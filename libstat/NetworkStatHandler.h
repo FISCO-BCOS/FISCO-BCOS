@@ -21,11 +21,11 @@
  * @date: 2020-03-20
  */
 #pragma once
+#include <libchannelserver/ChannelMessage.h>
+#include <libdevcore/Common.h>
 #include <libdevcore/Guards.h>
 #include <libdevcore/Log.h>
 #include <libethcore/Protocol.h>
-
-#define GROUP_STAT_LOG(LEVEL) STAT_LOG(LEVEL) << LOG_BADGE(m_groupIdStr)
 
 namespace dev
 {
@@ -35,31 +35,32 @@ class NetworkStatHandler
 {
 public:
     using Ptr = std::shared_ptr<NetworkStatHandler>;
-    using StatConstPtr = std::shared_ptr<std::map<int32_t, uint64_t> const>;
     using StatPtr = std::shared_ptr<std::map<int32_t, uint64_t>>;
 
     // _statisticName, eg. P2P, SDK
-    NetworkStatHandler(std::string const& _statisticName)
-      : m_statisticName(_statisticName),
-        m_InMsgTypeToBytes(std::make_shared<std::map<int32_t, uint64_t>>()),
+    NetworkStatHandler()
+      : m_InMsgTypeToBytes(std::make_shared<std::map<int32_t, uint64_t>>()),
         m_OutMsgTypeToBytes(std::make_shared<std::map<int32_t, uint64_t>>())
     {}
 
     virtual ~NetworkStatHandler() {}
 
-    void setGroupId(dev::GROUP_ID const& _groupId)
+    void setConsensusMsgType(std::string const& _type)
     {
-        m_groupId = _groupId;
-        m_groupIdStr = "g:" + std::to_string(m_groupId);
+        int32_t consType = dev::eth::ProtocolID::PBFT;
+        if (dev::stringCmpIgnoreCase(_type, "raft") == 0)
+        {
+            consType = dev::eth::ProtocolID::Raft;
+        }
+        m_p2pMsgTypeToDesc = {{consType, "CONS"}, {dev::eth::ProtocolID::BlockSync, "SYNC"}};
     }
 
-    void setMsgTypeToDesc(std::map<int32_t, std::string> const& _msgTypeToDesc)
-    {
-        m_msgTypeToDesc = _msgTypeToDesc;
-    }
+    void setGroupId(dev::GROUP_ID const& _groupId) { m_groupId = _groupId; }
 
     virtual void updateIncomingTraffic(int32_t const& _msgType, uint64_t _msgSize);
     virtual void updateOutcomingTraffic(int32_t const& _msgType, uint64_t _msgSize);
+
+    virtual void updateTraffic(StatPtr _statMap, int32_t const& _msgType, uint64_t _msgSize);
 
     uint64_t totalInMsgBytes() const { return m_totalInMsgBytes.load(); }
     uint64_t totalOutMsgBytes() const { return m_totalOutMsgBytes.load(); }
@@ -67,28 +68,42 @@ public:
     virtual void printStatistics();
     virtual void resetStatistics();
 
-protected:
-    virtual void printStatisticLog(StatConstPtr _statisticMap, uint64_t const& _totalBytes,
-        SharedMutex& _mutex, std::string const& _suffix);
-
 private:
-    std::string m_statisticName;
+    void printStatistics(std::string const& _statName,
+        std::map<int32_t, std::string> const& _inStatTypeToDesc,
+        std::map<int32_t, std::string> const& _outStatTypeToDesc);
+
+    void printStatisticLog(std::string const _statName,
+        std::map<int32_t, std::string> const& _statTypeToDesc, StatPtr _statisticMap,
+        std::string const& _suffix, std::stringstream& _oss);
+
+protected:
+    std::string const c_p2p_statisticName = "P2P";
+    std::string const c_sdk_statisticName = "SDK";
 
     dev::GROUP_ID m_groupId;
-    std::string m_groupIdStr;
     // maps between message type and message description
-    std::map<int32_t, std::string> m_msgTypeToDesc;
+    std::map<int32_t, std::string> m_p2pMsgTypeToDesc;
+
+    std::map<int32_t, std::string> const c_sdkInMsgTypeToDesc = {
+        {dev::channel::ChannelMessageType::CHANNEL_RPC_REQUEST, "RPC"},
+        {dev::channel::ChannelMessageType::CLIENT_REGISTER_EVENT_LOG, "EventLog"}};
+
+    std::map<int32_t, std::string> const c_sdkOutMsgTypeToDesc = {
+        {dev::channel::ChannelMessageType::CHANNEL_RPC_REQUEST, "RPC"},
+        {dev::channel::ChannelMessageType::TRANSACTION_NOTIFY, "Txs"},
+        {dev::channel::ChannelMessageType::EVENT_LOG_PUSH, "EventLog"}};
 
     // incoming traffic statistics: message type to the total
     std::shared_ptr<std::map<int32_t, uint64_t>> m_InMsgTypeToBytes;
     mutable SharedMutex x_InMsgTypeToBytes;
-    std::atomic<uint64_t> m_totalInMsgBytes;
+    std::atomic<uint64_t> m_totalInMsgBytes = {0};
     std::string const m_InMsgDescSuffix = "In";
 
     // outcoming traffic statistics
     std::shared_ptr<std::map<int32_t, uint64_t>> m_OutMsgTypeToBytes;
     mutable SharedMutex x_OutMsgTypeToBytes;
-    std::atomic<uint64_t> m_totalOutMsgBytes;
+    std::atomic<uint64_t> m_totalOutMsgBytes = {0};
     std::string const m_OutMsgDescSuffix = "_Out";
 };
 }  // namespace stat
