@@ -180,7 +180,8 @@ private:
     void checkRequest(int _groupID);
     void checkSyncStatus(int _groupID);
 
-    bool checkGroupID(int _groupID);
+    void checkNodeVersionForGroupMgr(const char* _methodName);
+    bool checkGroupIDForGroupMgr(int _groupID, Json::Value& _response);
     bool checkSealerID(const std::set<std::string>& _sealerList, std::string& _errorInfo);
     bool checkTimestamp(const std::string& _timestamp);
     bool checkConnection(const std::set<std::string>& _sealerList, std::string& _errorInfo);

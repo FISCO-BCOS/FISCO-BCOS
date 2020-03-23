@@ -1371,19 +1371,12 @@ Json::Value Rpc::generateGroup(
                   << LOG_KV("groupID", _groupID) << LOG_KV("timestamp", _timestamp)
                   << LOG_KV("sealerList.size", _sealerList.size());
 
-    if (g_BCOSConfig.version() < V2_2_0)
-    {
-        RPC_LOG(ERROR) << "generateGroup only support after by v2.2.0";
-        BOOST_THROW_EXCEPTION(JsonRpcException(
-            RPCExceptionType::InvalidRequest, "method generateGroup not support this version"));
-    }
+    checkNodeVersionForGroupMgr("generateGroup");
 
     Json::Value response;
 
-    if (!checkGroupID(_groupID))
+    if (!checkGroupIDForGroupMgr(_groupID, response))
     {
-        response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
-        response["message"] = "GroupID should be between 1 and " + std::to_string(maxGroupID);
         return response;
     }
 
@@ -1411,7 +1404,7 @@ Json::Value Rpc::generateGroup(
 
     try
     {
-        // TODO: implement this interface
+        ledgerManager()->generateGroup(_groupID, _timestamp, _sealerList);
         response["code"] = LedgerManagementStatusCode::SUCCESS;
         response["message"] = "Group " + std::to_string(_groupID) + " generated successfully";
     }
@@ -1448,17 +1441,68 @@ Json::Value Rpc::generateGroup(
 
 Json::Value Rpc::startGroup(int _groupID)
 {
-    RPC_LOG(INFO) << LOG_BADGE("startGroup") << LOG_DESC("query startGroup")
-                  << LOG_KV("groupID", _groupID);
+    RPC_LOG(INFO) << LOG_BADGE("startGroup") << LOG_DESC("request") << LOG_KV("groupID", _groupID);
 
-    if (g_BCOSConfig.version() < V2_2_0)
-    {
-        RPC_LOG(ERROR) << "startGroup only support after by v2.2.0";
-        BOOST_THROW_EXCEPTION(JsonRpcException(
-            RPCExceptionType::InvalidRequest, "method startGroup not support this version"));
-    }
+    checkNodeVersionForGroupMgr("startGroup");
 
     Json::Value response;
+
+    if (!checkGroupIDForGroupMgr(_groupID, response))
+    {
+        return response;
+    }
+
+    try
+    {
+        bool success = m_ledgerInitializer->initLedgerByGroupID(_groupID);
+        if (!success)
+        {
+            throw new dev::Exception("Group" + std::to_string(_groupID) + " initialized failed");
+        }
+
+        ledgerManager()->startByGroupID(_groupID);
+
+        response["code"] = LedgerManagementStatusCode::SUCCESS;
+        response["message"] = "Group " + std::to_string(_groupID) + " started successfully";
+    }
+    catch (GenesisConfNotFound const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GENESIS_CONF_NOT_FOUND;
+        response["message"] =
+            "Genesis config file for group " + std::to_string(_groupID) + " not found";
+    }
+    catch (GroupConfNotFound const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_CONF_NOT_FOUND;
+        response["message"] =
+            "Group config file for group " + std::to_string(_groupID) + " not found";
+    }
+    catch (GroupNotFound const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_NOT_FOUND;
+        response["message"] = "Group " + std::to_string(_groupID) + " not found";
+    }
+    catch (GroupIsRunning const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_ALREADY_RUNNING;
+        response["message"] = "Group " + std::to_string(_groupID) + " is already running";
+    }
+    catch (GroupIsStopping const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_IS_STOPPING;
+        response["message"] = "Group " + std::to_string(_groupID) + " is stopping";
+    }
+    catch (GroupAlreadyDeleted)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_ALREADY_DELETED;
+        response["message"] = "Group " + std::to_string(_groupID) + " has been deleted";
+    }
+    catch (std::exception const& _e)
+    {
+        response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
+        response["message"] = _e.what();
+    }
+
     return response;
 }
 
@@ -1466,14 +1510,46 @@ Json::Value Rpc::stopGroup(int _groupID)
 {
     RPC_LOG(INFO) << LOG_BADGE("stopGroup") << LOG_DESC("request") << LOG_KV("groupID", _groupID);
 
-    if (g_BCOSConfig.version() < V2_2_0)
-    {
-        RPC_LOG(ERROR) << "stopGroup only support after by v2.2.0";
-        BOOST_THROW_EXCEPTION(JsonRpcException(
-            RPCExceptionType::InvalidRequest, "method stopGroup not support this version"));
-    }
+    checkNodeVersionForGroupMgr("stopGroup");
 
     Json::Value response;
+
+    if (!checkGroupIDForGroupMgr(_groupID, response))
+    {
+        return response;
+    }
+
+    try
+    {
+        ledgerManager()->stopByGroupID(_groupID);
+        response["code"] = LedgerManagementStatusCode::SUCCESS;
+        response["message"] = "Group " + std::to_string(_groupID) + " stopped successfully";
+    }
+    catch (GroupNotFound const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_NOT_FOUND;
+        response["message"] = "Group " + std::to_string(_groupID) + " not found";
+    }
+    catch (GroupIsStopping const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_IS_STOPPING;
+        response["message"] = "Group " + std::to_string(_groupID) + " is stopping";
+    }
+    catch (GroupAlreadyStopped const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_ALREADY_STOPPED;
+        response["message"] = "Group " + std::to_string(_groupID) + " has already been stopped";
+    }
+    catch (GroupAlreadyDeleted const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_ALREADY_DELETED;
+        response["message"] = "Group " + std::to_string(_groupID) + " has already been deleted";
+    }
+    catch (std::exception const& _e)
+    {
+        response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
+        response["message"] = _e.what();
+    }
     return response;
 }
 
@@ -1481,14 +1557,14 @@ Json::Value Rpc::removeGroup(int _groupID)
 {
     RPC_LOG(INFO) << LOG_BADGE("removeGroup") << LOG_DESC("request") << LOG_KV("groupID", _groupID);
 
-    if (g_BCOSConfig.version() < V2_2_0)
-    {
-        RPC_LOG(ERROR) << "removeGroup only support after by v2.2.0";
-        BOOST_THROW_EXCEPTION(JsonRpcException(
-            RPCExceptionType::InvalidRequest, "method removeGroup not support this version"));
-    }
+    checkNodeVersionForGroupMgr("generateGroup");
 
     Json::Value response;
+
+    if (!checkGroupIDForGroupMgr(_groupID, response))
+    {
+        return response;
+    }
     return response;
 }
 
@@ -1497,14 +1573,14 @@ Json::Value Rpc::recoverGroup(int _groupID)
     RPC_LOG(INFO) << LOG_BADGE("recoverGroup") << LOG_DESC("request")
                   << LOG_KV("groupID", _groupID);
 
-    if (g_BCOSConfig.version() < V2_2_0)
-    {
-        RPC_LOG(ERROR) << "recoverGroup only support after by v2.2.0";
-        BOOST_THROW_EXCEPTION(JsonRpcException(
-            RPCExceptionType::InvalidRequest, "method recoverGroup not support this version"));
-    }
+    checkNodeVersionForGroupMgr("recoverGroup");
 
     Json::Value response;
+
+    if (!checkGroupIDForGroupMgr(_groupID, response))
+    {
+        return response;
+    }
     return response;
 }
 
@@ -1513,15 +1589,24 @@ Json::Value Rpc::queryGroupStatus(int _groupID)
     RPC_LOG(INFO) << LOG_BADGE("queryGroupStatus") << LOG_DESC("request")
                   << LOG_KV("groupID", _groupID);
 
-    if (g_BCOSConfig.version() < V2_2_0)
-    {
-        RPC_LOG(ERROR) << "queryGroupStatus only support after by v2.2.0";
-        BOOST_THROW_EXCEPTION(JsonRpcException(
-            RPCExceptionType::InvalidRequest, "method queryGroupStatus not support this version"));
-    }
+    checkNodeVersionForGroupMgr("queryGroupStatus");
 
     Json::Value response;
+    if (!checkGroupIDForGroupMgr(_groupID, response))
+    {
+        return response;
+    }
     return response;
+}
+
+void Rpc::checkNodeVersionForGroupMgr(const char* _methodName)
+{
+    if (g_BCOSConfig.version() < V2_2_0)
+    {
+        RPC_LOG(ERROR) << _methodName << " only support after by v2.2.0";
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            RPCExceptionType::InvalidRequest, "method stopGroup not support this version"));
+    }
 }
 
 bool Rpc::checkConnection(const std::set<std::string>& _sealerList, std::string& _errorInfo)
@@ -1549,10 +1634,12 @@ bool Rpc::checkConnection(const std::set<std::string>& _sealerList, std::string&
     return flag;
 }
 
-bool Rpc::checkGroupID(int _groupID)
+bool Rpc::checkGroupIDForGroupMgr(int _groupID, Json::Value& _response)
 {
     if (_groupID < 1 || _groupID > dev::maxGroupID)
     {
+        _response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
+        _response["message"] = "GroupID should be between 1 and " + std::to_string(maxGroupID);
         return false;
     }
     return true;
