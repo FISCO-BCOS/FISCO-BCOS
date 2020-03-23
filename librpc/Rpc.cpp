@@ -31,7 +31,6 @@
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
 #include <libexecutive/ExecutionResult.h>
-#include <libinitializer/GroupGenerator.h>
 #include <libprecompiled/SystemConfigPrecompiled.h>
 #include <libsync/SyncStatus.h>
 #include <libtxpool/TxPoolInterface.h>
@@ -1368,7 +1367,7 @@ Json::Value Rpc::getTransactionReceiptByHashWithProof(
 Json::Value Rpc::generateGroup(
     int _groupID, const std::string& _timestamp, const std::set<std::string>& _sealerList)
 {
-    RPC_LOG(INFO) << LOG_BADGE("generateGroup") << LOG_DESC("query generateGroup")
+    RPC_LOG(INFO) << LOG_BADGE("generateGroup") << LOG_DESC("request")
                   << LOG_KV("groupID", _groupID) << LOG_KV("timestamp", _timestamp)
                   << LOG_KV("sealerList.size", _sealerList.size());
 
@@ -1380,82 +1379,72 @@ Json::Value Rpc::generateGroup(
     }
 
     Json::Value response;
+
+    if (!checkGroupID(_groupID))
+    {
+        response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
+        response["message"] = "GroupID should be between 1 and " + std::to_string(maxGroupID);
+        return response;
+    }
+
+    if (!checkTimestamp(_timestamp))
+    {
+        response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
+        response["message"] = "Invalid timestamp: " + _timestamp;
+        return response;
+    }
+
     std::string errorInfo;
+    if (!checkSealerID(_sealerList, errorInfo))
+    {
+        response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
+        response["message"] = "Invalid sealer ID(s): " + errorInfo;
+        return response;
+    }
+
+    if (!checkConnection(_sealerList, errorInfo))
+    {
+        response["code"] = LedgerManagementStatusCode::PEERS_NOT_CONNECTED;
+        response["message"] = "Peer(s) not connected: " + errorInfo;
+        return response;
+    }
+
     try
     {
-        if (!GroupGenerator::checkGroupID(_groupID))
-        {
-            BOOST_THROW_EXCEPTION(InvalidGenesisGroupID());
-        }
-
-        if (ledgerManager()->isLedgerExist(GROUP_ID(_groupID)))
-        {
-            BOOST_THROW_EXCEPTION(GroupExists());
-        }
-
-        checkPeerlist(_sealerList, errorInfo);
-
-        GroupGenerator::generate(GROUP_ID(_groupID), _timestamp, _sealerList);
-
-        response["code"] = GroupGeneratorCode::SUCCESS;
-        response["message"] = "success";
+        // TODO: implement this interface
+        response["code"] = LedgerManagementStatusCode::SUCCESS;
+        response["message"] = "Group " + std::to_string(_groupID) + " generated successfully";
     }
-    catch (GroupExists const& _e)
-    {
-        response["code"] = GroupGeneratorCode::GROUP_EXIST;
-        response["message"] = "Group " + std::to_string(_groupID) + " is running";
+#define CATCH_GROUP_ALREADY_EXISTS_EXCEPTION(e)                                        \
+    catch (e const&)                                                                   \
+    {                                                                                  \
+        response["code"] = LedgerManagementStatusCode::GROUP_ALREADY_EXISTS;           \
+        response["message"] = "Group " + std::to_string(_groupID) + " already exists"; \
     }
-    catch (GenesisExists const& _e)
+    CATCH_GROUP_ALREADY_EXISTS_EXCEPTION(GroupIsRunning)
+    CATCH_GROUP_ALREADY_EXISTS_EXCEPTION(GroupIsStopping)
+    CATCH_GROUP_ALREADY_EXISTS_EXCEPTION(GroupAlreadyDeleted)
+    CATCH_GROUP_ALREADY_EXISTS_EXCEPTION(GroupAlreadyStopped)
+#undef CATCH_GROUP_ALREADY_EXISTS_EXCEPTION
+    catch (GenesisConfAlreadyExists const&)
     {
-        response["code"] = GroupGeneratorCode::GROUP_GENESIS_FILE_EXIST;
-        response["message"] = "Group " + std::to_string(_groupID) + " genesis exists";
+        response["code"] = LedgerManagementStatusCode::GENESIS_CONF_ALREADY_EXISTS;
+        response["message"] =
+            "Genesis config file for group " + std::to_string(_groupID) + " already exists";
     }
-    catch (GroupConfigExists const& _e)
+    catch (GroupConfAlreadyExists const&)
     {
-        response["code"] = GroupGeneratorCode::GROUP_CONFIG_FILE_EXIST;
-        response["message"] = "Group " + std::to_string(_groupID) + " config exists";
-    }
-    catch (GroupGeneratorException const& _e)
-    {
-        response["code"] = GroupGeneratorCode::INVALID_PARAMS;
-        response["message"] = "Group generator error: GroupID: " + std::to_string(_groupID) +
-                              " timestamp: " + _timestamp +
-                              " sealerlist.size: " + std::to_string(_sealerList.size());
-    }
-    catch (InvalidGenesisGroupID const& _e)
-    {
-        response["code"] = GroupStarterCode::INVALID_PARAMS;
-        response["message"] = "GroupID out of bound: " + std::to_string(_groupID);
-    }
-    catch (InvalidGenesisTimestamp const& _e)
-    {
-        response["code"] = GroupStarterCode::INVALID_PARAMS;
-        response["message"] = "Invalid timestamp: " + _timestamp;
-    }
-    catch (InvalidGenesisNodeid const& _e)
-    {
-        response["code"] = GroupStarterCode::INVALID_PARAMS;
-
-        std::string nodeIDs;
-        for (auto nodeid : _sealerList)
-        {
-            nodeIDs += nodeid + ",";
-        }
-        response["message"] = "Invalid Nodeids: " + nodeIDs;
-    }
-    catch (NotConnectGenesisNode const& _e)
-    {
-        response["code"] = GroupStarterCode::INVALID_PARAMS;
-        response["message"] = errorInfo;
+        response["code"] = LedgerManagementStatusCode::GROUP_CONF_ALREADY_EXIST;
+        response["message"] =
+            "Group config file for group " + std::to_string(_groupID) + " already exists";
     }
     catch (std::exception const& _e)
     {
-        response["code"] = GroupGeneratorCode::OTHER_ERROR;
+        response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
         response["message"] = _e.what();
     }
     return response;
 }
-
 
 Json::Value Rpc::startGroup(int _groupID)
 {
@@ -1470,91 +1459,133 @@ Json::Value Rpc::startGroup(int _groupID)
     }
 
     Json::Value response;
-    try
-    {
-        if (!GroupGenerator::checkGroupID(_groupID))
-        {
-            BOOST_THROW_EXCEPTION(InvalidGenesisGroupID());
-        }
-
-        bool success = m_ledgerInitializer->initLedgerByGroupID(GROUP_ID(_groupID));
-        if (!success)
-        {
-            throw new dev::Exception("Init ledger failed");
-        }
-
-        success = m_ledgerManager->startByGroupID(GROUP_ID(_groupID));
-        if (!success)
-        {
-            m_ledgerManager->removeLedger(GROUP_ID(_groupID));
-            throw new dev::Exception("start ledger failed");
-        }
-
-        response["code"] = GroupStarterCode::SUCCESS;
-        response["message"] = "success";
-    }
-    catch (GroupExists const& _e)
-    {
-        response["code"] = GroupStarterCode::GROUP_IS_RUNNING;
-        response["message"] = "Group " + std::to_string(_groupID) + " has been loaded";
-    }
-    catch (GenesisNotExists const& _e)
-    {
-        response["code"] = GroupStarterCode::GROUP_GENESIS_FILE_NOT_EXIST;
-        response["message"] = "Group " + std::to_string(_groupID) + " genesis not exists";
-    }
-    catch (GroupConfigNotExists const& _e)
-    {
-        response["code"] = GroupStarterCode::GROUP_CONFIG_FILE_NOT_EXIST;
-        response["message"] = "success" + std::to_string(_groupID) + " group config not exists";
-    }
-    catch (GroupGeneratorException const& _e)
-    {
-        response["code"] = GroupStarterCode::INVALID_PARAMS;
-        response["message"] = "Group start error: GroupID: " + std::to_string(_groupID);
-    }
-    catch (InvalidGenesisGroupID const& _e)
-    {
-        response["code"] = GroupStarterCode::INVALID_PARAMS;
-        response["message"] = "GroupID out of bound: " + std::to_string(_groupID);
-    }
-    catch (std::exception const& _e)
-    {
-        response["code"] = GroupStarterCode::OTHER_ERROR;
-        response["message"] = _e.what();
-    }
     return response;
 }
 
-void Rpc::checkPeerlist(const std::set<std::string>& _sealerList, std::string& _errorInfo)
+Json::Value Rpc::stopGroup(int _groupID)
 {
-    if (!GroupGenerator::checkSealerList(_sealerList))
+    RPC_LOG(INFO) << LOG_BADGE("stopGroup") << LOG_DESC("request") << LOG_KV("groupID", _groupID);
+
+    if (g_BCOSConfig.version() < V2_2_0)
     {
-        BOOST_THROW_EXCEPTION(InvalidGenesisNodeid());
+        RPC_LOG(ERROR) << "stopGroup only support after by v2.2.0";
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            RPCExceptionType::InvalidRequest, "method stopGroup not support this version"));
     }
 
-    std::set<NodeID> peers;
-    auto sessions = service()->sessionInfos();
-    for (auto it = sessions.begin(); it != sessions.end(); ++it)
-    {
-        peers.insert(it->nodeInfo.nodeID);
-    }
-    peers.insert(service()->id());  // Add myself
+    Json::Value response;
+    return response;
+}
 
-    bool error = false;
-    std::string errorInfo = "Not connect: ";
-    for (auto const genesisSealer : _sealerList)
+Json::Value Rpc::removeGroup(int _groupID)
+{
+    RPC_LOG(INFO) << LOG_BADGE("removeGroup") << LOG_DESC("request") << LOG_KV("groupID", _groupID);
+
+    if (g_BCOSConfig.version() < V2_2_0)
     {
-        if (peers.find(NodeID(genesisSealer)) == peers.end())
+        RPC_LOG(ERROR) << "removeGroup only support after by v2.2.0";
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            RPCExceptionType::InvalidRequest, "method removeGroup not support this version"));
+    }
+
+    Json::Value response;
+    return response;
+}
+
+Json::Value Rpc::recoverGroup(int _groupID)
+{
+    RPC_LOG(INFO) << LOG_BADGE("recoverGroup") << LOG_DESC("request")
+                  << LOG_KV("groupID", _groupID);
+
+    if (g_BCOSConfig.version() < V2_2_0)
+    {
+        RPC_LOG(ERROR) << "recoverGroup only support after by v2.2.0";
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            RPCExceptionType::InvalidRequest, "method recoverGroup not support this version"));
+    }
+
+    Json::Value response;
+    return response;
+}
+
+Json::Value Rpc::queryGroupStatus(int _groupID)
+{
+    RPC_LOG(INFO) << LOG_BADGE("queryGroupStatus") << LOG_DESC("request")
+                  << LOG_KV("groupID", _groupID);
+
+    if (g_BCOSConfig.version() < V2_2_0)
+    {
+        RPC_LOG(ERROR) << "queryGroupStatus only support after by v2.2.0";
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            RPCExceptionType::InvalidRequest, "method queryGroupStatus not support this version"));
+    }
+
+    Json::Value response;
+    return response;
+}
+
+bool Rpc::checkConnection(const std::set<std::string>& _sealerList, std::string& _errorInfo)
+{
+    bool flag = true;
+    for (auto& sealer : _sealerList)
+    {
+        auto nodeID = NodeID(sealer);
+        if (nodeID == service()->id())
         {
-            error = true;
-            errorInfo += genesisSealer + ", ";
+            continue;
+        }
+
+        if (!service()->isConnected(nodeID))
+        {
+            _errorInfo += sealer + ", ";
+            flag = false;
         }
     }
 
-    if (error)
+    if (!flag)
     {
-        _errorInfo = errorInfo;
-        BOOST_THROW_EXCEPTION(NotConnectGenesisNode());
+        _errorInfo = _errorInfo.substr(0, _errorInfo.length() - 2);
+    }
+    return flag;
+}
+
+bool Rpc::checkGroupID(int _groupID)
+{
+    if (_groupID < 1 || _groupID > dev::maxGroupID)
+    {
+        return false;
+    }
+    return true;
+}
+
+bool Rpc::checkSealerID(const std::set<std::string>& _sealerList, std::string& _errorInfo)
+{
+    bool flag = true;
+    for (auto& sealer : _sealerList)
+    {
+        if (!dev::isHex(sealer) || sealer.length() != 128 || sealer.compare(0, 2, "0x") == 0)
+        {
+            _errorInfo += sealer + ", ";
+            flag = false;
+        }
+    }
+
+    if (!flag)
+    {
+        _errorInfo = _errorInfo.substr(0, _errorInfo.length() - 2);
+    }
+    return flag;
+}
+
+bool Rpc::checkTimestamp(const std::string& _timestamp)
+{
+    try
+    {
+        int64_t cmp = boost::lexical_cast<int64_t>(_timestamp);
+        return _timestamp == std::to_string(cmp);
+    }
+    catch (...)
+    {
+        return false;
     }
 }

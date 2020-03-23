@@ -374,6 +374,10 @@ public:
     virtual Json::Value generateGroup(
         int param1, const std::string& param2, const std::set<std::string>& param3) = 0;
     virtual Json::Value startGroup(int param1) = 0;
+    virtual Json::Value stopGroup(int param1) = 0;
+    virtual Json::Value removeGroup(int param1) = 0;
+    virtual Json::Value recoverGroup(int param1) = 0;
+    virtual Json::Value queryGroupStatus(int param1) = 0;
 };
 
 }  // namespace rpc
