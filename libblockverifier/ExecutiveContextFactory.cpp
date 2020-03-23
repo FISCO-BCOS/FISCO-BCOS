@@ -28,6 +28,7 @@
 #include <libprecompiled/KVTableFactoryPrecompiled.h>
 #include <libprecompiled/ParallelConfigPrecompiled.h>
 #include <libprecompiled/PermissionPrecompiled.h>
+#include <libprecompiled/PrecompiledResult.h>
 #include <libprecompiled/SystemConfigPrecompiled.h>
 #include <libprecompiled/TableFactoryPrecompiled.h>
 #include <libprecompiled/extension/DagTransferPrecompiled.h>
@@ -37,6 +38,12 @@ using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::executive;
 using namespace dev::precompiled;
+
+void ExecutiveContextFactory::setPrecompiledExecResultFactory(
+    PrecompiledExecResultFactory::Ptr _precompiledExecResultFactory)
+{
+    m_precompiledExecResultFactory = _precompiledExecResultFactory;
+}
 
 void ExecutiveContextFactory::initExecutiveContext(
     BlockInfo blockInfo, h256 const& stateRoot, ExecutiveContext::Ptr context)
@@ -74,6 +81,7 @@ void ExecutiveContextFactory::initExecutiveContext(
     context->setBlockInfo(blockInfo);
     context->setPrecompiledContract(m_precompiledContract);
     context->setState(m_stateFactoryInterface->getState(stateRoot, memoryTableFactory));
+    context->setPrecompiledExecResultFactory(m_precompiledExecResultFactory);
     setTxGasLimitToContext(context);
 }
 

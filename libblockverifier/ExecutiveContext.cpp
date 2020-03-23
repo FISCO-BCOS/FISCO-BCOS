@@ -34,6 +34,18 @@ using namespace dev::eth::abi;
 using namespace dev::blockverifier;
 using namespace dev;
 using namespace std;
+// set PrecompiledExecResultFactory for each precompiled object
+void ExecutiveContext::setPrecompiledExecResultFactory(
+    dev::precompiled::PrecompiledExecResultFactory::Ptr _precompiledExecResultFactory)
+{
+    for (auto const& it : m_address2Precompiled)
+    {
+        if (it.second)
+        {
+            it.second->setPrecompiledExecResultFactory(_precompiledExecResultFactory);
+        }
+    }
+}
 
 bytes ExecutiveContext::call(
     Address const& address, bytesConstRef param, Address const& origin, Address const& sender)
