@@ -141,6 +141,125 @@ void LedgerManager::checkGroupStatus(dev::GROUP_ID const& _groupID, LedgerStatus
     }
 }
 
+void LedgerManager::generateGroup(
+    dev::GROUP_ID _groupID, const string& _timestamp, const set<string>& _sealerList)
+{
+    RecursiveGuard l(x_ledgerManager);
+    checkGroupStatus(_groupID, LedgerStatus::INEXISTENT);
+
+    auto confDir = g_BCOSConfig.confDir();
+
+    string genesisConfFileName = "group." + std::to_string(_groupID) + ".genesis";
+    fs::path genesisConfFilePath(confDir + fs::path::separator + genesisConfFileName);
+    if (exists(genesisConfFilePath))
+    {
+        BOOST_THROW_EXCEPTION(GenesisConfAlreadyExists());
+    }
+
+    string groupConfFileName = "group." + std::to_string(_groupID) + ".ini";
+    fs::path groupConfFilePath(confDir + fs::path::separator + groupConfFileName);
+    if (fs::exists(groupConfFilePath))
+    {
+        BOOST_THROW_EXCEPTION(GroupConfAlreadyExists());
+    }
+
+    std::ofstream genesisConfFile, groupConfFile;
+    genesisConfFile.exceptions(std::ofstream::failbit | std::ofstream::badbit);
+    groupConfFile.exceptions(std::ofstream::failbit | std::ofstream::badbit);
+
+    genesisConfFile.open(genesisConfFilePath.c_str());
+    genesisConfFile << generateGenesisConfig(_groupID, _timestamp, _sealerList);
+
+    groupConfFile.open(groupConfFilePath.c_str());
+    groupConfFile << generateGroupConfig();
+
+    setGroupStatus(_groupID, LedgerStatus::STOPPED);
+}
+
+string LedgerManager::generateGenesisConfig(
+    dev::GROUP_ID _groupID, const string& _timestamp, const set<string>& _sealerList)
+{
+    static string configTemplate =
+        "[consensus]\n"
+        "    ; consensus algorithm type, now support PBFT(consensus_type=pbft) and "
+        "Raft(consensus_type=raft)\n"
+        "    consensus_type=pbft\n"
+        "    ; the max number of transactions of a block\n"
+        "    max_trans_num=1000\n"
+        "    ; the node id of consensusers\n"
+        "%1%"
+        "[state]\n"
+        "    ; support mpt/storage\n"
+        "    type=storage\n"
+        "[tx]\n"
+        "    ; transaction gas limit\n"
+        "    gas_limit=300000000\n"
+        "[group]\n"
+        "    id=%2%\n"
+        "    timestamp=%3%";
+
+    string nodeIDList;
+    int nodeIdx = 0;
+    for (auto& sealer : _sealerList)
+    {
+        nodeIDList += (boost::format("    node.%1%=%2%\n") % nodeIdx % sealer).str();
+        nodeIdx++;
+    }
+
+    string config =
+        (boost::format(configTemplate) % nodeIDList.c_str() % _groupID % _timestamp).str();
+    return config;
+}
+
+string LedgerManager::generateGroupConfig()
+{
+    static string configTemplate =
+        "[consensus]\n"
+        "    ; the ttl for broadcasting pbft message\n"
+        "    ;ttl=2\n"
+        "    ; min block generation time(ms), the max block generation time is 1000 ms\n"
+        "    ;min_block_generation_time=500\n"
+        "    ;enable_dynamic_block_size=true\n"
+        "    ;enable_ttl_optimization=true\n"
+        "    ;enable_prepare_with_txsHash=true\n"
+        "[storage]\n"
+        "    ; storage db type, rocksdb / mysql / external / scalable, rocksdb is recommended\n"
+        "    type=rocksdb\n"
+        "    ; set true to turn on binary log\n"
+        "    binary_log=false\n"
+        "    ; scroll_threshold=scroll_threshold_multiple*1000, only for scalable\n"
+        "    scroll_threshold_multiple=2\n"
+        "    ; set fasle to disable CachedStorage\n"
+        "    cached_storage=true\n"
+        "    ; max cache memeory, MB\n"
+        "    max_capacity=32\n"
+        "    max_forward_block=10\n"
+        "    ; only for external\n"
+        "    max_retry=60\n"
+        "    topic=DB\n"
+        "    ; only for mysql\n"
+        "    db_ip=127.0.0.1\n"
+        "    db_port=3306\n"
+        "    db_username=\n"
+        "    db_passwd=\n"
+        "    db_name=\n"
+        "[tx_pool]\n"
+        "    limit=150000\n"
+        "[tx_execute]\n"
+        "    enable_parallel=true\n"
+        "[sync]\n"
+        "    idle_wait_ms=200\n"
+        "    ; send block status and transaction by tree-topology\n"
+        "    ; only supported when use pbft\n"
+        "    sync_by_tree=true\n"
+        "    ; must between 1000 to 3000\n"
+        "    ; only enabled when sync_by_tree is true\n"
+        "    gossip_interval_ms=1000\n"
+        "    gossip_peers_number=3\n";
+
+    return configTemplate;
+}
+
 void LedgerManager::startByGroupID(GROUP_ID const& _groupID)
 {
     RecursiveGuard l(x_ledgerManager);
@@ -168,6 +287,22 @@ void LedgerManager::stopByGroupID(GROUP_ID const& _groupID)
 
     setGroupStatus(_groupID, LedgerStatus::STOPPING);
     clearLedger(_groupID);
+    setGroupStatus(_groupID, LedgerStatus::STOPPED);
+}
+
+void LedgerManager::removeByGroupID(dev::GROUP_ID const& _groupID)
+{
+    RecursiveGuard l(x_ledgerManager);
+    checkGroupStatus(_groupID, LedgerStatus::STOPPED);
+
+    setGroupStatus(_groupID, LedgerStatus::DELETED);
+}
+
+void LedgerManager::recoverByGroupID(dev::GROUP_ID const& _groupID)
+{
+    RecursiveGuard l(x_ledgerManager);
+    checkGroupStatus(_groupID, LedgerStatus::DELETED);
+
     setGroupStatus(_groupID, LedgerStatus::STOPPED);
 }
 

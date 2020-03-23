@@ -93,6 +93,15 @@ public:
     }
 
     /**
+     * @brief : create a single ledger by group ID
+     * @param _groupID : the ledger need to be created
+     * @param _timestamp: timestamp of the genesis block
+     * @param _sealerList: sealers of the group
+     */
+    void generateGroup(dev::GROUP_ID _groupID, const std::string& _timestamp,
+        const std::set<std::string>& _sealerList);
+
+    /**
      * @brief : start a single ledger by group ID
      * @param _groupID : the ledger need to be started
      */
@@ -103,6 +112,18 @@ public:
      * @param _groupID: the groupId of the ledger need to be stopped
      */
     void stopByGroupID(dev::GROUP_ID const& _groupID);
+
+    /**
+     * @brief: delete the ledger by group ID
+     * @param _groupID: the groupId of the ledger need to be deleted
+     */
+    void removeByGroupID(dev::GROUP_ID const& _groupID);
+
+    /**
+     * @brief: recover the ledger by group ID
+     * @param _groupID: the groupId of the ledger need to be recovered
+     */
+    void recoverByGroupID(dev::GROUP_ID const& _groupID);
 
     /**
      * @brief: query the ledger status by group ID
