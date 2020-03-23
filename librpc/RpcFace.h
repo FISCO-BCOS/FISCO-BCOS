@@ -156,6 +156,22 @@ public:
         this->bindAndAddMethod(jsonrpc::Procedure("startGroup", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
             &dev::rpc::RpcFace::startGroupI);
+
+        this->bindAndAddMethod(jsonrpc::Procedure("stopGroup", jsonrpc::PARAMS_BY_POSITION,
+                                   jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
+            &dev::rpc::RpcFace::stopGroupI);
+
+        this->bindAndAddMethod(jsonrpc::Procedure("removeGroup", jsonrpc::PARAMS_BY_POSITION,
+                                   jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
+            &dev::rpc::RpcFace::removeGroupI);
+
+        this->bindAndAddMethod(jsonrpc::Procedure("recoverGroup", jsonrpc::PARAMS_BY_POSITION,
+                                   jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
+            &dev::rpc::RpcFace::recoverGroupI);
+
+        this->bindAndAddMethod(jsonrpc::Procedure("queryGroupStatus", jsonrpc::PARAMS_BY_POSITION,
+                                   jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
+            &dev::rpc::RpcFace::queryGroupStatusI);
     }
 
     inline virtual void getSystemConfigByKeyI(const Json::Value& request, Json::Value& response)
@@ -312,6 +328,26 @@ public:
     inline virtual void startGroupI(const Json::Value& request, Json::Value& response)
     {
         response = this->startGroup(boost::lexical_cast<int>(request[0u].asString()));
+    }
+
+    inline virtual void stopGroupI(const Json::Value& request, Json::Value& response)
+    {
+        response = this->stopGroup(boost::lexical_cast<int>(request[0u].asString()));
+    }
+
+    inline virtual void removeGroupI(const Json::Value& request, Json::Value& response)
+    {
+        response = this->removeGroup(boost::lexical_cast<int>(request[0u].asString()));
+    }
+
+    inline virtual void recoverGroupI(const Json::Value& request, Json::Value& response)
+    {
+        response = this->recoverGroup(boost::lexical_cast<int>(request[0u].asString()));
+    }
+
+    inline virtual void queryGroupStatusI(const Json::Value& request, Json::Value& response)
+    {
+        response = this->queryGroupStatus(boost::lexical_cast<int>(request[0u].asString()));
     }
 
     // system config part
