@@ -32,7 +32,7 @@ send_transaction()
         exit 1
     fi
     if [ ${is_raft} -eq 0 ];then
-        sleep 1.5
+        sleep 2
     else
         sleep 8
     fi
