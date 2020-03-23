@@ -85,16 +85,18 @@ LOG_INFO()
 
 get_value()
 {
-    local var_name=${1}
-    var_name=var_${var_name//./}
+    local var_name="${1}"
+    var_name="${var_name//./}"
+    var_name="var_${var_name//-/}"
     local res=$(eval echo '$'"${var_name}")
     echo ${res}
 }
 
 set_value()
 {
-    local var_name=${1}
-    var_name=var_${var_name//./}
+    local var_name="${1}"
+    var_name="${var_name//./}"
+    var_name="var_${var_name//-/}"
     local var_value=${2}
     eval "${var_name}=${var_value}"
 }
@@ -1207,8 +1209,8 @@ for line in ${ip_array[*]};do
     [ -z "$(get_value ${ip//./}_count)" ] && set_value ${ip//./}_count 0
     for ((i=0;i<num;++i));do
         echo "Processing IP:${ip} ID:${i} node's key" >> ${logfile}
-        local node_coount=$(get_value ${ip//./}_count)
-        node_dir="${output_dir}/${ip}/node${node_coount}"
+        local node_count="$(get_value ${ip//./}_count)"
+        node_dir="${output_dir}/${ip}/node${node_count}"
         [ -d "${node_dir}" ] && exit_with_clean "${node_dir} exist! Please delete!"
         
         while :
@@ -1310,9 +1312,9 @@ for line in ${ip_array[*]};do
     echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
     for ((i=0;i<num;++i));do
         echo "Processing IP:${ip} ID:${i} config files..." >> ${logfile}
-        local node_coount=$(get_value ${ip//./}_count)
-        node_dir="${output_dir}/${ip}/node${node_coount}"
-        generate_config_ini "${node_dir}/config.ini" ${ip} "${group_array[server_count]}"
+        local node_count="$(get_value ${ip//./}_count)"
+        node_dir="${output_dir}/${ip}/node${node_count}"
+        generate_config_ini "${node_dir}/config.ini" "${ip}" "${group_array[server_count]}"
         if [ "${use_ip_param}" == "false" ];then
             node_groups=(${group_array[${server_count}]//,/ })
             for j in ${node_groups[@]};do
