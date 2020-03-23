@@ -140,6 +140,7 @@ void RaftEngine::start()
 
 void RaftEngine::reportBlock(dev::eth::Block const& _block)
 {
+    ConsensusEngineBase::reportBlock(_block);
     auto shouldReport = false;
     {
         Guard guard(m_mutex);

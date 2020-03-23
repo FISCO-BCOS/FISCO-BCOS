@@ -35,6 +35,7 @@
 #include <libdevcore/Common.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Guards.h>
+#include <libstat/ChannelNetworkStatHandler.h>
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
 #include <boost/asio/ssl/stream.hpp>
@@ -126,6 +127,11 @@ public:
     }
     std::string clientType() { return m_clientType; }
 
+    void setNetworkStat(dev::stat::ChannelNetworkStatHandler::Ptr _handler)
+    {
+        m_networkStat = _handler;
+    }
+
 private:
     void startRead();
     void onRead(const boost::system::error_code& error, size_t bytesTransferred);
@@ -181,6 +187,9 @@ private:
         WriteGuard l(x_responseCallbacks);
         m_responseCallbacks.clear();
     }
+
+private:
+    dev::stat::ChannelNetworkStatHandler::Ptr m_networkStat;
 
     mutable SharedMutex x_responseCallbacks;
     std::map<std::string, ResponseCallback::Ptr> m_responseCallbacks;

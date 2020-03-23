@@ -81,9 +81,23 @@ bool Ledger::initLedger(std::shared_ptr<LedgerParamInterface> _ledgerParams)
     // setSyncNum for cachedStorage
     m_dbInitializer->setSyncNumForCachedStorage(m_blockChain->number());
 
+    // init network statistic handler
+    initNetworkStatHandler();
+
     /// init blockVerifier, txPool, sync and consensus
     return (initBlockVerifier() && initTxPool() && initSync() && consensusInitFactory() &&
             initEventLogFilterManager());
+}
+
+void Ledger::initNetworkStatHandler()
+{
+    Ledger_LOG(INFO) << LOG_BADGE("initNetworkStatHandler");
+    m_networkStatHandler = std::make_shared<dev::stat::NetworkStatHandler>();
+    m_networkStatHandler->setGroupId(m_groupId);
+    m_networkStatHandler->setConsensusMsgType(m_param->mutableConsensusParam().consensusType);
+    m_service->appendNetworkStatHandlerByGroupID(m_groupId, m_networkStatHandler);
+    m_channelRPCServer->networkStatHandler()->appendGroupP2PStatHandler(
+        m_groupId, m_networkStatHandler);
 }
 
 /// init txpool

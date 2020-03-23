@@ -230,5 +230,33 @@ void ConsensusEngineBase::resetConfig()
     m_idx = node_idx;
 }
 
+void ConsensusEngineBase::reportBlock(dev::eth::Block const& _block)
+{
+    // print the block gasUsed
+    auto txsNum = _block.transactions()->size();
+    if (txsNum == 0)
+    {
+        return;
+    }
+    auto blockGasUsed = (*_block.transactionReceipts())[txsNum - 1]->gasUsed();
+    STAT_LOG(INFO) << LOG_TYPE("BlockGasUsed") << LOG_KV("g", m_groupId) << LOG_KV("txNum", txsNum)
+                   << LOG_KV("gasUsed", blockGasUsed)
+                   << LOG_KV("blockHash", toHex(_block.blockHeader().hash()))
+                   << LOG_KV("nodeID", toHex(m_keyPair.pub()));
+    // print the gasUsed for each transaction
+    u256 prevGasUsed = 0;
+    uint64_t receiptIndex = 0;
+    auto receipts = _block.transactionReceipts();
+    for (auto const& tx : *_block.transactions())
+    {
+        auto receipt = (*receipts)[receiptIndex];
+        auto gasUsed = receipt->gasUsed() - prevGasUsed;
+        STAT_LOG(INFO) << LOG_TYPE("TxsGasUsed") << LOG_KV("g", m_groupId)
+                       << LOG_KV("txHash", toHex(tx->sha3())) << LOG_KV("gasUsed", gasUsed);
+        prevGasUsed = receipt->gasUsed();
+        receiptIndex++;
+    }
+}
+
 }  // namespace consensus
 }  // namespace dev

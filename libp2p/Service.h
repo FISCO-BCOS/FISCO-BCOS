@@ -165,6 +165,9 @@ public:
         return nullptr;
     }
 
+    void appendNetworkStatHandlerByGroupID(
+        GROUP_ID const& _groupID, std::shared_ptr<dev::stat::NetworkStatHandler> _handler) override;
+
 private:
     NodeIDs getPeersByTopic(std::string const& topic);
     void checkWhitelistAndClearSession();

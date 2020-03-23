@@ -165,7 +165,7 @@ public:
 
     virtual IDXTYPE minValidNodes() const { return m_nodeNum - m_f; }
     /// update the context of PBFT after commit a block into the block-chain
-    virtual void reportBlock(dev::eth::Block const&) override {}
+    void reportBlock(dev::eth::Block const&) override;
 
     /// obtain maxBlockTransactions
     uint64_t maxBlockTransactions() override { return m_maxBlockTransactions; }

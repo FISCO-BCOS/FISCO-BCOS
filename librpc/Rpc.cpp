@@ -1130,7 +1130,7 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
             auto transactionCallback = *currentTransactionCallback;
             clientProtocolversion = (*m_transactionCallbackVersion)();
             tx->setRpcCallback(
-                [transactionCallback, clientProtocolversion](
+                [transactionCallback, clientProtocolversion, _groupID](
                     LocalisedTransactionReceipt::Ptr receipt, dev::bytesConstRef input) {
                     Json::Value response;
                     if (clientProtocolversion > 0)
@@ -1165,7 +1165,7 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
                     }
 
                     auto receiptContent = response.toStyledString();
-                    transactionCallback(receiptContent);
+                    transactionCallback(receiptContent, _groupID);
                 });
         }
         // calculate the sha3 before submit into the transaction pool

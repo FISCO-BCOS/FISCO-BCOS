@@ -55,6 +55,10 @@ namespace rpc
 {
 class Rpc;
 }
+namespace stat
+{
+class ChannelNetworkStatHandler;
+}
 namespace initializer
 {
 class RPCInitializer : public std::enable_shared_from_this<RPCInitializer>
@@ -66,6 +70,12 @@ public:
 
     void stop()
     {
+        // stop networkStatHandler
+        if (m_networkStatHandler)
+        {
+            m_networkStatHandler->stop();
+            INITIALIZER_LOG(INFO) << "stop channelNetworkStatistics.";
+        }
         /// stop channel first
         if (m_channelRPCHttpServer)
         {
@@ -105,6 +115,10 @@ public:
     std::shared_ptr<ledger::LedgerManager> getLedgerManager() { return m_ledgerManager; }
 
 private:
+    std::shared_ptr<dev::stat::ChannelNetworkStatHandler> createNetWorkStatHandler(
+        boost::property_tree::ptree const& _pt);
+
+private:
     std::shared_ptr<p2p::P2PInterface> m_p2pService;
     std::shared_ptr<ledger::LedgerManager> m_ledgerManager;
     LedgerInitializer::Ptr m_ledgerInitializer;
@@ -114,6 +128,7 @@ private:
     ChannelRPCServer::Ptr m_channelRPCServer;
     ModularServer<>* m_channelRPCHttpServer;
     ModularServer<>* m_jsonrpcHttpServer;
+    dev::stat::ChannelNetworkStatHandler::Ptr m_networkStatHandler;
 };
 
 }  // namespace initializer

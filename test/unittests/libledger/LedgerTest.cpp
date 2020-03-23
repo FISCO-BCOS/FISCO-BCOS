@@ -34,6 +34,7 @@
 #include <memory>
 
 using namespace dev;
+using namespace dev::stat;
 using namespace dev::ledger;
 namespace dev
 {
@@ -266,6 +267,14 @@ BOOST_AUTO_TEST_CASE(testInitLedger)
     BOOST_CHECK(ledgerManager->blockChain(groupId)->number() == 1);
 }
 
+void initChannel(std::shared_ptr<LedgerInterface> ledger)
+{
+    auto channelServer = std::make_shared<ChannelRPCServer>();
+    auto handler = std::make_shared<ChannelNetworkStatHandler>("SDK");
+    channelServer->setNetworkStatHandler(handler);
+    ledger->setChannelRPCServer(channelServer);
+}
+
 BOOST_AUTO_TEST_CASE(testInitStorageLevelDB)
 {
     boost::system::error_code err;
@@ -280,6 +289,7 @@ BOOST_AUTO_TEST_CASE(testInitStorageLevelDB)
         std::make_shared<Ledger>(txpool_creator.m_topicService, groupId, key_pair);
     auto ledgerParams = std::make_shared<LedgerParam>();
     ledgerParams->init(configurationPath);
+    initChannel(ledger);
     BOOST_CHECK_NO_THROW(ledger->initLedger(ledgerParams));
 }
 
@@ -297,6 +307,7 @@ BOOST_AUTO_TEST_CASE(testInitStorageRocksDB)
         std::make_shared<Ledger>(txpool_creator.m_topicService, groupId, key_pair);
     auto ledgerParams = std::make_shared<LedgerParam>();
     ledgerParams->init(configurationPath);
+    initChannel(ledger);
     BOOST_CHECK_NO_THROW(ledger->initLedger(ledgerParams));
 }
 

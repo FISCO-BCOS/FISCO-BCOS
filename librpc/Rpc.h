@@ -140,7 +140,7 @@ public:
     Json::Value queryGroupStatus(int _groupID) override;
 
     void setCurrentTransactionCallback(
-        std::function<void(const std::string& receiptContext)>* _callback,
+        std::function<void(const std::string& receiptContext, GROUP_ID _groupId)>* _callback,
         std::function<uint32_t()>* _callbackVersion)
     {
         m_currentTransactionCallback.reset(_callback);
@@ -173,7 +173,8 @@ private:
     bool isValidSystemConfig(std::string const& key);
 
     /// transaction callback related
-    boost::thread_specific_ptr<std::function<void(const std::string& receiptContext)> >
+    boost::thread_specific_ptr<
+        std::function<void(const std::string& receiptContext, GROUP_ID _groupId)> >
         m_currentTransactionCallback;
     boost::thread_specific_ptr<std::function<uint32_t()> > m_transactionCallbackVersion;
 

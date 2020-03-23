@@ -102,8 +102,8 @@ EventLogFilterManager::filter_status EventLogFilterManager::executeFilter(
         filter->updateNextBlockToProcess(nextBlockToProcess + thisLoopBlockCanProcess);
 
         // call back
-        if (!response.empty() &&
-            !filter->getResponseCallback()(filter->getParams()->getFilterID(), 0, response))
+        if (!response.empty() && !filter->getResponseCallback()(filter->getParams()->getFilterID(),
+                                     0, response, filter->getParams()->getGroupID()))
         {  // call back failed, maybe sesseion disconnect
             strDesc = "response callback failed, session not active";
             status = filter_status::CALLBACK_FAILED;
@@ -113,8 +113,8 @@ EventLogFilterManager::filter_status EventLogFilterManager::executeFilter(
         // this filter push completed, remove this filter
         if (filter->pushCompleted())
         {
-            filter->getResponseCallback()(
-                filter->getParams()->getFilterID(), PUSH_COMPLETED, Json::Value());
+            filter->getResponseCallback()(filter->getParams()->getFilterID(), PUSH_COMPLETED,
+                Json::Value(), filter->getParams()->getGroupID());
             status = filter_status::PUSH_COMPLETED;
             break;
         }
@@ -131,7 +131,8 @@ EventLogFilterManager::filter_status EventLogFilterManager::executeFilter(
 // add EventLogFilter to m_filters by client json request
 int32_t EventLogFilterManager::addEventLogFilterByRequest(const EventLogFilterParams::Ptr _params,
     uint32_t _version,
-    std::function<bool(const std::string& _filterID, int32_t _result, const Json::Value& _logs)>
+    std::function<bool(const std::string& _filterID, int32_t _result, const Json::Value& _logs,
+        GROUP_ID const& _groupId)>
         _respCallback,
     std::function<bool()> _activeCallback)
 {
