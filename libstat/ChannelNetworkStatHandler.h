@@ -40,7 +40,6 @@ public:
         m_statLogFlushThread(std::make_shared<dev::ThreadPool>("statFlush", 1)),
         m_p2pStatHandlers(std::make_shared<std::map<GROUP_ID, NetworkStatHandler::Ptr>>())
     {}
-
     virtual ~ChannelNetworkStatHandler() {}
 
     virtual void start();
@@ -57,12 +56,15 @@ public:
     virtual void updateGroupRequestTraffic(
         GROUP_ID const& _groupId, uint32_t const& _msgType, uint64_t const& _msgSize);
 
-    void updateIncomingTrafficForRPC(
-        std::string const& _procedureName, GROUP_ID _groupId, uint64_t const& _msgSize);
-    void updateOutcomingTrafficForRPC(
-        std::string const& _procedureName, GROUP_ID _groupId, uint64_t const& _msgSize);
+    void updateIncomingTrafficForRPC(GROUP_ID _groupId, uint64_t const& _msgSize);
+    void updateOutcomingTrafficForRPC(GROUP_ID _groupId, uint64_t const& _msgSize);
 
     bool running() const { return m_running; }
+
+    bool shouldStatistic(std::string const& _procedureName)
+    {
+        return m_groupRPCMethodSet.count(_procedureName);
+    }
 
 private:
     void flushLog();
