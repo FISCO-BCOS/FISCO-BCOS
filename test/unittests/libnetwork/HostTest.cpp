@@ -145,6 +145,7 @@ BOOST_AUTO_TEST_CASE(Host_run)
     auto socket = fakeAsioInterface->m_acceptorInfo.first;
     auto nodeIP = NodeIPEndpoint(boost::asio::ip::address::from_string("127.0.0.1"), 8888);
     socket->setNodeIPEndpoint(nodeIP);
+    // TODO: fix the ut
     BOOST_CHECK(true == m_sessions.empty());
     boost::system::error_code ec;
     // accept successfully

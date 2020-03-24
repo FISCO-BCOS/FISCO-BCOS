@@ -49,8 +49,9 @@ public:
     ContractLifeCyclePrecompiled();
     virtual ~ContractLifeCyclePrecompiled(){};
 
-    bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context, bytesConstRef param,
-        Address const& origin = Address(), Address const& _sender = Address()) override;
+    PrecompiledExecResult::Ptr call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+        bytesConstRef param, Address const& origin = Address(),
+        Address const& _sender = Address()) override;
 
 private:
     bool checkPermission(std::shared_ptr<blockverifier::ExecutiveContext> context,
@@ -60,15 +61,15 @@ private:
     int updateFrozenStatus(std::shared_ptr<blockverifier::ExecutiveContext> context,
         std::string const& tableName, std::string const& frozen, Address const& origin);
     void freeze(std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,
-        Address const& origin, bytes& out);
+        Address const& origin, PrecompiledExecResult::Ptr _callResult);
     void unfreeze(std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,
-        Address const& origin, bytes& out);
+        Address const& origin, PrecompiledExecResult::Ptr _callResult);
     void grantManager(std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,
-        Address const& origin, bytes& out);
-    void getStatus(
-        std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data, bytes& out);
-    void listManager(
-        std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data, bytes& out);
+        Address const& origin, PrecompiledExecResult::Ptr _callResult);
+    void getStatus(std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,
+        PrecompiledExecResult::Ptr _callResult);
+    void listManager(std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,
+        PrecompiledExecResult::Ptr _callResult);
 };
 
 }  // namespace precompiled

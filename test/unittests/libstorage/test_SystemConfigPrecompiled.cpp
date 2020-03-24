@@ -36,6 +36,9 @@ struct SystemConfigPrecompiledFixture
         factory.initExecutiveContext(blockInfo, h256(0), context);
         systemConfigPrecompiled = std::make_shared<SystemConfigPrecompiled>();
         memoryTableFactory = context->getMemoryTableFactory();
+        auto precompiledExecResultFactory =
+            std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+        systemConfigPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     }
 
     ~SystemConfigPrecompiledFixture() {}
@@ -57,7 +60,8 @@ BOOST_AUTO_TEST_CASE(TestAddConfig)
     uint64_t value1 = 10000000;
     bytes in =
         abi.abiIn("setValueByKey(string,string)", key1, boost::lexical_cast<std::string>(value1));
-    bytes out = systemConfigPrecompiled->call(context, bytesConstRef(&in));
+    auto callResult = systemConfigPrecompiled->call(context, bytesConstRef(&in));
+    bytes out = callResult->execResult();
     s256 count = 0;
     abi.abiOut(bytesConstRef(&out), count);
     BOOST_TEST(count == 1u);
@@ -73,7 +77,8 @@ BOOST_AUTO_TEST_CASE(TestAddConfig)
     LOG(INFO) << "update the inserted key-value";
     uint64_t value2 = 20000000;
     in = abi.abiIn("setValueByKey(string,string)", key1, boost::lexical_cast<std::string>(value2));
-    out = systemConfigPrecompiled->call(context, bytesConstRef(&in));
+    callResult = systemConfigPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     count = 0;
     abi.abiOut(bytesConstRef(&out), count);
     BOOST_TEST(count == 1u);
@@ -90,7 +95,8 @@ BOOST_AUTO_TEST_CASE(errFunc)
 {
     eth::ContractABI abi;
     bytes in = abi.abiIn("insert(string)", std::string("test"));
-    bytes out = systemConfigPrecompiled->call(context, bytesConstRef(&in));
+    auto callResult = systemConfigPrecompiled->call(context, bytesConstRef(&in));
+    bytes out = callResult->execResult();
 }
 
 BOOST_AUTO_TEST_CASE(InvalidValue)
@@ -98,7 +104,8 @@ BOOST_AUTO_TEST_CASE(InvalidValue)
     eth::ContractABI abi;
     bytes in =
         abi.abiIn("setValueByKey(string,string)", std::string("tx_count_limit"), std::string("0"));
-    bytes out = systemConfigPrecompiled->call(context, bytesConstRef(&in));
+    auto callResult = systemConfigPrecompiled->call(context, bytesConstRef(&in));
+    bytes out = callResult->execResult();
     s256 count = 1;
     abi.abiOut(bytesConstRef(&out), count);
     if (g_BCOSConfig.version() > RC2_VERSION)
@@ -111,7 +118,8 @@ BOOST_AUTO_TEST_CASE(InvalidValue)
     }
 
     in = abi.abiIn("setValueByKey(string,string)", std::string("tx_count_limit"), std::string("0"));
-    out = systemConfigPrecompiled->call(context, bytesConstRef(&in));
+    callResult = systemConfigPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
     if (g_BCOSConfig.version() > RC2_VERSION)

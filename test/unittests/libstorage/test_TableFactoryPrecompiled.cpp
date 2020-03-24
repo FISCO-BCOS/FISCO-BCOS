@@ -56,6 +56,9 @@ struct TableFactoryPrecompiledFixture
         auto mockMemoryTableFactory = std::make_shared<MockMemoryTableFactory>();
         mockMemoryTableFactory->setStateStorage(memStorage);
         tableFactoryPrecompiled->setMemoryTableFactory(mockMemoryTableFactory);
+        auto precompiledExecResultFactory =
+            std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+        tableFactoryPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     }
 
     ~TableFactoryPrecompiledFixture() {}
@@ -78,7 +81,8 @@ BOOST_AUTO_TEST_CASE(call_afterBlock)
     dev::eth::ContractABI abi;
     bytes param = abi.abiIn("createTable(string,string,string)", std::string("t_test"),
         std::string("id"), std::string("item_name,item_id"));
-    bytes out = tableFactoryPrecompiled->call(context, bytesConstRef(&param));
+    auto callResult = tableFactoryPrecompiled->call(context, bytesConstRef(&param));
+    bytes out = callResult->execResult();
     s256 errCode;
     abi.abiOut(&out, errCode);
     BOOST_TEST(errCode == 0);
@@ -86,7 +90,8 @@ BOOST_AUTO_TEST_CASE(call_afterBlock)
     // createTable exist
     param = abi.abiIn("createTable(string,string,string)", std::string("t_test"), std::string("id"),
         std::string("item_name,item_id"));
-    out = tableFactoryPrecompiled->call(context, bytesConstRef(&param));
+    callResult = tableFactoryPrecompiled->call(context, bytesConstRef(&param));
+    out = callResult->execResult();
     abi.abiOut(&out, errCode);
     if (g_BCOSConfig.version() > RC2_VERSION)
     {
@@ -101,7 +106,8 @@ BOOST_AUTO_TEST_CASE(call_afterBlock)
     param.clear();
     out.clear();
     param = abi.abiIn("openTable(string)", std::string("t_poor"));
-    out = tableFactoryPrecompiled->call(context, bytesConstRef(&param));
+    callResult = tableFactoryPrecompiled->call(context, bytesConstRef(&param));
+    out = callResult->execResult();
     Address addressOut;
     addressOut.clear();
     abi.abiOut(&out, addressOut);
@@ -110,7 +116,8 @@ BOOST_AUTO_TEST_CASE(call_afterBlock)
     param.clear();
     out.clear();
     param = abi.abiIn("openTable(string)", std::string("t_test"));
-    out = tableFactoryPrecompiled->call(context, bytesConstRef(&param));
+    callResult = tableFactoryPrecompiled->call(context, bytesConstRef(&param));
+    out = callResult->execResult();
     addressOut.clear();
     abi.abiOut(&out, addressOut);
     BOOST_TEST(addressOut == Address(++addressCount));

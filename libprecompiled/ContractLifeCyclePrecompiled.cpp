@@ -152,8 +152,8 @@ int ContractLifeCyclePrecompiled::updateFrozenStatus(ExecutiveContext::Ptr conte
     return result;
 }
 
-void ContractLifeCyclePrecompiled::freeze(
-    ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin, bytes& out)
+void ContractLifeCyclePrecompiled::freeze(ExecutiveContext::Ptr context, bytesConstRef data,
+    Address const& origin, PrecompiledExecResult::Ptr _callResult)
 {
     dev::eth::ContractABI abi;
     Address contractAddress;
@@ -188,11 +188,11 @@ void ContractLifeCyclePrecompiled::freeze(
     {
         result = updateFrozenStatus(context, tableName, STATUS_TRUE, origin);
     }
-    getErrorCodeOut(out, result);
+    getErrorCodeOut(_callResult->mutableExecResult(), result);
 }
 
-void ContractLifeCyclePrecompiled::unfreeze(
-    ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin, bytes& out)
+void ContractLifeCyclePrecompiled::unfreeze(ExecutiveContext::Ptr context, bytesConstRef data,
+    Address const& origin, PrecompiledExecResult::Ptr _callResult)
 {
     dev::eth::ContractABI abi;
     Address contractAddress;
@@ -228,11 +228,11 @@ void ContractLifeCyclePrecompiled::unfreeze(
     {
         result = updateFrozenStatus(context, tableName, STATUS_FALSE, origin);
     }
-    getErrorCodeOut(out, result);
+    getErrorCodeOut(_callResult->mutableExecResult(), result);
 }
 
-void ContractLifeCyclePrecompiled::grantManager(
-    ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin, bytes& out)
+void ContractLifeCyclePrecompiled::grantManager(ExecutiveContext::Ptr context, bytesConstRef data,
+    Address const& origin, PrecompiledExecResult::Ptr _callResult)
 {
     dev::eth::ContractABI abi;
     Address contractAddress;
@@ -288,11 +288,11 @@ void ContractLifeCyclePrecompiled::grantManager(
             result = CODE_INVALID_CONTRACT_REPEAT_AUTHORIZATION;
         }
     }
-    getErrorCodeOut(out, result);
+    getErrorCodeOut(_callResult->mutableExecResult(), result);
 }
 
 void ContractLifeCyclePrecompiled::getStatus(
-    ExecutiveContext::Ptr context, bytesConstRef data, bytes& out)
+    ExecutiveContext::Ptr context, bytesConstRef data, PrecompiledExecResult::Ptr _callResult)
 {
     dev::eth::ContractABI abi;
 
@@ -305,11 +305,11 @@ void ContractLifeCyclePrecompiled::getStatus(
                            << LOG_KV("contract table name", tableName);
 
     ContractStatus status = getContractStatus(context, tableName);
-    out = abi.abiIn("", (u256)0, CONTRACT_STATUS_DESC[status]);
+    _callResult->setExecResult(abi.abiIn("", (u256)0, CONTRACT_STATUS_DESC[status]));
 }
 
 void ContractLifeCyclePrecompiled::listManager(
-    ExecutiveContext::Ptr context, bytesConstRef data, bytes& out)
+    ExecutiveContext::Ptr context, bytesConstRef data, PrecompiledExecResult::Ptr _callResult)
 {
     dev::eth::ContractABI abi;
 
@@ -353,14 +353,13 @@ void ContractLifeCyclePrecompiled::listManager(
             }
         }
     }
-
-    out = abi.abiIn("", (u256)result, addrs);
+    _callResult->setExecResult(abi.abiIn("", (u256)result, addrs));
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractLifeCyclePrecompiled")
                            << LOG_DESC("call query authority result")
-                           << LOG_KV("out", dev::toHex(out));
+                           << LOG_KV("out", dev::toHex(_callResult->execResult()));
 }
 
-bytes ContractLifeCyclePrecompiled::call(
+PrecompiledExecResult::Ptr ContractLifeCyclePrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin, Address const&)
 {
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractLifeCyclePrecompiled")
@@ -369,27 +368,28 @@ bytes ContractLifeCyclePrecompiled::call(
     // parse function name
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
-    bytes out;
+
+    auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
 
     if (func == name2Selector[METHOD_FREEZE_STR])
     {
-        freeze(context, data, origin, out);
+        freeze(context, data, origin, callResult);
     }
     else if (func == name2Selector[METHOD_UNFREEZE_STR])
     {
-        unfreeze(context, data, origin, out);
+        unfreeze(context, data, origin, callResult);
     }
     else if (func == name2Selector[METHOD_GRANT_STR])
     {
-        grantManager(context, data, origin, out);
+        grantManager(context, data, origin, callResult);
     }
     else if (func == name2Selector[METHOD_QUERY_STR])
     {
-        getStatus(context, data, out);
+        getStatus(context, data, callResult);
     }
     else if (func == name2Selector[METHOD_QUERY_AUTHORITY])
     {
-        listManager(context, data, out);
+        listManager(context, data, callResult);
     }
     else
     {
@@ -397,5 +397,5 @@ bytes ContractLifeCyclePrecompiled::call(
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
     }
 
-    return out;
+    return callResult;
 }

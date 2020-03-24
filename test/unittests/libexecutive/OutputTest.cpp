@@ -177,7 +177,8 @@ BOOST_AUTO_TEST_CASE(call)
 
     // freeze success
     in = abi.abiIn("freeze(address)", contractAddress);
-    out = clcPrecompiled->call(context, bytesConstRef(&in));
+    auto callResult = clcPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     abi.abiOut(&out, result);
     BOOST_TEST(result == 1);
 
@@ -196,7 +197,8 @@ BOOST_AUTO_TEST_CASE(call)
 
     // unfreeze success
     in = abi.abiIn("unfreeze(address)", contractAddress);
-    out = clcPrecompiled->call(context, bytesConstRef(&in));
+    callResult = clcPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     abi.abiOut(&out, result);
     BOOST_TEST(result == 1);
 

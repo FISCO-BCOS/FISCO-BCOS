@@ -60,8 +60,9 @@ std::string HelloWorldPrecompiled::toString()
     return "HelloWorld";
 }
 
-bytes HelloWorldPrecompiled::call(dev::blockverifier::ExecutiveContext::Ptr _context,
-    bytesConstRef _param, Address const& _origin, Address const&)
+PrecompiledExecResult::Ptr HelloWorldPrecompiled::call(
+    dev::blockverifier::ExecutiveContext::Ptr _context, bytesConstRef _param,
+    Address const& _origin, Address const&)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("call")
                            << LOG_KV("param", toHex(_param));
@@ -69,7 +70,7 @@ bytes HelloWorldPrecompiled::call(dev::blockverifier::ExecutiveContext::Ptr _con
     // parse function name
     uint32_t func = getParamFunc(_param);
     bytesConstRef data = getParamData(_param);
-    bytes out;
+    auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
     dev::eth::ContractABI abi;
 
     Table::Ptr table = openTable(_context, precompiled::getTableName(HELLO_WORLD_TABLE_NAME));
@@ -82,8 +83,8 @@ bytes HelloWorldPrecompiled::call(dev::blockverifier::ExecutiveContext::Ptr _con
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("set")
                                    << LOG_DESC("open table failed.");
-            getErrorCodeOut(out, storage::CODE_NO_AUTHORIZED);
-            return out;
+            getErrorCodeOut(callResult->mutableExecResult(), storage::CODE_NO_AUTHORIZED);
+            return callResult;
         }
     }
     if (func == name2Selector[HELLO_WORLD_METHOD_GET])
@@ -99,7 +100,7 @@ bytes HelloWorldPrecompiled::call(dev::blockverifier::ExecutiveContext::Ptr _con
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("get")
                                    << LOG_KV("value", retValue);
         }
-        out = abi.abiIn("", retValue);
+        callResult->setExecResult(abi.abiIn("", retValue));
     }
     else if (func == name2Selector[HELLO_WORLD_METHOD_SET])
     {  // set(string) function call
@@ -128,14 +129,14 @@ bytes HelloWorldPrecompiled::call(dev::blockverifier::ExecutiveContext::Ptr _con
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("set")
                                    << LOG_DESC("permission denied");
         }
-        getErrorCodeOut(out, count);
+        getErrorCodeOut(callResult->mutableExecResult(), count);
     }
     else
     {  // unknown function call
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC(" unknown func ")
                                << LOG_KV("func", func);
-        out = abi.abiIn("", u256(CODE_UNKNOW_FUNCTION_CALL));
+        callResult->setExecResult(abi.abiIn("", u256(CODE_UNKNOW_FUNCTION_CALL)));
     }
 
-    return out;
+    return callResult;
 }

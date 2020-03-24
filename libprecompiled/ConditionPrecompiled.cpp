@@ -59,7 +59,7 @@ std::string ConditionPrecompiled::toString()
     return "Condition";
 }
 
-bytes ConditionPrecompiled::call(
+PrecompiledExecResult::Ptr ConditionPrecompiled::call(
     ExecutiveContext::Ptr, bytesConstRef param, Address const&, Address const&)
 {
     STORAGE_LOG(DEBUG) << "call Condition:" << toHex(param);
@@ -72,7 +72,7 @@ bytes ConditionPrecompiled::call(
 
     dev::eth::ContractABI abi;
 
-    bytes out;
+    auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
 
     // ensured by the logic of code
     assert(m_condition);
@@ -161,5 +161,5 @@ bytes ConditionPrecompiled::call(
         STORAGE_LOG(ERROR) << LOG_BADGE("ConditionPrecompiled")
                            << LOG_DESC("call undefined function!");
     }
-    return out;
+    return callResult;
 }

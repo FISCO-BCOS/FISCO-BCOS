@@ -47,7 +47,7 @@ void ExecutiveContext::setPrecompiledExecResultFactory(
     }
 }
 
-bytes ExecutiveContext::call(
+dev::precompiled::PrecompiledExecResult::Ptr ExecutiveContext::call(
     Address const& address, bytesConstRef param, Address const& origin, Address const& sender)
 {
     try
@@ -56,13 +56,14 @@ bytes ExecutiveContext::call(
 
         if (p)
         {
-            bytes out = p->call(shared_from_this(), param, origin, sender);
-            return out;
+            auto execResult = p->call(shared_from_this(), param, origin, sender);
+            return execResult;
         }
         else
         {
             EXECUTIVECONTEXT_LOG(DEBUG)
                 << LOG_DESC("[call]Can't find address") << LOG_KV("address", address);
+            return std::make_shared<dev::precompiled::PrecompiledExecResult>();
         }
     }
     catch (dev::precompiled::PrecompiledException& e)
@@ -84,8 +85,6 @@ bytes ExecutiveContext::call(
 
         throw dev::eth::PrecompiledError();
     }
-
-    return bytes();
 }
 
 Address ExecutiveContext::registerPrecompiled(std::shared_ptr<precompiled::Precompiled> p)
