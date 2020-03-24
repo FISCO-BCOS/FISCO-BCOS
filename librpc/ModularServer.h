@@ -204,14 +204,15 @@ public:
             try
             {
                 (m_interface.get()->*(pointer->second))(_input, _output);
-                // update network stat for the RPC handler
-                auto groupId = getGroupID(_input);
-                if (m_networkStatHandler && groupId != -1)
+                if (m_networkStatHandler && m_networkStatHandler->shouldStatistic(procedureName))
                 {
-                    m_networkStatHandler->updateIncomingTrafficForRPC(
-                        procedureName, groupId, _input.size());
-                    m_networkStatHandler->updateOutcomingTrafficForRPC(
-                        procedureName, groupId, _output.size());
+                    // update network stat for the RPC handler
+                    auto groupId = getGroupID(_input);
+                    if (groupId != -1)
+                    {
+                        m_networkStatHandler->updateIncomingTrafficForRPC(groupId, _input.size());
+                        m_networkStatHandler->updateOutcomingTrafficForRPC(groupId, _output.size());
+                    }
                 }
             }
             catch (jsonrpc::JsonRpcException& e)

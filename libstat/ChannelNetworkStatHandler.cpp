@@ -77,28 +77,19 @@ void ChannelNetworkStatHandler::updateGroupRequestTraffic(
 
 
 void ChannelNetworkStatHandler::updateIncomingTrafficForRPC(
-    std::string const& _procedureName, GROUP_ID _groupId, uint64_t const& _msgSize)
+    GROUP_ID _groupId, uint64_t const& _msgSize)
 {
-    if (!m_groupRPCMethodSet.count(_procedureName))
-    {
-        return;
-    }
     ReadGuard l(x_p2pStatHandlers);
     if (!m_p2pStatHandlers->count(_groupId))
     {
         return;
     }
-
     (*m_p2pStatHandlers)[_groupId]->updateIncomingTraffic(
         ChannelMessageType::CHANNEL_RPC_REQUEST, _msgSize);
 }
 void ChannelNetworkStatHandler::updateOutcomingTrafficForRPC(
-    std::string const& _procedureName, GROUP_ID _groupId, uint64_t const& _msgSize)
+    GROUP_ID _groupId, uint64_t const& _msgSize)
 {
-    if (!m_groupRPCMethodSet.count(_procedureName))
-    {
-        return;
-    }
     ReadGuard l(x_p2pStatHandlers);
     if (!m_p2pStatHandlers->count(_groupId))
     {
