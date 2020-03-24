@@ -84,6 +84,9 @@ public:
         m_address2Precompiled.insert(std::make_pair(address, precompiled));
     }
 
+    void setPrecompiledExecResultFactory(
+        dev::precompiled::PrecompiledExecResultFactory::Ptr _precompiledExecResultFactory);
+
     BlockInfo blockInfo() { return m_blockInfo; }
     void setBlockInfo(BlockInfo blockInfo) { m_blockInfo = blockInfo; }
 
