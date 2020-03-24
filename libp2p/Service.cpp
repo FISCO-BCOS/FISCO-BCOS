@@ -815,6 +815,7 @@ bool Service::isConnected(NodeID const& nodeID) const
     return false;
 }
 
+
 void Service::appendNetworkStatHandlerByGroupID(
     GROUP_ID const& _groupID, std::shared_ptr<dev::stat::NetworkStatHandler> _handler)
 {
@@ -827,6 +828,18 @@ void Service::appendNetworkStatHandlerByGroupID(
     }
     SERVICE_LOG(WARNING) << LOG_DESC("appendNetworkStatHandlerByGroupID: already exists")
                          << LOG_KV("group", std::to_string(_groupID));
+}
+
+void Service::removeNetworkStatHandlerByGroupID(GROUP_ID const& _groupID)
+{
+    UpgradableGuard l(x_group2NetworkStatHandler);
+    if (m_group2NetworkStatHandler->count(_groupID))
+    {
+        UpgradeGuard ul(l);
+        m_group2NetworkStatHandler->erase(_groupID);
+        SERVICE_LOG(DEBUG) << LOG_DESC("removeNetworkStatHandlerByGroupID")
+                           << LOG_KV("group", std::to_string(_groupID));
+    }
 }
 
 void Service::updateIncomingTraffic(P2PMessage::Ptr _msg)

@@ -168,6 +168,8 @@ public:
     void appendNetworkStatHandlerByGroupID(
         GROUP_ID const& _groupID, std::shared_ptr<dev::stat::NetworkStatHandler> _handler) override;
 
+    void removeNetworkStatHandlerByGroupID(GROUP_ID const& _groupID) override;
+
 private:
     NodeIDs getPeersByTopic(std::string const& topic);
     void checkWhitelistAndClearSession();

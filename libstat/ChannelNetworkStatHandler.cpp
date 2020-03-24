@@ -43,6 +43,18 @@ void ChannelNetworkStatHandler::appendGroupP2PStatHandler(
     (*m_p2pStatHandlers)[_groupId] = _handler;
 }
 
+void ChannelNetworkStatHandler::removeGroupP2PStatHandler(GROUP_ID const& _groupId)
+{
+    UpgradableGuard l(x_p2pStatHandlers);
+    if (m_p2pStatHandlers->count(_groupId))
+    {
+        UpgradeGuard ul(l);
+        m_p2pStatHandlers->erase(_groupId);
+        CHANNEL_STAT_LOG(WARNING) << LOG_DESC("removeGroupP2PStatHandler")
+                                  << LOG_KV("groupId", std::to_string(_groupId));
+    }
+}
+
 void ChannelNetworkStatHandler::updateGroupResponseTraffic(
     GROUP_ID const& _groupId, uint32_t const& _msgType, uint64_t const& _msgSize)
 {

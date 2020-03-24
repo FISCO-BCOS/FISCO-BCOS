@@ -49,6 +49,7 @@ public:
     void setFlushInterval(int64_t const& _flushInterval);
     int64_t flushInterval() const { return m_flushInterval; }
     void appendGroupP2PStatHandler(GROUP_ID const& _groupId, NetworkStatHandler::Ptr _handler);
+    void removeGroupP2PStatHandler(GROUP_ID const& _groupId);
 
     virtual void updateGroupResponseTraffic(
         GROUP_ID const& _groupId, uint32_t const& _msgType, uint64_t const& _msgSize);
