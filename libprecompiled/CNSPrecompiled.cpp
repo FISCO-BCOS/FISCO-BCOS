@@ -51,7 +51,7 @@ std::string CNSPrecompiled::toString()
     return "CNS";
 }
 
-bytes CNSPrecompiled::call(
+PrecompiledExecResult::Ptr CNSPrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin, Address const&)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("CNSPrecompiled") << LOG_DESC("call")
@@ -62,7 +62,8 @@ bytes CNSPrecompiled::call(
     bytesConstRef data = getParamData(param);
 
     dev::eth::ContractABI abi;
-    bytes out;
+    auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
+
 
     if (func == name2Selector[CNS_METHOD_INS_STR4])
     {  // FIXME: modify insert(string,string,string,string) ==> insert(string,string,address,string)
@@ -147,7 +148,7 @@ bytes CNSPrecompiled::call(
                 result = count;
             }
         }
-        getErrorCodeOut(out, result);
+        getErrorCodeOut(callResult->mutableExecResult(), result);
     }
     else if (func == name2Selector[CNS_METHOD_SLT_STR])
     {
@@ -176,7 +177,7 @@ bytes CNSPrecompiled::call(
         }
         Json::FastWriter fastWriter;
         std::string str = fastWriter.write(CNSInfos);
-        out = abi.abiIn("", str);
+        callResult->setExecResult(abi.abiIn("", str));
     }
     else if (func == name2Selector[CNS_METHOD_SLT_STR2])
     {
@@ -201,7 +202,7 @@ bytes CNSPrecompiled::call(
         }
         Json::FastWriter fastWriter;
         std::string str = fastWriter.write(CNSInfos);
-        out = abi.abiIn("", str);
+        callResult->setExecResult(abi.abiIn("", str));
     }
     else if (func == name2Selector[CNS_METHOD_GET_CONTRACT_ADDRESS])
     {  // getContractAddress(string,string) returns(address)
@@ -219,7 +220,7 @@ bytes CNSPrecompiled::call(
             string value = entry->getField(SYS_CNS_FIELD_ADDRESS);
             ret = Address(value);
         }
-        out = abi.abiIn("", ret);
+        callResult->setExecResult(abi.abiIn("", ret));
     }
     else
     {
@@ -227,5 +228,5 @@ bytes CNSPrecompiled::call(
                                << LOG_KV("func", func);
     }
 
-    return out;
+    return callResult;
 }

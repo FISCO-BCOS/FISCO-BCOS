@@ -72,7 +72,8 @@ BOOST_AUTO_TEST_CASE(testGet)
     u256 num = u256(0);
     ContractABI abi;
     bytes bint = abi.abiIn("get(int256)", num);
-    bytes out = entriesPrecompiled->call(precompiledContext, bytesConstRef(&bint));
+    auto callResult = entriesPrecompiled->call(precompiledContext, bytesConstRef(&bint));
+    bytes out = callResult->execResult();
     Address address;
     abi.abiOut(bytesConstRef(&out), address);
     auto entryPrecompiled = precompiledContext->getPrecompiled(address);
@@ -85,7 +86,8 @@ BOOST_AUTO_TEST_CASE(testSize)
     entries->addEntry(entry);
     ContractABI abi;
     bytes bint = abi.abiIn("size()");
-    bytes out = entriesPrecompiled->call(precompiledContext, bytesConstRef(&bint));
+    auto callResult = entriesPrecompiled->call(precompiledContext, bytesConstRef(&bint));
+    bytes out = callResult->execResult();
     u256 num;
     abi.abiOut(bytesConstRef(&out), num);
     BOOST_TEST_TRUE(num == u256(1));

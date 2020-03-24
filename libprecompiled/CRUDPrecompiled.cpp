@@ -54,7 +54,7 @@ std::string CRUDPrecompiled::toString()
     return "CRUD";
 }
 
-bytes CRUDPrecompiled::call(
+PrecompiledExecResult::Ptr CRUDPrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin, Address const&)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("CRUDPrecompiled") << LOG_DESC("call")
@@ -64,8 +64,7 @@ bytes CRUDPrecompiled::call(
     bytesConstRef data = getParamData(param);
 
     dev::eth::ContractABI abi;
-    bytes out;
-
+    auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
     if (func == name2Selector[CRUD_METHOD_DESC_STR])
     {  // desc(string)
         std::string tableName;
@@ -85,7 +84,8 @@ bytes CRUDPrecompiled::call(
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("CRUDPrecompiled") << LOG_DESC("table not exist")
                                    << LOG_KV("tableName", tableName);
         }
-        return abi.abiIn("", keyField, valueFiled);
+        callResult->setExecResult(abi.abiIn("", keyField, valueFiled));
+        return callResult;
     }
     else if (func == name2Selector[CRUD_METHOD_INSERT_STR])
     {  // insert(string tableName, string key, string entry, string optional)
@@ -102,8 +102,8 @@ bytes CRUDPrecompiled::call(
             int parseEntryResult = parseEntry(entryStr, entry);
             if (parseEntryResult != CODE_SUCCESS)
             {
-                out = abi.abiIn("", u256(parseEntryResult));
-                return out;
+                callResult->setExecResult(abi.abiIn("", u256(parseEntryResult)));
+                return callResult;
             }
 
             auto it = entry->begin();
@@ -114,16 +114,16 @@ bytes CRUDPrecompiled::call(
             }
 
             int result = table->insert(key, entry, std::make_shared<AccessOptions>(origin));
-            out = abi.abiIn("", u256(result));
+            callResult->setExecResult(abi.abiIn("", u256(result)));
         }
         else
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("CRUDPrecompiled") << LOG_DESC("table open error")
                                    << LOG_KV("tableName", tableName);
-            out = abi.abiIn("", u256(CODE_TABLE_NOT_EXIST));
+            callResult->setExecResult(abi.abiIn("", u256(CODE_TABLE_NOT_EXIST)));
         }
 
-        return out;
+        return callResult;
     }
     if (func == name2Selector[CRUD_METHOD_UPDATE_STR])
     {  // update(string tableName, string key, string entry, string condition, string optional)
@@ -137,15 +137,15 @@ bytes CRUDPrecompiled::call(
             int parseEntryResult = parseEntry(entryStr, entry);
             if (parseEntryResult != CODE_SUCCESS)
             {
-                out = abi.abiIn("", u256(parseEntryResult));
-                return out;
+                callResult->setExecResult(abi.abiIn("", u256(parseEntryResult)));
+                return callResult;
             }
             Condition::Ptr condition = table->newCondition();
             int parseConditionResult = parseCondition(conditionStr, condition);
             if (parseConditionResult != CODE_SUCCESS)
             {
-                out = abi.abiIn("", u256(parseConditionResult));
-                return out;
+                callResult->setExecResult(abi.abiIn("", u256(parseConditionResult)));
+                return callResult;
             }
 
             auto it = entry->begin();
@@ -157,16 +157,16 @@ bytes CRUDPrecompiled::call(
 
             int result =
                 table->update(key, entry, condition, std::make_shared<AccessOptions>(origin));
-            out = abi.abiIn("", u256(result));
+            callResult->setExecResult(abi.abiIn("", u256(result)));
         }
         else
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("CRUDPrecompiled") << LOG_DESC("table open error")
                                    << LOG_KV("tableName", tableName);
-            out = abi.abiIn("", u256(CODE_TABLE_NOT_EXIST));
+            callResult->setExecResult(abi.abiIn("", u256(CODE_TABLE_NOT_EXIST)));
         }
 
-        return out;
+        return callResult;
     }
     if (func == name2Selector[CRUD_METHOD_REMOVE_STR])
     {  // remove(string tableName, string key, string condition, string optional)
@@ -180,20 +180,20 @@ bytes CRUDPrecompiled::call(
             int parseConditionResult = parseCondition(conditionStr, condition);
             if (parseConditionResult != CODE_SUCCESS)
             {
-                out = abi.abiIn("", u256(parseConditionResult));
-                return out;
+                callResult->setExecResult(abi.abiIn("", u256(parseConditionResult)));
+                return callResult;
             }
             int result = table->remove(key, condition, std::make_shared<AccessOptions>(origin));
-            out = abi.abiIn("", u256(result));
+            callResult->setExecResult(abi.abiIn("", u256(result)));
         }
         else
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("CRUDPrecompiled") << LOG_DESC("table open error")
                                    << LOG_KV("tableName", tableName);
-            out = abi.abiIn("", u256(CODE_TABLE_NOT_EXIST));
+            callResult->setExecResult(abi.abiIn("", u256(CODE_TABLE_NOT_EXIST)));
         }
 
-        return out;
+        return callResult;
     }
     if (func == name2Selector[CRUD_METHOD_SELECT_STR])
     {  // select(string tableName, string key, string condition, string optional)
@@ -210,8 +210,8 @@ bytes CRUDPrecompiled::call(
             int parseConditionResult = parseCondition(conditionStr, condition);
             if (parseConditionResult != CODE_SUCCESS)
             {
-                out = abi.abiIn("", u256(parseConditionResult));
-                return out;
+                callResult->setExecResult(abi.abiIn("", u256(parseConditionResult)));
+                return callResult;
             }
             auto entries = table->select(key, condition);
             Json::Value records = Json::Value(Json::arrayValue);
@@ -230,24 +230,24 @@ bytes CRUDPrecompiled::call(
             }
 
             auto str = records.toStyledString();
-            out = abi.abiIn("", str);
+            callResult->setExecResult(abi.abiIn("", str));
         }
         else
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("CRUDPrecompiled") << LOG_DESC("table open error")
                                    << LOG_KV("tableName", tableName);
-            out = abi.abiIn("", u256(CODE_TABLE_NOT_EXIST));
+            callResult->setExecResult(abi.abiIn("", u256(CODE_TABLE_NOT_EXIST)));
         }
 
-        return out;
+        return callResult;
     }
     else
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("CRUDPrecompiled")
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
-        out = abi.abiIn("", u256(CODE_UNKNOW_FUNCTION_CALL));
+        callResult->setExecResult(abi.abiIn("", u256(CODE_UNKNOW_FUNCTION_CALL)));
 
-        return out;
+        return callResult;
     }
 }
 

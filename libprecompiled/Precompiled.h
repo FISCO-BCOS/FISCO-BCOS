@@ -46,9 +46,9 @@ public:
     virtual ~Precompiled(){};
 
     virtual std::string toString() { return ""; }
-    virtual bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
-        bytesConstRef _param, Address const& _origin = Address(),
-        Address const& _sender = Address()) = 0;
+    virtual PrecompiledExecResult::Ptr call(
+        std::shared_ptr<dev::blockverifier::ExecutiveContext> _context, bytesConstRef _param,
+        Address const& _origin = Address(), Address const& _sender = Address()) = 0;
 
     // is this precompiled need parallel processing, default false.
     virtual bool isParallelPrecompiled() { return false; }

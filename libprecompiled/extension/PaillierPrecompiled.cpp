@@ -36,7 +36,7 @@ PaillierPrecompiled::PaillierPrecompiled() : m_callPaillier(std::make_shared<Cal
     name2Selector[PAILLIER_METHOD_SET_STR] = getFuncSelector(PAILLIER_METHOD_SET_STR);
 }
 
-bytes PaillierPrecompiled::call(
+PrecompiledExecResult::Ptr PaillierPrecompiled::call(
     ExecutiveContext::Ptr, bytesConstRef param, Address const&, Address const&)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("PaillierPrecompiled") << LOG_DESC("call")
@@ -47,7 +47,7 @@ bytes PaillierPrecompiled::call(
     bytesConstRef data = getParamData(param);
 
     dev::eth::ContractABI abi;
-    bytes out;
+    auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
 
     if (func == name2Selector[PAILLIER_METHOD_SET_STR])
     {
@@ -64,16 +64,16 @@ bytes PaillierPrecompiled::call(
             PRECOMPILED_LOG(ERROR)
                 << LOG_BADGE("PaillierPrecompiled") << LOG_DESC(std::string(e.what()))
                 << LOG_KV("cipher1", cipher1) << LOG_KV("cipher2", cipher2);
-            getErrorCodeOut(out, CODE_INVALID_CIPHERS);
-            return out;
+            getErrorCodeOut(callResult->mutableExecResult(), CODE_INVALID_CIPHERS);
+            return callResult;
         }
-        out = abi.abiIn("", result);
+        callResult->setExecResult(abi.abiIn("", result));
     }
     else
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("PaillierPrecompiled")
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
-        getErrorCodeOut(out, CODE_UNKNOW_FUNCTION_CALL);
+        getErrorCodeOut(callResult->mutableExecResult(), CODE_UNKNOW_FUNCTION_CALL);
     }
-    return out;
+    return callResult;
 }

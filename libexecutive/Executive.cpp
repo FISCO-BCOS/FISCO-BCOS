@@ -174,10 +174,11 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
         {
             m_gas = _p.gas;
             LOG(TRACE) << "Execute Precompiled: " << _p.codeAddress;
-            auto result = m_envInfo.precompiledEngine()->call(
+            auto callResult = m_envInfo.precompiledEngine()->call(
                 _p.codeAddress, _p.data, _origin, _p.senderAddress);
-            size_t outputSize = result.size();
-            m_output = owning_bytes_ref{std::move(result), 0, outputSize};
+            size_t outputSize = callResult->execResult().size();
+            auto output = callResult->execResult();
+            m_output = owning_bytes_ref{std::move(output), 0, outputSize};
         }
         else
         {
@@ -240,10 +241,11 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
     {
         try
         {
-            auto result = m_envInfo.precompiledEngine()->call(
+            auto callResult = m_envInfo.precompiledEngine()->call(
                 _p.codeAddress, _p.data, _origin, _p.senderAddress);
-            size_t outputSize = result.size();
-            m_output = owning_bytes_ref{std::move(result), 0, outputSize};
+            size_t outputSize = callResult->execResult().size();
+            auto output = callResult->execResult();
+            m_output = owning_bytes_ref{std::move(output), 0, outputSize};
         }
         catch (dev::precompiled::PrecompiledException& e)
         {

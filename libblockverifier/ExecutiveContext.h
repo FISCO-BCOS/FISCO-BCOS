@@ -69,7 +69,7 @@ public:
         }
     };
 
-    virtual bytes call(
+    virtual dev::precompiled::PrecompiledExecResult::Ptr call(
         Address const& address, bytesConstRef param, Address const& origin, Address const& sender);
 
     virtual Address registerPrecompiled(std::shared_ptr<precompiled::Precompiled> p);

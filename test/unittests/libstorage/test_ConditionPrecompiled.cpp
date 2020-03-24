@@ -43,6 +43,9 @@ struct ConditionPrecompiledFixture
         auto condition = std::make_shared<storage::Condition>();
         conditionPrecompiled->setPrecompiledEngine(context);
         conditionPrecompiled->setCondition(condition);
+        auto precompiledExecResultFactory =
+            std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+        conditionPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     }
 
     ~ConditionPrecompiledFixture() {}

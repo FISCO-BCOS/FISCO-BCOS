@@ -33,6 +33,7 @@ public:
     PrecompiledExecResult() = default;
     virtual ~PrecompiledExecResult() {}
     bytes const& execResult() const { return m_execResult; }
+    bytes& mutableExecResult() { return m_execResult; }
 
     void setExecResult(bytes const& _execResult) { m_execResult = _execResult; }
 

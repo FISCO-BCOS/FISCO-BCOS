@@ -56,8 +56,8 @@ std::string TablePrecompiled::toString()
     return "Table";
 }
 
-bytes TablePrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param,
-    Address const& origin, Address const& sender)
+PrecompiledExecResult::Ptr TablePrecompiled::call(ExecutiveContext::Ptr context,
+    bytesConstRef param, Address const& origin, Address const& sender)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("TablePrecompiled") << LOG_DESC("call")
                            << LOG_KV("param", toHex(param));
@@ -66,9 +66,7 @@ bytes TablePrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param,
     bytesConstRef data = getParamData(param);
 
     dev::eth::ContractABI abi;
-
-    bytes out;
-
+    auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
     if (func == name2Selector[TABLE_METHOD_SLT_STR_ADD])
     {  // select(string,address)
         std::string key;
@@ -85,7 +83,7 @@ bytes TablePrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param,
         entriesPrecompiled->setEntries(entries);
 
         auto newAddress = context->registerPrecompiled(entriesPrecompiled);
-        out = abi.abiIn("", newAddress);
+        callResult->setExecResult(abi.abiIn("", newAddress));
     }
     else if (func == name2Selector[TABLE_METHOD_INS_STR_ADD])
     {  // insert(string,address)
@@ -116,7 +114,7 @@ bytes TablePrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param,
                 it->second, USER_TABLE_FIELD_VALUE_MAX_LENGTH, CODE_TABLE_KEYVALUE_LENGTH_OVERFLOW);
         }
         int count = m_table->insert(key, entry, std::make_shared<AccessOptions>(origin));
-        out = abi.abiIn("", u256(count));
+        callResult->setExecResult(abi.abiIn("", u256(count)));
     }
     else if (func == name2Selector[TABLE_METHOD_NEWCOND])
     {  // newCondition()
@@ -125,7 +123,7 @@ bytes TablePrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param,
         conditionPrecompiled->setCondition(condition);
 
         auto newAddress = context->registerPrecompiled(conditionPrecompiled);
-        out = abi.abiIn("", newAddress);
+        callResult->setExecResult(abi.abiIn("", newAddress));
     }
     else if (func == name2Selector[TABLE_METHOD_NEWENT])
     {  // newEntry()
@@ -134,7 +132,7 @@ bytes TablePrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param,
         entryPrecompiled->setEntry(entry);
 
         auto newAddress = context->registerPrecompiled(entryPrecompiled);
-        out = abi.abiIn("", newAddress);
+        callResult->setExecResult(abi.abiIn("", newAddress));
     }
     else if (func == name2Selector[TABLE_METHOD_RE_STR_ADD])
     {  // remove(string,address)
@@ -157,7 +155,7 @@ bytes TablePrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param,
         auto condition = conditionPrecompiled->getCondition();
 
         int count = m_table->remove(key, condition, std::make_shared<AccessOptions>(origin));
-        out = abi.abiIn("", u256(count));
+        callResult->setExecResult(abi.abiIn("", u256(count)));
     }
     else if (func == name2Selector[TABLE_METHOD_UP_STR_2ADD])
     {  // update(string,address,address)
@@ -190,14 +188,14 @@ bytes TablePrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param,
         auto condition = conditionPrecompiled->getCondition();
 
         int count = m_table->update(key, entry, condition, std::make_shared<AccessOptions>(origin));
-        out = abi.abiIn("", u256(count));
+        callResult->setExecResult(abi.abiIn("", u256(count)));
     }
     else
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("TablePrecompiled")
                                << LOG_DESC("call undefined function!");
     }
-    return out;
+    return callResult;
 }
 
 h256 TablePrecompiled::hash()

@@ -40,8 +40,9 @@ public:
 
     std::string toString() override;
 
-    bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context, bytesConstRef param,
-        Address const& origin = Address(), Address const& _sender = Address()) override;
+    PrecompiledExecResult::Ptr call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+        bytesConstRef param, Address const& origin = Address(),
+        Address const& _sender = Address()) override;
 
 private:
     int parseEntry(const std::string& entryStr, storage::Entry::Ptr& entry);
