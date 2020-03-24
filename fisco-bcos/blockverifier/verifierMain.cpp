@@ -59,7 +59,7 @@ int main(int argc, char* argv[])
     auto blockChain = std::make_shared<dev::blockchain::BlockChainImp>();
     blockChain->setStateStorage(storage);
     dev::blockchain::GenesisBlockParam initParam = {
-        "std", dev::h512s(), dev::h512s(), "", "", "", 1000, 300000000, 0};
+        "std", dev::h512s(), dev::h512s(), "", "", "", 1000, 300000000, 0, -1, -1};
     blockChain->checkAndBuildGenesisBlock(initParam);
 
     auto stateFactory = std::make_shared<dev::storagestate::StorageStateFactory>(dev::u256(0));
@@ -314,7 +314,6 @@ int main(int argc, char* argv[])
             // u256 maxBlockLimit = u256(1000);
             // tx.setNonce(tx.nonce() + u256(1));
             // tx.setBlockLimit(u256(blockChain->number()) + maxBlockLimit);
-            // dev::Signature sig = sign(sec, tx.sha3(dev::eth::WithoutSignature));
             // tx.updateSignature(SignatureStruct(sig));
             LOG(INFO) << "Tx " << *tx;
 

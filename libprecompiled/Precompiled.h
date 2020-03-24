@@ -31,10 +31,13 @@ namespace storage
 {
 class Table;
 }  // namespace storage
-
 namespace blockverifier
 {
 class ExecutiveContext;
+}
+
+namespace precompiled
+{
 class Precompiled : public std::enable_shared_from_this<Precompiled>
 {
 public:
@@ -45,7 +48,8 @@ public:
     virtual std::string toString() { return ""; }
 
     virtual bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
-        bytesConstRef _param, Address const& _origin = Address()) = 0;
+        bytesConstRef _param, Address const& _origin = Address(),
+        Address const& _sender = Address()) = 0;
 
     // is this precompiled need parallel processing, default false.
     virtual bool isParallelPrecompiled() { return false; }
@@ -75,8 +79,10 @@ protected:
         std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
         const std::string& _tableName, const std::string& _keyField, const std::string& _valueField,
         Address const& origin);
+    bool checkAuthority(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+        Address const& _origin, Address const& _contract);
 };
 
-}  // namespace blockverifier
+}  // namespace precompiled
 
 }  // namespace dev

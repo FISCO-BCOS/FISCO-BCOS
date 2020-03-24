@@ -62,7 +62,6 @@ public:
             insertMessage(x_knownViewChange, m_knownViewChange, c_knownViewChange, key);
             return true;
         default:
-            LOG(DEBUG) << "Invalid packet type:" << type;
             return false;
         }
     }
@@ -172,8 +171,12 @@ public:
      */
     inline bool insertKey(h512 const& nodeId, unsigned const& type, std::string const& key)
     {
+        UpgradableGuard l(x_broadCastKeyCache);
         if (!m_broadCastKeyCache.count(nodeId))
+        {
+            UpgradeGuard ul(l);
             m_broadCastKeyCache[nodeId] = std::make_shared<PBFTMsgCache>();
+        }
         return m_broadCastKeyCache[nodeId]->insertByPacketType(type, key);
     }
 
@@ -188,6 +191,7 @@ public:
      */
     inline bool keyExists(h512 const& nodeId, unsigned const& type, std::string const& key)
     {
+        ReadGuard l(x_broadCastKeyCache);
         if (!m_broadCastKeyCache.count(nodeId))
             return false;
         return m_broadCastKeyCache[nodeId]->exists(type, key);
@@ -196,6 +200,7 @@ public:
     /// clear all caches
     inline void clearAll()
     {
+        WriteGuard l(x_broadCastKeyCache);
         for (auto& item : m_broadCastKeyCache)
             item.second->clearAll();
     }
@@ -203,6 +208,7 @@ public:
 private:
     /// maps between node id and its broadcast cache
     std::unordered_map<h512, std::shared_ptr<PBFTMsgCache>> m_broadCastKeyCache;
+    mutable SharedMutex x_broadCastKeyCache;
 };
 }  // namespace consensus
 }  // namespace dev

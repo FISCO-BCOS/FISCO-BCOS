@@ -112,33 +112,6 @@ public:
             txpool_creator.m_txPool, txpool_creator.m_blockChain, blockVerifier, txQueue};
     }
 
-    shared_ptr<Transactions> fakeTransactions(size_t _num, int64_t _currentBlockNumber)
-    {
-        shared_ptr<Transactions> txs = make_shared<Transactions>();
-        for (size_t i = 0; i < _num; ++i)
-        {
-            /// Transaction tx(ref(c_txBytes), CheckTransaction::Everything);
-            u256 value = u256(100);
-            u256 gas = u256(100000000);
-            u256 gasPrice = u256(0);
-            Address dst = toAddress(KeyPair::create().pub());
-            std::string str = "test transaction";
-            bytes data(str.begin(), str.end());
-            Transaction::Ptr tx = std::make_shared<Transaction>(value, gasPrice, gas, dst, data);
-            KeyPair sigKeyPair = KeyPair::create();
-            tx->setNonce(tx->nonce() + utcTime() + m_nonceBase);
-            tx->setBlockLimit(u256(_currentBlockNumber) + c_maxBlockLimit);
-            tx->setRpcTx(true);
-            SignatureStruct sig = dev::sign(sigKeyPair.secret(), tx->sha3(WithoutSignature));
-            /// update the signature of transaction
-            tx->updateSignature(sig);
-            // std::pair<h256, Address> ret = txPool->submit(tx);
-            txs->emplace_back(tx);
-            m_nonceBase++;
-        }
-        return txs;
-    }
-
 public:
     Secret m_sec;
     h256 m_genesisHash;
@@ -183,7 +156,8 @@ BOOST_AUTO_TEST_CASE(MaintainTransactionsTest)
     sync->syncStatus()->newSyncPeerStatus(
         SyncPeerInfo{NodeID(102), 0, m_genesisHash, m_genesisHash});
 
-    shared_ptr<Transactions> txs = fakeTransactions(2, currentBlockNumber);
+    std::shared_ptr<FakeBlock> fakedBlock = std::make_shared<FakeBlock>();
+    shared_ptr<Transactions> txs = fakedBlock->fakeTransactions(2, currentBlockNumber);
     for (auto& tx : *txs)
         txPool->submitTransactions(tx);
 
@@ -201,7 +175,7 @@ BOOST_AUTO_TEST_CASE(MaintainTransactionsTest)
         return true;
     });
 
-    txs = fakeTransactions(2, currentBlockNumber);
+    txs = fakedBlock->fakeTransactions(2, currentBlockNumber);
     for (auto& tx : *txs)
         txPool->submitTransactions(tx);
 
@@ -215,7 +189,7 @@ BOOST_AUTO_TEST_CASE(MaintainTransactionsTest)
     // Message::Ptr msg = service->getAsyncSendMessageByNodeID(NodeID(101));
 
     // test transaction has send logic
-    txs = fakeTransactions(2, currentBlockNumber);
+    txs = fakedBlock->fakeTransactions(2, currentBlockNumber);
     for (auto& tx : *txs)
         txPool->submitTransactions(tx);
     sync->maintainTransactions();
@@ -226,7 +200,7 @@ BOOST_AUTO_TEST_CASE(MaintainTransactionsTest)
     BOOST_CHECK_EQUAL(service->getAsyncSendSizeByNodeID(NodeID(102)), 2);
 
     // test transaction known by peer logic
-    txs = fakeTransactions(1, currentBlockNumber);
+    txs = fakedBlock->fakeTransactions(1, currentBlockNumber);
     for (auto tx : *txs)
     {
         txPool->submitTransactions(tx);
@@ -238,7 +212,7 @@ BOOST_AUTO_TEST_CASE(MaintainTransactionsTest)
 
     BOOST_CHECK_EQUAL(service->getAsyncSendSizeByNodeID(NodeID(101)), 2);
     // the transaction won't be sent to other nodes if received from P2P
-    BOOST_CHECK_EQUAL(service->getAsyncSendSizeByNodeID(NodeID(102)), 3);
+    BOOST_CHECK_EQUAL(service->getAsyncSendSizeByNodeID(NodeID(102)), 2);
 
     // test transaction already sent
     sync->maintainTransactions();
@@ -246,7 +220,7 @@ BOOST_AUTO_TEST_CASE(MaintainTransactionsTest)
     cout << "Msg number: " << service->getAsyncSendSizeByNodeID(NodeID(102)) << endl;
 
     BOOST_CHECK_EQUAL(service->getAsyncSendSizeByNodeID(NodeID(101)), 2);
-    BOOST_CHECK_EQUAL(service->getAsyncSendSizeByNodeID(NodeID(102)), 3);
+    BOOST_CHECK_EQUAL(service->getAsyncSendSizeByNodeID(NodeID(102)), 2);
 }
 
 BOOST_AUTO_TEST_CASE(MaintainBlocksTest)

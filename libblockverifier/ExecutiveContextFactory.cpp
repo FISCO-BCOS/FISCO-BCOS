@@ -24,6 +24,8 @@
 #include <libprecompiled/CNSPrecompiled.h>
 #include <libprecompiled/CRUDPrecompiled.h>
 #include <libprecompiled/ConsensusPrecompiled.h>
+#include <libprecompiled/ContractLifeCyclePrecompiled.h>
+#include <libprecompiled/KVTableFactoryPrecompiled.h>
 #include <libprecompiled/ParallelConfigPrecompiled.h>
 #include <libprecompiled/PermissionPrecompiled.h>
 #include <libprecompiled/SystemConfigPrecompiled.h>
@@ -42,9 +44,8 @@ void ExecutiveContextFactory::initExecutiveContext(
     auto memoryTableFactory =
         m_tableFactoryFactory->newTableFactory(blockInfo.hash, blockInfo.number);
 
-    auto tableFactoryPrecompiled = std::make_shared<dev::blockverifier::TableFactoryPrecompiled>();
+    auto tableFactoryPrecompiled = std::make_shared<dev::precompiled::TableFactoryPrecompiled>();
     tableFactoryPrecompiled->setMemoryTableFactory(memoryTableFactory);
-
     context->setAddress2Precompiled(
         Address(0x1000), std::make_shared<dev::precompiled::SystemConfigPrecompiled>());
     context->setAddress2Precompiled(Address(0x1001), tableFactoryPrecompiled);
@@ -58,6 +59,15 @@ void ExecutiveContextFactory::initExecutiveContext(
         Address(0x1005), std::make_shared<dev::precompiled::PermissionPrecompiled>());
     context->setAddress2Precompiled(
         Address(0x1006), std::make_shared<dev::precompiled::ParallelConfigPrecompiled>());
+    if (g_BCOSConfig.version() >= V2_3_0)
+    {
+        context->setAddress2Precompiled(
+            Address(0x1007), std::make_shared<dev::precompiled::ContractLifeCyclePrecompiled>());
+        auto kvTableFactoryPrecompiled =
+            std::make_shared<dev::precompiled::KVTableFactoryPrecompiled>();
+        kvTableFactoryPrecompiled->setMemoryTableFactory(memoryTableFactory);
+        context->setAddress2Precompiled(Address(0x1010), kvTableFactoryPrecompiled);
+    }
     // register User developed Precompiled contract
     registerUserPrecompiled(context);
     context->setMemoryTableFactory(memoryTableFactory);

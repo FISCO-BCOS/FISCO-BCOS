@@ -424,8 +424,8 @@ BOOST_AUTO_TEST_CASE(GM_testGetpendingTransactions)
             "0x3eebc46c9c0e3b84799097c5a6ccd6657a9295c11270407707366d0750fcd59");
     }
     BOOST_CHECK(response[0]["value"].asString() == "0x0");
-
-    BOOST_CHECK_THROW(rpc->getPendingTransactions(invalidGroup), JsonRpcException);
+    // no need to avoid getPendingTransactions for the node that doesn't belong to the group
+    // BOOST_CHECK_THROW(rpc->getPendingTransactions(invalidGroup), JsonRpcException);
 }
 
 BOOST_AUTO_TEST_CASE(GM_testGetCode)
@@ -883,14 +883,16 @@ BOOST_AUTO_TEST_CASE(testGetPendingTransactions)
     }
     BOOST_CHECK(response[0]["value"].asString() == "0x0");
 
-    BOOST_CHECK_THROW(rpc->getPendingTransactions(invalidGroup), JsonRpcException);
+    // no need to check the node in the group or not
+    // BOOST_CHECK_THROW(rpc->getPendingTransactions(invalidGroup), JsonRpcException);
 }
 BOOST_AUTO_TEST_CASE(testGetPendingTxSize)
 {
     std::string response = rpc->getPendingTxSize(groupId);
     BOOST_CHECK(response == "0x1");
 
-    BOOST_CHECK_THROW(rpc->getPendingTxSize(invalidGroup), JsonRpcException);
+    // no need to check the node in the group or not
+    // BOOST_CHECK_THROW(rpc->getPendingTxSize(invalidGroup), JsonRpcException);
 }
 
 BOOST_AUTO_TEST_CASE(testGetCode)

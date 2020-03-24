@@ -142,6 +142,8 @@ private:
 
     bool readFile(std::ifstream& file, void* buffer, uint32_t size);
 
+    void checkBinLogSize();
+
     uint32_t m_writtenBytesLength = 0;  // length already written
     int m_fd;                           // the file being written
     std::string m_path;                 // storage path of binlog

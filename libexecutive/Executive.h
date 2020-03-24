@@ -30,6 +30,11 @@ namespace dev
 {
 class OverlayDB;
 
+namespace storage
+{
+class TableFactory;
+}
+
 namespace eth
 {
 class Block;
@@ -202,6 +207,11 @@ private:
     /// @returns false iff go() must be called (and thus a VM execution in required).
     bool executeCreate(Address const& _txSender, u256 const& _endowment, u256 const& _gasPrice,
         u256 const& _gas, bytesConstRef _code, Address const& _originAddress);
+
+    void grantContractStatusManager(std::shared_ptr<dev::storage::TableFactory> memoryTableFactory,
+        Address const& newAddress, Address const& sender, Address const& origin);
+
+    void writeErrInfoToOutput(std::string const& errInfo);
 
     std::shared_ptr<StateFace> m_s;  ///< The state to which this operation/transaction is applied.
     // TODO: consider changign to EnvInfo const& to avoid LastHashes copy at every CALL/CREATE

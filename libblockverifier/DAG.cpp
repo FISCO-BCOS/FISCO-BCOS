@@ -64,36 +64,10 @@ void DAG::generate()
     // printVtx(id);
 }
 
-/*
 ID DAG::waitPop(bool _needWait)
 {
-    std::unique_lock<std::mutex> ul(x_topLevel);
-    ID top;
-    while (m_totalConsume < m_totalVtxs)
-    {
-        auto has = m_topLevel.try_pop(top);
-        if (has)
-        {
-            return top;
-        }
-        else
-        {
-            if (_needWait)
-            {
-                cv_topLevel.wait_for(ul, std::chrono::milliseconds(10),
-                    [&]() { return m_totalConsume >= m_totalVtxs || m_topLevel.size() > 0; });
-                ul.unlock();
-            }
-            else
-                break;
-        }
-    }
-    return INVALID_ID;
-}
-*/
-
-ID DAG::waitPop(bool _needWait)
-{
+    // Note: concurrent_queue of TBB can't be used with boost::conditional_variable
+    //       the try_pop will already be false
     std::unique_lock<std::mutex> ul(x_topLevel);
     ID top = INVALID_ID;
     cv_topLevel.wait_for(ul, std::chrono::milliseconds(10), [&]() {

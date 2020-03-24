@@ -120,6 +120,12 @@ h256 MPTState::codeHash(Address const& _contract) const
     return m_state.codeHash(_contract);
 }
 
+bool MPTState::frozen(Address const& _contract) const
+{
+    (void)_contract;
+    return false;
+}
+
 size_t MPTState::codeSize(Address const& _contract) const
 {
     return m_state.codeSize(_contract);

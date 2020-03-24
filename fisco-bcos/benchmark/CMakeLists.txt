@@ -22,6 +22,8 @@
 file(GLOB SRC_LIST "*.cpp")
 file(GLOB HEADERS "*.h")
 
-add_executable(storage_benchmark ${SRC_LIST} ${HEADERS})
-
+add_executable(storage_benchmark storage_benchmark.cpp ${HEADERS})
 target_link_libraries(storage_benchmark PUBLIC initializer storage)
+
+add_executable(table_benchmark table_benchmark.cpp ${HEADERS})
+target_link_libraries(table_benchmark PUBLIC initializer storage)

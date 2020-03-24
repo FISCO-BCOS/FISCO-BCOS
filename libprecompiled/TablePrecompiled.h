@@ -20,14 +20,12 @@
  */
 #pragma once
 
-#include "libblockverifier/Precompiled.h"
+#include "libprecompiled/Precompiled.h"
 
 namespace dev
 {
-namespace blockverifier
-{
 #if 0
-contract DB {
+contract Table {
     function select(string, Condition) public constant returns(Entries);
     function insert(string, Entry) public returns(int);
     function update(string, Entry, Condition) public returns(int);
@@ -44,7 +42,8 @@ contract DB {
     "bf2b70a1": "update(string,address,address)"
 }
 #endif
-
+namespace precompiled
+{
 class TablePrecompiled : public Precompiled
 {
 public:
@@ -53,10 +52,10 @@ public:
     virtual ~TablePrecompiled(){};
 
 
-    virtual std::string toString() override;
+    std::string toString() override;
 
-    virtual bytes call(std::shared_ptr<ExecutiveContext> context, bytesConstRef param,
-        Address const& origin = Address()) override;
+    bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context, bytesConstRef param,
+        Address const& origin = Address(), Address const& _sender = Address()) override;
 
     std::shared_ptr<dev::storage::Table> getTable() { return m_table; }
     void setTable(std::shared_ptr<dev::storage::Table> table) { m_table = table; }
@@ -65,10 +64,8 @@ public:
 
 private:
     std::shared_ptr<storage::Table> m_table;
-    void checkLengthValidate(
-        const std::string& field_value, int32_t max_length, int32_t throw_exception);
 };
 
-}  // namespace blockverifier
+}  // namespace precompiled
 
 }  // namespace dev

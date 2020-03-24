@@ -94,7 +94,7 @@ static void createTx(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
 #endif
     Transaction::Ptr tx =
         std::make_shared<Transaction>(ref(rlpBytes), CheckTransaction::Everything);
-    Secret sec = KeyPair::create().secret();
+    auto keyPair = KeyPair::create();
     string noncePrefix = to_string(time(NULL));
 
     uint16_t sleep_interval = (uint16_t)(1000.0 / _txSpeed);
@@ -112,7 +112,7 @@ static void createTx(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
             {
                 tx->setNonce(u256(noncePrefix + to_string(txSeqNonce++)));
                 tx->setBlockLimit(u256(_blockChain->number()) + 50);
-                dev::Signature sig = sign(sec, tx->sha3(WithoutSignature));
+                dev::Signature sig = sign(keyPair, tx->sha3(WithoutSignature));
                 tx->updateSignature(SignatureStruct(sig));
                 _txPool->submit(tx);
             }

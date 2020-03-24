@@ -21,7 +21,7 @@
  * @date: 2019-09-19
  */
 #pragma once
-#include "TreeTopology.h"
+#include <libdevcore/TreeTopology.h>
 
 #define SYNCTREE_LOG(_OBV)                                                 \
     LOG(_OBV) << LOG_BADGE("SYNCTREE") << LOG_KV("nodeIndex", m_nodeIndex) \
@@ -47,8 +47,8 @@ public:
     // consensus info must be updated with nodeList
     virtual void updateAllNodeInfo(dev::h512s const& _consensusNodes, dev::h512s const& _nodeList);
     // select the nodes by tree topology
-    std::shared_ptr<dev::h512s> selectNodes(
-        std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _consIndex = 0) override;
+    virtual std::shared_ptr<dev::h512s> selectNodesForBlockSync(
+        std::shared_ptr<std::set<dev::h512>> _peers);
 
 protected:
     bool getNodeIDByIndex(dev::h512& _nodeID, ssize_t const& _nodeIndex) const override;
@@ -62,7 +62,7 @@ protected:
     // select the parent nodes by tree
     void selectParentNodes(std::shared_ptr<dev::h512s> _selectedNodeList,
         std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _nodeIndex,
-        int64_t const& _startIndex) override;
+        int64_t const& _startIndex, bool const& _selectAll = false) override;
 
 private:
     bool locatedInGroup();

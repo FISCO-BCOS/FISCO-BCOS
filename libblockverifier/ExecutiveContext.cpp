@@ -35,7 +35,8 @@ using namespace dev::blockverifier;
 using namespace dev;
 using namespace std;
 
-bytes ExecutiveContext::call(Address const& origin, Address address, bytesConstRef param)
+bytes ExecutiveContext::call(
+    Address const& address, bytesConstRef param, Address const& origin, Address const& sender)
 {
     try
     {
@@ -43,7 +44,7 @@ bytes ExecutiveContext::call(Address const& origin, Address address, bytesConstR
 
         if (p)
         {
-            bytes out = p->call(shared_from_this(), param, origin);
+            bytes out = p->call(shared_from_this(), param, origin, sender);
             return out;
         }
         else
@@ -51,6 +52,12 @@ bytes ExecutiveContext::call(Address const& origin, Address address, bytesConstR
             EXECUTIVECONTEXT_LOG(DEBUG)
                 << LOG_DESC("[call]Can't find address") << LOG_KV("address", address);
         }
+    }
+    catch (dev::precompiled::PrecompiledException& e)
+    {
+        EXECUTIVECONTEXT_LOG(ERROR)
+            << "PrecompiledException" << LOG_KV("address", address) << LOG_KV("message:", e.what());
+        BOOST_THROW_EXCEPTION(e);
     }
     catch (dev::storage::StorageException& e)
     {
@@ -69,7 +76,7 @@ bytes ExecutiveContext::call(Address const& origin, Address address, bytesConstR
     return bytes();
 }
 
-Address ExecutiveContext::registerPrecompiled(Precompiled::Ptr p)
+Address ExecutiveContext::registerPrecompiled(std::shared_ptr<precompiled::Precompiled> p)
 {
     auto count = ++m_addressCount;
     Address address(count);
@@ -86,7 +93,7 @@ bool ExecutiveContext::isPrecompiled(Address address) const
     return p.get() != NULL;
 }
 
-Precompiled::Ptr ExecutiveContext::getPrecompiled(Address address) const
+std::shared_ptr<precompiled::Precompiled> ExecutiveContext::getPrecompiled(Address address) const
 {
     auto itPrecompiled = m_address2Precompiled.find(address);
 
@@ -94,7 +101,7 @@ Precompiled::Ptr ExecutiveContext::getPrecompiled(Address address) const
     {
         return itPrecompiled->second;
     }
-    return Precompiled::Ptr();
+    return std::shared_ptr<precompiled::Precompiled>();
 }
 
 std::shared_ptr<dev::executive::StateFace> ExecutiveContext::getState()

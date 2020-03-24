@@ -124,8 +124,8 @@ void Sealer::doWork(bool wait)
             if (!checkTxsEnough(maxTxsPerBlock))
             {
                 ///< 10 milliseconds to next loop
-                unique_lock<mutex> l(x_signalled);
-                m_signalled.wait_for(l, chrono::milliseconds(1));
+                boost::unique_lock<boost::mutex> l(x_signalled);
+                m_signalled.wait_for(l, boost::chrono::milliseconds(1));
                 return;
             }
             if (shouldHandleBlock())
@@ -134,8 +134,8 @@ void Sealer::doWork(bool wait)
     }
     if (shouldWait(wait))
     {
-        unique_lock<mutex> l(x_blocksignalled);
-        m_blockSignalled.wait_for(l, chrono::milliseconds(10));
+        boost::unique_lock<boost::mutex> l(x_blocksignalled);
+        m_blockSignalled.wait_for(l, boost::chrono::milliseconds(10));
     }
 }
 

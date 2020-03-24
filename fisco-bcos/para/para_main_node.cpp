@@ -51,7 +51,7 @@ using namespace dev::blockchain;
 
 void generateUserAddTx(std::shared_ptr<LedgerManager> ledgerManager, size_t _userNum)
 {
-    Secret sec = KeyPair::create().secret();
+    auto keyPair = KeyPair::create();
     // Generate user + receiver = _userNum
     for (size_t i = 0; i < _userNum; i++)
     {
@@ -69,7 +69,7 @@ void generateUserAddTx(std::shared_ptr<LedgerManager> ledgerManager, size_t _use
             u256 nonce = u256(utcTime());
             Transaction::Ptr tx =
                 std::make_shared<Transaction>(value, gasPrice, gas, dest, data, nonce);
-            Signature sig = sign(sec, tx->sha3(WithoutSignature));
+            Signature sig = sign(keyPair, tx->sha3(WithoutSignature));
 
             for (auto group : ledgerManager->getGroupList())
             {
@@ -90,7 +90,7 @@ void generateUserAddTx(std::shared_ptr<LedgerManager> ledgerManager, size_t _use
 static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed,
     unsigned int userCount, KeyPair const&)
 {
-    Secret sec = KeyPair::create().secret();
+    auto keyPair = KeyPair::create();
     u256 maxBlockLimit = u256(500);
     uint16_t sleep_interval = (uint16_t)(1000.0 / txSpeed);
     random_device rd;
@@ -132,8 +132,7 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
 
                 Transaction::Ptr tx =
                     std::make_shared<Transaction>(value, gasPrice, gas, dest, data, nonce);
-                // sec = KeyPair::create().secret();
-                Signature sig = sign(sec, tx->sha3(WithoutSignature));
+                Signature sig = sign(keyPair, tx->sha3(WithoutSignature));
 
                 tx->setBlockLimit(u256(ledgerManager->blockChain(group)->number()) + maxBlockLimit);
                 tx->updateSignature(SignatureStruct(sig));

@@ -51,7 +51,7 @@ struct TableFactoryPrecompiledFixture
         context = std::make_shared<MockPrecompiledEngine>();
         BlockInfo blockInfo{h256(0x001), 1, h256(0x001)};
         context->setBlockInfo(blockInfo);
-        tableFactoryPrecompiled = std::make_shared<dev::blockverifier::TableFactoryPrecompiled>();
+        tableFactoryPrecompiled = std::make_shared<dev::precompiled::TableFactoryPrecompiled>();
         memStorage = std::make_shared<MemoryStorage>();
         auto mockMemoryTableFactory = std::make_shared<MockMemoryTableFactory>();
         mockMemoryTableFactory->setStateStorage(memStorage);
@@ -60,7 +60,7 @@ struct TableFactoryPrecompiledFixture
 
     ~TableFactoryPrecompiledFixture() {}
     Storage::Ptr memStorage;
-    dev::blockverifier::TableFactoryPrecompiled::Ptr tableFactoryPrecompiled;
+    dev::precompiled::TableFactoryPrecompiled::Ptr tableFactoryPrecompiled;
     ExecutiveContext::Ptr context;
     int addressCount = 0x10000;
 };

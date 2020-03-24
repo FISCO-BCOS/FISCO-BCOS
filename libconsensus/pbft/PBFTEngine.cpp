@@ -45,6 +45,21 @@ void PBFTEngine::start()
 {
     // create PBFTMsgFactory
     createPBFTMsgFactory();
+    createPBFTReqCache();
+    assert(m_reqCache);
+    // set checkSignCallback for reqCache
+    m_reqCache->setCheckSignCallback(boost::bind(&PBFTEngine::checkSign, this, _1));
+
+    // register P2P callback after create PBFTMsgFactory
+    m_service->registerHandlerByProtoclID(
+        m_protocolId, boost::bind(&PBFTEngine::handleP2PMessage, this, _1, _2, _3));
+    initPBFTEnv(3 * getEmptyBlockGenTime());
+    ConsensusEngineBase::start();
+    PBFTENGINE_LOG(INFO) << "[Start PBFTEngine...]";
+}
+
+void PBFTEngine::createPBFTReqCache()
+{
     // init enablePrepareWithTxsHash
     if (m_enablePrepareWithTxsHash)
     {
@@ -55,12 +70,6 @@ void PBFTEngine::start()
     {
         m_reqCache = std::make_shared<PBFTReqCache>();
     }
-    // register P2P callback after create PBFTMsgFactory
-    m_service->registerHandlerByProtoclID(
-        m_protocolId, boost::bind(&PBFTEngine::handleP2PMessage, this, _1, _2, _3));
-    initPBFTEnv(3 * getEmptyBlockGenTime());
-    ConsensusEngineBase::start();
-    PBFTENGINE_LOG(INFO) << "[Start PBFTEngine...]";
 }
 
 void PBFTEngine::stop()
@@ -154,7 +163,7 @@ void PBFTEngine::rehandleCommitedPrepareCache(PrepareReq const& req)
             std::shared_ptr<bytes> prepare_data = std::make_shared<bytes>();
             // when rehandle the committedPrepareCache, broadcast prepare directly
             prepareReq->encode(*prepare_data);
-            broadcastMsg(PrepareReqPacket, prepareReq->uniqueKey(), ref(*prepare_data));
+            broadcastMsg(PrepareReqPacket, *prepareReq, ref(*prepare_data));
         }
         catch (std::exception const& e)
         {
@@ -162,7 +171,7 @@ void PBFTEngine::rehandleCommitedPrepareCache(PrepareReq const& req)
                                   << LOG_KV("errorInfo", boost::diagnostic_information(e));
         }
     });
-    handlePrepareMsg(*prepareReq);
+    handlePrepareMsg(prepareReq);
     /// note blockSync to the latest number, in case of the block number of other nodes is larger
     /// than this node
     m_blockSync->noteSealingBlockNumber(m_blockChain->number());
@@ -251,17 +260,15 @@ void PBFTEngine::reloadMsg(std::string const& key, PBFTMsg* msg)
  * @param _key: key of the PBFTMsg
  * @param _msg : data to backup in the DB
  */
-void PBFTEngine::backupMsg(std::string const& _key, PBFTMsg const& _msg)
+void PBFTEngine::backupMsg(std::string const& _key, std::shared_ptr<bytes> _msg)
 {
     if (!m_backupDB)
     {
         return;
     }
-    bytes message_data;
-    _msg.encode(message_data);
     try
     {
-        m_backupDB->insert(_key, toHex(message_data));
+        m_backupDB->insert(_key, toHex(*_msg));
     }
     catch (DatabaseError const& e)
     {
@@ -297,8 +304,7 @@ PrepareReq::Ptr PBFTEngine::constructPrepareReq(dev::eth::Block::Ptr _block)
         m_threadPool->enqueue([this, prepareReq, sendedData]() {
             try
             {
-                broadcastMsg(PrepareReqPacket, prepareReq->uniqueKey(), ref(*sendedData),
-                    PartiallyPreparePacket);
+                sendPrepareMsgFromLeader(prepareReq, ref(*sendedData), PartiallyPreparePacket);
             }
             catch (std::exception const& e)
             {
@@ -317,7 +323,7 @@ PrepareReq::Ptr PBFTEngine::constructPrepareReq(dev::eth::Block::Ptr _block)
             {
                 std::shared_ptr<bytes> prepare_data = std::make_shared<bytes>();
                 prepareReq->encode(*prepare_data);
-                broadcastMsg(PrepareReqPacket, prepareReq->uniqueKey(), ref(*prepare_data));
+                sendPrepareMsgFromLeader(prepareReq, ref(*prepare_data));
             }
             catch (std::exception const& e)
             {
@@ -327,6 +333,13 @@ PrepareReq::Ptr PBFTEngine::constructPrepareReq(dev::eth::Block::Ptr _block)
         });
     }
     return prepareReq;
+}
+
+// broadcast prepare message to all the other nodes
+void PBFTEngine::sendPrepareMsgFromLeader(
+    PrepareReq::Ptr _prepareReq, bytesConstRef _data, dev::PACKET_TYPE const& _p2pPacketType)
+{
+    broadcastMsg(PrepareReqPacket, *_prepareReq, _data, _p2pPacketType);
 }
 
 /// sealing the generated block into prepareReq and push its to msgQueue
@@ -343,7 +356,7 @@ bool PBFTEngine::generatePrepare(dev::eth::Block::Ptr _block)
         m_timeManager.m_changeCycle = 0;
         return true;
     }
-    handlePrepareMsg(*prepareReq);
+    handlePrepareMsg(prepareReq);
 
     /// reset the block according to broadcast result
     PBFTENGINE_LOG(INFO) << LOG_DESC("generateLocalPrepare")
@@ -361,10 +374,10 @@ bool PBFTEngine::generatePrepare(dev::eth::Block::Ptr _block)
  */
 bool PBFTEngine::broadcastSignReq(PrepareReq const& req)
 {
-    SignReq sign_req(req, m_keyPair, nodeIdx());
+    SignReq::Ptr sign_req = std::make_shared<SignReq>(req, m_keyPair, nodeIdx());
     bytes sign_req_data;
-    sign_req.encode(sign_req_data);
-    bool succ = broadcastMsg(SignReqPacket, sign_req.uniqueKey(), ref(sign_req_data));
+    sign_req->encode(sign_req_data);
+    bool succ = broadcastMsg(SignReqPacket, *sign_req, ref(sign_req_data));
     m_reqCache->addSignReq(sign_req);
     return succ;
 }
@@ -400,10 +413,10 @@ bool PBFTEngine::checkSign(PBFTMsg const& req) const
  */
 bool PBFTEngine::broadcastCommitReq(PrepareReq const& req)
 {
-    CommitReq commit_req(req, m_keyPair, nodeIdx());
+    CommitReq::Ptr commit_req = std::make_shared<CommitReq>(req, m_keyPair, nodeIdx());
     bytes commit_req_data;
-    commit_req.encode(commit_req_data);
-    bool succ = broadcastMsg(CommitReqPacket, commit_req.uniqueKey(), ref(commit_req_data));
+    commit_req->encode(commit_req_data);
+    bool succ = broadcastMsg(CommitReqPacket, *commit_req, ref(commit_req_data));
     if (succ)
         m_reqCache->addCommitReq(commit_req);
     return succ;
@@ -446,14 +459,13 @@ bool PBFTEngine::broadcastViewChangeReq()
                                 << LOG_KV("hash", req.block_hash.abridged())
                                 << LOG_KV("nodeIdx", nodeIdx())
                                 << LOG_KV("myNode", m_keyPair.pub().abridged());
-        auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
         // print the disconnected info
-        getForwardNodes(sessions, true);
+        getForwardNodes(true);
     }
 
     bytes view_change_data;
     req.encode(view_change_data);
-    return broadcastMsg(ViewChangeReqPacket, req.uniqueKey(), ref(view_change_data));
+    return broadcastMsg(ViewChangeReqPacket, req, ref(view_change_data));
 }
 
 /// set default ttl to 1 to in case of forward-broadcast
@@ -511,7 +523,7 @@ bool PBFTEngine::sendMsg(dev::network::NodeID const& nodeId, unsigned const& pac
  * @param data: the encoded data of to be broadcasted(RLP encoder now)
  * @param filter: the list that shouldn't be broadcasted to
  */
-bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key,
+bool PBFTEngine::broadcastMsg(unsigned const& packetType, PBFTMsg const& _pbftMsg,
     bytesConstRef data, PACKET_TYPE const& _p2pPacketType,
     std::unordered_set<dev::network::NodeID> const& filter, unsigned const& ttl,
     std::function<ssize_t(dev::network::NodeID const&)> const& filterFunction)
@@ -519,6 +531,7 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
     auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
     m_connectedNode = sessions.size();
     NodeIDs nodeIdList;
+    std::string key = _pbftMsg.uniqueKey();
     for (auto session : sessions)
     {
         /// get node index of the sealer from m_sealerList failed ?
@@ -545,28 +558,29 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, std::string const& key
         broadcastMark(session.nodeID(), packetType, key);
     }
     /// send messages according to node id
-    broadcastMsg(nodeIdList, data, packetType, ttl, _p2pPacketType);
-
-    // update the network-out statistic information
-    if (m_statisticHandler)
-    {
-        m_statisticHandler->updateConsOutPacketsInfo(packetType, nodeIdList.size(), data.size());
-    }
+    broadcastMsg(nodeIdList, data, packetType, ttl, _p2pPacketType, _pbftMsg);
     return true;
 }
 
 void PBFTEngine::broadcastMsg(dev::h512s const& _targetNodes, bytesConstRef _data,
-    unsigned const& _packetType, unsigned const& _ttl, PACKET_TYPE const& _p2pPacketType)
+    unsigned const& _packetType, unsigned const& _ttl, PACKET_TYPE const& _p2pPacketType,
+    PBFTMsg const& _pbftMsg)
 {
     std::shared_ptr<dev::h512s> forwardNodes = nullptr;
     if (m_enableTTLOptimize)
     {
-        auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
         // get the forwardNodes
-        forwardNodes = getForwardNodes(sessions);
+        forwardNodes = getForwardNodes();
     }
-    auto p2pMessage = transDataToMessage(_data, _packetType, _ttl, forwardNodes);
-    p2pMessage->setPacketType(_p2pPacketType);
+    // set prepareWithEmptyBlock and extend prepareWithEmptyBlock into the 8th bit of ttl field
+    auto pbftPacket = createPBFTMsgPacket(_data, _packetType, _ttl, forwardNodes);
+    if (_pbftMsg.isEmpty)
+    {
+        pbftPacket->prepareWithEmptyBlock = true;
+    }
+    std::shared_ptr<bytes> encodedData = std::make_shared<bytes>();
+    pbftPacket->encode(*encodedData);
+    auto p2pMessage = toP2PMessage(encodedData, _p2pPacketType);
     m_service->asyncMulticastMessageByNodeIDList(_targetNodes, p2pMessage);
     if (m_statisticHandler)
     {
@@ -591,9 +605,10 @@ void PBFTEngine::broadcastMsg(dev::h512s const& _targetNodes, bytesConstRef _dat
  */
 CheckResult PBFTEngine::isValidPrepare(PrepareReq const& req, std::ostringstream& oss) const
 {
+    // Note: we should try to decrease the size of duplicated
     if (m_reqCache->isExistPrepare(req))
     {
-        PBFTENGINE_LOG(TRACE) << LOG_DESC("InvalidPrepare: Duplicated Prep")
+        PBFTENGINE_LOG(DEBUG) << LOG_DESC("InvalidPrepare: Duplicated Prep")
                               << LOG_KV("EINFO", oss.str());
         return CheckResult::INVALID;
     }
@@ -619,9 +634,31 @@ CheckResult PBFTEngine::isValidPrepare(PrepareReq const& req, std::ostringstream
     {
         return CheckResult::INVALID;
     }
-    if (!isHashSavedAfterCommit(req))
+
+    // Since the empty block is not placed on the disk,
+    // pbftBackup is checked only when a non-empty prepare is received
+    // in case that:
+    // Some nodes cache pbftBackup，but the consensus failed because no enough commit requests were
+    // collected
+    // 2. view change occurred in the system, switch to the new leader without pbftBackup
+    // 3. the new leader generate an empty-block, and reset the changeCycle to 0
+    // 4. the other 2*f nodes received the prepare with empty block, but rejected the prepare for
+    // isHashSavedAfterCommit check failed
+    // 5. the changeCycle of the other nodes with pbftBackup are larger than the new leader, the
+    // system suffers from view-catchup
+    if (req.isEmpty && req.height == m_reqCache->committedPrepareCache().height)
     {
-        PBFTENGINE_LOG(TRACE) << LOG_DESC("InvalidPrepare: not saved after commit")
+        // here for debug
+        PBFTENGINE_LOG(DEBUG) << LOG_DESC("receive empty block while pbft-backup exists")
+                              << LOG_KV("reqHeight", req.height)
+                              << LOG_KV("reqHash", req.block_hash.abridged())
+                              << LOG_KV("reqView", req.view) << LOG_KV("view", m_view)
+                              << LOG_KV("pbftBackupHash",
+                                     m_reqCache->committedPrepareCache().block_hash.abridged());
+    }
+    if (!req.isEmpty && !isHashSavedAfterCommit(req))
+    {
+        PBFTENGINE_LOG(DEBUG) << LOG_DESC("InvalidPrepare: not saved after commit")
                               << LOG_KV("EINFO", oss.str());
         return CheckResult::INVALID;
     }
@@ -856,8 +893,8 @@ bool PBFTEngine::needOmit(Sealing const& sealing)
  * @param session: the session related to the network data(can get informations about the sender)
  * @param message: message constructed from data received from the network
  */
-void PBFTEngine::onRecvPBFTMessage(
-    NetworkException, std::shared_ptr<P2PSession> session, P2PMessage::Ptr message)
+void PBFTEngine::pushValidPBFTMsgIntoQueue(NetworkException, std::shared_ptr<P2PSession> session,
+    P2PMessage::Ptr message, std::function<void(PBFTMsgPacket::Ptr)> const& _f)
 {
     if (nodeIdx() == MAXIDX)
     {
@@ -871,6 +908,11 @@ void PBFTEngine::onRecvPBFTMessage(
     if (!valid)
     {
         return;
+    }
+    // calls callback if _f is not null
+    if (_f)
+    {
+        _f(pbft_msg);
     }
     if (pbft_msg->packet_id <= ViewChangeReqPacket)
     {
@@ -894,9 +936,20 @@ void PBFTEngine::onRecvPBFTMessage(
     }
 }
 
-bool PBFTEngine::handlePrepareMsg(PrepareReq& prepare_req, PBFTMsgPacket const& pbftMsg)
+void PBFTEngine::onRecvPBFTMessage(dev::p2p::NetworkException _exception,
+    std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message)
 {
-    bool valid = decodeToRequests(prepare_req, ref(pbftMsg.data));
+    return pushValidPBFTMsgIntoQueue(_exception, _session, _message, nullptr);
+}
+
+bool PBFTEngine::handlePrepareMsg(PrepareReq::Ptr prepare_req, PBFTMsgPacket const& pbftMsg)
+{
+    bool valid = decodeToRequests(*prepare_req, ref(pbftMsg.data));
+    // set isEmpty flag for the prepareReq
+    if (pbftMsg.prepareWithEmptyBlock)
+    {
+        prepare_req->isEmpty = true;
+    }
     if (!valid)
     {
         return false;
@@ -924,24 +977,25 @@ void PBFTEngine::clearPreRawPrepare()
  * @param self: if generated-prepare-request need to handled, then set self to be true;
  *              else this function will filter the self-generated prepareReq
  */
-bool PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string const& endpoint)
+bool PBFTEngine::handlePrepareMsg(PrepareReq::Ptr prepareReq, std::string const& endpoint)
 {
     std::ostringstream oss;
-    oss << LOG_DESC("handlePrepareMsg") << LOG_KV("reqIdx", prepareReq.idx)
-        << LOG_KV("view", prepareReq.view) << LOG_KV("reqNum", prepareReq.height)
+    oss << LOG_DESC("handlePrepareMsg") << LOG_KV("reqIdx", prepareReq->idx)
+        << LOG_KV("view", prepareReq->view) << LOG_KV("reqNum", prepareReq->height)
         << LOG_KV("curNum", m_highestBlock.number()) << LOG_KV("consNum", m_consensusBlockNumber)
-        << LOG_KV("fromIp", endpoint) << LOG_KV("hash", prepareReq.block_hash.abridged())
-        << LOG_KV("nodeIdx", nodeIdx()) << LOG_KV("myNode", m_keyPair.pub().abridged())
+        << LOG_KV("curView", m_view) << LOG_KV("fromIp", endpoint)
+        << LOG_KV("hash", prepareReq->block_hash.abridged()) << LOG_KV("nodeIdx", nodeIdx())
+        << LOG_KV("myNode", m_keyPair.pub().abridged())
         << LOG_KV("curChangeCycle", m_timeManager.m_changeCycle);
     /// check the prepare request is valid or not
-    auto valid_ret = isValidPrepare(prepareReq, oss);
+    auto valid_ret = isValidPrepare(*prepareReq, oss);
     if (valid_ret == CheckResult::INVALID)
     {
         clearPreRawPrepare();
         return false;
     }
     /// update the view for given idx
-    updateViewMap(prepareReq.idx, prepareReq.view);
+    updateViewMap(prepareReq->idx, prepareReq->view);
 
     if (valid_ret == CheckResult::FUTURE)
     {
@@ -952,18 +1006,24 @@ bool PBFTEngine::handlePrepareMsg(PrepareReq const& prepareReq, std::string cons
     // clear preRawPrepare before addRawPrepare when enable_block_with_txs_hash
     clearPreRawPrepare();
     /// add raw prepare request
-    m_reqCache->addRawPrepare(prepareReq);
+    addRawPrepare(prepareReq);
     return execPrepareAndGenerateSignMsg(prepareReq, oss);
 }
 
+void PBFTEngine::addRawPrepare(PrepareReq::Ptr _prepareReq)
+{
+    /// add raw prepare request
+    m_reqCache->addRawPrepare(_prepareReq);
+}
+
 bool PBFTEngine::execPrepareAndGenerateSignMsg(
-    PrepareReq const& _prepareReq, std::ostringstream& _oss)
+    PrepareReq::Ptr _prepareReq, std::ostringstream& _oss)
 {
     Timer t;
     Sealing workingSealing(m_blockFactory);
     try
     {
-        execBlock(workingSealing, _prepareReq, _oss);
+        execBlock(workingSealing, *_prepareReq, _oss);
         // old block (has already executed correctly by block sync)
         if (workingSealing.p_execContext == nullptr &&
             workingSealing.block->getTransactionSize() > 0)
@@ -988,18 +1048,19 @@ bool PBFTEngine::execPrepareAndGenerateSignMsg(
     /// generate prepare request with signature of this node to broadcast
     /// (can't change prepareReq since it may be broadcasted-forwarded to other nodes)
     auto startT = utcTime();
-    PrepareReq sign_prepare(_prepareReq, workingSealing, m_keyPair);
+    PrepareReq::Ptr sign_prepare =
+        std::make_shared<PrepareReq>(*_prepareReq, workingSealing, m_keyPair);
     m_execContextForAsyncReset.push_back(m_reqCache->prepareCache().p_execContext);
     m_reqCache->addPrepareReq(sign_prepare);
     PBFTENGINE_LOG(DEBUG) << LOG_DESC("handlePrepareMsg: add prepare cache and broadcastSignReq")
-                          << LOG_KV("reqNum", sign_prepare.height)
-                          << LOG_KV("hash", sign_prepare.block_hash.abridged())
+                          << LOG_KV("reqNum", sign_prepare->height)
+                          << LOG_KV("hash", sign_prepare->block_hash.abridged())
                           << LOG_KV("nodeIdx", nodeIdx())
                           << LOG_KV("addPrepareTime", utcTime() - startT)
                           << LOG_KV("myNode", m_keyPair.pub().abridged());
 
     /// broadcast the re-generated signReq(add the signReq to cache)
-    broadcastSignReq(sign_prepare);
+    broadcastSignReq(*sign_prepare);
 
     checkAndCommit();
     PBFTENGINE_LOG(INFO) << LOG_DESC("handlePrepareMsg Succ")
@@ -1010,10 +1071,12 @@ bool PBFTEngine::execPrepareAndGenerateSignMsg(
 
 void PBFTEngine::checkAndCommit()
 {
-    size_t sign_size = m_reqCache->getSigCacheSize(m_reqCache->prepareCache().block_hash);
+    auto minValidNodeSize = minValidNodes();
+    size_t sign_size =
+        m_reqCache->getSigCacheSize(m_reqCache->prepareCache().block_hash, minValidNodeSize);
     /// must be equal to minValidNodes:in case of callback checkAndCommit repeatly in a round of
     /// PBFT consensus
-    if (sign_size == minValidNodes())
+    if (sign_size == minValidNodeSize)
     {
         PBFTENGINE_LOG(DEBUG) << LOG_DESC("checkAndCommit, SignReq enough")
                               << LOG_KV("number", m_reqCache->prepareCache().height)
@@ -1039,8 +1102,10 @@ void PBFTEngine::checkAndCommit()
                                     m_reqCache->committedPrepareCache().block_hash.abridged())
                              << LOG_KV("nodeIdx", nodeIdx())
                              << LOG_KV("myNode", m_keyPair.pub().abridged());
-        m_threadPool->enqueue(
-            [=]() { backupMsg(c_backupKeyCommitted, m_reqCache->committedPrepareCache()); });
+        m_threadPool->enqueue([=]() {
+            auto committedPrepareMsg = m_reqCache->committedPrepareBytes();
+            backupMsg(c_backupKeyCommitted, committedPrepareMsg);
+        });
 
         PBFTENGINE_LOG(DEBUG) << LOG_DESC("checkAndCommit: broadcastCommitReq")
                               << LOG_KV("prepareHeight", m_reqCache->prepareCache().height)
@@ -1053,7 +1118,7 @@ void PBFTEngine::checkAndCommit()
             PBFTENGINE_LOG(WARNING) << LOG_DESC("checkAndCommit: broadcastCommitReq failed");
         }
 
-        m_timeManager.m_lastSignTime = utcTime();
+        m_timeManager.m_lastSignTime = utcSteadyTime();
         checkAndSave();
     }
 }
@@ -1064,9 +1129,12 @@ void PBFTEngine::checkAndSave()
 {
     auto start_commit_time = utcTime();
     auto record_time = utcTime();
-    size_t sign_size = m_reqCache->getSigCacheSize(m_reqCache->prepareCache().block_hash);
-    size_t commit_size = m_reqCache->getCommitCacheSize(m_reqCache->prepareCache().block_hash);
-    if (sign_size >= minValidNodes() && commit_size >= minValidNodes())
+    auto minValidNodeSize = minValidNodes();
+    size_t sign_size =
+        m_reqCache->getSigCacheSize(m_reqCache->prepareCache().block_hash, minValidNodeSize);
+    size_t commit_size =
+        m_reqCache->getCommitCacheSize(m_reqCache->prepareCache().block_hash, minValidNodeSize);
+    if (sign_size >= minValidNodeSize && commit_size >= minValidNodeSize)
     {
         PBFTENGINE_LOG(INFO) << LOG_DESC("checkAndSave: CommitReq enough")
                              << LOG_KV("prepareHeight", m_reqCache->prepareCache().height)
@@ -1169,7 +1237,7 @@ void PBFTEngine::reportBlockWithoutLock(Block const& block)
         {
             m_view = m_toView = 0;
             m_leaderFailed = false;
-            m_timeManager.m_lastConsensusTime = utcTime();
+            m_timeManager.m_lastConsensusTime = utcSteadyTime();
             m_timeManager.m_changeCycle = 0;
             m_consensusBlockNumber = m_highestBlock.number() + 1;
             /// delete invalid view change requests from the cache
@@ -1204,27 +1272,27 @@ void PBFTEngine::reportBlockWithoutLock(Block const& block)
  * @param sign_req: return value, the decoded signReq
  * @param pbftMsg: the network-received PBFTMsgPacket
  */
-bool PBFTEngine::handleSignMsg(SignReq& sign_req, PBFTMsgPacket const& pbftMsg)
+bool PBFTEngine::handleSignMsg(SignReq::Ptr sign_req, PBFTMsgPacket const& pbftMsg)
 {
     Timer t;
-    bool valid = decodeToRequests(sign_req, ref(pbftMsg.data));
+    bool valid = decodeToRequests(*sign_req, ref(pbftMsg.data));
     if (!valid)
     {
         return false;
     }
     std::ostringstream oss;
-    oss << LOG_DESC("handleSignMsg") << LOG_KV("num", sign_req.height)
-        << LOG_KV("curNum", m_highestBlock.number()) << LOG_KV("GenIdx", sign_req.idx)
-        << LOG_KV("Sview", sign_req.view) << LOG_KV("view", m_view)
+    oss << LOG_DESC("handleSignMsg") << LOG_KV("num", sign_req->height)
+        << LOG_KV("curNum", m_highestBlock.number()) << LOG_KV("GenIdx", sign_req->idx)
+        << LOG_KV("Sview", sign_req->view) << LOG_KV("view", m_view)
         << LOG_KV("fromIdx", pbftMsg.node_idx) << LOG_KV("fromNode", pbftMsg.node_id.abridged())
-        << LOG_KV("fromIp", pbftMsg.endpoint) << LOG_KV("hash", sign_req.block_hash.abridged())
+        << LOG_KV("fromIp", pbftMsg.endpoint) << LOG_KV("hash", sign_req->block_hash.abridged())
         << LOG_KV("nodeIdx", nodeIdx()) << LOG_KV("myNode", m_keyPair.pub().abridged());
     auto check_ret = isValidSignReq(sign_req, oss);
     if (check_ret == CheckResult::INVALID)
     {
         return false;
     }
-    updateViewMap(sign_req.idx, sign_req.view);
+    updateViewMap(sign_req->idx, sign_req->view);
 
     if (check_ret == CheckResult::FUTURE)
     {
@@ -1247,25 +1315,24 @@ bool PBFTEngine::handleSignMsg(SignReq& sign_req, PBFTMsgPacket const& pbftMsg)
  * @return true: check succeed
  * @return false: check failed
  */
-CheckResult PBFTEngine::isValidSignReq(SignReq const& req, std::ostringstream& oss) const
+CheckResult PBFTEngine::isValidSignReq(SignReq::Ptr req, std::ostringstream& oss) const
 {
-    if (m_reqCache->isExistSign(req))
+    if (m_reqCache->isExistSign(*req))
     {
         PBFTENGINE_LOG(TRACE) << LOG_DESC("InValidSignReq: Duplicated sign")
                               << LOG_KV("INFO", oss.str());
         return CheckResult::INVALID;
     }
-    if (hasConsensused(req))
+    if (hasConsensused(*req))
     {
         PBFTENGINE_LOG(TRACE) << LOG_DESC("Sign requests have been consensused")
                               << LOG_KV("INFO", oss.str());
         return CheckResult::INVALID;
     }
-    CheckResult result = checkReq(req, oss);
+    CheckResult result = checkReq(*req, oss);
     /// to ensure that the collected signature size is equal to minValidNodes
     /// so that checkAndCommit can be called, and the committed request backup can be stored
-    if ((result == CheckResult::FUTURE) &&
-        m_reqCache->getSigCacheSize(req.block_hash) < (size_t)(minValidNodes() - 1))
+    if (result == CheckResult::FUTURE)
     {
         m_reqCache->addSignReq(req);
         PBFTENGINE_LOG(INFO) << LOG_DESC("FutureBlock") << LOG_KV("INFO", oss.str());
@@ -1281,20 +1348,20 @@ CheckResult PBFTEngine::isValidSignReq(SignReq const& req, std::ostringstream& o
  * @param commit_req: return value, the decoded commitReq
  * @param pbftMsg: the network-received PBFTMsgPacket
  */
-bool PBFTEngine::handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& pbftMsg)
+bool PBFTEngine::handleCommitMsg(CommitReq::Ptr commit_req, PBFTMsgPacket const& pbftMsg)
 {
     Timer t;
-    bool valid = decodeToRequests(commit_req, ref(pbftMsg.data));
+    bool valid = decodeToRequests(*commit_req, ref(pbftMsg.data));
     if (!valid)
     {
         return false;
     }
     std::ostringstream oss;
-    oss << LOG_DESC("handleCommitMsg") << LOG_KV("reqNum", commit_req.height)
-        << LOG_KV("curNum", m_highestBlock.number()) << LOG_KV("GenIdx", commit_req.idx)
-        << LOG_KV("Cview", commit_req.view) << LOG_KV("view", m_view)
+    oss << LOG_DESC("handleCommitMsg") << LOG_KV("reqNum", commit_req->height)
+        << LOG_KV("curNum", m_highestBlock.number()) << LOG_KV("GenIdx", commit_req->idx)
+        << LOG_KV("Cview", commit_req->view) << LOG_KV("view", m_view)
         << LOG_KV("fromIdx", pbftMsg.node_idx) << LOG_KV("fromNode", pbftMsg.node_id.abridged())
-        << LOG_KV("fromIp", pbftMsg.endpoint) << LOG_KV("hash", commit_req.block_hash.abridged())
+        << LOG_KV("fromIp", pbftMsg.endpoint) << LOG_KV("hash", commit_req->block_hash.abridged())
         << LOG_KV("nodeIdx", nodeIdx()) << LOG_KV("myNode", m_keyPair.pub().abridged());
     auto valid_ret = isValidCommitReq(commit_req, oss);
     if (valid_ret == CheckResult::INVALID)
@@ -1302,7 +1369,7 @@ bool PBFTEngine::handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& pbf
         return false;
     }
     /// update the view for given idx
-    updateViewMap(commit_req.idx, commit_req.view);
+    updateViewMap(commit_req->idx, commit_req->view);
 
     if (valid_ret == CheckResult::FUTURE)
     {
@@ -1322,21 +1389,21 @@ bool PBFTEngine::handleCommitMsg(CommitReq& commit_req, PBFTMsgPacket const& pbf
  * @return true: the given commitReq is valid
  * @return false: the given commitReq is invalid
  */
-CheckResult PBFTEngine::isValidCommitReq(CommitReq const& req, std::ostringstream& oss) const
+CheckResult PBFTEngine::isValidCommitReq(CommitReq::Ptr req, std::ostringstream& oss) const
 {
-    if (m_reqCache->isExistCommit(req))
+    if (m_reqCache->isExistCommit(*req))
     {
         PBFTENGINE_LOG(TRACE) << LOG_DESC("InvalidCommitReq: Duplicated")
                               << LOG_KV("INFO", oss.str());
         return CheckResult::INVALID;
     }
-    if (hasConsensused(req))
+    if (hasConsensused(*req))
     {
         PBFTENGINE_LOG(TRACE) << LOG_DESC("InvalidCommitReq: has consensued")
                               << LOG_KV("INFO", oss.str());
         return CheckResult::INVALID;
     }
-    CheckResult result = checkReq(req, oss);
+    CheckResult result = checkReq(*req, oss);
     if (result == CheckResult::FUTURE)
     {
         m_reqCache->addCommitReq(req);
@@ -1344,28 +1411,29 @@ CheckResult PBFTEngine::isValidCommitReq(CommitReq const& req, std::ostringstrea
     return result;
 }
 
-bool PBFTEngine::handleViewChangeMsg(ViewChangeReq& viewChange_req, PBFTMsgPacket const& pbftMsg)
+bool PBFTEngine::handleViewChangeMsg(
+    ViewChangeReq::Ptr viewChange_req, PBFTMsgPacket const& pbftMsg)
 {
-    bool valid = decodeToRequests(viewChange_req, ref(pbftMsg.data));
+    bool valid = decodeToRequests(*viewChange_req, ref(pbftMsg.data));
     if (!valid)
     {
         return false;
     }
     std::ostringstream oss;
-    oss << LOG_KV("reqNum", viewChange_req.height) << LOG_KV("curNum", m_highestBlock.number())
-        << LOG_KV("GenIdx", viewChange_req.idx) << LOG_KV("Cview", viewChange_req.view)
+    oss << LOG_KV("reqNum", viewChange_req->height) << LOG_KV("curNum", m_highestBlock.number())
+        << LOG_KV("GenIdx", viewChange_req->idx) << LOG_KV("Cview", viewChange_req->view)
         << LOG_KV("view", m_view) << LOG_KV("fromIdx", pbftMsg.node_idx)
         << LOG_KV("fromNode", pbftMsg.node_id.abridged()) << LOG_KV("fromIp", pbftMsg.endpoint)
-        << LOG_KV("hash", viewChange_req.block_hash.abridged()) << LOG_KV("nodeIdx", nodeIdx())
+        << LOG_KV("hash", viewChange_req->block_hash.abridged()) << LOG_KV("nodeIdx", nodeIdx())
         << LOG_KV("myNode", m_keyPair.pub().abridged());
-    valid = isValidViewChangeReq(viewChange_req, pbftMsg.node_idx, oss);
+    valid = isValidViewChangeReq(*viewChange_req, pbftMsg.node_idx, oss);
     if (!valid)
     {
         return false;
     }
 
-    m_reqCache->addViewChangeReq(viewChange_req);
-    if (viewChange_req.view == m_toView)
+    m_reqCache->addViewChangeReq(viewChange_req, m_blockChain->number());
+    if (viewChange_req->view == m_toView)
     {
         checkAndChangeView();
     }
@@ -1402,12 +1470,19 @@ bool PBFTEngine::isValidViewChangeReq(
                               << LOG_KV("INFO", oss.str());
         return false;
     }
+    // move here to in case of the node send message with the current view to the syncing node
+    if (req.height < m_highestBlock.number())
+    {
+        PBFTENGINE_LOG(TRACE) << LOG_DESC("InvalidViewChangeReq: invalid height")
+                              << LOG_KV("INFO", oss.str());
+        return false;
+    }
     if (req.view + 1 < m_toView && req.idx == source)
     {
         catchupView(req, oss);
     }
     /// check view and block height
-    if (req.height < m_highestBlock.number() || req.view <= m_view)
+    if (req.view <= m_view)
     {
         PBFTENGINE_LOG(TRACE) << LOG_DESC("InvalidViewChangeReq: invalid view or height")
                               << LOG_KV("INFO", oss.str());
@@ -1456,48 +1531,17 @@ void PBFTEngine::checkAndChangeView()
         {
             m_fastViewChange = false;
         }
-        auto orgChangeCycle = m_timeManager.m_changeCycle;
-
-        /// problem:
-        /// 1. there are 0, 1, 2, 3 four nodes, the 2nd and 3rd nodes are off, the 0th and 1st nodes
-        /// are wait and increase the m_toView always
-        /// 2. the 2nd start up and trigger fast view change, the three online nodes reach a
-        /// consensus at a new view, but the current leader is 3rd
-        /// 3. since 0th and 1st pay a lot of time to timeout and increase the toView, while 3rd
-        /// pays little time to timeout and increase the toView, the toView of 0th and 1st will
-        /// always less than 2nd, and the network can never reach consensus at a given view
-
-        /// solution:
-        /// 1. if m_toView is equal to (m_view + 1), that means that some exceptions happened to
-        /// block execution, but the network is OK to reach a new view, which equal to m_view + 1,
-        /// in this case, we shouldn't update m_changeCycle to 0 in consideration of block execution
-        /// may cause more time
-
-        /// 2. if m_toView is larger than (m_view + 1), that means that the network is not ok to
-        /// reach a new view, and the related nodes have modifing toView always, and if the network
-        /// recovers, we should reset m_changeCycle to 1 in case of more timeout wait if the leader
-        /// if off after fast view change
-
-        /// potential problem:
-        /// execution speed differences among nodes may cause fast view change of the faster node
-        /// the faster nodes may have a different cycle compared to other nodes
-        if (m_toView > m_view + 1)
-        {
-            m_timeManager.m_changeCycle = 1;
-            PBFTENGINE_LOG(INFO) << LOG_DESC("checkAndChangeView, update m_changeCycle to 1");
-        }
         PBFTENGINE_LOG(INFO) << LOG_DESC("checkAndChangeView: Reach consensus")
                              << LOG_KV("org_view", m_view)
-                             << LOG_KV("org_changeCycle", orgChangeCycle)
                              << LOG_KV("cur_changeCycle", m_timeManager.m_changeCycle)
                              << LOG_KV("to_view", m_toView);
 
 
         m_leaderFailed = false;
-        m_timeManager.m_lastConsensusTime = utcTime();
+        m_timeManager.m_lastConsensusTime = utcSteadyTime();
         m_view = m_toView.load();
         m_notifyNextLeaderSeal = false;
-        m_reqCache->triggerViewChange(m_view);
+        m_reqCache->triggerViewChange(m_view, m_blockChain->number());
         m_blockSync->noteSealingBlockNumber(m_blockChain->number());
     }
 }
@@ -1511,7 +1555,7 @@ void PBFTEngine::collectGarbage()
         return;
     }
     Timer t;
-    std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+    std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
     if (now - m_timeManager.m_lastGarbageCollection >
         std::chrono::seconds(m_timeManager.CollectInterval))
     {
@@ -1563,7 +1607,7 @@ void PBFTEngine::checkTimeout()
             m_toView += 1;
             m_leaderFailed = true;
             m_blockSync->noteSealingBlockNumber(m_blockChain->number());
-            m_timeManager.m_lastConsensusTime = utcTime();
+            m_timeManager.m_lastConsensusTime = utcSteadyTime();
             flag = true;
             m_reqCache->removeInvalidViewChange(m_toView, m_highestBlock);
 
@@ -1587,40 +1631,35 @@ void PBFTEngine::checkTimeout()
 void PBFTEngine::handleMsg(PBFTMsgPacket::Ptr pbftMsg)
 {
     Guard l(m_mutex);
-    PBFTMsg pbft_msg;
-    std::string key;
+    std::shared_ptr<PBFTMsg> pbft_msg;
     bool succ = false;
     switch (pbftMsg->packet_id)
     {
     case PrepareReqPacket:
     {
-        PrepareReq prepare_req;
+        PrepareReq::Ptr prepare_req = std::make_shared<PrepareReq>();
         succ = handlePrepareMsg(prepare_req, *pbftMsg);
-        key = prepare_req.uniqueKey();
         pbft_msg = prepare_req;
         break;
     }
     case SignReqPacket:
     {
-        SignReq req;
+        SignReq::Ptr req = std::make_shared<SignReq>();
         succ = handleSignMsg(req, *pbftMsg);
-        key = req.uniqueKey();
         pbft_msg = req;
         break;
     }
     case CommitReqPacket:
     {
-        CommitReq req;
+        CommitReq::Ptr req = std::make_shared<CommitReq>();
         succ = handleCommitMsg(req, *pbftMsg);
-        key = req.uniqueKey();
         pbft_msg = req;
         break;
     }
     case ViewChangeReqPacket:
     {
-        ViewChangeReq req;
+        std::shared_ptr<ViewChangeReq> req = std::make_shared<ViewChangeReq>();
         succ = handleViewChangeMsg(req, *pbftMsg);
-        key = req.uniqueKey();
         pbft_msg = req;
         break;
     }
@@ -1633,22 +1672,23 @@ void PBFTEngine::handleMsg(PBFTMsgPacket::Ptr pbftMsg)
     }
     }
 
-    if (!needForwardMsg(succ, key, pbftMsg, pbft_msg))
+    if (!needForwardMsg(succ, pbftMsg, *pbft_msg))
     {
         return;
     }
-    forwardMsg(key, pbftMsg, pbft_msg);
+    forwardMsg(pbftMsg, *pbft_msg);
 }
 
 // should forward message or not
-bool PBFTEngine::needForwardMsg(bool const& _valid, std::string const& _key,
-    PBFTMsgPacket::Ptr _pbftMsgPacket, PBFTMsg const& _pbftMsg)
+bool PBFTEngine::needForwardMsg(
+    bool const& _valid, PBFTMsgPacket::Ptr _pbftMsgPacket, PBFTMsg const& _pbftMsg)
 {
+    std::string key = _pbftMsg.uniqueKey();
     if (_pbftMsgPacket->forwardNodes && _pbftMsgPacket->forwardNodes->size() == 0)
     {
         return false;
     }
-    if (!_valid || _key.size() == 0)
+    if (!_valid || key.size() == 0)
     {
         return false;
     }
@@ -1663,8 +1703,8 @@ bool PBFTEngine::needForwardMsg(bool const& _valid, std::string const& _key,
 }
 
 // update ttl and forward the message
-void PBFTEngine::forwardMsgByTTL(std::string const& _key, PBFTMsgPacket::Ptr _pbftMsgPacket,
-    PBFTMsg const& _pbftMsg, bytesConstRef _data)
+void PBFTEngine::forwardMsgByTTL(
+    PBFTMsgPacket::Ptr _pbftMsgPacket, PBFTMsg const& _pbftMsg, bytesConstRef _data)
 {
     std::unordered_set<h512> filter;
     filter.insert(_pbftMsgPacket->node_id);
@@ -1675,7 +1715,7 @@ void PBFTEngine::forwardMsgByTTL(std::string const& _key, PBFTMsgPacket::Ptr _pb
         filter.insert(genNodeId);
     }
     unsigned current_ttl = _pbftMsgPacket->ttl - 1;
-    broadcastMsg(_pbftMsgPacket->packet_id, _key, _data, 0, filter, current_ttl);
+    broadcastMsg(_pbftMsgPacket->packet_id, _pbftMsg, _data, 0, filter, current_ttl);
 }
 
 /// start a new thread to handle the network-receivied message
@@ -1718,8 +1758,8 @@ void PBFTEngine::workLoop()
 
 void PBFTEngine::waitSignal()
 {
-    std::unique_lock<std::mutex> l(x_signalled);
-    m_signalled.wait_for(l, std::chrono::milliseconds(5));
+    boost::unique_lock<boost::mutex> l(x_signalled);
+    m_signalled.wait_for(l, boost::chrono::milliseconds(5));
 }
 
 /// handle the prepareReq cached in the futurePrepareCache
@@ -1738,7 +1778,7 @@ void PBFTEngine::handleFutureBlock()
                              << LOG_KV("hash", p_future_prepare->block_hash.abridged())
                              << LOG_KV("nodeIdx", nodeIdx())
                              << LOG_KV("myNode", m_keyPair.pub().abridged());
-        handlePrepareMsg(*p_future_prepare);
+        handlePrepareMsg(p_future_prepare);
         m_reqCache->eraseHandledFutureReq(p_future_prepare->height);
     }
 }
@@ -1805,7 +1845,7 @@ PBFTMsgPacket::Ptr PBFTEngine::createPBFTMsgPacket(bytesConstRef data,
 }
 
 P2PMessage::Ptr PBFTEngine::transDataToMessage(bytesConstRef _data, PACKET_TYPE const& _packetType,
-    PROTOCOL_ID const& _protocolId, unsigned const& _ttl, std::shared_ptr<dev::h512s> _forwardNodes)
+    unsigned const& _ttl, std::shared_ptr<dev::h512s> _forwardNodes)
 {
     P2PMessage::Ptr message =
         std::dynamic_pointer_cast<P2PMessage>(m_service->p2pMessageFactory()->buildMessage());
@@ -1814,7 +1854,7 @@ P2PMessage::Ptr PBFTEngine::transDataToMessage(bytesConstRef _data, PACKET_TYPE 
     pbftPacket->encode(ret_data);
     std::shared_ptr<dev::bytes> p_data = std::make_shared<dev::bytes>(std::move(ret_data));
     message->setBuffer(p_data);
-    message->setProtocolID(_protocolId);
+    message->setProtocolID(m_protocolId);
     return message;
 }
 
@@ -1832,9 +1872,9 @@ void PBFTEngine::createPBFTMsgFactory()
 
 // get the forwardNodes
 // _printLog is true when viewChangeWarning to show more detailed info
-std::shared_ptr<dev::h512s> PBFTEngine::getForwardNodes(
-    dev::p2p::P2PSessionInfos const& _sessions, bool const& _printLog)
+std::shared_ptr<dev::h512s> PBFTEngine::getForwardNodes(bool const& _printLog)
 {
+    auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
     std::shared_ptr<dev::h512s> forwardNodes = nullptr;
     std::set<h512> consensusNodes;
     {
@@ -1843,7 +1883,7 @@ std::shared_ptr<dev::h512s> PBFTEngine::getForwardNodes(
     }
     std::string connectedNodeList = "";
     // select the disconnected consensus nodes
-    for (auto const& session : _sessions)
+    for (auto const& session : sessions)
     {
         if (consensusNodes.count(session.nodeID()))
         {
@@ -1870,7 +1910,7 @@ std::shared_ptr<dev::h512s> PBFTEngine::getForwardNodes(
             PBFTENGINE_LOG(WARNING)
                 << LOG_DESC("Find disconnectedNode")
                 << LOG_KV("disconnectedNodeSize", forwardNodes->size())
-                << LOG_KV("sessionSize", _sessions.size())
+                << LOG_KV("sessionSize", sessions.size())
                 << LOG_KV("minValidNodes", minValidNodes())
                 << LOG_KV("connectedNodeList", connectedNodeList)
                 << LOG_KV("disconnectedNode", disconnectedNode) << LOG_KV("idx", nodeIdx());
@@ -1920,14 +1960,14 @@ void PBFTEngine::forwardMsgByNodeInfo(
     }
 }
 
-void PBFTEngine::forwardMsg(
-    std::string const& _key, PBFTMsgPacket::Ptr _pbftMsgPacket, PBFTMsg const& _pbftMsg)
+void PBFTEngine::forwardMsg(PBFTMsgPacket::Ptr _pbftMsgPacket, PBFTMsg const& _pbftMsg)
 {
+    std::string key = _pbftMsg.uniqueKey();
     if (m_enableTTLOptimize)
     {
-        return forwardMsgByNodeInfo(_key, _pbftMsgPacket, ref(_pbftMsgPacket->data));
+        return forwardMsgByNodeInfo(key, _pbftMsgPacket, ref(_pbftMsgPacket->data));
     }
-    return forwardMsgByTTL(_key, _pbftMsgPacket, _pbftMsg, ref(_pbftMsgPacket->data));
+    return forwardMsgByTTL(_pbftMsgPacket, _pbftMsg, ref(_pbftMsgPacket->data));
 }
 
 void PBFTEngine::resetConfig()
@@ -1953,6 +1993,17 @@ dev::p2p::P2PMessage::Ptr PBFTEngine::toP2PMessage(
     message->setPacketType(_packetType);
     message->setProtocolID(m_protocolId);
     return message;
+}
+
+dev::h512 PBFTEngine::selectNodeToRequestMissedTxs(PrepareReq::Ptr _prepareReq)
+{
+    // can't find the node that generate the prepareReq
+    h512 targetNode;
+    if (!getNodeIDByIndex(targetNode, _prepareReq->idx))
+    {
+        return dev::h512();
+    }
+    return targetNode;
 }
 
 bool PBFTEngine::handlePartiallyPrepare(PrepareReq::Ptr _prepareReq)
@@ -1987,10 +2038,15 @@ bool PBFTEngine::handlePartiallyPrepare(PrepareReq::Ptr _prepareReq)
         {
             // re-encode the block into the completed block(for pbft-backup consideration)
             _prepareReq->pBlock->encode(*_prepareReq->block);
-            m_partiallyPrepareCache->addFuturePrepareCache(*_prepareReq);
+            m_partiallyPrepareCache->addFuturePrepareCache(_prepareReq);
             return true;
         }
-        return false;
+        // request missed txs for the future prepare
+        else
+        {
+            m_partiallyPrepareCache->addPartiallyFuturePrepare(_prepareReq);
+            return requestMissedTxs(_prepareReq);
+        }
     }
     if (!m_partiallyPrepareCache->addPartiallyRawPrepare(_prepareReq))
     {
@@ -2015,11 +2071,16 @@ bool PBFTEngine::handlePartiallyPrepare(PrepareReq::Ptr _prepareReq)
                               << LOG_KV("txsSize", _prepareReq->pBlock->transactions()->size());
         m_partiallyPrepareCache->transPartiallyPrepareIntoRawPrepare();
         // begin to handlePrepare
-        return execPrepareAndGenerateSignMsg(*_prepareReq, oss);
+        return execPrepareAndGenerateSignMsg(_prepareReq, oss);
     }
+    return requestMissedTxs(_prepareReq);
+}
+
+bool PBFTEngine::requestMissedTxs(PrepareReq::Ptr _prepareReq)
+{
     // can't find the node that generate the prepareReq
-    h512 targetNode;
-    if (!getNodeIDByIndex(targetNode, _prepareReq->idx))
+    h512 targetNode = selectNodeToRequestMissedTxs(_prepareReq);
+    if (targetNode == dev::h512())
     {
         return false;
     }
@@ -2063,7 +2124,7 @@ void PBFTEngine::forwardPrepareMsg(PBFTMsgPacket::Ptr _pbftMsgPacket, PrepareReq
     }
     else
     {
-        forwardMsgByTTL(_prepareReq->uniqueKey(), _pbftMsgPacket, *_prepareReq, ref(*encodedBytes));
+        forwardMsgByTTL(_pbftMsgPacket, *_prepareReq, ref(*encodedBytes));
     }
 }
 
@@ -2170,15 +2231,26 @@ void PBFTEngine::handleP2PMessage(
     }
 }
 
-// handle Partially prepare
+
 bool PBFTEngine::handlePartiallyPrepare(
-    std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message)
+    std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message)
+{
+    return handleReceivedPartiallyPrepare(_session, _message, nullptr);
+}
+
+// handle Partially prepare
+bool PBFTEngine::handleReceivedPartiallyPrepare(std::shared_ptr<P2PSession> _session,
+    P2PMessage::Ptr _message, std::function<void(PBFTMsgPacket::Ptr)> const& _f)
 {
     // decode the _message into prepareReq
     PBFTMsgPacket::Ptr pbftMsg = m_pbftMsgFactory->createPBFTMsgPacket();
     if (!decodePBFTMsgPacket(pbftMsg, _message, _session))
     {
         return false;
+    }
+    if (_f)
+    {
+        _f(pbftMsg);
     }
     PrepareReq::Ptr prepareReq = std::make_shared<PrepareReq>();
     if (!decodeToRequests(*prepareReq, ref(pbftMsg->data)))
@@ -2192,7 +2264,7 @@ bool PBFTEngine::handlePartiallyPrepare(
     {
         return false;
     }
-    if (needForwardMsg(succ, prepareReq->uniqueKey(), pbftMsg, *prepareReq))
+    if (needForwardMsg(succ, pbftMsg, *prepareReq))
     {
         // all hit ?
         if (prepareReq->pBlock->txsAllHit())
@@ -2218,7 +2290,17 @@ void PBFTEngine::onReceiveMissedTxsResponse(
         PBFTENGINE_LOG(DEBUG) << LOG_DESC("onReceiveMissedTxsResponse and fillBlock")
                               << LOG_KV("size", _message->length())
                               << LOG_KV("peer", _session->nodeID().abridged());
-        if (!m_partiallyPrepareCache->fillBlock(ref(*(_message->buffer()))))
+        RLP blockRLP(ref(*(_message->buffer())));
+        // get blockHash of the response
+        auto blockHash = blockRLP[1].toHash<h256>(RLP::VeryStrict);
+        // the response is for the future prepare,
+        // fill the future prepare and add it to the futurePrepareCache
+        if (m_partiallyPrepareCache->existInFuturePrepare(blockHash))
+        {
+            m_partiallyPrepareCache->fillFutureBlock(blockRLP);
+            return;
+        }
+        if (!m_partiallyPrepareCache->fillPrepareCacheBlock(blockRLP))
         {
             return;
         }
@@ -2226,7 +2308,7 @@ void PBFTEngine::onReceiveMissedTxsResponse(
         auto prepareReq = m_partiallyPrepareCache->partiallyRawPrepare();
         // re-encode the block into the completed block(for pbft-backup consideration)
         prepareReq->pBlock->encode(*prepareReq->block);
-        bool ret = handlePrepareMsg(*prepareReq);
+        bool ret = handlePrepareMsg(prepareReq);
         // forward the completed prepare message
         if (ret && m_cachedForwardMsg->count(prepareReq->block_hash))
         {
