@@ -1565,6 +1565,38 @@ Json::Value Rpc::removeGroup(int _groupID)
     {
         return response;
     }
+
+    try
+    {
+        ledgerManager()->removeByGroupID(_groupID);
+        response["code"] = LedgerManagementStatusCode::SUCCESS;
+        response["message"] = "Group " + std::to_string(_groupID) + " deleted successfully";
+    }
+    catch (GroupNotFound const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_NOT_FOUND;
+        response["message"] = "Group " + std::to_string(_groupID) + " not found";
+    }
+    catch (GroupIsRunning const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_ALREADY_RUNNING;
+        response["message"] = "Group " + std::to_string(_groupID) + " is running";
+    }
+    catch (GroupIsStopping const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_IS_STOPPING;
+        response["message"] = "Group " + std::to_string(_groupID) + " is stopping";
+    }
+    catch (GroupAlreadyDeleted const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_ALREADY_DELETED;
+        response["message"] = "Group " + std::to_string(_groupID) + " has already been deleted";
+    }
+    catch (std::exception const& _e)
+    {
+        response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
+        response["message"] = _e.what();
+    }
     return response;
 }
 
@@ -1581,6 +1613,33 @@ Json::Value Rpc::recoverGroup(int _groupID)
     {
         return response;
     }
+
+    try
+    {
+        ledgerManager()->recoverByGroupID(_groupID);
+        response["code"] = LedgerManagementStatusCode::SUCCESS;
+        response["message"] = "Group " + std::to_string(_groupID) + " recovered successfully";
+    }
+    catch (GroupNotFound const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_NOT_FOUND;
+        response["message"] = "Group " + std::to_string(_groupID) + " not found";
+    }
+#define CATCH_GROUP_NOT_DELETED_EXCEPTION(e)                                                 \
+    catch (e const&)                                                                         \
+    {                                                                                        \
+        response["code"] = LedgerManagementStatusCode::GROUP_HAS_NOT_DELETED;                \
+        response["message"] = "Group " + std::to_string(_groupID) + " has not been deleted"; \
+    }
+    CATCH_GROUP_NOT_DELETED_EXCEPTION(GroupIsRunning)
+    CATCH_GROUP_NOT_DELETED_EXCEPTION(GroupIsStopping)
+    CATCH_GROUP_NOT_DELETED_EXCEPTION(GroupAlreadyStopped)
+#undef CATCH_GROUP_NOT_DELETED_EXCEPTION
+    catch (std::exception const& _e)
+    {
+        response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
+        response["message"] = _e.what();
+    }
     return response;
 }
 
@@ -1594,8 +1653,33 @@ Json::Value Rpc::queryGroupStatus(int _groupID)
     Json::Value response;
     if (!checkGroupIDForGroupMgr(_groupID, response))
     {
+        response["status"] = "";
         return response;
     }
+
+    auto status = ledgerManager()->queryGroupStatus(_groupID);
+    switch (status)
+    {
+    case LedgerStatus::INEXISTENT:
+        response["status"] = "INEXISTENT";
+        break;
+    case LedgerStatus::RUNNING:
+        response["status"] = "RUNNING";
+        break;
+    case LedgerStatus::STOPPING:
+        response["status"] = "STOPPING";
+        break;
+    case LedgerStatus::STOPPED:
+        response["status"] = "STOPPED";
+        break;
+    case LedgerStatus::DELETED:
+        response["status"] = "DELETED";
+        break;
+    default:
+        BOOST_THROW_EXCEPTION(UnknownGroupStatus());
+    }
+    response["code"] = LedgerManagementStatusCode::SUCCESS;
+    response["message"] = "";
     return response;
 }
 

@@ -47,7 +47,7 @@ public:
             _blockVerifier, _keyPair, _minElectTime, _maxElectTime, _protocolId, _sealerList);
         m_raftEngine = std::dynamic_pointer_cast<RaftEngine>(m_consensusEngine);
 
-        /// set thread name for PBFTSealer
+        /// set thread name for RaftSealer
         std::string threadName = "RaftSeal-" + std::to_string(m_raftEngine->groupId());
         setName(threadName);
     }

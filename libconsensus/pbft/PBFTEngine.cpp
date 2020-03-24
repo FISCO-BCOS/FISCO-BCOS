@@ -74,24 +74,27 @@ void PBFTEngine::createPBFTReqCache()
 
 void PBFTEngine::stop()
 {
-    // remove the registered handler when stop the pbftEngine
-    if (m_service)
+    if (m_startConsensusEngine)
     {
-        m_service->removeHandlerByProtocolID(m_protocolId);
+        // remove the registered handler when stop the pbftEngine
+        if (m_service)
+        {
+            m_service->removeHandlerByProtocolID(m_protocolId);
+        }
+        if (m_threadPool)
+        {
+            m_threadPool->stop();
+        }
+        if (m_prepareWorker)
+        {
+            m_prepareWorker->stop();
+        }
+        if (m_messageHandler)
+        {
+            m_messageHandler->stop();
+        }
+        ConsensusEngineBase::stop();
     }
-    if (m_threadPool)
-    {
-        m_threadPool->stop();
-    }
-    if (m_prepareWorker)
-    {
-        m_prepareWorker->stop();
-    }
-    if (m_messageHandler)
-    {
-        m_messageHandler->stop();
-    }
-    ConsensusEngineBase::stop();
 }
 
 void PBFTEngine::initPBFTEnv(unsigned view_timeout)
