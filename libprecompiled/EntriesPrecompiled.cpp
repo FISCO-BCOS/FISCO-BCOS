@@ -52,6 +52,7 @@ PrecompiledExecResult::Ptr EntriesPrecompiled::call(
     dev::eth::ContractABI abi;
 
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
+    callResult->gasPricer()->setMemUsed(param.size());
 
     if (func == name2Selector[ENTRIES_GET_INT])
     {  // get(int256)

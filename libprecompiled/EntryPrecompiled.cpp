@@ -90,12 +90,14 @@ PrecompiledExecResult::Ptr EntryPrecompiled::call(
 
     dev::eth::ContractABI abi;
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
+    callResult->gasPricer()->setMemUsed(param.size());
 
     if (func == name2Selector[ENTRY_GET_INT])
     {  // getInt(string)
         std::string str;
         abi.abiOut(data, str);
         s256 num = boost::lexical_cast<s256>(m_entry->getField(str));
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::GetInt);
         callResult->setExecResult(abi.abiIn("", num));
     }
     else if (func == name2Selector[ENTRY_GET_UINT])
@@ -103,6 +105,7 @@ PrecompiledExecResult::Ptr EntryPrecompiled::call(
         std::string str;
         abi.abiOut(data, str);
         u256 num = boost::lexical_cast<u256>(m_entry->getField(str));
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::GetInt);
         callResult->setExecResult(abi.abiIn("", num));
     }
     else if (func == name2Selector[ENTRY_SET_STR_INT])
@@ -110,12 +113,14 @@ PrecompiledExecResult::Ptr EntryPrecompiled::call(
         std::string key;
         std::string value(setInt(data, key));
         m_entry->setField(key, value);
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::Set);
     }
     else if (func == name2Selector[ENTRY_SET_STR_UINT])
     {  // set(string,uint256)
         std::string key;
         std::string value(setInt(data, key, true));
         m_entry->setField(key, value);
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::Set);
     }
     else if (func == name2Selector[ENTRY_SET_STR_STR])
     {  // set(string,string)
@@ -124,6 +129,7 @@ PrecompiledExecResult::Ptr EntryPrecompiled::call(
         abi.abiOut(data, str, value);
 
         m_entry->setField(str, value);
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::Set);
     }
     else if (func == name2Selector[ENTRY_SET_STR_ADDR])
     {  // set(string,address)
@@ -132,6 +138,7 @@ PrecompiledExecResult::Ptr EntryPrecompiled::call(
         abi.abiOut(data, str, value);
 
         m_entry->setField(str, toHex(value));
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::Set);
     }
     else if (func == name2Selector[ENTRY_GETA_STR])
     {  // getAddress(string)
@@ -141,6 +148,7 @@ PrecompiledExecResult::Ptr EntryPrecompiled::call(
         std::string value = m_entry->getField(str);
         Address ret = Address(value);
         callResult->setExecResult(abi.abiIn("", ret));
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::GetAddr);
     }
     else if (func == name2Selector[ENTRY_GETB_STR])
     {  // getBytes64(string)
@@ -158,6 +166,7 @@ PrecompiledExecResult::Ptr EntryPrecompiled::call(
         for (unsigned i = 32; i < 64; ++i)
             ret1[i - 32] = (i < value.size() ? value[i] : 0);
         callResult->setExecResult(abi.abiIn("", ret0, ret1));
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::GetByte64);
     }
     else if (func == name2Selector[ENTRY_GETB_STR32])
     {  // getBytes32(string)
@@ -167,6 +176,7 @@ PrecompiledExecResult::Ptr EntryPrecompiled::call(
         std::string value = m_entry->getField(str);
         dev::string32 s32 = dev::eth::toString32(value);
         callResult->setExecResult(abi.abiIn("", s32));
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::GetByte32);
     }
     else if (func == name2Selector[ENTRY_GET_STR])
     {  // getString(string)
@@ -175,6 +185,7 @@ PrecompiledExecResult::Ptr EntryPrecompiled::call(
 
         std::string value = m_entry->getField(str);
         callResult->setExecResult(abi.abiIn("", value));
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::GetString);
     }
     else
     {

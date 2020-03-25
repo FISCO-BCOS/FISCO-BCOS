@@ -24,24 +24,33 @@
 #include <libdevcore/Log.h>
 using namespace dev;
 using namespace dev::precompiled;
-
 std::map<InterfaceOpcode, int64_t> GasMetrics::OpCode2GasCost = {{InterfaceOpcode::EQ, VeryLow},
     {InterfaceOpcode::GE, VeryLow}, {InterfaceOpcode::GT, VeryLow}, {InterfaceOpcode::LE, VeryLow},
-    {InterfaceOpcode::NE, VeryLow}, {InterfaceOpcode::Limit, VeryLow},
-    {InterfaceOpcode::GetInt, VeryLow}, {InterfaceOpcode::GetAddr, VeryLow},
-    {InterfaceOpcode::Set, VeryLow}, {InterfaceOpcode::GetByte32, 32 * VeryLow},
-    {InterfaceOpcode::GetByte64, 64 * VeryLow}, {InterfaceOpcode::CreateTable, High},
-    {InterfaceOpcode::OpenTable, Low}, {InterfaceOpcode::Insert, High},
-    {InterfaceOpcode::Update, High}, {InterfaceOpcode::Delete, Mid}};
+    {InterfaceOpcode::LT, VeryLow}, {InterfaceOpcode::NE, VeryLow},
+    {InterfaceOpcode::Limit, VeryLow}, {InterfaceOpcode::GetInt, VeryLow},
+    {InterfaceOpcode::GetAddr, VeryLow}, {InterfaceOpcode::Set, VeryLow},
+    {InterfaceOpcode::GetByte32, 32 * VeryLow}, {InterfaceOpcode::GetByte64, 64 * VeryLow},
+    {InterfaceOpcode::GetString, 64 * VeryLow}, {InterfaceOpcode::CreateTable, High},
+    {InterfaceOpcode::OpenTable, Low}, {InterfaceOpcode::Select, Low},
+    {InterfaceOpcode::Insert, High}, {InterfaceOpcode::Update, High},
+    {InterfaceOpcode::Remove, Mid}};
 
 void PrecompiledGas::appendOperation(InterfaceOpcode const& _opType, unsigned const& _opSize)
 {
     m_operationList->push_back(std::make_pair(_opType, _opSize));
 }
 
-u256 PrecompiledGas::calTotalGas(uint64_t const& _maxMemSize)
+void PrecompiledGas::updateMemUsed(uint64_t const& _newMemSize)
 {
-    return (calComputationGas() + calMemGas(_maxMemSize));
+    if (_newMemSize > m_memUsed)
+    {
+        m_memUsed = _newMemSize;
+    }
+}
+
+u256 PrecompiledGas::calTotalGas()
+{
+    return (calComputationGas() + calMemGas());
 }
 
 
@@ -62,8 +71,8 @@ u256 PrecompiledGas::calComputationGas()
 }
 
 // Calculating gas consumed by memory
-u256 PrecompiledGas::calMemGas(uint64_t const& _maxMemSize)
+u256 PrecompiledGas::calMemGas()
 {
-    auto memSize = (_maxMemSize + GasMetrics::MemUnitSize - 1) / GasMetrics::MemUnitSize;
+    auto memSize = (m_memUsed + GasMetrics::MemUnitSize - 1) / GasMetrics::MemUnitSize;
     return (GasMetrics::MemGas * memSize) + (memSize * memSize) / 512;
 }

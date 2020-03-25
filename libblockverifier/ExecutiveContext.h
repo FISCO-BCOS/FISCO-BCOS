@@ -51,7 +51,8 @@ class StateFace;
 namespace precompiled
 {
 class Precompiled;
-}
+class PrecompiledExecResultFactory;
+}  // namespace precompiled
 namespace blockverifier
 {
 class ExecutiveContext : public std::enable_shared_from_this<ExecutiveContext>
@@ -81,6 +82,10 @@ public:
     void setAddress2Precompiled(
         Address address, std::shared_ptr<precompiled::Precompiled> precompiled)
     {
+        if (!precompiled->precompiledExecResultFactory())
+        {
+            precompiled->setPrecompiledExecResultFactory(m_precompiledExecResultFactory);
+        }
         m_address2Precompiled.insert(std::make_pair(address, precompiled));
     }
 
@@ -129,6 +134,8 @@ private:
     std::unordered_map<Address, dev::eth::PrecompiledContract> m_precompiledContract;
     std::shared_ptr<dev::storage::TableFactory> m_memoryTableFactory;
     uint64_t m_txGasLimit = 300000000;
+
+    std::shared_ptr<dev::precompiled::PrecompiledExecResultFactory> m_precompiledExecResultFactory;
 };
 
 }  // namespace blockverifier

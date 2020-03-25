@@ -38,13 +38,7 @@ using namespace std;
 void ExecutiveContext::setPrecompiledExecResultFactory(
     dev::precompiled::PrecompiledExecResultFactory::Ptr _precompiledExecResultFactory)
 {
-    for (auto const& it : m_address2Precompiled)
-    {
-        if (it.second)
-        {
-            it.second->setPrecompiledExecResultFactory(_precompiledExecResultFactory);
-        }
-    }
+    m_precompiledExecResultFactory = _precompiledExecResultFactory;
 }
 
 dev::precompiled::PrecompiledExecResult::Ptr ExecutiveContext::call(
@@ -91,7 +85,10 @@ Address ExecutiveContext::registerPrecompiled(std::shared_ptr<precompiled::Preco
 {
     auto count = ++m_addressCount;
     Address address(count);
-
+    if (!p->precompiledExecResultFactory())
+    {
+        p->setPrecompiledExecResultFactory(m_precompiledExecResultFactory);
+    }
     m_address2Precompiled.insert(std::make_pair(address, p));
 
     return address;

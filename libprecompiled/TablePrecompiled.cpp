@@ -67,6 +67,8 @@ PrecompiledExecResult::Ptr TablePrecompiled::call(ExecutiveContext::Ptr context,
 
     dev::eth::ContractABI abi;
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
+    callResult->gasPricer()->setMemUsed(param.size());
+
     if (func == name2Selector[TABLE_METHOD_SLT_STR_ADD])
     {  // select(string,address)
         std::string key;
@@ -79,6 +81,12 @@ PrecompiledExecResult::Ptr TablePrecompiled::call(ExecutiveContext::Ptr context,
         auto condition = conditionPrecompiled->getCondition();
 
         auto entries = m_table->select(key, condition);
+
+        // update the memory gas and the computation gas
+        auto newMem = getEntriesCapacity(entries);
+        callResult->gasPricer()->updateMemUsed(newMem);
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::Select, entries->size());
+
         auto entriesPrecompiled = std::make_shared<EntriesPrecompiled>();
         entriesPrecompiled->setEntries(entries);
 
@@ -114,6 +122,12 @@ PrecompiledExecResult::Ptr TablePrecompiled::call(ExecutiveContext::Ptr context,
                 it->second, USER_TABLE_FIELD_VALUE_MAX_LENGTH, CODE_TABLE_KEYVALUE_LENGTH_OVERFLOW);
         }
         int count = m_table->insert(key, entry, std::make_shared<AccessOptions>(origin));
+        if (count > 0)
+        {
+            callResult->gasPricer()->updateMemUsed(entry->capacity());
+            callResult->gasPricer()->appendOperation(InterfaceOpcode::Insert, count);
+        }
+
         callResult->setExecResult(abi.abiIn("", u256(count)));
     }
     else if (func == name2Selector[TABLE_METHOD_NEWCOND])
@@ -155,6 +169,12 @@ PrecompiledExecResult::Ptr TablePrecompiled::call(ExecutiveContext::Ptr context,
         auto condition = conditionPrecompiled->getCondition();
 
         int count = m_table->remove(key, condition, std::make_shared<AccessOptions>(origin));
+
+        if (count > 0)
+        {
+            // Note: remove is to delete data from the blockchain and only include the memory gas
+            callResult->gasPricer()->appendOperation(InterfaceOpcode::Remove, count);
+        }
         callResult->setExecResult(abi.abiIn("", u256(count)));
     }
     else if (func == name2Selector[TABLE_METHOD_UP_STR_2ADD])
@@ -188,6 +208,12 @@ PrecompiledExecResult::Ptr TablePrecompiled::call(ExecutiveContext::Ptr context,
         auto condition = conditionPrecompiled->getCondition();
 
         int count = m_table->update(key, entry, condition, std::make_shared<AccessOptions>(origin));
+        if (count > 0)
+        {
+            // update memory and compuation cost
+            callResult->gasPricer()->setMemUsed(entry->capacity() * count);
+            callResult->gasPricer()->appendOperation(InterfaceOpcode::Update);
+        }
         callResult->setExecResult(abi.abiIn("", u256(count)));
     }
     else

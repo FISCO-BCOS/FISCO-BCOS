@@ -75,8 +75,17 @@ public:
         m_precompiledExecResultFactory = _precompiledExecResultFactory;
     }
 
+    PrecompiledExecResultFactory::Ptr precompiledExecResultFactory()
+    {
+        return m_precompiledExecResultFactory;
+    }
+
 protected:
     std::map<std::string, uint32_t> name2Selector;
+
+protected:
+    uint64_t getEntriesCapacity(std::shared_ptr<dev::storage::Entries const> _entries) const;
+
     std::shared_ptr<dev::storage::Table> openTable(
         std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
         const std::string& tableName);
