@@ -48,7 +48,7 @@ PrecompiledExecResult::Ptr PaillierPrecompiled::call(
 
     dev::eth::ContractABI abi;
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
-
+    callResult->gasPricer()->setMemUsed(param.size());
     if (func == name2Selector[PAILLIER_METHOD_SET_STR])
     {
         // paillierAdd(string,string)
@@ -58,6 +58,7 @@ PrecompiledExecResult::Ptr PaillierPrecompiled::call(
         try
         {
             result = m_callPaillier->paillierAdd(cipher1, cipher2);
+            callResult->gasPricer()->appendOperation(InterfaceOpcode::PaillierAdd);
         }
         catch (CallException& e)
         {

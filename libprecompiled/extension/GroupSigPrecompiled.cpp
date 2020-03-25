@@ -49,6 +49,7 @@ PrecompiledExecResult::Ptr GroupSigPrecompiled::call(
     dev::eth::ContractABI abi;
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
 
+    callResult->gasPricer()->setMemUsed(param.size());
     if (func == name2Selector[GroupSig_METHOD_SET_STR])
     {
         // groupSigVerify(string)
@@ -59,6 +60,7 @@ PrecompiledExecResult::Ptr GroupSigPrecompiled::call(
         try
         {
             result = GroupSigApi::group_verify(signature, message, gpkInfo, paramInfo);
+            callResult->gasPricer()->appendOperation(InterfaceOpcode::GroupSigVerify);
         }
         catch (std::string& errorMsg)
         {

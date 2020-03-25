@@ -33,7 +33,8 @@ std::map<InterfaceOpcode, int64_t> GasMetrics::OpCode2GasCost = {{InterfaceOpcod
     {InterfaceOpcode::GetString, 64 * VeryLow}, {InterfaceOpcode::CreateTable, High},
     {InterfaceOpcode::OpenTable, Low}, {InterfaceOpcode::Select, Low},
     {InterfaceOpcode::Insert, High}, {InterfaceOpcode::Update, High},
-    {InterfaceOpcode::Remove, Mid}};
+    {InterfaceOpcode::Remove, Mid}, {InterfaceOpcode::PaillierAdd, High},
+    {InterfaceOpcode::GroupSigVerify, High}, {InterfaceOpcode::RingSigVerify, High}};
 
 void PrecompiledGas::appendOperation(InterfaceOpcode const& _opType, unsigned const& _opSize)
 {

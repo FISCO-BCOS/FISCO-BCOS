@@ -39,6 +39,10 @@ namespace eth
 {
 class Block;
 }  // namespace eth
+namespace precompiled
+{
+class PrecompiledExecResult;
+}
 
 /**
  * @brief Message-call/contract-creation executor; useful for executing transactions.
@@ -64,7 +68,6 @@ namespace executive
 {
 class ExtVM;
 class StateFace;
-
 class Executive
 {
 public:
@@ -212,6 +215,8 @@ private:
         Address const& newAddress, Address const& sender, Address const& origin);
 
     void writeErrInfoToOutput(std::string const& errInfo);
+
+    void updateGas(std::shared_ptr<dev::precompiled::PrecompiledExecResult> _callResult);
 
     std::shared_ptr<StateFace> m_s;  ///< The state to which this operation/transaction is applied.
     // TODO: consider changign to EnvInfo const& to avoid LastHashes copy at every CALL/CREATE

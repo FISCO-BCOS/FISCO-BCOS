@@ -64,6 +64,7 @@ PrecompiledExecResult::Ptr CNSPrecompiled::call(
     dev::eth::ContractABI abi;
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
 
+    callResult->gasPricer()->setMemUsed(param.size());
 
     if (func == name2Selector[CNS_METHOD_INS_STR4])
     {  // FIXME: modify insert(string,string,string,string) ==> insert(string,string,address,string)
@@ -71,6 +72,7 @@ PrecompiledExecResult::Ptr CNSPrecompiled::call(
         std::string contractName, contractVersion, contractAddress, contractAbi;
         abi.abiOut(data, contractName, contractVersion, contractAddress, contractAbi);
         Table::Ptr table = openTable(context, SYS_CNS);
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::OpenTable);
 
         bool isValidAddress = true;
         if (g_BCOSConfig.version() >= V2_2_0)
@@ -89,6 +91,10 @@ PrecompiledExecResult::Ptr CNSPrecompiled::call(
         // check exist or not
         bool exist = false;
         auto entries = table->select(contractName, table->newCondition());
+        // Note: The selection here is only used as an internal logical judgment,
+        // so only calculate the computation gas
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::Select, entries->size());
+
         if (entries.get())
         {
             for (size_t i = 0; i < entries->size(); i++)
@@ -135,6 +141,11 @@ PrecompiledExecResult::Ptr CNSPrecompiled::call(
             entry->setField(SYS_CNS_FIELD_ADDRESS, contractAddress);
             entry->setField(SYS_CNS_FIELD_ABI, contractAbi);
             int count = table->insert(contractName, entry, std::make_shared<AccessOptions>(origin));
+            if (count > 0)
+            {
+                callResult->gasPricer()->updateMemUsed(entry->size() * count);
+                callResult->gasPricer()->appendOperation(InterfaceOpcode::Insert, count);
+            }
             if (count == storage::CODE_NO_AUTHORIZED)
             {
                 PRECOMPILED_LOG(DEBUG)
@@ -157,9 +168,14 @@ PrecompiledExecResult::Ptr CNSPrecompiled::call(
         std::string contractName;
         abi.abiOut(data, contractName);
         Table::Ptr table = openTable(context, SYS_CNS);
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::OpenTable);
 
         Json::Value CNSInfos(Json::arrayValue);
         auto entries = table->select(contractName, table->newCondition());
+        // Note: Because the selected data has been returned as cnsInfo,
+        // the memory is not updated here
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::Set, entries->size());
+
         if (entries.get())
         {
             for (size_t i = 0; i < entries->size(); i++)
@@ -185,11 +201,16 @@ PrecompiledExecResult::Ptr CNSPrecompiled::call(
         std::string contractName, contractVersion;
         abi.abiOut(data, contractName, contractVersion);
         Table::Ptr table = openTable(context, SYS_CNS);
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::OpenTable);
 
         Json::Value CNSInfos(Json::arrayValue);
         auto condition = table->newCondition();
         condition->EQ(SYS_CNS_FIELD_VERSION, contractVersion);
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::EQ);
+
         auto entries = table->select(contractName, condition);
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::Select, entries->size());
+
         if (entries->size() != 0)
         {
             auto entry = entries->get(0);
@@ -209,11 +230,14 @@ PrecompiledExecResult::Ptr CNSPrecompiled::call(
         std::string contractName, contractVersion;
         abi.abiOut(data, contractName, contractVersion);
         Table::Ptr table = openTable(context, SYS_CNS);
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::OpenTable);
 
         Address ret;
         auto condition = table->newCondition();
         condition->EQ(SYS_CNS_FIELD_VERSION, contractVersion);
         auto entries = table->select(contractName, condition);
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::Select, entries->size());
+
         if (entries.get())
         {
             auto entry = entries->get(0);

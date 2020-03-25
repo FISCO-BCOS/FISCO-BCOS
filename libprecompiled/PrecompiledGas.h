@@ -51,6 +51,9 @@ enum InterfaceOpcode : int64_t
     Insert = 0x10,
     Update = 0x11,
     Remove = 0x12,
+    PaillierAdd = 0x13,
+    GroupSigVerify = 0x14,
+    RingSigVerify = 0x15
 };
 
 struct GasMetrics
