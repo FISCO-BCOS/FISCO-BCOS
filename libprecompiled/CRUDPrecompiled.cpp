@@ -65,13 +65,19 @@ PrecompiledExecResult::Ptr CRUDPrecompiled::call(
 
     dev::eth::ContractABI abi;
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
+    callResult->gasPricer()->setMemUsed(param.size());
+
     if (func == name2Selector[CRUD_METHOD_DESC_STR])
     {  // desc(string)
         std::string tableName;
         abi.abiOut(data, tableName);
         tableName = precompiled::getTableName(tableName);
         Table::Ptr table = openTable(context, storage::SYS_TABLES);
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::OpenTable);
         auto entries = table->select(tableName, table->newCondition());
+        // Note: Because the selected data has been returned, the memory is not updated here
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::Select, entries->size());
+
         string keyField, valueFiled;
         if (entries->size() != 0)
         {
@@ -96,6 +102,7 @@ PrecompiledExecResult::Ptr CRUDPrecompiled::call(
 
         tableName = precompiled::getTableName(tableName);
         Table::Ptr table = openTable(context, tableName);
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::OpenTable);
         if (table)
         {
             Entry::Ptr entry = table->newEntry();
@@ -114,6 +121,11 @@ PrecompiledExecResult::Ptr CRUDPrecompiled::call(
             }
 
             int result = table->insert(key, entry, std::make_shared<AccessOptions>(origin));
+            if (result > 0)
+            {
+                callResult->gasPricer()->appendOperation(InterfaceOpcode::Insert, result);
+                callResult->gasPricer()->updateMemUsed(entry->capacity() * result);
+            }
             callResult->setExecResult(abi.abiIn("", u256(result)));
         }
         else
@@ -131,6 +143,7 @@ PrecompiledExecResult::Ptr CRUDPrecompiled::call(
         abi.abiOut(data, tableName, key, entryStr, conditionStr, optional);
         tableName = precompiled::getTableName(tableName);
         Table::Ptr table = openTable(context, tableName);
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::OpenTable);
         if (table)
         {
             Entry::Ptr entry = table->newEntry();
@@ -141,7 +154,7 @@ PrecompiledExecResult::Ptr CRUDPrecompiled::call(
                 return callResult;
             }
             Condition::Ptr condition = table->newCondition();
-            int parseConditionResult = parseCondition(conditionStr, condition);
+            int parseConditionResult = parseCondition(conditionStr, condition, callResult);
             if (parseConditionResult != CODE_SUCCESS)
             {
                 callResult->setExecResult(abi.abiIn("", u256(parseConditionResult)));
@@ -157,6 +170,11 @@ PrecompiledExecResult::Ptr CRUDPrecompiled::call(
 
             int result =
                 table->update(key, entry, condition, std::make_shared<AccessOptions>(origin));
+            if (result > 0)
+            {
+                callResult->gasPricer()->updateMemUsed(entry->capacity() * result);
+                callResult->gasPricer()->appendOperation(InterfaceOpcode::Update, result);
+            }
             callResult->setExecResult(abi.abiIn("", u256(result)));
         }
         else
@@ -174,16 +192,21 @@ PrecompiledExecResult::Ptr CRUDPrecompiled::call(
         abi.abiOut(data, tableName, key, conditionStr, optional);
         tableName = precompiled::getTableName(tableName);
         Table::Ptr table = openTable(context, tableName);
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::OpenTable);
         if (table)
         {
             Condition::Ptr condition = table->newCondition();
-            int parseConditionResult = parseCondition(conditionStr, condition);
+            int parseConditionResult = parseCondition(conditionStr, condition, callResult);
             if (parseConditionResult != CODE_SUCCESS)
             {
                 callResult->setExecResult(abi.abiIn("", u256(parseConditionResult)));
                 return callResult;
             }
             int result = table->remove(key, condition, std::make_shared<AccessOptions>(origin));
+            if (result > 0)
+            {
+                callResult->gasPricer()->appendOperation(InterfaceOpcode::Remove, result);
+            }
             callResult->setExecResult(abi.abiIn("", u256(result)));
         }
         else
@@ -204,16 +227,18 @@ PrecompiledExecResult::Ptr CRUDPrecompiled::call(
             tableName = precompiled::getTableName(tableName);
         }
         Table::Ptr table = openTable(context, tableName);
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::OpenTable);
         if (table)
         {
             Condition::Ptr condition = table->newCondition();
-            int parseConditionResult = parseCondition(conditionStr, condition);
+            int parseConditionResult = parseCondition(conditionStr, condition, callResult);
             if (parseConditionResult != CODE_SUCCESS)
             {
                 callResult->setExecResult(abi.abiIn("", u256(parseConditionResult)));
                 return callResult;
             }
             auto entries = table->select(key, condition);
+            callResult->gasPricer()->appendOperation(InterfaceOpcode::Select, entries->size());
             Json::Value records = Json::Value(Json::arrayValue);
             if (entries)
             {
@@ -251,7 +276,8 @@ PrecompiledExecResult::Ptr CRUDPrecompiled::call(
     }
 }
 
-int CRUDPrecompiled::parseCondition(const std::string& conditionStr, Condition::Ptr& condition)
+int CRUDPrecompiled::parseCondition(const std::string& conditionStr, Condition::Ptr& condition,
+    PrecompiledExecResult::Ptr _execResult)
 {
     Json::Reader reader;
     Json::Value conditionJson;
@@ -280,26 +306,32 @@ int CRUDPrecompiled::parseCondition(const std::string& conditionStr, Condition::
                 if (*it == "eq")
                 {
                     condition->EQ(*iter, OPJson[*it].asString());
+                    _execResult->gasPricer()->appendOperation(InterfaceOpcode::EQ);
                 }
                 else if (*it == "ne")
                 {
                     condition->NE(*iter, OPJson[*it].asString());
+                    _execResult->gasPricer()->appendOperation(InterfaceOpcode::NE);
                 }
                 else if (*it == "gt")
                 {
                     condition->GT(*iter, OPJson[*it].asString());
+                    _execResult->gasPricer()->appendOperation(InterfaceOpcode::GT);
                 }
                 else if (*it == "ge")
                 {
                     condition->GE(*iter, OPJson[*it].asString());
+                    _execResult->gasPricer()->appendOperation(InterfaceOpcode::GE);
                 }
                 else if (*it == "lt")
                 {
                     condition->LT(*iter, OPJson[*it].asString());
+                    _execResult->gasPricer()->appendOperation(InterfaceOpcode::LT);
                 }
                 else if (*it == "le")
                 {
                     condition->LE(*iter, OPJson[*it].asString());
+                    _execResult->gasPricer()->appendOperation(InterfaceOpcode::LE);
                 }
                 else if (*it == "limit")
                 {
@@ -309,6 +341,7 @@ int CRUDPrecompiled::parseCondition(const std::string& conditionStr, Condition::
                     int offset = boost::lexical_cast<int>(offsetCountList[0]);
                     int count = boost::lexical_cast<int>(offsetCountList[1]);
                     condition->limit(offset, count);
+                    _execResult->gasPricer()->appendOperation(InterfaceOpcode::Limit);
                 }
                 else
                 {

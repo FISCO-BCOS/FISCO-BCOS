@@ -48,6 +48,7 @@ PrecompiledExecResult::Ptr RingSigPrecompiled::call(
 
     dev::eth::ContractABI abi;
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
+    callResult->gasPricer()->setMemUsed(param.size());
 
     if (func == name2Selector[RingSig_METHOD_SET_STR])
     {
@@ -59,6 +60,7 @@ PrecompiledExecResult::Ptr RingSigPrecompiled::call(
         try
         {
             result = RingSigApi::LinkableRingSig::ring_verify(signature, message, paramInfo);
+            callResult->gasPricer()->appendOperation(InterfaceOpcode::RingSigVerify);
         }
         catch (std::string& errorMsg)
         {

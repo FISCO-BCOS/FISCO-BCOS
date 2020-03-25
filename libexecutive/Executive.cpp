@@ -136,6 +136,22 @@ bool Executive::call(Address const& _receiveAddress, Address const& _senderAddre
     return call(params, _gasPrice, _senderAddress);
 }
 
+void Executive::updateGas(std::shared_ptr<dev::precompiled::PrecompiledExecResult> _callResult)
+{
+    // calculate gas
+    auto gasUsed = _callResult->calGasCost();
+    if (m_gas < gasUsed)
+    {
+        m_excepted = TransactionException::OutOfGas;
+        LOG(WARNING) << LOG_DESC("OutOfGas when executing precompiled Contract")
+                     << LOG_KV("gasUsed", gasUsed) << LOG_KV("curGas", m_gas);
+        BOOST_THROW_EXCEPTION(dev::precompiled::PrecompiledException(
+            "OutOfGas when executing precompiled Contract, gasUsed: " +
+            boost::lexical_cast<std::string>(gasUsed) +
+            ", leftGas:" + boost::lexical_cast<std::string>(m_gas)));
+    }
+    m_gas -= gasUsed;
+}
 
 bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address const& _origin)
 {
@@ -243,6 +259,11 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
         {
             auto callResult = m_envInfo.precompiledEngine()->call(
                 _p.codeAddress, _p.data, _origin, _p.senderAddress);
+            // only calculate gas for the precompiled contract after v2.4.0
+            if (g_BCOSConfig.version() >= V2_4_0)
+            {
+                updateGas(callResult);
+            }
             size_t outputSize = callResult->execResult().size();
             auto output = callResult->execResult();
             m_output = owning_bytes_ref{std::move(output), 0, outputSize};
