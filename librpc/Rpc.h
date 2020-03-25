@@ -154,7 +154,6 @@ public:
         {
             m_ledgerManager = _ledgerInitializer->ledgerManager();
         }
-        registerSyncChecker();
     }
     void setService(std::shared_ptr<dev::p2p::P2PInterface> _service) { m_service = _service; }
 
@@ -167,7 +166,6 @@ protected:
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
 
 private:
-    void registerSyncChecker();
     bool isValidNodeId(dev::bytes const& precompileData,
         std::shared_ptr<dev::ledger::LedgerParamInterface> ledgerParam);
     bool isValidSystemConfig(std::string const& key);
