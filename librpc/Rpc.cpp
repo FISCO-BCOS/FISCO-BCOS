@@ -67,29 +67,6 @@ Rpc::Rpc(
     setLedgerInitializer(_ledgerInitializer);
 }
 
-void Rpc::registerSyncChecker()
-{
-    if (m_ledgerManager)
-    {
-        auto groupList = m_ledgerManager->getGroupListForRpc();
-        for (auto const& group : groupList)
-        {
-            auto txPool = m_ledgerManager->txPool(group);
-            txPool->registerSyncStatusChecker([this, group]() {
-                try
-                {
-                    checkSyncStatus(group);
-                }
-                catch (std::exception const& _e)
-                {
-                    return false;
-                }
-                return true;
-            });
-        }
-    }
-}
-
 std::shared_ptr<dev::ledger::LedgerManager> Rpc::ledgerManager()
 {
     if (!m_ledgerManager)
@@ -1753,6 +1730,10 @@ bool Rpc::checkTimestamp(const std::string& _timestamp)
     try
     {
         int64_t cmp = boost::lexical_cast<int64_t>(_timestamp);
+        if (cmp < 0)
+        {
+            return false;
+        }
         return _timestamp == std::to_string(cmp);
     }
     catch (...)

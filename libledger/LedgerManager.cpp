@@ -87,6 +87,8 @@ LedgerStatus LedgerManager::queryGroupStatus(dev::GROUP_ID const& _groupID)
 
 void LedgerManager::setGroupStatus(dev::GROUP_ID const& _groupID, LedgerStatus _status)
 {
+    // this method assumes that caller has already acquired x_ledgerManager
+
     string status;
 
     switch (_status)
@@ -109,7 +111,6 @@ void LedgerManager::setGroupStatus(dev::GROUP_ID const& _groupID, LedgerStatus _
 
     if (!status.empty())
     {
-        RecursiveGuard l(x_ledgerManager);
         ofstream statusFile;
         statusFile.exceptions(std::ofstream::failbit | std::ofstream::badbit);
         statusFile.open(getGroupStatusFilePath(_groupID));
@@ -264,7 +265,6 @@ void LedgerManager::startByGroupID(GROUP_ID const& _groupID)
 {
     RecursiveGuard l(x_ledgerManager);
     checkGroupStatus(_groupID, LedgerStatus::STOPPED);
-
     assert(m_ledgerMap.count(_groupID) != 0);
 
     try
@@ -274,7 +274,11 @@ void LedgerManager::startByGroupID(GROUP_ID const& _groupID)
     catch (...)
     {
         // Some modules may have already been started, need to release resources
-        clearLedger(_groupID);
+        m_groupListCache.erase(_groupID);
+        auto ledger = m_ledgerMap[_groupID];
+        m_ledgerMap.erase(_groupID);
+        ledger->stopAll();
+
         throw;
     }
     setGroupStatus(_groupID, LedgerStatus::RUNNING);
@@ -282,12 +286,22 @@ void LedgerManager::startByGroupID(GROUP_ID const& _groupID)
 
 void LedgerManager::stopByGroupID(GROUP_ID const& _groupID)
 {
-    RecursiveGuard l(x_ledgerManager);
-    checkGroupStatus(_groupID, LedgerStatus::RUNNING);
+    shared_ptr<LedgerInterface> ledger;
+    {
+        RecursiveGuard l(x_ledgerManager);
+        checkGroupStatus(_groupID, LedgerStatus::RUNNING);
+        setGroupStatus(_groupID, LedgerStatus::STOPPING);
+        m_groupListCache.erase(_groupID);
+        ledger = m_ledgerMap[_groupID];
+        m_ledgerMap.erase(_groupID);
+    }
 
-    setGroupStatus(_groupID, LedgerStatus::STOPPING);
-    clearLedger(_groupID);
-    setGroupStatus(_groupID, LedgerStatus::STOPPED);
+    ledger->stopAll();
+
+    {
+        RecursiveGuard l(x_ledgerManager);
+        setGroupStatus(_groupID, LedgerStatus::STOPPED);
+    }
 }
 
 void LedgerManager::removeByGroupID(dev::GROUP_ID const& _groupID)
@@ -304,19 +318,6 @@ void LedgerManager::recoverByGroupID(dev::GROUP_ID const& _groupID)
     checkGroupStatus(_groupID, LedgerStatus::DELETED);
 
     setGroupStatus(_groupID, LedgerStatus::STOPPED);
-}
-
-void LedgerManager::clearLedger(GROUP_ID const& _groupID)
-{
-    // the caller of this function should acquire x_legerManager first!
-
-    // first, remove ledger handler to stop service
-    m_groupListCache.erase(_groupID);
-    auto ledger = m_ledgerMap[_groupID];
-    m_ledgerMap.erase(_groupID);
-
-    // second, stop all service
-    ledger->stopAll();
 }
 
 std::set<dev::GROUP_ID> LedgerManager::getGroupListForRpc() const

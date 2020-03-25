@@ -237,8 +237,6 @@ private:
         const std::set<std::string>& _sealerList);
     std::string generateGroupConfig();
 
-    void clearLedger(dev::GROUP_ID const& _groupID);
-
     mutable RecursiveMutex x_ledgerManager;
     /// cache for the group List
     std::set<dev::GROUP_ID> m_groupListCache;
