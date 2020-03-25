@@ -20,6 +20,7 @@
  */
 
 #include "Common.h"
+#include <libconfig/GlobalConfigure.h>
 #include <libdevcrypto/Common.h>
 #include <libstorage/Table.h>
 #include <boost/test/unit_test.hpp>
@@ -56,15 +57,15 @@ BOOST_AUTO_TEST_CASE(process)
     condition = std::make_shared<Condition>();
     condition->EQ("name", "myname2");
     BOOST_TEST(condition->process(entry) == false);
+#ifndef FISCO_GM
+    g_BCOSConfig.setSupportedVersion("2.3.0", V2_3_0);
+    condition = std::make_shared<Condition>();
+    condition->NE("name", "myname");
+    BOOST_TEST(condition->process(entry) == false);
 
-#if 0
-	condition = std::make_shared<Condition>();
-	condition->NE("name", "myname");
-	BOOST_TEST(condition->process(entry) == false);
-
-	condition = std::make_shared<Condition>();
-	condition->NE("name", "myname2");
-	BOOST_TEST(condition->process(entry) == true);
+    condition = std::make_shared<Condition>();
+    condition->NE("name", "myname2");
+    BOOST_TEST(condition->process(entry) == true);
 #endif
 
     condition = std::make_shared<Condition>();
