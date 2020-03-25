@@ -71,14 +71,17 @@ PrecompiledExecResult::Ptr HelloWorldPrecompiled::call(
     uint32_t func = getParamFunc(_param);
     bytesConstRef data = getParamData(_param);
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
+    callResult->gasPricer()->setMemUsed(_param.size());
     dev::eth::ContractABI abi;
 
     Table::Ptr table = openTable(_context, precompiled::getTableName(HELLO_WORLD_TABLE_NAME));
+    callResult->gasPricer()->appendOperation(InterfaceOpcode::OpenTable);
     if (!table)
     {
         // table is not exist, create it.
         table = createTable(_context, precompiled::getTableName(HELLO_WORLD_TABLE_NAME),
             HELLOWORLD_KEY_FIELD, HELLOWORLD_VALUE_FIELD, _origin);
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::CreateTable);
         if (!table)
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("set")
@@ -95,6 +98,8 @@ PrecompiledExecResult::Ptr HelloWorldPrecompiled::call(
         auto entries = table->select(HELLOWORLD_KEY_FIELD_NAME, table->newCondition());
         if (0u != entries->size())
         {
+            callResult->gasPricer()->updateMemUsed(getEntriesCapacity(entries));
+            callResult->gasPricer()->appendOperation(InterfaceOpcode::Select, entries->size());
             auto entry = entries->get(0);
             retValue = entry->getField(HELLOWORLD_VALUE_FIELD);
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("get")
@@ -108,6 +113,9 @@ PrecompiledExecResult::Ptr HelloWorldPrecompiled::call(
         std::string strValue;
         abi.abiOut(data, strValue);
         auto entries = table->select(HELLOWORLD_KEY_FIELD_NAME, table->newCondition());
+        callResult->gasPricer()->updateMemUsed(getEntriesCapacity(entries));
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::Select, entries->size());
+
         auto entry = table->newEntry();
         entry->setField(HELLOWORLD_KEY_FIELD, HELLOWORLD_KEY_FIELD_NAME);
         entry->setField(HELLOWORLD_VALUE_FIELD, strValue);
@@ -117,11 +125,21 @@ PrecompiledExecResult::Ptr HelloWorldPrecompiled::call(
         {  // update
             count = table->update(HELLOWORLD_KEY_FIELD_NAME, entry, table->newCondition(),
                 std::make_shared<AccessOptions>(_origin));
+            if (count > 0)
+            {
+                callResult->gasPricer()->appendOperation(InterfaceOpcode::Update, count);
+                callResult->gasPricer()->updateMemUsed(entry->capacity() * count);
+            }
         }
         else
         {  // insert
             count = table->insert(
                 HELLOWORLD_KEY_FIELD_NAME, entry, std::make_shared<AccessOptions>(_origin));
+            if (count > 0)
+            {
+                callResult->gasPricer()->updateMemUsed(entry->capacity() * count);
+                callResult->gasPricer()->appendOperation(InterfaceOpcode::Insert, count);
+            }
         }
 
         if (count == storage::CODE_NO_AUTHORIZED)

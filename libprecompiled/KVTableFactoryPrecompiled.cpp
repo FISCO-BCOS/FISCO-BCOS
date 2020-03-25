@@ -66,6 +66,7 @@ PrecompiledExecResult::Ptr KVTableFactoryPrecompiled::call(ExecutiveContext::Ptr
 
     dev::eth::ContractABI abi;
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
+    callResult->gasPricer()->setMemUsed(param.size());
 
     if (func == name2Selector[KVTABLE_FACTORY_METHOD_OPEN_TABLE])
     {  // openTable(string)
@@ -75,6 +76,7 @@ PrecompiledExecResult::Ptr KVTableFactoryPrecompiled::call(ExecutiveContext::Ptr
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("KVTableFactory") << LOG_KV("openTable", tableName);
         Address address;
         auto table = m_memoryTableFactory->openTable(tableName);
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::OpenTable);
         if (table)
         {
             auto kvTablePrecompiled = make_shared<KVTablePrecompiled>();
@@ -151,6 +153,7 @@ PrecompiledExecResult::Ptr KVTableFactoryPrecompiled::call(ExecutiveContext::Ptr
         {
             auto table =
                 m_memoryTableFactory->createTable(tableName, keyField, valueFiled, true, origin);
+            callResult->gasPricer()->appendOperation(InterfaceOpcode::CreateTable);
             if (!table)
             {  // table already exist
                 result = CODE_TABLE_NAME_ALREADY_EXIST;
