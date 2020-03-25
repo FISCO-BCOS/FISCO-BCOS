@@ -83,6 +83,24 @@ public:
         BOOST_LOG_SCOPED_THREAD_ATTR(
             "GroupId", boost::log::attributes::constant<std::string>(std::to_string(m_groupId)));
         Ledger_LOG(INFO) << LOG_DESC("startAll...");
+
+        m_txPool->registerSyncStatusChecker([this]() {
+            try
+            {
+                // Refuse transaction if far syncing
+                if (m_sync->blockNumberFarBehind())
+                {
+                    BOOST_THROW_EXCEPTION(
+                        TransactionRefused() << errinfo_comment("ImportResult::NodeIsSyncing"));
+                }
+            }
+            catch (std::exception const& _e)
+            {
+                return false;
+            }
+            return true;
+        });
+        m_txPool->start();
         m_sync->start();
         m_sealer->start();
         m_eventLogFilterManger->start();
@@ -96,9 +114,10 @@ public:
         m_sealer->stop();
         Ledger_LOG(INFO) << LOG_DESC("sealer stopped. stop sync") << LOG_KV("groupID", groupId());
         m_sync->stop();
-        Ledger_LOG(INFO) << LOG_DESC("ledger stopped") << LOG_KV("groupID", groupId());
+        Ledger_LOG(INFO) << LOG_DESC("sync stopped. stop event filter manager")
+                         << LOG_KV("groupID", groupId());
         m_eventLogFilterManger->stop();
-        Ledger_LOG(INFO) << LOG_DESC("event filter manager stopped")
+        Ledger_LOG(INFO) << LOG_DESC("event filter manager stopped. stop tx pool")
                          << LOG_KV("groupID", groupId());
         m_txPool->stop();
         if (m_service)

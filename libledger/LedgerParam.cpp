@@ -53,7 +53,15 @@ void LedgerParam::parseGenesisConfig(const std::string& _genesisFile)
         initConsensusConfig(pt);
         initEventLogFilterManagerConfig(pt);
         /// use UTCTime directly as timeStamp in case of the clock differences between machines
-        mutableGenesisParam().timeStamp = pt.get<uint64_t>("group.timestamp", UINT64_MAX);
+        auto timeStamp = pt.get<int64_t>("group.timestamp", INT64_MAX);
+        if (timeStamp < 0)
+        {
+            LedgerParam_LOG(ERROR)
+                << LOG_BADGE("parseGenesisConfig") << LOG_DESC("invalid group timeStamp")
+                << LOG_KV("timeStamp", timeStamp);
+            BOOST_THROW_EXCEPTION(Exception("invalid group timestamp"));
+        }
+        mutableGenesisParam().timeStamp = timeStamp;
         LedgerParam_LOG(INFO) << LOG_BADGE("parseGenesisConfig")
                               << LOG_KV("timestamp", mutableGenesisParam().timeStamp);
         mutableStateParam().type = pt.get<std::string>("state.type", "storage");

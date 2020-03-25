@@ -114,7 +114,6 @@ bool Ledger::initTxPool()
     m_txPool = std::make_shared<dev::txpool::TxPool>(
         m_service, m_blockChain, protocol_id, m_param->mutableTxPoolParam().txPoolLimit);
     m_txPool->setMaxBlockLimit(g_BCOSConfig.c_blockLimit);
-    m_txPool->start();
     Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_DESC("initTxPool SUCC");
     return true;
 }
