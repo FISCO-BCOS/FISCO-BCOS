@@ -39,6 +39,11 @@ public:
 
     PrecompiledGas::Ptr gasPricer() { return m_gasPricer; }
     void setGasPricer(PrecompiledGas::Ptr _gasPricer) { m_gasPricer = _gasPricer; }
+    virtual u256 calGasCost()
+    {
+        m_gasPricer->updateMemUsed(m_execResult.size());
+        return m_gasPricer->calTotalGas();
+    }
 
 private:
     bytes m_execResult;

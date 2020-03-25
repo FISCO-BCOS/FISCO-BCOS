@@ -66,6 +66,7 @@ PrecompiledExecResult::Ptr TableFactoryPrecompiled::call(ExecutiveContext::Ptr c
 
     dev::eth::ContractABI abi;
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
+    callResult->gasPricer()->setMemUsed(param.size());
 
     if (func == name2Selector[TABLE_METHOD_OPT_STR])
     {  // openTable(string)
@@ -75,6 +76,7 @@ PrecompiledExecResult::Ptr TableFactoryPrecompiled::call(ExecutiveContext::Ptr c
 
         Address address;
         auto table = m_memoryTableFactory->openTable(tableName);
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::OpenTable);
         if (table)
         {
             TablePrecompiled::Ptr tablePrecompiled = make_shared<TablePrecompiled>();
@@ -156,6 +158,7 @@ PrecompiledExecResult::Ptr TableFactoryPrecompiled::call(ExecutiveContext::Ptr c
         {
             auto table =
                 m_memoryTableFactory->createTable(tableName, keyField, valueFiled, true, origin);
+            callResult->gasPricer()->appendOperation(InterfaceOpcode::CreateTable);
             if (!table)
             {  // table already exist
                 result = CODE_TABLE_NAME_ALREADY_EXIST;

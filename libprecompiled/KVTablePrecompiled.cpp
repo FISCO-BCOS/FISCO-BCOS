@@ -60,6 +60,8 @@ PrecompiledExecResult::Ptr KVTablePrecompiled::call(ExecutiveContext::Ptr contex
 
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
 
+    callResult->gasPricer()->setMemUsed(param.size());
+
     if (func == name2Selector[KVTABLE_METHOD_GET])
     {  // get(string)
         std::string key;
@@ -67,6 +69,10 @@ PrecompiledExecResult::Ptr KVTablePrecompiled::call(ExecutiveContext::Ptr contex
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("KVTable") << LOG_KV("get", key);
 
         auto entries = m_table->select(key, m_table->newCondition());
+
+        callResult->gasPricer()->updateMemUsed(getEntriesCapacity(entries));
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::Select, entries->size());
+
         if (entries->size() == 0)
         {
             callResult->setExecResult(abi.abiIn("", false, Address()));
@@ -108,15 +114,29 @@ PrecompiledExecResult::Ptr KVTablePrecompiled::call(ExecutiveContext::Ptr contex
                 CODE_TABLE_KEYVALUE_LENGTH_OVERFLOW, false);
         }
         auto entries = m_table->select(key, m_table->newCondition());
+
+        callResult->gasPricer()->updateMemUsed(getEntriesCapacity(entries));
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::Select, entries->size());
+
         int count = 0;
         if (entries->size() == 0)
         {
             count = m_table->insert(key, entry, std::make_shared<AccessOptions>(origin));
+            if (count > 0)
+            {
+                callResult->gasPricer()->setMemUsed(entry->capacity() * count);
+                callResult->gasPricer()->appendOperation(InterfaceOpcode::Insert, count);
+            }
         }
         else
         {
             count = m_table->update(
                 key, entry, m_table->newCondition(), std::make_shared<AccessOptions>(origin));
+            if (count > 0)
+            {
+                callResult->gasPricer()->setMemUsed(entry->capacity() * count);
+                callResult->gasPricer()->appendOperation(InterfaceOpcode::Update, count);
+            }
         }
         if (count == storage::CODE_NO_AUTHORIZED)
         {

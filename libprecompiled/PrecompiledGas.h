@@ -36,18 +36,21 @@ enum InterfaceOpcode : int64_t
     GE = 0x01,
     GT = 0x02,
     LE = 0x03,
-    NE = 0x04,
-    Limit = 0x05,
-    GetInt = 0x06,
-    GetAddr = 0x07,
-    Set = 0x08,
-    GetByte32 = 0X09,
-    GetByte64 = 0x0a,
-    CreateTable = 0x0b,
-    OpenTable = 0x0c,
-    Insert = 0x0d,
-    Update = 0x0e,
-    Delete = 0x0f,
+    LT = 0x04,
+    NE = 0x05,
+    Limit = 0x06,
+    GetInt = 0x07,
+    GetAddr = 0x08,
+    Set = 0x09,
+    GetByte32 = 0X0a,
+    GetByte64 = 0x0b,
+    GetString = 0x0c,
+    CreateTable = 0x0d,
+    OpenTable = 0x0e,
+    Select = 0x0f,
+    Insert = 0x10,
+    Update = 0x11,
+    Remove = 0x12,
 };
 
 struct GasMetrics
@@ -77,16 +80,21 @@ public:
     virtual ~PrecompiledGas() {}
 
     virtual void appendOperation(InterfaceOpcode const& _opType, unsigned const& _opSize = 1);
-    virtual u256 calTotalGas(uint64_t const& _maxMemSize);
+    virtual u256 calTotalGas();
+    void setMemUsed(uint64_t const& _memUsed) { m_memUsed = _memUsed; }
+    uint64_t const& memUsed() const { return m_memUsed; }
+
+    void updateMemUsed(uint64_t const& _newMemSize);
 
 protected:
     // Traverse m_operationList to calculate total gas cost
     virtual u256 calComputationGas();
     // Calculating gas consumed by memory
-    virtual u256 calMemGas(uint64_t const& _maxMemSize);
+    virtual u256 calMemGas();
 
 private:
     std::shared_ptr<OpListType> m_operationList;
+    uint64_t m_memUsed;
 };
 
 class PrecompiledGasFactory

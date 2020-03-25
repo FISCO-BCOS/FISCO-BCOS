@@ -50,7 +50,7 @@ void ExecutiveContextFactory::initExecutiveContext(
 {
     auto memoryTableFactory =
         m_tableFactoryFactory->newTableFactory(blockInfo.hash, blockInfo.number);
-
+    context->setPrecompiledExecResultFactory(m_precompiledExecResultFactory);
     auto tableFactoryPrecompiled = std::make_shared<dev::precompiled::TableFactoryPrecompiled>();
     tableFactoryPrecompiled->setMemoryTableFactory(memoryTableFactory);
     context->setAddress2Precompiled(
@@ -81,7 +81,6 @@ void ExecutiveContextFactory::initExecutiveContext(
     context->setBlockInfo(blockInfo);
     context->setPrecompiledContract(m_precompiledContract);
     context->setState(m_stateFactoryInterface->getState(stateRoot, memoryTableFactory));
-    context->setPrecompiledExecResultFactory(m_precompiledExecResultFactory);
     setTxGasLimitToContext(context);
 }
 
