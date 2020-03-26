@@ -104,6 +104,9 @@ public:
         m_pNumberHash = _pNumberHash;
     }
 
+    dev::executive::Executive::Ptr createAndInitExecutive();
+    void setEvmFlags(VMFlagType const& _evmFlags) { m_evmFlags = _evmFlags; }
+
 private:
     ExecutiveContextFactory::Ptr m_executiveContextFactory;
     NumberHashCallBackFunction m_pNumberHash;
@@ -112,6 +115,8 @@ private:
 
     std::mutex m_executingMutex;
     std::atomic<int64_t> m_executingNumber = {0};
+
+    VMFlagType m_evmFlags = 0;
 };
 
 }  // namespace blockverifier

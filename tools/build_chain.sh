@@ -521,6 +521,8 @@ generate_group_genesis()
 [group]
     id=${index}
     timestamp=${timestamp}
+[evm]
+    enable_free_storage=false
 EOF
 }
 

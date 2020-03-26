@@ -206,6 +206,8 @@ public:
 
     void setState(std::shared_ptr<StateFace> _state) { m_s = _state; }
 
+    void setEvmFlags(VMFlagType const& _evmFlags) { m_evmFlags = _evmFlags; }
+
 private:
     /// @returns false iff go() must be called (and thus a VM execution in required).
     bool executeCreate(Address const& _txSender, u256 const& _endowment, u256 const& _gasPrice,
@@ -248,6 +250,8 @@ private:
     Address m_newAddress;
     size_t m_savepoint = 0;
     size_t m_tableFactorySavepoint = 0;
+
+    VMFlagType m_evmFlags;
 };
 
 }  // namespace executive
