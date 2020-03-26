@@ -61,6 +61,7 @@ void LedgerParam::parseGenesisConfig(const std::string& _genesisFile)
         mutableStorageParam().type = pt.get<std::string>("storage.type", "LevelDB");
         mutableStorageParam().topic = pt.get<std::string>("storage.topic", "DB");
         mutableStorageParam().maxRetry = pt.get<uint>("storage.max_retry", 60);
+        setEVMFlags(pt);
     }
     catch (std::exception& e)
     {
@@ -71,6 +72,18 @@ void LedgerParam::parseGenesisConfig(const std::string& _genesisFile)
         BOOST_THROW_EXCEPTION(dev::InitLedgerConfigFailed() << errinfo_comment(error_info));
     }
     m_genesisBlockParam = generateGenesisMark();
+}
+
+void LedgerParam::setEVMFlags(boost::property_tree::ptree const& _pt)
+{
+    bool enableFreeStorageVMSchedule = _pt.get<bool>("evm.enable_free_storage", false);
+    if (enableFreeStorageVMSchedule)
+    {
+        mutableGenesisParam().evmFlags |= EVMFlags::FreeStorageGas;
+    }
+    LedgerParam_LOG(INFO) << LOG_DESC("setEVMFlags")
+                          << LOG_KV("enableFreeStorageVMSchedule", enableFreeStorageVMSchedule)
+                          << LOG_KV("evmFlags", mutableGenesisParam().evmFlags);
 }
 
 blockchain::GenesisBlockParam LedgerParam::generateGenesisMark()
@@ -84,12 +97,22 @@ blockchain::GenesisBlockParam LedgerParam::generateGenesisMark()
         s << mutableStorageParam().type << "-";
     }
     s << mutableStateParam().type << "-";
+    if (g_BCOSConfig.version() >= V2_4_0)
+    {
+        LedgerParam_LOG(DEBUG) << LOG_DESC("store evmFlag")
+                               << LOG_KV("evmFlag", mutableGenesisParam().evmFlags);
+        s << mutableGenesisParam().evmFlags << "-";
+    }
+
     s << mutableConsensusParam().maxTransactions << "-";
     s << mutableTxParam().txGasLimit;
 
     // init epochSealerNum and epochBlockNum for RPBFT
     if (dev::stringCmpIgnoreCase(mutableConsensusParam().consensusType, "rpbft") == 0)
     {
+        LedgerParam_LOG(DEBUG) << LOG_DESC("store RPBFT related configuration")
+                               << LOG_KV("epochSealerNum", mutableConsensusParam().epochSealerNum)
+                               << LOG_KV("epochBlockNum", mutableConsensusParam().epochBlockNum);
         s << "-" << mutableConsensusParam().epochSealerNum << "-";
         s << mutableConsensusParam().epochBlockNum;
     }
@@ -99,7 +122,7 @@ blockchain::GenesisBlockParam LedgerParam::generateGenesisMark()
         mutableStorageParam().type, mutableStateParam().type,
         mutableConsensusParam().maxTransactions, mutableTxParam().txGasLimit,
         mutableGenesisParam().timeStamp, mutableConsensusParam().epochSealerNum,
-        mutableConsensusParam().epochBlockNum};
+        mutableConsensusParam().epochBlockNum, mutableGenesisParam().evmFlags};
 }
 
 void LedgerParam::parseIniConfig(const std::string& _iniConfigFile, const std::string& _dataPath)

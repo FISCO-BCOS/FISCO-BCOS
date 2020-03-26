@@ -43,8 +43,8 @@ evmc_result execute(evmc_instance* _instance, evmc_context* _context, evmc_revis
 {
     (void)_instance;
     std::unique_ptr<dev::eth::VM> vm{new dev::eth::VM};
-    // create vm schedule according to extended flag of evmc_revision
-    vm->createVMSchedule(_rev);
+    // create vm schedule according to evmc_context
+    vm->createVMSchedule(_context);
     evmc_result result = {};
     dev::owning_bytes_ref output;
 
@@ -136,18 +136,16 @@ namespace dev
 {
 namespace eth
 {
-void VM::createVMSchedule(evmc_revision& _extendedRev)
+void VM::createVMSchedule(evmc_context* _context)
 {
-    // the 64th bit represent that enable FreeStorageVMSchedule
-    uint64_t freeStorageScheduleFlag = _extendedRev & 0x8000000000000000;
+    auto evmFlags = _context->flags;
+    // bit 64 is currently occupied, indicating whether to use FreeStorageVMSchedule
+    auto leftShitLen = sizeof(VMFlagType) * 8 - 1;
+    uint64_t freeStorageScheduleFlag = (evmFlags >> leftShitLen);
     // the FreeStorageVMSchedule enabled
     if (freeStorageScheduleFlag)
     {
         m_vmSchedule = std::make_shared<FreeStorageVMSchedule>();
-
-        // the first 32bit as extension bit
-        uint64_t revision = _extendedRev & (0xffffffff);
-        _extendedRev = (evmc_revision)(revision);
         return;
     }
     m_vmSchedule = std::make_shared<VMSchedule>();
@@ -237,7 +235,9 @@ void VM::updateIOGas()
 void VM::updateGas()
 {
     if (m_newMemSize > m_mem.size())
+    {
         m_runGas += toInt63(gasForMem(m_newMemSize) - gasForMem(m_mem.size()));
+    }
     m_runGas += (m_vmSchedule->copyGas * ((m_copyMemSize + 31) / 32));
     if (m_io_gas < m_runGas)
         throwOutOfGas();
@@ -409,7 +409,9 @@ void VM::interpretCases()
                 int destinationExists =
                     m_context->fn_table->account_exists(m_context, &destination);
                 if (m_rev >= EVMC_TANGERINE_WHISTLE && !destinationExists)
+                {
                     m_runGas += m_vmSchedule->callNewAccount;
+                }
             }
 
             updateIOGas();
@@ -1109,6 +1111,7 @@ void VM::interpretCases()
         {
             ON_OP();
             m_runGas = m_vmSchedule->stepGas6;
+
             updateIOGas();
 
             const int64_t blockNumber = getTxContext().block_number;

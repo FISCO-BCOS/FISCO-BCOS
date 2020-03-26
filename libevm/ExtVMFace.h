@@ -285,6 +285,9 @@ public:
     void setCreate(bool _isCreate) { m_isCreate = _isCreate; }
     void setStaticCall(bool _staticCall) { m_staticCall = _staticCall; }
 
+    virtual VMFlagType evmFlags() const { return flags; }
+    void setEvmFlags(VMFlagType const& _evmFlags) { flags = _evmFlags; }
+
 protected:
     EnvInfo const& m_envInfo;
 

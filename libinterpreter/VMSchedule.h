@@ -30,7 +30,10 @@ namespace eth
 struct VMSchedule
 {
     using Ptr = std::shared_ptr<VMSchedule>;
+    VMSchedule() = default;
+    virtual ~VMSchedule() {}
     static constexpr int64_t stackLimit = 1024;
+
     int64_t stepGas0 = 0;
     int64_t stepGas1 = 2;
     int64_t stepGas2 = 3;
@@ -61,14 +64,17 @@ struct FreeStorageVMSchedule : public VMSchedule
 {
 public:
     using Ptr = std::shared_ptr<FreeStorageVMSchedule>;
-
-    int64_t sstoreSetGas = stepGas5;
-    int64_t sstoreResetGas = stepGas5;
-    int64_t createGas = stepGas5;
-    // remove value transfer
-    int64_t valueTransferGas = stepGas0;
-    int64_t callStipend = stepGas5;
-    int64_t callNewAccount = stepGas5;
+    FreeStorageVMSchedule()
+    {
+        sstoreSetGas = stepGas5;
+        sstoreResetGas = stepGas5;
+        createGas = stepGas5;
+        // remove value transfer
+        valueTransferGas = stepGas0;
+        callStipend = stepGas5;
+        callNewAccount = stepGas5;
+    }
+    virtual ~FreeStorageVMSchedule() {}
 };
 }  // namespace eth
 }  // namespace dev
