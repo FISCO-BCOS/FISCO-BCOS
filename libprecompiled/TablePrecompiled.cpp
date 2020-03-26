@@ -124,7 +124,7 @@ PrecompiledExecResult::Ptr TablePrecompiled::call(ExecutiveContext::Ptr context,
         int count = m_table->insert(key, entry, std::make_shared<AccessOptions>(origin));
         if (count > 0)
         {
-            callResult->gasPricer()->updateMemUsed(entry->capacity());
+            callResult->gasPricer()->updateMemUsed(entry->capacity() * count);
             callResult->gasPricer()->appendOperation(InterfaceOpcode::Insert, count);
         }
 
@@ -212,7 +212,7 @@ PrecompiledExecResult::Ptr TablePrecompiled::call(ExecutiveContext::Ptr context,
         {
             // update memory and compuation cost
             callResult->gasPricer()->setMemUsed(entry->capacity() * count);
-            callResult->gasPricer()->appendOperation(InterfaceOpcode::Update);
+            callResult->gasPricer()->appendOperation(InterfaceOpcode::Update, count);
         }
         callResult->setExecResult(abi.abiIn("", u256(count)));
     }
