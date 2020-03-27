@@ -486,6 +486,8 @@ generate_config_ini()
 [log]
     enable=true
     log_path=./log
+    ; statistics log directory
+    stat_log_path=./stat
     ; info debug trace 
     level=${log_level}
     ; MB
