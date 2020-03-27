@@ -75,6 +75,12 @@ struct OutputFixture
         tableFactoryPrecompiled->setMemoryTableFactory(memoryTableFactory);
         clcPrecompiled = context->getPrecompiled(Address(0x1007));
 
+        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
+        auto precompiledExecResultFactory =
+            std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+        precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
+        clcPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
+
         // createTable
         std::string tableName("c_" + contractAddress.hex());
         table = memoryTableFactory->createTable(tableName, STORAGE_KEY, STORAGE_VALUE, false);

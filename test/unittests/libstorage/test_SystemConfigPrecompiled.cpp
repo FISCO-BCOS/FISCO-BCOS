@@ -36,8 +36,11 @@ struct SystemConfigPrecompiledFixture
         factory.initExecutiveContext(blockInfo, h256(0), context);
         systemConfigPrecompiled = std::make_shared<SystemConfigPrecompiled>();
         memoryTableFactory = context->getMemoryTableFactory();
+
+        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
         auto precompiledExecResultFactory =
             std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+        precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
         systemConfigPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     }
 

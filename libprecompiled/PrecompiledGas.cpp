@@ -24,18 +24,6 @@
 #include <libdevcore/Log.h>
 using namespace dev;
 using namespace dev::precompiled;
-std::map<InterfaceOpcode, int64_t> GasMetrics::OpCode2GasCost = {{InterfaceOpcode::EQ, VeryLow},
-    {InterfaceOpcode::GE, VeryLow}, {InterfaceOpcode::GT, VeryLow}, {InterfaceOpcode::LE, VeryLow},
-    {InterfaceOpcode::LT, VeryLow}, {InterfaceOpcode::NE, VeryLow},
-    {InterfaceOpcode::Limit, VeryLow}, {InterfaceOpcode::GetInt, VeryLow},
-    {InterfaceOpcode::GetAddr, VeryLow}, {InterfaceOpcode::Set, VeryLow},
-    {InterfaceOpcode::GetByte32, 32 * VeryLow}, {InterfaceOpcode::GetByte64, 64 * VeryLow},
-    {InterfaceOpcode::GetString, 64 * VeryLow}, {InterfaceOpcode::CreateTable, High},
-    {InterfaceOpcode::OpenTable, Low}, {InterfaceOpcode::Select, Low},
-    {InterfaceOpcode::Insert, High}, {InterfaceOpcode::Update, High},
-    {InterfaceOpcode::Remove, Mid}, {InterfaceOpcode::PaillierAdd, High},
-    {InterfaceOpcode::GroupSigVerify, High}, {InterfaceOpcode::RingSigVerify, High}};
-
 void PrecompiledGas::appendOperation(InterfaceOpcode const& _opType, unsigned const& _opSize)
 {
     m_operationList->push_back(std::make_pair(_opType, _opSize));
@@ -61,12 +49,12 @@ u256 PrecompiledGas::calComputationGas()
     u256 totalGas = 0;
     for (auto const& it : *m_operationList)
     {
-        if (!GasMetrics::OpCode2GasCost.count(it.first))
+        if (!m_metric->OpCode2GasCost.count(it.first))
         {
             PrecompiledGas_LOG(WARNING) << LOG_DESC("Invalid opType:") << it.first;
             continue;
         }
-        totalGas += (GasMetrics::OpCode2GasCost[it.first]) * it.second;
+        totalGas += ((m_metric->OpCode2GasCost)[it.first]) * it.second;
     }
     return totalGas;
 }
@@ -74,6 +62,10 @@ u256 PrecompiledGas::calComputationGas()
 // Calculating gas consumed by memory
 u256 PrecompiledGas::calMemGas()
 {
+    if (m_memUsed == 0)
+    {
+        return 0;
+    }
     auto memSize = (m_memUsed + GasMetrics::MemUnitSize - 1) / GasMetrics::MemUnitSize;
     return (GasMetrics::MemGas * memSize) + (memSize * memSize) / 512;
 }

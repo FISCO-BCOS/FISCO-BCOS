@@ -57,7 +57,10 @@ struct CNSPrecompiledFixture
         factory.setTableFactoryFactory(tableFactoryFactory);
         factory.initExecutiveContext(blockInfo, h256(0), context);
         cnsPrecompiled = std::make_shared<CNSPrecompiled>();
+
+        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
         auto precompiledExecResultFactory = std::make_shared<PrecompiledExecResultFactory>();
+        precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
         cnsPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
         memoryTableFactory = context->getMemoryTableFactory();
     }

@@ -41,6 +41,11 @@ struct EntriesPrecompiledFixture
         entriesPrecompiled = std::make_shared<dev::precompiled::EntriesPrecompiled>();
 
         entriesPrecompiled->setEntries(entries);
+
+        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
+        auto precompiledExecResultFactory = std::make_shared<PrecompiledExecResultFactory>();
+        precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
+        entriesPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     }
     ~EntriesPrecompiledFixture() {}
 

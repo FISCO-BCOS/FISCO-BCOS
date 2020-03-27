@@ -62,8 +62,12 @@ struct CRUDPrecompiledFixture
         tableFactoryPrecompiled = std::make_shared<dev::precompiled::TableFactoryPrecompiled>();
         tableFactoryPrecompiled->setMemoryTableFactory(memoryTableFactory);
         crudPrecompiled = context->getPrecompiled(Address(0x1002));
+
+        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
         auto precompiledExecResultFactory = std::make_shared<PrecompiledExecResultFactory>();
+        precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
         crudPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
+        tableFactoryPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     }
 
     ~CRUDPrecompiledFixture() {}
