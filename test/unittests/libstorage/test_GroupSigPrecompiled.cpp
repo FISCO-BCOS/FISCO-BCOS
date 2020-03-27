@@ -38,8 +38,11 @@ struct GroupSigPrecompiledFixture
     {
         context = std::make_shared<ExecutiveContext>();
         groupSigPrecompiled = std::make_shared<GroupSigPrecompiled>();
+
+        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
         auto precompiledExecResultFactory =
             std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+        precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
         groupSigPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     }
 

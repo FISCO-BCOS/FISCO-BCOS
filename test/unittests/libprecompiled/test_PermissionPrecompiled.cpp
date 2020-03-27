@@ -60,7 +60,10 @@ struct AuthorityPrecompiledFixture
         factory.initExecutiveContext(blockInfo, h256(0), context);
         authorityPrecompiled = context->getPrecompiled(Address(0x1005));
         memoryTableFactory = context->getMemoryTableFactory();
+
+        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
         auto precompiledExecResultFactory = std::make_shared<PrecompiledExecResultFactory>();
+        precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
         authorityPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     }
 

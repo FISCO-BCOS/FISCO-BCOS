@@ -43,8 +43,11 @@ struct ConsensusPrecompiledFixture
         factory.initExecutiveContext(blockInfo, h256(0), context);
         consensusPrecompiled = std::make_shared<ConsensusPrecompiled>();
         memoryTableFactory = context->getMemoryTableFactory();
+
+        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
         auto precompiledExecResultFactory =
             std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+        precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
         consensusPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     }
 

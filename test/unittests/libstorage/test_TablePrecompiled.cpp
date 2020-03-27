@@ -60,8 +60,11 @@ struct TablePrecompiledFixture
         table->setRecorder(
             [&](Table::Ptr, Change::Kind, string const&, vector<Change::Record>&) {});
         tablePrecompiled->setTable(table);
+
+        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
         auto precompiledExecResultFactory =
             std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+        precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
         tablePrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     }
 
