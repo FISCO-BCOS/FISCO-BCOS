@@ -81,9 +81,12 @@ bool Ledger::initLedger(std::shared_ptr<LedgerParamInterface> _ledgerParams)
     // setSyncNum for cachedStorage
     m_dbInitializer->setSyncNumForCachedStorage(m_blockChain->number());
 
-    // init network statistic handler
-    initNetworkStatHandler();
-
+    // the network statistic has been enabled
+    if (g_BCOSConfig.enableStat())
+    {
+        // init network statistic handler
+        initNetworkStatHandler();
+    }
     /// init blockVerifier, txPool, sync and consensus
     return (initBlockVerifier() && initTxPool() && initSync() && consensusInitFactory() &&
             initEventLogFilterManager());

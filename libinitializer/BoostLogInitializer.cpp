@@ -50,7 +50,7 @@ bool LogInitializer::canRotate(size_t const& _index)
 void LogInitializer::initStatLog(boost::property_tree::ptree const& _pt,
     std::string const& _channel, std::string const& _logPrefix)
 {
-    std::string logPath = _pt.get<std::string>("log.stat_log_path", "stat");
+    std::string logPath = "./stat";
     auto sink = initLogSink(_pt, logPath, _logPrefix, _channel);
     /// set file format
     /// log-level|timestamp | message
