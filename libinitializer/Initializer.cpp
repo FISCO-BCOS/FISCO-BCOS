@@ -37,11 +37,14 @@ void Initializer::init(std::string const& _path)
         /// init log
         m_logInitializer = std::make_shared<LogInitializer>();
         m_logInitializer->initLog(pt);
-        // init the statLog
-        m_logInitializer->initStatLog(pt);
-
         /// init global config. must init before DB, for compatibility
         initGlobalConfig(pt);
+
+        // init the statLog
+        if (g_BCOSConfig.enableStat())
+        {
+            m_logInitializer->initStatLog(pt);
+        }
 
         /// init certificates
         m_secureInitializer = std::make_shared<SecureInitializer>();
