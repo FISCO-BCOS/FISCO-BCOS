@@ -57,6 +57,12 @@ struct HelloWorldPrecompiledFixture
         factory.initExecutiveContext(blockInfo, h256(0), context);
         helloWorldPrecompiled = std::make_shared<HelloWorldPrecompiled>();
         memoryTableFactory = context->getMemoryTableFactory();
+
+        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
+        auto precompiledExecResultFactory =
+            std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+        precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
+        helloWorldPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     }
 
     ~HelloWorldPrecompiledFixture() {}
@@ -87,7 +93,8 @@ BOOST_AUTO_TEST_CASE(get)
 
     // original state, default value should return
     bytes params = abi.abiIn(getFunc);
-    out = helloWorldPrecompiled->call(context, bytesConstRef(&params));
+    auto callResult = helloWorldPrecompiled->call(context, bytesConstRef(&params));
+    out = callResult->execResult();
     abi.abiOut(bytesConstRef(&out), strValue);
     BOOST_TEST(defaultValue == strValue);
 }
@@ -105,10 +112,12 @@ BOOST_AUTO_TEST_CASE(set)
     std::string strGetValue0 = defaultValue;
 
     params = abi.abiIn(setFunc, strSetValue0);
-    out = helloWorldPrecompiled->call(context, bytesConstRef(&params));
+    auto callResult = helloWorldPrecompiled->call(context, bytesConstRef(&params));
+    out = callResult->execResult();
     // get it , empty string should return
     params = abi.abiIn(getFunc);
-    out = helloWorldPrecompiled->call(context, bytesConstRef(&params));
+    callResult = helloWorldPrecompiled->call(context, bytesConstRef(&params));
+    out = callResult->execResult();
     abi.abiOut(bytesConstRef(&out), strGetValue0);
     BOOST_TEST(strGetValue0 == strSetValue0);
 
@@ -118,10 +127,12 @@ BOOST_AUTO_TEST_CASE(set)
     std::string strGetValue1;
 
     params = abi.abiIn(setFunc, strSetValue1);
-    out = helloWorldPrecompiled->call(context, bytesConstRef(&params));
+    callResult = helloWorldPrecompiled->call(context, bytesConstRef(&params));
+    out = callResult->execResult();
     // get it , "aaaaaaaaaaaaaaaaaaaa" string should return
     params = abi.abiIn(getFunc);
-    out = helloWorldPrecompiled->call(context, bytesConstRef(&params));
+    callResult = helloWorldPrecompiled->call(context, bytesConstRef(&params));
+    out = callResult->execResult();
     abi.abiOut(bytesConstRef(&out), strGetValue1);
     BOOST_TEST(strGetValue1 == strSetValue1);
 
@@ -130,10 +141,12 @@ BOOST_AUTO_TEST_CASE(set)
     std::string strGetValue2;
 
     params = abi.abiIn(setFunc, strSetValue2);
-    out = helloWorldPrecompiled->call(context, bytesConstRef(&params));
+    callResult = helloWorldPrecompiled->call(context, bytesConstRef(&params));
+    out = callResult->execResult();
     // get it , "aaaaaaaaaaaaaaaaaaaa" string should return
     params = abi.abiIn(getFunc);
-    out = helloWorldPrecompiled->call(context, bytesConstRef(&params));
+    callResult = helloWorldPrecompiled->call(context, bytesConstRef(&params));
+    out = callResult->execResult();
     abi.abiOut(bytesConstRef(&out), strGetValue2);
     BOOST_TEST(strGetValue2 == strSetValue2);
 }

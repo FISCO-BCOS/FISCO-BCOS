@@ -81,9 +81,12 @@ bool Ledger::initLedger(std::shared_ptr<LedgerParamInterface> _ledgerParams)
     // setSyncNum for cachedStorage
     m_dbInitializer->setSyncNumForCachedStorage(m_blockChain->number());
 
-    // init network statistic handler
-    initNetworkStatHandler();
-
+    // the network statistic has been enabled
+    if (g_BCOSConfig.enableStat())
+    {
+        // init network statistic handler
+        initNetworkStatHandler();
+    }
     /// init blockVerifier, txPool, sync and consensus
     return (initBlockVerifier() && initTxPool() && initSync() && consensusInitFactory() &&
             initEventLogFilterManager());
@@ -139,8 +142,11 @@ bool Ledger::initBlockVerifier()
     std::shared_ptr<BlockChainImp> blockChain =
         std::dynamic_pointer_cast<BlockChainImp>(m_blockChain);
     blockVerifier->setNumberHash(boost::bind(&BlockChainImp::numberHash, blockChain, _1));
+    blockVerifier->setEvmFlags(m_param->mutableGenesisParam().evmFlags);
+
     m_blockVerifier = blockVerifier;
-    Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("initBlockVerifier SUCC");
+    Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("initBlockVerifier SUCC")
+                     << LOG_KV("evmFlags", m_param->mutableGenesisParam().evmFlags);
     return true;
 }
 

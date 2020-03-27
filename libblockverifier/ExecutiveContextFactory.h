@@ -28,6 +28,11 @@
 
 namespace dev
 {
+namespace precompiled
+{
+class PrecompiledExecResultFactory;
+class PrecompiledGasFactory;
+}  // namespace precompiled
 namespace blockverifier
 {
 class ExecutiveContextFactory : public std::enable_shared_from_this<ExecutiveContextFactory>
@@ -64,11 +69,17 @@ public:
         m_tableFactoryFactory = tableFactoryFactory;
     }
 
+    void setPrecompiledExecResultFactory(
+        std::shared_ptr<dev::precompiled::PrecompiledExecResultFactory>
+            _precompiledExecResultFactory);
+
 private:
     dev::storage::TableFactoryFactory::Ptr m_tableFactoryFactory;
     dev::storage::Storage::Ptr m_stateStorage;
     std::shared_ptr<dev::executive::StateFactoryInterface> m_stateFactoryInterface;
     std::unordered_map<Address, dev::eth::PrecompiledContract> m_precompiledContract;
+
+    std::shared_ptr<dev::precompiled::PrecompiledExecResultFactory> m_precompiledExecResultFactory;
 
     void setTxGasLimitToContext(ExecutiveContext::Ptr context);
     void registerUserPrecompiled(ExecutiveContext::Ptr context);

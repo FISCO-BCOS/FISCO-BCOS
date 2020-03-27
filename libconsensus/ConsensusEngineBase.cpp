@@ -232,6 +232,10 @@ void ConsensusEngineBase::resetConfig()
 
 void ConsensusEngineBase::reportBlock(dev::eth::Block const& _block)
 {
+    if (!g_BCOSConfig.enableStat())
+    {
+        return;
+    }
     // print the block gasUsed
     auto txsNum = _block.transactions()->size();
     if (txsNum == 0)
@@ -241,6 +245,8 @@ void ConsensusEngineBase::reportBlock(dev::eth::Block const& _block)
     auto blockGasUsed = (*_block.transactionReceipts())[txsNum - 1]->gasUsed();
     STAT_LOG(INFO) << LOG_TYPE("BlockGasUsed") << LOG_KV("g", m_groupId) << LOG_KV("txNum", txsNum)
                    << LOG_KV("gasUsed", blockGasUsed)
+                   << LOG_KV("blockNumber", _block.blockHeader().number())
+                   << LOG_KV("sealerIdx", _block.blockHeader().sealer())
                    << LOG_KV("blockHash", toHex(_block.blockHeader().hash()))
                    << LOG_KV("nodeID", toHex(m_keyPair.pub()));
     // print the gasUsed for each transaction

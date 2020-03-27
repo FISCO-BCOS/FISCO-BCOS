@@ -36,6 +36,7 @@ enum VERSION : uint32_t
     V2_1_0 = 0x02010000,
     V2_2_0 = 0x02020000,
     V2_3_0 = 0x02030000,
+    V2_4_0 = 0x02040000,
 };
 
 enum ProtocolVersion : uint32_t
@@ -80,6 +81,10 @@ public:
     void setDataDir(std::string _dataDir) { m_dataDir = _dataDir; }
     const std::string& dataDir() { return m_dataDir; }
 
+    void setEnableStat(bool _enableStat) { m_enableStat = _enableStat; }
+
+    bool const& enableStat() const { return m_enableStat; }
+
     struct DiskEncryption
     {
         bool enable = false;
@@ -118,6 +123,7 @@ private:
     dev::eth::EVMSchedule m_evmSchedule = dev::eth::DefaultSchedule;
     std::string m_confDir;
     std::string m_dataDir;
+    bool m_enableStat;
 };
 
 #define g_BCOSConfig GlobalConfigure::instance()

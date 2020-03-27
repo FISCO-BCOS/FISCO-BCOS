@@ -40,8 +40,9 @@ public:
     ConsensusPrecompiled();
     virtual ~ConsensusPrecompiled(){};
 
-    bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context, bytesConstRef param,
-        Address const& origin = Address(), Address const& _sender = Address()) override;
+    PrecompiledExecResult::Ptr call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+        bytesConstRef param, Address const& origin = Address(),
+        Address const& _sender = Address()) override;
 
 private:
     void showConsensusTable(std::shared_ptr<dev::blockverifier::ExecutiveContext> context);

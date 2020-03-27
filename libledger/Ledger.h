@@ -127,7 +127,7 @@ public:
             m_service->removeNetworkStatHandlerByGroupID(groupId());
         }
 
-        if (m_channelRPCServer)
+        if (m_channelRPCServer && m_channelRPCServer->networkStatHandler())
         {
             Ledger_LOG(INFO) << LOG_DESC("removeNetworkStatHandlerByGroupID for channelRPCServer")
                              << LOG_KV("groupID", groupId());

@@ -59,6 +59,7 @@ struct GenesisBlockParam
     uint64_t timeStamp;         /// the timestamp of genesis block
     int64_t rpbftEpochSize;
     int64_t rpbftRotatingInterval;
+    VMFlagType evmFlags;  // record flags of EVM
 };
 class BlockChainInterface
 {

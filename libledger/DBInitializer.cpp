@@ -35,6 +35,7 @@
 #include <libdevcore/Common.h>
 #include <libdevcore/Exceptions.h>
 #include <libmptstate/MPTStateFactory.h>
+#include <libprecompiled/Precompiled.h>
 #include <libsecurity/EncryptedLevelDB.h>
 #include <libstorage/BasicRocksDB.h>
 #include <libstorage/LevelDBStorage.h>
@@ -496,6 +497,16 @@ void DBInitializer::createExecutiveContext()
     // mpt or storage
     m_executiveContextFactory->setStateFactory(m_stateFactory);
     m_executiveContextFactory->setTableFactoryFactory(m_tableFactoryFactory);
+    // create precompiled related factory
+    auto precompiledResultFactory =
+        std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+    auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(
+        m_param->mutableGenesisParam().evmFlags);
+    precompiledResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
+    m_executiveContextFactory->setPrecompiledExecResultFactory(precompiledResultFactory);
+    DBInitializer_LOG(INFO) << LOG_DESC(
+        "create precompiledGasFactory and precompiledResultFactory");
+
     DBInitializer_LOG(INFO) << LOG_DESC("createExecutiveContext SUCC");
 }
 

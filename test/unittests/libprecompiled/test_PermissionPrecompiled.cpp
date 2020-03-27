@@ -60,6 +60,11 @@ struct AuthorityPrecompiledFixture
         factory.initExecutiveContext(blockInfo, h256(0), context);
         authorityPrecompiled = context->getPrecompiled(Address(0x1005));
         memoryTableFactory = context->getMemoryTableFactory();
+
+        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
+        auto precompiledExecResultFactory = std::make_shared<PrecompiledExecResultFactory>();
+        precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
+        authorityPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     }
 
     ~AuthorityPrecompiledFixture() {}
@@ -79,14 +84,16 @@ BOOST_AUTO_TEST_CASE(insert)
     std::string tableName = "t_test";
     std::string addr = "0x420f853b49838bd3e9466c85a4cc3428c960dde2";
     bytes in = abi.abiIn("insert(string,string)", tableName, addr);
-    bytes out = authorityPrecompiled->call(context, bytesConstRef(&in));
+    auto callResult = authorityPrecompiled->call(context, bytesConstRef(&in));
+    bytes out = callResult->execResult();
     // query
     auto table = memoryTableFactory->openTable(SYS_ACCESS_TABLE);
     auto entries = table->select(precompiled::getTableName(tableName), table->newCondition());
     BOOST_TEST(entries->size() == 1u);
 
     // insert again with same item
-    out = authorityPrecompiled->call(context, bytesConstRef(&in));
+    callResult = authorityPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     // query
     table = memoryTableFactory->openTable(SYS_ACCESS_TABLE);
     entries = table->select(precompiled::getTableName(tableName), table->newCondition());
@@ -95,7 +102,8 @@ BOOST_AUTO_TEST_CASE(insert)
     // insert new item with same table name, but different address
     addr = "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b";
     in = abi.abiIn("insert(string,string)", tableName, addr);
-    out = authorityPrecompiled->call(context, bytesConstRef(&in));
+    callResult = authorityPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     // query
     table = memoryTableFactory->openTable(SYS_ACCESS_TABLE);
     entries = table->select(precompiled::getTableName(tableName), table->newCondition());
@@ -109,7 +117,8 @@ BOOST_AUTO_TEST_CASE(insert_overflow)
     std::string tableName = "66666012345678901234567890123456789012345678901234567890123456789";
     std::string addr = "0x420f853b49838bd3e9466c85a4cc3428c960dde2";
     bytes in = abi.abiIn("insert(string,string)", tableName, addr);
-    bytes out = authorityPrecompiled->call(context, bytesConstRef(&in));
+    auto callResult = authorityPrecompiled->call(context, bytesConstRef(&in));
+    bytes out = callResult->execResult();
     s256 errCode;
     abi.abiOut(&out, errCode);
     BOOST_TEST(errCode == CODE_TABLE_NAME_OVERFLOW);
@@ -122,7 +131,8 @@ BOOST_AUTO_TEST_CASE(remove)
     std::string tableName = "t_test";
     std::string addr = "0x420f853b49838bd3e9466c85a4cc3428c960dde2";
     bytes in = abi.abiIn("insert(string,string)", tableName, addr);
-    bytes out = authorityPrecompiled->call(context, bytesConstRef(&in));
+    auto callResult = authorityPrecompiled->call(context, bytesConstRef(&in));
+    bytes out = callResult->execResult();
     // query
     auto table = memoryTableFactory->openTable(SYS_ACCESS_TABLE);
     auto entries = table->select(precompiled::getTableName(tableName), table->newCondition());
@@ -130,7 +140,8 @@ BOOST_AUTO_TEST_CASE(remove)
 
     // remove
     in = abi.abiIn("remove(string,string)", tableName, addr);
-    out = authorityPrecompiled->call(context, bytesConstRef(&in));
+    callResult = authorityPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
 
     // query
     table = memoryTableFactory->openTable(SYS_ACCESS_TABLE);
@@ -155,7 +166,8 @@ BOOST_AUTO_TEST_CASE(grantWrite_contract)
     std::string tableName = precompiled::getContractTableName(contractAddress);
     Address addr("0x420f853b49838bd3e9466c85a4cc3428c960dde2");
     bytes in = abi.abiIn("grantWrite(address,address)", contractAddress, addr);
-    bytes out = authorityPrecompiled->call(context, bytesConstRef(&in));
+    auto callResult = authorityPrecompiled->call(context, bytesConstRef(&in));
+    bytes out = callResult->execResult();
     s256 ret = 0;
     abi.abiOut(&out, ret);
     BOOST_TEST(ret == CODE_CONTRACT_NOT_EXIST);
@@ -169,7 +181,8 @@ BOOST_AUTO_TEST_CASE(grantWrite_contract)
     auto result =
         table->insert(tableName, entry, std::make_shared<AccessOptions>(Address(), false));
     BOOST_TEST(result == 1);
-    out = authorityPrecompiled->call(context, bytesConstRef(&in));
+    callResult = authorityPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     ret = 0;
     abi.abiOut(&out, ret);
     BOOST_TEST(ret == 1u);
@@ -179,7 +192,8 @@ BOOST_AUTO_TEST_CASE(grantWrite_contract)
     BOOST_TEST(entries->size() == 1u);
 
     // insert again with same item
-    out = authorityPrecompiled->call(context, bytesConstRef(&in));
+    callResult = authorityPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     // query
     table = memoryTableFactory->openTable(SYS_ACCESS_TABLE);
     entries = table->select(tableName, table->newCondition());
@@ -188,7 +202,8 @@ BOOST_AUTO_TEST_CASE(grantWrite_contract)
     // insert new item with same table name, but different address
     Address addr2("0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b");
     in = abi.abiIn("grantWrite(address,address)", contractAddress, addr2);
-    out = authorityPrecompiled->call(context, bytesConstRef(&in));
+    callResult = authorityPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     ret = 0;
     abi.abiOut(&out, ret);
     BOOST_TEST(ret == 1);
@@ -199,14 +214,16 @@ BOOST_AUTO_TEST_CASE(grantWrite_contract)
     BOOST_TEST(entries->size() == 2u);
     // remove
     in = abi.abiIn("revokeWrite(address,address)", contractAddress, addr2);
-    out = authorityPrecompiled->call(context, bytesConstRef(&in));
+    callResult = authorityPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     ret = 0;
     abi.abiOut(&out, ret);
     BOOST_TEST(ret == 1);
 
     // queryByName by a existing key
     in = abi.abiIn("queryPermission(address)", contractAddress);
-    out = authorityPrecompiled->call(context, bytesConstRef(&in));
+    callResult = authorityPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     std::string retStr;
     abi.abiOut(&out, retStr);
 
@@ -224,11 +241,14 @@ BOOST_AUTO_TEST_CASE(queryByName)
     std::string tableName = "t_test";
     std::string addr = "0x420f853b49838bd3e9466c85a4cc3428c960dde2";
     bytes in = abi.abiIn("insert(string,string)", tableName, addr);
-    bytes out = authorityPrecompiled->call(context, bytesConstRef(&in));
+
+    auto callResult = authorityPrecompiled->call(context, bytesConstRef(&in));
+    bytes out = callResult->execResult();
 
     // queryByName by a existing key
     in = abi.abiIn("queryByName(string)", tableName);
-    out = authorityPrecompiled->call(context, bytesConstRef(&in));
+    callResult = authorityPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     std::string retStr;
     abi.abiOut(&out, retStr);
 
@@ -240,7 +260,8 @@ BOOST_AUTO_TEST_CASE(queryByName)
     std::string keyName = "test";
     // queryByName by a no existing key
     in = abi.abiIn("queryByName(string)", keyName);
-    out = authorityPrecompiled->call(context, bytesConstRef(&in));
+    callResult = authorityPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     abi.abiOut(&out, retStr);
     BOOST_TEST(reader.parse(retStr, retJson) == true);
     BOOST_TEST(retJson.size() == 0);
@@ -253,7 +274,8 @@ BOOST_AUTO_TEST_CASE(error_func)
     std::string tableName = "t_test";
     std::string addr = "0x420f853b49838bd3e9466c85a4cc3428c960dde2";
     bytes in = abi.abiIn("insert(string)", tableName, addr);
-    bytes out = authorityPrecompiled->call(context, bytesConstRef(&in));
+    auto callResult = authorityPrecompiled->call(context, bytesConstRef(&in));
+    bytes out = callResult->execResult();
 }
 
 BOOST_AUTO_TEST_CASE(toString)

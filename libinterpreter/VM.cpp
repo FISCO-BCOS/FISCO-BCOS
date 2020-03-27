@@ -43,7 +43,8 @@ evmc_result execute(evmc_instance* _instance, evmc_context* _context, evmc_revis
 {
     (void)_instance;
     std::unique_ptr<dev::eth::VM> vm{new dev::eth::VM};
-
+    // create vm schedule according to evmc_context
+    vm->createVMSchedule(_context);
     evmc_result result = {};
     dev::owning_bytes_ref output;
 
@@ -135,6 +136,21 @@ namespace dev
 {
 namespace eth
 {
+void VM::createVMSchedule(evmc_context* _context)
+{
+    auto evmFlags = _context->flags;
+    // bit 64 is currently occupied, indicating whether to use FreeStorageVMSchedule
+    auto rightShiftLen = sizeof(VMFlagType) * 8 - 1;
+    uint64_t freeStorageScheduleFlag = (evmFlags >> rightShiftLen);
+    // the FreeStorageVMSchedule enabled
+    if (freeStorageScheduleFlag)
+    {
+        m_vmSchedule = std::make_shared<FreeStorageVMSchedule>();
+        return;
+    }
+    m_vmSchedule = std::make_shared<VMSchedule>();
+}
+
 uint64_t VM::memNeed(u256 const& _offset, u256 const& _size)
 {
     return toInt63(_size ? u512(_offset) + _size : u512(0));
@@ -203,8 +219,8 @@ void VM::adjustStack(int _removed, int _added)
 
 uint64_t VM::gasForMem(u512 const& _size)
 {
-    constexpr int64_t memoryGas = VMSchedule::memoryGas;
-    constexpr int64_t quadCoeffDiv = VMSchedule::quadCoeffDiv;
+    int64_t memoryGas = m_vmSchedule->memoryGas;
+    int64_t quadCoeffDiv = m_vmSchedule->quadCoeffDiv;
     u512 s = _size / 32;
     return toInt63(memoryGas * s + s * s / quadCoeffDiv);
 }
@@ -219,8 +235,10 @@ void VM::updateIOGas()
 void VM::updateGas()
 {
     if (m_newMemSize > m_mem.size())
+    {
         m_runGas += toInt63(gasForMem(m_newMemSize) - gasForMem(m_mem.size()));
-    m_runGas += (VMSchedule::copyGas * ((m_copyMemSize + 31) / 32));
+    }
+    m_runGas += (m_vmSchedule->copyGas * ((m_copyMemSize + 31) / 32));
     if (m_io_gas < m_runGas)
         throwOutOfGas();
 }
@@ -236,9 +254,9 @@ void VM::updateMem(uint64_t _newMem)
 void VM::logGasMem()
 {
     unsigned n = (unsigned)m_OP - (unsigned)Instruction::LOG0;
-    constexpr int64_t logDataGas = VMSchedule::logDataGas;
+    int64_t logDataGas = m_vmSchedule->logDataGas;
     m_runGas =
-        toInt63(VMSchedule::logGas + VMSchedule::logTopicGas * n + logDataGas * u512(m_SP[1]));
+        toInt63(m_vmSchedule->logGas + m_vmSchedule->logTopicGas * n + logDataGas * u512(m_SP[1]));
     updateMem(memNeed(m_SP[0], m_SP[1]));
 }
 
@@ -391,7 +409,9 @@ void VM::interpretCases()
                 int destinationExists =
                     m_context->fn_table->account_exists(m_context, &destination);
                 if (m_rev >= EVMC_TANGERINE_WHISTLE && !destinationExists)
-                    m_runGas += VMSchedule::callNewAccount;
+                {
+                    m_runGas += m_vmSchedule->callNewAccount;
+                }
             }
 
             updateIOGas();
@@ -446,8 +466,8 @@ void VM::interpretCases()
             CASE(SHA3)
         {
             ON_OP();
-            constexpr int64_t sha3Gas = VMSchedule::sha3Gas;
-            constexpr int64_t sha3WordGas = VMSchedule::sha3WordGas;
+            int64_t sha3Gas = m_vmSchedule->sha3Gas;
+            int64_t sha3WordGas = m_vmSchedule->sha3WordGas;
             m_runGas = toInt63(sha3Gas + (u512(m_SP[1]) + 31) / 32 * sha3WordGas);
             updateMem(memNeed(m_SP[0], m_SP[1]));
             updateIOGas();
@@ -561,7 +581,7 @@ void VM::interpretCases()
             u256 expon = m_SP[1];
             const int64_t byteCost = m_rev >= EVMC_SPURIOUS_DRAGON ? 50 : 10;
             m_runGas =
-                toInt63(VMSchedule::stepGas5 + byteCost * (32 - (h256(expon).firstBitSet() / 8)));
+                toInt63(m_vmSchedule->stepGas5 + byteCost * (32 - (h256(expon).firstBitSet() / 8)));
             ON_OP();
             updateIOGas();
 
@@ -1065,7 +1085,7 @@ void VM::interpretCases()
             evmc_address address = toEvmC(asAddress(m_SP[0]));
 
             size_t memoryOffset = static_cast<size_t>(m_SP[1]);
-            constexpr size_t codeOffsetMax = std::numeric_limits<size_t>::max();
+            size_t codeOffsetMax = std::numeric_limits<size_t>::max();
             size_t codeOffset =
                 m_SP[2] > codeOffsetMax ? codeOffsetMax : static_cast<size_t>(m_SP[2]);
             size_t size = static_cast<size_t>(copyMemSize);
@@ -1090,7 +1110,8 @@ void VM::interpretCases()
             CASE(BLOCKHASH)
         {
             ON_OP();
-            m_runGas = VMSchedule::stepGas6;
+            m_runGas = m_vmSchedule->stepGas6;
+
             updateIOGas();
 
             const int64_t blockNumber = getTxContext().block_number;
@@ -1346,10 +1367,11 @@ void VM::interpretCases()
             ON_OP();
             if (m_message->flags & EVMC_STATIC)
                 throwDisallowedStateChange();
-
-            static_assert(
-                VMSchedule::sstoreResetGas <= VMSchedule::sstoreSetGas, "Wrong SSTORE gas costs");
-            m_runGas = VMSchedule::sstoreResetGas;  // Charge the modification cost up front.
+#if 0
+            assert(m_vmSchedule->sstoreResetGas <= m_vmSchedule->sstoreSetGas,
+                "Wrong SSTORE gas costs");
+#endif
+            m_runGas = m_vmSchedule->sstoreResetGas;  // Charge the modification cost up front.
             updateIOGas();
 
             evmc_uint256be key = toEvmC(m_SP[0]);
@@ -1360,7 +1382,7 @@ void VM::interpretCases()
             if (status == EVMC_STORAGE_ADDED)
             {
                 // Charge additional amount for added storage item.
-                m_runGas = VMSchedule::sstoreSetGas - VMSchedule::sstoreResetGas;
+                m_runGas = m_vmSchedule->sstoreSetGas - m_vmSchedule->sstoreResetGas;
                 updateIOGas();
             }
         }
@@ -1395,7 +1417,7 @@ void VM::interpretCases()
 
             CASE(JUMPDEST)
         {
-            m_runGas = VMSchedule::jumpdestGas;
+            m_runGas = m_vmSchedule->jumpdestGas;
             ON_OP();
             updateIOGas();
         }

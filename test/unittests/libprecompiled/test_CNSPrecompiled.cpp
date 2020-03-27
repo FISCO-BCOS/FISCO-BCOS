@@ -57,6 +57,11 @@ struct CNSPrecompiledFixture
         factory.setTableFactoryFactory(tableFactoryFactory);
         factory.initExecutiveContext(blockInfo, h256(0), context);
         cnsPrecompiled = std::make_shared<CNSPrecompiled>();
+
+        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
+        auto precompiledExecResultFactory = std::make_shared<PrecompiledExecResultFactory>();
+        precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
+        cnsPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
         memoryTableFactory = context->getMemoryTableFactory();
     }
 
@@ -89,7 +94,8 @@ BOOST_AUTO_TEST_CASE(insert)
         "0123456789012345678901234567890123456789012345678901234567890123456789";
     bytes in2 = abi.abiIn("insert(string,string,string,string)", contractName, overflowVersion130,
         contractAddress, contractAbi);
-    bytes out2 = cnsPrecompiled->call(context, bytesConstRef(&in2));
+    auto callResult = (cnsPrecompiled->call(context, bytesConstRef(&in2)));
+    bytes out2 = callResult->execResult();
     s256 errCode;
     abi.abiOut(&out2, errCode);
     BOOST_TEST(errCode == CODE_VERSION_LENGTH_OVERFLOW);
@@ -97,7 +103,8 @@ BOOST_AUTO_TEST_CASE(insert)
     // insert
     bytes in = abi.abiIn("insert(string,string,string,string)", contractName, contractVersion,
         contractAddress, contractAbi);
-    bytes out = cnsPrecompiled->call(context, bytesConstRef(&in));
+    callResult = cnsPrecompiled->call(context, bytesConstRef(&in));
+    bytes out = callResult->execResult();
     // query
     auto table = memoryTableFactory->openTable(SYS_CNS);
     auto entries = table->select(contractName, table->newCondition());
@@ -105,7 +112,8 @@ BOOST_AUTO_TEST_CASE(insert)
 
 
     // insert again with same item
-    out = cnsPrecompiled->call(context, bytesConstRef(&in));
+    callResult = cnsPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     // query
     table = memoryTableFactory->openTable(SYS_CNS);
     entries = table->select(contractName, table->newCondition());
@@ -115,7 +123,8 @@ BOOST_AUTO_TEST_CASE(insert)
     contractVersion = "2.0";
     in = abi.abiIn("insert(string,string,string,string)", contractName, contractVersion,
         contractAddress, contractAbi);
-    out = cnsPrecompiled->call(context, bytesConstRef(&in));
+    callResult = cnsPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     // query
     table = memoryTableFactory->openTable(SYS_CNS);
     entries = table->select(contractName, table->newCondition());
@@ -137,16 +146,19 @@ BOOST_AUTO_TEST_CASE(select)
         "\"constructor\"}]";
     bytes in = abi.abiIn("insert(string,string,string,string)", contractName, contractVersion,
         contractAddress, contractAbi);
-    bytes out = cnsPrecompiled->call(context, bytesConstRef(&in));
+    auto callResult = cnsPrecompiled->call(context, bytesConstRef(&in));
+    bytes out = callResult->execResult();
     // insert new item with same name, address and abi
     contractVersion = "2.0";
     in = abi.abiIn("insert(string,string,string,string)", contractName, contractVersion,
         contractAddress, contractAbi);
-    out = cnsPrecompiled->call(context, bytesConstRef(&in));
+    callResult = cnsPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
 
     // select existing keys
     in = abi.abiIn("selectByName(string)", contractName);
-    out = cnsPrecompiled->call(context, bytesConstRef(&in));
+    callResult = cnsPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     std::string retStr;
     abi.abiOut(&out, retStr);
 
@@ -158,14 +170,16 @@ BOOST_AUTO_TEST_CASE(select)
 
     // getContractAddress
     in = abi.abiIn("getContractAddress(string,string)", contractName, contractVersion);
-    out = cnsPrecompiled->call(context, bytesConstRef(&in));
+    callResult = cnsPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     Address ret;
     abi.abiOut(&out, ret);
     BOOST_TEST(ret == Address(contractAddress));
 
     // select no existing keys
     in = abi.abiIn("selectByName(string)", std::string("Ok2"));
-    out = cnsPrecompiled->call(context, bytesConstRef(&in));
+    callResult = cnsPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     abi.abiOut(&out, retStr);
     LOG(TRACE) << "select result:" << retStr;
     BOOST_TEST(reader.parse(retStr, retJson) == true);
@@ -173,7 +187,9 @@ BOOST_AUTO_TEST_CASE(select)
 
     // select existing keys and version
     in = abi.abiIn("selectByNameAndVersion(string,string)", contractName, contractVersion);
-    out = cnsPrecompiled->call(context, bytesConstRef(&in));
+    callResult = cnsPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
+
     abi.abiOut(&out, retStr);
     LOG(TRACE) << "select result:" << retStr;
     BOOST_TEST(reader.parse(retStr, retJson) == true);
@@ -181,13 +197,15 @@ BOOST_AUTO_TEST_CASE(select)
 
     // select no existing keys and version
     in = abi.abiIn("selectByNameAndVersion(string,string)", contractName, std::string("3.0"));
-    out = cnsPrecompiled->call(context, bytesConstRef(&in));
+    callResult = cnsPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     abi.abiOut(&out, retStr);
     LOG(TRACE) << "select result:" << retStr;
     BOOST_TEST(reader.parse(retStr, retJson) == true);
     BOOST_TEST(retJson.size() == 0);
     in = abi.abiIn("selectByNameAndVersion(string,string)", std::string("Ok2"), contractVersion);
-    out = cnsPrecompiled->call(context, bytesConstRef(&in));
+    callResult = cnsPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     abi.abiOut(&out, retStr);
     LOG(TRACE) << "select result:" << retStr;
     BOOST_TEST(reader.parse(retStr, retJson) == true);
@@ -203,7 +221,8 @@ BOOST_AUTO_TEST_CASE(errFunc)
 {
     eth::ContractABI abi;
     bytes in = abi.abiIn("insert(string)", std::string("test"));
-    bytes out = cnsPrecompiled->call(context, bytesConstRef(&in));
+    auto callResult = cnsPrecompiled->call(context, bytesConstRef(&in));
+    bytes out = callResult->execResult();
 }
 
 BOOST_AUTO_TEST_SUITE_END()
