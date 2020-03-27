@@ -500,9 +500,13 @@ void DBInitializer::createExecutiveContext()
     // create precompiled related factory
     auto precompiledResultFactory =
         std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
-    auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>();
+    auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(
+        m_param->mutableGenesisParam().evmFlags);
     precompiledResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
     m_executiveContextFactory->setPrecompiledExecResultFactory(precompiledResultFactory);
+    DBInitializer_LOG(INFO) << LOG_DESC(
+        "create precompiledGasFactory and precompiledResultFactory");
+
     DBInitializer_LOG(INFO) << LOG_DESC("createExecutiveContext SUCC");
 }
 

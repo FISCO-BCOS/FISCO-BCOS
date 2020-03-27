@@ -70,7 +70,31 @@ struct GasMetrics
     static const unsigned MemUnitSize = 32;
 
     // opcode to gasCost mapping
-    static std::map<InterfaceOpcode, int64_t> OpCode2GasCost;
+    std::map<InterfaceOpcode, int64_t> OpCode2GasCost;
+
+    using Ptr = std::shared_ptr<GasMetrics>;
+    GasMetrics()
+    {
+        OpCode2GasCost = {{InterfaceOpcode::EQ, VeryLow}, {InterfaceOpcode::GE, VeryLow},
+            {InterfaceOpcode::GT, VeryLow}, {InterfaceOpcode::LE, VeryLow},
+            {InterfaceOpcode::LT, VeryLow}, {InterfaceOpcode::NE, VeryLow},
+            {InterfaceOpcode::Limit, VeryLow}, {InterfaceOpcode::GetInt, VeryLow},
+            {InterfaceOpcode::GetAddr, VeryLow}, {InterfaceOpcode::Set, VeryLow},
+            {InterfaceOpcode::GetByte32, 32 * VeryLow}, {InterfaceOpcode::GetByte64, 64 * VeryLow},
+            {InterfaceOpcode::GetString, 64 * VeryLow}, {InterfaceOpcode::CreateTable, High},
+            {InterfaceOpcode::OpenTable, Low}, {InterfaceOpcode::Select, Low},
+            {InterfaceOpcode::Insert, High}, {InterfaceOpcode::Update, High},
+            {InterfaceOpcode::Remove, Mid}, {InterfaceOpcode::PaillierAdd, High},
+            {InterfaceOpcode::GroupSigVerify, High}, {InterfaceOpcode::RingSigVerify, High}};
+    }
+    virtual ~GasMetrics() {}
+};
+
+// FreeStorageGasMetrics
+struct FreeStorageGasMetrics : public GasMetrics
+{
+    FreeStorageGasMetrics() : GasMetrics() {}
+    virtual ~FreeStorageGasMetrics() {}
 };
 
 class PrecompiledGas
@@ -88,6 +112,7 @@ public:
     uint64_t const& memUsed() const { return m_memUsed; }
 
     void updateMemUsed(uint64_t const& _newMemSize);
+    void setGasMetric(GasMetrics::Ptr _metric) { m_metric = _metric; }
 
 protected:
     // Traverse m_operationList to calculate total gas cost
@@ -97,16 +122,44 @@ protected:
 
 private:
     std::shared_ptr<OpListType> m_operationList;
-    uint64_t m_memUsed;
+    GasMetrics::Ptr m_metric;
+    uint64_t m_memUsed = 0;
 };
 
 class PrecompiledGasFactory
 {
 public:
     using Ptr = std::shared_ptr<PrecompiledGasFactory>;
-    PrecompiledGasFactory() = default;
+    PrecompiledGasFactory(VMFlagType const& _vmFlags) { createMetric(_vmFlags); }
     virtual ~PrecompiledGasFactory() {}
-    PrecompiledGas::Ptr createPrecompiledGas() { return std::make_shared<PrecompiledGas>(); }
+
+    PrecompiledGas::Ptr createPrecompiledGas()
+    {
+        auto gasPricer = std::make_shared<PrecompiledGas>();
+        gasPricer->setGasMetric(m_gasMetric);
+        return gasPricer;
+    }
+
+private:
+    void createMetric(VMFlagType const& _vmFlagType)
+    {
+        PrecompiledGas_LOG(DEBUG) << LOG_DESC("createGasMetric")
+                                  << LOG_KV("vmFlagType", _vmFlagType);
+
+        auto rightShiftLen = sizeof(VMFlagType) * 8 - 1;
+        uint64_t metricFlag = (_vmFlagType >> rightShiftLen);
+        // the FreeStorageGasMetrics enabled
+        if (metricFlag)
+        {
+            PrecompiledGas_LOG(DEBUG) << LOG_DESC("createGasMetric: FreeStorageGasMetrics");
+            m_gasMetric = std::make_shared<FreeStorageGasMetrics>();
+            return;
+        }
+        m_gasMetric = std::make_shared<GasMetrics>();
+    }
+
+private:
+    GasMetrics::Ptr m_gasMetric;
 };
 }  // namespace precompiled
 }  // namespace dev

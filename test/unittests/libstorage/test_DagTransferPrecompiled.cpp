@@ -54,8 +54,11 @@ struct DagTransferPrecompiledFixture
         factory.initExecutiveContext(blockInfo, h256(0), context);
         dtPrecompiled = std::make_shared<DagTransferPrecompiled>();
         memoryTableFactory = context->getMemoryTableFactory();
+
+        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
         auto precompiledExecResultFactory =
             std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+        precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
         dtPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     }
 

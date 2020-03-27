@@ -38,8 +38,11 @@ struct PaillierPrecompiledFixture
     {
         context = std::make_shared<ExecutiveContext>();
         paillierPrecompiled = std::make_shared<PaillierPrecompiled>();
+
+        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
         auto precompiledExecResultFactory =
             std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+        precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
         paillierPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     }
 

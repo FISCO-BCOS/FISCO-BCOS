@@ -38,8 +38,11 @@ struct RingSigPrecompiledFixture
     {
         context = std::make_shared<ExecutiveContext>();
         ringSigPrecompiled = std::make_shared<RingSigPrecompiled>();
+
+        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
         auto precompiledExecResultFactory =
             std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+        precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
         ringSigPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     }
 
