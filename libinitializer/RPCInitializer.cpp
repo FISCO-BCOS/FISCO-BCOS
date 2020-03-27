@@ -59,8 +59,13 @@ void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt
     m_channelRPCServer->setListenPort(listenPort);
     m_channelRPCServer->setSSLContext(m_sslContext);
     m_channelRPCServer->setService(m_p2pService);
-    // set networkStatHandler for channelRPCServer
-    m_networkStatHandler = createNetWorkStatHandler(_pt);
+    if (g_BCOSConfig.enableStat())
+    {
+        // set networkStatHandler for channelRPCServer
+        m_networkStatHandler = createNetWorkStatHandler(_pt);
+        INITIALIZER_LOG(DEBUG) << LOG_BADGE("RPCInitializer")
+                               << LOG_DESC("Enable network statistic");
+    }
     m_channelRPCServer->setNetworkStatHandler(m_networkStatHandler);
 
     auto ioService = std::make_shared<boost::asio::io_service>();
@@ -103,7 +108,10 @@ void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt
             ListenPortIsUsed() << errinfo_comment(
                 "Please check channel_listenIP and channel_listen_port are valid"));
     }
-    m_networkStatHandler->start();
+    if (m_networkStatHandler)
+    {
+        m_networkStatHandler->start();
+    }
     INITIALIZER_LOG(INFO) << LOG_BADGE("RPCInitializer")
                           << LOG_DESC("ChannelRPCHttpServer started.");
     m_channelRPCServer->setCallbackSetter(std::bind(&rpc::Rpc::setCurrentTransactionCallback,

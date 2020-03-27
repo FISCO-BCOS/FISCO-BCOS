@@ -326,8 +326,10 @@ void Service::onMessage(dev::network::NetworkException e, dev::network::SessionF
             p2pSession->onTopicMessage(p2pMessage);
             return;
         }
-
-        updateIncomingTraffic(p2pMessage);
+        if (g_BCOSConfig.enableStat())
+        {
+            updateIncomingTraffic(p2pMessage);
+        }
 
         if (p2pMessage->isRequestPacket())
         {
@@ -457,7 +459,10 @@ void Service::asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
             {
                 session->session()->asyncSendMessage(message, options, nullptr);
             }
-            updateOutcomingTraffic(message);
+            if (g_BCOSConfig.enableStat())
+            {
+                updateOutcomingTraffic(message);
+            }
         }
         else
         {

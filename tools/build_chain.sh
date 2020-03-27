@@ -33,6 +33,7 @@ consensus_type="pbft"
 supported_consensus=(pbft raft rpbft)
 TASSL_CMD="${HOME}"/.tassl
 auto_flush="true"
+enable_statistic="false"
 # trans timestamp from seconds to milliseconds
 timestamp=$(($(date '+%s')*1000))
 chain_id=1
@@ -62,6 +63,7 @@ Usage:
     -z <Generate tar packet>            Default no
     -t <Cert config file>               Default auto generate
     -T <Enable debug log>               Default off. If set -T, enable debug log
+    -S <Enable statistics>              Default off. If set -S, enable statistics
     -F <Disable log auto flush>         Default on. If set -F, disable log auto flush
     -h Help
 e.g 
@@ -113,7 +115,7 @@ exit_with_clean()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:t:v:s:C:c:izhgTFd" option;do
+while getopts "f:l:o:p:e:t:v:s:C:c:izhgTFSd" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -151,6 +153,7 @@ while getopts "f:l:o:p:e:t:v:s:C:c:izhgTFd" option;do
     log_level="debug"
     ;;
     F) auto_flush="false";;
+    S) enable_statistic="true";;
     z) make_tar="yes";;
     g) guomi_mode="yes";;
     d) docker_mode="yes"
@@ -446,7 +449,6 @@ generate_config_ini()
     listen_ip=0.0.0.0
     listen_port=$(( offset + port_start[0] ))
     ;enable_compress=true
-    ;enable_statistic=false
     ; nodes to connect
     $ip_list
 
@@ -486,8 +488,8 @@ generate_config_ini()
 [log]
     enable=true
     log_path=./log
-    ; statistics log directory
-    stat_log_path=./stat
+    ; enable/disable the statistics function
+    enable_statistic=${enable_statistic}
     ; info debug trace 
     level=${log_level}
     ; MB

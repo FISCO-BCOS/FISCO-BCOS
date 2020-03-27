@@ -125,7 +125,7 @@ void ChannelSession::asyncSendMessage(Message::Ptr request,
         request->encode(*p_buffer);
         writeBuffer(p_buffer);
         // update the group outgoing traffic
-        if (request->groupID() != -1)
+        if (m_networkStat && request->groupID() != -1)
         {
             m_networkStat->updateGroupResponseTraffic(
                 request->groupID(), request->type(), request->length());
@@ -398,7 +398,6 @@ void ChannelSession::onMessage(ChannelException e, Message::Ptr message)
 
             return;
         }
-        // m_networkStat->updateIncomingTraffic(message->type(), message->length());
 
         auto response_callback = findResponseCallbackBySeq(message->seq());
         if (response_callback != nullptr)
