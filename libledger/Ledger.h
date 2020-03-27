@@ -34,6 +34,7 @@
 #include <libeventfilter/EventLogFilterManager.h>
 #include <libp2p/P2PInterface.h>
 #include <libp2p/Service.h>
+#include <libstat/NetworkStatHandler.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/property_tree/ptree.hpp>
 
@@ -82,6 +83,24 @@ public:
         BOOST_LOG_SCOPED_THREAD_ATTR(
             "GroupId", boost::log::attributes::constant<std::string>(std::to_string(m_groupId)));
         Ledger_LOG(INFO) << LOG_DESC("startAll...");
+
+        m_txPool->registerSyncStatusChecker([this]() {
+            try
+            {
+                // Refuse transaction if far syncing
+                if (m_sync->blockNumberFarBehind())
+                {
+                    BOOST_THROW_EXCEPTION(
+                        TransactionRefused() << errinfo_comment("ImportResult::NodeIsSyncing"));
+                }
+            }
+            catch (std::exception const& _e)
+            {
+                return false;
+            }
+            return true;
+        });
+        m_txPool->start();
         m_sync->start();
         m_sealer->start();
         m_eventLogFilterManger->start();
@@ -95,11 +114,25 @@ public:
         m_sealer->stop();
         Ledger_LOG(INFO) << LOG_DESC("sealer stopped. stop sync") << LOG_KV("groupID", groupId());
         m_sync->stop();
-        Ledger_LOG(INFO) << LOG_DESC("ledger stopped") << LOG_KV("groupID", groupId());
+        Ledger_LOG(INFO) << LOG_DESC("sync stopped. stop event filter manager")
+                         << LOG_KV("groupID", groupId());
         m_eventLogFilterManger->stop();
-        Ledger_LOG(INFO) << LOG_DESC("event filter manager stopped")
+        Ledger_LOG(INFO) << LOG_DESC("event filter manager stopped. stop tx pool")
                          << LOG_KV("groupID", groupId());
         m_txPool->stop();
+        if (m_service)
+        {
+            Ledger_LOG(INFO) << LOG_DESC("removeNetworkStatHandlerByGroupID for service")
+                             << LOG_KV("groupID", groupId());
+            m_service->removeNetworkStatHandlerByGroupID(groupId());
+        }
+
+        if (m_channelRPCServer)
+        {
+            Ledger_LOG(INFO) << LOG_DESC("removeNetworkStatHandlerByGroupID for channelRPCServer")
+                             << LOG_KV("groupID", groupId());
+            m_channelRPCServer->networkStatHandler()->removeGroupP2PStatHandler(groupId());
+        }
     }
 
     virtual ~Ledger(){};
@@ -148,6 +181,8 @@ protected:
     virtual bool initSync();
     // init EventLogFilterManager
     virtual bool initEventLogFilterManager();
+    // init statHandler
+    virtual void initNetworkStatHandler();
 
     void initGenesisMark(GenesisBlockParam& genesisParam);
     /// load ini config of group
@@ -179,6 +214,8 @@ protected:
     std::shared_ptr<dev::consensus::Sealer> m_sealer = nullptr;
     std::shared_ptr<dev::sync::SyncInterface> m_sync = nullptr;
     std::shared_ptr<dev::event::EventLogFilterManager> m_eventLogFilterManger = nullptr;
+    // for network statistic
+    std::shared_ptr<dev::stat::NetworkStatHandler> m_networkStatHandler = nullptr;
 
     std::shared_ptr<dev::ledger::DBInitializer> m_dbInitializer = nullptr;
     ChannelRPCServer::Ptr m_channelRPCServer;

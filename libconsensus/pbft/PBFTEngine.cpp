@@ -74,24 +74,27 @@ void PBFTEngine::createPBFTReqCache()
 
 void PBFTEngine::stop()
 {
-    // remove the registered handler when stop the pbftEngine
-    if (m_service)
+    if (m_startConsensusEngine)
     {
-        m_service->removeHandlerByProtocolID(m_protocolId);
+        // remove the registered handler when stop the pbftEngine
+        if (m_service)
+        {
+            m_service->removeHandlerByProtocolID(m_protocolId);
+        }
+        if (m_threadPool)
+        {
+            m_threadPool->stop();
+        }
+        if (m_prepareWorker)
+        {
+            m_prepareWorker->stop();
+        }
+        if (m_messageHandler)
+        {
+            m_messageHandler->stop();
+        }
+        ConsensusEngineBase::stop();
     }
-    if (m_threadPool)
-    {
-        m_threadPool->stop();
-    }
-    if (m_prepareWorker)
-    {
-        m_prepareWorker->stop();
-    }
-    if (m_messageHandler)
-    {
-        m_messageHandler->stop();
-    }
-    ConsensusEngineBase::stop();
 }
 
 void PBFTEngine::initPBFTEnv(unsigned view_timeout)
@@ -494,12 +497,6 @@ bool PBFTEngine::sendMsg(dev::network::NodeID const& nodeId, unsigned const& pac
         {
             m_service->asyncSendMessageByNodeID(
                 session.nodeID(), transDataToMessage(data, packetType, ttl, forwardNodes), nullptr);
-
-            // update the network-out statistic information
-            if (m_statisticHandler)
-            {
-                m_statisticHandler->updateConsOutPacketsInfo(packetType, 1, data.size());
-            }
             PBFTENGINE_LOG(DEBUG) << LOG_DESC("sendMsg") << LOG_KV("packetType", packetType)
                                   << LOG_KV("dstNodeId", nodeId.abridged())
                                   << LOG_KV("remote_endpoint", session.nodeIPEndpoint.name())
@@ -582,11 +579,6 @@ void PBFTEngine::broadcastMsg(dev::h512s const& _targetNodes, bytesConstRef _dat
     pbftPacket->encode(*encodedData);
     auto p2pMessage = toP2PMessage(encodedData, _p2pPacketType);
     m_service->asyncMulticastMessageByNodeIDList(_targetNodes, p2pMessage);
-    if (m_statisticHandler)
-    {
-        m_statisticHandler->updateConsOutPacketsInfo(
-            _packetType, _targetNodes.size(), p2pMessage->length());
-    }
 }
 
 /**
@@ -919,12 +911,6 @@ void PBFTEngine::pushValidPBFTMsgIntoQueue(NetworkException, std::shared_ptr<P2P
         m_msgQueue.push(pbft_msg);
         /// notify to handleMsg after push new PBFTMsgPacket into m_msgQueue
         m_signalled.notify_all();
-
-        // update the network-in statistic information
-        if (m_statisticHandler)
-        {
-            m_statisticHandler->updateConsInPacketsInfo(pbft_msg->packet_id, message->length());
-        }
     }
     else
     {
@@ -1218,6 +1204,7 @@ void PBFTEngine::checkAndSave()
 
 void PBFTEngine::reportBlock(Block const& block)
 {
+    ConsensusEngineBase::reportBlock(block);
     Guard l(m_mutex);
     reportBlockWithoutLock(block);
 }
@@ -1256,11 +1243,6 @@ void PBFTEngine::reportBlockWithoutLock(Block const& block)
                              << LOG_KV("next", m_consensusBlockNumber)
                              << LOG_KV("tx", block.getTransactionSize())
                              << LOG_KV("nodeIdx", nodeIdx());
-        // print the statistic information after commit each block
-        if (m_statisticHandler)
-        {
-            m_statisticHandler->printStatistics();
-        }
     }
 }
 
@@ -2055,14 +2037,6 @@ bool PBFTEngine::handlePartiallyPrepare(PrepareReq::Ptr _prepareReq)
     // decode the partiallyBlock
     _prepareReq->pBlock->decodeProposal(ref(*_prepareReq->block), true);
     bool allHit = m_txPool->initPartiallyBlock(_prepareReq->pBlock);
-    // update the totalTxs size and the missedTxs size
-    if (m_statisticHandler)
-    {
-        auto partiallyBlock = std::dynamic_pointer_cast<PartiallyBlock>(_prepareReq->pBlock);
-        m_statisticHandler->updateTxsMissInfo(
-            partiallyBlock->txsHash()->size(), partiallyBlock->missedTxs()->size());
-    }
-
     // hit all transactions
     if (allHit)
     {
@@ -2096,10 +2070,6 @@ bool PBFTEngine::requestMissedTxs(PrepareReq::Ptr _prepareReq)
     p2pMsg->setPacketType(GetMissedTxsPacket);
 
     m_service->asyncSendMessageByNodeID(targetNode, p2pMsg, nullptr);
-    if (m_statisticHandler)
-    {
-        m_statisticHandler->updateConsOutPacketsInfo(p2pMsg->packetType(), 1, p2pMsg->length());
-    }
 
     PBFTENGINE_LOG(DEBUG) << LOG_DESC("send GetMissedTxsPacket to the leader")
                           << LOG_KV("targetIdx", _prepareReq->idx)
@@ -2147,10 +2117,6 @@ void PBFTEngine::onReceiveGetMissedTxsRequest(
         p2pMsg->setPacketType(MissedTxsPacket);
 
         m_service->asyncSendMessageByNodeID(_session->nodeID(), p2pMsg, nullptr);
-        if (m_statisticHandler)
-        {
-            m_statisticHandler->updateConsOutPacketsInfo(p2pMsg->packetType(), 1, p2pMsg->length());
-        }
     }
     catch (std::exception const& _e)
     {
@@ -2171,11 +2137,6 @@ void PBFTEngine::handleP2PMessage(
             return;
         }
         auto self = std::weak_ptr<PBFTEngine>(shared_from_this());
-        // update the network-in statistic information
-        if (m_statisticHandler && (_message->packetType() != 0))
-        {
-            m_statisticHandler->updateConsInPacketsInfo(_message->packetType(), _message->length());
-        }
         switch (_message->packetType())
         {
         case PartiallyPreparePacket:

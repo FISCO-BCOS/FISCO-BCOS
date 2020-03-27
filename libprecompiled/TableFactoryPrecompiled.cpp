@@ -55,8 +55,8 @@ std::string TableFactoryPrecompiled::toString()
 }
 
 
-bytes TableFactoryPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param,
-    Address const& origin, Address const& sender)
+PrecompiledExecResult::Ptr TableFactoryPrecompiled::call(ExecutiveContext::Ptr context,
+    bytesConstRef param, Address const& origin, Address const& sender)
 {
     STORAGE_LOG(TRACE) << LOG_BADGE("TableFactoryPrecompiled") << LOG_DESC("call")
                        << LOG_KV("param", toHex(param));
@@ -65,7 +65,8 @@ bytes TableFactoryPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef
     bytesConstRef data = getParamData(param);
 
     dev::eth::ContractABI abi;
-    bytes out;
+    auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
+    callResult->gasPricer()->setMemUsed(param.size());
 
     if (func == name2Selector[TABLE_METHOD_OPT_STR])
     {  // openTable(string)
@@ -75,6 +76,7 @@ bytes TableFactoryPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef
 
         Address address;
         auto table = m_memoryTableFactory->openTable(tableName);
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::OpenTable);
         if (table)
         {
             TablePrecompiled::Ptr tablePrecompiled = make_shared<TablePrecompiled>();
@@ -87,8 +89,7 @@ bytes TableFactoryPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef
                                  << LOG_DESC("Open new table failed")
                                  << LOG_KV("table name", tableName);
         }
-
-        out = abi.abiIn("", address);
+        callResult->setExecResult(abi.abiIn("", address));
     }
     else if (func == name2Selector[TABLE_METHOD_CRT_STR_STR])
     {  // createTable(string,string,string)
@@ -157,6 +158,7 @@ bytes TableFactoryPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef
         {
             auto table =
                 m_memoryTableFactory->createTable(tableName, keyField, valueFiled, true, origin);
+            callResult->gasPricer()->appendOperation(InterfaceOpcode::CreateTable);
             if (!table)
             {  // table already exist
                 result = CODE_TABLE_NAME_ALREADY_EXIST;
@@ -172,14 +174,14 @@ bytes TableFactoryPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef
             STORAGE_LOG(ERROR) << "Create table failed: " << boost::diagnostic_information(e);
             result = e.errorCode();
         }
-        getErrorCodeOut(out, result);
+        getErrorCodeOut(callResult->mutableExecResult(), result);
     }
     else
     {
         STORAGE_LOG(ERROR) << LOG_BADGE("TableFactoryPrecompiled")
                            << LOG_DESC("call undefined function!");
     }
-    return out;
+    return callResult;
 }
 
 h256 TableFactoryPrecompiled::hash()

@@ -56,8 +56,8 @@ std::string KVTableFactoryPrecompiled::toString()
     return "KVTableFactory";
 }
 
-bytes KVTableFactoryPrecompiled::call(ExecutiveContext::Ptr context, bytesConstRef param,
-    Address const& origin, Address const& sender)
+PrecompiledExecResult::Ptr KVTableFactoryPrecompiled::call(ExecutiveContext::Ptr context,
+    bytesConstRef param, Address const& origin, Address const& sender)
 {
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
@@ -65,7 +65,8 @@ bytes KVTableFactoryPrecompiled::call(ExecutiveContext::Ptr context, bytesConstR
                            << LOG_KV("func", func);
 
     dev::eth::ContractABI abi;
-    bytes out;
+    auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
+    callResult->gasPricer()->setMemUsed(param.size());
 
     if (func == name2Selector[KVTABLE_FACTORY_METHOD_OPEN_TABLE])
     {  // openTable(string)
@@ -75,6 +76,7 @@ bytes KVTableFactoryPrecompiled::call(ExecutiveContext::Ptr context, bytesConstR
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("KVTableFactory") << LOG_KV("openTable", tableName);
         Address address;
         auto table = m_memoryTableFactory->openTable(tableName);
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::OpenTable);
         if (table)
         {
             auto kvTablePrecompiled = make_shared<KVTablePrecompiled>();
@@ -88,8 +90,7 @@ bytes KVTableFactoryPrecompiled::call(ExecutiveContext::Ptr context, bytesConstR
                 << LOG_KV("table name", tableName);
             BOOST_THROW_EXCEPTION(PrecompiledException(tableName + " does not exist"));
         }
-
-        out = abi.abiIn("", address);
+        callResult->setExecResult(abi.abiIn("", address));
     }
     else if (func == name2Selector[KVTABLE_FACTORY_METHOD_CREATE_TABLE])
     {  // createTable(string,string,string)
@@ -152,6 +153,7 @@ bytes KVTableFactoryPrecompiled::call(ExecutiveContext::Ptr context, bytesConstR
         {
             auto table =
                 m_memoryTableFactory->createTable(tableName, keyField, valueFiled, true, origin);
+            callResult->gasPricer()->appendOperation(InterfaceOpcode::CreateTable);
             if (!table)
             {  // table already exist
                 result = CODE_TABLE_NAME_ALREADY_EXIST;
@@ -167,14 +169,14 @@ bytes KVTableFactoryPrecompiled::call(ExecutiveContext::Ptr context, bytesConstR
                     "Permission denied. " + origin.hex() + " can't create table " + tableName));
             }
         }
-        getErrorCodeOut(out, result);
+        getErrorCodeOut(callResult->mutableExecResult(), result);
     }
     else
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("KVTableFactoryPrecompiled")
                                << LOG_DESC("call undefined function!");
     }
-    return out;
+    return callResult;
 }
 
 h256 KVTableFactoryPrecompiled::hash()

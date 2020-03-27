@@ -114,7 +114,7 @@ int64_t VM::verifyJumpDest(u256 const& _dest, bool _throw)
 void VM::caseCreate()
 {
     m_bounce = &VM::interpretCases;
-    m_runGas = VMSchedule::createGas;
+    m_runGas = m_vmSchedule->createGas;
 
     // Collect arguments.
     u256 const endowment = m_SP[0];
@@ -236,11 +236,11 @@ bool VM::caseCallSetup(evmc_message& o_msg, bytesRef& o_output)
     if (m_OP == Instruction::CALL && !destinationExists)
     {
         if (m_SP[2] > 0 || m_rev < EVMC_SPURIOUS_DRAGON)
-            m_runGas += VMSchedule::callNewAccount;
+            m_runGas += m_vmSchedule->callNewAccount;
     }
 
     if (haveValueArg && m_SP[2] > 0)
-        m_runGas += VMSchedule::valueTransferGas;
+        m_runGas += m_vmSchedule->valueTransferGas;
 
     size_t const sizesOffset = haveValueArg ? 3 : 2;
     u256 inputOffset = m_SP[sizesOffset];
@@ -279,7 +279,7 @@ bool VM::caseCallSetup(evmc_message& o_msg, bytesRef& o_output)
         if (value > 0)
         {
             o_msg.value = toEvmC(m_SP[2]);
-            o_msg.gas += VMSchedule::callStipend;
+            o_msg.gas += m_vmSchedule->callStipend;
             {
                 evmc_uint256be rawBalance;
                 m_context->fn_table->get_balance(&rawBalance, m_context, &m_message->destination);

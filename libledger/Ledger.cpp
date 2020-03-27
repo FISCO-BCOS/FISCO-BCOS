@@ -81,9 +81,23 @@ bool Ledger::initLedger(std::shared_ptr<LedgerParamInterface> _ledgerParams)
     // setSyncNum for cachedStorage
     m_dbInitializer->setSyncNumForCachedStorage(m_blockChain->number());
 
+    // init network statistic handler
+    initNetworkStatHandler();
+
     /// init blockVerifier, txPool, sync and consensus
     return (initBlockVerifier() && initTxPool() && initSync() && consensusInitFactory() &&
             initEventLogFilterManager());
+}
+
+void Ledger::initNetworkStatHandler()
+{
+    Ledger_LOG(INFO) << LOG_BADGE("initNetworkStatHandler");
+    m_networkStatHandler = std::make_shared<dev::stat::NetworkStatHandler>();
+    m_networkStatHandler->setGroupId(m_groupId);
+    m_networkStatHandler->setConsensusMsgType(m_param->mutableConsensusParam().consensusType);
+    m_service->appendNetworkStatHandlerByGroupID(m_groupId, m_networkStatHandler);
+    m_channelRPCServer->networkStatHandler()->appendGroupP2PStatHandler(
+        m_groupId, m_networkStatHandler);
 }
 
 /// init txpool
@@ -100,7 +114,6 @@ bool Ledger::initTxPool()
     m_txPool = std::make_shared<dev::txpool::TxPool>(
         m_service, m_blockChain, protocol_id, m_param->mutableTxPoolParam().txPoolLimit);
     m_txPool->setMaxBlockLimit(g_BCOSConfig.c_blockLimit);
-    m_txPool->start();
     Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_DESC("initTxPool SUCC");
     return true;
 }
@@ -126,8 +139,11 @@ bool Ledger::initBlockVerifier()
     std::shared_ptr<BlockChainImp> blockChain =
         std::dynamic_pointer_cast<BlockChainImp>(m_blockChain);
     blockVerifier->setNumberHash(boost::bind(&BlockChainImp::numberHash, blockChain, _1));
+    blockVerifier->setEvmFlags(m_param->mutableGenesisParam().evmFlags);
+
     m_blockVerifier = blockVerifier;
-    Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("initBlockVerifier SUCC");
+    Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("initBlockVerifier SUCC")
+                     << LOG_KV("evmFlags", m_param->mutableGenesisParam().evmFlags);
     return true;
 }
 

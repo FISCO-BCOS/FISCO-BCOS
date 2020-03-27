@@ -37,6 +37,8 @@ void Initializer::init(std::string const& _path)
         /// init log
         m_logInitializer = std::make_shared<LogInitializer>();
         m_logInitializer->initLog(pt);
+        // init the statLog
+        m_logInitializer->initStatLog(pt);
 
         /// init global config. must init before DB, for compatibility
         initGlobalConfig(pt);
@@ -64,7 +66,7 @@ void Initializer::init(std::string const& _path)
         m_ledgerInitializer->setChannelRPCServer(m_rpcInitializer->channelRPCServer());
         m_ledgerInitializer->initConfig(pt);
 
-        m_rpcInitializer->setLedgerManager(m_ledgerInitializer->ledgerManager());
+        m_rpcInitializer->setLedgerInitializer(m_ledgerInitializer);
         m_rpcInitializer->initConfig(pt);
         m_ledgerInitializer->startAll();
     }

@@ -158,14 +158,15 @@ BOOST_AUTO_TEST_CASE(EventLogFilter_test0)
     filter->updateNextBlockToProcess(-1);
     BOOST_CHECK_EQUAL(filter->getNextBlockToProcess(), -1);
 
-    filter->setResponseCallBack(
-        [](const std::string& _filterID, int32_t _result, const Json::Value& _logs) -> bool {
-            EVENT_LOG(INFO) << LOG_KV("result", _result) << LOG_KV("_filterID", _filterID);
-            (void)_logs;
-            return true;
-        });
+    filter->setResponseCallBack([](const std::string& _filterID, int32_t _result,
+                                    const Json::Value& _logs, GROUP_ID const& _groupId) -> bool {
+        EVENT_LOG(INFO) << LOG_KV("result", _result) << LOG_KV("_filterID", _filterID)
+                        << LOG_KV("groupId", _groupId);
+        (void)_logs;
+        return true;
+    });
 
-    auto r0 = filter->getResponseCallback()("aaa", -1, Json::Value());
+    auto r0 = filter->getResponseCallback()("aaa", -1, Json::Value(), 1);
     BOOST_CHECK_EQUAL(r0, true);
 }
 

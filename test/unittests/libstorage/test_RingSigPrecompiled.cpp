@@ -38,6 +38,9 @@ struct RingSigPrecompiledFixture
     {
         context = std::make_shared<ExecutiveContext>();
         ringSigPrecompiled = std::make_shared<RingSigPrecompiled>();
+        auto precompiledExecResultFactory =
+            std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+        ringSigPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     }
 
     ~RingSigPrecompiledFixture() {}
@@ -92,7 +95,8 @@ BOOST_AUTO_TEST_CASE(TestRingSigVerify)
         "gzOTM4NTQ4MjI2NzIxNTQ1MjU4NDYzOTcwNjA5NTMwMzQwOS4ifQ==";
     dev::eth::ContractABI abi;
     bytes in = abi.abiIn("ringSigVerify(string,string,string)", signature, message1, paramInfo);
-    bytes out = ringSigPrecompiled->call(context, bytesConstRef(&in));
+    auto callResult = ringSigPrecompiled->call(context, bytesConstRef(&in));
+    bytes out = callResult->execResult();
     bool real_result1 = true;
     bool result1;
     abi.abiOut(bytesConstRef(&out), result1);
@@ -101,7 +105,8 @@ BOOST_AUTO_TEST_CASE(TestRingSigVerify)
     // false
     std::string message2 = "ringSigVerify";
     in = abi.abiIn("ringSigVerify(string,string,string)", signature, message2, paramInfo);
-    out = ringSigPrecompiled->call(context, bytesConstRef(&in));
+    callResult = ringSigPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     bool real_result2 = false;
     bool result2;
     abi.abiOut(bytesConstRef(&out), result2);
@@ -112,7 +117,8 @@ BOOST_AUTO_TEST_CASE(ErrorFunc)
 {
     dev::eth::ContractABI abi;
     bytes in = abi.abiIn("ringSigVerify(string)", std::string("2AE3FFE2"));
-    bytes out = ringSigPrecompiled->call(context, bytesConstRef(&in));
+    auto callResult = ringSigPrecompiled->call(context, bytesConstRef(&in));
+    bytes out = callResult->execResult();
     s256 count = 1;
     abi.abiOut(bytesConstRef(&out), count);
     if (g_BCOSConfig.version() > RC2_VERSION)
@@ -131,7 +137,8 @@ BOOST_AUTO_TEST_CASE(InvalidInputs)
     dev::eth::ContractABI abi;
     bytes in = abi.abiIn("ringSigVerify(string,string,string)", std::string("2AE3FFE2"),
         std::string("2AE3FFE2"), std::string("2AE3FFE2"));
-    bytes out = ringSigPrecompiled->call(context, bytesConstRef(&in));
+    auto callResult = ringSigPrecompiled->call(context, bytesConstRef(&in));
+    bytes out = callResult->execResult();
     s256 count = 1;
     abi.abiOut(bytesConstRef(&out), count);
     if (g_BCOSConfig.version() > RC2_VERSION)
@@ -165,7 +172,8 @@ BOOST_AUTO_TEST_CASE(InvalidInputs)
         "MzQyNzY5MDAzMTg1ODE4NjQ4NjA1MDg1Mzc1Mzg4MjgxMTk0NjU2OTk0NjQzMzY0NDcxMTExNjgwMSBleHAyIDUxMi"
         "BleHAxIDMyIHNpZ24xIC0xIHNpZ24wIDE=";
     in = abi.abiIn("ringSigVerify(string,string,string)", signature2, message2, paramInfo2);
-    out = ringSigPrecompiled->call(context, bytesConstRef(&in));
+    callResult = ringSigPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
     if (g_BCOSConfig.version() > RC2_VERSION)

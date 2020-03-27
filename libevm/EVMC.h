@@ -82,7 +82,6 @@ public:
         auto mode = toRevision(_ext.evmSchedule());
         evmc_call_kind kind = _ext.isCreate() ? EVMC_CREATE : EVMC_CALL;
         uint32_t flags = _ext.staticCall() ? EVMC_STATIC : 0;
-
         // this is ensured by solidity compiler
         assert(flags != EVMC_STATIC || kind == EVMC_CALL);  // STATIC implies a CALL.
 

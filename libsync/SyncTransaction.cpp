@@ -226,13 +226,6 @@ void SyncTransaction::broadcastTransactions(std::shared_ptr<NodeIDs> _selectedPe
 
         auto msg = packet->toMessage(m_protocolId, _fromRpc);
         m_service->asyncSendMessageByNodeID(_p->nodeId, msg, CallbackFuncWithSession(), Options());
-
-        // update sended txs information
-        if (m_statisticHandler)
-        {
-            m_statisticHandler->updateSendedTxsInfo(txsSize, msg->length());
-        }
-
         SYNC_LOG(DEBUG) << LOG_BADGE("Tx") << LOG_DESC("Send transaction to peer")
                         << LOG_KV("txNum", int(txsSize))
                         << LOG_KV("fastForwardRemainTxs", _fastForwardRemainTxs)
@@ -316,10 +309,6 @@ void SyncTransaction::sendTxsStatus(
         txsStatusPacket->encode(blockNumber, it.second);
         auto p2pMsg = txsStatusPacket->toMessage(m_protocolId);
         m_service->asyncSendMessageByNodeID(it.first, p2pMsg, CallbackFuncWithSession(), Options());
-        if (m_statisticHandler)
-        {
-            m_statisticHandler->updateSendedTxsInfo(1, p2pMsg->length());
-        }
         SYNC_LOG(DEBUG) << LOG_BADGE("Tx") << LOG_DESC("Send transaction status to peer")
                         << LOG_KV("txNum", it.second->size())
                         << LOG_KV("toNode", it.first.abridged())

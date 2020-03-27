@@ -43,6 +43,9 @@ struct ConsensusPrecompiledFixture
         factory.initExecutiveContext(blockInfo, h256(0), context);
         consensusPrecompiled = std::make_shared<ConsensusPrecompiled>();
         memoryTableFactory = context->getMemoryTableFactory();
+        auto precompiledExecResultFactory =
+            std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+        consensusPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     }
 
     ~ConsensusPrecompiledFixture() {}
@@ -65,7 +68,8 @@ BOOST_AUTO_TEST_CASE(TestAddNode)
 
     LOG(INFO) << "Add a new node to sealer";
     bytes in = abi.abiIn("addSealer(string)", nodeID1);
-    bytes out = consensusPrecompiled->call(context, bytesConstRef(&in));
+    auto callResult = consensusPrecompiled->call(context, bytesConstRef(&in));
+    bytes out = callResult->execResult();
     s256 count = 0;
     abi.abiOut(bytesConstRef(&out), count);
     BOOST_TEST(count == 1u);
@@ -79,7 +83,8 @@ BOOST_AUTO_TEST_CASE(TestAddNode)
     BOOST_TEST(entries->get(0)->getField(NODE_TYPE) == NODE_TYPE_SEALER);
 
     LOG(INFO) << "Add the same node to sealer";
-    out = consensusPrecompiled->call(context, bytesConstRef(&in));
+    callResult = consensusPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     count = 0;
     abi.abiOut(bytesConstRef(&out), count);
     BOOST_TEST(count == 1u);
@@ -92,7 +97,8 @@ BOOST_AUTO_TEST_CASE(TestAddNode)
         "10bf7d8cdeff9b0e85a035b9138e06c6cab68e21767872b2ebbdb14701464c53a4d435b5648bedb18c7bb1ae68"
         "fb6b32df4cf4fbadbccf7123b4dce271157aa2");
     in = abi.abiIn("addSealer(string)", nodeID2);
-    out = consensusPrecompiled->call(context, bytesConstRef(&in));
+    callResult = consensusPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     count = 0;
     abi.abiOut(bytesConstRef(&out), count);
     BOOST_TEST(count == 1u);
@@ -104,7 +110,8 @@ BOOST_AUTO_TEST_CASE(TestAddNode)
 
     LOG(INFO) << "Add the second node to observer";
     in = abi.abiIn("addObserver(string)", nodeID2);
-    out = consensusPrecompiled->call(context, bytesConstRef(&in));
+    callResult = consensusPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     count = 0;
     abi.abiOut(bytesConstRef(&out), count);
     BOOST_TEST(count == 1u);
@@ -137,7 +144,8 @@ BOOST_AUTO_TEST_CASE(TestRemoveNode)
 
     LOG(INFO) << "Add a new node to sealer";
     bytes in = abi.abiIn("addSealer(string)", nodeID1);
-    bytes out = consensusPrecompiled->call(context, bytesConstRef(&in));
+    auto callResult = consensusPrecompiled->call(context, bytesConstRef(&in));
+    bytes out = callResult->execResult();
     s256 count = 0;
     abi.abiOut(bytesConstRef(&out), count);
     BOOST_TEST(count == 1u);
@@ -148,7 +156,8 @@ BOOST_AUTO_TEST_CASE(TestRemoveNode)
 
     LOG(INFO) << "Add a second node to sealer";
     in = abi.abiIn("addSealer(string)", nodeID2);
-    out = consensusPrecompiled->call(context, bytesConstRef(&in));
+    callResult = consensusPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     count = 0;
     abi.abiOut(bytesConstRef(&out), count);
     BOOST_TEST(count == 1u);
@@ -176,7 +185,8 @@ BOOST_AUTO_TEST_CASE(TestRemoveNode)
 
     LOG(INFO) << "Remove the sealer node";
     in = abi.abiIn("remove(string)", nodeID1);
-    out = consensusPrecompiled->call(context, bytesConstRef(&in));
+    callResult = consensusPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     count = 0;
     abi.abiOut(bytesConstRef(&out), count);
     BOOST_TEST(count == 1u);
@@ -196,14 +206,16 @@ BOOST_AUTO_TEST_CASE(TestRemoveNode)
 
     LOG(INFO) << "Remove the sealer node again";
     in = abi.abiIn("remove(string)", nodeID1);
-    out = consensusPrecompiled->call(context, bytesConstRef(&in));
+    callResult = consensusPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
     BOOST_TEST(count == 0u);
 
     LOG(INFO) << "Add the node again";
     in = abi.abiIn("addSealer(string)", nodeID1);
-    out = consensusPrecompiled->call(context, bytesConstRef(&in));
+    callResult = consensusPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     count = 0;
     abi.abiOut(bytesConstRef(&out), count);
     BOOST_TEST(count == 1u);
@@ -233,7 +245,8 @@ BOOST_AUTO_TEST_CASE(TestMultiAddAndRemove)
 
     LOG(INFO) << "Add a new node to sealer";
     bytes in = abi.abiIn("addSealer(string)", nodeID1);
-    bytes out = consensusPrecompiled->call(context, bytesConstRef(&in));
+    auto callResult = consensusPrecompiled->call(context, bytesConstRef(&in));
+    bytes out = callResult->execResult();
     s256 count = 0;
     abi.abiOut(bytesConstRef(&out), count);
     BOOST_TEST(count == 1u);
@@ -250,7 +263,7 @@ BOOST_AUTO_TEST_CASE(TestMultiAddAndRemove)
 
     LOG(INFO) << "Add a second node to sealer";
     in = abi.abiIn("addSealer(string)", nodeID2);
-    out = consensusPrecompiled->call(context, bytesConstRef(&in));
+    callResult = consensusPrecompiled->call(context, bytesConstRef(&in));
     count = 0;
     abi.abiOut(bytesConstRef(&out), count);
     BOOST_TEST(count == 1u);
@@ -264,7 +277,7 @@ BOOST_AUTO_TEST_CASE(TestMultiAddAndRemove)
     for (size_t i = 3; i < 1030; ++i)
     {
         in = abi.abiIn("addSealer(string)", nodeID2);
-        out = consensusPrecompiled->call(context, bytesConstRef(&in));
+        callResult = consensusPrecompiled->call(context, bytesConstRef(&in));
         count = 0;
         abi.abiOut(bytesConstRef(&out), count);
         BOOST_TEST(count == 1u);
@@ -279,7 +292,7 @@ BOOST_AUTO_TEST_CASE(TestMultiAddAndRemove)
     for (size_t i = 1030; i < 2030; ++i)
     {
         in = abi.abiIn("remove(string)", nodeID2);
-        out = consensusPrecompiled->call(context, bytesConstRef(&in));
+        callResult = consensusPrecompiled->call(context, bytesConstRef(&in));
         count = 0;
         abi.abiOut(bytesConstRef(&out), count);
         auto table = memoryTableFactory->openTable(SYS_CURRENT_STATE);
@@ -296,7 +309,8 @@ BOOST_AUTO_TEST_CASE(TestErrorNodeID)
     eth::ContractABI abi;
     std::string nodeID("12345678");
     bytes in = abi.abiIn("addSealer(string)", nodeID);
-    bytes out = consensusPrecompiled->call(context, bytesConstRef(&in));
+    auto callResult = consensusPrecompiled->call(context, bytesConstRef(&in));
+    bytes out = callResult->execResult();
     s256 count = 1;
     abi.abiOut(bytesConstRef(&out), count);
     if (g_BCOSConfig.version() > RC2_VERSION)
@@ -308,7 +322,8 @@ BOOST_AUTO_TEST_CASE(TestErrorNodeID)
         BOOST_TEST(count == -CODE_INVALID_NODEID);
     }
     in = abi.abiIn("addObserver(string)", nodeID);
-    out = consensusPrecompiled->call(context, bytesConstRef(&in));
+    callResult = consensusPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
     if (g_BCOSConfig.version() > RC2_VERSION)
@@ -320,7 +335,8 @@ BOOST_AUTO_TEST_CASE(TestErrorNodeID)
         BOOST_TEST(count == -CODE_INVALID_NODEID);
     }
     in = abi.abiIn("remove(string)", nodeID);
-    out = consensusPrecompiled->call(context, bytesConstRef(&in));
+    callResult = consensusPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
     if (g_BCOSConfig.version() > RC2_VERSION)
@@ -342,7 +358,8 @@ BOOST_AUTO_TEST_CASE(TestRemoveLastSealer)
         "fb6b32df4cf4fbadbccf7123b4dce271157aae");
 
     bytes in = abi.abiIn("addSealer(string)", nodeID1);
-    bytes out = consensusPrecompiled->call(context, bytesConstRef(&in));
+    auto callResult = consensusPrecompiled->call(context, bytesConstRef(&in));
+    bytes out = callResult->execResult();
     s256 count = 0;
     abi.abiOut(bytesConstRef(&out), count);
     BOOST_TEST(count == 1u);
@@ -351,14 +368,16 @@ BOOST_AUTO_TEST_CASE(TestRemoveLastSealer)
         "10bf7d8cdeff9b0e85a035b9138e06c6cab68e21767872b2ebbdb14701464c53a4d435b5648bedb18c7bb1ae68"
         "fb6b32df4cf4fbadbccf7123b4dce271157aab");
     in = abi.abiIn("addObserver(string)", nodeID2);
-    out = consensusPrecompiled->call(context, bytesConstRef(&in));
+    callResult = consensusPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     count = 0;
     abi.abiOut(bytesConstRef(&out), count);
     BOOST_TEST(count == 1u);
 
     LOG(INFO) << "Try to remove the sealer node";
     in = abi.abiIn("remove(string)", nodeID1);
-    out = consensusPrecompiled->call(context, bytesConstRef(&in));
+    callResult = consensusPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
     if (g_BCOSConfig.version() > RC2_VERSION)
@@ -370,7 +389,8 @@ BOOST_AUTO_TEST_CASE(TestRemoveLastSealer)
         BOOST_TEST(count == -CODE_LAST_SEALER);
     }
     in = abi.abiIn("addObserver(string)", nodeID1);
-    out = consensusPrecompiled->call(context, bytesConstRef(&in));
+    callResult = consensusPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
     if (g_BCOSConfig.version() > RC2_VERSION)
@@ -387,7 +407,8 @@ BOOST_AUTO_TEST_CASE(errFunc)
 {
     eth::ContractABI abi;
     bytes in = abi.abiIn("add(string)", std::string("test"));
-    bytes out = consensusPrecompiled->call(context, bytesConstRef(&in));
+    auto callResult = consensusPrecompiled->call(context, bytesConstRef(&in));
+    bytes out = callResult->execResult();
 }
 
 BOOST_AUTO_TEST_SUITE_END()

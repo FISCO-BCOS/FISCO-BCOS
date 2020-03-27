@@ -42,8 +42,9 @@ public:
     PaillierPrecompiled();
     virtual ~PaillierPrecompiled(){};
 
-    bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context, bytesConstRef param,
-        Address const& origin = Address(), Address const& sender = Address()) override;
+    PrecompiledExecResult::Ptr call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+        bytesConstRef param, Address const& origin = Address(),
+        Address const& sender = Address()) override;
 
 private:
     std::shared_ptr<CallPaillier> m_callPaillier;

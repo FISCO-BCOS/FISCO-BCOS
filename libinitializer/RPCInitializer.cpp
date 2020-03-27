@@ -30,9 +30,11 @@
 #include "libledger/LedgerManager.h"
 #include "librpc/Rpc.h"  // for Rpc
 #include "librpc/SafeHttpServer.h"
+#include <libstat/ChannelNetworkStatHandler.h>
 
 using namespace dev;
 using namespace dev::initializer;
+using namespace dev::channel;
 
 void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt)
 {
@@ -57,6 +59,9 @@ void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt
     m_channelRPCServer->setListenPort(listenPort);
     m_channelRPCServer->setSSLContext(m_sslContext);
     m_channelRPCServer->setService(m_p2pService);
+    // set networkStatHandler for channelRPCServer
+    m_networkStatHandler = createNetWorkStatHandler(_pt);
+    m_channelRPCServer->setNetworkStatHandler(m_networkStatHandler);
 
     auto ioService = std::make_shared<boost::asio::io_service>();
 
@@ -71,7 +76,11 @@ void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt
 
     // start channelServer before initialize ledger, because amdb-proxy depends on channel
     auto rpcEntity = new rpc::Rpc(nullptr, nullptr);
-    m_channelRPCHttpServer = new ModularServer<rpc::Rpc>(rpcEntity);
+
+    auto modularServer = new ModularServer<rpc::Rpc>(rpcEntity);
+    modularServer->setNetworkStatHandler(m_networkStatHandler);
+    m_channelRPCHttpServer = modularServer;
+
     m_rpcForChannel.reset(rpcEntity, [](rpc::Rpc*) {});
     m_channelRPCHttpServer->addConnector(m_channelRPCServer.get());
     try
@@ -94,6 +103,7 @@ void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt
             ListenPortIsUsed() << errinfo_comment(
                 "Please check channel_listenIP and channel_listen_port are valid"));
     }
+    m_networkStatHandler->start();
     INITIALIZER_LOG(INFO) << LOG_BADGE("RPCInitializer")
                           << LOG_DESC("ChannelRPCHttpServer started.");
     m_channelRPCServer->setCallbackSetter(std::bind(&rpc::Rpc::setCurrentTransactionCallback,
@@ -120,13 +130,13 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
     try
     {
         // m_rpcForChannel is created in initChannelRPCServer, now complete m_rpcForChannel
-        m_rpcForChannel->setLedgerManager(m_ledgerManager);
+        m_rpcForChannel->setLedgerInitializer(m_ledgerInitializer);
         m_rpcForChannel->setService(m_p2pService);
         // event log filter callback
         m_channelRPCServer->setEventFilterCallback(
             [this](const std::string& _json, uint32_t _version,
-                std::function<bool(
-                    const std::string& _filterID, int32_t _result, const Json::Value& _logs)>
+                std::function<bool(const std::string& _filterID, int32_t _result,
+                    const Json::Value& _logs, GROUP_ID const& _groupId)>
                     _respCallback,
                 std::function<bool()> _activeCallback) -> int32_t {
                 auto params =
@@ -174,7 +184,7 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
             });
 
         // Don't to set destructor, the ModularServer will destruct.
-        auto rpcEntity = new rpc::Rpc(m_ledgerManager, m_p2pService);
+        auto rpcEntity = new rpc::Rpc(m_ledgerInitializer, m_p2pService);
         m_safeHttpServer.reset(
             new SafeHttpServer(listenIP, httpListenPort), [](SafeHttpServer* p) { (void)p; });
         m_jsonrpcHttpServer = new ModularServer<rpc::Rpc>(rpcEntity);
@@ -207,4 +217,23 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
                      << LOG_KV("EINFO", boost::diagnostic_information(e)) << std::endl;
         exit(1);
     }
+}
+
+dev::stat::ChannelNetworkStatHandler::Ptr RPCInitializer::createNetWorkStatHandler(
+    boost::property_tree::ptree const& _pt)
+{
+    auto networkStatHandler = std::make_shared<dev::stat::ChannelNetworkStatHandler>("SDK");
+    // get flush interval in seconds
+    int64_t flushInterval = _pt.get<int64_t>("log.stat_flush_interval", 60);
+    if (flushInterval <= 0)
+    {
+        BOOST_THROW_EXCEPTION(
+            dev::InvalidConfig() << errinfo_comment(
+                "init network-stat-handler failed, log.stat_flush_interval must be positive!"));
+    }
+    INITIALIZER_LOG(DEBUG) << LOG_DESC("createNetWorkStatHandler")
+                           << LOG_KV("flushInterval(s)", flushInterval);
+
+    networkStatHandler->setFlushInterval(flushInterval * 1000);
+    return networkStatHandler;
 }

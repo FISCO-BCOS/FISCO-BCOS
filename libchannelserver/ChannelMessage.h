@@ -69,6 +69,7 @@ public:
 
     virtual void encode(bytes& buffer)
     {
+        m_length = HEADER_LENGTH + m_data->size();
         uint32_t lengthN = htonl(HEADER_LENGTH + m_data->size());
         uint16_t typeN = htons(m_type);
         int32_t resultN = htonl(m_result);

@@ -23,6 +23,7 @@
 #include <jsonrpccpp/common/exception.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/CommonJS.h>
+#include <libinitializer/LedgerInitializer.h>
 #include <librpc/Rpc.h>
 #include <test/tools/libutils/Common.h>
 #include <test/tools/libutils/TestOutputHelper.h>
@@ -32,6 +33,7 @@ using namespace jsonrpc;
 using namespace dev;
 using namespace dev::rpc;
 using namespace dev::ledger;
+using namespace dev::initializer;
 
 namespace dev
 {
@@ -45,14 +47,17 @@ public:
         m_service = std::make_shared<FakesService>();
         std::string configurationPath =
             getTestPath().string() + "/fisco-bcos-data/group.10.genesis";
+
         m_ledgerManager = std::make_shared<LedgerManager>();
+        m_ledgerInitializer = std::make_shared<LedgerInitializer>();
+        m_ledgerInitializer->setLedgerManager(m_ledgerManager);
         std::shared_ptr<LedgerInterface> ledger =
             std::make_shared<FakeLedger>(m_service, groupId, m_keyPair, "", configurationPath);
         auto ledgerParams = std::make_shared<LedgerParam>();
         ledgerParams->init(configurationPath);
         ledger->initLedger(ledgerParams);
         m_ledgerManager->insertLedger(groupId, ledger);
-        rpc = std::make_shared<Rpc>(m_ledgerManager, m_service);
+        rpc = std::make_shared<Rpc>(m_ledgerInitializer, m_service);
     }
 
 public:
@@ -60,6 +65,7 @@ public:
     KeyPair m_keyPair = KeyPair::create();
     std::shared_ptr<FakesService> m_service;
     std::shared_ptr<LedgerManager> m_ledgerManager;
+    LedgerInitializer::Ptr m_ledgerInitializer;
 
     std::string clientVersion = "2.0";
     std::string listenIp = "127.0.0.1";

@@ -80,11 +80,6 @@ public:
     void onNotifyWorker(std::function<void()> const& _f) { m_onNotifyWorker = _f; }
     void onNotifySyncTrans(std::function<void()> const& _f) { m_onNotifySyncTrans = _f; }
 
-    void setStatisticHandler(dev::p2p::StatisticHandler::Ptr _statisticHandler)
-    {
-        m_statisticHandler = _statisticHandler;
-    }
-
 private:
     bool checkSession(std::shared_ptr<dev::p2p::P2PSession> _session);
     bool checkMessage(dev::p2p::P2PMessage::Ptr _msg);
@@ -124,7 +119,6 @@ protected:
     std::shared_ptr<dev::ThreadPool> m_txsWorker;
     std::shared_ptr<dev::ThreadPool> m_txsSender;
     std::shared_ptr<dev::ThreadPool> m_txsReceiver;
-    dev::p2p::StatisticHandler::Ptr m_statisticHandler;
 };
 
 class DownloadBlocksContainer

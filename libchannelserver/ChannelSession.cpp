@@ -124,6 +124,12 @@ void ChannelSession::asyncSendMessage(Message::Ptr request,
         std::shared_ptr<bytes> p_buffer = std::make_shared<bytes>();
         request->encode(*p_buffer);
         writeBuffer(p_buffer);
+        // update the group outgoing traffic
+        if (request->groupID() != -1)
+        {
+            m_networkStat->updateGroupResponseTraffic(
+                request->groupID(), request->type(), request->length());
+        }
     }
     catch (std::exception& e)
     {
@@ -392,6 +398,7 @@ void ChannelSession::onMessage(ChannelException e, Message::Ptr message)
 
             return;
         }
+        // m_networkStat->updateIncomingTraffic(message->type(), message->length());
 
         auto response_callback = findResponseCallbackBySeq(message->seq());
         if (response_callback != nullptr)

@@ -63,6 +63,7 @@
 
 // CryptoPP defines byte in the global namespace, so must we.
 using byte = uint8_t;
+using VMFlagType = uint64_t;
 
 // catch exceptions
 #define DEV_IGNORE_EXCEPTIONS(X) \

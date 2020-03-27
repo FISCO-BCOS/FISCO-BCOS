@@ -24,6 +24,7 @@
  */
 
 #pragma once
+#include "Common.h"
 #include "Log.h"
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>

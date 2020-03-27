@@ -111,6 +111,15 @@ struct GenesisParam
 {
     std::string nodeListMark;
     uint64_t timeStamp;
+    // evm related flags
+    // Extensible parameters for passing VM configuration
+    // bit 64 is currently occupied, indicating whether to use FreeStorageVMSchedule
+    VMFlagType evmFlags = 0;
+};
+
+struct EVMFlags
+{
+    static const VMFlagType FreeStorageGas = ((VMFlagType)1 << (sizeof(VMFlagType) * 8 - 1));
 };
 
 struct EventLogFilterManagerParams
@@ -190,6 +199,7 @@ private:
     void initRPBFTConsensusIniConfig(boost::property_tree::ptree const& pt);
     void initSyncConfig(boost::property_tree::ptree const& pt);
     void initEventLogFilterManagerConfig(boost::property_tree::ptree const& pt);
+    void setEVMFlags(boost::property_tree::ptree const& _pt);
 
 private:
     dev::GROUP_ID m_groupID;

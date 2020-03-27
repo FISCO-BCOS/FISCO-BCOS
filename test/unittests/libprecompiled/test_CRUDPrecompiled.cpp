@@ -62,6 +62,8 @@ struct CRUDPrecompiledFixture
         tableFactoryPrecompiled = std::make_shared<dev::precompiled::TableFactoryPrecompiled>();
         tableFactoryPrecompiled->setMemoryTableFactory(memoryTableFactory);
         crudPrecompiled = context->getPrecompiled(Address(0x1002));
+        auto precompiledExecResultFactory = std::make_shared<PrecompiledExecResultFactory>();
+        crudPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     }
 
     ~CRUDPrecompiledFixture() {}
@@ -82,7 +84,8 @@ BOOST_AUTO_TEST_CASE(CRUD)
     std::string tableName = "t_test", tableName2 = "t_demo", key = "name",
                 valueField = "item_id,item_name";
     bytes param = abi.abiIn("createTable(string,string,string)", tableName, key, valueField);
-    bytes out = tableFactoryPrecompiled->call(context, bytesConstRef(&param));
+    auto callResult = tableFactoryPrecompiled->call(context, bytesConstRef(&param));
+    bytes out = callResult->execResult();
     u256 createResult = 0;
     abi.abiOut(&out, createResult);
     BOOST_TEST(createResult == 0u);
@@ -91,7 +94,8 @@ BOOST_AUTO_TEST_CASE(CRUD)
     param.clear();
     out.clear();
     param = abi.abiIn("desc(string)", tableName);
-    out = crudPrecompiled->call(context, bytesConstRef(&param));
+    callResult = crudPrecompiled->call(context, bytesConstRef(&param));
+    out = callResult->execResult();
     string keyField, valueField2;
     abi.abiOut(&out, keyField, valueField2);
     BOOST_TEST(keyField == "name");
@@ -103,7 +107,8 @@ BOOST_AUTO_TEST_CASE(CRUD)
     param.clear();
     out.clear();
     param = abi.abiIn(insertFunc, tableName, key, entryStr, std::string(""));
-    out = crudPrecompiled->call(context, bytesConstRef(&param));
+    callResult = crudPrecompiled->call(context, bytesConstRef(&param));
+    out = callResult->execResult();
     u256 insertResult = 0;
     abi.abiOut(&out, insertResult);
     BOOST_TEST(insertResult == 1u);
@@ -113,7 +118,8 @@ BOOST_AUTO_TEST_CASE(CRUD)
     param.clear();
     out.clear();
     param = abi.abiIn(insertFunc, tableName2, key, entryStr, std::string(""));
-    out = crudPrecompiled->call(context, bytesConstRef(&param));
+    callResult = crudPrecompiled->call(context, bytesConstRef(&param));
+    out = callResult->execResult();
     insertResult = 0;
     abi.abiOut(&out, insertResult);
     BOOST_TEST(insertResult == CODE_TABLE_NOT_EXIST);
@@ -123,7 +129,8 @@ BOOST_AUTO_TEST_CASE(CRUD)
     param.clear();
     out.clear();
     param = abi.abiIn(insertFunc, tableName, key, entryStr, std::string(""));
-    out = crudPrecompiled->call(context, bytesConstRef(&param));
+    callResult = crudPrecompiled->call(context, bytesConstRef(&param));
+    out = callResult->execResult();
     insertResult = 0;
     abi.abiOut(&out, insertResult);
     BOOST_TEST(insertResult == CODE_PARSE_ENTRY_ERROR);
@@ -134,7 +141,8 @@ BOOST_AUTO_TEST_CASE(CRUD)
     param.clear();
     out.clear();
     param = abi.abiIn(selectFunc, tableName, key, conditionStr, std::string(""));
-    out = crudPrecompiled->call(context, bytesConstRef(&param));
+    callResult = crudPrecompiled->call(context, bytesConstRef(&param));
+    out = callResult->execResult();
     std::string selectResult;
     abi.abiOut(&out, selectResult);
     Json::Value entryJson;
@@ -146,7 +154,8 @@ BOOST_AUTO_TEST_CASE(CRUD)
     param.clear();
     out.clear();
     param = abi.abiIn(selectFunc, tableName2, key, conditionStr, std::string(""));
-    out = crudPrecompiled->call(context, bytesConstRef(&param));
+    callResult = crudPrecompiled->call(context, bytesConstRef(&param));
+    out = callResult->execResult();
     u256 selectResult2 = 0;
     abi.abiOut(&out, selectResult2);
     BOOST_TEST(selectResult2 == CODE_TABLE_NOT_EXIST);
@@ -156,7 +165,8 @@ BOOST_AUTO_TEST_CASE(CRUD)
     param.clear();
     out.clear();
     param = abi.abiIn(selectFunc, tableName, key, conditionStr, std::string(""));
-    out = crudPrecompiled->call(context, bytesConstRef(&param));
+    callResult = crudPrecompiled->call(context, bytesConstRef(&param));
+    out = callResult->execResult();
     selectResult2 = 0;
     abi.abiOut(&out, selectResult2);
     BOOST_TEST(selectResult2 == CODE_PARSE_CONDITION_ERROR);
@@ -168,7 +178,8 @@ BOOST_AUTO_TEST_CASE(CRUD)
     param.clear();
     out.clear();
     param = abi.abiIn(updateFunc, tableName, key, entryStr, conditionStr, std::string(""));
-    out = crudPrecompiled->call(context, bytesConstRef(&param));
+    callResult = crudPrecompiled->call(context, bytesConstRef(&param));
+    out = callResult->execResult();
     u256 updateResult = 0;
     abi.abiOut(&out, updateResult);
     BOOST_TEST(updateResult == 1u);
@@ -179,7 +190,8 @@ BOOST_AUTO_TEST_CASE(CRUD)
     param.clear();
     out.clear();
     param = abi.abiIn(updateFunc, tableName2, key, entryStr, conditionStr, std::string(""));
-    out = crudPrecompiled->call(context, bytesConstRef(&param));
+    callResult = crudPrecompiled->call(context, bytesConstRef(&param));
+    out = callResult->execResult();
     updateResult = 0;
     abi.abiOut(&out, updateResult);
     BOOST_TEST(updateResult == CODE_TABLE_NOT_EXIST);
@@ -190,7 +202,8 @@ BOOST_AUTO_TEST_CASE(CRUD)
     param.clear();
     out.clear();
     param = abi.abiIn(updateFunc, tableName, key, entryStr, conditionStr, std::string(""));
-    out = crudPrecompiled->call(context, bytesConstRef(&param));
+    callResult = crudPrecompiled->call(context, bytesConstRef(&param));
+    out = callResult->execResult();
     updateResult = 0;
     abi.abiOut(&out, updateResult);
     BOOST_TEST(updateResult == CODE_PARSE_ENTRY_ERROR);
@@ -201,7 +214,8 @@ BOOST_AUTO_TEST_CASE(CRUD)
     param.clear();
     out.clear();
     param = abi.abiIn(updateFunc, tableName, key, entryStr, conditionStr, std::string(""));
-    out = crudPrecompiled->call(context, bytesConstRef(&param));
+    callResult = crudPrecompiled->call(context, bytesConstRef(&param));
+    out = callResult->execResult();
     updateResult = 0;
     abi.abiOut(&out, updateResult);
     BOOST_TEST(updateResult == CODE_PARSE_CONDITION_ERROR);
@@ -212,7 +226,8 @@ BOOST_AUTO_TEST_CASE(CRUD)
     param.clear();
     out.clear();
     param = abi.abiIn(removeFunc, tableName, key, conditionStr, std::string(""));
-    out = crudPrecompiled->call(context, bytesConstRef(&param));
+    callResult = crudPrecompiled->call(context, bytesConstRef(&param));
+    out = callResult->execResult();
     u256 removeResult = 0;
     abi.abiOut(&out, removeResult);
     BOOST_TEST(removeResult == 1u);
@@ -222,7 +237,8 @@ BOOST_AUTO_TEST_CASE(CRUD)
     param.clear();
     out.clear();
     param = abi.abiIn(removeFunc, tableName2, key, conditionStr, std::string(""));
-    out = crudPrecompiled->call(context, bytesConstRef(&param));
+    callResult = crudPrecompiled->call(context, bytesConstRef(&param));
+    out = callResult->execResult();
     removeResult = 0;
     abi.abiOut(&out, removeResult);
     BOOST_TEST(removeResult == CODE_TABLE_NOT_EXIST);
@@ -232,7 +248,8 @@ BOOST_AUTO_TEST_CASE(CRUD)
     param.clear();
     out.clear();
     param = abi.abiIn(removeFunc, tableName, key, conditionStr, std::string(""));
-    out = crudPrecompiled->call(context, bytesConstRef(&param));
+    callResult = crudPrecompiled->call(context, bytesConstRef(&param));
+    out = callResult->execResult();
     removeResult = 0;
     abi.abiOut(&out, removeResult);
     BOOST_TEST(removeResult == CODE_PARSE_CONDITION_ERROR);
@@ -242,7 +259,8 @@ BOOST_AUTO_TEST_CASE(CRUD)
     param.clear();
     out.clear();
     param = abi.abiIn(removeFunc, tableName, key, conditionStr, std::string(""));
-    out = crudPrecompiled->call(context, bytesConstRef(&param));
+    callResult = crudPrecompiled->call(context, bytesConstRef(&param));
+    out = callResult->execResult();
     removeResult = 0;
     abi.abiOut(&out, removeResult);
     BOOST_TEST(removeResult == CODE_CONDITION_OPERATION_UNDEFINED);
@@ -250,7 +268,8 @@ BOOST_AUTO_TEST_CASE(CRUD)
     // function not exist
     std::string errorFunc = "errorFunc(string,string,string,string)";
     param = abi.abiIn(errorFunc, tableName, key, conditionStr, std::string(""));
-    out = crudPrecompiled->call(context, bytesConstRef(&param));
+    callResult = crudPrecompiled->call(context, bytesConstRef(&param));
+    out = callResult->execResult();
     u256 funcResult = 0;
     abi.abiOut(&out, funcResult);
     BOOST_TEST(funcResult == CODE_UNKNOW_FUNCTION_CALL);

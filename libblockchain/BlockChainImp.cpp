@@ -551,6 +551,14 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam, bool
                 {
                     initParam.stateType = s[3];
                 }
+                if (g_BCOSConfig.version() >= V2_4_0)
+                {
+                    initParam.evmFlags = boost::lexical_cast<VMFlagType>(s[4]);
+                }
+                BLOCKCHAIN_LOG(INFO) << LOG_BADGE("checkAndBuildGenesisBlock")
+                                     << LOG_DESC("Load genesis config from extraData")
+                                     << LOG_KV("stateType", initParam.stateType)
+                                     << LOG_KV("evmFlags", initParam.evmFlags);
             }
             catch (std::exception& e)
             {

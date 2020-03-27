@@ -42,6 +42,7 @@ using namespace dev::rpc;
 using namespace dev::sync;
 using namespace dev::ledger;
 using namespace dev::precompiled;
+using namespace dev::initializer;
 
 static const int64_t maxTransactionGasLimit = 0x7fffffffffffffff;
 static const int64_t gasPrice = 1;
@@ -59,34 +60,11 @@ std::map<int, std::string> dev::rpc::RPCMsg{{RPCExceptionType::Success, "Success
         "Don't send request to this node who doesn't belong to the group"},
     {RPCExceptionType::IncompleteInitialization, "RPC module initialization is incomplete."}};
 
-Rpc::Rpc(std::shared_ptr<dev::ledger::LedgerManager> _ledgerManager,
-    std::shared_ptr<dev::p2p::P2PInterface> _service)
-  : m_ledgerManager(_ledgerManager), m_service(_service)
+Rpc::Rpc(
+    LedgerInitializer::Ptr _ledgerInitializer, std::shared_ptr<dev::p2p::P2PInterface> _service)
+  : m_service(_service)
 {
-    registerSyncChecker();
-}
-
-void Rpc::registerSyncChecker()
-{
-    if (m_ledgerManager)
-    {
-        auto groupList = m_ledgerManager->getGroupListForRpc();
-        for (auto const& group : groupList)
-        {
-            auto txPool = m_ledgerManager->txPool(group);
-            txPool->registerSyncStatusChecker([this, group]() {
-                try
-                {
-                    checkSyncStatus(group);
-                }
-                catch (std::exception const& _e)
-                {
-                    return false;
-                }
-                return true;
-            });
-        }
-    }
+    setLedgerInitializer(_ledgerInitializer);
 }
 
 std::shared_ptr<dev::ledger::LedgerManager> Rpc::ledgerManager()
@@ -1129,7 +1107,7 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
             auto transactionCallback = *currentTransactionCallback;
             clientProtocolversion = (*m_transactionCallbackVersion)();
             tx->setRpcCallback(
-                [transactionCallback, clientProtocolversion](
+                [transactionCallback, clientProtocolversion, _groupID](
                     LocalisedTransactionReceipt::Ptr receipt, dev::bytesConstRef input) {
                     Json::Value response;
                     if (clientProtocolversion > 0)
@@ -1164,7 +1142,7 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
                     }
 
                     auto receiptContent = response.toStyledString();
-                    transactionCallback(receiptContent);
+                    transactionCallback(receiptContent, _groupID);
                 });
         }
         // calculate the sha3 before submit into the transaction pool
@@ -1359,5 +1337,407 @@ Json::Value Rpc::getTransactionReceiptByHashWithProof(
     {
         BOOST_THROW_EXCEPTION(
             JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
+    }
+}
+
+
+Json::Value Rpc::generateGroup(
+    int _groupID, const std::string& _timestamp, const std::set<std::string>& _sealerList)
+{
+    RPC_LOG(INFO) << LOG_BADGE("generateGroup") << LOG_DESC("request")
+                  << LOG_KV("groupID", _groupID) << LOG_KV("timestamp", _timestamp)
+                  << LOG_KV("sealerList.size", _sealerList.size());
+
+    checkNodeVersionForGroupMgr("generateGroup");
+
+    Json::Value response;
+
+    if (!checkGroupIDForGroupMgr(_groupID, response))
+    {
+        return response;
+    }
+
+    if (!checkTimestamp(_timestamp))
+    {
+        response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
+        response["message"] = "Invalid timestamp: " + _timestamp;
+        return response;
+    }
+
+    std::string errorInfo;
+    if (!checkSealerID(_sealerList, errorInfo))
+    {
+        response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
+        response["message"] = "Invalid sealer ID(s): " + errorInfo;
+        return response;
+    }
+
+    if (!checkConnection(_sealerList, errorInfo))
+    {
+        response["code"] = LedgerManagementStatusCode::PEERS_NOT_CONNECTED;
+        response["message"] = "Peer(s) not connected: " + errorInfo;
+        return response;
+    }
+
+    try
+    {
+        ledgerManager()->generateGroup(_groupID, _timestamp, _sealerList);
+        response["code"] = LedgerManagementStatusCode::SUCCESS;
+        response["message"] = "Group " + std::to_string(_groupID) + " generated successfully";
+    }
+#define CATCH_GROUP_ALREADY_EXISTS_EXCEPTION(e)                                        \
+    catch (e const&)                                                                   \
+    {                                                                                  \
+        response["code"] = LedgerManagementStatusCode::GROUP_ALREADY_EXISTS;           \
+        response["message"] = "Group " + std::to_string(_groupID) + " already exists"; \
+    }
+    CATCH_GROUP_ALREADY_EXISTS_EXCEPTION(GroupIsRunning)
+    CATCH_GROUP_ALREADY_EXISTS_EXCEPTION(GroupIsStopping)
+    CATCH_GROUP_ALREADY_EXISTS_EXCEPTION(GroupAlreadyDeleted)
+    CATCH_GROUP_ALREADY_EXISTS_EXCEPTION(GroupAlreadyStopped)
+#undef CATCH_GROUP_ALREADY_EXISTS_EXCEPTION
+    catch (GenesisConfAlreadyExists const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GENESIS_CONF_ALREADY_EXISTS;
+        response["message"] =
+            "Genesis config file for group " + std::to_string(_groupID) + " already exists";
+    }
+    catch (GroupConfAlreadyExists const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_CONF_ALREADY_EXIST;
+        response["message"] =
+            "Group config file for group " + std::to_string(_groupID) + " already exists";
+    }
+    catch (std::exception const& _e)
+    {
+        response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
+        response["message"] = _e.what();
+    }
+    return response;
+}
+
+Json::Value Rpc::startGroup(int _groupID)
+{
+    RPC_LOG(INFO) << LOG_BADGE("startGroup") << LOG_DESC("request") << LOG_KV("groupID", _groupID);
+
+    checkNodeVersionForGroupMgr("startGroup");
+
+    Json::Value response;
+
+    if (!checkGroupIDForGroupMgr(_groupID, response))
+    {
+        return response;
+    }
+
+    try
+    {
+        bool success = m_ledgerInitializer->initLedgerByGroupID(_groupID);
+        if (!success)
+        {
+            throw new dev::Exception("Group" + std::to_string(_groupID) + " initialized failed");
+        }
+
+        ledgerManager()->startByGroupID(_groupID);
+
+        response["code"] = LedgerManagementStatusCode::SUCCESS;
+        response["message"] = "Group " + std::to_string(_groupID) + " started successfully";
+    }
+    catch (GenesisConfNotFound const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GENESIS_CONF_NOT_FOUND;
+        response["message"] =
+            "Genesis config file for group " + std::to_string(_groupID) + " not found";
+    }
+    catch (GroupConfNotFound const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_CONF_NOT_FOUND;
+        response["message"] =
+            "Group config file for group " + std::to_string(_groupID) + " not found";
+    }
+    catch (GroupNotFound const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_NOT_FOUND;
+        response["message"] = "Group " + std::to_string(_groupID) + " not found";
+    }
+    catch (GroupIsRunning const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_ALREADY_RUNNING;
+        response["message"] = "Group " + std::to_string(_groupID) + " is already running";
+    }
+    catch (GroupIsStopping const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_IS_STOPPING;
+        response["message"] = "Group " + std::to_string(_groupID) + " is stopping";
+    }
+    catch (GroupAlreadyDeleted)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_ALREADY_DELETED;
+        response["message"] = "Group " + std::to_string(_groupID) + " has been deleted";
+    }
+    catch (std::exception const& _e)
+    {
+        response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
+        response["message"] = _e.what();
+    }
+
+    return response;
+}
+
+Json::Value Rpc::stopGroup(int _groupID)
+{
+    RPC_LOG(INFO) << LOG_BADGE("stopGroup") << LOG_DESC("request") << LOG_KV("groupID", _groupID);
+
+    checkNodeVersionForGroupMgr("stopGroup");
+
+    Json::Value response;
+
+    if (!checkGroupIDForGroupMgr(_groupID, response))
+    {
+        return response;
+    }
+
+    try
+    {
+        ledgerManager()->stopByGroupID(_groupID);
+        response["code"] = LedgerManagementStatusCode::SUCCESS;
+        response["message"] = "Group " + std::to_string(_groupID) + " stopped successfully";
+    }
+    catch (GroupNotFound const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_NOT_FOUND;
+        response["message"] = "Group " + std::to_string(_groupID) + " not found";
+    }
+    catch (GroupIsStopping const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_IS_STOPPING;
+        response["message"] = "Group " + std::to_string(_groupID) + " is stopping";
+    }
+    catch (GroupAlreadyStopped const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_ALREADY_STOPPED;
+        response["message"] = "Group " + std::to_string(_groupID) + " has already been stopped";
+    }
+    catch (GroupAlreadyDeleted const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_ALREADY_DELETED;
+        response["message"] = "Group " + std::to_string(_groupID) + " has already been deleted";
+    }
+    catch (std::exception const& _e)
+    {
+        response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
+        response["message"] = _e.what();
+    }
+    return response;
+}
+
+Json::Value Rpc::removeGroup(int _groupID)
+{
+    RPC_LOG(INFO) << LOG_BADGE("removeGroup") << LOG_DESC("request") << LOG_KV("groupID", _groupID);
+
+    checkNodeVersionForGroupMgr("generateGroup");
+
+    Json::Value response;
+
+    if (!checkGroupIDForGroupMgr(_groupID, response))
+    {
+        return response;
+    }
+
+    try
+    {
+        ledgerManager()->removeByGroupID(_groupID);
+        response["code"] = LedgerManagementStatusCode::SUCCESS;
+        response["message"] = "Group " + std::to_string(_groupID) + " deleted successfully";
+    }
+    catch (GroupNotFound const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_NOT_FOUND;
+        response["message"] = "Group " + std::to_string(_groupID) + " not found";
+    }
+    catch (GroupIsRunning const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_ALREADY_RUNNING;
+        response["message"] = "Group " + std::to_string(_groupID) + " is running";
+    }
+    catch (GroupIsStopping const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_IS_STOPPING;
+        response["message"] = "Group " + std::to_string(_groupID) + " is stopping";
+    }
+    catch (GroupAlreadyDeleted const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_ALREADY_DELETED;
+        response["message"] = "Group " + std::to_string(_groupID) + " has already been deleted";
+    }
+    catch (std::exception const& _e)
+    {
+        response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
+        response["message"] = _e.what();
+    }
+    return response;
+}
+
+Json::Value Rpc::recoverGroup(int _groupID)
+{
+    RPC_LOG(INFO) << LOG_BADGE("recoverGroup") << LOG_DESC("request")
+                  << LOG_KV("groupID", _groupID);
+
+    checkNodeVersionForGroupMgr("recoverGroup");
+
+    Json::Value response;
+
+    if (!checkGroupIDForGroupMgr(_groupID, response))
+    {
+        return response;
+    }
+
+    try
+    {
+        ledgerManager()->recoverByGroupID(_groupID);
+        response["code"] = LedgerManagementStatusCode::SUCCESS;
+        response["message"] = "Group " + std::to_string(_groupID) + " recovered successfully";
+    }
+    catch (GroupNotFound const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_NOT_FOUND;
+        response["message"] = "Group " + std::to_string(_groupID) + " not found";
+    }
+#define CATCH_GROUP_NOT_DELETED_EXCEPTION(e)                                                 \
+    catch (e const&)                                                                         \
+    {                                                                                        \
+        response["code"] = LedgerManagementStatusCode::GROUP_HAS_NOT_DELETED;                \
+        response["message"] = "Group " + std::to_string(_groupID) + " has not been deleted"; \
+    }
+    CATCH_GROUP_NOT_DELETED_EXCEPTION(GroupIsRunning)
+    CATCH_GROUP_NOT_DELETED_EXCEPTION(GroupIsStopping)
+    CATCH_GROUP_NOT_DELETED_EXCEPTION(GroupAlreadyStopped)
+#undef CATCH_GROUP_NOT_DELETED_EXCEPTION
+    catch (std::exception const& _e)
+    {
+        response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
+        response["message"] = _e.what();
+    }
+    return response;
+}
+
+Json::Value Rpc::queryGroupStatus(int _groupID)
+{
+    RPC_LOG(INFO) << LOG_BADGE("queryGroupStatus") << LOG_DESC("request")
+                  << LOG_KV("groupID", _groupID);
+
+    checkNodeVersionForGroupMgr("queryGroupStatus");
+
+    Json::Value response;
+    if (!checkGroupIDForGroupMgr(_groupID, response))
+    {
+        response["status"] = "";
+        return response;
+    }
+
+    auto status = ledgerManager()->queryGroupStatus(_groupID);
+    switch (status)
+    {
+    case LedgerStatus::INEXISTENT:
+        response["status"] = "INEXISTENT";
+        break;
+    case LedgerStatus::RUNNING:
+        response["status"] = "RUNNING";
+        break;
+    case LedgerStatus::STOPPING:
+        response["status"] = "STOPPING";
+        break;
+    case LedgerStatus::STOPPED:
+        response["status"] = "STOPPED";
+        break;
+    case LedgerStatus::DELETED:
+        response["status"] = "DELETED";
+        break;
+    default:
+        BOOST_THROW_EXCEPTION(UnknownGroupStatus());
+    }
+    response["code"] = LedgerManagementStatusCode::SUCCESS;
+    response["message"] = "";
+    return response;
+}
+
+void Rpc::checkNodeVersionForGroupMgr(const char* _methodName)
+{
+    if (g_BCOSConfig.version() < V2_2_0)
+    {
+        RPC_LOG(ERROR) << _methodName << " only support after by v2.2.0";
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            RPCExceptionType::InvalidRequest, "method stopGroup not support this version"));
+    }
+}
+
+bool Rpc::checkConnection(const std::set<std::string>& _sealerList, std::string& _errorInfo)
+{
+    bool flag = true;
+    for (auto& sealer : _sealerList)
+    {
+        auto nodeID = NodeID(sealer);
+        if (nodeID == service()->id())
+        {
+            continue;
+        }
+
+        if (!service()->isConnected(nodeID))
+        {
+            _errorInfo += sealer + ", ";
+            flag = false;
+        }
+    }
+
+    if (!flag)
+    {
+        _errorInfo = _errorInfo.substr(0, _errorInfo.length() - 2);
+    }
+    return flag;
+}
+
+bool Rpc::checkGroupIDForGroupMgr(int _groupID, Json::Value& _response)
+{
+    if (_groupID < 1 || _groupID > dev::maxGroupID)
+    {
+        _response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
+        _response["message"] = "GroupID should be between 1 and " + std::to_string(maxGroupID);
+        return false;
+    }
+    return true;
+}
+
+bool Rpc::checkSealerID(const std::set<std::string>& _sealerList, std::string& _errorInfo)
+{
+    bool flag = true;
+    for (auto& sealer : _sealerList)
+    {
+        if (!dev::isHex(sealer) || sealer.length() != 128 || sealer.compare(0, 2, "0x") == 0)
+        {
+            _errorInfo += sealer + ", ";
+            flag = false;
+        }
+    }
+
+    if (!flag)
+    {
+        _errorInfo = _errorInfo.substr(0, _errorInfo.length() - 2);
+    }
+    return flag;
+}
+
+bool Rpc::checkTimestamp(const std::string& _timestamp)
+{
+    try
+    {
+        int64_t cmp = boost::lexical_cast<int64_t>(_timestamp);
+        if (cmp < 0)
+        {
+            return false;
+        }
+        return _timestamp == std::to_string(cmp);
+    }
+    catch (...)
+    {
+        return false;
     }
 }
