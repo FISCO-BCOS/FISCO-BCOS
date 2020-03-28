@@ -78,46 +78,52 @@ PrecompiledExecResult::Ptr PermissionPrecompiled::call(
         // insert(string tableName,string addr)
         std::string tableName, addr;
         abi.abiOut(data, tableName, addr);
-        addPrefixToUserTable(tableName);
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("insert func")
-                               << LOG_KV("tableName", tableName) << LOG_KV("address", addr);
-        bool isValidAddress = true;
-        try
+        do
         {
-            Address address(addr);
-            (void)address;
-        }
-        catch (...)
-        {
-            isValidAddress = false;
-        }
+            if (g_BCOSConfig.version() >= V2_5_0 && tableName == SYS_ACCESS_TABLE)
+            {
+                result = CODE_COMMITTEE_PERMISSION;
+                PRECOMPILED_LOG(WARNING)
+                    << LOG_BADGE("PermissionPrecompiled")
+                    << LOG_DESC("Committee permission control by ChainGovernancePrecompiled")
+                    << LOG_KV("return", result);
+                break;
+            }
+            addPrefixToUserTable(tableName);
+            Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
 
-        Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
+            auto condition = table->newCondition();
+            condition->EQ(SYS_AC_ADDRESS, addr);
+            auto entries = table->select(tableName, condition);
+            if (entries->size() != 0u)
+            {
+                PRECOMPILED_LOG(WARNING) << LOG_BADGE("PermissionPrecompiled")
+                                         << LOG_DESC("tableName and address exist");
+                result = CODE_TABLE_AND_ADDRESS_EXIST;
+                break;
+            }
+            if (tableName.size() > USER_TABLE_NAME_MAX_LENGTH)
+            {
+                PRECOMPILED_LOG(ERROR)
+                    << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("tableName overflow")
+                    << LOG_KV("tableName", tableName);
+                result = CODE_TABLE_NAME_OVERFLOW;
+                break;
+            }
 
-        auto condition = table->newCondition();
-        condition->EQ(SYS_AC_ADDRESS, addr);
-        auto entries = table->select(tableName, condition);
-        if (entries->size() != 0u)
-        {
-            PRECOMPILED_LOG(WARNING)
-                << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("tableName and address exist");
-            result = CODE_TABLE_AND_ADDRESS_EXIST;
-        }
-        else if (tableName.size() > USER_TABLE_NAME_MAX_LENGTH)
-        {
-            PRECOMPILED_LOG(ERROR)
-                << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("tableName overflow")
-                << LOG_KV("tableName", tableName);
-            result = CODE_TABLE_NAME_OVERFLOW;
-        }
-        else if (!isValidAddress)
-        {
-            PRECOMPILED_LOG(ERROR) << LOG_BADGE("PermissionPrecompiled")
-                                   << LOG_DESC("address invalid") << LOG_KV("address", addr);
-            result = CODE_ADDRESS_INVALID;
-        }
-        else
-        {
+            try
+            {
+                Address address(addr);
+                (void)address;
+            }
+            catch (...)
+            {
+                PRECOMPILED_LOG(ERROR) << LOG_BADGE("PermissionPrecompiled")
+                                       << LOG_DESC("address invalid") << LOG_KV("address", addr);
+                result = CODE_ADDRESS_INVALID;
+                break;
+            }
+
             auto entry = table->newEntry();
             entry->setField(SYS_AC_TABLE_NAME, tableName);
             entry->setField(SYS_AC_ADDRESS, addr);
@@ -125,10 +131,11 @@ PrecompiledExecResult::Ptr PermissionPrecompiled::call(
                 boost::lexical_cast<std::string>(context->blockInfo().number + 1));
             int count = table->insert(tableName, entry, std::make_shared<AccessOptions>(origin));
             result = count;
-            PRECOMPILED_LOG(DEBUG)
-                << LOG_BADGE("PermissionPrecompiled")
-                << LOG_KV("insert_success", (count == storage::CODE_NO_AUTHORIZED ? false : true));
-        }
+            PRECOMPILED_LOG(INFO) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("insert func")
+                                  << LOG_KV("tableName", tableName) << LOG_KV("address", addr)
+                                  << LOG_KV("return", count);
+        } while (0);
+
         getErrorCodeOut(callResult->mutableExecResult(), result);
     }
     else if (func == name2Selector[AUP_METHOD_REM])
@@ -143,8 +150,7 @@ PrecompiledExecResult::Ptr PermissionPrecompiled::call(
         getErrorCodeOut(callResult->mutableExecResult(), result);
     }
     else if (func == name2Selector[AUP_METHOD_QUE])
-    {
-        // queryByName(string table_name)
+    {  // queryByName(string table_name)
         std::string tableName;
         abi.abiOut(data, tableName);
         addPrefixToUserTable(tableName);

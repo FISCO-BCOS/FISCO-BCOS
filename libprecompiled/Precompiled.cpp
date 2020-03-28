@@ -41,21 +41,15 @@ uint32_t Precompiled::getFuncSelector(std::string const& _functionName)
 storage::Table::Ptr Precompiled::openTable(
     ExecutiveContext::Ptr context, const std::string& tableName)
 {
-    TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
-        std::dynamic_pointer_cast<TableFactoryPrecompiled>(
-            context->getPrecompiled(Address(0x1001)));
-    return tableFactoryPrecompiled->getMemoryTableFactory()->openTable(tableName);
+    return context->getMemoryTableFactory()->openTable(tableName);
 }
 
 storage::Table::Ptr Precompiled::createTable(
     std::shared_ptr<dev::blockverifier::ExecutiveContext> context, const std::string& tableName,
     const std::string& keyField, const std::string& valueField, Address const& origin)
 {
-    TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
-        std::dynamic_pointer_cast<TableFactoryPrecompiled>(
-            context->getPrecompiled(Address(0x1001)));
-    return tableFactoryPrecompiled->getMemoryTableFactory()->createTable(
-        tableName, keyField, valueField, true, origin, true);
+    return context->getMemoryTableFactory()->createTable(
+        tableName, keyField, valueField, false, origin, true);
 }
 
 bool Precompiled::checkAuthority(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,

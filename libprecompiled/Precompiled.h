@@ -92,7 +92,7 @@ protected:
     std::shared_ptr<dev::storage::Table> createTable(
         std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
         const std::string& _tableName, const std::string& _keyField, const std::string& _valueField,
-        Address const& origin);
+        Address const& origin = Address());
     bool checkAuthority(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
         Address const& _origin, Address const& _contract);
 
