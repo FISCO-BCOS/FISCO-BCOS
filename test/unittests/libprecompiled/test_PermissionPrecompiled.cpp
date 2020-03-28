@@ -95,7 +95,6 @@ BOOST_AUTO_TEST_CASE(insert)
     callResult = authorityPrecompiled->call(context, bytesConstRef(&in));
     out = callResult->execResult();
     // query
-    table = memoryTableFactory->openTable(SYS_ACCESS_TABLE);
     entries = table->select(precompiled::getTableName(tableName), table->newCondition());
     BOOST_TEST(entries->size() == 1u);
 
@@ -105,7 +104,6 @@ BOOST_AUTO_TEST_CASE(insert)
     callResult = authorityPrecompiled->call(context, bytesConstRef(&in));
     out = callResult->execResult();
     // query
-    table = memoryTableFactory->openTable(SYS_ACCESS_TABLE);
     entries = table->select(precompiled::getTableName(tableName), table->newCondition());
     BOOST_TEST(entries->size() == 2u);
 }
@@ -171,9 +169,7 @@ BOOST_AUTO_TEST_CASE(grantWrite_contract)
     s256 ret = 0;
     abi.abiOut(&out, ret);
     BOOST_TEST(ret == CODE_CONTRACT_NOT_EXIST);
-    auto table = memoryTableFactory->openTable(SYS_ACCESS_TABLE);
-
-    table = memoryTableFactory->openTable(SYS_TABLES);
+    auto table = memoryTableFactory->openTable(SYS_TABLES);
     auto entry = table->newEntry();
     entry->setField("table_name", tableName);
     entry->setField("key_field", "key");

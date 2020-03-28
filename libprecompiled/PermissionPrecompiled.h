@@ -33,11 +33,6 @@ contract PermissionPrecompiled {
 }
 #endif
 
-/// _sys_table_access_ table fields
-const std::string SYS_AC_TABLE_NAME = "table_name";
-const std::string SYS_AC_ADDRESS = "address";
-const std::string SYS_AC_ENABLENUM = "enable_num";
-
 class PermissionPrecompiled : public dev::precompiled::Precompiled
 {
 public:

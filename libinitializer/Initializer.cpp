@@ -21,6 +21,7 @@
  */
 
 #include "Initializer.h"
+#include "Common.h"
 #include "GlobalConfigureInitializer.h"
 
 using namespace dev;
