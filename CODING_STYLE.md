@@ -179,7 +179,7 @@ Prefer exception to bool/int return type.
 Logging should be performed at appropriate verbosities depending on the logging message.
 The more likely a message is to repeat (and thus cause noise) the higher in verbosity it should be.
 
-We use [easylogging++](https://github.com/muflihun/easyloggingpp). Some rules to keep in mind:
+We use boost log, some rules to keep in mind:
 
 | Level   | Description                              |
 | ------- | ---------------------------------------- |
