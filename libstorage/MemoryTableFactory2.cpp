@@ -177,6 +177,9 @@ Table::Ptr MemoryTableFactory2::createTable(const std::string& tableName,
                                  << LOG_KV("table name", tableName);
             BOOST_THROW_EXCEPTION(StorageException(result, "create table permission denied"));
         }
+        STORAGE_LOG(INFO) << LOG_BADGE("MemoryTableFactory2") << LOG_DESC("createTable")
+                          << LOG_KV("table name", tableName) << LOG_KV("keyField", keyField)
+                          << LOG_KV("valueField", valueField);
     }
     return openTable(tableName, authorityFlag, isPara);
 }

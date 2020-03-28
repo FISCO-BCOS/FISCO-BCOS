@@ -40,8 +40,23 @@ namespace precompiled
 {
 #define PRECOMPILED_LOG(LEVEL) LOG(LEVEL) << "[PRECOMPILED]"
 
+/// _sys_table_access_ table fields
+const std::string SYS_AC_TABLE_NAME = "table_name";
+const std::string SYS_AC_ADDRESS = "address";
+const std::string SYS_AC_ENABLENUM = "enable_num";
+
 enum PrecompiledError : int
 {
+    // ChainGovernancePrecompiled -52099 ~ -52000
+    CODE_OPERATOR_NOT_EXIST = -52007,
+    CODE_OPERATOR_EXIST = -52006,
+    CODE_COMMITTEE_MEMBER_CANNOT_BE_OPERATOR = -52005,
+    CODE_OPERATOR_CANNOT_BE_COMMITTEE_MEMBER = -52004,
+    CODE_INVALID_THRESHOLD = -52003,
+    CODE_INVALID_REQUEST = -52002,
+    CODE_COMMITTEE_MEMBER_NOT_EXIST = -52001,
+    CODE_COMMITTEE_MEMBER_EXIST = -52000,
+
     // ContractLifeCyclePrecompiled -51999 ~ -51900
     CODE_INVALID_NO_AUTHORIZED = -51905,
     CODE_INVALID_TABLE_NOT_EXIST = -51904,
@@ -85,6 +100,7 @@ enum PrecompiledError : int
     CODE_INVALID_NODEID = -51100,
 
     // PermissionPrecompiled -51099 ~ -51000
+    CODE_COMMITTEE_PERMISSION = -51004,
     CODE_CONTRACT_NOT_EXIST = -51003,
     CODE_TABLE_NAME_OVERFLOW = -51002,
     CODE_TABLE_AND_ADDRESS_NOT_EXIST = -51001,

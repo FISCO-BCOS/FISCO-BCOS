@@ -103,21 +103,19 @@ Table::Ptr ParallelConfigPrecompiled::openTable(dev::blockverifier::ExecutiveCon
         tableName = PARA_CONFIG_TABLE_PREFIX_SHORT + contractAddress.hex();
     }
 
-    TableFactoryPrecompiled::Ptr tableFactoryPrecompiled =
-        dynamic_pointer_cast<TableFactoryPrecompiled>(context->getPrecompiled(Address(0x1001)));
-    if (!tableFactoryPrecompiled)
+    auto tableFactory = context->getMemoryTableFactory();
+    if (!tableFactory)
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("ParallelConfigPrecompiled")
                                << LOG_DESC("TableFactoryPrecompiled has not been initrailized");
         return nullptr;
     }
 
-    auto table =
-        tableFactoryPrecompiled->getMemoryTableFactory()->openTable(tableName, false, false);
+    auto table = tableFactory->openTable(tableName, false, false);
 
     if (!table && needCreate)
     {  //__dat_transfer__ is not exist, then create it first.
-        table = tableFactoryPrecompiled->getMemoryTableFactory()->createTable(
+        table = tableFactory->createTable(
             tableName, PARA_KEY_NAME, PARA_VALUE_NAMES, false, origin, false);
 
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ParallelConfigPrecompiled") << LOG_DESC("open table")

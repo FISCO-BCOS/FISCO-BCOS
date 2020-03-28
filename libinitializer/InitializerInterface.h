@@ -22,6 +22,8 @@
  * @date: 2018-10-23
  */
 #pragma once
+#include <string>
+
 namespace dev
 {
 namespace initializer

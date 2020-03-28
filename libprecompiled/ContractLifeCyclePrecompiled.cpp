@@ -89,7 +89,20 @@ bool ContractLifeCyclePrecompiled::checkPermission(
             }
         }
     }
-
+    if (g_BCOSConfig.version() >= V2_5_0)
+    {
+        auto acTable = openTable(context, SYS_ACCESS_TABLE);
+        auto condition = acTable->newCondition();
+        condition->EQ(SYS_AC_ADDRESS, origin.hex());
+        auto entries = acTable->select(SYS_ACCESS_TABLE, condition);
+        if (entries->size() != 0u)
+        {
+            PRECOMPILED_LOG(INFO) << LOG_BADGE("ContractLifeCyclePrecompiled")
+                                  << LOG_DESC("committee member is permitted to manage contract")
+                                  << LOG_KV("origin", origin.hex());
+            return true;
+        }
+    }
     return false;
 }
 
