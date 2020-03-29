@@ -172,6 +172,8 @@ private:
 
     unsigned m_txsStatusGossipMaxPeers = 5;
 
+    std::atomic_bool m_running = {false};
+
 private:
     void forwardRemainingTxs();
 

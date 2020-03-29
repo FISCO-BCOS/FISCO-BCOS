@@ -29,6 +29,7 @@
 
 #include "Common.h"
 #include "Table.h"
+#include "libconfig/GlobalConfigure.h"
 #include <libdevcore/Common.h>
 #include <tbb/pipeline.h>
 #include <tbb/tbb_thread.h>
@@ -710,14 +711,27 @@ bool Condition::process(Entry::Ptr entry)
                         it.second.right.first)
                     {
                         if (it.second.left.second == fieldIt->second)
-                        {
-                            // point hited
+                        {  // EQ
                             continue;
                         }
                         else
                         {
-                            // point missed
                             return false;
+                        }
+                    }
+                    if (g_BCOSConfig.version() >= V2_3_0)
+                    {
+                        if (it.second.left.second == it.second.right.second &&
+                            !it.second.left.first && !it.second.right.first)
+                        {
+                            if (it.second.left.second != fieldIt->second)
+                            {  // NE
+                                continue;
+                            }
+                            else
+                            {
+                                return false;
+                            }
                         }
                     }
 
@@ -731,14 +745,14 @@ bool Condition::process(Entry::Ptr entry)
                         }
 
                         if (it.second.left.first)
-                        {
+                        {  // GE, rhs should greater equal lhs
                             if (!(lhs <= rhs))
                             {
                                 return false;
                             }
                         }
                         else
-                        {
+                        {  // GT
                             if (!(lhs < rhs))
                             {
                                 return false;
@@ -758,12 +772,12 @@ bool Condition::process(Entry::Ptr entry)
                         if (it.second.right.first)
                         {
                             if (!(lhs >= rhs))
-                            {
+                            {  // LE
                                 return false;
                             }
                         }
                         else
-                        {
+                        {  // LT, rhs should less than lhs
                             if (!(lhs > rhs))
                             {
                                 return false;
