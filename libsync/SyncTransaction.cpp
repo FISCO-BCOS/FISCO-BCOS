@@ -36,14 +36,26 @@ static unsigned const c_maxSendTransactions = 1000;
 void SyncTransaction::start()
 {
     startWorking();
+    m_running.store(true);
+    SYNC_LOG(DEBUG) << LOG_DESC("start SyncTransaction") << LOG_KV("groupId", m_groupId);
 }
 
 void SyncTransaction::stop()
 {
-    doneWorking();
-    stopWorking();
-    // will not restart worker, so terminate it
-    terminate();
+    if (m_running.load())
+    {
+        m_running.store(false);
+        doneWorking();
+        stopWorking();
+        // will not restart worker, so terminate it
+        terminate();
+        SYNC_LOG(DEBUG) << LOG_DESC("stop SyncTransaction") << LOG_KV("groupId", m_groupId);
+    }
+    else
+    {
+        SYNC_LOG(DEBUG) << LOG_DESC("SyncTransaction already stopped")
+                        << LOG_KV("groupId", m_groupId);
+    }
 }
 
 void SyncTransaction::doWork()
@@ -115,8 +127,11 @@ void SyncTransaction::sendTransactions(std::shared_ptr<Transactions> _ts,
 
     // send the transactions from RPC
     broadcastTransactions(selectedPeers, _ts, _fastForwardRemainTxs, _startIndex, true);
-    if (!_fastForwardRemainTxs)
+    if (!_fastForwardRemainTxs && m_running.load())
     {
+        // Added sleep to prevent excessive redundant transaction message packets caused by
+        // transaction status spreading too fast
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
         sendTxsStatus(_ts, selectedPeers);
     }
 }

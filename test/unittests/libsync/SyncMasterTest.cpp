@@ -239,7 +239,7 @@ BOOST_AUTO_TEST_CASE(MaintainTransactionsTest)
 
     BOOST_CHECK_EQUAL(service->getAsyncSendSizeByNodeID(NodeID(101)), 2);
     // the transaction won't be sent to other nodes if received from P2P
-    BOOST_CHECK_EQUAL(service->getAsyncSendSizeByNodeID(NodeID(102)), 3);
+    BOOST_CHECK_EQUAL(service->getAsyncSendSizeByNodeID(NodeID(102)), 2);
 
     // test transaction already sent
     sync->maintainTransactions();
@@ -247,7 +247,7 @@ BOOST_AUTO_TEST_CASE(MaintainTransactionsTest)
     cout << "Msg number: " << service->getAsyncSendSizeByNodeID(NodeID(102)) << endl;
 
     BOOST_CHECK_EQUAL(service->getAsyncSendSizeByNodeID(NodeID(101)), 2);
-    BOOST_CHECK_EQUAL(service->getAsyncSendSizeByNodeID(NodeID(102)), 3);
+    BOOST_CHECK_EQUAL(service->getAsyncSendSizeByNodeID(NodeID(102)), 2);
 }
 
 BOOST_AUTO_TEST_CASE(MaintainBlocksTest)
