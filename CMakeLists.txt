@@ -34,7 +34,7 @@ if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
         execute_process(COMMAND ${GIT_EXECUTABLE} submodule update --init --recursive --remote
                         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
                         RESULT_VARIABLE GIT_SUBMOD_RESULT)
-        execute_process(COMMAND ${GIT_EXECUTABLE} checkout 2f757f79f1f304bfc56a24ed2f8b342c891c0594
+        execute_process(COMMAND ${GIT_EXECUTABLE} checkout release-2.3.0-bsn
                         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/evmc
                         RESULT_VARIABLE CHECKOUT_OUTPUT_RESULT)
         if(NOT GIT_SUBMOD_RESULT EQUAL "0")
