@@ -2,6 +2,9 @@ FROM ubuntu:18.04
 
 LABEL maintainer service@fisco.com.cn
 
+ARG SOURCE_BRANCH
+ENV SOURCE=${SOURCE_BRANCH:-master}
+
 WORKDIR /
 
 RUN apt-get -q update && apt-get install -qy --no-install-recommends \
@@ -11,7 +14,7 @@ RUN apt-get -q update && apt-get install -qy --no-install-recommends \
     && apt-get install -qy --no-install-recommends tzdata \
     && dpkg-reconfigure --frontend noninteractive tzdata \
     && git clone https://github.com/FISCO-BCOS/FISCO-BCOS.git \
-    && cd FISCO-BCOS && git checkout release-2.3.0-bsn \
+    && cd FISCO-BCOS && git checkout ${SOURCE} \
     && cmake . -DBUILD_GM=ON && make && make install \
     && cd / && rm -rf FISCO-BCOS \
     && apt-get purge git cmake build-essential -y \ 

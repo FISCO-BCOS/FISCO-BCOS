@@ -34,9 +34,9 @@ if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
         execute_process(COMMAND ${GIT_EXECUTABLE} submodule update --init --recursive --remote
                         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
                         RESULT_VARIABLE GIT_SUBMOD_RESULT)
-        execute_process(COMMAND ${GIT_EXECUTABLE} checkout release-2.3.0-bsn
+        execute_process(COMMAND ${GIT_EXECUTABLE} checkout b64ff8beab704916dfe86ff2c2e4185c08ddcef5
                         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/evmc
-                        RESULT_VARIABLE CHECKOUT_OUTPUT_RESULT)
+                        RESULT_VARIABLE CHECKOUT_OUTPUT_RESULT OUTPUT_QUIET ERROR_QUIET)
         if(NOT GIT_SUBMOD_RESULT EQUAL "0")
             message(FATAL_ERROR "git submodule update --init failed with ${GIT_SUBMOD_RESULT}, please checkout submodules")
         endif()
