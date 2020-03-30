@@ -20,7 +20,6 @@
  */
 
 #include "Rpc.h"
-#include "Common.h"
 #include "JsonHelper.h"
 #include "libledger/LedgerManager.h"  // for LedgerManager
 #include <jsonrpccpp/common/exception.h>
@@ -142,6 +141,8 @@ void Rpc::checkSyncStatus(int _groupID)
 {
     // Refuse transaction if far syncing
     auto syncModule = ledgerManager()->sync(_groupID);
+    checkLedgerStatus(syncModule, "sync", "checkSyncStatus");
+
     if (syncModule->blockNumberFarBehind())
     {
         BOOST_THROW_EXCEPTION(
@@ -156,8 +157,11 @@ std::string Rpc::getSystemConfigByKey(int _groupID, const std::string& key)
         RPC_LOG(INFO) << LOG_BADGE("getSystemConfigByKey") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID) << LOG_KV("key", key);
 
-        checkRequest(_groupID);
         auto blockchain = ledgerManager()->blockChain(_groupID);
+        checkLedgerStatus(blockchain, "BlockChain", "getSystemConfigByKey");
+
+        checkRequest(_groupID);
+
         if (!isValidSystemConfig(key))
         {
             BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::InvalidSystemConfig,
@@ -182,8 +186,10 @@ std::string Rpc::getBlockNumber(int _groupID)
         RPC_LOG(DEBUG) << LOG_BADGE("getBlockNumber") << LOG_DESC("request")
                        << LOG_KV("groupID", _groupID);
 
-        checkRequest(_groupID);
         auto blockchain = ledgerManager()->blockChain(_groupID);
+        checkLedgerStatus(blockchain, "BlockChain", "getBlockNumber");
+
+        checkRequest(_groupID);
         return toJS(blockchain->number());
     }
     catch (JsonRpcException& e)
@@ -205,6 +211,9 @@ std::string Rpc::getPbftView(int _groupID)
         RPC_LOG(INFO) << LOG_BADGE("getPbftView") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID);
 
+        auto consensus = ledgerManager()->consensus(_groupID);
+        checkLedgerStatus(consensus, "consensus", "getPbftView");
+
         checkRequest(_groupID);
         auto ledgerParam = ledgerManager()->getParamByGroupId(_groupID);
         auto consensusParam = ledgerParam->mutableConsensusParam();
@@ -215,7 +224,6 @@ std::string Rpc::getPbftView(int _groupID)
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(RPCExceptionType::NoView, RPCMsg[RPCExceptionType::NoView]));
         }
-        auto consensus = ledgerManager()->consensus(_groupID);
         if (!consensus)
         {
             BOOST_THROW_EXCEPTION(
@@ -242,8 +250,10 @@ Json::Value Rpc::getSealerList(int _groupID)
         RPC_LOG(INFO) << LOG_BADGE("getSealerList") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID);
 
-        checkRequest(_groupID);
         auto blockchain = ledgerManager()->blockChain(_groupID);
+        checkLedgerStatus(blockchain, "blockchain", "getSealerList");
+
+        checkRequest(_groupID);
         auto sealers = blockchain->sealerList();
 
         Json::Value response = Json::Value(Json::arrayValue);
@@ -284,8 +294,10 @@ Json::Value Rpc::getEpochSealersList(int _groupID)
         RPC_LOG(INFO) << LOG_BADGE("getEpochSealersList") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID);
 
-        checkRequest(_groupID);
         auto consensus = ledgerManager()->consensus(_groupID);
+        checkLedgerStatus(consensus, "consensus", "getEpochSealersList");
+        checkRequest(_groupID);
+
         // get the chosed sealer list
         auto sealers = consensus->consensusList();
         Json::Value response = Json::Value(Json::arrayValue);
@@ -313,8 +325,10 @@ Json::Value Rpc::getObserverList(int _groupID)
         RPC_LOG(INFO) << LOG_BADGE("getObserverList") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID);
 
-        checkRequest(_groupID);
         auto blockchain = ledgerManager()->blockChain(_groupID);
+        checkLedgerStatus(blockchain, "blockchain", "getObserverList");
+        checkRequest(_groupID);
+
         auto observers = blockchain->observerList();
 
         Json::Value response = Json::Value(Json::arrayValue);
@@ -342,8 +356,10 @@ Json::Value Rpc::getConsensusStatus(int _groupID)
         RPC_LOG(INFO) << LOG_BADGE("getConsensusStatus") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID);
 
-        checkRequest(_groupID);
         auto consensus = ledgerManager()->consensus(_groupID);
+        checkLedgerStatus(consensus, "consensus", "getConsensusStatus");
+
+        checkRequest(_groupID);
 
         std::string status = consensus->consensusStatus();
         Json::Reader reader;
@@ -372,8 +388,10 @@ Json::Value Rpc::getSyncStatus(int _groupID)
         RPC_LOG(INFO) << LOG_BADGE("getSyncStatus") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID);
 
-        checkRequest(_groupID);
         auto sync = ledgerManager()->sync(_groupID);
+        checkLedgerStatus(sync, "sync", "getSyncStatus");
+
+        checkRequest(_groupID);
 
         std::string status = sync->syncInfo();
         Json::Reader reader;
@@ -431,6 +449,7 @@ Json::Value Rpc::getPeers(int)
     try
     {
         RPC_LOG(INFO) << LOG_BADGE("getPeers") << LOG_DESC("request");
+
         Json::Value response = Json::Value(Json::arrayValue);
         auto sessions = service()->sessionInfos();
         for (auto it = sessions.begin(); it != sessions.end(); ++it)
@@ -560,10 +579,10 @@ Json::Value Rpc::getBlockByHash(
                       << LOG_KV("groupID", _groupID) << LOG_KV("blockHash", _blockHash)
                       << LOG_KV("includeTransaction", _includeTransactions);
 
+        auto blockchain = ledgerManager()->blockChain(_groupID);
+        checkLedgerStatus(blockchain, "blockchain", "getBlockByHash");
         checkRequest(_groupID);
         Json::Value response;
-
-        auto blockchain = ledgerManager()->blockChain(_groupID);
 
         h256 hash = jsToFixed<32>(_blockHash);
         auto block = blockchain->getBlockByHash(hash);
@@ -626,11 +645,12 @@ Json::Value Rpc::getBlockByNumber(
                       << LOG_KV("groupID", _groupID) << LOG_KV("blockNumber", _blockNumber)
                       << LOG_KV("includeTransaction", _includeTransactions);
 
+        auto blockchain = ledgerManager()->blockChain(_groupID);
+        checkLedgerStatus(blockchain, "blockchain", "getBlockByNumber");
         checkRequest(_groupID);
         Json::Value response;
 
         BlockNumber number = jsToBlockNumber(_blockNumber);
-        auto blockchain = ledgerManager()->blockChain(_groupID);
 
         auto block = blockchain->getBlockByNumber(number);
         if (!block)
@@ -690,8 +710,9 @@ std::string Rpc::getBlockHashByNumber(int _groupID, const std::string& _blockNum
         RPC_LOG(INFO) << LOG_BADGE("getBlockHashByNumber") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID) << LOG_KV("blockNumber", _blockNumber);
 
-        checkRequest(_groupID);
         auto blockchain = ledgerManager()->blockChain(_groupID);
+        checkLedgerStatus(blockchain, "blockchain", "getBlockHashByNumber");
+        checkRequest(_groupID);
 
         BlockNumber number = jsToBlockNumber(_blockNumber);
         h256 blockHash = blockchain->numberHash(number);
@@ -721,9 +742,10 @@ Json::Value Rpc::getTransactionByHash(int _groupID, const std::string& _transact
         RPC_LOG(INFO) << LOG_BADGE("getTransactionByHash") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID) << LOG_KV("transactionHash", _transactionHash);
 
+        auto blockchain = ledgerManager()->blockChain(_groupID);
+        checkLedgerStatus(blockchain, "blockchain", "getTransactionByHash");
         checkRequest(_groupID);
         Json::Value response;
-        auto blockchain = ledgerManager()->blockChain(_groupID);
 
         h256 hash = jsToFixed<32>(_transactionHash);
         auto tx = blockchain->getLocalisedTxByHash(hash);
@@ -765,10 +787,11 @@ Json::Value Rpc::getTransactionByBlockHashAndIndex(
                       << LOG_KV("groupID", _groupID) << LOG_KV("blockHash", _blockHash)
                       << LOG_KV("transactionIndex", _transactionIndex);
 
+        auto blockchain = ledgerManager()->blockChain(_groupID);
+        checkLedgerStatus(blockchain, "blockchain", "getTransactionByBlockHashAndIndex");
+
         checkRequest(_groupID);
         Json::Value response;
-
-        auto blockchain = ledgerManager()->blockChain(_groupID);
 
         h256 hash = jsToFixed<32>(_blockHash);
         auto block = blockchain->getBlockByHash(hash);
@@ -818,10 +841,11 @@ Json::Value Rpc::getTransactionByBlockNumberAndIndex(
                       << LOG_KV("groupID", _groupID) << LOG_KV("blockNumber", _blockNumber)
                       << LOG_KV("transactionIndex", _transactionIndex);
 
+        auto blockchain = ledgerManager()->blockChain(_groupID);
+        checkLedgerStatus(blockchain, "blockchain", "getTransactionByBlockNumberAndIndex");
         checkRequest(_groupID);
         Json::Value response;
 
-        auto blockchain = ledgerManager()->blockChain(_groupID);
 
         BlockNumber number = jsToBlockNumber(_blockNumber);
         auto block = blockchain->getBlockByNumber(number);
@@ -869,10 +893,12 @@ Json::Value Rpc::getTransactionReceipt(int _groupID, const std::string& _transac
         RPC_LOG(INFO) << LOG_BADGE("getTransactionByBlockHashAndIndex") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID) << LOG_KV("transactionHash", _transactionHash);
 
+        auto blockchain = ledgerManager()->blockChain(_groupID);
+        checkLedgerStatus(blockchain, "blockchain", "getTransactionReceipt");
         checkRequest(_groupID);
 
         h256 hash = jsToFixed<32>(_transactionHash);
-        auto blockchain = ledgerManager()->blockChain(_groupID);
+
         auto tx = blockchain->getLocalisedTxByHash(hash);
         if (tx->blockNumber() == INVALIDNUMBER)
             return Json::nullValue;
@@ -929,6 +955,7 @@ Json::Value Rpc::getPendingTransactions(int _groupID)
         Json::Value response;
 
         auto txPool = ledgerManager()->txPool(_groupID);
+        checkLedgerStatus(txPool, "txPool", "getPendingTransactions");
 
         response = Json::Value(Json::arrayValue);
         auto transactions = txPool->pendingList();
@@ -967,6 +994,7 @@ std::string Rpc::getPendingTxSize(int _groupID)
         RPC_LOG(INFO) << LOG_BADGE("getPendingTxSize") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID);
         auto txPool = ledgerManager()->txPool(_groupID);
+        checkLedgerStatus(txPool, "txPool", "getPendingTxSize");
 
         return toJS(txPool->status().current);
     }
@@ -988,8 +1016,9 @@ std::string Rpc::getCode(int _groupID, const std::string& _address)
         RPC_LOG(INFO) << LOG_BADGE("getCode") << LOG_DESC("request") << LOG_KV("groupID", _groupID)
                       << LOG_KV("address", _address);
 
-        checkRequest(_groupID);
         auto blockChain = ledgerManager()->blockChain(_groupID);
+        checkLedgerStatus(blockChain, "blockChain", "getCode");
+        checkRequest(_groupID);
 
         return toJS(blockChain->getCode(jsToAddress(_address)));
     }
@@ -1010,8 +1039,9 @@ Json::Value Rpc::getTotalTransactionCount(int _groupID)
 {
     try
     {
-        checkRequest(_groupID);
         auto blockChain = ledgerManager()->blockChain(_groupID);
+        checkLedgerStatus(blockChain, "blockChain", "getTotalTransactionCount");
+        checkRequest(_groupID);
 
         Json::Value response;
         std::pair<int64_t, int64_t> result = blockChain->totalTransactionCount();
@@ -1060,13 +1090,15 @@ Json::Value Rpc::call(int _groupID, const Json::Value& request)
         RPC_LOG(TRACE) << LOG_BADGE("call") << LOG_DESC("request") << LOG_KV("groupID", _groupID)
                        << LOG_KV("callParams", request.toStyledString());
 
+        auto blockchain = ledgerManager()->blockChain(_groupID);
+        checkLedgerStatus(blockchain, "blockChain", "call");
+        auto blockverfier = ledgerManager()->blockVerifier(_groupID);
+        checkLedgerStatus(blockverfier, "blockverfier", "call");
+
         checkRequest(_groupID);
         if (request["from"].empty() || request["from"].asString().empty())
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(RPCExceptionType::CallFrom, RPCMsg[RPCExceptionType::CallFrom]));
-
-        auto blockchain = ledgerManager()->blockChain(_groupID);
-        auto blockverfier = ledgerManager()->blockVerifier(_groupID);
 
         BlockNumber blockNumber = blockchain->number();
         auto block = blockchain->getBlockByNumber(blockNumber);
@@ -1223,9 +1255,12 @@ Json::Value Rpc::getTransactionByHashWithProof(int _groupID, const std::string& 
         }
         RPC_LOG(INFO) << LOG_BADGE("getTransactionByHashWithProof") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID) << LOG_KV("transactionHash", _transactionHash);
+
+        auto blockchain = ledgerManager()->blockChain(_groupID);
+        checkLedgerStatus(blockchain, "blockChain", "getTransactionByHashWithProof");
+
         checkRequest(_groupID);
         Json::Value response;
-        auto blockchain = ledgerManager()->blockChain(_groupID);
         h256 hash = jsToFixed<32>(_transactionHash);
         auto tx = blockchain->getTransactionByHashWithProof(hash);
 
@@ -1293,9 +1328,11 @@ Json::Value Rpc::getTransactionReceiptByHashWithProof(
             BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::InvalidRequest,
                 "method getTransactionReceiptByHashWithProof not support this version"));
         }
+        auto blockchain = ledgerManager()->blockChain(_groupID);
+        checkLedgerStatus(blockchain, "blockChain", "getTransactionReceiptByHashWithProof");
+
         checkRequest(_groupID);
         h256 hash = jsToFixed<32>(_transactionHash);
-        auto blockchain = ledgerManager()->blockChain(_groupID);
         dev::eth::LocalisedTransaction transaction;
         auto receipt = blockchain->getTransactionReceiptByHashWithProof(hash, transaction);
         auto txReceipt = receipt.first;

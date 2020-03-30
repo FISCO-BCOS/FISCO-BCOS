@@ -23,7 +23,7 @@
  */
 
 #pragma once
-
+#include "Common.h"
 #include "RpcFace.h"            // for RpcFace
 #include "libdevcore/Common.h"  // for bytes
 #include "libp2p/Common.h"
@@ -136,6 +136,19 @@ private:
     bool isValidNodeId(dev::bytes const& precompileData,
         std::shared_ptr<dev::ledger::LedgerParamInterface> ledgerParam);
     bool isValidSystemConfig(std::string const& key);
+
+    template <typename T>
+    void checkLedgerStatus(T _modulePtr, std::string const& _moduleName, std::string _method)
+    {
+        // the module is not initialized well
+        if (!_modulePtr)
+        {
+            RPC_LOG(WARNING) << LOG_DESC(
+                _method + ":" + _moduleName + " is not initialized completed");
+            BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::IncompleteInitialization,
+                RPCMsg[RPCExceptionType::IncompleteInitialization]));
+        }
+    }
 
     /// transaction callback related
     boost::thread_specific_ptr<std::function<void(const std::string& receiptContext)> >
