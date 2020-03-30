@@ -58,6 +58,7 @@ ExternalProject_Add(jsonrpccpp
     DOWNLOAD_NAME jsonrcpcpp-0.7.0.tar.gz
     DOWNLOAD_NO_PROGRESS 1
     URL https://github.com/cinemast/libjson-rpc-cpp/archive/v0.7.0.tar.gz
+        https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/jsonrcpcpp-0.7.0.tar.gz
     URL_HASH SHA256=669c2259909f11a8c196923a910f9a16a8225ecc14e6c30e2bcb712bab9097eb
     # On Windows it tries to install this dir. Create it to prevent failure.
     PATCH_COMMAND ${CMAKE_COMMAND} -E make_directory <SOURCE_DIR>/win32-deps/include
