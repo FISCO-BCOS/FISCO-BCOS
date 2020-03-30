@@ -31,6 +31,7 @@
 #include <json/value.h>            // for Value
 #include <libethcore/Transaction.h>
 #include <libinitializer/LedgerInitializer.h>
+#include <libledger/LedgerManager.h>
 #include <boost/thread/tss.hpp>  // for thread_specific_ptr
 #include <string>                // for string
 
@@ -131,8 +132,7 @@ public:
     Json::Value getTransactionReceiptByHashWithProof(
         int _groupID, const std::string& _transactionHash) override;
 
-    Json::Value generateGroup(int _groupID, const std::string& _timestamp,
-        const std::set<std::string>& _sealerList) override;
+    Json::Value generateGroup(int _groupID, const Json::Value& _params) override;
     Json::Value startGroup(int _groupID) override;
     Json::Value stopGroup(int _groupID) override;
     Json::Value removeGroup(int _groupID) override;
@@ -193,10 +193,12 @@ private:
     void checkSyncStatus(int _groupID);
 
     void checkNodeVersionForGroupMgr(const char* _methodName);
+    bool checkParamsForGenerateGroup(
+        const Json::Value& _params, ledger::GroupParams& _groupParams, Json::Value& _response);
     bool checkGroupIDForGroupMgr(int _groupID, Json::Value& _response);
-    bool checkSealerID(const std::set<std::string>& _sealerList, std::string& _errorInfo);
+    bool checkSealerID(const std::string& _sealer);
     bool checkTimestamp(const std::string& _timestamp);
-    bool checkConnection(const std::set<std::string>& _sealerList, std::string& _errorInfo);
+    bool checkConnection(const std::set<std::string>& _sealerList, Json::Value& _response);
 };
 
 }  // namespace rpc
