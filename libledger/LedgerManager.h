@@ -27,7 +27,11 @@
 #include "LedgerInterface.h"
 #include <libethcore/Protocol.h>
 #include <map>
+#include <set>
+#include <string>
+
 #define LedgerManager_LOG(LEVEL) LOG(LEVEL) << "[LEDGERMANAGER] "
+
 namespace dev
 {
 namespace ledger
@@ -40,6 +44,14 @@ enum class LedgerStatus
     STOPPING,
     DELETED,
 };
+
+struct GroupParams
+{
+    std::string timestamp;
+    std::set<std::string> sealers;
+    bool enableFreeStorage;
+};
+
 class LedgerManager
 {
 public:
@@ -98,8 +110,7 @@ public:
      * @param _timestamp: timestamp of the genesis block
      * @param _sealerList: sealers of the group
      */
-    void generateGroup(dev::GROUP_ID _groupID, const std::string& _timestamp,
-        const std::set<std::string>& _sealerList);
+    void generateGroup(dev::GROUP_ID _groupID, const GroupParams& _params);
 
     /**
      * @brief : start a single ledger by group ID
@@ -233,8 +244,7 @@ private:
     void checkGroupStatus(dev::GROUP_ID const& _groupID, LedgerStatus _allowedStatus);
     std::string getGroupStatusFilePath(dev::GROUP_ID const& _groupID) const;
 
-    std::string generateGenesisConfig(dev::GROUP_ID _groupId, const std::string& _timestamp,
-        const std::set<std::string>& _sealerList);
+    std::string generateGenesisConfig(dev::GROUP_ID _groupId, const GroupParams& _params);
     std::string generateGroupConfig();
 
     mutable RecursiveMutex x_ledgerManager;

@@ -148,9 +148,9 @@ public:
                                    jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_STRING, NULL),
             &dev::rpc::RpcFace::getTransactionReceiptByHashWithProofI);
 
-        this->bindAndAddMethod(jsonrpc::Procedure("generateGroup", jsonrpc::PARAMS_BY_POSITION,
-                                   jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, "param2",
-                                   jsonrpc::JSON_INTEGER, "param3", jsonrpc::JSON_ARRAY, NULL),
+        this->bindAndAddMethod(
+            jsonrpc::Procedure("generateGroup", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT,
+                "param1", jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_OBJECT, NULL),
             &dev::rpc::RpcFace::generateGroupI);
 
         this->bindAndAddMethod(jsonrpc::Procedure("startGroup", jsonrpc::PARAMS_BY_POSITION,
@@ -314,15 +314,8 @@ public:
 
     inline virtual void generateGroupI(const Json::Value& request, Json::Value& response)
     {
-        std::set<std::string> sealerList;
-        for (Json::Value value : request[2u])
-        {
-            std::string sealer = value.asString();
-            sealerList.insert(sealer);
-        }
-
-        response = this->generateGroup(
-            boost::lexical_cast<int>(request[0u].asString()), request[1u].asString(), sealerList);
+        response =
+            this->generateGroup(boost::lexical_cast<int>(request[0u].asString()), request[1u]);
     }
 
     inline virtual void startGroupI(const Json::Value& request, Json::Value& response)
@@ -407,8 +400,7 @@ public:
         int param1, const std::string& param2) = 0;
 
     // Group operation part
-    virtual Json::Value generateGroup(
-        int param1, const std::string& param2, const std::set<std::string>& param3) = 0;
+    virtual Json::Value generateGroup(int param1, const Json::Value& param2) = 0;
     virtual Json::Value startGroup(int param1) = 0;
     virtual Json::Value stopGroup(int param1) = 0;
     virtual Json::Value removeGroup(int param1) = 0;

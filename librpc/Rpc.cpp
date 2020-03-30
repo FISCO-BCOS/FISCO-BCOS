@@ -21,7 +21,6 @@
 
 #include "Rpc.h"
 #include "JsonHelper.h"
-#include "libledger/LedgerManager.h"  // for LedgerManager
 #include <jsonrpccpp/common/exception.h>
 #include <jsonrpccpp/server.h>
 #include <libconfig/GlobalConfigure.h>
@@ -35,6 +34,7 @@
 #include <libtxpool/TxPoolInterface.h>
 #include <boost/algorithm/hex.hpp>
 #include <csignal>
+#include <sstream>
 
 using namespace jsonrpc;
 using namespace dev::rpc;
@@ -1377,48 +1377,33 @@ Json::Value Rpc::getTransactionReceiptByHashWithProof(
     }
 }
 
-
-Json::Value Rpc::generateGroup(
-    int _groupID, const std::string& _timestamp, const std::set<std::string>& _sealerList)
+Json::Value Rpc::generateGroup(int _groupID, const Json::Value& _params)
 {
     RPC_LOG(INFO) << LOG_BADGE("generateGroup") << LOG_DESC("request")
-                  << LOG_KV("groupID", _groupID) << LOG_KV("timestamp", _timestamp)
-                  << LOG_KV("sealerList.size", _sealerList.size());
+                  << LOG_KV("groupID", _groupID) << LOG_KV("params", _params);
 
     checkNodeVersionForGroupMgr("generateGroup");
 
     Json::Value response;
-
     if (!checkGroupIDForGroupMgr(_groupID, response))
     {
         return response;
     }
 
-    if (!checkTimestamp(_timestamp))
+    GroupParams groupParams;
+    if (!checkParamsForGenerateGroup(_params, groupParams, response))
     {
-        response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
-        response["message"] = "Invalid timestamp: " + _timestamp;
         return response;
     }
 
-    std::string errorInfo;
-    if (!checkSealerID(_sealerList, errorInfo))
+    if (!checkConnection(groupParams.sealers, response))
     {
-        response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
-        response["message"] = "Invalid sealer ID(s): " + errorInfo;
-        return response;
-    }
-
-    if (!checkConnection(_sealerList, errorInfo))
-    {
-        response["code"] = LedgerManagementStatusCode::PEERS_NOT_CONNECTED;
-        response["message"] = "Peer(s) not connected: " + errorInfo;
         return response;
     }
 
     try
     {
-        ledgerManager()->generateGroup(_groupID, _timestamp, _sealerList);
+        ledgerManager()->generateGroup(_groupID, groupParams);
         response["code"] = LedgerManagementStatusCode::SUCCESS;
         response["message"] = "Group " + std::to_string(_groupID) + " generated successfully";
     }
@@ -1707,9 +1692,11 @@ void Rpc::checkNodeVersionForGroupMgr(const char* _methodName)
     }
 }
 
-bool Rpc::checkConnection(const std::set<std::string>& _sealerList, std::string& _errorInfo)
+bool Rpc::checkConnection(const std::set<std::string>& _sealerList, Json::Value& _response)
 {
     bool flag = true;
+    std::string errorInfo;
+
     for (auto& sealer : _sealerList)
     {
         auto nodeID = NodeID(sealer);
@@ -1720,14 +1707,16 @@ bool Rpc::checkConnection(const std::set<std::string>& _sealerList, std::string&
 
         if (!service()->isConnected(nodeID))
         {
-            _errorInfo += sealer + ", ";
+            errorInfo += sealer + ", ";
             flag = false;
         }
     }
 
     if (!flag)
     {
-        _errorInfo = _errorInfo.substr(0, _errorInfo.length() - 2);
+        _response["code"] = LedgerManagementStatusCode::PEERS_NOT_CONNECTED;
+        _response["message"] =
+            "Peer(s) not connected: " + errorInfo.substr(0, errorInfo.length() - 2);
     }
     return flag;
 }
@@ -1743,23 +1732,13 @@ bool Rpc::checkGroupIDForGroupMgr(int _groupID, Json::Value& _response)
     return true;
 }
 
-bool Rpc::checkSealerID(const std::set<std::string>& _sealerList, std::string& _errorInfo)
+bool Rpc::checkSealerID(const std::string& _sealer)
 {
-    bool flag = true;
-    for (auto& sealer : _sealerList)
+    if (!dev::isHex(_sealer) || _sealer.length() != 128 || _sealer.compare(0, 2, "0x") == 0)
     {
-        if (!dev::isHex(sealer) || sealer.length() != 128 || sealer.compare(0, 2, "0x") == 0)
-        {
-            _errorInfo += sealer + ", ";
-            flag = false;
-        }
+        return false;
     }
-
-    if (!flag)
-    {
-        _errorInfo = _errorInfo.substr(0, _errorInfo.length() - 2);
-    }
-    return flag;
+    return true;
 }
 
 bool Rpc::checkTimestamp(const std::string& _timestamp)
@@ -1777,4 +1756,63 @@ bool Rpc::checkTimestamp(const std::string& _timestamp)
     {
         return false;
     }
+}
+
+bool Rpc::checkParamsForGenerateGroup(
+    const Json::Value& _params, GroupParams& _groupParams, Json::Value& _response)
+{
+    // check timestamp
+    if (!_params.isMember("timestamp") || !_params["timestamp"].isString())
+    {
+        _response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
+        _response["message"] = "invalid `timestamp` field";
+        return false;
+    }
+
+    _groupParams.timestamp = _params["timestamp"].asString();
+    if (!checkTimestamp(_groupParams.timestamp))
+    {
+        _response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
+        _response["message"] = "invalid timestamp: " + _groupParams.timestamp;
+        return false;
+    }
+
+    // check sealers
+    if (!_params.isMember("sealers") || !_params["sealers"].isArray())
+    {
+        _response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
+        _response["message"] = "invalid `sealers` field";
+        return false;
+    }
+
+    int pos = 1;
+    for (auto& sealer : _params["sealers"])
+    {
+        if (!sealer.isString() || !checkSealerID(sealer.asString()))
+        {
+            _response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
+            _response["message"] = "invalid sealer ID at position " + std::to_string(pos);
+            return false;
+        }
+        _groupParams.sealers.insert(sealer.asString());
+        pos++;
+    }
+
+    // check enable_free_storage
+    if (!_params.isMember("enable_free_storage"))
+    {
+        _groupParams.enableFreeStorage = false;
+    }
+    else if (_params["enable_free_storage"].isBool())
+    {
+        _groupParams.enableFreeStorage = _params["enable_free_storage"].asBool();
+    }
+    else
+    {
+        _response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
+        _response["message"] = "invalid `enable_free_storage` field";
+        return false;
+    }
+
+    return true;
 }
