@@ -34,6 +34,7 @@ supported_consensus=(pbft raft rpbft)
 TASSL_CMD="${HOME}"/.tassl
 auto_flush="true"
 enable_statistic="false"
+enable_free_storage="false"
 # trans timestamp from seconds to milliseconds
 timestamp=$(($(date '+%s')*1000))
 chain_id=1
@@ -65,6 +66,7 @@ Usage:
     -T <Enable debug log>               Default off. If set -T, enable debug log
     -S <Enable statistics>              Default off. If set -S, enable statistics
     -F <Disable log auto flush>         Default on. If set -F, disable log auto flush
+    -E <Enable free_storage_evm>        Default off. If set -E, enable free_storage_evm
     -h Help
 e.g 
     $0 -l "127.0.0.1:4"
@@ -115,7 +117,7 @@ exit_with_clean()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:t:v:s:C:c:izhgTFSd" option;do
+while getopts "f:l:o:p:e:t:v:s:C:c:izhgTFSdE" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -154,6 +156,7 @@ while getopts "f:l:o:p:e:t:v:s:C:c:izhgTFSd" option;do
     ;;
     F) auto_flush="false";;
     S) enable_statistic="true";;
+    E) enable_free_storage="true";;
     z) make_tar="yes";;
     g) guomi_mode="yes";;
     d) docker_mode="yes"
@@ -490,6 +493,8 @@ generate_config_ini()
     log_path=./log
     ; enable/disable the statistics function
     enable_statistic=${enable_statistic}
+    ; network statistics interval, unit is second, default is 60s
+    stat_flush_interval=60
     ; info debug trace 
     level=${log_level}
     ; MB
@@ -528,7 +533,7 @@ generate_group_genesis()
     id=${index}
     timestamp=${timestamp}
 [evm]
-    enable_free_storage=false
+    enable_free_storage=${enable_free_storage}
 EOF
 }
 
