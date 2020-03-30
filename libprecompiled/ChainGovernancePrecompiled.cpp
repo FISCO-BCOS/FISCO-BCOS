@@ -45,11 +45,16 @@ const char* const CGP_METHOD_REVOKE_OP = "revokeOperator(address)";
 const char* const CGP_METHOD_LIST_OP = "listOperators()";
 
 const char* const CGP_COMMITTEE_TABLE = "_sys_committee_votes_";
+const char* const CGP_COMMITTEE_TABLE_KEY = "key";
 const char* const CGP_COMMITTEE_TABLE_VALUE = "value";
 const char* const CGP_COMMITTEE_TABLE_ORIGIN = "origin";
 const char* const CGP_COMMITTEE_TABLE_BLOCKLIMIT = "block_limit";
 const char* const CGP_WEIGTH_SUFFIX = "_weight";
+const char* const CGP_UPDATE_WEIGTH_SUFFIX = "_update_weight";
 const char* const CGP_AUTH_THRESHOLD = "auth_threshold";
+const char* const CGP_UPDATE_AUTH_THRESHOLD = "update_auth_threshold";
+
+#define CHAIN_GOVERNANCE_LOG(LEVEL) PRECOMPILED_LOG(LEVEL) << "[ChainGovernance]"
 
 ChainGovernancePrecompiled::ChainGovernancePrecompiled()
 {
@@ -71,24 +76,93 @@ string ChainGovernancePrecompiled::toString()
 }
 
 PrecompiledExecResult::Ptr ChainGovernancePrecompiled::call(
-    ExecutiveContext::Ptr, bytesConstRef _param, Address const&, Address const&)
+    ExecutiveContext::Ptr _context, bytesConstRef _param, Address const&, Address const&)
 {
-    PRECOMPILED_LOG(TRACE) << LOG_BADGE("ChainGovernancePrecompiled") << LOG_DESC("call")
-                           << LOG_KV("param", toHex(_param));
+    CHAIN_GOVERNANCE_LOG(TRACE) << LOG_DESC("call") << LOG_KV("param", toHex(_param));
 
-    return nullptr;
+    // parse function name
+    uint32_t func = getParamFunc(_param);
+    bytesConstRef data = getParamData(_param);
+
+    dev::eth::ContractABI abi;
+    bytes out;
+    auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
+    if (func == name2Selector[CGP_METHOD_GRANT_CM])
+    {  // grantCommitteeMember(address user) public returns (int256);
+    }
+    else if (func == name2Selector[CGP_METHOD_REVOKE_CM])
+    {  // revokeCommitteeMember(address user) public returns (int256);
+    }
+    else if (func == name2Selector[CGP_METHOD_UPDATE_CM_WEIGHT])
+    {  // updateCommitteeMemberWeight(address user, int256 weight)
+    }
+    else if (func == name2Selector[CGP_METHOD_UPDATE_CM_THRESHOLD])
+    {  // function updateThreshold(int256 threshold) public returns (int256);
+    }
+    else if (func == name2Selector[CGP_METHOD_LIST_CM])
+    {  // listCommitteeMembers();
+        auto resultJson = queryCommitteeMembers(_context, SYS_ACCESS_TABLE);
+        callResult->setExecResult(abi.abiIn("", resultJson));
+    }
+    else if (func == name2Selector[CGP_METHOD_GRANT_OP])
+    {  // grantOperator(address)
+    }
+    else if (func == name2Selector[CGP_METHOD_REVOKE_OP])
+    {  // revokeOperator(address)
+    }
+    else if (func == name2Selector[CGP_METHOD_LIST_OP])
+    {  // listOperators()
+        auto resultJson = queryCommitteeMembers(_context, SYS_TABLES);
+        callResult->setExecResult(abi.abiIn("", resultJson));
+    }
+    else if (func == name2Selector[CGP_METHOD_QUERY_CM_THRESHOLD])
+    {  // queryThreshold() public view returns (int256);
+        auto committeeTable = getCommitteeTable(_context);
+        auto entries = committeeTable->select(CGP_AUTH_THRESHOLD, committeeTable->newCondition());
+        auto entry = entries->get(0);
+        auto threshold =
+            boost::lexical_cast<double>(entry->getField(CGP_COMMITTEE_TABLE_VALUE)) * 100;
+        CHAIN_GOVERNANCE_LOG(INFO) << LOG_DESC("queryThreshold") << LOG_KV("return", threshold);
+        callResult->setExecResult(abi.abiIn("", s256(threshold)));
+    }
+    else if (func == name2Selector[CGP_METHOD_QUERY_CM_WEIGHT])
+    {  // queryCommitteeMemberWeight(address user) public view returns (int256);
+        Address user;
+        abi.abiOut(data, user);
+        string member = user.hex();
+        auto committeeTable = getCommitteeTable(_context);
+        auto entries =
+            committeeTable->select(member + CGP_WEIGTH_SUFFIX, committeeTable->newCondition());
+        auto entry = entries->get(0);
+        s256 weight = boost::lexical_cast<int>(entry->getField(CGP_COMMITTEE_TABLE_VALUE));
+        CHAIN_GOVERNANCE_LOG(INFO) << LOG_DESC("memberWeight") << LOG_KV("weight", weight);
+        callResult->setExecResult(abi.abiIn("", weight));
+    }
+    else
+    {
+        CHAIN_GOVERNANCE_LOG(ERROR) << LOG_DESC("call undefined function") << LOG_KV("func", func);
+    }
+    return callResult;
 }
 
 Table::Ptr ChainGovernancePrecompiled::getCommitteeTable(
     shared_ptr<dev::blockverifier::ExecutiveContext> _context)
 {
     auto table = openTable(_context, CGP_COMMITTEE_TABLE);
+    if (!table)
+    {
+        table = createTable(
+            _context, CGP_COMMITTEE_TABLE, CGP_COMMITTEE_TABLE_KEY, "value,origin,block_limit");
+        auto entry = table->newEntry();
+        entry->setField(CGP_COMMITTEE_TABLE_VALUE, to_string(0.5));
+        table->insert(CGP_AUTH_THRESHOLD, entry, make_shared<AccessOptions>(Address(), false));
+    }
     return table;
 }
 
 int ChainGovernancePrecompiled::verifyAndRecord(
     shared_ptr<dev::blockverifier::ExecutiveContext> _context, Operation _op, const string& _user,
-    const string&, const string& _origin)
+    const string& _value, const string& _origin)
 {
     Table::Ptr acTable = openTable(_context, SYS_ACCESS_TABLE);
     auto condition = acTable->newCondition();
@@ -96,16 +170,15 @@ int ChainGovernancePrecompiled::verifyAndRecord(
     auto entries = acTable->select(SYS_ACCESS_TABLE, condition);
     if (entries->size() == 0u)
     {
-        PRECOMPILED_LOG(INFO) << LOG_BADGE("ChainGovernance")
-                              << LOG_DESC("grantCommitteeMember invalid request")
-                              << LOG_KV("origin", _origin) << LOG_KV("member", _user)
-                              << LOG_KV("return", CODE_INVALID_REQUEST);
+        CHAIN_GOVERNANCE_LOG(INFO)
+            << LOG_DESC("verifyAndRecord invalid request") << LOG_KV("origin", _origin)
+            << LOG_KV("member", _user) << LOG_KV("return", CODE_INVALID_REQUEST);
         return CODE_INVALID_REQUEST;
     }
     auto committeeTable = getCommitteeTable(_context);
 
-    auto record = [committeeTable, _context](
-                      const string& key, const string& value, const string& origin) {
+    auto recordVote = [committeeTable, _context](
+                          const string& key, const string& value, const string& origin) {
         auto entry = committeeTable->newEntry();
         entry->setField(CGP_COMMITTEE_TABLE_VALUE, value);
         entry->setField(CGP_COMMITTEE_TABLE_ORIGIN, origin);
@@ -117,9 +190,9 @@ int ChainGovernancePrecompiled::verifyAndRecord(
         if (entries->size() != 0)
         {  // duplicate vote, update
             committeeTable->update(
-                key, entry, condition, std::make_shared<AccessOptions>(Address(), false));
+                key, entry, condition, make_shared<AccessOptions>(Address(), false));
         }
-        committeeTable->insert(key, entry, std::make_shared<AccessOptions>(Address(), false));
+        committeeTable->insert(key, entry, make_shared<AccessOptions>(Address(), false));
     };
 
     auto validate = [acTable, committeeTable](
@@ -129,8 +202,7 @@ int ChainGovernancePrecompiled::verifyAndRecord(
         auto entries = acTable->select(SYS_ACCESS_TABLE, condition);
         if (entries->size() == 0u)
         {  // check if already have at least one committee member
-            PRECOMPILED_LOG(ERROR) << LOG_BADGE("ChainGovernance")
-                                   << LOG_DESC("nobody has authority of " + SYS_ACCESS_TABLE);
+            CHAIN_GOVERNANCE_LOG(ERROR) << LOG_DESC("nobody has authority of " + SYS_ACCESS_TABLE);
             return true;
         }
         double total = 0;
@@ -166,10 +238,9 @@ int ChainGovernancePrecompiled::verifyAndRecord(
             threshold =
                 boost::lexical_cast<double>(thresholdEntry->getField(CGP_COMMITTEE_TABLE_VALUE));
         }
-        PRECOMPILED_LOG(INFO) << LOG_BADGE("ChainGovernance") << LOG_DESC("validate votes")
-                              << LOG_KV("key", key) << LOG_KV("value", value)
-                              << LOG_KV("vote", totalVotes / total)
-                              << LOG_KV("threshold", threshold);
+        CHAIN_GOVERNANCE_LOG(INFO)
+            << LOG_DESC("validate votes") << LOG_KV("key", key) << LOG_KV("value", value)
+            << LOG_KV("vote", totalVotes / total) << LOG_KV("threshold", threshold);
         return totalVotes / total > threshold;
     };
     auto deleteUsedVotes = [committeeTable](const string& key, const string& value) {
@@ -183,10 +254,9 @@ int ChainGovernancePrecompiled::verifyAndRecord(
     {
     case GrantCommitteeMember:
     {
-        auto& key = _user;
         auto value = "grant";
-        record(key, value, _origin);
-        if (validate(key, value, currentBlockNumber))
+        recordVote(_user, value, _origin);
+        if (validate(_user, value, currentBlockNumber))
         {  // grant committee member
             auto entry = acTable->newEntry();
             entry->setField(SYS_AC_TABLE_NAME, SYS_ACCESS_TABLE);
@@ -194,34 +264,96 @@ int ChainGovernancePrecompiled::verifyAndRecord(
             entry->setField(SYS_AC_ENABLENUM, to_string(currentBlockNumber));
             int count = acTable->insert(
                 SYS_ACCESS_TABLE, entry, make_shared<AccessOptions>(Address(), false));
+
             // write weight
             entry = committeeTable->newEntry();
             entry->setField(CGP_COMMITTEE_TABLE_VALUE, to_string(1));
             entry->setField(CGP_COMMITTEE_TABLE_ORIGIN, _origin);
             committeeTable->insert(
                 _user + CGP_WEIGTH_SUFFIX, entry, make_shared<AccessOptions>(Address(), false));
-            deleteUsedVotes(key, value);
-            PRECOMPILED_LOG(INFO) << LOG_BADGE("ChainGovernance")
-                                  << LOG_DESC("grantCommitteeMember") << LOG_KV("member", _user)
-                                  << LOG_KV("return", count);
+            deleteUsedVotes(_user, value);
             return count;
         }
         break;
     }
     case RevokeCommitteeMember:
     {
+        auto value = "revoke";
+        recordVote(_user, value, _origin);
+        if (validate(_user, value, currentBlockNumber))
+        {  // grant committee member
+            auto condition = committeeTable->newCondition();
+            condition->EQ(SYS_AC_TABLE_NAME, SYS_ACCESS_TABLE);
+            condition->EQ(SYS_AC_ADDRESS, _user);
+            int count = acTable->remove(
+                SYS_ACCESS_TABLE, condition, make_shared<AccessOptions>(Address(), false));
+            committeeTable->remove(_user + CGP_WEIGTH_SUFFIX, committeeTable->newCondition(),
+                make_shared<AccessOptions>(Address(), false));
+            deleteUsedVotes(_user, value);
+            return count;
+        }
         break;
     }
     case UpdateCommitteeMemberWeight:
     {
+        auto key = _user + CGP_UPDATE_WEIGTH_SUFFIX;
+        auto& value = _value;
+        recordVote(key, value, _origin);
+        if (validate(key, value, currentBlockNumber))
+        {  // write member weight
+            auto entry = committeeTable->newEntry();
+            entry->setField(CGP_COMMITTEE_TABLE_VALUE, value);
+            entry->setField(CGP_COMMITTEE_TABLE_ORIGIN, _origin);
+            int count = committeeTable->update(_user + CGP_WEIGTH_SUFFIX, entry,
+                committeeTable->newCondition(), make_shared<AccessOptions>(Address(), false));
+            deleteUsedVotes(key, value);
+            return count;
+        }
         break;
     }
     case UpdateThreshold:
     {
+        auto key = CGP_UPDATE_AUTH_THRESHOLD;
+        auto& value = _value;
+        recordVote(key, value, _origin);
+        if (validate(key, value, currentBlockNumber))
+        {  // write member weight
+            auto entry = committeeTable->newEntry();
+            entry->setField(CGP_COMMITTEE_TABLE_VALUE, _value);
+            entry->setField(CGP_COMMITTEE_TABLE_ORIGIN, _origin);
+            int count = committeeTable->update(CGP_AUTH_THRESHOLD, entry,
+                committeeTable->newCondition(), make_shared<AccessOptions>(Address(), false));
+            deleteUsedVotes(_user + CGP_WEIGTH_SUFFIX, value);
+            return count;
+        }
         break;
     }
     default:
-        PRECOMPILED_LOG(INFO) << LOG_BADGE("ChainGovernance") << LOG_DESC("undified operation");
+        CHAIN_GOVERNANCE_LOG(INFO) << LOG_DESC("undified operation");
     }
     return 0;
+}
+
+string ChainGovernancePrecompiled::queryCommitteeMembers(
+    shared_ptr<dev::blockverifier::ExecutiveContext> _context, const string& tableName)
+{
+    Table::Ptr table = openTable(_context, SYS_ACCESS_TABLE);
+    auto condition = table->newCondition();
+    auto entries = table->select(tableName, condition);
+    Json::Value AuthorityInfos(Json::arrayValue);
+    if (entries)
+    {
+        for (size_t i = 0; i < entries->size(); i++)
+        {
+            auto entry = entries->get(i);
+            if (!entry)
+                continue;
+            Json::Value AuthorityInfo;
+            AuthorityInfo[SYS_AC_ADDRESS] = "0x" + entry->getField(SYS_AC_ADDRESS);
+            AuthorityInfo[SYS_AC_ENABLENUM] = entry->getField(SYS_AC_ENABLENUM);
+            AuthorityInfos.append(AuthorityInfo);
+        }
+    }
+    Json::FastWriter fastWriter;
+    return fastWriter.write(AuthorityInfos);
 }

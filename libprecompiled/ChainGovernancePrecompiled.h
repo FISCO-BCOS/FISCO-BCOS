@@ -63,6 +63,10 @@ private:
     std::string queryCommitteeMembers(
         std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
         const std::string& _tableName);
+    int grantCommitteeMember(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
+        const std::string& _user, const Address& _origin);
+    int grantOperator(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
+        const std::string& _member, const Address& _origin);
 };
 
 }  // namespace precompiled
