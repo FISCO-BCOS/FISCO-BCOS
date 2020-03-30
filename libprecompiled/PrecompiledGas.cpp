@@ -69,3 +69,13 @@ u256 PrecompiledGas::calMemGas()
     auto memSize = (m_memUsed + GasMetrics::MemUnitSize - 1) / GasMetrics::MemUnitSize;
     return (GasMetrics::MemGas * memSize) + (memSize * memSize) / 512;
 }
+
+const int64_t GasMetrics::Zero = 0;
+const int64_t GasMetrics::Base = 2;
+const int64_t GasMetrics::VeryLow = 3;
+const int64_t GasMetrics::Low = 5;
+const int64_t GasMetrics::Mid = 8;
+const int64_t GasMetrics::High = 10;
+// Every 256 bytes is a memory gas calculation unit
+const unsigned GasMetrics::MemGas = 3;
+const unsigned GasMetrics::MemUnitSize = 32;

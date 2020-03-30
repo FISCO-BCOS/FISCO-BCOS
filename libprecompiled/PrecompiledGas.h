@@ -59,15 +59,15 @@ enum InterfaceOpcode : int64_t
 struct GasMetrics
 {
     // Measure the level of instruction gas
-    static const int64_t Zero = 0;
-    static const int64_t Base = 2;
-    static const int64_t VeryLow = 3;
-    static const int64_t Low = 5;
-    static const int64_t Mid = 8;
-    static const int64_t High = 10;
+    static const int64_t Zero;
+    static const int64_t Base;
+    static const int64_t VeryLow;
+    static const int64_t Low;
+    static const int64_t Mid;
+    static const int64_t High;
     // Every 256 bytes is a memory gas calculation unit
-    static const unsigned MemGas = 3;
-    static const unsigned MemUnitSize = 32;
+    static const unsigned MemGas;
+    static const unsigned MemUnitSize;
 
     // opcode to gasCost mapping
     std::map<InterfaceOpcode, int64_t> OpCode2GasCost;

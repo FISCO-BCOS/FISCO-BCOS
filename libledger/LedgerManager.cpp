@@ -142,8 +142,7 @@ void LedgerManager::checkGroupStatus(dev::GROUP_ID const& _groupID, LedgerStatus
     }
 }
 
-void LedgerManager::generateGroup(
-    dev::GROUP_ID _groupID, const string& _timestamp, const set<string>& _sealerList)
+void LedgerManager::generateGroup(dev::GROUP_ID _groupID, const GroupParams& _params)
 {
     RecursiveGuard l(x_ledgerManager);
     checkGroupStatus(_groupID, LedgerStatus::INEXISTENT);
@@ -169,7 +168,7 @@ void LedgerManager::generateGroup(
     groupConfFile.exceptions(std::ofstream::failbit | std::ofstream::badbit);
 
     genesisConfFile.open(genesisConfFilePath.c_str());
-    genesisConfFile << generateGenesisConfig(_groupID, _timestamp, _sealerList);
+    genesisConfFile << generateGenesisConfig(_groupID, _params);
 
     groupConfFile.open(groupConfFilePath.c_str());
     groupConfFile << generateGroupConfig();
@@ -177,8 +176,7 @@ void LedgerManager::generateGroup(
     setGroupStatus(_groupID, LedgerStatus::STOPPED);
 }
 
-string LedgerManager::generateGenesisConfig(
-    dev::GROUP_ID _groupID, const string& _timestamp, const set<string>& _sealerList)
+string LedgerManager::generateGenesisConfig(dev::GROUP_ID _groupID, const GroupParams& _params)
 {
     static string configTemplate =
         "[consensus]\n"
@@ -197,18 +195,21 @@ string LedgerManager::generateGenesisConfig(
         "    gas_limit=300000000\n"
         "[group]\n"
         "    id=%2%\n"
-        "    timestamp=%3%";
+        "    timestamp=%3%\n"
+        "[evm]\n"
+        "    enable_free_storage=%4%\n";
 
     string nodeIDList;
     int nodeIdx = 0;
-    for (auto& sealer : _sealerList)
+    for (auto& sealer : _params.sealers)
     {
         nodeIDList += (boost::format("    node.%1%=%2%\n") % nodeIdx % sealer).str();
         nodeIdx++;
     }
 
-    string config =
-        (boost::format(configTemplate) % nodeIDList.c_str() % _groupID % _timestamp).str();
+    string config = (boost::format(configTemplate) % nodeIDList.c_str() % _groupID %
+                     _params.timestamp % (_params.enableFreeStorage ? "true" : "false"))
+                        .str();
     return config;
 }
 
