@@ -19,9 +19,7 @@
 # (c) 2016-2018 fisco-dev contributors.
 #------------------------------------------------------------------------------
 file(GLOB_RECURSE sources "*.cpp" "*.h" "*.sol")
-if(NOT EASYLOG)
-    list(REMOVE_ITEM sources ${CMAKE_CURRENT_SOURCE_DIR}/unittests/libdevcore/easylogging++.cpp)
-endif()
+
 if (NOT CRYPTO_EXTENSION)
     list(REMOVE_ITEM sources ${CMAKE_CURRENT_SOURCE_DIR}/unittests/libstorage/test_PaillierPrecompiled.cpp)
     list(REMOVE_ITEM sources ${CMAKE_CURRENT_SOURCE_DIR}/unittests/libstorage/test_GroupSigPrecompiled.cpp)
