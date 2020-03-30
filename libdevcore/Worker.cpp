@@ -51,8 +51,7 @@ void Worker::startWorking()
         m_state = WorkerState::Starting;
         m_state_notifier.notify_all();
         m_work.reset(new thread([&]() {
-/// set threadName for log
-#ifndef FISCO_EASYLOG
+            // set threadName for log
             if (boost::log::core::get())
             {
                 std::vector<std::string> fields;
@@ -63,7 +62,6 @@ void Worker::startWorking()
                         "GroupId", boost::log::attributes::constant<std::string>(fields[1]));
                 }
             }
-#endif
             setThreadName(m_name.c_str());
             while (m_state != WorkerState::Killing)
             {
