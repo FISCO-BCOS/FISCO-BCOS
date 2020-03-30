@@ -289,10 +289,11 @@ void SyncMaster::maintainPeersStatus()
     uint64_t currentTime = utcTime();
     if (isSyncing())
     {
-        // Skip downloading if last if not timeout
-        if (((int64_t)currentTime - (int64_t)m_lastDownloadingRequestTime) <
+        auto maxTimeout = std::max((int64_t)c_respondDownloadRequestTimeout,
             (int64_t)m_eachBlockDownloadingRequestTimeout *
-                (m_maxRequestNumber - m_lastDownloadingBlockNumber))
+                (m_maxRequestNumber - m_lastDownloadingBlockNumber));
+        // Skip downloading if last if not timeout
+        if (((int64_t)currentTime - (int64_t)m_lastDownloadingRequestTime) < maxTimeout)
         {
             return;  // no need to sync
         }
