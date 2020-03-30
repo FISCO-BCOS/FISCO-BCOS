@@ -23,6 +23,7 @@
 #include <libdevcore/Common.h>
 #include <libprecompiled/CNSPrecompiled.h>
 #include <libprecompiled/CRUDPrecompiled.h>
+#include <libprecompiled/ChainGovernancePrecompiled.h>
 #include <libprecompiled/ConsensusPrecompiled.h>
 #include <libprecompiled/ContractLifeCyclePrecompiled.h>
 #include <libprecompiled/KVTableFactoryPrecompiled.h>
@@ -74,6 +75,11 @@ void ExecutiveContextFactory::initExecutiveContext(
             std::make_shared<dev::precompiled::KVTableFactoryPrecompiled>();
         kvTableFactoryPrecompiled->setMemoryTableFactory(memoryTableFactory);
         context->setAddress2Precompiled(Address(0x1010), kvTableFactoryPrecompiled);
+    }
+    if (g_BCOSConfig.version() >= V2_5_0)
+    {
+        context->setAddress2Precompiled(
+            Address(0x1008), std::make_shared<dev::precompiled::ChainGovernancePrecompiled>());
     }
     // register User developed Precompiled contract
     registerUserPrecompiled(context);
