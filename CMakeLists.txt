@@ -23,7 +23,7 @@ cmake_minimum_required(VERSION 3.4)
 set(FISCO_BCOS_CMAKE_DIR "${CMAKE_CURRENT_LIST_DIR}/cmake" CACHE PATH "The path to the cmake directory")
 list(APPEND CMAKE_MODULE_PATH ${FISCO_BCOS_CMAKE_DIR})
 
-project(FISCO-BCOS VERSION "2.3.0")
+project(FISCO-BCOS VERSION "2.4.0")
 # Suffix like "-rc1" e.t.c. to append to versions wherever needed.
 set(VERSION_SUFFIX "")
 
@@ -34,10 +34,9 @@ if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
         execute_process(COMMAND ${GIT_EXECUTABLE} submodule update --init --recursive --remote
                         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
                         RESULT_VARIABLE GIT_SUBMOD_RESULT)
-
         execute_process(COMMAND ${GIT_EXECUTABLE} checkout release-2.3.0-bsn
                         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/evmc
-                        RESULT_VARIABLE ERROR)
+                        RESULT_VARIABLE CHECKOUT_OUTPUT_RESULT)
         if(NOT GIT_SUBMOD_RESULT EQUAL "0")
             message(FATAL_ERROR "git submodule update --init failed with ${GIT_SUBMOD_RESULT}, please checkout submodules")
         endif()
