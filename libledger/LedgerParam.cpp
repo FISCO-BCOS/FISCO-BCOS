@@ -69,7 +69,10 @@ void LedgerParam::parseGenesisConfig(const std::string& _genesisFile)
         mutableStorageParam().type = pt.get<std::string>("storage.type", "LevelDB");
         mutableStorageParam().topic = pt.get<std::string>("storage.topic", "DB");
         mutableStorageParam().maxRetry = pt.get<uint>("storage.max_retry", 60);
-        setEVMFlags(pt);
+        if (g_BCOSConfig.version() >= V2_4_0)
+        {
+            setEVMFlags(pt);
+        }
     }
     catch (std::exception& e)
     {
