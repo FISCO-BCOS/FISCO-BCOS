@@ -27,14 +27,13 @@
 #include <libdevcore/ThreadPool.h>
 #include <tbb/concurrent_queue.h>
 #include <tbb/concurrent_unordered_map.h>
-#include <tbb/mutex.h>
-#include <tbb/recursive_mutex.h>
 #include <tbb/spin_mutex.h>
 #include <tbb/spin_rw_mutex.h>
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/identity.hpp>
 #include <boost/multi_index/sequenced_index.hpp>
 #include <boost/multi_index_container.hpp>
+#include <mutex>
 
 namespace dev
 {
@@ -94,8 +93,7 @@ public:
     typedef tbb::spin_rw_mutex RWMutex;
     typedef tbb::spin_rw_mutex::scoped_lock RWMutexScoped;
 
-    typedef tbb::mutex Mutex;
-    typedef tbb::mutex::scoped_lock MutexScoped;
+    typedef std::mutex Mutex;
 
     virtual ~CachedStorage();
 
