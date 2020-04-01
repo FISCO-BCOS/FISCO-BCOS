@@ -177,7 +177,6 @@ Signature dev::sign(KeyPair const& _keyPair, h256 const& _hash)
         return Signature{};
     }
     bytes byteSign = fromHex(r + s) + _keyPair.pub();
-    // std::cout <<"sign toHex:"<<toHex(byteSign)<<" sign toHexLen:"<<toHex(byteSign).length();
     return Signature{byteSign};
 }
 
