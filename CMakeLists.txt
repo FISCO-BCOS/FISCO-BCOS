@@ -50,9 +50,9 @@ endif()
 set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY On)
 
 # basic setting
-include(EthOptions)
-include(EthCompilerSettings)
-include(EthDependencies)
+include(Options)
+include(CompilerSettings)
+include(Dependencies)
 
 # install dependencies
 include(ProjectTBB)
