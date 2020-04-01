@@ -20,7 +20,7 @@
  */
 
 #pragma once
-
+#include "StatisticProtocolServer.h"
 #include <jsonrpccpp/common/exception.h>
 #include <jsonrpccpp/common/procedure.h>
 #include <jsonrpccpp/server/abstractserverconnector.h>
@@ -85,9 +85,7 @@ template <class... Is>
 class ModularServer : public jsonrpc::IProcedureInvokationHandler
 {
 public:
-    ModularServer()
-      : m_handler(jsonrpc::RequestHandlerFactory::createProtocolHandler(
-            jsonrpc::JSONRPC_SERVER_V2, *this))
+    ModularServer() : m_handler(new StatisticPotocolServer(*this))
     {
         m_handler->AddProcedure(jsonrpc::Procedure(
             "rpc_modules", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, NULL));
@@ -147,7 +145,7 @@ public:
 
 protected:
     std::vector<std::unique_ptr<jsonrpc::AbstractServerConnector>> m_connectors;
-    std::unique_ptr<jsonrpc::IProtocolHandler> m_handler;
+    std::unique_ptr<StatisticPotocolServer> m_handler;
     /// Mapping for implemented modules, to be filled by subclasses during construction.
     Json::Value m_implementedModules;
 };
@@ -180,20 +178,6 @@ public:
             this->m_implementedModules[module.name] = module.version;
     }
 
-    dev::GROUP_ID getGroupID(Json::Value const& _input)
-    {
-        try
-        {
-            return boost::lexical_cast<dev::GROUP_ID>(_input[0u].asString());
-        }
-        catch (std::exception const& _e)
-        {
-            LOG(WARNING) << LOG_DESC("HandleMethodCall: getGroupID failed!")
-                         << LOG_KV("errorInfo", boost::diagnostic_information(_e));
-            return -1;
-        }
-    }
-
     virtual void HandleMethodCall(
         jsonrpc::Procedure& _proc, Json::Value const& _input, Json::Value& _output) override
     {
@@ -204,16 +188,6 @@ public:
             try
             {
                 (m_interface.get()->*(pointer->second))(_input, _output);
-                if (m_networkStatHandler && m_networkStatHandler->shouldStatistic(procedureName))
-                {
-                    // update network stat for the RPC handler
-                    auto groupId = getGroupID(_input);
-                    if (groupId != -1)
-                    {
-                        m_networkStatHandler->updateIncomingTrafficForRPC(groupId, _input.size());
-                        m_networkStatHandler->updateOutcomingTrafficForRPC(groupId, _output.size());
-                    }
-                }
             }
             catch (jsonrpc::JsonRpcException& e)
             {
@@ -243,13 +217,12 @@ public:
 
     void setNetworkStatHandler(dev::stat::ChannelNetworkStatHandler::Ptr _handler)
     {
-        m_networkStatHandler = _handler;
+        this->m_handler->setNetworkStatHandler(_handler);
     }
 
 private:
     std::unique_ptr<I> m_interface;
     std::map<std::string, MethodPointer> m_methods;
     std::map<std::string, NotificationPointer> m_notifications;
-    dev::stat::ChannelNetworkStatHandler::Ptr m_networkStatHandler;
 };
 }  // namespace dev
