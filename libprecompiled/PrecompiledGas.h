@@ -22,6 +22,7 @@
  */
 #pragma once
 #include <libdevcore/Common.h>
+#include <libethcore/EVMFlags.h>
 
 #define PrecompiledGas_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("LEDGER")
 
@@ -145,11 +146,8 @@ private:
     {
         PrecompiledGas_LOG(DEBUG) << LOG_DESC("createGasMetric")
                                   << LOG_KV("vmFlagType", _vmFlagType);
-
-        auto rightShiftLen = sizeof(VMFlagType) * 8 - 1;
-        uint64_t metricFlag = (_vmFlagType >> rightShiftLen);
         // the FreeStorageGasMetrics enabled
-        if (metricFlag)
+        if (enableFreeStorage(_vmFlagType))
         {
             PrecompiledGas_LOG(DEBUG) << LOG_DESC("createGasMetric: FreeStorageGasMetrics");
             m_gasMetric = std::make_shared<FreeStorageGasMetrics>();

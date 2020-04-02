@@ -25,6 +25,7 @@
 
 #include "libconfig/GlobalConfigure.h"
 #include "libdevcrypto/Hash.h"
+#include <libethcore/EVMFlags.h>
 
 namespace
 {
@@ -139,11 +140,8 @@ namespace eth
 void VM::createVMSchedule(evmc_context* _context)
 {
     auto evmFlags = _context->flags;
-    // bit 64 is currently occupied, indicating whether to use FreeStorageVMSchedule
-    auto rightShiftLen = sizeof(VMFlagType) * 8 - 1;
-    uint64_t freeStorageScheduleFlag = (evmFlags >> rightShiftLen);
     // the FreeStorageVMSchedule enabled
-    if (freeStorageScheduleFlag)
+    if (enableFreeStorage(evmFlags))
     {
         m_vmSchedule = std::make_shared<FreeStorageVMSchedule>();
         return;
