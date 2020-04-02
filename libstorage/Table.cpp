@@ -108,6 +108,22 @@ std::string Entry::getField(const std::string& key) const
     return "";
 }
 
+vector<byte> Entry::getFieldBytes(const std::string& key) const
+{
+    RWMutexScoped lock(m_data->m_mutex, false);
+
+    auto it = m_data->m_fields.find(key);
+
+    if (it != m_data->m_fields.end())
+    {
+        return vector<byte>((unsigned char*)it->second.data(),
+            (unsigned char*)(it->second.data() + it->second.size()));
+    }
+
+    STORAGE_LOG(ERROR) << LOG_BADGE("Entry") << LOG_DESC("can't find key") << LOG_KV("key", key);
+    return vector<byte>();
+}
+
 void Entry::setField(const std::string& key, const std::string& value)
 {
     auto lock = checkRef();
