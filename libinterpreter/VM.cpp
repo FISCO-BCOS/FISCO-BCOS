@@ -22,7 +22,6 @@
 
 #include "VM.h"
 #include "interpreter.h"
-
 #include "libconfig/GlobalConfigure.h"
 #include "libdevcrypto/Hash.h"
 #include <libethcore/EVMFlags.h>
@@ -139,7 +138,7 @@ namespace eth
 {
 void VM::createVMSchedule(evmc_context* _context)
 {
-    auto evmFlags = _context->flags;
+    uint64_t evmFlags = _context->flags;
     // the FreeStorageVMSchedule enabled
     if (enableFreeStorage(evmFlags))
     {
@@ -1349,7 +1348,8 @@ void VM::interpretCases()
 
             CASE(SLOAD)
         {
-            m_runGas = m_rev >= EVMC_TANGERINE_WHISTLE ? 200 : 50;
+            m_runGas = m_rev >= EVMC_TANGERINE_WHISTLE ? m_vmSchedule->sloadGas : 50;
+
             ON_OP();
             updateIOGas();
 
@@ -1376,7 +1376,6 @@ void VM::interpretCases()
             evmc_uint256be value = toEvmC(m_SP[1]);
             auto status =
                 m_context->fn_table->set_storage(m_context, &m_message->destination, &key, &value);
-
             if (status == EVMC_STORAGE_ADDED)
             {
                 // Charge additional amount for added storage item.

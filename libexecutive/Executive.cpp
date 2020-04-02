@@ -51,7 +51,14 @@ void Executive::accrueSubState(SubState& _parentContext)
 void Executive::initialize(Transaction::Ptr _transaction)
 {
     m_t = _transaction;
-    m_baseGasRequired = m_t->baseGasRequired(g_BCOSConfig.evmSchedule());
+    if (m_enableFreeStorage)
+    {
+        m_baseGasRequired = 20000;
+    }
+    else
+    {
+        m_baseGasRequired = m_t->baseGasRequired(g_BCOSConfig.evmSchedule());
+    }
 
     verifyTransaction(ImportRequirements::Everything, m_t, m_envInfo.header(), m_envInfo.gasUsed());
 
@@ -121,11 +128,16 @@ bool Executive::execute()
         }
     }
     if (m_t->isCreation())
+    {
         return create(m_t->sender(), m_t->value(), m_t->gasPrice(),
             txGasLimit - (u256)m_baseGasRequired, &m_t->data(), m_t->sender());
+    }
+
     else
+    {
         return call(m_t->receiveAddress(), m_t->sender(), m_t->value(), m_t->gasPrice(),
             bytesConstRef(&m_t->data()), txGasLimit - (u256)m_baseGasRequired);
+    }
 }
 
 bool Executive::call(Address const& _receiveAddress, Address const& _senderAddress,
@@ -500,7 +512,12 @@ bool Executive::go(OnOpFunc const& _onOp)
                 else if (out.size() * m_ext->evmSchedule().createDataGas <= m_gas)
                 {
                     m_res.codeDeposit = CodeDeposit::Success;
-                    m_gas -= out.size() * m_ext->evmSchedule().createDataGas;
+                    // When FreeStorage VM is enabled,
+                    // the storage gas consumption of createData is not calculated additionally
+                    if (!m_enableFreeStorage)
+                    {
+                        m_gas -= out.size() * m_ext->evmSchedule().createDataGas;
+                    }
                 }
                 else
                 {
