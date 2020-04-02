@@ -22,6 +22,7 @@
  * @date: 2019-5-21
  */
 #include "LedgerManager.h"
+#include "gperftools/malloc_extension.h"
 #include <libconfig/GlobalConfigure.h>
 #include <boost/filesystem.hpp>
 #include <boost/format.hpp>
@@ -303,6 +304,7 @@ void LedgerManager::stopByGroupID(GROUP_ID const& _groupID)
         RecursiveGuard l(x_ledgerManager);
         setGroupStatus(_groupID, LedgerStatus::STOPPED);
     }
+    MallocExtension::instance()->ReleaseFreeMemory();
 }
 
 void LedgerManager::removeByGroupID(dev::GROUP_ID const& _groupID)
