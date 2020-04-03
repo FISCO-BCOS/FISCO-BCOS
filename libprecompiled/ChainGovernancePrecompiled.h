@@ -66,7 +66,9 @@ private:
     int grantCommitteeMember(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
         const std::string& _user, const Address& _origin);
     int grantOperator(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
-        const std::string& _member, const Address& _origin);
+        const std::string& _userAddress, const Address& _origin);
+    int revokeOperator(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
+        const std::string& _userAddress, const Address& _origin);
 };
 
 }  // namespace precompiled
