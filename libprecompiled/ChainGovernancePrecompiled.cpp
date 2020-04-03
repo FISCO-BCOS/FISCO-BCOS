@@ -76,28 +76,101 @@ string ChainGovernancePrecompiled::toString()
 }
 
 PrecompiledExecResult::Ptr ChainGovernancePrecompiled::call(
-    ExecutiveContext::Ptr _context, bytesConstRef _param, Address const&, Address const&)
+    ExecutiveContext::Ptr _context, bytesConstRef _param, Address const& _origin, Address const&)
 {
     CHAIN_GOVERNANCE_LOG(TRACE) << LOG_DESC("call") << LOG_KV("param", toHex(_param));
 
     // parse function name
     uint32_t func = getParamFunc(_param);
     bytesConstRef data = getParamData(_param);
-
     dev::eth::ContractABI abi;
     bytes out;
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
+    int result = 0;
     if (func == name2Selector[CGP_METHOD_GRANT_CM])
     {  // grantCommitteeMember(address user) public returns (int256);
+        Address user;
+        abi.abiOut(data, user);
+        result = grantCommitteeMember(_context, user.hex(), _origin);
+        getErrorCodeOut(callResult->mutableExecResult(), result);
     }
     else if (func == name2Selector[CGP_METHOD_REVOKE_CM])
     {  // revokeCommitteeMember(address user) public returns (int256);
+        Address user;
+        abi.abiOut(data, user);
+        auto member = user.hex();
+        Table::Ptr acTable = openTable(_context, SYS_ACCESS_TABLE);
+        do
+        {
+            auto condition = acTable->newCondition();
+            condition->EQ(SYS_AC_ADDRESS, member);
+            auto entries = acTable->select(SYS_ACCESS_TABLE, condition);
+            if (entries->size() == 0u)
+            {
+                result = CODE_COMMITTEE_MEMBER_NOT_EXIST;
+                CHAIN_GOVERNANCE_LOG(INFO)
+                    << LOG_BADGE("ChainGovernance revokeMember") << LOG_DESC("member not exist")
+                    << LOG_KV("member", member) << LOG_KV("return", result);
+                break;
+            }
+            result = verifyAndRecord(
+                _context, Operation::RevokeCommitteeMember, member, "", _origin.hex());
+            CHAIN_GOVERNANCE_LOG(INFO)
+                << LOG_DESC("revokeMember") << LOG_KV("origin", _origin.hex())
+                << LOG_KV("member", member) << LOG_KV("return", result);
+        } while (0);
+
+        getErrorCodeOut(callResult->mutableExecResult(), result);
     }
     else if (func == name2Selector[CGP_METHOD_UPDATE_CM_WEIGHT])
     {  // updateCommitteeMemberWeight(address user, int256 weight)
+        Address user;
+        s256 weight = 0;
+        abi.abiOut(data, user, weight);
+        auto member = user.hex();
+
+        Table::Ptr acTable = openTable(_context, SYS_ACCESS_TABLE);
+        auto condition = acTable->newCondition();
+        condition->EQ(SYS_AC_ADDRESS, member);
+        auto entries = acTable->select(SYS_ACCESS_TABLE, condition);
+        if (entries->size() == 0u)
+        {
+            result = CODE_COMMITTEE_MEMBER_NOT_EXIST;
+            CHAIN_GOVERNANCE_LOG(INFO)
+                << LOG_BADGE("ChainGovernance updateMemberWeight") << LOG_DESC("member not exist")
+                << LOG_KV("member", member) << LOG_KV("weight", weight) << LOG_KV("return", result);
+        }
+        else
+        {
+            result = verifyAndRecord(_context, Operation::UpdateCommitteeMemberWeight, member,
+                boost::lexical_cast<string>(weight), _origin.hex());
+            CHAIN_GOVERNANCE_LOG(INFO)
+                << LOG_DESC("updateMemberWeight") << LOG_KV("origin", _origin.hex())
+                << LOG_KV("member", member) << LOG_KV("return", result);
+        }
+        getErrorCodeOut(callResult->mutableExecResult(), result);
     }
     else if (func == name2Selector[CGP_METHOD_UPDATE_CM_THRESHOLD])
     {  // function updateThreshold(int256 threshold) public returns (int256);
+        s256 weight = 0;
+        abi.abiOut(data, weight);
+        if (weight > 100 || weight < 0)
+        {
+            result = CODE_INVALID_THRESHOLD;
+            CHAIN_GOVERNANCE_LOG(INFO)
+                << LOG_BADGE("ChainGovernance updateThreshold") << LOG_DESC("invalid value")
+                << LOG_KV("threshold", weight) << LOG_KV("return", result);
+        }
+        else
+        {
+            double threshold = boost::lexical_cast<double>(weight) / 100;
+            result = verifyAndRecord(_context, Operation::UpdateThreshold,
+                CGP_UPDATE_AUTH_THRESHOLD, boost::lexical_cast<string>(threshold), _origin.hex());
+            CHAIN_GOVERNANCE_LOG(INFO)
+                << LOG_DESC("updateThreshold") << LOG_KV("origin", _origin.hex())
+                << LOG_KV("threshold", weight) << LOG_KV("return", result);
+        }
+        getErrorCodeOut(callResult->mutableExecResult(), result);
     }
     else if (func == name2Selector[CGP_METHOD_LIST_CM])
     {  // listCommitteeMembers();
@@ -106,9 +179,17 @@ PrecompiledExecResult::Ptr ChainGovernancePrecompiled::call(
     }
     else if (func == name2Selector[CGP_METHOD_GRANT_OP])
     {  // grantOperator(address)
+        Address user;
+        abi.abiOut(data, user);
+        result = grantOperator(_context, user.hex(), _origin);
+        getErrorCodeOut(callResult->mutableExecResult(), result);
     }
     else if (func == name2Selector[CGP_METHOD_REVOKE_OP])
     {  // revokeOperator(address)
+        Address user;
+        abi.abiOut(data, user);
+        result = revokeOperator(_context, user.hex(), _origin);
+        getErrorCodeOut(callResult->mutableExecResult(), result);
     }
     else if (func == name2Selector[CGP_METHOD_LIST_OP])
     {  // listOperators()
@@ -160,6 +241,133 @@ Table::Ptr ChainGovernancePrecompiled::getCommitteeTable(
     return table;
 }
 
+int ChainGovernancePrecompiled::grantCommitteeMember(
+    shared_ptr<dev::blockverifier::ExecutiveContext> _context, const string& _member,
+    const Address& _origin)
+{
+    int result = 0;
+    Table::Ptr acTable = openTable(_context, SYS_ACCESS_TABLE);
+    auto condition = acTable->newCondition();
+    auto entries = acTable->select(SYS_ACCESS_TABLE, condition);
+    if (entries->size() == 0u)
+    {  // grant committee member
+        auto entry = acTable->newEntry();
+        entry->setField(SYS_AC_TABLE_NAME, SYS_ACCESS_TABLE);
+        entry->setField(SYS_AC_ADDRESS, _member);
+        entry->setField(SYS_AC_ENABLENUM, to_string(_context->blockInfo().number + 1));
+        result = acTable->insert(SYS_ACCESS_TABLE, entry, make_shared<AccessOptions>(_origin));
+        // write weight
+        auto committeeTable = getCommitteeTable(_context);
+        entry = committeeTable->newEntry();
+        entry->setField(CGP_COMMITTEE_TABLE_VALUE, to_string(1));
+        entry->setField(CGP_COMMITTEE_TABLE_ORIGIN, _origin.hex());
+        committeeTable->insert(
+            _member + CGP_WEIGTH_SUFFIX, entry, make_shared<AccessOptions>(Address(), false));
+        CHAIN_GOVERNANCE_LOG(INFO) << LOG_DESC("grantCommitteeMember") << LOG_KV("member", _member)
+                                   << LOG_KV("return", result);
+        return result;
+    }
+    condition = acTable->newCondition();
+    condition->EQ(SYS_AC_ADDRESS, _member);
+    auto addrEntries = acTable->select(SYS_ACCESS_TABLE, condition);
+    if (addrEntries->size() != 0u)
+    {
+        CHAIN_GOVERNANCE_LOG(INFO)
+            << LOG_DESC("grantCommitteeMember member already exist") << LOG_KV("member", _member)
+            << LOG_KV("member", _member) << LOG_KV("return", CODE_COMMITTEE_MEMBER_EXIST);
+        return CODE_COMMITTEE_MEMBER_EXIST;
+    }
+    addrEntries = acTable->select(SYS_TABLES, condition);
+    if (addrEntries->size() != 0u)
+    {
+        CHAIN_GOVERNANCE_LOG(INFO) << LOG_DESC("grant Operator as committee member is forbidden")
+                                   << LOG_KV("member", _member)
+                                   << LOG_KV("return", CODE_OPERATOR_CANNOT_BE_COMMITTEE_MEMBER);
+        return CODE_OPERATOR_CANNOT_BE_COMMITTEE_MEMBER;
+    }
+    // check vote validation
+    result = verifyAndRecord(_context, Operation::GrantCommitteeMember, _member, "", _origin.hex());
+    CHAIN_GOVERNANCE_LOG(INFO) << LOG_DESC("grantCommitteeMember")
+                               << LOG_KV("origin", _origin.hex()) << LOG_KV("member", _member)
+                               << LOG_KV("return", result);
+    return result;
+}
+
+int ChainGovernancePrecompiled::grantOperator(
+    shared_ptr<dev::blockverifier::ExecutiveContext> _context, const string& _userAddress,
+    const Address& _origin)
+{
+    Table::Ptr acTable = openTable(_context, SYS_ACCESS_TABLE);
+    auto condition = acTable->newCondition();
+    condition->EQ(SYS_AC_ADDRESS, _userAddress);
+    auto entries = acTable->select(SYS_ACCESS_TABLE, condition);
+    if (entries->size() != 0u)
+    {
+        CHAIN_GOVERNANCE_LOG(INFO) << LOG_DESC("grant committee member as Operator is forbidden")
+                                   << LOG_KV("member", _userAddress)
+                                   << LOG_KV("return", CODE_COMMITTEE_MEMBER_CANNOT_BE_OPERATOR);
+        return CODE_COMMITTEE_MEMBER_CANNOT_BE_OPERATOR;
+    }
+    entries = acTable->select(SYS_TABLES, condition);
+    if (entries->size() != 0u)
+    {
+        CHAIN_GOVERNANCE_LOG(INFO)
+            << LOG_DESC("grantOperator operator exists") << LOG_KV("operator", _userAddress)
+            << LOG_KV("return", CODE_OPERATOR_EXIST);
+        return CODE_OPERATOR_EXIST;
+    }
+    auto entry = acTable->newEntry();
+    entry->setField(SYS_AC_TABLE_NAME, SYS_TABLES);
+    entry->setField(SYS_AC_ADDRESS, _userAddress);
+    entry->setField(
+        SYS_AC_ENABLENUM, boost::lexical_cast<string>(_context->blockInfo().number + 1));
+    int result = acTable->insert(SYS_TABLES, entry, make_shared<AccessOptions>(_origin));
+    if (result == storage::CODE_NO_AUTHORIZED)
+    {
+        CHAIN_GOVERNANCE_LOG(INFO)
+            << LOG_DESC("permission denied") << LOG_KV("operator", _userAddress)
+            << LOG_KV("origin", _origin.hex());
+        BOOST_THROW_EXCEPTION(
+            PrecompiledException("Permission denied. " + _origin.hex() +
+                                 " can't grantOperator operator " + _userAddress));
+        return result;
+    }
+    CHAIN_GOVERNANCE_LOG(INFO) << LOG_DESC("revokeCommitteeMember")
+                               << LOG_KV("origin", _origin.hex())
+                               << LOG_KV("operator", _userAddress) << LOG_KV("return", result);
+    return result;
+}
+
+int ChainGovernancePrecompiled::revokeOperator(
+    shared_ptr<dev::blockverifier::ExecutiveContext> _context, const string& _userAddress,
+    const Address& _origin)
+{
+    Table::Ptr acTable = openTable(_context, SYS_ACCESS_TABLE);
+    auto condition = acTable->newCondition();
+    condition->EQ(SYS_AC_ADDRESS, _userAddress);
+    auto entries = acTable->select(SYS_TABLES, condition);
+    if (entries->size() == 0u)
+    {
+        CHAIN_GOVERNANCE_LOG(INFO)
+            << LOG_DESC("revokeOperator operator not exist") << LOG_KV("operator", _userAddress)
+            << LOG_KV("return", CODE_OPERATOR_NOT_EXIST);
+        return CODE_OPERATOR_NOT_EXIST;
+    }
+    int result = acTable->remove(SYS_TABLES, condition, make_shared<AccessOptions>(_origin));
+    if (result == storage::CODE_NO_AUTHORIZED)
+    {
+        CHAIN_GOVERNANCE_LOG(INFO)
+            << LOG_DESC("permission denied") << LOG_KV("operator", _userAddress)
+            << LOG_KV("origin", _origin.hex());
+        BOOST_THROW_EXCEPTION(
+            PrecompiledException("Permission denied. " + _origin.hex() +
+                                 " can't grantOperator operator " + _userAddress));
+        return result;
+    }
+    CHAIN_GOVERNANCE_LOG(INFO) << LOG_DESC("revoke Member") << LOG_KV("origin", _origin.hex())
+                               << LOG_KV("operator", _userAddress) << LOG_KV("return", result);
+    return result;
+}
 int ChainGovernancePrecompiled::verifyAndRecord(
     shared_ptr<dev::blockverifier::ExecutiveContext> _context, Operation _op, const string& _user,
     const string& _value, const string& _origin)
@@ -191,6 +399,7 @@ int ChainGovernancePrecompiled::verifyAndRecord(
         {  // duplicate vote, update
             committeeTable->update(
                 key, entry, condition, make_shared<AccessOptions>(Address(), false));
+            return;
         }
         committeeTable->insert(key, entry, make_shared<AccessOptions>(Address(), false));
     };
