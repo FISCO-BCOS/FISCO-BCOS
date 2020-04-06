@@ -28,6 +28,7 @@
 #include <libdevcrypto/Hash.h>
 #include <libethcore/BlockHeader.h>
 #include <libethcore/Common.h>
+#include <libethcore/EVMFlags.h>
 #include <libethcore/EVMSchedule.h>
 #include <libethcore/Instruction.h>
 #include <libethcore/LastBlockHashesFace.h>

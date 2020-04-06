@@ -152,8 +152,12 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             {
                 // ca or agency certificate
                 HOST_LOG(TRACE) << LOG_DESC("Ignore CA certificate");
+                BASIC_CONSTRAINTS_free(basic);
                 return preverified;
             }
+
+            BASIC_CONSTRAINTS_free(basic);
+
             EVP_PKEY* evpPublicKey = X509_get_pubkey(cert);
             if (!evpPublicKey)
             {

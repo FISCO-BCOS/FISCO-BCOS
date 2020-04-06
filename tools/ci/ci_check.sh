@@ -141,7 +141,7 @@ check_rpbft()
         sed_cmd="sed -i .bkp"
     fi
     ${sed_cmd} "s/consensus_type=raft/consensus_type=rpbft/" node*/conf/group.1.genesis
-    check_consensus_and_sync 5
+    check_consensus_and_sync 6
 }
 
 init

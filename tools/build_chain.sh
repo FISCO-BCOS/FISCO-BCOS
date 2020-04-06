@@ -10,6 +10,7 @@ ip_param=
 use_ip_param=
 agency_array=
 group_array=
+ports_array=
 ip_array=
 output_dir=nodes
 port_start=(30300 20200 8545)
@@ -31,7 +32,7 @@ gm_conf_path="gmconf/"
 current_dir=$(pwd)
 consensus_type="pbft"
 supported_consensus=(pbft raft rpbft)
-TASSL_CMD="${HOME}"/.tassl
+TASSL_CMD="${HOME}"/.fisco/tassl
 auto_flush="true"
 enable_statistic="false"
 enable_free_storage="false"
@@ -50,7 +51,7 @@ help() {
     cat << EOF
 Usage:
     -l <IP list>                        [Required] "ip1:nodeNum1,ip2:nodeNum2" e.g:"192.168.0.1:2,192.168.0.2:3"
-    -f <IP list file>                   [Optional] split by line, every line should be "ip:nodeNum agencyName groupList". eg "127.0.0.1:4 agency1 1,2"
+    -f <IP list file>                   [Optional] split by line, every line should be "ip:nodeNum agencyName groupList p2p_port,channel_port,jsonrpc_port". eg "127.0.0.1:4 agency1 1,2 30300,20200,8545"
     -e <FISCO-BCOS binary path>         Default download fisco-bcos from GitHub. If set -e, use the binary at the specified location
     -o <Output Dir>                     Default ./nodes/
     -p <Start Port>                     Default 30300,20200,8545 means p2p_port start from 30300, channel_port from 20200, jsonrpc_port from 8545
@@ -184,7 +185,7 @@ LOG_INFO "CA Key Path       : $ca_file"
 [ -n "${guomi_mode}" ] && LOG_INFO "Guomi mode        : $guomi_mode"
 echo "=============================================================="
 LOG_INFO "Execute the download_console.sh script in directory named by IP to get FISCO-BCOS console."
-echo "e.g.  bash ${output_dir}/${ip_array[0]%:*}/download_console.sh"
+echo "e.g.  bash ${output_dir}/${ip_array[0]%:*}/download_console.sh -f"
 echo "=============================================================="
 LOG_INFO "All completed. Files in ${output_dir}"
 }
@@ -211,7 +212,7 @@ check_env() {
 # TASSL env
 check_and_install_tassl()
 { 
-    if [ ! -f "${HOME}/.tassl" ];then
+    if [ ! -f "${TASSL_CMD}" ];then
         LOG_INFO "Downloading tassl binary ..."
         if [[ -n "${macOS}" ]];then
             curl -LO https://github.com/FISCO-BCOS/LargeFiles/raw/master/tools/tassl_mac.tar.gz
@@ -219,9 +220,10 @@ check_and_install_tassl()
         else
             curl -LO https://github.com/FISCO-BCOS/LargeFiles/raw/master/tools/tassl.tar.gz
         fi
-        tar zxvf tassl.tar.gz
+        tar zxvf tassl.tar.gz && rm tassl.tar.gz
         chmod u+x tassl
-        mv tassl ${HOME}/.tassl
+        mkdir -p "${HOME}"/.fisco
+        mv tassl "${HOME}"/.fisco/tassl
     fi
 }
 
@@ -356,8 +358,6 @@ gen_chain_cert_gm() {
 	$TASSL_CMD genpkey -paramfile gmsm2.param -out $chaindir/gmca.key
 	$TASSL_CMD req -config gmcert.cnf -x509 -days 3650 -subj "/CN=${name}/O=fisco-bcos/OU=chain" -key $chaindir/gmca.key -extensions v3_ca -out $chaindir/gmca.crt
 
-    cp gmcert.cnf gmsm2.param $chaindir
-
     if $(cp gmcert.cnf gmsm2.param $chaindir)
     then
         echo "build chain ca succussful!"
@@ -438,7 +438,15 @@ generate_config_ini()
     local ip=${2}
     local offset=$(get_value ${ip//./}_count)
     local node_groups=(${3//,/ })
+    local port_array=
+    read -r -a port_array <<< "${port_start[*]}"
+    local node_index="${5}"
+    if [[ -n "${4}" ]];then
+        read -r -a port_array <<< "${4//,/ }"
+        [ "${node_index}" == "0" ] && { offset=0 && set_value "${ip//./}_count" 0; }
+    fi 
     local prefix=""
+    
     if [ -n "${guomi_mode}" ]; then
         prefix="gm"
     fi
@@ -446,11 +454,11 @@ generate_config_ini()
 [rpc]
     channel_listen_ip=0.0.0.0
     jsonrpc_listen_ip=${listen_ip}
-    channel_listen_port=$(( offset + port_start[1] ))
-    jsonrpc_listen_port=$(( offset + port_start[2] ))
+    channel_listen_port=$(( offset + port_array[1] ))
+    jsonrpc_listen_port=$(( offset + port_array[2] ))
 [p2p]
     listen_ip=0.0.0.0
-    listen_port=$(( offset + port_start[0] ))
+    listen_port=$(( offset + port_array[0] ))
     ;enable_compress=true
     ; nodes to connect
     $ip_list
@@ -502,6 +510,7 @@ generate_config_ini()
     flush=${auto_flush}
     log_flush_threshold=100
 EOF
+    printf "  [%d] p2p:%-5d  channel:%-5d  jsonrpc:%-5d\n" "${node_index}" $(( offset + port_array[0] )) $(( offset + port_array[1] )) $(( offset + port_array[2] )) >>"${logfile}"
 }
 
 generate_group_genesis()
@@ -941,14 +950,29 @@ genDownloadConsole() {
     local output=$1
     local file="${output}/download_console.sh"
     generate_script_template "${file}"
-    cat << EOF > "${file}"
-version=\$(curl -s https://api.github.com/repos/FISCO-BCOS/console/releases | grep "tag_name" | sort -u | tail -n 1 | cut -d \" -f 4 | sed "s/^[vV]//")
+    cat << EOF >> "${file}"
+set -e
+sed_cmd="sed -i"
+
+if [ "\$(uname)" == "Darwin" ];then
+    sed_cmd="sed -i .bkp"
+fi
+while getopts "v:f" option;do
+    case \$option in
+    v) version="\$OPTARG";;
+    f) config="true";;
+    esac
+done    
+
+if [[ -z "\${version}" ]];then
+    version=\$(curl -s https://api.github.com/repos/FISCO-BCOS/console/releases | grep "tag_name" | sort -u | tail -n 1 | cut -d \" -f 4 | sed "s/^[vV]//")
+fi
 package_name="console.tar.gz"
 echo "Downloading console \${version}"
 download_link=https://github.com/FISCO-BCOS/console/releases/download/v\${version}/\${package_name}
 
 if [ \$(curl -IL -o /dev/null -s -w %{http_code}  https://www.fisco.com.cn/cdn/console/releases/download/v\${version}/\${package_name}) == 200 ];then
-    curl -LO \${download_link} --speed-time 30 --speed-limit 1024 -m 90 || {
+    curl -LO \${download_link} --speed-time 30 --speed-limit 102400 -m 450 || {
         echo -e "\033[32m Download speed is too low, try https://www.fisco.com.cn/cdn/console/releases/download/v\${version}/\${package_name} \033[0m"
         curl -LO https://www.fisco.com.cn/cdn/console/releases/download/v\${version}/\${package_name}
     }
@@ -956,6 +980,15 @@ else
     curl -LO \${download_link}
 fi
 tar -zxf \${package_name} && cd console && chmod +x *.sh
+
+if [[ -n "\${config}" ]];then 
+    cp conf/applicationContext-sample.xml conf/applicationContext.xml
+    cp ../sdk/* conf/
+    channel_listen_port=\$(cat "\${SHELL_FOLDER}"/node*/config.ini | grep channel_listen_port | cut -d = -f 2 | head -n 1)
+    channel_listen_ip=\$(cat "\${SHELL_FOLDER}"/node*/config.ini | grep channel_listen_ip | cut -d = -f 2 | head -n 1)
+    \${sed_cmd} "s/127.0.0.1:20200/127.0.0.1:\${channel_listen_port}/" conf/applicationContext.xml
+    echo -e "\033[32m console configuration completed successfully. \033[0m"
+fi
 EOF
 }
 
@@ -964,7 +997,7 @@ genTransTest()
     local output=$1
     local file="${output}/.transTest.sh"
     generate_script_template "${file}"
-    cat << EOF > "${file}"
+    cat << EOF >> "${file}"
 # This script only support for block number smaller than 65535 - 256
 
 ip_port=http://127.0.0.1:$(( port_start[2] ))
@@ -1059,7 +1092,7 @@ EOF
 parse_ip_config()
 {
     local config=$1
-    n=0
+    local n=0
     while read line;do
         ip_array[n]=$(echo ${line} | awk '{print $1}')
         agency_array[n]=$(echo ${line} | awk '{print $2}')
@@ -1067,6 +1100,7 @@ parse_ip_config()
         if [ -z "${ip_array[$n]}" -o -z "${agency_array[$n]}" -o -z "${group_array[$n]}" ];then
             exit_with_clean "Please check ${config}, make sure there is no empty line!"
         fi
+        ports_array[n]=$(echo "${line}" | awk '{print $4}')
         ((++n))
     done < ${config}
 }
@@ -1325,7 +1359,7 @@ for line in ${ip_array[*]};do
         echo "Processing IP:${ip} ID:${i} config files..." >> ${logfile}
         local node_count="$(get_value ${ip//./}_count)"
         node_dir="${output_dir}/${ip}/node${node_count}"
-        generate_config_ini "${node_dir}/config.ini" "${ip}" "${group_array[server_count]}"
+        generate_config_ini "${node_dir}/config.ini" "${ip}" "${group_array[server_count]}" "${ports_array[server_count]}" ${i}
         if [ "${use_ip_param}" == "false" ];then
             node_groups=(${group_array[${server_count}]//,/ })
             for j in ${node_groups[@]};do

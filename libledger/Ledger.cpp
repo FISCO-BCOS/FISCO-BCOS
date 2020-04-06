@@ -206,6 +206,7 @@ bool Ledger::initBlockChain(GenesisBlockParam& _genesisParam)
             m_param->mutableStorageParam().type = _genesisParam.storageType;
         }
         m_param->mutableStateParam().type = _genesisParam.stateType;
+        m_param->mutableGenesisParam().evmFlags = _genesisParam.evmFlags;
     }
     Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_DESC("initBlockChain SUCC");
     return true;

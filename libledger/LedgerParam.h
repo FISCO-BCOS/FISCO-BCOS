@@ -23,9 +23,10 @@
  */
 #pragma once
 #include "LedgerParamInterface.h"
-#include "libblockchain/BlockChainInterface.h"
-#include "libethcore/Protocol.h"
+#include <libblockchain/BlockChainInterface.h>
 #include <libdevcore/FixedHash.h>
+#include <libethcore/EVMFlags.h>
+#include <libethcore/Protocol.h>
 #include <boost/property_tree/ptree.hpp>
 #include <memory>
 #include <vector>
@@ -114,12 +115,7 @@ struct GenesisParam
     // evm related flags
     // Extensible parameters for passing VM configuration
     // bit 64 is currently occupied, indicating whether to use FreeStorageVMSchedule
-    VMFlagType evmFlags = 0;
-};
-
-struct EVMFlags
-{
-    static const VMFlagType FreeStorageGas = ((VMFlagType)1 << (sizeof(VMFlagType) * 8 - 1));
+    dev::VMFlagType evmFlags = 0;
 };
 
 struct EventLogFilterManagerParams

@@ -74,8 +74,9 @@ ExternalProject_Add(jsonrpccpp
 add_dependencies(jsonrpccpp jsoncpp)
 add_dependencies(jsonrpccpp MHD)
 
+ExternalProject_Get_Property(jsonrpccpp SOURCE_DIR)
 ExternalProject_Get_Property(jsonrpccpp INSTALL_DIR)
-set(JSONRPCCPP_INCLUDE_DIR ${INSTALL_DIR}/include)
+set(JSONRPCCPP_INCLUDE_DIR ${SOURCE_DIR}/src)
 file(MAKE_DIRECTORY ${JSONRPCCPP_INCLUDE_DIR})  # Must exist.
 
 add_library(JsonRpcCpp::Common STATIC IMPORTED)

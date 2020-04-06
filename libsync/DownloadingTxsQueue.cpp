@@ -114,7 +114,6 @@ void DownloadingTxsQueue::pop2TxPool(
         if (g_BCOSConfig.version() >= RC2_VERSION)
         {
             RLP const& txsBytesRLP = RLP(ref(txsShard->txsBytes))[0];
-            // std::cout << "decode sync txs " << toHex(txsShard.txsBytes) << std::endl;
             dev::eth::TxsParallelParser::decode(
                 txs, txsBytesRLP.toBytesConstRef(), _checkSig, true);
         }

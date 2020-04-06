@@ -25,6 +25,7 @@
 #include <libdevcore/FixedHash.h>
 #include <libethcore/Block.h>
 #include <libethcore/Common.h>
+#include <libethcore/EVMFlags.h>
 #include <libethcore/Transaction.h>
 #include <libethcore/TransactionReceipt.h>
 namespace dev

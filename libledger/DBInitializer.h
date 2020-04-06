@@ -106,7 +106,6 @@ private:
     dev::storage::Storage::Ptr initRocksDBStorage(std::shared_ptr<LedgerParamInterface> _param);
     dev::storage::Storage::Ptr initScalableStorage(std::shared_ptr<LedgerParamInterface> _param);
     void createStorageState();
-    void createMptState(dev::h256 const& genesisHash);
 
     dev::storage::Storage::Ptr initZdbStorage();
     void recoverFromBinaryLog(std::shared_ptr<dev::storage::BinLogHandler> _binaryLogger,
