@@ -88,6 +88,8 @@ public:
 private:
     void onHandshake(const boost::system::error_code& error, ChannelSession::Ptr session);
 
+    std::function<bool(bool, boost::asio::ssl::verify_context&)> newVerifyCallback();
+
     std::shared_ptr<boost::asio::io_service> m_ioService;
     std::shared_ptr<boost::asio::ssl::context> m_sslContext;
 
@@ -103,6 +105,7 @@ private:
     std::string m_listenHost = "";
     int m_listenPort = 0;
     bool m_enableSSL = false;
+    std::string m_certIssuerName = "";
 };
 
 }  // namespace channel
