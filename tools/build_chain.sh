@@ -36,6 +36,7 @@ TASSL_CMD="${HOME}"/.fisco/tassl
 auto_flush="true"
 enable_statistic="false"
 enable_free_storage="false"
+deploy_mode=
 # trans timestamp from seconds to milliseconds
 timestamp=$(($(date '+%s')*1000))
 chain_id=1
@@ -118,7 +119,7 @@ exit_with_clean()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:t:v:s:C:c:izhgTFSdE" option;do
+while getopts "f:l:o:p:e:t:v:s:C:c:izhgTFSdED" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -158,9 +159,10 @@ while getopts "f:l:o:p:e:t:v:s:C:c:izhgTFSdE" option;do
     F) auto_flush="false";;
     S) enable_statistic="true";;
     E) enable_free_storage="true";;
-    z) make_tar="yes";;
-    g) guomi_mode="yes";;
-    d) docker_mode="yes"
+    D) deploy_mode="true" && make_tar="true";;
+    z) make_tar="true";;
+    g) guomi_mode="true";;
+    d) docker_mode="true"
     if [ -n "${macOS}" ];then LOG_WARN "Docker desktop of macOS can't support docker mode of FISCO BCOS!" && exit 1;fi
     ;;
     h) help;;
@@ -436,14 +438,15 @@ generate_config_ini()
 {
     local output=${1}
     local ip=${2}
-    local offset=$(get_value ${ip//./}_count)
+    local offset=0
+    offset=$(get_value "${ip//./}_port_offset")
     local node_groups=(${3//,/ })
     local port_array=
     read -r -a port_array <<< "${port_start[*]}"
     local node_index="${5}"
     if [[ -n "${4}" ]];then
         read -r -a port_array <<< "${4//,/ }"
-        [ "${node_index}" == "0" ] && { offset=0 && set_value "${ip//./}_count" 0; }
+        [ "${node_index}" == "0" ] && { offset=0 && set_value "${ip//./}_port_offset" 0; }
     fi 
     local prefix=""
     
@@ -803,6 +806,8 @@ generate_node_scripts()
     local pid="pid"
     local log_cmd="tail -n20  nohup.out"
     local check_success="\$(${log_cmd} | grep running)"
+    local fisco_bin_path="../${bcos_bin_name}"
+    if [ -n "${deploy_mode}" ];then fisco_bin_path="${bcos_bin_name}"; fi
     if [ -n "${docker_mode}" ];then
         ps_cmd="\$(docker ps |grep \${SHELL_FOLDER//\//} | grep -v grep|awk '{print \$1}')"
         start_cmd="docker run -d --rm --name \${SHELL_FOLDER//\//} -v \${SHELL_FOLDER}:/data --network=host -w=/data fiscoorg/fiscobcos:${docker_tag} -c config.ini"
@@ -812,7 +817,7 @@ generate_node_scripts()
         check_success="success"
     fi
     cat << EOF >> "$output/start.sh"
-fisco_bcos=\${SHELL_FOLDER}/../${bcos_bin_name}
+fisco_bcos=\${SHELL_FOLDER}/${fisco_bin_path}
 cd \${SHELL_FOLDER}
 node=\$(basename \${SHELL_FOLDER})
 node_pid=${ps_cmd}
@@ -842,7 +847,7 @@ exit 1
 EOF
     generate_script_template "$output/stop.sh"
     cat << EOF >> "$output/stop.sh"
-fisco_bcos=\${SHELL_FOLDER}/../${bcos_bin_name}
+fisco_bcos=\${SHELL_FOLDER}/${fisco_bin_path}
 node=\$(basename \${SHELL_FOLDER})
 node_pid=${ps_cmd}
 try_times=15
@@ -869,7 +874,7 @@ EOF
     cat << EOF >> "$output/scripts/load_new_groups.sh"
 cd \${SHELL_FOLDER}/../
 NODE_FOLDER=\$(pwd)
-fisco_bcos=\${NODE_FOLDER}/../${bcos_bin_name}
+fisco_bcos=\${NODE_FOLDER}/${fisco_bin_path}
 node=\$(basename \${NODE_FOLDER})
 node_pid=${ps_cmd}
 if [ -n "\${node_pid}" ];then
@@ -933,7 +938,7 @@ check_whitelist \${SHELL_FOLDER}/../config.ini
 
 cd \${SHELL_FOLDER}/../
 NODE_FOLDER=\$(pwd)
-fisco_bcos=\${NODE_FOLDER}/../${bcos_bin_name}
+fisco_bcos=\${NODE_FOLDER}/${fisco_bin_path}
 node=\$(basename \${NODE_FOLDER})
 node_pid=${ps_cmd}
 if [ -n "\${node_pid}" ];then
@@ -943,6 +948,134 @@ if [ -n "\${node_pid}" ];then
 else 
     echo "\${node} is not running, use start.sh to start and enable whitelist directlly."
 fi
+EOF
+
+generate_script_template "$output/scripts/monitor.sh"
+    cat << EOF >> "$output/scripts/monitor.sh"
+
+# * * * * * bash monitor.sh -d /data/nodes/127.0.0.1/ > monitor.log 2>&1
+cd \$SHELL_FOLDER
+
+alarm() {
+        alert_ip=\$(/sbin/ifconfig eth0 | grep inet | awk '{print \$2}')
+        time=\$(date "+%Y-%m-%d %H:%M:%S")
+        echo "[\${time}] \$1"
+}
+
+# restart the node
+restart() {
+        local nodedir=\$1
+        bash \$nodedir/stop.sh
+        sleep 5
+        bash \$nodedir/start.sh
+}
+
+info() {
+        time=\$(date "+%Y-%m-%d %H:%M:%S")
+        echo "[\$time] \$1"
+}
+
+# check if nodeX is work well
+function check_node_work_properly() {
+        nodedir=\$1
+        # node name
+        node=\$(basename \$nodedir)
+        # fisco-bcos path
+        fiscopath=\${nodedir}/
+        config=\$1/config.ini
+        # rpc url
+        config_ip="127.0.0.1"
+        config_port=\$(cat \$config | grep 'jsonrpc_listen_port' | egrep -o "[0-9]+")
+
+        # check if process id exist
+        pid=\$(ps aux | grep "\$fiscopath" | egrep "fisco-bcos" | grep -v "grep" | awk -F " " '{print \$2}')
+        [ -z "\${pid}" ] && {
+                alarm " ERROR! \$config_ip:\$config_port \$node does not exist"
+                restart \$nodedir
+                return 1
+        }
+
+        # get group_id list
+        groups=\$(ls \${nodedir}/conf/group*genesis | grep -o "group.*.genesis" | grep -o "group.*.genesis" | cut -d \. -f 2)
+        for group in \${groups}; do
+                # get blocknumber
+                heightresult=\$(curl -s "http://\$config_ip:\$config_port" -X POST --data "{\"jsonrpc\":\"2.0\",\"method\":\"getBlockNumber\",\"params\":[\${group}],\"id\":67}")
+                echo \$heightresult
+                height=\$(echo \$heightresult | awk -F'"' '{if(\$2=="id" && \$4=="jsonrpc" && \$8=="result") {print \$10}}')
+                [[ -z "\$height" ]] && {
+                        alarm " ERROR! Cannot connect to \$config_ip:\$config_port \$node:\$group "
+                        continue
+                }
+
+                height_file="\$nodedir/\$node_\$group.height"
+                prev_height=0
+                [ -f \$height_file ] && prev_height=\$(cat \$height_file)
+                heightvalue=\$(printf "%d\n" "\$height")
+                prev_heightvalue=\$(printf "%d\n" "\$prev_height")
+
+                viewresult=\$(curl -s "http://\$config_ip:\$config_port" -X POST --data "{\"jsonrpc\":\"2.0\",\"method\":\"getPbftView\",\"params\":[\$group],\"id\":68}")
+                echo \$viewresult
+                view=\$(echo \$viewresult | awk -F'"' '{if(\$2=="id" && \$4=="jsonrpc" && \$8=="result") {print \$10}}')
+                [[ -z "\$view" ]] && {
+                        alarm " ERROR! Cannot connect to \$config_ip:\$config_port \$node:\$group "
+                        continue
+                }
+
+                view_file="\$nodedir/\$node_\$group.view"
+                prev_view=0
+                [ -f \$view_file ] && prev_view=\$(cat \$view_file)
+                viewvalue=\$(printf "%d\n" "\$view")
+                prev_viewvalue=\$(printf "%d\n" "\$prev_view")
+
+                # check if blocknumber of pbft view already change, if all of them is the same with before, the node may not work well.
+                [ \$heightvalue -eq \$prev_heightvalue ] && [ \$viewvalue -eq \$prev_viewvalue ] && {
+                        alarm " ERROR! \$config_ip:\$config_port \$node:\$group is not working properly: height \$height and view \$view no change"
+                        continue
+                }
+
+                echo \$height >\$height_file
+                echo \$view >\$view_file
+                info " OK! \$config_ip:\$config_port \$node:\$group is working properly: height \$height view \$view"
+
+        done
+
+        return 0
+}
+
+# check all node of this server, if all node work well.
+function check_all_node_work_properly() {
+        local work_dir=\$1
+        for configfile in \$(ls \${work_dir}/node*/config.ini); do
+                check_node_work_properly \$(dirname \$configfile)
+        done
+}
+
+function help() {
+        echo "Usage:"
+        echo "Optional:"
+        echo "    -d  <path>          work dir(default: \\$SHELL_FOLDER/../). "
+        echo "    -h                  Help."
+        echo "Example:"
+        echo "    bash monitor.sh -d /data/nodes/127.0.0.1 "
+        exit 0
+}
+
+work_dir=\${SHELL_FOLDER}/../../
+
+while getopts "d:r:c:s:h" option; do
+        case \$option in
+        d) work_dir=\$OPTARG ;;
+        h) help ;;
+        esac
+done
+
+[ ! -d \${work_dir} ] && {
+        LOG_ERROR "work_dir(\$work_dir) not exist "
+        exit 0
+}
+
+check_all_node_work_properly \${work_dir}
+
 EOF
 }
 
@@ -1255,7 +1388,7 @@ for line in ${ip_array[*]};do
     for ((i=0;i<num;++i));do
         echo "Processing IP:${ip} ID:${i} node's key" >> ${logfile}
         local node_count="$(get_value ${ip//./}_count)"
-        node_dir="${output_dir}/${ip}/node${node_count}"
+        local node_dir="${output_dir}/${ip}/node${node_count}"
         [ -d "${node_dir}" ] && exit_with_clean "${node_dir} exist! Please delete!"
         
         while :
@@ -1320,10 +1453,17 @@ for line in ${ip_array[*]};do
         nodeid_list=$"${nodeid_list}node.${count}=${nodeid}
     "
         fi
-        
-        ip_list=$"${ip_list}node.${count}="${ip}:$(( $(get_value ${ip//./}_count) + port_start[0] ))"
+        local node_ports=
+        read -r -a node_ports <<< "${port_start[*]}"
+        if [ -n "${ports_array[server_count]}" ];then 
+            read -r -a node_ports <<< "${ports_array[server_count]//,/ }"
+            echo "node_ports ${node_ports[*]}" >>"${logfile}"
+            [ "${i}" == "0" ] && { set_value "${ip//./}_port_offset" 0; }
+        fi
+        ip_list="${ip_list}node.${count}=${ip}:$(( $(get_value ${ip//./}_port_offset) + node_ports[0] ))
     "
         set_value ${ip//./}_count $(( $(get_value ${ip//./}_count) + 1 ))
+        set_value "${ip//./}_port_offset" $(( $(get_value "${ip//./}_port_offset") + 1 ))
         ((++count))
     done
     sdk_path="${output_dir}/${ip}/sdk"
@@ -1344,6 +1484,7 @@ done
 for line in ${ip_array[*]};do
     ip=${line%:*}
     set_value ${ip//./}_count 0
+    set_value "${ip//./}_port_offset" 0
 done
 
 echo "=============================================================="
@@ -1356,9 +1497,9 @@ for line in ${ip_array[*]};do
     [ "$num" == "$ip" ] || [ -z "${num}" ] && num=${node_num}
     echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
     for ((i=0;i<num;++i));do
-        echo "Processing IP:${ip} ID:${i} config files..." >> ${logfile}
         local node_count="$(get_value ${ip//./}_count)"
-        node_dir="${output_dir}/${ip}/node${node_count}"
+        local node_dir="${output_dir}/${ip}/node${node_count}"
+        echo "Processing IP:${ip} ID:${i} ${node_dir} config files..." >> "${logfile}"
         generate_config_ini "${node_dir}/config.ini" "${ip}" "${group_array[server_count]}" "${ports_array[server_count]}" ${i}
         if [ "${use_ip_param}" == "false" ];then
             node_groups=(${group_array[${server_count}]//,/ })
@@ -1371,11 +1512,17 @@ for line in ${ip_array[*]};do
             generate_group_ini "$node_dir/${conf_path}/group.1.ini"
         fi
         generate_node_scripts "${node_dir}"
+        if [[ -n "${deploy_mode}" ]];then 
+            if [ -z ${docker_mode} ];then cp "$bin_path" "${node_dir}/fisco-bcos"; fi
+            p2p_port=$(grep listen_port < "${node_dir}"/config.ini | grep -v _listen_port | cut -d = -f 2)
+            mv "${node_dir}" "${output_dir}/${ip}/node_${ip}_${p2p_port}"
+        fi
         set_value ${ip//./}_count $(( $(get_value ${ip//./}_count) + 1 ))
+        set_value "${ip//./}_port_offset" $(( $(get_value "${ip//./}_port_offset") + 1 ))
     done
     generate_server_scripts "${output_dir}/${ip}"
     genDownloadConsole "${output_dir}/${ip}"
-    if [ -z ${docker_mode} ];then cp "$bin_path" "${output_dir}/${ip}/fisco-bcos"; fi
+    if [[ -z "${deploy_mode}" && -z "${docker_mode}" ]];then cp "$bin_path" "${output_dir}/${ip}/fisco-bcos"; fi
     if [ -n "$make_tar" ];then cd ${output_dir} && tar zcf "${ip}.tar.gz" "${ip}" && cd ${current_dir};fi
     ((++server_count))
 done 
