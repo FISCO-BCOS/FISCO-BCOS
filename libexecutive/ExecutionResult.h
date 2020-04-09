@@ -69,6 +69,7 @@ enum class TransactionException : uint32_t
     TxPoolIsFull = 28,
     TransactionRefused = 29,
     ContractFrozen = 30,
+    AccountFrozen = 31,
     AlreadyKnown = 10000,  /// txPool related errors
     AlreadyInChain = 10001,
     InvalidChainId = 10002,

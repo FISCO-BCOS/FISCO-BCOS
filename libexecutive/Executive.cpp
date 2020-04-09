@@ -242,6 +242,17 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
     m_savepoint = m_s->savepoint();
     m_tableFactorySavepoint = m_envInfo.precompiledEngine()->getMemoryTableFactory()->savepoint();
     m_gas = _p.gas;
+
+    if (m_t && m_s->frozen(_origin))
+    {
+        LOG(DEBUG) << LOG_DESC("execute transaction failed for ContractFrozen")
+                   << LOG_KV("account", _origin);
+        writeErrInfoToOutput("Frozen account:" + _origin.hex());
+        revert();
+        m_excepted = TransactionException::AccountFrozen;
+        return !m_ext;
+    }
+
     if (m_envInfo.precompiledEngine() &&
         m_envInfo.precompiledEngine()->isOrginPrecompiled(_p.codeAddress))
     {
