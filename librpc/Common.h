@@ -25,8 +25,6 @@
 #include <string>
 #define INVALIDNUMBER -1
 #define RPC_LOG(LEVEL) LOG(LEVEL) << "[RPC]"
-// field used to record groupId
-#define KEY_GROUPID_FIELD "groupId"
 
 namespace dev
 {
