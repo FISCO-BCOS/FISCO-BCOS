@@ -3,7 +3,8 @@
 set -e
 
 # default value 
-ca_file= #CA key
+ca_path= #CA key
+gmca_path= #gm CA key
 node_num=1 
 ip_file=
 ip_param=
@@ -20,7 +21,6 @@ supported_storage=(rocksdb mysql external scalable)
 conf_path="conf"
 bin_path=
 make_tar=
-debug_log="false"
 binary_log="false"
 log_level="info"
 logfile=${PWD}/build.log
@@ -37,6 +37,7 @@ auto_flush="true"
 enable_statistic="false"
 enable_free_storage="false"
 deploy_mode=
+copy_cert=
 # trans timestamp from seconds to milliseconds
 timestamp=$(($(date '+%s')*1000))
 chain_id=1
@@ -65,6 +66,8 @@ Usage:
     -g <Generate guomi nodes>           Default no
     -z <Generate tar packet>            Default no
     -t <Cert config file>               Default auto generate
+    -k <The path of ca root>            Default auto generate
+    -K <The path of sm crypto ca root>  Default auto generate
     -T <Enable debug log>               Default off. If set -T, enable debug log
     -S <Enable statistics>              Default off. If set -S, enable statistics
     -F <Disable log auto flush>         Default on. If set -F, disable log auto flush
@@ -119,7 +122,7 @@ exit_with_clean()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:t:v:s:C:c:izhgTFSdED" option;do
+while getopts "f:l:o:p:e:t:v:s:C:c:k:K:izhgTFSdEDZ" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -134,6 +137,26 @@ while getopts "f:l:o:p:e:t:v:s:C:c:izhgTFSdED" option;do
     if [ ${#port_start[@]} -ne 3 ];then LOG_WARN "start port error. e.g: 30300,20200,8545" && exit 1;fi
     ;;
     e) bin_path=$OPTARG;;
+    k) ca_path="$OPTARG" && ca_key="$OPTARG/ca.key" && ca_crt="$OPTARG/ca.crt"
+        if [[ ! -f "${ca_key}" ]];then
+            LOG_WARN "${ca_key} not exist."
+            exit 1;
+        fi
+        if [[ ! -f "${ca_crt}" ]];then
+            LOG_WARN "${ca_crt} not exist."
+            exit 1;
+        fi
+    ;;
+    K) gmca_path="$OPTARG" && gmca_key="$OPTARG/gmca.key" && gmca_crt="$OPTARG/gmca.crt"
+        if [[ ! -f "${ca_key}" ]];then
+            LOG_WARN "${ca_key} not exist."
+            exit 1;
+        fi
+        if [[ ! -f "${ca_crt}" ]];then
+            LOG_WARN "${ca_crt} not exist."
+            exit 1;
+        fi
+    ;;
     s) storage_type=$OPTARG
         if ! echo "${supported_storage[*]}" | grep -i "${storage_type}" &>/dev/null; then
             LOG_WARN "${storage_type} is not supported. Please set one of ${supported_storage[*]}"
@@ -153,13 +176,12 @@ while getopts "f:l:o:p:e:t:v:s:C:c:izhgTFSdED" option;do
             exit 1;
         fi
     ;;
-    T) debug_log="true"
-    log_level="debug"
-    ;;
+    T) log_level="debug";;
     F) auto_flush="false";;
     S) enable_statistic="true";;
     E) enable_free_storage="true";;
     D) deploy_mode="true" && make_tar="true";;
+    Z) copy_cert="true";;
     z) make_tar="true";;
     g) guomi_mode="true";;
     d) docker_mode="true"
@@ -177,14 +199,14 @@ fi
 print_result()
 {
 echo "=============================================================="
-[ -z "${docker_mode}" ] && [ -f "${bin_path}" ] && LOG_INFO "FISCO-BCOS Path   : $bin_path"
-[ -n "${docker_mode}" ] && LOG_INFO "Docker tag        : latest"
-[ -n "${ip_file}" ] && LOG_INFO "IP List File      : $ip_file"
-LOG_INFO "Start Port        : ${port_start[*]}"
-LOG_INFO "Server IP         : ${ip_array[*]}"
-LOG_INFO "Output Dir        : ${output_dir}"
-LOG_INFO "CA Key Path       : $ca_file"
-[ -n "${guomi_mode}" ] && LOG_INFO "Guomi mode        : $guomi_mode"
+[ -z "${docker_mode}" ] && [ -f "${bin_path}" ] && LOG_INFO "FISCO-BCOS Path : $bin_path"
+[ -n "${docker_mode}" ] && LOG_INFO "Docker tag      : latest"
+[ -n "${ip_file}" ] && LOG_INFO "IP List File    : $ip_file"
+LOG_INFO "Start Port      : ${port_start[*]}"
+LOG_INFO "Server IP       : ${ip_array[*]}"
+LOG_INFO "Output Dir      : ${output_dir}"
+LOG_INFO "CA Key Path     : $ca_path"
+[ -n "${guomi_mode}" ] && LOG_INFO "Guomi mode      : $guomi_mode"
 echo "=============================================================="
 LOG_INFO "Execute the download_console.sh script in directory named by IP to get FISCO-BCOS console."
 echo "e.g.  bash ${output_dir}/${ip_array[0]%:*}/download_console.sh -f"
@@ -211,9 +233,7 @@ check_env() {
     fi
 }
 
-# TASSL env
-check_and_install_tassl()
-{ 
+check_and_install_tassl(){
     if [ ! -f "${TASSL_CMD}" ];then
         LOG_INFO "Downloading tassl binary ..."
         if [[ -n "${macOS}" ]];then
@@ -265,9 +285,8 @@ gen_chain_cert() {
     
     chaindir=$path
     mkdir -p $chaindir
-    openssl genrsa -out $chaindir/ca.key 2048
+    openssl genrsa -out "$chaindir/ca.key" 2048
     openssl req -new -x509 -days 3650 -subj "/CN=$name/O=fisco-bcos/OU=chain" -key $chaindir/ca.key -out $chaindir/ca.crt
-    mv cert.cnf $chaindir
 }
 
 gen_agency_cert() {
@@ -282,10 +301,10 @@ gen_agency_cert() {
     dir_must_not_exists "$agencydir"
     mkdir -p $agencydir
 
-    openssl genrsa -out $agencydir/agency.key 2048
-    openssl req -new -sha256 -subj "/CN=$name/O=fisco-bcos/OU=agency" -key $agencydir/agency.key -config $chain/cert.cnf -out $agencydir/agency.csr
-    openssl x509 -req -days 3650 -sha256 -CA $chain/ca.crt -CAkey $chain/ca.key -CAcreateserial\
-        -in $agencydir/agency.csr -out $agencydir/agency.crt  -extensions v4_req -extfile $chain/cert.cnf
+    openssl genrsa -out "$agencydir/agency.key" 2048 2> /dev/null
+    openssl req -new -sha256 -subj "/CN=$name/O=fisco-bcos/OU=agency" -key "$agencydir/agency.key" -config "$chain/cert.cnf" -out "$agencydir/agency.csr" 2> /dev/null
+    openssl x509 -req -days 3650 -sha256 -CA "$chain/ca.crt" -CAkey "$chain/ca.key" -CAcreateserial\
+        -in "$agencydir/agency.csr" -out "$agencydir/agency.crt"  -extensions v4_req -extfile "$chain/cert.cnf" 2> /dev/null
     
     cp $chain/ca.crt $chain/cert.cnf $agencydir/
     rm -f $agencydir/agency.csr
@@ -298,12 +317,12 @@ gen_cert_secp256k1() {
     certpath="$2"
     name="$3"
     type="$4"
-    openssl ecparam -out $certpath/${type}.param -name secp256k1
-    openssl genpkey -paramfile $certpath/${type}.param -out $certpath/${type}.key
-    openssl pkey -in $certpath/${type}.key -pubout -out $certpath/${type}.pubkey
-    openssl req -new -sha256 -subj "/CN=${name}/O=fisco-bcos/OU=${type}" -key $certpath/${type}.key -config $agpath/cert.cnf -out $certpath/${type}.csr
-    openssl x509 -req -days 3650 -sha256 -in $certpath/${type}.csr -CAkey $agpath/agency.key -CA $agpath/agency.crt\
-        -force_pubkey $certpath/${type}.pubkey -out $certpath/${type}.crt -CAcreateserial -extensions v3_req -extfile $agpath/cert.cnf
+    openssl ecparam -out "$certpath/${type}.param" -name secp256k1 2> /dev/null
+    openssl genpkey -paramfile "$certpath/${type}.param" -out "$certpath/${type}.key" 2> /dev/null
+    openssl pkey -in "$certpath/${type}.key" -pubout -out "$certpath/${type}.pubkey" 2> /dev/null
+    openssl req -new -sha256 -subj "/CN=${name}/O=fisco-bcos/OU=${type}" -key "$certpath/${type}.key" -config "$agpath/cert.cnf" -out "$certpath/${type}.csr" 2> /dev/null
+    openssl x509 -req -days 3650 -sha256 -in "$certpath/${type}.csr" -CAkey "$agpath/agency.key" -CA "$agpath/agency.crt" \
+        -force_pubkey "$certpath/${type}.pubkey" -out "$certpath/${type}.crt" -CAcreateserial -extensions v3_req -extfile "$agpath/cert.cnf" 2> /dev/null
     # openssl ec -in $certpath/${type}.key -outform DER | tail -c +8 | head -c 32 | xxd -p -c 32 | cat >$certpath/${type}.private
     cat ${agpath}/agency.crt >> $certpath/${type}.crt
     rm -f $certpath/${type}.csr $certpath/${type}.pubkey $certpath/${type}.param
@@ -329,7 +348,7 @@ gen_cert() {
 
     gen_cert_secp256k1 "$agpath" "$ndpath" "$node" "${cert_name}"
     #nodeid is pubkey
-    openssl ec -in $ndpath/node.key -text -noout | sed -n '7,11p' | tr -d ": \n" | awk '{print substr($0,3);}' | cat >$ndpath/node.nodeid
+    openssl ec -in "$ndpath"/node.key -text -noout 2> /dev/null | sed -n '7,11p' | tr -d ": \n" | awk '{print substr($0,3);}' | cat >"$ndpath"/node.nodeid
     # openssl x509 -serial -noout -in $ndpath/node.crt | awk -F= '{print $2}' | cat >$ndpath/node.serial
     cp $agpath/ca.crt $ndpath
     cd $ndpath
@@ -356,16 +375,8 @@ gen_chain_cert_gm() {
     chaindir=$path
     mkdir -p $chaindir
 
-    generate_gmsm2_param "gmsm2.param"
-	$TASSL_CMD genpkey -paramfile gmsm2.param -out $chaindir/gmca.key
-	$TASSL_CMD req -config gmcert.cnf -x509 -days 3650 -subj "/CN=${name}/O=fisco-bcos/OU=chain" -key $chaindir/gmca.key -extensions v3_ca -out $chaindir/gmca.crt
-
-    if $(cp gmcert.cnf gmsm2.param $chaindir)
-    then
-        echo "build chain ca succussful!"
-    else
-        echo "please input at least Common Name!"
-    fi
+	$TASSL_CMD genpkey -paramfile gmsm2.param -out "$chaindir/gmca.key" 2> /dev/null
+	$TASSL_CMD req -config gmcert.cnf -x509 -days 3650 -subj "/CN=${name}/O=fisco-bcos/OU=chain" -key "$chaindir/gmca.key" -extensions v3_ca -out "$chaindir/gmca.crt" 2> /dev/null
 }
 
 gen_agency_cert_gm() {
@@ -380,12 +391,12 @@ gen_agency_cert_gm() {
     dir_must_not_exists "$agencydir"
     mkdir -p $agencydir
 
-    $TASSL_CMD genpkey -paramfile $chain/gmsm2.param -out $agencydir/gmagency.key
-    $TASSL_CMD req -new -subj "/CN=$name/O=fisco-bcos/OU=agency" -key $agencydir/gmagency.key -config $chain/gmcert.cnf -out $agencydir/gmagency.csr
-    $TASSL_CMD x509 -req -CA $chain/gmca.crt -CAkey $chain/gmca.key -days 3650 -CAcreateserial -in $agencydir/gmagency.csr -out $agencydir/gmagency.crt -extfile $chain/gmcert.cnf -extensions v3_agency_root
+    $TASSL_CMD genpkey -paramfile "$chain/gmsm2.param" -out "$agencydir/gmagency.key" 2> /dev/null
+    $TASSL_CMD req -new -subj "/CN=$name/O=fisco-bcos/OU=agency" -key "$agencydir/gmagency.key" -config "$chain/gmcert.cnf" -out "$agencydir/gmagency.csr" 2> /dev/null
+    $TASSL_CMD x509 -req -CA "$chain/gmca.crt" -CAkey "$chain/gmca.key" -days 3650 -CAcreateserial -in "$agencydir/gmagency.csr" -out "$agencydir/gmagency.crt" -extfile "$chain/gmcert.cnf" -extensions v3_agency_root 2> /dev/null
 
-    cp $chain/gmca.crt $chain/gmcert.cnf $chain/gmsm2.param $agencydir/
-    rm -f $agencydir/gmagency.csr
+    cp "$chain/gmca.crt" "$chain/gmcert.cnf" "$chain/gmsm2.param" "$agencydir/"
+    rm -f "$agencydir/gmagency.csr"
 }
 
 gen_node_cert_with_extensions_gm() {
@@ -395,10 +406,10 @@ gen_node_cert_with_extensions_gm() {
     type="$4"
     extensions="$5"
 
-    $TASSL_CMD genpkey -paramfile $capath/gmsm2.param -out $certpath/gm${type}.key
-    $TASSL_CMD req -new -subj "/CN=$name/O=fisco-bcos/OU=${type}" -key $certpath/gm${type}.key -config $capath/gmcert.cnf -out $certpath/gm${type}.csr
-    $TASSL_CMD x509 -req -CA $capath/gmagency.crt -CAkey $capath/gmagency.key -days 3650 -CAcreateserial -in $certpath/gm${type}.csr -out $certpath/gm${type}.crt -extfile $capath/gmcert.cnf -extensions $extensions
-
+    $TASSL_CMD genpkey -paramfile "$capath/gmsm2.param" -out "$certpath/gm${type}.key" 2> /dev/null
+    $TASSL_CMD req -new -subj "/CN=$name/O=fisco-bcos/OU=${type}" -key "$certpath/gm${type}.key" -config "$capath/gmcert.cnf" -out "$certpath/gm${type}.csr" 2> /dev/null
+    $TASSL_CMD x509 -req -CA "$capath/gmagency.crt" -CAkey "$capath/gmagency.key" -days 3650 -CAcreateserial -in "$certpath/gm${type}.csr" -out "$certpath/gm${type}.crt" -extfile "$capath/gmcert.cnf" -extensions "$extensions" 2> /dev/null
+    cat "${capath}/gmagency.crt" >> "$certpath/gm${type}.crt"
     rm -f $certpath/gm${type}.csr
 }
 
@@ -420,16 +431,15 @@ gen_node_cert_gm() {
     gen_node_cert_with_extensions_gm "$agpath" "$ndpath" "$node" node v3_req
     gen_node_cert_with_extensions_gm "$agpath" "$ndpath" "$node" ennode v3enc_req
     #nodeid is pubkey
-    $TASSL_CMD ec -in $ndpath/gmnode.key -text -noout | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}'  | cat > $ndpath/gmnode.nodeid
+    $TASSL_CMD ec -in "$ndpath/gmnode.key" -text -noout 2> /dev/null | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}'  | cat > "$ndpath/gmnode.nodeid"
 
     #serial
-    if [ "" != "$($TASSL_CMD version | grep 1.0.2)" ];
+    if [ "" != "$($TASSL_CMD version 2> /dev/null | grep 1.0.2)" ];
     then
-        $TASSL_CMD x509  -text -in $ndpath/gmnode.crt | sed -n '5p' |  sed 's/://g' | tr "\n" " " | sed 's/ //g' | sed 's/[a-z]/\u&/g' | cat > $ndpath/gmnode.serial
+        $TASSL_CMD x509 -text -in "$ndpath/gmnode.crt" 2> /dev/null | sed -n '5p' |  sed 's/://g' | tr "\n" " " | sed 's/ //g' | sed 's/[a-z]/\u&/g' | cat > "$ndpath/gmnode.serial"
     else
-        $TASSL_CMD x509  -text -in $ndpath/gmnode.crt | sed -n '4p' |  sed 's/ //g' | sed 's/.*(0x//g' | sed 's/)//g' |sed 's/[a-z]/\u&/g' | cat > $ndpath/gmnode.serial
+        $TASSL_CMD x509 -text -in "$ndpath/gmnode.crt" 2> /dev/null | sed -n '4p' |  sed 's/ //g' | sed 's/.*(0x//g' | sed 's/)//g' |sed 's/[a-z]/\u&/g' | cat > "$ndpath/gmnode.serial"
     fi
-
     cp $agpath/gmca.crt $agpath/gmagency.crt $ndpath
     cd $ndpath
 }
@@ -706,7 +716,7 @@ crl		= $dir/crl.pem 		# The current CRL
 private_key	= $dir/private/cakey.pem # The private key
 RANDFILE	= $dir/private/.rand	# private random number file
 
-x509_extensions	= usr_cert		# The extentions to add to the cert
+x509_extensions	= usr_cert		# The extensions to add to the cert
 
 name_opt 	= ca_default		# Subject Name options
 cert_opt 	= ca_default		# Certificate field options
@@ -741,7 +751,7 @@ default_bits		= 2048
 default_md		= sm3
 default_keyfile 	= privkey.pem
 distinguished_name	= req_distinguished_name
-x509_extensions	= v3_ca	# The extentions to add to the self signed cert
+x509_extensions	= v3_ca	# The extensions to add to the self signed cert
 
 string_mask = utf8only
 
@@ -1286,6 +1296,68 @@ check_bin()
     echo "Binary check passed."
 }
 
+prepare_ca(){
+
+    if [ -z "${CertConfig}" ] || [ ! -e "${CertConfig}" ];then
+        # CertConfig="${output_dir}/cert.cnf"
+        generate_cert_conf "cert.cnf"
+    else 
+        cp "${CertConfig}" .
+    fi  
+    dir_must_not_exists "${output_dir}/chain"
+    if [ -z "$ca_path" ]; then
+        echo "Generating CA key..."
+        gen_chain_cert "${output_dir}/chain" >"${logfile}" 2>&1 || exit_with_clean "openssl error!"
+        mv "${output_dir}/chain" "${output_dir}/cert"
+    else
+        echo "Use user specified ca key from ${ca_path}"
+        mkdir -p "${output_dir}/cert"
+        cp "${ca_key}" "${output_dir}/cert"
+        cp "${ca_crt}" "${output_dir}/cert"
+    fi
+    ca_key="${output_dir}/cert/ca.key"
+    mv cert.cnf "${output_dir}/cert/"
+    if [ "${use_ip_param}" == "false" ];then
+        for agency_name in ${agency_array[*]};do
+            if [ ! -d "${output_dir}/cert/${agency_name}" ];then 
+                gen_agency_cert "${output_dir}/cert" "${output_dir}/cert/${agency_name}" >>"${logfile}" 2>&1
+            fi
+        done
+    else
+        gen_agency_cert "${output_dir}/cert" "${output_dir}/cert/agency" >"${logfile}" 2>&1
+    fi
+
+    if [[ -n "${guomi_mode}" ]];then
+        dir_must_not_exists "${output_dir}/gmchain"
+        generate_cert_conf_gm "gmcert.cnf"
+        generate_gmsm2_param "gmsm2.param"
+        if [[ -z "${gmca_path}" ]]; then
+            echo "Generating Guomi CA key..."
+            gen_chain_cert_gm "${output_dir}/gmchain" >"${logfile}" 2>&1 || exit_with_clean "openssl error!"
+            mv "${output_dir}/gmchain" "${output_dir}/gmcert"
+        elif [[ -n "${gmca_path}" ]]; then
+            echo "Use user specified sm_crypto ca key from ${gmca_path}"
+            mkdir -p "${output_dir}/gmcert"
+            cp "${gmca_key}" "${output_dir}/gmcert"
+            cp "${gmca_crt}" "${output_dir}/gmcert"
+        fi
+        gmca_key="${output_dir}/gmcert/ca.key"
+
+        if ! cp gmcert.cnf gmsm2.param "${output_dir}/gmcert/";then
+            exit_with_clean "cp gmcert.cnf gmsm2.param failed"
+        fi
+        if [ "${use_ip_param}" == "false" ];then
+            for agency_name in ${agency_array[*]};do
+                if [ ! -d "${output_dir}/gmcert/${agency_name}" ];then 
+                    gen_agency_cert_gm "${output_dir}/gmcert" "${output_dir}/gmcert/${agency_name}" >"${logfile}" 2>&1
+                fi
+            done
+        else
+            gen_agency_cert_gm "${output_dir}/gmcert" "${output_dir}/gmcert/agency" >"${logfile}" 2>&1
+        fi
+    fi
+}
+
 main()
 {
 output_dir="$(pwd)/${output_dir}"
@@ -1301,7 +1373,7 @@ else
 fi
 
 
-dir_must_not_exists ${output_dir}
+dir_must_not_exists "${output_dir}"
 mkdir -p "${output_dir}"
 
 # if [ -z "${compatibility_version}" ];then
@@ -1321,12 +1393,6 @@ if [ -z ${docker_mode} ];then
         check_bin
     fi
 fi
-if [ -z ${CertConfig} ] || [ ! -e ${CertConfig} ];then
-    # CertConfig="${output_dir}/cert.cnf"
-    generate_cert_conf "cert.cnf"
-else 
-   cp ${CertConfig} .
-fi
 
 if [ "${use_ip_param}" == "true" ];then
     for i in $(seq 0 ${#ip_array[*]});do
@@ -1337,36 +1403,8 @@ fi
 
 # prepare CA
 echo "=============================================================="
-if [ ! -e "$ca_file" ]; then
-    echo "Generating CA key..."
-    dir_must_not_exists ${output_dir}/chain
-    gen_chain_cert ${output_dir}/chain >${logfile} 2>&1 || exit_with_clean "openssl error!"
-    mv ${output_dir}/chain ${output_dir}/cert
-    if [ "${use_ip_param}" == "false" ];then
-        for agency_name in ${agency_array[*]};do
-            if [ ! -d ${output_dir}/cert/${agency_name} ];then 
-                gen_agency_cert ${output_dir}/cert ${output_dir}/cert/${agency_name} >${logfile} 2>&1
-            fi
-        done
-    else
-        gen_agency_cert ${output_dir}/cert ${output_dir}/cert/agency >${logfile} 2>&1
-    fi
-    ca_file="${output_dir}/cert/ca.key"
-fi
-
-if [ -n "${guomi_mode}" ]; then
-    #check_and_install_tassl
-
-    generate_cert_conf_gm "gmcert.cnf"
-
-    echo "Generating Guomi CA key..."
-    dir_must_not_exists ${output_dir}/gmchain
-    gen_chain_cert_gm ${output_dir}/gmchain >${logfile} 2>&1 || exit_with_clean "openssl error!"
-    mv ${output_dir}/gmchain ${output_dir}/gmcert
-    gen_agency_cert_gm ${output_dir}/gmcert ${output_dir}/gmcert/agency >${logfile} 2>&1
-    ca_file="${output_dir}/gmcert/ca.key"    
-fi
-
+echo "">"${logfile}"
+prepare_ca
 
 echo "=============================================================="
 echo "Generating keys ..."
@@ -1385,15 +1423,26 @@ for line in ${ip_array[*]};do
     [ "$num" == "$ip" ] || [ -z "${num}" ] && num=${node_num}
     echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
     [ -z "$(get_value ${ip//./}_count)" ] && set_value ${ip//./}_count 0
+    sdk_path="${output_dir}/${ip}/sdk"
+    if [ ! -d "${sdk_path}" ];then
+        gen_cert "${output_dir}/cert/${agency_array[${server_count}]}" "${sdk_path}" "sdk" >>"${logfile}" 2>&1
+        # FIXME: delete the below unbelievable ugliest operation in future
+        cp sdk.crt node.crt
+        cp sdk.key node.key
+        # FIXME: delete the upside unbelievable ugliest operation in future
+        rm node.nodeid
+        cp "${output_dir}/cert/ca.crt" "${sdk_path}/"
+        cd "${output_dir}"
+    fi
     for ((i=0;i<num;++i));do
-        echo "Processing IP:${ip} ID:${i} node's key" >> ${logfile}
+        echo "Processing IP:${ip} ID:${i} node's key" >>"${logfile}"
         local node_count="$(get_value ${ip//./}_count)"
         local node_dir="${output_dir}/${ip}/node${node_count}"
         [ -d "${node_dir}" ] && exit_with_clean "${node_dir} exist! Please delete!"
         
         while :
         do
-            gen_cert ${output_dir}/cert/${agency_array[${server_count}]} ${node_dir} "node" >${logfile} 2>&1
+            gen_cert "${output_dir}/cert/${agency_array[${server_count}]}" "${node_dir}" "node"
             mkdir -p ${conf_path}/
             mv *.* ${conf_path}/
 
@@ -1408,7 +1457,7 @@ for line in ${ip_array[*]};do
             fi
 
             if [ -n "$guomi_mode" ]; then
-                gen_node_cert_gm ${output_dir}/gmcert/agency ${node_dir} >${logfile} 2>&1
+                gen_node_cert_gm "${output_dir}/gmcert/${agency_array[${server_count}]}" "${node_dir}"
                 mkdir -p ${gm_conf_path}/
                 mv ./*.* ${gm_conf_path}/
 
@@ -1426,10 +1475,9 @@ for line in ${ip_array[*]};do
         done
 
         if [ -n "${guomi_mode}" ]; then
-            cat ${output_dir}/gmcert/agency/gmagency.crt >> ${node_dir}/${gm_conf_path}/gmnode.crt
+            # cat ${output_dir}/gmcert/agency/gmagency.crt >> ${node_dir}/${gm_conf_path}/gmnode.crt
             cat ${output_dir}/gmcert/gmca.crt >> ${node_dir}/${gm_conf_path}/gmnode.crt
 
-            #move origin conf to gm conf
             rm ${node_dir}/${conf_path}/node.nodeid
             mv ${node_dir}/${conf_path} ${node_dir}/${gm_conf_path}/origin_cert
             nodeid="$(cat ${node_dir}/${gm_conf_path}/gmnode.nodeid)"
@@ -1439,12 +1487,11 @@ for line in ${ip_array[*]};do
         else
             nodeid="$(cat ${node_dir}/${conf_path}/node.nodeid)"
         fi
-
+        if [ -n "${copy_cert}" ];then cp -r "${sdk_path}" "${node_dir}/" ; fi
         if [ "${use_ip_param}" == "false" ];then
             node_groups=(${group_array[server_count]//,/ })
             for j in ${node_groups[@]};do
                 if [ -z "${groups_count[${j}]}" ];then groups_count[${j}]=0;fi
-                echo "groups_count[${j}]=${groups_count[${j}]}"  >> ${logfile}
         groups[${j}]=$"${groups[${j}]}node.${groups_count[${j}]}=${nodeid}
     "
                 ((++groups_count[j]))
@@ -1466,17 +1513,6 @@ for line in ${ip_array[*]};do
         set_value "${ip//./}_port_offset" $(( $(get_value "${ip//./}_port_offset") + 1 ))
         ((++count))
     done
-    sdk_path="${output_dir}/${ip}/sdk"
-    if [ ! -d ${sdk_path} ];then
-        gen_cert ${output_dir}/cert/${agency_array[${server_count}]} "${sdk_path}" "sdk" >${logfile} 2>&1
-        # FIXME: delete the below unbelievable ugliest operation in future
-        cp sdk.crt node.crt
-        cp sdk.key node.key
-        # FIXME: delete the upside unbelievable ugliest operation in future
-        rm node.nodeid
-        cp ${output_dir}/cert/ca.crt ${sdk_path}/
-        cd ${output_dir}
-    fi
     ((++server_count))
 done 
 
@@ -1526,7 +1562,7 @@ for line in ${ip_array[*]};do
     if [ -n "$make_tar" ];then cd ${output_dir} && tar zcf "${ip}.tar.gz" "${ip}" && cd ${current_dir};fi
     ((++server_count))
 done 
-rm ${logfile}
+rm "${logfile}"
 if [ -f "${output_dir}/${bcos_bin_name}" ];then rm ${output_dir}/${bcos_bin_name};fi 
 if [ "${use_ip_param}" == "false" ];then
 echo "=============================================================="
