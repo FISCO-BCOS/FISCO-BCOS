@@ -36,9 +36,13 @@ void StatisticPotocolServer::HandleRequest(const std::string& _request, std::str
     Json::Value req;
     Json::Value resp;
     Json::FastWriter w;
-
+    dev::GROUP_ID groupId = -1;
     if (reader.parse(_request, req, false))
     {
+        if (m_networkStatHandler)
+        {
+            groupId = getGroupID(req);
+        }
         this->HandleJsonRequest(req, resp);
     }
     else
@@ -46,7 +50,6 @@ void StatisticPotocolServer::HandleRequest(const std::string& _request, std::str
         this->WrapError(Json::nullValue, Errors::ERROR_RPC_JSON_PARSE_ERROR,
             Errors::GetErrorMessage(Errors::ERROR_RPC_JSON_PARSE_ERROR), resp);
     }
-    auto groupId = getGroupIDAndUpdateResponse(resp);
     if (resp != Json::nullValue)
         _retValue = w.write(resp);
     if (m_networkStatHandler && groupId != -1)
@@ -56,78 +59,27 @@ void StatisticPotocolServer::HandleRequest(const std::string& _request, std::str
     }
 }
 
-dev::GROUP_ID StatisticPotocolServer::getGroupID(Json::Value const& _input)
+dev::GROUP_ID StatisticPotocolServer::getGroupID(Json::Value const& _request)
 {
     try
     {
-        return boost::lexical_cast<dev::GROUP_ID>(_input[0u].asString());
+        if (!_request.isObject() || !_request.isMember(KEY_REQUEST_METHODNAME) ||
+            !_request.isMember(KEY_REQUEST_PARAMETERS))
+        {
+            return -1;
+        }
+
+        auto procedureName = _request[KEY_REQUEST_METHODNAME].asString();
+        if (!m_networkStatHandler->shouldStatistic(procedureName))
+        {
+            return -1;
+        }
+        return boost::lexical_cast<dev::GROUP_ID>(_request[KEY_REQUEST_PARAMETERS][0u].asString());
     }
     catch (std::exception const& _e)
     {
         LOG(WARNING) << LOG_DESC("StatisticPotocolServer: getGroupID failed!")
                      << LOG_KV("errorInfo", boost::diagnostic_information(_e));
-        return -1;
-    }
-}
-
-void StatisticPotocolServer::WrapResult(
-    const Json::Value& _request, Json::Value& _response, Json::Value& _retValue)
-{
-    RpcProtocolServerV2::WrapResult(_request, _response, _retValue);
-    try
-    {
-        if (!m_networkStatHandler)
-        {
-            return;
-        }
-        auto procedureName = _request[KEY_REQUEST_METHODNAME].asString();
-        if (!m_networkStatHandler->shouldStatistic(procedureName))
-        {
-            return;
-        }
-        // get groupId and wrapper it into _response
-        auto groupId = getGroupID(_request[KEY_REQUEST_PARAMETERS]);
-        if (groupId != -1)
-        {
-            _response[KEY_GROUPID_FIELD] = groupId;
-        }
-    }
-    catch (const std::exception& _e)
-    {
-        LOG(WARNING) << LOG_DESC("StatisticPotocolServer: WrapResult failed!")
-                     << LOG_KV("errorInfo", boost::diagnostic_information(_e));
-    }
-}
-
-// get groupId from the KEY_GROUPID_FIELD field of response,
-// and remove the field after the groupId obtained
-dev::GROUP_ID StatisticPotocolServer::getGroupIDAndUpdateResponse(Json::Value& _resp)
-{
-    try
-    {
-        if (!m_networkStatHandler)
-        {
-            return -1;
-        }
-        if (!_resp.isMember(KEY_GROUPID_FIELD))
-        {
-            return -1;
-        }
-        auto groupIdJsonValue = _resp[KEY_GROUPID_FIELD];
-        if (groupIdJsonValue == Json::nullValue)
-        {
-            _resp.removeMember(KEY_GROUPID_FIELD);
-            return -1;
-        }
-        GROUP_ID groupId = groupIdJsonValue.asInt();
-        // remove KEY_GROUPID_FIELD from response
-        _resp.removeMember(KEY_GROUPID_FIELD);
-        return groupId;
-    }
-    catch (std::exception const& _e)
-    {
-        LOG(ERROR) << LOG_DESC("getGroupIDAndUpdateResponse exceptioned")
-                   << LOG_KV("errorInfo", boost::diagnostic_information(_e));
         return -1;
     }
 }
