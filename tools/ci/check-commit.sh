@@ -73,8 +73,9 @@ function check_PR_limit() {
     # fi
     local new_files=$(git diff HEAD^ | grep "new file" | wc -l)
     local test_insertions=$(git diff --numstat HEAD^ | grep "test/" | awk -F ' ' '{sum+=$1}END{print sum}')
+    local tool_insertions=$(git diff --numstat HEAD^ | grep "tools/" | awk -F ' ' '{sum+=$1}END{print sum}')
     local insertions=$(git diff --shortstat HEAD^ | awk -F ' ' '{print $4}')
-    local valid_insertions=$((insertions - new_files * new_file_header_length - test_insertions))
+    local valid_insertions=$((insertions - new_files * new_file_header_length - test_insertions - tool_insertions))
     if [ ${insert_limit} -lt ${valid_insertions} ]; then
         LOG_ERROR "insert ${insertions} lines, valid is ${valid_insertions}, limit is ${insert_limit}"
         exit 1
