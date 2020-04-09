@@ -37,11 +37,7 @@ public:
         m_networkStatHandler = _networkStatHandler;
     }
 
-    void WrapResult(
-        const Json::Value& _request, Json::Value& _response, Json::Value& _retValue) override;
-
 private:
-    dev::GROUP_ID getGroupIDAndUpdateResponse(Json::Value& _resp);
     dev::GROUP_ID getGroupID(Json::Value const& _input);
 
     dev::stat::ChannelNetworkStatHandler::Ptr m_networkStatHandler;
