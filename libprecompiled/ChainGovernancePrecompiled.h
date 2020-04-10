@@ -30,6 +30,16 @@ class Table;
 
 namespace precompiled
 {
+enum AccountStatus
+{
+    AccInvalid = 0,
+    AccAvailable,
+    AccFrozen,
+    AccAddressNonExistent,
+    InvalidAccountAddress,
+    AccCount
+};
+
 class ChainGovernancePrecompiled : public dev::precompiled::Precompiled
 {
 public:
@@ -69,6 +79,19 @@ private:
         const std::string& _userAddress, const Address& _origin);
     int revokeOperator(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
         const std::string& _userAddress, const Address& _origin);
+
+    bool checkPermission(
+        std::shared_ptr<blockverifier::ExecutiveContext> context, Address const& origin);
+    AccountStatus getAccountStatus(
+        std::shared_ptr<blockverifier::ExecutiveContext> context, std::string const& tableName);
+    int updateFrozenStatus(std::shared_ptr<blockverifier::ExecutiveContext> context,
+        std::string const& tableName, std::string const& frozen, Address const& origin);
+    void freezeAccount(std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,
+        Address const& origin, PrecompiledExecResult::Ptr _callResult);
+    void unfreezeAccount(std::shared_ptr<blockverifier::ExecutiveContext> context,
+        bytesConstRef data, Address const& origin, PrecompiledExecResult::Ptr _callResult);
+    void getAccountStatus(std::shared_ptr<blockverifier::ExecutiveContext> context,
+        bytesConstRef data, PrecompiledExecResult::Ptr _callResult);
 };
 
 }  // namespace precompiled
