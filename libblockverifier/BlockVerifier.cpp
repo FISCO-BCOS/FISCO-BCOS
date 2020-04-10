@@ -397,54 +397,6 @@ TransactionReceipt::Ptr BlockVerifier::executeTransaction(
 }
 
 
-#if 0
-std::pair<ExecutionResult, TransactionReceipt::Ptr> BlockVerifier::execute(EnvInfo const& _envInfo,
-    Transaction const& _t, OnOpFunc const& _onOp, ExecutiveContext::Ptr executiveContext)
-{
-    auto onOp = _onOp;
-#if ETH_VMTRACE
-    if (isChannelVisible<VMTraceChannel>())
-        onOp = Executive::simpleTrace();  // override tracer
-#endif
-
-    // Create and initialize the executive. This will throw fairly cheaply and quickly if the
-    // transaction is bad in any way.
-    Executive e(executiveContext->getState(), _envInfo);
-    ExecutionResult res;
-    e.setResultRecipient(res);
-
-    // OK - transaction looks valid - execute.
-    try
-    {
-        e.initialize(_t);
-        if (!e.execute())
-            e.go(onOp);
-        e.finalize();
-    }
-    catch (StorageException const& e)
-    {
-        BLOCKVERIFIER_LOG(ERROR) << LOG_DESC("get StorageException") << LOG_KV("what", e.what());
-        BOOST_THROW_EXCEPTION(e);
-    }
-    catch (Exception const& _e)
-    {
-        // only OutOfGasBase ExecutorNotFound exception will throw
-        BLOCKVERIFIER_LOG(ERROR) << diagnostic_information(_e);
-    }
-    catch (std::exception const& _e)
-    {
-        BLOCKVERIFIER_LOG(ERROR) << _e.what();
-    }
-
-    e.loggingException();
-
-    return make_pair(
-        res, std::make_shared<TransactionReceipt>(executiveContext->getState()->rootHash(false),
-                 e.gasUsed(), e.logs(), e.status(), e.takeOutput().takeBytes(), e.newAddress()));
-}
-#endif
-
-
 dev::eth::TransactionReceipt::Ptr BlockVerifier::execute(dev::eth::Transaction::Ptr _t,
     dev::eth::OnOpFunc const& _onOp, dev::blockverifier::ExecutiveContext::Ptr executiveContext,
     Executive::Ptr executive)
