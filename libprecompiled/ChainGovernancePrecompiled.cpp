@@ -20,6 +20,7 @@
  */
 #include "ChainGovernancePrecompiled.h"
 #include "libstorage/Table.h"
+#include "libstoragestate/StorageState.h"
 #include <json/json.h>
 #include <libblockverifier/ExecutiveContext.h>
 #include <libethcore/ABI.h>
@@ -44,6 +45,10 @@ const char* const CGP_METHOD_GRANT_OP = "grantOperator(address)";
 const char* const CGP_METHOD_REVOKE_OP = "revokeOperator(address)";
 const char* const CGP_METHOD_LIST_OP = "listOperators()";
 
+const char* const CGP_FREEZE_ACCOUNT = "freezeAccount(address)";
+const char* const CGP_UNFREEZE_ACCOUNT = "unfreezeAccount(address)";
+const char* const CGP_GET_ACCOUNT_STATUS = "getAccountStatus(address)";
+
 const char* const CGP_COMMITTEE_TABLE = "_sys_committee_votes_";
 const char* const CGP_COMMITTEE_TABLE_KEY = "key";
 const char* const CGP_COMMITTEE_TABLE_VALUE = "value";
@@ -53,6 +58,11 @@ const char* const CGP_WEIGTH_SUFFIX = "_weight";
 const char* const CGP_UPDATE_WEIGTH_SUFFIX = "_update_weight";
 const char* const CGP_AUTH_THRESHOLD = "auth_threshold";
 const char* const CGP_UPDATE_AUTH_THRESHOLD = "update_auth_threshold";
+
+const std::string ACCOUNT_STATUS_DESC[AccountStatus::AccCount] = {"Invalid",
+    "The account is available.",
+    "The account has been frozen. You can use this account after unfreezing it.",
+    "The address is nonexistent.", "This is not a account address."};
 
 #define CHAIN_GOVERNANCE_LOG(LEVEL) PRECOMPILED_LOG(LEVEL) << "[ChainGovernance]"
 
@@ -68,6 +78,9 @@ ChainGovernancePrecompiled::ChainGovernancePrecompiled()
     name2Selector[CGP_METHOD_LIST_OP] = getFuncSelector(CGP_METHOD_LIST_OP);
     name2Selector[CGP_METHOD_QUERY_CM_THRESHOLD] = getFuncSelector(CGP_METHOD_QUERY_CM_THRESHOLD);
     name2Selector[CGP_METHOD_QUERY_CM_WEIGHT] = getFuncSelector(CGP_METHOD_QUERY_CM_WEIGHT);
+    name2Selector[CGP_FREEZE_ACCOUNT] = getFuncSelector(CGP_FREEZE_ACCOUNT);
+    name2Selector[CGP_UNFREEZE_ACCOUNT] = getFuncSelector(CGP_UNFREEZE_ACCOUNT);
+    name2Selector[CGP_GET_ACCOUNT_STATUS] = getFuncSelector(CGP_GET_ACCOUNT_STATUS);
 }
 
 string ChainGovernancePrecompiled::toString()
@@ -218,6 +231,18 @@ PrecompiledExecResult::Ptr ChainGovernancePrecompiled::call(
         s256 weight = boost::lexical_cast<int>(entry->getField(CGP_COMMITTEE_TABLE_VALUE));
         CHAIN_GOVERNANCE_LOG(INFO) << LOG_DESC("memberWeight") << LOG_KV("weight", weight);
         callResult->setExecResult(abi.abiIn("", weight));
+    }
+    else if (func == name2Selector[CGP_FREEZE_ACCOUNT])
+    {  // function freezeAccount(address account) public returns (int256);
+        freezeAccount(_context, data, _origin, callResult);
+    }
+    else if (func == name2Selector[CGP_UNFREEZE_ACCOUNT])
+    {  // function unfreezeAccount(address account) public returns (int256);
+        unfreezeAccount(_context, data, _origin, callResult);
+    }
+    else if (func == name2Selector[CGP_GET_ACCOUNT_STATUS])
+    {  // function getAccountStatus(address account) public view returns (string);
+        getAccountStatus(_context, data, callResult);
     }
     else
     {
@@ -565,4 +590,174 @@ string ChainGovernancePrecompiled::queryCommitteeMembers(
     }
     Json::FastWriter fastWriter;
     return fastWriter.write(AuthorityInfos);
+}
+
+bool ChainGovernancePrecompiled::checkPermission(
+    ExecutiveContext::Ptr context, Address const& origin)
+{
+    auto acTable = openTable(context, SYS_ACCESS_TABLE);
+    auto condition = acTable->newCondition();
+    condition->EQ(SYS_AC_ADDRESS, origin.hex());
+    auto entries = acTable->select(SYS_ACCESS_TABLE, condition);
+    if (entries->size() != 0u)
+    {
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("ChainGovernancePrecompiled")
+                              << LOG_DESC("committee member is permitted to manage contract")
+                              << LOG_KV("origin", origin.hex());
+        return true;
+    }
+
+    return false;
+}
+
+AccountStatus ChainGovernancePrecompiled::getAccountStatus(
+    ExecutiveContext::Ptr context, std::string const& tableName)
+{
+    Table::Ptr table = openTable(context, tableName);
+    if (!table)
+    {
+        return AccountStatus::AccAddressNonExistent;
+    }
+
+    auto codeHashEntries = table->select(storagestate::ACCOUNT_CODE_HASH, table->newCondition());
+    if (toHex(EmptySHA3) != codeHashEntries->get(0)->getField(storagestate::STORAGE_VALUE))
+    {
+        return AccountStatus::InvalidAccountAddress;
+    }
+
+    auto frozenEntries = table->select(storagestate::ACCOUNT_FROZEN, table->newCondition());
+    if (frozenEntries->size() > 0 &&
+        "true" == frozenEntries->get(0)->getField(storagestate::STORAGE_VALUE))
+    {
+        return AccountStatus::AccFrozen;
+    }
+    else
+    {
+        return AccountStatus::AccAvailable;
+    }
+
+    PRECOMPILED_LOG(ERROR) << LOG_BADGE("ChainGovernancePrecompiled")
+                           << LOG_DESC("getAccountStatus error")
+                           << LOG_KV("account table name", tableName);
+
+    return AccountStatus::AccInvalid;
+}
+
+int ChainGovernancePrecompiled::updateFrozenStatus(ExecutiveContext::Ptr context,
+    std::string const& tableName, std::string const& frozen, Address const& origin)
+{
+    int result = 0;
+
+    Table::Ptr table = openTable(context, tableName);
+    if (table)
+    {
+        auto entries = table->select(storagestate::ACCOUNT_FROZEN, table->newCondition());
+        auto entry = table->newEntry();
+        entry->setField(storagestate::STORAGE_VALUE, frozen);
+        if (entries->size() != 0u)
+        {
+            result = table->update(storagestate::ACCOUNT_FROZEN, entry, table->newCondition(),
+                std::make_shared<AccessOptions>(origin, false));
+        }
+        else
+        {
+            result = table->insert(storagestate::ACCOUNT_FROZEN, entry,
+                std::make_shared<AccessOptions>(origin, false));
+        }
+    }
+
+    return result;
+}
+
+void ChainGovernancePrecompiled::freezeAccount(ExecutiveContext::Ptr context, bytesConstRef data,
+    Address const& origin, PrecompiledExecResult::Ptr _callResult)
+{
+    dev::eth::ContractABI abi;
+    Address accountAddress;
+    abi.abiOut(data, accountAddress);
+    int result = 0;
+
+    std::string tableName = precompiled::getContractTableName(accountAddress);
+    AccountStatus status = getAccountStatus(context, tableName);
+    if (AccountStatus::AccAddressNonExistent == status)
+    {
+        result = CODE_ACCOUNT_NOT_EXIST;
+    }
+    else if (AccountStatus::InvalidAccountAddress == status)
+    {
+        result = CODE_INVALID_ACCOUNT_ADDRESS;
+    }
+    else if (!checkPermission(context, origin))
+    {
+        result = storage::CODE_NO_AUTHORIZED;
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ChainGovernancePrecompiled")
+                               << LOG_DESC("permission denied");
+    }
+    else if (AccountStatus::AccFrozen == status)
+    {
+        result = CODE_ACCOUNT_FROZEN;
+    }
+    else
+    {
+        result = updateFrozenStatus(context, tableName, "true", origin);
+    }
+    getErrorCodeOut(_callResult->mutableExecResult(), result);
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ChainGovernancePrecompiled")
+                           << LOG_KV("freeze account", tableName) << LOG_KV("result", result);
+}
+
+void ChainGovernancePrecompiled::unfreezeAccount(ExecutiveContext::Ptr context, bytesConstRef data,
+    Address const& origin, PrecompiledExecResult::Ptr _callResult)
+{
+    dev::eth::ContractABI abi;
+    Address accountAddress;
+    abi.abiOut(data, accountAddress);
+    int result = 0;
+
+
+    std::string tableName = precompiled::getContractTableName(accountAddress);
+    AccountStatus status = getAccountStatus(context, tableName);
+    if (AccountStatus::AccAddressNonExistent == status)
+    {
+        result = CODE_ACCOUNT_NOT_EXIST;
+    }
+    else if (AccountStatus::InvalidAccountAddress == status)
+    {
+        result = CODE_INVALID_ACCOUNT_ADDRESS;
+    }
+    else if (!checkPermission(context, origin))
+    {
+        result = storage::CODE_NO_AUTHORIZED;
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ChainGovernancePrecompiled")
+                               << LOG_DESC("permission denied");
+    }
+    else if (AccountStatus::AccAvailable == status)
+    {
+        result = CODE_ACCOUNT_ALREADY_AVAILABLE;
+    }
+    else
+    {
+        result = updateFrozenStatus(context, tableName, "false", origin);
+    }
+    getErrorCodeOut(_callResult->mutableExecResult(), result);
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ChainGovernancePrecompiled")
+                           << LOG_KV("unfreeze account", tableName) << LOG_KV("result", result);
+}
+
+void ChainGovernancePrecompiled::getAccountStatus(
+    ExecutiveContext::Ptr context, bytesConstRef data, PrecompiledExecResult::Ptr _callResult)
+{
+    dev::eth::ContractABI abi;
+
+    Address accountAddress;
+    abi.abiOut(data, accountAddress);
+
+    std::string tableName = precompiled::getContractTableName(accountAddress);
+    AccountStatus status = getAccountStatus(context, tableName);
+    _callResult->setExecResult(abi.abiIn("", ACCOUNT_STATUS_DESC[status]));
+
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ChainGovernancePrecompiled")
+                           << LOG_DESC("call query status")
+                           << LOG_KV("account table name", tableName)
+                           << LOG_KV("account status", ACCOUNT_STATUS_DESC[status]);
 }
