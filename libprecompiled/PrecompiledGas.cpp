@@ -79,3 +79,21 @@ const int64_t GasMetrics::High = 10;
 // Every 256 bytes is a memory gas calculation unit
 const unsigned GasMetrics::MemGas = 3;
 const unsigned GasMetrics::MemUnitSize = 32;
+
+
+void PrecompiledGasFactory::createMetric(VMFlagType const& _vmFlagType)
+{
+    PrecompiledGas_LOG(INFO) << LOG_DESC("createGasMetric") << LOG_KV("vmFlagType", _vmFlagType);
+    // the FreeStorageGasMetrics enabled
+    if (enableFreeStorage(_vmFlagType))
+    {
+        PrecompiledGas_LOG(INFO) << LOG_DESC("createGasMetric: FreeStorageGasMetrics");
+        m_gasMetric = std::make_shared<FreeStorageGasMetrics>();
+    }
+    else
+    {
+        PrecompiledGas_LOG(INFO) << LOG_DESC("createGasMetric");
+        m_gasMetric = std::make_shared<GasMetrics>();
+    }
+    m_gasMetric->init();
+}

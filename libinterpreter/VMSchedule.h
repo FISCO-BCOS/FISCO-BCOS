@@ -43,13 +43,14 @@ struct VMSchedule
     int64_t stepGas6 = 20;
     int64_t sha3Gas = 30;
     int64_t sha3WordGas = 6;
-    int64_t sloadGas = 50;
+    int64_t sloadGas = 200;
     int64_t sstoreSetGas = 20000;
     int64_t sstoreResetGas = 5000;
     int64_t jumpdestGas = 1;
     int64_t logGas = 375;
     int64_t logDataGas = 8;
     int64_t logTopicGas = 375;
+    // create takes up a lot of CPU
     int64_t createGas = 32000;
     int64_t memoryGas = 3;
     int64_t quadCoeffDiv = 512;
@@ -66,9 +67,10 @@ public:
     using Ptr = std::shared_ptr<FreeStorageVMSchedule>;
     FreeStorageVMSchedule()
     {
-        sstoreSetGas = stepGas5;
-        sstoreResetGas = stepGas5;
-        createGas = stepGas5;
+        createGas = 16000;
+        sstoreSetGas = 1200;
+        sstoreResetGas = 1200;
+        sloadGas = 1200;
         // remove value transfer
         valueTransferGas = stepGas0;
         callStipend = stepGas5;

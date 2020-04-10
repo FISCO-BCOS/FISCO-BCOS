@@ -236,11 +236,16 @@ bool VM::caseCallSetup(evmc_message& o_msg, bytesRef& o_output)
     if (m_OP == Instruction::CALL && !destinationExists)
     {
         if (m_SP[2] > 0 || m_rev < EVMC_SPURIOUS_DRAGON)
+        {
             m_runGas += m_vmSchedule->callNewAccount;
+        }
     }
 
     if (haveValueArg && m_SP[2] > 0)
+    {
         m_runGas += m_vmSchedule->valueTransferGas;
+    }
+
 
     size_t const sizesOffset = haveValueArg ? 3 : 2;
     u256 inputOffset = m_SP[sizesOffset];

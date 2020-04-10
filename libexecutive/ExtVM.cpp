@@ -185,6 +185,8 @@ evmc_status_code transactionExceptionToEvmcStatusCode(TransactionException ex) n
 evmc_result ExtVM::call(CallParameters& _p)
 {
     Executive e{m_s, envInfo(), depth() + 1};
+    // Note: When create initializes Executive, the flags of evmc context must be passed in
+    e.setEvmFlags(flags);
     if (!e.call(_p, gasPrice(), origin()))
     {
         go(depth(), e, _p.onOp);
@@ -234,6 +236,8 @@ evmc_result ExtVM::create(u256 const& _endowment, u256& io_gas, bytesConstRef _c
     Instruction _op, u256 _salt, OnOpFunc const& _onOp)
 {
     Executive e{m_s, envInfo(), depth() + 1};
+    // Note: When create initializes Executive, the flags of evmc context must be passed in
+    e.setEvmFlags(flags);
     bool result = false;
     if (_op == Instruction::CREATE)
         result = e.createOpcode(myAddress(), _endowment, gasPrice(), io_gas, _code, origin());

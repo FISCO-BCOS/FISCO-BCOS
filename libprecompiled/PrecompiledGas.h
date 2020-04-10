@@ -70,11 +70,20 @@ struct GasMetrics
     static const unsigned MemGas;
     static const unsigned MemUnitSize;
 
+    int64_t CreateGas = 16000;
+    int64_t LoadGas = 200;
+    int64_t StoreGas = 10000;
+    int64_t RemoveGas = 2500;
+    int64_t VerifyGas = 20000;
+
     // opcode to gasCost mapping
     std::map<InterfaceOpcode, int64_t> OpCode2GasCost;
 
     using Ptr = std::shared_ptr<GasMetrics>;
-    GasMetrics()
+    GasMetrics() {}
+    virtual ~GasMetrics() {}
+
+    virtual void init()
     {
         OpCode2GasCost = {{InterfaceOpcode::EQ, VeryLow}, {InterfaceOpcode::GE, VeryLow},
             {InterfaceOpcode::GT, VeryLow}, {InterfaceOpcode::LE, VeryLow},
@@ -82,19 +91,25 @@ struct GasMetrics
             {InterfaceOpcode::Limit, VeryLow}, {InterfaceOpcode::GetInt, VeryLow},
             {InterfaceOpcode::GetAddr, VeryLow}, {InterfaceOpcode::Set, VeryLow},
             {InterfaceOpcode::GetByte32, 32 * VeryLow}, {InterfaceOpcode::GetByte64, 64 * VeryLow},
-            {InterfaceOpcode::GetString, 64 * VeryLow}, {InterfaceOpcode::CreateTable, High},
-            {InterfaceOpcode::OpenTable, Low}, {InterfaceOpcode::Select, Low},
-            {InterfaceOpcode::Insert, High}, {InterfaceOpcode::Update, High},
-            {InterfaceOpcode::Remove, Mid}, {InterfaceOpcode::PaillierAdd, High},
-            {InterfaceOpcode::GroupSigVerify, High}, {InterfaceOpcode::RingSigVerify, High}};
+            {InterfaceOpcode::GetString, VeryLow}, {InterfaceOpcode::CreateTable, CreateGas},
+            {InterfaceOpcode::OpenTable, LoadGas}, {InterfaceOpcode::Select, LoadGas},
+            {InterfaceOpcode::Insert, StoreGas}, {InterfaceOpcode::Update, StoreGas},
+            {InterfaceOpcode::Remove, RemoveGas}, {InterfaceOpcode::PaillierAdd, VerifyGas},
+            {InterfaceOpcode::GroupSigVerify, VerifyGas},
+            {InterfaceOpcode::RingSigVerify, VerifyGas}};
     }
-    virtual ~GasMetrics() {}
 };
 
 // FreeStorageGasMetrics
 struct FreeStorageGasMetrics : public GasMetrics
 {
-    FreeStorageGasMetrics() : GasMetrics() {}
+    FreeStorageGasMetrics() : GasMetrics()
+    {
+        CreateGas = 500;
+        LoadGas = 200;
+        StoreGas = 200;
+        RemoveGas = 200;
+    }
     virtual ~FreeStorageGasMetrics() {}
 };
 
@@ -141,20 +156,10 @@ public:
         return gasPricer;
     }
 
+    GasMetrics::Ptr gasMetric() { return m_gasMetric; }
+
 private:
-    void createMetric(VMFlagType const& _vmFlagType)
-    {
-        PrecompiledGas_LOG(DEBUG) << LOG_DESC("createGasMetric")
-                                  << LOG_KV("vmFlagType", _vmFlagType);
-        // the FreeStorageGasMetrics enabled
-        if (enableFreeStorage(_vmFlagType))
-        {
-            PrecompiledGas_LOG(DEBUG) << LOG_DESC("createGasMetric: FreeStorageGasMetrics");
-            m_gasMetric = std::make_shared<FreeStorageGasMetrics>();
-            return;
-        }
-        m_gasMetric = std::make_shared<GasMetrics>();
-    }
+    void createMetric(VMFlagType const& _vmFlagType);
 
 private:
     GasMetrics::Ptr m_gasMetric;

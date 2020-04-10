@@ -48,6 +48,7 @@ public:
     owning_bytes_ref exec(evmc_context* _context, evmc_revision _rev, const evmc_message* _msg,
         uint8_t const* _code, size_t _codeSize);
 
+    VMSchedule::Ptr vmSchedule() { return m_vmSchedule; }
     uint64_t m_io_gas = 0;
 
 private:
