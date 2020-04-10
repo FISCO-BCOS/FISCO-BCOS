@@ -158,7 +158,6 @@ PrecompiledExecResult::Ptr TableFactoryPrecompiled::call(ExecutiveContext::Ptr c
         {
             auto table =
                 m_memoryTableFactory->createTable(tableName, keyField, valueFiled, true, origin);
-            callResult->gasPricer()->appendOperation(InterfaceOpcode::CreateTable);
             if (!table)
             {  // table already exist
                 result = CODE_TABLE_NAME_ALREADY_EXIST;
@@ -167,6 +166,10 @@ PrecompiledExecResult::Ptr TableFactoryPrecompiled::call(ExecutiveContext::Ptr c
                 {
                     result = 0;
                 }
+            }
+            else
+            {
+                callResult->gasPricer()->appendOperation(InterfaceOpcode::CreateTable);
             }
         }
         catch (dev::storage::StorageException& e)

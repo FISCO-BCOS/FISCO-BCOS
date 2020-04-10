@@ -17,6 +17,7 @@
 #include "ExecutionResult.h"
 #include <libethcore/BlockHeader.h>
 #include <libethcore/Common.h>
+#include <libethcore/EVMFlags.h>
 #include <libethcore/Transaction.h>
 #include <libevm/VMFace.h>
 #include <functional>
@@ -206,7 +207,11 @@ public:
 
     void setState(std::shared_ptr<StateFace> _state) { m_s = _state; }
 
-    void setEvmFlags(VMFlagType const& _evmFlags) { m_evmFlags = _evmFlags; }
+    void setEvmFlags(VMFlagType const& _evmFlags)
+    {
+        m_evmFlags = _evmFlags;
+        m_enableFreeStorage = enableFreeStorage(_evmFlags);
+    }
 
 private:
     /// @returns false iff go() must be called (and thus a VM execution in required).
@@ -252,6 +257,8 @@ private:
     size_t m_tableFactorySavepoint = 0;
 
     VMFlagType m_evmFlags;
+    // determine whether the freeStorageVMSchedule enabled or not
+    bool m_enableFreeStorage = false;
 };
 
 }  // namespace executive
