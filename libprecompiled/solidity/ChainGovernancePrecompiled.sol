@@ -19,4 +19,9 @@ contract ChainGovernancePrecompiled {
     function grantOperator(address user) public returns (int256);
     function revokeOperator(address user) public returns (int256);
     function listOperators() public view returns (string);
+
+    // account life cycle
+    function freezeAccount(address account) public returns (int256);
+    function unfreezeAccount(address account) public returns (int256);
+    function getAccountStatus(address account) public view returns (string);
 }
