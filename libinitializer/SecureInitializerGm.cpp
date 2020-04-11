@@ -138,7 +138,6 @@ ConfigResult initOriginConfig(const boost::property_tree::ptree& pt)
         INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializer") << LOG_DESC("use user certificate")
                                << LOG_KV("file", cert);
         sslContext->use_certificate_chain_file(cert);
-        sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer);
     }
     else
     {
@@ -155,7 +154,6 @@ ConfigResult initOriginConfig(const boost::property_tree::ptree& pt)
 
         sslContext->add_certificate_authority(
             boost::asio::const_buffer(caCertContent.data(), caCertContent.size()));
-        sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer);
     }
     else
     {
@@ -169,9 +167,9 @@ ConfigResult initOriginConfig(const boost::property_tree::ptree& pt)
         INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializer") << LOG_DESC("use ca")
                                << LOG_KV("file", caPath);
         sslContext->add_verify_path(caPath);
-        sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer);
     }
-
+    // FIXME: set_verify_mode boost::asio::ssl::verify_fail_if_no_peer_cert
+    sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer);
     return ConfigResult{keyPair, sslContext};
 }
 
@@ -285,7 +283,6 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
         INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializerGM")
                                << LOG_DESC("use user certificate") << LOG_KV("file", cert);
         sslContext->use_certificate_chain_file(cert);
-        sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer);
     }
     else
     {
@@ -302,7 +299,6 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
 
         sslContext->add_certificate_authority(
             boost::asio::const_buffer(caCertContent.data(), caCertContent.size()));
-        sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer);
     }
     else
     {
@@ -316,9 +312,8 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
         INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializerGM") << LOG_DESC("use ca")
                                << LOG_KV("file", caPath);
         sslContext->add_verify_path(caPath);
-        sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer);
     }
-
+    sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer);
     return ConfigResult{keyPair, sslContext};
 }
 

@@ -72,7 +72,7 @@ Usage:
     -h Help
 e.g: 
     bash $0 -c nodes/cert -a newAgency
-    bash $0 -c nodes/cert -a newAgency -g nodes/gmcert
+    bash $0 -c nodes/cert -g nodes/gmcert -a newAgency
 EOF
 exit 0
 }
@@ -96,6 +96,42 @@ parse_params()
         *) LOG_WARN "invalid option $option";;
         esac
     done
+}
+
+generate_cert_conf()
+{
+    local output=$1
+    cat << EOF > "${output}"
+[ca]
+default_ca=default_ca
+[default_ca]
+default_days = 365
+default_md = sha256
+
+[req]
+distinguished_name = req_distinguished_name
+req_extensions = v3_req
+[req_distinguished_name]
+countryName = CN
+countryName_default = CN
+stateOrProvinceName = State or Province Name (full name)
+stateOrProvinceName_default =GuangDong
+localityName = Locality Name (eg, city)
+localityName_default = ShenZhen
+organizationalUnitName = Organizational Unit Name (eg, section)
+organizationalUnitName_default = fisco-bcos
+commonName =  Organizational  commonName (eg, fisco-bcos)
+commonName_default = fisco-bcos
+commonName_max = 64
+
+[ v3_req ]
+basicConstraints = CA:FALSE
+keyUsage = nonRepudiation, digitalSignature, keyEncipherment
+
+[ v4_req ]
+basicConstraints = CA:TRUE
+
+EOF
 }
 
 gen_agency_cert() {
@@ -281,7 +317,7 @@ gen_agency_cert_gm() {
     dir_must_exists "$chain"
     file_must_exists "$chain/gmca.key"
     check_name agency "$name"
-    agencydir="$agencypath"
+    agencydir="${agencypath}-gm"
     dir_must_not_exists "$agencydir"
     mkdir -p "$agencydir"
 
@@ -298,6 +334,7 @@ main()
     if openssl version | grep -q reSSL ;then
         export PATH="/usr/local/opt/openssl/bin:$PATH"
     fi
+    generate_cert_conf "${ca_path}/cert.cnf"
     gen_agency_cert "${ca_path}" "${ca_path}/${agency}" > "${logfile}" 2>&1
     if [ -n "${guomi_mode}" ]; then
         check_and_install_tassl
@@ -312,7 +349,7 @@ print_result()
 {
     echo "=============================================================="
     LOG_INFO "Cert Path   : ${ca_path}/${agency}"
-    [ -n "${guomi_mode}" ] && LOG_INFO "GM Cert Path: ${gmca_path}/${agency}"
+    [ -n "${guomi_mode}" ] && LOG_INFO "GM Cert Path: ${gmca_path}/${agency}-gm"
     LOG_INFO "All completed."
 }
 
