@@ -195,6 +195,17 @@ BOOST_AUTO_TEST_CASE(grant_revoke_CM)
     entries = acTable->select(SYS_ACCESS_TABLE, acTable->newCondition());
     BOOST_TEST(entries->size() == 2u);
 
+    // expired votes is deleted, so member vote will not make member2 to be revoke
+    blockInfo.hash = h256(0);
+    blockInfo.number = 10001;
+    context->setBlockInfo(blockInfo);
+    out = chainGovernancePrecompiled->call(context, bytesConstRef(&in), member2);
+    ret = 0;
+    abi.abiOut(&out->execResult(), ret);
+    BOOST_TEST(ret == 0);
+    entries = acTable->select(SYS_ACCESS_TABLE, acTable->newCondition());
+    BOOST_TEST(entries->size() == 2u);
+
     // listCommitteeMembers
     in = abi.abiIn("listCommitteeMembers()");
     out = chainGovernancePrecompiled->call(context, bytesConstRef(&in));
@@ -246,6 +257,10 @@ BOOST_AUTO_TEST_CASE(updateCommitteeMemberWeight)
     ret = 0;
     abi.abiOut(&out->execResult(), ret);
     BOOST_TEST(ret == 1);
+    out = chainGovernancePrecompiled->call(context, bytesConstRef(&in), member1);
+    ret = 0;
+    abi.abiOut(&out->execResult(), ret);
+    BOOST_TEST(ret == CODE_INVALID_REQUEST);
 
     // queryCommitteeMemberWeight member1 2
     in = abi.abiIn("queryCommitteeMemberWeight(address)", member1);
@@ -304,6 +319,10 @@ BOOST_AUTO_TEST_CASE(updateThreshold)
     ret = 0;
     abi.abiOut(&out->execResult(), ret);
     BOOST_TEST(ret == 1);
+    out = chainGovernancePrecompiled->call(context, bytesConstRef(&in), member2);
+    ret = 0;
+    abi.abiOut(&out->execResult(), ret);
+    BOOST_TEST(ret == CODE_INVALID_REQUEST);
 
     in = abi.abiIn("updateThreshold(int256)", 101);
     out = chainGovernancePrecompiled->call(context, bytesConstRef(&in), member2);
