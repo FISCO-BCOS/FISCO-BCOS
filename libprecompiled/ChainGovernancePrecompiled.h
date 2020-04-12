@@ -75,11 +75,15 @@ private:
         const std::string& _tableName);
     int grantCommitteeMember(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
         const std::string& _user, const Address& _origin);
+    int updateCommitteeMemberWeight(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
+        const std::string& _member, const std::string& _weight, const Address& _origin);
     int grantOperator(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
         const std::string& _userAddress, const Address& _origin);
     int revokeOperator(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
         const std::string& _userAddress, const Address& _origin);
 
+    int grantTablePermission(std::shared_ptr<blockverifier::ExecutiveContext> _context,
+        const std::string& _tableName, const std::string& _userAddress, const Address& _origin);
     bool checkPermission(
         std::shared_ptr<blockverifier::ExecutiveContext> context, Address const& origin);
     AccountStatus getAccountStatus(
