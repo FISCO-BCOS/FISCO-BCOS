@@ -110,6 +110,8 @@ public:
     const bool c_omitEmptyBlock = true;
     /// default blockLimit
     const unsigned c_blockLimit = 1000;
+    /// vote valid in 10 * c_blockLimit blocks
+    const unsigned c_voteValidLimit = c_blockLimit * 10;
     /// default compress threshold: 1KB
     const uint64_t c_compressThreshold = 1024;
     const uint64_t c_binaryLogSize = 128 * 1024 * 1024;
