@@ -80,7 +80,7 @@ pair<bool, bytes> SignatureStruct::ecRecover(bytesConstRef _in)
             {
                 if (Public rec = recover(sig, in.hash))
                 {
-                    ret = dev::sha3(rec);
+                    ret = dev::sha256(rec);
                     memset(ret.data(), 0, 12);
                     return {true, ret.asBytes()};
                 }
