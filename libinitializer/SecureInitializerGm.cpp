@@ -168,8 +168,8 @@ ConfigResult initOriginConfig(const boost::property_tree::ptree& pt)
                                << LOG_KV("file", caPath);
         sslContext->add_verify_path(caPath);
     }
-    // FIXME: set_verify_mode boost::asio::ssl::verify_fail_if_no_peer_cert
-    sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer);
+    sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer |
+                                boost::asio::ssl::verify_fail_if_no_peer_cert);
     return ConfigResult{keyPair, sslContext};
 }
 
@@ -313,7 +313,8 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
                                << LOG_KV("file", caPath);
         sslContext->add_verify_path(caPath);
     }
-    sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer);
+    sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer |
+                                boost::asio::ssl::verify_fail_if_no_peer_cert);
     return ConfigResult{keyPair, sslContext};
 }
 
