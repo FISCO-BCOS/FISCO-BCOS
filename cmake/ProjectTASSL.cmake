@@ -3,18 +3,19 @@ include(GNUInstallDirs)
 
 if (BUILD_GM)
 	if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
-	set(TASSL_CONFIG_COMMAND sh ./Configure darwin64-x86_64-cc)
+		set(TASSL_CONFIG_COMMAND perl ./Configure darwin64-x86_64-cc)
 	else()
 		set(TASSL_CONFIG_COMMAND bash config -Wl,--rpath=./ shared)
 	endif ()
 
 	set(TASSL_BUILD_COMMAND make)
 
-	ExternalProject_Add(tassl
+	ExternalProject_Add(tassl-1.1.1b
 		PREFIX ${CMAKE_SOURCE_DIR}/deps
 		DOWNLOAD_NO_PROGRESS 1
-		GIT_REPOSITORY https://github.com/jntass/TASSL.git
-		GIT_TAG ccdfc64c5f56988f76abc0390a12ed9865bc49e9
+		DOWNLOAD_NAME TASSL-1.1.1b
+		GIT_REPOSITORY https://github.com/bxq2011hust/TASSL-1.1.1b.git
+		GIT_TAG 780a6d3698ca627dfc761efa15734d59f1bc15d2
 		# GIT_SHALLOW true
 		BUILD_IN_SOURCE 1
 		CONFIGURE_COMMAND ${TASSL_CONFIG_COMMAND}
@@ -25,10 +26,13 @@ if (BUILD_GM)
 		INSTALL_COMMAND ""
 	)
 
-	ExternalProject_Get_Property(tassl SOURCE_DIR)
+	ExternalProject_Get_Property(tassl-1.1.1b SOURCE_DIR)
 	add_library(TASSL STATIC IMPORTED)
 	set(TASSL_SUFFIX .a)
 	set(TASSL_INCLUDE_DIRS ${SOURCE_DIR}/include)
+	set(TASSL_CRYPTO_NCLUDE_DIRS ${SOURCE_DIR}/crypto/include)
+	message(STATUS "TASSL_INCLUDE_DIRS=${TASSL_INCLUDE_DIRS}")
+	message(STATUS "TASSL_CRYPTO_NCLUDE_DIRS=${TASSL_CRYPTO_NCLUDE_DIRS}")
 	set(TASSL_LIBRARY ${SOURCE_DIR}/libssl${TASSL_SUFFIX})
 	set(TASSL_CRYPTO_LIBRARIE ${SOURCE_DIR}/libcrypto${TASSL_SUFFIX})
 	set(TASSL_LIBRARIES ${TASSL_LIBRARY} ${TASSL_CRYPTO_LIBRARIE} dl)

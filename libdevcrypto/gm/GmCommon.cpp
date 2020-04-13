@@ -19,6 +19,7 @@
  * @date 2018
  */
 
+
 #include "libdevcrypto/AES.h"
 #include "libdevcrypto/Common.h"
 #include "libdevcrypto/Exceptions.h"
@@ -29,6 +30,9 @@
 #include <libdevcore/Guards.h>
 #include <libdevcore/RLP.h>
 #include <libethcore/Exceptions.h>
+#include <secp256k1.h>
+#include <secp256k1_recovery.h>
+#include <secp256k1_sha256.h>
 using namespace std;
 using namespace dev;
 using namespace dev::crypto;
@@ -93,6 +97,22 @@ void SignatureStruct::check() const noexcept
         BOOST_THROW_EXCEPTION(eth::InvalidSignature());
 }
 
+namespace
+{
+/**
+ * @brief : init secp256k1_context globally(maybe for secure consider)
+ * @return secp256k1_context const* : global static secp256k1_context
+ */
+secp256k1_context const* getCtx()
+{
+    static std::unique_ptr<secp256k1_context, decltype(&secp256k1_context_destroy)> s_ctx{
+        secp256k1_context_create(SECP256K1_CONTEXT_SIGN | SECP256K1_CONTEXT_VERIFY),
+        &secp256k1_context_destroy};
+    return s_ctx.get();
+}
+
+}  // namespace
+
 bool dev::SignatureStruct::isValid() const noexcept
 {
     static const h256 s_max{"0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141"};
@@ -100,16 +120,6 @@ bool dev::SignatureStruct::isValid() const noexcept
 
     return (v >= h512(1) && r > s_zero && s > s_zero && r < s_max && s < s_max);
 }
-
-NumberVType dev::getVFromRLP(RLP const& _txRLPField)
-{
-    // Note: Since sdk encode v into bytes in sdk, the nodes must decode the v into bytes
-    // firstly, otherwise the transaction will decode failed in some cases
-    VType vBytes = _txRLPField.toHash<VType>();
-    NumberVType v = NumberVType(vBytes) - VBase;
-    return v;
-}
-
 
 /**
  * @brief : obtain public key according to secret key
@@ -176,9 +186,12 @@ Signature dev::sign(KeyPair const& _keyPair, h256 const& _hash)
     {
         return Signature{};
     }
+    // string pub = SM2::getInstance().priToPub(pri);
+    // bytes byteSign = fromHex(r + s + pub);
     bytes byteSign = fromHex(r + s) + _keyPair.pub();
     return Signature{byteSign};
 }
+
 
 KeyPair KeyPair::create()
 {
