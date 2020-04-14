@@ -15,8 +15,8 @@
  * (c) 2016-2020 fisco-dev contributors.
  */
 /**
- * @brief : Implement of QPSLimiter
- * @file: QPSLimiter.h
+ * @brief : Implement of RateLimiter
+ * @file: RateLimiter.h
  * @author: yujiechen
  * @date: 2020-04-15
  */
@@ -24,17 +24,17 @@
 #include <libdevcore/Common.h>
 #include <libdevcore/Guards.h>
 
-#define QPSLIMIT_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("QPSLimiter")
+#define RATELIMIT_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("RateLimiter")
 
 namespace dev
 {
 namespace flowlimit
 {
-class QPSLimiter
+class RateLimiter
 {
 public:
-    using Ptr = std::shared_ptr<QPSLimiter>;
-    QPSLimiter(uint64_t const& _maxQPS);
+    using Ptr = std::shared_ptr<RateLimiter>;
+    RateLimiter(uint64_t const& _maxQPS);
     // acquire permits
     int64_t acquire(int64_t const& _requiredPermits = 1, bool const& _wait = false,
         bool const& _fetchPermitsWhenRequireWait = false);
@@ -42,11 +42,11 @@ public:
     bool tryAcquire(uint64_t const& _requiredPermits = 1);
     bool acquireWithBurstSupported(uint64_t const& _requiredPermits = 1);
 
-    void setCumulativeStatInterval(int64_t const& _cumulativeStatInterval)
+    void setMaxPermitsSize(int64_t const& _maxPermitsSize)
     {
-        m_cumulativeStatInterval = _cumulativeStatInterval;
-        QPSLIMIT_LOG(DEBUG) << LOG_DESC("setCumulativeStatInterval")
-                            << LOG_KV("cumulativeStatInterval(s)", m_cumulativeStatInterval);
+        m_maxPermits = _maxPermitsSize;
+        RATELIMIT_LOG(DEBUG) << LOG_DESC("setMaxPermitsSize")
+                             << LOG_KV("maxPermitsSize", _maxPermitsSize);
     }
 
     void setBurstTimeInterval(int64_t const& _burstInterval);
@@ -71,7 +71,6 @@ private:
     // the interval time to update storedPermits
     double m_permitsUpdateInterval;
     int64_t m_lastPermitsUpdateTime;
-    int64_t m_cumulativeStatInterval = 1;
     int64_t m_maxPermits = 0;
 
     std::atomic<int64_t> m_futureBurstResetTime;

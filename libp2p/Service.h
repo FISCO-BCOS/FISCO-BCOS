@@ -31,7 +31,7 @@
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/TopicInfo.h>
-#include <libflowlimit/QPSLimiter.h>
+#include <libflowlimit/RateLimiter.h>
 #include <libnetwork/Host.h>
 #include <libnetwork/PeerWhitelist.h>
 #include <map>
@@ -77,8 +77,8 @@ public:
     void asyncSendMessageByTopic(std::string topic, std::shared_ptr<P2PMessage> message,
         CallbackFuncWithSession callback, dev::network::Options options) override;
 
-    void asyncMulticastMessageByTopic(
-        std::string topic, std::shared_ptr<P2PMessage> message) override;
+    bool asyncMulticastMessageByTopic(std::string topic, std::shared_ptr<P2PMessage> message,
+        dev::flowlimit::RateLimiter::Ptr _bandwidthLimiter = nullptr) override;
     void asyncMulticastMessageByNodeIDList(
         NodeIDs nodeIDs, std::shared_ptr<P2PMessage> message) override;
     void asyncBroadcastMessage(
@@ -171,9 +171,9 @@ public:
 
     void removeNetworkStatHandlerByGroupID(GROUP_ID const& _groupID) override;
 
-    void setNodeBandwidthLimiter(dev::flowlimit::QPSLimiter::Ptr _bandwidthLimiter) override;
+    void setNodeBandwidthLimiter(dev::flowlimit::RateLimiter::Ptr _bandwidthLimiter) override;
     void registerGroupBandwidthLimiter(
-        GROUP_ID const& _groupID, dev::flowlimit::QPSLimiter::Ptr _bandwidthLimiter) override;
+        GROUP_ID const& _groupID, dev::flowlimit::RateLimiter::Ptr _bandwidthLimiter) override;
     void removeGroupBandwidthLimiter(GROUP_ID const& _groupID) override;
 
 private:
@@ -240,10 +240,11 @@ private:
     mutable SharedMutex x_group2NetworkStatHandler;
 
     // for bandwidth limitation
-    std::shared_ptr<std::map<GROUP_ID, dev::flowlimit::QPSLimiter::Ptr>> m_group2BandwidthLimiter;
+    std::shared_ptr<std::map<GROUP_ID, dev::flowlimit::RateLimiter::Ptr>> m_group2BandwidthLimiter;
     mutable SharedMutex x_group2BandwidthLimiter;
 
-    dev::flowlimit::QPSLimiter::Ptr m_nodeBandwidthLimiter;
+    dev::flowlimit::RateLimiter::Ptr m_nodeBandwidthLimiter;
+    unsigned m_compressRate = 3;
 };
 
 }  // namespace p2p

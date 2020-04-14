@@ -15,50 +15,50 @@
  * (c) 2016-2020 fisco-dev contributors.
  */
 /**
- * @brief : Implement of QPSLimiter
- * @file: QPSLimiter.cpp
+ * @brief : Implement of RateLimiter
+ * @file: RateLimiter.cpp
  * @author: yujiechen
  * @date: 2020-04-15
  */
-#include "QPSLimiter.h"
+#include "RateLimiter.h"
 #include <thread>
 
 using namespace dev;
 using namespace dev::flowlimit;
 
-QPSLimiter::QPSLimiter(uint64_t const& _maxQPS) : m_maxQPS(_maxQPS)
+RateLimiter::RateLimiter(uint64_t const& _maxQPS) : m_maxQPS(_maxQPS)
 {
     m_permitsUpdateInterval = (double)1000000 / (double)m_maxQPS;
     m_lastPermitsUpdateTime = utcSteadyTimeUs();
     m_futureBurstResetTime = utcSteadyTimeUs() + m_burstTimeInterval;
 
-    m_maxPermits = m_maxQPS * m_cumulativeStatInterval;
-    QPSLIMIT_LOG(INFO) << LOG_DESC("create QPSLimiter")
-                       << LOG_KV("permitsUpdateInterval", m_permitsUpdateInterval)
-                       << LOG_KV("maxQPS", m_maxQPS) << LOG_KV("maxPermits", m_maxPermits);
+    m_maxPermits = m_maxQPS;
+    RATELIMIT_LOG(INFO) << LOG_DESC("create RateLimiter")
+                        << LOG_KV("permitsUpdateInterval", m_permitsUpdateInterval)
+                        << LOG_KV("maxQPS", m_maxQPS) << LOG_KV("maxPermits", m_maxPermits);
 }
 
-void QPSLimiter::setBurstTimeInterval(int64_t const& _burstInterval)
+void RateLimiter::setBurstTimeInterval(int64_t const& _burstInterval)
 {
     m_burstTimeInterval = _burstInterval;
-    QPSLIMIT_LOG(INFO) << LOG_DESC("setBurstTimeInterval")
-                       << LOG_KV("burstTimeInterval", m_burstTimeInterval);
+    RATELIMIT_LOG(INFO) << LOG_DESC("setBurstTimeInterval")
+                        << LOG_KV("burstTimeInterval", m_burstTimeInterval);
 }
 
-void QPSLimiter::setMaxBurstReqNum(int64_t const& _maxBurstReqNum)
+void RateLimiter::setMaxBurstReqNum(int64_t const& _maxBurstReqNum)
 {
     m_maxBurstReqNum = _maxBurstReqNum;
-    QPSLIMIT_LOG(INFO) << LOG_DESC("setMaxBurstReqNum")
-                       << LOG_KV("maxBurstReqNum", m_maxBurstReqNum);
+    RATELIMIT_LOG(INFO) << LOG_DESC("setMaxBurstReqNum")
+                        << LOG_KV("maxBurstReqNum", m_maxBurstReqNum);
 }
 
-bool QPSLimiter::tryAcquire(uint64_t const& _requiredPermits)
+bool RateLimiter::tryAcquire(uint64_t const& _requiredPermits)
 {
     auto waitTime = acquire(_requiredPermits, false, false);
     return (waitTime == 0);
 }
 
-int64_t QPSLimiter::acquire(
+int64_t RateLimiter::acquire(
     int64_t const& _requiredPermits, bool const& _wait, bool const& _fetchPermitsWhenRequireWait)
 {
     int64_t waitTime = fetchPermitsAndGetWaitTime(_requiredPermits, _fetchPermitsWhenRequireWait);
@@ -70,7 +70,7 @@ int64_t QPSLimiter::acquire(
     return waitTime;
 }
 
-bool QPSLimiter::acquireWithBurstSupported(uint64_t const& _requiredPermits)
+bool RateLimiter::acquireWithBurstSupported(uint64_t const& _requiredPermits)
 {
     auto waitTime = fetchPermitsAndGetWaitTime(_requiredPermits, false);
     int64_t now = utcSteadyTimeUs();
@@ -102,7 +102,7 @@ bool QPSLimiter::acquireWithBurstSupported(uint64_t const& _requiredPermits)
     return reqAccepted;
 }
 
-int64_t QPSLimiter::fetchPermitsAndGetWaitTime(
+int64_t RateLimiter::fetchPermitsAndGetWaitTime(
     int64_t const& _requiredPermits, bool const& _fetchPermitsWhenRequireWait)
 {
     // has remaining permits, handle the request directly
@@ -126,7 +126,7 @@ int64_t QPSLimiter::fetchPermitsAndGetWaitTime(
     return std::max(waitAvailableTime, (int64_t)0);
 }
 
-void QPSLimiter::updateCurrentStoredPermits(int64_t const& _requiredPermits)
+void RateLimiter::updateCurrentStoredPermits(int64_t const& _requiredPermits)
 {
     double waitTime = 0;
 
@@ -145,7 +145,7 @@ void QPSLimiter::updateCurrentStoredPermits(int64_t const& _requiredPermits)
     }
 }
 
-void QPSLimiter::updatePermits(int64_t const& _now)
+void RateLimiter::updatePermits(int64_t const& _now)
 {
     if (_now <= m_lastPermitsUpdateTime)
     {

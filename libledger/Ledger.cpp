@@ -30,7 +30,7 @@
 #include <libconsensus/raft/RaftEngine.h>
 #include <libconsensus/raft/RaftSealer.h>
 #include <libconsensus/rotating_pbft/RotatingPBFTEngine.h>
-#include <libflowlimit/QPSLimiter.h>
+#include <libflowlimit/RateLimiter.h>
 #include <libsync/SyncMaster.h>
 #include <libtxpool/TxPool.h>
 #include <boost/property_tree/ini_parser.hpp>
@@ -118,10 +118,9 @@ void Ledger::initNetworkBandWidthLimiter()
         return;
     }
 
-    m_networkBandwidthLimiter = std::make_shared<dev::flowlimit::QPSLimiter>(
+    m_networkBandwidthLimiter = std::make_shared<dev::flowlimit::RateLimiter>(
         m_param->mutableFlowControlParam().outGoingBandwidthLimit);
-    m_networkBandwidthLimiter->setCumulativeStatInterval(
-        m_param->mutableFlowControlParam().cumulativeStatInterval);
+    m_networkBandwidthLimiter->setMaxPermitsSize(g_BCOSConfig.c_maxPermitsSize);
     if (m_service)
     {
         m_service->registerGroupBandwidthLimiter(m_groupId, m_networkBandwidthLimiter);
@@ -152,8 +151,7 @@ void Ledger::initQPSLimit()
         return;
     }
     auto qpsLimiter =
-        std::make_shared<dev::flowlimit::QPSLimiter>(m_param->mutableFlowControlParam().maxQPS);
-    qpsLimiter->setBurstTimeInterval(1000000);
+        std::make_shared<dev::flowlimit::RateLimiter>(m_param->mutableFlowControlParam().maxQPS);
     qpsLimiter->setMaxBurstReqNum(m_param->mutableFlowControlParam().maxBurstReqNum);
 
     // register QPS
