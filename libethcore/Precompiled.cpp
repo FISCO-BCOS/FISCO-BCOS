@@ -20,9 +20,11 @@
  */
 
 #include "Precompiled.h"
+#include <libconfig/GlobalConfigure.h>
 #include <libdevcrypto/Common.h>
 #include <libdevcrypto/Hash.h>
 #include <libethcore/Common.h>
+
 using namespace std;
 using namespace dev;
 using namespace dev::eth;
@@ -47,7 +49,12 @@ namespace
 {
 ETH_REGISTER_PRECOMPILED(ecrecover)(bytesConstRef _in)
 {
-    return SignatureStruct::ecRecover(_in);
+    // When supported_version> = v2.4.0, ecRecover uniformly calls the ECDSA verification function
+    if (g_BCOSConfig.version() >= V2_4_0)
+    {
+        return SignatureStruct::ecRecover(_in);
+    }
+    return SignatureStruct::ecRecoverDeprecated(_in);
 }
 ETH_REGISTER_PRECOMPILED(sha256)(bytesConstRef _in)
 {
