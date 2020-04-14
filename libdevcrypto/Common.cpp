@@ -24,7 +24,6 @@
 #include "Common.h"
 #include "AES.h"
 #include "Exceptions.h"
-#include "Hash.h"
 #include <cryptopp/aes.h>
 #include <cryptopp/modes.h>
 #include <cryptopp/pwdbased.h>
@@ -32,9 +31,7 @@
 #include <libdevcore/Guards.h>
 #include <libdevcore/RLP.h>
 #include <libethcore/Exceptions.h>
-#include <secp256k1.h>
-#include <secp256k1_recovery.h>
-#include <secp256k1_sha256.h>
+
 using namespace std;
 using namespace dev;
 using namespace dev::crypto;
@@ -43,54 +40,9 @@ using namespace dev::crypto;
 static const u256 c_secp256k1n(
     "115792089237316195423570985008687907852837564279074904382605163141518161494337");
 
-SignatureStruct::SignatureStruct(Signature const& _s)
+pair<bool, bytes> SignatureStruct::ecRecoverDeprecated(bytesConstRef _in)
 {
-    *(Signature*)this = _s;
-}
-
-
-SignatureStruct::SignatureStruct(h256 const& _r, h256 const& _s, VType _v) : r(_r), s(_s), v(_v) {}
-SignatureStruct::SignatureStruct(u256 const& _r, u256 const& _s, NumberVType _v)
-{
-    r = _r;
-    s = _s;
-    v = _v;
-}
-
-pair<bool, bytes> SignatureStruct::ecRecover(bytesConstRef _in)
-{
-    struct
-    {
-        h256 hash;
-        h256 v;
-        h256 r;
-        h256 s;
-    } in;
-
-    memcpy(&in, _in.data(), min(_in.size(), sizeof(in)));
-
-    h256 ret;
-    u256 v = (u256)in.v;
-    if (v >= 27 && v <= 28)
-    {
-        SignatureStruct sig(in.r, in.s, (byte)((int)v - 27));
-        if (sig.isValid())
-        {
-            try
-            {
-                if (Public rec = recover(sig, in.hash))
-                {
-                    ret = dev::sha3(rec);
-                    memset(ret.data(), 0, 12);
-                    return {true, ret.asBytes()};
-                }
-            }
-            catch (...)
-            {
-            }
-        }
-    }
-    return {true, {}};
+    return ecRecover(_in);
 }
 
 void SignatureStruct::encode(RLPStream& _s) const noexcept
@@ -105,7 +57,6 @@ void SignatureStruct::check() const noexcept
         BOOST_THROW_EXCEPTION(eth::InvalidSignature());
 }
 
-
 namespace
 {
 /**
@@ -119,8 +70,6 @@ secp256k1_context const* getCtx()
         &secp256k1_context_destroy};
     return s_ctx.get();
 }
-
-
 }  // namespace
 
 bool dev::SignatureStruct::isValid() const noexcept
@@ -192,28 +141,7 @@ Address dev::toAddress(Address const& _from, u256 const& _nonce)
 
 Public dev::recover(Signature const& _sig, h256 const& _message)
 {
-    int v = _sig[64];
-    if (v > 3)
-        return {};
-
-    auto* ctx = getCtx();
-    secp256k1_ecdsa_recoverable_signature rawSig;
-    if (!secp256k1_ecdsa_recoverable_signature_parse_compact(ctx, &rawSig, _sig.data(), v))
-        return {};
-
-    secp256k1_pubkey rawPubkey;
-    if (!secp256k1_ecdsa_recover(ctx, &rawPubkey, &rawSig, _message.data()))
-        return {};
-
-    std::array<byte, 65> serializedPubkey;
-    size_t serializedPubkeySize = serializedPubkey.size();
-    secp256k1_ec_pubkey_serialize(
-        ctx, serializedPubkey.data(), &serializedPubkeySize, &rawPubkey, SECP256K1_EC_UNCOMPRESSED);
-    assert(serializedPubkeySize == serializedPubkey.size());
-    // Expect single byte header of value 0x04 -- uncompressed public key.
-    assert(serializedPubkey[0] == 0x04);
-    // Create the Public skipping the header.
-    return Public{&serializedPubkey[1], Public::ConstructFromPointer};
+    return recoverSignature(_sig, _message);
 }
 
 
