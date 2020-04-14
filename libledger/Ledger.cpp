@@ -30,6 +30,7 @@
 #include <libconsensus/raft/RaftEngine.h>
 #include <libconsensus/raft/RaftSealer.h>
 #include <libconsensus/rotating_pbft/RotatingPBFTEngine.h>
+#include <libflowlimit/QPSLimiter.h>
 #include <libsync/SyncMaster.h>
 #include <libtxpool/TxPool.h>
 #include <boost/property_tree/ini_parser.hpp>
@@ -87,6 +88,8 @@ bool Ledger::initLedger(std::shared_ptr<LedgerParamInterface> _ledgerParams)
         // init network statistic handler
         initNetworkStatHandler();
     }
+    initNetworkBandWidthLimiter();
+    initQPSLimit();
     /// init blockVerifier, txPool, sync and consensus
     return (initBlockVerifier() && initTxPool() && initSync() && consensusInitFactory() &&
             initEventLogFilterManager());
@@ -101,6 +104,59 @@ void Ledger::initNetworkStatHandler()
     m_service->appendNetworkStatHandlerByGroupID(m_groupId, m_networkStatHandler);
     m_channelRPCServer->networkStatHandler()->appendGroupP2PStatHandler(
         m_groupId, m_networkStatHandler);
+}
+
+void Ledger::initNetworkBandWidthLimiter()
+{
+    // Default: disable network bandwidth limit
+    if (m_param->mutableFlowControlParam().outGoingBandwidthLimit ==
+        m_param->mutableFlowControlParam().maxDefaultValue)
+    {
+        Ledger_LOG(INFO)
+            << LOG_BADGE("initNetworkBandWidthLimiter: outGoingBandwidthLimit has been disabled")
+            << LOG_KV("groupId", m_groupId);
+        return;
+    }
+
+    m_networkBandwidthLimiter = std::make_shared<dev::limit::QPSLimiter>(
+        m_param->mutableFlowControlParam().outGoingBandwidthLimit);
+    m_networkBandwidthLimiter->setCumulativeStatInterval(
+        m_param->mutableFlowControlParam().cumulativeStatInterval);
+    if (m_service)
+    {
+        m_service->registerGroupBandwidthLimiter(m_groupId, m_networkBandwidthLimiter);
+    }
+    if (m_channelRPCServer && m_channelRPCServer->networkBandwidthLimiter())
+    {
+        m_service->setChannelBandwidthLimiter(m_channelRPCServer->networkBandwidthLimiter());
+    }
+    Ledger_LOG(INFO) << LOG_BADGE("initNetworkBandWidthLimiter")
+                     << LOG_KV("outGoingBandwidthLimit",
+                            m_param->mutableFlowControlParam().outGoingBandwidthLimit)
+                     << LOG_KV("groupId", m_groupId);
+}
+
+void Ledger::initQPSLimit()
+{
+    // Default: disable QPS limitation
+    if (m_param->mutableFlowControlParam().maxQPS ==
+        m_param->mutableFlowControlParam().maxDefaultValue)
+    {
+        Ledger_LOG(INFO) << LOG_BADGE("QPSLimit has been disabled") << LOG_KV("groupId", m_groupId);
+        return;
+    }
+    auto rpcQPSLimiter = m_channelRPCServer->qpsLimiter();
+    if (!rpcQPSLimiter)
+    {
+        Ledger_LOG(INFO) << LOG_BADGE("Disable QPSLimit") << LOG_KV("groupId", m_groupId);
+        return;
+    }
+    auto qpsLimiter =
+        std::make_shared<dev::limit::QPSLimiter>(m_param->mutableFlowControlParam().maxQPS);
+    // register QPS
+    rpcQPSLimiter->registerQPSLimiterByGroupID(m_groupId, qpsLimiter);
+    Ledger_LOG(INFO) << LOG_BADGE("initQPSLimit") << LOG_KV("groupId", m_groupId)
+                     << LOG_KV("qpsLimiter", m_param->mutableFlowControlParam().maxQPS);
 }
 
 /// init txpool
@@ -339,10 +395,6 @@ std::shared_ptr<Sealer> Ledger::createRaftSealer()
     /// create consensus engine according to "consensusType"
     Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("createRaftSealer")
                      << LOG_KV("Protocol", protocol_id);
-    // auto intervalBlockTime = g_BCOSConfig.c_intervalBlockTime;
-    // std::shared_ptr<Sealer> raftSealer = std::make_shared<RaftSealer>(m_service, m_txPool,
-    //    m_blockChain, m_sync, m_blockVerifier, m_keyPair, intervalBlockTime,
-    //    intervalBlockTime + 1000, protocol_id, m_param->mutableConsensusParam().sealerList);
     std::shared_ptr<Sealer> raftSealer =
         std::make_shared<RaftSealer>(m_service, m_txPool, m_blockChain, m_sync, m_blockVerifier,
             m_keyPair, m_param->mutableConsensusParam().minElectTime,
@@ -421,6 +473,15 @@ bool Ledger::initSync()
     // set the max block queue size for sync module(bytes)
     syncMaster->setMaxBlockQueueSize(m_param->mutableSyncParam().maxQueueSizeForBlockSync);
     syncMaster->setTxsStatusGossipMaxPeers(m_param->mutableSyncParam().txsStatusGossipMaxPeers);
+    // set networkBandwidthLimiter
+    if (m_networkBandwidthLimiter)
+    {
+        syncMaster->setBandwidthLimiter(m_networkBandwidthLimiter);
+    }
+    if (m_channelRPCServer && m_channelRPCServer->networkBandwidthLimiter())
+    {
+        syncMaster->setChannelBandwidthLimiter(m_channelRPCServer->networkBandwidthLimiter());
+    }
     m_sync = syncMaster;
     Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_DESC("initSync SUCC");
     return true;

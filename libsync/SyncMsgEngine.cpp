@@ -340,6 +340,7 @@ void DownloadBlocksContainer::clearBatchAndSend()
     retPacket.encode(m_blockRLPsBatch);
 
     auto msg = retPacket.toMessage(m_protocolId);
+    msg->setPermitsAcquired(true);
     m_service->asyncSendMessageByNodeID(m_nodeId, msg, CallbackFuncWithSession(), Options());
     SYNC_ENGINE_LOG(INFO) << LOG_BADGE("Download") << LOG_BADGE("Request") << LOG_BADGE("BlockSync")
                           << LOG_DESC("Send block packet") << LOG_KV("peer", m_nodeId.abridged())

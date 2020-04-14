@@ -27,9 +27,29 @@ StatisticPotocolServer::StatisticPotocolServer(jsonrpc::IProcedureInvokationHand
   : RpcProtocolServerV2(_handler)
 {}
 
+void StatisticPotocolServer::limitRPCQPS()
+{
+    if (!m_qpsLimiter)
+    {
+        return;
+    }
+    m_qpsLimiter->acquire();
+}
+
+void StatisticPotocolServer::limitGroupQPS(dev::GROUP_ID const& _groupId)
+{
+    if (!m_qpsLimiter)
+    {
+        return;
+    }
+    m_qpsLimiter->acquireFromGroup(_groupId);
+}
+
 // Overload RpcProtocolServerV2 to implement RPC interface network statistics function
 void StatisticPotocolServer::HandleRequest(const std::string& _request, std::string& _retValue)
 {
+    // limit the whole RPC QPS
+    limitRPCQPS();
     // except for adding statistical logic,
     // the following implementation is the same as RpcProtocolServerV2::HandleRequest
     Json::Reader reader;
@@ -42,6 +62,8 @@ void StatisticPotocolServer::HandleRequest(const std::string& _request, std::str
         if (m_networkStatHandler)
         {
             groupId = getGroupID(req);
+            // limit group QPS
+            limitGroupQPS(groupId);
         }
         this->HandleJsonRequest(req, resp);
     }

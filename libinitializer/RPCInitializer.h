@@ -118,6 +118,11 @@ private:
     std::shared_ptr<dev::stat::ChannelNetworkStatHandler> createNetWorkStatHandler(
         boost::property_tree::ptree const& _pt);
 
+    std::shared_ptr<dev::limit::RPCQPSLimiter> createQPSLimiter(
+        boost::property_tree::ptree const& _pt);
+
+    dev::limit::QPSLimiter::Ptr createNetworkBandwidthLimit(boost::property_tree::ptree const& _pt);
+
 private:
     std::shared_ptr<p2p::P2PInterface> m_p2pService;
     std::shared_ptr<ledger::LedgerManager> m_ledgerManager;

@@ -44,7 +44,6 @@ public:
     {}
 
     virtual ~NetworkStatHandler() {}
-
     void setConsensusMsgType(std::string const& _type)
     {
         int32_t consType = dev::eth::ProtocolID::PBFT;

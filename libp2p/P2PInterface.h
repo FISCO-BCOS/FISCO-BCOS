@@ -33,6 +33,10 @@ namespace stat
 {
 class NetworkStatHandler;
 }
+namespace limit
+{
+class QPSLimiter;
+}
 namespace p2p
 {
 class P2PMessage;
@@ -103,6 +107,12 @@ public:
         GROUP_ID const&, std::shared_ptr<dev::stat::NetworkStatHandler>)
     {}
     virtual void removeNetworkStatHandlerByGroupID(GROUP_ID const&) {}
+
+    virtual void setChannelBandwidthLimiter(std::shared_ptr<dev::limit::QPSLimiter>) {}
+    virtual void registerGroupBandwidthLimiter(
+        GROUP_ID const&, std::shared_ptr<dev::limit::QPSLimiter>)
+    {}
+    virtual void removeGroupBandwidthLimiter(GROUP_ID const&) {}
 };
 
 }  // namespace p2p

@@ -160,6 +160,7 @@ void LedgerParam::parseIniConfig(const std::string& _iniConfigFile, const std::s
     initTxExecuteConfig(pt);
     // init params releated to consensus(ttl)
     initConsensusIniConfig(pt);
+    initFlowControlConfig(pt);
 }
 
 void LedgerParam::init(const std::string& _configFilePath, const std::string& _dataPath)
@@ -611,6 +612,41 @@ void LedgerParam::initEventLogFilterManagerConfig(boost::property_tree::ptree co
                                  mutableEventLogFilterManagerParams().maxBlockRange)
                           << LOG_KV("maxBlockPerProcess",
                                  mutableEventLogFilterManagerParams().maxBlockPerProcess);
+}
+
+void LedgerParam::initFlowControlConfig(boost::property_tree::ptree const& _pt)
+{
+    auto maxQPS =
+        _pt.get<int64_t>("flow_control.limit_req_qps", mutableFlowControlParam().maxDefaultValue);
+    if (maxQPS < 0)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfiguration()
+                              << errinfo_comment("flow_control.limit_req_qps must be positive"));
+    }
+    mutableFlowControlParam().maxQPS = maxQPS;
+
+    auto outGoingBandwidth = _pt.get<int64_t>(
+        "flow_control.outgoing_bandwidth_limit", mutableFlowControlParam().maxDefaultValue);
+    if (outGoingBandwidth < 0)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfiguration() << errinfo_comment(
+                                  "flow_control.outgoing_bandwidth_limit must be positive"));
+    }
+
+    if (outGoingBandwidth != mutableFlowControlParam().maxDefaultValue)
+    {
+        outGoingBandwidth = outGoingBandwidth * 1024 * 1024 / 8;
+    }
+    mutableFlowControlParam().outGoingBandwidthLimit = outGoingBandwidth;
+    mutableFlowControlParam().cumulativeStatInterval =
+        (g_BCOSConfig.c_maxBlockSize + outGoingBandwidth - 1) / outGoingBandwidth;
+
+    LedgerParam_LOG(INFO) << LOG_BADGE("initFlowControlConfig")
+                          << LOG_KV("maxQPS", mutableFlowControlParam().maxQPS)
+                          << LOG_KV("outGoingBandwidth(Bytes)",
+                                 mutableFlowControlParam().outGoingBandwidthLimit)
+                          << LOG_KV("cumulativeStatInterval",
+                                 mutableFlowControlParam().cumulativeStatInterval);
 }
 
 }  // namespace ledger

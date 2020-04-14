@@ -45,7 +45,8 @@ Service::Service()
   : m_topics(std::make_shared<std::set<std::string>>()),
     m_protocolID2Handler(std::make_shared<std::unordered_map<uint32_t, CallbackFuncWithSession>>()),
     m_topic2Handler(std::make_shared<std::unordered_map<std::string, CallbackFuncWithSession>>()),
-    m_group2NetworkStatHandler(std::make_shared<std::map<GROUP_ID, NetworkStatHandler::Ptr>>())
+    m_group2NetworkStatHandler(std::make_shared<std::map<GROUP_ID, NetworkStatHandler::Ptr>>()),
+    m_group2BandwidthLimiter(std::make_shared<std::map<GROUP_ID, dev::limit::QPSLimiter::Ptr>>())
 {}
 
 void Service::start()
@@ -459,10 +460,12 @@ void Service::asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
             {
                 session->session()->asyncSendMessage(message, options, nullptr);
             }
+            // update stat information
             if (g_BCOSConfig.enableStat())
             {
                 updateOutcomingTraffic(message);
             }
+            acquirePermits(message);
         }
         else
         {
@@ -851,20 +854,80 @@ void Service::updateIncomingTraffic(P2PMessage::Ptr _msg)
 {
     // split groupID and moduleID from the _protocolID
     auto ret = dev::eth::getGroupAndProtocol(abs(_msg->protocolID()));
-    ReadGuard l(x_group2NetworkStatHandler);
-    if (m_group2NetworkStatHandler->count(ret.first))
+    auto networkStatHandler =
+        getHandlerByGroupId(ret.first, m_group2NetworkStatHandler, x_group2NetworkStatHandler);
+
+    if (networkStatHandler)
     {
-        (*m_group2NetworkStatHandler)[ret.first]->updateIncomingTraffic(ret.second, _msg->length());
+        networkStatHandler->updateIncomingTraffic(ret.second, _msg->length());
     }
 }
 
 void Service::updateOutcomingTraffic(P2PMessage::Ptr _msg)
 {
     auto ret = dev::eth::getGroupAndProtocol(abs(_msg->protocolID()));
-    ReadGuard l(x_group2NetworkStatHandler);
-    if (m_group2NetworkStatHandler->count(ret.first))
+    auto networkStatHandler =
+        getHandlerByGroupId(ret.first, m_group2NetworkStatHandler, x_group2NetworkStatHandler);
+    if (networkStatHandler)
     {
-        (*m_group2NetworkStatHandler)[ret.first]->updateOutcomingTraffic(
-            ret.second, _msg->length());
+        networkStatHandler->updateOutcomingTraffic(ret.second, _msg->length());
     }
+}
+
+void Service::acquirePermits(P2PMessage::Ptr _msg)
+{
+    if (_msg->permitsAcquired())
+    {
+        return;
+    }
+    if (m_channelBandwidthLimiter)
+    {
+        m_channelBandwidthLimiter->acquire(_msg->length(), false, true);
+    }
+    // get groupId
+    auto ret = dev::eth::getGroupAndProtocol(abs(_msg->protocolID()));
+    auto bandwidthLimiter =
+        getHandlerByGroupId(ret.first, m_group2BandwidthLimiter, x_group2BandwidthLimiter);
+    if (!bandwidthLimiter)
+    {
+        return;
+    }
+    bandwidthLimiter->acquire(_msg->length(), false, true);
+}
+
+void Service::setChannelBandwidthLimiter(dev::limit::QPSLimiter::Ptr _bandwidthLimiter)
+{
+    m_channelBandwidthLimiter = _bandwidthLimiter;
+}
+
+
+void Service::registerGroupBandwidthLimiter(
+    GROUP_ID const& _groupID, dev::limit::QPSLimiter::Ptr _bandwidthLimiter)
+{
+    UpgradableGuard l(x_group2BandwidthLimiter);
+    if (m_group2BandwidthLimiter->count(_groupID))
+    {
+        SERVICE_LOG(DEBUG) << LOG_DESC("registerGroupBandwidthLimiter: already registered")
+                           << LOG_KV("group", std::to_string(_groupID));
+        return;
+    }
+    UpgradeGuard ul(l);
+    (*m_group2BandwidthLimiter)[_groupID] = _bandwidthLimiter;
+    SERVICE_LOG(INFO) << LOG_DESC("registerGroupBandwidthLimiter")
+                      << LOG_KV("group", std::to_string(_groupID));
+}
+
+void Service::removeGroupBandwidthLimiter(GROUP_ID const& _groupID)
+{
+    UpgradableGuard l(x_group2BandwidthLimiter);
+    if (!m_group2BandwidthLimiter->count(_groupID))
+    {
+        SERVICE_LOG(DEBUG) << LOG_DESC("removeGroupBandwidthLimiter: already removed")
+                           << LOG_KV("group", std::to_string(_groupID));
+        return;
+    }
+    UpgradeGuard ul(l);
+    m_group2BandwidthLimiter->erase(_groupID);
+    SERVICE_LOG(INFO) << LOG_DESC("removeGroupBandwidthLimiter")
+                      << LOG_KV("group", std::to_string(_groupID));
 }

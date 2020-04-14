@@ -53,9 +53,6 @@ public:
     virtual void updateGroupResponseTraffic(
         GROUP_ID const& _groupId, uint32_t const& _msgType, uint64_t const& _msgSize);
 
-    virtual void updateGroupRequestTraffic(
-        GROUP_ID const& _groupId, uint32_t const& _msgType, uint64_t const& _msgSize);
-
     void updateIncomingTrafficForRPC(GROUP_ID _groupId, uint64_t const& _msgSize);
     void updateOutcomingTrafficForRPC(GROUP_ID _groupId, uint64_t const& _msgSize);
 
@@ -68,8 +65,16 @@ public:
 
 private:
     void flushLog();
+    NetworkStatHandler::Ptr getP2PHandlerByGroupId(GROUP_ID const& _groupId);
+    void startThread(
+        ThreadPool::Ptr _thread, std::function<void()> const& _f, uint64_t const& _waitMs);
+
+    void calculateAverageNetworkBandwidth();
 
 private:
+    // default refresh window is 100ms
+    uint64_t m_refreshWindow = 100;
+
     std::string m_statisticName;
     int64_t m_flushInterval;
     dev::ThreadPool::Ptr m_statLogFlushThread;

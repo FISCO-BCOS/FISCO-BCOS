@@ -78,6 +78,11 @@ uint64_t utcTimeUs()
     return tv.tv_sec * 1000000 + tv.tv_usec;
 }
 
+uint64_t utcSteadyTimeUs()
+{
+    return std::chrono::steady_clock::now().time_since_epoch().count() / 1000;
+}
+
 std::string getCurrentDateTime()
 {
     using std::chrono::system_clock;

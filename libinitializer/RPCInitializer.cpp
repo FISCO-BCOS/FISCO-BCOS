@@ -67,7 +67,12 @@ void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt
                                << LOG_DESC("Enable network statistic");
     }
     m_channelRPCServer->setNetworkStatHandler(m_networkStatHandler);
-
+    // create network-bandwidth-limiter
+    auto networkBandwidth = createNetworkBandwidthLimit(_pt);
+    if (networkBandwidth && m_networkStatHandler)
+    {
+        m_channelRPCServer->setNetworkBandwidthLimiter(networkBandwidth);
+    }
     auto ioService = std::make_shared<boost::asio::io_service>();
 
     auto server = std::make_shared<dev::channel::ChannelServer>();
@@ -83,11 +88,15 @@ void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt
     auto rpcEntity = new rpc::Rpc(nullptr, nullptr);
 
     auto modularServer = new ModularServer<rpc::Rpc>(rpcEntity);
+    auto qpsLimiter = createQPSLimiter(_pt);
     modularServer->setNetworkStatHandler(m_networkStatHandler);
+    modularServer->setQPSLimiter(qpsLimiter);
+
     m_channelRPCHttpServer = modularServer;
 
     m_rpcForChannel.reset(rpcEntity, [](rpc::Rpc*) {});
     m_channelRPCHttpServer->addConnector(m_channelRPCServer.get());
+    m_channelRPCServer->setQPSLimiter(qpsLimiter);
     try
     {
         if (!m_channelRPCHttpServer->StartListening())
@@ -244,4 +253,54 @@ dev::stat::ChannelNetworkStatHandler::Ptr RPCInitializer::createNetWorkStatHandl
 
     networkStatHandler->setFlushInterval(flushInterval * 1000);
     return networkStatHandler;
+}
+
+dev::limit::RPCQPSLimiter::Ptr RPCInitializer::createQPSLimiter(
+    boost::property_tree::ptree const& _pt)
+{
+    auto qpsLimiter = std::make_shared<dev::limit::RPCQPSLimiter>();
+    int64_t maxQPS = _pt.get<int64_t>("flow_control.limit_req_qps", INT64_MAX);
+    // the limit_req_qps has not been setted
+    if (maxQPS == INT64_MAX)
+    {
+        INITIALIZER_LOG(DEBUG) << LOG_DESC(
+            "disable QPSLimit for flow_control.limit_req_qps has not been setted!");
+        return qpsLimiter;
+    }
+    if (maxQPS <= 0)
+    {
+        BOOST_THROW_EXCEPTION(
+            dev::InvalidConfig() << errinfo_comment(
+                "createQPSLimiter failed, flow_control.limit_req_qps must be positive!"));
+    }
+    INITIALIZER_LOG(DEBUG) << LOG_DESC("createQPSLimiter") << LOG_KV("maxQPS", maxQPS);
+    qpsLimiter->createRPCQPSLimiter(maxQPS);
+    return qpsLimiter;
+}
+
+dev::limit::QPSLimiter::Ptr RPCInitializer::createNetworkBandwidthLimit(
+    boost::property_tree::ptree const& _pt)
+{
+    int64_t outGoingBandwidthLimit =
+        _pt.get<int64_t>("flow_control.outgoing_bandwidth_limit", INT64_MAX);
+    if (outGoingBandwidthLimit < 0)
+    {
+        BOOST_THROW_EXCEPTION(dev::InvalidConfig()
+                              << errinfo_comment("createNetworkBandwidthLimit for channel failed, "
+                                                 "flow_control.limit_req_qps must be positive!"));
+    }
+    if (outGoingBandwidthLimit == INT64_MAX)
+    {
+        INITIALIZER_LOG(DEBUG) << LOG_DESC("Disable NetworkBandwidthLimit for channel");
+        return nullptr;
+    }
+    outGoingBandwidthLimit *= 1024 * 1024 / 8;
+    auto bandwidthLimiter = std::make_shared<dev::limit::QPSLimiter>(outGoingBandwidthLimit);
+    int64_t cumulativeStatInterval =
+        (g_BCOSConfig.c_maxBlockSize + outGoingBandwidthLimit - 1) / outGoingBandwidthLimit;
+    bandwidthLimiter->setCumulativeStatInterval(cumulativeStatInterval);
+    INITIALIZER_LOG(INFO) << LOG_BADGE("createNetworkBandwidthLimit")
+                          << LOG_KV("outGoingBandwidthLimit(Bytes)", outGoingBandwidthLimit)
+                          << LOG_KV("cumulativeStatInterval", cumulativeStatInterval);
+    return bandwidthLimiter;
 }
