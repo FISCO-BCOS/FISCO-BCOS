@@ -184,6 +184,9 @@ protected:
     // init statHandler
     virtual void initNetworkStatHandler();
 
+    // init QPSLimit
+    virtual void initQPSLimit();
+
     void initGenesisMark(GenesisBlockParam& genesisParam);
     /// load ini config of group
     void initIniConfig(std::string const& iniConfigFileName);

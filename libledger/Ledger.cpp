@@ -30,6 +30,7 @@
 #include <libconsensus/raft/RaftEngine.h>
 #include <libconsensus/raft/RaftSealer.h>
 #include <libconsensus/rotating_pbft/RotatingPBFTEngine.h>
+#include <libflowlimit/QPSLimiter.h>
 #include <libsync/SyncMaster.h>
 #include <libtxpool/TxPool.h>
 #include <boost/property_tree/ini_parser.hpp>
@@ -87,6 +88,7 @@ bool Ledger::initLedger(std::shared_ptr<LedgerParamInterface> _ledgerParams)
         // init network statistic handler
         initNetworkStatHandler();
     }
+    initQPSLimit();
     /// init blockVerifier, txPool, sync and consensus
     return (initBlockVerifier() && initTxPool() && initSync() && consensusInitFactory() &&
             initEventLogFilterManager());
@@ -101,6 +103,29 @@ void Ledger::initNetworkStatHandler()
     m_service->appendNetworkStatHandlerByGroupID(m_groupId, m_networkStatHandler);
     m_channelRPCServer->networkStatHandler()->appendGroupP2PStatHandler(
         m_groupId, m_networkStatHandler);
+}
+
+void Ledger::initQPSLimit()
+{
+    if (m_param->mutableFlowControlParam().maxQPS ==
+        m_param->mutableFlowControlParam().maxQPSDefaultValue)
+    {
+        Ledger_LOG(INFO) << LOG_BADGE("QPSLimit has not been setted")
+                         << LOG_KV("groupId", m_groupId);
+        return;
+    }
+    auto rpcQPSLimiter = m_channelRPCServer->qpsLimiter();
+    if (!rpcQPSLimiter)
+    {
+        Ledger_LOG(INFO) << LOG_BADGE("Disable QPSLimit") << LOG_KV("groupId", m_groupId);
+        return;
+    }
+    auto qpsLimiter =
+        std::make_shared<dev::limit::QPSLimiter>(m_param->mutableFlowControlParam().maxQPS);
+    // register QPS
+    rpcQPSLimiter->registerQPSLimiterByGroupID(m_groupId, qpsLimiter);
+    Ledger_LOG(INFO) << LOG_BADGE("initQPSLimit") << LOG_KV("groupId", m_groupId)
+                     << LOG_KV("qpsLimiter", m_param->mutableFlowControlParam().maxQPS);
 }
 
 /// init txpool

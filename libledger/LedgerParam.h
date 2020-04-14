@@ -158,6 +158,13 @@ struct TxParam
     int64_t txGasLimit;
     bool enableParallel = false;
 };
+
+struct FlowControlParam
+{
+    int64_t maxQPS;
+    int64_t const maxQPSDefaultValue = INT64_MAX;
+};
+
 class LedgerParam : public LedgerParamInterface
 {
 public:
@@ -171,6 +178,7 @@ public:
     StorageParam& mutableStorageParam() override { return m_storageParam; }
     StateParam& mutableStateParam() override { return m_stateParam; }
     TxParam& mutableTxParam() override { return m_txParam; }
+    FlowControlParam& mutableFlowControlParam() override { return m_flowControlParam; }
     EventLogFilterManagerParams& mutableEventLogFilterManagerParams() override
     {
         return m_eventLogFilterParams;
@@ -195,6 +203,7 @@ private:
     void initRPBFTConsensusIniConfig(boost::property_tree::ptree const& pt);
     void initSyncConfig(boost::property_tree::ptree const& pt);
     void initEventLogFilterManagerConfig(boost::property_tree::ptree const& pt);
+    void initFlowControlConfig(boost::property_tree::ptree const& _pt);
     void setEVMFlags(boost::property_tree::ptree const& _pt);
 
 private:
@@ -208,8 +217,10 @@ private:
     StorageParam m_storageParam;
     StateParam m_stateParam;
     TxParam m_txParam;
+    FlowControlParam m_flowControlParam;
     EventLogFilterManagerParams m_eventLogFilterParams;
     dev::blockchain::GenesisBlockParam m_genesisBlockParam;
+
 
 private:
     std::string uriEncode(const std::string& keyWord);

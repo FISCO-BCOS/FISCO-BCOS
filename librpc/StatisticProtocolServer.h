@@ -22,6 +22,7 @@
 #include "Common.h"
 #include "jsonrpccpp/server/rpcprotocolserverv2.h"
 #include <libethcore/Protocol.h>
+#include <libflowlimit/RPCQPSLimiter.h>
 #include <libstat/ChannelNetworkStatHandler.h>
 
 namespace dev
@@ -37,9 +38,15 @@ public:
         m_networkStatHandler = _networkStatHandler;
     }
 
+    void setQPSLimiter(dev::limit::RPCQPSLimiter::Ptr _qpsLimiter) { m_qpsLimiter = _qpsLimiter; }
+
 private:
+    void limitRPCQPS();
+    void limitGroupQPS(dev::GROUP_ID const& _groupId);
+
     dev::GROUP_ID getGroupID(Json::Value const& _input);
 
     dev::stat::ChannelNetworkStatHandler::Ptr m_networkStatHandler;
+    dev::limit::RPCQPSLimiter::Ptr m_qpsLimiter;
 };
 }  // namespace dev

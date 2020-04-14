@@ -27,6 +27,7 @@ using namespace dev::stat;
 // update incoming traffic
 void NetworkStatHandler::updateIncomingTraffic(int32_t const& _msgType, uint64_t _msgSize)
 {
+    m_networkMonitor->updateInBytes(_msgSize);
     m_totalInMsgBytes += _msgSize;
     WriteGuard l(x_InMsgTypeToBytes);
     updateTraffic(m_InMsgTypeToBytes, _msgType, _msgSize);
@@ -35,6 +36,7 @@ void NetworkStatHandler::updateIncomingTraffic(int32_t const& _msgType, uint64_t
 // update outcoming traffic
 void NetworkStatHandler::updateOutcomingTraffic(int32_t const& _msgType, uint64_t _msgSize)
 {
+    m_networkMonitor->updateOutBytes(_msgSize);
     m_totalOutMsgBytes += _msgSize;
     WriteGuard l(x_OutMsgTypeToBytes);
     updateTraffic(m_OutMsgTypeToBytes, _msgType, _msgSize);

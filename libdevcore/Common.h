@@ -309,6 +309,7 @@ uint64_t utcSteadyTime();
 
 /// Get the current time in seconds since the epoch in UTC(us)
 uint64_t utcTimeUs();
+uint64_t utcSteadyTimeUs();
 
 // get the current datatime
 std::string getCurrentDateTime();

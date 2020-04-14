@@ -561,6 +561,9 @@ generate_config_ini()
     max_log_file_size=200
     flush=${auto_flush}
     log_flush_threshold=100
+
+[flow_control]
+    ;limit_req_qps=1000
 EOF
     printf "  [%d] p2p:%-5d  channel:%-5d  jsonrpc:%-5d\n" "${node_index}" $(( offset + port_array[0] )) $(( offset + port_array[1] )) $(( offset + port_array[2] )) >>"${logfile}"
 }
@@ -658,6 +661,8 @@ function generate_group_ini()
     gossip_peers_number=3
     ; max number of nodes that broadcast txs status to, recommended less than 5 
     txs_max_gossip_peers_num=5
+[flow_control]
+    ;limit_req_qps=1000
 EOF
 }
 

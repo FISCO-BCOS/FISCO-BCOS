@@ -83,11 +83,15 @@ void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt
     auto rpcEntity = new rpc::Rpc(nullptr, nullptr);
 
     auto modularServer = new ModularServer<rpc::Rpc>(rpcEntity);
+    auto qpsLimiter = createQPSLimiter(_pt);
     modularServer->setNetworkStatHandler(m_networkStatHandler);
+    modularServer->setQPSLimiter(qpsLimiter);
+
     m_channelRPCHttpServer = modularServer;
 
     m_rpcForChannel.reset(rpcEntity, [](rpc::Rpc*) {});
     m_channelRPCHttpServer->addConnector(m_channelRPCServer.get());
+    m_channelRPCServer->setQPSLimiter(qpsLimiter);
     try
     {
         if (!m_channelRPCHttpServer->StartListening())
@@ -244,4 +248,28 @@ dev::stat::ChannelNetworkStatHandler::Ptr RPCInitializer::createNetWorkStatHandl
 
     networkStatHandler->setFlushInterval(flushInterval * 1000);
     return networkStatHandler;
+}
+
+std::shared_ptr<dev::limit::RPCQPSLimiter> RPCInitializer::createQPSLimiter(
+    boost::property_tree::ptree const& _pt)
+{
+    auto qpsLimiter = std::make_shared<dev::limit::RPCQPSLimiter>();
+    int64_t maxQPSValue = INT64_MAX;
+    int64_t maxQPS = _pt.get<int64_t>("flow_control.limit_req_qps", maxQPSValue);
+    // the limit_req_qps has not been setted
+    if (maxQPS == maxQPSValue)
+    {
+        INITIALIZER_LOG(DEBUG) << LOG_DESC(
+            "disable QPSLimit for flow_control.limit_req_qps has not been setted!");
+        return qpsLimiter;
+    }
+    if (maxQPS <= 0)
+    {
+        BOOST_THROW_EXCEPTION(
+            dev::InvalidConfig() << errinfo_comment(
+                "createQPSLimiter failed, flow_control.limit_req_qps must be positive!"));
+    }
+    INITIALIZER_LOG(DEBUG) << LOG_DESC("createQPSLimiter") << LOG_KV("maxQPS", maxQPS);
+    qpsLimiter->createRPCQPSLimiter(maxQPS);
+    return qpsLimiter;
 }

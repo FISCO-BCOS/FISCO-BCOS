@@ -55,48 +55,47 @@ void ChannelNetworkStatHandler::removeGroupP2PStatHandler(GROUP_ID const& _group
     }
 }
 
+NetworkStatHandler::Ptr ChannelNetworkStatHandler::getP2PHandlerByGroupId(GROUP_ID const& _groupId)
+{
+    ReadGuard l(x_p2pStatHandlers);
+    if (!m_p2pStatHandlers->count(_groupId))
+    {
+        return nullptr;
+    }
+    return (*m_p2pStatHandlers)[_groupId];
+}
+
 void ChannelNetworkStatHandler::updateGroupResponseTraffic(
     GROUP_ID const& _groupId, uint32_t const& _msgType, uint64_t const& _msgSize)
 {
-    ReadGuard l(x_p2pStatHandlers);
-    if (m_p2pStatHandlers->count(_groupId))
+    auto p2pStatHandler = getP2PHandlerByGroupId(_groupId);
+    if (!p2pStatHandler)
     {
-        (*m_p2pStatHandlers)[_groupId]->updateOutcomingTraffic(_msgType, _msgSize);
+        return;
     }
+    p2pStatHandler->updateOutcomingTraffic(_msgType, _msgSize);
 }
-
-void ChannelNetworkStatHandler::updateGroupRequestTraffic(
-    GROUP_ID const& _groupId, uint32_t const& _msgType, uint64_t const& _msgSize)
-{
-    ReadGuard l(x_p2pStatHandlers);
-    if (m_p2pStatHandlers->count(_groupId))
-    {
-        (*m_p2pStatHandlers)[_groupId]->updateIncomingTraffic(_msgType, _msgSize);
-    }
-}
-
 
 void ChannelNetworkStatHandler::updateIncomingTrafficForRPC(
     GROUP_ID _groupId, uint64_t const& _msgSize)
 {
-    ReadGuard l(x_p2pStatHandlers);
-    if (!m_p2pStatHandlers->count(_groupId))
+    auto p2pStatHandler = getP2PHandlerByGroupId(_groupId);
+    if (!p2pStatHandler)
     {
         return;
     }
-    (*m_p2pStatHandlers)[_groupId]->updateIncomingTraffic(
-        ChannelMessageType::CHANNEL_RPC_REQUEST, _msgSize);
+    p2pStatHandler->updateIncomingTraffic(ChannelMessageType::CHANNEL_RPC_REQUEST, _msgSize);
 }
+
 void ChannelNetworkStatHandler::updateOutcomingTrafficForRPC(
     GROUP_ID _groupId, uint64_t const& _msgSize)
 {
-    ReadGuard l(x_p2pStatHandlers);
-    if (!m_p2pStatHandlers->count(_groupId))
+    auto p2pStatHandler = getP2PHandlerByGroupId(_groupId);
+    if (!p2pStatHandler)
     {
         return;
     }
-    (*m_p2pStatHandlers)[_groupId]->updateOutcomingTraffic(
-        ChannelMessageType::CHANNEL_RPC_REQUEST, _msgSize);
+    p2pStatHandler->updateOutcomingTraffic(ChannelMessageType::CHANNEL_RPC_REQUEST, _msgSize);
 }
 
 void ChannelNetworkStatHandler::flushLog()
@@ -111,12 +110,13 @@ void ChannelNetworkStatHandler::flushLog()
     }
 }
 
-void ChannelNetworkStatHandler::start()
+void ChannelNetworkStatHandler::startThread(
+    ThreadPool::Ptr _thread, std::function<void()> const& _f, uint64_t const& _waitMs)
 {
     std::weak_ptr<ChannelNetworkStatHandler> self(
         std::dynamic_pointer_cast<ChannelNetworkStatHandler>(shared_from_this()));
     m_running.store(true);
-    m_statLogFlushThread->enqueue([self]() {
+    _thread->enqueue([self, _f, _waitMs]() {
         while (true)
         {
             try
@@ -124,10 +124,9 @@ void ChannelNetworkStatHandler::start()
                 auto handler = self.lock();
                 if (handler && handler->running())
                 {
-                    handler->flushLog();
+                    _f();
                     // wait m_flushInterval ms
-                    std::this_thread::sleep_for(
-                        std::chrono::milliseconds(handler->flushInterval()));
+                    std::this_thread::sleep_for(std::chrono::milliseconds(_waitMs));
                 }
                 else
                 {
@@ -141,4 +140,27 @@ void ChannelNetworkStatHandler::start()
             }
         }
     });
+}
+
+void ChannelNetworkStatHandler::start()
+{
+    startThread(m_statLogFlushThread, boost::bind(&ChannelNetworkStatHandler::flushLog, this),
+        m_flushInterval);
+}
+
+void ChannelNetworkStatHandler::startMonitorThread()
+{
+    startThread(m_networkMonitorThread,
+        boost::bind(&ChannelNetworkStatHandler::calculateAverageNetworkBandwidth, this),
+        m_refreshWindow);
+}
+
+void ChannelNetworkStatHandler::calculateAverageNetworkBandwidth()
+{
+    ReadGuard l(x_p2pStatHandlers);
+    // print p2p statistics of each group
+    for (auto p2pStatHandler : *m_p2pStatHandlers)
+    {
+        p2pStatHandler.second->networkMonitor()->flushNetworkStatistic();
+    }
 }

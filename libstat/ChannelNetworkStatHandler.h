@@ -38,11 +38,14 @@ public:
     ChannelNetworkStatHandler(std::string const& _statisticName)
       : m_statisticName(_statisticName),
         m_statLogFlushThread(std::make_shared<dev::ThreadPool>("statFlush", 1)),
+        m_networkMonitorThread(std::make_shared<dev::ThreadPool>("netMonitor", 1)),
         m_p2pStatHandlers(std::make_shared<std::map<GROUP_ID, NetworkStatHandler::Ptr>>())
     {}
     virtual ~ChannelNetworkStatHandler() {}
 
     virtual void start();
+    virtual void startMonitorThread();
+
     virtual void stop() { m_running.store(false); }
 
     void setFlushInterval(int64_t const& _flushInterval);
@@ -51,9 +54,6 @@ public:
     void removeGroupP2PStatHandler(GROUP_ID const& _groupId);
 
     virtual void updateGroupResponseTraffic(
-        GROUP_ID const& _groupId, uint32_t const& _msgType, uint64_t const& _msgSize);
-
-    virtual void updateGroupRequestTraffic(
         GROUP_ID const& _groupId, uint32_t const& _msgType, uint64_t const& _msgSize);
 
     void updateIncomingTrafficForRPC(GROUP_ID _groupId, uint64_t const& _msgSize);
@@ -68,11 +68,20 @@ public:
 
 private:
     void flushLog();
+    NetworkStatHandler::Ptr getP2PHandlerByGroupId(GROUP_ID const& _groupId);
+    void startThread(
+        ThreadPool::Ptr _thread, std::function<void()> const& _f, uint64_t const& _waitMs);
+
+    void calculateAverageNetworkBandwidth();
 
 private:
+    // default refresh window is 100ms
+    uint64_t m_refreshWindow = 100;
+
     std::string m_statisticName;
     int64_t m_flushInterval;
     dev::ThreadPool::Ptr m_statLogFlushThread;
+    dev::ThreadPool::Ptr m_networkMonitorThread;
 
     // record group related RPC methods
     std::set<std::string> const m_groupRPCMethodSet = {"getSystemConfigByKey", "getBlockNumber",

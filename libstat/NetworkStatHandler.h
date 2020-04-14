@@ -21,6 +21,7 @@
  * @date: 2020-03-20
  */
 #pragma once
+#include "NetworkStatistic.h"
 #include <libchannelserver/ChannelMessage.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/Guards.h>
@@ -40,10 +41,13 @@ public:
     // _statisticName, eg. P2P, SDK
     NetworkStatHandler()
       : m_InMsgTypeToBytes(std::make_shared<std::map<int32_t, uint64_t>>()),
-        m_OutMsgTypeToBytes(std::make_shared<std::map<int32_t, uint64_t>>())
+        m_OutMsgTypeToBytes(std::make_shared<std::map<int32_t, uint64_t>>()),
+        m_networkMonitor(std::make_shared<NetworkStatistic>())
     {}
 
     virtual ~NetworkStatHandler() {}
+
+    NetworkStatistic::Ptr networkMonitor() { return m_networkMonitor; }
 
     void setConsensusMsgType(std::string const& _type)
     {
@@ -105,6 +109,8 @@ protected:
     mutable SharedMutex x_OutMsgTypeToBytes;
     std::atomic<uint64_t> m_totalOutMsgBytes = {0};
     std::string const m_OutMsgDescSuffix = "_Out";
+
+    NetworkStatistic::Ptr m_networkMonitor;
 };
 }  // namespace stat
 }  // namespace dev
