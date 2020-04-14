@@ -891,8 +891,8 @@ void dev::ChannelRPCServer::onClientChannelRequest(
         {
             CHANNEL_LOG(DEBUG) << "channel2 multicast request"
                                << LOG_KV("seq", message->seq().substr(0, c_seqAbridgedLen));
-
             auto buffer = std::make_shared<bytes>();
+
             message->encode(*buffer);
 
             auto p2pMessage = std::dynamic_pointer_cast<p2p::P2PMessage>(
@@ -902,7 +902,6 @@ void dev::ChannelRPCServer::onClientChannelRequest(
             p2pMessage->setPacketType(1u);
 
             m_service->asyncMulticastMessageByTopic(topic, p2pMessage);
-
             message->setType(AMOP_RESPONSE);
             message->setResult(0);
             session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
