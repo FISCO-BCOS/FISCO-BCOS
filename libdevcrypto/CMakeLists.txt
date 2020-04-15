@@ -6,7 +6,7 @@ else ()
     file(GLOB SRC_LIST "./*.cpp")
 endif()
 
-set(INSERT_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/CommonFunc.cpp)
+set(INSERT_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/CommonFunc.cpp ${CMAKE_CURRENT_SOURCE_DIR}/HashCommonFunc.cpp)
 list(APPEND SRC_LIST ${INSERT_SOURCES})
 
 add_library(devcrypto ${SRC_LIST} ${HEADERS})
