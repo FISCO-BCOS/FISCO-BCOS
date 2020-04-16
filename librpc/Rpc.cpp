@@ -1110,7 +1110,116 @@ Json::Value Rpc::call(int _groupID, const Json::Value& request)
     }
 }
 
+
+std::shared_ptr<Json::Value> Rpc::notifyReceipt(
+    std::shared_ptr<dev::blockchain::BlockChainInterface>, LocalisedTransactionReceipt::Ptr receipt,
+    dev::bytesConstRef input, dev::eth::Block::Ptr)
+{
+    std::shared_ptr<Json::Value> response = std::make_shared<Json::Value>();
+
+    // FIXME: If made protocol modify, please modify upside if
+    (*response)["transactionHash"] = toJS(receipt->hash());
+    (*response)["transactionIndex"] = toJS(receipt->transactionIndex());
+    (*response)["root"] = toJS(receipt->stateRoot());
+    (*response)["blockNumber"] = toJS(receipt->blockNumber());
+    (*response)["blockHash"] = toJS(receipt->blockHash());
+    (*response)["from"] = toJS(receipt->from());
+    (*response)["to"] = toJS(receipt->to());
+    (*response)["gasUsed"] = toJS(receipt->gasUsed());
+    (*response)["contractAddress"] = toJS(receipt->contractAddress());
+    (*response)["logs"] = Json::Value(Json::arrayValue);
+    for (unsigned int i = 0; i < receipt->log().size(); ++i)
+    {
+        Json::Value log;
+        log["address"] = toJS(receipt->log()[i].address);
+        log["topics"] = Json::Value(Json::arrayValue);
+        for (unsigned int j = 0; j < receipt->log()[i].topics.size(); ++j)
+            log["topics"].append(toJS(receipt->log()[i].topics[j]));
+        log["data"] = toJS(receipt->log()[i].data);
+        (*response)["logs"].append(log);
+    }
+    (*response)["logsBloom"] = toJS(receipt->bloom());
+    (*response)["status"] = toJS(receipt->status());
+    if (g_BCOSConfig.version() > RC3_VERSION)
+    {
+        (*response)["input"] = toJS(input);
+    }
+    (*response)["output"] = toJS(receipt->outputBytes());
+    return response;
+}
+
+std::shared_ptr<Json::Value> Rpc::notifyReceiptWithProof(
+    std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
+    LocalisedTransactionReceipt::Ptr _receipt, dev::bytesConstRef _input,
+    dev::eth::Block::Ptr _blockPtr)
+{
+    auto response = notifyReceipt(_blockChain, _receipt, _input, _blockPtr);
+    // only support merkleProof when supported_version >= v2.2.0
+    if (!_blockPtr || g_BCOSConfig.version() < V2_2_0)
+    {
+        return response;
+    }
+    // get transaction Proof
+    auto index = _receipt->transactionIndex();
+    auto txProof = _blockChain->getTransactionProof(_blockPtr, index);
+    if (!txProof)
+    {
+        return response;
+    }
+    addProofToResponse(response, "txProof", txProof);
+    // get receipt proof
+    auto receiptProof = _blockChain->getTransactionReceiptProof(_blockPtr, index);
+    if (!receiptProof)
+    {
+        return response;
+    }
+    addProofToResponse(response, "receiptProof", receiptProof);
+    return response;
+}
+
+void Rpc::addProofToResponse(std::shared_ptr<Json::Value> _response, std::string const& _key,
+    std::shared_ptr<dev::blockchain::MerkleProofType> _proofList)
+{
+    uint32_t index = 0;
+    for (const auto& merkleItem : *_proofList)
+    {
+        (*_response)[_key][index]["left"] = Json::arrayValue;
+        (*_response)[_key][index]["right"] = Json::arrayValue;
+        const auto& left = merkleItem.first;
+        for (const auto& item : left)
+        {
+            (*_response)[_key][index]["left"].append(item);
+        }
+
+        const auto& right = merkleItem.second;
+        for (const auto& item : right)
+        {
+            (*_response)[_key][index]["right"].append(item);
+        }
+        ++index;
+    }
+}
+
+// send transactions and notify receipts with receipt, transactionProof, receiptProof
+std::string Rpc::sendRawTransactionAndGetProof(int _groupID, const std::string& _rlp)
+{
+    return sendRawTransaction(
+        _groupID, _rlp, boost::bind(&Rpc::notifyReceiptWithProof, this, _1, _2, _3, _4));
+}
+
 std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
+{
+    return sendRawTransaction(
+        _groupID, _rlp, boost::bind(&Rpc::notifyReceipt, this, _1, _2, _3, _4));
+}
+
+
+std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp,
+    std::function<std::shared_ptr<Json::Value>(
+        std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
+        LocalisedTransactionReceipt::Ptr receipt, dev::bytesConstRef input,
+        dev::eth::Block::Ptr _blockPtr)>
+        _notifyCallback)
 {
     try
     {
@@ -1125,6 +1234,7 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
         }
+        auto blockChain = ledgerManager()->blockChain(_groupID);
 
         // Transaction tx(jsToBytes(_rlp, OnFailed::Throw), CheckTransaction::Everything);
         Transaction::Ptr tx = std::make_shared<Transaction>(
@@ -1139,41 +1249,16 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
             auto transactionCallback = *currentTransactionCallback;
             clientProtocolversion = (*m_transactionCallbackVersion)();
             tx->setRpcCallback(
-                [transactionCallback, clientProtocolversion, _groupID](
-                    LocalisedTransactionReceipt::Ptr receipt, dev::bytesConstRef input) {
-                    Json::Value response;
+                [blockChain, _notifyCallback, transactionCallback, clientProtocolversion, _groupID](
+                    LocalisedTransactionReceipt::Ptr receipt, dev::bytesConstRef input,
+                    dev::eth::Block::Ptr _blockPtr) {
+                    std::shared_ptr<Json::Value> response = std::make_shared<Json::Value>();
                     if (clientProtocolversion > 0)
-                    {  // FIXME: If made protocol modify, please modify upside if
-                        response["transactionHash"] = toJS(receipt->hash());
-                        response["transactionIndex"] = toJS(receipt->transactionIndex());
-                        response["root"] = toJS(receipt->stateRoot());
-                        response["blockNumber"] = toJS(receipt->blockNumber());
-                        response["blockHash"] = toJS(receipt->blockHash());
-                        response["from"] = toJS(receipt->from());
-                        response["to"] = toJS(receipt->to());
-                        response["gasUsed"] = toJS(receipt->gasUsed());
-                        response["contractAddress"] = toJS(receipt->contractAddress());
-                        response["logs"] = Json::Value(Json::arrayValue);
-                        for (unsigned int i = 0; i < receipt->log().size(); ++i)
-                        {
-                            Json::Value log;
-                            log["address"] = toJS(receipt->log()[i].address);
-                            log["topics"] = Json::Value(Json::arrayValue);
-                            for (unsigned int j = 0; j < receipt->log()[i].topics.size(); ++j)
-                                log["topics"].append(toJS(receipt->log()[i].topics[j]));
-                            log["data"] = toJS(receipt->log()[i].data);
-                            response["logs"].append(log);
-                        }
-                        response["logsBloom"] = toJS(receipt->bloom());
-                        response["status"] = toJS(receipt->status());
-                        if (g_BCOSConfig.version() > RC3_VERSION)
-                        {
-                            response["input"] = toJS(input);
-                        }
-                        response["output"] = toJS(receipt->outputBytes());
+                    {
+                        response = _notifyCallback(blockChain, receipt, input, _blockPtr);
                     }
 
-                    auto receiptContent = response.toStyledString();
+                    auto receiptContent = response->toStyledString();
                     transactionCallback(receiptContent, _groupID);
                 });
         }

@@ -129,6 +129,11 @@ public:
                                    jsonrpc::JSON_STRING, NULL),
             &dev::rpc::RpcFace::sendRawTransactionI);
 
+        this->bindAndAddMethod(jsonrpc::Procedure("sendRawTransactionAndGetProof",
+                                   jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, "param1",
+                                   jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_STRING, NULL),
+            &dev::rpc::RpcFace::sendRawTransactionAndGetProofI);
+
         this->bindAndAddMethod(
             jsonrpc::Procedure("getCode", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT,
                 "param1", jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_STRING, NULL),
@@ -297,6 +302,13 @@ public:
             boost::lexical_cast<int>(request[0u].asString()), request[1u].asString());
     }
 
+    inline virtual void sendRawTransactionAndGetProofI(
+        const Json::Value& request, Json::Value& response)
+    {
+        response = this->sendRawTransactionAndGetProof(
+            boost::lexical_cast<int>(request[0u].asString()), request[1u].asString());
+    }
+
     inline virtual void getTransactionByHashWithProofI(
         const Json::Value& request, Json::Value& response)
     {
@@ -393,6 +405,7 @@ public:
     virtual Json::Value call(int param1, const Json::Value& param2) = 0;
     /// Creates new message call transaction or a contract creation for signed transactions.
     virtual std::string sendRawTransaction(int param1, const std::string& param2) = 0;
+    virtual std::string sendRawTransactionAndGetProof(int _groupID, const std::string& rlp) = 0;
     // Get merkle transaction with proof by hash
     virtual Json::Value getTransactionByHashWithProof(int param1, const std::string& param2) = 0;
     // Get receipt with merkle proof by hash
