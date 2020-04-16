@@ -58,6 +58,11 @@ ETH_REGISTER_PRECOMPILED(ecrecover)(bytesConstRef _in)
 }
 ETH_REGISTER_PRECOMPILED(sha256)(bytesConstRef _in)
 {
+    // When supported_version> = v2.4.0, sha256 uniformly calls the secp sha256 function
+    if (g_BCOSConfig.version() >= V2_4_0)
+    {
+        return {true, dev::standardSha256(_in).asBytes()};
+    }
     return {true, dev::sha256(_in).asBytes()};
 }
 
