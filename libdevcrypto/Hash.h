@@ -35,9 +35,11 @@ namespace dev
 /// @returns false if o_output.size() != 32.
 bool sha3(bytesConstRef _input, bytesRef o_output);
 
+// secp256k1_sha256
+h256 standardSha256(bytesConstRef _input) noexcept;
+
 // sha2 - sha256 replace Hash.h begin
 h256 sha256(bytesConstRef _input) noexcept;
-// sha2 - sha256 replace Hash.h end
 
 h160 ripemd160(bytesConstRef _input);
 
