@@ -134,7 +134,7 @@ void TxPool::notifyReceipt(dev::eth::Transaction::Ptr _tx, ImportResult const& _
                       << LOG_KV("exception", int(txException));
     dev::eth::LocalisedTransactionReceipt::Ptr receipt =
         std::make_shared<dev::eth::LocalisedTransactionReceipt>(txException);
-    m_workerPool->enqueue([callback, receipt] { callback(receipt, bytesConstRef()); });
+    m_workerPool->enqueue([callback, receipt] { callback(receipt, bytesConstRef(), nullptr); });
 }
 
 std::pair<h256, Address> TxPool::submitTransactions(dev::eth::Transaction::Ptr _tx)
@@ -402,7 +402,7 @@ bool TxPool::removeTrans(h256 const& _txHash, bool _needTriggerCallback,
             }
             TxCallback callback{transaction->rpcCallback(), pReceipt};
 
-            callback.call(callback.pReceipt, input);
+            callback.call(callback.pReceipt, input, _block);
         });
     }
 

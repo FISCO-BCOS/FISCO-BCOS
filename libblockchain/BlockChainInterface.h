@@ -62,6 +62,8 @@ struct GenesisBlockParam
     int64_t rpbftRotatingInterval;
     VMFlagType evmFlags;  // record flags of EVM
 };
+using MerkleProofType = std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>;
+
 class BlockChainInterface
 {
 public:
@@ -119,6 +121,18 @@ public:
     dev::eth::Handler<int64_t> onReady(T const& _t)
     {
         return m_onReady.add(_t);
+    }
+
+    virtual std::shared_ptr<MerkleProofType> getTransactionReceiptProof(
+        dev::eth::Block::Ptr, uint64_t const&)
+    {
+        return nullptr;
+    }
+
+    virtual std::shared_ptr<MerkleProofType> getTransactionProof(
+        dev::eth::Block::Ptr, uint64_t const&)
+    {
+        return nullptr;
     }
 
 protected:

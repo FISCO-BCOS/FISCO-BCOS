@@ -287,20 +287,13 @@ void Transaction::updateTransactionHashWithSig(dev::h256 const& txHash)
     m_hashWith = txHash;
 }
 
-void Transaction::triggerRpcCallback(LocalisedTransactionReceipt::Ptr pReceipt) const
+void Transaction::setRpcCallback(RPCCallback callBack)
 {
-    try
-    {
-        if (m_rpcCallback)
-        {
-            m_rpcCallback(pReceipt, bytesConstRef());
-        }
-    }
-    catch (std::exception& e)
-    {
-        // LOG(ERROR) << "callback RPC callback failed";
-        return;
-    }
+    m_rpcCallback = callBack;
+}
+RPCCallback Transaction::rpcCallback() const
+{
+    return m_rpcCallback;
 }
 
 bool Transaction::checkChainId(u256 _chainId)
