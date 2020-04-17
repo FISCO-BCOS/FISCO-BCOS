@@ -192,7 +192,7 @@ while getopts "f:l:o:p:e:t:v:s:C:c:k:K:X:izhgTNFSdEDZ" option;do
     z) make_tar="true";;
     g) guomi_mode="true";;
     d) docker_mode="true"
-    if [ -n "${macOS}" ];then LOG_WARN "Docker desktop of macOS can't support docker mode of FISCO BCOS!" && exit 1;fi
+        if [ "$(uname)" == "Darwin" ];then LOG_WARN "Docker desktop of macOS can't support docker mode of FISCO BCOS!" && exit 1;fi
     ;;
     h) help;;
     esac
@@ -236,12 +236,10 @@ check_env() {
     if [ "$(uname -m)" != "x86_64" ];then
         x86_64_arch="false"
     fi
-    if [ -n "${guomi_mode}" ]; then
-        check_and_install_tassl
-    fi
 }
 
 check_and_install_tassl(){
+if [ -n "${guomi_mode}" ]; then
     if [ ! -f "${TASSL_CMD}" ];then
         LOG_INFO "Downloading tassl binary ..."
         if [[ -n "${macOS}" ]];then
@@ -255,6 +253,7 @@ check_and_install_tassl(){
         mkdir -p "${HOME}"/.fisco
         mv tassl "${HOME}"/.fisco/tassl
     fi
+fi
 }
 
 check_name() {
@@ -1612,7 +1611,8 @@ if [ -n "${no_agency}" ];then
 fi
 }
 
-parse_params $@
 check_env
+parse_params $@
+check_and_install_tassl
 main
 print_result
