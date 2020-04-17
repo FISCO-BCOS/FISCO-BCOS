@@ -37,6 +37,8 @@ auto_flush="true"
 enable_statistic="false"
 enable_free_storage="false"
 deploy_mode=
+root_crt=
+gmroot_crt=
 copy_cert=
 no_agency=
 days=36500 # 100 years
@@ -68,8 +70,8 @@ Usage:
     -g <Generate guomi nodes>           Default no
     -z <Generate tar packet>            Default no
     -t <Cert config file>               Default auto generate
-    -k <The path of ca root>            Default auto generate
-    -K <The path of sm crypto ca root>  Default auto generate
+    -k <The path of ca root>            Default auto generate, the ca.crt and ca.key must in the path, if use intermediate the root.crt must in the path
+    -K <The path of sm crypto ca root>  Default auto generate, the gmca.crt and gmca.key must in the path, if use intermediate the gmroot.crt must in the path
     -X <Certificate expiration time>    Default 36500 days
     -T <Enable debug log>               Default off. If set -T, enable debug log
     -S <Enable statistics>              Default off. If set -S, enable statistics
@@ -338,7 +340,12 @@ gen_cert_secp256k1() {
         cat "${agpath}/agency.crt" >> "$certpath/${type}.crt"
     fi
     cat "${agpath}/../ca.crt" >> "$certpath/${type}.crt"
-    cp "${agpath}/../ca.crt" "$certpath/"
+    if [[ -n "${root_crt}" ]];then
+        echo "Use user specified root cert as ca.crt, $certpath" >> "${logfile}"
+        cp "${root_crt}" "$certpath/ca.crt"
+    else
+        cp "${agpath}/../ca.crt" "$certpath/"
+    fi
 
     rm -f $certpath/${type}.csr $certpath/${type}.pubkey $certpath/${type}.param
 }
@@ -411,7 +418,7 @@ gen_agency_cert_gm() {
 
     $TASSL_CMD genpkey -paramfile "$chain/gmsm2.param" -out "$agencydir/gmagency.key" 2> /dev/null
     $TASSL_CMD req -new -subj "/CN=${name}_son/O=fisco-bcos/OU=agency" -key "$agencydir/gmagency.key" -config "$chain/gmcert.cnf" -out "$agencydir/gmagency.csr" 2> /dev/null
-    $TASSL_CMD x509 -req -CA "$chain/gmca.crt" -CAkey "$chain/gmca.key" -days 3650 -CAcreateserial -in "$agencydir/gmagency.csr" -out "$agencydir/gmagency.crt" -extfile "$chain/gmcert.cnf" -extensions v3_agency_root 2> /dev/null
+    $TASSL_CMD x509 -sm3 -req -CA "$chain/gmca.crt" -CAkey "$chain/gmca.key" -days 3650 -CAcreateserial -in "$agencydir/gmagency.csr" -out "$agencydir/gmagency.crt" -extfile "$chain/gmcert.cnf" -extensions v3_agency_root 2> /dev/null
     # cat "$chain/gmca.crt" >> "$agencydir/gmagency.crt"
     cp "$chain/gmca.crt" "$chain/gmcert.cnf" "$chain/gmsm2.param" "$agencydir/"
     rm -f "$agencydir/gmagency.csr"
@@ -428,9 +435,9 @@ gen_node_cert_with_extensions_gm() {
     $TASSL_CMD req -new -subj "/CN=$name/O=fisco-bcos/OU=${type}" -key "$certpath/gm${type}.key" -config "$capath/gmcert.cnf" -out "$certpath/gm${type}.csr" 2> /dev/null
     if [ -n "${no_agency}" ];then
         echo "not use $(basename $capath) to sign $(basename $certpath) ${type}" >>"${logfile}"
-        $TASSL_CMD x509 -req -CA "$capath/../gmca.crt" -CAkey "$capath/../gmca.key" -days "${days}" -CAcreateserial -in "$certpath/gm${type}.csr" -out "$certpath/gm${type}.crt" -extfile "$capath/gmcert.cnf" -extensions "$extensions" 2> /dev/null
+        $TASSL_CMD x509 -sm3 -req -CA "$capath/../gmca.crt" -CAkey "$capath/../gmca.key" -days "${days}" -CAcreateserial -in "$certpath/gm${type}.csr" -out "$certpath/gm${type}.crt" -extfile "$capath/gmcert.cnf" -extensions "$extensions" 2> /dev/null
     else
-        $TASSL_CMD x509 -req -CA "$capath/gmagency.crt" -CAkey "$capath/gmagency.key" -days "${days}" -CAcreateserial -in "$certpath/gm${type}.csr" -out "$certpath/gm${type}.crt" -extfile "$capath/gmcert.cnf" -extensions "$extensions" 2> /dev/null
+        $TASSL_CMD x509 -sm3 -req -CA "$capath/gmagency.crt" -CAkey "$capath/gmagency.key" -days "${days}" -CAcreateserial -in "$certpath/gm${type}.csr" -out "$certpath/gm${type}.crt" -extfile "$capath/gmcert.cnf" -extensions "$extensions" 2> /dev/null
     fi
     rm -f $certpath/gm${type}.csr
 }
@@ -464,7 +471,12 @@ gen_node_cert_gm() {
     else
         $TASSL_CMD x509 -text -in "$ndpath/gmnode.crt" 2> /dev/null | sed -n '4p' |  sed 's/ //g' | sed 's/.*(0x//g' | sed 's/)//g' |sed 's/[a-z]/\u&/g' | cat > "$ndpath/gmnode.serial"
     fi
-    cp "$agpath/gmca.crt" "$ndpath"
+    if [[ -n "${gmroot_crt}" ]];then
+        echo "Use user specified gmroot cert as gmca.crt, $ndpath" >>"${logfile}"
+        cp "${gmroot_crt}" "$certpath/gmca.crt"
+    else
+        cp "$agpath/../gmca.crt" "$ndpath"
+    fi
     cd "$ndpath"
     mkdir -p "${gm_conf_path}/"
     mv ./*.* "${gm_conf_path}/"
@@ -1342,6 +1354,7 @@ prepare_ca(){
         mkdir -p "${output_dir}/cert"
         cp "${ca_key}" "${output_dir}/cert"
         cp "${ca_crt}" "${output_dir}/cert"
+        [ -f "$ca_path/root.crt" ] && cp "$ca_path/root.crt" "${output_dir}/cert/" && root_crt="${output_dir}/cert/root.crt"
     fi
     ca_key="${output_dir}/cert/ca.key"
     mv cert.cnf "${output_dir}/cert/"
@@ -1361,7 +1374,7 @@ prepare_ca(){
         generate_gmsm2_param "gmsm2.param"
         if [[ -z "${gmca_path}" ]]; then
             echo "Generating Guomi CA key..."
-            gen_chain_cert_gm "${output_dir}/gmchain" >"${logfile}" 2>&1 || exit_with_clean "openssl error!"
+            gen_chain_cert_gm "${output_dir}/gmchain" >"${logfile}" 2>&1 || exit_with_clean "openssl gm error!"
             mv "${output_dir}/gmchain" "${output_dir}/gmcert"
             gmca_path="${output_dir}/gmcert/"
         elif [[ -n "${gmca_path}" ]]; then
@@ -1369,6 +1382,7 @@ prepare_ca(){
             mkdir -p "${output_dir}/gmcert"
             cp "${gmca_key}" "${output_dir}/gmcert"
             cp "${gmca_crt}" "${output_dir}/gmcert"
+            [ -f "$gmca_path/gmroot.crt" ] && cp "$gmca_path/gmroot.crt" "${output_dir}/gmcert/" && gmroot_crt="${output_dir}/gmcert/gmroot.crt"
         fi
         gmca_key="${output_dir}/gmcert/ca.key"
 

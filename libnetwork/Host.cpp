@@ -193,7 +193,6 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
                     nodeIDOut->erase(0, 2);
                 }
             }
-
             /// check nodeID in certBlacklist, only filter by nodeID.
             const std::vector<std::string>& certBlacklist = host->certBlacklist();
             std::string nodeID = boost::to_upper_copy(*nodeIDOut);
@@ -308,7 +307,7 @@ void Host::handshakeServer(const boost::system::error_code& error,
     if (endpointPublicKey->empty())
     {
         HOST_LOG(WARNING) << LOG_DESC("handshakeServer get nodeID failed")
-                          << LOG_KV("endpoint", socket->nodeIPEndpoint().name());
+                          << LOG_KV("remote endpoint", socket->remoteEndpoint());
         socket->close();
         return;
     }
@@ -319,6 +318,8 @@ void Host::handshakeServer(const boost::system::error_code& error,
         std::string node_info(*endpointPublicKey);
         NodeInfo info;
         obtainNodeInfo(info, node_info);
+        HOST_LOG(INFO) << LOG_DESC("handshakeServer succ")
+                       << LOG_KV("remote endpoint", socket->remoteEndpoint());
         startPeerSession(info, socket, m_connectionHandler);
     }
 }
@@ -354,7 +355,8 @@ void Host::startPeerSession(NodeInfo const& nodeInfo, std::shared_ptr<SocketFace
             HOST_LOG(WARNING) << LOG_DESC("No connectionHandler, new connection may lost");
         }
     });
-    HOST_LOG(INFO) << LOG_DESC("startPeerSession, From=") << socket->remoteEndpoint()
+    HOST_LOG(INFO) << LOG_DESC("startPeerSession, Remote=") << socket->remoteEndpoint()
+                   << LOG_KV("local endpoint", socket->localEndpoint())
                    << LOG_KV("nodeID", nodeInfo.nodeID.abridged());
 }
 
@@ -503,7 +505,7 @@ void Host::handshakeClient(const boost::system::error_code& error,
     if (endpointPublicKey->empty())
     {
         HOST_LOG(WARNING) << LOG_DESC("handshakeClient get nodeID failed")
-                          << LOG_KV("endpoint", socket->nodeIPEndpoint().name());
+                          << LOG_KV("local endpoint", socket->localEndpoint());
         socket->close();
         return;
     }
@@ -513,6 +515,8 @@ void Host::handshakeClient(const boost::system::error_code& error,
         std::string node_info(*endpointPublicKey);
         NodeInfo info;
         obtainNodeInfo(info, node_info);
+        HOST_LOG(INFO) << LOG_DESC("handshakeClient succ")
+                       << LOG_KV("local endpoint", socket->localEndpoint());
         startPeerSession(info, socket, callback);
     }
 }

@@ -6,6 +6,8 @@ logfile=${PWD}/build.log
 ca_path=
 gmca_path=
 agency=
+root_crt=
+gmroot_crt=
 TASSL_CMD="${HOME}"/.fisco/tassl
 
 LOG_WARN()
@@ -84,6 +86,7 @@ parse_params()
         c) ca_path="${OPTARG}"
             if [ ! -e "$ca_path/ca.key" ]; then LOG_WARN "$ca_path/ca.key not exist" && exit 1; fi
             if [ ! -e "$ca_path/ca.crt" ]; then LOG_WARN "$ca_path/ca.crt not exist" && exit 1; fi
+            [ -f "$ca_path/root.crt" ] && root_crt="$ca_path/root.crt"
         ;;
         a) agency="${OPTARG}"
             if [ -z "$agency" ]; then LOG_WARN "$agency not specified" && exit 1; fi
@@ -91,6 +94,7 @@ parse_params()
         g) guomi_mode="yes" && gmca_path=$OPTARG
             if [ ! -e "$gmca_path/gmca.key" ]; then LOG_WARN "$gmca_path/gmca.key not exist" && exit 1; fi
             if [ ! -e "$gmca_path/gmca.crt" ]; then LOG_WARN "$gmca_path/gmca.crt not exist" && exit 1; fi        
+            [ -f "$gmca_path/gmroot.crt" ] && gmroot_crt="${gmca_path}/gmroot.crt"
         ;;
         h) help;;
         *) LOG_WARN "invalid option $option";;
@@ -152,6 +156,12 @@ gen_agency_cert() {
         -in "$agencydir/agency.csr" -out "$agencydir/agency.crt"  -extensions v4_req -extfile "$chain/cert.cnf" 2> /dev/null
     
     cp "$chain/ca.crt" "$chain/cert.cnf" "$agencydir/"
+    if [[ -n "${root_crt}" ]];then
+        echo "Use user specified root cert as ca.crt, $agencydir" >>"${logfile}"
+        cp "${root_crt}" "$agencydir/ca.crt"
+    else
+        cp "$chain/ca.crt" "$chain/cert.cnf" "$agencydir/"
+    fi
     rm -f "$agencydir/agency.csr"
 
     echo "build $name cert successful!"
@@ -325,7 +335,12 @@ gen_agency_cert_gm() {
     $TASSL_CMD req -new -subj "/CN=$name/O=fisco-bcos/OU=agency" -key "$agencydir/gmagency.key" -config "$chain/gmcert.cnf" -out "$agencydir/gmagency.csr" 2> /dev/null
     $TASSL_CMD x509 -req -CA "$chain/gmca.crt" -CAkey "$chain/gmca.key" -days 3650 -CAcreateserial -in "$agencydir/gmagency.csr" -out "$agencydir/gmagency.crt" -extfile "$chain/gmcert.cnf" -extensions v3_agency_root 2> /dev/null
 
-    cp "$chain/gmca.crt" "$chain/gmcert.cnf" "$chain/gmsm2.param" "$agencydir/"
+    if [[ -n "${gmroot_crt}" ]];then
+        echo "Use user specified gmroot cert as gmca.crt, $agencydir" >>"${logfile}"
+        cp "${gmroot_crt}" "$agencydir/gmca.crt"
+    else
+        cp "$chain/gmca.crt" "$chain/gmcert.cnf" "$chain/gmsm2.param" "$agencydir/"
+    fi
     rm -f "$agencydir/gmagency.csr"
 }
 
