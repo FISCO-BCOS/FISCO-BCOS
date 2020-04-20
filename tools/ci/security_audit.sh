@@ -8,7 +8,7 @@ verifierMain.cpp consensus_main.cpp sync_main.cpp ExecuteResultTest.cpp trie.cpp
 EthCoreCommonJS.cpp HostTest.cpp PeerWhitelist.cpp Common.cpp test_Service.cpp FakeSyncToolsSet.h \
 test_ConsensusPrecompiled.cpp RpcTest.cpp .genesis test_PermissionPrecompiled.cpp test_PaillierPrecompiled.cpp \
 test_ConsensusPrecompiled.cpp BlockChainImpTest.cpp test_KVTablePrecompiled.cpp test_CNSPrecompiled.cpp \
-TransactionTest.cpp test_ChainGovernancePrecompiled.cpp OutputTest.cpp CMakeLists.txt)
+TransactionTest.cpp test_ChainGovernancePrecompiled.cpp OutputTest.cpp CMakeLists.txt AES.cpp)
 
 LOG_ERROR() {
     content=${1}
