@@ -30,65 +30,84 @@ using namespace dev;
 using namespace dev::crypto;
 using namespace std;
 
+string dev::aesCBCEncrypt(const unsigned char* _plainData, const int _plainDataSize,
+    const unsigned char* _key, const int _keySize, const unsigned char* _ivData)
+{
+    int padding = _plainDataSize % 16;
+    int nSize = 16 - padding;
+    int inDataVLen = _plainDataSize + nSize;
+    bytes inDataV(inDataVLen);
+    memcpy(inDataV.data(), _plainData, _plainDataSize);
+    memset(inDataV.data() + _plainDataSize, nSize, nSize);
+
+    string enData;
+    enData.resize(inDataVLen);
+    SM4::getInstance().setKey(_key, _keySize);
+    SM4::getInstance().cbcEncrypt(
+        inDataV.data(), (unsigned char*)enData.data(), inDataVLen, (unsigned char*)_ivData, 1);
+    return enData;
+}
+
+string dev::aesCBCDecrypt(const unsigned char* _cypherData, const int _cypherDataSize,
+    const unsigned char* _key, const int _keySize, const unsigned char* _ivData)
+{
+    string deData;
+    deData.resize(_cypherDataSize);
+    SM4::getInstance().setKey(_key, _keySize);
+    SM4::getInstance().cbcEncrypt(
+        _cypherData, (unsigned char*)deData.data(), _cypherDataSize, (unsigned char*)_ivData, 0);
+    int padding = deData.at(_cypherDataSize - 1);
+    int deLen = _cypherDataSize - padding;
+    return deData.substr(0, deLen);
+}
+
+string dev::aesCBCEncrypt(const string& _plainData, const string& _key, const std::string& _ivData)
+{
+    return aesCBCEncrypt((const unsigned char*)_plainData.data(), _plainData.size(),
+        (const unsigned char*)_key.data(), _key.size(), (const unsigned char*)_ivData.data());
+}
+
+string dev::aesCBCDecrypt(const string& _cypherData, const string& _key, const std::string& _ivData)
+{
+    return aesCBCDecrypt((const unsigned char*)_cypherData.data(), _cypherData.size(),
+        (const unsigned char*)_key.data(), _key.size(), (const unsigned char*)_ivData.data());
+}
 
 string dev::aesCBCEncrypt(const string& _plainData, const string& _key)
 {
     string ivData(_key.substr(0, 16));
-    int padding = _plainData.size() % 16;
-    int nSize = 16 - padding;
-    int inDataVLen = _plainData.size() + nSize;
-    bytes inDataV(inDataVLen);
-    memcpy(inDataV.data(), (unsigned char*)_plainData.data(), _plainData.size());
-    memset(inDataV.data() + _plainData.size(), nSize, nSize);
 
-    string enData;
-    enData.resize(inDataVLen);
-    SM4::getInstance().setKey((unsigned char*)_key.data(), _key.size());
-    SM4::getInstance().cbcEncrypt(inDataV.data(), (unsigned char*)enData.data(), inDataVLen,
-        (unsigned char*)ivData.data(), 1);
-    return enData;
+    return aesCBCEncrypt(_plainData, _key, ivData);
 }
 
 string dev::aesCBCDecrypt(const string& _cypherData, const string& _key)
 {
     string ivData(_key.substr(0, 16));
-    string deData;
-    deData.resize(_cypherData.size());
-    SM4::getInstance().setKey((unsigned char*)_key.data(), _key.size());
-    SM4::getInstance().cbcEncrypt((unsigned char*)_cypherData.data(), (unsigned char*)deData.data(),
-        _cypherData.size(), (unsigned char*)ivData.data(), 0);
-    int padding = deData.at(_cypherData.size() - 1);
-    int deLen = _cypherData.size() - padding;
-    return deData.substr(0, deLen);
+    return aesCBCDecrypt(_cypherData, _key, ivData);
+    ;
 }
+
+bytes dev::aesCBCEncrypt(bytesConstRef _plainData, bytesConstRef _key, bytesConstRef _ivData)
+{
+    return asBytes(aesCBCEncrypt(
+        _plainData.data(), _plainData.size(), _key.data(), _key.size(), _ivData.data()));
+}
+
+bytes dev::aesCBCDecrypt(bytesConstRef _cypherData, bytesConstRef _key, bytesConstRef _ivData)
+{
+    return asBytes(aesCBCDecrypt(
+        _cypherData.data(), _cypherData.size(), _key.data(), _key.size(), _ivData.data()));
+}
+
 
 bytes dev::aesCBCEncrypt(bytesConstRef _plainData, bytesConstRef _key)
 {
     bytesConstRef ivData = _key.cropped(0, 16);
-    int padding = _plainData.size() % 16;
-    int nSize = 16 - padding;
-    int inDataVLen = _plainData.size() + nSize;
-    bytes inDataV(inDataVLen);
-    memcpy(inDataV.data(), (unsigned char*)_plainData.data(), _plainData.size());
-    memset(inDataV.data() + _plainData.size(), nSize, nSize);
-
-    bytes enData(inDataVLen);
-    SM4::getInstance().setKey((unsigned char*)_key.data(), _key.size());
-    SM4::getInstance().cbcEncrypt(
-        inDataV.data(), enData.data(), inDataVLen, (unsigned char*)ivData.data(), 1);
-    // LOG(DEBUG)<<"ivData:"<<ascii2hex((const char*)ivData.data(),ivData.size());
-    return enData;
+    return aesCBCEncrypt(_plainData, _key, ivData);
 }
 
 bytes dev::aesCBCDecrypt(bytesConstRef _cypherData, bytesConstRef _key)
 {
     bytesConstRef ivData = _key.cropped(0, 16);
-    bytes deData(_cypherData.size());
-    SM4::getInstance().setKey((unsigned char*)_key.data(), _key.size());
-    SM4::getInstance().cbcEncrypt((unsigned char*)_cypherData.data(), deData.data(),
-        _cypherData.size(), (unsigned char*)ivData.data(), 0);
-    int padding = deData.at(_cypherData.size() - 1);
-    int deLen = _cypherData.size() - padding;
-    deData.resize(deLen);
-    return deData;
+    return aesCBCDecrypt(_cypherData, _key, ivData);
 }

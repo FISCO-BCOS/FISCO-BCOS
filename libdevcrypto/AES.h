@@ -31,6 +31,16 @@ namespace dev
 DEV_SIMPLE_EXCEPTION(AESKeyLengthError);
 bytes aesCBCEncrypt(bytesConstRef _plainData, bytesConstRef _key);
 bytes aesCBCDecrypt(bytesConstRef _cypherData, bytesConstRef _key);
+bytes aesCBCEncrypt(bytesConstRef _plainData, bytesConstRef _key, bytesConstRef _ivData);
+bytes aesCBCDecrypt(bytesConstRef _cypherData, bytesConstRef _key, bytesConstRef _ivData);
 std::string aesCBCEncrypt(const std::string& _plainData, const std::string& _key);
 std::string aesCBCDecrypt(const std::string& _cypherData, const std::string& _key);
+std::string aesCBCEncrypt(
+    const std::string& _plainData, const std::string& _key, const std::string& _ivData);
+std::string aesCBCDecrypt(
+    const std::string& _cypherData, const std::string& _key, const std::string& _ivData);
+std::string aesCBCEncrypt(const unsigned char* _plainData, const int _plainDataSize,
+    const unsigned char* _key, const int _keySize, const unsigned char* _ivData);
+std::string aesCBCDecrypt(const unsigned char* _cypherData, const int _cypherDataSize,
+    const unsigned char* _key, const int _keySize, const unsigned char* _ivData);
 }  // namespace dev
