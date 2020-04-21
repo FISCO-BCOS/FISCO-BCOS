@@ -37,11 +37,9 @@ public:
     virtual ~StorageStateFactory() {}
     std::shared_ptr<dev::executive::StateFace> getState(
         h256 const& _root, std::shared_ptr<dev::storage::TableFactory> _factory) override;
-    void enableBinaryEncode(bool _enableBinaryEncode) { m_enableBinary = _enableBinaryEncode; }
 
 private:
     u256 m_accountStartNonce;
-    bool m_enableBinary = false;
 };
 }  // namespace storagestate
 }  // namespace dev

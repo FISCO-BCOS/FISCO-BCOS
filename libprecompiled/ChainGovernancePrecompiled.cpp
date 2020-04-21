@@ -683,7 +683,7 @@ AccountStatus ChainGovernancePrecompiled::getAccountStatus(
     }
 
     auto codeHashEntries = table->select(storagestate::ACCOUNT_CODE_HASH, table->newCondition());
-    if (toHex(EmptySHA3) != codeHashEntries->get(0)->getField(storagestate::STORAGE_VALUE))
+    if (EmptySHA3 != h256(codeHashEntries->get(0)->getFieldBytes(storagestate::STORAGE_VALUE)))
     {
         return AccountStatus::InvalidAccountAddress;
     }
