@@ -11,8 +11,9 @@ if (CRYPTO_EXTENSION)
         CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
         -DCMAKE_POSITION_INDEPENDENT_CODE=on
         LOG_CONFIGURE 1
+        LOG_BUILD 1
+        LOG_INSTALL 1
         BUILD_IN_SOURCE 1
-        LOG_CONFIGURE 1
     )
 
     ExternalProject_Get_Property(GroupSigLib SOURCE_DIR)
