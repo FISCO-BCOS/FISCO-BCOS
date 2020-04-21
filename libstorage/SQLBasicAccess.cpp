@@ -22,21 +22,19 @@
 #include "SQLBasicAccess.h"
 #include "SQLConnectionPool.h"
 #include "StorageException.h"
+#include "libconfig/GlobalConfigure.h"
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
-
-
-const static char HAS_VAlue = '1';
-const static char NOT_HAS_VAlue = '0';
+#include <boost/dynamic_bitset.hpp>
 
 using namespace dev::storage;
 using namespace std;
 
-int SQLBasicAccess::Select(int64_t, const std::string& _table, const std::string&,
-    Condition::Ptr condition, std::vector<std::map<std::string, std::string>>& values)
+int SQLBasicAccess::Select(int64_t, const string& _table, const string&, Condition::Ptr _condition,
+    vector<map<string, string>>& _values)
 {
-    std::string sql = this->BuildQuerySql(_table, condition);
+    string sql = this->BuildQuerySql(_table, _condition);
     Connection_T conn = m_connPool->GetConnection();
     uint32_t retryCnt = 0;
     uint32_t retryMax = 10;
@@ -58,10 +56,10 @@ int SQLBasicAccess::Select(int64_t, const std::string& _table, const std::string
     {
         PreparedStatement_T _prepareStatement =
             Connection_prepareStatement(conn, "%s", sql.c_str());
-        if (condition)
+        if (_condition)
         {
             uint32_t index = 0;
-            for (auto& it : *(condition))
+            for (auto& it : *(_condition))
             {
                 PreparedStatement_setString(
                     _prepareStatement, ++index, it.second.right.second.c_str());
@@ -71,16 +69,32 @@ int SQLBasicAccess::Select(int64_t, const std::string& _table, const std::string
         int32_t columnCnt = ResultSet_getColumnCount(result);
         while (ResultSet_next(result))
         {
-            std::map<std::string, std::string> value;
+            map<string, string> value;
             for (int32_t index = 1; index <= columnCnt; ++index)
             {
-                if (ResultSet_getString(result, index) != NULL)
+                if (g_BCOSConfig.version() >= V2_5_0 && boost::starts_with(_table, string("c_")))
                 {
-                    value[ResultSet_getColumnName(result, index)] =
-                        ResultSet_getString(result, index);
+                    int size;
+                    auto bytes = ResultSet_getBlob(result, index, &size);
+                    if (!bytes)
+                    {
+                        value[ResultSet_getColumnName(result, index)] = "";
+                    }
+                    else
+                    {
+                        value[ResultSet_getColumnName(result, index)] = string((char*)bytes, size);
+                    }
+                }
+                else
+                {
+                    if (ResultSet_getString(result, index) != NULL)
+                    {
+                        value[ResultSet_getColumnName(result, index)] =
+                            ResultSet_getString(result, index);
+                    }
                 }
             }
-            values.push_back(std::move(value));
+            _values.push_back(move(value));
         }
     }
     CATCH(SQLException)
@@ -94,79 +108,72 @@ int SQLBasicAccess::Select(int64_t, const std::string& _table, const std::string
     return 0;
 }
 
-std::string SQLBasicAccess::BuildQuerySql(const std::string& _table, Condition::Ptr condition)
+string SQLBasicAccess::BuildQuerySql(string _table, Condition::Ptr _condition)
 {
-    boost::algorithm::replace_all_copy(_table, "\\", "\\\\");
-    boost::algorithm::replace_all_copy(_table, "`", "\\`");
-    std::string sql = "select * from `";
+    _table = boost::algorithm::replace_all_copy(_table, "\\", "\\\\");
+    _table = boost::algorithm::replace_all_copy(_table, "`", "\\`");
+    string sql = "select * from `";
     sql.append(_table).append("`");
-    if (condition)
+    if (_condition)
     {
-        uint32_t index = 0;
-        auto it = condition->begin();
-        for (; it != condition->end(); ++it)
+        bool hasWhereClause = false;
+        for (auto it = _condition->begin(); it != _condition->end(); ++it)
         {
-            if (index == 0)
+            if (!hasWhereClause)
             {
-                ++index;
-                sql.append(GenerateConditionSql(" where", it, condition));
+                hasWhereClause = true;
+                sql.append(BuildConditionSql(" where", it, _condition));
             }
             else
             {
-                sql.append(GenerateConditionSql(" and", it, condition));
+                sql.append(BuildConditionSql(" and", it, _condition));
             }
         }
     }
     return sql;
 }
-std::string SQLBasicAccess::GenerateConditionSql(const std::string& strPrefix,
-    std::map<std::string, Condition::Range>::const_iterator& it, Condition::Ptr condition)
+string SQLBasicAccess::BuildConditionSql(const string& _strPrefix,
+    map<string, Condition::Range>::const_iterator& _it, Condition::Ptr _condition)
 {
-    string strConditionSql = strPrefix;
-    if (it->second.left.second == it->second.right.second && it->second.left.first &&
-        it->second.right.first)
+    string strConditionSql = _strPrefix;
+    if (_it->second.left.second == _it->second.right.second && _it->second.left.first &&
+        _it->second.right.first)
     {
-        strConditionSql.append(" `").append(it->first).append("`=").append("?");
+        strConditionSql.append(" `").append(_it->first).append("`=").append("?");
     }
     else
     {
-        if (it->second.left.second != condition->unlimitedField())
+        if (_it->second.left.second != _condition->unlimitedField())
         {
-            if (it->second.left.first)
+            if (_it->second.left.first)
             {
-                strConditionSql.append(" `").append(it->first).append("`>=").append("?");
+                strConditionSql.append(" `").append(_it->first).append("`>=").append("?");
             }
             else
             {
-                strConditionSql.append(" `").append(it->first).append("`>").append("?");
+                strConditionSql.append(" `").append(_it->first).append("`>").append("?");
             }
         }
-        if (it->second.right.second != condition->unlimitedField())
+        if (_it->second.right.second != _condition->unlimitedField())
         {
-            if (it->second.right.first)
+            if (_it->second.right.first)
             {
-                strConditionSql.append(" `").append(it->first).append("`<=").append("?");
+                strConditionSql.append(" `").append(_it->first).append("`<=").append("?");
             }
             else
             {
-                strConditionSql.append(" `").append(it->first).append("`<").append("?");
+                strConditionSql.append(" `").append(_it->first).append("`<").append("?");
             }
         }
     }
     return strConditionSql;
 }
 
-std::string SQLBasicAccess::BuildCreateTableSql(
-    const std::string& tablename, const std::string& keyfield, const std::string& valuefield)
+string SQLBasicAccess::BuildCreateTableSql(
+    const string& _tableName, const string& _keyField, const string& _valueField)
 {
-    boost::algorithm::replace_all_copy(tablename, "\\", "\\\\");
-    boost::algorithm::replace_all_copy(tablename, "`", "\\`");
-
-    boost::algorithm::replace_all_copy(keyfield, "\\", "\\\\");
-    boost::algorithm::replace_all_copy(keyfield, "`", "\\`");
-
     stringstream ss;
-    ss << "CREATE TABLE IF NOT EXISTS `" << tablename << "`(\n";
+    ss << "CREATE TABLE IF NOT EXISTS `" << _tableName << "`(\n";
     ss << " `_id_` BIGINT unsigned auto_increment,\n";
     if (g_BCOSConfig.version() <= V2_1_0)
     {
@@ -174,47 +181,59 @@ std::string SQLBasicAccess::BuildCreateTableSql(
     }
     ss << " `_num_` BIGINT not null,\n";
     ss << " `_status_` int not null,\n";
-    ss << "`" << keyfield << "` varchar(255) default '',\n";
+    ss << "`" << _keyField << "` varchar(255) default '',\n";
 
-    SQLBasicAccess_LOG(DEBUG) << "valuefield:" << valuefield;
-    std::vector<std::string> vecSplit;
-    boost::split(vecSplit, valuefield, boost::is_any_of(","));
+    SQLBasicAccess_LOG(DEBUG) << "valuefield:" << _valueField;
+    vector<string> vecSplit;
+    boost::split(vecSplit, _valueField, boost::is_any_of(","));
     auto it = vecSplit.begin();
+
+    auto fieldType = string("mediumtext");
+    if (g_BCOSConfig.version() >= V2_5_0 && boost::starts_with(_tableName, string("c_")))
+    {
+        fieldType = "mediumblob";
+    }
+
     for (; it != vecSplit.end(); ++it)
     {
-        boost::algorithm::replace_all_copy(*it, "\\", "\\\\");
-        boost::algorithm::replace_all_copy(*it, "`", "\\`");
-        ss << "`" << *it << "` mediumtext,\n";
+        *it = boost::algorithm::replace_all_copy(*it, "\\", "\\\\");
+        *it = boost::algorithm::replace_all_copy(*it, "`", "\\`");
+        ss << "`" << *it << "` " << fieldType << ",\n";
     }
     ss << " PRIMARY KEY( `_id_` ),\n";
-    ss << " KEY(`" << keyfield << "`(191)),\n";
+    ss << " KEY(`" << _keyField << "`(191)),\n";
     ss << " KEY(`_num_`)\n";
     ss << ")ENGINE=InnoDB default charset=utf8mb4;";
 
     return ss.str();
 }
 
-
-std::string SQLBasicAccess::GetCreateTableSql(const Entry::Ptr& entry)
+string SQLBasicAccess::BuildCreateTableSql(const Entry::Ptr& _entry)
 {
-    string table_name(entry->getField("table_name"));
-    string key_field(entry->getField("key_field"));
-    string value_field(entry->getField("value_field"));
-    /*generate create table sql*/
-    string sql = BuildCreateTableSql(table_name, key_field, value_field);
-    SQLBasicAccess_LOG(DEBUG) << "create table:" << table_name << " keyfield:" << key_field
-                              << " value field:" << value_field << " sql:" << sql;
+    string tableName(_entry->getField("table_name"));
+    string keyField(_entry->getField("key_field"));
+    string valueField(_entry->getField("value_field"));
+
+    tableName = boost::algorithm::replace_all_copy(tableName, "\\", "\\\\");
+    tableName = boost::algorithm::replace_all_copy(tableName, "`", "\\`");
+
+    keyField = boost::algorithm::replace_all_copy(keyField, "\\", "\\\\");
+    keyField = boost::algorithm::replace_all_copy(keyField, "`", "\\`");
+
+    string sql = BuildCreateTableSql(tableName, keyField, valueField);
+    SQLBasicAccess_LOG(DEBUG) << "create table:" << tableName << " keyfield:" << keyField
+                              << " value field:" << valueField << " sql:" << sql;
     return sql;
 }
 
-void SQLBasicAccess::GetCommitFieldNameAndValueEachTable(const std::string& _num,
-    const Entries::Ptr& data, const std::vector<size_t>& indexlist, std::string& fieldStr,
-    std::vector<std::string>& valueList)
+void SQLBasicAccess::GetCommitFieldNameAndValueEachTable(const string& _num,
+    const Entries::Ptr& _data, const vector<size_t>& _indexList, string& _fieldStr,
+    vector<string>& _valueList)
 {
-    uint32_t loopcount = 0;
-    for (auto index : indexlist)
+    bool isFirst = true;
+    for (auto index : _indexList)
     {
-        const Entry::Ptr& entry = data->get(index);
+        const auto& entry = _data->get(index);
         for (auto fieldIt : *entry)
         {
             if (fieldIt.first == NUM_FIELD || fieldIt.first == "_hash_" ||
@@ -222,45 +241,44 @@ void SQLBasicAccess::GetCommitFieldNameAndValueEachTable(const std::string& _num
             {
                 continue;
             }
-            if (loopcount == 0)
+            if (isFirst)
             {
-                fieldStr.append("`").append(fieldIt.first).append("`,");
+                _fieldStr.append("`").append(fieldIt.first).append("`,");
             }
-            valueList.push_back(fieldIt.second);
+            _valueList.push_back(fieldIt.second);
         }
+
         if (g_BCOSConfig.version() <= V2_1_0)
         {
-            valueList.push_back("0");
+            _valueList.push_back("0");
         }
-        valueList.push_back(_num);
-        valueList.push_back(boost::lexical_cast<std::string>(entry->getID()));
-        valueList.push_back(boost::lexical_cast<std::string>(entry->getStatus()));
-        ++loopcount;
+
+        _valueList.push_back(_num);
+        _valueList.push_back(boost::lexical_cast<string>(entry->getID()));
+        _valueList.push_back(boost::lexical_cast<string>(entry->getStatus()));
+        isFirst = false;
     }
-    if (!fieldStr.empty())
+
+    if (!_fieldStr.empty())
     {
         if (g_BCOSConfig.version() <= V2_1_0)
         {
-            fieldStr.append("`_hash_`,");
+            _fieldStr.append("`_hash_`,");
         }
-        fieldStr.append("`").append(NUM_FIELD).append("`,");
-        fieldStr.append("`").append(ID_FIELD).append("`,");
-        fieldStr.append("`").append(STATUS).append("`");
+        _fieldStr.append("`").append(NUM_FIELD).append("`,");
+        _fieldStr.append("`").append(ID_FIELD).append("`,");
+        _fieldStr.append("`").append(STATUS).append("`");
     }
 }
 
-void SQLBasicAccess::GetCommitFieldNameAndValue(const Entries::Ptr& data, const std::string& _num,
-    std::map<std::string, std::vector<std::string>>& _fieldValue)
+void SQLBasicAccess::GetCommitFieldNameAndValue(
+    const Entries::Ptr& _data, const string& _num, map<string, vector<string>>& _field2Values)
 {
-    std::map<std::string, std::vector<size_t>> splitDataItem;
-    std::map<std::string, uint32_t> field2Index;
-    uint32_t fillIndex = 0;
-
-    set<std::string> keySet;
-    for (size_t i = 0; i < data->size(); ++i)
+    set<string> keySet;
+    for (size_t i = 0; i < _data->size(); ++i)
     {
-        const Entry::Ptr& entry = data->get(i);
-        for (const auto& fieldIt : *entry)
+        const auto& entry = _data->get(i);
+        for (auto fieldIt : *entry)
         {
             if (fieldIt.first == NUM_FIELD || fieldIt.first == "_hash_" ||
                 fieldIt.first == ID_FIELD || fieldIt.first == STATUS)
@@ -271,10 +289,13 @@ void SQLBasicAccess::GetCommitFieldNameAndValue(const Entries::Ptr& data, const 
         }
     }
 
-    for (size_t i = 0; i < data->size(); ++i)
+    map<u_long, vector<size_t>> groupedEntries;
+    map<string, uint32_t> field2Position;
+    uint32_t currentFieldPostion = 0;
+    for (size_t i = 0; i < _data->size(); ++i)
     {
-        std::string dataValue(keySet.size(), NOT_HAS_VAlue);
-        const Entry::Ptr& entry = data->get(i);
+        boost::dynamic_bitset<> keyVec(keySet.size(), 0);
+        const auto& entry = _data->get(i);
         for (const auto& fieldIt : *entry)
         {
             if (fieldIt.first == NUM_FIELD || fieldIt.first == "_hash_" ||
@@ -282,49 +303,49 @@ void SQLBasicAccess::GetCommitFieldNameAndValue(const Entries::Ptr& data, const 
             {
                 continue;
             }
-            if (field2Index.find(fieldIt.first) == field2Index.end())
+
+            if (field2Position.find(fieldIt.first) == field2Position.end())
             {
-                field2Index[fieldIt.first] = fillIndex;
-                dataValue[fillIndex] = HAS_VAlue;
-                ++fillIndex;
+                field2Position[fieldIt.first] = currentFieldPostion;
+                keyVec[currentFieldPostion] = 1;
+                ++currentFieldPostion;
             }
             else
             {
-                uint32_t scoreExist = field2Index[fieldIt.first];
-                dataValue[scoreExist] = HAS_VAlue;
+                keyVec[field2Position[fieldIt.first]] = 1;
             }
         }
-        // SQLBasicAccess_LOG(DEBUG) << "fieldBuff value:" << dataValue;
-        splitDataItem[dataValue].push_back(i);
+
+        groupedEntries[keyVec.to_ulong()].push_back(i);
     }
-    for (const auto& it : splitDataItem)
+
+    for (const auto& it : groupedEntries)
     {
-        std::string fieldStr;
-        std::vector<std::string> valueList;
-        GetCommitFieldNameAndValueEachTable(_num, data, it.second, fieldStr, valueList);
-        _fieldValue[fieldStr].insert(_fieldValue[fieldStr].end(),
+        string fieldStr;
+        vector<string> valueList;
+        GetCommitFieldNameAndValueEachTable(_num, _data, it.second, fieldStr, valueList);
+        _field2Values[fieldStr].insert(_field2Values[fieldStr].end(),
             make_move_iterator(valueList.begin()), make_move_iterator(valueList.end()));
     }
 }
 
-
-int SQLBasicAccess::Commit(int64_t num, const std::vector<TableData::Ptr>& datas)
+int SQLBasicAccess::Commit(int64_t _num, const vector<TableData::Ptr>& _datas)
 {
-    string errmsg;
+    string errorMsg;
     volatile uint32_t retryCnt = 0;
     uint32_t retryMax = 10;
     volatile int ret = 0;
     TRY
     {
-        ret = CommitDo(num, datas, errmsg);
+        ret = CommitDo(_num, _datas, errorMsg);
         while (ret < 0 && ++retryCnt < retryMax)
         {
             sleep(1);
-            ret = CommitDo(num, datas, errmsg);
+            ret = CommitDo(_num, _datas, errorMsg);
         }
         if (ret < 0)
         {
-            SQLBasicAccess_LOG(ERROR) << "commit failed errmsg:" << errmsg;
+            SQLBasicAccess_LOG(ERROR) << "commit failed error message:" << errorMsg;
             return -1;
         }
     }
@@ -337,13 +358,13 @@ int SQLBasicAccess::Commit(int64_t num, const std::vector<TableData::Ptr>& datas
     return ret;
 }
 
-int SQLBasicAccess::CommitDo(int64_t num, const std::vector<TableData::Ptr>& datas, string& errmsg)
+int SQLBasicAccess::CommitDo(int64_t _num, const vector<TableData::Ptr>& _datas, string& _errorMsg)
 {
-    SQLBasicAccess_LOG(INFO) << " commit num:" << num;
-    string strNum = to_string(num);
-    if (datas.size() == 0)
+    SQLBasicAccess_LOG(INFO) << " commit num:" << _num;
+    string strNum = to_string(_num);
+    if (_datas.size() == 0)
     {
-        SQLBasicAccess_LOG(DEBUG) << "Empty data just return";
+        SQLBasicAccess_LOG(DEBUG) << "empty data just return";
         return 0;
     }
 
@@ -352,24 +373,14 @@ int SQLBasicAccess::CommitDo(int64_t num, const std::vector<TableData::Ptr>& dat
     Connection_T conn = m_connPool->GetConnection();
     TRY
     {
-        for (auto tableDataPtr : datas)
+        for (auto tableDataPtr : _datas)
         {
             if (tableDataPtr->info->name == SYS_TABLES)
             {
-                // FIXME: dirtyEntries should always empty, cause table struct can't be modified
-                for (size_t i = 0; i < tableDataPtr->dirtyEntries->size(); ++i)
-                {
-                    SQLBasicAccess_LOG(FATAL)
-                        << SYS_TABLES << " dirtyEntries should always be empty";
-                    Entry::Ptr entry = tableDataPtr->dirtyEntries->get(i);
-                    string sql = GetCreateTableSql(entry);
-                    Connection_execute(conn, "%s", sql.c_str());
-                }
-
                 for (size_t i = 0; i < tableDataPtr->newEntries->size(); ++i)
                 {
                     Entry::Ptr entry = tableDataPtr->newEntries->get(i);
-                    string sql = GetCreateTableSql(entry);
+                    string sql = BuildCreateTableSql(entry);
                     Connection_execute(conn, "%s", sql.c_str());
                 }
             }
@@ -377,8 +388,8 @@ int SQLBasicAccess::CommitDo(int64_t num, const std::vector<TableData::Ptr>& dat
     }
     CATCH(SQLException)
     {
-        errmsg = Exception_frame.message;
-        SQLBasicAccess_LOG(ERROR) << "create table exception:" << errmsg;
+        _errorMsg = Exception_frame.message;
+        SQLBasicAccess_LOG(ERROR) << "create table exception:" << _errorMsg;
         m_connPool->ReturnConnection(conn);
         return -1;
     }
@@ -388,41 +399,52 @@ int SQLBasicAccess::CommitDo(int64_t num, const std::vector<TableData::Ptr>& dat
     m_connPool->BeginTransaction(conn);
     TRY
     {
-        for (auto it : datas)
+        for (auto data : _datas)
         {
-            auto tableInfo = it->info;
-            std::string table_name = tableInfo->name;
-            std::map<std::string, std::vector<std::string>> _fieldValueMap;
-            this->GetCommitFieldNameAndValue(it->dirtyEntries, strNum, _fieldValueMap);
-            this->GetCommitFieldNameAndValue(it->newEntries, strNum, _fieldValueMap);
+            auto tableInfo = data->info;
+            string tableName = tableInfo->name;
+            map<string, vector<string>> field2Values;
+            this->GetCommitFieldNameAndValue(data->dirtyEntries, strNum, field2Values);
+            this->GetCommitFieldNameAndValue(data->newEntries, strNum, field2Values);
 
-            SQLBasicAccess_LOG(DEBUG) << "table:" << table_name << " split to "
-                                      << _fieldValueMap.size() << " parts to commit";
+            SQLBasicAccess_LOG(DEBUG) << "table:" << tableName << " split to "
+                                      << field2Values.size() << " parts to commit";
 
-            for (auto iter : _fieldValueMap)
+            tableName = boost::algorithm::replace_all_copy(tableName, "\\", "\\\\");
+            tableName = boost::algorithm::replace_all_copy(tableName, "`", "\\`");
+            for (auto item : field2Values)
             {
-                const auto& _fieldName = iter.first;
-                const auto& _fieldValue = iter.second;
-                std::vector<SQLPlaceHoldItem> sqlList =
-                    this->BuildCommitSql(table_name, _fieldName, _fieldValue);
-                auto itValue = _fieldValue.begin();
-                for (auto itSql : sqlList)
+                const auto& name = item.first;
+                const auto& values = item.second;
+                vector<SQLPlaceholderItem> sqlPlaceholders =
+                    this->BuildCommitSql(tableName, name, values);
+                for (auto& placeholder : sqlPlaceholders)
                 {
-                    PreparedStatement_T preSatement =
-                        Connection_prepareStatement(conn, "%s", itSql.sql.c_str());
-                    SQLBasicAccess_LOG(DEBUG) << "table:" << table_name << " sql:" << itSql.sql;
-                    uint32_t index = 0;
+                    PreparedStatement_T preStatement =
+                        Connection_prepareStatement(conn, "%s", placeholder.sql.c_str());
+                    SQLBasicAccess_LOG(TRACE)
+                        << "table:" << tableName << " sql:" << placeholder.sql;
 
-                    for (; itValue != _fieldValue.end(); ++itValue)
+                    uint32_t index = 0;
+                    for (auto& value : values)
                     {
-                        PreparedStatement_setString(preSatement, ++index, itValue->c_str());
-                        SQLBasicAccess_LOG(TRACE) << " index:" << index << " num:" << num
-                                                  << " setString:" << itValue->c_str();
-                        if (index == itSql.placeHolerCnt)
+                        if (g_BCOSConfig.version() >= V2_5_0 &&
+                            boost::starts_with(tableName, string("c_")))
                         {
-                            PreparedStatement_execute(preSatement);
-                            rowCount += (int32_t)PreparedStatement_rowsChanged(preSatement);
-                            ++itValue;
+                            PreparedStatement_setBlob(
+                                preStatement, ++index, value.c_str(), value.size());
+                        }
+                        else
+                        {
+                            PreparedStatement_setString(preStatement, ++index, value.c_str());
+                        }
+
+                        SQLBasicAccess_LOG(TRACE) << " index:" << index << " num:" << _num
+                                                  << " setString:" << value.c_str();
+                        if (index == placeholder.placeholderCnt)
+                        {
+                            PreparedStatement_execute(preStatement);
+                            rowCount += (int32_t)PreparedStatement_rowsChanged(preStatement);
                             break;
                         }
                     }
@@ -432,8 +454,8 @@ int SQLBasicAccess::CommitDo(int64_t num, const std::vector<TableData::Ptr>& dat
     }
     CATCH(SQLException)
     {
-        errmsg = Exception_frame.message;
-        SQLBasicAccess_LOG(ERROR) << "insert data exception:" << errmsg;
+        _errorMsg = Exception_frame.message;
+        SQLBasicAccess_LOG(ERROR) << "insert data exception:" << _errorMsg;
         SQLBasicAccess_LOG(DEBUG) << "active connections:" << m_connPool->GetActiveConnections()
                                   << " max connetions:" << m_connPool->GetMaxConnections()
                                   << " now connections:" << m_connPool->GetTotalConnections();
@@ -451,38 +473,37 @@ int SQLBasicAccess::CommitDo(int64_t num, const std::vector<TableData::Ptr>& dat
     return rowCount;
 }
 
-std::vector<SQLPlaceHoldItem> SQLBasicAccess::BuildCommitSql(const std::string& _table,
-    const std::string& _fieldStr, const std::vector<std::string>& _fieldValue)
+vector<SQLPlaceholderItem> SQLBasicAccess::BuildCommitSql(
+    const string& _table, const string& _fieldStr, const vector<string>& _fieldValues)
 {
-    std::vector<std::string> fieldName;
-    boost::split(fieldName, _fieldStr, boost::is_any_of(","));
-    std::vector<SQLPlaceHoldItem> sqlList;
-    if (fieldName.size() == 0 || _fieldValue.size() == 0 || (_fieldValue.size() % fieldName.size()))
+    vector<string> fieldNames;
+    boost::split(fieldNames, _fieldStr, boost::is_any_of(","));
+    vector<SQLPlaceholderItem> sqlPlaceholders;
+    if (fieldNames.size() == 0 || _fieldValues.size() == 0 ||
+        (_fieldValues.size() % fieldNames.size()))
     {
         /*throw exception*/
-        SQLBasicAccess_LOG(ERROR) << "tablename:" << _table << "field size:" << fieldName.size()
-                                  << " value size:" << _fieldValue.size()
+        SQLBasicAccess_LOG(ERROR) << "table name:" << _table << "field size:" << fieldNames.size()
+                                  << " value size:" << _fieldValues.size()
                                   << " field size and value should be greate than 0";
         THROW(SQLException, "PreparedStatement_executeQuery");
     }
 
-    boost::algorithm::replace_all_copy(_table, "\\", "\\\\");
-    boost::algorithm::replace_all_copy(_table, "`", "\\`");
-    std::string sqlHeader = "replace into `";
+    string sqlHeader = "replace into `";
     sqlHeader.append(_table).append("`(");
     sqlHeader.append(_fieldStr);
     sqlHeader.append(") values");
 
-    SQLBasicAccess_LOG(INFO) << "table name:" << _table << "field size:" << fieldName.size()
-                             << " value size:" << _fieldValue.size();
+    SQLBasicAccess_LOG(INFO) << "table name:" << _table << "field size:" << fieldNames.size()
+                             << " value size:" << _fieldValues.size();
 
     string sql = sqlHeader;
-    uint32_t placeHolderCnt = 0;
-    uint32_t valueSize = _fieldValue.size();
-    uint32_t columnSize = fieldName.size();
+    uint32_t placeholderCnt = 0;
+    uint32_t valueSize = _fieldValues.size();
+    uint32_t columnSize = fieldNames.size();
     for (uint32_t index = 0; index < valueSize; ++index)
     {
-        ++placeHolderCnt;
+        ++placeholderCnt;
         if (index % columnSize == 0)
         {
             sql.append("(?,");
@@ -497,29 +518,29 @@ std::vector<SQLPlaceHoldItem> SQLBasicAccess::BuildCommitSql(const std::string& 
             sql.append("),");
             /*
                 if placeholders count is great than 65535 sql will execute failed
-                so we need to execute  in multiple sqls
+                so we need to execute in multiple sqls
             */
-            if (placeHolderCnt >= maxPlaceHolderCnt)
+            if (placeholderCnt >= maxPlaceHolderCnt)
             {
                 sql = sql.substr(0, sql.size() - 1);
-                SQLPlaceHoldItem item;
+                SQLPlaceholderItem item;
                 item.sql = sql;
-                item.placeHolerCnt = placeHolderCnt;
-                sqlList.emplace_back(item);
+                item.placeholderCnt = placeholderCnt;
+                sqlPlaceholders.emplace_back(item);
                 sql = sqlHeader;
-                placeHolderCnt = 0;
+                placeholderCnt = 0;
             }
         }
     }
-    if (placeHolderCnt > 0)
+    if (placeholderCnt > 0)
     {
         sql = sql.substr(0, sql.size() - 1);
-        SQLPlaceHoldItem item;
+        SQLPlaceholderItem item;
         item.sql = sql;
-        item.placeHolerCnt = placeHolderCnt;
-        sqlList.emplace_back(item);
+        item.placeholderCnt = placeholderCnt;
+        sqlPlaceholders.emplace_back(item);
     }
-    return sqlList;
+    return sqlPlaceholders;
 }
 
 void SQLBasicAccess::setConnPool(SQLConnectionPool::Ptr& _connPool)
@@ -527,7 +548,7 @@ void SQLBasicAccess::setConnPool(SQLConnectionPool::Ptr& _connPool)
     this->m_connPool = _connPool;
 }
 
-void SQLBasicAccess::ExecuteSql(const std::string& _sql)
+void SQLBasicAccess::ExecuteSql(const string& _sql)
 {
     Connection_T conn = m_connPool->GetConnection();
     if (conn == NULL)
