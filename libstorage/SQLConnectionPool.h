@@ -52,7 +52,7 @@ class SQLConnectionPool
 public:
     typedef std::shared_ptr<SQLConnectionPool> Ptr;
 
-    SQLConnectionPool(){};
+    SQLConnectionPool() : m_connectionPool(NULL), m_url(NULL){};
     ~SQLConnectionPool();
     bool InitConnectionPool(const ConnectionPoolConfig& _dbConfig);
     Connection_T GetConnection();
