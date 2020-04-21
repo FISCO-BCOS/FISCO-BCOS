@@ -1,7 +1,7 @@
 include(ExternalProject)
 include(GNUInstallDirs)
 
-if (BUILD_GM)
+# if (BUILD_GM)
 	if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
 	set(TASSL_CONFIG_COMMAND sh ./Configure darwin64-x86_64-cc)
 	else()
@@ -36,8 +36,8 @@ if (BUILD_GM)
 	set_property(TARGET TASSL PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${TASSL_INCLUDE_DIRS})
 
 	set(OPENSSL_INCLUDE_DIRS ${TASSL_INCLUDE_DIRS})
-	set(OPENSSL_LIBRARIES ${TASSL_LIBRARY})
-endif()
+	set(OPENSSL_LIBRARIES ${TASSL_LIBRARIES})
+# endif()
 
 
 

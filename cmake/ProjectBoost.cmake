@@ -83,9 +83,9 @@ ExternalProject_Add(boost
     # INSTALL_COMMAND ${BOOST_INSTALL_COMMAND}
     BUILD_BYPRODUCTS ${BOOST_BUILD_FILES}
 )
-if (BUILD_GM)
+# if (BUILD_GM)
     add_dependencies(boost tassl)
-endif()
+# endif()
 
 ExternalProject_Get_Property(boost SOURCE_DIR)
 set(BOOST_INCLUDE_DIR ${SOURCE_DIR})
