@@ -126,12 +126,16 @@ public:
                              << LOG_KV("groupID", groupId());
             m_service->removeNetworkStatHandlerByGroupID(groupId());
         }
-
+        if (m_stopped)
+        {
+            return;
+        }
         if (m_channelRPCServer && m_channelRPCServer->networkStatHandler())
         {
             Ledger_LOG(INFO) << LOG_DESC("removeNetworkStatHandlerByGroupID for channelRPCServer")
                              << LOG_KV("groupID", groupId());
             m_channelRPCServer->networkStatHandler()->removeGroupP2PStatHandler(groupId());
+            m_stopped.store(true);
         }
     }
 
@@ -219,6 +223,7 @@ protected:
 
     std::shared_ptr<dev::ledger::DBInitializer> m_dbInitializer = nullptr;
     ChannelRPCServer::Ptr m_channelRPCServer;
+    std::atomic_bool m_stopped = {false};
 };
 }  // namespace ledger
 }  // namespace dev
