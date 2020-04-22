@@ -5,4 +5,4 @@ file(GLOB HEADERS "*.h")
 
 add_library(p2p ${SRC_LIST} ${HEADERS})
 
-target_link_libraries(p2p PUBLIC network stat devcore)
+target_link_libraries(p2p PUBLIC devcore network flowlimit stat)

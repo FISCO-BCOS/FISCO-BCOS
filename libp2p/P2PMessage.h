@@ -93,6 +93,13 @@ public:
 
     virtual uint32_t deliveredLength() { return m_length; }
 
+    // bandwidth limiter related logic
+    virtual bool permitsAcquired() const { return m_permitsAcquired; }
+    virtual void setPermitsAcquired(bool const& _permitsAcquired)
+    {
+        m_permitsAcquired = _permitsAcquired;
+    }
+
 protected:
     uint32_t m_length = 0;            ///< m_length = HEADER_LENGTH + length(m_buffer)
     PROTOCOL_ID m_protocolID = 0;     ///< message type, the first two bytes of information, when
@@ -101,6 +108,7 @@ protected:
     uint32_t m_seq = 0;               ///< the message identify
     std::shared_ptr<bytes> m_buffer;  ///< message data
     bool m_dirty = true;
+    bool m_permitsAcquired = false;
 };
 enum AMOPPacketType
 {

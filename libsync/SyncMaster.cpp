@@ -695,10 +695,26 @@ void SyncMaster::maintainBlockRequest()
                         << LOG_KV("nodeId", _p->nodeId.abridged());
                     break;
                 }
-
+                auto requiredPermits = blockRLP->size() / m_compressRate;
+                if (m_nodeBandwidthLimiter && !m_nodeBandwidthLimiter->tryAcquire(requiredPermits))
+                {
+                    SYNC_LOG(DEBUG)
+                        << LOG_BADGE("maintainBlockRequest")
+                        << LOG_DESC("stop responding block for over the channel bandwidth limit");
+                    break;
+                }
+                // over the network-bandwidth-limiter
+                if (m_bandwidthLimiter && !m_bandwidthLimiter->tryAcquire(requiredPermits))
+                {
+                    SYNC_LOG(DEBUG)
+                        << LOG_BADGE("maintainBlockRequest")
+                        << LOG_DESC("stop responding block for over the bandwidth limit");
+                    break;
+                }
                 SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_BADGE("Request")
                                 << LOG_BADGE("BlockSync") << LOG_DESC("Batch blocks for sending")
-                                << LOG_KV("number", number) << LOG_KV("peer", _p->nodeId.abridged())
+                                << LOG_KV("blockSize", blockRLP->size()) << LOG_KV("number", number)
+                                << LOG_KV("peer", _p->nodeId.abridged())
                                 << LOG_KV("timeCost", utcTime() - start_get_block_time);
                 blockContainer.batchAndSend(blockRLP);
             }

@@ -31,6 +31,7 @@
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/TopicInfo.h>
+#include <libflowlimit/QPSLimiter.h>
 #include <libnetwork/Host.h>
 #include <libnetwork/PeerWhitelist.h>
 #include <map>
@@ -170,11 +171,30 @@ public:
 
     void removeNetworkStatHandlerByGroupID(GROUP_ID const& _groupID) override;
 
+    void setNodeBandwidthLimiter(dev::flowlimit::QPSLimiter::Ptr _bandwidthLimiter) override;
+    void registerGroupBandwidthLimiter(
+        GROUP_ID const& _groupID, dev::flowlimit::QPSLimiter::Ptr _bandwidthLimiter) override;
+    void removeGroupBandwidthLimiter(GROUP_ID const& _groupID) override;
+
 private:
     NodeIDs getPeersByTopic(std::string const& topic);
     void checkWhitelistAndClearSession();
+
+    template <typename T>
+    T getHandlerByGroupId(GROUP_ID const& _groupId,
+        std::shared_ptr<std::map<GROUP_ID, T>> _group2Handlers, SharedMutex& _mutex)
+    {
+        ReadGuard l(_mutex);
+        if (!_group2Handlers->count(_groupId))
+        {
+            return nullptr;
+        }
+        return (*_group2Handlers)[_groupId];
+    }
+
     void updateIncomingTraffic(P2PMessage::Ptr _msg);
-    void updateOutcomingTraffic(P2PMessage::Ptr _msg);
+    void updateOutgoingTraffic(P2PMessage::Ptr _msg);
+    void acquirePermits(P2PMessage::Ptr _msg);
 
 private:
     std::map<dev::network::NodeIPEndpoint, NodeID> m_staticNodes;
@@ -218,6 +238,12 @@ private:
     std::shared_ptr<std::map<GROUP_ID, std::shared_ptr<dev::stat::NetworkStatHandler>>>
         m_group2NetworkStatHandler;
     mutable SharedMutex x_group2NetworkStatHandler;
+
+    // for bandwidth limitation
+    std::shared_ptr<std::map<GROUP_ID, dev::flowlimit::QPSLimiter::Ptr>> m_group2BandwidthLimiter;
+    mutable SharedMutex x_group2BandwidthLimiter;
+
+    dev::flowlimit::QPSLimiter::Ptr m_nodeBandwidthLimiter;
 };
 
 }  // namespace p2p
