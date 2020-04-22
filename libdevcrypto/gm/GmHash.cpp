@@ -20,7 +20,7 @@
  */
 
 #include "libdevcrypto/Hash.h"
-#include "libdevcrypto/gm/sm3/sm3.h"
+#include "libdevcrypto/sm3/sm3.h"
 #include <libdevcore/RLP.h>
 #include <libethcore/Exceptions.h>
 #include <secp256k1_sha256.h>

@@ -33,10 +33,9 @@
 using namespace std;
 using namespace dev;
 using namespace dev::crypto;
-using namespace std;
 
-string dev::aesCBCEncrypt(const unsigned char* _plainData, const int _plainDataSize,
-    const unsigned char* _key, const int _keySize, const unsigned char* _ivData)
+string dev::aesCBCEncrypt(const unsigned char* _plainData, size_t _plainDataSize,
+    const unsigned char* _key, size_t _keySize, const unsigned char* _ivData)
 {
     string cipherData;
     CryptoPP::AES::Encryption aesEncryption(_key, _keySize);
@@ -48,8 +47,8 @@ string dev::aesCBCEncrypt(const unsigned char* _plainData, const int _plainDataS
     return cipherData;
 }
 
-string dev::aesCBCDecrypt(const unsigned char* _cypherData, const int _cypherDataSize,
-    const unsigned char* _key, const int _keySize, const unsigned char* _ivData)
+string dev::aesCBCDecrypt(const unsigned char* _cypherData, size_t _cypherDataSize,
+    const unsigned char* _key, size_t _keySize, const unsigned char* _ivData)
 {
     string decryptedData;
     CryptoPP::AES::Decryption aesDecryption(_key, _keySize);
@@ -83,30 +82,5 @@ string dev::aesCBCEncrypt(const string& _plainData, const string& _key)
 string dev::aesCBCDecrypt(const string& _cypherData, const string& _key)
 {
     string ivData(_key.substr(0, 16));
-    return aesCBCDecrypt(_cypherData, _key, ivData);
-}
-
-bytes dev::aesCBCEncrypt(bytesConstRef _plainData, bytesConstRef _key, bytesConstRef _ivData)
-{
-    return asBytes(aesCBCEncrypt(
-        _plainData.data(), _plainData.size(), _key.data(), _key.size(), _ivData.data()));
-}
-
-bytes dev::aesCBCDecrypt(bytesConstRef _cypherData, bytesConstRef _key, bytesConstRef _ivData)
-{
-    return asBytes(aesCBCDecrypt(
-        _cypherData.data(), _cypherData.size(), _key.data(), _key.size(), _ivData.data()));
-}
-
-
-bytes dev::aesCBCEncrypt(bytesConstRef _plainData, bytesConstRef _key)
-{
-    bytesConstRef ivData = _key.cropped(0, 16);
-    return aesCBCEncrypt(_plainData, _key, ivData);
-}
-
-bytes dev::aesCBCDecrypt(bytesConstRef _cypherData, bytesConstRef _key)
-{
-    bytesConstRef ivData = _key.cropped(0, 16);
     return aesCBCDecrypt(_cypherData, _key, ivData);
 }

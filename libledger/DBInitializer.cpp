@@ -23,6 +23,7 @@
  */
 #include "DBInitializer.h"
 #include "LedgerParam.h"
+#include "libdevcrypto/CryptoInterface.h"
 #include "libstorage/BinLogHandler.h"
 #include "libstorage/BinaryLogStorage.h"
 #include "libstorage/RocksDBStorageFactory.h"
@@ -306,7 +307,10 @@ std::function<void(std::string const&, std::string&)> dev::ledger::getEncryptHan
     return [=](std::string const& data, std::string& encData) {
         try
         {
-            encData = aesCBCEncrypt(data, g_BCOSConfig.diskEncryption.dataKey);
+            auto const& dataKey = g_BCOSConfig.diskEncryption.dataKey;
+            encData = crypto::SymmetricEncrypt((const unsigned char*)data.data(), data.size(),
+                (const unsigned char*)dataKey.data(), dataKey.size(),
+                (const unsigned char*)dataKey.data());
         }
         catch (const std::exception& e)
         {
@@ -323,7 +327,10 @@ std::function<void(std::string&)> dev::ledger::getDecryptHandler()
     return [=](std::string& data) {
         try
         {
-            data = aesCBCDecrypt(data, g_BCOSConfig.diskEncryption.dataKey);
+            auto const& dataKey = g_BCOSConfig.diskEncryption.dataKey;
+            data = crypto::SymmetricDecrypt((const unsigned char*)data.data(), data.size(),
+                (const unsigned char*)dataKey.data(), dataKey.size(),
+                (const unsigned char*)dataKey.data());
         }
         catch (const std::exception& e)
         {

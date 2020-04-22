@@ -23,7 +23,6 @@
 #pragma once
 #include "Common.h"
 #include <libdevcore/Common.h>
-#include <libdevcrypto/AES.h>
 #include <memory>
 
 namespace dev

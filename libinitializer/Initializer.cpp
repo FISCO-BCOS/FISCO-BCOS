@@ -47,7 +47,7 @@ void Initializer::init(std::string const& _path)
             m_logInitializer->initStatLog(pt);
         }
 
-        /// init certificates
+        // init certificates
         m_secureInitializer = std::make_shared<SecureInitializer>();
         m_secureInitializer->initConfig(pt);
 
