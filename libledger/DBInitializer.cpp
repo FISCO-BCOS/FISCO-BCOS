@@ -538,20 +538,9 @@ void DBInitializer::createStateFactory(dev::h256 const& genesisHash)
 /// TOCHECK: create the stateStorage with AMDB
 void DBInitializer::createStorageState()
 {
-    bool enableBinaryEncode = false;
-#if 0
-    if (g_BCOSConfig.version() >= V2_4_0 &&
-        (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "RocksDB") ||
-            !dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "Scalable")))
-    {
-        enableBinaryEncode = true;
-    }
-#endif
     auto stateFactory = std::make_shared<StorageStateFactory>(u256(0x0));
-    stateFactory->enableBinaryEncode(enableBinaryEncode);
     m_stateFactory = stateFactory;
-    DBInitializer_LOG(INFO) << LOG_DESC("createStorageState SUCC")
-                            << LOG_KV("state enable store binary", enableBinaryEncode);
+    DBInitializer_LOG(INFO) << LOG_DESC("createStorageState SUCC");
 }
 
 Storage::Ptr dev::ledger::createRocksDBStorage(const std::string& _dbPath,

@@ -116,7 +116,17 @@ ContractStatus ContractLifeCyclePrecompiled::getContractStatus(
     }
 
     auto codeHashEntries = table->select(storagestate::ACCOUNT_CODE_HASH, table->newCondition());
-    if (toHex(EmptySHA3) == codeHashEntries->get(0)->getField(storagestate::STORAGE_VALUE))
+    h256 codeHash;
+    if (g_BCOSConfig.version() >= V2_5_0)
+    {
+        codeHash = h256(codeHashEntries->get(0)->getFieldBytes(storagestate::STORAGE_VALUE));
+    }
+    else
+    {
+        codeHash = h256(fromHex(codeHashEntries->get(0)->getField(storagestate::STORAGE_VALUE)));
+    }
+
+    if (EmptySHA3 == codeHash)
     {
         return ContractStatus::NotContractAddress;
     }
