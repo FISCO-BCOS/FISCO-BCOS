@@ -22,6 +22,7 @@
 
 #include "EncryptedLevelDB.h"
 #include "libconfig/GlobalConfigure.h"
+#include "libdevcrypto/CryptoInterface.h"
 
 using namespace std;
 using namespace dev;
@@ -59,16 +60,14 @@ char* ascii2hex(const string& _str)
 
 std::string encryptValue(const bytes& _dataKey, leveldb::Slice _value)
 {
-    bytesConstRef valueRef = bytesConstRef((const unsigned char*)_value.data(), _value.size());
-    bytes enData = aesCBCEncrypt(valueRef, ref(_dataKey));
-    return asString(enData);
+    return crypto::SymmetricEncrypt((const unsigned char*)_value.data(), _value.size(),
+        _dataKey.data(), _dataKey.size(), _dataKey.data());
 }
 
 std::string decryptValue(const bytes& _dataKey, const std::string& _value)
 {
-    bytes deData = aesCBCDecrypt(
-        bytesConstRef{(const unsigned char*)_value.c_str(), _value.length()}, ref(_dataKey));
-    return asString(deData);
+    return crypto::SymmetricDecrypt((const unsigned char*)_value.c_str(), _value.size(),
+        _dataKey.data(), _dataKey.size(), _dataKey.data());
 }
 
 }  // namespace db
@@ -103,8 +102,6 @@ EncryptedLevelDB::EncryptedLevelDB(const leveldb::Options& _options, const std::
   : BasicLevelDB(), m_cipherDataKey(_cipherDataKey), m_dataKey(asBytes(_dataKey))
 {
     m_name = _name;
-    // Encrypted leveldb initralization
-
     // Open db
     auto db = static_cast<leveldb::DB*>(nullptr);
     m_openStatus = leveldb::DB::Open(_options, _name, &db);
@@ -120,8 +117,7 @@ EncryptedLevelDB::EncryptedLevelDB(const leveldb::Options& _options, const std::
     OpenDBStatus type = checkOpenDBStatus();
     switch (type)
     {
-    case OpenDBStatus::FirstCreation:
-    {
+    case OpenDBStatus::FirstCreation: {
         if (m_cipherDataKey.empty())
         {
             std::stringstream exitInfo;
@@ -138,16 +134,14 @@ EncryptedLevelDB::EncryptedLevelDB(const leveldb::Options& _options, const std::
                          << LOG_KV("cipherDataKey", m_cipherDataKey);
         break;
     }
-    case OpenDBStatus::Encrypted:
-    {
+    case OpenDBStatus::Encrypted: {
         ENCDB_LOG(DEBUG) << LOG_BADGE("open") << LOG_DESC(" Encrypted leveldb open success")
                          << LOG_KV("name", _name) << LOG_KV("db", m_db)
                          << LOG_KV("cipherDataKey", m_cipherDataKey);
         break;
     }
 
-    case OpenDBStatus::NoEncrypted:
-    {
+    case OpenDBStatus::NoEncrypted: {
         std::stringstream exitInfo;
         exitInfo << LOG_BADGE("Open")
                  << LOG_DESC("Database type ERROR! This DB is not EncryptedLevelDB")
@@ -156,8 +150,7 @@ EncryptedLevelDB::EncryptedLevelDB(const leveldb::Options& _options, const std::
         break;
     }
 
-    case OpenDBStatus::CipherKeyError:
-    {
+    case OpenDBStatus::CipherKeyError: {
         std::stringstream exitInfo;
         exitInfo
             << LOG_BADGE("Open")
@@ -170,8 +163,7 @@ EncryptedLevelDB::EncryptedLevelDB(const leveldb::Options& _options, const std::
         break;
     }
 
-    default:
-    {
+    default: {
         std::stringstream exitInfo;
         exitInfo << LOG_BADGE("Open") << LOG_DESC("Unknown Open encrypted DB TYPE")
                  << LOG_KV("name", _name) << endl;
@@ -240,9 +232,6 @@ leveldb::Status EncryptedLevelDB::Put(
     try
     {
         enData = encryptValue(m_dataKey, _value);
-        // ENCDB_LOG(TRACE)<< LOG_BADGE("ENC")<< LOG_DESC("Put")<<
-        // LOG_KV("k",ascii2hex(_key.data(), _key.size()))<< LOG_KV("encv",ascii2hex(enData))<<
-        // LOG_KV("v", ascii2hex(_value.data(), _value.size()));
     }
     catch (Exception& e)
     {

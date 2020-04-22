@@ -23,7 +23,7 @@
 #include "libdevcrypto/Common.h"
 #include "libdevcrypto/Exceptions.h"
 #include "libdevcrypto/Hash.h"
-#include "libdevcrypto/gm/sm2/sm2.h"
+#include "libdevcrypto/sm2/sm2.h"
 #include <cryptopp/modes.h>
 #include <cryptopp/pwdbased.h>
 #include <libdevcore/Guards.h>
