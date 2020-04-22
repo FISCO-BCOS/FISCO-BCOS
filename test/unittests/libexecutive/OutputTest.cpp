@@ -99,11 +99,12 @@ struct OutputFixture
         table->insert(ACCOUNT_BALANCE, entry);
         entry = table->newEntry();
         entry->setField(STORAGE_KEY, ACCOUNT_CODE_HASH);
-        entry->setField(STORAGE_VALUE, toHex(h256("123456")));
+        auto codeHash = h256("123456");
+        entry->setField(STORAGE_VALUE, codeHash.data(), codeHash.size);
         table->insert(ACCOUNT_CODE_HASH, entry);
         entry = table->newEntry();
         entry->setField(STORAGE_KEY, ACCOUNT_CODE);
-        entry->setField(STORAGE_VALUE, "");
+        entry->setField(STORAGE_VALUE, nullptr, 0);
         table->insert(ACCOUNT_CODE, entry);
         entry = table->newEntry();
         entry->setField(STORAGE_KEY, ACCOUNT_NONCE);
@@ -133,11 +134,11 @@ struct OutputFixture
         accountTable->insert(ACCOUNT_BALANCE, entry);
         entry = accountTable->newEntry();
         entry->setField(STORAGE_KEY, ACCOUNT_CODE_HASH);
-        entry->setField(STORAGE_VALUE, toHex(EmptySHA3));
+        entry->setField(STORAGE_VALUE, EmptySHA3.data(), EmptySHA3.size);
         accountTable->insert(ACCOUNT_CODE_HASH, entry);
         entry = accountTable->newEntry();
         entry->setField(STORAGE_KEY, ACCOUNT_CODE);
-        entry->setField(STORAGE_VALUE, "");
+        entry->setField(STORAGE_VALUE, nullptr, 0);
         accountTable->insert(ACCOUNT_CODE, entry);
         entry = accountTable->newEntry();
         entry->setField(STORAGE_KEY, ACCOUNT_NONCE);
@@ -294,7 +295,7 @@ BOOST_AUTO_TEST_CASE(call)
     // test frozen contract output
     auto entry = table->newEntry();
     entry->setField(STORAGE_KEY, ACCOUNT_CODE_HASH);
-    entry->setField(STORAGE_VALUE, toHex(EmptySHA3));
+    entry->setField(STORAGE_VALUE, EmptySHA3.data(), EmptySHA3.size);
     table->update(ACCOUNT_CODE_HASH, entry, table->newCondition());
     executeTransaction(*executive, tx);
     output = abi.abiIn("Error(string)", string("Error address:" + contractAddress.hex()));
