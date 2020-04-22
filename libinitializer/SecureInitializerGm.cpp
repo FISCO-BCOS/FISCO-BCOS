@@ -21,6 +21,7 @@
  */
 
 #include "SecureInitializer.h"
+#include "libdevcrypto/CryptoInterface.h"
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonIO.h>
@@ -317,6 +318,7 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
 {
     try
     {
+        crypto::initSMCtypro();
         ConfigResult gmConfig = initGmConfig(pt);
         m_key = gmConfig.keyPair;
         m_sslContexts[Usage::Default] = gmConfig.sslContext;
