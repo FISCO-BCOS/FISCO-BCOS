@@ -23,7 +23,7 @@
 #include "VM.h"
 #include "interpreter.h"
 #include "libconfig/GlobalConfigure.h"
-#include "libdevcrypto/Hash.h"
+#include "libdevcrypto/CryptoInterface.h"
 #include <libethcore/EVMFlags.h>
 
 namespace
@@ -471,7 +471,7 @@ void VM::interpretCases()
 
             uint64_t inOff = (uint64_t)m_SP[0];
             uint64_t inSize = (uint64_t)m_SP[1];
-            m_SPP[0] = (u256)sha3(bytesConstRef(m_mem.data() + inOff, inSize));
+            m_SPP[0] = (u256)crypto::Hash(bytesConstRef(m_mem.data() + inOff, inSize));
         }
         NEXT
 

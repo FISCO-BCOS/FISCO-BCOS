@@ -119,8 +119,8 @@ public:
     bytes const code(Address const& _address) const override;
 
     /// Get the code hash of an account.
-    /// @returns EmptySHA3 if no account exists at that address or if there is no code associated
-    /// with the address.
+    /// @returns EmptyHash if no account exists at that address or if there is no code
+    /// associated with the address.
     h256 codeHash(Address const& _contract) const override;
 
     /// Get the frozen status of an account.

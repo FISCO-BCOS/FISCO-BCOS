@@ -19,6 +19,7 @@
 #include "Log.h"
 #include "TrieCommon.h"
 #include "db.h"
+#include "libdevcrypto/CryptoInterface.h"
 #include <thread>
 
 namespace dev

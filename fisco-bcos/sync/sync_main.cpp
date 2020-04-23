@@ -23,7 +23,7 @@
 
 #include "Fake.h"
 #include "SyncParamParse.h"
-
+#include "libdevcrypto/CryptoInterface.h"
 #include <fisco-bcos/Fake.h>
 #include <libconfig/GlobalConfigure.h>
 #include <libethcore/Protocol.h>

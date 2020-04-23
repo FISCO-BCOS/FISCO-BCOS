@@ -22,7 +22,6 @@
 #pragma once
 
 #include <libdevcore/RLP.h>
-#include <libdevcrypto/Hash.h>
 #include <libethcore/Common.h>
 #include <libethcore/Exceptions.h>
 

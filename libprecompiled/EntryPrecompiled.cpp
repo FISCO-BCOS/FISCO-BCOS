@@ -21,7 +21,7 @@
 #include "EntryPrecompiled.h"
 #include "libstorage/Table.h"
 #include <libblockverifier/ExecutiveContext.h>
-#include <libdevcrypto/Hash.h>
+#include <libdevcrypto/CryptoInterface.h>
 #include <libethcore/ABI.h>
 
 using namespace dev;

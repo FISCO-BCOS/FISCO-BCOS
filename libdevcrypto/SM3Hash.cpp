@@ -1,4 +1,4 @@
-/**
+/*
  * @CopyRight:
  * FISCO-BCOS is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -13,26 +13,30 @@
  * You should have received a copy of the GNU General Public License
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
- *
- * @brief: Empty test framework of FISCO-BCOS. Define BOOST_TEST_MODULE
- *
- * @file main.cpp
- * @author: yujiechen, jimmyshi
- * @date 2018-08-24
  */
-#define BOOST_TEST_MODULE FISCO_BCOS_Tests
-#define BOOST_TEST_NO_MAIN
+/** @file Hash.cpp
+ * @author Asherli
+ * @date 2018
+ */
 
-#include "libdevcrypto/CryptoInterface.h"
-#include <boost/test/included/unit_test.hpp>
-#include <boost/test/unit_test.hpp>
+#include "libdevcrypto/SM3Hash.h"
+#include "libdevcrypto/sm3/sm3.h"
+#include <libdevcore/RLP.h>
+#include <libethcore/Exceptions.h>
+#include <secp256k1_sha256.h>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+using namespace std;
+using namespace dev;
 
-int main(int argc, const char* argv[])
-{
-#ifdef FISCO_GM
-    dev::crypto::initSMCtypro();
-#endif
-    auto fakeInit = [](int, char**) -> boost::unit_test::test_suite* { return nullptr; };
-    int result = boost::unit_test::unit_test_main(fakeInit, argc, const_cast<char**>(argv));
-    return result;
+bool dev::sm3(bytesConstRef _input, bytesRef o_output)
+{  // FIXME: What with unaligned memory?
+    if (o_output.size() != 32)
+        return false;
+
+    SM3Hash::getInstance().sm3(
+        (const unsigned char*)_input.data(), _input.size(), (unsigned char*)o_output.data());
+    return true;
 }

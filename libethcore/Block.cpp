@@ -23,6 +23,7 @@
  */
 #include "Block.h"
 #include "TxsParallelParser.h"
+#include "libdevcrypto/CryptoInterface.h"
 #include <libdevcore/Guards.h>
 #include <libdevcore/RLP.h>
 #include <tbb/parallel_for.h>
@@ -311,7 +312,7 @@ void Block::calTransactionRootRC2(bool update) const
     if (m_txsCache == bytes())
     {
         m_txsCache = TxsParallelParser::encode(m_transactions);
-        m_transRootCache = sha3(m_txsCache);
+        m_transRootCache = crypto::Hash(m_txsCache);
     }
     if (update == true)
     {
@@ -387,7 +388,7 @@ void Block::calReceiptRootRC2(bool update) const
         // auto appenRLP_time_cost = utcTime() - record_time;
         // record_time = utcTime();
 
-        m_receiptRootCache = dev::sha3(ref(m_tReceiptsCache));
+        m_receiptRootCache = crypto::Hash(ref(m_tReceiptsCache));
         // auto hashReceipts_time_cost = utcTime() - record_time;
         /*
         LOG(DEBUG) << LOG_BADGE("Receipt") << LOG_DESC("Calculate receipt root cost")

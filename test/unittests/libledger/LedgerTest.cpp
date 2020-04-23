@@ -215,7 +215,7 @@ BOOST_AUTO_TEST_CASE(testGensisConfig)
         boost::filesystem::exists(fakeLedger.getParam()->mutableStorageParam().path) == true);
     BOOST_CHECK(dbInitializer->storage() != nullptr);
     /// create stateDB
-    dev::h256 genesisHash = dev::sha3("abc");
+    dev::h256 genesisHash = crypto::Hash("abc");
     BOOST_CHECK(dbInitializer->stateFactory() == nullptr);
     BOOST_CHECK(dbInitializer->executiveContextFactory() == nullptr);
     /// create executiveContext and stateFactory

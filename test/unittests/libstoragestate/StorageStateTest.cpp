@@ -23,7 +23,7 @@
 
 #include "libstoragestate/StorageState.h"
 #include "../libstorage/MemoryStorage.h"
-#include "libdevcrypto/Hash.h"
+#include "libdevcrypto/CryptoInterface.h"
 #include "libstorage/MemoryTableFactory2.h"
 #include <boost/test/unit_test.hpp>
 
@@ -80,7 +80,7 @@ BOOST_AUTO_TEST_CASE(Account)
     auto nonce = m_state.getNonce(addr1);
     BOOST_TEST(nonce == u256(0));
     auto hash = m_state.codeHash(addr1);
-    BOOST_TEST(hash == EmptySHA3);
+    BOOST_TEST(hash == EmptyHash);
     auto sign = m_state.accountNonemptyAndExisting(addr1);
     BOOST_TEST(sign == false);
     m_state.kill(addr1);
@@ -113,7 +113,7 @@ BOOST_AUTO_TEST_CASE(Code)
     auto code = m_state.code(addr1);
     BOOST_TEST(code == NullBytes);
     auto hash = m_state.codeHash(addr1);
-    BOOST_TEST(hash == EmptySHA3);
+    BOOST_TEST(hash == EmptyHash);
     m_state.addBalance(addr1, u256(10));
     code = m_state.code(addr1);
     BOOST_TEST(code == NullBytes);
@@ -123,7 +123,7 @@ BOOST_AUTO_TEST_CASE(Code)
     auto code2 = m_state.code(addr1);
     BOOST_TEST(code == code2);
     hash = m_state.codeHash(addr1);
-    BOOST_TEST(hash == sha3(code));
+    BOOST_TEST(hash == crypto::Hash(code));
     auto size = m_state.codeSize(addr1);
     BOOST_TEST(code.size() == size);
     hasCode = m_state.addressHasCode(addr1);
