@@ -127,9 +127,15 @@ inline void dev::storage::errorExitOut(std::stringstream& _exitInfo)
 
 SQLConnectionPool::~SQLConnectionPool()
 {
-    ConnectionPool_stop(m_connectionPool);
-    ConnectionPool_free(&m_connectionPool);
-    URL_free(&m_url);
+    if (m_connectionPool)
+    {
+        ConnectionPool_stop(m_connectionPool);
+        ConnectionPool_free(&m_connectionPool);
+    }
+    if (m_url)
+    {
+        URL_free(&m_url);
+    }
 }
 
 int SQLConnectionPool::GetActiveConnections()

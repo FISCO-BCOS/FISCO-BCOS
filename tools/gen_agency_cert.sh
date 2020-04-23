@@ -84,17 +84,17 @@ parse_params()
     while getopts "c:a:g:h" option;do
         case $option in
         c) ca_path="${OPTARG}"
-            if [ ! -e "$ca_path/ca.key" ]; then LOG_WARN "$ca_path/ca.key not exist" && exit 1; fi
-            if [ ! -e "$ca_path/ca.crt" ]; then LOG_WARN "$ca_path/ca.crt not exist" && exit 1; fi
-            [ -f "$ca_path/root.crt" ] && root_crt="$ca_path/root.crt"
+            if [ ! -f "$ca_path/ca.key" ]; then LOG_WARN "$ca_path/ca.key not exist" && exit 1; fi
+            if [ ! -f "$ca_path/ca.crt" ]; then LOG_WARN "$ca_path/ca.crt not exist" && exit 1; fi
+            if [ -f "$ca_path/root.crt" ]; then root_crt="$ca_path/root.crt";fi
         ;;
         a) agency="${OPTARG}"
             if [ -z "$agency" ]; then LOG_WARN "$agency not specified" && exit 1; fi
         ;;
         g) guomi_mode="yes" && gmca_path=$OPTARG
-            if [ ! -e "$gmca_path/gmca.key" ]; then LOG_WARN "$gmca_path/gmca.key not exist" && exit 1; fi
-            if [ ! -e "$gmca_path/gmca.crt" ]; then LOG_WARN "$gmca_path/gmca.crt not exist" && exit 1; fi        
-            [ -f "$gmca_path/gmroot.crt" ] && gmroot_crt="${gmca_path}/gmroot.crt"
+            if [ ! -f "$gmca_path/gmca.key" ]; then LOG_WARN "$gmca_path/gmca.key not exist" && exit 1; fi
+            if [ ! -f "$gmca_path/gmca.crt" ]; then LOG_WARN "$gmca_path/gmca.crt not exist" && exit 1; fi        
+            if [ -f "$gmca_path/gmroot.crt" ]; then gmroot_crt="${gmca_path}/gmroot.crt"; fi
         ;;
         h) help;;
         *) LOG_WARN "invalid option $option";;
