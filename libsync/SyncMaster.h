@@ -37,6 +37,7 @@
 #include <libdevcore/Worker.h>
 #include <libethcore/Common.h>
 #include <libethcore/Exceptions.h>
+#include <libflowlimit/QPSLimiter.h>
 #include <libnetwork/Common.h>
 #include <libnetwork/Session.h>
 #include <libp2p/P2PInterface.h>
@@ -234,6 +235,16 @@ public:
         m_syncTrans->noteForwardRemainTxs(_targetNodeId);
     }
 
+    void setBandwidthLimiter(dev::flowlimit::QPSLimiter::Ptr _bandwidthLimiter)
+    {
+        m_bandwidthLimiter = _bandwidthLimiter;
+    }
+
+    void setNodeBandwidthLimiter(dev::flowlimit::QPSLimiter::Ptr _nodeBandwidthLimiter)
+    {
+        m_nodeBandwidthLimiter = _nodeBandwidthLimiter;
+    }
+
 private:
     // init via blockchain when the sync thread started
     void updateNodeInfo()
@@ -311,6 +322,11 @@ private:
 
     // verify handler to check downloading block
     std::function<bool(dev::eth::Block const&)> fp_isConsensusOk = nullptr;
+
+    dev::flowlimit::QPSLimiter::Ptr m_bandwidthLimiter;
+    dev::flowlimit::QPSLimiter::Ptr m_nodeBandwidthLimiter;
+
+    const unsigned m_compressRate = 3;
 
 public:
     void maintainBlocks();

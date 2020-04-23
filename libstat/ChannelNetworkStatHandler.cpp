@@ -55,48 +55,47 @@ void ChannelNetworkStatHandler::removeGroupP2PStatHandler(GROUP_ID const& _group
     }
 }
 
+NetworkStatHandler::Ptr ChannelNetworkStatHandler::getP2PHandlerByGroupId(GROUP_ID const& _groupId)
+{
+    ReadGuard l(x_p2pStatHandlers);
+    if (!m_p2pStatHandlers->count(_groupId))
+    {
+        return nullptr;
+    }
+    return (*m_p2pStatHandlers)[_groupId];
+}
+
 void ChannelNetworkStatHandler::updateGroupResponseTraffic(
     GROUP_ID const& _groupId, uint32_t const& _msgType, uint64_t const& _msgSize)
 {
-    ReadGuard l(x_p2pStatHandlers);
-    if (m_p2pStatHandlers->count(_groupId))
+    auto p2pStatHandler = getP2PHandlerByGroupId(_groupId);
+    if (!p2pStatHandler)
     {
-        (*m_p2pStatHandlers)[_groupId]->updateOutcomingTraffic(_msgType, _msgSize);
+        return;
     }
+    p2pStatHandler->updateOutgoingTraffic(_msgType, _msgSize);
 }
-
-void ChannelNetworkStatHandler::updateGroupRequestTraffic(
-    GROUP_ID const& _groupId, uint32_t const& _msgType, uint64_t const& _msgSize)
-{
-    ReadGuard l(x_p2pStatHandlers);
-    if (m_p2pStatHandlers->count(_groupId))
-    {
-        (*m_p2pStatHandlers)[_groupId]->updateIncomingTraffic(_msgType, _msgSize);
-    }
-}
-
 
 void ChannelNetworkStatHandler::updateIncomingTrafficForRPC(
     GROUP_ID _groupId, uint64_t const& _msgSize)
 {
-    ReadGuard l(x_p2pStatHandlers);
-    if (!m_p2pStatHandlers->count(_groupId))
+    auto p2pStatHandler = getP2PHandlerByGroupId(_groupId);
+    if (!p2pStatHandler)
     {
         return;
     }
-    (*m_p2pStatHandlers)[_groupId]->updateIncomingTraffic(
-        ChannelMessageType::CHANNEL_RPC_REQUEST, _msgSize);
+    p2pStatHandler->updateIncomingTraffic(ChannelMessageType::CHANNEL_RPC_REQUEST, _msgSize);
 }
-void ChannelNetworkStatHandler::updateOutcomingTrafficForRPC(
+
+void ChannelNetworkStatHandler::updateOutgoingTrafficForRPC(
     GROUP_ID _groupId, uint64_t const& _msgSize)
 {
-    ReadGuard l(x_p2pStatHandlers);
-    if (!m_p2pStatHandlers->count(_groupId))
+    auto p2pStatHandler = getP2PHandlerByGroupId(_groupId);
+    if (!p2pStatHandler)
     {
         return;
     }
-    (*m_p2pStatHandlers)[_groupId]->updateOutcomingTraffic(
-        ChannelMessageType::CHANNEL_RPC_REQUEST, _msgSize);
+    p2pStatHandler->updateOutgoingTraffic(ChannelMessageType::CHANNEL_RPC_REQUEST, _msgSize);
 }
 
 void ChannelNetworkStatHandler::flushLog()

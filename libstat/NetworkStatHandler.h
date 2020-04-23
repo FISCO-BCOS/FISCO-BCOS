@@ -58,7 +58,7 @@ public:
     void setGroupId(dev::GROUP_ID const& _groupId) { m_groupId = _groupId; }
 
     virtual void updateIncomingTraffic(int32_t const& _msgType, uint64_t _msgSize);
-    virtual void updateOutcomingTraffic(int32_t const& _msgType, uint64_t _msgSize);
+    virtual void updateOutgoingTraffic(int32_t const& _msgType, uint64_t _msgSize);
 
     virtual void updateTraffic(StatPtr _statMap, int32_t const& _msgType, uint64_t _msgSize);
 
@@ -100,7 +100,7 @@ protected:
     std::atomic<uint64_t> m_totalInMsgBytes = {0};
     std::string const m_InMsgDescSuffix = "In";
 
-    // outcoming traffic statistics
+    // outgoing traffic statistics
     std::shared_ptr<std::map<int32_t, uint64_t>> m_OutMsgTypeToBytes;
     mutable SharedMutex x_OutMsgTypeToBytes;
     std::atomic<uint64_t> m_totalOutMsgBytes = {0};
