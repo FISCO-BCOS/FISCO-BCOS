@@ -32,8 +32,8 @@ void NetworkStatHandler::updateIncomingTraffic(int32_t const& _msgType, uint64_t
     updateTraffic(m_InMsgTypeToBytes, _msgType, _msgSize);
 }
 
-// update outcoming traffic
-void NetworkStatHandler::updateOutcomingTraffic(int32_t const& _msgType, uint64_t _msgSize)
+// update outgoing traffic
+void NetworkStatHandler::updateOutgoingTraffic(int32_t const& _msgType, uint64_t _msgSize)
 {
     m_totalOutMsgBytes += _msgSize;
     WriteGuard l(x_OutMsgTypeToBytes);

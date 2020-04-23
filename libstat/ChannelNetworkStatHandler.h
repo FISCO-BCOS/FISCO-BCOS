@@ -53,11 +53,8 @@ public:
     virtual void updateGroupResponseTraffic(
         GROUP_ID const& _groupId, uint32_t const& _msgType, uint64_t const& _msgSize);
 
-    virtual void updateGroupRequestTraffic(
-        GROUP_ID const& _groupId, uint32_t const& _msgType, uint64_t const& _msgSize);
-
     void updateIncomingTrafficForRPC(GROUP_ID _groupId, uint64_t const& _msgSize);
-    void updateOutcomingTrafficForRPC(GROUP_ID _groupId, uint64_t const& _msgSize);
+    void updateOutgoingTrafficForRPC(GROUP_ID _groupId, uint64_t const& _msgSize);
 
     bool running() const { return m_running; }
 
@@ -68,6 +65,7 @@ public:
 
 private:
     void flushLog();
+    NetworkStatHandler::Ptr getP2PHandlerByGroupId(GROUP_ID const& _groupId);
 
 private:
     std::string m_statisticName;

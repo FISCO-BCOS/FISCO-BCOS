@@ -57,7 +57,8 @@ std::map<int, std::string> dev::rpc::RPCMsg{{RPCExceptionType::Success, "Success
     {RPCExceptionType::InvalidSystemConfig, "Invalid System Config"},
     {RPCExceptionType::InvalidRequest,
         "Don't send request to this node who doesn't belong to the group"},
-    {RPCExceptionType::IncompleteInitialization, "RPC module initialization is incomplete."}};
+    {RPCExceptionType::IncompleteInitialization, "RPC module initialization is incomplete."},
+    {RPCExceptionType::OverQPSLimit, "Over QPS limit"}};
 
 Rpc::Rpc(
     LedgerInitializer::Ptr _ledgerInitializer, std::shared_ptr<dev::p2p::P2PInterface> _service)
