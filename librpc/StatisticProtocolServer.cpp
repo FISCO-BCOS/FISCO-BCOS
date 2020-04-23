@@ -22,10 +22,50 @@
 
 using namespace dev;
 using namespace jsonrpc;
+using namespace dev::rpc;
 
 StatisticPotocolServer::StatisticPotocolServer(jsonrpc::IProcedureInvokationHandler& _handler)
   : RpcProtocolServerV2(_handler)
 {}
+
+bool StatisticPotocolServer::limitRPCQPS(Json::Value const& _request, std::string& _retValue)
+{
+    if (!m_qpsLimiter)
+    {
+        return true;
+    }
+    auto canHandle = m_qpsLimiter->acquire();
+    wrapResponseForNodeBusy(canHandle, _request, _retValue);
+    return canHandle;
+}
+
+bool StatisticPotocolServer::limitGroupQPS(
+    dev::GROUP_ID const& _groupId, Json::Value const& _request, std::string& _retValue)
+{
+    if (!m_qpsLimiter)
+    {
+        return true;
+    }
+    auto canHandle = m_qpsLimiter->acquireFromGroup(_groupId);
+    wrapResponseForNodeBusy(canHandle, _request, _retValue);
+    return canHandle;
+}
+
+
+void StatisticPotocolServer::wrapResponseForNodeBusy(
+    bool const& _canHandle, Json::Value const& _request, std::string& _retValue)
+{
+    if (_canHandle)
+    {
+        return;
+    }
+    Json::Value resp;
+    Json::FastWriter writer;
+    this->WrapError(
+        _request, RPCExceptionType::OverQPSLimit, RPCMsg[RPCExceptionType::OverQPSLimit], resp);
+    if (resp != Json::nullValue)
+        _retValue = writer.write(resp);
+}
 
 // Overload RpcProtocolServerV2 to implement RPC interface network statistics function
 void StatisticPotocolServer::HandleRequest(const std::string& _request, std::string& _retValue)
@@ -36,12 +76,25 @@ void StatisticPotocolServer::HandleRequest(const std::string& _request, std::str
     Json::Value req;
     Json::Value resp;
     Json::FastWriter w;
+    // limit the whole RPC QPS
+    bool canHandle = limitRPCQPS(_request, _retValue);
+    if (!canHandle)
+    {
+        return;
+    }
+
     dev::GROUP_ID groupId = -1;
     if (reader.parse(_request, req, false))
     {
         if (m_networkStatHandler)
         {
             groupId = getGroupID(req);
+            // limit group QPS
+            canHandle = limitGroupQPS(groupId, _request, _retValue);
+            if (!canHandle)
+            {
+                return;
+            }
         }
         this->HandleJsonRequest(req, resp);
     }
@@ -55,7 +108,7 @@ void StatisticPotocolServer::HandleRequest(const std::string& _request, std::str
     if (m_networkStatHandler && groupId != -1)
     {
         m_networkStatHandler->updateIncomingTrafficForRPC(groupId, _request.size());
-        m_networkStatHandler->updateOutcomingTrafficForRPC(groupId, _retValue.size());
+        m_networkStatHandler->updateOutgoingTrafficForRPC(groupId, _retValue.size());
     }
 }
 

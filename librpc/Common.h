@@ -43,7 +43,8 @@ enum RPCExceptionType : int
     BlockNumberT = -40004,
     BlockHash = -40003,
     JsonParse = -40002,
-    GroupID = -40001
+    GroupID = -40001,
+    OverQPSLimit = -503,
 };
 
 extern std::map<int, std::string> RPCMsg;
