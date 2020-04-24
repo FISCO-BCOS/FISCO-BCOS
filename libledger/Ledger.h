@@ -122,9 +122,12 @@ public:
         m_txPool->stop();
         if (m_service)
         {
-            Ledger_LOG(INFO) << LOG_DESC("removeNetworkStatHandlerByGroupID for service")
+            Ledger_LOG(INFO) << LOG_DESC(
+                                    "removeNetworkStatHandlerByGroupID and "
+                                    "removeGroupBandwidthLimiter for service")
                              << LOG_KV("groupID", groupId());
             m_service->removeNetworkStatHandlerByGroupID(groupId());
+            m_service->removeGroupBandwidthLimiter(groupId());
         }
         if (m_stopped)
         {
@@ -187,6 +190,11 @@ protected:
     virtual bool initEventLogFilterManager();
     // init statHandler
     virtual void initNetworkStatHandler();
+    // init NetworkStatHandler
+    virtual void initNetworkBandWidthLimiter();
+
+    // init QPSLimit
+    virtual void initQPSLimit();
 
     void initGenesisMark(GenesisBlockParam& genesisParam);
     /// load ini config of group
@@ -220,6 +228,8 @@ protected:
     std::shared_ptr<dev::event::EventLogFilterManager> m_eventLogFilterManger = nullptr;
     // for network statistic
     std::shared_ptr<dev::stat::NetworkStatHandler> m_networkStatHandler = nullptr;
+    // for network bandwidth limitation
+    dev::flowlimit::QPSLimiter::Ptr m_networkBandwidthLimiter = nullptr;
 
     std::shared_ptr<dev::ledger::DBInitializer> m_dbInitializer = nullptr;
     ChannelRPCServer::Ptr m_channelRPCServer;

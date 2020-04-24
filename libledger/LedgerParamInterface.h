@@ -47,6 +47,7 @@ struct StorageParam;
 struct StateParam;
 struct TxParam;
 struct EventLogFilterManagerParams;
+struct FlowControlParam;
 
 class LedgerParamInterface
 {
@@ -65,6 +66,7 @@ public:
     virtual TxParam& mutableTxParam() = 0;
     virtual EventLogFilterManagerParams& mutableEventLogFilterManagerParams() = 0;
     virtual blockchain::GenesisBlockParam& mutableGenesisBlockParam() = 0;
+    virtual FlowControlParam& mutableFlowControlParam() = 0;
 };
 }  // namespace ledger
 }  // namespace dev
