@@ -22,6 +22,7 @@
  */
 
 #include <libdevcore/TopicInfo.h>
+#include <libflowlimit/RateLimiter.h>
 #include <libsync/DownloadingTxsQueue.h>
 #include <libsync/SyncMsgEngine.h>
 #include <libsync/SyncMsgPacket.h>
@@ -155,7 +156,11 @@ public:
     void asyncSendMessageByTopic(std::string, std::shared_ptr<P2PMessage>, CallbackFuncWithSession,
         dev::network::Options) override{};
 
-    void asyncMulticastMessageByTopic(std::string, std::shared_ptr<P2PMessage>) override{};
+    bool asyncMulticastMessageByTopic(
+        std::string, std::shared_ptr<P2PMessage>, dev::flowlimit::RateLimiter::Ptr) override
+    {
+        return true;
+    };
 
     void asyncMulticastMessageByNodeIDList(NodeIDs, std::shared_ptr<P2PMessage>) override{};
 

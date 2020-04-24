@@ -229,7 +229,7 @@ protected:
     // for network statistic
     std::shared_ptr<dev::stat::NetworkStatHandler> m_networkStatHandler = nullptr;
     // for network bandwidth limitation
-    dev::flowlimit::QPSLimiter::Ptr m_networkBandwidthLimiter = nullptr;
+    dev::flowlimit::RateLimiter::Ptr m_networkBandwidthLimiter = nullptr;
 
     std::shared_ptr<dev::ledger::DBInitializer> m_dbInitializer = nullptr;
     ChannelRPCServer::Ptr m_channelRPCServer;

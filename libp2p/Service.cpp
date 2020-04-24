@@ -47,7 +47,7 @@ Service::Service()
     m_topic2Handler(std::make_shared<std::unordered_map<std::string, CallbackFuncWithSession>>()),
     m_group2NetworkStatHandler(std::make_shared<std::map<GROUP_ID, NetworkStatHandler::Ptr>>()),
     m_group2BandwidthLimiter(
-        std::make_shared<std::map<GROUP_ID, dev::flowlimit::QPSLimiter::Ptr>>())
+        std::make_shared<std::map<GROUP_ID, dev::flowlimit::RateLimiter::Ptr>>())
 {}
 
 void Service::start()
@@ -627,9 +627,24 @@ void Service::asyncSendMessageByTopic(std::string topic, P2PMessage::Ptr message
     topicStatus->onResponse(dev::network::NetworkException(), P2PSession::Ptr(), message);
 }
 
-void Service::asyncMulticastMessageByTopic(std::string topic, P2PMessage::Ptr message)
+bool Service::asyncMulticastMessageByTopic(
+    std::string topic, P2PMessage::Ptr message, dev::flowlimit::RateLimiter::Ptr _bandwidthLimiter)
 {
     NodeIDs nodeIDsToSend = getPeersByTopic(topic);
+    if (_bandwidthLimiter)
+    {
+        auto requiredPermits = message->length() * nodeIDsToSend.size() / m_compressRate;
+        if (!_bandwidthLimiter->tryAcquire(requiredPermits))
+        {
+            SERVICE_LOG(DEBUG)
+                << LOG_DESC("asyncMulticastMessageByTopic failed for over bandwidth limitation")
+                << LOG_KV("requiredPermits", requiredPermits)
+                << LOG_KV("broadcastTargetSize", nodeIDsToSend.size())
+                << LOG_KV("msgSize", message->length());
+            return false;
+        }
+        message->setPermitsAcquired(true);
+    }
     SERVICE_LOG(DEBUG) << LOG_DESC("asyncMulticastMessageByTopic")
                        << LOG_KV("nodes", nodeIDsToSend.size());
     try
@@ -645,6 +660,7 @@ void Service::asyncMulticastMessageByTopic(std::string topic, P2PMessage::Ptr me
         SERVICE_LOG(WARNING) << LOG_DESC("asyncMulticastMessageByTopic")
                              << LOG_KV("what", boost::diagnostic_information(e));
     }
+    return true;
 }
 
 void Service::asyncMulticastMessageByNodeIDList(NodeIDs nodeIDs, P2PMessage::Ptr message)
@@ -896,14 +912,14 @@ void Service::acquirePermits(P2PMessage::Ptr _msg)
     bandwidthLimiter->acquire(_msg->length(), false, true);
 }
 
-void Service::setNodeBandwidthLimiter(dev::flowlimit::QPSLimiter::Ptr _bandwidthLimiter)
+void Service::setNodeBandwidthLimiter(dev::flowlimit::RateLimiter::Ptr _bandwidthLimiter)
 {
     m_nodeBandwidthLimiter = _bandwidthLimiter;
 }
 
 
 void Service::registerGroupBandwidthLimiter(
-    GROUP_ID const& _groupID, dev::flowlimit::QPSLimiter::Ptr _bandwidthLimiter)
+    GROUP_ID const& _groupID, dev::flowlimit::RateLimiter::Ptr _bandwidthLimiter)
 {
     UpgradableGuard l(x_group2BandwidthLimiter);
     if (m_group2BandwidthLimiter->count(_groupID))

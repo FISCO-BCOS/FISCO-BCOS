@@ -809,6 +809,40 @@ void dev::ChannelRPCServer::onClientTopicRequest(
     }
 }
 
+bool dev::ChannelRPCServer::limitAMOPBandwidth(dev::channel::ChannelSession::Ptr _session,
+    dev::channel::Message::Ptr _AMOPReq, dev::p2p::P2PMessage::Ptr _p2pMessage)
+{
+    int64_t requiredPermitsAfterCompress = _p2pMessage->length() / m_compressRate;
+    if (!m_networkBandwidthLimiter)
+    {
+        return true;
+    }
+    if (m_networkBandwidthLimiter->tryAcquire(requiredPermitsAfterCompress))
+    {
+        _p2pMessage->setPermitsAcquired(true);
+        return true;
+    }
+    CHANNEL_LOG(DEBUG) << LOG_BADGE("limitAMOPBandwidth: over bandwidth limitation")
+                       << LOG_KV("messageSize", requiredPermitsAfterCompress)
+                       << LOG_KV("seq", _AMOPReq->seq().substr(0, c_seqAbridgedLen));
+    // send REJECT_AMOP_REQ_FOR_OVER_BANDWIDTHLIMIT to client
+    sendRejectAMOPResponse(_session, _AMOPReq);
+    return false;
+}
+
+void dev::ChannelRPCServer::sendRejectAMOPResponse(
+    dev::channel::ChannelSession::Ptr _session, dev::channel::Message::Ptr _AMOPReq)
+{
+    CHANNEL_LOG(DEBUG) << LOG_BADGE("sendRejectAMOPResponse")
+                       << LOG_DESC("Reject AMOP Request for over bandwidth limitation")
+                       << LOG_KV("seq", _AMOPReq->seq().substr(0, c_seqAbridgedLen));
+    auto response = _AMOPReq;
+    response->clearData();
+    response->setType(AMOP_RESPONSE);
+    response->setResult(REJECT_AMOP_REQ_FOR_OVER_BANDWIDTHLIMIT);
+    _session->asyncSendMessage(response, dev::channel::ChannelSession::CallbackType(), 0);
+}
+
 void dev::ChannelRPCServer::onClientChannelRequest(
     dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message)
 {
@@ -842,6 +876,12 @@ void dev::ChannelRPCServer::onClientChannelRequest(
             p2pMessage->setProtocolID(dev::eth::ProtocolID::AMOP);
             p2pMessage->setPacketType(0u);
 
+            // Exceed the bandwidth-limit, return REJECT_AMOP_REQ_FOR_OVER_BANDWIDTHLIMIT AMOP
+            // response
+            if (!limitAMOPBandwidth(session, message, p2pMessage))
+            {
+                return;
+            }
             dev::network::Options options;
             options.timeout = 30 * 1000;  // 30 seconds
 
@@ -901,7 +941,15 @@ void dev::ChannelRPCServer::onClientChannelRequest(
             p2pMessage->setProtocolID(dev::eth::ProtocolID::AMOP);
             p2pMessage->setPacketType(1u);
 
-            m_service->asyncMulticastMessageByTopic(topic, p2pMessage);
+            // Exceed the bandwidth limit, return REJECT_AMOP_REQ_FOR_OVER_BANDWIDTHLIMIT AMOP
+            // response
+            bool sended = m_service->asyncMulticastMessageByTopic(
+                topic, p2pMessage, m_networkBandwidthLimiter);
+            if (!sended)
+            {
+                sendRejectAMOPResponse(session, message);
+                return;
+            }
             message->setType(AMOP_RESPONSE);
             message->setResult(0);
             session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);

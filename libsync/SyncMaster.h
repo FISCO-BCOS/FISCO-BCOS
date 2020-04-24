@@ -37,7 +37,7 @@
 #include <libdevcore/Worker.h>
 #include <libethcore/Common.h>
 #include <libethcore/Exceptions.h>
-#include <libflowlimit/QPSLimiter.h>
+#include <libflowlimit/RateLimiter.h>
 #include <libnetwork/Common.h>
 #include <libnetwork/Session.h>
 #include <libp2p/P2PInterface.h>
@@ -235,12 +235,12 @@ public:
         m_syncTrans->noteForwardRemainTxs(_targetNodeId);
     }
 
-    void setBandwidthLimiter(dev::flowlimit::QPSLimiter::Ptr _bandwidthLimiter)
+    void setBandwidthLimiter(dev::flowlimit::RateLimiter::Ptr _bandwidthLimiter)
     {
         m_bandwidthLimiter = _bandwidthLimiter;
     }
 
-    void setNodeBandwidthLimiter(dev::flowlimit::QPSLimiter::Ptr _nodeBandwidthLimiter)
+    void setNodeBandwidthLimiter(dev::flowlimit::RateLimiter::Ptr _nodeBandwidthLimiter)
     {
         m_nodeBandwidthLimiter = _nodeBandwidthLimiter;
     }
@@ -323,10 +323,10 @@ private:
     // verify handler to check downloading block
     std::function<bool(dev::eth::Block const&)> fp_isConsensusOk = nullptr;
 
-    dev::flowlimit::QPSLimiter::Ptr m_bandwidthLimiter;
-    dev::flowlimit::QPSLimiter::Ptr m_nodeBandwidthLimiter;
+    dev::flowlimit::RateLimiter::Ptr m_bandwidthLimiter;
+    dev::flowlimit::RateLimiter::Ptr m_nodeBandwidthLimiter;
 
-    const unsigned m_compressRate = 3;
+    unsigned m_compressRate = 3;
 
 public:
     void maintainBlocks();
