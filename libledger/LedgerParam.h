@@ -167,8 +167,6 @@ struct FlowControlParam
     int64_t maxQPS;
     // for outgoing bandwidth limitation
     int64_t outGoingBandwidthLimit;
-    // default: 1 second
-    int64_t cumulativeStatInterval = 1;
     int64_t maxBurstReqPercent;
     int64_t maxBurstReqNum;
 };

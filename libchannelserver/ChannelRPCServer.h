@@ -85,9 +85,9 @@ public:
     {
         REMOTE_PEER_UNAVAILABLE = 100,
         REMOTE_CLIENT_PEER_UNAVAILABLE = 101,
-        TIMEOUT = 102
+        TIMEOUT = 102,
+        REJECT_AMOP_REQ_FOR_OVER_BANDWIDTHLIMIT = 103
     };
-
     typedef std::shared_ptr<ChannelRPCServer> Ptr;
 
     ChannelRPCServer(std::string listenAddr = "", int listenPort = 0)
@@ -173,12 +173,12 @@ public:
 
     dev::flowlimit::RPCQPSLimiter::Ptr qpsLimiter() { return m_qpsLimiter; }
 
-    void setNetworkBandwidthLimiter(dev::flowlimit::QPSLimiter::Ptr _networkBandwidthLimiter)
+    void setNetworkBandwidthLimiter(dev::flowlimit::RateLimiter::Ptr _networkBandwidthLimiter)
     {
         m_networkBandwidthLimiter = _networkBandwidthLimiter;
     }
 
-    dev::flowlimit::QPSLimiter::Ptr networkBandwidthLimiter() const
+    dev::flowlimit::RateLimiter::Ptr networkBandwidthLimiter() const
     {
         return m_networkBandwidthLimiter;
     }
@@ -211,6 +211,11 @@ private:
     std::vector<dev::channel::ChannelSession::Ptr> getSessionByTopic(const std::string& topic);
 
     void onClientUpdateTopicStatusRequest(dev::channel::Message::Ptr message);
+    bool limitAMOPBandwidth(dev::channel::ChannelSession::Ptr _session,
+        dev::channel::Message::Ptr _AMOPReq, dev::p2p::P2PMessage::Ptr _p2pMessage);
+
+    void sendRejectAMOPResponse(
+        dev::channel::ChannelSession::Ptr _session, dev::channel::Message::Ptr _AMOPReq);
 
     bool _running = false;
 
@@ -245,7 +250,9 @@ private:
 
     dev::stat::ChannelNetworkStatHandler::Ptr m_networkStatHandler;
     dev::flowlimit::RPCQPSLimiter::Ptr m_qpsLimiter;
-    dev::flowlimit::QPSLimiter::Ptr m_networkBandwidthLimiter;
+    dev::flowlimit::RateLimiter::Ptr m_networkBandwidthLimiter;
+
+    const unsigned m_compressRate = 3;
 };
 
 }  // namespace dev

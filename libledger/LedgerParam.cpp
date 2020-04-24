@@ -618,7 +618,7 @@ void LedgerParam::initFlowControlConfig(boost::property_tree::ptree const& _pt)
 {
     auto maxQPS =
         _pt.get<int64_t>("flow_control.limit_req_qps", mutableFlowControlParam().maxDefaultValue);
-    if (maxQPS < 0)
+    if (maxQPS <= 0)
     {
         BOOST_THROW_EXCEPTION(InvalidConfiguration()
                               << errinfo_comment("flow_control.limit_req_qps must be positive"));
@@ -638,7 +638,7 @@ void LedgerParam::initFlowControlConfig(boost::property_tree::ptree const& _pt)
 
     auto outGoingBandwidth = _pt.get<int64_t>(
         "flow_control.outgoing_bandwidth_limit", mutableFlowControlParam().maxDefaultValue);
-    if (outGoingBandwidth < 0)
+    if (outGoingBandwidth <= 0)
     {
         BOOST_THROW_EXCEPTION(InvalidConfiguration() << errinfo_comment(
                                   "flow_control.outgoing_bandwidth_limit must be positive"));
@@ -649,17 +649,12 @@ void LedgerParam::initFlowControlConfig(boost::property_tree::ptree const& _pt)
         outGoingBandwidth = outGoingBandwidth * 1024 * 1024 / 8;
     }
     mutableFlowControlParam().outGoingBandwidthLimit = outGoingBandwidth;
-    mutableFlowControlParam().cumulativeStatInterval =
-        (g_BCOSConfig.c_maxBlockSize + outGoingBandwidth - 1) / outGoingBandwidth;
-
     LedgerParam_LOG(INFO) << LOG_BADGE("initFlowControlConfig")
                           << LOG_KV("maxQPS", mutableFlowControlParam().maxQPS)
                           << LOG_KV("maxBurstReqPercent(%)", maxBurstReqPercent)
                           << LOG_KV("maxBurstReqNum", mutableFlowControlParam().maxBurstReqNum)
                           << LOG_KV("outGoingBandwidth(Bytes)",
-                                 mutableFlowControlParam().outGoingBandwidthLimit)
-                          << LOG_KV("cumulativeStatInterval",
-                                 mutableFlowControlParam().cumulativeStatInterval);
+                                 mutableFlowControlParam().outGoingBandwidthLimit);
 }
 
 }  // namespace ledger

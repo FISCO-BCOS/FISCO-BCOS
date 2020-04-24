@@ -26,17 +26,17 @@
 using namespace dev::flowlimit;
 
 RPCQPSLimiter::RPCQPSLimiter()
-  : m_group2QPSLimiter(std::make_shared<std::map<dev::GROUP_ID, QPSLimiter::Ptr>>())
+  : m_group2QPSLimiter(std::make_shared<std::map<dev::GROUP_ID, RateLimiter::Ptr>>())
 {}
 
 void RPCQPSLimiter::createRPCQPSLimiter(uint64_t const& _maxQPS)
 {
-    m_rpcQPSLimiter = std::make_shared<QPSLimiter>(_maxQPS);
+    m_rpcQPSLimiter = std::make_shared<RateLimiter>(_maxQPS);
     RPCQPSLIMIT_LOG(INFO) << LOG_DESC("create RPCQPSLimiter") << LOG_KV("qps", _maxQPS);
 }
 
 void RPCQPSLimiter::registerQPSLimiterByGroupID(
-    dev::GROUP_ID const& _groupId, QPSLimiter::Ptr _qpsLimiter)
+    dev::GROUP_ID const& _groupId, RateLimiter::Ptr _qpsLimiter)
 {
     WriteGuard l(x_group2QPSLimiter);
     if (m_group2QPSLimiter->count(_groupId))
@@ -48,7 +48,7 @@ void RPCQPSLimiter::registerQPSLimiterByGroupID(
     (*m_group2QPSLimiter)[_groupId] = _qpsLimiter;
 }
 
-QPSLimiter::Ptr RPCQPSLimiter::getQPSLimiterByGroupId(dev::GROUP_ID const& _groupId)
+RateLimiter::Ptr RPCQPSLimiter::getQPSLimiterByGroupId(dev::GROUP_ID const& _groupId)
 {
     ReadGuard l(x_group2QPSLimiter);
     if (!m_group2QPSLimiter->count(_groupId))

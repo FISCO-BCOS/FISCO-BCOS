@@ -21,7 +21,7 @@
  * @date: 2020-04-15
  */
 #pragma once
-#include "QPSLimiter.h"
+#include "RateLimiter.h"
 #include <libethcore/Protocol.h>
 
 #define RPCQPSLIMIT_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("RPCQPSLimiter")
@@ -37,20 +37,20 @@ public:
     RPCQPSLimiter();
     virtual ~RPCQPSLimiter() {}
     virtual void createRPCQPSLimiter(uint64_t const& _maxQPS);
-    void registerQPSLimiterByGroupID(dev::GROUP_ID const& _groupId, QPSLimiter::Ptr);
+    void registerQPSLimiterByGroupID(dev::GROUP_ID const& _groupId, RateLimiter::Ptr);
 
-    QPSLimiter::Ptr getQPSLimiterByGroupId(dev::GROUP_ID const& _groupId);
+    RateLimiter::Ptr getQPSLimiterByGroupId(dev::GROUP_ID const& _groupId);
 
     virtual bool acquire(int64_t const& _requiredPermits = 1);
     virtual bool acquireFromGroup(
         dev::GROUP_ID const& _groupId, int64_t const& _requiredPermits = 1);
 
-    QPSLimiter::Ptr rpcQPSLimiter() { return m_rpcQPSLimiter; }
+    RateLimiter::Ptr rpcQPSLimiter() { return m_rpcQPSLimiter; }
 
 private:
-    std::shared_ptr<std::map<dev::GROUP_ID, QPSLimiter::Ptr>> m_group2QPSLimiter;
+    std::shared_ptr<std::map<dev::GROUP_ID, RateLimiter::Ptr>> m_group2QPSLimiter;
     mutable SharedMutex x_group2QPSLimiter;
-    QPSLimiter::Ptr m_rpcQPSLimiter;
+    RateLimiter::Ptr m_rpcQPSLimiter;
 };
 }  // namespace flowlimit
 }  // namespace dev
