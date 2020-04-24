@@ -121,7 +121,7 @@ private:
     std::shared_ptr<dev::flowlimit::RPCQPSLimiter> createQPSLimiter(
         boost::property_tree::ptree const& _pt);
 
-    dev::flowlimit::QPSLimiter::Ptr createNetworkBandwidthLimit(
+    dev::flowlimit::RateLimiter::Ptr createNetworkBandwidthLimit(
         boost::property_tree::ptree const& _pt);
 
 private:

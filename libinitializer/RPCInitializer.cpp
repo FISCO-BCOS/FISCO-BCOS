@@ -286,18 +286,16 @@ dev::flowlimit::RPCQPSLimiter::Ptr RPCInitializer::createQPSLimiter(
     INITIALIZER_LOG(DEBUG) << LOG_DESC("createQPSLimiter") << LOG_KV("maxQPS", maxQPS)
                            << LOG_KV("maxBurstReqNum", maxBurstReqNum);
     qpsLimiter->createRPCQPSLimiter(maxQPS);
-    // default burst interval is 1s
-    qpsLimiter->rpcQPSLimiter()->setBurstTimeInterval(1000000);
     qpsLimiter->rpcQPSLimiter()->setMaxBurstReqNum(maxBurstReqNum);
     return qpsLimiter;
 }
 
-dev::flowlimit::QPSLimiter::Ptr RPCInitializer::createNetworkBandwidthLimit(
+dev::flowlimit::RateLimiter::Ptr RPCInitializer::createNetworkBandwidthLimit(
     boost::property_tree::ptree const& _pt)
 {
     int64_t outGoingBandwidthLimit =
         _pt.get<int64_t>("flow_control.outgoing_bandwidth_limit", INT64_MAX);
-    if (outGoingBandwidthLimit < 0)
+    if (outGoingBandwidthLimit <= 0)
     {
         BOOST_THROW_EXCEPTION(dev::InvalidConfig()
                               << errinfo_comment("createNetworkBandwidthLimit for channel failed, "
@@ -309,12 +307,10 @@ dev::flowlimit::QPSLimiter::Ptr RPCInitializer::createNetworkBandwidthLimit(
         return nullptr;
     }
     outGoingBandwidthLimit *= 1024 * 1024 / 8;
-    auto bandwidthLimiter = std::make_shared<dev::flowlimit::QPSLimiter>(outGoingBandwidthLimit);
-    int64_t cumulativeStatInterval =
-        (g_BCOSConfig.c_maxBlockSize + outGoingBandwidthLimit - 1) / outGoingBandwidthLimit;
-    bandwidthLimiter->setCumulativeStatInterval(cumulativeStatInterval);
+    auto bandwidthLimiter = std::make_shared<dev::flowlimit::RateLimiter>(outGoingBandwidthLimit);
+    bandwidthLimiter->setMaxPermitsSize(g_BCOSConfig.c_maxPermitsSize);
     INITIALIZER_LOG(INFO) << LOG_BADGE("createNetworkBandwidthLimit")
                           << LOG_KV("outGoingBandwidthLimit(Bytes)", outGoingBandwidthLimit)
-                          << LOG_KV("cumulativeStatInterval", cumulativeStatInterval);
+                          << LOG_KV("maxPermitsSize", g_BCOSConfig.c_maxPermitsSize);
     return bandwidthLimiter;
 }
