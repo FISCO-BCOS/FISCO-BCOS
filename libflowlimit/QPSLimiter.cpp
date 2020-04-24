@@ -30,7 +30,7 @@ QPSLimiter::QPSLimiter(uint64_t const& _maxQPS) : m_maxQPS(_maxQPS)
 {
     m_permitsUpdateInterval = (double)1000000 / (double)m_maxQPS;
     m_lastPermitsUpdateTime = utcSteadyTimeUs();
-    m_futureBrustResetTime = utcSteadyTimeUs() + m_burstTimeInterval;
+    m_futureBurstResetTime = utcSteadyTimeUs() + m_burstTimeInterval;
 
     m_maxPermits = m_maxQPS * m_cumulativeStatInterval;
     QPSLIMIT_LOG(INFO) << LOG_DESC("create QPSLimiter")
@@ -38,18 +38,18 @@ QPSLimiter::QPSLimiter(uint64_t const& _maxQPS) : m_maxQPS(_maxQPS)
                        << LOG_KV("maxQPS", m_maxQPS) << LOG_KV("maxPermits", m_maxPermits);
 }
 
-void QPSLimiter::setBrustTimeInterval(int64_t const& _burstInterval)
+void QPSLimiter::setBurstTimeInterval(int64_t const& _burstInterval)
 {
     m_burstTimeInterval = _burstInterval;
-    QPSLIMIT_LOG(INFO) << LOG_DESC("setBrustTimeInterval")
-                       << LOG_KV("brustTimeInterval", m_burstTimeInterval);
+    QPSLIMIT_LOG(INFO) << LOG_DESC("setBurstTimeInterval")
+                       << LOG_KV("burstTimeInterval", m_burstTimeInterval);
 }
 
-void QPSLimiter::setMaxBrustReqNum(int64_t const& _maxBrustReqNum)
+void QPSLimiter::setMaxBurstReqNum(int64_t const& _maxBurstReqNum)
 {
-    m_maxBrustReqNum = _maxBrustReqNum;
-    QPSLIMIT_LOG(INFO) << LOG_DESC("setMaxBrustReqNum")
-                       << LOG_KV("maxBrustReqNum", m_maxBrustReqNum);
+    m_maxBurstReqNum = _maxBurstReqNum;
+    QPSLIMIT_LOG(INFO) << LOG_DESC("setMaxBurstReqNum")
+                       << LOG_KV("maxBurstReqNum", m_maxBurstReqNum);
 }
 
 bool QPSLimiter::tryAcquire(uint64_t const& _requiredPermits)
@@ -70,7 +70,7 @@ int64_t QPSLimiter::acquire(
     return waitTime;
 }
 
-bool QPSLimiter::acquireWithBrustSupported(uint64_t const& _requiredPermits)
+bool QPSLimiter::acquireWithBurstSupported(uint64_t const& _requiredPermits)
 {
     auto waitTime = fetchPermitsAndGetWaitTime(_requiredPermits, false);
     int64_t now = utcSteadyTimeUs();
@@ -80,24 +80,24 @@ bool QPSLimiter::acquireWithBrustSupported(uint64_t const& _requiredPermits)
     {
         return true;
     }
-    // has no permits, determine brust now
-    m_brustReqNum += _requiredPermits;
+
+    // should update m_futureBurstResetTime
+    if (now >= m_futureBurstResetTime)
+    {
+        m_burstReqNum = 0;
+        m_futureBurstResetTime += m_burstTimeInterval;
+    }
+    // has no permits, determine burst now
+    m_burstReqNum += _requiredPermits;
     bool reqAccepted = false;
-    if (m_brustReqNum < m_maxBrustReqNum && waitAvailableTime < m_futureBrustResetTime)
+    if (m_burstReqNum < m_maxBurstReqNum && waitAvailableTime < m_futureBurstResetTime)
     {
         reqAccepted = true;
-        updateCurrentStoredPermits(_requiredPermits);
     }
-    // without brust permits
+    // without burst permits
     else
     {
-        m_brustReqNum -= _requiredPermits;
-    }
-    // should update m_futureBrustResetTime
-    if (now >= m_futureBrustResetTime)
-    {
-        m_brustReqNum = 0;
-        m_futureBrustResetTime = m_burstTimeInterval + now;
+        m_burstReqNum -= _requiredPermits;
     }
     return reqAccepted;
 }
