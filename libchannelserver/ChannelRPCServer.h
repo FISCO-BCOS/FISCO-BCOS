@@ -32,6 +32,7 @@
 #include "libethcore/Common.h"
 #include "libp2p/P2PMessage.h"
 #include <jsonrpccpp/server/abstractserverconnector.h>
+#include <libflowlimit/RPCQPSLimiter.h>
 #include <libstat/ChannelNetworkStatHandler.h>
 #include <boost/asio/io_service.hpp>  // for io_service
 #include <atomic>                     // for atomic
@@ -165,6 +166,23 @@ public:
 
     dev::stat::ChannelNetworkStatHandler::Ptr networkStatHandler() { return m_networkStatHandler; }
 
+    void setQPSLimiter(dev::flowlimit::RPCQPSLimiter::Ptr _qpsLimiter)
+    {
+        m_qpsLimiter = _qpsLimiter;
+    }
+
+    dev::flowlimit::RPCQPSLimiter::Ptr qpsLimiter() { return m_qpsLimiter; }
+
+    void setNetworkBandwidthLimiter(dev::flowlimit::QPSLimiter::Ptr _networkBandwidthLimiter)
+    {
+        m_networkBandwidthLimiter = _networkBandwidthLimiter;
+    }
+
+    dev::flowlimit::QPSLimiter::Ptr networkBandwidthLimiter() const
+    {
+        return m_networkBandwidthLimiter;
+    }
+
 private:
     virtual void onClientRPCRequest(
         dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
@@ -226,6 +244,8 @@ private:
     std::vector<dev::eth::Handler<int64_t>> m_handlers;
 
     dev::stat::ChannelNetworkStatHandler::Ptr m_networkStatHandler;
+    dev::flowlimit::RPCQPSLimiter::Ptr m_qpsLimiter;
+    dev::flowlimit::QPSLimiter::Ptr m_networkBandwidthLimiter;
 };
 
 }  // namespace dev
