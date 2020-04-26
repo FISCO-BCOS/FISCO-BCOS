@@ -24,7 +24,7 @@
 #include <libconsensus/Common.h>
 #include <libdevcore/RLP.h>
 #include <libdevcrypto/Common.h>
-#include <libdevcrypto/Hash.h>
+#include <libdevcrypto/CryptoInterface.h>
 #include <libethcore/Block.h>
 #include <libethcore/Exceptions.h>
 
@@ -343,7 +343,7 @@ struct PBFTMsg
     {
         RLPStream ts;
         ts << height << view << idx << timestamp;
-        return dev::sha3(ts.out());
+        return crypto::Hash(ts.out());
     }
 
     /**

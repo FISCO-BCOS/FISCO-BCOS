@@ -109,8 +109,9 @@ private:
     BlockHeader fakeBlockHeader()
     {
         BlockHeader fakeHeader;
-        fakeHeader.setParentHash(sha3("parent"));
-        fakeHeader.setRoots(sha3("transactionRoot"), sha3("receiptRoot"), sha3("stateRoot"));
+        fakeHeader.setParentHash(crypto::Hash("parent"));
+        fakeHeader.setRoots(crypto::Hash("transactionRoot"), crypto::Hash("receiptRoot"),
+            crypto::Hash("stateRoot"));
         fakeHeader.setLogBloom(LogBloom(0));
         fakeHeader.setNumber(int64_t(0));
         fakeHeader.setGasLimit(u256(3000000000000000000));

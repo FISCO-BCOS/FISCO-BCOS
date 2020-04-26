@@ -21,7 +21,7 @@
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/RLP.h>
 #include <libdevcrypto/Common.h>
-#include <libdevcrypto/Hash.h>
+#include <libdevcrypto/CryptoInterface.h>
 #include <libethcore/Common.h>
 #include <boost/optional.hpp>
 

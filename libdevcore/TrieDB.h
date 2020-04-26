@@ -23,7 +23,7 @@
 
 #include "Exceptions.h"
 #include "TrieCommon.h"
-#include <libdevcrypto/Hash.h>
+#include "libdevcrypto/CryptoInterface.h"
 #include <memory>
 
 namespace dev
@@ -205,15 +205,15 @@ public:
         {
             if (_out)
                 (*_out) << std::string(_indent * 2, ' ') << (_wasExt ? "!2 " : "2  ")
-                        << sha3(_r.data()) << ": " << _r << "\n";
+                        << crypto::Hash(_r.data()) << ": " << _r << "\n";
             if (!isLeaf(_r))  // don't go down leaves
                 descendEntry(_r[1], _keyMask, true, _out, _indent + 1);
         }
         else if (_r.isList() && _r.itemCount() == 17)
         {
             if (_out)
-                (*_out) << std::string(_indent * 2, ' ') << "17 " << sha3(_r.data()) << ": " << _r
-                        << "\n";
+                (*_out) << std::string(_indent * 2, ' ') << "17 " << crypto::Hash(_r.data()) << ": "
+                        << _r << "\n";
             for (unsigned i = 0; i < 16; ++i)
                 if (!_r[i].isEmpty())  // 16 branches are allowed to be empty
                     descendEntry(_r[i], _keyMask, false, _out, _indent + 1);
@@ -313,7 +313,7 @@ private:
     // These are low-level node insertion functions that just go straight through into the DB.
     h256 forceInsertNode(bytesConstRef _v)
     {
-        auto h = sha3(_v);
+        auto h = crypto::Hash(_v);
         forceInsertNode(h, _v);
         return h;
     }
@@ -327,7 +327,7 @@ private:
     void killNode(RLP const& _d)
     {
         if (_d.data().size() >= 32)
-            forceKillNode(sha3(_d.data()));
+            forceKillNode(crypto::Hash(_d.data()));
     }
     void killNode(RLP const& _d, h256 const& _h)
     {
@@ -442,10 +442,13 @@ public:
     using Super::debugStructure;
     using Super::leftOvers;
 
-    std::string at(bytesConstRef _key) const { return Super::at(sha3(_key)); }
-    bool contains(bytesConstRef _key) const { return Super::contains(sha3(_key)); }
-    void insert(bytesConstRef _key, bytesConstRef _value) { Super::insert(sha3(_key), _value); }
-    void remove(bytesConstRef _key) { Super::remove(sha3(_key)); }
+    std::string at(bytesConstRef _key) const { return Super::at(crypto::Hash(_key)); }
+    bool contains(bytesConstRef _key) const { return Super::contains(crypto::Hash(_key)); }
+    void insert(bytesConstRef _key, bytesConstRef _value)
+    {
+        Super::insert(crypto::Hash(_key), _value);
+    }
+    void remove(bytesConstRef _key) { Super::remove(crypto::Hash(_key)); }
 
     // empty from the PoV of the iterator interface; still need a basic iterator impl though.
     class iterator
@@ -495,16 +498,16 @@ public:
     using Super::root;
     using Super::setRoot;
 
-    std::string at(bytesConstRef _key) const { return Super::at(sha3(_key)); }
-    bool contains(bytesConstRef _key) const { return Super::contains(sha3(_key)); }
+    std::string at(bytesConstRef _key) const { return Super::at(crypto::Hash(_key)); }
+    bool contains(bytesConstRef _key) const { return Super::contains(crypto::Hash(_key)); }
     void insert(bytesConstRef _key, bytesConstRef _value)
     {
-        h256 hash = sha3(_key);
+        h256 hash = crypto::Hash(_key);
         Super::insert(hash, _value);
         Super::db()->insertAux(hash, _key);
     }
 
-    void remove(bytesConstRef _key) { Super::remove(sha3(_key)); }
+    void remove(bytesConstRef _key) { Super::remove(crypto::Hash(_key)); }
 
     // iterates over <key, value> pairs
     class iterator : public GenericTrieDB<_DB>::iterator
@@ -892,7 +895,7 @@ std::string GenericTrieDB<DB>::atAux(RLP const& _here, NibbleSlice _key) const
 template <class DB>
 bytes GenericTrieDB<DB>::mergeAt(RLP const& _orig, NibbleSlice _k, bytesConstRef _v, bool _inLine)
 {
-    return mergeAt(_orig, sha3(_orig.data()), _k, _v, _inLine);
+    return mergeAt(_orig, crypto::Hash(_orig.data()), _k, _v, _inLine);
 }
 
 template <class DB>

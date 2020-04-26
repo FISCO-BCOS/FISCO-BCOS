@@ -568,7 +568,7 @@ BOOST_AUTO_TEST_CASE(hashedLowerBound)
     for (int i = 0; i < 10; ++i)
     {
         std::string key = toString(i);
-        hashToKey[sha3(key)] = key;
+        hashToKey[crypto::Hash(key)] = key;
     }
 
     // insert keys into trie

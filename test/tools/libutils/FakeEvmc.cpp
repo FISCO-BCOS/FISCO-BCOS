@@ -95,7 +95,7 @@ void getCodeHash(evmc_uint256be* o_result, evmc_context* _context, evmc_address 
 {
     (void)_context;
     bytes const& code = fakeState.accountCode(*_addr);
-    h256 codeHash = sha3(code);
+    h256 codeHash = crypto::Hash(code);
     *o_result = reinterpret_cast<evmc_uint256be const&>(codeHash);
 }
 
@@ -179,7 +179,7 @@ void getTxContext(evmc_tx_context* result, evmc_context*) noexcept
 void getBlockHash(evmc_uint256be* o_hash, evmc_context*, int64_t)
 {
     bytes const& fakeBlock = bytes();
-    h256 blockHash = sha3(fakeBlock);
+    h256 blockHash = crypto::Hash(fakeBlock);
     cout << "block hash: " << blockHash.hex() << endl;
     *o_hash = reinterpret_cast<evmc_uint256be const&>(FAKE_BLOCK_HASH);
 }
@@ -227,7 +227,7 @@ evmc_result FakeEvmc::execute(EVMSchedule const& schedule, bytes code, bytes dat
     auto mode = toRevision(schedule);
     evmc_call_kind kind = isCreate ? EVMC_CREATE : EVMC_CALL;
     uint32_t flags = isStaticCall ? EVMC_STATIC : 0;
-    h256 codeHash = sha3(code);
+    h256 codeHash = crypto::Hash(code);
     assert(flags != EVMC_STATIC || kind == EVMC_CALL);  // STATIC implies a CALL.
     evmc_message msg = {toEvmC(destination), toEvmC(caller), toEvmC(value), data.data(),
         data.size(), toEvmC(codeHash), toEvmC(0x0_cppui256), gas, depth, kind, flags};

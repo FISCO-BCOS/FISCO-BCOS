@@ -51,7 +51,7 @@ BOOST_FIXTURE_TEST_SUITE(RPBFTReqCacheTest, RPBFTReqCacheTestFixture)
 BOOST_AUTO_TEST_CASE(testCheckReceivedRawPrepareStatus)
 {
     RPBFTReqCache::Ptr rpbftReqCache = std::make_shared<RPBFTReqCache>();
-    dev::h256 blockHash = dev::sha3("test");
+    dev::h256 blockHash = crypto::Hash("test");
     int64_t blockHeight = 10;
     VIEWTYPE view = 10;
     IDXTYPE nodeIdx = 1;
@@ -87,7 +87,7 @@ BOOST_AUTO_TEST_CASE(testCheckReceivedRawPrepareStatus)
 BOOST_AUTO_TEST_CASE(testCheckAndRequestRawPrepare)
 {
     RPBFTReqCache::Ptr pbftReqCache = std::make_shared<RPBFTReqCache>();
-    dev::h256 hash = dev::sha3("test");
+    dev::h256 hash = crypto::Hash("test");
     int64_t blockNumber = 11;
     VIEWTYPE reqView = 12;
     IDXTYPE idx = 1;
@@ -96,17 +96,17 @@ BOOST_AUTO_TEST_CASE(testCheckAndRequestRawPrepare)
     BOOST_CHECK(pbftReqCache->checkAndRequestRawPrepare(pbftMsg) == true);
     BOOST_CHECK(pbftReqCache->checkAndRequestRawPrepare(pbftMsg) == false);
 
-    pbftMsg->block_hash = dev::sha3("test2");
+    pbftMsg->block_hash = crypto::Hash("test2");
     BOOST_CHECK(pbftReqCache->checkAndRequestRawPrepare(pbftMsg) == true);
     BOOST_CHECK(pbftReqCache->checkAndRequestRawPrepare(pbftMsg) == false);
 
     pbftReqCache->setMaxRequestedPrepareQueueSize(2);
-    pbftMsg->block_hash = dev::sha3("test3");
+    pbftMsg->block_hash = crypto::Hash("test3");
     BOOST_CHECK(pbftReqCache->checkAndRequestRawPrepare(pbftMsg) == true);
     BOOST_CHECK(pbftReqCache->checkAndRequestRawPrepare(pbftMsg) == false);
 
     // check pop
-    pbftMsg->block_hash = dev::sha3("test");
+    pbftMsg->block_hash = crypto::Hash("test");
     BOOST_CHECK(pbftReqCache->checkAndRequestRawPrepare(pbftMsg) == true);
     BOOST_CHECK(pbftReqCache->checkAndRequestRawPrepare(pbftMsg) == false);
 }
@@ -115,7 +115,7 @@ BOOST_AUTO_TEST_CASE(testResponseRawPrepare)
 {
     RPBFTReqCache::Ptr reqCache = std::make_shared<RPBFTReqCache>();
     // rawPrepareCache miss
-    dev::h256 blockHash = dev::sha3("test");
+    dev::h256 blockHash = crypto::Hash("test");
     int64_t blockHeight = 20;
     VIEWTYPE view = 15;
     IDXTYPE nodeIdx = 4;

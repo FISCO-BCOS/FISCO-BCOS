@@ -24,6 +24,7 @@
 #pragma once
 #include "FakePBFTEngine.h"
 #include "PBFTReqCache.h"
+#include "libdevcrypto/CryptoInterface.h"
 #include <libconsensus/pbft/PBFTEngine.h>
 #include <libdevcore/TopicInfo.h>
 #include <libethcore/Protocol.h>
@@ -161,7 +162,7 @@ static void FakeSignAndCommitCache(FakeConsensus<T>& fake_pbft, PrepareReq::Ptr 
         fake_pbft.consensus()->reqCache()->addPrepareReq(signReq);
     }
 
-    h256 invalid_hash = sha3("invalid" + toString(utcTime()));
+    h256 invalid_hash = crypto::Hash("invalid" + toString(utcTime()));
 
     /// fake SignReq
     if (type == 0 || type == 2)
@@ -399,7 +400,7 @@ static void testIsHashSavedAfterCommit(FakeConsensus<T>& fake_pbft, PrepareReq& 
         int64_t org_height = req.height;
         h256 org_hash = req.block_hash;
         req.height = fake_pbft.consensus()->reqCache()->committedPrepareCache().height;
-        req.block_hash = sha3("invalid");
+        req.block_hash = crypto::Hash("invalid");
         BOOST_CHECK(fake_pbft.consensus()->isValidPrepare(req) == CheckResult::INVALID);
         req.height = org_height;
         req.block_hash = org_hash;

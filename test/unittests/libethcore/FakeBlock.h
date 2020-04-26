@@ -135,8 +135,9 @@ public:
     /// fake block header
     void FakeBlockHeader(uint64_t blockNumber)
     {
-        m_blockHeader.setParentHash(sha3("parent"));
-        m_blockHeader.setRoots(sha3("transactionRoot"), sha3("receiptRoot"), sha3("stateRoot"));
+        m_blockHeader.setParentHash(crypto::Hash("parent"));
+        m_blockHeader.setRoots(crypto::Hash("transactionRoot"), crypto::Hash("receiptRoot"),
+            crypto::Hash("stateRoot"));
         m_blockHeader.setLogBloom(LogBloom(0));
         m_blockHeader.setNumber(blockNumber);
         m_blockHeader.setGasLimit(u256(3000000));

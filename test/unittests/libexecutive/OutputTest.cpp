@@ -16,6 +16,7 @@
  */
 
 #include "../libstorage/MemoryStorage.h"
+#include "libdevcrypto/CryptoInterface.h"
 #include "libstoragestate/StorageStateFactory.h"
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcore/CommonJS.h>
@@ -134,7 +135,7 @@ struct OutputFixture
         accountTable->insert(ACCOUNT_BALANCE, entry);
         entry = accountTable->newEntry();
         entry->setField(STORAGE_KEY, ACCOUNT_CODE_HASH);
-        entry->setField(STORAGE_VALUE, EmptySHA3.data(), EmptySHA3.size);
+        entry->setField(STORAGE_VALUE, EmptyHash.data(), EmptyHash.size);
         accountTable->insert(ACCOUNT_CODE_HASH, entry);
         entry = accountTable->newEntry();
         entry->setField(STORAGE_KEY, ACCOUNT_CODE);
@@ -192,8 +193,9 @@ struct OutputFixture
     BlockHeader fakeBlockHeader()
     {
         BlockHeader fakeHeader;
-        fakeHeader.setParentHash(sha3("parent"));
-        fakeHeader.setRoots(sha3("transactionRoot"), sha3("receiptRoot"), sha3("stateRoot"));
+        fakeHeader.setParentHash(crypto::Hash("parent"));
+        fakeHeader.setRoots(crypto::Hash("transactionRoot"), crypto::Hash("receiptRoot"),
+            crypto::Hash("stateRoot"));
         fakeHeader.setLogBloom(LogBloom(0));
         fakeHeader.setNumber(int64_t(0));
         fakeHeader.setGasLimit(u256(3000000000000000000));
@@ -295,7 +297,7 @@ BOOST_AUTO_TEST_CASE(call)
     // test frozen contract output
     auto entry = table->newEntry();
     entry->setField(STORAGE_KEY, ACCOUNT_CODE_HASH);
-    entry->setField(STORAGE_VALUE, EmptySHA3.data(), EmptySHA3.size);
+    entry->setField(STORAGE_VALUE, EmptyHash.data(), EmptyHash.size);
     table->update(ACCOUNT_CODE_HASH, entry, table->newCondition());
     executeTransaction(*executive, tx);
     output = abi.abiIn("Error(string)", string("Error address:" + contractAddress.hex()));

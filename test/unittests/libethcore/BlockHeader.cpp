@@ -21,6 +21,7 @@
  * @date 2018-08-24
  */
 
+#include "libdevcrypto/CryptoInterface.h"
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/TrieHash.h>
 #include <libdevcrypto/Common.h>
@@ -41,9 +42,9 @@ public:
     BlockHeaderFixture()
     {
         /// set interface
-        block_header_genesis.setParentHash(sha3("parent"));
-        block_header_genesis.setRoots(
-            sha3("transactionRoot"), sha3("receiptRoot"), sha3("stateRoot"));
+        block_header_genesis.setParentHash(crypto::Hash("parent"));
+        block_header_genesis.setRoots(crypto::Hash("transactionRoot"), crypto::Hash("receiptRoot"),
+            crypto::Hash("stateRoot"));
         block_header_genesis.setLogBloom(LogBloom(0));
         block_header_genesis.setNumber(int64_t(0));
         block_header_genesis.setGasLimit(u256(3000000));
@@ -109,11 +110,11 @@ BOOST_FIXTURE_TEST_SUITE(BlockHeaderTest, BlockHeaderFixture)
 BOOST_AUTO_TEST_CASE(testBlockerHeaderGetter)
 {
     /// get interfaces
-    BOOST_CHECK(block_header_genesis.parentHash() == sha3("parent"));
-    BOOST_CHECK(block_header_genesis.stateRoot() == sha3("stateRoot"));
-    BOOST_CHECK(block_header_genesis.stateRoot() != sha3("stateroot"));
-    BOOST_CHECK(block_header_genesis.transactionsRoot() == sha3("transactionRoot"));
-    BOOST_CHECK(block_header_genesis.receiptsRoot() == sha3("receiptRoot"));
+    BOOST_CHECK(block_header_genesis.parentHash() == crypto::Hash("parent"));
+    BOOST_CHECK(block_header_genesis.stateRoot() == crypto::Hash("stateRoot"));
+    BOOST_CHECK(block_header_genesis.stateRoot() != crypto::Hash("stateroot"));
+    BOOST_CHECK(block_header_genesis.transactionsRoot() == crypto::Hash("transactionRoot"));
+    BOOST_CHECK(block_header_genesis.receiptsRoot() == crypto::Hash("receiptRoot"));
     BOOST_CHECK(block_header_genesis.logBloom() == LogBloom(0));
     BOOST_CHECK(block_header_genesis.number() == 0);
     BOOST_CHECK(block_header_genesis.gasLimit() == u256(3000000));
@@ -238,7 +239,7 @@ BOOST_AUTO_TEST_CASE(testBlockHeaderVerify)
         InvalidNumber);
     /// test invalid parentHash
     block_header_child.setNumber(block_header_child.number() - 2);
-    block_header_child.setParentHash(sha3("+++"));
+    block_header_child.setParentHash(crypto::Hash("+++"));
     BOOST_CHECK_THROW(block_header_child.verify(
                           CheckEverything, block_header_genesis, ref(block_child_rlp.out())),
         InvalidParentHash);

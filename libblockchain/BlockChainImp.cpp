@@ -22,6 +22,7 @@
  */
 
 #include "BlockChainImp.h"
+#include "libdevcrypto/CryptoInterface.h"
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/CommonData.h>
 #include <libethcore/Block.h>
@@ -931,10 +932,10 @@ dev::bytes BlockChainImp::getHashNeed2Proof(uint32_t index, const dev::bytes& da
     s << index;
     bytes bytesHash;
     bytesHash.insert(bytesHash.end(), s.out().begin(), s.out().end());
-    dev::h256 dataHash = sha3(data);
+    dev::h256 dataHash = crypto::Hash(data);
     bytesHash.insert(bytesHash.end(), dataHash.begin(), dataHash.end());
 #if 0
-    dev::h256 hashWithIndex = sha3(bytesHash);
+    dev::h256 hashWithIndex = Hash(bytesHash);
     BLOCKCHAIN_LOG(DEBUG) << "transactionindex:" << index << " data:" << toHex(data)
                           << " bytesHash:" << toHex(bytesHash)
                           << " hashWithIndex:" << hashWithIndex.hex();

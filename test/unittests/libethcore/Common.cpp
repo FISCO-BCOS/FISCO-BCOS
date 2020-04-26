@@ -20,6 +20,7 @@
  * @date 2018
  */
 
+#include "libdevcrypto/CryptoInterface.h"
 #include <libdevcore/CommonJS.h>
 #include <libdevcore/TrieHash.h>
 #include <libdevcrypto/Common.h>
@@ -42,8 +43,9 @@ BOOST_FIXTURE_TEST_SUITE(Common, TestOutputHelperFixture)
 BOOST_AUTO_TEST_CASE(testBadBlock)
 {
     BlockHeader blockHeader;
-    blockHeader.setParentHash(sha3("parent"));
-    blockHeader.setRoots(sha3("transactionRoot"), sha3("receiptRoot"), sha3("stateRoot"));
+    blockHeader.setParentHash(crypto::Hash("parent"));
+    blockHeader.setRoots(
+        crypto::Hash("transactionRoot"), crypto::Hash("receiptRoot"), crypto::Hash("stateRoot"));
     blockHeader.setLogBloom(LogBloom(0));
     blockHeader.setNumber(0);
     blockHeader.setGasLimit(u256(3000000));

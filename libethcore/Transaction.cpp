@@ -171,7 +171,7 @@ Address const& Transaction::sender() const
         auto p = recover(*m_vrs, sha3(WithoutSignature));
         if (!p)
             BOOST_THROW_EXCEPTION(InvalidSignature());
-        m_sender = right160(dev::sha3(bytesConstRef(p.data(), sizeof(p))));
+        m_sender = right160(crypto::Hash(bytesConstRef(p.data(), sizeof(p))));
     }
     return m_sender;
 }
@@ -276,7 +276,7 @@ h256 Transaction::sha3(IncludeSignature _sig) const
     bytes s;
     encode(s, _sig);
 
-    auto ret = dev::sha3(s);
+    auto ret = crypto::Hash(s);
     if (_sig == WithSignature)
         m_hashWith = ret;
     return ret;
