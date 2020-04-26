@@ -927,6 +927,16 @@ node=\$(basename \${NODE_FOLDER})
 node_pid=${ps_cmd}
 if [ -n "\${node_pid}" ];then
     echo "\${node} is trying to load new groups. Check log for more information."
+    DATA_FOLDER=\${NODE_FOLDER}/data
+    for dir in \$(ls \${DATA_FOLDER})
+    do
+        if [[ -d "\${DATA_FOLDER}/\${dir}" ]] && [[ -n "\$(echo \${dir} | grep -E "^group\d+$")" ]]; then
+            STATUS_FILE=\${DATA_FOLDER}/\${dir}/.group_status
+            if [ ! -f "\${STATUS_FILE}" ]; then
+                echo "STOPPED" > \${STATUS_FILE}
+            fi
+        fi
+    done
     touch config.ini.append_group
     exit 0
 else 
