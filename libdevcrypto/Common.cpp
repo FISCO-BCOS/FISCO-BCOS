@@ -23,6 +23,7 @@
 
 #include "Common.h"
 #include "AES.h"
+#include "CryptoInterface.h"
 #include "Exceptions.h"
 #include <cryptopp/aes.h>
 #include <cryptopp/modes.h>
@@ -117,7 +118,7 @@ Public dev::toPublic(Secret const& _secret)
  */
 Address dev::toAddress(Public const& _public)
 {
-    return right160(sha3(_public.ref()));
+    return right160(crypto::Hash(_public.ref()));
 }
 
 Address dev::toAddress(Secret const& _secret)
@@ -136,7 +137,7 @@ Address dev::toAddress(Secret const& _secret)
  */
 Address dev::toAddress(Address const& _from, u256 const& _nonce)
 {
-    return right160(sha3(rlpList(_from, _nonce)));
+    return right160(crypto::Hash(rlpList(_from, _nonce)));
 }
 
 Public dev::recover(Signature const& _sig, h256 const& _message)
@@ -194,5 +195,5 @@ Secret Nonce::next()
             BOOST_THROW_EXCEPTION(InvalidState());
     }
     m_value = sha3Secure(m_value.ref());
-    return sha3(~m_value);
+    return crypto::Hash(~m_value);
 }

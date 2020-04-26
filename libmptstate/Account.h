@@ -24,7 +24,6 @@
 #include <libdevcore/Common.h>
 #include <libdevcore/RLP.h>
 #include <libdevcore/TrieDB.h>
-#include <libdevcrypto/Hash.h>
 #include <libethcore/Common.h>
 #include <boost/filesystem.hpp>
 
@@ -110,7 +109,7 @@ public:
     {
         m_isAlive = false;
         m_storageOverlay.clear();
-        m_codeHash = EmptySHA3;
+        m_codeHash = EmptyHash;
         m_storageRoot = EmptyTrie;
         m_balance = 0;
         m_nonce = 0;
@@ -129,7 +128,7 @@ public:
 
     /// @returns true if the nonce, balance and code is zero / empty. Code is considered empty
     /// during creation phase.
-    bool isEmpty() const { return nonce() == 0 && balance() == 0 && codeHash() == EmptySHA3; }
+    bool isEmpty() const { return nonce() == 0 && balance() == 0 && codeHash() == EmptyHash; }
 
     /// @returns the balance of this account.
     u256 const& balance() const { return m_balance; }
@@ -235,14 +234,14 @@ public:
     {
         m_codeCache.clear();
         m_hasNewCode = false;
-        m_codeHash = EmptySHA3;
+        m_codeHash = EmptyHash;
     }
 
     /// Specify to the object what the actual code is for the account. @a _code must have a SHA3
     /// equal to codeHash() and must only be called when isFreshCode() returns false.
     void noteCode(bytesConstRef _code)
     {
-        assert(sha3(_code) == m_codeHash);
+        assert(crypto::Hash(_code) == m_codeHash);
         m_codeCache = _code.toBytes();
     }
 
@@ -274,11 +273,11 @@ private:
     h256 m_storageRoot = EmptyTrie;
 
     /** If c_contractConceptionCodeHash then we're in the limbo where we're running the
-     * initialisation code. We expect a setCode() at some point later. If EmptySHA3, then m_code,
-     * which should be empty, is valid. If anything else, then m_code is valid iff it's not empty,
-     * otherwise, State::ensureCached() needs to be called with the correct args.
+     * initialisation code. We expect a setCode() at some point later. If EmptyHash, then
+     * m_code, which should be empty, is valid. If anything else, then m_code is valid iff it's not
+     * empty, otherwise, State::ensureCached() needs to be called with the correct args.
      */
-    h256 m_codeHash = EmptySHA3;
+    h256 m_codeHash = EmptyHash;
 
     /// The map with is overlaid onto whatever storage is implied by the m_storageRoot in the trie.
     std::unordered_map<u256, u256> m_storageOverlay;

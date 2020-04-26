@@ -37,6 +37,9 @@ include(GNUInstallDirs)
 
 	set(OPENSSL_INCLUDE_DIRS ${TASSL_INCLUDE_DIRS})
 	set(OPENSSL_LIBRARIES ${TASSL_LIBRARIES})
+	message(STATUS "libssl include  : ${TASSL_INCLUDE_DIRS}")
+	message(STATUS "libssl libraries: ${TASSL_LIBRARIES}")
+
 # endif()
 
 

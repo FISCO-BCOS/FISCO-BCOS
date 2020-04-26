@@ -56,7 +56,7 @@ public:
         for (unsigned i = 0; i < addressCount; ++i)
         {
             Address addr{i};
-            hashToAddress[sha3(addr)] = addr;
+            hashToAddress[crypto::Hash(addr)] = addr;
         }
 
         // create accounts in the state
@@ -127,7 +127,7 @@ BOOST_AUTO_TEST_CASE(addressesReturnsCreatedInCache)
     for (unsigned i = addressCount; i < addressCount + createCount; ++i)
     {
         Address addr{i};
-        newHashToAddress[sha3(addr)] = addr;
+        newHashToAddress[crypto::Hash(addr)] = addr;
     }
 
     // create accounts in the state

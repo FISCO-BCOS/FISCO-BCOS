@@ -22,6 +22,7 @@
  * @date: 2018-10-09
  */
 #include "Common.h"
+#include "libdevcrypto/CryptoInterface.h"
 #include <libdevcore/Assertions.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libethcore/FakeBlock.h>
@@ -34,7 +35,7 @@ template <typename T>
 void checkSignAndCommitReq()
 {
     KeyPair key_pair = KeyPair::create();
-    h256 block_hash = sha3("key_pair");
+    h256 block_hash = crypto::Hash("key_pair");
     PrepareReq prepare_req(key_pair, 1000, 1, 134, block_hash);
     KeyPair key_pair2 = KeyPair::create();
     T checked_req(prepare_req, key_pair2, prepare_req.idx);
@@ -74,7 +75,7 @@ BOOST_AUTO_TEST_CASE(testPBFTMsg)
     checkPBFTMsg(pbft_msg);
 
     /// test encode
-    h256 block_hash = sha3("block_hash");
+    h256 block_hash = crypto::Hash("block_hash");
     KeyPair key_pair = KeyPair::create();
     PBFTMsg faked_pbft_msg(key_pair, 1000, 1, 134, block_hash);
     checkPBFTMsg(faked_pbft_msg, key_pair, 1000, 1, 134, faked_pbft_msg.timestamp, block_hash);
@@ -100,7 +101,7 @@ BOOST_AUTO_TEST_CASE(testPBFTMsg)
 BOOST_AUTO_TEST_CASE(testPrepareReq)
 {
     KeyPair key_pair = KeyPair::create();
-    h256 block_hash = sha3("key_pair");
+    h256 block_hash = crypto::Hash("key_pair");
     PrepareReq prepare_req(key_pair, 1000, 1, 134, block_hash);
     checkPBFTMsg(prepare_req, key_pair, 1000, 1, 134, prepare_req.timestamp, block_hash);
     FakeBlock fake_block(5);
@@ -168,9 +169,9 @@ BOOST_AUTO_TEST_CASE(testViewChange)
     ViewChangeReq empty_view;
     checkPBFTMsg(empty_view);
     KeyPair key_pair = KeyPair::create();
-    ViewChangeReq viewChange_req(key_pair, 100, 1000, 1, sha3("test_view"));
-    checkPBFTMsg(
-        viewChange_req, key_pair, 100, 1000, 1, viewChange_req.timestamp, sha3("test_view"));
+    ViewChangeReq viewChange_req(key_pair, 100, 1000, 1, crypto::Hash("test_view"));
+    checkPBFTMsg(viewChange_req, key_pair, 100, 1000, 1, viewChange_req.timestamp,
+        crypto::Hash("test_view"));
     bytes req_data;
     BOOST_REQUIRE_NO_THROW(viewChange_req.encode(req_data));
     ViewChangeReq tmp_req;
@@ -185,7 +186,7 @@ BOOST_AUTO_TEST_CASE(testViewChange)
 BOOST_AUTO_TEST_CASE(testPBFTMsgPacket)
 {
     KeyPair key_pair = KeyPair::create();
-    h256 block_hash = sha3("key_pair");
+    h256 block_hash = crypto::Hash("key_pair");
     PrepareReq prepare_req(key_pair, 1000, 1, 134, block_hash);
     bytes prepare_data;
     prepare_req.encode(prepare_data);

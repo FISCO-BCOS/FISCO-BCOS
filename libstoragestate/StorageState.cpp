@@ -24,7 +24,7 @@
 
 #include "StorageState.h"
 #include "libconfig/GlobalConfigure.h"
-#include "libdevcrypto/Hash.h"
+#include "libdevcrypto/CryptoInterface.h"
 #include "libethcore/Exceptions.h"
 #include "libstorage/Table.h"
 
@@ -50,7 +50,7 @@ bool StorageState::accountNonemptyAndExisting(Address const& _address) const
     auto table = getTable(_address);
     if (table)
     {
-        if (balance(_address) > u256(0) || codeHash(_address) != EmptySHA3 ||
+        if (balance(_address) > u256(0) || codeHash(_address) != EmptyHash ||
             getNonce(_address) != m_accountStartNonce)
             return true;
     }
@@ -68,12 +68,12 @@ bool StorageState::addressHasCode(Address const& _address) const
             if (g_BCOSConfig.version() >= V2_5_0)
             {
                 auto codeHash = h256(entries->get(0)->getFieldBytes(STORAGE_VALUE));
-                return codeHash != EmptySHA3;
+                return codeHash != EmptyHash;
             }
             else
             {
                 auto codeHash = h256(fromHex(entries->get(0)->getField(STORAGE_VALUE)));
-                return codeHash != EmptySHA3;
+                return codeHash != EmptyHash;
             }
         }
     }
@@ -245,12 +245,12 @@ void StorageState::setCode(Address const& _address, bytes&& _code)
         entry = table->newEntry();
         if (g_BCOSConfig.version() >= V2_5_0)
         {
-            auto codeHash = sha3(_code);
+            auto codeHash = crypto::Hash(_code);
             entry->setField(STORAGE_VALUE, codeHash.data(), codeHash.size);
         }
         else
         {
-            entry->setField(STORAGE_VALUE, toHex(sha3(_code)));
+            entry->setField(STORAGE_VALUE, toHex(crypto::Hash(_code)));
         }
         table->update(ACCOUNT_CODE_HASH, entry, table->newCondition(), option);
     }
@@ -277,7 +277,7 @@ void StorageState::kill(Address _address)
             table->update(ACCOUNT_CODE, entry, table->newCondition(), option);
 
             entry = table->newEntry();
-            entry->setField(STORAGE_VALUE, EmptySHA3.data(), EmptySHA3.size);
+            entry->setField(STORAGE_VALUE, EmptyHash.data(), EmptyHash.size);
             table->update(ACCOUNT_CODE_HASH, entry, table->newCondition(), option);
         }
         else
@@ -287,7 +287,7 @@ void StorageState::kill(Address _address)
             table->update(ACCOUNT_CODE, entry, table->newCondition(), option);
 
             entry = table->newEntry();
-            entry->setField(STORAGE_VALUE, toHex(EmptySHA3));
+            entry->setField(STORAGE_VALUE, toHex(EmptyHash));
             table->update(ACCOUNT_CODE_HASH, entry, table->newCondition(), option);
         }
 
@@ -300,7 +300,7 @@ void StorageState::kill(Address _address)
 
 bytes const StorageState::code(Address const& _address) const
 {
-    if (codeHash(_address) == EmptySHA3)
+    if (codeHash(_address) == EmptyHash)
         return NullBytes;
     auto table = getTable(_address);
     if (table)
@@ -332,7 +332,7 @@ h256 StorageState::codeHash(Address const& _address) const
             return h256(fromHex(entries->get(0)->getField(STORAGE_VALUE)));
         }
     }
-    return EmptySHA3;
+    return EmptyHash;
 }
 
 bool StorageState::frozen(Address const& _contract) const
@@ -506,7 +506,7 @@ void StorageState::createAccount(Address const& _address, u256 const& _nonce, u2
     {
         entry = table->newEntry();
         entry->setField(STORAGE_KEY, ACCOUNT_CODE_HASH);
-        entry->setField(STORAGE_VALUE, EmptySHA3.data(), EmptySHA3.size);
+        entry->setField(STORAGE_VALUE, EmptyHash.data(), EmptyHash.size);
         table->insert(ACCOUNT_CODE_HASH, entry);
 
         entry = table->newEntry();
@@ -518,7 +518,7 @@ void StorageState::createAccount(Address const& _address, u256 const& _nonce, u2
     {
         entry = table->newEntry();
         entry->setField(STORAGE_KEY, ACCOUNT_CODE_HASH);
-        entry->setField(STORAGE_VALUE, toHex(EmptySHA3));
+        entry->setField(STORAGE_VALUE, toHex(EmptyHash));
         table->insert(ACCOUNT_CODE_HASH, entry);
 
         entry = table->newEntry();

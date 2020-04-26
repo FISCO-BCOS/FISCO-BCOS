@@ -22,6 +22,7 @@
 #pragma once
 
 
+#include "libdevcrypto/CryptoInterface.h"
 #include <libdevcore/Address.h>
 #include <libdevcore/CommonIO.h>
 #include <libdevcore/RLP.h>
@@ -77,7 +78,7 @@ public:
     {
         if (m_sha3 == bytes())
         {
-            m_sha3 = dev::sha3(receipt()).asBytes();
+            m_sha3 = crypto::Hash(receipt()).asBytes();
         }
         return m_sha3;
     }

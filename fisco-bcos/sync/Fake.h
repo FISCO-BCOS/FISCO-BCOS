@@ -141,8 +141,8 @@ private:
     {
         BlockHeaderPtr blockHeader = std::make_shared<dev::eth::BlockHeader>();
         blockHeader->setParentHash(_parentHash);
-        blockHeader->setRoots(
-            dev::sha3("transactionRoot"), dev::sha3("receiptRoot"), dev::sha3("stateRoot"));
+        blockHeader->setRoots(dev::crypto::Hash("transactionRoot"),
+            dev::crypto::Hash("receiptRoot"), dev::crypto::Hash("stateRoot"));
         blockHeader->setLogBloom(dev::eth::LogBloom(0));
         blockHeader->setNumber(_currentNumner);
         blockHeader->setGasLimit(dev::u256(3000000));
@@ -169,7 +169,7 @@ private:
         auto keyPair = dev::KeyPair::create();
         for (size_t i = 0; i < _size; i++)
         {
-            block_hash = dev::sha3("block " + std::to_string(i));
+            block_hash = dev::crypto::Hash("block " + std::to_string(i));
             sig = dev::sign(keyPair, block_hash);
             retList->push_back(std::make_pair(dev::u256(block_hash), sig));
         }

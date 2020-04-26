@@ -21,7 +21,7 @@
  * @date 2018-09-04
  */
 
-#include "libdevcrypto/Hash.h"
+#include "libdevcrypto/CryptoInterface.h"
 #include <evmc/evmc.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcrypto/Common.h>
@@ -624,8 +624,8 @@ BOOST_AUTO_TEST_CASE(contextTest)
         "6bfd050029"));
     bytes data = fromHex("jimmyshi");
     Address destination{KeyPair::create().address()};
-    Address caller = right160(
-        sha3(fromHex("ff") + destination.asBytes() + toBigEndian(0x123_cppui256) + sha3(data)));
+    Address caller = right160(crypto::Hash(
+        fromHex("ff") + destination.asBytes() + toBigEndian(0x123_cppui256) + crypto::Hash(data)));
     u256 value = 1024;
     int64_t gas = 1000000;
     int32_t depth = 0;
@@ -929,7 +929,7 @@ BOOST_AUTO_TEST_CASE(callTest)
         function Base() {
             Son _s = new Son();
             s = _s;
-            s.call(bytes4(sha3("set(uint256)")), 456);
+            s.call(bytes4(crypto::Hash("set(uint256)")), 456);
         }
     }
     contract Son {

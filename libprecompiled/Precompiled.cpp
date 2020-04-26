@@ -23,7 +23,7 @@
 #include "Common.h"
 #include "libstorage/Table.h"
 #include <libblockverifier/ExecutiveContext.h>
-#include <libdevcrypto/Hash.h>
+#include <libdevcrypto/CryptoInterface.h>
 #include <libprecompiled/TableFactoryPrecompiled.h>
 #include <libstorage/MemoryTableFactory.h>
 
@@ -33,7 +33,7 @@ using namespace dev::blockverifier;
 
 uint32_t Precompiled::getFuncSelector(std::string const& _functionName)
 {
-    uint32_t func = *(uint32_t*)(sha3(_functionName).ref().cropped(0, 4).data());
+    uint32_t func = *(uint32_t*)(crypto::Hash(_functionName).ref().cropped(0, 4).data());
     return ((func & 0x000000FF) << 24) | ((func & 0x0000FF00) << 8) | ((func & 0x00FF0000) >> 8) |
            ((func & 0xFF000000) >> 24);
 }

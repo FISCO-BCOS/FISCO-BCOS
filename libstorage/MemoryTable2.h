@@ -25,7 +25,7 @@
 #include <json/json.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Guards.h>
-#include <libdevcrypto/Hash.h>
+#include <libdevcrypto/CryptoInterface.h>
 #include <libprecompiled/Common.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <boost/exception/diagnostic_information.hpp>

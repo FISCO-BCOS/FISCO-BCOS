@@ -46,7 +46,7 @@ BlockHeader::BlockHeader() {}
 BlockHeader::BlockHeader(bytesConstRef _block, BlockDataType _bdt, h256 const& _hashWith)
 {
     RLP header = _bdt == BlockData ? extractHeader(_block) : RLP(_block);
-    m_hash = _hashWith ? _hashWith : sha3(header.data());
+    m_hash = _hashWith ? _hashWith : crypto::Hash(header.data());
     populate(header);
 }
 
@@ -131,7 +131,7 @@ h256 BlockHeader::hash() const
     {
         bytes header;
         encode(header);
-        m_hash = sha3(header);
+        m_hash = crypto::Hash(header);
     }
     return m_hash;
 }
@@ -166,7 +166,7 @@ void BlockHeader::decode(bytesConstRef& _header_data)
 h256 BlockHeader::headerHashFromBlock(bytesConstRef _block)
 {
     // TODO: exception unit test
-    return sha3(RLP(_block)[0].data());
+    return crypto::Hash(RLP(_block)[0].data());
 }
 
 /**

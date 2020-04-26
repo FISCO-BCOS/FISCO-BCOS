@@ -125,7 +125,7 @@ BOOST_AUTO_TEST_CASE(testFetchMissedTxsAndFillBlock)
 
     // case2: the leader has already modified the rawPrepareReq
     PrepareReq::Ptr updatedPrepareReq = std::make_shared<PrepareReq>();
-    updatedPrepareReq->block_hash = dev::sha3("update");
+    updatedPrepareReq->block_hash = crypto::Hash("update");
     leaderReqCache->addRawPrepare(updatedPrepareReq);
     BOOST_CHECK(leaderReqCache->fetchMissedTxs(encodedTxsBytes, ref(*encodedMissTxsInfo)) == false);
 

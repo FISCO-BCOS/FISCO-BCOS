@@ -41,7 +41,7 @@ h256 getHash256(const std::vector<dev::bytes>& _bytesCaches)
 {
     if (_bytesCaches.empty())
     {
-        return dev::sha3(bytes());
+        return crypto::Hash(bytes());
     }
     std::vector<dev::bytes> bytesCachesTemp;
     bytesCachesTemp.insert(bytesCachesTemp.end(),
@@ -67,12 +67,12 @@ h256 getHash256(const std::vector<dev::bytes>& _bytesCaches)
                                 bytesCachesTemp[index].end());
                         }
                     }
-                    higherLevelList[i] = dev::sha3(byteValue).asBytes();
+                    higherLevelList[i] = crypto::Hash(byteValue).asBytes();
                 }
             });
         bytesCachesTemp = std::move(higherLevelList);
     }
-    return dev::sha3(bytesCachesTemp[0]);
+    return crypto::Hash(bytesCachesTemp[0]);
 }
 
 void getMerkleProof(const std::vector<dev::bytes>& _bytesCaches,
@@ -108,7 +108,7 @@ void getMerkleProof(const std::vector<dev::bytes>& _bytesCaches,
                             childList.push_back(bytesCachesTemp[index]);
                         }
                     }
-                    higherLevelList[i] = dev::sha3(byteValue).asBytes();
+                    higherLevelList[i] = crypto::Hash(byteValue).asBytes();
                     std::lock_guard<std::mutex> l(mapMutex);
                     std::string parentNode = toHex(higherLevelList[i]);
                     for (const auto& child : childList)
@@ -120,7 +120,7 @@ void getMerkleProof(const std::vector<dev::bytes>& _bytesCaches,
         bytesCachesTemp = std::move(higherLevelList);
     }
 
-    (*_parent2ChildList)[toHex(dev::sha3(bytesCachesTemp[0]).asBytes())].push_back(
+    (*_parent2ChildList)[toHex(crypto::Hash(bytesCachesTemp[0]).asBytes())].push_back(
         toHex(bytesCachesTemp[0]));
 }
 

@@ -1,6 +1,6 @@
 #include "libdevcore/CommonData.h"
 #include "libdevcore/FixedHash.h"
-#include "libdevcrypto/Hash.h"
+#include "libdevcrypto/CryptoInterface.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,7 +13,10 @@ using namespace dev;
 int main(int, char** argv)
 {
     auto source = dev::fromHex(argv[1]);
-    auto addr = right160(dev::sha3(bytesConstRef((const unsigned char*)source.data(), 64)));
+#ifdef FISCO_GM
+    crypto::initSMCtypro();
+#endif
+    auto addr = right160(crypto::Hash(bytesConstRef((const unsigned char*)source.data(), 64)));
     cout << addr << endl;
     return 0;
 }

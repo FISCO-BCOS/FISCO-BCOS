@@ -358,15 +358,15 @@ bool Executive::createOpcode(Address const& _sender, u256 const& _endowment, u25
     u256 const& _gas, bytesConstRef _init, Address const& _origin)
 {
     u256 nonce = m_s->getNonce(_sender);
-    m_newAddress = right160(sha3(rlpList(_sender, nonce)));
+    m_newAddress = right160(crypto::Hash(rlpList(_sender, nonce)));
     return executeCreate(_sender, _endowment, _gasPrice, _gas, _init, _origin);
 }
 
 bool Executive::create2Opcode(Address const& _sender, u256 const& _endowment, u256 const& _gasPrice,
     u256 const& _gas, bytesConstRef _init, Address const& _origin, u256 const& _salt)
 {
-    m_newAddress =
-        right160(sha3(bytes{0xff} + _sender.asBytes() + toBigEndian(_salt) + sha3(_init)));
+    m_newAddress = right160(
+        crypto::Hash(bytes{0xff} + _sender.asBytes() + toBigEndian(_salt) + crypto::Hash(_init)));
     return executeCreate(_sender, _endowment, _gasPrice, _gas, _init, _origin);
 }
 
@@ -428,7 +428,7 @@ bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u2
     if (!_init.empty())
     {
         m_ext = make_shared<ExtVM>(m_s, m_envInfo, m_newAddress, _sender, _origin, _endowment,
-            _gasPrice, bytesConstRef(), _init, sha3(_init), m_depth, true, false);
+            _gasPrice, bytesConstRef(), _init, crypto::Hash(_init), m_depth, true, false);
         m_ext->setEvmFlags(m_evmFlags);
     }
     return !m_ext;

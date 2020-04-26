@@ -19,7 +19,7 @@
  *  @date 20190106
  */
 #include "ContractLifeCyclePrecompiled.h"
-
+#include "libdevcrypto/CryptoInterface.h"
 #include "libprecompiled/EntriesPrecompiled.h"
 #include "libprecompiled/TableFactoryPrecompiled.h"
 #include "libstoragestate/StorageState.h"
@@ -126,7 +126,7 @@ ContractStatus ContractLifeCyclePrecompiled::getContractStatus(
         codeHash = h256(fromHex(codeHashEntries->get(0)->getField(storagestate::STORAGE_VALUE)));
     }
 
-    if (EmptySHA3 == codeHash)
+    if (EmptyHash == codeHash)
     {
         return ContractStatus::NotContractAddress;
     }
