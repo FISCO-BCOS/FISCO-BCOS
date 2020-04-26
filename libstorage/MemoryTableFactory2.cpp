@@ -25,7 +25,7 @@
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/FixedHash.h>
-#include <libdevcrypto/Hash.h>
+#include <libdevcrypto/CryptoInterface.h>
 #include <tbb/concurrent_vector.h>
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_sort.h>
@@ -242,7 +242,18 @@ h256 MemoryTableFactory2::hash()
     {
         return h256();
     }
-    m_hash = dev::sha256(&data);
+    if (g_BCOSConfig.version() <= V2_4_0)
+    {
+#ifdef FISCO_GM
+        m_hash = dev::sm3(&data);
+#else
+        m_hash = dev::sha256(&data);
+#endif
+    }
+    else
+    {
+        m_hash = crypto::Hash(&data);
+    }
     return m_hash;
 }
 

@@ -23,7 +23,7 @@
 #include "LogEntry.h"
 
 #include <libdevcore/RLP.h>
-#include <libdevcrypto/Hash.h>
+#include <libdevcrypto/CryptoInterface.h>
 
 namespace dev
 {
@@ -45,9 +45,9 @@ void LogEntry::streamRLP(RLPStream& _s) const
 LogBloom LogEntry::bloom() const
 {
     LogBloom ret;
-    ret.shiftBloom<3>(sha3(address.ref()));
+    ret.shiftBloom<3>(crypto::Hash(address.ref()));
     for (auto t : topics)
-        ret.shiftBloom<3>(sha3(t.ref()));
+        ret.shiftBloom<3>(crypto::Hash(t.ref()));
     return ret;
 }
 

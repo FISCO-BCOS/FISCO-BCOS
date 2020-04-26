@@ -110,8 +110,8 @@ public:
     virtual bytes const code(Address const& _addr) const = 0;
 
     /// Get the code hash of an account.
-    /// @returns EmptySHA3 if no account exists at that address or if there is no code associated
-    /// with the address.
+    /// @returns EmptyHash if no account exists at that address or if there is no code
+    /// associated with the address.
     virtual h256 codeHash(Address const& _contract) const = 0;
 
     /// Get the frozen status of an account.

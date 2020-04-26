@@ -23,10 +23,10 @@
 
 #pragma once
 
+#include "libdevcrypto/CryptoInterface.h"
 #include <libdevcore/Address.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonData.h>
-#include <libdevcrypto/Hash.h>
 #include <boost/algorithm/string.hpp>
 
 namespace dev
@@ -383,7 +383,7 @@ public:
         abiInAux(_t...);
 
         return _sig.empty() ? fixed + dynamic :
-                              sha3(_sig).ref().cropped(0, 4).toBytes() + fixed + dynamic;
+                              crypto::Hash(_sig).ref().cropped(0, 4).toBytes() + fixed + dynamic;
     }
 
     template <class... T>

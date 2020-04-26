@@ -22,7 +22,7 @@
 #include "libdevcrypto/AES.h"
 #include "libdevcrypto/Common.h"
 #include "libdevcrypto/Exceptions.h"
-#include "libdevcrypto/Hash.h"
+#include "libdevcrypto/SM3Hash.h"
 #include "libdevcrypto/sm2/sm2.h"
 #include <cryptopp/modes.h>
 #include <cryptopp/pwdbased.h>
@@ -50,7 +50,7 @@ pair<bool, bytes> SignatureStruct::ecRecoverDeprecated(bytesConstRef _in)
         {
             if (Public rec = recover(sig, in.hash))
             {
-                h256 ret = dev::sha3(rec);
+                h256 ret = sm3(rec);
                 memset(ret.data(), 0, 12);
                 return {true, ret.asBytes()};
             }
@@ -107,13 +107,13 @@ Public dev::toPublic(Secret const& _secret)
 
 /**
  * @brief obtain address from public key
- *        by adding the last 20Bytes of sha3(public key)
+ *        by adding the last 20Bytes of sm3(public key)
  * @param _public : the public key need to convert to address
  * @return Address : the converted address
  */
 Address dev::toAddress(Public const& _public)
 {
-    return right160(sha3(_public.ref()));
+    return right160(sm3(_public.ref()));
 }
 
 Address dev::toAddress(Secret const& _secret)
@@ -123,8 +123,8 @@ Address dev::toAddress(Secret const& _secret)
 
 /**
  * @brief : 1.serialize (_from address, nonce) into rlpStream
- *          2.calculate the sha3 of serialized (_from, nonce)
- *          3.obtaining the last 20Bytes of the sha3 as address
+ *          2.calculate the sm3 of serialized (_from, nonce)
+ *          3.obtaining the last 20Bytes of the sm3 as address
  *          (mainly used for contract address generating)
  * @param _from : address that sending this transaction
  * @param _nonce : random number
@@ -132,7 +132,7 @@ Address dev::toAddress(Secret const& _secret)
  */
 Address dev::toAddress(Address const& _from, u256 const& _nonce)
 {
-    return right160(sha3(rlpList(_from, _nonce)));
+    return right160(sm3(rlpList(_from, _nonce)));
 }
 
 Public dev::recover(Signature const& _sig, h256 const& _message)
@@ -182,8 +182,8 @@ Secret Nonce::next()
         if (!m_value)
             BOOST_THROW_EXCEPTION(InvalidState());
     }
-    m_value = sha3Secure(m_value.ref());
-    return sha3(~m_value);
+    m_value = sm3Secure(m_value.ref());
+    return sm3(~m_value);
 }
 
 bool dev::verify(Public const& _p, Signature const& _s, h256 const& _hash)

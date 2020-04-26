@@ -20,6 +20,7 @@
  * @author:
  * @date 2018-09-21
  */
+#include "libdevcrypto/CryptoInterface.h"
 #include <libblockchain/BlockChainImp.h>
 #include <libblockverifier/ExecutiveContext.h>
 #include <libconfig/GlobalConfigure.h>
@@ -245,8 +246,9 @@ BOOST_AUTO_TEST_CASE(emptyChain)
     BOOST_CHECK_EQUAL(
         *(empty.m_blockChainImp->getTxByHash(h256(c_commonHashPrefix))), Transaction());
     BOOST_CHECK_EQUAL(
-        sha3(empty.m_blockChainImp->getTransactionReceiptByHash(h256(c_commonHashPrefix))->rlp()),
-        sha3(TransactionReceipt().rlp()));
+        crypto::Hash(
+            empty.m_blockChainImp->getTransactionReceiptByHash(h256(c_commonHashPrefix))->rlp()),
+        crypto::Hash(TransactionReceipt().rlp()));
     BOOST_CHECK_EQUAL(
         empty.m_blockChainImp->getLocalisedTxReceiptByHash(h256(c_commonHashPrefix))->hash(),
         h256(0));
@@ -297,7 +299,8 @@ BOOST_AUTO_TEST_CASE(getTransactionReceiptByHash)
 {
     auto txReceipt = m_blockChainImp->getTransactionReceiptByHash(h256(c_commonHashPrefix));
 
-    BOOST_CHECK_EQUAL(sha3(txReceipt->rlp()), sha3((*m_fakeBlock->m_transactionReceipt)[0]->rlp()));
+    BOOST_CHECK_EQUAL(crypto::Hash(txReceipt->rlp()),
+        crypto::Hash((*m_fakeBlock->m_transactionReceipt)[0]->rlp()));
 }
 
 BOOST_AUTO_TEST_CASE(getLocalisedTxReceiptByHash)

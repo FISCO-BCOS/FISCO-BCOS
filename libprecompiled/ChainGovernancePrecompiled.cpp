@@ -19,6 +19,7 @@
  *  @date 20190324
  */
 #include "ChainGovernancePrecompiled.h"
+#include "libdevcrypto/CryptoInterface.h"
 #include "libstorage/Table.h"
 #include "libstoragestate/StorageState.h"
 #include <json/json.h>
@@ -683,7 +684,7 @@ AccountStatus ChainGovernancePrecompiled::getAccountStatus(
     }
 
     auto codeHashEntries = table->select(storagestate::ACCOUNT_CODE_HASH, table->newCondition());
-    if (EmptySHA3 != h256(codeHashEntries->get(0)->getFieldBytes(storagestate::STORAGE_VALUE)))
+    if (EmptyHash != h256(codeHashEntries->get(0)->getFieldBytes(storagestate::STORAGE_VALUE)))
     {
         return AccountStatus::InvalidAccountAddress;
     }

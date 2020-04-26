@@ -193,7 +193,7 @@ void TestIsValidViewChange(FakeConsensus<FakePBFTEngine>& fake_pbft, ViewChangeR
 
     /// case 4: check block hash
     dev::h256 orgHash = req->block_hash;
-    req->block_hash = dev::sha3("fake");
+    req->block_hash = crypto::Hash("fake");
     BOOST_CHECK(fake_pbft.consensus()->isValidViewChangeReq(*req, nodeIdxSource) == false);
     req->block_hash = orgHash;
     BOOST_CHECK(fake_pbft.consensus()->isValidViewChangeReq(*req, nodeIdxSource) == true);

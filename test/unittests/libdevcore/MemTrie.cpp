@@ -16,8 +16,7 @@
 */
 
 #include "MemTrie.h"
-
-#include "libdevcrypto/Hash.h"
+#include "libdevcrypto/CryptoInterface.h"
 #include <libdevcore/TrieCommon.h>
 
 namespace dev
@@ -38,7 +37,7 @@ public:
     {
         RLPStream s;
         makeRLP(s);
-        return dev::sha3(s.out());
+        return crypto::Hash(s.out());
     }
     bytes rlp() const
     {
@@ -166,7 +165,7 @@ void MemTrieNode::putRLP(RLPStream& _parentStream) const
     if (s.out().size() < 32)
         _parentStream.appendRaw(s.out());
     else
-        _parentStream << dev::sha3(s.out());
+        _parentStream << crypto::Hash(s.out());
 }
 
 void TrieBranchNode::makeRLP(RLPStream& _intoStream) const
@@ -406,7 +405,7 @@ MemTrie::~MemTrie()
 
 h256 MemTrie::hash256() const
 {
-    return m_root ? m_root->hash256() : sha3(dev::rlp(bytesConstRef()));
+    return m_root ? m_root->hash256() : crypto::Hash(dev::rlp(bytesConstRef()));
 }
 
 bytes MemTrie::rlp() const

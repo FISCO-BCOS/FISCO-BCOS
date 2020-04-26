@@ -22,9 +22,17 @@
 
 #include "CryptoInterface.h"
 #include "AES.h"
+#include "Hash.h"
+#include "SM3Hash.h"
 #include "SM4Crypto.h"
+#include "libdevcore/RLP.h"
 
 using namespace std;
+using namespace dev;
+
+h256 dev::EmptyHash = sha3(bytesConstRef());
+h256 dev::EmptyTrie = sha3(rlp(""));
+static bool SMCrypto = false;
 
 std::function<std::string(const unsigned char* _plainData, size_t _plainDataSize,
     const unsigned char* _key, size_t _keySize, const unsigned char* _ivData)>
@@ -35,10 +43,18 @@ std::function<std::string(const unsigned char* _encryptedData, size_t _encrypted
     dev::crypto::SymmetricDecrypt = static_cast<std::string (*)(const unsigned char*, size_t,
         const unsigned char*, size_t, const unsigned char*)>(dev::aesCBCDecrypt);
 
+bool dev::crypto::isSMCrypto()
+{
+    return SMCrypto;
+}
+
 void dev::crypto::initSMCtypro()
 {
+    EmptyHash = sm3(bytesConstRef());
+    EmptyTrie = sm3(rlp(""));
     dev::crypto::SymmetricEncrypt = static_cast<std::string (*)(const unsigned char*, size_t,
         const unsigned char*, size_t, const unsigned char*)>(dev::SM4Encrypt);
     dev::crypto::SymmetricDecrypt = static_cast<std::string (*)(const unsigned char*, size_t,
         const unsigned char*, size_t, const unsigned char*)>(dev::SM4Decrypt);
+    SMCrypto = true;
 }

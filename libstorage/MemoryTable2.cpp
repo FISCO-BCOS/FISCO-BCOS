@@ -26,7 +26,7 @@
 #include <json/json.h>
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcore/FixedHash.h>
-#include <libdevcrypto/Hash.h>
+#include <libdevcrypto/CryptoInterface.h>
 #include <libprecompiled/Common.h>
 #include <tbb/parallel_sort.h>
 #include <boost/exception/diagnostic_information.hpp>
@@ -421,7 +421,12 @@ dev::storage::TableData::Ptr MemoryTable2::dumpWithoutOptimize()
         }
 
         bytesConstRef bR(allData.data(), allData.size());
+
+#ifdef FISCO_GM
+        m_hash = dev::sm3(bR);
+#else
         m_hash = dev::sha256(bR);
+#endif
         m_isDirty = false;
     }
 
@@ -519,7 +524,18 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
             }
 
             bytesConstRef bR(allData.data(), allData.size());
-            m_hash = dev::sha256(bR);
+            if (g_BCOSConfig.version() <= V2_4_0)
+            {
+#ifdef FISCO_GM
+                m_hash = dev::sm3(bR);
+#else
+                m_hash = dev::sha256(bR);
+#endif
+            }
+            else
+            {
+                m_hash = crypto::Hash(bR);
+            }
         }
         else
         {

@@ -21,6 +21,7 @@
  * @date 2018-09-05
  */
 #include "FakeExtVMFace.h"
+#include "libdevcrypto/CryptoInterface.h"
 #include <libevm/EVMC.h>
 #include <libevm/VMFace.h>
 #include <libevm/VMFactory.h>
@@ -46,7 +47,7 @@ BOOST_AUTO_TEST_CASE(testInterpreterEvmC)
     EnvInfo env_info = InitEnvInfo::createEnvInfo(gasUsed, gasLimit);
     CallParameters param = InitCallParams::createRandomCallParams();
     FakeExtVM fake_ext_vm(env_info, param.codeAddress, param.senderAddress, param.senderAddress,
-        param.valueTransfer, param.gas, param.data, code, sha3(code_str), 0, false, true);
+        param.valueTransfer, param.gas, param.data, code, crypto::Hash(code_str), 0, false, true);
     std::unique_ptr<VMFace> m_face = VMFactory::create(VMKind::Interpreter);
     u256 io_gas = u256(200000);
     BOOST_CHECK_NO_THROW(m_face->exec(io_gas, fake_ext_vm, OnOpFunc{}));
