@@ -84,6 +84,8 @@ private:
 
     int grantTablePermission(std::shared_ptr<blockverifier::ExecutiveContext> _context,
         const std::string& _tableName, const std::string& _userAddress, const Address& _origin);
+    int revokeTablePermission(std::shared_ptr<blockverifier::ExecutiveContext> _context,
+        const std::string& _tableName, const std::string& _userAddress, const Address& _origin);
     bool checkPermission(
         std::shared_ptr<blockverifier::ExecutiveContext> context, Address const& origin);
     AccountStatus getAccountStatus(
