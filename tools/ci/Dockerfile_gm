@@ -20,7 +20,11 @@ RUN git clone https://github.com/FISCO-BCOS/FISCO-BCOS.git && cd FISCO-BCOS \
 FROM ubuntu:18.04
 LABEL maintainer service@fisco.com.cn
 
-RUN apt-get -q update && apt-get install -qy --no-install-recommends libssl-dev zlib1g-dev && rm -rf /var/lib/apt/lists/*
+RUN apt-get -q update && apt-get install -qy --no-install-recommends libssl-dev zlib1g-dev \
+    && ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
+    && apt-get install -qy --no-install-recommends tzdata \
+    && dpkg-reconfigure --frontend noninteractive tzdata \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /FISCO-BCOS/bin/fisco-bcos /usr/local/bin/
 
