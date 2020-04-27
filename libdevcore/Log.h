@@ -29,6 +29,7 @@
 
 // BCOS log format
 #define LOG_BADGE(_NAME) "[" << (_NAME) << "]"
+#define LOG_TYPE(_TYPE) (_TYPE) << "|"
 #define LOG_DESC(_DESCRIPTION) (_DESCRIPTION)
 #define LOG_KV(_K, _V) "," << (_K) << "=" << (_V)
 
@@ -39,6 +40,12 @@ extern std::string const FileLogger;
 extern boost::log::sources::severity_channel_logger_mt<boost::log::trivial::severity_level,
     std::string>
     FileLoggerHandler;
+
+// the statFileLogger
+extern std::string const StatFileLogger;
+extern boost::log::sources::severity_channel_logger_mt<boost::log::trivial::severity_level,
+    std::string>
+    StatFileLoggerHandler;
 
 enum LogLevel
 {
@@ -52,5 +59,9 @@ enum LogLevel
 
 #define LOG(level)                        \
     BOOST_LOG_SEV(dev::FileLoggerHandler, \
+        (boost::log::v2s_mt_posix::trivial::severity_level)(dev::LogLevel::level))
+
+#define STAT_LOG(level)                       \
+    BOOST_LOG_SEV(dev::StatFileLoggerHandler, \
         (boost::log::v2s_mt_posix::trivial::severity_level)(dev::LogLevel::level))
 }  // namespace dev

@@ -34,7 +34,7 @@ public:
 
     std::string toString() override;
 
-    virtual bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
+    PrecompiledExecResult::Ptr call(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
         bytesConstRef _param, Address const& _origin = Address(),
         Address const& _sender = Address()) override;
 };

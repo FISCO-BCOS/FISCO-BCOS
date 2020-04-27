@@ -109,7 +109,7 @@ macro(configure_project)
         set(VERSION_SUFFIX "")
     endif()
 
-    include(EthBuildInfo)
+    include(BuildInfo)
     create_build_info()
     print_config(${NAME})
 endmacro()

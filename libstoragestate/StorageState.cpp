@@ -223,7 +223,14 @@ void StorageState::setCode(Address const& _address, bytes&& _code)
     {
         auto entry = table->newEntry();
         auto option = std::make_shared<AccessOptions>(Address(), false);
-        entry->setField(STORAGE_VALUE, toHex(_code));
+        if (m_enableBinary)
+        {  // >= v2.4.0 and rocksdb
+            entry->setField(STORAGE_VALUE, _code.data(), _code.size());
+        }
+        else
+        {
+            entry->setField(STORAGE_VALUE, toHex(_code));
+        }
         table->update(ACCOUNT_CODE, entry, table->newCondition(), option);
         entry = table->newEntry();
         entry->setField(STORAGE_VALUE, toHex(sha3(_code)));
@@ -266,7 +273,14 @@ bytes const StorageState::code(Address const& _address) const
         auto entries = table->select(ACCOUNT_CODE, table->newCondition());
         if (entries->size() != 0u)
         {
-            return fromHex(entries->get(0)->getField(STORAGE_VALUE));
+            if (m_enableBinary)
+            {  // >= v2.4.0 and rocksdb
+                return entries->get(0)->getFieldBytes(STORAGE_VALUE);
+            }
+            else
+            {
+                return fromHex(entries->get(0)->getField(STORAGE_VALUE));
+            }
         }
     }
     return NullBytes;

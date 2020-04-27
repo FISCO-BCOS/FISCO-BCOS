@@ -99,6 +99,7 @@ public:
     }
 
     void start() override;
+    void stop() override;
     void reportBlock(dev::eth::Block const& _block) override;
     bool shouldSeal();
     bool commit(dev::eth::Block const& _block);

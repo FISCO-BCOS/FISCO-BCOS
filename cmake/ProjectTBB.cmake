@@ -10,9 +10,10 @@ endif()
 ExternalProject_Add(tbb
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NO_PROGRESS 1
-    DOWNLOAD_NAME tbb_2019_u3.tar.gz
-    URL https://github.com/01org/tbb/archive/2019_U3.tar.gz
-    URL_HASH SHA256=4cb6bde796ae056e7c29f31bfdc6cfd0cfe848925219e9c82a20f09158e81542
+    DOWNLOAD_NAME oneTBB-2020.1.tar.gz
+    URL https://codeload.github.com/oneapi-src/oneTBB/tar.gz/v2020.1
+        https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/oneTBB-2020.1.tar.gz
+    URL_HASH SHA256=7c96a150ed22bc3c6628bc3fef9ed475c00887b26d37bca61518d76a56510971
     BUILD_IN_SOURCE 1
     LOG_CONFIGURE 1
     LOG_BUILD 1

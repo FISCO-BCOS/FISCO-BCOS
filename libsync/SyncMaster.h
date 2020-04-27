@@ -82,17 +82,13 @@ public:
         m_sendBlockProcessor =
             std::make_shared<dev::ThreadPool>("SyncSend-" + std::to_string(m_groupId), 1);
 
-        m_statisticHandler = m_service->statisticHandler();
         // syncStatus should be initialized firstly since it should be deconstruct at final
         m_syncStatus =
             std::make_shared<SyncMasterStatus>(_blockChain, _protocolId, _genesisHash, _nodeId);
-        // set statistic handler for downloadingBlockQueue and downloadingTxsQueue
-        m_syncStatus->setStatHandlerForDownloadingBlockQueue(m_statisticHandler);
 
         m_txQueue = std::make_shared<DownloadingTxsQueue>(_protocolId, _nodeId);
         m_txQueue->setService(_service);
         m_txQueue->setSyncStatus(m_syncStatus);
-        m_txQueue->setStatisticHandler(m_statisticHandler);
 
         if (m_enableSendTxsByTree)
         {
@@ -118,11 +114,9 @@ public:
         m_msgEngine = std::make_shared<SyncMsgEngine>(_service, _txPool, _blockChain, m_syncStatus,
             m_txQueue, _protocolId, _nodeId, _genesisHash);
         m_msgEngine->onNotifyWorker([&]() { m_signalled.notify_all(); });
-        m_msgEngine->setStatisticHandler(m_statisticHandler);
 
         m_syncTrans = std::make_shared<SyncTransaction>(_service, _txPool, m_txQueue, _protocolId,
             _nodeId, m_syncStatus, m_msgEngine, _blockChain, _idleWaitMs);
-        m_syncTrans->setStatisticHandler(m_statisticHandler);
     }
 
     virtual void setMaxBlockQueueSize(int64_t const& _maxBlockQueueSize)
@@ -305,9 +299,6 @@ private:
 
     // sync transactions
     SyncTransaction::Ptr m_syncTrans = nullptr;
-
-    // statisticHandler
-    dev::p2p::StatisticHandler::Ptr m_statisticHandler = nullptr;
 
     // handler for find the tree router
     SyncTreeTopology::Ptr m_syncTreeRouter = nullptr;

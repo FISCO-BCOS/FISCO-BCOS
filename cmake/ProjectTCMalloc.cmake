@@ -9,6 +9,7 @@ ExternalProject_Add(gperftools
     DOWNLOAD_NAME gperftools-2.7.tar.gz
     DOWNLOAD_NO_PROGRESS 1
     URL https://github.com/gperftools/gperftools/releases/download/gperftools-2.7/gperftools-2.7.tar.gz
+        https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/gperftools-2.7.tar.gz
     URL_HASH SHA256=1ee8c8699a0eff6b6a203e59b43330536b22bbcbe6448f54c7091e5efb0763c9
     BUILD_IN_SOURCE 1
     LOG_CONFIGURE 1

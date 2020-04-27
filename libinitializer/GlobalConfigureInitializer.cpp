@@ -150,11 +150,14 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
                               << LOG_KV("url.port",
                                      to_string(g_BCOSConfig.diskEncryption.keyCenterPort));
     }
+    bool enableStat = _pt.get<bool>("log.enable_statistic", false);
+    g_BCOSConfig.setEnableStat(enableStat);
 
     INITIALIZER_LOG(INFO) << LOG_BADGE("initGlobalConfig")
                           << LOG_KV("enableCompress", g_BCOSConfig.compressEnabled())
                           << LOG_KV("compatibilityVersion", version)
                           << LOG_KV("versionNumber", g_BCOSConfig.version())
+                          << LOG_KV("enableStat", g_BCOSConfig.enableStat())
                           << LOG_KV("chainId", g_BCOSConfig.chainId());
 }
 

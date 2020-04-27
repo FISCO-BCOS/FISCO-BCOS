@@ -76,6 +76,11 @@ struct TablePrecompiledFixture2
         table->setRecorder(
             [&](Table::Ptr, Change::Kind, string const&, vector<Change::Record>&) {});
         tablePrecompiled->setTable(table);
+
+        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
+        auto precompiledExecResultFactory = std::make_shared<PrecompiledExecResultFactory>();
+        precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
+        tablePrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     }
 
     ~TablePrecompiledFixture2() {}
@@ -114,7 +119,8 @@ BOOST_AUTO_TEST_CASE(call_get_set)
 {
     eth::ContractABI abi;
     bytes in = abi.abiIn("get(string)", std::string("name"));
-    bytes out = tablePrecompiled->call(context, bytesConstRef(&in));
+    auto callResult = tablePrecompiled->call(context, bytesConstRef(&in));
+    bytes out = callResult->execResult();
     bool status = true;
     Address entryAddress;
     abi.abiOut(bytesConstRef(&out), status, entryAddress);
@@ -125,12 +131,14 @@ BOOST_AUTO_TEST_CASE(call_get_set)
     entryPrecompiled->setEntry(entry);
     auto entryAddress1 = context->registerPrecompiled(entryPrecompiled);
     bytes in1 = abi.abiIn("set(string,address)", std::string("name"), entryAddress1);
-    bytes out1 = tablePrecompiled->call(context, bytesConstRef(&in1), okAddress);
+    callResult = tablePrecompiled->call(context, bytesConstRef(&in1), okAddress);
+    bytes out1 = callResult->execResult();
     u256 num;
     abi.abiOut(bytesConstRef(&out1), num);
     BOOST_TEST(num == 1);
     bytes in2 = abi.abiIn("get(string)", std::string("name"));
-    bytes out2 = tablePrecompiled->call(context, bytesConstRef(&in2));
+    callResult = tablePrecompiled->call(context, bytesConstRef(&in2));
+    bytes out2 = callResult->execResult();
     bool status2 = true;
     Address entryAddress2;
     abi.abiOut(bytesConstRef(&out2), status2, entryAddress2);
@@ -163,7 +171,8 @@ BOOST_AUTO_TEST_CASE(call_newEntry)
 {
     eth::ContractABI abi;
     bytes in = abi.abiIn("newEntry()");
-    bytes out1 = tablePrecompiled->call(context, bytesConstRef(&in));
+    auto callResult = tablePrecompiled->call(context, bytesConstRef(&in));
+    bytes out1 = callResult->execResult();
     Address address(++addressCount);
     bytes out2 = abi.abiIn("", address);
     BOOST_CHECK(out1 == out2);

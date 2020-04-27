@@ -21,7 +21,8 @@
  */
 
 #pragma once
-#include "Common.h"                             // for INITIALIZER_LOG
+#include "Common.h"  // for INITIALIZER_LOG
+#include "LedgerInitializer.h"
 #include "librpc/ModularServer.h"               // for ModularServer
 #include <libchannelserver/ChannelRPCServer.h>  // for ChannelRPCServer
 #include <boost/property_tree/ptree_fwd.hpp>    // for ptree
@@ -54,6 +55,10 @@ namespace rpc
 {
 class Rpc;
 }
+namespace stat
+{
+class ChannelNetworkStatHandler;
+}
 namespace initializer
 {
 class RPCInitializer : public std::enable_shared_from_this<RPCInitializer>
@@ -65,6 +70,12 @@ public:
 
     void stop()
     {
+        // stop networkStatHandler
+        if (m_networkStatHandler)
+        {
+            m_networkStatHandler->stop();
+            INITIALIZER_LOG(INFO) << "stop channelNetworkStatistics.";
+        }
         /// stop channel first
         if (m_channelRPCHttpServer)
         {
@@ -93,23 +104,31 @@ public:
     {
         m_sslContext = sslContext;
     }
-    void setLedgerManager(std::shared_ptr<ledger::LedgerManager> _ledgerManager)
+
+    void setLedgerInitializer(LedgerInitializer::Ptr _ledgerInitializer)
     {
-        m_ledgerManager = _ledgerManager;
+        m_ledgerInitializer = _ledgerInitializer;
+        m_ledgerManager = m_ledgerInitializer->ledgerManager();
     }
 
     ChannelRPCServer::Ptr channelRPCServer() { return m_channelRPCServer; }
     std::shared_ptr<ledger::LedgerManager> getLedgerManager() { return m_ledgerManager; }
 
 private:
+    std::shared_ptr<dev::stat::ChannelNetworkStatHandler> createNetWorkStatHandler(
+        boost::property_tree::ptree const& _pt);
+
+private:
     std::shared_ptr<p2p::P2PInterface> m_p2pService;
     std::shared_ptr<ledger::LedgerManager> m_ledgerManager;
+    LedgerInitializer::Ptr m_ledgerInitializer;
     std::shared_ptr<boost::asio::ssl::context> m_sslContext;
     std::shared_ptr<dev::rpc::Rpc> m_rpcForChannel;
     std::shared_ptr<dev::SafeHttpServer> m_safeHttpServer;
     ChannelRPCServer::Ptr m_channelRPCServer;
     ModularServer<>* m_channelRPCHttpServer;
     ModularServer<>* m_jsonrpcHttpServer;
+    dev::stat::ChannelNetworkStatHandler::Ptr m_networkStatHandler;
 };
 
 }  // namespace initializer

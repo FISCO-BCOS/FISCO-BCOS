@@ -32,25 +32,7 @@
 using namespace std;
 using namespace dev;
 using namespace dev::crypto;
-
-
-SignatureStruct::SignatureStruct(Signature const& _s)
-{
-    *(Signature*)this = _s;
-}
-
-// SignatureStruct::SignatureStruct(VType _v, h256 const& _r, h256 const& _s) : r(_r), s(_s), v(_v)
-// {}
-
-SignatureStruct::SignatureStruct(h256 const& _r, h256 const& _s, VType _v) : r(_r), s(_s), v(_v) {}
-SignatureStruct::SignatureStruct(u256 const& _r, u256 const& _s, NumberVType _v)
-{
-    r = _r;
-    s = _s;
-    v = _v;
-}
-
-pair<bool, bytes> SignatureStruct::ecRecover(bytesConstRef _in)
+pair<bool, bytes> SignatureStruct::ecRecoverDeprecated(bytesConstRef _in)
 {
     struct
     {
@@ -177,7 +159,6 @@ Signature dev::sign(KeyPair const& _keyPair, h256 const& _hash)
         return Signature{};
     }
     bytes byteSign = fromHex(r + s) + _keyPair.pub();
-    // std::cout <<"sign toHex:"<<toHex(byteSign)<<" sign toHexLen:"<<toHex(byteSign).length();
     return Signature{byteSign};
 }
 

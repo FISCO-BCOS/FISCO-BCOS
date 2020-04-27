@@ -28,6 +28,7 @@
 #include <libprecompiled/KVTableFactoryPrecompiled.h>
 #include <libprecompiled/ParallelConfigPrecompiled.h>
 #include <libprecompiled/PermissionPrecompiled.h>
+#include <libprecompiled/PrecompiledResult.h>
 #include <libprecompiled/SystemConfigPrecompiled.h>
 #include <libprecompiled/TableFactoryPrecompiled.h>
 #include <libprecompiled/extension/DagTransferPrecompiled.h>
@@ -38,12 +39,18 @@ using namespace dev::blockverifier;
 using namespace dev::executive;
 using namespace dev::precompiled;
 
+void ExecutiveContextFactory::setPrecompiledExecResultFactory(
+    PrecompiledExecResultFactory::Ptr _precompiledExecResultFactory)
+{
+    m_precompiledExecResultFactory = _precompiledExecResultFactory;
+}
+
 void ExecutiveContextFactory::initExecutiveContext(
     BlockInfo blockInfo, h256 const& stateRoot, ExecutiveContext::Ptr context)
 {
     auto memoryTableFactory =
         m_tableFactoryFactory->newTableFactory(blockInfo.hash, blockInfo.number);
-
+    context->setPrecompiledExecResultFactory(m_precompiledExecResultFactory);
     auto tableFactoryPrecompiled = std::make_shared<dev::precompiled::TableFactoryPrecompiled>();
     tableFactoryPrecompiled->setMemoryTableFactory(memoryTableFactory);
     context->setAddress2Precompiled(

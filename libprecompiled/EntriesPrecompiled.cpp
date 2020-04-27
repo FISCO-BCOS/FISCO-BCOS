@@ -41,7 +41,7 @@ std::string EntriesPrecompiled::toString()
     return "Entries";
 }
 
-bytes EntriesPrecompiled::call(
+PrecompiledExecResult::Ptr EntriesPrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const&, Address const&)
 {
     STORAGE_LOG(TRACE) << LOG_BADGE("EntriesPrecompiled") << LOG_DESC("call")
@@ -51,7 +51,8 @@ bytes EntriesPrecompiled::call(
 
     dev::eth::ContractABI abi;
 
-    bytes out;
+    auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
+    callResult->gasPricer()->setMemUsed(param.size());
 
     if (func == name2Selector[ENTRIES_GET_INT])
     {  // get(int256)
@@ -62,19 +63,17 @@ bytes EntriesPrecompiled::call(
         EntryPrecompiled::Ptr entryPrecompiled = std::make_shared<EntryPrecompiled>();
         entryPrecompiled->setEntry(entry);
         Address address = context->registerPrecompiled(entryPrecompiled);
-
-        out = abi.abiIn("", address);
+        callResult->setExecResult(abi.abiIn("", address));
     }
     else if (func == name2Selector[ENTRIES_SIZE])
     {  // size()
         u256 c = getEntries()->size();
-
-        out = abi.abiIn("", c);
+        callResult->setExecResult(abi.abiIn("", c));
     }
     else
     {
         STORAGE_LOG(ERROR) << LOG_BADGE("EntriesPrecompiled")
                            << LOG_DESC("call undefined function!");
     }
-    return out;
+    return callResult;
 }

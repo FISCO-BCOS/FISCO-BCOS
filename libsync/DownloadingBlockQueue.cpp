@@ -210,11 +210,6 @@ void DownloadingBlockQueue::flushBufferToQueue()
                 {
                     successCnt++;
                     m_blocks.push(block);
-                    // update the downloaded block information
-                    if (m_statisticHandler)
-                    {
-                        m_statisticHandler->updateDownloadedBlockInfo(rlps[i].data().size());
-                    }
                 }
             }
             catch (std::exception& e)

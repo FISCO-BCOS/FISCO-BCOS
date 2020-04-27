@@ -75,6 +75,12 @@ struct OutputFixture
         tableFactoryPrecompiled->setMemoryTableFactory(memoryTableFactory);
         clcPrecompiled = context->getPrecompiled(Address(0x1007));
 
+        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
+        auto precompiledExecResultFactory =
+            std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+        precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
+        clcPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
+
         // createTable
         std::string tableName("c_" + contractAddress.hex());
         table = memoryTableFactory->createTable(tableName, STORAGE_KEY, STORAGE_VALUE, false);
@@ -177,7 +183,8 @@ BOOST_AUTO_TEST_CASE(call)
 
     // freeze success
     in = abi.abiIn("freeze(address)", contractAddress);
-    out = clcPrecompiled->call(context, bytesConstRef(&in));
+    auto callResult = clcPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     abi.abiOut(&out, result);
     BOOST_TEST(result == 1);
 
@@ -196,7 +203,8 @@ BOOST_AUTO_TEST_CASE(call)
 
     // unfreeze success
     in = abi.abiIn("unfreeze(address)", contractAddress);
-    out = clcPrecompiled->call(context, bytesConstRef(&in));
+    callResult = clcPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     abi.abiOut(&out, result);
     BOOST_TEST(result == 1);
 

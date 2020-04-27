@@ -69,3 +69,15 @@ bool Precompiled::checkAuthority(std::shared_ptr<dev::blockverifier::ExecutiveCo
     }
     return true;
 }
+
+uint64_t Precompiled::getEntriesCapacity(
+    std::shared_ptr<dev::storage::Entries const> _entries) const
+{
+    int64_t totalCapacity = 0;
+    int64_t entriesSize = _entries->size();
+    for (int64_t i = 0; i < entriesSize; i++)
+    {
+        totalCapacity += _entries->get(i)->capacity();
+    }
+    return totalCapacity;
+}

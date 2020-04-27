@@ -36,7 +36,7 @@ RingSigPrecompiled::RingSigPrecompiled()
     name2Selector[RingSig_METHOD_SET_STR] = getFuncSelector(RingSig_METHOD_SET_STR);
 }
 
-bytes RingSigPrecompiled::call(
+PrecompiledExecResult::Ptr RingSigPrecompiled::call(
     ExecutiveContext::Ptr, bytesConstRef param, Address const&, Address const&)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("RingSigPrecompiled") << LOG_DESC("call")
@@ -47,7 +47,8 @@ bytes RingSigPrecompiled::call(
     bytesConstRef data = getParamData(param);
 
     dev::eth::ContractABI abi;
-    bytes out;
+    auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
+    callResult->gasPricer()->setMemUsed(param.size());
 
     if (func == name2Selector[RingSig_METHOD_SET_STR])
     {
@@ -59,22 +60,23 @@ bytes RingSigPrecompiled::call(
         try
         {
             result = RingSigApi::LinkableRingSig::ring_verify(signature, message, paramInfo);
+            callResult->gasPricer()->appendOperation(InterfaceOpcode::RingSigVerify);
         }
         catch (std::string& errorMsg)
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("RingSigPrecompiled") << LOG_DESC(errorMsg)
                                    << LOG_KV("signature", signature) << LOG_KV("message", message)
                                    << LOG_KV("paramInfo", paramInfo);
-            getErrorCodeOut(out, VERIFY_RING_SIG_FAILED);
-            return out;
+            getErrorCodeOut(callResult->mutableExecResult(), VERIFY_RING_SIG_FAILED);
+            return callResult;
         }
-        out = abi.abiIn("", result);
+        callResult->setExecResult(abi.abiIn("", result));
     }
     else
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("RingSigPrecompiled")
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
-        getErrorCodeOut(out, CODE_UNKNOW_FUNCTION_CALL);
+        getErrorCodeOut(callResult->mutableExecResult(), CODE_UNKNOW_FUNCTION_CALL);
     }
-    return out;
+    return callResult;
 }

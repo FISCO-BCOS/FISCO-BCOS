@@ -23,6 +23,7 @@
 #pragma once
 
 #include "VMConfig.h"
+#include "VMSchedule.h"
 
 #include <libdevcore/Common.h>
 #include <libethcore/Exceptions.h>
@@ -37,45 +38,21 @@ namespace dev
 {
 namespace eth
 {
-struct VMSchedule
-{
-    static constexpr int64_t stackLimit = 1024;
-    static constexpr int64_t stepGas0 = 0;
-    static constexpr int64_t stepGas1 = 2;
-    static constexpr int64_t stepGas2 = 3;
-    static constexpr int64_t stepGas3 = 5;
-    static constexpr int64_t stepGas4 = 8;
-    static constexpr int64_t stepGas5 = 10;
-    static constexpr int64_t stepGas6 = 20;
-    static constexpr int64_t sha3Gas = 30;
-    static constexpr int64_t sha3WordGas = 6;
-    static constexpr int64_t sloadGas = 50;
-    static constexpr int64_t sstoreSetGas = 20000;
-    static constexpr int64_t sstoreResetGas = 5000;
-    static constexpr int64_t jumpdestGas = 1;
-    static constexpr int64_t logGas = 375;
-    static constexpr int64_t logDataGas = 8;
-    static constexpr int64_t logTopicGas = 375;
-    static constexpr int64_t createGas = 32000;
-    static constexpr int64_t memoryGas = 3;
-    static constexpr int64_t quadCoeffDiv = 512;
-    static constexpr int64_t copyGas = 3;
-    static constexpr int64_t valueTransferGas = 9000;
-    static constexpr int64_t callStipend = 2300;
-    static constexpr int64_t callNewAccount = 25000;
-};
-
 class VM
 {
 public:
     VM() = default;
+    virtual ~VM() {}
+    virtual void createVMSchedule(evmc_context* _context);
 
     owning_bytes_ref exec(evmc_context* _context, evmc_revision _rev, const evmc_message* _msg,
         uint8_t const* _code, size_t _codeSize);
 
+    VMSchedule::Ptr vmSchedule() { return m_vmSchedule; }
     uint64_t m_io_gas = 0;
 
 private:
+    VMSchedule::Ptr m_vmSchedule = nullptr;
     evmc_context* m_context = nullptr;
     evmc_revision m_rev = EVMC_FRONTIER;
     evmc_message const* m_message = nullptr;

@@ -50,7 +50,6 @@ int main()
                           << "]:" << topic;
         p_topics->insert(topic);
         p2pService->setTopics(p_topics);
-        LogInitializer::logRotateByTime();
         this_thread::sleep_for(chrono::milliseconds((rand() % 50) * 100));
     }
 

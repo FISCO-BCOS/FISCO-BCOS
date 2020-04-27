@@ -27,7 +27,6 @@
 #include "P2PInterface.h"
 #include "P2PMessageFactory.h"
 #include "P2PSession.h"
-#include "StatisticHandler.h"
 #include <libdevcore/Common.h>
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/FixedHash.h>
@@ -166,17 +165,18 @@ public:
         return nullptr;
     }
 
-    void setStatisticHandler(StatisticHandler::Ptr _statisticHandler)
-    {
-        m_statisticHandler = _statisticHandler;
-    }
+    void appendNetworkStatHandlerByGroupID(
+        GROUP_ID const& _groupID, std::shared_ptr<dev::stat::NetworkStatHandler> _handler) override;
 
-    StatisticHandler::Ptr statisticHandler() override { return m_statisticHandler; }
+    void removeNetworkStatHandlerByGroupID(GROUP_ID const& _groupID) override;
 
 private:
     NodeIDs getPeersByTopic(std::string const& topic);
     void checkWhitelistAndClearSession();
+    void updateIncomingTraffic(P2PMessage::Ptr _msg);
+    void updateOutcomingTraffic(P2PMessage::Ptr _msg);
 
+private:
     std::map<dev::network::NodeIPEndpoint, NodeID> m_staticNodes;
     RecursiveMutex x_nodes;
 
@@ -213,7 +213,11 @@ private:
     bool m_run = false;
 
     PeerWhitelist::Ptr m_whitelist;
-    StatisticHandler::Ptr m_statisticHandler = nullptr;
+
+    // for network statistics
+    std::shared_ptr<std::map<GROUP_ID, std::shared_ptr<dev::stat::NetworkStatHandler>>>
+        m_group2NetworkStatHandler;
+    mutable SharedMutex x_group2NetworkStatHandler;
 };
 
 }  // namespace p2p

@@ -51,7 +51,14 @@ void Executive::accrueSubState(SubState& _parentContext)
 void Executive::initialize(Transaction::Ptr _transaction)
 {
     m_t = _transaction;
-    m_baseGasRequired = m_t->baseGasRequired(g_BCOSConfig.evmSchedule());
+    if (m_enableFreeStorage)
+    {
+        m_baseGasRequired = 20000;
+    }
+    else
+    {
+        m_baseGasRequired = m_t->baseGasRequired(g_BCOSConfig.evmSchedule());
+    }
 
     verifyTransaction(ImportRequirements::Everything, m_t, m_envInfo.header(), m_envInfo.gasUsed());
 
@@ -121,11 +128,16 @@ bool Executive::execute()
         }
     }
     if (m_t->isCreation())
+    {
         return create(m_t->sender(), m_t->value(), m_t->gasPrice(),
             txGasLimit - (u256)m_baseGasRequired, &m_t->data(), m_t->sender());
+    }
+
     else
+    {
         return call(m_t->receiveAddress(), m_t->sender(), m_t->value(), m_t->gasPrice(),
             bytesConstRef(&m_t->data()), txGasLimit - (u256)m_baseGasRequired);
+    }
 }
 
 bool Executive::call(Address const& _receiveAddress, Address const& _senderAddress,
@@ -136,6 +148,22 @@ bool Executive::call(Address const& _receiveAddress, Address const& _senderAddre
     return call(params, _gasPrice, _senderAddress);
 }
 
+void Executive::updateGas(std::shared_ptr<dev::precompiled::PrecompiledExecResult> _callResult)
+{
+    // calculate gas
+    auto gasUsed = _callResult->calGasCost();
+    if (m_gas < gasUsed)
+    {
+        m_excepted = TransactionException::OutOfGas;
+        LOG(WARNING) << LOG_DESC("OutOfGas when executing precompiled Contract")
+                     << LOG_KV("gasUsed", gasUsed) << LOG_KV("curGas", m_gas);
+        BOOST_THROW_EXCEPTION(dev::precompiled::PrecompiledException(
+            "OutOfGas when executing precompiled Contract, gasUsed: " +
+            boost::lexical_cast<std::string>(gasUsed) +
+            ", leftGas:" + boost::lexical_cast<std::string>(m_gas)));
+    }
+    m_gas -= gasUsed;
+}
 
 bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address const& _origin)
 {
@@ -174,10 +202,11 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
         {
             m_gas = _p.gas;
             LOG(TRACE) << "Execute Precompiled: " << _p.codeAddress;
-            auto result = m_envInfo.precompiledEngine()->call(
+            auto callResult = m_envInfo.precompiledEngine()->call(
                 _p.codeAddress, _p.data, _origin, _p.senderAddress);
-            size_t outputSize = result.size();
-            m_output = owning_bytes_ref{std::move(result), 0, outputSize};
+            size_t outputSize = callResult->execResult().size();
+            auto output = callResult->execResult();
+            m_output = owning_bytes_ref{std::move(output), 0, outputSize};
         }
         else
         {
@@ -240,10 +269,16 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
     {
         try
         {
-            auto result = m_envInfo.precompiledEngine()->call(
+            auto callResult = m_envInfo.precompiledEngine()->call(
                 _p.codeAddress, _p.data, _origin, _p.senderAddress);
-            size_t outputSize = result.size();
-            m_output = owning_bytes_ref{std::move(result), 0, outputSize};
+            // only calculate gas for the precompiled contract after v2.4.0
+            if (g_BCOSConfig.version() >= V2_4_0)
+            {
+                updateGas(callResult);
+            }
+            size_t outputSize = callResult->execResult().size();
+            auto output = callResult->execResult();
+            m_output = owning_bytes_ref{std::move(output), 0, outputSize};
         }
         catch (dev::precompiled::PrecompiledException& e)
         {
@@ -285,6 +320,7 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
         h256 codeHash = m_s->codeHash(_p.codeAddress);
         m_ext = make_shared<ExtVM>(m_s, m_envInfo, _p.receiveAddress, _p.senderAddress, _origin,
             _p.apparentValue, _gasPrice, _p.data, &c, codeHash, m_depth, false, _p.staticCall);
+        m_ext->setEvmFlags(m_evmFlags);
     }
     else
     {
@@ -379,9 +415,11 @@ bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u2
 
     // Schedule _init execution if not empty.
     if (!_init.empty())
+    {
         m_ext = make_shared<ExtVM>(m_s, m_envInfo, m_newAddress, _sender, _origin, _endowment,
             _gasPrice, bytesConstRef(), _init, sha3(_init), m_depth, true, false);
-
+        m_ext->setEvmFlags(m_evmFlags);
+    }
     return !m_ext;
 }
 
@@ -474,7 +512,12 @@ bool Executive::go(OnOpFunc const& _onOp)
                 else if (out.size() * m_ext->evmSchedule().createDataGas <= m_gas)
                 {
                     m_res.codeDeposit = CodeDeposit::Success;
-                    m_gas -= out.size() * m_ext->evmSchedule().createDataGas;
+                    // When FreeStorage VM is enabled,
+                    // the storage gas consumption of createData is not calculated additionally
+                    if (!m_enableFreeStorage)
+                    {
+                        m_gas -= out.size() * m_ext->evmSchedule().createDataGas;
+                    }
                 }
                 else
                 {

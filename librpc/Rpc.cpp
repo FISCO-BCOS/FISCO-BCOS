@@ -21,7 +21,6 @@
 
 #include "Rpc.h"
 #include "JsonHelper.h"
-#include "libledger/LedgerManager.h"  // for LedgerManager
 #include <jsonrpccpp/common/exception.h>
 #include <jsonrpccpp/server.h>
 #include <libconfig/GlobalConfigure.h>
@@ -35,12 +34,14 @@
 #include <libtxpool/TxPoolInterface.h>
 #include <boost/algorithm/hex.hpp>
 #include <csignal>
+#include <sstream>
 
 using namespace jsonrpc;
 using namespace dev::rpc;
 using namespace dev::sync;
 using namespace dev::ledger;
 using namespace dev::precompiled;
+using namespace dev::initializer;
 
 static const int64_t maxTransactionGasLimit = 0x7fffffffffffffff;
 static const int64_t gasPrice = 1;
@@ -58,34 +59,11 @@ std::map<int, std::string> dev::rpc::RPCMsg{{RPCExceptionType::Success, "Success
         "Don't send request to this node who doesn't belong to the group"},
     {RPCExceptionType::IncompleteInitialization, "RPC module initialization is incomplete."}};
 
-Rpc::Rpc(std::shared_ptr<dev::ledger::LedgerManager> _ledgerManager,
-    std::shared_ptr<dev::p2p::P2PInterface> _service)
-  : m_ledgerManager(_ledgerManager), m_service(_service)
+Rpc::Rpc(
+    LedgerInitializer::Ptr _ledgerInitializer, std::shared_ptr<dev::p2p::P2PInterface> _service)
+  : m_service(_service)
 {
-    registerSyncChecker();
-}
-
-void Rpc::registerSyncChecker()
-{
-    if (m_ledgerManager)
-    {
-        auto groupList = m_ledgerManager->getGroupListForRpc();
-        for (auto const& group : groupList)
-        {
-            auto txPool = m_ledgerManager->txPool(group);
-            txPool->registerSyncStatusChecker([this, group]() {
-                try
-                {
-                    checkSyncStatus(group);
-                }
-                catch (std::exception const& _e)
-                {
-                    return false;
-                }
-                return true;
-            });
-        }
-    }
+    setLedgerInitializer(_ledgerInitializer);
 }
 
 std::shared_ptr<dev::ledger::LedgerManager> Rpc::ledgerManager()
@@ -1132,7 +1110,116 @@ Json::Value Rpc::call(int _groupID, const Json::Value& request)
     }
 }
 
+
+std::shared_ptr<Json::Value> Rpc::notifyReceipt(
+    std::shared_ptr<dev::blockchain::BlockChainInterface>, LocalisedTransactionReceipt::Ptr receipt,
+    dev::bytesConstRef input, dev::eth::Block::Ptr)
+{
+    std::shared_ptr<Json::Value> response = std::make_shared<Json::Value>();
+
+    // FIXME: If made protocol modify, please modify upside if
+    (*response)["transactionHash"] = toJS(receipt->hash());
+    (*response)["transactionIndex"] = toJS(receipt->transactionIndex());
+    (*response)["root"] = toJS(receipt->stateRoot());
+    (*response)["blockNumber"] = toJS(receipt->blockNumber());
+    (*response)["blockHash"] = toJS(receipt->blockHash());
+    (*response)["from"] = toJS(receipt->from());
+    (*response)["to"] = toJS(receipt->to());
+    (*response)["gasUsed"] = toJS(receipt->gasUsed());
+    (*response)["contractAddress"] = toJS(receipt->contractAddress());
+    (*response)["logs"] = Json::Value(Json::arrayValue);
+    for (unsigned int i = 0; i < receipt->log().size(); ++i)
+    {
+        Json::Value log;
+        log["address"] = toJS(receipt->log()[i].address);
+        log["topics"] = Json::Value(Json::arrayValue);
+        for (unsigned int j = 0; j < receipt->log()[i].topics.size(); ++j)
+            log["topics"].append(toJS(receipt->log()[i].topics[j]));
+        log["data"] = toJS(receipt->log()[i].data);
+        (*response)["logs"].append(log);
+    }
+    (*response)["logsBloom"] = toJS(receipt->bloom());
+    (*response)["status"] = toJS(receipt->status());
+    if (g_BCOSConfig.version() > RC3_VERSION)
+    {
+        (*response)["input"] = toJS(input);
+    }
+    (*response)["output"] = toJS(receipt->outputBytes());
+    return response;
+}
+
+std::shared_ptr<Json::Value> Rpc::notifyReceiptWithProof(
+    std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
+    LocalisedTransactionReceipt::Ptr _receipt, dev::bytesConstRef _input,
+    dev::eth::Block::Ptr _blockPtr)
+{
+    auto response = notifyReceipt(_blockChain, _receipt, _input, _blockPtr);
+    // only support merkleProof when supported_version >= v2.2.0
+    if (!_blockPtr || g_BCOSConfig.version() < V2_2_0)
+    {
+        return response;
+    }
+    // get transaction Proof
+    auto index = _receipt->transactionIndex();
+    auto txProof = _blockChain->getTransactionProof(_blockPtr, index);
+    if (!txProof)
+    {
+        return response;
+    }
+    addProofToResponse(response, "txProof", txProof);
+    // get receipt proof
+    auto receiptProof = _blockChain->getTransactionReceiptProof(_blockPtr, index);
+    if (!receiptProof)
+    {
+        return response;
+    }
+    addProofToResponse(response, "receiptProof", receiptProof);
+    return response;
+}
+
+void Rpc::addProofToResponse(std::shared_ptr<Json::Value> _response, std::string const& _key,
+    std::shared_ptr<dev::blockchain::MerkleProofType> _proofList)
+{
+    uint32_t index = 0;
+    for (const auto& merkleItem : *_proofList)
+    {
+        (*_response)[_key][index]["left"] = Json::arrayValue;
+        (*_response)[_key][index]["right"] = Json::arrayValue;
+        const auto& left = merkleItem.first;
+        for (const auto& item : left)
+        {
+            (*_response)[_key][index]["left"].append(item);
+        }
+
+        const auto& right = merkleItem.second;
+        for (const auto& item : right)
+        {
+            (*_response)[_key][index]["right"].append(item);
+        }
+        ++index;
+    }
+}
+
+// send transactions and notify receipts with receipt, transactionProof, receiptProof
+std::string Rpc::sendRawTransactionAndGetProof(int _groupID, const std::string& _rlp)
+{
+    return sendRawTransaction(
+        _groupID, _rlp, boost::bind(&Rpc::notifyReceiptWithProof, this, _1, _2, _3, _4));
+}
+
 std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
+{
+    return sendRawTransaction(
+        _groupID, _rlp, boost::bind(&Rpc::notifyReceipt, this, _1, _2, _3, _4));
+}
+
+
+std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp,
+    std::function<std::shared_ptr<Json::Value>(
+        std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
+        LocalisedTransactionReceipt::Ptr receipt, dev::bytesConstRef input,
+        dev::eth::Block::Ptr _blockPtr)>
+        _notifyCallback)
 {
     try
     {
@@ -1147,6 +1234,7 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
         }
+        auto blockChain = ledgerManager()->blockChain(_groupID);
 
         // Transaction tx(jsToBytes(_rlp, OnFailed::Throw), CheckTransaction::Everything);
         Transaction::Ptr tx = std::make_shared<Transaction>(
@@ -1161,42 +1249,17 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
             auto transactionCallback = *currentTransactionCallback;
             clientProtocolversion = (*m_transactionCallbackVersion)();
             tx->setRpcCallback(
-                [transactionCallback, clientProtocolversion](
-                    LocalisedTransactionReceipt::Ptr receipt, dev::bytesConstRef input) {
-                    Json::Value response;
+                [blockChain, _notifyCallback, transactionCallback, clientProtocolversion, _groupID](
+                    LocalisedTransactionReceipt::Ptr receipt, dev::bytesConstRef input,
+                    dev::eth::Block::Ptr _blockPtr) {
+                    std::shared_ptr<Json::Value> response = std::make_shared<Json::Value>();
                     if (clientProtocolversion > 0)
-                    {  // FIXME: If made protocol modify, please modify upside if
-                        response["transactionHash"] = toJS(receipt->hash());
-                        response["transactionIndex"] = toJS(receipt->transactionIndex());
-                        response["root"] = toJS(receipt->stateRoot());
-                        response["blockNumber"] = toJS(receipt->blockNumber());
-                        response["blockHash"] = toJS(receipt->blockHash());
-                        response["from"] = toJS(receipt->from());
-                        response["to"] = toJS(receipt->to());
-                        response["gasUsed"] = toJS(receipt->gasUsed());
-                        response["contractAddress"] = toJS(receipt->contractAddress());
-                        response["logs"] = Json::Value(Json::arrayValue);
-                        for (unsigned int i = 0; i < receipt->log().size(); ++i)
-                        {
-                            Json::Value log;
-                            log["address"] = toJS(receipt->log()[i].address);
-                            log["topics"] = Json::Value(Json::arrayValue);
-                            for (unsigned int j = 0; j < receipt->log()[i].topics.size(); ++j)
-                                log["topics"].append(toJS(receipt->log()[i].topics[j]));
-                            log["data"] = toJS(receipt->log()[i].data);
-                            response["logs"].append(log);
-                        }
-                        response["logsBloom"] = toJS(receipt->bloom());
-                        response["status"] = toJS(receipt->status());
-                        if (g_BCOSConfig.version() > RC3_VERSION)
-                        {
-                            response["input"] = toJS(input);
-                        }
-                        response["output"] = toJS(receipt->outputBytes());
+                    {
+                        response = _notifyCallback(blockChain, receipt, input, _blockPtr);
                     }
 
-                    auto receiptContent = response.toStyledString();
-                    transactionCallback(receiptContent);
+                    auto receiptContent = response->toStyledString();
+                    transactionCallback(receiptContent, _groupID);
                 });
         }
         // calculate the sha3 before submit into the transaction pool
@@ -1397,4 +1460,444 @@ Json::Value Rpc::getTransactionReceiptByHashWithProof(
         BOOST_THROW_EXCEPTION(
             JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
     }
+}
+
+Json::Value Rpc::generateGroup(int _groupID, const Json::Value& _params)
+{
+    RPC_LOG(INFO) << LOG_BADGE("generateGroup") << LOG_DESC("request")
+                  << LOG_KV("groupID", _groupID) << LOG_KV("params", _params);
+
+    checkNodeVersionForGroupMgr("generateGroup");
+
+    Json::Value response;
+    if (!checkGroupIDForGroupMgr(_groupID, response))
+    {
+        return response;
+    }
+
+    GroupParams groupParams;
+    if (!checkParamsForGenerateGroup(_params, groupParams, response))
+    {
+        return response;
+    }
+
+    if (!checkConnection(groupParams.sealers, response))
+    {
+        return response;
+    }
+
+    try
+    {
+        ledgerManager()->generateGroup(_groupID, groupParams);
+        response["code"] = LedgerManagementStatusCode::SUCCESS;
+        response["message"] = "Group " + std::to_string(_groupID) + " generated successfully";
+    }
+#define CATCH_GROUP_ALREADY_EXISTS_EXCEPTION(e)                                        \
+    catch (e const&)                                                                   \
+    {                                                                                  \
+        response["code"] = LedgerManagementStatusCode::GROUP_ALREADY_EXISTS;           \
+        response["message"] = "Group " + std::to_string(_groupID) + " already exists"; \
+    }
+    CATCH_GROUP_ALREADY_EXISTS_EXCEPTION(GroupIsRunning)
+    CATCH_GROUP_ALREADY_EXISTS_EXCEPTION(GroupIsStopping)
+    CATCH_GROUP_ALREADY_EXISTS_EXCEPTION(GroupAlreadyDeleted)
+    CATCH_GROUP_ALREADY_EXISTS_EXCEPTION(GroupAlreadyStopped)
+#undef CATCH_GROUP_ALREADY_EXISTS_EXCEPTION
+    catch (GenesisConfAlreadyExists const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GENESIS_CONF_ALREADY_EXISTS;
+        response["message"] =
+            "Genesis config file for group " + std::to_string(_groupID) + " already exists";
+    }
+    catch (GroupConfAlreadyExists const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_CONF_ALREADY_EXIST;
+        response["message"] =
+            "Group config file for group " + std::to_string(_groupID) + " already exists";
+    }
+    catch (std::exception const& _e)
+    {
+        response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
+        response["message"] = _e.what();
+    }
+    return response;
+}
+
+Json::Value Rpc::startGroup(int _groupID)
+{
+    RPC_LOG(INFO) << LOG_BADGE("startGroup") << LOG_DESC("request") << LOG_KV("groupID", _groupID);
+
+    checkNodeVersionForGroupMgr("startGroup");
+
+    Json::Value response;
+
+    if (!checkGroupIDForGroupMgr(_groupID, response))
+    {
+        return response;
+    }
+
+    try
+    {
+        bool success = m_ledgerInitializer->initLedgerByGroupID(_groupID);
+        if (!success)
+        {
+            throw new dev::Exception("Group" + std::to_string(_groupID) + " initialized failed");
+        }
+
+        ledgerManager()->startByGroupID(_groupID);
+
+        response["code"] = LedgerManagementStatusCode::SUCCESS;
+        response["message"] = "Group " + std::to_string(_groupID) + " started successfully";
+    }
+    catch (GenesisConfNotFound const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GENESIS_CONF_NOT_FOUND;
+        response["message"] =
+            "Genesis config file for group " + std::to_string(_groupID) + " not found";
+    }
+    catch (GroupConfNotFound const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_CONF_NOT_FOUND;
+        response["message"] =
+            "Group config file for group " + std::to_string(_groupID) + " not found";
+    }
+    catch (GroupNotFound const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_NOT_FOUND;
+        response["message"] = "Group " + std::to_string(_groupID) + " not found";
+    }
+    catch (GroupIsRunning const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_ALREADY_RUNNING;
+        response["message"] = "Group " + std::to_string(_groupID) + " is already running";
+    }
+    catch (GroupIsStopping const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_IS_STOPPING;
+        response["message"] = "Group " + std::to_string(_groupID) + " is stopping";
+    }
+    catch (GroupAlreadyDeleted)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_ALREADY_DELETED;
+        response["message"] = "Group " + std::to_string(_groupID) + " has been deleted";
+    }
+    catch (std::exception const& _e)
+    {
+        response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
+        response["message"] = _e.what();
+    }
+
+    return response;
+}
+
+Json::Value Rpc::stopGroup(int _groupID)
+{
+    RPC_LOG(INFO) << LOG_BADGE("stopGroup") << LOG_DESC("request") << LOG_KV("groupID", _groupID);
+
+    checkNodeVersionForGroupMgr("stopGroup");
+
+    Json::Value response;
+
+    if (!checkGroupIDForGroupMgr(_groupID, response))
+    {
+        return response;
+    }
+
+    try
+    {
+        ledgerManager()->stopByGroupID(_groupID);
+        response["code"] = LedgerManagementStatusCode::SUCCESS;
+        response["message"] = "Group " + std::to_string(_groupID) + " stopped successfully";
+    }
+    catch (GroupNotFound const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_NOT_FOUND;
+        response["message"] = "Group " + std::to_string(_groupID) + " not found";
+    }
+    catch (GroupIsStopping const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_IS_STOPPING;
+        response["message"] = "Group " + std::to_string(_groupID) + " is stopping";
+    }
+    catch (GroupAlreadyStopped const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_ALREADY_STOPPED;
+        response["message"] = "Group " + std::to_string(_groupID) + " has already been stopped";
+    }
+    catch (GroupAlreadyDeleted const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_ALREADY_DELETED;
+        response["message"] = "Group " + std::to_string(_groupID) + " has already been deleted";
+    }
+    catch (std::exception const& _e)
+    {
+        response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
+        response["message"] = _e.what();
+    }
+    return response;
+}
+
+Json::Value Rpc::removeGroup(int _groupID)
+{
+    RPC_LOG(INFO) << LOG_BADGE("removeGroup") << LOG_DESC("request") << LOG_KV("groupID", _groupID);
+
+    checkNodeVersionForGroupMgr("generateGroup");
+
+    Json::Value response;
+
+    if (!checkGroupIDForGroupMgr(_groupID, response))
+    {
+        return response;
+    }
+
+    try
+    {
+        ledgerManager()->removeByGroupID(_groupID);
+        response["code"] = LedgerManagementStatusCode::SUCCESS;
+        response["message"] = "Group " + std::to_string(_groupID) + " deleted successfully";
+    }
+    catch (GroupNotFound const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_NOT_FOUND;
+        response["message"] = "Group " + std::to_string(_groupID) + " not found";
+    }
+    catch (GroupIsRunning const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_ALREADY_RUNNING;
+        response["message"] = "Group " + std::to_string(_groupID) + " is running";
+    }
+    catch (GroupIsStopping const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_IS_STOPPING;
+        response["message"] = "Group " + std::to_string(_groupID) + " is stopping";
+    }
+    catch (GroupAlreadyDeleted const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_ALREADY_DELETED;
+        response["message"] = "Group " + std::to_string(_groupID) + " has already been deleted";
+    }
+    catch (std::exception const& _e)
+    {
+        response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
+        response["message"] = _e.what();
+    }
+    return response;
+}
+
+Json::Value Rpc::recoverGroup(int _groupID)
+{
+    RPC_LOG(INFO) << LOG_BADGE("recoverGroup") << LOG_DESC("request")
+                  << LOG_KV("groupID", _groupID);
+
+    checkNodeVersionForGroupMgr("recoverGroup");
+
+    Json::Value response;
+
+    if (!checkGroupIDForGroupMgr(_groupID, response))
+    {
+        return response;
+    }
+
+    try
+    {
+        ledgerManager()->recoverByGroupID(_groupID);
+        response["code"] = LedgerManagementStatusCode::SUCCESS;
+        response["message"] = "Group " + std::to_string(_groupID) + " recovered successfully";
+    }
+    catch (GroupNotFound const&)
+    {
+        response["code"] = LedgerManagementStatusCode::GROUP_NOT_FOUND;
+        response["message"] = "Group " + std::to_string(_groupID) + " not found";
+    }
+#define CATCH_GROUP_NOT_DELETED_EXCEPTION(e)                                                 \
+    catch (e const&)                                                                         \
+    {                                                                                        \
+        response["code"] = LedgerManagementStatusCode::GROUP_HAS_NOT_DELETED;                \
+        response["message"] = "Group " + std::to_string(_groupID) + " has not been deleted"; \
+    }
+    CATCH_GROUP_NOT_DELETED_EXCEPTION(GroupIsRunning)
+    CATCH_GROUP_NOT_DELETED_EXCEPTION(GroupIsStopping)
+    CATCH_GROUP_NOT_DELETED_EXCEPTION(GroupAlreadyStopped)
+#undef CATCH_GROUP_NOT_DELETED_EXCEPTION
+    catch (std::exception const& _e)
+    {
+        response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
+        response["message"] = _e.what();
+    }
+    return response;
+}
+
+Json::Value Rpc::queryGroupStatus(int _groupID)
+{
+    RPC_LOG(INFO) << LOG_BADGE("queryGroupStatus") << LOG_DESC("request")
+                  << LOG_KV("groupID", _groupID);
+
+    checkNodeVersionForGroupMgr("queryGroupStatus");
+
+    Json::Value response;
+    if (!checkGroupIDForGroupMgr(_groupID, response))
+    {
+        response["status"] = "";
+        return response;
+    }
+
+    auto status = ledgerManager()->queryGroupStatus(_groupID);
+    switch (status)
+    {
+    case LedgerStatus::INEXISTENT:
+        response["status"] = "INEXISTENT";
+        break;
+    case LedgerStatus::RUNNING:
+        response["status"] = "RUNNING";
+        break;
+    case LedgerStatus::STOPPING:
+        response["status"] = "STOPPING";
+        break;
+    case LedgerStatus::STOPPED:
+        response["status"] = "STOPPED";
+        break;
+    case LedgerStatus::DELETED:
+        response["status"] = "DELETED";
+        break;
+    default:
+        BOOST_THROW_EXCEPTION(UnknownGroupStatus());
+    }
+    response["code"] = LedgerManagementStatusCode::SUCCESS;
+    response["message"] = "";
+    return response;
+}
+
+void Rpc::checkNodeVersionForGroupMgr(const char* _methodName)
+{
+    if (g_BCOSConfig.version() < V2_2_0)
+    {
+        RPC_LOG(ERROR) << _methodName << " only support after by v2.2.0";
+        BOOST_THROW_EXCEPTION(JsonRpcException(
+            RPCExceptionType::InvalidRequest, "method stopGroup not support this version"));
+    }
+}
+
+bool Rpc::checkConnection(const std::set<std::string>& _sealerList, Json::Value& _response)
+{
+    bool flag = true;
+    std::string errorInfo;
+
+    for (auto& sealer : _sealerList)
+    {
+        auto nodeID = NodeID(sealer);
+        if (nodeID == service()->id())
+        {
+            continue;
+        }
+
+        if (!service()->isConnected(nodeID))
+        {
+            errorInfo += sealer + ", ";
+            flag = false;
+        }
+    }
+
+    if (!flag)
+    {
+        _response["code"] = LedgerManagementStatusCode::PEERS_NOT_CONNECTED;
+        _response["message"] =
+            "Peer(s) not connected: " + errorInfo.substr(0, errorInfo.length() - 2);
+    }
+    return flag;
+}
+
+bool Rpc::checkGroupIDForGroupMgr(int _groupID, Json::Value& _response)
+{
+    if (_groupID < 1 || _groupID > dev::maxGroupID)
+    {
+        _response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
+        _response["message"] = "GroupID should be between 1 and " + std::to_string(maxGroupID);
+        return false;
+    }
+    return true;
+}
+
+bool Rpc::checkSealerID(const std::string& _sealer)
+{
+    if (!dev::isHex(_sealer) || _sealer.length() != 128 || _sealer.compare(0, 2, "0x") == 0)
+    {
+        return false;
+    }
+    return true;
+}
+
+bool Rpc::checkTimestamp(const std::string& _timestamp)
+{
+    try
+    {
+        int64_t cmp = boost::lexical_cast<int64_t>(_timestamp);
+        if (cmp < 0)
+        {
+            return false;
+        }
+        return _timestamp == std::to_string(cmp);
+    }
+    catch (...)
+    {
+        return false;
+    }
+}
+
+bool Rpc::checkParamsForGenerateGroup(
+    const Json::Value& _params, GroupParams& _groupParams, Json::Value& _response)
+{
+    // check timestamp
+    if (!_params.isMember("timestamp") || !_params["timestamp"].isString())
+    {
+        _response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
+        _response["message"] = "invalid `timestamp` field";
+        return false;
+    }
+
+    _groupParams.timestamp = _params["timestamp"].asString();
+    if (!checkTimestamp(_groupParams.timestamp))
+    {
+        _response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
+        _response["message"] = "invalid timestamp: " + _groupParams.timestamp;
+        return false;
+    }
+
+    // check sealers
+    if (!_params.isMember("sealers") || !_params["sealers"].isArray())
+    {
+        _response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
+        _response["message"] = "invalid `sealers` field";
+        return false;
+    }
+
+    int pos = 1;
+    for (auto& sealer : _params["sealers"])
+    {
+        if (!sealer.isString() || !checkSealerID(sealer.asString()))
+        {
+            _response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
+            _response["message"] = "invalid sealer ID at position " + std::to_string(pos);
+            return false;
+        }
+        _groupParams.sealers.insert(sealer.asString());
+        pos++;
+    }
+
+    // check enable_free_storage
+    if (!_params.isMember("enable_free_storage"))
+    {
+        _groupParams.enableFreeStorage = false;
+    }
+    else if (_params["enable_free_storage"].isBool())
+    {
+        _groupParams.enableFreeStorage = _params["enable_free_storage"].asBool();
+    }
+    else
+    {
+        _response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
+        _response["message"] = "invalid `enable_free_storage` field";
+        return false;
+    }
+
+    return true;
 }

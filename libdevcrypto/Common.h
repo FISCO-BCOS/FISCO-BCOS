@@ -24,11 +24,15 @@
 
 #pragma once
 
+#include "Hash.h"
 #include <libdevcore/Address.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/RLP.h>
+#include <secp256k1.h>
+#include <secp256k1_recovery.h>
+#include <secp256k1_sha256.h>
 #include <mutex>
 
 
@@ -56,10 +60,18 @@ static const unsigned VBase = 27;
 struct SignatureStruct
 {
     SignatureStruct() = default;
-    SignatureStruct(Signature const& _s);
-    SignatureStruct(h256 const& _r, h256 const& _s, VType _v);
-    SignatureStruct(u256 const& _r, u256 const& _s, NumberVType _v);
+    SignatureStruct(Signature const& _s) { *(Signature*)this = _s; }
+
+
+    SignatureStruct(h256 const& _r, h256 const& _s, VType _v) : r(_r), s(_s), v(_v) {}
+    SignatureStruct(u256 const& _r, u256 const& _s, NumberVType _v)
+    {
+        r = _r;
+        s = _s;
+        v = _v;
+    }
     static std::pair<bool, bytes> ecRecover(bytesConstRef _in);
+    static std::pair<bool, bytes> ecRecoverDeprecated(bytesConstRef _in);
     // SignatureStruct(VType _v, h256 const& _r, h256 const& _s);
     void encode(RLPStream& _s) const noexcept;
     void check() const noexcept;
@@ -72,7 +84,6 @@ struct SignatureStruct
     h256 s;
     VType v;
 };
-
 // m_vrs.rlp()
 
 /// A vector of secrets.
@@ -105,6 +116,7 @@ Address toAddress(Address const& _from, u256 const& _nonce);
 
 
 /// Recovers Public key from signed message hash.
+Public recoverSignature(Signature const& _sig, h256 const& _hash);
 Public recover(Signature const& _sig, h256 const& _hash);
 
 class KeyPair;

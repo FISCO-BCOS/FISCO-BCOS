@@ -20,12 +20,13 @@
  */
 
 #pragma once
-
+#include "StatisticProtocolServer.h"
 #include <jsonrpccpp/common/exception.h>
 #include <jsonrpccpp/common/procedure.h>
 #include <jsonrpccpp/server/abstractserverconnector.h>
 #include <jsonrpccpp/server/iprocedureinvokationhandler.h>
 #include <jsonrpccpp/server/requesthandlerfactory.h>
+#include <libstat/ChannelNetworkStatHandler.h>
 #include <boost/throw_exception.hpp>
 #include <chrono>
 #include <map>
@@ -84,9 +85,7 @@ template <class... Is>
 class ModularServer : public jsonrpc::IProcedureInvokationHandler
 {
 public:
-    ModularServer()
-      : m_handler(jsonrpc::RequestHandlerFactory::createProtocolHandler(
-            jsonrpc::JSONRPC_SERVER_V2, *this))
+    ModularServer() : m_handler(new StatisticPotocolServer(*this))
     {
         m_handler->AddProcedure(jsonrpc::Procedure(
             "rpc_modules", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, NULL));
@@ -146,7 +145,7 @@ public:
 
 protected:
     std::vector<std::unique_ptr<jsonrpc::AbstractServerConnector>> m_connectors;
-    std::unique_ptr<jsonrpc::IProtocolHandler> m_handler;
+    std::unique_ptr<StatisticPotocolServer> m_handler;
     /// Mapping for implemented modules, to be filled by subclasses during construction.
     Json::Value m_implementedModules;
 };
@@ -182,7 +181,8 @@ public:
     virtual void HandleMethodCall(
         jsonrpc::Procedure& _proc, Json::Value const& _input, Json::Value& _output) override
     {
-        auto pointer = m_methods.find(_proc.GetProcedureName());
+        auto procedureName = _proc.GetProcedureName();
+        auto pointer = m_methods.find(procedureName);
         if (pointer != m_methods.end())
         {
             try
@@ -213,6 +213,11 @@ public:
             (m_interface.get()->*(pointer->second))(_input);
         else
             ModularServer<Is...>::HandleNotificationCall(_proc, _input);
+    }
+
+    void setNetworkStatHandler(dev::stat::ChannelNetworkStatHandler::Ptr _handler)
+    {
+        this->m_handler->setNetworkStatHandler(_handler);
     }
 
 private:

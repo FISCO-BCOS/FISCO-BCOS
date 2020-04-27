@@ -35,6 +35,7 @@
 #include <libdevcore/Common.h>
 #include <libdevcore/Exceptions.h>
 #include <libmptstate/MPTStateFactory.h>
+#include <libprecompiled/Precompiled.h>
 #include <libsecurity/EncryptedLevelDB.h>
 #include <libstorage/BasicRocksDB.h>
 #include <libstorage/LevelDBStorage.h>
@@ -496,6 +497,16 @@ void DBInitializer::createExecutiveContext()
     // mpt or storage
     m_executiveContextFactory->setStateFactory(m_stateFactory);
     m_executiveContextFactory->setTableFactoryFactory(m_tableFactoryFactory);
+    // create precompiled related factory
+    auto precompiledResultFactory =
+        std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+    auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(
+        m_param->mutableGenesisParam().evmFlags);
+    precompiledResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
+    m_executiveContextFactory->setPrecompiledExecResultFactory(precompiledResultFactory);
+    DBInitializer_LOG(INFO) << LOG_DESC(
+        "create precompiledGasFactory and precompiledResultFactory");
+
     DBInitializer_LOG(INFO) << LOG_DESC("createExecutiveContext SUCC");
 }
 
@@ -505,12 +516,17 @@ void DBInitializer::createStateFactory(dev::h256 const& genesisHash)
     DBInitializer_LOG(INFO) << LOG_BADGE("createStateFactory")
                             << LOG_KV("type", m_param->mutableStateParam().type);
     if (dev::stringCmpIgnoreCase(m_param->mutableStateParam().type, "mpt") == 0)
-        createMptState(genesisHash);
-    else if (dev::stringCmpIgnoreCase(m_param->mutableStateParam().type, "storage") ==
-             0)  /// default is storage state
-        createStorageState();
-    else
     {
+        m_stateFactory = std::make_shared<MPTStateFactory>(
+            u256(0x0), m_param->baseDir(), genesisHash, WithExisting::Trust);
+        DBInitializer_LOG(INFO) << LOG_DESC("create MptState success");
+    }
+    else if (dev::stringCmpIgnoreCase(m_param->mutableStateParam().type, "storage") == 0)
+    {
+        createStorageState();
+    }
+    else
+    {  // default is storage state
         DBInitializer_LOG(WARNING)
             << LOG_BADGE("createStateFactory")
             << LOG_DESC("only support storage and mpt now, create storage by default");
@@ -522,16 +538,20 @@ void DBInitializer::createStateFactory(dev::h256 const& genesisHash)
 /// TOCHECK: create the stateStorage with AMDB
 void DBInitializer::createStorageState()
 {
-    m_stateFactory = std::make_shared<StorageStateFactory>(u256(0x0));
-    DBInitializer_LOG(INFO) << LOG_DESC("createStorageState SUCC");
-}
-
-/// create the mptState
-void DBInitializer::createMptState(dev::h256 const& genesisHash)
-{
-    m_stateFactory = std::make_shared<MPTStateFactory>(
-        u256(0x0), m_param->baseDir(), genesisHash, WithExisting::Trust);
-    DBInitializer_LOG(INFO) << LOG_DESC("createMptState SUCC");
+    bool enableBinaryEncode = false;
+#if 0
+    if (g_BCOSConfig.version() >= V2_4_0 &&
+        (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "RocksDB") ||
+            !dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "Scalable")))
+    {
+        enableBinaryEncode = true;
+    }
+#endif
+    auto stateFactory = std::make_shared<StorageStateFactory>(u256(0x0));
+    stateFactory->enableBinaryEncode(enableBinaryEncode);
+    m_stateFactory = stateFactory;
+    DBInitializer_LOG(INFO) << LOG_DESC("createStorageState SUCC")
+                            << LOG_KV("state enable store binary", enableBinaryEncode);
 }
 
 Storage::Ptr dev::ledger::createRocksDBStorage(const std::string& _dbPath,

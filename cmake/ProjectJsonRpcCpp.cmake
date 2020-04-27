@@ -58,6 +58,7 @@ ExternalProject_Add(jsonrpccpp
     DOWNLOAD_NAME jsonrcpcpp-0.7.0.tar.gz
     DOWNLOAD_NO_PROGRESS 1
     URL https://github.com/cinemast/libjson-rpc-cpp/archive/v0.7.0.tar.gz
+        https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/jsonrcpcpp-0.7.0.tar.gz
     URL_HASH SHA256=669c2259909f11a8c196923a910f9a16a8225ecc14e6c30e2bcb712bab9097eb
     # On Windows it tries to install this dir. Create it to prevent failure.
     PATCH_COMMAND ${CMAKE_COMMAND} -E make_directory <SOURCE_DIR>/win32-deps/include
@@ -73,8 +74,9 @@ ExternalProject_Add(jsonrpccpp
 add_dependencies(jsonrpccpp jsoncpp)
 add_dependencies(jsonrpccpp MHD)
 
+ExternalProject_Get_Property(jsonrpccpp SOURCE_DIR)
 ExternalProject_Get_Property(jsonrpccpp INSTALL_DIR)
-set(JSONRPCCPP_INCLUDE_DIR ${INSTALL_DIR}/include)
+set(JSONRPCCPP_INCLUDE_DIR ${SOURCE_DIR}/src)
 file(MAKE_DIRECTORY ${JSONRPCCPP_INCLUDE_DIR})  # Must exist.
 
 add_library(JsonRpcCpp::Common STATIC IMPORTED)

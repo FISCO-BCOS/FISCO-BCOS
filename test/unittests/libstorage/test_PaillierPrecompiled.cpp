@@ -38,6 +38,12 @@ struct PaillierPrecompiledFixture
     {
         context = std::make_shared<ExecutiveContext>();
         paillierPrecompiled = std::make_shared<PaillierPrecompiled>();
+
+        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
+        auto precompiledExecResultFactory =
+            std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+        precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
+        paillierPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     }
 
     ~PaillierPrecompiledFixture() {}
@@ -109,7 +115,8 @@ BOOST_AUTO_TEST_CASE(TestHomAdd)
         "C0D1C97483";
     dev::eth::ContractABI abi;
     bytes in = abi.abiIn("paillierAdd(string,string)", cipher1, cipher2);
-    bytes out = paillierPrecompiled->call(context, bytesConstRef(&in));
+    auto callResult = paillierPrecompiled->call(context, bytesConstRef(&in));
+    bytes out = callResult->execResult();
     std::string result;
     abi.abiOut(bytesConstRef(&out), result);
     BOOST_TEST(result == cipher3);
@@ -119,7 +126,8 @@ BOOST_AUTO_TEST_CASE(ErrorFunc)
 {
     dev::eth::ContractABI abi;
     bytes in = abi.abiIn("add(string,string)", std::string("2AE3FFE2"), std::string("2AE3FFE2"));
-    bytes out = paillierPrecompiled->call(context, bytesConstRef(&in));
+    auto callResult = paillierPrecompiled->call(context, bytesConstRef(&in));
+    bytes out = callResult->execResult();
     s256 count = 1;
     abi.abiOut(bytesConstRef(&out), count);
     if (g_BCOSConfig.version() > RC2_VERSION)
@@ -138,7 +146,8 @@ BOOST_AUTO_TEST_CASE(InvalidInputs)
     dev::eth::ContractABI abi;
     bytes in = abi.abiIn(
         "paillierAdd(string,string)", std::string("2AE3FFE2"), std::string("2AE3FFE22AE3FFE2"));
-    bytes out = paillierPrecompiled->call(context, bytesConstRef(&in));
+    auto callResult = paillierPrecompiled->call(context, bytesConstRef(&in));
+    bytes out = callResult->execResult();
     s256 count = 1;
     abi.abiOut(bytesConstRef(&out), count);
     if (g_BCOSConfig.version() > RC2_VERSION)
@@ -153,7 +162,8 @@ BOOST_AUTO_TEST_CASE(InvalidInputs)
     // situation2
     in = abi.abiIn("paillierAdd(string,string)", std::string("1111FFE22AE3FFE2"),
         std::string("2AE3FFE22AE3FFE2"));
-    out = paillierPrecompiled->call(context, bytesConstRef(&in));
+    callResult = paillierPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
     if (g_BCOSConfig.version() > RC2_VERSION)
@@ -177,7 +187,8 @@ BOOST_AUTO_TEST_CASE(InvalidInputs)
         "4C856800539EB71D3B82FAD9DA4529D7547BAA2EA258357A3EFE5B8B0F4F0FBD36FF0D3DD25213E78AD8319886"
         "5DFBC7B818C1D2B561E1B00F1D81B1986B7B8C72A629BBF67F5D";
     in = abi.abiIn("paillierAdd(string,string)", cipher3, cipher3);
-    out = paillierPrecompiled->call(context, bytesConstRef(&in));
+    callResult = paillierPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
     if (g_BCOSConfig.version() > RC2_VERSION)
@@ -205,7 +216,8 @@ BOOST_AUTO_TEST_CASE(InvalidInputs)
         "95A222DB990A3B7F7D6658DD532251BB160FF0C23FE691AD3240BE7A2484722EFCBB8AE10DDB7CC719B9076E39"
         "4C856800539EB71D3B82FAD9DA4529D7547BAA2EA258357A3EFE5B8B0F4F0FBD36FF0D3DD25213E78AD831988";
     in = abi.abiIn("paillierAdd(string,string)", cipher4, cipher4);
-    out = paillierPrecompiled->call(context, bytesConstRef(&in));
+    callResult = paillierPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
     if (g_BCOSConfig.version() > RC2_VERSION)
@@ -239,7 +251,8 @@ BOOST_AUTO_TEST_CASE(InvalidInputs)
         "4C856800539EB71D3B82FAD9DA4529D7547BAA2EA258357A3EFE5B8B0F4F0FBD36FF0D3DD25213E78AD8319886"
         "5DFBC7B818C1D2B561E1B00F1D81B1986B7B8C72A629BBF67F5D";
     in = abi.abiIn("paillierAdd(string,string)", cipher51, cipher52);
-    out = paillierPrecompiled->call(context, bytesConstRef(&in));
+    callResult = paillierPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
     if (g_BCOSConfig.version() > RC2_VERSION)

@@ -38,6 +38,12 @@ struct GroupSigPrecompiledFixture
     {
         context = std::make_shared<ExecutiveContext>();
         groupSigPrecompiled = std::make_shared<GroupSigPrecompiled>();
+
+        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
+        auto precompiledExecResultFactory =
+            std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+        precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
+        groupSigPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     }
 
     ~GroupSigPrecompiledFixture() {}
@@ -130,7 +136,9 @@ BOOST_AUTO_TEST_CASE(TestGroupSigVerify)
     dev::eth::ContractABI abi;
     bytes in = abi.abiIn(
         "groupSigVerify(string,string,string,string)", signature, message1, gpkInfo, paramInfo);
-    bytes out = groupSigPrecompiled->call(context, bytesConstRef(&in));
+    auto execResult = groupSigPrecompiled->call(context, bytesConstRef(&in));
+    bytes out = execResult->execResult();
+
     bool real_result1 = true;
     bool result1;
     abi.abiOut(bytesConstRef(&out), result1);
@@ -140,7 +148,8 @@ BOOST_AUTO_TEST_CASE(TestGroupSigVerify)
     std::string message2 = "groupSigVerify";
     in = abi.abiIn(
         "groupSigVerify(string,string,string,string)", signature, message2, gpkInfo, paramInfo);
-    out = groupSigPrecompiled->call(context, bytesConstRef(&in));
+    execResult = groupSigPrecompiled->call(context, bytesConstRef(&in));
+    out = execResult->execResult();
     bool real_result2 = false;
     bool result2;
     abi.abiOut(bytesConstRef(&out), result2);
@@ -151,7 +160,8 @@ BOOST_AUTO_TEST_CASE(ErrorFunc)
 {
     dev::eth::ContractABI abi;
     bytes in = abi.abiIn("groupSigVerify(string)", std::string("2AE3FFE2"));
-    bytes out = groupSigPrecompiled->call(context, bytesConstRef(&in));
+    auto execResult = groupSigPrecompiled->call(context, bytesConstRef(&in));
+    bytes out = execResult->execResult();
     s256 count = 1;
     abi.abiOut(bytesConstRef(&out), count);
     if (g_BCOSConfig.version() > RC2_VERSION)
@@ -170,7 +180,8 @@ BOOST_AUTO_TEST_CASE(InvalidInputs)
     dev::eth::ContractABI abi;
     bytes in = abi.abiIn("groupSigVerify(string,string,string,string)", std::string("2AE3FFE2"),
         std::string("2AE3FFE2"), std::string("2AE3FFE2"), std::string("2AE3FFE2"));
-    bytes out = groupSigPrecompiled->call(context, bytesConstRef(&in));
+    auto execResult = groupSigPrecompiled->call(context, bytesConstRef(&in));
+    bytes out = execResult->execResult();
     s256 count = 1;
     abi.abiOut(bytesConstRef(&out), count);
     if (g_BCOSConfig.version() > RC2_VERSION)
@@ -213,7 +224,8 @@ BOOST_AUTO_TEST_CASE(InvalidInputs)
         "AxIDMyIHNpZ24xIC0xIHNpZ24wIDE=";
     in = abi.abiIn(
         "groupSigVerify(string,string,string,string)", signature2, message2, gpkInfo2, paramInfo2);
-    out = groupSigPrecompiled->call(context, bytesConstRef(&in));
+    execResult = groupSigPrecompiled->call(context, bytesConstRef(&in));
+    out = execResult->execResult();
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
     if (g_BCOSConfig.version() > RC2_VERSION)

@@ -20,6 +20,7 @@
  */
 #pragma once
 
+#include "PrecompiledResult.h"
 #include <libdevcore/Address.h>
 #include <libstorage/Table.h>
 #include <map>
@@ -35,7 +36,6 @@ namespace blockverifier
 {
 class ExecutiveContext;
 }
-
 namespace precompiled
 {
 class Precompiled : public std::enable_shared_from_this<Precompiled>
@@ -46,10 +46,9 @@ public:
     virtual ~Precompiled(){};
 
     virtual std::string toString() { return ""; }
-
-    virtual bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
-        bytesConstRef _param, Address const& _origin = Address(),
-        Address const& _sender = Address()) = 0;
+    virtual PrecompiledExecResult::Ptr call(
+        std::shared_ptr<dev::blockverifier::ExecutiveContext> _context, bytesConstRef _param,
+        Address const& _origin = Address(), Address const& _sender = Address()) = 0;
 
     // is this precompiled need parallel processing, default false.
     virtual bool isParallelPrecompiled() { return false; }
@@ -70,8 +69,23 @@ public:
     virtual uint32_t getFuncSelector(std::string const& _functionName);
     virtual bytesConstRef getParamData(bytesConstRef _param) { return _param.cropped(4); }
 
+    void setPrecompiledExecResultFactory(
+        PrecompiledExecResultFactory::Ptr _precompiledExecResultFactory)
+    {
+        m_precompiledExecResultFactory = _precompiledExecResultFactory;
+    }
+
+    PrecompiledExecResultFactory::Ptr precompiledExecResultFactory()
+    {
+        return m_precompiledExecResultFactory;
+    }
+
 protected:
     std::map<std::string, uint32_t> name2Selector;
+
+protected:
+    uint64_t getEntriesCapacity(std::shared_ptr<dev::storage::Entries const> _entries) const;
+
     std::shared_ptr<dev::storage::Table> openTable(
         std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
         const std::string& tableName);
@@ -81,6 +95,8 @@ protected:
         Address const& origin);
     bool checkAuthority(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
         Address const& _origin, Address const& _contract);
+
+    PrecompiledExecResultFactory::Ptr m_precompiledExecResultFactory;
 };
 
 }  // namespace precompiled

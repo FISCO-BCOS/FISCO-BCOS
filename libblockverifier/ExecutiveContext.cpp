@@ -34,8 +34,14 @@ using namespace dev::eth::abi;
 using namespace dev::blockverifier;
 using namespace dev;
 using namespace std;
+// set PrecompiledExecResultFactory for each precompiled object
+void ExecutiveContext::setPrecompiledExecResultFactory(
+    dev::precompiled::PrecompiledExecResultFactory::Ptr _precompiledExecResultFactory)
+{
+    m_precompiledExecResultFactory = _precompiledExecResultFactory;
+}
 
-bytes ExecutiveContext::call(
+dev::precompiled::PrecompiledExecResult::Ptr ExecutiveContext::call(
     Address const& address, bytesConstRef param, Address const& origin, Address const& sender)
 {
     try
@@ -44,13 +50,14 @@ bytes ExecutiveContext::call(
 
         if (p)
         {
-            bytes out = p->call(shared_from_this(), param, origin, sender);
-            return out;
+            auto execResult = p->call(shared_from_this(), param, origin, sender);
+            return execResult;
         }
         else
         {
             EXECUTIVECONTEXT_LOG(DEBUG)
                 << LOG_DESC("[call]Can't find address") << LOG_KV("address", address);
+            return std::make_shared<dev::precompiled::PrecompiledExecResult>();
         }
     }
     catch (dev::precompiled::PrecompiledException& e)
@@ -72,15 +79,16 @@ bytes ExecutiveContext::call(
 
         throw dev::eth::PrecompiledError();
     }
-
-    return bytes();
 }
 
 Address ExecutiveContext::registerPrecompiled(std::shared_ptr<precompiled::Precompiled> p)
 {
     auto count = ++m_addressCount;
     Address address(count);
-
+    if (!p->precompiledExecResultFactory())
+    {
+        p->setPrecompiledExecResultFactory(m_precompiledExecResultFactory);
+    }
     m_address2Precompiled.insert(std::make_pair(address, p));
 
     return address;
