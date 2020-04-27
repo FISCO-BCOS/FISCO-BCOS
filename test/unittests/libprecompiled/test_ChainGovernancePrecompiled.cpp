@@ -88,13 +88,19 @@ BOOST_AUTO_TEST_CASE(grant_revoke_CM)
     condition->EQ(SYS_AC_ADDRESS, member1.hex());
     auto result = acTable->select(SYS_ACCESS_TABLE, condition);
     BOOST_TEST(result->size() == 1);
+    condition = acTable->newCondition();
+    condition->EQ(SYS_AC_ADDRESS, member1.hex());
+    auto entries = acTable->select(SYS_CONFIG, condition);
+    BOOST_TEST(entries->size() == 1);
+    entries = acTable->select(SYS_CONSENSUS, condition);
+    BOOST_TEST(entries->size() == 1);
 
     // insert again
     out = chainGovernancePrecompiled->call(context, bytesConstRef(&in), member1);
     ret = 0;
     abi.abiOut(&out->execResult(), ret);
     BOOST_TEST(ret == CODE_COMMITTEE_MEMBER_EXIST);
-    auto entries = acTable->select(SYS_ACCESS_TABLE, acTable->newCondition());
+    entries = acTable->select(SYS_ACCESS_TABLE, acTable->newCondition());
     BOOST_TEST(entries->size() == 1u);
 
     // grantOperator member1
@@ -153,6 +159,12 @@ BOOST_AUTO_TEST_CASE(grant_revoke_CM)
     BOOST_TEST(ret == 1);
     entries = acTable->select(SYS_ACCESS_TABLE, acTable->newCondition());
     BOOST_TEST(entries->size() == 2u);
+    condition = acTable->newCondition();
+    condition->EQ(SYS_AC_ADDRESS, member2.hex());
+    entries = acTable->select(SYS_CONFIG, condition);
+    BOOST_TEST(entries->size() == 1);
+    entries = acTable->select(SYS_CONSENSUS, condition);
+    BOOST_TEST(entries->size() == 1);
 
     // grantCommitteeMember member3
     Address member3("0x420f853b49838bd3e9466c85a4cc3428c960dde3");
@@ -185,6 +197,25 @@ BOOST_AUTO_TEST_CASE(grant_revoke_CM)
     BOOST_TEST(ret == 1);
     entries = acTable->select(SYS_ACCESS_TABLE, acTable->newCondition());
     BOOST_TEST(entries->size() == 2u);
+    condition = acTable->newCondition();
+    condition->EQ(SYS_AC_ADDRESS, member3.hex());
+    entries = acTable->select(SYS_CONFIG, condition);
+    BOOST_TEST(entries->size() == 0);
+    entries = acTable->select(SYS_CONSENSUS, condition);
+    BOOST_TEST(entries->size() == 0);
+
+    // member3 revokeOperator member3
+    in = abi.abiIn("revokeOperator(address)", member3);
+    out = chainGovernancePrecompiled->call(context, bytesConstRef(&in), member3);
+    ret = 0;
+    abi.abiOut(&out->execResult(), ret);
+    BOOST_TEST(ret == CODE_INVALID_REQUEST_PERMISSION_DENIED);
+    // member3 revokeOperator member3
+    in = abi.abiIn("grantOperator(address)", member3);
+    out = chainGovernancePrecompiled->call(context, bytesConstRef(&in), member3);
+    ret = 0;
+    abi.abiOut(&out->execResult(), ret);
+    BOOST_TEST(ret == CODE_INVALID_REQUEST_PERMISSION_DENIED);
 
     // revokeCommitteeMember member2
     in = abi.abiIn("revokeCommitteeMember(address)", member2);
@@ -248,7 +279,7 @@ BOOST_AUTO_TEST_CASE(updateCommitteeMemberWeight)
     out = chainGovernancePrecompiled->call(context, bytesConstRef(&in), member3);
     ret = 0;
     abi.abiOut(&out->execResult(), ret);
-    BOOST_TEST(ret == CODE_INVALID_REQUEST);
+    BOOST_TEST(ret == CODE_INVALID_REQUEST_PERMISSION_DENIED);
     out = chainGovernancePrecompiled->call(context, bytesConstRef(&in), member1);
     ret = 0;
     abi.abiOut(&out->execResult(), ret);
@@ -260,14 +291,25 @@ BOOST_AUTO_TEST_CASE(updateCommitteeMemberWeight)
     out = chainGovernancePrecompiled->call(context, bytesConstRef(&in), member1);
     ret = 0;
     abi.abiOut(&out->execResult(), ret);
-    BOOST_TEST(ret == CODE_INVALID_REQUEST);
+    BOOST_TEST(ret == CODE_CURRENT_VALUE_IS_EXPECTED_VALUE);
 
     // queryCommitteeMemberWeight member1 2
     in = abi.abiIn("queryCommitteeMemberWeight(address)", member1);
     out = chainGovernancePrecompiled->call(context, bytesConstRef(&in), member1);
     ret = 0;
-    abi.abiOut(&out->execResult(), ret);
+    bool ok = false;
+    abi.abiOut(&out->execResult(), ok, ret);
     BOOST_TEST(ret == 2);
+    BOOST_TEST(ok == true);
+
+    // queryCommitteeMemberWeight member3
+    in = abi.abiIn("queryCommitteeMemberWeight(address)", member3);
+    out = chainGovernancePrecompiled->call(context, bytesConstRef(&in), member1);
+    ret = 0;
+    ok = true;
+    abi.abiOut(&out->execResult(), ok, ret);
+    BOOST_TEST(ret == CODE_COMMITTEE_MEMBER_NOT_EXIST);
+    BOOST_TEST(ok == false);
 
     // grantCommitteeMember member3
     in = abi.abiIn("grantCommitteeMember(address)", member3);
@@ -310,7 +352,7 @@ BOOST_AUTO_TEST_CASE(updateThreshold)
     out = chainGovernancePrecompiled->call(context, bytesConstRef(&in), member3);
     ret = 0;
     abi.abiOut(&out->execResult(), ret);
-    BOOST_TEST(ret == CODE_INVALID_REQUEST);
+    BOOST_TEST(ret == CODE_INVALID_REQUEST_PERMISSION_DENIED);
     out = chainGovernancePrecompiled->call(context, bytesConstRef(&in), member1);
     ret = 0;
     abi.abiOut(&out->execResult(), ret);
@@ -322,7 +364,29 @@ BOOST_AUTO_TEST_CASE(updateThreshold)
     out = chainGovernancePrecompiled->call(context, bytesConstRef(&in), member2);
     ret = 0;
     abi.abiOut(&out->execResult(), ret);
-    BOOST_TEST(ret == CODE_INVALID_REQUEST);
+    BOOST_TEST(ret == CODE_CURRENT_VALUE_IS_EXPECTED_VALUE);
+
+    // updateThreshold 0.02
+    in = abi.abiIn("updateThreshold(int256)", 2);
+    out = chainGovernancePrecompiled->call(context, bytesConstRef(&in), member3);
+    ret = 0;
+    abi.abiOut(&out->execResult(), ret);
+    BOOST_TEST(ret == CODE_INVALID_REQUEST_PERMISSION_DENIED);
+    out = chainGovernancePrecompiled->call(context, bytesConstRef(&in), member1);
+    ret = 0;
+    abi.abiOut(&out->execResult(), ret);
+    BOOST_TEST(ret == 1);
+
+    in = abi.abiIn("updateThreshold(int256)", 3);
+    out = chainGovernancePrecompiled->call(context, bytesConstRef(&in), member2);
+    ret = 0;
+    abi.abiOut(&out->execResult(), ret);
+    BOOST_TEST(ret == 1);
+    in = abi.abiIn("updateThreshold(int256)", 3);
+    out = chainGovernancePrecompiled->call(context, bytesConstRef(&in), member2);
+    ret = 0;
+    abi.abiOut(&out->execResult(), ret);
+    BOOST_TEST(ret == CODE_CURRENT_VALUE_IS_EXPECTED_VALUE);
 
     in = abi.abiIn("updateThreshold(int256)", 101);
     out = chainGovernancePrecompiled->call(context, bytesConstRef(&in), member2);
@@ -340,7 +404,7 @@ BOOST_AUTO_TEST_CASE(updateThreshold)
     out = chainGovernancePrecompiled->call(context, bytesConstRef(&in), member1);
     ret = 0;
     abi.abiOut(&out->execResult(), ret);
-    BOOST_TEST(ret == 40);
+    BOOST_TEST(ret == 3);
 
     // revokeCommitteeMember member2
     in = abi.abiIn("revokeCommitteeMember(address)", member2);
