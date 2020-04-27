@@ -2,13 +2,13 @@ file(GLOB_RECURSE HEADERS "*.h")
 file(GLOB_RECURSE SRC_LIST "*.cpp")
 
 if (BUILD_GM)
-    # file(GLOB_RECURSE SRC_LIST "gm/*.cpp") 
-    list(REMOVE_ITEM SRC_LIST ${CMAKE_CURRENT_SOURCE_DIR}/Common.cpp)
+    # file(GLOB_RECURSE SRC_LIST "gm/*.cpp")
+    # list(REMOVE_ITEM SRC_LIST ${CMAKE_CURRENT_SOURCE_DIR}/Common.cpp)
 else()
-    list(REMOVE_ITEM SRC_LIST ${CMAKE_CURRENT_SOURCE_DIR}/gm/GmCommon.cpp)
+    # list(REMOVE_ITEM SRC_LIST ${CMAKE_CURRENT_SOURCE_DIR}/gm/GmCommon.cpp)
 endif()
 
-set(INSERT_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/CommonFunc.cpp ${CMAKE_CURRENT_SOURCE_DIR}/HashCommonFunc.cpp)
+# set(INSERT_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/CommonFunc.cpp)
 list(APPEND SRC_LIST ${INSERT_SOURCES})
 
 add_library(devcrypto ${SRC_LIST} ${HEADERS})

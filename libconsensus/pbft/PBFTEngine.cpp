@@ -22,6 +22,7 @@
  * @date: 2018-09-28
  */
 #include "PBFTEngine.h"
+#include "libdevcrypto/CryptoInterface.h"
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcore/CommonJS.h>
 #include <libethcore/CommonJS.h>
@@ -406,9 +407,10 @@ bool PBFTEngine::checkSign(PBFTMsg const& req) const
     h512 node_id;
     if (getNodeIDByIndex(node_id, req.idx))
     {
-        Public pub_id = jsToPublic(toJS(node_id.hex()));
-        return dev::verify(pub_id, req.sig, req.block_hash) &&
-               dev::verify(pub_id, req.sig2, req.fieldsWithoutBlock());
+        return dev::crypto::Verify(
+                   node_id, dev::crypto::SignatureFromBytes(req.sig), req.block_hash) &&
+               dev::crypto::Verify(
+                   node_id, dev::crypto::SignatureFromBytes(req.sig2), req.fieldsWithoutBlock());
     }
     return false;
 }
@@ -740,7 +742,7 @@ bool PBFTEngine::checkBlock(Block const& block)
             PBFTENGINE_LOG(ERROR) << LOG_DESC("checkBlock: checkSign failed")
                                   << LOG_KV("sealerIdx", nodeIndex)
                                   << LOG_KV("blockHash", block.blockHeader().hash().abridged())
-                                  << LOG_KV("signature", sign.second.abridged());
+                                  << LOG_KV("signature", toHex(sign.second));
             return false;
         }
     }  /// end of check sign
@@ -756,12 +758,12 @@ bool PBFTEngine::checkBlock(Block const& block)
     return true;
 }
 
-bool PBFTEngine::checkSign(IDXTYPE const& _idx, dev::h256 const& _hash, Signature const& _sig)
+bool PBFTEngine::checkSign(IDXTYPE const& _idx, dev::h256 const& _hash, bytes const& _sig)
 {
     h512 nodeId;
     if (getNodeIDByIndex(nodeId, _idx))
     {
-        return dev::verify(nodeId, _sig, _hash);
+        return dev::crypto::Verify(nodeId, dev::crypto::SignatureFromBytes(_sig), _hash);
     }
     return false;
 }

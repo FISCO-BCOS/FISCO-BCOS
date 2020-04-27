@@ -117,11 +117,12 @@ BOOST_AUTO_TEST_CASE(testSigListSetting)
     ret = req_cache.generateAndSetSigList(block, node_num);
     BOOST_CHECK(ret);
     BOOST_CHECK(block.sigList()->size() == node_num);
-    std::vector<std::pair<u256, Signature>> sig_list = *(block.sigList());
+    std::vector<std::pair<u256, std::vector<unsigned char>>> sig_list = *(block.sigList());
     /// check the signature
     for (auto& item : sig_list)
     {
-        auto p = dev::recover(item.second, prepare_req->block_hash);
+        auto p = dev::crypto::Recover(
+            dev::crypto::SignatureFromBytes(item.second), prepare_req->block_hash);
         BOOST_CHECK(!!p);
     }
 }

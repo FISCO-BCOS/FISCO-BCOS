@@ -199,12 +199,6 @@ BOOST_AUTO_TEST_CASE(GettingSignatureForUnsignedTransactionThrows)
     BOOST_REQUIRE_THROW(tx.signature(), TransactionIsUnsigned);
 }
 
-BOOST_AUTO_TEST_CASE(CheckLowSForUnsignedTransactionThrows)
-{
-    Transaction tx(0, 0, 10000, Address("a94f5374fce5edbc8e2a8697c15331677e6ebf0b"), bytes(), 0);
-    BOOST_REQUIRE_THROW(tx.checkLowS(), TransactionIsUnsigned);
-}
-
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev

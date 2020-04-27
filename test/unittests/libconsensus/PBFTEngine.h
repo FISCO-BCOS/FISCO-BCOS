@@ -423,8 +423,8 @@ static void testCheckSign(FakeConsensus<T>& fake_pbft, PrepareReq& req, bool suc
 {
     if (!succ)
     {
-        Signature org_sig2 = req.sig2;
-        req.sig2 = Signature();
+        auto org_sig2 = req.sig2;
+        req.sig2 = vector<unsigned char>();
         BOOST_CHECK(fake_pbft.consensus()->isValidPrepare(req) == CheckResult::INVALID);
         req.sig2 = org_sig2;
     }
@@ -456,8 +456,8 @@ static void fakeValidPrepare(FakeConsensus<T>& fake_pbft, PrepareReq& req)
     fake_pbft.consensus()->setConsensusBlockNumber(req.height);
     BOOST_CHECK(fake_pbft.m_secrets.size() > req.idx);
     auto keyPair = fake_pbft.m_keyPair[req.idx];
-    req.sig = dev::sign(keyPair, req.block_hash);
-    req.sig2 = dev::sign(keyPair, req.fieldsWithoutBlock());
+    req.sig = dev::crypto::Sign(keyPair, req.block_hash)->asBytes();
+    req.sig2 = dev::crypto::Sign(keyPair, req.fieldsWithoutBlock())->asBytes();
 }
 
 /// test isValidPrepare

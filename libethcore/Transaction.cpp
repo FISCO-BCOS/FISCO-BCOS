@@ -22,6 +22,7 @@
 #include "Transaction.h"
 #include "EVMSchedule.h"
 #include "Exceptions.h"
+#include "libdevcrypto/CryptoInterface.h"
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcore/vector_ref.h>
 #include <libdevcrypto/Common.h>
@@ -82,12 +83,7 @@ void Transaction::decodeRC1(RLP const& rlp, CheckTransaction _checkSig)
         // r -> rlp[8].toInt<u256>();             // 8
         // s -> rlp[9].toInt<u256>();             // 9
 
-        // decode v r s by increasing rlp index order for faster decoding
-        NumberVType v = getVFromRLP(rlp[7]);
-        u256 r = rlp[8].toInt<u256>();
-        u256 s = rlp[9].toInt<u256>();
-
-        m_vrs = SignatureStruct(r, s, v);
+        m_vrs = dev::crypto::SignatureFromRLP(rlp, 7);
 
         if (_checkSig >= CheckTransaction::Cheap && !m_vrs->isValid())
             BOOST_THROW_EXCEPTION(InvalidSignature());
@@ -129,11 +125,10 @@ void Transaction::decodeRC2(RLP const& rlp, CheckTransaction _checkSig)
         m_extraData = rlp[9].toBytes();
 
         // decode v r s by increasing rlp index order for faster decoding
-        NumberVType v = getVFromRLP(rlp[10]);
-        u256 r = rlp[11].toInt<u256>();
-        u256 s = rlp[12].toInt<u256>();
-
-        m_vrs = SignatureStruct(r, s, v);
+        // NumberVType v = getVFromRLP(rlp[10]);
+        // u256 r = rlp[11].toInt<u256>();
+        // u256 s = rlp[12].toInt<u256>();
+        m_vrs = dev::crypto::SignatureFromRLP(rlp, 10);
 
         if (_checkSig >= CheckTransaction::Cheap && !m_vrs->isValid())
             BOOST_THROW_EXCEPTION(InvalidSignature());
@@ -168,7 +163,7 @@ Address const& Transaction::sender() const
         if (!m_vrs)
             BOOST_THROW_EXCEPTION(TransactionIsUnsigned());
 
-        auto p = recover(*m_vrs, sha3(WithoutSignature));
+        auto p = crypto::Recover(m_vrs, sha3(WithoutSignature));
         if (!p)
             BOOST_THROW_EXCEPTION(InvalidSignature());
         m_sender = right160(crypto::Hash(bytesConstRef(p.data(), sizeof(p))));
@@ -176,12 +171,12 @@ Address const& Transaction::sender() const
     return m_sender;
 }
 
-SignatureStruct const& Transaction::signature() const
+std::shared_ptr<Signature> const& Transaction::signature() const
 {
     if (!m_vrs)
         BOOST_THROW_EXCEPTION(TransactionIsUnsigned());
 
-    return *m_vrs;
+    return m_vrs;
 }
 
 /// encode the transaction to bytes
@@ -243,16 +238,6 @@ void Transaction::encodeRC2(bytes& _trans, IncludeSignature _sig) const
     }
 
     _s.swapOut(_trans);
-}
-
-static const u256 c_secp256k1n(
-    "115792089237316195423570985008687907852837564279074904382605163141518161494337");
-
-void Transaction::checkLowS() const
-{
-    if (!m_vrs)
-        BOOST_THROW_EXCEPTION(TransactionIsUnsigned());
-    m_vrs->check();
 }
 
 int64_t Transaction::baseGasRequired(

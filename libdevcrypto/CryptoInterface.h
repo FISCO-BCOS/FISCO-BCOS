@@ -17,13 +17,14 @@
 /** @file CryptoInterface.h
  * @author xingqiangbai
  * @date 2020-04-22
- *
  */
 
 #pragma once
 
+#include "Common.h"
 #include "Hash.h"
 #include "SM3Hash.h"
+#include "Signature.h"
 #include "libdevcore/FixedHash.h"
 #include <functional>
 #include <string>
@@ -44,9 +45,19 @@ extern std::function<std::string(const unsigned char* _plainData, size_t _plainD
 extern std::function<std::string(const unsigned char* _encryptedData, size_t _encryptedDataSize,
     const unsigned char* _key, size_t _keySize, const unsigned char* _ivData)>
     SymmetricDecrypt;
+
+extern std::function<std::shared_ptr<Signature>(KeyPair const& _keyPair, const h256& _hash)> Sign;
+extern std::function<bool(h512 const& _pubKey, std::shared_ptr<Signature> _sig, const h256& _hash)>
+    Verify;
+extern std::function<h512(std::shared_ptr<Signature> _sig, const h256& _hash)> Recover;
+extern std::function<std::shared_ptr<Signature>(RLP const& _rlp, size_t _start)> SignatureFromRLP;
+extern std::function<std::shared_ptr<Signature>(std::vector<unsigned char>)> SignatureFromBytes;
+
 void initSMCtypro();
 
 bool isSMCrypto();
+
+size_t signatureLength();
 
 template <unsigned N>
 inline SecureFixedHash<32> Hash(SecureFixedHash<N>&& _data)

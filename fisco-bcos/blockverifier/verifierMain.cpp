@@ -309,12 +309,6 @@ int main(int argc, char* argv[])
                 "f");
             dev::eth::Transaction::Ptr tx = std::make_shared<dev::eth::Transaction>(
                 ref(rlpBytes), dev::eth::CheckTransaction::Everything);
-            // dev::KeyPair key_pair(dev::Secret::random());
-            // dev::Secret sec = key_pair.secret();
-            // u256 maxBlockLimit = u256(1000);
-            // tx.setNonce(tx.nonce() + u256(1));
-            // tx.setBlockLimit(u256(blockChain->number()) + maxBlockLimit);
-            // tx.updateSignature(SignatureStruct(sig));
             LOG(INFO) << "Tx " << *tx;
 
             dev::eth::Transaction::Ptr tx2 = std::make_shared<dev::eth::Transaction>(
