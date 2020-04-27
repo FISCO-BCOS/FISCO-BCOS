@@ -245,6 +245,11 @@ public:
         m_nodeBandwidthLimiter = _nodeBandwidthLimiter;
     }
 
+    void setMemoryLimiter(dev::flowlimit::MemoryLimiter::Ptr _memoryLimiter)
+    {
+        m_syncStatus->setMemoryLimiter(_memoryLimiter);
+    }
+
 private:
     // init via blockchain when the sync thread started
     void updateNodeInfo()

@@ -169,6 +169,9 @@ struct FlowControlParam
     int64_t outGoingBandwidthLimit;
     int64_t maxBurstReqPercent;
     int64_t maxBurstReqNum;
+
+    // for memory limit: MB
+    int64_t maxMemorySize;
 };
 
 class LedgerParam : public LedgerParamInterface

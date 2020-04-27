@@ -60,7 +60,11 @@ std::shared_ptr<Block> BlockCache::add(std::shared_ptr<Block> _block)
             BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[add]Block cache full, start to remove old item...");
             auto firstHash = m_blockCacheFIFO.front();
             m_blockCacheFIFO.pop_front();
+            auto firstHashBlock = m_blockCache[firstHash];
+            decreaseMemoryUsed(firstHashBlock);
+
             m_blockCache.erase(firstHash);
+
             // in case something unexcept error
             if (m_blockCache.size() > c_blockCacheSize)
             {
@@ -75,7 +79,7 @@ std::shared_ptr<Block> BlockCache::add(std::shared_ptr<Block> _block)
         m_blockCache.insert(std::make_pair(blockHash, block));
         // add hashindex to the blockCache queue, use to remove first element when the cache is full
         m_blockCacheFIFO.push_back(blockHash);
-
+        increaseMemoryUsed(block);
         return block;
     }
 }

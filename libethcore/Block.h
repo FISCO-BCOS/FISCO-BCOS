@@ -326,7 +326,7 @@ protected:
     mutable dev::h256 m_transRootCache;
     mutable dev::h256 m_receiptRootCache;
 
-    int64_t m_blockSize = 0;
+    std::atomic<int64_t> m_blockSize = {0};
 };
 }  // namespace eth
 }  // namespace dev

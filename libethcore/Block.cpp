@@ -502,6 +502,5 @@ void Block::decodeProposal(bytesConstRef _block, bool const&)
 {
     decode(_block);
 }
-
 }  // namespace eth
 }  // namespace dev

@@ -56,6 +56,7 @@ bool Ledger::initLedger(std::shared_ptr<LedgerParamInterface> _ledgerParams)
         return false;
     }
     m_param = _ledgerParams;
+    initMemoryLimiter();
     /// init dbInitializer
     Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("DBInitializer");
     m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param, m_groupId);
@@ -93,6 +94,21 @@ bool Ledger::initLedger(std::shared_ptr<LedgerParamInterface> _ledgerParams)
     /// init blockVerifier, txPool, sync and consensus
     return (initBlockVerifier() && initTxPool() && initSync() && consensusInitFactory() &&
             initEventLogFilterManager());
+}
+
+void Ledger::initMemoryLimiter()
+{
+    if (m_param->mutableFlowControlParam().maxMemorySize == INT64_MAX)
+    {
+        Ledger_LOG(INFO) << LOG_DESC("MemoryLimiter has been disabled");
+        return;
+    }
+    // create memoryLimiter
+    m_memoryLimiter = std::make_shared<dev::flowlimit::MemoryLimiter>(
+        m_param->mutableFlowControlParam().maxMemorySize);
+    Ledger_LOG(INFO) << LOG_DESC("initMemoryLimiter")
+                     << LOG_KV("maxMemorySize(Bytes)",
+                            m_param->mutableFlowControlParam().maxMemorySize);
 }
 
 void Ledger::initNetworkStatHandler()
@@ -171,9 +187,11 @@ bool Ledger::initTxPool()
         Ledger_LOG(ERROR) << LOG_BADGE("initLedger") << LOG_DESC("initTxPool Failed");
         return false;
     }
-    m_txPool = std::make_shared<dev::txpool::TxPool>(
+    auto txPool = std::make_shared<dev::txpool::TxPool>(
         m_service, m_blockChain, protocol_id, m_param->mutableTxPoolParam().txPoolLimit);
-    m_txPool->setMaxBlockLimit(g_BCOSConfig.c_blockLimit);
+    txPool->setMaxBlockLimit(g_BCOSConfig.c_blockLimit);
+    txPool->setMemoryLimiter(m_memoryLimiter);
+    m_txPool = txPool;
     Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_DESC("initTxPool SUCC");
     return true;
 }
@@ -250,6 +268,9 @@ bool Ledger::initBlockChain(GenesisBlockParam& _genesisParam)
 
     blockChain->setStateStorage(m_dbInitializer->storage());
     blockChain->setTableFactoryFactory(m_dbInitializer->tableFactoryFactory());
+    // set memoryLimiter for blockChain
+    blockChain->setMemoryLimiter(m_memoryLimiter);
+
     m_blockChain = blockChain;
     bool ret = m_blockChain->checkAndBuildGenesisBlock(_genesisParam, shouldBuild);
     if (!ret)
@@ -265,6 +286,7 @@ bool Ledger::initBlockChain(GenesisBlockParam& _genesisParam)
         m_param->mutableStateParam().type = _genesisParam.stateType;
         m_param->mutableGenesisParam().evmFlags = _genesisParam.evmFlags;
     }
+    blockChain->setMemoryLimiter(m_memoryLimiter);
     Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_DESC("initBlockChain SUCC");
     return true;
 }
@@ -483,6 +505,8 @@ bool Ledger::initSync()
     {
         syncMaster->setNodeBandwidthLimiter(m_channelRPCServer->networkBandwidthLimiter());
     }
+    syncMaster->setMemoryLimiter(m_memoryLimiter);
+
     m_sync = syncMaster;
     Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_DESC("initSync SUCC");
     return true;

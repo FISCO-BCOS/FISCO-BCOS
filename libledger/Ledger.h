@@ -32,6 +32,7 @@
 #include <libethcore/BlockFactory.h>
 #include <libethcore/Common.h>
 #include <libeventfilter/EventLogFilterManager.h>
+#include <libflowlimit/MemoryLimiter.h>
 #include <libp2p/P2PInterface.h>
 #include <libp2p/Service.h>
 #include <libstat/NetworkStatHandler.h>
@@ -192,6 +193,9 @@ protected:
     // init QPSLimit
     virtual void initQPSLimit();
 
+    // init memory limit
+    virtual void initMemoryLimiter();
+
     void initGenesisMark(GenesisBlockParam& genesisParam);
     /// load ini config of group
     void initIniConfig(std::string const& iniConfigFileName);
@@ -226,6 +230,8 @@ protected:
     std::shared_ptr<dev::stat::NetworkStatHandler> m_networkStatHandler = nullptr;
     // for network bandwidth limitation
     dev::flowlimit::RateLimiter::Ptr m_networkBandwidthLimiter = nullptr;
+
+    dev::flowlimit::MemoryLimiter::Ptr m_memoryLimiter = nullptr;
 
     std::shared_ptr<dev::ledger::DBInitializer> m_dbInitializer = nullptr;
     ChannelRPCServer::Ptr m_channelRPCServer;

@@ -25,6 +25,7 @@
 #include <libblockchain/BlockChainInterface.h>
 #include <libdevcore/Guards.h>
 #include <libethcore/Block.h>
+#include <libflowlimit/MemoryLimiter.h>
 #include <climits>
 #include <queue>
 #include <set>
@@ -58,7 +59,7 @@ class DownloadingBlockQueue
 {
 public:
     using ShardPtr = std::shared_ptr<DownloadBlocksShard>;
-    using ShardPtrVec = std::vector<ShardPtr>;
+    using ShardPtrVec = std::list<ShardPtr>;
 
 public:
     DownloadingBlockQueue(std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
@@ -108,6 +109,32 @@ public:
     int64_t maxRequestBlocks() const { return m_maxRequestBlocks; }
     void adjustMaxRequestBlocks();
 
+    void increaseMemoryUsed(int64_t const& _memoryUsed)
+    {
+        if (!m_memoryLimiter)
+        {
+            return;
+        }
+        m_memoryLimiter->increaseMemoryUsed(_memoryUsed);
+    }
+
+    void decreaseMemoryUsed(int64_t const& _memoryUsed)
+    {
+        if (!m_memoryLimiter)
+        {
+            return;
+        }
+        m_memoryLimiter->decreaseMemoryUsed(_memoryUsed);
+    }
+
+    void setMemoryLimiter(dev::flowlimit::MemoryLimiter::Ptr _memoryLimiter)
+    {
+        m_memoryLimiter = _memoryLimiter;
+    }
+
+private:
+    bool flushOneShard(ShardPtr _blocksShard);
+
 private:
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
     NodeID m_nodeId;
@@ -121,11 +148,14 @@ private:
     // the memory size occupied by the sync module
     std::atomic<int64_t> m_blockQueueSize = {0};
     // the max number of blocks this node can requested to
-    std::atomic<int64_t> m_maxRequestBlocks = {32};
+    std::atomic<int64_t> m_maxRequestBlocks = {8};
     // the average size of synced blocks
     std::atomic<int64_t> m_averageBlockSize = {0};
+    std::atomic<int64_t> m_averageCalCount = {0};
     // the expand coeff of memory-size after block-decode
     int64_t const m_blockSizeExpandCoeff = 3;
+
+    dev::flowlimit::MemoryLimiter::Ptr m_memoryLimiter;
 
 private:
     bool isNewerBlock(std::shared_ptr<dev::eth::Block> _block);

@@ -30,6 +30,7 @@
 #include <libethcore/Common.h>
 #include <libethcore/Protocol.h>
 #include <libethcore/Transaction.h>
+#include <libflowlimit/MemoryLimiter.h>
 #include <libp2p/P2PInterface.h>
 #include <tbb/concurrent_queue.h>
 #include <tbb/concurrent_unordered_set.h>
@@ -202,6 +203,11 @@ public:
 
     bool initPartiallyBlock(dev::eth::Block::Ptr _block) override;
 
+    void setMemoryLimiter(dev::flowlimit::MemoryLimiter::Ptr _memoryLimiter)
+    {
+        m_memoryLimiter = _memoryLimiter;
+    }
+
 protected:
     /**
      * @brief : submit a transaction through p2p, Verify and add transaction to the queue
@@ -290,6 +296,8 @@ private:
     mutable SharedMutex x_invalidTxs;
 
     std::function<bool()> m_syncStatusChecker;
+
+    dev::flowlimit::MemoryLimiter::Ptr m_memoryLimiter;
 };
 }  // namespace txpool
 }  // namespace dev

@@ -141,6 +141,11 @@ public:
 
     DownloadingBlockQueue& bq() { return m_downloadingBlockQueue; }
 
+    void setMemoryLimiter(dev::flowlimit::MemoryLimiter::Ptr _memoryLimiter)
+    {
+        m_downloadingBlockQueue.setMemoryLimiter(_memoryLimiter);
+    }
+
 private:
     int64_t selectPeers(int64_t const& _neighborSize, std::shared_ptr<NodeIDs> _nodeIds);
 

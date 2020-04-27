@@ -649,12 +649,26 @@ void LedgerParam::initFlowControlConfig(boost::property_tree::ptree const& _pt)
         outGoingBandwidth = outGoingBandwidth * 1024 * 1024 / 8;
     }
     mutableFlowControlParam().outGoingBandwidthLimit = outGoingBandwidth;
+
+    // set memory limit
+    auto memoryLimit = _pt.get<int64_t>("flow_control.max_memory_size", INT64_MAX);
+    if (memoryLimit <= 0)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfiguration()
+                              << errinfo_comment("flow_control.max_memory_size must be positive"));
+    }
+    mutableFlowControlParam().maxMemorySize = memoryLimit;
+    if (memoryLimit != INT64_MAX)
+    {
+        mutableFlowControlParam().maxMemorySize = memoryLimit * 1024 * 1024;
+    }
     LedgerParam_LOG(INFO) << LOG_BADGE("initFlowControlConfig")
                           << LOG_KV("maxQPS", mutableFlowControlParam().maxQPS)
                           << LOG_KV("maxBurstReqPercent(%)", maxBurstReqPercent)
                           << LOG_KV("maxBurstReqNum", mutableFlowControlParam().maxBurstReqNum)
                           << LOG_KV("outGoingBandwidth(Bytes)",
-                                 mutableFlowControlParam().outGoingBandwidthLimit);
+                                 mutableFlowControlParam().outGoingBandwidthLimit)
+                          << LOG_KV("memoryLimit(MB)", memoryLimit);
 }
 
 }  // namespace ledger

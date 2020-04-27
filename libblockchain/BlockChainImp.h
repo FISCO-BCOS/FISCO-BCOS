@@ -31,6 +31,7 @@
 #include <libethcore/Transaction.h>
 #include <libethcore/TransactionReceipt.h>
 #include <libexecutive/StateFactoryInterface.h>
+#include <libflowlimit/MemoryLimiter.h>
 #include <libprecompiled/SystemConfigPrecompiled.h>
 #include <libstorage/Common.h>
 #include <libstorage/Storage.h>
@@ -65,12 +66,36 @@ public:
     BlockCache(){};
     std::shared_ptr<dev::eth::Block> add(std::shared_ptr<dev::eth::Block> _block);
     std::pair<std::shared_ptr<dev::eth::Block>, dev::h256> get(h256 const& _hash);
+    void decreaseMemoryUsed(std::shared_ptr<dev::eth::Block> _block)
+    {
+        if (!m_memoryLimiter || !_block)
+        {
+            return;
+        }
+        m_memoryLimiter->decreaseMemoryUsed(_block->blockSize() * c_blockExpandTimeAfterDecode);
+    }
+
+    void increaseMemoryUsed(std::shared_ptr<dev::eth::Block> _block)
+    {
+        if (!m_memoryLimiter || !_block)
+        {
+            return;
+        }
+        m_memoryLimiter->increaseMemoryUsed(_block->blockSize() * c_blockExpandTimeAfterDecode);
+    }
+
+    void setMemoryLimiter(dev::flowlimit::MemoryLimiter::Ptr _memoryLimiter)
+    {
+        m_memoryLimiter = _memoryLimiter;
+    }
 
 private:
     mutable boost::shared_mutex m_sharedMutex;
     mutable std::map<dev::h256, std::shared_ptr<dev::eth::Block>> m_blockCache;
     mutable std::deque<dev::h256> m_blockCacheFIFO;  // insert queue log for m_blockCache
     const unsigned c_blockCacheSize = 10;            // m_blockCache size, default set 10
+    dev::flowlimit::MemoryLimiter::Ptr m_memoryLimiter;
+    const unsigned c_blockExpandTimeAfterDecode = 3;
 };
 DEV_SIMPLE_EXCEPTION(OpenSysTableFailed);
 
@@ -135,6 +160,11 @@ public:
 
     std::shared_ptr<MerkleProofType> getTransactionProof(
         dev::eth::Block::Ptr _block, uint64_t const& _index) override;
+
+    void setMemoryLimiter(dev::flowlimit::MemoryLimiter::Ptr _memoryLimiter)
+    {
+        m_blockCache.setMemoryLimiter(_memoryLimiter);
+    }
 
 private:
     std::shared_ptr<Parent2ChildListMap> getParent2ChildListByReceiptProofCache(

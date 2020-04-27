@@ -254,6 +254,8 @@ public:
     void setSynced(bool const& _synced) { m_synced = _synced; }
     bool synced() const { return m_synced; }
 
+    int64_t capacity() { return (m_data.size() + m_rlpBuffer.size() + m_extraData.size()); }
+
 protected:
     /// Type of transaction.
     enum Type
