@@ -124,7 +124,11 @@ void TxPool::notifyReceipt(dev::eth::Transaction::Ptr _tx, ImportResult const& _
         break;
     // invalid transaction: 10005
     case ImportResult::Malformed:
-        txException = TransactionException ::MalformedTx;
+        txException = TransactionException::MalformedTx;
+        break;
+    // over the groupMemory Limit: 10006
+    case ImportResult::OverGroupMemoryLimit:
+        txException = TransactionException::OverGroupMemoryLimit;
         break;
     default:
         txException = TransactionException::TransactionRefused;
@@ -186,6 +190,11 @@ std::pair<h256, Address> TxPool::submitTransactions(dev::eth::Transaction::Ptr _
                                   "BlockLimitCheckFailed, txBlockLimit=" + _tx->blockLimit().str() +
                                   ", txHash=" + _tx->sha3().abridged()));
     }
+    else if (ImportResult::OverGroupMemoryLimit == ret)
+    {
+        BOOST_THROW_EXCEPTION(TransactionRefused() << errinfo_comment(
+                                  "OverGroupMemoryLimit, txHash=" + _tx->sha3().abridged()));
+    }
     else
     {
         BOOST_THROW_EXCEPTION(TransactionRefused() << errinfo_comment(
@@ -215,6 +224,14 @@ bool TxPool::isSealerOrObserver()
 ImportResult TxPool::import(Transaction::Ptr _tx, IfDropped)
 {
     _tx->setImportTime(u256(utcTime()));
+    auto memoryUsed = m_usedMemorySize + _tx->capacity();
+    if (memoryUsed > m_maxMemoryLimit)
+    {
+        TXPOOL_LOG(DEBUG) << LOG_DESC("import: overMemoryLimit")
+                          << LOG_KV("hash", _tx->sha3().abridged());
+        return ImportResult::OverGroupMemoryLimit;
+    }
+    m_usedMemorySize += _tx->capacity();
     UpgradableGuard l(m_lock);
     /// check the txpool size
     if (m_txsQueue.size() >= m_limit)
@@ -373,7 +390,7 @@ bool TxPool::removeTrans(h256 const& _txHash, bool _needTriggerCallback,
         transaction = *(p_tx->second);
         m_txsQueue.erase(p_tx->second);
         m_txsHash.erase(p_tx);
-
+        m_usedMemorySize -= transaction->capacity();
         // m_delTransactions.unsafe_erase(_txHash);
     }
     // call transaction callback
