@@ -5,7 +5,6 @@ if (APPLE)
     set(WEDPR_LIB "${CMAKE_SOURCE_DIR}/deps/lib/libffi_storage.dylib")
 else()
     set(WEDPR_LIB "${CMAKE_SOURCE_DIR}/deps/lib/safe_libffi_storage.o")
-    # set(WEDPR_LIB "/mnt/d/dev/WeDPR/target/release/libffi_storage.so")
 endif()
 
 if(NOT WEDPR_EXTENSION)

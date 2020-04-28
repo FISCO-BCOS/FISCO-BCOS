@@ -89,7 +89,8 @@ const char API_ANONYMOUS_AUCTION_VERIFY_BID_SIGNATURE_FROM_BID_REQUEST[] =
     "anonymousAuctionVerifyBidSignatureFromBidRequest(string)";
 const char API_ANONYMOUS_AUCTION_VERIFY_BID_SIGNATURE_FROM_BID_COMPARISON_REQUEST[] =
     "anonymousAuctionVerifyBidSignatureFromBidComparisonRequest(string)";
-const char API_ANONYMOUS_AUCTION_VERIFY_WINNER[] = "anonymousAuctionVerifyWinner(string,string)";
+const char API_ANONYMOUS_AUCTION_VERIFY_WINNER[] =
+    "anonymousAuctionVerifyWinner(string,string,string)";
 
 const char WEDPR_VERFIY_FAILED[] = "verfiy failed";
 
@@ -599,7 +600,7 @@ bytes WedprPrecompiled::verifyBidSignatureFromBidRequest(
 {
     string bidRequest;
     abi.abiOut(data, bidRequest);
-    PRECOMPILED_LOG(INFO) << LOG_BADGE("WedprPrecompiled") << LOG_KV("bidRequest", bidRequest);
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("WedprPrecompiled") << LOG_KV("bidRequest", bidRequest);
     char* bidRequestChar = stringToChar(bidRequest);
     if (verify_bid_signature_from_bid_request(bidRequestChar) != WEDPR_SUCCESS)
     {
@@ -607,7 +608,7 @@ bytes WedprPrecompiled::verifyBidSignatureFromBidRequest(
         throwException("verify_bid_signature_from_bid_request failed");
     }
     string bidStorage = get_bid_storage_from_bid_request(bidRequestChar);
-    PRECOMPILED_LOG(INFO) << LOG_BADGE("WedprPrecompiled") << LOG_KV("bidStorage", bidStorage);
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("WedprPrecompiled") << LOG_KV("bidStorage", bidStorage);
     return abi.abiIn("", bidStorage);
 }
 bytes WedprPrecompiled::VerifyBidSignatureFromBidComparisonRequest(
@@ -615,8 +616,8 @@ bytes WedprPrecompiled::VerifyBidSignatureFromBidComparisonRequest(
 {
     string bidComparisonRequest;
     abi.abiOut(data, bidComparisonRequest);
-    PRECOMPILED_LOG(INFO) << LOG_BADGE("WedprPrecompiled")
-                          << LOG_KV("bidComparisonRequest", bidComparisonRequest);
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("WedprPrecompiled")
+                           << LOG_KV("bidComparisonRequest", bidComparisonRequest);
     char* bidComparisonRequestChar = stringToChar(bidComparisonRequest);
     if (verify_bid_signature_from_bid_comparison_request(bidComparisonRequestChar) != WEDPR_SUCCESS)
     {
@@ -628,15 +629,19 @@ bytes WedprPrecompiled::VerifyBidSignatureFromBidComparisonRequest(
 }
 bytes WedprPrecompiled::verifyWinner(dev::eth::ContractABI& abi, bytesConstRef& data)
 {
+    string systemParameters;
     string winnerClaimRequest;
     string allBidRequest;
-    abi.abiOut(data, winnerClaimRequest, allBidRequest);
+    abi.abiOut(data, systemParameters, winnerClaimRequest, allBidRequest);
+    char* systemParametersChar = stringToChar(systemParameters);
     char* winnerClaimRequestChar = stringToChar(winnerClaimRequest);
     char* allBidRequestChar = stringToChar(allBidRequest);
-    PRECOMPILED_LOG(INFO) << LOG_BADGE("WedprPrecompiled")
-                          << LOG_KV("winnerClaimRequest", winnerClaimRequest)
-                          << LOG_KV("allBidRequest", allBidRequest);
-    if (verify_winner(winnerClaimRequestChar, allBidRequestChar) != WEDPR_SUCCESS)
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("WedprPrecompiled")
+                           << LOG_KV("systemParameters", systemParameters)
+                           << LOG_KV("winnerClaimRequest", winnerClaimRequest)
+                           << LOG_KV("allBidRequest", allBidRequest);
+    if (verify_winner(systemParametersChar, winnerClaimRequestChar, allBidRequestChar) !=
+        WEDPR_SUCCESS)
     {
         logError(WEDPR_PRECOMPILED, "verify_winner", WEDPR_VERFIY_FAILED);
         throwException("verify_winner failed");
