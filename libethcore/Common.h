@@ -114,7 +114,8 @@ enum class ImportResult
     InvalidGroupId,
     BlockLimitCheckFailed,
     NotBelongToTheGroup,
-    TransactionRefused
+    TransactionRefused,
+    OverGroupMemoryLimit
 };
 
 struct ImportRequirements

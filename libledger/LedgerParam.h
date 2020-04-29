@@ -40,10 +40,13 @@ namespace ledger
 {
 /// forward class declaration
 #define SYNC_TX_POOL_SIZE_DEFAULT 102400
+#define TX_POOL_DEFAULT_MEMORY_SIZE 512
 #define MAX_BLOCK_RANGE_EVENT_FILTER (0)
 struct TxPoolParam
 {
     int64_t txPoolLimit = SYNC_TX_POOL_SIZE_DEFAULT;
+    // txpool size, default is 512MB
+    int64_t maxTxPoolMemorySize = TX_POOL_DEFAULT_MEMORY_SIZE;
 };
 struct ConsensusParam
 {

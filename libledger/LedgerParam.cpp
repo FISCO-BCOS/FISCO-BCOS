@@ -211,8 +211,17 @@ void LedgerParam::initTxPoolConfig(ptree const& pt)
                 ForbidNegativeValue() << errinfo_comment("Please set tx_pool.limit to positive !"));
         }
 
+        auto memorySizeLimit = pt.get<int64_t>("tx_pool.memory_limit", TX_POOL_DEFAULT_MEMORY_SIZE);
+        if (memorySizeLimit < 0)
+        {
+            BOOST_THROW_EXCEPTION(
+                ForbidNegativeValue() << errinfo_comment("Please set tx_pool.limit to positive !"));
+        }
+        mutableTxPoolParam().maxTxPoolMemorySize = memorySizeLimit * 1024 * 1024;
+
         LedgerParam_LOG(INFO) << LOG_BADGE("initTxPoolConfig")
-                              << LOG_KV("txPoolLimit", mutableTxPoolParam().txPoolLimit);
+                              << LOG_KV("txPoolLimit", mutableTxPoolParam().txPoolLimit)
+                              << LOG_KV("memorySizeLimit(MB)", memorySizeLimit);
     }
     catch (std::exception& e)
     {
