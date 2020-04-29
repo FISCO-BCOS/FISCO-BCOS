@@ -164,18 +164,18 @@ protected:
 
     std::string sendRawTransaction(int _groupID, const std::string& _rlp,
         std::function<std::shared_ptr<Json::Value>(
-            std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
+            std::weak_ptr<dev::blockchain::BlockChainInterface> _blockChain,
             LocalisedTransactionReceipt::Ptr receipt, dev::bytesConstRef input,
             dev::eth::Block::Ptr _blockPtr)>
             _notifyCallback);
 
     std::shared_ptr<Json::Value> notifyReceipt(
-        std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
+        std::weak_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         LocalisedTransactionReceipt::Ptr receipt, dev::bytesConstRef input,
         dev::eth::Block::Ptr _blockPtr);
 
     std::shared_ptr<Json::Value> notifyReceiptWithProof(
-        std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
+        std::weak_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         LocalisedTransactionReceipt::Ptr receipt, dev::bytesConstRef input,
         dev::eth::Block::Ptr _blockPtr);
 

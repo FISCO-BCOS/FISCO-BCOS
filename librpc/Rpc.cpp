@@ -1112,9 +1112,8 @@ Json::Value Rpc::call(int _groupID, const Json::Value& request)
 }
 
 
-std::shared_ptr<Json::Value> Rpc::notifyReceipt(
-    std::shared_ptr<dev::blockchain::BlockChainInterface>, LocalisedTransactionReceipt::Ptr receipt,
-    dev::bytesConstRef input, dev::eth::Block::Ptr)
+std::shared_ptr<Json::Value> Rpc::notifyReceipt(std::weak_ptr<dev::blockchain::BlockChainInterface>,
+    LocalisedTransactionReceipt::Ptr receipt, dev::bytesConstRef input, dev::eth::Block::Ptr)
 {
     std::shared_ptr<Json::Value> response = std::make_shared<Json::Value>();
 
@@ -1150,7 +1149,7 @@ std::shared_ptr<Json::Value> Rpc::notifyReceipt(
 }
 
 std::shared_ptr<Json::Value> Rpc::notifyReceiptWithProof(
-    std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
+    std::weak_ptr<dev::blockchain::BlockChainInterface> _blockChain,
     LocalisedTransactionReceipt::Ptr _receipt, dev::bytesConstRef _input,
     dev::eth::Block::Ptr _blockPtr)
 {
@@ -1162,14 +1161,19 @@ std::shared_ptr<Json::Value> Rpc::notifyReceiptWithProof(
     }
     // get transaction Proof
     auto index = _receipt->transactionIndex();
-    auto txProof = _blockChain->getTransactionProof(_blockPtr, index);
+    auto blockChain = _blockChain.lock();
+    if (!blockChain)
+    {
+        return response;
+    }
+    auto txProof = blockChain->getTransactionProof(_blockPtr, index);
     if (!txProof)
     {
         return response;
     }
     addProofToResponse(response, "txProof", txProof);
     // get receipt proof
-    auto receiptProof = _blockChain->getTransactionReceiptProof(_blockPtr, index);
+    auto receiptProof = blockChain->getTransactionReceiptProof(_blockPtr, index);
     if (!receiptProof)
     {
         return response;
@@ -1217,7 +1221,7 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
 
 std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp,
     std::function<std::shared_ptr<Json::Value>(
-        std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
+        std::weak_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         LocalisedTransactionReceipt::Ptr receipt, dev::bytesConstRef input,
         dev::eth::Block::Ptr _blockPtr)>
         _notifyCallback)
@@ -1236,7 +1240,6 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp,
                 JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
         }
         auto blockChain = ledgerManager()->blockChain(_groupID);
-
         // Transaction tx(jsToBytes(_rlp, OnFailed::Throw), CheckTransaction::Everything);
         Transaction::Ptr tx = std::make_shared<Transaction>(
             jsToBytes(_rlp, OnFailed::Throw), CheckTransaction::Everything);
@@ -1249,14 +1252,19 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp,
         {
             auto transactionCallback = *currentTransactionCallback;
             clientProtocolversion = (*m_transactionCallbackVersion)();
+            std::weak_ptr<dev::blockchain::BlockChainInterface> weakedBlockChain(blockChain);
+            // Note: Since blockChain has a transaction cache, that is,
+            //       BlockChain holds transactions, in order to prevent circular references,
+            //       the callback of the transaction cannot hold the blockChain of shared_ptr,
+            //       must be weak_ptr
             tx->setRpcCallback(
-                [blockChain, _notifyCallback, transactionCallback, clientProtocolversion, _groupID](
-                    LocalisedTransactionReceipt::Ptr receipt, dev::bytesConstRef input,
+                [weakedBlockChain, _notifyCallback, transactionCallback, clientProtocolversion,
+                    _groupID](LocalisedTransactionReceipt::Ptr receipt, dev::bytesConstRef input,
                     dev::eth::Block::Ptr _blockPtr) {
                     std::shared_ptr<Json::Value> response = std::make_shared<Json::Value>();
                     if (clientProtocolversion > 0)
                     {
-                        response = _notifyCallback(blockChain, receipt, input, _blockPtr);
+                        response = _notifyCallback(weakedBlockChain, receipt, input, _blockPtr);
                     }
 
                     auto receiptContent = response->toStyledString();
