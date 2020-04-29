@@ -171,9 +171,11 @@ bool Ledger::initTxPool()
         Ledger_LOG(ERROR) << LOG_BADGE("initLedger") << LOG_DESC("initTxPool Failed");
         return false;
     }
-    m_txPool = std::make_shared<dev::txpool::TxPool>(
+    auto txPool = std::make_shared<dev::txpool::TxPool>(
         m_service, m_blockChain, protocol_id, m_param->mutableTxPoolParam().txPoolLimit);
-    m_txPool->setMaxBlockLimit(g_BCOSConfig.c_blockLimit);
+    txPool->setMaxBlockLimit(g_BCOSConfig.c_blockLimit);
+    txPool->setMaxMemoryLimit(m_param->mutableTxPoolParam().maxTxPoolMemorySize);
+    m_txPool = txPool;
     Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_DESC("initTxPool SUCC");
     return true;
 }
@@ -250,6 +252,7 @@ bool Ledger::initBlockChain(GenesisBlockParam& _genesisParam)
 
     blockChain->setStateStorage(m_dbInitializer->storage());
     blockChain->setTableFactoryFactory(m_dbInitializer->tableFactoryFactory());
+
     m_blockChain = blockChain;
     bool ret = m_blockChain->checkAndBuildGenesisBlock(_genesisParam, shouldBuild);
     if (!ret)
@@ -483,6 +486,7 @@ bool Ledger::initSync()
     {
         syncMaster->setNodeBandwidthLimiter(m_channelRPCServer->networkBandwidthLimiter());
     }
+
     m_sync = syncMaster;
     Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_DESC("initSync SUCC");
     return true;

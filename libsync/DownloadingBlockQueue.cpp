@@ -42,15 +42,6 @@ void DownloadingBlockQueue::push(RLP const& _rlps)
     }
     ShardPtr blocksShard = make_shared<DownloadBlocksShard>(0, 0, _rlps.data().toBytes());
     m_buffer->emplace_back(blocksShard);
-    // Note: the memory size occupied by Block object will increase to at least treble for:
-    // 1. txsCache of Block
-    // 2. m_rlpBuffer of every Transaction
-    // 3. the Block occupied memory calculated without cache
-    int64_t decodedBlockSize = _rlps.data().size() * m_blockSizeExpandCoeff;
-    m_blockQueueSize += decodedBlockSize;
-
-    m_averageBlockSize =
-        (m_averageBlockSize == 0 ? decodedBlockSize : (decodedBlockSize + m_averageBlockSize) / 2);
 }
 
 
@@ -127,7 +118,8 @@ void DownloadingBlockQueue::pop()
     WriteGuard l(x_blocks);
     if (!m_blocks.empty())
     {
-        m_blockQueueSize -= m_blocks.top()->blockSize() * m_blockSizeExpandCoeff;
+        auto blockSize = m_blocks.top()->blockSize() * m_blockSizeExpandCoeff;
+        m_blockQueueSize -= blockSize;
         m_blocks.pop();
     }
     // block queue is empty, reset m_maxRequestBlocks to c_maxRequestBlocks
@@ -170,62 +162,75 @@ void DownloadingBlockQueue::clearQueue()
 
 void DownloadingBlockQueue::flushBufferToQueue()
 {
-    shared_ptr<ShardPtrVec> localBuffer;
+    WriteGuard l(x_buffer);
+    bool ret = true;
+    while (m_buffer->size() > 0 && ret)
     {
-        WriteGuard l(x_buffer);
-        localBuffer = m_buffer;                 //
-        m_buffer = make_shared<ShardPtrVec>();  // m_buffer point to a new vector
+        auto blocksShard = m_buffer->front();
+        m_buffer->pop_front();
+        ret = flushOneShard(blocksShard);
     }
+}
 
+bool DownloadingBlockQueue::flushOneShard(ShardPtr _blocksShard)
+{
     // pop buffer into queue
     WriteGuard l(x_blocks);
-
-    for (ShardPtr blocksShard : *localBuffer)
+    if (m_blocks.size() >= c_maxDownloadingBlockQueueSize)  // TODO not to use size to
+                                                            // control insert
     {
-        if (m_blocks.size() >= c_maxDownloadingBlockQueueSize)  // TODO not to use size to control
-                                                                // insert
-        {
-            SYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
-                            << LOG_DESC("DownloadingBlockQueueBuffer is full")
-                            << LOG_KV("queueSize", m_blocks.size());
-
-            break;
-        }
-
         SYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
-                        << LOG_DESC("Decoding block buffer")
-                        << LOG_KV("blocksShardSize", blocksShard->blocksBytes.size());
+                        << LOG_DESC("DownloadingBlockQueueBuffer is full")
+                        << LOG_KV("queueSize", m_blocks.size());
 
-
-        RLP const& rlps = RLP(ref(blocksShard->blocksBytes));
-        unsigned itemCount = rlps.itemCount();
-        size_t successCnt = 0;
-        for (unsigned i = 0; i < itemCount; ++i)
-        {
-            try
-            {
-                shared_ptr<Block> block =
-                    make_shared<Block>(rlps[i].toBytes(), CheckTransaction::Everything, false);
-                if (isNewerBlock(block))
-                {
-                    successCnt++;
-                    m_blocks.push(block);
-                }
-            }
-            catch (std::exception& e)
-            {
-                SYNC_LOG(WARNING) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
-                                  << LOG_DESC("Invalid block RLP") << LOG_KV("reason", e.what())
-                                  << LOG_KV("RLPDataSize", rlps.data().size());
-                continue;
-            }
-        }
-
-        SYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
-                        << LOG_DESC("Flush buffer to block queue") << LOG_KV("import", successCnt)
-                        << LOG_KV("rcv", itemCount)
-                        << LOG_KV("downloadBlockQueue", m_blocks.size());
+        return false;
     }
+
+    SYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+                    << LOG_DESC("Decoding block buffer")
+                    << LOG_KV("blocksShardSize", _blocksShard->blocksBytes.size());
+
+
+    RLP const& rlps = RLP(ref(_blocksShard->blocksBytes));
+    unsigned itemCount = rlps.itemCount();
+    size_t successCnt = 0;
+    for (unsigned i = 0; i < itemCount; ++i)
+    {
+        try
+        {
+            shared_ptr<Block> block =
+                make_shared<Block>(rlps[i].toBytes(), CheckTransaction::Everything, false);
+            if (isNewerBlock(block))
+            {
+                successCnt++;
+                m_blocks.push(block);
+                // Note: the memory size occupied by Block object will increase to at least treble
+                // for:
+                // 1. txsCache of Block
+                // 2. m_rlpBuffer of every Transaction
+                // 3. the Block occupied memory calculated without cache
+                auto blockSize = block->blockSize() * m_blockSizeExpandCoeff;
+                m_blockQueueSize += blockSize;
+                m_averageBlockSize = (m_averageBlockSize == 0 ?
+                                          blockSize :
+                                          (blockSize + m_averageBlockSize * m_averageCalCount) /
+                                              (m_averageCalCount + 1));
+                m_averageCalCount++;
+            }
+        }
+        catch (std::exception& e)
+        {
+            SYNC_LOG(WARNING) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+                              << LOG_DESC("Invalid block RLP") << LOG_KV("reason", e.what())
+                              << LOG_KV("RLPDataSize", rlps.data().size());
+            continue;
+        }
+    }
+
+    SYNC_LOG(TRACE) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
+                    << LOG_DESC("Flush buffer to block queue") << LOG_KV("import", successCnt)
+                    << LOG_KV("rcv", itemCount) << LOG_KV("downloadBlockQueue", m_blocks.size());
+    return true;
 }
 
 void DownloadingBlockQueue::clearFullQueueIfNotHas(int64_t _blockNumber)

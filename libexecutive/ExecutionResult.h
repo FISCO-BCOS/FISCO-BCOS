@@ -74,7 +74,8 @@ enum class TransactionException : uint32_t
     InvalidChainId = 10002,
     InvalidGroupId = 10003,
     RequestNotBelongToTheGroup = 10004,
-    MalformedTx = 10005
+    MalformedTx = 10005,
+    OverGroupMemoryLimit = 10006
 };
 
 enum class CodeDeposit

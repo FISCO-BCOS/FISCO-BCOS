@@ -202,6 +202,8 @@ public:
 
     bool initPartiallyBlock(dev::eth::Block::Ptr _block) override;
 
+    void setMaxMemoryLimit(int64_t const& _maxMemoryLimit) { m_maxMemoryLimit = _maxMemoryLimit; }
+
 protected:
     /**
      * @brief : submit a transaction through p2p, Verify and add transaction to the queue
@@ -290,6 +292,9 @@ private:
     mutable SharedMutex x_invalidTxs;
 
     std::function<bool()> m_syncStatusChecker;
+
+    std::atomic<int64_t> m_usedMemorySize = {0};
+    int64_t m_maxMemoryLimit = 512 * 1024 * 1024;
 };
 }  // namespace txpool
 }  // namespace dev
