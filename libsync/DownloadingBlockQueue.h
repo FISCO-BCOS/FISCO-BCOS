@@ -58,7 +58,7 @@ class DownloadingBlockQueue
 {
 public:
     using ShardPtr = std::shared_ptr<DownloadBlocksShard>;
-    using ShardPtrVec = std::vector<ShardPtr>;
+    using ShardPtrVec = std::list<ShardPtr>;
 
 public:
     DownloadingBlockQueue(std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
@@ -109,6 +109,9 @@ public:
     void adjustMaxRequestBlocks();
 
 private:
+    bool flushOneShard(ShardPtr _blocksShard);
+
+private:
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
     NodeID m_nodeId;
     std::priority_queue<BlockPtr, BlockPtrVec, BlockQueueCmp> m_blocks;  //
@@ -121,9 +124,10 @@ private:
     // the memory size occupied by the sync module
     std::atomic<int64_t> m_blockQueueSize = {0};
     // the max number of blocks this node can requested to
-    std::atomic<int64_t> m_maxRequestBlocks = {32};
+    std::atomic<int64_t> m_maxRequestBlocks = {8};
     // the average size of synced blocks
     std::atomic<int64_t> m_averageBlockSize = {0};
+    std::atomic<int64_t> m_averageCalCount = {0};
     // the expand coeff of memory-size after block-decode
     int64_t const m_blockSizeExpandCoeff = 3;
 
