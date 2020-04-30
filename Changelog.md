@@ -7,7 +7,7 @@
 - 支持网络流量和Gas统计
 - Precompiled合约支持Gas
 - 支持EVM Gas衡量标准插件化配置
-- 添加新接口SendTransactionAndGetProof推送交易和交易回执证明
+- 添加新接口sendRawTransactionAndGetProof推送交易回执、交易Merkle证明和交易回执Merkle证明
 
 **更新**
 
