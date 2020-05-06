@@ -21,6 +21,7 @@
  */
 
 #include "BasicRocksDB.h"
+#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/Exceptions.h>
 #include <boost/filesystem.hpp>
 
@@ -44,6 +45,48 @@ rocksdb::Options dev::storage::getRocksDBOptions()
     return options;
 }
 
+
+std::function<void(std::string const&, std::string&)> dev::storage::getEncryptHandler()
+{
+    // get dataKey according to ciperDataKey from keyCenter
+    return [=](std::string const& data, std::string& encData) {
+        try
+        {
+            auto const& dataKey = g_BCOSConfig.diskEncryption.dataKey;
+            encData = crypto::SymmetricEncrypt((const unsigned char*)data.data(), data.size(),
+                (const unsigned char*)dataKey.data(), dataKey.size(),
+                (const unsigned char*)dataKey.data());
+        }
+        catch (const std::exception& e)
+        {
+            std::string error_info = "encryt value for data=" + data +
+                                     " failed, EINFO: " + boost::diagnostic_information(e);
+            ROCKSDB_LOG(ERROR) << LOG_DESC(error_info);
+            BOOST_THROW_EXCEPTION(EncryptFailed() << errinfo_comment(error_info));
+        }
+    };
+}
+
+std::function<void(std::string&)> dev::storage::getDecryptHandler()
+{
+    return [=](std::string& data) {
+        try
+        {
+            auto const& dataKey = g_BCOSConfig.diskEncryption.dataKey;
+            data = crypto::SymmetricDecrypt((const unsigned char*)data.data(), data.size(),
+                (const unsigned char*)dataKey.data(), dataKey.size(),
+                (const unsigned char*)dataKey.data());
+        }
+        catch (const std::exception& e)
+        {
+            std::string error_info = "decrypt value for data=" + data + " failed";
+            ROCKSDB_LOG(ERROR) << LOG_DESC(error_info);
+            BOOST_THROW_EXCEPTION(DecryptFailed() << errinfo_comment(error_info));
+        }
+    };
+}
+
+
 void BasicRocksDB::flush()
 {
     if (m_db)
@@ -64,11 +107,8 @@ void BasicRocksDB::closeDB()
  *
  * @param options: options used to open the rocksDB
  * @param dbname: db name
- * @return std::shared_ptr<rocksdb::DB>:
- * 1. open successfully: return the DB handler
- * 2. open failed: throw exception(OpenDBFailed)
  */
-std::shared_ptr<rocksdb::DB> BasicRocksDB::Open(const Options& options, const std::string& dbname)
+void BasicRocksDB::Open(const Options& options, const std::string& dbname)
 {
     ROCKSDB_LOG(INFO) << LOG_DESC("open rocksDB handler") << LOG_KV("path", dbname);
     boost::filesystem::create_directories(dbname);
@@ -76,7 +116,6 @@ std::shared_ptr<rocksdb::DB> BasicRocksDB::Open(const Options& options, const st
     auto status = DB::Open(options, dbname, &db);
     checkStatus(status, dbname);
     m_db.reset(db);
-    return m_db;
 }
 
 Status BasicRocksDB::Get(ReadOptions const& options, std::string const& key, std::string& value)
@@ -122,7 +161,7 @@ Status BasicRocksDB::PutWithLock(
     }
 }
 
-Status BasicRocksDB::Put(WriteBatch& batch, std::string const& key, std::string& value)
+Status BasicRocksDB::Put(WriteBatch& batch, std::string const& key, std::string const& value)
 {
     // encrypt value
     if (m_encryptHandler)
