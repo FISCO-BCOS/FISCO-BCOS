@@ -834,5 +834,42 @@ bool TxPool::initPartiallyBlock(dev::eth::Block::Ptr _block)
     // hit all the transactions
     return true;
 }
+
+// when the node changed from sealer/observer node to free-node,
+// Update the status of all transactions,  so that when the node becomes an observer or a sealer,
+// broadcast the remaining transactions in the transaction pool to other nodes
+void TxPool::freshTxsStatus()
+{
+    TXPOOL_LOG(INFO) << LOG_DESC(
+        "freshTxsStatus for the node changed from sealer/observer node to free-node");
+    // set the 'synced' flag of every remaining transactions into false so that it can be
+    // broadcasted
+    {
+        UpgradableGuard l(m_lock);
+        // without remaining transactions
+        if (m_txsQueue.size() == 0)
+        {
+            TXPOOL_LOG(INFO) << LOG_DESC("freshTxsStatus: return for the txPool is empty");
+            return;
+        }
+        TXPOOL_LOG(INFO) << LOG_DESC("freshTxsStatus") << LOG_KV("txsSize", m_txsQueue.size());
+        UpgradeGuard ul(l);
+        for (auto const& tx : m_txsQueue)
+        {
+            tx->setSynced(false);
+        }
+    }
+    // clear m_transactionKnownBy and m_txsHashFilter, so that the remaining txs can be broadcasted
+    // after changed into sealer/observer
+    {
+        WriteGuard l(x_transactionKnownBy);
+        m_transactionKnownBy.clear();
+    }
+    {
+        WriteGuard l(x_txsHashFilter);
+        m_txsHashFilter->clear();
+    }
+}
+
 }  // namespace txpool
 }  // namespace dev
