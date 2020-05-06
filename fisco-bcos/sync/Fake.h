@@ -46,7 +46,7 @@ public:
     using BlockHeaderPtr = std::shared_ptr<dev::eth::BlockHeader>;
     using BlockPtr = std::shared_ptr<dev::eth::Block>;
     using TxPtr = std::shared_ptr<dev::eth::Transaction>;
-    using SigList = std::vector<std::pair<dev::u256, dev::Signature>>;
+    using SigList = std::vector<std::pair<dev::u256, std::vector<unsigned char>>>;
 
 public:
     FakeConcensus(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
@@ -164,14 +164,13 @@ private:
     {
         std::shared_ptr<SigList> retList = std::make_shared<SigList>();
         /// set sig list
-        dev::Signature sig;
         dev::h256 block_hash;
         auto keyPair = dev::KeyPair::create();
         for (size_t i = 0; i < _size; i++)
         {
             block_hash = dev::crypto::Hash("block " + std::to_string(i));
-            sig = dev::sign(keyPair, block_hash);
-            retList->push_back(std::make_pair(dev::u256(block_hash), sig));
+            auto sig = dev::crypto::Sign(keyPair, block_hash);
+            retList->push_back(std::make_pair(dev::u256(block_hash), sig->asBytes()));
         }
         return retList;
     }

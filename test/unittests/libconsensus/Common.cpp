@@ -39,12 +39,18 @@ void checkSignAndCommitReq()
     PrepareReq prepare_req(key_pair, 1000, 1, 134, block_hash);
     KeyPair key_pair2 = KeyPair::create();
     T checked_req(prepare_req, key_pair2, prepare_req.idx);
-    BOOST_CHECK(prepare_req.sig != checked_req.sig && prepare_req.sig2 != checked_req.sig2);
+    BOOST_CHECK(prepare_req.sig != checked_req.sig);
+    BOOST_CHECK(prepare_req.sig2 != checked_req.sig2);
     /// test encode && decode
     bytes req_data;
     BOOST_REQUIRE_NO_THROW(checked_req.encode(req_data));
     T tmp_req;
     BOOST_REQUIRE_NO_THROW(tmp_req.decode(ref(req_data)));
+    BOOST_CHECK(tmp_req.height == checked_req.height);
+    BOOST_CHECK(tmp_req.view == checked_req.view);
+    BOOST_CHECK(tmp_req.block_hash == checked_req.block_hash);
+    BOOST_CHECK(tmp_req.sig == checked_req.sig);
+    BOOST_CHECK(tmp_req.sig2 == checked_req.sig2);
     BOOST_CHECK(tmp_req == checked_req);
     /// test decode exception
     req_data[0] += 1;

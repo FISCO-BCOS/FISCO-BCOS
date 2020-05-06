@@ -185,6 +185,9 @@ contract HelloWorld{
 
     Executive e0(m_mptStates, initEnvInfo());
     Transaction tx(value, gasPrice, gas, code);  // Use contract creation constructor
+    auto keyPair = KeyPair::create();
+    auto sig = dev::crypto::Sign(keyPair, tx.sha3(WithoutSignature));
+    tx.updateSignature(sig);
     tx.forceSender(caller);
     executeTransaction(e0, tx);
 
@@ -214,6 +217,8 @@ contract HelloWorld{
         fromHex(string("0x60fe47b1") +  // set(0xaa)
                 string("00000000000000000000000000000000000000000000000000000000000000aa"));
     Transaction setTx(value, gasPrice, gas, newAddress, callDataToSet);
+    sig = dev::crypto::Sign(keyPair, setTx.sha3(WithoutSignature));
+    setTx.updateSignature(sig);
     setTx.forceSender(caller);
 
     Executive e1(m_mptStates, initEnvInfo());
@@ -226,6 +231,8 @@ contract HelloWorld{
                                   string(""));
 
     Transaction getTx(value, gasPrice, gas, newAddress, callDataToGet);
+    sig = dev::crypto::Sign(keyPair, getTx.sha3(WithoutSignature));
+    getTx.updateSignature(sig);
     getTx.forceSender(caller);
 
     Executive e2(m_mptStates, initEnvInfo());
@@ -242,6 +249,8 @@ contract HelloWorld{
                                         string(""));
 
     Transaction getByCallTx(value, gasPrice, gas, newAddress, callDataToGetByCall);
+    sig = dev::crypto::Sign(keyPair, getByCallTx.sha3(WithoutSignature));
+    getByCallTx.updateSignature(sig);
     getByCallTx.forceSender(caller);
 
     Executive e3(m_mptStates, initEnvInfo());
@@ -257,6 +266,8 @@ contract HelloWorld{
                                 string(""));
 
     Transaction destroyTx(value, gasPrice, gas, newAddress, callDestroy);
+    sig = dev::crypto::Sign(keyPair, destroyTx.sha3(WithoutSignature));
+    destroyTx.updateSignature(sig);
     destroyTx.forceSender(caller);
 
     Executive e4(m_mptStates, initEnvInfo());
@@ -439,6 +450,9 @@ contract HelloWorld{
                                         string(""));
 
     Transaction getByCallTx(value, gasPrice, gas, newAddress, callDataToGetByCall);
+    auto keyPair = KeyPair::create();
+    auto sig = dev::crypto::Sign(keyPair, tx.sha3(WithoutSignature));
+    tx.updateSignature(sig);
     getByCallTx.forceSender(caller);
 
     Executive e3(m_mptStates, initEnvInfo());
@@ -455,6 +469,8 @@ contract HelloWorld{
                                 string(""));
 
     Transaction destroyTx(value, gasPrice, gas, newAddress, callDestroy);
+    sig = dev::crypto::Sign(keyPair, destroyTx.sha3(WithoutSignature));
+    destroyTx.updateSignature(sig);
     destroyTx.forceSender(caller);
 
     Executive e4(m_mptStates, initEnvInfo());

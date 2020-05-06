@@ -48,7 +48,7 @@ BOOST_AUTO_TEST_CASE(testCreateTxByRLP)
     bytes data(str.begin(), str.end());
     Transaction tx(value, gasPrice, gas, dst, data);
     KeyPair sigKeyPair = KeyPair::create();
-    SignatureStruct sig = dev::sign(sigKeyPair, tx.sha3(WithoutSignature));
+    std::shared_ptr<Signature> sig = dev::crypto::Sign(sigKeyPair, tx.sha3(WithoutSignature));
     /// update the signature of transaction
     tx.updateSignature(sig);
     /// test encode
@@ -60,7 +60,6 @@ BOOST_AUTO_TEST_CASE(testCreateTxByRLP)
     BOOST_CHECK(tx == decodeTx);
     BOOST_CHECK(decodeTx.sender() == tx.safeSender());
     BOOST_CHECK_NO_THROW(decodeTx.signature());
-    BOOST_CHECK_NO_THROW(decodeTx.checkLowS());
     /*bytes s;
     BOOST_CHECK_NO_THROW(tx.encode(s, eth::IncludeSignature::WithSignature));*/
 

@@ -22,10 +22,13 @@
  * @date 2018-08-28
  */
 #include "libdevcrypto/CryptoInterface.h"
+#include "libdevcrypto/ECDSASignature.h"
+#include "libdevcrypto/SM2Signature.h"
 #include <libdevcrypto/Common.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
+using namespace std;
 using namespace dev;
 
 namespace dev
@@ -39,7 +42,6 @@ BOOST_AUTO_TEST_CASE(GM_testCommonTrans)
 {
     BOOST_CHECK(Secret::size == 32);
     BOOST_CHECK(Public::size == 64);
-    BOOST_CHECK(Signature::size == 128);
     // check secret->public
     Secret sec1(
         "bcec428d5205abe0f0cc8a7340839"
@@ -115,47 +117,46 @@ BOOST_AUTO_TEST_CASE(GM_testSigAndVerify)
     h256 hash = crypto::Hash("abcd");
     /// normal check
     // sign
-    Signature sig = sign(key_pair, hash);
-    BOOST_CHECK(SignatureStruct(sig).isValid() == true);
+    auto sig = crypto::Sign(key_pair, hash);
+    BOOST_CHECK(sig->isValid() == true);
     // verify
-    bool result = verify(key_pair.pub(), sig, hash);
+    bool result = crypto::Verify(key_pair.pub(), sig, hash);
     BOOST_CHECK(result == true);
     // recover
-    Public pub = recover(sig, hash);
+    Public pub = crypto::Recover(sig, hash);
     BOOST_CHECK(pub == key_pair.pub());
     /// exception check:
     // check1: invalid payload(hash)
     h256 invalid_hash = crypto::Hash("abce");
-    result = verify(key_pair.pub(), sig, invalid_hash);
+    result = crypto::Verify(key_pair.pub(), sig, invalid_hash);
     BOOST_CHECK(result == false);
     Public invalid_pub = {};
-    invalid_pub = recover(sig, invalid_hash);
+    invalid_pub = crypto::Recover(sig, invalid_hash);
     BOOST_CHECK(invalid_pub != key_pair.pub());
 
     // check2: invalid sig
-    Signature another_sig(sign(key_pair, invalid_hash));
-    result = verify(key_pair.pub(), another_sig, hash);
+    auto another_sig(crypto::Sign(key_pair, invalid_hash));
+    result = crypto::Verify(key_pair.pub(), another_sig, hash);
     BOOST_CHECK(result == false);
 
-    invalid_pub = recover(another_sig, hash);
+    invalid_pub = crypto::Recover(another_sig, hash);
     BOOST_CHECK(invalid_pub != key_pair.pub());
     // check3: invalid secret
     Public random_key = Public::random();
-    result = verify(random_key, sig, hash);
+    result = crypto::Verify(random_key, sig, hash);
     BOOST_CHECK(result == false);
 
     // construct invalid r, v,s and check isValid() function
     h256 r(crypto::Hash("+++"));
     h256 s(crypto::Hash("24324"));
     h512 v(crypto::Hash("123456"));
-    SignatureStruct constructed_sig(r, s, v);
-    BOOST_CHECK(constructed_sig.isValid() == true);
+    auto constructed_sig = std::make_shared<SM2Signature>(r, s, v);
+    BOOST_CHECK(constructed_sig->isValid() == true);
 }
 /// test ecRocer
 BOOST_AUTO_TEST_CASE(GM_testSigecRocer)
 {
     std::pair<bool, bytes> KeyPair;
-#ifdef FISCO_GM
     bytes rlpBytes = fromHex(
         "f901309f65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d14485174876e7ff8609"
         "184e729fff8204a294d6f1a71052366dbae2f7ab2d5d5845e77965cf0d80b86448f85bce00000000000000"
@@ -165,19 +166,19 @@ BOOST_AUTO_TEST_CASE(GM_testSigecRocer)
         "2ea523c88cf3becba1cc4375bc9e225143fe1e8e43abc8a7c493a0ba3ce8383b7c91528bede9cf890b4b1e"
         "9b99c1d8e56d6f8292c827470a606827a0ed511490a1666791b2bd7fc4f499eb5ff18fb97ba68ff9aee206"
         "8fd63b88e817");
-#else
-    bytes rlpBytes = fromHex(
-        "f8ef9f65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d03f85174876e7ff"
-        "8609184e729fff82020394d6f1a71052366dbae2f7ab2d5d5845e77965cf0d80b86448f85bce000000"
-        "000000000000000000000000000000000000000000000000000000001bf5bd8a9e7ba8b936ea704292"
-        "ff4aaa5797bf671fdc8526dcd159f23c1f5a05f44e9fa862834dc7cb4541558f2b4961dc39eaaf0af7"
-        "f7395028658d0e01b86a371ca00b2b3fabd8598fefdda4efdb54f626367fc68e1735a8047f0f1c4f84"
-        "0255ca1ea0512500bc29f4cfe18ee1c88683006d73e56c934100b8abf4d2334560e1d2f75e");
-#endif
     h256 ret;
     RLP rlpObj(rlpBytes);
     bytesConstRef _in = rlpObj.data();
-    KeyPair = SignatureStruct::ecRecover(_in);
+    struct
+    {
+        h256 hash;
+        h512 v;
+        h256 r;
+        h256 s;
+    } in;
+    memcpy(&in, _in.data(), min(_in.size(), sizeof(in)));
+    auto sig = std::make_shared<SM2Signature>(in.r, in.s, in.v);
+    KeyPair = recover(sig, in.hash);
     BOOST_CHECK(KeyPair.first == true);
     BOOST_CHECK(KeyPair.second != ret.asBytes());
 }
@@ -186,7 +187,6 @@ BOOST_AUTO_TEST_CASE(testCommonTrans)
 {
     BOOST_CHECK(Secret::size == 32);
     BOOST_CHECK(Public::size == 64);
-    BOOST_CHECK(Signature::size == 65);
     // check secret->public
     Secret sec1(
         "bcec428d5205abe0f0cc8a7340839"
@@ -253,46 +253,46 @@ BOOST_AUTO_TEST_CASE(testSigAndVerify)
     h256 hash = crypto::Hash("abcd");
     /// normal check
     // sign
-    Signature sig = sign(key_pair, hash);
-    BOOST_CHECK(SignatureStruct(sig).isValid() == true);
+    auto sig = crypto::Sign(key_pair, hash);
+    BOOST_CHECK(sig->isValid() == true);
     // verify
-    bool result = verify(key_pair.pub(), sig, hash);
+    bool result = crypto::Verify(key_pair.pub(), sig, hash);
     BOOST_CHECK(result == true);
     // recover
-    Public pub = recover(sig, hash);
+    Public pub = crypto::Recover(sig, hash);
     BOOST_CHECK(pub == key_pair.pub());
     /// exception check:
     // check1: invalid payload(hash)
     h256 invalid_hash = crypto::Hash("abce");
-    result = verify(key_pair.pub(), sig, invalid_hash);
+    result = crypto::Verify(key_pair.pub(), sig, invalid_hash);
     BOOST_CHECK(result == false);
     Public invalid_pub = {};
-    invalid_pub = recover(sig, invalid_hash);
+    invalid_pub = crypto::Recover(sig, invalid_hash);
     BOOST_CHECK(invalid_pub != key_pair.pub());
 
     // check2: invalid sig
-    Signature another_sig(sign(key_pair, invalid_hash));
-    result = verify(key_pair.pub(), another_sig, hash);
+    auto another_sig(crypto::Sign(key_pair, invalid_hash));
+    result = crypto::Verify(key_pair.pub(), another_sig, hash);
     BOOST_CHECK(result == false);
 
-    invalid_pub = recover(another_sig, hash);
+    invalid_pub = crypto::Recover(another_sig, hash);
     BOOST_CHECK(invalid_pub != key_pair.pub());
     // check3: invalid secret
     Public random_key = Public::random();
-    result = verify(random_key, sig, hash);
+    result = crypto::Verify(random_key, sig, hash);
     BOOST_CHECK(result == false);
 
     // construct invalid r, v,s and check isValid() function
     h256 r(crypto::Hash("+++"));
     h256 s(crypto::Hash("24324"));
     byte v = 4;
-    SignatureStruct constructed_sig(r, s, v - 27);
-    BOOST_CHECK(constructed_sig.isValid() == false);
+    auto constructed_sig = std::make_shared<ECDSASignature>(r, s, v - 27);
+    BOOST_CHECK(constructed_sig->isValid() == false);
 }
 /// test ecRocer
 BOOST_AUTO_TEST_CASE(testSigecRocer)
 {
-    std::pair<bool, bytes> KeyPair;
+    std::pair<bool, bytes> keyPair;
     std::pair<bool, bytes> KeyPairR;
     bytes rlpBytes = fromHex(
         "f8ef9f65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d03f85174876e7ff"
@@ -311,10 +311,25 @@ BOOST_AUTO_TEST_CASE(testSigecRocer)
     h256 ret("000000000000000000000000ceaccac640adf55b2028469bd36ba501f28b699d");
     RLP rlpObj(rlpBytes);
     bytesConstRef _in = rlpObj.data();
-    KeyPair = SignatureStruct::ecRecover(_in);
-    KeyPairR = SignatureStruct::ecRecover(ref(rlpBytesRight));
-    BOOST_CHECK(KeyPair.first == true);
-    BOOST_CHECK(KeyPair.second != ret.asBytes());
+    struct
+    {
+        h256 hash;
+        h256 v;
+        h256 r;
+        h256 s;
+    } in, in2;
+    u256 v = (u256)in.v;
+    memcpy(&in, _in.data(), min(_in.size(), sizeof(in)));
+    auto sig = std::make_shared<ECDSASignature>(in.r, in.s, (byte)((int)v - 27));
+    keyPair = dev::ecRecover(sig, in.hash);
+    memcpy(&in2, ref(rlpBytesRight).data(), min(sizeof(in2), rlpBytesRight.size()));
+    v = (u256)in2.v;
+    sig = std::make_shared<ECDSASignature>(in2.r, in2.s, (byte)((int)v - 27));
+    KeyPairR = dev::ecRecover(sig, in2.hash);
+    BOOST_CHECK(keyPair.first == true);
+    BOOST_CHECK(keyPair.second != ret.asBytes());
+    cout << toHex(KeyPairR.second) << endl;
+    cout << toHex(ret.asBytes()) << endl;
     BOOST_CHECK(KeyPairR.second == ret.asBytes());
 }
 #endif

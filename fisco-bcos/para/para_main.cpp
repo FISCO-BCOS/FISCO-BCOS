@@ -64,8 +64,8 @@ void genTxUserAddBlock(Block& _block, size_t _userNum)
         Transaction::Ptr tx =
             std::make_shared<Transaction>(value, gasPrice, gas, dest, data, nonce);
         tx->setBlockLimit(250);
-        Signature sig = sign(*keyPair, tx->sha3(WithoutSignature));
-        tx->updateSignature(SignatureStruct(sig));
+        auto sig = dev::crypto::Sign(*keyPair, tx->sha3(WithoutSignature));
+        tx->updateSignature(sig);
         txs->push_back(tx);
     }
 
@@ -120,8 +120,8 @@ void genTxUserTransfer(Block& _block, size_t _userNum, size_t _txNum)
         Transaction::Ptr tx =
             std::make_shared<Transaction>(value, gasPrice, gas, dest, data, nonce);
         tx->setBlockLimit(250);
-        Signature sig = sign(*keyPair, tx->sha3(WithoutSignature));
-        tx->updateSignature(SignatureStruct(sig));
+        auto sig = crypto::Sign(*keyPair, tx->sha3(WithoutSignature));
+        tx->updateSignature(sig);
         txs->push_back(tx);
     }
 

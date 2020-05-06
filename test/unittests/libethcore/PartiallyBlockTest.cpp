@@ -49,7 +49,8 @@ public:
         {
             tx->setNonce(utcTime() + index);
             tx->setBlockLimit(200);
-            SignatureStruct sig = dev::sign(fakedBlock->m_keyPair, tx->sha3(WithoutSignature));
+            std::shared_ptr<Signature> sig =
+                dev::crypto::Sign(fakedBlock->m_keyPair, tx->sha3(WithoutSignature));
             tx->updateSignature(sig);
             index++;
         }

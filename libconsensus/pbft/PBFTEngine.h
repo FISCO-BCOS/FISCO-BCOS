@@ -331,7 +331,8 @@ protected:
     inline std::string getBackupMsgPath() { return m_baseDir + "/" + c_backupMsgDirName; }
 
     bool checkSign(PBFTMsg const& req) const;
-    bool checkSign(IDXTYPE const& _idx, dev::h256 const& _hash, Signature const& _sig);
+    bool checkSign(
+        IDXTYPE const& _idx, dev::h256 const& _hash, std::vector<unsigned char> const& _sig);
 
     inline bool broadcastFilter(
         dev::network::NodeID const& nodeId, unsigned const& packetType, std::string const& key)
