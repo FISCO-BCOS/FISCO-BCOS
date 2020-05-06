@@ -99,13 +99,7 @@ public:
         fp_txsReceiversFilter = _handler;
     }
 
-    void updateNeedMaintainTransactions(bool const& _needMaintainTxs)
-    {
-        if (_needMaintainTxs != m_needMaintainTransactions)
-        {
-            m_needMaintainTransactions = _needMaintainTxs;
-        }
-    }
+    void updateNeedMaintainTransactions(bool const& _needMaintainTxs);
 
     virtual void noteForwardRemainTxs(dev::h512 const& _targetNodeId)
     {
