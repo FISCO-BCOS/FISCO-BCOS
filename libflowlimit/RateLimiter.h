@@ -35,12 +35,15 @@ class RateLimiter
 public:
     using Ptr = std::shared_ptr<RateLimiter>;
     RateLimiter(uint64_t const& _maxQPS);
+    virtual ~RateLimiter() {}
     // acquire permits
-    int64_t acquire(int64_t const& _requiredPermits = 1, bool const& _wait = false,
-        bool const& _fetchPermitsWhenRequireWait = false);
+    virtual int64_t acquire(int64_t const& _requiredPermits = 1, bool const& _wait = false,
+        bool const& _fetchPermitsWhenRequireWait = false, int64_t const& _now = utcSteadyTimeUs());
 
-    bool tryAcquire(uint64_t const& _requiredPermits = 1);
-    bool acquireWithBurstSupported(uint64_t const& _requiredPermits = 1);
+    virtual bool tryAcquire(
+        uint64_t const& _requiredPermits = 1, int64_t const& _now = utcSteadyTimeUs());
+    virtual bool acquireWithBurstSupported(
+        uint64_t const& _requiredPermits = 1, int64_t const& _now = utcSteadyTimeUs());
 
     void setMaxPermitsSize(int64_t const& _maxPermitsSize)
     {
@@ -53,13 +56,13 @@ public:
     void setMaxBurstReqNum(int64_t const& _maxBurstReqNum);
 
 protected:
-    int64_t fetchPermitsAndGetWaitTime(
-        int64_t const& _requiredPermits, bool const& _fetchPermitsWhenRequireWait);
+    int64_t fetchPermitsAndGetWaitTime(int64_t const& _requiredPermits,
+        bool const& _fetchPermitsWhenRequireWait, int64_t const& _now);
     void updatePermits(int64_t const& _now);
 
     void updateCurrentStoredPermits(int64_t const& _requiredPermits);
 
-private:
+protected:
     mutable dev::Mutex m_mutex;
 
     // the max QPS

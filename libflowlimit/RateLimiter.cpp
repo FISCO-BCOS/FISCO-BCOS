@@ -52,16 +52,17 @@ void RateLimiter::setMaxBurstReqNum(int64_t const& _maxBurstReqNum)
                         << LOG_KV("maxBurstReqNum", m_maxBurstReqNum);
 }
 
-bool RateLimiter::tryAcquire(uint64_t const& _requiredPermits)
+bool RateLimiter::tryAcquire(uint64_t const& _requiredPermits, int64_t const& _now)
 {
-    auto waitTime = acquire(_requiredPermits, false, false);
+    auto waitTime = acquire(_requiredPermits, false, false, _now);
     return (waitTime == 0);
 }
 
-int64_t RateLimiter::acquire(
-    int64_t const& _requiredPermits, bool const& _wait, bool const& _fetchPermitsWhenRequireWait)
+int64_t RateLimiter::acquire(int64_t const& _requiredPermits, bool const& _wait,
+    bool const& _fetchPermitsWhenRequireWait, int64_t const& _now)
 {
-    int64_t waitTime = fetchPermitsAndGetWaitTime(_requiredPermits, _fetchPermitsWhenRequireWait);
+    int64_t waitTime =
+        fetchPermitsAndGetWaitTime(_requiredPermits, _fetchPermitsWhenRequireWait, _now);
     // if _wait is true(default is false): need sleep
     if (_wait && waitTime > 0)
     {
@@ -70,11 +71,10 @@ int64_t RateLimiter::acquire(
     return waitTime;
 }
 
-bool RateLimiter::acquireWithBurstSupported(uint64_t const& _requiredPermits)
+bool RateLimiter::acquireWithBurstSupported(uint64_t const& _requiredPermits, int64_t const& _now)
 {
-    auto waitTime = fetchPermitsAndGetWaitTime(_requiredPermits, false);
-    int64_t now = utcSteadyTimeUs();
-    int64_t waitAvailableTime = now + waitTime;
+    auto waitTime = fetchPermitsAndGetWaitTime(_requiredPermits, false, _now);
+    int64_t waitAvailableTime = _now + waitTime;
     // has enough permits
     if (waitTime == 0)
     {
@@ -82,15 +82,15 @@ bool RateLimiter::acquireWithBurstSupported(uint64_t const& _requiredPermits)
     }
 
     // should update m_futureBurstResetTime
-    if (now >= m_futureBurstResetTime)
+    if (_now >= m_futureBurstResetTime)
     {
         m_burstReqNum = 0;
-        m_futureBurstResetTime += m_burstTimeInterval;
+        m_futureBurstResetTime = _now + m_burstTimeInterval;
     }
     // has no permits, determine burst now
     m_burstReqNum += _requiredPermits;
     bool reqAccepted = false;
-    if (m_burstReqNum < m_maxBurstReqNum && waitAvailableTime < m_futureBurstResetTime)
+    if (m_burstReqNum <= m_maxBurstReqNum && waitAvailableTime < m_futureBurstResetTime)
     {
         reqAccepted = true;
     }
@@ -103,7 +103,7 @@ bool RateLimiter::acquireWithBurstSupported(uint64_t const& _requiredPermits)
 }
 
 int64_t RateLimiter::fetchPermitsAndGetWaitTime(
-    int64_t const& _requiredPermits, bool const& _fetchPermitsWhenRequireWait)
+    int64_t const& _requiredPermits, bool const& _fetchPermitsWhenRequireWait, int64_t const& _now)
 {
     // has remaining permits, handle the request directly
     if (m_currentStoredPermits > _requiredPermits)
@@ -111,11 +111,10 @@ int64_t RateLimiter::fetchPermitsAndGetWaitTime(
         m_currentStoredPermits -= _requiredPermits;
         return 0;
     }
-    auto now = utcSteadyTimeUs();
     Guard l(m_mutex);
     // update the permits
-    updatePermits(now);
-    int64_t waitAvailableTime = m_lastPermitsUpdateTime - now;
+    updatePermits(_now);
+    int64_t waitAvailableTime = m_lastPermitsUpdateTime - _now;
     // without wait: don't fetch permits after timeout
     // wait: fetch permits after timeout
     if (waitAvailableTime > 0 && !_fetchPermitsWhenRequireWait)
@@ -151,8 +150,15 @@ void RateLimiter::updatePermits(int64_t const& _now)
     {
         return;
     }
-    int64_t increasedPremits = (double)(_now - m_lastPermitsUpdateTime) / m_permitsUpdateInterval;
-    m_currentStoredPermits = std::min(m_maxPermits, m_currentStoredPermits + increasedPremits);
+    int64_t increasedPermits = (double)(_now - m_lastPermitsUpdateTime) / m_permitsUpdateInterval;
+    m_currentStoredPermits = std::min(m_maxPermits, m_currentStoredPermits + increasedPermits);
     // update last permits update time
-    m_lastPermitsUpdateTime = _now;
+    if (m_currentStoredPermits == m_maxPermits)
+    {
+        m_lastPermitsUpdateTime = _now;
+    }
+    else
+    {
+        m_lastPermitsUpdateTime += increasedPermits * m_permitsUpdateInterval;
+    }
 }
