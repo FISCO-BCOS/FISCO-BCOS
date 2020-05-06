@@ -20,6 +20,9 @@
  */
 
 #include "Precompiled.h"
+#include "libdevcrypto/ECDSASignature.h"
+#include "libdevcrypto/SM2Signature.h"
+#include "libdevcrypto/SM3Hash.h"
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcrypto/Common.h>
 #include <libdevcrypto/Hash.h>
@@ -52,18 +55,59 @@ ETH_REGISTER_PRECOMPILED(ecrecover)(bytesConstRef _in)
     // When supported_version> = v2.4.0, ecRecover uniformly calls the ECDSA verification function
     if (g_BCOSConfig.version() >= V2_4_0)
     {
-        return SignatureStruct::ecRecover(_in);
+        struct
+        {
+            h256 hash;
+            h256 v;
+            h256 r;
+            h256 s;
+        } in;
+        u256 v = (u256)in.v;
+        memcpy(&in, _in.data(), min(_in.size(), sizeof(in)));
+        auto sig = std::make_shared<ECDSASignature>(in.r, in.s, (byte)((int)v - 27));
+        return dev::ecRecover(sig, in.hash);
     }
-    return SignatureStruct::ecRecoverDeprecated(_in);
+// FIXME: before 2.4.0, in sm crypto mode this use sm2 recover which is a bug
+#ifdef FISCO_GM
+    struct
+    {
+        h256 hash;
+        h512 v;
+        h256 r;
+        h256 s;
+    } in;
+    memcpy(&in, _in.data(), min(_in.size(), sizeof(in)));
+    auto sig = std::make_shared<SM2Signature>(in.r, in.s, in.v);
+    return recover(sig, in.hash);
+#else
+    struct
+    {
+        h256 hash;
+        h256 v;
+        h256 r;
+        h256 s;
+    } in;
+    u256 v = (u256)in.v;
+    memcpy(&in, _in.data(), min(_in.size(), sizeof(in)));
+    auto sig = std::make_shared<ECDSASignature>(in.r, in.s, (byte)((int)v - 27));
+    return dev::ecRecover(sig, in.hash);
+
+#endif
 }
+
 ETH_REGISTER_PRECOMPILED(sha256)(bytesConstRef _in)
 {
     // When supported_version> = v2.4.0, sha256 uniformly calls the secp sha256 function
     if (g_BCOSConfig.version() >= V2_4_0)
     {
-        return {true, dev::standardSha256(_in).asBytes()};
+        return {true, dev::sha256(_in).asBytes()};
     }
+    // FIXME: before 2.4.0, in sm crypto mode this use sm3 which is a bug
+#ifdef FISCO_GM
+    return {true, dev::sm3(_in).asBytes()};
+#else
     return {true, dev::sha256(_in).asBytes()};
+#endif
 }
 
 ETH_REGISTER_PRECOMPILED(ripemd160)(bytesConstRef _in)

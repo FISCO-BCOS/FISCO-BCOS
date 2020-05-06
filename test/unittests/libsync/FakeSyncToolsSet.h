@@ -190,10 +190,10 @@ public:
         auto keyPair = KeyPair::create();
         TransactionPtr txPtr =
             std::make_shared<Transaction>(ref(c_txBytes), CheckTransaction::Everything);
-        txPtr->setNonce(txPtr->nonce() + u256(rand()));
+        txPtr->setNonce(txPtr->nonce() + utcTime() + u256(1));
         txPtr->setBlockLimit(u256(_currentBlockNumber) + c_maxBlockLimit);
-        dev::Signature sig = sign(keyPair, txPtr->sha3(WithoutSignature));
-        txPtr->updateSignature(SignatureStruct(sig));
+        auto sig = crypto::Sign(keyPair, txPtr->sha3(WithoutSignature));
+        txPtr->updateSignature(sig);
         return txPtr;
     }
 

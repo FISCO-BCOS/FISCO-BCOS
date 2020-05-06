@@ -67,11 +67,7 @@ BOOST_AUTO_TEST_CASE(fat_trie)
 
 BOOST_AUTO_TEST_CASE(hex_encoded_securetrie_test)
 {
-    // #ifdef FISCO_GM
-    //     fs::path const testPath = test::getTestPath() / fs::path("GMTrieTests");
-    // #else
     fs::path const testPath = test::getTestPath() / fs::path("TrieTests");
-    // #endif
     LOG(INFO) << "Testing Secure Trie...";
     Json::Value v;
     Json::Reader reader;

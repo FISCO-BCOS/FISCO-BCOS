@@ -53,9 +53,11 @@ void testCheckReq(FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareReq::Ptr prep
             fake_pbft.consensus()->reqCache()->getSigCacheSize(copiedReq.block_hash, 1) == 0);
         BOOST_CHECK(fake_pbft.consensus()->reqCache()->isExistSign(copiedReq) == false);
         /// modify the signature
-        copiedReq.sig = dev::sign(fake_pbft.m_keyPair[copiedReq.idx], copiedReq.block_hash);
+        copiedReq.sig =
+            dev::crypto::Sign(fake_pbft.m_keyPair[copiedReq.idx], copiedReq.block_hash)->asBytes();
         copiedReq.sig2 =
-            dev::sign(fake_pbft.m_keyPair[copiedReq.idx], copiedReq.fieldsWithoutBlock());
+            dev::crypto::Sign(fake_pbft.m_keyPair[copiedReq.idx], copiedReq.fieldsWithoutBlock())
+                ->asBytes();
         BOOST_CHECK(fake_pbft.consensus()->isValidSignReq(copiedReq) == CheckResult::FUTURE);
         BOOST_CHECK(fake_pbft.consensus()->reqCache()->isExistSign(copiedReq) == true);
 
@@ -73,8 +75,8 @@ void testCheckReq(FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareReq::Ptr prep
         BOOST_CHECK(fake_pbft.consensus()->isValidSignReq(signReq) == CheckResult::INVALID);
         signReq.view = org_view;
         /// test invalid sign
-        Signature sig = signReq.sig;
-        signReq.sig = Signature();
+        auto sig = signReq.sig;
+        signReq.sig.clear();
         BOOST_CHECK(fake_pbft.consensus()->isValidSignReq(signReq) == CheckResult::INVALID);
         signReq.sig = sig;
     }
@@ -118,8 +120,8 @@ void fakeValidViewchange(FakeConsensus<FakePBFTEngine>& fake_pbft, ViewChangeReq
     req.height = highest.number();
     fake_pbft.consensus()->setConsensusBlockNumber(req.height + 1);
     auto keyPair = fake_pbft.m_keyPair[req.idx];
-    req.sig = dev::sign(keyPair, req.block_hash);
-    req.sig2 = dev::sign(keyPair, req.fieldsWithoutBlock());
+    req.sig = dev::crypto::Sign(keyPair, req.block_hash)->asBytes();
+    req.sig2 = dev::crypto::Sign(keyPair, req.fieldsWithoutBlock())->asBytes();
 }
 
 void testIsExistCommit(FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareReq::Ptr prepareReq,
@@ -645,6 +647,10 @@ BOOST_AUTO_TEST_CASE(testIsValidSignReq)
     SignReq::Ptr signReq = std::make_shared<SignReq>();
     PrepareReq::Ptr prepareReq = std::make_shared<PrepareReq>();
     KeyPair peer_keyPair = KeyPair::create();
+    // signReq->sig.resize(crypto::signatureLength(), 0);
+    // signReq->sig2.resize(crypto::signatureLength(), 0);
+    // prepareReq->sig.resize(crypto::signatureLength(), 0);
+    // prepareReq->sig2.resize(crypto::signatureLength(), 0);
     TestIsValidSignReq(fake_pbft, pbftMsg, signReq, prepareReq, peer_keyPair, false);
 }
 

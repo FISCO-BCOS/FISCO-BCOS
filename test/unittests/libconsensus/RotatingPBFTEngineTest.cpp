@@ -113,6 +113,7 @@ BOOST_AUTO_TEST_CASE(testConstantSealers)
 // test for broadcasting rawPrepare by tree
 BOOST_AUTO_TEST_CASE(testRawPrepareTreeBroadcast)
 {
+#ifndef FISCO_GM
     // create RotatingPBFTEngineFixture for the leader
     auto leaderRPBFT = std::make_shared<RotatingPBFTEngineFixture>(20);
     auto followRPBFT = std::make_shared<RotatingPBFTEngineFixture>(20);
@@ -138,11 +139,13 @@ BOOST_AUTO_TEST_CASE(testRawPrepareTreeBroadcast)
 
     std::shared_ptr<P2PMessage> receivedP2pMsg = nullptr;
     // wait broadcast enqueue finished
-    while (!receivedP2pMsg)
+    int count = 50;
+    while (!receivedP2pMsg && --count > 0)
     {
         receivedP2pMsg = leaderService->getAsyncSendMessageByNodeID(
             followRPBFT->fakePBFTSuite()->consensus()->keyPair().pub());
-        sleep(1);
+        cout << "under sleep, dead loop " << count << endl;
+        this_thread::sleep_for(std::chrono::milliseconds(100));
     }
     for (auto const& node : leaderRPBFT->fakePBFTSuite()->consensus()->sealerList())
     {
@@ -326,5 +329,6 @@ BOOST_AUTO_TEST_CASE(testRawPrepareTreeBroadcast)
         leaderSession2, receivedP2pMsg);
     checkPrepareReqEqual(
         followRPBFT->fakePBFTSuite()->consensus()->reqCache()->rawPrepareCachePtr(), prepareReq);
+#endif
 }
 BOOST_AUTO_TEST_SUITE_END()

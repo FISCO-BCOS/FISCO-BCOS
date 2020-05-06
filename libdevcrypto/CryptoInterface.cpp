@@ -22,7 +22,9 @@
 
 #include "CryptoInterface.h"
 #include "AES.h"
+#include "ECDSASignature.h"
 #include "Hash.h"
+#include "SM2Signature.h"
 #include "SM3Hash.h"
 #include "SM4Crypto.h"
 #include "libdevcore/RLP.h"
@@ -33,6 +35,8 @@ using namespace dev;
 h256 dev::EmptyHash = sha3(bytesConstRef());
 h256 dev::EmptyTrie = sha3(rlp(""));
 static bool SMCrypto = false;
+static size_t SM2SignatureLength = 128;
+static size_t ECDSASignatureLength = 65;
 
 std::function<std::string(const unsigned char* _plainData, size_t _plainDataSize,
     const unsigned char* _key, size_t _keySize, const unsigned char* _ivData)>
@@ -42,19 +46,44 @@ std::function<std::string(const unsigned char* _encryptedData, size_t _encrypted
     const unsigned char* _key, size_t _keySize, const unsigned char* _ivData)>
     dev::crypto::SymmetricDecrypt = static_cast<std::string (*)(const unsigned char*, size_t,
         const unsigned char*, size_t, const unsigned char*)>(dev::aesCBCDecrypt);
+std::function<std::shared_ptr<Signature>(RLP const& _rlp, size_t _start)>
+    dev::crypto::SignatureFromRLP = ECDSASignatureFromRLP;
+std::function<std::shared_ptr<Signature>(std::vector<unsigned char>)>
+    dev::crypto::SignatureFromBytes = ECDSASignatureFromBytes;
+
+std::function<std::shared_ptr<Signature>(KeyPair const& _keyPair, const h256& _hash)>
+    dev::crypto::Sign = ecdsaSign;
+std::function<bool(h512 const& _pubKey, std::shared_ptr<Signature> _sig, const h256& _hash)>
+    dev::crypto::Verify = ecdsaVerify;
+std::function<h512(std::shared_ptr<Signature> _sig, const h256& _hash)> dev::crypto::Recover =
+    ecdsaRecover;
 
 bool dev::crypto::isSMCrypto()
 {
     return SMCrypto;
 }
 
+size_t dev::crypto::signatureLength()
+{
+    if (isSMCrypto())
+    {
+        return SM2SignatureLength;
+    }
+    return ECDSASignatureLength;
+}
+
 void dev::crypto::initSMCtypro()
 {
+    SMCrypto = true;
     EmptyHash = sm3(bytesConstRef());
     EmptyTrie = sm3(rlp(""));
+    SignatureFromRLP = SM2SignatureFromRLP;
+    SignatureFromBytes = SM2SignatureFromBytes;
     dev::crypto::SymmetricEncrypt = static_cast<std::string (*)(const unsigned char*, size_t,
         const unsigned char*, size_t, const unsigned char*)>(dev::SM4Encrypt);
     dev::crypto::SymmetricDecrypt = static_cast<std::string (*)(const unsigned char*, size_t,
         const unsigned char*, size_t, const unsigned char*)>(dev::SM4Decrypt);
-    SMCrypto = true;
+    Sign = sm2Sign;
+    Verify = sm2Verify;
+    Recover = sm2Recover;
 }

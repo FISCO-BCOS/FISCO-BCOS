@@ -112,8 +112,8 @@ static void createTx(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
             {
                 tx->setNonce(u256(noncePrefix + to_string(txSeqNonce++)));
                 tx->setBlockLimit(u256(_blockChain->number()) + 50);
-                dev::Signature sig = sign(keyPair, tx->sha3(WithoutSignature));
-                tx->updateSignature(SignatureStruct(sig));
+                auto sig = dev::crypto::Sign(keyPair, tx->sha3(WithoutSignature));
+                tx->updateSignature(sig);
                 _txPool->submit(tx);
             }
             catch (std::exception& e)
