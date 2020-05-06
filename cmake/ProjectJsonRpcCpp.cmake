@@ -1,6 +1,6 @@
 #------------------------------------------------------------------------------
 # HTTP client from JSON RPC CPP requires curl library. It can find it itself,
-# but we need to know the libcurl location for static linking. 
+# but we need to know the libcurl location for static linking.
 #
 # HTTP server from JSON RPC CPP requires microhttpd library. It can find it itself,
 # but we need to know the MHD location for static linking.
@@ -28,15 +28,15 @@ set(CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
                -DCMAKE_BUILD_TYPE=Release
                # Build static lib but suitable to be included in a shared lib.
                -DCMAKE_POSITION_INDEPENDENT_CODE=${BUILD_SHARED_LIBS}
-               -DBUILD_STATIC_LIBS=On
-               -DBUILD_SHARED_LIBS=Off
-               -DUNIX_DOMAIN_SOCKET_SERVER=Off
-               -DUNIX_DOMAIN_SOCKET_CLIENT=Off
-               -DHTTP_SERVER=On
-               -DHTTP_CLIENT=off
-               -DCOMPILE_TESTS=Off
-               -DCOMPILE_STUBGEN=Off
-               -DCOMPILE_EXAMPLES=Off
+               -DBUILD_STATIC_LIBS=ON
+               -DBUILD_SHARED_LIBS=OFF
+               -DUNIX_DOMAIN_SOCKET_SERVER=OFF
+               -DUNIX_DOMAIN_SOCKET_CLIENT=OFF
+               -DHTTP_SERVER=ON
+               -DHTTP_CLIENT=OFF
+               -DCOMPILE_TESTS=OFF
+               -DCOMPILE_STUBGEN=OFF
+               -DCOMPILE_EXAMPLES=OFF
                # Point to jsoncpp library.
                -DJSONCPP_INCLUDE_DIR=${JSONCPP_INCLUDE_DIR}
                # Select jsoncpp include prefix: <json/...> or <jsoncpp/json/...>

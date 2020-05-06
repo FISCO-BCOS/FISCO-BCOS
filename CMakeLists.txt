@@ -47,7 +47,7 @@ if(NOT EXISTS "${CMAKE_SOURCE_DIR}/evmc/.git")
     message(FATAL_ERROR "The submodules were not downloaded! GIT_SUBMODULE was turned off or failed. Please execute:\n  git submodule update --init")
 endif()
 
-set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY On)
+set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY ON)
 
 # basic setting
 include(Options)
@@ -122,5 +122,5 @@ add_custom_target(doc COMMAND ${DOXYGEN_EXECUTABLE} ${doxyfile}
                        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
                        COMMENT "Generating documentation with Doxygen..." VERBATIM)
 elseif()
-  message(WARNING "Doxygen is needed to build the documentation. Please install doxygen and graphviz") 
+  message(WARNING "Doxygen is needed to build the documentation. Please install doxygen and graphviz")
 endif()
