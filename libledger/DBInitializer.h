@@ -124,8 +124,6 @@ private:
     std::shared_ptr<dev::storage::CachedStorage> m_cacheStorage;
 };
 int64_t getBlockNumberFromStorage(dev::storage::Storage::Ptr _storage);
-std::function<void(std::string&)> getDecryptHandler();
-std::function<void(std::string const&, std::string&)> getEncryptHandler();
 dev::storage::Storage::Ptr createRocksDBStorage(
     const std::string& _dbPath, bool _enableEncryption, bool _disableWAL, bool _enableCache);
 dev::storage::Storage::Ptr createSQLStorage(std::shared_ptr<LedgerParamInterface> _param,

@@ -25,7 +25,6 @@
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcore/CommonJS.h>
 #include <libethcore/CommonJS.h>
-#include <libsecurity/EncryptedLevelDB.h>
 #include <libtxpool/TxPool.h>
 using namespace dev::eth;
 using namespace dev::db;
@@ -33,13 +32,14 @@ using namespace dev::blockverifier;
 using namespace dev::blockchain;
 using namespace dev::p2p;
 using namespace dev::storage;
+using namespace rocksdb;
 
 namespace dev
 {
 namespace consensus
 {
 const std::string PBFTEngine::c_backupKeyCommitted = "committed";
-const std::string PBFTEngine::c_backupMsgDirName = "pbftMsgBackup";
+const std::string PBFTEngine::c_backupMsgDirName = "pbftMsgBackup/RocksDB";
 
 void PBFTEngine::start()
 {
@@ -183,31 +183,23 @@ void PBFTEngine::rehandleCommitedPrepareCache(PrepareReq const& req)
 /// init pbftMsgBackup
 void PBFTEngine::initBackupDB()
 {
-    /// try-catch has already been considered by libdevcore/LevelDB.*
+    /// try-catch has already been considered by Initializer::init and RPC calls startByGroupID
     std::string path = getBackupMsgPath();
     boost::filesystem::path path_handler = boost::filesystem::path(path);
     if (!boost::filesystem::exists(path_handler))
     {
         boost::filesystem::create_directories(path_handler);
     }
-
-    db::BasicLevelDB* basicDB = NULL;
-    leveldb::Status status;
-
-    if (g_BCOSConfig.diskEncryption.enable && g_BCOSConfig.version() <= RC3_VERSION)
+    m_backupDB = std::make_shared<BasicRocksDB>();
+    auto options = getRocksDBOptions();
+    m_backupDB->Open(options, path_handler.string());
+    if (g_BCOSConfig.diskEncryption.enable)
     {
-        status =
-            EncryptedLevelDB::Open(LevelDB::defaultDBOptions(), path_handler.string(), &basicDB,
-                g_BCOSConfig.diskEncryption.cipherDataKey, g_BCOSConfig.diskEncryption.dataKey);
+        PBFTENGINE_LOG(INFO) << LOG_DESC(
+            "diskEncryption enabled: set encrypt and decrypt handler for pbftBackup");
+        m_backupDB->setEncryptHandler(getEncryptHandler());
+        m_backupDB->setDecryptHandler(getDecryptHandler());
     }
-    else
-    {
-        status = BasicLevelDB::Open(LevelDB::defaultDBOptions(), path_handler.string(), &basicDB);
-    }
-
-    LevelDB::checkStatus(status, path_handler);
-
-    m_backupDB = std::make_shared<LevelDB>(basicDB);
 
     if (!isDiskSpaceEnough(path))
     {
@@ -234,7 +226,16 @@ void PBFTEngine::reloadMsg(std::string const& key, PBFTMsg* msg)
     }
     try
     {
-        bytes data = fromHex(m_backupDB->lookup(key));
+        std::string value;
+        auto status = m_backupDB->Get(ReadOptions(), key, value);
+        if (!status.ok() && !status.IsNotFound())
+        {
+            PBFTENGINE_LOG(ERROR) << LOG_DESC("reloadMsg PBFTBackup failed")
+                                  << LOG_KV("status", status.ToString());
+            BOOST_THROW_EXCEPTION(DatabaseError() << errinfo_comment(
+                                      "reloadMsg failed, status = " + status.ToString()));
+        }
+        bytes data = fromHex(value);
         if (data.empty())
         {
             PBFTENGINE_LOG(DEBUG) << LOG_DESC("reloadMsg: Empty message stored")
@@ -271,7 +272,10 @@ void PBFTEngine::backupMsg(std::string const& _key, std::shared_ptr<bytes> _msg)
     }
     try
     {
-        m_backupDB->insert(_key, toHex(*_msg));
+        WriteBatch batch;
+        m_backupDB->Put(batch, _key, toHex(*_msg));
+        WriteOptions options;
+        m_backupDB->Write(options, batch);
     }
     catch (DatabaseError const& e)
     {
@@ -279,14 +283,14 @@ void PBFTEngine::backupMsg(std::string const& _key, std::shared_ptr<bytes> _msg)
                               << LOG_DESC("store backupMsg to db failed")
                               << LOG_KV("EINFO", boost::diagnostic_information(e));
         raise(SIGTERM);
-        BOOST_THROW_EXCEPTION(std::invalid_argument(" store backupMsg to leveldb failed."));
+        BOOST_THROW_EXCEPTION(std::invalid_argument(" store backupMsg to rocksdb failed."));
     }
     catch (std::exception const& e)
     {
         PBFTENGINE_LOG(ERROR) << LOG_DESC("store backupMsg to db failed")
                               << LOG_KV("EINFO", boost::diagnostic_information(e));
         raise(SIGTERM);
-        BOOST_THROW_EXCEPTION(std::invalid_argument(" store backupMsg to leveldb failed."));
+        BOOST_THROW_EXCEPTION(std::invalid_argument(" store backupMsg to rocksdb failed."));
     }
 }
 

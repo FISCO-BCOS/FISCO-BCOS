@@ -76,7 +76,7 @@ public:
     const std::shared_ptr<PBFTReqCache> reqCache() const { return m_reqCache; }
     TimeManager const& timeManager() const { return m_timeManager; }
     TimeManager& mutableTimeManager() { return m_timeManager; }
-    const std::shared_ptr<dev::db::LevelDB> backupDB() const { return m_backupDB; }
+    const std::shared_ptr<dev::storage::BasicRocksDB> backupDB() const { return m_backupDB; }
     int64_t consensusBlockNumber() const { return m_consensusBlockNumber; }
     void setConsensusBlockNumber(int64_t const& number) { m_consensusBlockNumber = number; }
 
