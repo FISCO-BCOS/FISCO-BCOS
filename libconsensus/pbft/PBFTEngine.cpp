@@ -620,12 +620,6 @@ CheckResult PBFTEngine::isValidPrepare(PrepareReq const& req, std::ostringstream
                               << LOG_KV("EINFO", oss.str());
         return CheckResult::INVALID;
     }
-
-    if (isFuturePrepare(req))
-    {
-        PBFTENGINE_LOG(INFO) << LOG_DESC("FutureBlock") << LOG_KV("EINFO", oss.str());
-        return CheckResult::FUTURE;
-    }
     if (!isValidLeader(req))
     {
         return CheckResult::INVALID;
@@ -657,6 +651,11 @@ CheckResult PBFTEngine::isValidPrepare(PrepareReq const& req, std::ostringstream
         PBFTENGINE_LOG(DEBUG) << LOG_DESC("InvalidPrepare: not saved after commit")
                               << LOG_KV("EINFO", oss.str());
         return CheckResult::INVALID;
+    }
+    if (isFuturePrepare(req))
+    {
+        PBFTENGINE_LOG(INFO) << LOG_DESC("FutureBlock") << LOG_KV("EINFO", oss.str());
+        return CheckResult::FUTURE;
     }
     if (!checkSign(req))
     {
