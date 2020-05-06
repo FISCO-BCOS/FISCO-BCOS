@@ -264,13 +264,21 @@ static inline void checkDelCommitCache(FakeConsensus<T>& fake_pbft, BlockHeader 
     BOOST_CHECK(p_commit == fake_pbft.consensus()->reqCache()->mutableCommitCache().end());
 }
 
+static inline std::string getDataFromBackupDB(
+    std::string const& _key, dev::storage::BasicRocksDB::Ptr _backupDB)
+{
+    std::string value;
+    _backupDB->Get(rocksdb::ReadOptions(), _key, value);
+    return value;
+}
+
 template <typename T>
 static void checkBackupMsg(FakeConsensus<T>& fake_pbft, std::string const& key,
     bytes const& msgData, bool shouldClean = true)
 {
     BOOST_CHECK(fake_pbft.consensus()->backupDB());
     /// insert succ
-    std::string data = fake_pbft.consensus()->backupDB()->lookup(key);
+    std::string data = getDataFromBackupDB(key, fake_pbft.consensus()->backupDB());
     if (msgData.size() == 0)
         BOOST_CHECK(data.empty() == true);
     else
@@ -278,7 +286,7 @@ static void checkBackupMsg(FakeConsensus<T>& fake_pbft, std::string const& key,
         // wait the prepare commit to the backupDB
         while (data.empty())
         {
-            data = fake_pbft.consensus()->backupDB()->lookup(key);
+            data = getDataFromBackupDB(key, fake_pbft.consensus()->backupDB());
             sleep(1);
         }
         if (data != toHex(msgData))
@@ -291,7 +299,10 @@ static void checkBackupMsg(FakeConsensus<T>& fake_pbft, std::string const& key,
         std::string empty = "";
         if (shouldClean)
         {
-            fake_pbft.consensus()->backupDB()->insert(key, empty);
+            rocksdb::WriteBatch batch;
+            fake_pbft.consensus()->backupDB()->Put(batch, key, empty);
+            rocksdb::WriteOptions options;
+            fake_pbft.consensus()->backupDB()->Write(options, batch);
         }
     }
 }

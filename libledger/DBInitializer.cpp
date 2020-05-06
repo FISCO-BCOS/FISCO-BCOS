@@ -301,45 +301,6 @@ dev::storage::Storage::Ptr DBInitializer::initSQLStorage()
     return sqlStorage;
 }
 
-std::function<void(std::string const&, std::string&)> dev::ledger::getEncryptHandler()
-{
-    // get dataKey according to ciperDataKey from keyCenter
-    return [=](std::string const& data, std::string& encData) {
-        try
-        {
-            auto const& dataKey = g_BCOSConfig.diskEncryption.dataKey;
-            encData = crypto::SymmetricEncrypt((const unsigned char*)data.data(), data.size(),
-                (const unsigned char*)dataKey.data(), dataKey.size(),
-                (const unsigned char*)dataKey.data());
-        }
-        catch (const std::exception& e)
-        {
-            std::string error_info = "encryt value for data=" + data +
-                                     " failed, EINFO: " + boost::diagnostic_information(e);
-            ROCKSDB_LOG(ERROR) << LOG_DESC(error_info);
-            BOOST_THROW_EXCEPTION(EncryptFailed() << errinfo_comment(error_info));
-        }
-    };
-}
-
-std::function<void(std::string&)> dev::ledger::getDecryptHandler()
-{
-    return [=](std::string& data) {
-        try
-        {
-            auto const& dataKey = g_BCOSConfig.diskEncryption.dataKey;
-            data = crypto::SymmetricDecrypt((const unsigned char*)data.data(), data.size(),
-                (const unsigned char*)dataKey.data(), dataKey.size(),
-                (const unsigned char*)dataKey.data());
-        }
-        catch (const std::exception& e)
-        {
-            std::string error_info = "decrypt value for data=" + data + " failed";
-            ROCKSDB_LOG(ERROR) << LOG_DESC(error_info);
-            BOOST_THROW_EXCEPTION(DecryptFailed() << errinfo_comment(error_info));
-        }
-    };
-}
 
 dev::storage::Storage::Ptr DBInitializer::initRocksDBStorage(
     std::shared_ptr<LedgerParamInterface> _param)

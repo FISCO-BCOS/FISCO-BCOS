@@ -29,7 +29,6 @@
 #include "TimeManager.h"
 #include <libconsensus/ConsensusEngineBase.h>
 #include <libdevcore/FileSystem.h>
-#include <libdevcore/LevelDB.h>
 #include <libdevcore/ThreadPool.h>
 #include <libdevcore/concurrent_queue.h>
 #include <libstorage/Storage.h>
@@ -41,6 +40,7 @@
 #include <libp2p/Service.h>
 
 #include "PBFTMsgFactory.h"
+#include <libstorage/BasicRocksDB.h>
 #include <libsync/SyncStatus.h>
 
 namespace dev
@@ -682,7 +682,7 @@ protected:
     std::atomic_bool m_notifyNextLeaderSeal = {false};
 
     // backup msg
-    std::shared_ptr<dev::db::LevelDB> m_backupDB = nullptr;
+    dev::storage::BasicRocksDB::Ptr m_backupDB = nullptr;
 
     /// static vars
     static const std::string c_backupKeyCommitted;

@@ -22,6 +22,7 @@
 
 #pragma once
 #include <libdevcore/Common.h>
+#include <libdevcrypto/CryptoInterface.h>
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
 #include <rocksdb/slice.h>
@@ -41,14 +42,14 @@ namespace storage
 class BasicRocksDB
 {
 public:
+    using Ptr = std::shared_ptr<BasicRocksDB>;
     BasicRocksDB() {}
     virtual ~BasicRocksDB() { closeDB(); }
 
     // open rocksDB with the given option
     // if rocksDB is opened successfully, return the DB handler
     // if open rocksDB failed, throw exception, and stop the program directly
-    virtual std::shared_ptr<rocksdb::DB> Open(
-        const rocksdb::Options& options, const std::string& dbname);
+    virtual void Open(const rocksdb::Options& options, const std::string& dbname);
 
     // get value from rocksDB according to the given key
     // if query successfully, return query status
@@ -58,7 +59,7 @@ public:
 
     // common Put interface, put the given (key, value) into batch
     virtual rocksdb::Status Put(
-        rocksdb::WriteBatch& batch, std::string const& key, std::string& value);
+        rocksdb::WriteBatch& batch, std::string const& key, std::string const& value);
 
     // callback hook function, and put (key, value) into batch later
     // for performance consideration, hook is called without lock, batch put is called with lock
@@ -86,10 +87,12 @@ protected:
     rocksdb::Status BatchPut(
         rocksdb::WriteBatch& batch, std::string const& key, std::string const& value);
 
-    std::shared_ptr<rocksdb::DB> m_db;
+    std::unique_ptr<rocksdb::DB> m_db;
     EncHookFunction m_encryptHandler = nullptr;
     DecHookFunction m_decryptHandler = nullptr;
 };
 rocksdb::Options getRocksDBOptions();
+std::function<void(std::string const&, std::string&)> getEncryptHandler();
+std::function<void(std::string&)> getDecryptHandler();
 }  // namespace storage
 }  // namespace dev
