@@ -25,11 +25,10 @@
 #pragma once
 
 #include "Hash.h"
+#include "Signature.h"
 #include <libdevcore/Address.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/Exceptions.h>
-#include <libdevcore/FixedHash.h>
-#include <libdevcore/RLP.h>
 #include <secp256k1.h>
 #include <secp256k1_recovery.h>
 #include <secp256k1_sha256.h>
@@ -44,53 +43,8 @@ using Secret = SecureFixedHash<32>;
 /// @NOTE This is not endian-specific; it's just a bunch of bytes.
 using Public = h512;
 
-/// A signature: 65 bytes: r: [0, 32), s: [32, 64), v: 64.
-/// @NOTE This is not endian-specific; it's just a bunch of bytes.
-#ifdef FISCO_GM
-using Signature = h1024;
-using VType = h512;
-using NumberVType = u512;
-static const u512 VBase = 0;
-#else
-using Signature = h520;
-using VType = byte;
-using NumberVType = byte;
-static const unsigned VBase = 27;
-#endif
-struct SignatureStruct
-{
-    SignatureStruct() = default;
-    SignatureStruct(Signature const& _s) { *(Signature*)this = _s; }
-
-
-    SignatureStruct(h256 const& _r, h256 const& _s, VType _v) : r(_r), s(_s), v(_v) {}
-    SignatureStruct(u256 const& _r, u256 const& _s, NumberVType _v)
-    {
-        r = _r;
-        s = _s;
-        v = _v;
-    }
-    static std::pair<bool, bytes> ecRecover(bytesConstRef _in);
-    static std::pair<bool, bytes> ecRecoverDeprecated(bytesConstRef _in);
-    // SignatureStruct(VType _v, h256 const& _r, h256 const& _s);
-    void encode(RLPStream& _s) const noexcept;
-    void check() const noexcept;
-    operator Signature() const { return *(Signature const*)this; }
-
-    /// @returns true if r,s,v values are valid, otherwise false
-    bool isValid() const noexcept;
-
-    h256 r;
-    h256 s;
-    VType v;
-};
-// m_vrs.rlp()
-
 /// A vector of secrets.
 using Secrets = std::vector<Secret>;
-
-
-NumberVType getVFromRLP(RLP const& _txRLPField);
 
 /// Convert a secret key into the public key equivalent.
 /// if convert failed, assertion failed
@@ -107,28 +61,6 @@ Address toAddress(Secret const& _secret);
 // Convert transaction from and nonce to address.
 // for contract adddress generation
 Address toAddress(Address const& _from, u256 const& _nonce);
-
-// /// Encrypts plain text using Public key.(asymmetric encryption)
-// void encrypt(Public const& _k, bytesConstRef _plain, bytes& o_cipher);
-
-// /// Decrypts cipher using Secret key.(asymmetric decryption)
-// bool decrypt(Secret const& _k, bytesConstRef _cipher, bytes& o_plaintext);
-
-
-/// Recovers Public key from signed message hash.
-Public recoverSignature(Signature const& _sig, h256 const& _hash);
-Public recover(Signature const& _sig, h256 const& _hash);
-
-class KeyPair;
-
-/// Returns siganture of message hash.
-// SM2 is a non-deterministic signature algorithm. Even with the same hash and private key, will
-// obtained different [r] and [s] values.
-Signature sign(KeyPair const& _keyPair, h256 const& _hash);
-
-/// Verify signature.
-
-bool verify(Public const& _k, Signature const& _s, h256 const& _hash);
 
 /// Simple class that represents a "key pair".
 /// All of the data of the class can be regenerated from the secret key (m_secret) alone.

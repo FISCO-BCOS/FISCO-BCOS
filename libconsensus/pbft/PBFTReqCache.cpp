@@ -61,13 +61,12 @@ void PBFTReqCache::delCache(dev::eth::BlockHeader const& _highestBlockHeader)
  */
 bool PBFTReqCache::generateAndSetSigList(dev::eth::Block& block, IDXTYPE const& minSigSize)
 {
-    auto sig_list = std::make_shared<std::vector<std::pair<u256, Signature>>>();
+    auto sig_list = std::make_shared<std::vector<std::pair<u256, std::vector<unsigned char>>>>();
     if (m_commitCache.count(m_prepareCache->block_hash) > 0)
     {
         for (auto const& item : m_commitCache[m_prepareCache->block_hash])
         {
-            sig_list->push_back(
-                std::make_pair(u256(item.second->idx), Signature(item.first.c_str())));
+            sig_list->push_back(std::make_pair(u256(item.second->idx), fromHex(item.first)));
         }
         if (sig_list->size() < minSigSize)
         {
