@@ -145,6 +145,11 @@ public:
     virtual bool initPartiallyBlock(std::shared_ptr<dev::eth::Block>) { return true; }
     virtual void registerSyncStatusChecker(std::function<bool()>) {}
 
+    // when the node is changed from sealer/observer node to free-node,
+    // Update the status of all transactions,  so that when the node becomes an observer or a
+    // sealer, broadcast the remaining transactions in the transaction pool to other nodes
+    virtual void freshTxsStatus() {}
+
 protected:
     ///< Called when a subsequent call to import transactions will return a non-empty container. Be
     ///< nice and exit fast.

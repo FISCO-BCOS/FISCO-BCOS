@@ -60,7 +60,6 @@ public:
 
 private:
     std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
-    std::vector<NonceVec> nonce_vec;
     /// cache the block nonce to in case of accessing the DB to get nonces of given block frequently
     /// key: block number
     /// value: all the nonces of a given block
