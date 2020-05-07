@@ -622,11 +622,6 @@ CheckResult PBFTEngine::isValidPrepare(PrepareReq const& req, std::ostringstream
                               << LOG_KV("EINFO", oss.str());
         return CheckResult::INVALID;
     }
-    if (!isValidLeader(req))
-    {
-        return CheckResult::INVALID;
-    }
-
     // Since the empty block is not placed on the disk,
     // pbftBackup is checked only when a non-empty prepare is received
     // in case that:
@@ -658,6 +653,10 @@ CheckResult PBFTEngine::isValidPrepare(PrepareReq const& req, std::ostringstream
     {
         PBFTENGINE_LOG(INFO) << LOG_DESC("FutureBlock") << LOG_KV("EINFO", oss.str());
         return CheckResult::FUTURE;
+    }
+    if (!isValidLeader(req))
+    {
+        return CheckResult::INVALID;
     }
     if (!checkSign(req))
     {
