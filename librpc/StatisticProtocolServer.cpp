@@ -42,7 +42,7 @@ bool StatisticPotocolServer::limitRPCQPS(Json::Value const& _request, std::strin
 bool StatisticPotocolServer::limitGroupQPS(
     dev::GROUP_ID const& _groupId, Json::Value const& _request, std::string& _retValue)
 {
-    if (!m_qpsLimiter)
+    if (_groupId == -1)
     {
         return true;
     }
@@ -51,7 +51,7 @@ bool StatisticPotocolServer::limitGroupQPS(
     return canHandle;
 }
 
-
+// QPS limit exceeded, respond OverQPSLimit
 void StatisticPotocolServer::wrapResponseForNodeBusy(
     bool const& _canHandle, Json::Value const& _request, std::string& _retValue)
 {
@@ -86,7 +86,7 @@ void StatisticPotocolServer::HandleRequest(const std::string& _request, std::str
     dev::GROUP_ID groupId = -1;
     if (reader.parse(_request, req, false))
     {
-        if (m_networkStatHandler)
+        if (m_networkStatHandler || m_qpsLimiter)
         {
             groupId = getGroupID(req);
             // limit group QPS
@@ -123,7 +123,7 @@ dev::GROUP_ID StatisticPotocolServer::getGroupID(Json::Value const& _request)
         }
 
         auto procedureName = _request[KEY_REQUEST_METHODNAME].asString();
-        if (!m_networkStatHandler->shouldStatistic(procedureName))
+        if (!m_groupRPCMethodSet.count(procedureName))
         {
             return -1;
         }

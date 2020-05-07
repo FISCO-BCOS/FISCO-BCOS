@@ -58,11 +58,6 @@ public:
 
     bool running() const { return m_running; }
 
-    bool shouldStatistic(std::string const& _procedureName)
-    {
-        return m_groupRPCMethodSet.count(_procedureName);
-    }
-
 private:
     void flushLog();
     NetworkStatHandler::Ptr getP2PHandlerByGroupId(GROUP_ID const& _groupId);
@@ -71,16 +66,6 @@ private:
     std::string m_statisticName;
     int64_t m_flushInterval;
     dev::ThreadPool::Ptr m_statLogFlushThread;
-
-    // record group related RPC methods
-    std::set<std::string> const m_groupRPCMethodSet = {"getSystemConfigByKey", "getBlockNumber",
-        "getPbftView", "getSealerList", "getEpochSealersList", "getObserverList",
-        "getConsensusStatus", "getSyncStatus", "getGroupPeers", "getBlockByHash",
-        "getBlockByNumber", "getBlockHashByNumber", "getTransactionByHash",
-        "getTransactionByBlockHashAndIndex", "getTransactionByBlockNumberAndIndex",
-        "getTransactionReceipt", "getPendingTransactions", "getPendingTxSize", "call",
-        "sendRawTransaction", "getCode", "getTotalTransactionCount",
-        "getTransactionByHashWithProof", "getTransactionReceiptByHashWithProof"};
 
     std::shared_ptr<std::map<GROUP_ID, NetworkStatHandler::Ptr>> m_p2pStatHandlers;
     mutable SharedMutex x_p2pStatHandlers;

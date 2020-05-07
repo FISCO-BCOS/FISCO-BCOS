@@ -52,6 +52,17 @@ private:
 
     dev::GROUP_ID getGroupID(Json::Value const& _input);
 
+private:
+    // record group related RPC methods
+    std::set<std::string> const m_groupRPCMethodSet = {"getSystemConfigByKey", "getBlockNumber",
+        "getPbftView", "getSealerList", "getEpochSealersList", "getObserverList",
+        "getConsensusStatus", "getSyncStatus", "getGroupPeers", "getBlockByHash",
+        "getBlockByNumber", "getBlockHashByNumber", "getTransactionByHash",
+        "getTransactionByBlockHashAndIndex", "getTransactionByBlockNumberAndIndex",
+        "getTransactionReceipt", "getPendingTransactions", "getPendingTxSize", "call",
+        "sendRawTransaction", "getCode", "getTotalTransactionCount",
+        "getTransactionByHashWithProof", "getTransactionReceiptByHashWithProof"};
+
     dev::stat::ChannelNetworkStatHandler::Ptr m_networkStatHandler;
     dev::flowlimit::RPCQPSLimiter::Ptr m_qpsLimiter;
 };
