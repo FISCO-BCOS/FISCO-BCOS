@@ -139,15 +139,15 @@ ExternalProject_Add(cryptopp
         -DCMAKE_BUILD_TYPE=Release
         # Build static lib but suitable to be included in a shared lib.
         -DCMAKE_POSITION_INDEPENDENT_CODE=${BUILD_SHARED_LIBS}
-        -DBUILD_SHARED=Off
-        -DBUILD_TESTING=Off
+        -DBUILD_SHARED=OFF
+        -DBUILD_TESTING=OFF
         -DCMAKE_C_FLAGS=${MARCH_TYPE}
         -DCMAKE_CXX_FLAGS=${MARCH_TYPE}
         -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
         -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
-    LOG_CONFIGURE 1
     BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config Release
     INSTALL_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config Release --target install
+    LOG_CONFIGURE 1
     LOG_BUILD 1
     LOG_INSTALL 1
     BUILD_BYPRODUCTS <INSTALL_DIR>/${CMAKE_INSTALL_LIBDIR}/libcryptopp.a
