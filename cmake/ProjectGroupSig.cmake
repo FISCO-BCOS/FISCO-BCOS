@@ -9,7 +9,7 @@ if (CRYPTO_EXTENSION)
         GIT_REPOSITORY https://github.com/FISCO-BCOS/group-signature-lib.git
         GIT_TAG 6c5e7d47cb4cb43b15da064e3793727dd1b59192
         CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
-        -DCMAKE_POSITION_INDEPENDENT_CODE=on
+        -DCMAKE_POSITION_INDEPENDENT_CODE=ON
         LOG_CONFIGURE 1
         LOG_BUILD 1
         LOG_INSTALL 1
@@ -19,7 +19,7 @@ if (CRYPTO_EXTENSION)
     ExternalProject_Get_Property(GroupSigLib SOURCE_DIR)
     set(LIB_SUFFIX .a)
     set(DEPS_INCLUDE_DIR ${SOURCE_DIR}/deps/include)
-    file(MAKE_DIRECTORY ${DEPS_INCLUDE_DIR}) 
+    file(MAKE_DIRECTORY ${DEPS_INCLUDE_DIR})
 
     find_library(GMP_LIBRARIES NAMES "libgmp.a")
     find_path(GMP_INCLUDE_DIR "gmp.h")

@@ -40,8 +40,8 @@ ExternalProject_Add(jsoncpp
                # Build static lib but suitable to be included in a shared lib.
                -DCMAKE_POSITION_INDEPENDENT_CODE=${BUILD_SHARED_LIBS}
                ${_only_release_configuration}
-               -DJSONCPP_WITH_TESTS=Off
-               -DJSONCPP_WITH_PKGCONFIG_SUPPORT=Off
+               -DJSONCPP_WITH_TESTS=OFF
+               -DJSONCPP_WITH_PKGCONFIG_SUPPORT=OFF
                	# -DCMAKE_C_FLAGS=-Wa,-march=generic64
                	# -DCMAKE_CXX_FLAGS=-Wa,-march=generic64
                	-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
