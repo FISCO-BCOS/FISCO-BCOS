@@ -237,14 +237,13 @@ void KeyCenter::setIpPort(const std::string& _ip, int _port)
 
 dev::bytes KeyCenter::uniformDataKey(const dev::bytes& _readableDataKey)
 {
-#ifdef FISCO_GM
-    // Uniform datakey to a fix size 128(guimi) bytes by hashing it
-    // Because we has no limit to _readableDataKey size
-    bytes oneTurn = sm3(ref(_readableDataKey)).asBytes();
-    return oneTurn + oneTurn + oneTurn + oneTurn;
-#else
-    // Uniform datakey to a fix size 32 bytes by hashing it
-    // Because we has no limit to _readableDataKey size
-    return sha3(ref(_readableDataKey)).asBytes();
-#endif
+    bytes oneTurn = crypto::Hash(ref(_readableDataKey)).asBytes();
+    if (g_BCOSConfig.SMCrypto())
+    {
+        return oneTurn + oneTurn + oneTurn + oneTurn;
+    }
+    else
+    {
+        return oneTurn;
+    }
 }

@@ -243,12 +243,16 @@ public:
             return h256();
         }
         bytesConstRef bR(data.data(), data.size());
-#ifdef FISCO_GM
-        auto hash = dev::sm3(bR);
-#else
-        auto hash = dev::sha256(bR);
-#endif
-        return hash;
+        if (g_BCOSConfig.SMCrypto())
+        {
+            auto hash = dev::sm3(bR);
+            return hash;
+        }
+        else
+        {
+            auto hash = dev::sha256(bR);
+            return hash;
+        }
     }
     virtual void clear() override { m_cache.clear(); }
     virtual bool empty() override

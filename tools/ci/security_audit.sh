@@ -10,7 +10,7 @@ test_ConsensusPrecompiled.cpp RpcTest.cpp .genesis test_PermissionPrecompiled.cp
 test_ConsensusPrecompiled.cpp BlockChainImpTest.cpp test_KVTablePrecompiled.cpp test_CNSPrecompiled.cpp \
 TransactionTest.cpp test_ChainGovernancePrecompiled.cpp OutputTest.cpp CMakeLists.txt AES.cpp \
 SM4Crypto.cpp Hash.cpp VMTest.cpp ExecuteVMTest.cpp InterpreterTest.cpp SM2Signature.cpp \
-ECDSASignature.cpp )
+ECDSASignature.cpp LogEntry.cpp)
 
 LOG_ERROR() {
     content=${1}

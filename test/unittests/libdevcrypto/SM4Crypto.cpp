@@ -36,7 +36,7 @@ namespace test
 {
 BOOST_FIXTURE_TEST_SUITE(SM4, TestOutputHelperFixture)
 
-BOOST_AUTO_TEST_CASE(GM_testSM4String)
+BOOST_AUTO_TEST_CASE(testSM4String)
 {
     const std::string key = "0B780F0F13CE7F3F1383053CAC817ABF";
     const std::string plainData =

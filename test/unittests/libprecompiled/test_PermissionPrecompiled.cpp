@@ -30,6 +30,7 @@
 #include <libstorage/MemoryTable.h>
 #include <libstorage/MemoryTableFactoryFactory2.h>
 #include <libstoragestate/StorageStateFactory.h>
+#include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace dev;
@@ -37,18 +38,23 @@ using namespace dev::blockverifier;
 using namespace dev::storage;
 using namespace dev::storagestate;
 using namespace dev::precompiled;
+using namespace dev::test;
 
 namespace test_AuthorityPrecompiled
 {
 struct AuthorityPrecompiledFixture
 {
-    AuthorityPrecompiledFixture()
+    AuthorityPrecompiledFixture(bool useSMCrypto = false)
     {
+        m_useSMCrypto = useSMCrypto;
         blockInfo.hash = h256(0);
         blockInfo.number = 0;
-#ifndef FISCO_GM
-        g_BCOSConfig.setSupportedVersion("2.3.0", V2_3_0);
-#endif
+        if (!useSMCrypto)
+        {
+            m_version = g_BCOSConfig.version();
+            m_supportedVersion = g_BCOSConfig.supportedVersion();
+            g_BCOSConfig.setSupportedVersion("2.3.0", V2_3_0);
+        }
         context = std::make_shared<ExecutiveContext>();
         ExecutiveContextFactory factory;
         auto storage = std::make_shared<MemoryStorage>();
@@ -67,12 +73,27 @@ struct AuthorityPrecompiledFixture
         authorityPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     }
 
-    ~AuthorityPrecompiledFixture() {}
+    ~AuthorityPrecompiledFixture()
+    {
+        if (!m_useSMCrypto)
+        {
+            g_BCOSConfig.setSupportedVersion(m_supportedVersion, m_version);
+        }
+    }
 
     ExecutiveContext::Ptr context;
     TableFactory::Ptr memoryTableFactory;
     Precompiled::Ptr authorityPrecompiled;
     BlockInfo blockInfo;
+    dev::VERSION m_version;
+    std::string m_supportedVersion;
+    bool m_useSMCrypto;
+};
+
+struct SM_AuthorityPrecompiledFixture : public SM_CryptoTestFixture,
+                                        public AuthorityPrecompiledFixture
+{
+    SM_AuthorityPrecompiledFixture() : SM_CryptoTestFixture(), AuthorityPrecompiledFixture(true) {}
 };
 
 BOOST_FIXTURE_TEST_SUITE(test_AuthorityPrecompiled, AuthorityPrecompiledFixture)
@@ -157,7 +178,6 @@ BOOST_AUTO_TEST_CASE(remove)
 
 BOOST_AUTO_TEST_CASE(grantWrite_contract)
 {
-#ifndef FISCO_GM
     // first insert
     eth::ContractABI abi;
     Address contractAddress("0x420f853b49838bd3e9466c85a4cc3428c960dde1");
@@ -227,7 +247,137 @@ BOOST_AUTO_TEST_CASE(grantWrite_contract)
     Json::Reader reader;
     BOOST_TEST(reader.parse(retStr, retJson) == true);
     BOOST_TEST(retJson.size() == 1);
-#endif
+}
+
+BOOST_AUTO_TEST_CASE(queryByName)
+{
+    // insert
+    eth::ContractABI abi;
+    std::string tableName = "t_test";
+    std::string addr = "0x420f853b49838bd3e9466c85a4cc3428c960dde2";
+    bytes in = abi.abiIn("insert(string,string)", tableName, addr);
+
+    auto callResult = authorityPrecompiled->call(context, bytesConstRef(&in));
+    bytes out = callResult->execResult();
+
+    // queryByName by a existing key
+    in = abi.abiIn("queryByName(string)", tableName);
+    callResult = authorityPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
+    std::string retStr;
+    abi.abiOut(&out, retStr);
+
+    Json::Value retJson;
+    Json::Reader reader;
+    BOOST_TEST(reader.parse(retStr, retJson) == true);
+    BOOST_TEST(retJson.size() == 1);
+
+    std::string keyName = "test";
+    // queryByName by a no existing key
+    in = abi.abiIn("queryByName(string)", keyName);
+    callResult = authorityPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
+    abi.abiOut(&out, retStr);
+    BOOST_TEST(reader.parse(retStr, retJson) == true);
+    BOOST_TEST(retJson.size() == 0);
+}
+
+BOOST_AUTO_TEST_CASE(error_func)
+{
+    // insert
+    eth::ContractABI abi;
+    std::string tableName = "t_test";
+    std::string addr = "0x420f853b49838bd3e9466c85a4cc3428c960dde2";
+    bytes in = abi.abiIn("insert(string)", tableName, addr);
+    auto callResult = authorityPrecompiled->call(context, bytesConstRef(&in));
+    bytes out = callResult->execResult();
+}
+
+BOOST_AUTO_TEST_CASE(toString)
+{
+    BOOST_TEST(authorityPrecompiled->toString() == "Permission");
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
+BOOST_FIXTURE_TEST_SUITE(SM_test_AuthorityPrecompiled, SM_AuthorityPrecompiledFixture)
+
+BOOST_AUTO_TEST_CASE(insert)
+{
+    // first insert
+    eth::ContractABI abi;
+    std::string tableName = "t_test";
+    std::string addr = "0x420f853b49838bd3e9466c85a4cc3428c960dde2";
+    bytes in = abi.abiIn("insert(string,string)", tableName, addr);
+    auto callResult = authorityPrecompiled->call(context, bytesConstRef(&in));
+    bytes out = callResult->execResult();
+    // query
+    auto table = memoryTableFactory->openTable(SYS_ACCESS_TABLE);
+    auto entries = table->select(precompiled::getTableName(tableName), table->newCondition());
+    BOOST_TEST(entries->size() == 1u);
+
+    // insert again with same item
+    callResult = authorityPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
+    // query
+    entries = table->select(precompiled::getTableName(tableName), table->newCondition());
+    BOOST_TEST(entries->size() == 1u);
+
+    // insert new item with same table name, but different address
+    addr = "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b";
+    in = abi.abiIn("insert(string,string)", tableName, addr);
+    callResult = authorityPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
+    // query
+    entries = table->select(precompiled::getTableName(tableName), table->newCondition());
+    BOOST_TEST(entries->size() == 2u);
+}
+
+BOOST_AUTO_TEST_CASE(insert_overflow)
+{
+    // first insert
+    eth::ContractABI abi;
+    std::string tableName = "66666012345678901234567890123456789012345678901234567890123456789";
+    std::string addr = "0x420f853b49838bd3e9466c85a4cc3428c960dde2";
+    bytes in = abi.abiIn("insert(string,string)", tableName, addr);
+    auto callResult = authorityPrecompiled->call(context, bytesConstRef(&in));
+    bytes out = callResult->execResult();
+    s256 errCode;
+    abi.abiOut(&out, errCode);
+    BOOST_TEST(errCode == CODE_TABLE_NAME_OVERFLOW);
+}
+
+BOOST_AUTO_TEST_CASE(remove)
+{
+    // first insert
+    eth::ContractABI abi;
+    std::string tableName = "t_test";
+    std::string addr = "0x420f853b49838bd3e9466c85a4cc3428c960dde2";
+    bytes in = abi.abiIn("insert(string,string)", tableName, addr);
+    auto callResult = authorityPrecompiled->call(context, bytesConstRef(&in));
+    bytes out = callResult->execResult();
+    // query
+    auto table = memoryTableFactory->openTable(SYS_ACCESS_TABLE);
+    auto entries = table->select(precompiled::getTableName(tableName), table->newCondition());
+    BOOST_TEST(entries->size() == 1u);
+
+    // remove
+    in = abi.abiIn("remove(string,string)", tableName, addr);
+    callResult = authorityPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
+
+    // query
+    table = memoryTableFactory->openTable(SYS_ACCESS_TABLE);
+    Condition::Ptr condition = table->newCondition();
+    condition->EQ(STATUS, "1");
+    entries = table->select(precompiled::getTableName(tableName), condition);
+    BOOST_TEST(entries->size() == 0u);
+
+    // remove not exist entry
+    tableName = "t_ok";
+    in = abi.abiIn("remove(string,string)", tableName, addr);
+    authorityPrecompiled->call(context, bytesConstRef(&in));
+    BOOST_TEST(entries->size() == 0u);
 }
 
 BOOST_AUTO_TEST_CASE(queryByName)

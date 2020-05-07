@@ -251,7 +251,14 @@ BOOST_AUTO_TEST_CASE(setBlockNum)
 BOOST_AUTO_TEST_CASE(init)
 {
     memoryDBFactory->init();
-    BOOST_TEST(memoryDBFactory->ID() == 1);
+    if (g_BCOSConfig.version() >= V2_2_0)
+    {
+        BOOST_TEST(memoryDBFactory->ID() == ENTRY_ID_START + 1);
+    }
+    else
+    {
+        BOOST_TEST(memoryDBFactory->ID() == 1);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

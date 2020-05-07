@@ -32,10 +32,8 @@ namespace dev
 {
 namespace test
 {
-BOOST_FIXTURE_TEST_SUITE(Hash, TestOutputHelperFixture)
-// test sha3
-#ifdef FISCO_GM
-BOOST_AUTO_TEST_CASE(GM_testEmptySHA3)
+BOOST_FIXTURE_TEST_SUITE(SM_Hash, SM_CryptoTestFixture)
+BOOST_AUTO_TEST_CASE(SM_testEmptySHA3)
 {
     std::string ts = EmptyHash.hex();
     BOOST_CHECK_EQUAL(
@@ -49,7 +47,7 @@ BOOST_AUTO_TEST_CASE(GM_testEmptySHA3)
     BOOST_REQUIRE_EQUAL(emptySHA3, EmptyHash);
 }
 
-BOOST_AUTO_TEST_CASE(GM_testSha3General)
+BOOST_AUTO_TEST_CASE(SM_testSha3General)
 {
     BOOST_REQUIRE_EQUAL(
         crypto::Hash(""), h256("1ab21d8355cfa17f8e61194831e81a8f22bec8c728fefb747ed035eb5082aa2b"));
@@ -58,7 +56,7 @@ BOOST_AUTO_TEST_CASE(GM_testSha3General)
 }
 
 /// test sha3Secure and
-BOOST_AUTO_TEST_CASE(GM_testSha3CommonFunc)
+BOOST_AUTO_TEST_CASE(SM_testSha3CommonFunc)
 {
     std::string content = "abcd";
     bytes content_bytes(content.begin(), content.end());
@@ -82,7 +80,7 @@ BOOST_AUTO_TEST_CASE(GM_testSha3CommonFunc)
 }
 
 // test sha2
-BOOST_AUTO_TEST_CASE(GM_testSha256)
+BOOST_AUTO_TEST_CASE(SM_testSha256)
 {
     const std::string plainText = "123456ABC+";
     const std::string cipherText =
@@ -96,7 +94,7 @@ BOOST_AUTO_TEST_CASE(GM_testSha256)
     BOOST_CHECK(toJS(sm3(bsConst)) == cipherText);
 }
 
-BOOST_AUTO_TEST_CASE(GM_testRipemd160)
+BOOST_AUTO_TEST_CASE(SM_testRipemd160)
 {
     const std::string plainText = "123456ABC+";
     const std::string cipherText = "0x74204bedd818292adc1127f9bb24bafd75468b62";
@@ -108,7 +106,10 @@ BOOST_AUTO_TEST_CASE(GM_testRipemd160)
     bytesConstRef bsConst(&bs);
     BOOST_CHECK(toJS(ripemd160(bsConst)) == cipherText);
 }
-#else
+BOOST_AUTO_TEST_SUITE_END()
+
+BOOST_FIXTURE_TEST_SUITE(Hash, TestOutputHelperFixture)
+// test sha3
 BOOST_AUTO_TEST_CASE(testEmptySHA3)
 {
     std::string ts = EmptyHash.hex();
@@ -180,7 +181,6 @@ BOOST_AUTO_TEST_CASE(testRipemd160)
     bytesConstRef bsConst(&bs);
     BOOST_CHECK(toJS(ripemd160(bsConst)) == cipherText);
 }
-#endif
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev

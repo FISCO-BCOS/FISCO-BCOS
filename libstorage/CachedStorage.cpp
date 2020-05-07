@@ -731,7 +731,16 @@ void CachedStorage::restoreCache(TableInfo::Ptr table, const std::string& key, C
 void CachedStorage::removeCache(const std::string& table, const std::string& key)
 {
     auto cacheKey = table + "_" + key;
-    RWMutexScoped lockCache(m_cachesMutex, true);
+    RWMutexScoped lockCache;
+
+    while (true)
+    {
+        if (lockCache.try_acquire(m_cachesMutex, true))
+        {
+            break;
+        }
+        std::this_thread::yield();
+    }
 
     auto c = m_caches.unsafe_erase(cacheKey);
 

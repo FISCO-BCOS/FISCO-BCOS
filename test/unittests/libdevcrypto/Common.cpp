@@ -35,10 +35,8 @@ namespace dev
 {
 namespace test
 {
-BOOST_FIXTURE_TEST_SUITE(DevcryptoCommonTest, TestOutputHelperFixture)
-/// test toPublic && toAddress
-#ifdef FISCO_GM
-BOOST_AUTO_TEST_CASE(GM_testCommonTrans)
+BOOST_FIXTURE_TEST_SUITE(SM_DevcryptoCommonTest, SM_CryptoTestFixture)
+BOOST_AUTO_TEST_CASE(SM_testCommonTrans)
 {
     BOOST_CHECK(Secret::size == 32);
     BOOST_CHECK(Public::size == 64);
@@ -77,7 +75,7 @@ BOOST_AUTO_TEST_CASE(GM_testCommonTrans)
 }
 
 /// test key pair
-BOOST_AUTO_TEST_CASE(GM_testEcKeypair)
+BOOST_AUTO_TEST_CASE(SM_testEcKeypair)
 {
     KeyPair k = KeyPair::create();
     BOOST_CHECK(k.secret());
@@ -94,16 +92,16 @@ BOOST_AUTO_TEST_CASE(GM_testEcKeypair)
 #endif
 }
 
-BOOST_AUTO_TEST_CASE(GM_testKdf) {}
+BOOST_AUTO_TEST_CASE(SM_testKdf) {}
 
 /// test nonce
-BOOST_AUTO_TEST_CASE(GM_testNonce)
+BOOST_AUTO_TEST_CASE(SM_testNonce)
 {
     BOOST_CHECK(dev::crypto::Nonce::get() != dev::crypto::Nonce::get());
 }
 
 // /// test ecdha
-BOOST_AUTO_TEST_CASE(GM_testEcdh)
+BOOST_AUTO_TEST_CASE(SM_testEcdh)
 {
     auto sec = Secret{crypto::Hash("ecdhAgree")};
     Secret sharedSec;
@@ -111,7 +109,7 @@ BOOST_AUTO_TEST_CASE(GM_testEcdh)
     BOOST_CHECK_EQUAL(sharedSec.makeInsecure().hex(), expectedSharedSec);
 }
 
-BOOST_AUTO_TEST_CASE(GM_testSigAndVerify)
+BOOST_AUTO_TEST_CASE(SM_testSigAndVerify)
 {
     KeyPair key_pair = KeyPair::create();
     h256 hash = crypto::Hash("abcd");
@@ -154,7 +152,7 @@ BOOST_AUTO_TEST_CASE(GM_testSigAndVerify)
     BOOST_CHECK(constructed_sig->isValid() == true);
 }
 /// test ecRocer
-BOOST_AUTO_TEST_CASE(GM_testSigecRocer)
+BOOST_AUTO_TEST_CASE(SM_testSigecRocer)
 {
     std::pair<bool, bytes> KeyPair;
     bytes rlpBytes = fromHex(
@@ -182,7 +180,10 @@ BOOST_AUTO_TEST_CASE(GM_testSigecRocer)
     BOOST_CHECK(KeyPair.first == true);
     BOOST_CHECK(KeyPair.second != ret.asBytes());
 }
-#else
+BOOST_AUTO_TEST_SUITE_END()
+
+BOOST_FIXTURE_TEST_SUITE(DevcryptoCommonTest, TestOutputHelperFixture)
+/// test toPublic && toAddress
 BOOST_AUTO_TEST_CASE(testCommonTrans)
 {
     BOOST_CHECK(Secret::size == 32);
@@ -233,10 +234,6 @@ BOOST_AUTO_TEST_CASE(testEcKeypair)
     Secret empty;
     KeyPair kNot(empty);
     BOOST_CHECK(!kNot.address());
-#if 0
-    KeyPair k2(crypto::Hash(empty));
-    BOOST_CHECK(k2.address());
-#endif
 }
 
 BOOST_AUTO_TEST_CASE(testKdf) {}
@@ -332,9 +329,6 @@ BOOST_AUTO_TEST_CASE(testSigecRocer)
     cout << toHex(ret.asBytes()) << endl;
     BOOST_CHECK(KeyPairR.second == ret.asBytes());
 }
-#endif
-
-
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace test
