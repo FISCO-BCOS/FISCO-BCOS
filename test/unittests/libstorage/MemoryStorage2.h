@@ -53,8 +53,10 @@ public:
                 if (entry->getStatus() == Entry::Status::NORMAL &&
                     (!condition || condition->process(entry)))
                 {
-                    entry->setDirty(false);
-                    entries->addEntry(entry);
+                    auto outEntry = std::make_shared<Entry>();
+                    outEntry->copyFrom(entry);
+                    outEntry->setDirty(false);
+                    entries->addEntry(outEntry);
                 }
             }
         }
