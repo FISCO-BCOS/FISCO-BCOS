@@ -328,7 +328,16 @@ void Service::onMessage(dev::network::NetworkException e, dev::network::SessionF
             p2pSession->onTopicMessage(p2pMessage);
             return;
         }
-        if (g_BCOSConfig.enableStat())
+
+        // AMOP-incoming-network-traffic between nodes
+        bool isAMOPMessage =
+            (abs(p2pMessage->protocolID()) == dev::eth::ProtocolID::AMOP ? true : false);
+        if (m_channelNetworkStatHandler && isAMOPMessage)
+        {
+            m_channelNetworkStatHandler->updateAMOPInTraffic(p2pMessage->length());
+        }
+        // P2P messages within the group, statistics of network traffic
+        if (g_BCOSConfig.enableStat() && !isAMOPMessage)
         {
             updateIncomingTraffic(p2pMessage);
         }
@@ -461,11 +470,20 @@ void Service::asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
             {
                 session->session()->asyncSendMessage(message, options, nullptr);
             }
+            bool isAMOPMessage =
+                (abs(message->protocolID()) == dev::eth::ProtocolID::AMOP ? true : false);
+
+            // AMOP-outgoing-network-traffic between nodes
+            if (m_channelNetworkStatHandler && isAMOPMessage)
+            {
+                m_channelNetworkStatHandler->updateAMOPOutTraffic(message->length());
+            }
             // update stat information
-            if (g_BCOSConfig.enableStat())
+            if (g_BCOSConfig.enableStat() && !isAMOPMessage)
             {
                 updateOutgoingTraffic(message);
             }
+
             acquirePermits(message);
         }
         else

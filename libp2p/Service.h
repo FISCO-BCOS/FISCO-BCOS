@@ -34,6 +34,7 @@
 #include <libflowlimit/RateLimiter.h>
 #include <libnetwork/Host.h>
 #include <libnetwork/PeerWhitelist.h>
+#include <libstat/ChannelNetworkStatHandler.h>
 #include <map>
 #include <memory>
 #include <unordered_map>
@@ -176,6 +177,12 @@ public:
         GROUP_ID const& _groupID, dev::flowlimit::RateLimiter::Ptr _bandwidthLimiter) override;
     void removeGroupBandwidthLimiter(GROUP_ID const& _groupID) override;
 
+    void setChannelNetworkStatHandler(
+        dev::stat::ChannelNetworkStatHandler::Ptr _channelNetworkStatHandler) override
+    {
+        m_channelNetworkStatHandler = _channelNetworkStatHandler;
+    }
+
 private:
     NodeIDs getPeersByTopic(std::string const& topic);
     void checkWhitelistAndClearSession();
@@ -245,6 +252,7 @@ private:
 
     dev::flowlimit::RateLimiter::Ptr m_nodeBandwidthLimiter;
     unsigned m_compressRate = 3;
+    dev::stat::ChannelNetworkStatHandler::Ptr m_channelNetworkStatHandler;
 };
 
 }  // namespace p2p

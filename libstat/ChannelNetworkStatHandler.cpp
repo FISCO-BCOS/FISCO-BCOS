@@ -100,6 +100,11 @@ void ChannelNetworkStatHandler::updateOutgoingTrafficForRPC(
 
 void ChannelNetworkStatHandler::flushLog()
 {
+    // print AMOP statistic
+    STAT_LOG(INFO) << LOG_TYPE("AMOP") << LOG_KV("AMOPIn", m_AMOPIn)
+                   << LOG_KV("AMOPOut", m_AMOPOut);
+    m_AMOPIn = 0;
+    m_AMOPOut = 0;
     ReadGuard l(x_p2pStatHandlers);
     // print p2p statistics of each group
     for (auto p2pStatHandler : *m_p2pStatHandlers)
@@ -140,4 +145,14 @@ void ChannelNetworkStatHandler::start()
             }
         }
     });
+}
+
+void ChannelNetworkStatHandler::updateAMOPInTraffic(int64_t const& _msgSize)
+{
+    m_AMOPIn += _msgSize;
+}
+
+void ChannelNetworkStatHandler::updateAMOPOutTraffic(int64_t const& _msgSize)
+{
+    m_AMOPOut += _msgSize;
 }
