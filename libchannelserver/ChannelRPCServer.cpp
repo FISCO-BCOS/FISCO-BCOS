@@ -651,6 +651,7 @@ void dev::ChannelRPCServer::asyncPushChannelMessageHandler(
     }
 }
 
+// Note: No restrictions on AMOP traffic between nodes
 void dev::ChannelRPCServer::onNodeChannelRequest(
     dev::network::NetworkException, std::shared_ptr<p2p::P2PSession> s, p2p::P2PMessage::Ptr msg)
 {
@@ -823,7 +824,8 @@ bool dev::ChannelRPCServer::limitAMOPBandwidth(dev::channel::ChannelSession::Ptr
         return true;
     }
     CHANNEL_LOG(DEBUG) << LOG_BADGE("limitAMOPBandwidth: over bandwidth limitation")
-                       << LOG_KV("messageSize", requiredPermitsAfterCompress)
+                       << LOG_KV("requiredPermitsAfterCompress", requiredPermitsAfterCompress)
+                       << LOG_KV("maxPermitsPerSecond(Bytes)", m_networkBandwidthLimiter->maxQPS())
                        << LOG_KV("seq", _AMOPReq->seq().substr(0, c_seqAbridgedLen));
     // send REJECT_AMOP_REQ_FOR_OVER_BANDWIDTHLIMIT to client
     sendRejectAMOPResponse(_session, _AMOPReq);

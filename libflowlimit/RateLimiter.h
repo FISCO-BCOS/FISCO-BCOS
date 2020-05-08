@@ -34,7 +34,7 @@ class RateLimiter
 {
 public:
     using Ptr = std::shared_ptr<RateLimiter>;
-    RateLimiter(uint64_t const& _maxQPS);
+    RateLimiter(int64_t const& _maxQPS);
     virtual ~RateLimiter() {}
     // acquire permits
     virtual int64_t acquire(int64_t const& _requiredPermits = 1, bool const& _wait = false,
@@ -55,6 +55,8 @@ public:
     void setBurstTimeInterval(int64_t const& _burstInterval);
     void setMaxBurstReqNum(int64_t const& _maxBurstReqNum);
 
+    int64_t const& maxQPS() { return m_maxQPS; }
+
 protected:
     int64_t fetchPermitsAndGetWaitTime(int64_t const& _requiredPermits,
         bool const& _fetchPermitsWhenRequireWait, int64_t const& _now);
@@ -66,7 +68,7 @@ protected:
     mutable dev::Mutex m_mutex;
 
     // the max QPS
-    uint64_t m_maxQPS;
+    int64_t m_maxQPS;
 
     // stored permits
     int64_t m_currentStoredPermits = 0;

@@ -117,7 +117,9 @@ public:
     const uint64_t c_binaryLogSize = 128 * 1024 * 1024;
     // the max block size: 20MB
     // the max permits size(for network bandwidth limit), default is 20MB
-    const uint64_t c_maxPermitsSize = 20 * 1024 * 1024;
+    // default compressRate is 3
+    const uint64_t c_compressRate = 3;
+    const uint64_t c_maxPermitsSize = 20 * 1024 * 1024 / c_compressRate;
 
     std::atomic_bool shouldExit;
 
