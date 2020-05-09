@@ -787,8 +787,6 @@ void ChainGovernancePrecompiled::freezeAccount(ExecutiveContext::Ptr context, by
         result = storage::CODE_NO_AUTHORIZED;
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ChainGovernancePrecompiled")
                                << LOG_DESC("permission denied");
-        BOOST_THROW_EXCEPTION(PrecompiledException(
-            "Permission denied. " + origin.hex() + " can't freezeAccount " + accountAddress.hex()));
     }
     else if (AccountStatus::AccFrozen == status)
     {
@@ -827,9 +825,6 @@ void ChainGovernancePrecompiled::unfreezeAccount(ExecutiveContext::Ptr context, 
         result = storage::CODE_NO_AUTHORIZED;
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ChainGovernancePrecompiled")
                                << LOG_DESC("permission denied");
-        BOOST_THROW_EXCEPTION(
-            PrecompiledException("Permission denied. " + origin.hex() + " can't unfreezeAccount " +
-                                 accountAddress.hex()));
     }
     else if (AccountStatus::AccAvailable == status)
     {
