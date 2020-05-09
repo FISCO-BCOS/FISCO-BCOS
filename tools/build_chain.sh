@@ -495,12 +495,13 @@ generate_config_ini()
     if [[ -n "${4}" ]];then
         read -r -a port_array <<< "${4//,/ }"
         [ "${node_index}" == "0" ] && { offset=0 && set_value "${ip//./}_port_offset" 0; }
-    fi 
-    local prefix=""
-    
-    if [ -n "${guomi_mode}" ]; then
-        prefix="gm"
     fi
+
+    sm_crypto="false"
+    if [ -n "${guomi_mode}" ]; then
+        sm_crypto="true"
+    fi
+
     cat << EOF > ${output}
 [rpc]
     channel_listen_ip=0.0.0.0
@@ -526,16 +527,6 @@ generate_config_ini()
     group_data_path=data/
     group_config_path=${conf_path}/
 
-[network_security]
-    ; directory the certificates located in
-    data_path=${conf_path}/
-    ; the node private key file
-    key=${prefix}node.key
-    ; the node certificate file
-    cert=${prefix}node.crt
-    ; the ca certificate file
-    ca_cert=${prefix}ca.crt
-
 [storage_security]
     enable=false
     key_manager_ip=
@@ -544,9 +535,13 @@ generate_config_ini()
 
 [chain]
     id=${chain_id}
+    ; use SM crypto or not
+    sm_crypto=${sm_crypto}
+
 [compatibility]
     ; supported_version should nerver be changed
     supported_version=${compatibility_version}
+
 [log]
     enable=true
     log_path=./log
@@ -571,6 +566,21 @@ generate_config_ini()
     ; when the outgoing bandwidth exceeds the limit, the block synchronization operation will not proceed
     ;outgoing_bandwidth_limit=2
 EOF
+
+if [ -z "${guomi_mode}" ]; then
+    cat << EOF >> "${output}"
+
+[network_security]
+    ; directory the certificates located in
+    data_path=${conf_path}/
+    ; the node private key file
+    key=node.key
+    ; the node certificate file
+    cert=node.crt
+    ; the ca certificate file
+    ca_cert=ca.crt
+EOF
+fi
     printf "  [%d] p2p:%-5d  channel:%-5d  jsonrpc:%-5d\n" "${node_index}" $(( offset + port_array[0] )) $(( offset + port_array[1] )) $(( offset + port_array[2] )) >>"${logfile}"
 }
 
@@ -1355,12 +1365,6 @@ check_bin()
     bin_version=$(${bin_path} -v)
     if [ -z "$(echo ${bin_version} | grep 'FISCO-BCOS')" ];then
         exit_with_clean "${bin_path} is wrong. Please correct it and try again."
-    fi
-    if [[ ! -z ${guomi_mode} && -z $(echo ${bin_version} | grep 'gm') ]];then
-        exit_with_clean "${bin_path} isn't gm version. Please correct it and try again."
-    fi
-    if [[ -z ${guomi_mode} && ! -z $(echo ${bin_version} | grep 'gm') ]];then
-        exit_with_clean "${bin_path} isn't standard version. Please correct it and try again."
     fi
     echo "Binary check passed."
 }

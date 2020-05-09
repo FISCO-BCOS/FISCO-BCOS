@@ -25,6 +25,7 @@
 #include "AES.h"
 #include "CryptoInterface.h"
 #include "Exceptions.h"
+#include "libdevcrypto/sm2/sm2.h"
 #include <cryptopp/aes.h>
 #include <cryptopp/modes.h>
 #include <cryptopp/pwdbased.h>
@@ -80,4 +81,64 @@ Address dev::toAddress(Secret const& _secret)
 Address dev::toAddress(Address const& _from, u256 const& _nonce)
 {
     return right160(crypto::Hash(rlpList(_from, _nonce)));
+}
+
+Public dev::toPublic(Secret const& _secret)
+{
+    if (!g_BCOSConfig.SMCrypto())
+    {
+        auto* ctx = getCtx();
+        secp256k1_pubkey rawPubkey;
+        // Creation will fail if the secret key is invalid.
+        if (!secp256k1_ec_pubkey_create(ctx, &rawPubkey, _secret.data()))
+            return {};
+        std::array<byte, 65> serializedPubkey;
+        size_t serializedPubkeySize = serializedPubkey.size();
+        secp256k1_ec_pubkey_serialize(ctx, serializedPubkey.data(), &serializedPubkeySize,
+            &rawPubkey, SECP256K1_EC_UNCOMPRESSED);
+        assert(serializedPubkeySize == serializedPubkey.size());
+        // Expect single byte header of value 0x04 -- uncompressed public key.
+        assert(serializedPubkey[0] == 0x04);
+        // Create the Public skipping the header.
+        return Public{&serializedPubkey[1], Public::ConstructFromPointer};
+    }
+    else
+    {
+        string pri = toHex(bytesConstRef{_secret.data(), 32});
+        string pub = SM2::getInstance().priToPub(pri);
+        return h512(fromHex(pub));
+    }
+}
+
+KeyPair KeyPair::create()
+{
+    while (true)
+    {
+        KeyPair keyPair(Secret::random());
+        if (keyPair.address())
+            return keyPair;
+    }
+}
+
+Secret Nonce::next()
+{
+    Guard l(x_value);
+    if (!m_value)
+    {
+        m_value = Secret::random();
+        if (!m_value)
+            BOOST_THROW_EXCEPTION(InvalidState());
+    }
+
+
+    if (g_BCOSConfig.SMCrypto())
+    {
+        m_value = sm3Secure(m_value.ref());
+    }
+    else
+    {
+        m_value = sha3Secure(m_value.ref());
+    }
+
+    return crypto::Hash(~m_value);
 }

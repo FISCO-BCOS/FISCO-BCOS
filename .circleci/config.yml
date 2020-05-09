@@ -128,7 +128,7 @@ jobs:
           name: Compile
           command: |
             mkdir -p build && cd build
-            cmake3 -DBUILD_GM=ON -DTESTS=ON -DTOOL=ON -DDEMO=ON ..
+            cmake3 -DTESTS=ON -DTOOL=ON -DDEMO=ON ..
             make -j2
       - save_cache:
           key: deps-cache-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
@@ -139,7 +139,7 @@ jobs:
           name: Unit test
           command: |
             cd build
-            ./bin/test-fisco-bcos -- --testpath=../test/data/ 
+            ./bin/test-fisco-bcos --random -- --testpath=../test/data/
       - run:
           name: Run GM nodes
           command: |
@@ -189,7 +189,7 @@ jobs:
           keys:
             - deps-cache-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
       - compile:
-          options: "-DBUILD_STATIC=ON -DBUILD_GM=ON"
+          options: "-DBUILD_STATIC=ON"
           compiler: "CC=/usr/bin/clang CXX=/usr/bin/clang++"
       - save_cache:
           key: deps-cache-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
@@ -246,7 +246,7 @@ jobs:
           packages: "ca-certificates golang-go"
       - checkout
       - compile:
-          options: "-DBUILD_STATIC=ON -DBUILD_GM=ON -DCMAKE_BUILD_TYPE=Release"
+          options: "-DBUILD_STATIC=ON -DCMAKE_BUILD_TYPE=Release"
           compiler: "CC=/usr/bin/clang CXX=/usr/bin/clang++"
       - run:
           name: Strip

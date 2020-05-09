@@ -126,11 +126,19 @@ public:
         m_block->header().setGasUsed(u256(3000000000));
         m_blockHeader.encode(m_blockHeaderData);
         BOOST_CHECK_THROW(m_block->encode(m_blockData), TooMuchGasUsed);
+
         /// construct invalid block format
-        for (size_t i = 1; i < 3; i++)
+        bytes result_bytes = FakeInvalidBlockData(1, size);
+        BOOST_CHECK_THROW(m_block->decode(ref(result_bytes)), InvalidBlockFormat);
+
+        result_bytes = FakeInvalidBlockData(2, size);
+        if (g_BCOSConfig.version() >= RC2_VERSION)
         {
-            bytes result_bytes = FakeInvalidBlockData(i, size);
             BOOST_CHECK_THROW(m_block->decode(ref(result_bytes)), InvalidBlockFormat);
+        }
+        else
+        {
+            BOOST_CHECK_THROW(m_block->decode(ref(result_bytes)), BadCast);
         }
     }
 

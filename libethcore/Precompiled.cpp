@@ -67,32 +67,34 @@ ETH_REGISTER_PRECOMPILED(ecrecover)(bytesConstRef _in)
         auto sig = std::make_shared<ECDSASignature>(in.r, in.s, (byte)((int)v - 27));
         return dev::ecRecover(sig, in.hash);
     }
-// FIXME: before 2.4.0, in sm crypto mode this use sm2 recover which is a bug
-#ifdef FISCO_GM
-    struct
+    // before 2.4.0, in sm crypto mode this use sm2 recover which is a bug
+    if (g_BCOSConfig.SMCrypto())
     {
-        h256 hash;
-        h512 v;
-        h256 r;
-        h256 s;
-    } in;
-    memcpy(&in, _in.data(), min(_in.size(), sizeof(in)));
-    auto sig = std::make_shared<SM2Signature>(in.r, in.s, in.v);
-    return recover(sig, in.hash);
-#else
-    struct
+        struct
+        {
+            h256 hash;
+            h512 v;
+            h256 r;
+            h256 s;
+        } in;
+        memcpy(&in, _in.data(), min(_in.size(), sizeof(in)));
+        auto sig = std::make_shared<SM2Signature>(in.r, in.s, in.v);
+        return recover(sig, in.hash);
+    }
+    else
     {
-        h256 hash;
-        h256 v;
-        h256 r;
-        h256 s;
-    } in;
-    u256 v = (u256)in.v;
-    memcpy(&in, _in.data(), min(_in.size(), sizeof(in)));
-    auto sig = std::make_shared<ECDSASignature>(in.r, in.s, (byte)((int)v - 27));
-    return dev::ecRecover(sig, in.hash);
-
-#endif
+        struct
+        {
+            h256 hash;
+            h256 v;
+            h256 r;
+            h256 s;
+        } in;
+        u256 v = (u256)in.v;
+        memcpy(&in, _in.data(), min(_in.size(), sizeof(in)));
+        auto sig = std::make_shared<ECDSASignature>(in.r, in.s, (byte)((int)v - 27));
+        return dev::ecRecover(sig, in.hash);
+    }
 }
 
 ETH_REGISTER_PRECOMPILED(sha256)(bytesConstRef _in)
@@ -102,12 +104,15 @@ ETH_REGISTER_PRECOMPILED(sha256)(bytesConstRef _in)
     {
         return {true, dev::sha256(_in).asBytes()};
     }
-    // FIXME: before 2.4.0, in sm crypto mode this use sm3 which is a bug
-#ifdef FISCO_GM
-    return {true, dev::sm3(_in).asBytes()};
-#else
-    return {true, dev::sha256(_in).asBytes()};
-#endif
+    // before 2.4.0, in sm crypto mode this use sm3 which is a bug
+    if (g_BCOSConfig.SMCrypto())
+    {
+        return {true, dev::sm3(_in).asBytes()};
+    }
+    else
+    {
+        return {true, dev::sha256(_in).asBytes()};
+    }
 }
 
 ETH_REGISTER_PRECOMPILED(ripemd160)(bytesConstRef _in)

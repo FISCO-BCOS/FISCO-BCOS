@@ -23,10 +23,12 @@
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcrypto/Common.h>
 #include <libstorage/Table.h>
+#include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace dev;
 using namespace dev::storage;
+using namespace dev::test;
 
 namespace test_Condition
 {
@@ -45,6 +47,11 @@ struct ConditionFixture
     ~ConditionFixture() {}
 };
 
+struct SM_ConditionFixture : public ConditionFixture, public SM_CryptoTestFixture
+{
+    SM_ConditionFixture() : ConditionFixture(), SM_CryptoTestFixture() {}
+};
+
 BOOST_FIXTURE_TEST_SUITE(ConditionTest, ConditionFixture)
 
 BOOST_AUTO_TEST_CASE(process)
@@ -57,7 +64,9 @@ BOOST_AUTO_TEST_CASE(process)
     condition = std::make_shared<Condition>();
     condition->EQ("name", "myname2");
     BOOST_TEST(condition->process(entry) == false);
-#ifndef FISCO_GM
+
+    auto version = g_BCOSConfig.version();
+    auto supportedVersion = g_BCOSConfig.supportedVersion();
     g_BCOSConfig.setSupportedVersion("2.3.0", V2_3_0);
     condition = std::make_shared<Condition>();
     condition->NE("name", "myname");
@@ -66,7 +75,6 @@ BOOST_AUTO_TEST_CASE(process)
     condition = std::make_shared<Condition>();
     condition->NE("name", "myname2");
     BOOST_TEST(condition->process(entry) == true);
-#endif
 
     condition = std::make_shared<Condition>();
     condition->GT("item_id", "50");
@@ -116,8 +124,68 @@ BOOST_AUTO_TEST_CASE(process)
     condition->GE("item_id", "100");
     condition->LT("item_id", "101");
     BOOST_TEST(condition->process(entry) == true);
+    g_BCOSConfig.setSupportedVersion(supportedVersion, version);
+}
 
-    // condition->GE("price", )
+BOOST_FIXTURE_TEST_CASE(SM_process, SM_ConditionFixture)
+{
+    auto condition = std::make_shared<Condition>();
+
+    condition->EQ("name", "myname");
+    BOOST_TEST(condition->process(entry) == true);
+
+    condition = std::make_shared<Condition>();
+    condition->EQ("name", "myname2");
+    BOOST_TEST(condition->process(entry) == false);
+
+    condition = std::make_shared<Condition>();
+    condition->GT("item_id", "50");
+    BOOST_TEST(condition->process(entry) == true);
+
+    condition->GT("item_id", "100");
+    BOOST_TEST(condition->process(entry) == false);
+
+    condition->GT("item_id", "150");
+    BOOST_TEST(condition->process(entry) == false);
+
+    condition = std::make_shared<Condition>();
+    condition->GE("item_id", "50");
+    BOOST_TEST(condition->process(entry) == true);
+
+    condition->GE("item_id", "100");
+    BOOST_TEST(condition->process(entry) == true);
+
+    condition->GE("item_id", "150");
+    BOOST_TEST(condition->process(entry) == false);
+
+    condition = std::make_shared<Condition>();
+    condition->LT("item_id", "50");
+    BOOST_TEST(condition->process(entry) == false);
+
+    condition->LT("item_id", "100");
+    BOOST_TEST(condition->process(entry) == false);
+
+    condition->LT("item_id", "150");
+    BOOST_TEST(condition->process(entry) == true);
+
+    condition = std::make_shared<Condition>();
+    condition->LE("item_id", "50");
+    BOOST_TEST(condition->process(entry) == false);
+
+    condition->LE("item_id", "100");
+    BOOST_TEST(condition->process(entry) == true);
+
+    condition->LE("item_id", "150");
+    BOOST_TEST(condition->process(entry) == true);
+
+    condition = std::make_shared<Condition>();
+    condition->GT("item_id", "99");
+    condition->LT("item_id", "101");
+    BOOST_TEST(condition->process(entry) == true);
+
+    condition->GE("item_id", "100");
+    condition->LT("item_id", "101");
+    BOOST_TEST(condition->process(entry) == true);
 }
 
 BOOST_AUTO_TEST_CASE(greaterThan)

@@ -22,6 +22,7 @@
 #include <libethcore/ABI.h>
 #include <libprecompiled/TableFactoryPrecompiled.h>
 #include <libstorage/MemoryTableFactory.h>
+#include <libstorage/MemoryTableFactory2.h>
 #include <libstorage/Storage.h>
 #include <libstorage/Table.h>
 #include <boost/test/unit_test.hpp>
@@ -51,6 +52,7 @@ struct TableFactoryPrecompiledFixture
         context = std::make_shared<MockPrecompiledEngine>();
         BlockInfo blockInfo{h256(0x001), 1, h256(0x001)};
         context->setBlockInfo(blockInfo);
+        context->setMemoryTableFactory(std::make_shared<storage::MemoryTableFactory2>());
         tableFactoryPrecompiled = std::make_shared<dev::precompiled::TableFactoryPrecompiled>();
         memStorage = std::make_shared<MemoryStorage>();
         auto mockMemoryTableFactory = std::make_shared<MockMemoryTableFactory>();

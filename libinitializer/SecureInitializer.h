@@ -59,8 +59,13 @@ private:
     void completePath(std::string& _path);
     KeyPair m_key;
     std::map<Usage, std::shared_ptr<boost::asio::ssl::context>> m_sslContexts;
+
+    void initConfigWithCrypto(const boost::property_tree::ptree& _pt);
+    void initConfigWithSMCrypto();
+
+    std::shared_ptr<bas::context> SSLContextWithCrypto(Usage _usage);
+    std::shared_ptr<bas::context> SSLContextWithSMCrypto(Usage _usage);
 };
 
 }  // namespace initializer
-
 }  // namespace dev

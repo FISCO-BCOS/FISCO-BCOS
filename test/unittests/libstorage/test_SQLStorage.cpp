@@ -23,10 +23,12 @@
 
 #include <libchannelserver/ChannelRPCServer.h>
 #include <libdevcore/FixedHash.h>
+#include <libstorage/Common.h>
 #include <libstorage/SQLStorage.h>
 #include <libstorage/StorageException.h>
 #include <libstorage/Table.h>
 #include <boost/test/unit_test.hpp>
+
 
 using namespace dev;
 using namespace dev::storage;
@@ -82,6 +84,37 @@ public:
 
                 responseJson["code"] = 0;
                 responseJson["result"] = resultJson;
+            }
+        }
+        else if (requestJson["op"].asString() == "select2")
+        {
+            if (requestJson["params"]["table"].asString() == "e")
+            {
+                BOOST_THROW_EXCEPTION(StorageException(-1, "mock exception"));
+            }
+
+            if (requestJson["params"]["key"].asString() != "LiSi")
+            {
+                responseJson["code"] = 0;
+            }
+            else if (requestJson["params"]["condition"].isArray() &&
+                     requestJson["params"]["condition"][0][2].asString() == "2")
+            {
+                responseJson["code"] = 0;
+            }
+            else
+            {
+                responseJson["code"] = 0;
+
+                Json::Value columnValue;
+                Json::Value item;
+                item["Name"] = "LiSi";
+                item["id"] = "1";
+                item[ID_FIELD] = "1";
+                item[NUM_FIELD] = "1";
+                item[STATUS] = "0";
+                columnValue.append(item);
+                responseJson["result"]["columnValue"] = columnValue;
             }
         }
         else if (requestJson["op"].asString() == "commit")

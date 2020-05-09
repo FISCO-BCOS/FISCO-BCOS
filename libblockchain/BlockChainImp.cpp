@@ -434,7 +434,7 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam, bool
     std::shared_ptr<Block> block = getBlockByNumber(0);
     if (block == nullptr && !_shouldBuild)
     {
-        BLOCKCHAIN_LOG(FATAL) << "Can't find the genesisi block";
+        BLOCKCHAIN_LOG(FATAL) << "Can't find the genesis block";
     }
     else if (block == nullptr && _shouldBuild)
     {

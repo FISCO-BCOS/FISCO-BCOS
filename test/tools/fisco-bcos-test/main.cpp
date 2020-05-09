@@ -29,9 +29,6 @@
 
 int main(int argc, const char* argv[])
 {
-#ifdef FISCO_GM
-    dev::crypto::initSMCtypro();
-#endif
     auto fakeInit = [](int, char**) -> boost::unit_test::test_suite* { return nullptr; };
     int result = boost::unit_test::unit_test_main(fakeInit, argc, const_cast<char**>(argv));
     return result;
