@@ -232,7 +232,7 @@ BOOST_AUTO_TEST_CASE(accountLiftCycle)
     Transaction tx(value, gasPrice, gas, contractAddress, callData);
     tx.forceSender(accountAddress);
     executeTransaction(*executive, tx);
-    auto output = abi.abiIn("Error(string)", string("Frozen account:" + accountAddress.hex()));
+    auto output = abi.abiIn("Error(string)", string("Frozen account:0x" + accountAddress.hex()));
     dev::owning_bytes_ref o = owning_bytes_ref{std::move(output), 0, output.size()};
     BOOST_TEST(toHex(executive->takeOutput()) == toHex(o));
 
