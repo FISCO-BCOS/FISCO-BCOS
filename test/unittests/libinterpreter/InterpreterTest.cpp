@@ -100,6 +100,12 @@ public:
     }
 };
 
+class SM_InterpreterFixture : public InterpreterFixture, public SM_CryptoTestFixture
+{
+public:
+    SM_InterpreterFixture() : InterpreterFixture(), SM_CryptoTestFixture() {}
+};
+
 BOOST_FIXTURE_TEST_SUITE(InterpreterTest, InterpreterFixture)
 
 BOOST_AUTO_TEST_CASE(addTest)
@@ -989,11 +995,81 @@ BOOST_AUTO_TEST_CASE(callTest)
     cout << "new code: " << evmc.getState().accountCode(toEvmC(newContractAddr)).size() << endl;
     u256 xResult = getStateValueU256(
         newContractAddr, "0000000000000000000000000000000000000000000000000000000000000000");
-#ifdef FISCO_GM
-    BOOST_CHECK_EQUAL(100, xResult);
-#else
     BOOST_CHECK_EQUAL(456, xResult);
-#endif
+    BOOST_CHECK(0 == result.status_code);
+}
+
+BOOST_FIXTURE_TEST_CASE(SM_callTest, SM_InterpreterFixture)
+{
+    /*
+    pragma solidity ^0.4.11;
+    contract Base {
+        address s;
+        uint x;
+        function Base() {
+            Son _s = new Son();
+            s = _s;
+            s.call(bytes4(crypto::Hash("set(uint256)")), 456);
+        }
+    }
+    contract Son {
+        uint256 x;
+        function Son()
+        {
+            x = 100;
+        }
+        function set(uint256 _x) public
+        {
+            x = _x;
+        }
+        function get() public constant returns(uint256 _x)
+        {
+            _x = x;
+        }
+    }
+    */
+    dev::eth::EVMSchedule const& schedule = DefaultSchedule;
+    bytes code = fromHex(
+        string(
+            "608060405234801561001057600080fd5b50600061001b6100eb565b604051809103906000f08015801561"
+            "0037573d6000803e3d6000fd5b5060008054600160a060020a03808416600160a060020a03199092169190"
+            "9117808355604080517f7365742875696e7432353629000000000000000000000000000000000000000081"
+            "52815190819003600c01812063ffffffff7c01000000000000000000000000000000000000000000000000"
+            "000000009182900490811690910282526101c8600483015291519596509190921693919260248083019391"
+            "92829003018183875af19250505050506100fa565b60405160e38061013d83390190565b60358061010860"
+            "00396000f3006080604052600080fd00a165627a7a72305820cddcd5dde134b1146c29ff4cc96c1a1790e3"
+            "a036e2425a1def8e00617c17dee50029608060405234801561001057600080fd5b50606460005560bf8061"
+            "00246000396000f30060806040526004361060485763ffffffff7c01000000000000000000000000000000"
+            "0000000000000000000000000060003504166360fe47b18114604d5780636d4ce63c146064575b600080fd"
+            "5b348015605857600080fd5b5060626004356088565b005b348015606f57600080fd5b506076608d565b60"
+            "408051918252519081900360200190f35b600055565b600054905600a165627a7a7230582061f8c02f4a0f"
+            "53e2f4b173d7a8475ec61c5138d08bddb39b3d1ee308bd30d37d0029") +
+        string(""));
+    bytes data = fromHex("");
+    Address destination{KeyPair::create().address()};
+    Address caller = destination;
+    u256 value = 0;
+    int64_t gas = 1000000;
+    int32_t depth = evmc.depth();
+    bool isCreate = true;
+    bool isStaticCall = false;
+
+    evmc_result result = evmc.execute(
+        schedule, code, data, destination, caller, value, gas, depth, isCreate, isStaticCall);
+    printResult(result);
+    printAccount(destination);
+
+    Address newContractAddr = FixedHash<20>(u160(getStateValueU256(
+        destination, "0000000000000000000000000000000000000000000000000000000000000000")));
+    printAccount(newContractAddr);
+
+    cout << "old addr: " << destination.hex() << endl;
+    cout << "old code: " << evmc.getState().accountCode(toEvmC(destination)).size() << endl;
+    cout << "new addr: " << newContractAddr.hex() << endl;
+    cout << "new code: " << evmc.getState().accountCode(toEvmC(newContractAddr)).size() << endl;
+    u256 xResult = getStateValueU256(
+        newContractAddr, "0000000000000000000000000000000000000000000000000000000000000000");
+    BOOST_CHECK_EQUAL(100, xResult);
     BOOST_CHECK(0 == result.status_code);
 }
 

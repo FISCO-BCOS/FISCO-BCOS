@@ -26,6 +26,7 @@
 #include "SM3Hash.h"
 #include "Signature.h"
 #include "libdevcore/FixedHash.h"
+#include <libconfig/GlobalConfigure.h>
 #include <functional>
 #include <string>
 
@@ -53,16 +54,17 @@ extern std::function<h512(std::shared_ptr<Signature> _sig, const h256& _hash)> R
 extern std::function<std::shared_ptr<Signature>(RLP const& _rlp, size_t _start)> SignatureFromRLP;
 extern std::function<std::shared_ptr<Signature>(std::vector<unsigned char>)> SignatureFromBytes;
 
-void initSMCtypro();
+void initSMCrypto();
+void initCrypto();
 
-bool isSMCrypto();
+size_t signatureLength();
 
 size_t signatureLength();
 
 template <unsigned N>
 inline SecureFixedHash<32> Hash(SecureFixedHash<N>&& _data)
 {
-    if (isSMCrypto())
+    if (g_BCOSConfig.SMCrypto())
     {
         return sm3Secure(_data);
     }
@@ -72,7 +74,7 @@ inline SecureFixedHash<32> Hash(SecureFixedHash<N>&& _data)
 template <unsigned N>
 inline SecureFixedHash<32> Hash(FixedHash<N>&& _data)
 {
-    if (isSMCrypto())
+    if (g_BCOSConfig.SMCrypto())
     {
         return sm3Secure(_data);
     }
@@ -82,11 +84,12 @@ inline SecureFixedHash<32> Hash(FixedHash<N>&& _data)
 template <typename T>
 inline h256 Hash(T&& _data)
 {
-    if (isSMCrypto())
+    if (g_BCOSConfig.SMCrypto())
     {
         return sm3(_data);
     }
     return sha3(_data);
 }
+
 }  // namespace crypto
 }  // namespace dev

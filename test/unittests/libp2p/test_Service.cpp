@@ -26,7 +26,9 @@
 #include "libp2p/P2PMessageFactory.h"
 #include "libp2p/Service.h"
 #include "test/tools/libutils/Common.h"
+#include <libconfig/GlobalConfigure.h>
 #include <libinitializer/SecureInitializer.h>
+#include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/test/unit_test.hpp>
@@ -46,13 +48,16 @@ struct ServiceFixture
         boost::property_tree::ptree pt;
         pt.put("secure.data_path", getTestPath().string() + "/fisco-bcos-data/");
         auto secureInitializer = std::make_shared<dev::initializer::SecureInitializer>();
-#ifdef FISCO_GM
-        m_sslContext =
-            std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv12);
-#else
-        secureInitializer->initConfig(pt);
-        m_sslContext = secureInitializer->SSLContext();
-#endif
+        if (g_BCOSConfig.SMCrypto())
+        {
+            m_sslContext =
+                std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv12);
+        }
+        else
+        {
+            secureInitializer->initConfig(pt);
+            m_sslContext = secureInitializer->SSLContext();
+        }
         m_asioInterface = std::make_shared<dev::network::FakeASIOInterface>();
         m_asioInterface->setIOService(std::make_shared<ba::io_service>());
         m_asioInterface->setSSLContext(m_sslContext);
@@ -94,6 +99,11 @@ struct ServiceFixture
         m_connectionHandler;
 };
 
+struct SM_ServiceFixture : public SM_CryptoTestFixture, public ServiceFixture
+{
+    SM_ServiceFixture() : SM_CryptoTestFixture(), ServiceFixture() {}
+};
+
 BOOST_FIXTURE_TEST_SUITE(Service, ServiceFixture)
 
 BOOST_AUTO_TEST_CASE(Service_run)
@@ -104,19 +114,17 @@ BOOST_AUTO_TEST_CASE(Service_run)
         "f4746846c0db2604adebf9c70c7f418d4d5a61");
     m_p2pService->setStaticNodes(m_nodes);
     m_p2pService->start();
-    // m_host->setConnectionHandler(
-    //         [&](dev::network::NetworkException e, dev::network::NodeInfo const&,
-    //             std::shared_ptr<dev::network::SessionFace> p) {
-    //             if (e.errorCode())
-    //             {
-    //                 LOG(ERROR) << e.what();
-    //                 return;
-    //             }
-    //             LOG(INFO) << "start new session " << p->socket()->nodeIPEndpoint().name()
-    //                       << ",error:" << e.what();
-    //             m_sessions.push_back(p);
-    //             p->start();
-    //         });
+    m_p2pService->stop();
+}
+
+BOOST_FIXTURE_TEST_CASE(SM_Service_run, SM_ServiceFixture)
+{
+    auto nodeIP = NodeIPEndpoint(boost::asio::ip::address::from_string("127.0.0.1"), 8888);
+    m_nodes[nodeIP] = NodeID(
+        "7dcce48da1c464c7025614a54a4e26df7d6f92cd4d315601e057c1659796736c5c8730e380fcbe637191cc2aeb"
+        "f4746846c0db2604adebf9c70c7f418d4d5a61");
+    m_p2pService->setStaticNodes(m_nodes);
+    m_p2pService->start();
     m_p2pService->stop();
 }
 BOOST_AUTO_TEST_SUITE_END()

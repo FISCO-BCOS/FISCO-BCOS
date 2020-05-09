@@ -26,6 +26,7 @@
 
 #include "Hash.h"
 #include "Signature.h"
+#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/Address.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/Exceptions.h>
@@ -33,8 +34,6 @@
 #include <secp256k1_recovery.h>
 #include <secp256k1_sha256.h>
 #include <mutex>
-
-
 namespace dev
 {
 using Secret = SecureFixedHash<32>;

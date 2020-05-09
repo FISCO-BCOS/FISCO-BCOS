@@ -428,11 +428,14 @@ dev::storage::TableData::Ptr MemoryTable2::dumpWithoutOptimize()
 
         bytesConstRef bR(allData.data(), allData.size());
 
-#ifdef FISCO_GM
-        m_hash = dev::sm3(bR);
-#else
-        m_hash = dev::sha256(bR);
-#endif
+        if (g_BCOSConfig.SMCrypto())
+        {
+            m_hash = dev::sm3(bR);
+        }
+        else
+        {
+            m_hash = dev::sha256(bR);
+        }
         m_isDirty = false;
     }
 
@@ -532,11 +535,17 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
             bytesConstRef bR(allData.data(), allData.size());
             if (g_BCOSConfig.version() <= V2_4_0)
             {
-#ifdef FISCO_GM
-                m_hash = dev::sm3(bR);
-#else
-                m_hash = dev::sha256(bR);
-#endif
+                if (g_BCOSConfig.SMCrypto())
+                {
+                    m_hash = dev::sm3(bR);
+                }
+                else
+                {
+                    // in previous version(<= 2.4.0), we use sha256(...) to calculate hash of the data,
+                    // for now, to keep consistent with transction's implementation, we decide to use
+                    // sha3(...) to calculate hash of the data. This `else` branch is just for compatibility.
+                    m_hash = dev::sha256(bR);
+                }
             }
             else
             {

@@ -65,12 +65,6 @@ macro(configure_project)
     # code coverage
     eth_default_option(COVERAGE OFF)
 
-    # guomi
-    eth_default_option(BUILD_GM OFF)
-    if (BUILD_GM)
-        add_definitions(-DFISCO_GM)
-    endif()
-
     # extension privacy module
     eth_default_option(CRYPTO_EXTENSION OFF)
     if (CRYPTO_EXTENSION)
@@ -130,9 +124,6 @@ macro(print_config NAME)
     message("-- TESTS              Build tests                  ${TESTS}")
     message("-- ARCH_NATIVE        Enable native code           ${ARCH_NATIVE}")
     message("-- PROF                                            ${PROF}")
-if (BUILD_GM)  
-    message("-- BUILD_GM           Build GM                     ${BUILD_GM}")
-endif()
 if (CRYPTO_EXTENSION)
     message("-- CRYPTO_EXTENSION   Build crypto extension       ${CRYPTO_EXTENSION}")
 endif()

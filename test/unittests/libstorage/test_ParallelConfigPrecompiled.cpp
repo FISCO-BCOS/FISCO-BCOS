@@ -95,7 +95,7 @@ public:
         auto tableName = PARA_CONFIG_TABLE_PREFIX + _address.hex() + "_";
         if (g_BCOSConfig.version() >= V2_2_0)
         {
-            tableName = std::string("c_" + _address.hex());
+            tableName = PARA_CONFIG_TABLE_PREFIX_SHORT + _address.hex();
         }
         Table::Ptr table = memoryTableFactory->openTable(tableName);
         if (!table)

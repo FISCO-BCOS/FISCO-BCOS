@@ -28,15 +28,13 @@
 #include "SM3Hash.h"
 #include "SM4Crypto.h"
 #include "libdevcore/RLP.h"
+#include <libconfig/GlobalConfigure.h>
 
 using namespace std;
 using namespace dev;
 
 h256 dev::EmptyHash = sha3(bytesConstRef());
 h256 dev::EmptyTrie = sha3(rlp(""));
-static bool SMCrypto = false;
-static size_t SM2SignatureLength = 128;
-static size_t ECDSASignatureLength = 65;
 
 std::function<std::string(const unsigned char* _plainData, size_t _plainDataSize,
     const unsigned char* _key, size_t _keySize, const unsigned char* _ivData)>
@@ -58,23 +56,19 @@ std::function<bool(h512 const& _pubKey, std::shared_ptr<Signature> _sig, const h
 std::function<h512(std::shared_ptr<Signature> _sig, const h256& _hash)> dev::crypto::Recover =
     ecdsaRecover;
 
-bool dev::crypto::isSMCrypto()
-{
-    return SMCrypto;
-}
-
 size_t dev::crypto::signatureLength()
 {
-    if (isSMCrypto())
+    if (g_BCOSConfig.SMCrypto())
     {
-        return SM2SignatureLength;
+        // SM2SignatureLength;
+        return 128;
     }
-    return ECDSASignatureLength;
+    // ECDSASignatureLength;
+    return 65;
 }
 
-void dev::crypto::initSMCtypro()
+void dev::crypto::initSMCrypto()
 {
-    SMCrypto = true;
     EmptyHash = sm3(bytesConstRef());
     EmptyTrie = sm3(rlp(""));
     SignatureFromRLP = SM2SignatureFromRLP;
@@ -86,4 +80,19 @@ void dev::crypto::initSMCtypro()
     Sign = sm2Sign;
     Verify = sm2Verify;
     Recover = sm2Recover;
+}
+
+void dev::crypto::initCrypto()
+{
+    EmptyHash = sha3(bytesConstRef());
+    EmptyTrie = sha3(rlp(""));
+    SignatureFromRLP = ECDSASignatureFromRLP;
+    SignatureFromBytes = ECDSASignatureFromBytes;
+    dev::crypto::SymmetricEncrypt = static_cast<std::string (*)(const unsigned char*, size_t,
+        const unsigned char*, size_t, const unsigned char*)>(dev::aesCBCEncrypt);
+    dev::crypto::SymmetricDecrypt = static_cast<std::string (*)(const unsigned char*, size_t,
+        const unsigned char*, size_t, const unsigned char*)>(dev::aesCBCDecrypt);
+    Sign = ecdsaSign;
+    Verify = ecdsaVerify;
+    Recover = ecdsaRecover;
 }

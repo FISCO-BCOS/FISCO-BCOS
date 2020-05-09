@@ -23,6 +23,7 @@
 #include <libprecompiled/EntryPrecompiled.h>
 #include <libprecompiled/TablePrecompiled.h>
 #include <libstorage/MemoryTable.h>
+#include <libstorage/MemoryTableFactory.h>
 #include <libstorage/Table.h>
 #include <boost/test/unit_test.hpp>
 
@@ -51,6 +52,7 @@ struct TablePrecompiledFixture
     TablePrecompiledFixture()
     {
         context = std::make_shared<MockPrecompiledEngine>();
+        context->setMemoryTableFactory(std::make_shared<storage::MemoryTableFactory>());
         tablePrecompiled = std::make_shared<dev::precompiled::TablePrecompiled>();
         auto table = std::make_shared<MockMemoryDB>();
         TableInfo::Ptr info = std::make_shared<TableInfo>();

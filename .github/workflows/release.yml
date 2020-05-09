@@ -21,7 +21,7 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install openssl
       - name: configure
-        run: cmake -DBUILD_GM=ON .
+        run: cmake .
       - name: compile
         run: make -j2
       - name: prepare artifact
