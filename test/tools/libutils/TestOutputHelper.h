@@ -19,7 +19,9 @@
  */
 
 #pragma once
+#include <libconfig/GlobalConfigure.h>
 #include <libdevcore/Common.h>
+#include <libdevcrypto/CryptoInterface.h>
 #include <boost/filesystem.hpp>
 
 namespace dev
@@ -75,6 +77,33 @@ public:
     TestOutputHelperFixture() { TestOutputHelper::get().initTest(); }
     /// release test-suite fixture
     ~TestOutputHelperFixture() { TestOutputHelper::get().finishTest(); }
+};
+
+class SM_CryptoTestFixture
+{
+public:
+    SM_CryptoTestFixture() : m_originUseSMCrypto(g_BCOSConfig.SMCrypto())
+    {
+        g_BCOSConfig.setUseSMCrypto(true);
+        if (!m_originUseSMCrypto)
+        {
+            crypto::initSMCrypto();
+        }
+        TestOutputHelper::get().initTest();
+    }
+
+    ~SM_CryptoTestFixture()
+    {
+        TestOutputHelper::get().finishTest();
+        if (!m_originUseSMCrypto)
+        {
+            crypto::initCrypto();
+        }
+        g_BCOSConfig.setUseSMCrypto(m_originUseSMCrypto);
+    }
+
+private:
+    bool m_originUseSMCrypto;
 };
 
 }  // namespace test

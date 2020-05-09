@@ -27,7 +27,6 @@
 #include <cstdlib>
 #include <string>
 
-
 namespace dev
 {
 namespace test

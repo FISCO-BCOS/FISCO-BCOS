@@ -318,9 +318,15 @@ BOOST_AUTO_TEST_CASE(OutOfGasBaseTest)
     Executive e(m_mptStates, initEnvInfo());
     Transaction tx(value, gasPrice, gas, code);  // Use contract creation constructor
     tx.forceSender(caller);
-    BOOST_CHECK_THROW(executeTransaction(e, tx), OutOfGasBase);  // Throw in rc2 and later
-
-    BOOST_CHECK_EQUAL(e.getException(), TransactionException::OutOfGasBase);
+    if (g_BCOSConfig.version() <= RC3_VERSION)
+    {
+        BOOST_CHECK_THROW(executeTransaction(e, tx), OutOfGasBase);
+        BOOST_CHECK_EQUAL(e.getException(), TransactionException::OutOfGasBase);
+    }
+    else
+    {
+        BOOST_CHECK_NO_THROW(executeTransaction(e, tx));
+    }
 }
 
 BOOST_AUTO_TEST_CASE(CallAddressErrorTest)
@@ -340,11 +346,16 @@ BOOST_AUTO_TEST_CASE(CallAddressErrorTest)
     // e.setResultRecipient(res);
     executeTransaction(e, setTx);
 
-    BOOST_CHECK_EQUAL(e.getException(), TransactionException::CallAddressError);
+    if (g_BCOSConfig.version() >= RC2_VERSION)
+    {
+        BOOST_CHECK_EQUAL(e.getException(), TransactionException::CallAddressError);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(DeployGetSetContractTestRC1)
 {
+    auto version = g_BCOSConfig.version();
+    auto supportedVersion = g_BCOSConfig.supportedVersion();
     g_BCOSConfig.setSupportedVersion("2.0.0-rc1", RC1_VERSION);
     /*
 pragma solidity ^0.4.2;
@@ -478,6 +489,7 @@ contract HelloWorld{
     // e4.setResultRecipient(destroyExeRes);
     executeTransaction(e4, destroyTx);
     BOOST_CHECK(!m_mptStates->addressHasCode(newAddress));
+    g_BCOSConfig.setSupportedVersion(supportedVersion, version);
 }
 
 

@@ -16,6 +16,7 @@
  */
 
 #include <libblockverifier/ExecutiveContext.h>
+#include <libconfig/GlobalConfigure.h>
 #include <libethcore/Exceptions.h>
 #include <libethcore/LastBlockHashesFace.h>
 #include <libevm/EVMC.h>
@@ -213,13 +214,16 @@ public:
             addressWithEmptyCode.ref(), ref(code), crypto::Hash(code), depth, isCreate, staticCall);
 
         owning_bytes_ref ret = vm->exec(gas, extVm, OnOpFunc{});
-#ifdef FISCO_GM
-        BOOST_REQUIRE_EQUAL(toHex(ret.toBytes()),
-            "1ab21d8355cfa17f8e61194831e81a8f22bec8c728fefb747ed035eb5082aa2b");
-#else
-        BOOST_REQUIRE_EQUAL(toHex(ret.toBytes()),
-            "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470");
-#endif
+        if (g_BCOSConfig.SMCrypto())
+        {
+            BOOST_REQUIRE_EQUAL(toHex(ret.toBytes()),
+                "1ab21d8355cfa17f8e61194831e81a8f22bec8c728fefb747ed035eb5082aa2b");
+        }
+        else
+        {
+            BOOST_REQUIRE_EQUAL(toHex(ret.toBytes()),
+                "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470");
+        }
     }
 
     void testExtCodeHashOfNonExistentAccount()
@@ -255,13 +259,16 @@ public:
             addressPrecompile.ref(), ref(code), crypto::Hash(code), depth, isCreate, staticCall);
 
         owning_bytes_ref ret = vm->exec(gas, extVm, OnOpFunc{});
-#ifdef FISCO_GM
-        BOOST_REQUIRE_EQUAL(toHex(ret.toBytes()),
-            "1ab21d8355cfa17f8e61194831e81a8f22bec8c728fefb747ed035eb5082aa2b");
-#else
-        BOOST_REQUIRE_EQUAL(toHex(ret.toBytes()),
-            "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470");
-#endif
+        if (g_BCOSConfig.SMCrypto())
+        {
+            BOOST_REQUIRE_EQUAL(toHex(ret.toBytes()),
+                "1ab21d8355cfa17f8e61194831e81a8f22bec8c728fefb747ed035eb5082aa2b");
+        }
+        else
+        {
+            BOOST_REQUIRE_EQUAL(toHex(ret.toBytes()),
+                "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470");
+        }
     }
 
     void testExtcodehashIgnoresHigh12Bytes()
@@ -320,6 +327,15 @@ class AlethInterpreterExtcodehashTestFixture : public ExtcodehashTestFixture
 public:
     AlethInterpreterExtcodehashTestFixture()
       : ExtcodehashTestFixture{new EVMC{evmc_create_interpreter()}}
+    {}
+};
+
+class SM_AlethInterpreterExtcodehashTestFixture : public SM_CryptoTestFixture,
+                                                  public AlethInterpreterExtcodehashTestFixture
+{
+public:
+    SM_AlethInterpreterExtcodehashTestFixture()
+      : SM_CryptoTestFixture(), AlethInterpreterExtcodehashTestFixture()
     {}
 };
 
@@ -385,5 +401,20 @@ BOOST_AUTO_TEST_CASE(AlethInterpreterExtCodeHashIgnoresHigh12Bytes)
 }
 
 BOOST_AUTO_TEST_SUITE_END()
+
+BOOST_AUTO_TEST_SUITE_END()
+
+BOOST_FIXTURE_TEST_SUITE(
+    SM_AlethInterpreterExtcodehashSuite, SM_AlethInterpreterExtcodehashTestFixture)
+
+BOOST_AUTO_TEST_CASE(SM_AlethInterpreterExtCodeHashOfNonContractAccount)
+{
+    testExtCodeHashOfNonContractAccount();
+}
+
+BOOST_AUTO_TEST_CASE(SM_AlethInterpreterExtCodeHashOfPrecomileNonZeroBalance)
+{
+    testExtCodeHashOfPrecomileNonZeroBalance();
+}
 
 BOOST_AUTO_TEST_SUITE_END()

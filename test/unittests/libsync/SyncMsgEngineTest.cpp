@@ -236,6 +236,7 @@ BOOST_AUTO_TEST_CASE(SyncTransactionPacketTest)
     std::cout << "topTransactions finished" << std::endl;
     BOOST_CHECK(topTxs->size() == 1);
     BOOST_CHECK_EQUAL((*topTxs)[0]->sha3(), txPtr->sha3());
+    // TODO: this unit test may cause fatal error randomly
 }
 
 BOOST_AUTO_TEST_CASE(SyncBlocksPacketTest)

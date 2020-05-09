@@ -22,6 +22,8 @@
  */
 
 #include "RotatingPBFTEngineTest.h"
+#include <libconfig/GlobalConfigure.h>
+#include <random>
 
 using namespace dev::test;
 
@@ -113,7 +115,6 @@ BOOST_AUTO_TEST_CASE(testConstantSealers)
 // test for broadcasting rawPrepare by tree
 BOOST_AUTO_TEST_CASE(testRawPrepareTreeBroadcast)
 {
-#ifndef FISCO_GM
     // create RotatingPBFTEngineFixture for the leader
     auto leaderRPBFT = std::make_shared<RotatingPBFTEngineFixture>(20);
     auto followRPBFT = std::make_shared<RotatingPBFTEngineFixture>(20);
@@ -144,13 +145,14 @@ BOOST_AUTO_TEST_CASE(testRawPrepareTreeBroadcast)
     {
         receivedP2pMsg = leaderService->getAsyncSendMessageByNodeID(
             followRPBFT->fakePBFTSuite()->consensus()->keyPair().pub());
-        cout << "under sleep, dead loop " << count << endl;
-        this_thread::sleep_for(std::chrono::milliseconds(100));
+        this_thread::sleep_for(std::chrono::milliseconds(1));
     }
+
     for (auto const& node : leaderRPBFT->fakePBFTSuite()->consensus()->sealerList())
     {
         compareAndClearAsyncSendTime(*(leaderRPBFT->fakePBFTSuite()), node, 1);
     }
+
 
     // the follower receive rawPrepare message from the leader, no forward
     // fake session for the leader
@@ -160,6 +162,7 @@ BOOST_AUTO_TEST_CASE(testRawPrepareTreeBroadcast)
     NetworkException networkException;
     followRPBFT->fakePBFTSuite()->consensus()->wrapperOnRecvPBFTMessage(
         networkException, leaderSession, receivedP2pMsg);
+
     for (auto const& node : followRPBFT->fakePBFTSuite()->consensus()->sealerList())
     {
         compareAndClearAsyncSendTime(*(followRPBFT->fakePBFTSuite()), node, 0);
@@ -190,8 +193,9 @@ BOOST_AUTO_TEST_CASE(testRawPrepareTreeBroadcast)
     while (!receivedP2pMsg)
     {
         receivedP2pMsg = leaderService->getAsyncSendMessageByNodeID((*selectedNodes)[0]);
-        sleep(1);
+        this_thread::sleep_for(std::chrono::milliseconds(1));
     }
+
     for (auto const& node : *selectedNodes)
     {
         compareAndClearAsyncSendTime(*(leaderRPBFT->fakePBFTSuite()), node, 1);
@@ -219,7 +223,7 @@ BOOST_AUTO_TEST_CASE(testRawPrepareTreeBroadcast)
         while (!receivedP2pMsg)
         {
             receivedP2pMsg = followService->getAsyncSendMessageByNodeID((*selectedNodes)[0]);
-            sleep(1);
+            this_thread::sleep_for(std::chrono::milliseconds(1));
         }
 
         for (auto const& node : *selectedNodes)
@@ -260,11 +264,10 @@ BOOST_AUTO_TEST_CASE(testRawPrepareTreeBroadcast)
 
     // the chosed node receive rawPrepareStatus and request the rawPrepareReq
     // make sure the followRPBFT is not the child of the leaderRPBFT
-    do
-    {
-        std::srand(utcTime());
-        index = std::rand() % chosedNodes.size();
-    } while (index >= 0 && index <= 3);
+    std::mt19937 rng;
+    rng.seed(std::random_device()());
+    std::uniform_int_distribution<std::mt19937::result_type> dist(4, chosedNodes.size() - 1);
+    index = dist(rng);
 
     followRPBFT->fakePBFTSuite()->consensus()->setKeyPair(
         followRPBFT->fakePBFTSuite()->m_keyPair[chosedNodes[index].second]);
@@ -276,8 +279,8 @@ BOOST_AUTO_TEST_CASE(testRawPrepareTreeBroadcast)
     // onReceiveRawPrepareStatus
     followRPBFT->fakePBFTSuite()->consensus()->rpbftReqCache()->requestedPrepareQueue()->clear();
     leaderRPBFT->fakePBFTSuite()->consensus()->rpbftReqCache()->requestedPrepareQueue()->clear();
-    // case1: connect with all the node, but the parent node doesn't send rawPrepare to the node,
-    // request again after 100ms
+    // case1: connect with all the node, but the parent node doesn't send rawPrepare to the
+    // node, request again after 100ms
     followRPBFT->fakePBFTSuite()->consensus()->wrapperOnReceiveRawPrepareStatus(
         leaderSession2, receivedP2pMsg);
     // wait for request
@@ -286,7 +289,7 @@ BOOST_AUTO_TEST_CASE(testRawPrepareTreeBroadcast)
     {
         receivedP2pMsg2 = followService->getAsyncSendMessageByNodeID(
             leaderRPBFT->fakePBFTSuite()->consensus()->keyPair().pub());
-        sleep(1);
+        this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     compareAndClearAsyncSendTime(*(followRPBFT->fakePBFTSuite()),
         leaderRPBFT->fakePBFTSuite()->consensus()->keyPair().pub(), 1);
@@ -305,7 +308,7 @@ BOOST_AUTO_TEST_CASE(testRawPrepareTreeBroadcast)
     {
         receivedP2pMsg = followService->getAsyncSendMessageByNodeID(
             leaderRPBFT->fakePBFTSuite()->consensus()->keyPair().pub());
-        sleep(1);
+        this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     compareAndClearAsyncSendTime(*(followRPBFT->fakePBFTSuite()),
         leaderRPBFT->fakePBFTSuite()->consensus()->keyPair().pub(), 1);
@@ -321,14 +324,12 @@ BOOST_AUTO_TEST_CASE(testRawPrepareTreeBroadcast)
     {
         receivedP2pMsg = leaderService->getAsyncSendMessageByNodeID(
             followRPBFT->fakePBFTSuite()->consensus()->keyPair().pub());
-        sleep(1);
+        this_thread::sleep_for(std::chrono::milliseconds(1));
     }
-
     // onReceiveRawPrepareResponse
     followRPBFT->fakePBFTSuite()->consensus()->wrapperOnReceiveRawPrepareResponse(
         leaderSession2, receivedP2pMsg);
     checkPrepareReqEqual(
         followRPBFT->fakePBFTSuite()->consensus()->reqCache()->rawPrepareCachePtr(), prepareReq);
-#endif
 }
 BOOST_AUTO_TEST_SUITE_END()

@@ -24,10 +24,13 @@
 #include "GlobalConfigureInitializer.h"
 #include "include/BuildInfo.h"
 #include "libsecurity/KeyCenter.h"
+#include <libdevcrypto/CryptoInterface.h>
 #include <libethcore/EVMSchedule.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
+#include <boost/filesystem.hpp>
+
 
 using namespace std;
 using namespace dev;
@@ -153,17 +156,44 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
     bool enableStat = _pt.get<bool>("log.enable_statistic", false);
     g_BCOSConfig.setEnableStat(enableStat);
 
+    if (g_BCOSConfig.version() >= V2_5_0)
+    {
+        bool useSMCrypto = _pt.get<bool>("chain.sm_crypto", false);
+        g_BCOSConfig.setUseSMCrypto(useSMCrypto);
+        if (useSMCrypto)
+        {
+            crypto::initSMCrypto();
+        }
+    }
+    else
+    {
+        boost::filesystem::path gmNodeKeyPath = "conf/gmnode.key";
+        if (boost::filesystem::exists(gmNodeKeyPath))
+        {
+            g_BCOSConfig.setUseSMCrypto(true);
+            crypto::initSMCrypto();
+        }
+        else
+        {
+            g_BCOSConfig.setUseSMCrypto(false);
+        }
+    }
+
+    g_BCOSConfig.binaryInfo.version += g_BCOSConfig.SMCrypto() ? " gm" : "";
+
     INITIALIZER_LOG(INFO) << LOG_BADGE("initGlobalConfig")
                           << LOG_KV("enableCompress", g_BCOSConfig.compressEnabled())
                           << LOG_KV("compatibilityVersion", version)
                           << LOG_KV("versionNumber", g_BCOSConfig.version())
                           << LOG_KV("enableStat", g_BCOSConfig.enableStat())
-                          << LOG_KV("chainId", g_BCOSConfig.chainId());
+                          << LOG_KV("chainId", g_BCOSConfig.chainId())
+                          << LOG_KV("useSMCrypto", g_BCOSConfig.SMCrypto());
 }
 
 void dev::version()
 {
-    std::cout << "FISCO-BCOS Version : " << FISCO_BCOS_PROJECT_VERSION << std::endl;
+    std::cout << "FISCO-BCOS Version : " << FISCO_BCOS_PROJECT_VERSION
+              << (g_BCOSConfig.SMCrypto() ? " gm" : "") << std::endl;
     std::cout << "Build Time         : " << FISCO_BCOS_BUILD_TIME << std::endl;
     std::cout << "Build Type         : " << FISCO_BCOS_BUILD_PLATFORM << "/"
               << FISCO_BCOS_BUILD_TYPE << std::endl;

@@ -195,7 +195,9 @@ class BasicCheck(object):
         try:
             request_data = constructRequestData(method, param, rpc_id)
             url = "http://" + self.rpc_ip + ":" + str(self.rpc_port + node_id)
+            LOG_INFO("request: " + url)
             response = requests.post(url, data = request_data)
+            LOG_INFO("response: " + str(response))
             if (response.status_code == requests.codes.ok):
                 json_object = json.loads(response.text)
                 if("result" in json_object):

@@ -634,7 +634,7 @@ BOOST_AUTO_TEST_CASE(testHandlePrepareReq)
     bytes data;
     fake_pbft.consensus()->reqCache()->committedPrepareCache().encode(data);
     // since commit backup pbft asyncly, need to sleep 1s before checkBackupMsg
-    sleep(1);
+    this_thread::sleep_for(std::chrono::milliseconds(1));
     checkBackupMsg(fake_pbft, FakePBFTEngine::backupKeyCommitted(), data);
     /// submit failed for collected commitReq is not enough
     CheckBlockChain(fake_pbft, block_number + 1);
@@ -1050,7 +1050,7 @@ BOOST_AUTO_TEST_CASE(testHandlePartiallyPrepare)
     {
         receivedP2pMsg =
             leaderService->getAsyncSendMessageByNodeID(followerPBFT->consensus()->keyPair().pub());
-        sleep(1);
+        this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     for (auto const& nodeId : leaderPBFT->m_sealerList)
     {
@@ -1073,7 +1073,7 @@ BOOST_AUTO_TEST_CASE(testHandlePartiallyPrepare)
     {
         receivedP2pMsg =
             followService->getAsyncSendMessageByNodeID(leaderPBFT->consensus()->keyPair().pub());
-        sleep(1);
+        this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     // the follower handlePartiallyPrepare and request missed transactions to the leader
     compareAndClearAsyncSendTime(*followerPBFT, leaderPBFT->consensus()->keyPair().pub(), 1);
@@ -1092,7 +1092,7 @@ BOOST_AUTO_TEST_CASE(testHandlePartiallyPrepare)
     {
         receivedP2pMsg =
             leaderService->getAsyncSendMessageByNodeID(followerPBFT->consensus()->keyPair().pub());
-        sleep(1);
+        this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     compareAndClearAsyncSendTime(*leaderPBFT, followerPBFT->consensus()->keyPair().pub(), 1);
     BOOST_CHECK(receivedP2pMsg != nullptr);
@@ -1105,7 +1105,7 @@ BOOST_AUTO_TEST_CASE(testHandlePartiallyPrepare)
     {
         receivedP2pMsg =
             followService->getAsyncSendMessageByNodeID(leaderPBFT->consensus()->keyPair().pub());
-        sleep(1);
+        this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     compareAndClearAsyncSendTime(*followerPBFT, leaderPBFT->consensus()->keyPair().pub(), 1);
     checkPrepareReqEqual(
