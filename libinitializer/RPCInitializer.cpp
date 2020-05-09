@@ -69,7 +69,7 @@ void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt
     m_channelRPCServer->setNetworkStatHandler(m_networkStatHandler);
     // create network-bandwidth-limiter
     auto networkBandwidth = createNetworkBandwidthLimit(_pt);
-    if (networkBandwidth && m_networkStatHandler)
+    if (networkBandwidth)
     {
         m_channelRPCServer->setNetworkBandwidthLimiter(networkBandwidth);
     }
@@ -276,21 +276,26 @@ dev::flowlimit::RPCQPSLimiter::Ptr RPCInitializer::createQPSLimiter(
 dev::flowlimit::RateLimiter::Ptr RPCInitializer::createNetworkBandwidthLimit(
     boost::property_tree::ptree const& _pt)
 {
-    int64_t outGoingBandwidthLimit =
-        _pt.get<int64_t>("flow_control.outgoing_bandwidth_limit", INT64_MAX);
-    if (outGoingBandwidthLimit <= 0)
-    {
-        BOOST_THROW_EXCEPTION(dev::InvalidConfig()
-                              << errinfo_comment("createNetworkBandwidthLimit for channel failed, "
-                                                 "flow_control.limit_req_qps must be positive!"));
-    }
-    if (outGoingBandwidthLimit == INT64_MAX)
+    auto outGoingBandwidthLimit =
+        _pt.get<double>("flow_control.outgoing_bandwidth_limit", INT64_MAX);
+    // default value
+    if (outGoingBandwidthLimit == (double)INT64_MAX)
     {
         INITIALIZER_LOG(DEBUG) << LOG_DESC("Disable NetworkBandwidthLimit for channel");
         return nullptr;
     }
+    // Configured outgoing_bandwidth_limit
+    if (outGoingBandwidthLimit <= (double)0 || outGoingBandwidthLimit >= (double)MAX_VALUE_IN_Mb)
+    {
+        BOOST_THROW_EXCEPTION(
+            dev::InvalidConfig() << errinfo_comment(
+                "createNetworkBandwidthLimit for channel failed, "
+                "flow_control.limit_req_qps must be larger than 0 and smaller than " +
+                std::to_string(MAX_VALUE_IN_Mb)));
+    }
     outGoingBandwidthLimit *= 1024 * 1024 / 8;
-    auto bandwidthLimiter = std::make_shared<dev::flowlimit::RateLimiter>(outGoingBandwidthLimit);
+    auto bandwidthLimiter =
+        std::make_shared<dev::flowlimit::RateLimiter>((int64_t)outGoingBandwidthLimit);
     bandwidthLimiter->setMaxPermitsSize(g_BCOSConfig.c_maxPermitsSize);
     INITIALIZER_LOG(INFO) << LOG_BADGE("createNetworkBandwidthLimit")
                           << LOG_KV("outGoingBandwidthLimit(Bytes)", outGoingBandwidthLimit)
