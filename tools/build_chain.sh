@@ -567,6 +567,7 @@ generate_config_ini()
     ; The number of brust requests as a percentage of limit_req_qps must be between 0 and 100
     ;qps_burst_percent=20
     ; restrict the outgoing bandwidth of the node
+    ; Mb, can be a decimal
     ; when the outgoing bandwidth exceeds the limit, the block synchronization operation will not proceed
     ;outgoing_bandwidth_limit=2
 EOF
@@ -674,6 +675,7 @@ function generate_group_ini()
     ; The number of brust requests as a percentage of limit_req_qps must be between 0 and 100
     ;qps_burst_percent=20
     ; restrict the outgoing bandwidth of the group
+    ; Mb, can be a decimal
     ; when the outgoing bandwidth exceeds the limit, the block synchronization operation will not proceed
     ;outgoing_bandwidth_limit=2
 EOF

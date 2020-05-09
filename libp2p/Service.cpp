@@ -636,11 +636,13 @@ bool Service::asyncMulticastMessageByTopic(
         auto requiredPermits = message->length() * nodeIDsToSend.size() / m_compressRate;
         if (!_bandwidthLimiter->tryAcquire(requiredPermits))
         {
-            SERVICE_LOG(DEBUG)
-                << LOG_DESC("asyncMulticastMessageByTopic failed for over bandwidth limitation")
-                << LOG_KV("requiredPermits", requiredPermits)
-                << LOG_KV("broadcastTargetSize", nodeIDsToSend.size())
-                << LOG_KV("msgSize", message->length());
+            SERVICE_LOG(DEBUG) << LOG_DESC(
+                                      "asyncMulticastMessageByTopic from channel failed for over "
+                                      "bandwidth limitation")
+                               << LOG_KV("requiredPermits", requiredPermits)
+                               << LOG_KV("maxPermitsPerSecond(Bytes)", _bandwidthLimiter->maxQPS())
+                               << LOG_KV("broadcastTargetSize", nodeIDsToSend.size())
+                               << LOG_KV("msgSize", message->length());
             return false;
         }
         message->setPermitsAcquired(true);
