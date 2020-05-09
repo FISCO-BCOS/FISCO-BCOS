@@ -259,7 +259,7 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
     {
         LOG(DEBUG) << LOG_DESC("execute transaction failed for ContractFrozen")
                    << LOG_KV("account", _origin);
-        writeErrInfoToOutput("Frozen account:" + _origin.hex());
+        writeErrInfoToOutput("Frozen account:0x" + _origin.hex());
         revert();
         m_excepted = TransactionException::AccountFrozen;
         return !m_ext;
@@ -383,6 +383,18 @@ bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u2
         m_gas = 0;
         m_excepted = TransactionException::PermissionDenied;
         revert();
+        m_ext = {};
+        return !m_ext;
+    }
+
+    if (m_s->frozen(_origin))
+    {
+        LOG(DEBUG) << LOG_DESC("deploy contract failed for ContractFrozen")
+                   << LOG_KV("account", _origin);
+        writeErrInfoToOutput("Frozen account:0x" + _origin.hex());
+        m_gas = 0;
+        revert();
+        m_excepted = TransactionException::AccountFrozen;
         m_ext = {};
         return !m_ext;
     }
