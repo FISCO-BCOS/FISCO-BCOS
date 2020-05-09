@@ -130,12 +130,28 @@ void ChannelSession::asyncSendMessage(Message::Ptr request,
             m_networkStat->updateGroupResponseTraffic(
                 request->groupID(), request->type(), request->length());
         }
+        // stat AMOP outgoing-network-traffic
+        if (m_networkStat && isAMOPMessage(request))
+        {
+            m_networkStat->updateAMOPOutTraffic(request->length());
+        }
     }
     catch (std::exception& e)
     {
         CHANNEL_SESSION_LOG(ERROR) << LOG_DESC("asyncSendMessage error")
                                    << LOG_KV("what", boost::diagnostic_information(e));
     }
+}
+
+bool ChannelSession::isAMOPMessage(Message::Ptr _request)
+{
+    auto reqType = _request->type();
+    if (reqType == AMOP_REQUEST || reqType == AMOP_RESPONSE ||
+        reqType == AMOP_CLIENT_SUBSCRIBE_TOPICS || reqType == AMOP_MULBROADCAST)
+    {
+        return true;
+    }
+    return false;
 }
 
 void ChannelSession::run()
@@ -437,6 +453,11 @@ void ChannelSession::onMessage(ChannelException e, Message::Ptr message)
             {
                 CHANNEL_SESSION_LOG(ERROR) << "MessageHandler empty";
             }
+        }
+        // stat AMOP incoming-network-traffic
+        if (m_networkStat && isAMOPMessage(message))
+        {
+            m_networkStat->updateAMOPInTraffic(message->length());
         }
     }
     catch (std::exception& e)
