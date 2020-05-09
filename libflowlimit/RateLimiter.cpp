@@ -26,7 +26,7 @@
 using namespace dev;
 using namespace dev::flowlimit;
 
-RateLimiter::RateLimiter(uint64_t const& _maxQPS) : m_maxQPS(_maxQPS)
+RateLimiter::RateLimiter(int64_t const& _maxQPS) : m_maxQPS(_maxQPS)
 {
     m_permitsUpdateInterval = (double)1000000 / (double)m_maxQPS;
     m_lastPermitsUpdateTime = utcSteadyTimeUs();
@@ -115,9 +115,23 @@ int64_t RateLimiter::fetchPermitsAndGetWaitTime(
     // update the permits
     updatePermits(_now);
     int64_t waitAvailableTime = m_lastPermitsUpdateTime - _now;
-    // without wait: don't fetch permits after timeout
-    // wait: fetch permits after timeout
-    if (waitAvailableTime > 0 && !_fetchPermitsWhenRequireWait)
+    // _fetchPermitsWhenRequireWait is false: don't fetch permits after timeout
+    // _fetchPermitsWhenRequireWait is true: fetch permits after timeout
+    if (!_fetchPermitsWhenRequireWait)
+    {
+        if (waitAvailableTime > 0)
+        {
+            return waitAvailableTime;
+        }
+        // Only permits of m_maxQPS can be used in advance
+        if ((_requiredPermits - m_currentStoredPermits) >= m_maxQPS)
+        {
+            // Indicates that the permits was not obtained
+            return 1;
+        }
+    }
+    if ((waitAvailableTime > 0 || (_requiredPermits - m_currentStoredPermits) >= m_maxQPS) &&
+        !_fetchPermitsWhenRequireWait)
     {
         return waitAvailableTime;
     }
