@@ -102,8 +102,18 @@ void Ledger::initNetworkStatHandler()
     m_networkStatHandler->setGroupId(m_groupId);
     m_networkStatHandler->setConsensusMsgType(m_param->mutableConsensusParam().consensusType);
     m_service->appendNetworkStatHandlerByGroupID(m_groupId, m_networkStatHandler);
+    if (!m_channelRPCServer)
+    {
+        return;
+    }
+    if (!m_channelRPCServer->networkStatHandler())
+    {
+        return;
+    }
     m_channelRPCServer->networkStatHandler()->appendGroupP2PStatHandler(
         m_groupId, m_networkStatHandler);
+    // set channelNetworkStatHandler
+    m_service->setChannelNetworkStatHandler(m_channelRPCServer->networkStatHandler());
 }
 
 void Ledger::initNetworkBandWidthLimiter()

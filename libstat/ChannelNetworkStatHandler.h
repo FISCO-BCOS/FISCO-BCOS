@@ -56,6 +56,9 @@ public:
     void updateIncomingTrafficForRPC(GROUP_ID _groupId, uint64_t const& _msgSize);
     void updateOutgoingTrafficForRPC(GROUP_ID _groupId, uint64_t const& _msgSize);
 
+    void updateAMOPInTraffic(int64_t const& _msgSize);
+    void updateAMOPOutTraffic(int64_t const& _msgSize);
+
     bool running() const { return m_running; }
 
 private:
@@ -66,6 +69,9 @@ private:
     std::string m_statisticName;
     int64_t m_flushInterval;
     dev::ThreadPool::Ptr m_statLogFlushThread;
+
+    std::atomic<int64_t> m_AMOPIn = {0};
+    std::atomic<int64_t> m_AMOPOut = {0};
 
     std::shared_ptr<std::map<GROUP_ID, NetworkStatHandler::Ptr>> m_p2pStatHandlers;
     mutable SharedMutex x_p2pStatHandlers;

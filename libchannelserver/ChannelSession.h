@@ -133,6 +133,7 @@ public:
     }
 
 private:
+    bool isAMOPMessage(Message::Ptr _request);
     void startRead();
     void onRead(const boost::system::error_code& error, size_t bytesTransferred);
 

@@ -32,11 +32,13 @@ namespace dev
 namespace stat
 {
 class NetworkStatHandler;
-}
+class ChannelNetworkStatHandler;
+}  // namespace stat
 namespace flowlimit
 {
 class RateLimiter;
 }
+
 namespace p2p
 {
 class P2PMessage;
@@ -114,6 +116,8 @@ public:
         GROUP_ID const&, std::shared_ptr<dev::flowlimit::RateLimiter>)
     {}
     virtual void removeGroupBandwidthLimiter(GROUP_ID const&) {}
+    virtual void setChannelNetworkStatHandler(std::shared_ptr<dev::stat::ChannelNetworkStatHandler>)
+    {}
 };
 
 }  // namespace p2p
