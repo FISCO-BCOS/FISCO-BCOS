@@ -8,20 +8,22 @@ else()
 endif ()
 
 set(TASSL_BUILD_COMMAND make)
-
 ExternalProject_Add(tassl
-	PREFIX ${CMAKE_SOURCE_DIR}/deps
-	DOWNLOAD_NO_PROGRESS 1
-	GIT_REPOSITORY https://github.com/jntass/TASSL.git
-	GIT_TAG ccdfc64c5f56988f76abc0390a12ed9865bc49e9
-	# GIT_SHALLOW true
-	BUILD_IN_SOURCE 1
-	CONFIGURE_COMMAND ${TASSL_CONFIG_COMMAND}
-	LOG_CONFIGURE 1
-	LOG_BUILD 1
-	LOG_INSTALL 1
-	BUILD_COMMAND ${TASSL_BUILD_COMMAND}
-	INSTALL_COMMAND ""
+        PREFIX ${CMAKE_SOURCE_DIR}/deps
+        DOWNLOAD_NAME tassl_1.0.2o-ccdfc64c.tar.gz
+        DOWNLOAD_NO_PROGRESS 1
+        URL https://github.com/jntass/TASSL/archive/ccdfc64c5f56988f76abc0390a12ed9865bc49e9.tar.gz
+        URL_HASH SHA256=534c3ba12a75e6eb87aef4b86967c55a8845edd9e22be95ded27d1abd853f160
+        # GIT_REPOSITORY https://github.com/jntass/TASSL.git
+        # GIT_TAG ccdfc64c5f56988f76abc0390a12ed9865bc49e9
+        # GIT_SHALLOW true
+        BUILD_IN_SOURCE 1
+        CONFIGURE_COMMAND ${TASSL_CONFIG_COMMAND}
+        LOG_CONFIGURE 1
+        LOG_BUILD 1
+        LOG_INSTALL 1
+        BUILD_COMMAND ${TASSL_BUILD_COMMAND}
+        INSTALL_COMMAND ""
 )
 
 ExternalProject_Get_Property(tassl SOURCE_DIR)

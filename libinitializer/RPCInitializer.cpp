@@ -242,19 +242,19 @@ dev::flowlimit::RPCQPSLimiter::Ptr RPCInitializer::createQPSLimiter(
     boost::property_tree::ptree const& _pt)
 {
     auto qpsLimiter = std::make_shared<dev::flowlimit::RPCQPSLimiter>();
-    int64_t maxQPS = _pt.get<int64_t>("flow_control.limit_req_qps", INT64_MAX);
-    // the limit_req_qps has not been setted
+    int64_t maxQPS = _pt.get<int64_t>("flow_control.limit_req", INT64_MAX);
+    // the limit_req has not been setted
     if (maxQPS == INT64_MAX)
     {
         INITIALIZER_LOG(DEBUG) << LOG_DESC(
-            "disable QPSLimit for flow_control.limit_req_qps has not been setted!");
+            "disable QPSLimit for flow_control.limit_req has not been setted!");
         return qpsLimiter;
     }
     if (maxQPS <= 0)
     {
         BOOST_THROW_EXCEPTION(
             dev::InvalidConfig() << errinfo_comment(
-                "createQPSLimiter failed, flow_control.limit_req_qps must be positive!"));
+                "createQPSLimiter failed, flow_control.limit_req must be positive!"));
     }
 
     auto maxBurstReqPercent = _pt.get<int64_t>("flow_control.qps_burst_percent", 20);
@@ -287,11 +287,10 @@ dev::flowlimit::RateLimiter::Ptr RPCInitializer::createNetworkBandwidthLimit(
     // Configured outgoing_bandwidth_limit
     if (outGoingBandwidthLimit <= (double)0 || outGoingBandwidthLimit >= (double)MAX_VALUE_IN_Mb)
     {
-        BOOST_THROW_EXCEPTION(
-            dev::InvalidConfig() << errinfo_comment(
-                "createNetworkBandwidthLimit for channel failed, "
-                "flow_control.limit_req_qps must be larger than 0 and smaller than " +
-                std::to_string(MAX_VALUE_IN_Mb)));
+        BOOST_THROW_EXCEPTION(dev::InvalidConfig() << errinfo_comment(
+                                  "createNetworkBandwidthLimit for channel failed, "
+                                  "flow_control.limit_req must be larger than 0 and smaller than " +
+                                  std::to_string(MAX_VALUE_IN_Mb)));
     }
     outGoingBandwidthLimit *= 1024 * 1024 / 8;
     auto bandwidthLimiter =
