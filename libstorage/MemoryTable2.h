@@ -30,6 +30,7 @@
 #include <tbb/concurrent_unordered_map.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
+#include <set>
 #include <type_traits>
 
 namespace dev
@@ -90,6 +91,7 @@ private:
 
     tbb::concurrent_unordered_map<std::string, Entries::Ptr> m_newEntries;
     tbb::concurrent_unordered_map<uint64_t, Entry::Ptr> m_dirty;
+    tbb::concurrent_unordered_map<std::string, std::set<uint64_t>> m_dirty_updated;
 
     std::vector<size_t> processEntries(Entries::Ptr entries, Condition::Ptr condition)
     {
