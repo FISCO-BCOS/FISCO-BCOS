@@ -636,11 +636,11 @@ void LedgerParam::initEventLogFilterManagerConfig(boost::property_tree::ptree co
 void LedgerParam::initFlowControlConfig(boost::property_tree::ptree const& _pt)
 {
     auto maxQPS =
-        _pt.get<int64_t>("flow_control.limit_req_qps", mutableFlowControlParam().maxDefaultValue);
+        _pt.get<int64_t>("flow_control.limit_req", mutableFlowControlParam().maxDefaultValue);
     if (maxQPS <= 0)
     {
-        BOOST_THROW_EXCEPTION(InvalidConfiguration()
-                              << errinfo_comment("flow_control.limit_req_qps must be positive"));
+        BOOST_THROW_EXCEPTION(
+            InvalidConfiguration() << errinfo_comment("flow_control.limit_req must be positive"));
     }
     mutableFlowControlParam().maxQPS = maxQPS;
     // set maxBurstReqPercent
