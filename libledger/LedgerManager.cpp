@@ -259,6 +259,8 @@ string LedgerManager::generateGroupConfig()
         "    db_name=\n"
         "[tx_pool]\n"
         "    limit=150000\n"
+        "    ; transaction pool memory size limit, MB\n"
+        "    memory_limit=512\n"
         "[sync]\n"
         "    ; max memory size used for block sync, must >= 32MB\n"
         "    max_block_sync_memory_size=512\n"
@@ -273,9 +275,18 @@ string LedgerManager::generateGroupConfig()
         "    gossip_interval_ms=1000\n"
         "    gossip_peers_number=3\n"
         "    ; max number of nodes that broadcast txs status to, recommended less than 5\n"
-        "    txs_max_gossip_peers_num=5\n";
-
-
+        "    txs_max_gossip_peers_num=5\n"
+        "[flow_control]\n"
+        "    ; restrict QPS of the group\n"
+        "    ;limit_req=1000\n"
+        "    ; The number of brust requests as a percentage of limit_req must be between 0 and "
+        "100\n"
+        "    ;qps_burst_percent=20\n"
+        "    ; restrict the outgoing bandwidth of the group\n"
+        "    ; Mb, can be a decimal\n"
+        "    ; when the outgoing bandwidth exceeds the limit, the block synchronization operation "
+        "will not proceed\n"
+        "    ;outgoing_bandwidth_limit=2\n";
     return configTemplate;
 }
 
