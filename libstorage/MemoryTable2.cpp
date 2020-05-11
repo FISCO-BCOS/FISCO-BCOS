@@ -102,11 +102,14 @@ Entries::Ptr MemoryTable2::selectNoLock(const std::string& key, Condition::Ptr c
             {
                 return entries;
             }
+            std::set<uint64_t> processed;
+            std::set<uint64_t> diff;
             for (size_t i = 0; i < dbEntries->size(); ++i)
             {
                 auto entryIt = m_dirty.find(dbEntries->get(i)->getID());
                 if (entryIt != m_dirty.end())
                 {
+                    processed.insert(entryIt->second->getID());
                     if ((g_BCOSConfig.version() >= V2_5_0) &&
                         (entryIt->second->getStatus() == Entry::Status::DELETED ||
                             entryIt->second->deleted()))
@@ -118,6 +121,18 @@ Entries::Ptr MemoryTable2::selectNoLock(const std::string& key, Condition::Ptr c
                 else
                 {
                     entries->addEntry(dbEntries->get(i));
+                }
+            }
+            if (g_BCOSConfig.version() >= V2_5_0)
+            {
+                std::set_difference(m_dirty_updated[key].begin(), m_dirty_updated[key].end(),
+                    processed.begin(), processed.end(), std::inserter(diff, diff.begin()));
+                for (auto id : diff)
+                {
+                    if (condition->process(m_dirty[id]))
+                    {
+                        entries->addEntry(m_dirty[id]);
+                    }
                 }
             }
         }
@@ -178,6 +193,7 @@ int MemoryTable2::update(
             if (updateEntry->getID() != 0 && m_dirty.find(updateEntry->getID()) == m_dirty.end())
             {
                 m_dirty.insert(std::make_pair(updateEntry->getID(), updateEntry));
+                m_dirty_updated[key].insert(updateEntry->getID());
             }
 
             for (auto& it : *(entry))
@@ -541,9 +557,10 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
                 }
                 else
                 {
-                    // in previous version(<= 2.4.0), we use sha256(...) to calculate hash of the data,
-                    // for now, to keep consistent with transction's implementation, we decide to use
-                    // sha3(...) to calculate hash of the data. This `else` branch is just for compatibility.
+                    // in previous version(<= 2.4.0), we use sha256(...) to calculate hash of the
+                    // data, for now, to keep consistent with transction's implementation, we decide
+                    // to use sha3(...) to calculate hash of the data. This `else` branch is just
+                    // for compatibility.
                     m_hash = dev::sha256(bR);
                 }
             }

@@ -255,7 +255,7 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
     m_tableFactorySavepoint = m_envInfo.precompiledEngine()->getMemoryTableFactory()->savepoint();
     m_gas = _p.gas;
 
-    if (m_t && m_s->frozen(_origin))
+    if (g_BCOSConfig.version() >= V2_5_0 && m_t && m_s->frozen(_origin))
     {
         LOG(DEBUG) << LOG_DESC("execute transaction failed for ContractFrozen")
                    << LOG_KV("account", _origin);

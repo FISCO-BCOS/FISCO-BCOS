@@ -162,7 +162,7 @@ PrecompiledExecResult::Ptr ChainGovernancePrecompiled::call(
             double threshold = boost::lexical_cast<double>(weight) / 100;
             auto committeeTable = getCommitteeTable(_context);
             auto condition = committeeTable->newCondition();
-            condition->EQ(CGP_COMMITTEE_TABLE_VALUE, boost::lexical_cast<string>(threshold));
+            condition->EQ(CGP_COMMITTEE_TABLE_VALUE, to_string(threshold));
             auto entries = committeeTable->select(CGP_AUTH_THRESHOLD, condition);
             if (entries->size() != 0u)
             {
@@ -174,10 +174,10 @@ PrecompiledExecResult::Ptr ChainGovernancePrecompiled::call(
                 break;
             }
             result = verifyAndRecord(_context, Operation::UpdateThreshold,
-                CGP_UPDATE_AUTH_THRESHOLD, boost::lexical_cast<string>(threshold), _origin.hex());
+                CGP_UPDATE_AUTH_THRESHOLD, to_string(threshold), _origin.hex());
             CHAIN_GOVERNANCE_LOG(INFO)
                 << LOG_DESC("updateThreshold") << LOG_KV("origin", _origin.hex())
-                << LOG_KV("threshold", threshold) << LOG_KV("return", result);
+                << LOG_KV("threshold", to_string(threshold)) << LOG_KV("return", result);
         } while (0);
         getErrorCodeOut(callResult->mutableExecResult(), result);
     }
@@ -351,8 +351,8 @@ int ChainGovernancePrecompiled::updateCommitteeMemberWeight(
             << LOG_KV("weight", _weight) << LOG_KV("return", result);
         return CODE_CURRENT_VALUE_IS_EXPECTED_VALUE;
     }
-    result = verifyAndRecord(_context, Operation::UpdateCommitteeMemberWeight, _member,
-        boost::lexical_cast<string>(_weight), _origin.hex());
+    result = verifyAndRecord(
+        _context, Operation::UpdateCommitteeMemberWeight, _member, _weight, _origin.hex());
     CHAIN_GOVERNANCE_LOG(INFO) << LOG_DESC("updateMemberWeight") << LOG_KV("origin", _origin.hex())
                                << LOG_KV("member", _member) << LOG_KV("return", result);
     return result;
@@ -485,6 +485,8 @@ int ChainGovernancePrecompiled::verifyAndRecord(
         {  // duplicate vote, update
             committeeTable->update(
                 key, entry, condition, make_shared<AccessOptions>(Address(), false));
+            CHAIN_GOVERNANCE_LOG(INFO)
+                << LOG_DESC("dup vote recorded") << LOG_KV("key", key) << LOG_KV("value", value);
         }
         else
         {  // new vote
@@ -539,9 +541,9 @@ int ChainGovernancePrecompiled::verifyAndRecord(
             threshold =
                 boost::lexical_cast<double>(thresholdEntry->getField(CGP_COMMITTEE_TABLE_VALUE));
         }
-        CHAIN_GOVERNANCE_LOG(INFO)
-            << LOG_DESC("validate votes") << LOG_KV("key", key) << LOG_KV("value", value)
-            << LOG_KV("vote", totalVotes / total) << LOG_KV("threshold", threshold);
+        CHAIN_GOVERNANCE_LOG(INFO) << LOG_DESC("validate votes") << LOG_KV("key", key)
+                                   << LOG_KV("value", value) << LOG_KV("Votes", totalVotes)
+                                   << LOG_KV("total", total) << LOG_KV("threshold", threshold);
         return totalVotes / total > threshold;
     };
     auto deleteUsedVotes = [committeeTable](const string& key, const string& value) {
@@ -623,7 +625,7 @@ int ChainGovernancePrecompiled::verifyAndRecord(
         auto& value = _value;
         recordVote(key, value, _origin);
         if (validate(key, value, currentBlockNumber))
-        {  // write member weight
+        {  // write new Threshold
             auto entry = committeeTable->newEntry();
             entry->setField(CGP_COMMITTEE_TABLE_VALUE, _value);
             entry->setField(CGP_COMMITTEE_TABLE_ORIGIN, _origin);
