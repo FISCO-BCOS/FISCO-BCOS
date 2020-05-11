@@ -21,6 +21,7 @@
  */
 
 #include "VM.h"
+#include <libconfig/GlobalConfigure.h>
 
 namespace dev
 {
@@ -231,7 +232,11 @@ bool VM::caseCallSetup(evmc_message& o_msg, bytesRef& o_output)
     bool const haveValueArg = m_OP == Instruction::CALL || m_OP == Instruction::CALLCODE;
 
     evmc_address destination = toEvmC(asAddress(m_SP[1]));
-    int destinationExists = m_context->fn_table->account_exists(m_context, &destination);
+    int destinationExists = 1;
+    if (g_BCOSConfig.version() < V2_5_0)
+    {
+        destinationExists = m_context->fn_table->account_exists(m_context, &destination);
+    }
 
     if (m_OP == Instruction::CALL && !destinationExists)
     {

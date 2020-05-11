@@ -140,7 +140,7 @@ BOOST_AUTO_TEST_CASE(testRawPrepareTreeBroadcast)
 
     std::shared_ptr<P2PMessage> receivedP2pMsg = nullptr;
     // wait broadcast enqueue finished
-    int count = 5000;
+    int count = 10000;
     while (!receivedP2pMsg && --count > 0)
     {
         receivedP2pMsg = leaderService->getAsyncSendMessageByNodeID(
@@ -190,7 +190,7 @@ BOOST_AUTO_TEST_CASE(testRawPrepareTreeBroadcast)
         sealerSet, leaderRPBFT->fakePBFTSuite()->consensus()->nodeIdx());
     BOOST_CHECK(selectedNodes->size() == 3);
     receivedP2pMsg = nullptr;
-    count = 5000;
+    count = 10000;
     while (!receivedP2pMsg && --count > 0)
     {
         receivedP2pMsg = leaderService->getAsyncSendMessageByNodeID((*selectedNodes)[0]);
@@ -221,7 +221,7 @@ BOOST_AUTO_TEST_CASE(testRawPrepareTreeBroadcast)
     else
     {
         receivedP2pMsg = nullptr;
-        count = 5000;
+        count = 10000;
         while (!receivedP2pMsg && --count > 0)
         {
             receivedP2pMsg = followService->getAsyncSendMessageByNodeID((*selectedNodes)[0]);
@@ -287,7 +287,7 @@ BOOST_AUTO_TEST_CASE(testRawPrepareTreeBroadcast)
         leaderSession2, receivedP2pMsg);
     // wait for request
     std::shared_ptr<P2PMessage> receivedP2pMsg2 = nullptr;
-    count = 5000;
+    count = 10000;
     while (!receivedP2pMsg2 && --count > 0)
     {
         receivedP2pMsg2 = followService->getAsyncSendMessageByNodeID(
@@ -307,7 +307,7 @@ BOOST_AUTO_TEST_CASE(testRawPrepareTreeBroadcast)
         networkException, leaderSession2, receivedP2pMsg);
 
     receivedP2pMsg = nullptr;
-    count = 5000;
+    count = 10000;
     while (!receivedP2pMsg && --count > 0)
     {
         receivedP2pMsg = followService->getAsyncSendMessageByNodeID(
@@ -324,7 +324,7 @@ BOOST_AUTO_TEST_CASE(testRawPrepareTreeBroadcast)
     leaderRPBFT->fakePBFTSuite()->consensus()->wrapperHandleP2PMessage(
         networkException, followSession, receivedP2pMsg);
     receivedP2pMsg = nullptr;
-    count = 5000;
+    count = 10000;
     while (!receivedP2pMsg && --count > 0)
     {
         receivedP2pMsg = leaderService->getAsyncSendMessageByNodeID(

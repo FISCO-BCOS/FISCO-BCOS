@@ -58,9 +58,6 @@ std::string TableFactoryPrecompiled::toString()
 PrecompiledExecResult::Ptr TableFactoryPrecompiled::call(ExecutiveContext::Ptr context,
     bytesConstRef param, Address const& origin, Address const& sender)
 {
-    STORAGE_LOG(TRACE) << LOG_BADGE("TableFactoryPrecompiled") << LOG_DESC("call")
-                       << LOG_KV("param", toHex(param));
-
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
 

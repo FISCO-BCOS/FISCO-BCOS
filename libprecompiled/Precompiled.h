@@ -98,7 +98,8 @@ protected:
 
     PrecompiledExecResultFactory::Ptr m_precompiledExecResultFactory;
 };
+// for UT
+void clearName2SelectCache();
 
 }  // namespace precompiled
-
 }  // namespace dev
