@@ -32,6 +32,7 @@
 #include <boost/algorithm/string/replace.hpp>
 #include <iostream>
 
+using namespace std;
 using namespace dev;
 using namespace dev::initializer;
 
@@ -216,10 +217,9 @@ struct ConfigResult
     std::shared_ptr<boost::asio::ssl::context> sslContext;
 };
 
-ConfigResult initOriginConfig()
+ConfigResult initOriginConfig(const string& _dataPath)
 {
-    std::string dataPath = "conf/";
-    std::string originDataPath = dataPath + "/origin_cert/";
+    std::string originDataPath = _dataPath + "/origin_cert/";
     std::string key = originDataPath + "node.key";
     std::string cert = originDataPath + "node.crt";
     std::string caCert = originDataPath + "ca.crt";
@@ -347,15 +347,20 @@ ConfigResult initOriginConfig()
     return ConfigResult{keyPair, sslContext};
 }
 
-ConfigResult initGmConfig()
+ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
 {
-    std::string dataPath = "conf/";
-    std::string key = dataPath + "gmnode.key";
-    std::string enKey = dataPath + "gmennode.key";
-    std::string enCert = dataPath + "gmennode.crt";
-    std::string cert = dataPath + "gmnode.crt";
-    std::string caCert = dataPath + "gmca.crt";
-    std::string caPath = dataPath;
+    std::string sectionName = "secure";
+    if (pt.get_child_optional("network_security"))
+    {
+        sectionName = "network_security";
+    }
+    std::string dataPath = pt.get<std::string>(sectionName + ".data_path", "./conf/");
+    std::string key = dataPath + "/" + pt.get<std::string>(sectionName + ".key", "gmnode.key");
+    std::string cert = dataPath + "/" + pt.get<std::string>(sectionName + ".cert", "gmnode.crt");
+    std::string caCert = dataPath + "/" + pt.get<std::string>(sectionName + ".ca_cert", "gmca.crt");
+    std::string caPath = dataPath + "/" + pt.get<std::string>(sectionName + ".ca_path", "");
+    std::string enKey = dataPath + pt.get<std::string>(sectionName + ".en_key", "gmennode.key");
+    std::string enCert = dataPath + pt.get<std::string>(sectionName + ".en_cert", "gmennode.crt");
     bytes keyContent;
     if (!key.empty())
     {
@@ -487,17 +492,25 @@ ConfigResult initGmConfig()
     return ConfigResult{keyPair, sslContext};
 }
 
-void SecureInitializer::initConfigWithSMCrypto()
+void SecureInitializer::initConfigWithSMCrypto(const boost::property_tree::ptree& pt)
 {
     try
     {
-        ConfigResult gmConfig = initGmConfig();
+        ConfigResult gmConfig = initGmConfig(pt);
         m_key = gmConfig.keyPair;
         m_sslContexts[Usage::Default] = gmConfig.sslContext;
         m_sslContexts[Usage::ForP2P] = gmConfig.sslContext;
-
-        ConfigResult originConfig = initOriginConfig();
-        m_sslContexts[Usage::ForRPC] = originConfig.sslContext;
+        bool smCryptoChannel = pt.get<bool>("chain.sm_crypto_channel", false);
+        if (smCryptoChannel)
+        {
+            m_sslContexts[Usage::ForRPC] = gmConfig.sslContext;
+        }
+        else
+        {
+            std::string dataPath = pt.get<std::string>("network_security.data_path", "./conf/");
+            ConfigResult originConfig = initOriginConfig(dataPath);
+            m_sslContexts[Usage::ForRPC] = originConfig.sslContext;
+        }
     }
     catch (Exception& e)
     {
@@ -530,7 +543,7 @@ void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
 {
     if (g_BCOSConfig.SMCrypto())
     {
-        initConfigWithSMCrypto();
+        initConfigWithSMCrypto(pt);
     }
     else
     {

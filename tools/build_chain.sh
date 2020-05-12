@@ -2,10 +2,10 @@
 
 set -e
 
-# default value 
+# default value
 ca_path= #CA key
 gmca_path= #gm CA key
-node_num=1 
+node_num=1
 ip_file=
 ip_param=
 use_ip_param=
@@ -15,13 +15,14 @@ ports_array=
 ip_array=
 output_dir=nodes
 port_start=(30300 20200 8545)
-state_type=storage 
+state_type=storage
 storage_type=rocksdb
 supported_storage=(rocksdb mysql external scalable)
 conf_path="conf"
 bin_path=
 make_tar=
 binary_log="false"
+sm_crypto_channel="false"
 log_level="info"
 logfile=${PWD}/build.log
 listen_ip="127.0.0.1"
@@ -72,13 +73,14 @@ Usage:
     -t <Cert config file>               Default auto generate
     -k <The path of ca root>            Default auto generate, the ca.crt and ca.key must in the path, if use intermediate the root.crt must in the path
     -K <The path of sm crypto ca root>  Default auto generate, the gmca.crt and gmca.key must in the path, if use intermediate the gmroot.crt must in the path
+    -G <channel use sm crypto ssl>      Default false, only works for guomi mode
     -X <Certificate expiration time>    Default 36500 days
     -T <Enable debug log>               Default off. If set -T, enable debug log
     -S <Enable statistics>              Default off. If set -S, enable statistics
     -F <Disable log auto flush>         Default on. If set -F, disable log auto flush
     -E <Enable free_storage_evm>        Default off. If set -E, enable free_storage_evm
     -h Help
-e.g 
+e.g
     $0 -l "127.0.0.1:4"
 EOF
 
@@ -127,7 +129,7 @@ exit_with_clean()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:t:v:s:C:c:k:K:X:izhgTNFSdEDZ" option;do
+while getopts "f:l:o:p:e:t:v:s:C:c:k:K:X:izhgGTNFSdEDZ" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -182,6 +184,7 @@ while getopts "f:l:o:p:e:t:v:s:C:c:k:K:X:izhgTNFSdEDZ" option;do
         fi
     ;;
     X) days="$OPTARG";;
+    G) sm_crypto_channel="true";;
     T) log_level="debug";;
     F) auto_flush="false";;
     N) no_agency="true";;
@@ -200,6 +203,12 @@ done
 if [ "${storage_type}" == "scalable" ]; then
     echo "use scalable storage, so turn on binary log"
     binary_log="true"
+fi
+# sm_crypto_channel only works in guomi mode
+if [[ -n "${guomi_mode}" && "${sm_crypto_channel}" == "true" ]];then
+    sm_crypto_channel="true"
+else
+    sm_crypto_channel="false"
 fi
 }
 
@@ -289,11 +298,14 @@ gen_chain_cert() {
     echo "$path --- $name"
     dir_must_not_exists "$path"
     check_name chain "$name"
-    
+
     chaindir=$path
     mkdir -p $chaindir
-    openssl genrsa -out "$chaindir/ca.key" 2048
+    # openssl genrsa -out "$chaindir/ca.key" 2048
+    openssl ecparam -out "$chaindir/secp256k1.param" -name secp256k1 2> /dev/null
+    openssl genpkey -paramfile "$chaindir/secp256k1.param" -out "$chaindir/ca.key" 2> /dev/null
     openssl req -new -x509 -days "${days}" -subj "/CN=$name/O=fisco-bcos/OU=chain" -key "$chaindir/ca.key" -out "$chaindir/ca.crt"
+    rm -f "$chaindir/secp256k1.param"
 }
 
 gen_agency_cert() {
@@ -308,13 +320,15 @@ gen_agency_cert() {
     dir_must_not_exists "$agencydir"
     mkdir -p $agencydir
 
-    openssl genrsa -out "$agencydir/agency.key" 2048 2> /dev/null
+    # openssl genrsa -out "$agencydir/agency.key" 2048 2> /dev/null
+    openssl ecparam -out "$agencydir/secp256k1.param" -name secp256k1 2> /dev/null
+    openssl genpkey -paramfile "$agencydir/secp256k1.param" -out "$agencydir/agency.key" 2> /dev/null
     openssl req -new -sha256 -subj "/CN=$name/O=fisco-bcos/OU=agency" -key "$agencydir/agency.key" -config "$chain/cert.cnf" -out "$agencydir/agency.csr" 2> /dev/null
     openssl x509 -req -days 3650 -sha256 -CA "$chain/ca.crt" -CAkey "$chain/ca.key" -CAcreateserial\
         -in "$agencydir/agency.csr" -out "$agencydir/agency.crt"  -extensions v4_req -extfile "$chain/cert.cnf" 2> /dev/null
     # cat "$chain/ca.crt" >> "$agencydir/agency.crt"
     cp $chain/ca.crt $chain/cert.cnf $agencydir/
-    rm -f $agencydir/agency.csr
+    rm -f "$agencydir/agency.csr" "$agencydir/secp256k1.param"
 
     echo "build $name cert successful!"
 }
@@ -324,8 +338,8 @@ gen_cert_secp256k1() {
     certpath="$2"
     name="$3"
     type="$4"
-    openssl ecparam -out "$certpath/${type}.param" -name secp256k1 2> /dev/null
-    openssl genpkey -paramfile "$certpath/${type}.param" -out "$certpath/${type}.key" 2> /dev/null
+    openssl ecparam -out "$certpath/secp256k1.param" -name secp256k1 2> /dev/null
+    openssl genpkey -paramfile "$certpath/secp256k1.param" -out "$certpath/${type}.key" 2> /dev/null
     openssl pkey -in "$certpath/${type}.key" -pubout -out "$certpath/${type}.pubkey" 2> /dev/null
     openssl req -new -sha256 -subj "/CN=${name}/O=fisco-bcos/OU=${type}" -key "$certpath/${type}.key" -config "$agpath/cert.cnf" -out "$certpath/${type}.csr" 2> /dev/null
     if [ -n "${no_agency}" ];then
@@ -346,7 +360,7 @@ gen_cert_secp256k1() {
         cp "${agpath}/../ca.crt" "$certpath/"
     fi
 
-    rm -f $certpath/${type}.csr $certpath/${type}.pubkey $certpath/${type}.param
+    rm -f "$certpath/${type}.csr" "$certpath/${type}.pubkey" "$certpath/secp256k1.param"
 }
 
 gen_cert() {
@@ -362,7 +376,7 @@ gen_cert() {
     dir_must_exists "$agpath"
     file_must_exists "$agpath/agency.key"
     check_name agency "$agency"
-    dir_must_not_exists "$ndpath"	
+    dir_must_not_exists "$ndpath"
     check_name node "$node"
 
     mkdir -p $ndpath
@@ -381,7 +395,7 @@ gen_cert() {
 generate_gmsm2_param()
 {
     local output=$1
-    cat << EOF > ${output} 
+    cat << EOF > "${output}"
 -----BEGIN EC PARAMETERS-----
 BggqgRzPVQGCLQ==
 -----END EC PARAMETERS-----
@@ -498,11 +512,13 @@ generate_config_ini()
     fi
 
     sm_crypto="false"
+    local prefix=""
     if [ -n "${guomi_mode}" ]; then
         sm_crypto="true"
+        prefix="gm"
     fi
 
-    cat << EOF > ${output}
+    cat << EOF > "${output}"
 [rpc]
     channel_listen_ip=0.0.0.0
     jsonrpc_listen_ip=${listen_ip}
@@ -515,17 +531,27 @@ generate_config_ini()
     ; nodes to connect
     $ip_list
 
-[certificate_blacklist]		
-    ; crl.0 should be nodeid, nodeid's length is 128 
+[certificate_blacklist]
+    ; crl.0 should be nodeid, nodeid's length is 128
     ;crl.0=
 
-[certificate_whitelist]		
-    ; cal.0 should be nodeid, nodeid's length is 128 
+[certificate_whitelist]
+    ; cal.0 should be nodeid, nodeid's length is 128
     ;cal.0=
 
 [group]
     group_data_path=data/
     group_config_path=${conf_path}/
+
+[network_security]
+    ; directory the certificates located in
+    data_path=${conf_path}/
+    ; the node private key file
+    key=${prefix}node.key
+    ; the node certificate file
+    cert=${prefix}node.crt
+    ; the ca certificate file
+    ca_cert=${prefix}ca.crt
 
 [storage_security]
     enable=false
@@ -537,6 +563,7 @@ generate_config_ini()
     id=${chain_id}
     ; use SM crypto or not
     sm_crypto=${sm_crypto}
+    sm_crypto_channel=${sm_crypto_channel}
 
 [compatibility]
     ; supported_version should nerver be changed
@@ -549,7 +576,7 @@ generate_config_ini()
     enable_statistic=${enable_statistic}
     ; network statistics interval, unit is second, default is 60s
     stat_flush_interval=60
-    ; info debug trace 
+    ; info debug trace
     level=${log_level}
     ; MB
     max_log_file_size=200
@@ -566,21 +593,6 @@ generate_config_ini()
     ; when the outgoing bandwidth exceeds the limit, the block synchronization operation will not proceed
     ;outgoing_bandwidth_limit=2
 EOF
-
-if [ -z "${guomi_mode}" ]; then
-    cat << EOF >> "${output}"
-
-[network_security]
-    ; directory the certificates located in
-    data_path=${conf_path}/
-    ; the node private key file
-    key=node.key
-    ; the node certificate file
-    cert=node.crt
-    ; the ca certificate file
-    ca_cert=ca.crt
-EOF
-fi
     printf "  [%d] p2p:%-5d  channel:%-5d  jsonrpc:%-5d\n" "${node_index}" $(( offset + port_array[0] )) $(( offset + port_array[1] )) $(( offset + port_array[2] )) >>"${logfile}"
 }
 
@@ -590,7 +602,7 @@ generate_group_genesis()
     local index=$2
     local node_list=$3
     local sealer_size=$4
-    cat << EOF > ${output} 
+    cat << EOF > "${output}"
 [consensus]
     ; consensus algorithm now support PBFT(consensus_type=pbft), Raft(consensus_type=raft)
     ; and rpbft(consensus_type=rpbft)
@@ -620,7 +632,7 @@ EOF
 function generate_group_ini()
 {
     local output="${1}"
-    cat << EOF > ${output}
+    cat << EOF > "${output}"
 [consensus]
     ; the ttl for broadcasting pbft message
     ttl=2
@@ -677,7 +689,7 @@ function generate_group_ini()
     ; only enabled when sync_by_tree is true
     gossip_interval_ms=1000
     gossip_peers_number=3
-    ; max number of nodes that broadcast txs status to, recommended less than 5 
+    ; max number of nodes that broadcast txs status to, recommended less than 5
     txs_max_gossip_peers_num=5
 [flow_control]
     ; restrict QPS of the group
@@ -694,7 +706,7 @@ EOF
 generate_cert_conf()
 {
     local output=$1
-    cat << EOF > ${output} 
+    cat << EOF > "${output}"
 [ca]
 default_ca=default_ca
 [default_ca]
@@ -752,7 +764,7 @@ EOF
 generate_cert_conf_gm()
 {
     local output=$1
-    cat << EOF > ${output} 
+    cat << EOF > "${output}"
 HOME			= .
 RANDFILE		= $ENV::HOME/.rnd
 oid_section		= new_oids
@@ -903,7 +915,7 @@ node_pid=${ps_cmd}
 if [ -n "\${node_pid}" ];then
     echo " \${node} is running, ${pid} is \$node_pid."
     exit 0
-else 
+else
     ${start_cmd}
     sleep 1.5
 fi
@@ -970,7 +982,7 @@ if [ -n "\${node_pid}" ];then
     done
     touch config.ini.append_group
     exit 0
-else 
+else
     echo "\${node} is not running, use start.sh to start all group directlly."
 fi
 EOF
@@ -986,7 +998,7 @@ check_cal_line()
     fi
 }
 
-check_cal_lines() 
+check_cal_lines()
 {
     # print Illegal line
     config_file=\$1
@@ -996,7 +1008,7 @@ check_cal_lines()
             LOG_ERROR "Illigal whitelist line: \$line"
             error="true"
         fi
-    done 
+    done
 
     if [[ "true" == \$error ]]; then
         LOG_ERROR "[certificate_whitelist] reload error for illigal lines"
@@ -1006,7 +1018,7 @@ check_cal_lines()
 
 check_duplicate_key()
 {
-    config_file=\$1;  
+    config_file=\$1;
     dup_key=\$(grep -v '^[ ]*[;]' \$config_file |grep "cal\."|awk -F"=" '{print \$1}'|awk '{print \$1}' |sort |uniq -d)
 
     if [[ "" != \$dup_key ]]; then
@@ -1034,7 +1046,7 @@ if [ -n "\${node_pid}" ];then
     echo "\${node} is trying to reset certificate whitelist. Check log for more information."
     touch config.ini.reset_certificate_whitelist
     exit 0
-else 
+else
     echo "\${node} is not running, use start.sh to start and enable whitelist directlly."
 fi
 EOF
@@ -1184,7 +1196,7 @@ while getopts "v:f" option;do
     v) version="\$OPTARG";;
     f) config="true";;
     esac
-done    
+done
 
 if [[ -z "\${version}" ]];then
     version=\$(curl -s https://api.github.com/repos/FISCO-BCOS/console/releases | grep "tag_name" | sort -u | tail -n 1 | cut -d \" -f 4 | sed "s/^[vV]//")
@@ -1203,7 +1215,7 @@ else
 fi
 tar -zxf \${package_name} && cd console && chmod +x *.sh
 
-if [[ -n "\${config}" ]];then 
+if [[ -n "\${config}" ]];then
     cp conf/applicationContext-sample.xml conf/applicationContext.xml
     cp ../sdk/* conf/
     channel_listen_port=\$(cat "\${SHELL_FOLDER}"/node*/config.ini | grep channel_listen_port | cut -d = -f 2 | head -n 1)
@@ -1269,7 +1281,7 @@ send_many_tx()
     for j in \$(seq 1 \$1)
     do
         echo 'Send transaction: ' \$j
-        send_a_tx \${ip_port} 
+        send_a_tx \${ip_port}
     done
 }
 getNodeVersion
@@ -1288,25 +1300,25 @@ generate_server_scripts()
     # echo "if echo \${ip_array[@]} | grep -w \"${ip}\" &>/dev/null; then echo \"start node_${ip}_${i}\" && bash \${SHELL_FOLDER}/node_${ip}_${i}/start.sh; fi" >> "${output_dir}/start_all.sh"
     cat << EOF >> "$output/start_all.sh"
 dirs=(\$(ls -l \${SHELL_FOLDER} | awk '/^d/ {print \$NF}'))
-for directory in \${dirs[*]} 
-do  
-    if [[ -f "\${SHELL_FOLDER}/\${directory}/config.ini" && -f "\${SHELL_FOLDER}/\${directory}/start.sh" ]];then  
+for directory in \${dirs[*]}
+do
+    if [[ -f "\${SHELL_FOLDER}/\${directory}/config.ini" && -f "\${SHELL_FOLDER}/\${directory}/start.sh" ]];then
         echo "try to start \${directory}"
         bash \${SHELL_FOLDER}/\${directory}/start.sh &
-    fi  
-done  
+    fi
+done
 wait
 EOF
     generate_script_template "$output/stop_all.sh"
     cat << EOF >> "$output/stop_all.sh"
 dirs=(\$(ls -l \${SHELL_FOLDER} | awk '/^d/ {print \$NF}'))
-for directory in \${dirs[*]}  
-do  
-    if [[ -d "\${SHELL_FOLDER}/\${directory}" && -f "\${SHELL_FOLDER}/\${directory}/stop.sh" ]];then  
+for directory in \${dirs[*]}
+do
+    if [[ -d "\${SHELL_FOLDER}/\${directory}" && -f "\${SHELL_FOLDER}/\${directory}/stop.sh" ]];then
         echo "try to stop \${directory}"
         bash \${SHELL_FOLDER}/\${directory}/stop.sh &
-    fi  
-done  
+    fi
+done
 wait
 EOF
 }
@@ -1333,17 +1345,17 @@ download_bin()
     bin_path=${output_dir}/${bcos_bin_name}
     package_name="fisco-bcos.tar.gz"
     if [ -n "${macOS}" ];then
-        if [ -n "${guomi_mode}" ];then 
+        if [ -n "${guomi_mode}" ];then
             package_name="fisco-bcos-macOS-gm.tar.gz"
         else
             package_name="fisco-bcos-macOS.tar.gz"
         fi
-    elif [ -n "${guomi_mode}" ];then 
+    elif [ -n "${guomi_mode}" ];then
         package_name="fisco-bcos-gm.tar.gz";
     fi
 
     Download_Link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${compatibility_version}/${package_name}"
-    LOG_INFO "Downloading fisco-bcos binary from ${Download_Link} ..." 
+    LOG_INFO "Downloading fisco-bcos binary from ${Download_Link} ..."
     if [ $(curl -IL -o /dev/null -s -w %{http_code}  ${cdn_link_header}/v${compatibility_version}/${package_name}) == 200 ];then
         curl -LO ${Download_Link} --speed-time 20 --speed-limit 102400 -m ${download_timeout} || {
             LOG_INFO "Download speed is too low, try ${cdn_link_header}/v${compatibility_version}/${package_name}"
@@ -1352,7 +1364,7 @@ download_bin()
     else
         curl -LO ${Download_Link}
     fi
-    if [[ $(ls -al . | grep tar.gz | awk '{print $5}') < 1048576 ]];then 
+    if [[ $(ls -al . | grep tar.gz | awk '{print $5}') -lt 1048576 ]];then
         exit_with_clean "Download fisco-bcos failed, please try again. Or download and extract it manually from ${Download_Link} and use -e option."
     fi
     tar -zxf ${package_name} && mv fisco-bcos ${bin_path} && rm ${package_name}
@@ -1374,9 +1386,9 @@ prepare_ca(){
     if [ -z "${CertConfig}" ] || [ ! -e "${CertConfig}" ];then
         # CertConfig="${output_dir}/cert.cnf"
         generate_cert_conf "cert.cnf"
-    else 
+    else
         cp "${CertConfig}" .
-    fi  
+    fi
     dir_must_not_exists "${output_dir}/chain"
     if [ -z "$ca_path" ]; then
         echo "Generating CA key..."
@@ -1394,7 +1406,7 @@ prepare_ca(){
     mv cert.cnf "${output_dir}/cert/"
     if [ "${use_ip_param}" == "false" ];then
         for agency_name in ${agency_array[*]};do
-            if [ ! -d "${output_dir}/cert/${agency_name}" ];then 
+            if [ ! -d "${output_dir}/cert/${agency_name}" ];then
                 gen_agency_cert "${output_dir}/cert" "${output_dir}/cert/${agency_name}" >>"${logfile}" 2>&1
             fi
         done
@@ -1425,7 +1437,7 @@ prepare_ca(){
         fi
         if [ "${use_ip_param}" == "false" ];then
             for agency_name in ${agency_array[*]};do
-                if [ ! -d "${output_dir}/gmcert/${agency_name}" ];then 
+                if [ ! -d "${output_dir}/gmcert/${agency_name}" ];then
                     gen_agency_cert_gm "${output_dir}/gmcert" "${output_dir}/gmcert/${agency_name}" >"${logfile}" 2>&1
                 fi
             done
@@ -1442,11 +1454,11 @@ output_dir="$(pwd)/${output_dir}"
 if [ "${use_ip_param}" == "true" ];then
     ip_array=(${ip_param//,/ })
 elif [ "${use_ip_param}" == "false" ];then
-    if ! parse_ip_config $ip_file ;then 
+    if ! parse_ip_config "$ip_file" ;then
         exit_with_clean "Parse $ip_file error!"
     fi
-else 
-    help 
+else
+    help
 fi
 
 
@@ -1509,13 +1521,20 @@ for line in ${ip_array[*]};do
         # FIXME: delete the upside unbelievable ugliest operation in future
         rm node.nodeid
         cd "${output_dir}"
+        if [ -n "${guomi_mode}" ];then
+            mkdir -p "${sdk_path}/gm"
+            gen_node_cert_with_extensions_gm "${output_dir}/gmcert/${agency_array[${server_count}]}" "${sdk_path}/gm" "sdk" sdk v3_req
+            if [ -z "${no_agency}" ];then cat "${output_dir}/gmcert/${agency_array[${server_count}]}/gmagency.crt" >> "${sdk_path}/gm/gmsdk.crt";fi
+            cat "${output_dir}/gmcert/${agency_array[${server_count}]}/../gmca.crt" >> "${sdk_path}/gm/gmsdk.crt"
+            gen_node_cert_with_extensions_gm "${output_dir}/gmcert/${agency_array[${server_count}]}" "${sdk_path}/gm" "sdk" ensdk v3enc_req
+        fi
     fi
     for ((i=0;i<num;++i));do
         echo "Processing IP:${ip} ID:${i} node's key" >>"${logfile}"
         local node_count="$(get_value ${ip//./}_count)"
         local node_dir="${output_dir}/${ip}/node${node_count}"
         [ -d "${node_dir}" ] && exit_with_clean "${node_dir} exist! Please delete!"
-        
+
         while :
         do
             gen_cert "${output_dir}/cert/${agency_array[${server_count}]}" "${node_dir}" "node"
@@ -1568,7 +1587,7 @@ for line in ${ip_array[*]};do
         fi
         local node_ports=
         read -r -a node_ports <<< "${port_start[*]}"
-        if [ -n "${ports_array[server_count]}" ];then 
+        if [ -n "${ports_array[server_count]}" ];then
             read -r -a node_ports <<< "${ports_array[server_count]//,/ }"
             echo "node_ports ${node_ports[*]}" >>"${logfile}"
             [ "${i}" == "0" ] && { set_value "${ip//./}_port_offset" 0; }
@@ -1580,9 +1599,9 @@ for line in ${ip_array[*]};do
         ((++count))
     done
     ((++server_count))
-done 
+done
 
-# clean 
+# clean
 for line in ${ip_array[*]};do
     ip=${line%:*}
     set_value ${ip//./}_count 0
@@ -1614,7 +1633,7 @@ for line in ${ip_array[*]};do
             generate_group_ini "$node_dir/${conf_path}/group.1.ini"
         fi
         generate_node_scripts "${node_dir}"
-        if [[ -n "${deploy_mode}" ]];then 
+        if [[ -n "${deploy_mode}" ]];then
             if [ -z ${docker_mode} ];then cp "$bin_path" "${node_dir}/fisco-bcos"; fi
             p2p_port=$(grep listen_port < "${node_dir}"/config.ini | grep -v _listen_port | cut -d = -f 2)
             mv "${node_dir}" "${output_dir}/${ip}/node_${ip}_${p2p_port}"
@@ -1627,9 +1646,9 @@ for line in ${ip_array[*]};do
     if [[ -z "${deploy_mode}" && -z "${docker_mode}" ]];then cp "$bin_path" "${output_dir}/${ip}/fisco-bcos"; fi
     if [ -n "$make_tar" ];then cd ${output_dir} && tar zcf "${ip}.tar.gz" "${ip}" && cd ${current_dir};fi
     ((++server_count))
-done 
+done
 rm "${logfile}"
-if [ -f "${output_dir}/${bcos_bin_name}" ];then rm ${output_dir}/${bcos_bin_name};fi 
+if [ -f "${output_dir}/${bcos_bin_name}" ];then rm "${output_dir}/${bcos_bin_name}";fi
 if [ "${use_ip_param}" == "false" ];then
 echo "=============================================================="
     for l in $(seq 0 ${#groups_count[@]});do
