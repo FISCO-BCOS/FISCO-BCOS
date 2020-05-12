@@ -110,7 +110,7 @@ jobs:
   build_test_guomi:
     working_directory: /FISCO-BCOS-GM
     docker:
-        - image: centos:7
+      - image: centos:7
     steps:
       - run:
           name: Setup dependencies
@@ -178,38 +178,6 @@ jobs:
           path: /FISCO-BCOS/build/bin/fisco-bcos-mini.tar.gz
           destination: fisco-bcos-mini.tar.gz
 
-  build_guomi:
-    working_directory: /FISCO-BCOS-GM
-    executor: ubuntu-build-env
-    steps:
-      - install_depencies:
-          packages: "ccache"
-      - checkout
-      - restore_cache:
-          keys:
-            - deps-cache-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
-      - compile:
-          options: "-DBUILD_STATIC=ON"
-          compiler: "CC=/usr/bin/clang CXX=/usr/bin/clang++"
-      - save_cache:
-          key: deps-cache-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
-          paths:
-            - deps
-            - /ccache
-      - run:
-          name: Upload binary
-          command: |
-            cd build/bin
-            tar -zcf fisco-bcos-gm.tar.gz fisco-bcos
-            strip fisco-bcos
-            tar -zcf fisco-bcos-mini-gm.tar.gz fisco-bcos
-      - store_artifacts:
-          path: /FISCO-BCOS-GM/build/bin/fisco-bcos-gm.tar.gz
-          destination: fisco-bcos-gm.tar.gz
-      - store_artifacts:
-          path: /FISCO-BCOS-GM/build/bin/fisco-bcos-mini-gm.tar.gz
-          destination: fisco-bcos-mini-gm.tar.gz
-
   deploy_static:
     working_directory: /FISCO-BCOS
     executor: ubuntu-build-env
@@ -237,28 +205,6 @@ jobs:
             ~/go/bin/ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -replace ${CIRCLE_TAG} /FISCO-BCOS/build/bin/fisco-bcos.tar.gz
             ~/go/bin/ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -replace ${CIRCLE_TAG} /FISCO-BCOS/build/bin/fisco-sync.tar.gz
             ~/go/bin/ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -replace ${CIRCLE_TAG} /FISCO-BCOS/build/bin/fisco-bcos-withSymbols.tar.gz
-
-  deploy_guomi:
-    working_directory: /FISCO-BCOS-GM
-    executor: ubuntu-build-env
-    steps:
-      - install_depencies:
-          packages: "ca-certificates golang-go"
-      - checkout
-      - compile:
-          options: "-DBUILD_STATIC=ON -DCMAKE_BUILD_TYPE=Release"
-          compiler: "CC=/usr/bin/clang CXX=/usr/bin/clang++"
-      - run:
-          name: Strip
-          command: |
-            cd build/bin
-            strip fisco-bcos
-            tar -zcf fisco-bcos-gm.tar.gz fisco-bcos
-      - run:
-          name: Upload to GitHub Release
-          command: |
-            go get github.com/tcnksm/ghr
-            ~/go/bin/ghr -t ${GITHUB_TOKEN} -u ${CIRCLE_PROJECT_USERNAME} -r ${CIRCLE_PROJECT_REPONAME} -replace ${CIRCLE_TAG} /FISCO-BCOS-GM/build/bin/fisco-bcos-gm.tar.gz
 
 workflows:
   version: 2
@@ -298,22 +244,10 @@ workflows:
               ignore: /^pull.*/
             tags:
               ignore: /.*/
-      - build_guomi:
-          filters:
-            branches:
-              ignore: /^pull.*/
-            tags:
-              ignore: /.*/
+
   deploy:
     jobs:
       - deploy_static:
-          filters:
-            tags:
-              only:
-                - /v2.*/
-            branches:
-              ignore: /.*/
-      - deploy_guomi:
           filters:
             tags:
               only:
