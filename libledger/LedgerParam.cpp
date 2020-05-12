@@ -643,18 +643,6 @@ void LedgerParam::initFlowControlConfig(boost::property_tree::ptree const& _pt)
             InvalidConfiguration() << errinfo_comment("flow_control.limit_req must be positive"));
     }
     mutableFlowControlParam().maxQPS = maxQPS;
-    // set maxBurstReqPercent
-    auto maxBurstReqPercent = _pt.get<int64_t>(
-        "flow_control.qps_burst_percent", mutableFlowControlParam().maxBurstReqPercentDefaultValue);
-    if (maxBurstReqPercent < 0 || maxBurstReqPercent > 100)
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfiguration() << errinfo_comment(
-                                  "flow_control.qps_burst_percent must between 0-100"));
-    }
-    mutableFlowControlParam().maxBurstReqPercent = maxBurstReqPercent;
-    mutableFlowControlParam().maxBurstReqNum =
-        mutableFlowControlParam().maxBurstReqPercent * maxQPS / 100;
-
     auto outGoingBandwidth = _pt.get<double>(
         "flow_control.outgoing_bandwidth_limit", mutableFlowControlParam().maxDefaultValue);
     // values configured using configuration items
@@ -682,8 +670,6 @@ void LedgerParam::initFlowControlConfig(boost::property_tree::ptree const& _pt)
 
     LedgerParam_LOG(INFO) << LOG_BADGE("initFlowControlConfig")
                           << LOG_KV("maxQPS", mutableFlowControlParam().maxQPS)
-                          << LOG_KV("maxBurstReqPercent(%)", maxBurstReqPercent)
-                          << LOG_KV("maxBurstReqNum", mutableFlowControlParam().maxBurstReqNum)
                           << LOG_KV("outGoingBandwidth(Bytes)",
                                  mutableFlowControlParam().outGoingBandwidthLimit);
 }

@@ -273,20 +273,8 @@ dev::flowlimit::RPCQPSLimiter::Ptr RPCInitializer::createQPSLimiter(
             dev::InvalidConfig() << errinfo_comment(
                 "createQPSLimiter failed, flow_control.limit_req must be positive!"));
     }
-
-    auto maxBurstReqPercent = _pt.get<int64_t>("flow_control.qps_burst_percent", 20);
-    if (maxBurstReqPercent < 0 || maxBurstReqPercent > 100)
-    {
-        BOOST_THROW_EXCEPTION(
-            dev::InvalidConfig() << errinfo_comment(
-                "createQPSLimiter failed, flow_control.qps_burst_percent must between 0-100!"));
-    }
-
-    int64_t maxBurstReqNum = maxBurstReqPercent * maxQPS / 100;
-    INITIALIZER_LOG(DEBUG) << LOG_DESC("createQPSLimiter") << LOG_KV("maxQPS", maxQPS)
-                           << LOG_KV("maxBurstReqNum", maxBurstReqNum);
+    INITIALIZER_LOG(DEBUG) << LOG_DESC("createQPSLimiter") << LOG_KV("maxQPS", maxQPS);
     qpsLimiter->createRPCQPSLimiter(maxQPS);
-    qpsLimiter->rpcQPSLimiter()->setMaxBurstReqNum(maxBurstReqNum);
     return qpsLimiter;
 }
 
