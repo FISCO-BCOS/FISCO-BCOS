@@ -654,13 +654,13 @@ bool Service::asyncMulticastMessageByTopic(
         auto requiredPermits = message->length() * nodeIDsToSend.size() / m_compressRate;
         if (!_bandwidthLimiter->tryAcquire(requiredPermits))
         {
-            SERVICE_LOG(DEBUG) << LOG_DESC(
-                                      "asyncMulticastMessageByTopic from channel failed for over "
-                                      "bandwidth limitation")
-                               << LOG_KV("requiredPermits", requiredPermits)
-                               << LOG_KV("maxPermitsPerSecond(Bytes)", _bandwidthLimiter->maxQPS())
-                               << LOG_KV("broadcastTargetSize", nodeIDsToSend.size())
-                               << LOG_KV("msgSize", message->length());
+            SERVICE_LOG(INFO) << LOG_DESC(
+                                     "asyncMulticastMessageByTopic from channel failed for over "
+                                     "bandwidth limitation")
+                              << LOG_KV("requiredPermits", requiredPermits)
+                              << LOG_KV("maxPermitsPerSecond(Bytes)", _bandwidthLimiter->maxQPS())
+                              << LOG_KV("broadcastTargetSize", nodeIDsToSend.size())
+                              << LOG_KV("msgSize", message->length());
             return false;
         }
         message->setPermitsAcquired(true);
@@ -919,7 +919,7 @@ void Service::acquirePermits(P2PMessage::Ptr _msg)
     }
     if (m_nodeBandwidthLimiter)
     {
-        m_nodeBandwidthLimiter->acquire(_msg->length(), false, true);
+        m_nodeBandwidthLimiter->acquireWithoutWait(_msg->length());
     }
     // get groupId
     auto ret = dev::eth::getGroupAndProtocol(abs(_msg->protocolID()));
@@ -929,7 +929,7 @@ void Service::acquirePermits(P2PMessage::Ptr _msg)
     {
         return;
     }
-    bandwidthLimiter->acquire(_msg->length(), false, true);
+    bandwidthLimiter->acquireWithoutWait(_msg->length());
 }
 
 void Service::setNodeBandwidthLimiter(dev::flowlimit::RateLimiter::Ptr _bandwidthLimiter)

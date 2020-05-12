@@ -34,6 +34,7 @@ namespace rpc
 enum RPCExceptionType : int
 {
     Success = 0,
+    OverQPSLimit = -40011,
     IncompleteInitialization = -40010,
     InvalidRequest = -40009,
     InvalidSystemConfig = -40008,
@@ -44,7 +45,6 @@ enum RPCExceptionType : int
     BlockHash = -40003,
     JsonParse = -40002,
     GroupID = -40001,
-    OverQPSLimit = -503,
 };
 
 extern std::map<int, std::string> RPCMsg;

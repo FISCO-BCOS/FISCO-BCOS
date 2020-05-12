@@ -64,7 +64,7 @@ bool RPCQPSLimiter::acquire(int64_t const& _requiredPermits)
     {
         return true;
     }
-    return m_rpcQPSLimiter->acquireWithBurstSupported(_requiredPermits);
+    return m_rpcQPSLimiter->tryAcquire(_requiredPermits);
 }
 
 bool RPCQPSLimiter::acquireFromGroup(dev::GROUP_ID const& _groupId, int64_t const& _requiredPermits)
@@ -74,5 +74,5 @@ bool RPCQPSLimiter::acquireFromGroup(dev::GROUP_ID const& _groupId, int64_t cons
     {
         return true;
     }
-    return qpsLimiter->acquireWithBurstSupported(_requiredPermits);
+    return qpsLimiter->tryAcquire(_requiredPermits);
 }

@@ -35,7 +35,10 @@ bool StatisticPotocolServer::limitRPCQPS(Json::Value const& _request, std::strin
         return true;
     }
     auto canHandle = m_qpsLimiter->acquire();
-    wrapResponseForNodeBusy(canHandle, _request, _retValue);
+    if (canHandle)
+    {
+        wrapResponseForNodeBusy(_request, _retValue);
+    }
     return canHandle;
 }
 
@@ -47,18 +50,18 @@ bool StatisticPotocolServer::limitGroupQPS(
         return true;
     }
     auto canHandle = m_qpsLimiter->acquireFromGroup(_groupId);
-    wrapResponseForNodeBusy(canHandle, _request, _retValue);
+    if (canHandle)
+    {
+        wrapResponseForNodeBusy(_request, _retValue);
+    }
+
     return canHandle;
 }
 
 // QPS limit exceeded, respond OverQPSLimit
 void StatisticPotocolServer::wrapResponseForNodeBusy(
-    bool const& _canHandle, Json::Value const& _request, std::string& _retValue)
+    Json::Value const& _request, std::string& _retValue)
 {
-    if (_canHandle)
-    {
-        return;
-    }
     Json::Value resp;
     Json::FastWriter writer;
     this->WrapError(
