@@ -47,8 +47,7 @@ private:
     bool limitRPCQPS(Json::Value const& _request, std::string& _retValue);
     bool limitGroupQPS(
         dev::GROUP_ID const& _groupId, Json::Value const& _request, std::string& _retValue);
-    void wrapResponseForNodeBusy(
-        bool const& _canHandle, Json::Value const& _request, std::string& _retValue);
+    void wrapResponseForNodeBusy(Json::Value const& _request, std::string& _retValue);
 
     dev::GROUP_ID getGroupID(Json::Value const& _input);
 

@@ -40,6 +40,12 @@ public:
     virtual int64_t acquire(int64_t const& _requiredPermits = 1, bool const& _wait = false,
         bool const& _fetchPermitsWhenRequireWait = false, int64_t const& _now = utcSteadyTimeUs());
 
+    // acquire the permits without wait
+    virtual int64_t acquireWithoutWait(int64_t const& _requiredPermits = 1)
+    {
+        return acquire(_requiredPermits, false, true);
+    }
+
     virtual bool tryAcquire(
         uint64_t const& _requiredPermits = 1, int64_t const& _now = utcSteadyTimeUs());
     virtual bool acquireWithBurstSupported(

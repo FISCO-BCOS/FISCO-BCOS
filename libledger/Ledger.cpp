@@ -173,8 +173,6 @@ void Ledger::initQPSLimit()
     }
     auto qpsLimiter =
         std::make_shared<dev::flowlimit::RateLimiter>(m_param->mutableFlowControlParam().maxQPS);
-    qpsLimiter->setMaxBurstReqNum(m_param->mutableFlowControlParam().maxBurstReqNum);
-
     // register QPS
     rpcQPSLimiter->registerQPSLimiterByGroupID(m_groupId, qpsLimiter);
     Ledger_LOG(INFO) << LOG_BADGE("initQPSLimit") << LOG_KV("groupId", m_groupId)
