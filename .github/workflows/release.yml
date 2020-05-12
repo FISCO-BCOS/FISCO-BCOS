@@ -9,32 +9,6 @@ on:
     types: [published, created, edited]
 
 jobs:
-  compile_macOS_guomi_release:
-    name: upload guomi binary of macOS
-    runs-on: macos-latest
-    # if: startsWith(github.ref,'v2')
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          fetch-depth: 5
-      - name: install macOS dependencies
-        if: runner.os == 'macOS'
-        run: brew install openssl
-      - name: configure
-        run: cmake .
-      - name: compile
-        run: make -j2
-      - name: prepare artifact
-        run: cd bin/ && strip fisco-bcos && tar -zcf fisco-bcos-macOS-gm.tar.gz fisco-bcos
-      - name: Upload binaries to release
-        uses: svenstaro/upload-release-action@v1-release
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: bin/fisco-bcos-macOS-gm.tar.gz
-          asset_name: fisco-bcos-macOS-gm.tar.gz
-          tag: ${{ github.ref }}
-          overwrite: true
-
   compile_macOS_release:
     name: upload standard binary of macOS
     runs-on: macos-latest

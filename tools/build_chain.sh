@@ -1345,13 +1345,7 @@ download_bin()
     bin_path=${output_dir}/${bcos_bin_name}
     package_name="fisco-bcos.tar.gz"
     if [ -n "${macOS}" ];then
-        if [ -n "${guomi_mode}" ];then
-            package_name="fisco-bcos-macOS-gm.tar.gz"
-        else
-            package_name="fisco-bcos-macOS.tar.gz"
-        fi
-    elif [ -n "${guomi_mode}" ];then
-        package_name="fisco-bcos-gm.tar.gz";
+        package_name="fisco-bcos-macOS.tar.gz"
     fi
 
     Download_Link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${compatibility_version}/${package_name}"
