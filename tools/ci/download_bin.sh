@@ -13,9 +13,8 @@ help() {
 Usage:
     -b <Branch>                   Default master
     -o <Output Dir>               Default ./
-    -g <Generate guomi nodes>     Default no
     -h Help
-e.g 
+e.g
     $0 -b master
 EOF
 
@@ -24,11 +23,10 @@ exit 0
 
 parse_params()
 {
-while getopts "b:o:hgm" option;do
+while getopts "b:o:hm" option;do
     case $option in
     o) output_dir=$OPTARG;;
     b) branch="$OPTARG";;
-    g) download_gm="true";;
     m) download_mini="true";;
     h) help;;
     *) help;;
@@ -53,21 +51,17 @@ download_artifact()
         exit 1
     fi
 
-    is_gm="$(echo "${response}"| grep -o 'gm')"
-    if [ ! -z "${download_gm}" -a -z "${is_gm}" ] || [ -z "${download_gm}" -a ! -z "${is_gm}" ]
-    then
-        num=$(( build_num - 1 ))
-        if [ -z "${download_mini}" ];then
-            link=$(curl https://circleci.com/api/v1.1/project/github/${org}/${repo}/${num}/artifacts?circle-token= 2>/dev/null| grep -o 'https://[^"]*' | grep -v 'mini'| tail -n 1)
-        else
-            link=$(curl https://circleci.com/api/v1.1/project/github/${org}/${repo}/${num}/artifacts?circle-token= 2>/dev/null| grep -o 'https://[^"]*' | grep 'mini'| tail -n 1)
-        fi
-        
+    num=$(( build_num - 1 ))
+    if [ -z "${download_mini}" ];then
+        link=$(curl https://circleci.com/api/v1.1/project/github/${org}/${repo}/${num}/artifacts?circle-token= 2>/dev/null| grep -o 'https://[^"]*' | grep -v 'mini'| tail -n 1)
+    else
+        link=$(curl https://circleci.com/api/v1.1/project/github/${org}/${repo}/${num}/artifacts?circle-token= 2>/dev/null| grep -o 'https://[^"]*' | grep 'mini'| tail -n 1)
     fi
+
     echo -e "\033[32mDownloading binary from ${link} \033[0m"
     cd ${output_dir} && curl -LO ${link} && tar -zxf fisco*.tar.gz && rm fisco*.tar.gz
     result=$?
-    if [[ "${result}" != "0" ]];then echo  -e "\033[31mDownload failed, please try again\033[0m" && exit 1;fi 
+    if [[ "${result}" != "0" ]];then echo  -e "\033[31mDownload failed, please try again\033[0m" && exit 1;fi
     echo -e "\033[32mFinished. Please check ${output_dir}\033[0m"
 
 }
