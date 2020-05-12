@@ -110,9 +110,7 @@ Entries::Ptr MemoryTable2::selectNoLock(const std::string& key, Condition::Ptr c
                 if (entryIt != m_dirty.end())
                 {
                     processed.insert(entryIt->second->getID());
-                    if ((g_BCOSConfig.version() >= V2_5_0) &&
-                        (entryIt->second->getStatus() == Entry::Status::DELETED ||
-                            entryIt->second->deleted()))
+                    if (g_BCOSConfig.version() >= V2_5_0 && !condition->process(entryIt->second))
                     {
                         continue;
                     }
