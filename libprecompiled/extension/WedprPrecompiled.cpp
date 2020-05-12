@@ -176,8 +176,9 @@ string WedprPrecompiled::toString()
     return WEDPR_PRECOMPILED;
 }
 
-bytes WedprPrecompiled::call(
-    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
+PrecompiledExecResult::Ptr WedprPrecompiled::call(
+    dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param,
+    Address const& origin, Address const&)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE(WEDPR_PRECOMPILED) << LOG_DESC("call")
                            << LOG_KV("param", toHex(param)) << LOG_KV("origin", origin)
@@ -187,127 +188,129 @@ bytes WedprPrecompiled::call(
     bytesConstRef data = getParamData(param);
 
     dev::eth::ContractABI abi;
-    bytes out;
+    auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
+    callResult->gasPricer()->setMemUsed(param.size());
 
     // confidentialPaymentIsCompatible(string targetVersion)
     if (func == name2Selector[API_CONFIDENTIAL_PAYMENT_IS_COMPATIBLE])
     {
-        out = confidentialPaymentIsCompatible(abi, data);
+        callResult->setExecResult(confidentialPaymentIsCompatible(abi, data));
     }
     // confidentialPaymentGetVersion()
     else if (func == name2Selector[API_CONFIDENTIAL_PAYMENT_GET_VERSION])
     {
-        out = confidentialPaymentGetVersion(abi);
+        callResult->setExecResult(confidentialPaymentGetVersion(abi));
     }
     // confidentialPaymentVerifyIssuedCredit(string issueArgument)
     else if (func == name2Selector[API_CONFIDENTIAL_PAYMENT_VERIFY_ISSUED_CREDIT])
     {
-        out = verifyIssuedCredit(abi, data);
+        callResult->setExecResult(verifyIssuedCredit(abi, data));
     }
     // confidentialPaymentVerifyFulfilledCredit(string fulfillArgument)
     else if (func == name2Selector[API_CONFIDENTIAL_PAYMENT_VERIFY_FULFILLED_CREDIT])
     {
-        out = verifyFulfilledCredit(abi, data);
+        callResult->setExecResult(verifyFulfilledCredit(abi, data));
     }
     // confidentialPaymentVerifyTransferredCredit(string transferRequest)
     else if (func == name2Selector[API_CONFIDENTIAL_PAYMENT_VERIFY_TRANSFERRED_CREDIT])
     {
-        out = verifyTransferredCredit(abi, data);
+        callResult->setExecResult(verifyTransferredCredit(abi, data));
     }
     // confidentialPaymentVerifySplitCredit(string splitRequest)
     else if (func == name2Selector[API_CONFIDENTIAL_PAYMENT_VERIFY_SPLIT_CREDIT])
     {
-        out = verifySplitCredit(abi, data);
+        callResult->setExecResult(verifySplitCredit(abi, data));
     }
 
     // anonymousVotingIsCompatible(string targetVersion)
     else if (func == name2Selector[API_ANONYMOUS_VOTING_IS_COMPATIBLE])
     {
-        out = anonymousVotingIsCompatible(abi, data);
+        callResult->setExecResult(anonymousVotingIsCompatible(abi, data));
     }
     // anonymousVotingGetVersion()
     else if (func == name2Selector[API_ANONYMOUS_VOTING_GET_VERSION])
     {
-        out = anonymousVotingGetVersion(abi);
+        callResult->setExecResult(anonymousVotingGetVersion(abi));
     }
     // anonymousVotingVerifyBoundedVoteRequest(string systemParameters, string voteRequest)
     else if (func == name2Selector[API_ANONYMOUS_VOTING_BOUNDED_VERIFY_VOTE_REQUEST])
     {
-        out = verifyBoundedVoteRequest(abi, data);
+        callResult->setExecResult(verifyBoundedVoteRequest(abi, data));
     }
     // anonymousVotingVerifyUnboundedVoteRequest(string systemParameters, string voteRequest)
     else if (func == name2Selector[API_ANONYMOUS_VOTING_UNBOUNDED_VERIFY_VOTE_REQUEST])
     {
-        out = verifyUnboundedVoteRequest(abi, data);
+        callResult->setExecResult(verifyUnboundedVoteRequest(abi, data));
     }
     // anonymousVotingAggregateVoteSumResponse(string systemParameters, string voteRequest, string
     // voteStorage)
     else if (func == name2Selector[API_ANONYMOUS_VOTING_AGGREGATE_VOTE_SUM_RESPONSE])
     {
-        out = aggregateVoteSumResponse(abi, data);
+        callResult->setExecResult(aggregateVoteSumResponse(abi, data));
     }
     // anonymousVotingAggregateHPoint(string hPointShare, string hPointSum)
     else if (func == name2Selector[API_ANONYMOUS_VOTING_AGGREGATE_HPOINT])
     {
-        out = aggregateHPoint(abi, data);
+        callResult->setExecResult(aggregateHPoint(abi, data));
     }
     // anonymousVotingVerifyCountRequest(string systemParameters, string voteStorage, string
     // hPointShare, string decryptedRequest)
     else if (func == name2Selector[API_ANONYMOUS_VOTING_VERIFY_COUNT_REQUEST])
     {
-        out = verifyCountRequest(abi, data);
+        callResult->setExecResult(verifyCountRequest(abi, data));
     }
     // anonymousVotingAggregateDecryptedPartSum(string systemParameters, string decryptedRequest,
     // string decryptedResultPartStorage)
     else if (func == name2Selector[API_ANONYMOUS_VOTING_AGGREGATE_DECRYPTED_PART_SUM])
     {
-        out = aggregateDecryptedPartSum(abi, data);
+        callResult->setExecResult(aggregateDecryptedPartSum(abi, data));
     }
     // anonymousVotingVerifyVoteResult(string systemParameters, string voteStorageSum, string
     // decryptedResultPartStorageSum, string voteResultRequest)
     else if (func == name2Selector[API_ANONYMOUS_VOTING_VERIFY_VOTE_RESULT])
     {
-        out = verifyVoteResult(abi, data);
+        callResult->setExecResult(verifyVoteResult(abi, data));
     }
     // anonymousVotingGetVoteResultFromRequest(string voteResultRequest)
     else if (func == name2Selector[API_ANONYMOUS_VOTING_GET_VOTE_RESULT_FROM_REQUEST])
     {
-        out = getVoteResultFromRequest(abi, data);
+        callResult->setExecResult(getVoteResultFromRequest(abi, data));
     }
 
     // anonymousAuctionIsCompatible(string targetVersion)
     else if (func == name2Selector[API_ANONYMOUS_AUCTION_IS_COMPATIBLE])
     {
-        out = anonymousAuctionIsCompatible(abi, data);
+        callResult->setExecResult(anonymousAuctionIsCompatible(abi, data));
     }
     // anonymousAuctionGetVersion()
     else if (func == name2Selector[API_ANONYMOUS_AUCTION_GET_VERSION])
     {
-        out = anonymousAuctionGetVersion(abi);
+        callResult->setExecResult(anonymousAuctionGetVersion(abi));
     }
     // anonymousAuctionVerifyBidSignatureFromBidRequest(string bidRequest)
     else if (func == name2Selector[API_ANONYMOUS_AUCTION_VERIFY_BID_SIGNATURE_FROM_BID_REQUEST])
     {
-        out = verifyBidSignatureFromBidRequest(abi, data);
+        callResult->setExecResult(verifyBidSignatureFromBidRequest(abi, data));
     }
     // anonymousAuctionVerifyBidSignatureFromBidComparisonRequest(string bidComparisonRequest)
     else if (func ==
              name2Selector[API_ANONYMOUS_AUCTION_VERIFY_BID_SIGNATURE_FROM_BID_COMPARISON_REQUEST])
     {
-        out = VerifyBidSignatureFromBidComparisonRequest(abi, data);
+        callResult->setExecResult(VerifyBidSignatureFromBidComparisonRequest(abi, data));
     }
     // nonymousAuctionVerifyWinner(string winnerClaimRequest, string allBidStorageRequest)
     else if (func == name2Selector[API_ANONYMOUS_AUCTION_VERIFY_WINNER])
     {
-        out = verifyWinner(abi, data);
+        callResult->setExecResult(verifyWinner(abi, data));
     }
     // unknown function call
     else
     {
         logError(WEDPR_PRECOMPILED, "unknown func", "func", std::to_string(func));
+        callResult->setExecResult(abi.abiIn("", u256(CODE_UNKNOW_FUNCTION_CALL)));
         throwException("unknown func");
     }
-    return out;
+    return callResult;
 }
 
 bytes WedprPrecompiled::confidentialPaymentIsCompatible(

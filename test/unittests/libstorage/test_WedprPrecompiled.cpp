@@ -63,9 +63,14 @@ struct WedprPrecompiledFixture
         factory.initExecutiveContext(blockInfo, h256(0), context);
         memoryTableFactory = context->getMemoryTableFactory();
 
-        tableFactoryPrecompiled = std::make_shared<dev::blockverifier::TableFactoryPrecompiled>();
+        tableFactoryPrecompiled = std::make_shared<dev::precompiled::TableFactoryPrecompiled>();
         tableFactoryPrecompiled->setMemoryTableFactory(memoryTableFactory);
         wedprPrecompiled = context->getPrecompiled(Address(0x5018));
+        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
+        auto precompiledExecResultFactory =
+            std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+        precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
+        wedprPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     }
 
     ~WedprPrecompiledFixture() {}
@@ -73,7 +78,7 @@ struct WedprPrecompiledFixture
     ExecutiveContext::Ptr context;
     TableFactory::Ptr memoryTableFactory;
     Precompiled::Ptr wedprPrecompiled;
-    dev::blockverifier::TableFactoryPrecompiled::Ptr tableFactoryPrecompiled;
+    dev::precompiled::TableFactoryPrecompiled::Ptr tableFactoryPrecompiled;
     BlockInfo blockInfo;
 };
 
@@ -91,7 +96,7 @@ BOOST_AUTO_TEST_CASE(confidentialPaymentVerifyIssuedCredit)
         "JvYUd1Sm1nPRoDCIAI";
     bytes param = abi.abiIn(API_CONFIDENTIAL_PAYMENT_VERIFY_ISSUED_CREDIT, issueArgument);
     // confidentialPaymentVerifyIssuedCredit(string issueArgument)
-    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
+    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param))->execResult();
 
     std::string currentCredit;
     std::string creditStorage;
@@ -125,7 +130,7 @@ BOOST_AUTO_TEST_CASE(confidentialPaymentVerifyFulfilledCredit)
         "MlQvUzUxUjNFM2xldHdVTkQ5d09kTVFBNW90aEZRbz18NWViMzZhMTk=";
     bytes param = abi.abiIn(API_CONFIDENTIAL_PAYMENT_VERIFY_FULFILLED_CREDIT, fulfillArgument);
     // confidentialPaymentVerifyFulfilledCredit(string fulfillArgument)
-    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
+    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param))->execResult();
 
     std::string currentCredit;
     std::string creditStorage;
@@ -167,7 +172,7 @@ BOOST_AUTO_TEST_CASE(confidentialPaymentVerifyTransferredCredit)
         "TWRhMkQ2M20yb2ZtcXBVMlN4aUE3aVFVPXw1ZWIzNmFlNSIIdHJhbnNmZXI=";
     bytes param = abi.abiIn(API_CONFIDENTIAL_PAYMENT_VERIFY_TRANSFERRED_CREDIT, transferRequest);
     // confidentialPaymentVerifyTransferredCredit(string transferRequest)
-    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
+    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param))->execResult();
 
     std::string spentCurrentCredit;
     std::string spentCreditStorage;
@@ -249,7 +254,7 @@ BOOST_AUTO_TEST_CASE(confidentialPaymentVerifySplitCredit)
         "k2K25zbGRmQzlUUFRNdStyS2I1K2lLQk5ubndnRT0SGGFWZ2pPcEdiUVYyYnhFSkR3MklmU1E9PRoFc3BsaXQ=";
     bytes param = abi.abiIn(API_CONFIDENTIAL_PAYMENT_VERIFY_SPLIT_CREDIT, splitRequest);
     // confidentialPaymentVerifySplitCredit(string splitRequest)
-    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
+    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param))->execResult();
 
     std::string spentCurrentCredit;
     std::string spentCreditStorage;
@@ -337,7 +342,7 @@ BOOST_AUTO_TEST_CASE(anonymousVotingVerifyBoundedVoteRequest)
     bytes param =
         abi.abiIn(API_ANONYMOUS_VOTING_BOUNDED_VERIFY_VOTE_REQUEST, systemParameters, voteRequest);
     // anonymousVotingVerifyBoundedVoteRequest(string systemParameters, string voteRequest)
-    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
+    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param))->execResult();
 
     std::string blankBallot;
     std::string voteStoragePart;
@@ -407,7 +412,7 @@ BOOST_AUTO_TEST_CASE(anonymousVotingVerifyUnboundedVoteRequest)
     bytes param = abi.abiIn(
         API_ANONYMOUS_VOTING_UNBOUNDED_VERIFY_VOTE_REQUEST, systemParameters, voteRequest);
     //  anonymousVotingVerifyUnboundedVoteRequest(string systemParameters, string voteRequest)
-    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
+    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param))->execResult();
 
     std::string blankBallot;
     std::string voteStoragePart;
@@ -473,7 +478,7 @@ BOOST_AUTO_TEST_CASE(anonymousVotingAggregateVoteSumResponse)
         voteStoragePart, voteStorage);
     // anonymousVotingAggregateVoteSumResponse(string systemParameters, string voteStoragePart,
     // string voteStorage)
-    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
+    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param))->execResult();
 
     std::string voteStorageSum;
 
@@ -518,7 +523,7 @@ BOOST_AUTO_TEST_CASE(anonymousVotingVerifyCountRequest)
         voteStorage, hPointShare, decryptedRequest);
     // anonymousVotingVerifyCountRequest(string systemParameters, string voteStorage, string
     // hPointShare, string decryptedRequest)
-    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
+    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param))->execResult();
 
     std::string counterId;
     std::string decryptedResultPartStoragePart;
@@ -592,7 +597,7 @@ BOOST_AUTO_TEST_CASE(anonymousVotingAggregateDecryptedPartSum)
         decryptedRequest, decryptedResultPartStorage);
     // anonymousVotingAggregateDecryptedPartSum(string systemParameters, string decryptRequest,
     // string decryptedResultPartStorage)
-    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
+    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param))->execResult();
 
     std::string decryptedResultPartStorageSum;
 
@@ -617,7 +622,7 @@ BOOST_AUTO_TEST_CASE(anonymousVotingAggregateHPoint)
     std::string hPointSum = "0PoMptw9RCM5U9D59bC76WVEOfzjYpxdHLAthYOATy8=";
     bytes param = abi.abiIn(API_ANONYMOUS_VOTING_AGGREGATE_HPOINT, hPointShare, hPointSum);
     // anonymousVotingAggregateHPoint(string hPointShare, string hPointSum)
-    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
+    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param))->execResult();
 
     std::string newHPointSum;
     abi.abiOut(&out, newHPointSum);
@@ -668,7 +673,7 @@ BOOST_AUTO_TEST_CASE(anonymousVotingVerifyVoteResult)
         voteStorageSum, decryptedResultPartStorageSum, voteResultRequest);
     // anonymousVotingVerifyVoteResult(string systemParameters, string voteStorageSum, string
     // decryptedResultPartStorageSum, string voteResultRequest)
-    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
+    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param))->execResult();
     u256 result;
     abi.abiOut(&out, result);
     BOOST_TEST(result == WEDPR_SUCCESS);
@@ -690,7 +695,7 @@ BOOST_AUTO_TEST_CASE(anonymousVotingGetVoteResultFromRequest)
         "==";
     bytes param = abi.abiIn(API_ANONYMOUS_VOTING_GET_VOTE_RESULT_FROM_REQUEST, voteResultRequest);
     // anonymousVotingGetVoteResultFromRequest(string voteResultRequest)
-    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
+    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param))->execResult();
     std::string voteResultStorage;
     abi.abiOut(&out, voteResultStorage);
     BOOST_TEST(
@@ -736,7 +741,7 @@ BOOST_AUTO_TEST_CASE(anonymousAuctionVerifyBidSignatureFromBidRequest)
     bytes param =
         abi.abiIn(API_ANONYMOUS_AUCTION_VERIFY_BID_SIGNATURE_FROM_BID_REQUEST, bidRequest);
     // anonymousAuctionVerifyBidSignatureFromBidRequest(string bidRequest)
-    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
+    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param))->execResult();
     std::string bidStorage;
     abi.abiOut(&out, bidStorage);
     BOOST_TEST(
@@ -860,7 +865,7 @@ BOOST_AUTO_TEST_CASE(anonymousAuctionVerifyWinner)
     bytes param = abi.abiIn(API_ANONYMOUS_AUCTION_VERIFY_WINNER, systemParameters,
         winnerClaimRequest, allBidStorageRequest);
     // anonymousAuctionVerifyWinner(string winnerClaimRequest, string allBidStorageRequest)
-    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
+    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param))->execResult();
     u256 bidValue;
     std::string publicKey;
     abi.abiOut(&out, bidValue, publicKey);
@@ -882,14 +887,14 @@ BOOST_AUTO_TEST_CASE(confidentialPaymentIsCompatible)
     dev::eth::ContractABI abi;
     std::string targetVersion = CONFIDENTIAL_PAYMENT_VERSION;
     bytes param = abi.abiIn(API_CONFIDENTIAL_PAYMENT_IS_COMPATIBLE, targetVersion);
-    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
+    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param))->execResult();
     s256 result;
     abi.abiOut(&out, result);
     BOOST_TEST(result == WEDPR_SUCCESS);
 
     std::string errorTargetVersion = "errorVersion";
     param = abi.abiIn(API_CONFIDENTIAL_PAYMENT_IS_COMPATIBLE, errorTargetVersion);
-    out = wedprPrecompiled->call(context, bytesConstRef(&param));
+    out = wedprPrecompiled->call(context, bytesConstRef(&param))->execResult();
     abi.abiOut(&out, result);
     BOOST_TEST(result == WEDPR_FAILURE);
 }
@@ -898,14 +903,14 @@ BOOST_AUTO_TEST_CASE(anonymousVotingIsCompatible)
     dev::eth::ContractABI abi;
     std::string targetVersion = ANONYMOUS_VOTING_VERSION;
     bytes param = abi.abiIn(API_ANONYMOUS_VOTING_IS_COMPATIBLE, targetVersion);
-    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
+    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param))->execResult();
     s256 result;
     abi.abiOut(&out, result);
     BOOST_TEST(result == WEDPR_SUCCESS);
 
     std::string errorTargetVersion = "errorVersion";
     param = abi.abiIn(API_ANONYMOUS_VOTING_IS_COMPATIBLE, errorTargetVersion);
-    out = wedprPrecompiled->call(context, bytesConstRef(&param));
+    out = wedprPrecompiled->call(context, bytesConstRef(&param))->execResult();
     abi.abiOut(&out, result);
     BOOST_TEST(result == WEDPR_FAILURE);
 }
@@ -914,14 +919,14 @@ BOOST_AUTO_TEST_CASE(anonymousAuctionIsCompatible)
     dev::eth::ContractABI abi;
     std::string targetVersion = ANONYMOUS_AUCTION_VERSION;
     bytes param = abi.abiIn(API_ANONYMOUS_AUCTION_IS_COMPATIBLE, targetVersion);
-    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
+    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param))->execResult();
     s256 result;
     abi.abiOut(&out, result);
     BOOST_TEST(result == WEDPR_SUCCESS);
 
     std::string errorTargetVersion = "errorVersion";
     param = abi.abiIn(API_ANONYMOUS_AUCTION_IS_COMPATIBLE, errorTargetVersion);
-    out = wedprPrecompiled->call(context, bytesConstRef(&param));
+    out = wedprPrecompiled->call(context, bytesConstRef(&param))->execResult();
     abi.abiOut(&out, result);
     BOOST_TEST(result == WEDPR_FAILURE);
 }
@@ -929,7 +934,7 @@ BOOST_AUTO_TEST_CASE(confidentialPaymentGetVersion)
 {
     dev::eth::ContractABI abi;
     bytes param = abi.abiIn(API_CONFIDENTIAL_PAYMENT_GET_VERSION);
-    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
+    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param))->execResult();
     std::string version;
     abi.abiOut(&out, version);
     BOOST_TEST(version == CONFIDENTIAL_PAYMENT_VERSION);
@@ -938,7 +943,7 @@ BOOST_AUTO_TEST_CASE(anonymousVotingGetVersion)
 {
     dev::eth::ContractABI abi;
     bytes param = abi.abiIn(API_ANONYMOUS_VOTING_GET_VERSION);
-    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
+    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param))->execResult();
     std::string version;
     abi.abiOut(&out, version);
     BOOST_TEST(version == ANONYMOUS_VOTING_VERSION);
@@ -947,7 +952,7 @@ BOOST_AUTO_TEST_CASE(anonymousAuctionGetVersion)
 {
     dev::eth::ContractABI abi;
     bytes param = abi.abiIn(API_ANONYMOUS_AUCTION_GET_VERSION);
-    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param));
+    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param))->execResult();
     std::string version;
     abi.abiOut(&out, version);
     BOOST_TEST(version == ANONYMOUS_AUCTION_VERSION);

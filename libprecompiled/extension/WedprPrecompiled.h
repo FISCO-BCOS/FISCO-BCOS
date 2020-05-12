@@ -69,7 +69,7 @@ extern const char WEDPR_PRECOMPILED[];
 extern const int WEDPR_SUCCESS;
 extern const int WEDPR_FAILURE;
 
-class WedprPrecompiled : public dev::blockverifier::Precompiled
+class WedprPrecompiled : public dev::precompiled::Precompiled
 {
 public:
     typedef std::shared_ptr<WedprPrecompiled> Ptr;
@@ -78,8 +78,9 @@ public:
 
     std::string toString() override;
 
-    bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context, bytesConstRef _param,
-        Address const& _origin = Address()) override;
+    PrecompiledExecResult::Ptr call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+        bytesConstRef param, Address const& origin = Address(),
+        Address const& sender = Address()) override;
 
     bytes confidentialPaymentIsCompatible(dev::eth::ContractABI& abi, bytesConstRef& data);
     bytes confidentialPaymentGetVersion(dev::eth::ContractABI& abi);
