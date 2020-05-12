@@ -61,7 +61,7 @@ private:
     std::map<Usage, std::shared_ptr<boost::asio::ssl::context>> m_sslContexts;
 
     void initConfigWithCrypto(const boost::property_tree::ptree& _pt);
-    void initConfigWithSMCrypto();
+    void initConfigWithSMCrypto(const boost::property_tree::ptree& pt);
 
     std::shared_ptr<bas::context> SSLContextWithCrypto(Usage _usage);
     std::shared_ptr<bas::context> SSLContextWithSMCrypto(Usage _usage);
