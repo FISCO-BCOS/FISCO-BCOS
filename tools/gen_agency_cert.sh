@@ -70,9 +70,9 @@ help()
 Usage:
     -c <ca path>           [Required]
     -a <agency name>       [Required]
-    -g <gm ca path>        gmcert ca key path, if generate gm node cert 
+    -g <gm ca path>        gmcert ca key path, if generate gm node cert
     -h Help
-e.g: 
+e.g:
     bash $0 -c nodes/cert -a newAgency
     bash $0 -c nodes/cert -g nodes/gmcert -a newAgency
 EOF
@@ -93,7 +93,7 @@ parse_params()
         ;;
         g) guomi_mode="yes" && gmca_path=$OPTARG
             if [ ! -f "$gmca_path/gmca.key" ]; then LOG_WARN "$gmca_path/gmca.key not exist" && exit 1; fi
-            if [ ! -f "$gmca_path/gmca.crt" ]; then LOG_WARN "$gmca_path/gmca.crt not exist" && exit 1; fi        
+            if [ ! -f "$gmca_path/gmca.crt" ]; then LOG_WARN "$gmca_path/gmca.crt not exist" && exit 1; fi
             if [ -f "$gmca_path/gmroot.crt" ]; then gmroot_crt="${gmca_path}/gmroot.crt"; fi
         ;;
         h) help;;
@@ -150,11 +150,13 @@ gen_agency_cert() {
     dir_must_not_exists "$agencydir"
     mkdir -p "$agencydir"
 
-    openssl genrsa -out "$agencydir/agency.key" 2048 2> /dev/null
+    # openssl genrsa -out "$agencydir/agency.key" 2048 2> /dev/null
+    openssl ecparam -out "$agencydir/secp256k1.param" -name secp256k1 2> /dev/null
+    openssl genpkey -paramfile "$agencydir/secp256k1.param" -out "$agencydir/agency.key" 2> /dev/null
     openssl req -new -sha256 -subj "/CN=$name/O=fisco-bcos/OU=agency" -key "$agencydir/agency.key" -config "$chain/cert.cnf" -out "$agencydir/agency.csr" 2> /dev/null
     openssl x509 -req -days 3650 -sha256 -CA "$chain/ca.crt" -CAkey "$chain/ca.key" -CAcreateserial\
         -in "$agencydir/agency.csr" -out "$agencydir/agency.crt"  -extensions v4_req -extfile "$chain/cert.cnf" 2> /dev/null
-    
+
     cp "$chain/ca.crt" "$chain/cert.cnf" "$agencydir/"
     if [[ -n "${root_crt}" ]];then
         echo "Use user specified root cert as ca.crt, $agencydir" >>"${logfile}"
@@ -162,7 +164,7 @@ gen_agency_cert() {
     else
         cp "$chain/ca.crt" "$chain/cert.cnf" "$agencydir/"
     fi
-    rm -f "$agencydir/agency.csr"
+    rm -f "$agencydir/agency.csr" "$agencydir/secp256k1.param"
 
     echo "build $name cert successful!"
 }
@@ -186,7 +188,7 @@ check_and_install_tassl(){
 generate_cert_conf_gm()
 {
     local output="$1"
-    cat << EOF > "${output}" 
+    cat << EOF > "${output}"
 HOME			= .
 RANDFILE		= $ENV::HOME/.rnd
 oid_section		= new_oids
