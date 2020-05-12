@@ -561,7 +561,7 @@ generate_config_ini()
 
 [chain]
     id=${chain_id}
-    ; use SM crypto or not
+    ; use SM crypto or not, should nerver be changed
     sm_crypto=${sm_crypto}
     sm_crypto_channel=${sm_crypto_channel}
 
