@@ -80,6 +80,12 @@ public:
         return m_wsSocket->lowest_layer().remote_endpoint(ec);
     }
 
+    virtual bi::tcp::endpoint localEndpoint(
+        boost::system::error_code ec = boost::system::error_code()) override
+    {
+        return m_wsSocket->lowest_layer().local_endpoint(ec);
+    }
+
     virtual bi::tcp::socket& ref() override { return m_wsSocket->next_layer().next_layer(); }
     virtual ba::ssl::stream<bi::tcp::socket>& sslref() override { return m_wsSocket->next_layer(); }
     virtual boost::beast::websocket::stream<ba::ssl::stream<bi::tcp::socket>>& wsref() override

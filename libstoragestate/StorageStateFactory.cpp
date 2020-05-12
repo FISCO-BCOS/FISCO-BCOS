@@ -31,7 +31,7 @@ using namespace dev::executive;
 std::shared_ptr<StateFace> StorageStateFactory::getState(
     h256 const&, std::shared_ptr<dev::storage::TableFactory> _factory)
 {
-    auto storageState = make_shared<StorageState>(m_accountStartNonce);
+    auto storageState = make_shared<StorageState>(m_accountStartNonce, m_enableBinary);
     storageState->setMemoryTableFactory(_factory);
     return storageState;
 }

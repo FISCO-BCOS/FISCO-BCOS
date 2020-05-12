@@ -39,7 +39,6 @@
 #include <libp2p/P2PMessageFactory.h>
 #include <libp2p/P2PSession.h>
 #include <libp2p/Service.h>
-#include <libp2p/StatisticHandler.h>
 
 #include "PBFTMsgFactory.h"
 #include <libsync/SyncStatus.h>
@@ -83,8 +82,6 @@ public:
         m_threadPool =
             std::make_shared<dev::ThreadPool>("pbftPool-" + std::to_string(m_groupId), 1);
         m_broacastTargetsFilter = boost::bind(&PBFTEngine::getIndexBySealer, this, _1);
-        // set statisticHandler
-        m_statisticHandler = m_service->statisticHandler();
 
         m_consensusSet = std::make_shared<std::set<dev::h512>>();
 
@@ -330,7 +327,7 @@ protected:
     void initPBFTEnv(unsigned _view_timeout);
     virtual void initBackupDB();
     void reloadMsg(std::string const& _key, PBFTMsg* _msg);
-    void backupMsg(std::string const& _key, PBFTMsg const& _msg);
+    void backupMsg(std::string const& _key, std::shared_ptr<bytes> _msg);
     inline std::string getBackupMsgPath() { return m_baseDir + "/" + c_backupMsgDirName; }
 
     bool checkSign(PBFTMsg const& req) const;
@@ -727,7 +724,6 @@ protected:
     dev::ThreadPool::Ptr m_threadPool;
 
     std::vector<dev::blockverifier::ExecutiveContext::Ptr> m_execContextForAsyncReset;
-    dev::p2p::StatisticHandler::Ptr m_statisticHandler = nullptr;
     PBFTMsgFactory::Ptr m_pbftMsgFactory = nullptr;
     // ttl-optimize related logic
     bool m_enableTTLOptimize = false;

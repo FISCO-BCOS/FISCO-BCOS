@@ -32,7 +32,7 @@ send_transaction()
         exit 1
     fi
     if [ ${is_raft} -eq 0 ];then
-        sleep 1.5
+        sleep 2
     else
         sleep 8
     fi
@@ -68,7 +68,7 @@ check_sync_consensus()
     check_reports 1 4 "check report block failed!" "[round1]==============check report block is ok"
 
     LOG_INFO "[round1]==============check sync block"
-    bash stop_all.sh
+    bash stop_all.sh && sleep 2
     rm -rf node0/data node*/log
     bash start_all.sh && sleep 5
     check_reports 1 4 "[round1] sync block failed!" "[round1]==============check sync block is ok"
@@ -117,7 +117,7 @@ check_binarylog()
     fi
     ${sed_cmd} "s/binary_log=false/binary_log=true/" node0/conf/group.1.ini
     ${sed_cmd} "s/binary_log=false/binary_log=true/" node1/conf/group.1.ini
-    check_consensus_and_sync 5
+    check_consensus_and_sync 6
 }
 
 check_raft()
@@ -141,7 +141,7 @@ check_rpbft()
         sed_cmd="sed -i .bkp"
     fi
     ${sed_cmd} "s/consensus_type=raft/consensus_type=rpbft/" node*/conf/group.1.genesis
-    check_consensus_and_sync 5
+    check_consensus_and_sync 6
 }
 
 init

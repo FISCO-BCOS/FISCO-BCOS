@@ -45,7 +45,7 @@ struct ParallelConfig
 const std::string PARA_CONFIG_TABLE_PREFIX = "_contract_parafunc_";
 const std::string PARA_CONFIG_TABLE_PREFIX_SHORT = "cp_";
 
-class ParallelConfigPrecompiled : public dev::blockverifier::Precompiled
+class ParallelConfigPrecompiled : public dev::precompiled::Precompiled
 {
 public:
     typedef std::shared_ptr<ParallelConfigPrecompiled> Ptr;
@@ -54,8 +54,9 @@ public:
 
     std::string toString() override;
 
-    bytes call(dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param,
-        Address const& origin = Address()) override;
+    PrecompiledExecResult::Ptr call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+        bytesConstRef param, Address const& origin = Address(),
+        Address const& _sender = Address()) override;
 
     dev::storage::Table::Ptr openTable(dev::blockverifier::ExecutiveContext::Ptr context,
         Address const& contractAddress, Address const& origin, bool needCreate = true);

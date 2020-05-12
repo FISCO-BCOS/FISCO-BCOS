@@ -39,7 +39,7 @@ const std::string SYS_CNS_FIELD_ABI = "abi";
 
 namespace precompiled
 {
-class CNSPrecompiled : public dev::blockverifier::Precompiled
+class CNSPrecompiled : public dev::precompiled::Precompiled
 {
 public:
     typedef std::shared_ptr<CNSPrecompiled> Ptr;
@@ -48,8 +48,9 @@ public:
 
     std::string toString() override;
 
-    bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context, bytesConstRef param,
-        Address const& origin = Address()) override;
+    PrecompiledExecResult::Ptr call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+        bytesConstRef param, Address const& origin = Address(),
+        Address const& _sender = Address()) override;
 };
 
 }  // namespace precompiled

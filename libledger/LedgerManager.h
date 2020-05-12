@@ -22,26 +22,42 @@
  * @date: 2018-10-23
  */
 #pragma once
+#include "Common.h"
 #include "Ledger.h"
 #include "LedgerInterface.h"
 #include <libethcore/Protocol.h>
 #include <map>
+#include <set>
+#include <string>
+
 #define LedgerManager_LOG(LEVEL) LOG(LEVEL) << "[LEDGERMANAGER] "
+
 namespace dev
 {
 namespace ledger
 {
+enum class LedgerStatus
+{
+    INEXISTENT,
+    RUNNING,
+    STOPPED,
+    STOPPING,
+    DELETED,
+};
+
+struct GroupParams
+{
+    std::string timestamp;
+    std::set<std::string> sealers;
+    bool enableFreeStorage;
+};
+
 class LedgerManager
 {
 public:
-    /**
-     * @brief: constructor of LedgerManager
-     * @param _service: p2p service handler used to send/receive messages
-     * @param _keyPair: the keyPair used to init consensus module
-     * @param _preCompile: map that stores the PrecompiledContract (required by blockverifier)
-     */
     LedgerManager() = default;
     virtual ~LedgerManager() = default;
+
     /**
      * @brief : init a single ledger with the given params
      *
@@ -51,65 +67,104 @@ public:
      */
     bool insertLedger(dev::GROUP_ID const& _groupId, std::shared_ptr<LedgerInterface> ledger)
     {
-        if (_groupId <= 0)
-        {
-            LedgerManager_LOG(ERROR)
-                << "[initSingleLedger] invalid GroupId: " << _groupId << ", must between [1"
-                << ", " << maxGroupID << "]";
-            return false;
-        }
+        RecursiveGuard l(x_ledgerManager);
         auto ret = m_ledgerMap.insert(std::make_pair(_groupId, ledger));
         if (ret.second)
         {
-            WriteGuard l(x_groupListCache);
             m_groupListCache.insert(_groupId);
         }
 
         return ret.second;
     }
 
-    bool isLedgerExist(dev::GROUP_ID const& _groupId) { return m_ledgerMap.count(_groupId); }
-    /**
-     * @brief : start a single ledger by groupId
-     * @param groupId : the ledger need to be started
-     * @return true : start success
-     * @return false : start failed (maybe the ledger doesn't exist)
-     */
-    virtual bool startByGroupID(dev::GROUP_ID const& groupId)
+    bool isLedgerExist(dev::GROUP_ID const& _groupId)
     {
-        if (!m_ledgerMap.count(groupId))
-            return false;
-        m_ledgerMap[groupId]->startAll();
-        return true;
+        RecursiveGuard l(x_ledgerManager);
+        return m_ledgerMap.count(_groupId) != 0;
+    }
+
+    bool isLedgerHaltedBefore(dev::GROUP_ID const& _groupID)
+    {
+        RecursiveGuard l(x_ledgerManager);
+        auto status = queryGroupStatus(_groupID);
+        // if a group was marked as `STOPPED` or `DELETED`, it was halted before
+        if (status == LedgerStatus::STOPPED || status == LedgerStatus::DELETED)
+        {
+            return true;
+        }
+        // the group who marked as `STOPPING` had tried to stop itself before
+        // reboot of the node. Now, it's stopped physically, so change the mark
+        // to `STOPPED`
+        if (status == LedgerStatus::STOPPING)
+        {
+            setGroupStatus(_groupID, LedgerStatus::STOPPED);
+            return true;
+        }
+
+        return false;
     }
 
     /**
-     * @brief: stop the ledger by group id
-     * @param groupId: the groupId of the ledger need to be stopped
-     * @return true: stop the ledger succeed
-     * @return false: stop the ledger failed
+     * @brief : create a single ledger by group ID
+     * @param _groupID : the ledger need to be created
+     * @param _timestamp: timestamp of the genesis block
+     * @param _sealerList: sealers of the group
      */
-    virtual bool stopByGroupID(dev::GROUP_ID const& groupId)
-    {
-        if (!m_ledgerMap.count(groupId))
-            return false;
-        m_ledgerMap[groupId]->stopAll();
-        return true;
-    }
+    void generateGroup(dev::GROUP_ID _groupID, const GroupParams& _params);
+
+    /**
+     * @brief : start a single ledger by group ID
+     * @param _groupID : the ledger need to be started
+     */
+    void startByGroupID(dev::GROUP_ID const& _groupID);
+
+    /**
+     * @brief: stop the ledger by group ID
+     * @param _groupID: the groupId of the ledger need to be stopped
+     */
+    void stopByGroupID(dev::GROUP_ID const& _groupID);
+
+    /**
+     * @brief: delete the ledger by group ID
+     * @param _groupID: the groupId of the ledger need to be deleted
+     */
+    void removeByGroupID(dev::GROUP_ID const& _groupID);
+
+    /**
+     * @brief: recover the ledger by group ID
+     * @param _groupID: the groupId of the ledger need to be recovered
+     */
+    void recoverByGroupID(dev::GROUP_ID const& _groupID);
+
+    /**
+     * @brief: query the ledger status by group ID
+     * @param _groupID: the groupId of the ledger
+     */
+    LedgerStatus queryGroupStatus(dev::GROUP_ID const& groupID);
+
+    /**
+     * @brief: change the ledger status by group ID
+     * @param _groupID: the groupId of the ledger
+     * @param _status: new status of the ledger
+     */
+    void setGroupStatus(dev::GROUP_ID const& _groupID, LedgerStatus _status);
 
     /// start all the ledgers that have been created
     virtual void startAll()
     {
+        RecursiveGuard l(x_ledgerManager);
         for (auto item : m_ledgerMap)
         {
             if (!item.second)
                 continue;
             item.second->startAll();
+            setGroupStatus(item.first, LedgerStatus::RUNNING);
         }
     }
     /// stop all the ledgers that have been started
     virtual void stopAll()
     {
+        RecursiveGuard l(x_ledgerManager);
         for (auto item : m_ledgerMap)
         {
             if (!item.second)
@@ -120,6 +175,7 @@ public:
     /// get pointer of txPool by group id
     std::shared_ptr<dev::txpool::TxPoolInterface> txPool(dev::GROUP_ID const& groupId)
     {
+        RecursiveGuard l(x_ledgerManager);
         if (!m_ledgerMap.count(groupId))
             return nullptr;
         return m_ledgerMap[groupId]->txPool();
@@ -129,6 +185,7 @@ public:
     std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier(
         dev::GROUP_ID const& groupId)
     {
+        RecursiveGuard l(x_ledgerManager);
         if (!m_ledgerMap.count(groupId))
             return nullptr;
         return m_ledgerMap[groupId]->blockVerifier();
@@ -137,6 +194,7 @@ public:
     /// get ledger
     std::shared_ptr<LedgerInterface> ledger(dev::GROUP_ID const& groupId)
     {
+        RecursiveGuard l(x_ledgerManager);
         auto it = m_ledgerMap.find(groupId);
         return (it == m_ledgerMap.end() ? nullptr : it->second);
     }
@@ -144,6 +202,7 @@ public:
     /// get pointer of blockchain by group id
     std::shared_ptr<dev::blockchain::BlockChainInterface> blockChain(dev::GROUP_ID const& groupId)
     {
+        RecursiveGuard l(x_ledgerManager);
         if (!m_ledgerMap.count(groupId))
             return nullptr;
         return m_ledgerMap[groupId]->blockChain();
@@ -151,6 +210,7 @@ public:
     /// get pointer of consensus by group id
     std::shared_ptr<dev::consensus::ConsensusInterface> consensus(dev::GROUP_ID const& groupId)
     {
+        RecursiveGuard l(x_ledgerManager);
         if (!m_ledgerMap.count(groupId))
             return nullptr;
         return m_ledgerMap[groupId]->consensus();
@@ -158,6 +218,7 @@ public:
     /// get pointer of blocksync by group id
     std::shared_ptr<dev::sync::SyncInterface> sync(dev::GROUP_ID const& groupId)
     {
+        RecursiveGuard l(x_ledgerManager);
         if (!m_ledgerMap.count(groupId))
             return nullptr;
         return m_ledgerMap[groupId]->sync();
@@ -165,6 +226,7 @@ public:
     /// get ledger params by group id
     std::shared_ptr<LedgerParamInterface> getParamByGroupId(dev::GROUP_ID const& groupId)
     {
+        RecursiveGuard l(x_ledgerManager);
         if (!m_ledgerMap.count(groupId))
             return nullptr;
         return m_ledgerMap[groupId]->getParam();
@@ -173,13 +235,19 @@ public:
     std::set<dev::GROUP_ID> getGroupListForRpc() const;
     std::set<dev::GROUP_ID> const& getGroupList() const
     {
-        ReadGuard l(x_groupListCache);
+        RecursiveGuard l(x_ledgerManager);
         return m_groupListCache;
     }
 
 
 private:
-    mutable SharedMutex x_groupListCache;
+    void checkGroupStatus(dev::GROUP_ID const& _groupID, LedgerStatus _allowedStatus);
+    std::string getGroupStatusFilePath(dev::GROUP_ID const& _groupID) const;
+
+    std::string generateGenesisConfig(dev::GROUP_ID _groupId, const GroupParams& _params);
+    std::string generateGroupConfig();
+
+    mutable RecursiveMutex x_ledgerManager;
     /// cache for the group List
     std::set<dev::GROUP_ID> m_groupListCache;
 

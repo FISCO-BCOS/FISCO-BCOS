@@ -36,7 +36,8 @@ GroupSigPrecompiled::GroupSigPrecompiled()
     name2Selector[GroupSig_METHOD_SET_STR] = getFuncSelector(GroupSig_METHOD_SET_STR);
 }
 
-bytes GroupSigPrecompiled::call(ExecutiveContext::Ptr, bytesConstRef param, Address const&)
+PrecompiledExecResult::Ptr GroupSigPrecompiled::call(
+    ExecutiveContext::Ptr, bytesConstRef param, Address const&, Address const&)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("GroupSigPrecompiled") << LOG_DESC("call")
                            << LOG_KV("param", toHex(param));
@@ -46,8 +47,9 @@ bytes GroupSigPrecompiled::call(ExecutiveContext::Ptr, bytesConstRef param, Addr
     bytesConstRef data = getParamData(param);
 
     dev::eth::ContractABI abi;
-    bytes out;
+    auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
 
+    callResult->gasPricer()->setMemUsed(param.size());
     if (func == name2Selector[GroupSig_METHOD_SET_STR])
     {
         // groupSigVerify(string)
@@ -58,22 +60,23 @@ bytes GroupSigPrecompiled::call(ExecutiveContext::Ptr, bytesConstRef param, Addr
         try
         {
             result = GroupSigApi::group_verify(signature, message, gpkInfo, paramInfo);
+            callResult->gasPricer()->appendOperation(InterfaceOpcode::GroupSigVerify);
         }
         catch (std::string& errorMsg)
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("GroupSigPrecompiled") << LOG_DESC(errorMsg)
                                    << LOG_KV("signature", signature) << LOG_KV("message", message)
                                    << LOG_KV("gpkInfo", gpkInfo) << LOG_KV("paramInfo", paramInfo);
-            getErrorCodeOut(out, VERIFY_GROUP_SIG_FAILED);
-            return out;
+            getErrorCodeOut(callResult->mutableExecResult(), VERIFY_GROUP_SIG_FAILED);
+            return callResult;
         }
-        out = abi.abiIn("", result);
+        callResult->setExecResult(abi.abiIn("", result));
     }
     else
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("GroupSigPrecompiled")
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
-        getErrorCodeOut(out, CODE_UNKNOW_FUNCTION_CALL);
+        getErrorCodeOut(callResult->mutableExecResult(), CODE_UNKNOW_FUNCTION_CALL);
     }
-    return out;
+    return callResult;
 }

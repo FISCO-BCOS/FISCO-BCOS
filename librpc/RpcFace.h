@@ -22,6 +22,7 @@
 
 #include "ModularServer.h"
 #include <boost/lexical_cast.hpp>
+#include <set>
 
 using namespace jsonrpc;
 
@@ -128,6 +129,11 @@ public:
                                    jsonrpc::JSON_STRING, NULL),
             &dev::rpc::RpcFace::sendRawTransactionI);
 
+        this->bindAndAddMethod(jsonrpc::Procedure("sendRawTransactionAndGetProof",
+                                   jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, "param1",
+                                   jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_STRING, NULL),
+            &dev::rpc::RpcFace::sendRawTransactionAndGetProofI);
+
         this->bindAndAddMethod(
             jsonrpc::Procedure("getCode", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT,
                 "param1", jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_STRING, NULL),
@@ -146,6 +152,31 @@ public:
                                    jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, "param1",
                                    jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_STRING, NULL),
             &dev::rpc::RpcFace::getTransactionReceiptByHashWithProofI);
+
+        this->bindAndAddMethod(
+            jsonrpc::Procedure("generateGroup", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT,
+                "param1", jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_OBJECT, NULL),
+            &dev::rpc::RpcFace::generateGroupI);
+
+        this->bindAndAddMethod(jsonrpc::Procedure("startGroup", jsonrpc::PARAMS_BY_POSITION,
+                                   jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
+            &dev::rpc::RpcFace::startGroupI);
+
+        this->bindAndAddMethod(jsonrpc::Procedure("stopGroup", jsonrpc::PARAMS_BY_POSITION,
+                                   jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
+            &dev::rpc::RpcFace::stopGroupI);
+
+        this->bindAndAddMethod(jsonrpc::Procedure("removeGroup", jsonrpc::PARAMS_BY_POSITION,
+                                   jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
+            &dev::rpc::RpcFace::removeGroupI);
+
+        this->bindAndAddMethod(jsonrpc::Procedure("recoverGroup", jsonrpc::PARAMS_BY_POSITION,
+                                   jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
+            &dev::rpc::RpcFace::recoverGroupI);
+
+        this->bindAndAddMethod(jsonrpc::Procedure("queryGroupStatus", jsonrpc::PARAMS_BY_POSITION,
+                                   jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
+            &dev::rpc::RpcFace::queryGroupStatusI);
     }
 
     inline virtual void getSystemConfigByKeyI(const Json::Value& request, Json::Value& response)
@@ -271,6 +302,13 @@ public:
             boost::lexical_cast<int>(request[0u].asString()), request[1u].asString());
     }
 
+    inline virtual void sendRawTransactionAndGetProofI(
+        const Json::Value& request, Json::Value& response)
+    {
+        response = this->sendRawTransactionAndGetProof(
+            boost::lexical_cast<int>(request[0u].asString()), request[1u].asString());
+    }
+
     inline virtual void getTransactionByHashWithProofI(
         const Json::Value& request, Json::Value& response)
     {
@@ -284,6 +322,37 @@ public:
     {
         response = this->getTransactionReceiptByHashWithProof(
             boost::lexical_cast<int>(request[0u].asString()), request[1u].asString());
+    }
+
+    inline virtual void generateGroupI(const Json::Value& request, Json::Value& response)
+    {
+        response =
+            this->generateGroup(boost::lexical_cast<int>(request[0u].asString()), request[1u]);
+    }
+
+    inline virtual void startGroupI(const Json::Value& request, Json::Value& response)
+    {
+        response = this->startGroup(boost::lexical_cast<int>(request[0u].asString()));
+    }
+
+    inline virtual void stopGroupI(const Json::Value& request, Json::Value& response)
+    {
+        response = this->stopGroup(boost::lexical_cast<int>(request[0u].asString()));
+    }
+
+    inline virtual void removeGroupI(const Json::Value& request, Json::Value& response)
+    {
+        response = this->removeGroup(boost::lexical_cast<int>(request[0u].asString()));
+    }
+
+    inline virtual void recoverGroupI(const Json::Value& request, Json::Value& response)
+    {
+        response = this->recoverGroup(boost::lexical_cast<int>(request[0u].asString()));
+    }
+
+    inline virtual void queryGroupStatusI(const Json::Value& request, Json::Value& response)
+    {
+        response = this->queryGroupStatus(boost::lexical_cast<int>(request[0u].asString()));
     }
 
     // system config part
@@ -336,11 +405,20 @@ public:
     virtual Json::Value call(int param1, const Json::Value& param2) = 0;
     /// Creates new message call transaction or a contract creation for signed transactions.
     virtual std::string sendRawTransaction(int param1, const std::string& param2) = 0;
+    virtual std::string sendRawTransactionAndGetProof(int _groupID, const std::string& rlp) = 0;
     // Get merkle transaction with proof by hash
     virtual Json::Value getTransactionByHashWithProof(int param1, const std::string& param2) = 0;
     // Get receipt with merkle proof by hash
     virtual Json::Value getTransactionReceiptByHashWithProof(
         int param1, const std::string& param2) = 0;
+
+    // Group operation part
+    virtual Json::Value generateGroup(int param1, const Json::Value& param2) = 0;
+    virtual Json::Value startGroup(int param1) = 0;
+    virtual Json::Value stopGroup(int param1) = 0;
+    virtual Json::Value removeGroup(int param1) = 0;
+    virtual Json::Value recoverGroup(int param1) = 0;
+    virtual Json::Value queryGroupStatus(int param1) = 0;
 };
 
 }  // namespace rpc

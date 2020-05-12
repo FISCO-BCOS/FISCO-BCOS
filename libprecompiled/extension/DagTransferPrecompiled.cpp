@@ -166,8 +166,9 @@ Table::Ptr DagTransferPrecompiled::openTable(
     return table;
 }
 
-bytes DagTransferPrecompiled::call(
-    dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
+PrecompiledExecResult::Ptr DagTransferPrecompiled::call(
+    dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin,
+    Address const&)
 {
     // PRECOMPILED_LOG(TRACE) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("call")
     //                       << LOG_KV("param", toHex(param));
@@ -175,28 +176,27 @@ bytes DagTransferPrecompiled::call(
     // parse function name
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
-
-    bytes out;
+    auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
     // user_name user_balance 2 fields in table, the key of table is user_name field
     if (func == name2Selector[DAG_TRANSFER_METHOD_ADD_STR_UINT])
     {  // userAdd(string,uint256)
-        userAddCall(context, data, origin, out);
+        userAddCall(context, data, origin, callResult->mutableExecResult());
     }
     else if (func == name2Selector[DAG_TRANSFER_METHOD_SAV_STR_UINT])
     {  // userSave(string,uint256)
-        userSaveCall(context, data, origin, out);
+        userSaveCall(context, data, origin, callResult->mutableExecResult());
     }
     else if (func == name2Selector[DAG_TRANSFER_METHOD_DRAW_STR_UINT])
     {  // userDraw(string,uint256)
-        userDrawCall(context, data, origin, out);
+        userDrawCall(context, data, origin, callResult->mutableExecResult());
     }
     else if (func == name2Selector[DAG_TRANSFER_METHOD_TRS_STR2_UINT])
     {  // userTransfer(string,string,uint256)
-        userTransferCall(context, data, origin, out);
+        userTransferCall(context, data, origin, callResult->mutableExecResult());
     }
     else if (func == name2Selector[DAG_TRANSFER_METHOD_BAL_STR])
     {  // userBalance(string user)
-        userBalanceCall(context, data, origin, out);
+        userBalanceCall(context, data, origin, callResult->mutableExecResult());
     }
     else
     {
@@ -207,7 +207,7 @@ bytes DagTransferPrecompiled::call(
     // PRECOMPILED_LOG(TRACE) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("call")
     //                       << LOG_DESC("end");
 
-    return out;
+    return callResult;
 }
 
 void DagTransferPrecompiled::userAddCall(dev::blockverifier::ExecutiveContext::Ptr context,

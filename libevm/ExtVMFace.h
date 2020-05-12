@@ -28,6 +28,7 @@
 #include <libdevcrypto/Hash.h>
 #include <libethcore/BlockHeader.h>
 #include <libethcore/Common.h>
+#include <libethcore/EVMFlags.h>
 #include <libethcore/EVMSchedule.h>
 #include <libethcore/Instruction.h>
 #include <libethcore/LastBlockHashesFace.h>
@@ -284,6 +285,9 @@ public:
     void setDepth(unsigned _depth) { m_depth = _depth; }
     void setCreate(bool _isCreate) { m_isCreate = _isCreate; }
     void setStaticCall(bool _staticCall) { m_staticCall = _staticCall; }
+
+    virtual VMFlagType evmFlags() const { return flags; }
+    void setEvmFlags(VMFlagType const& _evmFlags) { flags = _evmFlags; }
 
 protected:
     EnvInfo const& m_envInfo;

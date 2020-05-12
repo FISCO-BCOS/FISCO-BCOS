@@ -23,6 +23,7 @@
 #include <boost/test/unit_test.hpp>
 
 using namespace dev;
+using namespace dev::precompiled;
 using namespace dev::blockverifier;
 
 namespace test_ConditionPrecompiled
@@ -38,14 +39,20 @@ struct ConditionPrecompiledFixture
     ConditionPrecompiledFixture()
     {
         context = std::make_shared<MockPrecompiledEngine>();
-        conditionPrecompiled = std::make_shared<dev::blockverifier::ConditionPrecompiled>();
+        conditionPrecompiled = std::make_shared<dev::precompiled::ConditionPrecompiled>();
         auto condition = std::make_shared<storage::Condition>();
         conditionPrecompiled->setPrecompiledEngine(context);
         conditionPrecompiled->setCondition(condition);
+
+        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
+        auto precompiledExecResultFactory =
+            std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+        precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
+        conditionPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     }
 
     ~ConditionPrecompiledFixture() {}
-    dev::blockverifier::ConditionPrecompiled::Ptr conditionPrecompiled;
+    dev::precompiled::ConditionPrecompiled::Ptr conditionPrecompiled;
     ExecutiveContext::Ptr context;
 };
 

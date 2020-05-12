@@ -20,7 +20,7 @@
  */
 #pragma once
 
-#include "libblockverifier/Precompiled.h"
+#include "libprecompiled/Precompiled.h"
 
 namespace dev
 {
@@ -38,17 +38,18 @@ contract KVTableFactory {
 }
 #endif
 
-class KVTableFactoryPrecompiled : public dev::blockverifier::Precompiled
+class KVTableFactoryPrecompiled : public dev::precompiled::Precompiled
 {
 public:
     typedef std::shared_ptr<KVTableFactoryPrecompiled> Ptr;
     KVTableFactoryPrecompiled();
     virtual ~KVTableFactoryPrecompiled(){};
 
-    std::string toString();
+    std::string toString() override;
 
-    bytes call(std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef param,
-        Address const& origin = Address());
+    PrecompiledExecResult::Ptr call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+        bytesConstRef param, Address const& origin = Address(),
+        Address const& _sender = Address()) override;
 
     void setMemoryTableFactory(std::shared_ptr<dev::storage::TableFactory> memoryTableFactory)
     {

@@ -56,15 +56,17 @@ std::string KVTableFactoryPrecompiled::toString()
     return "KVTableFactory";
 }
 
-bytes KVTableFactoryPrecompiled::call(
-    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
+PrecompiledExecResult::Ptr KVTableFactoryPrecompiled::call(ExecutiveContext::Ptr context,
+    bytesConstRef param, Address const& origin, Address const& sender)
 {
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
-    STORAGE_LOG(DEBUG) << LOG_BADGE("KVTableFactory") << LOG_DESC("call") << LOG_KV("func", func);
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("KVTableFactory") << LOG_DESC("call")
+                           << LOG_KV("func", func);
 
     dev::eth::ContractABI abi;
-    bytes out;
+    auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
+    callResult->gasPricer()->setMemUsed(param.size());
 
     if (func == name2Selector[KVTABLE_FACTORY_METHOD_OPEN_TABLE])
     {  // openTable(string)
@@ -74,6 +76,7 @@ bytes KVTableFactoryPrecompiled::call(
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("KVTableFactory") << LOG_KV("openTable", tableName);
         Address address;
         auto table = m_memoryTableFactory->openTable(tableName);
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::OpenTable);
         if (table)
         {
             auto kvTablePrecompiled = make_shared<KVTablePrecompiled>();
@@ -82,23 +85,30 @@ bytes KVTableFactoryPrecompiled::call(
         }
         else
         {
-            STORAGE_LOG(WARNING) << LOG_BADGE("KVTableFactoryPrecompiled")
-                                 << LOG_DESC("Open new table failed")
-                                 << LOG_KV("table name", tableName);
+            PRECOMPILED_LOG(WARNING)
+                << LOG_BADGE("KVTableFactoryPrecompiled") << LOG_DESC("Open new table failed")
+                << LOG_KV("table name", tableName);
             BOOST_THROW_EXCEPTION(PrecompiledException(tableName + " does not exist"));
         }
-
-        out = abi.abiIn("", address);
+        callResult->setExecResult(abi.abiIn("", address));
     }
     else if (func == name2Selector[KVTABLE_FACTORY_METHOD_CREATE_TABLE])
     {  // createTable(string,string,string)
+        if (!checkAuthority(context, origin, sender))
+        {
+            PRECOMPILED_LOG(ERROR)
+                << LOG_BADGE("KVTableFactoryPrecompiled") << LOG_DESC("permission denied")
+                << LOG_KV("origin", origin.hex()) << LOG_KV("contract", sender.hex());
+            BOOST_THROW_EXCEPTION(PrecompiledException(
+                "Permission denied. " + origin.hex() + " can't call contract " + sender.hex()));
+        }
         string tableName;
         string keyField;
         string valueFiled;
 
         abi.abiOut(data, tableName, keyField, valueFiled);
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("KVTableFactory") << LOG_KV("createTable", tableName)
-                               << LOG_KV("keyField", keyField) << LOG_KV("valueFiled", valueFiled);
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("KVTableFactory") << LOG_KV("createTable", tableName)
+                              << LOG_KV("keyField", keyField) << LOG_KV("valueFiled", valueFiled);
 
         vector<string> fieldNameList;
         boost::split(fieldNameList, valueFiled, boost::is_any_of(","));
@@ -147,24 +157,29 @@ bytes KVTableFactoryPrecompiled::call(
             {  // table already exist
                 result = CODE_TABLE_NAME_ALREADY_EXIST;
             }
+            else
+            {
+                callResult->gasPricer()->appendOperation(InterfaceOpcode::CreateTable);
+            }
         }
         catch (dev::storage::StorageException& e)
         {
-            STORAGE_LOG(ERROR) << "Create table failed: " << boost::diagnostic_information(e);
+            PRECOMPILED_LOG(ERROR) << "Create table failed: " << boost::diagnostic_information(e);
             result = e.errorCode();
             if (e.errorCode() == storage::CODE_NO_AUTHORIZED)
             {
-                BOOST_THROW_EXCEPTION(PrecompiledException(std::string("permission denied")));
+                BOOST_THROW_EXCEPTION(PrecompiledException(
+                    "Permission denied. " + origin.hex() + " can't create table " + tableName));
             }
         }
-        getErrorCodeOut(out, result);
+        getErrorCodeOut(callResult->mutableExecResult(), result);
     }
     else
     {
-        STORAGE_LOG(ERROR) << LOG_BADGE("KVTableFactoryPrecompiled")
-                           << LOG_DESC("call undefined function!");
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("KVTableFactoryPrecompiled")
+                               << LOG_DESC("call undefined function!");
     }
-    return out;
+    return callResult;
 }
 
 h256 KVTableFactoryPrecompiled::hash()

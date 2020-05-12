@@ -29,7 +29,6 @@
 #include <libethcore/Transaction.h>
 #include <libethcore/TxsParallelParser.h>
 #include <libp2p/P2PInterface.h>
-#include <libp2p/StatisticHandler.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <vector>
 
@@ -72,12 +71,6 @@ public:
         ReadGuard l(x_buffer);
         return m_buffer->size();
     }
-
-    void setStatisticHandler(dev::p2p::StatisticHandler::Ptr _statisticHandler)
-    {
-        m_statisticHandler = _statisticHandler;
-    }
-
     void setTreeRouter(TreeTopology::Ptr _treeRouter) { m_treeRouter = _treeRouter; }
     void setSyncStatus(SyncMasterStatus::Ptr _syncStatus) { m_syncStatus = _syncStatus; }
 
@@ -102,8 +95,6 @@ private:
     std::shared_ptr<std::vector<std::shared_ptr<DownloadTxsShard>>> m_buffer;
     mutable SharedMutex x_buffer;
     mutable Mutex m_mutex;
-
-    dev::p2p::StatisticHandler::Ptr m_statisticHandler = nullptr;
     TreeTopology::Ptr m_treeRouter = nullptr;
     SyncMasterStatus::Ptr m_syncStatus;
     dev::p2p::P2PInterface::Ptr m_service;

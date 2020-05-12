@@ -166,6 +166,8 @@ void ChannelRPCServer::onConnect(
         CHANNEL_LOG(INFO) << "channel new connect, host=" << session->host() << ":"
                           << session->port();
 
+        session->setNetworkStat(m_networkStatHandler);
+
         auto sessionID = ++_sessionCount;
         {
             std::lock_guard<std::mutex> lock(_sessionMutex);
@@ -392,14 +394,16 @@ void dev::ChannelRPCServer::onClientRPCRequest(
             auto protocolVersion = static_cast<uint32_t>(session->protocolVersion());
 
             m_callbackSetter(
-                new std::function<void(const std::string& receiptContext)>(
-                    [serverRef, sessionRef, seq](const std::string& receiptContext) {
+                new std::function<void(const std::string& receiptContext, GROUP_ID _groupId)>(
+                    [serverRef, sessionRef, seq](
+                        const std::string& receiptContext, GROUP_ID _groupId) {
                         auto server = serverRef.lock();
                         auto session = sessionRef.lock();
                         if (server && session)
                         {
                             auto channelMessage = server->messageFactory()->buildMessage();
                             channelMessage->setType(TRANSACTION_NOTIFY);
+                            channelMessage->setGroupID(_groupId);
                             channelMessage->setSeq(seq);
                             channelMessage->setResult(0);
                             channelMessage->setData(
@@ -447,7 +451,7 @@ void dev::ChannelRPCServer::onClientEventLogRequest(
         auto protocolVersion = static_cast<uint32_t>(session->protocolVersion());
 
         auto respCallback = [serverRef, sessionRef](const std::string& _filterID, int32_t _result,
-                                const Json::Value& _logs) {
+                                const Json::Value& _logs, GROUP_ID const& _groupId) {
             auto server = serverRef.lock();
             auto session = sessionRef.lock();
 
@@ -462,6 +466,10 @@ void dev::ChannelRPCServer::onClientEventLogRequest(
                 auto resp = writer.write(jsonResp);
 
                 auto channelMessage = server->messageFactory()->buildMessage();
+
+                // only used for network statistic
+                channelMessage->setGroupID(_groupId);
+
                 channelMessage->setType(EVENT_LOG_PUSH);
                 channelMessage->setResult(0);
                 channelMessage->setSeq(std::string(32, '0'));

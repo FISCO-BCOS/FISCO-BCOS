@@ -50,15 +50,17 @@ std::string KVTablePrecompiled::toString()
     return "KVTable";
 }
 
-bytes KVTablePrecompiled::call(
-    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
+PrecompiledExecResult::Ptr KVTablePrecompiled::call(ExecutiveContext::Ptr context,
+    bytesConstRef param, Address const& origin, Address const& sender)
 {
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("KVTable") << LOG_DESC("call") << LOG_KV("func", func);
     dev::eth::ContractABI abi;
 
-    bytes out;
+    auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
+
+    callResult->gasPricer()->setMemUsed(param.size());
 
     if (func == name2Selector[KVTABLE_METHOD_GET])
     {  // get(string)
@@ -67,9 +69,13 @@ bytes KVTablePrecompiled::call(
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("KVTable") << LOG_KV("get", key);
 
         auto entries = m_table->select(key, m_table->newCondition());
+
+        callResult->gasPricer()->updateMemUsed(getEntriesCapacity(entries));
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::Select, entries->size());
+
         if (entries->size() == 0)
         {
-            out = abi.abiIn("", false, Address());
+            callResult->setExecResult(abi.abiIn("", false, Address()));
         }
         else
         {
@@ -78,15 +84,23 @@ bytes KVTablePrecompiled::call(
             entryPrecompiled->setEntry(
                 std::const_pointer_cast<dev::storage::Entries>(entries)->get(0));
             auto newAddress = context->registerPrecompiled(entryPrecompiled);
-            out = abi.abiIn("", true, newAddress);
+            callResult->setExecResult(abi.abiIn("", true, newAddress));
         }
     }
     else if (func == name2Selector[KVTABLE_METHOD_SET])
     {  // set(string,address)
+        if (!checkAuthority(context, origin, sender))
+        {
+            PRECOMPILED_LOG(ERROR)
+                << LOG_BADGE("TablePrecompiled") << LOG_DESC("permission denied")
+                << LOG_KV("origin", origin.hex()) << LOG_KV("contract", sender.hex());
+            BOOST_THROW_EXCEPTION(PrecompiledException(
+                "Permission denied. " + origin.hex() + " can't call contract " + sender.hex()));
+        }
         std::string key;
         Address entryAddress;
         abi.abiOut(data, key, entryAddress);
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("KVTable") << LOG_KV("set", key);
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("KVTable") << LOG_KV("set", key);
         EntryPrecompiled::Ptr entryPrecompiled =
             std::dynamic_pointer_cast<EntryPrecompiled>(context->getPrecompiled(entryAddress));
         auto entry = entryPrecompiled->getEntry();
@@ -100,21 +114,37 @@ bytes KVTablePrecompiled::call(
                 CODE_TABLE_KEYVALUE_LENGTH_OVERFLOW, false);
         }
         auto entries = m_table->select(key, m_table->newCondition());
+
+        callResult->gasPricer()->updateMemUsed(getEntriesCapacity(entries));
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::Select, entries->size());
+
         int count = 0;
         if (entries->size() == 0)
         {
             count = m_table->insert(key, entry, std::make_shared<AccessOptions>(origin));
+            if (count > 0)
+            {
+                callResult->gasPricer()->setMemUsed(entry->capacity() * count);
+                callResult->gasPricer()->appendOperation(InterfaceOpcode::Insert, count);
+            }
         }
         else
         {
             count = m_table->update(
                 key, entry, m_table->newCondition(), std::make_shared<AccessOptions>(origin));
+            if (count > 0)
+            {
+                callResult->gasPricer()->setMemUsed(entry->capacity() * count);
+                callResult->gasPricer()->appendOperation(InterfaceOpcode::Update, count);
+            }
         }
         if (count == storage::CODE_NO_AUTHORIZED)
         {
-            BOOST_THROW_EXCEPTION(PrecompiledException(std::string("permission denied")));
+            BOOST_THROW_EXCEPTION(
+                PrecompiledException("Permission denied. " + origin.hex() + " can't write " +
+                                     m_table->tableInfo()->name));
         }
-        out = abi.abiIn("", s256(count));
+        callResult->setExecResult(abi.abiIn("", s256(count)));
     }
     else if (func == name2Selector[KVTABLE_METHOD_NEWENT])
     {  // newEntry()
@@ -123,14 +153,14 @@ bytes KVTablePrecompiled::call(
         entryPrecompiled->setEntry(entry);
 
         auto newAddress = context->registerPrecompiled(entryPrecompiled);
-        out = abi.abiIn("", newAddress);
+        callResult->setExecResult(abi.abiIn("", newAddress));
     }
     else
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("KVTablePrecompiled")
                                << LOG_DESC("call undefined function!");
     }
-    return out;
+    return callResult;
 }
 
 h256 KVTablePrecompiled::hash()

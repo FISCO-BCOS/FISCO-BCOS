@@ -33,14 +33,15 @@ ExternalProject_Add(jsoncpp
     DOWNLOAD_NAME jsoncpp-1.7.7.tar.gz
     DOWNLOAD_NO_PROGRESS 1
     URL https://github.com/open-source-parsers/jsoncpp/archive/1.7.7.tar.gz
+        https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/jsoncpp-1.7.7.tar.gz
     URL_HASH SHA256=087640ebcf7fbcfe8e2717a0b9528fff89c52fcf69fa2a18cc2b538008098f97
     CMAKE_COMMAND ${JSONCPP_CMAKE_COMMAND}
     CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
                # Build static lib but suitable to be included in a shared lib.
                -DCMAKE_POSITION_INDEPENDENT_CODE=${BUILD_SHARED_LIBS}
                ${_only_release_configuration}
-               -DJSONCPP_WITH_TESTS=Off
-               -DJSONCPP_WITH_PKGCONFIG_SUPPORT=Off
+               -DJSONCPP_WITH_TESTS=OFF
+               -DJSONCPP_WITH_PKGCONFIG_SUPPORT=OFF
                	# -DCMAKE_C_FLAGS=-Wa,-march=generic64
                	# -DCMAKE_CXX_FLAGS=-Wa,-march=generic64
                	-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}

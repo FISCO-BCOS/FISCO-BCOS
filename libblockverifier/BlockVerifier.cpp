@@ -122,7 +122,7 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
 
     try
     {
-        Executive::Ptr executive = std::make_shared<Executive>();
+        auto executive = createAndInitExecutive();
         EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
         envInfo.setPrecompiledEngine(executiveContext);
         executive->setEnvInfo(envInfo);
@@ -274,7 +274,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
                 (void)_r;
                 EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
                 envInfo.setPrecompiledEngine(executiveContext);
-                Executive::Ptr executive = std::make_shared<Executive>();
+                auto executive = createAndInitExecutive();
                 executive->setEnvInfo(envInfo);
                 executive->setState(executiveContext->getState());
 
@@ -387,8 +387,7 @@ TransactionReceipt::Ptr BlockVerifier::executeTransaction(
             << LOG_DESC("[executeTransaction] Error during execute initExecutiveContext")
             << LOG_KV("errorMsg", boost::diagnostic_information(e));
     }
-
-    Executive::Ptr executive = std::make_shared<Executive>();
+    auto executive = createAndInitExecutive();
     EnvInfo envInfo(blockHeader, m_pNumberHash, 0);
     envInfo.setPrecompiledEngine(executiveContext);
     executive->setEnvInfo(envInfo);
@@ -487,4 +486,11 @@ dev::eth::TransactionReceipt::Ptr BlockVerifier::execute(dev::eth::Transaction::
     return std::make_shared<TransactionReceipt>(executiveContext->getState()->rootHash(false),
         executive->gasUsed(), executive->logs(), executive->status(),
         executive->takeOutput().takeBytes(), executive->newAddress());
+}
+
+dev::executive::Executive::Ptr BlockVerifier::createAndInitExecutive()
+{
+    Executive::Ptr executive = std::make_shared<Executive>();
+    executive->setEvmFlags(m_evmFlags);
+    return executive;
 }

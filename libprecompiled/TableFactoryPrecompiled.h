@@ -20,7 +20,7 @@
  */
 #pragma once
 
-#include "libblockverifier/Precompiled.h"
+#include "libprecompiled/Precompiled.h"
 
 namespace dev
 {
@@ -28,9 +28,9 @@ namespace storage
 {
 class MemoryTableFactory;
 }
-namespace blockverifier
+
+namespace precompiled
 {
-class ExecutiveContext;
 #if 0
 {
     "56004b6a": "createTable(string,string,string)",
@@ -49,10 +49,11 @@ public:
     TableFactoryPrecompiled();
     virtual ~TableFactoryPrecompiled(){};
 
-    virtual std::string toString();
+    std::string toString() override;
 
-    virtual bytes call(std::shared_ptr<ExecutiveContext> context, bytesConstRef param,
-        Address const& origin = Address());
+    PrecompiledExecResult::Ptr call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+        bytesConstRef param, Address const& origin = Address(),
+        Address const& _sender = Address()) override;
 
     void setMemoryTableFactory(std::shared_ptr<dev::storage::TableFactory> memoryTableFactory)
     {
@@ -70,6 +71,6 @@ private:
     std::shared_ptr<dev::storage::TableFactory> m_memoryTableFactory;
 };
 
-}  // namespace blockverifier
+}  // namespace precompiled
 
 }  // namespace dev

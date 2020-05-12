@@ -49,7 +49,8 @@ public:
     // m_nextBlockToProcess
     eth::BlockNumber getNextBlockToProcess() const { return m_nextBlockToProcess; }
     // m_responseCallback
-    std::function<bool(const std::string& _filterID, int32_t _result, const Json::Value& _logs)>
+    std::function<bool(const std::string& _filterID, int32_t _result, const Json::Value& _logs,
+        GROUP_ID const& _groupId)>
     getResponseCallback()
     {
         return m_responseCallback;
@@ -66,8 +67,8 @@ public:
         m_nextBlockToProcess = _nextBlockToProcess;
     }
     // set response call back
-    void setResponseCallBack(
-        std::function<bool(const std::string& _filterID, int32_t _result, const Json::Value& _logs)>
+    void setResponseCallBack(std::function<bool(const std::string& _filterID, int32_t _result,
+            const Json::Value& _logs, GROUP_ID const& _groupId)>
             _callback)
     {
         m_responseCallback = _callback;
@@ -92,7 +93,8 @@ private:
     // channel protocol version
     uint32_t m_channelProtocolVersion;
     // response callback function
-    std::function<bool(const std::string& _filterID, int32_t _result, const Json::Value& _logs)>
+    std::function<bool(const std::string& _filterID, int32_t _result, const Json::Value& _logs,
+        GROUP_ID const& _groupId)>
         m_responseCallback;
     // connect active check function
     std::function<bool()> m_isSessionActive;

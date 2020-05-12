@@ -32,6 +32,7 @@ ExternalProject_Add(cryptopp
     DOWNLOAD_NAME cryptopp_bccc6443.tar.gz
     DOWNLOAD_NO_PROGRESS 1
     URL https://github.com/weidai11/cryptopp/archive/bccc6443c4d4d611066c2de4c17109380cf97704.tar.gz
+        https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/cryptopp_bccc6443.tar.gz
     URL_HASH SHA256=f1fddacadd2a0873f795d5614a85fecd5b6ff1d1c6e21dedc251703c54ce63aa
     PATCH_COMMAND ${CMAKE_COMMAND} -E remove
         3way.cpp
@@ -138,15 +139,15 @@ ExternalProject_Add(cryptopp
         -DCMAKE_BUILD_TYPE=Release
         # Build static lib but suitable to be included in a shared lib.
         -DCMAKE_POSITION_INDEPENDENT_CODE=${BUILD_SHARED_LIBS}
-        -DBUILD_SHARED=Off
-        -DBUILD_TESTING=Off
+        -DBUILD_SHARED=OFF
+        -DBUILD_TESTING=OFF
         -DCMAKE_C_FLAGS=${MARCH_TYPE}
         -DCMAKE_CXX_FLAGS=${MARCH_TYPE}
         -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
         -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
-    LOG_CONFIGURE 1
     BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config Release
     INSTALL_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config Release --target install
+    LOG_CONFIGURE 1
     LOG_BUILD 1
     LOG_INSTALL 1
     BUILD_BYPRODUCTS <INSTALL_DIR>/${CMAKE_INSTALL_LIBDIR}/libcryptopp.a

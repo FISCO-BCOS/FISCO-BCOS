@@ -14,7 +14,7 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  *
- * @brief: Empty test framework of FISCO-BCOS. Define BOOST_TEST_MODULE and import easylogging
+ * @brief: Empty test framework of FISCO-BCOS. Define BOOST_TEST_MODULE
  *
  * @file main.cpp
  * @author: yujiechen, jimmyshi

@@ -25,7 +25,7 @@
 
 namespace dev
 {
-namespace blockverifier
+namespace precompiled
 {
 #if 0
 contract Entries {
@@ -45,10 +45,11 @@ public:
     EntriesPrecompiled();
     virtual ~EntriesPrecompiled(){};
 
-    virtual std::string toString();
+    std::string toString() override;
 
-    virtual bytes call(
-        ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin = Address());
+    PrecompiledExecResult::Ptr call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+        bytesConstRef param, Address const& origin = Address(),
+        Address const& _sender = Address()) override;
 
     void setEntries(dev::storage::Entries::ConstPtr entries) { m_entriesConst = entries; }
     dev::storage::Entries::Ptr getEntries()
@@ -61,6 +62,6 @@ private:
     dev::storage::Entries::ConstPtr m_entriesConst;
 };
 
-}  // namespace blockverifier
+}  // namespace precompiled
 
 }  // namespace dev

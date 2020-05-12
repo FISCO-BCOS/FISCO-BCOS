@@ -74,6 +74,7 @@ private:
 };
 DEV_SIMPLE_EXCEPTION(OpenSysTableFailed);
 
+using Parent2ChildListMap = std::map<std::string, std::vector<std::string>>;
 class BlockChainImp : public BlockChainInterface
 {
 public:
@@ -129,7 +130,22 @@ public:
 
     void setEnableHexBlock(bool const& _enableHexBlock) { m_enableHexBlock = _enableHexBlock; }
 
+    std::shared_ptr<MerkleProofType> getTransactionReceiptProof(
+        dev::eth::Block::Ptr _block, uint64_t const& _index) override;
+
+    std::shared_ptr<MerkleProofType> getTransactionProof(
+        dev::eth::Block::Ptr _block, uint64_t const& _index) override;
+
 private:
+    std::shared_ptr<Parent2ChildListMap> getParent2ChildListByReceiptProofCache(
+        dev::eth::Block::Ptr _block);
+    std::shared_ptr<Parent2ChildListMap> getParent2ChildListByTxsProofCache(
+        dev::eth::Block::Ptr _block);
+
+    std::shared_ptr<MerkleProofType> getProof(
+        std::shared_ptr<Parent2ChildListMap> _parent2ChildList, uint64_t const& _index,
+        const dev::bytes& _encodedData);
+
     void initSystemConfig(
         dev::storage::Table::Ptr _tb, std::string const& _key, std::string const& _value);
 
@@ -204,17 +220,17 @@ private:
 
     dev::storage::TableFactoryFactory::Ptr m_tableFactoryFactory;
 
-    std::pair<dev::eth::LocalisedTransaction::Ptr,
+    std::pair<dev::eth::BlockNumber,
         std::shared_ptr<std::map<std::string, std::vector<std::string>>>>
-        m_transactionWithProof;
-    std::mutex m_transactionWithProofMutex;
+        m_transactionWithProof = std::make_pair(0, nullptr);
 
-    std::pair<dev::eth::LocalisedTransactionReceipt::Ptr,
+    mutable SharedMutex m_transactionWithProofMutex;
+
+    std::pair<dev::eth::BlockNumber,
         std::shared_ptr<std::map<std::string, std::vector<std::string>>>>
-        m_receiptWithProof = std::make_pair(std::make_shared<dev::eth::LocalisedTransactionReceipt>(
-                                                executive::TransactionException::None),
-            std::shared_ptr<std::map<std::string, std::vector<std::string>>>());
-    std::mutex m_receiptWithProofMutex;
+        m_receiptWithProof = std::make_pair(0, nullptr);
+
+    mutable SharedMutex m_receiptWithProofMutex;
 
     bool m_enableHexBlock = false;
 };

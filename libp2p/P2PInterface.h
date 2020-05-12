@@ -29,12 +29,15 @@
 
 namespace dev
 {
+namespace stat
+{
+class NetworkStatHandler;
+}
 namespace p2p
 {
 class P2PMessage;
 class P2PMessageFactory;
 class P2PSession;
-class StatisticHandler;
 typedef std::function<void(dev::network::NetworkException, std::shared_ptr<dev::p2p::P2PSession>,
     std::shared_ptr<dev::p2p::P2PMessage>)>
     CallbackFuncWithSession;
@@ -96,7 +99,10 @@ public:
     virtual CallbackFuncForTopicVerify callbackFuncForTopicVerify() = 0;
 
     virtual std::shared_ptr<dev::p2p::P2PSession> getP2PSessionByNodeId(NodeID const& _nodeID) = 0;
-    virtual std::shared_ptr<StatisticHandler> statisticHandler() { return nullptr; }
+    virtual void appendNetworkStatHandlerByGroupID(
+        GROUP_ID const&, std::shared_ptr<dev::stat::NetworkStatHandler>)
+    {}
+    virtual void removeNetworkStatHandlerByGroupID(GROUP_ID const&) {}
 };
 
 }  // namespace p2p

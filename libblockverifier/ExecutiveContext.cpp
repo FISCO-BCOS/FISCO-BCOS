@@ -34,8 +34,15 @@ using namespace dev::eth::abi;
 using namespace dev::blockverifier;
 using namespace dev;
 using namespace std;
+// set PrecompiledExecResultFactory for each precompiled object
+void ExecutiveContext::setPrecompiledExecResultFactory(
+    dev::precompiled::PrecompiledExecResultFactory::Ptr _precompiledExecResultFactory)
+{
+    m_precompiledExecResultFactory = _precompiledExecResultFactory;
+}
 
-bytes ExecutiveContext::call(Address const& origin, Address address, bytesConstRef param)
+dev::precompiled::PrecompiledExecResult::Ptr ExecutiveContext::call(
+    Address const& address, bytesConstRef param, Address const& origin, Address const& sender)
 {
     try
     {
@@ -43,13 +50,14 @@ bytes ExecutiveContext::call(Address const& origin, Address address, bytesConstR
 
         if (p)
         {
-            bytes out = p->call(shared_from_this(), param, origin);
-            return out;
+            auto execResult = p->call(shared_from_this(), param, origin, sender);
+            return execResult;
         }
         else
         {
             EXECUTIVECONTEXT_LOG(DEBUG)
                 << LOG_DESC("[call]Can't find address") << LOG_KV("address", address);
+            return std::make_shared<dev::precompiled::PrecompiledExecResult>();
         }
     }
     catch (dev::precompiled::PrecompiledException& e)
@@ -71,15 +79,16 @@ bytes ExecutiveContext::call(Address const& origin, Address address, bytesConstR
 
         throw dev::eth::PrecompiledError();
     }
-
-    return bytes();
 }
 
-Address ExecutiveContext::registerPrecompiled(Precompiled::Ptr p)
+Address ExecutiveContext::registerPrecompiled(std::shared_ptr<precompiled::Precompiled> p)
 {
     auto count = ++m_addressCount;
     Address address(count);
-
+    if (!p->precompiledExecResultFactory())
+    {
+        p->setPrecompiledExecResultFactory(m_precompiledExecResultFactory);
+    }
     m_address2Precompiled.insert(std::make_pair(address, p));
 
     return address;
@@ -92,7 +101,7 @@ bool ExecutiveContext::isPrecompiled(Address address) const
     return p.get() != NULL;
 }
 
-Precompiled::Ptr ExecutiveContext::getPrecompiled(Address address) const
+std::shared_ptr<precompiled::Precompiled> ExecutiveContext::getPrecompiled(Address address) const
 {
     auto itPrecompiled = m_address2Precompiled.find(address);
 
@@ -100,7 +109,7 @@ Precompiled::Ptr ExecutiveContext::getPrecompiled(Address address) const
     {
         return itPrecompiled->second;
     }
-    return Precompiled::Ptr();
+    return std::shared_ptr<precompiled::Precompiled>();
 }
 
 std::shared_ptr<dev::executive::StateFace> ExecutiveContext::getState()

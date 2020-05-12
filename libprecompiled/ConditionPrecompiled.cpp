@@ -25,6 +25,7 @@
 
 using namespace dev;
 using namespace dev::blockverifier;
+using namespace dev::precompiled;
 using namespace dev::storage;
 
 
@@ -58,7 +59,8 @@ std::string ConditionPrecompiled::toString()
     return "Condition";
 }
 
-bytes ConditionPrecompiled::call(ExecutiveContext::Ptr, bytesConstRef param, Address const&)
+PrecompiledExecResult::Ptr ConditionPrecompiled::call(
+    ExecutiveContext::Ptr, bytesConstRef param, Address const&, Address const&)
 {
     STORAGE_LOG(DEBUG) << "call Condition:" << toHex(param);
 
@@ -70,8 +72,8 @@ bytes ConditionPrecompiled::call(ExecutiveContext::Ptr, bytesConstRef param, Add
 
     dev::eth::ContractABI abi;
 
-    bytes out;
-
+    auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
+    callResult->gasPricer()->setMemUsed(param.size());
     // ensured by the logic of code
     assert(m_condition);
     if (func == name2Selector[CONDITION_METHOD_EQ_STR_INT])
@@ -82,6 +84,7 @@ bytes ConditionPrecompiled::call(ExecutiveContext::Ptr, bytesConstRef param, Add
         abi.abiOut(data, str, num);
 
         m_condition->EQ(str, boost::lexical_cast<std::string>(num));
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::EQ);
     }
     else if (func == name2Selector[CONDITION_METHOD_EQ_STR_STR])
     {  // EQ(string,string)
@@ -90,6 +93,7 @@ bytes ConditionPrecompiled::call(ExecutiveContext::Ptr, bytesConstRef param, Add
         abi.abiOut(data, str, value);
 
         m_condition->EQ(str, value);
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::EQ);
     }
     else if (func == name2Selector[CONDITION_METHOD_GE_STR_INT])
     {  // GE(string,int256)
@@ -98,6 +102,7 @@ bytes ConditionPrecompiled::call(ExecutiveContext::Ptr, bytesConstRef param, Add
         abi.abiOut(data, str, value);
 
         m_condition->GE(str, boost::lexical_cast<std::string>(value));
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::GE);
     }
     else if (func == name2Selector[CONDITION_METHOD_GT_STR_INT])
     {  // GT(string,int256)
@@ -106,6 +111,7 @@ bytes ConditionPrecompiled::call(ExecutiveContext::Ptr, bytesConstRef param, Add
         abi.abiOut(data, str, value);
 
         m_condition->GT(str, boost::lexical_cast<std::string>(value));
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::GT);
     }
     else if (func == name2Selector[CONDITION_METHOD_LE_STR_INT])
     {  // LE(string,int256)
@@ -114,6 +120,7 @@ bytes ConditionPrecompiled::call(ExecutiveContext::Ptr, bytesConstRef param, Add
         abi.abiOut(data, str, value);
 
         m_condition->LE(str, boost::lexical_cast<std::string>(value));
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::LE);
     }
     else if (func == name2Selector[CONDITION_METHOD_LT_STR_INT])
     {  // LT(string,int256)
@@ -122,6 +129,7 @@ bytes ConditionPrecompiled::call(ExecutiveContext::Ptr, bytesConstRef param, Add
         abi.abiOut(data, str, value);
 
         m_condition->LT(str, boost::lexical_cast<std::string>(value));
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::LT);
     }
     else if (func == name2Selector[CONDITION_METHOD_NE_STR_INT])
     {  // NE(string,int256)
@@ -130,6 +138,7 @@ bytes ConditionPrecompiled::call(ExecutiveContext::Ptr, bytesConstRef param, Add
         abi.abiOut(data, str, num);
 
         m_condition->NE(str, boost::lexical_cast<std::string>(num));
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::NE);
     }
     else if (func == name2Selector[CONDITION_METHOD_NE_STR_STR])
     {  // NE(string,string)
@@ -138,6 +147,7 @@ bytes ConditionPrecompiled::call(ExecutiveContext::Ptr, bytesConstRef param, Add
         abi.abiOut(data, str, value);
 
         m_condition->NE(str, value);
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::NE);
     }
     else if (func == name2Selector[CONDITION_METHOD_LIMIT_INT])
     {  // limit(int256)
@@ -145,6 +155,7 @@ bytes ConditionPrecompiled::call(ExecutiveContext::Ptr, bytesConstRef param, Add
         abi.abiOut(data, num);
 
         m_condition->limit(num.convert_to<size_t>());
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::Limit);
     }
     else if (func == name2Selector[CONDITION_METHOD_LIMIT_2INT])
     {  // limit(int256,int256)
@@ -153,11 +164,12 @@ bytes ConditionPrecompiled::call(ExecutiveContext::Ptr, bytesConstRef param, Add
         abi.abiOut(data, offset, size);
 
         m_condition->limit(offset.convert_to<size_t>(), size.convert_to<size_t>());
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::Limit);
     }
     else
     {
         STORAGE_LOG(ERROR) << LOG_BADGE("ConditionPrecompiled")
                            << LOG_DESC("call undefined function!");
     }
-    return out;
+    return callResult;
 }

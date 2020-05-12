@@ -51,8 +51,8 @@ ConsensusPrecompiled::ConsensusPrecompiled()
     name2Selector[CSS_METHOD_REMOVE] = getFuncSelector(CSS_METHOD_REMOVE);
 }
 
-bytes ConsensusPrecompiled::call(
-    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
+PrecompiledExecResult::Ptr ConsensusPrecompiled::call(
+    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin, Address const&)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("call")
                            << LOG_KV("param", toHex(param));
@@ -62,7 +62,7 @@ bytes ConsensusPrecompiled::call(
     bytesConstRef data = getParamData(param);
 
     dev::eth::ContractABI abi;
-    bytes out;
+    auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
     int count = 0;
 
     showConsensusTable(context);
@@ -259,8 +259,8 @@ bytes ConsensusPrecompiled::call(
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
     }
-    getErrorCodeOut(out, result);
-    return out;
+    getErrorCodeOut(callResult->mutableExecResult(), result);
+    return callResult;
 }
 
 void ConsensusPrecompiled::showConsensusTable(ExecutiveContext::Ptr context)

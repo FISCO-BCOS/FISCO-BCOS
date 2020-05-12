@@ -45,8 +45,10 @@ const char* const ACCOUNT_FROZEN = "frozen";
 class StorageState : public dev::executive::StateFace
 {
 public:
-    explicit StorageState(u256 const& _accountStartNonce)
-      : m_accountStartNonce(_accountStartNonce), m_memoryTableFactory(nullptr){};
+    explicit StorageState(u256 const& _accountStartNonce, bool _enableBinary = false)
+      : m_accountStartNonce(_accountStartNonce),
+        m_memoryTableFactory(nullptr),
+        m_enableBinary(_enableBinary){};
     virtual ~StorageState() = default;
     /// Check if the address is in use.
     bool addressInUse(Address const& _address) const override;
@@ -180,9 +182,9 @@ public:
 private:
     void createAccount(Address const& _address, u256 const& _nonce, u256 const& _amount = u256(0));
     std::shared_ptr<dev::storage::Table> getTable(Address const& _address) const;
-    /// check authority by caller
     u256 m_accountStartNonce;
     std::shared_ptr<dev::storage::TableFactory> m_memoryTableFactory;
+    bool m_enableBinary = false;
 };
 }  // namespace storagestate
 }  // namespace dev

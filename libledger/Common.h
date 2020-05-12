@@ -14,26 +14,32 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  */
-/** @file PrecompiledException.h
- *  @author mingzhenliu
- *  @date 20180921
+
+/**
+ * @brief : common componens of dynamic group management
+ * @file: GroupCommon.h
+ * @author: catli
+ * @date: 2020-03-16
  */
 #pragma once
-#include <exception>
+#include <libdevcore/Exceptions.h>
 
 namespace dev
 {
-namespace blockverifier
+namespace ledger
 {
-class FatalException : public std::exception
-{
-public:
-    FatalException() _GLIBCXX_USE_NOEXCEPT {}
+DEV_SIMPLE_EXCEPTION(GenesisConfAlreadyExists);
+DEV_SIMPLE_EXCEPTION(GroupConfAlreadyExists);
 
-    virtual ~FatalException() _GLIBCXX_USE_NOEXCEPT;
+DEV_SIMPLE_EXCEPTION(GroupNotFound);
+DEV_SIMPLE_EXCEPTION(GenesisConfNotFound);
+DEV_SIMPLE_EXCEPTION(GroupConfNotFound);
 
-    virtual const char* what() const _GLIBCXX_USE_NOEXCEPT;
-};
+DEV_SIMPLE_EXCEPTION(GroupIsRunning);
+DEV_SIMPLE_EXCEPTION(GroupIsStopping);
+DEV_SIMPLE_EXCEPTION(GroupAlreadyDeleted);
+DEV_SIMPLE_EXCEPTION(GroupAlreadyStopped);
 
-}  // namespace blockverifier
+DEV_SIMPLE_EXCEPTION(UnknownGroupStatus);
+}  // namespace ledger
 }  // namespace dev

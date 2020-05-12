@@ -26,7 +26,7 @@
 
 namespace dev
 {
-namespace blockverifier
+namespace precompiled
 {
 #if 0
 contract Condition {
@@ -67,22 +67,26 @@ public:
     virtual ~ConditionPrecompiled(){};
 
 
-    virtual std::string toString();
+    std::string toString() override;
 
-    virtual bytes call(
-        ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin = Address());
+    PrecompiledExecResult::Ptr call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+        bytesConstRef param, Address const& origin = Address(),
+        Address const& _sender = Address()) override;
 
-    void setPrecompiledEngine(ExecutiveContext::Ptr engine) { m_exeEngine = engine; }
+    void setPrecompiledEngine(std::shared_ptr<dev::blockverifier::ExecutiveContext> engine)
+    {
+        m_exeEngine = engine;
+    }
 
     void setCondition(dev::storage::Condition::Ptr condition) { m_condition = condition; }
     dev::storage::Condition::Ptr getCondition() { return m_condition; }
 
 private:
-    ExecutiveContext::Ptr m_exeEngine;
+    std::shared_ptr<dev::blockverifier::ExecutiveContext> m_exeEngine;
     // condition must been setted
     dev::storage::Condition::Ptr m_condition;
 };
 
-}  // namespace blockverifier
+}  // namespace precompiled
 
 }  // namespace dev

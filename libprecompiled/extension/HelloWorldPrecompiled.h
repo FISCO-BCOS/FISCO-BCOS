@@ -25,17 +25,18 @@ namespace dev
 {
 namespace precompiled
 {
-class HelloWorldPrecompiled : public dev::blockverifier::Precompiled
+class HelloWorldPrecompiled : public dev::precompiled::Precompiled
 {
 public:
     typedef std::shared_ptr<HelloWorldPrecompiled> Ptr;
     HelloWorldPrecompiled();
     virtual ~HelloWorldPrecompiled(){};
 
-    virtual std::string toString() override;
+    std::string toString() override;
 
-    virtual bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
-        bytesConstRef _param, Address const& _origin = Address()) override;
+    PrecompiledExecResult::Ptr call(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
+        bytesConstRef _param, Address const& _origin = Address(),
+        Address const& _sender = Address()) override;
 };
 
 }  // namespace precompiled

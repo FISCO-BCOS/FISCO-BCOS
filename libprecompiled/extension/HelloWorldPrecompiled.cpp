@@ -60,8 +60,9 @@ std::string HelloWorldPrecompiled::toString()
     return "HelloWorld";
 }
 
-bytes HelloWorldPrecompiled::call(dev::blockverifier::ExecutiveContext::Ptr _context,
-    bytesConstRef _param, Address const& _origin)
+PrecompiledExecResult::Ptr HelloWorldPrecompiled::call(
+    dev::blockverifier::ExecutiveContext::Ptr _context, bytesConstRef _param,
+    Address const& _origin, Address const&)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("call")
                            << LOG_KV("param", toHex(_param));
@@ -69,21 +70,24 @@ bytes HelloWorldPrecompiled::call(dev::blockverifier::ExecutiveContext::Ptr _con
     // parse function name
     uint32_t func = getParamFunc(_param);
     bytesConstRef data = getParamData(_param);
-    bytes out;
+    auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
+    callResult->gasPricer()->setMemUsed(_param.size());
     dev::eth::ContractABI abi;
 
     Table::Ptr table = openTable(_context, precompiled::getTableName(HELLO_WORLD_TABLE_NAME));
+    callResult->gasPricer()->appendOperation(InterfaceOpcode::OpenTable);
     if (!table)
     {
         // table is not exist, create it.
         table = createTable(_context, precompiled::getTableName(HELLO_WORLD_TABLE_NAME),
             HELLOWORLD_KEY_FIELD, HELLOWORLD_VALUE_FIELD, _origin);
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::CreateTable);
         if (!table)
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("set")
                                    << LOG_DESC("open table failed.");
-            getErrorCodeOut(out, storage::CODE_NO_AUTHORIZED);
-            return out;
+            getErrorCodeOut(callResult->mutableExecResult(), storage::CODE_NO_AUTHORIZED);
+            return callResult;
         }
     }
     if (func == name2Selector[HELLO_WORLD_METHOD_GET])
@@ -94,12 +98,14 @@ bytes HelloWorldPrecompiled::call(dev::blockverifier::ExecutiveContext::Ptr _con
         auto entries = table->select(HELLOWORLD_KEY_FIELD_NAME, table->newCondition());
         if (0u != entries->size())
         {
+            callResult->gasPricer()->updateMemUsed(getEntriesCapacity(entries));
+            callResult->gasPricer()->appendOperation(InterfaceOpcode::Select, entries->size());
             auto entry = entries->get(0);
             retValue = entry->getField(HELLOWORLD_VALUE_FIELD);
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("get")
                                    << LOG_KV("value", retValue);
         }
-        out = abi.abiIn("", retValue);
+        callResult->setExecResult(abi.abiIn("", retValue));
     }
     else if (func == name2Selector[HELLO_WORLD_METHOD_SET])
     {  // set(string) function call
@@ -107,6 +113,9 @@ bytes HelloWorldPrecompiled::call(dev::blockverifier::ExecutiveContext::Ptr _con
         std::string strValue;
         abi.abiOut(data, strValue);
         auto entries = table->select(HELLOWORLD_KEY_FIELD_NAME, table->newCondition());
+        callResult->gasPricer()->updateMemUsed(getEntriesCapacity(entries));
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::Select, entries->size());
+
         auto entry = table->newEntry();
         entry->setField(HELLOWORLD_KEY_FIELD, HELLOWORLD_KEY_FIELD_NAME);
         entry->setField(HELLOWORLD_VALUE_FIELD, strValue);
@@ -116,11 +125,21 @@ bytes HelloWorldPrecompiled::call(dev::blockverifier::ExecutiveContext::Ptr _con
         {  // update
             count = table->update(HELLOWORLD_KEY_FIELD_NAME, entry, table->newCondition(),
                 std::make_shared<AccessOptions>(_origin));
+            if (count > 0)
+            {
+                callResult->gasPricer()->appendOperation(InterfaceOpcode::Update, count);
+                callResult->gasPricer()->updateMemUsed(entry->capacity() * count);
+            }
         }
         else
         {  // insert
             count = table->insert(
                 HELLOWORLD_KEY_FIELD_NAME, entry, std::make_shared<AccessOptions>(_origin));
+            if (count > 0)
+            {
+                callResult->gasPricer()->updateMemUsed(entry->capacity() * count);
+                callResult->gasPricer()->appendOperation(InterfaceOpcode::Insert, count);
+            }
         }
 
         if (count == storage::CODE_NO_AUTHORIZED)
@@ -128,14 +147,14 @@ bytes HelloWorldPrecompiled::call(dev::blockverifier::ExecutiveContext::Ptr _con
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("set")
                                    << LOG_DESC("permission denied");
         }
-        getErrorCodeOut(out, count);
+        getErrorCodeOut(callResult->mutableExecResult(), count);
     }
     else
     {  // unknown function call
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC(" unknown func ")
                                << LOG_KV("func", func);
-        out = abi.abiIn("", u256(CODE_UNKNOW_FUNCTION_CALL));
+        callResult->setExecResult(abi.abiIn("", u256(CODE_UNKNOW_FUNCTION_CALL)));
     }
 
-    return out;
+    return callResult;
 }

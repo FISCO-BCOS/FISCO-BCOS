@@ -67,30 +67,31 @@ string ParallelConfigPrecompiled::toString()
     return "ParallelConfig";
 }
 
-bytes ParallelConfigPrecompiled::call(
-    dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
+PrecompiledExecResult::Ptr ParallelConfigPrecompiled::call(
+    dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin,
+    Address const&)
 {
     // parse function name
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
 
     ContractABI abi;
-    bytes out;
+    auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
 
     if (func == name2Selector[PARA_CONFIG_REGISTER_METHOD_ADDR_STR_UINT])
     {
-        registerParallelFunction(context, data, origin, out);
+        registerParallelFunction(context, data, origin, callResult->mutableExecResult());
     }
     else if (func == name2Selector[PARA_CONFIG_UNREGISTER_METHOD_ADDR_STR])
     {
-        unregisterParallelFunction(context, data, origin, out);
+        unregisterParallelFunction(context, data, origin, callResult->mutableExecResult());
     }
     else
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("ParallelConfigPrecompiled")
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
     }
-    return out;
+    return callResult;
 }
 
 Table::Ptr ParallelConfigPrecompiled::openTable(dev::blockverifier::ExecutiveContext::Ptr context,

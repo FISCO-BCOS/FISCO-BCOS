@@ -22,14 +22,13 @@
 
 #pragma once
 #include "Common.h"
+#include <libdevcore/Exceptions.h>
 #include <libethcore/PrecompiledContract.h>
 #include <libledger/Ledger.h>
 #include <libledger/LedgerManager.h>
 #include <libp2p/Service.h>
 #include <functional>
 #include <vector>
-
-using namespace dev::ledger;
 
 namespace dev
 {
@@ -43,7 +42,11 @@ public:
     void initConfig(boost::property_tree::ptree const& _pt);
     void startMoreLedger();
 
-    std::shared_ptr<LedgerManager> ledgerManager() { return m_ledgerManager; }
+    std::shared_ptr<ledger::LedgerManager> ledgerManager() { return m_ledgerManager; }
+    void setLedgerManager(std::shared_ptr<ledger::LedgerManager> _ledgerManager)
+    {
+        m_ledgerManager = _ledgerManager;
+    }
 
     void setP2PService(std::shared_ptr<dev::p2p::P2PInterface> _p2pService)
     {
@@ -69,13 +72,16 @@ public:
             m_ledgerManager->stopAll();
     }
 
+    // Init ledger when running
+    bool initLedgerByGroupID(dev::GROUP_ID const& _groupId);
+
 private:
     std::vector<dev::GROUP_ID> initLedgers();
     std::vector<dev::GROUP_ID> foreachLedgerConfigure(const std::string& _groupConfigPath,
         std::function<bool(dev::GROUP_ID const&, const std::string&)> _f);
     bool initLedger(dev::GROUP_ID const& _groupId, std::string const& _dataDir = "data",
         std::string const& _configFileName = "");
-    std::shared_ptr<LedgerManager> m_ledgerManager;
+    std::shared_ptr<ledger::LedgerManager> m_ledgerManager;
     std::shared_ptr<dev::p2p::P2PInterface> m_p2pService;
     ChannelRPCServer::Ptr m_channelRPCServer;
     KeyPair m_keyPair;

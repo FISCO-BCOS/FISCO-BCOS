@@ -38,8 +38,8 @@ SystemConfigPrecompiled::SystemConfigPrecompiled()
     name2Selector[SYSCONFIG_METHOD_SET_STR] = getFuncSelector(SYSCONFIG_METHOD_SET_STR);
 }
 
-bytes SystemConfigPrecompiled::call(
-    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
+PrecompiledExecResult::Ptr SystemConfigPrecompiled::call(
+    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin, Address const&)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("call")
                            << LOG_KV("param", toHex(param));
@@ -49,7 +49,7 @@ bytes SystemConfigPrecompiled::call(
     bytesConstRef data = getParamData(param);
 
     dev::eth::ContractABI abi;
-    bytes out;
+    auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
     int count = 0;
     int result = 0;
     if (func == name2Selector[SYSCONFIG_METHOD_SET_STR])
@@ -68,8 +68,8 @@ bytes SystemConfigPrecompiled::call(
             PRECOMPILED_LOG(DEBUG)
                 << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("set invalid value")
                 << LOG_KV("configKey", configKey) << LOG_KV("configValue", configValue);
-            getErrorCodeOut(out, CODE_INVALID_CONFIGURATION_VALUES);
-            return out;
+            getErrorCodeOut(callResult->mutableExecResult(), CODE_INVALID_CONFIGURATION_VALUES);
+            return callResult;
         }
 
         storage::Table::Ptr table = openTable(context, SYS_CONFIG);
@@ -121,8 +121,8 @@ bytes SystemConfigPrecompiled::call(
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("SystemConfigPrecompiled")
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
     }
-    getErrorCodeOut(out, result);
-    return out;
+    getErrorCodeOut(callResult->mutableExecResult(), result);
+    return callResult;
 }
 
 bool SystemConfigPrecompiled::checkValueValid(std::string const& key, std::string const& value)

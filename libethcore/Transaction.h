@@ -52,7 +52,9 @@ const int c_fieldCountRC2WithOutSig = 10;
 const int c_sigCount = 3;
 
 /// function called after the transaction has been submitted
-using RPCCallback = std::function<void(LocalisedTransactionReceipt::Ptr, dev::bytesConstRef input)>;
+class Block;
+using RPCCallback = std::function<void(LocalisedTransactionReceipt::Ptr, dev::bytesConstRef input,
+    std::shared_ptr<dev::eth::Block> _blockPtr)>;
 /// Encodes a transaction, ready to be exported to or freshly imported from RLP.
 class Transaction
 {
@@ -238,17 +240,19 @@ public:
     static int64_t baseGasRequired(
         bool _contractCreation, bytesConstRef _data, EVMSchedule const& _es);
 
-    void setRpcCallback(RPCCallback callBack) { m_rpcCallback = callBack; }
-    RPCCallback rpcCallback() const { return m_rpcCallback; }
-    void triggerRpcCallback(LocalisedTransactionReceipt::Ptr pReceipt) const;
-
     void updateTransactionHashWithSig(dev::h256 const& txHash);
 
     bool checkChainId(u256 _chainId);
     bool checkGroupId(u256 _groupId);
 
+    void setRpcCallback(RPCCallback callBack);
+    RPCCallback rpcCallback() const;
+
     void setRpcTx(bool const& _rpcTx) { m_rpcTx = _rpcTx; }
     bool rpcTx() { return m_rpcTx; }
+
+    void setSynced(bool const& _synced) { m_synced = _synced; }
+    bool synced() const { return m_synced; }
 
 protected:
     /// Type of transaction.
@@ -307,6 +311,8 @@ protected:
     bytes m_extraData;  /// < Reserved fields, distinguished by "##".
     // used to represent that the transaction is received from rpc
     bool m_rpcTx = false;
+    // Whether the transaction has been synchronized
+    bool m_synced = false;
 };
 
 /// Nice name for vector of Transaction.

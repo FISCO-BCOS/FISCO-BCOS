@@ -23,9 +23,10 @@
  */
 #pragma once
 #include "LedgerParamInterface.h"
-#include "libblockchain/BlockChainInterface.h"
-#include "libethcore/Protocol.h"
+#include <libblockchain/BlockChainInterface.h>
 #include <libdevcore/FixedHash.h>
+#include <libethcore/EVMFlags.h>
+#include <libethcore/Protocol.h>
 #include <boost/property_tree/ptree.hpp>
 #include <memory>
 #include <vector>
@@ -111,6 +112,10 @@ struct GenesisParam
 {
     std::string nodeListMark;
     uint64_t timeStamp;
+    // evm related flags
+    // Extensible parameters for passing VM configuration
+    // bit 64 is currently occupied, indicating whether to use FreeStorageVMSchedule
+    dev::VMFlagType evmFlags = 0;
 };
 
 struct EventLogFilterManagerParams
@@ -190,6 +195,7 @@ private:
     void initRPBFTConsensusIniConfig(boost::property_tree::ptree const& pt);
     void initSyncConfig(boost::property_tree::ptree const& pt);
     void initEventLogFilterManagerConfig(boost::property_tree::ptree const& pt);
+    void setEVMFlags(boost::property_tree::ptree const& _pt);
 
 private:
     dev::GROUP_ID m_groupID;

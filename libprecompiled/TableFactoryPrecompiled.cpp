@@ -55,8 +55,8 @@ std::string TableFactoryPrecompiled::toString()
 }
 
 
-bytes TableFactoryPrecompiled::call(
-    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
+PrecompiledExecResult::Ptr TableFactoryPrecompiled::call(ExecutiveContext::Ptr context,
+    bytesConstRef param, Address const& origin, Address const& sender)
 {
     STORAGE_LOG(TRACE) << LOG_BADGE("TableFactoryPrecompiled") << LOG_DESC("call")
                        << LOG_KV("param", toHex(param));
@@ -65,7 +65,8 @@ bytes TableFactoryPrecompiled::call(
     bytesConstRef data = getParamData(param);
 
     dev::eth::ContractABI abi;
-    bytes out;
+    auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
+    callResult->gasPricer()->setMemUsed(param.size());
 
     if (func == name2Selector[TABLE_METHOD_OPT_STR])
     {  // openTable(string)
@@ -75,6 +76,7 @@ bytes TableFactoryPrecompiled::call(
 
         Address address;
         auto table = m_memoryTableFactory->openTable(tableName);
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::OpenTable);
         if (table)
         {
             TablePrecompiled::Ptr tablePrecompiled = make_shared<TablePrecompiled>();
@@ -87,16 +89,24 @@ bytes TableFactoryPrecompiled::call(
                                  << LOG_DESC("Open new table failed")
                                  << LOG_KV("table name", tableName);
         }
-
-        out = abi.abiIn("", address);
+        callResult->setExecResult(abi.abiIn("", address));
     }
     else if (func == name2Selector[TABLE_METHOD_CRT_STR_STR])
     {  // createTable(string,string,string)
+        if (g_BCOSConfig.version() >= V2_3_0 && !checkAuthority(context, origin, sender))
+        {
+            PRECOMPILED_LOG(ERROR)
+                << LOG_BADGE("TableFactoryPrecompiled") << LOG_DESC("permission denied")
+                << LOG_KV("origin", origin.hex()) << LOG_KV("contract", sender.hex());
+            BOOST_THROW_EXCEPTION(PrecompiledException(
+                "Permission denied. " + origin.hex() + " can't call contract " + sender.hex()));
+        }
         string tableName;
         string keyField;
         string valueFiled;
-
         abi.abiOut(data, tableName, keyField, valueFiled);
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TableFactory") << LOG_KV("createTable", tableName)
+                               << LOG_KV("keyField", keyField) << LOG_KV("valueFiled", valueFiled);
         vector<string> fieldNameList;
         boost::split(fieldNameList, valueFiled, boost::is_any_of(","));
         boost::trim(keyField);
@@ -157,20 +167,24 @@ bytes TableFactoryPrecompiled::call(
                     result = 0;
                 }
             }
+            else
+            {
+                callResult->gasPricer()->appendOperation(InterfaceOpcode::CreateTable);
+            }
         }
         catch (dev::storage::StorageException& e)
         {
             STORAGE_LOG(ERROR) << "Create table failed: " << boost::diagnostic_information(e);
             result = e.errorCode();
         }
-        getErrorCodeOut(out, result);
+        getErrorCodeOut(callResult->mutableExecResult(), result);
     }
     else
     {
         STORAGE_LOG(ERROR) << LOG_BADGE("TableFactoryPrecompiled")
                            << LOG_DESC("call undefined function!");
     }
-    return out;
+    return callResult;
 }
 
 h256 TableFactoryPrecompiled::hash()

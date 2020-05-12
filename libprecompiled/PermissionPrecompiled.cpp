@@ -60,8 +60,8 @@ std::string PermissionPrecompiled::toString()
     return "Permission";
 }
 
-bytes PermissionPrecompiled::call(
-    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
+PrecompiledExecResult::Ptr PermissionPrecompiled::call(
+    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin, Address const&)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("call")
                            << LOG_KV("param", toHex(param));
@@ -71,7 +71,7 @@ bytes PermissionPrecompiled::call(
     bytesConstRef data = getParamData(param);
 
     dev::eth::ContractABI abi;
-    bytes out;
+    auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
     int result = 0;
     if (func == name2Selector[AUP_METHOD_INS])
     {  // FIXME: modify insert(string,string) ==> insert(string,address)
@@ -129,7 +129,7 @@ bytes PermissionPrecompiled::call(
                 << LOG_BADGE("PermissionPrecompiled")
                 << LOG_KV("insert_success", (count == storage::CODE_NO_AUTHORIZED ? false : true));
         }
-        getErrorCodeOut(out, result);
+        getErrorCodeOut(callResult->mutableExecResult(), result);
     }
     else if (func == name2Selector[AUP_METHOD_REM])
     {  // remove(string tableName,string addr)
@@ -140,7 +140,7 @@ bytes PermissionPrecompiled::call(
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("remove func")
                                << LOG_KV("tableName", tableName) << LOG_KV("address", addr);
         int result = revokeWritePermission(context, tableName, addr, origin);
-        getErrorCodeOut(out, result);
+        getErrorCodeOut(callResult->mutableExecResult(), result);
     }
     else if (func == name2Selector[AUP_METHOD_QUE])
     {
@@ -153,7 +153,7 @@ bytes PermissionPrecompiled::call(
                                << LOG_KV("tableName", tableName);
 
         auto result = queryPermission(context, tableName);
-        out = abi.abiIn("", result);
+        callResult->setExecResult(abi.abiIn("", result));
     }
     else if (func == name2Selector[AUP_METHOD_GRANT_WRITE_CONTRACT])
     {  // grantWrite(address,address)
@@ -201,7 +201,7 @@ bytes PermissionPrecompiled::call(
             PRECOMPILED_LOG(INFO) << LOG_BADGE("PermissionPrecompiled grantWrite")
                                   << LOG_KV("return", result);
         }
-        getErrorCodeOut(out, result);
+        getErrorCodeOut(callResult->mutableExecResult(), result);
     }
     else if (func == name2Selector[AUP_METHOD_REVOKE_WRITE_CONTRACT])
     {  // revokeWrite(address,address)
@@ -214,7 +214,7 @@ bytes PermissionPrecompiled::call(
                               << LOG_KV("tableName", tableName) << LOG_KV("address", addr);
 
         int result = revokeWritePermission(context, tableName, addr, origin);
-        out = abi.abiIn("", s256(result));
+        callResult->setExecResult(abi.abiIn("", s256(result)));
     }
     else if (func == name2Selector[AUP_METHOD_QUERY_CONTRACT])
     {  // queryPermission(address)
@@ -224,14 +224,14 @@ bytes PermissionPrecompiled::call(
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("queryPermission")
                                << LOG_KV("tableName", tableName);
         auto result = queryPermission(context, tableName);
-        out = abi.abiIn("", result);
+        callResult->setExecResult(abi.abiIn("", result));
     }
     else
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("PermissionPrecompiled")
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
     }
-    return out;
+    return callResult;
 }
 
 string PermissionPrecompiled::queryPermission(

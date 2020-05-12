@@ -56,8 +56,8 @@ std::string TablePrecompiled::toString()
     return "Table";
 }
 
-bytes TablePrecompiled::call(
-    ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin)
+PrecompiledExecResult::Ptr TablePrecompiled::call(ExecutiveContext::Ptr context,
+    bytesConstRef param, Address const& origin, Address const& sender)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("TablePrecompiled") << LOG_DESC("call")
                            << LOG_KV("param", toHex(param));
@@ -66,8 +66,8 @@ bytes TablePrecompiled::call(
     bytesConstRef data = getParamData(param);
 
     dev::eth::ContractABI abi;
-
-    bytes out;
+    auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
+    callResult->gasPricer()->setMemUsed(param.size());
 
     if (func == name2Selector[TABLE_METHOD_SLT_STR_ADD])
     {  // select(string,address)
@@ -81,17 +81,33 @@ bytes TablePrecompiled::call(
         auto condition = conditionPrecompiled->getCondition();
 
         auto entries = m_table->select(key, condition);
+
+        // update the memory gas and the computation gas
+        auto newMem = getEntriesCapacity(entries);
+        callResult->gasPricer()->updateMemUsed(newMem);
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::Select, entries->size());
+
         auto entriesPrecompiled = std::make_shared<EntriesPrecompiled>();
         entriesPrecompiled->setEntries(entries);
 
         auto newAddress = context->registerPrecompiled(entriesPrecompiled);
-        out = abi.abiIn("", newAddress);
+        callResult->setExecResult(abi.abiIn("", newAddress));
     }
     else if (func == name2Selector[TABLE_METHOD_INS_STR_ADD])
     {  // insert(string,address)
+        if (g_BCOSConfig.version() >= V2_3_0 && !checkAuthority(context, origin, sender))
+        {
+            PRECOMPILED_LOG(ERROR)
+                << LOG_BADGE("TablePrecompiled") << LOG_DESC("permission denied")
+                << LOG_KV("origin", origin.hex()) << LOG_KV("contract", sender.hex());
+            BOOST_THROW_EXCEPTION(PrecompiledException(
+                "Permission denied. " + origin.hex() + " can't call contract " + sender.hex()));
+        }
         std::string key;
         Address entryAddress;
         abi.abiOut(data, key, entryAddress);
+
+        PRECOMPILED_LOG(INFO) << LOG_DESC("Table insert") << LOG_KV("key", key);
 
         EntryPrecompiled::Ptr entryPrecompiled =
             std::dynamic_pointer_cast<EntryPrecompiled>(context->getPrecompiled(entryAddress));
@@ -106,7 +122,13 @@ bytes TablePrecompiled::call(
                 it->second, USER_TABLE_FIELD_VALUE_MAX_LENGTH, CODE_TABLE_KEYVALUE_LENGTH_OVERFLOW);
         }
         int count = m_table->insert(key, entry, std::make_shared<AccessOptions>(origin));
-        out = abi.abiIn("", u256(count));
+        if (count > 0)
+        {
+            callResult->gasPricer()->updateMemUsed(entry->capacity() * count);
+            callResult->gasPricer()->appendOperation(InterfaceOpcode::Insert, count);
+        }
+
+        callResult->setExecResult(abi.abiIn("", u256(count)));
     }
     else if (func == name2Selector[TABLE_METHOD_NEWCOND])
     {  // newCondition()
@@ -115,7 +137,7 @@ bytes TablePrecompiled::call(
         conditionPrecompiled->setCondition(condition);
 
         auto newAddress = context->registerPrecompiled(conditionPrecompiled);
-        out = abi.abiIn("", newAddress);
+        callResult->setExecResult(abi.abiIn("", newAddress));
     }
     else if (func == name2Selector[TABLE_METHOD_NEWENT])
     {  // newEntry()
@@ -124,13 +146,22 @@ bytes TablePrecompiled::call(
         entryPrecompiled->setEntry(entry);
 
         auto newAddress = context->registerPrecompiled(entryPrecompiled);
-        out = abi.abiIn("", newAddress);
+        callResult->setExecResult(abi.abiIn("", newAddress));
     }
     else if (func == name2Selector[TABLE_METHOD_RE_STR_ADD])
     {  // remove(string,address)
+        if (g_BCOSConfig.version() >= V2_3_0 && !checkAuthority(context, origin, sender))
+        {
+            PRECOMPILED_LOG(ERROR)
+                << LOG_BADGE("TablePrecompiled") << LOG_DESC("permission denied")
+                << LOG_KV("origin", origin.hex()) << LOG_KV("contract", sender.hex());
+            BOOST_THROW_EXCEPTION(PrecompiledException(
+                "Permission denied. " + origin.hex() + " can't call contract " + sender.hex()));
+        }
         std::string key;
         Address conditionAddress;
         abi.abiOut(data, key, conditionAddress);
+        PRECOMPILED_LOG(INFO) << LOG_DESC("Table remove") << LOG_KV("key", key);
 
         ConditionPrecompiled::Ptr conditionPrecompiled =
             std::dynamic_pointer_cast<ConditionPrecompiled>(
@@ -138,16 +169,29 @@ bytes TablePrecompiled::call(
         auto condition = conditionPrecompiled->getCondition();
 
         int count = m_table->remove(key, condition, std::make_shared<AccessOptions>(origin));
-        PRECOMPILED_LOG(DEBUG) << LOG_DESC("Table remove") << LOG_KV("key", key)
-                               << LOG_KV("result", count);
-        out = abi.abiIn("", u256(count));
+
+        if (count > 0)
+        {
+            // Note: remove is to delete data from the blockchain and only include the memory gas
+            callResult->gasPricer()->appendOperation(InterfaceOpcode::Remove, count);
+        }
+        callResult->setExecResult(abi.abiIn("", u256(count)));
     }
     else if (func == name2Selector[TABLE_METHOD_UP_STR_2ADD])
     {  // update(string,address,address)
+        if (g_BCOSConfig.version() >= V2_3_0 && !checkAuthority(context, origin, sender))
+        {
+            PRECOMPILED_LOG(ERROR)
+                << LOG_BADGE("TablePrecompiled") << LOG_DESC("permission denied")
+                << LOG_KV("origin", origin.hex()) << LOG_KV("contract", sender.hex());
+            BOOST_THROW_EXCEPTION(PrecompiledException(
+                "Permission denied. " + origin.hex() + " can't call contract " + sender.hex()));
+        }
         std::string key;
         Address entryAddress;
         Address conditionAddress;
         abi.abiOut(data, key, entryAddress, conditionAddress);
+        PRECOMPILED_LOG(INFO) << LOG_DESC("Table update") << LOG_KV("key", key);
         EntryPrecompiled::Ptr entryPrecompiled =
             std::dynamic_pointer_cast<EntryPrecompiled>(context->getPrecompiled(entryAddress));
         ConditionPrecompiled::Ptr conditionPrecompiled =
@@ -164,16 +208,20 @@ bytes TablePrecompiled::call(
         auto condition = conditionPrecompiled->getCondition();
 
         int count = m_table->update(key, entry, condition, std::make_shared<AccessOptions>(origin));
-        PRECOMPILED_LOG(DEBUG) << LOG_DESC("Table update") << LOG_KV("key", key)
-                               << LOG_KV("result", count);
-        out = abi.abiIn("", u256(count));
+        if (count > 0)
+        {
+            // update memory and compuation cost
+            callResult->gasPricer()->setMemUsed(entry->capacity() * count);
+            callResult->gasPricer()->appendOperation(InterfaceOpcode::Update, count);
+        }
+        callResult->setExecResult(abi.abiIn("", u256(count)));
     }
     else
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("TablePrecompiled")
                                << LOG_DESC("call undefined function!");
     }
-    return out;
+    return callResult;
 }
 
 h256 TablePrecompiled::hash()

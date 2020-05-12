@@ -25,6 +25,7 @@ endif()
 if (NOT WEDPR_EXTENSION)
     list(REMOVE_ITEM sources ${CMAKE_CURRENT_SOURCE_DIR}/unittests/libstorage/test_WedprPrecompiled.cpp)
 endif ()
+
 if (NOT CRYPTO_EXTENSION)
     list(REMOVE_ITEM sources ${CMAKE_CURRENT_SOURCE_DIR}/unittests/libstorage/test_PaillierPrecompiled.cpp)
     list(REMOVE_ITEM sources ${CMAKE_CURRENT_SOURCE_DIR}/unittests/libstorage/test_GroupSigPrecompiled.cpp)

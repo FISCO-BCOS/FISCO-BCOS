@@ -21,7 +21,7 @@
 #pragma once
 
 #include "Common.h"
-#include "Precompiled.h"
+#include "libprecompiled/Precompiled.h"
 #include <libdevcore/Common.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcrypto/Common.h>
@@ -48,7 +48,11 @@ namespace executive
 {
 class StateFace;
 }
-
+namespace precompiled
+{
+class Precompiled;
+class PrecompiledExecResultFactory;
+}  // namespace precompiled
 namespace blockverifier
 {
 class ExecutiveContext : public std::enable_shared_from_this<ExecutiveContext>
@@ -66,18 +70,27 @@ public:
         }
     };
 
-    virtual bytes call(Address const& origin, Address address, bytesConstRef param);
+    virtual dev::precompiled::PrecompiledExecResult::Ptr call(
+        Address const& address, bytesConstRef param, Address const& origin, Address const& sender);
 
-    virtual Address registerPrecompiled(Precompiled::Ptr p);
+    virtual Address registerPrecompiled(std::shared_ptr<precompiled::Precompiled> p);
 
     virtual bool isPrecompiled(Address address) const;
 
-    Precompiled::Ptr getPrecompiled(Address address) const;
+    std::shared_ptr<precompiled::Precompiled> getPrecompiled(Address address) const;
 
-    void setAddress2Precompiled(Address address, Precompiled::Ptr precompiled)
+    void setAddress2Precompiled(
+        Address address, std::shared_ptr<precompiled::Precompiled> precompiled)
     {
+        if (!precompiled->precompiledExecResultFactory())
+        {
+            precompiled->setPrecompiledExecResultFactory(m_precompiledExecResultFactory);
+        }
         m_address2Precompiled.insert(std::make_pair(address, precompiled));
     }
+
+    void setPrecompiledExecResultFactory(
+        dev::precompiled::PrecompiledExecResultFactory::Ptr _precompiledExecResultFactory);
 
     BlockInfo blockInfo() { return m_blockInfo; }
     void setBlockInfo(BlockInfo blockInfo) { m_blockInfo = blockInfo; }
@@ -112,7 +125,8 @@ public:
     std::shared_ptr<std::vector<std::string>> getTxCriticals(const dev::eth::Transaction& _tx);
 
 private:
-    tbb::concurrent_unordered_map<Address, Precompiled::Ptr, std::hash<Address>>
+    tbb::concurrent_unordered_map<Address, std::shared_ptr<precompiled::Precompiled>,
+        std::hash<Address>>
         m_address2Precompiled;
     std::atomic<int> m_addressCount;
     BlockInfo m_blockInfo;
@@ -120,6 +134,8 @@ private:
     std::unordered_map<Address, dev::eth::PrecompiledContract> m_precompiledContract;
     std::shared_ptr<dev::storage::TableFactory> m_memoryTableFactory;
     uint64_t m_txGasLimit = 300000000;
+
+    std::shared_ptr<dev::precompiled::PrecompiledExecResultFactory> m_precompiledExecResultFactory;
 };
 
 }  // namespace blockverifier

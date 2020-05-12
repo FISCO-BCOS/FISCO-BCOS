@@ -31,21 +31,23 @@ class Table;
 
 namespace precompiled
 {
-class CRUDPrecompiled : public dev::blockverifier::Precompiled
+class CRUDPrecompiled : public dev::precompiled::Precompiled
 {
 public:
     typedef std::shared_ptr<CRUDPrecompiled> Ptr;
     CRUDPrecompiled();
     virtual ~CRUDPrecompiled(){};
 
-    virtual std::string toString();
+    std::string toString() override;
 
-    virtual bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
-        bytesConstRef param, Address const& origin = Address());
+    PrecompiledExecResult::Ptr call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+        bytesConstRef param, Address const& origin = Address(),
+        Address const& _sender = Address()) override;
 
 private:
     int parseEntry(const std::string& entryStr, storage::Entry::Ptr& entry);
-    int parseCondition(const std::string& conditionStr, storage::Condition::Ptr& condition);
+    int parseCondition(const std::string& conditionStr, storage::Condition::Ptr& condition,
+        PrecompiledExecResult::Ptr _execResult);
 };
 
 }  // namespace precompiled

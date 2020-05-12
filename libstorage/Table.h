@@ -106,6 +106,7 @@ public:
     virtual void setID(const std::string& id);
 
     virtual std::string getField(const std::string& key) const;
+    virtual bytes getFieldBytes(const std::string& key) const;
     virtual bytesConstRef getFieldConst(const std::string& key) const;
 
     virtual void setField(const std::string& key, const std::string& value);

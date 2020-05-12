@@ -29,23 +29,23 @@ jobs:
       - uses: actions/checkout@v2
         with:
           fetch-depth: 5
-      - uses: actions/cache@v1
+      - uses: actions/cache@v1.1.2
         id: cache
         with:
           path: deps/src
-          key: deps-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: deps-v1-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            deps-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            deps-${{ runner.temp }}-${{ github.base_ref }}
-            deps-${{ runner.temp }}-
-      - uses: actions/cache@v1
+            deps-v1-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            deps-v1-${{ runner.temp }}-${{ github.base_ref }}-
+            deps-v1-${{ runner.temp }}-
+      - uses: actions/cache@v1.1.2
         id: ccache
         with:
           path: ccache
           key: ccache-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
             ccache-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            ccache-${{ runner.temp }}-${{ github.base_ref }}
+            ccache-${{ runner.temp }}-${{ github.base_ref }}-
             ccache-${{ runner.temp }}-
       - name: install macOS dependencies
         if: runner.os == 'macOS'
@@ -54,7 +54,7 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt install -y git curl build-essential clang cmake libssl-dev zlib1g-dev ccache libgmp-dev flex bison patch
       - name: configure
-        run: cmake -DTESTS=on -DCRYPTO_EXTENSION=ON .
+        run: cmake -DTESTS=ON -DCRYPTO_EXTENSION=ON .
       - name: compile
         run: make -j2
       - name: run uint tests
@@ -66,24 +66,24 @@ jobs:
       - uses: actions/checkout@v2
         with:
           fetch-depth: 5
-      - uses: actions/cache@v1
+      - uses: actions/cache@v1.1.2
         id: cache
         with:
           path: deps/src
-          key: deps-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: deps-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            deps-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            deps-notest-${{ runner.temp }}-${{ github.base_ref }}
-            deps-notest-${{ runner.temp }}-
-            deps-${{ runner.temp }}-
-      - uses: actions/cache@v1
+            deps-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            deps-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            deps-v1-notest-${{ runner.temp }}-
+            deps-v1-${{ runner.temp }}-
+      - uses: actions/cache@v1.1.2
         id: ccache
         with:
           path: ccache
           key: ccache-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
             ccache-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            ccache-notest-${{ runner.temp }}-${{ github.base_ref }}
+            ccache-notest-${{ runner.temp }}-${{ github.base_ref }}-
             ccache-notest-${{ runner.temp }}-
       - name: install macOS dependencies
         run: brew install openssl@1.1 ccache

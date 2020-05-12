@@ -17,6 +17,7 @@
 #include "ExecutionResult.h"
 #include <libethcore/BlockHeader.h>
 #include <libethcore/Common.h>
+#include <libethcore/EVMFlags.h>
 #include <libethcore/Transaction.h>
 #include <libevm/VMFace.h>
 #include <functional>
@@ -39,6 +40,10 @@ namespace eth
 {
 class Block;
 }  // namespace eth
+namespace precompiled
+{
+class PrecompiledExecResult;
+}
 
 /**
  * @brief Message-call/contract-creation executor; useful for executing transactions.
@@ -64,7 +69,6 @@ namespace executive
 {
 class ExtVM;
 class StateFace;
-
 class Executive
 {
 public:
@@ -203,6 +207,12 @@ public:
 
     void setState(std::shared_ptr<StateFace> _state) { m_s = _state; }
 
+    void setEvmFlags(VMFlagType const& _evmFlags)
+    {
+        m_evmFlags = _evmFlags;
+        m_enableFreeStorage = enableFreeStorage(_evmFlags);
+    }
+
 private:
     /// @returns false iff go() must be called (and thus a VM execution in required).
     bool executeCreate(Address const& _txSender, u256 const& _endowment, u256 const& _gasPrice,
@@ -210,6 +220,10 @@ private:
 
     void grantContractStatusManager(std::shared_ptr<dev::storage::TableFactory> memoryTableFactory,
         Address const& newAddress, Address const& sender, Address const& origin);
+
+    void writeErrInfoToOutput(std::string const& errInfo);
+
+    void updateGas(std::shared_ptr<dev::precompiled::PrecompiledExecResult> _callResult);
 
     std::shared_ptr<StateFace> m_s;  ///< The state to which this operation/transaction is applied.
     // TODO: consider changign to EnvInfo const& to avoid LastHashes copy at every CALL/CREATE
@@ -241,6 +255,10 @@ private:
     Address m_newAddress;
     size_t m_savepoint = 0;
     size_t m_tableFactorySavepoint = 0;
+
+    VMFlagType m_evmFlags;
+    // determine whether the freeStorageVMSchedule enabled or not
+    bool m_enableFreeStorage = false;
 };
 
 }  // namespace executive

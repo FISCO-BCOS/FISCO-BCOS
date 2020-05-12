@@ -120,11 +120,6 @@ public:
         m_signalled.notify_all();
     }
 
-    void setStatisticHandler(dev::p2p::StatisticHandler::Ptr _statisticHandler)
-    {
-        m_statisticHandler = _statisticHandler;
-    }
-
     void maintainTransactions();
     void maintainDownloadingTransactions();
     void setTxsStatusGossipMaxPeers(unsigned const& _txsStatusGossipMaxPeers)
@@ -172,12 +167,12 @@ private:
     std::atomic_bool m_needForwardRemainTxs = {false};
     std::shared_ptr<dev::h512s> m_fastForwardedNodes;
 
-    dev::p2p::StatisticHandler::Ptr m_statisticHandler = nullptr;
-
     TreeTopology::Ptr m_treeRouter;
     std::shared_ptr<std::map<dev::h512, std::shared_ptr<std::set<dev::h256>>>> m_txsHash;
 
     unsigned m_txsStatusGossipMaxPeers = 5;
+
+    std::atomic_bool m_running = {false};
 
 private:
     void forwardRemainingTxs();

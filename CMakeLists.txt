@@ -19,11 +19,11 @@
 # (c) 2016-2018 fisco-dev contributors.
 #------------------------------------------------------------------------------
 
-cmake_minimum_required(VERSION 3.4)
+cmake_minimum_required(VERSION 3.7)
 set(FISCO_BCOS_CMAKE_DIR "${CMAKE_CURRENT_LIST_DIR}/cmake" CACHE PATH "The path to the cmake directory")
 list(APPEND CMAKE_MODULE_PATH ${FISCO_BCOS_CMAKE_DIR})
 
-project(FISCO-BCOS VERSION "2.3.0")
+project(FISCO-BCOS VERSION "2.4.0")
 # Suffix like "-rc1" e.t.c. to append to versions wherever needed.
 set(VERSION_SUFFIX "")
 
@@ -34,6 +34,9 @@ if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
         execute_process(COMMAND ${GIT_EXECUTABLE} submodule update --init --recursive --remote
                         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
                         RESULT_VARIABLE GIT_SUBMOD_RESULT)
+        execute_process(COMMAND ${GIT_EXECUTABLE} checkout b64ff8beab704916dfe86ff2c2e4185c08ddcef5
+                        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/evmc
+                        RESULT_VARIABLE CHECKOUT_OUTPUT_RESULT OUTPUT_QUIET ERROR_QUIET)
         if(NOT GIT_SUBMOD_RESULT EQUAL "0")
             message(FATAL_ERROR "git submodule update --init failed with ${GIT_SUBMOD_RESULT}, please checkout submodules")
         endif()
@@ -44,12 +47,12 @@ if(NOT EXISTS "${CMAKE_SOURCE_DIR}/evmc/.git")
     message(FATAL_ERROR "The submodules were not downloaded! GIT_SUBMODULE was turned off or failed. Please execute:\n  git submodule update --init")
 endif()
 
-set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY On)
+set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY ON)
 
 # basic setting
-include(EthOptions)
-include(EthCompilerSettings)
-include(EthDependencies)
+include(Options)
+include(CompilerSettings)
+include(Dependencies)
 
 # install dependencies
 include(ProjectTBB)
@@ -83,6 +86,7 @@ add_subdirectory(libethcore)
 add_subdirectory(evmc)
 add_subdirectory(libinterpreter)
 add_subdirectory(libevm)
+add_subdirectory(libstat)
 add_subdirectory(libtxpool)
 add_subdirectory(libstorage)
 add_subdirectory(libprecompiled)
@@ -121,5 +125,5 @@ add_custom_target(doc COMMAND ${DOXYGEN_EXECUTABLE} ${doxyfile}
                        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
                        COMMENT "Generating documentation with Doxygen..." VERBATIM)
 elseif()
-  message(WARNING "Doxygen is needed to build the documentation. Please install doxygen and graphviz") 
+  message(WARNING "Doxygen is needed to build the documentation. Please install doxygen and graphviz")
 endif()

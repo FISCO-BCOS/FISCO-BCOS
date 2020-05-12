@@ -14,7 +14,7 @@
     You should have received a copy of the GNU General Public License
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file ContractStatusPrecompiled.h
+/** @file ContractLifeCyclePrecompiled.h
  *  @author chaychen
  *  @date 20190106
  */
@@ -29,48 +29,47 @@ enum ContractStatus
     Invalid = 0,
     Available,
     Frozen,
-    Destroyed,
-    Nonexistent,
+    AddressNonExistent,
+    NotContractAddress,
     Count
 };
 
 const std::string CONTRACT_STATUS_DESC[ContractStatus::Count] = {"Invalid",
     "The contract is available.",
-    "The contract has been frozen. You can invoke this contract after unfrozening it.",
-    "The contract address is incorrect.", "The contract is nonexistent."};
+    "The contract has been frozen. You can invoke this contract after unfreezing it.",
+    "The address is nonexistent.", "This is not a contract address."};
 
 const std::string STATUS_TRUE = "true";
 const std::string STATUS_FALSE = "false";
 
-class ContractStatusPrecompiled : public dev::blockverifier::Precompiled
+class ContractLifeCyclePrecompiled : public dev::precompiled::Precompiled
 {
 public:
-    typedef std::shared_ptr<ContractStatusPrecompiled> Ptr;
-    ContractStatusPrecompiled();
-    virtual ~ContractStatusPrecompiled(){};
+    typedef std::shared_ptr<ContractLifeCyclePrecompiled> Ptr;
+    ContractLifeCyclePrecompiled();
+    virtual ~ContractLifeCyclePrecompiled(){};
 
-    virtual bytes call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
-        bytesConstRef param, Address const& origin = Address());
+    PrecompiledExecResult::Ptr call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+        bytesConstRef param, Address const& origin = Address(),
+        Address const& _sender = Address()) override;
 
 private:
     bool checkPermission(std::shared_ptr<blockverifier::ExecutiveContext> context,
         std::string const& tableName, Address const& origin);
     ContractStatus getContractStatus(
         std::shared_ptr<blockverifier::ExecutiveContext> context, std::string const& tableName);
-    void destroy(std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,
-        Address const& origin, bytes& out);
     int updateFrozenStatus(std::shared_ptr<blockverifier::ExecutiveContext> context,
         std::string const& tableName, std::string const& frozen, Address const& origin);
     void freeze(std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,
-        Address const& origin, bytes& out);
+        Address const& origin, PrecompiledExecResult::Ptr _callResult);
     void unfreeze(std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,
-        Address const& origin, bytes& out);
+        Address const& origin, PrecompiledExecResult::Ptr _callResult);
     void grantManager(std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,
-        Address const& origin, bytes& out);
-    void getStatus(
-        std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data, bytes& out);
-    void listManager(
-        std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data, bytes& out);
+        Address const& origin, PrecompiledExecResult::Ptr _callResult);
+    void getStatus(std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,
+        PrecompiledExecResult::Ptr _callResult);
+    void listManager(std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,
+        PrecompiledExecResult::Ptr _callResult);
 };
 
 }  // namespace precompiled

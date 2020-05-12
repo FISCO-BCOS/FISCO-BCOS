@@ -134,7 +134,7 @@ void TxPool::notifyReceipt(dev::eth::Transaction::Ptr _tx, ImportResult const& _
                       << LOG_KV("exception", int(txException));
     dev::eth::LocalisedTransactionReceipt::Ptr receipt =
         std::make_shared<dev::eth::LocalisedTransactionReceipt>(txException);
-    m_workerPool->enqueue([callback, receipt] { callback(receipt, bytesConstRef()); });
+    m_workerPool->enqueue([callback, receipt] { callback(receipt, bytesConstRef(), nullptr); });
 }
 
 std::pair<h256, Address> TxPool::submitTransactions(dev::eth::Transaction::Ptr _tx)
@@ -147,54 +147,49 @@ std::pair<h256, Address> TxPool::submitTransactions(dev::eth::Transaction::Ptr _
 
     else if (ret == ImportResult::TransactionNonceCheckFail)
     {
-        BOOST_THROW_EXCEPTION(
-            TransactionRefused() << errinfo_comment(
-                "TransactionNonceCheckFail, txHash=" + toHex(_tx->sha3().abridged())));
+        BOOST_THROW_EXCEPTION(TransactionRefused() << errinfo_comment(
+                                  "TransactionNonceCheckFail, txHash=" + _tx->sha3().abridged()));
     }
     else if (ImportResult::TransactionPoolIsFull == ret)
     {
-        BOOST_THROW_EXCEPTION(
-            TransactionRefused() << errinfo_comment(
-                "TransactionPoolIsFull, txHash=" + toHex(_tx->sha3().abridged())));
+        BOOST_THROW_EXCEPTION(TransactionRefused() << errinfo_comment(
+                                  "TransactionPoolIsFull, txHash=" + _tx->sha3().abridged()));
     }
     else if (ImportResult::TxPoolNonceCheckFail == ret)
     {
         BOOST_THROW_EXCEPTION(TransactionRefused() << errinfo_comment(
-                                  "TxPoolNonceCheckFail, txHash=" + toHex(_tx->sha3().abridged())));
+                                  "TxPoolNonceCheckFail, txHash=" + _tx->sha3().abridged()));
     }
     else if (ImportResult::AlreadyKnown == ret)
     {
-        BOOST_THROW_EXCEPTION(
-            TransactionRefused() << errinfo_comment(
-                "TransactionAlreadyKown, txHash=" + toHex(_tx->sha3().abridged())));
+        BOOST_THROW_EXCEPTION(TransactionRefused() << errinfo_comment(
+                                  "TransactionAlreadyKown, txHash=" + _tx->sha3().abridged()));
     }
     else if (ImportResult::AlreadyInChain == ret)
     {
-        BOOST_THROW_EXCEPTION(
-            TransactionRefused() << errinfo_comment(
-                "TransactionAlreadyInChain, txHash=" + toHex(_tx->sha3().abridged())));
+        BOOST_THROW_EXCEPTION(TransactionRefused() << errinfo_comment(
+                                  "TransactionAlreadyInChain, txHash=" + _tx->sha3().abridged()));
     }
     else if (ImportResult::InvalidChainId == ret)
     {
         BOOST_THROW_EXCEPTION(TransactionRefused() << errinfo_comment(
-                                  "InvalidChainId, txHash=" + toHex(_tx->sha3().abridged())));
+                                  "InvalidChainId, txHash=" + _tx->sha3().abridged()));
     }
     else if (ImportResult::InvalidGroupId == ret)
     {
         BOOST_THROW_EXCEPTION(TransactionRefused() << errinfo_comment(
-                                  "InvalidGroupId, txHash=" + toHex(_tx->sha3().abridged())));
+                                  "InvalidGroupId, txHash=" + _tx->sha3().abridged()));
     }
     else if (ImportResult::BlockLimitCheckFailed == ret)
     {
         BOOST_THROW_EXCEPTION(TransactionRefused() << errinfo_comment(
                                   "BlockLimitCheckFailed, txBlockLimit=" + _tx->blockLimit().str() +
-                                  ", txHash=" + toHex(_tx->sha3().abridged())));
+                                  ", txHash=" + _tx->sha3().abridged()));
     }
     else
     {
-        BOOST_THROW_EXCEPTION(
-            TransactionRefused() << errinfo_comment(
-                "TransactionSubmitFailed, txHash=" + toHex(_tx->sha3().abridged())));
+        BOOST_THROW_EXCEPTION(TransactionRefused() << errinfo_comment(
+                                  "TransactionSubmitFailed, txHash=" + _tx->sha3().abridged()));
     }
 }
 
@@ -407,7 +402,7 @@ bool TxPool::removeTrans(h256 const& _txHash, bool _needTriggerCallback,
             }
             TxCallback callback{transaction->rpcCallback(), pReceipt};
 
-            callback.call(callback.pReceipt, input);
+            callback.call(callback.pReceipt, input, _block);
         });
     }
 
@@ -661,7 +656,7 @@ std::shared_ptr<Transactions> TxPool::topTransactions(
 }
 
 std::shared_ptr<Transactions> TxPool::topTransactionsCondition(
-    uint64_t const& _limit, dev::h512 const& _nodeId)
+    uint64_t const& _limit, dev::h512 const&)
 {
     ReadGuard l(m_lock);
     std::shared_ptr<Transactions> ret = std::make_shared<Transactions>();
@@ -673,17 +668,11 @@ std::shared_ptr<Transactions> TxPool::topTransactionsCondition(
         ReadGuard l_kownTrans(x_transactionKnownBy);
         for (auto it = m_txsQueue.begin(); txCnt < limit && it != m_txsQueue.end(); it++)
         {
-            if (!isTransactionKnownBy((*it)->sha3(), _nodeId))
+            if (!(*it)->synced())
             {
-#if 0
-                if (m_delTransactions.find((*it)->sha3()) != m_delTransactions.end())
-                {
-                    ++ignoreCount;
-                    continue;
-                }
-#endif
                 ret->push_back(*it);
                 txCnt++;
+                (*it)->setSynced(true);
             }
         }
     }

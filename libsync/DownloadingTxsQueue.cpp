@@ -55,10 +55,6 @@ void DownloadingTxsQueue::push(
                 continue;
             }
             m_service->asyncSendMessageByNodeID(selectedNode, _msg, nullptr);
-            if (m_statisticHandler)
-            {
-                m_statisticHandler->updateSendedTxsInfo(_msg->length());
-            }
             txsShard->appendKnownNode(selectedNode);
             SYNC_LOG(DEBUG) << LOG_DESC("forward transaction")
                             << LOG_KV("selectedNode", selectedNode.abridged());
@@ -66,11 +62,6 @@ void DownloadingTxsQueue::push(
     }
     WriteGuard l(x_buffer);
     m_buffer->emplace_back(txsShard);
-    if (m_statisticHandler)
-    {
-        // the statistic of downloaded-txs-bytes doesn't include the txs from RPC
-        m_statisticHandler->updateDownloadedTxsBytes(_msg->length());
-    }
 }
 
 
@@ -123,7 +114,6 @@ void DownloadingTxsQueue::pop2TxPool(
         if (g_BCOSConfig.version() >= RC2_VERSION)
         {
             RLP const& txsBytesRLP = RLP(ref(txsShard->txsBytes))[0];
-            // std::cout << "decode sync txs " << toHex(txsShard.txsBytes) << std::endl;
             dev::eth::TxsParallelParser::decode(
                 txs, txsBytesRLP.toBytesConstRef(), _checkSig, true);
         }
@@ -204,11 +194,6 @@ void DownloadingTxsQueue::pop2TxPool(
             }
         }
         import_time_cost += (utcTime() - record_time);
-        record_time = utcTime();
-        if (m_statisticHandler)
-        {
-            m_statisticHandler->updateDownloadedTxsCount(txs->size());
-        }
     }
     SYNC_LOG(TRACE) << LOG_BADGE("Tx") << LOG_DESC("Import peer transactions")
                     << LOG_KV("import", successCnt)

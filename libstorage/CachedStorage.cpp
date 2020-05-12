@@ -615,11 +615,13 @@ void CachedStorage::startClearThread()
 {
     std::weak_ptr<CachedStorage> self(std::dynamic_pointer_cast<CachedStorage>(shared_from_this()));
     auto running = m_running;
-    m_clearThread = std::make_shared<std::thread>([running, self]() {
+    auto groupID = m_groupID;
+    m_clearThread = std::make_shared<std::thread>([running, self, groupID]() {
+        dev::pthread_setThreadName("MemClear-" + to_string(groupID));
         while (true)
         {
             auto storage = self.lock();
-            if (storage && storage->m_running->load())
+            if (storage && running->load())
             {
                 std::this_thread::sleep_for(std::chrono::milliseconds(storage->m_clearInterval));
                 storage->checkAndClear();
@@ -838,12 +840,8 @@ void CachedStorage::checkAndClear()
 
                 auto result = touchCache(tableInfo, it->second, true);
                 auto cache = std::get<1>(result);
-                if (cache->empty())
-                {
-                    continue;
-                }
                 if (std::get<2>(result))
-                {
+                {  // FIXME: if always true, simplify this
                     if (m_syncNum > 0 && (cache->num() <= m_syncNum))
                     {
                         int64_t totalCapacity = 0;
