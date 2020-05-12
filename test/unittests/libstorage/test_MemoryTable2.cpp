@@ -86,15 +86,26 @@ BOOST_AUTO_TEST_CASE(update_select)
     auto m_version = g_BCOSConfig.version();
     auto m_supportedVersion = g_BCOSConfig.supportedVersion();
     g_BCOSConfig.setSupportedVersion("2.4.0", V2_4_0);
-    // select
+    // select 0.6 should success
     condition = std::make_shared<storage::Condition>();
     condition->EQ("value", "0.6");
     entries = m_table->select(std::string("WangWu"), condition);
     BOOST_TEST(entries->size() == 0);
-
-    g_BCOSConfig.setSupportedVersion("2.5.0", V2_5_0);
+    // select 0.5 should failed
+    condition = std::make_shared<storage::Condition>();
+    condition->EQ("value", "0.5");
     entries = m_table->select(std::string("WangWu"), condition);
     BOOST_TEST(entries->size() == 1u);
+
+    g_BCOSConfig.setSupportedVersion("2.5.0", V2_5_0);
+    condition = std::make_shared<storage::Condition>();
+    condition->EQ("value", "0.6");
+    entries = m_table->select(std::string("WangWu"), condition);
+    BOOST_TEST(entries->size() == 1u);
+    condition = std::make_shared<storage::Condition>();
+    condition->EQ("value", "0.5");
+    entries = m_table->select(std::string("WangWu"), condition);
+    BOOST_TEST(entries->size() == 0);
     g_BCOSConfig.setSupportedVersion(m_supportedVersion, m_version);
 }
 
