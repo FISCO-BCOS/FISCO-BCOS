@@ -823,10 +823,10 @@ bool dev::ChannelRPCServer::limitAMOPBandwidth(dev::channel::ChannelSession::Ptr
         _p2pMessage->setPermitsAcquired(true);
         return true;
     }
-    CHANNEL_LOG(DEBUG) << LOG_BADGE("limitAMOPBandwidth: over bandwidth limitation")
-                       << LOG_KV("requiredPermitsAfterCompress", requiredPermitsAfterCompress)
-                       << LOG_KV("maxPermitsPerSecond(Bytes)", m_networkBandwidthLimiter->maxQPS())
-                       << LOG_KV("seq", _AMOPReq->seq().substr(0, c_seqAbridgedLen));
+    CHANNEL_LOG(INFO) << LOG_BADGE("limitAMOPBandwidth: over bandwidth limitation")
+                      << LOG_KV("requiredPermitsAfterCompress", requiredPermitsAfterCompress)
+                      << LOG_KV("maxPermitsPerSecond(Bytes)", m_networkBandwidthLimiter->maxQPS())
+                      << LOG_KV("seq", _AMOPReq->seq().substr(0, c_seqAbridgedLen));
     // send REJECT_AMOP_REQ_FOR_OVER_BANDWIDTHLIMIT to client
     sendRejectAMOPResponse(_session, _AMOPReq);
     return false;
@@ -835,9 +835,9 @@ bool dev::ChannelRPCServer::limitAMOPBandwidth(dev::channel::ChannelSession::Ptr
 void dev::ChannelRPCServer::sendRejectAMOPResponse(
     dev::channel::ChannelSession::Ptr _session, dev::channel::Message::Ptr _AMOPReq)
 {
-    CHANNEL_LOG(DEBUG) << LOG_BADGE("sendRejectAMOPResponse")
-                       << LOG_DESC("Reject AMOP Request for over bandwidth limitation")
-                       << LOG_KV("seq", _AMOPReq->seq().substr(0, c_seqAbridgedLen));
+    CHANNEL_LOG(INFO) << LOG_BADGE("sendRejectAMOPResponse")
+                      << LOG_DESC("Reject AMOP Request for over bandwidth limitation")
+                      << LOG_KV("seq", _AMOPReq->seq().substr(0, c_seqAbridgedLen));
     auto response = _AMOPReq;
     response->clearData();
     response->setType(AMOP_RESPONSE);

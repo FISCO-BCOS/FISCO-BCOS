@@ -586,8 +586,6 @@ generate_config_ini()
 [flow_control]
     ; restrict QPS of the node
     ;limit_req=1000
-    ; The number of brust requests as a percentage of limit_req must be between 0 and 100
-    ;qps_burst_percent=20
     ; restrict the outgoing bandwidth of the node
     ; Mb, can be a decimal
     ; when the outgoing bandwidth exceeds the limit, the block synchronization operation will not proceed
@@ -694,8 +692,6 @@ function generate_group_ini()
 [flow_control]
     ; restrict QPS of the group
     ;limit_req=1000
-    ; The number of brust requests as a percentage of limit_req must be between 0 and 100
-    ;qps_burst_percent=20
     ; restrict the outgoing bandwidth of the group
     ; Mb, can be a decimal
     ; when the outgoing bandwidth exceeds the limit, the block synchronization operation will not proceed
