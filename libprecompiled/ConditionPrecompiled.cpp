@@ -62,8 +62,6 @@ std::string ConditionPrecompiled::toString()
 PrecompiledExecResult::Ptr ConditionPrecompiled::call(
     ExecutiveContext::Ptr, bytesConstRef param, Address const&, Address const&)
 {
-    STORAGE_LOG(DEBUG) << "call Condition:" << toHex(param);
-
     // parse function name
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);

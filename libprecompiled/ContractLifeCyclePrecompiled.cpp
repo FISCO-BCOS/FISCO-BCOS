@@ -385,8 +385,7 @@ void ContractLifeCyclePrecompiled::listManager(
 PrecompiledExecResult::Ptr ContractLifeCyclePrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin, Address const&)
 {
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractLifeCyclePrecompiled")
-                           << LOG_KV("call param", toHex(param));
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractLifeCyclePrecompiled");
 
     // parse function name
     uint32_t func = getParamFunc(param);

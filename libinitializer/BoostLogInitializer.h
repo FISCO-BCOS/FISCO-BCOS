@@ -79,7 +79,8 @@ private:
     bool canRotate(size_t const& _index);
 
     boost::shared_ptr<sink_t> initLogSink(boost::property_tree::ptree const& _pt,
-        std::string const& _logPath, std::string const& _logPrefix, std::string const& channel);
+        unsigned const& _logLevel, std::string const& _logPath, std::string const& _logPrefix,
+        std::string const& channel);
 
 private:
     void stopLogging(boost::shared_ptr<sink_t> sink);

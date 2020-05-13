@@ -55,6 +55,8 @@ struct AuthorityPrecompiledFixture
             m_supportedVersion = g_BCOSConfig.supportedVersion();
             g_BCOSConfig.setSupportedVersion("2.3.0", V2_3_0);
         }
+        // clear global name2Selector cache
+        clearName2SelectCache();
         context = std::make_shared<ExecutiveContext>();
         ExecutiveContextFactory factory;
         auto storage = std::make_shared<MemoryStorage>();
@@ -79,6 +81,8 @@ struct AuthorityPrecompiledFixture
         {
             g_BCOSConfig.setSupportedVersion(m_supportedVersion, m_version);
         }
+        // clear global name2Selector cache
+        clearName2SelectCache();
     }
 
     ExecutiveContext::Ptr context;

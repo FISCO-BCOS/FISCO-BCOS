@@ -54,9 +54,6 @@ ConsensusPrecompiled::ConsensusPrecompiled()
 PrecompiledExecResult::Ptr ConsensusPrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin, Address const&)
 {
-    PRECOMPILED_LOG(TRACE) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("call")
-                           << LOG_KV("param", toHex(param));
-
     // parse function name
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);

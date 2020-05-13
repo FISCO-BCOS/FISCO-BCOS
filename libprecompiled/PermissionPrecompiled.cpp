@@ -63,9 +63,6 @@ std::string PermissionPrecompiled::toString()
 PrecompiledExecResult::Ptr PermissionPrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin, Address const&)
 {
-    PRECOMPILED_LOG(TRACE) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("call")
-                           << LOG_KV("param", toHex(param));
-
     // parse function name
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);

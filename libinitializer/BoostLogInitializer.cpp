@@ -51,7 +51,13 @@ void LogInitializer::initStatLog(boost::property_tree::ptree const& _pt,
     std::string const& _channel, std::string const& _logPrefix)
 {
     std::string logPath = "./stat";
-    auto sink = initLogSink(_pt, logPath, _logPrefix, _channel);
+
+    /// set log level
+    unsigned logLevel = getLogLevel(_pt.get<std::string>("log.level", "info"));
+    auto sink = initLogSink(_pt, logLevel, logPath, _logPrefix, _channel);
+
+    setStatLogLevel((LogLevel)logLevel);
+
     /// set file format
     /// log-level|timestamp | message
     sink->set_formatter(expr::stream
@@ -74,7 +80,12 @@ void LogInitializer::initLog(boost::property_tree::ptree const& _pt, std::string
     std::string const& _logPrefix)
 {
     std::string logPath = _pt.get<std::string>("log.log_path", "log");
-    auto sink = initLogSink(_pt, logPath, _logPrefix, _channel);
+    /// set log level
+    unsigned logLevel = getLogLevel(_pt.get<std::string>("log.level", "info"));
+    auto sink = initLogSink(_pt, logLevel, logPath, _logPrefix, _channel);
+
+    setFileLogLevel((LogLevel)logLevel);
+
     /// set file format
     /// log-level|timestamp |[g:groupId] message
     sink->set_formatter(
@@ -87,7 +98,7 @@ void LogInitializer::initLog(boost::property_tree::ptree const& _pt, std::string
 }
 
 boost::shared_ptr<dev::initializer::LogInitializer::sink_t> LogInitializer::initLogSink(
-    boost::property_tree::ptree const& pt, std::string const& _logPath,
+    boost::property_tree::ptree const& pt, unsigned const& _logLevel, std::string const& _logPath,
     std::string const& _logPrefix, std::string const& channel)
 {
     m_currentHourVec.push_back(
@@ -107,10 +118,9 @@ boost::shared_ptr<dev::initializer::LogInitializer::sink_t> LogInitializer::init
     bool need_flush = pt.get<bool>("log.flush", true);
     sink->locked_backend()->auto_flush(need_flush);
 
-    /// set log level
-    unsigned log_level = getLogLevel(pt.get<std::string>("log.level", "info"));
+
     sink->set_filter(boost::log::expressions::attr<std::string>("Channel") == channel &&
-                     boost::log::trivial::severity >= log_level);
+                     boost::log::trivial::severity >= _logLevel);
 
 
     boost::log::core::get()->add_sink(sink);
