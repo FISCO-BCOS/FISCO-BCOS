@@ -97,8 +97,7 @@ Address ExecutiveContext::registerPrecompiled(std::shared_ptr<precompiled::Preco
 
 bool ExecutiveContext::isPrecompiled(Address address) const
 {
-    auto p = getPrecompiled(address);
-    return p.get() != NULL;
+    return (m_address2Precompiled.count(address));
 }
 
 std::shared_ptr<precompiled::Precompiled> ExecutiveContext::getPrecompiled(Address address) const

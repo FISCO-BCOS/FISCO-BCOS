@@ -252,7 +252,8 @@ h256 MemoryTableFactory2::hash()
         {
             // in previous version(<= 2.4.0), we use sha256(...) to calculate hash of the data,
             // for now, to keep consistent with transction's implementation, we decide to use
-            // sha3(...) to calculate hash of the data. This `else` branch is just for compatibility.
+            // sha3(...) to calculate hash of the data. This `else` branch is just for
+            // compatibility.
             m_hash = dev::sha256(&data);
         }
     }
@@ -353,7 +354,6 @@ void MemoryTableFactory2::commitDB(dev::h256 const&, int64_t _blockNumber)
     }
     auto commit_time_cost = utcTime() - record_time;
     record_time = utcTime();
-
     m_name2Table.clear();
     auto clear_time_cost = utcTime() - record_time;
     STORAGE_LOG(DEBUG) << LOG_BADGE("Commit") << LOG_DESC("Commit db time record")

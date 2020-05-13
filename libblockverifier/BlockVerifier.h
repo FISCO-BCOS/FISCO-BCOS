@@ -65,8 +65,7 @@ public:
     {
         if (_enableParallel)
         {
-            // m_threadNum = std::max(std::thread::hardware_concurrency(), (unsigned int)1);
-            m_threadNum = 8;
+            m_threadNum = std::max(std::thread::hardware_concurrency(), (unsigned int)1);
         }
     }
 

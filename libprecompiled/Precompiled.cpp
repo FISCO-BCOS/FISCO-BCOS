@@ -31,11 +31,21 @@ using namespace dev;
 using namespace precompiled;
 using namespace dev::blockverifier;
 
+// global function selector cache
+static tbb::concurrent_unordered_map<std::string, uint32_t> s_name2SelectCache;
+
 uint32_t Precompiled::getFuncSelector(std::string const& _functionName)
 {
+    // global function selector cache
+    if (s_name2SelectCache.count(_functionName))
+    {
+        return s_name2SelectCache[_functionName];
+    }
     uint32_t func = *(uint32_t*)(crypto::Hash(_functionName).ref().cropped(0, 4).data());
-    return ((func & 0x000000FF) << 24) | ((func & 0x0000FF00) << 8) | ((func & 0x00FF0000) >> 8) |
-           ((func & 0xFF000000) >> 24);
+    uint32_t selector = ((func & 0x000000FF) << 24) | ((func & 0x0000FF00) << 8) |
+                        ((func & 0x00FF0000) >> 8) | ((func & 0xFF000000) >> 24);
+    s_name2SelectCache.insert(std::make_pair(_functionName, selector));
+    return selector;
 }
 
 storage::Table::Ptr Precompiled::openTable(
@@ -74,4 +84,10 @@ uint64_t Precompiled::getEntriesCapacity(
         totalCapacity += _entries->get(i)->capacity();
     }
     return totalCapacity;
+}
+
+// for UT
+void dev::precompiled::clearName2SelectCache()
+{
+    s_name2SelectCache.clear();
 }
