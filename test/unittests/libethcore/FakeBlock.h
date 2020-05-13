@@ -213,7 +213,7 @@ public:
         std::string str = "test transaction";
         bytes data(str.begin(), str.end());
         m_singleTransaction = Transaction(value, gasPrice, gas, dst, data, 2);
-        std::shared_ptr<Signature> sig =
+        std::shared_ptr<crypto::Signature> sig =
             dev::crypto::Sign(m_keyPair, m_singleTransaction.sha3(WithoutSignature));
         /// update the signature of transaction
         m_singleTransaction.updateSignature(sig);
@@ -249,7 +249,7 @@ public:
             tx->setNonce(tx->nonce() + utcTime() + m_nonceBase);
             tx->setBlockLimit(u256(_currentBlockNumber) + c_maxBlockLimit);
             tx->setRpcTx(true);
-            std::shared_ptr<Signature> sig =
+            std::shared_ptr<crypto::Signature> sig =
                 dev::crypto::Sign(sigKeyPair.secret(), tx->sha3(WithoutSignature));
             /// update the signature of transaction
             tx->updateSignature(sig);

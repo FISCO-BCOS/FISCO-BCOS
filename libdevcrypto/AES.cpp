@@ -15,7 +15,7 @@
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** @file AES.cpp
- * @author Alex Leverington <nessence@gmail.com> Asherli
+ * @author Asherli
  * @date 2018
  */
 
@@ -34,7 +34,7 @@ using namespace std;
 using namespace dev;
 using namespace dev::crypto;
 
-string dev::aesCBCEncrypt(const unsigned char* _plainData, size_t _plainDataSize,
+string dev::crypto::aesCBCEncrypt(const unsigned char* _plainData, size_t _plainDataSize,
     const unsigned char* _key, size_t _keySize, const unsigned char* _ivData)
 {
     string cipherData;
@@ -47,7 +47,7 @@ string dev::aesCBCEncrypt(const unsigned char* _plainData, size_t _plainDataSize
     return cipherData;
 }
 
-string dev::aesCBCDecrypt(const unsigned char* _cypherData, size_t _cypherDataSize,
+string dev::crypto::aesCBCDecrypt(const unsigned char* _cypherData, size_t _cypherDataSize,
     const unsigned char* _key, size_t _keySize, const unsigned char* _ivData)
 {
     string decryptedData;
@@ -61,25 +61,27 @@ string dev::aesCBCDecrypt(const unsigned char* _cypherData, size_t _cypherDataSi
     return decryptedData;
 }
 
-string dev::aesCBCEncrypt(const string& _plainData, const string& _key, const std::string& _ivData)
+string dev::crypto::aesCBCEncrypt(
+    const string& _plainData, const string& _key, const std::string& _ivData)
 {
     return aesCBCEncrypt((const unsigned char*)_plainData.data(), _plainData.size(),
         (const unsigned char*)_key.data(), _key.size(), (const unsigned char*)_ivData.data());
 }
 
-string dev::aesCBCDecrypt(const string& _cypherData, const string& _key, const std::string& _ivData)
+string dev::crypto::aesCBCDecrypt(
+    const string& _cypherData, const string& _key, const std::string& _ivData)
 {
     return aesCBCDecrypt((const unsigned char*)_cypherData.data(), _cypherData.size(),
         (const unsigned char*)_key.data(), _key.size(), (const unsigned char*)_ivData.data());
 }
 
-string dev::aesCBCEncrypt(const string& _plainData, const string& _key)
+string dev::crypto::aesCBCEncrypt(const string& _plainData, const string& _key)
 {
     string ivData(_key.substr(0, 16));
     return aesCBCEncrypt(_plainData, _key, ivData);
 }
 
-string dev::aesCBCDecrypt(const string& _cypherData, const string& _key)
+string dev::crypto::aesCBCDecrypt(const string& _cypherData, const string& _key)
 {
     string ivData(_key.substr(0, 16));
     return aesCBCDecrypt(_cypherData, _key, ivData);

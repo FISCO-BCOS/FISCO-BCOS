@@ -50,12 +50,12 @@ static const u256 c_secp256k1n(
 static const unsigned VBase = 27;
 using byte = unsigned char;
 
-void dev::ECDSASignature::encode(RLPStream& _s) const noexcept
+void dev::crypto::ECDSASignature::encode(RLPStream& _s) const noexcept
 {
     _s << (byte)(v + VBase) << (u256)r << (u256)s;
 }
 
-std::vector<unsigned char> dev::ECDSASignature::asBytes() const
+std::vector<unsigned char> dev::crypto::ECDSASignature::asBytes() const
 {
     std::vector<unsigned char> data;
     data.resize(65);
@@ -65,7 +65,7 @@ std::vector<unsigned char> dev::ECDSASignature::asBytes() const
     return data;
 }
 
-bool dev::ECDSASignature::isValid() const noexcept
+bool dev::crypto::ECDSASignature::isValid() const noexcept
 {
     if (s > c_secp256k1n / 2)
     {
@@ -92,14 +92,14 @@ secp256k1_context const* getSecp256k1Ctx()
 }
 }  // namespace
 
-std::shared_ptr<Signature> dev::ECDSASignatureFromRLP(RLP const& _rlp, size_t _start)
+std::shared_ptr<crypto::Signature> dev::ecdsaSignatureFromRLP(RLP const& _rlp, size_t _start)
 {
     auto v = _rlp[_start++].toInt<unsigned char>() - VBase;
     h256 r = _rlp[_start++].toInt<u256>();
     h256 s = _rlp[_start++].toInt<u256>();
     return std::make_shared<ECDSASignature>(r, s, v);
 }
-std::shared_ptr<Signature> dev::ECDSASignatureFromBytes(std::vector<unsigned char> _data)
+std::shared_ptr<crypto::Signature> dev::ecdsaSignatureFromBytes(std::vector<unsigned char> _data)
 {
     if (_data.size() != 65)
     {  // ecdsa signature must be 65 bytes
@@ -111,7 +111,7 @@ std::shared_ptr<Signature> dev::ECDSASignatureFromBytes(std::vector<unsigned cha
     return std::make_shared<ECDSASignature>(r, s, v);
 }
 
-std::shared_ptr<Signature> dev::ecdsaSign(KeyPair const& _keyPair, h256 const& _hash)
+std::shared_ptr<crypto::Signature> dev::ecdsaSign(KeyPair const& _keyPair, h256 const& _hash)
 {
     auto* ctx = getSecp256k1Ctx();
     secp256k1_ecdsa_recoverable_signature rawSig;
@@ -136,7 +136,7 @@ std::shared_ptr<Signature> dev::ecdsaSign(KeyPair const& _keyPair, h256 const& _
     return ss;
 }
 
-bool dev::ecdsaVerify(h512 const& _p, std::shared_ptr<Signature> _s, h256 const& _hash)
+bool dev::ecdsaVerify(h512 const& _p, std::shared_ptr<crypto::Signature> _s, h256 const& _hash)
 {
     // TODO: Verify w/o recovery (if faster).
     if (!_p)
@@ -144,7 +144,7 @@ bool dev::ecdsaVerify(h512 const& _p, std::shared_ptr<Signature> _s, h256 const&
     return _p == ecdsaRecover(_s, _hash);
 }
 
-Public dev::ecdsaRecover(std::shared_ptr<Signature> _s, h256 const& _message)
+Public dev::ecdsaRecover(std::shared_ptr<crypto::Signature> _s, h256 const& _message)
 {
     auto _sig = dynamic_pointer_cast<ECDSASignature>(_s);
     if (!_sig)
@@ -176,7 +176,7 @@ Public dev::ecdsaRecover(std::shared_ptr<Signature> _s, h256 const& _message)
     return Public{&serializedPubkey[1], Public::ConstructFromPointer};
 }
 
-pair<bool, bytes> dev::ecRecover(std::shared_ptr<Signature> _s, h256 const& _message)
+pair<bool, bytes> dev::ecRecover(std::shared_ptr<crypto::Signature> _s, h256 const& _message)
 {
     if (_s->isValid())
     {
