@@ -27,6 +27,8 @@
 
 namespace dev
 {
+namespace crypto
+{
 struct SM2Signature : public Signature
 {
     SM2Signature() = default;
@@ -41,14 +43,14 @@ struct SM2Signature : public Signature
 
     h512 v;
 };
+}  // namespace crypto
 
 class KeyPair;
-std::shared_ptr<Signature> sm2Sign(KeyPair const& _keyPair, const h256& _hash);
-bool sm2Verify(h512 const& _pubKey, std::shared_ptr<Signature> _sig, const h256& _hash);
-h512 sm2Recover(std::shared_ptr<Signature> _sig, const h256& _hash);
-std::shared_ptr<Signature> SM2SignatureFromRLP(RLP const& _rlp, size_t _start);
-std::shared_ptr<Signature> SM2SignatureFromBytes(std::vector<unsigned char> _data);
+std::shared_ptr<crypto::Signature> sm2Sign(KeyPair const& _keyPair, const h256& _hash);
+bool sm2Verify(h512 const& _pubKey, std::shared_ptr<crypto::Signature> _sig, const h256& _hash);
+h512 sm2Recover(std::shared_ptr<crypto::Signature> _sig, const h256& _hash);
+std::shared_ptr<crypto::Signature> sm2SignatureFromRLP(RLP const& _rlp, size_t _start);
+std::shared_ptr<crypto::Signature> sm2SignatureFromBytes(std::vector<unsigned char> _data);
 std::pair<bool, std::vector<unsigned char>> recover(
-    std::shared_ptr<Signature> _s, h256 const& _message);
-
+    std::shared_ptr<crypto::Signature> _s, h256 const& _message);
 }  // namespace dev

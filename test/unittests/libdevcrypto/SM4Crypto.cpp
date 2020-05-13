@@ -30,6 +30,7 @@
 
 
 using namespace dev;
+using namespace dev::crypto;
 namespace dev
 {
 namespace test
@@ -43,9 +44,9 @@ BOOST_AUTO_TEST_CASE(testSM4String)
         "1E59A21C02EBE011A33A36F497A0D5927EE96088EF3232DA09AD25BE3B1F1C9EF24D357E25B4A15472C41682BE"
         "ACE94E";
     const std::string iv = "B47B07085D258F6EE60790A786C7DFBD";
-    const std::string endata = SM4Encrypt((const unsigned char*)plainData.data(), plainData.size(),
+    const std::string endata = sm4Encrypt((const unsigned char*)plainData.data(), plainData.size(),
         (const unsigned char*)key.data(), key.size(), (const unsigned char*)iv.data());
-    const std::string dedata = SM4Decrypt((const unsigned char*)endata.data(), endata.size(),
+    const std::string dedata = sm4Decrypt((const unsigned char*)endata.data(), endata.size(),
         (const unsigned char*)key.data(), key.size(), (const unsigned char*)iv.data());
 
     BOOST_CHECK_EQUAL(plainData, dedata);
@@ -55,10 +56,10 @@ BOOST_AUTO_TEST_CASE(testSM4String)
         "5942D6DA31CD0A93E46CF382468710888F4393C6D734B3C6C6C44B1F6F34B08AEE0386B91831A268C4E9815BB6"
         "1375F4CDA913BA80C37CE6F4971977319CCD7D23502328A45130D0FDF5B63A77EA601F806733FBCADF969B08AA"
         "9AA56A8B509FAA7E95FC3706E3482EF1532A91DB2EB3EDF234D1E2E57F75B5EACC81A391";
-    const std::string endataWithoutIv = SM4Encrypt((const unsigned char*)plainDataWithoutIv.data(),
+    const std::string endataWithoutIv = sm4Encrypt((const unsigned char*)plainDataWithoutIv.data(),
         plainDataWithoutIv.size(), (const unsigned char*)keyWithoutIv.data(), keyWithoutIv.size(),
         (const unsigned char*)keyWithoutIv.data());
-    const std::string dedataWithoutIv = SM4Decrypt((const unsigned char*)endataWithoutIv.data(),
+    const std::string dedataWithoutIv = sm4Decrypt((const unsigned char*)endataWithoutIv.data(),
         endataWithoutIv.size(), (const unsigned char*)keyWithoutIv.data(), endataWithoutIv.size(),
         (const unsigned char*)keyWithoutIv.data());
 

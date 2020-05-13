@@ -87,7 +87,7 @@ check_sync_consensus()
     LOG_INFO "[round2]==============check sync block"
     bash stop_all.sh
     rm -rf node0/data node*/log
-    bash start_all.sh && sleep 10
+    bash start_all.sh && sleep 12
     check_reports 2 4 "[round2] sync block failed!" "[round2]==============check sync block is ok"
 
     bash stop_all.sh

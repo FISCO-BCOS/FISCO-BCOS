@@ -48,7 +48,8 @@ BOOST_AUTO_TEST_CASE(testCreateTxByRLP)
     bytes data(str.begin(), str.end());
     Transaction tx(value, gasPrice, gas, dst, data);
     KeyPair sigKeyPair = KeyPair::create();
-    std::shared_ptr<Signature> sig = dev::crypto::Sign(sigKeyPair, tx.sha3(WithoutSignature));
+    std::shared_ptr<crypto::Signature> sig =
+        dev::crypto::Sign(sigKeyPair, tx.sha3(WithoutSignature));
     /// update the signature of transaction
     tx.updateSignature(sig);
     /// test encode
@@ -93,7 +94,8 @@ BOOST_FIXTURE_TEST_CASE(SM_testCreateTxByRLP, SM_CryptoTestFixture)
     bytes data(str.begin(), str.end());
     Transaction tx(value, gasPrice, gas, dst, data);
     KeyPair sigKeyPair = KeyPair::create();
-    std::shared_ptr<Signature> sig = dev::crypto::Sign(sigKeyPair, tx.sha3(WithoutSignature));
+    std::shared_ptr<crypto::Signature> sig =
+        dev::crypto::Sign(sigKeyPair, tx.sha3(WithoutSignature));
     /// update the signature of transaction
     tx.updateSignature(sig);
     /// test encode

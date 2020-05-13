@@ -32,6 +32,7 @@
 
 using namespace std;
 using namespace dev;
+using namespace dev::crypto;
 
 h256 dev::EmptyHash = sha3(bytesConstRef());
 h256 dev::EmptyTrie = sha3(rlp(""));
@@ -39,22 +40,22 @@ h256 dev::EmptyTrie = sha3(rlp(""));
 std::function<std::string(const unsigned char* _plainData, size_t _plainDataSize,
     const unsigned char* _key, size_t _keySize, const unsigned char* _ivData)>
     dev::crypto::SymmetricEncrypt = static_cast<std::string (*)(const unsigned char*, size_t,
-        const unsigned char*, size_t, const unsigned char*)>(dev::aesCBCEncrypt);
+        const unsigned char*, size_t, const unsigned char*)>(dev::crypto::aesCBCEncrypt);
 std::function<std::string(const unsigned char* _encryptedData, size_t _encryptedDataSize,
     const unsigned char* _key, size_t _keySize, const unsigned char* _ivData)>
     dev::crypto::SymmetricDecrypt = static_cast<std::string (*)(const unsigned char*, size_t,
-        const unsigned char*, size_t, const unsigned char*)>(dev::aesCBCDecrypt);
-std::function<std::shared_ptr<Signature>(RLP const& _rlp, size_t _start)>
-    dev::crypto::SignatureFromRLP = ECDSASignatureFromRLP;
-std::function<std::shared_ptr<Signature>(std::vector<unsigned char>)>
-    dev::crypto::SignatureFromBytes = ECDSASignatureFromBytes;
+        const unsigned char*, size_t, const unsigned char*)>(dev::crypto::aesCBCDecrypt);
+std::function<std::shared_ptr<crypto::Signature>(RLP const& _rlp, size_t _start)>
+    dev::crypto::SignatureFromRLP = ecdsaSignatureFromRLP;
+std::function<std::shared_ptr<crypto::Signature>(std::vector<unsigned char>)>
+    dev::crypto::SignatureFromBytes = ecdsaSignatureFromBytes;
 
-std::function<std::shared_ptr<Signature>(KeyPair const& _keyPair, const h256& _hash)>
+std::function<std::shared_ptr<crypto::Signature>(KeyPair const& _keyPair, const h256& _hash)>
     dev::crypto::Sign = ecdsaSign;
-std::function<bool(h512 const& _pubKey, std::shared_ptr<Signature> _sig, const h256& _hash)>
+std::function<bool(h512 const& _pubKey, std::shared_ptr<crypto::Signature> _sig, const h256& _hash)>
     dev::crypto::Verify = ecdsaVerify;
-std::function<h512(std::shared_ptr<Signature> _sig, const h256& _hash)> dev::crypto::Recover =
-    ecdsaRecover;
+std::function<h512(std::shared_ptr<crypto::Signature> _sig, const h256& _hash)>
+    dev::crypto::Recover = ecdsaRecover;
 
 size_t dev::crypto::signatureLength()
 {
@@ -71,12 +72,12 @@ void dev::crypto::initSMCrypto()
 {
     EmptyHash = sm3(bytesConstRef());
     EmptyTrie = sm3(rlp(""));
-    SignatureFromRLP = SM2SignatureFromRLP;
-    SignatureFromBytes = SM2SignatureFromBytes;
+    SignatureFromRLP = sm2SignatureFromRLP;
+    SignatureFromBytes = sm2SignatureFromBytes;
     dev::crypto::SymmetricEncrypt = static_cast<std::string (*)(const unsigned char*, size_t,
-        const unsigned char*, size_t, const unsigned char*)>(dev::SM4Encrypt);
+        const unsigned char*, size_t, const unsigned char*)>(dev::crypto::sm4Encrypt);
     dev::crypto::SymmetricDecrypt = static_cast<std::string (*)(const unsigned char*, size_t,
-        const unsigned char*, size_t, const unsigned char*)>(dev::SM4Decrypt);
+        const unsigned char*, size_t, const unsigned char*)>(dev::crypto::sm4Decrypt);
     Sign = sm2Sign;
     Verify = sm2Verify;
     Recover = sm2Recover;
@@ -86,12 +87,12 @@ void dev::crypto::initCrypto()
 {
     EmptyHash = sha3(bytesConstRef());
     EmptyTrie = sha3(rlp(""));
-    SignatureFromRLP = ECDSASignatureFromRLP;
-    SignatureFromBytes = ECDSASignatureFromBytes;
+    SignatureFromRLP = ecdsaSignatureFromRLP;
+    SignatureFromBytes = ecdsaSignatureFromBytes;
     dev::crypto::SymmetricEncrypt = static_cast<std::string (*)(const unsigned char*, size_t,
-        const unsigned char*, size_t, const unsigned char*)>(dev::aesCBCEncrypt);
+        const unsigned char*, size_t, const unsigned char*)>(dev::crypto::aesCBCEncrypt);
     dev::crypto::SymmetricDecrypt = static_cast<std::string (*)(const unsigned char*, size_t,
-        const unsigned char*, size_t, const unsigned char*)>(dev::aesCBCDecrypt);
+        const unsigned char*, size_t, const unsigned char*)>(dev::crypto::aesCBCDecrypt);
     Sign = ecdsaSign;
     Verify = ecdsaVerify;
     Recover = ecdsaRecover;

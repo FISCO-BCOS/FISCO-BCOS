@@ -14,11 +14,9 @@
     You should have received a copy of the GNU General Public License
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file Hash.h
- * @author Alex Leverington <nessence@gmail.com> Asherli
- * @date 2018
- *
- * The FixedHash fixed-size "hash" container type.
+/** @file SM3Hash.h
+ * @author xingqiangbai
+ * @date 2020-04-27
  */
 
 #pragma once

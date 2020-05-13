@@ -202,6 +202,7 @@ public:
         m_fakePBFT =
             std::make_shared<FakeConsensus<FakeRotatingPBFTEngine>>(m_sealersNum, ProtocolID::PBFT);
         m_rotatingPBFT = std::dynamic_pointer_cast<FakeRotatingPBFTEngine>(m_fakePBFT->consensus());
+        m_rotatingPBFT->setMaxRequestPrepareWaitTime(10);
     }
 
     FakeRotatingPBFTEngine::Ptr rotatingPBFT() { return m_rotatingPBFT; }
