@@ -57,11 +57,19 @@ enum LogLevel
     TRACE = boost::log::trivial::trace
 };
 
-#define LOG(level)                        \
-    BOOST_LOG_SEV(dev::FileLoggerHandler, \
+extern LogLevel c_fileLogLevel;
+extern LogLevel c_statLogLevel;
+
+void setFileLogLevel(LogLevel const& _level);
+void setStatLogLevel(LogLevel const& _level);
+
+#define LOG(level)                                   \
+    if (dev::LogLevel::level >= dev::c_fileLogLevel) \
+    BOOST_LOG_SEV(dev::FileLoggerHandler,            \
         (boost::log::v2s_mt_posix::trivial::severity_level)(dev::LogLevel::level))
 
-#define STAT_LOG(level)                       \
-    BOOST_LOG_SEV(dev::StatFileLoggerHandler, \
+#define STAT_LOG(level)                              \
+    if (dev::LogLevel::level >= dev::c_statLogLevel) \
+    BOOST_LOG_SEV(dev::StatFileLoggerHandler,        \
         (boost::log::v2s_mt_posix::trivial::severity_level)(dev::LogLevel::level))
 }  // namespace dev

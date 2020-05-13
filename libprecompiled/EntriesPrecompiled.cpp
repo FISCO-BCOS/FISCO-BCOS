@@ -44,8 +44,6 @@ std::string EntriesPrecompiled::toString()
 PrecompiledExecResult::Ptr EntriesPrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const&, Address const&)
 {
-    STORAGE_LOG(TRACE) << LOG_BADGE("EntriesPrecompiled") << LOG_DESC("call")
-                       << LOG_KV("param", toHex(param));
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
 
