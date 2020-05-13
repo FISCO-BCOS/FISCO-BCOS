@@ -24,8 +24,8 @@
 #include "MemoryTable.h"
 #include "Storage.h"
 #include "Table.h"
-
 #include <tbb/enumerable_thread_specific.h>
+#include <tbb/spin_mutex.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/thread/tss.hpp>
 #include <memory>
@@ -62,6 +62,9 @@ public:
     virtual void commitDB(h256 const& _blockHash, int64_t _blockNumber) override;
 
 private:
+    virtual Table::Ptr openTableWithoutLock(
+        const std::string& tableName, bool authorityFlag = true, bool isPara = true);
+
     void setAuthorizedAddress(storage::TableInfo::Ptr _tableInfo);
     std::vector<Change>& getChangeLog();
     uint64_t m_ID = 1;
@@ -72,7 +75,7 @@ private:
     std::vector<std::string> m_sysTables;
 
     // mutex
-    mutable RecursiveMutex x_name2Table;
+    mutable tbb::spin_mutex x_name2Table;
 };
 
 }  // namespace storage

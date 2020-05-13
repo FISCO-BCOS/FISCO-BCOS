@@ -52,7 +52,8 @@ public:
     // constructor function
     EventLogFilterManager(std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         int64_t _maxBlockRange = -1, int64_t _maxBlockPerLoopFilter = 10)
-      : m_blockChain(_blockChain),
+      : Worker("eventLog", 0),
+        m_blockChain(_blockChain),
         m_maxBlockRange(_maxBlockRange),
         m_maxBlockPerLoopFilter(_maxBlockPerLoopFilter)
     {}
