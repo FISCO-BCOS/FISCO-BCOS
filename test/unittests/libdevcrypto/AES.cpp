@@ -30,6 +30,7 @@
 
 
 using namespace dev;
+using namespace dev::crypto;
 namespace dev
 {
 namespace test

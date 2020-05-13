@@ -26,6 +26,8 @@
 
 namespace dev
 {
+namespace crypto
+{
 struct Signature
 {
     Signature() = default;
@@ -41,4 +43,5 @@ struct Signature
     h256 r;
     h256 s;
 };
+}  // namespace crypto
 }  // namespace dev

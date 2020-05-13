@@ -1517,6 +1517,7 @@ for line in ${ip_array[*]};do
             if [ -z "${no_agency}" ];then cat "${output_dir}/gmcert/${agency_array[${server_count}]}/gmagency.crt" >> "${sdk_path}/gm/gmsdk.crt";fi
             cat "${output_dir}/gmcert/${agency_array[${server_count}]}/../gmca.crt" >> "${sdk_path}/gm/gmsdk.crt"
             gen_node_cert_with_extensions_gm "${output_dir}/gmcert/${agency_array[${server_count}]}" "${sdk_path}/gm" "sdk" ensdk v3enc_req
+            cp "${output_dir}/gmcert/gmca.crt" "${sdk_path}/gm/"
         fi
     fi
     for ((i=0;i<num;++i));do

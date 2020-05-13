@@ -28,6 +28,8 @@
 
 namespace dev
 {
+namespace crypto
+{
 struct ECDSASignature : public Signature
 {
     ECDSASignature() = default;
@@ -43,13 +45,13 @@ struct ECDSASignature : public Signature
 
     unsigned char v;
 };
+}  // namespace crypto
 
 class KeyPair;
-std::shared_ptr<Signature> ecdsaSign(const KeyPair& _keyPair, const h256& _hash);
-bool ecdsaVerify(h512 const& _pubKey, std::shared_ptr<Signature> _sig, const h256& _hash);
-h512 ecdsaRecover(std::shared_ptr<Signature> _sig, const h256& _hash);
-std::shared_ptr<Signature> ECDSASignatureFromRLP(RLP const& _rlp, size_t _start);
-std::pair<bool, bytes> ecRecover(std::shared_ptr<Signature> _s, h256 const& _message);
-std::shared_ptr<Signature> ECDSASignatureFromBytes(std::vector<unsigned char>);
-
+std::shared_ptr<crypto::Signature> ecdsaSign(const KeyPair& _keyPair, const h256& _hash);
+bool ecdsaVerify(h512 const& _pubKey, std::shared_ptr<crypto::Signature> _sig, const h256& _hash);
+h512 ecdsaRecover(std::shared_ptr<crypto::Signature> _sig, const h256& _hash);
+std::shared_ptr<crypto::Signature> ecdsaSignatureFromRLP(RLP const& _rlp, size_t _start);
+std::pair<bool, bytes> ecRecover(std::shared_ptr<crypto::Signature> _s, h256 const& _message);
+std::shared_ptr<crypto::Signature> ecdsaSignatureFromBytes(std::vector<unsigned char>);
 }  // namespace dev

@@ -49,7 +49,7 @@ public:
         {
             tx->setNonce(utcTime() + index);
             tx->setBlockLimit(200);
-            std::shared_ptr<Signature> sig =
+            std::shared_ptr<crypto::Signature> sig =
                 dev::crypto::Sign(fakedBlock->m_keyPair, tx->sha3(WithoutSignature));
             tx->updateSignature(sig);
             index++;
