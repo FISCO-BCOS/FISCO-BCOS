@@ -148,7 +148,7 @@ BOOST_AUTO_TEST_CASE(SM_testSigAndVerify)
     h256 r(crypto::Hash("+++"));
     h256 s(crypto::Hash("24324"));
     h512 v(crypto::Hash("123456"));
-    auto constructed_sig = std::make_shared<SM2Signature>(r, s, v);
+    auto constructed_sig = std::make_shared<crypto::SM2Signature>(r, s, v);
     BOOST_CHECK(constructed_sig->isValid() == true);
 }
 /// test ecRocer
@@ -175,7 +175,7 @@ BOOST_AUTO_TEST_CASE(SM_testSigecRocer)
         h256 s;
     } in;
     memcpy(&in, _in.data(), min(_in.size(), sizeof(in)));
-    auto sig = std::make_shared<SM2Signature>(in.r, in.s, in.v);
+    auto sig = std::make_shared<crypto::SM2Signature>(in.r, in.s, in.v);
     KeyPair = recover(sig, in.hash);
     BOOST_CHECK(KeyPair.first == true);
     BOOST_CHECK(KeyPair.second != ret.asBytes());
@@ -283,7 +283,7 @@ BOOST_AUTO_TEST_CASE(testSigAndVerify)
     h256 r(crypto::Hash("+++"));
     h256 s(crypto::Hash("24324"));
     byte v = 4;
-    auto constructed_sig = std::make_shared<ECDSASignature>(r, s, v - 27);
+    auto constructed_sig = std::make_shared<crypto::ECDSASignature>(r, s, v - 27);
     BOOST_CHECK(constructed_sig->isValid() == false);
 }
 /// test ecRocer
@@ -317,11 +317,11 @@ BOOST_AUTO_TEST_CASE(testSigecRocer)
     } in, in2;
     u256 v = (u256)in.v;
     memcpy(&in, _in.data(), min(_in.size(), sizeof(in)));
-    auto sig = std::make_shared<ECDSASignature>(in.r, in.s, (byte)((int)v - 27));
+    auto sig = std::make_shared<crypto::ECDSASignature>(in.r, in.s, (byte)((int)v - 27));
     keyPair = dev::ecRecover(sig, in.hash);
     memcpy(&in2, ref(rlpBytesRight).data(), min(sizeof(in2), rlpBytesRight.size()));
     v = (u256)in2.v;
-    sig = std::make_shared<ECDSASignature>(in2.r, in2.s, (byte)((int)v - 27));
+    sig = std::make_shared<crypto::ECDSASignature>(in2.r, in2.s, (byte)((int)v - 27));
     KeyPairR = dev::ecRecover(sig, in2.hash);
     BOOST_CHECK(keyPair.first == true);
     BOOST_CHECK(keyPair.second != ret.asBytes());

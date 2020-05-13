@@ -49,7 +49,7 @@ void checkPBFTMsg(T const& msg, KeyPair const _keyPair = KeyPair::create(),
         if (g_BCOSConfig.SMCrypto())
         {
             bool result =
-                crypto::Verify(_keyPair.pub(), SM2SignatureFromBytes(msg.sig), msg.block_hash);
+                crypto::Verify(_keyPair.pub(), sm2SignatureFromBytes(msg.sig), msg.block_hash);
             BOOST_CHECK_EQUAL(result, true);
         }
         else
@@ -62,7 +62,7 @@ void checkPBFTMsg(T const& msg, KeyPair const _keyPair = KeyPair::create(),
         if (g_BCOSConfig.SMCrypto())
         {
             bool result1 = crypto::Verify(
-                _keyPair.pub(), SM2SignatureFromBytes(msg.sig2), msg.fieldsWithoutBlock());
+                _keyPair.pub(), sm2SignatureFromBytes(msg.sig2), msg.fieldsWithoutBlock());
             BOOST_CHECK_EQUAL(result1, true);
         }
         else

@@ -51,7 +51,7 @@ void SM2Signature::encode(RLPStream& _s) const noexcept
     _s << (VType)(v) << (u256)r << (u256)s;
 }
 
-std::vector<unsigned char> dev::SM2Signature::asBytes() const
+std::vector<unsigned char> dev::crypto::SM2Signature::asBytes() const
 {
     std::vector<unsigned char> data;
     data.resize(128);
@@ -61,7 +61,7 @@ std::vector<unsigned char> dev::SM2Signature::asBytes() const
     return data;
 }
 
-bool dev::SM2Signature::isValid() const noexcept
+bool dev::crypto::SM2Signature::isValid() const noexcept
 {
     static const h256 s_max{"0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141"};
     static const h256 s_zero;
@@ -69,14 +69,14 @@ bool dev::SM2Signature::isValid() const noexcept
     return (v >= h512(1) && r > s_zero && s > s_zero && r < s_max && s < s_max);
 }
 
-std::shared_ptr<Signature> dev::SM2SignatureFromRLP(RLP const& _rlp, size_t _start)
+std::shared_ptr<crypto::Signature> dev::sm2SignatureFromRLP(RLP const& _rlp, size_t _start)
 {
     h512 v = _rlp[_start++].toHash<h512>();
     h256 r = _rlp[_start++].toInt<u256>();
     h256 s = _rlp[_start++].toInt<u256>();
     return std::make_shared<SM2Signature>(r, s, v);
 }
-std::shared_ptr<Signature> dev::SM2SignatureFromBytes(std::vector<unsigned char> _data)
+std::shared_ptr<crypto::Signature> dev::sm2SignatureFromBytes(std::vector<unsigned char> _data)
 {
     if (_data.size() != 128)
     {  // sm2 signature must be 128 bytes
@@ -88,7 +88,7 @@ std::shared_ptr<Signature> dev::SM2SignatureFromBytes(std::vector<unsigned char>
     return std::make_shared<SM2Signature>(r, s, v);
 }
 
-std::shared_ptr<Signature> dev::sm2Sign(KeyPair const& _keyPair, h256 const& _hash)
+std::shared_ptr<crypto::Signature> dev::sm2Sign(KeyPair const& _keyPair, h256 const& _hash)
 {
     string pri = toHex(bytesConstRef{_keyPair.secret().data(), 32});
     h256 r(0);
@@ -100,7 +100,7 @@ std::shared_ptr<Signature> dev::sm2Sign(KeyPair const& _keyPair, h256 const& _ha
     return make_shared<SM2Signature>(r, s, _keyPair.pub());
 }
 
-bool dev::sm2Verify(h512 const& _p, std::shared_ptr<Signature> _s, h256 const& _hash)
+bool dev::sm2Verify(h512 const& _p, std::shared_ptr<crypto::Signature> _s, h256 const& _hash)
 {
     if (!_s)
     {
@@ -112,7 +112,7 @@ bool dev::sm2Verify(h512 const& _p, std::shared_ptr<Signature> _s, h256 const& _
     return lresult;
 }
 
-h512 dev::sm2Recover(std::shared_ptr<Signature> _s, h256 const& _message)
+h512 dev::sm2Recover(std::shared_ptr<crypto::Signature> _s, h256 const& _message)
 {
     auto _sig = dynamic_pointer_cast<SM2Signature>(_s);
     if (!_sig)
@@ -131,7 +131,7 @@ h512 dev::sm2Recover(std::shared_ptr<Signature> _s, h256 const& _message)
     return h512{};
 }
 
-pair<bool, bytes> dev::recover(std::shared_ptr<Signature> _s, h256 const& _message)
+pair<bool, bytes> dev::recover(std::shared_ptr<crypto::Signature> _s, h256 const& _message)
 {
     auto _sig = dynamic_pointer_cast<SM2Signature>(_s);
     if (!_sig->isValid())

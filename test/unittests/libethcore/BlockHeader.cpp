@@ -92,7 +92,7 @@ public:
         bytes data(str.begin(), str.end());
         m_singleTransaction = Transaction(value, gasPrice, gas, dst, data);
         KeyPair sigKeyPair = KeyPair::create();
-        std::shared_ptr<Signature> sig =
+        std::shared_ptr<crypto::Signature> sig =
             dev::crypto::Sign(sigKeyPair, m_singleTransaction.sha3(WithoutSignature));
         /// update the signature of transaction
         m_singleTransaction.updateSignature(sig);

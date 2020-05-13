@@ -218,8 +218,8 @@ public:
     /// @returns the signature of the transaction (the signature has the sender
     /// encoded in it)
     /// @throws TransactionIsUnsigned if signature was not initialized
-    std::shared_ptr<Signature> const& signature() const;
-    void updateSignature(std::shared_ptr<Signature> sig)
+    std::shared_ptr<crypto::Signature> const& signature() const;
+    void updateSignature(std::shared_ptr<crypto::Signature> sig)
     {
         m_vrs = sig;
         m_hashWith = h256(0);
@@ -292,12 +292,12 @@ protected:
                    ///< unused gas gets refunded once the contract is ended.
     bytes m_data;  ///< The data associated with the transaction, or the
                    ///< initialiser if it's a creation transaction.
-    std::shared_ptr<Signature> m_vrs;  ///< The signature of the transaction.
-                                       ///< Encodes the sender.
-    mutable h256 m_hashWith;           ///< Cached hash of transaction with signature.
-    mutable Address m_sender;          ///< Cached sender, determined from signature.
-    u256 m_blockLimit;                 ///< The latest block number to be packaged for transaction.
-    u256 m_importTime = u256(0);       ///< The utc time at which a transaction enters the queue.
+    std::shared_ptr<crypto::Signature> m_vrs;  ///< The signature of the transaction.
+                                               ///< Encodes the sender.
+    mutable h256 m_hashWith;                   ///< Cached hash of transaction with signature.
+    mutable Address m_sender;                  ///< Cached sender, determined from signature.
+    u256 m_blockLimit;            ///< The latest block number to be packaged for transaction.
+    u256 m_importTime = u256(0);  ///< The utc time at which a transaction enters the queue.
 
     RPCCallback m_rpcCallback;
 

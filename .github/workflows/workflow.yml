@@ -93,3 +93,9 @@ jobs:
         run: make -j2
       - name: run integration testing
         run: cd tools && bash ci/ci_check.sh
+      - name: tar fisco-bcos for macOS
+        run: cd bin && strip fisco-bcos && tar -zcf fisco-bcos.tar.gz fisco-bcos
+      - uses: actions/upload-artifact@v2
+        with:
+          name: fisco-bcos-macOS.tar.gz
+          path: bin/fisco-bcos.tar.gz

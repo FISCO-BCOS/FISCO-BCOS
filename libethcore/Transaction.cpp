@@ -171,7 +171,7 @@ Address const& Transaction::sender() const
     return m_sender;
 }
 
-std::shared_ptr<Signature> const& Transaction::signature() const
+std::shared_ptr<crypto::Signature> const& Transaction::signature() const
 {
     if (!m_vrs)
         BOOST_THROW_EXCEPTION(TransactionIsUnsigned());

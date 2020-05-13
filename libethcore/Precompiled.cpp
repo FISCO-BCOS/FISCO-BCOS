@@ -31,6 +31,7 @@
 using namespace std;
 using namespace dev;
 using namespace dev::eth;
+using namespace dev::crypto;
 
 PrecompiledRegistrar* PrecompiledRegistrar::s_this = nullptr;
 
