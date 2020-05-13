@@ -289,7 +289,7 @@ void SQLBasicAccess::GetCommitFieldNameAndValue(
         }
     }
 
-    map<u_long, vector<size_t>> groupedEntries;
+    map<string, vector<size_t>> groupedEntries;
     map<string, uint32_t> field2Position;
     uint32_t currentFieldPostion = 0;
     for (size_t i = 0; i < _data->size(); ++i)
@@ -315,8 +315,9 @@ void SQLBasicAccess::GetCommitFieldNameAndValue(
                 keyVec[field2Position[fieldIt.first]] = 1;
             }
         }
-
-        groupedEntries[keyVec.to_ulong()].push_back(i);
+        string key;
+        boost::to_string(keyVec, key);
+        groupedEntries[key].push_back(i);
     }
 
     for (const auto& it : groupedEntries)
