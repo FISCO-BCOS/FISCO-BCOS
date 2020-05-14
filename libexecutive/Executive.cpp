@@ -257,7 +257,7 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
 
     if (g_BCOSConfig.version() >= V2_5_0 && m_t && m_s->frozen(_origin))
     {
-        LOG(DEBUG) << LOG_DESC("execute transaction failed for ContractFrozen")
+        LOG(DEBUG) << LOG_DESC("execute transaction failed for account frozen")
                    << LOG_KV("account", _origin);
         writeErrInfoToOutput("Frozen account:0x" + _origin.hex());
         revert();
@@ -389,7 +389,7 @@ bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u2
 
     if (m_s->frozen(_origin))
     {
-        LOG(DEBUG) << LOG_DESC("deploy contract failed for ContractFrozen")
+        LOG(DEBUG) << LOG_DESC("deploy contract failed for account frozen")
                    << LOG_KV("account", _origin);
         writeErrInfoToOutput("Frozen account:0x" + _origin.hex());
         m_gas = 0;

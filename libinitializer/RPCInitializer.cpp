@@ -44,6 +44,9 @@ void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt
 
     int listenPort = _pt.get<int>("rpc.channel_listen_port", 20200);
     int httpListenPort = _pt.get<int>("rpc.jsonrpc_listen_port", 8545);
+    bool checkCertIssuer = _pt.get<bool>("network_security.check_cert_issuer", true);
+    INITIALIZER_LOG(INFO) << LOG_BADGE("RPCInitializer")
+                          << LOG_KV("network_security.check_cert_issuer", checkCertIssuer);
 
     if (!isValidPort(listenPort) || !isValidPort(httpListenPort))
     {
@@ -80,6 +83,7 @@ void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt
     server->setSSLContext(m_sslContext);
     server->setEnableSSL(true);
     server->setBind(listenIP, listenPort);
+    server->setCheckCertIssuer(checkCertIssuer);
     server->setMessageFactory(std::make_shared<dev::channel::ChannelMessageFactory>());
 
     m_channelRPCServer->setChannelServer(server);
