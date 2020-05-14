@@ -387,7 +387,7 @@ bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u2
         return !m_ext;
     }
 
-    if (m_s->frozen(_origin))
+    if (g_BCOSConfig.version() >= V2_5_0 && m_s->frozen(_origin))
     {
         LOG(DEBUG) << LOG_DESC("deploy contract failed for account frozen")
                    << LOG_KV("account", _origin);

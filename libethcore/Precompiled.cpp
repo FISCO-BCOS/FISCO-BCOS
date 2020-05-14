@@ -56,45 +56,16 @@ ETH_REGISTER_PRECOMPILED(ecrecover)(bytesConstRef _in)
     // When supported_version> = v2.4.0, ecRecover uniformly calls the ECDSA verification function
     if (g_BCOSConfig.version() >= V2_4_0)
     {
-        struct
-        {
-            h256 hash;
-            h256 v;
-            h256 r;
-            h256 s;
-        } in;
-        u256 v = (u256)in.v;
-        memcpy(&in, _in.data(), min(_in.size(), sizeof(in)));
-        auto sig = std::make_shared<ECDSASignature>(in.r, in.s, (byte)((int)v - 27));
-        return dev::ecRecover(sig, in.hash);
+        return dev::ecRecover(_in);
     }
     // before 2.4.0, in sm crypto mode this use sm2 recover which is a bug
     if (g_BCOSConfig.SMCrypto())
     {
-        struct
-        {
-            h256 hash;
-            h512 v;
-            h256 r;
-            h256 s;
-        } in;
-        memcpy(&in, _in.data(), min(_in.size(), sizeof(in)));
-        auto sig = std::make_shared<SM2Signature>(in.r, in.s, in.v);
-        return recover(sig, in.hash);
+        return recover(_in);
     }
     else
     {
-        struct
-        {
-            h256 hash;
-            h256 v;
-            h256 r;
-            h256 s;
-        } in;
-        u256 v = (u256)in.v;
-        memcpy(&in, _in.data(), min(_in.size(), sizeof(in)));
-        auto sig = std::make_shared<ECDSASignature>(in.r, in.s, (byte)((int)v - 27));
-        return dev::ecRecover(sig, in.hash);
+        return dev::ecRecover(_in);
     }
 }
 

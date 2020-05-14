@@ -343,7 +343,7 @@ public:
     {
         m_recorder = _recorder;
     }
-
+    virtual bool dirty() const { return m_isDirty; }
     virtual void setStateStorage(std::shared_ptr<Storage> _db) { m_remoteDB = _db; }
     virtual void setBlockHash(h256 const& _blockHash) { m_blockHash = _blockHash; }
     virtual void setBlockNum(int64_t _blockNum) { m_blockNum = _blockNum; }
@@ -358,6 +358,7 @@ protected:
     TableInfo::Ptr m_tableInfo;
     h256 m_blockHash;
     int64_t m_blockNum = 0;
+    bool m_isDirty = false;  // mark if the tableData had been dump
 };
 
 // Block execution time construction by TableFactoryFactory

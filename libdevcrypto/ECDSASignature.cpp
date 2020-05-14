@@ -176,21 +176,45 @@ Public dev::ecdsaRecover(std::shared_ptr<crypto::Signature> _s, h256 const& _mes
     return Public{&serializedPubkey[1], Public::ConstructFromPointer};
 }
 
-pair<bool, bytes> dev::ecRecover(std::shared_ptr<crypto::Signature> _s, h256 const& _message)
+pair<bool, bytes> dev::ecRecover(bytesConstRef _in)
 {
-    if (_s->isValid())
+    struct
     {
-        try
+        h256 hash;
+        h256 v;
+        h256 r;
+        h256 s;
+    } in;
+
+    memcpy(&in, _in.data(), min(_in.size(), sizeof(in)));
+
+    h256 ret;
+    u256 v = (u256)in.v;
+    if (v >= 27 && v <= 28)
+    {
+        auto sig = std::make_shared<ECDSASignature>(in.r, in.s, (byte)((int)v - 27));
+        if (sig->isValid())
         {
-            if (Public rec = ecdsaRecover(_s, _message))
+            try
             {
-                h256 ret = dev::sha3(rec);
-                memset(ret.data(), 0, 12);
-                return {true, ret.asBytes()};
+                if (Public rec = ecdsaRecover(sig, in.hash))
+                {
+                    if (g_BCOSConfig.version() >= V2_5_0)
+                    {
+                        ret = dev::sha3(rec);
+
+                    }
+                    else
+                    {
+                        ret = crypto::Hash(rec);
+                    }
+                    memset(ret.data(), 0, 12);
+                    return {true, ret.asBytes()};
+                }
             }
-        }
-        catch (...)
-        {
+            catch (...)
+            {
+            }
         }
     }
     return {true, {}};

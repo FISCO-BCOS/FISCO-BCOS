@@ -347,6 +347,7 @@ void Block::calReceiptRoot(bool update) const
             s << i;
             bytes tranReceipts_data;
             (*m_transactionReceipts)[i]->encode(tranReceipts_data);
+            // BLOCK_LOG(DEBUG) << LOG_KV("index", i) << "receipt=" << *(*m_transactionReceipts)[i];
             txReceipts.appendRaw(tranReceipts_data);
             mapCache.insert(std::make_pair(s.out(), tranReceipts_data));
         }
