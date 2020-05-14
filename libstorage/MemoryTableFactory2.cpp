@@ -73,9 +73,15 @@ void MemoryTableFactory2::init()
     }
 }
 
-Table::Ptr MemoryTableFactory2::openTable(const std::string& tableName, bool authorityFlag, bool)
+Table::Ptr MemoryTableFactory2::openTable(const std::string& _tableName, bool _authorityFlag, bool)
 {
-    RecursiveGuard l(x_name2Table);
+    tbb::spin_mutex::scoped_lock l(x_name2Table);
+    return openTableWithoutLock(_tableName, _authorityFlag);
+}
+
+Table::Ptr MemoryTableFactory2::openTableWithoutLock(
+    const std::string& tableName, bool authorityFlag, bool)
+{
     auto it = m_name2Table.find(tableName);
     if (it != m_name2Table.end())
     {
@@ -89,7 +95,7 @@ Table::Ptr MemoryTableFactory2::openTable(const std::string& tableName, bool aut
     }
     else
     {
-        auto tempSysTable = openTable(SYS_TABLES);
+        auto tempSysTable = openTableWithoutLock(SYS_TABLES);
         auto tableEntries = tempSysTable->select(tableName, tempSysTable->newCondition());
         if (tableEntries->size() == 0u)
         {
@@ -153,7 +159,7 @@ Table::Ptr MemoryTableFactory2::createTable(const std::string& tableName,
     auto sysTable = openTable(SYS_TABLES, authorityFlag);
     // To make sure the table exists
     {
-        RecursiveGuard l(x_name2Table);
+        tbb::spin_mutex::scoped_lock l(x_name2Table);
         auto tableEntries = sysTable->select(tableName, sysTable->newCondition());
         if (tableEntries->size() != 0)
         {
@@ -365,7 +371,7 @@ void MemoryTableFactory2::commitDB(dev::h256 const&, int64_t _blockNumber)
 
 void MemoryTableFactory2::setAuthorizedAddress(storage::TableInfo::Ptr _tableInfo)
 {
-    typename Table::Ptr accessTable = openTable(SYS_ACCESS_TABLE);
+    typename Table::Ptr accessTable = openTableWithoutLock(SYS_ACCESS_TABLE);
     if (accessTable)
     {
         auto tableEntries = accessTable->select(_tableInfo->name, accessTable->newCondition());

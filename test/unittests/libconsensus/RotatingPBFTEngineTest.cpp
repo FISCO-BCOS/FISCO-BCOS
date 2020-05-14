@@ -202,10 +202,6 @@ BOOST_AUTO_TEST_CASE(testRawPrepareTreeBroadcast)
         compareAndClearAsyncSendTime(*(leaderRPBFT->fakePBFTSuite()), node, 1);
     }
 
-    // check the follow forward and handle the message
-    followRPBFT->fakePBFTSuite()->consensus()->wrapperOnRecvPBFTMessage(
-        networkException, leaderSession, receivedP2pMsg);
-
     selectedNodes = followRPBFT->fakePBFTSuite()->consensus()->treeRouter()->selectNodes(
         sealerSet, prepareReq->idx);
     // should forward the message
