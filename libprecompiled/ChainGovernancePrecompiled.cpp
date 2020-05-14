@@ -687,18 +687,18 @@ int ChainGovernancePrecompiled::revokeTablePermission(
     return acTable->remove(_tableName, condition, make_shared<AccessOptions>(_origin));
 }
 
-bool ChainGovernancePrecompiled::checkPermission(
-    ExecutiveContext::Ptr context, Address const& origin)
+bool ChainGovernancePrecompiled::isCommitteeMember(
+    ExecutiveContext::Ptr context, Address const& account)
 {
     auto acTable = openTable(context, SYS_ACCESS_TABLE);
     auto condition = acTable->newCondition();
-    condition->EQ(SYS_AC_ADDRESS, origin.hex());
+    condition->EQ(SYS_AC_ADDRESS, account.hex());
     auto entries = acTable->select(SYS_ACCESS_TABLE, condition);
     if (entries->size() != 0u)
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("ChainGovernancePrecompiled")
-                              << LOG_DESC("committee member is permitted to manage contract")
-                              << LOG_KV("origin", origin.hex());
+                              << LOG_DESC("account is not a committee meember")
+                              << LOG_KV("account", account.hex());
         return true;
     }
 
@@ -782,11 +782,17 @@ void ChainGovernancePrecompiled::freezeAccount(ExecutiveContext::Ptr context, by
     {
         result = CODE_INVALID_ACCOUNT_ADDRESS;
     }
-    else if (!checkPermission(context, origin))
+    else if (!isCommitteeMember(context, origin))
     {
         result = storage::CODE_NO_AUTHORIZED;
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ChainGovernancePrecompiled")
                                << LOG_DESC("permission denied");
+    }
+    else if (isCommitteeMember(context, accountAddress))
+    {
+        result = storage::CODE_NO_AUTHORIZED;
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ChainGovernancePrecompiled")
+                               << LOG_DESC("can not freeze a committee member");
     }
     else if (AccountStatus::AccFrozen == status)
     {
@@ -820,7 +826,7 @@ void ChainGovernancePrecompiled::unfreezeAccount(ExecutiveContext::Ptr context, 
     {
         result = CODE_INVALID_ACCOUNT_ADDRESS;
     }
-    else if (!checkPermission(context, origin))
+    else if (!isCommitteeMember(context, origin))
     {
         result = storage::CODE_NO_AUTHORIZED;
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ChainGovernancePrecompiled")
