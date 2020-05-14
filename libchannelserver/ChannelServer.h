@@ -85,6 +85,8 @@ public:
 
     virtual void stop();
 
+    void setCheckCertIssuer(bool checkCertIssuer) { m_checkCertIssuer = checkCertIssuer; }
+
 private:
     void onHandshake(const boost::system::error_code& error, ChannelSession::Ptr session);
 
@@ -106,6 +108,7 @@ private:
     int m_listenPort = 0;
     bool m_enableSSL = false;
     std::string m_certIssuerName = "";
+    bool m_checkCertIssuer = true;
 };
 
 }  // namespace channel

@@ -174,17 +174,22 @@ dev::channel::ChannelServer::newVerifyCallback()
             BASIC_CONSTRAINTS_free(basic);
 
             /// get issuer name
-            const char* issuerName = X509_NAME_oneline(X509_get_issuer_name(cert), NULL, 0);
-            std::string issuer(issuerName);
-            OPENSSL_free((void*)issuerName);
-
-            if (issuer != server->m_certIssuerName)
+            if (server->m_checkCertIssuer)
             {
-                CHANNEL_LOG(INFO) << LOG_DESC("sdk issuer is not consistent with node issuer")
-                                  << LOG_KV("sdk issuer", issuer)
-                                  << LOG_KV("node issuer", server->m_certIssuerName);
-                return false;
+                const char* issuerName = X509_NAME_oneline(X509_get_issuer_name(cert), NULL, 0);
+                std::string issuer(issuerName);
+                OPENSSL_free((void*)issuerName);
+
+                if (issuer != server->m_certIssuerName)
+                {
+                    CHANNEL_LOG(ERROR)
+                        << LOG_DESC("The issuer of the two certificates are inconsistent.")
+                        << LOG_KV("sdk certificate issuer", issuer)
+                        << LOG_KV("node certificate issuer", server->m_certIssuerName);
+                    return false;
+                }
             }
+
             return preverified;
         }
         catch (std::exception& e)
