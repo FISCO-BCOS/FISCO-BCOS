@@ -75,16 +75,6 @@ inline SecureFixedHash<32> Hash(SecureFixedHash<N>&& _data)
     return sha3Secure(_data);
 }
 
-template <unsigned N>
-inline SecureFixedHash<32> Hash(FixedHash<N>&& _data)
-{
-    if (g_BCOSConfig.SMCrypto())
-    {
-        return sm3Secure(_data);
-    }
-    return sha3Secure(_data);
-}
-
 template <typename T>
 inline h256 Hash(T&& _data)
 {

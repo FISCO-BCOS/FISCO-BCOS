@@ -346,6 +346,14 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
                 << LOG_KV("curState", block.header().stateRoot().abridged())
                 << LOG_KV("orgDBHash", tmpHeader.dbHash().abridged())
                 << LOG_KV("curDBHash", block.header().dbHash().abridged());
+#ifdef FISCO_DEBUG
+            auto receipts = block.transactionReceipts();
+            for (size_t i = 0; i < receipts->size(); ++i)
+            {
+                BLOCKVERIFIER_LOG(ERROR) << LOG_BADGE("FISCO_DEBUG") << LOG_KV("index", i)
+                                         << "receipt=" << *receipts->at(i);
+            }
+#endif
             BOOST_THROW_EXCEPTION(InvalidBlockWithBadStateOrReceipt() << errinfo_comment(
                                       "Invalid Block with bad stateRoot or ReciptRoot"));
         }

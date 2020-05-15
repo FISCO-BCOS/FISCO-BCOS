@@ -208,6 +208,10 @@ h256 MemoryTableFactory2::hash()
     {
         if (it.second->tableInfo()->enableConsensus)
         {
+            if (g_BCOSConfig.version() >= V2_5_0 && !it.second->dirty())
+            {  // clean table dont calculate hash
+                continue;
+            }
             tables.push_back(std::make_pair(it.first, it.second));
         }
     }
@@ -226,20 +230,22 @@ h256 MemoryTableFactory2::hash()
                 h256 hash = table.second->hash();
                 if (hash == h256())
                 {
-#if 0
-                    cout << LOG_BADGE("MemoryTableFactory2 hash continued ") << it << "/"
-                         << tables.size() << LOG_KV("tableName", table.first)
-                         << LOG_KV("blockNum", m_blockNum) << endl;
+#if FISCO_DEBUG
+                    STORAGE_LOG(DEBUG) << LOG_BADGE("FISCO_DEBUG")
+                                       << LOG_BADGE("MemoryTableFactory2 hash continued ") << it
+                                       << "/" << tables.size() << LOG_KV("tableName", table.first)
+                                       << LOG_KV("blockNum", m_blockNum);
 #endif
                     continue;
                 }
 
                 bytes tableHash = hash.asBytes();
                 memcpy(&data[it * 32], &tableHash[0], tableHash.size());
-#if 0
-                cout << LOG_BADGE("MemoryTableFactory2 hash ") << it << "/" << tables.size()
-                     << LOG_KV("tableName", table.first) << LOG_KV("hash", hash)
-                     << LOG_KV("blockNum", m_blockNum) << endl;
+#if FISCO_DEBUG
+                STORAGE_LOG(DEBUG)
+                    << LOG_BADGE("FISCO_DEBUG") << LOG_BADGE("MemoryTableFactory2 hash ") << it
+                    << "/" << tables.size() << LOG_KV("tableName", table.first)
+                    << LOG_KV("hash", hash) << LOG_KV("blockNum", m_blockNum);
 #endif
             }
         });

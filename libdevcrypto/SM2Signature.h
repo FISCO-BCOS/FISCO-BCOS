@@ -51,6 +51,5 @@ bool sm2Verify(h512 const& _pubKey, std::shared_ptr<crypto::Signature> _sig, con
 h512 sm2Recover(std::shared_ptr<crypto::Signature> _sig, const h256& _hash);
 std::shared_ptr<crypto::Signature> sm2SignatureFromRLP(RLP const& _rlp, size_t _start);
 std::shared_ptr<crypto::Signature> sm2SignatureFromBytes(std::vector<unsigned char> _data);
-std::pair<bool, std::vector<unsigned char>> recover(
-    std::shared_ptr<crypto::Signature> _s, h256 const& _message);
+std::pair<bool, std::vector<unsigned char>> recover(bytesConstRef _in);
 }  // namespace dev

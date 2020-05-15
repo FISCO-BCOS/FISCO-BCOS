@@ -415,26 +415,6 @@ dev::storage::TableData::Ptr MemoryTable2::dumpWithoutOptimize()
             char status = (char)entry->getStatus();
             allData.insert(allData.end(), &status, &status + sizeof(status));
         }
-#if 0
-        auto printEntries = [](tbb::concurrent_vector<Entry::Ptr>& entries) {
-            if (entries.size() == 0)
-            {
-                cout << " is empty!" << endl;
-                return;
-            }
-            for (size_t i = 0; i < entries.size(); ++i)
-            {
-                auto data = entries[i];
-                cout << endl << "***" << i << " [ id=" << data->getID() << " ]";
-                for (auto& it : *data)
-                {
-                    cout << "[ " << it.first << "=" << it.second << " ]";
-                }
-            }
-            cout << endl;
-        };
-        printEntries(tempEntries);
-#endif
         if (allData.empty())
         {
             m_hash = h256();
@@ -545,7 +525,28 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
             {
                 m_hash = h256();
             }
-
+#if FISCO_DEBUG
+            auto printEntries = [](Entries::Ptr entries) {
+                if (entries->size() == 0)
+                {
+                    STORAGE_LOG(DEBUG) << LOG_BADGE("FISCO_DEBUG") << " entries is empty!" << endl;
+                    return;
+                }
+                stringstream ss;
+                for (size_t i = 0; i < entries->size(); ++i)
+                {
+                    auto data = entries->get(i);
+                    ss << endl << "***" << i << " [ id=" << data->getID() << " ]";
+                    for (auto& it : *data)
+                    {
+                        ss << "[ " << it.first << "=" << it.second << " ]";
+                    }
+                }
+                STORAGE_LOG(DEBUG) << LOG_BADGE("FISCO_DEBUG") << ss.str();
+            };
+            printEntries(m_tableData->dirtyEntries);
+            printEntries(m_tableData->newEntries);
+#endif
             bytesConstRef bR(allData.data(), allData.size());
             if (g_BCOSConfig.version() <= V2_4_0)
             {

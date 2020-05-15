@@ -167,16 +167,7 @@ BOOST_AUTO_TEST_CASE(SM_testSigecRocer)
     h256 ret;
     RLP rlpObj(rlpBytes);
     bytesConstRef _in = rlpObj.data();
-    struct
-    {
-        h256 hash;
-        h512 v;
-        h256 r;
-        h256 s;
-    } in;
-    memcpy(&in, _in.data(), min(_in.size(), sizeof(in)));
-    auto sig = std::make_shared<crypto::SM2Signature>(in.r, in.s, in.v);
-    KeyPair = recover(sig, in.hash);
+    KeyPair = recover(_in);
     BOOST_CHECK(KeyPair.first == true);
     BOOST_CHECK(KeyPair.second != ret.asBytes());
 }
@@ -308,23 +299,10 @@ BOOST_AUTO_TEST_CASE(testSigecRocer)
     h256 ret("000000000000000000000000ceaccac640adf55b2028469bd36ba501f28b699d");
     RLP rlpObj(rlpBytes);
     bytesConstRef _in = rlpObj.data();
-    struct
-    {
-        h256 hash;
-        h256 v;
-        h256 r;
-        h256 s;
-    } in, in2;
-    u256 v = (u256)in.v;
-    memcpy(&in, _in.data(), min(_in.size(), sizeof(in)));
-    auto sig = std::make_shared<crypto::ECDSASignature>(in.r, in.s, (byte)((int)v - 27));
-    keyPair = dev::ecRecover(sig, in.hash);
-    memcpy(&in2, ref(rlpBytesRight).data(), min(sizeof(in2), rlpBytesRight.size()));
-    v = (u256)in2.v;
-    sig = std::make_shared<crypto::ECDSASignature>(in2.r, in2.s, (byte)((int)v - 27));
-    KeyPairR = dev::ecRecover(sig, in2.hash);
+    keyPair = dev::ecRecover(_in);
     BOOST_CHECK(keyPair.first == true);
     BOOST_CHECK(keyPair.second != ret.asBytes());
+    KeyPairR = dev::ecRecover(ref(rlpBytesRight));
     cout << toHex(KeyPairR.second) << endl;
     cout << toHex(ret.asBytes()) << endl;
     BOOST_CHECK(KeyPairR.second == ret.asBytes());

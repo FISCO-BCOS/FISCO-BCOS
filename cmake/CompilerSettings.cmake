@@ -74,13 +74,13 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
 		SET(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pg")
 		SET(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -pg")
     endif ()
-    
+
     # Configuration-specific compiler settings.
-    set(CMAKE_CXX_FLAGS_DEBUG          "-Og -g  -DETH_DEBUG")
+    set(CMAKE_CXX_FLAGS_DEBUG          "-Og -g  -DFISCO_DEBUG")
     set(CMAKE_CXX_FLAGS_MINSIZEREL     "-Os -DNDEBUG")
     set(CMAKE_CXX_FLAGS_RELEASE        "-O3 -DNDEBUG")
     set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g")
-    
+
     option(USE_LD_GOLD "Use GNU gold linker" ON)
     if (USE_LD_GOLD)
         execute_process(COMMAND ${CMAKE_C_COMPILER} -fuse-ld=gold -Wl,--version ERROR_QUIET OUTPUT_VARIABLE LD_VERSION)
@@ -89,10 +89,10 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
             set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=gold")
         endif ()
     endif ()
-    
+
     # Additional GCC-specific compiler settings.
     if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
-    
+
         add_compile_options(-Wa,-march=generic64)
         # Check that we've got GCC 4.7 or newer.
         execute_process(
@@ -115,7 +115,7 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
     # Additional Clang-specific compiler settings.
     elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
         if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 4.0)
-            set(CMAKE_CXX_FLAGS_DEBUG          "-O -g -DETH_DEBUG")
+            set(CMAKE_CXX_FLAGS_DEBUG          "-O -g -DFISCO_DEBUG")
         endif()
         # set(CMAKE_CXX_FLAGS "-stdlib=libc++ ${CMAKE_CXX_FLAGS}")
         add_compile_options(-fstack-protector)
@@ -131,7 +131,7 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
 
     if (COVERAGE)
         set(TESTS ON)
-        if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") 
+        if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
             set(CMAKE_CXX_FLAGS "-g --coverage ${CMAKE_CXX_FLAGS}")
             set(CMAKE_C_FLAGS "-g --coverage ${CMAKE_C_FLAGS}")
             set(CMAKE_SHARED_LINKER_FLAGS "--coverage ${CMAKE_SHARED_LINKER_FLAGS}")
