@@ -227,11 +227,12 @@ ImportResult TxPool::import(Transaction::Ptr _tx, IfDropped)
     auto memoryUsed = m_usedMemorySize + _tx->capacity();
     if (memoryUsed > m_maxMemoryLimit)
     {
-        TXPOOL_LOG(DEBUG) << LOG_DESC("import: overMemoryLimit")
+        TXPOOL_LOG(DEBUG) << LOG_DESC("import: overMemoryLimit") << LOG_KV("memoryUsed", memoryUsed)
+                          << LOG_KV("txCapacity", _tx->capacity())
+                          << LOG_KV("memoryLimit", m_maxMemoryLimit)
                           << LOG_KV("hash", _tx->sha3().abridged());
         return ImportResult::OverGroupMemoryLimit;
     }
-    m_usedMemorySize += _tx->capacity();
     UpgradableGuard l(m_lock);
     /// check the txpool size
     if (m_txsQueue.size() >= m_limit)
@@ -247,6 +248,8 @@ ImportResult TxPool::import(Transaction::Ptr _tx, IfDropped)
             if (insert(_tx))
             {
                 m_txpoolNonceChecker->insertCache(*_tx);
+                // only if the transaction import is successful, update m_usedMemorySize
+                m_usedMemorySize += _tx->capacity();
             }
         }
         {

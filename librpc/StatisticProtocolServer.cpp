@@ -35,7 +35,7 @@ bool StatisticPotocolServer::limitRPCQPS(Json::Value const& _request, std::strin
         return true;
     }
     auto canHandle = m_qpsLimiter->acquire();
-    if (canHandle)
+    if (!canHandle)
     {
         wrapResponseForNodeBusy(_request, _retValue);
     }
@@ -50,7 +50,7 @@ bool StatisticPotocolServer::limitGroupQPS(
         return true;
     }
     auto canHandle = m_qpsLimiter->acquireFromGroup(_groupId);
-    if (canHandle)
+    if (!canHandle)
     {
         wrapResponseForNodeBusy(_request, _retValue);
     }
