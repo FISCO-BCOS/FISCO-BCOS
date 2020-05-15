@@ -648,7 +648,7 @@ void LedgerParam::initFlowControlConfig(boost::property_tree::ptree const& _pt)
     // values configured using configuration items
     if (outGoingBandwidth != (double)mutableFlowControlParam().maxDefaultValue)
     {
-        if (outGoingBandwidth <= (double)0 || outGoingBandwidth >= (double)MAX_VALUE_IN_Mb)
+        if (outGoingBandwidth <= (double)(-0.0) || outGoingBandwidth >= (double)MAX_VALUE_IN_Mb)
         {
             BOOST_THROW_EXCEPTION(InvalidConfiguration()
                                   << errinfo_comment("flow_control.outgoing_bandwidth_limit must "
