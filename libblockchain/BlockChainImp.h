@@ -25,6 +25,7 @@
 #include "BlockChainInterface.h"
 
 #include <libdevcore/Exceptions.h>
+#include <libdevcore/ThreadPool.h>
 #include <libethcore/Block.h>
 #include <libethcore/Common.h>
 #include <libethcore/Protocol.h>
@@ -66,11 +67,18 @@ public:
     std::shared_ptr<dev::eth::Block> add(std::shared_ptr<dev::eth::Block> _block);
     std::pair<std::shared_ptr<dev::eth::Block>, dev::h256> get(h256 const& _hash);
 
+    void setDestructorThread(dev::ThreadPool::Ptr _destructorThread)
+    {
+        m_destructorThread = _destructorThread;
+    }
+
 private:
     mutable boost::shared_mutex m_sharedMutex;
     mutable std::map<dev::h256, std::shared_ptr<dev::eth::Block>> m_blockCache;
     mutable std::deque<dev::h256> m_blockCacheFIFO;  // insert queue log for m_blockCache
     const unsigned c_blockCacheSize = 10;            // m_blockCache size, default set 10
+    // used to destructor time-consuming, large memory objects
+    dev::ThreadPool::Ptr m_destructorThread;
 };
 DEV_SIMPLE_EXCEPTION(OpenSysTableFailed);
 
@@ -78,7 +86,12 @@ using Parent2ChildListMap = std::map<std::string, std::vector<std::string>>;
 class BlockChainImp : public BlockChainInterface
 {
 public:
-    BlockChainImp() {}
+    BlockChainImp()
+    {
+        // used to destructor time-consuming, large memory objects
+        m_destructorThread = std::make_shared<ThreadPool>("blkCache", 1);
+        m_blockCache.setDestructorThread(m_destructorThread);
+    }
     virtual ~BlockChainImp(){};
     int64_t number() override;
     dev::h256 numberHash(int64_t _i) override;
@@ -168,8 +181,6 @@ private:
         std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
     void writeTxToBlock(const dev::eth::Block& block,
         std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
-    void writeBlockInfo(
-        dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
     void writeNumber2Hash(const dev::eth::Block& block,
         std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
     void writeHash2Block(
@@ -233,6 +244,7 @@ private:
     mutable SharedMutex m_receiptWithProofMutex;
 
     bool m_enableHexBlock = false;
+    dev::ThreadPool::Ptr m_destructorThread;
 };
 }  // namespace blockchain
 }  // namespace dev

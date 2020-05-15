@@ -89,6 +89,9 @@ public:
             std::make_shared<dev::ThreadPool>("PBFTMsg-" + std::to_string(m_groupId), 1);
         m_prepareWorker =
             std::make_shared<dev::ThreadPool>("PBFTWork-" + std::to_string(m_groupId), 1);
+
+        m_destructorThread =
+            std::make_shared<dev::ThreadPool>("PBFTAsync-" + std::to_string(m_groupId), 1);
         m_cachedForwardMsg =
             std::make_shared<std::map<dev::h256, std::pair<int64_t, PBFTMsgPacket::Ptr>>>();
     }
@@ -723,8 +726,6 @@ protected:
 
     // the thread pool is used to execute the async-function
     dev::ThreadPool::Ptr m_threadPool;
-
-    std::vector<dev::blockverifier::ExecutiveContext::Ptr> m_execContextForAsyncReset;
     PBFTMsgFactory::Ptr m_pbftMsgFactory = nullptr;
     // ttl-optimize related logic
     bool m_enableTTLOptimize = false;
@@ -736,6 +737,9 @@ protected:
     std::shared_ptr<std::map<dev::h256, std::pair<int64_t, PBFTMsgPacket::Ptr>>> m_cachedForwardMsg;
     dev::ThreadPool::Ptr m_prepareWorker;
     dev::ThreadPool::Ptr m_messageHandler;
+
+    // Make object destructive overhead asynchronous
+    dev::ThreadPool::Ptr m_destructorThread;
     bool m_enablePrepareWithTxsHash = false;
 };
 }  // namespace consensus

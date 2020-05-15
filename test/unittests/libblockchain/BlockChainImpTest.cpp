@@ -79,40 +79,6 @@ public:
         m_fakeStorage[SYS_TX_HASH_2_BLOCK] = std::unordered_map<std::string, Entry::Ptr>();
     }
 
-    void insertGenesisBlock(std::shared_ptr<FakeBlock> _fakeBlock)
-    {
-#if 0
-        if (m_fakeStorage[SYS_CURRENT_STATE].find(SYS_KEY_CURRENT_NUMBER) !=
-            m_fakeStorage[SYS_CURRENT_STATE].end())
-        {
-            return;
-        }
-#endif
-        Entry::Ptr entry = std::make_shared<Entry>();
-        entry->setField("value", "0");
-        m_fakeStorage[SYS_CURRENT_STATE][SYS_KEY_CURRENT_NUMBER] = entry;
-
-        entry = std::make_shared<Entry>();
-        entry->setField("value",
-            boost::lexical_cast<std::string>(_fakeBlock->getBlock()->transactions()->size()));
-        m_fakeStorage[SYS_CURRENT_STATE][SYS_KEY_TOTAL_TRANSACTION_COUNT] = entry;
-
-        entry = std::make_shared<Entry>();
-        entry->setField("value", c_commonHashPrefix);
-        m_fakeStorage[SYS_NUMBER_2_HASH]["0"] = entry;
-
-        entry = std::make_shared<Entry>();
-        bytes encodedData;
-        _fakeBlock->m_block->encode(encodedData);
-        entry->setField("value", encodedData.data(), encodedData.size());
-        m_fakeStorage[SYS_HASH_2_BLOCK][c_commonHash] = entry;
-
-        entry = std::make_shared<Entry>();
-        entry->setField("value", "0");
-        entry->setField("index", "0");
-        m_fakeStorage[SYS_TX_HASH_2_BLOCK][c_commonHash] = entry;
-    }
-
     Entries::ConstPtr select(const std::string& key, Condition::Ptr) override
     {
         Entries::Ptr entries = std::make_shared<Entries>();
@@ -135,12 +101,21 @@ public:
     int update(
         const std::string& key, Entry::Ptr entry, Condition::Ptr, AccessOptions::Ptr) override
     {
-        entry->setField(
-            "_num_", m_fakeStorage[SYS_CURRENT_STATE][SYS_KEY_CURRENT_NUMBER]->getField("value"));
-        entry->setNum(boost::lexical_cast<int64_t>(
-            m_fakeStorage[SYS_CURRENT_STATE][SYS_KEY_CURRENT_NUMBER]->getField("value")));
         m_fakeStorage[m_table][key] = entry;
         return 0;
+    }
+
+    void commitDB(int64_t _blockNumber)
+    {
+        for (auto pmainKey : m_fakeStorage)
+        {
+            for (auto psubKey : pmainKey.second)
+            {
+                auto entry = psubKey.second;
+                entry->setNum(_blockNumber);
+                entry->setField("_num_", std::to_string(_blockNumber));
+            }
+        }
     }
 
     std::string m_table;
@@ -150,15 +125,33 @@ public:
 class MockMemoryTableFactory : public dev::storage::MemoryTableFactory
 {
 public:
-    MockMemoryTableFactory(std::shared_ptr<MockTable> _mockTable) { m_mockTable = _mockTable; }
+    MockMemoryTableFactory() {}
 
     Table::Ptr openTable(const std::string& _table, bool = true, bool = false) override
     {
-        m_mockTable->m_table = _table;
-        return m_mockTable;
+        UpgradableGuard l(x_name2Table);
+        if (m_name2Table.count(_table))
+        {
+            return m_name2Table[_table];
+        }
+        UpgradeGuard ul(l);
+        auto table = std::make_shared<MockTable>();
+        table->m_table = _table;
+        m_name2Table[_table] = table;
+        return table;
     }
 
-    std::shared_ptr<MockTable> m_mockTable;
+    void commitDB(h256 const&, int64_t _blockNumber) override
+    {
+        ReadGuard l(x_name2Table);
+        for (auto it : m_name2Table)
+        {
+            it.second->commitDB(_blockNumber);
+        }
+    }
+
+    std::map<std::string, std::shared_ptr<MockTable>> m_name2Table;
+    mutable SharedMutex x_name2Table;
 };
 
 class MockBlockChainImp : public BlockChainImp
@@ -190,8 +183,7 @@ struct EmptyFixture
     {
         m_executiveContext = std::make_shared<ExecutiveContext>();
         m_blockChainImp = std::make_shared<MockBlockChainImp>();
-        m_mockTable = std::make_shared<MockTable>();
-        mockMemoryTableFactory = std::make_shared<MockMemoryTableFactory>(m_mockTable);
+        mockMemoryTableFactory = std::make_shared<MockMemoryTableFactory>();
         m_storageStateFactory = std::make_shared<StorageStateFactory>(0x0);
 
         m_blockChainImp->setMemoryTableFactory(mockMemoryTableFactory);
@@ -204,7 +196,6 @@ struct EmptyFixture
 
     std::shared_ptr<MockMemoryTableFactory> mockMemoryTableFactory;
     std::shared_ptr<MockBlockChainImp> m_blockChainImp;
-    std::shared_ptr<MockTable> m_mockTable;
     std::shared_ptr<ExecutiveContext> m_executiveContext;
     std::shared_ptr<StorageStateFactory> m_storageStateFactory;
 };
@@ -218,7 +209,39 @@ struct MemoryTableFactoryFixture : EmptyFixture
 
         g_BCOSConfig.setSupportedVersion("2.2.0", V2_2_0);
         m_fakeBlock = std::make_shared<FakeBlock>(5);
-        m_mockTable->insertGenesisBlock(m_fakeBlock);
+        insertGenesisBlock(m_fakeBlock);
+    }
+
+    void insertGenesisBlock(std::shared_ptr<FakeBlock> _fakeBlock)
+    {
+        Entry::Ptr entry = std::make_shared<Entry>();
+        entry->setField("value", "0");
+        auto table = mockMemoryTableFactory->openTable(SYS_CURRENT_STATE);
+        table->update(SYS_KEY_CURRENT_NUMBER, entry, nullptr, nullptr);
+
+        entry = std::make_shared<Entry>();
+        entry->setField("value",
+            boost::lexical_cast<std::string>(_fakeBlock->getBlock()->transactions()->size()));
+        table = mockMemoryTableFactory->openTable(SYS_CURRENT_STATE);
+        table->update(SYS_KEY_TOTAL_TRANSACTION_COUNT, entry, nullptr, nullptr);
+
+        entry = std::make_shared<Entry>();
+        entry->setField("value", c_commonHashPrefix);
+        table = mockMemoryTableFactory->openTable(SYS_NUMBER_2_HASH);
+        table->update("0", entry, nullptr, nullptr);
+
+        entry = std::make_shared<Entry>();
+        bytes encodedData;
+        _fakeBlock->m_block->encode(encodedData);
+        entry->setField("value", encodedData.data(), encodedData.size());
+        table = mockMemoryTableFactory->openTable(SYS_HASH_2_BLOCK);
+        table->update(c_commonHash, entry, nullptr, nullptr);
+
+        entry = std::make_shared<Entry>();
+        entry->setField("value", "0");
+        entry->setField("index", "0");
+        table = mockMemoryTableFactory->openTable(SYS_TX_HASH_2_BLOCK);
+        table->update(c_commonHash, entry, nullptr, nullptr);
     }
 
     ~MemoryTableFactoryFixture()

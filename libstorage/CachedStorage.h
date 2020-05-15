@@ -169,6 +169,7 @@ private:
     uint64_t m_clearInterval = 1000;
 
     dev::ThreadPool::Ptr m_taskThreadPool;
+    dev::ThreadPool::Ptr m_asyncThreadPool;
     std::shared_ptr<std::thread> m_clearThread;
 
     tbb::atomic<uint64_t> m_hitTimes;
