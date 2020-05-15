@@ -143,7 +143,6 @@ private:
     void proccessLimit(const Condition::Ptr& condition, const Entries::Ptr& entries,
         const Entries::Ptr& resultEntries);
 
-    bool m_isDirty = false;  // mark if the tableData had been dump
     dev::h256 m_hash;
     dev::storage::TableData::Ptr m_tableData;
 };

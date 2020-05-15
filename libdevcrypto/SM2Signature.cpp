@@ -131,14 +131,22 @@ h512 dev::sm2Recover(std::shared_ptr<crypto::Signature> _s, h256 const& _message
     return h512{};
 }
 
-pair<bool, bytes> dev::recover(std::shared_ptr<crypto::Signature> _s, h256 const& _message)
+pair<bool, bytes> dev::recover(bytesConstRef _in)
 {
-    auto _sig = dynamic_pointer_cast<SM2Signature>(_s);
-    if (!_sig->isValid())
+    struct
+    {
+        h256 hash;
+        h512 v;
+        h256 r;
+        h256 s;
+    } in;
+    memcpy(&in, _in.data(), min(_in.size(), sizeof(in)));
+    auto sig = std::make_shared<SM2Signature>(in.r, in.s, in.v);
+    if (!sig->isValid())
     {
         return {false, {}};
     }
-    auto rec = sm2Recover(_sig, _message);
+    auto rec = sm2Recover(sig, in.hash);
     h256 ret = sm3(rec);
     memset(ret.data(), 0, 12);
     return {true, ret.asBytes()};
