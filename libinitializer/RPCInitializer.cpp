@@ -294,7 +294,8 @@ dev::flowlimit::RateLimiter::Ptr RPCInitializer::createNetworkBandwidthLimit(
         return nullptr;
     }
     // Configured outgoing_bandwidth_limit
-    if (outGoingBandwidthLimit <= (double)0 || outGoingBandwidthLimit >= (double)MAX_VALUE_IN_Mb)
+    if (outGoingBandwidthLimit <= (double)(-0.0) ||
+        outGoingBandwidthLimit >= (double)MAX_VALUE_IN_Mb)
     {
         BOOST_THROW_EXCEPTION(dev::InvalidConfig() << errinfo_comment(
                                   "createNetworkBandwidthLimit for channel failed, "
