@@ -102,6 +102,7 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
         endif ()
         if (GCC_VERSION VERSION_LESS 5.0)
             add_compile_options(-Wno-unused-variable)
+            add_compile_options(-Wno-missing-field-initializers)
         endif ()
 		set(CMAKE_C_FLAGS "-std=c99")
 

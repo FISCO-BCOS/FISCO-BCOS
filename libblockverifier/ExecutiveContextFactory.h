@@ -53,6 +53,26 @@ public:
         m_precompiledContract.insert(std::make_pair(
             dev::Address(4), dev::eth::PrecompiledContract(
                                  15, 3, dev::eth::PrecompiledRegistrar::executor("identity"))));
+        if (g_BCOSConfig.version() >= V2_5_0)
+        {
+            m_precompiledContract.insert({dev::Address{0x5},
+                dev::eth::PrecompiledContract(dev::eth::PrecompiledRegistrar::pricer("modexp"),
+                    dev::eth::PrecompiledRegistrar::executor("modexp"))});
+            m_precompiledContract.insert({dev::Address{0x6},
+                dev::eth::PrecompiledContract(
+                    150, 0, dev::eth::PrecompiledRegistrar::executor("alt_bn128_G1_add"))});
+            m_precompiledContract.insert({dev::Address{0x7},
+                dev::eth::PrecompiledContract(
+                    6000, 0, dev::eth::PrecompiledRegistrar::executor("alt_bn128_G1_mul"))});
+            m_precompiledContract.insert({dev::Address{0x8},
+                dev::eth::PrecompiledContract(
+                    dev::eth::PrecompiledRegistrar::pricer("alt_bn128_pairing_product"),
+                    dev::eth::PrecompiledRegistrar::executor("alt_bn128_pairing_product"))});
+            m_precompiledContract.insert({dev::Address{0x9},
+                dev::eth::PrecompiledContract(
+                    dev::eth::PrecompiledRegistrar::pricer("blake2_compression"),
+                    dev::eth::PrecompiledRegistrar::executor("blake2_compression"))});
+        }
     };
     virtual ~ExecutiveContextFactory(){};
 
