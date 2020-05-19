@@ -6,5 +6,5 @@ list(APPEND SRC_LIST ${INSERT_SOURCES})
 
 add_library(devcrypto ${SRC_LIST} ${HEADERS})
 eth_use(devcrypto OPTIONAL OpenSSL)
-target_link_libraries(devcrypto PRIVATE Secp256k1 Cryptopp)
+target_link_libraries(devcrypto PRIVATE Secp256k1 Cryptopp libff::ff)
 target_link_libraries(devcrypto PUBLIC devcore)
