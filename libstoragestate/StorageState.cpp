@@ -209,6 +209,7 @@ void StorageState::setStorage(Address const& _address, u256 const& _location, u2
         if (entries->size() == 0u)
         {
             auto entry = table->newEntry();
+            entry->setForce(true);
             entry->setField(STORAGE_KEY, _location.str());
             entry->setField(STORAGE_VALUE, _value.str());
             table->insert(_location.str(), entry, option);
@@ -216,6 +217,7 @@ void StorageState::setStorage(Address const& _address, u256 const& _location, u2
         else
         {
             auto entry = table->newEntry();
+            entry->setForce(true);
             entry->setField(STORAGE_KEY, _location.str());
             entry->setField(STORAGE_VALUE, _value.str());
             table->update(_location.str(), entry, table->newCondition(), option);

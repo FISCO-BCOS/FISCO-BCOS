@@ -1040,7 +1040,12 @@ bool PBFTEngine::execPrepareAndGenerateSignMsg(
     auto startT = utcTime();
     PrepareReq::Ptr sign_prepare =
         std::make_shared<PrepareReq>(*_prepareReq, workingSealing, m_keyPair);
-    m_execContextForAsyncReset.push_back(m_reqCache->prepareCache().p_execContext);
+
+    // destroy ExecutiveContext in m_destructorThread
+    auto execContext = m_reqCache->prepareCache().p_execContext;
+    HolderForDestructor<dev::blockverifier::ExecutiveContext> holder(std::move(execContext));
+    m_destructorThread->enqueue(std::move(holder));
+
     m_reqCache->addPrepareReq(sign_prepare);
     PBFTENGINE_LOG(DEBUG) << LOG_DESC("handlePrepareMsg: add prepare cache and broadcastSignReq")
                           << LOG_KV("reqNum", sign_prepare->height)
@@ -1564,16 +1569,6 @@ void PBFTEngine::checkTimeout()
     bool flag = false;
     {
         Guard l(m_mutex);
-        // clear and destruct the executiveContext
-        for (auto& exec : m_execContextForAsyncReset)
-        {
-            if (exec)
-            {
-                exec.reset();
-            }
-        }
-        m_execContextForAsyncReset.clear();
-
         if (m_timeManager.isTimeout())
         {
             /// timeout not triggered by fast view change

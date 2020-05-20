@@ -28,6 +28,7 @@
 #include <libdevcore/FixedHash.h>
 #include <libdevcrypto/CryptoInterface.h>
 #include <libprecompiled/Common.h>
+#include <tbb/parallel_invoke.h>
 #include <tbb/parallel_sort.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
@@ -436,6 +437,54 @@ dev::storage::TableData::Ptr MemoryTable2::dumpWithoutOptimize()
     return m_tableData;
 }
 
+void MemoryTable2::parallelGenData(
+    bytes& _generatedData, std::shared_ptr<std::vector<size_t>> _offsetVec, Entries::Ptr _entries)
+{
+    if (_entries->size() == 0)
+    {
+        return;
+    }
+    tbb::parallel_for(tbb::blocked_range<uint64_t>(0, _offsetVec->size() - 1),
+        [&](const tbb::blocked_range<uint64_t>& range) {
+            for (uint64_t i = range.begin(); i < range.end(); i++)
+            {
+                auto entry = (*_entries)[i];
+                auto startOffSet = (*_offsetVec)[i];
+
+                for (auto& fieldIt : *(entry))
+                {
+                    if (isHashField(fieldIt.first))
+                    {
+                        memcpy(
+                            &_generatedData[startOffSet], &fieldIt.first[0], fieldIt.first.size());
+                        startOffSet += fieldIt.first.size();
+
+                        memcpy(&_generatedData[startOffSet], &fieldIt.second[0],
+                            fieldIt.second.size());
+                        startOffSet += fieldIt.second.size();
+                    }
+                }
+                char status = (char)entry->getStatus();
+                memcpy(&_generatedData[startOffSet], &status, sizeof(status));
+            }
+        });
+}
+
+std::shared_ptr<std::vector<size_t>> MemoryTable2::genDataOffset(
+    Entries::Ptr _entries, size_t _startOffset)
+{
+    std::shared_ptr<std::vector<size_t>> dataOffset = std::make_shared<std::vector<size_t>>();
+    dataOffset->push_back(_startOffset);
+    for (size_t i = 0; i < _entries->size(); i++)
+    {
+        auto entry = (*_entries)[i];
+        // 1 for status field
+        auto offset = (*dataOffset)[i] + entry->capacityOfHashField() + 1;
+        dataOffset->push_back(offset);
+    }
+    return dataOffset;
+}
+
 dev::storage::TableData::Ptr MemoryTable2::dump()
 {
     // >= v2.2.0
@@ -455,7 +504,7 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
                     if (!it->second->deleted())
                     {
                         m_tableData->dirtyEntries->addEntry(it->second);
-                        allSize += (it->second->capacity() + 1);  // 1 for status field
+                        allSize += (it->second->capacityOfHashField() + 1);  // 1 for status field
                     }
                 }
             });
@@ -472,7 +521,8 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
                                 if (!it->second->get(i)->deleted())
                                 {
                                     m_tableData->newEntries->addEntry(it->second->get(i));
-                                    allSize += (it->second->get(i)->capacity() + 1);
+                                    // 1 for status field
+                                    allSize += (it->second->get(i)->capacityOfHashField() + 1);
                                 }
                             }
                         });
@@ -488,43 +538,33 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
                 EntryLessNoLock(m_tableInfo));
             TIME_RECORD("Calc hash");
 
-            bytes allData;
-            allData.reserve(allSize);
-
-            for (size_t i = 0; i < m_tableData->dirtyEntries->size(); ++i)
+            auto startT = utcTime();
+            std::shared_ptr<bytes> allData = std::make_shared<bytes>();
+            allData->resize(allSize);
+            // get offset for dirtyEntries
+            size_t insertDataStartOffset = 0;
+            std::shared_ptr<std::vector<size_t>> dirtyEntriesOffset;
+            if (m_tableData->dirtyEntries->size() > 0)
             {
-                auto entry = (*m_tableData->dirtyEntries)[i];
-                for (auto& fieldIt : *(entry))
-                {
-                    if (isHashField(fieldIt.first))
-                    {
-                        allData.insert(allData.end(), fieldIt.first.begin(), fieldIt.first.end());
-                        allData.insert(allData.end(), fieldIt.second.begin(), fieldIt.second.end());
-                    }
-                }
-                char status = (char)entry->getStatus();
-                allData.insert(allData.end(), &status, &status + sizeof(status));
+                dirtyEntriesOffset = genDataOffset(m_tableData->dirtyEntries, 0);
+                insertDataStartOffset = (*dirtyEntriesOffset)[m_tableData->dirtyEntries->size()];
             }
-
-            for (size_t i = 0; i < m_tableData->newEntries->size(); ++i)
+            // get offset for newEntries
+            std::shared_ptr<std::vector<size_t>> newEntriesOffset;
+            if (m_tableData->newEntries->size() > 0)
             {
-                auto entry = (*m_tableData->newEntries)[i];
-                for (auto& fieldIt : *(entry))
-                {
-                    if (isHashField(fieldIt.first))
-                    {
-                        allData.insert(allData.end(), fieldIt.first.begin(), fieldIt.first.end());
-                        allData.insert(allData.end(), fieldIt.second.begin(), fieldIt.second.end());
-                    }
-                }
-                char status = (char)entry->getStatus();
-                allData.insert(allData.end(), &status, &status + sizeof(status));
+                newEntriesOffset = genDataOffset(m_tableData->newEntries, insertDataStartOffset);
             }
+            // Parallel processing dirtyEntries and newEntries
+            tbb::parallel_invoke(
+                [this, allData, dirtyEntriesOffset]() {
+                    parallelGenData(*allData, dirtyEntriesOffset, m_tableData->dirtyEntries);
+                },
+                [this, allData, newEntriesOffset]() {
+                    parallelGenData(*allData, newEntriesOffset, m_tableData->newEntries);
+                });
 
-            if (allData.empty())
-            {
-                m_hash = h256();
-            }
+
 #if FISCO_DEBUG
             auto printEntries = [](Entries::Ptr entries) {
                 if (entries->size() == 0)
@@ -547,7 +587,11 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
             printEntries(m_tableData->dirtyEntries);
             printEntries(m_tableData->newEntries);
 #endif
-            bytesConstRef bR(allData.data(), allData.size());
+            auto writeDataT = utcTime() - startT;
+            startT = utcTime();
+            bytesConstRef bR(allData->data(), allData->size());
+            auto transDataT = utcTime() - startT;
+            startT = utcTime();
             if (g_BCOSConfig.version() <= V2_4_0)
             {
                 if (g_BCOSConfig.SMCrypto())
@@ -567,6 +611,10 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
             {
                 m_hash = crypto::Hash(bR);
             }
+            auto getHashT = utcTime() - startT;
+            STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable2 dump") << LOG_KV("writeDataT", writeDataT)
+                               << LOG_KV("transDataT", transDataT) << LOG_KV("getHashT", getHashT)
+                               << LOG_KV("hash", m_hash.abridged());
         }
         else
         {
@@ -575,7 +623,6 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
             STORAGE_LOG(DEBUG) << "Ignore sort and hash for: " << m_tableInfo->name
                                << " hash: " << m_hash.hex();
         }
-
         m_isDirty = false;
     }
 

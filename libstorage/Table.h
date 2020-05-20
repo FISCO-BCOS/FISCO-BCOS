@@ -85,6 +85,7 @@ private:
     bool m_force = false;
     bool m_deleted = false;
     ssize_t m_capacity = 0;
+    ssize_t m_capacityOfHashField = 0;
 
     EntryData::Ptr m_data;
 
@@ -141,6 +142,7 @@ public:
     virtual void setDeleted(bool deleted);
 
     virtual ssize_t capacity() const;
+    virtual ssize_t capacityOfHashField() const;
 
     virtual void copyFrom(Entry::ConstPtr entry);
 

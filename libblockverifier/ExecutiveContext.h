@@ -52,6 +52,7 @@ namespace precompiled
 {
 class Precompiled;
 class PrecompiledExecResultFactory;
+class ParallelConfigPrecompiled;
 }  // namespace precompiled
 namespace blockverifier
 {
@@ -59,9 +60,7 @@ class ExecutiveContext : public std::enable_shared_from_this<ExecutiveContext>
 {
 public:
     typedef std::shared_ptr<ExecutiveContext> Ptr;
-
     ExecutiveContext() : m_addressCount(0x10000) {}
-
     virtual ~ExecutiveContext()
     {
         if (m_memoryTableFactory)
@@ -88,6 +87,8 @@ public:
         }
         m_address2Precompiled.insert(std::make_pair(address, precompiled));
     }
+
+    void registerParallelPrecompiled(std::shared_ptr<dev::precompiled::Precompiled> _precompiled);
 
     void setPrecompiledExecResultFactory(
         dev::precompiled::PrecompiledExecResultFactory::Ptr _precompiledExecResultFactory);
@@ -138,6 +139,7 @@ private:
     uint64_t m_txGasLimit = 300000000;
 
     std::shared_ptr<dev::precompiled::PrecompiledExecResultFactory> m_precompiledExecResultFactory;
+    std::shared_ptr<dev::precompiled::ParallelConfigPrecompiled> m_parallelConfigPrecompiled;
 };
 
 }  // namespace blockverifier

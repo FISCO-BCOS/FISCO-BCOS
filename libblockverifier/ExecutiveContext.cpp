@@ -34,6 +34,13 @@ using namespace dev::eth::abi;
 using namespace dev::blockverifier;
 using namespace dev;
 using namespace std;
+void ExecutiveContext::registerParallelPrecompiled(
+    std::shared_ptr<dev::precompiled::Precompiled> _precompiled)
+{
+    m_parallelConfigPrecompiled =
+        std::dynamic_pointer_cast<dev::precompiled::ParallelConfigPrecompiled>(_precompiled);
+}
+
 // set PrecompiledExecResultFactory for each precompiled object
 void ExecutiveContext::setPrecompiledExecResultFactory(
     dev::precompiled::PrecompiledExecResultFactory::Ptr _precompiledExecResultFactory)
@@ -176,14 +183,8 @@ std::shared_ptr<std::vector<std::string>> ExecutiveContext::getTxCriticals(const
     }
     else
     {
-        // Normal transaction
-        auto parallelConfigPrecompiled =
-            std::dynamic_pointer_cast<dev::precompiled::ParallelConfigPrecompiled>(
-                getPrecompiled(Address(0x1006)));
-
-        uint32_t selector = parallelConfigPrecompiled->getParamFunc(ref(_tx.data()));
-
-        auto config = parallelConfigPrecompiled->getParallelConfig(
+        uint32_t selector = m_parallelConfigPrecompiled->getParamFunc(ref(_tx.data()));
+        auto config = m_parallelConfigPrecompiled->getParallelConfig(
             shared_from_this(), _tx.receiveAddress(), selector, _tx.sender());
 
         if (config == nullptr)
