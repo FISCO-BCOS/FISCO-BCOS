@@ -425,6 +425,20 @@ private:
         m_record;
 };
 
+template <typename T>
+class HolderForDestructor
+{
+public:
+    HolderForDestructor(std::shared_ptr<T> _elementsToDestroy)
+      : m_elementsToDestroy(std::move(_elementsToDestroy))
+    {}
+    void operator()() {}
+
+private:
+    // Elements to be deconstructed
+    std::shared_ptr<T> m_elementsToDestroy;
+};
+
 std::string newSeq();
 void pthread_setThreadName(std::string const& _n);
 

@@ -65,8 +65,11 @@ void ExecutiveContextFactory::initExecutiveContext(
         Address(0x1004), std::make_shared<dev::precompiled::CNSPrecompiled>());
     context->setAddress2Precompiled(
         Address(0x1005), std::make_shared<dev::precompiled::PermissionPrecompiled>());
-    context->setAddress2Precompiled(
-        Address(0x1006), std::make_shared<dev::precompiled::ParallelConfigPrecompiled>());
+
+    auto parallelConfigPrecompiled =
+        std::make_shared<dev::precompiled::ParallelConfigPrecompiled>();
+    context->setAddress2Precompiled(Address(0x1006), parallelConfigPrecompiled);
+    context->registerParallelPrecompiled(parallelConfigPrecompiled);
     if (g_BCOSConfig.version() >= V2_3_0)
     {
         context->setAddress2Precompiled(

@@ -86,6 +86,12 @@ public:
     void rollback(const Change& _change) override;
 
 private:
+    void parallelGenData(bytes& _generatedData, std::shared_ptr<std::vector<size_t>> _offsetVec,
+        Entries::Ptr _entries);
+
+    std::shared_ptr<std::vector<size_t>> genDataOffset(Entries::Ptr _entries, size_t _startOffset);
+
+
     Entries::Ptr selectNoLock(const std::string& key, Condition::Ptr condition);
     dev::storage::TableData::Ptr dumpWithoutOptimize();
 

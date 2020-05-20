@@ -129,20 +129,24 @@ void Entry::setField(const std::string& key, const std::string& value)
     auto lock = checkRef();
 
     auto it = m_data->m_fields.find(key);
-
+    ssize_t updatedCapacity = 0;
     if (it != m_data->m_fields.end())
     {
-        m_capacity -= (key.size() + it->second.size());
+        updatedCapacity = value.size() - it->second.size();
         it->second = value;
-        m_capacity += (key.size() + value.size());
     }
     else
     {
         m_data->m_fields.insert(std::make_pair(key, value));
-        m_capacity += (key.size() + value.size());
+        updatedCapacity = key.size() + value.size();
     }
-
+    m_capacity += updatedCapacity;
+    if (isHashField(key))
+    {
+        m_capacityOfHashField += updatedCapacity;
+    }
     assert(m_capacity >= 0);
+    assert(m_capacityOfHashField >= 0);
     m_dirty = true;
 }
 
@@ -151,21 +155,24 @@ void Entry::setField(const std::string& key, const byte* value, size_t size)
     auto lock = checkRef();
 
     auto it = m_data->m_fields.find(key);
-
+    ssize_t updatedCapacity = 0;
     if (it != m_data->m_fields.end())
     {
-        m_capacity -= (key.size() + it->second.size());
+        updatedCapacity = size - it->second.size();
         it->second.assign((char*)value, (char*)value + size);
-        m_capacity += (key.size() + size);
     }
     else
     {
         m_data->m_fields.emplace(key, std::string((char*)value, size));
-        // m_data->m_fields.insert(std::make_pair(key, std::string(value, size)));
-        m_capacity += (key.size() + size);
+        updatedCapacity = key.size() + size;
     }
-
+    m_capacity += updatedCapacity;
+    if (isHashField(key))
+    {
+        m_capacityOfHashField += updatedCapacity;
+    }
     assert(m_capacity >= 0);
+    assert(m_capacityOfHashField >= 0);
     m_dirty = true;
 }
 
@@ -316,6 +323,12 @@ ssize_t Entry::capacity() const
     return m_capacity;
 }
 
+ssize_t Entry::capacityOfHashField() const
+{
+    RWMutexScoped lock(m_data->m_mutex, false);
+    return m_capacityOfHashField;
+}
+
 void Entry::copyFrom(Entry::ConstPtr entry)
 {
     RWMutexScoped lock(m_data->m_mutex, true);
@@ -349,6 +362,7 @@ void Entry::copyFrom(Entry::ConstPtr entry)
     m_force = entry->m_force;
     m_deleted = entry->m_deleted;
     m_capacity = entry->m_capacity;
+    m_capacityOfHashField = entry->m_capacityOfHashField;
 
     auto oldData = m_data;
     m_data->m_refCount -= 1;

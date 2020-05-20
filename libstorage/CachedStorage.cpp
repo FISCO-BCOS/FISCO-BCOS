@@ -104,6 +104,9 @@ CachedStorage::CachedStorage(dev::GROUP_ID const& _groupID) : m_groupID(_groupID
     m_taskThreadPool =
         std::make_shared<dev::ThreadPool>("taskPool-" + std::to_string(m_groupID), 1);
 
+    m_asyncThreadPool =
+        std::make_shared<dev::ThreadPool>("touchMRU-" + std::to_string(m_groupID), 1);
+
     m_mruQueue =
         std::make_shared<tbb::concurrent_queue<std::tuple<std::string, std::string, ssize_t>>>();
     m_mru = std::make_shared<boost::multi_index_container<std::pair<std::string, std::string>,
@@ -290,7 +293,6 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
                                             {
                                                 totalCapacity += it->capacity();
                                             }
-
                                             touchMRU(requestData->info->name, key, totalCapacity);
                                         }
 
@@ -372,7 +374,6 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
                                             << " != " << (*entryIt)->getID() << ss.str();
                                     }
                                 }
-
                                 touchMRU(requestData->info->name, key, change);
                             }
                         });
@@ -639,8 +640,9 @@ void CachedStorage::touchMRU(const std::string& table, const std::string& key, s
     {
         return;
     }
-
-    m_mruQueue->push(std::make_tuple(table, key, capacity));
+    m_asyncThreadPool->enqueue([this, table, key, capacity]() {
+        m_mruQueue->push(std::make_tuple(table, key, capacity));
+    });
 }
 
 void CachedStorage::updateMRU(const std::string& table, const std::string& key, ssize_t capacity)

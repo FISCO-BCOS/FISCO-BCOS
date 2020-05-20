@@ -149,6 +149,7 @@ PrecompiledExecResult::Ptr KVTablePrecompiled::call(ExecutiveContext::Ptr contex
     else if (func == name2Selector[KVTABLE_METHOD_NEWENT])
     {  // newEntry()
         auto entry = m_table->newEntry();
+        entry->setForce(true);
         auto entryPrecompiled = std::make_shared<EntryPrecompiled>();
         entryPrecompiled->setEntry(entry);
 
