@@ -48,7 +48,7 @@ jobs:
     executor: ubuntu-build-env
     steps:
       - install_depencies:
-          packages: "ccache lcov"
+          packages: "ccache lcov patch flex bison libgmp-dev"
       - checkout
       - restore_cache:
           keys:
@@ -116,7 +116,7 @@ jobs:
           name: Setup dependencies
           command: |
             yum install -y epel-release
-            yum install -y git make gcc-c++ cmake3 openssl-devel openssl ccache
+            yum install -y git make gcc-c++ cmake3 openssl-devel openssl ccache flex patch bison gmp-static
             echo 'export CCACHE_DIR=/ccache' >> $BASH_ENV
       - checkout
       - restore_cache:
@@ -151,7 +151,7 @@ jobs:
     executor: ubuntu-build-env
     steps:
       - install_depencies:
-          packages: "ccache"
+          packages: "ccache libgmp-dev flex bison patch"
       - checkout
       - restore_cache:
           keys:
@@ -183,7 +183,7 @@ jobs:
     executor: ubuntu-build-env
     steps:
       - install_depencies:
-          packages: "ca-certificates golang-go"
+          packages: "ca-certificates golang-go libgmp-dev flex bison patch"
       - checkout
       - compile:
           options: "-DTOOL=ON -DBUILD_STATIC=ON -DCMAKE_BUILD_TYPE=Release"
