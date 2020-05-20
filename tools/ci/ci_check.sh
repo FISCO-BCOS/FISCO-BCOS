@@ -61,7 +61,7 @@ check_sync_consensus()
     LOG_INFO "***************check_sync_consensus"
     bash start_all.sh
     bash ../../check_node_config.sh -p node0
-    sleep 1
+    sleep 5
     send_transaction
     LOG_INFO "[round1]==============send a transaction is ok"
     LOG_INFO "[round1]==============check report block"
@@ -141,7 +141,7 @@ check_rpbft()
         sed_cmd="sed -i .bkp"
     fi
     ${sed_cmd} "s/consensus_type=raft/consensus_type=rpbft/" node*/conf/group.1.genesis
-    check_consensus_and_sync 10
+    check_consensus_and_sync 12
 }
 
 init

@@ -268,6 +268,20 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
     if (m_envInfo.precompiledEngine() &&
         m_envInfo.precompiledEngine()->isOrginPrecompiled(_p.codeAddress))
     {
+        if (g_BCOSConfig.version() >= V2_5_0)
+        {
+            auto gas = m_envInfo.precompiledEngine()->costOfPrecompiled(_p.codeAddress, _p.data);
+            if (m_gas < gas)
+            {
+                m_excepted = TransactionException::OutOfGasBase;
+                // true actually means "all finished - nothing more to be done regarding go().
+                return true;
+            }
+            else
+            {
+                m_gas = (u256)(_p.gas - gas);
+            }
+        }
         bytes output;
         bool success;
         tie(success, output) =

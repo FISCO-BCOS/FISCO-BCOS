@@ -33,20 +33,20 @@ jobs:
         id: cache
         with:
           path: deps/src
-          key: deps-v2-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: deps-v3-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            deps-v2-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            deps-v2-${{ runner.temp }}-${{ github.base_ref }}-
-            deps-v2-${{ runner.temp }}-
+            deps-v3-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            deps-v3-${{ runner.temp }}-${{ github.base_ref }}-
+            deps-v3-${{ runner.temp }}-
       - uses: actions/cache@v1.1.2
         id: ccache
         with:
           path: ccache
-          key: ccache-v2-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: ccache-v3-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            ccache-v2-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            ccache-v2-${{ runner.temp }}-${{ github.base_ref }}-
-            ccache-v2-${{ runner.temp }}-
+            ccache-v3-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            ccache-v3-${{ runner.temp }}-${{ github.base_ref }}-
+            ccache-v3-${{ runner.temp }}-
       - name: install macOS dependencies
         if: runner.os == 'macOS'
         run: brew install openssl@1.1 ccache gmp
@@ -54,7 +54,7 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt install -y git curl build-essential clang cmake libssl-dev zlib1g-dev ccache libgmp-dev flex bison patch
       - name: configure
-        run: cmake -DTESTS=ON -DCRYPTO_EXTENSION=ON .
+        run: CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DTESTS=ON -DCRYPTO_EXTENSION=ON .
       - name: compile
         run: make -j2
       - name: run uint tests

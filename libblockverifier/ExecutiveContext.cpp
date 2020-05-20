@@ -131,6 +131,11 @@ std::pair<bool, bytes> ExecutiveContext::executeOriginPrecompiled(
     return m_precompiledContract.at(_a).execute(_in);
 }
 
+bigint ExecutiveContext::costOfPrecompiled(Address const& _a, bytesConstRef _in) const
+{
+    return m_precompiledContract.at(_a).cost(_in);
+}
+
 void ExecutiveContext::setPrecompiledContract(
     std::unordered_map<Address, PrecompiledContract> const& precompiledContract)
 {
