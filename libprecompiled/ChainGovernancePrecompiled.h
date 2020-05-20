@@ -70,7 +70,7 @@ private:
     int verifyAndRecord(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
         Operation _op, const std::string& _user, const std::string& _value,
         const std::string& _origin);
-    std::string queryCommitteeMembers(
+    std::string queryTablePermissions(
         std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
         const std::string& _tableName);
     int grantCommitteeMember(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
@@ -88,6 +88,8 @@ private:
         const std::string& _tableName, const std::string& _userAddress, const Address& _origin);
     bool isCommitteeMember(
         std::shared_ptr<blockverifier::ExecutiveContext> context, Address const& account);
+    bool isOperator(
+        std::shared_ptr<blockverifier::ExecutiveContext> context, std::string const& account);
     AccountStatus getAccountStatus(
         std::shared_ptr<blockverifier::ExecutiveContext> context, std::string const& tableName);
     int updateFrozenStatus(std::shared_ptr<blockverifier::ExecutiveContext> context,

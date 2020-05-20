@@ -17,7 +17,7 @@ contract ChainGovernancePrecompiled {
         public
         returns (int256);
 
-    // threshold [0,100]
+    // threshold [0,100)
     function updateThreshold(int256 threshold) public returns (int256);
 
     function queryThreshold() public view returns (int256);
