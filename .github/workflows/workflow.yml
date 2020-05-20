@@ -54,7 +54,7 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt install -y git curl build-essential clang cmake libssl-dev zlib1g-dev ccache libgmp-dev flex bison patch
       - name: configure
-        run: CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DTESTS=ON -DCRYPTO_EXTENSION=ON .
+        run: CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DTESTS=ON .
       - name: compile
         run: make -j2
       - name: run uint tests

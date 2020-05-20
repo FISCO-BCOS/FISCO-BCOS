@@ -65,12 +65,6 @@ macro(configure_project)
     # code coverage
     eth_default_option(COVERAGE OFF)
 
-    # extension privacy module
-    eth_default_option(CRYPTO_EXTENSION OFF)
-    if (CRYPTO_EXTENSION)
-        add_definitions(-DFISCO_CRYPTO_EXTENSION)
-    endif()
-
     #debug
     eth_default_option(DEBUG OFF)
     if (DEBUG)
@@ -124,9 +118,6 @@ macro(print_config NAME)
     message("-- TESTS              Build tests                  ${TESTS}")
     message("-- ARCH_NATIVE        Enable native code           ${ARCH_NATIVE}")
     message("-- PROF                                            ${PROF}")
-if (CRYPTO_EXTENSION)
-    message("-- CRYPTO_EXTENSION   Build crypto extension       ${CRYPTO_EXTENSION}")
-endif()
     message("------------------------------------------------------------------------")
     message("")
 endmacro()

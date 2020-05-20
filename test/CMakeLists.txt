@@ -19,12 +19,6 @@
 # (c) 2016-2018 fisco-dev contributors.
 #------------------------------------------------------------------------------
 file(GLOB_RECURSE sources "*.cpp" "*.h" "*.sol")
-
-if (NOT CRYPTO_EXTENSION)
-    list(REMOVE_ITEM sources ${CMAKE_CURRENT_SOURCE_DIR}/unittests/libstorage/test_PaillierPrecompiled.cpp)
-    list(REMOVE_ITEM sources ${CMAKE_CURRENT_SOURCE_DIR}/unittests/libstorage/test_GroupSigPrecompiled.cpp)
-    list(REMOVE_ITEM sources ${CMAKE_CURRENT_SOURCE_DIR}/unittests/libstorage/test_RingSigPrecompiled.cpp)
-endif ()
 set(TEST_ARGS "--testpath=${CMAKE_SOURCE_DIR}/test/data")
 foreach(file ${sources})
     file(STRINGS ${file} test_list_raw REGEX "BOOST_.*TEST_(SUITE|CASE|SUITE_END)")
