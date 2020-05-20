@@ -99,3 +99,41 @@ jobs:
         with:
           name: fisco-bcos-macOS.tar.gz
           path: bin/fisco-bcos.tar.gz
+
+  ubuntu16_integration_test:
+    name: ubuntu16_integration_test
+    runs-on: ubuntu-16.04
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 5
+      - name: check commit
+        if: github.base_ref == 'master' && github.event == 'pull_request'
+        run: bash tools/ci/check-commit.sh
+      - uses: actions/cache@v1.1.2
+        id: cache
+        with:
+          path: deps/src
+          key: deps-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          restore-keys: |
+            deps-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            deps-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            deps-v1-notest-${{ runner.temp }}-
+            deps-v1-${{ runner.temp }}-
+      - uses: actions/cache@v1.1.2
+        id: ccache
+        with:
+          path: ccache
+          key: ccache-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          restore-keys: |
+            ccache-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            ccache-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            ccache-v1-notest-${{ runner.temp }}-
+      - name: install ubuntu dependencies
+        run: sudo apt install -y git curl build-essential clang cmake openssl libssl-dev zlib1g-dev ccache libgmp-dev flex bison
+      - name: configure
+        run: cmake .
+      - name: compile
+        run: make -j2
+      - name: run integration testing
+        run: cd tools && bash ci/ci_check.sh
