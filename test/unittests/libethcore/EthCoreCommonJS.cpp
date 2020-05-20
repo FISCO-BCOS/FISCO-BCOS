@@ -46,7 +46,7 @@ BOOST_AUTO_TEST_CASE(testJsToPublic)
     KeyPair key_pair = KeyPair::create();
     pub = jsToPublic(toHex(key_pair.pub()));
     BOOST_CHECK(pub != key_pair.pub());
-    pub = jsToPublic("0x" + toHex(key_pair.pub()));
+    pub = jsToPublic(toHexPrefixed(key_pair.pub()));
     BOOST_CHECK(pub == key_pair.pub());
     /// test jsToSecret
     std::string sec_str =
@@ -60,7 +60,7 @@ BOOST_AUTO_TEST_CASE(testJsToPublic)
     BOOST_CHECK(sec);
 
     /// test jsToAddress
-    std::string addr = "0x" + toHex(toAddress(key_pair.pub()));
+    std::string addr = toHexPrefixed(toAddress(key_pair.pub()));
     BOOST_CHECK(jsToAddress(addr) == toAddress(key_pair.pub()));
     // exception test
     std::string invalid_addr = "0x1234";

@@ -103,14 +103,14 @@ PrecompiledExecResult::Ptr ChainGovernancePrecompiled::call(
     {  // grantCommitteeMember(address user) public returns (int256);
         Address user;
         abi.abiOut(data, user);
-        result = grantCommitteeMember(_context, user.hex(), _origin);
+        result = grantCommitteeMember(_context, user.hexPrefixed(), _origin);
         getErrorCodeOut(callResult->mutableExecResult(), result);
     }
     else if (func == name2Selector[CGP_METHOD_REVOKE_CM])
     {  // revokeCommitteeMember(address user) public returns (int256);
         Address user;
         abi.abiOut(data, user);
-        auto member = user.hex();
+        auto member = user.hexPrefixed();
         Table::Ptr acTable = openTable(_context, SYS_ACCESS_TABLE);
         do
         {
@@ -126,9 +126,9 @@ PrecompiledExecResult::Ptr ChainGovernancePrecompiled::call(
                 break;
             }
             result = verifyAndRecord(
-                _context, Operation::RevokeCommitteeMember, member, "", _origin.hex());
+                _context, Operation::RevokeCommitteeMember, member, "", _origin.hexPrefixed());
             CHAIN_GOVERNANCE_LOG(INFO)
-                << LOG_DESC("revokeMember") << LOG_KV("origin", _origin.hex())
+                << LOG_DESC("revokeMember") << LOG_KV("origin", _origin.hexPrefixed())
                 << LOG_KV("member", member) << LOG_KV("return", result);
         } while (0);
 
@@ -140,7 +140,7 @@ PrecompiledExecResult::Ptr ChainGovernancePrecompiled::call(
         s256 weight = 0;
         abi.abiOut(data, user, weight);
         int result = updateCommitteeMemberWeight(
-            _context, user.hex(), boost::lexical_cast<string>(weight), _origin);
+            _context, user.hexPrefixed(), boost::lexical_cast<string>(weight), _origin);
         getErrorCodeOut(callResult->mutableExecResult(), result);
     }
     else if (func == name2Selector[CGP_METHOD_UPDATE_CM_THRESHOLD])
@@ -149,7 +149,7 @@ PrecompiledExecResult::Ptr ChainGovernancePrecompiled::call(
         abi.abiOut(data, weight);
         do
         {
-            if (weight > 100 || weight < 0)
+            if (weight > 99 || weight < 0)
             {
                 result = CODE_INVALID_THRESHOLD;
                 CHAIN_GOVERNANCE_LOG(INFO)
@@ -172,35 +172,35 @@ PrecompiledExecResult::Ptr ChainGovernancePrecompiled::call(
                 break;
             }
             result = verifyAndRecord(_context, Operation::UpdateThreshold,
-                CGP_UPDATE_AUTH_THRESHOLD, to_string(threshold), _origin.hex());
+                CGP_UPDATE_AUTH_THRESHOLD, to_string(threshold), _origin.hexPrefixed());
             CHAIN_GOVERNANCE_LOG(INFO)
-                << LOG_DESC("updateThreshold") << LOG_KV("origin", _origin.hex())
+                << LOG_DESC("updateThreshold") << LOG_KV("origin", _origin.hexPrefixed())
                 << LOG_KV("threshold", to_string(threshold)) << LOG_KV("return", result);
         } while (0);
         getErrorCodeOut(callResult->mutableExecResult(), result);
     }
     else if (func == name2Selector[CGP_METHOD_LIST_CM])
     {  // listCommitteeMembers();
-        auto resultJson = queryCommitteeMembers(_context, SYS_ACCESS_TABLE);
+        auto resultJson = queryTablePermissions(_context, SYS_ACCESS_TABLE);
         callResult->setExecResult(abi.abiIn("", resultJson));
     }
     else if (func == name2Selector[CGP_METHOD_GRANT_OP])
     {  // grantOperator(address)
         Address user;
         abi.abiOut(data, user);
-        result = grantOperator(_context, user.hex(), _origin);
+        result = grantOperator(_context, user.hexPrefixed(), _origin);
         getErrorCodeOut(callResult->mutableExecResult(), result);
     }
     else if (func == name2Selector[CGP_METHOD_REVOKE_OP])
     {  // revokeOperator(address)
         Address user;
         abi.abiOut(data, user);
-        result = revokeOperator(_context, user.hex(), _origin);
+        result = revokeOperator(_context, user.hexPrefixed(), _origin);
         getErrorCodeOut(callResult->mutableExecResult(), result);
     }
     else if (func == name2Selector[CGP_METHOD_LIST_OP])
     {  // listOperators()
-        auto resultJson = queryCommitteeMembers(_context, SYS_TABLES);
+        auto resultJson = queryTablePermissions(_context, SYS_TABLES);
         callResult->setExecResult(abi.abiIn("", resultJson));
     }
     else if (func == name2Selector[CGP_METHOD_QUERY_CM_THRESHOLD])
@@ -217,7 +217,7 @@ PrecompiledExecResult::Ptr ChainGovernancePrecompiled::call(
     {  // queryCommitteeMemberWeight(address user) public view returns (int256);
         Address user;
         abi.abiOut(data, user);
-        string member = user.hex();
+        string member = user.hexPrefixed();
         auto committeeTable = getCommitteeTable(_context);
         auto entries =
             committeeTable->select(member + CGP_WEIGTH_SUFFIX, committeeTable->newCondition());
@@ -275,6 +275,13 @@ int ChainGovernancePrecompiled::grantCommitteeMember(
     shared_ptr<dev::blockverifier::ExecutiveContext> _context, const string& _member,
     const Address& _origin)
 {
+    if (isOperator(_context, _member))
+    {
+        CHAIN_GOVERNANCE_LOG(INFO) << LOG_DESC("grant Operator as committee member is forbidden")
+                                   << LOG_KV("member", _member)
+                                   << LOG_KV("return", CODE_OPERATOR_CANNOT_BE_COMMITTEE_MEMBER);
+        return CODE_OPERATOR_CANNOT_BE_COMMITTEE_MEMBER;
+    }
     int result = 0;
     Table::Ptr acTable = openTable(_context, SYS_ACCESS_TABLE);
     auto condition = acTable->newCondition();
@@ -288,7 +295,7 @@ int ChainGovernancePrecompiled::grantCommitteeMember(
         auto committeeTable = getCommitteeTable(_context);
         auto entry = committeeTable->newEntry();
         entry->setField(CGP_COMMITTEE_TABLE_VALUE, to_string(1));
-        entry->setField(CGP_COMMITTEE_TABLE_ORIGIN, _origin.hex());
+        entry->setField(CGP_COMMITTEE_TABLE_ORIGIN, _origin.hexPrefixed());
         committeeTable->insert(
             _member + CGP_WEIGTH_SUFFIX, entry, make_shared<AccessOptions>(Address(), false));
         CHAIN_GOVERNANCE_LOG(INFO) << LOG_DESC("grantCommitteeMember") << LOG_KV("member", _member)
@@ -305,19 +312,13 @@ int ChainGovernancePrecompiled::grantCommitteeMember(
             << LOG_KV("member", _member) << LOG_KV("return", CODE_COMMITTEE_MEMBER_EXIST);
         return CODE_COMMITTEE_MEMBER_EXIST;
     }
-    addrEntries = acTable->select(SYS_TABLES, condition);
-    if (addrEntries->size() != 0u)
-    {
-        CHAIN_GOVERNANCE_LOG(INFO) << LOG_DESC("grant Operator as committee member is forbidden")
-                                   << LOG_KV("member", _member)
-                                   << LOG_KV("return", CODE_OPERATOR_CANNOT_BE_COMMITTEE_MEMBER);
-        return CODE_OPERATOR_CANNOT_BE_COMMITTEE_MEMBER;
-    }
+
     // check vote validation
-    result = verifyAndRecord(_context, Operation::GrantCommitteeMember, _member, "", _origin.hex());
+    result = verifyAndRecord(
+        _context, Operation::GrantCommitteeMember, _member, "", _origin.hexPrefixed());
     CHAIN_GOVERNANCE_LOG(INFO) << LOG_DESC("grantCommitteeMember")
-                               << LOG_KV("origin", _origin.hex()) << LOG_KV("member", _member)
-                               << LOG_KV("return", result);
+                               << LOG_KV("origin", _origin.hexPrefixed())
+                               << LOG_KV("member", _member) << LOG_KV("return", result);
     return result;
 }
 
@@ -350,8 +351,9 @@ int ChainGovernancePrecompiled::updateCommitteeMemberWeight(
         return CODE_CURRENT_VALUE_IS_EXPECTED_VALUE;
     }
     result = verifyAndRecord(
-        _context, Operation::UpdateCommitteeMemberWeight, _member, _weight, _origin.hex());
-    CHAIN_GOVERNANCE_LOG(INFO) << LOG_DESC("updateMemberWeight") << LOG_KV("origin", _origin.hex())
+        _context, Operation::UpdateCommitteeMemberWeight, _member, _weight, _origin.hexPrefixed());
+    CHAIN_GOVERNANCE_LOG(INFO) << LOG_DESC("updateMemberWeight")
+                               << LOG_KV("origin", _origin.hexPrefixed())
                                << LOG_KV("member", _member) << LOG_KV("return", result);
     return result;
 }
@@ -362,7 +364,7 @@ int ChainGovernancePrecompiled::grantOperator(
 {
     Table::Ptr acTable = openTable(_context, SYS_ACCESS_TABLE);
     auto condition = acTable->newCondition();
-    condition->EQ(SYS_AC_ADDRESS, _origin.hex());
+    condition->EQ(SYS_AC_ADDRESS, _origin.hexPrefixed());
     auto entries = acTable->select(SYS_ACCESS_TABLE, condition);
     if (entries->size() == 0u)
     {
@@ -395,9 +397,9 @@ int ChainGovernancePrecompiled::grantOperator(
     {
         CHAIN_GOVERNANCE_LOG(INFO)
             << LOG_DESC("permission denied") << LOG_KV("operator", _userAddress)
-            << LOG_KV("origin", _origin.hex());
+            << LOG_KV("origin", _origin.hexPrefixed());
         BOOST_THROW_EXCEPTION(
-            PrecompiledException("Permission denied. " + _origin.hex() +
+            PrecompiledException("Permission denied. " + _origin.hexPrefixed() +
                                  " can't grantOperator operator " + _userAddress));
         return result;
     }
@@ -407,14 +409,14 @@ int ChainGovernancePrecompiled::grantOperator(
     {
         CHAIN_GOVERNANCE_LOG(INFO)
             << LOG_DESC("permission denied") << LOG_KV("operator", _userAddress)
-            << LOG_KV("origin", _origin.hex());
+            << LOG_KV("origin", _origin.hexPrefixed());
         BOOST_THROW_EXCEPTION(
-            PrecompiledException("Permission denied. " + _origin.hex() +
+            PrecompiledException("Permission denied. " + _origin.hexPrefixed() +
                                  " can't grantOperator operator " + _userAddress));
         return result;
     }
     CHAIN_GOVERNANCE_LOG(INFO) << LOG_DESC("revokeCommitteeMember")
-                               << LOG_KV("origin", _origin.hex())
+                               << LOG_KV("origin", _origin.hexPrefixed())
                                << LOG_KV("operator", _userAddress) << LOG_KV("return", result);
     return result;
 }
@@ -425,7 +427,7 @@ int ChainGovernancePrecompiled::revokeOperator(
 {
     Table::Ptr acTable = openTable(_context, SYS_ACCESS_TABLE);
     auto condition = acTable->newCondition();
-    condition->EQ(SYS_AC_ADDRESS, _origin.hex());
+    condition->EQ(SYS_AC_ADDRESS, _origin.hexPrefixed());
     auto entries = acTable->select(SYS_ACCESS_TABLE, condition);
     if (entries->size() == 0u)
     {
@@ -447,7 +449,8 @@ int ChainGovernancePrecompiled::revokeOperator(
     }
     int result = revokeTablePermission(_context, SYS_TABLES, _userAddress, _origin);
     revokeTablePermission(_context, SYS_CNS, _userAddress, _origin);
-    CHAIN_GOVERNANCE_LOG(INFO) << LOG_DESC("revoke Member") << LOG_KV("origin", _origin.hex())
+    CHAIN_GOVERNANCE_LOG(INFO) << LOG_DESC("revoke Member")
+                               << LOG_KV("origin", _origin.hexPrefixed())
                                << LOG_KV("operator", _userAddress) << LOG_KV("return", result);
     return result;
 }
@@ -640,7 +643,7 @@ int ChainGovernancePrecompiled::verifyAndRecord(
     return 0;
 }
 
-string ChainGovernancePrecompiled::queryCommitteeMembers(
+string ChainGovernancePrecompiled::queryTablePermissions(
     shared_ptr<dev::blockverifier::ExecutiveContext> _context, const string& tableName)
 {
     Table::Ptr table = openTable(_context, SYS_ACCESS_TABLE);
@@ -655,7 +658,7 @@ string ChainGovernancePrecompiled::queryCommitteeMembers(
             if (!entry)
                 continue;
             Json::Value AuthorityInfo;
-            AuthorityInfo[SYS_AC_ADDRESS] = "0x" + entry->getField(SYS_AC_ADDRESS);
+            AuthorityInfo[SYS_AC_ADDRESS] = entry->getField(SYS_AC_ADDRESS);
             AuthorityInfo[SYS_AC_ENABLENUM] = entry->getField(SYS_AC_ENABLENUM);
             AuthorityInfos.append(AuthorityInfo);
         }
@@ -692,16 +695,38 @@ bool ChainGovernancePrecompiled::isCommitteeMember(
 {
     auto acTable = openTable(context, SYS_ACCESS_TABLE);
     auto condition = acTable->newCondition();
-    condition->EQ(SYS_AC_ADDRESS, account.hex());
+    condition->EQ(SYS_AC_ADDRESS, account.hexPrefixed());
     auto entries = acTable->select(SYS_ACCESS_TABLE, condition);
     if (entries->size() != 0u)
     {
-        PRECOMPILED_LOG(INFO) << LOG_BADGE("ChainGovernancePrecompiled")
-                              << LOG_DESC("account is not a committee meember")
-                              << LOG_KV("account", account.hex());
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ChainGovernancePrecompiled")
+                               << LOG_DESC("account is a committee meember")
+                               << LOG_KV("account", account.hexPrefixed());
         return true;
     }
 
+    return false;
+}
+
+bool ChainGovernancePrecompiled::isOperator(ExecutiveContext::Ptr context, string const& account)
+{
+    auto acTable = openTable(context, SYS_ACCESS_TABLE);
+    auto condition = acTable->newCondition();
+    condition->EQ(SYS_AC_ADDRESS, account);
+    auto entries = acTable->select(SYS_TABLES, condition);
+    if (entries->size() != 0u)
+    {
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ChainGovernancePrecompiled")
+                               << LOG_DESC("account is an operator") << LOG_KV("account", account);
+        return true;
+    }
+    entries = acTable->select(SYS_CNS, condition);
+    if (entries->size() != 0u)
+    {
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ChainGovernancePrecompiled")
+                               << LOG_DESC("account is an operator") << LOG_KV("account", account);
+        return true;
+    }
     return false;
 }
 

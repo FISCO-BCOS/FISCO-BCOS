@@ -35,6 +35,7 @@
 #include <libstoragestate/StorageStateFactory.h>
 #include <boost/test/unit_test.hpp>
 
+using namespace std;
 using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::storage;
@@ -85,11 +86,11 @@ BOOST_AUTO_TEST_CASE(grant_revoke_CM)
     BOOST_TEST(ret == 1);
     auto acTable = tableFactory->openTable(SYS_ACCESS_TABLE);
     auto condition = acTable->newCondition();
-    condition->EQ(SYS_AC_ADDRESS, member1.hex());
+    condition->EQ(SYS_AC_ADDRESS, member1.hexPrefixed());
     auto result = acTable->select(SYS_ACCESS_TABLE, condition);
     BOOST_TEST(result->size() == 1);
     condition = acTable->newCondition();
-    condition->EQ(SYS_AC_ADDRESS, member1.hex());
+    condition->EQ(SYS_AC_ADDRESS, member1.hexPrefixed());
     auto entries = acTable->select(SYS_CONFIG, condition);
     BOOST_TEST(entries->size() == 1);
     entries = acTable->select(SYS_CONSENSUS, condition);
@@ -136,7 +137,6 @@ BOOST_AUTO_TEST_CASE(grant_revoke_CM)
     out = chainGovernancePrecompiled->call(context, bytesConstRef(&in));
     std::string retStr;
     abi.abiOut(&out->execResult(), retStr);
-
     Json::Value retJson;
     Json::Reader reader;
     BOOST_TEST(reader.parse(retStr, retJson) == true);
@@ -160,7 +160,7 @@ BOOST_AUTO_TEST_CASE(grant_revoke_CM)
     entries = acTable->select(SYS_ACCESS_TABLE, acTable->newCondition());
     BOOST_TEST(entries->size() == 2u);
     condition = acTable->newCondition();
-    condition->EQ(SYS_AC_ADDRESS, member2.hex());
+    condition->EQ(SYS_AC_ADDRESS, member2.hexPrefixed());
     entries = acTable->select(SYS_CONFIG, condition);
     BOOST_TEST(entries->size() == 1);
     entries = acTable->select(SYS_CONSENSUS, condition);
@@ -198,7 +198,7 @@ BOOST_AUTO_TEST_CASE(grant_revoke_CM)
     entries = acTable->select(SYS_ACCESS_TABLE, acTable->newCondition());
     BOOST_TEST(entries->size() == 2u);
     condition = acTable->newCondition();
-    condition->EQ(SYS_AC_ADDRESS, member3.hex());
+    condition->EQ(SYS_AC_ADDRESS, member3.hexPrefixed());
     entries = acTable->select(SYS_CONFIG, condition);
     BOOST_TEST(entries->size() == 0);
     entries = acTable->select(SYS_CONSENSUS, condition);
@@ -248,6 +248,25 @@ BOOST_AUTO_TEST_CASE(grant_revoke_CM)
     BOOST_TEST(committeeMembers.size() == 2);
 }
 
+BOOST_AUTO_TEST_CASE(grant_first_committee)
+{
+    Address member1("0x420f853b49838bd3e9466c85a4cc3428c960dde1");
+    auto acTable = tableFactory->openTable(SYS_ACCESS_TABLE);
+    auto entry = acTable->newEntry();
+    entry->setField(SYS_AC_TABLE_NAME, SYS_ACCESS_TABLE);
+    entry->setField(SYS_AC_ADDRESS, member1.hexPrefixed());
+    entry->setField(SYS_AC_ENABLENUM, to_string(0));
+    int count = acTable->insert(SYS_TABLES, entry, make_shared<AccessOptions>(Address(), false));
+    BOOST_TEST(count == 1);
+
+    eth::ContractABI abi;
+    bytes in = abi.abiIn("grantCommitteeMember(address)", member1);
+    auto out = chainGovernancePrecompiled->call(context, bytesConstRef(&in));
+    s256 ret = 0;
+    abi.abiOut(&out->execResult(), ret);
+    BOOST_TEST(ret == CODE_OPERATOR_CANNOT_BE_COMMITTEE_MEMBER);
+}
+
 BOOST_AUTO_TEST_CASE(updateCommitteeMemberWeight)
 {
     eth::ContractABI abi;
@@ -259,7 +278,7 @@ BOOST_AUTO_TEST_CASE(updateCommitteeMemberWeight)
     BOOST_TEST(ret == 1);
     auto acTable = tableFactory->openTable(SYS_ACCESS_TABLE);
     auto condition = acTable->newCondition();
-    condition->EQ(SYS_AC_ADDRESS, member1.hex());
+    condition->EQ(SYS_AC_ADDRESS, member1.hexPrefixed());
     auto entries = acTable->select(SYS_ACCESS_TABLE, condition);
     BOOST_TEST(entries->size() == 1);
 
@@ -332,7 +351,7 @@ BOOST_AUTO_TEST_CASE(updateThreshold)
     BOOST_TEST(ret == 1);
     auto acTable = tableFactory->openTable(SYS_ACCESS_TABLE);
     auto condition = acTable->newCondition();
-    condition->EQ(SYS_AC_ADDRESS, member1.hex());
+    condition->EQ(SYS_AC_ADDRESS, member1.hexPrefixed());
     auto entries = acTable->select(SYS_ACCESS_TABLE, condition);
     BOOST_TEST(entries->size() == 1);
 
