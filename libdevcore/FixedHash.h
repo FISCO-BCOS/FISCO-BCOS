@@ -239,6 +239,9 @@ public:
     /// @returns the hash as a user-readable hex string.
     std::string hex() const { return toHex(ref()); }
 
+    /// @returns the hash as a user-readable hex string with 0x perfix.
+    std::string hexPrefixed() const { return toHexPrefixed(ref()); }
+
     /// @returns a mutable byte vector_ref to the object's data.
     bytesRef ref() { return bytesRef(m_data.data(), N); }
 

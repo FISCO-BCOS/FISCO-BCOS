@@ -162,7 +162,7 @@ PrecompiledExecResult::Ptr PermissionPrecompiled::call(
     {  // grantWrite(address,address)
         Address contractAddress, user;
         abi.abiOut(data, contractAddress, user);
-        string addr = "0x" + user.hex();
+        string addr = user.hexPrefixed();
         string tableName = precompiled::getContractTableName(contractAddress);
         PRECOMPILED_LOG(INFO) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("grantWrite")
                               << LOG_KV("tableName", tableName) << LOG_KV("user", addr);
@@ -210,7 +210,7 @@ PrecompiledExecResult::Ptr PermissionPrecompiled::call(
     {  // revokeWrite(address,address)
         Address contractAddress, user;
         abi.abiOut(data, contractAddress, user);
-        string addr = "0x" + user.hex();
+        string addr = user.hexPrefixed();
         string tableName = precompiled::getContractTableName(contractAddress);
 
         PRECOMPILED_LOG(INFO) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("revokeWrite")

@@ -121,7 +121,7 @@ BOOST_AUTO_TEST_CASE(EventLogFilterParams_test1)
     BOOST_CHECK_EQUAL(params->getFromBlock(), int64_t(eth::MAX_BLOCK_NUMBER));
     BOOST_CHECK_EQUAL(params->getToBlock(), int64_t(eth::MAX_BLOCK_NUMBER));
     BOOST_CHECK_EQUAL(params->getAddresses().size(), 1);
-    BOOST_CHECK_EQUAL("0x" + toHex(*(params->getAddresses().begin())),
+    BOOST_CHECK_EQUAL(toHexPrefixed(*(params->getAddresses().begin())),
         "0x8888f1f195afa192cfee860698584c030f4c9db1");
 
     std::string json1 =
@@ -135,7 +135,7 @@ BOOST_AUTO_TEST_CASE(EventLogFilterParams_test1)
     BOOST_CHECK_EQUAL(params1->getFromBlock(), int64_t(0x7fffffffffffffff));
     BOOST_CHECK_EQUAL(params1->getToBlock(), int64_t(0x7fffffffffffffff));
     BOOST_CHECK_EQUAL(params1->getAddresses().size(), 1);
-    BOOST_CHECK_EQUAL("0x" + toHex(*(params->getAddresses().begin())),
+    BOOST_CHECK_EQUAL(toHexPrefixed(*(params->getAddresses().begin())),
         "0x8888f1f195afa192cfee860698584c030f4c9db1");
 }
 
@@ -189,10 +189,10 @@ BOOST_AUTO_TEST_CASE(EventLogFilter_test1)
 
     BOOST_CHECK_EQUAL(filter->getNextBlockToProcess(), 1111);
 
-    BOOST_CHECK_EQUAL("0x" + toHex(*(params->getAddresses().begin())),
+    BOOST_CHECK_EQUAL(toHexPrefixed(*(params->getAddresses().begin())),
         "0x692a70d2e424a56d2c6c27aa97d1a86395877b3a");
 
-    BOOST_CHECK_EQUAL("0x" + toHex(*(params->getTopics()[0].begin())),
+    BOOST_CHECK_EQUAL(toHexPrefixed(*(params->getTopics()[0].begin())),
         "0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa4");
 
     Address addr = jsToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3a");
@@ -278,9 +278,9 @@ BOOST_AUTO_TEST_CASE(EventLogFilter_test3)
 
     BOOST_CHECK_EQUAL(filter->getNextBlockToProcess(), 0);
 
-    BOOST_CHECK_EQUAL("0x" + toHex(*(params->getTopics()[0].begin())),
+    BOOST_CHECK_EQUAL(toHexPrefixed(*(params->getTopics()[0].begin())),
         "0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa4");
-    BOOST_CHECK_EQUAL("0x" + toHex(*(params->getTopics()[2].begin())),
+    BOOST_CHECK_EQUAL(toHexPrefixed(*(params->getTopics()[2].begin())),
         "0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa5");
 
     h256s topics0{
