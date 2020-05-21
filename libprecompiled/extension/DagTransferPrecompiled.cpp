@@ -155,14 +155,22 @@ Table::Ptr DagTransferPrecompiled::openTable(
     }
     auto table = Precompiled::openTable(context, dagTableName);
     if (!table)
-    {  //__dat_transfer__ is not exist, then create it first.
+    {
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE(
+                                      "DagTransferPrecompiled openTable: ready to create table")
+                               << LOG_KV("tableName", dagTableName);
+        //__dag_transfer__ is not exist, then create it first.
         table = createTable(
             context, dagTableName, DAG_TRANSFER_FIELD_NAME, DAG_TRANSFER_FIELD_BALANCE, origin);
-
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("open table")
-                               << LOG_DESC(" create __dag_transfer__ table. ");
+        // table already exists
+        if (!table)
+        {
+            PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled: table already exist")
+                                   << LOG_KV("tableName", dagTableName);
+            // try to openTable and get the table again
+            table = Precompiled::openTable(context, dagTableName);
+        }
     }
-
     return table;
 }
 
