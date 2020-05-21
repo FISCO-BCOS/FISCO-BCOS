@@ -651,7 +651,8 @@ bool Service::asyncMulticastMessageByTopic(
     NodeIDs nodeIDsToSend = getPeersByTopic(topic);
     if (_bandwidthLimiter)
     {
-        auto requiredPermits = message->length() * nodeIDsToSend.size() / m_compressRate;
+        auto requiredPermits =
+            message->length() * nodeIDsToSend.size() / g_BCOSConfig.c_compressRate;
         if (!_bandwidthLimiter->tryAcquire(requiredPermits))
         {
             SERVICE_LOG(INFO) << LOG_DESC(

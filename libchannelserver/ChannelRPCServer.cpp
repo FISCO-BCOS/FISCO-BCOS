@@ -813,7 +813,7 @@ void dev::ChannelRPCServer::onClientTopicRequest(
 bool dev::ChannelRPCServer::limitAMOPBandwidth(dev::channel::ChannelSession::Ptr _session,
     dev::channel::Message::Ptr _AMOPReq, dev::p2p::P2PMessage::Ptr _p2pMessage)
 {
-    int64_t requiredPermitsAfterCompress = _p2pMessage->length() / m_compressRate;
+    int64_t requiredPermitsAfterCompress = _p2pMessage->length() / g_BCOSConfig.c_compressRate;
     if (!m_networkBandwidthLimiter)
     {
         return true;
@@ -887,7 +887,8 @@ void dev::ChannelRPCServer::onClientChannelRequest(
             dev::network::Options options;
             options.timeout = 30 * 1000;  // 30 seconds
 
-            m_service->asyncSendMessageByTopic(topic, p2pMessage,
+            m_service->asyncSendMessageByTopic(
+                topic, p2pMessage,
                 [session, message](dev::network::NetworkException e,
                     std::shared_ptr<dev::p2p::P2PSession>, dev::p2p::P2PMessage::Ptr response) {
                     if (e.errorCode())

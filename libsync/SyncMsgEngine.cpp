@@ -357,6 +357,7 @@ void DownloadBlocksContainer::sendBigBlock(bytes const& _blockRLP)
     retPacket.singleEncode(_blockRLP);
 
     auto msg = retPacket.toMessage(m_protocolId);
+    msg->setPermitsAcquired(true);
     m_service->asyncSendMessageByNodeID(m_nodeId, msg, CallbackFuncWithSession(), Options());
     SYNC_ENGINE_LOG(INFO) << LOG_BADGE("Rcv") << LOG_BADGE("Send") << LOG_BADGE("Download")
                           << LOG_DESC("Block back") << LOG_KV("peer", m_nodeId.abridged())

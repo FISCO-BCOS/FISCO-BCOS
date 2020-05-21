@@ -695,7 +695,7 @@ void SyncMaster::maintainBlockRequest()
                         << LOG_KV("nodeId", _p->nodeId.abridged());
                     break;
                 }
-                auto requiredPermits = blockRLP->size() / m_compressRate;
+                auto requiredPermits = blockRLP->size() / g_BCOSConfig.c_compressRate;
                 if (m_nodeBandwidthLimiter && !m_nodeBandwidthLimiter->tryAcquire(requiredPermits))
                 {
                     SYNC_LOG(INFO)
