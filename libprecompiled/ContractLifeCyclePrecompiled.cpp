@@ -93,7 +93,7 @@ bool ContractLifeCyclePrecompiled::checkPermission(
     {
         auto acTable = openTable(context, SYS_ACCESS_TABLE);
         auto condition = acTable->newCondition();
-        condition->EQ(SYS_AC_ADDRESS, origin.hex());
+        condition->EQ(SYS_AC_ADDRESS, origin.hexPrefixed());
         auto entries = acTable->select(SYS_ACCESS_TABLE, condition);
         if (entries->size() != 0u)
         {
