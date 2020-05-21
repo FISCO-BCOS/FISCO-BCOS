@@ -42,6 +42,7 @@ public:
     RateLimiter::Ptr getQPSLimiterByGroupId(dev::GROUP_ID const& _groupId);
 
     virtual bool acquire(int64_t const& _requiredPermits = 1);
+    virtual void acquireWithoutWait(int64_t _requiredPermits = 1);
     virtual bool acquireFromGroup(
         dev::GROUP_ID const& _groupId, int64_t const& _requiredPermits = 1);
 

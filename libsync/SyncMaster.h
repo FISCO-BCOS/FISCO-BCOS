@@ -326,8 +326,6 @@ private:
     dev::flowlimit::RateLimiter::Ptr m_bandwidthLimiter;
     dev::flowlimit::RateLimiter::Ptr m_nodeBandwidthLimiter;
 
-    unsigned m_compressRate = 3;
-
 public:
     void maintainBlocks();
     void maintainPeersStatus();

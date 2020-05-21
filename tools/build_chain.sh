@@ -527,7 +527,6 @@ generate_config_ini()
 [p2p]
     listen_ip=0.0.0.0
     listen_port=$(( offset + port_array[0] ))
-    ;enable_compress=true
     ; nodes to connect
     $ip_list
 

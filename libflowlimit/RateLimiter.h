@@ -41,7 +41,7 @@ public:
         bool const& _fetchPermitsWhenRequireWait = false, int64_t const& _now = utcSteadyTimeUs());
 
     // acquire the permits without wait
-    virtual int64_t acquireWithoutWait(int64_t const& _requiredPermits = 1)
+    virtual int64_t acquireWithoutWait(int64_t _requiredPermits = 1)
     {
         return acquire(_requiredPermits, false, true);
     }
