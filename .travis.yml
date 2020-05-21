@@ -81,9 +81,9 @@ addons:
       - ccache
       - go
 install: |
-  if [[ $TRAVIS_OS_NAME == linux && "$TRAVIS_BRANCH" != "master" ]]; then
-    bash tools/ci/check-commit.sh;
-  fi
+  #if [[ $TRAVIS_OS_NAME == linux && "$TRAVIS_BRANCH" != "master" ]]; then
+  #  bash tools/ci/check-commit.sh;
+  #fi
 script: |
   if [[ $TRAVIS_OS_NAME == linux ]]; then
     cmake . && make -j2 &&  cd tools && bash ci/ci_check.sh

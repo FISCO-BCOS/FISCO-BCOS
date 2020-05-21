@@ -251,7 +251,6 @@ private:
     mutable SharedMutex x_group2BandwidthLimiter;
 
     dev::flowlimit::RateLimiter::Ptr m_nodeBandwidthLimiter;
-    unsigned m_compressRate = 3;
     dev::stat::ChannelNetworkStatHandler::Ptr m_channelNetworkStatHandler;
 };
 

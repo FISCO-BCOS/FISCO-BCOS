@@ -49,7 +49,8 @@ private:
         dev::GROUP_ID const& _groupId, Json::Value const& _request, std::string& _retValue);
     void wrapResponseForNodeBusy(Json::Value const& _request, std::string& _retValue);
 
-    dev::GROUP_ID getGroupID(Json::Value const& _input);
+    dev::GROUP_ID getGroupID(Json::Value const& _request);
+    bool isValidRequest(Json::Value const& _request);
 
 private:
     // record group related RPC methods
@@ -61,6 +62,9 @@ private:
         "getTransactionReceipt", "getPendingTransactions", "getPendingTxSize", "call",
         "sendRawTransaction", "getCode", "getTotalTransactionCount",
         "getTransactionByHashWithProof", "getTransactionReceiptByHashWithProof"};
+
+    // RPC interface without restrictions
+    std::set<std::string> const m_noRestrictRpcMethodSet = {"getClientVersion"};
 
     dev::stat::ChannelNetworkStatHandler::Ptr m_networkStatHandler;
     dev::flowlimit::RPCQPSLimiter::Ptr m_qpsLimiter;

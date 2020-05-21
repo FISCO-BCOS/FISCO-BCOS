@@ -30,8 +30,16 @@ StatisticPotocolServer::StatisticPotocolServer(jsonrpc::IProcedureInvokationHand
 
 bool StatisticPotocolServer::limitRPCQPS(Json::Value const& _request, std::string& _retValue)
 {
-    if (!m_qpsLimiter)
+    // get procedure name failed
+    if (!isValidRequest(_request))
     {
+        return true;
+    }
+    auto procedureName = _request[KEY_REQUEST_METHODNAME].asString();
+    // no restrict rpc method
+    if (m_noRestrictRpcMethodSet.count(procedureName))
+    {
+        m_qpsLimiter->acquireWithoutWait();
         return true;
     }
     auto canHandle = m_qpsLimiter->acquire();
@@ -64,8 +72,9 @@ void StatisticPotocolServer::wrapResponseForNodeBusy(
 {
     Json::Value resp;
     Json::FastWriter writer;
-    this->WrapError(
-        _request, RPCExceptionType::OverQPSLimit, RPCMsg[RPCExceptionType::OverQPSLimit], resp);
+    std::string errorMsg =
+        _request[KEY_REQUEST_METHODNAME].asString() + " " + RPCMsg[RPCExceptionType::OverQPSLimit];
+    this->WrapError(_request, RPCExceptionType::OverQPSLimit, errorMsg, resp);
     if (resp != Json::nullValue)
         _retValue = writer.write(resp);
 }
@@ -79,22 +88,24 @@ void StatisticPotocolServer::HandleRequest(const std::string& _request, std::str
     Json::Value req;
     Json::Value resp;
     Json::FastWriter w;
-    // limit the whole RPC QPS
-    bool canHandle = limitRPCQPS(_request, _retValue);
-    if (!canHandle)
-    {
-        return;
-    }
 
     dev::GROUP_ID groupId = -1;
     if (reader.parse(_request, req, false))
     {
+        // get groupId
         if (m_networkStatHandler || m_qpsLimiter)
         {
             groupId = getGroupID(req);
+        }
+        if (m_qpsLimiter)
+        {
+            // limit the whole RPC QPS
+            if (!limitRPCQPS(req, _retValue))
+            {
+                return;
+            }
             // limit group QPS
-            canHandle = limitGroupQPS(groupId, _request, _retValue);
-            if (!canHandle)
+            if (!limitGroupQPS(groupId, req, _retValue))
             {
                 return;
             }
@@ -106,6 +117,8 @@ void StatisticPotocolServer::HandleRequest(const std::string& _request, std::str
         this->WrapError(Json::nullValue, Errors::ERROR_RPC_JSON_PARSE_ERROR,
             Errors::GetErrorMessage(Errors::ERROR_RPC_JSON_PARSE_ERROR), resp);
     }
+
+
     if (resp != Json::nullValue)
         _retValue = w.write(resp);
     if (m_networkStatHandler && groupId != -1)
@@ -115,12 +128,22 @@ void StatisticPotocolServer::HandleRequest(const std::string& _request, std::str
     }
 }
 
+// check the request
+bool StatisticPotocolServer::isValidRequest(Json::Value const& _request)
+{
+    if (!_request.isObject() || !_request.isMember(KEY_REQUEST_METHODNAME) ||
+        !_request.isMember(KEY_REQUEST_PARAMETERS))
+    {
+        return false;
+    }
+    return true;
+}
+
 dev::GROUP_ID StatisticPotocolServer::getGroupID(Json::Value const& _request)
 {
     try
     {
-        if (!_request.isObject() || !_request.isMember(KEY_REQUEST_METHODNAME) ||
-            !_request.isMember(KEY_REQUEST_PARAMETERS))
+        if (!isValidRequest(_request))
         {
             return -1;
         }

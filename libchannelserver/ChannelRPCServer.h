@@ -251,8 +251,6 @@ private:
     dev::stat::ChannelNetworkStatHandler::Ptr m_networkStatHandler;
     dev::flowlimit::RPCQPSLimiter::Ptr m_qpsLimiter;
     dev::flowlimit::RateLimiter::Ptr m_networkBandwidthLimiter;
-
-    const unsigned m_compressRate = 3;
 };
 
 }  // namespace dev
