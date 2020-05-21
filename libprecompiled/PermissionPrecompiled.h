@@ -54,6 +54,8 @@ private:
         const std::string& tableName);
     int revokeWritePermission(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
         const std::string& tableName, const std::string& user, Address const& origin);
+    bool checkPermission(std::shared_ptr<blockverifier::ExecutiveContext> context,
+        std::string const& tableName, Address const& origin);
 };
 
 }  // namespace precompiled
