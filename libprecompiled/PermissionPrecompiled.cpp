@@ -169,15 +169,6 @@ PrecompiledExecResult::Ptr PermissionPrecompiled::call(
                               << LOG_KV("tableName", tableName) << LOG_KV("user", addr);
         do
         {
-            if (g_BCOSConfig.version() >= V2_5_0 && !checkPermission(context, tableName, origin))
-            {
-                PRECOMPILED_LOG(INFO) << LOG_BADGE("PermissionPrecompiled")
-                                      << LOG_DESC("only deployer of contract can grantWrite")
-                                      << LOG_KV("tableName", tableName)
-                                      << LOG_KV("origin", origin.hex()) << LOG_KV("user", addr);
-                result = storage::CODE_NO_AUTHORIZED;
-                break;
-            }
             Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
             auto condition = table->newCondition();
             condition->EQ(SYS_AC_ADDRESS, addr);
@@ -205,6 +196,15 @@ PrecompiledExecResult::Ptr PermissionPrecompiled::call(
                 result = CODE_CONTRACT_NOT_EXIST;
                 break;
             }
+            if (g_BCOSConfig.version() >= V2_5_0 && !checkPermission(context, tableName, origin))
+            {
+                PRECOMPILED_LOG(INFO) << LOG_BADGE("PermissionPrecompiled")
+                                      << LOG_DESC("only deployer of contract can grantWrite")
+                                      << LOG_KV("tableName", tableName)
+                                      << LOG_KV("origin", origin.hex()) << LOG_KV("user", addr);
+                result = storage::CODE_NO_AUTHORIZED;
+                break;
+            }
             auto entry = table->newEntry();
             entry->setField(SYS_AC_TABLE_NAME, tableName);
             entry->setField(SYS_AC_ADDRESS, addr);
@@ -224,22 +224,8 @@ PrecompiledExecResult::Ptr PermissionPrecompiled::call(
         abi.abiOut(data, contractAddress, user);
         string addr = user.hexPrefixed();
         string tableName = precompiled::getContractTableName(contractAddress);
-
-        if (g_BCOSConfig.version() >= V2_5_0 && !checkPermission(context, tableName, origin))
-        {
-            PRECOMPILED_LOG(INFO) << LOG_BADGE("PermissionPrecompiled")
-                                  << LOG_DESC("only deployer of contract can revokeWrite")
-                                  << LOG_KV("tableName", tableName)
-                                  << LOG_KV("origin", origin.hex()) << LOG_KV("user", addr);
-            callResult->setExecResult(abi.abiIn("", s256(storage::CODE_NO_AUTHORIZED)));
-        }
-        else
-        {
-            PRECOMPILED_LOG(INFO) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("revokeWrite")
-                                  << LOG_KV("tableName", tableName) << LOG_KV("address", addr);
-            int result = revokeWritePermission(context, tableName, addr, origin);
-            callResult->setExecResult(abi.abiIn("", s256(result)));
-        }
+        int result = revokeWritePermission(context, tableName, addr, origin);
+        callResult->setExecResult(abi.abiIn("", s256(result)));
     }
     else if (func == name2Selector[AUP_METHOD_QUERY_CONTRACT])
     {  // queryPermission(address)
@@ -298,15 +284,20 @@ int PermissionPrecompiled::revokeWritePermission(
     {
         PRECOMPILED_LOG(WARNING) << LOG_BADGE("PermissionPrecompiled")
                                  << LOG_DESC("tableName and address does not exist");
-        result = CODE_TABLE_AND_ADDRESS_NOT_EXIST;
+        return result = CODE_TABLE_AND_ADDRESS_NOT_EXIST;
     }
-    else
+    if (g_BCOSConfig.version() >= V2_5_0 && !checkPermission(context, tableName, origin))
     {
-        int count = table->remove(tableName, condition, std::make_shared<AccessOptions>(origin));
-        result = count;
-        PRECOMPILED_LOG(INFO) << LOG_DESC("PermissionPrecompiled revoke")
-                              << LOG_KV("return", result);
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("PermissionPrecompiled")
+                              << LOG_DESC("only deployer of contract can revokeWrite")
+                              << LOG_KV("tableName", tableName) << LOG_KV("origin", origin.hex())
+                              << LOG_KV("user", user);
+        return storage::CODE_NO_AUTHORIZED;
     }
+    result = table->remove(tableName, condition, std::make_shared<AccessOptions>(origin));
+    PRECOMPILED_LOG(INFO) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("revokeWrite")
+                          << LOG_KV("tableName", tableName) << LOG_KV("user", user)
+                          << LOG_KV("return", result);
     return result;
 }
 

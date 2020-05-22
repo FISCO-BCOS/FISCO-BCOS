@@ -26,6 +26,7 @@ list(APPEND CMAKE_MODULE_PATH ${FISCO_BCOS_CMAKE_DIR})
 project(FISCO-BCOS VERSION "2.5.0")
 # Suffix like "-rc1" e.t.c. to append to versions wherever needed.
 set(VERSION_SUFFIX "")
+set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum OS X deployment version")
 
 find_package(Git QUIET)
 if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
