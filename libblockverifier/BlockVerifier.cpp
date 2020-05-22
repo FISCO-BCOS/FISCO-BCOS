@@ -167,10 +167,12 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
     block.header().setStateRoot(stateRoot);
     block.header().setDBhash(executiveContext->getMemoryTableFactory()->hash());
 
-    /// if executeBlock is called by consensus module, no need to compare receiptRoot and stateRoot
-    /// since origin value is empty if executeBlock is called by sync module, need to compare
-    /// receiptRoot, stateRoot and dbHash
-    if (tmpHeader.receiptsRoot() != h256() && tmpHeader.stateRoot() != h256())
+    // if executeBlock is called by consensus module, no need to compare receiptRoot and stateRoot
+    // since origin value is empty if executeBlock is called by sync module, need to compare
+    // receiptRoot, stateRoot and dbHash
+    // Consensus module execute block, receiptRoot is empty, skip this judgment
+    // The sync module execute block, receiptRoot is not empty, need to compare BlockHeader
+    if (tmpHeader.receiptsRoot() != h256())
     {
         if (tmpHeader != block.blockHeader())
         {
@@ -328,8 +330,9 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     block.header().setDBhash(executiveContext->getMemoryTableFactory()->hash());
     auto setStateRoot_time_cost = utcTime() - record_time;
     record_time = utcTime();
-
-    if (tmpHeader.receiptsRoot() != h256() && tmpHeader.stateRoot() != h256())
+    // Consensus module execute block, receiptRoot is empty, skip this judgment
+    // The sync module execute block, receiptRoot is not empty, need to compare BlockHeader
+    if (tmpHeader.receiptsRoot() != h256())
     {
         if (tmpHeader != block.blockHeader())
         {
