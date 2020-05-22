@@ -76,7 +76,8 @@ void Host::startAccept(boost::system::error_code boost_error)
         auto socket = m_asioInterface->newSocket(NodeIPEndpoint());
         // get and set the accepted endpoint to socket(client endpoint)
         /// define callback after accept connections
-        m_asioInterface->asyncAccept(socket,
+        m_asioInterface->asyncAccept(
+            socket,
             [=](boost::system::error_code ec) {
                 /// get the endpoint information of remote client after accept the connections
                 auto endpoint = socket->remoteEndpoint();
@@ -531,5 +532,8 @@ void Host::stop()
     m_run = false;
     m_asioInterface->stop();
     m_hostThread->join();
-    m_threadPool->stop();
+    if (m_threadPool)
+    {
+        m_threadPool->stop();
+    }
 }
