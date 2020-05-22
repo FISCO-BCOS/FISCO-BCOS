@@ -680,7 +680,8 @@ void SyncMaster::maintainBlockRequest()
             int64_t numberLimit = req.fromNumber + req.size;
             SYNC_LOG(DEBUG) << LOG_BADGE("Download Request: response blocks")
                             << LOG_KV("from", req.fromNumber) << LOG_KV("size", req.size)
-                            << LOG_KV("numberLimit", numberLimit);
+                            << LOG_KV("numberLimit", numberLimit)
+                            << LOG_KV("peer", _p->nodeId.abridged());
             // Send block at sequence
             for (; number < numberLimit && utcSteadyTime() <= timeout; number++)
             {
@@ -700,15 +701,16 @@ void SyncMaster::maintainBlockRequest()
                 {
                     SYNC_LOG(INFO)
                         << LOG_BADGE("maintainBlockRequest")
-                        << LOG_DESC("stop responding block for over the channel bandwidth limit");
+                        << LOG_DESC("stop responding block for over the channel bandwidth limit")
+                        << LOG_KV("peer", _p->nodeId.abridged());
                     break;
                 }
                 // over the network-bandwidth-limiter
                 if (m_bandwidthLimiter && !m_bandwidthLimiter->tryAcquire(requiredPermits))
                 {
-                    SYNC_LOG(INFO)
-                        << LOG_BADGE("maintainBlockRequest")
-                        << LOG_DESC("stop responding block for over the bandwidth limit");
+                    SYNC_LOG(INFO) << LOG_BADGE("maintainBlockRequest")
+                                   << LOG_DESC("stop responding block for over the bandwidth limit")
+                                   << LOG_KV("peer", _p->nodeId.abridged());
                     break;
                 }
                 SYNC_LOG(INFO) << LOG_BADGE("Download") << LOG_BADGE("Request")
