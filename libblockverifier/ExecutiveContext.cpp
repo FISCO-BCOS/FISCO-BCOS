@@ -184,8 +184,24 @@ std::shared_ptr<std::vector<std::string>> ExecutiveContext::getTxCriticals(const
     else
     {
         uint32_t selector = m_parallelConfigPrecompiled->getParamFunc(ref(_tx.data()));
-        auto config = m_parallelConfigPrecompiled->getParallelConfig(
-            shared_from_this(), _tx.receiveAddress(), selector, _tx.sender());
+
+        auto receiveAddress = _tx.receiveAddress();
+        std::shared_ptr<dev::precompiled::ParallelConfig> config = nullptr;
+        // hit the cache, fetch ParallelConfig from the cache directly
+        // Note: Only when initializing DAG, get ParallelConfig, will not get ParallelConfig during
+        // transaction execution
+        auto parallelKey = std::make_pair(receiveAddress, selector);
+        if (m_parallelConfigCache.count(parallelKey))
+        {
+            config = m_parallelConfigCache[parallelKey];
+        }
+        // miss the cache, fetch ParallelConfig from the table and cache the config
+        else
+        {
+            config = m_parallelConfigPrecompiled->getParallelConfig(
+                shared_from_this(), receiveAddress, selector, _tx.sender());
+            m_parallelConfigCache.insert(std::make_pair(parallelKey, config));
+        }
 
         if (config == nullptr)
         {
