@@ -79,5 +79,9 @@ bool RPCQPSLimiter::acquireFromGroup(dev::GROUP_ID const& _groupId, int64_t cons
 
 void RPCQPSLimiter::acquireWithoutWait(int64_t _requiredPermits)
 {
+    if (!m_rpcQPSLimiter)
+    {
+        return;
+    }
     m_rpcQPSLimiter->acquireWithoutWait(_requiredPermits);
 }
