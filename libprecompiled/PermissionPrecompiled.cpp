@@ -144,7 +144,7 @@ PrecompiledExecResult::Ptr PermissionPrecompiled::call(
 
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("remove func")
                                << LOG_KV("tableName", tableName) << LOG_KV("address", addr);
-        int result = revokeWritePermission(context, tableName, addr, origin);
+        int result = revokeTablePermission(context, tableName, addr, origin);
         getErrorCodeOut(callResult->mutableExecResult(), result);
     }
     else if (func == name2Selector[AUP_METHOD_QUE])
@@ -224,7 +224,7 @@ PrecompiledExecResult::Ptr PermissionPrecompiled::call(
         abi.abiOut(data, contractAddress, user);
         string addr = user.hexPrefixed();
         string tableName = precompiled::getContractTableName(contractAddress);
-        int result = revokeWritePermission(context, tableName, addr, origin);
+        int result = revokeContractTablePermission(context, tableName, addr, origin);
         callResult->setExecResult(abi.abiIn("", s256(result)));
     }
     else if (func == name2Selector[AUP_METHOD_QUERY_CONTRACT])
@@ -273,7 +273,7 @@ string PermissionPrecompiled::queryPermission(
 
 int PermissionPrecompiled::revokeWritePermission(
     std::shared_ptr<dev::blockverifier::ExecutiveContext> context, const string& tableName,
-    const string& user, Address const& origin)
+    const string& user, Address const& origin, bool _isContractTable)
 {
     int result;
     Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
@@ -286,7 +286,8 @@ int PermissionPrecompiled::revokeWritePermission(
                                  << LOG_DESC("tableName and address does not exist");
         return result = CODE_TABLE_AND_ADDRESS_NOT_EXIST;
     }
-    if (g_BCOSConfig.version() >= V2_5_0 && !checkPermission(context, tableName, origin))
+    if (g_BCOSConfig.version() >= V2_5_0 && _isContractTable &&
+        !checkPermission(context, tableName, origin))
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("PermissionPrecompiled")
                               << LOG_DESC("only deployer of contract can revokeWrite")
