@@ -134,28 +134,6 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
             ForbidNegativeValue() << errinfo_comment("Please set chain.id to positive!"));
     }
     g_BCOSConfig.setChainId(chainId);
-
-    if (g_BCOSConfig.diskEncryption.enable)
-    {
-        auto cipherDataKey = _pt.get<string>(sectionName + ".cipher_data_key", "");
-        if (cipherDataKey.empty())
-        {
-            BOOST_THROW_EXCEPTION(
-                MissingField() << errinfo_comment("Please provide cipher_data_key!"));
-        }
-        KeyCenter keyClient;
-        keyClient.setIpPort(
-            g_BCOSConfig.diskEncryption.keyCenterIP, g_BCOSConfig.diskEncryption.keyCenterPort);
-        g_BCOSConfig.diskEncryption.cipherDataKey = cipherDataKey;
-        g_BCOSConfig.diskEncryption.dataKey = asString(keyClient.getDataKey(cipherDataKey));
-        INITIALIZER_LOG(INFO) << LOG_BADGE("initKeyManager")
-                              << LOG_KV("url.IP", g_BCOSConfig.diskEncryption.keyCenterIP)
-                              << LOG_KV("url.port",
-                                     to_string(g_BCOSConfig.diskEncryption.keyCenterPort));
-    }
-    bool enableStat = _pt.get<bool>("log.enable_statistic", false);
-    g_BCOSConfig.setEnableStat(enableStat);
-
     if (g_BCOSConfig.version() >= V2_5_0)
     {
         bool useSMCrypto = _pt.get<bool>("chain.sm_crypto", false);
@@ -179,6 +157,26 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
         }
     }
 
+    if (g_BCOSConfig.diskEncryption.enable)
+    {
+        auto cipherDataKey = _pt.get<string>(sectionName + ".cipher_data_key", "");
+        if (cipherDataKey.empty())
+        {
+            BOOST_THROW_EXCEPTION(
+                MissingField() << errinfo_comment("Please provide cipher_data_key!"));
+        }
+        KeyCenter keyClient;
+        keyClient.setIpPort(
+            g_BCOSConfig.diskEncryption.keyCenterIP, g_BCOSConfig.diskEncryption.keyCenterPort);
+        g_BCOSConfig.diskEncryption.cipherDataKey = cipherDataKey;
+        g_BCOSConfig.diskEncryption.dataKey = asString(keyClient.getDataKey(cipherDataKey));
+        INITIALIZER_LOG(INFO) << LOG_BADGE("initKeyManager")
+                              << LOG_KV("url.IP", g_BCOSConfig.diskEncryption.keyCenterIP)
+                              << LOG_KV("url.port",
+                                     to_string(g_BCOSConfig.diskEncryption.keyCenterPort));
+    }
+    bool enableStat = _pt.get<bool>("log.enable_statistic", false);
+    g_BCOSConfig.setEnableStat(enableStat);
     g_BCOSConfig.binaryInfo.version += g_BCOSConfig.SMCrypto() ? " gm" : "";
 
     INITIALIZER_LOG(INFO) << LOG_BADGE("initGlobalConfig")
