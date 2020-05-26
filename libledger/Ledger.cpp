@@ -191,7 +191,8 @@ bool Ledger::initTxPool()
         return false;
     }
     auto txPool = std::make_shared<dev::txpool::TxPool>(
-        m_service, m_blockChain, protocol_id, m_param->mutableTxPoolParam().txPoolLimit);
+        m_service, m_blockChain, protocol_id, m_param->mutableTxPoolParam().txPoolLimit,
+        m_param->mutableTxPoolParam().notifyWorkerNum);
     txPool->setMaxBlockLimit(g_BCOSConfig.c_blockLimit);
     txPool->setMaxMemoryLimit(m_param->mutableTxPoolParam().maxTxPoolMemorySize);
     m_txPool = txPool;
