@@ -301,6 +301,10 @@ PrepareReq::Ptr PBFTEngine::constructPrepareReq(dev::eth::Block::Ptr _block)
     *engineBlock = std::move(*_block);
     PrepareReq::Ptr prepareReq = std::make_shared<PrepareReq>(
         engineBlock, m_keyPair, m_view, nodeIdx(), m_enablePrepareWithTxsHash);
+    if (prepareReq->pBlock->transactions()->size() == 0)
+    {
+        prepareReq->isEmpty = true;
+    }
     // the non-empty block only broadcast hash when enable-prepare-with-txs-hash
     if (m_enablePrepareWithTxsHash && prepareReq->pBlock->transactions()->size() > 0)
     {
