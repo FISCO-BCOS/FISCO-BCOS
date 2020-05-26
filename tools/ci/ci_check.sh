@@ -34,7 +34,7 @@ send_transaction()
     if [ ${is_raft} -eq 0 ];then
         sleep 2
     else
-        sleep 8
+        sleep 10
     fi
     LOG_INFO "==============send a transaction is ok"
 }
@@ -46,7 +46,7 @@ check_reports()
     local errorMessage=$3
     local successdMessage=$4
     local total=$(cat node*/log/* | grep Report | grep "num=${num}" | wc -l)
-    if [ ${total} -ne 4 ]; then
+    if [ "${total}" -ne "${target}" ]; then
         LOG_ERROR "${errorMessage} ${total} != ${target}"
         cat node*/log/*
         cat node*/nohup.out

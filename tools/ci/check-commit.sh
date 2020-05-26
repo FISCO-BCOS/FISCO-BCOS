@@ -11,7 +11,7 @@ SHELL_FOLDER=$(
     pwd
 )
 
-check_script=${SHELL_FOLDER}/run-clang-format.py
+check_script="clang-format-9"
 commit_limit=6
 file_limit=35
 insert_limit=300
@@ -46,7 +46,7 @@ function check_codeFormat() {
     exec 1>&2
     sum=0
     for file in $(git diff-index --name-status HEAD^ -- | grep -v D | grep -E '\.[ch](pp)?$' | awk '{print $2}'); do
-        execute_cmd "$check_script $file"
+        execute_cmd "$check_script -style=file -i $file"
         sum=$(expr ${sum} + $?)
     done
 
