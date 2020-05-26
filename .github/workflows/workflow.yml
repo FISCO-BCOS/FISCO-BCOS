@@ -29,6 +29,9 @@ jobs:
       - uses: actions/checkout@v2
         with:
           fetch-depth: 5
+      - name: check commit
+        if: ${{ runner.os == 'Linux' && github.base_ref != 'master' && github.event_name == 'pull_request' }}
+        run: bash tools/ci/check-commit.sh
       - uses: actions/cache@v1.1.2
         id: cache
         with:
@@ -107,9 +110,6 @@ jobs:
       - uses: actions/checkout@v2
         with:
           fetch-depth: 5
-      - name: check commit
-        if: ${{ github.base_ref != 'master' && github.event_name == 'pull_request' }}
-        run: bash tools/ci/check-commit.sh
       - uses: actions/cache@v1.1.2
         id: cache
         with:

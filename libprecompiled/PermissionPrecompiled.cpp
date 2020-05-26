@@ -83,7 +83,7 @@ PrecompiledExecResult::Ptr PermissionPrecompiled::call(
                 result = CODE_COMMITTEE_PERMISSION;
                 PRECOMPILED_LOG(WARNING)
                     << LOG_BADGE("PermissionPrecompiled")
-                    << LOG_DESC("Committee permission control by ChainGovernancePrecompiled")
+                    << LOG_DESC("Committee permission controlled by ChainGovernancePrecompiled")
                     << LOG_KV("return", result);
                 break;
             }
