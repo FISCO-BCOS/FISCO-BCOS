@@ -232,7 +232,7 @@ h256 MemoryTableFactory2::hash()
                 {
 #if FISCO_DEBUG
                     STORAGE_LOG(DEBUG) << LOG_BADGE("FISCO_DEBUG")
-                                       << LOG_BADGE("MemoryTableFactory2 hash continued ") << it
+                                       << LOG_BADGE("MemoryTableFactory2 hash continued ") << it + 1
                                        << "/" << tables.size() << LOG_KV("tableName", table.first)
                                        << LOG_KV("blockNum", m_blockNum);
 #endif
@@ -243,7 +243,7 @@ h256 MemoryTableFactory2::hash()
                 memcpy(&data[it * 32], &tableHash[0], tableHash.size());
 #if FISCO_DEBUG
                 STORAGE_LOG(DEBUG)
-                    << LOG_BADGE("FISCO_DEBUG") << LOG_BADGE("MemoryTableFactory2 hash ") << it
+                    << LOG_BADGE("FISCO_DEBUG") << LOG_BADGE("MemoryTableFactory2 hash ") << it + 1
                     << "/" << tables.size() << LOG_KV("tableName", table.first)
                     << LOG_KV("hash", hash) << LOG_KV("blockNum", m_blockNum);
 #endif

@@ -22,6 +22,7 @@
 #include "ExecutiveContext.h"
 #include "TxDAG.h"
 #include "libstorage/StorageException.h"
+#include "libstoragestate/StorageState.h"
 #include <libethcore/Exceptions.h>
 #include <libethcore/PrecompiledContract.h>
 #include <libethcore/TransactionReceipt.h>
@@ -165,7 +166,14 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
     block.updateSequenceReceiptGas();
     block.calReceiptRoot();
     block.header().setStateRoot(stateRoot);
-    block.header().setDBhash(executiveContext->getMemoryTableFactory()->hash());
+    if (dynamic_pointer_cast<storagestate::StorageState>(executiveContext->getState()))
+    {
+        block.header().setDBhash(stateRoot);
+    }
+    else
+    {
+        block.header().setDBhash(executiveContext->getMemoryTableFactory()->hash());
+    }
 
     // if executeBlock is called by consensus module, no need to compare receiptRoot and stateRoot
     // since origin value is empty if executeBlock is called by sync module, need to compare
@@ -327,7 +335,14 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     record_time = utcTime();
 
     block.header().setStateRoot(stateRoot);
-    block.header().setDBhash(executiveContext->getMemoryTableFactory()->hash());
+    if (dynamic_pointer_cast<storagestate::StorageState>(executiveContext->getState()))
+    {
+        block.header().setDBhash(stateRoot);
+    }
+    else
+    {
+        block.header().setDBhash(executiveContext->getMemoryTableFactory()->hash());
+    }
     auto setStateRoot_time_cost = utcTime() - record_time;
     record_time = utcTime();
     // Consensus module execute block, receiptRoot is empty, skip this judgment
