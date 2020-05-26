@@ -221,9 +221,17 @@ void LedgerParam::initTxPoolConfig(ptree const& pt)
         }
         mutableTxPoolParam().maxTxPoolMemorySize = memorySizeLimit * 1024 * 1024;
 
+        auto notifyWorkerNum = pt.get<int64_t>("tx_pool.notify_worker_num", 2);
+        if (notifyWorkerNum <= 0)
+        {
+            BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
+                                      "Please set tx_pool.notify_worker_num to positive !"));
+        }
+        mutableTxPoolParam().notifyWorkerNum = notifyWorkerNum;
         LedgerParam_LOG(INFO) << LOG_BADGE("initTxPoolConfig")
                               << LOG_KV("txPoolLimit", mutableTxPoolParam().txPoolLimit)
-                              << LOG_KV("memorySizeLimit(MB)", memorySizeLimit);
+                              << LOG_KV("memorySizeLimit(MB)", memorySizeLimit)
+                              << LOG_KV("notifyWorkerNum", notifyWorkerNum);
     }
     catch (std::exception& e)
     {

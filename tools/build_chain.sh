@@ -673,6 +673,9 @@ function generate_group_ini()
     limit=150000
     ; transaction pool memory size limit, MB
     memory_limit=512
+    ; number of threads responsible for transaction notification,
+    ; default is 2, not recommended for more than 8
+    notify_worker_num=2
 [sync]
     ; max memory size used for block sync, must >= 32MB
     max_block_sync_memory_size=512
