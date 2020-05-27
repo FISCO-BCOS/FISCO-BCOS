@@ -210,7 +210,8 @@ int MemoryTable2::update(
 
         m_recorder(shared_from_this(), Change::Update, key, records);
 
-        m_isDirty = true;
+        m_hashDirty = true;
+        m_dataDirty = true;
         return entries->size();
     }
     catch (std::invalid_argument& e)
@@ -259,7 +260,8 @@ int MemoryTable2::insert(const std::string& key, Entry::Ptr entry, AccessOptions
         std::vector<Change::Record> value{record};
         m_recorder(shared_from_this(), Change::Insert, key, value);
 
-        m_isDirty = true;
+        m_hashDirty = true;
+        m_dataDirty = true;
         return 1;
     }
     catch (std::invalid_argument& e)
@@ -310,7 +312,8 @@ int MemoryTable2::remove(
 
         m_recorder(shared_from_this(), Change::Remove, key, records);
 
-        m_isDirty = true;
+        m_hashDirty = true;
+        m_dataDirty = true;
         return entries->size();
     }
     catch (std::exception& e)
@@ -328,7 +331,7 @@ int MemoryTable2::remove(
 
 dev::h256 MemoryTable2::hash()
 {
-    if (m_isDirty)
+    if (m_hashDirty)
     {
         m_tableData.reset(new dev::storage::TableData());
         if (g_BCOSConfig.version() < V2_2_0)
@@ -347,7 +350,7 @@ dev::h256 MemoryTable2::hash()
 dev::storage::TableData::Ptr MemoryTable2::dumpWithoutOptimize()
 {
     TIME_RECORD("MemoryTable2 Dump");
-    if (m_isDirty)
+    if (m_hashDirty)
     {
         m_tableData = std::make_shared<dev::storage::TableData>();
         m_tableData->info = m_tableInfo;
@@ -431,7 +434,7 @@ dev::storage::TableData::Ptr MemoryTable2::dumpWithoutOptimize()
         {
             m_hash = dev::sha256(bR);
         }
-        m_isDirty = false;
+        m_hashDirty = false;
     }
 
     return m_tableData;
@@ -489,7 +492,7 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
 {
     // >= v2.2.0
     TIME_RECORD("MemoryTable2 Dump-" + m_tableInfo->name);
-    if (m_isDirty)
+    if (m_hashDirty)
     {
         tbb::atomic<size_t> allSize = 0;
 
@@ -566,7 +569,7 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
 
 
 #if FISCO_DEBUG
-            auto printEntries = [](Entries::Ptr entries) {
+            auto printEntries = [](const string& tableName, Entries::Ptr entries) {
                 if (entries->size() == 0)
                 {
                     STORAGE_LOG(DEBUG) << LOG_BADGE("FISCO_DEBUG") << " entries is empty!" << endl;
@@ -582,10 +585,11 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
                         ss << "[ " << it.first << "=" << it.second << " ]";
                     }
                 }
-                STORAGE_LOG(DEBUG) << LOG_BADGE("FISCO_DEBUG") << ss.str();
+                STORAGE_LOG(DEBUG)
+                    << LOG_BADGE("FISCO_DEBUG") << LOG_KV("TableName", tableName) << ss.str();
             };
-            printEntries(m_tableData->dirtyEntries);
-            printEntries(m_tableData->newEntries);
+            printEntries(m_tableData->info->name, m_tableData->dirtyEntries);
+            printEntries(m_tableData->info->name, m_tableData->newEntries);
 #endif
             auto writeDataT = utcTime() - startT;
             startT = utcTime();
@@ -623,7 +627,7 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
             STORAGE_LOG(DEBUG) << "Ignore sort and hash for: " << m_tableInfo->name
                                << " hash: " << m_hash.hex();
         }
-        m_isDirty = false;
+        m_hashDirty = false;
     }
 
     return m_tableData;

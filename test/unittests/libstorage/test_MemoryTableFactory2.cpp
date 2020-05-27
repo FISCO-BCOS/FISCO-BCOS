@@ -114,6 +114,9 @@ BOOST_AUTO_TEST_CASE(open_Table)
     entry->setField(SYS_KEY, SYS_KEY_CURRENT_NUMBER);
     table->insert(SYS_KEY_CURRENT_NUMBER, entry);
     memoryDBFactory->commitDB(h256(0), 2);
+    auto dbHash = memoryDBFactory->hash();
+    auto dbHash2 = memoryDBFactory->hash();
+    BOOST_TEST(dbHash == dbHash2);
 }
 
 BOOST_AUTO_TEST_CASE(parallel_openTable)

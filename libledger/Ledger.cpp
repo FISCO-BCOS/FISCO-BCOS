@@ -209,12 +209,8 @@ bool Ledger::initBlockVerifier()
         return false;
     }
 
-    bool enableParallel = false;
-    if (m_param->mutableTxParam().enableParallel)
-    {
-        enableParallel = true;
-    }
-    std::shared_ptr<BlockVerifier> blockVerifier = std::make_shared<BlockVerifier>(enableParallel);
+    std::shared_ptr<BlockVerifier> blockVerifier =
+        std::make_shared<BlockVerifier>(m_param->mutableTxParam().enableParallel);
     /// set params for blockverifier
     blockVerifier->setExecutiveContextFactory(m_dbInitializer->executiveContextFactory());
     std::shared_ptr<BlockChainImp> blockChain =
