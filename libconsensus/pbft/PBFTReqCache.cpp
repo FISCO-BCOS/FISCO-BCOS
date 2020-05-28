@@ -98,7 +98,7 @@ bool PBFTReqCache::checkViewChangeReq(ViewChangeReq::Ptr _req, int64_t const& _b
     // only store the newest viewChangeReq
     auto viewChangeReq = (*m_latestViewChangeReqCache)[_req->idx];
     // remove the cached viewChangeReq with older Height
-    if (viewChangeReq->height < _blockNumber)
+    if (viewChangeReq && viewChangeReq->height < _blockNumber)
     {
         eraseExpiredViewChange(viewChangeReq, _blockNumber);
         return true;
@@ -129,12 +129,12 @@ void PBFTReqCache::eraseExpiredViewChange(ViewChangeReq::Ptr _req, int64_t const
     if (m_latestViewChangeReqCache->count(_req->idx))
     {
         auto viewChangeReq = (*m_latestViewChangeReqCache)[_req->idx];
-        if (m_recvViewChangeReq.count(_req->view) &&
-            m_recvViewChangeReq[_req->view].count(_req->idx))
+        if (viewChangeReq && m_recvViewChangeReq.count(viewChangeReq->view) &&
+            m_recvViewChangeReq[viewChangeReq->view].count(_req->idx))
         {
-            if (viewChangeReq == m_recvViewChangeReq[_req->view][_req->idx])
+            if (viewChangeReq == m_recvViewChangeReq[viewChangeReq->view][_req->idx])
             {
-                m_recvViewChangeReq[_req->view].erase(_req->idx);
+                m_recvViewChangeReq[viewChangeReq->view].erase(_req->idx);
             }
             m_latestViewChangeReqCache->erase(_req->idx);
             PBFTReqCache_LOG(DEBUG)
@@ -387,5 +387,9 @@ void PBFTReqCache::triggerViewChange(VIEWTYPE const& curView, int64_t const& _hi
     removeInvalidViewChange(curView);
 }
 
+void PBFTReqCache::eraseLatestViewChangeCacheForNodeUpdated(ViewChangeReq const& _req)
+{
+    m_latestViewChangeReqCache->erase(_req.idx);
+}
 }  // namespace consensus
 }  // namespace dev
