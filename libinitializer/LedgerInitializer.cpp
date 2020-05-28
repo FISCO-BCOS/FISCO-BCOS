@@ -184,7 +184,10 @@ bool LedgerInitializer::initLedger(
     ledgerParams->init(_configFileName, _dataDir);
     bool succ = ledger->initLedger(ledgerParams);
     if (!succ)
+    {
         return false;
+    }
+
     m_ledgerManager->insertLedger(_groupId, ledger);
     return true;
 }
