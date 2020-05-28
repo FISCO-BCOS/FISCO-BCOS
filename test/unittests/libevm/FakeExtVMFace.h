@@ -22,7 +22,7 @@
 #include <libdevcrypto/Common.h>
 #include <libethcore/BlockHeader.h>
 #include <libethcore/LastBlockHashesFace.h>
-#include <libevm/ExtVMFace.h>
+#include <libevm/EVMHostInterface.h>
 #include <stdlib.h>
 #include <time.h>
 using namespace dev;
@@ -119,7 +119,7 @@ public:
     }
 };
 
-class FakeExtVM : public ExtVMFace
+class FakeExtVM : public EVMHostInterface
 {
 public:
     evmc_result call(CallParameters& param) override
@@ -139,7 +139,7 @@ public:
     }
 
     evmc_result create(
-        u256 const&, u256& io_gas, bytesConstRef, Instruction, u256, OnOpFunc const&) override
+        u256 const&, u256& io_gas, bytesConstRef, evmc_opcode, u256, OnOpFunc const&) override
     {
         u256 nonce = u256(00013443);
         Address m_newAddress = right160(crypto::Hash(rlpList(myAddress(), nonce)));
@@ -228,7 +228,7 @@ public:
     FakeExtVM(EnvInfo const& _envInfo, Address const& _myAddress, Address const& _caller,
         Address const& _origin, u256 const& _value, u256 const& _gasPrice, bytesConstRef _data,
         bytes _code, h256 const& _codeHash, unsigned _depth, bool _isCreate, bool _staticCall)
-      : ExtVMFace(_envInfo, _myAddress, _caller, _origin, _value, _gasPrice, _data, _code,
+      : EVMHostInterface(_envInfo, _myAddress, _caller, _origin, _value, _gasPrice, _data, _code,
             _codeHash, _depth, _isCreate, _staticCall)
     {
         account_map.insert(_myAddress);

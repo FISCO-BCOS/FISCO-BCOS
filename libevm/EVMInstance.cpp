@@ -14,13 +14,13 @@
     You should have received a copy of the GNU General Public License
     along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file EVMC.cpp
+/** @file EVMInstance.cpp
  * @author wheatli
  * @date 2018.8.28
  * @record copy from aleth, this is a vm interface
  */
 
-#include "EVMC.h"
+#include "EVMInstance.h"
 #include "VMFactory.h"
 
 
@@ -28,10 +28,10 @@ namespace dev
 {
 namespace eth
 {
-/// Error info for EVMC status code.
+/// Error info for EVMInstance status code.
 using errinfo_evmcStatusCode = boost::error_info<struct tag_evmcStatusCode, evmc_status_code>;
 
-EVM::EVM(evmc_instance* _instance) noexcept : m_instance(_instance)
+EVMInstance::EVMInstance(evmc_instance* _instance) noexcept : m_instance(_instance)
 {
     assert(m_instance != nullptr);
     // the abi_version of intepreter is EVMC_ABI_VERSION when callback VMFactory::create()
@@ -43,7 +43,7 @@ EVM::EVM(evmc_instance* _instance) noexcept : m_instance(_instance)
             m_instance->set_option(m_instance, pair.first.c_str(), pair.second.c_str());
 }
 
-owning_bytes_ref EVMC::exec(u256& io_gas, ExtVMFace& _ext, const OnOpFunc& _onOp)
+owning_bytes_ref EVMInstance::exec(u256& io_gas, EVMHostInterface& _ext, const OnOpFunc& _onOp)
 {
     // the block number will be larger than 0,
     // can be controlled by the programmers
@@ -55,7 +55,7 @@ owning_bytes_ref EVMC::exec(u256& io_gas, ExtVMFace& _ext, const OnOpFunc& _onOp
     //       used for gas, block number and timestamp.
     (void)int64max;
 
-    // gas, gasLimit are u256 outside of EVM
+    // gas, gasLimit are u256 outside of EVMInstance
     // and can be passed inside by the outsider-users
     // so we should remove the `assert`, and throw exceptions if this happend
     // *origin code:
@@ -70,11 +70,10 @@ owning_bytes_ref EVMC::exec(u256& io_gas, ExtVMFace& _ext, const OnOpFunc& _onOp
         BOOST_THROW_EXCEPTION(GasOverflow());
     }
 
-
     assert(_ext.depth() <= static_cast<size_t>(std::numeric_limits<int32_t>::max()));
 
     auto gas = static_cast<int64_t>(io_gas);
-    EVM::Result r = execute(_ext, gas);
+    EVMInstance::Result r = execute(_ext, gas);
 
     switch (r.status())
     {
@@ -112,7 +111,8 @@ owning_bytes_ref EVMC::exec(u256& io_gas, ExtVMFace& _ext, const OnOpFunc& _onOp
         BOOST_THROW_EXCEPTION(DisallowedStateChange());
 
     case EVMC_REJECTED:
-        LOG(WARNING) << "Execution rejected by EVMC, executing with default VM implementation";
+        LOG(WARNING)
+            << "Execution rejected by EVMInstance, executing with default VM implementation";
         return VMFactory::create(VMKind::Interpreter)->exec(io_gas, _ext, _onOp);
 
     case EVMC_INTERNAL_ERROR:

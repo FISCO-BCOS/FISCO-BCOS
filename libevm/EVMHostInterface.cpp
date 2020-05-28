@@ -14,13 +14,13 @@
     You should have received a copy of the GNU General Public License
     along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file ExtVMFace.cpp
+/** @file EVMHostInterface.cpp
  * @author wheatli
  * @date 2018.8.28
  * @record copy from aleth, this is a vm interface
  */
 
-#include "ExtVMFace.h"
+#include "EVMHostInterface.h"
 #include <evmc/helpers.h>
 #include <libblockverifier/ExecutiveContext.h>
 namespace dev
@@ -36,7 +36,7 @@ static_assert(alignof(h256) == alignof(evmc_uint256be), "Hash types alignment mi
 
 int accountExists(evmc_context* _context, evmc_address const* _addr) noexcept
 {
-    auto& env = static_cast<ExtVMFace&>(*_context);
+    auto& env = static_cast<EVMHostInterface&>(*_context);
     Address addr = fromEvmC(*_addr);
     return env.exists(addr) ? 1 : 0;
 }
@@ -45,7 +45,7 @@ void getStorage(evmc_uint256be* o_result, evmc_context* _context, evmc_address c
     evmc_uint256be const* _key)
 {
     (void)_addr;
-    auto& env = static_cast<ExtVMFace&>(*_context);
+    auto& env = static_cast<EVMHostInterface&>(*_context);
 
     // programming assert for debug
     assert(fromEvmC(*_addr) == env.myAddress());
@@ -57,7 +57,7 @@ evmc_storage_status setStorage(evmc_context* _context, evmc_address const* _addr
     evmc_uint256be const* _key, evmc_uint256be const* _value)
 {
     (void)_addr;
-    auto& env = static_cast<ExtVMFace&>(*_context);
+    auto& env = static_cast<EVMHostInterface&>(*_context);
     if (!env.isPermitted())
     {
         BOOST_THROW_EXCEPTION(PermissionDenied());
@@ -85,19 +85,19 @@ evmc_storage_status setStorage(evmc_context* _context, evmc_address const* _addr
 void getBalance(
     evmc_uint256be* o_result, evmc_context* _context, evmc_address const* _addr) noexcept
 {
-    auto& env = static_cast<ExtVMFace&>(*_context);
+    auto& env = static_cast<EVMHostInterface&>(*_context);
     *o_result = toEvmC(env.balance(fromEvmC(*_addr)));
 }
 
 size_t getCodeSize(evmc_context* _context, evmc_address const* _addr)
 {
-    auto& env = static_cast<ExtVMFace&>(*_context);
+    auto& env = static_cast<EVMHostInterface&>(*_context);
     return env.codeSizeAt(fromEvmC(*_addr));
 }
 
 void getCodeHash(evmc_uint256be* o_result, evmc_context* _context, evmc_address const* _addr)
 {
-    auto& env = static_cast<ExtVMFace&>(*_context);
+    auto& env = static_cast<EVMHostInterface&>(*_context);
     *o_result = toEvmC(env.codeHashAt(fromEvmC(*_addr)));
 }
 
@@ -116,7 +116,7 @@ void getCodeHash(evmc_uint256be* o_result, evmc_context* _context, evmc_address 
 size_t copyCode(evmc_context* _context, evmc_address const* _addr, size_t _codeOffset,
     byte* _bufferData, size_t _bufferSize)
 {
-    auto& env = static_cast<ExtVMFace&>(*_context);
+    auto& env = static_cast<EVMHostInterface&>(*_context);
     Address addr = fromEvmC(*_addr);
     bytes const& code = env.codeAt(addr);
 
@@ -134,7 +134,7 @@ void selfdestruct(
     evmc_context* _context, evmc_address const* _addr, evmc_address const* _beneficiary) noexcept
 {
     (void)_addr;
-    auto& env = static_cast<ExtVMFace&>(*_context);
+    auto& env = static_cast<EVMHostInterface&>(*_context);
     assert(fromEvmC(*_addr) == env.myAddress());
     env.suicide(fromEvmC(*_beneficiary));
 }
@@ -144,7 +144,7 @@ void log(evmc_context* _context, evmc_address const* _addr, uint8_t const* _data
     evmc_uint256be const _topics[], size_t _numTopics) noexcept
 {
     (void)_addr;
-    auto& env = static_cast<ExtVMFace&>(*_context);
+    auto& env = static_cast<EVMHostInterface&>(*_context);
     assert(fromEvmC(*_addr) == env.myAddress());
     h256 const* pTopics = reinterpret_cast<h256 const*>(_topics);
     env.log(h256s{pTopics, pTopics + _numTopics}, bytesConstRef{_data, _dataSize});
@@ -152,7 +152,7 @@ void log(evmc_context* _context, evmc_address const* _addr, uint8_t const* _data
 
 void getTxContext(evmc_tx_context* result, evmc_context* _context) noexcept
 {
-    auto& env = static_cast<ExtVMFace&>(*_context);
+    auto& env = static_cast<EVMHostInterface&>(*_context);
     result->tx_gas_price = toEvmC(env.gasPrice());
     result->tx_origin = toEvmC(env.origin());
     result->block_number = env.envInfo().number();
@@ -162,19 +162,20 @@ void getTxContext(evmc_tx_context* result, evmc_context* _context) noexcept
 
 void getBlockHash(evmc_uint256be* o_hash, evmc_context* _envPtr, int64_t _number)
 {
-    auto& env = static_cast<ExtVMFace&>(*_envPtr);
+    auto& env = static_cast<EVMHostInterface&>(*_envPtr);
     *o_hash = toEvmC(env.blockHash(_number));
 }
 
-void create(evmc_result* o_result, ExtVMFace& _env, evmc_message const* _msg) noexcept
+void create(evmc_result* o_result, EVMHostInterface& _env, evmc_message const* _msg) noexcept
 {
     u256 gas = _msg->gas;
     u256 value = fromEvmC(_msg->value);
     bytesConstRef init = {_msg->input_data, _msg->input_size};
     u256 salt = fromEvmC(_msg->create2_salt);
-    Instruction opcode = _msg->kind == EVMC_CREATE ? Instruction::CREATE : Instruction::CREATE2;
+    evmc_opcode opcode =
+        _msg->kind == EVMC_CREATE ? evmc_opcode::OP_CREATE : evmc_opcode::OP_CREATE2;
 
-    // ExtVM::create takes the sender address from .myAddress().
+    // EVMHostContext::create takes the sender address from .myAddress().
     assert(fromEvmC(_msg->sender) == _env.myAddress());
 
     *o_result = _env.create(value, gas, init, opcode, salt, {});
@@ -192,7 +193,7 @@ void call(evmc_result* o_result, evmc_context* _context, evmc_message const* _ms
         BOOST_THROW_EXCEPTION(GasOverflow());
     }
 
-    auto& env = static_cast<ExtVMFace&>(*_context);
+    auto& env = static_cast<EVMHostInterface&>(*_context);
 
     // Handle CREATE separately.
     if (_msg->kind == EVMC_CREATE || _msg->kind == EVMC_CREATE2)
@@ -229,9 +230,10 @@ evmc_context_fn_table const fnTable = {
 };
 }  // namespace
 
-ExtVMFace::ExtVMFace(EnvInfo const& _envInfo, Address const& _myAddress, Address const& _caller,
-    Address const& _origin, u256 const& _value, u256 const& _gasPrice, bytesConstRef _data,
-    bytes _code, h256 const& _codeHash, unsigned _depth, bool _isCreate, bool _staticCall)
+EVMHostInterface::EVMHostInterface(EnvInfo const& _envInfo, Address const& _myAddress,
+    Address const& _caller, Address const& _origin, u256 const& _value, u256 const& _gasPrice,
+    bytesConstRef _data, bytes _code, h256 const& _codeHash, unsigned _depth, bool _isCreate,
+    bool _staticCall)
   : evmc_context{&fnTable, 0},
     m_envInfo(_envInfo),
     m_myAddress(_myAddress),
