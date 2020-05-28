@@ -87,6 +87,17 @@ bool Ledger::initLedger(std::shared_ptr<LedgerParamInterface> _ledgerParams)
         // init network statistic handler
         initNetworkStatHandler();
     }
+
+    auto channelRPCServer = std::weak_ptr<dev::ChannelRPCServer>(m_channelRPCServer);
+    m_handler = blockChain->onReady([this, channelRPCServer](int64_t number) {
+        LOG(INFO) << "Push block notify: " << std::to_string(m_groupId) << "-" << number;
+        auto channelRpcServer = channelRPCServer.lock();
+        if (channelRpcServer)
+        {
+            channelRpcServer->blockNotify(m_groupId, number);
+        }
+    });
+
     /// init blockVerifier, txPool, sync and consensus
     return (initBlockVerifier() && initTxPool() && initSync() && consensusInitFactory() &&
             initEventLogFilterManager());
