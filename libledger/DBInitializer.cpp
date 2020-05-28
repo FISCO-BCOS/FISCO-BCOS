@@ -99,6 +99,9 @@ void DBInitializer::initStorageDB()
     {
         auto storage = initScalableStorage(m_param);
         initTableFactory2(storage, m_param);
+        // reset block number after recover from binlog
+        std::string blocksDBPath = m_param->mutableStorageParam().path + "/blocksDB";
+        setRemoteBlockNumber(std::dynamic_pointer_cast<ScalableStorage>(storage), blocksDBPath);
     }
     else
     {
@@ -362,7 +365,6 @@ dev::storage::Storage::Ptr DBInitializer::initScalableStorage(
         blockNumber = blockNumber > 0 ? blockNumber + 1 : 0;
         auto archiveStorage = rocksDBStorageFactory->getStorage(to_string(blockNumber));
         scalableStorage->setArchiveStorage(archiveStorage, blockNumber);
-        setRemoteBlockNumber(scalableStorage, blocksDBPath);
 
         return scalableStorage;
     }

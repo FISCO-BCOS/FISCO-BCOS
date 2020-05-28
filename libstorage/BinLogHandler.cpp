@@ -379,7 +379,7 @@ void BinLogHandler::encodeBlock(
 }
 
 uint32_t BinLogHandler::decodeEntries(const bytes& buffer, uint32_t& offset,
-    const std::vector<std::string>& vecField, Entries::Ptr entries)
+    const std::vector<std::string>& vecField, Entries::Ptr entries, bool force)
 {
     uint32_t preOffset = offset;
     uint32_t entryCount = readUINT32(buffer, offset);
@@ -403,6 +403,10 @@ uint32_t BinLogHandler::decodeEntries(const bytes& buffer, uint32_t& offset,
             std::string value;
             readString(buffer, value, offset);
             entry->setField(key, value);
+        }
+        if (force)
+        {
+            entry->setForce(true);
         }
         entries->addEntry(entry);
     }
@@ -459,8 +463,9 @@ DecodeBlockResult BinLogHandler::decodeBlock(const bytes& buffer, int64_t startN
         {
             vecField.push_back(field);
         }
-        decodeEntries(buffer, offset, vecField, data->dirtyEntries);
-        decodeEntries(buffer, offset, vecField, data->newEntries);
+        bool force = (data->info->name == SYS_BLOCK_2_NONCES || data->info->name == SYS_HASH_2_BLOCK);
+        decodeEntries(buffer, offset, vecField, data->dirtyEntries, force);
+        decodeEntries(buffer, offset, vecField, data->newEntries, force);
         datas.push_back(data);
     }
 
