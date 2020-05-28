@@ -14,34 +14,24 @@
     You should have received a copy of the GNU General Public License
     along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file VMFace.h
+/** @file EVMHostContext.cpp
  * @author wheatli
  * @date 2018.8.28
  * @record copy from aleth, this is a vm interface
  */
 
-#pragma once
+#include "Common.h"
+#include <evmc/helpers.h>
+#include <libblockverifier/ExecutiveContext.h>
 
-#include "libevm/EVMHostContext.h"
-#include <evmc/instructions.h>
-#include <libethcore/Exceptions.h>
-#include <memory>
+using namespace dev;
 
-namespace dev
+std::shared_ptr<dev::blockverifier::ExecutiveContext> eth::EnvInfo::precompiledEngine() const
 {
-namespace eth
+    return m_executiveEngine;
+}
+void eth::EnvInfo::setPrecompiledEngine(
+    std::shared_ptr<dev::blockverifier::ExecutiveContext> executiveEngine)
 {
-/// EVM Virtual Machine interface
-class VMFace
-{
-public:
-    VMFace() = default;
-    virtual ~VMFace() = default;
-    VMFace(VMFace const&) = delete;
-    VMFace& operator=(VMFace const&) = delete;
-
-    /// VM implementation
-    virtual owning_bytes_ref exec(u256& io_gas, EVMHostContext& _ext, OnOpFunc const& _onOp) = 0;
-};
-}  // namespace eth
-}  // namespace dev
+    m_executiveEngine = executiveEngine;
+}

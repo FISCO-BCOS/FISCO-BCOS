@@ -13,8 +13,8 @@
 */
 
 #include "Executive.h"
-#include "ExtVM.h"
 #include "StateFace.h"
+#include "libevm/EVMHostContext.h"
 
 #include <libdevcore/CommonIO.h>
 #include <libethcore/ABI.h>
@@ -221,9 +221,9 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
             {
                 bytes const& c = m_s->code(_p.codeAddress);
                 h256 codeHash = m_s->codeHash(_p.codeAddress);
-                m_ext = make_shared<ExtVM>(m_s, m_envInfo, _p.receiveAddress, _p.senderAddress,
-                    _origin, _p.apparentValue, _gasPrice, _p.data, &c, codeHash, m_depth, false,
-                    _p.staticCall);
+                m_ext = make_shared<EVMHostContext>(m_s, m_envInfo, _p.receiveAddress,
+                    _p.senderAddress, _origin, _p.apparentValue, _gasPrice, _p.data, &c, codeHash,
+                    m_depth, false, _p.staticCall);
             }
         }
         // Transfer ether.
@@ -343,8 +343,9 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
     {
         bytes const& c = m_s->code(_p.codeAddress);
         h256 codeHash = m_s->codeHash(_p.codeAddress);
-        m_ext = make_shared<ExtVM>(m_s, m_envInfo, _p.receiveAddress, _p.senderAddress, _origin,
-            _p.apparentValue, _gasPrice, _p.data, &c, codeHash, m_depth, false, _p.staticCall);
+        m_ext = make_shared<EVMHostContext>(m_s, m_envInfo, _p.receiveAddress, _p.senderAddress,
+            _origin, _p.apparentValue, _gasPrice, _p.data, &c, codeHash, m_depth, false,
+            _p.staticCall);
         m_ext->setEvmFlags(m_evmFlags);
     }
     else
@@ -453,8 +454,9 @@ bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u2
     // Schedule _init execution if not empty.
     if (!_init.empty())
     {
-        m_ext = make_shared<ExtVM>(m_s, m_envInfo, m_newAddress, _sender, _origin, _endowment,
-            _gasPrice, bytesConstRef(), _init, crypto::Hash(_init), m_depth, true, false);
+        m_ext =
+            make_shared<EVMHostContext>(m_s, m_envInfo, m_newAddress, _sender, _origin, _endowment,
+                _gasPrice, bytesConstRef(), _init, crypto::Hash(_init), m_depth, true, false);
         m_ext->setEvmFlags(m_evmFlags);
     }
     return !m_ext;
@@ -527,6 +529,7 @@ bool Executive::go(OnOpFunc const& _onOp)
 #if ETH_TIMED_EXECUTIONS
         Timer t;
 #endif
+        constexpr int64_t int64max = std::numeric_limits<int64_t>::max();
         try
         {
             // Create VM instance. Force Interpreter if tracing requested.
@@ -534,6 +537,18 @@ bool Executive::go(OnOpFunc const& _onOp)
             if (m_isCreation)
             {
                 m_s->clearStorage(m_ext->myAddress());
+                // the block number will be larger than 0,
+                // can be controlled by the programmers
+                assert(m_ext->envInfo().number() >= 0);
+                assert(m_ext->depth() <= static_cast<size_t>(std::numeric_limits<int32_t>::max()));
+
+                if (m_gas > int64max || m_ext->envInfo().gasLimit() > int64max)
+                {
+                    LOG(ERROR) << LOG_DESC("Gas overflow") << LOG_KV("gas", m_gas)
+                               << LOG_KV("gasLimit", m_ext->envInfo().gasLimit())
+                               << LOG_KV("max gas/gasLimit", int64max);
+                    BOOST_THROW_EXCEPTION(GasOverflow());
+                }
                 auto out = vm->exec(m_gas, *m_ext, _onOp);
 
                 m_res.gasForDeposit = m_gas;
@@ -574,7 +589,18 @@ bool Executive::go(OnOpFunc const& _onOp)
                 m_s->setCode(m_ext->myAddress(), out.toVector());
             }
             else
+            {
+                assert(m_ext->envInfo().number() >= 0);
+                assert(m_ext->depth() <= static_cast<size_t>(std::numeric_limits<int32_t>::max()));
+                if (m_gas > int64max || m_ext->envInfo().gasLimit() > int64max)
+                {
+                    LOG(ERROR) << LOG_DESC("Gas overflow") << LOG_KV("gas", m_gas)
+                               << LOG_KV("gasLimit", m_ext->envInfo().gasLimit())
+                               << LOG_KV("max gas/gasLimit", int64max);
+                    BOOST_THROW_EXCEPTION(GasOverflow());
+                }
                 m_output = vm->exec(m_gas, *m_ext, _onOp);
+            }
         }
         catch (RevertInstruction& _e)
         {
@@ -678,7 +704,7 @@ bool Executive::finalize()
 
 
     m_res.gasUsed = gasUsed();
-    m_res.excepted = m_excepted;  // TODO: m_except is used only in ExtVM::call
+    m_res.excepted = m_excepted;  // TODO: m_except is used only in EVMHostContext::call
     m_res.newAddress = m_newAddress;
     m_res.gasRefunded = m_ext ? m_ext->sub().refunds : 0;
 

@@ -20,7 +20,7 @@
 #include <libethcore/Exceptions.h>
 #include <libethcore/LastBlockHashesFace.h>
 #include <libevm/EVMC.h>
-#include <libexecutive/ExtVM.h>
+#include <libevm/EVMHostContext.h>
 #include <libexecutive/StateFace.h>
 #include <libinterpreter/interpreter.h>
 #include <libmptstate/MPTState.h>
