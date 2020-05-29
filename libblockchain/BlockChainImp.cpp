@@ -23,6 +23,7 @@
 
 #include "BlockChainImp.h"
 #include "libdevcrypto/CryptoInterface.h"
+#include "tbb/parallel_for_each.h"
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/CommonData.h>
 #include <libethcore/Block.h>
@@ -922,13 +923,12 @@ BlockChainImp::getTransactionByHashWithProof(dev::h256 const& _txHash)
 
     auto parent2ChildList = getParent2ChildListByTxsProofCache(blockInfo);
 
-    std::map<std::string, std::string> child2Parent;
-    parseMerkleMap(parent2ChildList, child2Parent);
+    auto child2Parent = getChild2ParentCacheByTransaction(parent2ChildList, blockInfo);
     // get merkle from  parent2ChildList and child2Parent
     bytes txData;
     tx->encode(txData);
     auto hashWithIndex = getHashNeed2Proof(tx->transactionIndex(), txData);
-    this->getMerkleProof(hashWithIndex, *parent2ChildList, child2Parent, merkleProof);
+    this->getMerkleProof(hashWithIndex, *parent2ChildList, *child2Parent, merkleProof);
     return std::make_pair(tx, merkleProof);
 }
 
@@ -953,23 +953,28 @@ dev::bytes BlockChainImp::getHashNeed2Proof(uint32_t index, const dev::bytes& da
 
 void BlockChainImp::parseMerkleMap(
     std::shared_ptr<std::map<std::string, std::vector<std::string>>> parent2ChildList,
-    std::map<std::string, std::string>& child2Parent)
+    Child2ParentMap& child2Parent)
 {
-    for (const auto& item : *parent2ChildList)
-    {
-        for (const auto& child : item.second)
-        {
-            if (!child.empty())
-            {
-                child2Parent[child] = item.first;
-            }
-        }
-    }
+    tbb::parallel_for_each(parent2ChildList->begin(), parent2ChildList->end(),
+        [&](std::pair<const std::string, std::vector<std::string>>& _childListIterator) {
+            auto childList = _childListIterator.second;
+            tbb::parallel_for(tbb::blocked_range<size_t>(0, childList.size()),
+                [&](const tbb::blocked_range<size_t>& range) {
+                    for (size_t i = 0; i < range.size(); i++)
+                    {
+                        std::string child = childList[i];
+                        if (!child.empty())
+                        {
+                            child2Parent[child] = _childListIterator.first;
+                        }
+                    }
+                });
+        });
 }
 
 void BlockChainImp::getMerkleProof(dev::bytes const& _txHash,
     const std::map<std::string, std::vector<std::string>>& parent2ChildList,
-    const std::map<std::string, std::string>& child2Parent,
+    const Child2ParentMap& child2Parent,
     std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>& merkleProof)
 {
     std::string merkleNode = toHex(_txHash);
@@ -1081,27 +1086,14 @@ BlockChainImp::getTransactionReceiptByHashWithProof(
 
     auto parent2ChildList = getParent2ChildListByReceiptProofCache(blockInfo);
 
-    std::map<std::string, std::string> child2Parent;
-    parseMerkleMap(parent2ChildList, child2Parent);
+    auto child2Parent = getChild2ParentCacheByReceipt(parent2ChildList, blockInfo);
     // get receipt hash with index
     bytes receiptData;
     txReceipt->encode(receiptData);
     auto hashWithIndex = getHashNeed2Proof(txReceipt->transactionIndex(), receiptData);
     // get merkle from  parent2ChildList and child2Parent
-    this->getMerkleProof(hashWithIndex, *parent2ChildList, child2Parent, merkleProof);
+    this->getMerkleProof(hashWithIndex, *parent2ChildList, *child2Parent, merkleProof);
     return std::make_pair(txReceipt, merkleProof);
-}
-
-std::shared_ptr<MerkleProofType> BlockChainImp::getProof(
-    std::shared_ptr<Parent2ChildListMap> _parent2ChildList, uint64_t const& _index,
-    const dev::bytes& _encodedData)
-{
-    std::shared_ptr<MerkleProofType> merkleProof = std::make_shared<MerkleProofType>();
-    std::map<std::string, std::string> child2Parent;
-    parseMerkleMap(_parent2ChildList, child2Parent);
-    auto hashWithIndex = getHashNeed2Proof(_index, _encodedData);
-    this->getMerkleProof(hashWithIndex, *_parent2ChildList, child2Parent, *merkleProof);
-    return merkleProof;
 }
 
 std::shared_ptr<Parent2ChildListMap> BlockChainImp::getParent2ChildListByReceiptProofCache(
@@ -1144,7 +1136,6 @@ std::shared_ptr<Parent2ChildListMap> BlockChainImp::getParent2ChildListByTxsProo
     {
         return m_transactionWithProof.second;
     }
-
     std::shared_ptr<Parent2ChildListMap> parent2ChildList = _block->getTransactionProof();
     m_transactionWithProof = std::make_pair(_block->blockHeader().number(), parent2ChildList);
     return parent2ChildList;
@@ -1161,7 +1152,14 @@ std::shared_ptr<MerkleProofType> BlockChainImp::getTransactionReceiptProof(
     auto parent2ChildList = getParent2ChildListByReceiptProofCache(_block);
     bytes encodedData;
     txReceipt->encode(encodedData);
-    return getProof(parent2ChildList, _index, encodedData);
+
+    // get merkle proof
+    std::shared_ptr<MerkleProofType> merkleProof = std::make_shared<MerkleProofType>();
+    auto child2Parent = getChild2ParentCacheByReceipt(parent2ChildList, _block);
+    auto hashWithIndex = getHashNeed2Proof(_index, encodedData);
+    this->getMerkleProof(hashWithIndex, *parent2ChildList, *child2Parent, *merkleProof);
+
+    return merkleProof;
 }
 
 std::shared_ptr<MerkleProofType> BlockChainImp::getTransactionProof(
@@ -1175,7 +1173,14 @@ std::shared_ptr<MerkleProofType> BlockChainImp::getTransactionProof(
     auto parent2ChildList = getParent2ChildListByTxsProofCache(_block);
     bytes encodedData;
     tx->encode(encodedData);
-    return getProof(parent2ChildList, _index, encodedData);
+    // get merkle proof
+    std::shared_ptr<MerkleProofType> merkleProof = std::make_shared<MerkleProofType>();
+    auto child2Parent = getChild2ParentCacheByTransaction(parent2ChildList, _block);
+
+    auto hashWithIndex = getHashNeed2Proof(_index, encodedData);
+
+    this->getMerkleProof(hashWithIndex, *parent2ChildList, *child2Parent, *merkleProof);
+    return merkleProof;
 }
 
 
@@ -1569,4 +1574,40 @@ void BlockChainImp::writeBytesToField(std::shared_ptr<dev::bytes> _data,
     {
         _entry->setField(_fieldName, toHexPrefixed(*_data));
     }
+}
+
+std::shared_ptr<Child2ParentMap> BlockChainImp::getChild2ParentCache(SharedMutex& _mutex,
+    std::pair<dev::eth::BlockNumber, std::shared_ptr<Child2ParentMap>>& _cache,
+    std::shared_ptr<Parent2ChildListMap> _parent2Child, dev::eth::Block::Ptr _block)
+{
+    UpgradableGuard l(_mutex);
+    if (_cache.second && _cache.first == _block->blockHeader().number())
+    {
+        return _cache.second;
+    }
+    UpgradeGuard ul(l);
+    // After preempting the write lock, judge again whether m_receiptWithProof has been updated
+    // to prevent lock competition
+    if (_cache.second && _cache.first == _block->blockHeader().number())
+    {
+        return _cache.second;
+    }
+    std::shared_ptr<Child2ParentMap> child2Parent = std::make_shared<Child2ParentMap>();
+    parseMerkleMap(_parent2Child, *child2Parent);
+    _cache = std::make_pair(_block->blockHeader().number(), child2Parent);
+    return child2Parent;
+}
+
+std::shared_ptr<Child2ParentMap> BlockChainImp::getChild2ParentCacheByReceipt(
+    std::shared_ptr<Parent2ChildListMap> _parent2ChildList, dev::eth::Block::Ptr _block)
+{
+    return getChild2ParentCache(
+        x_receiptChild2ParentCache, m_receiptChild2ParentCache, _parent2ChildList, _block);
+}
+
+std::shared_ptr<Child2ParentMap> BlockChainImp::getChild2ParentCacheByTransaction(
+    std::shared_ptr<Parent2ChildListMap> _parent2ChildList, dev::eth::Block::Ptr _block)
+{
+    return getChild2ParentCache(
+        x_txsChild2ParentCache, m_txsChild2ParentCache, _parent2ChildList, _block);
 }
