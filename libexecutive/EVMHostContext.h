@@ -17,7 +17,7 @@
 /**
  * @Legacy EVM context
  *
- * @file ExtVM.h
+ * @file EVMHostContext.h
  * @author jimmyshi
  * @date 2018-09-21
  */
@@ -31,7 +31,7 @@
 #include <evmc/helpers.h>
 #include <libethcore/Common.h>
 #include <libethcore/EVMSchedule.h>
-#include <libevm/ExtVMFace.h>
+#include <libevm/EVMHostInterface.h>
 #include <functional>
 #include <map>
 
@@ -41,19 +41,19 @@ namespace dev
 namespace executive
 {
 /// Externality interface for the Virtual Machine providing access to world state.
-class ExtVM : public dev::eth::ExtVMFace
+class EVMHostContext : public dev::eth::EVMHostInterface
 {
 public:
     /// Full constructor.
-    ExtVM(std::shared_ptr<StateFace> _s, dev::eth::EnvInfo const& _envInfo,
+    EVMHostContext(std::shared_ptr<StateFace> _s, dev::eth::EnvInfo const& _envInfo,
         Address const& _myAddress, Address const& _caller, Address const& _origin,
         u256 const& _value, u256 const& _gasPrice, bytesConstRef _data, bytesConstRef _code,
         h256 const& _codeHash, unsigned _depth, bool _isCreate, bool _staticCall)
-      : ExtVMFace(_envInfo, _myAddress, _caller, _origin, _value, _gasPrice, _data, _code.toBytes(),
-            _codeHash, _depth, _isCreate, _staticCall),
+      : EVMHostInterface(_envInfo, _myAddress, _caller, _origin, _value, _gasPrice, _data,
+            _code.toBytes(), _codeHash, _depth, _isCreate, _staticCall),
         m_s(_s)
     {
-        // Contract: processing account must exist. In case of CALL, the ExtVM
+        // Contract: processing account must exist. In case of CALL, the EVMHostContext
         // is created only if an account has code (so exist). In case of CREATE
         // the account must be created first.
         assert(m_s->addressInUse(_myAddress));
@@ -75,8 +75,8 @@ public:
     h256 codeHashAt(Address const& _a) final;
 
     /// Create a new contract.
-    evmc_result create(u256 const& _endowment, u256& io_gas, bytesConstRef _code,
-        dev::eth::Instruction _op, u256 _salt, dev::eth::OnOpFunc const& _onOp = {}) final;
+    evmc_result create(u256 const& _endowment, u256& io_gas, bytesConstRef _code, evmc_opcode _op,
+        u256 _salt, dev::eth::OnOpFunc const& _onOp = {}) final;
 
     /// Create a new message call.
     evmc_result call(dev::eth::CallParameters& _params) final;
