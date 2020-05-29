@@ -13,7 +13,7 @@
 */
 
 #include "Executive.h"
-#include "ExtVM.h"
+#include "EVMHostContext.h"
 #include "StateFace.h"
 
 #include <libdevcore/CommonIO.h>
@@ -221,9 +221,9 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
             {
                 bytes const& c = m_s->code(_p.codeAddress);
                 h256 codeHash = m_s->codeHash(_p.codeAddress);
-                m_ext = make_shared<ExtVM>(m_s, m_envInfo, _p.receiveAddress, _p.senderAddress,
-                    _origin, _p.apparentValue, _gasPrice, _p.data, &c, codeHash, m_depth, false,
-                    _p.staticCall);
+                m_ext = make_shared<EVMHostContext>(m_s, m_envInfo, _p.receiveAddress,
+                    _p.senderAddress, _origin, _p.apparentValue, _gasPrice, _p.data, &c, codeHash,
+                    m_depth, false, _p.staticCall);
             }
         }
         // Transfer ether.
@@ -343,8 +343,9 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
     {
         bytes const& c = m_s->code(_p.codeAddress);
         h256 codeHash = m_s->codeHash(_p.codeAddress);
-        m_ext = make_shared<ExtVM>(m_s, m_envInfo, _p.receiveAddress, _p.senderAddress, _origin,
-            _p.apparentValue, _gasPrice, _p.data, &c, codeHash, m_depth, false, _p.staticCall);
+        m_ext = make_shared<EVMHostContext>(m_s, m_envInfo, _p.receiveAddress, _p.senderAddress,
+            _origin, _p.apparentValue, _gasPrice, _p.data, &c, codeHash, m_depth, false,
+            _p.staticCall);
         m_ext->setEvmFlags(m_evmFlags);
     }
     else
@@ -453,8 +454,9 @@ bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u2
     // Schedule _init execution if not empty.
     if (!_init.empty())
     {
-        m_ext = make_shared<ExtVM>(m_s, m_envInfo, m_newAddress, _sender, _origin, _endowment,
-            _gasPrice, bytesConstRef(), _init, crypto::Hash(_init), m_depth, true, false);
+        m_ext =
+            make_shared<EVMHostContext>(m_s, m_envInfo, m_newAddress, _sender, _origin, _endowment,
+                _gasPrice, bytesConstRef(), _init, crypto::Hash(_init), m_depth, true, false);
         m_ext->setEvmFlags(m_evmFlags);
     }
     return !m_ext;
@@ -678,7 +680,7 @@ bool Executive::finalize()
 
 
     m_res.gasUsed = gasUsed();
-    m_res.excepted = m_excepted;  // TODO: m_except is used only in ExtVM::call
+    m_res.excepted = m_excepted;  // TODO: m_except is used only in EVMHostContext::call
     m_res.newAddress = m_newAddress;
     m_res.gasRefunded = m_ext ? m_ext->sub().refunds : 0;
 

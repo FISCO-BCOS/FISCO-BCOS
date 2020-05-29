@@ -153,7 +153,7 @@ void VM::caseCreate()
         msg.depth = m_message->depth + 1;
         msg.kind = m_OP == Instruction::CREATE ?
                        EVMC_CREATE :
-                       EVMC_CREATE2;  // FIXME: In EVMC move the kind to the top.
+                       EVMC_CREATE2;  // FIXME: In EVMInstance move the kind to the top.
         msg.value = toEvmC(endowment);
 
         evmc_result result;
