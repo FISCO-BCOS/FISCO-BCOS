@@ -295,6 +295,11 @@ public:
     /// add specified viewchange cache to the viewchange-cache
     bool checkViewChangeReq(ViewChangeReq::Ptr _req, int64_t const& _blockNumber);
     void eraseExpiredViewChange(ViewChangeReq::Ptr _req, int64_t const& _blockNumber);
+
+    // When the node restarts and the view becomes smaller, call this function to clear the history
+    // cache
+    void eraseLatestViewChangeCacheForNodeUpdated(ViewChangeReq const& _req);
+
     void addViewChangeReq(ViewChangeReq::Ptr _req, int64_t const& _blockNumber = 0);
 
     template <typename T, typename S>
