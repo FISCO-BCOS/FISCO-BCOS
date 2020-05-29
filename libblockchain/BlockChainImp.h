@@ -83,6 +83,7 @@ private:
 DEV_SIMPLE_EXCEPTION(OpenSysTableFailed);
 
 using Parent2ChildListMap = std::map<std::string, std::vector<std::string>>;
+using Child2ParentMap = tbb::concurrent_unordered_map<std::string, std::string>;
 class BlockChainImp : public BlockChainInterface
 {
 public:
@@ -155,9 +156,14 @@ private:
     std::shared_ptr<Parent2ChildListMap> getParent2ChildListByTxsProofCache(
         dev::eth::Block::Ptr _block);
 
-    std::shared_ptr<MerkleProofType> getProof(
-        std::shared_ptr<Parent2ChildListMap> _parent2ChildList, uint64_t const& _index,
-        const dev::bytes& _encodedData);
+    std::shared_ptr<Child2ParentMap> getChild2ParentCacheByReceipt(
+        std::shared_ptr<Parent2ChildListMap> _parent2ChildList, dev::eth::Block::Ptr _block);
+    std::shared_ptr<Child2ParentMap> getChild2ParentCacheByTransaction(
+        std::shared_ptr<Parent2ChildListMap> _parent2Child, dev::eth::Block::Ptr _block);
+
+    std::shared_ptr<Child2ParentMap> getChild2ParentCache(SharedMutex& _mutex,
+        std::pair<dev::eth::BlockNumber, std::shared_ptr<Child2ParentMap>>& _cache,
+        std::shared_ptr<Parent2ChildListMap> _parent2Child, dev::eth::Block::Ptr _block);
 
     void initSystemConfig(
         dev::storage::Table::Ptr _tb, std::string const& _key, std::string const& _value);
@@ -190,11 +196,11 @@ private:
 
     void parseMerkleMap(
         std::shared_ptr<std::map<std::string, std::vector<std::string>>> parent2ChildList,
-        std::map<std::string, std::string>& child2Parent);
+        Child2ParentMap& child2Parent);
 
     void getMerkleProof(dev::bytes const& _txHash,
         const std::map<std::string, std::vector<std::string>>& parent2ChildList,
-        const std::map<std::string, std::string>& child2Parent,
+        const Child2ParentMap& child2Parent,
         std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>& merkleProof);
 
     dev::bytes getHashNeed2Proof(uint32_t index, const dev::bytes& data);
@@ -240,8 +246,13 @@ private:
     std::pair<dev::eth::BlockNumber,
         std::shared_ptr<std::map<std::string, std::vector<std::string>>>>
         m_receiptWithProof = std::make_pair(0, nullptr);
-
     mutable SharedMutex m_receiptWithProofMutex;
+
+    std::pair<dev::eth::BlockNumber, std::shared_ptr<Child2ParentMap>> m_receiptChild2ParentCache;
+    mutable SharedMutex x_receiptChild2ParentCache;
+
+    std::pair<dev::eth::BlockNumber, std::shared_ptr<Child2ParentMap>> m_txsChild2ParentCache;
+    mutable SharedMutex x_txsChild2ParentCache;
 
     bool m_enableHexBlock = false;
     dev::ThreadPool::Ptr m_destructorThread;
