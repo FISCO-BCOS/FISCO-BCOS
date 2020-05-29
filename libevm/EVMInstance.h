@@ -14,7 +14,7 @@
     You should have received a copy of the GNU General Public License
     along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file EVMC.h
+/** @file EVMInstance.h
  * @author wheatli
  * @date 2018.8.28
  * @record copy from aleth, this is a vm interface
@@ -22,7 +22,7 @@
 
 #pragma once
 
-#include "VMFace.h"
+#include "EVMInterface.h"
 
 #include <libethcore/EVMSchedule.h>
 
@@ -32,19 +32,19 @@ namespace dev
 {
 namespace eth
 {
-/// Translate the EVMSchedule to EVM-C revision.
+/// Translate the EVMSchedule to EVMInstance-C revision.
 evmc_revision toRevision(EVMSchedule const& _schedule);
 
-/// The RAII wrapper for an EVM-C instance.
-class EVM
+/// The RAII wrapper for an EVMInstance-C instance.
+class EVMInstance : public EVMInterface
 {
 public:
-    explicit EVM(evmc_instance* _instance) noexcept;
+    explicit EVMInstance(evmc_instance* _instance) noexcept;
 
-    ~EVM() { m_instance->destroy(m_instance); }
+    ~EVMInstance() { m_instance->destroy(m_instance); }
 
-    EVM(EVM const&) = delete;
-    EVM& operator=(EVM) = delete;
+    EVMInstance(EVMInstance const&) = delete;
+    EVMInstance& operator=(EVMInstance) = delete;
 
     class Result
     {
@@ -77,7 +77,7 @@ public:
     };
 
     /// Handy wrapper for evmc_execute().
-    Result execute(ExtVMFace& _ext, int64_t gas)
+    Result execute(EVMHostInterface& _ext, int64_t gas)
     {
         auto mode = toRevision(_ext.evmSchedule());
         evmc_call_kind kind = _ext.isCreate() ? EVMC_CREATE : EVMC_CALL;
@@ -91,20 +91,12 @@ public:
         return Result{m_instance->execute(
             m_instance, &_ext, mode, &msg, _ext.code().data(), _ext.code().size())};
     }
+    owning_bytes_ref exec(u256& io_gas, EVMHostInterface& _ext, OnOpFunc const& _onOp) final;
 
 private:
-    /// The VM instance created with EVM-C <prefix>_create() function.
+    /// The VM instance created with EVMInstance-C <prefix>_create() function.
     evmc_instance* m_instance = nullptr;
 };
 
-
-/// The wrapper implementing the VMFace interface with a EVM-C VM as a backend.
-class EVMC : public EVM, public VMFace
-{
-public:
-    explicit EVMC(evmc_instance* _instance) : EVM(_instance) {}
-
-    owning_bytes_ref exec(u256& io_gas, ExtVMFace& _ext, OnOpFunc const& _onOp) final;
-};
 }  // namespace eth
 }  // namespace dev
