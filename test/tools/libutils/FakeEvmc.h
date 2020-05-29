@@ -27,7 +27,7 @@
 #include <libdevcore/FixedHash.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/EVMSchedule.h>
-#include <libethcore/Instruction.h>
+#include <libinterpreter/Instruction.h>
 #include <libethcore/LogEntry.h>
 #include <libinterpreter/interpreter.h>
 #include <test/tools/libutils/TestOutputHelper.h>

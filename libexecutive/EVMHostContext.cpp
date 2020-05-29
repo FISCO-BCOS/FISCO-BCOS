@@ -17,12 +17,12 @@
 /**
  * @Legacy EVM context
  *
- * @file ExtVM.cpp
+ * @file EVMHostContext.cpp
  * @author jimmyshi
  * @date 2018-09-22
  */
 
-#include "ExtVM.h"
+#include "EVMHostContext.h"
 #include <libblockverifier/ExecutiveContext.h>
 #include <libethcore/LastBlockHashesFace.h>
 #include <boost/thread.hpp>
@@ -182,7 +182,7 @@ evmc_status_code transactionExceptionToEvmcStatusCode(TransactionException ex) n
 }  // anonymous namespace
 
 
-evmc_result ExtVM::call(CallParameters& _p)
+evmc_result EVMHostContext::call(CallParameters& _p)
 {
     Executive e{m_s, envInfo(), depth() + 1};
     // Note: When create initializes Executive, the flags of evmc context must be passed in
@@ -200,7 +200,7 @@ evmc_result ExtVM::call(CallParameters& _p)
     return evmcResult;
 }
 
-size_t ExtVM::codeSizeAt(dev::Address const& _a)
+size_t EVMHostContext::codeSizeAt(dev::Address const& _a)
 {
     if (m_envInfo.precompiledEngine()->isPrecompiled(_a))
     {
@@ -209,41 +209,41 @@ size_t ExtVM::codeSizeAt(dev::Address const& _a)
     return m_s->codeSize(_a);
 }
 
-h256 ExtVM::codeHashAt(Address const& _a)
+h256 EVMHostContext::codeHashAt(Address const& _a)
 {
     return exists(_a) ? m_s->codeHash(_a) : h256{};
 }
 
-bool ExtVM::isPermitted()
+bool EVMHostContext::isPermitted()
 {
     // check authority by tx.origin
     if (!m_s->checkAuthority(origin(), myAddress()))
     {
-        LOG(ERROR) << "ExtVM::isPermitted PermissionDenied" << LOG_KV("origin", origin())
+        LOG(ERROR) << "EVMHostContext::isPermitted PermissionDenied" << LOG_KV("origin", origin())
                    << LOG_KV("address", myAddress());
         return false;
     }
     return true;
 }
 
-void ExtVM::setStore(u256 const& _n, u256 const& _v)
+void EVMHostContext::setStore(u256 const& _n, u256 const& _v)
 {
     m_s->setStorage(myAddress(), _n, _v);
 }
 
-evmc_result ExtVM::create(u256 const& _endowment, u256& io_gas, bytesConstRef _code,
-    Instruction _op, u256 _salt, OnOpFunc const& _onOp)
+evmc_result EVMHostContext::create(u256 const& _endowment, u256& io_gas, bytesConstRef _code,
+    evmc_opcode _op, u256 _salt, OnOpFunc const& _onOp)
 {
     Executive e{m_s, envInfo(), depth() + 1};
     // Note: When create initializes Executive, the flags of evmc context must be passed in
     e.setEvmFlags(flags);
     bool result = false;
-    if (_op == Instruction::CREATE)
+    if (_op == evmc_opcode::OP_CREATE)
         result = e.createOpcode(myAddress(), _endowment, gasPrice(), io_gas, _code, origin());
     else
     {
         // TODO: when new CREATE opcode added, this logic maybe affected
-        assert(_op == Instruction::CREATE2);
+        assert(_op == evmc_opcode::OP_CREATE2);
         result =
             e.create2Opcode(myAddress(), _endowment, gasPrice(), io_gas, _code, origin(), _salt);
     }
@@ -260,7 +260,7 @@ evmc_result ExtVM::create(u256 const& _endowment, u256& io_gas, bytesConstRef _c
     return evmcResult;
 }
 
-void ExtVM::suicide(Address const& _a)
+void EVMHostContext::suicide(Address const& _a)
 {
     // Why transfer is not used here? That caused a consensus issue before (see Quirk #2 in
     // http://martin.swende.se/blog/Ethereum_quirks_and_vulns.html). There is one test case
@@ -270,16 +270,16 @@ void ExtVM::suicide(Address const& _a)
     if (g_BCOSConfig.version() >= RC2_VERSION)
     {
         // No balance here in BCOS. Balance has data racing in parallel suicide.
-        ExtVMFace::suicide(_a);
+        EVMHostInterface::suicide(_a);
         return;
     }
 
     m_s->addBalance(_a, m_s->balance(myAddress()));
     m_s->setBalance(myAddress(), 0);
-    ExtVMFace::suicide(_a);
+    EVMHostInterface::suicide(_a);
 }
 
-h256 ExtVM::blockHash(int64_t _number)
+h256 EVMHostContext::blockHash(int64_t _number)
 {
     return envInfo().numberHash(_number);
 }

@@ -14,7 +14,7 @@
     You should have received a copy of the GNU General Public License
     along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file ExtVMFace.h
+/** @file EVMHostInterface.h
  * @author wheatli
  * @date 2018.8.28
  * @record copy from aleth, this is a vm interface
@@ -29,11 +29,11 @@
 #include <libethcore/Common.h>
 #include <libethcore/EVMFlags.h>
 #include <libethcore/EVMSchedule.h>
-#include <libethcore/Instruction.h>
 #include <libethcore/LastBlockHashesFace.h>
 #include <libethcore/LogEntry.h>
 
 #include <evmc/evmc.h>
+#include <evmc/instructions.h>
 
 #include <boost/optional.hpp>
 #include <functional>
@@ -70,15 +70,16 @@ struct SubState
     }
 };
 
-class ExtVMFace;
-class VMFace;
+class EVMHostInterface;
+class EVMInterface;
 
 /**
  * @brief : execute the opcode of evm
  *
  */
-using OnOpFunc = std::function<void(uint64_t /*steps*/, uint64_t /* PC */, Instruction /*instr*/,
-    bigint /*newMemSize*/, bigint /*gasCost*/, bigint /*gas*/, VMFace const*, ExtVMFace const*)>;
+using OnOpFunc = std::function<void(uint64_t /*steps*/, uint64_t /* PC */, evmc_opcode /*instr*/,
+    bigint /*newMemSize*/, bigint /*gasCost*/, bigint /*gas*/, EVMInterface const*,
+    EVMHostInterface const*)>;
 
 /// set parameters and functions for the evm call
 struct CallParameters
@@ -193,18 +194,18 @@ struct CreateResult
 /**
  * @brief Interface and null implementation of the class for specifying VM externalities.
  */
-class ExtVMFace : public evmc_context
+class EVMHostInterface : public evmc_context
 {
 public:
     /// Full constructor.
-    ExtVMFace(EnvInfo const& _envInfo, Address const& _myAddress, Address const& _caller,
+    EVMHostInterface(EnvInfo const& _envInfo, Address const& _myAddress, Address const& _caller,
         Address const& _origin, u256 const& _value, u256 const& _gasPrice, bytesConstRef _data,
         bytes _code, h256 const& _codeHash, unsigned _depth, bool _isCreate, bool _staticCall);
 
-    virtual ~ExtVMFace() = default;
+    virtual ~EVMHostInterface() = default;
 
-    ExtVMFace(ExtVMFace const&) = delete;
-    ExtVMFace& operator=(ExtVMFace const&) = delete;
+    EVMHostInterface(EVMHostInterface const&) = delete;
+    EVMHostInterface& operator=(EVMHostInterface const&) = delete;
 
     /// Read storage location.
     virtual u256 store(u256 const&) = 0;
@@ -232,7 +233,7 @@ public:
 
     /// Create a new (contract) account.
     virtual evmc_result create(
-        u256 const&, u256&, bytesConstRef, Instruction, u256, OnOpFunc const&) = 0;
+        u256 const&, u256&, bytesConstRef, evmc_opcode, u256, OnOpFunc const&) = 0;
 
     /// Make a new message call.
     virtual evmc_result call(CallParameters&) = 0;
@@ -256,7 +257,7 @@ public:
     virtual EVMSchedule const& evmSchedule() const { return g_BCOSConfig.evmSchedule(); }
 
 public:
-    /// ------ get interfaces related to ExtVMFace------
+    /// ------ get interfaces related to EVMHostInterface------
     Address const& myAddress() { return m_myAddress; }
     Address const& caller() { return m_caller; }
     Address const& origin() { return m_origin; }
@@ -270,7 +271,7 @@ public:
     unsigned const& depth() { return m_depth; }
     bool const& isCreate() { return m_isCreate; }
     bool const& staticCall() { return m_staticCall; }
-    /// ------ set interfaces related to ExtVMFace------
+    /// ------ set interfaces related to EVMHostInterface------
     void setMyAddress(Address const& _contractAddr) { m_myAddress = _contractAddr; }
     void setCaller(Address const& _senderAddr) { m_caller = _senderAddr; }
     void setOrigin(Address const& _origin) { m_origin = _origin; }
