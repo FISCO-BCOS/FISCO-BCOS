@@ -19,7 +19,7 @@
 #include <libethcore/Common.h>
 #include <libethcore/EVMFlags.h>
 #include <libethcore/Transaction.h>
-#include <libevm/VMFace.h>
+#include <libevm/EVMInterface.h>
 #include <functional>
 
 namespace Json
@@ -67,7 +67,7 @@ class PrecompiledExecResult;
  */
 namespace executive
 {
-class ExtVM;
+class EVMHostContext;
 class StateFace;
 class Executive
 {
@@ -227,11 +227,12 @@ private:
 
     std::shared_ptr<StateFace> m_s;  ///< The state to which this operation/transaction is applied.
     // TODO: consider changign to EnvInfo const& to avoid LastHashes copy at every CALL/CREATE
-    dev::eth::EnvInfo m_envInfo;   ///< Information on the runtime environment.
-    std::shared_ptr<ExtVM> m_ext;  ///< The VM externality object for the VM execution or null if no
-                                   ///< VM is required. shared_ptr used only to allow ExtVM forward
-                                   ///< reference. This field does *NOT* survive this object.
-    owning_bytes_ref m_output;     ///< Execution output.
+    dev::eth::EnvInfo m_envInfo;            ///< Information on the runtime environment.
+    std::shared_ptr<EVMHostContext> m_ext;  ///< The VM externality object for the VM execution or
+                                            ///< null if no VM is required. shared_ptr used only to
+                                            ///< allow EVMHostContext forward reference. This field
+                                            ///< does *NOT* survive this object.
+    owning_bytes_ref m_output;  ///< Execution output.
 
     ExecutionResult m_res;  ///< Optional storage for execution results.
 
