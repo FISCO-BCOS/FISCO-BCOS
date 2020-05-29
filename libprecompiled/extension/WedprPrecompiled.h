@@ -93,6 +93,7 @@ public:
     bytes anonymousVotingGetVersion(dev::eth::ContractABI& abi);
     bytes verifyBoundedVoteRequest(dev::eth::ContractABI& abi, bytesConstRef& data);
     bytes verifyUnboundedVoteRequest(dev::eth::ContractABI& abi, bytesConstRef& data);
+    bytes verifyUnboundedVoteRequestUnlisted(dev::eth::ContractABI& abi, bytesConstRef& data);
     bytes aggregateVoteSumResponse(dev::eth::ContractABI& abi, bytesConstRef& data);
     bytes aggregateHPoint(dev::eth::ContractABI& abi, bytesConstRef& data);
     bytes verifyCountRequest(dev::eth::ContractABI& abi, bytesConstRef& data);

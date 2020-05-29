@@ -24,27 +24,6 @@ int __rbt_backtrace_pcinfo(backtrace_state* _state, uintptr_t _addr, backtrace_f
 int __rbt_backtrace_syminfo(backtrace_state* _state, uintptr_t _addr,
     backtrace_syminfo_callback _cb, backtrace_error_callback _error, void* _data);
 
-void* __rbt_backtrace_alloc(
-    backtrace_state*, size_t size, backtrace_error_callback error_callback, void* data)
-{
-    void* ret;
-
-    ret = malloc(size);
-    if (ret == NULL)
-    {
-        if (error_callback)
-            error_callback(data, "malloc", errno);
-    }
-    return ret;
-}
-
-/* Free memory.  */
-
-void __rbt_backtrace_free(backtrace_state*, void* p, size_t, backtrace_error_callback, void*)
-{
-    free(p);
-}
-
 char* aggregate_decrypted_part_sum(
     char* param_pb, char* decrypted_result_part_storage_pb, char* count_result_sum_pb);
 
@@ -130,6 +109,8 @@ int8_t verify_split_credit(char* split_request_pb);
 int8_t verify_transferred_credit(char* transfer_request_pb);
 
 int8_t verify_unbounded_vote_request(char* param_pb, char* request_pb);
+
+int8_t verify_unbounded_vote_request_unlisted(char* param_pb, char* request_pb);
 
 int8_t verify_vote_result(
     char* param_pb, char* vote_sum_pb, char* count_result_sum_pb, char* vote_result_request_pb);

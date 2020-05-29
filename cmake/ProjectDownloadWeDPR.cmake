@@ -27,7 +27,7 @@ if (APPLE)
     set(WEDPR_SHA256 326d20a2a1bc3a0f5b4a216237356099d431f482ec45e59615ccad2dd1d28563)
 else()
     set(WEDPR_URL https://github.com/WeDPR/WeDPR-Public-Binary/releases/download/v0.2/linux_libffi_storage.tar.gz)
-    set(WEDPR_SHA256 7d8a4062e1710fcaf42b9c49730267dc3568631e46dc1cd65d12af2c0cdfac0d)
+    set(WEDPR_SHA256 f6dd260063d9ee84488ee2c30273a31503170f650a1ede5d6a21a06a9614547f)
 endif()
 
 ExternalProject_Add(WeDPR
