@@ -1512,6 +1512,8 @@ void PBFTEngine::catchupView(ViewChangeReq const& req, std::ostringstream& oss)
         if (succ)
         {
             sendViewChangeMsg(nodeId);
+            // erase the cache
+            m_reqCache->eraseLatestViewChangeCacheForNodeUpdated(req);
         }
     }
 }
