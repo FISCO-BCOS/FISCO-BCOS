@@ -41,7 +41,7 @@ scan_code()
         if should_ignore ${file}; then continue; fi
         if [ ! -f ${file} ];then continue; fi
         LOG_INFO "check file ${file}"
-        python "${scan_code_script}" "${file}"
+        python ${scan_code_script} "${file}"
         trigger_rules=$(jq -r '.' /tmp/report.json | grep 'trigger_rules' | awk '{print $2}' | sed 's/,//g')
         count=$((count+trigger_rules))
         echo "trigger_rules is ${trigger_rules}"
