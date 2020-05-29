@@ -14,7 +14,7 @@ SHELL_FOLDER=$(
 check_script=${SHELL_FOLDER}/run-clang-format.py
 commit_limit=6
 file_limit=35
-insert_limit=300
+insert_limit=1000
 new_file_header_length=35
 
 skip_check_words="sync code"
