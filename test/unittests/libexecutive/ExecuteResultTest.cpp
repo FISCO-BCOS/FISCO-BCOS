@@ -25,9 +25,9 @@
 #include <libdevcore/FixedHash.h>
 #include <libethcore/Block.h>
 #include <libethcore/Transaction.h>
+#include <libexecutive/EVMHostContext.h>
 #include <libexecutive/ExecutionResult.h>
 #include <libexecutive/Executive.h>
-#include <libexecutive/ExtVM.h>
 #include <libmptstate/MPTState.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>

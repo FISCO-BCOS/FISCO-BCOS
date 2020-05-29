@@ -16,13 +16,13 @@
  *
  * @brief
  *
- * @file ExtVMFace.cpp
+ * @file EVMHostInterface.cpp
  * @author: yujiechen
  * @date 2018-09-03
  */
 #include "libdevcrypto/CryptoInterface.h"
 #include <evmc/helpers.h>
-#include <libevm/ExtVMFace.h>
+#include <libevm/EVMHostInterface.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libevm/FakeExtVMFace.h>
 #include <boost/test/unit_test.hpp>
@@ -54,7 +54,7 @@ BOOST_AUTO_TEST_CASE(testEVMCTrans)
 
 BOOST_AUTO_TEST_CASE(testFunctionTables)
 {
-    std::string code_str = "ExtVMFace Test";
+    std::string code_str = "EVMHostInterface Test";
     bytes code(code_str.begin(), code_str.end());
     u256 gasUsed = u256(300000);
     u256 gasLimit = u256(300000);
@@ -186,7 +186,7 @@ BOOST_AUTO_TEST_CASE(testFunctionTables)
 
 BOOST_AUTO_TEST_CASE(testCodeRelated)
 {
-    std::string code_str = "ExtVMFace Test";
+    std::string code_str = "EVMHostInterface Test";
     bytes code(code_str.begin(), code_str.end());
     u256 gasUsed = u256(300000);
     u256 gasLimit = u256(300000);
