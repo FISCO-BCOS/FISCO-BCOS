@@ -66,6 +66,8 @@ const char API_ANONYMOUS_VOTING_BOUNDED_VERIFY_VOTE_REQUEST[] =
     "anonymousVotingVerifyBoundedVoteRequest(string,string)";
 const char API_ANONYMOUS_VOTING_UNBOUNDED_VERIFY_VOTE_REQUEST[] =
     "anonymousVotingVerifyUnboundedVoteRequest(string,string)";
+const char API_ANONYMOUS_VOTING_UNBOUNDED_VERIFY_VOTE_REQUEST_UNLISTED[] =
+    "anonymousVotingVerifyUnboundedVoteRequestUnlisted(string,string)";
 const char API_ANONYMOUS_VOTING_AGGREGATE_VOTE_SUM_RESPONSE[] =
     "anonymousVotingAggregateVoteSumResponse(string,string,string)";
 const char API_ANONYMOUS_VOTING_AGGREGATE_HPOINT[] =
@@ -136,6 +138,8 @@ WedprPrecompiled::WedprPrecompiled()
         getFuncSelector(API_ANONYMOUS_VOTING_GET_VERSION);
     name2Selector[API_ANONYMOUS_VOTING_UNBOUNDED_VERIFY_VOTE_REQUEST] =
         getFuncSelector(API_ANONYMOUS_VOTING_UNBOUNDED_VERIFY_VOTE_REQUEST);
+    name2Selector[API_ANONYMOUS_VOTING_UNBOUNDED_VERIFY_VOTE_REQUEST_UNLISTED] =
+        getFuncSelector(API_ANONYMOUS_VOTING_UNBOUNDED_VERIFY_VOTE_REQUEST_UNLISTED);
     name2Selector[API_ANONYMOUS_VOTING_BOUNDED_VERIFY_VOTE_REQUEST] =
         getFuncSelector(API_ANONYMOUS_VOTING_BOUNDED_VERIFY_VOTE_REQUEST);
     name2Selector[API_ANONYMOUS_VOTING_AGGREGATE_VOTE_SUM_RESPONSE] =
@@ -176,9 +180,8 @@ string WedprPrecompiled::toString()
     return WEDPR_PRECOMPILED;
 }
 
-PrecompiledExecResult::Ptr WedprPrecompiled::call(
-    dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param,
-    Address const& origin, Address const&)
+PrecompiledExecResult::Ptr WedprPrecompiled::call(dev::blockverifier::ExecutiveContext::Ptr context,
+    bytesConstRef param, Address const& origin, Address const&)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE(WEDPR_PRECOMPILED) << LOG_DESC("call")
                            << LOG_KV("param", toHex(param)) << LOG_KV("origin", origin)
@@ -241,6 +244,12 @@ PrecompiledExecResult::Ptr WedprPrecompiled::call(
     else if (func == name2Selector[API_ANONYMOUS_VOTING_UNBOUNDED_VERIFY_VOTE_REQUEST])
     {
         callResult->setExecResult(verifyUnboundedVoteRequest(abi, data));
+    }
+    // anonymousVotingVerifyUnboundedVoteRequestUnlisted(string systemParameters, string
+    // voteRequest)
+    else if (func == name2Selector[API_ANONYMOUS_VOTING_UNBOUNDED_VERIFY_VOTE_REQUEST_UNLISTED])
+    {
+        callResult->setExecResult(verifyUnboundedVoteRequestUnlisted(abi, data));
     }
     // anonymousVotingAggregateVoteSumResponse(string systemParameters, string voteRequest, string
     // voteStorage)
@@ -468,6 +477,27 @@ bytes WedprPrecompiled::verifyUnboundedVoteRequest(dev::eth::ContractABI& abi, b
     char* systemParametersChar = stringToChar(systemParameters);
     char* voteRequestChar = stringToChar(voteRequest);
     if (verify_unbounded_vote_request(systemParametersChar, voteRequestChar) != WEDPR_SUCCESS)
+    {
+        logError(WEDPR_PRECOMPILED, "verify_vote_request", WEDPR_VERFIY_FAILED);
+        throwException("verify_vote_request failed");
+    }
+    string voteStoragePart = get_vote_storage_from_vote_request(voteRequestChar);
+    string blankBallot = get_blank_ballot_from_vote_request(voteRequestChar);
+
+    return abi.abiIn("", blankBallot, voteStoragePart);
+}
+
+bytes WedprPrecompiled::verifyUnboundedVoteRequestUnlisted(
+    dev::eth::ContractABI& abi, bytesConstRef& data)
+{
+    string systemParameters;
+    string voteRequest;
+    abi.abiOut(data, systemParameters, voteRequest);
+
+    char* systemParametersChar = stringToChar(systemParameters);
+    char* voteRequestChar = stringToChar(voteRequest);
+    if (verify_unbounded_vote_request_unlisted(systemParametersChar, voteRequestChar) !=
+        WEDPR_SUCCESS)
     {
         logError(WEDPR_PRECOMPILED, "verify_vote_request", WEDPR_VERFIY_FAILED);
         throwException("verify_vote_request failed");
