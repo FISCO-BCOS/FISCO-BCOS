@@ -22,7 +22,7 @@
  */
 #pragma once
 
-#include <libdevcore/FixedHash.h>
+#include "FixedHash.h"
 #include <vector>
 
 namespace dev

@@ -76,21 +76,6 @@ public:
         evmc_result m_result;
     };
 
-    /// Handy wrapper for evmc_execute().
-    Result execute(EVMHostInterface& _ext, int64_t gas)
-    {
-        auto mode = toRevision(_ext.evmSchedule());
-        evmc_call_kind kind = _ext.isCreate() ? EVMC_CREATE : EVMC_CALL;
-        uint32_t flags = _ext.staticCall() ? EVMC_STATIC : 0;
-        // this is ensured by solidity compiler
-        assert(flags != EVMC_STATIC || kind == EVMC_CALL);  // STATIC implies a CALL.
-
-        evmc_message msg = {toEvmC(_ext.myAddress()), toEvmC(_ext.caller()), toEvmC(_ext.value()),
-            _ext.data().data(), _ext.data().size(), toEvmC(_ext.codeHash()), toEvmC(0x0_cppui256),
-            gas, static_cast<int32_t>(_ext.depth()), kind, flags};
-        return Result{m_instance->execute(
-            m_instance, &_ext, mode, &msg, _ext.code().data(), _ext.code().size())};
-    }
     owning_bytes_ref exec(u256& io_gas, EVMHostInterface& _ext, OnOpFunc const& _onOp) final;
 
 private:

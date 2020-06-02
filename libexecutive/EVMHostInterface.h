@@ -22,6 +22,9 @@
 
 #pragma once
 
+#include "Common.h"
+#include "evmc/evmc.h"
+#include "evmc/instructions.h"
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonData.h>
@@ -31,9 +34,6 @@
 #include <libethcore/EVMSchedule.h>
 #include <libethcore/LastBlockHashesFace.h>
 #include <libethcore/LogEntry.h>
-
-#include <evmc/evmc.h>
-#include <evmc/instructions.h>
 
 #include <boost/optional.hpp>
 #include <functional>
@@ -48,149 +48,6 @@ class ExecutiveContext;
 
 namespace eth
 {
-struct SubState
-{
-    std::set<Address> suicides;  ///< Any accounts that have suicided.
-    LogEntries logs;             ///< Any logs.
-    u256 refunds;                ///< Refund counter of SSTORE nonzero->zero.
-
-    SubState& operator+=(SubState const& _s)
-    {
-        suicides += _s.suicides;
-        refunds += _s.refunds;
-        logs += _s.logs;
-        return *this;
-    }
-
-    void clear()
-    {
-        suicides.clear();
-        logs.clear();
-        refunds = 0;
-    }
-};
-
-class EVMHostInterface;
-class EVMInterface;
-
-/**
- * @brief : execute the opcode of evm
- *
- */
-using OnOpFunc = std::function<void(uint64_t /*steps*/, uint64_t /* PC */, evmc_opcode /*instr*/,
-    bigint /*newMemSize*/, bigint /*gasCost*/, bigint /*gas*/, EVMInterface const*,
-    EVMHostInterface const*)>;
-
-/// set parameters and functions for the evm call
-struct CallParameters
-{
-    CallParameters() = default;
-    CallParameters(Address _senderAddress, Address _codeAddress, Address _receiveAddress,
-        u256 _valueTransfer, u256 _apparentValue, u256 _gas, bytesConstRef _data,
-        OnOpFunc _onOpFunc)
-      : senderAddress(_senderAddress),
-        codeAddress(_codeAddress),
-        receiveAddress(_receiveAddress),
-        valueTransfer(_valueTransfer),
-        apparentValue(_apparentValue),
-        gas(_gas),
-        data(_data),
-        onOp(_onOpFunc)
-    {}
-    Address senderAddress;   /// address of the transaction sender
-    Address codeAddress;     /// address of the contract
-    Address receiveAddress;  /// address of the transaction receiver
-    u256 valueTransfer;      /// transferred wei between the sender and receiver
-    u256 apparentValue;
-    u256 gas;
-    bytesConstRef data;       /// transaction data
-    bool staticCall = false;  /// only true when the transaction is a message call
-    OnOpFunc onOp;
-};
-
-/// the information related to the EVM
-class EnvInfo
-{
-public:
-    typedef boost::function<dev::h256(int64_t x)> CallBackFunction;
-
-    // Constructor with custom gasLimit - used in some synthetic scenarios like eth_estimateGas RPC
-    // method
-    EnvInfo(BlockHeader const& _current, CallBackFunction _callback, u256 const& _gasUsed,
-        u256 const& _gasLimit)
-      : EnvInfo(_current, _callback, _gasUsed)
-    {
-        /// modify the gasLimit of current blockheader with given gasLimit
-        m_headerInfo.setGasLimit(_gasLimit);
-    }
-
-    EnvInfo(BlockHeader const& _current, CallBackFunction _callback, u256 const& _gasUsed)
-      : m_headerInfo(_current), m_numberHash(_callback), m_gasUsed(_gasUsed)
-    {}
-
-    EnvInfo() {}
-
-
-    /// @return block header
-    BlockHeader const& header() const { return m_headerInfo; }
-
-    /// @return block number
-    int64_t number() const { return m_headerInfo.number(); }
-
-    /// @return timestamp
-    uint64_t timestamp() const { return m_headerInfo.timestamp(); }
-
-    /// @return gasLimit of the block header
-    u256 const& gasLimit() const { return m_headerInfo.gasLimit(); }
-
-
-    /// @return used gas of the evm
-    u256 const& gasUsed() const { return m_gasUsed; }
-
-    dev::h256 numberHash(int64_t x) const { return m_numberHash(x); }
-
-    std::shared_ptr<dev::blockverifier::ExecutiveContext> precompiledEngine() const;
-
-    void setPrecompiledEngine(
-        std::shared_ptr<dev::blockverifier::ExecutiveContext> executiveEngine);
-
-
-private:
-    BlockHeader m_headerInfo;
-    CallBackFunction m_numberHash;
-    u256 m_gasUsed;
-    std::shared_ptr<dev::blockverifier::ExecutiveContext> m_executiveEngine;
-};
-
-/// Represents a call result.
-///
-/// @todo: Replace with evmc_result in future.
-/*
-struct CallResult
-{
-    evmc_status_code status;
-    owning_bytes_ref output;
-
-    CallResult(evmc_status_code status, owning_bytes_ref&& output)
-      : status{status}, output{std::move(output)}
-    {}
-};*/
-
-/// Represents a CREATE result.
-///
-/// @todo: Replace with evmc_result in future.
-/*
-struct CreateResult
-{
-    evmc_status_code status;
-    owning_bytes_ref output;
-    h160 address;
-
-    CreateResult(evmc_status_code status, owning_bytes_ref&& output, h160 const& address)
-      : status{status}, output{std::move(output)}, address{address}
-    {}
-};*/
-
 /**
  * @brief Interface and null implementation of the class for specifying VM externalities.
  */

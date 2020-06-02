@@ -22,9 +22,9 @@
  */
 #include "FakeExtVMFace.h"
 #include "libdevcrypto/CryptoInterface.h"
-#include <libevm/EVMInstance.h>
-#include <libevm/EVMInterface.h>
-#include <libevm/VMFactory.h>
+#include <libexecutive/EVMInstance.h>
+#include <libexecutive/EVMInterface.h>
+#include <libexecutive/VMFactory.h>
 #include <libinterpreter/interpreter.h>
 #include <test/tools/libbcos/Options.h>
 #include <test/tools/libutils/TestOutputHelper.h>

@@ -26,8 +26,8 @@
 #include "libstorage/ScalableStorage.h"
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libchannelserver/ChannelRPCServer.h>
-#include <libdevcore/OverlayDB.h>
 #include <libexecutive/StateFactoryInterface.h>
+#include <libmptstate/OverlayDB.h>
 #include <libstorage/CachedStorage.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/MemoryTableFactory2.h>

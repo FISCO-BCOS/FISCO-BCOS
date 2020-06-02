@@ -23,7 +23,7 @@
 
 #include "libdevcrypto/CryptoInterface.h"
 #include <libdevcore/LevelDB.h>
-#include <libdevcore/OverlayDB.h>
+#include <libmptstate/OverlayDB.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
