@@ -164,23 +164,6 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
                     params, _version, _respCallback, _activeCallback);
             });
 
-        for (auto it : m_ledgerManager->getGroupList())
-        {
-            auto groupID = it;
-            auto blockChain = m_ledgerManager->blockChain(it);
-            auto channelRPCServer = std::weak_ptr<dev::ChannelRPCServer>(m_channelRPCServer);
-            auto handler = blockChain->onReady([groupID, channelRPCServer](int64_t number) {
-                LOG(INFO) << "Push block notify: " << std::to_string(groupID) << "-" << number;
-                auto channelRpcServer = channelRPCServer.lock();
-                if (channelRpcServer)
-                {
-                    channelRpcServer->blockNotify(groupID, number);
-                }
-            });
-
-            m_channelRPCServer->addHandler(handler);
-        }
-
         auto channelRPCServerWeak = std::weak_ptr<dev::ChannelRPCServer>(m_channelRPCServer);
         m_p2pService->setCallbackFuncForTopicVerify(
             [channelRPCServerWeak](const std::string& _1, const std::string& _2) {

@@ -224,6 +224,8 @@ protected:
     std::shared_ptr<dev::ledger::DBInitializer> m_dbInitializer = nullptr;
     ChannelRPCServer::Ptr m_channelRPCServer;
     std::atomic_bool m_stopped = {false};
+
+    dev::eth::Handler<int64_t> m_handler;
 };
 }  // namespace ledger
 }  // namespace dev
