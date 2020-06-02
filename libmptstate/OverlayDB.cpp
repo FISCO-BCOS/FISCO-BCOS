@@ -16,9 +16,9 @@
 */
 
 #include "OverlayDB.h"
-#include "Log.h"
-#include "TrieCommon.h"
-#include "db.h"
+#include "libdevcore/Log.h"
+#include "libdevcore/TrieCommon.h"
+#include "libdevcore/db.h"
 #include "libdevcrypto/CryptoInterface.h"
 #include <thread>
 

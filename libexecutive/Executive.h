@@ -14,12 +14,12 @@
 
 #pragma once
 
+#include "Common.h"
 #include "ExecutionResult.h"
 #include <libethcore/BlockHeader.h>
 #include <libethcore/Common.h>
 #include <libethcore/EVMFlags.h>
 #include <libethcore/Transaction.h>
-#include <libevm/EVMInterface.h>
 #include <functional>
 
 namespace Json
@@ -232,7 +232,7 @@ private:
                                             ///< null if no VM is required. shared_ptr used only to
                                             ///< allow EVMHostContext forward reference. This field
                                             ///< does *NOT* survive this object.
-    owning_bytes_ref m_output;  ///< Execution output.
+    owning_bytes_ref m_output;              ///< Execution output.
 
     ExecutionResult m_res;  ///< Optional storage for execution results.
 

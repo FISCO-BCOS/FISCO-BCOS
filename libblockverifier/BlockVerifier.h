@@ -31,7 +31,6 @@
 #include <libethcore/Protocol.h>
 #include <libethcore/Transaction.h>
 #include <libethcore/TransactionReceipt.h>
-#include <libevm/EVMHostInterface.h>
 #include <libexecutive/ExecutionResult.h>
 #include <libexecutive/Executive.h>
 #include <libmptstate/State.h>

@@ -1,3 +1,0 @@
-[submodule "evmc"]
-	path = evmc
-	url = https://github.com/FISCO-BCOS/evmc.git

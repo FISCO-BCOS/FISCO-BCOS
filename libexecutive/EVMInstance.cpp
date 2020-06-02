@@ -22,7 +22,6 @@
 
 #include "EVMInstance.h"
 #include "VMFactory.h"
-#include "lininterpreter/Exception.h"
 
 namespace dev
 {

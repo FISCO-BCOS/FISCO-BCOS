@@ -31,7 +31,7 @@
 #include <evmc/helpers.h>
 #include <libethcore/Common.h>
 #include <libethcore/EVMSchedule.h>
-#include <libevm/EVMHostInterface.h>
+#include <libexecutive/EVMHostInterface.h>
 #include <functional>
 #include <map>
 

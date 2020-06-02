@@ -22,31 +22,14 @@
 cmake_minimum_required(VERSION 3.7)
 set(FISCO_BCOS_CMAKE_DIR "${CMAKE_CURRENT_LIST_DIR}/cmake" CACHE PATH "The path to the cmake directory")
 list(APPEND CMAKE_MODULE_PATH ${FISCO_BCOS_CMAKE_DIR})
+set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum OS X deployment version")
 
 project(FISCO-BCOS VERSION "2.5.0")
 # Suffix like "-rc1" e.t.c. to append to versions wherever needed.
 set(VERSION_SUFFIX "")
-set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum OS X deployment version")
 
 find_package(Git QUIET)
-if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
-    option(GIT_SUBMODULE "Check submodules during build" ON)
-    if(GIT_SUBMODULE)
-        execute_process(COMMAND ${GIT_EXECUTABLE} submodule update --init --recursive --remote
-                        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-                        RESULT_VARIABLE GIT_SUBMOD_RESULT)
-        execute_process(COMMAND ${GIT_EXECUTABLE} checkout b64ff8beab704916dfe86ff2c2e4185c08ddcef5
-                        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/evmc
-                        RESULT_VARIABLE CHECKOUT_OUTPUT_RESULT OUTPUT_QUIET ERROR_QUIET)
-        if(NOT GIT_SUBMOD_RESULT EQUAL "0")
-            message(FATAL_ERROR "git submodule update --init failed with ${GIT_SUBMOD_RESULT}, please checkout submodules")
-        endif()
-    endif()
-endif()
 
-if(NOT EXISTS "${CMAKE_SOURCE_DIR}/evmc/.git")
-    message(FATAL_ERROR "The submodules were not downloaded! GIT_SUBMODULE was turned off or failed. Please execute:\n  git submodule update --init")
-endif()
 
 set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY ON)
 
@@ -54,6 +37,7 @@ set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY ON)
 include(Options)
 include(CompilerSettings)
 include(Dependencies)
+configure_project()
 
 # install dependencies
 include(ProjectTBB)
@@ -72,17 +56,15 @@ include(ProjectTCMalloc)
 include(ProjectLibFF)
 include(ProjectPaillier)
 include(ProjectGroupSig)
+include(ProjectEVMC)
 
-include_directories("${CMAKE_SOURCE_DIR}" "evmc/include")
+include_directories("${CMAKE_SOURCE_DIR}")
 
-configure_project(TESTS)
 add_subdirectory(libchannelserver)
 add_subdirectory(libdevcore)
 add_subdirectory(libdevcrypto)
 add_subdirectory(libethcore)
-add_subdirectory(evmc)
 add_subdirectory(libinterpreter)
-add_subdirectory(libevm)
 add_subdirectory(libstat)
 add_subdirectory(libflowlimit)
 add_subdirectory(libtxpool)

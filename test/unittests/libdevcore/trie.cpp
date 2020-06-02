@@ -18,9 +18,9 @@
 #include "MemTrie.h"
 #include <json/json.h>
 #include <libdevcore/CommonIO.h>
-#include <libdevcore/MemoryDB.h>
-#include <libdevcore/TrieDB.h>
 #include <libdevcore/TrieHash.h>
+#include <libmptstate/MemoryDB.h>
+#include <libmptstate/TrieDB.h>
 #include <test/tools/libbcos/Options.h>
 #include <test/tools/libutils/Common.h>
 #include <test/tools/libutils/TestOutputHelper.h>
