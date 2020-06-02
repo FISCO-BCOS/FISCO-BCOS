@@ -22,11 +22,11 @@
 cmake_minimum_required(VERSION 3.7)
 set(FISCO_BCOS_CMAKE_DIR "${CMAKE_CURRENT_LIST_DIR}/cmake" CACHE PATH "The path to the cmake directory")
 list(APPEND CMAKE_MODULE_PATH ${FISCO_BCOS_CMAKE_DIR})
+set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum OS X deployment version")
 
 project(FISCO-BCOS VERSION "2.5.0")
 # Suffix like "-rc1" e.t.c. to append to versions wherever needed.
 set(VERSION_SUFFIX "")
-set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum OS X deployment version")
 
 find_package(Git QUIET)
 if(GIT_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
@@ -75,7 +75,7 @@ include(ProjectGroupSig)
 
 include_directories("${CMAKE_SOURCE_DIR}" "evmc/include")
 
-configure_project(TESTS)
+configure_project()
 add_subdirectory(libchannelserver)
 add_subdirectory(libdevcore)
 add_subdirectory(libdevcrypto)

@@ -114,12 +114,12 @@ jobs:
         id: cache
         with:
           path: deps/src
-          key: deps-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: deps-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            deps-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            deps-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            deps-v1-notest-${{ runner.temp }}-
-            deps-v1-${{ runner.temp }}-
+            deps-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            deps-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            deps-v2-notest-${{ runner.temp }}-
+            deps-v2-${{ runner.temp }}-
       - uses: actions/cache@v1.1.2
         id: ccache
         with:
