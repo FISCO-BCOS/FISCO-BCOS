@@ -21,9 +21,9 @@
 
 #pragma once
 
+#include "TrieDB.h"
 #include <libdevcore/Common.h>
 #include <libdevcore/RLP.h>
-#include <libdevcore/TrieDB.h>
 #include <libethcore/Common.h>
 #include <boost/filesystem.hpp>
 
