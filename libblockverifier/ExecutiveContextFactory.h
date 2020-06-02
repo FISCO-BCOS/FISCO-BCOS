@@ -21,7 +21,6 @@
 #pragma once
 
 #include "ExecutiveContext.h"
-#include <libdevcore/OverlayDB.h>
 #include <libexecutive/StateFactoryInterface.h>
 #include <libstorage/Storage.h>
 #include <libstorage/Table.h>

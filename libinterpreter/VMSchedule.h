@@ -21,7 +21,7 @@
  */
 
 #pragma once
-#include <libdevcore/Common.h>
+#include <memory>
 
 namespace dev
 {

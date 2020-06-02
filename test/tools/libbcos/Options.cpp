@@ -66,7 +66,7 @@ Options::Options(int argc, char** argv)
     setVmOptions(argc, argv);
 }
 
-/// set vm related options (for test libevm/VMFactory.cpp)
+/// set vm related options (for test libexecutive/VMFactory.cpp)
 void Options::setVmOptions(int argc, char** argv)
 {
     namespace po = boost::program_options;

@@ -22,11 +22,11 @@
 
 #pragma once
 
+#include "Guards.h"
 #include "db.h"
 #include <leveldb/db.h>
 #include <leveldb/status.h>
 #include <leveldb/write_batch.h>
-#include <libdevcore/Guards.h>
 #include <memory>
 #include <string>
 

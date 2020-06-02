@@ -22,7 +22,7 @@
 #include <libdevcrypto/Common.h>
 #include <libethcore/BlockHeader.h>
 #include <libethcore/LastBlockHashesFace.h>
-#include <libevm/EVMHostInterface.h>
+#include <libexecutive/EVMHostInterface.h>
 #include <stdlib.h>
 #include <time.h>
 using namespace dev;
