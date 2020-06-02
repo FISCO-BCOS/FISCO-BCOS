@@ -78,6 +78,13 @@ enum class TransactionException : uint32_t
     OverGroupMemoryLimit = 10006
 };
 
+inline std::string toJS(executive::TransactionException const& _i)
+{
+    std::stringstream stream;
+    stream << "0x" << std::hex << static_cast<int>(_i);
+    return stream.str();
+}
+
 enum class CodeDeposit
 {
     None = 0,

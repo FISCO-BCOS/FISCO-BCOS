@@ -21,7 +21,8 @@
 #include <libethcore/CommonJS.h>
 #include <libethcore/EVMSchedule.h>
 #include <libethcore/LastBlockHashesFace.h>
-#include <libevm/VMFactory.h>
+#include <libexecutive/EVMInterface.h>
+#include <libexecutive/VMFactory.h>
 #include <libstorage/Common.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/StorageException.h>
@@ -132,7 +133,6 @@ bool Executive::execute()
         return create(m_t->sender(), m_t->value(), m_t->gasPrice(),
             txGasLimit - (u256)m_baseGasRequired, &m_t->data(), m_t->sender());
     }
-
     else
     {
         return call(m_t->receiveAddress(), m_t->sender(), m_t->value(), m_t->gasPrice(),
@@ -466,7 +466,7 @@ void Executive::grantContractStatusManager(TableFactory::Ptr memoryTableFactory,
     Address const& newAddress, Address const& sender, Address const& origin)
 {
     LOG(DEBUG) << LOG_DESC("grantContractStatusManager") << LOG_KV("contract", newAddress)
-               << LOG_KV("sender account", sender) << LOG_KV("origin account", origin);
+               << LOG_KV("sender", sender) << LOG_KV("origin", origin);
 
     std::string tableName = precompiled::getContractTableName(newAddress);
     auto table = memoryTableFactory->openTable(tableName);
@@ -482,8 +482,8 @@ void Executive::grantContractStatusManager(TableFactory::Ptr memoryTableFactory,
     entry->setField("key", "authority");
     entry->setField("value", origin.hex());
     table->insert("authority", entry);
-    LOG(DEBUG) << LOG_DESC("grantContractStatusManager add origin")
-               << LOG_KV("authoriy", origin.hex());
+    LOG(DEBUG) << LOG_DESC("grantContractStatusManager add authoriy")
+               << LOG_KV("origin", origin.hex());
 
     if (origin != sender)
     {
@@ -513,8 +513,8 @@ void Executive::grantContractStatusManager(TableFactory::Ptr memoryTableFactory,
                     entry->setField("key", "authority");
                     entry->setField("value", authority);
                     table->insert("authority", entry);
-                    LOG(DEBUG) << LOG_DESC("grantContractStatusManager add sender")
-                               << LOG_KV("authoriy", authority);
+                    LOG(DEBUG) << LOG_DESC("grantContractStatusManager add authoriy")
+                               << LOG_KV("sender", authority);
                 }
             }
         }

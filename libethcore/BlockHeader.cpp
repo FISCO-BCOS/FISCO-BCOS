@@ -26,10 +26,9 @@
 #include "BlockHeader.h"
 #include "Common.h"
 #include "Exceptions.h"
+#include "libdevcrypto/CryptoInterface.h"
 #include <libdevcore/Common.h>
-#include <libdevcore/MemoryDB.h>
 #include <libdevcore/RLP.h>
-#include <libdevcore/TrieDB.h>
 #include <libdevcore/TrieHash.h>
 using namespace std;
 using namespace dev;
@@ -287,7 +286,8 @@ void BlockHeader::verify(Strictness _s, BlockHeader const& _parent, bytesConstRe
     {
         RLP root(_block);
         auto txList = root[1];
-        auto expectedRoot = trieRootOver(txList.itemCount(), [&](unsigned i) { return rlp(i); },
+        auto expectedRoot = trieRootOver(
+            txList.itemCount(), [&](unsigned i) { return rlp(i); },
             [&](unsigned i) { return txList[i].data().toBytes(); });
         LOG(WARNING) << "Expected trie root: " << expectedRoot;
         if (m_transactionsRoot != expectedRoot)

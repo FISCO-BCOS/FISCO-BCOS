@@ -26,7 +26,7 @@
 #include <libethcore/ABI.h>
 #include <libethcore/BlockHeader.h>
 #include <libethcore/Transaction.h>
-#include <libevm/EVMHostInterface.h>
+#include <libexecutive/EVMHostInterface.h>
 #include <libexecutive/Executive.h>
 #include <libexecutive/StateFace.h>
 #include <libmptstate/MPTState.h>
