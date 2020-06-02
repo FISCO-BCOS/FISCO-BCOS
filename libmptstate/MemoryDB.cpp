@@ -20,8 +20,8 @@
  */
 
 #include "MemoryDB.h"
-#include "Common.h"
-#include "CommonData.h"
+#include "libdevcore/Common.h"
+#include "libdevcore/CommonData.h"
 
 using namespace std;
 using namespace dev;

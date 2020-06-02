@@ -17,7 +17,7 @@
 
 #include "TrieHash.h"
 #include "TrieCommon.h"
-#include "TrieDB.h"  // @TODO replace ASAP!
+#include "libdevcrypto/CryptoInterface.h"
 
 namespace dev
 {

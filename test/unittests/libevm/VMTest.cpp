@@ -19,8 +19,8 @@
 #include <libconfig/GlobalConfigure.h>
 #include <libethcore/Exceptions.h>
 #include <libethcore/LastBlockHashesFace.h>
-#include <libevm/EVMInstance.h>
 #include <libexecutive/EVMHostContext.h>
+#include <libexecutive/EVMInstance.h>
 #include <libexecutive/StateFace.h>
 #include <libinterpreter/Instruction.h>
 #include <libinterpreter/interpreter.h>
