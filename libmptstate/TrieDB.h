@@ -21,8 +21,8 @@
 
 #pragma once
 
-#include "Exceptions.h"
-#include "TrieCommon.h"
+#include "libdevcore/Exceptions.h"
+#include "libdevcore/TrieCommon.h"
 #include "libdevcrypto/CryptoInterface.h"
 #include <memory>
 

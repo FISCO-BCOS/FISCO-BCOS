@@ -22,7 +22,7 @@
  */
 #include "libdevcrypto/CryptoInterface.h"
 #include <evmc/helpers.h>
-#include <libevm/EVMHostInterface.h>
+#include <libexecutive/EVMHostInterface.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libevm/FakeExtVMFace.h>
 #include <boost/test/unit_test.hpp>
