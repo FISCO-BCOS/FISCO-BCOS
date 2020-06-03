@@ -21,6 +21,7 @@
 #pragma once
 #include "libdevcore/Exceptions.h"
 #include "libprecompiled/Precompiled.h"
+#include <libdevcore/Address.h>
 #include <memory>
 #include <string>
 
@@ -134,6 +135,11 @@ void checkNameValidate(const std::string& tableName, std::string& keyField,
     std::vector<std::string>& valueFieldList, bool throwStorageException = true);
 int checkLengthValidate(const std::string& field_value, int32_t max_length, int32_t errorCode,
     bool throwStorageException = true);
+
+uint32_t getParamFunc(bytesConstRef _param);
+uint32_t getFuncSelectorByFunctionName(std::string const& _functionName);
+
+bytesConstRef getParamData(bytesConstRef _param);
 
 const int SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH = 64;
 const int SYS_TABLE_VALUE_FIELD_MAX_LENGTH = 1024;
