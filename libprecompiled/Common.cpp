@@ -193,3 +193,25 @@ bytes precompiled::PrecompiledException::ToOutput()
     eth::ContractABI abi;
     return abi.abiIn("Error(string)", string(what()));
 }
+
+uint32_t dev::precompiled::getParamFunc(bytesConstRef _param)
+{
+    auto funcBytes = _param.cropped(0, 4);
+    uint32_t func = *((uint32_t*)(funcBytes.data()));
+
+    return ((func & 0x000000FF) << 24) | ((func & 0x0000FF00) << 8) | ((func & 0x00FF0000) >> 8) |
+           ((func & 0xFF000000) >> 24);
+}
+
+bytesConstRef dev::precompiled::getParamData(bytesConstRef _param)
+{
+    return _param.cropped(4);
+}
+
+uint32_t dev::precompiled::getFuncSelectorByFunctionName(std::string const& _functionName)
+{
+    uint32_t func = *(uint32_t*)(crypto::Hash(_functionName).ref().cropped(0, 4).data());
+    uint32_t selector = ((func & 0x000000FF) << 24) | ((func & 0x0000FF00) << 8) |
+                        ((func & 0x00FF0000) >> 8) | ((func & 0xFF000000) >> 24);
+    return selector;
+}

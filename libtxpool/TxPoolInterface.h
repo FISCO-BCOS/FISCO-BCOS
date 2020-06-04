@@ -150,6 +150,8 @@ public:
     // sealer, broadcast the remaining transactions in the transaction pool to other nodes
     virtual void freshTxsStatus() {}
 
+    virtual unsigned maxBlockLimit() const { return 1000; }
+
 protected:
     ///< Called when a subsequent call to import transactions will return a non-empty container. Be
     ///< nice and exit fast.
