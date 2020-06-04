@@ -215,6 +215,10 @@ public:
     /// @returns true if the transaction was signed with zero signature
     bool hasZeroSignature() const { return m_vrs && isZeroSignature(m_vrs->r, m_vrs->s); }
 
+    u256 const& chainId() { return m_chainId; }
+    u256 const& groupId() { return m_groupId; }
+    dev::bytes const& extraData() { return m_extraData; }
+
     /// @returns the signature of the transaction (the signature has the sender
     /// encoded in it)
     /// @throws TransactionIsUnsigned if signature was not initialized
@@ -252,7 +256,14 @@ public:
 
     int64_t capacity() { return (m_data.size() + m_rlpBuffer.size() + m_extraData.size()); }
 
-protected:
+    // Note: Provide for node transaction generation
+    void setReceiveAddress(Address const& _receiveAddr) { m_receiveAddress = _receiveAddr; }
+    void setData(std::shared_ptr<dev::bytes const> _dataPtr) { m_data = *_dataPtr; }
+
+    void setChainId(u256 const& _chainId) { m_chainId = _chainId; }
+
+    void setGroupId(u256 const& _groupId) { m_groupId = _groupId; }
+
     /// Type of transaction.
     enum Type
     {
@@ -262,7 +273,10 @@ protected:
         MessageCall        ///< Transaction to invoke a message call - receiveAddress() is
                            ///< used.
     };
+    void setType(Type const& _type) { m_type = _type; }
+    Type const& type() { return m_type; }
 
+protected:
     static bool isZeroSignature(u256 const& _r, u256 const& _s) { return !_r && !_s; }
 
     void encodeRC1(bytes& _trans, IncludeSignature _sig = WithSignature) const;
