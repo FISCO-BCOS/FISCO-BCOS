@@ -49,8 +49,12 @@ BOOST_AUTO_TEST_CASE(testInterpreterEvmC)
     FakeExtVM fake_ext_vm(env_info, param.codeAddress, param.senderAddress, param.senderAddress,
         param.valueTransfer, param.gas, param.data, code, crypto::Hash(code_str), 0, false, true);
     std::unique_ptr<EVMInterface> m_face = VMFactory::create(VMKind::Interpreter);
-    u256 io_gas = u256(200000);
-    BOOST_CHECK_THROW(m_face->exec(io_gas, fake_ext_vm, OnOpFunc{}), BadJumpDestination);
+    auto io_gas = 200000;
+    evmc_message msg;
+    msg.gas = io_gas;
+    evmc_revision revision = EVMC_HOMESTEAD;
+    BOOST_CHECK_THROW(
+        m_face->exec(fake_ext_vm, revision, &msg, code.data(), code.size()), BadJumpDestination);
 }
 
 BOOST_AUTO_TEST_CASE(testVMOptionParser)

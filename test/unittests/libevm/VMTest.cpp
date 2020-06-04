@@ -72,37 +72,36 @@ public:
         executiveContext->setMemoryTableFactory(make_shared<storage::MemoryTableFactory>());
         envInfo.setPrecompiledEngine(executiveContext);
     }
-
-    void testCreate2worksInConstantinople()
+    owning_bytes_ref callVMExec()
     {
         EVMHostContext extVm(state, envInfo, address, address, address, value, gasPrice,
             ref(inputData), ref(code), crypto::Hash(code), depth, isCreate, staticCall);
-
-        vm->exec(gas, extVm, OnOpFunc{});
-
+        evmc_call_kind kind = extVm.isCreate() ? EVMC_CREATE : EVMC_CALL;
+        uint32_t flags = extVm.staticCall() ? EVMC_STATIC : 0;
+        auto leftGas = 20000000;
+        evmc_message msg{toEvmC(extVm.myAddress()), toEvmC(extVm.caller()), toEvmC(extVm.value()),
+            extVm.data().data(), extVm.data().size(), toEvmC(extVm.codeHash()),
+            toEvmC(0x0_cppui256), leftGas, static_cast<int32_t>(extVm.depth()), kind, flags};
+        evmc_revision revision = EVMC_CONSTANTINOPLE;
+        return vm->exec(extVm, revision, &msg, extVm.code().data(), extVm.code().size());
+    }
+    void testCreate2worksInConstantinople()
+    {
+        callVMExec();
         BOOST_REQUIRE(state->addressHasCode(expectedAddress));
     }
 
     void testCreate2succeedsIfAddressHasEther()
     {
         state->addBalance(expectedAddress, 1 * ether);
-
-        EVMHostContext extVm(state, envInfo, address, address, address, value, gasPrice,
-            ref(inputData), ref(code), crypto::Hash(code), depth, isCreate, staticCall);
-
-        vm->exec(gas, extVm, OnOpFunc{});
-
+        callVMExec();
         BOOST_REQUIRE(state->addressHasCode(expectedAddress));
     }
 
     void testCreate2doesntChangeContractIfAddressExists()
     {
         state->setCode(expectedAddress, bytes{inputData});
-
-        EVMHostContext extVm(state, envInfo, address, address, address, value, gasPrice,
-            ref(inputData), ref(code), crypto::Hash(code), depth, isCreate, staticCall);
-
-        vm->exec(gas, extVm, OnOpFunc{});
+        callVMExec();
         BOOST_REQUIRE(state->code(expectedAddress) == inputData);
     }
 
@@ -110,10 +109,7 @@ public:
     {
         staticCall = true;
 
-        EVMHostContext extVm(state, envInfo, address, address, address, value, gasPrice,
-            ref(inputData), ref(code), crypto::Hash(code), depth, isCreate, staticCall);
-
-        BOOST_REQUIRE_THROW(vm->exec(gas, extVm, OnOpFunc{}), DisallowedStateChange);
+        BOOST_REQUIRE_THROW(callVMExec(), DisallowedStateChange);
     }
 
     BlockHeader blockHeader{initBlockHeader()};
@@ -177,9 +173,15 @@ public:
     {
         EVMHostContext extVm(state, envInfo, address, address, address, value, gasPrice,
             extAddress.ref(), ref(code), crypto::Hash(code), depth, isCreate, staticCall);
-
-        owning_bytes_ref ret = vm->exec(gas, extVm, OnOpFunc{});
-
+        evmc_call_kind kind = extVm.isCreate() ? EVMC_CREATE : EVMC_CALL;
+        uint32_t flags = extVm.staticCall() ? EVMC_STATIC : 0;
+        auto leftGas = 20000;
+        evmc_message msg{toEvmC(extVm.myAddress()), toEvmC(extVm.caller()), toEvmC(extVm.value()),
+            extVm.data().data(), extVm.data().size(), toEvmC(extVm.codeHash()),
+            toEvmC(0x0_cppui256), leftGas, static_cast<int32_t>(extVm.depth()), kind, flags};
+        evmc_revision revision = EVMC_CONSTANTINOPLE;
+        owning_bytes_ref ret =
+            vm->exec(extVm, revision, &msg, extVm.code().data(), extVm.code().size());
         BOOST_REQUIRE(ret.toBytes() == crypto::Hash(extCode).asBytes());
     }
 
@@ -190,6 +192,7 @@ public:
 
         bigint gasBefore;
         bigint gasAfter;
+#if 0
         auto onOp = [&gasBefore, &gasAfter](uint64_t,  // steps
                         uint64_t,                      // PC
                         evmc_opcode _instr,
@@ -201,9 +204,15 @@ public:
             else if (gasBefore != 0 && gasAfter == 0)
                 gasAfter = _gas;
         };
-
-        vm->exec(gas, extVm, onOp);
-
+#endif
+        evmc_call_kind kind = extVm.isCreate() ? EVMC_CREATE : EVMC_CALL;
+        uint32_t flags = extVm.staticCall() ? EVMC_STATIC : 0;
+        auto leftGas = 20000;
+        evmc_message msg{toEvmC(extVm.myAddress()), toEvmC(extVm.caller()), toEvmC(extVm.value()),
+            extVm.data().data(), extVm.data().size(), toEvmC(extVm.codeHash()),
+            toEvmC(0x0_cppui256), leftGas, static_cast<int32_t>(extVm.depth()), kind, flags};
+        evmc_revision revision = EVMC_CONSTANTINOPLE;
+        vm->exec(extVm, revision, &msg, extVm.code().data(), extVm.code().size());
         BOOST_REQUIRE_EQUAL(gasBefore - gasAfter, 400);
     }
 
@@ -215,7 +224,15 @@ public:
         EVMHostContext extVm(state, envInfo, address, address, address, value, gasPrice,
             addressWithEmptyCode.ref(), ref(code), crypto::Hash(code), depth, isCreate, staticCall);
 
-        owning_bytes_ref ret = vm->exec(gas, extVm, OnOpFunc{});
+        evmc_call_kind kind = extVm.isCreate() ? EVMC_CREATE : EVMC_CALL;
+        uint32_t flags = extVm.staticCall() ? EVMC_STATIC : 0;
+        auto leftGas = 20000;
+        evmc_message msg{toEvmC(extVm.myAddress()), toEvmC(extVm.caller()), toEvmC(extVm.value()),
+            extVm.data().data(), extVm.data().size(), toEvmC(extVm.codeHash()),
+            toEvmC(0x0_cppui256), leftGas, static_cast<int32_t>(extVm.depth()), kind, flags};
+        evmc_revision revision = EVMC_CONSTANTINOPLE;
+        owning_bytes_ref ret =
+            vm->exec(extVm, revision, &msg, extVm.code().data(), extVm.code().size());
         if (g_BCOSConfig.SMCrypto())
         {
             BOOST_REQUIRE_EQUAL(toHex(ret.toBytes()),
@@ -235,7 +252,15 @@ public:
         EVMHostContext extVm(state, envInfo, address, address, address, value, gasPrice,
             addressNonExisting.ref(), ref(code), crypto::Hash(code), depth, isCreate, staticCall);
 
-        owning_bytes_ref ret = vm->exec(gas, extVm, OnOpFunc{});
+        evmc_call_kind kind = extVm.isCreate() ? EVMC_CREATE : EVMC_CALL;
+        uint32_t flags = extVm.staticCall() ? EVMC_STATIC : 0;
+        auto leftGas = 20000;
+        evmc_message msg{toEvmC(extVm.myAddress()), toEvmC(extVm.caller()), toEvmC(extVm.value()),
+            extVm.data().data(), extVm.data().size(), toEvmC(extVm.codeHash()),
+            toEvmC(0x0_cppui256), leftGas, static_cast<int32_t>(extVm.depth()), kind, flags};
+        evmc_revision revision = EVMC_CONSTANTINOPLE;
+        owning_bytes_ref ret =
+            vm->exec(extVm, revision, &msg, extVm.code().data(), extVm.code().size());
 
         BOOST_REQUIRE_EQUAL(fromBigEndian<int>(ret.toBytes()), 0);
     }
@@ -247,7 +272,15 @@ public:
         EVMHostContext extVm(state, envInfo, address, address, address, value, gasPrice,
             addressPrecompile.ref(), ref(code), crypto::Hash(code), depth, isCreate, staticCall);
 
-        owning_bytes_ref ret = vm->exec(gas, extVm, OnOpFunc{});
+        evmc_call_kind kind = extVm.isCreate() ? EVMC_CREATE : EVMC_CALL;
+        uint32_t flags = extVm.staticCall() ? EVMC_STATIC : 0;
+        auto leftGas = 20000;
+        evmc_message msg{toEvmC(extVm.myAddress()), toEvmC(extVm.caller()), toEvmC(extVm.value()),
+            extVm.data().data(), extVm.data().size(), toEvmC(extVm.codeHash()),
+            toEvmC(0x0_cppui256), leftGas, static_cast<int32_t>(extVm.depth()), kind, flags};
+        evmc_revision revision = EVMC_CONSTANTINOPLE;
+        owning_bytes_ref ret =
+            vm->exec(extVm, revision, &msg, extVm.code().data(), extVm.code().size());
 
         BOOST_REQUIRE_EQUAL(fromBigEndian<int>(ret.toBytes()), 0);
     }
@@ -260,7 +293,15 @@ public:
         EVMHostContext extVm(state, envInfo, address, address, address, value, gasPrice,
             addressPrecompile.ref(), ref(code), crypto::Hash(code), depth, isCreate, staticCall);
 
-        owning_bytes_ref ret = vm->exec(gas, extVm, OnOpFunc{});
+        evmc_call_kind kind = extVm.isCreate() ? EVMC_CREATE : EVMC_CALL;
+        uint32_t flags = extVm.staticCall() ? EVMC_STATIC : 0;
+        auto leftGas = 20000;
+        evmc_message msg{toEvmC(extVm.myAddress()), toEvmC(extVm.caller()), toEvmC(extVm.value()),
+            extVm.data().data(), extVm.data().size(), toEvmC(extVm.codeHash()),
+            toEvmC(0x0_cppui256), leftGas, static_cast<int32_t>(extVm.depth()), kind, flags};
+        evmc_revision revision = EVMC_CONSTANTINOPLE;
+        owning_bytes_ref ret =
+            vm->exec(extVm, revision, &msg, extVm.code().data(), extVm.code().size());
         if (g_BCOSConfig.SMCrypto())
         {
             BOOST_REQUIRE_EQUAL(toHex(ret.toBytes()),
@@ -288,7 +329,15 @@ public:
         EVMHostContext extVm(state, envInfo, address, address, address, value, gasPrice,
             ref(extAddressPrefixed), ref(code), crypto::Hash(code), depth, isCreate, staticCall);
 
-        owning_bytes_ref ret = vm->exec(gas, extVm, OnOpFunc{});
+        evmc_call_kind kind = extVm.isCreate() ? EVMC_CREATE : EVMC_CALL;
+        uint32_t flags = extVm.staticCall() ? EVMC_STATIC : 0;
+        auto leftGas = 20000;
+        evmc_message msg{toEvmC(extVm.myAddress()), toEvmC(extVm.caller()), toEvmC(extVm.value()),
+            extVm.data().data(), extVm.data().size(), toEvmC(extVm.codeHash()),
+            toEvmC(0x0_cppui256), leftGas, static_cast<int32_t>(extVm.depth()), kind, flags};
+        evmc_revision revision = EVMC_CONSTANTINOPLE;
+        owning_bytes_ref ret =
+            vm->exec(extVm, revision, &msg, extVm.code().data(), extVm.code().size());
 
         BOOST_REQUIRE(ret.toBytes() == crypto::Hash(extCode).asBytes());
     }
@@ -322,7 +371,7 @@ public:
     bytes code = fromHex("60146000600c37600051803f8060005260206000f35050");
 
     std::unique_ptr<EVMInterface> vm;
-};
+};  // namespace
 
 class AlethInterpreterExtcodehashTestFixture : public ExtcodehashTestFixture
 {

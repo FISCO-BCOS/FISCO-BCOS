@@ -16,6 +16,9 @@
 #include "EVMHostContext.h"
 #include "StateFace.h"
 
+#include "EVMInstance.h"
+#include <json/json.h>
+#include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/CommonIO.h>
 #include <libethcore/ABI.h>
 #include <libethcore/CommonJS.h>
@@ -26,9 +29,7 @@
 #include <libstorage/Common.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/StorageException.h>
-
-#include <json/json.h>
-#include <libblockverifier/ExecutiveContext.h>
+#include <limits.h>
 #include <boost/timer.hpp>
 #include <numeric>
 
@@ -522,7 +523,7 @@ void Executive::grantContractStatusManager(TableFactory::Ptr memoryTableFactory,
     return;
 }
 
-bool Executive::go(OnOpFunc const& _onOp)
+bool Executive::go(OnOpFunc const&)
 {
     if (m_ext)
     {
@@ -531,12 +532,38 @@ bool Executive::go(OnOpFunc const& _onOp)
 #endif
         try
         {
+            auto getEVMCMessage = [=]() -> shared_ptr<evmc_message> {
+                // the block number will be larger than 0,
+                // can be controlled by the programmers
+                assert(m_ext->envInfo().number() >= 0);
+                constexpr int64_t int64max = std::numeric_limits<int64_t>::max();
+                if (m_gas > int64max || m_ext->envInfo().gasLimit() > int64max)
+                {
+                    LOG(ERROR) << LOG_DESC("Gas overflow") << LOG_KV("gas", m_gas)
+                               << LOG_KV("gasLimit", m_ext->envInfo().gasLimit())
+                               << LOG_KV("max gas/gasLimit", int64max);
+                    BOOST_THROW_EXCEPTION(GasOverflow());
+                }
+                assert(m_ext->depth() <= static_cast<size_t>(std::numeric_limits<int32_t>::max()));
+                evmc_call_kind kind = m_ext->isCreate() ? EVMC_CREATE : EVMC_CALL;
+                uint32_t flags = m_ext->staticCall() ? EVMC_STATIC : 0;
+                // this is ensured by solidity compiler
+                assert(flags != EVMC_STATIC || kind == EVMC_CALL);  // STATIC implies a CALL.
+                auto leftGas = static_cast<int64_t>(m_gas);
+                return shared_ptr<evmc_message>(new evmc_message{toEvmC(m_ext->myAddress()),
+                    toEvmC(m_ext->caller()), toEvmC(m_ext->value()), m_ext->data().data(),
+                    m_ext->data().size(), toEvmC(m_ext->codeHash()), toEvmC(0x0_cppui256), leftGas,
+                    static_cast<int32_t>(m_ext->depth()), kind, flags});
+            };
             // Create VM instance. Force Interpreter if tracing requested.
             auto vm = VMFactory::create();
             if (m_isCreation)
             {
                 m_s->clearStorage(m_ext->myAddress());
-                auto out = vm->exec(m_gas, *m_ext, _onOp);
+                auto mode = toRevision(m_ext->evmSchedule());
+                auto emvcMessage = getEVMCMessage();
+                auto out = vm->exec(
+                    *m_ext, mode, emvcMessage.get(), m_ext->code().data(), m_ext->code().size());
 
                 m_res.gasForDeposit = m_gas;
                 m_res.depositSize = out.size();
@@ -576,7 +603,12 @@ bool Executive::go(OnOpFunc const& _onOp)
                 m_s->setCode(m_ext->myAddress(), out.toVector());
             }
             else
-                m_output = vm->exec(m_gas, *m_ext, _onOp);
+            {
+                auto mode = toRevision(m_ext->evmSchedule());
+                auto emvcMessage = getEVMCMessage();
+                m_output = vm->exec(
+                    *m_ext, mode, emvcMessage.get(), m_ext->code().data(), m_ext->code().size());
+            }
         }
         catch (RevertInstruction& _e)
         {
