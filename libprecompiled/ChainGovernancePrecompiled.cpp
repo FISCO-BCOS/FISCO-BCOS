@@ -384,7 +384,8 @@ int ChainGovernancePrecompiled::grantOperator(
         return CODE_COMMITTEE_MEMBER_CANNOT_BE_OPERATOR;
     }
     entries = acTable->select(SYS_TABLES, condition);
-    if (entries->size() != 0u)
+    auto entries2 = acTable->select(SYS_CNS, condition);
+    if (entries->size() != 0u && entries2->size() != 0u)
     {
         CHAIN_GOVERNANCE_LOG(INFO)
             << LOG_DESC("grantOperator operator exists") << LOG_KV("operator", _userAddress)
@@ -672,6 +673,15 @@ int ChainGovernancePrecompiled::grantTablePermission(
     const std::string& _userAddress, const Address& _origin)
 {  // _origin must have permission of SYS_ACCESS_TABLE
     auto acTable = openTable(_context, SYS_ACCESS_TABLE);
+    auto condition = acTable->newCondition();
+    condition->EQ(SYS_AC_ADDRESS, _userAddress);
+    auto entries = acTable->select(_tableName, condition);
+    if (entries->size() != 0u)
+    {
+        CHAIN_GOVERNANCE_LOG(DEBUG) << LOG_DESC("user exist") << LOG_KV("operator", _userAddress)
+                                    << LOG_KV("table", _tableName);
+        return 1;
+    }
     auto entry = acTable->newEntry();
     entry->setField(SYS_AC_TABLE_NAME, _tableName);
     entry->setField(SYS_AC_ADDRESS, _userAddress);

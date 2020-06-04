@@ -78,17 +78,33 @@ PrecompiledExecResult::Ptr PermissionPrecompiled::call(
         abi.abiOut(data, tableName, addr);
         do
         {
-            if (g_BCOSConfig.version() >= V2_5_0 && tableName == SYS_ACCESS_TABLE)
+            Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
+            if (g_BCOSConfig.version() >= V2_5_0)
             {
-                result = CODE_COMMITTEE_PERMISSION;
-                PRECOMPILED_LOG(WARNING)
-                    << LOG_BADGE("PermissionPrecompiled")
-                    << LOG_DESC("Committee permission controlled by ChainGovernancePrecompiled")
-                    << LOG_KV("return", result);
-                break;
+                if (tableName == SYS_ACCESS_TABLE)
+                {
+                    result = CODE_COMMITTEE_PERMISSION;
+                    PRECOMPILED_LOG(WARNING)
+                        << LOG_BADGE("PermissionPrecompiled")
+                        << LOG_DESC("Committee permission controlled by ChainGovernancePrecompiled")
+                        << LOG_KV("return", result);
+                    break;
+                }
+                auto condition = table->newCondition();
+                condition->EQ(SYS_AC_ADDRESS, addr);
+                auto entries = table->select(SYS_ACCESS_TABLE, condition);
+                if (entries->size() != 0u && (tableName == SYS_TABLES || tableName == SYS_CNS))
+                {  // committee
+                    result = CODE_OPERATOR_CANNOT_BE_COMMITTEE_MEMBER;
+                    PRECOMPILED_LOG(WARNING)
+                        << LOG_BADGE("PermissionPrecompiled")
+                        << LOG_DESC("committee member should not have operator permission")
+                        << LOG_KV("account", addr)
+                        << LOG_KV("return", CODE_COMMITTEE_MEMBER_CANNOT_BE_OPERATOR);
+                    break;
+                }
             }
             addPrefixToUserTable(tableName);
-            Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
 
             auto condition = table->newCondition();
             condition->EQ(SYS_AC_ADDRESS, addr);
