@@ -73,6 +73,7 @@ Usage:
     -t <Cert config file>               Default auto generate
     -k <The path of ca root>            Default auto generate, the ca.crt and ca.key must in the path, if use intermediate the root.crt must in the path
     -K <The path of sm crypto ca root>  Default auto generate, the gmca.crt and gmca.key must in the path, if use intermediate the gmroot.crt must in the path
+    -D <Use Deployment mode>            Default false, If set -D, use deploy mode directory struct and make tar
     -G <channel use sm crypto ssl>      Default false, only works for guomi mode
     -X <Certificate expiration time>    Default 36500 days
     -T <Enable debug log>               Default off. If set -T, enable debug log
