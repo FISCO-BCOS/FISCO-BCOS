@@ -42,48 +42,11 @@ EVMInstance::EVMInstance(evmc_instance* _instance) noexcept : m_instance(_instan
             m_instance->set_option(m_instance, pair.first.c_str(), pair.second.c_str());
 }
 
-owning_bytes_ref EVMInstance::exec(u256& io_gas, EVMHostInterface& _ext, const OnOpFunc& _onOp)
+owning_bytes_ref EVMInstance::exec(EVMHostInterface& _ext, evmc_revision _rev, evmc_message* _msg,
+    const uint8_t* _code, size_t _code_size)
 {
-    // the block number will be larger than 0,
-    // can be controlled by the programmers
-    assert(_ext.envInfo().number() >= 0);
-
-    constexpr int64_t int64max = std::numeric_limits<int64_t>::max();
-
-    // TODO: The following checks should be removed by changing the types
-    //       used for gas, block number and timestamp.
-    (void)int64max;
-
-    // gas, gasLimit are u256 outside of EVMInstance
-    // and can be passed inside by the outsider-users
-    // so we should remove the `assert`, and throw exceptions if this happend
-    // *origin code:
-    // assert(io_gas <= int64max);
-    // assert(_ext.envInfo().gasLimit() <= int64max);
-    // *modified code:
-    if (io_gas > int64max || _ext.envInfo().gasLimit() > int64max)
-    {
-        LOG(ERROR) << LOG_DESC("Gas overflow") << LOG_KV("gas", io_gas)
-                   << LOG_KV("gasLimit", _ext.envInfo().gasLimit())
-                   << LOG_KV("max gas/gasLimit", int64max);
-        BOOST_THROW_EXCEPTION(GasOverflow());
-    }
-
-    assert(_ext.depth() <= static_cast<size_t>(std::numeric_limits<int32_t>::max()));
-
-    auto gas = static_cast<int64_t>(io_gas);
-    auto mode = toRevision(_ext.evmSchedule());
-    evmc_call_kind kind = _ext.isCreate() ? EVMC_CREATE : EVMC_CALL;
-    uint32_t flags = _ext.staticCall() ? EVMC_STATIC : 0;
-    // this is ensured by solidity compiler
-    assert(flags != EVMC_STATIC || kind == EVMC_CALL);  // STATIC implies a CALL.
-
-    evmc_message msg = {toEvmC(_ext.myAddress()), toEvmC(_ext.caller()), toEvmC(_ext.value()),
-        _ext.data().data(), _ext.data().size(), toEvmC(_ext.codeHash()), toEvmC(0x0_cppui256), gas,
-        static_cast<int32_t>(_ext.depth()), kind, flags};
-    Result r{
-        m_instance->execute(m_instance, &_ext, mode, &msg, _ext.code().data(), _ext.code().size())};
-
+    Result r{m_instance->execute(m_instance, &_ext, _rev, _msg, _code, _code_size)};
+    auto io_gas = _msg->gas;
     switch (r.status())
     {
     case EVMC_SUCCESS:
@@ -122,7 +85,7 @@ owning_bytes_ref EVMInstance::exec(u256& io_gas, EVMHostInterface& _ext, const O
     case EVMC_REJECTED:
         LOG(WARNING)
             << "Execution rejected by EVMInstance, executing with default VM implementation";
-        return VMFactory::create(VMKind::Interpreter)->exec(io_gas, _ext, _onOp);
+        return VMFactory::create(VMKind::Interpreter)->exec(_ext, _rev, _msg, _code, _code_size);
 
     case EVMC_INTERNAL_ERROR:
     default:

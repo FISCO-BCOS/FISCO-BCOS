@@ -76,7 +76,8 @@ public:
         evmc_result m_result;
     };
 
-    owning_bytes_ref exec(u256& io_gas, EVMHostInterface& _ext, OnOpFunc const& _onOp) final;
+    owning_bytes_ref exec(EVMHostInterface& _ext, evmc_revision _rev, evmc_message* _msg,
+        const uint8_t* _code, size_t _code_size) final;
 
 private:
     /// The VM instance created with EVMInstance-C <prefix>_create() function.

@@ -40,7 +40,8 @@ public:
     EVMInterface& operator=(EVMInterface const&) = delete;
 
     /// VM implementation
-    virtual owning_bytes_ref exec(u256& io_gas, EVMHostInterface& _ext, OnOpFunc const& _onOp) = 0;
+    virtual owning_bytes_ref exec(EVMHostInterface& _ext, evmc_revision _rev, evmc_message* _msg,
+        const uint8_t* _code, size_t _code_size) = 0;
 };
 }  // namespace eth
 }  // namespace dev
