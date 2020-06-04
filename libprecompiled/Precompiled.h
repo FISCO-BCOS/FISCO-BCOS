@@ -20,6 +20,7 @@
  */
 #pragma once
 
+#include "Common.h"
 #include "PrecompiledResult.h"
 #include <libdevcore/Address.h>
 #include <libstorage/Table.h>
@@ -56,18 +57,7 @@ public:
     {
         return std::vector<std::string>();
     }
-
-    virtual uint32_t getParamFunc(bytesConstRef _param)
-    {
-        auto funcBytes = _param.cropped(0, 4);
-        uint32_t func = *((uint32_t*)(funcBytes.data()));
-
-        return ((func & 0x000000FF) << 24) | ((func & 0x0000FF00) << 8) |
-               ((func & 0x00FF0000) >> 8) | ((func & 0xFF000000) >> 24);
-    }
-
     virtual uint32_t getFuncSelector(std::string const& _functionName);
-    virtual bytesConstRef getParamData(bytesConstRef _param) { return _param.cropped(4); }
 
     void setPrecompiledExecResultFactory(
         PrecompiledExecResultFactory::Ptr _precompiledExecResultFactory)
