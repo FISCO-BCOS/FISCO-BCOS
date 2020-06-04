@@ -150,6 +150,17 @@ const int USER_TABLE_NAME_MAX_LENGTH = 64;
 const int USER_TABLE_NAME_MAX_LENGTH_S = 50;
 const int USER_TABLE_FIELD_VALUE_MAX_LENGTH = 16 * 1024 * 1024 - 1;
 
-
+// Define precompiled contract address
+const Address SYS_CONFIG_ADDRESS = Address(0x1000);
+const Address TABLE_FACTORY_ADDRESS = Address(0x1001);
+const Address CRUD_ADDRESS = Address(0x1002);
+const Address CONSENSUS_ADDRESS = Address(0x1003);
+const Address CNS_ADDRESS = Address(0x1004);
+const Address PERMISSION_ADDRESS = Address(0x1005);
+const Address PARALLEL_CONFIG_ADDRESS = Address(0x1006);
+const Address CONTRACT_LIFECYCLE_ADDRESS = Address(0x1007);
+const Address CHAINGOVERNANCE_ADDRESS = Address(0x1008);
+const Address KVTABLE_FACTORY_ADDRESS = Address(0x1010);
+const Address WORKING_SEALER_MGR_ADDRESS = Address(0x1011);
 }  // namespace precompiled
 }  // namespace dev

@@ -32,6 +32,7 @@ namespace consensus
 class TxGenerator
 {
 public:
+    using Ptr = std::shared_ptr<TxGenerator>;
     TxGenerator(u256 const& _chainId, u256 const& _groupId, unsigned const& _validBlockLimit = 600)
       : m_chainId(_chainId), m_groupId(_groupId), m_validBlockLimit(_validBlockLimit)
     {}

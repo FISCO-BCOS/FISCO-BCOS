@@ -175,6 +175,9 @@ protected:
         m_sealing.block->header().setTimestamp(std::max(parentTime + 1, utcTime()));
     }
 
+    // hook call before loadTransaction
+    virtual void hookBeforeSealBlock() {}
+
 protected:
     uint64_t maxBlockCanSeal()
     {
