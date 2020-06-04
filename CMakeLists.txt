@@ -60,7 +60,6 @@ include(ProjectEVMC)
 
 include_directories("${CMAKE_SOURCE_DIR}")
 
-configure_project()
 add_subdirectory(libchannelserver)
 add_subdirectory(libdevcore)
 add_subdirectory(libdevcrypto)

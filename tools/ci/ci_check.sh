@@ -117,7 +117,7 @@ check_binarylog()
     fi
     ${sed_cmd} "s/binary_log=false/binary_log=true/" node0/conf/group.1.ini
     ${sed_cmd} "s/binary_log=false/binary_log=true/" node1/conf/group.1.ini
-    check_consensus_and_sync 10
+    check_consensus_and_sync 12
 }
 
 check_raft()
