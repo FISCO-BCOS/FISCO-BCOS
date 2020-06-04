@@ -1750,7 +1750,19 @@ Json::Value Rpc::queryGroupStatus(int _groupID)
         return response;
     }
 
-    auto status = ledgerManager()->queryGroupStatus(_groupID);
+    LedgerStatus status;
+    try
+    {
+        status = ledgerManager()->queryGroupStatus(_groupID);
+    }
+    catch (UnknownGroupStatus&)
+    {
+        status = LedgerStatus::UNKNOWN;
+    }
+
+    response["code"] = LedgerManagementStatusCode::SUCCESS;
+    response["message"] = "";
+
     switch (status)
     {
     case LedgerStatus::INEXISTENT:
@@ -1768,11 +1780,12 @@ Json::Value Rpc::queryGroupStatus(int _groupID)
     case LedgerStatus::DELETED:
         response["status"] = "DELETED";
         break;
-    default:
-        BOOST_THROW_EXCEPTION(UnknownGroupStatus());
+    case LedgerStatus::UNKNOWN:
+        response["status"] = "UNKNOWN";
+        response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
+        response["message"] = "Please check `.group_status` file of the group";
+        break;
     }
-    response["code"] = LedgerManagementStatusCode::SUCCESS;
-    response["message"] = "";
     return response;
 }
 

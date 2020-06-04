@@ -140,6 +140,8 @@ void LedgerManager::checkGroupStatus(dev::GROUP_ID const& _groupID, LedgerStatus
         BOOST_THROW_EXCEPTION(GroupAlreadyStopped());
     case LedgerStatus::STOPPING:
         BOOST_THROW_EXCEPTION(GroupIsStopping());
+    case LedgerStatus::UNKNOWN:
+        BOOST_THROW_EXCEPTION(UnknownGroupStatus());
     }
 }
 
