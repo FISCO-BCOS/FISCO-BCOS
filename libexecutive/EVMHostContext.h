@@ -76,7 +76,7 @@ public:
 
     /// Create a new contract.
     evmc_result create(u256 const& _endowment, u256& io_gas, bytesConstRef _code, evmc_opcode _op,
-        u256 _salt, dev::eth::OnOpFunc const& _onOp = {}) final;
+        u256 _salt) final;
 
     /// Create a new message call.
     evmc_result call(dev::eth::CallParameters& _params) final;
