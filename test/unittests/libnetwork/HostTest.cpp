@@ -214,6 +214,7 @@ BOOST_AUTO_TEST_CASE(Host_run)
         [](NetworkException, SessionFace::Ptr, Message::Ptr m) { LOG(INFO) << m->length(); });
     s->setMessageHandler(messageHandler);
     // empty callback
+    // TODO: fix this ut
     BOOST_CHECK(nullptr == s->getCallbackBySeq(0u));
 
     m_host->stop();

@@ -183,7 +183,7 @@ std::shared_ptr<std::vector<std::string>> ExecutiveContext::getTxCriticals(const
     }
     else
     {
-        uint32_t selector = m_parallelConfigPrecompiled->getParamFunc(ref(_tx.data()));
+        uint32_t selector = dev::precompiled::getParamFunc(ref(_tx.data()));
 
         auto receiveAddress = _tx.receiveAddress();
         std::shared_ptr<dev::precompiled::ParallelConfig> config = nullptr;
