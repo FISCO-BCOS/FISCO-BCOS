@@ -100,7 +100,14 @@ public:
         }
         TXPOOL_LOG(DEBUG) << LOG_DESC("TxPool Stopped!");
     }
-    void setMaxBlockLimit(unsigned const& limit) { m_txNonceCheck->setBlockLimit(limit); }
+    void setMaxBlockLimit(unsigned const& _limit)
+    {
+        m_maxBlockLimit = _limit;
+        m_txNonceCheck->setBlockLimit(_limit);
+    }
+
+    unsigned maxBlockLimit() const override { return m_maxBlockLimit; }
+
     unsigned const& maxBlockLimit() { return m_txNonceCheck->maxBlockLimit(); }
     virtual ~TxPool()
     {
@@ -295,6 +302,8 @@ private:
 
     std::atomic<int64_t> m_usedMemorySize = {0};
     int64_t m_maxMemoryLimit = 512 * 1024 * 1024;
+
+    unsigned m_maxBlockLimit;
 };
 }  // namespace txpool
 }  // namespace dev
