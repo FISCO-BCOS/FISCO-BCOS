@@ -24,6 +24,7 @@
 #include <json/json.h>
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/FixedHash.h>
+#include <libethcore/Exceptions.h>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/crc.hpp>
@@ -57,6 +58,13 @@ void BinLogHandler::setBinLogStoragePath(const std::string& path)
 
 bool BinLogHandler::writeBlocktoBinLog(int64_t num, const std::vector<TableData::Ptr>& datas)
 {
+    if (boost::filesystem::space(m_path).available < m_binarylogSize)
+    {
+        BINLOG_HANDLER_LOG(ERROR) << LOG_DESC("Disk space is insufficient.");
+        raise(SIGTERM);
+        BOOST_THROW_EXCEPTION(dev::eth::NotEnoughAvailableSpace());
+    }
+
     bytes buffer;
     auto start = utcTimeUs();
     encodeBlock(num, datas, buffer);
