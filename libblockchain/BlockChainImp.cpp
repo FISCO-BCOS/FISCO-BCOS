@@ -637,40 +637,49 @@ dev::h512s BlockChainImp::getNodeListByType(int64_t blockNumber, std::string con
     return list;
 }
 
+// return the working sealer
+dev::h512s BlockChainImp::workingSealerList()
+{
+    return getNodeList(
+        m_cacheNumByWorkingSealer, m_workingSealerList, m_nodeListMutex, NODE_TYPE_WORKING_SEALER);
+}
+
+dev::h512s BlockChainImp::pendingSealerList()
+{
+    return getNodeList(m_cacheNumBySealer, m_sealerList, m_nodeListMutex, NODE_TYPE_SEALER);
+}
+
+// Union of type=NODE_TYPE_WORKING_SEALER and type=NODE_TYPE_SEALER
 dev::h512s BlockChainImp::sealerList()
 {
-    int64_t blockNumber = number();
-    UpgradableGuard l(m_nodeListMutex);
-    if (m_cacheNumBySealer == blockNumber)
-    {
-        BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#sealerList]Get sealer list by cache")
-                              << LOG_KV("size", m_sealerList.size());
-        return m_sealerList;
-    }
-    dev::h512s list = getNodeListByType(blockNumber, NODE_TYPE_SEALER);
-    UpgradeGuard ul(l);
-    m_cacheNumBySealer = blockNumber;
-    m_sealerList = list;
-
-    return list;
+    return (workingSealerList() + pendingSealerList());
 }
 
 dev::h512s BlockChainImp::observerList()
 {
-    int64_t blockNumber = number();
-    UpgradableGuard l(m_nodeListMutex);
-    if (m_cacheNumByObserver == blockNumber)
-    {
-        BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#observerList]Get observer list by cache")
-                              << LOG_KV("size", m_observerList.size());
-        return m_observerList;
-    }
-    dev::h512s list = getNodeListByType(blockNumber, NODE_TYPE_OBSERVER);
-    UpgradeGuard ul(l);
-    m_cacheNumByObserver = blockNumber;
-    m_observerList = list;
+    return getNodeList(m_cacheNumByObserver, m_observerList, m_nodeListMutex, NODE_TYPE_OBSERVER);
+}
 
-    return list;
+// TODO: Use pointers as return values to reduce copy overhead
+dev::h512s BlockChainImp::getNodeList(dev::eth::BlockNumber& _cachedNumber,
+    dev::h512s& _cachedNodeList, SharedMutex& _mutex, std::string const& _nodeListType)
+{
+    auto blockNumber = number();
+    UpgradableGuard l(_mutex);
+    // hit the cache
+    if (_cachedNumber == blockNumber)
+    {
+        BLOCKCHAIN_LOG(TRACE) << LOG_DESC("getNodeList: hit the cache")
+                              << LOG_KV("type", _nodeListType)
+                              << LOG_KV("size", _cachedNodeList.size());
+        return _cachedNodeList;
+    }
+    // miss the cache
+    auto nodeList = getNodeListByType(blockNumber, _nodeListType);
+    UpgradeGuard ul(l);
+    _cachedNumber = blockNumber;
+    _cachedNodeList = nodeList;
+    return nodeList;
 }
 
 std::string BlockChainImp::getSystemConfigByKey(std::string const& key, int64_t num)

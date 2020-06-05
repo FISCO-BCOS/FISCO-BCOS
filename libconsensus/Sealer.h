@@ -176,7 +176,7 @@ protected:
     }
 
     // hook call before loadTransaction
-    virtual void hookBeforeSealBlock() {}
+    virtual bool hookBeforeSealBlock() { return true; }
 
 protected:
     uint64_t maxBlockCanSeal()

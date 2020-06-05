@@ -28,6 +28,8 @@ namespace precompiled
 const char* const NODE_TYPE = "type";
 const char* const NODE_TYPE_SEALER = "sealer";
 const char* const NODE_TYPE_OBSERVER = "observer";
+// working sealer
+const char* const NODE_TYPE_WORKING_SEALER = "wSealer";
 const char* const NODE_KEY_NODEID = "node_id";
 const char* const NODE_KEY_ENABLENUM = "enable_num";
 const char* const PRI_COLUMN = "name";

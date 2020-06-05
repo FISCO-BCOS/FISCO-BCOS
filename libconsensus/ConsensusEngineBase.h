@@ -175,6 +175,8 @@ public:
         m_blockFactory = _blockFactory;
     }
 
+    KeyPair const& keyPair() { return m_keyPair; }
+
 protected:
     void dropHandledTransactions(std::shared_ptr<dev::eth::Block> block)
     {
