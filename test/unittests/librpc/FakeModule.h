@@ -32,7 +32,6 @@
 #include <libethcore/Common.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
-#include <libexecutive/ExecutionResult.h>
 #include <libledger/LedgerManager.h>
 #include <libp2p/Service.h>
 #include <libsync/SyncInterface.h>
@@ -304,8 +303,8 @@ public:
         entry.data = bytes();
         entry.topics = h256s();
         entries.push_back(entry);
-        return std::make_shared<TransactionReceipt>(h256(0x3), u256(8), entries,
-            executive::TransactionException::None, bytes(), Address(0x1000));
+        return std::make_shared<TransactionReceipt>(
+            h256(0x3), u256(8), entries, eth::TransactionException::None, bytes(), Address(0x1000));
     }
 
     std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) override
@@ -324,8 +323,8 @@ public:
         std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
     getTransactionReceiptByHashWithProof(dev::h256 const&, dev::eth::LocalisedTransaction&) override
     {
-        return std::make_pair(std::make_shared<LocalisedTransactionReceipt>(
-                                  dev::executive::TransactionException::None),
+        return std::make_pair(
+            std::make_shared<LocalisedTransactionReceipt>(dev::eth::TransactionException::None),
             std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>());
     }
     CommitResult commitBlock(std::shared_ptr<dev::eth::Block> block,

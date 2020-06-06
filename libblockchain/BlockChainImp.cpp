@@ -1067,7 +1067,7 @@ BlockChainImp::getTransactionReceiptByHashWithProof(
         BLOCKCHAIN_LOG(ERROR) << LOG_DESC("get block info  failed")
                               << LOG_KV("_txHash", _txHash.hex());
         return std::make_pair(std::make_shared<dev::eth::LocalisedTransactionReceipt>(
-                                  executive::TransactionException::None),
+                                  eth::TransactionException::None),
             merkleProof);
     }
     auto txIndex = blockInfoWithTxIndex.second;
@@ -1080,7 +1080,7 @@ BlockChainImp::getTransactionReceiptByHashWithProof(
     {
         BLOCKCHAIN_LOG(ERROR) << LOG_DESC("txindex is invalidate ") << LOG_KV("txIndex", txIndex);
         return std::make_pair(std::make_shared<dev::eth::LocalisedTransactionReceipt>(
-                                  executive::TransactionException::None),
+                                  eth::TransactionException::None),
             merkleProof);
     }
 

@@ -28,7 +28,6 @@
 #include <libethcore/Common.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
-#include <libexecutive/ExecutionResult.h>
 #include <libprecompiled/SystemConfigPrecompiled.h>
 #include <libsync/SyncStatus.h>
 #include <libtxpool/TxPoolInterface.h>
@@ -1090,12 +1089,12 @@ Json::Value Rpc::call(int _groupID, const Json::Value& request)
             maxTransactionGasLimit, txSkeleton.to, txSkeleton.data, txSkeleton.nonce);
         auto blockHeader = block->header();
         tx->forceSender(txSkeleton.from);
-        auto executionResult = blockverfier->executeTransaction(blockHeader, tx);
+        auto transactionReceipt = blockverfier->executeTransaction(blockHeader, tx);
 
         Json::Value response;
         response["currentBlockNumber"] = toJS(blockNumber);
-        response["status"] = toJS(executionResult->status());
-        response["output"] = toJS(executionResult->outputBytes());
+        response["status"] = toJS(transactionReceipt->status());
+        response["output"] = toJS(transactionReceipt->outputBytes());
         return response;
     }
     catch (JsonRpcException& e)
