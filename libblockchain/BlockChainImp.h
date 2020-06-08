@@ -112,7 +112,12 @@ public:
     virtual void setStateStorage(dev::storage::Storage::Ptr stateStorage);
     virtual void setStateFactory(dev::executive::StateFactoryInterface::Ptr _stateFactory);
     virtual std::shared_ptr<dev::storage::TableFactory> getMemoryTableFactory(int64_t num = 0);
+
+    // When there is no genesis block, write relevant configuration items to the genesis block and
+    // system table; when there is a genesis block, load immutable configuration information from
+    // the genesis block
     bool checkAndBuildGenesisBlock(GenesisBlockParam& initParam, bool _shouldBuild = true) override;
+
     std::pair<int64_t, int64_t> totalTransactionCount() override;
     std::pair<int64_t, int64_t> totalFailedTransactionCount() override;
     dev::bytes getCode(dev::Address _address) override;
@@ -155,6 +160,14 @@ public:
         dev::eth::Block::Ptr _block, uint64_t const& _index) override;
 
 private:
+    // Randomly select epochSealerSize nodes from workingList as workingSealer and write them into
+    // the system table Only used in vrf_rpbft consensus type
+    virtual void initGenesisWorkingSealers(
+        dev::storage::Table::Ptr _consTable, GenesisBlockParam& _initParam);
+    virtual void initGensisConsensusInfoByNodeType(dev::storage::Table::Ptr _consTable,
+        std::string const& _nodeType, dev::h512s const& _nodeList, int64_t _nodeNum = -1,
+        bool _update = false);
+
     dev::h512s getNodeList(dev::eth::BlockNumber& _cachedNumber, dev::h512s& _cachedNodeList,
         SharedMutex& _mutex, std::string const& _nodeListType);
 
