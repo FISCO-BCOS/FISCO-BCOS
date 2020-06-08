@@ -24,8 +24,8 @@
 
 using namespace dev::precompiled;
 
-// The parameters are: VRF proof, VRF public key, VRF input
-const char* const WSM_METHOD_ROTATE_STR =
+// The parameters are: VRF public key, VRF input, VRF proof
+const char* const dev::precompiled::WSM_METHOD_ROTATE_STR =
     "rotateWorkingSealer(std::string, std::string, std::string)";
 
 // init function selector
