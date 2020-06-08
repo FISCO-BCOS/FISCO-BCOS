@@ -200,7 +200,7 @@ PrecompiledExecResult::Ptr ChainGovernancePrecompiled::call(
     }
     else if (func == name2Selector[CGP_METHOD_LIST_OP])
     {  // listOperators()
-        auto resultJson = queryTablePermissions(_context, SYS_TABLES);
+        auto resultJson = listOperators(_context);
         callResult->setExecResult(abi.abiIn("", resultJson));
     }
     else if (func == name2Selector[CGP_METHOD_QUERY_CM_THRESHOLD])
@@ -275,7 +275,7 @@ int ChainGovernancePrecompiled::grantCommitteeMember(
     shared_ptr<dev::blockverifier::ExecutiveContext> _context, const string& _member,
     const Address& _origin)
 {
-    if (isOperator(_context, _member))
+    if (hasOperatorPermissions(_context, _member))
     {
         CHAIN_GOVERNANCE_LOG(INFO) << LOG_DESC("grant Operator as committee member is forbidden")
                                    << LOG_KV("member", _member)
@@ -383,9 +383,7 @@ int ChainGovernancePrecompiled::grantOperator(
                                    << LOG_KV("return", CODE_COMMITTEE_MEMBER_CANNOT_BE_OPERATOR);
         return CODE_COMMITTEE_MEMBER_CANNOT_BE_OPERATOR;
     }
-    entries = acTable->select(SYS_TABLES, condition);
-    auto entries2 = acTable->select(SYS_CNS, condition);
-    if (entries->size() != 0u && entries2->size() != 0u)
+    if (isOperator(_context, _userAddress))
     {
         CHAIN_GOVERNANCE_LOG(INFO)
             << LOG_DESC("grantOperator operator exists") << LOG_KV("operator", _userAddress)
@@ -668,6 +666,33 @@ string ChainGovernancePrecompiled::queryTablePermissions(
     return fastWriter.write(AuthorityInfos);
 }
 
+string ChainGovernancePrecompiled::listOperators(
+    shared_ptr<dev::blockverifier::ExecutiveContext> _context)
+{
+    Table::Ptr table = openTable(_context, SYS_ACCESS_TABLE);
+    auto condition = table->newCondition();
+    auto entries = table->select(SYS_TABLES, condition);
+    Json::Value AuthorityInfos(Json::arrayValue);
+    if (entries)
+    {
+        for (size_t i = 0; i < entries->size(); i++)
+        {
+            auto entry = entries->get(i);
+            if (!entry)
+                continue;
+            if (isOperator(_context, entry->getField(SYS_AC_ADDRESS)))
+            {
+                Json::Value AuthorityInfo;
+                AuthorityInfo[SYS_AC_ADDRESS] = entry->getField(SYS_AC_ADDRESS);
+                AuthorityInfo[SYS_AC_ENABLENUM] = entry->getField(SYS_AC_ENABLENUM);
+                AuthorityInfos.append(AuthorityInfo);
+            }
+        }
+    }
+    Json::FastWriter fastWriter;
+    return fastWriter.write(AuthorityInfos);
+}
+
 int ChainGovernancePrecompiled::grantTablePermission(
     std::shared_ptr<blockverifier::ExecutiveContext> _context, const std::string& _tableName,
     const std::string& _userAddress, const Address& _origin)
@@ -719,6 +744,17 @@ bool ChainGovernancePrecompiled::isCommitteeMember(
 }
 
 bool ChainGovernancePrecompiled::isOperator(ExecutiveContext::Ptr context, string const& account)
+{
+    auto acTable = openTable(context, SYS_ACCESS_TABLE);
+    auto condition = acTable->newCondition();
+    condition->EQ(SYS_AC_ADDRESS, account);
+    auto entries = acTable->select(SYS_TABLES, condition);
+    auto entries2 = acTable->select(SYS_CNS, condition);
+    return (entries->size() != 0u) && (entries2->size() != 0u);
+}
+
+bool ChainGovernancePrecompiled::hasOperatorPermissions(
+    ExecutiveContext::Ptr context, string const& account)
 {
     auto acTable = openTable(context, SYS_ACCESS_TABLE);
     auto condition = acTable->newCondition();

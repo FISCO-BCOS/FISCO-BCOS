@@ -73,6 +73,8 @@ private:
     std::string queryTablePermissions(
         std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
         const std::string& _tableName);
+    std::string listOperators(
+        std::shared_ptr<dev::blockverifier::ExecutiveContext> _context);
     int grantCommitteeMember(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
         const std::string& _user, const Address& _origin);
     int updateCommitteeMemberWeight(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
@@ -89,6 +91,8 @@ private:
     bool isCommitteeMember(
         std::shared_ptr<blockverifier::ExecutiveContext> context, Address const& account);
     bool isOperator(
+        std::shared_ptr<blockverifier::ExecutiveContext> context, std::string const& account);
+        bool hasOperatorPermissions(
         std::shared_ptr<blockverifier::ExecutiveContext> context, std::string const& account);
     AccountStatus getAccountStatus(
         std::shared_ptr<blockverifier::ExecutiveContext> context, std::string const& tableName);
