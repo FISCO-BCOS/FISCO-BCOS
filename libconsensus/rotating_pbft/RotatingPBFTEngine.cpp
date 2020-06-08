@@ -39,12 +39,11 @@ std::pair<bool, IDXTYPE> RotatingPBFTEngine::getLeader() const
     {
         return std::make_pair(false, MAXIDX);
     }
-    auto leaderIdx = VRFSelection();
+    auto leaderIdx = selectLeader();
     return std::make_pair(true, leaderIdx);
 }
 
-// TODO: chose leader by VRF algorithm
-IDXTYPE RotatingPBFTEngine::VRFSelection() const
+IDXTYPE RotatingPBFTEngine::selectLeader() const
 {
     size_t index = (m_view + m_highestBlock.number()) % m_epochSize;
     return (IDXTYPE)((m_startNodeIdx.load() + index) % m_sealersNum);

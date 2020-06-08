@@ -36,6 +36,11 @@ contract WorkingSealerManagerPrecompiled
     function rotateWorkingSealer(string, string, string) returns(int);
 }
 #endif
+// The parameters are: VRF proof, VRF public key, VRF input
+// In order to support the vrfBasedrPBFT to generate rotateWorkingSealer transactions,
+// the interface name is exposed in the header file
+extern const char* const WSM_METHOD_ROTATE_STR;
+
 class WorkingSealerManagerPrecompiled : public Precompiled
 {
 public:
