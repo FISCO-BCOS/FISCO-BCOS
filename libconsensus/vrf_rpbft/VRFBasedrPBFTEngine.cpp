@@ -32,7 +32,7 @@ void VRFBasedrPBFTEngine::setShouldRotateSealers(bool _shouldRotateSealers)
 // Working sealer is elected as leader in turn
 IDXTYPE VRFBasedrPBFTEngine::selectLeader() const
 {
-    return (IDXTYPE)((m_view + m_highestBlock.number()) % m_epochSize);
+    return (IDXTYPE)((m_view + m_highestBlock.number()) % m_workingSealersNum);
 }
 
 void VRFBasedrPBFTEngine::updateConsensusNodeList()
@@ -47,9 +47,17 @@ void VRFBasedrPBFTEngine::updateConsensusNodeList()
     if (workingSealers != *m_chosedSealerList)
     {
         chosedSealerListUpdated = true;
-        VRFRPBFTEngine_LOG(INFO) << LOG_DESC("updateConsensusNodeList: update working sealers");
         UpgradeGuard ul(l);
         *m_chosedSealerList = workingSealers;
+        m_workingSealersNum = workingSealers.size();
+        std::string workingSealersStr;
+        for (auto const& node : workingSealers)
+        {
+            workingSealersStr += node.abridged() + ",";
+        }
+        VRFRPBFTEngine_LOG(INFO) << LOG_DESC("updateConsensusNodeList: update working sealers")
+                                 << LOG_KV("updatedWorkingSealers", m_workingSealersNum)
+                                 << LOG_KV("workingSealers", workingSealersStr);
     }
     // update m_chosedConsensusNodes
     if (chosedSealerListUpdated)
@@ -61,32 +69,95 @@ void VRFBasedrPBFTEngine::updateConsensusNodeList()
             m_chosedConsensusNodes->insert(_node);
         }
     }
+    if (chosedSealerListUpdated)
+    {
+        resetLocatedInConsensusNodes();
+    }
     // the working sealers or the sealers have been updated
     if (chosedSealerListUpdated || m_sealerListUpdated)
     {
         // update consensusInfo when send block status by tree-topology
         updateConsensusInfo();
     }
+    if (m_sealerListUpdated)
+    {
+        ReadGuard l(m_sealerListMutex);
+        m_sealersNum = m_sealerList.size();
+    }
+}
+
+void VRFBasedrPBFTEngine::updateNodeRotatingInfo()
+{
+    // The current workingSealers size is larger than the configurated workingSealers size
+    auto epochSize = std::min(m_sealersNum.load(), m_epochSize.load());
+
+    ssize_t removedWorkingSealerNum;
+    ssize_t insertedWorkingSealerNum;
+    if (m_workingSealersNum > epochSize)
+    {
+        removedWorkingSealerNum = (m_workingSealersNum.load() - epochSize);
+        insertedWorkingSealerNum = 0;
+    }
+    // The configurated workingSealers size is larger than the current workingSealers size
+    else if (m_workingSealersNum < epochSize)
+    {
+        removedWorkingSealerNum = 0;
+        insertedWorkingSealerNum = epochSize - m_workingSealersNum.load();
+    }
+    // The configurated workingSealers size is equal to the current workingSealers size
+    else
+    {
+        removedWorkingSealerNum = 1;
+        insertedWorkingSealerNum = 1;
+    }
+    {
+        WriteGuard l(x_nodeRotatingInfo);
+        m_nodeRotatingInfo->removedWorkingSealerNum = u256(removedWorkingSealerNum);
+        m_nodeRotatingInfo->insertedWorkingSealerNum = u256(insertedWorkingSealerNum);
+    }
+
+
+    VRFRPBFTEngine_LOG(INFO) << LOG_DESC("updateNodeRotatingInfo")
+                             << LOG_KV("epochSealers", epochSize)
+                             << LOG_KV("toRemovedNode", removedWorkingSealerNum)
+                             << LOG_KV("toInsertedNode", insertedWorkingSealerNum);
 }
 
 void VRFBasedrPBFTEngine::resetConfig()
 {
     PBFTEngine::resetConfig();
-    // update the epochBlockNum
-    m_rotatingIntervalUpdated = updateRotatingInterval();
+    // Reach consensus on new blocks, update m_shouldRotateSealers to false
+    if (true == m_shouldRotateSealers.load())
+    {
+        m_shouldRotateSealers.store(false);
+    }
+    // update m_f
+    m_f = (m_workingSealersNum - 1) / 3;
 
-    // update m_shouldRotateSealers
-    if (0 == (m_blockChain->number() - m_rotatingIntervalEnableNumber) % m_rotatingInterval)
+    // update according to epoch_blocks_num
+    updateRotatingInterval();
+    // update according to epoch_sealers_num
+    bool epochUpdated = updateEpochSize();
+    if (m_blockChain->number() == 0)
+    {
+        return;
+    }
+    if (epochUpdated)
+    {
+        updateNodeRotatingInfo();
+    }
+    // After the last batch of workingsealer agreed on m_rotatingInterval blocks,
+    // set m_shouldRotateSealers to true to notify VRFBasedrPBFTSealer to update workingSealer
+    if (epochUpdated ||
+        (0 == (m_blockChain->number() - m_rotatingIntervalEnableNumber) % m_rotatingInterval))
     {
         m_shouldRotateSealers.store(true);
     }
-    // update m_epochSize
-    int64_t epochSize = m_chosedSealerList->size();
-    if (epochSize != m_epochSize.load())
-    {
-        m_epochSize = epochSize;
-        m_f = (epochSize - 1) / 3;
-    }
+    VRFRPBFTEngine_LOG(DEBUG) << LOG_DESC("resetConfig") << LOG_KV("blkNum", m_blockChain->number())
+                              << LOG_KV("shouldRotateSealers", m_shouldRotateSealers)
+                              << LOG_KV("workingSealersNum", m_workingSealersNum)
+                              << LOG_KV("epochBlockNum", m_rotatingInterval)
+                              << LOG_KV("configuredEpochSealers", m_epochSize);
 }
 
 void VRFBasedrPBFTEngine::updateConsensusInfo()
