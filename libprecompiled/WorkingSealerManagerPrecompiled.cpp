@@ -24,9 +24,10 @@
 
 using namespace dev::precompiled;
 
-// The parameters are: VRF public key, VRF input, VRF proof
+// The parameters are: VRF public key, VRF input, VRF proof, removedWorkingSealers,
+// insertedWorkingSealers
 const char* const dev::precompiled::WSM_METHOD_ROTATE_STR =
-    "rotateWorkingSealer(std::string, std::string, std::string)";
+    "rotateWorkingSealer(std::string, std::string, std::string, uint256, uint256)";
 
 // init function selector
 WorkingSealerManagerPrecompiled::WorkingSealerManagerPrecompiled()
@@ -47,7 +48,9 @@ void WorkingSealerManagerPrecompiled::rotateWorkingSealer(
     std::string vrfProof;
     std::string vrfPublicKey;
     std::string vrfInput;
-    _abi.abiOut(_paramData, vrfProof, vrfPublicKey, vrfInput);
+    u256 insertedNodeNum;
+    u256 removedNodeNum;
+    _abi.abiOut(_paramData, vrfProof, vrfPublicKey, vrfInput, insertedNodeNum, removedNodeNum);
 
     // TODO: implement rotateWorkingSealer
     (void)_context;

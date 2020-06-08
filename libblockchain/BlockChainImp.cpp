@@ -435,6 +435,32 @@ std::shared_ptr<Block> BlockChainImp::getBlockByHash(h256 const& _blockHash, int
     }
 }
 
+void BlockChainImp::initGenesisWorkingSealers(
+    dev::storage::Table::Ptr _consTable, GenesisBlockParam& _initParam)
+{
+    // only used for vrf based rPBFT
+    if (dev::stringCmpIgnoreCase(_initParam.consensusType, "vrf_rpbft") != 0)
+    {
+        return;
+    }
+    // TODO: select the genesis working sealers randomly according to genesis hash
+    std::sort(_initParam.sealerList.begin(), _initParam.sealerList.end());
+    int64_t sealersSize = _initParam.sealerList.size();
+    auto selectedNum = std::min(_initParam.rpbftEpochSize, sealersSize);
+    // output workingSealers
+    std::string workingSealers;
+    for (int64_t i = 0; i < selectedNum; i++)
+    {
+        workingSealers += (_initParam.sealerList[i]).abridged() + ",";
+    }
+    BLOCKCHAIN_LOG(INFO) << LOG_DESC("initGenesisWorkingSealers")
+                         << LOG_KV("workingSealerNum", selectedNum)
+                         << LOG_KV("workingSealers", workingSealers);
+    // update selected sealers into workingSealers
+    initGensisConsensusInfoByNodeType(
+        _consTable, NODE_TYPE_WORKING_SEALER, _initParam.sealerList, selectedNum, true);
+}
+
 bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam, bool _shouldBuild)
 {
     BLOCKCHAIN_LOG(INFO) << LOG_DESC("[#checkAndBuildGenesisBlock]")
@@ -471,7 +497,8 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam, bool
             initSystemConfig(tb, SYSTEM_KEY_TX_GAS_LIMIT,
                 boost::lexical_cast<std::string>(initParam.txGasLimit));
             // init configurations for RPBFT
-            if (dev::stringCmpIgnoreCase(initParam.consensusType, "rpbft") == 0)
+            if (dev::stringCmpIgnoreCase(initParam.consensusType, "rpbft") == 0 ||
+                dev::stringCmpIgnoreCase(initParam.consensusType, "vrf_rpbft") == 0)
             {
                 // init rotating-epoch-size
                 initSystemConfig(tb, SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM,
@@ -484,25 +511,9 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam, bool
         tb = mtb->openTable(SYS_CONSENSUS);
         if (tb)
         {
-            for (dev::h512 node : initParam.sealerList)
-            {
-                Entry::Ptr entry = std::make_shared<Entry>();
-                entry->setField(PRI_COLUMN, PRI_KEY);
-                entry->setField(NODE_TYPE, NODE_TYPE_SEALER);
-                entry->setField(NODE_KEY_NODEID, dev::toHex(node));
-                entry->setField(NODE_KEY_ENABLENUM, "0");
-                tb->insert(PRI_KEY, entry);
-            }
-
-            for (dev::h512 node : initParam.observerList)
-            {
-                Entry::Ptr entry = std::make_shared<Entry>();
-                entry->setField(PRI_COLUMN, PRI_KEY);
-                entry->setField(NODE_TYPE, NODE_TYPE_OBSERVER);
-                entry->setField(NODE_KEY_NODEID, dev::toHex(node));
-                entry->setField(NODE_KEY_ENABLENUM, "0");
-                tb->insert(PRI_KEY, entry);
-            }
+            initGensisConsensusInfoByNodeType(tb, NODE_TYPE_SEALER, initParam.sealerList);
+            initGensisConsensusInfoByNodeType(tb, NODE_TYPE_OBSERVER, initParam.observerList);
+            initGenesisWorkingSealers(tb, initParam);
         }
 
         tb = mtb->openTable(SYS_HASH_2_BLOCK, false);
@@ -579,6 +590,35 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam, bool
         }
     }
     return true;
+}
+
+void BlockChainImp::initGensisConsensusInfoByNodeType(dev::storage::Table::Ptr _consTable,
+    std::string const& _nodeType, dev::h512s const& _nodeList, int64_t _nodeNum, bool _update)
+{
+    int64_t initedNodeSize = _nodeNum;
+    if (-1 == _nodeNum)
+    {
+        initedNodeSize = _nodeList.size();
+    }
+    for (int64_t i = 0; i < initedNodeSize; i++)
+    {
+        auto const& node = _nodeList[i];
+        auto entry = std::make_shared<Entry>();
+        entry->setField(PRI_COLUMN, PRI_KEY);
+        entry->setField(NODE_TYPE, _nodeType);
+        entry->setField(NODE_KEY_NODEID, dev::toHex(node));
+        entry->setField(NODE_KEY_ENABLENUM, "0");
+        if (_update)
+        {
+            auto condition = _consTable->newCondition();
+            condition->EQ(NODE_KEY_NODEID, dev::toHex(node));
+            _consTable->update(PRI_KEY, entry, condition);
+        }
+        else
+        {
+            _consTable->insert(PRI_KEY, entry);
+        }
+    }
 }
 
 // init system config
