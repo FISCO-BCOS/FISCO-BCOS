@@ -24,7 +24,6 @@
 
 #pragma once
 
-#include "ExecutionResult.h"
 #include "Executive.h"
 #include "StateFace.h"
 #include <evmc/evmc.h>
