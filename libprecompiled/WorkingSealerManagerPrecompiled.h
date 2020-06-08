@@ -33,7 +33,7 @@ namespace precompiled
 // Note: strongly discouraged that users use this interface
 contract WorkingSealerManagerPrecompiled
 {
-    function rotateWorkingSealer(string, string, string) returns(int);
+    function rotateWorkingSealer(string, string, string, ssize_t, ssize_t) returns(int);
 }
 #endif
 // The parameters are: VRF proof, VRF public key, VRF input
