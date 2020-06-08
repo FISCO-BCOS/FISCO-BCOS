@@ -15,7 +15,6 @@
 #pragma once
 
 #include "Common.h"
-#include "ExecutionResult.h"
 #include <libethcore/BlockHeader.h>
 #include <libethcore/Common.h>
 #include <libethcore/EVMFlags.h>
@@ -39,6 +38,7 @@ class TableFactory;
 namespace eth
 {
 class Block;
+class Result;
 }  // namespace eth
 namespace precompiled
 {
@@ -167,15 +167,12 @@ public:
     /// @returns gas remaining after the transaction/operation. Valid after the transaction has been
     /// executed.
     u256 gas() const { return m_gas; }
-    executive::TransactionException status() const { return m_excepted; }
+    eth::TransactionException status() const { return m_excepted; }
     /// @returns the new address for the created contract in the CREATE operation.
     Address newAddress() const { return m_newAddress; }
 
     /// @returns The exception that has happened during the execution if any.
-    TransactionException getException() const noexcept { return m_excepted; }
-
-    /// Collect execution results in the result storage provided.
-    // void setResultRecipient(ExecutionResult& _res) { m_res = &_res; }
+    eth::TransactionException getException() const noexcept { return m_excepted; }
 
     /// Revert all changes made to the state by this execution.
     void revert();
@@ -188,7 +185,7 @@ public:
         m_ext = nullptr;
         m_output = owning_bytes_ref();
         m_depth = 0;
-        m_excepted = TransactionException::None;
+        m_excepted = eth::TransactionException::None;
         m_exceptionReason.clear();
         m_baseGasRequired = 0;
         m_gas = 0;
@@ -200,7 +197,6 @@ public:
         m_tableFactorySavepoint = 0;
         m_logs.clear();
         m_t.reset();
-        m_res.reset();
     }
 
     void setEnvInfo(dev::eth::EnvInfo const& _envInfo) { m_envInfo = _envInfo; }
@@ -214,6 +210,7 @@ public:
     }
 
 private:
+    void parseEVMCResult(std::shared_ptr<eth::Result> _result);
     /// @returns false iff go() must be called (and thus a VM execution in required).
     bool executeCreate(Address const& _txSender, u256 const& _endowment, u256 const& _gasPrice,
         u256 const& _gas, bytesConstRef _code, Address const& _originAddress);
@@ -234,11 +231,10 @@ private:
                                             ///< does *NOT* survive this object.
     owning_bytes_ref m_output;              ///< Execution output.
 
-    ExecutionResult m_res;  ///< Optional storage for execution results.
-
     unsigned m_depth = 0;  ///< The context's call-depth.
-    TransactionException m_excepted =
-        TransactionException::None;  ///< Details if the VM's execution resulted in an exception.
+    eth::TransactionException m_excepted =
+        eth::TransactionException::None;  ///< Details if the VM's execution resulted in an
+                                          ///< exception.
     std::stringstream m_exceptionReason;
 
     int64_t m_baseGasRequired;  ///< The base amount of gas requried for executing this transaction.

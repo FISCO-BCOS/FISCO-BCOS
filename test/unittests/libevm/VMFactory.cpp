@@ -53,8 +53,8 @@ BOOST_AUTO_TEST_CASE(testInterpreterEvmC)
     evmc_message msg;
     msg.gas = io_gas;
     evmc_revision revision = EVMC_HOMESTEAD;
-    BOOST_CHECK_THROW(
-        m_face->exec(fake_ext_vm, revision, &msg, code.data(), code.size()), BadJumpDestination);
+    auto result = m_face->exec(fake_ext_vm, revision, &msg, code.data(), code.size());
+    BOOST_TEST(result->status() == EVMC_BAD_JUMP_DESTINATION);
 }
 
 BOOST_AUTO_TEST_CASE(testVMOptionParser)
