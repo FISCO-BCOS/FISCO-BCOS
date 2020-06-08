@@ -145,7 +145,7 @@ bool Executive::call(Address const& _receiveAddress, Address const& _senderAddre
     u256 const& _value, u256 const& _gasPrice, bytesConstRef _data, u256 const& _gas)
 {
     CallParameters params{
-        _senderAddress, _receiveAddress, _receiveAddress, _value, _value, _gas, _data, {}};
+        _senderAddress, _receiveAddress, _receiveAddress, _value, _value, _gas, _data};
     return call(params, _gasPrice, _senderAddress);
 }
 
@@ -523,7 +523,7 @@ void Executive::grantContractStatusManager(TableFactory::Ptr memoryTableFactory,
     return;
 }
 
-bool Executive::go(OnOpFunc const&)
+bool Executive::go()
 {
     if (m_ext)
     {
