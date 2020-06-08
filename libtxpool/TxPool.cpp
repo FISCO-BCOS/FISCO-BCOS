@@ -31,7 +31,6 @@
 using namespace std;
 using namespace dev::p2p;
 using namespace dev::eth;
-using namespace dev::executive;
 namespace dev
 {
 namespace txpool

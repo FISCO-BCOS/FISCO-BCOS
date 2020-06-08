@@ -237,8 +237,8 @@ public:
         dev::h256 const& _txHash, dev::eth::LocalisedTransaction&) override
     {
         (void)_txHash;
-        return std::make_pair(std::make_shared<LocalisedTransactionReceipt>(
-                                  dev::executive::TransactionException::None),
+        return std::make_pair(
+            std::make_shared<LocalisedTransactionReceipt>(dev::eth::TransactionException::None),
             std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>());
     }
     CommitResult commitBlock(std::shared_ptr<dev::eth::Block> block,

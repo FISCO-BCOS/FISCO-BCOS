@@ -31,7 +31,6 @@
 #include <libethcore/Protocol.h>
 #include <libethcore/Transaction.h>
 #include <libethcore/TransactionReceipt.h>
-#include <libexecutive/ExecutionResult.h>
 #include <libexecutive/Executive.h>
 #include <libmptstate/State.h>
 #include <boost/function.hpp>
@@ -46,11 +45,6 @@ namespace eth
 class TransactionReceipt;
 
 }  // namespace eth
-
-namespace executive
-{
-struct ExecutionResult;
-}
 
 namespace blockverifier
 {
@@ -79,12 +73,6 @@ public:
 
     dev::eth::TransactionReceipt::Ptr executeTransaction(
         const dev::eth::BlockHeader& blockHeader, dev::eth::Transaction::Ptr _t);
-#if 0
-    std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt::Ptr> execute(
-        dev::eth::EnvInfo const& _envInfo, dev::eth::Transaction const& _t,
-        dev::blockverifier::ExecutiveContext::Ptr executiveContext);
-#endif
-
 
     dev::eth::TransactionReceipt::Ptr execute(dev::eth::Transaction::Ptr _t,
         dev::blockverifier::ExecutiveContext::Ptr executiveContext,

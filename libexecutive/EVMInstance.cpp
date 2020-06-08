@@ -23,13 +23,11 @@
 #include "EVMInstance.h"
 #include "VMFactory.h"
 
+using namespace std;
 namespace dev
 {
 namespace eth
 {
-/// Error info for EVMInstance status code.
-using errinfo_evmcStatusCode = boost::error_info<struct tag_evmcStatusCode, evmc_status_code>;
-
 EVMInstance::EVMInstance(evmc_instance* _instance) noexcept : m_instance(_instance)
 {
     assert(m_instance != nullptr);
@@ -42,60 +40,17 @@ EVMInstance::EVMInstance(evmc_instance* _instance) noexcept : m_instance(_instan
             m_instance->set_option(m_instance, pair.first.c_str(), pair.second.c_str());
 }
 
-owning_bytes_ref EVMInstance::exec(EVMHostInterface& _ext, evmc_revision _rev, evmc_message* _msg,
-    const uint8_t* _code, size_t _code_size)
+std::shared_ptr<Result> EVMInstance::exec(EVMHostInterface& _ext, evmc_revision _rev,
+    evmc_message* _msg, const uint8_t* _code, size_t _code_size)
 {
-    Result r{m_instance->execute(m_instance, &_ext, _rev, _msg, _code, _code_size)};
-    auto io_gas = _msg->gas;
-    switch (r.status())
+    auto result = std::make_shared<Result>(m_instance->execute(m_instance, &_ext, _rev, _msg, _code, _code_size));
+
+    if (result->status() == EVMC_REJECTED)
     {
-    case EVMC_SUCCESS:
-        io_gas = r.gasLeft();
-        // FIXME: Copy the output for now, but copyless version possible.
-        return {r.output().toVector(), 0, r.output().size()};
-
-    case EVMC_REVERT:
-        io_gas = r.gasLeft();
-        // FIXME: Copy the output for now, but copyless version possible.
-        throw RevertInstruction{{r.output().toVector(), 0, r.output().size()}};
-
-    case EVMC_OUT_OF_GAS:
-    case EVMC_FAILURE:
-        BOOST_THROW_EXCEPTION(OutOfGas());
-
-    case EVMC_INVALID_INSTRUCTION:  // NOTE: this could have its own exception
-    case EVMC_UNDEFINED_INSTRUCTION:
-        BOOST_THROW_EXCEPTION(BadInstruction());
-
-    case EVMC_BAD_JUMP_DESTINATION:
-        BOOST_THROW_EXCEPTION(BadJumpDestination());
-
-    case EVMC_STACK_OVERFLOW:
-        BOOST_THROW_EXCEPTION(OutOfStack());
-
-    case EVMC_STACK_UNDERFLOW:
-        BOOST_THROW_EXCEPTION(StackUnderflow());
-
-    case EVMC_INVALID_MEMORY_ACCESS:
-        BOOST_THROW_EXCEPTION(BufferOverrun());
-
-    case EVMC_STATIC_MODE_VIOLATION:
-        BOOST_THROW_EXCEPTION(DisallowedStateChange());
-
-    case EVMC_REJECTED:
-        LOG(WARNING)
-            << "Execution rejected by EVMInstance, executing with default VM implementation";
+        LOG(WARNING) << "Execution rejected by EVMC, executing with default VM implementation";
         return VMFactory::create(VMKind::Interpreter)->exec(_ext, _rev, _msg, _code, _code_size);
-
-    case EVMC_INTERNAL_ERROR:
-    default:
-        if (r.status() <= EVMC_INTERNAL_ERROR)
-            BOOST_THROW_EXCEPTION(InternalVMError{} << errinfo_evmcStatusCode(r.status()));
-        else
-            // These cases aren't really internal errors, just more specific
-            // error codes returned by the VM. Map all of them to OOG.
-            BOOST_THROW_EXCEPTION(OutOfGas());
     }
+    return result;
 }
 
 evmc_revision toRevision(EVMSchedule const& _schedule)
