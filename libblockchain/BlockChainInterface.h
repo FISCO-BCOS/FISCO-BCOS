@@ -105,9 +105,13 @@ public:
     /// Returns an error in the rest of the cases.
     virtual bool checkAndBuildGenesisBlock(
         GenesisBlockParam& initParam, bool _shouldBuild = true) = 0;
-    /// get sealer or observer nodes
+
+    /// get sealer, workingSealer or observer nodes
     virtual dev::h512s sealerList() = 0;
     virtual dev::h512s observerList() = 0;
+    virtual dev::h512s workingSealerList() { return dev::h512s(); }
+    virtual dev::h512s pendingSealerList() { return dev::h512s(); }
+
     /// get system config
     virtual std::string getSystemConfigByKey(std::string const& key, int64_t number = -1) = 0;
     virtual std::pair<std::string, dev::eth::BlockNumber> getSystemConfigInfoByKey(
