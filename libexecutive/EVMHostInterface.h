@@ -90,7 +90,7 @@ public:
 
     /// Create a new (contract) account.
     virtual evmc_result create(
-        u256 const&, u256&, bytesConstRef, evmc_opcode, u256, OnOpFunc const&) = 0;
+        u256 const&, u256&, bytesConstRef, evmc_opcode, u256) = 0;
 
     /// Make a new message call.
     virtual evmc_result call(CallParameters&) = 0;

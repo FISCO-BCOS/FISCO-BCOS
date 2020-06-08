@@ -132,8 +132,7 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
         {
             auto& tx = (*block.transactions())[i];
 
-            TransactionReceipt::Ptr resultReceipt =
-                execute(tx, OnOpFunc(), executiveContext, executive);
+            TransactionReceipt::Ptr resultReceipt = execute(tx, executiveContext, executive);
             block.setTransactionReceipt(i, resultReceipt);
             executiveContext->getState()->commit();
         }
@@ -263,9 +262,9 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
 
 #if 0
         std::pair<ExecutionResult, TransactionReceipt::Ptr> resultReceipt =
-            execute(envInfo, _tr, OnOpFunc(), executiveContext);
+            execute(envInfo, _tr, executiveContext);
 #endif
-        auto resultReceipt = execute(_tr, OnOpFunc(), executiveContext, _executive);
+        auto resultReceipt = execute(_tr, executiveContext, _executive);
 
         block.setTransactionReceipt(_txId, resultReceipt);
         executiveContext->getState()->commit();
@@ -419,20 +418,14 @@ TransactionReceipt::Ptr BlockVerifier::executeTransaction(
     executive->setEnvInfo(envInfo);
     executive->setState(executiveContext->getState());
     // only Rpc::call will use executeTransaction, RPC do catch exception
-    return execute(_t, OnOpFunc(), executiveContext, executive);
+    return execute(_t, executiveContext, executive);
 }
 
 
 #if 0
 std::pair<ExecutionResult, TransactionReceipt::Ptr> BlockVerifier::execute(EnvInfo const& _envInfo,
-    Transaction const& _t, OnOpFunc const& _onOp, ExecutiveContext::Ptr executiveContext)
+    Transaction const& _t, ExecutiveContext::Ptr executiveContext)
 {
-    auto onOp = _onOp;
-#if ETH_VMTRACE
-    if (isChannelVisible<VMTraceChannel>())
-        onOp = Executive::simpleTrace();  // override tracer
-#endif
-
     // Create and initialize the executive. This will throw fairly cheaply and quickly if the
     // transaction is bad in any way.
     Executive e(executiveContext->getState(), _envInfo);
@@ -444,7 +437,7 @@ std::pair<ExecutionResult, TransactionReceipt::Ptr> BlockVerifier::execute(EnvIn
     {
         e.initialize(_t);
         if (!e.execute())
-            e.go(onOp);
+            e.go();
         e.finalize();
     }
     catch (StorageException const& e)
@@ -472,25 +465,18 @@ std::pair<ExecutionResult, TransactionReceipt::Ptr> BlockVerifier::execute(EnvIn
 
 
 dev::eth::TransactionReceipt::Ptr BlockVerifier::execute(dev::eth::Transaction::Ptr _t,
-    dev::eth::OnOpFunc const& _onOp, dev::blockverifier::ExecutiveContext::Ptr executiveContext,
-    Executive::Ptr executive)
+    dev::blockverifier::ExecutiveContext::Ptr executiveContext, Executive::Ptr executive)
 {
-    auto onOp = _onOp;
-#if ETH_VMTRACE
-    if (isChannelVisible<VMTraceChannel>())
-        onOp = Executive::simpleTrace();  // override tracer
-#endif
     // Create and initialize the executive. This will throw fairly cheaply and quickly if the
     // transaction is bad in any way.
     executive->reset();
-
 
     // OK - transaction looks valid - execute.
     try
     {
         executive->initialize(_t);
         if (!executive->execute())
-            executive->go(onOp);
+            executive->go();
         executive->finalize();
     }
     catch (StorageException const& e)
