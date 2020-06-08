@@ -126,9 +126,9 @@ vector<dev::GROUP_ID> LedgerInitializer::initLedgers()
     catch (exception& e)
     {
         INITIALIZER_LOG(ERROR) << LOG_BADGE("LedgerInitializer")
-                               << LOG_DESC("parse group config faield")
+                               << LOG_DESC("parse group config failed")
                                << LOG_KV("EINFO", boost::diagnostic_information(e));
-        ERROR_OUTPUT << LOG_BADGE("LedgerInitializer") << LOG_DESC("parse group config faield")
+        ERROR_OUTPUT << LOG_BADGE("LedgerInitializer") << LOG_DESC("parse group config failed")
                      << LOG_KV("EINFO", boost::diagnostic_information(e)) << endl;
         BOOST_THROW_EXCEPTION(e);
     }
