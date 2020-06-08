@@ -23,7 +23,6 @@
 
 #include <libethcore/ABIParser.h>
 #include <libethcore/Exceptions.h>
-#include <libexecutive/ExecutionResult.h>
 #include <libprecompiled/ParallelConfigPrecompiled.h>
 #include <libstorage/StorageException.h>
 #include <libstorage/Table.h>

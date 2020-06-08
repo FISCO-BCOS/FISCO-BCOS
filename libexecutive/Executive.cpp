@@ -39,6 +39,9 @@ using namespace dev::eth;
 using namespace dev::executive;
 using namespace dev::storage;
 
+/// Error info for EVMInstance status code.
+using errinfo_evmcStatusCode = boost::error_info<struct tag_evmcStatusCode, evmc_status_code>;
+
 u256 Executive::gasUsed() const
 {
     return m_envInfo.precompiledEngine()->txGasLimit() - m_gas;
@@ -562,27 +565,24 @@ bool Executive::go()
                 m_s->clearStorage(m_ext->myAddress());
                 auto mode = toRevision(m_ext->evmSchedule());
                 auto emvcMessage = getEVMCMessage();
-                auto out = vm->exec(
+                auto ret = vm->exec(
                     *m_ext, mode, emvcMessage.get(), m_ext->code().data(), m_ext->code().size());
-
-                m_res.gasForDeposit = m_gas;
-                m_res.depositSize = out.size();
-
-                if (out.size() > m_ext->evmSchedule().maxCodeSize)
+                parseEVMCResult(ret);
+                auto outputRef = ret->output();
+                if (outputRef.size() > m_ext->evmSchedule().maxCodeSize)
                 {
                     m_exceptionReason << LOG_KV("reason", "Code is too long")
                                       << LOG_KV("size_limit", m_ext->evmSchedule().maxCodeSize)
-                                      << LOG_KV("size", out.size());
+                                      << LOG_KV("size", outputRef.size());
                     BOOST_THROW_EXCEPTION(OutOfGas());
                 }
-                else if (out.size() * m_ext->evmSchedule().createDataGas <= m_gas)
+                else if (outputRef.size() * m_ext->evmSchedule().createDataGas <= m_gas)
                 {
-                    m_res.codeDeposit = CodeDeposit::Success;
                     // When FreeStorage VM is enabled,
                     // the storage gas consumption of createData is not calculated additionally
                     if (!m_enableFreeStorage)
                     {
-                        m_gas -= out.size() * m_ext->evmSchedule().createDataGas;
+                        m_gas -= outputRef.size() * m_ext->evmSchedule().createDataGas;
                     }
                 }
                 else
@@ -594,20 +594,19 @@ bool Executive::go()
                     }
                     else
                     {
-                        m_res.codeDeposit = CodeDeposit::Failed;
-                        out = {};
+                        outputRef = {};
                     }
                 }
-
-                m_res.output = out.toVector();  // copy output to execution result
-                m_s->setCode(m_ext->myAddress(), out.toVector());
+                m_s->setCode(m_ext->myAddress(),
+                    bytes(outputRef.data(), outputRef.data() + outputRef.size()));
             }
             else
             {
                 auto mode = toRevision(m_ext->evmSchedule());
                 auto emvcMessage = getEVMCMessage();
-                m_output = vm->exec(
+                auto ret = vm->exec(
                     *m_ext, mode, emvcMessage.get(), m_ext->code().data(), m_ext->code().size());
+                parseEVMCResult(ret);
             }
         }
         catch (RevertInstruction& _e)
@@ -678,10 +677,6 @@ bool Executive::go()
             // has drawbacks. Essentially, the amount of ram has to be increased here.
         }
 
-        if (m_output)
-            // Copy full output:
-            m_res.output = m_output.toVector();
-
 #if ETH_TIMED_EXECUTIONS
         cnote << "VM took:" << t.elapsed() << "; gas used: " << (sgas - m_endGas);
 #endif
@@ -710,12 +705,6 @@ bool Executive::finalize()
     if (m_ext)
         m_logs = m_ext->sub().logs;
 
-
-    m_res.gasUsed = gasUsed();
-    m_res.excepted = m_excepted;  // TODO: m_except is used only in EVMHostContext::call
-    m_res.newAddress = m_newAddress;
-    m_res.gasRefunded = m_ext ? m_ext->sub().refunds : 0;
-
     return (m_excepted == TransactionException::None);
 }
 
@@ -731,6 +720,99 @@ void Executive::revert()
     memoryTableFactory->rollback(m_tableFactorySavepoint);
 }
 
+void Executive::parseEVMCResult(std::shared_ptr<eth::Result> _result)
+{
+    auto outputRef = _result->output();
+    switch (_result->status())
+    {
+    case EVMC_SUCCESS:
+    {
+        m_gas = _result->gasLeft();
+        m_output = owning_bytes_ref(
+            bytes(outputRef.data(), outputRef.data() + outputRef.size()), 0, outputRef.size());
+        break;
+    }
+    case EVMC_REVERT:
+    {
+        // FIXME: Copy the output for now, but copyless version possible.
+        m_gas = _result->gasLeft();
+        revert();
+        m_output = owning_bytes_ref(
+            bytes(outputRef.data(), outputRef.data() + outputRef.size()), 0, outputRef.size());
+        m_excepted = TransactionException::RevertInstruction;
+        break;
+    }
+    case EVMC_OUT_OF_GAS:
+    case EVMC_FAILURE:
+    {
+        revert();
+        m_excepted = TransactionException::OutOfGas;
+        break;
+    }
+
+    case EVMC_INVALID_INSTRUCTION:  // NOTE: this could have its own exception
+    case EVMC_UNDEFINED_INSTRUCTION:
+    {
+        m_gas = 0;
+        m_excepted = TransactionException::BadInstruction;
+        revert();
+        break;
+    }
+
+    case EVMC_BAD_JUMP_DESTINATION:
+    {
+        m_gas = 0;
+        m_excepted = TransactionException::BadJumpDestination;
+        revert();
+        break;
+    }
+    case EVMC_STACK_OVERFLOW:
+    {
+        m_gas = 0;
+        m_excepted = TransactionException::OutOfStack;
+        revert();
+        break;
+    }
+    case EVMC_STACK_UNDERFLOW:
+    {
+        m_gas = 0;
+        m_excepted = TransactionException::StackUnderflow;
+        revert();
+        break;
+    }
+    case EVMC_INVALID_MEMORY_ACCESS:
+    {
+        m_gas = 0;
+        LOG(WARNING) << LOG_DESC("VM error, BufferOverrun");
+        m_excepted = TransactionException::Unknown;
+        revert();
+        // BOOST_THROW_EXCEPTION(BufferOverrun());
+        break;
+    }
+    case EVMC_STATIC_MODE_VIOLATION:
+    {
+        m_gas = 0;
+        LOG(WARNING) << LOG_DESC("VM error, DisallowedStateChange");
+        m_excepted = TransactionException::Unknown;
+        revert();
+        // BOOST_THROW_EXCEPTION(DisallowedStateChange());
+        break;
+    }
+    case EVMC_INTERNAL_ERROR:
+    default:
+    {
+        if (_result->status() <= EVMC_INTERNAL_ERROR)
+        {
+            BOOST_THROW_EXCEPTION(InternalVMError{} << errinfo_evmcStatusCode(_result->status()));
+        }
+        else
+        {  // These cases aren't really internal errors, just more specific error codes returned by
+           // the VM. Map all of them to OOG.
+            BOOST_THROW_EXCEPTION(OutOfGas());
+        }
+    }
+    }
+}
 
 void Executive::loggingException()
 {
