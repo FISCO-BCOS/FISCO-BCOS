@@ -82,13 +82,12 @@ public:
 #if 0
     std::pair<dev::executive::ExecutionResult, dev::eth::TransactionReceipt::Ptr> execute(
         dev::eth::EnvInfo const& _envInfo, dev::eth::Transaction const& _t,
-        dev::eth::OnOpFunc const& _onOp,
         dev::blockverifier::ExecutiveContext::Ptr executiveContext);
 #endif
 
 
     dev::eth::TransactionReceipt::Ptr execute(dev::eth::Transaction::Ptr _t,
-        dev::eth::OnOpFunc const& _onOp, dev::blockverifier::ExecutiveContext::Ptr executiveContext,
+        dev::blockverifier::ExecutiveContext::Ptr executiveContext,
         dev::executive::Executive::Ptr executive);
 
 
