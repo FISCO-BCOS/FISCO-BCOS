@@ -59,32 +59,24 @@ struct SubState
     }
 };
 
-class EVMHostInterface;
-class EVMInterface;
-
 /**
  * @brief : execute the opcode of evm
  *
  */
-using OnOpFunc = std::function<void(uint64_t /*steps*/, uint64_t /* PC */, evmc_opcode /*instr*/,
-    bigint /*newMemSize*/, bigint /*gasCost*/, bigint /*gas*/, EVMInterface const*,
-    EVMHostInterface const*)>;
 
 /// set parameters and functions for the evm call
 struct CallParameters
 {
     CallParameters() = default;
     CallParameters(Address _senderAddress, Address _codeAddress, Address _receiveAddress,
-        u256 _valueTransfer, u256 _apparentValue, u256 _gas, bytesConstRef _data,
-        OnOpFunc _onOpFunc)
+        u256 _valueTransfer, u256 _apparentValue, u256 _gas, bytesConstRef _data)
       : senderAddress(_senderAddress),
         codeAddress(_codeAddress),
         receiveAddress(_receiveAddress),
         valueTransfer(_valueTransfer),
         apparentValue(_apparentValue),
         gas(_gas),
-        data(_data),
-        onOp(_onOpFunc)
+        data(_data)
     {}
     Address senderAddress;   /// address of the transaction sender
     Address codeAddress;     /// address of the contract
@@ -94,7 +86,6 @@ struct CallParameters
     u256 gas;
     bytesConstRef data;       /// transaction data
     bool staticCall = false;  /// only true when the transaction is a message call
-    OnOpFunc onOp;
 };
 
 /// the information related to the EVM

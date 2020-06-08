@@ -65,7 +65,7 @@ public:
         createRandomElements(
             sender_addr, contract_addr, receive_addr, transfer, gas, apparent_value, data);
         static CallParameters evmcall_param(
-            sender_addr, contract_addr, receive_addr, transfer, apparent_value, gas, data, {});
+            sender_addr, contract_addr, receive_addr, transfer, apparent_value, gas, data);
         return evmcall_param;
     }
 };
@@ -138,8 +138,7 @@ public:
         return result;
     }
 
-    evmc_result create(
-        u256 const&, u256& io_gas, bytesConstRef, evmc_opcode, u256, OnOpFunc const&) override
+    evmc_result create(u256 const&, u256& io_gas, bytesConstRef, evmc_opcode, u256) override
     {
         u256 nonce = u256(00013443);
         Address m_newAddress = right160(crypto::Hash(rlpList(myAddress(), nonce)));
