@@ -30,6 +30,8 @@
 #include <libconsensus/raft/RaftEngine.h>
 #include <libconsensus/raft/RaftSealer.h>
 #include <libconsensus/rotating_pbft/RotatingPBFTEngine.h>
+#include <libconsensus/vrf_rpbft/VRFBasedrPBFTEngine.h>
+#include <libconsensus/vrf_rpbft/VRFBasedrPBFTSealer.h>
 #include <libflowlimit/RateLimiter.h>
 #include <libsync/SyncMaster.h>
 #include <libtxpool/TxPool.h>
@@ -88,7 +90,7 @@ bool Ledger::initLedger(std::shared_ptr<LedgerParamInterface> _ledgerParams)
         // init network statistic handler
         initNetworkStatHandler();
     }
-    
+
     auto channelRPCServer = std::weak_ptr<dev::ChannelRPCServer>(m_channelRPCServer);
     m_handler = blockChain->onReady([this, channelRPCServer](int64_t number) {
         LOG(INFO) << "Push block notify: " << std::to_string(m_groupId) << "-" << number;
@@ -287,21 +289,24 @@ bool Ledger::initBlockChain(GenesisBlockParam& _genesisParam)
     return true;
 }
 
-bool Ledger::isRotatingPBFTEnabled()
-{
-    return (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "rpbft") == 0);
-}
-
 ConsensusInterface::Ptr Ledger::createConsensusEngine(dev::PROTOCOL_ID const& _protocolId)
 {
     if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0)
     {
+        Ledger_LOG(INFO) << LOG_DESC("createConsensusEngine: create PBFTEngine");
         return std::make_shared<PBFTEngine>(m_service, m_txPool, m_blockChain, m_sync,
             m_blockVerifier, _protocolId, m_keyPair, m_param->mutableConsensusParam().sealerList);
     }
-    if (isRotatingPBFTEnabled())
+    if (normalrPBFTEnabled())
     {
+        Ledger_LOG(INFO) << LOG_DESC("createConsensusEngine: create RotatingPBFTEngine");
         return std::make_shared<RotatingPBFTEngine>(m_service, m_txPool, m_blockChain, m_sync,
+            m_blockVerifier, _protocolId, m_keyPair, m_param->mutableConsensusParam().sealerList);
+    }
+    if (vrfBasedrPBFTEnabled())
+    {
+        Ledger_LOG(INFO) << LOG_DESC("createConsensusEngine: create VRFBasedrPBFTEngine");
+        return std::make_shared<VRFBasedrPBFTEngine>(m_service, m_txPool, m_blockChain, m_sync,
             m_blockVerifier, _protocolId, m_keyPair, m_param->mutableConsensusParam().sealerList);
     }
     return nullptr;
@@ -325,8 +330,21 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
     /// create consensus engine according to "consensusType"
     Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("createPBFTSealer")
                      << LOG_KV("baseDir", m_param->baseDir()) << LOG_KV("Protocol", protocol_id);
-    std::shared_ptr<PBFTSealer> pbftSealer =
-        std::make_shared<PBFTSealer>(m_txPool, m_blockChain, m_sync);
+    std::shared_ptr<PBFTSealer> pbftSealer;
+    if (vrfBasedrPBFTEnabled())
+    {
+        pbftSealer = std::make_shared<VRFBasedrPBFTSealer>(m_txPool, m_blockChain, m_sync);
+        Ledger_LOG(INFO) << LOG_BADGE("initLedger")
+                         << LOG_DESC("createPBFTSealer for VRF-based rPBFT")
+                         << LOG_KV("consensusType", m_param->mutableConsensusParam().consensusType);
+    }
+    else
+    {
+        pbftSealer = std::make_shared<PBFTSealer>(m_txPool, m_blockChain, m_sync);
+        Ledger_LOG(INFO) << LOG_BADGE("initLedger")
+                         << LOG_DESC("createPBFTSealer for PBFT or rPBFT")
+                         << LOG_KV("consensusType", m_param->mutableConsensusParam().consensusType);
+    }
 
     ConsensusInterface::Ptr pbftEngine = createConsensusEngine(protocol_id);
     if (!pbftEngine)
@@ -339,7 +357,7 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
     pbftSealer->setEnableDynamicBlockSize(m_param->mutableConsensusParam().enableDynamicBlockSize);
     pbftSealer->setBlockSizeIncreaseRatio(m_param->mutableConsensusParam().blockSizeIncreaseRatio);
     initPBFTEngine(pbftSealer);
-    initRotatingPBFTEngine(pbftSealer);
+    initrPBFTEngine(pbftSealer);
     return pbftSealer;
 }
 
@@ -351,7 +369,7 @@ dev::eth::BlockFactory::Ptr Ledger::createBlockFactory()
     }
     // only create PartiallyBlockFactory when using pbft or rpbft
     if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0 ||
-        isRotatingPBFTEnabled())
+        normalrPBFTEnabled() || vrfBasedrPBFTEnabled())
     {
         return std::make_shared<dev::eth::PartiallyBlockFactory>();
     }
@@ -375,13 +393,12 @@ void Ledger::initPBFTEngine(Sealer::Ptr _sealer)
 }
 
 // init rotating-pbft engine
-void Ledger::initRotatingPBFTEngine(dev::consensus::Sealer::Ptr _sealer)
+void Ledger::initrPBFTEngine(dev::consensus::Sealer::Ptr _sealer)
 {
-    if (!isRotatingPBFTEnabled())
+    if (!normalrPBFTEnabled() && !vrfBasedrPBFTEnabled())
     {
         return;
     }
-
     RotatingPBFTEngine::Ptr rotatingPBFT =
         std::dynamic_pointer_cast<RotatingPBFTEngine>(_sealer->consensusEngine());
     assert(rotatingPBFT);
@@ -434,7 +451,7 @@ bool Ledger::consensusInitFactory()
     // create PBFTSealer
     else if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") ==
                  0 ||
-             isRotatingPBFTEnabled())
+             normalrPBFTEnabled() || vrfBasedrPBFTEnabled())
     {
         m_sealer = createPBFTSealer();
     }
@@ -444,7 +461,7 @@ bool Ledger::consensusInitFactory()
             dev::InitLedgerConfigFailed()
             << errinfo_comment("create consensusEngine failed, maybe unsupported consensus type " +
                                m_param->mutableConsensusParam().consensusType +
-                               ", supported consensus type are pbft, raft, rpbft"));
+                               ", supported consensus type are pbft, raft, rpbft, vrf_rpbft"));
     }
     if (!m_sealer)
     {

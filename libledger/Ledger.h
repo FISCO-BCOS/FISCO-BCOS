@@ -205,7 +205,7 @@ protected:
         dev::PROTOCOL_ID const& _protocolId);
     dev::eth::BlockFactory::Ptr createBlockFactory();
     void initPBFTEngine(dev::consensus::Sealer::Ptr _sealer);
-    void initRotatingPBFTEngine(dev::consensus::Sealer::Ptr _sealer);
+    void initrPBFTEngine(dev::consensus::Sealer::Ptr _sealer);
 
 private:
     /// create PBFTConsensus
@@ -213,7 +213,17 @@ private:
     /// create RaftConsensus
     std::shared_ptr<dev::consensus::Sealer> createRaftSealer();
 
-    bool isRotatingPBFTEnabled();
+    bool inline normalrPBFTEnabled()
+    {
+        return dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "rpbft") ==
+               0;
+    }
+
+    bool vrfBasedrPBFTEnabled()
+    {
+        return (dev::stringCmpIgnoreCase(
+                    m_param->mutableConsensusParam().consensusType, "vrf_rpbft") == 0);
+    }
 
 protected:
     std::shared_ptr<LedgerParamInterface> m_param = nullptr;

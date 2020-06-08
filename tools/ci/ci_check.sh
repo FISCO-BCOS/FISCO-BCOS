@@ -144,6 +144,18 @@ check_rpbft()
     check_consensus_and_sync 12
 }
 
+check_vrf_rpbft()
+{
+    LOG_INFO "***************check vrf_based_rpbft"
+    rm -rf node*/log node*/data
+    local sed_cmd="sed -i"
+    if [ "$(uname)" == "Darwin" ];then
+        sed_cmd="sed -i .bkp"
+    fi
+    ${sed_cmd} "s/consensus_type=rpbft/consensus_type=vrf_rpbft/" node*/conf/group.1.genesis
+    check_consensus_and_sync 12
+}
+
 init
 check_sync_consensus
 check_binarylog
@@ -151,3 +163,4 @@ is_raft=1
 check_raft
 is_raft=0
 check_rpbft
+check_vrf_rpbft
