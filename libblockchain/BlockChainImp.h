@@ -119,6 +119,10 @@ public:
 
     dev::h512s sealerList() override;
     dev::h512s observerList() override;
+    // get workingSealer list: type == NODE_TYPE_WORKING_SEALER
+    dev::h512s workingSealerList() override;
+    // get pending list: type ==  NODE_TYPE_SEALER
+    dev::h512s pendingSealerList() override;
 
     std::string getSystemConfigByKey(std::string const& key, int64_t num = -1) override;
 
@@ -151,6 +155,9 @@ public:
         dev::eth::Block::Ptr _block, uint64_t const& _index) override;
 
 private:
+    dev::h512s getNodeList(dev::eth::BlockNumber& _cachedNumber, dev::h512s& _cachedNodeList,
+        SharedMutex& _mutex, std::string const& _nodeListType);
+
     std::shared_ptr<Parent2ChildListMap> getParent2ChildListByReceiptProofCache(
         dev::eth::Block::Ptr _block);
     std::shared_ptr<Parent2ChildListMap> getParent2ChildListByTxsProofCache(
@@ -215,8 +222,12 @@ private:
     mutable SharedMutex m_nodeListMutex;
     dev::h512s m_sealerList;
     dev::h512s m_observerList;
+    dev::h512s m_workingSealerList;
+
+    int64_t m_cacheNumByWorkingSealer = -1;
     int64_t m_cacheNumBySealer = -1;
     int64_t m_cacheNumByObserver = -1;
+
 
     struct SystemConfigRecord
     {

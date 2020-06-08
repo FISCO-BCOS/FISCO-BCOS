@@ -153,8 +153,7 @@ protected:
     virtual void onReceiveRawPrepareResponse(
         std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);
 
-    // TODO: select nodes with VRF algorithm
-    IDXTYPE VRFSelection() const;
+    virtual IDXTYPE selectLeader() const;
 
     void resetConfig() override;
     virtual void resetChosedConsensusNodes();
