@@ -178,7 +178,7 @@ void create(evmc_result* o_result, EVMHostInterface& _env, evmc_message const* _
     // EVMHostContext::create takes the sender address from .myAddress().
     assert(fromEvmC(_msg->sender) == _env.myAddress());
 
-    *o_result = _env.create(value, gas, init, opcode, salt, {});
+    *o_result = _env.create(value, gas, init, opcode, salt);
 }
 
 void call(evmc_result* o_result, evmc_context* _context, evmc_message const* _msg) noexcept
@@ -208,7 +208,6 @@ void call(evmc_result* o_result, evmc_context* _context, evmc_message const* _ms
     params.receiveAddress = _msg->kind == EVMC_CALL ? params.codeAddress : env.myAddress();
     params.data = {_msg->input_data, _msg->input_size};
     params.staticCall = (_msg->flags & EVMC_STATIC) != 0;
-    params.onOp = {};
 
     *o_result = env.call(params);
 }

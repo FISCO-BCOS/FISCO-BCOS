@@ -57,7 +57,7 @@ static size_t const c_entryOverhead = 128 * 1024;
 static unsigned const c_offloadPoint =
     (c_defaultStackSize - c_entryOverhead) / c_singleExecutionStackSize;
 
-void goOnOffloadedStack(Executive& _e, OnOpFunc const& _onOp)
+void goOnOffloadedStack(Executive& _e)
 {
     // Set new stack size enouth to handle the rest of the calls up to the limit.
     boost::thread::attributes attrs;
@@ -71,7 +71,7 @@ void goOnOffloadedStack(Executive& _e, OnOpFunc const& _onOp)
         [&] {
             try
             {
-                _e.go(_onOp);
+                _e.go();
             }
             catch (...)
             {
@@ -84,7 +84,7 @@ void goOnOffloadedStack(Executive& _e, OnOpFunc const& _onOp)
         boost::rethrow_exception(exception);
 }
 
-void go(unsigned _depth, Executive& _e, OnOpFunc const& _onOp)
+void go(unsigned _depth, Executive& _e)
 {
     // If in the offloading point we need to switch to additional separated stack space.
     // Current stack is too small to handle more CALL/CREATE executions.
@@ -94,10 +94,10 @@ void go(unsigned _depth, Executive& _e, OnOpFunc const& _onOp)
     if (_depth == c_offloadPoint)
     {
         LOG(TRACE) << "Stack offloading (depth: " << c_offloadPoint << ")";
-        goOnOffloadedStack(_e, _onOp);
+        goOnOffloadedStack(_e);
     }
     else
-        _e.go(_onOp);
+        _e.go();
 }
 
 void generateCallResult(
@@ -189,7 +189,7 @@ evmc_result EVMHostContext::call(CallParameters& _p)
     e.setEvmFlags(flags);
     if (!e.call(_p, gasPrice(), origin()))
     {
-        go(depth(), e, _p.onOp);
+        go(depth(), e);
         e.accrueSubState(sub());
     }
     _p.gas = e.gas();
@@ -231,8 +231,8 @@ void EVMHostContext::setStore(u256 const& _n, u256 const& _v)
     m_s->setStorage(myAddress(), _n, _v);
 }
 
-evmc_result EVMHostContext::create(u256 const& _endowment, u256& io_gas, bytesConstRef _code,
-    evmc_opcode _op, u256 _salt, OnOpFunc const& _onOp)
+evmc_result EVMHostContext::create(
+    u256 const& _endowment, u256& io_gas, bytesConstRef _code, evmc_opcode _op, u256 _salt)
 {
     Executive e{m_s, envInfo(), depth() + 1};
     // Note: When create initializes Executive, the flags of evmc context must be passed in
@@ -250,7 +250,7 @@ evmc_result EVMHostContext::create(u256 const& _endowment, u256& io_gas, bytesCo
 
     if (!result)
     {
-        go(depth(), e, _onOp);
+        go(depth(), e);
         e.accrueSubState(sub());
     }
     io_gas = e.gas();
