@@ -26,7 +26,6 @@
 #include <libethcore/Exceptions.h>
 #include <libethcore/PrecompiledContract.h>
 #include <libethcore/TransactionReceipt.h>
-#include <libexecutive/ExecutionResult.h>
 #include <libstorage/Table.h>
 #include <tbb/parallel_for.h>
 #include <exception>
@@ -258,12 +257,6 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
 
 
     txDag->setTxExecuteFunc([&](Transaction::Ptr _tr, ID _txId, Executive::Ptr _executive) {
-
-
-#if 0
-        std::pair<ExecutionResult, TransactionReceipt::Ptr> resultReceipt =
-            execute(envInfo, _tr, executiveContext);
-#endif
         auto resultReceipt = execute(_tr, executiveContext, _executive);
 
         block.setTransactionReceipt(_txId, resultReceipt);
@@ -420,49 +413,6 @@ TransactionReceipt::Ptr BlockVerifier::executeTransaction(
     // only Rpc::call will use executeTransaction, RPC do catch exception
     return execute(_t, executiveContext, executive);
 }
-
-
-#if 0
-std::pair<ExecutionResult, TransactionReceipt::Ptr> BlockVerifier::execute(EnvInfo const& _envInfo,
-    Transaction const& _t, ExecutiveContext::Ptr executiveContext)
-{
-    // Create and initialize the executive. This will throw fairly cheaply and quickly if the
-    // transaction is bad in any way.
-    Executive e(executiveContext->getState(), _envInfo);
-    ExecutionResult res;
-    e.setResultRecipient(res);
-
-    // OK - transaction looks valid - execute.
-    try
-    {
-        e.initialize(_t);
-        if (!e.execute())
-            e.go();
-        e.finalize();
-    }
-    catch (StorageException const& e)
-    {
-        BLOCKVERIFIER_LOG(ERROR) << LOG_DESC("get StorageException") << LOG_KV("what", e.what());
-        BOOST_THROW_EXCEPTION(e);
-    }
-    catch (Exception const& _e)
-    {
-        // only OutOfGasBase ExecutorNotFound exception will throw
-        BLOCKVERIFIER_LOG(ERROR) << diagnostic_information(_e);
-    }
-    catch (std::exception const& _e)
-    {
-        BLOCKVERIFIER_LOG(ERROR) << _e.what();
-    }
-
-    e.loggingException();
-
-    return make_pair(
-        res, std::make_shared<TransactionReceipt>(executiveContext->getState()->rootHash(false),
-                 e.gasUsed(), e.logs(), e.status(), e.takeOutput().takeBytes(), e.newAddress()));
-}
-#endif
-
 
 dev::eth::TransactionReceipt::Ptr BlockVerifier::execute(dev::eth::Transaction::Ptr _t,
     dev::blockverifier::ExecutiveContext::Ptr executiveContext, Executive::Ptr executive)

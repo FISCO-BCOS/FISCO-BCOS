@@ -137,8 +137,8 @@ public:
         std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
     getTransactionReceiptByHashWithProof(dev::h256 const&, dev::eth::LocalisedTransaction&) override
     {
-        return std::make_pair(std::make_shared<LocalisedTransactionReceipt>(
-                                  dev::executive::TransactionException::None),
+        return std::make_pair(
+            std::make_shared<LocalisedTransactionReceipt>(dev::eth::TransactionException::None),
             std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>());
     }
     std::pair<LocalisedTransaction::Ptr,
@@ -240,7 +240,7 @@ public:
         for (unsigned index = 0; index < block.getTransactionSize(); index++)
         {
             TransactionReceipt::Ptr receipt = std::make_shared<TransactionReceipt>(u256(0),
-                u256(100), LogEntries(), executive::TransactionException::None, bytes(),
+                u256(100), LogEntries(), eth::TransactionException::None, bytes(),
                 (*block.transactions())[index]->receiveAddress());
             receipts->push_back(receipt);
         }

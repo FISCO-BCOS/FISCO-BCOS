@@ -30,6 +30,7 @@ namespace dev
 {
 namespace eth
 {
+class Result;
 /// EVM Virtual Machine interface
 class EVMInterface
 {
@@ -40,7 +41,7 @@ public:
     EVMInterface& operator=(EVMInterface const&) = delete;
 
     /// VM implementation
-    virtual owning_bytes_ref exec(EVMHostInterface& _ext, evmc_revision _rev, evmc_message* _msg,
+    virtual std::shared_ptr<Result> exec(EVMHostInterface& _ext, evmc_revision _rev, evmc_message* _msg,
         const uint8_t* _code, size_t _code_size) = 0;
 };
 }  // namespace eth
