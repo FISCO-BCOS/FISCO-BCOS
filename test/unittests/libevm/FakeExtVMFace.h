@@ -21,12 +21,14 @@
 #include <libdevcore/CommonJS.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/BlockHeader.h>
-#include <libethcore/LastBlockHashesFace.h>
+#include <libexecutive/EVMHostContext.h>
 #include <libexecutive/EVMHostInterface.h>
 #include <stdlib.h>
 #include <time.h>
+
 using namespace dev;
 using namespace dev::eth;
+using namespace dev::executive;
 namespace dev
 {
 namespace test
@@ -70,19 +72,6 @@ public:
     }
 };
 
-class FakeLastBlockHashes : public LastBlockHashesFace
-{
-public:
-    virtual h256s precedingHashes(h256 const&) const
-    {
-        h256s tmp;
-        return tmp;
-    }
-    /// Clear any cached result
-    virtual void clear() {}
-};
-
-
 class InitEnvInfo
 {
 public:
@@ -119,7 +108,7 @@ public:
     }
 };
 
-class FakeExtVM : public EVMHostInterface
+class FakeExtVM : public EVMHostContext
 {
 public:
     evmc_result call(CallParameters& param) override
@@ -221,14 +210,15 @@ public:
     }
     /// Read address's code.
     bytes const codeAt(Address const&) override { return code(); }
+    bool isPermitted() override { return true; }
 
     h256 blockHash(int64_t number) override { return crypto::Hash(toString(number)); }
 
     FakeExtVM(EnvInfo const& _envInfo, Address const& _myAddress, Address const& _caller,
         Address const& _origin, u256 const& _value, u256 const& _gasPrice, bytesConstRef _data,
         bytes _code, h256 const& _codeHash, unsigned _depth, bool _isCreate, bool _staticCall)
-      : EVMHostInterface(_envInfo, _myAddress, _caller, _origin, _value, _gasPrice, _data, _code,
-            _codeHash, _depth, _isCreate, _staticCall)
+      : EVMHostContext(nullptr, _envInfo, _myAddress, _caller, _origin, _value, _gasPrice, _data,
+            _code, _codeHash, _depth, _isCreate, _staticCall)
     {
         account_map.insert(_myAddress);
         account_map.insert(_caller);

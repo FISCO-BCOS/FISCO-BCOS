@@ -23,8 +23,8 @@
  */
 
 #include "EVMHostContext.h"
+#include "EVMHostInterface.h"
 #include <libblockverifier/ExecutiveContext.h>
-#include <libethcore/LastBlockHashesFace.h>
 #include <boost/thread.hpp>
 #include <exception>
 
@@ -181,6 +181,36 @@ evmc_status_code transactionExceptionToEvmcStatusCode(TransactionException ex) n
 
 }  // anonymous namespace
 
+namespace dev
+{
+namespace executive
+{
+EVMHostContext::EVMHostContext(std::shared_ptr<StateFace> _s,
+    dev::executive::EnvInfo const& _envInfo, Address const& _myAddress, Address const& _caller,
+    Address const& _origin, u256 const& _value, u256 const& _gasPrice, bytesConstRef _data,
+    const bytes& _code, h256 const& _codeHash, unsigned _depth, bool _isCreate, bool _staticCall)
+  : evmc_context{getHostInterface(), 0},
+    m_envInfo(_envInfo),
+    m_myAddress(_myAddress),
+    m_caller(_caller),
+    m_origin(_origin),
+    m_value(_value),
+    m_gasPrice(_gasPrice),
+    m_data(_data),
+    m_code(_code),
+    m_codeHash(_codeHash),
+    m_depth(_depth),
+    m_isCreate(_isCreate),
+    m_staticCall(_staticCall),
+    m_s(_s)
+{
+#if 0
+    // Contract: processing account must exist. In case of CALL, the EVMHostContext
+    // is created only if an account has code (so exist). In case of CREATE
+    // the account must be created first.
+    assert(m_s->addressInUse(_myAddress));
+#endif
+}
 
 evmc_result EVMHostContext::call(CallParameters& _p)
 {
@@ -270,16 +300,18 @@ void EVMHostContext::suicide(Address const& _a)
     if (g_BCOSConfig.version() >= RC2_VERSION)
     {
         // No balance here in BCOS. Balance has data racing in parallel suicide.
-        EVMHostInterface::suicide(_a);
+        m_sub.suicides.insert(m_myAddress);
         return;
     }
 
     m_s->addBalance(_a, m_s->balance(myAddress()));
     m_s->setBalance(myAddress(), 0);
-    EVMHostInterface::suicide(_a);
+    m_sub.suicides.insert(m_myAddress);
 }
 
 h256 EVMHostContext::blockHash(int64_t _number)
 {
     return envInfo().numberHash(_number);
 }
+}  // namespace executive
+}  // namespace dev

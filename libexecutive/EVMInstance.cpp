@@ -40,10 +40,11 @@ EVMInstance::EVMInstance(evmc_instance* _instance) noexcept : m_instance(_instan
             m_instance->set_option(m_instance, pair.first.c_str(), pair.second.c_str());
 }
 
-std::shared_ptr<Result> EVMInstance::exec(EVMHostInterface& _ext, evmc_revision _rev,
+std::shared_ptr<Result> EVMInstance::exec(executive::EVMHostContext& _ext, evmc_revision _rev,
     evmc_message* _msg, const uint8_t* _code, size_t _code_size)
 {
-    auto result = std::make_shared<Result>(m_instance->execute(m_instance, &_ext, _rev, _msg, _code, _code_size));
+    auto result = std::make_shared<Result>(
+        m_instance->execute(m_instance, &_ext, _rev, _msg, _code, _code_size));
 
     if (result->status() == EVMC_REJECTED)
     {
