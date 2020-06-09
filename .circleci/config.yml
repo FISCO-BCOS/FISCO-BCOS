@@ -213,9 +213,9 @@ workflows:
       - build_static_test:
           filters:
             branches:
-              only: 
+              only:
                 - /^pull.*/
-                - /^release.*/ 
+                - /^release.*/
             tags:
               ignore: /.*/
       - generate_coverage:
@@ -223,9 +223,9 @@ workflows:
             - build_static_test
           filters:
             branches:
-              only: 
+              only:
                 - /^pull.*/
-                - /^release.*/ 
+                - /^release.*/
             tags:
               ignore: /.*/
       - integration_test:
@@ -233,17 +233,17 @@ workflows:
             - build_static_test
           filters:
             branches:
-              only: 
+              only:
                 - /^pull.*/
-                - /^release.*/ 
+                - /^release.*/
             tags:
               ignore: /.*/
       - build_test_guomi:
           filters:
             branches:
-              only: 
+              only:
                 - /^pull.*/
-                - /^release.*/ 
+                - /^release.*/
             tags:
               ignore: /.*/
       - build_static:
@@ -252,7 +252,6 @@ workflows:
               ignore: /^pull.*/
             tags:
               ignore: /.*/
-
   deploy:
     jobs:
       - deploy_static:

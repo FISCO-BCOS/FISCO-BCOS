@@ -40,15 +40,23 @@ download_artifact_linux()
 
     local response="$(curl https://circleci.com/api/v1.1/project/github/${org}/${repo}/${build_num}/artifacts?circle-token= 2>/dev/null)"
     if [ -z "${download_mini}" ];then
-        link=$(echo ${response}| grep -o 'https://[^"]*' | grep -v 'mini')
+        link="$(echo ${response}| grep -o 'https://[^"]*' | grep -v mini)"
     else
-        link=$(echo ${response}| grep -o 'https://[^"]*' | grep 'mini')
+        link="$(echo ${response}| grep -o 'https://[^"]*' | grep mini)"
+    fi
+    if [ -z "${link}" ];then
+        build_num=$(( build_num - 1 ))
+        response="$(curl https://circleci.com/api/v1.1/project/github/${org}/${repo}/${build_num}/artifacts?circle-token= 2>/dev/null)"
+        if [ -z "${download_mini}" ];then
+            link="$(echo ${response}| grep -o 'https://[^"]*' | grep -v mini| tail -n 1)"
+        else
+            link="$(echo ${response}| grep -o 'https://[^"]*' | grep mini| tail -n 1)"
+        fi
     fi
     if [ -z "${link}" ];then
         echo "CircleCI build_num:${build_num} can't find artifacts."
         exit 1
     fi
-
     echo -e "\033[32mDownloading binary from ${link} \033[0m"
     cd ${output_dir} && curl -LO ${link} && tar -zxf fisco*.tar.gz && rm fisco*.tar.gz
     result=$?
@@ -64,7 +72,7 @@ download_artifact_macOS(){
     local workflow_artifacts_url="$(curl https://api.github.com/repos/FISCO-BCOS/FISCO-BCOS/actions/runs\?branch\=${branch}\&status\=success\&event\=push | grep artifacts_url | head -n 1 | cut -d \" -f 4)"
     local archive_download_url="$(curl ${workflow_artifacts_url} | grep archive_download_url | cut -d \" -f 4)"
     if [ -z "${archive_download_url}" ];then
-        echo "GitHub atone ${workflow_artifacts_url} can't find artifact."
+        echo "GitHub action ${workflow_artifacts_url} can't find artifact."
         exit 1
     fi
     echo -e "\033[32mDownloading macOS binary from ${archive_download_url} \033[0m"
