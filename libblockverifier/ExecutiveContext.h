@@ -26,7 +26,6 @@
 #include <libdevcore/FixedHash.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/Block.h>
-#include <libethcore/ChainOperationParams.h>
 #include <libethcore/PrecompiledContract.h>
 #include <libethcore/Protocol.h>
 #include <libethcore/Transaction.h>
@@ -104,7 +103,7 @@ public:
     std::shared_ptr<dev::executive::StateFace> getState();
     void setState(std::shared_ptr<dev::executive::StateFace> state);
 
-    virtual bool isOrginPrecompiled(Address const& _a) const;
+    virtual bool isEthereumPrecompiled(Address const& _a) const;
 
     virtual std::pair<bool, bytes> executeOriginPrecompiled(
         Address const& _a, bytesConstRef _in) const;

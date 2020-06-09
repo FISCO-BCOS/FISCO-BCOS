@@ -25,7 +25,6 @@
 #include "include/BuildInfo.h"
 #include "libsecurity/KeyCenter.h"
 #include <libdevcrypto/CryptoInterface.h>
-#include <libethcore/EVMSchedule.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
@@ -88,7 +87,11 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
     }
 
     // set evmSchedule
-    if (g_BCOSConfig.version() <= getVersionNumber("2.0.0"))
+    if (g_BCOSConfig.version() >= V2_6_0)
+    {
+        g_BCOSConfig.setEVMSchedule(dev::eth::FiscoBcosScheduleV3);
+    }
+    else if (g_BCOSConfig.version() <= getVersionNumber("2.0.0"))
     {
         g_BCOSConfig.setEVMSchedule(dev::eth::FiscoBcosSchedule);
     }

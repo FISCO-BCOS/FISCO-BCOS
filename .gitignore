@@ -36,8 +36,7 @@
 
 
 # ignore some directory
-build
-build/**
+build**
 deps
 deps/**
 

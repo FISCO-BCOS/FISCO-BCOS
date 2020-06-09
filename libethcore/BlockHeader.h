@@ -25,7 +25,6 @@
 
 #pragma once
 
-#include "ChainOperationParams.h"
 #include "Common.h"
 #include "Exceptions.h"
 #include <libdevcore/Common.h>

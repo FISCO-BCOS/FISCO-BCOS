@@ -74,12 +74,12 @@ class Executive
 public:
     using Ptr = std::shared_ptr<Executive>;
     /// Simple constructor; executive will operate on given state, with the given environment info.
-    Executive(
-        std::shared_ptr<StateFace> _s, dev::executive::EnvInfo const& _envInfo, unsigned _level = 0)
-      : m_s(_s), m_envInfo(_envInfo), m_depth(_level)
+    Executive(std::shared_ptr<StateFace> _s, dev::executive::EnvInfo const& _envInfo,
+        unsigned _level = 0, bool _freeStorage = false)
+      : m_s(_s), m_envInfo(_envInfo), m_depth(_level), m_enableFreeStorage(_freeStorage)
     {}
 
-    Executive() {}
+    Executive(bool _freeStorage = false) : m_enableFreeStorage(_freeStorage) {}
 
 
     // template <typename T>
@@ -199,12 +199,6 @@ public:
 
     void setState(std::shared_ptr<StateFace> _state) { m_s = _state; }
 
-    void setEvmFlags(VMFlagType const& _evmFlags)
-    {
-        m_evmFlags = _evmFlags;
-        m_enableFreeStorage = enableFreeStorage(_evmFlags);
-    }
-
 private:
     void parseEVMCResult(std::shared_ptr<eth::Result> _result);
     /// @returns false iff go() must be called (and thus a VM execution in required).
@@ -249,7 +243,6 @@ private:
     size_t m_savepoint = 0;
     size_t m_tableFactorySavepoint = 0;
 
-    VMFlagType m_evmFlags;
     // determine whether the freeStorageVMSchedule enabled or not
     bool m_enableFreeStorage = false;
 };

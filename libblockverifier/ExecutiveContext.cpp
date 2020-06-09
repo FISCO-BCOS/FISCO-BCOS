@@ -126,7 +126,7 @@ void ExecutiveContext::setState(std::shared_ptr<dev::executive::StateFace> state
     m_stateFace = state;
 }
 
-bool ExecutiveContext::isOrginPrecompiled(Address const& _a) const
+bool ExecutiveContext::isEthereumPrecompiled(Address const& _a) const
 {
     return m_precompiledContract.count(_a);
 }
