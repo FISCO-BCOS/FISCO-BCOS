@@ -160,6 +160,7 @@ void LedgerParam::parseIniConfig(const std::string& _iniConfigFile, const std::s
     initTxExecuteConfig(pt);
     // init params releated to consensus(ttl)
     initConsensusIniConfig(pt);
+    initFlowControlConfig(pt);
 }
 
 void LedgerParam::init(const std::string& _configFilePath, const std::string& _dataPath)
@@ -210,8 +211,27 @@ void LedgerParam::initTxPoolConfig(ptree const& pt)
                 ForbidNegativeValue() << errinfo_comment("Please set tx_pool.limit to positive !"));
         }
 
+        auto memorySizeLimit = pt.get<int64_t>("tx_pool.memory_limit", TX_POOL_DEFAULT_MEMORY_SIZE);
+        if (memorySizeLimit < 0 || memorySizeLimit >= MAX_VALUE_IN_MB)
+        {
+            BOOST_THROW_EXCEPTION(
+                ForbidNegativeValue() << errinfo_comment(
+                    "Please set tx_pool.limit to be larger than 0 and smaller than " +
+                    std::to_string(MAX_VALUE_IN_MB)));
+        }
+        mutableTxPoolParam().maxTxPoolMemorySize = memorySizeLimit * 1024 * 1024;
+
+        auto notifyWorkerNum = pt.get<int64_t>("tx_pool.notify_worker_num", 2);
+        if (notifyWorkerNum <= 0)
+        {
+            BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
+                                      "Please set tx_pool.notify_worker_num to positive !"));
+        }
+        mutableTxPoolParam().notifyWorkerNum = notifyWorkerNum;
         LedgerParam_LOG(INFO) << LOG_BADGE("initTxPoolConfig")
-                              << LOG_KV("txPoolLimit", mutableTxPoolParam().txPoolLimit);
+                              << LOG_KV("txPoolLimit", mutableTxPoolParam().txPoolLimit)
+                              << LOG_KV("memorySizeLimit(MB)", memorySizeLimit)
+                              << LOG_KV("notifyWorkerNum", notifyWorkerNum);
     }
     catch (std::exception& e)
     {
@@ -486,15 +506,14 @@ void LedgerParam::initSyncConfig(ptree const& pt)
     // max_block_sync_queue_size, default is 512MB
     mutableSyncParam().maxQueueSizeForBlockSync =
         pt.get<int>("sync.max_block_sync_memory_size", 512);
-    if (mutableSyncParam().maxQueueSizeForBlockSync <= 0)
+
+    if (mutableSyncParam().maxQueueSizeForBlockSync < 32 ||
+        mutableSyncParam().maxQueueSizeForBlockSync >= MAX_VALUE_IN_MB)
     {
-        BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
-                                  "Please set sync.max_block_sync_memory_size to positive !"));
-    }
-    if (mutableSyncParam().maxQueueSizeForBlockSync < 32)
-    {
-        BOOST_THROW_EXCEPTION(InvalidConfiguration() << errinfo_comment(
-                                  "Please set max_block_sync_memory_size no more than 32"));
+        BOOST_THROW_EXCEPTION(
+            InvalidConfiguration() << errinfo_comment("Please set max_block_sync_memory_size must "
+                                                      "be no smaller than 32MB and smaller than " +
+                                                      std::to_string(MAX_VALUE_IN_MB)));
     }
     mutableSyncParam().txsStatusGossipMaxPeers = pt.get<signed>("sync.txs_max_gossip_peers_num", 5);
     if (mutableSyncParam().txsStatusGossipMaxPeers < 0)
@@ -561,7 +580,16 @@ void LedgerParam::initStorageConfig(ptree const& pt)
     {
         mutableStorageParam().path += "/Scalable";
     }
-    mutableStorageParam().maxCapacity = pt.get<uint>("storage.max_capacity", 32);
+    mutableStorageParam().maxCapacity = pt.get<int>("storage.max_capacity", 32);
+
+    if (mutableStorageParam().maxCapacity <= 0 &&
+        mutableStorageParam().maxCapacity >= MAX_VALUE_IN_MB)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfiguration() << errinfo_comment(
+                                  "storage.max_capacity must be larger than 0 and smaller than " +
+                                  std::to_string(MAX_VALUE_IN_MB)));
+    }
+
     auto scrollThresholdMultiple = pt.get<uint>("storage.scroll_threshold_multiple", 2);
     mutableStorageParam().scrollThreshold =
         scrollThresholdMultiple > 0 ? scrollThresholdMultiple * g_BCOSConfig.c_blockLimit : 2000;
@@ -611,6 +639,47 @@ void LedgerParam::initEventLogFilterManagerConfig(boost::property_tree::ptree co
                                  mutableEventLogFilterManagerParams().maxBlockRange)
                           << LOG_KV("maxBlockPerProcess",
                                  mutableEventLogFilterManagerParams().maxBlockPerProcess);
+}
+
+void LedgerParam::initFlowControlConfig(boost::property_tree::ptree const& _pt)
+{
+    auto maxQPS =
+        _pt.get<int64_t>("flow_control.limit_req", mutableFlowControlParam().maxDefaultValue);
+    if (maxQPS <= 0)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfiguration() << errinfo_comment("flow_control.limit_req must be positive"));
+    }
+    mutableFlowControlParam().maxQPS = maxQPS;
+    auto outGoingBandwidth = _pt.get<double>(
+        "flow_control.outgoing_bandwidth_limit", mutableFlowControlParam().maxDefaultValue);
+    // values configured using configuration items
+    if (outGoingBandwidth != (double)mutableFlowControlParam().maxDefaultValue)
+    {
+        if (outGoingBandwidth <= (double)(-0.0) || outGoingBandwidth >= (double)MAX_VALUE_IN_Mb)
+        {
+            BOOST_THROW_EXCEPTION(InvalidConfiguration()
+                                  << errinfo_comment("flow_control.outgoing_bandwidth_limit must "
+                                                     "be larger than 0 and smaller than " +
+                                                     std::to_string(MAX_VALUE_IN_Mb)));
+        }
+        outGoingBandwidth = outGoingBandwidth * 1024 * 1024 / 8;
+        mutableFlowControlParam().outGoingBandwidthLimit = (int64_t)(outGoingBandwidth);
+    }
+    else
+    {
+        LedgerParam_LOG(DEBUG) << LOG_BADGE("initFlowControlConfig")
+                               << LOG_DESC(
+                                      "disable NetworkBandWidthLimiter for "
+                                      "flow_control.outgoing_bandwidth_limit is not configured");
+        mutableFlowControlParam().outGoingBandwidthLimit =
+            mutableFlowControlParam().maxDefaultValue;
+    }
+
+    LedgerParam_LOG(INFO) << LOG_BADGE("initFlowControlConfig")
+                          << LOG_KV("maxQPS", mutableFlowControlParam().maxQPS)
+                          << LOG_KV("outGoingBandwidth(Bytes)",
+                                 mutableFlowControlParam().outGoingBandwidthLimit);
 }
 
 }  // namespace ledger

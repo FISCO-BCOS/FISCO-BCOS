@@ -45,7 +45,9 @@ Service::Service()
   : m_topics(std::make_shared<std::set<std::string>>()),
     m_protocolID2Handler(std::make_shared<std::unordered_map<uint32_t, CallbackFuncWithSession>>()),
     m_topic2Handler(std::make_shared<std::unordered_map<std::string, CallbackFuncWithSession>>()),
-    m_group2NetworkStatHandler(std::make_shared<std::map<GROUP_ID, NetworkStatHandler::Ptr>>())
+    m_group2NetworkStatHandler(std::make_shared<std::map<GROUP_ID, NetworkStatHandler::Ptr>>()),
+    m_group2BandwidthLimiter(
+        std::make_shared<std::map<GROUP_ID, dev::flowlimit::RateLimiter::Ptr>>())
 {}
 
 void Service::start()
@@ -326,7 +328,16 @@ void Service::onMessage(dev::network::NetworkException e, dev::network::SessionF
             p2pSession->onTopicMessage(p2pMessage);
             return;
         }
-        if (g_BCOSConfig.enableStat())
+
+        // AMOP-incoming-network-traffic between nodes
+        bool isAMOPMessage =
+            (abs(p2pMessage->protocolID()) == dev::eth::ProtocolID::AMOP ? true : false);
+        if (m_channelNetworkStatHandler && isAMOPMessage)
+        {
+            m_channelNetworkStatHandler->updateAMOPInTraffic(p2pMessage->length());
+        }
+        // P2P messages within the group, statistics of network traffic
+        if (g_BCOSConfig.enableStat() && !isAMOPMessage)
         {
             updateIncomingTraffic(p2pMessage);
         }
@@ -459,10 +470,21 @@ void Service::asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
             {
                 session->session()->asyncSendMessage(message, options, nullptr);
             }
-            if (g_BCOSConfig.enableStat())
+            bool isAMOPMessage =
+                (abs(message->protocolID()) == dev::eth::ProtocolID::AMOP ? true : false);
+
+            // AMOP-outgoing-network-traffic between nodes
+            if (m_channelNetworkStatHandler && isAMOPMessage)
             {
-                updateOutcomingTraffic(message);
+                m_channelNetworkStatHandler->updateAMOPOutTraffic(message->length());
             }
+            // update stat information
+            if (g_BCOSConfig.enableStat() && !isAMOPMessage)
+            {
+                updateOutgoingTraffic(message);
+            }
+
+            acquirePermits(message);
         }
         else
         {
@@ -623,9 +645,27 @@ void Service::asyncSendMessageByTopic(std::string topic, P2PMessage::Ptr message
     topicStatus->onResponse(dev::network::NetworkException(), P2PSession::Ptr(), message);
 }
 
-void Service::asyncMulticastMessageByTopic(std::string topic, P2PMessage::Ptr message)
+bool Service::asyncMulticastMessageByTopic(
+    std::string topic, P2PMessage::Ptr message, dev::flowlimit::RateLimiter::Ptr _bandwidthLimiter)
 {
     NodeIDs nodeIDsToSend = getPeersByTopic(topic);
+    if (_bandwidthLimiter)
+    {
+        auto requiredPermits =
+            message->length() * nodeIDsToSend.size() / g_BCOSConfig.c_compressRate;
+        if (!_bandwidthLimiter->tryAcquire(requiredPermits))
+        {
+            SERVICE_LOG(INFO) << LOG_DESC(
+                                     "asyncMulticastMessageByTopic from channel failed for over "
+                                     "bandwidth limitation")
+                              << LOG_KV("requiredPermits", requiredPermits)
+                              << LOG_KV("maxPermitsPerSecond(Bytes)", _bandwidthLimiter->maxQPS())
+                              << LOG_KV("broadcastTargetSize", nodeIDsToSend.size())
+                              << LOG_KV("msgSize", message->length());
+            return false;
+        }
+        message->setPermitsAcquired(true);
+    }
     SERVICE_LOG(DEBUG) << LOG_DESC("asyncMulticastMessageByTopic")
                        << LOG_KV("nodes", nodeIDsToSend.size());
     try
@@ -641,6 +681,7 @@ void Service::asyncMulticastMessageByTopic(std::string topic, P2PMessage::Ptr me
         SERVICE_LOG(WARNING) << LOG_DESC("asyncMulticastMessageByTopic")
                              << LOG_KV("what", boost::diagnostic_information(e));
     }
+    return true;
 }
 
 void Service::asyncMulticastMessageByNodeIDList(NodeIDs nodeIDs, P2PMessage::Ptr message)
@@ -851,20 +892,80 @@ void Service::updateIncomingTraffic(P2PMessage::Ptr _msg)
 {
     // split groupID and moduleID from the _protocolID
     auto ret = dev::eth::getGroupAndProtocol(abs(_msg->protocolID()));
-    ReadGuard l(x_group2NetworkStatHandler);
-    if (m_group2NetworkStatHandler->count(ret.first))
+    auto networkStatHandler =
+        getHandlerByGroupId(ret.first, m_group2NetworkStatHandler, x_group2NetworkStatHandler);
+
+    if (networkStatHandler)
     {
-        (*m_group2NetworkStatHandler)[ret.first]->updateIncomingTraffic(ret.second, _msg->length());
+        networkStatHandler->updateIncomingTraffic(ret.second, _msg->length());
     }
 }
 
-void Service::updateOutcomingTraffic(P2PMessage::Ptr _msg)
+void Service::updateOutgoingTraffic(P2PMessage::Ptr _msg)
 {
     auto ret = dev::eth::getGroupAndProtocol(abs(_msg->protocolID()));
-    ReadGuard l(x_group2NetworkStatHandler);
-    if (m_group2NetworkStatHandler->count(ret.first))
+    auto networkStatHandler =
+        getHandlerByGroupId(ret.first, m_group2NetworkStatHandler, x_group2NetworkStatHandler);
+    if (networkStatHandler)
     {
-        (*m_group2NetworkStatHandler)[ret.first]->updateOutcomingTraffic(
-            ret.second, _msg->length());
+        networkStatHandler->updateOutgoingTraffic(ret.second, _msg->length());
     }
+}
+
+void Service::acquirePermits(P2PMessage::Ptr _msg)
+{
+    if (_msg->permitsAcquired())
+    {
+        return;
+    }
+    if (m_nodeBandwidthLimiter)
+    {
+        m_nodeBandwidthLimiter->acquireWithoutWait(_msg->length());
+    }
+    // get groupId
+    auto ret = dev::eth::getGroupAndProtocol(abs(_msg->protocolID()));
+    auto bandwidthLimiter =
+        getHandlerByGroupId(ret.first, m_group2BandwidthLimiter, x_group2BandwidthLimiter);
+    if (!bandwidthLimiter)
+    {
+        return;
+    }
+    bandwidthLimiter->acquireWithoutWait(_msg->length());
+}
+
+void Service::setNodeBandwidthLimiter(dev::flowlimit::RateLimiter::Ptr _bandwidthLimiter)
+{
+    m_nodeBandwidthLimiter = _bandwidthLimiter;
+}
+
+
+void Service::registerGroupBandwidthLimiter(
+    GROUP_ID const& _groupID, dev::flowlimit::RateLimiter::Ptr _bandwidthLimiter)
+{
+    UpgradableGuard l(x_group2BandwidthLimiter);
+    if (m_group2BandwidthLimiter->count(_groupID))
+    {
+        SERVICE_LOG(DEBUG) << LOG_DESC("registerGroupBandwidthLimiter: already registered")
+                           << LOG_KV("group", std::to_string(_groupID));
+        return;
+    }
+    UpgradeGuard ul(l);
+    (*m_group2BandwidthLimiter)[_groupID] = _bandwidthLimiter;
+    SERVICE_LOG(INFO) << LOG_DESC("registerGroupBandwidthLimiter")
+                      << LOG_KV("group", std::to_string(_groupID));
+}
+
+void Service::removeGroupBandwidthLimiter(GROUP_ID const& _groupID)
+{
+    UpgradableGuard l(x_group2BandwidthLimiter);
+    if (!m_group2BandwidthLimiter->count(_groupID))
+    {
+        SERVICE_LOG(DEBUG) << LOG_DESC("removeGroupBandwidthLimiter: already removed")
+                           << LOG_KV("group", std::to_string(_groupID));
+        return;
+    }
+    UpgradeGuard ul(l);
+    m_group2BandwidthLimiter->erase(_groupID);
+    SERVICE_LOG(INFO) << LOG_DESC("removeGroupBandwidthLimiter")
+                      << LOG_KV("group", std::to_string(_groupID));
 }

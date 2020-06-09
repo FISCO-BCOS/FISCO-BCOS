@@ -196,7 +196,15 @@ h256 MemoryTableFactory::hash()
     {
         return h256();
     }
-    m_hash = dev::sha256(&data);
+
+    if (g_BCOSConfig.SMCrypto())
+    {
+        m_hash = dev::sm3(&data);
+    }
+    else
+    {
+        m_hash = dev::sha256(&data);
+    }
     return m_hash;
 }
 

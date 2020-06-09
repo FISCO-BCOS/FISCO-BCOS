@@ -32,6 +32,9 @@
 #include <libethcore/Transaction.h>
 #include <libexecutive/StateFace.h>
 #include <libstorage/Table.h>
+// for concurrent_map
+#define TBB_PREVIEW_CONCURRENT_ORDERED_CONTAINERS 1
+#include <tbb/concurrent_map.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <atomic>
 #include <functional>
@@ -52,6 +55,8 @@ namespace precompiled
 {
 class Precompiled;
 class PrecompiledExecResultFactory;
+class ParallelConfigPrecompiled;
+struct ParallelConfig;
 }  // namespace precompiled
 namespace blockverifier
 {
@@ -59,9 +64,8 @@ class ExecutiveContext : public std::enable_shared_from_this<ExecutiveContext>
 {
 public:
     typedef std::shared_ptr<ExecutiveContext> Ptr;
-
+    using ParallelConfigKey = std::pair<Address, uint32_t>;
     ExecutiveContext() : m_addressCount(0x10000) {}
-
     virtual ~ExecutiveContext()
     {
         if (m_memoryTableFactory)
@@ -89,6 +93,8 @@ public:
         m_address2Precompiled.insert(std::make_pair(address, precompiled));
     }
 
+    void registerParallelPrecompiled(std::shared_ptr<dev::precompiled::Precompiled> _precompiled);
+
     void setPrecompiledExecResultFactory(
         dev::precompiled::PrecompiledExecResultFactory::Ptr _precompiledExecResultFactory);
 
@@ -102,6 +108,8 @@ public:
 
     virtual std::pair<bool, bytes> executeOriginPrecompiled(
         Address const& _a, bytesConstRef _in) const;
+
+    virtual bigint costOfPrecompiled(Address const& _a, bytesConstRef _in) const;
 
     void setPrecompiledContract(
         std::unordered_map<Address, dev::eth::PrecompiledContract> const& precompiledContract);
@@ -136,6 +144,12 @@ private:
     uint64_t m_txGasLimit = 300000000;
 
     std::shared_ptr<dev::precompiled::PrecompiledExecResultFactory> m_precompiledExecResultFactory;
+    std::shared_ptr<dev::precompiled::ParallelConfigPrecompiled> m_parallelConfigPrecompiled;
+
+    // map between {receiveAddress, selector} to {ParallelConfig}
+    // avoid multiple concurrent transactions of openTable to obtain ParallelConfig
+    tbb::concurrent_map<ParallelConfigKey, std::shared_ptr<dev::precompiled::ParallelConfig>>
+        m_parallelConfigCache;
 };
 
 }  // namespace blockverifier

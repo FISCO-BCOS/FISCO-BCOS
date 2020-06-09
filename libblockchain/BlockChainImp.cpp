@@ -22,6 +22,8 @@
  */
 
 #include "BlockChainImp.h"
+#include "libdevcrypto/CryptoInterface.h"
+#include "tbb/parallel_for_each.h"
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/CommonData.h>
 #include <libethcore/Block.h>
@@ -31,6 +33,7 @@
 #include <libstorage/StorageException.h>
 #include <libstorage/Table.h>
 #include <tbb/parallel_for.h>
+#include <tbb/parallel_invoke.h>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/lexical_cast.hpp>
@@ -59,7 +62,13 @@ std::shared_ptr<Block> BlockCache::add(std::shared_ptr<Block> _block)
             BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[add]Block cache full, start to remove old item...");
             auto firstHash = m_blockCacheFIFO.front();
             m_blockCacheFIFO.pop_front();
+            auto removedBlock = m_blockCache[firstHash];
+
             m_blockCache.erase(firstHash);
+            // Destruct the block in m_destructorThread
+            HolderForDestructor<Block> holder(std::move(removedBlock));
+            m_destructorThread->enqueue(std::move(holder));
+
             // in case something unexcept error
             if (m_blockCache.size() > c_blockCacheSize)
             {
@@ -433,7 +442,7 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam, bool
     std::shared_ptr<Block> block = getBlockByNumber(0);
     if (block == nullptr && !_shouldBuild)
     {
-        BLOCKCHAIN_LOG(FATAL) << "Can't find the genesisi block";
+        BLOCKCHAIN_LOG(FATAL) << "Can't find the genesis block";
     }
     else if (block == nullptr && _shouldBuild)
     {
@@ -914,13 +923,12 @@ BlockChainImp::getTransactionByHashWithProof(dev::h256 const& _txHash)
 
     auto parent2ChildList = getParent2ChildListByTxsProofCache(blockInfo);
 
-    std::map<std::string, std::string> child2Parent;
-    parseMerkleMap(parent2ChildList, child2Parent);
+    auto child2Parent = getChild2ParentCacheByTransaction(parent2ChildList, blockInfo);
     // get merkle from  parent2ChildList and child2Parent
     bytes txData;
     tx->encode(txData);
     auto hashWithIndex = getHashNeed2Proof(tx->transactionIndex(), txData);
-    this->getMerkleProof(hashWithIndex, *parent2ChildList, child2Parent, merkleProof);
+    this->getMerkleProof(hashWithIndex, *parent2ChildList, *child2Parent, merkleProof);
     return std::make_pair(tx, merkleProof);
 }
 
@@ -931,10 +939,10 @@ dev::bytes BlockChainImp::getHashNeed2Proof(uint32_t index, const dev::bytes& da
     s << index;
     bytes bytesHash;
     bytesHash.insert(bytesHash.end(), s.out().begin(), s.out().end());
-    dev::h256 dataHash = sha3(data);
+    dev::h256 dataHash = crypto::Hash(data);
     bytesHash.insert(bytesHash.end(), dataHash.begin(), dataHash.end());
 #if 0
-    dev::h256 hashWithIndex = sha3(bytesHash);
+    dev::h256 hashWithIndex = Hash(bytesHash);
     BLOCKCHAIN_LOG(DEBUG) << "transactionindex:" << index << " data:" << toHex(data)
                           << " bytesHash:" << toHex(bytesHash)
                           << " hashWithIndex:" << hashWithIndex.hex();
@@ -945,23 +953,30 @@ dev::bytes BlockChainImp::getHashNeed2Proof(uint32_t index, const dev::bytes& da
 
 void BlockChainImp::parseMerkleMap(
     std::shared_ptr<std::map<std::string, std::vector<std::string>>> parent2ChildList,
-    std::map<std::string, std::string>& child2Parent)
+    Child2ParentMap& child2Parent)
 {
-    for (const auto& item : *parent2ChildList)
-    {
-        for (const auto& child : item.second)
-        {
-            if (!child.empty())
-            {
-                child2Parent[child] = item.first;
-            }
-        }
-    }
+    // trans parent2ChildList into child2Parent concurrently
+    tbb::parallel_for_each(parent2ChildList->begin(), parent2ChildList->end(),
+        [&](std::pair<const std::string, std::vector<std::string>>& _childListIterator) {
+            auto childList = _childListIterator.second;
+            auto parent = _childListIterator.first;
+            tbb::parallel_for(tbb::blocked_range<size_t>(0, childList.size()),
+                [&](const tbb::blocked_range<size_t>& range) {
+                    for (size_t i = range.begin(); i < range.end(); i++)
+                    {
+                        std::string child = childList[i];
+                        if (!child.empty())
+                        {
+                            child2Parent[child] = parent;
+                        }
+                    }
+                });
+        });
 }
 
 void BlockChainImp::getMerkleProof(dev::bytes const& _txHash,
     const std::map<std::string, std::vector<std::string>>& parent2ChildList,
-    const std::map<std::string, std::string>& child2Parent,
+    const Child2ParentMap& child2Parent,
     std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>& merkleProof)
 {
     std::string merkleNode = toHex(_txHash);
@@ -1073,27 +1088,14 @@ BlockChainImp::getTransactionReceiptByHashWithProof(
 
     auto parent2ChildList = getParent2ChildListByReceiptProofCache(blockInfo);
 
-    std::map<std::string, std::string> child2Parent;
-    parseMerkleMap(parent2ChildList, child2Parent);
+    auto child2Parent = getChild2ParentCacheByReceipt(parent2ChildList, blockInfo);
     // get receipt hash with index
     bytes receiptData;
     txReceipt->encode(receiptData);
     auto hashWithIndex = getHashNeed2Proof(txReceipt->transactionIndex(), receiptData);
     // get merkle from  parent2ChildList and child2Parent
-    this->getMerkleProof(hashWithIndex, *parent2ChildList, child2Parent, merkleProof);
+    this->getMerkleProof(hashWithIndex, *parent2ChildList, *child2Parent, merkleProof);
     return std::make_pair(txReceipt, merkleProof);
-}
-
-std::shared_ptr<MerkleProofType> BlockChainImp::getProof(
-    std::shared_ptr<Parent2ChildListMap> _parent2ChildList, uint64_t const& _index,
-    const dev::bytes& _encodedData)
-{
-    std::shared_ptr<MerkleProofType> merkleProof = std::make_shared<MerkleProofType>();
-    std::map<std::string, std::string> child2Parent;
-    parseMerkleMap(_parent2ChildList, child2Parent);
-    auto hashWithIndex = getHashNeed2Proof(_index, _encodedData);
-    this->getMerkleProof(hashWithIndex, *_parent2ChildList, child2Parent, *merkleProof);
-    return merkleProof;
 }
 
 std::shared_ptr<Parent2ChildListMap> BlockChainImp::getParent2ChildListByReceiptProofCache(
@@ -1136,7 +1138,6 @@ std::shared_ptr<Parent2ChildListMap> BlockChainImp::getParent2ChildListByTxsProo
     {
         return m_transactionWithProof.second;
     }
-
     std::shared_ptr<Parent2ChildListMap> parent2ChildList = _block->getTransactionProof();
     m_transactionWithProof = std::make_pair(_block->blockHeader().number(), parent2ChildList);
     return parent2ChildList;
@@ -1153,7 +1154,14 @@ std::shared_ptr<MerkleProofType> BlockChainImp::getTransactionReceiptProof(
     auto parent2ChildList = getParent2ChildListByReceiptProofCache(_block);
     bytes encodedData;
     txReceipt->encode(encodedData);
-    return getProof(parent2ChildList, _index, encodedData);
+
+    // get merkle proof
+    std::shared_ptr<MerkleProofType> merkleProof = std::make_shared<MerkleProofType>();
+    auto child2Parent = getChild2ParentCacheByReceipt(parent2ChildList, _block);
+    auto hashWithIndex = getHashNeed2Proof(_index, encodedData);
+    this->getMerkleProof(hashWithIndex, *parent2ChildList, *child2Parent, *merkleProof);
+
+    return merkleProof;
 }
 
 std::shared_ptr<MerkleProofType> BlockChainImp::getTransactionProof(
@@ -1167,7 +1175,14 @@ std::shared_ptr<MerkleProofType> BlockChainImp::getTransactionProof(
     auto parent2ChildList = getParent2ChildListByTxsProofCache(_block);
     bytes encodedData;
     tx->encode(encodedData);
-    return getProof(parent2ChildList, _index, encodedData);
+    // get merkle proof
+    std::shared_ptr<MerkleProofType> merkleProof = std::make_shared<MerkleProofType>();
+    auto child2Parent = getChild2ParentCacheByTransaction(parent2ChildList, _block);
+
+    auto hashWithIndex = getHashNeed2Proof(_index, encodedData);
+
+    this->getMerkleProof(hashWithIndex, *parent2ChildList, *child2Parent, *merkleProof);
+    return merkleProof;
 }
 
 
@@ -1291,51 +1306,53 @@ void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<Executive
     if (tb && tb_nonces)
     {
         auto txs = block.transactions();
-        std::vector<dev::eth::NonceKeyType> nonce_vector(txs->size());
         auto constructVector_time_cost = utcTime() - record_time;
         record_time = utcTime();
+        std::string blockNumberStr = lexical_cast<std::string>(block.blockHeader().number());
+        tbb::parallel_invoke(
+            [tb, txs, blockNumberStr]() {
+                tbb::parallel_for(tbb::blocked_range<size_t>(0, txs->size()),
+                    [&](const tbb::blocked_range<size_t>& _r) {
+                        for (size_t i = _r.begin(); i != _r.end(); ++i)
+                        {
+                            Entry::Ptr entry = std::make_shared<Entry>();
+                            entry->setField(SYS_VALUE, blockNumberStr);
+                            entry->setField("index", lexical_cast<std::string>(i));
+                            entry->setForce(true);
 
-        tbb::parallel_for(
-            tbb::blocked_range<size_t>(0, txs->size()), [&](const tbb::blocked_range<size_t>& _r) {
-                for (size_t i = _r.begin(); i != _r.end(); ++i)
+                            tb->insert((*txs)[i]->sha3().hex(), entry,
+                                std::make_shared<dev::storage::AccessOptions>(), false);
+                        }
+                    });
+            },
+            [this, tb_nonces, txs, blockNumberStr]() {
+                std::vector<dev::eth::NonceKeyType> nonce_vector(txs->size());
+                for (size_t i = 0; i < txs->size(); i++)
                 {
-                    Entry::Ptr entry = std::make_shared<Entry>();
-                    entry->setField(
-                        SYS_VALUE, lexical_cast<std::string>(block.blockHeader().number()));
-                    entry->setField("index", lexical_cast<std::string>(i));
-                    entry->setForce(true);
-
-                    tb->insert((*txs)[i]->sha3().hex(), entry,
-                        std::make_shared<dev::storage::AccessOptions>(), false);
                     nonce_vector[i] = (*txs)[i]->nonce();
                 }
+                /// insert tb2Nonces
+                RLPStream rs;
+                rs.appendVector(nonce_vector);
+                std::shared_ptr<bytes> nonceData = std::make_shared<bytes>();
+                rs.swapOut(*nonceData);
+                Entry::Ptr entry_tb2nonces = std::make_shared<Entry>();
+                // store nonce directly >= v2.2.0
+                // store the hex string < 2.2.0
+                writeBytesToField(nonceData, entry_tb2nonces, SYS_VALUE);
+
+                entry_tb2nonces->setForce(true);
+                tb_nonces->insert(lexical_cast<std::string>(blockNumberStr), entry_tb2nonces);
+                // Destruct the entry_tb2nonces in m_destructorThread
+                HolderForDestructor<Entry> holder(std::move(entry_tb2nonces));
+                m_destructorThread->enqueue(std::move(holder));
             });
-
         auto insertTable_time_cost = utcTime() - record_time;
-        record_time = utcTime();
-        /// insert tb2Nonces
-        RLPStream rs;
-        rs.appendVector(nonce_vector);
-        auto encodeNonceVector_time_cost = utcTime() - record_time;
-        record_time = utcTime();
-
-        Entry::Ptr entry_tb2nonces = std::make_shared<Entry>();
-        // store nonce directly >= v2.2.0
-        // store the hex string < 2.2.0
-        std::shared_ptr<bytes> nonceData = std::make_shared<bytes>();
-        rs.swapOut(*nonceData);
-        writeBytesToField(nonceData, entry_tb2nonces, SYS_VALUE);
-
-        entry_tb2nonces->setForce(true);
-        tb_nonces->insert(lexical_cast<std::string>(block.blockHeader().number()), entry_tb2nonces);
-        auto insertNonceVector_time_cost = utcTime() - record_time;
         BLOCKCHAIN_LOG(DEBUG) << LOG_BADGE("WriteTxOnCommit")
                               << LOG_DESC("Write tx to block time record")
                               << LOG_KV("openTableTimeCost", openTable_time_cost)
                               << LOG_KV("constructVectorTimeCost", constructVector_time_cost)
                               << LOG_KV("insertTableTimeCost", insertTable_time_cost)
-                              << LOG_KV("encodeNonceVectorTimeCost", encodeNonceVector_time_cost)
-                              << LOG_KV("insertNonceVectorTimeCost", insertNonceVector_time_cost)
                               << LOG_KV("totalTimeCost", utcTime() - start_time);
     }
     else
@@ -1370,17 +1387,15 @@ void BlockChainImp::writeHash2Block(Block& block, std::shared_ptr<ExecutiveConte
         writeBlockToField(block, entry);
         entry->setForce(true);
         tb->insert(block.blockHeader().hash().hex(), entry);
+        // Block entry destructor is time-consuming, add it to the thread pool to destruct
+        // asynchronously, Destruct the entry in m_destructorThread
+        HolderForDestructor<Entry> holder(std::move(entry));
+        m_destructorThread->enqueue(std::move(holder));
     }
     else
     {
         BOOST_THROW_EXCEPTION(OpenSysTableFailed() << errinfo_comment(SYS_HASH_2_BLOCK));
     }
-}
-
-void BlockChainImp::writeBlockInfo(Block& block, std::shared_ptr<ExecutiveContext> context)
-{
-    writeHash2Block(block, context);
-    writeNumber2Hash(block, context);
 }
 
 bool BlockChainImp::isBlockShouldCommit(int64_t const& _blockNumber)
@@ -1427,25 +1442,13 @@ CommitResult BlockChainImp::commitBlock(
                 return CommitResult::ERROR_PARENT_HASH;
             }
             auto write_record_time = utcTime();
-            // writeBlockInfo(block, context);
-            writeHash2Block(*block, context);
-            auto writeHash2Block_time_cost = utcTime() - write_record_time;
-            write_record_time = utcTime();
+            tbb::parallel_invoke([this, block, context]() { writeHash2Block(*block, context); },
+                [this, block, context]() { writeNumber2Hash(*block, context); },
+                [this, block, context]() { writeNumber(*block, context); },
+                [this, block, context]() { writeTotalTransactionCount(*block, context); },
+                [this, block, context]() { writeTxToBlock(*block, context); });
+            auto write_table_time = utcTime() - write_record_time;
 
-            writeNumber2Hash(*block, context);
-            auto writeNumber2Hash_time_cost = utcTime() - write_record_time;
-            write_record_time = utcTime();
-
-            writeNumber(*block, context);
-            auto writeNumber_time_cost = utcTime() - write_record_time;
-            write_record_time = utcTime();
-
-            writeTotalTransactionCount(*block, context);
-            auto writeTotalTransactionCount_time_cost = utcTime() - write_record_time;
-            write_record_time = utcTime();
-
-            writeTxToBlock(*block, context);
-            auto writeTxToBlock_time_cost = utcTime() - write_record_time;
             write_record_time = utcTime();
             try
             {
@@ -1465,15 +1468,9 @@ CommitResult BlockChainImp::commitBlock(
                 m_blockNumber = block->blockHeader().number();
             }
             auto updateBlockNumber_time_cost = utcTime() - write_record_time;
-
             BLOCKCHAIN_LOG(DEBUG) << LOG_BADGE("Commit")
                                   << LOG_DESC("Commit block time record(write)")
-                                  << LOG_KV("writeHash2BlockTimeCost", writeHash2Block_time_cost)
-                                  << LOG_KV("writeNumber2HashTimeCost", writeNumber2Hash_time_cost)
-                                  << LOG_KV("writeNumberTimeCost", writeNumber_time_cost)
-                                  << LOG_KV("writeTotalTransactionCountTimeCost",
-                                         writeTotalTransactionCount_time_cost)
-                                  << LOG_KV("writeTxToBlockTimeCost", writeTxToBlock_time_cost)
+                                  << LOG_KV("writeTableTime", write_table_time)
                                   << LOG_KV("dbCommitTimeCost", dbCommit_time_cost)
                                   << LOG_KV(
                                          "updateBlockNumberTimeCost", updateBlockNumber_time_cost);
@@ -1486,7 +1483,6 @@ CommitResult BlockChainImp::commitBlock(
         record_time = utcTime();
         m_onReady(m_blockNumber);
         auto noteReady_time_cost = utcTime() - record_time;
-        record_time = utcTime();
 
         BLOCKCHAIN_LOG(DEBUG) << LOG_BADGE("Commit") << LOG_DESC("Commit block time record")
                               << LOG_KV("beforeTimeCost", before_write_time_cost)
@@ -1580,4 +1576,40 @@ void BlockChainImp::writeBytesToField(std::shared_ptr<dev::bytes> _data,
     {
         _entry->setField(_fieldName, toHexPrefixed(*_data));
     }
+}
+
+std::shared_ptr<Child2ParentMap> BlockChainImp::getChild2ParentCache(SharedMutex& _mutex,
+    std::pair<dev::eth::BlockNumber, std::shared_ptr<Child2ParentMap>>& _cache,
+    std::shared_ptr<Parent2ChildListMap> _parent2Child, dev::eth::Block::Ptr _block)
+{
+    UpgradableGuard l(_mutex);
+    if (_cache.second && _cache.first == _block->blockHeader().number())
+    {
+        return _cache.second;
+    }
+    UpgradeGuard ul(l);
+    // After preempting the write lock, judge again whether m_receiptWithProof has been updated
+    // to prevent lock competition
+    if (_cache.second && _cache.first == _block->blockHeader().number())
+    {
+        return _cache.second;
+    }
+    std::shared_ptr<Child2ParentMap> child2Parent = std::make_shared<Child2ParentMap>();
+    parseMerkleMap(_parent2Child, *child2Parent);
+    _cache = std::make_pair(_block->blockHeader().number(), child2Parent);
+    return child2Parent;
+}
+
+std::shared_ptr<Child2ParentMap> BlockChainImp::getChild2ParentCacheByReceipt(
+    std::shared_ptr<Parent2ChildListMap> _parent2ChildList, dev::eth::Block::Ptr _block)
+{
+    return getChild2ParentCache(
+        x_receiptChild2ParentCache, m_receiptChild2ParentCache, _parent2ChildList, _block);
+}
+
+std::shared_ptr<Child2ParentMap> BlockChainImp::getChild2ParentCacheByTransaction(
+    std::shared_ptr<Parent2ChildListMap> _parent2ChildList, dev::eth::Block::Ptr _block)
+{
+    return getChild2ParentCache(
+        x_txsChild2ParentCache, m_txsChild2ParentCache, _parent2ChildList, _block);
 }

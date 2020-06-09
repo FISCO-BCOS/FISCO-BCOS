@@ -16,6 +16,7 @@
  */
 
 #include "../libstorage/MemoryStorage.h"
+#include "libdevcrypto/CryptoInterface.h"
 #include "libstoragestate/StorageStateFactory.h"
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcore/CommonJS.h>
@@ -24,6 +25,7 @@
 #include <libethcore/Block.h>
 #include <libethcore/Transaction.h>
 #include <libexecutive/Executive.h>
+#include <libprecompiled/ChainGovernancePrecompiled.h>
 #include <libprecompiled/ContractLifeCyclePrecompiled.h>
 #include <libprecompiled/TableFactoryPrecompiled.h>
 #include <libstorage/MemoryTable.h>
@@ -53,8 +55,11 @@ struct OutputFixture
 
     OutputFixture()
     {
-        g_BCOSConfig.setSupportedVersion("2.3.0", V2_3_0);
+        m_version = g_BCOSConfig.version();
+        m_supportedVersion = g_BCOSConfig.supportedVersion();
+        g_BCOSConfig.setSupportedVersion("2.5.0", V2_5_0);
         contractAddress = Address("0xa4adafef4c989e17675479565b9abb5821d81f2c");
+        accountAddress = Address("0x420f853b49838bd3e9466c85a4cc3428c960dde1");
 
         context = std::make_shared<ExecutiveContext>();
         blockInfo.hash = h256(0);
@@ -74,20 +79,22 @@ struct OutputFixture
         tableFactoryPrecompiled = std::make_shared<dev::precompiled::TableFactoryPrecompiled>();
         tableFactoryPrecompiled->setMemoryTableFactory(memoryTableFactory);
         clcPrecompiled = context->getPrecompiled(Address(0x1007));
+        cgPrecompiled = context->getPrecompiled(Address(0x1008));
 
         auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
         auto precompiledExecResultFactory =
             std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
         precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
         clcPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
+        cgPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
 
-        // createTable
+        // createTable of contract
         std::string tableName("c_" + contractAddress.hex());
         table = memoryTableFactory->createTable(tableName, STORAGE_KEY, STORAGE_VALUE, false);
         if (!table)
         {
-            LOG(ERROR) << LOG_BADGE("OutputTest") << LOG_DESC("createAccount failed")
-                       << LOG_KV("Account", tableName);
+            LOG(ERROR) << LOG_BADGE("OutputTest") << LOG_DESC("create contract failed")
+                       << LOG_KV("contract", tableName);
         }
         auto entry = table->newEntry();
         entry->setField(STORAGE_KEY, ACCOUNT_BALANCE);
@@ -95,11 +102,12 @@ struct OutputFixture
         table->insert(ACCOUNT_BALANCE, entry);
         entry = table->newEntry();
         entry->setField(STORAGE_KEY, ACCOUNT_CODE_HASH);
-        entry->setField(STORAGE_VALUE, toHex(h256("123456")));
+        auto codeHash = h256("123456");
+        entry->setField(STORAGE_VALUE, codeHash.data(), codeHash.size);
         table->insert(ACCOUNT_CODE_HASH, entry);
         entry = table->newEntry();
         entry->setField(STORAGE_KEY, ACCOUNT_CODE);
-        entry->setField(STORAGE_VALUE, "");
+        entry->setField(STORAGE_VALUE, nullptr, 0);
         table->insert(ACCOUNT_CODE, entry);
         entry = table->newEntry();
         entry->setField(STORAGE_KEY, ACCOUNT_NONCE);
@@ -114,6 +122,40 @@ struct OutputFixture
         entry->setField(STORAGE_VALUE, "0000000000000000000000000000000000000000");
         table->insert(ACCOUNT_AUTHORITY, entry);
 
+        // createTable of account
+        std::string accountTableName("c_" + accountAddress.hex());
+        accountTable =
+            memoryTableFactory->createTable(accountTableName, STORAGE_KEY, STORAGE_VALUE, false);
+        if (!accountTable)
+        {
+            LOG(ERROR) << LOG_BADGE("OutputTest") << LOG_DESC("create account failed")
+                       << LOG_KV("account", accountTableName);
+        }
+        entry = accountTable->newEntry();
+        entry->setField(STORAGE_KEY, ACCOUNT_BALANCE);
+        entry->setField(STORAGE_VALUE, "0");
+        accountTable->insert(ACCOUNT_BALANCE, entry);
+        entry = accountTable->newEntry();
+        entry->setField(STORAGE_KEY, ACCOUNT_CODE_HASH);
+        entry->setField(STORAGE_VALUE, EmptyHash.data(), EmptyHash.size);
+        accountTable->insert(ACCOUNT_CODE_HASH, entry);
+        entry = accountTable->newEntry();
+        entry->setField(STORAGE_KEY, ACCOUNT_CODE);
+        entry->setField(STORAGE_VALUE, nullptr, 0);
+        accountTable->insert(ACCOUNT_CODE, entry);
+        entry = accountTable->newEntry();
+        entry->setField(STORAGE_KEY, ACCOUNT_NONCE);
+        entry->setField(STORAGE_VALUE, "0");
+        accountTable->insert(ACCOUNT_NONCE, entry);
+        entry = accountTable->newEntry();
+        entry->setField(STORAGE_KEY, ACCOUNT_ALIVE);
+        entry->setField(STORAGE_VALUE, "true");
+        accountTable->insert(ACCOUNT_ALIVE, entry);
+        entry = accountTable->newEntry();
+        entry->setField(STORAGE_KEY, ACCOUNT_FROZEN);
+        entry->setField(STORAGE_VALUE, "true");
+        accountTable->insert(ACCOUNT_FROZEN, entry);
+
         executive = std::make_shared<Executive>();
         EnvInfo envInfo{fakeBlockHeader(), fakeCallBack, 0};
         envInfo.setPrecompiledEngine(context);
@@ -121,16 +163,21 @@ struct OutputFixture
         executive->setState(context->getState());
     }
 
-    ~OutputFixture() {}
+    ~OutputFixture() { g_BCOSConfig.setSupportedVersion(m_supportedVersion, m_version); }
 
     ExecutiveContext::Ptr context;
     TableFactory::Ptr memoryTableFactory;
     Precompiled::Ptr clcPrecompiled;
+    Precompiled::Ptr cgPrecompiled;
     dev::precompiled::TableFactoryPrecompiled::Ptr tableFactoryPrecompiled;
     BlockInfo blockInfo;
     Table::Ptr table;
+    Table::Ptr accountTable;
     Address contractAddress;
+    Address accountAddress;
     Executive::Ptr executive;
+    dev::VERSION m_version;
+    std::string m_supportedVersion;
 
     void executeTransaction(Executive& _e, Transaction const& _transaction)
     {
@@ -150,8 +197,9 @@ struct OutputFixture
     BlockHeader fakeBlockHeader()
     {
         BlockHeader fakeHeader;
-        fakeHeader.setParentHash(sha3("parent"));
-        fakeHeader.setRoots(sha3("transactionRoot"), sha3("receiptRoot"), sha3("stateRoot"));
+        fakeHeader.setParentHash(crypto::Hash("parent"));
+        fakeHeader.setRoots(crypto::Hash("transactionRoot"), crypto::Hash("receiptRoot"),
+            crypto::Hash("stateRoot"));
         fakeHeader.setLogBloom(LogBloom(0));
         fakeHeader.setNumber(int64_t(0));
         fakeHeader.setGasLimit(u256(3000000000000000000));
@@ -171,6 +219,48 @@ struct OutputFixture
 };
 
 BOOST_FIXTURE_TEST_SUITE(Output, OutputFixture)
+
+BOOST_AUTO_TEST_CASE(accountLiftCycle)
+{
+    eth::ContractABI abi;
+    bytes in;
+    bytes out;
+    s256 result = 0;
+    PrecompiledExecResult::Ptr callResult;
+
+    // test frozen account output
+    u256 value = 0;
+    u256 gasPrice = 0;
+    u256 gas = 100000000;
+    bytes callData;
+    Transaction tx(value, gasPrice, gas, contractAddress, callData);
+    tx.forceSender(accountAddress);
+    executeTransaction(*executive, tx);
+    auto output = abi.abiIn("Error(string)", string("Frozen account:0x" + accountAddress.hex()));
+    dev::owning_bytes_ref o = owning_bytes_ref{std::move(output), 0, output.size()};
+    BOOST_TEST(toHex(executive->takeOutput()) == toHex(o));
+
+    // grant
+    in = abi.abiIn(
+        "grantCommitteeMember(address)", Address("0x000000000000000000000000000000000000000"));
+    callResult = cgPrecompiled->call(context, bytesConstRef(&in));
+    abi.abiOut(&callResult->execResult(), result);
+    BOOST_TEST(result == 1);
+
+    // unfreeze success
+    in = abi.abiIn("unfreezeAccount(address)", accountAddress);
+    callResult = cgPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
+    abi.abiOut(&out, result);
+    BOOST_TEST(result == 1);
+
+    // freeze success
+    in = abi.abiIn("freezeAccount(address)", accountAddress);
+    callResult = cgPrecompiled->call(context, bytesConstRef(&in));
+    out = callResult->execResult();
+    abi.abiOut(&out, result);
+    BOOST_TEST(result == 1);
+}
 
 BOOST_AUTO_TEST_CASE(call)
 {
@@ -211,7 +301,7 @@ BOOST_AUTO_TEST_CASE(call)
     // test frozen contract output
     auto entry = table->newEntry();
     entry->setField(STORAGE_KEY, ACCOUNT_CODE_HASH);
-    entry->setField(STORAGE_VALUE, toHex(EmptySHA3));
+    entry->setField(STORAGE_VALUE, EmptyHash.data(), EmptyHash.size);
     table->update(ACCOUNT_CODE_HASH, entry, table->newCondition());
     executeTransaction(*executive, tx);
     output = abi.abiIn("Error(string)", string("Error address:" + contractAddress.hex()));

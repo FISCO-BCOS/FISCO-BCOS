@@ -21,6 +21,7 @@
  */
 
 #include "EncryptedFile.h"
+#include "libdevcrypto/CryptoInterface.h"
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcore/Base64.h>
 #include <libdevcore/CommonIO.h>
@@ -32,7 +33,6 @@ using namespace dev;
 bytes EncryptedFile::decryptContents(const std::string& _filePath)
 {
     bytes encFileBytes;
-    bytes encFileBase64Bytes;
     bytes decFileBytes;
     try
     {
@@ -43,11 +43,13 @@ bytes EncryptedFile::decryptContents(const std::string& _filePath)
         LOG(DEBUG) << LOG_BADGE("ENCFILE") << LOG_DESC("Enc file contents")
                    << LOG_KV("string", encContextsStr) << LOG_KV("bytes", toHex(encFileBytes));
 
-        bytes dataKey = asBytes(g_BCOSConfig.diskEncryption.dataKey);
+        auto dataKey = g_BCOSConfig.diskEncryption.dataKey;
 
-        encFileBase64Bytes = aesCBCDecrypt(ref(encFileBytes), ref(dataKey));
+        string decFileBytesBase64 =
+            crypto::SymmetricDecrypt((const unsigned char*)encFileBytes.data(), encFileBytes.size(),
+                (const unsigned char*)dataKey.data(), dataKey.size(),
+                (const unsigned char*)dataKey.substr(0, 16).data());
 
-        string decFileBytesBase64 = asString(encFileBase64Bytes);
         LOG(DEBUG) << "[ENCFILE] EncryptedFile Base64 key: " << decFileBytesBase64 << endl;
         decFileBytes = fromBase64(decFileBytesBase64);
     }

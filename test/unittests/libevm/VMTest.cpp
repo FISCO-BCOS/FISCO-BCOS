@@ -16,6 +16,7 @@
  */
 
 #include <libblockverifier/ExecutiveContext.h>
+#include <libconfig/GlobalConfigure.h>
 #include <libethcore/Exceptions.h>
 #include <libethcore/LastBlockHashesFace.h>
 #include <libevm/EVMC.h>
@@ -74,7 +75,7 @@ public:
     void testCreate2worksInConstantinople()
     {
         ExtVM extVm(state, envInfo, address, address, address, value, gasPrice, ref(inputData),
-            ref(code), sha3(code), depth, isCreate, staticCall);
+            ref(code), crypto::Hash(code), depth, isCreate, staticCall);
 
         vm->exec(gas, extVm, OnOpFunc{});
 
@@ -86,7 +87,7 @@ public:
         state->addBalance(expectedAddress, 1 * ether);
 
         ExtVM extVm(state, envInfo, address, address, address, value, gasPrice, ref(inputData),
-            ref(code), sha3(code), depth, isCreate, staticCall);
+            ref(code), crypto::Hash(code), depth, isCreate, staticCall);
 
         vm->exec(gas, extVm, OnOpFunc{});
 
@@ -98,7 +99,7 @@ public:
         state->setCode(expectedAddress, bytes{inputData});
 
         ExtVM extVm(state, envInfo, address, address, address, value, gasPrice, ref(inputData),
-            ref(code), sha3(code), depth, isCreate, staticCall);
+            ref(code), crypto::Hash(code), depth, isCreate, staticCall);
 
         vm->exec(gas, extVm, OnOpFunc{});
         BOOST_REQUIRE(state->code(expectedAddress) == inputData);
@@ -109,7 +110,7 @@ public:
         staticCall = true;
 
         ExtVM extVm(state, envInfo, address, address, address, value, gasPrice, ref(inputData),
-            ref(code), sha3(code), depth, isCreate, staticCall);
+            ref(code), crypto::Hash(code), depth, isCreate, staticCall);
 
         BOOST_REQUIRE_THROW(vm->exec(gas, extVm, OnOpFunc{}), DisallowedStateChange);
     }
@@ -140,8 +141,8 @@ public:
     // pop
     bytes code = fromHex("368060006000376101238160006000f55050");
 
-    Address expectedAddress = right160(
-        sha3(fromHex("ff") + address.asBytes() + toBigEndian(0x123_cppui256) + sha3(inputData)));
+    Address expectedAddress = right160(crypto::Hash(
+        fromHex("ff") + address.asBytes() + toBigEndian(0x123_cppui256) + crypto::Hash(inputData)));
 
     std::unique_ptr<VMFace> vm;
 };
@@ -173,17 +174,17 @@ public:
     void testExtcodehashWorksInConstantinople()
     {
         ExtVM extVm(state, envInfo, address, address, address, value, gasPrice, extAddress.ref(),
-            ref(code), sha3(code), depth, isCreate, staticCall);
+            ref(code), crypto::Hash(code), depth, isCreate, staticCall);
 
         owning_bytes_ref ret = vm->exec(gas, extVm, OnOpFunc{});
 
-        BOOST_REQUIRE(ret.toBytes() == sha3(extCode).asBytes());
+        BOOST_REQUIRE(ret.toBytes() == crypto::Hash(extCode).asBytes());
     }
 
     void testExtcodehashHasCorrectCost()
     {
         ExtVM extVm(state, envInfo, address, address, address, value, gasPrice, extAddress.ref(),
-            ref(code), sha3(code), depth, isCreate, staticCall);
+            ref(code), crypto::Hash(code), depth, isCreate, staticCall);
 
         bigint gasBefore;
         bigint gasAfter;
@@ -210,16 +211,19 @@ public:
         state->addBalance(addressWithEmptyCode, 1 * ether);
 
         ExtVM extVm(state, envInfo, address, address, address, value, gasPrice,
-            addressWithEmptyCode.ref(), ref(code), sha3(code), depth, isCreate, staticCall);
+            addressWithEmptyCode.ref(), ref(code), crypto::Hash(code), depth, isCreate, staticCall);
 
         owning_bytes_ref ret = vm->exec(gas, extVm, OnOpFunc{});
-#ifdef FISCO_GM
-        BOOST_REQUIRE_EQUAL(toHex(ret.toBytes()),
-            "1ab21d8355cfa17f8e61194831e81a8f22bec8c728fefb747ed035eb5082aa2b");
-#else
-        BOOST_REQUIRE_EQUAL(toHex(ret.toBytes()),
-            "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470");
-#endif
+        if (g_BCOSConfig.SMCrypto())
+        {
+            BOOST_REQUIRE_EQUAL(toHex(ret.toBytes()),
+                "1ab21d8355cfa17f8e61194831e81a8f22bec8c728fefb747ed035eb5082aa2b");
+        }
+        else
+        {
+            BOOST_REQUIRE_EQUAL(toHex(ret.toBytes()),
+                "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470");
+        }
     }
 
     void testExtCodeHashOfNonExistentAccount()
@@ -227,7 +231,7 @@ public:
         Address addressNonExisting{0x1234};
 
         ExtVM extVm(state, envInfo, address, address, address, value, gasPrice,
-            addressNonExisting.ref(), ref(code), sha3(code), depth, isCreate, staticCall);
+            addressNonExisting.ref(), ref(code), crypto::Hash(code), depth, isCreate, staticCall);
 
         owning_bytes_ref ret = vm->exec(gas, extVm, OnOpFunc{});
 
@@ -239,7 +243,7 @@ public:
         Address addressPrecompile{0x1};
 
         ExtVM extVm(state, envInfo, address, address, address, value, gasPrice,
-            addressPrecompile.ref(), ref(code), sha3(code), depth, isCreate, staticCall);
+            addressPrecompile.ref(), ref(code), crypto::Hash(code), depth, isCreate, staticCall);
 
         owning_bytes_ref ret = vm->exec(gas, extVm, OnOpFunc{});
 
@@ -252,16 +256,19 @@ public:
         state->addBalance(addressPrecompile, 1 * ether);
 
         ExtVM extVm(state, envInfo, address, address, address, value, gasPrice,
-            addressPrecompile.ref(), ref(code), sha3(code), depth, isCreate, staticCall);
+            addressPrecompile.ref(), ref(code), crypto::Hash(code), depth, isCreate, staticCall);
 
         owning_bytes_ref ret = vm->exec(gas, extVm, OnOpFunc{});
-#ifdef FISCO_GM
-        BOOST_REQUIRE_EQUAL(toHex(ret.toBytes()),
-            "1ab21d8355cfa17f8e61194831e81a8f22bec8c728fefb747ed035eb5082aa2b");
-#else
-        BOOST_REQUIRE_EQUAL(toHex(ret.toBytes()),
-            "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470");
-#endif
+        if (g_BCOSConfig.SMCrypto())
+        {
+            BOOST_REQUIRE_EQUAL(toHex(ret.toBytes()),
+                "1ab21d8355cfa17f8e61194831e81a8f22bec8c728fefb747ed035eb5082aa2b");
+        }
+        else
+        {
+            BOOST_REQUIRE_EQUAL(toHex(ret.toBytes()),
+                "c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470");
+        }
     }
 
     void testExtcodehashIgnoresHigh12Bytes()
@@ -277,11 +284,11 @@ public:
             bytes{1, 2, 3, 4, 5, 6, 7, 8, 9, 0xa, 0xb, 0xc} + extAddress.ref();
 
         ExtVM extVm(state, envInfo, address, address, address, value, gasPrice,
-            ref(extAddressPrefixed), ref(code), sha3(code), depth, isCreate, staticCall);
+            ref(extAddressPrefixed), ref(code), crypto::Hash(code), depth, isCreate, staticCall);
 
         owning_bytes_ref ret = vm->exec(gas, extVm, OnOpFunc{});
 
-        BOOST_REQUIRE(ret.toBytes() == sha3(extCode).asBytes());
+        BOOST_REQUIRE(ret.toBytes() == crypto::Hash(extCode).asBytes());
     }
 
     BlockHeader blockHeader{initBlockHeader()};
@@ -320,6 +327,15 @@ class AlethInterpreterExtcodehashTestFixture : public ExtcodehashTestFixture
 public:
     AlethInterpreterExtcodehashTestFixture()
       : ExtcodehashTestFixture{new EVMC{evmc_create_interpreter()}}
+    {}
+};
+
+class SM_AlethInterpreterExtcodehashTestFixture : public SM_CryptoTestFixture,
+                                                  public AlethInterpreterExtcodehashTestFixture
+{
+public:
+    SM_AlethInterpreterExtcodehashTestFixture()
+      : SM_CryptoTestFixture(), AlethInterpreterExtcodehashTestFixture()
     {}
 };
 
@@ -385,5 +401,20 @@ BOOST_AUTO_TEST_CASE(AlethInterpreterExtCodeHashIgnoresHigh12Bytes)
 }
 
 BOOST_AUTO_TEST_SUITE_END()
+
+BOOST_AUTO_TEST_SUITE_END()
+
+BOOST_FIXTURE_TEST_SUITE(
+    SM_AlethInterpreterExtcodehashSuite, SM_AlethInterpreterExtcodehashTestFixture)
+
+BOOST_AUTO_TEST_CASE(SM_AlethInterpreterExtCodeHashOfNonContractAccount)
+{
+    testExtCodeHashOfNonContractAccount();
+}
+
+BOOST_AUTO_TEST_CASE(SM_AlethInterpreterExtCodeHashOfPrecomileNonZeroBalance)
+{
+    testExtCodeHashOfPrecomileNonZeroBalance();
+}
 
 BOOST_AUTO_TEST_SUITE_END()

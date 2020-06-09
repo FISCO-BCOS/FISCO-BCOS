@@ -36,12 +36,12 @@ namespace dev
 namespace storage
 {
 class SQLConnectionPool;
-struct SQLPlaceHoldItem
+struct SQLPlaceholderItem
 {
     std::string sql;
-    uint32_t placeHolerCnt;
+    uint32_t placeholderCnt;
 
-    SQLPlaceHoldItem() : placeHolerCnt(0) {}
+    SQLPlaceholderItem() : placeholderCnt(0) {}
 };
 
 class SQLBasicAccess
@@ -49,30 +49,31 @@ class SQLBasicAccess
 public:
     virtual ~SQLBasicAccess() {}
     typedef std::shared_ptr<SQLBasicAccess> Ptr;
-    virtual int Select(int64_t num, const std::string& table, const std::string& key,
-        Condition::Ptr condition, std::vector<std::map<std::string, std::string>>& values);
-    virtual int Commit(int64_t num, const std::vector<TableData::Ptr>& datas);
+    virtual int Select(int64_t _num, const std::string& _table, const std::string& _key,
+        Condition::Ptr _condition, std::vector<std::map<std::string, std::string>>& _values);
+    virtual int Commit(int64_t _num, const std::vector<TableData::Ptr>& _datas);
 
 private:
-    std::string BuildQuerySql(const std::string& table, Condition::Ptr condition);
-    std::string GenerateConditionSql(const std::string& strPrefix,
-        std::map<std::string, Condition::Range>::const_iterator& it, Condition::Ptr condition);
+    std::string BuildQuerySql(std::string _table, Condition::Ptr _condition);
 
-    std::vector<SQLPlaceHoldItem> BuildCommitSql(const std::string& _table,
+    std::string BuildConditionSql(const std::string& _strPrefix,
+        std::map<std::string, Condition::Range>::const_iterator& _it, Condition::Ptr _condition);
+
+    std::vector<SQLPlaceholderItem> BuildCommitSql(const std::string& _table,
         const std::string& _fieldStr, const std::vector<std::string>& _fieldValue);
 
-    std::string BuildCreateTableSql(
-        const std::string& tablename, const std::string& keyfield, const std::string& valuefield);
+    std::string BuildCreateTableSql(const Entry::Ptr& _data);
+    std::string BuildCreateTableSql(const std::string& _tableName, const std::string& _keyField,
+        const std::string& _valueField);
 
-    std::string GetCreateTableSql(const Entry::Ptr& data);
-    void GetCommitFieldNameAndValue(const Entries::Ptr& data, const std::string& strNum,
+    void GetCommitFieldNameAndValue(const Entries::Ptr& _data, const std::string& _strNum,
         std::map<std::string, std::vector<std::string>>& _fieldValue);
 
-    void GetCommitFieldNameAndValueEachTable(const std::string& _num, const Entries::Ptr& data,
-        const std::vector<size_t>& indexlist, std::string& fieldList,
-        std::vector<std::string>& valueList);
+    void GetCommitFieldNameAndValueEachTable(const std::string& _num, const Entries::Ptr& _data,
+        const std::vector<size_t>& _indexList, std::string& _fieldList,
+        std::vector<std::string>& _valueList);
 
-    int CommitDo(int64_t num, const std::vector<TableData::Ptr>& datas, std::string& errmsg);
+    int CommitDo(int64_t _num, const std::vector<TableData::Ptr>& _datas, std::string& _errorMsg);
 
 public:
     virtual void ExecuteSql(const std::string& _sql);

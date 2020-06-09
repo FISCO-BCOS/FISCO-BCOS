@@ -43,6 +43,7 @@ enum class LedgerStatus
     STOPPED,
     STOPPING,
     DELETED,
+    UNKNOWN,
 };
 
 struct GroupParams

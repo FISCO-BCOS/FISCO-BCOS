@@ -27,7 +27,6 @@
 #include <cstdlib>
 #include <string>
 
-
 namespace dev
 {
 namespace test
@@ -49,7 +48,7 @@ inline boost::filesystem::path getTestPath()
     const char* pTestPath = getenv(dev::test::constVar::TEST_PATH.c_str());
     if (!pTestPath)
     {
-        testPath = "../../data";
+        testPath = "../test/data";
         LOG(WARNING) << "Test environment " << dev::test::constVar::TEST_PATH
                      << " has not been setted, use default";
     }

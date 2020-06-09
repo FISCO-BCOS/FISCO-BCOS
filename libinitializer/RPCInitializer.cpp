@@ -44,6 +44,9 @@ void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt
 
     int listenPort = _pt.get<int>("rpc.channel_listen_port", 20200);
     int httpListenPort = _pt.get<int>("rpc.jsonrpc_listen_port", 8545);
+    bool checkCertIssuer = _pt.get<bool>("network_security.check_cert_issuer", true);
+    INITIALIZER_LOG(INFO) << LOG_BADGE("RPCInitializer")
+                          << LOG_KV("network_security.check_cert_issuer", checkCertIssuer);
 
     if (!isValidPort(listenPort) || !isValidPort(httpListenPort))
     {
@@ -67,7 +70,12 @@ void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt
                                << LOG_DESC("Enable network statistic");
     }
     m_channelRPCServer->setNetworkStatHandler(m_networkStatHandler);
-
+    // create network-bandwidth-limiter
+    auto networkBandwidth = createNetworkBandwidthLimit(_pt);
+    if (networkBandwidth)
+    {
+        m_channelRPCServer->setNetworkBandwidthLimiter(networkBandwidth);
+    }
     auto ioService = std::make_shared<boost::asio::io_service>();
 
     auto server = std::make_shared<dev::channel::ChannelServer>();
@@ -75,6 +83,7 @@ void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt
     server->setSSLContext(m_sslContext);
     server->setEnableSSL(true);
     server->setBind(listenIP, listenPort);
+    server->setCheckCertIssuer(checkCertIssuer);
     server->setMessageFactory(std::make_shared<dev::channel::ChannelMessageFactory>());
 
     m_channelRPCServer->setChannelServer(server);
@@ -83,11 +92,15 @@ void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt
     auto rpcEntity = new rpc::Rpc(nullptr, nullptr);
 
     auto modularServer = new ModularServer<rpc::Rpc>(rpcEntity);
+    auto qpsLimiter = createQPSLimiter(_pt);
     modularServer->setNetworkStatHandler(m_networkStatHandler);
+    modularServer->setQPSLimiter(qpsLimiter);
+
     m_channelRPCHttpServer = modularServer;
 
     m_rpcForChannel.reset(rpcEntity, [](rpc::Rpc*) {});
     m_channelRPCHttpServer->addConnector(m_channelRPCServer.get());
+    m_channelRPCServer->setQPSLimiter(qpsLimiter);
     try
     {
         if (!m_channelRPCHttpServer->StartListening())
@@ -227,4 +240,57 @@ dev::stat::ChannelNetworkStatHandler::Ptr RPCInitializer::createNetWorkStatHandl
 
     networkStatHandler->setFlushInterval(flushInterval * 1000);
     return networkStatHandler;
+}
+
+dev::flowlimit::RPCQPSLimiter::Ptr RPCInitializer::createQPSLimiter(
+    boost::property_tree::ptree const& _pt)
+{
+    auto qpsLimiter = std::make_shared<dev::flowlimit::RPCQPSLimiter>();
+    int64_t maxQPS = _pt.get<int64_t>("flow_control.limit_req", INT64_MAX);
+    // the limit_req has not been setted
+    if (maxQPS == INT64_MAX)
+    {
+        INITIALIZER_LOG(DEBUG) << LOG_DESC(
+            "disable QPSLimit for flow_control.limit_req has not been setted!");
+        return qpsLimiter;
+    }
+    if (maxQPS <= 0)
+    {
+        BOOST_THROW_EXCEPTION(
+            dev::InvalidConfig() << errinfo_comment(
+                "createQPSLimiter failed, flow_control.limit_req must be positive!"));
+    }
+    INITIALIZER_LOG(DEBUG) << LOG_DESC("createQPSLimiter") << LOG_KV("maxQPS", maxQPS);
+    qpsLimiter->createRPCQPSLimiter(maxQPS);
+    return qpsLimiter;
+}
+
+dev::flowlimit::RateLimiter::Ptr RPCInitializer::createNetworkBandwidthLimit(
+    boost::property_tree::ptree const& _pt)
+{
+    auto outGoingBandwidthLimit =
+        _pt.get<double>("flow_control.outgoing_bandwidth_limit", INT64_MAX);
+    // default value
+    if (outGoingBandwidthLimit == (double)INT64_MAX)
+    {
+        INITIALIZER_LOG(DEBUG) << LOG_DESC("Disable NetworkBandwidthLimit for channel");
+        return nullptr;
+    }
+    // Configured outgoing_bandwidth_limit
+    if (outGoingBandwidthLimit <= (double)(-0.0) ||
+        outGoingBandwidthLimit >= (double)MAX_VALUE_IN_Mb)
+    {
+        BOOST_THROW_EXCEPTION(dev::InvalidConfig() << errinfo_comment(
+                                  "createNetworkBandwidthLimit for channel failed, "
+                                  "flow_control.limit_req must be larger than 0 and smaller than " +
+                                  std::to_string(MAX_VALUE_IN_Mb)));
+    }
+    outGoingBandwidthLimit *= 1024 * 1024 / 8;
+    auto bandwidthLimiter =
+        std::make_shared<dev::flowlimit::RateLimiter>((int64_t)outGoingBandwidthLimit);
+    bandwidthLimiter->setMaxPermitsSize(g_BCOSConfig.c_maxPermitsSize);
+    INITIALIZER_LOG(INFO) << LOG_BADGE("createNetworkBandwidthLimit")
+                          << LOG_KV("outGoingBandwidthLimit(Bytes)", outGoingBandwidthLimit)
+                          << LOG_KV("maxPermitsSize", g_BCOSConfig.c_maxPermitsSize);
+    return bandwidthLimiter;
 }

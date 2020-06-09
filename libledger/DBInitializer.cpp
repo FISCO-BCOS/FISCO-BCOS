@@ -23,6 +23,7 @@
  */
 #include "DBInitializer.h"
 #include "LedgerParam.h"
+#include "libdevcrypto/CryptoInterface.h"
 #include "libstorage/BinLogHandler.h"
 #include "libstorage/BinaryLogStorage.h"
 #include "libstorage/RocksDBStorageFactory.h"
@@ -98,6 +99,9 @@ void DBInitializer::initStorageDB()
     {
         auto storage = initScalableStorage(m_param);
         initTableFactory2(storage, m_param);
+        // reset block number after recover from binlog
+        std::string blocksDBPath = m_param->mutableStorageParam().path + "/blocksDB";
+        setRemoteBlockNumber(std::dynamic_pointer_cast<ScalableStorage>(storage), blocksDBPath);
     }
     else
     {
@@ -300,39 +304,6 @@ dev::storage::Storage::Ptr DBInitializer::initSQLStorage()
     return sqlStorage;
 }
 
-std::function<void(std::string const&, std::string&)> dev::ledger::getEncryptHandler()
-{
-    // get dataKey according to ciperDataKey from keyCenter
-    return [=](std::string const& data, std::string& encData) {
-        try
-        {
-            encData = aesCBCEncrypt(data, g_BCOSConfig.diskEncryption.dataKey);
-        }
-        catch (const std::exception& e)
-        {
-            std::string error_info = "encryt value for data=" + data +
-                                     " failed, EINFO: " + boost::diagnostic_information(e);
-            ROCKSDB_LOG(ERROR) << LOG_DESC(error_info);
-            BOOST_THROW_EXCEPTION(EncryptFailed() << errinfo_comment(error_info));
-        }
-    };
-}
-
-std::function<void(std::string&)> dev::ledger::getDecryptHandler()
-{
-    return [=](std::string& data) {
-        try
-        {
-            data = aesCBCDecrypt(data, g_BCOSConfig.diskEncryption.dataKey);
-        }
-        catch (const std::exception& e)
-        {
-            std::string error_info = "decrypt value for data=" + data + " failed";
-            ROCKSDB_LOG(ERROR) << LOG_DESC(error_info);
-            BOOST_THROW_EXCEPTION(DecryptFailed() << errinfo_comment(error_info));
-        }
-    };
-}
 
 dev::storage::Storage::Ptr DBInitializer::initRocksDBStorage(
     std::shared_ptr<LedgerParamInterface> _param)
@@ -394,7 +365,6 @@ dev::storage::Storage::Ptr DBInitializer::initScalableStorage(
         blockNumber = blockNumber > 0 ? blockNumber + 1 : 0;
         auto archiveStorage = rocksDBStorageFactory->getStorage(to_string(blockNumber));
         scalableStorage->setArchiveStorage(archiveStorage, blockNumber);
-        setRemoteBlockNumber(scalableStorage, blocksDBPath);
 
         return scalableStorage;
     }
@@ -538,20 +508,9 @@ void DBInitializer::createStateFactory(dev::h256 const& genesisHash)
 /// TOCHECK: create the stateStorage with AMDB
 void DBInitializer::createStorageState()
 {
-    bool enableBinaryEncode = false;
-#if 0
-    if (g_BCOSConfig.version() >= V2_4_0 &&
-        (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "RocksDB") ||
-            !dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "Scalable")))
-    {
-        enableBinaryEncode = true;
-    }
-#endif
     auto stateFactory = std::make_shared<StorageStateFactory>(u256(0x0));
-    stateFactory->enableBinaryEncode(enableBinaryEncode);
     m_stateFactory = stateFactory;
-    DBInitializer_LOG(INFO) << LOG_DESC("createStorageState SUCC")
-                            << LOG_KV("state enable store binary", enableBinaryEncode);
+    DBInitializer_LOG(INFO) << LOG_DESC("createStorageState SUCC");
 }
 
 Storage::Ptr dev::ledger::createRocksDBStorage(const std::string& _dbPath,

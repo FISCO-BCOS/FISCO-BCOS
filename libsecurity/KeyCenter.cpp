@@ -27,7 +27,7 @@
 #include <libdevcore/Common.h>
 #include <libdevcore/Exceptions.h>
 #include <libdevcrypto/AES.h>
-#include <libdevcrypto/Hash.h>
+#include <libdevcrypto/CryptoInterface.h>
 #include <iostream>
 #include <string>
 
@@ -237,14 +237,13 @@ void KeyCenter::setIpPort(const std::string& _ip, int _port)
 
 dev::bytes KeyCenter::uniformDataKey(const dev::bytes& _readableDataKey)
 {
-#ifdef FISCO_GM
-    // Uniform datakey to a fix size 128(guimi) bytes by hashing it
-    // Because we has no limit to _readableDataKey size
-    bytes oneTurn = sha3(ref(_readableDataKey)).asBytes();
-    return oneTurn + oneTurn + oneTurn + oneTurn;
-#else
-    // Uniform datakey to a fix size 32 bytes by hashing it
-    // Because we has no limit to _readableDataKey size
-    return sha3(ref(_readableDataKey)).asBytes();
-#endif
+    bytes oneTurn = crypto::Hash(ref(_readableDataKey)).asBytes();
+    if (g_BCOSConfig.SMCrypto())
+    {
+        return oneTurn + oneTurn + oneTurn + oneTurn;
+    }
+    else
+    {
+        return oneTurn;
+    }
 }

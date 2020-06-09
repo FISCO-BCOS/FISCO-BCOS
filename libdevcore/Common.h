@@ -235,7 +235,7 @@ private:
 };
 
 /// Scope guard for invariant check in a class derived from HasInvariants.
-#if ETH_DEBUG
+#if FISCO_DEBUG
 #define DEV_INVARIANT_CHECK \
     ::dev::InvariantChecker __dev_invariantCheck(this, BOOST_CURRENT_FUNCTION, __FILE__, __LINE__)
 #define DEV_INVARIANT_CHECK_HERE \
@@ -309,6 +309,7 @@ uint64_t utcSteadyTime();
 
 /// Get the current time in seconds since the epoch in UTC(us)
 uint64_t utcTimeUs();
+uint64_t utcSteadyTimeUs();
 
 // get the current datatime
 std::string getCurrentDateTime();
@@ -422,6 +423,20 @@ private:
     static thread_local size_t m_heapCount;
     static thread_local std::vector<std::pair<std::string, std::chrono::steady_clock::time_point>>
         m_record;
+};
+
+template <typename T>
+class HolderForDestructor
+{
+public:
+    HolderForDestructor(std::shared_ptr<T> _elementsToDestroy)
+      : m_elementsToDestroy(std::move(_elementsToDestroy))
+    {}
+    void operator()() {}
+
+private:
+    // Elements to be deconstructed
+    std::shared_ptr<T> m_elementsToDestroy;
 };
 
 std::string newSeq();

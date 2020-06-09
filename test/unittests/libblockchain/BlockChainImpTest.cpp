@@ -20,6 +20,7 @@
  * @author:
  * @date 2018-09-21
  */
+#include "libdevcrypto/CryptoInterface.h"
 #include <libblockchain/BlockChainImp.h>
 #include <libblockverifier/ExecutiveContext.h>
 #include <libconfig/GlobalConfigure.h>
@@ -31,6 +32,7 @@
 #include <libstorage/MemoryTable.h>
 #include <libstoragestate/StorageState.h>
 #include <libstoragestate/StorageStateFactory.h>
+#include <test/tools/libutils/Common.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libethcore/FakeBlock.h>
 #include <boost/lexical_cast.hpp>
@@ -77,40 +79,6 @@ public:
         m_fakeStorage[SYS_TX_HASH_2_BLOCK] = std::unordered_map<std::string, Entry::Ptr>();
     }
 
-    void insertGenesisBlock(std::shared_ptr<FakeBlock> _fakeBlock)
-    {
-#if 0
-        if (m_fakeStorage[SYS_CURRENT_STATE].find(SYS_KEY_CURRENT_NUMBER) !=
-            m_fakeStorage[SYS_CURRENT_STATE].end())
-        {
-            return;
-        }
-#endif
-        Entry::Ptr entry = std::make_shared<Entry>();
-        entry->setField("value", "0");
-        m_fakeStorage[SYS_CURRENT_STATE][SYS_KEY_CURRENT_NUMBER] = entry;
-
-        entry = std::make_shared<Entry>();
-        entry->setField("value",
-            boost::lexical_cast<std::string>(_fakeBlock->getBlock()->transactions()->size()));
-        m_fakeStorage[SYS_CURRENT_STATE][SYS_KEY_TOTAL_TRANSACTION_COUNT] = entry;
-
-        entry = std::make_shared<Entry>();
-        entry->setField("value", c_commonHashPrefix);
-        m_fakeStorage[SYS_NUMBER_2_HASH]["0"] = entry;
-
-        entry = std::make_shared<Entry>();
-        bytes encodedData;
-        _fakeBlock->m_block->encode(encodedData);
-        entry->setField("value", encodedData.data(), encodedData.size());
-        m_fakeStorage[SYS_HASH_2_BLOCK][c_commonHash] = entry;
-
-        entry = std::make_shared<Entry>();
-        entry->setField("value", "0");
-        entry->setField("index", "0");
-        m_fakeStorage[SYS_TX_HASH_2_BLOCK][c_commonHash] = entry;
-    }
-
     Entries::ConstPtr select(const std::string& key, Condition::Ptr) override
     {
         Entries::Ptr entries = std::make_shared<Entries>();
@@ -133,12 +101,21 @@ public:
     int update(
         const std::string& key, Entry::Ptr entry, Condition::Ptr, AccessOptions::Ptr) override
     {
-        entry->setField(
-            "_num_", m_fakeStorage[SYS_CURRENT_STATE][SYS_KEY_CURRENT_NUMBER]->getField("value"));
-        entry->setNum(boost::lexical_cast<int64_t>(
-            m_fakeStorage[SYS_CURRENT_STATE][SYS_KEY_CURRENT_NUMBER]->getField("value")));
         m_fakeStorage[m_table][key] = entry;
         return 0;
+    }
+
+    void commitDB(int64_t _blockNumber)
+    {
+        for (auto pmainKey : m_fakeStorage)
+        {
+            for (auto psubKey : pmainKey.second)
+            {
+                auto entry = psubKey.second;
+                entry->setNum(_blockNumber);
+                entry->setField("_num_", std::to_string(_blockNumber));
+            }
+        }
     }
 
     std::string m_table;
@@ -148,15 +125,33 @@ public:
 class MockMemoryTableFactory : public dev::storage::MemoryTableFactory
 {
 public:
-    MockMemoryTableFactory(std::shared_ptr<MockTable> _mockTable) { m_mockTable = _mockTable; }
+    MockMemoryTableFactory() {}
 
     Table::Ptr openTable(const std::string& _table, bool = true, bool = false) override
     {
-        m_mockTable->m_table = _table;
-        return m_mockTable;
+        UpgradableGuard l(x_name2Table);
+        if (m_name2Table.count(_table))
+        {
+            return m_name2Table[_table];
+        }
+        UpgradeGuard ul(l);
+        auto table = std::make_shared<MockTable>();
+        table->m_table = _table;
+        m_name2Table[_table] = table;
+        return table;
     }
 
-    std::shared_ptr<MockTable> m_mockTable;
+    void commitDB(h256 const&, int64_t _blockNumber) override
+    {
+        ReadGuard l(x_name2Table);
+        for (auto it : m_name2Table)
+        {
+            it.second->commitDB(_blockNumber);
+        }
+    }
+
+    std::map<std::string, std::shared_ptr<MockTable>> m_name2Table;
+    mutable SharedMutex x_name2Table;
 };
 
 class MockBlockChainImp : public BlockChainImp
@@ -188,8 +183,7 @@ struct EmptyFixture
     {
         m_executiveContext = std::make_shared<ExecutiveContext>();
         m_blockChainImp = std::make_shared<MockBlockChainImp>();
-        m_mockTable = std::make_shared<MockTable>();
-        mockMemoryTableFactory = std::make_shared<MockMemoryTableFactory>(m_mockTable);
+        mockMemoryTableFactory = std::make_shared<MockMemoryTableFactory>();
         m_storageStateFactory = std::make_shared<StorageStateFactory>(0x0);
 
         m_blockChainImp->setMemoryTableFactory(mockMemoryTableFactory);
@@ -202,7 +196,6 @@ struct EmptyFixture
 
     std::shared_ptr<MockMemoryTableFactory> mockMemoryTableFactory;
     std::shared_ptr<MockBlockChainImp> m_blockChainImp;
-    std::shared_ptr<MockTable> m_mockTable;
     std::shared_ptr<ExecutiveContext> m_executiveContext;
     std::shared_ptr<StorageStateFactory> m_storageStateFactory;
 };
@@ -211,12 +204,54 @@ struct MemoryTableFactoryFixture : EmptyFixture
 {
     MemoryTableFactoryFixture()
     {
+        m_version = g_BCOSConfig.version();
+        m_supportedVersion = g_BCOSConfig.supportedVersion();
+
         g_BCOSConfig.setSupportedVersion("2.2.0", V2_2_0);
         m_fakeBlock = std::make_shared<FakeBlock>(5);
-        m_mockTable->insertGenesisBlock(m_fakeBlock);
+        insertGenesisBlock(m_fakeBlock);
+    }
+
+    void insertGenesisBlock(std::shared_ptr<FakeBlock> _fakeBlock)
+    {
+        Entry::Ptr entry = std::make_shared<Entry>();
+        entry->setField("value", "0");
+        auto table = mockMemoryTableFactory->openTable(SYS_CURRENT_STATE);
+        table->update(SYS_KEY_CURRENT_NUMBER, entry, nullptr, nullptr);
+
+        entry = std::make_shared<Entry>();
+        entry->setField("value",
+            boost::lexical_cast<std::string>(_fakeBlock->getBlock()->transactions()->size()));
+        table = mockMemoryTableFactory->openTable(SYS_CURRENT_STATE);
+        table->update(SYS_KEY_TOTAL_TRANSACTION_COUNT, entry, nullptr, nullptr);
+
+        entry = std::make_shared<Entry>();
+        entry->setField("value", c_commonHashPrefix);
+        table = mockMemoryTableFactory->openTable(SYS_NUMBER_2_HASH);
+        table->update("0", entry, nullptr, nullptr);
+
+        entry = std::make_shared<Entry>();
+        bytes encodedData;
+        _fakeBlock->m_block->encode(encodedData);
+        entry->setField("value", encodedData.data(), encodedData.size());
+        table = mockMemoryTableFactory->openTable(SYS_HASH_2_BLOCK);
+        table->update(c_commonHash, entry, nullptr, nullptr);
+
+        entry = std::make_shared<Entry>();
+        entry->setField("value", "0");
+        entry->setField("index", "0");
+        table = mockMemoryTableFactory->openTable(SYS_TX_HASH_2_BLOCK);
+        table->update(c_commonHash, entry, nullptr, nullptr);
+    }
+
+    ~MemoryTableFactoryFixture()
+    {
+        g_BCOSConfig.setSupportedVersion(m_supportedVersion, m_version);
     }
 
     std::shared_ptr<FakeBlock> m_fakeBlock;
+    dev::VERSION m_version;
+    std::string m_supportedVersion;
 };
 
 BOOST_FIXTURE_TEST_SUITE(BlockChainImpl, MemoryTableFactoryFixture)
@@ -230,14 +265,11 @@ BOOST_AUTO_TEST_CASE(emptyChain)
     BOOST_CHECK_EQUAL(empty.m_blockChainImp->totalTransactionCount().first, 0);
     BOOST_CHECK_EQUAL(empty.m_blockChainImp->totalTransactionCount().second, 0);
     BOOST_CHECK_NO_THROW(empty.m_blockChainImp->getCode(Address(0x0)));
-#ifdef FISCO_GM
-    BOOST_CHECK_EQUAL(empty.m_blockChainImp->numberHash(0),
-        h256("39b4e98c07189c1a1cc53d8159b294c6b58753e660aa52d3a25c5241cc6225f9"));
-#else
+
     /// modify the hash of the empty block since "timestamp" has been added into groupMark
     BOOST_CHECK_EQUAL(empty.m_blockChainImp->numberHash(0),
         h256("0x2d1c730a81f92c9888f508a9c1a4cdeed7063b831f1a21d61a4d6d97584fc260"));
-#endif
+
     BOOST_CHECK_EQUAL(
         empty.m_blockChainImp->getBlockByHash(h256(c_commonHashPrefix)), std::shared_ptr<Block>());
     BOOST_CHECK_EQUAL(*(empty.m_blockChainImp->getLocalisedTxByHash(h256(c_commonHashPrefix))),
@@ -245,8 +277,9 @@ BOOST_AUTO_TEST_CASE(emptyChain)
     BOOST_CHECK_EQUAL(
         *(empty.m_blockChainImp->getTxByHash(h256(c_commonHashPrefix))), Transaction());
     BOOST_CHECK_EQUAL(
-        sha3(empty.m_blockChainImp->getTransactionReceiptByHash(h256(c_commonHashPrefix))->rlp()),
-        sha3(TransactionReceipt().rlp()));
+        crypto::Hash(
+            empty.m_blockChainImp->getTransactionReceiptByHash(h256(c_commonHashPrefix))->rlp()),
+        crypto::Hash(TransactionReceipt().rlp()));
     BOOST_CHECK_EQUAL(
         empty.m_blockChainImp->getLocalisedTxReceiptByHash(h256(c_commonHashPrefix))->hash(),
         h256(0));
@@ -297,7 +330,8 @@ BOOST_AUTO_TEST_CASE(getTransactionReceiptByHash)
 {
     auto txReceipt = m_blockChainImp->getTransactionReceiptByHash(h256(c_commonHashPrefix));
 
-    BOOST_CHECK_EQUAL(sha3(txReceipt->rlp()), sha3((*m_fakeBlock->m_transactionReceipt)[0]->rlp()));
+    BOOST_CHECK_EQUAL(crypto::Hash(txReceipt->rlp()),
+        crypto::Hash((*m_fakeBlock->m_transactionReceipt)[0]->rlp()));
 }
 
 BOOST_AUTO_TEST_CASE(getLocalisedTxReceiptByHash)
@@ -344,6 +378,34 @@ BOOST_AUTO_TEST_CASE(query)
     BOOST_CHECK_EQUAL(sealerList.size(), 0);
     dev::h512s observerList = m_blockChainImp->observerList();
     BOOST_CHECK_EQUAL(observerList.size(), 0);
+}
+
+BOOST_FIXTURE_TEST_CASE(SM_emptyChain, SM_CryptoTestFixture)
+{
+    // special case
+    EmptyFixture empty;
+
+    BOOST_CHECK_EQUAL(empty.m_blockChainImp->number(), 0);
+    BOOST_CHECK_EQUAL(empty.m_blockChainImp->totalTransactionCount().first, 0);
+    BOOST_CHECK_EQUAL(empty.m_blockChainImp->totalTransactionCount().second, 0);
+    BOOST_CHECK_NO_THROW(empty.m_blockChainImp->getCode(Address(0x0)));
+
+    BOOST_CHECK_EQUAL(empty.m_blockChainImp->numberHash(0),
+        h256("39b4e98c07189c1a1cc53d8159b294c6b58753e660aa52d3a25c5241cc6225f9"));
+
+    BOOST_CHECK_EQUAL(
+        empty.m_blockChainImp->getBlockByHash(h256(c_commonHashPrefix)), std::shared_ptr<Block>());
+    BOOST_CHECK_EQUAL(*(empty.m_blockChainImp->getLocalisedTxByHash(h256(c_commonHashPrefix))),
+        LocalisedTransaction(Transaction(), h256(0), -1));
+    BOOST_CHECK_EQUAL(
+        *(empty.m_blockChainImp->getTxByHash(h256(c_commonHashPrefix))), Transaction());
+    BOOST_CHECK_EQUAL(
+        crypto::Hash(
+            empty.m_blockChainImp->getTransactionReceiptByHash(h256(c_commonHashPrefix))->rlp()),
+        crypto::Hash(TransactionReceipt().rlp()));
+    BOOST_CHECK_EQUAL(
+        empty.m_blockChainImp->getLocalisedTxReceiptByHash(h256(c_commonHashPrefix))->hash(),
+        h256(0));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

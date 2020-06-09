@@ -114,6 +114,9 @@ BOOST_AUTO_TEST_CASE(open_Table)
     entry->setField(SYS_KEY, SYS_KEY_CURRENT_NUMBER);
     table->insert(SYS_KEY_CURRENT_NUMBER, entry);
     memoryDBFactory->commitDB(h256(0), 2);
+    auto dbHash = memoryDBFactory->hash();
+    auto dbHash2 = memoryDBFactory->hash();
+    BOOST_TEST(dbHash == dbHash2);
 }
 
 BOOST_AUTO_TEST_CASE(parallel_openTable)
@@ -251,7 +254,14 @@ BOOST_AUTO_TEST_CASE(setBlockNum)
 BOOST_AUTO_TEST_CASE(init)
 {
     memoryDBFactory->init();
-    BOOST_TEST(memoryDBFactory->ID() == 1);
+    if (g_BCOSConfig.version() >= V2_2_0)
+    {
+        BOOST_TEST(memoryDBFactory->ID() == ENTRY_ID_START + 1);
+    }
+    else
+    {
+        BOOST_TEST(memoryDBFactory->ID() == 1);
+    }
 }
 
 BOOST_AUTO_TEST_SUITE_END()

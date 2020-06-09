@@ -48,6 +48,7 @@ public:
     Transaction::Ptr createParallelTransferTx(
         const string& _userFrom, const string& _userTo, u256 _money)
     {
+        auto keyPair = KeyPair::create();
         u256 value = 0;
         u256 gasPrice = 0;
         u256 gas = 10000000;
@@ -61,6 +62,8 @@ public:
         Transaction::Ptr tx =
             std::make_shared<Transaction>(value, gasPrice, gas, dest, data, nonce);
         tx->setBlockLimit(500);
+        auto sig = dev::crypto::Sign(keyPair, tx->sha3(WithoutSignature));
+        tx->updateSignature(sig);
         tx->forceSender(Address(0x2333));
 
         return tx;
@@ -80,6 +83,9 @@ public:
         Transaction::Ptr tx =
             std::make_shared<Transaction>(value, gasPrice, gas, dest, data, nonce);
         tx->setBlockLimit(500);
+        auto keyPair = KeyPair::create();
+        auto sig = dev::crypto::Sign(keyPair, tx->sha3(WithoutSignature));
+        tx->updateSignature(sig);
         tx->forceSender(Address(0x2333));
 
         return tx;
@@ -90,8 +96,9 @@ public:
         ExecutiveContext::Ptr ctx = std::make_shared<ExecutiveContext>();
         ctx->setAddress2Precompiled(
             Address(0x5002), make_shared<dev::precompiled::DagTransferPrecompiled>());
-        ctx->setAddress2Precompiled(
-            Address(0x1006), make_shared<dev::precompiled::ParallelConfigPrecompiled>());
+        auto parallelConfigPrecompiled = make_shared<dev::precompiled::ParallelConfigPrecompiled>();
+        ctx->setAddress2Precompiled(Address(0x1006), parallelConfigPrecompiled);
+        ctx->registerParallelPrecompiled(parallelConfigPrecompiled);
         return ctx;
     }
 

@@ -31,8 +31,10 @@
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/TopicInfo.h>
+#include <libflowlimit/RateLimiter.h>
 #include <libnetwork/Host.h>
 #include <libnetwork/PeerWhitelist.h>
+#include <libstat/ChannelNetworkStatHandler.h>
 #include <map>
 #include <memory>
 #include <unordered_map>
@@ -76,8 +78,8 @@ public:
     void asyncSendMessageByTopic(std::string topic, std::shared_ptr<P2PMessage> message,
         CallbackFuncWithSession callback, dev::network::Options options) override;
 
-    void asyncMulticastMessageByTopic(
-        std::string topic, std::shared_ptr<P2PMessage> message) override;
+    bool asyncMulticastMessageByTopic(std::string topic, std::shared_ptr<P2PMessage> message,
+        dev::flowlimit::RateLimiter::Ptr _bandwidthLimiter = nullptr) override;
     void asyncMulticastMessageByNodeIDList(
         NodeIDs nodeIDs, std::shared_ptr<P2PMessage> message) override;
     void asyncBroadcastMessage(
@@ -170,11 +172,36 @@ public:
 
     void removeNetworkStatHandlerByGroupID(GROUP_ID const& _groupID) override;
 
+    void setNodeBandwidthLimiter(dev::flowlimit::RateLimiter::Ptr _bandwidthLimiter) override;
+    void registerGroupBandwidthLimiter(
+        GROUP_ID const& _groupID, dev::flowlimit::RateLimiter::Ptr _bandwidthLimiter) override;
+    void removeGroupBandwidthLimiter(GROUP_ID const& _groupID) override;
+
+    void setChannelNetworkStatHandler(
+        dev::stat::ChannelNetworkStatHandler::Ptr _channelNetworkStatHandler) override
+    {
+        m_channelNetworkStatHandler = _channelNetworkStatHandler;
+    }
+
 private:
     NodeIDs getPeersByTopic(std::string const& topic);
     void checkWhitelistAndClearSession();
+
+    template <typename T>
+    T getHandlerByGroupId(GROUP_ID const& _groupId,
+        std::shared_ptr<std::map<GROUP_ID, T>> _group2Handlers, SharedMutex& _mutex)
+    {
+        ReadGuard l(_mutex);
+        if (!_group2Handlers->count(_groupId))
+        {
+            return nullptr;
+        }
+        return (*_group2Handlers)[_groupId];
+    }
+
     void updateIncomingTraffic(P2PMessage::Ptr _msg);
-    void updateOutcomingTraffic(P2PMessage::Ptr _msg);
+    void updateOutgoingTraffic(P2PMessage::Ptr _msg);
+    void acquirePermits(P2PMessage::Ptr _msg);
 
 private:
     std::map<dev::network::NodeIPEndpoint, NodeID> m_staticNodes;
@@ -218,6 +245,13 @@ private:
     std::shared_ptr<std::map<GROUP_ID, std::shared_ptr<dev::stat::NetworkStatHandler>>>
         m_group2NetworkStatHandler;
     mutable SharedMutex x_group2NetworkStatHandler;
+
+    // for bandwidth limitation
+    std::shared_ptr<std::map<GROUP_ID, dev::flowlimit::RateLimiter::Ptr>> m_group2BandwidthLimiter;
+    mutable SharedMutex x_group2BandwidthLimiter;
+
+    dev::flowlimit::RateLimiter::Ptr m_nodeBandwidthLimiter;
+    dev::stat::ChannelNetworkStatHandler::Ptr m_channelNetworkStatHandler;
 };
 
 }  // namespace p2p

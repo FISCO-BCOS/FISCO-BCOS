@@ -21,32 +21,41 @@
  */
 #include <iostream>
 
+#include "libdevcrypto/AES.h"
 #include <libdevcore/Assertions.h>
 #include <libdevcore/CommonJS.h>
-#include <libdevcrypto/AES.h>
-#include <libdevcrypto/Hash.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
 
 
 using namespace dev;
+using namespace dev::crypto;
 namespace dev
 {
 namespace test
 {
 BOOST_FIXTURE_TEST_SUITE(AES, TestOutputHelperFixture)
-// #ifdef FISCO_GM
-BOOST_AUTO_TEST_CASE(GM_testAESen)
+
+BOOST_AUTO_TEST_CASE(testAESString)
 {
-    bytes seed_true = fromHex("01234567012345670123456701234564");
-    bytes _plainData = fromHex("12345");
-    // h256 key = dev::sha3(&seed);
-    bytes endata = aesCBCEncrypt(ref(_plainData), ref(seed_true));
-    bytes dedata = aesCBCDecrypt(ref(endata), ref(seed_true));
-    BOOST_CHECK_EQUAL(toHex(_plainData), toHex(dedata));
+    const std::string key = "1527F8068E8F577F4CBB38CB8206CEEA";
+    const std::string plainData =
+        "8398A06D3A238E77EFDF91E5CE5596942C42788065D24A8DFAF911501BE71181A9D0A318A19D5F7B087401233F"
+        "C937A5";
+    const std::string iv = "081199C91FA3A8F0B31F7EAB053B770F";
+    const std::string endata = aesCBCEncrypt(plainData, key, iv);
+    const std::string dedata = aesCBCDecrypt(endata, key, iv);
+
+    BOOST_CHECK_EQUAL(plainData, dedata);
+
+    const std::string keyWithoutIv = "00000000000000000000000000000000";
+    const std::string plainDataWithoutIv = "2B731E559C35EB31AD86EA0EAA441F19";
+    const std::string endataWithoutIv = aesCBCEncrypt(plainDataWithoutIv, keyWithoutIv);
+    const std::string dedataWithoutIv = aesCBCDecrypt(endataWithoutIv, keyWithoutIv);
+
+    BOOST_CHECK_EQUAL(plainDataWithoutIv, dedataWithoutIv);
 }
-// #endif
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev

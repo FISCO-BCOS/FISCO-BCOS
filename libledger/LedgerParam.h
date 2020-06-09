@@ -40,10 +40,15 @@ namespace ledger
 {
 /// forward class declaration
 #define SYNC_TX_POOL_SIZE_DEFAULT 102400
+#define TX_POOL_DEFAULT_MEMORY_SIZE 512
 #define MAX_BLOCK_RANGE_EVENT_FILTER (0)
 struct TxPoolParam
 {
     int64_t txPoolLimit = SYNC_TX_POOL_SIZE_DEFAULT;
+    // txpool size, default is 512MB
+    int64_t maxTxPoolMemorySize = TX_POOL_DEFAULT_MEMORY_SIZE;
+    // txPool notify worker size
+    int64_t notifyWorkerNum = 2;
 };
 struct ConsensusParam
 {
@@ -158,6 +163,19 @@ struct TxParam
     int64_t txGasLimit;
     bool enableParallel = false;
 };
+
+struct FlowControlParam
+{
+    int64_t const maxDefaultValue = INT64_MAX;
+    int64_t const maxBurstReqPercentDefaultValue = 20;
+    // for QPS
+    int64_t maxQPS;
+    // for outgoing bandwidth limitation
+    int64_t outGoingBandwidthLimit;
+    int64_t maxBurstReqPercent;
+    int64_t maxBurstReqNum;
+};
+
 class LedgerParam : public LedgerParamInterface
 {
 public:
@@ -171,6 +189,7 @@ public:
     StorageParam& mutableStorageParam() override { return m_storageParam; }
     StateParam& mutableStateParam() override { return m_stateParam; }
     TxParam& mutableTxParam() override { return m_txParam; }
+    FlowControlParam& mutableFlowControlParam() override { return m_flowControlParam; }
     EventLogFilterManagerParams& mutableEventLogFilterManagerParams() override
     {
         return m_eventLogFilterParams;
@@ -195,6 +214,7 @@ private:
     void initRPBFTConsensusIniConfig(boost::property_tree::ptree const& pt);
     void initSyncConfig(boost::property_tree::ptree const& pt);
     void initEventLogFilterManagerConfig(boost::property_tree::ptree const& pt);
+    void initFlowControlConfig(boost::property_tree::ptree const& _pt);
     void setEVMFlags(boost::property_tree::ptree const& _pt);
 
 private:
@@ -208,8 +228,10 @@ private:
     StorageParam m_storageParam;
     StateParam m_stateParam;
     TxParam m_txParam;
+    FlowControlParam m_flowControlParam;
     EventLogFilterManagerParams m_eventLogFilterParams;
     dev::blockchain::GenesisBlockParam m_genesisBlockParam;
+
 
 private:
     std::string uriEncode(const std::string& keyWord);

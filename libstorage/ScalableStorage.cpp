@@ -63,16 +63,20 @@ bool ScalableStorage::isStateData(const string& _tableName)
            find(m_archiveTables.begin(), m_archiveTables.end(), _tableName);
 }
 
-string ScalableStorage::getDBNameOfArchivedBlock(int64_t _blockNumber)
+string ScalableStorage::getDBNameOfArchivedBlock(int64_t _blockNumber, bool _noException)
 {
     auto tableInfo = std::make_shared<storage::TableInfo>();
     tableInfo->name = TABLE_BLOCK_TO_DB_NAME;
     tableInfo->key = "number";
     auto entries = m_state->select(_blockNumber, tableInfo, to_string(_blockNumber), nullptr);
-    if (!entries)
+    if (!entries || entries->size() == 0)
     {
+        if (_noException)
+        {
+            return "";
+        }
         SCALABLE_STORAGE_LOG(FATAL)
-            << "Can't archived block's dbName" << LOG_KV("blockNumber", _blockNumber);
+            << "Can't find archived block's dbName" << LOG_KV("blockNumber", _blockNumber);
     }
     return entries->get(0)->getField(DB_NAME);
 }
@@ -83,7 +87,7 @@ Entries::Ptr ScalableStorage::selectFromArchive(
     Guard l(m_archiveMutex);
     if (num < m_archiveDBName)
     {
-        auto dbName = lexical_cast<int64_t>(getDBNameOfArchivedBlock(num));
+        auto dbName = lexical_cast<int64_t>(getDBNameOfArchivedBlock(num, false));
         auto dataStorage = m_storageFactory->getStorage(to_string(dbName), false);
         if (!dataStorage)
         {

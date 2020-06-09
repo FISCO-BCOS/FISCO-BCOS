@@ -32,6 +32,7 @@
 #include "libethcore/Common.h"
 #include "libp2p/P2PMessage.h"
 #include <jsonrpccpp/server/abstractserverconnector.h>
+#include <libflowlimit/RPCQPSLimiter.h>
 #include <libstat/ChannelNetworkStatHandler.h>
 #include <boost/asio/io_service.hpp>  // for io_service
 #include <atomic>                     // for atomic
@@ -84,9 +85,9 @@ public:
     {
         REMOTE_PEER_UNAVAILABLE = 100,
         REMOTE_CLIENT_PEER_UNAVAILABLE = 101,
-        TIMEOUT = 102
+        TIMEOUT = 102,
+        REJECT_AMOP_REQ_FOR_OVER_BANDWIDTHLIMIT = 103
     };
-
     typedef std::shared_ptr<ChannelRPCServer> Ptr;
 
     ChannelRPCServer(std::string listenAddr = "", int listenPort = 0)
@@ -165,6 +166,23 @@ public:
 
     dev::stat::ChannelNetworkStatHandler::Ptr networkStatHandler() { return m_networkStatHandler; }
 
+    void setQPSLimiter(dev::flowlimit::RPCQPSLimiter::Ptr _qpsLimiter)
+    {
+        m_qpsLimiter = _qpsLimiter;
+    }
+
+    dev::flowlimit::RPCQPSLimiter::Ptr qpsLimiter() { return m_qpsLimiter; }
+
+    void setNetworkBandwidthLimiter(dev::flowlimit::RateLimiter::Ptr _networkBandwidthLimiter)
+    {
+        m_networkBandwidthLimiter = _networkBandwidthLimiter;
+    }
+
+    dev::flowlimit::RateLimiter::Ptr networkBandwidthLimiter() const
+    {
+        return m_networkBandwidthLimiter;
+    }
+
 private:
     virtual void onClientRPCRequest(
         dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
@@ -193,6 +211,11 @@ private:
     std::vector<dev::channel::ChannelSession::Ptr> getSessionByTopic(const std::string& topic);
 
     void onClientUpdateTopicStatusRequest(dev::channel::Message::Ptr message);
+    bool limitAMOPBandwidth(dev::channel::ChannelSession::Ptr _session,
+        dev::channel::Message::Ptr _AMOPReq, dev::p2p::P2PMessage::Ptr _p2pMessage);
+
+    void sendRejectAMOPResponse(
+        dev::channel::ChannelSession::Ptr _session, dev::channel::Message::Ptr _AMOPReq);
 
     bool _running = false;
 
@@ -226,6 +249,8 @@ private:
     std::vector<dev::eth::Handler<int64_t>> m_handlers;
 
     dev::stat::ChannelNetworkStatHandler::Ptr m_networkStatHandler;
+    dev::flowlimit::RPCQPSLimiter::Ptr m_qpsLimiter;
+    dev::flowlimit::RateLimiter::Ptr m_networkBandwidthLimiter;
 };
 
 }  // namespace dev

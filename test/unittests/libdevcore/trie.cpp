@@ -67,19 +67,12 @@ BOOST_AUTO_TEST_CASE(fat_trie)
 
 BOOST_AUTO_TEST_CASE(hex_encoded_securetrie_test)
 {
-    // #ifdef FISCO_GM
-    //     fs::path const testPath = test::getTestPath() / fs::path("GMTrieTests");
-    // #else
     fs::path const testPath = test::getTestPath() / fs::path("TrieTests");
-    // #endif
     LOG(INFO) << "Testing Secure Trie...";
     Json::Value v;
     Json::Reader reader;
-#ifdef FISCO_GM
-    string const s = contentsString(testPath / fs::path("GMhex_encoded_securetrie_test.json"));
-#else
+    std::cout << testPath.c_str() << std::endl;
     string const s = contentsString(testPath / fs::path("hex_encoded_securetrie_test.json"));
-#endif
     BOOST_REQUIRE_MESSAGE(s.length() > 0,
         "Contents of 'hex_encoded_securetrie_test.json' is empty. Have you cloned the 'tests' repo "
         "branch develop?");
@@ -138,15 +131,79 @@ BOOST_AUTO_TEST_CASE(hex_encoded_securetrie_test)
                 BOOST_CHECK_EQUAL(ht.root(), ft.root());
             }
             BOOST_REQUIRE(!root_obj["root"].isNull());
-            // #ifdef FISCO_GM
-            //             BOOST_CHECK_EQUAL("0xa7b4922e16941f1e35346f747d13d915e8ccf67d335f262fd33cb15236e3dc84",
-            //                 toHexPrefixed(ht.root().asArray()));
-            //             BOOST_CHECK_EQUAL("0xa7b4922e16941f1e35346f747d13d915e8ccf67d335f262fd33cb15236e3dc84",
-            //                 toHexPrefixed(ft.root().asArray()));
-            // #else
             BOOST_CHECK_EQUAL(root_obj["root"].asString(), toHexPrefixed(ht.root().asArray()));
             BOOST_CHECK_EQUAL(root_obj["root"].asString(), toHexPrefixed(ft.root().asArray()));
-            // #endif
+        }
+    }
+}
+
+BOOST_FIXTURE_TEST_CASE(SM_hex_encoded_securetrie_test, SM_CryptoTestFixture)
+{
+    fs::path const testPath = test::getTestPath() / fs::path("TrieTests");
+    LOG(INFO) << "Testing Secure Trie...";
+    Json::Value v;
+    Json::Reader reader;
+    string const s = contentsString(testPath / fs::path("GMhex_encoded_securetrie_test.json"));
+    BOOST_REQUIRE_MESSAGE(s.length() > 0,
+        "Contents of '.json' is empty. Have you cloned the 'tests' repo "
+        "branch develop?");
+    reader.parse(s, v);
+    Json::Value::Members v_mem = v.getMemberNames();
+    for (auto it = v_mem.begin(); it != v_mem.end(); it++)
+    {
+        LOG(INFO) << *it;
+        Json::Value& o = v[*it]["in"];
+        Json::Value& root_obj = v[*it];
+        /// Json::Value& o = v[i];
+        vector<pair<string, string>> ss;
+        Json::Value::Members mem = o.getMemberNames();
+        for (auto it = mem.begin(); it != mem.end(); it++)
+        {
+            ss.push_back(make_pair(*it, o[*it].asString()));
+            if (!ss.back().first.find("0x"))
+                ss.back().first = asString(fromHex(ss.back().first.substr(2)));
+            if (!ss.back().second.find("0x"))
+                ss.back().second = asString(fromHex(ss.back().second.substr(2)));
+        }
+        for (unsigned j = 0; j < min(1000000000u, fac((unsigned)ss.size())); ++j)
+        {
+            next_permutation(ss.begin(), ss.end());
+            MemoryDB m;
+            EnforceRefs r(m, true);
+            GenericTrieDB<MemoryDB> t(&m);
+            MemoryDB hm;
+            EnforceRefs hr(hm, true);
+            HashedGenericTrieDB<MemoryDB> ht(&hm);
+            MemoryDB fm;
+            EnforceRefs fr(fm, true);
+            FatGenericTrieDB<MemoryDB> ft(&fm);
+            t.init();
+            ht.init();
+            ft.init();
+            BOOST_REQUIRE(t.check(true));
+            BOOST_REQUIRE(ht.check(true));
+            BOOST_REQUIRE(ft.check(true));
+            for (auto const& k : ss)
+            {
+                t.insert(k.first, k.second);
+                ht.insert(k.first, k.second);
+                ft.insert(k.first, k.second);
+                BOOST_REQUIRE(t.check(true));
+                BOOST_REQUIRE(ht.check(true));
+                BOOST_REQUIRE(ft.check(true));
+                auto i = ft.begin();
+                auto j = t.begin();
+                for (; i != ft.end() && j != t.end(); ++i, ++j)
+                {
+                    BOOST_CHECK_EQUAL(i == ft.end(), j == t.end());
+                    BOOST_REQUIRE((*i).first.toBytes() == (*j).first.toBytes());
+                    BOOST_REQUIRE((*i).second.toBytes() == (*j).second.toBytes());
+                }
+                BOOST_CHECK_EQUAL(ht.root(), ft.root());
+            }
+            BOOST_REQUIRE(!root_obj["root"].isNull());
+            BOOST_CHECK_EQUAL(root_obj["root"].asString(), toHexPrefixed(ht.root().asArray()));
+            BOOST_CHECK_EQUAL(root_obj["root"].asString(), toHexPrefixed(ft.root().asArray()));
         }
     }
 }
@@ -156,11 +213,7 @@ BOOST_AUTO_TEST_CASE(trie_test_anyorder)
     fs::path const testPath = test::getTestPath() / fs::path("TrieTests");
 
     LOG(INFO) << "Testing Trie...";
-#ifdef FISCO_GM
-    string const s = contentsString(testPath / fs::path("GMtrieanyorder.json"));
-#else
     string const s = contentsString(testPath / fs::path("trieanyorder.json"));
-#endif
     BOOST_REQUIRE_MESSAGE(s.length() > 0,
         "Contents of 'trieanyorder.json' is empty. Have you cloned the 'tests' repo branch "
         "develop?");
@@ -221,15 +274,80 @@ BOOST_AUTO_TEST_CASE(trie_test_anyorder)
                 BOOST_CHECK_EQUAL(ht.root(), ft.root());
             }
             BOOST_REQUIRE(!root_obj["root"].isNull());
-            // #ifdef FISCO_GM
-            //             BOOST_CHECK_EQUAL("0xac0c2b00e9f978a86713cc6dddea3972925f0d29243a2b51a3b597afaf1c7451",
-            //                 toHexPrefixed(t.root().asArray()));
-            //             BOOST_CHECK_EQUAL(ht.root(), ft.root());
-
-            // #else
             BOOST_CHECK_EQUAL(root_obj["root"].asString(), toHexPrefixed(t.root().asArray()));
             BOOST_CHECK_EQUAL(ht.root(), ft.root());
-            // #endif
+        }
+    }
+}
+
+BOOST_FIXTURE_TEST_CASE(SM_trie_test_anyorder, SM_CryptoTestFixture)
+{
+    fs::path const testPath = test::getTestPath() / fs::path("TrieTests");
+
+    LOG(INFO) << "Testing Trie...";
+    string const s = contentsString(testPath / fs::path("GMtrieanyorder.json"));
+    BOOST_REQUIRE_MESSAGE(s.length() > 0,
+        "Contents of 'trieanyorder.json' is empty. Have you cloned the 'tests' repo branch "
+        "develop?");
+
+    Json::Value v;
+    Json::Reader reader;
+    reader.parse(s, v);
+    Json::Value::Members mem = v.getMemberNames();
+    for (auto it = mem.begin(); it != mem.end(); it++)
+    {
+        LOG(INFO) << *it;
+        Json::Value& o = v[*it]["in"];
+        Json::Value& root_obj = v[*it];
+        Json::Value::Members o_mem = o.getMemberNames();
+        vector<pair<string, string>> ss;
+        for (auto it = o_mem.begin(); it != o_mem.end(); it++)
+        {
+            ss.push_back(make_pair(*it, o[*it].asString()));
+            if (!ss.back().first.find("0x"))
+                ss.back().first = asString(fromHex(ss.back().first.substr(2)));
+            if (!ss.back().second.find("0x"))
+                ss.back().second = asString(fromHex(ss.back().second.substr(2)));
+        }
+        for (unsigned j = 0; j < min(1000u, fac((unsigned)ss.size())); ++j)
+        {
+            next_permutation(ss.begin(), ss.end());
+            MemoryDB m;
+            EnforceRefs r(m, true);
+            GenericTrieDB<MemoryDB> t(&m);
+            MemoryDB hm;
+            EnforceRefs hr(hm, true);
+            HashedGenericTrieDB<MemoryDB> ht(&hm);
+            MemoryDB fm;
+            EnforceRefs fr(fm, true);
+            FatGenericTrieDB<MemoryDB> ft(&fm);
+            t.init();
+            ht.init();
+            ft.init();
+            BOOST_REQUIRE(t.check(true));
+            BOOST_REQUIRE(ht.check(true));
+            BOOST_REQUIRE(ft.check(true));
+            for (auto const& k : ss)
+            {
+                t.insert(k.first, k.second);
+                ht.insert(k.first, k.second);
+                ft.insert(k.first, k.second);
+                BOOST_REQUIRE(t.check(true));
+                BOOST_REQUIRE(ht.check(true));
+                BOOST_REQUIRE(ft.check(true));
+                auto i = ft.begin();
+                auto j = t.begin();
+                for (; i != ft.end() && j != t.end(); ++i, ++j)
+                {
+                    BOOST_CHECK_EQUAL(i == ft.end(), j == t.end());
+                    BOOST_REQUIRE((*i).first.toBytes() == (*j).first.toBytes());
+                    BOOST_REQUIRE((*i).second.toBytes() == (*j).second.toBytes());
+                }
+                BOOST_CHECK_EQUAL(ht.root(), ft.root());
+            }
+            BOOST_REQUIRE(!root_obj["root"].isNull());
+            BOOST_CHECK_EQUAL(root_obj["root"].asString(), toHexPrefixed(t.root().asArray()));
+            BOOST_CHECK_EQUAL(ht.root(), ft.root());
         }
     }
 }
@@ -239,11 +357,7 @@ BOOST_AUTO_TEST_CASE(trie_tests_ordered)
     fs::path const testPath = test::getTestPath() / fs::path("TrieTests");
 
     LOG(INFO) << "Testing Trie...";
-#ifdef FISCO_GM
-    string const s = contentsString(testPath / fs::path("GMtrietest.json"));
-#else
     string const s = contentsString(testPath / fs::path("trietest.json"));
-#endif
     BOOST_REQUIRE_MESSAGE(s.length() > 0,
         "Contents of 'trietest.json' is empty. Have you cloned the 'tests' repo branch develop?");
 
@@ -330,11 +444,103 @@ BOOST_AUTO_TEST_CASE(trie_tests_ordered)
         }
 
         BOOST_REQUIRE(!root_obj["root"].isNull());
-        // #ifdef FISCO_GM
-        // BOOST_CHECK_EQUAL(o["root"].get_str(), toHexPrefixed(t.root().asArray()));
-        // #else
         BOOST_CHECK_EQUAL(root_obj["root"].asString(), toHexPrefixed(t.root().asArray()));
-        // #endif
+    }
+}
+
+BOOST_FIXTURE_TEST_CASE(SM_trie_tests_ordered, SM_CryptoTestFixture)
+{
+    fs::path const testPath = test::getTestPath() / fs::path("TrieTests");
+
+    LOG(INFO) << "Testing Trie...";
+    string const s = contentsString(testPath / fs::path("GMtrietest.json"));
+    BOOST_REQUIRE_MESSAGE(s.length() > 0,
+        "Contents of 'trietest.json' is empty. Have you cloned the 'tests' repo branch develop?");
+
+    Json::Value v;
+    Json::Reader reader;
+    reader.parse(s, v);
+    Json::Value::Members mem = v.getMemberNames();
+    for (auto it = mem.begin(); it != mem.end(); it++)
+    {
+        LOG(INFO) << *it;
+        Json::Value& o = v[*it]["in"];
+        Json::Value& root_obj = v[*it];
+        vector<pair<string, string>> ss;
+        vector<string> keysToBeDeleted;
+
+        for (int i = 0; i < (int)o.size(); i++)
+        {
+            vector<string> values;
+            Json::Value s = o[i];
+            if (s.type() == Json::arrayValue)
+            {
+                for (int j = 0; j < (int)s.size(); j++)
+                {
+                    if (s[j].type() == Json::stringValue)
+                    {
+                        values.push_back(s[j].asString());
+                    }
+                    else if (s[j].type() == Json::nullValue)
+                    {
+                        // mark entry for deletion
+                        values.push_back("");
+                        if (!values[0].find("0x"))
+                            values[0] = asString(fromHex(values[0].substr(2)));
+                        keysToBeDeleted.push_back(values[0]);
+                    }
+                    else
+                        BOOST_FAIL("Bad type (expected string)");
+                }
+            }
+            BOOST_REQUIRE(values.size() == 2);
+            ss.push_back(make_pair(values[0], values[1]));
+            if (!ss.back().first.find("0x"))
+                ss.back().first = asString(fromHex(ss.back().first.substr(2)));
+            if (!ss.back().second.find("0x"))
+                ss.back().second = asString(fromHex(ss.back().second.substr(2)));
+        }
+        MemoryDB m;
+        EnforceRefs r(m, true);
+        GenericTrieDB<MemoryDB> t(&m);
+        MemoryDB hm;
+        EnforceRefs hr(hm, true);
+        HashedGenericTrieDB<MemoryDB> ht(&hm);
+        MemoryDB fm;
+        EnforceRefs fr(fm, true);
+        FatGenericTrieDB<MemoryDB> ft(&fm);
+        t.init();
+        ht.init();
+        ft.init();
+        BOOST_REQUIRE(t.check(true));
+        BOOST_REQUIRE(ht.check(true));
+        BOOST_REQUIRE(ft.check(true));
+
+        for (auto const& k : ss)
+        {
+            if (find(keysToBeDeleted.begin(), keysToBeDeleted.end(), k.first) !=
+                    keysToBeDeleted.end() &&
+                k.second.empty())
+                t.remove(k.first), ht.remove(k.first), ft.remove(k.first);
+            else
+                t.insert(k.first, k.second), ht.insert(k.first, k.second),
+                    ft.insert(k.first, k.second);
+            BOOST_REQUIRE(t.check(true));
+            BOOST_REQUIRE(ht.check(true));
+            BOOST_REQUIRE(ft.check(true));
+            auto i = ft.begin();
+            auto j = t.begin();
+            for (; i != ft.end() && j != t.end(); ++i, ++j)
+            {
+                BOOST_CHECK_EQUAL(i == ft.end(), j == t.end());
+                BOOST_REQUIRE((*i).first.toBytes() == (*j).first.toBytes());
+                BOOST_REQUIRE((*i).second.toBytes() == (*j).second.toBytes());
+            }
+            BOOST_CHECK_EQUAL(ht.root(), ft.root());
+        }
+
+        BOOST_REQUIRE(!root_obj["root"].isNull());
+        BOOST_CHECK_EQUAL(root_obj["root"].asString(), toHexPrefixed(t.root().asArray()));
     }
 }
 
@@ -568,7 +774,7 @@ BOOST_AUTO_TEST_CASE(hashedLowerBound)
     for (int i = 0; i < 10; ++i)
     {
         std::string key = toString(i);
-        hashToKey[sha3(key)] = key;
+        hashToKey[crypto::Hash(key)] = key;
     }
 
     // insert keys into trie

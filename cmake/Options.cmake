@@ -21,7 +21,7 @@
 # change-list
 # 2018/09/05: yujiechen
 # 1. add DEBUG flag
-# 2. add ETH_DEBUG definition when DEBUG flag has been set
+# 2. add FISCO_DEBUG definition when DEBUG flag has been set
 
 macro(eth_default_option O DEF)
     if (DEFINED ${O})
@@ -47,12 +47,12 @@ macro(configure_project)
     endif()
 
     eth_default_option(BUILD_SHARED_LIBS OFF)
-   
+
     eth_default_option(BUILD_STATIC OFF)
 
     #ARCH TYPE
     eth_default_option(ARCH_NATIVE OFF)
-    
+
     if(ARCH_NATIVE)
         set(MARCH_TYPE "-march=native -mtune=native -fvisibility=hidden -fvisibility-inlines-hidden")
     endif()
@@ -65,30 +65,18 @@ macro(configure_project)
     # code coverage
     eth_default_option(COVERAGE OFF)
 
-    # guomi
-    eth_default_option(BUILD_GM OFF)
-    if (BUILD_GM)
-        add_definitions(-DFISCO_GM)
-    endif()
-
-    # extension privacy module
-    eth_default_option(CRYPTO_EXTENSION OFF)
-    if (CRYPTO_EXTENSION)
-        add_definitions(-DFISCO_CRYPTO_EXTENSION)
-    endif()
-
     #debug
     eth_default_option(DEBUG OFF)
     if (DEBUG)
-        add_definitions(-DETH_DEBUG)
+        add_definitions(-DFISCO_DEBUG)
     endif()
-    
+
     #perf
     eth_default_option(PROF OFF)
     if (PROF)
     	#add_definitions(-DPROF)
 	endif()
-	
+
     # Define a matching property name of each of the "features".
     foreach(FEATURE ${ARGN})
         set(SUPPORT_${FEATURE} TRUE)
@@ -130,12 +118,6 @@ macro(print_config NAME)
     message("-- TESTS              Build tests                  ${TESTS}")
     message("-- ARCH_NATIVE        Enable native code           ${ARCH_NATIVE}")
     message("-- PROF                                            ${PROF}")
-if (BUILD_GM)  
-    message("-- BUILD_GM           Build GM                     ${BUILD_GM}")
-endif()
-if (CRYPTO_EXTENSION)
-    message("-- CRYPTO_EXTENSION   Build crypto extension       ${CRYPTO_EXTENSION}")
-endif()
     message("------------------------------------------------------------------------")
     message("")
 endmacro()

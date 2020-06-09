@@ -109,8 +109,9 @@ private:
     BlockHeader fakeBlockHeader()
     {
         BlockHeader fakeHeader;
-        fakeHeader.setParentHash(sha3("parent"));
-        fakeHeader.setRoots(sha3("transactionRoot"), sha3("receiptRoot"), sha3("stateRoot"));
+        fakeHeader.setParentHash(crypto::Hash("parent"));
+        fakeHeader.setRoots(crypto::Hash("transactionRoot"), crypto::Hash("receiptRoot"),
+            crypto::Hash("stateRoot"));
         fakeHeader.setLogBloom(LogBloom(0));
         fakeHeader.setNumber(int64_t(0));
         fakeHeader.setGasLimit(u256(3000000000000000000));
@@ -184,6 +185,9 @@ contract HelloWorld{
 
     Executive e0(m_mptStates, initEnvInfo());
     Transaction tx(value, gasPrice, gas, code);  // Use contract creation constructor
+    auto keyPair = KeyPair::create();
+    auto sig = dev::crypto::Sign(keyPair, tx.sha3(WithoutSignature));
+    tx.updateSignature(sig);
     tx.forceSender(caller);
     executeTransaction(e0, tx);
 
@@ -213,6 +217,8 @@ contract HelloWorld{
         fromHex(string("0x60fe47b1") +  // set(0xaa)
                 string("00000000000000000000000000000000000000000000000000000000000000aa"));
     Transaction setTx(value, gasPrice, gas, newAddress, callDataToSet);
+    sig = dev::crypto::Sign(keyPair, setTx.sha3(WithoutSignature));
+    setTx.updateSignature(sig);
     setTx.forceSender(caller);
 
     Executive e1(m_mptStates, initEnvInfo());
@@ -225,6 +231,8 @@ contract HelloWorld{
                                   string(""));
 
     Transaction getTx(value, gasPrice, gas, newAddress, callDataToGet);
+    sig = dev::crypto::Sign(keyPair, getTx.sha3(WithoutSignature));
+    getTx.updateSignature(sig);
     getTx.forceSender(caller);
 
     Executive e2(m_mptStates, initEnvInfo());
@@ -241,6 +249,8 @@ contract HelloWorld{
                                         string(""));
 
     Transaction getByCallTx(value, gasPrice, gas, newAddress, callDataToGetByCall);
+    sig = dev::crypto::Sign(keyPair, getByCallTx.sha3(WithoutSignature));
+    getByCallTx.updateSignature(sig);
     getByCallTx.forceSender(caller);
 
     Executive e3(m_mptStates, initEnvInfo());
@@ -256,6 +266,8 @@ contract HelloWorld{
                                 string(""));
 
     Transaction destroyTx(value, gasPrice, gas, newAddress, callDestroy);
+    sig = dev::crypto::Sign(keyPair, destroyTx.sha3(WithoutSignature));
+    destroyTx.updateSignature(sig);
     destroyTx.forceSender(caller);
 
     Executive e4(m_mptStates, initEnvInfo());
@@ -306,9 +318,15 @@ BOOST_AUTO_TEST_CASE(OutOfGasBaseTest)
     Executive e(m_mptStates, initEnvInfo());
     Transaction tx(value, gasPrice, gas, code);  // Use contract creation constructor
     tx.forceSender(caller);
-    BOOST_CHECK_THROW(executeTransaction(e, tx), OutOfGasBase);  // Throw in rc2 and later
-
-    BOOST_CHECK_EQUAL(e.getException(), TransactionException::OutOfGasBase);
+    if (g_BCOSConfig.version() <= RC3_VERSION)
+    {
+        BOOST_CHECK_THROW(executeTransaction(e, tx), OutOfGasBase);
+        BOOST_CHECK_EQUAL(e.getException(), TransactionException::OutOfGasBase);
+    }
+    else
+    {
+        BOOST_CHECK_NO_THROW(executeTransaction(e, tx));
+    }
 }
 
 BOOST_AUTO_TEST_CASE(CallAddressErrorTest)
@@ -328,11 +346,16 @@ BOOST_AUTO_TEST_CASE(CallAddressErrorTest)
     // e.setResultRecipient(res);
     executeTransaction(e, setTx);
 
-    BOOST_CHECK_EQUAL(e.getException(), TransactionException::CallAddressError);
+    if (g_BCOSConfig.version() >= RC2_VERSION)
+    {
+        BOOST_CHECK_EQUAL(e.getException(), TransactionException::CallAddressError);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(DeployGetSetContractTestRC1)
 {
+    auto version = g_BCOSConfig.version();
+    auto supportedVersion = g_BCOSConfig.supportedVersion();
     g_BCOSConfig.setSupportedVersion("2.0.0-rc1", RC1_VERSION);
     /*
 pragma solidity ^0.4.2;
@@ -438,6 +461,9 @@ contract HelloWorld{
                                         string(""));
 
     Transaction getByCallTx(value, gasPrice, gas, newAddress, callDataToGetByCall);
+    auto keyPair = KeyPair::create();
+    auto sig = dev::crypto::Sign(keyPair, tx.sha3(WithoutSignature));
+    tx.updateSignature(sig);
     getByCallTx.forceSender(caller);
 
     Executive e3(m_mptStates, initEnvInfo());
@@ -454,6 +480,8 @@ contract HelloWorld{
                                 string(""));
 
     Transaction destroyTx(value, gasPrice, gas, newAddress, callDestroy);
+    sig = dev::crypto::Sign(keyPair, destroyTx.sha3(WithoutSignature));
+    destroyTx.updateSignature(sig);
     destroyTx.forceSender(caller);
 
     Executive e4(m_mptStates, initEnvInfo());
@@ -461,6 +489,7 @@ contract HelloWorld{
     // e4.setResultRecipient(destroyExeRes);
     executeTransaction(e4, destroyTx);
     BOOST_CHECK(!m_mptStates->addressHasCode(newAddress));
+    g_BCOSConfig.setSupportedVersion(supportedVersion, version);
 }
 
 

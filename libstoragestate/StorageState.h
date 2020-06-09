@@ -45,10 +45,8 @@ const char* const ACCOUNT_FROZEN = "frozen";
 class StorageState : public dev::executive::StateFace
 {
 public:
-    explicit StorageState(u256 const& _accountStartNonce, bool _enableBinary = false)
-      : m_accountStartNonce(_accountStartNonce),
-        m_memoryTableFactory(nullptr),
-        m_enableBinary(_enableBinary){};
+    explicit StorageState(u256 const& _accountStartNonce)
+      : m_accountStartNonce(_accountStartNonce), m_memoryTableFactory(nullptr){};
     virtual ~StorageState() = default;
     /// Check if the address is in use.
     bool addressInUse(Address const& _address) const override;
@@ -121,8 +119,8 @@ public:
     bytes const code(Address const& _address) const override;
 
     /// Get the code hash of an account.
-    /// @returns EmptySHA3 if no account exists at that address or if there is no code associated
-    /// with the address.
+    /// @returns EmptyHash if no account exists at that address or if there is no code
+    /// associated with the address.
     h256 codeHash(Address const& _contract) const override;
 
     /// Get the frozen status of an account.
@@ -184,7 +182,6 @@ private:
     std::shared_ptr<dev::storage::Table> getTable(Address const& _address) const;
     u256 m_accountStartNonce;
     std::shared_ptr<dev::storage::TableFactory> m_memoryTableFactory;
-    bool m_enableBinary = false;
 };
 }  // namespace storagestate
 }  // namespace dev

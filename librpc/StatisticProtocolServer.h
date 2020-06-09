@@ -22,6 +22,7 @@
 #include "Common.h"
 #include "jsonrpccpp/server/rpcprotocolserverv2.h"
 #include <libethcore/Protocol.h>
+#include <libflowlimit/RPCQPSLimiter.h>
 #include <libstat/ChannelNetworkStatHandler.h>
 
 namespace dev
@@ -37,9 +38,35 @@ public:
         m_networkStatHandler = _networkStatHandler;
     }
 
+    void setQPSLimiter(dev::flowlimit::RPCQPSLimiter::Ptr _qpsLimiter)
+    {
+        m_qpsLimiter = _qpsLimiter;
+    }
+
 private:
-    dev::GROUP_ID getGroupID(Json::Value const& _input);
+    bool limitRPCQPS(Json::Value const& _request, std::string& _retValue);
+    bool limitGroupQPS(
+        dev::GROUP_ID const& _groupId, Json::Value const& _request, std::string& _retValue);
+    void wrapResponseForNodeBusy(Json::Value const& _request, std::string& _retValue);
+
+    dev::GROUP_ID getGroupID(Json::Value const& _request);
+    bool isValidRequest(Json::Value const& _request);
+
+private:
+    // record group related RPC methods
+    std::set<std::string> const m_groupRPCMethodSet = {"getSystemConfigByKey", "getBlockNumber",
+        "getPbftView", "getSealerList", "getEpochSealersList", "getObserverList",
+        "getConsensusStatus", "getSyncStatus", "getGroupPeers", "getBlockByHash",
+        "getBlockByNumber", "getBlockHashByNumber", "getTransactionByHash",
+        "getTransactionByBlockHashAndIndex", "getTransactionByBlockNumberAndIndex",
+        "getTransactionReceipt", "getPendingTransactions", "getPendingTxSize", "call",
+        "sendRawTransaction", "getCode", "getTotalTransactionCount",
+        "getTransactionByHashWithProof", "getTransactionReceiptByHashWithProof"};
+
+    // RPC interface without restrictions
+    std::set<std::string> const m_noRestrictRpcMethodSet = {"getClientVersion"};
 
     dev::stat::ChannelNetworkStatHandler::Ptr m_networkStatHandler;
+    dev::flowlimit::RPCQPSLimiter::Ptr m_qpsLimiter;
 };
 }  // namespace dev

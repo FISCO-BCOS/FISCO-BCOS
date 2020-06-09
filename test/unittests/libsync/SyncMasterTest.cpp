@@ -129,7 +129,8 @@ public:
             tx->setNonce(tx->nonce() + utcTime() + m_nonceBase);
             tx->setBlockLimit(u256(_currentBlockNumber) + c_maxBlockLimit);
             tx->setRpcTx(true);
-            SignatureStruct sig = dev::sign(sigKeyPair.secret(), tx->sha3(WithoutSignature));
+            std::shared_ptr<crypto::Signature> sig =
+                dev::crypto::Sign(sigKeyPair.secret(), tx->sha3(WithoutSignature));
             /// update the signature of transaction
             tx->updateSignature(sig);
             // std::pair<h256, Address> ret = txPool->submit(tx);

@@ -21,6 +21,7 @@
  * @date: 2018
  */
 #include "sm2.h"
+#include "libdevcore/CommonData.h"
 #include <libdevcore/Guards.h>
 
 #define SM3_DIGEST_LENGTH 32
@@ -88,7 +89,6 @@ bool SM2::genKey()
     }
     publicKey = pub;
     lresult = true;
-    // LOG(DEBUG)<<"SM2 PublicKey:"<<publicKey;
 err:
     if (pri)
         OPENSSL_free(pri);
@@ -114,11 +114,9 @@ string SM2::getPrivateKey()
     return privateKey;
 }
 
-bool SM2::sign(
-    const char* originalData, int originalDataLen, const string& privateKey, string& r, string& s)
+bool SM2::sign(const char* originalData, int originalDataLen, const string& privateKey,
+    unsigned char* r, unsigned char* s)
 {
-    // originalDataLen:"<<originalDataLen<<" Sign privateKey:"<<privateKey;
-
     bool lresult = false;
     SM3_CTX sm3Ctx;
     EC_KEY* sm2Key = NULL;
@@ -126,14 +124,14 @@ bool SM2::sign(
 
     size_t zValueLen;
     ECDSA_SIG* signData = NULL;
-    char* rData = NULL;
-    char* sData = NULL;
     string str = "";   // big int data
     string _str = "";  // big int swap data
-    int _size = 0;     // big int padding size
+    // int _size = 0;     // big int padding size
     BIGNUM start;
     BIGNUM* res = NULL;
     BN_CTX* ctx = NULL;
+    int len = 0;
+    int i = 0;
     BN_init(&start);
     ctx = BN_CTX_new();
 
@@ -160,23 +158,23 @@ bool SM2::sign(
         CRYPTO_LOG(ERROR) << "[SM2::sign] Error Of SM2 Signature";
         goto err;
     }
-    rData = BN_bn2hex(signData->r);
-    r = rData;
-    sData = BN_bn2hex(signData->s);
-    s = sData;
-
-    str = "0000000000000000000000000000000000000000000000000000000000000000";
-    if (r.length() < 64)
+    len = BN_bn2bin(signData->r, r);
+    for (i = 31; len > 0 && len != 32; --len, --i)
     {
-        _size = 64 - r.length();
-        _str = str.substr(0, _size);
-        r = _str + r;
+        r[i] = r[len - 1];
     }
-    if (s.length() < 64)
+    for (; i >= 0 && len != 32; --i)
     {
-        _size = 64 - s.length();
-        _str = str.substr(0, _size);
-        s = _str + s;
+        r[i] = 0;
+    }
+    len = BN_bn2bin(signData->s, s);
+    for (i = 31; len > 0 && len != 32; --len, --i)
+    {
+        s[i] = s[len - 1];
+    }
+    for (; i >= 0 && len != 32; --i)
+    {
+        s[i] = 0;
     }
     lresult = true;
     // LOG(DEBUG)<<"r:"<<r<<" rLen:"<<r.length()<<" s:"<<s<<" sLen:"<<s.length();
@@ -187,19 +185,12 @@ err:
         EC_KEY_free(sm2Key);
     if (signData)
         ECDSA_SIG_free(signData);
-    if (rData)
-        OPENSSL_free(rData);
-    if (sData)
-        OPENSSL_free(sData);
     return lresult;
 }
 
-int SM2::verify(const string& _signData, int, const char* originalData, int originalDataLen,
-    const string& publicKey)
-{
-    // LOG(DEBUG)<<"_signData:"<<_signData<<" _signDataLen:"<<_signDataLen<<"
-    // originalData:"<<(originalData,originalDataLen)<<"
-    // originalDataLen:"<<originalDataLen<<" publicKey:"<<publicKey;
+int SM2::verify(const unsigned char* _signData, size_t, const unsigned char* _originalData,
+    size_t _originalLength, const unsigned char* _publicKey)
+{  // _publicKey length must 64, start with 4
     bool lresult = false;
     SM3_CTX sm3Ctx;
     EC_KEY* sm2Key = NULL;
@@ -208,29 +199,28 @@ int SM2::verify(const string& _signData, int, const char* originalData, int orig
     ECDSA_SIG* signData = NULL;
     unsigned char zValue[SM3_DIGEST_LENGTH];
     size_t zValueLen = SM3_DIGEST_LENGTH;
-    string r = _signData.substr(0, 64);
-    string s = _signData.substr(64, 64);
-    // LOG(DEBUG)<<"r:"<<r<<" s:"<<s;
-
+    auto pubHex = toHex(_publicKey, _publicKey + 64, "04");
     sm2Group = EC_GROUP_new_by_curve_name(NID_sm2);
+    auto rHex = toHex(_signData, _signData + 32, "");
+    auto sHex = toHex(_signData + 32, _signData + 64, "");
     if (sm2Group == NULL)
     {
         CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_GROUP_new_by_curve_name"
-                          << LOG_KV("pubKey", publicKey);
+                          << LOG_KV("pubKey", pubHex);
         goto err;
     }
 
     if ((pubPoint = EC_POINT_new(sm2Group)) == NULL)
     {
         CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_POINT_new"
-                          << LOG_KV("pubKey", publicKey);
+                          << LOG_KV("pubKey", pubHex);
         goto err;
     }
 
-    if (!EC_POINT_hex2point(sm2Group, (const char*)publicKey.c_str(), pubPoint, NULL))
+    if (!EC_POINT_hex2point(sm2Group, (const char*)pubHex.c_str(), pubPoint, NULL))
     {
         CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_POINT_hex2point"
-                          << LOG_KV("pubKey", publicKey);
+                          << LOG_KV("pubKey", pubHex);
         goto err;
     }
 
@@ -239,50 +229,48 @@ int SM2::verify(const string& _signData, int, const char* originalData, int orig
     if (sm2Key == NULL)
     {
         CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_KEY_new_by_curve_name"
-                          << LOG_KV("pubKey", publicKey);
+                          << LOG_KV("pubKey", pubHex);
         goto err;
     }
 
     if (!EC_KEY_set_public_key(sm2Key, pubPoint))
     {
         CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_KEY_set_public_key"
-                          << LOG_KV("pubKey", publicKey);
+                          << LOG_KV("pubKey", pubHex);
         goto err;
     }
 
     if (!ECDSA_sm2_get_Z((const EC_KEY*)sm2Key, NULL, NULL, 0, zValue, &zValueLen))
     {
-        CRYPTO_LOG(ERROR) << "[SM2::veify] Error Of Compute Z" << LOG_KV("pubKey", publicKey);
+        CRYPTO_LOG(ERROR) << "[SM2::veify] Error Of Compute Z" << LOG_KV("pubKey", pubHex);
         goto err;
     }
     // SM3 Degist
     SM3_Init(&sm3Ctx);
     SM3_Update(&sm3Ctx, zValue, zValueLen);
-    SM3_Update(&sm3Ctx, originalData, originalDataLen);
+    SM3_Update(&sm3Ctx, _originalData, _originalLength);
     SM3_Final(zValue, &sm3Ctx);
 
     /*Now Verify it*/
     signData = ECDSA_SIG_new();
-    if (!BN_hex2bn(&signData->r, r.c_str()))
+    signData->r = BN_bin2bn(_signData, 32, NULL);
+    if (!signData->r)
     {
-        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of BN_hex2bn" << LOG_KV("R", r)
-                          << LOG_KV("pubKey", publicKey);
+        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of BN_bin2bn r" << LOG_KV("pubKey", pubHex);
         goto err;
     }
-
-    if (!BN_hex2bn(&signData->s, s.c_str()))
+    signData->s = BN_bin2bn(_signData + 32, 32, NULL);
+    if (!signData->s)
     {
-        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR BN_hex2bn:" << LOG_KV("S", s)
-                          << LOG_KV("pubKey", publicKey);
+        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR BN_bin2bn s" << LOG_KV("pubKey", pubHex);
         goto err;
     }
 
     if (ECDSA_do_verify(zValue, zValueLen, signData, sm2Key) != 1)
     {
-        CRYPTO_LOG(ERROR) << "[SM2::veify] Error Of SM2 Verify" << LOG_KV("pubKey", publicKey);
+        CRYPTO_LOG(ERROR) << "[SM2::veify] Error Of SM2 Verify" << LOG_KV("pubKey", pubHex);
         goto err;
     }
-    // LOG(DEBUG)<<"SM2 Verify successed.";
     lresult = true;
 err:
     if (sm2Key)
@@ -358,7 +346,8 @@ string SM2::priToPub(const string& pri)
     pubKey = pub;
     pubKey = pubKey.substr(2, 128);
     pubKey = strlower((char*)pubKey.c_str());
-    // LOG(DEBUG)<<"PriToPub:"<<pubKey << "PriToPubLen:" << pubKey.length();
+    // LOG(DEBUG) << LOG_KV("pri:", pri) << LOG_KV(" pri size:", pri.size())
+    //            << LOG_KV("PriToPub:", pubKey) << LOG_KV("PriToPubLen:", pubKey.length());
 err:
     if (pub)
         OPENSSL_free(pub);

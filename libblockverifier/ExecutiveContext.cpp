@@ -34,6 +34,13 @@ using namespace dev::eth::abi;
 using namespace dev::blockverifier;
 using namespace dev;
 using namespace std;
+void ExecutiveContext::registerParallelPrecompiled(
+    std::shared_ptr<dev::precompiled::Precompiled> _precompiled)
+{
+    m_parallelConfigPrecompiled =
+        std::dynamic_pointer_cast<dev::precompiled::ParallelConfigPrecompiled>(_precompiled);
+}
+
 // set PrecompiledExecResultFactory for each precompiled object
 void ExecutiveContext::setPrecompiledExecResultFactory(
     dev::precompiled::PrecompiledExecResultFactory::Ptr _precompiledExecResultFactory)
@@ -97,8 +104,7 @@ Address ExecutiveContext::registerPrecompiled(std::shared_ptr<precompiled::Preco
 
 bool ExecutiveContext::isPrecompiled(Address address) const
 {
-    auto p = getPrecompiled(address);
-    return p.get() != NULL;
+    return (m_address2Precompiled.count(address));
 }
 
 std::shared_ptr<precompiled::Precompiled> ExecutiveContext::getPrecompiled(Address address) const
@@ -130,6 +136,11 @@ std::pair<bool, bytes> ExecutiveContext::executeOriginPrecompiled(
     Address const& _a, bytesConstRef _in) const
 {
     return m_precompiledContract.at(_a).execute(_in);
+}
+
+bigint ExecutiveContext::costOfPrecompiled(Address const& _a, bytesConstRef _in) const
+{
+    return m_precompiledContract.at(_a).cost(_in);
 }
 
 void ExecutiveContext::setPrecompiledContract(
@@ -172,15 +183,25 @@ std::shared_ptr<std::vector<std::string>> ExecutiveContext::getTxCriticals(const
     }
     else
     {
-        // Normal transaction
-        auto parallelConfigPrecompiled =
-            std::dynamic_pointer_cast<dev::precompiled::ParallelConfigPrecompiled>(
-                getPrecompiled(Address(0x1006)));
+        uint32_t selector = m_parallelConfigPrecompiled->getParamFunc(ref(_tx.data()));
 
-        uint32_t selector = parallelConfigPrecompiled->getParamFunc(ref(_tx.data()));
-
-        auto config = parallelConfigPrecompiled->getParallelConfig(
-            shared_from_this(), _tx.receiveAddress(), selector, _tx.sender());
+        auto receiveAddress = _tx.receiveAddress();
+        std::shared_ptr<dev::precompiled::ParallelConfig> config = nullptr;
+        // hit the cache, fetch ParallelConfig from the cache directly
+        // Note: Only when initializing DAG, get ParallelConfig, will not get ParallelConfig during
+        // transaction execution
+        auto parallelKey = std::make_pair(receiveAddress, selector);
+        if (m_parallelConfigCache.count(parallelKey))
+        {
+            config = m_parallelConfigCache[parallelKey];
+        }
+        // miss the cache, fetch ParallelConfig from the table and cache the config
+        else
+        {
+            config = m_parallelConfigPrecompiled->getParallelConfig(
+                shared_from_this(), receiveAddress, selector, _tx.sender());
+            m_parallelConfigCache.insert(std::make_pair(parallelKey, config));
+        }
 
         if (config == nullptr)
         {

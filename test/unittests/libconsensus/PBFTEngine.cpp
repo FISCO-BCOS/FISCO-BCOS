@@ -53,9 +53,11 @@ void testCheckReq(FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareReq::Ptr prep
             fake_pbft.consensus()->reqCache()->getSigCacheSize(copiedReq.block_hash, 1) == 0);
         BOOST_CHECK(fake_pbft.consensus()->reqCache()->isExistSign(copiedReq) == false);
         /// modify the signature
-        copiedReq.sig = dev::sign(fake_pbft.m_keyPair[copiedReq.idx], copiedReq.block_hash);
+        copiedReq.sig =
+            dev::crypto::Sign(fake_pbft.m_keyPair[copiedReq.idx], copiedReq.block_hash)->asBytes();
         copiedReq.sig2 =
-            dev::sign(fake_pbft.m_keyPair[copiedReq.idx], copiedReq.fieldsWithoutBlock());
+            dev::crypto::Sign(fake_pbft.m_keyPair[copiedReq.idx], copiedReq.fieldsWithoutBlock())
+                ->asBytes();
         BOOST_CHECK(fake_pbft.consensus()->isValidSignReq(copiedReq) == CheckResult::FUTURE);
         BOOST_CHECK(fake_pbft.consensus()->reqCache()->isExistSign(copiedReq) == true);
 
@@ -73,8 +75,8 @@ void testCheckReq(FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareReq::Ptr prep
         BOOST_CHECK(fake_pbft.consensus()->isValidSignReq(signReq) == CheckResult::INVALID);
         signReq.view = org_view;
         /// test invalid sign
-        Signature sig = signReq.sig;
-        signReq.sig = Signature();
+        auto sig = signReq.sig;
+        signReq.sig.clear();
         BOOST_CHECK(fake_pbft.consensus()->isValidSignReq(signReq) == CheckResult::INVALID);
         signReq.sig = sig;
     }
@@ -118,8 +120,8 @@ void fakeValidViewchange(FakeConsensus<FakePBFTEngine>& fake_pbft, ViewChangeReq
     req.height = highest.number();
     fake_pbft.consensus()->setConsensusBlockNumber(req.height + 1);
     auto keyPair = fake_pbft.m_keyPair[req.idx];
-    req.sig = dev::sign(keyPair, req.block_hash);
-    req.sig2 = dev::sign(keyPair, req.fieldsWithoutBlock());
+    req.sig = dev::crypto::Sign(keyPair, req.block_hash)->asBytes();
+    req.sig2 = dev::crypto::Sign(keyPair, req.fieldsWithoutBlock())->asBytes();
 }
 
 void testIsExistCommit(FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareReq::Ptr prepareReq,
@@ -193,7 +195,7 @@ void TestIsValidViewChange(FakeConsensus<FakePBFTEngine>& fake_pbft, ViewChangeR
 
     /// case 4: check block hash
     dev::h256 orgHash = req->block_hash;
-    req->block_hash = dev::sha3("fake");
+    req->block_hash = crypto::Hash("fake");
     BOOST_CHECK(fake_pbft.consensus()->isValidViewChangeReq(*req, nodeIdxSource) == false);
     req->block_hash = orgHash;
     BOOST_CHECK(fake_pbft.consensus()->isValidViewChangeReq(*req, nodeIdxSource) == true);
@@ -632,7 +634,7 @@ BOOST_AUTO_TEST_CASE(testHandlePrepareReq)
     bytes data;
     fake_pbft.consensus()->reqCache()->committedPrepareCache().encode(data);
     // since commit backup pbft asyncly, need to sleep 1s before checkBackupMsg
-    sleep(1);
+    this_thread::sleep_for(std::chrono::milliseconds(1));
     checkBackupMsg(fake_pbft, FakePBFTEngine::backupKeyCommitted(), data);
     /// submit failed for collected commitReq is not enough
     CheckBlockChain(fake_pbft, block_number + 1);
@@ -645,6 +647,10 @@ BOOST_AUTO_TEST_CASE(testIsValidSignReq)
     SignReq::Ptr signReq = std::make_shared<SignReq>();
     PrepareReq::Ptr prepareReq = std::make_shared<PrepareReq>();
     KeyPair peer_keyPair = KeyPair::create();
+    // signReq->sig.resize(crypto::signatureLength(), 0);
+    // signReq->sig2.resize(crypto::signatureLength(), 0);
+    // prepareReq->sig.resize(crypto::signatureLength(), 0);
+    // prepareReq->sig2.resize(crypto::signatureLength(), 0);
     TestIsValidSignReq(fake_pbft, pbftMsg, signReq, prepareReq, peer_keyPair, false);
 }
 
@@ -1044,7 +1050,7 @@ BOOST_AUTO_TEST_CASE(testHandlePartiallyPrepare)
     {
         receivedP2pMsg =
             leaderService->getAsyncSendMessageByNodeID(followerPBFT->consensus()->keyPair().pub());
-        sleep(1);
+        this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     for (auto const& nodeId : leaderPBFT->m_sealerList)
     {
@@ -1067,7 +1073,7 @@ BOOST_AUTO_TEST_CASE(testHandlePartiallyPrepare)
     {
         receivedP2pMsg =
             followService->getAsyncSendMessageByNodeID(leaderPBFT->consensus()->keyPair().pub());
-        sleep(1);
+        this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     // the follower handlePartiallyPrepare and request missed transactions to the leader
     compareAndClearAsyncSendTime(*followerPBFT, leaderPBFT->consensus()->keyPair().pub(), 1);
@@ -1086,7 +1092,7 @@ BOOST_AUTO_TEST_CASE(testHandlePartiallyPrepare)
     {
         receivedP2pMsg =
             leaderService->getAsyncSendMessageByNodeID(followerPBFT->consensus()->keyPair().pub());
-        sleep(1);
+        this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     compareAndClearAsyncSendTime(*leaderPBFT, followerPBFT->consensus()->keyPair().pub(), 1);
     BOOST_CHECK(receivedP2pMsg != nullptr);
@@ -1099,7 +1105,7 @@ BOOST_AUTO_TEST_CASE(testHandlePartiallyPrepare)
     {
         receivedP2pMsg =
             followService->getAsyncSendMessageByNodeID(leaderPBFT->consensus()->keyPair().pub());
-        sleep(1);
+        this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     compareAndClearAsyncSendTime(*followerPBFT, leaderPBFT->consensus()->keyPair().pub(), 1);
     checkPrepareReqEqual(

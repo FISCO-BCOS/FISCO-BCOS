@@ -20,6 +20,7 @@
  */
 #include "PermissionPrecompiled.h"
 #include "libstorage/Table.h"
+#include "libstoragestate/StorageState.h"
 #include <json/json.h>
 #include <libblockverifier/ExecutiveContext.h>
 #include <libethcore/ABI.h>
@@ -63,9 +64,6 @@ std::string PermissionPrecompiled::toString()
 PrecompiledExecResult::Ptr PermissionPrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin, Address const&)
 {
-    PRECOMPILED_LOG(TRACE) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("call")
-                           << LOG_KV("param", toHex(param));
-
     // parse function name
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
@@ -78,46 +76,68 @@ PrecompiledExecResult::Ptr PermissionPrecompiled::call(
         // insert(string tableName,string addr)
         std::string tableName, addr;
         abi.abiOut(data, tableName, addr);
-        addPrefixToUserTable(tableName);
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("insert func")
-                               << LOG_KV("tableName", tableName) << LOG_KV("address", addr);
-        bool isValidAddress = true;
-        try
+        do
         {
-            Address address(addr);
-            (void)address;
-        }
-        catch (...)
-        {
-            isValidAddress = false;
-        }
+            Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
+            if (g_BCOSConfig.version() >= V2_5_0)
+            {
+                if (tableName == SYS_ACCESS_TABLE)
+                {
+                    result = CODE_COMMITTEE_PERMISSION;
+                    PRECOMPILED_LOG(WARNING)
+                        << LOG_BADGE("PermissionPrecompiled")
+                        << LOG_DESC("Committee permission controlled by ChainGovernancePrecompiled")
+                        << LOG_KV("return", result);
+                    break;
+                }
+                auto condition = table->newCondition();
+                condition->EQ(SYS_AC_ADDRESS, addr);
+                auto entries = table->select(SYS_ACCESS_TABLE, condition);
+                if (entries->size() != 0u && (tableName == SYS_TABLES || tableName == SYS_CNS))
+                {  // committee
+                    result = CODE_OPERATOR_CANNOT_BE_COMMITTEE_MEMBER;
+                    PRECOMPILED_LOG(WARNING)
+                        << LOG_BADGE("PermissionPrecompiled")
+                        << LOG_DESC("committee member should not have operator permission")
+                        << LOG_KV("account", addr)
+                        << LOG_KV("return", CODE_COMMITTEE_MEMBER_CANNOT_BE_OPERATOR);
+                    break;
+                }
+            }
+            addPrefixToUserTable(tableName);
 
-        Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
+            auto condition = table->newCondition();
+            condition->EQ(SYS_AC_ADDRESS, addr);
+            auto entries = table->select(tableName, condition);
+            if (entries->size() != 0u)
+            {
+                PRECOMPILED_LOG(WARNING) << LOG_BADGE("PermissionPrecompiled")
+                                         << LOG_DESC("tableName and address exist");
+                result = CODE_TABLE_AND_ADDRESS_EXIST;
+                break;
+            }
+            if (tableName.size() > USER_TABLE_NAME_MAX_LENGTH)
+            {
+                PRECOMPILED_LOG(ERROR)
+                    << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("tableName overflow")
+                    << LOG_KV("tableName", tableName);
+                result = CODE_TABLE_NAME_OVERFLOW;
+                break;
+            }
 
-        auto condition = table->newCondition();
-        condition->EQ(SYS_AC_ADDRESS, addr);
-        auto entries = table->select(tableName, condition);
-        if (entries->size() != 0u)
-        {
-            PRECOMPILED_LOG(WARNING)
-                << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("tableName and address exist");
-            result = CODE_TABLE_AND_ADDRESS_EXIST;
-        }
-        else if (tableName.size() > USER_TABLE_NAME_MAX_LENGTH)
-        {
-            PRECOMPILED_LOG(ERROR)
-                << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("tableName overflow")
-                << LOG_KV("tableName", tableName);
-            result = CODE_TABLE_NAME_OVERFLOW;
-        }
-        else if (!isValidAddress)
-        {
-            PRECOMPILED_LOG(ERROR) << LOG_BADGE("PermissionPrecompiled")
-                                   << LOG_DESC("address invalid") << LOG_KV("address", addr);
-            result = CODE_ADDRESS_INVALID;
-        }
-        else
-        {
+            try
+            {
+                Address address(addr);
+                (void)address;
+            }
+            catch (...)
+            {
+                PRECOMPILED_LOG(ERROR) << LOG_BADGE("PermissionPrecompiled")
+                                       << LOG_DESC("address invalid") << LOG_KV("address", addr);
+                result = CODE_ADDRESS_INVALID;
+                break;
+            }
+
             auto entry = table->newEntry();
             entry->setField(SYS_AC_TABLE_NAME, tableName);
             entry->setField(SYS_AC_ADDRESS, addr);
@@ -125,10 +145,11 @@ PrecompiledExecResult::Ptr PermissionPrecompiled::call(
                 boost::lexical_cast<std::string>(context->blockInfo().number + 1));
             int count = table->insert(tableName, entry, std::make_shared<AccessOptions>(origin));
             result = count;
-            PRECOMPILED_LOG(DEBUG)
-                << LOG_BADGE("PermissionPrecompiled")
-                << LOG_KV("insert_success", (count == storage::CODE_NO_AUTHORIZED ? false : true));
-        }
+            PRECOMPILED_LOG(INFO) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("insert func")
+                                  << LOG_KV("tableName", tableName) << LOG_KV("address", addr)
+                                  << LOG_KV("return", count);
+        } while (0);
+
         getErrorCodeOut(callResult->mutableExecResult(), result);
     }
     else if (func == name2Selector[AUP_METHOD_REM])
@@ -139,12 +160,11 @@ PrecompiledExecResult::Ptr PermissionPrecompiled::call(
 
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("remove func")
                                << LOG_KV("tableName", tableName) << LOG_KV("address", addr);
-        int result = revokeWritePermission(context, tableName, addr, origin);
+        int result = revokeTablePermission(context, tableName, addr, origin);
         getErrorCodeOut(callResult->mutableExecResult(), result);
     }
     else if (func == name2Selector[AUP_METHOD_QUE])
-    {
-        // queryByName(string table_name)
+    {  // queryByName(string table_name)
         std::string tableName;
         abi.abiOut(data, tableName);
         addPrefixToUserTable(tableName);
@@ -159,38 +179,48 @@ PrecompiledExecResult::Ptr PermissionPrecompiled::call(
     {  // grantWrite(address,address)
         Address contractAddress, user;
         abi.abiOut(data, contractAddress, user);
-        string addr = "0x" + user.hex();
+        string addr = user.hexPrefixed();
         string tableName = precompiled::getContractTableName(contractAddress);
         PRECOMPILED_LOG(INFO) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("grantWrite")
                               << LOG_KV("tableName", tableName) << LOG_KV("user", addr);
-
-        Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
-
-        auto condition = table->newCondition();
-        condition->EQ(SYS_AC_ADDRESS, addr);
-        auto entries = table->select(tableName, condition);
-        if (entries->size() != 0u)
+        do
         {
-            PRECOMPILED_LOG(WARNING)
-                << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("tableName and address exist");
-            result = CODE_TABLE_AND_ADDRESS_EXIST;
-        }
-        else if (tableName.size() > USER_TABLE_NAME_MAX_LENGTH)
-        {
-            PRECOMPILED_LOG(ERROR)
-                << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("tableName overflow")
-                << LOG_KV("tableName", tableName);
-            result = CODE_TABLE_NAME_OVERFLOW;
-        }
-        else if (!openTable(context, tableName))
-        {
-            PRECOMPILED_LOG(ERROR)
-                << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("contract not exist")
-                << LOG_KV("contract", tableName);
-            result = CODE_CONTRACT_NOT_EXIST;
-        }
-        else
-        {
+            Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
+            auto condition = table->newCondition();
+            condition->EQ(SYS_AC_ADDRESS, addr);
+            auto entries = table->select(tableName, condition);
+            if (entries->size() != 0u)
+            {
+                PRECOMPILED_LOG(WARNING) << LOG_BADGE("PermissionPrecompiled")
+                                         << LOG_DESC("tableName and address exist");
+                result = CODE_TABLE_AND_ADDRESS_EXIST;
+                break;
+            }
+            if (tableName.size() > USER_TABLE_NAME_MAX_LENGTH)
+            {
+                PRECOMPILED_LOG(ERROR)
+                    << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("tableName overflow")
+                    << LOG_KV("tableName", tableName);
+                result = CODE_TABLE_NAME_OVERFLOW;
+                break;
+            }
+            if (!openTable(context, tableName))
+            {
+                PRECOMPILED_LOG(ERROR)
+                    << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("contract not exist")
+                    << LOG_KV("contract", tableName);
+                result = CODE_CONTRACT_NOT_EXIST;
+                break;
+            }
+            if (g_BCOSConfig.version() >= V2_5_0 && !checkPermission(context, tableName, origin))
+            {
+                PRECOMPILED_LOG(INFO) << LOG_BADGE("PermissionPrecompiled")
+                                      << LOG_DESC("only deployer of contract can grantWrite")
+                                      << LOG_KV("tableName", tableName)
+                                      << LOG_KV("origin", origin.hex()) << LOG_KV("user", addr);
+                result = storage::CODE_NO_AUTHORIZED;
+                break;
+            }
             auto entry = table->newEntry();
             entry->setField(SYS_AC_TABLE_NAME, tableName);
             entry->setField(SYS_AC_ADDRESS, addr);
@@ -200,20 +230,17 @@ PrecompiledExecResult::Ptr PermissionPrecompiled::call(
             result = count;
             PRECOMPILED_LOG(INFO) << LOG_BADGE("PermissionPrecompiled grantWrite")
                                   << LOG_KV("return", result);
-        }
+        } while (0);
+
         getErrorCodeOut(callResult->mutableExecResult(), result);
     }
     else if (func == name2Selector[AUP_METHOD_REVOKE_WRITE_CONTRACT])
     {  // revokeWrite(address,address)
         Address contractAddress, user;
         abi.abiOut(data, contractAddress, user);
-        string addr = "0x" + user.hex();
+        string addr = user.hexPrefixed();
         string tableName = precompiled::getContractTableName(contractAddress);
-
-        PRECOMPILED_LOG(INFO) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("revokeWrite")
-                              << LOG_KV("tableName", tableName) << LOG_KV("address", addr);
-
-        int result = revokeWritePermission(context, tableName, addr, origin);
+        int result = revokeContractTablePermission(context, tableName, addr, origin);
         callResult->setExecResult(abi.abiIn("", s256(result)));
     }
     else if (func == name2Selector[AUP_METHOD_QUERY_CONTRACT])
@@ -262,7 +289,7 @@ string PermissionPrecompiled::queryPermission(
 
 int PermissionPrecompiled::revokeWritePermission(
     std::shared_ptr<dev::blockverifier::ExecutiveContext> context, const string& tableName,
-    const string& user, Address const& origin)
+    const string& user, Address const& origin, bool _isContractTable)
 {
     int result;
     Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
@@ -273,15 +300,21 @@ int PermissionPrecompiled::revokeWritePermission(
     {
         PRECOMPILED_LOG(WARNING) << LOG_BADGE("PermissionPrecompiled")
                                  << LOG_DESC("tableName and address does not exist");
-        result = CODE_TABLE_AND_ADDRESS_NOT_EXIST;
+        return result = CODE_TABLE_AND_ADDRESS_NOT_EXIST;
     }
-    else
+    if (g_BCOSConfig.version() >= V2_5_0 && _isContractTable &&
+        !checkPermission(context, tableName, origin))
     {
-        int count = table->remove(tableName, condition, std::make_shared<AccessOptions>(origin));
-        result = count;
-        PRECOMPILED_LOG(INFO) << LOG_DESC("PermissionPrecompiled revoke")
-                              << LOG_KV("return", result);
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("PermissionPrecompiled")
+                              << LOG_DESC("only deployer of contract can revokeWrite")
+                              << LOG_KV("tableName", tableName) << LOG_KV("origin", origin.hex())
+                              << LOG_KV("user", user);
+        return storage::CODE_NO_AUTHORIZED;
     }
+    result = table->remove(tableName, condition, std::make_shared<AccessOptions>(origin));
+    PRECOMPILED_LOG(INFO) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("revokeWrite")
+                          << LOG_KV("tableName", tableName) << LOG_KV("user", user)
+                          << LOG_KV("return", result);
     return result;
 }
 
@@ -296,4 +329,26 @@ void PermissionPrecompiled::addPrefixToUserTable(std::string& table_name)
     {
         table_name = precompiled::getTableName(table_name);
     }
+}
+
+bool PermissionPrecompiled::checkPermission(
+    ExecutiveContext::Ptr context, std::string const& tableName, Address const& origin)
+{
+    Table::Ptr table = openTable(context, tableName);
+    if (table)
+    {
+        auto entries = table->select(storagestate::ACCOUNT_AUTHORITY, table->newCondition());
+        if (entries->size() > 0)
+        {  // the key of authority would be set when support version >= 2.3.0
+            for (size_t i = 0; i < entries->size(); i++)
+            {
+                std::string authority = entries->get(i)->getField(storagestate::STORAGE_VALUE);
+                if (origin.hex() == authority)
+                {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
 }

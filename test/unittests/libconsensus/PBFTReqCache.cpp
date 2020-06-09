@@ -22,6 +22,7 @@
  * @date: 2018-10-09
  */
 #include "PBFTReqCache.h"
+#include "libdevcrypto/CryptoInterface.h"
 #include <libethcore/Block.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 namespace dev
@@ -116,11 +117,12 @@ BOOST_AUTO_TEST_CASE(testSigListSetting)
     ret = req_cache.generateAndSetSigList(block, node_num);
     BOOST_CHECK(ret);
     BOOST_CHECK(block.sigList()->size() == node_num);
-    std::vector<std::pair<u256, Signature>> sig_list = *(block.sigList());
+    std::vector<std::pair<u256, std::vector<unsigned char>>> sig_list = *(block.sigList());
     /// check the signature
     for (auto& item : sig_list)
     {
-        auto p = dev::recover(item.second, prepare_req->block_hash);
+        auto p = dev::crypto::Recover(
+            dev::crypto::SignatureFromBytes(item.second), prepare_req->block_hash);
         BOOST_CHECK(!!p);
     }
 }
@@ -132,7 +134,7 @@ BOOST_AUTO_TEST_CASE(testCollectGarbage)
     size_t invalidHeightNum = 2;
     size_t invalidHash = 1;
     size_t validNum = 3;
-    h256 invalid_hash = sha3("invalid_hash");
+    h256 invalid_hash = crypto::Hash("invalid_hash");
     BlockHeader highest;
     highest.setNumber(100);
     /// test signcache
@@ -198,7 +200,7 @@ BOOST_AUTO_TEST_CASE(testViewChangeReqRelated)
 {
     KeyPair key_pair = KeyPair::create();
     ViewChangeReq::Ptr viewChange_req =
-        std::make_shared<ViewChangeReq>(key_pair, 100, 1, 1, sha3("test_view"));
+        std::make_shared<ViewChangeReq>(key_pair, 100, 1, 1, crypto::Hash("test_view"));
     PBFTReqCache req_cache;
     /// test exists of viewchange
     req_cache.addViewChangeReq(viewChange_req);
@@ -206,7 +208,7 @@ BOOST_AUTO_TEST_CASE(testViewChangeReqRelated)
     BOOST_CHECK(req_cache.getViewChangeSize(1) == 1);
     /// generate and add a new viewchange request with the same blockhash, but different views
     ViewChangeReq::Ptr viewChange_req2 =
-        std::make_shared<ViewChangeReq>(key_pair, 101, 1, 2, sha3("test_view"));
+        std::make_shared<ViewChangeReq>(key_pair, 101, 1, 2, crypto::Hash("test_view"));
     req_cache.addViewChangeReq(viewChange_req2);
     BOOST_CHECK(req_cache.getViewChangeSize(1) == 2);
     BOOST_CHECK(req_cache.isExistViewChange(*viewChange_req2));
@@ -244,7 +246,7 @@ BOOST_AUTO_TEST_CASE(testViewChangeReqRelated)
     size_t invalidHeightNum = 2;
     size_t invalidHash = 1;
     size_t validNum = 3;
-    h256 invalid_hash = sha3("invalid_hash");
+    h256 invalid_hash = crypto::Hash("invalid_hash");
     /// fake signCache and commitCache
     FakeInvalidReq<SignReq>(req, req_cache, req_cache.mutableSignCache(), highest, invalid_hash,
         invalidHeightNum, invalidHash, validNum);

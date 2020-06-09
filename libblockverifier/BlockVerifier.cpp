@@ -22,6 +22,7 @@
 #include "ExecutiveContext.h"
 #include "TxDAG.h"
 #include "libstorage/StorageException.h"
+#include "libstoragestate/StorageState.h"
 #include <libethcore/Exceptions.h>
 #include <libethcore/PrecompiledContract.h>
 #include <libethcore/TransactionReceipt.h>
@@ -165,12 +166,21 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
     block.updateSequenceReceiptGas();
     block.calReceiptRoot();
     block.header().setStateRoot(stateRoot);
-    block.header().setDBhash(executiveContext->getMemoryTableFactory()->hash());
+    if (dynamic_pointer_cast<storagestate::StorageState>(executiveContext->getState()))
+    {
+        block.header().setDBhash(stateRoot);
+    }
+    else
+    {
+        block.header().setDBhash(executiveContext->getMemoryTableFactory()->hash());
+    }
 
-    /// if executeBlock is called by consensus module, no need to compare receiptRoot and stateRoot
-    /// since origin value is empty if executeBlock is called by sync module, need to compare
-    /// receiptRoot, stateRoot and dbHash
-    if (tmpHeader.receiptsRoot() != h256() && tmpHeader.stateRoot() != h256())
+    // if executeBlock is called by consensus module, no need to compare receiptRoot and stateRoot
+    // since origin value is empty if executeBlock is called by sync module, need to compare
+    // receiptRoot, stateRoot and dbHash
+    // Consensus module execute block, receiptRoot is empty, skip this judgment
+    // The sync module execute block, receiptRoot is not empty, need to compare BlockHeader
+    if (tmpHeader.receiptsRoot() != h256())
     {
         if (tmpHeader != block.blockHeader())
         {
@@ -325,11 +335,19 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     record_time = utcTime();
 
     block.header().setStateRoot(stateRoot);
-    block.header().setDBhash(executiveContext->getMemoryTableFactory()->hash());
+    if (dynamic_pointer_cast<storagestate::StorageState>(executiveContext->getState()))
+    {
+        block.header().setDBhash(stateRoot);
+    }
+    else
+    {
+        block.header().setDBhash(executiveContext->getMemoryTableFactory()->hash());
+    }
     auto setStateRoot_time_cost = utcTime() - record_time;
     record_time = utcTime();
-
-    if (tmpHeader.receiptsRoot() != h256() && tmpHeader.stateRoot() != h256())
+    // Consensus module execute block, receiptRoot is empty, skip this judgment
+    // The sync module execute block, receiptRoot is not empty, need to compare BlockHeader
+    if (tmpHeader.receiptsRoot() != h256())
     {
         if (tmpHeader != block.blockHeader())
         {
@@ -346,6 +364,14 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
                 << LOG_KV("curState", block.header().stateRoot().abridged())
                 << LOG_KV("orgDBHash", tmpHeader.dbHash().abridged())
                 << LOG_KV("curDBHash", block.header().dbHash().abridged());
+#ifdef FISCO_DEBUG
+            auto receipts = block.transactionReceipts();
+            for (size_t i = 0; i < receipts->size(); ++i)
+            {
+                BLOCKVERIFIER_LOG(ERROR) << LOG_BADGE("FISCO_DEBUG") << LOG_KV("index", i)
+                                         << "receipt=" << *receipts->at(i);
+            }
+#endif
             BOOST_THROW_EXCEPTION(InvalidBlockWithBadStateOrReceipt() << errinfo_comment(
                                       "Invalid Block with bad stateRoot or ReciptRoot"));
         }

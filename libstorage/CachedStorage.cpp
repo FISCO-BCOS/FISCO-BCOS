@@ -23,9 +23,9 @@
 #include "StorageException.h"
 #include <libdevcore/Common.h>
 #include <libdevcore/FixedHash.h>
-#include <tbb/concurrent_unordered_set.h>
 #include <tbb/concurrent_vector.h>
 #include <tbb/parallel_for.h>
+#include <tbb/parallel_for_each.h>
 #include <tbb/parallel_sort.h>
 #include <thread>
 
@@ -104,6 +104,9 @@ CachedStorage::CachedStorage(dev::GROUP_ID const& _groupID) : m_groupID(_groupID
     CACHED_STORAGE_LOG(INFO) << "Init flushStorage thread";
     m_taskThreadPool =
         std::make_shared<dev::ThreadPool>("taskPool-" + std::to_string(m_groupID), 1);
+
+    m_asyncThreadPool =
+        std::make_shared<dev::ThreadPool>("touchMRU-" + std::to_string(m_groupID), 1);
 
     m_mruQueue =
         std::make_shared<tbb::concurrent_queue<std::tuple<std::string, std::string, ssize_t>>>();
@@ -291,7 +294,6 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
                                             {
                                                 totalCapacity += it->capacity();
                                             }
-
                                             touchMRU(requestData->info->name, key, totalCapacity);
                                         }
 
@@ -373,7 +375,6 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
                                             << " != " << (*entryIt)->getID() << ss.str();
                                     }
                                 }
-
                                 touchMRU(requestData->info->name, key, change);
                             }
                         });
@@ -403,80 +404,98 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
 
     TIME_RECORD("Process new entries");
     auto commitDatasSize = commitDatas->size();
-    for (size_t i = 0; i < commitDatasSize; ++i)
-    {
-        auto commitData = (*commitDatas)[i];
 
-        if (!commitData->info->enableCache)
-        {
-            continue;
-        }
+    // Cache the key corresponding to each table newEntries
+    std::shared_ptr<std::vector<tbb::concurrent_unordered_set<std::string>>> processedKeys =
+        std::make_shared<std::vector<tbb::concurrent_unordered_set<std::string>>>(
+            commitDatasSize, tbb::concurrent_unordered_set<std::string>());
 
-        auto newEntriesSize = commitData->newEntries->size();
-        for (size_t j = 0; j < newEntriesSize; ++j)
-        {
-            auto commitEntry = commitData->newEntries->get(j);
-            commitEntry->setNum(num);
-            ++total;
-
-            auto key = commitEntry->getField(commitData->info->key);
-
-            auto cacheEntry = std::make_shared<Entry>();
-            cacheEntry->copyFrom(commitEntry);
-
-            if (cacheEntry->force())
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, commitDatasSize),
+        [&](const tbb::blocked_range<size_t>& range) {
+            for (size_t i = range.begin(); i < range.end(); ++i)
             {
-                auto result = touchCache(commitData->info, key, true);
+                auto commitData = (*commitDatas)[i];
 
-                auto caches = std::get<1>(result);
-                caches->setNum(num);
-                caches->entries()->addEntry(cacheEntry);
-                caches->setEmpty(false);
-            }
-            else
-            {
-                auto result = touchCache(commitData->info, key, true);
-                auto caches = std::get<1>(result);
-                if (caches->empty())
+                if (!commitData->info->enableCache)
                 {
-                    if (m_backend)
-                    {
-                        auto conditionKey = std::make_shared<Condition>();
-                        conditionKey->EQ(commitData->info->key, key);
-                        auto backendData =
-                            m_backend->select(num, commitData->info, key, conditionKey);
+                    continue;
+                }
 
-                        CACHED_STORAGE_LOG(TRACE) << commitData->info->name << "-" << key
-                                                  << " miss the cache while commit new entries";
-
-                        caches->setEntries(backendData);
-
-                        size_t totalCapacity = 0;
-                        for (auto it : *backendData)
+                auto newEntriesSize = commitData->newEntries->size();
+                tbb::parallel_for(tbb::blocked_range<size_t>(0, newEntriesSize),
+                    [&](const tbb::blocked_range<size_t>& range) {
+                        for (size_t j = range.begin(); j < range.end(); ++j)
                         {
-                            totalCapacity += it->capacity();
-                        }
+                            auto commitEntry = commitData->newEntries->get(j);
+                            commitEntry->setNum(num);
+                            ++total;
+
+                            auto key = commitEntry->getField(commitData->info->key);
+
+                            (*processedKeys)[i].insert(key);
+
+                            auto cacheEntry = std::make_shared<Entry>();
+                            cacheEntry->copyFrom(commitEntry);
+
+                            if (cacheEntry->force())
+                            {
+                                auto result = touchCache(commitData->info, key, true);
+
+                                auto caches = std::get<1>(result);
+                                caches->setNum(num);
+                                caches->entries()->addEntry(cacheEntry);
+                                caches->setEmpty(false);
+                            }
+                            else
+                            {
+                                auto result = touchCache(commitData->info, key, true);
+                                auto caches = std::get<1>(result);
+                                if (caches->empty())
+                                {
+                                    if (m_backend)
+                                    {
+                                        auto conditionKey = std::make_shared<Condition>();
+                                        conditionKey->EQ(commitData->info->key, key);
+                                        auto backendData = m_backend->select(
+                                            num, commitData->info, key, conditionKey);
+
+                                        CACHED_STORAGE_LOG(TRACE)
+                                            << commitData->info->name << "-" << key
+                                            << " miss the cache while commit new entries";
+
+                                        caches->setEntries(backendData);
+
+                                        size_t totalCapacity = 0;
+                                        for (auto it : *backendData)
+                                        {
+                                            totalCapacity += it->capacity();
+                                        }
 #if 0
                         CACHED_STORAGE_LOG(TRACE) << "backend capacity: " << commitData->info->name
                                                   << "-" << key << ", capacity: " << totalCapacity;
 #endif
-                        touchMRU(commitData->info->name, key, totalCapacity);
-                    }
+                                        touchMRU(commitData->info->name, key, totalCapacity);
+                                    }
 
-                    restoreCache(commitData->info, key, caches);
-                }
+                                    restoreCache(commitData->info, key, caches);
+                                }
 
-                caches->entries()->addEntry(cacheEntry);
-                caches->setNum(num);
-                caches->setEmpty(false);
-            }
+                                caches->entries()->addEntry(cacheEntry);
+                                caches->setNum(num);
+                                caches->setEmpty(false);
+                            }
 #if 0
             STORAGE_LOG(TRACE) << "new cached: " << commitData->info->name << "-" << key
                                << ", capacity: " << cacheEntry->capacity();
 #endif
-            touchMRU(commitData->info->name, key, cacheEntry->capacity());
-        }
-    }
+                            touchMRU(commitData->info->name, key, cacheEntry->capacity());
+                        }
+                    });
+            }
+        });
+    // sort the caches
+    TIME_RECORD("sort caches");
+    sortCaches(commitDatas, processedKeys);
 
     if (m_backend)
     {
@@ -543,6 +562,31 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
         setSyncNum(num);
     }
     return total;
+}
+
+void CachedStorage::sortCaches(std::shared_ptr<std::vector<TableData::Ptr>> _commitDatas,
+    std::shared_ptr<std::vector<tbb::concurrent_unordered_set<std::string>>> _processedKeys)
+{
+    auto commitDataSize = _commitDatas->size();
+    tbb::parallel_for(tbb::blocked_range<size_t>(0, commitDataSize),
+        [&](const tbb::blocked_range<size_t>& range) {
+            for (size_t i = range.begin(); i < range.end(); i++)
+            {
+                auto commitData = (*_commitDatas)[i];
+                auto processedKey = (*_processedKeys)[i];
+                // get caches and parallel sort the caches
+                tbb::parallel_for(processedKey.range(),
+                    [&](tbb::concurrent_unordered_set<std::string>::range_type& range) {
+                        for (auto it = range.begin(); it != range.end(); ++it)
+                        {
+                            auto result = touchCache(commitData->info, *it, true);
+                            auto caches = std::get<1>(result);
+                            tbb::parallel_sort(caches->entries()->begin(), caches->entries()->end(),
+                                EntryLessNoLock(commitData->info));
+                        }
+                    });
+            }
+        });
 }
 
 void CachedStorage::setBackend(Storage::Ptr backend)
@@ -640,8 +684,9 @@ void CachedStorage::touchMRU(const std::string& table, const std::string& key, s
     {
         return;
     }
-
-    m_mruQueue->push(std::make_tuple(table, key, capacity));
+    m_asyncThreadPool->enqueue([this, table, key, capacity]() {
+        m_mruQueue->push(std::make_tuple(table, key, capacity));
+    });
 }
 
 void CachedStorage::updateMRU(const std::string& table, const std::string& key, ssize_t capacity)
@@ -731,7 +776,16 @@ void CachedStorage::restoreCache(TableInfo::Ptr table, const std::string& key, C
 void CachedStorage::removeCache(const std::string& table, const std::string& key)
 {
     auto cacheKey = table + "_" + key;
-    RWMutexScoped lockCache(m_cachesMutex, true);
+    RWMutexScoped lockCache;
+
+    while (true)
+    {
+        if (lockCache.try_acquire(m_cachesMutex, true))
+        {
+            break;
+        }
+        std::this_thread::yield();
+    }
 
     auto c = m_caches.unsafe_erase(cacheKey);
 

@@ -220,6 +220,11 @@ public:
         this->m_handler->setNetworkStatHandler(_handler);
     }
 
+    void setQPSLimiter(dev::flowlimit::RPCQPSLimiter::Ptr _qpsLimiter)
+    {
+        this->m_handler->setQPSLimiter(_qpsLimiter);
+    }
+
 private:
     std::unique_ptr<I> m_interface;
     std::map<std::string, MethodPointer> m_methods;

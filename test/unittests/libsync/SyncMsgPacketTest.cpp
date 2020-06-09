@@ -82,7 +82,8 @@ public:
         tx.setBlockLimit(u256(_currentBlockNumber) + c_maxBlockLimit);
         KeyPair sigKeyPair = KeyPair::create();
 
-        SignatureStruct sig = dev::sign(sigKeyPair, tx.sha3(WithoutSignature));
+        std::shared_ptr<crypto::Signature> sig =
+            dev::crypto::Sign(sigKeyPair, tx.sha3(WithoutSignature));
         /// update the signature of transaction
         tx.updateSignature(sig);
         return tx;

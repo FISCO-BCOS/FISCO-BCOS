@@ -23,10 +23,10 @@
 #include "MemoryTable.h"
 #include "Storage.h"
 #include "Table.h"
+#include "libdevcrypto/CryptoInterface.h"
 #include <json/json.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Guards.h>
-#include <libdevcrypto/Hash.h>
 #include <libprecompiled/Common.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <boost/exception/diagnostic_information.hpp>
@@ -243,9 +243,16 @@ public:
             return h256();
         }
         bytesConstRef bR(data.data(), data.size());
-        h256 hash = dev::sha256(bR);
-
-        return hash;
+        if (g_BCOSConfig.SMCrypto())
+        {
+            auto hash = dev::sm3(bR);
+            return hash;
+        }
+        else
+        {
+            auto hash = dev::sha256(bR);
+            return hash;
+        }
     }
     virtual void clear() override { m_cache.clear(); }
     virtual bool empty() override

@@ -202,6 +202,9 @@ public:
 
     bool initPartiallyBlock(dev::eth::Block::Ptr _block) override;
 
+    void setMaxMemoryLimit(int64_t const& _maxMemoryLimit) { m_maxMemoryLimit = _maxMemoryLimit; }
+    void freshTxsStatus() override;
+
 protected:
     /**
      * @brief : submit a transaction through p2p, Verify and add transaction to the queue
@@ -283,13 +286,15 @@ private:
     dev::ThreadPool::Ptr m_submitPool;
     dev::ThreadPool::Ptr m_workerPool;
 
-    std::shared_ptr<tbb::concurrent_queue<dev::eth::Transaction::Ptr>> m_txsCache;
     std::atomic_bool m_running = {false};
     std::condition_variable m_signalled;
     std::shared_ptr<std::map<dev::h256, dev::u256>> m_invalidTxs;
     mutable SharedMutex x_invalidTxs;
 
     std::function<bool()> m_syncStatusChecker;
+
+    std::atomic<int64_t> m_usedMemorySize = {0};
+    int64_t m_maxMemoryLimit = 512 * 1024 * 1024;
 };
 }  // namespace txpool
 }  // namespace dev

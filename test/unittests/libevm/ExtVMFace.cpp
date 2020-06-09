@@ -20,6 +20,7 @@
  * @author: yujiechen
  * @date 2018-09-03
  */
+#include "libdevcrypto/CryptoInterface.h"
 #include <evmc/helpers.h>
 #include <libevm/ExtVMFace.h>
 #include <test/tools/libutils/TestOutputHelper.h>
@@ -46,9 +47,9 @@ BOOST_AUTO_TEST_CASE(testEVMCTrans)
     // std::cout << "transed address:" << toHex(transed_eth_addr) << std::endl;
     BOOST_CHECK(eth_addr == transed_eth_addr);
     /// test u256 translation
-    evmc_uint256be evm_uint = toEvmC(sha3("+++"));
+    evmc_uint256be evm_uint = toEvmC(crypto::Hash("+++"));
     u256 eth_u256 = fromEvmC(evm_uint);
-    BOOST_CHECK(eth_u256 == u256(sha3("+++")));
+    BOOST_CHECK(eth_u256 == u256(crypto::Hash("+++")));
 }
 
 BOOST_AUTO_TEST_CASE(testFunctionTables)
@@ -60,7 +61,7 @@ BOOST_AUTO_TEST_CASE(testFunctionTables)
     EnvInfo env_info = InitEnvInfo::createEnvInfo(gasUsed, gasLimit);
     CallParameters param = InitCallParams::createRandomCallParams();
     FakeExtVM fake_ext_vm(env_info, param.codeAddress, param.senderAddress, param.senderAddress,
-        param.valueTransfer, param.gas, param.data, code, sha3(code_str), 0, false, true);
+        param.valueTransfer, param.gas, param.data, code, crypto::Hash(code_str), 0, false, true);
 
     ///========== TEST ACCOUNT EXISTS=====================
     /// test account_exists
@@ -81,9 +82,9 @@ BOOST_AUTO_TEST_CASE(testFunctionTables)
     ///========== TEST setStorage and getStorage=====================
     /// test setStorage
     code_addr = toEvmC(fake_ext_vm.myAddress());
-    u256 key = u256(sha3("code"));
-    // std::cout << "########code key:" << sha3("code") << std::endl;
-    u256 value = u256(sha3(code_str));
+    u256 key = u256(crypto::Hash("code"));
+    // std::cout << "########code key:" << crypto::Hash("code") << std::endl;
+    u256 value = u256(crypto::Hash(code_str));
     evmc_uint256be evm_key = toEvmC(key);
     evmc_uint256be evm_value = toEvmC(value);
     u256 origin_refunds = fake_ext_vm.sub().refunds;
@@ -101,7 +102,7 @@ BOOST_AUTO_TEST_CASE(testFunctionTables)
     BOOST_CHECK(fromEvmC(result) == fromEvmC(evm_value));
     BOOST_CHECK(origin_refunds == fake_ext_vm.sub().refunds);
     /// modify storage
-    evmc_uint256be evm_new_value = toEvmC(sha3("hello, modified"));
+    evmc_uint256be evm_new_value = toEvmC(crypto::Hash("hello, modified"));
     status = fake_ext_vm.fn_table->set_storage(&fake_ext_vm, &code_addr, &evm_key, &evm_new_value);
     BOOST_CHECK(status == EVMC_STORAGE_MODIFIED);
     BOOST_CHECK(origin_refunds == fake_ext_vm.sub().refunds);
@@ -150,14 +151,14 @@ BOOST_AUTO_TEST_CASE(testFunctionTables)
     BOOST_CHECK(memcmp(data->pointer, origin_str.c_str(), call_result.output_size) == 0);
     ///========== TEST emit_log(eth::log)=====================
     evmc_uint256be topics[2];
-    topics[0] = toEvmC(sha3("0"));
-    topics[1] = toEvmC(sha3("1"));
+    topics[0] = toEvmC(crypto::Hash("0"));
+    topics[1] = toEvmC(crypto::Hash("1"));
     fake_ext_vm.fn_table->emit_log(
         &fake_ext_vm, &code_addr, call_result.output_data, call_result.output_size, topics, 2);
     BOOST_CHECK(fake_ext_vm.sub().logs.size() == 1);
     BOOST_CHECK(fake_ext_vm.sub().logs[0].topics.size() == 2);
-    BOOST_CHECK(fake_ext_vm.sub().logs[0].topics[0] == sha3("0"));
-    BOOST_CHECK(fake_ext_vm.sub().logs[0].topics[1] == sha3("1"));
+    BOOST_CHECK(fake_ext_vm.sub().logs[0].topics[0] == crypto::Hash("0"));
+    BOOST_CHECK(fake_ext_vm.sub().logs[0].topics[1] == crypto::Hash("1"));
     BOOST_CHECK(memcpy(
         fake_ext_vm.sub().logs[0].data.data(), call_result.output_data, call_result.output_size));
     BOOST_CHECK(fake_ext_vm.sub().logs[0].data.size() == call_result.output_size);
@@ -192,7 +193,7 @@ BOOST_AUTO_TEST_CASE(testCodeRelated)
     EnvInfo env_info = InitEnvInfo::createEnvInfo(gasUsed, gasLimit);
     CallParameters param = InitCallParams::createRandomCallParams();
     FakeExtVM fake_ext_vm(env_info, param.codeAddress, param.senderAddress, param.senderAddress,
-        param.valueTransfer, param.gas, param.data, code, sha3(code_str), 0, false, true);
+        param.valueTransfer, param.gas, param.data, code, crypto::Hash(code_str), 0, false, true);
 
     ///========== TEST getBalance=====================
     evmc_uint256be balance_result;
@@ -211,7 +212,7 @@ BOOST_AUTO_TEST_CASE(testCodeRelated)
     evmc_uint256be hash_result;
     fake_ext_vm.fn_table->get_code_hash(&hash_result, &fake_ext_vm, &code_addr);
     BOOST_CHECK(fromEvmC(hash_result) != h256{});
-    BOOST_CHECK(fromEvmC(hash_result) == sha3(code_str));
+    BOOST_CHECK(fromEvmC(hash_result) == crypto::Hash(code_str));
     code_addr = toEvmC(Address(0));
     fake_ext_vm.fn_table->get_code_hash(&hash_result, &fake_ext_vm, &code_addr);
     BOOST_CHECK(fromEvmC(hash_result) == h256{});
@@ -257,7 +258,7 @@ BOOST_AUTO_TEST_CASE(testCodeRelated)
     ///========== test getBlockHash =====================
     evmc_uint256be block_hash;
     fake_ext_vm.fn_table->get_block_hash(&block_hash, &fake_ext_vm, 20);
-    BOOST_CHECK(fromEvmC(block_hash) == sha3(toString(20)));
+    BOOST_CHECK(fromEvmC(block_hash) == crypto::Hash(toString(20)));
     fake_ext_vm.fn_table->get_block_hash(&block_hash, &fake_ext_vm, fake_ext_vm.envInfo().number());
 }
 BOOST_AUTO_TEST_SUITE_END()

@@ -21,7 +21,7 @@
 #include "EntryPrecompiled.h"
 #include "libstorage/Table.h"
 #include <libblockverifier/ExecutiveContext.h>
-#include <libdevcrypto/Hash.h>
+#include <libdevcrypto/CryptoInterface.h>
 #include <libethcore/ABI.h>
 
 using namespace dev;
@@ -82,9 +82,6 @@ std::string EntryPrecompiled::toString()
 PrecompiledExecResult::Ptr EntryPrecompiled::call(
     std::shared_ptr<ExecutiveContext>, bytesConstRef param, Address const&, Address const&)
 {
-    STORAGE_LOG(TRACE) << LOG_BADGE("EntryPrecompiled") << LOG_DESC("call")
-                       << LOG_KV("param", toHex(param));
-
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
 

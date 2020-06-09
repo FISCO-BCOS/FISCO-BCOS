@@ -59,9 +59,6 @@ std::string TablePrecompiled::toString()
 PrecompiledExecResult::Ptr TablePrecompiled::call(ExecutiveContext::Ptr context,
     bytesConstRef param, Address const& origin, Address const& sender)
 {
-    PRECOMPILED_LOG(TRACE) << LOG_BADGE("TablePrecompiled") << LOG_DESC("call")
-                           << LOG_KV("param", toHex(param));
-
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
 
@@ -107,7 +104,7 @@ PrecompiledExecResult::Ptr TablePrecompiled::call(ExecutiveContext::Ptr context,
         Address entryAddress;
         abi.abiOut(data, key, entryAddress);
 
-        PRECOMPILED_LOG(INFO) << LOG_DESC("Table insert") << LOG_KV("key", key);
+        PRECOMPILED_LOG(DEBUG) << LOG_DESC("Table insert") << LOG_KV("key", key);
 
         EntryPrecompiled::Ptr entryPrecompiled =
             std::dynamic_pointer_cast<EntryPrecompiled>(context->getPrecompiled(entryAddress));
@@ -161,7 +158,7 @@ PrecompiledExecResult::Ptr TablePrecompiled::call(ExecutiveContext::Ptr context,
         std::string key;
         Address conditionAddress;
         abi.abiOut(data, key, conditionAddress);
-        PRECOMPILED_LOG(INFO) << LOG_DESC("Table remove") << LOG_KV("key", key);
+        PRECOMPILED_LOG(DEBUG) << LOG_DESC("Table remove") << LOG_KV("key", key);
 
         ConditionPrecompiled::Ptr conditionPrecompiled =
             std::dynamic_pointer_cast<ConditionPrecompiled>(
@@ -191,7 +188,7 @@ PrecompiledExecResult::Ptr TablePrecompiled::call(ExecutiveContext::Ptr context,
         Address entryAddress;
         Address conditionAddress;
         abi.abiOut(data, key, entryAddress, conditionAddress);
-        PRECOMPILED_LOG(INFO) << LOG_DESC("Table update") << LOG_KV("key", key);
+        PRECOMPILED_LOG(DEBUG) << LOG_DESC("Table update") << LOG_KV("key", key);
         EntryPrecompiled::Ptr entryPrecompiled =
             std::dynamic_pointer_cast<EntryPrecompiled>(context->getPrecompiled(entryAddress));
         ConditionPrecompiled::Ptr conditionPrecompiled =

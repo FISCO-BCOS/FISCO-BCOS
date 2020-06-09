@@ -21,7 +21,7 @@
  * @date 2018-08-24
  */
 
-#include "libdevcrypto/Hash.h"
+#include "libdevcrypto/CryptoInterface.h"
 #include <libdevcore/MemoryDB.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
@@ -47,9 +47,9 @@ BOOST_AUTO_TEST_CASE(testMemoryDBKeyValue)
     dev::MemoryDB memoryDB;
     dev::EnforceRefs enforceRefs(memoryDB, true);
 
-    h256 key = dev::sha3("0x2979B90fF15080A5F956bE0dD2dF1A345b120183");
-    h256 keyNotExist = dev::sha3("0x2979B90fF15080A5F956bE0dD2dF1A345b120184");
-    h256 key2 = dev::sha3("0x2979B90fF15080A5F956bE0dD2dF1A345b120185");
+    h256 key = crypto::Hash("0x2979B90fF15080A5F956bE0dD2dF1A345b120183");
+    h256 keyNotExist = crypto::Hash("0x2979B90fF15080A5F956bE0dD2dF1A345b120184");
+    h256 key2 = crypto::Hash("0x2979B90fF15080A5F956bE0dD2dF1A345b120185");
 
     bytesConstRef value("helloworld");
     memoryDB.insert(key, value);
@@ -78,7 +78,7 @@ BOOST_AUTO_TEST_CASE(testMemoryDBAux)
     dev::MemoryDB memoryDB;
     dev::EnforceRefs enforceRefs(memoryDB, true);
 
-    h256 key = dev::sha3("aux_0x2979B90fF15080A5F956bE0dD2dF1A345b120183");
+    h256 key = crypto::Hash("aux_0x2979B90fF15080A5F956bE0dD2dF1A345b120183");
 
     string valueStr = "helloworld";
     bytesConstRef value(valueStr);

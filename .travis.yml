@@ -51,7 +51,7 @@ matrix:
 
     # - language: cpp
     #   os: osx
-    #   osx_image: xcode11.3
+    #   osx_image: xcode11.4
     #   env:
     #     - CACHE_NAME=osx
     #     - PROJECT_USERNAME=FISCO-BCOS
@@ -81,13 +81,12 @@ addons:
       - ccache
       - go
 install: |
-  if [[ $TRAVIS_OS_NAME == linux && "$TRAVIS_BRANCH" != "master" ]]; then 
-    bash tools/ci/check-commit.sh; 
-  fi
+  #if [[ $TRAVIS_OS_NAME == linux && "$TRAVIS_BRANCH" != "master" ]]; then
+  #  bash tools/ci/check-commit.sh;
+  #fi
 script: |
   if [[ $TRAVIS_OS_NAME == linux ]]; then
-    CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . && \
-    make -j2 &&  cd tools && bash ci/ci_check.sh
+    cmake . && make -j2 &&  cd tools && bash ci/ci_check.sh
   else
     CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . && \
     make -j2 && cd tools && bash ci/ci_check.sh

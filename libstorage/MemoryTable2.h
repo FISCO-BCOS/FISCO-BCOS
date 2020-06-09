@@ -25,11 +25,12 @@
 #include <json/json.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Guards.h>
-#include <libdevcrypto/Hash.h>
+#include <libdevcrypto/CryptoInterface.h>
 #include <libprecompiled/Common.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
+#include <set>
 #include <type_traits>
 
 namespace dev
@@ -85,11 +86,18 @@ public:
     void rollback(const Change& _change) override;
 
 private:
+    void parallelGenData(bytes& _generatedData, std::shared_ptr<std::vector<size_t>> _offsetVec,
+        Entries::Ptr _entries);
+
+    std::shared_ptr<std::vector<size_t>> genDataOffset(Entries::Ptr _entries, size_t _startOffset);
+
+
     Entries::Ptr selectNoLock(const std::string& key, Condition::Ptr condition);
     dev::storage::TableData::Ptr dumpWithoutOptimize();
 
     tbb::concurrent_unordered_map<std::string, Entries::Ptr> m_newEntries;
     tbb::concurrent_unordered_map<uint64_t, Entry::Ptr> m_dirty;
+    tbb::concurrent_unordered_map<std::string, std::set<uint64_t>> m_dirty_updated;
 
     std::vector<size_t> processEntries(Entries::Ptr entries, Condition::Ptr condition)
     {
@@ -141,7 +149,6 @@ private:
     void proccessLimit(const Condition::Ptr& condition, const Entries::Ptr& entries,
         const Entries::Ptr& resultEntries);
 
-    bool m_isDirty = false;  // mark if the tableData had been dump
     dev::h256 m_hash;
     dev::storage::TableData::Ptr m_tableData;
 };

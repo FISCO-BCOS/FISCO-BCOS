@@ -316,3 +316,31 @@ void SyncTransaction::sendTxsStatus(
     }
     m_txsHash->clear();
 }
+
+void SyncTransaction::updateNeedMaintainTransactions(bool const& _needMaintainTxs)
+{
+    if (_needMaintainTxs != m_needMaintainTransactions)
+    {
+        // changed from sealer/observer to free-node
+        if (m_needMaintainTransactions)
+        {
+            SYNC_LOG(DEBUG) << LOG_DESC(
+                                   "updateNeedMaintainTransactions: node changed from "
+                                   "sealer/observer to free-node, freshTxsStatus")
+                            << LOG_KV("isSealerOrObserver", _needMaintainTxs)
+                            << LOG_KV("isSealerOrObserverBeforeUpdate", m_needMaintainTransactions);
+            m_txPool->freshTxsStatus();
+        }
+        else
+        {
+            SYNC_LOG(DEBUG) << LOG_DESC(
+                                   "updateNeedMaintainTransactions: node changed from free-node to "
+                                   "sealer/observer, noteNewTransactions")
+                            << LOG_KV("isSealerOrObserver", _needMaintainTxs)
+                            << LOG_KV("isSealerOrObserverBeforeUpdate", m_needMaintainTransactions);
+            // changed from free-node into sealer/observer
+            noteNewTransactions();
+        }
+        m_needMaintainTransactions = _needMaintainTxs;
+    }
+}

@@ -57,7 +57,8 @@ std::map<int, std::string> dev::rpc::RPCMsg{{RPCExceptionType::Success, "Success
     {RPCExceptionType::InvalidSystemConfig, "Invalid System Config"},
     {RPCExceptionType::InvalidRequest,
         "Don't send request to this node who doesn't belong to the group"},
-    {RPCExceptionType::IncompleteInitialization, "RPC module initialization is incomplete."}};
+    {RPCExceptionType::IncompleteInitialization, "RPC module initialization is incomplete."},
+    {RPCExceptionType::OverQPSLimit, "Over QPS limit"}};
 
 Rpc::Rpc(
     LedgerInitializer::Ptr _ledgerInitializer, std::shared_ptr<dev::p2p::P2PInterface> _service)
@@ -1749,7 +1750,19 @@ Json::Value Rpc::queryGroupStatus(int _groupID)
         return response;
     }
 
-    auto status = ledgerManager()->queryGroupStatus(_groupID);
+    LedgerStatus status;
+    try
+    {
+        status = ledgerManager()->queryGroupStatus(_groupID);
+    }
+    catch (UnknownGroupStatus&)
+    {
+        status = LedgerStatus::UNKNOWN;
+    }
+
+    response["code"] = LedgerManagementStatusCode::SUCCESS;
+    response["message"] = "";
+
     switch (status)
     {
     case LedgerStatus::INEXISTENT:
@@ -1767,11 +1780,12 @@ Json::Value Rpc::queryGroupStatus(int _groupID)
     case LedgerStatus::DELETED:
         response["status"] = "DELETED";
         break;
-    default:
-        BOOST_THROW_EXCEPTION(UnknownGroupStatus());
+    case LedgerStatus::UNKNOWN:
+        response["status"] = "UNKNOWN";
+        response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
+        response["message"] = "Please check `.group_status` file of the group";
+        break;
     }
-    response["code"] = LedgerManagementStatusCode::SUCCESS;
-    response["message"] = "";
     return response;
 }
 

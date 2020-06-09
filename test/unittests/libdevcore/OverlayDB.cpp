@@ -21,7 +21,7 @@
  * @date 2018-08-24
  */
 
-#include "libdevcrypto/Hash.h"
+#include "libdevcrypto/CryptoInterface.h"
 #include <libdevcore/LevelDB.h>
 #include <libdevcore/OverlayDB.h>
 #include <test/tools/libutils/TestOutputHelper.h>
@@ -59,7 +59,7 @@ BOOST_AUTO_TEST_CASE(testOverlayDBKeyValue)
     dev::EnforceRefs enforceRefs(overlayDB, true);
     dev::EnforceRefs enforceRefs1(overlayDB1, true);
 
-    h256 key = dev::sha3("0x2979B90fF15080A5F956bE0dD2dF1A345b120183");
+    h256 key = crypto::Hash("0x2979B90fF15080A5F956bE0dD2dF1A345b120183");
     bytesConstRef value("helloworld");
 
     overlayDB.insert(key, value);
@@ -93,7 +93,7 @@ BOOST_AUTO_TEST_CASE(testOverlayDBAux)
     dev::OverlayDB overlayDB(std::move(dbp));
     dev::EnforceRefs enforceRefs(overlayDB, true);
 
-    h256 key = dev::sha3("aux_0x2979B90fF15080A5F956bE0dD2dF1A345b120183");
+    h256 key = crypto::Hash("aux_0x2979B90fF15080A5F956bE0dD2dF1A345b120183");
 
     string valueStr = "helloworld";
     bytesConstRef value(valueStr);

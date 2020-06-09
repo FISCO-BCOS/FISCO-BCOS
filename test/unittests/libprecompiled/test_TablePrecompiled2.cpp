@@ -15,7 +15,7 @@
  * (c) 2016-2018 fisco-dev contributors.
  */
 
-#include "Common.h"
+#include "../libstorage/MemoryStorage2.h"
 #include <libdevcrypto/Common.h>
 #include <libethcore/ABI.h>
 #include <libprecompiled/ConditionPrecompiled.h>
@@ -23,6 +23,7 @@
 #include <libprecompiled/EntryPrecompiled.h>
 #include <libprecompiled/TablePrecompiled.h>
 #include <libstorage/MemoryTable2.h>
+#include <libstorage/MemoryTableFactory2.h>
 #include <libstorage/Table.h>
 #include <boost/test/unit_test.hpp>
 
@@ -51,16 +52,19 @@ struct TablePrecompiledFixture2
     TablePrecompiledFixture2()
     {
         context = std::make_shared<MockPrecompiledEngine>();
+        context->setMemoryTableFactory(std::make_shared<storage::MemoryTableFactory2>());
         tablePrecompiled = std::make_shared<dev::precompiled::TablePrecompiled>();
-        auto table = std::make_shared<MockMemoryDB>();
+        m_table = std::make_shared<MockMemoryDB>();
         TableInfo::Ptr info = std::make_shared<TableInfo>();
         info->fields.emplace_back(ID_FIELD);
         info->fields.emplace_back("name");
         info->fields.emplace_back(STATUS);
-        table->setTableInfo(info);
-        table->setRecorder(
+        info->key = "name";
+        info->name = "test";
+        m_table->setTableInfo(info);
+        m_table->setRecorder(
             [&](Table::Ptr, Change::Kind, string const&, vector<Change::Record>&) {});
-        tablePrecompiled->setTable(table);
+        tablePrecompiled->setTable(m_table);
 
         auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
         auto precompiledExecResultFactory =
@@ -72,6 +76,7 @@ struct TablePrecompiledFixture2
     ~TablePrecompiledFixture2() {}
 
     dev::precompiled::TablePrecompiled::Ptr tablePrecompiled;
+    storage::Table::Ptr m_table;
     ExecutiveContext::Ptr context;
     BlockInfo blockInfo;
     int addressCount = 0x10000;
@@ -193,6 +198,45 @@ BOOST_AUTO_TEST_CASE(call_update2)
     u256 num;
     abi.abiOut(bytesConstRef(&out), num);
     BOOST_TEST(num == 0u);
+}
+
+BOOST_AUTO_TEST_CASE(insert_remove_select)
+{
+    auto memStorage = std::make_shared<MemoryStorage2>();
+    TableData::Ptr tableData = std::make_shared<TableData>();
+    Entries::Ptr insertEntries = std::make_shared<Entries>();
+    // insert
+    auto entry = std::make_shared<storage::Entry>();
+    entry->setField("name", "WangWu");
+    entry->setID(1);
+    insertEntries->addEntry(entry);
+    tableData->newEntries = insertEntries;
+    tableData->info = m_table->tableInfo();
+    memStorage->commit(1, vector<TableData::Ptr>{tableData});
+
+    m_table->setStateStorage(memStorage);
+    auto condition = std::make_shared<storage::Condition>();
+    auto entries = m_table->select(std::string("WangWu"), condition);
+    BOOST_TEST(entries->size() == 1u);
+    // remove
+    condition = std::make_shared<storage::Condition>();
+    condition->EQ("name", "WangWu");
+    auto ret = m_table->remove(std::string("WangWu"), condition);
+    BOOST_TEST(ret == 1);
+
+    auto m_version = g_BCOSConfig.version();
+    auto m_supportedVersion = g_BCOSConfig.supportedVersion();
+    g_BCOSConfig.setSupportedVersion("2.4.0", V2_4_0);
+    // select
+    condition = std::make_shared<storage::Condition>();
+    entries = m_table->select(std::string("WangWu"), condition);
+    BOOST_TEST(entries->size() == 1u);
+
+    g_BCOSConfig.setSupportedVersion("2.5.0", V2_5_0);
+    condition = std::make_shared<storage::Condition>();
+    entries = m_table->select(std::string("WangWu"), condition);
+    BOOST_TEST(entries->size() == 0);
+    g_BCOSConfig.setSupportedVersion(m_supportedVersion, m_version);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

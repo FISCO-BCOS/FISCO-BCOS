@@ -100,7 +100,7 @@ PrecompiledExecResult::Ptr KVTablePrecompiled::call(ExecutiveContext::Ptr contex
         std::string key;
         Address entryAddress;
         abi.abiOut(data, key, entryAddress);
-        PRECOMPILED_LOG(INFO) << LOG_BADGE("KVTable") << LOG_KV("set", key);
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("KVTable") << LOG_KV("set", key);
         EntryPrecompiled::Ptr entryPrecompiled =
             std::dynamic_pointer_cast<EntryPrecompiled>(context->getPrecompiled(entryAddress));
         auto entry = entryPrecompiled->getEntry();
@@ -149,6 +149,7 @@ PrecompiledExecResult::Ptr KVTablePrecompiled::call(ExecutiveContext::Ptr contex
     else if (func == name2Selector[KVTABLE_METHOD_NEWENT])
     {  // newEntry()
         auto entry = m_table->newEntry();
+        entry->setForce(true);
         auto entryPrecompiled = std::make_shared<EntryPrecompiled>();
         entryPrecompiled->setEntry(entry);
 

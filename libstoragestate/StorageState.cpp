@@ -23,7 +23,8 @@
  */
 
 #include "StorageState.h"
-#include "libdevcrypto/Hash.h"
+#include "libconfig/GlobalConfigure.h"
+#include "libdevcrypto/CryptoInterface.h"
 #include "libethcore/Exceptions.h"
 #include "libstorage/Table.h"
 
@@ -49,7 +50,7 @@ bool StorageState::accountNonemptyAndExisting(Address const& _address) const
     auto table = getTable(_address);
     if (table)
     {
-        if (balance(_address) > u256(0) || codeHash(_address) != EmptySHA3 ||
+        if (balance(_address) > u256(0) || codeHash(_address) != EmptyHash ||
             getNonce(_address) != m_accountStartNonce)
             return true;
     }
@@ -64,8 +65,16 @@ bool StorageState::addressHasCode(Address const& _address) const
         auto entries = table->select(ACCOUNT_CODE_HASH, table->newCondition());
         if (entries->size() != 0u)
         {
-            auto codeHash = h256(fromHex(entries->get(0)->getField(STORAGE_VALUE)));
-            return codeHash != EmptySHA3;
+            if (g_BCOSConfig.version() >= V2_5_0)
+            {
+                auto codeHash = h256(entries->get(0)->getFieldBytes(STORAGE_VALUE));
+                return codeHash != EmptyHash;
+            }
+            else
+            {
+                auto codeHash = h256(fromHex(entries->get(0)->getField(STORAGE_VALUE)));
+                return codeHash != EmptyHash;
+            }
         }
     }
     return false;
@@ -200,6 +209,7 @@ void StorageState::setStorage(Address const& _address, u256 const& _location, u2
         if (entries->size() == 0u)
         {
             auto entry = table->newEntry();
+            entry->setForce(true);
             entry->setField(STORAGE_KEY, _location.str());
             entry->setField(STORAGE_VALUE, _value.str());
             table->insert(_location.str(), entry, option);
@@ -207,6 +217,7 @@ void StorageState::setStorage(Address const& _address, u256 const& _location, u2
         else
         {
             auto entry = table->newEntry();
+            entry->setForce(true);
             entry->setField(STORAGE_KEY, _location.str());
             entry->setField(STORAGE_VALUE, _value.str());
             table->update(_location.str(), entry, table->newCondition(), option);
@@ -221,10 +232,10 @@ void StorageState::setCode(Address const& _address, bytes&& _code)
     auto table = getTable(_address);
     if (table)
     {
-        auto entry = table->newEntry();
         auto option = std::make_shared<AccessOptions>(Address(), false);
-        if (m_enableBinary)
-        {  // >= v2.4.0 and rocksdb
+        auto entry = table->newEntry();
+        if (g_BCOSConfig.version() >= V2_5_0)
+        {
             entry->setField(STORAGE_VALUE, _code.data(), _code.size());
         }
         else
@@ -232,8 +243,17 @@ void StorageState::setCode(Address const& _address, bytes&& _code)
             entry->setField(STORAGE_VALUE, toHex(_code));
         }
         table->update(ACCOUNT_CODE, entry, table->newCondition(), option);
+
         entry = table->newEntry();
-        entry->setField(STORAGE_VALUE, toHex(sha3(_code)));
+        if (g_BCOSConfig.version() >= V2_5_0)
+        {
+            auto codeHash = crypto::Hash(_code);
+            entry->setField(STORAGE_VALUE, codeHash.data(), codeHash.size);
+        }
+        else
+        {
+            entry->setField(STORAGE_VALUE, toHex(crypto::Hash(_code)));
+        }
         table->update(ACCOUNT_CODE_HASH, entry, table->newCondition(), option);
     }
 }
@@ -247,15 +267,32 @@ void StorageState::kill(Address _address)
         auto option = std::make_shared<AccessOptions>(Address(), false);
         entry->setField(STORAGE_VALUE, m_accountStartNonce.str());
         table->update(ACCOUNT_NONCE, entry, table->newCondition(), option);
+
         entry = table->newEntry();
         entry->setField(STORAGE_VALUE, u256(0).str());
         table->update(ACCOUNT_BALANCE, entry, table->newCondition(), option);
-        entry = table->newEntry();
-        entry->setField(STORAGE_VALUE, "");
-        table->update(ACCOUNT_CODE, entry, table->newCondition(), option);
-        entry = table->newEntry();
-        entry->setField(STORAGE_VALUE, toHex(EmptySHA3));
-        table->update(ACCOUNT_CODE_HASH, entry, table->newCondition(), option);
+
+        if (g_BCOSConfig.version() >= V2_5_0)
+        {
+            entry = table->newEntry();
+            entry->setField(STORAGE_VALUE, nullptr, 0);
+            table->update(ACCOUNT_CODE, entry, table->newCondition(), option);
+
+            entry = table->newEntry();
+            entry->setField(STORAGE_VALUE, EmptyHash.data(), EmptyHash.size);
+            table->update(ACCOUNT_CODE_HASH, entry, table->newCondition(), option);
+        }
+        else
+        {
+            entry = table->newEntry();
+            entry->setField(STORAGE_VALUE, "");
+            table->update(ACCOUNT_CODE, entry, table->newCondition(), option);
+
+            entry = table->newEntry();
+            entry->setField(STORAGE_VALUE, toHex(EmptyHash));
+            table->update(ACCOUNT_CODE_HASH, entry, table->newCondition(), option);
+        }
+
         entry = table->newEntry();
         entry->setField(STORAGE_VALUE, "false");
         table->update(ACCOUNT_ALIVE, entry, table->newCondition(), option);
@@ -265,7 +302,7 @@ void StorageState::kill(Address _address)
 
 bytes const StorageState::code(Address const& _address) const
 {
-    if (codeHash(_address) == EmptySHA3)
+    if (codeHash(_address) == EmptyHash)
         return NullBytes;
     auto table = getTable(_address);
     if (table)
@@ -273,8 +310,8 @@ bytes const StorageState::code(Address const& _address) const
         auto entries = table->select(ACCOUNT_CODE, table->newCondition());
         if (entries->size() != 0u)
         {
-            if (m_enableBinary)
-            {  // >= v2.4.0 and rocksdb
+            if (g_BCOSConfig.version() >= V2_5_0)
+            {
                 return entries->get(0)->getFieldBytes(STORAGE_VALUE);
             }
             else
@@ -297,7 +334,7 @@ h256 StorageState::codeHash(Address const& _address) const
             return h256(fromHex(entries->get(0)->getField(STORAGE_VALUE)));
         }
     }
-    return EmptySHA3;
+    return EmptyHash;
 }
 
 bool StorageState::frozen(Address const& _contract) const
@@ -466,18 +503,37 @@ void StorageState::createAccount(Address const& _address, u256 const& _nonce, u2
     entry->setField(STORAGE_KEY, ACCOUNT_BALANCE);
     entry->setField(STORAGE_VALUE, _amount.str());
     table->insert(ACCOUNT_BALANCE, entry);
-    entry = table->newEntry();
-    entry->setField(STORAGE_KEY, ACCOUNT_CODE_HASH);
-    entry->setField(STORAGE_VALUE, toHex(EmptySHA3));
-    table->insert(ACCOUNT_CODE_HASH, entry);
-    entry = table->newEntry();
-    entry->setField(STORAGE_KEY, ACCOUNT_CODE);
-    entry->setField(STORAGE_VALUE, "");
-    table->insert(ACCOUNT_CODE, entry);
+
+    if (g_BCOSConfig.version() >= V2_5_0)
+    {
+        entry = table->newEntry();
+        entry->setField(STORAGE_KEY, ACCOUNT_CODE_HASH);
+        entry->setField(STORAGE_VALUE, EmptyHash.data(), EmptyHash.size);
+        table->insert(ACCOUNT_CODE_HASH, entry);
+
+        entry = table->newEntry();
+        entry->setField(STORAGE_KEY, ACCOUNT_CODE);
+        entry->setField(STORAGE_VALUE, nullptr, 0);
+        table->insert(ACCOUNT_CODE, entry);
+    }
+    else
+    {
+        entry = table->newEntry();
+        entry->setField(STORAGE_KEY, ACCOUNT_CODE_HASH);
+        entry->setField(STORAGE_VALUE, toHex(EmptyHash));
+        table->insert(ACCOUNT_CODE_HASH, entry);
+
+        entry = table->newEntry();
+        entry->setField(STORAGE_KEY, ACCOUNT_CODE);
+        entry->setField(STORAGE_VALUE, "");
+        table->insert(ACCOUNT_CODE, entry);
+    }
+
     entry = table->newEntry();
     entry->setField(STORAGE_KEY, ACCOUNT_NONCE);
     entry->setField(STORAGE_VALUE, _nonce.str());
     table->insert(ACCOUNT_NONCE, entry);
+
     entry = table->newEntry();
     entry->setField(STORAGE_KEY, ACCOUNT_ALIVE);
     entry->setField(STORAGE_VALUE, "true");

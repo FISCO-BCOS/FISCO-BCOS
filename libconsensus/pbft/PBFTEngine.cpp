@@ -22,10 +22,10 @@
  * @date: 2018-09-28
  */
 #include "PBFTEngine.h"
+#include "libdevcrypto/CryptoInterface.h"
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcore/CommonJS.h>
 #include <libethcore/CommonJS.h>
-#include <libsecurity/EncryptedLevelDB.h>
 #include <libtxpool/TxPool.h>
 using namespace dev::eth;
 using namespace dev::db;
@@ -33,13 +33,14 @@ using namespace dev::blockverifier;
 using namespace dev::blockchain;
 using namespace dev::p2p;
 using namespace dev::storage;
+using namespace rocksdb;
 
 namespace dev
 {
 namespace consensus
 {
 const std::string PBFTEngine::c_backupKeyCommitted = "committed";
-const std::string PBFTEngine::c_backupMsgDirName = "pbftMsgBackup";
+const std::string PBFTEngine::c_backupMsgDirName = "pbftMsgBackup/RocksDB";
 
 void PBFTEngine::start()
 {
@@ -183,31 +184,23 @@ void PBFTEngine::rehandleCommitedPrepareCache(PrepareReq const& req)
 /// init pbftMsgBackup
 void PBFTEngine::initBackupDB()
 {
-    /// try-catch has already been considered by libdevcore/LevelDB.*
+    /// try-catch has already been considered by Initializer::init and RPC calls startByGroupID
     std::string path = getBackupMsgPath();
     boost::filesystem::path path_handler = boost::filesystem::path(path);
     if (!boost::filesystem::exists(path_handler))
     {
         boost::filesystem::create_directories(path_handler);
     }
-
-    db::BasicLevelDB* basicDB = NULL;
-    leveldb::Status status;
-
-    if (g_BCOSConfig.diskEncryption.enable && g_BCOSConfig.version() <= RC3_VERSION)
+    m_backupDB = std::make_shared<BasicRocksDB>();
+    auto options = getRocksDBOptions();
+    m_backupDB->Open(options, path_handler.string());
+    if (g_BCOSConfig.diskEncryption.enable)
     {
-        status =
-            EncryptedLevelDB::Open(LevelDB::defaultDBOptions(), path_handler.string(), &basicDB,
-                g_BCOSConfig.diskEncryption.cipherDataKey, g_BCOSConfig.diskEncryption.dataKey);
+        PBFTENGINE_LOG(INFO) << LOG_DESC(
+            "diskEncryption enabled: set encrypt and decrypt handler for pbftBackup");
+        m_backupDB->setEncryptHandler(getEncryptHandler());
+        m_backupDB->setDecryptHandler(getDecryptHandler());
     }
-    else
-    {
-        status = BasicLevelDB::Open(LevelDB::defaultDBOptions(), path_handler.string(), &basicDB);
-    }
-
-    LevelDB::checkStatus(status, path_handler);
-
-    m_backupDB = std::make_shared<LevelDB>(basicDB);
 
     if (!isDiskSpaceEnough(path))
     {
@@ -234,7 +227,16 @@ void PBFTEngine::reloadMsg(std::string const& key, PBFTMsg* msg)
     }
     try
     {
-        bytes data = fromHex(m_backupDB->lookup(key));
+        std::string value;
+        auto status = m_backupDB->Get(ReadOptions(), key, value);
+        if (!status.ok() && !status.IsNotFound())
+        {
+            PBFTENGINE_LOG(ERROR) << LOG_DESC("reloadMsg PBFTBackup failed")
+                                  << LOG_KV("status", status.ToString());
+            BOOST_THROW_EXCEPTION(DatabaseError() << errinfo_comment(
+                                      "reloadMsg failed, status = " + status.ToString()));
+        }
+        bytes data = fromHex(value);
         if (data.empty())
         {
             PBFTENGINE_LOG(DEBUG) << LOG_DESC("reloadMsg: Empty message stored")
@@ -271,7 +273,10 @@ void PBFTEngine::backupMsg(std::string const& _key, std::shared_ptr<bytes> _msg)
     }
     try
     {
-        m_backupDB->insert(_key, toHex(*_msg));
+        WriteBatch batch;
+        m_backupDB->Put(batch, _key, toHex(*_msg));
+        WriteOptions options;
+        m_backupDB->Write(options, batch);
     }
     catch (DatabaseError const& e)
     {
@@ -279,14 +284,14 @@ void PBFTEngine::backupMsg(std::string const& _key, std::shared_ptr<bytes> _msg)
                               << LOG_DESC("store backupMsg to db failed")
                               << LOG_KV("EINFO", boost::diagnostic_information(e));
         raise(SIGTERM);
-        BOOST_THROW_EXCEPTION(std::invalid_argument(" store backupMsg to leveldb failed."));
+        BOOST_THROW_EXCEPTION(std::invalid_argument(" store backupMsg to rocksdb failed."));
     }
     catch (std::exception const& e)
     {
         PBFTENGINE_LOG(ERROR) << LOG_DESC("store backupMsg to db failed")
                               << LOG_KV("EINFO", boost::diagnostic_information(e));
         raise(SIGTERM);
-        BOOST_THROW_EXCEPTION(std::invalid_argument(" store backupMsg to leveldb failed."));
+        BOOST_THROW_EXCEPTION(std::invalid_argument(" store backupMsg to rocksdb failed."));
     }
 }
 
@@ -296,6 +301,10 @@ PrepareReq::Ptr PBFTEngine::constructPrepareReq(dev::eth::Block::Ptr _block)
     *engineBlock = std::move(*_block);
     PrepareReq::Ptr prepareReq = std::make_shared<PrepareReq>(
         engineBlock, m_keyPair, m_view, nodeIdx(), m_enablePrepareWithTxsHash);
+    if (prepareReq->pBlock->transactions()->size() == 0)
+    {
+        prepareReq->isEmpty = true;
+    }
     // the non-empty block only broadcast hash when enable-prepare-with-txs-hash
     if (m_enablePrepareWithTxsHash && prepareReq->pBlock->transactions()->size() > 0)
     {
@@ -402,9 +411,10 @@ bool PBFTEngine::checkSign(PBFTMsg const& req) const
     h512 node_id;
     if (getNodeIDByIndex(node_id, req.idx))
     {
-        Public pub_id = jsToPublic(toJS(node_id.hex()));
-        return dev::verify(pub_id, req.sig, req.block_hash) &&
-               dev::verify(pub_id, req.sig2, req.fieldsWithoutBlock());
+        return dev::crypto::Verify(
+                   node_id, dev::crypto::SignatureFromBytes(req.sig), req.block_hash) &&
+               dev::crypto::Verify(
+                   node_id, dev::crypto::SignatureFromBytes(req.sig2), req.fieldsWithoutBlock());
     }
     return false;
 }
@@ -616,17 +626,6 @@ CheckResult PBFTEngine::isValidPrepare(PrepareReq const& req, std::ostringstream
                               << LOG_KV("EINFO", oss.str());
         return CheckResult::INVALID;
     }
-
-    if (isFuturePrepare(req))
-    {
-        PBFTENGINE_LOG(INFO) << LOG_DESC("FutureBlock") << LOG_KV("EINFO", oss.str());
-        return CheckResult::FUTURE;
-    }
-    if (!isValidLeader(req))
-    {
-        return CheckResult::INVALID;
-    }
-
     // Since the empty block is not placed on the disk,
     // pbftBackup is checked only when a non-empty prepare is received
     // in case that:
@@ -652,6 +651,15 @@ CheckResult PBFTEngine::isValidPrepare(PrepareReq const& req, std::ostringstream
     {
         PBFTENGINE_LOG(DEBUG) << LOG_DESC("InvalidPrepare: not saved after commit")
                               << LOG_KV("EINFO", oss.str());
+        return CheckResult::INVALID;
+    }
+    if (isFuturePrepare(req))
+    {
+        PBFTENGINE_LOG(INFO) << LOG_DESC("FutureBlock") << LOG_KV("EINFO", oss.str());
+        return CheckResult::FUTURE;
+    }
+    if (!isValidLeader(req))
+    {
         return CheckResult::INVALID;
     }
     if (!checkSign(req))
@@ -736,7 +744,7 @@ bool PBFTEngine::checkBlock(Block const& block)
             PBFTENGINE_LOG(ERROR) << LOG_DESC("checkBlock: checkSign failed")
                                   << LOG_KV("sealerIdx", nodeIndex)
                                   << LOG_KV("blockHash", block.blockHeader().hash().abridged())
-                                  << LOG_KV("signature", sign.second.abridged());
+                                  << LOG_KV("signature", toHex(sign.second));
             return false;
         }
     }  /// end of check sign
@@ -752,12 +760,12 @@ bool PBFTEngine::checkBlock(Block const& block)
     return true;
 }
 
-bool PBFTEngine::checkSign(IDXTYPE const& _idx, dev::h256 const& _hash, Signature const& _sig)
+bool PBFTEngine::checkSign(IDXTYPE const& _idx, dev::h256 const& _hash, bytes const& _sig)
 {
     h512 nodeId;
     if (getNodeIDByIndex(nodeId, _idx))
     {
-        return dev::verify(nodeId, _sig, _hash);
+        return dev::crypto::Verify(nodeId, dev::crypto::SignatureFromBytes(_sig), _hash);
     }
     return false;
 }
@@ -1036,7 +1044,12 @@ bool PBFTEngine::execPrepareAndGenerateSignMsg(
     auto startT = utcTime();
     PrepareReq::Ptr sign_prepare =
         std::make_shared<PrepareReq>(*_prepareReq, workingSealing, m_keyPair);
-    m_execContextForAsyncReset.push_back(m_reqCache->prepareCache().p_execContext);
+
+    // destroy ExecutiveContext in m_destructorThread
+    auto execContext = m_reqCache->prepareCache().p_execContext;
+    HolderForDestructor<dev::blockverifier::ExecutiveContext> holder(std::move(execContext));
+    m_destructorThread->enqueue(std::move(holder));
+
     m_reqCache->addPrepareReq(sign_prepare);
     PBFTENGINE_LOG(DEBUG) << LOG_DESC("handlePrepareMsg: add prepare cache and broadcastSignReq")
                           << LOG_KV("reqNum", sign_prepare->height)
@@ -1499,6 +1512,8 @@ void PBFTEngine::catchupView(ViewChangeReq const& req, std::ostringstream& oss)
         if (succ)
         {
             sendViewChangeMsg(nodeId);
+            // erase the cache
+            m_reqCache->eraseLatestViewChangeCacheForNodeUpdated(req);
         }
     }
 }
@@ -1560,16 +1575,6 @@ void PBFTEngine::checkTimeout()
     bool flag = false;
     {
         Guard l(m_mutex);
-        // clear and destruct the executiveContext
-        for (auto& exec : m_execContextForAsyncReset)
-        {
-            if (exec)
-            {
-                exec.reset();
-            }
-        }
-        m_execContextForAsyncReset.clear();
-
         if (m_timeManager.isTimeout())
         {
             /// timeout not triggered by fast view change

@@ -102,7 +102,7 @@ BOOST_AUTO_TEST_CASE(testCheckInvariants)
 {
     FakeCheckInvariants fake_invariant;
     BOOST_REQUIRE_NO_THROW(fake_invariant.check());
-#if ETH_DEBUG
+#if FISCO_DEBUG
     fake_invariant.setHasInvariants(false);
     BOOST_CHECK_THROW(fake_invariant.check(), FailedInvariant);
 #endif

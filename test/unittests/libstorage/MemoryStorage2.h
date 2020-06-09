@@ -40,8 +40,6 @@ public:
     Entries::Ptr select(int64_t, TableInfo::Ptr tableInfo, const std::string& key,
         Condition::Ptr condition) override
     {
-        (void)condition;
-        // TODO: complete select
         auto tableKey = tableInfo->name + key;
         tbb::mutex::scoped_lock lock(m_mutex);
 
@@ -51,7 +49,15 @@ public:
         {
             for (auto const& item : it->second)
             {
-                entries->addEntry(item.second);
+                auto entry = item.second;
+                if (entry->getStatus() == Entry::Status::NORMAL &&
+                    (!condition || condition->process(entry)))
+                {
+                    auto outEntry = std::make_shared<Entry>();
+                    outEntry->copyFrom(entry);
+                    outEntry->setDirty(false);
+                    entries->addEntry(outEntry);
+                }
             }
         }
 

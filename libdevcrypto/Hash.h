@@ -123,8 +123,4 @@ inline void sha3mac(bytesConstRef _secret, bytesConstRef _plain, bytesRef _outpu
     sha3(_secret.toBytes() + _plain.toBytes()).ref().populate(_output);
 }
 
-extern h256 EmptySHA3;
-
-extern h256 EmptyListSHA3;
-
 }  // namespace dev

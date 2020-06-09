@@ -254,9 +254,34 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
     m_savepoint = m_s->savepoint();
     m_tableFactorySavepoint = m_envInfo.precompiledEngine()->getMemoryTableFactory()->savepoint();
     m_gas = _p.gas;
+
+    if (g_BCOSConfig.version() >= V2_5_0 && m_t && m_s->frozen(_origin))
+    {
+        LOG(DEBUG) << LOG_DESC("execute transaction failed for account frozen")
+                   << LOG_KV("account", _origin);
+        writeErrInfoToOutput("Frozen account:0x" + _origin.hex());
+        revert();
+        m_excepted = TransactionException::AccountFrozen;
+        return !m_ext;
+    }
+
     if (m_envInfo.precompiledEngine() &&
         m_envInfo.precompiledEngine()->isOrginPrecompiled(_p.codeAddress))
     {
+        if (g_BCOSConfig.version() >= V2_5_0)
+        {
+            auto gas = m_envInfo.precompiledEngine()->costOfPrecompiled(_p.codeAddress, _p.data);
+            if (m_gas < gas)
+            {
+                m_excepted = TransactionException::OutOfGasBase;
+                // true actually means "all finished - nothing more to be done regarding go().
+                return true;
+            }
+            else
+            {
+                m_gas = (u256)(_p.gas - gas);
+            }
+        }
         bytes output;
         bool success;
         tie(success, output) =
@@ -347,15 +372,15 @@ bool Executive::createOpcode(Address const& _sender, u256 const& _endowment, u25
     u256 const& _gas, bytesConstRef _init, Address const& _origin)
 {
     u256 nonce = m_s->getNonce(_sender);
-    m_newAddress = right160(sha3(rlpList(_sender, nonce)));
+    m_newAddress = right160(crypto::Hash(rlpList(_sender, nonce)));
     return executeCreate(_sender, _endowment, _gasPrice, _gas, _init, _origin);
 }
 
 bool Executive::create2Opcode(Address const& _sender, u256 const& _endowment, u256 const& _gasPrice,
     u256 const& _gas, bytesConstRef _init, Address const& _origin, u256 const& _salt)
 {
-    m_newAddress =
-        right160(sha3(bytes{0xff} + _sender.asBytes() + toBigEndian(_salt) + sha3(_init)));
+    m_newAddress = right160(
+        crypto::Hash(bytes{0xff} + _sender.asBytes() + toBigEndian(_salt) + crypto::Hash(_init)));
     return executeCreate(_sender, _endowment, _gasPrice, _gas, _init, _origin);
 }
 
@@ -372,6 +397,18 @@ bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u2
         m_gas = 0;
         m_excepted = TransactionException::PermissionDenied;
         revert();
+        m_ext = {};
+        return !m_ext;
+    }
+
+    if (g_BCOSConfig.version() >= V2_5_0 && m_s->frozen(_origin))
+    {
+        LOG(DEBUG) << LOG_DESC("deploy contract failed for account frozen")
+                   << LOG_KV("account", _origin);
+        writeErrInfoToOutput("Frozen account:0x" + _origin.hex());
+        m_gas = 0;
+        revert();
+        m_excepted = TransactionException::AccountFrozen;
         m_ext = {};
         return !m_ext;
     }
@@ -417,7 +454,7 @@ bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u2
     if (!_init.empty())
     {
         m_ext = make_shared<ExtVM>(m_s, m_envInfo, m_newAddress, _sender, _origin, _endowment,
-            _gasPrice, bytesConstRef(), _init, sha3(_init), m_depth, true, false);
+            _gasPrice, bytesConstRef(), _init, crypto::Hash(_init), m_depth, true, false);
         m_ext->setEvmFlags(m_evmFlags);
     }
     return !m_ext;

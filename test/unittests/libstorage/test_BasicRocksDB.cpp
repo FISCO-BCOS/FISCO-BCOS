@@ -28,6 +28,7 @@
 
 using namespace dev;
 using namespace dev::ledger;
+using namespace dev::crypto;
 using namespace dev::storage;
 using namespace rocksdb;
 
@@ -37,8 +38,7 @@ namespace test
 {
 BOOST_FIXTURE_TEST_SUITE(TestRocksDB, TestOutputHelperFixture)
 
-std::shared_ptr<BasicRocksDB> openTable(
-    std::shared_ptr<BasicRocksDB> basicRocksDB, std::string const& dbName)
+void openTable(std::shared_ptr<BasicRocksDB> basicRocksDB, std::string const& dbName)
 {
     rocksdb::Options options;
     options.IncreaseParallelism(std::max(1, (int)std::thread::hardware_concurrency()));
@@ -47,12 +47,7 @@ std::shared_ptr<BasicRocksDB> openTable(
     options.max_open_files = 1000;
     options.compression = rocksdb::kSnappyCompression;
     // open rocksDB with default option
-    auto dbHandler = basicRocksDB->Open(options, dbName);
-    if (dbHandler)
-    {
-        return basicRocksDB;
-    }
-    return nullptr;
+    basicRocksDB->Open(options, dbName);
 }
 
 // test get value
@@ -64,8 +59,7 @@ void testReGetValue(std::shared_ptr<BasicRocksDB> basicRocksDB, std::string cons
     // open DB
     if (needOpen)
     {
-        auto dbHandler = openTable(basicRocksDB, dbName);
-        BOOST_CHECK(dbHandler != nullptr);
+        openTable(basicRocksDB, dbName);
     }
     std::string value;
     for (size_t i = 0; i < succNum; i++)
@@ -82,11 +76,7 @@ std::shared_ptr<BasicRocksDB> testBasicOperation(std::shared_ptr<BasicRocksDB> b
     size_t& succNum)
 {
     // open table
-    auto dbHandler = openTable(basicRocksDB, dbName);
-    if (!dbHandler)
-    {
-        return nullptr;
-    }
+    openTable(basicRocksDB, dbName);
     std::string key = keyPrefix;
     std::string value = valuePrefix;
     ROCKSDB_LOG(DEBUG) << LOG_DESC("* Check get non-exist key from rocksDB");

@@ -24,6 +24,7 @@
 #include <json/json.h>
 #include <libdevcore/Exceptions.h>
 #include <libdevcore/FixedHash.h>
+#include <libethcore/Exceptions.h>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/crc.hpp>
@@ -57,6 +58,13 @@ void BinLogHandler::setBinLogStoragePath(const std::string& path)
 
 bool BinLogHandler::writeBlocktoBinLog(int64_t num, const std::vector<TableData::Ptr>& datas)
 {
+    if (boost::filesystem::space(m_path).available < m_binarylogSize)
+    {
+        BINLOG_HANDLER_LOG(ERROR) << LOG_DESC("Disk space is insufficient.");
+        raise(SIGTERM);
+        BOOST_THROW_EXCEPTION(dev::eth::NotEnoughAvailableSpace());
+    }
+
     bytes buffer;
     auto start = utcTimeUs();
     encodeBlock(num, datas, buffer);
@@ -304,19 +312,39 @@ void BinLogHandler::encodeEntries(
                                   << LOG_KV("id", entry->getID())
                                   << LOG_KV("status", (uint32_t)status);*/
         buffer.insert(buffer.end(), (byte*)&status, (byte*)&status + 1);
+        int flagSize = (vecField.size() - 3) / 8 + 1;  // exclude STATUS,NUM_FIELD,ID_FIELD
+        uint8_t* usedFlag = new uint8_t[flagSize];     // bit-based used to represent a field
+        memset(usedFlag, 0, sizeof(uint8_t) * flagSize);
+        int KeyIdx = 0;  // field index
         for (const auto& key : vecField)
         {
             if (key == STATUS || key == NUM_FIELD || key == ID_FIELD)
             {
                 continue;
             }
-            std::string value = "";
+            if (entry->find(key) != entry->end())
+            {
+                // "KeyIdx / 8" get the index in array, "7 - KeyIdx % 8" get the bit index in byte
+                // "A += std::pow(2, B)" set the Bth digit of A to 1, count backwards
+                usedFlag[KeyIdx / 8] |= (1 << (7 - KeyIdx % 8));
+            }
+            KeyIdx++;
+        }
+        buffer.insert(buffer.end(), (byte*)usedFlag, (byte*)usedFlag + flagSize);
+        delete[] usedFlag;
+
+        for (const auto& key : vecField)
+        {
+            if (key == STATUS || key == NUM_FIELD || key == ID_FIELD)
+            {
+                continue;
+            }
             auto fieldIt = entry->find(key);
             if (fieldIt != entry->end())
             {
-                value = fieldIt->second;
+                writeString(buffer, fieldIt->second);
+                // BINLOG_HANDLER_LOG(TRACE) << LOG_KV("k", key) << LOG_KV("v", fieldIt->second);
             }
-            writeString(buffer, value);
         }
     }
 }
@@ -341,8 +369,7 @@ void BinLogHandler::encodeTable(TableData::Ptr table, bytes& buffer)
         }
     }
     writeString(buffer, ss.str());
-    // BINLOG_HANDLER_LOG(TRACE) << "table name:" << info->name << ",fields(include key):" <<
-    // ss.str();
+    // BINLOG_HANDLER_LOG(TRACE) << "table name:" << info->name << ",fields(include key):" << ss.str();
     // table data : dirty entries and new entries
     encodeEntries(vecField, table->dirtyEntries, buffer);
     encodeEntries(vecField, table->newEntries, buffer);
@@ -379,7 +406,7 @@ void BinLogHandler::encodeBlock(
 }
 
 uint32_t BinLogHandler::decodeEntries(const bytes& buffer, uint32_t& offset,
-    const std::vector<std::string>& vecField, Entries::Ptr entries)
+    const std::vector<std::string>& vecField, Entries::Ptr entries, bool force)
 {
     uint32_t preOffset = offset;
     uint32_t entryCount = readUINT32(buffer, offset);
@@ -394,17 +421,39 @@ uint32_t BinLogHandler::decodeEntries(const bytes& buffer, uint32_t& offset,
         /*BINLOG_HANDLER_LOG(TRACE) << LOG_DESC("entry info") << LOG_KV("idx in entries", idx)
                                   << LOG_KV("_id_", entry->getID())
                                   << LOG_KV("_status_", (uint32_t)entry->getStatus());*/
+        int flagSize = (vecField.size() - 3) / 8 + 1;  // exclude STATUS,NUM_FIELD,ID_FIELD
+        uint8_t* usedFlag = new uint8_t[flagSize];     // bit-based used to represent a field
+        int fieldIdx = 0;                              // field index
+        for (int i = 0; i < flagSize; i++)
+        {
+            usedFlag[i] = *((uint8_t*)&buffer[offset]);
+            /* BINLOG_HANDLER_LOG(TRACE) << LOG_DESC("usedFlag") << LOG_KV("idx", i)
+                                      << LOG_KV("value", (uint32_t)usedFlag[i]); */
+            offset++;
+        }
         for (const auto& key : vecField)
         {
             if (key == STATUS || key == NUM_FIELD || key == ID_FIELD)
             {
                 continue;
             }
-            std::string value;
-            readString(buffer, value, offset);
-            entry->setField(key, value);
+            // "fieldIdx / 8" get the index in array, "7 - fieldIdx % 8" get the bit index in byte
+            // "A >> B & 1" check if the Bth digit of A is 1, count backwards
+            if ((usedFlag[fieldIdx / 8] >> (7 - fieldIdx % 8)) & 1)
+            {
+                std::string value;
+                readString(buffer, value, offset);
+                entry->setField(key, value);
+                // BINLOG_HANDLER_LOG(TRACE) << LOG_KV("k", key) << LOG_KV("v", value);
+            }
+            fieldIdx++;
+        }
+        if (force)
+        {
+            entry->setForce(true);
         }
         entries->addEntry(entry);
+        delete[] usedFlag;
     }
     return offset - preOffset;
 }
@@ -459,8 +508,9 @@ DecodeBlockResult BinLogHandler::decodeBlock(const bytes& buffer, int64_t startN
         {
             vecField.push_back(field);
         }
-        decodeEntries(buffer, offset, vecField, data->dirtyEntries);
-        decodeEntries(buffer, offset, vecField, data->newEntries);
+        bool force = (data->info->name == SYS_BLOCK_2_NONCES || data->info->name == SYS_HASH_2_BLOCK);
+        decodeEntries(buffer, offset, vecField, data->dirtyEntries, force);
+        decodeEntries(buffer, offset, vecField, data->newEntries, force);
         datas.push_back(data);
     }
 
@@ -515,8 +565,9 @@ bool BinLogHandler::getBlockData(
             return false;
         }
         blockLen = ntohl(blockLen);
-        BINLOG_HANDLER_LOG(INFO) << LOG_DESC("decode block") << LOG_KV("block index", binlog.offset)
-                                 << LOG_KV("block data length", blockLen);
+        BINLOG_HANDLER_LOG(DEBUG) << LOG_DESC("decode block")
+                                  << LOG_KV("block index", binlog.offset)
+                                  << LOG_KV("block data length", blockLen);
         binlog.offset += sizeof(uint32_t);
         if (binlog.offset + blockLen > binlog.length)
         {

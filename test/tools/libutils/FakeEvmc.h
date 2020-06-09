@@ -21,7 +21,7 @@
  * @date 2018-09-04
  */
 
-#include "libdevcrypto/Hash.h"
+#include "libdevcrypto/CryptoInterface.h"
 #include <evmc/evmc.h>
 #include <libdevcore/Address.h>
 #include <libdevcore/FixedHash.h>
@@ -36,7 +36,6 @@
 #include <map>
 #include <memory>
 
-
 namespace dev
 {
 namespace test
@@ -48,7 +47,7 @@ const int64_t FAKE_BLOCK_NUMBER = 100;
 const int64_t FAKE_TIMESTAMP = 123456;
 const int64_t FAKE_GAS_LIMIT = 0x13880000000000;
 const u256 FAKE_DIFFICULTY = 456;
-const h256 FAKE_BLOCK_HASH = sha3(bytes());
+const h256 FAKE_BLOCK_HASH = crypto::Hash(bytes());
 
 inline evmc_address toEvmC(Address const& _addr)
 {

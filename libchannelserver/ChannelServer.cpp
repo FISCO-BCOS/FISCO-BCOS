@@ -34,6 +34,14 @@ using namespace dev::channel;
 
 void dev::channel::ChannelServer::run()
 {
+    auto sslCtx = m_sslContext->native_handle();
+    auto cert = SSL_CTX_get0_certificate(sslCtx);
+    /// get issuer name
+    const char* issuer = X509_NAME_oneline(X509_get_issuer_name(cert), NULL, 0);
+    std::string issuerName(issuer);
+    m_certIssuerName = issuerName;
+    OPENSSL_free((void*)issuer);
+
     // ChannelReq process more request, should be larger
     m_requestThreadPool = std::make_shared<ThreadPool>("ChannelReq", 16);
     m_responseThreadPool = std::make_shared<ThreadPool>("ChannelResp", 8);
@@ -93,6 +101,7 @@ void dev::channel::ChannelServer::onAccept(
         if (m_enableSSL)
         {
             CHANNEL_LOG(TRACE) << LOG_DESC("Start SSL handshake");
+            session->sslSocket()->set_verify_callback(newVerifyCallback());
             session->sslSocket()->async_handshake(boost::asio::ssl::stream_base::server,
                 boost::bind(&ChannelServer::onHandshake, shared_from_this(),
                     boost::asio::placeholders::error, session));
@@ -123,6 +132,73 @@ void dev::channel::ChannelServer::onAccept(
     }
 
     startAccept();
+}
+
+std::function<bool(bool, boost::asio::ssl::verify_context&)>
+dev::channel::ChannelServer::newVerifyCallback()
+{
+    auto server = shared_from_this();
+    return [server](bool preverified, boost::asio::ssl::verify_context& ctx) {
+        try
+        {
+            /// return early when the certificate is invalid
+            if (!preverified)
+            {
+                return false;
+            }
+            /// get the object points to certificate
+            X509* cert = X509_STORE_CTX_get_current_cert(ctx.native_handle());
+            if (!cert)
+            {
+                CHANNEL_LOG(ERROR) << LOG_DESC("Get cert failed");
+                return preverified;
+            }
+
+            int crit = 0;
+            BASIC_CONSTRAINTS* basic =
+                (BASIC_CONSTRAINTS*)X509_get_ext_d2i(cert, NID_basic_constraints, &crit, NULL);
+            if (!basic)
+            {
+                CHANNEL_LOG(ERROR) << LOG_DESC("Get ca basic failed");
+                return preverified;
+            }
+            /// ignore ca
+            if (basic->ca)
+            {
+                // ca or agency certificate
+                CHANNEL_LOG(TRACE) << LOG_DESC("Ignore CA certificate");
+                BASIC_CONSTRAINTS_free(basic);
+                return preverified;
+            }
+
+            BASIC_CONSTRAINTS_free(basic);
+
+            /// get issuer name
+            if (server->m_checkCertIssuer)
+            {
+                const char* issuerName = X509_NAME_oneline(X509_get_issuer_name(cert), NULL, 0);
+                std::string issuer(issuerName);
+                OPENSSL_free((void*)issuerName);
+
+                if (issuer != server->m_certIssuerName)
+                {
+                    CHANNEL_LOG(ERROR)
+                        << LOG_DESC("The issuer of the two certificates are inconsistent.")
+                        << LOG_KV("sdk certificate issuer", issuer)
+                        << LOG_KV("node certificate issuer", server->m_certIssuerName);
+                    return false;
+                }
+            }
+
+            return preverified;
+        }
+        catch (std::exception& e)
+        {
+            CHANNEL_LOG(ERROR) << LOG_DESC("Cert verify failed")
+                               << boost::diagnostic_information(e);
+            return preverified;
+        }
+    };
 }
 
 void dev::channel::ChannelServer::startAccept()

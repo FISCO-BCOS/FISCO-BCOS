@@ -95,7 +95,7 @@ void hash256aux(HexMap const& _s, HexMap::const_iterator _begin, HexMap::const_i
         _rlp.appendRaw(rlp.out());
     }
     else
-        _rlp << sha3(rlp.out());
+        _rlp << crypto::Hash(rlp.out());
 }
 
 bytes rlp256(BytesMap const& _s)
@@ -113,7 +113,7 @@ bytes rlp256(BytesMap const& _s)
 
 h256 hash256(BytesMap const& _s)
 {
-    return sha3(rlp256(_s));
+    return crypto::Hash(rlp256(_s));
 }
 
 h256 orderedTrieRoot(std::vector<bytes> const& _data)

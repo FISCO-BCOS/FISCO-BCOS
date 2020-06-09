@@ -37,6 +37,7 @@ enum VERSION : uint32_t
     V2_2_0 = 0x02020000,
     V2_3_0 = 0x02030000,
     V2_4_0 = 0x02040000,
+    V2_5_0 = 0x02050000,
 };
 
 enum ProtocolVersion : uint32_t
@@ -85,6 +86,9 @@ public:
 
     bool const& enableStat() const { return m_enableStat; }
 
+    void setUseSMCrypto(bool _useSMCrypto) { m_useSMCrypto = _useSMCrypto; }
+    bool SMCrypto() const { return m_useSMCrypto; }
+
     struct DiskEncryption
     {
         bool enable = false;
@@ -109,9 +113,16 @@ public:
     const bool c_omitEmptyBlock = true;
     /// default blockLimit
     const unsigned c_blockLimit = 1000;
+    /// vote valid in 10 * c_blockLimit blocks
+    const unsigned c_voteValidLimit = c_blockLimit * 10;
     /// default compress threshold: 1KB
     const uint64_t c_compressThreshold = 1024;
     const uint64_t c_binaryLogSize = 128 * 1024 * 1024;
+    // the max block size: 20MB
+    // the max permits size(for network bandwidth limit), default is 20MB
+    // default compressRate is 4.0
+    const double c_compressRate = 4.0;
+    const uint64_t c_maxPermitsSize = 20 * 1024 * 1024 / c_compressRate;
 
     std::atomic_bool shouldExit;
 
@@ -124,6 +135,7 @@ private:
     std::string m_confDir;
     std::string m_dataDir;
     bool m_enableStat;
+    bool m_useSMCrypto;
 };
 
 #define g_BCOSConfig GlobalConfigure::instance()

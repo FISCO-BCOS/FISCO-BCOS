@@ -48,7 +48,8 @@ Transaction fakeTransaction(size_t _idx = 0)
     Transaction fakeTx(value, gasPrice, gas, dst, data, nonce);
 
     auto keyPair = KeyPair::create();
-    SignatureStruct sig = dev::sign(keyPair, fakeTx.sha3(WithoutSignature));
+    std::shared_ptr<crypto::Signature> sig =
+        dev::crypto::Sign(keyPair, fakeTx.sha3(WithoutSignature));
     /// update the signature of transaction
     fakeTx.updateSignature(sig);
     return fakeTx;

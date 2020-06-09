@@ -22,10 +22,62 @@
 
 using namespace dev;
 using namespace jsonrpc;
+using namespace dev::rpc;
 
 StatisticPotocolServer::StatisticPotocolServer(jsonrpc::IProcedureInvokationHandler& _handler)
   : RpcProtocolServerV2(_handler)
 {}
+
+bool StatisticPotocolServer::limitRPCQPS(Json::Value const& _request, std::string& _retValue)
+{
+    // get procedure name failed
+    if (!isValidRequest(_request))
+    {
+        return true;
+    }
+    auto procedureName = _request[KEY_REQUEST_METHODNAME].asString();
+    // no restrict rpc method
+    if (m_noRestrictRpcMethodSet.count(procedureName))
+    {
+        m_qpsLimiter->acquireWithoutWait();
+        return true;
+    }
+    auto canHandle = m_qpsLimiter->acquire();
+    if (!canHandle)
+    {
+        wrapResponseForNodeBusy(_request, _retValue);
+    }
+    return canHandle;
+}
+
+bool StatisticPotocolServer::limitGroupQPS(
+    dev::GROUP_ID const& _groupId, Json::Value const& _request, std::string& _retValue)
+{
+    if (_groupId == -1)
+    {
+        return true;
+    }
+    auto canHandle = m_qpsLimiter->acquireFromGroup(_groupId);
+    if (!canHandle)
+    {
+        wrapResponseForNodeBusy(_request, _retValue);
+    }
+
+    return canHandle;
+}
+
+// QPS limit exceeded, respond OverQPSLimit
+void StatisticPotocolServer::wrapResponseForNodeBusy(
+    Json::Value const& _request, std::string& _retValue)
+{
+    Json::Value resp;
+    Json::FastWriter writer;
+    std::string errorMsg =
+        _request[KEY_REQUEST_METHODNAME].asString() + " " + RPCMsg[RPCExceptionType::OverQPSLimit];
+    this->WrapError(_request, RPCExceptionType::OverQPSLimit, errorMsg, resp);
+    if (resp != Json::nullValue)
+        _retValue = writer.write(resp);
+}
 
 // Overload RpcProtocolServerV2 to implement RPC interface network statistics function
 void StatisticPotocolServer::HandleRequest(const std::string& _request, std::string& _retValue)
@@ -36,12 +88,27 @@ void StatisticPotocolServer::HandleRequest(const std::string& _request, std::str
     Json::Value req;
     Json::Value resp;
     Json::FastWriter w;
+
     dev::GROUP_ID groupId = -1;
     if (reader.parse(_request, req, false))
     {
-        if (m_networkStatHandler)
+        // get groupId
+        if (m_networkStatHandler || m_qpsLimiter)
         {
             groupId = getGroupID(req);
+        }
+        if (m_qpsLimiter)
+        {
+            // limit the whole RPC QPS
+            if (!limitRPCQPS(req, _retValue))
+            {
+                return;
+            }
+            // limit group QPS
+            if (!limitGroupQPS(groupId, req, _retValue))
+            {
+                return;
+            }
         }
         this->HandleJsonRequest(req, resp);
     }
@@ -50,27 +117,39 @@ void StatisticPotocolServer::HandleRequest(const std::string& _request, std::str
         this->WrapError(Json::nullValue, Errors::ERROR_RPC_JSON_PARSE_ERROR,
             Errors::GetErrorMessage(Errors::ERROR_RPC_JSON_PARSE_ERROR), resp);
     }
+
+
     if (resp != Json::nullValue)
         _retValue = w.write(resp);
     if (m_networkStatHandler && groupId != -1)
     {
         m_networkStatHandler->updateIncomingTrafficForRPC(groupId, _request.size());
-        m_networkStatHandler->updateOutcomingTrafficForRPC(groupId, _retValue.size());
+        m_networkStatHandler->updateOutgoingTrafficForRPC(groupId, _retValue.size());
     }
+}
+
+// check the request
+bool StatisticPotocolServer::isValidRequest(Json::Value const& _request)
+{
+    if (!_request.isObject() || !_request.isMember(KEY_REQUEST_METHODNAME) ||
+        !_request.isMember(KEY_REQUEST_PARAMETERS))
+    {
+        return false;
+    }
+    return true;
 }
 
 dev::GROUP_ID StatisticPotocolServer::getGroupID(Json::Value const& _request)
 {
     try
     {
-        if (!_request.isObject() || !_request.isMember(KEY_REQUEST_METHODNAME) ||
-            !_request.isMember(KEY_REQUEST_PARAMETERS))
+        if (!isValidRequest(_request))
         {
             return -1;
         }
 
         auto procedureName = _request[KEY_REQUEST_METHODNAME].asString();
-        if (!m_networkStatHandler->shouldStatistic(procedureName))
+        if (!m_groupRPCMethodSet.count(procedureName))
         {
             return -1;
         }

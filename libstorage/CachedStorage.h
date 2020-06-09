@@ -27,6 +27,7 @@
 #include <libdevcore/ThreadPool.h>
 #include <tbb/concurrent_queue.h>
 #include <tbb/concurrent_unordered_map.h>
+#include <tbb/concurrent_unordered_set.h>
 #include <tbb/spin_mutex.h>
 #include <tbb/spin_rw_mutex.h>
 #include <boost/multi_index/hashed_index.hpp>
@@ -81,7 +82,7 @@ public:
     typedef std::shared_ptr<Task> Ptr;
 
     int64_t num = 0;
-    std::shared_ptr<std::vector<TableData::Ptr> > datas;
+    std::shared_ptr<std::vector<TableData::Ptr>> datas;
 };
 
 class CachedStorage : public Storage
@@ -131,6 +132,9 @@ private:
         TableInfo::Ptr table, const std::string& key, bool write = false);
     void restoreCache(TableInfo::Ptr table, const std::string& key, Cache::Ptr cache);
 
+    void sortCaches(std::shared_ptr<std::vector<TableData::Ptr>> _commitDatas,
+        std::shared_ptr<std::vector<tbb::concurrent_unordered_set<std::string>>> _processedKeys);
+
     void removeCache(const std::string& table, const std::string& key);
 
     bool disabled();
@@ -150,9 +154,9 @@ private:
     std::shared_ptr<boost::multi_index_container<std::pair<std::string, std::string>,
         boost::multi_index::indexed_by<boost::multi_index::sequenced<>,
             boost::multi_index::hashed_unique<
-                boost::multi_index::identity<std::pair<std::string, std::string> > > > > >
+                boost::multi_index::identity<std::pair<std::string, std::string>>>>>>
         m_mru;
-    std::shared_ptr<tbb::concurrent_queue<std::tuple<std::string, std::string, ssize_t> > >
+    std::shared_ptr<tbb::concurrent_queue<std::tuple<std::string, std::string, ssize_t>>>
         m_mruQueue;
 
     // boost::multi_index
@@ -169,12 +173,13 @@ private:
     uint64_t m_clearInterval = 1000;
 
     dev::ThreadPool::Ptr m_taskThreadPool;
+    dev::ThreadPool::Ptr m_asyncThreadPool;
     std::shared_ptr<std::thread> m_clearThread;
 
     tbb::atomic<uint64_t> m_hitTimes;
     tbb::atomic<uint64_t> m_queryTimes;
 
-    std::shared_ptr<tbb::atomic<bool> > m_running;
+    std::shared_ptr<tbb::atomic<bool>> m_running;
 };
 
 }  // namespace storage

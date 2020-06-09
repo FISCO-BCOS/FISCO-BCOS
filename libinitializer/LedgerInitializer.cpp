@@ -75,8 +75,12 @@ vector<dev::GROUP_ID> LedgerInitializer::initLedgers()
     vector<dev::GROUP_ID> newGroupIDList;
     try
     {
-        newGroupIDList = foreachLedgerConfigure(
-            m_groupConfigPath, [&](dev::GROUP_ID const& _groupID, const string& _configFileName) {
+        newGroupIDList = foreachLedgerConfigure(m_groupConfigPath, [&](dev::GROUP_ID const&
+                                                                           _groupID,
+                                                                       const string&
+                                                                           _configFileName) {
+            try
+            {
                 // skip existing group
                 if (m_ledgerManager->isLedgerExist(_groupID))
                 {
@@ -103,7 +107,21 @@ vector<dev::GROUP_ID> LedgerInitializer::initLedgers()
                 LOG(INFO) << LOG_BADGE("LedgerInitializer init group succ")
                           << LOG_KV("groupID", _groupID);
                 return true;
-            });
+            }
+            catch (UnknownGroupStatus& e)
+            {
+                INITIALIZER_LOG(ERROR)
+                    << LOG_BADGE("LedgerInitializer")
+                    << LOG_DESC(
+                           "Invalid group status, please check `.group_status` file of the group")
+                    << LOG_KV("groupID", _groupID);
+                return false;
+            }
+            catch (exception& e)
+            {
+                BOOST_THROW_EXCEPTION(e);
+            }
+        });
     }
     catch (exception& e)
     {

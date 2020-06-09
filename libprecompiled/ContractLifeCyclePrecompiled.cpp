@@ -19,7 +19,7 @@
  *  @date 20190106
  */
 #include "ContractLifeCyclePrecompiled.h"
-
+#include "libdevcrypto/CryptoInterface.h"
 #include "libprecompiled/EntriesPrecompiled.h"
 #include "libprecompiled/TableFactoryPrecompiled.h"
 #include "libstoragestate/StorageState.h"
@@ -89,7 +89,20 @@ bool ContractLifeCyclePrecompiled::checkPermission(
             }
         }
     }
-
+    if (g_BCOSConfig.version() >= V2_5_0)
+    {
+        auto acTable = openTable(context, SYS_ACCESS_TABLE);
+        auto condition = acTable->newCondition();
+        condition->EQ(SYS_AC_ADDRESS, origin.hexPrefixed());
+        auto entries = acTable->select(SYS_ACCESS_TABLE, condition);
+        if (entries->size() != 0u)
+        {
+            PRECOMPILED_LOG(INFO) << LOG_BADGE("ContractLifeCyclePrecompiled")
+                                  << LOG_DESC("committee member is permitted to manage contract")
+                                  << LOG_KV("origin", origin.hex());
+            return true;
+        }
+    }
     return false;
 }
 
@@ -103,7 +116,17 @@ ContractStatus ContractLifeCyclePrecompiled::getContractStatus(
     }
 
     auto codeHashEntries = table->select(storagestate::ACCOUNT_CODE_HASH, table->newCondition());
-    if (toHex(EmptySHA3) == codeHashEntries->get(0)->getField(storagestate::STORAGE_VALUE))
+    h256 codeHash;
+    if (g_BCOSConfig.version() >= V2_5_0)
+    {
+        codeHash = h256(codeHashEntries->get(0)->getFieldBytes(storagestate::STORAGE_VALUE));
+    }
+    else
+    {
+        codeHash = h256(fromHex(codeHashEntries->get(0)->getField(storagestate::STORAGE_VALUE)));
+    }
+
+    if (EmptyHash == codeHash)
     {
         return ContractStatus::NotContractAddress;
     }
@@ -362,8 +385,7 @@ void ContractLifeCyclePrecompiled::listManager(
 PrecompiledExecResult::Ptr ContractLifeCyclePrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin, Address const&)
 {
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractLifeCyclePrecompiled")
-                           << LOG_KV("call param", toHex(param));
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractLifeCyclePrecompiled");
 
     // parse function name
     uint32_t func = getParamFunc(param);

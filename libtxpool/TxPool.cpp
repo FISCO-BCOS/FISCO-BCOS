@@ -124,7 +124,11 @@ void TxPool::notifyReceipt(dev::eth::Transaction::Ptr _tx, ImportResult const& _
         break;
     // invalid transaction: 10005
     case ImportResult::Malformed:
-        txException = TransactionException ::MalformedTx;
+        txException = TransactionException::MalformedTx;
+        break;
+    // over the groupMemory Limit: 10006
+    case ImportResult::OverGroupMemoryLimit:
+        txException = TransactionException::OverGroupMemoryLimit;
         break;
     default:
         txException = TransactionException::TransactionRefused;
@@ -186,6 +190,11 @@ std::pair<h256, Address> TxPool::submitTransactions(dev::eth::Transaction::Ptr _
                                   "BlockLimitCheckFailed, txBlockLimit=" + _tx->blockLimit().str() +
                                   ", txHash=" + _tx->sha3().abridged()));
     }
+    else if (ImportResult::OverGroupMemoryLimit == ret)
+    {
+        BOOST_THROW_EXCEPTION(TransactionRefused() << errinfo_comment(
+                                  "OverGroupMemoryLimit, txHash=" + _tx->sha3().abridged()));
+    }
     else
     {
         BOOST_THROW_EXCEPTION(TransactionRefused() << errinfo_comment(
@@ -215,6 +224,15 @@ bool TxPool::isSealerOrObserver()
 ImportResult TxPool::import(Transaction::Ptr _tx, IfDropped)
 {
     _tx->setImportTime(u256(utcTime()));
+    auto memoryUsed = m_usedMemorySize + _tx->capacity();
+    if (memoryUsed > m_maxMemoryLimit)
+    {
+        TXPOOL_LOG(DEBUG) << LOG_DESC("import: overMemoryLimit") << LOG_KV("memoryUsed", memoryUsed)
+                          << LOG_KV("txCapacity", _tx->capacity())
+                          << LOG_KV("memoryLimit", m_maxMemoryLimit)
+                          << LOG_KV("hash", _tx->sha3().abridged());
+        return ImportResult::OverGroupMemoryLimit;
+    }
     UpgradableGuard l(m_lock);
     /// check the txpool size
     if (m_txsQueue.size() >= m_limit)
@@ -230,6 +248,8 @@ ImportResult TxPool::import(Transaction::Ptr _tx, IfDropped)
             if (insert(_tx))
             {
                 m_txpoolNonceChecker->insertCache(*_tx);
+                // only if the transaction import is successful, update m_usedMemorySize
+                m_usedMemorySize += _tx->capacity();
             }
         }
         {
@@ -373,7 +393,7 @@ bool TxPool::removeTrans(h256 const& _txHash, bool _needTriggerCallback,
         transaction = *(p_tx->second);
         m_txsQueue.erase(p_tx->second);
         m_txsHash.erase(p_tx);
-
+        m_usedMemorySize -= transaction->capacity();
         // m_delTransactions.unsafe_erase(_txHash);
     }
     // call transaction callback
@@ -817,5 +837,42 @@ bool TxPool::initPartiallyBlock(dev::eth::Block::Ptr _block)
     // hit all the transactions
     return true;
 }
+
+// when the node changed from sealer/observer node to free-node,
+// Update the status of all transactions,  so that when the node becomes an observer or a sealer,
+// broadcast the remaining transactions in the transaction pool to other nodes
+void TxPool::freshTxsStatus()
+{
+    TXPOOL_LOG(INFO) << LOG_DESC(
+        "freshTxsStatus for the node changed from sealer/observer node to free-node");
+    // set the 'synced' flag of every remaining transactions into false so that it can be
+    // broadcasted
+    {
+        UpgradableGuard l(m_lock);
+        // without remaining transactions
+        if (m_txsQueue.size() == 0)
+        {
+            TXPOOL_LOG(INFO) << LOG_DESC("freshTxsStatus: return for the txPool is empty");
+            return;
+        }
+        TXPOOL_LOG(INFO) << LOG_DESC("freshTxsStatus") << LOG_KV("txsSize", m_txsQueue.size());
+        UpgradeGuard ul(l);
+        for (auto const& tx : m_txsQueue)
+        {
+            tx->setSynced(false);
+        }
+    }
+    // clear m_transactionKnownBy and m_txsHashFilter, so that the remaining txs can be broadcasted
+    // after changed into sealer/observer
+    {
+        WriteGuard l(x_transactionKnownBy);
+        m_transactionKnownBy.clear();
+    }
+    {
+        WriteGuard l(x_txsHashFilter);
+        m_txsHashFilter->clear();
+    }
+}
+
 }  // namespace txpool
 }  // namespace dev

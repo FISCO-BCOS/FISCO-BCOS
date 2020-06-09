@@ -21,7 +21,7 @@
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/RLP.h>
 #include <libdevcrypto/Common.h>
-#include <libdevcrypto/Hash.h>
+#include <libdevcrypto/CryptoInterface.h>
 #include <libethcore/Common.h>
 #include <boost/optional.hpp>
 
@@ -127,10 +127,6 @@ public:
     /// transaction RLP.
     void forceSender(Address const& _a) { m_sender = _a; }
 
-    /// @throws TransactionIsUnsigned if signature was not initialized
-    /// @throws InvalidSValue if the signature has an invalid S value.
-    void checkLowS() const;
-
     /// @returns true if transaction is non-null.
     explicit operator bool() const { return m_type != NullTransaction; }
 
@@ -214,7 +210,7 @@ public:
     void setImportTime(u256 _t) { m_importTime = _t; }
 
     /// @returns true if the transaction was signed
-    bool hasSignature() const { return m_vrs.is_initialized(); }
+    bool hasSignature() const { return (bool)m_vrs; }
 
     /// @returns true if the transaction was signed with zero signature
     bool hasZeroSignature() const { return m_vrs && isZeroSignature(m_vrs->r, m_vrs->s); }
@@ -222,8 +218,8 @@ public:
     /// @returns the signature of the transaction (the signature has the sender
     /// encoded in it)
     /// @throws TransactionIsUnsigned if signature was not initialized
-    SignatureStruct const& signature() const;
-    void updateSignature(boost::optional<SignatureStruct> const& sig)
+    std::shared_ptr<crypto::Signature> const& signature() const;
+    void updateSignature(std::shared_ptr<crypto::Signature> sig)
     {
         m_vrs = sig;
         m_hashWith = h256(0);
@@ -254,6 +250,8 @@ public:
     void setSynced(bool const& _synced) { m_synced = _synced; }
     bool synced() const { return m_synced; }
 
+    int64_t capacity() { return (m_data.size() + m_rlpBuffer.size() + m_extraData.size()); }
+
 protected:
     /// Type of transaction.
     enum Type
@@ -275,7 +273,7 @@ protected:
     /// Clears the signature.
     void clearSignature()
     {
-        m_vrs = SignatureStruct();
+        m_vrs.reset();
         m_sender = Address();
     }
 
@@ -294,10 +292,10 @@ protected:
                    ///< unused gas gets refunded once the contract is ended.
     bytes m_data;  ///< The data associated with the transaction, or the
                    ///< initialiser if it's a creation transaction.
-    boost::optional<SignatureStruct> m_vrs;  ///< The signature of the transaction.
-                                             ///< Encodes the sender.
-    mutable h256 m_hashWith;                 ///< Cached hash of transaction with signature.
-    mutable Address m_sender;                ///< Cached sender, determined from signature.
+    std::shared_ptr<crypto::Signature> m_vrs;  ///< The signature of the transaction.
+                                               ///< Encodes the sender.
+    mutable h256 m_hashWith;                   ///< Cached hash of transaction with signature.
+    mutable Address m_sender;                  ///< Cached sender, determined from signature.
     u256 m_blockLimit;            ///< The latest block number to be packaged for transaction.
     u256 m_importTime = u256(0);  ///< The utc time at which a transaction enters the queue.
 

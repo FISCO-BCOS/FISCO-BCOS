@@ -32,7 +32,13 @@ namespace dev
 namespace stat
 {
 class NetworkStatHandler;
+class ChannelNetworkStatHandler;
+}  // namespace stat
+namespace flowlimit
+{
+class RateLimiter;
 }
+
 namespace p2p
 {
 class P2PMessage;
@@ -63,8 +69,9 @@ public:
     virtual void asyncSendMessageByTopic(std::string topic, std::shared_ptr<P2PMessage> message,
         CallbackFuncWithSession callback, dev::network::Options options) = 0;
 
-    virtual void asyncMulticastMessageByTopic(
-        std::string topic, std::shared_ptr<P2PMessage> message) = 0;
+    virtual bool asyncMulticastMessageByTopic(std::string topic,
+        std::shared_ptr<P2PMessage> message,
+        std::shared_ptr<dev::flowlimit::RateLimiter> _bandwidthLimiter = nullptr) = 0;
 
     virtual void asyncMulticastMessageByNodeIDList(
         NodeIDs nodeIDs, std::shared_ptr<P2PMessage> message) = 0;
@@ -103,6 +110,14 @@ public:
         GROUP_ID const&, std::shared_ptr<dev::stat::NetworkStatHandler>)
     {}
     virtual void removeNetworkStatHandlerByGroupID(GROUP_ID const&) {}
+
+    virtual void setNodeBandwidthLimiter(std::shared_ptr<dev::flowlimit::RateLimiter>) {}
+    virtual void registerGroupBandwidthLimiter(
+        GROUP_ID const&, std::shared_ptr<dev::flowlimit::RateLimiter>)
+    {}
+    virtual void removeGroupBandwidthLimiter(GROUP_ID const&) {}
+    virtual void setChannelNetworkStatHandler(std::shared_ptr<dev::stat::ChannelNetworkStatHandler>)
+    {}
 };
 
 }  // namespace p2p

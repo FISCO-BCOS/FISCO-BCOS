@@ -41,9 +41,6 @@ SystemConfigPrecompiled::SystemConfigPrecompiled()
 PrecompiledExecResult::Ptr SystemConfigPrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin, Address const&)
 {
-    PRECOMPILED_LOG(TRACE) << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("call")
-                           << LOG_KV("param", toHex(param));
-
     // parse function name
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);

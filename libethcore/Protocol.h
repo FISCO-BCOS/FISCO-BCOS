@@ -26,6 +26,9 @@
 #include <stdint.h>
 #include <iosfwd>
 
+#define MAX_VALUE_IN_MB (INT64_MAX / (1024 * 1024))
+#define MAX_VALUE_IN_Mb (INT64_MAX / (1024 * 128))
+
 namespace dev
 {
 typedef int16_t GROUP_ID;

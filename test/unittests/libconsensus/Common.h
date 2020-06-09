@@ -22,10 +22,13 @@
  * @date: 2018-10-11
  */
 #pragma once
+#include <libconfig/GlobalConfigure.h>
 #include <libconsensus/Common.h>
 #include <libconsensus/pbft/Common.h>
 #include <libdevcrypto/Common.h>
+#include <libdevcrypto/SM2Signature.h>
 #include <boost/test/unit_test.hpp>
+
 namespace dev
 {
 namespace test
@@ -41,24 +44,32 @@ void checkPBFTMsg(T const& msg, KeyPair const _keyPair = KeyPair::create(),
     BOOST_CHECK(msg.idx == _idx);
     BOOST_CHECK(msg.timestamp == _timestamp);
     BOOST_CHECK(msg.block_hash == _blockHash);
-    if (msg.sig != Signature())
+    if (!msg.sig.empty())
     {
-#ifdef FISCO_GM
-        bool result = dev::verify(dev::toPublic(_keyPair.secret()), msg.sig, msg.block_hash);
-        BOOST_CHECK_EQUAL(result, true);
-#else
-        BOOST_CHECK_EQUAL(msg.sig, msg.signHash(msg.block_hash, _keyPair));
-#endif
+        if (g_BCOSConfig.SMCrypto())
+        {
+            bool result =
+                crypto::Verify(_keyPair.pub(), sm2SignatureFromBytes(msg.sig), msg.block_hash);
+            BOOST_CHECK_EQUAL(result, true);
+        }
+        else
+        {
+            BOOST_CHECK_EQUAL(toHex(msg.sig), toHex(msg.signHash(msg.block_hash, _keyPair)));
+        }
     }
-    if (msg.sig2 != Signature())
+    if (!msg.sig2.empty())
     {
-#ifdef FISCO_GM
-        bool result1 =
-            dev::verify(dev::toPublic(_keyPair.secret()), msg.sig2, msg.fieldsWithoutBlock());
-        BOOST_CHECK_EQUAL(result1, true);
-#else
-        BOOST_CHECK_EQUAL(msg.sig2, msg.signHash(msg.fieldsWithoutBlock(), _keyPair));
-#endif
+        if (g_BCOSConfig.SMCrypto())
+        {
+            bool result1 = crypto::Verify(
+                _keyPair.pub(), sm2SignatureFromBytes(msg.sig2), msg.fieldsWithoutBlock());
+            BOOST_CHECK_EQUAL(result1, true);
+        }
+        else
+        {
+            BOOST_CHECK_EQUAL(
+                toHex(msg.sig2), toHex(msg.signHash(msg.fieldsWithoutBlock(), _keyPair)));
+        }
     }
 }
 

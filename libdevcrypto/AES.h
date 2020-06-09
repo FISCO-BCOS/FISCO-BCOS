@@ -15,11 +15,8 @@
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
 /** @file AES.h
- * @author Alex Leverington <nessence@gmail.com> asherli
+ * @author asherli
  * @date 2018
- *
- * AES
- * todo: use openssl tassl
  */
 
 #pragma once
@@ -28,9 +25,17 @@
 
 namespace dev
 {
-DEV_SIMPLE_EXCEPTION(AESKeyLengthError);
-bytes aesCBCEncrypt(bytesConstRef _plainData, bytesConstRef _key);
-bytes aesCBCDecrypt(bytesConstRef _cypherData, bytesConstRef _key);
+namespace crypto
+{
 std::string aesCBCEncrypt(const std::string& _plainData, const std::string& _key);
 std::string aesCBCDecrypt(const std::string& _cypherData, const std::string& _key);
+std::string aesCBCEncrypt(
+    const std::string& _plainData, const std::string& _key, const std::string& _ivData);
+std::string aesCBCDecrypt(
+    const std::string& _cypherData, const std::string& _key, const std::string& _ivData);
+std::string aesCBCEncrypt(const unsigned char* _plainData, size_t _plainDataSize,
+    const unsigned char* _key, size_t _keySize, const unsigned char* _ivData);
+std::string aesCBCDecrypt(const unsigned char* _cypherData, size_t _cypherDataSize,
+    const unsigned char* _key, size_t _keySize, const unsigned char* _ivData);
+}  // namespace crypto
 }  // namespace dev

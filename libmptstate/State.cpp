@@ -271,7 +271,7 @@ std::pair<State::AddressMap, h256> State::addresses(
     for (auto const& addressAndAccount : m_cache)
     {
         auto const& address = addressAndAccount.first;
-        auto const addressHash = sha3(address);
+        auto const addressHash = crypto::Hash(address);
         auto const& account = addressAndAccount.second;
         if (account.isDirty() && account.isAlive() && addressHash >= _beginHash)
             cacheAddresses.emplace(addressHash, address);
@@ -317,7 +317,7 @@ bool State::accountNonemptyAndExisting(Address const& _address) const
 bool State::addressHasCode(Address const& _id) const
 {
     if (auto a = account(_id))
-        return a->codeHash() != EmptySHA3;
+        return a->codeHash() != EmptyHash;
     else
         return false;
 }
@@ -502,7 +502,7 @@ map<h256, pair<u256, u256>> State::storage(Address const& _id) const
         for (auto const& i : a->storageOverlay())
         {
             h256 const key = i.first;
-            h256 const hashedKey = sha3(key);
+            h256 const hashedKey = crypto::Hash(key);
             if (i.second)
                 ret[hashedKey] = i;
             else
@@ -531,7 +531,7 @@ h256 State::storageRoot(Address const& _id) const
 bytes const& State::code(Address const& _addr) const
 {
     Account const* a = account(_addr);
-    if (!a || a->codeHash() == EmptySHA3)
+    if (!a || a->codeHash() == EmptyHash)
         return NullBytes;
 
     if (a->code().empty())
@@ -556,7 +556,7 @@ h256 State::codeHash(Address const& _a) const
     if (Account const* a = account(_a))
         return a->codeHash();
     else
-        return EmptySHA3;
+        return EmptyHash;
 }
 
 size_t State::codeSize(Address const& _a) const
@@ -653,8 +653,8 @@ std::ostream& dev::mptstate::operator<<(std::ostream& _out, State const& _s)
 
             stringstream contout;
 
-            if ((cache && cache->codeHash() == EmptySHA3) ||
-                (!cache && r && (h256)r[3] != EmptySHA3))
+            if ((cache && cache->codeHash() == EmptyHash) ||
+                (!cache && r && (h256)r[3] != EmptyHash))
             {
                 std::map<u256, u256> mem;
                 std::set<u256> back;

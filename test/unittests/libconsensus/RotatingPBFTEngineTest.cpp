@@ -22,6 +22,8 @@
  */
 
 #include "RotatingPBFTEngineTest.h"
+#include <libconfig/GlobalConfigure.h>
+#include <random>
 
 using namespace dev::test;
 
@@ -138,16 +140,19 @@ BOOST_AUTO_TEST_CASE(testRawPrepareTreeBroadcast)
 
     std::shared_ptr<P2PMessage> receivedP2pMsg = nullptr;
     // wait broadcast enqueue finished
-    while (!receivedP2pMsg)
+    int count = 10000;
+    while (!receivedP2pMsg && --count > 0)
     {
         receivedP2pMsg = leaderService->getAsyncSendMessageByNodeID(
             followRPBFT->fakePBFTSuite()->consensus()->keyPair().pub());
-        sleep(1);
+        this_thread::sleep_for(std::chrono::milliseconds(1));
     }
+
     for (auto const& node : leaderRPBFT->fakePBFTSuite()->consensus()->sealerList())
     {
         compareAndClearAsyncSendTime(*(leaderRPBFT->fakePBFTSuite()), node, 1);
     }
+
 
     // the follower receive rawPrepare message from the leader, no forward
     // fake session for the leader
@@ -157,6 +162,7 @@ BOOST_AUTO_TEST_CASE(testRawPrepareTreeBroadcast)
     NetworkException networkException;
     followRPBFT->fakePBFTSuite()->consensus()->wrapperOnRecvPBFTMessage(
         networkException, leaderSession, receivedP2pMsg);
+
     for (auto const& node : followRPBFT->fakePBFTSuite()->consensus()->sealerList())
     {
         compareAndClearAsyncSendTime(*(followRPBFT->fakePBFTSuite()), node, 0);
@@ -184,19 +190,17 @@ BOOST_AUTO_TEST_CASE(testRawPrepareTreeBroadcast)
         sealerSet, leaderRPBFT->fakePBFTSuite()->consensus()->nodeIdx());
     BOOST_CHECK(selectedNodes->size() == 3);
     receivedP2pMsg = nullptr;
-    while (!receivedP2pMsg)
+    count = 10000;
+    while (!receivedP2pMsg && --count > 0)
     {
         receivedP2pMsg = leaderService->getAsyncSendMessageByNodeID((*selectedNodes)[0]);
-        sleep(1);
+        this_thread::sleep_for(std::chrono::milliseconds(1));
     }
+
     for (auto const& node : *selectedNodes)
     {
         compareAndClearAsyncSendTime(*(leaderRPBFT->fakePBFTSuite()), node, 1);
     }
-
-    // check the follow forward and handle the message
-    followRPBFT->fakePBFTSuite()->consensus()->wrapperOnRecvPBFTMessage(
-        networkException, leaderSession, receivedP2pMsg);
 
     selectedNodes = followRPBFT->fakePBFTSuite()->consensus()->treeRouter()->selectNodes(
         sealerSet, prepareReq->idx);
@@ -213,10 +217,11 @@ BOOST_AUTO_TEST_CASE(testRawPrepareTreeBroadcast)
     else
     {
         receivedP2pMsg = nullptr;
-        while (!receivedP2pMsg)
+        count = 10000;
+        while (!receivedP2pMsg && --count > 0)
         {
             receivedP2pMsg = followService->getAsyncSendMessageByNodeID((*selectedNodes)[0]);
-            sleep(1);
+            this_thread::sleep_for(std::chrono::milliseconds(1));
         }
 
         for (auto const& node : *selectedNodes)
@@ -257,11 +262,10 @@ BOOST_AUTO_TEST_CASE(testRawPrepareTreeBroadcast)
 
     // the chosed node receive rawPrepareStatus and request the rawPrepareReq
     // make sure the followRPBFT is not the child of the leaderRPBFT
-    do
-    {
-        std::srand(utcTime());
-        index = std::rand() % chosedNodes.size();
-    } while (index >= 0 && index <= 3);
+    std::mt19937 rng;
+    rng.seed(std::random_device()());
+    std::uniform_int_distribution<std::mt19937::result_type> dist(4, chosedNodes.size() - 1);
+    index = dist(rng);
 
     followRPBFT->fakePBFTSuite()->consensus()->setKeyPair(
         followRPBFT->fakePBFTSuite()->m_keyPair[chosedNodes[index].second]);
@@ -273,17 +277,18 @@ BOOST_AUTO_TEST_CASE(testRawPrepareTreeBroadcast)
     // onReceiveRawPrepareStatus
     followRPBFT->fakePBFTSuite()->consensus()->rpbftReqCache()->requestedPrepareQueue()->clear();
     leaderRPBFT->fakePBFTSuite()->consensus()->rpbftReqCache()->requestedPrepareQueue()->clear();
-    // case1: connect with all the node, but the parent node doesn't send rawPrepare to the node,
-    // request again after 100ms
+    // case1: connect with all the node, but the parent node doesn't send rawPrepare to the
+    // node, request again after 100ms
     followRPBFT->fakePBFTSuite()->consensus()->wrapperOnReceiveRawPrepareStatus(
         leaderSession2, receivedP2pMsg);
     // wait for request
     std::shared_ptr<P2PMessage> receivedP2pMsg2 = nullptr;
-    while (!receivedP2pMsg2)
+    count = 10000;
+    while (!receivedP2pMsg2 && --count > 0)
     {
         receivedP2pMsg2 = followService->getAsyncSendMessageByNodeID(
             leaderRPBFT->fakePBFTSuite()->consensus()->keyPair().pub());
-        sleep(1);
+        this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     compareAndClearAsyncSendTime(*(followRPBFT->fakePBFTSuite()),
         leaderRPBFT->fakePBFTSuite()->consensus()->keyPair().pub(), 1);
@@ -298,11 +303,12 @@ BOOST_AUTO_TEST_CASE(testRawPrepareTreeBroadcast)
         networkException, leaderSession2, receivedP2pMsg);
 
     receivedP2pMsg = nullptr;
-    while (!receivedP2pMsg)
+    count = 10000;
+    while (!receivedP2pMsg && --count > 0)
     {
         receivedP2pMsg = followService->getAsyncSendMessageByNodeID(
             leaderRPBFT->fakePBFTSuite()->consensus()->keyPair().pub());
-        sleep(1);
+        this_thread::sleep_for(std::chrono::milliseconds(1));
     }
     compareAndClearAsyncSendTime(*(followRPBFT->fakePBFTSuite()),
         leaderRPBFT->fakePBFTSuite()->consensus()->keyPair().pub(), 1);
@@ -314,13 +320,13 @@ BOOST_AUTO_TEST_CASE(testRawPrepareTreeBroadcast)
     leaderRPBFT->fakePBFTSuite()->consensus()->wrapperHandleP2PMessage(
         networkException, followSession, receivedP2pMsg);
     receivedP2pMsg = nullptr;
-    while (!receivedP2pMsg)
+    count = 10000;
+    while (!receivedP2pMsg && --count > 0)
     {
         receivedP2pMsg = leaderService->getAsyncSendMessageByNodeID(
             followRPBFT->fakePBFTSuite()->consensus()->keyPair().pub());
-        sleep(1);
+        this_thread::sleep_for(std::chrono::milliseconds(1));
     }
-
     // onReceiveRawPrepareResponse
     followRPBFT->fakePBFTSuite()->consensus()->wrapperOnReceiveRawPrepareResponse(
         leaderSession2, receivedP2pMsg);

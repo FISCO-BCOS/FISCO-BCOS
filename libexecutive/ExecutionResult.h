@@ -22,7 +22,6 @@
 #pragma once
 
 #include <libdevcore/RLP.h>
-#include <libdevcrypto/Hash.h>
 #include <libethcore/Common.h>
 #include <libethcore/Exceptions.h>
 
@@ -69,12 +68,14 @@ enum class TransactionException : uint32_t
     TxPoolIsFull = 28,
     TransactionRefused = 29,
     ContractFrozen = 30,
+    AccountFrozen = 31,
     AlreadyKnown = 10000,  /// txPool related errors
     AlreadyInChain = 10001,
     InvalidChainId = 10002,
     InvalidGroupId = 10003,
     RequestNotBelongToTheGroup = 10004,
-    MalformedTx = 10005
+    MalformedTx = 10005,
+    OverGroupMemoryLimit = 10006
 };
 
 enum class CodeDeposit

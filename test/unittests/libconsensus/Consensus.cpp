@@ -24,6 +24,7 @@
 #include "FakePBFTEngine.h"
 #include <libconsensus/Sealer.h>
 #include <libconsensus/pbft/PBFTSealer.h>
+#include <libdevcrypto/CryptoInterface.h>
 #include <libethcore/Protocol.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
@@ -52,18 +53,17 @@ public:
         Address dst = toAddress(KeyPair::create().pub());
         std::string str = "transaction";
         bytes data(str.begin(), str.end());
-        Transaction tx(value, gasPrice, gas, dst, data);
         auto keyPair = KeyPair::create();
         ///< Summit 10 transactions to txpool.
         const size_t txCnt = 10;
         for (size_t i = 0; i < txCnt; i++)
         {
-            tx.setNonce(tx.nonce() + u256(i));
-            tx.setBlockLimit(m_txpoolCreator->m_blockChain->number() + 2);
-            dev::Signature sig = sign(keyPair, tx.sha3(WithoutSignature));
-            tx.updateSignature(SignatureStruct(sig));
-            std::shared_ptr<Transaction> p_tx = std::make_shared<Transaction>(tx);
-            m_txpoolCreator->m_txPool->submitTransactions(p_tx);
+            auto tx = std::make_shared<Transaction>(value, gasPrice, gas, dst, data);
+            tx->setNonce(tx->nonce() + utcTime() + u256(i));
+            tx->setBlockLimit(m_txpoolCreator->m_blockChain->number() + 2);
+            auto sig = crypto::Sign(keyPair, tx->sha3(WithoutSignature));
+            tx->updateSignature(sig);
+            m_txpoolCreator->m_txPool->submitTransactions(tx);
         }
         BOOST_CHECK(m_txpoolCreator->m_txPool->pendingSize() == txCnt);
         m_fakePBFT = std::make_shared<FakePBFTSealer>(m_txpoolCreator->m_topicService,
@@ -275,11 +275,11 @@ BOOST_AUTO_TEST_CASE(testUpdateConsensusNodeList)
     {
         observerList.push_back(KeyPair::create().pub());
     }
+    std::sort(sealerList.begin(), sealerList.end());
     sealerFixture.m_txpoolCreator->m_blockChain->setSealerList(sealerList);
     sealerFixture.m_txpoolCreator->m_blockChain->setObserverList(observerList);
     fake_pbft->engine()->fakeUpdateConsensusNodeList();
     /// check sealerList
-    std::sort(sealerList.begin(), sealerList.end());
     BOOST_CHECK(fake_pbft->engine()->sealerList() == sealerList);
 }
 

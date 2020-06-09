@@ -25,7 +25,7 @@
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/FixedHash.h>
-#include <libdevcrypto/Hash.h>
+#include <libdevcrypto/CryptoInterface.h>
 #include <tbb/concurrent_vector.h>
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_sort.h>
@@ -73,9 +73,15 @@ void MemoryTableFactory2::init()
     }
 }
 
-Table::Ptr MemoryTableFactory2::openTable(const std::string& tableName, bool authorityFlag, bool)
+Table::Ptr MemoryTableFactory2::openTable(const std::string& _tableName, bool _authorityFlag, bool)
 {
-    RecursiveGuard l(x_name2Table);
+    tbb::spin_mutex::scoped_lock l(x_name2Table);
+    return openTableWithoutLock(_tableName, _authorityFlag);
+}
+
+Table::Ptr MemoryTableFactory2::openTableWithoutLock(
+    const std::string& tableName, bool authorityFlag, bool)
+{
     auto it = m_name2Table.find(tableName);
     if (it != m_name2Table.end())
     {
@@ -89,7 +95,7 @@ Table::Ptr MemoryTableFactory2::openTable(const std::string& tableName, bool aut
     }
     else
     {
-        auto tempSysTable = openTable(SYS_TABLES);
+        auto tempSysTable = openTableWithoutLock(SYS_TABLES);
         auto tableEntries = tempSysTable->select(tableName, tempSysTable->newCondition());
         if (tableEntries->size() == 0u)
         {
@@ -153,7 +159,7 @@ Table::Ptr MemoryTableFactory2::createTable(const std::string& tableName,
     auto sysTable = openTable(SYS_TABLES, authorityFlag);
     // To make sure the table exists
     {
-        RecursiveGuard l(x_name2Table);
+        tbb::spin_mutex::scoped_lock l(x_name2Table);
         auto tableEntries = sysTable->select(tableName, sysTable->newCondition());
         if (tableEntries->size() != 0)
         {
@@ -177,6 +183,9 @@ Table::Ptr MemoryTableFactory2::createTable(const std::string& tableName,
                                  << LOG_KV("table name", tableName);
             BOOST_THROW_EXCEPTION(StorageException(result, "create table permission denied"));
         }
+        STORAGE_LOG(INFO) << LOG_BADGE("MemoryTableFactory2") << LOG_DESC("createTable")
+                          << LOG_KV("table name", tableName) << LOG_KV("keyField", keyField)
+                          << LOG_KV("valueField", valueField);
     }
     return openTable(tableName, authorityFlag, isPara);
 }
@@ -199,6 +208,10 @@ h256 MemoryTableFactory2::hash()
     {
         if (it.second->tableInfo()->enableConsensus)
         {
+            if (g_BCOSConfig.version() >= V2_5_0 && !it.second->dirty())
+            {  // clean table dont calculate hash
+                continue;
+            }
             tables.push_back(std::make_pair(it.first, it.second));
         }
     }
@@ -217,20 +230,22 @@ h256 MemoryTableFactory2::hash()
                 h256 hash = table.second->hash();
                 if (hash == h256())
                 {
-#if 0
-                    cout << LOG_BADGE("MemoryTableFactory2 hash continued ") << it << "/"
-                         << tables.size() << LOG_KV("tableName", table.first)
-                         << LOG_KV("blockNum", m_blockNum) << endl;
+#if FISCO_DEBUG
+                    STORAGE_LOG(DEBUG) << LOG_BADGE("FISCO_DEBUG")
+                                       << LOG_BADGE("MemoryTableFactory2 hash continued ") << it + 1
+                                       << "/" << tables.size() << LOG_KV("tableName", table.first)
+                                       << LOG_KV("blockNum", m_blockNum);
 #endif
                     continue;
                 }
 
                 bytes tableHash = hash.asBytes();
                 memcpy(&data[it * 32], &tableHash[0], tableHash.size());
-#if 0
-                cout << LOG_BADGE("MemoryTableFactory2 hash ") << it << "/" << tables.size()
-                     << LOG_KV("tableName", table.first) << LOG_KV("hash", hash)
-                     << LOG_KV("blockNum", m_blockNum) << endl;
+#if FISCO_DEBUG
+                STORAGE_LOG(DEBUG)
+                    << LOG_BADGE("FISCO_DEBUG") << LOG_BADGE("MemoryTableFactory2 hash ") << it + 1
+                    << "/" << tables.size() << LOG_KV("tableName", table.first)
+                    << LOG_KV("hash", hash) << LOG_KV("blockNum", m_blockNum);
 #endif
             }
         });
@@ -239,7 +254,25 @@ h256 MemoryTableFactory2::hash()
     {
         return h256();
     }
-    m_hash = dev::sha256(&data);
+    if (g_BCOSConfig.version() <= V2_4_0)
+    {
+        if (g_BCOSConfig.SMCrypto())
+        {
+            m_hash = dev::sm3(&data);
+        }
+        else
+        {
+            // in previous version(<= 2.4.0), we use sha256(...) to calculate hash of the data,
+            // for now, to keep consistent with transction's implementation, we decide to use
+            // sha3(...) to calculate hash of the data. This `else` branch is just for
+            // compatibility.
+            m_hash = dev::sha256(&data);
+        }
+    }
+    else
+    {
+        m_hash = crypto::Hash(&data);
+    }
     return m_hash;
 }
 
@@ -333,7 +366,6 @@ void MemoryTableFactory2::commitDB(dev::h256 const&, int64_t _blockNumber)
     }
     auto commit_time_cost = utcTime() - record_time;
     record_time = utcTime();
-
     m_name2Table.clear();
     auto clear_time_cost = utcTime() - record_time;
     STORAGE_LOG(DEBUG) << LOG_BADGE("Commit") << LOG_DESC("Commit db time record")
@@ -345,7 +377,7 @@ void MemoryTableFactory2::commitDB(dev::h256 const&, int64_t _blockNumber)
 
 void MemoryTableFactory2::setAuthorizedAddress(storage::TableInfo::Ptr _tableInfo)
 {
-    typename Table::Ptr accessTable = openTable(SYS_ACCESS_TABLE);
+    typename Table::Ptr accessTable = openTableWithoutLock(SYS_ACCESS_TABLE);
     if (accessTable)
     {
         auto tableEntries = accessTable->select(_tableInfo->name, accessTable->newCondition());

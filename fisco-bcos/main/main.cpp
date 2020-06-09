@@ -29,6 +29,7 @@
 #include <clocale>
 #include <iostream>
 #include <memory>
+#include <thread>
 
 using namespace std;
 using namespace dev;

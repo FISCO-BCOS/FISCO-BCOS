@@ -21,18 +21,17 @@
 
 #include "Hash.h"
 #include <libdevcore/RLP.h>
+#include <secp256k1_sha256.h>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+
 using namespace std;
 using namespace dev;
 
 namespace dev
 {
-h256 EmptySHA3 = sha3(bytesConstRef());
-h256 EmptyListSHA3 = sha3(rlpList());
-
 namespace keccak
 {
 /** libkeccak-tiny
@@ -187,7 +186,12 @@ bool sha3(bytesConstRef _input, bytesRef o_output)
 // add sha2 -- sha256 to this file begin
 h256 sha256(bytesConstRef _input) noexcept
 {
-    return standardSha256(_input);
+    secp256k1_sha256_t ctx;
+    secp256k1_sha256_initialize(&ctx);
+    secp256k1_sha256_write(&ctx, _input.data(), _input.size());
+    h256 hash;
+    secp256k1_sha256_finalize(&ctx, hash.data());
+    return hash;
 }
 // add sha2 -- sha256 to this file end
 // add RIPEMD-160

@@ -123,7 +123,7 @@ public:
         status_obj["max_faulty_leader"] = IDXTYPE(m_f);
         status_obj["consensusedBlockNumber"] = int64_t(m_consensusBlockNumber);
         status_obj["highestblockNumber"] = m_highestBlock.number();
-        status_obj["highestblockHash"] = "0x" + toHex(m_highestBlock.hash());
+        status_obj["highestblockHash"] = toHexPrefixed(m_highestBlock.hash());
         status_obj["groupId"] = m_groupId;
         status_obj["protocolId"] = m_protocolId;
         status_obj["accountType"] = NodeAccountType(m_accountType);

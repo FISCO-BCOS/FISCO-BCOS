@@ -16,7 +16,7 @@
  */
 
 #pragma once
-#include "libdevcrypto/Hash.h"
+#include "libdevcrypto/CryptoInterface.h"
 #include <evmc/helpers.h>
 #include <libdevcore/CommonJS.h>
 #include <libdevcrypto/Common.h>
@@ -90,8 +90,9 @@ public:
     {
         /// create BlockHeader
         static BlockHeader genesis;
-        genesis.setParentHash(sha3("parent"));
-        genesis.setRoots(sha3("transactionRoot"), sha3("receiptRoot"), sha3("stateRoot"));
+        genesis.setParentHash(crypto::Hash("parent"));
+        genesis.setRoots(crypto::Hash("transactionRoot"), crypto::Hash("receiptRoot"),
+            crypto::Hash("stateRoot"));
         genesis.setLogBloom(LogBloom(0));
         genesis.setNumber(1);
         genesis.setGasLimit(u256(3000000));
@@ -141,7 +142,7 @@ public:
         u256 const&, u256& io_gas, bytesConstRef, Instruction, u256, OnOpFunc const&) override
     {
         u256 nonce = u256(00013443);
-        Address m_newAddress = right160(sha3(rlpList(myAddress(), nonce)));
+        Address m_newAddress = right160(crypto::Hash(rlpList(myAddress(), nonce)));
         evmc_result result;
         if (!account_map.count(m_newAddress))
         {
@@ -222,7 +223,7 @@ public:
     /// Read address's code.
     bytes const codeAt(Address const&) override { return code(); }
 
-    h256 blockHash(int64_t number) override { return sha3(toString(number)); }
+    h256 blockHash(int64_t number) override { return crypto::Hash(toString(number)); }
 
     FakeExtVM(EnvInfo const& _envInfo, Address const& _myAddress, Address const& _caller,
         Address const& _origin, u256 const& _value, u256 const& _gasPrice, bytesConstRef _data,

@@ -24,7 +24,7 @@
 #include <libconsensus/Common.h>
 #include <libdevcore/RLP.h>
 #include <libdevcrypto/Common.h>
-#include <libdevcrypto/Hash.h>
+#include <libdevcrypto/CryptoInterface.h>
 #include <libethcore/Block.h>
 #include <libethcore/Exceptions.h>
 
@@ -223,9 +223,9 @@ struct PBFTMsg
     /// block-header hash of the block handling
     h256 block_hash = h256();
     /// signature to the block_hash
-    Signature sig = Signature();
+    std::vector<unsigned char> sig;
     /// signature to the hash of other fields except block_hash, sig and sig2
-    Signature sig2 = Signature();
+    std::vector<unsigned char> sig2;
     bool isFuture = false;
     bool signChecked = true;
     // the block inner the PrepareReq is empty or not
@@ -301,7 +301,7 @@ struct PBFTMsg
     /// trans PBFTMsg into RLPStream for encoding
     virtual void streamRLPFields(RLPStream& _s) const
     {
-        _s << height << view << idx << timestamp << block_hash << sig.asBytes() << sig2.asBytes();
+        _s << height << view << idx << timestamp << block_hash << sig << sig2;
     }
 
     /// populate specified rlp into PBFTMsg object
@@ -315,8 +315,8 @@ struct PBFTMsg
             idx = rlp[field = 2].toInt<IDXTYPE>();
             timestamp = rlp[field = 3].toInt<u256>();
             block_hash = rlp[field = 4].toHash<h256>(RLP::VeryStrict);
-            sig = dev::Signature(rlp[field = 5].toBytesConstRef());
-            sig2 = dev::Signature(rlp[field = 6].toBytesConstRef());
+            sig = rlp[field = 5].toBytes();
+            sig2 = rlp[field = 6].toBytes();
         }
         catch (Exception const& _e)
         {
@@ -334,8 +334,8 @@ struct PBFTMsg
         idx = MAXIDX;
         timestamp = Invalid256;
         block_hash = h256();
-        sig = Signature();
-        sig2 = Signature();
+        sig.resize(sig.size(), 0);
+        sig2.resize(sig2.size(), 0);
     }
 
     /// get the hash of the fields without block_hash, sig and sig2
@@ -343,7 +343,7 @@ struct PBFTMsg
     {
         RLPStream ts;
         ts << height << view << idx << timestamp;
-        return dev::sha3(ts.out());
+        return crypto::Hash(ts.out());
     }
 
     /**
@@ -352,12 +352,12 @@ struct PBFTMsg
      * @param keyPair: keypair used to sign for the specified hash
      * @return Signature: signature result
      */
-    Signature signHash(h256 const& hash, KeyPair const& keyPair) const
+    std::vector<unsigned char> signHash(h256 const& hash, KeyPair const& keyPair) const
     {
-        return dev::sign(keyPair, hash);
+        return dev::crypto::Sign(keyPair, hash)->asBytes();
     }
 
-    std::string uniqueKey() const { return sig.hex() + sig2.hex(); }
+    std::string uniqueKey() const { return toHex(sig) + toHex(sig2); }
 };
 
 /// definition of the prepare requests
@@ -440,7 +440,6 @@ struct PrepareReq : public PBFTMsg
         view = req.view;
         idx = req.idx;
         p_execContext = sealing.p_execContext;
-        /// sealing.block.encode(block);
         timestamp = u256(utcTime());
         block_hash = sealing.block->blockHeader().hash();
         sig = signHash(block_hash, keyPair);

@@ -26,7 +26,7 @@
 #include <libdevcore/Address.h>
 #include <libdevcore/Common.h>
 #include <libdevcore/CommonData.h>
-#include <libdevcrypto/Hash.h>
+#include <libdevcrypto/CryptoInterface.h>
 #include <boost/algorithm/string.hpp>
 
 namespace dev

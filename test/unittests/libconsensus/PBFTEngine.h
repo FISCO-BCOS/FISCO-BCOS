@@ -24,6 +24,7 @@
 #pragma once
 #include "FakePBFTEngine.h"
 #include "PBFTReqCache.h"
+#include "libdevcrypto/CryptoInterface.h"
 #include <libconsensus/pbft/PBFTEngine.h>
 #include <libdevcore/TopicInfo.h>
 #include <libethcore/Protocol.h>
@@ -161,7 +162,7 @@ static void FakeSignAndCommitCache(FakeConsensus<T>& fake_pbft, PrepareReq::Ptr 
         fake_pbft.consensus()->reqCache()->addPrepareReq(signReq);
     }
 
-    h256 invalid_hash = sha3("invalid" + toString(utcTime()));
+    h256 invalid_hash = crypto::Hash("invalid" + toString(utcTime()));
 
     /// fake SignReq
     if (type == 0 || type == 2)
@@ -263,13 +264,21 @@ static inline void checkDelCommitCache(FakeConsensus<T>& fake_pbft, BlockHeader 
     BOOST_CHECK(p_commit == fake_pbft.consensus()->reqCache()->mutableCommitCache().end());
 }
 
+static inline std::string getDataFromBackupDB(
+    std::string const& _key, dev::storage::BasicRocksDB::Ptr _backupDB)
+{
+    std::string value;
+    _backupDB->Get(rocksdb::ReadOptions(), _key, value);
+    return value;
+}
+
 template <typename T>
 static void checkBackupMsg(FakeConsensus<T>& fake_pbft, std::string const& key,
     bytes const& msgData, bool shouldClean = true)
 {
     BOOST_CHECK(fake_pbft.consensus()->backupDB());
     /// insert succ
-    std::string data = fake_pbft.consensus()->backupDB()->lookup(key);
+    std::string data = getDataFromBackupDB(key, fake_pbft.consensus()->backupDB());
     if (msgData.size() == 0)
         BOOST_CHECK(data.empty() == true);
     else
@@ -277,7 +286,7 @@ static void checkBackupMsg(FakeConsensus<T>& fake_pbft, std::string const& key,
         // wait the prepare commit to the backupDB
         while (data.empty())
         {
-            data = fake_pbft.consensus()->backupDB()->lookup(key);
+            data = getDataFromBackupDB(key, fake_pbft.consensus()->backupDB());
             sleep(1);
         }
         if (data != toHex(msgData))
@@ -290,7 +299,10 @@ static void checkBackupMsg(FakeConsensus<T>& fake_pbft, std::string const& key,
         std::string empty = "";
         if (shouldClean)
         {
-            fake_pbft.consensus()->backupDB()->insert(key, empty);
+            rocksdb::WriteBatch batch;
+            fake_pbft.consensus()->backupDB()->Put(batch, key, empty);
+            rocksdb::WriteOptions options;
+            fake_pbft.consensus()->backupDB()->Write(options, batch);
         }
     }
 }
@@ -399,7 +411,7 @@ static void testIsHashSavedAfterCommit(FakeConsensus<T>& fake_pbft, PrepareReq& 
         int64_t org_height = req.height;
         h256 org_hash = req.block_hash;
         req.height = fake_pbft.consensus()->reqCache()->committedPrepareCache().height;
-        req.block_hash = sha3("invalid");
+        req.block_hash = crypto::Hash("invalid");
         BOOST_CHECK(fake_pbft.consensus()->isValidPrepare(req) == CheckResult::INVALID);
         req.height = org_height;
         req.block_hash = org_hash;
@@ -411,8 +423,8 @@ static void testCheckSign(FakeConsensus<T>& fake_pbft, PrepareReq& req, bool suc
 {
     if (!succ)
     {
-        Signature org_sig2 = req.sig2;
-        req.sig2 = Signature();
+        auto org_sig2 = req.sig2;
+        req.sig2 = vector<unsigned char>();
         BOOST_CHECK(fake_pbft.consensus()->isValidPrepare(req) == CheckResult::INVALID);
         req.sig2 = org_sig2;
     }
@@ -444,8 +456,8 @@ static void fakeValidPrepare(FakeConsensus<T>& fake_pbft, PrepareReq& req)
     fake_pbft.consensus()->setConsensusBlockNumber(req.height);
     BOOST_CHECK(fake_pbft.m_secrets.size() > req.idx);
     auto keyPair = fake_pbft.m_keyPair[req.idx];
-    req.sig = dev::sign(keyPair, req.block_hash);
-    req.sig2 = dev::sign(keyPair, req.fieldsWithoutBlock());
+    req.sig = dev::crypto::Sign(keyPair, req.block_hash)->asBytes();
+    req.sig2 = dev::crypto::Sign(keyPair, req.fieldsWithoutBlock())->asBytes();
 }
 
 /// test isValidPrepare
