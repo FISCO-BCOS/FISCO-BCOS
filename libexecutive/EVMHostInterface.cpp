@@ -21,11 +21,13 @@
  */
 
 #include "EVMHostInterface.h"
-#include <evmc/helpers.h>
+#include "EVMHostContext.h"
+#include "libethcore/Exceptions.h"
 #include <libblockverifier/ExecutiveContext.h>
+
 namespace dev
 {
-namespace eth
+namespace executive
 {
 namespace
 {
@@ -36,7 +38,7 @@ static_assert(alignof(h256) == alignof(evmc_uint256be), "Hash types alignment mi
 
 int accountExists(evmc_context* _context, evmc_address const* _addr) noexcept
 {
-    auto& env = static_cast<EVMHostInterface&>(*_context);
+    auto& env = static_cast<EVMHostContext&>(*_context);
     Address addr = fromEvmC(*_addr);
     return env.exists(addr) ? 1 : 0;
 }
@@ -45,7 +47,7 @@ void getStorage(evmc_uint256be* o_result, evmc_context* _context, evmc_address c
     evmc_uint256be const* _key)
 {
     (void)_addr;
-    auto& env = static_cast<EVMHostInterface&>(*_context);
+    auto& env = static_cast<EVMHostContext&>(*_context);
 
     // programming assert for debug
     assert(fromEvmC(*_addr) == env.myAddress());
@@ -57,10 +59,10 @@ evmc_storage_status setStorage(evmc_context* _context, evmc_address const* _addr
     evmc_uint256be const* _key, evmc_uint256be const* _value)
 {
     (void)_addr;
-    auto& env = static_cast<EVMHostInterface&>(*_context);
+    auto& env = static_cast<EVMHostContext&>(*_context);
     if (!env.isPermitted())
     {
-        BOOST_THROW_EXCEPTION(PermissionDenied());
+        BOOST_THROW_EXCEPTION(eth::PermissionDenied());
     }
     assert(fromEvmC(*_addr) == env.myAddress());
     u256 index = fromEvmC(*_key);
@@ -85,19 +87,19 @@ evmc_storage_status setStorage(evmc_context* _context, evmc_address const* _addr
 void getBalance(
     evmc_uint256be* o_result, evmc_context* _context, evmc_address const* _addr) noexcept
 {
-    auto& env = static_cast<EVMHostInterface&>(*_context);
+    auto& env = static_cast<EVMHostContext&>(*_context);
     *o_result = toEvmC(env.balance(fromEvmC(*_addr)));
 }
 
 size_t getCodeSize(evmc_context* _context, evmc_address const* _addr)
 {
-    auto& env = static_cast<EVMHostInterface&>(*_context);
+    auto& env = static_cast<EVMHostContext&>(*_context);
     return env.codeSizeAt(fromEvmC(*_addr));
 }
 
 void getCodeHash(evmc_uint256be* o_result, evmc_context* _context, evmc_address const* _addr)
 {
-    auto& env = static_cast<EVMHostInterface&>(*_context);
+    auto& env = static_cast<EVMHostContext&>(*_context);
     *o_result = toEvmC(env.codeHashAt(fromEvmC(*_addr)));
 }
 
@@ -116,7 +118,7 @@ void getCodeHash(evmc_uint256be* o_result, evmc_context* _context, evmc_address 
 size_t copyCode(evmc_context* _context, evmc_address const* _addr, size_t _codeOffset,
     byte* _bufferData, size_t _bufferSize)
 {
-    auto& env = static_cast<EVMHostInterface&>(*_context);
+    auto& env = static_cast<EVMHostContext&>(*_context);
     Address addr = fromEvmC(*_addr);
     bytes const& code = env.codeAt(addr);
 
@@ -134,7 +136,7 @@ void selfdestruct(
     evmc_context* _context, evmc_address const* _addr, evmc_address const* _beneficiary) noexcept
 {
     (void)_addr;
-    auto& env = static_cast<EVMHostInterface&>(*_context);
+    auto& env = static_cast<EVMHostContext&>(*_context);
     assert(fromEvmC(*_addr) == env.myAddress());
     env.suicide(fromEvmC(*_beneficiary));
 }
@@ -144,7 +146,7 @@ void log(evmc_context* _context, evmc_address const* _addr, uint8_t const* _data
     evmc_uint256be const _topics[], size_t _numTopics) noexcept
 {
     (void)_addr;
-    auto& env = static_cast<EVMHostInterface&>(*_context);
+    auto& env = static_cast<EVMHostContext&>(*_context);
     assert(fromEvmC(*_addr) == env.myAddress());
     h256 const* pTopics = reinterpret_cast<h256 const*>(_topics);
     env.log(h256s{pTopics, pTopics + _numTopics}, bytesConstRef{_data, _dataSize});
@@ -152,7 +154,7 @@ void log(evmc_context* _context, evmc_address const* _addr, uint8_t const* _data
 
 void getTxContext(evmc_tx_context* result, evmc_context* _context) noexcept
 {
-    auto& env = static_cast<EVMHostInterface&>(*_context);
+    auto& env = static_cast<EVMHostContext&>(*_context);
     result->tx_gas_price = toEvmC(env.gasPrice());
     result->tx_origin = toEvmC(env.origin());
     result->block_number = env.envInfo().number();
@@ -162,11 +164,11 @@ void getTxContext(evmc_tx_context* result, evmc_context* _context) noexcept
 
 void getBlockHash(evmc_uint256be* o_hash, evmc_context* _envPtr, int64_t _number)
 {
-    auto& env = static_cast<EVMHostInterface&>(*_envPtr);
+    auto& env = static_cast<EVMHostContext&>(*_envPtr);
     *o_hash = toEvmC(env.blockHash(_number));
 }
 
-void create(evmc_result* o_result, EVMHostInterface& _env, evmc_message const* _msg) noexcept
+void create(evmc_result* o_result, EVMHostContext& _env, evmc_message const* _msg) noexcept
 {
     u256 gas = _msg->gas;
     u256 value = fromEvmC(_msg->value);
@@ -186,14 +188,13 @@ void call(evmc_result* o_result, evmc_context* _context, evmc_message const* _ms
     // gas maybe smaller than 0 since outside gas is u256 and evmc_message is int64_t
     // so gas maybe smaller than 0 in some extreme cases
     // * orgin code: assert(_msg->gas >= 0)
-    // * modified：
     if (_msg->gas < 0)
     {
         LOG(ERROR) << LOG_DESC("Gas overflow") << LOG_KV("cur gas", _msg->gas);
-        BOOST_THROW_EXCEPTION(GasOverflow());
+        BOOST_THROW_EXCEPTION(eth::GasOverflow());
     }
 
-    auto& env = static_cast<EVMHostInterface&>(*_context);
+    auto& env = static_cast<EVMHostContext&>(*_context);
 
     // Handle CREATE separately.
     if (_msg->kind == EVMC_CREATE || _msg->kind == EVMC_CREATE2)
@@ -222,40 +223,17 @@ evmc_context_fn_table const fnTable = {
     getCodeHash,
     copyCode,
     selfdestruct,
-    eth::call,
+    call,
     getTxContext,
     getBlockHash,
-    eth::log,
+    log,
 };
+
 }  // namespace
 
-EVMHostInterface::EVMHostInterface(EnvInfo const& _envInfo, Address const& _myAddress,
-    Address const& _caller, Address const& _origin, u256 const& _value, u256 const& _gasPrice,
-    bytesConstRef _data, bytes _code, h256 const& _codeHash, unsigned _depth, bool _isCreate,
-    bool _staticCall)
-  : evmc_context{&fnTable, 0},
-    m_envInfo(_envInfo),
-    m_myAddress(_myAddress),
-    m_caller(_caller),
-    m_origin(_origin),
-    m_value(_value),
-    m_gasPrice(_gasPrice),
-    m_data(_data),
-    m_code(std::move(_code)),
-    m_codeHash(_codeHash),
-    m_depth(_depth),
-    m_isCreate(_isCreate),
-    m_staticCall(_staticCall)
-{}
-std::shared_ptr<dev::blockverifier::ExecutiveContext> EnvInfo::precompiledEngine() const
+const evmc_context_fn_table* getHostInterface()
 {
-    return m_executiveEngine;
+    return &fnTable;
 }
-void EnvInfo::setPrecompiledEngine(
-    std::shared_ptr<dev::blockverifier::ExecutiveContext> executiveEngine)
-{
-    m_executiveEngine = executiveEngine;
-}
-
-}  // namespace eth
+}  // namespace executive
 }  // namespace dev

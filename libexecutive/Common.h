@@ -35,12 +35,12 @@ namespace blockverifier
 {
 class ExecutiveContext;
 }
-namespace eth
+namespace executive
 {
 struct SubState
 {
     std::set<Address> suicides;  ///< Any accounts that have suicided.
-    LogEntries logs;             ///< Any logs.
+    eth::LogEntries logs;        ///< Any logs.
     u256 refunds;                ///< Refund counter of SSTORE nonzero->zero.
 
     SubState& operator+=(SubState const& _s)
@@ -96,7 +96,7 @@ public:
 
     // Constructor with custom gasLimit - used in some synthetic scenarios like eth_estimateGas RPC
     // method
-    EnvInfo(BlockHeader const& _current, CallBackFunction _callback, u256 const& _gasUsed,
+    EnvInfo(eth::BlockHeader const& _current, CallBackFunction _callback, u256 const& _gasUsed,
         u256 const& _gasLimit)
       : EnvInfo(_current, _callback, _gasUsed)
     {
@@ -104,7 +104,7 @@ public:
         m_headerInfo.setGasLimit(_gasLimit);
     }
 
-    EnvInfo(BlockHeader const& _current, CallBackFunction _callback, u256 const& _gasUsed)
+    EnvInfo(eth::BlockHeader const& _current, CallBackFunction _callback, u256 const& _gasUsed)
       : m_headerInfo(_current), m_numberHash(_callback), m_gasUsed(_gasUsed)
     {}
 
@@ -112,7 +112,7 @@ public:
 
 
     /// @return block header
-    BlockHeader const& header() const { return m_headerInfo; }
+    eth::BlockHeader const& header() const { return m_headerInfo; }
 
     /// @return block number
     int64_t number() const { return m_headerInfo.number(); }
@@ -129,19 +129,24 @@ public:
 
     dev::h256 numberHash(int64_t x) const { return m_numberHash(x); }
 
-    std::shared_ptr<dev::blockverifier::ExecutiveContext> precompiledEngine() const;
+    std::shared_ptr<dev::blockverifier::ExecutiveContext> precompiledEngine() const
+    {
+        return m_executiveEngine;
+    }
 
     void setPrecompiledEngine(
-        std::shared_ptr<dev::blockverifier::ExecutiveContext> executiveEngine);
+        std::shared_ptr<dev::blockverifier::ExecutiveContext> executiveEngine)
+        {
+            m_executiveEngine = executiveEngine;
+        }
 
 
 private:
-    BlockHeader m_headerInfo;
+    eth::BlockHeader m_headerInfo;
     CallBackFunction m_numberHash;
     u256 m_gasUsed;
     std::shared_ptr<dev::blockverifier::ExecutiveContext> m_executiveEngine;
 };
 
-
-}  // namespace eth
+}  // namespace executive
 }  // namespace dev

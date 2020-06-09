@@ -74,7 +74,8 @@ class Executive
 public:
     using Ptr = std::shared_ptr<Executive>;
     /// Simple constructor; executive will operate on given state, with the given environment info.
-    Executive(std::shared_ptr<StateFace> _s, dev::eth::EnvInfo const& _envInfo, unsigned _level = 0)
+    Executive(
+        std::shared_ptr<StateFace> _s, dev::executive::EnvInfo const& _envInfo, unsigned _level = 0)
       : m_s(_s), m_envInfo(_envInfo), m_depth(_level)
     {}
 
@@ -82,7 +83,7 @@ public:
 
 
     // template <typename T>
-    // Executive(T _s, dev::eth::EnvInfo const& _envInfo, unsigned _level = 0)
+    // Executive(T _s, dev::executive::EnvInfo const& _envInfo, unsigned _level = 0)
     //  : m_s(dynamic_cast<std::shared_ptr<StateFace>>(_s)), m_envInfo(_envInfo), m_depth(_level)
     //{}
 
@@ -91,12 +92,6 @@ public:
      * info from given Block and the LastHashes portion from the BlockChain.
      */
     // Executive(Block& _s, BlockChain const& _bc, unsigned _level = 0);
-
-    /** LastHashes-split constructor.
-     * Creates executive to operate on the state of end of the given block, populating environment
-     * info accordingly, with last hashes given explicitly.
-     */
-    // Executive(Block& _s, LastBlockHashesFace const& _lh, unsigned _level = 0);
 
     /** Previous-state constructor.
      * Creates executive to operate on the state of a particular transaction in the given block,
@@ -154,11 +149,12 @@ public:
     /// @returns false iff go() must be called (and thus a VM execution in required).
     bool call(Address const& _receiveAddress, Address const& _txSender, u256 const& _txValue,
         u256 const& _gasPrice, bytesConstRef _txData, u256 const& _gas);
-    bool call(dev::eth::CallParameters const& _cp, u256 const& _gasPrice, Address const& _origin);
+    bool call(
+        dev::executive::CallParameters const& _cp, u256 const& _gasPrice, Address const& _origin);
     bool callRC2(
-        dev::eth::CallParameters const& _cp, u256 const& _gasPrice, Address const& _origin);
+        dev::executive::CallParameters const& _cp, u256 const& _gasPrice, Address const& _origin);
     /// Finalise an operation through accruing the substate into the parent context.
-    void accrueSubState(dev::eth::SubState& _parentContext);
+    void accrueSubState(dev::executive::SubState& _parentContext);
 
     /// Executes (or continues execution of) the VM.
     /// @returns false iff go() must be called again to finish the transaction.
@@ -199,7 +195,7 @@ public:
         m_t.reset();
     }
 
-    void setEnvInfo(dev::eth::EnvInfo const& _envInfo) { m_envInfo = _envInfo; }
+    void setEnvInfo(dev::executive::EnvInfo const& _envInfo) { m_envInfo = _envInfo; }
 
     void setState(std::shared_ptr<StateFace> _state) { m_s = _state; }
 
@@ -224,7 +220,7 @@ private:
 
     std::shared_ptr<StateFace> m_s;  ///< The state to which this operation/transaction is applied.
     // TODO: consider changign to EnvInfo const& to avoid LastHashes copy at every CALL/CREATE
-    dev::eth::EnvInfo m_envInfo;            ///< Information on the runtime environment.
+    dev::executive::EnvInfo m_envInfo;      ///< Information on the runtime environment.
     std::shared_ptr<EVMHostContext> m_ext;  ///< The VM externality object for the VM execution or
                                             ///< null if no VM is required. shared_ptr used only to
                                             ///< allow EVMHostContext forward reference. This field
