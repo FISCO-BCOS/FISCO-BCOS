@@ -643,24 +643,7 @@ dev::h512s BlockChainImp::getNodeListByType(int64_t blockNumber, std::string con
             BLOCKCHAIN_LOG(ERROR) << LOG_DESC("[#getNodeListByType]Open table error");
             return list;
         }
-
-        auto nodes = tb->select(PRI_KEY, tb->newCondition());
-        if (!nodes)
-            return list;
-
-        for (size_t i = 0; i < nodes->size(); i++)
-        {
-            auto node = nodes->get(i);
-            if (!node)
-                return list;
-
-            if ((node->getField(NODE_TYPE) == type) &&
-                (boost::lexical_cast<int>(node->getField(NODE_KEY_ENABLENUM)) <= blockNumber))
-            {
-                h512 nodeID = h512(node->getField(NODE_KEY_NODEID));
-                list.push_back(nodeID);
-            }
-        }
+        list = dev::precompiled::getNodeListByType(tb, blockNumber, type);
     }
     catch (std::exception& e)
     {
@@ -735,9 +718,6 @@ std::pair<std::string, BlockNumber> BlockChainImp::getSystemConfigInfoByKey(
     // The param was reset at height number(), and takes effect in next block.
     // So we query the status of number() + 1.
     int64_t blockNumber = (-1 == num) ? number() + 1 : num;
-
-    BlockNumber enableNumber = -1;
-
     UpgradableGuard l(m_systemConfigMutex);
     auto it = m_systemConfigRecord.find(key);
     if (it != m_systemConfigRecord.end() && it->second.curBlockNum == blockNumber)
@@ -746,7 +726,7 @@ std::pair<std::string, BlockNumber> BlockChainImp::getSystemConfigInfoByKey(
         return std::make_pair(it->second.value, it->second.enableNumber);
     }
 
-    std::string ret;
+    auto result = std::make_shared<std::pair<std::string, BlockNumber>>(std::make_pair("", -1));
     // cannot find the system config key or need to update the value with different block height
     // get value from db
     try
@@ -755,43 +735,21 @@ std::pair<std::string, BlockNumber> BlockChainImp::getSystemConfigInfoByKey(
         if (!tb)
         {
             BLOCKCHAIN_LOG(ERROR) << LOG_DESC("[#getSystemConfigByKey]Open table error");
-            return std::make_pair(ret, -1);
+            return *result;
         }
-        auto values = tb->select(key, tb->newCondition());
-        if (!values || values->size() != 1)
-        {
-            BLOCKCHAIN_LOG(ERROR) << LOG_DESC("[#getSystemConfigByKey]Select error")
-                                  << LOG_KV("key", key);
-            // FIXME: throw exception here, or fatal error
-            return std::make_pair(ret, enableNumber);
-        }
-
-        auto value = values->get(0);
-        if (!value)
-        {
-            BLOCKCHAIN_LOG(ERROR) << LOG_DESC("[#getSystemConfigByKey]Null pointer");
-            // FIXME: throw exception here, or fatal error
-            return std::make_pair(ret, enableNumber);
-        }
-
-        if (boost::lexical_cast<BlockNumber>(value->getField(SYSTEM_CONFIG_ENABLENUM)) <=
-            blockNumber)
-        {
-            ret = value->getField(SYSTEM_CONFIG_VALUE);
-            enableNumber =
-                boost::lexical_cast<BlockNumber>(value->getField(SYSTEM_CONFIG_ENABLENUM));
-        }
+        result = dev::precompiled::getSysteConfigByKey(tb, key, blockNumber);
     }
     catch (std::exception& e)
     {
         BLOCKCHAIN_LOG(ERROR) << LOG_DESC("[#getSystemConfigByKey]Failed")
                               << LOG_KV("EINFO", boost::diagnostic_information(e));
+        return *result;
     }
 
     // update cache
     {
         UpgradeGuard ul(l);
-        SystemConfigRecord systemConfigRecord(ret, enableNumber, blockNumber);
+        SystemConfigRecord systemConfigRecord(result->first, result->second, blockNumber);
         if (it != m_systemConfigRecord.end())
         {
             it->second = systemConfigRecord;
@@ -804,8 +762,8 @@ std::pair<std::string, BlockNumber> BlockChainImp::getSystemConfigInfoByKey(
     }
 
     BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getSystemConfigByKey]Data in db") << LOG_KV("key", key)
-                          << LOG_KV("value", ret);
-    return std::make_pair(ret, enableNumber);
+                          << LOG_KV("value", result->first);
+    return *result;
 }
 
 std::shared_ptr<Block> BlockChainImp::getBlockByNumber(int64_t _i)
