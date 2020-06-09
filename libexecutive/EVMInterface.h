@@ -22,7 +22,7 @@
 
 #pragma once
 
-#include "EVMHostInterface.h"
+#include "EVMHostContext.h"
 #include <libethcore/Exceptions.h>
 #include <memory>
 
@@ -41,8 +41,8 @@ public:
     EVMInterface& operator=(EVMInterface const&) = delete;
 
     /// VM implementation
-    virtual std::shared_ptr<Result> exec(EVMHostInterface& _ext, evmc_revision _rev, evmc_message* _msg,
-        const uint8_t* _code, size_t _code_size) = 0;
+    virtual std::shared_ptr<Result> exec(executive::EVMHostContext& _ext, evmc_revision _rev,
+        evmc_message* _msg, const uint8_t* _code, size_t _code_size) = 0;
 };
 }  // namespace eth
 }  // namespace dev

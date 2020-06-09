@@ -24,67 +24,63 @@
 
 #pragma once
 
-#include "Executive.h"
-#include "StateFace.h"
+#include "Common.h"
+#include "libethcore/EVMSchedule.h"
+#include "libexecutive/Executive.h"
+#include "libexecutive/StateFace.h"
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
+#include <evmc/instructions.h>
 #include <libethcore/Common.h>
-#include <libethcore/EVMSchedule.h>
-#include <libexecutive/EVMHostInterface.h>
 #include <functional>
 #include <map>
-
 
 namespace dev
 {
 namespace executive
 {
 /// Externality interface for the Virtual Machine providing access to world state.
-class EVMHostContext : public dev::eth::EVMHostInterface
+class EVMHostContext : public evmc_context
 {
 public:
     /// Full constructor.
-    EVMHostContext(std::shared_ptr<StateFace> _s, dev::eth::EnvInfo const& _envInfo,
-        Address const& _myAddress, Address const& _caller, Address const& _origin,
-        u256 const& _value, u256 const& _gasPrice, bytesConstRef _data, bytesConstRef _code,
-        h256 const& _codeHash, unsigned _depth, bool _isCreate, bool _staticCall)
-      : EVMHostInterface(_envInfo, _myAddress, _caller, _origin, _value, _gasPrice, _data,
-            _code.toBytes(), _codeHash, _depth, _isCreate, _staticCall),
-        m_s(_s)
-    {
-        // Contract: processing account must exist. In case of CALL, the EVMHostContext
-        // is created only if an account has code (so exist). In case of CREATE
-        // the account must be created first.
-        assert(m_s->addressInUse(_myAddress));
-    }
+    EVMHostContext(std::shared_ptr<executive::StateFace> _s,
+        dev::executive::EnvInfo const& _envInfo, Address const& _myAddress, Address const& _caller,
+        Address const& _origin, u256 const& _value, u256 const& _gasPrice, bytesConstRef _data,
+        const bytes& _code, h256 const& _codeHash, unsigned _depth, bool _isCreate,
+        bool _staticCall);
+    virtual ~EVMHostContext() = default;
+
+    EVMHostContext(EVMHostContext const&) = delete;
+    EVMHostContext& operator=(EVMHostContext const&) = delete;
 
     /// Read storage location.
-    u256 store(u256 const& _n) final { return m_s->storage(myAddress(), _n); }
+    virtual u256 store(u256 const& _n) { return m_s->storage(myAddress(), _n); }
 
     /// Write a value in storage.
-    void setStore(u256 const& _n, u256 const& _v) final;
+    virtual void setStore(u256 const& _n, u256 const& _v);
 
     /// Read address's code.
-    bytes const codeAt(Address const& _a) final { return m_s->code(_a); }
+    virtual bytes const codeAt(Address const& _a) { return m_s->code(_a); }
 
     /// @returns the size of the code in  bytes at the given address.
-    size_t codeSizeAt(Address const& _a) final;
+    virtual size_t codeSizeAt(Address const& _a);
 
     /// @returns the hash of the code at the given address.
-    h256 codeHashAt(Address const& _a) final;
+    virtual h256 codeHashAt(Address const& _a);
 
     /// Create a new contract.
-    evmc_result create(u256 const& _endowment, u256& io_gas, bytesConstRef _code, evmc_opcode _op,
-        u256 _salt) final;
+    virtual evmc_result create(
+        u256 const& _endowment, u256& io_gas, bytesConstRef _code, evmc_opcode _op, u256 _salt);
 
     /// Create a new message call.
-    evmc_result call(dev::eth::CallParameters& _params) final;
+    virtual evmc_result call(dev::executive::CallParameters& _params);
 
     /// Read address's balance.
-    u256 balance(Address const& _a) final { return m_s->balance(_a); }
+    virtual u256 balance(Address const& _a) { return m_s->balance(_a); }
 
     /// Does the account exist?
-    bool exists(Address const& _a) final
+    virtual bool exists(Address const& _a)
     {
         if (evmSchedule().emptinessIsNonexistence())
             return m_s->accountNonemptyAndExisting(_a);
@@ -93,20 +89,79 @@ public:
     }
 
     /// Suicide the associated contract to the given address.
-    void suicide(Address const& _a) final;
+    virtual void suicide(Address const& _a);
 
     /// Return the EVM gas-price schedule for this execution context.
-    dev::eth::EVMSchedule const& evmSchedule() const final { return g_BCOSConfig.evmSchedule(); }
+    virtual dev::eth::EVMSchedule const& evmSchedule() const { return g_BCOSConfig.evmSchedule(); }
 
-    std::shared_ptr<StateFace> const& state() const { return m_s; }
+    virtual std::shared_ptr<executive::StateFace> const& state() const { return m_s; }
 
     /// Hash of a block if within the last 256 blocks, or h256() otherwise.
-    h256 blockHash(int64_t _number) final;
+    virtual h256 blockHash(int64_t _number);
 
-    bool isPermitted();
+    virtual bool isPermitted();
+
+    /// Get the execution environment information.
+    virtual EnvInfo const& envInfo() const { return m_envInfo; }
+
+    /// Revert any changes made (by any of the other calls).
+    virtual void log(h256s&& _topics, bytesConstRef _data)
+    {
+        m_sub.logs.push_back(eth::LogEntry(m_myAddress, std::move(_topics), _data.toBytes()));
+    }
+    /// ------ get interfaces related to EVMHostContext------
+    virtual Address const& myAddress() { return m_myAddress; }
+    virtual Address const& caller() { return m_caller; }
+    virtual Address const& origin() { return m_origin; }
+    virtual u256 const& value() { return m_value; }
+    virtual u256 const& gasPrice() { return m_gasPrice; }
+    virtual bytesConstRef const& data() { return m_data; }
+    virtual bytes const& code() { return m_code; }
+    virtual h256 const& codeHash() { return m_codeHash; }
+    virtual u256 const& salt() { return m_salt; }
+    virtual SubState& sub() { return m_sub; }
+    virtual unsigned const& depth() { return m_depth; }
+    virtual bool const& isCreate() { return m_isCreate; }
+    virtual bool const& staticCall() { return m_staticCall; }
+    /// ------ set interfaces related to EVMHostContext------
+    virtual void setMyAddress(Address const& _contractAddr) { m_myAddress = _contractAddr; }
+    virtual void setCaller(Address const& _senderAddr) { m_caller = _senderAddr; }
+    virtual void setOrigin(Address const& _origin) { m_origin = _origin; }
+    virtual void setValue(u256 const& _value) { m_value = _value; }
+    virtual void setGasePrice(u256 const& _gasPrice) { m_gasPrice = _gasPrice; }
+    virtual void setData(bytesConstRef _data) { m_data = _data; }
+    virtual void setCode(bytes& _code) { m_code = _code; }
+    virtual void setCodeHash(h256 const& _codeHash) { m_codeHash = _codeHash; }
+    virtual void setSalt(u256 const& _salt) { m_salt = _salt; }
+    virtual void setSub(SubState _sub) { m_sub = _sub; }
+    virtual void setDepth(unsigned _depth) { m_depth = _depth; }
+    virtual void setCreate(bool _isCreate) { m_isCreate = _isCreate; }
+    virtual void setStaticCall(bool _staticCall) { m_staticCall = _staticCall; }
+
+    virtual VMFlagType evmFlags() const { return flags; }
+    virtual void setEvmFlags(VMFlagType const& _evmFlags) { flags = _evmFlags; }
+
+protected:
+    EnvInfo const& m_envInfo;
 
 private:
-    std::shared_ptr<StateFace> m_s;  ///< A reference to the base state.
+    Address m_myAddress;  ///< Address associated with executing code (a contract, or
+                          ///< contract-to-be).
+    Address m_caller;  ///< Address which sent the message (either equal to origin or a contract).
+    Address m_origin;  ///< Original transactor.
+    u256 m_value;      ///< Value (in Wei) that was passed to this address.
+    u256 m_gasPrice;   ///< Price of gas (that we already paid).
+    bytesConstRef m_data;       ///< Current input data.
+    bytes m_code;               ///< Current code that is executing.
+    h256 m_codeHash;            ///< SHA3 hash of the executing code
+    u256 m_salt;                ///< Values used in new address construction by CREATE2
+    SubState m_sub;             ///< Sub-band VM state (suicides, refund counter, logs).
+    unsigned m_depth = 0;       ///< Depth of the present call.
+    bool m_isCreate = false;    ///< Is this a CREATE call?
+    bool m_staticCall = false;  ///< Throw on state changing.
+
+private:
+    std::shared_ptr<executive::StateFace> m_s;  ///< A reference to the base state.
 };
 
 }  // namespace executive
