@@ -21,6 +21,8 @@
  * @date: 2020-06-04
  */
 #include "VRFBasedrPBFTSealer.h"
+#include "Common.h"
+#include "ffi_vrf.h"
 #include <libprecompiled/WorkingSealerManagerPrecompiled.h>
 
 using namespace dev::consensus;
@@ -43,8 +45,21 @@ void VRFBasedrPBFTSealer::initConsensusEngine()
     m_txGenerator = std::make_shared<TxGenerator>(
         m_pbftEngine->groupId(), g_BCOSConfig.chainId(), m_txPool->maxBlockLimit() / 2);
 
-    // TODO: Initialize VRF public key from the private key
-    VRFRPBFTSealer_LOG(INFO) << LOG_DESC("initConsensusEngine");
+    // get private key and generate vrf-public-key
+    m_privateKey =
+        toHex(bytesConstRef{m_vrfBasedrPBFTEngine->keyPair().secret().data(), c_privateKeyLen});
+    auto vrfPublicKey = curve25519_vrf_generate_key_pair(m_privateKey.c_str());
+    if (vrfPublicKey == nullptr)
+    {
+        VRFRPBFTSealer_LOG(ERROR) << LOG_DESC(
+            "initConsensusEngine failed for the failure to initialize the vrf public key");
+
+        BOOST_THROW_EXCEPTION(
+            InitVRFPublicKeyFailed() << errinfo_comment(
+                "nitConsensusEngine failed for the failure to initialize the vrf public key"));
+    }
+    m_vrfPublicKey = vrfPublicKey;
+    VRFRPBFTSealer_LOG(INFO) << LOG_DESC("initConsensusEngine") << LOG_KV("vrfPk", m_vrfPublicKey);
 }
 
 bool VRFBasedrPBFTSealer::hookBeforeSealBlock()
@@ -60,12 +75,6 @@ bool VRFBasedrPBFTSealer::hookBeforeSealBlock()
     }
     m_vrfBasedrPBFTEngine->setShouldRotateSealers(false);
     return true;
-}
-
-// TODO: call rust VRF library to generate VRF proof
-std::string VRFBasedrPBFTSealer::generateVRFProof(std::string const& _inputData)
-{
-    return _inputData;
 }
 
 bool VRFBasedrPBFTSealer::generateAndSealerRotatingTx()
@@ -87,8 +96,15 @@ bool VRFBasedrPBFTSealer::generateAndSealerRotatingTx()
         auto blockNumber = m_blockChain->number();
         auto blockHash = m_blockChain->numberHash(blockNumber);
         auto blockHashStr = toHex(blockHash);
-        auto vrfProof = generateVRFProof(blockHashStr);
-
+        auto vrfProofPtr = curve25519_vrf_proof(m_privateKey.c_str(), blockHashStr.c_str());
+        if (!vrfProofPtr)
+        {
+            VRFRPBFTSealer_LOG(WARNING)
+                << LOG_DESC("generateAndSealerRotatingTx: generate vrf-proof failed")
+                << LOG_KV("inputData", blockHashStr);
+            return false;
+        }
+        std::string vrfProof = vrfProofPtr;
         auto const& nodeRotatingInfo = m_vrfBasedrPBFTEngine->nodeRotatingInfo();
 
         // generate "rotateWorkingSealer" transaction

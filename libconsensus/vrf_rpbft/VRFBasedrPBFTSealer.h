@@ -50,14 +50,15 @@ public:
 protected:
     // generate and seal the workingSealerManagerPrecompiled transaction into _txOffset
     virtual bool generateAndSealerRotatingTx();
-    // call VRF random number generator to generate VRF proof
-    virtual std::string generateVRFProof(std::string const& _inputData);
 
 private:
     VRFBasedrPBFTEngine::Ptr m_vrfBasedrPBFTEngine;
     TxGenerator::Ptr m_txGenerator;
     // VRF public key
     std::string m_vrfPublicKey;
+
+    unsigned const c_privateKeyLen = 32;
+    std::string m_privateKey;
 };
 }  // namespace consensus
 }  // namespace dev
