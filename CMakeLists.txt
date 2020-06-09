@@ -57,6 +57,7 @@ include(ProjectLibFF)
 include(ProjectPaillier)
 include(ProjectGroupSig)
 include(ProjectEVMC)
+include(ProjectVRF)
 
 include_directories("${CMAKE_SOURCE_DIR}")
 

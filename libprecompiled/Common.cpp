@@ -22,6 +22,7 @@
 #include "libstorage/StorageException.h"
 #include <libconfig/GlobalConfigure.h>
 #include <libethcore/ABI.h>
+#include <libstorage/Table.h>
 
 using namespace std;
 using namespace dev;
@@ -214,4 +215,70 @@ uint32_t dev::precompiled::getFuncSelectorByFunctionName(std::string const& _fun
     uint32_t selector = ((func & 0x000000FF) << 24) | ((func & 0x0000FF00) << 8) |
                         ((func & 0x00FF0000) >> 8) | ((func & 0xFF000000) >> 24);
     return selector;
+}
+
+// get node list of the given type from the consensus table
+dev::h512s dev::precompiled::getNodeListByType(
+    dev::storage::Table::Ptr _consTable, int64_t _blockNumber, std::string const& _type)
+{
+    dev::h512s list;
+    try
+    {
+        auto nodes = _consTable->select(PRI_KEY, _consTable->newCondition());
+        if (!nodes)
+            return list;
+
+        for (size_t i = 0; i < nodes->size(); i++)
+        {
+            auto node = nodes->get(i);
+            if (!node)
+                return list;
+
+            if ((node->getField(NODE_TYPE) == _type) &&
+                (boost::lexical_cast<int>(node->getField(NODE_KEY_ENABLENUM)) <= _blockNumber))
+            {
+                h512 nodeID = h512(node->getField(NODE_KEY_NODEID));
+                list.push_back(nodeID);
+            }
+        }
+    }
+    catch (std::exception& e)
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_DESC("[#getNodeListByType]Failed")
+                               << LOG_KV("EINFO", boost::diagnostic_information(e));
+    }
+    return list;
+}
+
+// Get the configuration value of the given key from the system configuration table
+std::shared_ptr<std::pair<std::string, int64_t>> dev::precompiled::getSysteConfigByKey(
+    dev::storage::Table::Ptr _sysConfigTable, std::string const& _key, int64_t const& _num)
+{
+    std::shared_ptr<std::pair<std::string, int64_t>> result =
+        std::make_shared<std::pair<std::string, int64_t>>();
+    *result = std::make_pair("", -1);
+
+    auto values = _sysConfigTable->select(_key, _sysConfigTable->newCondition());
+    if (!values || values->size() != 1)
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_DESC("[#getSystemConfigByKey]Select error")
+                               << LOG_KV("key", _key);
+        // FIXME: throw exception here, or fatal error
+        return result;
+    }
+
+    auto value = values->get(0);
+    if (!value)
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_DESC("[#getSystemConfigByKey]Null pointer")
+                               << LOG_KV("key", _key);
+        // FIXME: throw exception here, or fatal error
+        return result;
+    }
+    if (boost::lexical_cast<int64_t>(value->getField(SYSTEM_CONFIG_ENABLENUM)) <= _num)
+    {
+        result->first = value->getField(SYSTEM_CONFIG_VALUE);
+        result->second = boost::lexical_cast<int64_t>(value->getField(SYSTEM_CONFIG_ENABLENUM));
+    }
+    return result;
 }

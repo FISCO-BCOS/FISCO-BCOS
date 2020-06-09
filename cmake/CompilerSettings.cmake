@@ -164,3 +164,8 @@ if (SANITIZE)
     endif()
 endif()
 
+# rust static library linking requirements for macos
+if(APPLE)
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -framework Security")
+endif()
+
