@@ -44,18 +44,6 @@ namespace dev
 {
 namespace test
 {
-class TestLastBlockHashes : public eth::LastBlockHashesFace
-{
-public:
-    explicit TestLastBlockHashes(h256s const& _hashes) : m_hashes(_hashes) {}
-
-    h256s precedingHashes(h256 const& /* _mostRecentHash */) const override { return m_hashes; }
-    void clear() override {}
-
-private:
-    h256s const m_hashes;
-};
-
 class ExecuteVMTestFixture : public TestOutputHelperFixture
 {
 public:
@@ -127,11 +115,6 @@ private:
         }
         fakeHeader.setSealerList(sealer_list);
         return fakeHeader;
-    }
-
-    TestLastBlockHashes fakeLastHashes()
-    {
-        return TestLastBlockHashes(h256s{h256("0xaaabbbccc"), h256("0xdddeeefff")});
     }
 };
 

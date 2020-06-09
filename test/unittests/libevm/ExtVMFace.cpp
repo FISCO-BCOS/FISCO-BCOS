@@ -16,13 +16,13 @@
  *
  * @brief
  *
- * @file EVMHostInterface.cpp
+ * @file ExtVMFace.cpp
  * @author: yujiechen
  * @date 2018-09-03
  */
 #include "libdevcrypto/CryptoInterface.h"
 #include <evmc/helpers.h>
-#include <libexecutive/EVMHostInterface.h>
+#include <libexecutive/EVMHostContext.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libevm/FakeExtVMFace.h>
 #include <boost/test/unit_test.hpp>

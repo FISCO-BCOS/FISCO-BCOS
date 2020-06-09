@@ -18,8 +18,8 @@
 #include <libblockverifier/ExecutiveContext.h>
 #include <libconfig/GlobalConfigure.h>
 #include <libethcore/Exceptions.h>
-#include <libethcore/LastBlockHashesFace.h>
 #include <libexecutive/EVMHostContext.h>
+#include <libexecutive/EVMHostInterface.h>
 #include <libexecutive/EVMInstance.h>
 #include <libexecutive/StateFace.h>
 #include <libinterpreter/Instruction.h>
@@ -39,16 +39,6 @@ using namespace dev::executive;
 
 namespace
 {
-class LastBlockHashes : public eth::LastBlockHashesFace
-{
-public:
-    h256s precedingHashes(h256 const& /* _mostRecentHash */) const override
-    {
-        return h256s(256, h256());
-    }
-    void clear() override {}
-};
-
 BlockHeader initBlockHeader()
 {
     BlockHeader blockHeader;
@@ -75,7 +65,7 @@ public:
     std::shared_ptr<eth::Result> callVMExec()
     {
         EVMHostContext extVm(state, envInfo, address, address, address, value, gasPrice,
-            ref(inputData), ref(code), crypto::Hash(code), depth, isCreate, staticCall);
+            ref(inputData), code, crypto::Hash(code), depth, isCreate, staticCall);
         evmc_call_kind kind = extVm.isCreate() ? EVMC_CREATE : EVMC_CALL;
         uint32_t flags = extVm.staticCall() ? EVMC_STATIC : 0;
         auto leftGas = 20000000;
@@ -114,7 +104,6 @@ public:
     }
 
     BlockHeader blockHeader{initBlockHeader()};
-    LastBlockHashes lastBlockHashes;
     static dev::h256 fakeCallBack(int64_t) { return h256(); }
     EnvInfo envInfo{blockHeader, fakeCallBack, 0};
     Address address{KeyPair::create().address()};
@@ -172,7 +161,7 @@ public:
     owning_bytes_ref callVMExec(bytesConstRef const& _addressRef)
     {
         EVMHostContext extVm(state, envInfo, address, address, address, value, gasPrice,
-            _addressRef, ref(code), crypto::Hash(code), depth, isCreate, staticCall);
+            _addressRef, code, crypto::Hash(code), depth, isCreate, staticCall);
         evmc_call_kind kind = extVm.isCreate() ? EVMC_CREATE : EVMC_CALL;
         uint32_t flags = extVm.staticCall() ? EVMC_STATIC : 0;
         auto leftGas = 20000;
@@ -201,7 +190,7 @@ public:
                         evmc_opcode _instr,
                         bigint,  // newMemSize
                         bigint,  // gasCost
-                        bigint _gas, EVMInterface const*, EVMHostInterface const*) {
+                        bigint _gas, EVMInterface const*, EVMHostContext const*) {
             if (_instr == evmc_opcode::OP_EXTCODEHASH)
                 gasBefore = _gas;
             else if (gasBefore != 0 && gasAfter == 0)
@@ -279,7 +268,7 @@ public:
             bytes{1, 2, 3, 4, 5, 6, 7, 8, 9, 0xa, 0xb, 0xc} + extAddress.ref();
 
         EVMHostContext extVm(state, envInfo, address, address, address, value, gasPrice,
-            ref(extAddressPrefixed), ref(code), crypto::Hash(code), depth, isCreate, staticCall);
+            ref(extAddressPrefixed), code, crypto::Hash(code), depth, isCreate, staticCall);
 
         auto ret = callVMExec(ref(extAddressPrefixed));
 
@@ -287,7 +276,6 @@ public:
     }
 
     BlockHeader blockHeader{initBlockHeader()};
-    LastBlockHashes lastBlockHashes;
     static dev::h256 fakeCallBack(int64_t) { return h256(); }
     EnvInfo envInfo{blockHeader, fakeCallBack, 0};
     Address address{KeyPair::create().address()};
