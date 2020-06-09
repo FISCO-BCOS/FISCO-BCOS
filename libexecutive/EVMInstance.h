@@ -73,8 +73,8 @@ public:
     EVMInstance(EVMInstance const&) = delete;
     EVMInstance& operator=(EVMInstance) = delete;
 
-    std::shared_ptr<Result> exec(EVMHostInterface& _ext, evmc_revision _rev, evmc_message* _msg,
-        const uint8_t* _code, size_t _code_size) final;
+    std::shared_ptr<Result> exec(executive::EVMHostContext& _ext, evmc_revision _rev,
+        evmc_message* _msg, const uint8_t* _code, size_t _code_size) final;
 
 private:
     /// The VM instance created with EVMInstance-C <prefix>_create() function.

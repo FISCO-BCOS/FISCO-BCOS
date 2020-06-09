@@ -14,16 +14,15 @@
 
 #include "Executive.h"
 #include "EVMHostContext.h"
-#include "StateFace.h"
-
+#include "EVMHostInterface.h"
 #include "EVMInstance.h"
+#include "StateFace.h"
 #include <json/json.h>
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/CommonIO.h>
 #include <libethcore/ABI.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/EVMSchedule.h>
-#include <libethcore/LastBlockHashesFace.h>
 #include <libexecutive/EVMInterface.h>
 #include <libexecutive/VMFactory.h>
 #include <libstorage/Common.h>
@@ -226,7 +225,7 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
                 bytes const& c = m_s->code(_p.codeAddress);
                 h256 codeHash = m_s->codeHash(_p.codeAddress);
                 m_ext = make_shared<EVMHostContext>(m_s, m_envInfo, _p.receiveAddress,
-                    _p.senderAddress, _origin, _p.apparentValue, _gasPrice, _p.data, &c, codeHash,
+                    _p.senderAddress, _origin, _p.apparentValue, _gasPrice, _p.data, c, codeHash,
                     m_depth, false, _p.staticCall);
             }
         }
@@ -348,7 +347,7 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
         bytes const& c = m_s->code(_p.codeAddress);
         h256 codeHash = m_s->codeHash(_p.codeAddress);
         m_ext = make_shared<EVMHostContext>(m_s, m_envInfo, _p.receiveAddress, _p.senderAddress,
-            _origin, _p.apparentValue, _gasPrice, _p.data, &c, codeHash, m_depth, false,
+            _origin, _p.apparentValue, _gasPrice, _p.data, c, codeHash, m_depth, false,
             _p.staticCall);
         m_ext->setEvmFlags(m_evmFlags);
     }
@@ -458,9 +457,9 @@ bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u2
     // Schedule _init execution if not empty.
     if (!_init.empty())
     {
-        m_ext =
-            make_shared<EVMHostContext>(m_s, m_envInfo, m_newAddress, _sender, _origin, _endowment,
-                _gasPrice, bytesConstRef(), _init, crypto::Hash(_init), m_depth, true, false);
+        m_ext = make_shared<EVMHostContext>(m_s, m_envInfo, m_newAddress, _sender, _origin,
+            _endowment, _gasPrice, bytesConstRef(), _init.toBytes(), crypto::Hash(_init), m_depth,
+            true, false);
         m_ext->setEvmFlags(m_evmFlags);
     }
     return !m_ext;
