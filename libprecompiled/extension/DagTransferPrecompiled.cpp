@@ -153,7 +153,7 @@ Table::Ptr DagTransferPrecompiled::openTable(
     {
         dagTableName = precompiled::getTableName(DAG_TRANSFER);
     }
-    auto table = Precompiled::openTable(context, dagTableName);
+    auto table = dev::precompiled::openTable(context, dagTableName);
     if (!table)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE(
@@ -168,7 +168,7 @@ Table::Ptr DagTransferPrecompiled::openTable(
             PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled: table already exist")
                                    << LOG_KV("tableName", dagTableName);
             // try to openTable and get the table again
-            table = Precompiled::openTable(context, dagTableName);
+            table = dev::precompiled::openTable(context, dagTableName);
         }
     }
     return table;
