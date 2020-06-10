@@ -188,8 +188,8 @@ void SQLConnectionPool::createDataBase(const ConnectionPoolConfig& _dbConfig)
             }
 
             string _dbName = _dbConfig.dbName;
-            boost::algorithm::replace_all_copy(_dbName, "\\", "\\\\");
-            boost::algorithm::replace_all_copy(_dbName, "`", "\\`");
+            _dbName = boost::algorithm::replace_all_copy(_dbName, "\\", "\\\\");
+            _dbName = boost::algorithm::replace_all_copy(_dbName, "`", "\\`");
             string _sql = "CREATE DATABASE IF NOT EXISTS ";
             _sql.append(_dbName);
             Connection_execute(_connection, "%s", _sql.c_str());

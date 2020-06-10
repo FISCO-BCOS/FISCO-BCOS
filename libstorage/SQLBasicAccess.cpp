@@ -419,6 +419,7 @@ int SQLBasicAccess::CommitDo(int64_t _num, const vector<TableData::Ptr>& _datas,
                 const auto& values = item.second;
                 vector<SQLPlaceholderItem> sqlPlaceholders =
                     this->BuildCommitSql(tableName, name, values);
+                auto itValue = values.begin();
                 for (auto& placeholder : sqlPlaceholders)
                 {
                     PreparedStatement_T preStatement =
@@ -427,25 +428,26 @@ int SQLBasicAccess::CommitDo(int64_t _num, const vector<TableData::Ptr>& _datas,
                         << "table:" << tableName << " sql:" << placeholder.sql;
 
                     uint32_t index = 0;
-                    for (auto& value : values)
+                    for (; itValue != values.end(); ++itValue)
                     {
                         if (g_BCOSConfig.version() >= V2_5_0 &&
                             boost::starts_with(tableName, string("c_")))
                         {
                             PreparedStatement_setBlob(
-                                preStatement, ++index, value.c_str(), value.size());
+                                preStatement, ++index, itValue->c_str(), itValue->size());
                         }
                         else
                         {
-                            PreparedStatement_setString(preStatement, ++index, value.c_str());
+                            PreparedStatement_setString(preStatement, ++index, itValue->c_str());
+                            SQLBasicAccess_LOG(TRACE) << " index:" << index << " num:" << _num
+                                                      << " setString:" << itValue->c_str();
                         }
 
-                        SQLBasicAccess_LOG(TRACE) << " index:" << index << " num:" << _num
-                                                  << " setString:" << value.c_str();
                         if (index == placeholder.placeholderCnt)
                         {
                             PreparedStatement_execute(preStatement);
                             rowCount += (int32_t)PreparedStatement_rowsChanged(preStatement);
+                            ++itValue;
                             break;
                         }
                     }
