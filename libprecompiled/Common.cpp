@@ -20,6 +20,7 @@
  */
 #include "Common.h"
 #include "libstorage/StorageException.h"
+#include <libblockverifier/ExecutiveContext.h>
 #include <libconfig/GlobalConfigure.h>
 #include <libethcore/ABI.h>
 #include <libstorage/Table.h>
@@ -281,4 +282,10 @@ std::shared_ptr<std::pair<std::string, int64_t>> dev::precompiled::getSysteConfi
         result->second = boost::lexical_cast<int64_t>(value->getField(SYSTEM_CONFIG_ENABLENUM));
     }
     return result;
+}
+
+dev::storage::Table::Ptr dev::precompiled::openTable(
+    dev::blockverifier::ExecutiveContext::Ptr _context, const std::string& _tableName)
+{
+    return _context->getMemoryTableFactory()->openTable(_tableName);
 }

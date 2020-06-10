@@ -98,7 +98,7 @@ public:
     void setPrecompiledExecResultFactory(
         dev::precompiled::PrecompiledExecResultFactory::Ptr _precompiledExecResultFactory);
 
-    BlockInfo blockInfo() { return m_blockInfo; }
+    BlockInfo const& blockInfo() { return m_blockInfo; }
     void setBlockInfo(BlockInfo blockInfo) { m_blockInfo = blockInfo; }
 
     std::shared_ptr<dev::executive::StateFace> getState();
