@@ -104,11 +104,6 @@ void Sealer::doWork(bool wait)
     {
         WriteGuard l(x_sealing);
         {
-            // hook call before seal block failed
-            if (!hookBeforeSealBlock())
-            {
-                return;
-            }
             /// get current transaction num
             uint64_t tx_num = m_sealing.block->getTransactionSize();
 

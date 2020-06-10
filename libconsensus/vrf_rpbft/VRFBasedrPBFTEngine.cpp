@@ -32,7 +32,16 @@ void VRFBasedrPBFTEngine::setShouldRotateSealers(bool _shouldRotateSealers)
 // Working sealer is elected as leader in turn
 IDXTYPE VRFBasedrPBFTEngine::selectLeader() const
 {
-    return (IDXTYPE)((m_view + m_highestBlock.number()) % m_workingSealersNum);
+    int64_t selectedIdx = ((m_view + m_highestBlock.number()) % m_workingSealersNum);
+    dev::h512 selectedNodeId;
+    {
+        ReadGuard l(x_chosedSealerList);
+        selectedNodeId = (*m_chosedSealerList)[selectedIdx];
+    }
+    {
+        ReadGuard l(x_nodeID2Index);
+        return (*m_nodeID2Index)[selectedNodeId];
+    }
 }
 
 void VRFBasedrPBFTEngine::updateConsensusNodeList()
@@ -62,15 +71,14 @@ void VRFBasedrPBFTEngine::updateConsensusNodeList()
     // update m_chosedConsensusNodes
     if (chosedSealerListUpdated)
     {
-        WriteGuard l(x_chosedConsensusNodes);
-        m_chosedConsensusNodes->clear();
-        for (auto const& _node : *m_chosedSealerList)
         {
-            m_chosedConsensusNodes->insert(_node);
+            WriteGuard l(x_chosedConsensusNodes);
+            m_chosedConsensusNodes->clear();
+            for (auto const& _node : *m_chosedSealerList)
+            {
+                m_chosedConsensusNodes->insert(_node);
+            }
         }
-    }
-    if (chosedSealerListUpdated)
-    {
         resetLocatedInConsensusNodes();
     }
     // the working sealers or the sealers have been updated
@@ -83,6 +91,14 @@ void VRFBasedrPBFTEngine::updateConsensusNodeList()
     {
         ReadGuard l(m_sealerListMutex);
         m_sealersNum = m_sealerList.size();
+        WriteGuard lock(x_nodeID2Index);
+        m_nodeID2Index->clear();
+        IDXTYPE nodeIndex = 0;
+        for (auto const& node : m_sealerList)
+        {
+            m_nodeID2Index->insert(std::make_pair(node, nodeIndex));
+            nodeIndex++;
+        }
     }
 }
 
@@ -101,6 +117,7 @@ void VRFBasedrPBFTEngine::resetConfig()
     updateRotatingInterval();
     // update according to epoch_sealers_num
     bool epochUpdated = updateEpochSize();
+    // first setup
     if (m_blockChain->number() == 0)
     {
         return;
@@ -121,6 +138,7 @@ void VRFBasedrPBFTEngine::resetConfig()
 
 void VRFBasedrPBFTEngine::updateConsensusInfo()
 {
+    ReadGuard l(x_chosedSealerList);
     // update consensus node info for syncing block
     if (m_blockSync->syncTreeRouterEnabled())
     {

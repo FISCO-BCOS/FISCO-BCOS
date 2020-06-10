@@ -43,7 +43,8 @@ public:
         dev::PROTOCOL_ID const& _protocolId, KeyPair const& _keyPair,
         h512s const& _sealerList = h512s())
       : RotatingPBFTEngine(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
-            _keyPair, _sealerList)
+            _keyPair, _sealerList),
+        m_nodeID2Index(std::make_shared<std::map<dev::h512, IDXTYPE>>())
     {}
 
     bool shouldRotateSealers() { return m_shouldRotateSealers.load(); }
@@ -61,6 +62,9 @@ private:
     // Used to notify Sealer whether it needs to rotate sealers
     std::atomic_bool m_shouldRotateSealers = {false};
     std::atomic<int64_t> m_workingSealersNum = {0};
+
+    std::shared_ptr<std::map<dev::h512, IDXTYPE>> m_nodeID2Index;
+    mutable SharedMutex x_nodeID2Index;
 };
 }  // namespace consensus
 }  // namespace dev
