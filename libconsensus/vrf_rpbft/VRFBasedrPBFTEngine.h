@@ -31,13 +31,6 @@ namespace dev
 {
 namespace consensus
 {
-struct NodeRotatingInfo
-{
-    using Ptr = std::shared_ptr<NodeRotatingInfo>;
-    u256 removedWorkingSealerNum;
-    u256 insertedWorkingSealerNum;
-};
-
 class VRFBasedrPBFTEngine : public dev::consensus::RotatingPBFTEngine
 {
 public:
@@ -50,19 +43,11 @@ public:
         dev::PROTOCOL_ID const& _protocolId, KeyPair const& _keyPair,
         h512s const& _sealerList = h512s())
       : RotatingPBFTEngine(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
-            _keyPair, _sealerList),
-        m_nodeRotatingInfo(std::make_shared<NodeRotatingInfo>())
+            _keyPair, _sealerList)
     {}
 
     bool shouldRotateSealers() { return m_shouldRotateSealers.load(); }
     void setShouldRotateSealers(bool _shouldRotateSealers);
-
-    // Note: here must be
-    NodeRotatingInfo nodeRotatingInfo()
-    {
-        ReadGuard l(x_nodeRotatingInfo);
-        return *m_nodeRotatingInfo;
-    }
 
 protected:
     IDXTYPE minValidNodes() const override { return m_workingSealersNum.load() - m_f; }
@@ -73,15 +58,9 @@ protected:
     void updateConsensusInfo() override;
 
 private:
-    void updateNodeRotatingInfo();
-
-private:
     // Used to notify Sealer whether it needs to rotate sealers
     std::atomic_bool m_shouldRotateSealers = {false};
     std::atomic<int64_t> m_workingSealersNum = {0};
-
-    std::shared_ptr<NodeRotatingInfo> m_nodeRotatingInfo;
-    mutable SharedMutex x_nodeRotatingInfo;
 };
 }  // namespace consensus
 }  // namespace dev

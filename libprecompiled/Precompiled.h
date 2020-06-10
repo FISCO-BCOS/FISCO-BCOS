@@ -76,9 +76,6 @@ protected:
 protected:
     uint64_t getEntriesCapacity(std::shared_ptr<dev::storage::Entries const> _entries) const;
 
-    std::shared_ptr<dev::storage::Table> openTable(
-        std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
-        const std::string& tableName);
     std::shared_ptr<dev::storage::Table> createTable(
         std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
         const std::string& _tableName, const std::string& _keyField, const std::string& _valueField,
