@@ -86,43 +86,6 @@ void VRFBasedrPBFTEngine::updateConsensusNodeList()
     }
 }
 
-void VRFBasedrPBFTEngine::updateNodeRotatingInfo()
-{
-    // The current workingSealers size is larger than the configurated workingSealers size
-    auto epochSize = std::min(m_sealersNum.load(), m_epochSize.load());
-
-    ssize_t removedWorkingSealerNum;
-    ssize_t insertedWorkingSealerNum;
-    if (m_workingSealersNum > epochSize)
-    {
-        removedWorkingSealerNum = (m_workingSealersNum.load() - epochSize);
-        insertedWorkingSealerNum = 0;
-    }
-    // The configurated workingSealers size is larger than the current workingSealers size
-    else if (m_workingSealersNum < epochSize)
-    {
-        removedWorkingSealerNum = 0;
-        insertedWorkingSealerNum = epochSize - m_workingSealersNum.load();
-    }
-    // The configurated workingSealers size is equal to the current workingSealers size
-    else
-    {
-        removedWorkingSealerNum = 1;
-        insertedWorkingSealerNum = 1;
-    }
-    {
-        WriteGuard l(x_nodeRotatingInfo);
-        m_nodeRotatingInfo->removedWorkingSealerNum = u256(removedWorkingSealerNum);
-        m_nodeRotatingInfo->insertedWorkingSealerNum = u256(insertedWorkingSealerNum);
-    }
-
-
-    VRFRPBFTEngine_LOG(INFO) << LOG_DESC("updateNodeRotatingInfo")
-                             << LOG_KV("epochSealers", epochSize)
-                             << LOG_KV("toRemovedNode", removedWorkingSealerNum)
-                             << LOG_KV("toInsertedNode", insertedWorkingSealerNum);
-}
-
 void VRFBasedrPBFTEngine::resetConfig()
 {
     PBFTEngine::resetConfig();
@@ -141,10 +104,6 @@ void VRFBasedrPBFTEngine::resetConfig()
     if (m_blockChain->number() == 0)
     {
         return;
-    }
-    if (epochUpdated)
-    {
-        updateNodeRotatingInfo();
     }
     // After the last batch of workingsealer agreed on m_rotatingInterval blocks,
     // set m_shouldRotateSealers to true to notify VRFBasedrPBFTSealer to update workingSealer

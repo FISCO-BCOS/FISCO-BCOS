@@ -45,12 +45,6 @@ uint32_t Precompiled::getFuncSelector(std::string const& _functionName)
     return selector;
 }
 
-storage::Table::Ptr Precompiled::openTable(
-    ExecutiveContext::Ptr context, const std::string& tableName)
-{
-    return context->getMemoryTableFactory()->openTable(tableName);
-}
-
 storage::Table::Ptr Precompiled::createTable(
     std::shared_ptr<dev::blockverifier::ExecutiveContext> context, const std::string& tableName,
     const std::string& keyField, const std::string& valueField, Address const& origin)
