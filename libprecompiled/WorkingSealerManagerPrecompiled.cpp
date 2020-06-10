@@ -21,13 +21,14 @@
  * @date: 2020-06-04
  */
 #include "WorkingSealerManagerPrecompiled.h"
+//#include "ffi_vrf.h"
 
 using namespace dev::precompiled;
 
 // The parameters are: VRF public key, VRF input, VRF proof, removedWorkingSealers,
 // insertedWorkingSealers
 const char* const dev::precompiled::WSM_METHOD_ROTATE_STR =
-    "rotateWorkingSealer(std::string, std::string, std::string, uint256, uint256)";
+    "rotateWorkingSealer(std::string, std::string, std::string)";
 
 // init function selector
 WorkingSealerManagerPrecompiled::WorkingSealerManagerPrecompiled()
@@ -39,8 +40,6 @@ std::string WorkingSealerManagerPrecompiled::toString()
 {
     return "WorkingSealerManagerPrecompiled";
 }
-
-
 void WorkingSealerManagerPrecompiled::rotateWorkingSealer(
     std::shared_ptr<dev::blockverifier::ExecutiveContext> _context, bytesConstRef _paramData,
     dev::eth::ContractABI& _abi, PrecompiledExecResult::Ptr _result)
@@ -48,9 +47,7 @@ void WorkingSealerManagerPrecompiled::rotateWorkingSealer(
     std::string vrfProof;
     std::string vrfPublicKey;
     std::string vrfInput;
-    u256 insertedNodeNum;
-    u256 removedNodeNum;
-    _abi.abiOut(_paramData, vrfProof, vrfPublicKey, vrfInput, insertedNodeNum, removedNodeNum);
+    _abi.abiOut(_paramData, vrfProof, vrfPublicKey, vrfInput);
 
     // TODO: implement rotateWorkingSealer
     (void)_context;

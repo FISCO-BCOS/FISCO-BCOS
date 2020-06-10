@@ -105,15 +105,13 @@ bool VRFBasedrPBFTSealer::generateAndSealerRotatingTx()
             return false;
         }
         std::string vrfProof = vrfProofPtr;
-        auto const& nodeRotatingInfo = m_vrfBasedrPBFTEngine->nodeRotatingInfo();
 
         // generate "rotateWorkingSealer" transaction
         std::string interface = dev::precompiled::WSM_METHOD_ROTATE_STR;
-        auto generatedTx = m_txGenerator->generateTransactionWithSig(interface,
-            m_blockChain->number(), dev::precompiled::WORKING_SEALER_MGR_ADDRESS,
-            m_vrfBasedrPBFTEngine->keyPair(), dev::eth::Transaction::Type::MessageCall,
-            m_vrfPublicKey, blockHashStr, vrfProof, nodeRotatingInfo.removedWorkingSealerNum,
-            nodeRotatingInfo.insertedWorkingSealerNum);
+        auto generatedTx =
+            m_txGenerator->generateTransactionWithSig(interface, m_blockChain->number(),
+                dev::precompiled::WORKING_SEALER_MGR_ADDRESS, m_vrfBasedrPBFTEngine->keyPair(),
+                dev::eth::Transaction::Type::MessageCall, m_vrfPublicKey, blockHashStr, vrfProof);
 
         // put the generated transaction into the 0th position of the block transactions
         m_sealing.block->transactions()->push_back(generatedTx);
