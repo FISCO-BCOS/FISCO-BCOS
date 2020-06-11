@@ -156,11 +156,23 @@ PrecompiledExecResult::Ptr PermissionPrecompiled::call(
     {  // remove(string tableName,string addr)
         std::string tableName, addr;
         abi.abiOut(data, tableName, addr);
-        addPrefixToUserTable(tableName);
-
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("remove func")
-                               << LOG_KV("tableName", tableName) << LOG_KV("address", addr);
-        int result = revokeTablePermission(context, tableName, addr, origin);
+        int result = 0;
+        if (g_BCOSConfig.version() >= V2_5_0 && tableName == SYS_ACCESS_TABLE)
+        {
+            result = CODE_COMMITTEE_PERMISSION;
+            PRECOMPILED_LOG(WARNING)
+                << LOG_BADGE("PermissionPrecompiled")
+                << LOG_DESC("Committee permission controlled by ChainGovernancePrecompiled")
+                << LOG_KV("return", result);
+        }
+        else
+        {
+            addPrefixToUserTable(tableName);
+            result = revokeTablePermission(context, tableName, addr, origin);
+        }
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("remove")
+                               << LOG_KV("tableName", tableName) << LOG_KV("address", addr)
+                               << LOG_KV("ret", result);
         getErrorCodeOut(callResult->mutableExecResult(), result);
     }
     else if (func == name2Selector[AUP_METHOD_QUE])
