@@ -62,7 +62,7 @@ void VRFBasedrPBFTSealer::initConsensusEngine()
     VRFRPBFTSealer_LOG(INFO) << LOG_DESC("initConsensusEngine") << LOG_KV("vrfPk", m_vrfPublicKey);
 }
 
-bool VRFBasedrPBFTSealer::hookBeforeSealBlock()
+bool VRFBasedrPBFTSealer::hookAfterHandleBlock()
 {
     if (!m_vrfBasedrPBFTEngine->shouldRotateSealers())
     {
@@ -73,7 +73,6 @@ bool VRFBasedrPBFTSealer::hookBeforeSealBlock()
     {
         return false;
     }
-    m_vrfBasedrPBFTEngine->setShouldRotateSealers(false);
     return true;
 }
 
@@ -81,17 +80,6 @@ bool VRFBasedrPBFTSealer::generateAndSealerRotatingTx()
 {
     try
     {
-        // already has a transaction
-        auto txsSize = m_sealing.block->getTransactionSize();
-        if (txsSize >= 1)
-        {
-            // Note: this situation should be strictly avoided
-            VRFRPBFTSealer_LOG(WARNING)
-                << LOG_DESC("generateAndSealerRotatingTx failed for txs already exists")
-                << LOG_KV("txSize", txsSize);
-        }
-        // clear the loaded transaction
-        m_sealing.block->transactions()->clear();
         // get VRF proof
         auto blockNumber = m_blockChain->number();
         auto blockHash = m_blockChain->numberHash(blockNumber);

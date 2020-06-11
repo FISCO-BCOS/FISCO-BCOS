@@ -401,9 +401,6 @@ void Ledger::initrPBFTEngine(dev::consensus::Sealer::Ptr _sealer)
     }
     RotatingPBFTEngine::Ptr rotatingPBFT =
         std::dynamic_pointer_cast<RotatingPBFTEngine>(_sealer->consensusEngine());
-    assert(rotatingPBFT);
-    rotatingPBFT->setEpochSealerNum(m_param->mutableConsensusParam().epochSealerNum);
-    rotatingPBFT->setEpochBlockNum(m_param->mutableConsensusParam().epochBlockNum);
     rotatingPBFT->setMaxRequestMissedTxsWaitTime(
         m_param->mutableConsensusParam().maxRequestMissedTxsWaitTime);
     rotatingPBFT->setMaxRequestPrepareWaitTime(

@@ -46,6 +46,7 @@ public:
     VRFInfo(std::string const& _vrfProof, std::string const& _vrfPk, std::string const& _vrfInput)
       : m_vrfProof(_vrfProof), m_vrfPublicKey(_vrfPk), m_vrfInput(_vrfInput)
     {}
+    virtual ~VRFInfo() {}
 
     virtual bool verifyProof();
     virtual dev::h256 getHashFromProof();
@@ -77,8 +78,11 @@ public:
 
     virtual ~WorkingSealerManagerImpl() {}
 
-    void setVRFInfos(VRFInfo::Ptr _vrfInfo);
+    void createVRFInfo(std::string const& _vrfProof, std::string const& _vrfPublicKey,
+        std::string const& _vrfInput);
     VRFInfo::Ptr vrfInfo() const { return m_vrfInfo; }
+
+    virtual void rotateWorkingSealer();
 
 protected:
     virtual void checkVRFInfos();
@@ -86,10 +90,14 @@ protected:
     // calculate the number of working sealers that need to be added and removed
     virtual NodeRotatingInfo::Ptr calNodeRotatingInfo();
 
+    virtual std::shared_ptr<dev::h512s> selectNodesFromList(
+        std::shared_ptr<dev::h512s> _nodeList, int64_t selectedNode);
+
 private:
     bool checkPermission(dev::Address const& _origin, dev::h512s const& _allowedAccountInfoList);
     void getSealerList();
     int64_t getrPBFTEpochSealersNum();
+    void UpdateNodeType(dev::h512 const& _node, std::string const& _nodeType);
 
 private:
     std::shared_ptr<dev::blockverifier::ExecutiveContext> m_context;
@@ -101,6 +109,9 @@ private:
     std::shared_ptr<dev::h512s> m_workingSealerList;
 
     std::shared_ptr<dev::storage::Table> m_consTable;
+    dev::h256 m_proofHash;
+
+    int64_t m_configuredEpochSealersSize;
 };
 }  // namespace precompiled
 }  // namespace dev

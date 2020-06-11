@@ -32,6 +32,7 @@
 #include <libprecompiled/PrecompiledResult.h>
 #include <libprecompiled/SystemConfigPrecompiled.h>
 #include <libprecompiled/TableFactoryPrecompiled.h>
+#include <libprecompiled/WorkingSealerManagerPrecompiled.h>
 #include <libprecompiled/extension/DagTransferPrecompiled.h>
 #include <libstorage/MemoryTableFactory.h>
 
@@ -91,6 +92,13 @@ void ExecutiveContextFactory::initExecutiveContext(
     context->setPrecompiledContract(m_precompiledContract);
     context->setState(m_stateFactoryInterface->getState(stateRoot, memoryTableFactory));
     setTxGasLimitToContext(context);
+
+    if (g_BCOSConfig.version() >= V2_6_0)
+    {
+        // register workingSealerManagerPrecompiled for VRF-based-rPBFT
+        context->setAddress2Precompiled(WORKING_SEALER_MGR_ADDRESS,
+            std::make_shared<dev::precompiled::WorkingSealerManagerPrecompiled>());
+    }
 }
 
 void ExecutiveContextFactory::setStateStorage(dev::storage::Storage::Ptr stateStorage)

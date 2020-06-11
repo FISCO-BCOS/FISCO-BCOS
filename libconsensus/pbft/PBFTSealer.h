@@ -84,6 +84,8 @@ public:
         m_blockSizeIncreaseRatio = blockSizeIncreaseRatio;
     }
 
+    virtual bool hookAfterHandleBlock() { return true; }
+
 protected:
     virtual void initConsensusEngine()
     {
