@@ -190,7 +190,17 @@ struct EmptyFixture
         m_blockChainImp->setStateFactory(m_storageStateFactory);
         m_executiveContext->setMemoryTableFactory(mockMemoryTableFactory);
         m_executiveContext->setState(std::make_shared<MockState>());
-        GenesisBlockParam initParam{"", dev::h512s(), dev::h512s(), "", "", "", 0, 0, 0, -1, -1, 0};
+
+        auto initParam = std::make_shared<dev::ledger::LedgerParam>();
+        initParam->mutableGenesisMark() = "";
+        initParam->mutableConsensusParam().sealerList = dev::h512s();
+        initParam->mutableConsensusParam().observerList = dev::h512s();
+        initParam->mutableConsensusParam().consensusType = "";
+        initParam->mutableStorageParam().type = "";
+        initParam->mutableStateParam().type = "";
+        initParam->mutableConsensusParam().maxTransactions = 0;
+        initParam->mutableTxParam().txGasLimit = 0;
+        initParam->mutableGenesisParam().timeStamp = 0;
         m_blockChainImp->checkAndBuildGenesisBlock(initParam);
     }
 

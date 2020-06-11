@@ -207,7 +207,8 @@ BOOST_AUTO_TEST_CASE(testBlockHeaderVerify)
     /// modify state of block_header_genesis, and check, require no throw
     RLP root(block_rlp.out());
     auto txList = root[1];
-    auto expectedRoot = trieRootOver(txList.itemCount(), [&](unsigned i) { return rlp(i); },
+    auto expectedRoot = trieRootOver(
+        txList.itemCount(), [&](unsigned i) { return rlp(i); },
         [&](unsigned i) { return txList[i].data().toBytes(); });
     block_header_genesis.setRoots(
         expectedRoot, block_header_genesis.receiptsRoot(), block_header_genesis.stateRoot());
@@ -221,7 +222,8 @@ BOOST_AUTO_TEST_CASE(testBlockHeaderVerify)
     constructBlock(block_child_rlp, block_header_child);
     root = RLP(block_child_rlp.out());
     txList = root[1];
-    expectedRoot = trieRootOver(txList.itemCount(), [&](unsigned i) { return rlp(i); },
+    expectedRoot = trieRootOver(
+        txList.itemCount(), [&](unsigned i) { return rlp(i); },
         [&](unsigned i) { return txList[i].data().toBytes(); });
     block_header_child.setRoots(
         expectedRoot, block_header_child.receiptsRoot(), block_header_child.stateRoot());
