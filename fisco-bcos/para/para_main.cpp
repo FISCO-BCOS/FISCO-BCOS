@@ -155,9 +155,14 @@ static void startExecute(int _totalUser, int _totalTxs)
     blockChain->setStateStorage(dbInitializer->storage());
     blockChain->setTableFactoryFactory(dbInitializer->tableFactoryFactory());
 
-    GenesisBlockParam initParam = {"", dev::h512s(), dev::h512s(), "consensusType", "storageType",
-        "stateType", 5000, 300000000, 0, -1, -1, 0};
-    bool ret = blockChain->checkAndBuildGenesisBlock(initParam);
+    params->mutableGenesisMark() = "";
+    params->mutableConsensusParam().sealerList = dev::h512s();
+    params->mutableConsensusParam().observerList = dev::h512s();
+    params->mutableConsensusParam().consensusType = "";
+    params->mutableConsensusParam().maxTransactions = 5000;
+    params->mutableTxParam().txGasLimit = 300000000;
+    params->mutableGenesisParam().timeStamp = 0;
+    bool ret = blockChain->checkAndBuildGenesisBlock(params);
     assert(ret == true);
 
     dev::h256 genesisHash = blockChain->getBlockByNumber(0)->headerHash();
