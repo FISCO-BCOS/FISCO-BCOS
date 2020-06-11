@@ -82,7 +82,7 @@ void LedgerParam::parseGenesisConfig(const std::string& _genesisFile)
                                << LOG_KV("EINFO", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(dev::InitLedgerConfigFailed() << errinfo_comment(error_info));
     }
-    m_genesisBlockParam = generateGenesisMark();
+    generateGenesisMark();
 }
 
 void LedgerParam::setEVMFlags(boost::property_tree::ptree const& _pt)
@@ -97,7 +97,7 @@ void LedgerParam::setEVMFlags(boost::property_tree::ptree const& _pt)
                           << LOG_KV("evmFlags", mutableGenesisParam().evmFlags);
 }
 
-blockchain::GenesisBlockParam LedgerParam::generateGenesisMark()
+void LedgerParam::generateGenesisMark()
 {
     std::stringstream s;
     s << int(m_groupID) << "-";
@@ -127,13 +127,8 @@ blockchain::GenesisBlockParam LedgerParam::generateGenesisMark()
         s << "-" << mutableConsensusParam().epochSealerNum << "-";
         s << mutableConsensusParam().epochBlockNum;
     }
-    LedgerParam_LOG(DEBUG) << LOG_BADGE("initMark") << LOG_KV("genesisMark", s.str());
-    return blockchain::GenesisBlockParam{s.str(), mutableConsensusParam().sealerList,
-        mutableConsensusParam().observerList, mutableConsensusParam().consensusType,
-        mutableStorageParam().type, mutableStateParam().type,
-        mutableConsensusParam().maxTransactions, mutableTxParam().txGasLimit,
-        mutableGenesisParam().timeStamp, mutableConsensusParam().epochSealerNum,
-        mutableConsensusParam().epochBlockNum, mutableGenesisParam().evmFlags};
+    m_genesisMark = s.str();
+    LedgerParam_LOG(DEBUG) << LOG_BADGE("initMark") << LOG_KV("genesisMark", m_genesisMark);
 }
 
 void LedgerParam::parseIniConfig(const std::string& _iniConfigFile, const std::string& _dataPath)
@@ -375,6 +370,16 @@ void LedgerParam::initConsensusConfig(ptree const& pt)
                                   "Please set consensus.max_trans_num to positive !"));
     }
 
+    // init maxConsensusTimeout
+    mutableConsensusParam().maxConsensusTimeout =
+        pt.get<int64_t>("consensus.max_timeout_time", 1000);
+    if (mutableConsensusParam().maxConsensusTimeout < 1000)
+    {
+        BOOST_THROW_EXCEPTION(
+            ForbidNegativeValue() << errinfo_comment(
+                "Please set consensus.max_timeout_time no smaller than 1000 ms!"));
+    }
+
     mutableConsensusParam().minElectTime = pt.get<int64_t>("consensus.min_elect_time", 1000);
     if (mutableConsensusParam().minElectTime <= 0)
     {
@@ -397,6 +402,8 @@ void LedgerParam::initConsensusConfig(ptree const& pt)
 
     LedgerParam_LOG(INFO) << LOG_BADGE("initConsensusConfig")
                           << LOG_KV("type", mutableConsensusParam().consensusType)
+                          << LOG_KV(
+                                 "maxConsensusTimeout", mutableConsensusParam().maxConsensusTimeout)
                           << LOG_KV("maxTxNum", mutableConsensusParam().maxTransactions)
                           << LOG_KV("txGasLimit", mutableTxParam().txGasLimit);
 
