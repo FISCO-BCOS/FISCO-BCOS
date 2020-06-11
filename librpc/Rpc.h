@@ -199,9 +199,9 @@ private:
         if (!_modulePtr)
         {
             RPC_LOG(WARNING) << LOG_DESC(
-                _method + ":" + _moduleName + " is not initialized completed");
-            BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::IncompleteInitialization,
-                RPCMsg[RPCExceptionType::IncompleteInitialization]));
+                _method + ": get " + _moduleName + " failed, please check the status of the group");
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
         }
     }
 
