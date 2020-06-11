@@ -44,7 +44,7 @@ public:
     ~VRFBasedrPBFTSealer() override {}
 
     void initConsensusEngine() override;
-    bool hookBeforeSealBlock() override;
+    bool hookAfterHandleBlock() override;
 
 
 protected:

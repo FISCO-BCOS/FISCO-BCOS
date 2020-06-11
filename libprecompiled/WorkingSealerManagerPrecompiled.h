@@ -56,7 +56,8 @@ public:
 
 private:
     void rotateWorkingSealer(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
-        bytesConstRef _paramData, dev::eth::ContractABI& _abi, PrecompiledExecResult::Ptr _result);
+        bytesConstRef _paramData, dev::eth::ContractABI& _abi, Address const& _origin,
+        Address const& _sender);
 };
 }  // namespace precompiled
 }  // namespace dev

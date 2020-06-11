@@ -21,9 +21,11 @@
  * @date: 2020-06-04
  */
 #include "WorkingSealerManagerPrecompiled.h"
-//#include "ffi_vrf.h"
+#include "WorkingSealerManagerImpl.h"
+#include <libblockverifier/ExecutiveContext.h>
 
 using namespace dev::precompiled;
+using namespace dev::blockverifier;
 
 // The parameters are: VRF public key, VRF input, VRF proof, removedWorkingSealers,
 // insertedWorkingSealers
@@ -42,21 +44,39 @@ std::string WorkingSealerManagerPrecompiled::toString()
 }
 void WorkingSealerManagerPrecompiled::rotateWorkingSealer(
     std::shared_ptr<dev::blockverifier::ExecutiveContext> _context, bytesConstRef _paramData,
-    dev::eth::ContractABI& _abi, PrecompiledExecResult::Ptr _result)
+    dev::eth::ContractABI& _abi, Address const& _origin, Address const& _sender)
 {
-    std::string vrfProof;
-    std::string vrfPublicKey;
-    std::string vrfInput;
-    _abi.abiOut(_paramData, vrfProof, vrfPublicKey, vrfInput);
+    try
+    {
+        PRECOMPILED_LOG(INFO) << LOG_DESC("rotateWorkingSealer")
+                              << LOG_KV("number", _context->blockInfo().number);
+        std::string vrfProof;
+        std::string vrfPublicKey;
+        std::string vrfInput;
+        _abi.abiOut(_paramData, vrfPublicKey, vrfInput, vrfProof);
 
-    // TODO: implement rotateWorkingSealer
-    (void)_context;
-    (void)_result;
+        auto workingSealerMgr =
+            std::make_shared<WorkingSealerManagerImpl>(_context, _origin, _sender);
+
+        workingSealerMgr->createVRFInfo(vrfProof, vrfPublicKey, vrfInput);
+        workingSealerMgr->rotateWorkingSealer();
+    }
+    catch (std::exception const& _e)
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("WorkingSealerManagerPrecompiled")
+                               << LOG_DESC("rotateWorkingSealer exceptioned")
+                               << LOG_KV("errorInfo", boost::diagnostic_information(_e))
+                               << LOG_KV("origin", _origin.hexPrefixed())
+                               << LOG_KV("sender", _sender.hexPrefixed());
+        BOOST_THROW_EXCEPTION(PrecompiledException(
+            "rotateWorkingSealer exceptioned, error info:" + boost::diagnostic_information(_e) +
+            " , origin:" + _origin.hexPrefixed()));
+    }
 }
 
 PrecompiledExecResult::Ptr WorkingSealerManagerPrecompiled::call(
     std::shared_ptr<dev::blockverifier::ExecutiveContext> _context, bytesConstRef _param,
-    Address const&, Address const&)
+    Address const& _origin, Address const& _sender)
 {
     // get function selector
     auto funcSelector = getParamFunc(_param);
@@ -66,7 +86,7 @@ PrecompiledExecResult::Ptr WorkingSealerManagerPrecompiled::call(
     // Call the corresponding function according to the selector
     if (funcSelector == name2Selector[WSM_METHOD_ROTATE_STR])
     {
-        rotateWorkingSealer(_context, paramData, abi, callResult);
+        rotateWorkingSealer(_context, paramData, abi, _origin, _sender);
     }
     return callResult;
 }
