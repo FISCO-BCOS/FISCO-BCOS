@@ -23,6 +23,7 @@
  */
 #pragma once
 #include <libblockchain/BlockChainInterface.h>
+#include <libledger/LedgerParamInterface.h>
 #include <libp2p/P2PMessageFactory.h>
 #include <libp2p/Service.h>
 #include <libtxpool/TxPool.h>
@@ -255,7 +256,11 @@ public:
     }
 
     dev::bytes getCode(dev::Address) override { return bytes(); }
-    bool checkAndBuildGenesisBlock(GenesisBlockParam&, bool = true) override { return true; }
+    bool checkAndBuildGenesisBlock(
+        std::shared_ptr<dev::ledger::LedgerParamInterface>, bool = true) override
+    {
+        return true;
+    }
     std::string getSystemConfigByKey(std::string const&, int64_t) override { return "300000000"; };
     dev::h512s sealerList() override { return m_sealerList; }
     dev::h512s observerList() override { return m_observerList; }

@@ -181,7 +181,7 @@ protected:
     virtual bool initTxPool();
     /// init blockverifier related
     virtual bool initBlockVerifier();
-    virtual bool initBlockChain(GenesisBlockParam& _genesisParam);
+    virtual bool initBlockChain();
     /// create consensus moudle
     virtual bool consensusInitFactory();
     /// init the blockSync
@@ -196,7 +196,6 @@ protected:
     // init QPSLimit
     virtual void initQPSLimit();
 
-    void initGenesisMark(GenesisBlockParam& genesisParam);
     /// load ini config of group
     void initIniConfig(std::string const& iniConfigFileName);
     void initDBConfig(boost::property_tree::ptree const& pt);

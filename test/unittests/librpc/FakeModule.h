@@ -173,13 +173,17 @@ public:
     {
         return std::make_shared<std::vector<dev::eth::NonceKeyType>>();
     }
-    bool checkAndBuildGenesisBlock(GenesisBlockParam& initParam, bool = true) override
+    bool checkAndBuildGenesisBlock(
+        std::shared_ptr<LedgerParamInterface> initParam, bool = true) override
     {
         m_initParam = initParam;
         return true;
     }
-    dev::h512s sealerList() override { return m_initParam.sealerList; };
-    dev::h512s observerList() override { return m_initParam.observerList; };
+    dev::h512s sealerList() override { return m_initParam->mutableConsensusParam().sealerList; };
+    dev::h512s observerList() override
+    {
+        return m_initParam->mutableConsensusParam().observerList;
+    };
     std::string getSystemConfigByKey(std::string const&, int64_t = -1) override
     {
         return "300000000";
@@ -351,7 +355,7 @@ public:
     uint64_t m_blockNumber;
     uint64_t m_totalTransactionCount;
 
-    GenesisBlockParam m_initParam;
+    std::shared_ptr<LedgerParamInterface> m_initParam;
 };
 
 class MockBlockVerifier : public BlockVerifierInterface
@@ -596,8 +600,17 @@ public:
         sealerList.push_back(
             dev::h512("7dcce48da1c464c7025614a54a4e26df7d6f92cd4d315601e057c1659796736c5c8730e380fc"
                       "be637191cc2aebf4746846c0db2604adebf9c70c7f418d4d5a61"));
-        GenesisBlockParam initParam = {
-            "std", sealerList, dev::h512s(), "", "", "", 1000, 300000000, 0, -1, -1, 0};
+        // init the genesis param
+        auto initParam = std::make_shared<dev::ledger::LedgerParam>();
+        initParam->mutableGenesisMark() = "std";
+        initParam->mutableConsensusParam().sealerList = sealerList;
+        initParam->mutableConsensusParam().observerList = dev::h512s();
+        initParam->mutableConsensusParam().consensusType = "";
+        initParam->mutableStorageParam().type = "";
+        initParam->mutableStateParam().type = "";
+        initParam->mutableConsensusParam().maxTransactions = 1000;
+        initParam->mutableTxParam().txGasLimit = 300000000;
+        initParam->mutableGenesisParam().timeStamp = 0;
         m_blockChain->checkAndBuildGenesisBlock(initParam);
     }
 

@@ -435,37 +435,48 @@ std::shared_ptr<Block> BlockChainImp::getBlockByHash(h256 const& _blockHash, int
     }
 }
 
-void BlockChainImp::initGenesisWorkingSealers(
-    dev::storage::Table::Ptr _consTable, GenesisBlockParam& _initParam)
+void BlockChainImp::initGenesisWorkingSealers(dev::storage::Table::Ptr _consTable,
+    std::shared_ptr<dev::ledger::LedgerParamInterface> _initParam)
 {
     // only used for vrf based rPBFT
-    if (dev::stringCmpIgnoreCase(_initParam.consensusType, "vrf_rpbft") != 0)
+    auto sealerList = _initParam->mutableConsensusParam().sealerList;
+    if (dev::stringCmpIgnoreCase(_initParam->mutableConsensusParam().consensusType, "vrf_rpbft") !=
+        0)
     {
         return;
     }
     // TODO: select the genesis working sealers randomly according to genesis hash
-    std::sort(_initParam.sealerList.begin(), _initParam.sealerList.end());
-    int64_t sealersSize = _initParam.sealerList.size();
-    auto selectedNum = std::min(_initParam.rpbftEpochSize, sealersSize);
+    std::sort(sealerList.begin(), sealerList.end());
+    int64_t sealersSize = sealerList.size();
+    auto selectedNum = std::min(_initParam->mutableConsensusParam().epochSealerNum, sealersSize);
     // output workingSealers
     std::string workingSealers;
     for (int64_t i = 0; i < selectedNum; i++)
     {
-        workingSealers += (_initParam.sealerList[i]).abridged() + ",";
+        workingSealers += (sealerList[i]).abridged() + ",";
     }
     BLOCKCHAIN_LOG(INFO) << LOG_DESC("initGenesisWorkingSealers")
                          << LOG_KV("workingSealerNum", selectedNum)
                          << LOG_KV("workingSealers", workingSealers);
     // update selected sealers into workingSealers
     initGensisConsensusInfoByNodeType(
-        _consTable, NODE_TYPE_WORKING_SEALER, _initParam.sealerList, selectedNum, true);
+        _consTable, NODE_TYPE_WORKING_SEALER, sealerList, selectedNum, true);
 }
 
-bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam, bool _shouldBuild)
+// Configuration item written to the genesis block:
+// groupMark:
+//          groupId, sealerList, observerList, consensusType,
+//          storageType, stateType, evmFlags, tx_count_limit
+//          tx_gas_limit, epochSealerNum(for rPBFT), epochBlockNum(for rPBFT)
+bool BlockChainImp::checkAndBuildGenesisBlock(
+    std::shared_ptr<dev::ledger::LedgerParamInterface> _initParam, bool _shouldBuild)
 {
     BLOCKCHAIN_LOG(INFO) << LOG_DESC("[#checkAndBuildGenesisBlock]")
                          << LOG_KV("shouldBuild", _shouldBuild);
     std::shared_ptr<Block> block = getBlockByNumber(0);
+
+    auto groupGenesisMark = _initParam->mutableGenesisMark();
+
     if (block == nullptr && !_shouldBuild)
     {
         BLOCKCHAIN_LOG(FATAL) << "Can't find the genesis block";
@@ -474,8 +485,8 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam, bool
     {
         block = std::make_shared<Block>();
         /// modification 2019.3.20: set timestamp to block header
-        block->setEmptyBlock(initParam.timeStamp);
-        block->header().appendExtraDataArray(asBytes(initParam.groupMark));
+        block->setEmptyBlock(_initParam->mutableGenesisParam().timeStamp);
+        block->header().appendExtraDataArray(asBytes(groupGenesisMark));
         shared_ptr<TableFactory> mtb = getMemoryTableFactory();
         Table::Ptr tb = mtb->openTable(SYS_NUMBER_2_HASH, false);
         if (tb)
@@ -491,29 +502,36 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam, bool
         {
             // init for tx_count_limit
             initSystemConfig(tb, SYSTEM_KEY_TX_COUNT_LIMIT,
-                boost::lexical_cast<std::string>(initParam.txCountLimit));
+                boost::lexical_cast<std::string>(
+                    _initParam->mutableConsensusParam().maxTransactions));
 
             // init for tx_gas_limit
             initSystemConfig(tb, SYSTEM_KEY_TX_GAS_LIMIT,
-                boost::lexical_cast<std::string>(initParam.txGasLimit));
+                boost::lexical_cast<std::string>(_initParam->mutableTxParam().txGasLimit));
             // init configurations for RPBFT
-            if (dev::stringCmpIgnoreCase(initParam.consensusType, "rpbft") == 0 ||
-                dev::stringCmpIgnoreCase(initParam.consensusType, "vrf_rpbft") == 0)
+            auto consensusType = _initParam->mutableConsensusParam().consensusType;
+            if (dev::stringCmpIgnoreCase(consensusType, "rpbft") == 0 ||
+                dev::stringCmpIgnoreCase(consensusType, "vrf_rpbft") == 0)
             {
-                // init rotating-epoch-size
+                // init epoch_sealer_num
                 initSystemConfig(tb, SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM,
-                    boost::lexical_cast<std::string>(initParam.rpbftEpochSize));
+                    boost::lexical_cast<std::string>(
+                        _initParam->mutableConsensusParam().epochSealerNum));
+                // init epoch_block_num
                 initSystemConfig(tb, SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM,
-                    boost::lexical_cast<std::string>(initParam.rpbftRotatingInterval));
+                    boost::lexical_cast<std::string>(
+                        _initParam->mutableConsensusParam().epochBlockNum));
             }
         }
 
         tb = mtb->openTable(SYS_CONSENSUS);
         if (tb)
         {
-            initGensisConsensusInfoByNodeType(tb, NODE_TYPE_SEALER, initParam.sealerList);
-            initGensisConsensusInfoByNodeType(tb, NODE_TYPE_OBSERVER, initParam.observerList);
-            initGenesisWorkingSealers(tb, initParam);
+            initGensisConsensusInfoByNodeType(
+                tb, NODE_TYPE_SEALER, _initParam->mutableConsensusParam().sealerList);
+            initGensisConsensusInfoByNodeType(
+                tb, NODE_TYPE_OBSERVER, _initParam->mutableConsensusParam().observerList);
+            initGenesisWorkingSealers(tb, _initParam);
         }
 
         tb = mtb->openTable(SYS_HASH_2_BLOCK, false);
@@ -541,7 +559,8 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam, bool
         std::string extraData = asString(block->header().extraData(0));
         /// compare() return 0 means equal!
         /// If not equal, only print warning, willnot kill process.
-        if (!initParam.groupMark.compare(extraData))
+
+        if (!groupGenesisMark.compare(extraData))
         {
             BLOCKCHAIN_LOG(INFO) << LOG_DESC(
                 "[#checkAndBuildGenesisBlock]Already have the 0th block, 0th groupMark is "
@@ -550,35 +569,37 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam, bool
         }
         else
         {
-            BLOCKCHAIN_LOG(WARNING) << LOG_DESC(
-                                           "[#checkAndBuildGenesisBlock]Already have the 0th "
-                                           "block, 0th group mark is not equal to file groupMark")
-                                    << LOG_KV("0thGroupMark:", extraData)
-                                    << LOG_KV("fileGroupMark", initParam.groupMark);
+            BLOCKCHAIN_LOG(WARNING)
+                << LOG_DESC(
+                       "[#checkAndBuildGenesisBlock]Already have the 0th "
+                       "block, 0th group mark is not equal to file groupMark")
+                << LOG_KV("0thGroupMark:", extraData) << LOG_KV("fileGroupMark", groupGenesisMark);
 
             // maybe consensusType/storageType/stateType diff, then update config
             std::vector<std::string> s;
             try
             {
                 boost::split(s, extraData, boost::is_any_of("-"), boost::token_compress_on);
-                initParam.consensusType = s[2];
+                _initParam->mutableConsensusParam().consensusType = s[2];
                 if (g_BCOSConfig.version() <= RC2_VERSION)
                 {
-                    initParam.storageType = s[3];
-                    initParam.stateType = s[4];
+                    _initParam->mutableStorageParam().type = s[3];
+                    _initParam->mutableStateParam().type = s[4];
                 }
                 else
                 {
-                    initParam.stateType = s[3];
+                    _initParam->mutableStateParam().type = s[3];
                 }
                 if (g_BCOSConfig.version() >= V2_4_0)
                 {
-                    initParam.evmFlags = boost::lexical_cast<VMFlagType>(s[4]);
+                    _initParam->mutableGenesisParam().evmFlags =
+                        boost::lexical_cast<VMFlagType>(s[4]);
                 }
-                BLOCKCHAIN_LOG(INFO) << LOG_BADGE("checkAndBuildGenesisBlock")
-                                     << LOG_DESC("Load genesis config from extraData")
-                                     << LOG_KV("stateType", initParam.stateType)
-                                     << LOG_KV("evmFlags", initParam.evmFlags);
+                BLOCKCHAIN_LOG(INFO)
+                    << LOG_BADGE("checkAndBuildGenesisBlock")
+                    << LOG_DESC("Load genesis config from extraData")
+                    << LOG_KV("stateType", _initParam->mutableStateParam().type)
+                    << LOG_KV("evmFlags", _initParam->mutableGenesisParam().evmFlags);
             }
             catch (std::exception& e)
             {
