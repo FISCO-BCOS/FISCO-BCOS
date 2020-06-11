@@ -1282,7 +1282,6 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp,
             checkSyncStatus(_groupID);
             ret = txPool->submitTransactions(tx);
             break;
-        // TODO: the SDK protocol upgrade to 3,
         // the v2 submit transactions sync
         // and v3 submit transactions async
         case ProtocolVersion::v3:

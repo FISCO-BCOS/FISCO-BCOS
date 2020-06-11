@@ -160,7 +160,12 @@ bool SyncMsgEngine::interpret(
 void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
 {
     shared_ptr<SyncPeerStatus> status = m_syncStatus->peerStatus(_packet.nodeId);
-
+    // Note: m_syncMsgPacketFactory may be initialized behind SyncMsgEngine,
+    //       so here must judge whether m_syncMsgPacketFactory is nullptr
+    if (!m_syncMsgPacketFactory)
+    {
+        return;
+    }
     // decode
     RLP const& rlps = _packet.rlp();
 

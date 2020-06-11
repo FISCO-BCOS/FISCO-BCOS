@@ -50,7 +50,7 @@ void DownloadingTxsQueue::push(
         // forward the received txs
         for (auto const& selectedNode : *selectedNodeList)
         {
-            if (selectedNode == _fromPeer)
+            if (selectedNode == _fromPeer || !m_service)
             {
                 continue;
             }

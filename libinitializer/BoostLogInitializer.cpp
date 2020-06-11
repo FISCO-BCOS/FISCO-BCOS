@@ -74,7 +74,6 @@ void LogInitializer::initStatLog(boost::property_tree::ptree const& _pt,
  * @param pt: ptree that contains the log configuration
  * @param channel: channel name
  * @param logType: log prefix
- * @ TODO: improve the log flush performance
  */
 void LogInitializer::initLog(boost::property_tree::ptree const& _pt, std::string const& _channel,
     std::string const& _logPrefix)

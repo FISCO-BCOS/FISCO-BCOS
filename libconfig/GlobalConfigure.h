@@ -45,7 +45,6 @@ enum ProtocolVersion : uint32_t
 {
     v1 = 1,
     v2 = 2,
-    // TODO: update SDK protocol to V3 after sdk-2.1.1 released
     v3 = 3,
     maxVersion = v3,
     minVersion = v1,
