@@ -32,6 +32,7 @@
 #include <libethcore/Transaction.h>
 #include <libethcore/TransactionReceipt.h>
 #include <libexecutive/StateFactoryInterface.h>
+#include <libledger/LedgerParam.h>
 #include <libprecompiled/SystemConfigPrecompiled.h>
 #include <libstorage/Common.h>
 #include <libstorage/Storage.h>
@@ -116,7 +117,8 @@ public:
     // When there is no genesis block, write relevant configuration items to the genesis block and
     // system table; when there is a genesis block, load immutable configuration information from
     // the genesis block
-    bool checkAndBuildGenesisBlock(GenesisBlockParam& initParam, bool _shouldBuild = true) override;
+    bool checkAndBuildGenesisBlock(std::shared_ptr<dev::ledger::LedgerParamInterface> _initParam,
+        bool _shouldBuild = true) override;
 
     std::pair<int64_t, int64_t> totalTransactionCount() override;
     std::pair<int64_t, int64_t> totalFailedTransactionCount() override;
@@ -162,8 +164,9 @@ public:
 private:
     // Randomly select epochSealerSize nodes from workingList as workingSealer and write them into
     // the system table Only used in vrf_rpbft consensus type
-    virtual void initGenesisWorkingSealers(
-        dev::storage::Table::Ptr _consTable, GenesisBlockParam& _initParam);
+    virtual void initGenesisWorkingSealers(dev::storage::Table::Ptr _consTable,
+        std::shared_ptr<dev::ledger::LedgerParamInterface> _initParam);
+
     virtual void initGensisConsensusInfoByNodeType(dev::storage::Table::Ptr _consTable,
         std::string const& _nodeType, dev::h512s const& _nodeList, int64_t _nodeNum = -1,
         bool _update = false);

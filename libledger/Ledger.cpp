@@ -67,7 +67,7 @@ bool Ledger::initLedger(std::shared_ptr<LedgerParamInterface> _ledgerParams)
         return false;
     m_dbInitializer->initStorageDB();
     /// init the DB
-    bool ret = initBlockChain(m_param->mutableGenesisBlockParam());
+    bool ret = initBlockChain();
     if (!ret)
         return false;
     dev::h256 genesisHash = m_blockChain->getBlockByNumber(0)->headerHash();
@@ -226,7 +226,7 @@ bool Ledger::initBlockVerifier()
     return true;
 }
 
-bool Ledger::initBlockChain(GenesisBlockParam& _genesisParam)
+bool Ledger::initBlockChain()
 {
     Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("initBlockChain");
     if (!m_dbInitializer->storage())
@@ -271,20 +271,7 @@ bool Ledger::initBlockChain(GenesisBlockParam& _genesisParam)
     blockChain->setTableFactoryFactory(m_dbInitializer->tableFactoryFactory());
 
     m_blockChain = blockChain;
-    bool ret = m_blockChain->checkAndBuildGenesisBlock(_genesisParam, shouldBuild);
-    if (!ret)
-    {
-        /// It is a subsequent block without same extra data, so do reset.
-        Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("initBlockChain")
-                         << LOG_DESC("The configuration item will be reset");
-        m_param->mutableConsensusParam().consensusType = _genesisParam.consensusType;
-        if (g_BCOSConfig.version() <= RC2_VERSION)
-        {
-            m_param->mutableStorageParam().type = _genesisParam.storageType;
-        }
-        m_param->mutableStateParam().type = _genesisParam.stateType;
-        m_param->mutableGenesisParam().evmFlags = _genesisParam.evmFlags;
-    }
+    m_blockChain->checkAndBuildGenesisBlock(m_param, shouldBuild);
     Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_DESC("initBlockChain SUCC");
     return true;
 }

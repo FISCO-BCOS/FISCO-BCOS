@@ -58,8 +58,16 @@ int main(int argc, char* argv[])
 
     auto blockChain = std::make_shared<dev::blockchain::BlockChainImp>();
     blockChain->setStateStorage(storage);
-    dev::blockchain::GenesisBlockParam initParam = {
-        "std", dev::h512s(), dev::h512s(), "", "", "", 1000, 300000000, 0, -1, -1, 0};
+    auto initParam = std::make_shared<dev::ledger::LedgerParam>();
+    initParam->mutableGenesisMark() = "std";
+    initParam->mutableConsensusParam().sealerList = dev::h512s();
+    initParam->mutableConsensusParam().observerList = dev::h512s();
+    initParam->mutableConsensusParam().consensusType = "";
+    initParam->mutableStorageParam().type = "";
+    initParam->mutableStateParam().type = "";
+    initParam->mutableConsensusParam().maxTransactions = 1000;
+    initParam->mutableTxParam().txGasLimit = 300000000;
+    initParam->mutableGenesisParam().timeStamp = 0;
     blockChain->checkAndBuildGenesisBlock(initParam);
 
     auto stateFactory = std::make_shared<dev::storagestate::StorageStateFactory>(dev::u256(0));
