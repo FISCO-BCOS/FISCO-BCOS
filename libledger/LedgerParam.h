@@ -57,7 +57,7 @@ struct ConsensusParam
     dev::h512s sealerList = dev::h512s();
     dev::h512s observerList = dev::h512s();
     // default consensus timeout time is 1000ms
-    int64_t maxConsensusTimeout = 1000;
+    int64_t consensusTime = 1000;
     int64_t maxTransactions;
     // rPBFT related
     // sealers size for each RPBFT epoch, default is 10

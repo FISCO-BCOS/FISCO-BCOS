@@ -63,6 +63,7 @@ public:
     virtual VIEWTYPE view() const { return 0; }
     virtual VIEWTYPE toView() const { return 0; }
     virtual void setBlockFactory(dev::eth::BlockFactory::Ptr) {}
+    virtual void setSupportConsensusTimeAdjust(bool) {}
 };
 }  // namespace consensus
 }  // namespace dev

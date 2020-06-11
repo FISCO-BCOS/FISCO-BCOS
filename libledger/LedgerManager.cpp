@@ -188,6 +188,8 @@ string LedgerManager::generateGenesisConfig(dev::GROUP_ID _groupID, const GroupP
         "    consensus_type=pbft\n"
         "    ; the max number of transactions of a block\n"
         "    max_trans_num=1000\n"
+        "    ; in ms, block generation time, must be >=1000ms\n"
+        "    consensus_time=1000\n"
         "    ; the node id of consensusers\n"
         "%1%"
         "[state]\n"

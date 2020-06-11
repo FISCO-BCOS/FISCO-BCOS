@@ -105,7 +105,6 @@ public:
     {
         m_timeManager.m_emptyBlockGenTime = _intervalBlockTime;
     }
-
     /// get max block generation time
     inline unsigned const& getEmptyBlockGenTime() const
     {
@@ -119,7 +118,14 @@ public:
         {
             m_timeManager.m_minBlockGenTime = time;
         }
-        PBFTENGINE_LOG(INFO) << LOG_KV("minBlockGenerationTime", m_timeManager.m_minBlockGenTime);
+        else
+        {
+            m_timeManager.m_minBlockGenTime = (m_timeManager.m_emptyBlockGenTime - 1);
+        }
+
+        PBFTENGINE_LOG(INFO) << LOG_DESC("setMinBlockGenerationTime")
+                             << LOG_KV("minBlockGenerationTime", m_timeManager.m_minBlockGenTime)
+                             << LOG_KV("consensusTime", m_timeManager.m_emptyBlockGenTime);
     }
 
     void start() override;
@@ -251,6 +257,8 @@ public:
     }
 
 protected:
+    virtual void resetConsensusTime();
+
     virtual bool locatedInChosedConsensensusNodes() const { return m_idx != MAXIDX; }
     virtual void addRawPrepare(PrepareReq::Ptr _prepareReq);
     void reportBlockWithoutLock(dev::eth::Block const& block);
