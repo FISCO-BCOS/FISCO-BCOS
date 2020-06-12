@@ -161,55 +161,48 @@ void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
 {
     shared_ptr<SyncPeerStatus> status = m_syncStatus->peerStatus(_packet.nodeId);
 
+    // decode
     RLP const& rlps = _packet.rlp();
 
-    if (rlps.itemCount() != 3)
-    {
-        SYNC_ENGINE_LOG(WARNING) << LOG_BADGE("Status")
-                                 << LOG_DESC("Receive invalid status packet format")
-                                 << LOG_KV("peer", _packet.nodeId.abridged());
-        return;
-    }
+    SyncStatusPacket::Ptr info = m_syncMsgPacketFactory->createSyncStatusPacket();
+    info->decodePacket(rlps, _packet.nodeId);
 
-    SyncPeerInfo info{
-        _packet.nodeId, rlps[0].toInt<int64_t>(), rlps[1].toHash<h256>(), rlps[2].toHash<h256>()};
-
-    if (info.genesisHash != m_genesisHash)
+    if (info->genesisHash != m_genesisHash)
     {
         SYNC_ENGINE_LOG(WARNING) << LOG_BADGE("Status")
                                  << LOG_DESC(
                                         "Receive invalid status packet with different genesis hash")
                                  << LOG_KV("peer", _packet.nodeId.abridged())
-                                 << LOG_KV("genesisHash", info.genesisHash);
+                                 << LOG_KV("genesisHash", info->genesisHash);
         return;
     }
 
     int64_t currentNumber = m_blockChain->number();
     if (status == nullptr)
     {
-        if (currentNumber < info.number)
+        if (currentNumber < info->number)
         {
             m_syncStatus->newSyncPeerStatus(info);
         }
         SYNC_ENGINE_LOG(DEBUG) << LOG_BADGE("Status")
                                << LOG_DESC("Receive status from unknown peer")
                                << LOG_KV("shouldAccept",
-                                      (currentNumber < info.number ? "true" : "false"))
-                               << LOG_KV("peer", info.nodeId.abridged())
-                               << LOG_KV("peerBlockNumber", info.number)
-                               << LOG_KV("genesisHash", info.genesisHash.abridged())
-                               << LOG_KV("latestHash", info.latestHash.abridged());
+                                      (currentNumber < info->number ? "true" : "false"))
+                               << LOG_KV("peer", info->nodeId.abridged())
+                               << LOG_KV("peerBlockNumber", info->number)
+                               << LOG_KV("genesisHash", info->genesisHash.abridged())
+                               << LOG_KV("latestHash", info->latestHash.abridged());
     }
     else
     {
         SYNC_ENGINE_LOG(DEBUG) << LOG_BADGE("Status") << LOG_DESC("Receive status from peer")
-                               << LOG_KV("peerNodeId", info.nodeId.abridged())
-                               << LOG_KV("peerBlockNumber", info.number)
-                               << LOG_KV("genesisHash", info.genesisHash.abridged())
-                               << LOG_KV("latestHash", info.latestHash.abridged());
+                               << LOG_KV("peerNodeId", info->nodeId.abridged())
+                               << LOG_KV("peerBlockNumber", info->number)
+                               << LOG_KV("genesisHash", info->genesisHash.abridged())
+                               << LOG_KV("latestHash", info->latestHash.abridged());
         status->update(info);
     }
-    if (currentNumber < info.number && m_onNotifyWorker)
+    if (currentNumber < info->number && m_onNotifyWorker)
     {
         m_onNotifyWorker();
     }
