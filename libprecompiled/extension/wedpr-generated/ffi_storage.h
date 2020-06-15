@@ -104,6 +104,10 @@ int8_t verify_fulfilled_credit(char* fulfill_argument_pb);
 
 int8_t verify_issued_credit(char* issue_argument_pb);
 
+int8_t verify_multi_split_credit(char* combine_storage_c_str, char* split_request_pb);
+
+int8_t verify_multi_transferred_credit(char* combine_storage_c_str, char* transfer_request_pb);
+
 int8_t verify_split_credit(char* split_request_pb);
 
 int8_t verify_transferred_credit(char* transfer_request_pb);

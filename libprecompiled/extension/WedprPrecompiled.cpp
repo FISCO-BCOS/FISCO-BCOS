@@ -55,6 +55,10 @@ const char API_CONFIDENTIAL_PAYMENT_VERIFY_TRANSFERRED_CREDIT[] =
     "confidentialPaymentVerifyTransferredCredit(string)";
 const char API_CONFIDENTIAL_PAYMENT_VERIFY_SPLIT_CREDIT[] =
     "confidentialPaymentVerifySplitCredit(string)";
+const char API_CONFIDENTIAL_PAYMENT_VERIFY_MULTI_TRANSFERRED_CREDIT[] =
+    "confidentialPaymentVerifyMultiTransferredCredit(string,string)";
+const char API_CONFIDENTIAL_PAYMENT_VERIFY_MULTI_TSPLIT_CREDIT[] =
+    "confidentialPaymentVerifyMultiSplitCredit(string,string)";
 
 // anonymous voting
 const char ANONYMOUS_VOTING_VERSION[] = "v0.2-generic";
@@ -123,6 +127,10 @@ WedprPrecompiled::WedprPrecompiled()
         getFuncSelector(API_CONFIDENTIAL_PAYMENT_VERIFY_TRANSFERRED_CREDIT);
     name2Selector[API_CONFIDENTIAL_PAYMENT_VERIFY_SPLIT_CREDIT] =
         getFuncSelector(API_CONFIDENTIAL_PAYMENT_VERIFY_SPLIT_CREDIT);
+    name2Selector[API_CONFIDENTIAL_PAYMENT_VERIFY_MULTI_TRANSFERRED_CREDIT] =
+        getFuncSelector(API_CONFIDENTIAL_PAYMENT_VERIFY_MULTI_TRANSFERRED_CREDIT);
+    name2Selector[API_CONFIDENTIAL_PAYMENT_VERIFY_MULTI_TSPLIT_CREDIT] =
+        getFuncSelector(API_CONFIDENTIAL_PAYMENT_VERIFY_MULTI_TSPLIT_CREDIT);
 
     // anonymous voting
     if (anonymous_voting_is_compatible(ANONYMOUS_VOTING_VERSION) == WEDPR_FAILURE)
@@ -223,6 +231,15 @@ PrecompiledExecResult::Ptr WedprPrecompiled::call(dev::blockverifier::ExecutiveC
     else if (func == name2Selector[API_CONFIDENTIAL_PAYMENT_VERIFY_SPLIT_CREDIT])
     {
         callResult->setExecResult(verifySplitCredit(abi, data));
+    }
+    else if (func == name2Selector[API_CONFIDENTIAL_PAYMENT_VERIFY_MULTI_TRANSFERRED_CREDIT])
+    {
+        callResult->setExecResult(verifyMultiTransferredCredit(abi, data));
+    }
+    // confidentialPaymentVerifySplitCredit(string splitRequest)
+    else if (func == name2Selector[API_CONFIDENTIAL_PAYMENT_VERIFY_MULTI_TSPLIT_CREDIT])
+    {
+        callResult->setExecResult(verifyMultiSplitCredit(abi, data));
     }
 
     // anonymousVotingIsCompatible(string targetVersion)
@@ -431,6 +448,49 @@ bytes WedprPrecompiled::verifySplitCredit(dev::eth::ContractABI& abi, bytesConst
 
     return abi.abiIn("", spentCurrentCredit, spentCreditStorage, newCurrentCredit1,
         newCreditStorage1, newCurrentCredit2, newCreditStorage2);
+}
+
+bytes WedprPrecompiled::verifyMultiTransferredCredit(
+    dev::eth::ContractABI& abi, bytesConstRef& data)
+{
+    string transferRequest;
+    string combinedStoagre;
+    abi.abiOut(data, combinedStoagre, transferRequest);
+
+    char* transferRequestChar = stringToChar(transferRequest);
+    char* combinedStoagreChar = stringToChar(combinedStoagre);
+    if (verify_multi_transferred_credit(combinedStoagreChar, transferRequestChar) != WEDPR_SUCCESS)
+    {
+        logError(WEDPR_PRECOMPILED, "verify_multi_transfer_credit", WEDPR_VERFIY_FAILED);
+        throwException("verify_multi_transfer_credit failed");
+    }
+
+    string newCurrentCredit = get_new_current_credit_by_transfer_request(transferRequestChar);
+    string newCreditStorage = get_new_credit_storage_by_transfer_request(transferRequestChar);
+
+    return abi.abiIn("", newCurrentCredit, newCreditStorage);
+}
+
+bytes WedprPrecompiled::verifyMultiSplitCredit(dev::eth::ContractABI& abi, bytesConstRef& data)
+{
+    string splitRequest;
+    string combinedStoagre;
+    abi.abiOut(data, combinedStoagre, splitRequest);
+    char* splitRequestChar = stringToChar(splitRequest);
+    char* combinedStoagreChar = stringToChar(combinedStoagre);
+    if (verify_multi_split_credit(combinedStoagreChar, splitRequestChar) != WEDPR_SUCCESS)
+    {
+        logError(WEDPR_PRECOMPILED, "verify_multi_split_credit", WEDPR_VERFIY_FAILED);
+        throwException("verify_multi_split_credit failed");
+    }
+
+    string newCurrentCredit1 = get_new_current_credit1_by_split_request(splitRequestChar);
+    string newCreditStorage1 = get_new_credit_storage1_by_split_request(splitRequestChar);
+    string newCurrentCredit2 = get_new_current_credit2_by_split_request(splitRequestChar);
+    string newCreditStorage2 = get_new_credit_storage2_by_split_request(splitRequestChar);
+
+    return abi.abiIn(
+        "", newCurrentCredit1, newCreditStorage1, newCurrentCredit2, newCreditStorage2);
 }
 
 bytes WedprPrecompiled::anonymousVotingIsCompatible(dev::eth::ContractABI& abi, bytesConstRef& data)

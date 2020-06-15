@@ -37,6 +37,8 @@ extern const char API_CONFIDENTIAL_PAYMENT_VERIFY_ISSUED_CREDIT[];
 extern const char API_CONFIDENTIAL_PAYMENT_VERIFY_FULFILLED_CREDIT[];
 extern const char API_CONFIDENTIAL_PAYMENT_VERIFY_TRANSFERRED_CREDIT[];
 extern const char API_CONFIDENTIAL_PAYMENT_VERIFY_SPLIT_CREDIT[];
+extern const char API_CONFIDENTIAL_PAYMENT_VERIFY_MULTI_TRANSFERRED_CREDIT[];
+extern const char API_CONFIDENTIAL_PAYMENT_VERIFY_MULTI_SPLIT_CREDIT[];
 
 // anonymous voting
 extern const char ANONYMOUS_VOTING_VERSION[];
@@ -88,6 +90,8 @@ public:
     bytes verifyFulfilledCredit(dev::eth::ContractABI& abi, bytesConstRef& data);
     bytes verifyTransferredCredit(dev::eth::ContractABI& abi, bytesConstRef& data);
     bytes verifySplitCredit(dev::eth::ContractABI& abi, bytesConstRef& data);
+    bytes verifyMultiTransferredCredit(dev::eth::ContractABI& abi, bytesConstRef& data);
+    bytes verifyMultiSplitCredit(dev::eth::ContractABI& abi, bytesConstRef& data);
 
     bytes anonymousVotingIsCompatible(dev::eth::ContractABI& abi, bytesConstRef& data);
     bytes anonymousVotingGetVersion(dev::eth::ContractABI& abi);
