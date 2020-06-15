@@ -31,6 +31,7 @@
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 
+using namespace std;
 using namespace dev;
 using namespace dev::p2p;
 using namespace dev::initializer;
@@ -60,36 +61,50 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
             {
                 INITIALIZER_LOG(TRACE)
                     << LOG_BADGE("P2PInitializer") << LOG_DESC("initConfig add staticNode")
-                    << LOG_KV("data", it.second.data());
-
+                    << LOG_KV("endpoint", it.second.data());
                 std::vector<std::string> s;
                 try
                 {
                     boost::split(
-                        s, it.second.data(), boost::is_any_of(":"), boost::token_compress_on);
-                    if (s.size() != 2)
+                        s, it.second.data(), boost::is_any_of("]"), boost::token_compress_on);
+                    boost::asio::ip::address ip_address;
+                    uint16_t port;
+
+                    if (s.size() == 2)
+                    {  // ipv6
+                        ip_address = boost::asio::ip::make_address(s[0].data() + 1);
+                        port = boost::lexical_cast<uint16_t>(s[1].data() + 1);
+                    }
+                    else if (s.size() == 1)
+                    {  // ipv4
+                        std::vector<std::string> ipv4Endpoint;
+                        boost::split(ipv4Endpoint, it.second.data(), boost::is_any_of(":"),
+                            boost::token_compress_on);
+                        ip_address = boost::asio::ip::make_address(ipv4Endpoint[0]);
+                        port = boost::lexical_cast<uint16_t>(ipv4Endpoint[1]);
+                    }
+                    else
                     {
                         INITIALIZER_LOG(ERROR) << LOG_BADGE("P2PInitializer")
                                                << LOG_DESC("initConfig parse config faield")
                                                << LOG_KV("data", it.second.data());
                         ERROR_OUTPUT << LOG_BADGE("P2PInitializer")
                                      << LOG_DESC("initConfig parse config faield")
-                                     << LOG_KV("data", it.second.data()) << std::endl;
+                                     << LOG_KV("endpoint", it.second.data()) << std::endl;
                         exit(1);
                     }
-                    NodeIPEndpoint endpoint;
-                    endpoint.host = s[0];
-                    endpoint.port = s[1];
+                    NodeIPEndpoint endpoint(ip_address, port);
+
                     nodes.insert(std::make_pair(endpoint, NodeID()));
                 }
                 catch (std::exception& e)
                 {
                     INITIALIZER_LOG(ERROR)
                         << LOG_BADGE("P2PInitializer") << LOG_DESC("parse address faield")
-                        << LOG_KV("data", it.second.data())
+                        << LOG_KV("endpoint", it.second.data())
                         << LOG_KV("EINFO", boost::diagnostic_information(e));
                     ERROR_OUTPUT << LOG_BADGE("P2PInitializer") << LOG_DESC("parse address faield")
-                                 << LOG_KV("data", it.second.data())
+                                 << LOG_KV("endpoint", it.second.data())
                                  << LOG_KV("EINFO", boost::diagnostic_information(e)) << std::endl;
                     exit(1);
                 }

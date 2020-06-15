@@ -85,7 +85,7 @@ static void appendSessionInfo(FakeConsensus<T>& fake_pbft, Public const& node_id
 {
     FakeService* service =
         dynamic_cast<FakeService*>(fake_pbft.consensus()->mutableService().get());
-    NodeIPEndpoint m_endpoint("127.0.0.1", "30303");
+    NodeIPEndpoint m_endpoint(boost::asio::ip::make_address("127.0.0.1"), 30303);
 
     dev::network::NodeInfo node_info;
     node_info.nodeID = node_id;

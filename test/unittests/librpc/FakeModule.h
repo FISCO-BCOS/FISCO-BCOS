@@ -58,7 +58,7 @@ public:
     FakesService() : Service()
     {
         NodeID nodeID = h512(100);
-        NodeIPEndpoint m_endpoint(std::string("127.0.0.1"), 30310);
+        NodeIPEndpoint m_endpoint(boost::asio::ip::make_address("127.0.0.1"), 30310);
         dev::network::NodeInfo node_info;
         node_info.nodeID = nodeID;
         std::set<dev::TopicItem> topicList;

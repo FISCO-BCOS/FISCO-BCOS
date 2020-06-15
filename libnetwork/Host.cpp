@@ -93,9 +93,7 @@ void Host::startAccept(boost::system::error_code boost_error)
                 }
 
                 /// if the connected peer over the limitation, drop socket
-                socket->setNodeIPEndpoint(
-                    NodeIPEndpoint(endpoint.address().to_string(), to_string(endpoint.port())));
-
+                socket->setNodeIPEndpoint(endpoint);
                 HOST_LOG(INFO) << LOG_DESC("P2P Recv Connect, From=") << endpoint;
                 /// register ssl callback to get the NodeID of peers
                 std::shared_ptr<std::string> endpointPublicKey = std::make_shared<std::string>();
@@ -301,7 +299,7 @@ void Host::handshakeServer(const boost::system::error_code& error,
         HOST_LOG(WARNING) << LOG_DESC("handshakeServer Handshake failed")
                           << LOG_KV("errorValue", error.value())
                           << LOG_KV("message", error.message())
-                          << LOG_KV("endpoint", socket->nodeIPEndpoint().name());
+                          << LOG_KV("endpoint", socket->nodeIPEndpoint());
         socket->close();
         return;
     }
@@ -410,13 +408,13 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
     {
         return;
     }
-    HOST_LOG(INFO) << LOG_DESC("Connecting to node") << LOG_KV("endpoint", _nodeIPEndpoint.name());
+    HOST_LOG(INFO) << LOG_DESC("Connecting to node") << LOG_KV("endpoint", _nodeIPEndpoint);
     {
         Guard l(x_pendingConns);
-        if (m_pendingConns.count(_nodeIPEndpoint.name()))
+        if (m_pendingConns.count(_nodeIPEndpoint))
         {
             LOG(TRACE) << LOG_DESC("asyncConnected node is in the pending list")
-                       << LOG_KV("endpoint", _nodeIPEndpoint.name());
+                       << LOG_KV("endpoint", _nodeIPEndpoint);
             return;
         }
     }
@@ -442,7 +440,7 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
         if (socket->isConnected())
         {
             LOG(WARNING) << LOG_DESC("AsyncConnect timeout erase")
-                         << LOG_KV("endpoint", _nodeIPEndpoint.name());
+                         << LOG_KV("endpoint", _nodeIPEndpoint);
             erasePendingConns(_nodeIPEndpoint);
             socket->close();
         }
@@ -452,7 +450,7 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
         if (ec)
         {
             HOST_LOG(WARNING) << LOG_DESC("TCP Connection refused by node")
-                              << LOG_KV("endpoint", _nodeIPEndpoint.name())
+                              << LOG_KV("endpoint", _nodeIPEndpoint)
                               << LOG_KV("message", ec.message());
             socket->close();
 
@@ -493,7 +491,7 @@ void Host::handshakeClient(const boost::system::error_code& error,
     if (error)
     {
         HOST_LOG(WARNING) << LOG_DESC("handshakeClient failed")
-                          << LOG_KV("endpoint", _nodeIPEndpoint.name())
+                          << LOG_KV("endpoint", _nodeIPEndpoint)
                           << LOG_KV("errorValue", error.value())
                           << LOG_KV("message", error.message());
 

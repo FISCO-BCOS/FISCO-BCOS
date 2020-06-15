@@ -88,7 +88,7 @@ public:
         m_resolver = std::make_shared<bi::tcp::resolver>(*m_ioService);
         m_acceptor = std::make_shared<bi::tcp::acceptor>(
             *m_ioService, boost::asio::ip::tcp::endpoint(
-                              boost::asio::ip::address::from_string(listenHost), listenPort));
+                              boost::asio::ip::make_address(listenHost), listenPort));
         boost::asio::socket_base::reuse_address optionReuseAddress(true);
         m_acceptor->set_option(optionReuseAddress);
     }
@@ -128,8 +128,7 @@ public:
         socket->ref().async_connect(peer_endpoint, handler);
     }
 #endif
-    virtual void asyncResolveConnect(std::shared_ptr<SocketFace> socket, Handler_Type handler,
-        const bi::tcp::resolver::protocol_type& _protocol = bi::tcp::tcp::v4());
+    virtual void asyncResolveConnect(std::shared_ptr<SocketFace> socket, Handler_Type handler);
 
     virtual void asyncWrite(std::shared_ptr<SocketFace> socket,
         boost::asio::mutable_buffers_1 buffers, ReadWriteHandler handler)
