@@ -49,7 +49,7 @@ void dev::channel::ChannelServer::run()
     {
         m_acceptor = std::make_shared<boost::asio::ip::tcp::acceptor>(
             *m_ioService, boost::asio::ip::tcp::endpoint(
-                              boost::asio::ip::address::from_string(m_listenHost), m_listenPort));
+                              boost::asio::ip::make_address(m_listenHost), m_listenPort));
 
         boost::asio::socket_base::reuse_address optionReuseAddress(true);
         m_acceptor->set_option(optionReuseAddress);

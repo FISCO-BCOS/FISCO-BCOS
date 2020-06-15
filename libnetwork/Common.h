@@ -56,11 +56,6 @@ namespace dev
 {
 namespace network
 {
-struct NodeIPEndpoint;
-class Node;
-extern const NodeIPEndpoint UnspecifiedNodeIPEndpoint;
-extern const Node UnspecifiedNode;
-
 /// define Exceptions
 DEV_SIMPLE_EXCEPTION(NetworkStartRequired);
 DEV_SIMPLE_EXCEPTION(InvalidPublicIPAddress);
@@ -198,49 +193,7 @@ inline std::string reasonOf(DisconnectReason _r)
     }
 }
 
-/**
- * @brief client end endpoint. Node will connect to NodeIPEndpoint.
- */
-struct NodeIPEndpoint
-{
-    NodeIPEndpoint() = default;
-    NodeIPEndpoint(const std::string& _host, const std::string& _port) : host(_host), port(_port) {}
-    NodeIPEndpoint(const std::string& _host, uint16_t _port)
-      : host(_host), port(std::to_string(_port))
-    {}
-    NodeIPEndpoint(bi::address _addr, uint16_t _port)
-      : host(_addr.to_string()), port(std::to_string(_port))
-    {}
-    NodeIPEndpoint(const NodeIPEndpoint& _nodeIPEndpoint)
-    {
-        host = _nodeIPEndpoint.host;
-        port = _nodeIPEndpoint.port;
-    }
-
-    bool operator<(const NodeIPEndpoint& rhs) const
-    {
-        if (host + port < rhs.host + rhs.port)
-        {
-            return true;
-        }
-        return false;
-    }
-
-    bool operator==(const NodeIPEndpoint& rhs) const
-    {
-        return (host + port == rhs.host + rhs.port);
-    }
-
-    std::string name() const
-    {
-        std::ostringstream os;
-        os << host << ":" << port;
-        return os.str();
-    }
-    std::string host;
-    // port may be a descriptive name or a numeric string corresponding to a port number
-    std::string port;
-};
+using NodeIPEndpoint = boost::asio::ip::tcp::endpoint;
 
 }  // namespace network
 }  // namespace dev

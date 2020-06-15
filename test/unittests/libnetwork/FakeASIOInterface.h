@@ -93,14 +93,11 @@ public:
         }
     }
 #endif
-    void asyncResolveConnect(std::shared_ptr<SocketFace> socket, Handler_Type handler,
-        const bi::tcp::resolver::protocol_type& _protocol = bi::tcp::tcp::v4()) override
+    void asyncResolveConnect(std::shared_ptr<SocketFace> socket, Handler_Type handler) override
     {
-        (void)_protocol;
         auto fakeSocket = std::dynamic_pointer_cast<FakeSocket>(socket);
         fakeSocket->open();
-        auto endpoint = bi::tcp::endpoint(bi::address::from_string(socket->nodeIPEndpoint().host),
-            std::stoi(socket->nodeIPEndpoint().port));
+        auto endpoint = socket->nodeIPEndpoint();
         fakeSocket->setRemoteEndpoint(endpoint);
         if (endpoint.port() == ERROR_SOCKET_PORT)
         {
@@ -145,8 +142,7 @@ public:
         ba::ssl::stream_base::handshake_type type, Handler_Type handler) override
     {
         (void)type;
-        bi::tcp::endpoint endpoint(bi::address::from_string(socket->nodeIPEndpoint().host),
-            std::stoi(socket->nodeIPEndpoint().port));
+        bi::tcp::endpoint endpoint(socket->nodeIPEndpoint());
         if (endpoint.port() == ERROR_SOCKET_PORT)
         {
             handler(boost::asio::error::operation_aborted);
@@ -173,7 +169,7 @@ public:
         // X509_STORE_CTX_set_cert(x509_store_ctx, x509);
         auto endpoint = socket->nodeIPEndpoint();
 
-        if (endpoint.port != std::to_string(EMPTY_CERT_SOCKET_PORT))
+        if (endpoint.port() != EMPTY_CERT_SOCKET_PORT)
         {
 #if OPENSSL_VERSION_NUMBER < 0x1010007fL
             x509_store_ctx->current_cert = x509;

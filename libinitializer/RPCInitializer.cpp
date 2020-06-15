@@ -133,7 +133,7 @@ void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt
 
 void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
 {
-    std::string listenIP = _pt.get<std::string>("rpc.listen_ip", "0.0.0.0");
+    std::string listenIP = _pt.get<std::string>("rpc.listen_ip", "127.0.0.1");
     // listen ip for jsonrpc, load from rpc.listen ip if rpc.jsonrpc_listen_ip is not setted
     listenIP = _pt.get<std::string>("rpc.jsonrpc_listen_ip", listenIP);
 
@@ -189,22 +189,25 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
 
         // Don't to set destructor, the ModularServer will destruct.
         auto rpcEntity = new rpc::Rpc(m_ledgerInitializer, m_p2pService);
-        m_safeHttpServer.reset(
-            new SafeHttpServer(listenIP, httpListenPort), [](SafeHttpServer* p) { (void)p; });
+        auto ipAddress = boost::asio::ip::make_address(listenIP);
+        m_safeHttpServer.reset(new SafeHttpServer(listenIP, httpListenPort, ipAddress.is_v6()),
+            [](SafeHttpServer* p) { (void)p; });
         m_jsonrpcHttpServer = new ModularServer<rpc::Rpc>(rpcEntity);
         m_jsonrpcHttpServer->addConnector(m_safeHttpServer.get());
         // TODO: StartListening() will throw exception, catch it and give more specific help
         if (!m_jsonrpcHttpServer->StartListening())
         {
-            INITIALIZER_LOG(ERROR) << LOG_BADGE("RPCInitializer")
-                                   << LOG_KV("check jsonrpc_listen_port", httpListenPort);
-            ERROR_OUTPUT << LOG_BADGE("RPCInitializer")
+            INITIALIZER_LOG(ERROR)
+                << LOG_BADGE("RPCInitializer") << LOG_KV("ipv6", ipAddress.is_v6())
+                << LOG_KV("check jsonrpc_listen_port", httpListenPort);
+            ERROR_OUTPUT << LOG_BADGE("RPCInitializer") << LOG_KV("ipv6", ipAddress.is_v6())
                          << LOG_KV("check jsonrpc_listen_port", httpListenPort) << std::endl;
             BOOST_THROW_EXCEPTION(ListenPortIsUsed());
         }
-        INITIALIZER_LOG(INFO) << LOG_BADGE("RPCInitializer") << LOG_KV("rpcListenIp", listenIP)
+        INITIALIZER_LOG(INFO) << LOG_BADGE("RPCInitializer JsonrpcHttpServer started")
+                              << LOG_KV("rpcListenIp", listenIP)
                               << LOG_KV("rpcListenPort", httpListenPort)
-                              << LOG_DESC("JsonrpcHttpServer started.");
+                              << LOG_KV("ipv6", ipAddress.is_v6());
     }
     catch (std::exception& e)
     {
