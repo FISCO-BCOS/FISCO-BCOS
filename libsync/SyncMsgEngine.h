@@ -23,6 +23,7 @@
 #pragma once
 #include "Common.h"
 #include "DownloadingTxsQueue.h"
+#include "NodeTimeMaintenance.h"
 #include "RspBlockReq.h"
 #include "SyncMsgPacket.h"
 #include "SyncMsgPacketFactory.h"
@@ -86,6 +87,19 @@ public:
         m_syncMsgPacketFactory = _syncMsgPacketFactory;
     }
 
+    void setNodeTimeMaintenance(NodeTimeMaintenance::Ptr _nodeTimeMaintenance)
+    {
+        if (m_nodeTimeMaintenance)
+        {
+            return;
+        }
+        m_timeAlignWorker =
+            std::make_shared<dev::ThreadPool>("alignTime-" + std::to_string(m_groupId), 1);
+        m_nodeTimeMaintenance = _nodeTimeMaintenance;
+    }
+
+    NodeTimeMaintenance::Ptr nodeTimeMaintenance() { return m_nodeTimeMaintenance; }
+
 private:
     bool checkSession(std::shared_ptr<dev::p2p::P2PSession> _session);
     bool checkMessage(dev::p2p::P2PMessage::Ptr _msg);
@@ -122,9 +136,13 @@ protected:
     std::function<void()> m_onNotifyWorker = nullptr;
     std::function<void()> m_onNotifySyncTrans = nullptr;
 
+    // TODO: Simplify worker threads
     std::shared_ptr<dev::ThreadPool> m_txsWorker;
     std::shared_ptr<dev::ThreadPool> m_txsSender;
     std::shared_ptr<dev::ThreadPool> m_txsReceiver;
+    std::shared_ptr<dev::ThreadPool> m_timeAlignWorker;
+
+    NodeTimeMaintenance::Ptr m_nodeTimeMaintenance;
 
     // factory used to create sync related packet
     SyncMsgPacketFactory::Ptr m_syncMsgPacketFactory;

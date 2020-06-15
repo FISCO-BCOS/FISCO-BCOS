@@ -47,6 +47,10 @@ namespace event
 class EventLogFilterManager;
 }
 
+namespace sync
+{
+class NodeTimeMaintenance;
+}
 namespace ledger
 {
 class Ledger : public LedgerInterface
@@ -249,6 +253,8 @@ protected:
     std::atomic_bool m_stopped = {false};
 
     dev::eth::Handler<int64_t> m_handler;
+
+    std::shared_ptr<dev::sync::NodeTimeMaintenance> m_nodeTimeMaintenance;
 };
 }  // namespace ledger
 }  // namespace dev
