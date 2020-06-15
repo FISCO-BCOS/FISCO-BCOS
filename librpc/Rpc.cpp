@@ -434,7 +434,7 @@ Json::Value Rpc::getPeers(int)
         {
             Json::Value node;
             node["NodeID"] = it->nodeInfo.nodeID.hex();
-            node["IPAndPort"] = it->nodeIPEndpoint.name();
+            node["IPAndPort"] = boost::lexical_cast<std::string>(it->nodeIPEndpoint);
             node["Agency"] = it->nodeInfo.agencyName;
             node["Node"] = it->nodeInfo.nodeName;
             node["Topic"] = Json::Value(Json::arrayValue);

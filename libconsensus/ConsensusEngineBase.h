@@ -220,7 +220,7 @@ protected:
             valid = decodeToRequests(req, ref(*(message->buffer())));
             if (valid)
                 req.setOtherField(
-                    peer_index, session->nodeID(), session->session()->nodeIPEndpoint().name());
+                    peer_index, session->nodeID(), boost::lexical_cast<std::string>(session->session()->nodeIPEndpoint()));
         }
         return valid;
     }

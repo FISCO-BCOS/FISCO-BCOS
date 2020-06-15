@@ -156,15 +156,15 @@ private:
     void erasePendingConns(NodeIPEndpoint const& _nodeIPEndpoint)
     {
         Guard l(x_pendingConns);
-        if (m_pendingConns.count(_nodeIPEndpoint.name()))
-            m_pendingConns.erase(_nodeIPEndpoint.name());
+        if (m_pendingConns.count(_nodeIPEndpoint))
+            m_pendingConns.erase(_nodeIPEndpoint);
     }
 
     void insertPendingConns(NodeIPEndpoint const& _nodeIPEndpoint)
     {
         Guard l(x_pendingConns);
-        if (!m_pendingConns.count(_nodeIPEndpoint.name()))
-            m_pendingConns.insert(_nodeIPEndpoint.name());
+        if (!m_pendingConns.count(_nodeIPEndpoint))
+            m_pendingConns.insert(_nodeIPEndpoint);
     }
 
     std::shared_ptr<dev::ThreadPool> m_threadPool;
@@ -173,7 +173,7 @@ private:
     std::shared_ptr<ASIOInterface> m_asioInterface;
     std::shared_ptr<SessionFactory> m_sessionFactory;
     int m_connectTimeThre = 50000;
-    std::set<std::string> m_pendingConns;
+    std::set<NodeIPEndpoint> m_pendingConns;
     Mutex x_pendingConns;
 
     MessageFactory::Ptr m_messageFactory;

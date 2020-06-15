@@ -50,7 +50,10 @@ namespace test
 class FakeBaseSession : public SessionFace
 {
 public:
-    FakeBaseSession() { m_endpoint = NodeIPEndpoint("127.0.0.1", "30303"); }
+    FakeBaseSession()
+    {
+        m_endpoint = NodeIPEndpoint(boost::asio::ip::make_address("127.0.0.1"), 30303);
+    }
     NodeIPEndpoint nodeIPEndpoint() const override { return m_endpoint; }
     void start() override {}
     void disconnect(dev::network::DisconnectReason) override {}

@@ -20,6 +20,7 @@
  */
 
 #include "SafeHttpServer.h"
+#include "libdevcore/Log.h"
 #include <arpa/inet.h>
 #include <jsonrpccpp/common/specificationparser.h>
 #include <netinet/in.h>
@@ -38,12 +39,13 @@ struct mhd_coninfo
     int code;
 };
 
-SafeHttpServer::SafeHttpServer(std::string const& _address, int _port, std::string const& _sslcert,
-    std::string const& _sslkey, int _threads)
+SafeHttpServer::SafeHttpServer(std::string const& _address, int _port, bool _ipv6,
+    std::string const& _sslcert, std::string const& _sslkey, int _threads)
   : AbstractServerConnector(),
     port(_port),
     threads(_threads),
     running(false),
+    ipv6Enabled(_ipv6),
     path_sslcert(_sslcert),
     path_sslkey(_sslkey),
     daemon(NULL),
@@ -65,36 +67,72 @@ bool SafeHttpServer::StartListening()
 {
     if (!this->running)
     {
-        struct sockaddr_in sock;
-        sock.sin_family = AF_INET;
-        sock.sin_port = htons(this->port);
-        sock.sin_addr.s_addr = inet_addr(m_address.c_str());
         if (this->path_sslcert != "" && this->path_sslkey != "")
         {
             try
             {
                 jsonrpc::SpecificationParser::GetFileContent(this->path_sslcert, this->sslcert);
                 jsonrpc::SpecificationParser::GetFileContent(this->path_sslkey, this->sslkey);
-
-                this->daemon = MHD_start_daemon(MHD_USE_SSL | MHD_USE_EPOLL_INTERNALLY, this->port,
-                    NULL, NULL, SafeHttpServer::callback, this, MHD_OPTION_SOCK_ADDR, &sock,
-                    MHD_OPTION_HTTPS_MEM_KEY, this->sslkey.c_str(), MHD_OPTION_HTTPS_MEM_CERT,
-                    this->sslcert.c_str(), MHD_OPTION_THREAD_POOL_SIZE, this->threads,
-                    MHD_OPTION_CONNECTION_LIMIT, 1000000, MHD_OPTION_END);
             }
             catch (jsonrpc::JsonRpcException& ex)
             {
                 return false;
             }
         }
-        else
+        if (ipv6Enabled)
         {
-            this->daemon = MHD_start_daemon(MHD_USE_SELECT_INTERNALLY, this->port, NULL, NULL,
-                SafeHttpServer::callback, this, MHD_OPTION_SOCK_ADDR, &sock,
-                MHD_OPTION_THREAD_POOL_SIZE, this->threads, MHD_OPTION_END);
+            struct sockaddr_in6 sock;
+            sock.sin6_family = AF_INET6;
+            sock.sin6_port = htons(this->port);
+            auto ret = inet_pton(AF_INET6, m_address.c_str(), &sock.sin6_addr);
+            if (ret != 1)
+            {
+                LOG(ERROR) << LOG_BADGE("SafeHttpServer parse ipv6 failed");
+                return false;
+            }
+            if (this->path_sslcert != "" && this->path_sslkey != "")
+            {
+                this->daemon = MHD_start_daemon(
+                    MHD_USE_DUAL_STACK | MHD_USE_SSL | MHD_USE_EPOLL_INTERNAL_THREAD, this->port,
+                    NULL, NULL, SafeHttpServer::callback, this, MHD_OPTION_SOCK_ADDR, &sock,
+                    MHD_OPTION_HTTPS_MEM_KEY, this->sslkey.c_str(), MHD_OPTION_HTTPS_MEM_CERT,
+                    this->sslcert.c_str(), MHD_OPTION_THREAD_POOL_SIZE, this->threads,
+                    MHD_OPTION_CONNECTION_LIMIT, 1000000, MHD_OPTION_END);
+            }
+            else
+            {
+                this->daemon = MHD_start_daemon(MHD_USE_SELECT_INTERNALLY | MHD_USE_DUAL_STACK,
+                    this->port, NULL, NULL, SafeHttpServer::callback, this, MHD_OPTION_SOCK_ADDR,
+                    &sock, MHD_OPTION_THREAD_POOL_SIZE, this->threads, MHD_OPTION_END);
+            }
+            LOG(INFO) << LOG_BADGE("SafeHttpServer use ipv6") << LOG_KV("address", m_address)
+                      << LOG_KV("ipv6 supported", this->daemon ? "true" : "false");
         }
-        if (this->daemon != NULL)
-            this->running = true;
+        else
+        {  // ipv4
+            struct sockaddr_in sock;
+            sock.sin_family = AF_INET;
+            sock.sin_port = htons(this->port);
+            sock.sin_addr.s_addr = inet_addr(m_address.c_str());
+            if (this->path_sslcert != "" && this->path_sslkey != "")
+            {
+                this->daemon = MHD_start_daemon(MHD_USE_SSL | MHD_USE_EPOLL_INTERNAL_THREAD,
+                    this->port, NULL, NULL, SafeHttpServer::callback, this, MHD_OPTION_SOCK_ADDR,
+                    &sock, MHD_OPTION_HTTPS_MEM_KEY, this->sslkey.c_str(),
+                    MHD_OPTION_HTTPS_MEM_CERT, this->sslcert.c_str(), MHD_OPTION_THREAD_POOL_SIZE,
+                    this->threads, MHD_OPTION_CONNECTION_LIMIT, 1000000, MHD_OPTION_END);
+            }
+            else
+            {
+                this->daemon = MHD_start_daemon(MHD_USE_SELECT_INTERNALLY, this->port, NULL, NULL,
+                    SafeHttpServer::callback, this, MHD_OPTION_SOCK_ADDR, &sock,
+                    MHD_OPTION_THREAD_POOL_SIZE, this->threads, MHD_OPTION_END);
+            }
+        }
+    }
+    if (this->daemon != NULL)
+    {
+        this->running = true;
     }
     return this->running;
 }

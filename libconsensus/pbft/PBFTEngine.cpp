@@ -509,7 +509,7 @@ bool PBFTEngine::sendMsg(dev::network::NodeID const& nodeId, unsigned const& pac
                 session.nodeID(), transDataToMessage(data, packetType, ttl, forwardNodes), nullptr);
             PBFTENGINE_LOG(DEBUG) << LOG_DESC("sendMsg") << LOG_KV("packetType", packetType)
                                   << LOG_KV("dstNodeId", nodeId.abridged())
-                                  << LOG_KV("remote_endpoint", session.nodeIPEndpoint.name())
+                                  << LOG_KV("remote_endpoint", session.nodeIPEndpoint)
                                   << LOG_KV("nodeIdx", nodeIdx())
                                   << LOG_KV("myNode", m_keyPair.pub().abridged());
             broadcastMark(session.nodeID(), packetType, key);
@@ -557,7 +557,7 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, PBFTMsg const& _pbftMs
             continue;
         PBFTENGINE_LOG(TRACE) << LOG_DESC("broadcastMsg") << LOG_KV("packetType", packetType)
                               << LOG_KV("dstNodeId", session.nodeID().abridged())
-                              << LOG_KV("dstIp", session.nodeIPEndpoint.name())
+                              << LOG_KV("dstIp", session.nodeIPEndpoint)
                               << LOG_KV("ttl", (ttl == 0 ? maxTTL : ttl))
                               << LOG_KV("nodeIdx", nodeIdx())
                               << LOG_KV("toNode", session.nodeID().abridged());
@@ -1876,7 +1876,8 @@ std::shared_ptr<dev::h512s> PBFTEngine::getForwardNodes(bool const& _printLog)
         {
             if (_printLog)
             {
-                connectedNodeList += session.nodeIPEndpoint.name() + ", ";
+                connectedNodeList +=
+                    boost::lexical_cast<std::string>(session.nodeIPEndpoint) + ", ";
             }
             consensusNodes.erase(session.nodeID());
         }

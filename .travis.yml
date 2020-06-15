@@ -29,17 +29,17 @@ env:
 matrix:
   fast_finish: true
   include:
-    - language: python
-      python: 3.6
-      dist: xenial
-      before_cache:
-      cache:
-      addons:
-      before_install:
-      install:
-      script: |
-        bash ./tools/ci/security_audit.sh
-      webhooks:
+    # - language: python
+    #   python: 3.6
+    #   dist: xenial
+    #   before_cache:
+    #   cache:
+    #   addons:
+    #   before_install:
+    #   install:
+    #   script: |
+    #     bash ./tools/ci/security_audit.sh
+    #   webhooks:
 
     - language: cpp
       os: linux

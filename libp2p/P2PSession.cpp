@@ -66,7 +66,7 @@ void P2PSession::heartBeat()
         {
             SESSION_LOG(TRACE) << LOG_DESC("P2PSession onHeartBeat")
                                << LOG_KV("nodeID", m_nodeInfo.nodeID.abridged())
-                               << LOG_KV("name", m_session->nodeIPEndpoint().name())
+                               << LOG_KV("name", m_session->nodeIPEndpoint())
                                << LOG_KV("seq", service->topicSeq());
             auto message =
                 std::dynamic_pointer_cast<P2PMessage>(service->p2pMessageFactory()->buildMessage());
