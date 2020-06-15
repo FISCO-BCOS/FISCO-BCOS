@@ -40,7 +40,7 @@ BOOST_AUTO_TEST_CASE(testSessionRead)
     BOOST_CHECK(!!pool_test.m_topicService);
     BOOST_CHECK(!!pool_test.m_blockChain);
     ba::io_service m_ioservice(2);
-    NodeIPEndpoint m_endpoint(std::string("127.0.0.1"), 30303);
+    NodeIPEndpoint m_endpoint(boost::asio::ip::make_address("127.0.0.1"), 30303);
     // std::shared_ptr<FakeSocket> fake_socket = std::make_shared<FakeSocket>(m_ioservice,
     // m_endpoint);
     /// NodeID m_nodeId = KeyPair::create().pub();

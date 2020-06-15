@@ -118,24 +118,19 @@ void Service::heartBeat()
         if (it.second == id())
         {
             SERVICE_LOG(DEBUG) << LOG_DESC("heartBeat ignore myself nodeID same")
-                               << LOG_KV("remote endpoint", it.first.name())
+                               << LOG_KV("remote endpoint", it.first)
                                << LOG_KV("nodeID", it.second.abridged());
             continue;
         }
         if (it.second != NodeID() && isConnected(it.second))
         {
             SERVICE_LOG(DEBUG) << LOG_DESC("heartBeat ignore connected")
-                               << LOG_KV("endpoint", it.first.name())
+                               << LOG_KV("endpoint", it.first)
                                << LOG_KV("nodeID", it.second.abridged());
             continue;
         }
-        if (it.first.host.empty() || it.first.port.empty())
-        {
-            SERVICE_LOG(DEBUG) << LOG_DESC("heartBeat ignore invalid address");
-            continue;
-        }
         SERVICE_LOG(DEBUG) << LOG_DESC("heartBeat try to reconnect")
-                           << LOG_KV("endpoint", it.first.name());
+                           << LOG_KV("endpoint", it.first);
         m_host->asyncConnect(
             it.first, std::bind(&Service::onConnect, shared_from_this(), std::placeholders::_1,
                           std::placeholders::_2, std::placeholders::_3));
@@ -212,14 +207,13 @@ void Service::updateStaticNodes(
     if (it != m_staticNodes.end())
     {
         SERVICE_LOG(DEBUG) << LOG_DESC("updateStaticNodes") << LOG_KV("nodeID", nodeID.abridged())
-                           << LOG_KV("endpoint", endpoint.name());
+                           << LOG_KV("endpoint", endpoint);
         it->second = nodeID;
     }
     else
     {
         SERVICE_LOG(DEBUG) << LOG_DESC("updateStaticNodes can't find endpoint")
-                           << LOG_KV("nodeID", nodeID.abridged())
-                           << LOG_KV("endpoint", endpoint.name());
+                           << LOG_KV("nodeID", nodeID.abridged()) << LOG_KV("endpoint", endpoint);
     }
 }
 
@@ -272,7 +266,7 @@ void Service::onConnect(dev::network::NetworkException e, dev::network::NodeInfo
         m_sessions.insert(std::make_pair(nodeID, p2pSession));
     }
     SERVICE_LOG(INFO) << LOG_DESC("Connection established") << LOG_KV("nodeID", nodeID.abridged())
-                      << LOG_KV("endpoint", session->nodeIPEndpoint().name());
+                      << LOG_KV("endpoint", session->nodeIPEndpoint());
 }
 
 void Service::onDisconnect(dev::network::NetworkException e, P2PSession::Ptr p2pSession)
@@ -283,7 +277,7 @@ void Service::onDisconnect(dev::network::NetworkException e, P2PSession::Ptr p2p
     {
         SERVICE_LOG(TRACE) << "Service onDisconnect and remove from m_sessions"
                            << LOG_KV("nodeID", p2pSession->nodeID().abridged())
-                           << LOG_KV("endpoint", p2pSession->session()->nodeIPEndpoint().name());
+                           << LOG_KV("endpoint", p2pSession->session()->nodeIPEndpoint());
 
         m_sessions.erase(it);
         if (e.errorCode() == dev::network::P2PExceptionType::DuplicateSession)
@@ -311,7 +305,7 @@ void Service::onMessage(dev::network::NetworkException e, dev::network::SessionF
         {
             SERVICE_LOG(WARNING) << LOG_DESC("disconnect error P2PSession")
                                  << LOG_KV("nodeID", p2pSession->nodeID().abridged())
-                                 << LOG_KV("endpoint", session->nodeIPEndpoint().name())
+                                 << LOG_KV("endpoint", session->nodeIPEndpoint())
                                  << LOG_KV("errorCode", e.errorCode()) << LOG_KV("what", e.what());
 
             p2pSession->stop(dev::network::UserReason);

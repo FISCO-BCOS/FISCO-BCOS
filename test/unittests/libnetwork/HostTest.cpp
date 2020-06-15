@@ -82,7 +82,7 @@ struct HostFixture
                     LOG(ERROR) << e.what();
                     return;
                 }
-                LOG(INFO) << "start new session " << p->socket()->nodeIPEndpoint().name()
+                LOG(INFO) << "start new session " << p->socket()->nodeIPEndpoint()
                           << ",error:" << e.what();
                 m_sessions.push_back(p);
                 p->start();

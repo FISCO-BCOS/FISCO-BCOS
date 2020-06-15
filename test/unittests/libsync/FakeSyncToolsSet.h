@@ -35,7 +35,10 @@ namespace test
 class FakeBaseSession : public dev::network::SessionFace
 {
 public:
-    FakeBaseSession() { m_endpoint = NodeIPEndpoint("127.0.0.1", "30303"); }
+    FakeBaseSession()
+    {
+        m_endpoint = NodeIPEndpoint(boost::asio::ip::make_address("127.0.0.1"), 30303);
+    }
     virtual NodeIPEndpoint nodeIPEndpoint() const override { return m_endpoint; }
     virtual void start() override {}
     virtual void disconnect(dev::network::DisconnectReason) override {}
@@ -106,7 +109,7 @@ public:
 
     P2PSession::Ptr createSession(std::string _ip = "127.0.0.1")
     {
-        NodeIPEndpoint peer_endpoint(std::string(_ip), m_listenPort);
+        NodeIPEndpoint peer_endpoint(boost::asio::ip::make_address(_ip), m_listenPort);
         KeyPair key_pair = KeyPair::create();
 #if 0
         std::shared_ptr<Peer> peer = std::make_shared<Peer>(key_pair.pub(), peer_endpoint);
@@ -123,7 +126,7 @@ public:
 
     P2PSession::Ptr createSessionWithID(NodeID _peerID, std::string _ip = "127.0.0.1")
     {
-        NodeIPEndpoint peer_endpoint(std::string(_ip), m_listenPort);
+        NodeIPEndpoint peer_endpoint(boost::asio::ip::make_address(_ip), m_listenPort);
 #if 0
         dev::p2p::P2PSessionInfo peer_info(
             {_peerID, peer_endpoint.address.to_string(), std::chrono::steady_clock::duration(), 0});

@@ -53,7 +53,7 @@ public:
 
     std::shared_ptr<P2PSession> createFakeSession(std::string ip = "127.0.0.1")
     {
-        NodeIPEndpoint peer_endpoint(std::string(ip), m_listenPort);
+        NodeIPEndpoint peer_endpoint(boost::asio::ip::make_address(ip), m_listenPort);
         ;
         KeyPair key_pair = KeyPair::create();
 #if 0

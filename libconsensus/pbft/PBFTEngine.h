@@ -622,8 +622,8 @@ protected:
                 PBFTENGINE_LOG(DEBUG) << "[decodeToRequests] Invalid network-received packet";
                 return false;
             }
-            _req->setOtherField(
-                peerIndex, _session->nodeID(), _session->session()->nodeIPEndpoint().name());
+            _req->setOtherField(peerIndex, _session->nodeID(),
+                boost::lexical_cast<std::string>(_session->session()->nodeIPEndpoint()));
         }
         return valid;
     }
