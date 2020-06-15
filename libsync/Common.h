@@ -42,6 +42,7 @@ namespace dev
 namespace sync
 {
 DEV_SIMPLE_EXCEPTION(SyncVerifyHandlerNotSet);
+DEV_SIMPLE_EXCEPTION(InValidSyncPacket);
 // Every downloading request timeout request:
 // c_maxRequestBlocks(each peer) * c_maxRequestShards(peer num) = blocks
 static int64_t const c_maxRequestBlocks = 32;
@@ -88,14 +89,5 @@ enum class SyncState
     Downloading,  ///< Downloading blocks
     Size          /// Must be kept last
 };
-
-struct SyncPeerInfo
-{
-    NodeID nodeId;
-    int64_t number;
-    h256 genesisHash;
-    h256 latestHash;
-};
-
 }  // namespace sync
 }  // namespace dev
