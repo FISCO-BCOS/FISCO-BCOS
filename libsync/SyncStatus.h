@@ -23,6 +23,7 @@
 #include "Common.h"
 #include "DownloadingBlockQueue.h"
 #include "RspBlockReq.h"
+#include "SyncMsgPacket.h"
 #include <libblockchain/BlockChainInterface.h>
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/Worker.h>
@@ -61,20 +62,20 @@ public:
         latestHash(_latestHash),
         reqQueue(_nodeId)
     {}
-    SyncPeerStatus(const SyncPeerInfo& _info, PROTOCOL_ID)
-      : nodeId(_info.nodeId),
-        number(_info.number),
-        genesisHash(_info.genesisHash),
-        latestHash(_info.latestHash),
-        reqQueue(_info.nodeId)
+    SyncPeerStatus(SyncStatusPacket::Ptr _info, PROTOCOL_ID)
+      : nodeId(_info->nodeId),
+        number(_info->number),
+        genesisHash(_info->genesisHash),
+        latestHash(_info->latestHash),
+        reqQueue(_info->nodeId)
     {}
 
-    void update(const SyncPeerInfo& _info)
+    void update(SyncStatusPacket::Ptr _info)
     {
-        nodeId = _info.nodeId;
-        number = _info.number;
-        genesisHash = _info.genesisHash;
-        latestHash = _info.latestHash;
+        nodeId = _info->nodeId;
+        number = _info->number;
+        genesisHash = _info->genesisHash;
+        latestHash = _info->latestHash;
     }
 
 public:
@@ -111,7 +112,7 @@ public:
 
     bool hasPeer(NodeID const& _id);
 
-    bool newSyncPeerStatus(SyncPeerInfo const& _info);
+    bool newSyncPeerStatus(SyncStatusPacket::Ptr _info);
 
     void deletePeer(NodeID const& _id);
 

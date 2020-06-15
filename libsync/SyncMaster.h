@@ -27,6 +27,7 @@
 #include "RspBlockReq.h"
 #include "SyncInterface.h"
 #include "SyncMsgEngine.h"
+#include "SyncMsgPacketFactory.h"
 #include "SyncStatus.h"
 #include "SyncTransaction.h"
 #include "SyncTreeTopology.h"
@@ -128,6 +129,12 @@ public:
     virtual void setTxsStatusGossipMaxPeers(unsigned const& _txsStatusGossipMaxPeers)
     {
         m_syncTrans->setTxsStatusGossipMaxPeers(_txsStatusGossipMaxPeers);
+    }
+
+    void setSyncMsgPacketFactory(SyncMsgPacketFactory::Ptr _syncMsgPacketFactory)
+    {
+        m_syncMsgPacketFactory = _syncMsgPacketFactory;
+        m_msgEngine->setSyncMsgPacketFactory(_syncMsgPacketFactory);
     }
 
     virtual ~SyncMaster() { stop(); };
@@ -256,6 +263,10 @@ private:
         std::sort(nodeList.begin(), nodeList.end());
         updateConsensusNodeInfo(sealerList, nodeList);
     }
+
+protected:
+    // factory used to create sync related packet
+    SyncMsgPacketFactory::Ptr m_syncMsgPacketFactory;
 
 private:
     /// p2p service handler

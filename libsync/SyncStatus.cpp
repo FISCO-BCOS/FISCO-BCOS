@@ -37,9 +37,9 @@ bool SyncMasterStatus::hasPeer(NodeID const& _id)
     return m_peersStatus.count(_id);
 }
 
-bool SyncMasterStatus::newSyncPeerStatus(SyncPeerInfo const& _info)
+bool SyncMasterStatus::newSyncPeerStatus(SyncStatusPacket::Ptr _info)
 {
-    if (hasPeer(_info.nodeId))
+    if (hasPeer(_info->nodeId))
     {
         SYNC_LOG(WARNING) << LOG_BADGE("Status")
                           << LOG_DESC("Peer status is exist, no need to create");
