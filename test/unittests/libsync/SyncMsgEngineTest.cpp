@@ -56,6 +56,7 @@ public:
         m_txsWorker = nullptr;
         m_txsSender = nullptr;
         m_txsReceiver = nullptr;
+        m_syncMsgPacketFactory = std::make_shared<SyncMsgPacketFactory>();
     }
 
     bool interpret(
@@ -113,7 +114,7 @@ public:
             h256(0xcdef)),
         fakeException()
     {
-        SyncPeerInfo newPeer{NodeID(), 0, h256(0x1024), h256(0x1024)};
+        auto newPeer = std::make_shared<SyncStatusPacket>(NodeID(), 0, h256(0x1024), h256(0x1024));
         fakeStatusPtr->newSyncPeerStatus(newPeer);
     }
     FakeSyncToolsSet fakeSyncToolsSet;
@@ -205,8 +206,8 @@ BOOST_FIXTURE_TEST_SUITE(SyncMsgEngineTest, SyncMsgEngineFixture)
 
 BOOST_AUTO_TEST_CASE(SyncStatusPacketTest)
 {
-    auto statusPacket = SyncStatusPacket();
-    statusPacket.encode(0x1, h256(0xcdef), h256(0xcd));
+    auto statusPacket = SyncStatusPacket(dev::h512(), 0x1, h256(0xcdef), h256(0xcd));
+    statusPacket.encode();
     auto msgPtr = statusPacket.toMessage(0x01);
     auto fakeSessionPtr = fakeSyncToolsSet.createSession();
     fakeMsgEngine.messageHandler(fakeException, fakeSessionPtr, msgPtr);
@@ -263,7 +264,8 @@ BOOST_AUTO_TEST_CASE(SyncReqBlockPacketTest)
     auto msgPtr = reqBlockPacket.toMessage(0x03);
     auto fakeSessionPtr = fakeSyncToolsSet.createSession();
 
-    fakeStatusPtr->newSyncPeerStatus({h512(0), 0, h256(), h256()});
+    fakeStatusPtr->newSyncPeerStatus(
+        std::make_shared<SyncStatusPacket>(h512(0), 0, h256(), h256()));
     fakeMsgEngine.messageHandler(fakeException, fakeSessionPtr, msgPtr);
 
     BOOST_CHECK(fakeStatusPtr->hasPeer(h512(0)));

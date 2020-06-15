@@ -52,11 +52,11 @@ BOOST_AUTO_TEST_CASE(PeerNewHasDeleteTest)
 {
     for (unsigned id = 0; id < 10; id++)
     {
-        SyncPeerInfo node{NodeID(id), id, h256(id), h256(id)};
-        BOOST_CHECK(!status.hasPeer(node.nodeId));
+        auto node = std::make_shared<SyncStatusPacket>(NodeID(id), id, h256(id), h256(id));
+        BOOST_CHECK(!status.hasPeer(node->nodeId));
         BOOST_CHECK(status.newSyncPeerStatus(node));
         BOOST_CHECK(!status.newSyncPeerStatus(node));
-        BOOST_CHECK(status.hasPeer(node.nodeId));
+        BOOST_CHECK(status.hasPeer(node->nodeId));
     }
 
     NodeIDs peers = *(status.peers());
@@ -72,21 +72,21 @@ BOOST_AUTO_TEST_CASE(PeerNewHasDeleteTest)
 BOOST_AUTO_TEST_CASE(PeerStatusTest)
 {
     unsigned id = 999;
-    SyncPeerInfo node{NodeID(id), id, h256(id), h256(id)};
+    auto node = std::make_shared<SyncStatusPacket>(NodeID(id), id, h256(id), h256(id));
     status.newSyncPeerStatus(node);
-    shared_ptr<SyncPeerStatus> peerStatus = status.peerStatus(node.nodeId);
+    shared_ptr<SyncPeerStatus> peerStatus = status.peerStatus(node->nodeId);
 
-    BOOST_CHECK_EQUAL(peerStatus->nodeId, node.nodeId);
-    BOOST_CHECK_EQUAL(peerStatus->number, node.number);
-    BOOST_CHECK_EQUAL(peerStatus->genesisHash, node.genesisHash);
-    BOOST_CHECK_EQUAL(peerStatus->latestHash, node.latestHash);
+    BOOST_CHECK_EQUAL(peerStatus->nodeId, node->nodeId);
+    BOOST_CHECK_EQUAL(peerStatus->number, node->number);
+    BOOST_CHECK_EQUAL(peerStatus->genesisHash, node->genesisHash);
+    BOOST_CHECK_EQUAL(peerStatus->latestHash, node->latestHash);
 }
 
 BOOST_AUTO_TEST_CASE(ForeachPeerTest)
 {
     for (unsigned id = 0; id < 10; id++)
     {
-        SyncPeerInfo node{NodeID(id), id, h256(id), h256(id)};
+        auto node = std::make_shared<SyncStatusPacket>(NodeID(id), id, h256(id), h256(id));
         status.newSyncPeerStatus(node);
     }
 
@@ -110,7 +110,7 @@ BOOST_AUTO_TEST_CASE(ForeachPeerRandomTest)
 {
     for (unsigned id = 0; id < 10; id++)
     {
-        SyncPeerInfo node{NodeID(id), id, h256(id), h256(id)};
+        auto node = std::make_shared<SyncStatusPacket>(NodeID(id), id, h256(id), h256(id));
         status.newSyncPeerStatus(node);
     }
 
@@ -133,7 +133,7 @@ BOOST_AUTO_TEST_CASE(RandomSelectionTest)
 {
     for (unsigned id = 0; id < 10; id++)
     {
-        SyncPeerInfo node{NodeID(id), id, h256(id), h256(id)};
+        auto node = std::make_shared<SyncStatusPacket>(NodeID(id), id, h256(id), h256(id));
         status.newSyncPeerStatus(node);
     }
 
@@ -160,7 +160,7 @@ BOOST_AUTO_TEST_CASE(RandomSelectionSizeTest)
 {
     for (unsigned id = 0; id < 10; id++)
     {
-        SyncPeerInfo node{NodeID(id), id, h256(id), h256(id)};
+        auto node = std::make_shared<SyncStatusPacket>(NodeID(id), id, h256(id), h256(id));
         status.newSyncPeerStatus(node);
     }
 
