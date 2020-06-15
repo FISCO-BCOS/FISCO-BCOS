@@ -50,6 +50,8 @@ public:
             m_p2pFactory = std::make_shared<dev::p2p::P2PMessageFactory>();
         }
     }
+    virtual ~SyncMsgPacket() {}
+
     /// Extract data by decoding the message
     bool decode(
         std::shared_ptr<dev::p2p::P2PSession> _session, std::shared_ptr<dev::p2p::P2PMessage> _msg);
@@ -76,12 +78,49 @@ private:
     bool checkPacket(bytesConstRef _msg);
 };
 
-
 class SyncStatusPacket : public SyncMsgPacket
 {
 public:
+    using Ptr = std::shared_ptr<SyncStatusPacket>;
     SyncStatusPacket() { packetType = StatusPacket; }
-    void encode(int64_t _number, h256 const& _genesisHash, h256 const& _latestHash);
+    SyncStatusPacket(NodeID const& _nodeId, int64_t const& _number, h256 const& _genesisHash,
+        h256 const& _latestHash)
+      : nodeId(_nodeId), number(_number), genesisHash(_genesisHash), latestHash(_latestHash)
+    {
+        packetType = StatusPacket;
+    }
+    ~SyncStatusPacket() override {}
+    virtual void encode();
+    virtual void decodePacket(RLP const& _rlp, dev::h512 const& _peer);
+
+public:
+    NodeID nodeId;
+    int64_t number;
+    h256 genesisHash;
+    h256 latestHash;
+    int64_t alignedTime;
+
+protected:
+    unsigned m_itemCount = 3;
+};
+
+// extend SyncStatusPacket with aligned time
+class SyncStatusPacketWithAlignedTime : public SyncStatusPacket
+{
+public:
+    using Ptr = std::shared_ptr<SyncStatusPacketWithAlignedTime>;
+    SyncStatusPacketWithAlignedTime() : SyncStatusPacket() { m_itemCount = 4; }
+    SyncStatusPacketWithAlignedTime(NodeID const& _nodeId, int64_t const& _number,
+        h256 const& _genesisHash, h256 const& _latestHash)
+      : SyncStatusPacket(_nodeId, _number, _genesisHash, _latestHash)
+    {
+        m_itemCount = 4;
+    }
+
+    ~SyncStatusPacketWithAlignedTime() override {}
+
+    void encode() override;
+    void decodePacket(RLP const& _rlp, dev::h512 const& _peer) override;
 };
 
 class SyncTransactionsPacket : public SyncMsgPacket

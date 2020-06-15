@@ -34,6 +34,7 @@
 #include <libconsensus/vrf_rpbft/VRFBasedrPBFTSealer.h>
 #include <libflowlimit/RateLimiter.h>
 #include <libsync/SyncMaster.h>
+#include <libsync/SyncMsgPacketFactory.h>
 #include <libtxpool/TxPool.h>
 #include <boost/property_tree/ini_parser.hpp>
 
@@ -490,6 +491,19 @@ bool Ledger::initSync()
         m_param->mutableSyncParam().idleWaitMs, m_param->mutableSyncParam().gossipInterval,
         m_param->mutableSyncParam().gossipPeers, enableSendTxsByTree, enableSendBlockStatusByTree,
         m_param->mutableSyncParam().syncTreeWidth);
+
+    // create and setSyncMsgPacketFactory
+    SyncMsgPacketFactory::Ptr syncMsgPacketFactory;
+    if (g_BCOSConfig.version() >= V2_6_0)
+    {
+        syncMsgPacketFactory = std::make_shared<SyncMsgPacketWithAlignedTimeFactory>();
+    }
+    else
+    {
+        syncMsgPacketFactory = std::make_shared<SyncMsgPacketFactory>();
+    }
+    syncMaster->setSyncMsgPacketFactory(syncMsgPacketFactory);
+
     // set the max block queue size for sync module(bytes)
     syncMaster->setMaxBlockQueueSize(m_param->mutableSyncParam().maxQueueSizeForBlockSync);
     syncMaster->setTxsStatusGossipMaxPeers(m_param->mutableSyncParam().txsStatusGossipMaxPeers);
