@@ -48,7 +48,6 @@
 #include <boost/uuid/uuid_io.hpp>
 #include <string>
 
-
 using namespace std;
 using namespace dev;
 using namespace dev::eth;
