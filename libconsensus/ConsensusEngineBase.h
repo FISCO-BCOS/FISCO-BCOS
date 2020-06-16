@@ -91,6 +91,12 @@ public:
     void stop() override;
     virtual ~ConsensusEngineBase() { stop(); }
 
+    void setSupportConsensusTimeAdjust(bool _supportConsensusTimeAdjust) override
+    {
+        m_supportConsensusTimeAdjust = _supportConsensusTimeAdjust;
+        ENGINE_LOG(DEBUG) << LOG_DESC("setSupportConsensusTimeAdjust: ")
+                          << m_supportConsensusTimeAdjust;
+    }
     /// get sealer list
     dev::h512s sealerList() const override
     {
@@ -322,6 +328,8 @@ protected:
 
     // block Factory used to create block
     dev::eth::BlockFactory::Ptr m_blockFactory;
+
+    bool m_supportConsensusTimeAdjust = false;
 };
 }  // namespace consensus
 }  // namespace dev

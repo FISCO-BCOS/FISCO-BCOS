@@ -341,6 +341,15 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
                                   "create PBFTEngine failed, maybe unsupported consensus type " +
                                   m_param->mutableConsensusParam().consensusType));
     }
+    // only when supported_version>=v2.6.0, support adjust consensus interval at runtime
+    if (g_BCOSConfig.version() >= V2_6_0)
+    {
+        pbftEngine->setSupportConsensusTimeAdjust(true);
+    }
+    else
+    {
+        pbftEngine->setSupportConsensusTimeAdjust(false);
+    }
     pbftSealer->setConsensusEngine(pbftEngine);
     pbftSealer->setEnableDynamicBlockSize(m_param->mutableConsensusParam().enableDynamicBlockSize);
     pbftSealer->setBlockSizeIncreaseRatio(m_param->mutableConsensusParam().blockSizeIncreaseRatio);
@@ -368,10 +377,15 @@ void Ledger::initPBFTEngine(Sealer::Ptr _sealer)
 {
     /// set params for PBFTEngine
     PBFTEngine::Ptr pbftEngine = std::dynamic_pointer_cast<PBFTEngine>(_sealer->consensusEngine());
-    /// set the range of block generation time
-    pbftEngine->setEmptyBlockGenTime(g_BCOSConfig.c_intervalBlockTime);
-    pbftEngine->setMinBlockGenerationTime(m_param->mutableConsensusParam().minBlockGenTime);
 
+    // set the range of block generation time
+    // supported_version < v2.6.0, the consensus time is c_intervalBlockTime
+    // supported_version >=v2.6.0, the consensus time is loaded from sys_config table
+    if (g_BCOSConfig.version() < V2_6_0)
+    {
+        pbftEngine->setEmptyBlockGenTime(g_BCOSConfig.c_intervalBlockTime);
+    }
+    pbftEngine->setMinBlockGenerationTime(m_param->mutableConsensusParam().minBlockGenTime);
     pbftEngine->setOmitEmptyBlock(g_BCOSConfig.c_omitEmptyBlock);
     pbftEngine->setMaxTTL(m_param->mutableConsensusParam().maxTTL);
     pbftEngine->setBaseDir(m_param->baseDir());
