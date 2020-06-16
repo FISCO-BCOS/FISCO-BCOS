@@ -174,7 +174,31 @@ bool SystemConfigPrecompiled::checkValueValid(std::string const& key, std::strin
             return false;
         }
     }
+    else if (SYSTEM_KEY_CONSENSUS_TIME == key)
+    {
+        return checkConsensusTimeConfig(key, value);
+    }
     // only can insert tx_count_limit and tx_gas_limit, rpbft_epoch_sealer_num,
     // rpbft_epoch_block_num as system config
     return false;
+}
+
+bool SystemConfigPrecompiled::checkConsensusTimeConfig(
+    std::string const& _key, std::string const& _value)
+{
+    if (g_BCOSConfig.version() < V2_6_0)
+    {
+        return false;
+    }
+
+    try
+    {
+        return (boost::lexical_cast<int64_t>(_value) >= SYSTEM_CONSENSUS_TIME_MIN);
+    }
+    catch (const std::exception& e)
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_DESC("checkValueValid failed") << LOG_KV("key", _key)
+                               << LOG_KV("errInfo", e.what());
+        return false;
+    }
 }

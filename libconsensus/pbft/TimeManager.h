@@ -46,6 +46,12 @@ struct TimeManager
     const unsigned kMaxChangeCycle = 20;
     const unsigned CollectInterval = 60;
 
+    void resetEmptyBlockGenTime(unsigned const& _emptyBlockGenTime)
+    {
+        m_emptyBlockGenTime = _emptyBlockGenTime;
+        m_viewTimeout = 3 * m_emptyBlockGenTime;
+    }
+
     inline void initTimerManager(unsigned view_timeout)
     {
         m_lastConsensusTime = utcSteadyTime();

@@ -32,6 +32,7 @@
 #include <libethcore/Transaction.h>
 #include <libinitializer/LedgerInitializer.h>
 #include <libledger/LedgerManager.h>
+#include <libprecompiled/Common.h>
 #include <boost/thread/tss.hpp>  // for thread_specific_ptr
 #include <string>                // for string
 
@@ -186,6 +187,12 @@ protected:
     dev::initializer::LedgerInitializer::Ptr m_ledgerInitializer;
 
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
+
+    const std::set<std::string> c_supportedSystemConfigKeys = {
+        dev::precompiled::SYSTEM_KEY_TX_COUNT_LIMIT, dev::precompiled::SYSTEM_KEY_TX_GAS_LIMIT,
+        dev::precompiled::SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM,
+        dev::precompiled::SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM,
+        dev::precompiled::SYSTEM_KEY_CONSENSUS_TIME};
 
 private:
     bool isValidNodeId(dev::bytes const& precompileData,

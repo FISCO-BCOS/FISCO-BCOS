@@ -54,8 +54,8 @@ void PBFTEngine::start()
     // register P2P callback after create PBFTMsgFactory
     m_service->registerHandlerByProtoclID(
         m_protocolId, boost::bind(&PBFTEngine::handleP2PMessage, this, _1, _2, _3));
-    initPBFTEnv(3 * getEmptyBlockGenTime());
     ConsensusEngineBase::start();
+    initPBFTEnv(3 * getEmptyBlockGenTime());
     PBFTENGINE_LOG(INFO) << "[Start PBFTEngine...]";
 }
 
@@ -108,9 +108,9 @@ void PBFTEngine::initPBFTEnv(unsigned view_timeout)
     {
         PBFTENGINE_LOG(FATAL) << "can't find latest block";
     }
+    m_timeManager.initTimerManager(view_timeout);
     reportBlock(*block);
     initBackupDB();
-    m_timeManager.initTimerManager(view_timeout);
     PBFTENGINE_LOG(INFO) << "[PBFT init env successfully]";
 }
 
@@ -1961,6 +1961,9 @@ void PBFTEngine::forwardMsg(PBFTMsgPacket::Ptr _pbftMsgPacket, PBFTMsg const& _p
 void PBFTEngine::resetConfig()
 {
     ConsensusEngineBase::resetConfig();
+    // adjust consensus time at runtime
+    resetConsensusTime();
+
     if (!m_sealerListUpdated)
     {
         return;
@@ -2306,6 +2309,34 @@ void PBFTEngine::clearInvalidCachedForwardMsg()
         {
             it++;
         }
+    }
+}
+
+void PBFTEngine::resetConsensusTime()
+{
+    if (!m_supportConsensusTimeAdjust)
+    {
+        return;
+    }
+    auto consensusTimeStr =
+        m_blockChain->getSystemConfigByKey(dev::precompiled::SYSTEM_KEY_CONSENSUS_TIME);
+    unsigned consensusTime = boost::lexical_cast<int64_t>(consensusTimeStr);
+    if (consensusTime < m_timeManager.m_minBlockGenTime)
+    {
+        PBFTENGINE_LOG(WARNING) << LOG_DESC(
+                                       "resetConsensusTime: invalid configurated consensus time "
+                                       "for smaller than minBlockGenTime")
+                                << LOG_KV("configuredConsensusT", consensusTimeStr)
+                                << LOG_KV("minBlockGenTime", m_timeManager.m_minBlockGenTime);
+        return;
+    }
+    // update emptyBlockGenTime
+    if (m_timeManager.m_emptyBlockGenTime != consensusTime)
+    {
+        m_timeManager.resetEmptyBlockGenTime(consensusTime);
+        PBFTENGINE_LOG(INFO) << LOG_DESC("resetConsensusTime")
+                             << LOG_KV("updatedConsensusTime", consensusTime)
+                             << LOG_KV("minBlockGenTime", m_timeManager.m_minBlockGenTime);
     }
 }
 

@@ -110,25 +110,33 @@ void LedgerParam::generateGenesisMark()
     s << mutableStateParam().type << "-";
     if (g_BCOSConfig.version() >= V2_4_0)
     {
-        LedgerParam_LOG(DEBUG) << LOG_DESC("store evmFlag")
-                               << LOG_KV("evmFlag", mutableGenesisParam().evmFlags);
+        LedgerParam_LOG(INFO) << LOG_DESC("store evmFlag")
+                              << LOG_KV("evmFlag", mutableGenesisParam().evmFlags);
         s << mutableGenesisParam().evmFlags << "-";
     }
 
     s << mutableConsensusParam().maxTransactions << "-";
     s << mutableTxParam().txGasLimit;
 
-    // init epochSealerNum and epochBlockNum for RPBFT
+    // init epochSealerNum and epochBlockNum for rPBFT
     if (dev::stringCmpIgnoreCase(mutableConsensusParam().consensusType, "rpbft") == 0)
     {
-        LedgerParam_LOG(DEBUG) << LOG_DESC("store RPBFT related configuration")
-                               << LOG_KV("epochSealerNum", mutableConsensusParam().epochSealerNum)
-                               << LOG_KV("epochBlockNum", mutableConsensusParam().epochBlockNum);
+        LedgerParam_LOG(INFO) << LOG_DESC("store rPBFT related configuration")
+                              << LOG_KV("epochSealerNum", mutableConsensusParam().epochSealerNum)
+                              << LOG_KV("epochBlockNum", mutableConsensusParam().epochBlockNum);
         s << "-" << mutableConsensusParam().epochSealerNum << "-";
         s << mutableConsensusParam().epochBlockNum;
     }
+    // only the supported_version is greater than or equal to v2.6.0,
+    // the consensus time runtime setting is enabled
+    if (g_BCOSConfig.version() >= V2_6_0)
+    {
+        LedgerParam_LOG(INFO) << LOG_DESC("store consensus time")
+                              << LOG_KV("consensusTime", mutableConsensusParam().consensusTime);
+        s << "-" << mutableConsensusParam().consensusTime;
+    }
     m_genesisMark = s.str();
-    LedgerParam_LOG(DEBUG) << LOG_BADGE("initMark") << LOG_KV("genesisMark", m_genesisMark);
+    LedgerParam_LOG(INFO) << LOG_BADGE("initMark") << LOG_KV("genesisMark", m_genesisMark);
 }
 
 void LedgerParam::parseIniConfig(const std::string& _iniConfigFile, const std::string& _dataPath)
@@ -370,14 +378,12 @@ void LedgerParam::initConsensusConfig(ptree const& pt)
                                   "Please set consensus.max_trans_num to positive !"));
     }
 
-    // init maxConsensusTimeout
-    mutableConsensusParam().maxConsensusTimeout =
-        pt.get<int64_t>("consensus.max_timeout_time", 1000);
-    if (mutableConsensusParam().maxConsensusTimeout < 1000)
+    // init consensusTime
+    mutableConsensusParam().consensusTime = pt.get<int64_t>("consensus.consensus_time", 1000);
+    if (mutableConsensusParam().consensusTime < 1000)
     {
-        BOOST_THROW_EXCEPTION(
-            ForbidNegativeValue() << errinfo_comment(
-                "Please set consensus.max_timeout_time no smaller than 1000 ms!"));
+        BOOST_THROW_EXCEPTION(InvalidConfiguration() << errinfo_comment(
+                                  "Please set consensus.consensus_time no smaller than 1000ms!"));
     }
 
     mutableConsensusParam().minElectTime = pt.get<int64_t>("consensus.min_elect_time", 1000);
@@ -402,8 +408,7 @@ void LedgerParam::initConsensusConfig(ptree const& pt)
 
     LedgerParam_LOG(INFO) << LOG_BADGE("initConsensusConfig")
                           << LOG_KV("type", mutableConsensusParam().consensusType)
-                          << LOG_KV(
-                                 "maxConsensusTimeout", mutableConsensusParam().maxConsensusTimeout)
+                          << LOG_KV("consensusTime", mutableConsensusParam().consensusTime)
                           << LOG_KV("maxTxNum", mutableConsensusParam().maxTransactions)
                           << LOG_KV("txGasLimit", mutableTxParam().txGasLimit);
 
@@ -495,7 +500,7 @@ void LedgerParam::initSyncConfig(ptree const& pt)
     mutableSyncParam().gossipInterval = pt.get<int64_t>("sync.gossip_interval_ms", 1000);
     if (mutableSyncParam().gossipInterval < 1000 || mutableSyncParam().gossipInterval > 3000)
     {
-        BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
+        BOOST_THROW_EXCEPTION(InvalidConfiguration() << errinfo_comment(
                                   "Please set sync.gossip_interval_ms to between 1000ms-3000ms!"));
     }
     LedgerParam_LOG(INFO) << LOG_BADGE("initSyncConfig")

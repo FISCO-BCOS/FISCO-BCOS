@@ -521,6 +521,22 @@ bool BlockChainImp::checkAndBuildGenesisBlock(
                 initSystemConfig(tb, SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM,
                     boost::lexical_cast<std::string>(
                         _initParam->mutableConsensusParam().epochBlockNum));
+
+                BLOCKCHAIN_LOG(INFO) << LOG_DESC("set configuration for rPBFT")
+                                     << LOG_KV(SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM,
+                                            _initParam->mutableConsensusParam().epochSealerNum)
+                                     << LOG_KV(SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM,
+                                            _initParam->mutableConsensusParam().epochBlockNum);
+            }
+            if (g_BCOSConfig.version() >= V2_6_0)
+            {
+                // init consensus time
+                initSystemConfig(tb, SYSTEM_KEY_CONSENSUS_TIME,
+                    boost::lexical_cast<std::string>(
+                        _initParam->mutableConsensusParam().consensusTime));
+                BLOCKCHAIN_LOG(INFO) << LOG_DESC("init consensus time")
+                                     << LOG_KV(SYSTEM_KEY_CONSENSUS_TIME,
+                                            _initParam->mutableConsensusParam().consensusTime);
             }
         }
 
