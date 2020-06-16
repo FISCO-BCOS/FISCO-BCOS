@@ -23,7 +23,7 @@
 
 #include "ChannelServer.h"
 
-
+#include <libnetwork/Common.h>
 #include <boost/asio.hpp>
 #include <boost/bind.hpp>
 #include <iostream>
@@ -101,10 +101,11 @@ void dev::channel::ChannelServer::onAccept(
         if (m_enableSSL)
         {
             CHANNEL_LOG(TRACE) << LOG_DESC("Start SSL handshake");
-            session->sslSocket()->set_verify_callback(newVerifyCallback());
+            std::shared_ptr<std::string> sdkPublicKey = std::make_shared<std::string>();
+            session->sslSocket()->set_verify_callback(newVerifyCallback(sdkPublicKey));
             session->sslSocket()->async_handshake(boost::asio::ssl::stream_base::server,
                 boost::bind(&ChannelServer::onHandshake, shared_from_this(),
-                    boost::asio::placeholders::error, session));
+                    boost::asio::placeholders::error, sdkPublicKey, session));
         }
         else
         {
@@ -134,11 +135,12 @@ void dev::channel::ChannelServer::onAccept(
     startAccept();
 }
 
+
 std::function<bool(bool, boost::asio::ssl::verify_context&)>
-dev::channel::ChannelServer::newVerifyCallback()
+dev::channel::ChannelServer::newVerifyCallback(std::shared_ptr<std::string> _sdkPublicKey)
 {
     auto server = shared_from_this();
-    return [server](bool preverified, boost::asio::ssl::verify_context& ctx) {
+    return [server, _sdkPublicKey](bool preverified, boost::asio::ssl::verify_context& ctx) {
         try
         {
             /// return early when the certificate is invalid
@@ -189,6 +191,8 @@ dev::channel::ChannelServer::newVerifyCallback()
                     return false;
                 }
             }
+
+            dev::network::getPublicKeyFromCert(_sdkPublicKey, cert);
 
             return preverified;
         }
@@ -257,8 +261,8 @@ void dev::channel::ChannelServer::stop()
     m_serverThread->join();
 }
 
-void dev::channel::ChannelServer::onHandshake(
-    const boost::system::error_code& error, ChannelSession::Ptr session)
+void dev::channel::ChannelServer::onHandshake(const boost::system::error_code& error,
+    std::shared_ptr<std::string> _sdkPublicKey, ChannelSession::Ptr session)
 {
     try
     {
@@ -273,6 +277,7 @@ void dev::channel::ChannelServer::onHandshake(
             {
                 CHANNEL_LOG(ERROR) << LOG_DESC("connectionHandler empty");
             }
+            session->setRemotePublicKey(dev::h512(*_sdkPublicKey));
         }
         else
         {

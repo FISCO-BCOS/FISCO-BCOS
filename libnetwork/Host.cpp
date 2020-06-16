@@ -156,42 +156,11 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             }
 
             BASIC_CONSTRAINTS_free(basic);
-
-            EVP_PKEY* evpPublicKey = X509_get_pubkey(cert);
-            if (!evpPublicKey)
+            if (!getPublicKeyFromCert(nodeIDOut, cert))
             {
-                HOST_LOG(ERROR) << LOG_DESC("Get evpPublicKey failed");
                 return preverified;
             }
 
-            ec_key_st* ecPublicKey = EVP_PKEY_get1_EC_KEY(evpPublicKey);
-            if (!ecPublicKey)
-            {
-                HOST_LOG(ERROR) << LOG_DESC("Get ecPublicKey failed");
-                return preverified;
-            }
-            /// get public key of the certificate
-            const EC_POINT* ecPoint = EC_KEY_get0_public_key(ecPublicKey);
-            if (!ecPoint)
-            {
-                HOST_LOG(ERROR) << LOG_DESC("Get ecPoint failed");
-                return preverified;
-            }
-
-            std::shared_ptr<char> hex =
-                std::shared_ptr<char>(EC_POINT_point2hex(EC_KEY_get0_group(ecPublicKey), ecPoint,
-                                          EC_KEY_get_conv_form(ecPublicKey), NULL),
-                    [](char* p) { OPENSSL_free(p); });
-
-            if (hex)
-            {
-                nodeIDOut->assign(hex.get());
-                if (nodeIDOut->find("04") == 0)
-                {
-                    /// remove 04
-                    nodeIDOut->erase(0, 2);
-                }
-            }
             /// check nodeID in certBlacklist, only filter by nodeID.
             const std::vector<std::string>& certBlacklist = host->certBlacklist();
             std::string nodeID = boost::to_upper_copy(*nodeIDOut);
