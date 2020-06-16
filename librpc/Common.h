@@ -34,6 +34,7 @@ namespace rpc
 enum RPCExceptionType : int
 {
     Success = 0,
+    PermissionDenied = -40012,
     OverQPSLimit = -40011,
     IncompleteInitialization = -40010,
     InvalidRequest = -40009,

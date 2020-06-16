@@ -139,6 +139,8 @@ public:
         m_remotePublicKey = _remotePublicKey;
     }
 
+    dev::h512 const& remotePublicKey() { return m_remotePublicKey; }
+
 private:
     bool isAMOPMessage(Message::Ptr _request);
     void startRead();

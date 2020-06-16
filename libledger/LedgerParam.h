@@ -27,7 +27,6 @@
 #include <libdevcore/FixedHash.h>
 #include <libethcore/EVMFlags.h>
 #include <libethcore/Protocol.h>
-#include <boost/property_tree/ptree.hpp>
 #include <memory>
 #include <vector>
 
@@ -182,6 +181,11 @@ struct FlowControlParam
     int64_t maxBurstReqNum;
 };
 
+struct PermissionParam
+{
+    dev::h512s sdkAllowList;
+};
+
 class LedgerParam : public LedgerParamInterface
 {
 public:
@@ -206,8 +210,14 @@ public:
     const dev::GROUP_ID& groupId() const { return m_groupID; }
 
     std::string& mutableGenesisMark() override { return m_genesisMark; }
-
+    PermissionParam& mutablePermissionParam() override { return m_permissionParam; }
     void generateGenesisMark();
+
+    void initPermissionParam(
+        dev::h512s& _nodeList, boost::property_tree::ptree const& _pt) override;
+
+    std::string const& iniConfigPath() override { return m_iniConfigPath; }
+    std::string const& genesisConfigPath() override { return m_genesisConfigPath; }
 
 private:
     void initStorageConfig(boost::property_tree::ptree const& pt);
@@ -220,6 +230,8 @@ private:
     void initEventLogFilterManagerConfig(boost::property_tree::ptree const& pt);
     void initFlowControlConfig(boost::property_tree::ptree const& _pt);
     void setEVMFlags(boost::property_tree::ptree const& _pt);
+    void parsePublicKeyListOfSection(dev::h512s& _nodeList, boost::property_tree::ptree const& _pt,
+        std::string const& _sectionName, std::string const& _subSectionName);
 
 private:
     dev::GROUP_ID m_groupID;
@@ -234,8 +246,11 @@ private:
     TxParam m_txParam;
     FlowControlParam m_flowControlParam;
     EventLogFilterManagerParams m_eventLogFilterParams;
-
+    PermissionParam m_permissionParam;
     std::string m_genesisMark;
+
+    std::string m_iniConfigPath;
+    std::string m_genesisConfigPath;
 
 private:
     std::string uriEncode(const std::string& keyWord);

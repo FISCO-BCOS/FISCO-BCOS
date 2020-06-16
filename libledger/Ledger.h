@@ -177,6 +177,8 @@ public:
         return m_eventLogFilterManger;
     }
 
+    void reloadSDKAllowList() override;
+
 protected:
     virtual bool initTxPool();
     /// init blockverifier related
@@ -197,9 +199,6 @@ protected:
     virtual void initQPSLimit();
 
     /// load ini config of group
-    void initIniConfig(std::string const& iniConfigFileName);
-    void initDBConfig(boost::property_tree::ptree const& pt);
-
     dev::consensus::ConsensusInterface::Ptr createConsensusEngine(
         dev::PROTOCOL_ID const& _protocolId);
     dev::eth::BlockFactory::Ptr createBlockFactory();
@@ -207,6 +206,7 @@ protected:
     void initrPBFTEngine(dev::consensus::Sealer::Ptr _sealer);
 
 private:
+    void setSDKAllowList(dev::h512s const& _sdkList);
     /// create PBFTConsensus
     std::shared_ptr<dev::consensus::Sealer> createPBFTSealer();
     /// create RaftConsensus
@@ -218,7 +218,7 @@ private:
                0;
     }
 
-    bool vrfBasedrPBFTEnabled()
+    bool inline vrfBasedrPBFTEnabled()
     {
         return (dev::stringCmpIgnoreCase(
                     m_param->mutableConsensusParam().consensusType, "vrf_rpbft") == 0);

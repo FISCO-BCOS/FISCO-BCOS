@@ -33,6 +33,7 @@
 #include <libconsensus/vrf_rpbft/VRFBasedrPBFTEngine.h>
 #include <libconsensus/vrf_rpbft/VRFBasedrPBFTSealer.h>
 #include <libflowlimit/RateLimiter.h>
+#include <libnetwork/PeerWhitelist.h>
 #include <libsync/SyncMaster.h>
 #include <libsync/SyncMsgPacketFactory.h>
 #include <libtxpool/TxPool.h>
@@ -63,6 +64,9 @@ bool Ledger::initLedger(std::shared_ptr<LedgerParamInterface> _ledgerParams)
     Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("DBInitializer");
     m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param, m_groupId);
     m_dbInitializer->setChannelRPCServer(m_channelRPCServer);
+
+    setSDKAllowList(m_param->mutablePermissionParam().sdkAllowList);
+
     // m_dbInitializer
     if (!m_dbInitializer)
         return false;
@@ -107,6 +111,38 @@ bool Ledger::initLedger(std::shared_ptr<LedgerParamInterface> _ledgerParams)
     /// init blockVerifier, txPool, sync and consensus
     return (initBlockVerifier() && initTxPool() && initSync() && consensusInitFactory() &&
             initEventLogFilterManager());
+}
+
+void Ledger::reloadSDKAllowList()
+{
+    // Note: here must catch the exception in case of sdk allowlist reload failed
+    try
+    {
+        boost::property_tree::ptree pt;
+        boost::property_tree::read_ini(m_param->iniConfigPath(), pt);
+        dev::h512s sdkAllowList;
+        m_param->initPermissionParam(sdkAllowList, pt);
+        setSDKAllowList(sdkAllowList);
+        Ledger_LOG(INFO) << LOG_DESC("reloadSDKAllowList")
+                         << LOG_KV("config", m_param->iniConfigPath())
+                         << LOG_KV("allowListSize", sdkAllowList.size());
+    }
+    catch (std::exception const& e)
+    {
+        Ledger_LOG(ERROR) << LOG_DESC("reloadSDKAllowList failed")
+                          << LOG_KV("EINFO", boost::diagnostic_information(e));
+    }
+}
+
+void Ledger::setSDKAllowList(dev::h512s const& _sdkList)
+{
+    Ledger_LOG(INFO) << LOG_DESC("setSDKAllowList") << LOG_KV("groupId", m_groupId)
+                     << LOG_KV("sdkAllowListSize", _sdkList.size());
+    PeerWhitelist::Ptr sdkAllowList = std::make_shared<PeerWhitelist>(_sdkList, true);
+    if (m_channelRPCServer)
+    {
+        m_channelRPCServer->registerSDKAllowListByGroupId(m_groupId, sdkAllowList);
+    }
 }
 
 void Ledger::initNetworkStatHandler()

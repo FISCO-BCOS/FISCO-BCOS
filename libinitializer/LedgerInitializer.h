@@ -41,6 +41,7 @@ public:
 
     void initConfig(boost::property_tree::ptree const& _pt);
     void startMoreLedger();
+    void reloadSDKAllowList();
 
     std::shared_ptr<ledger::LedgerManager> ledgerManager() { return m_ledgerManager; }
     void setLedgerManager(std::shared_ptr<ledger::LedgerManager> _ledgerManager)

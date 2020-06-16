@@ -26,9 +26,17 @@ using namespace dev;
 
 PeerWhitelist::PeerWhitelist(std::vector<std::string> _strList, bool _enable) : m_enable(_enable)
 {
-    for (auto str : _strList)
+    for (auto const& str : _strList)
     {
         m_whitelist.insert(NodeID(str));
+    }
+}
+
+PeerWhitelist::PeerWhitelist(dev::h512s const& _nodeList, bool _enable) : m_enable(_enable)
+{
+    for (auto const& node : _nodeList)
+    {
+        m_whitelist.insert(node);
     }
 }
 
@@ -68,24 +76,4 @@ std::string PeerWhitelist::dump(bool _isAbridged)
     ret << "]";
 
     return ret.str();
-}
-
-bool PeerWhitelist::isNodeIDOk(NodeID _nodeID)
-{
-    return NodeID() != _nodeID;
-}
-
-bool PeerWhitelist::isNodeIDOk(const string& _nodeID)
-{
-    try
-    {
-        NodeID nodeID = NodeID(_nodeID);
-        return isNodeIDOk(nodeID);
-    }
-    catch (...)
-    {
-        return false;
-    }
-
-    return false;
 }
