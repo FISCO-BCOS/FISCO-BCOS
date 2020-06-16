@@ -242,5 +242,7 @@ struct NodeIPEndpoint
     std::string port;
 };
 
+bool getPublicKeyFromCert(std::shared_ptr<std::string> _nodeIDOut, X509* cert);
+
 }  // namespace network
 }  // namespace dev
