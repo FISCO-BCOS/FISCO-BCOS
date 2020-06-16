@@ -14,7 +14,7 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2020 fisco-dev contributors.
  *
- * @file StatisticPotocolServer.h
+ * @file StatisticProtocolServer.h
  * @author: yujiechen
  * @date 2020-04-01
  */
@@ -27,10 +27,10 @@
 
 namespace dev
 {
-class StatisticPotocolServer : public jsonrpc::RpcProtocolServerV2
+class StatisticProtocolServer : public jsonrpc::RpcProtocolServerV2
 {
 public:
-    StatisticPotocolServer(jsonrpc::IProcedureInvokationHandler& _handler);
+    StatisticProtocolServer(jsonrpc::IProcedureInvokationHandler& _handler);
     void HandleRequest(const std::string& _request, std::string& _retValue) override;
 
     void setNetworkStatHandler(dev::stat::ChannelNetworkStatHandler::Ptr _networkStatHandler)

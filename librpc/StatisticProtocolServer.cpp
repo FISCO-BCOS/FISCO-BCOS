@@ -14,7 +14,7 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2020 fisco-dev contributors.
  *
- * @file StatisticPotocolServer.cpp
+ * @file StatisticProtocolServer.cpp
  * @author: yujiechen
  * @date 2020-04-01
  */
@@ -24,11 +24,11 @@ using namespace dev;
 using namespace jsonrpc;
 using namespace dev::rpc;
 
-StatisticPotocolServer::StatisticPotocolServer(jsonrpc::IProcedureInvokationHandler& _handler)
+StatisticProtocolServer::StatisticProtocolServer(jsonrpc::IProcedureInvokationHandler& _handler)
   : RpcProtocolServerV2(_handler)
 {}
 
-bool StatisticPotocolServer::limitRPCQPS(Json::Value const& _request, std::string& _retValue)
+bool StatisticProtocolServer::limitRPCQPS(Json::Value const& _request, std::string& _retValue)
 {
     // get procedure name failed
     if (!isValidRequest(_request))
@@ -50,7 +50,7 @@ bool StatisticPotocolServer::limitRPCQPS(Json::Value const& _request, std::strin
     return canHandle;
 }
 
-bool StatisticPotocolServer::limitGroupQPS(
+bool StatisticProtocolServer::limitGroupQPS(
     dev::GROUP_ID const& _groupId, Json::Value const& _request, std::string& _retValue)
 {
     if (_groupId == -1)
@@ -67,7 +67,7 @@ bool StatisticPotocolServer::limitGroupQPS(
 }
 
 // QPS limit exceeded, respond OverQPSLimit
-void StatisticPotocolServer::wrapResponseForNodeBusy(
+void StatisticProtocolServer::wrapResponseForNodeBusy(
     Json::Value const& _request, std::string& _retValue)
 {
     Json::Value resp;
@@ -80,7 +80,7 @@ void StatisticPotocolServer::wrapResponseForNodeBusy(
 }
 
 // Overload RpcProtocolServerV2 to implement RPC interface network statistics function
-void StatisticPotocolServer::HandleRequest(const std::string& _request, std::string& _retValue)
+void StatisticProtocolServer::HandleRequest(const std::string& _request, std::string& _retValue)
 {
     // except for adding statistical logic,
     // the following implementation is the same as RpcProtocolServerV2::HandleRequest
@@ -129,7 +129,7 @@ void StatisticPotocolServer::HandleRequest(const std::string& _request, std::str
 }
 
 // check the request
-bool StatisticPotocolServer::isValidRequest(Json::Value const& _request)
+bool StatisticProtocolServer::isValidRequest(Json::Value const& _request)
 {
     if (!_request.isObject() || !_request.isMember(KEY_REQUEST_METHODNAME) ||
         !_request.isMember(KEY_REQUEST_PARAMETERS))
@@ -139,7 +139,7 @@ bool StatisticPotocolServer::isValidRequest(Json::Value const& _request)
     return true;
 }
 
-dev::GROUP_ID StatisticPotocolServer::getGroupID(Json::Value const& _request)
+dev::GROUP_ID StatisticProtocolServer::getGroupID(Json::Value const& _request)
 {
     try
     {
@@ -157,7 +157,7 @@ dev::GROUP_ID StatisticPotocolServer::getGroupID(Json::Value const& _request)
     }
     catch (std::exception const& _e)
     {
-        LOG(WARNING) << LOG_DESC("StatisticPotocolServer: getGroupID failed!")
+        LOG(WARNING) << LOG_DESC("StatisticProtocolServer: getGroupID failed!")
                      << LOG_KV("errorInfo", boost::diagnostic_information(_e));
         return -1;
     }
