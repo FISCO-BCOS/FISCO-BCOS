@@ -512,8 +512,11 @@ void dev::ChannelRPCServer::onClientEventLogRequest(
             return server && session && session->actived();
         };
 
-        // TODO: add sdkPermission check when register event log
-        int32_t ret = m_eventFilterCallBack(data, protocolVersion, respCallback, activeCallback);
+        // checkSDKPermission when receive CLIENT_REGISTER_EVENT_LOG
+        int32_t ret = m_eventFilterCallBack(data, protocolVersion, respCallback, activeCallback,
+            [this, session](dev::GROUP_ID _groupId) {
+                return checkSDKPermission(_groupId, session->remotePublicKey());
+            });
 
         CHANNEL_LOG(TRACE) << "onClientEventLogRequest" << LOG_KV("seq", seq) << LOG_KV("ret", ret)
                            << LOG_KV("request", data);
@@ -1297,6 +1300,21 @@ void ChannelRPCServer::registerSDKAllowListByGroupId(
         return;
     }
     (*m_group2SDKAllowList)[_groupId] = _allowList;
+}
+
+void ChannelRPCServer::removeSDKAllowListByGroupId(dev::GROUP_ID const& _groupId)
+{
+    if (!m_group2SDKAllowList)
+    {
+        return;
+    }
+    CHANNEL_LOG(INFO) << LOG_DESC("removeSDKAllowListByGroupId") << LOG_KV("groupId", _groupId);
+    UpgradableGuard l(x_group2SDKAllowList);
+    if (m_group2SDKAllowList->count(_groupId))
+    {
+        UpgradeGuard ul(l);
+        m_group2SDKAllowList->erase(_groupId);
+    }
 }
 
 bool ChannelRPCServer::checkSDKPermission(dev::GROUP_ID _groupId, dev::h512 const& _sdkPublicKey)

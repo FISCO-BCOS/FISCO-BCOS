@@ -157,7 +157,7 @@ public:
     void setEventFilterCallback(std::function<int32_t(const std::string&, uint32_t,
             std::function<bool(const std::string& _filterID, int32_t _result,
                 const Json::Value& _logs, GROUP_ID const& _groupId)>,
-            std::function<bool()>)>
+            std::function<bool()>, std::function<bool(GROUP_ID _groupId)>)>
             _callback)
     {
         m_eventFilterCallBack = _callback;
@@ -191,6 +191,9 @@ public:
 
     void registerSDKAllowListByGroupId(
         dev::GROUP_ID const& _groupId, dev::PeerWhitelist::Ptr _allowList);
+
+    // remove the registered sdk allowlist when stop/delete the group
+    void removeSDKAllowListByGroupId(dev::GROUP_ID const& _groupId);
 
 private:
     bool checkSDKPermission(dev::GROUP_ID _groupId, dev::h512 const& _sdkPublicKey);
@@ -267,7 +270,7 @@ private:
     std::function<int32_t(const std::string&, uint32_t,
         std::function<bool(const std::string& _filterID, int32_t _result, const Json::Value& _logs,
             GROUP_ID const& _groupId)>,
-        std::function<bool()>)>
+        std::function<bool()>, std::function<bool(GROUP_ID _groupId)>)>
         m_eventFilterCallBack;
 
     std::vector<dev::eth::Handler<int64_t>> m_handlers;

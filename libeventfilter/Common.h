@@ -44,7 +44,7 @@ enum ResponseCode
     INVALID_REQUEST_RANGE = -41003,
     INVALID_RESPONSE = -41004,
     REQUST_TIMEOUT = -41005,
-    UNKNOWN_ERROR = -41006
+    SDK_PERMISSION_DENIED = -41006,
 };
 }  // namespace event
 }  // namespace dev
