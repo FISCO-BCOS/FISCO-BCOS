@@ -76,6 +76,10 @@ PrecompiledExecResult::Ptr PermissionPrecompiled::call(
         // insert(string tableName,string addr)
         std::string tableName, addr;
         abi.abiOut(data, tableName, addr);
+        if (g_BCOSConfig.version() >= V2_5_0)
+        {
+            boost::to_lower(addr);
+        }
         do
         {
             Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
@@ -133,7 +137,7 @@ PrecompiledExecResult::Ptr PermissionPrecompiled::call(
             catch (...)
             {
                 PRECOMPILED_LOG(ERROR) << LOG_BADGE("PermissionPrecompiled")
-                                       << LOG_DESC("address invalid") << LOG_KV("address", addr);
+                                       << LOG_DESC("address invalid") << LOG_KV("account", addr);
                 result = CODE_ADDRESS_INVALID;
                 break;
             }
@@ -156,6 +160,10 @@ PrecompiledExecResult::Ptr PermissionPrecompiled::call(
     {  // remove(string tableName,string addr)
         std::string tableName, addr;
         abi.abiOut(data, tableName, addr);
+        if (g_BCOSConfig.version() >= V2_5_0)
+        {
+            boost::to_lower(addr);
+        }
         int result = 0;
         if (g_BCOSConfig.version() >= V2_5_0 && tableName == SYS_ACCESS_TABLE)
         {
@@ -171,7 +179,7 @@ PrecompiledExecResult::Ptr PermissionPrecompiled::call(
             result = revokeTablePermission(context, tableName, addr, origin);
         }
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("remove")
-                               << LOG_KV("tableName", tableName) << LOG_KV("address", addr)
+                               << LOG_KV("tableName", tableName) << LOG_KV("account", addr)
                                << LOG_KV("ret", result);
         getErrorCodeOut(callResult->mutableExecResult(), result);
     }
