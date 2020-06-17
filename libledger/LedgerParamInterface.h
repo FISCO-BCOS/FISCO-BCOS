@@ -24,6 +24,7 @@
 #pragma once
 #include <libdevcrypto/Common.h>
 #include <libethcore/Common.h>
+#include <boost/property_tree/ptree.hpp>
 #include <memory>
 #include <vector>
 namespace dev
@@ -44,6 +45,7 @@ struct StateParam;
 struct TxParam;
 struct EventLogFilterManagerParams;
 struct FlowControlParam;
+struct PermissionParam;
 
 class LedgerParamInterface
 {
@@ -63,6 +65,10 @@ public:
     virtual EventLogFilterManagerParams& mutableEventLogFilterManagerParams() = 0;
     virtual FlowControlParam& mutableFlowControlParam() = 0;
     virtual std::string& mutableGenesisMark() = 0;
+    virtual PermissionParam& mutablePermissionParam() = 0;
+    virtual std::string const& iniConfigPath() = 0;
+    virtual std::string const& genesisConfigPath() = 0;
+    virtual void initPermissionParam(dev::h512s&, boost::property_tree::ptree const&) = 0;
 };
 }  // namespace ledger
 }  // namespace dev

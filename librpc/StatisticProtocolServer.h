@@ -31,7 +31,8 @@ class StatisticProtocolServer : public jsonrpc::RpcProtocolServerV2
 {
 public:
     StatisticProtocolServer(jsonrpc::IProcedureInvokationHandler& _handler);
-    void HandleRequest(const std::string& _request, std::string& _retValue) override;
+    void HandleChannelRequest(const std::string& _request, std::string& _retValue,
+        std::function<bool(dev::GROUP_ID _groupId)> const& permissionChecker);
 
     void setNetworkStatHandler(dev::stat::ChannelNetworkStatHandler::Ptr _networkStatHandler)
     {
@@ -48,6 +49,8 @@ private:
     bool limitGroupQPS(
         dev::GROUP_ID const& _groupId, Json::Value const& _request, std::string& _retValue);
     void wrapResponseForNodeBusy(Json::Value const& _request, std::string& _retValue);
+    void wrapErrorResponse(Json::Value const& _request, std::string& _retValue, int _errorCode,
+        std::string const& _errorMsg);
 
     dev::GROUP_ID getGroupID(Json::Value const& _request);
     bool isValidRequest(Json::Value const& _request);

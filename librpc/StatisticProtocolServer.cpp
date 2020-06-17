@@ -70,19 +70,25 @@ bool StatisticProtocolServer::limitGroupQPS(
 void StatisticProtocolServer::wrapResponseForNodeBusy(
     Json::Value const& _request, std::string& _retValue)
 {
-    Json::Value resp;
-    Json::FastWriter writer;
     std::string errorMsg =
         _request[KEY_REQUEST_METHODNAME].asString() + " " + RPCMsg[RPCExceptionType::OverQPSLimit];
-    this->WrapError(_request, RPCExceptionType::OverQPSLimit, errorMsg, resp);
+    wrapErrorResponse(_request, _retValue, RPCExceptionType::OverQPSLimit, errorMsg);
+}
+
+void StatisticProtocolServer::wrapErrorResponse(Json::Value const& _request, std::string& _retValue,
+    int _errorCode, std::string const& _errorMsg)
+{
+    Json::Value resp;
+    Json::FastWriter writer;
+    this->WrapError(_request, _errorCode, _errorMsg, resp);
     if (resp != Json::nullValue)
         _retValue = writer.write(resp);
 }
 
 // Overload RpcProtocolServerV2 to implement RPC interface network statistics function
-void StatisticProtocolServer::HandleRequest(const std::string& _request, std::string& _retValue)
-{
-    // except for adding statistical logic,
+void StatisticProtocolServer::HandleChannelRequest(const std::string& _request,
+    std::string& _retValue, std::function<bool(dev::GROUP_ID _groupId)> const& permissionChecker)
+{  // except for adding statistical logic,
     // the following implementation is the same as RpcProtocolServerV2::HandleRequest
     Json::Reader reader;
     Json::Value req;
@@ -93,9 +99,14 @@ void StatisticProtocolServer::HandleRequest(const std::string& _request, std::st
     if (reader.parse(_request, req, false))
     {
         // get groupId
-        if (m_networkStatHandler || m_qpsLimiter)
+        groupId = getGroupID(req);
+        // check sdk allow list
+        if (permissionChecker && !permissionChecker(groupId))
         {
-            groupId = getGroupID(req);
+            std::string errorMsg = req[KEY_REQUEST_METHODNAME].asString() + " " +
+                                   RPCMsg[RPCExceptionType::PermissionDenied];
+            wrapErrorResponse(_request, _retValue, RPCExceptionType::PermissionDenied, errorMsg);
+            return;
         }
         if (m_qpsLimiter)
         {

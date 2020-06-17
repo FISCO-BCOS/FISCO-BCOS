@@ -42,4 +42,23 @@ std::string toUUID(h128 const& _uuid)
     return ret;
 }
 
+bool isNodeIDOk(dev::h512 const& _nodeID)
+{
+    return dev::h512() != _nodeID;
+}
+
+bool isNodeIDOk(const std::string& _nodeID)
+{
+    try
+    {
+        dev::h512 nodeID = dev::h512(_nodeID);
+        return isNodeIDOk(nodeID);
+    }
+    catch (...)
+    {
+        return false;
+    }
+    return false;
+}
+
 }  // namespace dev

@@ -221,7 +221,7 @@ PeerWhitelist::Ptr P2PInitializer::parseWhitelistFromPropertyTree(
                                            << LOG_DESC("get certificate accepted by nodeID")
                                            << LOG_KV("nodeID", nodeID);
 
-                    if (PeerWhitelist::isNodeIDOk(nodeID))
+                    if (isNodeIDOk(nodeID))
                     {
                         enableWhitelist = true;
                         certWhitelist.push_back(nodeID);

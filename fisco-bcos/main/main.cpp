@@ -48,6 +48,11 @@ void checkAndCall(const std::string& configPath, shared_ptr<Initializer> initial
         cout << "Reset certificate whitelist(CAL)" << endl;
         initializer->p2pInitializer()->resetWhitelist(configPath);
     });
+    std::string resetSDKAllowListSignal = configPath + ".reset_allowlist";
+    dev::FileSignal::callIfFileExist(resetSDKAllowListSignal, [&]() {
+        cout << "Reset sdk allowList(public keys)" << endl;
+        initializer->ledgerInitializer()->reloadSDKAllowList();
+    });
 }
 
 int main(int argc, const char* argv[])
