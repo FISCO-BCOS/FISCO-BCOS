@@ -38,6 +38,7 @@
 #include <json/json.h>
 #include <libp2p/P2PMessage.h>
 #include <libp2p/Service.h>
+#include <librpc/StatisticProtocolServer.h>
 #include <unistd.h>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/asio.hpp>
@@ -422,17 +423,35 @@ void dev::ChannelRPCServer::onClientRPCRequest(
 
     try
     {
-        OnRequest(body, addInfo);
+        OnRpcRequest(session, body, addInfo);
     }
     catch (std::exception& e)
     {
-        CHANNEL_LOG(ERROR) << "Error while onRequest rpc: " << boost::diagnostic_information(e);
+        CHANNEL_LOG(ERROR) << "Error while OnRpcRequest rpc: " << boost::diagnostic_information(e);
     }
 
     if (m_callbackSetter)
     {
         m_callbackSetter(NULL, NULL);
     }
+}
+
+bool dev::ChannelRPCServer::OnRpcRequest(
+    dev::channel::ChannelSession::Ptr _session, const std::string& request, void* addInfo)
+{
+    string response;
+    auto handler = this->GetHandler();
+    if (!handler)
+    {
+        return false;
+    }
+    auto statisticProtocolServer = dynamic_cast<StatisticProtocolServer*>(handler);
+    statisticProtocolServer->HandleChannelRequest(
+        request, response, [this, _session](dev::GROUP_ID _groupId) {
+            return checkSDKPermission(_groupId, _session->remotePublicKey());
+        });
+    SendResponse(response, addInfo);
+    return true;
 }
 
 void dev::ChannelRPCServer::onClientEventLogRequest(
@@ -493,6 +512,7 @@ void dev::ChannelRPCServer::onClientEventLogRequest(
             return server && session && session->actived();
         };
 
+        // TODO: add sdkPermission check when register event log
         int32_t ret = m_eventFilterCallBack(data, protocolVersion, respCallback, activeCallback);
 
         CHANNEL_LOG(TRACE) << "onClientEventLogRequest" << LOG_KV("seq", seq) << LOG_KV("ret", ret)
@@ -1258,4 +1278,43 @@ std::vector<dev::channel::ChannelSession::Ptr> ChannelRPCServer::getSessionByTop
     }
 
     return activedSessions;
+}
+
+void ChannelRPCServer::registerSDKAllowListByGroupId(
+    dev::GROUP_ID const& _groupId, dev::PeerWhitelist::Ptr _allowList)
+{
+    CHANNEL_LOG(INFO) << LOG_DESC("registerSDKAllowListByGroupId") << LOG_KV("groupId", _groupId)
+                      << LOG_KV("size", _allowList->size());
+    WriteGuard l(x_group2SDKAllowList);
+    if (_allowList->size() == 0)
+    {
+        CHANNEL_LOG(INFO) << LOG_DESC(
+            "Disable group-level sdk permission control for sdk allowlist is empty");
+        if (m_group2SDKAllowList->count(_groupId))
+        {
+            m_group2SDKAllowList->erase(_groupId);
+        }
+        return;
+    }
+    (*m_group2SDKAllowList)[_groupId] = _allowList;
+}
+
+bool ChannelRPCServer::checkSDKPermission(dev::GROUP_ID _groupId, dev::h512 const& _sdkPublicKey)
+{
+    if (-1 == _groupId)
+    {
+        return true;
+    }
+    // SDK allowlist is not set
+    auto allowList = getSDKAllowListByGroupId(_groupId);
+    if (!allowList)
+    {
+        return true;
+    }
+    // check if the requesting SDK is on the allowlist
+    if (allowList->has(_sdkPublicKey))
+    {
+        return true;
+    }
+    return false;
 }

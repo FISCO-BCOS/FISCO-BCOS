@@ -163,7 +163,7 @@ void TransactionNonceCheck::updateCache(bool _rebuild)
                 }
             }  // for
             NONCECHECKER_LOG(DEBUG)
-                << LOG_DESC("updateCache") << LOG_KV("cacheSize", m_cache.size())
+                << LOG_DESC("updateCache") << LOG_KV("nonceCacheSize", m_cache.size())
                 << LOG_KV("costTime", timer.elapsed() * 1000);
         }
         catch (...)

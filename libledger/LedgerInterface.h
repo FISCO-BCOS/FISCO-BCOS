@@ -64,6 +64,7 @@ public:
         (void)channelRPCServer;
     };
     virtual std::shared_ptr<dev::event::EventLogFilterManager> getEventLogFilterManager() = 0;
+    virtual void reloadSDKAllowList() {}
 
 protected:
     dev::KeyPair m_keyPair;

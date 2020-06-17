@@ -613,6 +613,9 @@ inline std::string toString(h256s const& _bs)
     return out.str();
 }
 
+bool isNodeIDOk(dev::h512 const& _nodeID);
+bool isNodeIDOk(const std::string& _nodeID);
+
 }  // namespace dev
 
 namespace std

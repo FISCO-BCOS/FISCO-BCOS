@@ -196,6 +196,5 @@ inline std::string reasonOf(DisconnectReason _r)
 using NodeIPEndpoint = boost::asio::ip::tcp::endpoint;
 
 bool getPublicKeyFromCert(std::shared_ptr<std::string> _nodeIDOut, X509* cert);
-
 }  // namespace network
 }  // namespace dev

@@ -43,6 +43,7 @@ void LedgerParam::parseGenesisConfig(const std::string& _genesisFile)
 {
     try
     {
+        m_genesisConfigPath = _genesisFile;
         ptree pt;
         // read the configuration file for a specified group
         read_ini(_genesisFile, pt);
@@ -141,6 +142,7 @@ void LedgerParam::generateGenesisMark()
 
 void LedgerParam::parseIniConfig(const std::string& _iniConfigFile, const std::string& _dataPath)
 {
+    m_iniConfigPath = _iniConfigFile;
     std::string prefix = _dataPath + "/group" + std::to_string(m_groupID);
     if (_dataPath == "")
     {
@@ -164,6 +166,7 @@ void LedgerParam::parseIniConfig(const std::string& _iniConfigFile, const std::s
     // init params releated to consensus(ttl)
     initConsensusIniConfig(pt);
     initFlowControlConfig(pt);
+    initPermissionParam(m_permissionParam.sdkAllowList, pt);
 }
 
 void LedgerParam::init(const std::string& _configFilePath, const std::string& _dataPath)
@@ -412,30 +415,12 @@ void LedgerParam::initConsensusConfig(ptree const& pt)
                           << LOG_KV("maxTxNum", mutableConsensusParam().maxTransactions)
                           << LOG_KV("txGasLimit", mutableTxParam().txGasLimit);
 
+    parsePublicKeyListOfSection(mutableConsensusParam().sealerList, pt, "consensus", "node.");
     std::stringstream nodeListMark;
-    try
+    // init nodeListMark
+    for (auto const& node : mutableConsensusParam().sealerList)
     {
-        for (auto it : pt.get_child("consensus"))
-        {
-            if (it.first.find("node.") == 0)
-            {
-                std::string data = it.second.data();
-                boost::to_lower(data);
-                LedgerParam_LOG(INFO)
-                    << LOG_BADGE("initConsensusConfig") << LOG_KV("it.first", data);
-                // Uniform lowercase nodeID
-                dev::h512 nodeID(data);
-                mutableConsensusParam().sealerList.push_back(nodeID);
-                // The full output node ID is required.
-                nodeListMark << data << ",";
-            }
-        }
-    }
-    catch (std::exception& e)
-    {
-        LedgerParam_LOG(ERROR) << LOG_BADGE("initConsensusConfig")
-                               << LOG_DESC("Parse consensus section failed")
-                               << LOG_KV("EINFO", boost::diagnostic_information(e));
+        nodeListMark << toHex(node) << ",";
     }
     mutableGenesisParam().nodeListMark = nodeListMark.str();
 
@@ -692,6 +677,40 @@ void LedgerParam::initFlowControlConfig(boost::property_tree::ptree const& _pt)
                           << LOG_KV("maxQPS", mutableFlowControlParam().maxQPS)
                           << LOG_KV("outGoingBandwidth(Bytes)",
                                  mutableFlowControlParam().outGoingBandwidthLimit);
+}
+
+void LedgerParam::parsePublicKeyListOfSection(dev::h512s& _nodeList,
+    boost::property_tree::ptree const& _pt, std::string const& _sectionName,
+    std::string const& _subSectionName)
+{
+    if (!_pt.get_child_optional(_sectionName))
+    {
+        LedgerParam_LOG(DEBUG) << LOG_DESC("parsePublicKeyListOfSection return for empty config")
+                               << LOG_KV("sectionName", _sectionName);
+        return;
+    }
+    for (auto const& it : _pt.get_child(_sectionName))
+    {
+        if (it.first.find(_subSectionName) != 0)
+        {
+            continue;
+        }
+        std::string data = it.second.data();
+        boost::to_lower(data);
+        if (!isNodeIDOk(data))
+        {
+            continue;
+        }
+        LedgerParam_LOG(INFO) << LOG_BADGE("parsePublicKeyListOfSection")
+                              << LOG_KV("sectionName", _sectionName) << LOG_KV("it.first", data);
+        _nodeList.push_back(dev::h512(data));
+    }
+}
+
+void LedgerParam::initPermissionParam(dev::h512s& _nodeList, boost::property_tree::ptree const& _pt)
+{
+    parsePublicKeyListOfSection(_nodeList, _pt, "sdk_allowlist", "public_key.");
+    LedgerParam_LOG(INFO) << LOG_DESC("initPermissionParam") << LOG_KV("sdkAllowList", _nodeList);
 }
 
 }  // namespace ledger

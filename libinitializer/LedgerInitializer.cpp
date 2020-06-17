@@ -185,6 +185,20 @@ void LedgerInitializer::startMoreLedger()
     }
 }
 
+void LedgerInitializer::reloadSDKAllowList()
+{
+    auto groupList = m_ledgerManager->getGroupList();
+    for (auto const& group : groupList)
+    {
+        auto ledger = m_ledgerManager->ledger(group);
+        if (!ledger)
+        {
+            continue;
+        }
+        ledger->reloadSDKAllowList();
+    }
+}
+
 bool LedgerInitializer::initLedger(
     dev::GROUP_ID const& _groupId, std::string const& _dataDir, std::string const& _configFileName)
 {
