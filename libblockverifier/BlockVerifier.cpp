@@ -452,7 +452,6 @@ dev::eth::TransactionReceipt::Ptr BlockVerifier::execute(dev::eth::Transaction::
 
 dev::executive::Executive::Ptr BlockVerifier::createAndInitExecutive()
 {
-    Executive::Ptr executive = std::make_shared<Executive>();
-    executive->setEvmFlags(m_evmFlags);
+    Executive::Ptr executive = std::make_shared<Executive>(m_evmFlags & EVMFlags::FreeStorageGas);
     return executive;
 }

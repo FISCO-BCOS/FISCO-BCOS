@@ -25,7 +25,7 @@
 #include <libexecutive/EVMInstance.h>
 #include <libexecutive/EVMInterface.h>
 #include <libexecutive/VMFactory.h>
-#include <libinterpreter/interpreter.h>
+// #include <libinterpreter/interpreter.h>
 #include <test/tools/libbcos/Options.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
@@ -89,6 +89,8 @@ BOOST_AUTO_TEST_CASE(testToRevision)
     BOOST_CHECK(EVMC_BYZANTIUM == toRevision(schedule));
     schedule.haveCreate2 = true;
     BOOST_CHECK(EVMC_CONSTANTINOPLE == toRevision(schedule));
+    schedule.enableIstanbul = true;
+    BOOST_CHECK(EVMC_ISTANBUL == toRevision(schedule));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

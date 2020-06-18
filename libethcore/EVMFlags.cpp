@@ -27,4 +27,3 @@ using namespace dev;
 
 // bit 64 is currently occupied, indicating whether to use FreeStorageVMSchedule
 const VMFlagType EVMFlags::FreeStorageGas = ((VMFlagType)1 << (sizeof(VMFlagType) * 8 - 1));
-const unsigned EVMFlags::freeStorageFlagPos = sizeof(VMFlagType) * 8 - 1;

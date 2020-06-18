@@ -27,9 +27,9 @@
 #include <libdevcore/FixedHash.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/EVMSchedule.h>
-#include <libinterpreter/Instruction.h>
 #include <libethcore/LogEntry.h>
-#include <libinterpreter/interpreter.h>
+// #include <libinterpreter/Instruction.h>
+// #include <libinterpreter/interpreter.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <iosfwd>
@@ -157,7 +157,7 @@ extern int64_t fakeDepth;
 class FakeEvmc
 {
 public:
-    explicit FakeEvmc(evmc_instance* _instance);
+    explicit FakeEvmc(evmc_vm* _instance);
     virtual ~FakeEvmc()
     {
         fakeDepth--;
@@ -175,8 +175,8 @@ public:
     int64_t depth() { return m_depth; }
 
 private:
-    struct evmc_instance* m_instance;
-    struct evmc_context* m_context;
+    struct evmc_vm* m_instance;
+    std::shared_ptr<evmc_host_context> m_context;
     int64_t m_depth;
 };
 

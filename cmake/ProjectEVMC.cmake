@@ -3,10 +3,12 @@ include(GNUInstallDirs)
 
 ExternalProject_Add(evmc
         PREFIX ${CMAKE_SOURCE_DIR}/deps
-        DOWNLOAD_NAME evmc-b64ff8be.tar.gz
         DOWNLOAD_NO_PROGRESS 1
-        URL https://github.com/FISCO-BCOS/evmc/archive/b64ff8beab704916dfe86ff2c2e4185c08ddcef5.tar.gz
-        URL_HASH SHA256=c32b3143cbf578e15cb10843abcf72ac86f976d9b002c9a3a2f7cfa4663d6fe9
+        DOWNLOAD_NAME evmc-c009c755.tar.gz
+        URL https://github.com/FISCO-BCOS/evmc/archive/c009c755a20ff9658506d855904c17552f3144fe.tar.gz
+        URL_HASH SHA256=5f37ba67803df187e30c68b11c5feeff611d6b69f1483b78c9a3dff001ab9a67
+        # GIT_REPOSITORY https://github.com/FISCO-BCOS/evmc.git
+        # GIT_TAG c009c755a20ff9658506d855904c17552f3144fe
         CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
         BUILD_IN_SOURCE 1
         LOG_CONFIGURE 1
@@ -31,3 +33,4 @@ set_property(TARGET EVMC::Instructions PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${
 add_library(EVMC INTERFACE IMPORTED)
 set_property(TARGET EVMC PROPERTY INTERFACE_LINK_LIBRARIES ${EVMC_INSTRUCTIONS_LIBRARIES} ${EVMC_LOADER_LIBRARIES})
 set_property(TARGET EVMC PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${EVMC_INCLUDE_DIRS})
+add_dependencies(EVMC evmc)

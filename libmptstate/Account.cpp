@@ -22,7 +22,6 @@
 #include "Account.h"
 #include "libdevcrypto/CryptoInterface.h"
 #include <libdevcore/CommonIO.h>
-#include <libethcore/ChainOperationParams.h>
 #include <libethcore/Precompiled.h>
 
 using namespace std;

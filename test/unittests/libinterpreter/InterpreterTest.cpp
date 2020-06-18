@@ -21,6 +21,7 @@
  * @date 2018-09-04
  */
 
+#include "evmone/evmone.h"
 #include "libdevcrypto/CryptoInterface.h"
 #include <evmc/evmc.h>
 #include <libdevcore/FixedHash.h>
@@ -47,7 +48,7 @@ namespace test
 class InterpreterFixture : TestOutputHelperFixture
 {
 public:
-    InterpreterFixture() : evmc(evmc_create_interpreter()){};
+    InterpreterFixture() : evmc(evmc_create_evmone()){};
 
     FakeEvmc evmc;
     FakeState& state = evmc.getState();

@@ -115,23 +115,25 @@ jobs:
       - run:
           name: Setup dependencies
           command: |
-            yum install -y epel-release
-            yum install -y git make gcc-c++ cmake3 openssl-devel openssl ccache flex patch bison gmp-static
+            yum install -y epel-release centos-release-scl
+            yum install -y git make gcc-c++ cmake3 openssl-devel openssl ccache flex patch bison gmp-static devtoolset-7
             echo 'export CCACHE_DIR=/ccache' >> $BASH_ENV
+
       - checkout
       - restore_cache:
           keys:
-            - deps-cache-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
-            - deps-cache-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
-            - deps-cache-{{ .Environment.CIRCLE_JOB }}-
+            - deps-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+            - deps-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
+            - deps-v1-{{ .Environment.CIRCLE_JOB }}-
       - run:
           name: Compile
           command: |
+            source /opt/rh/devtoolset-7/enable
             mkdir -p build && cd build
             cmake3 -DTESTS=ON -DTOOL=ON -DDEMO=ON ..
             make -j2
       - save_cache:
-          key: deps-cache-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+          key: deps-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
           paths:
             - deps
             - /ccache

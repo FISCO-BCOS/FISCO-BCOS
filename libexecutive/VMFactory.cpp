@@ -27,11 +27,7 @@
 #include <libinterpreter/interpreter.h>
 
 #include <evmc/loader.h>
-
-#ifdef ETH_EVMJIT
-#include <evmjit.h>
-#endif
-
+#include <evmone/evmone.h>
 #ifdef ETH_HERA
 #include <hera/hera.h>
 #endif
@@ -67,9 +63,6 @@ struct VMKindTableEntry
 /// We don't use a map to avoid complex dynamic initialization. This list will never be long,
 /// so linear search only to parse command line arguments is not a problem.
 VMKindTableEntry vmKindsTable[] = {
-#ifdef ETH_EVMJIT
-    {VMKind::JIT, "jit"},
-#endif
 #ifdef ETH_HERA
     {VMKind::Hera, "hera"},
 #endif
@@ -184,19 +177,18 @@ std::unique_ptr<EVMInterface> VMFactory::create(VMKind _kind)
 {
     switch (_kind)
     {
-#ifdef ETH_EVMJIT
-    case VMKind::JIT:
-        return std::unique_ptr<EVMInterface>(new EVMInstance{evmjit_create()});
-#endif
 #ifdef ETH_HERA
     case VMKind::Hera:
         return std::unique_ptr<EVMInterface>(new EVMInstance{evmc_create_hera()});
 #endif
     case VMKind::DLL:
         return std::unique_ptr<EVMInterface>(new EVMInstance{g_evmcCreateFn()});
+#if 0
     case VMKind::Interpreter:
-    default:
         return std::unique_ptr<EVMInterface>(new EVMInstance{evmc_create_interpreter()});
+#endif
+    default:
+        return std::unique_ptr<EVMInterface>(new EVMInstance{evmc_create_evmone()});
     }
 }
 }  // namespace eth

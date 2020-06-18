@@ -28,7 +28,7 @@ namespace dev
 {
 namespace eth
 {
-EVMInstance::EVMInstance(evmc_instance* _instance) noexcept : m_instance(_instance)
+EVMInstance::EVMInstance(evmc_vm* _instance) noexcept : m_instance(_instance)
 {
     assert(m_instance != nullptr);
     // the abi_version of intepreter is EVMC_ABI_VERSION when callback VMFactory::create()
@@ -44,18 +44,14 @@ std::shared_ptr<Result> EVMInstance::exec(executive::EVMHostContext& _ext, evmc_
     evmc_message* _msg, const uint8_t* _code, size_t _code_size)
 {
     auto result = std::make_shared<Result>(
-        m_instance->execute(m_instance, &_ext, _rev, _msg, _code, _code_size));
-
-    if (result->status() == EVMC_REJECTED)
-    {
-        LOG(WARNING) << "Execution rejected by EVMC, executing with default VM implementation";
-        return VMFactory::create(VMKind::Interpreter)->exec(_ext, _rev, _msg, _code, _code_size);
-    }
+        m_instance->execute(m_instance, _ext.interface, &_ext, _rev, _msg, _code, _code_size));
     return result;
 }
 
 evmc_revision toRevision(EVMSchedule const& _schedule)
 {
+    if (_schedule.enableIstanbul)
+        return EVMC_ISTANBUL;
     if (_schedule.haveCreate2)
         return EVMC_CONSTANTINOPLE;
     if (_schedule.haveRevert)
