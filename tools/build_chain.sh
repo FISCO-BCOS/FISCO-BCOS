@@ -383,7 +383,7 @@ gen_cert() {
     mkdir -p $ndpath
     gen_cert_secp256k1 "$agpath" "$ndpath" "$node" "${cert_name}"
     #nodeid is pubkey
-    openssl ec -in "$ndpath"/node.key -text -noout 2> /dev/null | sed -n '7,11p' | tr -d ": \n" | awk '{print substr($0,3);}' | cat >"$ndpath"/node.nodeid
+    openssl ec -in "$ndpath/${cert_name}.key" -text -noout 2> /dev/null | sed -n '7,11p' | tr -d ": \n" | awk '{print substr($0,3);}' | cat >"$ndpath"/node.nodeid
     # openssl x509 -serial -noout -in $ndpath/node.crt | awk -F= '{print $2}' | cat >$ndpath/node.serial
     cd "$ndpath"
     if [ "${cert_name}" == "node" ];then
@@ -701,6 +701,12 @@ function generate_group_ini()
     ; Mb, can be a decimal
     ; when the outgoing bandwidth exceeds the limit, the block synchronization operation will not proceed
     ;outgoing_bandwidth_limit=2
+
+[sdk_allowlist]
+    ; When sdk_allowlist is empty, all SDKs can connect to this node
+    ; when sdk_allowlist is not empty, only the SDK in the allowlist can connect to this node
+    ; public_key.0 should be nodeid, nodeid's length is 128
+    ;public_key.0=
 EOF
 }
 
@@ -1179,6 +1185,21 @@ done
 check_all_node_work_properly \${work_dir}
 
 EOF
+generate_script_template "$output/scripts/reload_sdk_allowlist.sh"
+    cat << EOF >> "$output/scripts/reload_sdk_allowlist.sh"
+cd \${SHELL_FOLDER}/../
+NODE_FOLDER=\$(pwd)
+fisco_bcos=\${NODE_FOLDER}/${fisco_bin_path}
+node=\$(basename \${NODE_FOLDER})
+node_pid=${ps_cmd}
+if [ -n "\${node_pid}" ];then
+    LOG_INFO "\${node} is trying to reload sdk allowlist. Check log for more information."
+    touch config.ini.reset_allowlist
+    exit 0
+else
+    echo "\${node} is not running, use start.sh to start all group directlly."
+fi
+EOF
 }
 
 genDownloadConsole() {
@@ -1516,7 +1537,7 @@ for line in ${ip_array[*]};do
         cp sdk.crt node.crt
         cp sdk.key node.key
         # FIXME: delete the upside unbelievable ugliest operation in future
-        rm node.nodeid
+        mv node.nodeid sdk.publickey
         cd "${output_dir}"
         if [ -n "${guomi_mode}" ];then
             mkdir -p "${sdk_path}/gm"
@@ -1525,6 +1546,8 @@ for line in ${ip_array[*]};do
             cat "${output_dir}/gmcert/${agency_array[${server_count}]}/../gmca.crt" >> "${sdk_path}/gm/gmsdk.crt"
             gen_node_cert_with_extensions_gm "${output_dir}/gmcert/${agency_array[${server_count}]}" "${sdk_path}/gm" "sdk" ensdk v3enc_req
             cp "${output_dir}/gmcert/gmca.crt" "${sdk_path}/gm/"
+            $TASSL_CMD ec -in "$sdk_path/gm/gmsdk.key" -text -noout 2> /dev/null | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}'  | cat > "$ndpath/gmsdk.publickey"
+            mv "$sdk_path/gmsdk.publickey" "$sdk_path/gm"
         fi
     fi
     for ((i=0;i<num;++i));do
