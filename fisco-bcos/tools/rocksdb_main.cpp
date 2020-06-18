@@ -20,6 +20,7 @@
  */
 
 #include "libinitializer/Initializer.h"
+#include "libledger/DBInitializer.h"
 #include "libstorage/BasicRocksDB.h"
 #include "libstorage/MemoryTableFactory2.h"
 #include "libstorage/RocksDBStorage.h"
@@ -32,6 +33,7 @@ using namespace std;
 using namespace dev;
 using namespace boost;
 using namespace dev::db;
+using namespace dev::ledger;
 using namespace dev::storage;
 using namespace dev::initializer;
 namespace po = boost::program_options;
@@ -44,8 +46,9 @@ po::variables_map initCommandLine(int argc, const char* argv[])
         po::value<vector<string>>()->multitoken(), "[TableName] [KeyField] [ValueField]")(
         "path,p", po::value<string>()->default_value("data/"), "[RocksDB path]")(
         "select,s", po::value<vector<string>>()->multitoken(), "[TableName] [priKey]")("update,u",
-        po::value<vector<string>>()->multitoken(), "[TableName] [priKey] [Key] [NewValue]")(
-        "insert,i", po::value<vector<string>>()->multitoken(),
+        po::value<vector<string>>()->multitoken(),
+        "[TableName] [priKey] [keyEQ] [valueEQ] [Key] [NewValue]")("insert,i",
+        po::value<vector<string>>()->multitoken(),
         "[TableName] [priKey] [Key]:[Value],...,[Key]:[Value]")(
         "remove,r", po::value<vector<string>>()->multitoken(), "[TableName] [priKey]");
     po::variables_map vm;
@@ -121,13 +124,21 @@ int main(int argc, const char* argv[])
     auto params = initCommandLine(argc, argv);
     auto storagePath = params["path"].as<string>();
     cout << "DB path : " << storagePath << endl;
-    auto rocksdbStorage = createRocksDBStorage(storagePath);
+    auto rocksdbStorage = createRocksDBStorage(storagePath, false, false, false);
     MemoryTableFactory2::Ptr tableFactory = std::make_shared<MemoryTableFactory2>();
     tableFactory->setStateStorage(rocksdbStorage);
     tableFactory->setBlockHash(h256(0));
     tableFactory->setBlockNum(0);
     tableFactory->init();
-
+    auto commit = [tableFactory, rocksdbStorage]() {
+        auto blockNumber = getBlockNumberFromStorage(rocksdbStorage);
+        auto stateTable = tableFactory->openTable(SYS_CURRENT_STATE);
+        auto entry = stateTable->newEntry();
+        entry->setField(SYS_VALUE, to_string(blockNumber));
+        entry->setField(SYS_KEY, SYS_KEY_CURRENT_NUMBER);
+        stateTable->insert(SYS_KEY_CURRENT_NUMBER, entry);
+        tableFactory->commitDB(h256(0), blockNumber);
+    };
     if (params.count("createTable") || params.count("c"))
     {
         auto& p = params["createTable"].as<vector<string>>();
@@ -165,16 +176,20 @@ int main(int argc, const char* argv[])
     {
         auto& p = params["update"].as<vector<string>>();
         cout << "update " << p << " || params num : " << p.size() << endl;
-        if (p.size() == 4u)
+        if (p.size() == 6u)
         {
             auto table = tableFactory->openTable(p[0]);
             if (table)
             {
                 cout << "open Table [" << p[0] << "] success!" << endl;
+                auto condition = table->newCondition();
+                condition->EQ(p[2], p[3]);
+                cout << "condition is [" << p[2] << "=" << p[3] << "]" << endl;
                 auto entry = table->newEntry();
-                entry->setField(p[2], p[3]);
-                table->update(p[1], entry, table->newCondition());
-                tableFactory->commitDB(h256(0), 1);
+                entry->setField(p[4], p[5]);
+                cout << "update [" << p[4] << ":" << p[5] << "]" << endl;
+                table->update(p[1], entry, condition);
+                commit();
             }
             return 0;
         }
@@ -199,7 +214,7 @@ int main(int argc, const char* argv[])
                     entry->setField(KV[0], KV[1]);
                 }
                 table->insert(p[1], entry);
-                tableFactory->commitDB(h256(0), 1);
+                commit();
             }
             return 0;
         }
@@ -215,7 +230,7 @@ int main(int argc, const char* argv[])
             {
                 cout << "open Table [" << p[0] << "] success!" << endl;
                 table->remove(p[1], table->newCondition());
-                tableFactory->commitDB(h256(0), 1);
+                commit();
             }
             return 0;
         }
