@@ -159,7 +159,8 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
                 std::function<bool(const std::string& _filterID, int32_t _result,
                     const Json::Value& _logs, GROUP_ID const& _groupId)>
                     _respCallback,
-                std::function<bool()> _activeCallback) -> int32_t {
+                std::function<bool()> _activeCallback,
+                std::function<bool(GROUP_ID _groupId)> _permissionChecker) -> int32_t {
                 auto params =
                     dev::event::EventLogFilterParams::buildEventLogFilterParamsObject(_json);
                 if (!params)
@@ -172,7 +173,10 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
                 {
                     return dev::event::ResponseCode::GROUP_NOT_EXIST;
                 }
-
+                if (!_permissionChecker(params->getGroupID()))
+                {
+                    return dev::event::ResponseCode::SDK_PERMISSION_DENIED;
+                }
                 return ledger->getEventLogFilterManager()->addEventLogFilterByRequest(
                     params, _version, _respCallback, _activeCallback);
             });

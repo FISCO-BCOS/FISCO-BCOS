@@ -138,8 +138,12 @@ public:
             Ledger_LOG(INFO) << LOG_DESC("removeNetworkStatHandlerByGroupID for channelRPCServer")
                              << LOG_KV("groupID", groupId());
             m_channelRPCServer->networkStatHandler()->removeGroupP2PStatHandler(groupId());
-            m_stopped.store(true);
         }
+        if (m_channelRPCServer)
+        {
+            m_channelRPCServer->removeSDKAllowListByGroupId(groupId());
+        }
+        m_stopped.store(true);
     }
 
     virtual ~Ledger(){};
