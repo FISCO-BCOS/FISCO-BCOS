@@ -163,8 +163,8 @@ public:
     std::shared_ptr<MerkleProofType> getTransactionProof(
         dev::eth::Block::Ptr _block, uint64_t const& _index) override;
 
-    std::shared_ptr<BlockHeaderInfo> getBlockHeaderInfo(int64_t _blockNumber);
-    std::shared_ptr<BlockHeaderInfo> getBlockHeaderInfoByHash(dev::h256 const& _blockHash);
+    std::shared_ptr<BlockHeaderInfo> getBlockHeaderInfo(int64_t _blockNumber) override;
+    std::shared_ptr<BlockHeaderInfo> getBlockHeaderInfoByHash(dev::h256 const& _blockHash) override;
 
 private:
     std::shared_ptr<BlockHeaderInfo> getBlockHeaderFromBlock(dev::eth::Block::Ptr _block);

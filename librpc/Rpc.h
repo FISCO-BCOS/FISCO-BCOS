@@ -110,6 +110,12 @@ public:
         int _groupID, const std::string& _blockHash, bool _includeTransactions) override;
     Json::Value getBlockByNumber(
         int _groupID, const std::string& _blockNumber, bool _includeTransactions) override;
+
+    Json::Value getBlockHeaderByNumber(
+        int _groupID, const std::string& _blockNumber, bool _includeSigList = false) override;
+    Json::Value getBlockHeaderByHash(
+        int _groupID, const std::string& _blockHash, bool _includeSigList = false) override;
+
     std::string getBlockHashByNumber(int _groupID, const std::string& _blockNumber) override;
 
     // transaction part
@@ -183,6 +189,12 @@ protected:
     void addProofToResponse(std::shared_ptr<Json::Value> _response, std::string const& _key,
         std::shared_ptr<dev::blockchain::MerkleProofType> _proofList);
 
+    void generateBlockHeaderInfo(Json::Value& _response,
+        std::shared_ptr<
+            std::pair<std::shared_ptr<dev::eth::BlockHeader>, dev::eth::Block::SigListPtrType>>
+            _headerInfo,
+        bool _includeSigList);
+
     std::shared_ptr<dev::ledger::LedgerManager> m_ledgerManager;
     dev::initializer::LedgerInitializer::Ptr m_ledgerInitializer;
 
@@ -214,9 +226,9 @@ private:
 
     /// transaction callback related
     boost::thread_specific_ptr<
-        std::function<void(const std::string& receiptContext, GROUP_ID _groupId)> >
+        std::function<void(const std::string& receiptContext, GROUP_ID _groupId)>>
         m_currentTransactionCallback;
-    boost::thread_specific_ptr<std::function<uint32_t()> > m_transactionCallbackVersion;
+    boost::thread_specific_ptr<std::function<uint32_t()>> m_transactionCallbackVersion;
 
     void checkRequest(int _groupID);
     void checkSyncStatus(int _groupID);

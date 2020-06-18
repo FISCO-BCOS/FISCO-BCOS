@@ -614,6 +614,120 @@ Json::Value Rpc::getBlockByHash(
 }
 
 
+void Rpc::generateBlockHeaderInfo(Json::Value& _response,
+    std::shared_ptr<
+        std::pair<std::shared_ptr<dev::eth::BlockHeader>, dev::eth::Block::SigListPtrType>>
+        _headerInfo,
+    bool _includeSigList)
+{
+    auto blockHeader = _headerInfo->first;
+    _response["number"] = blockHeader->number();
+
+    _response["hash"] = toJS(blockHeader->hash());
+    _response["parentHash"] = toJS(blockHeader->parentHash());
+    _response["logsBloom"] = toJS(blockHeader->logBloom());
+    _response["transactionsRoot"] = toJS(blockHeader->transactionsRoot());
+    _response["receiptsRoot"] = toJS(blockHeader->receiptsRoot());
+    _response["dbHash"] = toJS(blockHeader->dbHash());
+    _response["stateRoot"] = toJS(blockHeader->stateRoot());
+    _response["sealer"] = toJS(blockHeader->sealer());
+    _response["sealerList"] = Json::Value(Json::arrayValue);
+    auto const sealerList = blockHeader->sealerList();
+    for (auto it = sealerList.begin(); it != sealerList.end(); ++it)
+    {
+        _response["sealerList"].append((*it).hex());
+    }
+    _response["extraData"] = Json::Value(Json::arrayValue);
+    auto datas = blockHeader->extraData();
+    for (auto const& data : datas)
+    {
+        _response["extraData"].append(toJS(data));
+    }
+    _response["gasLimit"] = toJS(blockHeader->gasLimit());
+    _response["gasUsed"] = toJS(blockHeader->gasUsed());
+    _response["timestamp"] = toJS(blockHeader->timestamp());
+    if (!_includeSigList)
+    {
+        return;
+    }
+    // signature list
+    _response["signatureList"] = Json::Value(Json::arrayValue);
+    auto sigList = _headerInfo->second;
+    for (auto const& signature : *sigList)
+    {
+        Json::Value sigJsonObj;
+        sigJsonObj["index"] = toJS(signature.first);
+        sigJsonObj["signature"] = toJS(signature.second);
+        _response["signatureList"].append(sigJsonObj);
+    }
+}
+
+Json::Value Rpc::getBlockHeaderByNumber(
+    int _groupID, const std::string& _blockNumber, bool _includeSigList)
+{
+    try
+    {
+        RPC_LOG(INFO) << LOG_BADGE("getBlockHeaderByNumber") << LOG_DESC("request")
+                      << LOG_KV("groupID", _groupID) << LOG_KV("blockNumber", _blockNumber);
+        auto blockChain = ledgerManager()->blockChain(_groupID);
+        checkLedgerStatus(blockChain, "blockchain", "getBlockHeaderByNumber");
+        checkRequest(_groupID);
+
+        BlockNumber number = jsToBlockNumber(_blockNumber);
+        auto blockHeaderInfo = blockChain->getBlockHeaderInfo(number);
+        if (!blockHeaderInfo)
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::BlockNumberT, RPCMsg[RPCExceptionType::BlockNumberT]));
+        }
+        Json::Value response;
+        generateBlockHeaderInfo(response, blockHeaderInfo, _includeSigList);
+        return response;
+    }
+    catch (JsonRpcException& e)
+    {
+        throw e;
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
+    }
+}
+
+Json::Value Rpc::getBlockHeaderByHash(
+    int _groupID, const std::string& _blockHash, bool _includeSigList)
+{
+    try
+    {
+        RPC_LOG(INFO) << LOG_BADGE("getBlockHeaderByHash") << LOG_DESC("request")
+                      << LOG_KV("groupID", _groupID);
+        auto blockChain = ledgerManager()->blockChain(_groupID);
+        checkLedgerStatus(blockChain, "blockchain", "getBlockHeaderByHash");
+        checkRequest(_groupID);
+        h256 blockHash = jsToFixed<32>(_blockHash);
+        auto blockHeaderInfo = blockChain->getBlockHeaderInfoByHash(blockHash);
+        if (!blockHeaderInfo)
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(RPCExceptionType::BlockHash, RPCMsg[RPCExceptionType::BlockHash]));
+        }
+        Json::Value response;
+        generateBlockHeaderInfo(response, blockHeaderInfo, _includeSigList);
+        return response;
+    }
+    catch (JsonRpcException& e)
+    {
+        throw e;
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
+    }
+}
+
+
 Json::Value Rpc::getBlockByNumber(
     int _groupID, const std::string& _blockNumber, bool _includeTransactions)
 {
