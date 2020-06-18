@@ -67,30 +67,32 @@ int SQLBasicAccess::Select(int64_t, const string& _table, const string&, Conditi
         }
         ResultSet_T result = PreparedStatement_executeQuery(_prepareStatement);
         int32_t columnCnt = ResultSet_getColumnCount(result);
+
+        bool tableWithBlobField = isBlobType(_table);
         while (ResultSet_next(result))
         {
             map<string, string> value;
             for (int32_t index = 1; index <= columnCnt; ++index)
             {
-                if (g_BCOSConfig.version() >= V2_5_0 && boost::starts_with(_table, string("c_")))
+                auto fieldName = ResultSet_getColumnName(result, index);
+                if (tableWithBlobField)
                 {
                     int size;
                     auto bytes = ResultSet_getBlob(result, index, &size);
                     if (!bytes)
                     {
-                        value[ResultSet_getColumnName(result, index)] = "";
+                        value[fieldName] = "";
                     }
                     else
                     {
-                        value[ResultSet_getColumnName(result, index)] = string((char*)bytes, size);
+                        value[fieldName] = string((char*)bytes, size);
                     }
                 }
                 else
                 {
                     if (ResultSet_getString(result, index) != NULL)
                     {
-                        value[ResultSet_getColumnName(result, index)] =
-                            ResultSet_getString(result, index);
+                        value[fieldName] = ResultSet_getString(result, index);
                     }
                 }
             }
@@ -169,6 +171,33 @@ string SQLBasicAccess::BuildConditionSql(const string& _strPrefix,
     return strConditionSql;
 }
 
+SQLFieldType SQLBasicAccess::getFieldType(std::string const& _tableName)
+{
+    // _sys_hash_2_block_ or _sys_block_2_nonce, the SYS_VALUE field is blob
+    if (_tableName == SYS_HASH_2_BLOCK || _tableName == SYS_BLOCK_2_NONCES)
+    {
+        if (g_BCOSConfig.version() >= V2_6_0)
+        {
+            return SQLFieldType::LongBlobType;
+        }
+        return SQLFieldType::LongStringType;
+    }
+    // _sys_hash_2_blockheader_, the SYS_VALUE and SYS_SIG_LIST are blob
+    if (_tableName == SYS_HASH_2_BLOCKHEADER)
+    {
+        return SQLFieldType::LongBlobType;
+    }
+    // contract table, all the fields are blob type
+    if (boost::starts_with(_tableName, string("c_")))
+    {
+        if (g_BCOSConfig.version() >= V2_5_0)
+        {
+            return SQLFieldType::MediumBlobType;
+        }
+    }
+    return SQLFieldType::MediumStringType;
+}
+
 string SQLBasicAccess::BuildCreateTableSql(
     const string& _tableName, const string& _keyField, const string& _valueField)
 {
@@ -188,17 +217,13 @@ string SQLBasicAccess::BuildCreateTableSql(
     boost::split(vecSplit, _valueField, boost::is_any_of(","));
     auto it = vecSplit.begin();
 
-    auto fieldType = string("mediumtext");
-    if (g_BCOSConfig.version() >= V2_5_0 && boost::starts_with(_tableName, string("c_")))
-    {
-        fieldType = "mediumblob";
-    }
-
+    auto fieldType = getFieldType(_tableName);
+    std::string fieldTypeName = SQLFieldTypeName[fieldType];
     for (; it != vecSplit.end(); ++it)
     {
         *it = boost::algorithm::replace_all_copy(*it, "\\", "\\\\");
         *it = boost::algorithm::replace_all_copy(*it, "`", "\\`");
-        ss << "`" << *it << "` " << fieldType << ",\n";
+        ss << "`" << *it << "` " << fieldTypeName << ",\n";
     }
     ss << " PRIMARY KEY( `_id_` ),\n";
     ss << " KEY(`" << _keyField << "`(191)),\n";
@@ -413,6 +438,8 @@ int SQLBasicAccess::CommitDo(int64_t _num, const vector<TableData::Ptr>& _datas,
 
             tableName = boost::algorithm::replace_all_copy(tableName, "\\", "\\\\");
             tableName = boost::algorithm::replace_all_copy(tableName, "`", "\\`");
+
+            auto tableWithBlobField = isBlobType(tableName);
             for (auto item : field2Values)
             {
                 const auto& name = item.first;
@@ -430,8 +457,7 @@ int SQLBasicAccess::CommitDo(int64_t _num, const vector<TableData::Ptr>& _datas,
                     uint32_t index = 0;
                     for (; itValue != values.end(); ++itValue)
                     {
-                        if (g_BCOSConfig.version() >= V2_5_0 &&
-                            boost::starts_with(tableName, string("c_")))
+                        if (tableWithBlobField)
                         {
                             PreparedStatement_setBlob(
                                 preStatement, ++index, itValue->c_str(), itValue->size());

@@ -131,10 +131,20 @@ void ZdbStorage::initSysTables()
     createCurrentStateTables();
     createNumber2HashTables();
     createTxHash2BlockTables();
-    createHash2BlockTables();
+
     createCnsTables();
     createSysConfigTables();
-    createSysBlock2NoncesTables();
+    if (g_BCOSConfig.version() >= V2_6_0)
+    {
+        createBlobHash2BlockTables();
+        createBlobSysBlock2NoncesTables();
+    }
+    else
+    {
+        createHash2BlockTables();
+        createSysBlock2NoncesTables();
+    }
+    createBlobSysHash2BlockHeaderTable();
     insertSysTables();
 }
 
@@ -249,6 +259,37 @@ void ZdbStorage::createHash2BlockTables()
     string sql = ss.str();
     m_sqlBasicAcc->ExecuteSql(sql);
 }
+
+void ZdbStorage::createBlobHash2BlockTables()
+{
+    stringstream ss;
+    ss << "CREATE TABLE IF NOT EXISTS `" << SYS_HASH_2_BLOCK << "` (\n";
+    ss << getCommonFileds();
+    ss << "`hash` varchar(128) DEFAULT NULL,\n";
+    ss << "`value` longblob,\n";
+    ss << " PRIMARY KEY (`_id_`),\n";
+    ss << "KEY `hash` (`hash`)\n";
+    ss << ") ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4;";
+    string sql = ss.str();
+    m_sqlBasicAcc->ExecuteSql(sql);
+}
+
+void ZdbStorage::createBlobSysHash2BlockHeaderTable()
+{
+    stringstream ss;
+    ss << "CREATE TABLE IF NOT EXISTS `" << SYS_HASH_2_BLOCKHEADER << "` (\n";
+    ss << getCommonFileds();
+    ss << "`hash` varchar(128) DEFAULT NULL,\n";
+    ss << "`value` longblob,\n";
+    ss << "`sigs` longblob,\n";
+    ss << " PRIMARY KEY (`_id_`),\n";
+    ss << "KEY `hash` (`hash`)\n";
+    ss << ") ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4;";
+    string sql = ss.str();
+    m_sqlBasicAcc->ExecuteSql(sql);
+}
+
+
 void ZdbStorage::createSysConsensus()
 {
     stringstream ss;
@@ -292,6 +333,21 @@ void ZdbStorage::createSysBlock2NoncesTables()
     string sql = ss.str();
     m_sqlBasicAcc->ExecuteSql(sql);
 }
+
+void ZdbStorage::createBlobSysBlock2NoncesTables()
+{
+    stringstream ss;
+    ss << "CREATE TABLE IF NOT EXISTS `" << SYS_BLOCK_2_NONCES << "` (\n";
+    ss << getCommonFileds();
+    ss << "`number` varchar(128) DEFAULT NULL,\n";
+    ss << " `value` longblob,\n";
+    ss << "PRIMARY KEY (`_id_`),";
+    ss << "KEY `number` (`number`)";
+    ss << ") ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4;";
+    string sql = ss.str();
+    m_sqlBasicAcc->ExecuteSql(sql);
+}
+
 void ZdbStorage::insertSysTables()
 {
     stringstream ss;
@@ -307,6 +363,7 @@ void ZdbStorage::insertSysTables()
     ss << "	('" << SYS_CNS << "', 'name','version,address,abi'),\n";
     ss << "	('" << SYS_CONFIG << "', 'key','value,enable_num'),\n";
     ss << "	('" << SYS_BLOCK_2_NONCES << "', 'number','value');";
+    ss << "	('" << SYS_HASH_2_BLOCKHEADER << "', 'hash','value', 'sigs');";
     string sql = ss.str();
     m_sqlBasicAcc->ExecuteSql(sql);
 }

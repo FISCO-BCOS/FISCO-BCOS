@@ -369,8 +369,8 @@ void BinLogHandler::encodeTable(TableData::Ptr table, bytes& buffer)
         }
     }
     writeString(buffer, ss.str());
-    // BINLOG_HANDLER_LOG(TRACE) << "table name:" << info->name << ",fields(include key):" << ss.str();
-    // table data : dirty entries and new entries
+    // BINLOG_HANDLER_LOG(TRACE) << "table name:" << info->name << ",fields(include key):" <<
+    // ss.str(); table data : dirty entries and new entries
     encodeEntries(vecField, table->dirtyEntries, buffer);
     encodeEntries(vecField, table->newEntries, buffer);
 }
@@ -508,7 +508,8 @@ DecodeBlockResult BinLogHandler::decodeBlock(const bytes& buffer, int64_t startN
         {
             vecField.push_back(field);
         }
-        bool force = (data->info->name == SYS_BLOCK_2_NONCES || data->info->name == SYS_HASH_2_BLOCK);
+        bool force =
+            (data->info->name == SYS_BLOCK_2_NONCES || data->info->name == SYS_HASH_2_BLOCK);
         decodeEntries(buffer, offset, vecField, data->dirtyEntries, force);
         decodeEntries(buffer, offset, vecField, data->newEntries, force);
         datas.push_back(data);

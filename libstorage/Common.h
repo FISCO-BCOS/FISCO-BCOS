@@ -19,6 +19,7 @@
  *  @date 20180921
  */
 #pragma once
+#include <map>
 #include <string>
 
 namespace dev
@@ -43,6 +44,7 @@ static const std::string SYS_KEY_CURRENT_ID = "current_id";
 static const std::string SYS_KEY_TOTAL_TRANSACTION_COUNT = "total_transaction_count";
 static const std::string SYS_KEY_TOTAL_FAILED_TRANSACTION = "total_failed_transaction_count";
 static const std::string SYS_VALUE = "value";
+static const std::string SYS_SIG_LIST = "sigs";
 static const std::string SYS_KEY = "key";
 
 static const std::string SYS_TABLES = "_sys_tables_";
@@ -55,6 +57,7 @@ static const std::string SYS_CNS = "_sys_cns_";
 static const std::string SYS_CONFIG = "_sys_config_";
 static const std::string SYS_ACCESS_TABLE = "_sys_table_access_";
 static const std::string SYS_BLOCK_2_NONCES = "_sys_block_2_nonces_";
+static const std::string SYS_HASH_2_BLOCKHEADER = "_sys_hash_2_header_";
 
 #if 0
 const char* const ID_FIELD = "_id_";
@@ -86,6 +89,15 @@ const int CODE_TABLE_KEYVALUE_LENGTH_OVERFLOW = -50005;
 const int CODE_TABLE_FIELDVALUE_LENGTH_OVERFLOW = -50006;
 const int CODE_TABLE_DUMPLICATE_FIELD = -50007;
 const int CODE_TABLE_INVALIDATE_FIELD = -50008;
+
+enum SQLFieldType : int8_t
+{
+    MediumBlobType = 0,
+    LongBlobType = 1,
+    MediumStringType = 2,
+    LongStringType = 3,
+};
+extern std::map<SQLFieldType, std::string> SQLFieldTypeName;
 
 bool isHashField(const std::string& _key);
 }  // namespace storage

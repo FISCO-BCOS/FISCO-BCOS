@@ -51,6 +51,7 @@ MemoryTableFactory2::MemoryTableFactory2()
     m_sysTables.push_back(SYS_CNS);
     m_sysTables.push_back(SYS_CONFIG);
     m_sysTables.push_back(SYS_BLOCK_2_NONCES);
+    m_sysTables.push_back(SYS_HASH_2_BLOCKHEADER);
 }
 
 

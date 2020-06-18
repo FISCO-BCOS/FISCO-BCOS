@@ -85,6 +85,8 @@ DEV_SIMPLE_EXCEPTION(OpenSysTableFailed);
 
 using Parent2ChildListMap = std::map<std::string, std::vector<std::string>>;
 using Child2ParentMap = tbb::concurrent_unordered_map<std::string, std::string>;
+using BlockHeaderInfo =
+    std::pair<std::shared_ptr<dev::eth::BlockHeader>, dev::eth::Block::SigListPtrType>;
 class BlockChainImp : public BlockChainInterface
 {
 public:
@@ -161,7 +163,12 @@ public:
     std::shared_ptr<MerkleProofType> getTransactionProof(
         dev::eth::Block::Ptr _block, uint64_t const& _index) override;
 
+    std::shared_ptr<BlockHeaderInfo> getBlockHeaderInfo(int64_t _blockNumber);
+    std::shared_ptr<BlockHeaderInfo> getBlockHeaderInfoByHash(dev::h256 const& _blockHash);
+
 private:
+    std::shared_ptr<BlockHeaderInfo> getBlockHeaderFromBlock(dev::eth::Block::Ptr _block);
+
     // Randomly select epochSealerSize nodes from workingList as workingSealer and write them into
     // the system table Only used in vrf_rpbft consensus type
     virtual void initGenesisWorkingSealers(dev::storage::Table::Ptr _consTable,
@@ -200,7 +207,8 @@ private:
     void writeBlockToField(dev::eth::Block const& _block, dev::storage::Entry::Ptr _entry);
 
     std::shared_ptr<dev::eth::Block> getBlock(int64_t _blockNumber);
-    std::shared_ptr<dev::eth::Block> getBlock(dev::h256 const& _blockHash, int64_t _blockNumber);
+    std::shared_ptr<dev::eth::Block> getBlock(
+        dev::h256 const& _blockHash, int64_t _blockNumber = -1);
     std::shared_ptr<dev::bytes> getBlockRLP(int64_t _i);
     std::shared_ptr<dev::bytes> getBlockRLP(dev::h256 const& _blockHash, int64_t _blockNumber);
     int64_t obtainNumber();
@@ -214,6 +222,8 @@ private:
         std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
     void writeHash2Block(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
+    void writeHash2BlockHeader(
+        dev::eth::Block& _block, std::shared_ptr<dev::blockverifier::ExecutiveContext> _context);
 
     bool isBlockShouldCommit(int64_t const& _blockNumber);
 
