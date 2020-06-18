@@ -22,8 +22,9 @@
 #include <libexecutive/EVMHostInterface.h>
 #include <libexecutive/EVMInstance.h>
 #include <libexecutive/StateFace.h>
-#include <libinterpreter/Instruction.h>
-#include <libinterpreter/interpreter.h>
+// #include <libinterpreter/Instruction.h>
+// #include <libinterpreter/interpreter.h>
+#include "evmone/evmone.h"
 #include <libmptstate/MPTState.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <test/tools/libutils/TestOutputHelper.h>
@@ -69,9 +70,9 @@ public:
         evmc_call_kind kind = extVm.isCreate() ? EVMC_CREATE : EVMC_CALL;
         uint32_t flags = extVm.staticCall() ? EVMC_STATIC : 0;
         auto leftGas = 20000000;
-        evmc_message msg{toEvmC(extVm.myAddress()), toEvmC(extVm.caller()), toEvmC(extVm.value()),
-            extVm.data().data(), extVm.data().size(), toEvmC(extVm.codeHash()),
-            toEvmC(0x0_cppui256), leftGas, static_cast<int32_t>(extVm.depth()), kind, flags};
+        evmc_message msg{kind, flags, static_cast<int32_t>(extVm.depth()), leftGas,
+            toEvmC(extVm.myAddress()), toEvmC(extVm.caller()), extVm.data().data(),
+            extVm.data().size(), toEvmC(extVm.value()), toEvmC(0x0_cppui256)};
         evmc_revision revision = EVMC_CONSTANTINOPLE;
         auto ret = vm->exec(extVm, revision, &msg, extVm.code().data(), extVm.code().size());
         return ret;
@@ -137,8 +138,7 @@ public:
 class AlethInterpreterCreate2TestFixture : public Create2TestFixture
 {
 public:
-    AlethInterpreterCreate2TestFixture()
-      : Create2TestFixture{new EVMInstance{evmc_create_interpreter()}}
+    AlethInterpreterCreate2TestFixture() : Create2TestFixture{new EVMInstance{evmc_create_evmone()}}
     {}
 };
 
@@ -165,9 +165,9 @@ public:
         evmc_call_kind kind = extVm.isCreate() ? EVMC_CREATE : EVMC_CALL;
         uint32_t flags = extVm.staticCall() ? EVMC_STATIC : 0;
         auto leftGas = 20000;
-        evmc_message msg{toEvmC(extVm.myAddress()), toEvmC(extVm.caller()), toEvmC(extVm.value()),
-            extVm.data().data(), extVm.data().size(), toEvmC(extVm.codeHash()),
-            toEvmC(0x0_cppui256), leftGas, static_cast<int32_t>(extVm.depth()), kind, flags};
+        evmc_message msg{kind, flags, static_cast<int32_t>(extVm.depth()), leftGas,
+            toEvmC(extVm.myAddress()), toEvmC(extVm.caller()), extVm.data().data(),
+            extVm.data().size(), toEvmC(extVm.value()), toEvmC(0x0_cppui256)};
         evmc_revision revision = EVMC_CONSTANTINOPLE;
         auto ret = vm->exec(extVm, revision, &msg, extVm.code().data(), extVm.code().size());
         auto outputRef = ret->output();
@@ -309,7 +309,7 @@ class AlethInterpreterExtcodehashTestFixture : public ExtcodehashTestFixture
 {
 public:
     AlethInterpreterExtcodehashTestFixture()
-      : ExtcodehashTestFixture{new EVMInstance{evmc_create_interpreter()}}
+      : ExtcodehashTestFixture{new EVMInstance{evmc_create_evmone()}}
     {}
 };
 

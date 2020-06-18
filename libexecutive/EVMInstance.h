@@ -67,7 +67,7 @@ evmc_revision toRevision(EVMSchedule const& _schedule);
 class EVMInstance : public EVMInterface
 {
 public:
-    explicit EVMInstance(evmc_instance* _instance) noexcept;
+    explicit EVMInstance(evmc_vm* _instance) noexcept;
     ~EVMInstance() { m_instance->destroy(m_instance); }
 
     EVMInstance(EVMInstance const&) = delete;
@@ -78,7 +78,7 @@ public:
 
 private:
     /// The VM instance created with EVMInstance-C <prefix>_create() function.
-    evmc_instance* m_instance = nullptr;
+    evmc_vm* m_instance = nullptr;
 };
 
 }  // namespace eth

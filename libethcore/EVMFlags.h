@@ -30,16 +30,10 @@ using VMFlagType = uint64_t;
 struct EVMFlags
 {
     static const VMFlagType FreeStorageGas;
-    static const unsigned freeStorageFlagPos;
 };
-
-inline bool enableFlags(VMFlagType const& _vmFlags, unsigned const& _flagPos)
-{
-    return (_vmFlags & (1 << _flagPos)) > 0;
-}
 
 inline bool enableFreeStorage(VMFlagType const& _vmFlags)
 {
-    return enableFlags(_vmFlags, EVMFlags::freeStorageFlagPos);
+    return _vmFlags & EVMFlags::FreeStorageGas;
 }
 }  // namespace dev

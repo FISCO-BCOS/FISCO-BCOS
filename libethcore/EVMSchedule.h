@@ -50,6 +50,7 @@ struct EVMSchedule
     bool haveStaticCall = false;
     bool haveCreate2 = false;
     bool haveExtcodehash = false;
+    bool enableIstanbul = false;
     /// gas cost for specified calculation
     /// exp gas cost
     unsigned expGas = 10;
@@ -157,11 +158,6 @@ static const EVMSchedule ConstantinopleSchedule = [] {
     return schedule;
 }();
 
-static const EVMSchedule ExperimentalSchedule = [] {
-    EVMSchedule schedule = ConstantinopleSchedule;
-    return schedule;
-}();
-
 static const EVMSchedule FiscoBcosSchedule = [] {
     EVMSchedule schedule = ConstantinopleSchedule;
     return schedule;
@@ -173,7 +169,13 @@ static const EVMSchedule FiscoBcosScheduleV2 = [] {
     return schedule;
 }();
 
-static const EVMSchedule DefaultSchedule = FiscoBcosScheduleV2;
+static const EVMSchedule FiscoBcosScheduleV3 = [] {
+    EVMSchedule schedule = FiscoBcosScheduleV2;
+    schedule.enableIstanbul = true;
+    return schedule;
+}();
+
+static const EVMSchedule DefaultSchedule = FiscoBcosScheduleV3;
 
 }  // namespace eth
 }  // namespace dev

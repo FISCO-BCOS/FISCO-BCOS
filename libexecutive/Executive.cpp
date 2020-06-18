@@ -190,7 +190,7 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
     try
     {
         if (m_envInfo.precompiledEngine() &&
-            m_envInfo.precompiledEngine()->isOrginPrecompiled(_p.codeAddress))
+            m_envInfo.precompiledEngine()->isEthereumPrecompiled(_p.codeAddress))
         {
             m_gas = _p.gas;
             bytes output;
@@ -226,7 +226,7 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
                 h256 codeHash = m_s->codeHash(_p.codeAddress);
                 m_ext = make_shared<EVMHostContext>(m_s, m_envInfo, _p.receiveAddress,
                     _p.senderAddress, _origin, _p.apparentValue, _gasPrice, _p.data, c, codeHash,
-                    m_depth, false, _p.staticCall);
+                    m_depth, false, _p.staticCall, m_enableFreeStorage);
             }
         }
         // Transfer ether.
@@ -269,7 +269,7 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
     }
 
     if (m_envInfo.precompiledEngine() &&
-        m_envInfo.precompiledEngine()->isOrginPrecompiled(_p.codeAddress))
+        m_envInfo.precompiledEngine()->isEthereumPrecompiled(_p.codeAddress))
     {
         if (g_BCOSConfig.version() >= V2_5_0)
         {
@@ -348,8 +348,7 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
         h256 codeHash = m_s->codeHash(_p.codeAddress);
         m_ext = make_shared<EVMHostContext>(m_s, m_envInfo, _p.receiveAddress, _p.senderAddress,
             _origin, _p.apparentValue, _gasPrice, _p.data, c, codeHash, m_depth, false,
-            _p.staticCall);
-        m_ext->setEvmFlags(m_evmFlags);
+            _p.staticCall, m_enableFreeStorage);
     }
     else
     {
@@ -459,8 +458,7 @@ bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u2
     {
         m_ext = make_shared<EVMHostContext>(m_s, m_envInfo, m_newAddress, _sender, _origin,
             _endowment, _gasPrice, bytesConstRef(), _init.toBytes(), crypto::Hash(_init), m_depth,
-            true, false);
-        m_ext->setEvmFlags(m_evmFlags);
+            true, false, m_enableFreeStorage);
     }
     return !m_ext;
 }
@@ -552,10 +550,10 @@ bool Executive::go()
                 // this is ensured by solidity compiler
                 assert(flags != EVMC_STATIC || kind == EVMC_CALL);  // STATIC implies a CALL.
                 auto leftGas = static_cast<int64_t>(m_gas);
-                return shared_ptr<evmc_message>(new evmc_message{toEvmC(m_ext->myAddress()),
-                    toEvmC(m_ext->caller()), toEvmC(m_ext->value()), m_ext->data().data(),
-                    m_ext->data().size(), toEvmC(m_ext->codeHash()), toEvmC(0x0_cppui256), leftGas,
-                    static_cast<int32_t>(m_ext->depth()), kind, flags});
+                return shared_ptr<evmc_message>(
+                    new evmc_message{kind, flags, static_cast<int32_t>(m_ext->depth()), leftGas,
+                        toEvmC(m_ext->myAddress()), toEvmC(m_ext->caller()), m_ext->data().data(),
+                        m_ext->data().size(), toEvmC(m_ext->value()), toEvmC(0x0_cppui256)});
             };
             // Create VM instance. Force Interpreter if tracing requested.
             auto vm = VMFactory::create();
@@ -727,8 +725,11 @@ void Executive::parseEVMCResult(std::shared_ptr<eth::Result> _result)
     case EVMC_SUCCESS:
     {
         m_gas = _result->gasLeft();
-        m_output = owning_bytes_ref(
-            bytes(outputRef.data(), outputRef.data() + outputRef.size()), 0, outputRef.size());
+        if (!m_isCreation)
+        {
+            m_output = owning_bytes_ref(
+                bytes(outputRef.data(), outputRef.data() + outputRef.size()), 0, outputRef.size());
+        }
         break;
     }
     case EVMC_REVERT:

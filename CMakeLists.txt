@@ -29,7 +29,9 @@ project(FISCO-BCOS VERSION "2.6.0")
 set(VERSION_SUFFIX "")
 
 find_package(Git QUIET)
-
+if(NOT GIT_FOUND)
+  message(FATAL_ERROR "Please install git")
+endif()
 
 set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY ON)
 
@@ -58,6 +60,7 @@ include(ProjectPaillier)
 include(ProjectGroupSig)
 include(ProjectEVMC)
 include(ProjectVRF)
+include(ProjectEVMONE)
 
 include_directories("${CMAKE_SOURCE_DIR}")
 
@@ -65,7 +68,7 @@ add_subdirectory(libchannelserver)
 add_subdirectory(libdevcore)
 add_subdirectory(libdevcrypto)
 add_subdirectory(libethcore)
-add_subdirectory(libinterpreter)
+# add_subdirectory(libinterpreter)
 add_subdirectory(libstat)
 add_subdirectory(libflowlimit)
 add_subdirectory(libtxpool)

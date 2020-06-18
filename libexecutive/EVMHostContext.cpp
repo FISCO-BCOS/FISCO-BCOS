@@ -24,11 +24,13 @@
 
 #include "EVMHostContext.h"
 #include "EVMHostInterface.h"
+#include "evmc/evmc.hpp"
 #include <libblockverifier/ExecutiveContext.h>
 #include <boost/thread.hpp>
 #include <exception>
 
 
+using namespace std;
 using namespace dev;
 using namespace dev::eth;
 using namespace dev::executive;
@@ -185,12 +187,22 @@ namespace dev
 {
 namespace executive
 {
+evmc_bytes32 sm3Hash(const uint8_t* data, size_t size)
+{
+    evmc_bytes32 hash;
+    sm3(data, size, &hash.bytes[0]);
+    return hash;
+}
+
+evmc_gas_metrics ethMetrics{32000, 20000, 5000, 200, 9000, 2300, 25000};
+evmc_gas_metrics freeStorageGasMetrics{16000, 1200, 1200, 1200, 0, 5, 5};
+
 EVMHostContext::EVMHostContext(std::shared_ptr<StateFace> _s,
     dev::executive::EnvInfo const& _envInfo, Address const& _myAddress, Address const& _caller,
     Address const& _origin, u256 const& _value, u256 const& _gasPrice, bytesConstRef _data,
-    const bytes& _code, h256 const& _codeHash, unsigned _depth, bool _isCreate, bool _staticCall)
-  : evmc_context{getHostInterface(), 0},
-    m_envInfo(_envInfo),
+    const bytes& _code, h256 const& _codeHash, unsigned _depth, bool _isCreate, bool _staticCall,
+    bool _freeStorage)
+  : m_envInfo(_envInfo),
     m_myAddress(_myAddress),
     m_caller(_caller),
     m_origin(_origin),
@@ -202,21 +214,30 @@ EVMHostContext::EVMHostContext(std::shared_ptr<StateFace> _s,
     m_depth(_depth),
     m_isCreate(_isCreate),
     m_staticCall(_staticCall),
+    m_freeStorage(_freeStorage),
     m_s(_s)
 {
-#if 0
-    // Contract: processing account must exist. In case of CALL, the EVMHostContext
-    // is created only if an account has code (so exist). In case of CREATE
-    // the account must be created first.
-    assert(m_s->addressInUse(_myAddress));
-#endif
+    interface = getHostInterface();
+    sm3_hash_fn = nullptr;
+    if (g_BCOSConfig.SMCrypto())
+    {
+        sm3_hash_fn = sm3Hash;
+    }
+    version = g_BCOSConfig.version();
+    if (m_freeStorage)
+    {
+        metrics = &freeStorageGasMetrics;
+    }
+    else
+    {
+        metrics = &ethMetrics;
+    }
 }
 
 evmc_result EVMHostContext::call(CallParameters& _p)
 {
-    Executive e{m_s, envInfo(), depth() + 1};
+    Executive e{m_s, envInfo(), depth() + 1, m_freeStorage};
     // Note: When create initializes Executive, the flags of evmc context must be passed in
-    e.setEvmFlags(flags);
     if (!e.call(_p, gasPrice(), origin()))
     {
         go(depth(), e);
@@ -264,9 +285,8 @@ void EVMHostContext::setStore(u256 const& _n, u256 const& _v)
 evmc_result EVMHostContext::create(
     u256 const& _endowment, u256& io_gas, bytesConstRef _code, evmc_opcode _op, u256 _salt)
 {
-    Executive e{m_s, envInfo(), depth() + 1};
+    Executive e{m_s, envInfo(), depth() + 1, m_freeStorage};
     // Note: When create initializes Executive, the flags of evmc context must be passed in
-    e.setEvmFlags(flags);
     bool result = false;
     if (_op == evmc_opcode::OP_CREATE)
         result = e.createOpcode(myAddress(), _endowment, gasPrice(), io_gas, _code, origin());

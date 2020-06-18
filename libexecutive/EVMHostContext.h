@@ -39,8 +39,9 @@ namespace dev
 {
 namespace executive
 {
+evmc_bytes32 sm3Hash(const uint8_t* data, size_t size);
 /// Externality interface for the Virtual Machine providing access to world state.
-class EVMHostContext : public evmc_context
+class EVMHostContext : public evmc_host_context
 {
 public:
     /// Full constructor.
@@ -48,7 +49,7 @@ public:
         dev::executive::EnvInfo const& _envInfo, Address const& _myAddress, Address const& _caller,
         Address const& _origin, u256 const& _value, u256 const& _gasPrice, bytesConstRef _data,
         const bytes& _code, h256 const& _codeHash, unsigned _depth, bool _isCreate,
-        bool _staticCall);
+        bool _staticCall, bool _freeStorage=false);
     virtual ~EVMHostContext() = default;
 
     EVMHostContext(EVMHostContext const&) = delete;
@@ -138,9 +139,6 @@ public:
     virtual void setCreate(bool _isCreate) { m_isCreate = _isCreate; }
     virtual void setStaticCall(bool _staticCall) { m_staticCall = _staticCall; }
 
-    virtual VMFlagType evmFlags() const { return flags; }
-    virtual void setEvmFlags(VMFlagType const& _evmFlags) { flags = _evmFlags; }
-
 protected:
     EnvInfo const& m_envInfo;
 
@@ -160,7 +158,7 @@ private:
     bool m_isCreate = false;    ///< Is this a CREATE call?
     bool m_staticCall = false;  ///< Throw on state changing.
 
-private:
+    bool m_freeStorage = false;
     std::shared_ptr<executive::StateFace> m_s;  ///< A reference to the base state.
 };
 
