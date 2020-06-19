@@ -9,6 +9,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 RUN apt-get -q update && apt-get install -qy --no-install-recommends \
     git clang make build-essential cmake libssl-dev zlib1g-dev ca-certificates \
+    libgmp-dev flex bison patch \
     && ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
     && apt-get install -qy --no-install-recommends tzdata \
     && dpkg-reconfigure --frontend noninteractive tzdata \
