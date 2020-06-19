@@ -306,7 +306,6 @@ bool TxPool::txExists(dev::h256 const& txHash)
  *  2. check nonce
  *  3. check block limit
  *  4. check chainId and groupId
- *  TODO: check transaction filter
  *
  * @param trans : the transaction to be verified
  * @param _drop_policy : Import transaction policy

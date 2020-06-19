@@ -269,11 +269,14 @@ protected:
     bool getNodeIDByIndex(dev::network::NodeID& nodeId, const IDXTYPE& idx) const;
     virtual dev::h512 selectNodeToRequestMissedTxs(PrepareReq::Ptr _prepareReq);
 
-    inline void checkBlockValid(dev::eth::Block const& block) override
+    void checkBlockValid(dev::eth::Block const& block) override
     {
         ConsensusEngineBase::checkBlockValid(block);
         checkSealerList(block);
     }
+
+    virtual void checkTransactionsValid(dev::eth::Block::Ptr, PrepareReq::Ptr) {}
+
     bool needOmit(Sealing const& sealing);
 
     void getAllNodesViewStatus(Json::Value& status);
@@ -590,7 +593,7 @@ protected:
     void checkSealerList(dev::eth::Block const& block);
     /// check block
     bool checkBlock(dev::eth::Block const& block);
-    void execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream& oss);
+    void execBlock(Sealing& sealing, PrepareReq::Ptr _req, std::ostringstream& oss);
     void changeViewForFastViewChange()
     {
         m_timeManager.changeView();

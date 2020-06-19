@@ -176,6 +176,8 @@ protected:
     }
 
 protected:
+    virtual uint64_t maxTxsSizeSealedInnerBlock() { return maxBlockCanSeal(); }
+
     uint64_t maxBlockCanSeal()
     {
         ReadGuard l(x_maxBlockCanSeal);

@@ -801,20 +801,20 @@ void PBFTEngine::notifySealing(dev::eth::Block const& block)
     }
 }
 
-void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream&)
+void PBFTEngine::execBlock(Sealing& sealing, PrepareReq::Ptr _req, std::ostringstream&)
 {
     /// no need to decode the local generated prepare packet
     auto start_time = utcTime();
     auto record_time = utcTime();
-    if (req.pBlock)
+    if (_req->pBlock)
     {
-        sealing.block = req.pBlock;
+        sealing.block = _req->pBlock;
     }
     /// decode the network received prepare packet
     else
     {
         // without receipt, with transaction hash(parallel calc txs' hash)
-        sealing.block->decode(ref(*req.block), CheckTransaction::None, false, true);
+        sealing.block->decode(ref(*_req->block), CheckTransaction::None, false, true);
     }
     auto decode_time_cost = utcTime() - record_time;
     record_time = utcTime();
@@ -829,12 +829,13 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     }
 
     checkBlockValid(*(sealing.block));
+    checkTransactionsValid(sealing.block, _req);
     auto check_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
     /// notify the next leader seal a new block
     /// this if condition to in case of dead-lock when generate local prepare and notifySealing
-    if (req.idx != nodeIdx())
+    if (_req->idx != nodeIdx())
     {
         notifySealing(*(sealing.block));
     }
@@ -856,7 +857,7 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     auto exec_time_cost = utcTime() - record_time;
     PBFTENGINE_LOG(INFO)
         << LOG_DESC("execBlock") << LOG_KV("blkNum", sealing.block->header().number())
-        << LOG_KV("reqIdx", req.idx) << LOG_KV("hash", sealing.block->header().hash().abridged())
+        << LOG_KV("reqIdx", _req->idx) << LOG_KV("hash", sealing.block->header().hash().abridged())
         << LOG_KV("nodeIdx", nodeIdx()) << LOG_KV("myNode", m_keyPair.pub().abridged())
         << LOG_KV("decodeCost", decode_time_cost) << LOG_KV("checkCost", check_time_cost)
         << LOG_KV("notifyCost", notify_time_cost)
@@ -1017,7 +1018,7 @@ bool PBFTEngine::execPrepareAndGenerateSignMsg(
     Sealing workingSealing(m_blockFactory);
     try
     {
-        execBlock(workingSealing, *_prepareReq, _oss);
+        execBlock(workingSealing, _prepareReq, _oss);
         // old block (has already executed correctly by block sync)
         if (workingSealing.p_execContext == nullptr &&
             workingSealing.block->getTransactionSize() > 0)

@@ -21,6 +21,7 @@
  * @date: 2020-06-04
  */
 #include "VRFBasedrPBFTEngine.h"
+#include "Common.h"
 
 using namespace dev::consensus;
 
@@ -71,6 +72,7 @@ void VRFBasedrPBFTEngine::updateConsensusNodeList()
     // update m_chosedConsensusNodes
     if (chosedSealerListUpdated)
     {
+        // TODO: forward the remaining transactions to the insertedNode
         {
             WriteGuard l(x_chosedConsensusNodes);
             m_chosedConsensusNodes->clear();
@@ -154,4 +156,51 @@ void VRFBasedrPBFTEngine::updateConsensusInfo()
     }
     VRFRPBFTEngine_LOG(INFO) << LOG_DESC("updateConsensusInfo")
                              << LOG_KV("chosedSealerListSize", m_chosedSealerList->size());
+}
+
+// When you need to rotate nodes, check the node rotation transaction
+// (the last transaction in the block, the sender must be the leader)
+void VRFBasedrPBFTEngine::checkTransactionsValid(
+    dev::eth::Block::Ptr _block, PrepareReq::Ptr _prepareReq)
+{
+    if (!m_shouldRotateSealers.load())
+    {
+        return;
+    }
+    // check the node rotation transaction
+    auto transactionSize = _block->getTransactionSize();
+    // empty block
+    if (transactionSize == 0)
+    {
+        return;
+    }
+    VRFRPBFTEngine_LOG(DEBUG) << LOG_DESC("checkTransactionsValid")
+                              << LOG_KV("blkNum", _prepareReq->height)
+                              << LOG_KV("hash", _prepareReq->block_hash.abridged())
+                              << LOG_KV("leaderIdx", _prepareReq->idx)
+                              << LOG_KV("nodeIdx", nodeIdx()) << LOG_KV("txSize", transactionSize);
+    auto nodeRotatingTx = (*(_block->transactions()))[transactionSize - 1];
+    auto leaderNodeID = RotatingPBFTEngine::getSealerByIndex(_prepareReq->idx);
+    if (leaderNodeID == dev::h512())
+    {
+        VRFRPBFTEngine_LOG(WARNING)
+            << LOG_DESC("checkTransactionsValid failed for invalid preprareReq generator");
+        BOOST_THROW_EXCEPTION(
+            InvalidLeader() << errinfo_comment(
+                "Invalid Leader " + std::to_string(_prepareReq->idx) + ": NodeID not found!"));
+    }
+    // get the account of the leader
+    Address leaderAccount = toAddress(leaderNodeID);
+    // check the sender of the nodeRotatingTx
+    if (nodeRotatingTx->sender() != leaderAccount)
+    {
+        VRFRPBFTEngine_LOG(WARNING) << LOG_DESC("checkTransactionsValid failed")
+                                    << LOG_KV("expectedSender", leaderAccount.hexPrefixed())
+                                    << LOG_KV("sender", nodeRotatingTx->sender().hexPrefixed());
+
+        BOOST_THROW_EXCEPTION(InvalidNodeRotationTx() << errinfo_comment(
+                                  "Invalid node rotation transaction, expected sender: " +
+                                  leaderAccount.hexPrefixed() +
+                                  ", current sender:" + nodeRotatingTx->sender().hexPrefixed()));
+    }
 }
