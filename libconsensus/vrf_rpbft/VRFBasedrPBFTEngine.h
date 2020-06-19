@@ -58,6 +58,8 @@ protected:
     void resetConfig() override;
     void updateConsensusInfo() override;
 
+    void checkTransactionsValid(dev::eth::Block::Ptr _block, PrepareReq::Ptr _prepareReq) override;
+
 private:
     // Used to notify Sealer whether it needs to rotate sealers
     std::atomic_bool m_shouldRotateSealers = {false};

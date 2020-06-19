@@ -51,6 +51,8 @@ protected:
     // generate and seal the workingSealerManagerPrecompiled transaction into _txOffset
     virtual bool generateAndSealerRotatingTx();
 
+    uint64_t maxTxsSizeSealedInnerBlock() override;
+
 private:
     VRFBasedrPBFTEngine::Ptr m_vrfBasedrPBFTEngine;
     TxGenerator::Ptr m_txGenerator;

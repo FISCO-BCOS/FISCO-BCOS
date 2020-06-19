@@ -445,10 +445,22 @@ void BlockChainImp::initGenesisWorkingSealers(dev::storage::Table::Ptr _consTabl
     {
         return;
     }
-    // TODO: select the genesis working sealers randomly according to genesis hash
+
     std::sort(sealerList.begin(), sealerList.end());
+
     int64_t sealersSize = sealerList.size();
     auto selectedNum = std::min(_initParam->mutableConsensusParam().epochSealerNum, sealersSize);
+
+    // shuffle the sealerList according to the genesis hash
+    // select the genesis working sealers randomly according to genesis hash
+    if (sealersSize > selectedNum)
+    {
+        for (ssize_t i = sealersSize - 1; i > 0; i--)
+        {
+            int64_t selectedNode = (int64_t)(u256(crypto::Hash(sealerList[i])) % (i + 1));
+            std::swap(sealerList[i], sealerList[selectedNode]);
+        }
+    }
     // output workingSealers
     std::string workingSealers;
     for (int64_t i = 0; i < selectedNum; i++)

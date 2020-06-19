@@ -29,5 +29,8 @@ namespace dev
 namespace consensus
 {
 DEV_SIMPLE_EXCEPTION(InitVRFPublicKeyFailed);
+DEV_SIMPLE_EXCEPTION(InvalidLeader);
+DEV_SIMPLE_EXCEPTION(InvalidNodeRotationTx);
+
 }  // namespace consensus
 }  // namespace dev

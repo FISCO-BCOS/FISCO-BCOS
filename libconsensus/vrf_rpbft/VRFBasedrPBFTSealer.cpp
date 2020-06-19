@@ -119,3 +119,19 @@ bool VRFBasedrPBFTSealer::generateAndSealerRotatingTx()
     }
     return true;
 }
+
+uint64_t VRFBasedrPBFTSealer::maxTxsSizeSealedInnerBlock()
+{
+    if (!m_vrfBasedrPBFTEngine->shouldRotateSealers())
+    {
+        return PBFTSealer::maxTxsSizeSealedInnerBlock();
+    }
+    // should rotate node, at most (m_pbftEngine->maxBlockTransactions() - 1) transactions can be
+    // packed up to a block
+    auto maxTransactions = m_pbftEngine->maxBlockTransactions();
+    if (PBFTSealer::maxTxsSizeSealedInnerBlock() >= maxTransactions)
+    {
+        return (maxTransactions - 1);
+    }
+    return PBFTSealer::maxTxsSizeSealedInnerBlock();
+}

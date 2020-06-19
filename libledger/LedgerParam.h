@@ -99,7 +99,6 @@ struct AMDBParam
 #define SYNC_IDLE_WAIT_DEFAULT 200
 struct SyncParam
 {
-    /// TODO: syncParam related
     signed idleWaitMs = SYNC_IDLE_WAIT_DEFAULT;
     // enable send transactions by tree
     bool enableSendTxsByTree = false;
