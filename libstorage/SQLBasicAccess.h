@@ -75,6 +75,17 @@ private:
 
     int CommitDo(int64_t _num, const std::vector<TableData::Ptr>& _datas, std::string& _errorMsg);
 
+    SQLFieldType getFieldType(std::string const& _tableName);
+    bool inline isBlobType(std::string const& _tableName)
+    {
+        auto fieldType = getFieldType(_tableName);
+        if (fieldType == SQLFieldType::MediumBlobType || fieldType == SQLFieldType::LongBlobType)
+        {
+            return true;
+        }
+        return false;
+    }
+
 public:
     virtual void ExecuteSql(const std::string& _sql);
     void setConnPool(std::shared_ptr<SQLConnectionPool>& _connPool);
