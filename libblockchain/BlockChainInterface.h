@@ -125,6 +125,19 @@ public:
         return nullptr;
     }
 
+    virtual std::shared_ptr<
+        std::pair<std::shared_ptr<dev::eth::BlockHeader>, dev::eth::Block::SigListPtrType>>
+        getBlockHeaderInfo(int64_t)
+    {
+        return nullptr;
+    }
+    virtual std::shared_ptr<
+        std::pair<std::shared_ptr<dev::eth::BlockHeader>, dev::eth::Block::SigListPtrType>>
+    getBlockHeaderInfoByHash(dev::h256 const&)
+    {
+        return nullptr;
+    }
+
 protected:
     ///< Called when a subsequent call to import transactions will return a non-empty container. Be
     ///< nice and exit fast.
