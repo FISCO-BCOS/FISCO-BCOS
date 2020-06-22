@@ -889,6 +889,13 @@ TableInfo::Ptr dev::storage::getSysTableInfo(const string& tableName)
         tableInfo->fields = vector<string>{"value"};
         tableInfo->enableConsensus = false;
     }
+    // SYS_HASH_2_BLOCKHEADER won't change the state
+    else if (tableName == SYS_HASH_2_BLOCKHEADER)
+    {
+        tableInfo->key = "hash";
+        tableInfo->fields = std::vector<string>{SYS_VALUE, SYS_SIG_LIST};
+        tableInfo->enableConsensus = false;
+    }
     else if (tableName == SYS_CNS)
     {
         tableInfo->key = "name";

@@ -121,6 +121,63 @@ shared_ptr<TableFactory> BlockChainImp::getMemoryTableFactory(int64_t num)
     return memoryTableFactory;
 }
 
+std::shared_ptr<BlockHeaderInfo> BlockChainImp::getBlockHeaderInfo(int64_t _blockNumber)
+{
+    if (_blockNumber > number())
+    {
+        return nullptr;
+    }
+    // get block hash
+    auto blockHash = numberHash(_blockNumber);
+    if (blockHash != h256(""))
+    {
+        return getBlockHeaderInfoByHash(blockHash);
+    }
+    return nullptr;
+}
+
+std::shared_ptr<BlockHeaderInfo> BlockChainImp::getBlockHeaderFromBlock(dev::eth::Block::Ptr _block)
+{
+    if (!_block)
+    {
+        return nullptr;
+    }
+    // TODO: remove the copy overhead
+    return std::make_shared<BlockHeaderInfo>(
+        std::make_pair(std::make_shared<BlockHeader>(_block->blockHeader()), _block->sigList()));
+}
+
+std::shared_ptr<BlockHeaderInfo> BlockChainImp::getBlockHeaderInfoByHash(
+    dev::h256 const& _blockHash)
+{
+    auto cachedBlockInfo = m_blockCache.get(_blockHash);
+    // hit the cache, get block header from the cache directly
+    if (cachedBlockInfo.first)
+    {
+        return getBlockHeaderFromBlock(cachedBlockInfo.first);
+    }
+    // miss the cache, read from the SYS_HASH_2_BLOCKHEAER firstly
+    // Note: the SYS_HASH_2_BLOCKHEADER can always be opened successfully
+    auto table = getMemoryTableFactory()->openTable(SYS_HASH_2_BLOCKHEADER);
+    // query block to obtain the block header and signature list
+    auto entries = table->select(_blockHash.hex(), table->newCondition());
+    if (entries->size() <= 0)
+    {
+        return getBlockHeaderFromBlock(getBlock(_blockHash));
+    }
+    auto entry = entries->get(0);
+    // decode block header
+    auto blockHeaderBytes = entry->getFieldConst(SYS_VALUE);
+    auto blockHeader = std::make_shared<BlockHeader>(blockHeaderBytes, BlockDataType::HeaderData);
+
+    // decode signature list
+    auto sigListBytes = entry->getFieldConst(SYS_SIG_LIST);
+    auto sigList = std::make_shared<dev::eth::Block::SigListType>();
+    RLP rlp(sigListBytes);
+    *sigList = rlp.toVector<std::pair<u256, std::vector<unsigned char>>>();
+    return std::make_shared<BlockHeaderInfo>(std::make_pair(blockHeader, sigList));
+}
+
 std::shared_ptr<Block> BlockChainImp::getBlock(int64_t _blockNumber)
 {
     /// the future block
@@ -128,18 +185,11 @@ std::shared_ptr<Block> BlockChainImp::getBlock(int64_t _blockNumber)
     {
         return nullptr;
     }
-    Table::Ptr tb = getMemoryTableFactory(_blockNumber)->openTable(SYS_NUMBER_2_HASH);
-    if (tb)
+    auto blockHash = numberHash(_blockNumber);
+    if (blockHash != h256(""))
     {
-        auto entries = tb->select(lexical_cast<std::string>(_blockNumber), tb->newCondition());
-        if (entries->size() > 0)
-        {
-            auto entry = entries->get(0);
-            h256 blockHash = h256((entry->getField(SYS_VALUE)));
-            return getBlock(blockHash, _blockNumber);
-        }
+        return getBlock(blockHash, _blockNumber);
     }
-
     BLOCKCHAIN_LOG(WARNING) << LOG_DESC("[getBlock]Can't find block")
                             << LOG_KV("number", _blockNumber);
     return nullptr;
@@ -1454,6 +1504,24 @@ void BlockChainImp::writeHash2Block(Block& block, std::shared_ptr<ExecutiveConte
     }
 }
 
+void BlockChainImp::writeHash2BlockHeader(Block& _block, std::shared_ptr<ExecutiveContext> _context)
+{
+    auto table = _context->getMemoryTableFactory()->openTable(SYS_HASH_2_BLOCKHEADER, false);
+    Entry::Ptr entry = std::make_shared<Entry>();
+    // encode and write the block header into SYS_VALUE field
+    bytes encodededBlockHeader;
+    _block.header().encode(encodededBlockHeader);
+    entry->setField(SYS_VALUE, encodededBlockHeader.data(), encodededBlockHeader.size());
+    // encode and write the sigList into the SYS_SIG_LIST field
+    RLPStream rlp;
+    rlp.appendVector(*(_block.sigList()));
+    bytes encodedSigList;
+    rlp.swapOut(encodedSigList);
+    entry->setField(SYS_SIG_LIST, encodedSigList.data(), encodedSigList.size());
+    entry->setForce(true);
+    table->insert(_block.blockHeader().hash().hex(), entry);
+}
+
 bool BlockChainImp::isBlockShouldCommit(int64_t const& _blockNumber)
 {
     if (_blockNumber != number() + 1)
@@ -1502,7 +1570,9 @@ CommitResult BlockChainImp::commitBlock(
                 [this, block, context]() { writeNumber2Hash(*block, context); },
                 [this, block, context]() { writeNumber(*block, context); },
                 [this, block, context]() { writeTotalTransactionCount(*block, context); },
-                [this, block, context]() { writeTxToBlock(*block, context); });
+                [this, block, context]() { writeTxToBlock(*block, context); },
+                [this, block, context]() { writeHash2BlockHeader(*block, context); });
+
             auto write_table_time = utcTime() - write_record_time;
 
             write_record_time = utcTime();

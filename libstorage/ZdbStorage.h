@@ -76,6 +76,11 @@ private:
     void createSysBlock2NoncesTables();
     void insertSysTables();
 
+    // create blob table
+    void createBlobHash2BlockTables();
+    void createBlobSysBlock2NoncesTables();
+    void createBlobSysHash2BlockHeaderTable();
+
     int m_maxRetry = 60;
 };
 
