@@ -152,7 +152,7 @@ int main(int argc, const char* argv[])
                 cout << "ValueField:[" << p[2] << "]" << endl;
                 cout << "createTable [" << p[0] << "] success!" << endl;
             }
-            tableFactory->commitDB(h256(0), 1);
+            commit();
             return 0;
         }
     }
