@@ -119,16 +119,19 @@ vector<dev::GROUP_ID> LedgerInitializer::initLedgers()
             }
             catch (exception& e)
             {
+                // Note: This exception is thrown by the lamda expression,
+                //        and the outer function cannot catch the specific error
+                ERROR_OUTPUT << LOG_BADGE("LedgerInitializer") << LOG_DESC("initLedger failed")
+                             << LOG_KV("errorInfo", boost::diagnostic_information(e));
                 BOOST_THROW_EXCEPTION(e);
             }
         });
     }
     catch (exception& e)
     {
-        INITIALIZER_LOG(ERROR) << LOG_BADGE("LedgerInitializer")
-                               << LOG_DESC("parse group config failed")
+        INITIALIZER_LOG(ERROR) << LOG_BADGE("LedgerInitializer") << LOG_DESC("initLedger failed")
                                << LOG_KV("EINFO", boost::diagnostic_information(e));
-        ERROR_OUTPUT << LOG_BADGE("LedgerInitializer") << LOG_DESC("parse group config failed")
+        ERROR_OUTPUT << LOG_BADGE("LedgerInitializer") << LOG_DESC("initLedger failed")
                      << LOG_KV("EINFO", boost::diagnostic_information(e)) << endl;
         BOOST_THROW_EXCEPTION(e);
     }

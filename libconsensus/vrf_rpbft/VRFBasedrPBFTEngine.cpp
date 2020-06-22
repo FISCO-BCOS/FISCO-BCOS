@@ -61,6 +61,7 @@ void VRFBasedrPBFTEngine::updateConsensusNodeList()
         *m_chosedSealerList = workingSealers;
         m_workingSealersNum = workingSealers.size();
         std::string workingSealersStr;
+        // TODO: remove this
         for (auto const& node : workingSealers)
         {
             workingSealersStr += node.abridged() + ",";
@@ -124,7 +125,15 @@ void VRFBasedrPBFTEngine::resetConfig()
     {
         return;
     }
-    // After the last batch of workingsealer agreed on m_rotatingInterval blocks,
+
+    // the number of workingSealers is smaller than epochSize,
+    // trigger rotate in case of the number of working sealers has been decreased to 0
+    auto epochSize = std::min(m_epochSize.load(), m_sealersNum.load());
+    if (m_workingSealersNum.load() < epochSize)
+    {
+        m_shouldRotateSealers.store(true);
+    }
+    // After the last batch of workingsealers agreed on m_rotatingInterval blocks,
     // set m_shouldRotateSealers to true to notify VRFBasedrPBFTSealer to update workingSealer
     if (epochUpdated ||
         (0 == (m_blockChain->number() - m_rotatingIntervalEnableNumber) % m_rotatingInterval))
