@@ -427,11 +427,27 @@ void LedgerParam::initConsensusConfig(ptree const& pt)
     // init configurations for RPBFT
     mutableConsensusParam().epochSealerNum =
         pt.get<int64_t>("consensus.epoch_sealer_num", mutableConsensusParam().sealerList.size());
-    if (mutableConsensusParam().epochSealerNum <= 0)
+
+    if (g_BCOSConfig.version() < V2_6_0)
     {
-        BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
-                                  "Please set consensus.epoch_sealer_num to positive !"));
+        if (mutableConsensusParam().epochSealerNum <= 0)
+        {
+            BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
+                                      "Please set consensus.epoch_sealer_num to positive !"));
+        }
     }
+    else
+    {
+        // epoch_block_num is at least 2 when supported_version >= v2.6.0
+        if (mutableConsensusParam().epochSealerNum <= dev::precompiled::RPBFT_EPOCH_BLOCK_NUM_MIN)
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidConfiguration() << errinfo_comment(
+                    "Please set consensus.epoch_sealer_num to be larger than " +
+                    std::to_string(dev::precompiled::RPBFT_EPOCH_BLOCK_NUM_MIN) + "!"));
+        }
+    }
+
 
     mutableConsensusParam().epochBlockNum = pt.get<int64_t>("consensus.epoch_block_num", 10);
     if (mutableConsensusParam().epochBlockNum <= 0)
