@@ -105,20 +105,19 @@ public:
     }
     bi::tcp::endpoint remoteEndpoint(boost::system::error_code) override
     {
-        return bi::tcp::endpoint(m_nodeIPEndpoint.address().to_string().empty() ?
+        return bi::tcp::endpoint(m_nodeIPEndpoint.address().empty() ?
                                      bi::address::from_string("0.0.0.0") :
-                                     m_nodeIPEndpoint.address(), m_nodeIPEndpoint.port());
+                                     bi::address::from_string(m_nodeIPEndpoint.address()),
+            m_nodeIPEndpoint.port());
     }
     bi::tcp::endpoint localEndpoint(boost::system::error_code) override
     {
-        return bi::tcp::endpoint(m_nodeIPEndpoint.address().to_string().empty() ?
+        return bi::tcp::endpoint(m_nodeIPEndpoint.address().empty() ?
                                      bi::address::from_string("0.0.0.0") :
-                                     m_nodeIPEndpoint.address(), m_nodeIPEndpoint.port());
+                                     bi::address::from_string(m_nodeIPEndpoint.address()),
+            m_nodeIPEndpoint.port());
     }
-    void setRemoteEndpoint(const bi::tcp::endpoint& end)
-    {
-        m_nodeIPEndpoint = end;
-    }
+    void setRemoteEndpoint(const bi::tcp::endpoint& end) { m_nodeIPEndpoint = end; }
 
     bi::tcp::socket& ref() override { return m_wsSocket->next_layer().next_layer(); }
     ba::ssl::stream<bi::tcp::socket>& sslref() override { return m_wsSocket->next_layer(); }
