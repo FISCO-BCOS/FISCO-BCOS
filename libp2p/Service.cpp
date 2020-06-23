@@ -442,6 +442,75 @@ P2PMessage::Ptr Service::sendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr mess
     return P2PMessage::Ptr();
 }
 
+void Service::onLocalAMOPMessage(
+    P2PMessage::Ptr message, CallbackFuncWithSession callback, dev::network::Options options)
+{
+    if (message->isRequestPacket())
+    {
+        // save callback and call onMessage to push the request message
+        RecursiveGuard lock(x_localAMOPCallbacks);
+
+        auto self = shared_from_this();
+        std::shared_ptr<boost::asio::deadline_timer> timer;
+        if (options.timeout > 0)
+        {
+            timer = m_host->asioInterface()->newTimer(options.timeout);
+            timer->async_wait([self, message](const boost::system::error_code& error) {
+                if (error)
+                {
+                    SERVICE_LOG(TRACE) << "timer canceled" << LOG_KV("errorCode", error);
+                    return;
+                }
+
+
+                SERVICE_LOG(INFO) << "AMOP Local message Timeout: " << message->seq();
+
+                RecursiveGuard lock(self->localAMOPCallbacksLock());
+                auto it = self->localAMOPCallbacks()->find(message->seq());
+                if (it != self->localAMOPCallbacks()->end())
+                {
+                    auto callback = it->second.second;
+                    self->host()->threadPool()->enqueue([callback] {
+                        callback(dev::network::NetworkException(
+                                     P2PExceptionType::NetworkTimeout, "NetworkTimeout"),
+                            std::shared_ptr<dev::p2p::P2PSession>(), P2PMessage::Ptr());
+                    });
+
+                    self->localAMOPCallbacks()->erase(it);
+                }
+            });
+        }
+
+        m_localAMOPCallbacks->insert(
+            std::make_pair(message->seq(), std::make_pair(timer, callback)));
+
+        onMessage(NetworkException(), dev::network::SessionFace::Ptr(), message,
+            dev::p2p::P2PSession::Ptr());
+    }
+    else
+    {
+        // find callback and push response message
+        RecursiveGuard lock(x_localAMOPCallbacks);
+
+        auto it = m_localAMOPCallbacks->find(message->seq());
+        if (it != m_localAMOPCallbacks->end())
+        {
+            if (it->second.first)
+            {
+                it->second.first->cancel();
+            }
+
+            auto callback = it->second.second;
+            m_host->threadPool()->enqueue([callback, message] {
+                callback(dev::network::NetworkException(), std::shared_ptr<dev::p2p::P2PSession>(),
+                    message);
+            });
+
+            m_localAMOPCallbacks->erase(it);
+        }
+    }
+}
+
 void Service::asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
     CallbackFuncWithSession callback, dev::network::Options options)
 {
@@ -455,72 +524,7 @@ void Service::asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
             // ignore myself but amop
             if (isAMOPMessage)
             {
-                if (message->isRequestPacket())
-                {
-                    // save callback and call onMessage to push the request message
-                    RecursiveGuard lock(x_localAMOPCallbacks);
-
-                    auto self = shared_from_this();
-                    std::shared_ptr<boost::asio::deadline_timer> timer;
-                    if (options.timeout > 0)
-                    {
-                        timer = m_host->asioInterface()->newTimer(options.timeout);
-                        timer->async_wait([self, message](const boost::system::error_code& error) {
-                            if (error)
-                            {
-                                SERVICE_LOG(TRACE)
-                                    << "timer canceled" << LOG_KV("errorCode", error);
-                                return;
-                            }
-
-
-                            SERVICE_LOG(INFO) << "AMOP Local message Timeout: " << message->seq();
-
-                            RecursiveGuard lock(self->localAMOPCallbacksLock());
-                            auto it = self->localAMOPCallbacks()->find(message->seq());
-                            if (it != self->localAMOPCallbacks()->end())
-                            {
-                                auto callback = it->second.second;
-                                self->host()->threadPool()->enqueue([callback] {
-                                    callback(
-                                        dev::network::NetworkException(
-                                            P2PExceptionType::NetworkTimeout, "NetworkTimeout"),
-                                        std::shared_ptr<dev::p2p::P2PSession>(), P2PMessage::Ptr());
-                                });
-
-                                self->localAMOPCallbacks()->erase(it);
-                            }
-                        });
-                    }
-
-                    m_localAMOPCallbacks->insert(
-                        std::make_pair(message->seq(), std::make_pair(timer, callback)));
-
-                    onMessage(NetworkException(), dev::network::SessionFace::Ptr(), message,
-                        dev::p2p::P2PSession::Ptr());
-                }
-                else
-                {
-                    // find callback and push response message
-                    RecursiveGuard lock(x_localAMOPCallbacks);
-
-                    auto it = m_localAMOPCallbacks->find(message->seq());
-                    if (it != m_localAMOPCallbacks->end())
-                    {
-                        if (it->second.first)
-                        {
-                            it->second.first->cancel();
-                        }
-
-                        auto callback = it->second.second;
-                        m_host->threadPool()->enqueue([callback, message] {
-                            callback(dev::network::NetworkException(),
-                                std::shared_ptr<dev::p2p::P2PSession>(), message);
-                        });
-
-                        m_localAMOPCallbacks->erase(it);
-                    }
-                }
+                onLocalAMOPMessage(message, callback, options);
             }
 
             return;

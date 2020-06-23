@@ -67,6 +67,9 @@ public:
     virtual void onMessage(dev::network::NetworkException e, dev::network::SessionFace::Ptr session,
         dev::network::Message::Ptr message, P2PSession::Ptr p2pSession);
 
+    void onLocalAMOPMessage(
+        P2PMessage::Ptr message, CallbackFuncWithSession callback, dev::network::Options options);
+
     std::shared_ptr<P2PMessage> sendMessageByNodeID(
         NodeID nodeID, std::shared_ptr<P2PMessage> message) override;
     void asyncSendMessageByNodeID(NodeID nodeID, std::shared_ptr<P2PMessage> message,
