@@ -47,7 +47,10 @@ Service::Service()
     m_topic2Handler(std::make_shared<std::unordered_map<std::string, CallbackFuncWithSession>>()),
     m_group2NetworkStatHandler(std::make_shared<std::map<GROUP_ID, NetworkStatHandler::Ptr>>()),
     m_group2BandwidthLimiter(
-        std::make_shared<std::map<GROUP_ID, dev::flowlimit::RateLimiter::Ptr>>())
+        std::make_shared<std::map<GROUP_ID, dev::flowlimit::RateLimiter::Ptr>>()),
+    m_localAMOPCallbacks(std::make_shared<
+        std::unordered_map<uint32_t, std::pair<std::shared_ptr<boost::asio::deadline_timer>,
+                                         dev::p2p::CallbackFuncWithSession>>>())
 {}
 
 void Service::start()
@@ -301,15 +304,26 @@ void Service::onMessage(dev::network::NetworkException e, dev::network::SessionF
 {
     try
     {
+        NodeID nodeID = id();
+        NodeIPEndpoint nodeIPEndpoint(boost::asio::ip::address(), 0);
+        if (session && p2pSession)
+        {
+            nodeID = p2pSession->nodeID();
+            nodeIPEndpoint = session->nodeIPEndpoint();
+        }
+
         if (e.errorCode())
         {
             SERVICE_LOG(WARNING) << LOG_DESC("disconnect error P2PSession")
-                                 << LOG_KV("nodeID", p2pSession->nodeID().abridged())
-                                 << LOG_KV("endpoint", session->nodeIPEndpoint())
+                                 << LOG_KV("nodeID", nodeID.abridged())
+                                 << LOG_KV("endpoint", nodeIPEndpoint)
                                  << LOG_KV("errorCode", e.errorCode()) << LOG_KV("what", e.what());
 
-            p2pSession->stop(dev::network::UserReason);
-            onDisconnect(e, p2pSession);
+            if (p2pSession)
+            {
+                p2pSession->stop(dev::network::UserReason);
+                onDisconnect(e, p2pSession);
+            }
             return;
         }
 
@@ -317,7 +331,7 @@ void Service::onMessage(dev::network::NetworkException e, dev::network::SessionF
         auto p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
 
         // AMOP topic message, redirect to p2psession
-        if (abs(p2pMessage->protocolID()) == dev::eth::ProtocolID::Topic)
+        if (p2pSession && abs(p2pMessage->protocolID()) == dev::eth::ProtocolID::Topic)
         {
             p2pSession->onTopicMessage(p2pMessage);
             return;
@@ -433,11 +447,85 @@ void Service::asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
 {
     try
     {
+        bool isAMOPMessage =
+            (abs(message->protocolID()) == dev::eth::ProtocolID::AMOP ? true : false);
+
         if (nodeID == id())
         {
-            // exclude myself
+            // ignore myself but amop
+            if (isAMOPMessage)
+            {
+                if (message->isRequestPacket())
+                {
+                    // save callback and call onMessage to push the request message
+                    RecursiveGuard lock(x_localAMOPCallbacks);
+
+                    auto self = shared_from_this();
+                    std::shared_ptr<boost::asio::deadline_timer> timer;
+                    if (options.timeout > 0)
+                    {
+                        timer = m_host->asioInterface()->newTimer(options.timeout);
+                        timer->async_wait([self, message](const boost::system::error_code& error) {
+                            if (error)
+                            {
+                                SERVICE_LOG(TRACE)
+                                    << "timer canceled" << LOG_KV("errorCode", error);
+                                return;
+                            }
+
+
+                            SERVICE_LOG(INFO) << "AMOP Local message Timeout: " << message->seq();
+
+                            RecursiveGuard lock(self->localAMOPCallbacksLock());
+                            auto it = self->localAMOPCallbacks()->find(message->seq());
+                            if (it != self->localAMOPCallbacks()->end())
+                            {
+                                auto callback = it->second.second;
+                                self->host()->threadPool()->enqueue([callback] {
+                                    callback(
+                                        dev::network::NetworkException(
+                                            P2PExceptionType::NetworkTimeout, "NetworkTimeout"),
+                                        std::shared_ptr<dev::p2p::P2PSession>(), P2PMessage::Ptr());
+                                });
+
+                                self->localAMOPCallbacks()->erase(it);
+                            }
+                        });
+                    }
+
+                    m_localAMOPCallbacks->insert(
+                        std::make_pair(message->seq(), std::make_pair(timer, callback)));
+
+                    onMessage(NetworkException(), dev::network::SessionFace::Ptr(), message,
+                        dev::p2p::P2PSession::Ptr());
+                }
+                else
+                {
+                    // find callback and push response message
+                    RecursiveGuard lock(x_localAMOPCallbacks);
+
+                    auto it = m_localAMOPCallbacks->find(message->seq());
+                    if (it != m_localAMOPCallbacks->end())
+                    {
+                        if (it->second.first)
+                        {
+                            it->second.first->cancel();
+                        }
+
+                        auto callback = it->second.second;
+                        m_host->threadPool()->enqueue([callback, message] {
+                            callback(dev::network::NetworkException(),
+                                std::shared_ptr<dev::p2p::P2PSession>(), message);
+                        });
+
+                        m_localAMOPCallbacks->erase(it);
+                    }
+                }
+            }
+
             return;
         }
+
         RecursiveGuard l(x_sessions);
         auto it = m_sessions.find(nodeID);
 
@@ -831,6 +919,11 @@ NodeIDs Service::getPeersByTopic(std::string const& topic)
                     nodeList.push_back(it.first);
                 }
             }
+        }
+
+        if (m_topics->find(topic) != m_topics->end())
+        {
+            nodeList.push_back(id());
         }
     }
     catch (std::exception& e)

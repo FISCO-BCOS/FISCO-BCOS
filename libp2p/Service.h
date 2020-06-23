@@ -151,6 +151,14 @@ public:
         m_channelRpcCallBack = channelRpcCallBack;
     }
 
+    RecursiveMutex& localAMOPCallbacksLock() { return x_localAMOPCallbacks; }
+    std::shared_ptr<std::unordered_map<uint32_t,
+        std::pair<std::shared_ptr<boost::asio::deadline_timer>, dev::p2p::CallbackFuncWithSession>>>
+    localAMOPCallbacks()
+    {
+        return m_localAMOPCallbacks;
+    }
+
     CallbackFuncForTopicVerify callbackFuncForTopicVerify() override
     {
         return m_channelRpcCallBack;
@@ -234,7 +242,6 @@ private:
 
     std::shared_ptr<boost::asio::deadline_timer> m_timer;
 
-
     CallbackFuncForTopicVerify m_channelRpcCallBack;
 
     bool m_run = false;
@@ -252,6 +259,11 @@ private:
 
     dev::flowlimit::RateLimiter::Ptr m_nodeBandwidthLimiter;
     dev::stat::ChannelNetworkStatHandler::Ptr m_channelNetworkStatHandler;
+
+    mutable RecursiveMutex x_localAMOPCallbacks;
+    std::shared_ptr<std::unordered_map<uint32_t,
+        std::pair<std::shared_ptr<boost::asio::deadline_timer>, dev::p2p::CallbackFuncWithSession>>>
+        m_localAMOPCallbacks;
 };
 
 }  // namespace p2p
