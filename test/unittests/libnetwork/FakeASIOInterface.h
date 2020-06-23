@@ -93,7 +93,8 @@ public:
         }
     }
 #endif
-    void asyncResolveConnect(std::shared_ptr<SocketFace> socket, Handler_Type handler) override
+    void asyncResolveConnect(std::shared_ptr<SocketFace> socket, Handler_Type handler,
+        const bi::tcp::resolver::protocol_type& = bi::tcp::tcp::v4()) override
     {
         auto fakeSocket = std::dynamic_pointer_cast<FakeSocket>(socket);
         fakeSocket->open();
@@ -142,8 +143,7 @@ public:
         ba::ssl::stream_base::handshake_type type, Handler_Type handler) override
     {
         (void)type;
-        bi::tcp::endpoint endpoint(socket->nodeIPEndpoint());
-        if (endpoint.port() == ERROR_SOCKET_PORT)
+        if (socket->nodeIPEndpoint().port() == ERROR_SOCKET_PORT)
         {
             handler(boost::asio::error::operation_aborted);
         }

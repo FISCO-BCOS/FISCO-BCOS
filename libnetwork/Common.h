@@ -193,7 +193,53 @@ inline std::string reasonOf(DisconnectReason _r)
     }
 }
 
-using NodeIPEndpoint = boost::asio::ip::tcp::endpoint;
+// using NodeIPEndpoint = boost::asio::ip::tcp::endpoint;
+/**
+ * @brief client end endpoint. Node will connect to NodeIPEndpoint.
+ */
+struct NodeIPEndpoint
+{
+    NodeIPEndpoint() = default;
+    NodeIPEndpoint(const std::string& _host, uint16_t _port) : m_host(_host), m_port(_port) {}
+    NodeIPEndpoint(bi::address _addr, uint16_t _port) : m_host(_addr.to_string()), m_port(_port) {}
+    NodeIPEndpoint(const NodeIPEndpoint& _nodeIPEndpoint)
+    {
+        m_host = _nodeIPEndpoint.m_host;
+        m_port = _nodeIPEndpoint.m_port;
+    }
+    NodeIPEndpoint(const boost::asio::ip::tcp::endpoint& _endpoint)
+    {
+        m_host = _endpoint.address().to_string();
+        m_port = _endpoint.port();
+    }
+    bool operator<(const NodeIPEndpoint& rhs) const
+    {
+        if (m_host + std::to_string(m_port) < rhs.m_host + std::to_string(rhs.m_port))
+        {
+            return true;
+        }
+        return false;
+    }
+    bool operator==(const NodeIPEndpoint& rhs) const
+    {
+        return (m_host + std::to_string(m_port) == rhs.m_host + std::to_string(rhs.m_port));
+    }
+    operator boost::asio::ip::tcp::endpoint()
+    {
+        return boost::asio::ip::tcp::endpoint(boost::asio::ip::make_address(m_host), m_port);
+    }
+
+    // Get the port associated with the endpoint.
+    uint16_t port() const { return m_port; };
+
+    // Get the IP address associated with the endpoint.
+    std::string address() const { return m_host; };
+
+    std::string m_host;
+    uint16_t m_port;
+};
+
+std::ostream& operator<<(std::ostream& _out, NodeIPEndpoint const& _endpoint);
 
 bool getPublicKeyFromCert(std::shared_ptr<std::string> _nodeIDOut, X509* cert);
 }  // namespace network

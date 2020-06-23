@@ -59,3 +59,9 @@ bool dev::network::getPublicKeyFromCert(std::shared_ptr<std::string> _nodeIDOut,
     }
     return true;
 }
+
+std::ostream& dev::network::operator<<(std::ostream& _out, NodeIPEndpoint const& _endpoint)
+{
+    _out << _endpoint.address() << ":" << _endpoint.port();
+    return _out;
+}

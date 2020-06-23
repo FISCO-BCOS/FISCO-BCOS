@@ -67,21 +67,23 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
                 {
                     boost::split(
                         s, it.second.data(), boost::is_any_of("]"), boost::token_compress_on);
-                    boost::asio::ip::address ip_address;
-                    uint16_t port;
 
                     if (s.size() == 2)
                     {  // ipv6
-                        ip_address = boost::asio::ip::make_address(s[0].data() + 1);
-                        port = boost::lexical_cast<uint16_t>(s[1].data() + 1);
+                        boost::asio::ip::address ip_address =
+                            boost::asio::ip::make_address(s[0].data() + 1);
+                        uint16_t port = boost::lexical_cast<uint16_t>(s[1].data() + 1);
+                        nodes.insert(
+                            std::make_pair(NodeIPEndpoint{ip_address.to_string(), port}, NodeID()));
                     }
                     else if (s.size() == 1)
-                    {  // ipv4
+                    {  // ipv4 and ipv4 host
                         std::vector<std::string> ipv4Endpoint;
                         boost::split(ipv4Endpoint, it.second.data(), boost::is_any_of(":"),
                             boost::token_compress_on);
-                        ip_address = boost::asio::ip::make_address(ipv4Endpoint[0]);
-                        port = boost::lexical_cast<uint16_t>(ipv4Endpoint[1]);
+                        uint16_t port = boost::lexical_cast<uint16_t>(ipv4Endpoint[1]);
+                        nodes.insert(
+                            std::make_pair(NodeIPEndpoint{ipv4Endpoint[0], port}, NodeID()));
                     }
                     else
                     {
@@ -93,9 +95,6 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
                                      << LOG_KV("endpoint", it.second.data()) << std::endl;
                         exit(1);
                     }
-                    NodeIPEndpoint endpoint(ip_address, port);
-
-                    nodes.insert(std::make_pair(endpoint, NodeID()));
                 }
                 catch (std::exception& e)
                 {
