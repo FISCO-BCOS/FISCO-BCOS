@@ -25,10 +25,13 @@
 namespace ba = boost::asio;
 namespace bi = ba::ip;
 using namespace dev::network;
+using namespace std;
 
-void ASIOInterface::asyncResolveConnect(std::shared_ptr<SocketFace> socket, Handler_Type handler)
+void ASIOInterface::asyncResolveConnect(std::shared_ptr<SocketFace> socket, Handler_Type handler,
+    const bi::tcp::resolver::protocol_type& _protocol)
 {
-    m_resolver->async_resolve(socket->nodeIPEndpoint(),
+    m_resolver->async_resolve(_protocol, socket->nodeIPEndpoint().address(),
+        to_string(socket->nodeIPEndpoint().port()),
         [=](const boost::system::error_code& ec, bi::tcp::resolver::results_type results) {
             if (!ec)
             {

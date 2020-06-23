@@ -79,14 +79,14 @@ BOOST_AUTO_TEST_CASE(testNodeIPEndpoint)
 {
     /// test default construct
     dev::network::NodeIPEndpoint m_endpoint(boost::asio::ip::make_address("0.0.0.0"), 0);
-    BOOST_CHECK(m_endpoint.address().to_string() == "0.0.0.0");
+    BOOST_CHECK(m_endpoint.address() == "0.0.0.0");
     BOOST_CHECK(m_endpoint.port() == 0);
     BOOST_CHECK(boost::lexical_cast<std::string>(m_endpoint) == "0.0.0.0:0");
     /// "0.0.0.0" is not the specified address
     /// test construct: NodeIPEndpoint(bi::address _addr, uint16_t _udp, uint16_t _tcp)
     uint16_t port = 30303;
     NodeIPEndpoint m_endpoint2(boost::asio::ip::make_address("127.0.0.1"), port);
-    BOOST_CHECK(m_endpoint2.address().to_string() == "127.0.0.1");
+    BOOST_CHECK(m_endpoint2.address() == "127.0.0.1");
     BOOST_CHECK(m_endpoint2.port() == port);
     BOOST_CHECK_MESSAGE(true, "127.0.0.1:" + toString(port) + ":" + toString(port));
 

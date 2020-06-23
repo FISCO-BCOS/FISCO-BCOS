@@ -128,7 +128,8 @@ public:
         socket->ref().async_connect(peer_endpoint, handler);
     }
 #endif
-    virtual void asyncResolveConnect(std::shared_ptr<SocketFace> socket, Handler_Type handler);
+    virtual void asyncResolveConnect(std::shared_ptr<SocketFace> socket, Handler_Type handler,
+        const bi::tcp::resolver::protocol_type& _protocol = bi::tcp::tcp::v4());
 
     virtual void asyncWrite(std::shared_ptr<SocketFace> socket,
         boost::asio::mutable_buffers_1 buffers, ReadWriteHandler handler)
