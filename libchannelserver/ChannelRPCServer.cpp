@@ -677,6 +677,17 @@ void dev::ChannelRPCServer::asyncPushChannelMessageHandler(
 void dev::ChannelRPCServer::onNodeChannelRequest(
     dev::network::NetworkException, std::shared_ptr<p2p::P2PSession> s, p2p::P2PMessage::Ptr msg)
 {
+    NodeID nodeID;
+
+    if (s)
+    {
+        nodeID = s->nodeID();
+    }
+    else
+    {
+        nodeID = m_service->id();
+    }
+
     auto channelMessage = _server->messageFactory()->buildMessage();
     ssize_t result = channelMessage->decode(msg->buffer()->data(), msg->buffer()->size());
 
@@ -687,7 +698,7 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
         return;
     }
 
-    CHANNEL_LOG(DEBUG) << "receive node request" << LOG_KV("from", s->nodeID())
+    CHANNEL_LOG(DEBUG) << "receive node request" << LOG_KV("from", nodeID)
                        << LOG_KV("length", msg->buffer()->size())
                        << LOG_KV("type", channelMessage->type())
                        << LOG_KV("seq", channelMessage->seq());
@@ -709,7 +720,6 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
         {
             try
             {
-                auto nodeID = s->nodeID();
                 auto p2pMessage = msg;
                 auto service = m_service;
                 asyncPushChannelMessage(topic, channelMessage,
@@ -767,7 +777,7 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
                 p2pResponse->setPacketType(0u);
                 p2pResponse->setSeq(msg->seq());
                 m_service->asyncSendMessageByNodeID(
-                    s->nodeID(), p2pResponse, CallbackFuncWithSession(), dev::network::Options());
+                    nodeID, p2pResponse, CallbackFuncWithSession(), dev::network::Options());
             }
         }
         else if (channelMessage->type() == AMOP_MULBROADCAST)
@@ -909,8 +919,7 @@ void dev::ChannelRPCServer::onClientChannelRequest(
             dev::network::Options options;
             options.timeout = 30 * 1000;  // 30 seconds
 
-            m_service->asyncSendMessageByTopic(
-                topic, p2pMessage,
+            m_service->asyncSendMessageByTopic(topic, p2pMessage,
                 [session, message](dev::network::NetworkException e,
                     std::shared_ptr<dev::p2p::P2PSession>, dev::p2p::P2PMessage::Ptr response) {
                     if (e.errorCode())
