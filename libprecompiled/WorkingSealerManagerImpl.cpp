@@ -66,7 +66,10 @@ void WorkingSealerManagerImpl::rotateWorkingSealer()
 {
     // check VRFInfos firstly
     checkVRFInfos();
-    m_configuredEpochSealersSize = getrPBFTEpochSealersNum();
+    if (!shouldRotate())
+    {
+        return;
+    }
     int64_t sealersNum = m_workingSealerList->size() + m_pendingSealerList->size();
     if (sealersNum <= 1 ||
         (m_configuredEpochSealersSize == sealersNum && 0 == m_pendingSealerList->size()))
@@ -98,7 +101,14 @@ void WorkingSealerManagerImpl::rotateWorkingSealer()
             UpdateNodeType(node, NODE_TYPE_SEALER);
             PRECOMPILED_LOG(DEBUG) << LOG_DESC("rotateWorkingSealer: remove workingSealer")
                                    << LOG_KV("nodeId", node.abridged());
-            m_pendingSealerList->push_back(node);
+        }
+        int64_t pendingSealersSize = m_pendingSealerList->size();
+        if (pendingSealersSize < nodeRotatingInfo->insertedWorkingSealerNum)
+        {
+            for (auto const& node : *workingSealersToRemove)
+            {
+                m_pendingSealerList->push_back(node);
+            }
         }
     }
 
@@ -236,9 +246,9 @@ void WorkingSealerManagerImpl::checkVRFInfos()
     {
         PRECOMPILED_LOG(ERROR) << LOG_DESC("checkVRFInfos: Invalid VRF public key")
                                << LOG_KV("publicKey", m_vrfInfo->vrfPublicKey());
-        BOOST_THROW_EXCEPTION(PrecompiledException(
-            "Invalid VRF Public Key, must be the parentHash! sender:" + m_origin.hexPrefixed() +
-            ", publicKey:" + m_vrfInfo->vrfPublicKey()));
+        BOOST_THROW_EXCEPTION(
+            PrecompiledException("Invalid VRF Public Key ! sender:" + m_origin.hexPrefixed() +
+                                 ", publicKey:" + m_vrfInfo->vrfPublicKey()));
     }
     // verify vrf proof
     if (!m_vrfInfo->verifyProof())
@@ -257,7 +267,7 @@ void WorkingSealerManagerImpl::checkVRFInfos()
     }
 }
 
-int64_t WorkingSealerManagerImpl::getrPBFTEpochSealersNum()
+bool WorkingSealerManagerImpl::shouldRotate()
 {
     // open system configuration table
     auto sysConfigTable = openTable(m_context, SYS_CONFIG);
@@ -269,13 +279,29 @@ int64_t WorkingSealerManagerImpl::getrPBFTEpochSealersNum()
     // get epoch_sealers_num from the table
     auto epochSealersInfo = getSysteConfigByKey(
         sysConfigTable, SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM, m_context->blockInfo().number);
-    auto epochSealersSize = boost::lexical_cast<int64_t>(epochSealersInfo->first);
-    PRECOMPILED_LOG(DEBUG) << LOG_DESC("getrPBFTEpochSealersNum")
+    m_configuredEpochSealersSize = boost::lexical_cast<int64_t>(epochSealersInfo->first);
+    PRECOMPILED_LOG(DEBUG) << LOG_DESC("shouldRotate: get epoch_sealer_num")
                            << LOG_KV("key", SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM)
                            << LOG_KV("value", epochSealersInfo->first)
                            << LOG_KV("enableBlk", epochSealersInfo->second)
-                           << LOG_KV("epochSealersNum", epochSealersSize);
-    return epochSealersSize;
+                           << LOG_KV("epochSealersNum", m_configuredEpochSealersSize);
+    if (epochSealersInfo->second == m_context->blockInfo().number)
+    {
+        return true;
+    }
+    // get epoch_block_num from the table
+    auto epochBlockInfo = getSysteConfigByKey(
+        sysConfigTable, SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM, m_context->blockInfo().number);
+    auto epochBlockNum = boost::lexical_cast<int64_t>(epochBlockInfo->first);
+    if ((m_context->blockInfo().number - epochBlockInfo->second) % epochBlockNum == 0)
+    {
+        return true;
+    }
+    PRECOMPILED_LOG(WARNING)
+        << LOG_DESC("should not rotate working sealers for not meet the requirements")
+        << LOG_KV("epochBlockNum", epochBlockNum) << LOG_KV("curNum", m_context->blockInfo().number)
+        << LOG_KV("enableNum", epochBlockInfo->second);
+    return false;
 }
 
 NodeRotatingInfo::Ptr WorkingSealerManagerImpl::calNodeRotatingInfo()

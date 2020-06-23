@@ -165,7 +165,15 @@ bool SystemConfigPrecompiled::checkValueValid(std::string const& key, std::strin
     {
         try
         {
-            return (boost::lexical_cast<int64_t>(value) >= RPBFT_EPOCH_BLOCK_NUM_MIN);
+            if (g_BCOSConfig.version() < V2_6_0)
+            {
+                return (boost::lexical_cast<int64_t>(value) >= RPBFT_EPOCH_BLOCK_NUM_MIN);
+            }
+            else
+            {
+                // epoch_block_num is at least 2 when supported_version >= v2.6.0
+                return (boost::lexical_cast<int64_t>(value) > RPBFT_EPOCH_BLOCK_NUM_MIN);
+            }
         }
         catch (boost::bad_lexical_cast& e)
         {

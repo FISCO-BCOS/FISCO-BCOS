@@ -96,7 +96,7 @@ protected:
 private:
     bool checkPermission(dev::Address const& _origin, dev::h512s const& _allowedAccountInfoList);
     void getSealerList();
-    int64_t getrPBFTEpochSealersNum();
+    bool shouldRotate();
     void UpdateNodeType(dev::h512 const& _node, std::string const& _nodeType);
 
 private:
