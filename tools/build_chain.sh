@@ -1221,7 +1221,7 @@ while getopts "v:f" option;do
 done
 
 if [[ -z "\${version}" ]];then
-    version=\$(curl -s https://api.github.com/repos/FISCO-BCOS/console/releases | grep "tag_name" | sort -u | tail -n 1 | cut -d \" -f 4 | sed "s/^[vV]//")
+    version=\$(curl -s https://api.github.com/repos/FISCO-BCOS/console/releases | grep "tag_name" | sort -V | tail -n 1 | cut -d \" -f 4 | sed "s/^[vV]//")
 fi
 package_name="console.tar.gz"
 echo "Downloading console \${version}"
@@ -1483,7 +1483,7 @@ mkdir -p "${output_dir}"
 
 if [ -z "${compatibility_version}" ];then
     set +e
-    compatibility_version=$(curl -s https://api.github.com/repos/FISCO-BCOS/FISCO-BCOS/releases | grep "tag_name" | grep "\"v2\.[0-9]\.[0-9]\"" | sort -u | tail -n 1 | cut -d \" -f 4 | sed "s/^[vV]//")
+    compatibility_version=$(curl -s https://api.github.com/repos/FISCO-BCOS/FISCO-BCOS/releases | grep "tag_name" | grep "\"v2\.[0-9]\.[0-9]\"" | sort -V | tail -n 1 | cut -d \" -f 4 | sed "s/^[vV]//")
     set -e
 fi
 

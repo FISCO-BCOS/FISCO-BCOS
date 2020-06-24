@@ -93,8 +93,7 @@ public:
         }
     }
 #endif
-    void asyncResolveConnect(std::shared_ptr<SocketFace> socket, Handler_Type handler,
-        const bi::tcp::resolver::protocol_type& = bi::tcp::tcp::v4()) override
+    void asyncResolveConnect(std::shared_ptr<SocketFace> socket, Handler_Type handler) override
     {
         auto fakeSocket = std::dynamic_pointer_cast<FakeSocket>(socket);
         fakeSocket->open();

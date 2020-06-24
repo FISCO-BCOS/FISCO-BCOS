@@ -129,6 +129,8 @@ check_raft()
         sed_cmd="sed -i .bkp"
     fi
     ${sed_cmd} "s/consensus_type=pbft/consensus_type=raft/" node*/conf/group.1.genesis
+    # test resolve host
+    ${sed_cmd} "s/127.0.0.1:/localhost:/g" node*/config.ini
     check_consensus_and_sync 10
 }
 
@@ -141,6 +143,9 @@ check_rpbft()
         sed_cmd="sed -i .bkp"
     fi
     ${sed_cmd} "s/consensus_type=raft/consensus_type=rpbft/" node*/conf/group.1.genesis
+    # test ipv6
+    ${sed_cmd} "s/127.0.0.1:/\[::1\]:/g" node*/config.ini
+    ${sed_cmd} "s/0.0.0.0/::/g" node*/config.ini
     check_consensus_and_sync 12
 }
 
