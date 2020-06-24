@@ -170,9 +170,10 @@ protected:
     /// reset timestamp of block header
     void resetCurrentTime()
     {
-        uint64_t parentTime =
+        int64_t parentTime =
             m_blockChain->getBlockByNumber(m_blockChain->number())->header().timestamp();
-        m_sealing.block->header().setTimestamp(std::max(parentTime + 1, utcTime()));
+        m_sealing.block->header().setTimestamp(
+            std::max(parentTime + 1, m_consensusEngine->getAlignedTime()));
     }
 
 protected:

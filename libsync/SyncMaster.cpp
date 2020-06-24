@@ -273,6 +273,7 @@ bool SyncMaster::sendSyncStatusByNodeId(
 {
     auto packet = m_syncMsgPacketFactory->createSyncStatusPacket(
         m_nodeId, blockNumber, m_genesisHash, currentHash);
+    packet->alignedTime = getAlignedTime();
     packet->encode();
     m_service->asyncSendMessageByNodeID(
         nodeId, packet->toMessage(m_protocolId), CallbackFuncWithSession(), Options());
@@ -280,7 +281,8 @@ bool SyncMaster::sendSyncStatusByNodeId(
                     << LOG_KV("number", blockNumber)
                     << LOG_KV("genesisHash", m_genesisHash.abridged())
                     << LOG_KV("currentHash", currentHash.abridged())
-                    << LOG_KV("peer", nodeId.abridged());
+                    << LOG_KV("peer", nodeId.abridged())
+                    << LOG_KV("currentTime", packet->alignedTime);
     return true;
 }
 
@@ -621,6 +623,7 @@ void SyncMaster::maintainPeersConnection()
                 // send my status to her
                 auto packet = m_syncMsgPacketFactory->createSyncStatusPacket(
                     m_nodeId, currentNumber, m_genesisHash, currentHash);
+                packet->alignedTime = getAlignedTime();
                 packet->encode();
 
                 m_service->asyncSendMessageByNodeID(
@@ -630,7 +633,8 @@ void SyncMaster::maintainPeersConnection()
                                 << LOG_KV("number", int(currentNumber))
                                 << LOG_KV("genesisHash", m_genesisHash.abridged())
                                 << LOG_KV("currentHash", currentHash.abridged())
-                                << LOG_KV("peer", member.abridged());
+                                << LOG_KV("peer", member.abridged())
+                                << LOG_KV("currentTime", packet->alignedTime);
             }
         }
     }
