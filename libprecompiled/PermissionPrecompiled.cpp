@@ -100,6 +100,10 @@ PrecompiledExecResult::Ptr PermissionPrecompiled::call(
                 if (entries->size() != 0u && (tableName == SYS_TABLES || tableName == SYS_CNS))
                 {  // committee
                     result = CODE_OPERATOR_CANNOT_BE_COMMITTEE_MEMBER;
+                    if (g_BCOSConfig.version() >= V2_6_0)
+                    {
+                        result = CODE_COMMITTEE_MEMBER_CANNOT_BE_OPERATOR;
+                    }
                     PRECOMPILED_LOG(WARNING)
                         << LOG_BADGE("PermissionPrecompiled")
                         << LOG_DESC("committee member should not have operator permission")
