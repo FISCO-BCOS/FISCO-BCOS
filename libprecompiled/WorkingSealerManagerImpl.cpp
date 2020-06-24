@@ -285,7 +285,14 @@ bool WorkingSealerManagerImpl::shouldRotate()
                            << LOG_KV("value", epochSealersInfo->first)
                            << LOG_KV("enableBlk", epochSealersInfo->second)
                            << LOG_KV("epochSealersNum", m_configuredEpochSealersSize);
+    // the epoch_sealer_num has updated in the previous block
     if (epochSealersInfo->second == m_context->blockInfo().number)
+    {
+        return true;
+    }
+    int64_t sealersNum = m_pendingSealerList->size() + m_workingSealerList->size();
+    auto epochSize = std::min(m_configuredEpochSealersSize, sealersNum);
+    if ((int64_t)(m_workingSealerList->size()) < epochSize)
     {
         return true;
     }
@@ -300,7 +307,8 @@ bool WorkingSealerManagerImpl::shouldRotate()
     PRECOMPILED_LOG(WARNING)
         << LOG_DESC("should not rotate working sealers for not meet the requirements")
         << LOG_KV("epochBlockNum", epochBlockNum) << LOG_KV("curNum", m_context->blockInfo().number)
-        << LOG_KV("enableNum", epochBlockInfo->second);
+        << LOG_KV("enableNum", epochBlockInfo->second) << LOG_KV("sealersNum", sealersNum)
+        << LOG_KV("epochSealersNum", m_configuredEpochSealersSize);
     return false;
 }
 
