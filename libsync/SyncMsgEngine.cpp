@@ -196,7 +196,8 @@ void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
                                << LOG_KV("peer", info->nodeId.abridged())
                                << LOG_KV("peerBlockNumber", info->number)
                                << LOG_KV("genesisHash", info->genesisHash.abridged())
-                               << LOG_KV("latestHash", info->latestHash.abridged());
+                               << LOG_KV("latestHash", info->latestHash.abridged())
+                               << LOG_KV("peerTime", info->alignedTime);
     }
     else
     {
@@ -204,12 +205,26 @@ void SyncMsgEngine::onPeerStatus(SyncMsgPacket const& _packet)
                                << LOG_KV("peerNodeId", info->nodeId.abridged())
                                << LOG_KV("peerBlockNumber", info->number)
                                << LOG_KV("genesisHash", info->genesisHash.abridged())
-                               << LOG_KV("latestHash", info->latestHash.abridged());
+                               << LOG_KV("latestHash", info->latestHash.abridged())
+                               << LOG_KV("peerTime", info->alignedTime);
         status->update(info);
     }
     if (currentNumber < info->number && m_onNotifyWorker)
     {
         m_onNotifyWorker();
+    }
+    // align time
+    if (m_nodeTimeMaintenance)
+    {
+        auto self = std::weak_ptr<SyncMsgEngine>(shared_from_this());
+        m_timeAlignWorker->enqueue([self, info]() {
+            auto msgEngine = self.lock();
+            if (!msgEngine)
+            {
+                return;
+            }
+            msgEngine->nodeTimeMaintenance()->tryToUpdatePeerTimeInfo(info);
+        });
     }
 }
 
@@ -463,6 +478,10 @@ void SyncMsgEngine::stop()
     if (m_txsReceiver)
     {
         m_txsReceiver->stop();
+    }
+    if (m_timeAlignWorker)
+    {
+        m_timeAlignWorker->stop();
     }
     SYNC_ENGINE_LOG(INFO) << LOG_DESC("SyncMsgEngine stopped");
 }

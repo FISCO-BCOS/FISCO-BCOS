@@ -511,6 +511,8 @@ bool Ledger::consensusInitFactory()
         BOOST_THROW_EXCEPTION(
             dev::InitLedgerConfigFailed() << errinfo_comment("create sealer failed"));
     }
+    // set nodeTimeMaintenance
+    m_sealer->consensusEngine()->setNodeTimeMaintenance(m_nodeTimeMaintenance);
     // create blockFactory
     auto blockFactory = createBlockFactory();
     m_sealer->setBlockFactory(blockFactory);
@@ -555,6 +557,9 @@ bool Ledger::initSync()
     if (g_BCOSConfig.version() >= V2_6_0)
     {
         syncMsgPacketFactory = std::make_shared<SyncMsgPacketWithAlignedTimeFactory>();
+        // create NodeTimeMaintenance
+        m_nodeTimeMaintenance = std::make_shared<NodeTimeMaintenance>();
+        syncMaster->setNodeTimeMaintenance(m_nodeTimeMaintenance);
     }
     else
     {

@@ -32,6 +32,7 @@
 #include <libp2p/P2PInterface.h>
 #include <libp2p/P2PMessage.h>
 #include <libp2p/P2PSession.h>
+#include <libsync/NodeTimeMaintenance.h>
 #include <libsync/SyncInterface.h>
 #include <libtxpool/TxPoolInterface.h>
 
@@ -183,6 +184,20 @@ public:
 
     KeyPair const& keyPair() { return m_keyPair; }
 
+    int64_t getAlignedTime() override
+    {
+        if (m_nodeTimeMaintenance)
+        {
+            return m_nodeTimeMaintenance->getAlignedTime();
+        }
+        return utcTime();
+    }
+
+    void setNodeTimeMaintenance(dev::sync::NodeTimeMaintenance::Ptr _nodeTimeMaintenance) override
+    {
+        m_nodeTimeMaintenance = _nodeTimeMaintenance;
+    }
+
 protected:
     void dropHandledTransactions(std::shared_ptr<dev::eth::Block> block)
     {
@@ -225,8 +240,8 @@ protected:
         {
             valid = decodeToRequests(req, ref(*(message->buffer())));
             if (valid)
-                req.setOtherField(
-                    peer_index, session->nodeID(), boost::lexical_cast<std::string>(session->session()->nodeIPEndpoint()));
+                req.setOtherField(peer_index, session->nodeID(),
+                    boost::lexical_cast<std::string>(session->session()->nodeIPEndpoint()));
         }
         return valid;
     }
@@ -256,6 +271,7 @@ protected:
 
     dev::blockverifier::ExecutiveContext::Ptr executeBlock(dev::eth::Block& block);
     virtual void checkBlockValid(dev::eth::Block const& block);
+    virtual void checkBlockTimeStamp(dev::eth::Block const& _block);
 
     virtual void updateConsensusNodeList();
 
@@ -330,6 +346,9 @@ protected:
     dev::eth::BlockFactory::Ptr m_blockFactory;
 
     bool m_supportConsensusTimeAdjust = false;
+    dev::sync::NodeTimeMaintenance::Ptr m_nodeTimeMaintenance;
+
+    int64_t m_maxBlockTimeOffset = 30 * 60 * 1000;
 };
 }  // namespace consensus
 }  // namespace dev

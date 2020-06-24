@@ -100,14 +100,19 @@ void SyncStatusPacketWithAlignedTime::encode()
 {
     m_rlpStream.clear();
     // add aligned time into the fields
-    prep(m_rlpStream, StatusPacket, 4) << number << genesisHash << latestHash << alignedTime;
+    prep(m_rlpStream, StatusPacket, m_itemCount);
+    // Note: here must encode int64_t type value with append(bigint)
+    // Otherwise, when the number is large the result of decode is incorrect
+    m_rlpStream.append(bigint(number));
+    m_rlpStream << genesisHash << latestHash;
+    m_rlpStream.append(bigint(alignedTime));
 }
 
 void SyncStatusPacketWithAlignedTime::decodePacket(RLP const& _rlp, dev::h512 const& _peer)
 {
     SyncStatusPacket::decodePacket(_rlp, _peer);
     // get alignedTime
-    alignedTime = _rlp[3].toPositiveInt64();
+    alignedTime = _rlp[3].toInt<int64_t>();
 }
 
 void SyncTransactionsPacket::encode(
