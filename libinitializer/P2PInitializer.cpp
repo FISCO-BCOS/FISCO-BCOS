@@ -74,7 +74,7 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
                             boost::asio::ip::make_address(s[0].data() + 1);
                         uint16_t port = boost::lexical_cast<uint16_t>(s[1].data() + 1);
                         nodes.insert(
-                            std::make_pair(NodeIPEndpoint{ip_address.to_string(), port}, NodeID()));
+                            std::make_pair(NodeIPEndpoint{ip_address, port}, NodeID()));
                     }
                     else if (s.size() == 1)
                     {  // ipv4 and ipv4 host

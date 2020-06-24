@@ -201,16 +201,20 @@ struct NodeIPEndpoint
 {
     NodeIPEndpoint() = default;
     NodeIPEndpoint(const std::string& _host, uint16_t _port) : m_host(_host), m_port(_port) {}
-    NodeIPEndpoint(bi::address _addr, uint16_t _port) : m_host(_addr.to_string()), m_port(_port) {}
+    NodeIPEndpoint(bi::address _addr, uint16_t _port)
+      : m_host(_addr.to_string()), m_port(_port), m_ipv6(_addr.is_v6())
+    {}
     NodeIPEndpoint(const NodeIPEndpoint& _nodeIPEndpoint)
     {
         m_host = _nodeIPEndpoint.m_host;
         m_port = _nodeIPEndpoint.m_port;
+        m_ipv6 = _nodeIPEndpoint.m_ipv6;
     }
     NodeIPEndpoint(const boost::asio::ip::tcp::endpoint& _endpoint)
     {
         m_host = _endpoint.address().to_string();
         m_port = _endpoint.port();
+        m_ipv6 = _endpoint.address().is_v6();
     }
     bool operator<(const NodeIPEndpoint& rhs) const
     {
@@ -224,7 +228,7 @@ struct NodeIPEndpoint
     {
         return (m_host + std::to_string(m_port) == rhs.m_host + std::to_string(rhs.m_port));
     }
-    operator boost::asio::ip::tcp::endpoint()
+    operator boost::asio::ip::tcp::endpoint() const
     {
         return boost::asio::ip::tcp::endpoint(boost::asio::ip::make_address(m_host), m_port);
     }
@@ -234,9 +238,11 @@ struct NodeIPEndpoint
 
     // Get the IP address associated with the endpoint.
     std::string address() const { return m_host; };
+    bool isIPv6() const { return m_ipv6; }
 
     std::string m_host;
     uint16_t m_port;
+    bool m_ipv6 = false;
 };
 
 std::ostream& operator<<(std::ostream& _out, NodeIPEndpoint const& _endpoint);
