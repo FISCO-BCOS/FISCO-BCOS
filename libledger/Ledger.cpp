@@ -337,9 +337,21 @@ ConsensusInterface::Ptr Ledger::createConsensusEngine(dev::PROTOCOL_ID const& _p
     }
     if (vrfBasedrPBFTEnabled())
     {
-        Ledger_LOG(INFO) << LOG_DESC("createConsensusEngine: create VRFBasedrPBFTEngine");
-        return std::make_shared<VRFBasedrPBFTEngine>(m_service, m_txPool, m_blockChain, m_sync,
-            m_blockVerifier, _protocolId, m_keyPair, m_param->mutableConsensusParam().sealerList);
+        // Note: since WorkingSealerManagerPrecompiled is enabled after v2.6.0,
+        //       vrf_rpbft is supported after v2.6.0
+        if (g_BCOSConfig.version() >= V2_6_0)
+        {
+            Ledger_LOG(INFO) << LOG_DESC("createConsensusEngine: create VRFBasedrPBFTEngine");
+            return std::make_shared<VRFBasedrPBFTEngine>(m_service, m_txPool, m_blockChain, m_sync,
+                m_blockVerifier, _protocolId, m_keyPair,
+                m_param->mutableConsensusParam().sealerList);
+        }
+        else
+        {
+            BOOST_THROW_EXCEPTION(dev::InitLedgerConfigFailed() << errinfo_comment(
+                                      m_param->mutableConsensusParam().consensusType +
+                                      " is supported after when supported_version >= v2.6.0!"));
+        }
     }
     return nullptr;
 }
