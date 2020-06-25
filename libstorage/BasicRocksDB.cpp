@@ -25,6 +25,7 @@
 #include <libdevcore/Exceptions.h>
 #include <boost/filesystem.hpp>
 
+using namespace std;
 using namespace dev;
 using namespace dev::storage;
 using namespace rocksdb;
@@ -46,16 +47,16 @@ rocksdb::Options dev::storage::getRocksDBOptions()
 }
 
 
-std::function<void(std::string const&, std::string&)> dev::storage::getEncryptHandler()
+std::function<void(std::string const&, std::string&)> dev::storage::getEncryptHandler(
+    const std::vector<uint8_t>& _encryptKey)
 {
     // get dataKey according to ciperDataKey from keyCenter
     return [=](std::string const& data, std::string& encData) {
         try
         {
-            auto const& dataKey = g_BCOSConfig.diskEncryption.dataKey;
             encData = crypto::SymmetricEncrypt((const unsigned char*)data.data(), data.size(),
-                (const unsigned char*)dataKey.data(), dataKey.size(),
-                (const unsigned char*)dataKey.data());
+                (const unsigned char*)_encryptKey.data(), _encryptKey.size(),
+                (const unsigned char*)_encryptKey.data());
         }
         catch (const std::exception& e)
         {
@@ -67,15 +68,15 @@ std::function<void(std::string const&, std::string&)> dev::storage::getEncryptHa
     };
 }
 
-std::function<void(std::string&)> dev::storage::getDecryptHandler()
+std::function<void(std::string&)> dev::storage::getDecryptHandler(
+    const std::vector<uint8_t>& _decryptKey)
 {
     return [=](std::string& data) {
         try
         {
-            auto const& dataKey = g_BCOSConfig.diskEncryption.dataKey;
             data = crypto::SymmetricDecrypt((const unsigned char*)data.data(), data.size(),
-                (const unsigned char*)dataKey.data(), dataKey.size(),
-                (const unsigned char*)dataKey.data());
+                (const unsigned char*)_decryptKey.data(), _decryptKey.size(),
+                (const unsigned char*)_decryptKey.data());
         }
         catch (const std::exception& e)
         {
