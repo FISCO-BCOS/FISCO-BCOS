@@ -43,8 +43,6 @@ bool dev::sm3(bytesConstRef _input, bytesRef o_output)
 
 bool dev::sm3(const uint8_t* _data, size_t _size, uint8_t* _hash)
 {
-    if (_size != 32)
-        return false;
     SM3Hash::getInstance().sm3(_data, _size, _hash);
     return true;
 }
