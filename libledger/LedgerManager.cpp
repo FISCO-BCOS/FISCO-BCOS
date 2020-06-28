@@ -287,7 +287,13 @@ string LedgerManager::generateGroupConfig()
         "    ; Mb, can be a decimal\n"
         "    ; when the outgoing bandwidth exceeds the limit, the block synchronization operation "
         "will not proceed\n"
-        "    ;outgoing_bandwidth_limit=2\n";
+        "    ;outgoing_bandwidth_limit=2\n"
+        "[sdk_allowlist]\n"
+        "    ; When sdk_allowlist is empty, all SDKs can connect to this node\n"
+        "    ; when sdk_allowlist is not empty, only the SDK in the allowlist can connect to this "
+        "node\n"
+        "    ; public_key.0 should be nodeid, nodeid's length is 128\n"
+        "    ;public_key.0=\n";
     return configTemplate;
 }
 
