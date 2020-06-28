@@ -106,7 +106,7 @@ int main(int argc, const char* argv[])
         value[i] = '0' + rand() % 10;
     }
 
-    auto rocksdbStorage = createRocksDBStorage(storagePath, false, false, useCachedStorage);
+    auto rocksdbStorage = createRocksDBStorage(storagePath, bytes(), false, useCachedStorage);
     Storage::Ptr storage = rocksdbStorage;
     if (useCachedStorage)
     {
