@@ -190,7 +190,7 @@ namespace executive
 evmc_bytes32 sm3Hash(const uint8_t* data, size_t size)
 {
     evmc_bytes32 hash;
-    sm3(data, size, &hash.bytes[0]);
+    sm3(data, size, hash.bytes);
     return hash;
 }
 
