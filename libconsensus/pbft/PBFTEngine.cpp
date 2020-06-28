@@ -198,8 +198,10 @@ void PBFTEngine::initBackupDB()
     {
         PBFTENGINE_LOG(INFO) << LOG_DESC(
             "diskEncryption enabled: set encrypt and decrypt handler for pbftBackup");
-        m_backupDB->setEncryptHandler(getEncryptHandler());
-        m_backupDB->setDecryptHandler(getDecryptHandler());
+        m_backupDB->setEncryptHandler(
+            getEncryptHandler(asBytes(g_BCOSConfig.diskEncryption.dataKey)));
+        m_backupDB->setDecryptHandler(
+            getDecryptHandler(asBytes(g_BCOSConfig.diskEncryption.dataKey)));
     }
 
     if (!isDiskSpaceEnough(path))

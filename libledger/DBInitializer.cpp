@@ -316,7 +316,7 @@ dev::storage::Storage::Ptr DBInitializer::initRocksDBStorage(
     try
     {
         auto rocksdbStorage = createRocksDBStorage(_param->mutableStorageParam().path,
-            g_BCOSConfig.diskEncryption.enable, _param->mutableStorageParam().binaryLog,
+            asBytes(g_BCOSConfig.diskEncryption.dataKey), _param->mutableStorageParam().binaryLog,
             _param->mutableStorageParam().CachedStorage);
         return rocksdbStorage;
     }
@@ -342,7 +342,7 @@ dev::storage::Storage::Ptr DBInitializer::initScalableStorage(
     try
     {
         auto stateStorage = createRocksDBStorage(_param->mutableStorageParam().path + "/state",
-            g_BCOSConfig.diskEncryption.enable, _param->mutableStorageParam().binaryLog,
+            asBytes(g_BCOSConfig.diskEncryption.dataKey), _param->mutableStorageParam().binaryLog,
             _param->mutableStorageParam().CachedStorage);
         auto scalableStorage =
             std::make_shared<ScalableStorage>(_param->mutableStorageParam().scrollThreshold);
@@ -513,8 +513,8 @@ void DBInitializer::createStorageState()
     DBInitializer_LOG(INFO) << LOG_DESC("createStorageState SUCC");
 }
 
-Storage::Ptr dev::ledger::createRocksDBStorage(const std::string& _dbPath,
-    bool _enableEncryption = false, bool _disableWAL = false, bool _enableCache = true)
+Storage::Ptr dev::ledger::createRocksDBStorage(const std::string& _dbPath, const bytes& _encryptKey,
+    bool _disableWAL = false, bool _enableCache = true)
 {
     boost::filesystem::create_directories(_dbPath);
 
@@ -522,12 +522,12 @@ Storage::Ptr dev::ledger::createRocksDBStorage(const std::string& _dbPath,
     auto options = getRocksDBOptions();
     // any exception will cause the program to be stopped
     rocksDB->Open(options, _dbPath);
-    if (_enableEncryption)
-    {
+    if (!_encryptKey.empty())
+    {  // if enable disk encryption, this will not empty
         DBInitializer_LOG(INFO) << LOG_DESC(
             "diskEncryption enabled: set encrypt and decrypt handler for rocksDB");
-        rocksDB->setEncryptHandler(getEncryptHandler());
-        rocksDB->setDecryptHandler(getDecryptHandler());
+        rocksDB->setEncryptHandler(getEncryptHandler(_encryptKey));
+        rocksDB->setDecryptHandler(getDecryptHandler(_encryptKey));
     }
     // create and init rocksDBStorage
     std::shared_ptr<RocksDBStorage> rocksdbStorage =

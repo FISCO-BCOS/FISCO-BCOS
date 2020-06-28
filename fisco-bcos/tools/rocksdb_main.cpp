@@ -50,7 +50,8 @@ po::variables_map initCommandLine(int argc, const char* argv[])
         "[TableName] [priKey] [keyEQ] [valueEQ] [Key] [NewValue]")("insert,i",
         po::value<vector<string>>()->multitoken(),
         "[TableName] [priKey] [Key]:[Value],...,[Key]:[Value]")(
-        "remove,r", po::value<vector<string>>()->multitoken(), "[TableName] [priKey]");
+        "remove,r", po::value<vector<string>>()->multitoken(), "[TableName] [priKey]")(
+        "encrypt,e", po::value<vector<string>>()->multitoken(), "[encryptKey] [SMCrypto]");
     po::variables_map vm;
     try
     {
@@ -96,24 +97,6 @@ void printEntries(Entries::ConstPtr entries)
     cout << endl;
 }
 
-
-Storage::Ptr createRocksDBStorage(const std::string& _dbPath)
-{
-    boost::filesystem::create_directories(_dbPath);
-
-    std::shared_ptr<BasicRocksDB> rocksDB = std::make_shared<BasicRocksDB>();
-    rocksdb::Options options;
-    options.create_if_missing = true;
-    options.max_open_files = 200;
-    options.compression = rocksdb::kSnappyCompression;
-    // any exception will cause the program to be stopped
-    rocksDB->Open(options, _dbPath);
-    // create and init rocksDBStorage
-    std::shared_ptr<RocksDBStorage> rocksdbStorage = std::make_shared<RocksDBStorage>();
-    rocksdbStorage->setDB(rocksDB);
-    return rocksdbStorage;
-}
-
 int main(int argc, const char* argv[])
 {
     // init log
@@ -124,7 +107,28 @@ int main(int argc, const char* argv[])
     auto params = initCommandLine(argc, argv);
     auto storagePath = params["path"].as<string>();
     cout << "DB path : " << storagePath << endl;
-    auto rocksdbStorage = createRocksDBStorage(storagePath, false, false, false);
+    // disk encrypt
+    bytes encryptKey;
+    if (params.count("encrypt") || params.count("e"))
+    {
+        auto& p = params["encrypt"].as<vector<string>>();
+        cout << "encrypt " << p << " || params num : " << p.size() << endl;
+        string dataKey = p[0];
+        if (p.size() > 1)
+        {  // sm crypto
+            g_BCOSConfig.setUseSMCrypto(true);
+            crypto::initSMCrypto();
+            encryptKey = sm3(dataKey).asBytes();
+            encryptKey = encryptKey + encryptKey + encryptKey + encryptKey;
+        }
+        else
+        {  // keccak256
+            g_BCOSConfig.setUseSMCrypto(false);
+            encryptKey = sha3(dataKey).asBytes();
+        }
+    }
+
+    auto rocksdbStorage = createRocksDBStorage(storagePath, encryptKey, false, false);
     MemoryTableFactory2::Ptr tableFactory = std::make_shared<MemoryTableFactory2>();
     tableFactory->setStateStorage(rocksdbStorage);
     tableFactory->setBlockHash(h256(0));
@@ -136,9 +140,10 @@ int main(int argc, const char* argv[])
         auto entry = stateTable->newEntry();
         entry->setField(SYS_VALUE, to_string(blockNumber));
         entry->setField(SYS_KEY, SYS_KEY_CURRENT_NUMBER);
-        stateTable->insert(SYS_KEY_CURRENT_NUMBER, entry);
+        stateTable->update(SYS_KEY_CURRENT_NUMBER, entry, stateTable->newCondition());
         tableFactory->commitDB(h256(0), blockNumber);
     };
+
     if (params.count("createTable") || params.count("c"))
     {
         auto& p = params["createTable"].as<vector<string>>();
