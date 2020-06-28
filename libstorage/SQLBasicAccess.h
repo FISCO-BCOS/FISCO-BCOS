@@ -47,6 +47,7 @@ struct SQLPlaceholderItem
 class SQLBasicAccess
 {
 public:
+    SQLBasicAccess();
     virtual ~SQLBasicAccess() {}
     typedef std::shared_ptr<SQLBasicAccess> Ptr;
     virtual int Select(int64_t _num, const std::string& _table, const std::string& _key,
@@ -92,6 +93,7 @@ public:
 
 private:
     std::shared_ptr<SQLConnectionPool> m_connPool;
+    std::string m_rowFormat = "";
 };
 
 }  // namespace storage
