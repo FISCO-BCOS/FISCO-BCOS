@@ -89,7 +89,7 @@ void NodeTimeMaintenance::updateTimeInfo()
     {
         medianTimeOffset = timeOffsetVec[medianIndex];
     }
-    if (std::abs(m_medianTimeOffset.load() - medianTimeOffset) >= m_maxTimeOffset)
+    if (std::abs(m_medianTimeOffset.load()) >= m_maxTimeOffset)
     {
         checkLocalTimeAndWarning();
     }

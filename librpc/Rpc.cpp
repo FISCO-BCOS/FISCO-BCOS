@@ -259,13 +259,16 @@ Json::Value Rpc::getEpochSealersList(int _groupID)
     {
         auto consensusType =
             ledgerManager()->getParamByGroupId(_groupID)->mutableConsensusParam().consensusType;
-        if (stringCmpIgnoreCase(consensusType, "rpbft") != 0)
+        if (stringCmpIgnoreCase(consensusType, "rpbft") != 0 &&
+            stringCmpIgnoreCase(consensusType, "vrf_rpbft") != 0)
         {
-            RPC_LOG(ERROR) << LOG_DESC("Only support getEpochSealersList when RPBFT is used")
+            RPC_LOG(ERROR) << LOG_DESC(
+                                  "Only support getEpochSealersList when rpbft/vrf_rpbft is used")
                            << LOG_KV("consensusType", consensusType) << LOG_KV("groupID", _groupID);
 
             BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::InvalidRequest,
-                "method getEpochSealersList only supported when RPBFT is used, current consensus "
+                "method getEpochSealersList only supported when rpbft/vrf_rpbft is used, current "
+                "consensus "
                 "type is " +
                     consensusType));
         }

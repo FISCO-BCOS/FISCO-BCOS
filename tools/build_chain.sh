@@ -603,14 +603,14 @@ generate_group_genesis()
     cat << EOF > "${output}"
 [consensus]
     ; consensus algorithm now support PBFT(consensus_type=pbft), Raft(consensus_type=raft)
-    ; and rpbft(consensus_type=rpbft)
+    ; rpbft(consensus_type=rpbft) and vrf_rpbft(consensus_type=vrf_rpbft)
     consensus_type=${consensus_type}
     ; the max number of transactions of a block
     max_trans_num=1000
     ; in ms, block generation time, must be >=1000ms
     consensus_time=1000
     ; rpbft related configuration
-    ; the sealers num of each consensus epoch
+    ; the working sealers num of each consensus epoch
     epoch_sealer_num=${sealer_size}
     ; the number of generated blocks each epoch
     epoch_block_num=1000
