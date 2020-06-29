@@ -303,13 +303,14 @@ void LedgerParam::initConsensusIniConfig(ptree const& pt)
     }
 
     // the minimum block generation time(ms)
-    mutableConsensusParam().minBlockGenTime =
-        pt.get<signed>("consensus.min_block_generation_time", 500);
-    if (mutableConsensusParam().minBlockGenTime < 0)
+    int64_t minBlockGenTime = pt.get<signed>("consensus.min_block_generation_time", 500);
+    if (minBlockGenTime < 0 || minBlockGenTime >= UINT_MAX)
     {
-        BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
-                                  "Please set consensus.min_block_generation_time to positive !"));
+        BOOST_THROW_EXCEPTION(InvalidConfiguration() << errinfo_comment(
+                                  "Please set consensus.min_block_generation_time between 1 and " +
+                                  std::to_string(UINT_MAX) + " !"));
     }
+    mutableConsensusParam().minBlockGenTime = minBlockGenTime;
 
     // enable dynamic block size
     mutableConsensusParam().enableDynamicBlockSize =
@@ -383,10 +384,12 @@ void LedgerParam::initConsensusConfig(ptree const& pt)
 
     // init consensusTime
     mutableConsensusParam().consensusTime = pt.get<int64_t>("consensus.consensus_time", 1000);
-    if (mutableConsensusParam().consensusTime < 1000)
+    if (mutableConsensusParam().consensusTime < 1000 ||
+        mutableConsensusParam().consensusTime >= UINT_MAX)
     {
         BOOST_THROW_EXCEPTION(InvalidConfiguration() << errinfo_comment(
-                                  "Please set consensus.consensus_time no smaller than 1000ms!"));
+                                  "Please set consensus.consensus_time must between 1000ms and " +
+                                  std::to_string(UINT_MAX) + "ms !"));
     }
 
     mutableConsensusParam().minElectTime = pt.get<int64_t>("consensus.min_elect_time", 1000);
