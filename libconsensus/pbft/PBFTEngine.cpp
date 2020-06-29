@@ -2323,15 +2323,13 @@ void PBFTEngine::resetConsensusTime()
     }
     auto consensusTimeStr =
         m_blockChain->getSystemConfigByKey(dev::precompiled::SYSTEM_KEY_CONSENSUS_TIME);
-    unsigned consensusTime = boost::lexical_cast<int64_t>(consensusTimeStr);
+    int64_t consensusTime = boost::lexical_cast<int64_t>(consensusTimeStr);
     if (consensusTime < m_timeManager.m_minBlockGenTime)
     {
-        PBFTENGINE_LOG(WARNING) << LOG_DESC(
-                                       "resetConsensusTime: invalid configurated consensus time "
-                                       "for smaller than minBlockGenTime")
-                                << LOG_KV("configuredConsensusT", consensusTimeStr)
-                                << LOG_KV("minBlockGenTime", m_timeManager.m_minBlockGenTime);
-        return;
+        m_timeManager.m_minBlockGenTime = (consensusTime - 1);
+        PBFTENGINE_LOG(INFO) << LOG_DESC("resetConsensusTime: reset minBlockGenTime")
+                             << LOG_KV("consensusTime", consensusTimeStr)
+                             << LOG_KV("minBlockGenTime", m_timeManager.m_minBlockGenTime);
     }
     // update emptyBlockGenTime
     if (m_timeManager.m_emptyBlockGenTime != consensusTime)
