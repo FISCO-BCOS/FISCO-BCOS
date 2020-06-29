@@ -77,11 +77,11 @@ private:
     void insertSysTables();
 
     // create blob table
-    void createBlobHash2BlockTables();
-    void createBlobSysBlock2NoncesTables();
     void createBlobSysHash2BlockHeaderTable();
 
     int m_maxRetry = 60;
+    std::string m_rowFormat = "";
+    std::string m_valueFieldType = "longtext";
 };
 
 }  // namespace storage

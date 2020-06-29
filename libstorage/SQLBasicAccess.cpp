@@ -31,6 +31,15 @@
 using namespace dev::storage;
 using namespace std;
 
+SQLBasicAccess::SQLBasicAccess()
+{
+    if (g_BCOSConfig.version() >= V2_6_0)
+    {
+        // supported_version >= v2.6.0, enable compress
+        m_rowFormat = " ROW_FORMAT=COMPRESSED ";
+    }
+}
+
 int SQLBasicAccess::Select(int64_t, const string& _table, const string&, Condition::Ptr _condition,
     vector<map<string, string>>& _values)
 {
@@ -174,7 +183,7 @@ string SQLBasicAccess::BuildConditionSql(const string& _strPrefix,
 SQLFieldType SQLBasicAccess::getFieldType(std::string const& _tableName)
 {
     // _sys_hash_2_block_ or _sys_block_2_nonce, the SYS_VALUE field is blob
-    if (_tableName == SYS_HASH_2_BLOCK || _tableName == SYS_BLOCK_2_NONCES)
+    if (_tableName == SYS_HASH_2_BLOCK || _tableName == SYS_BLOCK_2_NONCES || _tableName == SYS_CNS)
     {
         if (g_BCOSConfig.version() >= V2_6_0)
         {
@@ -195,6 +204,12 @@ SQLFieldType SQLBasicAccess::getFieldType(std::string const& _tableName)
             return SQLFieldType::MediumBlobType;
         }
     }
+    // supported_version >= v2.6.0, all the field type of user created table is mediumblob
+    if (g_BCOSConfig.version() >= V2_6_0)
+    {
+        return SQLFieldType::MediumBlobType;
+    }
+    // supported_version < v2.6.0, the user created table is mediumtext
     return SQLFieldType::MediumStringType;
 }
 
@@ -228,8 +243,8 @@ string SQLBasicAccess::BuildCreateTableSql(
     ss << " PRIMARY KEY( `_id_` ),\n";
     ss << " KEY(`" << _keyField << "`(191)),\n";
     ss << " KEY(`_num_`)\n";
-    ss << ")ENGINE=InnoDB default charset=utf8mb4;";
-
+    // supported_version >= v2.6.0, enable compress
+    ss << ") " << m_rowFormat << " ENGINE=InnoDB default charset=utf8mb4;";
     return ss.str();
 }
 
