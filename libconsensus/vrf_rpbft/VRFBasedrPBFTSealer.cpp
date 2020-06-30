@@ -102,8 +102,8 @@ bool VRFBasedrPBFTSealer::generateAndSealerRotatingTx()
                 dev::eth::Transaction::Type::MessageCall, m_vrfPublicKey, blockHashStr, vrfProof);
 
         // put the generated transaction into the 0th position of the block transactions
-        m_sealing.block->transactions()->push_back(generatedTx);
-
+        // Note: here must use appendTransaction for this function will notify updating the txsCache
+        m_sealing.block->appendTransaction(generatedTx);
         VRFRPBFTSealer_LOG(DEBUG) << LOG_DESC("generateAndSealerRotatingTx succ")
                                   << LOG_KV("nodeIdx", m_vrfBasedrPBFTEngine->nodeIdx())
                                   << LOG_KV("blkNum", blockNumber)

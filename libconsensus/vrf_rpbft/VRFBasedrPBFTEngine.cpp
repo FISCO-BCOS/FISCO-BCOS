@@ -73,7 +73,7 @@ void VRFBasedrPBFTEngine::updateConsensusNodeList()
     // update m_chosedConsensusNodes
     if (chosedSealerListUpdated)
     {
-        // TODO: forward the remaining transactions to the insertedNode
+        auto lastEpocWorkingSealer = *m_chosedConsensusNodes;
         {
             WriteGuard l(x_chosedConsensusNodes);
             m_chosedConsensusNodes->clear();
@@ -83,6 +83,7 @@ void VRFBasedrPBFTEngine::updateConsensusNodeList()
             }
         }
         resetLocatedInConsensusNodes();
+        forwardRemaingTxs(lastEpocWorkingSealer);
     }
     // the working sealers or the sealers have been updated
     if (chosedSealerListUpdated || m_sealerListUpdated)
@@ -101,6 +102,30 @@ void VRFBasedrPBFTEngine::updateConsensusNodeList()
         {
             m_nodeID2Index->insert(std::make_pair(node, nodeIndex));
             nodeIndex++;
+        }
+    }
+}
+
+void VRFBasedrPBFTEngine::forwardRemaingTxs(std::set<dev::h512> const& _lastEpochWorkingSealers)
+{
+    // the node is one working sealer of the last epoch
+    // while not the working sealer of this epoch
+    auto nodeId = m_keyPair.pub();
+    if (!_lastEpochWorkingSealers.count(nodeId) || m_chosedConsensusNodes->count(nodeId))
+    {
+        return;
+    }
+    // get the working sealers rotated in, and forward the remaining transactions to the rotated-in
+    // working sealers
+    for (auto const& workingSealer : *m_chosedConsensusNodes)
+    {
+        if (!_lastEpochWorkingSealers.count(workingSealer))
+        {
+            m_blockSync->noteForwardRemainTxs(workingSealer);
+            RPBFTENGINE_LOG(DEBUG)
+                << LOG_DESC("noteForwardRemainTxs after the node rotating out")
+                << LOG_KV("idx", m_idx) << LOG_KV("chosedOutWorkingSealer", m_idx)
+                << LOG_KV("chosedInWorkingSealer", workingSealer.abridged());
         }
     }
 }
