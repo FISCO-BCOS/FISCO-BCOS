@@ -65,7 +65,8 @@ bool Ledger::initLedger(std::shared_ptr<LedgerParamInterface> _ledgerParams)
     m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param, m_groupId);
     m_dbInitializer->setChannelRPCServer(m_channelRPCServer);
 
-    setSDKAllowList(m_param->mutablePermissionParam().sdkAllowList);
+    setSDKAllowList(m_param->mutablePermissionParam().sdkAllowList,
+        m_param->mutablePermissionParam().enableSDKAllowList);
 
     // m_dbInitializer
     if (!m_dbInitializer)
@@ -121,8 +122,8 @@ void Ledger::reloadSDKAllowList()
         boost::property_tree::ptree pt;
         boost::property_tree::read_ini(m_param->iniConfigPath(), pt);
         dev::h512s sdkAllowList;
-        m_param->initPermissionParam(sdkAllowList, pt);
-        setSDKAllowList(sdkAllowList);
+        auto enableSDKAllowList = m_param->parseSDKAllowList(sdkAllowList, pt);
+        setSDKAllowList(sdkAllowList, enableSDKAllowList);
         Ledger_LOG(INFO) << LOG_DESC("reloadSDKAllowList")
                          << LOG_KV("config", m_param->iniConfigPath())
                          << LOG_KV("allowListSize", sdkAllowList.size());
@@ -134,14 +135,16 @@ void Ledger::reloadSDKAllowList()
     }
 }
 
-void Ledger::setSDKAllowList(dev::h512s const& _sdkList)
+void Ledger::setSDKAllowList(dev::h512s const& _sdkList, bool _enableSDKAllowList)
 {
     Ledger_LOG(INFO) << LOG_DESC("setSDKAllowList") << LOG_KV("groupId", m_groupId)
-                     << LOG_KV("sdkAllowListSize", _sdkList.size());
+                     << LOG_KV("sdkAllowListSize", _sdkList.size())
+                     << LOG_KV("enableSDKAllowList", _enableSDKAllowList);
     PeerWhitelist::Ptr sdkAllowList = std::make_shared<PeerWhitelist>(_sdkList, true);
     if (m_channelRPCServer)
     {
-        m_channelRPCServer->registerSDKAllowListByGroupId(m_groupId, sdkAllowList);
+        m_channelRPCServer->registerSDKAllowListByGroupId(
+            m_groupId, sdkAllowList, _enableSDKAllowList);
     }
 }
 

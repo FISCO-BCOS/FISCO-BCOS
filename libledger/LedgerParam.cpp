@@ -166,7 +166,7 @@ void LedgerParam::parseIniConfig(const std::string& _iniConfigFile, const std::s
     // init params releated to consensus(ttl)
     initConsensusIniConfig(pt);
     initFlowControlConfig(pt);
-    initPermissionParam(m_permissionParam.sdkAllowList, pt);
+    m_permissionParam.enableSDKAllowList = parseSDKAllowList(m_permissionParam.sdkAllowList, pt);
 }
 
 void LedgerParam::init(const std::string& _configFilePath, const std::string& _dataPath)
@@ -698,15 +698,16 @@ void LedgerParam::initFlowControlConfig(boost::property_tree::ptree const& _pt)
                                  mutableFlowControlParam().outGoingBandwidthLimit);
 }
 
-void LedgerParam::parsePublicKeyListOfSection(dev::h512s& _nodeList,
+bool LedgerParam::parsePublicKeyListOfSection(dev::h512s& _nodeList,
     boost::property_tree::ptree const& _pt, std::string const& _sectionName,
     std::string const& _subSectionName)
 {
+    bool enabled = false;
     if (!_pt.get_child_optional(_sectionName))
     {
         LedgerParam_LOG(DEBUG) << LOG_DESC("parsePublicKeyListOfSection return for empty config")
                                << LOG_KV("sectionName", _sectionName);
-        return;
+        return enabled;
     }
     for (auto const& it : _pt.get_child(_sectionName))
     {
@@ -714,22 +715,31 @@ void LedgerParam::parsePublicKeyListOfSection(dev::h512s& _nodeList,
         {
             continue;
         }
+        enabled = true;
         std::string data = it.second.data();
         boost::to_lower(data);
         if (!isNodeIDOk(data))
         {
+            LedgerParam_LOG(WARNING) << LOG_BADGE("load public key: invalid public key")
+                                     << LOG_KV("invalidPubKey", data);
             continue;
         }
         LedgerParam_LOG(INFO) << LOG_BADGE("parsePublicKeyListOfSection")
                               << LOG_KV("sectionName", _sectionName) << LOG_KV("it.first", data);
         _nodeList.push_back(dev::h512(data));
     }
+    LedgerParam_LOG(INFO) << LOG_BADGE("parsePublicKeyListOfSection")
+                          << LOG_KV("totalPubKeySize", _nodeList.size());
+    return enabled;
 }
 
-void LedgerParam::initPermissionParam(dev::h512s& _nodeList, boost::property_tree::ptree const& _pt)
+bool LedgerParam::parseSDKAllowList(dev::h512s& _nodeList, boost::property_tree::ptree const& _pt)
 {
-    parsePublicKeyListOfSection(_nodeList, _pt, "sdk_allowlist", "public_key.");
-    LedgerParam_LOG(INFO) << LOG_DESC("initPermissionParam") << LOG_KV("sdkAllowList", _nodeList);
+    auto enableSDKPermissionControl =
+        parsePublicKeyListOfSection(_nodeList, _pt, "sdk_allowlist", "public_key.");
+    LedgerParam_LOG(INFO) << LOG_DESC("parseSDKAllowList") << LOG_KV("sdkAllowList", _nodeList)
+                          << LOG_KV("enableSDKPermissionControl", enableSDKPermissionControl);
+    return enableSDKPermissionControl;
 }
 
 }  // namespace ledger

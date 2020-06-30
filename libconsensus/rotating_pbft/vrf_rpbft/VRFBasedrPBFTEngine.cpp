@@ -109,8 +109,7 @@ void VRFBasedrPBFTEngine::updateConsensusNodeList()
 void VRFBasedrPBFTEngine::tryToForwardRemainingTxs(
     std::set<dev::h512> const& _lastEpochWorkingSealers)
 {
-    // the node is one working sealer of the last epoch
-    // while not the working sealer of this epoch
+    // the node is not the working sealer of this epoch
     auto nodeId = m_keyPair.pub();
     if (!_lastEpochWorkingSealers.count(nodeId) || m_chosedConsensusNodes->count(nodeId))
     {
@@ -125,7 +124,8 @@ void VRFBasedrPBFTEngine::tryToForwardRemainingTxs(
             m_blockSync->noteForwardRemainTxs(workingSealer);
             RPBFTENGINE_LOG(DEBUG)
                 << LOG_DESC("noteForwardRemainTxs after the node rotating out")
-                << LOG_KV("idx", m_idx) << LOG_KV("chosedOutWorkingSealer", m_idx)
+                << LOG_KV("blkNumber", m_highestBlock.number()) << LOG_KV("idx", m_idx)
+                << LOG_KV("chosedOutWorkingSealer", m_idx)
                 << LOG_KV("chosedInWorkingSealer", workingSealer.abridged());
         }
     }

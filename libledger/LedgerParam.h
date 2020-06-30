@@ -183,6 +183,7 @@ struct FlowControlParam
 struct PermissionParam
 {
     dev::h512s sdkAllowList;
+    bool enableSDKAllowList = false;
 };
 
 class LedgerParam : public LedgerParamInterface
@@ -212,8 +213,7 @@ public:
     PermissionParam& mutablePermissionParam() override { return m_permissionParam; }
     void generateGenesisMark();
 
-    void initPermissionParam(
-        dev::h512s& _nodeList, boost::property_tree::ptree const& _pt) override;
+    bool parseSDKAllowList(dev::h512s& _nodeList, boost::property_tree::ptree const& _pt) override;
 
     std::string const& iniConfigPath() override { return m_iniConfigPath; }
     std::string const& genesisConfigPath() override { return m_genesisConfigPath; }
@@ -229,7 +229,7 @@ private:
     void initEventLogFilterManagerConfig(boost::property_tree::ptree const& pt);
     void initFlowControlConfig(boost::property_tree::ptree const& _pt);
     void setEVMFlags(boost::property_tree::ptree const& _pt);
-    void parsePublicKeyListOfSection(dev::h512s& _nodeList, boost::property_tree::ptree const& _pt,
+    bool parsePublicKeyListOfSection(dev::h512s& _nodeList, boost::property_tree::ptree const& _pt,
         std::string const& _sectionName, std::string const& _subSectionName);
 
 private:

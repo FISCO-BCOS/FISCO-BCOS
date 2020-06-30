@@ -214,7 +214,7 @@ protected:
     void initrPBFTEngine(dev::consensus::Sealer::Ptr _sealer);
 
 private:
-    void setSDKAllowList(dev::h512s const& _sdkList);
+    void setSDKAllowList(dev::h512s const& _sdkList, bool _enableSDKAllowList);
     /// create PBFTConsensus
     std::shared_ptr<dev::consensus::Sealer> createPBFTSealer();
     /// create RaftConsensus

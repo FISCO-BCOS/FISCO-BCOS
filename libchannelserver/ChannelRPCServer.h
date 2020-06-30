@@ -189,8 +189,8 @@ public:
         return m_networkBandwidthLimiter;
     }
 
-    void registerSDKAllowListByGroupId(
-        dev::GROUP_ID const& _groupId, dev::PeerWhitelist::Ptr _allowList);
+    void registerSDKAllowListByGroupId(dev::GROUP_ID const& _groupId,
+        dev::PeerWhitelist::Ptr _allowList, bool _enableSDKAllowList);
 
     // remove the registered sdk allowlist when stop/delete the group
     void removeSDKAllowListByGroupId(dev::GROUP_ID const& _groupId);

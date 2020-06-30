@@ -919,7 +919,8 @@ void dev::ChannelRPCServer::onClientChannelRequest(
             dev::network::Options options;
             options.timeout = 30 * 1000;  // 30 seconds
 
-            m_service->asyncSendMessageByTopic(topic, p2pMessage,
+            m_service->asyncSendMessageByTopic(
+                topic, p2pMessage,
                 [session, message](dev::network::NetworkException e,
                     std::shared_ptr<dev::p2p::P2PSession>, dev::p2p::P2PMessage::Ptr response) {
                     if (e.errorCode())
@@ -1293,12 +1294,12 @@ std::vector<dev::channel::ChannelSession::Ptr> ChannelRPCServer::getSessionByTop
 }
 
 void ChannelRPCServer::registerSDKAllowListByGroupId(
-    dev::GROUP_ID const& _groupId, dev::PeerWhitelist::Ptr _allowList)
+    dev::GROUP_ID const& _groupId, dev::PeerWhitelist::Ptr _allowList, bool _enableSDKAllowList)
 {
     CHANNEL_LOG(INFO) << LOG_DESC("registerSDKAllowListByGroupId") << LOG_KV("groupId", _groupId)
                       << LOG_KV("size", _allowList->size());
     WriteGuard l(x_group2SDKAllowList);
-    if (_allowList->size() == 0)
+    if (!_enableSDKAllowList)
     {
         CHANNEL_LOG(INFO) << LOG_DESC(
             "Disable group-level sdk permission control for sdk allowlist is empty");

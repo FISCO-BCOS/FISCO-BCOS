@@ -173,7 +173,7 @@ void SyncTransaction::broadcastTransactions(std::shared_ptr<NodeIDs> _selectedPe
                 selectSize = (selectSize * percent + 99) / 100;
             }
         }
-        if (_fromRpc && m_treeRouter && !randomSelectedPeersInited)
+        if (_fromRpc && m_treeRouter && !randomSelectedPeersInited && !_fastForwardRemainTxs)
         {
             randomSelectedPeers =
                 m_treeRouter->selectNodes(m_syncStatus->peersSet(), consIndex, true);
@@ -182,6 +182,7 @@ void SyncTransaction::broadcastTransactions(std::shared_ptr<NodeIDs> _selectedPe
         // the randomSelectedPeers is empty, continue without setTransactionIsKnownBy
         if (randomSelectedPeers->size() == 0)
         {
+            randomSelectedPeersInited = false;
             continue;
         }
         peers = m_syncStatus->filterPeers(
