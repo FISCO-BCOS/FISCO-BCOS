@@ -157,6 +157,7 @@ public:
     /// Convert to arithmetic type.
     operator Arith() const { return fromBigEndian<Arith>(m_data); }
 
+#if 0
     /// @returns true iff this is the empty hash.
     explicit operator bool() const
     {
@@ -178,7 +179,25 @@ public:
     bool operator>=(FixedHash const& _c) const { return !operator<(_c); }
     bool operator<=(FixedHash const& _c) const { return operator==(_c) || operator<(_c); }
     bool operator>(FixedHash const& _c) const { return !operator<=(_c); }
+#endif
 
+    /// @returns true if this is not the empty hash.
+    explicit operator bool() const
+    {
+        return operator!=(FixedHash());
+    }
+
+    // The obvious comparison operators.
+    bool operator==(FixedHash const& _c) const { return m_data == _c.m_data; }
+    bool operator!=(FixedHash const& _c) const { return !operator==(_c); }
+    bool operator<(FixedHash const& _c) const
+    {
+        return m_data < _c.m_data;
+    }
+    bool operator>=(FixedHash const& _c) const { return m_data >= _c.m_data; }
+    bool operator<=(FixedHash const& _c) const { return m_data <= _c.m_data; }
+    bool operator>(FixedHash const& _c) const { return m_data > _c.m_data; }
+    
     // The obvious binary operators.
     FixedHash& operator^=(FixedHash const& _c)
     {
