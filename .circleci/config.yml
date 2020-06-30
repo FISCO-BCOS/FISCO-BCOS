@@ -217,7 +217,6 @@ workflows:
             branches:
               only:
                 - /^pull.*/
-                - /^release.*/
             tags:
               ignore: /.*/
       - generate_coverage:
@@ -227,7 +226,6 @@ workflows:
             branches:
               only:
                 - /^pull.*/
-                - /^release.*/
             tags:
               ignore: /.*/
       - integration_test:
@@ -237,7 +235,6 @@ workflows:
             branches:
               only:
                 - /^pull.*/
-                - /^release.*/
             tags:
               ignore: /.*/
       - build_test_guomi:
