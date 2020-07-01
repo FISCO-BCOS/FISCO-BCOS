@@ -123,10 +123,10 @@ void VRFBasedrPBFTEngine::tryToForwardRemainingTxs(
         if (!_lastEpochWorkingSealers.count(workingSealer))
         {
             m_blockSync->noteForwardRemainTxs(workingSealer);
-            RPBFTENGINE_LOG(DEBUG)
-                << LOG_DESC("noteForwardRemainTxs after the node rotating out")
-                << LOG_KV("idx", m_idx) << LOG_KV("chosedOutWorkingSealer", m_idx)
-                << LOG_KV("chosedInWorkingSealer", workingSealer.abridged());
+            RPBFTENGINE_LOG(DEBUG) << LOG_DESC("noteForwardRemainTxs after the node rotating out")
+                                   << LOG_KV("blkNumber", m_highestBlock.number())
+                                   << LOG_KV("chosedOutWorkingSealer", m_idx)
+                                   << LOG_KV("chosedInWorkingSealer", workingSealer.abridged());
         }
     }
 }
