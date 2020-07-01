@@ -212,8 +212,7 @@ public:
     PermissionParam& mutablePermissionParam() override { return m_permissionParam; }
     void generateGenesisMark();
 
-    void initPermissionParam(
-        dev::h512s& _nodeList, boost::property_tree::ptree const& _pt) override;
+    void parseSDKAllowList(dev::h512s& _nodeList, boost::property_tree::ptree const& _pt) override;
 
     std::string const& iniConfigPath() override { return m_iniConfigPath; }
     std::string const& genesisConfigPath() override { return m_genesisConfigPath; }

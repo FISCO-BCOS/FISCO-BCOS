@@ -121,7 +121,7 @@ void Ledger::reloadSDKAllowList()
         boost::property_tree::ptree pt;
         boost::property_tree::read_ini(m_param->iniConfigPath(), pt);
         dev::h512s sdkAllowList;
-        m_param->initPermissionParam(sdkAllowList, pt);
+        m_param->parseSDKAllowList(sdkAllowList, pt);
         setSDKAllowList(sdkAllowList);
         Ledger_LOG(INFO) << LOG_DESC("reloadSDKAllowList")
                          << LOG_KV("config", m_param->iniConfigPath())
