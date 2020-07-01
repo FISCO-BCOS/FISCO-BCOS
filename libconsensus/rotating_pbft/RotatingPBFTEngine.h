@@ -158,7 +158,11 @@ protected:
     void resetConfig() override;
     virtual void resetChosedConsensusNodes();
     virtual void chooseConsensusNodes();
+
     virtual void updateConsensusInfo();
+    void updateChosedSealerList();
+    virtual void updateTreeTopologyInfo();
+
     virtual void resetLocatedInConsensusNodes();
     IDXTYPE minValidNodes() const override { return std::min(m_epochSize, m_sealersNum) - m_f; }
 

@@ -64,12 +64,12 @@ void WorkingSealerManagerImpl::createVRFInfo(
 
 void WorkingSealerManagerImpl::rotateWorkingSealer()
 {
-    // check VRFInfos firstly
-    checkVRFInfos();
     if (!shouldRotate())
     {
         return;
     }
+    // check VRFInfos firstly
+    checkVRFInfos();
     int64_t sealersNum = m_workingSealerList->size() + m_pendingSealerList->size();
     if (sealersNum <= 1 ||
         (m_configuredEpochSealersSize == sealersNum && 0 == m_pendingSealerList->size()))
@@ -101,14 +101,6 @@ void WorkingSealerManagerImpl::rotateWorkingSealer()
             UpdateNodeType(node, NODE_TYPE_SEALER);
             PRECOMPILED_LOG(DEBUG) << LOG_DESC("rotateWorkingSealer: remove workingSealer")
                                    << LOG_KV("nodeId", node.abridged());
-        }
-        int64_t pendingSealersSize = m_pendingSealerList->size();
-        if (pendingSealersSize < nodeRotatingInfo->insertedWorkingSealerNum)
-        {
-            for (auto const& node : *workingSealersToRemove)
-            {
-                m_pendingSealerList->push_back(node);
-            }
         }
     }
 
@@ -198,6 +190,10 @@ std::shared_ptr<dev::h512s> WorkingSealerManagerImpl::selectNodesFromList(
 
 void WorkingSealerManagerImpl::getSealerList()
 {
+    if (m_sealerListObtained)
+    {
+        return;
+    }
     m_consTable = openTable(m_context, SYS_CONSENSUS);
     if (!m_consTable)
     {
@@ -207,6 +203,7 @@ void WorkingSealerManagerImpl::getSealerList()
     auto blockNumber = m_context->blockInfo().number;
     *m_pendingSealerList = getNodeListByType(m_consTable, blockNumber, NODE_TYPE_SEALER);
     *m_workingSealerList = getNodeListByType(m_consTable, blockNumber, NODE_TYPE_WORKING_SEALER);
+    m_sealerListObtained = true;
 }
 
 bool WorkingSealerManagerImpl::checkPermission(
@@ -276,7 +273,7 @@ bool WorkingSealerManagerImpl::shouldRotate()
         BOOST_THROW_EXCEPTION(PrecompiledException(
             "Open system configuration table failed! tableName: " + SYS_CONFIG));
     }
-    // get epoch_sealers_num from the table
+    // get epoch_sealer_num from the table
     auto epochSealersInfo = getSysteConfigByKey(
         sysConfigTable, SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM, m_context->blockInfo().number);
     m_configuredEpochSealersSize = boost::lexical_cast<int64_t>(epochSealersInfo->first);
@@ -290,9 +287,10 @@ bool WorkingSealerManagerImpl::shouldRotate()
     {
         return true;
     }
+    getSealerList();
     int64_t sealersNum = m_pendingSealerList->size() + m_workingSealerList->size();
-    auto epochSize = std::min(m_configuredEpochSealersSize, sealersNum);
-    if ((int64_t)(m_workingSealerList->size()) < epochSize)
+    auto maxWorkingSealerNum = std::min(m_configuredEpochSealersSize, sealersNum);
+    if ((int64_t)(m_workingSealerList->size()) < maxWorkingSealerNum)
     {
         return true;
     }
@@ -315,7 +313,7 @@ bool WorkingSealerManagerImpl::shouldRotate()
 NodeRotatingInfo::Ptr WorkingSealerManagerImpl::calNodeRotatingInfo()
 {
     int64_t sealersNum = m_pendingSealerList->size() + m_workingSealerList->size();
-    // get rPBFT epoch_sealers_num
+    // get rPBFT epoch_sealer_num
     auto epochSize = std::min(m_configuredEpochSealersSize, sealersNum);
 
     int64_t workingSealersNum = m_workingSealerList->size();
@@ -335,8 +333,16 @@ NodeRotatingInfo::Ptr WorkingSealerManagerImpl::calNodeRotatingInfo()
     // The configurated workingSealers size is equal to the current workingSealers size
     else
     {
-        nodeRotatingInfo->removedWorkingSealerNum = 1;
-        nodeRotatingInfo->insertedWorkingSealerNum = 1;
+        if (sealersNum == workingSealersNum)
+        {
+            nodeRotatingInfo->removedWorkingSealerNum = 0;
+            nodeRotatingInfo->insertedWorkingSealerNum = 0;
+        }
+        else
+        {
+            nodeRotatingInfo->removedWorkingSealerNum = 1;
+            nodeRotatingInfo->insertedWorkingSealerNum = 1;
+        }
     }
     PRECOMPILED_LOG(INFO) << LOG_DESC("calNodeRotatingInfo") << LOG_KV("sealersNum", sealersNum)
                           << LOG_KV("configuredEpochSealers", m_configuredEpochSealersSize)

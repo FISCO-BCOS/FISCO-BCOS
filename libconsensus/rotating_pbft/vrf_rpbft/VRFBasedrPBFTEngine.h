@@ -56,10 +56,8 @@ protected:
     void updateConsensusNodeList() override;
 
     void resetConfig() override;
-    void updateConsensusInfo() override;
-
     void checkTransactionsValid(dev::eth::Block::Ptr _block, PrepareReq::Ptr _prepareReq) override;
-    void forwardRemaingTxs(std::set<dev::h512> const& _lastEpochWorkingSealers);
+    void tryToForwardRemainingTxs(std::set<dev::h512> const& _lastEpochWorkingSealers);
 
 private:
     // Used to notify Sealer whether it needs to rotate sealers

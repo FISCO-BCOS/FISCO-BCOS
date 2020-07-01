@@ -32,7 +32,7 @@ docker_mode=
 gm_conf_path="gmconf/"
 current_dir=$(pwd)
 consensus_type="pbft"
-supported_consensus=(pbft raft rpbft vrf_rpbft)
+supported_consensus=(pbft raft rpbft)
 TASSL_CMD="${HOME}"/.fisco/tassl
 auto_flush="true"
 enable_statistic="false"
@@ -66,7 +66,7 @@ Usage:
     -v <FISCO-BCOS binary version>      Default get version from https://github.com/FISCO-BCOS/FISCO-BCOS/releases. If set use specificd version binary
     -s <DB type>                        Default rocksdb. Options can be rocksdb / mysql / scalable, rocksdb is recommended
     -d <docker mode>                    Default off. If set -d, build with docker
-    -c <Consensus Algorithm>            Default PBFT. Options can be pbft / raft /rpbft / vrf_rpbft, pbft is recommended
+    -c <Consensus Algorithm>            Default PBFT. Options can be pbft / raft /rpbft, pbft is recommended
     -C <Chain id>                       Default 1. Can set uint.
     -g <Generate guomi nodes>           Default no
     -z <Generate tar packet>            Default no
@@ -603,7 +603,7 @@ generate_group_genesis()
     cat << EOF > "${output}"
 [consensus]
     ; consensus algorithm now support PBFT(consensus_type=pbft), Raft(consensus_type=raft)
-    ; rpbft(consensus_type=rpbft) and vrf_rpbft(consensus_type=vrf_rpbft)
+    ; rpbft(consensus_type=rpbft)
     consensus_type=${consensus_type}
     ; the max number of transactions of a block
     max_trans_num=1000

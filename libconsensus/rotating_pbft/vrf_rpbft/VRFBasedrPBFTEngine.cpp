@@ -83,13 +83,13 @@ void VRFBasedrPBFTEngine::updateConsensusNodeList()
             }
         }
         resetLocatedInConsensusNodes();
-        forwardRemaingTxs(lastEpocWorkingSealer);
+        tryToForwardRemainingTxs(lastEpocWorkingSealer);
     }
     // the working sealers or the sealers have been updated
     if (chosedSealerListUpdated || m_sealerListUpdated)
     {
         // update consensusInfo when send block status by tree-topology
-        updateConsensusInfo();
+        updateTreeTopologyInfo();
     }
     if (m_sealerListUpdated)
     {
@@ -106,7 +106,8 @@ void VRFBasedrPBFTEngine::updateConsensusNodeList()
     }
 }
 
-void VRFBasedrPBFTEngine::forwardRemaingTxs(std::set<dev::h512> const& _lastEpochWorkingSealers)
+void VRFBasedrPBFTEngine::tryToForwardRemainingTxs(
+    std::set<dev::h512> const& _lastEpochWorkingSealers)
 {
     // the node is one working sealer of the last epoch
     // while not the working sealer of this epoch
@@ -141,9 +142,9 @@ void VRFBasedrPBFTEngine::resetConfig()
     // update m_f
     m_f = (m_workingSealersNum - 1) / 3;
 
-    // update according to epoch_blocks_num
+    // update according to epoch_block_num
     updateRotatingInterval();
-    // update according to epoch_sealers_num
+    // update according to epoch_sealer_num
     bool epochUpdated = updateEpochSize();
     // first setup
     if (m_blockChain->number() == 0)
@@ -153,8 +154,8 @@ void VRFBasedrPBFTEngine::resetConfig()
 
     // the number of workingSealers is smaller than epochSize,
     // trigger rotate in case of the number of working sealers has been decreased to 0
-    auto epochSize = std::min(m_epochSize.load(), m_sealersNum.load());
-    if (m_workingSealersNum.load() < epochSize)
+    auto maxWorkingSealerNum = std::min(m_epochSize.load(), m_sealersNum.load());
+    if (m_workingSealersNum.load() < maxWorkingSealerNum)
     {
         m_shouldRotateSealers.store(true);
     }
@@ -170,26 +171,6 @@ void VRFBasedrPBFTEngine::resetConfig()
                               << LOG_KV("workingSealersNum", m_workingSealersNum)
                               << LOG_KV("epochBlockNum", m_rotatingInterval)
                               << LOG_KV("configuredEpochSealers", m_epochSize);
-}
-
-void VRFBasedrPBFTEngine::updateConsensusInfo()
-{
-    ReadGuard l(x_chosedSealerList);
-    // update consensus node info for syncing block
-    if (m_blockSync->syncTreeRouterEnabled())
-    {
-        // get all the node list of this group
-        auto nodeList = m_blockChain->sealerList() + m_blockChain->observerList();
-        std::sort(nodeList.begin(), nodeList.end());
-        m_blockSync->updateConsensusNodeInfo(*m_chosedSealerList, nodeList);
-    }
-    // update consensus node info for broadcasting transactions
-    if (m_treeRouter)
-    {
-        m_treeRouter->updateConsensusNodeInfo(*m_chosedSealerList);
-    }
-    VRFRPBFTEngine_LOG(INFO) << LOG_DESC("updateConsensusInfo")
-                             << LOG_KV("chosedSealerListSize", m_chosedSealerList->size());
 }
 
 // When you need to rotate nodes, check the node rotation transaction

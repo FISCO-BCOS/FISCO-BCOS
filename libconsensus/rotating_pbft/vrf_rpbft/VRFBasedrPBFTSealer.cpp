@@ -69,14 +69,14 @@ bool VRFBasedrPBFTSealer::hookAfterHandleBlock()
         return true;
     }
     // generate transaction exceptioned
-    if (!generateAndSealerRotatingTx())
+    if (!generateTransactionForRotating())
     {
         return false;
     }
     return true;
 }
 
-bool VRFBasedrPBFTSealer::generateAndSealerRotatingTx()
+bool VRFBasedrPBFTSealer::generateTransactionForRotating()
 {
     try
     {
@@ -88,7 +88,7 @@ bool VRFBasedrPBFTSealer::generateAndSealerRotatingTx()
         if (!vrfProofPtr)
         {
             VRFRPBFTSealer_LOG(WARNING)
-                << LOG_DESC("generateAndSealerRotatingTx: generate vrf-proof failed")
+                << LOG_DESC("generateTransactionForRotating: generate vrf-proof failed")
                 << LOG_KV("inputData", blockHashStr);
             return false;
         }
@@ -104,7 +104,7 @@ bool VRFBasedrPBFTSealer::generateAndSealerRotatingTx()
         // put the generated transaction into the 0th position of the block transactions
         // Note: here must use appendTransaction for this function will notify updating the txsCache
         m_sealing.block->appendTransaction(generatedTx);
-        VRFRPBFTSealer_LOG(DEBUG) << LOG_DESC("generateAndSealerRotatingTx succ")
+        VRFRPBFTSealer_LOG(DEBUG) << LOG_DESC("generateTransactionForRotating succ")
                                   << LOG_KV("nodeIdx", m_vrfBasedrPBFTEngine->nodeIdx())
                                   << LOG_KV("blkNum", blockNumber)
                                   << LOG_KV("hash", blockHash.abridged())
@@ -113,7 +113,7 @@ bool VRFBasedrPBFTSealer::generateAndSealerRotatingTx()
     }
     catch (const std::exception& _e)
     {
-        VRFRPBFTSealer_LOG(ERROR) << LOG_DESC("generateAndSealerRotatingTx failed")
+        VRFRPBFTSealer_LOG(ERROR) << LOG_DESC("generateTransactionForRotating failed")
                                   << LOG_KV("reason", boost::diagnostic_information(_e));
         return false;
     }
