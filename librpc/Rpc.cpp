@@ -1585,7 +1585,7 @@ Json::Value Rpc::startGroup(int _groupID)
         response["code"] = LedgerManagementStatusCode::GROUP_IS_STOPPING;
         response["message"] = "Group " + std::to_string(_groupID) + " is stopping";
     }
-    catch (GroupAlreadyDeleted)
+    catch (GroupAlreadyDeleted const&)
     {
         response["code"] = LedgerManagementStatusCode::GROUP_ALREADY_DELETED;
         response["message"] = "Group " + std::to_string(_groupID) + " has been deleted";
