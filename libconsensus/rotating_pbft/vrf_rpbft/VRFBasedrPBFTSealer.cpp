@@ -38,7 +38,7 @@ void VRFBasedrPBFTSealer::initConsensusEngine()
 {
     PBFTSealer::initConsensusEngine();
     std::string threadName = "rPBFTSeal-" + std::to_string(m_pbftEngine->groupId());
-    setThreadName(threadName);
+    setName(threadName);
     // convert PBFTEngine into VRFBasedrPBFTEngine
     m_vrfBasedrPBFTEngine = std::dynamic_pointer_cast<VRFBasedrPBFTEngine>(m_pbftEngine);
     // create txGenerator
