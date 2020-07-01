@@ -4,11 +4,11 @@ include(GNUInstallDirs)
 ExternalProject_Add(evmc
         PREFIX ${CMAKE_SOURCE_DIR}/deps
         DOWNLOAD_NO_PROGRESS 1
-        DOWNLOAD_NAME evmc-c009c755.tar.gz
-        URL https://github.com/FISCO-BCOS/evmc/archive/c009c755a20ff9658506d855904c17552f3144fe.tar.gz
-        URL_HASH SHA256=5f37ba67803df187e30c68b11c5feeff611d6b69f1483b78c9a3dff001ab9a67
+        DOWNLOAD_NAME evmc-e0bd9d5d.tar.gz
+        URL https://github.com/FISCO-BCOS/evmc/archive/e0bd9d5dc68ec3a00fe9a3c5e81c98946449a20d.tar.gz
+        URL_HASH SHA256=a9983643415c8473cd696ff4aa93e014308f0292057bce740bc0b4ca84a40462
         # GIT_REPOSITORY https://github.com/FISCO-BCOS/evmc.git
-        # GIT_TAG c009c755a20ff9658506d855904c17552f3144fe
+        # GIT_TAG e0bd9d5dc68ec3a00fe9a3c5e81c98946449a20d
         CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
         BUILD_IN_SOURCE 1
         LOG_CONFIGURE 1
