@@ -418,6 +418,7 @@ void LedgerParam::initConsensusConfig(ptree const& pt)
                           << LOG_KV("maxTxNum", mutableConsensusParam().maxTransactions)
                           << LOG_KV("txGasLimit", mutableTxParam().txGasLimit);
 
+    // if the consensus node id is invalid, throw InvalidConfiguration exception
     parsePublicKeyListOfSection(mutableConsensusParam().sealerList, pt, "consensus", "node.");
     std::stringstream nodeListMark;
     // init nodeListMark
@@ -718,10 +719,12 @@ void LedgerParam::parsePublicKeyListOfSection(dev::h512s& _nodeList,
         boost::to_lower(data);
         if (!isNodeIDOk(data))
         {
-            LedgerParam_LOG(WARNING) << LOG_BADGE("load public key: invalid public key")
-                                     << LOG_KV("invalidPubKey", data);
-
-            continue;
+            LedgerParam_LOG(WARNING)
+                << LOG_BADGE("load public key: invalid public key") << LOG_KV("invalidPubKey", data)
+                << LOG_KV("sectionName", _sectionName);
+            BOOST_THROW_EXCEPTION(InvalidConfiguration() << errinfo_comment(
+                                      "load public key failed, invalid public key:" + data +
+                                      ", configuration section:" + _sectionName));
         }
         LedgerParam_LOG(INFO) << LOG_BADGE("parsePublicKeyListOfSection")
                               << LOG_KV("sectionName", _sectionName) << LOG_KV("it.first", data);

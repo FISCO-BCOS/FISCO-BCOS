@@ -51,6 +51,16 @@ bool isNodeIDOk(const std::string& _nodeID)
 {
     try
     {
+        // check node id length, must be 130bits or 128bits
+        if (_nodeID.length() != 130 && _nodeID.length() != 128)
+        {
+            return false;
+        }
+        // if the length of the node id is 130, must be start with 0x
+        if (_nodeID.length() == 130 && _nodeID.compare(0, 2, "0x") != 0)
+        {
+            return false;
+        }
         dev::h512 nodeID = dev::h512(_nodeID);
         return isNodeIDOk(nodeID);
     }

@@ -241,7 +241,7 @@ string LedgerManager::generateGroupConfig()
         "    max_request_prepare_waitTime=100\n"
 
         "[storage]\n"
-        "    ; storage db type, rocksdb / mysql / external / scalable, rocksdb is recommended\n"
+        "    ; storage db type, rocksdb / mysql / scalable, rocksdb is recommended\n"
         "    type=rocksdb\n"
         "    ; set true to turn on binary log\n"
         "    binary_log=false\n"
@@ -252,7 +252,7 @@ string LedgerManager::generateGroupConfig()
         "    ; max cache memeory, MB\n"
         "    max_capacity=32\n"
         "    max_forward_block=10\n"
-        "    ; only for external\n"
+        "    ; only for external, deprecated in v2.3.0\n"
         "    max_retry=60\n"
         "    topic=DB\n"
         "    ; only for mysql\n"
