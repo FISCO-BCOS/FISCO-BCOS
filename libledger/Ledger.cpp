@@ -30,8 +30,8 @@
 #include <libconsensus/raft/RaftEngine.h>
 #include <libconsensus/raft/RaftSealer.h>
 #include <libconsensus/rotating_pbft/RotatingPBFTEngine.h>
-#include <libconsensus/vrf_rpbft/VRFBasedrPBFTEngine.h>
-#include <libconsensus/vrf_rpbft/VRFBasedrPBFTSealer.h>
+#include <libconsensus/rotating_pbft/vrf_rpbft/VRFBasedrPBFTEngine.h>
+#include <libconsensus/rotating_pbft/vrf_rpbft/VRFBasedrPBFTSealer.h>
 #include <libflowlimit/RateLimiter.h>
 #include <libnetwork/PeerWhitelist.h>
 #include <libsync/SyncMaster.h>
@@ -338,7 +338,7 @@ ConsensusInterface::Ptr Ledger::createConsensusEngine(dev::PROTOCOL_ID const& _p
     if (vrfBasedrPBFTEnabled())
     {
         // Note: since WorkingSealerManagerPrecompiled is enabled after v2.6.0,
-        //       vrf_rpbft is supported after v2.6.0
+        //       vrf based rpbft is supported after v2.6.0
         if (g_BCOSConfig.version() >= V2_6_0)
         {
             Ledger_LOG(INFO) << LOG_DESC("createConsensusEngine: create VRFBasedrPBFTEngine");
@@ -516,7 +516,7 @@ bool Ledger::consensusInitFactory()
             dev::InitLedgerConfigFailed()
             << errinfo_comment("create consensusEngine failed, maybe unsupported consensus type " +
                                m_param->mutableConsensusParam().consensusType +
-                               ", supported consensus type are pbft, raft, rpbft, vrf_rpbft"));
+                               ", supported consensus type are pbft, raft, rpbft"));
     }
     if (!m_sealer)
     {

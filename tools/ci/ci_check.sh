@@ -16,7 +16,6 @@ init() {
 127.0.0.1:2 agencyA 1,2
 127.0.0.1:2 agencyB 1
 EOF
-    fisco_version=$(../bin/fisco-bcos -v | grep -o "2\.[0-9]\.[0-9]")
     bash build_chain.sh -T -f ipconf -e ../bin/fisco-bcos -v "${fisco_version}"
     bash check_node_config.sh -p nodes/127.0.0.1/node0
     cd nodes/127.0.0.1
@@ -143,6 +142,7 @@ check_rpbft()
         sed_cmd="sed -i .bkp"
     fi
     ${sed_cmd} "s/consensus_type=raft/consensus_type=rpbft/" node*/conf/group.1.genesis
+    ${sed_cmd} "s/supported_version=${fisco_version}/supported_version=2.5.0/g" node*/config.ini
     # test ipv6
     ${sed_cmd} "s/127.0.0.1:/\[::1\]:/g" node*/config.ini
     ${sed_cmd} "s/0.0.0.0/::/g" node*/config.ini
@@ -157,10 +157,11 @@ check_vrf_rpbft()
     if [ "$(uname)" == "Darwin" ];then
         sed_cmd="sed -i .bkp"
     fi
-    ${sed_cmd} "s/consensus_type=rpbft/consensus_type=vrf_rpbft/" node*/conf/group.1.genesis
+    ${sed_cmd} "s/supported_version=2.5.0/supported_version=${fisco_version}/g" node*/config.ini
     check_consensus_and_sync 12
 }
 
+fisco_version=$(../bin/fisco-bcos -v | grep -o "2\.[0-9]\.[0-9]" | head -n 1)
 init
 check_sync_consensus
 check_binarylog

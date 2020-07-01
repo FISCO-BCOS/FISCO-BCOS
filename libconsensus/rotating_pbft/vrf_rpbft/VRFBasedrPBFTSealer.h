@@ -49,7 +49,7 @@ public:
 
 protected:
     // generate and seal the workingSealerManagerPrecompiled transaction into _txOffset
-    virtual bool generateAndSealerRotatingTx();
+    virtual bool generateTransactionForRotating();
 
     uint64_t maxTxsSizeSealedInnerBlock() override;
 

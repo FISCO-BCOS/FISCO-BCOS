@@ -112,6 +112,7 @@ private:
     dev::h256 m_proofHash;
 
     int64_t m_configuredEpochSealersSize;
+    bool m_sealerListObtained = false;
 };
 }  // namespace precompiled
 }  // namespace dev
