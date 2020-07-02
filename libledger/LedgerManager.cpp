@@ -280,6 +280,8 @@ string LedgerManager::generateGroupConfig()
         "    gossip_peers_number=3\n"
         "    ; max number of nodes that broadcast txs status to, recommended less than 5\n"
         "    txs_max_gossip_peers_num=5\n"
+        "    ;in ms, timeout for each block download, default is 500ms\n"
+        "    each_block_download_timeout=500\n"
         "[flow_control]\n"
         "    ; restrict QPS of the group\n"
         "    ;limit_req=1000\n"

@@ -672,9 +672,6 @@ function generate_group_ini()
     db_username=
     db_passwd=
     db_name=
-[sync]
-    ;in ms, timeout for each block download, default is 500ms
-    each_block_download_timeout=500
 [tx_pool]
     limit=150000
     ; transaction pool memory size limit, MB
@@ -697,6 +694,9 @@ function generate_group_ini()
     gossip_peers_number=3
     ; max number of nodes that broadcast txs status to, recommended less than 5
     txs_max_gossip_peers_num=5
+    ;in ms, timeout for each block download, default is 500ms
+    each_block_download_timeout=500
+    
 [flow_control]
     ; restrict QPS of the group
     ;limit_req=1000

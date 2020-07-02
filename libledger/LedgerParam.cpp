@@ -540,7 +540,7 @@ void LedgerParam::initSyncConfig(ptree const& pt)
     }
     mutableSyncParam().maxQueueSizeForBlockSync *= 1024 * 1024;
 
-    auto eachBlockDownloadRequestTimeOut = pt.get<signed>("sync.each_block_download_timeout", 500);
+    auto eachBlockDownloadRequestTimeOut = pt.get<signed>("sync.each_block_download_timeout", 1000);
     if (eachBlockDownloadRequestTimeOut <= 0)
     {
         BOOST_THROW_EXCEPTION(ForbidNegativeValue()

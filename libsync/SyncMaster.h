@@ -261,6 +261,11 @@ public:
         m_nodeBandwidthLimiter = _nodeBandwidthLimiter;
     }
 
+    void setEachBlockDownloadingRequestTimeout(int64_t _eachBlockDownloadingRequestTimeout)
+    {
+        m_eachBlockDownloadingRequestTimeout = _eachBlockDownloadingRequestTimeout;
+    }
+
 private:
     // init via blockchain when the sync thread started
     void updateNodeInfo()
@@ -355,7 +360,6 @@ private:
     dev::flowlimit::RateLimiter::Ptr m_bandwidthLimiter;
     dev::flowlimit::RateLimiter::Ptr m_nodeBandwidthLimiter;
     NodeTimeMaintenance::Ptr m_nodeTimeMaintenance;
-    int64_t m_eachBlockDownloadingRequestTimeout = 500;
 
 public:
     void maintainBlocks();
