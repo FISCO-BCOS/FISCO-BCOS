@@ -144,6 +144,11 @@ public:
 
     std::shared_ptr<SyncMsgEngine> msgEngine() { return m_msgEngine; }
 
+    void setEachBlockDownloadingRequestTimeout(int64_t const& _eachBlockDownloadRequestTimeOut)
+    {
+        m_eachBlockDownloadingRequestTimeout = _eachBlockDownloadRequestTimeOut;
+    }
+
 private:
     /// p2p service handler
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
@@ -192,6 +197,9 @@ private:
 
     // verify handler to check downloading block
     std::function<bool(dev::eth::Block const&)> fp_isConsensusOk = nullptr;
+
+    int64_t m_eachBlockDownloadingRequestTimeout = 500;
+    int64_t m_respondDownloadRequestTimeout = 200;
 
 public:
     void maintainTransactions();

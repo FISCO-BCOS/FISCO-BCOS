@@ -316,11 +316,21 @@ void Ledger::initSyncConfig(ptree const& pt)
     {
         m_param->mutableSyncParam().idleWaitMs =
             pt.get<signed>("sync.idle_wait_ms", SYNC_IDLE_WAIT_DEFAULT);
-        if (m_param->mutableSyncParam().idleWaitMs < 0)
+        if (m_param->mutableSyncParam().idleWaitMs <= 0)
         {
             BOOST_THROW_EXCEPTION(ForbidNegativeValue()
                                   << errinfo_comment("Please set sync.idle_wait_ms to positive !"));
         }
+
+        auto eachBlockDownloadRequestTimeOut =
+            pt.get<signed>("sync.each_block_download_timeout", 500);
+        if (eachBlockDownloadRequestTimeOut <= 0)
+        {
+            BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
+                                      "Please set sync.each_block_download_timeout !"));
+        }
+        m_param->mutableSyncParam().eachBlockDownloadRequestTimeOut =
+            eachBlockDownloadRequestTimeOut;
 
         Ledger_LOG(DEBUG) << LOG_BADGE("initSyncConfig")
                           << LOG_KV("idleWaitMs", m_param->mutableSyncParam().idleWaitMs);
@@ -615,8 +625,14 @@ bool Ledger::initSync()
     }
     dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::BlockSync);
     dev::h256 genesisHash = m_blockChain->getBlockByNumber(int64_t(0))->headerHash();
-    m_sync = std::make_shared<SyncMaster>(m_service, m_txPool, m_blockChain, m_blockVerifier,
-        protocol_id, m_keyPair.pub(), genesisHash, m_param->mutableSyncParam().idleWaitMs);
+    auto syncMaster =
+        std::make_shared<SyncMaster>(m_service, m_txPool, m_blockChain, m_blockVerifier,
+            protocol_id, m_keyPair.pub(), genesisHash, m_param->mutableSyncParam().idleWaitMs);
+
+    syncMaster->setEachBlockDownloadingRequestTimeout(
+        m_param->mutableSyncParam().eachBlockDownloadRequestTimeOut);
+    m_sync = syncMaster;
+
     Ledger_LOG(DEBUG) << LOG_BADGE("initLedger") << LOG_DESC("initSync SUCC");
     return true;
 }

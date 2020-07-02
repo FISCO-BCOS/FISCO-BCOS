@@ -380,7 +380,7 @@ void SyncMaster::maintainPeersStatus()
 
     uint64_t currentTime = utcTime();
     if (((int64_t)currentTime - (int64_t)m_lastDownloadingRequestTime) <
-        (int64_t)c_eachBlockDownloadingRequestTimeout * (m_maxRequestNumber - currentNumber))
+        (int64_t)m_eachBlockDownloadingRequestTimeout * (m_maxRequestNumber - currentNumber))
     {
         SYNC_LOG(DEBUG) << LOG_BADGE("Download") << LOG_DESC("Waiting for peers' blocks")
                         << LOG_KV("currentNumber", currentNumber)
@@ -687,7 +687,8 @@ void SyncMaster::maintainDownloadingQueueBuffer()
 
 void SyncMaster::maintainBlockRequest()
 {
-    uint64_t timeout = utcTime() + c_respondDownloadRequestTimeout;
+    // Note: Before asynchronous maintainBlockRequest, can't let it take up too much time
+    uint64_t timeout = utcTime() + m_respondDownloadRequestTimeout;
     m_syncStatus->foreachPeerRandom([&](std::shared_ptr<SyncPeerStatus> _p) {
         DownloadRequestQueue& reqQueue = _p->reqQueue;
         if (reqQueue.empty())
