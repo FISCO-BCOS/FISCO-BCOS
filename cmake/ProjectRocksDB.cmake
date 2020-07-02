@@ -2,8 +2,10 @@ include(ExternalProject)
 
 if (APPLE)
     set(SED_CMMAND sed -i .bkp)
+    set(COMPILER_FLAGS "-Wno-defaulted-function-deleted -Wno-shadow")
 else()
     set(SED_CMMAND sed -i)
+    set(COMPILER_FLAGS "")
 endif()
 
 ExternalProject_Add(rocksdb
@@ -13,19 +15,19 @@ ExternalProject_Add(rocksdb
     URL https://codeload.github.com/facebook/rocksdb/tar.gz/v6.0.2
     URL_HASH SHA256=89e0832f1fb00ac240a9438d4bbdae37dd3e52f7c15c3f646dc26887da16f342
     # remove dynamic lib and gtest. NOTE: sed line number should update once RocksDB upgrade
-    PATCH_COMMAND ${SED_CMMAND} "s#-march=native#-march=x86-64 -mtune=generic#g" CMakeLists.txt COMMAND ${SED_CMMAND} "464d" CMakeLists.txt COMMAND ${SED_CMMAND} "739,749d" CMakeLists.txt COMMAND ${SED_CMMAND} "805,813d" CMakeLists.txt
+    PATCH_COMMAND ${SED_CMMAND} "s#-march=native#-march=x86-64 -mtune=generic ${COMPILER_FLAGS} #g" CMakeLists.txt COMMAND ${SED_CMMAND} "464d" CMakeLists.txt COMMAND ${SED_CMMAND} "739,749d" CMakeLists.txt COMMAND ${SED_CMMAND} "805,813d" CMakeLists.txt
     BUILD_IN_SOURCE 1
     CMAKE_COMMAND ${CMAKE_COMMAND}
     CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
-    -DCMAKE_POSITION_INDEPENDENT_CODE=on
+    -DCMAKE_POSITION_INDEPENDENT_CODE=ON
     ${_only_release_configuration}
-    -DWITH_LZ4=off
-    -DWITH_SNAPPY=on
-    -DWITH_GFLAGS=off
-    -DWITH_TESTS=off
-    -DWITH_TOOLS=off
-    -DBUILD_SHARED_LIBS=Off
-    -DUSE_RTTI=on
+    -DWITH_LZ4=OFF
+    -DWITH_SNAPPY=ON
+    -DWITH_GFLAGS=OFF
+    -DWITH_TESTS=OFF
+    -DWITH_TOOLS=OFF
+    -DBUILD_SHARED_LIBS=OFF
+    -DUSE_RTTI=ON
     -DCMAKE_C_FLAGS=${CMAKE_C_FLAGS} ${MARCH_TYPE}
     -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS} ${MARCH_TYPE}
     -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
@@ -36,7 +38,7 @@ ExternalProject_Add(rocksdb
     LOG_UPDATE 1
     LOG_BUILD 1
     LOG_INSTALL 1
-    BUILD_BYPRODUCTS <SOURCE_DIR>/ibrocksdb.a
+    BUILD_BYPRODUCTS <SOURCE_DIR>/librocksdb.a
 )
 
 ExternalProject_Get_Property(rocksdb SOURCE_DIR)

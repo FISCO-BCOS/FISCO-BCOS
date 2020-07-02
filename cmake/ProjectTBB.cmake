@@ -10,16 +10,17 @@ endif()
 ExternalProject_Add(tbb
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NO_PROGRESS 1
-    DOWNLOAD_NAME tbb_2019_u3.tar.gz
-    URL https://github.com/01org/tbb/archive/2019_U3.tar.gz
-    URL_HASH SHA256=b2244147bc8159cdd8f06a38afeb42f3237d3fc822555499d7ccfbd4b86f8ece
+    DOWNLOAD_NAME oneTBB-2020.1.tar.gz
+    URL https://codeload.github.com/oneapi-src/oneTBB/tar.gz/v2020.1
+    URL_HASH SHA256=7c96a150ed22bc3c6628bc3fef9ed475c00887b26d37bca61518d76a56510971
     BUILD_IN_SOURCE 1
     LOG_CONFIGURE 1
     LOG_BUILD 1
     LOG_INSTALL 1
     CONFIGURE_COMMAND ""
     BUILD_COMMAND make extra_inc=big_iron.inc ${ENABLE_STD_LIB}
-    INSTALL_COMMAND bash -c "cp ./build/*_release/*.${TBB_LIB_SUFFIX}* ${CMAKE_SOURCE_DIR}/deps/lib"
+    INSTALL_COMMAND bash -c "/bin/cp -f ./build/*_release/libtbb.${TBB_LIB_SUFFIX}* ${CMAKE_SOURCE_DIR}/deps/lib/"
+    BUILD_BYPRODUCTS ${CMAKE_SOURCE_DIR}/deps/lib/libtbb.${TBB_LIB_SUFFIX}
 )
 
 ExternalProject_Get_Property(tbb SOURCE_DIR)

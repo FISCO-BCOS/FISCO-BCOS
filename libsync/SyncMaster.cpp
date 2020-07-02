@@ -254,7 +254,7 @@ void SyncMaster::maintainTransactions()
             return isSealer && unsent && !m_txPool->isTransactionKnownBy(t.sha3(), _p->nodeId);
         });
         if (0 == peers.size())
-            return;
+            continue;
         UpgradeGuard ul(l);
         m_txPool->setTransactionIsKnownBy(t.sha3(), m_nodeId);
         for (auto const& p : peers)

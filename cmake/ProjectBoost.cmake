@@ -30,7 +30,15 @@ elseif(CORES GREATER 2)
 endif()
 
 set(BOOST_CXXFLAGS "cxxflags=-march=x86-64 -mtune=generic -fvisibility=hidden -fvisibility-inlines-hidden")
-set(BOOST_BOOTSTRAP_COMMAND ./bootstrap.sh)
+
+if (APPLE)
+    set(SED_CMMAND sed -i .bkp)
+    set(BOOST_BOOTSTRAP_COMMAND ./bootstrap.sh COMMAND ${SED_CMMAND} "s/-fcoalesce-templates//g" ${CMAKE_SOURCE_DIR}/deps/src/boost/tools/build/src/tools/darwin.jam)
+else()
+    set(SED_CMMAND sed -i)
+    set(BOOST_BOOTSTRAP_COMMAND ./bootstrap.sh)
+endif()
+
 set(BOOST_INSTALL_COMMAND ./b2 install --prefix=${CMAKE_SOURCE_DIR}/deps)
 set(BOOST_BUILD_TOOL ./b2)
 set(BOOST_LIBRARY_SUFFIX .a)
