@@ -218,4 +218,16 @@ void VRFBasedrPBFTEngine::checkTransactionsValid(
                                   leaderAccount.hexPrefixed() +
                                   ", current sender:" + nodeRotatingTx->sender().hexPrefixed()));
     }
+    // check the contract address
+    if (nodeRotatingTx->to() != dev::precompiled::WORKING_SEALER_MGR_ADDRESS)
+    {
+        VRFRPBFTEngine_LOG(WARNING)
+            << LOG_DESC("checkTransactionsValid failed")
+            << LOG_KV("expectedTo", toHex(dev::precompiled::WORKING_SEALER_MGR_ADDRESS))
+            << LOG_KV("currentTo", toHex(nodeRotatingTx->to()));
+        BOOST_THROW_EXCEPTION(InvalidNodeRotationTx() << errinfo_comment(
+                                  "Invalid node rotation transaction, expected contract address: " +
+                                  toHex(dev::precompiled::WORKING_SEALER_MGR_ADDRESS) +
+                                  ", current to:" + toHex(nodeRotatingTx->to())));
+    }
 }
