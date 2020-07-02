@@ -57,7 +57,6 @@ void PBFTSealer::handleBlock()
         return;
     }
     setBlock();
-    hookAfterHandleBlock();
     PBFTSEALER_LOG(INFO) << LOG_DESC("++++++++++++++++ Generating seal on")
                          << LOG_KV("blkNum", m_sealing.block->header().number())
                          << LOG_KV("tx", m_sealing.block->getTransactionSize())
@@ -76,6 +75,7 @@ void PBFTSealer::setBlock()
     m_sealing.block->header().populateFromParent(
         m_blockChain->getBlockByNumber(m_blockChain->number())->header());
     resetSealingHeader(m_sealing.block->header());
+    hookAfterHandleBlock();
     // calculate transactionRoot before execBlock
     m_sealing.block->calTransactionRoot();
 }

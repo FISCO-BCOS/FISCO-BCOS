@@ -198,6 +198,8 @@ const char* const SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM = "rpbft_epoch_block_num";
 // system configuration for consensus-time
 const char* const SYSTEM_KEY_CONSENSUS_TIME = "consensus_time";
 
+const char* const INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE = "notify_rotate";
+
 const char* const SYSTEM_INIT_VALUE_TX_GAS_LIMIT = "300000000";
 
 const int TX_COUNT_LIMIT_MIN = 1;

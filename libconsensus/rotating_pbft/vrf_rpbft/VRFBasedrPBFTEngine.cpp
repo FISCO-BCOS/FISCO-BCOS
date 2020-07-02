@@ -152,6 +152,24 @@ void VRFBasedrPBFTEngine::resetConfig()
         return;
     }
 
+    // The previous leader forged an illegal rotating-tx, resulting in a failed
+    // verification And the INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE flag was set to true, the current
+    // leader needs to rotate workingsealers
+    auto notifyRotateFlagInfo =
+        m_blockChain->getSystemConfigByKey(dev::precompiled::INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE);
+    bool notifyRotateFlag = false;
+    if (notifyRotateFlagInfo != "")
+    {
+        notifyRotateFlag = (bool)(boost::lexical_cast<int64_t>(notifyRotateFlagInfo));
+    }
+    if (notifyRotateFlag)
+    {
+        m_shouldRotateSealers.store(true);
+        VRFRPBFTEngine_LOG(INFO) << LOG_DESC(
+            "resetConfig: the previous leader forged an illegal transaction-rotating, still roate "
+            "working sealers in this epoch");
+    }
+
     // the number of workingSealers is smaller than epochSize,
     // trigger rotate in case of the number of working sealers has been decreased to 0
     auto maxWorkingSealerNum = std::min(m_epochSize.load(), m_sealersNum.load());

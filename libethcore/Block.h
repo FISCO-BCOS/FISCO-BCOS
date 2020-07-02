@@ -291,13 +291,13 @@ public:
         }
     }
 
-protected:
     /// callback this function when transaction has been changed
     void noteChange()
     {
         WriteGuard l_txscache(x_txsCache);
         m_txsCache = bytes();
     }
+protected:
 
     /// callback this function when transaction receipt has been changed
     void noteReceiptChange()
