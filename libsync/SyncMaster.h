@@ -355,6 +355,7 @@ private:
     dev::flowlimit::RateLimiter::Ptr m_bandwidthLimiter;
     dev::flowlimit::RateLimiter::Ptr m_nodeBandwidthLimiter;
     NodeTimeMaintenance::Ptr m_nodeTimeMaintenance;
+    int64_t m_eachBlockDownloadingRequestTimeout = 500;
 
 public:
     void maintainBlocks();

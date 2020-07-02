@@ -564,6 +564,8 @@ bool Ledger::initSync()
         m_param->mutableSyncParam().gossipPeers, enableSendTxsByTree, enableSendBlockStatusByTree,
         m_param->mutableSyncParam().syncTreeWidth);
 
+    syncMaster->setEachBlockDownloadingRequestTimeout(
+        m_param->mutableSyncParam().eachBlockDownloadRequestTimeOut);
     // create and setSyncMsgPacketFactory
     SyncMsgPacketFactory::Ptr syncMsgPacketFactory;
     if (g_BCOSConfig.version() >= V2_6_0)

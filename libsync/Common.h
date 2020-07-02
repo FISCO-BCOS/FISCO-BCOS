@@ -47,8 +47,6 @@ DEV_SIMPLE_EXCEPTION(InValidSyncPacket);
 // c_maxRequestBlocks(each peer) * c_maxRequestShards(peer num) = blocks
 static int64_t const c_maxRequestBlocks = 32;
 static size_t const c_maxRequestShards = 4;
-static uint64_t const c_eachBlockDownloadingRequestTimeout =
-    200;  // ms: assume that we have 200ms timeout for each block
 
 static size_t const c_maxDownloadingBlockQueueSize =
     c_maxRequestShards * c_maxRequestBlocks * 2;  // maybe less than 128 is ok

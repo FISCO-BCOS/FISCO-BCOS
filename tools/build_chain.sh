@@ -672,6 +672,9 @@ function generate_group_ini()
     db_username=
     db_passwd=
     db_name=
+[sync]
+    ;in ms, timeout for each block download, default is 500ms
+    each_block_download_timeout=500
 [tx_pool]
     limit=150000
     ; transaction pool memory size limit, MB

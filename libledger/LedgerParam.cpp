@@ -540,6 +540,13 @@ void LedgerParam::initSyncConfig(ptree const& pt)
     }
     mutableSyncParam().maxQueueSizeForBlockSync *= 1024 * 1024;
 
+    auto eachBlockDownloadRequestTimeOut = pt.get<signed>("sync.each_block_download_timeout", 500);
+    if (eachBlockDownloadRequestTimeOut <= 0)
+    {
+        BOOST_THROW_EXCEPTION(ForbidNegativeValue()
+                              << errinfo_comment("Please set sync.each_block_download_timeout !"));
+    }
+    mutableSyncParam().eachBlockDownloadRequestTimeOut = eachBlockDownloadRequestTimeOut;
     LedgerParam_LOG(INFO)
         << LOG_BADGE("initSyncConfig")
         << LOG_KV("enableSendBlockStatusByTree", mutableSyncParam().enableSendBlockStatusByTree)
@@ -547,7 +554,9 @@ void LedgerParam::initSyncConfig(ptree const& pt)
         << LOG_KV("gossipPeers", mutableSyncParam().gossipPeers)
         << LOG_KV("syncTreeWidth", mutableSyncParam().syncTreeWidth)
         << LOG_KV("maxQueueSizeForBlockSync", mutableSyncParam().maxQueueSizeForBlockSync)
-        << LOG_KV("txsStatusGossipMaxPeers", mutableSyncParam().txsStatusGossipMaxPeers);
+        << LOG_KV("txsStatusGossipMaxPeers", mutableSyncParam().txsStatusGossipMaxPeers)
+        << LOG_KV("eachBlockDownloadRequestTimeOut",
+               mutableSyncParam().eachBlockDownloadRequestTimeOut);
 }
 
 std::string LedgerParam::uriEncode(const std::string& keyWord)
