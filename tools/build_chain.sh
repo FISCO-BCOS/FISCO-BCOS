@@ -607,7 +607,7 @@ generate_group_genesis()
     consensus_type=${consensus_type}
     ; the max number of transactions of a block
     max_trans_num=1000
-    ; in ms, block generation time, must be >=1000ms
+    ; in ms, block  time, must be >=1000ms
     consensus_time=1000
     ; rpbft related configuration
     ; the working sealers num of each consensus epoch
@@ -636,7 +636,7 @@ function generate_group_ini()
 [consensus]
     ; the ttl for broadcasting pbft message
     ttl=2
-    ; min block generation time(ms), the max block generation time is 1000 ms
+    ; min block generation time(ms)
     min_block_generation_time=500
     ;enable_dynamic_block_size=true
     enable_ttl_optimization=true
