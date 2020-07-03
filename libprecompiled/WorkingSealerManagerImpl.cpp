@@ -50,11 +50,13 @@ dev::h256 VRFInfo::getHashFromProof()
 WorkingSealerManagerImpl::WorkingSealerManagerImpl(
     std::shared_ptr<dev::blockverifier::ExecutiveContext> _context, Address const& _origin,
     Address const& _sender)
-  : m_context(_context), m_origin(_origin), m_sender(_sender)
-{
-    m_pendingSealerList = std::make_shared<dev::h512s>();
-    m_workingSealerList = std::make_shared<dev::h512s>();
-}
+  : m_context(_context),
+    m_origin(_origin),
+    m_sender(_sender),
+    m_pendingSealerList(std::make_shared<dev::h512s>()),
+    m_workingSealerList(std::make_shared<dev::h512s>()),
+    m_skipAccessCheckOption(std::make_shared<AccessOptions>(m_origin, false))
+{}
 
 void WorkingSealerManagerImpl::createVRFInfo(
     std::string const& _vrfProof, std::string const& _vrfPublicKey, std::string const& _vrfInput)
@@ -164,7 +166,9 @@ void WorkingSealerManagerImpl::UpdateNodeType(dev::h512 const& _node, std::strin
     entry->setField(PRI_COLUMN, PRI_KEY);
     entry->setField(
         NODE_KEY_ENABLENUM, boost::lexical_cast<std::string>(m_context->blockInfo().number + 1));
-    auto count = m_consTable->update(PRI_KEY, entry, condition);
+
+    // not check the access option
+    auto count = m_consTable->update(PRI_KEY, entry, condition, m_skipAccessCheckOption);
     if (count < 0)
     {
         PRECOMPILED_LOG(ERROR) << LOG_DESC("UpdateNodeType: update table failed")
@@ -207,6 +211,7 @@ void WorkingSealerManagerImpl::getSealerList()
     {
         return;
     }
+
     m_consTable = openTable(m_context, SYS_CONSENSUS);
     if (!m_consTable)
     {
@@ -296,13 +301,14 @@ void WorkingSealerManagerImpl::setSystemConfigByKey(
     entry->setField(SYSTEM_CONFIG_KEY, _key);
     entry->setField(SYSTEM_CONFIG_VALUE, _value);
     entry->setField(SYSTEM_CONFIG_ENABLENUM, boost::lexical_cast<std::string>(_enableNumber));
+
     if (entries->size() == 0u)
     {
-        m_sysConfigTable->insert(_key, entry);
+        m_sysConfigTable->insert(_key, entry, m_skipAccessCheckOption);
     }
     else
     {
-        m_sysConfigTable->update(_key, entry, condition);
+        m_sysConfigTable->update(_key, entry, condition, m_skipAccessCheckOption);
     }
 }
 

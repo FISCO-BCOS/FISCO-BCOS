@@ -28,6 +28,10 @@
 
 namespace dev
 {
+namespace storage
+{
+struct AccessOptions;
+}
 namespace blockverifier
 {
 class ExecutiveContext;
@@ -118,6 +122,7 @@ private:
     int64_t m_configuredEpochSealersSize;
     bool m_sealerListObtained = false;
     bool m_notifyNextLeaderRotateSetted = false;
+    std::shared_ptr<dev::storage::AccessOptions> m_skipAccessCheckOption;
 };
 }  // namespace precompiled
 }  // namespace dev

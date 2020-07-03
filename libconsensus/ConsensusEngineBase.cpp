@@ -152,9 +152,6 @@ void ConsensusEngineBase::checkBlockTimeStamp(dev::eth::Block const& _block)
             << LOG_KV("blockTime", blockTimeStamp) << LOG_KV("alignedTime", alignedTime)
             << LOG_KV("utcTime", utcTime()) << LOG_KV("blkNum", _block.blockHeader().number())
             << LOG_KV("hash", _block.blockHeader().hash().abridged());
-
-        BOOST_THROW_EXCEPTION(
-            InvalidBlockTimeStamp() << errinfo_comment("checkBlockTimeStamp failed"));
     }
 }
 
