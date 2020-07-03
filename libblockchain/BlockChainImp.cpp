@@ -593,12 +593,12 @@ bool BlockChainImp::checkAndBuildGenesisBlock(
             if (g_BCOSConfig.version() >= V2_6_0)
             {
                 // init consensus time
-                initSystemConfig(tb, SYSTEM_KEY_CONSENSUS_TIME,
+                initSystemConfig(tb, SYSTEM_KEY_CONSENSUS_TIMEOUT,
                     boost::lexical_cast<std::string>(
-                        _initParam->mutableConsensusParam().consensusTime));
-                BLOCKCHAIN_LOG(INFO) << LOG_DESC("init consensus time")
-                                     << LOG_KV(SYSTEM_KEY_CONSENSUS_TIME,
-                                            _initParam->mutableConsensusParam().consensusTime);
+                        _initParam->mutableConsensusParam().consensusTimeout));
+                BLOCKCHAIN_LOG(INFO) << LOG_DESC("init consensus timeout")
+                                     << LOG_KV(SYSTEM_KEY_CONSENSUS_TIMEOUT,
+                                            _initParam->mutableConsensusParam().consensusTimeout);
             }
         }
 

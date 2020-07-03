@@ -1965,7 +1965,7 @@ void PBFTEngine::resetConfig()
 {
     ConsensusEngineBase::resetConfig();
     // adjust consensus time at runtime
-    resetConsensusTime();
+    resetConsensusTimeout();
 
     if (!m_sealerListUpdated)
     {
@@ -2315,28 +2315,27 @@ void PBFTEngine::clearInvalidCachedForwardMsg()
     }
 }
 
-void PBFTEngine::resetConsensusTime()
+void PBFTEngine::resetConsensusTimeout()
 {
     if (!m_supportConsensusTimeAdjust)
     {
         return;
     }
-    auto consensusTimeStr =
-        m_blockChain->getSystemConfigByKey(dev::precompiled::SYSTEM_KEY_CONSENSUS_TIME);
-    int64_t consensusTime = boost::lexical_cast<int64_t>(consensusTimeStr);
-    if (consensusTime < m_timeManager.m_minBlockGenTime)
+    auto consensusTimeoutStr =
+        m_blockChain->getSystemConfigByKey(dev::precompiled::SYSTEM_KEY_CONSENSUS_TIMEOUT);
+    uint64_t consensusTimeout = boost::lexical_cast<uint64_t>(consensusTimeoutStr) * 1000;
+
+    // Prevent external users from modifying the empty block time by modifying the code
+    if (m_timeManager.m_emptyBlockGenTime > consensusTimeout)
     {
-        m_timeManager.m_minBlockGenTime = (consensusTime - 1);
-        PBFTENGINE_LOG(INFO) << LOG_DESC("resetConsensusTime: reset minBlockGenTime")
-                             << LOG_KV("consensusTime", consensusTimeStr)
-                             << LOG_KV("minBlockGenTime", m_timeManager.m_minBlockGenTime);
+        m_timeManager.m_emptyBlockGenTime = consensusTimeout / 3;
     }
     // update emptyBlockGenTime
-    if (m_timeManager.m_emptyBlockGenTime != consensusTime)
+    if (m_timeManager.m_viewTimeout != consensusTimeout)
     {
-        m_timeManager.resetEmptyBlockGenTime(consensusTime);
-        PBFTENGINE_LOG(INFO) << LOG_DESC("resetConsensusTime")
-                             << LOG_KV("updatedConsensusTime", consensusTime)
+        m_timeManager.resetConsensusTimeout(consensusTimeout);
+        PBFTENGINE_LOG(INFO) << LOG_DESC("resetConsensusTimeout")
+                             << LOG_KV("updatedConsensusTimeout", consensusTimeout)
                              << LOG_KV("minBlockGenTime", m_timeManager.m_minBlockGenTime);
     }
 }

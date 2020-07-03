@@ -257,7 +257,7 @@ public:
     }
 
 protected:
-    virtual void resetConsensusTime();
+    virtual void resetConsensusTimeout();
 
     virtual bool locatedInChosedConsensensusNodes() const { return m_idx != MAXIDX; }
     virtual void addRawPrepare(PrepareReq::Ptr _prepareReq);

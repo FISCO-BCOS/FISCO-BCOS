@@ -204,7 +204,7 @@ protected:
         dev::precompiled::SYSTEM_KEY_TX_COUNT_LIMIT, dev::precompiled::SYSTEM_KEY_TX_GAS_LIMIT,
         dev::precompiled::SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM,
         dev::precompiled::SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM,
-        dev::precompiled::SYSTEM_KEY_CONSENSUS_TIME};
+        dev::precompiled::SYSTEM_KEY_CONSENSUS_TIMEOUT};
 
 private:
     bool isValidNodeId(dev::bytes const& precompileData,

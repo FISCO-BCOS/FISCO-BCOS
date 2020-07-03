@@ -44,7 +44,7 @@ public:
         Address const& _sender = Address()) override;
 
 private:
-    bool checkConsensusTimeConfig(std::string const& _key, std::string const& _value);
+    bool checkConsensusTimeoutConfig(std::string const& _key, std::string const& _value);
     bool checkValueValid(std::string const& key, std::string const& value);
 };
 

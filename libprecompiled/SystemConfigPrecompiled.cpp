@@ -182,16 +182,16 @@ bool SystemConfigPrecompiled::checkValueValid(std::string const& key, std::strin
             return false;
         }
     }
-    else if (SYSTEM_KEY_CONSENSUS_TIME == key)
+    else if (SYSTEM_KEY_CONSENSUS_TIMEOUT == key)
     {
-        return checkConsensusTimeConfig(key, value);
+        return checkConsensusTimeoutConfig(key, value);
     }
     // only can insert tx_count_limit and tx_gas_limit, rpbft_epoch_sealer_num,
     // rpbft_epoch_block_num as system config
     return false;
 }
 
-bool SystemConfigPrecompiled::checkConsensusTimeConfig(
+bool SystemConfigPrecompiled::checkConsensusTimeoutConfig(
     std::string const& _key, std::string const& _value)
 {
     if (g_BCOSConfig.version() < V2_6_0)
@@ -201,7 +201,9 @@ bool SystemConfigPrecompiled::checkConsensusTimeConfig(
 
     try
     {
-        return (boost::lexical_cast<int64_t>(_value) >= SYSTEM_CONSENSUS_TIME_MIN);
+        int64_t configuredConsensusTime = boost::lexical_cast<int64_t>(_value);
+        return (configuredConsensusTime >= SYSTEM_CONSENSUS_TIMEOUT_MIN &&
+                configuredConsensusTime < SYSTEM_CONSENSUS_TIMEOUT_MAX);
     }
     catch (const std::exception& e)
     {
