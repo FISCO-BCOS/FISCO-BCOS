@@ -98,6 +98,9 @@ private:
     void getSealerList();
     bool shouldRotate();
     void UpdateNodeType(dev::h512 const& _node, std::string const& _nodeType);
+    void setSystemConfigByKey(
+        std::string const& _key, std::string const& _value, int64_t _enableNumber);
+    void tryToResetNotifyNextLeaderFlag();
 
 private:
     std::shared_ptr<dev::blockverifier::ExecutiveContext> m_context;
@@ -109,10 +112,12 @@ private:
     std::shared_ptr<dev::h512s> m_workingSealerList;
 
     std::shared_ptr<dev::storage::Table> m_consTable;
+    std::shared_ptr<dev::storage::Table> m_sysConfigTable;
     dev::h256 m_proofHash;
 
     int64_t m_configuredEpochSealersSize;
     bool m_sealerListObtained = false;
+    bool m_notifyNextLeaderRotateSetted = false;
 };
 }  // namespace precompiled
 }  // namespace dev

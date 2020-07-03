@@ -142,6 +142,8 @@ check_rpbft()
         sed_cmd="sed -i .bkp"
     fi
     ${sed_cmd} "s/consensus_type=raft/consensus_type=rpbft/" node*/conf/group.1.genesis
+    ${sed_cmd} "s/epoch_sealer_num=4/epoch_sealer_num=2/" node*/conf/group.1.genesis
+    ${sed_cmd} "s/epoch_block_num=1000/epoch_block_num=2/" node*/conf/group.1.genesis
     ${sed_cmd} "s/supported_version=${fisco_version}/supported_version=2.5.0/g" node*/config.ini
     # test ipv6
     ${sed_cmd} "s/127.0.0.1:/\[::1\]:/g" node*/config.ini

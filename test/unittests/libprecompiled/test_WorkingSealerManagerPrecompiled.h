@@ -139,6 +139,14 @@ public:
         updateNodeListType(sealerList, workingSealersSize, NODE_TYPE_WORKING_SEALER);
     }
 
+    std::string getSystemConfigByKey(std::string const& _key)
+    {
+        auto table = openTable(context, SYS_CONFIG);
+        auto valueInfo =
+            dev::precompiled::getSysteConfigByKey(table, _key, context->blockInfo().number + 1);
+        return valueInfo->first;
+    }
+
     void initrPBFTConfig(std::string const& _key, std::string const& _value)
     {
         auto table = openTable(context, SYS_CONFIG);

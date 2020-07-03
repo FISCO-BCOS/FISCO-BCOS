@@ -103,7 +103,17 @@ bool VRFBasedrPBFTSealer::generateTransactionForRotating()
 
         // put the generated transaction into the 0th position of the block transactions
         // Note: here must use appendTransaction for this function will notify updating the txsCache
-        m_sealing.block->appendTransaction(generatedTx);
+        size_t maxTransacitonSize = m_pbftEngine->maxBlockTransactions();
+        if (m_sealing.block->getTransactionSize() < maxTransacitonSize)
+        {
+            m_sealing.block->appendTransaction(generatedTx);
+        }
+        // update the last transaction
+        else
+        {
+            (*(m_sealing.block->transactions()))[maxTransacitonSize - 1] = generatedTx;
+            m_sealing.block->noteChange();
+        }
         VRFRPBFTSealer_LOG(DEBUG) << LOG_DESC("generateTransactionForRotating succ")
                                   << LOG_KV("nodeIdx", m_vrfBasedrPBFTEngine->nodeIdx())
                                   << LOG_KV("blkNum", blockNumber)

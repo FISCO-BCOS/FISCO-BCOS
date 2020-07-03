@@ -44,6 +44,7 @@ BOOST_AUTO_TEST_CASE(testRotateWorkingSealerWithoutRotate)
     auto sealerAccount = dev::toAddress(fixture->m_keyPair.pub());
     BOOST_CHECK_NO_THROW(fixture->workingSealerManagerPrecompiled->call(
         fixture->context, bytesConstRef(&in), sealerAccount, sealerAccount));
+    BOOST_CHECK(fixture->getSystemConfigByKey(INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE) == "");
 
     // get the current workingSealers and sealers
     fixture->getSealerList();
@@ -63,6 +64,7 @@ BOOST_AUTO_TEST_CASE(testRotateWorkingSealerWithoutRotate)
         BOOST_CHECK(workingSealers == fixture->m_workingSealerList);
         BOOST_CHECK(pendingSealers == fixture->m_pendingSealerList);
         BOOST_CHECK(fixture->m_pendingSealerList.size() == 0);
+        BOOST_CHECK(fixture->getSystemConfigByKey(INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE) == "");
     }
 
     // case2: valid proof, but the origin is not exist in the workingSealers
@@ -73,6 +75,8 @@ BOOST_AUTO_TEST_CASE(testRotateWorkingSealerWithoutRotate)
     BOOST_CHECK_THROW(fixture->workingSealerManagerPrecompiled->call(
                           fixture->context, bytesConstRef(&in), nonSealerAccount, nonSealerAccount),
         PrecompiledException);
+    // check INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE flag
+    BOOST_CHECK(fixture->getSystemConfigByKey(INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE) == "1");
 
     // case3: invalid input(must be lastest hash)
     LOG(INFO) << LOG_DESC("testRotateWorkingSealerWithoutRotate: valid proof, invalid input");
@@ -81,6 +85,7 @@ BOOST_AUTO_TEST_CASE(testRotateWorkingSealerWithoutRotate)
     BOOST_CHECK_THROW(fixture->workingSealerManagerPrecompiled->call(
                           fixture->context, bytesConstRef(&in), nonSealerAccount, nonSealerAccount),
         PrecompiledException);
+    BOOST_CHECK(fixture->getSystemConfigByKey(INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE) == "1");
 
     // case4: invalid public key(the origin is not one of the sealers)
     LOG(INFO) << LOG_DESC("testRotateWorkingSealerWithoutRotate: invalid public key");
@@ -89,6 +94,7 @@ BOOST_AUTO_TEST_CASE(testRotateWorkingSealerWithoutRotate)
     BOOST_CHECK_THROW(fixture->workingSealerManagerPrecompiled->call(
                           fixture->context, bytesConstRef(&in), nonSealerAccount, nonSealerAccount),
         PrecompiledException);
+    BOOST_CHECK(fixture->getSystemConfigByKey(INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE) == "1");
 
     // case5: invalid proof
     LOG(INFO) << LOG_DESC("testRotateWorkingSealerWithoutRotate: invalid proof");
@@ -101,6 +107,21 @@ BOOST_AUTO_TEST_CASE(testRotateWorkingSealerWithoutRotate)
     BOOST_CHECK_THROW(fixture->workingSealerManagerPrecompiled->call(
                           fixture->context, bytesConstRef(&in), sealerAccount, sealerAccount),
         PrecompiledException);
+    BOOST_CHECK(fixture->getSystemConfigByKey(INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE) == "1");
+
+    // case6: vaild proof
+    LOG(INFO) << LOG_DESC(
+        "testRotateWorkingSealerWithoutRotate: rotate success after invalid cases");
+    auto blockInfo = fixture->context->blockInfo();
+    blockInfo.number += 1;
+    fixture->context->setBlockInfo(blockInfo);
+    vrfInputWithProof = fixture->generateVRFProof(fixture->context, fixture->vrfPrivateKey);
+    in = abi.abiIn(WSM_METHOD_ROTATE_STR, fixture->vrfPublicKey, vrfInputWithProof.first,
+        vrfInputWithProof.second);
+    sealerAccount = dev::toAddress(fixture->m_keyPair.pub());
+    BOOST_CHECK_NO_THROW(fixture->workingSealerManagerPrecompiled->call(
+        fixture->context, bytesConstRef(&in), sealerAccount, sealerAccount));
+    BOOST_CHECK(fixture->getSystemConfigByKey(INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE) == "0");
 }
 
 BOOST_AUTO_TEST_CASE(testRotateOneSealer)

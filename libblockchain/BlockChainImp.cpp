@@ -583,7 +583,7 @@ bool BlockChainImp::checkAndBuildGenesisBlock(
                 initSystemConfig(tb, SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM,
                     boost::lexical_cast<std::string>(
                         _initParam->mutableConsensusParam().epochBlockNum));
-
+                initSystemConfig(tb, INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE, "0");
                 BLOCKCHAIN_LOG(INFO) << LOG_DESC("set configuration for rPBFT")
                                      << LOG_KV(SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM,
                                             _initParam->mutableConsensusParam().epochSealerNum)

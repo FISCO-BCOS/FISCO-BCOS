@@ -68,8 +68,21 @@ void WorkingSealerManagerImpl::rotateWorkingSealer()
     {
         return;
     }
-    // check VRFInfos firstly
-    checkVRFInfos();
+    try
+    {
+        // check VRFInfos firstly
+        checkVRFInfos();
+    }
+    catch (PrecompiledException& e)
+    {
+        PRECOMPILED_LOG(WARNING) << LOG_DESC("rotateWorkingSealer failed for checkVRFInfos failed")
+                                 << LOG_DESC("notifyNextLeaderRotate now");
+        setSystemConfigByKey(
+            INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE, "1", m_context->blockInfo().number + 1);
+        throw;
+    }
+    // a valid transaction, reset the INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE flag
+    tryToResetNotifyNextLeaderFlag();
     int64_t sealersNum = m_workingSealerList->size() + m_pendingSealerList->size();
     if (sealersNum <= 1 ||
         (m_configuredEpochSealersSize == sealersNum && 0 == m_pendingSealerList->size()))
@@ -264,18 +277,74 @@ void WorkingSealerManagerImpl::checkVRFInfos()
     }
 }
 
+// notify the next leader rotate when checkVRFInfos failed
+void WorkingSealerManagerImpl::setSystemConfigByKey(
+    std::string const& _key, std::string const& _value, int64_t _enableNumber)
+{
+    if (!m_sysConfigTable)
+    {
+        m_sysConfigTable = openTable(m_context, SYS_CONFIG);
+        if (!m_sysConfigTable)
+        {
+            BOOST_THROW_EXCEPTION(PrecompiledException(
+                "Open system configuration table failed! tableName: " + SYS_CONFIG));
+        }
+    }
+    auto condition = m_sysConfigTable->newCondition();
+    auto entries = m_sysConfigTable->select(_key, condition);
+    auto entry = m_sysConfigTable->newEntry();
+    entry->setField(SYSTEM_CONFIG_KEY, _key);
+    entry->setField(SYSTEM_CONFIG_VALUE, _value);
+    entry->setField(SYSTEM_CONFIG_ENABLENUM, boost::lexical_cast<std::string>(_enableNumber));
+    if (entries->size() == 0u)
+    {
+        m_sysConfigTable->insert(_key, entry);
+    }
+    else
+    {
+        m_sysConfigTable->update(_key, entry, condition);
+    }
+}
+
+// reset INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE to false when the next leader rotate succeed
+void WorkingSealerManagerImpl::tryToResetNotifyNextLeaderFlag()
+{
+    // INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE is false
+    if (!m_notifyNextLeaderRotateSetted)
+    {
+        return;
+    }
+    PRECOMPILED_LOG(INFO)
+        << LOG_DESC("tryToResetNotifyNextLeaderFlag")
+        << LOG_DESC("reset notifyRotate flag to false after working sealers rotating succeed");
+    // update INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE to false
+    setSystemConfigByKey(INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE, "0", m_context->blockInfo().number + 1);
+}
+
 bool WorkingSealerManagerImpl::shouldRotate()
 {
     // open system configuration table
-    auto sysConfigTable = openTable(m_context, SYS_CONFIG);
-    if (!sysConfigTable)
+    m_sysConfigTable = openTable(m_context, SYS_CONFIG);
+    if (!m_sysConfigTable)
     {
         BOOST_THROW_EXCEPTION(PrecompiledException(
             "Open system configuration table failed! tableName: " + SYS_CONFIG));
     }
+    auto notifyRotateFalgInfo = getSysteConfigByKey(
+        m_sysConfigTable, INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE, m_context->blockInfo().number);
+    m_notifyNextLeaderRotateSetted = false;
+    if (notifyRotateFalgInfo->first != "")
+    {
+        m_notifyNextLeaderRotateSetted =
+            (bool)(boost::lexical_cast<int64_t>(notifyRotateFalgInfo->first));
+    }
+    if (m_notifyNextLeaderRotateSetted)
+    {
+        return true;
+    }
     // get epoch_sealer_num from the table
     auto epochSealersInfo = getSysteConfigByKey(
-        sysConfigTable, SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM, m_context->blockInfo().number);
+        m_sysConfigTable, SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM, m_context->blockInfo().number);
     m_configuredEpochSealersSize = boost::lexical_cast<int64_t>(epochSealersInfo->first);
     PRECOMPILED_LOG(DEBUG) << LOG_DESC("shouldRotate: get epoch_sealer_num")
                            << LOG_KV("key", SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM)
@@ -296,7 +365,7 @@ bool WorkingSealerManagerImpl::shouldRotate()
     }
     // get epoch_block_num from the table
     auto epochBlockInfo = getSysteConfigByKey(
-        sysConfigTable, SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM, m_context->blockInfo().number);
+        m_sysConfigTable, SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM, m_context->blockInfo().number);
     auto epochBlockNum = boost::lexical_cast<int64_t>(epochBlockInfo->first);
     if ((m_context->blockInfo().number - epochBlockInfo->second) % epochBlockNum == 0)
     {
