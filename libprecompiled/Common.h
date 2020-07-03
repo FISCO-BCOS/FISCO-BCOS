@@ -149,8 +149,7 @@ std::shared_ptr<std::pair<std::string, int64_t>> getSysteConfigByKey(
     int64_t const& _num);
 
 std::shared_ptr<dev::storage::Table> openTable(
-    std::shared_ptr<dev::blockverifier::ExecutiveContext> context, const std::string& tableName,
-    bool _authorityFlag = true);
+    std::shared_ptr<dev::blockverifier::ExecutiveContext> context, const std::string& tableName);
 
 const int SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH = 64;
 const int SYS_TABLE_VALUE_FIELD_MAX_LENGTH = 1024;

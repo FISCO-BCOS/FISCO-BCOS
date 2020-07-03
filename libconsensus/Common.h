@@ -45,7 +45,6 @@ DEV_SIMPLE_EXCEPTION(ExistedBlock);
 DEV_SIMPLE_EXCEPTION(ParentNoneExist);
 DEV_SIMPLE_EXCEPTION(WrongParentHash);
 DEV_SIMPLE_EXCEPTION(BlockSealerListWrong);
-DEV_SIMPLE_EXCEPTION(InvalidBlockTimeStamp);
 
 enum NodeAccountType
 {

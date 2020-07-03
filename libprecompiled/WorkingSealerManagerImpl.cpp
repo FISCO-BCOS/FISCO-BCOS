@@ -212,7 +212,7 @@ void WorkingSealerManagerImpl::getSealerList()
         return;
     }
 
-    m_consTable = openTable(m_context, SYS_CONSENSUS, false);
+    m_consTable = openTable(m_context, SYS_CONSENSUS);
     if (!m_consTable)
     {
         BOOST_THROW_EXCEPTION(
@@ -288,7 +288,7 @@ void WorkingSealerManagerImpl::setSystemConfigByKey(
 {
     if (!m_sysConfigTable)
     {
-        m_sysConfigTable = openTable(m_context, SYS_CONFIG, false);
+        m_sysConfigTable = openTable(m_context, SYS_CONFIG);
         if (!m_sysConfigTable)
         {
             BOOST_THROW_EXCEPTION(PrecompiledException(
@@ -330,7 +330,7 @@ void WorkingSealerManagerImpl::tryToResetNotifyNextLeaderFlag()
 bool WorkingSealerManagerImpl::shouldRotate()
 {
     // open system configuration table
-    m_sysConfigTable = openTable(m_context, SYS_CONFIG, false);
+    m_sysConfigTable = openTable(m_context, SYS_CONFIG);
     if (!m_sysConfigTable)
     {
         BOOST_THROW_EXCEPTION(PrecompiledException(

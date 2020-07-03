@@ -285,8 +285,7 @@ std::shared_ptr<std::pair<std::string, int64_t>> dev::precompiled::getSysteConfi
 }
 
 dev::storage::Table::Ptr dev::precompiled::openTable(
-    dev::blockverifier::ExecutiveContext::Ptr _context, const std::string& _tableName,
-    bool _authorityFlag)
+    dev::blockverifier::ExecutiveContext::Ptr _context, const std::string& _tableName)
 {
-    return _context->getMemoryTableFactory()->openTable(_tableName, _authorityFlag);
+    return _context->getMemoryTableFactory()->openTable(_tableName);
 }
