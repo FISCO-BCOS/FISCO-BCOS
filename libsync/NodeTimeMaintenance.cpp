@@ -33,8 +33,8 @@ NodeTimeMaintenance::NodeTimeMaintenance()
 void NodeTimeMaintenance::tryToUpdatePeerTimeInfo(SyncStatusPacket::Ptr _peerStatus)
 {
     auto peer = _peerStatus->nodeId;
-    auto localAlignedTime = getAlignedTime();
-    auto peerTimeOffset = _peerStatus->alignedTime - localAlignedTime;
+    int64_t localTime = utcTime();
+    auto peerTimeOffset = _peerStatus->alignedTime - localTime;
 
     Guard l(x_mutex);
     // The time information of the same node is within m_minTimeOffset,
@@ -46,9 +46,13 @@ void NodeTimeMaintenance::tryToUpdatePeerTimeInfo(SyncStatusPacket::Ptr _peerSta
         {
             return;
         }
+        (*m_node2TimeOffset)[peer] = peerTimeOffset;
     }
-    // update time information
-    m_node2TimeOffset->insert(std::make_pair(peer, peerTimeOffset));
+    else
+    {
+        // update time information
+        m_node2TimeOffset->insert(std::make_pair(peer, peerTimeOffset));
+    }
 
     // check remote time
     if (std::abs(peerTimeOffset) > m_maxTimeOffset)
@@ -57,7 +61,7 @@ void NodeTimeMaintenance::tryToUpdatePeerTimeInfo(SyncStatusPacket::Ptr _peerSta
                                  "Invalid remote peer time:  too much difference from local time")
                           << LOG_KV("peer", peer.abridged())
                           << LOG_KV("peerTime", _peerStatus->alignedTime)
-                          << LOG_KV("localTime", localAlignedTime)
+                          << LOG_KV("localTime", localTime)
                           << LOG_KV("medianTimeOffset", m_medianTimeOffset.load());
     }
     updateTimeInfo();
