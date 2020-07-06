@@ -42,6 +42,7 @@ public:
 
     virtual void tryToUpdatePeerTimeInfo(std::shared_ptr<SyncStatusPacket> _peerStatus);
     virtual int64_t getAlignedTime();
+    int64_t medianTimeOffset() { return m_medianTimeOffset.load(); }
 
 private:
     void updateTimeInfo();

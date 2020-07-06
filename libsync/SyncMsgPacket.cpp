@@ -77,7 +77,12 @@ RLPStream& SyncMsgPacket::prep(RLPStream& _s, unsigned _id, unsigned _args)
 void SyncStatusPacket::encode()
 {
     m_rlpStream.clear();
-    prep(m_rlpStream, StatusPacket, 3) << number << genesisHash << latestHash;
+    // add aligned time into the fields
+    prep(m_rlpStream, StatusPacket, m_itemCount);
+    // Note: here must encode int64_t type value with append(bigint)
+    // Otherwise, when the number is large the result of decode is incorrect
+    m_rlpStream.append(bigint(number));
+    m_rlpStream << genesisHash << latestHash;
 }
 
 void SyncStatusPacket::decodePacket(RLP const& _rlp, dev::h512 const& _peer)
@@ -98,13 +103,7 @@ void SyncStatusPacket::decodePacket(RLP const& _rlp, dev::h512 const& _peer)
 
 void SyncStatusPacketWithAlignedTime::encode()
 {
-    m_rlpStream.clear();
-    // add aligned time into the fields
-    prep(m_rlpStream, StatusPacket, m_itemCount);
-    // Note: here must encode int64_t type value with append(bigint)
-    // Otherwise, when the number is large the result of decode is incorrect
-    m_rlpStream.append(bigint(number));
-    m_rlpStream << genesisHash << latestHash;
+    SyncStatusPacket::encode();
     m_rlpStream.append(bigint(alignedTime));
 }
 
