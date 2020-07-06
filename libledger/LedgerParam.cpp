@@ -133,8 +133,9 @@ void LedgerParam::generateGenesisMark()
     if (g_BCOSConfig.version() >= V2_6_0)
     {
         LedgerParam_LOG(INFO) << LOG_DESC("store consensus time")
-                              << LOG_KV("consensusTime", mutableConsensusParam().consensusTime);
-        s << "-" << mutableConsensusParam().consensusTime;
+                              << LOG_KV(
+                                     "consensusTimeout", mutableConsensusParam().consensusTimeout);
+        s << "-" << mutableConsensusParam().consensusTimeout;
     }
     m_genesisMark = s.str();
     LedgerParam_LOG(INFO) << LOG_BADGE("initMark") << LOG_KV("genesisMark", m_genesisMark);
@@ -382,15 +383,19 @@ void LedgerParam::initConsensusConfig(ptree const& pt)
                                   "Please set consensus.max_trans_num to positive !"));
     }
 
-    // init consensusTime
-    mutableConsensusParam().consensusTime = pt.get<int64_t>("consensus.consensus_time", 1000);
-    if (mutableConsensusParam().consensusTime < 1000 ||
-        mutableConsensusParam().consensusTime >= UINT_MAX)
+    // init consensusTimeout
+    auto consensusTimeout = pt.get<int64_t>("consensus.consensus_timeout", 3);
+
+    if (mutableConsensusParam().consensusTimeout < dev::precompiled::SYSTEM_CONSENSUS_TIMEOUT_MIN ||
+        mutableConsensusParam().consensusTimeout >= dev::precompiled::SYSTEM_CONSENSUS_TIMEOUT_MAX)
     {
-        BOOST_THROW_EXCEPTION(InvalidConfiguration() << errinfo_comment(
-                                  "Please set consensus.consensus_time must between 1000ms and " +
-                                  std::to_string(UINT_MAX) + "ms !"));
+        BOOST_THROW_EXCEPTION(
+            InvalidConfiguration() << errinfo_comment(
+                "Please set consensus.consensus_time must between " +
+                std::to_string(dev::precompiled::SYSTEM_CONSENSUS_TIMEOUT_MIN) + "s and " +
+                std::to_string(dev::precompiled::SYSTEM_CONSENSUS_TIMEOUT_MAX) + "s !"));
     }
+    mutableConsensusParam().consensusTimeout = consensusTimeout;
 
     mutableConsensusParam().minElectTime = pt.get<int64_t>("consensus.min_elect_time", 1000);
     if (mutableConsensusParam().minElectTime <= 0)
@@ -414,7 +419,7 @@ void LedgerParam::initConsensusConfig(ptree const& pt)
 
     LedgerParam_LOG(INFO) << LOG_BADGE("initConsensusConfig")
                           << LOG_KV("type", mutableConsensusParam().consensusType)
-                          << LOG_KV("consensusTime", mutableConsensusParam().consensusTime)
+                          << LOG_KV("consensusTimeout", mutableConsensusParam().consensusTimeout)
                           << LOG_KV("maxTxNum", mutableConsensusParam().maxTransactions)
                           << LOG_KV("txGasLimit", mutableTxParam().txGasLimit);
 

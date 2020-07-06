@@ -607,8 +607,8 @@ generate_group_genesis()
     consensus_type=${consensus_type}
     ; the max number of transactions of a block
     max_trans_num=1000
-    ; in ms, block  time, must be >=1000ms
-    consensus_time=1000
+    ; in seconds, block consensus timeout, at least 3s
+    consensus_timeout=3
     ; rpbft related configuration
     ; the working sealers num of each consensus epoch
     epoch_sealer_num=${sealer_size}

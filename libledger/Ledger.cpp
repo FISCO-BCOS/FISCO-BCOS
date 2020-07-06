@@ -436,11 +436,7 @@ void Ledger::initPBFTEngine(Sealer::Ptr _sealer)
 
     // set the range of block generation time
     // supported_version < v2.6.0, the consensus time is c_intervalBlockTime
-    // supported_version >=v2.6.0, the consensus time is loaded from sys_config table
-    if (g_BCOSConfig.version() < V2_6_0)
-    {
-        pbftEngine->setEmptyBlockGenTime(g_BCOSConfig.c_intervalBlockTime);
-    }
+    pbftEngine->setEmptyBlockGenTime(g_BCOSConfig.c_intervalBlockTime);
     pbftEngine->setMinBlockGenerationTime(m_param->mutableConsensusParam().minBlockGenTime);
     pbftEngine->setOmitEmptyBlock(g_BCOSConfig.c_omitEmptyBlock);
     pbftEngine->setMaxTTL(m_param->mutableConsensusParam().maxTTL);
