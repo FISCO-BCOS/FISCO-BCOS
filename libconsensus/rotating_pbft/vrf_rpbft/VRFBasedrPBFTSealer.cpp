@@ -102,17 +102,17 @@ bool VRFBasedrPBFTSealer::generateTransactionForRotating()
                 dev::eth::Transaction::Type::MessageCall, m_vrfPublicKey, blockHashStr, vrfProof);
 
         // put the generated transaction into the 0th position of the block transactions
-        // Note: here must use appendTransaction for this function will notify updating the txsCache
-        size_t maxTransacitonSize = m_pbftEngine->maxBlockTransactions();
-        if (m_sealing.block->getTransactionSize() < maxTransacitonSize)
+        // Note: must set generatedTx into the first transaction for other transactions may change
+        //       the _sys_config_ and _sys_consensus_
+        //       here must use noteChange for this function will notify updating the txsCache
+        if (m_sealing.block->transactions()->size() > 0)
         {
-            m_sealing.block->appendTransaction(generatedTx);
+            (*(m_sealing.block->transactions()))[0] = generatedTx;
+            m_sealing.block->noteChange();
         }
-        // update the last transaction
         else
         {
-            (*(m_sealing.block->transactions()))[maxTransacitonSize - 1] = generatedTx;
-            m_sealing.block->noteChange();
+            m_sealing.block->appendTransaction(generatedTx);
         }
         VRFRPBFTSealer_LOG(DEBUG) << LOG_DESC("generateTransactionForRotating succ")
                                   << LOG_KV("nodeIdx", m_vrfBasedrPBFTEngine->nodeIdx())
@@ -128,20 +128,4 @@ bool VRFBasedrPBFTSealer::generateTransactionForRotating()
         return false;
     }
     return true;
-}
-
-uint64_t VRFBasedrPBFTSealer::maxTxsSizeSealedInnerBlock()
-{
-    if (!m_vrfBasedrPBFTEngine->shouldRotateSealers())
-    {
-        return PBFTSealer::maxTxsSizeSealedInnerBlock();
-    }
-    // should rotate node, at most (m_pbftEngine->maxBlockTransactions() - 1) transactions can be
-    // packed up to a block
-    auto maxTransactions = m_pbftEngine->maxBlockTransactions();
-    if (PBFTSealer::maxTxsSizeSealedInnerBlock() >= maxTransactions)
-    {
-        return (maxTransactions - 1);
-    }
-    return PBFTSealer::maxTxsSizeSealedInnerBlock();
 }

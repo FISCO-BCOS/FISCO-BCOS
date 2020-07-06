@@ -171,12 +171,23 @@ void updateProof(WorkingSealerManagerFixture::Ptr fixture,
     std::pair<std::string, std::string>& proof, bytes& in, Address& origin)
 {
     fixture->getSealerList();
-    workingSealerKeyPair =
-        fixture->generateVRFKeyPair(fixture->m_publicKey2KeyPair[fixture->m_workingSealerList[0]]);
+    dev::h512 sealer;
+    if (fixture->m_workingSealerList.size() > 0)
+    {
+        LOG(INFO) << LOG_DESC("updateProof")
+                  << LOG_KV("workingSealerSize", fixture->m_workingSealerList.size());
+        sealer = fixture->m_workingSealerList[0];
+    }
+    else
+    {
+        sealer = fixture->m_pendingSealerList[0];
+        LOG(INFO) << LOG_DESC("updateProof with pendingSealer for workingSealer size is 0");
+    }
+    workingSealerKeyPair = fixture->generateVRFKeyPair(fixture->m_publicKey2KeyPair[sealer]);
     proof = fixture->generateVRFProof(fixture->context, workingSealerKeyPair.first);
     dev::eth::ContractABI abi;
     in = abi.abiIn(WSM_METHOD_ROTATE_STR, workingSealerKeyPair.second, proof.first, proof.second);
-    origin = dev::toAddress(fixture->m_publicKey2KeyPair[fixture->m_workingSealerList[0]].pub());
+    origin = dev::toAddress(fixture->m_publicKey2KeyPair[sealer].pub());
 }
 
 BOOST_AUTO_TEST_CASE(testRotateMultiSealers)
@@ -228,6 +239,22 @@ BOOST_AUTO_TEST_CASE(testRotateMultiSealers)
         fixture->context, bytesConstRef(&in), origin, origin));
     fixture->getSealerList();
     BOOST_CHECK(fixture->m_workingSealerList.size() == 4);
+    BOOST_CHECK(fixture->m_pendingSealerList.size() == 0);
+
+    // remove all the workingSealers into sealer
+    auto workingSealerSize = fixture->m_workingSealerList.size();
+    fixture->updateNodeListType(fixture->m_workingSealerList, 3, NODE_TYPE_SEALER);
+    fixture->updateNodeListType(
+        fixture->m_workingSealerList, workingSealerSize - 3, NODE_TYPE_OBSERVER);
+    updateProof(fixture, workingSealerKeyPair, proof, in, origin);
+
+    blockInfo = fixture->context->blockInfo();
+    blockInfo.number += 1;
+    fixture->context->setBlockInfo(blockInfo);
+    BOOST_CHECK_NO_THROW(fixture->workingSealerManagerPrecompiled->call(
+        fixture->context, bytesConstRef(&in), origin, origin));
+    fixture->getSealerList();
+    BOOST_CHECK(fixture->m_workingSealerList.size() == 3);
     BOOST_CHECK(fixture->m_pendingSealerList.size() == 0);
 }
 

@@ -301,5 +301,24 @@ bool ConsensusPrecompiled::checkIsLastSealer(storage::Table::Ptr table, std::str
                                  << LOG_KV("nodeID", nodeID);
         return true;
     }
+    // check the last working sealer
+    condition = table->newCondition();
+    condition->EQ(NODE_KEY_NODEID, nodeID);
+    entries = table->select(PRI_KEY, condition);
+    if (entries->size() > 0 && entries->get(0)->getField(NODE_TYPE) == NODE_TYPE_WORKING_SEALER)
+    {
+        // check working sealer
+        condition = table->newCondition();
+        condition->EQ(NODE_TYPE, NODE_TYPE_WORKING_SEALER);
+        entries = table->select(PRI_KEY, condition);
+        if (entries->size() == 1u && entries->get(0)->getField(NODE_KEY_NODEID) == nodeID)
+        {
+            PRECOMPILED_LOG(WARNING)
+                << LOG_BADGE("ConsensusPrecompiled")
+                << LOG_DESC("the nodeID in param is the last working sealer, cannot be deleted.")
+                << LOG_KV("nodeID", nodeID);
+            return true;
+        }
+    }
     return false;
 }

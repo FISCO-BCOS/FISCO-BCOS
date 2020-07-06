@@ -424,25 +424,26 @@ BOOST_AUTO_TEST_CASE(testTimeout)
     fake_pbft.consensus()->initPBFTEnv(
         3 * fake_pbft.consensus()->timeManager().m_emptyBlockGenTime);
 
-    VIEWTYPE oriToView = fake_pbft.consensus()->toView();
+    VIEWTYPE orgToView = fake_pbft.consensus()->toView();
     TimeManager& timeManager = fake_pbft.consensus()->mutableTimeManager();
-    unsigned oriChangeCycle = timeManager.m_changeCycle;
+    unsigned orgChangeCycle = timeManager.m_changeCycle;
 
     ///< expect to no timeout
     timeManager.m_lastConsensusTime = timeManager.m_lastSignTime = utcSteadyTime();
     fake_pbft.consensus()->checkTimeout();
-    BOOST_CHECK(fake_pbft.consensus()->toView() == oriToView);
+    BOOST_CHECK(fake_pbft.consensus()->toView() == orgToView);
 
     ///< expect to timeout, first timeout interval is 3000 because m_changeCycle is 0
+    timeManager.m_lastAddRawPrepareTime = utcSteadyTime() - 5800;
     timeManager.m_lastConsensusTime = timeManager.m_lastSignTime = utcSteadyTime() - 5000;
     fake_pbft.consensus()->checkTimeout();
-    BOOST_CHECK(fake_pbft.consensus()->toView() == oriToView + 1);
-    BOOST_CHECK(timeManager.m_changeCycle == oriChangeCycle + 1);
+    BOOST_CHECK(fake_pbft.consensus()->toView() == orgToView + 1);
+    BOOST_CHECK(timeManager.m_changeCycle == orgChangeCycle + 1);
 
     ///< expect to no timeout
     fake_pbft.consensus()->checkTimeout();
-    BOOST_CHECK(fake_pbft.consensus()->toView() == oriToView + 1);
-    BOOST_CHECK(timeManager.m_changeCycle == oriChangeCycle + 1);
+    BOOST_CHECK(fake_pbft.consensus()->toView() == orgToView + 1);
+    BOOST_CHECK(timeManager.m_changeCycle == orgChangeCycle + 1);
 }
 
 /// test checkAndChangeView
@@ -455,12 +456,14 @@ BOOST_AUTO_TEST_CASE(testCheckAndChangeView)
     fake_pbft.consensus()->resetConfig();
 
     ///< timeout situation
-    VIEWTYPE oriToView = fake_pbft.consensus()->toView();
+    VIEWTYPE orgToView = fake_pbft.consensus()->toView();
     TimeManager& timeManager = fake_pbft.consensus()->mutableTimeManager();
     unsigned oriChangeCycle = timeManager.m_changeCycle;
+
+    timeManager.m_lastAddRawPrepareTime = utcSteadyTime() - 5800;
     timeManager.m_lastConsensusTime = timeManager.m_lastSignTime = utcSteadyTime() - 5000;
     fake_pbft.consensus()->checkTimeout();
-    BOOST_CHECK(fake_pbft.consensus()->toView() == oriToView + 1);
+    BOOST_CHECK(fake_pbft.consensus()->toView() == orgToView + 1);
     BOOST_CHECK(timeManager.m_changeCycle == oriChangeCycle + 1);
 
     FakeBlockChain* p_blockChain =
@@ -1121,6 +1124,78 @@ BOOST_AUTO_TEST_CASE(testHandlePartiallyPrepare)
         BOOST_CHECK(*tx == *(*sendedPrepare->pBlock->transactions())[i]);
         i++;
     }
+}
+
+BOOST_AUTO_TEST_CASE(testResetConsensusTimeout)
+{
+    std::shared_ptr<FakeConsensus<FakePBFTEngine>> pbftFixture =
+        std::make_shared<FakeConsensus<FakePBFTEngine>>(4, ProtocolID::PBFT);
+    // first setup, initPBFTEnv
+    pbftFixture->consensus()->initPBFTEnv(3000);
+    auto& timeMgr = pbftFixture->consensus()->mutableTimeManager();
+    // reset consensus_timeout to 30min
+    timeMgr.resetConsensusTimeout(1000 * 60 * 30);
+    // case1: first setup, and viewchange for network reason
+    auto now = timeMgr.m_lastConsensusTime + 3001;
+    BOOST_CHECK(timeMgr.isTimeout(now) == true);
+    // reach view consensus
+    timeMgr.m_lastConsensusTime = now;
+
+    // case2: receive rawPrepare, and execution spent too much time(15min)
+    timeMgr.m_lastAddRawPrepareTime = now + 100;
+    now += 1000 * 60 * 15;
+    BOOST_CHECK(timeMgr.isTimeout(now) == false);
+    auto invalidNow = now + 1000 * 60 * 15 + 100;
+    // execution timeout
+    BOOST_CHECK(timeMgr.isTimeout(invalidNow) == true);
+
+    // case3: receive rawPrepare, and execution without timeout
+    timeMgr.m_lastSignTime = now;
+    BOOST_CHECK(timeMgr.isTimeout(timeMgr.m_lastSignTime + 2000) == false);
+    // network timeout
+    invalidNow = timeMgr.m_lastSignTime + 3001;
+    BOOST_CHECK(timeMgr.isTimeout(invalidNow) == true);
+    // reach view consensus
+    timeMgr.m_lastConsensusTime = invalidNow;
+
+    // receive no rawPrepare after 3s
+    now = invalidNow + 3;
+    BOOST_CHECK(timeMgr.isTimeout() == true);
+
+    // reach view consensus
+    timeMgr.m_lastConsensusTime = invalidNow;
+
+    // receive prepare after 2s
+    now += 2000;
+    timeMgr.m_lastAddRawPrepareTime = now;
+    // execution spent 20min
+    now += 1000 * 60 * 20;
+    BOOST_CHECK(timeMgr.isTimeout(now) == false);
+    invalidNow = now + 10 * 1000 * 60 * +100;
+    BOOST_CHECK(timeMgr.isTimeout(invalidNow) == true);
+    timeMgr.m_lastSignTime = now;
+    BOOST_CHECK(timeMgr.isTimeout(now) == false);
+    timeMgr.m_lastConsensusTime = now + 1000;
+
+    // case4: fast view change, the leader
+    timeMgr.changeView();
+    now += 3002;
+    BOOST_CHECK(timeMgr.isTimeout(now) == true);
+
+    // case5: fast view change, the  follow
+    // without receive the empty block after 3s
+    timeMgr.m_lastSignTime = now - 2000;
+    timeMgr.m_lastConsensusTime = now;
+    BOOST_CHECK(timeMgr.isTimeout(now + 3001) == true);
+
+    // receive the empty block after 100ms
+    now += 100;
+    timeMgr.m_lastAddRawPrepareTime = now;
+    // suppose block decode time is 20ms
+    now += 20;
+    BOOST_CHECK(timeMgr.isTimeout(now) == false);
+    timeMgr.changeView();
+    BOOST_CHECK(timeMgr.isTimeout(now) == true);
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test

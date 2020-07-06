@@ -854,7 +854,6 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq::Ptr _req, std::ostrings
     m_txPool->verifyAndSetSenderForBlock(*sealing.block);
     auto verifyAndSetSender_time_cost = utcTime() - record_time;
     record_time = utcTime();
-
     sealing.p_execContext = executeBlock(*sealing.block);
     auto exec_time_cost = utcTime() - record_time;
     PBFTENGINE_LOG(INFO)
@@ -1004,6 +1003,8 @@ bool PBFTEngine::handlePrepareMsg(PrepareReq::Ptr prepareReq, std::string const&
     clearPreRawPrepare();
     /// add raw prepare request
     addRawPrepare(prepareReq);
+
+    m_timeManager.m_lastAddRawPrepareTime = utcSteadyTime();
     return execPrepareAndGenerateSignMsg(prepareReq, oss);
 }
 
