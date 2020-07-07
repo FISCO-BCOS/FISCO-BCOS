@@ -632,13 +632,14 @@ bool Executive::go()
         catch (PermissionDenied const& _e)
         {
             revert();
-            if (g_BCOSConfig.version() <= V2_5_0)
+            if (g_BCOSConfig.version() >= V2_6_0)
             {
-                m_excepted = TransactionException::RevertInstruction;
+                m_excepted = TransactionException::PermissionDenied;
             }
             else
             {
-                m_excepted = TransactionException::PermissionDenied;
+                m_gas = 0;
+                m_excepted = TransactionException::RevertInstruction;
             }
         }
         catch (NotEnoughCash const& _e)
