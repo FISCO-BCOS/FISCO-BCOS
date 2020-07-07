@@ -58,7 +58,7 @@ check_reports()
 check_sync_consensus()
 {
     LOG_INFO "***************check_sync_consensus"
-    bash start_all.sh
+    bash start_all.sh && sleep 2
     bash ../../check_node_config.sh -p node0
     sleep 5
     send_transaction
@@ -95,7 +95,7 @@ check_sync_consensus()
 check_consensus_and_sync()
 {
     local sleep_seconds=${1}
-    bash start_all.sh
+    bash start_all.sh && sleep 2
     send_transaction
     check_reports 1 4 "check report block failed!" "==============check report block is ok"
     bash stop_all.sh

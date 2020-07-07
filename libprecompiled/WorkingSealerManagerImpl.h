@@ -98,7 +98,7 @@ protected:
         std::shared_ptr<dev::h512s> _nodeList, int64_t selectedNode);
 
 private:
-    bool checkPermission(dev::Address const& _origin, dev::h512s const& _allowedAccountInfoList);
+    void checkPermission(dev::Address const& _origin, dev::h512s const& _allowedAccountInfoList);
     void getSealerList();
     bool shouldRotate();
     void UpdateNodeType(dev::h512 const& _node, std::string const& _nodeType);

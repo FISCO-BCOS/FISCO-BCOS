@@ -54,12 +54,16 @@ void VRFBasedrPBFTEngine::updateConsensusNodeList()
 
     UpgradableGuard l(x_chosedSealerList);
     bool chosedSealerListUpdated = false;
+    // udpate m_workingSealersNum
+    if (m_workingSealersNum.load() != (int64_t)workingSealers.size())
+    {
+        m_workingSealersNum = workingSealers.size();
+    }
     if (workingSealers != *m_chosedSealerList)
     {
         chosedSealerListUpdated = true;
         UpgradeGuard ul(l);
         *m_chosedSealerList = workingSealers;
-        m_workingSealersNum = workingSealers.size();
         std::string workingSealersStr;
         // TODO: remove this
         for (auto const& node : workingSealers)
@@ -212,7 +216,7 @@ void VRFBasedrPBFTEngine::checkTransactionsValid(
                               << LOG_KV("hash", _prepareReq->block_hash.abridged())
                               << LOG_KV("leaderIdx", _prepareReq->idx)
                               << LOG_KV("nodeIdx", nodeIdx()) << LOG_KV("txSize", transactionSize);
-    auto nodeRotatingTx = (*(_block->transactions()))[transactionSize - 1];
+    auto nodeRotatingTx = (*(_block->transactions()))[0];
     auto leaderNodeID = RotatingPBFTEngine::getSealerByIndex(_prepareReq->idx);
     if (leaderNodeID == dev::h512())
     {

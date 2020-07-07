@@ -224,17 +224,19 @@ void WorkingSealerManagerImpl::getSealerList()
     m_sealerListObtained = true;
 }
 
-bool WorkingSealerManagerImpl::checkPermission(
+void WorkingSealerManagerImpl::checkPermission(
     Address const& _origin, dev::h512s const& _allowedAccountInfoList)
 {
     for (auto const& _allowedAccount : _allowedAccountInfoList)
     {
         if (toAddress(_allowedAccount) == _origin)
         {
-            return true;
+            return;
         }
     }
-    return false;
+    BOOST_THROW_EXCEPTION(
+        PrecompiledException("Permission denied, must be among the working sealer list! origin:" +
+                             _origin.hexPrefixed()));
 }
 
 void WorkingSealerManagerImpl::checkVRFInfos()
@@ -272,14 +274,9 @@ void WorkingSealerManagerImpl::checkVRFInfos()
         BOOST_THROW_EXCEPTION(
             PrecompiledException("Verify VRF proof failed! sender:" + m_origin.hexPrefixed()));
     }
-    // check origin: must be among the workingSealerList, others cannot call this interface
     getSealerList();
-    if (!checkPermission(m_origin, *m_workingSealerList))
-    {
-        BOOST_THROW_EXCEPTION(PrecompiledException(
-            "Permission denied, must be among the working sealer list! origin:" +
-            m_origin.hexPrefixed()));
-    }
+    // check origin: the origin must be among the workingSealerList
+    checkPermission(m_origin, *m_workingSealerList);
 }
 
 // notify the next leader rotate when checkVRFInfos failed
@@ -336,13 +333,13 @@ bool WorkingSealerManagerImpl::shouldRotate()
         BOOST_THROW_EXCEPTION(PrecompiledException(
             "Open system configuration table failed! tableName: " + SYS_CONFIG));
     }
-    auto notifyRotateFalgInfo = getSysteConfigByKey(
+    auto notifyRotateFlagInfo = getSysteConfigByKey(
         m_sysConfigTable, INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE, m_context->blockInfo().number);
     m_notifyNextLeaderRotateSetted = false;
-    if (notifyRotateFalgInfo->first != "")
+    if (notifyRotateFlagInfo->first != "")
     {
         m_notifyNextLeaderRotateSetted =
-            (bool)(boost::lexical_cast<int64_t>(notifyRotateFalgInfo->first));
+            (bool)(boost::lexical_cast<int64_t>(notifyRotateFlagInfo->first));
     }
     if (m_notifyNextLeaderRotateSetted)
     {

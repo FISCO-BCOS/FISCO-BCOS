@@ -116,7 +116,7 @@ void Sealer::doWork(bool wait)
             {
                 m_syncTxPool = true;
             }
-            auto maxTxsPerBlock = maxTxsSizeSealedInnerBlock();
+            auto maxTxsPerBlock = maxBlockCanSeal();
             /// load transaction from transaction queue
             if (maxTxsPerBlock > tx_num && m_syncTxPool == true && !reachBlockIntervalTime())
                 loadTransactions(maxTxsPerBlock - tx_num);
