@@ -62,21 +62,24 @@ public:
         initWorkingSealerMgrFixture(_epochSealerNum, _epochBlockNum);
     }
 
-    void initWorkingSealerManagerFixture(
-        size_t _sealersSize = 4, size_t _epochSealerNum = 4, size_t _epochBlockNum = 10)
+    void initWorkingSealerManagerFixture(size_t _sealersSize = 4, size_t _epochSealerNum = 4,
+        size_t _epochBlockNum = 10, bool _needFakeSealerList = true)
     {
-        // init VRF public and private keys
-        m_keyPair = KeyPair::create();
-
-        // add the node into the sealerList
-        sealerList.push_back(m_keyPair.pub());
-        m_publicKey2KeyPair[m_keyPair.pub()] = m_keyPair;
-        // generate sealerList
-        for (size_t i = 1; i < _sealersSize; i++)
+        if (_needFakeSealerList)
         {
-            auto keyPair = KeyPair::create();
-            sealerList.push_back(keyPair.pub());
-            m_publicKey2KeyPair[keyPair.pub()] = keyPair;
+            // init VRF public and private keys
+            m_keyPair = KeyPair::create();
+
+            // add the node into the sealerList
+            sealerList.push_back(m_keyPair.pub());
+            m_publicKey2KeyPair[m_keyPair.pub()] = m_keyPair;
+            // generate sealerList
+            for (size_t i = 1; i < _sealersSize; i++)
+            {
+                auto keyPair = KeyPair::create();
+                sealerList.push_back(keyPair.pub());
+                m_publicKey2KeyPair[keyPair.pub()] = keyPair;
+            }
         }
         initWorkingSealerMgrFixture(_epochSealerNum, _epochBlockNum);
     }
@@ -104,9 +107,9 @@ public:
 
         std::sort(sealerList.begin(), sealerList.end());
         // init epoch_sealer_num
-        initrPBFTConfig(
+        setSystemConfigByKey(
             SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM, boost::lexical_cast<std::string>(_epochSealerNum));
-        initrPBFTConfig(
+        setSystemConfigByKey(
             SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM, boost::lexical_cast<std::string>(_epochBlockNum));
         // init workingSealer
         initWorkingSealers(_epochSealerNum);
@@ -141,13 +144,19 @@ public:
 
     std::string getSystemConfigByKey(std::string const& _key)
     {
+        return getSystemConfigAndEnableNumByKey(_key).first;
+    }
+
+    std::pair<std::string, dev::eth::BlockNumber> getSystemConfigAndEnableNumByKey(
+        std::string const& _key)
+    {
         auto table = openTable(context, SYS_CONFIG);
         auto valueInfo =
             dev::precompiled::getSysteConfigByKey(table, _key, context->blockInfo().number + 1);
-        return valueInfo->first;
+        return *valueInfo;
     }
 
-    void initrPBFTConfig(std::string const& _key, std::string const& _value)
+    void setSystemConfigByKey(std::string const& _key, std::string const& _value)
     {
         auto table = openTable(context, SYS_CONFIG);
         auto condition = table->newCondition();

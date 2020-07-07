@@ -294,9 +294,11 @@ public:
         std::shared_ptr<BlockVerifierInterface> blockVerifier =
             std::make_shared<FakeBlockverifier>(),
         std::shared_ptr<TxPoolFixture> txpool_creator = std::make_shared<TxPoolFixture>(5, 5))
+      : txPoolCreator(txpool_creator)
     {
-        m_consensus = std::make_shared<T>(txpool_creator->m_topicService, txpool_creator->m_txPool,
-            txpool_creator->m_blockChain, sync, blockVerifier, protocolID, m_sealerList);
+        m_consensus = std::make_shared<T>(txPoolCreator->m_topicService, txPoolCreator->m_txPool,
+            txPoolCreator->m_blockChain, sync, blockVerifier, protocolID, m_sealerList);
+        fakeSync = std::dynamic_pointer_cast<FakeBlockSync>(sync);
         /// fake sealerList
         FakeSealerList(sealerSize);
         resetSessionInfo();
@@ -336,6 +338,8 @@ public:
     h512s m_sealerList;
     std::vector<Secret> m_secrets;
     std::vector<KeyPair> m_keyPair;
+    std::shared_ptr<TxPoolFixture> txPoolCreator;
+    std::shared_ptr<FakeBlockSync> fakeSync;
 
 private:
     std::shared_ptr<T> m_consensus;

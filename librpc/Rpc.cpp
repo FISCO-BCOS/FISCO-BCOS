@@ -257,8 +257,11 @@ Json::Value Rpc::getEpochSealersList(int _groupID)
 {
     try
     {
-        auto consensusType =
-            ledgerManager()->getParamByGroupId(_groupID)->mutableConsensusParam().consensusType;
+        auto ledgerParam = ledgerManager()->getParamByGroupId(_groupID);
+        checkLedgerStatus(ledgerParam, "ledgerParam", "getEpochSealersList");
+        checkRequest(_groupID);
+
+        auto consensusType = ledgerParam->mutableConsensusParam().consensusType;
         if (stringCmpIgnoreCase(consensusType, "rpbft") != 0)
         {
             RPC_LOG(ERROR) << LOG_DESC("Only support getEpochSealersList when rpbft is used")
@@ -1143,24 +1146,6 @@ Json::Value Rpc::getTotalTransactionCount(int _groupID)
         result = blockChain->totalFailedTransactionCount();
         response["failedTxSum"] = toJS(result.first);
         return response;
-#if 0
-        RPC_LOG(INFO) << LOG_BADGE("getTotalTransactionCount") << LOG_DESC("request")
-                      << LOG_KV("groupID", _groupID);
-
-        checkRequest(_groupID);
-        auto blockChain = ledgerManager()->blockChain(_groupID);
-
-        std::pair<int64_t, int64_t> result = blockChain->totalTransactionCount();
-
-        Json::Value response;
-        auto txPool = ledgerManager()->txPool(_groupID);
-
-        auto ret = txPool->totalTransactionNum();
-        response["txSum"] = toJS(ret);
-        response["blockNumber"] = toJS(result.second);
-        result = blockChain->totalFailedTransactionCount();
-        response["failedTxSum"] = toJS(result.first);
-#endif
     }
     catch (JsonRpcException& e)
     {
