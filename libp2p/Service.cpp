@@ -447,42 +447,45 @@ void Service::onLocalAMOPMessage(
 {
     if (message->isRequestPacket())
     {
-        // save callback and call onMessage to push the request message
-        RecursiveGuard lock(x_localAMOPCallbacks);
-
-        auto self = shared_from_this();
-        std::shared_ptr<boost::asio::deadline_timer> timer;
-        if (options.timeout > 0)
+        if (callback)
         {
-            timer = m_host->asioInterface()->newTimer(options.timeout);
-            timer->async_wait([self, message](const boost::system::error_code& error) {
-                if (error)
-                {
-                    SERVICE_LOG(TRACE) << "timer canceled" << LOG_KV("errorCode", error);
-                    return;
-                }
+            // save callback and call onMessage to push the request message
+            RecursiveGuard lock(x_localAMOPCallbacks);
+
+            auto self = shared_from_this();
+            std::shared_ptr<boost::asio::deadline_timer> timer;
+            if (options.timeout > 0)
+            {
+                timer = m_host->asioInterface()->newTimer(options.timeout);
+                timer->async_wait([self, message](const boost::system::error_code& error) {
+                    if (error)
+                    {
+                        SERVICE_LOG(TRACE) << "timer canceled" << LOG_KV("errorCode", error);
+                        return;
+                    }
 
 
-                SERVICE_LOG(INFO) << "AMOP Local message Timeout: " << message->seq();
+                    SERVICE_LOG(INFO) << "AMOP Local message Timeout: " << message->seq();
 
-                RecursiveGuard lock(self->localAMOPCallbacksLock());
-                auto it = self->localAMOPCallbacks()->find(message->seq());
-                if (it != self->localAMOPCallbacks()->end())
-                {
-                    auto callback = it->second.second;
-                    self->host()->threadPool()->enqueue([callback] {
-                        callback(dev::network::NetworkException(
-                                     P2PExceptionType::NetworkTimeout, "NetworkTimeout"),
-                            std::shared_ptr<dev::p2p::P2PSession>(), P2PMessage::Ptr());
-                    });
+                    RecursiveGuard lock(self->localAMOPCallbacksLock());
+                    auto it = self->localAMOPCallbacks()->find(message->seq());
+                    if (it != self->localAMOPCallbacks()->end())
+                    {
+                        auto callback = it->second.second;
+                        self->host()->threadPool()->enqueue([callback] {
+                            callback(dev::network::NetworkException(
+                                         P2PExceptionType::NetworkTimeout, "NetworkTimeout"),
+                                std::shared_ptr<dev::p2p::P2PSession>(), P2PMessage::Ptr());
+                        });
 
-                    self->localAMOPCallbacks()->erase(it);
-                }
-            });
+                        self->localAMOPCallbacks()->erase(it);
+                    }
+                });
+            }
+
+            m_localAMOPCallbacks->insert(
+                std::make_pair(message->seq(), std::make_pair(timer, callback)));
         }
-
-        m_localAMOPCallbacks->insert(
-            std::make_pair(message->seq(), std::make_pair(timer, callback)));
 
         onMessage(NetworkException(), dev::network::SessionFace::Ptr(), message,
             dev::p2p::P2PSession::Ptr());
@@ -500,11 +503,15 @@ void Service::onLocalAMOPMessage(
                 it->second.first->cancel();
             }
 
-            auto callback = it->second.second;
-            m_host->threadPool()->enqueue([callback, message] {
-                callback(dev::network::NetworkException(), std::shared_ptr<dev::p2p::P2PSession>(),
-                    message);
-            });
+            auto amopCallback = it->second.second;
+
+            if (amopCallback)
+            {
+                m_host->threadPool()->enqueue([amopCallback, message] {
+                    amopCallback(dev::network::NetworkException(),
+                        std::shared_ptr<dev::p2p::P2PSession>(), message);
+                });
+            }
 
             m_localAMOPCallbacks->erase(it);
         }
