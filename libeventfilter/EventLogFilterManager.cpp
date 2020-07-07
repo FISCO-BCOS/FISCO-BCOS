@@ -1,6 +1,5 @@
 
 #include "EventLogFilterManager.h"
-#include "Common.h"
 #include <json/json.h>
 #include <libblockchain/BlockChainInterface.h>
 #include <libdevcore/TopicInfo.h>
@@ -52,8 +51,7 @@ void EventLogFilterManager::doWork()
     executeFilters();
 }
 
-EventLogFilterManager::filter_status EventLogFilterManager::executeFilter(
-    EventLogFilter::Ptr _filter)
+filter_status EventLogFilterManager::executeFilter(EventLogFilter::Ptr _filter)
 {
     filter_status status;
     std::string strDesc;
@@ -67,14 +65,22 @@ EventLogFilterManager::filter_status EventLogFilterManager::executeFilter(
         BlockNumber blockNumber = blockchain->number();
         BlockNumber nextBlockToProcess = filter->getNextBlockToProcess();
 
-        // check if session active
-        if (!filter->getSessionActiveCallback()())
-        {  // maybe sesseion disconnect
+        auto result = (filter->getSessionCheckerCallback())(filter->getParams()->getGroupID());
+        // check if session is actived
+        if (result == filter_status::CALLBACK_FAILED)
+        {
+            // maybe sesseion disconnect
             strDesc = "session not active";
             status = filter_status::CALLBACK_FAILED;
             break;
         }
-
+        // check sdk exists in the allow list or not
+        if (result == filter_status::REMOTE_PEERS_ACCESS_DENIED)
+        {
+            strDesc = "The SDK is not allowed to access this group";
+            status = filter_status::REMOTE_PEERS_ACCESS_DENIED;
+            break;
+        }
         if (blockNumber < nextBlockToProcess)
         {  // wait for more block to be sealed
             status = filter_status::WAIT_FOR_MORE_BLOCK;
@@ -115,7 +121,7 @@ EventLogFilterManager::filter_status EventLogFilterManager::executeFilter(
         {
             filter->getResponseCallback()(filter->getParams()->getFilterID(), PUSH_COMPLETED,
                 Json::Value(), filter->getParams()->getGroupID());
-            status = filter_status::PUSH_COMPLETED;
+            status = filter_status::STATUS_PUSH_COMPLETED;
             break;
         }
 
@@ -134,7 +140,7 @@ int32_t EventLogFilterManager::addEventLogFilterByRequest(const EventLogFilterPa
     std::function<bool(const std::string& _filterID, int32_t _result, const Json::Value& _logs,
         GROUP_ID const& _groupId)>
         _respCallback,
-    std::function<bool()> _activeCallback)
+    std::function<int(GROUP_ID _groupId)> _sessionCheckerCallback)
 {
     ResponseCode responseCode = ResponseCode::SUCCESS;
     do
@@ -173,7 +179,7 @@ int32_t EventLogFilterManager::addEventLogFilterByRequest(const EventLogFilterPa
 
         auto filter = std::make_shared<EventLogFilter>(params, nextBlockToProcess, _version);
         filter->setResponseCallBack(_respCallback);
-        filter->setCheckSessionActiveCallBack(_activeCallback);
+        filter->setSessionCheckerCallBack(_sessionCheckerCallback);
 
         // add filter to vector wait for loop thread to process
         addEventLogFilter(filter);
@@ -224,7 +230,7 @@ void EventLogFilterManager::executeFilters()
                          << LOG_KV("endBlockNumber", filter->getParams()->getToBlock());
 
         auto status = executeFilter(filter);
-        if ((isErrorStatus(status)) || (status == filter_status::PUSH_COMPLETED))
+        if ((isErrorStatus(status)) || (status == filter_status::STATUS_PUSH_COMPLETED))
         {
             EVENT_LOG(INFO) << LOG_BADGE("executeFilters") << LOG_DESC("remove filter")
                             << LOG_KV("status", static_cast<int>(status))

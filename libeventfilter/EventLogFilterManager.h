@@ -22,6 +22,7 @@
  */
 
 #pragma once
+#include "Common.h"
 #include "EventLogFilter.h"
 #include <libdevcore/Worker.h>
 #include <atomic>
@@ -88,19 +89,9 @@ public:
         std::function<bool(const std::string& _filterID, int32_t _result, const Json::Value& _logs,
             GROUP_ID const& _groupId)>
             _respCallback,
-        std::function<bool()> _activeCallback);
+        std::function<int(GROUP_ID _groupId)> _sessionCheckerCallback);
 
 public:
-    enum class filter_status
-    {
-        GROUP_ID_NOT_EXIST,
-        CALLBACK_FAILED,
-        ERROR_STATUS,
-        PUSH_COMPLETED,
-        WAIT_FOR_MORE_BLOCK,
-        WAIT_FOR_NEXT_LOOP
-    };
-
     bool isErrorStatus(filter_status status)
     {
         return ((status == filter_status::GROUP_ID_NOT_EXIST) ||
