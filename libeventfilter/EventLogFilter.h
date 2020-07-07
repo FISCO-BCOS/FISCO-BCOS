@@ -56,7 +56,7 @@ public:
         return m_responseCallback;
     }
     // m_sessionActive
-    std::function<bool()> getSessionActiveCallback() { return m_isSessionActive; }
+    std::function<int(GROUP_ID _groupId)> getSessionCheckerCallback() { return m_sessionChecker; }
 
     // this filter pushed end
     bool pushCompleted() const { return m_nextBlockToProcess > m_params->getToBlock(); }
@@ -74,9 +74,9 @@ public:
         m_responseCallback = _callback;
     }
 
-    void setCheckSessionActiveCallBack(std::function<bool()> _callback)
+    void setSessionCheckerCallBack(std::function<int(GROUP_ID _groupId)> _callback)
     {
-        m_isSessionActive = _callback;
+        m_sessionChecker = _callback;
     }
 
     uint32_t getChannelProtocolVersion() const { return m_channelProtocolVersion; }
@@ -97,7 +97,7 @@ private:
         GROUP_ID const& _groupId)>
         m_responseCallback;
     // connect active check function
-    std::function<bool()> m_isSessionActive;
+    std::function<int(GROUP_ID _groupId)> m_sessionChecker;
 };
 
 }  // namespace event

@@ -638,7 +638,7 @@ function generate_group_ini()
     ttl=2
     ; min block generation time(ms)
     min_block_generation_time=500
-    ;enable_dynamic_block_size=true
+    enable_dynamic_block_size=true
     enable_ttl_optimization=true
     enable_prepare_with_txsHash=true
     ; The following is the relevant configuration of rpbft

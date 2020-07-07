@@ -157,7 +157,7 @@ public:
     void setEventFilterCallback(std::function<int32_t(const std::string&, uint32_t,
             std::function<bool(const std::string& _filterID, int32_t _result,
                 const Json::Value& _logs, GROUP_ID const& _groupId)>,
-            std::function<bool()>, std::function<bool(GROUP_ID _groupId)>)>
+            std::function<int(GROUP_ID _groupId)>, std::function<bool(GROUP_ID _groupId)>)>
             _callback)
     {
         m_eventFilterCallBack = _callback;
@@ -270,7 +270,7 @@ private:
     std::function<int32_t(const std::string&, uint32_t,
         std::function<bool(const std::string& _filterID, int32_t _result, const Json::Value& _logs,
             GROUP_ID const& _groupId)>,
-        std::function<bool()>, std::function<bool(GROUP_ID _groupId)>)>
+        std::function<int(GROUP_ID _groupId)>, std::function<bool(GROUP_ID _groupId)>)>
         m_eventFilterCallBack;
 
     std::vector<dev::eth::Handler<int64_t>> m_handlers;

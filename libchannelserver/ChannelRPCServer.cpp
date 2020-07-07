@@ -36,6 +36,7 @@
 #include "libp2p/P2PMessageFactory.h"           // for P2PMessageFac...
 #include "libp2p/P2PSession.h"                  // for P2PSession
 #include <json/json.h>
+#include <libeventfilter/Common.h>
 #include <libp2p/P2PMessage.h>
 #include <libp2p/Service.h>
 #include <librpc/StatisticProtocolServer.h>
@@ -506,15 +507,26 @@ void dev::ChannelRPCServer::onClientEventLogRequest(
             return false;
         };
 
-        auto activeCallback = [serverRef, sessionRef]() {
+        auto sessionCheckerCallback = [this, serverRef, sessionRef](GROUP_ID _groupId) {
             auto server = serverRef.lock();
             auto session = sessionRef.lock();
-            return server && session && session->actived();
+            auto sessionActived = server && session && session->actived();
+            if (!sessionActived)
+            {
+                CHANNEL_LOG(DEBUG) << LOG_DESC("Push event failed for session invactived")
+                                   << LOG_KV("groupId", _groupId);
+                return dev::event::filter_status::CALLBACK_FAILED;
+            }
+            if (!checkSDKPermission(_groupId, session->remotePublicKey()))
+            {
+                return dev::event::filter_status::REMOTE_PEERS_ACCESS_DENIED;
+            }
+            return dev::event::filter_status::CHECK_VALID;
         };
 
         // checkSDKPermission when receive CLIENT_REGISTER_EVENT_LOG
-        int32_t ret = m_eventFilterCallBack(data, protocolVersion, respCallback, activeCallback,
-            [this, session](dev::GROUP_ID _groupId) {
+        int32_t ret = m_eventFilterCallBack(data, protocolVersion, respCallback,
+            sessionCheckerCallback, [this, session](dev::GROUP_ID _groupId) {
                 return checkSDKPermission(_groupId, session->remotePublicKey());
             });
 
@@ -919,7 +931,8 @@ void dev::ChannelRPCServer::onClientChannelRequest(
             dev::network::Options options;
             options.timeout = 30 * 1000;  // 30 seconds
 
-            m_service->asyncSendMessageByTopic(topic, p2pMessage,
+            m_service->asyncSendMessageByTopic(
+                topic, p2pMessage,
                 [session, message](dev::network::NetworkException e,
                     std::shared_ptr<dev::p2p::P2PSession>, dev::p2p::P2PMessage::Ptr response) {
                     if (e.errorCode())
