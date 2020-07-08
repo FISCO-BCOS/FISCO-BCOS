@@ -72,7 +72,8 @@ void VRFBasedrPBFTEngine::updateConsensusNodeList()
         }
         VRFRPBFTEngine_LOG(INFO) << LOG_DESC("updateConsensusNodeList: update working sealers")
                                  << LOG_KV("updatedWorkingSealers", m_workingSealersNum)
-                                 << LOG_KV("workingSealers", workingSealersStr);
+                                 << LOG_KV("workingSealers", workingSealersStr)
+                                 << LOG_KV("blkNumber", m_highestBlock.number());
     }
     // update m_chosedConsensusNodes
     if (chosedSealerListUpdated)
@@ -145,7 +146,6 @@ void VRFBasedrPBFTEngine::resetConfig()
     }
     // update m_f
     m_f = (m_workingSealersNum - 1) / 3;
-
     // update according to epoch_block_num
     updateRotatingInterval();
     // update according to epoch_sealer_num
