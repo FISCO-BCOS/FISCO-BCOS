@@ -810,9 +810,12 @@ void RotatingPBFTEngine::onReceiveRawPrepareRequest(
     }
     catch (std::exception const& _e)
     {
-        RPBFTENGINE_LOG(WARNING) << LOG_DESC("onReceiveRawPrepareRequest exceptioned")
-                                 << LOG_KV("peer", _session->nodeID().abridged())
-                                 << LOG_KV("errorInfo", boost::diagnostic_information(_e));
+        // In the empty block scene, because the view switches quickly,
+        // and if the node is disconnected, this warning is often triggered,
+        // so the log level is adjusted to trace
+        RPBFTENGINE_LOG(TRACE) << LOG_DESC("onReceiveRawPrepareRequest exceptioned")
+                               << LOG_KV("peer", _session->nodeID().abridged())
+                               << LOG_KV("errorInfo", boost::diagnostic_information(_e));
     }
 }
 

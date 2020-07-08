@@ -108,18 +108,60 @@ BOOST_AUTO_TEST_CASE(testVRFBasedrPBFT)
     BOOST_CHECK_NO_THROW(
         engine->checkTransactionsValid(fakedSealer->mutableSealing().block, prepareReq));
 
-    // block without invalid rotatingTx
-    // invalid receiveAddress
-    rotatingTx->setReceiveAddress(Address(0x001));
+    auto orgSender = rotatingTx->sender();
+    rotatingTx->forceSender(toAddress(KeyPair::create().pub()));
     BOOST_CHECK_THROW(
         engine->checkTransactionsValid(fakedSealer->mutableSealing().block, prepareReq),
         InvalidNodeRotationTx);
 
+    // pbftBackupBlock: update pbftBackup
+    engine->reqCache()->addRawPrepare(prepareReq);
+    engine->reqCache()->updateCommittedPrepare();
+    // modify sender of block
+    LOG(DEBUG) << LOG_DESC("updateCommittedPrepare and checkTransactionsValid");
+    BOOST_CHECK_NO_THROW(
+        engine->checkTransactionsValid(fakedSealer->mutableSealing().block, prepareReq));
+    rotatingTx->forceSender(orgSender);
+
+    // block without invalid rotatingTx
+    // invalid receiveAddress
+    auto orgTo = rotatingTx->to();
+    rotatingTx->setReceiveAddress(Address(0x001));
+    BOOST_CHECK_THROW(
+        engine->checkTransactionsValid(fakedSealer->mutableSealing().block, prepareReq),
+        InvalidNodeRotationTx);
+    rotatingTx->setReceiveAddress(orgTo);
+
+    // disable pbftBackup cache
+    engine->reqCache()->mutableCommittedPrepareCache()->height = 3;
     // invalid sender
     rotatingTx->forceSender(toAddress(KeyPair::create().pub()));
     BOOST_CHECK_THROW(
         engine->checkTransactionsValid(fakedSealer->mutableSealing().block, prepareReq),
         InvalidNodeRotationTx);
+
+    // receive pbftBackup from other leader(the sealer of the block is the sender of the
+    // transaction)
+    auto idx = (prepareReq->idx + 1) % (engine->consensusList().size() + 1);
+    dev::h512 nodeId;
+    engine->wrapperGetNodeIDByIndex(nodeId, idx);
+    rotatingTx->forceSender(toAddress(nodeId));
+    fakedSealer->mutableSealing().block->header().setSealer(idx);
+    BOOST_CHECK_NO_THROW(
+        engine->checkTransactionsValid(fakedSealer->mutableSealing().block, prepareReq));
+
+#if 0
+        auto pbftEngine = _fixture->vrfBasedrPBFT();
+    pbftEngine->setLocatedInConsensusNodes(true);
+    auto leader = pbftEngine->getLeader();
+    BOOST_CHECK(leader.first == true);
+    dev::h512 leaderNodeID;
+    pbftEngine->wrapperGetNodeIDByIndex(leaderNodeID, leader.second);
+    BOOST_CHECK(leaderNodeID != dev::h512());
+    BOOST_CHECK(_fixture->nodeID2KeyPair.count(leaderNodeID));
+    auto keyPair = (_fixture->nodeID2KeyPair)[leaderNodeID];
+    pbftEngine->setKeyPair(keyPair);
+#endif
 
     // test resetConfig
     // set epoch_block_num to 5(the current block number is 4)

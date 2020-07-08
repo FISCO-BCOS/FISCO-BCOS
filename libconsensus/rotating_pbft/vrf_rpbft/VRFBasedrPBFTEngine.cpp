@@ -201,7 +201,7 @@ void VRFBasedrPBFTEngine::checkTransactionsValid(
     dev::eth::Block::Ptr _block, PrepareReq::Ptr _prepareReq)
 {
     // Note: if the block contains rotatingTx when m_shouldRotateSealers is false
-    //       the rotatingTx will reverted by the ordinary node when executing
+    //       the rotatingTx will be reverted by the ordinary node when executing
     if (!m_shouldRotateSealers.load())
     {
         return;
@@ -219,6 +219,27 @@ void VRFBasedrPBFTEngine::checkTransactionsValid(
                               << LOG_KV("leaderIdx", _prepareReq->idx)
                               << LOG_KV("nodeIdx", nodeIdx()) << LOG_KV("txSize", transactionSize);
     auto nodeRotatingTx = (*(_block->transactions()))[0];
+    // check the contract address
+    if (nodeRotatingTx->to() != dev::precompiled::WORKING_SEALER_MGR_ADDRESS)
+    {
+        VRFRPBFTEngine_LOG(WARNING)
+            << LOG_DESC("checkTransactionsValid failed") << LOG_KV("reqHeight", _prepareReq->height)
+            << LOG_KV("reqHash", _prepareReq->block_hash.abridged())
+            << LOG_KV("reqIdx", _prepareReq->idx)
+            << LOG_KV("expectedTo", toHex(dev::precompiled::WORKING_SEALER_MGR_ADDRESS))
+            << LOG_KV("currentTo", toHex(nodeRotatingTx->to()));
+        BOOST_THROW_EXCEPTION(InvalidNodeRotationTx() << errinfo_comment(
+                                  "Invalid node rotation transaction, expected contract address: " +
+                                  toHex(dev::precompiled::WORKING_SEALER_MGR_ADDRESS) +
+                                  ", current to:" + toHex(nodeRotatingTx->to())));
+    }
+    // Note: When pbftBackup exists, the current leader is not necessarily equal to the transaction
+    //       generation node, and the sender of the transaction is not checked
+    if (m_reqCache->committedPrepareCache().height == _prepareReq->height)
+    {
+        return;
+    }
+    //
     auto leaderNodeID = RotatingPBFTEngine::getSealerByIndex(_prepareReq->idx);
     if (leaderNodeID == dev::h512())
     {
@@ -231,27 +252,34 @@ void VRFBasedrPBFTEngine::checkTransactionsValid(
     // get the account of the leader
     Address leaderAccount = toAddress(leaderNodeID);
     // check the sender of the nodeRotatingTx
-    if (nodeRotatingTx->sender() != leaderAccount)
+    if (nodeRotatingTx->sender() == leaderAccount)
     {
-        VRFRPBFTEngine_LOG(WARNING) << LOG_DESC("checkTransactionsValid failed")
-                                    << LOG_KV("expectedSender", leaderAccount.hexPrefixed())
-                                    << LOG_KV("sender", nodeRotatingTx->sender().hexPrefixed());
+        return;
+    }
+    // The local does not contain pbftBackup,
+    // because it may be pbftBackup replayed by other nodes, and the leader is not a sender, check
+    // the sealer
+    auto sealerIndex = _block->blockHeader().sealer();
+    auto sealerNodeID = RotatingPBFTEngine::getSealerByIndex(sealerIndex.convert_to<size_t>());
+    if (nodeRotatingTx->sender() == toAddress(sealerNodeID))
+    {
+        VRFRPBFTEngine_LOG(DEBUG) << LOG_DESC("checkTransactionsValid: receive the pbftBackup")
+                                  << LOG_KV("reqHeight", _prepareReq->height)
+                                  << LOG_KV("reqHash", _prepareReq->block_hash.abridged())
+                                  << LOG_KV("reqIdx", _prepareReq->idx)
+                                  << LOG_KV("sealer", sealerIndex);
+        return;
+    }
+    VRFRPBFTEngine_LOG(WARNING) << LOG_DESC("checkTransactionsValid failed")
+                                << LOG_KV("reqHeight", _prepareReq->height)
+                                << LOG_KV("reqHash", _prepareReq->block_hash.abridged())
+                                << LOG_KV("reqIdx", _prepareReq->idx)
+                                << LOG_KV("leaderNodeID", leaderNodeID.abridged())
+                                << LOG_KV("expectedSender", leaderAccount.hexPrefixed())
+                                << LOG_KV("sender", nodeRotatingTx->sender().hexPrefixed());
 
-        BOOST_THROW_EXCEPTION(InvalidNodeRotationTx() << errinfo_comment(
-                                  "Invalid node rotation transaction, expected sender: " +
-                                  leaderAccount.hexPrefixed() +
-                                  ", current sender:" + nodeRotatingTx->sender().hexPrefixed()));
-    }
-    // check the contract address
-    if (nodeRotatingTx->to() != dev::precompiled::WORKING_SEALER_MGR_ADDRESS)
-    {
-        VRFRPBFTEngine_LOG(WARNING)
-            << LOG_DESC("checkTransactionsValid failed")
-            << LOG_KV("expectedTo", toHex(dev::precompiled::WORKING_SEALER_MGR_ADDRESS))
-            << LOG_KV("currentTo", toHex(nodeRotatingTx->to()));
-        BOOST_THROW_EXCEPTION(InvalidNodeRotationTx() << errinfo_comment(
-                                  "Invalid node rotation transaction, expected contract address: " +
-                                  toHex(dev::precompiled::WORKING_SEALER_MGR_ADDRESS) +
-                                  ", current to:" + toHex(nodeRotatingTx->to())));
-    }
+    BOOST_THROW_EXCEPTION(
+        InvalidNodeRotationTx() << errinfo_comment(
+            "Invalid node rotation transaction, expected sender: " + leaderAccount.hexPrefixed() +
+            ", current sender:" + nodeRotatingTx->sender().hexPrefixed()));
 }
