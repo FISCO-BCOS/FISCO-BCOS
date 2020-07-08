@@ -25,6 +25,7 @@
 #include <libconsensus/rotating_pbft/vrf_rpbft/VRFBasedrPBFTEngine.h>
 #include <libconsensus/rotating_pbft/vrf_rpbft/VRFBasedrPBFTSealer.h>
 #include <test/tools/libutils/TestOutputHelper.h>
+#include <test/unittests/libconsensus/FakePBFTEngine.h>
 #include <test/unittests/libprecompiled/test_WorkingSealerManagerPrecompiled.h>
 #include <test/unittests/libsync/FakeBlockSync.h>
 #include <test/unittests/libtxpool/FakeBlockChain.h>
@@ -51,10 +52,15 @@ public:
         storageFixture->setSystemConfigByKey("tx_count_limit", "1000");
         storageFixture->setSystemConfigByKey("tx_gas_limit", "3000000000");
         storageFixture->setSystemConfigByKey("notify_rotate", "0");
+
+        BOOST_CHECK(getSystemConfigByKey("tx_count_limit") == "1000");
+        BOOST_CHECK(getSystemConfigByKey("tx_gas_limit") == "3000000000");
+        BOOST_CHECK(getSystemConfigByKey("notify_rotate") == "0");
     }
 
-    std::string getSystemConfigByKey(std::string const& _key, int64_t) override
+    std::string getSystemConfigByKey(std::string const& _key, int64_t _number = -1) override
     {
+        (void)_number;
         return storageFixture->getSystemConfigByKey(_key);
     }
 
@@ -116,6 +122,44 @@ public:
     }
     std::shared_ptr<P2PInterface> mutableService() { return m_service; }
     BlockChainInterface::Ptr blockChain() { return m_blockChain; }
+    void setKeyPair(KeyPair const& _keyPair) { m_keyPair = _keyPair; }
+    std::pair<bool, IDXTYPE> getLeader() const override { return VRFBasedrPBFTEngine::getLeader(); }
+
+    bool wrapperGetNodeIDByIndex(dev::network::NodeID& nodeId, const IDXTYPE& idx) const
+    {
+        return PBFTEngine::getNodeIDByIndex(nodeId, idx);
+    }
+
+    void setLocatedInConsensusNodes(bool _locatedInConsensusNodes)
+    {
+        m_locatedInConsensusNodes = _locatedInConsensusNodes;
+    }
+
+    CheckResult isValidPrepare(PrepareReq const& req) const
+    {
+        std::ostringstream oss;
+        return VRFBasedrPBFTEngine::isValidPrepare(req, oss);
+    }
+
+    void setLeaderFailed(bool leaderFailed) { m_leaderFailed = leaderFailed; }
+    void setConsensusBlockNumber(int64_t const& number) { m_consensusBlockNumber = number; }
+    int64_t consensusBlockNumber() const { return m_consensusBlockNumber; }
+    void resetBlock(Block& block)
+    {
+        block.resetCurrentBlock(m_blockChain->getBlockByNumber(m_blockChain->number())->header());
+        block.header().setTimestamp(utcTime());
+        block.header().setSealerList(sealerList());
+        block.header().setSealer(u256(nodeIdx()));
+        block.header().setLogBloom(LogBloom());
+        block.header().setGasUsed(u256(0));
+    }
+
+    void setView(VIEWTYPE const& _view) { m_view = _view; }
+    void setHighest(BlockHeader const& header) { m_highestBlock = header; }
+    std::shared_ptr<PBFTReqCache> reqCache() { return m_reqCache; }
+
+    int64_t epochSealerNum() { return m_epochSize.load(); }
+    int64_t epochBlockNum() { return m_rotatingInterval.load(); }
 };
 
 class FakeVRFBasedrPBFTSealer : public VRFBasedrPBFTSealer
@@ -141,8 +185,11 @@ public:
         for (size_t i = 0; i < m_sealersNum; i++)
         {
             auto keyPair = KeyPair::create();
+            keyPairVec.push_back(keyPair);
+            nodeID2KeyPair[keyPair.pub()] = keyPair;
             sealerList.push_back(keyPair.pub());
         }
+
         // create m_workingSealerManager to fake system storage env
         m_workingSealerManager = std::make_shared<WorkingSealerManagerFixture>();
         // update sealerList
@@ -152,19 +199,23 @@ public:
         m_workingSealerManager->updateNodeListType(
             m_workingSealerManager->sealerList, _sealersNum, NODE_TYPE_WORKING_SEALER);
         // create FakeVRFBasedrPBFTEngine
-        auto txPoolCreator = std::make_shared<TxPoolFixture>(5, 5);
-        auto fakeSync = std::make_shared<FakeBlockSync>();
         auto blockChain = std::make_shared<FakeBlockChainForrPBFT>(m_workingSealerManager, 5, 5);
-        m_VRFBasedrPBFT = std::make_shared<FakeVRFBasedrPBFTEngine>(txPoolCreator->m_topicService,
-            txPoolCreator->m_txPool, blockChain, fakeSync, std::make_shared<BlockVerifier>(),
-            ProtocolID::PBFT, sealerList);
+        auto blockVerifier = std::make_shared<BlockVerifier>();
+
+        m_fakerPBFT = std::make_shared<FakeConsensus<FakeVRFBasedrPBFTEngine>>(
+            ProtocolID::PBFT, sealerList, blockVerifier, blockChain, keyPairVec[0]);
+        m_fakerPBFT->setKeyPair(keyPairVec);
+        m_fakerPBFT->setNodeID2KeyPair(nodeID2KeyPair);
+        m_VRFBasedrPBFT =
+            std::dynamic_pointer_cast<FakeVRFBasedrPBFTEngine>(m_fakerPBFT->consensus());
+
         m_VRFBasedrPBFT->setMaxRequestPrepareWaitTime(10);
         // Note: all the storage env are ready, can call reportBlock
         m_VRFBasedrPBFT->reportBlock(*(blockChain->getBlockByNumber(blockChain->number())));
 
         // create and init vrfBasedrPBFTSealer
         m_vrfBasedrPBFTSealer = std::make_shared<FakeVRFBasedrPBFTSealer>(
-            txPoolCreator->m_txPool, blockChain, fakeSync);
+            m_fakerPBFT->txPoolCreator->m_txPool, blockChain, m_fakerPBFT->fakeSync);
         m_vrfBasedrPBFTSealer->setConsensusEngine(m_VRFBasedrPBFT);
         m_vrfBasedrPBFTSealer->initConsensusEngine();
         m_vrfBasedrPBFTSealer->mutableSealing().setBlockFactory(
@@ -176,12 +227,15 @@ public:
     size_t sealersNum() { return m_sealersNum; }
 
     FakeVRFBasedrPBFTSealer::Ptr vrfBasedrPBFTSealer() { return m_vrfBasedrPBFTSealer; }
+    std::shared_ptr<FakeConsensus<FakeVRFBasedrPBFTEngine>> fakerPBFT() { return m_fakerPBFT; }
 
-private:
+    std::shared_ptr<FakeConsensus<FakeVRFBasedrPBFTEngine>> m_fakerPBFT;
     FakeVRFBasedrPBFTEngine::Ptr m_VRFBasedrPBFT;
     FakeVRFBasedrPBFTSealer::Ptr m_vrfBasedrPBFTSealer;
     WorkingSealerManagerFixture::Ptr m_workingSealerManager;
     dev::h512s sealerList;
+    std::vector<KeyPair> keyPairVec;
+    std::map<dev::h512, KeyPair> nodeID2KeyPair;
 
     size_t m_sealersNum = 4;
 };

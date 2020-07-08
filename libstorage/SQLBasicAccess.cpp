@@ -88,20 +88,19 @@ int SQLBasicAccess::Select(int64_t, const string& _table, const string&, Conditi
                 {
                     int size;
                     auto bytes = ResultSet_getBlob(result, index, &size);
-                    if (!bytes)
-                    {
-                        value[fieldName] = "";
-                    }
-                    else
+                    // Note: Since the field may not be set, it must be added here to determine
+                    //       whether the value of the obtained field is nullptr
+                    if (bytes)
                     {
                         value[fieldName] = string((char*)bytes, size);
                     }
                 }
                 else
                 {
-                    if (ResultSet_getString(result, index) != NULL)
+                    auto selectResult = ResultSet_getString(result, index);
+                    if (selectResult)
                     {
-                        value[fieldName] = ResultSet_getString(result, index);
+                        value[fieldName] = selectResult;
                     }
                 }
             }
