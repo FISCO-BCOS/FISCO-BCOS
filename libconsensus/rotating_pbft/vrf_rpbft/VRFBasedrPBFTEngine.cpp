@@ -200,6 +200,8 @@ void VRFBasedrPBFTEngine::resetConfig()
 void VRFBasedrPBFTEngine::checkTransactionsValid(
     dev::eth::Block::Ptr _block, PrepareReq::Ptr _prepareReq)
 {
+    // Note: if the block contains rotatingTx when m_shouldRotateSealers is false
+    //       the rotatingTx will reverted by the ordinary node when executing
     if (!m_shouldRotateSealers.load())
     {
         return;
@@ -221,7 +223,7 @@ void VRFBasedrPBFTEngine::checkTransactionsValid(
     if (leaderNodeID == dev::h512())
     {
         VRFRPBFTEngine_LOG(WARNING)
-            << LOG_DESC("checkTransactionsValid failed for invalid preprareReq generator");
+            << LOG_DESC("checkTransactionsValid failed for invalid prepareReq generator");
         BOOST_THROW_EXCEPTION(
             InvalidLeader() << errinfo_comment(
                 "Invalid Leader " + std::to_string(_prepareReq->idx) + ": NodeID not found!"));

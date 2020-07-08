@@ -283,6 +283,10 @@ public:
     {
         return PBFTEngine::handleP2PMessage(_exception, _session, _message);
     }
+    bool wrapperGetNodeIDByIndex(dev::network::NodeID& nodeId, const IDXTYPE& idx) const
+    {
+        return PBFTEngine::getNodeIDByIndex(nodeId, idx);
+    }
 };
 
 template <typename T>
@@ -292,15 +296,26 @@ public:
     FakeConsensus(size_t sealerSize, PROTOCOL_ID protocolID,
         std::shared_ptr<SyncInterface> sync = std::make_shared<FakeBlockSync>(),
         std::shared_ptr<BlockVerifierInterface> blockVerifier =
-            std::make_shared<FakeBlockverifier>(),
-        std::shared_ptr<TxPoolFixture> txpool_creator = std::make_shared<TxPoolFixture>(5, 5))
-      : txPoolCreator(txpool_creator)
+            std::make_shared<FakeBlockverifier>())
     {
+        txPoolCreator = std::make_shared<TxPoolFixture>(5, 5);
         m_consensus = std::make_shared<T>(txPoolCreator->m_topicService, txPoolCreator->m_txPool,
             txPoolCreator->m_blockChain, sync, blockVerifier, protocolID, m_sealerList);
         fakeSync = std::dynamic_pointer_cast<FakeBlockSync>(sync);
         /// fake sealerList
         FakeSealerList(sealerSize);
+        resetSessionInfo();
+    }
+
+    FakeConsensus(PROTOCOL_ID protocolID, dev::h512s const& _sealerList,
+        std::shared_ptr<BlockVerifierInterface> _blockVerifier,
+        std::shared_ptr<BlockChainInterface> _blockChain, KeyPair const& _keyPair)
+      : m_sealerList(_sealerList)
+    {
+        txPoolCreator = std::make_shared<TxPoolFixture>(5, 5);
+        fakeSync = std::make_shared<FakeBlockSync>();
+        m_consensus = std::make_shared<T>(txPoolCreator->m_topicService, txPoolCreator->m_txPool,
+            _blockChain, fakeSync, _blockVerifier, protocolID, _sealerList, _keyPair);
         resetSessionInfo();
     }
 
@@ -319,6 +334,13 @@ public:
         }
     }
 
+    void setKeyPair(std::vector<KeyPair> const& _keyPair) { m_keyPair = _keyPair; }
+
+    void setNodeID2KeyPair(std::map<dev::h512, KeyPair> const& _nodeID2KeyPair)
+    {
+        m_nodeID2KeyPair = _nodeID2KeyPair;
+    }
+
     /// fake sealer list
     void FakeSealerList(size_t sealerSize)
     {
@@ -329,6 +351,7 @@ public:
             m_sealerList.push_back(key_pair.pub());
             m_secrets.push_back(key_pair.secret());
             m_keyPair.push_back(key_pair);
+            m_nodeID2KeyPair[key_pair.pub()] = key_pair;
             m_consensus->appendSealer(key_pair.pub());
         }
     }
@@ -338,6 +361,7 @@ public:
     h512s m_sealerList;
     std::vector<Secret> m_secrets;
     std::vector<KeyPair> m_keyPair;
+    std::map<dev::h512, KeyPair> m_nodeID2KeyPair;
     std::shared_ptr<TxPoolFixture> txPoolCreator;
     std::shared_ptr<FakeBlockSync> fakeSync;
 

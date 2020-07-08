@@ -44,7 +44,7 @@ public:
         m_qpsLimiter = _qpsLimiter;
     }
 
-private:
+protected:
     bool limitRPCQPS(Json::Value const& _request, std::string& _retValue);
     bool limitGroupQPS(
         dev::GROUP_ID const& _groupId, Json::Value const& _request, std::string& _retValue);
@@ -55,7 +55,7 @@ private:
     dev::GROUP_ID getGroupID(Json::Value const& _request);
     bool isValidRequest(Json::Value const& _request);
 
-private:
+protected:
     // record group related RPC methods
     std::set<std::string> const m_groupRPCMethodSet = {"getSystemConfigByKey", "getBlockNumber",
         "getPbftView", "getSealerList", "getEpochSealersList", "getObserverList",

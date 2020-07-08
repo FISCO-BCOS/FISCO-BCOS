@@ -187,6 +187,11 @@ public:
         return RotatingPBFTEngine::onReceiveRawPrepareResponse(_session, _message);
     }
 
+    bool wrapperGetNodeIDByIndex(dev::network::NodeID& nodeId, const IDXTYPE& idx) const
+    {
+        return PBFTEngine::getNodeIDByIndex(nodeId, idx);
+    }
+
 private:
     std::shared_ptr<FakeBlockChain> m_fakedBlockChain;
 };

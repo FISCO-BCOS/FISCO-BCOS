@@ -268,11 +268,11 @@ BOOST_AUTO_TEST_CASE(testInitPBFTEnvNormalCase)
 /// test onRecvPBFTMessage
 BOOST_AUTO_TEST_CASE(testOnRecvPBFTMessage)
 {
+    /// fake FakePBFTEngine
+    FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     KeyPair key_pair;
     /// fake prepare_req
     PrepareReq prepare_req = FakePrepareReq(key_pair);
-    /// fake FakePBFTEngine
-    FakeConsensus<FakePBFTEngine> fake_pbft(1, ProtocolID::PBFT);
     NodeIPEndpoint endpoint;
     /// fake session
     std::shared_ptr<FakeSession> session = FakeSessionFunc(key_pair.pub());
@@ -650,10 +650,6 @@ BOOST_AUTO_TEST_CASE(testIsValidSignReq)
     SignReq::Ptr signReq = std::make_shared<SignReq>();
     PrepareReq::Ptr prepareReq = std::make_shared<PrepareReq>();
     KeyPair peer_keyPair = KeyPair::create();
-    // signReq->sig.resize(crypto::signatureLength(), 0);
-    // signReq->sig2.resize(crypto::signatureLength(), 0);
-    // prepareReq->sig.resize(crypto::signatureLength(), 0);
-    // prepareReq->sig2.resize(crypto::signatureLength(), 0);
     TestIsValidSignReq(fake_pbft, pbftMsg, signReq, prepareReq, peer_keyPair, false);
 }
 

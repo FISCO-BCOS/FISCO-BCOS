@@ -48,6 +48,7 @@ static void FakePBFTSealerByKeyPair(FakeConsensus<T>& fake_pbft, KeyPair const& 
     fake_pbft.m_sealerList.push_back(key_pair.pub());
     fake_pbft.m_secrets.push_back(key_pair.secret());
     fake_pbft.m_keyPair.push_back(key_pair);
+    fake_pbft.m_nodeID2KeyPair[key_pair.pub()] = key_pair;
     fake_pbft.consensus()->appendSealer(key_pair.pub());
     fake_pbft.resetSessionInfo();
 }
@@ -136,10 +137,9 @@ static void FakeSignAndCommitCache(FakeConsensus<T>& fake_pbft, PrepareReq::Ptr 
     BlockHeader& highest, size_t invalidHeightNum, size_t invalidHash, size_t validNum, int type,
     bool shouldFake = true, bool shouldAdd = true)
 {
-    FakeBlockChain* p_blockChain =
-        dynamic_cast<FakeBlockChain*>(fake_pbft.consensus()->blockChain().get());
-    assert(p_blockChain);
-    highest = p_blockChain->getBlockByNumber(p_blockChain->number())->header();
+    auto blockChain = fake_pbft.consensus()->blockChain();
+    assert(blockChain);
+    highest = blockChain->getBlockByNumber(blockChain->number())->header();
     fake_pbft.consensus()->setHighest(highest);
     /// fake prepare req
     KeyPair key_pair;
@@ -435,9 +435,8 @@ static void fakeValidPrepare(FakeConsensus<T>& fake_pbft, PrepareReq& req)
 {
     /// init the env
     FakePBFTSealer(fake_pbft);
-    FakeBlockChain* p_blockChain =
-        dynamic_cast<FakeBlockChain*>(fake_pbft.consensus()->blockChain().get());
-    BlockHeader highest = p_blockChain->getBlockByNumber(p_blockChain->number())->header();
+    auto blockChain = fake_pbft.consensus()->blockChain();
+    BlockHeader highest = blockChain->getBlockByNumber(blockChain->number())->header();
     /// fake_pbft.consensus()->resetConfig();
     fake_pbft.consensus()->setHighest(highest);
     fake_pbft.consensus()->setView(2);
@@ -454,8 +453,11 @@ static void fakeValidPrepare(FakeConsensus<T>& fake_pbft, PrepareReq& req)
     req.height = block.header().number();
     req.pBlock = std::make_shared<dev::eth::Block>(std::move(block));
     fake_pbft.consensus()->setConsensusBlockNumber(req.height);
-    BOOST_CHECK(fake_pbft.m_secrets.size() > req.idx);
-    auto keyPair = fake_pbft.m_keyPair[req.idx];
+    // get nodeID according to node index
+    dev::h512 nodeID;
+    fake_pbft.consensus()->wrapperGetNodeIDByIndex(nodeID, req.idx);
+    BOOST_CHECK((fake_pbft.m_nodeID2KeyPair).count(nodeID));
+    auto keyPair = (fake_pbft.m_nodeID2KeyPair)[nodeID];
     req.sig = dev::crypto::Sign(keyPair, req.block_hash)->asBytes();
     req.sig2 = dev::crypto::Sign(keyPair, req.fieldsWithoutBlock())->asBytes();
 }
@@ -559,6 +561,8 @@ inline void fakePrepareMsg(std::shared_ptr<FakeConsensus<T>> _leaderPBFT,
 
     _followPBFT->m_sealerList = _leaderPBFT->m_sealerList = _leaderPBFT->consensus()->sealerList();
     _followPBFT->m_keyPair = _leaderPBFT->m_keyPair;
+    _followPBFT->m_nodeID2KeyPair = _leaderPBFT->m_nodeID2KeyPair;
+
     _followPBFT->consensus()->setSealerList(_leaderPBFT->consensus()->sealerList());
 
     TestIsValidPrepare(*_followPBFT, _prepareReq, true);
