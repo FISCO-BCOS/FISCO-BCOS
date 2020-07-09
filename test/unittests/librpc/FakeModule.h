@@ -184,6 +184,7 @@ public:
     {
         return m_initParam->mutableConsensusParam().observerList;
     };
+
     std::string getSystemConfigByKey(std::string const&, int64_t = -1) override
     {
         return "300000000";
@@ -315,6 +316,47 @@ public:
     {
         return getBlockByHash(numberHash(_i));
     }
+
+    std::shared_ptr<
+        std::pair<std::shared_ptr<dev::eth::BlockHeader>, dev::eth::Block::SigListPtrType>>
+    getBlockHeaderInfo(int64_t _blockNumber) override
+    {
+        auto block = getBlockByNumber(_blockNumber);
+        if (!block)
+        {
+            return nullptr;
+        }
+        auto result = std::make_shared<
+            std::pair<std::shared_ptr<dev::eth::BlockHeader>, dev::eth::Block::SigListPtrType>>();
+        result->first = std::make_shared<BlockHeader>(block->blockHeader());
+        result->second = nullptr;
+        return result;
+    }
+
+    std::shared_ptr<
+        std::pair<std::shared_ptr<dev::eth::BlockHeader>, dev::eth::Block::SigListPtrType>>
+    getBlockHeaderInfoByHash(dev::h256 const& _blockHash) override
+    {
+        auto block = getBlockByHash(_blockHash);
+        if (!block)
+        {
+            return nullptr;
+        }
+        auto result = std::make_shared<
+            std::pair<std::shared_ptr<dev::eth::BlockHeader>, dev::eth::Block::SigListPtrType>>();
+        result->first = std::make_shared<BlockHeader>(block->blockHeader());
+        // fake sigList
+        auto hash = block->header().hash();
+        for (int i = 0; i < 9; i++)
+        {
+            auto keyPair = KeyPair::create();
+            auto signature = dev::crypto::Sign(keyPair, hash)->asBytes();
+            sigList.push_back(std::make_pair(i, signature));
+        }
+        result->second = std::make_shared<dev::eth::Block::SigListType>(sigList);
+        return result;
+    }
+
     std::pair<LocalisedTransaction::Ptr,
         std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
     getTransactionByHashWithProof(dev::h256 const& _txHash) override
@@ -356,6 +398,8 @@ public:
     uint64_t m_totalTransactionCount;
 
     std::shared_ptr<LedgerParamInterface> m_initParam;
+
+    std::vector<std::pair<u256, std::vector<unsigned char>>> sigList;
 };
 
 class MockBlockVerifier : public BlockVerifierInterface

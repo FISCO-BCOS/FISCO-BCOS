@@ -657,6 +657,10 @@ void Rpc::generateBlockHeaderInfo(Json::Value& _response,
     // signature list
     _response["signatureList"] = Json::Value(Json::arrayValue);
     auto sigList = _headerInfo->second;
+    if (!sigList)
+    {
+        return;
+    }
     for (auto const& signature : *sigList)
     {
         Json::Value sigJsonObj;
