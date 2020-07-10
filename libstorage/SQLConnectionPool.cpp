@@ -198,6 +198,16 @@ void SQLConnectionPool::createDataBase(const ConnectionPoolConfig& _dbConfig)
 
             _sql = "SET GLOBAL sql_mode = 'STRICT_TRANS_TABLES'";
             Connection_execute(_connection, "%s", _sql.c_str());
+
+            // support ROW_FORMAT=COMPRESSED, please ref to
+            // https://mariadb.com/kb/en/innodb-compressed-row-format/
+            // Use the select * from INFORMATION_SCHEMA.INNODB_CMP;
+            // command to see if mysql has table compression enabled
+            _sql = "SET GLOBAL innodb_file_per_table=ON";
+            Connection_execute(_connection, "%s", _sql.c_str());
+
+            _sql = "SET GLOBAL innodb_file_format='Barracuda'";
+            Connection_execute(_connection, "%s", _sql.c_str());
         }
         CATCH(SQLException)
         {
