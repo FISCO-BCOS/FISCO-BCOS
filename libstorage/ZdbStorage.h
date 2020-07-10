@@ -75,7 +75,6 @@ private:
     void createSysConfigTables();
     void createSysBlock2NoncesTables();
     void insertSysTables();
-
     // create blob table
     void createBlobSysHash2BlockHeaderTable();
 
