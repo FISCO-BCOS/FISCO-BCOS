@@ -193,7 +193,10 @@ int main(int argc, const char* argv[])
                 auto entry = table->newEntry();
                 entry->setField(p[4], p[5]);
                 cout << "update [" << p[4] << ":" << p[5] << "]" << endl;
-                table->update(p[1], entry, condition);
+                int updatedLines = table->update(p[1], entry, condition);
+                if (updatedLines >= 1) {
+                    cout << "update successfully!" << endl;
+                }
                 commit();
             }
             return 0;
@@ -218,7 +221,10 @@ int main(int argc, const char* argv[])
                     boost::split(KV, kv, boost::is_any_of(":"));
                     entry->setField(KV[0], KV[1]);
                 }
-                table->insert(p[1], entry);
+                int insertedLines = table->insert(p[1], entry);
+                if (insertedLines >= 1) {
+                    cout << "insert successfully!" << endl;
+                }
                 commit();
             }
             return 0;
@@ -234,7 +240,10 @@ int main(int argc, const char* argv[])
             if (table)
             {
                 cout << "open Table [" << p[0] << "] success!" << endl;
-                table->remove(p[1], table->newCondition());
+                int removedLines = table->remove(p[1], table->newCondition());
+                if (removedLines >= 1) {
+                    cout << "remove successfully!" << endl;
+                }
                 commit();
             }
             return 0;
