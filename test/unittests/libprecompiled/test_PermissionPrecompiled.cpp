@@ -178,6 +178,45 @@ BOOST_AUTO_TEST_CASE(remove)
     in = abi.abiIn("remove(string,string)", tableName, addr);
     authorityPrecompiled->call(context, bytesConstRef(&in));
     BOOST_TEST(entries->size() == 0u);
+
+    // add committee member permission
+    m_version = g_BCOSConfig.version();
+    m_supportedVersion = g_BCOSConfig.supportedVersion();
+    g_BCOSConfig.setSupportedVersion("2.4.0", V2_4_0);
+    in = abi.abiIn("insert(string,string)", SYS_ACCESS_TABLE, addr);
+    auto origin = Address(addr);
+    callResult = authorityPrecompiled->call(context, bytesConstRef(&in), origin);
+    out = callResult->execResult();
+    s256 ret = 0;
+    abi.abiOut(&out, ret);
+    BOOST_TEST(ret == 1);
+    in = abi.abiIn("insert(string,string)", SYS_CONSENSUS, addr);
+    callResult = authorityPrecompiled->call(context, bytesConstRef(&in), origin);
+    out = callResult->execResult();
+    ret = 0;
+    abi.abiOut(&out, ret);
+    BOOST_TEST(ret == 1);
+    g_BCOSConfig.setSupportedVersion("2.5.0", V2_5_0);
+    in = abi.abiIn("remove(string,string)", SYS_CONSENSUS, addr);
+    callResult = authorityPrecompiled->call(context, bytesConstRef(&in), origin);
+    out = callResult->execResult();
+    ret = 0;
+    abi.abiOut(&out, ret);
+    BOOST_TEST(ret == 1);
+    in = abi.abiIn("insert(string,string)", SYS_CONSENSUS, addr);
+    callResult = authorityPrecompiled->call(context, bytesConstRef(&in), origin);
+    out = callResult->execResult();
+    ret = 0;
+    abi.abiOut(&out, ret);
+    BOOST_TEST(ret == 1);
+    g_BCOSConfig.setSupportedVersion("2.6.0", V2_6_0);
+    in = abi.abiIn("remove(string,string)", SYS_CONSENSUS, addr);
+    callResult = authorityPrecompiled->call(context, bytesConstRef(&in), origin);
+    out = callResult->execResult();
+    ret = 0;
+    abi.abiOut(&out, ret);
+    BOOST_TEST(ret == CODE_NO_AUTHORIZED);
+    g_BCOSConfig.setSupportedVersion(m_supportedVersion, m_version);
 }
 
 BOOST_AUTO_TEST_CASE(grantWrite_contract)

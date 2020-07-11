@@ -169,12 +169,25 @@ PrecompiledExecResult::Ptr PermissionPrecompiled::call(
             boost::to_lower(addr);
         }
         int result = 0;
+        Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
+        auto condition = table->newCondition();
+        condition->EQ(SYS_AC_ADDRESS, addr);
+        auto entries = table->select(SYS_ACCESS_TABLE, condition);
         if (g_BCOSConfig.version() >= V2_5_0 && tableName == SYS_ACCESS_TABLE)
         {
             result = CODE_COMMITTEE_PERMISSION;
             PRECOMPILED_LOG(WARNING)
                 << LOG_BADGE("PermissionPrecompiled")
                 << LOG_DESC("Committee permission controlled by ChainGovernancePrecompiled")
+                << LOG_KV("return", result);
+        }
+        else if (g_BCOSConfig.version() >= V2_6_0 && entries->size() != 0u &&
+                 (tableName == SYS_CONSENSUS || tableName == SYS_CONFIG))
+        {
+            result = storage::CODE_NO_AUTHORIZED;
+            PRECOMPILED_LOG(WARNING)
+                << LOG_BADGE("PermissionPrecompiled")
+                << LOG_DESC("Committee permission should not be removed by PermissionPrecompiled")
                 << LOG_KV("return", result);
         }
         else

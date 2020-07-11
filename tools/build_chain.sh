@@ -324,7 +324,7 @@ gen_agency_cert() {
     # openssl genrsa -out "$agencydir/agency.key" 2048 2> /dev/null
     openssl ecparam -out "$agencydir/secp256k1.param" -name secp256k1 2> /dev/null
     openssl genpkey -paramfile "$agencydir/secp256k1.param" -out "$agencydir/agency.key" 2> /dev/null
-    openssl req -new -sha256 -subj "/CN=$name/O=fisco-bcos/OU=agency" -key "$agencydir/agency.key" -config "$chain/cert.cnf" -out "$agencydir/agency.csr" 2> /dev/null
+    openssl req -new -sha256 -subj "/CN=$name/O=fisco-bcos/OU=agency" -key "$agencydir/agency.key" -out "$agencydir/agency.csr" 2> /dev/null
     openssl x509 -req -days 3650 -sha256 -CA "$chain/ca.crt" -CAkey "$chain/ca.key" -CAcreateserial\
         -in "$agencydir/agency.csr" -out "$agencydir/agency.crt"  -extensions v4_req -extfile "$chain/cert.cnf" 2> /dev/null
     # cat "$chain/ca.crt" >> "$agencydir/agency.crt"
@@ -342,7 +342,7 @@ gen_cert_secp256k1() {
     openssl ecparam -out "$certpath/secp256k1.param" -name secp256k1 2> /dev/null
     openssl genpkey -paramfile "$certpath/secp256k1.param" -out "$certpath/${type}.key" 2> /dev/null
     openssl pkey -in "$certpath/${type}.key" -pubout -out "$certpath/${type}.pubkey" 2> /dev/null
-    openssl req -new -sha256 -subj "/CN=${name}/O=fisco-bcos/OU=${type}" -key "$certpath/${type}.key" -config "$agpath/cert.cnf" -out "$certpath/${type}.csr" 2> /dev/null
+    openssl req -new -sha256 -subj "/CN=${name}/O=fisco-bcos/OU=${type}" -key "$certpath/${type}.key" -out "$certpath/${type}.csr" 2> /dev/null
     if [ -n "${no_agency}" ];then
         echo "not use $(basename $agpath) to sign $(basename $certpath) ${type}" >>"${logfile}"
         openssl x509 -req -days "${days}" -sha256 -in "$certpath/${type}.csr" -CAkey "$agpath/../ca.key" -CA "$agpath/../ca.crt" \
