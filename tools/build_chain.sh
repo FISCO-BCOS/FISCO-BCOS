@@ -26,6 +26,7 @@ sm_crypto_channel="false"
 log_level="info"
 logfile=${PWD}/build.log
 listen_ip="127.0.0.1"
+default_listen_ip="0.0.0.0"
 bcos_bin_name=fisco-bcos
 guomi_mode=
 docker_mode=
@@ -52,6 +53,7 @@ macOS=""
 x86_64_arch="true"
 download_timeout=240
 cdn_link_header="https://www.fisco.com.cn/cdn/fisco-bcos/releases/download"
+use_ipv6=
 
 help() {
     echo $1
@@ -71,6 +73,7 @@ Usage:
     -g <Generate guomi nodes>           Default no
     -z <Generate tar packet>            Default no
     -t <Cert config file>               Default auto generate
+    -6 <Use ipv6>                       Default no. If set -6, treat IP as IPv6
     -k <The path of ca root>            Default auto generate, the ca.crt and ca.key must in the path, if use intermediate the root.crt must in the path
     -K <The path of sm crypto ca root>  Default auto generate, the gmca.crt and gmca.key must in the path, if use intermediate the gmroot.crt must in the path
     -D <Use Deployment mode>            Default false, If set -D, use deploy mode directory struct and make tar
@@ -130,7 +133,7 @@ exit_with_clean()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:t:v:s:C:c:k:K:X:izhgGTNFSdEDZ" option;do
+while getopts "f:l:o:p:e:t:v:s:C:c:k:K:X:izhgGTNFSdEDZ6" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -195,6 +198,7 @@ while getopts "f:l:o:p:e:t:v:s:C:c:k:K:X:izhgGTNFSdEDZ" option;do
     Z) copy_cert="true";;
     z) make_tar="true";;
     g) guomi_mode="true";;
+    6) use_ipv6="true" && default_listen_ip="::";;
     d) docker_mode="true"
         if [ "$(uname)" == "Darwin" ];then LOG_WARN "Docker desktop of macOS can't support docker mode of FISCO BCOS!" && exit 1;fi
     ;;
@@ -502,14 +506,14 @@ generate_config_ini()
     local output=${1}
     local ip=${2}
     local offset=0
-    offset=$(get_value "${ip//./}_port_offset")
+    offset=$(get_value "${ip//[\.:]/_}_port_offset")
     local node_groups=(${3//,/ })
     local port_array=
     read -r -a port_array <<< "${port_start[*]}"
     local node_index="${5}"
     if [[ -n "${4}" ]];then
         read -r -a port_array <<< "${4//,/ }"
-        [ "${node_index}" == "0" ] && { offset=0 && set_value "${ip//./}_port_offset" 0; }
+        [ "${node_index}" == "0" ] && { offset=0 && set_value "${ip//[\.:]/_}_port_offset" 0; }
     fi
 
     sm_crypto="false"
@@ -521,12 +525,12 @@ generate_config_ini()
 
     cat << EOF > "${output}"
 [rpc]
-    channel_listen_ip=0.0.0.0
+    channel_listen_ip=${default_listen_ip}
     channel_listen_port=$(( offset + port_array[1] ))
     jsonrpc_listen_ip=${listen_ip}
     jsonrpc_listen_port=$(( offset + port_array[2] ))
 [p2p]
-    listen_ip=0.0.0.0
+    listen_ip=${default_listen_ip}
     listen_port=$(( offset + port_array[0] ))
     ; nodes to connect
     $ip_list
@@ -1523,13 +1527,13 @@ groups=
 groups_count=
 for line in ${ip_array[*]};do
     ip=${line%:*}
-    num=${line#*:}
-    if [ -z $(echo $ip | grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$") ];then
+    num=${line##*:}
+    if [[ $(echo "$ip" | grep -qE "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$") && -z "${use_ipv6}" ]];then
         LOG_WARN "Please check IP address: ${ip}, if you use domain name please ignore this."
     fi
     [ "$num" == "$ip" ] || [ -z "${num}" ] && num=${node_num}
-    echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
-    [ -z "$(get_value ${ip//./}_count)" ] && set_value ${ip//./}_count 0
+    echo "Processing IP=${ip} Total=${num} Agency=${agency_array[${server_count}]} Groups=${group_array[server_count]}"
+    [ -z "$(get_value "${ip//[\.:]/_}_count")" ] && set_value "${ip//[\.:]/_}_count" 0
     sdk_path="${output_dir}/${ip}/sdk"
     if [ ! -d "${sdk_path}" ];then
         gen_cert "${output_dir}/cert/${agency_array[${server_count}]}" "${sdk_path}" "sdk"
@@ -1551,8 +1555,8 @@ for line in ${ip_array[*]};do
         fi
     fi
     for ((i=0;i<num;++i));do
-        echo "Processing IP:${ip} ID:${i} node's key" >>"${logfile}"
-        local node_count="$(get_value ${ip//./}_count)"
+        echo "Processing IP=${ip} ID=${i} node's key" >>"${logfile}"
+        local node_count="$(get_value "${ip//[\.:]/_}_count")"
         local node_dir="${output_dir}/${ip}/node${node_count}"
         [ -d "${node_dir}" ] && exit_with_clean "${node_dir} exist! Please delete!"
 
@@ -1611,12 +1615,17 @@ for line in ${ip_array[*]};do
         if [ -n "${ports_array[server_count]}" ];then
             read -r -a node_ports <<< "${ports_array[server_count]//,/ }"
             echo "node_ports ${node_ports[*]}" >>"${logfile}"
-            [ "${i}" == "0" ] && { set_value "${ip//./}_port_offset" 0; }
+            [ "${i}" == "0" ] && { set_value "${ip//[\.:]/_}_port_offset" 0; }
         fi
-        ip_list="${ip_list}node.${count}=${ip}:$(( $(get_value ${ip//./}_port_offset) + node_ports[0] ))
+        if [ -n "${use_ipv6}" ];then
+        ip_list="${ip_list}node.${count}=[${ip}]:$(( $(get_value ${ip//[\.:]/_}_port_offset) + node_ports[0] ))
     "
-        set_value ${ip//./}_count $(( $(get_value ${ip//./}_count) + 1 ))
-        set_value "${ip//./}_port_offset" $(( $(get_value "${ip//./}_port_offset") + 1 ))
+        else
+        ip_list="${ip_list}node.${count}=${ip}:$(( $(get_value ${ip//[\.:]/_}_port_offset) + node_ports[0] ))
+    "
+        fi
+        set_value "${ip//[\.:]/_}_count" $(( $(get_value "${ip//[\.:]/_}_count") + 1 ))
+        set_value "${ip//[\.:]/_}_port_offset" $(( $(get_value "${ip//[\.:]/_}_port_offset") + 1 ))
         ((++count))
     done
     ((++server_count))
@@ -1625,8 +1634,8 @@ done
 # clean
 for line in ${ip_array[*]};do
     ip=${line%:*}
-    set_value ${ip//./}_count 0
-    set_value "${ip//./}_port_offset" 0
+    set_value "${ip//[\.:]/_}_count" 0
+    set_value "${ip//[\.:]/_}_port_offset" 0
 done
 
 echo "=============================================================="
@@ -1635,13 +1644,13 @@ cd ${current_dir}
 server_count=0
 for line in ${ip_array[*]};do
     ip=${line%:*}
-    num=${line#*:}
+    num=${line##*:}
     [ "$num" == "$ip" ] || [ -z "${num}" ] && num=${node_num}
-    echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
+    echo "Processing IP=${ip} Total=${num} Agency=${agency_array[${server_count}]} Groups=${group_array[server_count]}"
     for ((i=0;i<num;++i));do
-        local node_count="$(get_value ${ip//./}_count)"
+        local node_count="$(get_value "${ip//[\.:]/_}_count")"
         local node_dir="${output_dir}/${ip}/node${node_count}"
-        echo "Processing IP:${ip} ID:${i} ${node_dir} config files..." >> "${logfile}"
+        echo "Processing IP=${ip} ID=${i} ${node_dir} config files..." >> "${logfile}"
         generate_config_ini "${node_dir}/config.ini" "${ip}" "${group_array[server_count]}" "${ports_array[server_count]}" ${i}
         if [ "${use_ip_param}" == "false" ];then
             node_groups=(${group_array[${server_count}]//,/ })
@@ -1659,8 +1668,8 @@ for line in ${ip_array[*]};do
             p2p_port=$(grep listen_port < "${node_dir}"/config.ini | grep -v _listen_port | cut -d = -f 2)
             mv "${node_dir}" "${output_dir}/${ip}/node_${ip}_${p2p_port}"
         fi
-        set_value ${ip//./}_count $(( $(get_value ${ip//./}_count) + 1 ))
-        set_value "${ip//./}_port_offset" $(( $(get_value "${ip//./}_port_offset") + 1 ))
+        set_value "${ip//[\.:]/_}_count" $(( $(get_value "${ip//[\.:]/_}_count") + 1 ))
+        set_value "${ip//[\.:]/_}_port_offset" $(( $(get_value "${ip//[\.:]/_}_port_offset") + 1 ))
     done
     generate_server_scripts "${output_dir}/${ip}"
     genDownloadConsole "${output_dir}/${ip}"
