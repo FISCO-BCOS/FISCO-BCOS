@@ -1132,10 +1132,11 @@ BOOST_AUTO_TEST_CASE(testResetConsensusTimeout)
     // reset consensus_timeout to 30min
     timeMgr.resetConsensusTimeout(1000 * 60 * 30);
     // case1: first setup, and viewchange for network reason
+
     auto now = timeMgr.m_lastConsensusTime + 3001;
     BOOST_CHECK(timeMgr.isTimeout(now) == true);
     // reach view consensus
-    timeMgr.m_lastConsensusTime = now;
+    timeMgr.m_lastConsensusTime = timeMgr.m_lastSignTime = now;
 
     // case2: receive rawPrepare, and execution spent too much time(15min)
     timeMgr.m_lastAddRawPrepareTime = now + 100;
@@ -1146,10 +1147,10 @@ BOOST_AUTO_TEST_CASE(testResetConsensusTimeout)
     BOOST_CHECK(timeMgr.isTimeout(invalidNow) == true);
 
     // case3: receive rawPrepare, and execution without timeout
-    timeMgr.m_lastSignTime = now;
-    BOOST_CHECK(timeMgr.isTimeout(timeMgr.m_lastSignTime + 2000) == false);
+    timeMgr.m_lastExecTime = now;
+    BOOST_CHECK(timeMgr.isTimeout(timeMgr.m_lastExecTime + 2000) == false);
     // network timeout
-    invalidNow = timeMgr.m_lastSignTime + 3001;
+    invalidNow = timeMgr.m_lastExecTime + 3001;
     BOOST_CHECK(timeMgr.isTimeout(invalidNow) == true);
     // reach view consensus
     timeMgr.m_lastConsensusTime = invalidNow;
@@ -1169,7 +1170,7 @@ BOOST_AUTO_TEST_CASE(testResetConsensusTimeout)
     BOOST_CHECK(timeMgr.isTimeout(now) == false);
     invalidNow = now + 10 * 1000 * 60 * +100;
     BOOST_CHECK(timeMgr.isTimeout(invalidNow) == true);
-    timeMgr.m_lastSignTime = now;
+    timeMgr.m_lastExecTime = now;
     BOOST_CHECK(timeMgr.isTimeout(now) == false);
     timeMgr.m_lastConsensusTime = now + 1000;
 
@@ -1180,7 +1181,7 @@ BOOST_AUTO_TEST_CASE(testResetConsensusTimeout)
 
     // case5: fast view change, the  follow
     // without receive the empty block after 3s
-    timeMgr.m_lastSignTime = now - 2000;
+    timeMgr.m_lastExecTime = now - 2000;
     timeMgr.m_lastConsensusTime = now;
     BOOST_CHECK(timeMgr.isTimeout(now + 3001) == true);
 

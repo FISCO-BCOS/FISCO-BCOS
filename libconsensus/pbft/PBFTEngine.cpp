@@ -1004,7 +1004,6 @@ bool PBFTEngine::handlePrepareMsg(PrepareReq::Ptr prepareReq, std::string const&
     /// add raw prepare request
     addRawPrepare(prepareReq);
 
-    m_timeManager.m_lastAddRawPrepareTime = utcSteadyTime();
     return execPrepareAndGenerateSignMsg(prepareReq, oss);
 }
 
@@ -1021,7 +1020,14 @@ bool PBFTEngine::execPrepareAndGenerateSignMsg(
     Sealing workingSealing(m_blockFactory);
     try
     {
+        // update the latest time of receiving the rawPrepare and ready to execute the block
+        m_timeManager.m_lastAddRawPrepareTime = utcSteadyTime();
+
         execBlock(workingSealing, _prepareReq, _oss);
+
+        // update the latest execution time when processed the block execution
+        m_timeManager.m_lastExecTime = utcSteadyTime();
+
         // old block (has already executed correctly by block sync)
         if (workingSealing.p_execContext == nullptr &&
             workingSealing.block->getTransactionSize() > 0)
