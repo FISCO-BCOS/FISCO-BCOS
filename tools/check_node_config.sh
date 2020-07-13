@@ -17,7 +17,6 @@ LOG_INFO() {
 }
 
 help() {
-    echo $1
     cat <<EOF
 Usage:
     -p <node path>              Node's path default is ./
