@@ -38,6 +38,8 @@ public:
 private:
     void showConsensusTable(std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
     bool checkIsLastSealer(std::shared_ptr<storage::Table> table, std::string const& nodeID);
+    storage::Entries::ConstPtr selectEntriesByNodeType(
+        std::shared_ptr<storage::Table> _table, std::string const& _nodeType);
 };
 
 }  // namespace precompiled
