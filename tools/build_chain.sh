@@ -48,24 +48,23 @@ days=36500 # 100 years
 timestamp=$(($(date '+%s')*1000))
 chain_id=1
 compatibility_version=""
-default_version="2.5.0"
+default_version="2.6.0"
 macOS=""
 x86_64_arch="true"
 download_timeout=240
 cdn_link_header="https://www.fisco.com.cn/cdn/fisco-bcos/releases/download"
 use_ipv6=
-
 help() {
-    echo $1
     cat << EOF
 Usage:
     -l <IP list>                        [Required] "ip1:nodeNum1,ip2:nodeNum2" e.g:"192.168.0.1:2,192.168.0.2:3"
     -f <IP list file>                   [Optional] split by line, every line should be "ip:nodeNum agencyName groupList p2p_port,channel_port,jsonrpc_port". eg "127.0.0.1:4 agency1 1,2 30300,20200,8545"
+    -v <FISCO-BCOS binary version>      Default is the latest v${default_version}
     -e <FISCO-BCOS binary path>         Default download fisco-bcos from GitHub. If set -e, use the binary at the specified location
     -o <Output Dir>                     Default ./nodes/
     -p <Start Port>                     Default 30300,20200,8545 means p2p_port start from 30300, channel_port from 20200, jsonrpc_port from 8545
+    -q <List FISCO-BCOS releases>       List FISCO-BCOS released versions
     -i <Host ip>                        Default 127.0.0.1. If set -i, listen 0.0.0.0
-    -v <FISCO-BCOS binary version>      Default get version from https://github.com/FISCO-BCOS/FISCO-BCOS/releases. If set use specificd version binary
     -s <DB type>                        Default rocksdb. Options can be rocksdb / mysql / scalable, rocksdb is recommended
     -d <docker mode>                    Default off. If set -d, build with docker
     -c <Consensus Algorithm>            Default PBFT. Options can be pbft / raft /rpbft, pbft is recommended
@@ -133,7 +132,7 @@ exit_with_clean()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:t:v:s:C:c:k:K:X:izhgGTNFSdEDZ6" option;do
+while getopts "f:l:o:p:e:t:v:s:C:c:k:K:X:izhgGTNFSdEDZ6q" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -143,7 +142,8 @@ while getopts "f:l:o:p:e:t:v:s:C:c:k:K:X:izhgGTNFSdEDZ6" option;do
     ;;
     o) output_dir=$OPTARG;;
     i) listen_ip="0.0.0.0" && LOG_WARN "jsonrpc_listen_ip linstens 0.0.0.0 is unsafe.";;
-    v) compatibility_version="$OPTARG";;
+    q) LOG_INFO "Show the history releases of FISCO-BCOS " && curl -sS https://gitee.com/api/v5/repos/FISCO-BCOS/FISCO-BCOS/tags | grep -oe "\"name\":\"v[2-9]*\.[0-9]*\.[0-9]*\"" | cut -d \" -f 4 | sort -V && exit 0;;
+    v) compatibility_version="${OPTARG//[vV]/}";;
     p) port_start=(${OPTARG//,/ })
     if [ ${#port_start[@]} -ne 3 ];then LOG_WARN "start port error. e.g: 30300,20200,8545" && exit 1;fi
     ;;
@@ -1225,7 +1225,7 @@ while getopts "v:f" option;do
 done
 
 if [[ -z "\${version}" ]];then
-    version=\$(curl -s https://api.github.com/repos/FISCO-BCOS/console/releases | grep "tag_name" | sort -V | tail -n 1 | cut -d \" -f 4 | sed "s/^[vV]//")
+    version=\$(curl -s https://api.github.com/repos/FISCO-BCOS/console/releases | grep "tag_name" | cut -d \" -f 4 | sort -V | tail -n 1 | sed "s/^[vV]//")
 fi
 package_name="console.tar.gz"
 echo "Downloading console \${version}"
@@ -1347,6 +1347,141 @@ do
 done
 wait
 EOF
+    generate_script_template "$output/download_bin.sh"
+    cat << EOF >> "$output/download_bin.sh"
+#!/bin/bash
+
+project=FISCO-BCOS/FISCO-BCOS
+cdn_link_header="${cdn_link_header}"
+download_branch=
+output_dir=bin/
+download_mini=
+download_version=
+latest_version=
+download_timeout=${download_timeout}
+
+help() {
+    echo "
+Usage:
+    -v <Version>           Download binary of spectfic version, default latest
+    -b <Branch>            Download binary of spectfic branch       
+    -o <Output Dir>        Default ./
+    -h Help
+e.g
+    \$0 -b master
+"
+exit 0
+}
+
+parse_params(){
+while getopts "b:o:v:hml" option;do
+    case \$option in
+    o) output_dir=\$OPTARG;;
+    b) download_branch="\$OPTARG";;
+    v) download_version="\${OPTARG//[vV]/}";;
+    m) download_mini="true";;
+    l) LOG_INFO "Show the history releases of FISCO-BCOS " && curl -sS https://gitee.com/api/v5/repos/\${project}/tags | grep -oe "\"name\":\"v[2-9]*\.[0-9]*\.[0-9]*\"" | cut -d \" -f 4 | sort -V && exit 0;;
+    h) help;;
+    *) help;;
+    esac
+done
+}
+
+download_artifact_linux(){
+    local branch="\$1"
+    build_num=\$(curl https://circleci.com/api/v1.1/project/github/\${project}/tree/\${branch}\?circle-token\=\&limit\=1\&offset\=0\&filter\=successful 2>/dev/null| grep build_num | sed "s/ //g"| cut -d ":" -f 2| sed "s/,//g" | sort -u | tail -n1)
+
+    local response="\$(curl https://circleci.com/api/v1.1/project/github/\${project}/\${build_num}/artifacts?circle-token= 2>/dev/null)"
+    if [ -z "\${download_mini}" ];then
+        link="\$(echo \${response}| grep -o 'https://[^"]*' | grep -v mini)"
+    else
+        link="\$(echo \${response}| grep -o 'https://[^"]*' | grep mini)"
+    fi
+    if [ -z "\${link}" ];then
+        build_num=\$(( build_num - 1 ))
+        response="\$(curl https://circleci.com/api/v1.1/project/github/\${project}/\${build_num}/artifacts?circle-token= 2>/dev/null)"
+        if [ -z "\${download_mini}" ];then
+            link="\$(echo \${response}| grep -o 'https://[^"]*' | grep -v mini| tail -n 1)"
+        else
+            link="\$(echo \${response}| grep -o 'https://[^"]*' | grep mini| tail -n 1)"
+        fi
+    fi
+    if [ -z "\${link}" ];then
+        echo "CircleCI build_num:\${build_num} can't find artifacts."
+        exit 1
+    fi
+    LOG_INFO "Downloading binary from \${link} "
+    curl -#LO \${link} && tar -zxf fisco*.tar.gz && rm fisco*.tar.gz
+    result=\$?
+    if [[ "\${result}" != "0" ]];then LOG_ERROR "Download failed, please try again" && exit 1;fi
+
+}
+
+download_artifact_macOS(){
+    echo "unsupported for now."
+    exit 1
+    local branch="\$1"
+    # TODO: https://developer.github.com/v3/actions/artifacts/#download-an-artifact
+    local workflow_artifacts_url="\$(curl https://api.github.com/repos/\${project}/actions/runs\?branch\=\${branch}\&status\=success\&event\=push | grep artifacts_url | head -n 1 | cut -d \" -f 4)"
+    local archive_download_url="\$(curl \${workflow_artifacts_url} | grep archive_download_url | cut -d \" -f 4)"
+    if [ -z "\${archive_download_url}" ];then
+        echo "GitHub action \${workflow_artifacts_url} can't find artifact."
+        exit 1
+    fi
+    LOG_INFO "Downloading macOS binary from \${archive_download_url} "
+    # FIXME: https://github.com/actions/upload-artifact/issues/51
+    curl -#LO "\${archive_download_url}" && tar -zxf fisco-bcos-macOS.tar.gz && rm fisco-bcos-macOS.tar.gz
+}
+
+download_branch_artifact(){
+    local branch="\$1"
+    if [ "\$(uname)" == "Darwin" ];then
+        LOG_INFO "Downloading binary of \${branch} on macOS "
+        download_artifact_macOS "\${branch}"
+    else
+        LOG_INFO "Downloading binary of \${branch} on Linux "
+        download_artifact_linux "\${branch}"
+    fi
+}
+
+download_released_artifact(){
+    local version="\$1"
+    local package_name="fisco-bcos.tar.gz"
+    if [ "\$(uname)" == "Darwin" ];then
+        package_name="fisco-bcos-macOS.tar.gz"
+    fi
+    local download_link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/\${version}/\${package_name}"
+    local cdn_download_link="\${cdn_link_header}/\${version}/\${package_name}"
+    LOG_INFO "Downloading binary of \${version}, from \${download_link}"
+    if [ \$(curl -IL -o /dev/null -s -w %{http_code} \${cdn_download_link}) == 200 ];then
+        curl -#LO \${download_link} --speed-time 20 --speed-limit 102400 -m \${download_timeout} || {
+            echo "Download speed is too low, try \${cdn_download_link}"
+            curl -#LO "\${cdn_download_link}"
+        }
+    else
+        curl -#LO \${download_link}
+    fi
+    tar -zxf "\${package_name}" && rm "\${package_name}"
+}
+
+main() {
+    [ -f "\${output_dir}/fisco-bcos" ] && mv "\${output_dir}/fisco-bcos" "\${output_dir}/fisco-bcos.bak"
+    mkdir -p "\${output_dir}" && cd "\${output_dir}"
+    latest_version=\$(curl -sS https://gitee.com/api/v5/repos/\${project}/tags | grep -oe "\"name\":\"v[2-9]*\.[0-9]*\.[0-9]*\"" | cut -d \" -f 4 | sort -V | tail -n 1)
+    if [ -n "\${download_version}" ];then
+        download_released_artifact "v\${download_version}"
+    elif [ -n "\${download_branch}" ];then
+        download_branch_artifact "\${download_branch}"
+    else 
+        download_released_artifact "\${latest_version}"
+    fi
+    LOG_INFO "Finished. Please check \${output_dir}"
+}
+
+parse_params "\$@"
+main
+
+EOF
 }
 
 parse_ip_config()
@@ -1391,12 +1526,18 @@ download_bin()
     chmod a+x ${bin_path}
 }
 
+function version_gt() { test "$(echo "$@" | tr " " "\n" | sort -V | head -n 1)" != "$1"; }
+
 check_bin()
 {
     echo "Checking fisco-bcos binary..."
-    bin_version=$(${bin_path} -v)
-    if [ -z "$(echo ${bin_version} | grep 'FISCO-BCOS')" ];then
+    bin_version=$()
+    if ! ${bin_path} -v | grep -q 'FISCO-BCOS';then
         exit_with_clean "${bin_path} is wrong. Please correct it and try again."
+    fi
+    bin_version=$(${bin_path} -v | grep -oe "[2-9]*\.[0-9]*\.[0-9]*")
+    if version_gt "${compatibility_version}" "${bin_version}";then
+        exit_with_clean "${bin_version} is less than ${compatibility_version}. Please correct it and try again."
     fi
     echo "Binary check passed."
 }
@@ -1485,11 +1626,11 @@ fi
 dir_must_not_exists "${output_dir}"
 mkdir -p "${output_dir}"
 
-if [ -z "${compatibility_version}" ];then
-    set +e
-    compatibility_version=$(curl -s https://api.github.com/repos/FISCO-BCOS/FISCO-BCOS/releases | grep "tag_name" | grep "\"v2\.[0-9]\.[0-9]\"" | sort -V | tail -n 1 | cut -d \" -f 4 | sed "s/^[vV]//")
-    set -e
-fi
+# if [ -z "${compatibility_version}" ];then
+#     set +e
+#     compatibility_version=$(curl -s https://api.github.com/repos/FISCO-BCOS/FISCO-BCOS/releases | grep "tag_name" | grep "\"v2\.[0-9]*\.[0-9]*\"" | sort -V | tail -n 1 | cut -d \" -f 4 | sed "s/^[vV]//")
+#     set -e
+# fi
 
 # use default version as compatibility_version
 if [ -z "${compatibility_version}" ];then

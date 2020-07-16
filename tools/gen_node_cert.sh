@@ -31,6 +31,7 @@ help() {
 Usage:
     -c <cert path>              [Required] cert key path
     -g <gm cert path>           gmcert key path, if generate gm node cert
+    -s                          If set -s, generate certificate for sdk
     -o <Output Dir>             Default ${output_dir}
     -h Help
 e.g

@@ -106,7 +106,13 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
         string(FISCO_BCOS_BUILD_PLATFORM) + "/" + string(FISCO_BCOS_BUILD_TYPE);
     g_BCOSConfig.binaryInfo.gitBranch = FISCO_BCOS_BUILD_BRANCH;
     g_BCOSConfig.binaryInfo.gitCommitHash = FISCO_BCOS_COMMIT_HASH;
-
+    auto binaryVersion = getVersionNumber(g_BCOSConfig.binaryInfo.version);
+    if (binaryVersion < g_BCOSConfig.version() || g_BCOSConfig.version() == 0)
+    {
+        BOOST_THROW_EXCEPTION(InvalidSupportedVersion() << errinfo_comment(
+                                  "initGlobalConfig supported_version:" + version +
+                                  " bigger than binary version: " + to_string(binaryVersion)));
+    }
     string sectionName = "data_secure";
     if (_pt.get_child_optional("storage_security"))
     {
@@ -120,8 +126,8 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
     if (!isValidPort(g_BCOSConfig.diskEncryption.keyCenterPort))
     {
         BOOST_THROW_EXCEPTION(
-            InvalidPort() << errinfo_comment("P2PInitializer:  initConfig for storage_security "
-                                             "failed! Invalid key_manange_port!"));
+            InvalidPort() << errinfo_comment(
+                "initGlobalConfig storage_security failed! Invalid key_manange_port!"));
     }
 
 
