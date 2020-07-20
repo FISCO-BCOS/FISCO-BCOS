@@ -263,7 +263,12 @@ PrecompiledExecResult::Ptr PermissionPrecompiled::call(
             entry->setField(SYS_AC_ADDRESS, addr);
             entry->setField(SYS_AC_ENABLENUM,
                 boost::lexical_cast<std::string>(context->blockInfo().number + 1));
-            int count = table->insert(tableName, entry, std::make_shared<AccessOptions>(origin));
+            auto accessOption = std::make_shared<AccessOptions>(origin);
+            if (g_BCOSConfig.version() >= V2_6_0)
+            {
+                accessOption = std::make_shared<AccessOptions>(origin, false);
+            }
+            int count = table->insert(tableName, entry, accessOption);
             result = count;
             PRECOMPILED_LOG(INFO) << LOG_BADGE("PermissionPrecompiled grantWrite")
                                   << LOG_KV("return", result);
@@ -348,7 +353,12 @@ int PermissionPrecompiled::revokeWritePermission(
                               << LOG_KV("user", user);
         return storage::CODE_NO_AUTHORIZED;
     }
-    result = table->remove(tableName, condition, std::make_shared<AccessOptions>(origin));
+    auto accessOption = std::make_shared<AccessOptions>(origin);
+    if (g_BCOSConfig.version() >= V2_6_0 && _isContractTable)
+    {
+        accessOption = std::make_shared<AccessOptions>(origin, false);
+    }
+    result = table->remove(tableName, condition, accessOption);
     PRECOMPILED_LOG(INFO) << LOG_BADGE("PermissionPrecompiled") << LOG_DESC("revokeWrite")
                           << LOG_KV("tableName", tableName) << LOG_KV("user", user)
                           << LOG_KV("return", result);
