@@ -52,7 +52,7 @@ void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt
     {
         ERROR_OUTPUT << LOG_BADGE("RPCInitializer")
                      << LOG_DESC(
-                            "initConfig for RPCInitializer failed! Invalid ListenPort for RPC!")
+                            "initChannelRPCServer failed! Invalid ListenPort for RPC!")
                      << std::endl;
         exit(1);
     }
@@ -209,22 +209,22 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
             BOOST_THROW_EXCEPTION(ListenPortIsUsed());
         }
         INITIALIZER_LOG(INFO) << LOG_BADGE("RPCInitializer JsonrpcHttpServer started")
-                              << LOG_KV("rpcListenIp", listenIP)
-                              << LOG_KV("rpcListenPort", httpListenPort)
+                              << LOG_KV("jsonrpc_IP", listenIP)
+                              << LOG_KV("jsonrpc_listen_port", httpListenPort)
                               << LOG_KV("ipv6", ipAddress.is_v6());
     }
     catch (std::exception& e)
     {
         // TODO: catch in Initializer::init, delete this catch
         INITIALIZER_LOG(ERROR) << LOG_BADGE("RPCInitializer")
-                               << LOG_DESC("init RPC/channelserver failed")
-                               << LOG_KV("check channel_listen_port", listenPort)
+                               << LOG_DESC("init RPC failed")
                                << LOG_KV("check jsonrpc_listen_port", httpListenPort)
+                               << LOG_KV("check jsonrpc_IP", listenIP)
                                << LOG_KV("EINFO", boost::diagnostic_information(e));
 
-        ERROR_OUTPUT << LOG_BADGE("RPCInitializer") << LOG_DESC("init RPC/channelserver failed")
-                     << LOG_KV("check channel_listen_port", listenPort)
+        ERROR_OUTPUT << LOG_BADGE("RPCInitializer") << LOG_DESC("init RPC failed")
                      << LOG_KV("check jsonrpc_listen_port", httpListenPort)
+                     << LOG_KV("check jsonrpc_IP", listenIP)
                      << LOG_KV("EINFO", boost::diagnostic_information(e)) << std::endl;
         exit(1);
     }
