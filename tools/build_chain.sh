@@ -1365,7 +1365,7 @@ help() {
 Usage:
     -v <Version>           Download binary of spectfic version, default latest
     -b <Branch>            Download binary of spectfic branch       
-    -o <Output Dir>        Default ./
+    -o <Output Dir>        Default ./bin
     -l                     List List FISCO-BCOS released versions
     -m                     Download mini binary, only works with -b option
     -h Help
