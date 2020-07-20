@@ -63,8 +63,6 @@ int main(int argc, const char* argv[])
         std::cerr << "terminate handler called" << endl;
         abort();
     });
-    /// init params
-    string configPath = initCommandLine(argc, argv);
     // get datetime and output welcome info
     ExitHandler exitHandler;
     signal(SIGTERM, &ExitHandler::exitHandler);
@@ -72,8 +70,11 @@ int main(int argc, const char* argv[])
     signal(SIGINT, &ExitHandler::exitHandler);
     /// callback initializer to init all ledgers
     auto initialize = std::make_shared<Initializer>();
+    std::string configPath("./config.ini");
     try
     {
+        /// init params
+        configPath = initCommandLine(argc, argv);
         std::cout << "[" << getCurrentDateTime() << "] ";
         std::cout << "Initializing..." << std::endl;
         initialize->init(configPath);

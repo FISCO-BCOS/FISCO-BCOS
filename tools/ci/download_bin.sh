@@ -16,9 +16,10 @@ Usage:
     -b <Branch>            Download binary of spectfic branch       
     -o <Output Dir>        Default ./
     -l                     List List FISCO-BCOS released versions
+    -m                     Download mini binary, only works with -b option
     -h Help
 e.g
-    $0 -b master
+    $0 -v 2.6.0
 "
 
 exit 0

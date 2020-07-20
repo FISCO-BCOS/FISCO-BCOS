@@ -257,10 +257,10 @@ if [ -n "${guomi_mode}" ]; then
     if [ ! -f "${TASSL_CMD}" ];then
         LOG_INFO "Downloading tassl binary ..."
         if [[ -n "${macOS}" ]];then
-            curl -LO https://github.com/FISCO-BCOS/LargeFiles/raw/master/tools/tassl_mac.tar.gz
+            curl -#LO https://github.com/FISCO-BCOS/LargeFiles/raw/master/tools/tassl_mac.tar.gz
             mv tassl_mac.tar.gz tassl.tar.gz
         else
-            curl -LO https://github.com/FISCO-BCOS/LargeFiles/raw/master/tools/tassl.tar.gz
+            curl -#LO https://github.com/FISCO-BCOS/LargeFiles/raw/master/tools/tassl.tar.gz
         fi
         tar zxvf tassl.tar.gz && rm tassl.tar.gz
         chmod u+x tassl
@@ -1234,10 +1234,10 @@ download_link=https://github.com/FISCO-BCOS/console/releases/download/v\${versio
 if [ \$(curl -IL -o /dev/null -s -w %{http_code}  https://www.fisco.com.cn/cdn/console/releases/download/v\${version}/\${package_name}) == 200 ];then
     curl -LO \${download_link} --speed-time 30 --speed-limit 102400 -m 450 || {
         echo -e "\033[32m Download speed is too low, try https://www.fisco.com.cn/cdn/console/releases/download/v\${version}/\${package_name} \033[0m"
-        curl -LO https://www.fisco.com.cn/cdn/console/releases/download/v\${version}/\${package_name}
+        curl -#LO https://www.fisco.com.cn/cdn/console/releases/download/v\${version}/\${package_name}
     }
 else
-    curl -LO \${download_link}
+    curl -#LO \${download_link}
 fi
 tar -zxf \${package_name} && cd console && chmod +x *.sh
 
@@ -1366,9 +1366,11 @@ Usage:
     -v <Version>           Download binary of spectfic version, default latest
     -b <Branch>            Download binary of spectfic branch       
     -o <Output Dir>        Default ./
+    -l                     List List FISCO-BCOS released versions
+    -m                     Download mini binary, only works with -b option
     -h Help
 e.g
-    \$0 -b master
+    \$0 -v 2.6.0
 "
 exit 0
 }
@@ -1514,10 +1516,10 @@ download_bin()
     if [ $(curl -IL -o /dev/null -s -w %{http_code}  ${cdn_link_header}/v${compatibility_version}/${package_name}) == 200 ];then
         curl -LO ${Download_Link} --speed-time 20 --speed-limit 102400 -m ${download_timeout} || {
             LOG_INFO "Download speed is too low, try ${cdn_link_header}/v${compatibility_version}/${package_name}"
-            curl -LO ${cdn_link_header}/v${compatibility_version}/${package_name}
+            curl -#LO "${cdn_link_header}/v${compatibility_version}/${package_name}"
         }
     else
-        curl -LO ${Download_Link}
+        curl -#LO "${Download_Link}"
     fi
     if [[ $(ls -al . | grep tar.gz | awk '{print $5}') -lt 1048576 ]];then
         exit_with_clean "Download fisco-bcos failed, please try again. Or download and extract it manually from ${Download_Link} and use -e option."

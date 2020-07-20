@@ -20,7 +20,7 @@ ExternalProject_Add(tassl
         BUILD_IN_SOURCE 1
         CONFIGURE_COMMAND ${TASSL_CONFIG_COMMAND}
         LOG_CONFIGURE 1
-        LOG_BUILD 0
+        LOG_BUILD 1
         LOG_INSTALL 1
         BUILD_COMMAND ${TASSL_BUILD_COMMAND}
         INSTALL_COMMAND ""
