@@ -105,6 +105,11 @@ ssize_t P2PMessageRC2::decode(const byte* buffer, size_t size)
 
     int32_t offset = 0;
     m_length = ntohl(*((uint32_t*)&buffer[offset]));
+    
+    // in case malicious packet
+    if (m_length < HEADER_LENGTH) {
+        return dev::network::PACKET_ERROR;
+    }
 
     if (size < m_length)
     {
