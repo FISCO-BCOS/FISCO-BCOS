@@ -168,7 +168,7 @@ gen_node_cert() {
     mkdir -p $ndpath
     gen_cert_secp256k1 "$agpath" "$ndpath" "$node" "node"
     #nodeid is pubkey
-    openssl ec -in "$ndpath/node.key" -text -noout 2> /dev/null| sed -n '7,11p' | tr -d ": \n" | awk '{print substr($0,3);}' | cat >"$ndpath/node.nodeid"
+    openssl ec -text -noout -in "$ndpath/node.key" 2> /dev/null| sed -n '7,11p' | tr -d ": \n" | awk '{print substr($0,3);}' | cat >"$ndpath/node.nodeid"
     cp $agpath/ca.crt $agpath/agency.crt $ndpath
 }
 

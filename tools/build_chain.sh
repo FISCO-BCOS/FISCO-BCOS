@@ -387,7 +387,7 @@ gen_cert() {
     mkdir -p $ndpath
     gen_cert_secp256k1 "$agpath" "$ndpath" "$node" "${cert_name}"
     #nodeid is pubkey
-    openssl ec -in "$ndpath/${cert_name}.key" -text -noout 2> /dev/null | sed -n '7,11p' | tr -d ": \n" | awk '{print substr($0,3);}' | cat >"$ndpath"/node.nodeid
+    openssl ec -text -noout -in "$ndpath/${cert_name}.key" 2> /dev/null | sed -n '7,11p' | tr -d ": \n" | awk '{print substr($0,3);}' | cat >"$ndpath"/node.nodeid
     # openssl x509 -serial -noout -in $ndpath/node.crt | awk -F= '{print $2}' | cat >$ndpath/node.serial
     cd "$ndpath"
     if [ "${cert_name}" == "node" ];then
@@ -1364,7 +1364,7 @@ help() {
     echo "
 Usage:
     -v <Version>           Download binary of spectfic version, default latest
-    -b <Branch>            Download binary of spectfic branch       
+    -b <Branch>            Download binary of spectfic branch
     -o <Output Dir>        Default ./bin
     -l                     List List FISCO-BCOS released versions
     -m                     Download mini binary, only works with -b option
@@ -1474,7 +1474,7 @@ main() {
         download_released_artifact "v\${download_version}"
     elif [ -n "\${download_branch}" ];then
         download_branch_artifact "\${download_branch}"
-    else 
+    else
         download_released_artifact "\${latest_version}"
     fi
     LOG_INFO "Finished. Please check \${output_dir}"
