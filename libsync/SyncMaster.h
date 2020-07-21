@@ -273,15 +273,6 @@ private:
         updateConsensusNodeInfo(sealerList, nodeList);
     }
 
-    int64_t getAlignedTime()
-    {
-        if (!m_nodeTimeMaintenance)
-        {
-            return utcTime();
-        }
-        return m_nodeTimeMaintenance->getAlignedTime();
-    }
-
 protected:
     // factory used to create sync related packet
     SyncMsgPacketFactory::Ptr m_syncMsgPacketFactory;

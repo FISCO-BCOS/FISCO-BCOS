@@ -124,91 +124,52 @@ PrecompiledExecResult::Ptr SystemConfigPrecompiled::call(
 
 bool SystemConfigPrecompiled::checkValueValid(std::string const& key, std::string const& value)
 {
+    int64_t configuredValue = 0;
+    try
+    {
+        configuredValue = boost::lexical_cast<int64_t>(value);
+    }
+    catch (std::exception const& e)
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("SystemConfigPrecompiled")
+                               << LOG_DESC("checkValueValid failed") << LOG_KV("key", key)
+                               << LOG_KV("value", value) << LOG_KV("errorInfo", e.what());
+        return false;
+    }
     if (SYSTEM_KEY_TX_COUNT_LIMIT == key)
     {
-        try
-        {
-            return (boost::lexical_cast<int64_t>(value) >= TX_COUNT_LIMIT_MIN);
-        }
-        catch (boost::bad_lexical_cast& e)
-        {
-            PRECOMPILED_LOG(ERROR) << LOG_BADGE(e.what());
-            return false;
-        }
+        return (configuredValue >= TX_COUNT_LIMIT_MIN);
     }
     else if (SYSTEM_KEY_TX_GAS_LIMIT == key)
     {
-        try
-        {
-            return (boost::lexical_cast<int64_t>(value) >= TX_GAS_LIMIT_MIN);
-        }
-        catch (boost::bad_lexical_cast& e)
-        {
-            PRECOMPILED_LOG(ERROR) << LOG_BADGE(e.what());
-            return false;
-        }
+        return (configuredValue >= TX_GAS_LIMIT_MIN);
     }
     else if (SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM == key)
     {
-        try
-        {
-            return (boost::lexical_cast<int64_t>(value) >= RPBFT_EPOCH_SEALER_NUM_MIN);
-        }
-        catch (boost::bad_lexical_cast& e)
-        {
-            PRECOMPILED_LOG(ERROR)
-                << LOG_DESC("checkValueValid failed") << LOG_KV("errInfo", e.what());
-            return false;
-        }
+        return (configuredValue >= RPBFT_EPOCH_SEALER_NUM_MIN);
     }
     else if (SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM == key)
     {
-        try
+        if (g_BCOSConfig.version() < V2_6_0)
         {
-            if (g_BCOSConfig.version() < V2_6_0)
-            {
-                return (boost::lexical_cast<int64_t>(value) >= RPBFT_EPOCH_BLOCK_NUM_MIN);
-            }
-            else
-            {
-                // epoch_block_num is at least 2 when supported_version >= v2.6.0
-                return (boost::lexical_cast<int64_t>(value) > RPBFT_EPOCH_BLOCK_NUM_MIN);
-            }
+            return (configuredValue >= RPBFT_EPOCH_BLOCK_NUM_MIN);
         }
-        catch (boost::bad_lexical_cast& e)
+        else
         {
-            PRECOMPILED_LOG(ERROR)
-                << LOG_DESC("checkValueValid failed") << LOG_KV("errInfo", e.what());
-            return false;
+            // epoch_block_num is at least 2 when supported_version >= v2.6.0
+            return (configuredValue > RPBFT_EPOCH_BLOCK_NUM_MIN);
         }
     }
     else if (SYSTEM_KEY_CONSENSUS_TIMEOUT == key)
     {
-        return checkConsensusTimeoutConfig(key, value);
+        if (g_BCOSConfig.version() < V2_6_0)
+        {
+            return false;
+        }
+        return (configuredValue >= SYSTEM_CONSENSUS_TIMEOUT_MIN &&
+                configuredValue < SYSTEM_CONSENSUS_TIMEOUT_MAX);
     }
     // only can insert tx_count_limit and tx_gas_limit, rpbft_epoch_sealer_num,
     // rpbft_epoch_block_num as system config
     return false;
-}
-
-bool SystemConfigPrecompiled::checkConsensusTimeoutConfig(
-    std::string const& _key, std::string const& _value)
-{
-    if (g_BCOSConfig.version() < V2_6_0)
-    {
-        return false;
-    }
-
-    try
-    {
-        int64_t configuredConsensusTime = boost::lexical_cast<int64_t>(_value);
-        return (configuredConsensusTime >= SYSTEM_CONSENSUS_TIMEOUT_MIN &&
-                configuredConsensusTime < SYSTEM_CONSENSUS_TIMEOUT_MAX);
-    }
-    catch (const std::exception& e)
-    {
-        PRECOMPILED_LOG(ERROR) << LOG_DESC("checkValueValid failed") << LOG_KV("key", _key)
-                               << LOG_KV("errInfo", e.what());
-        return false;
-    }
 }

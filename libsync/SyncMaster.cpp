@@ -273,7 +273,7 @@ bool SyncMaster::sendSyncStatusByNodeId(
 {
     auto packet = m_syncMsgPacketFactory->createSyncStatusPacket(
         m_nodeId, blockNumber, m_genesisHash, currentHash);
-    packet->alignedTime = getAlignedTime();
+    packet->alignedTime = utcTime();
     packet->encode();
     m_service->asyncSendMessageByNodeID(
         nodeId, packet->toMessage(m_protocolId), CallbackFuncWithSession(), Options());
@@ -623,7 +623,7 @@ void SyncMaster::maintainPeersConnection()
                 // send my status to her
                 auto packet = m_syncMsgPacketFactory->createSyncStatusPacket(
                     m_nodeId, currentNumber, m_genesisHash, currentHash);
-                packet->alignedTime = getAlignedTime();
+                packet->alignedTime = utcTime();
                 packet->encode();
 
                 m_service->asyncSendMessageByNodeID(
