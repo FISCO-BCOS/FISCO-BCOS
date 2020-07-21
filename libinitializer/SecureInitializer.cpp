@@ -143,6 +143,16 @@ void SecureInitializer::initConfigWithCrypto(const boost::property_tree::ptree& 
             INITIALIZER_LOG(INFO) << LOG_BADGE("SecureInitializer")
                                   << LOG_DESC("use user certificate") << LOG_KV("file", cert);
             sslContext->use_certificate_chain_file(cert);
+            if (!SSL_CTX_get0_certificate(sslContext->native_handle()))
+            {
+                INITIALIZER_LOG(ERROR)
+                    << LOG_BADGE("SecureInitializer")
+                    << LOG_DESC("certificate load failed, please check") << LOG_KV("file", cert);
+                ERROR_OUTPUT << LOG_BADGE("SecureInitializer")
+                             << LOG_DESC("certificate load failed, please check")
+                             << LOG_KV("file", cert) << std::endl;
+                exit(1);
+            }
         }
         else
         {
@@ -312,6 +322,16 @@ ConfigResult initOriginConfig(const string& _dataPath)
         INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializer") << LOG_DESC("use user certificate")
                                << LOG_KV("file", cert);
         sslContext->use_certificate_chain_file(cert);
+        if (!SSL_CTX_get0_certificate(sslContext->native_handle()))
+        {
+            INITIALIZER_LOG(ERROR)
+                << LOG_BADGE("SecureInitializer")
+                << LOG_DESC("certificate load failed, please check") << LOG_KV("file", cert);
+            ERROR_OUTPUT << LOG_BADGE("SecureInitializer")
+                         << LOG_DESC("certificate load failed, please check")
+                         << LOG_KV("file", cert) << std::endl;
+            exit(1);
+        }
     }
     else
     {
@@ -443,6 +463,16 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
         INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializerGM")
                                << LOG_DESC("use user certificate") << LOG_KV("file", cert);
         sslContext->use_certificate_chain_file(cert);
+        if (!SSL_CTX_get0_certificate(sslContext->native_handle()))
+        {
+            INITIALIZER_LOG(ERROR)
+                << LOG_BADGE("SecureInitializer")
+                << LOG_DESC("certificate load failed, please check") << LOG_KV("file", cert);
+            ERROR_OUTPUT << LOG_BADGE("SecureInitializer")
+                         << LOG_DESC("certificate load failed, please check")
+                         << LOG_KV("file", cert) << std::endl;
+            exit(1);
+        }
     }
     else
     {
