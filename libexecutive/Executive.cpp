@@ -291,6 +291,12 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
             m_envInfo.precompiledEngine()->executeOriginPrecompiled(_p.codeAddress, _p.data);
         size_t outputSize = output.size();
         m_output = owning_bytes_ref{std::move(output), 0, outputSize};
+        if (g_BCOSConfig.version() >= V2_6_0 && !success)
+        {
+            m_gas = 0;
+            m_excepted = TransactionException::RevertInstruction;
+            return true;  // true means no need to run go().
+        }
     }
     else if (m_envInfo.precompiledEngine() &&
              m_envInfo.precompiledEngine()->isPrecompiled(_p.codeAddress))
