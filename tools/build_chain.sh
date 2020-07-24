@@ -585,7 +585,6 @@ generate_config_ini()
     ; MB
     max_log_file_size=200
     flush=${auto_flush}
-    log_flush_threshold=100
 
 [flow_control]
     ; restrict QPS of the node

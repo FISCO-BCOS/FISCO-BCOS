@@ -36,11 +36,11 @@ jobs:
         id: cache
         with:
           path: deps/src
-          key: deps-v5-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: deps-v6-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            deps-v5-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            deps-v5-${{ runner.temp }}-${{ github.base_ref }}-
-            deps-v5-${{ runner.temp }}-
+            deps-v6-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            deps-v6-${{ runner.temp }}-${{ github.base_ref }}-
+            deps-v6-${{ runner.temp }}-
       - uses: actions/cache@v2
         id: ccache
         with:
@@ -73,12 +73,12 @@ jobs:
         id: cache
         with:
           path: deps/src
-          key: deps-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: deps-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            deps-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            deps-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            deps-v2-notest-${{ runner.temp }}-
-            deps-v2-${{ runner.temp }}-
+            deps-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            deps-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            deps-v3-notest-${{ runner.temp }}-
+            deps-v3-${{ runner.temp }}-
       - uses: actions/cache@v2
         id: ccache
         with:
