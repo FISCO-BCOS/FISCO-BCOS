@@ -13,9 +13,9 @@ help() {
     echo "
 Usage:
     -v <Version>           Download binary of spectfic version, default latest
-    -b <Branch>            Download binary of spectfic branch       
+    -b <Branch>            Download binary of spectfic branch
     -o <Output Dir>        Default ./bin
-    -l                     List List FISCO-BCOS released versions
+    -l                     List released FISCO-BCOS versions
     -m                     Download mini binary, only works with -b option
     -h Help
 e.g
@@ -23,6 +23,12 @@ e.g
 "
 
 exit 0
+}
+
+LOG_INFO()
+{
+    local content=${1}
+    echo -e "\033[32m[INFO] ${content}\033[0m"
 }
 
 parse_params(){
@@ -75,14 +81,16 @@ download_artifact_macOS(){
     local branch="$1"
     # TODO: https://developer.github.com/v3/actions/artifacts/#download-an-artifact
     local workflow_artifacts_url="$(curl https://api.github.com/repos/${project}/actions/runs\?branch\=${branch}\&status\=success\&event\=push | grep artifacts_url | head -n 1 | cut -d \" -f 4)"
+    # local archive_download_url="$(curl https://api.github.com/repos/FISCO-BCOS/FISCO-BCOS/actions/artifacts | grep archive_download_url | sort | tail -n 1 | cut -d \" -f 4)"
     local archive_download_url="$(curl ${workflow_artifacts_url} | grep archive_download_url | cut -d \" -f 4)"
     if [ -z "${archive_download_url}" ];then
         echo "GitHub action ${workflow_artifacts_url} can't find artifact."
         exit 1
     fi
-    LOG_INFO "Downloading macOS binary from ${archive_download_url} "
-    # FIXME: https://github.com/actions/upload-artifact/issues/51
-    curl -#LO "${archive_download_url}" && tar -zxf fisco-bcos-macOS.tar.gz && rm fisco-bcos-macOS.tar.gz
+    LOG_INFO "Downloading macOS binary from ${archive_download_url}"
+    # failed because of permission issue
+    # FIXME: https://github.com/actions/upload-artifact/issues/51 https://github.community/t/api-to-download-artifact/16496/13
+    curl -#Lo fisco-bcos-macOS.tar.gz "${archive_download_url}" && tar -zxf fisco-bcos-macOS.tar.gz && rm fisco-bcos-macOS.tar.gz
 }
 
 download_branch_artifact(){
@@ -124,7 +132,7 @@ main() {
         download_released_artifact "v${download_version}"
     elif [ -n "${download_branch}" ];then
         download_branch_artifact "${download_branch}"
-    else 
+    else
         download_released_artifact "${latest_version}"
     fi
     LOG_INFO "Finished. Please check ${output_dir}"

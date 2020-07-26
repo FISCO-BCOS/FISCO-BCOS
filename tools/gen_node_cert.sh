@@ -35,8 +35,10 @@ Usage:
     -o <Output Dir>             Default ${output_dir}
     -h Help
 e.g
-    $0 -c nodes/cert/agency -o newNode
-    $0 -c nodes/cert/agency -g nodes/gmcert/agency -o newNode_GM
+    $0 -c nodes/cert/agency -o newNode                                #generate node certificate
+    $0 -c nodes/cert/agency -o newSDK -s                              #generate sdk certificate
+    $0 -c nodes/cert/agency -g nodes/gmcert/agency -o newNode_GM      #generate gm node certificate
+    $0 -c nodes/cert/agency -g nodes/gmcert/agency -o newSDK_GM -s    #generate gm sdk certificate
 EOF
 
 exit 0

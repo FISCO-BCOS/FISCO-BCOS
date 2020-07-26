@@ -1231,7 +1231,7 @@ echo "Downloading console \${version}"
 download_link=https://github.com/FISCO-BCOS/console/releases/download/v\${version}/\${package_name}
 
 if [ \$(curl -IL -o /dev/null -s -w %{http_code}  https://www.fisco.com.cn/cdn/console/releases/download/v\${version}/\${package_name}) == 200 ];then
-    curl -LO \${download_link} --speed-time 30 --speed-limit 102400 -m 450 || {
+    curl -#LO \${download_link} --speed-time 30 --speed-limit 102400 -m 450 || {
         echo -e "\033[32m Download speed is too low, try https://www.fisco.com.cn/cdn/console/releases/download/v\${version}/\${package_name} \033[0m"
         curl -#LO https://www.fisco.com.cn/cdn/console/releases/download/v\${version}/\${package_name}
     }
@@ -1365,7 +1365,7 @@ Usage:
     -v <Version>           Download binary of spectfic version, default latest
     -b <Branch>            Download binary of spectfic branch
     -o <Output Dir>        Default ./bin
-    -l                     List List FISCO-BCOS released versions
+    -l                     List released FISCO-BCOS versions
     -m                     Download mini binary, only works with -b option
     -h Help
 e.g
@@ -1513,7 +1513,7 @@ download_bin()
     Download_Link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${compatibility_version}/${package_name}"
     LOG_INFO "Downloading fisco-bcos binary from ${Download_Link} ..."
     if [ $(curl -IL -o /dev/null -s -w %{http_code}  ${cdn_link_header}/v${compatibility_version}/${package_name}) == 200 ];then
-        curl -LO ${Download_Link} --speed-time 20 --speed-limit 102400 -m ${download_timeout} || {
+        curl -#LO "${Download_Link}" --speed-time 20 --speed-limit 102400 -m "${download_timeout}" || {
             LOG_INFO "Download speed is too low, try ${cdn_link_header}/v${compatibility_version}/${package_name}"
             curl -#LO "${cdn_link_header}/v${compatibility_version}/${package_name}"
         }
