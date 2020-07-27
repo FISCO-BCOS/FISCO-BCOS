@@ -149,4 +149,6 @@ private:
 };
 
 }  // namespace executive
+
+bool hasWasmPreamble(const bytes& _input);
 }  // namespace dev

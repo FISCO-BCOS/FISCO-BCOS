@@ -61,6 +61,8 @@ include(ProjectGroupSig)
 include(ProjectEVMC)
 include(ProjectVRF)
 include(ProjectEVMONE)
+include(ProjectHera)
+
 
 include_directories("${CMAKE_SOURCE_DIR}")
 
