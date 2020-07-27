@@ -28,7 +28,7 @@
 
 #include <evmc/loader.h>
 #include <evmone/evmone.h>
-#ifdef ETH_HERA
+#ifdef HERA
 #include <hera/hera.h>
 #endif
 
@@ -40,7 +40,7 @@ namespace eth
 {
 namespace
 {
-auto g_kind = VMKind::Interpreter;
+auto g_kind = VMKind::evmone;
 
 /// The pointer to EVMInstance create function in DLL EVMInstance VM.
 ///
@@ -63,10 +63,10 @@ struct VMKindTableEntry
 /// We don't use a map to avoid complex dynamic initialization. This list will never be long,
 /// so linear search only to parse command line arguments is not a problem.
 VMKindTableEntry vmKindsTable[] = {
-#ifdef ETH_HERA
+#ifdef HERA
     {VMKind::Hera, "hera"},
 #endif
-    {VMKind::Interpreter, "interpreter"}};
+    {VMKind::Interpreter, "interpreter"}, {VMKind::evmone, "evmone"}};
 
 void setVMKind(const std::string& _name)
 {
@@ -177,10 +177,12 @@ std::unique_ptr<EVMInterface> VMFactory::create(VMKind _kind)
 {
     switch (_kind)
     {
-#ifdef ETH_HERA
+#ifdef HERA
     case VMKind::Hera:
         return std::unique_ptr<EVMInterface>(new EVMInstance{evmc_create_hera()});
 #endif
+    case VMKind::evmone:
+        return std::unique_ptr<EVMInterface>(new EVMInstance{evmc_create_evmone()});
     case VMKind::DLL:
         return std::unique_ptr<EVMInterface>(new EVMInstance{g_evmcCreateFn()});
 #if 0

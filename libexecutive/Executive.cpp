@@ -561,7 +561,7 @@ bool Executive::go()
                         toEvmC(m_ext->myAddress()), toEvmC(m_ext->caller()), m_ext->data().data(),
                         m_ext->data().size(), toEvmC(m_ext->value()), toEvmC(0x0_cppui256)});
             };
-            // Create VM instance. Force Interpreter if tracing requested.
+            // Create VM instance.
             auto vm = VMFactory::create();
             if (m_isCreation)
             {

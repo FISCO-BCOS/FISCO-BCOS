@@ -48,7 +48,7 @@ BOOST_AUTO_TEST_CASE(testInterpreterEvmC)
     CallParameters param = InitCallParams::createRandomCallParams();
     FakeExtVM fake_ext_vm(env_info, param.codeAddress, param.senderAddress, param.senderAddress,
         param.valueTransfer, param.gas, param.data, code, crypto::Hash(code_str), 0, false, true);
-    std::unique_ptr<EVMInterface> m_face = VMFactory::create(VMKind::Interpreter);
+    std::unique_ptr<EVMInterface> m_face = VMFactory::create(VMKind::evmone);
     auto io_gas = 200000;
     evmc_message msg;
     msg.gas = io_gas;
