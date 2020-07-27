@@ -119,7 +119,6 @@ protected:
     void onReceiveTxsRequest(std::shared_ptr<SyncMsgPacket> _txsReqPacket, dev::h512 const& _peer,
         dev::p2p::P2PMessage::Ptr);
 
-
 protected:
     // Outside data
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
