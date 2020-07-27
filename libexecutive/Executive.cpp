@@ -462,8 +462,14 @@ bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u2
     // Schedule _init execution if not empty.
     if (!_init.empty())
     {
+        auto codes = _init.toBytes();
+        auto callData = bytesConstRef();
+        if (hasWasmPreamble(codes))
+        {
+            callData = bytesConstRef(m_t->extraData().data(),m_t->extraData().size());
+        }
         m_ext = make_shared<EVMHostContext>(m_s, m_envInfo, m_newAddress, _sender, _origin,
-            _endowment, _gasPrice, bytesConstRef(), _init.toBytes(), crypto::Hash(_init), m_depth,
+            _endowment, _gasPrice, callData, codes, crypto::Hash(_init), m_depth,
             true, false, m_enableFreeStorage);
     }
     return !m_ext;
