@@ -31,8 +31,6 @@
 #include <libethcore/Protocol.h>
 #include <libethcore/Transaction.h>
 #include <libp2p/P2PInterface.h>
-#include <tbb/concurrent_queue.h>
-#include <tbb/concurrent_unordered_set.h>
 #include <unordered_map>
 
 using namespace dev::eth;
@@ -157,40 +155,6 @@ public:
     /// protocol id used when register handler to p2p module
     virtual PROTOCOL_ID const& getProtocolId() const override { return m_protocolId; }
     void setTxPoolLimit(uint64_t const& _limit) { m_limit = _limit; }
-
-    /// Set transaction is known by a node
-    void setTransactionIsKnownBy(h256 const& _txHash, h512 const& _nodeId) override;
-
-    /// Is the transaction is known by the node ?
-    bool isTransactionKnownBy(h256 const& _txHash, h512 const& _nodeId) override
-    {
-        auto p = m_transactionKnownBy.find(_txHash);
-        if (p == m_transactionKnownBy.end())
-            return false;
-        return p->second.find(_nodeId) != p->second.end();
-    }
-
-    void setTransactionsAreKnownBy(
-        std::vector<dev::h256> const& _txHashVec, h512 const& _nodeId) override;
-    void setTransactionsAreKnownBy(
-        std::set<dev::h256> const& _txHashSet, h512 const& _nodeId) override
-    {
-        markTransactionsAreKnownBy(_txHashSet, _nodeId);
-    }
-    template <typename T>
-    void markTransactionsAreKnownBy(T const& _txsHash, h512 const& _nodeId)
-    {
-        WriteGuard l(x_transactionKnownBy);
-        for (auto const& tx_hash : _txsHash)
-        {
-            m_transactionKnownBy[tx_hash].insert(_nodeId);
-        }
-    }
-
-    /// Is the transaction is known by someone
-    bool isTransactionKnownBySomeone(h256 const& _txHash) override;
-    SharedMutex& xtransactionKnownBy() override { return x_transactionKnownBy; }
-
     /// verify and set the sender of known transactions of sepcified block
     void verifyAndSetSenderForBlock(dev::eth::Block& block) override;
     bool txExists(dev::h256 const& txHash) override;
@@ -205,7 +169,7 @@ public:
     std::shared_ptr<dev::eth::Transactions> obtainTransactions(
         std::vector<dev::h256> const& _reqTxs) override;
     std::shared_ptr<std::vector<dev::h256>> filterUnknownTxs(
-        std::set<dev::h256> const& _txsHashSet) override;
+        std::set<dev::h256> const& _txsHashSet, dev::h512 const& _peer) override;
 
     bool initPartiallyBlock(dev::eth::Block::Ptr _block) override;
 
@@ -228,7 +192,6 @@ protected:
     virtual u256 filterCheck(Transaction::Ptr) const { return u256(0); };
     void clear();
     bool dropTransactions(std::shared_ptr<Block> block, bool needNotify = false);
-    bool removeBlockKnowTrans(dev::eth::Block const& block);
     void removeInvalidTxs();
     void dropBlockTxsFilter(std::shared_ptr<dev::eth::Block> _block);
 
@@ -246,7 +209,6 @@ private:
         std::shared_ptr<dev::eth::Block> _block = nullptr, size_t _index = 0);
 
     bool insert(dev::eth::Transaction::Ptr _tx);
-    void removeTransactionKnowBy(h256 const& _txHash);
     bool inline txPoolNonceCheck(dev::eth::Transaction::Ptr const& tx)
     {
         if (!m_txpoolNonceChecker->isNonceOk(*tx, true))
@@ -264,6 +226,7 @@ private:
     {
         m_syncStatusChecker = _handler;
     }
+    void setTransactionKnownBy(std::set<dev::h256> const& _txsHashSet, dev::h512 const& _peer);
 
 private:
     /// p2p module
@@ -286,9 +249,6 @@ private:
     std::shared_ptr<std::set<h256>> m_txsHashFilter;
     /// hash of dropped transactions
     h256Hash m_dropped;
-    /// Transaction is known by some peers
-    mutable SharedMutex x_transactionKnownBy;
-    std::unordered_map<h256, std::unordered_set<h512>> m_transactionKnownBy;
 
     dev::ThreadPool::Ptr m_submitPool;
     dev::ThreadPool::Ptr m_workerPool;

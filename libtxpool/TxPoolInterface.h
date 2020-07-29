@@ -96,29 +96,12 @@ public:
     /// protocol id used when register handler to p2p module
     virtual PROTOCOL_ID const& getProtocolId() const = 0;
 
-    /// Set transaction is known by a node
-    /// param1: tx hash
-    /// param2: node id
-    virtual void setTransactionIsKnownBy(h256 const&, h512 const&){};
-
-    /// param1: the vector of txhashes
-    /// param2: the node id
-    virtual void setTransactionsAreKnownBy(std::vector<dev::h256> const&, h512 const&){};
-    virtual void setTransactionsAreKnownBy(std::set<dev::h256> const&, h512 const&){};
-
-    /// Is the transaction is known by the node ?
-    virtual bool isTransactionKnownBy(h256 const&, h512 const&) { return false; };
-
-    /// Is the transaction is known by someone
-    virtual bool isTransactionKnownBySomeone(h256 const&) { return false; };
-
     /// Register a handler that will be called once there is a new transaction imported
     template <class T>
     dev::eth::Handler<> onReady(T const& _t)
     {
         return m_onReady.add(_t);
     }
-    virtual SharedMutex& xtransactionKnownBy() = 0;
 
     /// param: transaction hash
     /// determine the given transaction hash exists in the transaction pool or not
@@ -137,7 +120,8 @@ public:
     {
         return nullptr;
     }
-    virtual std::shared_ptr<std::vector<dev::h256>> filterUnknownTxs(std::set<dev::h256> const&)
+    virtual std::shared_ptr<std::vector<dev::h256>> filterUnknownTxs(
+        std::set<dev::h256> const&, dev::h512 const&)
     {
         return nullptr;
     }

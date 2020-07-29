@@ -151,8 +151,6 @@ void SyncTransaction::broadcastTransactions(std::shared_ptr<NodeIDs> _selectedPe
     {
         consIndex = m_treeRouter->consIndex();
     }
-
-    WriteGuard l(m_txPool->xtransactionKnownBy());
     for (ssize_t i = _startIndex; i <= endIndex; ++i)
     {
         auto t = (*_ts)[i];
@@ -160,8 +158,7 @@ void SyncTransaction::broadcastTransactions(std::shared_ptr<NodeIDs> _selectedPe
 
         int64_t selectSize = _selectedPeers->size();
         // add redundancy when receive transactions from P2P
-        if ((!t->rpcTx() || m_txPool->isTransactionKnownBySomeone(t->sha3())) &&
-            !_fastForwardRemainTxs)
+        if ((!t->rpcTx() || t->isKnownBySomeone()) && !_fastForwardRemainTxs)
         {
             if (_fromRpc)
             {
@@ -179,7 +176,7 @@ void SyncTransaction::broadcastTransactions(std::shared_ptr<NodeIDs> _selectedPe
                 m_treeRouter->selectNodes(m_syncStatus->peersSet(), consIndex, true);
             randomSelectedPeersInited = true;
         }
-        // the randomSelectedPeers is empty, continue without setTransactionIsKnownBy
+        // the randomSelectedPeers is empty
         if (randomSelectedPeers->size() == 0)
         {
             randomSelectedPeersInited = false;
@@ -187,19 +184,18 @@ void SyncTransaction::broadcastTransactions(std::shared_ptr<NodeIDs> _selectedPe
         }
         peers = m_syncStatus->filterPeers(
             selectSize, randomSelectedPeers, [&](std::shared_ptr<SyncPeerStatus> _p) {
-                bool unsent =
-                    !m_txPool->isTransactionKnownBy(t->sha3(), m_nodeId) || _fastForwardRemainTxs;
+                bool unsent = !t->isTheNodeContainsTransaction(m_nodeId) || _fastForwardRemainTxs;
                 bool isSealer = _p->isSealer;
-                return isSealer && unsent && !m_txPool->isTransactionKnownBy(t->sha3(), _p->nodeId);
+                return isSealer && unsent && !t->isTheNodeContainsTransaction(_p->nodeId);
             });
 
-        m_txPool->setTransactionIsKnownBy(t->sha3(), m_nodeId);
+        t->appendNodeContainsTransaction(m_nodeId);
         if (0 == peers.size())
             continue;
         for (auto const& p : peers)
         {
             peerTransactions[p].push_back(i);
-            m_txPool->setTransactionIsKnownBy(t->sha3(), p);
+            t->appendNodeContainsTransaction(p);
         }
     }
 
@@ -271,20 +267,20 @@ void SyncTransaction::sendTxsStatus(
     unsigned expectedSelectSize = (_selectedPeers->size() * percent + 99) / 100;
     int64_t selectSize = std::min(expectedSelectSize, m_txsStatusGossipMaxPeers);
     {
-        ReadGuard l(m_txPool->xtransactionKnownBy());
         for (auto tx : *_txs)
         {
             auto peers = m_syncStatus->filterPeers(
                 selectSize, _selectedPeers, [&](std::shared_ptr<SyncPeerStatus> _p) {
-                    bool unsent = !m_txPool->isTransactionKnownBy(tx->sha3(), m_nodeId);
+                    bool unsent = !tx->isTheNodeContainsTransaction(m_nodeId);
                     bool isSealer = _p->isSealer;
-                    return isSealer && unsent &&
-                           !m_txPool->isTransactionKnownBy(tx->sha3(), _p->nodeId);
+                    return isSealer && unsent && !tx->isTheNodeContainsTransaction(_p->nodeId);
                 });
             if (peers.size() == 0)
             {
                 continue;
             }
+            tx->appendNodeListContainTransaction(peers);
+            tx->appendNodeContainsTransaction(m_nodeId);
             for (auto const& peer : peers)
             {
                 if (!m_txsHash->count(peer))
@@ -299,8 +295,6 @@ void SyncTransaction::sendTxsStatus(
     auto blockNumber = m_blockChain->number();
     for (auto const& it : *m_txsHash)
     {
-        m_txPool->setTransactionsAreKnownBy(*(it.second), it.first);
-        m_txPool->setTransactionsAreKnownBy(*(it.second), m_nodeId);
         std::shared_ptr<SyncTxsStatusPacket> txsStatusPacket =
             std::make_shared<SyncTxsStatusPacket>();
         if (it.second->size() == 0)

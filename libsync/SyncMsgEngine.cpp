@@ -385,9 +385,6 @@ void SyncMsgEngine::onPeerTxsStatus(
     {
         RLP const& rlps = _packet->rlp();
         std::set<dev::h256> txsHash = rlps[1].toSet<dev::h256>();
-        // mark the transaction as known
-        // in case of send the same transactions status to the nodes
-        m_txPool->setTransactionsAreKnownBy(txsHash, _peer);
         // pop all downloaded txs into the txPool
         while (m_txQueue->bufferSize() > 0)
         {
@@ -395,7 +392,7 @@ void SyncMsgEngine::onPeerTxsStatus(
         }
         auto blockNumber = m_blockChain->number();
         // request transaction to the peer
-        auto requestTxs = m_txPool->filterUnknownTxs(txsHash);
+        auto requestTxs = m_txPool->filterUnknownTxs(txsHash, _peer);
         if (requestTxs->size() == 0)
         {
             return;
@@ -428,10 +425,6 @@ void SyncMsgEngine::onReceiveTxsRequest(
     {
         RLP const& rlps = _txsReqPacket->rlp();
         std::vector<dev::h256> reqTxs = rlps[0].toVector<dev::h256>();
-        // mark the transactions known by the requested node and the node-self
-        // in case of send status to the same node
-        m_txPool->setTransactionsAreKnownBy(reqTxs, _peer);
-
         auto txs = m_txPool->obtainTransactions(reqTxs);
         if (0 == txs->size())
         {
@@ -441,6 +434,7 @@ void SyncMsgEngine::onReceiveTxsRequest(
         for (auto tx : *txs)
         {
             txRLPs->emplace_back(tx->rlp(WithSignature));
+            tx->appendNodeContainsTransaction(_peer);
         }
         std::shared_ptr<SyncTransactionsPacket> txsPacket =
             std::make_shared<SyncTransactionsPacket>();

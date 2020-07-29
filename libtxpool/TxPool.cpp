@@ -22,6 +22,7 @@
  * @date: 2018-09-23
  */
 #include "TxPool.h"
+#include "tbb/parallel_for_each.h"
 #include <libdevcore/Common.h>
 #include <libethcore/Exceptions.h>
 #include <libethcore/PartiallyBlock.h>
@@ -462,11 +463,6 @@ bool TxPool::drop(h256 const& _txHash)
             m_dropped.clear();
         succ = removeTrans(_txHash);
     }
-    /// drop information of transactions
-    {
-        WriteGuard l(x_transactionKnownBy);
-        removeTransactionKnowBy(_txHash);
-    }
     return succ;
 }
 
@@ -478,18 +474,6 @@ dev::eth::LocalisedTransactionReceipt::Ptr TxPool::constructTransactionReceipt(
             block.blockHeader().hash(), block.blockHeader().number(), tx->safeSender(),
             tx->receiveAddress(), index, receipt->gasUsed(), receipt->contractAddress());
     return pTxReceipt;
-}
-
-bool TxPool::removeBlockKnowTrans(Block const& block)
-{
-    if (block.getTransactionSize() == 0)
-        return true;
-    WriteGuard l(x_transactionKnownBy);
-    for (auto const& trans : *block.transactions())
-    {
-        removeTransactionKnowBy(trans->sha3());
-    }
-    return true;
 }
 
 bool TxPool::dropTransactions(std::shared_ptr<Block> block, bool)
@@ -559,14 +543,6 @@ void TxPool::removeInvalidTxs()
             }
         },
         [this]() {
-            WriteGuard l(x_transactionKnownBy);
-            // remove transaction knownBy
-            for (auto const& item : *m_invalidTxs)
-            {
-                removeTransactionKnowBy(item.second);
-            }
-        },
-        [this]() {
             WriteGuard txsLock(x_txsHashFilter);
             for (auto const& item : *m_invalidTxs)
             {
@@ -591,17 +567,12 @@ bool TxPool::dropBlockTrans(std::shared_ptr<Block> block)
 {
     TIME_RECORD(
         "dropBlockTrans, count:" + boost::lexical_cast<std::string>(block->transactions()->size()));
-
-    tbb::parallel_invoke([this, block]() { removeBlockKnowTrans(*block); },
-        [this, block]() {
-            // update the Nonces of txs
-            // (must be updated before dropTransactions to in case of sealing the same txs)
-            m_txNonceCheck->updateCache(false);
-            dropTransactions(block, true);
-            // delete the nonce cache
-            m_txpoolNonceChecker->delCache(*(block->transactions()));
-        });
-
+    // update the Nonces of txs
+    // (must be updated before dropTransactions to in case of sealing the same txs)
+    m_txNonceCheck->updateCache(false);
+    dropTransactions(block, true);
+    // delete the nonce cache
+    m_txpoolNonceChecker->delCache(*(block->transactions()));
     return true;
 }
 
@@ -683,7 +654,6 @@ std::shared_ptr<Transactions> TxPool::topTransactionsCondition(
     uint64_t limit = min(m_limit, _limit);
     {
         uint64_t txCnt = 0;
-        ReadGuard l_kownTrans(x_transactionKnownBy);
         for (auto it = m_txsQueue.begin(); txCnt < limit && it != m_txsQueue.end(); it++)
         {
             if (!(*it)->synced())
@@ -694,9 +664,6 @@ std::shared_ptr<Transactions> TxPool::topTransactionsCondition(
             }
         }
     }
-
-    // TXPOOL_LOG(DEBUG) << "topTransactionCondition done, ignore: " << ignoreCount;
-
     return ret;
 }
 
@@ -736,38 +703,6 @@ void TxPool::clear()
     m_txsQueue.clear();
     m_txsHash.clear();
     m_dropped.clear();
-    WriteGuard l_trans(x_transactionKnownBy);
-    m_transactionKnownBy.clear();
-}
-
-/// Set transaction is known by a node
-void TxPool::setTransactionIsKnownBy(h256 const& _txHash, h512 const& _nodeId)
-{
-    m_transactionKnownBy[_txHash].insert(_nodeId);
-}
-
-/// set transactions is known by a node
-void TxPool::setTransactionsAreKnownBy(
-    std::vector<dev::h256> const& _txHashVec, h512 const& _nodeId)
-{
-    markTransactionsAreKnownBy(_txHashVec, _nodeId);
-}
-
-/// Is the transaction is known by someone
-bool TxPool::isTransactionKnownBySomeone(h256 const& _txHash)
-{
-    auto p = m_transactionKnownBy.find(_txHash);
-    if (p == m_transactionKnownBy.end())
-        return false;
-    return !p->second.empty();
-}
-
-// Remove the record of transaction know by some peers
-void TxPool::removeTransactionKnowBy(h256 const& _txHash)
-{
-    auto p = m_transactionKnownBy.find(_txHash);
-    if (p != m_transactionKnownBy.end())
-        m_transactionKnownBy.erase(p);
 }
 
 std::shared_ptr<Transactions> TxPool::obtainTransactions(std::vector<dev::h256> const& _reqTxs)
@@ -784,11 +719,23 @@ std::shared_ptr<Transactions> TxPool::obtainTransactions(std::vector<dev::h256> 
     return ret;
 }
 
-std::shared_ptr<std::vector<dev::h256>> TxPool::filterUnknownTxs(
-    std::set<dev::h256> const& _txsHashSet)
+void TxPool::setTransactionKnownBy(std::set<dev::h256> const& _txsHashSet, dev::h512 const& _peer)
 {
-    std::shared_ptr<std::vector<dev::h256>> unknownTxs = std::make_shared<std::vector<dev::h256>>();
+    ReadGuard l(m_lock);
+    tbb::parallel_for_each(_txsHashSet.begin(), _txsHashSet.end(), [&](dev::h256 const& txHash) {
+        auto p_tx = m_txsHash.find(txHash);
+        if (p_tx != m_txsHash.end())
+        {
+            (*(p_tx->second))->appendNodeContainsTransaction(_peer);
+        }
+    });
+}
 
+std::shared_ptr<std::vector<dev::h256>> TxPool::filterUnknownTxs(
+    std::set<dev::h256> const& _txsHashSet, dev::h512 const& _peer)
+{
+    setTransactionKnownBy(_txsHashSet, _peer);
+    std::shared_ptr<std::vector<dev::h256>> unknownTxs = std::make_shared<std::vector<dev::h256>>();
     WriteGuard l(x_txsHashFilter);
     for (auto const& txHash : _txsHashSet)
     {
@@ -798,7 +745,10 @@ std::shared_ptr<std::vector<dev::h256>> TxPool::filterUnknownTxs(
             m_txsHashFilter->insert(txHash);
         }
     }
-
+    if (m_txsHashFilter->size() >= m_limit)
+    {
+        m_txsHashFilter->clear();
+    }
     return unknownTxs;
 }
 
@@ -859,12 +809,6 @@ void TxPool::freshTxsStatus()
         {
             tx->setSynced(false);
         }
-    }
-    // clear m_transactionKnownBy and m_txsHashFilter, so that the remaining txs can be broadcasted
-    // after changed into sealer/observer
-    {
-        WriteGuard l(x_transactionKnownBy);
-        m_transactionKnownBy.clear();
     }
     {
         WriteGuard l(x_txsHashFilter);
