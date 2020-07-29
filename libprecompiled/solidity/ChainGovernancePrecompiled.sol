@@ -16,7 +16,8 @@ contract ChainGovernancePrecompiled {
     function updateCommitteeMemberWeight(address user, int256 weight)
         public
         returns (int256);
-
+    function queryVotesOfMember(address member) public view returns (string);
+    function queryVotesOfThreshold() public view returns (string);
     // threshold [0,100)
     function updateThreshold(int256 threshold) public returns (int256);
 

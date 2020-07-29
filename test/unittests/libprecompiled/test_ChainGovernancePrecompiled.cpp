@@ -151,6 +151,16 @@ BOOST_AUTO_TEST_CASE(grant_revoke_CM)
     entries = acTable->select(SYS_TABLES, acTable->newCondition());
     BOOST_TEST(entries->size() == 0);
 
+    // queryVotesOfMember member2
+    in = abi.abiIn("queryVotesOfMember(address)", member2);
+    out = chainGovernancePrecompiled->call(context, bytesConstRef(&in), member1);
+    string votes;
+    abi.abiOut(&out->execResult(), votes);
+    BOOST_TEST(reader.parse(votes, retJson) == true);
+    BOOST_TEST(retJson["revoke"].size() == 0);
+    BOOST_TEST(retJson["grant"].size() == 0);
+    BOOST_TEST(retJson["update_weight"].size() == 0);
+
     // grantCommitteeMember member2
     in = abi.abiIn("grantCommitteeMember(address)", member2);
     out = chainGovernancePrecompiled->call(context, bytesConstRef(&in), member1);
@@ -173,6 +183,17 @@ BOOST_AUTO_TEST_CASE(grant_revoke_CM)
     ret = 0;
     abi.abiOut(&out->execResult(), ret);
     BOOST_TEST(ret == 0);
+
+    auto in2 = abi.abiIn("queryVotesOfMember(address)", member3);
+    out = chainGovernancePrecompiled->call(context, bytesConstRef(&in2), member1);
+    abi.abiOut(&out->execResult(), votes);
+    BOOST_TEST(reader.parse(votes, retJson) == true);
+    BOOST_TEST(retJson["revoke"].size() == 0);
+    BOOST_TEST(retJson["grant"].size() == 1);
+    BOOST_TEST(retJson["grant"][(Json::ArrayIndex)0]["block_limit"].asString() == "10000");
+    BOOST_TEST(retJson["grant"][(Json::ArrayIndex)0]["origin"].asString() == member1.hexPrefixed());
+    BOOST_TEST(retJson["update_weight"].size() == 0);
+
     // member1 grant member2 again, but should not work
     out = chainGovernancePrecompiled->call(context, bytesConstRef(&in), member1);
     ret = 0;
@@ -191,6 +212,19 @@ BOOST_AUTO_TEST_CASE(grant_revoke_CM)
     ret = 0;
     abi.abiOut(&out->execResult(), ret);
     BOOST_TEST(ret == 0);
+
+    // queryVotesOfMember member3
+    in2 = abi.abiIn("queryVotesOfMember(address)", member3);
+    out = chainGovernancePrecompiled->call(context, bytesConstRef(&in2), member1);
+    abi.abiOut(&out->execResult(), votes);
+    BOOST_TEST(reader.parse(votes, retJson) == true);
+    BOOST_TEST(retJson["revoke"].size() == 1);
+    BOOST_TEST(retJson["revoke"][(Json::ArrayIndex)0]["block_limit"].asString() == "10000");
+    BOOST_TEST(
+        retJson["revoke"][(Json::ArrayIndex)0]["origin"].asString() == member1.hexPrefixed());
+    BOOST_TEST(retJson["grant"].size() == 0);
+    BOOST_TEST(retJson["update_weight"].size() == 0);
+
     out = chainGovernancePrecompiled->call(context, bytesConstRef(&in), member2);
     ret = 0;
     abi.abiOut(&out->execResult(), ret);
@@ -225,6 +259,18 @@ BOOST_AUTO_TEST_CASE(grant_revoke_CM)
     BOOST_TEST(ret == 0);
     entries = acTable->select(SYS_ACCESS_TABLE, acTable->newCondition());
     BOOST_TEST(entries->size() == 2u);
+
+    // queryVotesOfMember member2
+    in2 = abi.abiIn("queryVotesOfMember(address)", member2);
+    out = chainGovernancePrecompiled->call(context, bytesConstRef(&in2), member2);
+    abi.abiOut(&out->execResult(), votes);
+    BOOST_TEST(reader.parse(votes, retJson) == true);
+    BOOST_TEST(retJson["revoke"].size() == 1);
+    BOOST_TEST(retJson["revoke"][(Json::ArrayIndex)0]["block_limit"].asString() == "10000");
+    BOOST_TEST(
+        retJson["revoke"][(Json::ArrayIndex)0]["origin"].asString() == member1.hexPrefixed());
+    BOOST_TEST(retJson["grant"].size() == 0);
+    BOOST_TEST(retJson["update_weight"].size() == 0);
 
     // expired votes is deleted, so member vote will not make member2 to be revoke
     blockInfo.hash = h256(0);
@@ -303,6 +349,21 @@ BOOST_AUTO_TEST_CASE(updateCommitteeMemberWeight)
     ret = 0;
     abi.abiOut(&out->execResult(), ret);
     BOOST_TEST(ret == 0);
+    // queryVotesOfMember member1
+    auto in2 = abi.abiIn("queryVotesOfMember(address)", member1);
+    out = chainGovernancePrecompiled->call(context, bytesConstRef(&in2), member2);
+    string votes;
+    abi.abiOut(&out->execResult(), votes);
+    Json::Value retJson;
+    Json::Reader reader;
+    BOOST_TEST(reader.parse(votes, retJson) == true);
+    BOOST_TEST(retJson["revoke"].size() == 0);
+    BOOST_TEST(retJson["grant"].size() == 0);
+    BOOST_TEST(retJson["update_weight"].size() == 1);
+    BOOST_TEST(retJson["update_weight"][(Json::ArrayIndex)0]["block_limit"].asString() == "10000");
+    BOOST_TEST(retJson["update_weight"][(Json::ArrayIndex)0]["origin"].asString() ==
+               member1.hexPrefixed());
+
     out = chainGovernancePrecompiled->call(context, bytesConstRef(&in), member2);
     ret = 0;
     abi.abiOut(&out->execResult(), ret);
@@ -376,6 +437,20 @@ BOOST_AUTO_TEST_CASE(updateThreshold)
     ret = 0;
     abi.abiOut(&out->execResult(), ret);
     BOOST_TEST(ret == 0);
+    // queryVotesOfMember member2
+    auto in2 = abi.abiIn("queryVotesOfThreshold()", member1);
+    out = chainGovernancePrecompiled->call(context, bytesConstRef(&in2), member2);
+    string votes;
+    abi.abiOut(&out->execResult(), votes);
+    Json::Value retJson;
+    Json::Reader reader;
+    BOOST_TEST(reader.parse(votes, retJson) == true);
+    BOOST_TEST(retJson.size() == 1);
+    BOOST_TEST(retJson["0.400000"].size() == 1);
+    BOOST_TEST(retJson["0.400000"][(Json::ArrayIndex)0]["block_limit"].asString() == "10000");
+    BOOST_TEST(
+        retJson["0.400000"][(Json::ArrayIndex)0]["origin"].asString() == member1.hexPrefixed());
+
     out = chainGovernancePrecompiled->call(context, bytesConstRef(&in), member2);
     ret = 0;
     abi.abiOut(&out->execResult(), ret);
