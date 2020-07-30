@@ -173,7 +173,7 @@ private:
 
     void broadcastTransactions(std::shared_ptr<dev::p2p::NodeIDs> _selectedPeers,
         std::shared_ptr<dev::eth::Transactions> _ts, bool const& _fastForwardRemainTxs,
-        int64_t const& _startIndex, bool const& _fromRpc);
+        int64_t const& _startIndex);
 
     void sendTransactions(std::shared_ptr<dev::eth::Transactions> _ts,
         bool const& _fastForwardRemainTxs, int64_t const& _startIndex);
