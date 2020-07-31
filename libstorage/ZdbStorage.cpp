@@ -69,11 +69,24 @@ Entries::Ptr ZdbStorage::select(
         Entry::Ptr entry = std::make_shared<Entry>();
         for (auto it2 : it)
         {
-            entry->setField(it2.first, it2.second);
+            if (it2.first == ID_FIELD)
+            {
+                entry->setID(it2.second);
+            }
+            else if (it2.first == NUM_FIELD)
+            {
+                entry->setNum(it2.second);
+            }
+            else if (it2.first == STATUS)
+            {
+                entry->setStatus(it2.second);
+            }
+            else
+            {
+                entry->setField(it2.first, it2.second);
+            }
         }
-        entry->setID(it.at(ID_FIELD));
-        entry->setNum(it.at(NUM_FIELD));
-        entry->setStatus(it.at(STATUS));
+
         if (entry->getStatus() == 0)
         {
             entry->setDirty(false);

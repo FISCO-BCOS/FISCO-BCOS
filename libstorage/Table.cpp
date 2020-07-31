@@ -318,7 +318,7 @@ void Entry::setDeleted(bool deleted)
 }
 
 ssize_t Entry::capacity() const
-{
+{ // the capacity is used to calculate gas, must return the same value in different DB
     RWMutexScoped lock(m_data->m_mutex, false);
     return m_capacity;
 }
