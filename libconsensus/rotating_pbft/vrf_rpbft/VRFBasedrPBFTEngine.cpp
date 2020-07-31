@@ -114,10 +114,9 @@ void VRFBasedrPBFTEngine::updateConsensusNodeList()
 void VRFBasedrPBFTEngine::tryToForwardRemainingTxs(
     std::set<dev::h512> const& _lastEpochWorkingSealers)
 {
-    // the node is one working sealer of the last epoch
-    // while not the working sealer of this epoch
+    // the node is not the working sealer of this epoch
     auto nodeId = m_keyPair.pub();
-    if (!_lastEpochWorkingSealers.count(nodeId) || m_chosedConsensusNodes->count(nodeId))
+    if (m_chosedConsensusNodes->count(nodeId))
     {
         return;
     }

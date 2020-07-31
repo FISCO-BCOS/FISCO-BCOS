@@ -126,7 +126,7 @@ void SyncTransaction::sendTransactions(std::shared_ptr<Transactions> _ts,
     }
 
     // send the transactions from RPC
-    broadcastTransactions(selectedPeers, _ts, _fastForwardRemainTxs, _startIndex, true);
+    broadcastTransactions(selectedPeers, _ts, _fastForwardRemainTxs, _startIndex);
     if (!_fastForwardRemainTxs && m_running.load())
     {
         // Added sleep to prevent excessive redundant transaction message packets caused by
@@ -138,7 +138,7 @@ void SyncTransaction::sendTransactions(std::shared_ptr<Transactions> _ts,
 
 void SyncTransaction::broadcastTransactions(std::shared_ptr<NodeIDs> _selectedPeers,
     std::shared_ptr<Transactions> _ts, bool const& _fastForwardRemainTxs,
-    int64_t const& _startIndex, bool const& _fromRpc)
+    int64_t const& _startIndex)
 {
     unordered_map<NodeID, std::vector<size_t>> peerTransactions;
     auto endIndex =
@@ -160,17 +160,9 @@ void SyncTransaction::broadcastTransactions(std::shared_ptr<NodeIDs> _selectedPe
         // add redundancy when receive transactions from P2P
         if ((!t->rpcTx() || t->isKnownBySomeone()) && !_fastForwardRemainTxs)
         {
-            if (_fromRpc)
-            {
-                continue;
-            }
-            else
-            {
-                unsigned percent = 25;
-                selectSize = (selectSize * percent + 99) / 100;
-            }
+            continue;
         }
-        if (_fromRpc && m_treeRouter && !randomSelectedPeersInited && !_fastForwardRemainTxs)
+        if (m_treeRouter && !randomSelectedPeersInited && !_fastForwardRemainTxs)
         {
             randomSelectedPeers =
                 m_treeRouter->selectNodes(m_syncStatus->peersSet(), consIndex, true);
@@ -212,7 +204,7 @@ void SyncTransaction::broadcastTransactions(std::shared_ptr<NodeIDs> _selectedPe
 
 
         std::shared_ptr<SyncTransactionsPacket> packet = std::make_shared<SyncTransactionsPacket>();
-        if (m_treeRouter && _fromRpc)
+        if (m_treeRouter)
         {
             packet->encode(txRLPs, true, consIndex);
         }
@@ -220,16 +212,14 @@ void SyncTransaction::broadcastTransactions(std::shared_ptr<NodeIDs> _selectedPe
         {
             packet->encode(txRLPs);
         }
-
-        auto msg = packet->toMessage(m_protocolId, _fromRpc);
+        auto msg = packet->toMessage(m_protocolId, (!_fastForwardRemainTxs));
         m_service->asyncSendMessageByNodeID(_p->nodeId, msg, CallbackFuncWithSession(), Options());
         SYNC_LOG(DEBUG) << LOG_BADGE("Tx") << LOG_DESC("Send transaction to peer")
                         << LOG_KV("txNum", int(txsSize))
                         << LOG_KV("fastForwardRemainTxs", _fastForwardRemainTxs)
                         << LOG_KV("startIndex", _startIndex)
                         << LOG_KV("toNodeId", _p->nodeId.abridged())
-                        << LOG_KV("messageSize(B)", msg->buffer()->size())
-                        << LOG_KV("fromRpc", _fromRpc);
+                        << LOG_KV("messageSize(B)", msg->buffer()->size());
         return true;
     });
 }
@@ -249,6 +239,11 @@ void SyncTransaction::forwardRemainingTxs()
     {
         sendTransactions(ts, m_needForwardRemainTxs, startIndex);
         startIndex += c_maxSendTransactions;
+    }
+    for (auto const& targetNode : *m_fastForwardedNodes)
+    {
+        SYNC_LOG(DEBUG) << LOG_DESC("forwardRemainingTxs") << LOG_KV("txsSize", currentTxsSize)
+                        << LOG_KV("targetNode", targetNode.abridged());
     }
     m_needForwardRemainTxs = false;
     m_fastForwardedNodes->clear();
