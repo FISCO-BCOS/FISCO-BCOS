@@ -96,8 +96,9 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
 
     # Additional GCC-specific compiler settings.
     if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
-
-        add_compile_options(-Wa,-march=generic64)
+        if(NOT ARCH_NATIVE)
+            add_compile_options(-Wa,-march=generic64)
+        endif()
         # Check that we've got GCC 4.7 or newer.
         execute_process(
             COMMAND ${CMAKE_CXX_COMPILER} -dumpversion OUTPUT_VARIABLE GCC_VERSION)
