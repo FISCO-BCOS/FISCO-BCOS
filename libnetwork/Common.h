@@ -204,12 +204,9 @@ struct NodeIPEndpoint
     NodeIPEndpoint(bi::address _addr, uint16_t _port)
       : m_host(_addr.to_string()), m_port(_port), m_ipv6(_addr.is_v6())
     {}
-    NodeIPEndpoint(const NodeIPEndpoint& _nodeIPEndpoint)
-    {
-        m_host = _nodeIPEndpoint.m_host;
-        m_port = _nodeIPEndpoint.m_port;
-        m_ipv6 = _nodeIPEndpoint.m_ipv6;
-    }
+
+    virtual ~NodeIPEndpoint() = default;
+    NodeIPEndpoint(const NodeIPEndpoint& _nodeIPEndpoint) = default;
     NodeIPEndpoint(const boost::asio::ip::tcp::endpoint& _endpoint)
     {
         m_host = _endpoint.address().to_string();

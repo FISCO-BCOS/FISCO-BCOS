@@ -19,38 +19,43 @@
 
 include(ExternalProject)
 
-set(VRF_SHA256 02f1e26203c5f6406abbecc4141834e77eb7063e6c93f9318ca08f944c57ea5e)
-set(VRF_LIB_SUFFIX a)
+if("${CMAKE_HOST_SYSTEM_NAME}" MATCHES "Linux")
+    EXECUTE_PROCESS(COMMAND uname -m COMMAND tr -d '\n' OUTPUT_VARIABLE ARCHITECTURE)
+    if("${ARCHITECTURE}" MATCHES "aarch64")
+        set(VRF_LIB_NAME libffi_vrf_aarch64.a)
+    else()
+        set(VRF_LIB_NAME libffi_vrf_generic64.a)
+    endif()
+elseif(APPLE)
+    set(VRF_LIB_NAME libffi_vrf_mac.a)
+else()
+    message(FATAL "unsupported platform")
+endif()
 
-ExternalProject_Add(vrf
+ExternalProject_Add(libvrf
     PREFIX ${CMAKE_SOURCE_DIR}/deps
-    DOWNLOAD_NAME vrf.tgz
+    DOWNLOAD_NAME libvrf.tar.gz
     DOWNLOAD_NO_PROGRESS 1
+    URL https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/libvrf.tar.gz
+    URL_HASH SHA256=c67ec43606137c82853bbf816c88990988c51ac99c8c83ccd6defa7c382a39ec
     BUILD_IN_SOURCE 1
     LOG_CONFIGURE 1
     LOG_BUILD 1
     LOG_INSTALL 1
-    URL https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/vrf.tgz
-        https://www.fisco.com.cn/cdn/deps/libs/vrf.tgz
-    URL_HASH SHA256=${VRF_SHA256}
     CONFIGURE_COMMAND ""
     BUILD_COMMAND ""
-    INSTALL_COMMAND bash -c "/bin/cp ${CMAKE_SOURCE_DIR}/deps/src/vrf/*${VRF_LIB_SUFFIX} ${CMAKE_SOURCE_DIR}/deps/lib/"
+    INSTALL_COMMAND bash -c "/bin/cp ${CMAKE_SOURCE_DIR}/deps/src/libvrf/${VRF_LIB_NAME} ${CMAKE_SOURCE_DIR}/deps/lib/libffi_vrf.a"
 )
 
-ExternalProject_Get_Property(vrf SOURCE_DIR)
+ExternalProject_Get_Property(libvrf SOURCE_DIR)
 add_library(VRF STATIC IMPORTED)
 
 set(VRF_INCLUDE_DIR ${SOURCE_DIR}/include)
 file(MAKE_DIRECTORY ${VRF_INCLUDE_DIR})  # Must exist.
 
-if (APPLE)
-    set(VRF_LIB "${CMAKE_SOURCE_DIR}/deps/lib/libffi_vrf_mac.${VRF_LIB_SUFFIX}")
-else()
-    set(VRF_LIB "${CMAKE_SOURCE_DIR}/deps/lib/libffi_vrf.${VRF_LIB_SUFFIX}")
-endif()
+set(VRF_LIB "${CMAKE_SOURCE_DIR}/deps/lib/libffi_vrf.a")
 
 set_property(TARGET VRF PROPERTY IMPORTED_LOCATION ${VRF_LIB})
 set_property(TARGET VRF PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${VRF_INCLUDE_DIR})
-add_dependencies(VRF vrf)
+add_dependencies(VRF libvrf)
 unset(SOURCE_DIR)

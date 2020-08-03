@@ -390,7 +390,7 @@ public:
     {}
     explicit SecureFixedHash(bytes const* _d, ConstructFromPointerType _t) : FixedHash<T>(_d, _t) {}
     ~SecureFixedHash() { ref().cleanse(); }
-
+    SecureFixedHash(SecureFixedHash<T> const& _c) = default;
     SecureFixedHash<T>& operator=(SecureFixedHash<T> const& _c)
     {
         if (&_c == this)

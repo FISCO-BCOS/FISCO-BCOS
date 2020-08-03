@@ -132,7 +132,42 @@ jobs:
       - name: install ubuntu dependencies
         run: sudo apt install -y git curl build-essential clang cmake openssl libssl-dev zlib1g-dev ccache libgmp-dev flex bison
       - name: configure
-        run: cmake .
+        run: cmake . -DARCH_NATIVE=on
+      - name: compile
+        run: make -j2
+      - name: run integration testing
+        run: cd tools && bash ci/ci_check.sh
+
+  ubuntu20_integration_test:
+    name: ubuntu20_test
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 5
+      - uses: actions/cache@v2
+        id: cache
+        with:
+          path: deps/src
+          key: deps-v0-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          restore-keys: |
+            deps-v0-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            deps-v0-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            deps-v0-notest-${{ runner.temp }}-
+            deps-v0-${{ runner.temp }}-
+      - uses: actions/cache@v2
+        id: ccache
+        with:
+          path: ccache
+          key: ccache-v0-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          restore-keys: |
+            ccache-v0-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            ccache-v0-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            ccache-v0-notest-${{ runner.temp }}-
+      - name: install ubuntu dependencies
+        run: sudo apt install -y git curl build-essential clang cmake openssl libssl-dev zlib1g-dev ccache libgmp-dev flex bison
+      - name: configure
+        run: cmake . -DARCH_NATIVE=on
       - name: compile
         run: make -j2
       - name: run integration testing

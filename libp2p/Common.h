@@ -38,11 +38,8 @@ struct P2PSessionInfo
     P2PSessionInfo(dev::network::NodeInfo const& _nodeInfo,
         dev::network::NodeIPEndpoint const& _nodeIPEndpoint,
         std::set<dev::TopicItem> const& _topics)
-    {
-        nodeInfo = _nodeInfo;
-        nodeIPEndpoint = _nodeIPEndpoint;
-        topics = _topics;
-    }
+      : nodeInfo(_nodeInfo), nodeIPEndpoint(_nodeIPEndpoint), topics(_topics)
+    {}
 
     NodeID const& nodeID() const { return nodeInfo.nodeID; }
 };
