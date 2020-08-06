@@ -808,6 +808,7 @@ void TxPool::freshTxsStatus()
         for (auto const& tx : m_txsQueue)
         {
             tx->setSynced(false);
+            tx->clearNodeTransactionMarker();
         }
     }
     {

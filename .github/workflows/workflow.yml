@@ -124,11 +124,11 @@ jobs:
         id: ccache
         with:
           path: ccache
-          key: ccache-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: ccache-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            ccache-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            ccache-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            ccache-v1-notest-${{ runner.temp }}-
+            ccache-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            ccache-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            ccache-v2-notest-${{ runner.temp }}-
       - name: install ubuntu dependencies
         run: sudo apt install -y git curl build-essential clang cmake openssl libssl-dev zlib1g-dev ccache libgmp-dev flex bison
       - name: configure
