@@ -100,6 +100,12 @@ public:
         return !m_nodeListWithTheTransaction.empty();
     }
 
+    void clear()
+    {
+        WriteGuard l(x_nodeListWithTheTransaction);
+        m_nodeListWithTheTransaction.clear();
+    }
+
 private:
     mutable dev::SharedMutex x_nodeListWithTheTransaction;
     // Record the node where the transaction exists
@@ -345,6 +351,8 @@ public:
         return m_nodeTransactionMarker.isTheNodeContainsTransaction(_node);
     }
     bool isKnownBySomeone() { return m_nodeTransactionMarker.isKnownBySomeone(); }
+
+    void clearNodeTransactionMarker() { m_nodeTransactionMarker.clear(); }
 
 protected:
     static bool isZeroSignature(u256 const& _r, u256 const& _s) { return !_r && !_s; }

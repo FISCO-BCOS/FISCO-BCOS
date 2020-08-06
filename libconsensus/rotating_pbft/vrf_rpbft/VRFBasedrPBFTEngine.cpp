@@ -116,6 +116,7 @@ void VRFBasedrPBFTEngine::tryToForwardRemainingTxs(
 {
     // the node is not the working sealer of this epoch
     auto nodeId = m_keyPair.pub();
+    ReadGuard l(x_chosedConsensusNodes);
     if (m_chosedConsensusNodes->count(nodeId))
     {
         return;
@@ -126,11 +127,34 @@ void VRFBasedrPBFTEngine::tryToForwardRemainingTxs(
     {
         if (!_lastEpochWorkingSealers.count(workingSealer))
         {
-            m_blockSync->noteForwardRemainTxs(workingSealer);
-            RPBFTENGINE_LOG(DEBUG) << LOG_DESC("noteForwardRemainTxs after the node rotating out")
-                                   << LOG_KV("blkNumber", m_highestBlock.number())
-                                   << LOG_KV("chosedOutWorkingSealer", m_idx)
-                                   << LOG_KV("chosedInWorkingSealer", workingSealer.abridged());
+            // the rotated-in workingSealer is connected with this node
+            if (m_service->isConnected(workingSealer))
+            {
+                m_blockSync->noteForwardRemainTxs(workingSealer);
+                RPBFTENGINE_LOG(DEBUG)
+                    << LOG_DESC("noteForwardRemainTxs after the node rotating out")
+                    << LOG_KV("blkNumber", m_highestBlock.number())
+                    << LOG_KV("chosedOutWorkingSealer", m_idx)
+                    << LOG_KV("chosedInWorkingSealer", workingSealer.abridged());
+            }
+            // the rotated-in workingSealer is not connected with the node
+            else
+            {
+                for (auto const& selectedWorkingSealer : *m_chosedConsensusNodes)
+                {
+                    if (m_service->isConnected(selectedWorkingSealer))
+                    {
+                        m_blockSync->noteForwardRemainTxs(selectedWorkingSealer);
+                        RPBFTENGINE_LOG(DEBUG)
+                            << LOG_DESC("the rotated-in workingSealer is not connected with myself")
+                            << LOG_DESC("select a workingSealer to noteForwardRemainTxs")
+                            << LOG_KV("blkNumber", m_highestBlock.number())
+                            << LOG_KV("chosedOutWorkingSealer", m_idx)
+                            << LOG_KV("selectedWorkingSealer", selectedWorkingSealer.abridged());
+                        break;
+                    }
+                }
+            }
         }
     }
 }
