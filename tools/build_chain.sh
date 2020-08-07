@@ -260,7 +260,15 @@ if [ -n "${guomi_mode}" ]; then
             curl -#LO https://github.com/FISCO-BCOS/LargeFiles/raw/master/tools/tassl_mac.tar.gz
             mv tassl_mac.tar.gz tassl.tar.gz
         else
-            curl -#LO https://github.com/FISCO-BCOS/LargeFiles/raw/master/tools/tassl.tar.gz
+            if [[ "$(uname -p)" == "aarch64" ]];then
+                curl -#LO https://github.com/FISCO-BCOS/LargeFiles/raw/master/tools/tassl-aarch64.tar.gz
+                mv tassl-aarch64.tar.gz tassl.tar.gz
+            elif [[ "$(uname -p)" == "x86_64" ]];then
+                curl -#LO https://github.com/FISCO-BCOS/LargeFiles/raw/master/tools/tassl.tar.gz
+            else
+                LOG_ERROR "Unsupported platform"
+                exit 1
+            fi
         fi
         tar zxvf tassl.tar.gz && rm tassl.tar.gz
         chmod u+x tassl
