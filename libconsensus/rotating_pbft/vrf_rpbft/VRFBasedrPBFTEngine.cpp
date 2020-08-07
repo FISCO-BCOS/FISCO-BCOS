@@ -33,7 +33,12 @@ void VRFBasedrPBFTEngine::setShouldRotateSealers(bool _shouldRotateSealers)
 // Working sealer is elected as leader in turn
 IDXTYPE VRFBasedrPBFTEngine::selectLeader() const
 {
-    int64_t selectedIdx = ((m_view + m_highestBlock.number()) % m_workingSealersNum);
+    // the m_chosedSealerList has not been initialized yet
+    if (m_chosedSealerList->size() == 0)
+    {
+        return MAXIDX;
+    }
+    int64_t selectedIdx = ((m_view + m_highestBlock.number()) % m_chosedSealerList->size());
     dev::h512 selectedNodeId;
     {
         ReadGuard l(x_chosedSealerList);
@@ -50,6 +55,13 @@ void VRFBasedrPBFTEngine::updateConsensusNodeList()
     ConsensusEngineBase::updateConsensusNodeList();
     // update chosedConsensusNode and x_chosedSealerList
     auto workingSealers = m_blockChain->workingSealerList();
+    // make sure the size of workingSealer is non-empty
+    // In some scenarios, the number of workingSealers will be 0,
+    // such as the scenario where the last workingSealer is added as sealer
+    if (workingSealers.size() == 0)
+    {
+        workingSealers.push_back(m_sealerList[0]);
+    }
     std::sort(workingSealers.begin(), workingSealers.end());
 
     UpgradableGuard l(x_chosedSealerList);
