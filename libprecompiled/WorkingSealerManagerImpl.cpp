@@ -276,7 +276,10 @@ void WorkingSealerManagerImpl::checkVRFInfos()
     }
     getSealerList();
     // check origin: the origin must be among the workingSealerList
-    checkPermission(m_origin, *m_workingSealerList);
+    if (m_workingSealerList->size() > 0)
+    {
+        checkPermission(m_origin, *m_workingSealerList);
+    }
 }
 
 // notify the next leader rotate when checkVRFInfos failed
