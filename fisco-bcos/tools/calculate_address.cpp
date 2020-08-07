@@ -28,9 +28,11 @@ int main(int argc, char** argv)
 
     if (useSMCrypto)
     {
-        crypto::initSMCrypto();
+        auto addr = right160(sm3(bytesConstRef((const unsigned char*)source.data(), 64)));
+        cout << addr << endl;
+        return 0;
     }
-    auto addr = right160(crypto::Hash(bytesConstRef((const unsigned char*)source.data(), 64)));
+    auto addr = right160(sha3(bytesConstRef((const unsigned char*)source.data(), 64)));
     cout << addr << endl;
     return 0;
 }
