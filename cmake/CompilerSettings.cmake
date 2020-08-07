@@ -96,19 +96,15 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
 
     # Additional GCC-specific compiler settings.
     if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
+        # Check that we've got GCC 5.4 or newer.
+        execute_process(
+            COMMAND ${CMAKE_CXX_COMPILER} -dumpversion OUTPUT_VARIABLE GCC_VERSION)
+        if (NOT (GCC_VERSION VERSION_GREATER 5.4 OR GCC_VERSION VERSION_EQUAL 5.4))
+            message(FATAL_ERROR "${PROJECT_NAME} requires g++ 5.4 or greater. Current is ${GCC_VERSION}")
+        endif ()
         if(NOT ARCH_NATIVE)
             add_compile_options(-Wa,-march=generic64)
         endif()
-        # Check that we've got GCC 4.7 or newer.
-        execute_process(
-            COMMAND ${CMAKE_CXX_COMPILER} -dumpversion OUTPUT_VARIABLE GCC_VERSION)
-        if (NOT (GCC_VERSION VERSION_GREATER 4.7 OR GCC_VERSION VERSION_EQUAL 4.7))
-            message(FATAL_ERROR "${PROJECT_NAME} requires g++ 4.7 or greater.")
-        endif ()
-        if (GCC_VERSION VERSION_LESS 5.0)
-            add_compile_options(-Wno-unused-variable)
-            add_compile_options(-Wno-missing-field-initializers)
-        endif ()
 		set(CMAKE_C_FLAGS "-std=c99")
 
 		# Strong stack protection was only added in GCC 4.9.
