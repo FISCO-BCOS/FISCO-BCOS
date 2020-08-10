@@ -111,6 +111,14 @@ public:
                                    jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, "param1",
                                    jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_STRING, NULL),
             &dev::rpc::RpcFace::getTransactionReceiptI);
+        this->bindAndAddMethod(jsonrpc::Procedure("getBlockTransactionReceipts",
+                                   jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, "param1",
+                                   jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_STRING, "param3", jsonrpc::JSON_INTEGER, "param4", jsonrpc::JSON_INTEGER, NULL),
+            &dev::rpc::RpcFace::getBlockTransactionReceiptsI);
+        this->bindAndAddMethod(jsonrpc::Procedure("getBlockTransactionReceiptsByHash",
+                                   jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, "param1",
+                                   jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_STRING, "param3", jsonrpc::JSON_INTEGER, "param4", jsonrpc::JSON_INTEGER, NULL),
+            &dev::rpc::RpcFace::getBlockTransactionReceiptsByHashI);
         this->bindAndAddMethod(
             jsonrpc::Procedure("getPendingTransactions", jsonrpc::PARAMS_BY_POSITION,
                 jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
@@ -244,6 +252,16 @@ public:
         response = this->getTransactionReceipt(
             boost::lexical_cast<int>(request[0u].asString()), request[1u].asString());
     }
+    inline virtual void getBlockTransactionReceiptsI(const Json::Value& request, Json::Value& response)
+    {
+        response = this->getBlockTransactionReceipts(
+            boost::lexical_cast<int>(request[0u].asString()), request[1u].asString(), boost::lexical_cast<int>(request[2u].asString()), boost::lexical_cast<int>(request[3u].asString()));
+    }
+    inline virtual void getBlockTransactionReceiptsByHashI(const Json::Value& request, Json::Value& response)
+    {
+        response = this->getBlockTransactionReceiptsByHash(
+            boost::lexical_cast<int>(request[0u].asString()), request[1u].asString(), boost::lexical_cast<int>(request[2u].asString()), boost::lexical_cast<int>(request[3u].asString()));
+    }
     inline virtual void getPendingTransactionsI(const Json::Value& request, Json::Value& response)
     {
         response = this->getPendingTransactions(boost::lexical_cast<int>(request[0u].asString()));
@@ -324,6 +342,9 @@ public:
     /// @return the receipt of a transaction by transaction hash.
     /// @note That the receipt is not available for pending transactions.
     virtual Json::Value getTransactionReceipt(int param1, const std::string& param2) = 0;
+
+    virtual Json::Value getBlockTransactionReceipts(int param1, const std::string& param2, int param3, int param4) = 0;
+    virtual Json::Value getBlockTransactionReceiptsByHash(int param1, const std::string& param2, int param3, int param4) = 0;
     /// @return information about PendingTransactions.
     virtual Json::Value getPendingTransactions(int param1) = 0;
     /// @return size about PendingTransactions.

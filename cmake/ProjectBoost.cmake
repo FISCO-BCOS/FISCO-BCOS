@@ -35,11 +35,11 @@ set(BOOST_LIBRARY_SUFFIX .a)
 
 set(BOOST_LIB_PREFIX ${CMAKE_SOURCE_DIR}/deps/src/boost/stage/lib/libboost_)
 set(BOOST_BUILD_FILES ${BOOST_LIB_PREFIX}chrono.a ${BOOST_LIB_PREFIX}date_time.a
-        ${BOOST_LIB_PREFIX}random.a ${BOOST_LIB_PREFIX}regex.a 
-        ${BOOST_LIB_PREFIX}filesystem.a ${BOOST_LIB_PREFIX}system.a 
+        ${BOOST_LIB_PREFIX}random.a ${BOOST_LIB_PREFIX}regex.a
+        ${BOOST_LIB_PREFIX}filesystem.a ${BOOST_LIB_PREFIX}system.a
         ${BOOST_LIB_PREFIX}unit_test_framework.a ${BOOST_LIB_PREFIX}log.a
-        ${BOOST_LIB_PREFIX}thread.a ${BOOST_LIB_PREFIX}program_options.a 
-        ${BOOST_LIB_PREFIX}serialization.a)
+        ${BOOST_LIB_PREFIX}thread.a ${BOOST_LIB_PREFIX}program_options.a
+        ${BOOST_LIB_PREFIX}serialization.a  ${BOOST_LIB_PREFIX}iostreams.a)
 
 ExternalProject_Add(boost
     PREFIX ${CMAKE_SOURCE_DIR}/deps
@@ -66,6 +66,8 @@ ExternalProject_Add(boost
         --with-serialization
         --with-program_options
         --with-log
+        --with-iostreams
+        -s NO_BZIP2=1 -s NO_LZMA=1 -s NO_ZSTD=1
         -j${CORES}
     LOG_BUILD 1
     LOG_INSTALL 1
@@ -136,5 +138,10 @@ add_library(Boost::Serialization STATIC IMPORTED GLOBAL)
 set_property(TARGET Boost::Serialization PROPERTY IMPORTED_LOCATION ${BOOST_LIB_DIR}/libboost_serialization${BOOST_LIBRARY_SUFFIX})
 set_property(TARGET Boost::Serialization PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${BOOST_INCLUDE_DIR})
 add_dependencies(Boost::Serialization boost)
+
+add_library(Boost::iostreams STATIC IMPORTED GLOBAL)
+set_property(TARGET Boost::iostreams PROPERTY IMPORTED_LOCATION ${BOOST_LIB_DIR}/libboost_iostreams${BOOST_LIBRARY_SUFFIX})
+set_property(TARGET Boost::iostreams PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${BOOST_INCLUDE_DIR})
+add_dependencies(Boost::iostreams boost)
 
 unset(SOURCE_DIR)

@@ -19,11 +19,11 @@
  * @date 2018-10-27
  */
 #include "FakeModule.h"
-
 #include <jsonrpccpp/common/exception.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/CommonJS.h>
 #include <librpc/Rpc.h>
+#include <librpc/Common.h>
 #include <test/tools/libutils/Common.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
@@ -70,6 +70,21 @@ public:
 };
 
 BOOST_FIXTURE_TEST_SUITE(RpcTest, RpcTestFixure)
+BOOST_AUTO_TEST_CASE(test_compress)
+{
+    std::string data("abcdefg1234567");
+    auto compressedData = compress(data);
+    auto decompressData = decompress(compressedData);
+    BOOST_CHECK(decompressData == data);
+}
+BOOST_AUTO_TEST_CASE(test_base64)
+{
+    std::string data("abcdefg1234567");
+    auto compressedData = base64Encode(data);
+    auto decompressData = base64Decode(compressedData);
+    BOOST_CHECK(decompressData == data);
+}
+
 #ifdef FISCO_GM
 BOOST_AUTO_TEST_CASE(GM_testConsensusPart)
 {

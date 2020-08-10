@@ -919,6 +919,124 @@ Json::Value Rpc::getTransactionReceipt(int _groupID, const std::string& _transac
     }
 }
 
+Json::Value Rpc::getReceiptsOfBlock(std::shared_ptr<dev::eth::Block> _blcok, int _from, int _count)
+{
+        size_t startIndex = _from;
+        size_t endIndex = startIndex + _count;
+        auto transactions = _blcok->transactions();
+        auto receipts = _blcok->transactionReceipts();
+        if (startIndex >= transactions->size() || startIndex >= receipts->size())
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(-40099, "start index out of range, the number of receipt is " +
+                                             std::to_string(receipts->size())));
+        }
+        Json::Value blockInfo;
+        blockInfo["receiptRoot"] = toJS(_blcok->receiptRoot());
+        blockInfo["blockNumber"] = toJS(_blcok->blockHeader().number());
+        blockInfo["blockHash"] = toJS(_blcok->headerHash());
+        blockInfo["receiptsCount"] = toJS(receipts->size());
+        Json::Value response;
+        response["blockInfo"] = blockInfo;
+        if (_count == -1 || endIndex > receipts->size())
+        {
+            endIndex = receipts->size();
+        }
+
+        for (size_t i = startIndex; i < endIndex; ++i)
+        {
+            auto receipt = receipts->at(i);
+            auto transaction = transactions->at(i);
+
+            Json::Value receiptJson;
+            receiptJson["transactionHash"] = toJS(transaction->sha3());
+            receiptJson["transactionIndex"] = toJS(i);
+            receiptJson["from"] = toJS(transaction->from());
+            receiptJson["to"] = toJS(transaction->to());
+            receiptJson["gasUsed"] = toJS(receipt->gasUsed());
+            receiptJson["contractAddress"] = toJS(receipt->contractAddress());
+            receiptJson["logs"] = Json::Value(Json::arrayValue);
+            for (unsigned int i = 0; i < receipt->log().size(); ++i)
+            {
+                Json::Value log;
+                log["address"] = toJS(receipt->log()[i].address);
+                log["topics"] = Json::Value(Json::arrayValue);
+                for (unsigned int j = 0; j < receipt->log()[i].topics.size(); ++j)
+                    log["topics"].append(toJS(receipt->log()[i].topics[j]));
+                log["data"] = toJS(receipt->log()[i].data);
+                receiptJson["logs"].append(log);
+            }
+            receiptJson["status"] = toJS(receipt->status());
+            receiptJson["output"] = toJS(receipt->outputBytes());
+            response["transactionReceipts"].append(receiptJson);
+        }
+        Json::FastWriter fastWriter;
+        return base64Encode(compress(fastWriter.write(response)));
+}
+
+Json::Value Rpc::getBlockTransactionReceipts(
+    int _groupID, const std::string& _blockNumber, int _from, int _count)
+{
+    try
+    {
+        RPC_LOG(INFO) << LOG_BADGE("getBlockTransactionReceipts") << LOG_DESC("request")
+                      << LOG_KV("groupID", _groupID) << LOG_KV("_blockNumber", _blockNumber)
+                      << LOG_KV("from", _from) << LOG_KV("count", _count);
+
+        checkRequest(_groupID);
+
+        BlockNumber number = jsToBlockNumber(_blockNumber);
+
+        auto blockchain = ledgerManager()->blockChain(_groupID);
+        auto block = blockchain->getBlockByNumber(number);
+        if (!block)
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::BlockNumberT, RPCMsg[RPCExceptionType::BlockNumberT]));
+        }
+        return getReceiptsOfBlock(block,_from,_count);
+    }
+    catch (JsonRpcException& e)
+    {
+        throw e;
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
+    }
+}
+
+Json::Value Rpc::getBlockTransactionReceiptsByHash(
+    int _groupID, const std::string& _blockHash, int _from, int _count)
+{
+    try
+    {
+        RPC_LOG(INFO) << LOG_BADGE("getBlockTransactionReceipts") << LOG_DESC("request")
+                      << LOG_KV("groupID", _groupID) << LOG_KV("blockHash", _blockHash)
+                      << LOG_KV("from", _from) << LOG_KV("count", _count);
+
+        checkRequest(_groupID);
+        h256 hash = jsToFixed<32>(_blockHash);
+        auto blockchain = ledgerManager()->blockChain(_groupID);
+        auto block = blockchain->getBlockByHash(hash);
+        if (!block)
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::BlockNumberT, RPCMsg[RPCExceptionType::BlockNumberT]));
+        }
+        return getReceiptsOfBlock(block,_from,_count);
+    }
+    catch (JsonRpcException& e)
+    {
+        throw e;
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
+    }
+}
 
 Json::Value Rpc::getPendingTransactions(int _groupID)
 {

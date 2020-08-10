@@ -44,6 +44,10 @@ namespace p2p
 {
 class P2PInterface;
 }
+namespace eth
+{
+class Block;
+}
 namespace rpc
 {
 /**
@@ -96,6 +100,8 @@ public:
     Json::Value getTransactionByBlockNumberAndIndex(int _groupID, const std::string& _blockNumber,
         const std::string& _transactionIndex) override;
     Json::Value getTransactionReceipt(int _groupID, const std::string& _transactionHash) override;
+    Json::Value getBlockTransactionReceipts(int _groupID, const std::string& _blockNumber, int _from, int _count) override;
+    Json::Value getBlockTransactionReceiptsByHash(int _groupID, const std::string& _blockHash, int _from, int _count) override;
     Json::Value getPendingTransactions(int _groupID) override;
     std::string getPendingTxSize(int _groupID) override;
     std::string getCode(int _groupID, const std::string& address) override;
@@ -136,6 +142,7 @@ private:
     bool isValidNodeId(dev::bytes const& precompileData,
         std::shared_ptr<dev::ledger::LedgerParamInterface> ledgerParam);
     bool isValidSystemConfig(std::string const& key);
+    Json::Value getReceiptsOfBlock(std::shared_ptr<dev::eth::Block> _blcok, int _from, int _count);
 
     /// transaction callback related
     boost::thread_specific_ptr<std::function<void(const std::string& receiptContext)> >
