@@ -14,7 +14,7 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2020 fisco-dev contributors.
  *
- * @file StatisticPotocolServer.h
+ * @file StatisticProtocolServer.h
  * @author: yujiechen
  * @date 2020-04-01
  */
@@ -27,11 +27,12 @@
 
 namespace dev
 {
-class StatisticPotocolServer : public jsonrpc::RpcProtocolServerV2
+class StatisticProtocolServer : public jsonrpc::RpcProtocolServerV2
 {
 public:
-    StatisticPotocolServer(jsonrpc::IProcedureInvokationHandler& _handler);
-    void HandleRequest(const std::string& _request, std::string& _retValue) override;
+    StatisticProtocolServer(jsonrpc::IProcedureInvokationHandler& _handler);
+    void HandleChannelRequest(const std::string& _request, std::string& _retValue,
+        std::function<bool(dev::GROUP_ID _groupId)> const& permissionChecker);
 
     void setNetworkStatHandler(dev::stat::ChannelNetworkStatHandler::Ptr _networkStatHandler)
     {
@@ -43,16 +44,18 @@ public:
         m_qpsLimiter = _qpsLimiter;
     }
 
-private:
+protected:
     bool limitRPCQPS(Json::Value const& _request, std::string& _retValue);
     bool limitGroupQPS(
         dev::GROUP_ID const& _groupId, Json::Value const& _request, std::string& _retValue);
     void wrapResponseForNodeBusy(Json::Value const& _request, std::string& _retValue);
+    void wrapErrorResponse(Json::Value const& _request, std::string& _retValue, int _errorCode,
+        std::string const& _errorMsg);
 
     dev::GROUP_ID getGroupID(Json::Value const& _request);
     bool isValidRequest(Json::Value const& _request);
 
-private:
+protected:
     // record group related RPC methods
     std::set<std::string> const m_groupRPCMethodSet = {"getSystemConfigByKey", "getBlockNumber",
         "getPbftView", "getSealerList", "getEpochSealersList", "getObserverList",
@@ -61,7 +64,9 @@ private:
         "getTransactionByBlockHashAndIndex", "getTransactionByBlockNumberAndIndex",
         "getTransactionReceipt", "getPendingTransactions", "getPendingTxSize", "call",
         "sendRawTransaction", "getCode", "getTotalTransactionCount",
-        "getTransactionByHashWithProof", "getTransactionReceiptByHashWithProof"};
+        "getTransactionByHashWithProof", "getTransactionReceiptByHashWithProof",
+        "sendRawTransactionAndGetProof", "getBlockHeaderByNumber", "getBlockHeaderByHash",
+        "startGroup", "stopGroup", "removeGroup", "recoverGroup", "queryGroupStatus"};
 
     // RPC interface without restrictions
     std::set<std::string> const m_noRestrictRpcMethodSet = {"getClientVersion"};

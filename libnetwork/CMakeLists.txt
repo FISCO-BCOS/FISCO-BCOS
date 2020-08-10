@@ -6,5 +6,4 @@ file(GLOB HEADERS "*.h")
 add_library(network ${SRC_LIST} ${HEADERS})
 
 target_link_libraries(network PUBLIC devcrypto)
-
 # install(TARGETS network RUNTIME DESTINATION bin ARCHIVE DESTINATION lib LIBRARY DESTINATION lib)

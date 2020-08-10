@@ -153,13 +153,16 @@ protected:
     virtual void onReceiveRawPrepareResponse(
         std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);
 
-    // TODO: select nodes with VRF algorithm
-    IDXTYPE VRFSelection() const;
+    virtual IDXTYPE selectLeader() const;
 
     void resetConfig() override;
     virtual void resetChosedConsensusNodes();
     virtual void chooseConsensusNodes();
+
     virtual void updateConsensusInfo();
+    void updateChosedSealerList();
+    virtual void updateTreeTopologyInfo();
+
     virtual void resetLocatedInConsensusNodes();
     IDXTYPE minValidNodes() const override { return std::min(m_epochSize, m_sealersNum) - m_f; }
 

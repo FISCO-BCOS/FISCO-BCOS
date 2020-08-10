@@ -26,6 +26,10 @@
 #include <libethcore/Protocol.h>
 namespace dev
 {
+namespace sync
+{
+class NodeTimeMaintenance;
+}
 namespace consensus
 {
 class ConsensusInterface
@@ -63,6 +67,9 @@ public:
     virtual VIEWTYPE view() const { return 0; }
     virtual VIEWTYPE toView() const { return 0; }
     virtual void setBlockFactory(dev::eth::BlockFactory::Ptr) {}
+    virtual void setSupportConsensusTimeAdjust(bool) {}
+    virtual void setNodeTimeMaintenance(std::shared_ptr<dev::sync::NodeTimeMaintenance>) {}
+    virtual int64_t getAlignedTime() { return utcTime(); }
 };
 }  // namespace consensus
 }  // namespace dev

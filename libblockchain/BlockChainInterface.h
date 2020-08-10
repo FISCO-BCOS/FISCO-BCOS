@@ -30,6 +30,11 @@
 #include <libethcore/TransactionReceipt.h>
 namespace dev
 {
+namespace ledger
+{
+class LedgerParamInterface;
+}
+
 namespace blockverifier
 {
 class ExecutiveContext;
@@ -42,25 +47,6 @@ enum class CommitResult
     ERROR_NUMBER = -1,  // 1
     ERROR_PARENT_HASH = -2,
     ERROR_COMMITTING = -3
-};
-// Configuration item written to the table of genesis block,
-// groupMark/consensusType/storageType/stateType excluded.
-// modification 2019.3.20: add timestamp filed into the GenesisBlockParam for setting the timestamp
-// for the zero block
-struct GenesisBlockParam
-{
-    std::string groupMark;      // Data written to extra data of genesis block.
-    dev::h512s sealerList;      // sealer nodes for consensus/syns modules
-    dev::h512s observerList;    // observer nodes for syns module
-    std::string consensusType;  // the type of consensus, now pbft
-    std::string storageType;    // the type of storage, now LevelDB
-    std::string stateType;      // the type of state, now mpt/storage
-    int64_t txCountLimit;       // the maximum number of transactions recorded in a block
-    int64_t txGasLimit;         // the maximum gas required to execute a transaction
-    uint64_t timeStamp;         /// the timestamp of genesis block
-    int64_t rpbftEpochSize;
-    int64_t rpbftRotatingInterval;
-    VMFlagType evmFlags;  // record flags of EVM
 };
 using MerkleProofType = std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>;
 
@@ -104,10 +90,14 @@ public:
     /// If it is a subsequent block with same extra data, function returns true.
     /// Returns an error in the rest of the cases.
     virtual bool checkAndBuildGenesisBlock(
-        GenesisBlockParam& initParam, bool _shouldBuild = true) = 0;
-    /// get sealer or observer nodes
+        std::shared_ptr<dev::ledger::LedgerParamInterface>, bool _shouldBuild = true) = 0;
+
+    /// get sealer, workingSealer or observer nodes
     virtual dev::h512s sealerList() = 0;
     virtual dev::h512s observerList() = 0;
+    virtual dev::h512s workingSealerList() { return dev::h512s(); }
+    virtual dev::h512s pendingSealerList() { return dev::h512s(); }
+
     /// get system config
     virtual std::string getSystemConfigByKey(std::string const& key, int64_t number = -1) = 0;
     virtual std::pair<std::string, dev::eth::BlockNumber> getSystemConfigInfoByKey(
@@ -131,6 +121,19 @@ public:
 
     virtual std::shared_ptr<MerkleProofType> getTransactionProof(
         dev::eth::Block::Ptr, uint64_t const&)
+    {
+        return nullptr;
+    }
+
+    virtual std::shared_ptr<
+        std::pair<std::shared_ptr<dev::eth::BlockHeader>, dev::eth::Block::SigListPtrType>>
+        getBlockHeaderInfo(int64_t)
+    {
+        return nullptr;
+    }
+    virtual std::shared_ptr<
+        std::pair<std::shared_ptr<dev::eth::BlockHeader>, dev::eth::Block::SigListPtrType>>
+    getBlockHeaderInfoByHash(dev::h256 const&)
     {
         return nullptr;
     }

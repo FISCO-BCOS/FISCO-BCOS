@@ -35,9 +35,17 @@ struct TimeManager
     /// last execution finish time, only one will be used at last
     /// the finish time of executing tx by leader
     uint64_t m_viewTimeout = 3 * m_emptyBlockGenTime;
+    uint64_t m_consensusTimeout = 3 * m_emptyBlockGenTime;
     unsigned m_changeCycle = 0;
+    // the recently time collected enough signature packages
     uint64_t m_lastSignTime = 0;
+    // the recently time reached consensus
     uint64_t m_lastConsensusTime;
+    // the recently time receive the rawPrepare and ready to execute the block
+    uint64_t m_lastAddRawPrepareTime = 0;
+    // the recently time executed the block
+    uint64_t m_lastExecTime = 0;
+
     /// the minimum block generation time(default is 500ms)
     unsigned m_minBlockGenTime = 500;
 
@@ -46,9 +54,16 @@ struct TimeManager
     const unsigned kMaxChangeCycle = 20;
     const unsigned CollectInterval = 60;
 
+    void resetConsensusTimeout(unsigned const& _consensusTimeout)
+    {
+        m_consensusTimeout = _consensusTimeout;
+    }
+
     inline void initTimerManager(unsigned view_timeout)
     {
+        m_lastAddRawPrepareTime = utcSteadyTime();
         m_lastConsensusTime = utcSteadyTime();
+        m_lastExecTime = utcSteadyTime();
         m_lastSignTime = 0;
         m_viewTimeout = view_timeout;
         m_changeCycle = 0;
@@ -66,12 +81,30 @@ struct TimeManager
         m_changeCycle = std::min(m_changeCycle + 1, (unsigned)kMaxChangeCycle);
     }
 
-    inline bool isTimeout()
+    virtual bool isTimeout(int64_t _now = utcSteadyTime())
     {
-        auto now = utcSteadyTime();
-        auto last = std::max(m_lastConsensusTime, m_lastSignTime);
-        auto interval = (uint64_t)(m_viewTimeout * std::pow(1.5, m_changeCycle));
-        return (now - last >= interval);
+        auto maxConsensusTime = std::max(m_lastConsensusTime, m_lastSignTime);
+        auto last = maxConsensusTime;
+        // collect PBFT related message packets and set the timeout to 3s
+        auto viewTimeOut = m_viewTimeout;
+        // the case that received the rawPrepare, but not collect enough sign requests
+        if (m_lastAddRawPrepareTime > maxConsensusTime &&
+            (m_lastConsensusTime != 0 || m_lastSignTime != 0))
+        {
+            // process block execution, set the timeout to consensus_timeout
+            if (m_lastAddRawPrepareTime > m_lastExecTime)
+            {
+                viewTimeOut = m_consensusTimeout;
+                last = m_lastAddRawPrepareTime;
+            }
+            // the block has been executed, while not collect enough sign requests
+            else
+            {
+                last = m_lastExecTime;
+            }
+        }
+        auto interval = (uint64_t)(viewTimeOut * std::pow(1.5, m_changeCycle));
+        return (_now - last >= interval);
     }
 };
 }  // namespace consensus

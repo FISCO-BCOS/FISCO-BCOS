@@ -17,18 +17,20 @@
 /**
  * @Legacy EVM context
  *
- * @file ExtVM.cpp
+ * @file EVMHostContext.cpp
  * @author jimmyshi
  * @date 2018-09-22
  */
 
-#include "ExtVM.h"
+#include "EVMHostContext.h"
+#include "EVMHostInterface.h"
+#include "evmc/evmc.hpp"
 #include <libblockverifier/ExecutiveContext.h>
-#include <libethcore/LastBlockHashesFace.h>
 #include <boost/thread.hpp>
 #include <exception>
 
 
+using namespace std;
 using namespace dev;
 using namespace dev::eth;
 using namespace dev::executive;
@@ -57,7 +59,7 @@ static size_t const c_entryOverhead = 128 * 1024;
 static unsigned const c_offloadPoint =
     (c_defaultStackSize - c_entryOverhead) / c_singleExecutionStackSize;
 
-void goOnOffloadedStack(Executive& _e, OnOpFunc const& _onOp)
+void goOnOffloadedStack(Executive& _e)
 {
     // Set new stack size enouth to handle the rest of the calls up to the limit.
     boost::thread::attributes attrs;
@@ -71,7 +73,7 @@ void goOnOffloadedStack(Executive& _e, OnOpFunc const& _onOp)
         [&] {
             try
             {
-                _e.go(_onOp);
+                _e.go();
             }
             catch (...)
             {
@@ -84,7 +86,7 @@ void goOnOffloadedStack(Executive& _e, OnOpFunc const& _onOp)
         boost::rethrow_exception(exception);
 }
 
-void go(unsigned _depth, Executive& _e, OnOpFunc const& _onOp)
+void go(unsigned _depth, Executive& _e)
 {
     // If in the offloading point we need to switch to additional separated stack space.
     // Current stack is too small to handle more CALL/CREATE executions.
@@ -94,10 +96,10 @@ void go(unsigned _depth, Executive& _e, OnOpFunc const& _onOp)
     if (_depth == c_offloadPoint)
     {
         LOG(TRACE) << "Stack offloading (depth: " << c_offloadPoint << ")";
-        goOnOffloadedStack(_e, _onOp);
+        goOnOffloadedStack(_e);
     }
     else
-        _e.go(_onOp);
+        _e.go();
 }
 
 void generateCallResult(
@@ -181,15 +183,64 @@ evmc_status_code transactionExceptionToEvmcStatusCode(TransactionException ex) n
 
 }  // anonymous namespace
 
-
-evmc_result ExtVM::call(CallParameters& _p)
+namespace dev
 {
-    Executive e{m_s, envInfo(), depth() + 1};
+namespace executive
+{
+evmc_bytes32 sm3Hash(const uint8_t* data, size_t size)
+{
+    evmc_bytes32 hash;
+    sm3(data, size, hash.bytes);
+    return hash;
+}
+
+evmc_gas_metrics ethMetrics{32000, 20000, 5000, 200, 9000, 2300, 25000};
+evmc_gas_metrics freeStorageGasMetrics{16000, 1200, 1200, 1200, 0, 5, 5};
+
+EVMHostContext::EVMHostContext(std::shared_ptr<StateFace> _s,
+    dev::executive::EnvInfo const& _envInfo, Address const& _myAddress, Address const& _caller,
+    Address const& _origin, u256 const& _value, u256 const& _gasPrice, bytesConstRef _data,
+    const bytes& _code, h256 const& _codeHash, unsigned _depth, bool _isCreate, bool _staticCall,
+    bool _freeStorage)
+  : m_envInfo(_envInfo),
+    m_myAddress(_myAddress),
+    m_caller(_caller),
+    m_origin(_origin),
+    m_value(_value),
+    m_gasPrice(_gasPrice),
+    m_data(_data),
+    m_code(_code),
+    m_codeHash(_codeHash),
+    m_depth(_depth),
+    m_isCreate(_isCreate),
+    m_staticCall(_staticCall),
+    m_freeStorage(_freeStorage),
+    m_s(_s)
+{
+    interface = getHostInterface();
+    sm3_hash_fn = nullptr;
+    if (g_BCOSConfig.SMCrypto())
+    {
+        sm3_hash_fn = sm3Hash;
+    }
+    version = g_BCOSConfig.version();
+    if (m_freeStorage)
+    {
+        metrics = &freeStorageGasMetrics;
+    }
+    else
+    {
+        metrics = &ethMetrics;
+    }
+}
+
+evmc_result EVMHostContext::call(CallParameters& _p)
+{
+    Executive e{m_s, envInfo(), depth() + 1, m_freeStorage};
     // Note: When create initializes Executive, the flags of evmc context must be passed in
-    e.setEvmFlags(flags);
     if (!e.call(_p, gasPrice(), origin()))
     {
-        go(depth(), e, _p.onOp);
+        go(depth(), e);
         e.accrueSubState(sub());
     }
     _p.gas = e.gas();
@@ -200,7 +251,7 @@ evmc_result ExtVM::call(CallParameters& _p)
     return evmcResult;
 }
 
-size_t ExtVM::codeSizeAt(dev::Address const& _a)
+size_t EVMHostContext::codeSizeAt(dev::Address const& _a)
 {
     if (m_envInfo.precompiledEngine()->isPrecompiled(_a))
     {
@@ -209,48 +260,47 @@ size_t ExtVM::codeSizeAt(dev::Address const& _a)
     return m_s->codeSize(_a);
 }
 
-h256 ExtVM::codeHashAt(Address const& _a)
+h256 EVMHostContext::codeHashAt(Address const& _a)
 {
     return exists(_a) ? m_s->codeHash(_a) : h256{};
 }
 
-bool ExtVM::isPermitted()
+bool EVMHostContext::isPermitted()
 {
     // check authority by tx.origin
     if (!m_s->checkAuthority(origin(), myAddress()))
     {
-        LOG(ERROR) << "ExtVM::isPermitted PermissionDenied" << LOG_KV("origin", origin())
+        LOG(ERROR) << "EVMHostContext::isPermitted PermissionDenied" << LOG_KV("origin", origin())
                    << LOG_KV("address", myAddress());
         return false;
     }
     return true;
 }
 
-void ExtVM::setStore(u256 const& _n, u256 const& _v)
+void EVMHostContext::setStore(u256 const& _n, u256 const& _v)
 {
     m_s->setStorage(myAddress(), _n, _v);
 }
 
-evmc_result ExtVM::create(u256 const& _endowment, u256& io_gas, bytesConstRef _code,
-    Instruction _op, u256 _salt, OnOpFunc const& _onOp)
+evmc_result EVMHostContext::create(
+    u256 const& _endowment, u256& io_gas, bytesConstRef _code, evmc_opcode _op, u256 _salt)
 {
-    Executive e{m_s, envInfo(), depth() + 1};
+    Executive e{m_s, envInfo(), depth() + 1, m_freeStorage};
     // Note: When create initializes Executive, the flags of evmc context must be passed in
-    e.setEvmFlags(flags);
     bool result = false;
-    if (_op == Instruction::CREATE)
+    if (_op == evmc_opcode::OP_CREATE)
         result = e.createOpcode(myAddress(), _endowment, gasPrice(), io_gas, _code, origin());
     else
     {
         // TODO: when new CREATE opcode added, this logic maybe affected
-        assert(_op == Instruction::CREATE2);
+        assert(_op == evmc_opcode::OP_CREATE2);
         result =
             e.create2Opcode(myAddress(), _endowment, gasPrice(), io_gas, _code, origin(), _salt);
     }
 
     if (!result)
     {
-        go(depth(), e, _onOp);
+        go(depth(), e);
         e.accrueSubState(sub());
     }
     io_gas = e.gas();
@@ -260,7 +310,7 @@ evmc_result ExtVM::create(u256 const& _endowment, u256& io_gas, bytesConstRef _c
     return evmcResult;
 }
 
-void ExtVM::suicide(Address const& _a)
+void EVMHostContext::suicide(Address const& _a)
 {
     // Why transfer is not used here? That caused a consensus issue before (see Quirk #2 in
     // http://martin.swende.se/blog/Ethereum_quirks_and_vulns.html). There is one test case
@@ -270,16 +320,18 @@ void ExtVM::suicide(Address const& _a)
     if (g_BCOSConfig.version() >= RC2_VERSION)
     {
         // No balance here in BCOS. Balance has data racing in parallel suicide.
-        ExtVMFace::suicide(_a);
+        m_sub.suicides.insert(m_myAddress);
         return;
     }
 
     m_s->addBalance(_a, m_s->balance(myAddress()));
     m_s->setBalance(myAddress(), 0);
-    ExtVMFace::suicide(_a);
+    m_sub.suicides.insert(m_myAddress);
 }
 
-h256 ExtVM::blockHash(int64_t _number)
+h256 EVMHostContext::blockHash(int64_t _number)
 {
     return envInfo().numberHash(_number);
 }
+}  // namespace executive
+}  // namespace dev

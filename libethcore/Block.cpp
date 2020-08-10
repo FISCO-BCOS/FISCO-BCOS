@@ -61,8 +61,7 @@ Block::Block(Block const& _block)
   : m_blockHeader(_block.blockHeader()),
     m_transactions(std::make_shared<Transactions>(*_block.transactions())),
     m_transactionReceipts(std::make_shared<TransactionReceipts>(*_block.transactionReceipts())),
-    m_sigList(std::make_shared<std::vector<std::pair<u256, std::vector<unsigned char>>>>(
-        *_block.sigList())),
+    m_sigList(std::make_shared<SigListType>(*_block.sigList())),
     m_txsCache(_block.m_txsCache),
     m_tReceiptsCache(_block.m_tReceiptsCache),
     m_transRootCache(_block.m_transRootCache),
@@ -77,8 +76,7 @@ Block& Block::operator=(Block const& _block)
     /// init transactionReceipts
     m_transactionReceipts = std::make_shared<TransactionReceipts>(*_block.transactionReceipts());
     /// init sigList
-    m_sigList = std::make_shared<std::vector<std::pair<u256, std::vector<unsigned char>>>>(
-        *_block.sigList());
+    m_sigList = std::make_shared<SigListType>(*_block.sigList());
     m_txsCache = _block.m_txsCache;
     m_tReceiptsCache = _block.m_tReceiptsCache;
     m_transRootCache = _block.m_transRootCache;
@@ -452,7 +450,7 @@ void Block::decode(
         BOOST_THROW_EXCEPTION(ErrorBlockHash() << errinfo_comment("BlockHeader hash error"));
     }
     /// get sig_list
-    m_sigList = std::make_shared<std::vector<std::pair<u256, std::vector<unsigned char>>>>(
+    m_sigList = std::make_shared<SigListType>(
         block_rlp[4].toVector<std::pair<u256, std::vector<unsigned char>>>());
 }
 
@@ -480,7 +478,7 @@ void Block::decodeRC2(
         BOOST_THROW_EXCEPTION(ErrorBlockHash() << errinfo_comment("BlockHeader hash error"));
     }
     /// get sig_list
-    m_sigList = std::make_shared<std::vector<std::pair<u256, std::vector<unsigned char>>>>(
+    m_sigList = std::make_shared<SigListType>(
         block_rlp[3].toVector<std::pair<u256, std::vector<unsigned char>>>());
 
     /// get transactionReceipt list

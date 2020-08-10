@@ -23,7 +23,6 @@
 
 #include <libethcore/ABIParser.h>
 #include <libethcore/Exceptions.h>
-#include <libexecutive/ExecutionResult.h>
 #include <libprecompiled/ParallelConfigPrecompiled.h>
 #include <libstorage/StorageException.h>
 #include <libstorage/Table.h>
@@ -127,7 +126,7 @@ void ExecutiveContext::setState(std::shared_ptr<dev::executive::StateFace> state
     m_stateFace = state;
 }
 
-bool ExecutiveContext::isOrginPrecompiled(Address const& _a) const
+bool ExecutiveContext::isEthereumPrecompiled(Address const& _a) const
 {
     return m_precompiledContract.count(_a);
 }
@@ -183,7 +182,7 @@ std::shared_ptr<std::vector<std::string>> ExecutiveContext::getTxCriticals(const
     }
     else
     {
-        uint32_t selector = m_parallelConfigPrecompiled->getParamFunc(ref(_tx.data()));
+        uint32_t selector = dev::precompiled::getParamFunc(ref(_tx.data()));
 
         auto receiveAddress = _tx.receiveAddress();
         std::shared_ptr<dev::precompiled::ParallelConfig> config = nullptr;

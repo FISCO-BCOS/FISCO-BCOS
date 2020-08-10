@@ -3,6 +3,8 @@ file(GLOB HEADERS "*.h")
 
 add_library(executivecontext ${SRC_LIST} ${HEADERS})
 
-target_link_libraries(executivecontext PRIVATE devcore evm ethcore storage)
-target_link_libraries(executivecontext PUBLIC TBB)
+# target_include_directories(executivecontext PRIVATE ${EVMC_INCLUDE_DIRS})
+
+target_link_libraries(executivecontext PUBLIC EVMC TBB EVMONE)
+target_link_libraries(executivecontext PRIVATE devcore ethcore Boost::program_options devcore ethcore storage)
 target_compile_options(executivecontext PRIVATE -Wno-error)

@@ -26,8 +26,8 @@
 #include "libstorage/ScalableStorage.h"
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libchannelserver/ChannelRPCServer.h>
-#include <libdevcore/OverlayDB.h>
 #include <libexecutive/StateFactoryInterface.h>
+#include <libmptstate/OverlayDB.h>
 #include <libstorage/CachedStorage.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/MemoryTableFactory2.h>
@@ -125,7 +125,7 @@ private:
 };
 int64_t getBlockNumberFromStorage(dev::storage::Storage::Ptr _storage);
 dev::storage::Storage::Ptr createRocksDBStorage(
-    const std::string& _dbPath, bool _enableEncryption, bool _disableWAL, bool _enableCache);
+    const std::string& _dbPath, const bytes& _encryptKey, bool _disableWAL, bool _enableCache);
 dev::storage::Storage::Ptr createSQLStorage(std::shared_ptr<LedgerParamInterface> _param,
     std::shared_ptr<ChannelRPCServer> _channelRPCServer,
     std::function<void(std::exception& e)> _fatalHandler);

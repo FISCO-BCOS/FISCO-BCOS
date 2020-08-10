@@ -78,23 +78,21 @@ BOOST_AUTO_TEST_CASE(testDisconnectReason)
 BOOST_AUTO_TEST_CASE(testNodeIPEndpoint)
 {
     /// test default construct
-    dev::network::NodeIPEndpoint m_endpoint("0.0.0.0", "0");
-    BOOST_CHECK(m_endpoint.host == "0.0.0.0");
-    BOOST_CHECK(m_endpoint.port == "0");
-    BOOST_CHECK(m_endpoint.name() == "0.0.0.0:0");
+    dev::network::NodeIPEndpoint m_endpoint(boost::asio::ip::make_address("0.0.0.0"), 0);
+    BOOST_CHECK(m_endpoint.address() == "0.0.0.0");
+    BOOST_CHECK(m_endpoint.port() == 0);
+    BOOST_CHECK(boost::lexical_cast<std::string>(m_endpoint) == "0.0.0.0:0");
     /// "0.0.0.0" is not the specified address
-    m_endpoint.host = std::string("10.0.0.0");
     /// test construct: NodeIPEndpoint(bi::address _addr, uint16_t _udp, uint16_t _tcp)
     uint16_t port = 30303;
-    NodeIPEndpoint m_endpoint2("127.0.0.1", std::to_string(port));
-    BOOST_CHECK(m_endpoint2.host == "127.0.0.1");
-    BOOST_CHECK(m_endpoint2.port == std::to_string(port));
-    m_endpoint2.name();
+    NodeIPEndpoint m_endpoint2(boost::asio::ip::make_address("127.0.0.1"), port);
+    BOOST_CHECK(m_endpoint2.address() == "127.0.0.1");
+    BOOST_CHECK(m_endpoint2.port() == port);
     BOOST_CHECK_MESSAGE(true, "127.0.0.1:" + toString(port) + ":" + toString(port));
 
     /// test operators
     /// operator ==
-    BOOST_CHECK(m_endpoint2 == NodeIPEndpoint("127.0.0.1", port));
+    BOOST_CHECK(m_endpoint2 == NodeIPEndpoint(boost::asio::ip::make_address("127.0.0.1"), port));
     /// opearator <
     BOOST_CHECK(m_endpoint < m_endpoint2);
     /// test map
@@ -104,7 +102,7 @@ BOOST_AUTO_TEST_CASE(testNodeIPEndpoint)
     m_endpoint_map[m_endpoint2] = false;
     BOOST_CHECK(m_endpoint_map.size() == 2);
     BOOST_CHECK(m_endpoint_map[m_endpoint2] == false);
-    m_endpoint_map[NodeIPEndpoint("127.0.0.1", port)] = true;
+    m_endpoint_map[NodeIPEndpoint(boost::asio::ip::make_address("127.0.0.1"), port)] = true;
     BOOST_CHECK(m_endpoint_map[m_endpoint2] == true);
 }
 

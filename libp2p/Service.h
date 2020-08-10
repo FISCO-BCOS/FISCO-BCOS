@@ -67,6 +67,9 @@ public:
     virtual void onMessage(dev::network::NetworkException e, dev::network::SessionFace::Ptr session,
         dev::network::Message::Ptr message, P2PSession::Ptr p2pSession);
 
+    void onLocalAMOPMessage(
+        P2PMessage::Ptr message, CallbackFuncWithSession callback, dev::network::Options options);
+
     std::shared_ptr<P2PMessage> sendMessageByNodeID(
         NodeID nodeID, std::shared_ptr<P2PMessage> message) override;
     void asyncSendMessageByNodeID(NodeID nodeID, std::shared_ptr<P2PMessage> message,
@@ -149,6 +152,14 @@ public:
     void setCallbackFuncForTopicVerify(CallbackFuncForTopicVerify channelRpcCallBack) override
     {
         m_channelRpcCallBack = channelRpcCallBack;
+    }
+
+    RecursiveMutex& localAMOPCallbacksLock() { return x_localAMOPCallbacks; }
+    std::shared_ptr<std::unordered_map<uint32_t,
+        std::pair<std::shared_ptr<boost::asio::deadline_timer>, dev::p2p::CallbackFuncWithSession>>>
+    localAMOPCallbacks()
+    {
+        return m_localAMOPCallbacks;
     }
 
     CallbackFuncForTopicVerify callbackFuncForTopicVerify() override
@@ -234,7 +245,6 @@ private:
 
     std::shared_ptr<boost::asio::deadline_timer> m_timer;
 
-
     CallbackFuncForTopicVerify m_channelRpcCallBack;
 
     bool m_run = false;
@@ -252,6 +262,11 @@ private:
 
     dev::flowlimit::RateLimiter::Ptr m_nodeBandwidthLimiter;
     dev::stat::ChannelNetworkStatHandler::Ptr m_channelNetworkStatHandler;
+
+    mutable RecursiveMutex x_localAMOPCallbacks;
+    std::shared_ptr<std::unordered_map<uint32_t,
+        std::pair<std::shared_ptr<boost::asio::deadline_timer>, dev::p2p::CallbackFuncWithSession>>>
+        m_localAMOPCallbacks;
 };
 
 }  // namespace p2p

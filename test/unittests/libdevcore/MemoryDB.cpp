@@ -22,7 +22,7 @@
  */
 
 #include "libdevcrypto/CryptoInterface.h"
-#include <libdevcore/MemoryDB.h>
+#include <libmptstate/MemoryDB.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 

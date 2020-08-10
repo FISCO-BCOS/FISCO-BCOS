@@ -25,7 +25,7 @@
 #pragma once
 
 #include "MPTState.h"
-#include <libdevcore/OverlayDB.h>
+#include <libmptstate/OverlayDB.h>
 #include <libexecutive/StateFactoryInterface.h>
 #include <libstorage/Storage.h>
 #include <boost/filesystem.hpp>

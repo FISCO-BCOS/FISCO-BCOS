@@ -3,4 +3,4 @@ file(GLOB HEADERS "*.h")
 
 add_library(eventfilter ${SRC_LIST} ${HEADERS})
 
-target_link_libraries(eventfilter PUBLIC channelserver devcore ethcore JsonCpp)
+target_link_libraries(eventfilter PUBLIC devcore ethcore JsonCpp)

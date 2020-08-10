@@ -57,8 +57,7 @@ public:
         BOOST_CHECK(m_dbInitializer->stateFactory() == nullptr);
         BOOST_CHECK(m_dbInitializer->executiveContextFactory() == nullptr);
         /// init blockChain
-        m_genesisParam = _ledgerParams->mutableGenesisBlockParam();
-        FakeLedger::initBlockChain(m_genesisParam);
+        FakeLedger::initBlockChain();
         /// intit blockVerifier
         FakeLedger::initBlockVerifier();
         /// init txPool
@@ -72,7 +71,7 @@ public:
     bool initRealLedger()
     {
         bool ret = false;
-        ret = Ledger::initBlockChain(FakeLedger::m_genesisParam);
+        ret = Ledger::initBlockChain();
         if (!ret)
         {
             return false;
@@ -122,11 +121,7 @@ public:
             m_param = params;
         }
     }
-    void regenerateGenesisMark()
-    {
-        auto params = std::dynamic_pointer_cast<LedgerParam>(m_param);
-        params->mutableGenesisBlockParam() = params->generateGenesisMark();
-    }
+    void regenerateGenesisMark() { auto params = std::dynamic_pointer_cast<LedgerParam>(m_param); }
     void setDBInitializer(std::shared_ptr<dev::ledger::DBInitializer> _dbInitializer)
     {
         m_dbInitializer = _dbInitializer;
@@ -181,7 +176,7 @@ BOOST_AUTO_TEST_CASE(testGensisConfig)
     {
         mark += "mpt-2000-300000000";
     }
-    BOOST_CHECK(fakeLedger.getParam()->mutableGenesisBlockParam().groupMark == mark);
+    BOOST_CHECK(fakeLedger.getParam()->mutableGenesisMark() == mark);
 
     /// init ini config
     configurationPath = getTestPath().string() + "/fisco-bcos-data/group.10.ini";

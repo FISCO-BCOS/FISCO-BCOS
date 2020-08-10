@@ -25,6 +25,10 @@ set(ETH_SCRIPTS_DIR ${ETH_CMAKE_DIR}/scripts)
 
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
 
+if("${CMAKE_SIZEOF_VOID_P}" STREQUAL "4")
+    message(FATAL "The ${PROJECT_NAME} does not support compiling on 32-bit systems")
+endif()
+
 if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang"))
     find_program(CCACHE_PROGRAM ccache)
     if(CCACHE_PROGRAM)
@@ -92,18 +96,15 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
 
     # Additional GCC-specific compiler settings.
     if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
-
-        add_compile_options(-Wa,-march=generic64)
-        # Check that we've got GCC 4.7 or newer.
+        # Check that we've got GCC 5.4 or newer.
         execute_process(
             COMMAND ${CMAKE_CXX_COMPILER} -dumpversion OUTPUT_VARIABLE GCC_VERSION)
-        if (NOT (GCC_VERSION VERSION_GREATER 4.7 OR GCC_VERSION VERSION_EQUAL 4.7))
-            message(FATAL_ERROR "${PROJECT_NAME} requires g++ 4.7 or greater.")
+        if (NOT (GCC_VERSION VERSION_GREATER 5.4 OR GCC_VERSION VERSION_EQUAL 5.4))
+            message(FATAL_ERROR "${PROJECT_NAME} requires g++ 5.4 or greater. Current is ${GCC_VERSION}")
         endif ()
-        if (GCC_VERSION VERSION_LESS 5.0)
-            add_compile_options(-Wno-unused-variable)
-            add_compile_options(-Wno-missing-field-initializers)
-        endif ()
+        if(NOT ARCH_NATIVE)
+            add_compile_options(-Wa,-march=generic64)
+        endif()
 		set(CMAKE_C_FLAGS "-std=c99")
 
 		# Strong stack protection was only added in GCC 4.9.
@@ -162,5 +163,10 @@ if (SANITIZE)
     if (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")
         set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -fsanitize-blacklist=${CMAKE_SOURCE_DIR}/sanitizer-blacklist.txt")
     endif()
+endif()
+
+# rust static library linking requirements for macos
+if(APPLE)
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -framework Security")
 endif()
 

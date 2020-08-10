@@ -33,6 +33,7 @@
 #include "libp2p/P2PMessage.h"
 #include <jsonrpccpp/server/abstractserverconnector.h>
 #include <libflowlimit/RPCQPSLimiter.h>
+#include <libnetwork/PeerWhitelist.h>
 #include <libstat/ChannelNetworkStatHandler.h>
 #include <boost/asio/io_service.hpp>  // for io_service
 #include <atomic>                     // for atomic
@@ -91,7 +92,12 @@ public:
     typedef std::shared_ptr<ChannelRPCServer> Ptr;
 
     ChannelRPCServer(std::string listenAddr = "", int listenPort = 0)
-      : jsonrpc::AbstractServerConnector(), _listenAddr(listenAddr), _listenPort(listenPort){};
+      : jsonrpc::AbstractServerConnector(),
+        _listenAddr(listenAddr),
+        _listenPort(listenPort),
+        m_group2SDKAllowList(
+            std::make_shared<std::map<dev::GROUP_ID, dev::PeerWhitelist::Ptr>>()){};
+
     virtual ~ChannelRPCServer();
     virtual bool StartListening() override;
     virtual bool StopListening() override;
@@ -151,7 +157,7 @@ public:
     void setEventFilterCallback(std::function<int32_t(const std::string&, uint32_t,
             std::function<bool(const std::string& _filterID, int32_t _result,
                 const Json::Value& _logs, GROUP_ID const& _groupId)>,
-            std::function<bool()>)>
+            std::function<int(GROUP_ID _groupId)>, std::function<bool(GROUP_ID _groupId)>)>
             _callback)
     {
         m_eventFilterCallBack = _callback;
@@ -183,7 +189,28 @@ public:
         return m_networkBandwidthLimiter;
     }
 
+    void registerSDKAllowListByGroupId(
+        dev::GROUP_ID const& _groupId, dev::PeerWhitelist::Ptr _allowList);
+
+    // remove the registered sdk allowlist when stop/delete the group
+    void removeSDKAllowListByGroupId(dev::GROUP_ID const& _groupId);
+
 private:
+    bool checkSDKPermission(dev::GROUP_ID _groupId, dev::h512 const& _sdkPublicKey);
+
+    dev::PeerWhitelist::Ptr getSDKAllowListByGroupId(dev::GROUP_ID const& _groupId)
+    {
+        ReadGuard l(x_group2SDKAllowList);
+        if (m_group2SDKAllowList->count(_groupId))
+        {
+            return (*m_group2SDKAllowList)[_groupId];
+        }
+        return nullptr;
+    }
+
+    bool OnRpcRequest(
+        dev::channel::ChannelSession::Ptr _session, const std::string& request, void* addInfo);
+
     virtual void onClientRPCRequest(
         dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
 
@@ -243,7 +270,7 @@ private:
     std::function<int32_t(const std::string&, uint32_t,
         std::function<bool(const std::string& _filterID, int32_t _result, const Json::Value& _logs,
             GROUP_ID const& _groupId)>,
-        std::function<bool()>)>
+        std::function<int(GROUP_ID _groupId)>, std::function<bool(GROUP_ID _groupId)>)>
         m_eventFilterCallBack;
 
     std::vector<dev::eth::Handler<int64_t>> m_handlers;
@@ -251,6 +278,9 @@ private:
     dev::stat::ChannelNetworkStatHandler::Ptr m_networkStatHandler;
     dev::flowlimit::RPCQPSLimiter::Ptr m_qpsLimiter;
     dev::flowlimit::RateLimiter::Ptr m_networkBandwidthLimiter;
+
+    std::shared_ptr<std::map<dev::GROUP_ID, dev::PeerWhitelist::Ptr>> m_group2SDKAllowList;
+    mutable SharedMutex x_group2SDKAllowList;
 };
 
 }  // namespace dev

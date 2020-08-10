@@ -75,6 +75,7 @@ void PBFTSealer::setBlock()
     m_sealing.block->header().populateFromParent(
         m_blockChain->getBlockByNumber(m_blockChain->number())->header());
     resetSealingHeader(m_sealing.block->header());
+    hookAfterHandleBlock();
     // calculate transactionRoot before execBlock
     m_sealing.block->calTransactionRoot();
 }

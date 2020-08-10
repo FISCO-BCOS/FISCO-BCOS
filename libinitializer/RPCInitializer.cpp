@@ -52,7 +52,7 @@ void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt
     {
         ERROR_OUTPUT << LOG_BADGE("RPCInitializer")
                      << LOG_DESC(
-                            "initConfig for RPCInitializer failed! Invalid ListenPort for RPC!")
+                            "initChannelRPCServer failed! Invalid ListenPort for RPC!")
                      << std::endl;
         exit(1);
     }
@@ -133,7 +133,7 @@ void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt
 
 void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
 {
-    std::string listenIP = _pt.get<std::string>("rpc.listen_ip", "0.0.0.0");
+    std::string listenIP = _pt.get<std::string>("rpc.listen_ip", "127.0.0.1");
     // listen ip for jsonrpc, load from rpc.listen ip if rpc.jsonrpc_listen_ip is not setted
     listenIP = _pt.get<std::string>("rpc.jsonrpc_listen_ip", listenIP);
 
@@ -159,7 +159,8 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
                 std::function<bool(const std::string& _filterID, int32_t _result,
                     const Json::Value& _logs, GROUP_ID const& _groupId)>
                     _respCallback,
-                std::function<bool()> _activeCallback) -> int32_t {
+                std::function<int(GROUP_ID _groupId)> _sessionCheckerCallback,
+                std::function<bool(GROUP_ID _groupId)> _permissionChecker) -> int32_t {
                 auto params =
                     dev::event::EventLogFilterParams::buildEventLogFilterParamsObject(_json);
                 if (!params)
@@ -172,9 +173,12 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
                 {
                     return dev::event::ResponseCode::GROUP_NOT_EXIST;
                 }
-
+                if (!_permissionChecker(params->getGroupID()))
+                {
+                    return dev::event::ResponseCode::SDK_PERMISSION_DENIED;
+                }
                 return ledger->getEventLogFilterManager()->addEventLogFilterByRequest(
-                    params, _version, _respCallback, _activeCallback);
+                    params, _version, _respCallback, _sessionCheckerCallback);
             });
 
         auto channelRPCServerWeak = std::weak_ptr<dev::ChannelRPCServer>(m_channelRPCServer);
@@ -189,35 +193,38 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
 
         // Don't to set destructor, the ModularServer will destruct.
         auto rpcEntity = new rpc::Rpc(m_ledgerInitializer, m_p2pService);
-        m_safeHttpServer.reset(
-            new SafeHttpServer(listenIP, httpListenPort), [](SafeHttpServer* p) { (void)p; });
+        auto ipAddress = boost::asio::ip::make_address(listenIP);
+        m_safeHttpServer.reset(new SafeHttpServer(listenIP, httpListenPort, ipAddress.is_v6()),
+            [](SafeHttpServer* p) { (void)p; });
         m_jsonrpcHttpServer = new ModularServer<rpc::Rpc>(rpcEntity);
         m_jsonrpcHttpServer->addConnector(m_safeHttpServer.get());
         // TODO: StartListening() will throw exception, catch it and give more specific help
         if (!m_jsonrpcHttpServer->StartListening())
         {
-            INITIALIZER_LOG(ERROR) << LOG_BADGE("RPCInitializer")
-                                   << LOG_KV("check jsonrpc_listen_port", httpListenPort);
-            ERROR_OUTPUT << LOG_BADGE("RPCInitializer")
+            INITIALIZER_LOG(ERROR)
+                << LOG_BADGE("RPCInitializer") << LOG_KV("ipv6", ipAddress.is_v6())
+                << LOG_KV("check jsonrpc_listen_port", httpListenPort);
+            ERROR_OUTPUT << LOG_BADGE("RPCInitializer") << LOG_KV("ipv6", ipAddress.is_v6())
                          << LOG_KV("check jsonrpc_listen_port", httpListenPort) << std::endl;
             BOOST_THROW_EXCEPTION(ListenPortIsUsed());
         }
-        INITIALIZER_LOG(INFO) << LOG_BADGE("RPCInitializer") << LOG_KV("rpcListenIp", listenIP)
-                              << LOG_KV("rpcListenPort", httpListenPort)
-                              << LOG_DESC("JsonrpcHttpServer started.");
+        INITIALIZER_LOG(INFO) << LOG_BADGE("RPCInitializer JsonrpcHttpServer started")
+                              << LOG_KV("jsonrpc_IP", listenIP)
+                              << LOG_KV("jsonrpc_listen_port", httpListenPort)
+                              << LOG_KV("ipv6", ipAddress.is_v6());
     }
     catch (std::exception& e)
     {
         // TODO: catch in Initializer::init, delete this catch
         INITIALIZER_LOG(ERROR) << LOG_BADGE("RPCInitializer")
-                               << LOG_DESC("init RPC/channelserver failed")
-                               << LOG_KV("check channel_listen_port", listenPort)
+                               << LOG_DESC("init RPC failed")
                                << LOG_KV("check jsonrpc_listen_port", httpListenPort)
+                               << LOG_KV("check jsonrpc_IP", listenIP)
                                << LOG_KV("EINFO", boost::diagnostic_information(e));
 
-        ERROR_OUTPUT << LOG_BADGE("RPCInitializer") << LOG_DESC("init RPC/channelserver failed")
-                     << LOG_KV("check channel_listen_port", listenPort)
+        ERROR_OUTPUT << LOG_BADGE("RPCInitializer") << LOG_DESC("init RPC failed")
                      << LOG_KV("check jsonrpc_listen_port", httpListenPort)
+                     << LOG_KV("check jsonrpc_IP", listenIP)
                      << LOG_KV("EINFO", boost::diagnostic_information(e)) << std::endl;
         exit(1);
     }

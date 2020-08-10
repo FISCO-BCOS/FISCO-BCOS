@@ -50,7 +50,7 @@ void DownloadingTxsQueue::push(
         // forward the received txs
         for (auto const& selectedNode : *selectedNodeList)
         {
-            if (selectedNode == _fromPeer)
+            if (selectedNode == _fromPeer || !m_service)
             {
                 continue;
             }
@@ -102,7 +102,6 @@ void DownloadingTxsQueue::pop2TxPool(
     int64_t decode_time_cost = 0;
     int64_t verifySig_time_cost = 0;
     int64_t import_time_cost = 0;
-    int64_t setTxKnownBy_time_cost = 0;
     size_t successCnt = 0;
     for (size_t i = 0; i < localBuffer->size(); ++i)
     {
@@ -142,31 +141,20 @@ void DownloadingTxsQueue::pop2TxPool(
             });
         verifySig_time_cost += (utcTime() - record_time);
 
+        // import into tx pool
         record_time = utcTime();
         NodeID fromPeer = txsShard->fromPeer;
-        // import into tx pool
-        std::vector<dev::h256> knownTxHash;
-        for (auto tx : *txs)
-        {
-            knownTxHash.push_back(tx->sha3());
-        }
-        if (knownTxHash.size() > 0)
-        {
-            _txPool->setTransactionsAreKnownBy(knownTxHash, fromPeer);
-        }
-        for (auto const& forwardedNode : *(txsShard->knownNodes))
-        {
-            _txPool->setTransactionsAreKnownBy(knownTxHash, forwardedNode);
-        }
-        setTxKnownBy_time_cost += (utcTime() - record_time);
-        record_time = utcTime();
         for (auto tx : *txs)
         {
             try
             {
                 auto importResult = _txPool->import(tx);
                 if (dev::eth::ImportResult::Success == importResult)
+                {
+                    tx->appendNodeContainsTransaction(fromPeer);
+                    tx->appendNodeListContainTransaction(*(txsShard->knownNodes));
                     successCnt++;
+                }
                 else if (dev::eth::ImportResult::AlreadyKnown == importResult)
                 {
                     SYNC_LOG(TRACE)
@@ -203,7 +191,6 @@ void DownloadingTxsQueue::pop2TxPool(
                     << LOG_KV("decodTimeCost", decode_time_cost)
                     << LOG_KV("verifySigTimeCost", verifySig_time_cost)
                     << LOG_KV("importTimeCost", import_time_cost)
-                    << LOG_KV("setTxKnownByTimeCost", setTxKnownBy_time_cost)
                     << LOG_KV("maintainBufferTimeCost", utcTime() - maintainBuffer_start_time)
                     << LOG_KV("totalTimeCostFromStart", utcTime() - start_time);
 }

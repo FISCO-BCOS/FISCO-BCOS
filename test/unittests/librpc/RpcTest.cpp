@@ -546,6 +546,13 @@ BOOST_AUTO_TEST_CASE(testConsensusPart)
     Json::Value observerList = rpc->getObserverList(groupId);
     BOOST_CHECK(observerList.size() == 0);
     BOOST_CHECK_THROW(rpc->getObserverList(invalidGroup), JsonRpcException);
+
+    // test getEpochSealersList
+    BOOST_CHECK_THROW(rpc->getEpochSealersList(invalidGroup), JsonRpcException);
+    auto param = m_ledgerManager->getParamByGroupId(groupId);
+    param->mutableConsensusParam().consensusType = "rpbft";
+    BOOST_CHECK((rpc->getEpochSealersList(groupId)).size() == 1);
+    param->mutableConsensusParam().consensusType = "pbft";
 }
 
 BOOST_AUTO_TEST_CASE(testSyncPart)
@@ -579,8 +586,7 @@ BOOST_AUTO_TEST_CASE(testGetBlockByHash)
 {
     std::string blockHash = "0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e";
     Json::Value response = rpc->getBlockByHash(groupId, blockHash, true);
-
-    BOOST_CHECK(response["number"].asString() == "0x0");
+    BOOST_CHECK(response["number"].asString() == "0x0" || response["number"].asString() == "0");
     BOOST_CHECK(response["hash"].asString() ==
                 "0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e");
     BOOST_CHECK(response["sealer"].asString() == "0x1");
@@ -638,11 +644,10 @@ BOOST_AUTO_TEST_CASE(testGetBlockByHash)
     blockHash = "0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e0755480070";
     BOOST_CHECK_THROW(rpc->getBlockByHash(groupId, blockHash, false), JsonRpcException);
 }
-BOOST_AUTO_TEST_CASE(getBlockByNumber)
-{
-    Json::Value response = rpc->getBlockByNumber(groupId, "0x0", true);
 
-    BOOST_CHECK(response["number"].asString() == "0x0");
+void checkHeaderByNumber(Json::Value const& response)
+{
+    BOOST_CHECK(response["number"].asString() == "0x0" || response["number"].asString() == "0");
     BOOST_CHECK(response["hash"].asString() ==
                 "0xba6e71fbc207e776c74b66bc031d1a599d5b35cd03fd9f5e2331fa5ecdccdc87");
     BOOST_CHECK(response["sealer"].asString() == "0x1");
@@ -650,6 +655,33 @@ BOOST_AUTO_TEST_CASE(getBlockByNumber)
     BOOST_CHECK(response["gasLimit"].asString() == "0x9");
     BOOST_CHECK(response["gasUsed"].asString() == "0x8");
     BOOST_CHECK(response["timestamp"].asString() == "0x9");
+}
+
+BOOST_AUTO_TEST_CASE(getBlockHeader)
+{
+    BOOST_CHECK_THROW(rpc->getBlockHeaderByNumber(invalidGroup, "0x0", false), JsonRpcException);
+    auto blockHash = "0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e0755480070";
+    BOOST_CHECK_THROW(rpc->getBlockHeaderByHash(invalidGroup, blockHash, true), JsonRpcException);
+    BOOST_CHECK_THROW(rpc->getBlockHeaderByHash(groupId, blockHash, true), JsonRpcException);
+
+    // check normal case
+    auto response = rpc->getBlockHeaderByNumber(groupId, "0x0", true);
+    checkHeaderByNumber(response);
+
+    auto hash = "0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e";
+    response = rpc->getBlockHeaderByHash(groupId, hash, true);
+    BOOST_CHECK(response["number"].asString() == "0");
+    BOOST_CHECK(response["sealer"].asString() == "0x1");
+    BOOST_CHECK(response["extraData"][0].asString() == "0x0a");
+    BOOST_CHECK(response["gasLimit"].asString() == "0x9");
+    BOOST_CHECK(response["gasUsed"].asString() == "0x8");
+    BOOST_CHECK(response["timestamp"].asString() == "0x9");
+}
+
+BOOST_AUTO_TEST_CASE(getBlockByNumber)
+{
+    Json::Value response = rpc->getBlockByNumber(groupId, "0x0", true);
+    checkHeaderByNumber(response);
 
     if (g_BCOSConfig.version() == RC1_VERSION)
     {
@@ -961,7 +993,11 @@ BOOST_AUTO_TEST_CASE(testSendRawTransaction)
 
     BOOST_CHECK(response == "0x0accad4228274b0d78939f48149767883a6e99c95941baa950156e926f1c96ba");
 
+    response = rpc->sendRawTransactionAndGetProof(groupId, rlpStr);
+    BOOST_CHECK(response == "0x0accad4228274b0d78939f48149767883a6e99c95941baa950156e926f1c96ba");
+
     BOOST_CHECK_THROW(rpc->sendRawTransaction(invalidGroup, rlpStr), JsonRpcException);
+    BOOST_CHECK_THROW(rpc->sendRawTransactionAndGetProof(invalidGroup, rlpStr), JsonRpcException);
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test

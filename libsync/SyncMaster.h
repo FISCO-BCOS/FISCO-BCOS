@@ -24,9 +24,11 @@
 #include "Common.h"
 #include "DownloadingTxsQueue.h"
 #include "GossipBlockStatus.h"
+#include "NodeTimeMaintenance.h"
 #include "RspBlockReq.h"
 #include "SyncInterface.h"
 #include "SyncMsgEngine.h"
+#include "SyncMsgPacketFactory.h"
 #include "SyncStatus.h"
 #include "SyncTransaction.h"
 #include "SyncTreeTopology.h"
@@ -129,6 +131,20 @@ public:
     {
         m_syncTrans->setTxsStatusGossipMaxPeers(_txsStatusGossipMaxPeers);
     }
+
+    void setSyncMsgPacketFactory(SyncMsgPacketFactory::Ptr _syncMsgPacketFactory)
+    {
+        m_syncMsgPacketFactory = _syncMsgPacketFactory;
+        m_msgEngine->setSyncMsgPacketFactory(_syncMsgPacketFactory);
+    }
+
+    void setNodeTimeMaintenance(NodeTimeMaintenance::Ptr _nodeTimeMaintenance)
+    {
+        m_msgEngine->setNodeTimeMaintenance(_nodeTimeMaintenance);
+        m_nodeTimeMaintenance = _nodeTimeMaintenance;
+    }
+
+    NodeTimeMaintenance::Ptr nodeTimeMaintenance() { return m_nodeTimeMaintenance; }
 
     virtual ~SyncMaster() { stop(); };
     /// start blockSync
@@ -257,6 +273,10 @@ private:
         updateConsensusNodeInfo(sealerList, nodeList);
     }
 
+protected:
+    // factory used to create sync related packet
+    SyncMsgPacketFactory::Ptr m_syncMsgPacketFactory;
+
 private:
     /// p2p service handler
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
@@ -325,6 +345,7 @@ private:
 
     dev::flowlimit::RateLimiter::Ptr m_bandwidthLimiter;
     dev::flowlimit::RateLimiter::Ptr m_nodeBandwidthLimiter;
+    NodeTimeMaintenance::Ptr m_nodeTimeMaintenance;
 
 public:
     void maintainBlocks();

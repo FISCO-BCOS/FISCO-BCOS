@@ -47,6 +47,10 @@ namespace event
 class EventLogFilterManager;
 }
 
+namespace sync
+{
+class NodeTimeMaintenance;
+}
 namespace ledger
 {
 class Ledger : public LedgerInterface
@@ -138,8 +142,12 @@ public:
             Ledger_LOG(INFO) << LOG_DESC("removeNetworkStatHandlerByGroupID for channelRPCServer")
                              << LOG_KV("groupID", groupId());
             m_channelRPCServer->networkStatHandler()->removeGroupP2PStatHandler(groupId());
-            m_stopped.store(true);
         }
+        if (m_channelRPCServer)
+        {
+            m_channelRPCServer->removeSDKAllowListByGroupId(groupId());
+        }
+        m_stopped.store(true);
     }
 
     virtual ~Ledger(){};
@@ -177,11 +185,13 @@ public:
         return m_eventLogFilterManger;
     }
 
+    void reloadSDKAllowList() override;
+
 protected:
     virtual bool initTxPool();
     /// init blockverifier related
     virtual bool initBlockVerifier();
-    virtual bool initBlockChain(GenesisBlockParam& _genesisParam);
+    virtual bool initBlockChain();
     /// create consensus moudle
     virtual bool consensusInitFactory();
     /// init the blockSync
@@ -196,24 +206,33 @@ protected:
     // init QPSLimit
     virtual void initQPSLimit();
 
-    void initGenesisMark(GenesisBlockParam& genesisParam);
     /// load ini config of group
-    void initIniConfig(std::string const& iniConfigFileName);
-    void initDBConfig(boost::property_tree::ptree const& pt);
-
     dev::consensus::ConsensusInterface::Ptr createConsensusEngine(
         dev::PROTOCOL_ID const& _protocolId);
     dev::eth::BlockFactory::Ptr createBlockFactory();
     void initPBFTEngine(dev::consensus::Sealer::Ptr _sealer);
-    void initRotatingPBFTEngine(dev::consensus::Sealer::Ptr _sealer);
+    void initrPBFTEngine(dev::consensus::Sealer::Ptr _sealer);
 
 private:
+    void setSDKAllowList(dev::h512s const& _sdkList);
     /// create PBFTConsensus
     std::shared_ptr<dev::consensus::Sealer> createPBFTSealer();
     /// create RaftConsensus
     std::shared_ptr<dev::consensus::Sealer> createRaftSealer();
 
-    bool isRotatingPBFTEnabled();
+    bool inline normalrPBFTEnabled()
+    {
+        return (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "rpbft") ==
+                   0) &&
+               (g_BCOSConfig.version() < V2_6_0);
+    }
+
+    bool inline vrfBasedrPBFTEnabled()
+    {
+        return (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "rpbft") ==
+                   0) &&
+               (g_BCOSConfig.version() >= V2_6_0);
+    }
 
 protected:
     std::shared_ptr<LedgerParamInterface> m_param = nullptr;
@@ -236,6 +255,8 @@ protected:
     std::atomic_bool m_stopped = {false};
 
     dev::eth::Handler<int64_t> m_handler;
+
+    std::shared_ptr<dev::sync::NodeTimeMaintenance> m_nodeTimeMaintenance;
 };
 }  // namespace ledger
 }  // namespace dev

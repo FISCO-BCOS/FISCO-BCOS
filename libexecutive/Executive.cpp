@@ -13,21 +13,22 @@
 */
 
 #include "Executive.h"
-#include "ExtVM.h"
+#include "EVMHostContext.h"
+#include "EVMHostInterface.h"
+#include "EVMInstance.h"
 #include "StateFace.h"
-
+#include <json/json.h>
+#include <libblockverifier/ExecutiveContext.h>
 #include <libdevcore/CommonIO.h>
 #include <libethcore/ABI.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/EVMSchedule.h>
-#include <libethcore/LastBlockHashesFace.h>
-#include <libevm/VMFactory.h>
+#include <libexecutive/EVMInterface.h>
+#include <libexecutive/VMFactory.h>
 #include <libstorage/Common.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/StorageException.h>
-
-#include <json/json.h>
-#include <libblockverifier/ExecutiveContext.h>
+#include <limits.h>
 #include <boost/timer.hpp>
 #include <numeric>
 
@@ -36,6 +37,9 @@ using namespace dev;
 using namespace dev::eth;
 using namespace dev::executive;
 using namespace dev::storage;
+
+/// Error info for EVMInstance status code.
+using errinfo_evmcStatusCode = boost::error_info<struct tag_evmcStatusCode, evmc_status_code>;
 
 u256 Executive::gasUsed() const
 {
@@ -132,7 +136,6 @@ bool Executive::execute()
         return create(m_t->sender(), m_t->value(), m_t->gasPrice(),
             txGasLimit - (u256)m_baseGasRequired, &m_t->data(), m_t->sender());
     }
-
     else
     {
         return call(m_t->receiveAddress(), m_t->sender(), m_t->value(), m_t->gasPrice(),
@@ -144,7 +147,7 @@ bool Executive::call(Address const& _receiveAddress, Address const& _senderAddre
     u256 const& _value, u256 const& _gasPrice, bytesConstRef _data, u256 const& _gas)
 {
     CallParameters params{
-        _senderAddress, _receiveAddress, _receiveAddress, _value, _value, _gas, _data, {}};
+        _senderAddress, _receiveAddress, _receiveAddress, _value, _value, _gas, _data};
     return call(params, _gasPrice, _senderAddress);
 }
 
@@ -187,7 +190,7 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
     try
     {
         if (m_envInfo.precompiledEngine() &&
-            m_envInfo.precompiledEngine()->isOrginPrecompiled(_p.codeAddress))
+            m_envInfo.precompiledEngine()->isEthereumPrecompiled(_p.codeAddress))
         {
             m_gas = _p.gas;
             bytes output;
@@ -221,9 +224,9 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
             {
                 bytes const& c = m_s->code(_p.codeAddress);
                 h256 codeHash = m_s->codeHash(_p.codeAddress);
-                m_ext = make_shared<ExtVM>(m_s, m_envInfo, _p.receiveAddress, _p.senderAddress,
-                    _origin, _p.apparentValue, _gasPrice, _p.data, &c, codeHash, m_depth, false,
-                    _p.staticCall);
+                m_ext = make_shared<EVMHostContext>(m_s, m_envInfo, _p.receiveAddress,
+                    _p.senderAddress, _origin, _p.apparentValue, _gasPrice, _p.data, c, codeHash,
+                    m_depth, false, _p.staticCall, m_enableFreeStorage);
             }
         }
         // Transfer ether.
@@ -266,7 +269,7 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
     }
 
     if (m_envInfo.precompiledEngine() &&
-        m_envInfo.precompiledEngine()->isOrginPrecompiled(_p.codeAddress))
+        m_envInfo.precompiledEngine()->isEthereumPrecompiled(_p.codeAddress))
     {
         if (g_BCOSConfig.version() >= V2_5_0)
         {
@@ -288,6 +291,12 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
             m_envInfo.precompiledEngine()->executeOriginPrecompiled(_p.codeAddress, _p.data);
         size_t outputSize = output.size();
         m_output = owning_bytes_ref{std::move(output), 0, outputSize};
+        if (g_BCOSConfig.version() >= V2_6_0 && !success)
+        {
+            m_gas = 0;
+            m_excepted = TransactionException::RevertInstruction;
+            return true;  // true means no need to run go().
+        }
     }
     else if (m_envInfo.precompiledEngine() &&
              m_envInfo.precompiledEngine()->isPrecompiled(_p.codeAddress))
@@ -343,9 +352,9 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
     {
         bytes const& c = m_s->code(_p.codeAddress);
         h256 codeHash = m_s->codeHash(_p.codeAddress);
-        m_ext = make_shared<ExtVM>(m_s, m_envInfo, _p.receiveAddress, _p.senderAddress, _origin,
-            _p.apparentValue, _gasPrice, _p.data, &c, codeHash, m_depth, false, _p.staticCall);
-        m_ext->setEvmFlags(m_evmFlags);
+        m_ext = make_shared<EVMHostContext>(m_s, m_envInfo, _p.receiveAddress, _p.senderAddress,
+            _origin, _p.apparentValue, _gasPrice, _p.data, c, codeHash, m_depth, false,
+            _p.staticCall, m_enableFreeStorage);
     }
     else
     {
@@ -453,9 +462,9 @@ bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u2
     // Schedule _init execution if not empty.
     if (!_init.empty())
     {
-        m_ext = make_shared<ExtVM>(m_s, m_envInfo, m_newAddress, _sender, _origin, _endowment,
-            _gasPrice, bytesConstRef(), _init, crypto::Hash(_init), m_depth, true, false);
-        m_ext->setEvmFlags(m_evmFlags);
+        m_ext = make_shared<EVMHostContext>(m_s, m_envInfo, m_newAddress, _sender, _origin,
+            _endowment, _gasPrice, bytesConstRef(), _init.toBytes(), crypto::Hash(_init), m_depth,
+            true, false, m_enableFreeStorage);
     }
     return !m_ext;
 }
@@ -464,7 +473,7 @@ void Executive::grantContractStatusManager(TableFactory::Ptr memoryTableFactory,
     Address const& newAddress, Address const& sender, Address const& origin)
 {
     LOG(DEBUG) << LOG_DESC("grantContractStatusManager") << LOG_KV("contract", newAddress)
-               << LOG_KV("sender account", sender) << LOG_KV("origin account", origin);
+               << LOG_KV("sender", sender) << LOG_KV("origin", origin);
 
     std::string tableName = precompiled::getContractTableName(newAddress);
     auto table = memoryTableFactory->openTable(tableName);
@@ -480,8 +489,8 @@ void Executive::grantContractStatusManager(TableFactory::Ptr memoryTableFactory,
     entry->setField("key", "authority");
     entry->setField("value", origin.hex());
     table->insert("authority", entry);
-    LOG(DEBUG) << LOG_DESC("grantContractStatusManager add origin")
-               << LOG_KV("authoriy", origin.hex());
+    LOG(DEBUG) << LOG_DESC("grantContractStatusManager add authoriy")
+               << LOG_KV("origin", origin.hex());
 
     if (origin != sender)
     {
@@ -511,8 +520,8 @@ void Executive::grantContractStatusManager(TableFactory::Ptr memoryTableFactory,
                     entry->setField("key", "authority");
                     entry->setField("value", authority);
                     table->insert("authority", entry);
-                    LOG(DEBUG) << LOG_DESC("grantContractStatusManager add sender")
-                               << LOG_KV("authoriy", authority);
+                    LOG(DEBUG) << LOG_DESC("grantContractStatusManager add authoriy")
+                               << LOG_KV("sender", authority);
                 }
             }
         }
@@ -520,7 +529,7 @@ void Executive::grantContractStatusManager(TableFactory::Ptr memoryTableFactory,
     return;
 }
 
-bool Executive::go(OnOpFunc const& _onOp)
+bool Executive::go()
 {
     if (m_ext)
     {
@@ -529,31 +538,54 @@ bool Executive::go(OnOpFunc const& _onOp)
 #endif
         try
         {
-            // Create VM instance. Force Interpreter if tracing requested.
+            auto getEVMCMessage = [=]() -> shared_ptr<evmc_message> {
+                // the block number will be larger than 0,
+                // can be controlled by the programmers
+                assert(m_ext->envInfo().number() >= 0);
+                constexpr int64_t int64max = std::numeric_limits<int64_t>::max();
+                if (m_gas > int64max || m_ext->envInfo().gasLimit() > int64max)
+                {
+                    LOG(ERROR) << LOG_DESC("Gas overflow") << LOG_KV("gas", m_gas)
+                               << LOG_KV("gasLimit", m_ext->envInfo().gasLimit())
+                               << LOG_KV("max gas/gasLimit", int64max);
+                    BOOST_THROW_EXCEPTION(GasOverflow());
+                }
+                assert(m_ext->depth() <= static_cast<size_t>(std::numeric_limits<int32_t>::max()));
+                evmc_call_kind kind = m_ext->isCreate() ? EVMC_CREATE : EVMC_CALL;
+                uint32_t flags = m_ext->staticCall() ? EVMC_STATIC : 0;
+                // this is ensured by solidity compiler
+                assert(flags != EVMC_STATIC || kind == EVMC_CALL);  // STATIC implies a CALL.
+                auto leftGas = static_cast<int64_t>(m_gas);
+                return shared_ptr<evmc_message>(
+                    new evmc_message{kind, flags, static_cast<int32_t>(m_ext->depth()), leftGas,
+                        toEvmC(m_ext->myAddress()), toEvmC(m_ext->caller()), m_ext->data().data(),
+                        m_ext->data().size(), toEvmC(m_ext->value()), toEvmC(0x0_cppui256)});
+            };
+            // Create VM instance.
             auto vm = VMFactory::create();
             if (m_isCreation)
             {
                 m_s->clearStorage(m_ext->myAddress());
-                auto out = vm->exec(m_gas, *m_ext, _onOp);
-
-                m_res.gasForDeposit = m_gas;
-                m_res.depositSize = out.size();
-
-                if (out.size() > m_ext->evmSchedule().maxCodeSize)
+                auto mode = toRevision(m_ext->evmSchedule());
+                auto emvcMessage = getEVMCMessage();
+                auto ret = vm->exec(
+                    *m_ext, mode, emvcMessage.get(), m_ext->code().data(), m_ext->code().size());
+                parseEVMCResult(ret);
+                auto outputRef = ret->output();
+                if (outputRef.size() > m_ext->evmSchedule().maxCodeSize)
                 {
                     m_exceptionReason << LOG_KV("reason", "Code is too long")
                                       << LOG_KV("size_limit", m_ext->evmSchedule().maxCodeSize)
-                                      << LOG_KV("size", out.size());
+                                      << LOG_KV("size", outputRef.size());
                     BOOST_THROW_EXCEPTION(OutOfGas());
                 }
-                else if (out.size() * m_ext->evmSchedule().createDataGas <= m_gas)
+                else if (outputRef.size() * m_ext->evmSchedule().createDataGas <= m_gas)
                 {
-                    m_res.codeDeposit = CodeDeposit::Success;
                     // When FreeStorage VM is enabled,
                     // the storage gas consumption of createData is not calculated additionally
                     if (!m_enableFreeStorage)
                     {
-                        m_gas -= out.size() * m_ext->evmSchedule().createDataGas;
+                        m_gas -= outputRef.size() * m_ext->evmSchedule().createDataGas;
                     }
                 }
                 else
@@ -565,16 +597,20 @@ bool Executive::go(OnOpFunc const& _onOp)
                     }
                     else
                     {
-                        m_res.codeDeposit = CodeDeposit::Failed;
-                        out = {};
+                        outputRef = {};
                     }
                 }
-
-                m_res.output = out.toVector();  // copy output to execution result
-                m_s->setCode(m_ext->myAddress(), out.toVector());
+                m_s->setCode(m_ext->myAddress(),
+                    bytes(outputRef.data(), outputRef.data() + outputRef.size()));
             }
             else
-                m_output = vm->exec(m_gas, *m_ext, _onOp);
+            {
+                auto mode = toRevision(m_ext->evmSchedule());
+                auto emvcMessage = getEVMCMessage();
+                auto ret = vm->exec(
+                    *m_ext, mode, emvcMessage.get(), m_ext->code().data(), m_ext->code().size());
+                parseEVMCResult(ret);
+            }
         }
         catch (RevertInstruction& _e)
         {
@@ -602,7 +638,15 @@ bool Executive::go(OnOpFunc const& _onOp)
         catch (PermissionDenied const& _e)
         {
             revert();
-            m_excepted = TransactionException::PermissionDenied;
+            if (g_BCOSConfig.version() >= V2_6_0)
+            {
+                m_excepted = TransactionException::PermissionDenied;
+            }
+            else
+            {
+                m_gas = 0;
+                m_excepted = TransactionException::RevertInstruction;
+            }
         }
         catch (NotEnoughCash const& _e)
         {
@@ -644,10 +688,6 @@ bool Executive::go(OnOpFunc const& _onOp)
             // has drawbacks. Essentially, the amount of ram has to be increased here.
         }
 
-        if (m_output)
-            // Copy full output:
-            m_res.output = m_output.toVector();
-
 #if ETH_TIMED_EXECUTIONS
         cnote << "VM took:" << t.elapsed() << "; gas used: " << (sgas - m_endGas);
 #endif
@@ -676,12 +716,6 @@ bool Executive::finalize()
     if (m_ext)
         m_logs = m_ext->sub().logs;
 
-
-    m_res.gasUsed = gasUsed();
-    m_res.excepted = m_excepted;  // TODO: m_except is used only in ExtVM::call
-    m_res.newAddress = m_newAddress;
-    m_res.gasRefunded = m_ext ? m_ext->sub().refunds : 0;
-
     return (m_excepted == TransactionException::None);
 }
 
@@ -697,6 +731,102 @@ void Executive::revert()
     memoryTableFactory->rollback(m_tableFactorySavepoint);
 }
 
+void Executive::parseEVMCResult(std::shared_ptr<eth::Result> _result)
+{
+    auto outputRef = _result->output();
+    switch (_result->status())
+    {
+    case EVMC_SUCCESS:
+    {
+        m_gas = _result->gasLeft();
+        if (!m_isCreation)
+        {
+            m_output = owning_bytes_ref(
+                bytes(outputRef.data(), outputRef.data() + outputRef.size()), 0, outputRef.size());
+        }
+        break;
+    }
+    case EVMC_REVERT:
+    {
+        // FIXME: Copy the output for now, but copyless version possible.
+        m_gas = _result->gasLeft();
+        revert();
+        m_output = owning_bytes_ref(
+            bytes(outputRef.data(), outputRef.data() + outputRef.size()), 0, outputRef.size());
+        m_excepted = TransactionException::RevertInstruction;
+        break;
+    }
+    case EVMC_OUT_OF_GAS:
+    case EVMC_FAILURE:
+    {
+        revert();
+        m_excepted = TransactionException::OutOfGas;
+        break;
+    }
+
+    case EVMC_INVALID_INSTRUCTION:  // NOTE: this could have its own exception
+    case EVMC_UNDEFINED_INSTRUCTION:
+    {
+        m_gas = 0;
+        m_excepted = TransactionException::BadInstruction;
+        revert();
+        break;
+    }
+
+    case EVMC_BAD_JUMP_DESTINATION:
+    {
+        m_gas = 0;
+        m_excepted = TransactionException::BadJumpDestination;
+        revert();
+        break;
+    }
+    case EVMC_STACK_OVERFLOW:
+    {
+        m_gas = 0;
+        m_excepted = TransactionException::OutOfStack;
+        revert();
+        break;
+    }
+    case EVMC_STACK_UNDERFLOW:
+    {
+        m_gas = 0;
+        m_excepted = TransactionException::StackUnderflow;
+        revert();
+        break;
+    }
+    case EVMC_INVALID_MEMORY_ACCESS:
+    {
+        m_gas = 0;
+        LOG(WARNING) << LOG_DESC("VM error, BufferOverrun");
+        m_excepted = TransactionException::Unknown;
+        revert();
+        // BOOST_THROW_EXCEPTION(BufferOverrun());
+        break;
+    }
+    case EVMC_STATIC_MODE_VIOLATION:
+    {
+        m_gas = 0;
+        LOG(WARNING) << LOG_DESC("VM error, DisallowedStateChange");
+        m_excepted = TransactionException::Unknown;
+        revert();
+        // BOOST_THROW_EXCEPTION(DisallowedStateChange());
+        break;
+    }
+    case EVMC_INTERNAL_ERROR:
+    default:
+    {
+        if (_result->status() <= EVMC_INTERNAL_ERROR)
+        {
+            BOOST_THROW_EXCEPTION(InternalVMError{} << errinfo_evmcStatusCode(_result->status()));
+        }
+        else
+        {  // These cases aren't really internal errors, just more specific error codes returned by
+           // the VM. Map all of them to OOG.
+            BOOST_THROW_EXCEPTION(OutOfGas());
+        }
+    }
+    }
+}
 
 void Executive::loggingException()
 {

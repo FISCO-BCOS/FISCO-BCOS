@@ -85,10 +85,24 @@ public:
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, "param2",
                                    jsonrpc::JSON_STRING, "param3", jsonrpc::JSON_BOOLEAN, NULL),
             &dev::rpc::RpcFace::getBlockByHashI);
+
+        this->bindAndAddMethod(
+            jsonrpc::Procedure("getBlockHeaderByHash", jsonrpc::PARAMS_BY_POSITION,
+                jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, "param2",
+                jsonrpc::JSON_STRING, "param3", jsonrpc::JSON_BOOLEAN, NULL),
+            &dev::rpc::RpcFace::getBlockHeaderByHashI);
+
         this->bindAndAddMethod(jsonrpc::Procedure("getBlockByNumber", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, "param2",
                                    jsonrpc::JSON_STRING, "param3", jsonrpc::JSON_BOOLEAN, NULL),
             &dev::rpc::RpcFace::getBlockByNumberI);
+
+        this->bindAndAddMethod(
+            jsonrpc::Procedure("getBlockHeaderByNumber", jsonrpc::PARAMS_BY_POSITION,
+                jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, "param2",
+                jsonrpc::JSON_STRING, "param3", jsonrpc::JSON_BOOLEAN, NULL),
+            &dev::rpc::RpcFace::getBlockHeaderByNumberI);
+
         this->bindAndAddMethod(jsonrpc::Procedure("getBlockHashByNumber",
                                    jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, "param1",
                                    jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_STRING, NULL),
@@ -245,6 +259,19 @@ public:
         response = this->getBlockByNumber(boost::lexical_cast<int>(request[0u].asString()),
             request[1u].asString(), request[2u].asBool());
     }
+
+    inline virtual void getBlockHeaderByNumberI(const Json::Value& request, Json::Value& response)
+    {
+        response = this->getBlockHeaderByNumber(boost::lexical_cast<int>(request[0u].asString()),
+            request[1u].asString(), request[2u].asBool());
+    }
+
+    inline virtual void getBlockHeaderByHashI(const Json::Value& request, Json::Value& response)
+    {
+        response = this->getBlockHeaderByHash(boost::lexical_cast<int>(request[0u].asString()),
+            request[1u].asString(), request[2u].asBool());
+    }
+
     inline virtual void getBlockHashByNumberI(const Json::Value& request, Json::Value& response)
     {
         response = this->getBlockHashByNumber(
@@ -380,6 +407,11 @@ public:
     virtual Json::Value getBlockByHash(int param1, const std::string& param2, bool param3) = 0;
     virtual Json::Value getBlockByNumber(int param1, const std::string& param2, bool param3) = 0;
     virtual std::string getBlockHashByNumber(int param1, const std::string& param2) = 0;
+
+    virtual Json::Value getBlockHeaderByNumber(
+        int _groupID, const std::string& _blockNumber, bool _includeSigList = false) = 0;
+    virtual Json::Value getBlockHeaderByHash(
+        int _groupID, const std::string& _blockHash, bool _includeSigList = false) = 0;
 
     // transaction part
     /// @return the information about a transaction requested by transaction hash.

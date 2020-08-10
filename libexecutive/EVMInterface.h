@@ -14,7 +14,7 @@
     You should have received a copy of the GNU General Public License
     along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file VMFace.h
+/** @file EVMInterface.h
  * @author wheatli
  * @date 2018.8.28
  * @record copy from aleth, this is a vm interface
@@ -22,7 +22,7 @@
 
 #pragma once
 
-#include "ExtVMFace.h"
+#include "EVMHostContext.h"
 #include <libethcore/Exceptions.h>
 #include <memory>
 
@@ -30,17 +30,19 @@ namespace dev
 {
 namespace eth
 {
+class Result;
 /// EVM Virtual Machine interface
-class VMFace
+class EVMInterface
 {
 public:
-    VMFace() = default;
-    virtual ~VMFace() = default;
-    VMFace(VMFace const&) = delete;
-    VMFace& operator=(VMFace const&) = delete;
+    EVMInterface() = default;
+    virtual ~EVMInterface() = default;
+    EVMInterface(EVMInterface const&) = delete;
+    EVMInterface& operator=(EVMInterface const&) = delete;
 
     /// VM implementation
-    virtual owning_bytes_ref exec(u256& io_gas, ExtVMFace& _ext, OnOpFunc const& _onOp) = 0;
+    virtual std::shared_ptr<Result> exec(executive::EVMHostContext& _ext, evmc_revision _rev,
+        evmc_message* _msg, const uint8_t* _code, size_t _code_size) = 0;
 };
 }  // namespace eth
 }  // namespace dev

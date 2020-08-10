@@ -27,7 +27,6 @@
 #include <libdevcore/FixedHash.h>
 #include <libethcore/EVMFlags.h>
 #include <libethcore/Protocol.h>
-#include <boost/property_tree/ptree.hpp>
 #include <memory>
 #include <vector>
 
@@ -52,10 +51,20 @@ struct TxPoolParam
 };
 struct ConsensusParam
 {
+    // consensus related genesis param
     std::string consensusType;
     dev::h512s sealerList = dev::h512s();
     dev::h512s observerList = dev::h512s();
+    // default consensus timeout time is 3s
+    int64_t consensusTimeout = 3;
     int64_t maxTransactions;
+    // rPBFT related
+    // sealers size for each RPBFT epoch, default is 10
+    int64_t epochSealerNum = 10;
+    // block num for each epoch, default is 10
+    int64_t epochBlockNum = 10;
+
+    // consensus related Non-genesis param
     int8_t maxTTL;
     // limit ttl to 5
     int8_t ttlLimit = 5;
@@ -69,10 +78,6 @@ struct ConsensusParam
     /// block size increase ratio
     float blockSizeIncreaseRatio = 0.5;
 
-    // sealers size for each RPBFT epoch, default is 10
-    int64_t epochSealerNum = 10;
-    // block num for each epoch, default is 10
-    int64_t epochBlockNum = 10;
     // enable optimize ttl or not
     bool enableTTLOptimize;
     bool enablePrepareWithTxsHash;
@@ -94,7 +99,6 @@ struct AMDBParam
 #define SYNC_IDLE_WAIT_DEFAULT 200
 struct SyncParam
 {
-    /// TODO: syncParam related
     signed idleWaitMs = SYNC_IDLE_WAIT_DEFAULT;
     // enable send transactions by tree
     bool enableSendTxsByTree = false;
@@ -176,6 +180,11 @@ struct FlowControlParam
     int64_t maxBurstReqNum;
 };
 
+struct PermissionParam
+{
+    dev::h512s sdkAllowList;
+};
+
 class LedgerParam : public LedgerParamInterface
 {
 public:
@@ -194,16 +203,19 @@ public:
     {
         return m_eventLogFilterParams;
     }
-    blockchain::GenesisBlockParam& mutableGenesisBlockParam() override
-    {
-        return m_genesisBlockParam;
-    }
     void parseGenesisConfig(const std::string& _genesisFile);
     void parseIniConfig(const std::string& _iniFile, const std::string& _dataPath = "data/");
     void init(const std::string& _configFilePath, const std::string& _dataPath = "data/");
     const dev::GROUP_ID& groupId() const { return m_groupID; }
 
-    blockchain::GenesisBlockParam generateGenesisMark();
+    std::string& mutableGenesisMark() override { return m_genesisMark; }
+    PermissionParam& mutablePermissionParam() override { return m_permissionParam; }
+    void generateGenesisMark();
+
+    void parseSDKAllowList(dev::h512s& _nodeList, boost::property_tree::ptree const& _pt) override;
+
+    std::string const& iniConfigPath() override { return m_iniConfigPath; }
+    std::string const& genesisConfigPath() override { return m_genesisConfigPath; }
 
 private:
     void initStorageConfig(boost::property_tree::ptree const& pt);
@@ -216,6 +228,8 @@ private:
     void initEventLogFilterManagerConfig(boost::property_tree::ptree const& pt);
     void initFlowControlConfig(boost::property_tree::ptree const& _pt);
     void setEVMFlags(boost::property_tree::ptree const& _pt);
+    void parsePublicKeyListOfSection(dev::h512s& _nodeList, boost::property_tree::ptree const& _pt,
+        std::string const& _sectionName, std::string const& _subSectionName);
 
 private:
     dev::GROUP_ID m_groupID;
@@ -230,8 +244,11 @@ private:
     TxParam m_txParam;
     FlowControlParam m_flowControlParam;
     EventLogFilterManagerParams m_eventLogFilterParams;
-    dev::blockchain::GenesisBlockParam m_genesisBlockParam;
+    PermissionParam m_permissionParam;
+    std::string m_genesisMark;
 
+    std::string m_iniConfigPath;
+    std::string m_genesisConfigPath;
 
 private:
     std::string uriEncode(const std::string& keyWord);

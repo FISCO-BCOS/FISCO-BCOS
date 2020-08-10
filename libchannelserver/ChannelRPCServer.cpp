@@ -36,8 +36,10 @@
 #include "libp2p/P2PMessageFactory.h"           // for P2PMessageFac...
 #include "libp2p/P2PSession.h"                  // for P2PSession
 #include <json/json.h>
+#include <libeventfilter/Common.h>
 #include <libp2p/P2PMessage.h>
 #include <libp2p/Service.h>
+#include <librpc/StatisticProtocolServer.h>
 #include <unistd.h>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/asio.hpp>
@@ -47,7 +49,6 @@
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
 #include <string>
-
 
 using namespace std;
 using namespace dev;
@@ -423,17 +424,35 @@ void dev::ChannelRPCServer::onClientRPCRequest(
 
     try
     {
-        OnRequest(body, addInfo);
+        OnRpcRequest(session, body, addInfo);
     }
     catch (std::exception& e)
     {
-        CHANNEL_LOG(ERROR) << "Error while onRequest rpc: " << boost::diagnostic_information(e);
+        CHANNEL_LOG(ERROR) << "Error while OnRpcRequest rpc: " << boost::diagnostic_information(e);
     }
 
     if (m_callbackSetter)
     {
         m_callbackSetter(NULL, NULL);
     }
+}
+
+bool dev::ChannelRPCServer::OnRpcRequest(
+    dev::channel::ChannelSession::Ptr _session, const std::string& request, void* addInfo)
+{
+    string response;
+    auto handler = this->GetHandler();
+    if (!handler)
+    {
+        return false;
+    }
+    auto statisticProtocolServer = dynamic_cast<StatisticProtocolServer*>(handler);
+    statisticProtocolServer->HandleChannelRequest(
+        request, response, [this, _session](dev::GROUP_ID _groupId) {
+            return checkSDKPermission(_groupId, _session->remotePublicKey());
+        });
+    SendResponse(response, addInfo);
+    return true;
 }
 
 void dev::ChannelRPCServer::onClientEventLogRequest(
@@ -488,13 +507,28 @@ void dev::ChannelRPCServer::onClientEventLogRequest(
             return false;
         };
 
-        auto activeCallback = [serverRef, sessionRef]() {
+        auto sessionCheckerCallback = [this, serverRef, sessionRef](GROUP_ID _groupId) {
             auto server = serverRef.lock();
             auto session = sessionRef.lock();
-            return server && session && session->actived();
+            auto sessionActived = server && session && session->actived();
+            if (!sessionActived)
+            {
+                CHANNEL_LOG(DEBUG) << LOG_DESC("Push event failed for session invactived")
+                                   << LOG_KV("groupId", _groupId);
+                return dev::event::filter_status::CALLBACK_FAILED;
+            }
+            if (!checkSDKPermission(_groupId, session->remotePublicKey()))
+            {
+                return dev::event::filter_status::REMOTE_PEERS_ACCESS_DENIED;
+            }
+            return dev::event::filter_status::CHECK_VALID;
         };
 
-        int32_t ret = m_eventFilterCallBack(data, protocolVersion, respCallback, activeCallback);
+        // checkSDKPermission when receive CLIENT_REGISTER_EVENT_LOG
+        int32_t ret = m_eventFilterCallBack(data, protocolVersion, respCallback,
+            sessionCheckerCallback, [this, session](dev::GROUP_ID _groupId) {
+                return checkSDKPermission(_groupId, session->remotePublicKey());
+            });
 
         CHANNEL_LOG(TRACE) << "onClientEventLogRequest" << LOG_KV("seq", seq) << LOG_KV("ret", ret)
                            << LOG_KV("request", data);
@@ -655,6 +689,17 @@ void dev::ChannelRPCServer::asyncPushChannelMessageHandler(
 void dev::ChannelRPCServer::onNodeChannelRequest(
     dev::network::NetworkException, std::shared_ptr<p2p::P2PSession> s, p2p::P2PMessage::Ptr msg)
 {
+    NodeID nodeID;
+
+    if (s)
+    {
+        nodeID = s->nodeID();
+    }
+    else
+    {
+        nodeID = m_service->id();
+    }
+
     auto channelMessage = _server->messageFactory()->buildMessage();
     ssize_t result = channelMessage->decode(msg->buffer()->data(), msg->buffer()->size());
 
@@ -665,7 +710,7 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
         return;
     }
 
-    CHANNEL_LOG(DEBUG) << "receive node request" << LOG_KV("from", s->nodeID())
+    CHANNEL_LOG(DEBUG) << "receive node request" << LOG_KV("from", nodeID)
                        << LOG_KV("length", msg->buffer()->size())
                        << LOG_KV("type", channelMessage->type())
                        << LOG_KV("seq", channelMessage->seq());
@@ -687,7 +732,6 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
         {
             try
             {
-                auto nodeID = s->nodeID();
                 auto p2pMessage = msg;
                 auto service = m_service;
                 asyncPushChannelMessage(topic, channelMessage,
@@ -745,7 +789,7 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
                 p2pResponse->setPacketType(0u);
                 p2pResponse->setSeq(msg->seq());
                 m_service->asyncSendMessageByNodeID(
-                    s->nodeID(), p2pResponse, CallbackFuncWithSession(), dev::network::Options());
+                    nodeID, p2pResponse, CallbackFuncWithSession(), dev::network::Options());
             }
         }
         else if (channelMessage->type() == AMOP_MULBROADCAST)
@@ -1259,4 +1303,58 @@ std::vector<dev::channel::ChannelSession::Ptr> ChannelRPCServer::getSessionByTop
     }
 
     return activedSessions;
+}
+
+void ChannelRPCServer::registerSDKAllowListByGroupId(
+    dev::GROUP_ID const& _groupId, dev::PeerWhitelist::Ptr _allowList)
+{
+    CHANNEL_LOG(INFO) << LOG_DESC("registerSDKAllowListByGroupId") << LOG_KV("groupId", _groupId)
+                      << LOG_KV("size", _allowList->size());
+    WriteGuard l(x_group2SDKAllowList);
+    if (_allowList->size() == 0)
+    {
+        CHANNEL_LOG(INFO) << LOG_DESC(
+            "Disable group-level sdk permission control for sdk allowlist is empty");
+        if (m_group2SDKAllowList->count(_groupId))
+        {
+            m_group2SDKAllowList->erase(_groupId);
+        }
+        return;
+    }
+    (*m_group2SDKAllowList)[_groupId] = _allowList;
+}
+
+void ChannelRPCServer::removeSDKAllowListByGroupId(dev::GROUP_ID const& _groupId)
+{
+    if (!m_group2SDKAllowList)
+    {
+        return;
+    }
+    CHANNEL_LOG(INFO) << LOG_DESC("removeSDKAllowListByGroupId") << LOG_KV("groupId", _groupId);
+    UpgradableGuard l(x_group2SDKAllowList);
+    if (m_group2SDKAllowList->count(_groupId))
+    {
+        UpgradeGuard ul(l);
+        m_group2SDKAllowList->erase(_groupId);
+    }
+}
+
+bool ChannelRPCServer::checkSDKPermission(dev::GROUP_ID _groupId, dev::h512 const& _sdkPublicKey)
+{
+    if (-1 == _groupId)
+    {
+        return true;
+    }
+    // SDK allowlist is not set
+    auto allowList = getSDKAllowListByGroupId(_groupId);
+    if (!allowList)
+    {
+        return true;
+    }
+    // check if the requesting SDK is on the allowlist
+    if (allowList->has(_sdkPublicKey))
+    {
+        return true;
+    }
+    return false;
 }

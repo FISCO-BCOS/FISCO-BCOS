@@ -22,7 +22,7 @@
 
 #pragma once
 
-#include "VMFace.h"
+#include "EVMInterface.h"
 
 #include <boost/program_options/options_description.hpp>
 
@@ -33,7 +33,7 @@ namespace eth
 enum class VMKind
 {
     Interpreter,
-    JIT,
+    evmone,
     Hera,
     DLL
 };
@@ -55,10 +55,10 @@ public:
     ~VMFactory() = delete;
 
     /// Creates a VM instance of the global kind (controlled by the --vm command line option).
-    static std::unique_ptr<VMFace> create();
+    static std::unique_ptr<EVMInterface> create();
 
     /// Creates a VM instance of the kind provided.
-    static std::unique_ptr<VMFace> create(VMKind _kind);
+    static std::unique_ptr<EVMInterface> create(VMKind _kind);
 };
 }  // namespace eth
 }  // namespace dev

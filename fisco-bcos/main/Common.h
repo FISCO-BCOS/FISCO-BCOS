@@ -81,16 +81,14 @@ std::string initCommandLine(int argc, const char* argv[])
     if (vm.count("config") || vm.count("c"))
     {
         configPath = vm["config"].as<std::string>();
+        if (boost::filesystem::exists(configPath))
+        {
+            std::cout << "config file path : " << configPath << std::endl;
+            return configPath;
+        }
     }
-    else if (boost::filesystem::exists(configPath))
-    {
-        std::cout << "use default configPath : " << configPath << std::endl;
-    }
-    else
-    {
-        std::cout << main_options << std::endl;
-        exit(0);
-    }
+    std::cout << main_options << std::endl;
+    exit(0);
 
     return configPath;
 }

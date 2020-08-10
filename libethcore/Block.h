@@ -38,13 +38,16 @@ namespace eth
 class Block
 {
 public:
+    using SigListType = std::vector<std::pair<u256, std::vector<unsigned char>>>;
+    using SigListPtrType =
+        std::shared_ptr<std::vector<std::pair<u256, std::vector<unsigned char>>>>;
     using Ptr = std::shared_ptr<Block>;
     ///-----constructors of Block
     Block()
     {
         m_transactions = std::make_shared<Transactions>();
         m_transactionReceipts = std::make_shared<TransactionReceipts>();
-        m_sigList = std::make_shared<std::vector<std::pair<u256, std::vector<unsigned char>>>>();
+        m_sigList = std::make_shared<SigListType>();
     }
     explicit Block(bytesConstRef _data,
         CheckTransaction const _option = CheckTransaction::Everything, bool _withReceipt = true,
@@ -126,10 +129,7 @@ public:
     BlockHeader const& blockHeader() const { return m_blockHeader; }
     BlockHeader& header() { return m_blockHeader; }
     h256 headerHash() const { return m_blockHeader.hash(); }
-    std::shared_ptr<std::vector<std::pair<u256, std::vector<unsigned char>>>> sigList() const
-    {
-        return m_sigList;
-    }
+    SigListPtrType sigList() const { return m_sigList; }
 
     std::shared_ptr<std::vector<u256>> getAllNonces() const
     {
@@ -173,11 +173,7 @@ public:
     /// set block header
     void setBlockHeader(BlockHeader const& _blockHeader) { m_blockHeader = _blockHeader; }
     /// set sig list
-    void inline setSigList(
-        std::shared_ptr<std::vector<std::pair<u256, std::vector<unsigned char>>>> _sigList)
-    {
-        m_sigList = _sigList;
-    }
+    void inline setSigList(SigListPtrType _sigList) { m_sigList = _sigList; }
     /// get hash of block header
     h256 blockHeaderHash() { return m_blockHeader.hash(); }
     bool isSealed() const { return (m_blockHeader.sealer() != Invalid256); }
@@ -295,13 +291,13 @@ public:
         }
     }
 
-protected:
     /// callback this function when transaction has been changed
     void noteChange()
     {
         WriteGuard l_txscache(x_txsCache);
         m_txsCache = bytes();
     }
+protected:
 
     /// callback this function when transaction receipt has been changed
     void noteReceiptChange()
@@ -317,7 +313,7 @@ protected:
     mutable std::shared_ptr<Transactions> m_transactions;
     std::shared_ptr<TransactionReceipts> m_transactionReceipts;
     /// sig list (field 3)
-    std::shared_ptr<std::vector<std::pair<u256, std::vector<unsigned char>>>> m_sigList;
+    SigListPtrType m_sigList;
     /// m_transactions converted bytes, when m_transactions changed,
     /// should refresh this catch when encode
 

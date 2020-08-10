@@ -271,16 +271,18 @@ void SyncMaster::broadcastSyncStatus(BlockNumber const& _blockNumber, h256 const
 bool SyncMaster::sendSyncStatusByNodeId(
     BlockNumber const& blockNumber, h256 const& currentHash, dev::network::NodeID const& nodeId)
 {
-    SyncStatusPacket packet;
-    packet.encode(blockNumber, m_genesisHash, currentHash);
+    auto packet = m_syncMsgPacketFactory->createSyncStatusPacket(
+        m_nodeId, blockNumber, m_genesisHash, currentHash);
+    packet->alignedTime = utcTime();
+    packet->encode();
     m_service->asyncSendMessageByNodeID(
-        nodeId, packet.toMessage(m_protocolId), CallbackFuncWithSession(), Options());
-
+        nodeId, packet->toMessage(m_protocolId), CallbackFuncWithSession(), Options());
     SYNC_LOG(DEBUG) << LOG_BADGE("Status") << LOG_DESC("Send current status when maintainBlocks")
                     << LOG_KV("number", blockNumber)
                     << LOG_KV("genesisHash", m_genesisHash.abridged())
                     << LOG_KV("currentHash", currentHash.abridged())
-                    << LOG_KV("peer", nodeId.abridged());
+                    << LOG_KV("peer", nodeId.abridged())
+                    << LOG_KV("currentTime", packet->alignedTime);
     return true;
 }
 
@@ -612,22 +614,27 @@ void SyncMaster::maintainPeersConnection()
         if (member != m_nodeId && !m_syncStatus->hasPeer(member))
         {
             // create a peer
-            SyncPeerInfo newPeer{member, 0, m_genesisHash, m_genesisHash};
-            m_syncStatus->newSyncPeerStatus(newPeer);
+            auto newPeerStatus = m_syncMsgPacketFactory->createSyncStatusPacket(
+                member, 0, m_genesisHash, m_genesisHash);
+            m_syncStatus->newSyncPeerStatus(newPeerStatus);
 
             if (m_needSendStatus)
             {
                 // send my status to her
-                SyncStatusPacket packet;
-                packet.encode(currentNumber, m_genesisHash, currentHash);
+                auto packet = m_syncMsgPacketFactory->createSyncStatusPacket(
+                    m_nodeId, currentNumber, m_genesisHash, currentHash);
+                packet->alignedTime = utcTime();
+                packet->encode();
+
                 m_service->asyncSendMessageByNodeID(
-                    member, packet.toMessage(m_protocolId), CallbackFuncWithSession(), Options());
+                    member, packet->toMessage(m_protocolId), CallbackFuncWithSession(), Options());
                 SYNC_LOG(DEBUG) << LOG_BADGE("Status")
                                 << LOG_DESC("Send current status to new peer")
                                 << LOG_KV("number", int(currentNumber))
                                 << LOG_KV("genesisHash", m_genesisHash.abridged())
                                 << LOG_KV("currentHash", currentHash.abridged())
-                                << LOG_KV("peer", member.abridged());
+                                << LOG_KV("peer", member.abridged())
+                                << LOG_KV("currentTime", packet->alignedTime);
             }
         }
     }

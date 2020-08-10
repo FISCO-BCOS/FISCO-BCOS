@@ -21,6 +21,7 @@
 #pragma once
 #include "libdevcore/Exceptions.h"
 #include "libprecompiled/Precompiled.h"
+#include <libdevcore/Address.h>
 #include <memory>
 #include <string>
 
@@ -135,6 +136,21 @@ void checkNameValidate(const std::string& tableName, std::string& keyField,
 int checkLengthValidate(const std::string& field_value, int32_t max_length, int32_t errorCode,
     bool throwStorageException = true);
 
+uint32_t getParamFunc(bytesConstRef _param);
+uint32_t getFuncSelectorByFunctionName(std::string const& _functionName);
+
+bytesConstRef getParamData(bytesConstRef _param);
+
+dev::h512s getNodeListByType(std::shared_ptr<dev::storage::Table> _consTable, int64_t _blockNumber,
+    std::string const& _type);
+
+std::shared_ptr<std::pair<std::string, int64_t>> getSysteConfigByKey(
+    std::shared_ptr<dev::storage::Table> _sysConfigTable, std::string const& _key,
+    int64_t const& _num);
+
+std::shared_ptr<dev::storage::Table> openTable(
+    std::shared_ptr<dev::blockverifier::ExecutiveContext> context, const std::string& tableName);
+
 const int SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH = 64;
 const int SYS_TABLE_VALUE_FIELD_MAX_LENGTH = 1024;
 const int CNS_VERSION_MAX_LENGTH = 128;
@@ -144,6 +160,54 @@ const int USER_TABLE_NAME_MAX_LENGTH = 64;
 const int USER_TABLE_NAME_MAX_LENGTH_S = 50;
 const int USER_TABLE_FIELD_VALUE_MAX_LENGTH = 16 * 1024 * 1024 - 1;
 
+// Define precompiled contract address
+const Address SYS_CONFIG_ADDRESS = Address(0x1000);
+const Address TABLE_FACTORY_ADDRESS = Address(0x1001);
+const Address CRUD_ADDRESS = Address(0x1002);
+const Address CONSENSUS_ADDRESS = Address(0x1003);
+const Address CNS_ADDRESS = Address(0x1004);
+const Address PERMISSION_ADDRESS = Address(0x1005);
+const Address PARALLEL_CONFIG_ADDRESS = Address(0x1006);
+const Address CONTRACT_LIFECYCLE_ADDRESS = Address(0x1007);
+const Address CHAINGOVERNANCE_ADDRESS = Address(0x1008);
+const Address KVTABLE_FACTORY_ADDRESS = Address(0x1010);
+const Address WORKING_SEALER_MGR_ADDRESS = Address(0x1011);
 
+/// \brief Sign of the sealer is valid or not
+const char* const NODE_TYPE = "type";
+const char* const NODE_TYPE_SEALER = "sealer";
+const char* const NODE_TYPE_OBSERVER = "observer";
+// working sealer
+const char* const NODE_TYPE_WORKING_SEALER = "wSealer";
+const char* const NODE_KEY_NODEID = "node_id";
+const char* const NODE_KEY_ENABLENUM = "enable_num";
+const char* const PRI_COLUMN = "name";
+const char* const PRI_KEY = "node";
+
+const char* const SYSTEM_CONFIG_KEY = "key";
+const char* const SYSTEM_CONFIG_VALUE = "value";
+const char* const SYSTEM_CONFIG_ENABLENUM = "enable_num";
+const char* const SYSTEM_KEY_TX_COUNT_LIMIT = "tx_count_limit";
+const char* const SYSTEM_INIT_VALUE_TX_COUNT_LIMIT = "1000";
+const char* const SYSTEM_KEY_TX_GAS_LIMIT = "tx_gas_limit";
+
+// system configuration for RPBFT
+const char* const SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM = "rpbft_epoch_sealer_num";
+const char* const SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM = "rpbft_epoch_block_num";
+
+// system configuration for consensus-time
+const char* const SYSTEM_KEY_CONSENSUS_TIMEOUT = "consensus_timeout";
+
+const char* const INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE = "notify_rotate";
+
+const char* const SYSTEM_INIT_VALUE_TX_GAS_LIMIT = "300000000";
+
+const int TX_COUNT_LIMIT_MIN = 1;
+const int TX_GAS_LIMIT_MIN = 100000;
+
+const int RPBFT_EPOCH_SEALER_NUM_MIN = 1;
+const int RPBFT_EPOCH_BLOCK_NUM_MIN = 1;
+const unsigned SYSTEM_CONSENSUS_TIMEOUT_MIN = 3;
+const unsigned SYSTEM_CONSENSUS_TIMEOUT_MAX = (UINT_MAX / 1000);
 }  // namespace precompiled
 }  // namespace dev

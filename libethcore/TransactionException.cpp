@@ -1,38 +1,33 @@
 /*
-    This file is part of cpp-ethereum.
-
-    cpp-ethereum is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    cpp-ethereum is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
-*/
-/** @file ExecutionResult.cpp
- * @author
- * @date
+ * @CopyRight:
+ * FISCO-BCOS is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * FISCO-BCOS is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
+ * (c) 2016-2020 fisco-dev contributors.
+ */
+/**
+ * @file: TransactionException.cpp
+ * @author: xingqiangbai
+ * @date: 20200608
  */
 
-#include "ExecutionResult.h"
+#include "TransactionException.h"
+#include "Exceptions.h"
 
 using namespace std;
 using namespace dev;
 using namespace dev::eth;
-using namespace dev::executive;
 
-std::ostream& dev::executive::operator<<(std::ostream& _out, ExecutionResult const& _er)
-{
-    _out << "{" << _er.gasUsed << ", " << _er.newAddress << ", " << toHex(_er.output) << "}";
-    return _out;
-}
-
-TransactionException dev::executive::toTransactionException(Exception const& _e)
+TransactionException dev::eth::toTransactionException(Exception const& _e)
 {
     // Basic Transaction exceptions
     if (!!dynamic_cast<RLPException const*>(&_e))
@@ -73,7 +68,7 @@ TransactionException dev::executive::toTransactionException(Exception const& _e)
     return TransactionException::Unknown;
 }
 
-std::ostream& dev::executive::operator<<(std::ostream& _out, TransactionException const& _er)
+std::ostream& dev::eth::operator<<(std::ostream& _out, TransactionException const& _er)
 {
     switch (_er)
     {

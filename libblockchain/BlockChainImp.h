@@ -32,6 +32,7 @@
 #include <libethcore/Transaction.h>
 #include <libethcore/TransactionReceipt.h>
 #include <libexecutive/StateFactoryInterface.h>
+#include <libledger/LedgerParam.h>
 #include <libprecompiled/SystemConfigPrecompiled.h>
 #include <libstorage/Common.h>
 #include <libstorage/Storage.h>
@@ -84,6 +85,8 @@ DEV_SIMPLE_EXCEPTION(OpenSysTableFailed);
 
 using Parent2ChildListMap = std::map<std::string, std::vector<std::string>>;
 using Child2ParentMap = tbb::concurrent_unordered_map<std::string, std::string>;
+using BlockHeaderInfo =
+    std::pair<std::shared_ptr<dev::eth::BlockHeader>, dev::eth::Block::SigListPtrType>;
 class BlockChainImp : public BlockChainInterface
 {
 public:
@@ -112,13 +115,23 @@ public:
     virtual void setStateStorage(dev::storage::Storage::Ptr stateStorage);
     virtual void setStateFactory(dev::executive::StateFactoryInterface::Ptr _stateFactory);
     virtual std::shared_ptr<dev::storage::TableFactory> getMemoryTableFactory(int64_t num = 0);
-    bool checkAndBuildGenesisBlock(GenesisBlockParam& initParam, bool _shouldBuild = true) override;
+
+    // When there is no genesis block, write relevant configuration items to the genesis block and
+    // system table; when there is a genesis block, load immutable configuration information from
+    // the genesis block
+    bool checkAndBuildGenesisBlock(std::shared_ptr<dev::ledger::LedgerParamInterface> _initParam,
+        bool _shouldBuild = true) override;
+
     std::pair<int64_t, int64_t> totalTransactionCount() override;
     std::pair<int64_t, int64_t> totalFailedTransactionCount() override;
     dev::bytes getCode(dev::Address _address) override;
 
     dev::h512s sealerList() override;
     dev::h512s observerList() override;
+    // get workingSealer list: type == NODE_TYPE_WORKING_SEALER
+    dev::h512s workingSealerList() override;
+    // get pending list: type ==  NODE_TYPE_SEALER
+    dev::h512s pendingSealerList() override;
 
     std::string getSystemConfigByKey(std::string const& key, int64_t num = -1) override;
 
@@ -150,7 +163,24 @@ public:
     std::shared_ptr<MerkleProofType> getTransactionProof(
         dev::eth::Block::Ptr _block, uint64_t const& _index) override;
 
+    std::shared_ptr<BlockHeaderInfo> getBlockHeaderInfo(int64_t _blockNumber) override;
+    std::shared_ptr<BlockHeaderInfo> getBlockHeaderInfoByHash(dev::h256 const& _blockHash) override;
+
 private:
+    std::shared_ptr<BlockHeaderInfo> getBlockHeaderFromBlock(dev::eth::Block::Ptr _block);
+
+    // Randomly select epochSealerSize nodes from workingList as workingSealer and write them into
+    // the system table Only used in vrf rpbft consensus type
+    virtual void initGenesisWorkingSealers(dev::storage::Table::Ptr _consTable,
+        std::shared_ptr<dev::ledger::LedgerParamInterface> _initParam);
+
+    virtual void initGensisConsensusInfoByNodeType(dev::storage::Table::Ptr _consTable,
+        std::string const& _nodeType, dev::h512s const& _nodeList, int64_t _nodeNum = -1,
+        bool _update = false);
+
+    dev::h512s getNodeList(dev::eth::BlockNumber& _cachedNumber, dev::h512s& _cachedNodeList,
+        SharedMutex& _mutex, std::string const& _nodeListType);
+
     std::shared_ptr<Parent2ChildListMap> getParent2ChildListByReceiptProofCache(
         dev::eth::Block::Ptr _block);
     std::shared_ptr<Parent2ChildListMap> getParent2ChildListByTxsProofCache(
@@ -177,7 +207,8 @@ private:
     void writeBlockToField(dev::eth::Block const& _block, dev::storage::Entry::Ptr _entry);
 
     std::shared_ptr<dev::eth::Block> getBlock(int64_t _blockNumber);
-    std::shared_ptr<dev::eth::Block> getBlock(dev::h256 const& _blockHash, int64_t _blockNumber);
+    std::shared_ptr<dev::eth::Block> getBlock(
+        dev::h256 const& _blockHash, int64_t _blockNumber = -1);
     std::shared_ptr<dev::bytes> getBlockRLP(int64_t _i);
     std::shared_ptr<dev::bytes> getBlockRLP(dev::h256 const& _blockHash, int64_t _blockNumber);
     int64_t obtainNumber();
@@ -191,6 +222,8 @@ private:
         std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
     void writeHash2Block(
         dev::eth::Block& block, std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
+    void writeHash2BlockHeader(
+        dev::eth::Block& _block, std::shared_ptr<dev::blockverifier::ExecutiveContext> _context);
 
     bool isBlockShouldCommit(int64_t const& _blockNumber);
 
@@ -215,8 +248,12 @@ private:
     mutable SharedMutex m_nodeListMutex;
     dev::h512s m_sealerList;
     dev::h512s m_observerList;
+    dev::h512s m_workingSealerList;
+
+    int64_t m_cacheNumByWorkingSealer = -1;
     int64_t m_cacheNumBySealer = -1;
     int64_t m_cacheNumByObserver = -1;
+
 
     struct SystemConfigRecord
     {

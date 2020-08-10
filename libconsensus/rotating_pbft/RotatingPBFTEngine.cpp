@@ -39,12 +39,11 @@ std::pair<bool, IDXTYPE> RotatingPBFTEngine::getLeader() const
     {
         return std::make_pair(false, MAXIDX);
     }
-    auto leaderIdx = VRFSelection();
+    auto leaderIdx = selectLeader();
     return std::make_pair(true, leaderIdx);
 }
 
-// TODO: chose leader by VRF algorithm
-IDXTYPE RotatingPBFTEngine::VRFSelection() const
+IDXTYPE RotatingPBFTEngine::selectLeader() const
 {
     size_t index = (m_view + m_highestBlock.number()) % m_epochSize;
     return (IDXTYPE)((m_startNodeIdx.load() + index) % m_sealersNum);
@@ -269,27 +268,40 @@ void RotatingPBFTEngine::updateConsensusInfo()
     ReadGuard l(x_chosedConsensusNodes);
     if (m_chosedConsensusNodes->size() > 0)
     {
-        WriteGuard l(x_chosedSealerList);
-        m_chosedSealerList->resize(m_chosedConsensusNodes->size());
-
-        std::copy(m_chosedConsensusNodes->begin(), m_chosedConsensusNodes->end(),
-            m_chosedSealerList->begin());
-        std::sort(m_chosedSealerList->begin(), m_chosedSealerList->end());
-        // update consensus node info
-        if (m_blockSync->syncTreeRouterEnabled())
-        {
-            dev::h512s nodeList = m_blockChain->sealerList() + m_blockChain->observerList();
-            std::sort(nodeList.begin(), nodeList.end());
-            m_blockSync->updateConsensusNodeInfo(*m_chosedSealerList, nodeList);
-        }
-        if (m_treeRouter)
-        {
-            m_treeRouter->updateConsensusNodeInfo(*m_chosedSealerList);
-        }
-        RPBFTENGINE_LOG(DEBUG) << LOG_DESC("updateConsensusInfo")
-                               << LOG_KV("chosedSealerList", m_chosedSealerList->size());
+        updateChosedSealerList();
+        updateTreeTopologyInfo();
     }
     m_chosedConsNodeChanged = false;
+}
+
+void RotatingPBFTEngine::updateChosedSealerList()
+{
+    WriteGuard l(x_chosedSealerList);
+    m_chosedSealerList->resize(m_chosedConsensusNodes->size());
+
+    std::copy(m_chosedConsensusNodes->begin(), m_chosedConsensusNodes->end(),
+        m_chosedSealerList->begin());
+    std::sort(m_chosedSealerList->begin(), m_chosedSealerList->end());
+}
+
+void RotatingPBFTEngine::updateTreeTopologyInfo()
+{
+    ReadGuard l(x_chosedSealerList);
+    // update consensus node info for syncing block
+    if (m_blockSync->syncTreeRouterEnabled())
+    {
+        // get all the node list of this group
+        auto nodeList = m_blockChain->sealerList() + m_blockChain->observerList();
+        std::sort(nodeList.begin(), nodeList.end());
+        m_blockSync->updateConsensusNodeInfo(*m_chosedSealerList, nodeList);
+    }
+    // update consensus node info for broadcasting transactions
+    if (m_treeRouter)
+    {
+        m_treeRouter->updateConsensusNodeInfo(*m_chosedSealerList);
+    }
+    RPBFTENGINE_LOG(INFO) << LOG_DESC("updateConsensusInfo")
+                          << LOG_KV("chosedSealerListSize", m_chosedSealerList->size());
 }
 
 ssize_t RotatingPBFTEngine::filterBroadcastTargets(dev::network::NodeID const& _nodeId)
@@ -798,9 +810,12 @@ void RotatingPBFTEngine::onReceiveRawPrepareRequest(
     }
     catch (std::exception const& _e)
     {
-        RPBFTENGINE_LOG(WARNING) << LOG_DESC("onReceiveRawPrepareRequest exceptioned")
-                                 << LOG_KV("peer", _session->nodeID().abridged())
-                                 << LOG_KV("errorInfo", boost::diagnostic_information(_e));
+        // In the empty block scene, because the view switches quickly,
+        // and if the node is disconnected, this warning is often triggered,
+        // so the log level is adjusted to trace
+        RPBFTENGINE_LOG(TRACE) << LOG_DESC("onReceiveRawPrepareRequest exceptioned")
+                               << LOG_KV("peer", _session->nodeID().abridged())
+                               << LOG_KV("errorInfo", boost::diagnostic_information(_e));
     }
 }
 

@@ -36,7 +36,7 @@ using namespace std;
 
 const std::vector<string> MemoryTableFactory::c_sysTables = std::vector<string>{SYS_CONSENSUS,
     SYS_TABLES, SYS_ACCESS_TABLE, SYS_CURRENT_STATE, SYS_NUMBER_2_HASH, SYS_TX_HASH_2_BLOCK,
-    SYS_HASH_2_BLOCK, SYS_CNS, SYS_CONFIG, SYS_BLOCK_2_NONCES};
+    SYS_HASH_2_BLOCK, SYS_CNS, SYS_CONFIG, SYS_BLOCK_2_NONCES, SYS_HASH_2_BLOCKHEADER};
 
 // according to
 // https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/design/security_control/permission_control.html
@@ -145,9 +145,9 @@ Table::Ptr MemoryTableFactory::createTable(const std::string& tableName,
     auto tableEntries = sysTable->select(tableName, sysTable->newCondition());
     if (tableEntries->size() != 0)
     {
-        STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTableFactory")
-                           << LOG_DESC("table already exist in _sys_tables_")
-                           << LOG_KV("table name", tableName);
+        STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTableFactory")
+                             << LOG_DESC("table already exist in _sys_tables_")
+                             << LOG_KV("table name", tableName);
         return nullptr;
     }
     // Write table entry

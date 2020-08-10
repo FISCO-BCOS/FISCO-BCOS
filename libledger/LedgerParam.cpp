@@ -43,6 +43,7 @@ void LedgerParam::parseGenesisConfig(const std::string& _genesisFile)
 {
     try
     {
+        m_genesisConfigPath = _genesisFile;
         ptree pt;
         // read the configuration file for a specified group
         read_ini(_genesisFile, pt);
@@ -82,7 +83,7 @@ void LedgerParam::parseGenesisConfig(const std::string& _genesisFile)
                                << LOG_KV("EINFO", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(dev::InitLedgerConfigFailed() << errinfo_comment(error_info));
     }
-    m_genesisBlockParam = generateGenesisMark();
+    generateGenesisMark();
 }
 
 void LedgerParam::setEVMFlags(boost::property_tree::ptree const& _pt)
@@ -97,7 +98,7 @@ void LedgerParam::setEVMFlags(boost::property_tree::ptree const& _pt)
                           << LOG_KV("evmFlags", mutableGenesisParam().evmFlags);
 }
 
-blockchain::GenesisBlockParam LedgerParam::generateGenesisMark()
+void LedgerParam::generateGenesisMark()
 {
     std::stringstream s;
     s << int(m_groupID) << "-";
@@ -110,34 +111,39 @@ blockchain::GenesisBlockParam LedgerParam::generateGenesisMark()
     s << mutableStateParam().type << "-";
     if (g_BCOSConfig.version() >= V2_4_0)
     {
-        LedgerParam_LOG(DEBUG) << LOG_DESC("store evmFlag")
-                               << LOG_KV("evmFlag", mutableGenesisParam().evmFlags);
+        LedgerParam_LOG(INFO) << LOG_DESC("store evmFlag")
+                              << LOG_KV("evmFlag", mutableGenesisParam().evmFlags);
         s << mutableGenesisParam().evmFlags << "-";
     }
 
     s << mutableConsensusParam().maxTransactions << "-";
     s << mutableTxParam().txGasLimit;
 
-    // init epochSealerNum and epochBlockNum for RPBFT
+    // init epochSealerNum and epochBlockNum for rPBFT
     if (dev::stringCmpIgnoreCase(mutableConsensusParam().consensusType, "rpbft") == 0)
     {
-        LedgerParam_LOG(DEBUG) << LOG_DESC("store RPBFT related configuration")
-                               << LOG_KV("epochSealerNum", mutableConsensusParam().epochSealerNum)
-                               << LOG_KV("epochBlockNum", mutableConsensusParam().epochBlockNum);
+        LedgerParam_LOG(INFO) << LOG_DESC("store rPBFT related configuration")
+                              << LOG_KV("epochSealerNum", mutableConsensusParam().epochSealerNum)
+                              << LOG_KV("epochBlockNum", mutableConsensusParam().epochBlockNum);
         s << "-" << mutableConsensusParam().epochSealerNum << "-";
         s << mutableConsensusParam().epochBlockNum;
     }
-    LedgerParam_LOG(DEBUG) << LOG_BADGE("initMark") << LOG_KV("genesisMark", s.str());
-    return blockchain::GenesisBlockParam{s.str(), mutableConsensusParam().sealerList,
-        mutableConsensusParam().observerList, mutableConsensusParam().consensusType,
-        mutableStorageParam().type, mutableStateParam().type,
-        mutableConsensusParam().maxTransactions, mutableTxParam().txGasLimit,
-        mutableGenesisParam().timeStamp, mutableConsensusParam().epochSealerNum,
-        mutableConsensusParam().epochBlockNum, mutableGenesisParam().evmFlags};
+    // only the supported_version is greater than or equal to v2.6.0,
+    // the consensus time runtime setting is enabled
+    if (g_BCOSConfig.version() >= V2_6_0)
+    {
+        LedgerParam_LOG(INFO) << LOG_DESC("store consensus time")
+                              << LOG_KV(
+                                     "consensusTimeout", mutableConsensusParam().consensusTimeout);
+        s << "-" << mutableConsensusParam().consensusTimeout;
+    }
+    m_genesisMark = s.str();
+    LedgerParam_LOG(INFO) << LOG_BADGE("initMark") << LOG_KV("genesisMark", m_genesisMark);
 }
 
 void LedgerParam::parseIniConfig(const std::string& _iniConfigFile, const std::string& _dataPath)
 {
+    m_iniConfigPath = _iniConfigFile;
     std::string prefix = _dataPath + "/group" + std::to_string(m_groupID);
     if (_dataPath == "")
     {
@@ -161,6 +167,7 @@ void LedgerParam::parseIniConfig(const std::string& _iniConfigFile, const std::s
     // init params releated to consensus(ttl)
     initConsensusIniConfig(pt);
     initFlowControlConfig(pt);
+    parseSDKAllowList(m_permissionParam.sdkAllowList, pt);
 }
 
 void LedgerParam::init(const std::string& _configFilePath, const std::string& _dataPath)
@@ -297,13 +304,14 @@ void LedgerParam::initConsensusIniConfig(ptree const& pt)
     }
 
     // the minimum block generation time(ms)
-    mutableConsensusParam().minBlockGenTime =
-        pt.get<signed>("consensus.min_block_generation_time", 500);
-    if (mutableConsensusParam().minBlockGenTime < 0)
+    int64_t minBlockGenTime = pt.get<signed>("consensus.min_block_generation_time", 500);
+    if (minBlockGenTime < 0 || minBlockGenTime >= UINT_MAX)
     {
-        BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
-                                  "Please set consensus.min_block_generation_time to positive !"));
+        BOOST_THROW_EXCEPTION(InvalidConfiguration() << errinfo_comment(
+                                  "Please set consensus.min_block_generation_time between 1 and " +
+                                  std::to_string(UINT_MAX) + " !"));
     }
+    mutableConsensusParam().minBlockGenTime = minBlockGenTime;
 
     // enable dynamic block size
     mutableConsensusParam().enableDynamicBlockSize =
@@ -375,6 +383,20 @@ void LedgerParam::initConsensusConfig(ptree const& pt)
                                   "Please set consensus.max_trans_num to positive !"));
     }
 
+    // init consensusTimeout
+    auto consensusTimeout = pt.get<int64_t>("consensus.consensus_timeout", 3);
+
+    if (mutableConsensusParam().consensusTimeout < dev::precompiled::SYSTEM_CONSENSUS_TIMEOUT_MIN ||
+        mutableConsensusParam().consensusTimeout >= dev::precompiled::SYSTEM_CONSENSUS_TIMEOUT_MAX)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfiguration() << errinfo_comment(
+                "Please set consensus.consensus_time must between " +
+                std::to_string(dev::precompiled::SYSTEM_CONSENSUS_TIMEOUT_MIN) + "s and " +
+                std::to_string(dev::precompiled::SYSTEM_CONSENSUS_TIMEOUT_MAX) + "s !"));
+    }
+    mutableConsensusParam().consensusTimeout = consensusTimeout;
+
     mutableConsensusParam().minElectTime = pt.get<int64_t>("consensus.min_elect_time", 1000);
     if (mutableConsensusParam().minElectTime <= 0)
     {
@@ -397,50 +419,48 @@ void LedgerParam::initConsensusConfig(ptree const& pt)
 
     LedgerParam_LOG(INFO) << LOG_BADGE("initConsensusConfig")
                           << LOG_KV("type", mutableConsensusParam().consensusType)
+                          << LOG_KV("consensusTimeout", mutableConsensusParam().consensusTimeout)
                           << LOG_KV("maxTxNum", mutableConsensusParam().maxTransactions)
                           << LOG_KV("txGasLimit", mutableTxParam().txGasLimit);
 
+    // if the consensus node id is invalid, throw InvalidConfiguration exception
+    parsePublicKeyListOfSection(mutableConsensusParam().sealerList, pt, "consensus", "node.");
     std::stringstream nodeListMark;
-    try
+    // init nodeListMark
+    for (auto const& node : mutableConsensusParam().sealerList)
     {
-        for (auto it : pt.get_child("consensus"))
-        {
-            if (it.first.find("node.") == 0)
-            {
-                std::string data = it.second.data();
-                boost::to_lower(data);
-                LedgerParam_LOG(INFO)
-                    << LOG_BADGE("initConsensusConfig") << LOG_KV("it.first", data);
-                // Uniform lowercase nodeID
-                dev::h512 nodeID(data);
-                mutableConsensusParam().sealerList.push_back(nodeID);
-                // The full output node ID is required.
-                nodeListMark << data << ",";
-            }
-        }
-    }
-    catch (std::exception& e)
-    {
-        LedgerParam_LOG(ERROR) << LOG_BADGE("initConsensusConfig")
-                               << LOG_DESC("Parse consensus section failed")
-                               << LOG_KV("EINFO", boost::diagnostic_information(e));
+        nodeListMark << toHex(node) << ",";
     }
     mutableGenesisParam().nodeListMark = nodeListMark.str();
 
-    // init configurations for RPBFT
+    // init configurations for rPBFT
     mutableConsensusParam().epochSealerNum =
         pt.get<int64_t>("consensus.epoch_sealer_num", mutableConsensusParam().sealerList.size());
     if (mutableConsensusParam().epochSealerNum <= 0)
     {
-        BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
-                                  "Please set consensus.epoch_sealer_num to positive !"));
+        BOOST_THROW_EXCEPTION(InvalidConfiguration() << errinfo_comment(
+                                  "Please set consensus.epoch_sealer_num to be larger than 0!"));
     }
 
-    mutableConsensusParam().epochBlockNum = pt.get<int64_t>("consensus.epoch_block_num", 10);
-    if (mutableConsensusParam().epochBlockNum <= 0)
+    mutableConsensusParam().epochBlockNum = pt.get<int64_t>("consensus.epoch_block_num", 1000);
+    if (g_BCOSConfig.version() < V2_6_0)
     {
-        BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
-                                  "Please set consensus.epoch_block_num to positive !"));
+        if (mutableConsensusParam().epochBlockNum <= 0)
+        {
+            BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
+                                      "Please set consensus.epoch_block_num to positive !"));
+        }
+    }
+    else
+    {
+        // epoch_block_num is at least 2 when supported_version >= v2.6.0
+        if (mutableConsensusParam().epochBlockNum <= dev::precompiled::RPBFT_EPOCH_BLOCK_NUM_MIN)
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidConfiguration() << errinfo_comment(
+                    "Please set consensus.epoch_block_num to be larger than " +
+                    std::to_string(dev::precompiled::RPBFT_EPOCH_BLOCK_NUM_MIN) + "!"));
+        }
     }
     LedgerParam_LOG(DEBUG) << LOG_BADGE("initConsensusConfig")
                            << LOG_KV("epochSealerNum", mutableConsensusParam().epochSealerNum)
@@ -488,7 +508,7 @@ void LedgerParam::initSyncConfig(ptree const& pt)
     mutableSyncParam().gossipInterval = pt.get<int64_t>("sync.gossip_interval_ms", 1000);
     if (mutableSyncParam().gossipInterval < 1000 || mutableSyncParam().gossipInterval > 3000)
     {
-        BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
+        BOOST_THROW_EXCEPTION(InvalidConfiguration() << errinfo_comment(
                                   "Please set sync.gossip_interval_ms to between 1000ms-3000ms!"));
     }
     LedgerParam_LOG(INFO) << LOG_BADGE("initSyncConfig")
@@ -680,6 +700,49 @@ void LedgerParam::initFlowControlConfig(boost::property_tree::ptree const& _pt)
                           << LOG_KV("maxQPS", mutableFlowControlParam().maxQPS)
                           << LOG_KV("outGoingBandwidth(Bytes)",
                                  mutableFlowControlParam().outGoingBandwidthLimit);
+}
+
+void LedgerParam::parsePublicKeyListOfSection(dev::h512s& _nodeList,
+    boost::property_tree::ptree const& _pt, std::string const& _sectionName,
+    std::string const& _subSectionName)
+{
+    if (!_pt.get_child_optional(_sectionName))
+    {
+        LedgerParam_LOG(DEBUG) << LOG_DESC("parsePublicKeyListOfSection return for empty config")
+                               << LOG_KV("sectionName", _sectionName);
+        return;
+    }
+    for (auto const& it : _pt.get_child(_sectionName))
+    {
+        if (it.first.find(_subSectionName) != 0)
+        {
+            continue;
+        }
+        std::string data = it.second.data();
+        boost::to_lower(data);
+        if (!isNodeIDOk(data))
+        {
+            LedgerParam_LOG(WARNING)
+                << LOG_BADGE("load public key: invalid public key") << LOG_KV("invalidPubKey", data)
+                << LOG_KV("sectionName", _sectionName);
+            BOOST_THROW_EXCEPTION(InvalidConfiguration() << errinfo_comment(
+                                      "load public key failed, invalid public key:" + data +
+                                      ", configuration section:" + _sectionName));
+        }
+        LedgerParam_LOG(INFO) << LOG_BADGE("parsePublicKeyListOfSection")
+                              << LOG_KV("sectionName", _sectionName) << LOG_KV("it.first", data);
+        _nodeList.push_back(dev::h512(data));
+    }
+    LedgerParam_LOG(INFO) << LOG_BADGE("parsePublicKeyListOfSection")
+                          << LOG_KV("totalPubKeySize", _nodeList.size());
+}
+
+void LedgerParam::parseSDKAllowList(dev::h512s& _nodeList, boost::property_tree::ptree const& _pt)
+{
+    parsePublicKeyListOfSection(_nodeList, _pt, "sdk_allowlist", "public_key.");
+    bool enableSDKAllowListControl = (_nodeList.size() > 0);
+    LedgerParam_LOG(INFO) << LOG_DESC("parseSDKAllowList") << LOG_KV("sdkAllowList", _nodeList)
+                          << LOG_KV("enableSDKAllowListControl", enableSDKAllowListControl);
 }
 
 }  // namespace ledger

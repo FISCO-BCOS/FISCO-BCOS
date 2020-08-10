@@ -32,6 +32,7 @@
 #include <libprecompiled/PrecompiledResult.h>
 #include <libprecompiled/SystemConfigPrecompiled.h>
 #include <libprecompiled/TableFactoryPrecompiled.h>
+#include <libprecompiled/WorkingSealerManagerPrecompiled.h>
 #include <libprecompiled/extension/DagTransferPrecompiled.h>
 #include <libstorage/MemoryTableFactory.h>
 
@@ -55,34 +56,34 @@ void ExecutiveContextFactory::initExecutiveContext(
     auto tableFactoryPrecompiled = std::make_shared<dev::precompiled::TableFactoryPrecompiled>();
     tableFactoryPrecompiled->setMemoryTableFactory(memoryTableFactory);
     context->setAddress2Precompiled(
-        Address(0x1000), std::make_shared<dev::precompiled::SystemConfigPrecompiled>());
-    context->setAddress2Precompiled(Address(0x1001), tableFactoryPrecompiled);
+        SYS_CONFIG_ADDRESS, std::make_shared<dev::precompiled::SystemConfigPrecompiled>());
+    context->setAddress2Precompiled(TABLE_FACTORY_ADDRESS, tableFactoryPrecompiled);
     context->setAddress2Precompiled(
-        Address(0x1002), std::make_shared<dev::precompiled::CRUDPrecompiled>());
+        CRUD_ADDRESS, std::make_shared<dev::precompiled::CRUDPrecompiled>());
     context->setAddress2Precompiled(
-        Address(0x1003), std::make_shared<dev::precompiled::ConsensusPrecompiled>());
+        CONSENSUS_ADDRESS, std::make_shared<dev::precompiled::ConsensusPrecompiled>());
     context->setAddress2Precompiled(
-        Address(0x1004), std::make_shared<dev::precompiled::CNSPrecompiled>());
+        CNS_ADDRESS, std::make_shared<dev::precompiled::CNSPrecompiled>());
     context->setAddress2Precompiled(
-        Address(0x1005), std::make_shared<dev::precompiled::PermissionPrecompiled>());
+        PERMISSION_ADDRESS, std::make_shared<dev::precompiled::PermissionPrecompiled>());
 
     auto parallelConfigPrecompiled =
         std::make_shared<dev::precompiled::ParallelConfigPrecompiled>();
-    context->setAddress2Precompiled(Address(0x1006), parallelConfigPrecompiled);
+    context->setAddress2Precompiled(PARALLEL_CONFIG_ADDRESS, parallelConfigPrecompiled);
     context->registerParallelPrecompiled(parallelConfigPrecompiled);
     if (g_BCOSConfig.version() >= V2_3_0)
     {
-        context->setAddress2Precompiled(
-            Address(0x1007), std::make_shared<dev::precompiled::ContractLifeCyclePrecompiled>());
+        context->setAddress2Precompiled(CONTRACT_LIFECYCLE_ADDRESS,
+            std::make_shared<dev::precompiled::ContractLifeCyclePrecompiled>());
         auto kvTableFactoryPrecompiled =
             std::make_shared<dev::precompiled::KVTableFactoryPrecompiled>();
         kvTableFactoryPrecompiled->setMemoryTableFactory(memoryTableFactory);
-        context->setAddress2Precompiled(Address(0x1010), kvTableFactoryPrecompiled);
+        context->setAddress2Precompiled(KVTABLE_FACTORY_ADDRESS, kvTableFactoryPrecompiled);
     }
     if (g_BCOSConfig.version() >= V2_5_0)
     {
-        context->setAddress2Precompiled(
-            Address(0x1008), std::make_shared<dev::precompiled::ChainGovernancePrecompiled>());
+        context->setAddress2Precompiled(CHAINGOVERNANCE_ADDRESS,
+            std::make_shared<dev::precompiled::ChainGovernancePrecompiled>());
     }
     // register User developed Precompiled contract
     registerUserPrecompiled(context);
@@ -91,6 +92,13 @@ void ExecutiveContextFactory::initExecutiveContext(
     context->setPrecompiledContract(m_precompiledContract);
     context->setState(m_stateFactoryInterface->getState(stateRoot, memoryTableFactory));
     setTxGasLimitToContext(context);
+
+    if (g_BCOSConfig.version() >= V2_6_0)
+    {
+        // register workingSealerManagerPrecompiled for VRF-based-rPBFT
+        context->setAddress2Precompiled(WORKING_SEALER_MGR_ADDRESS,
+            std::make_shared<dev::precompiled::WorkingSealerManagerPrecompiled>());
+    }
 }
 
 void ExecutiveContextFactory::setStateStorage(dev::storage::Storage::Ptr stateStorage)

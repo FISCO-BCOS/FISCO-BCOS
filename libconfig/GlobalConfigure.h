@@ -38,13 +38,13 @@ enum VERSION : uint32_t
     V2_3_0 = 0x02030000,
     V2_4_0 = 0x02040000,
     V2_5_0 = 0x02050000,
+    V2_6_0 = 0x02060000,
 };
 
 enum ProtocolVersion : uint32_t
 {
     v1 = 1,
     v2 = 2,
-    // TODO: update SDK protocol to V3 after sdk-2.1.1 released
     v3 = 3,
     maxVersion = v3,
     minVersion = v1,

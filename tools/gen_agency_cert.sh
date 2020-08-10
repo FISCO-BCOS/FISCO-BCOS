@@ -153,7 +153,7 @@ gen_agency_cert() {
     # openssl genrsa -out "$agencydir/agency.key" 2048 2> /dev/null
     openssl ecparam -out "$agencydir/secp256k1.param" -name secp256k1 2> /dev/null
     openssl genpkey -paramfile "$agencydir/secp256k1.param" -out "$agencydir/agency.key" 2> /dev/null
-    openssl req -new -sha256 -subj "/CN=$name/O=fisco-bcos/OU=agency" -key "$agencydir/agency.key" -config "$chain/cert.cnf" -out "$agencydir/agency.csr" 2> /dev/null
+    openssl req -new -sha256 -subj "/CN=$name/O=fisco-bcos/OU=agency" -key "$agencydir/agency.key" -out "$agencydir/agency.csr" 2> /dev/null
     openssl x509 -req -days 3650 -sha256 -CA "$chain/ca.crt" -CAkey "$chain/ca.key" -CAcreateserial\
         -in "$agencydir/agency.csr" -out "$agencydir/agency.crt"  -extensions v4_req -extfile "$chain/cert.cnf" 2> /dev/null
 
@@ -173,10 +173,10 @@ check_and_install_tassl(){
     if [ ! -f "${TASSL_CMD}" ];then
         LOG_INFO "Downloading tassl binary ..."
         if [[ "$(uname)" == "Darwin" ]];then
-            curl -LO https://github.com/FISCO-BCOS/LargeFiles/raw/master/tools/tassl_mac.tar.gz
+            curl -#LO https://github.com/FISCO-BCOS/LargeFiles/raw/master/tools/tassl_mac.tar.gz
             mv tassl_mac.tar.gz tassl.tar.gz
         else
-            curl -LO https://github.com/FISCO-BCOS/LargeFiles/raw/master/tools/tassl.tar.gz
+            curl -#LO https://github.com/FISCO-BCOS/LargeFiles/raw/master/tools/tassl.tar.gz
         fi
         tar zxvf tassl.tar.gz && rm tassl.tar.gz
         chmod u+x tassl
@@ -334,7 +334,7 @@ gen_agency_cert_gm() {
     mkdir -p "$agencydir"
 
     $TASSL_CMD genpkey -paramfile "$chain/gmsm2.param" -out "$agencydir/gmagency.key" 2> /dev/null
-    $TASSL_CMD req -new -subj "/CN=$name/O=fisco-bcos/OU=agency" -key "$agencydir/gmagency.key" -config "$chain/gmcert.cnf" -out "$agencydir/gmagency.csr" 2> /dev/null
+    $TASSL_CMD req -new -subj "/CN=$name/O=fisco-bcos/OU=agency" -key "$agencydir/gmagency.key" -out "$agencydir/gmagency.csr" 2> /dev/null
     $TASSL_CMD x509 -req -CA "$chain/gmca.crt" -CAkey "$chain/gmca.key" -days 3650 -CAcreateserial -in "$agencydir/gmagency.csr" -out "$agencydir/gmagency.crt" -extfile "$chain/gmcert.cnf" -extensions v3_agency_root 2> /dev/null
 
     if [[ -n "${gmroot_crt}" ]];then

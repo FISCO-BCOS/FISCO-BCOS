@@ -30,8 +30,12 @@
 #include <libconsensus/raft/RaftEngine.h>
 #include <libconsensus/raft/RaftSealer.h>
 #include <libconsensus/rotating_pbft/RotatingPBFTEngine.h>
+#include <libconsensus/rotating_pbft/vrf_rpbft/VRFBasedrPBFTEngine.h>
+#include <libconsensus/rotating_pbft/vrf_rpbft/VRFBasedrPBFTSealer.h>
 #include <libflowlimit/RateLimiter.h>
+#include <libnetwork/PeerWhitelist.h>
 #include <libsync/SyncMaster.h>
+#include <libsync/SyncMsgPacketFactory.h>
 #include <libtxpool/TxPool.h>
 #include <boost/property_tree/ini_parser.hpp>
 
@@ -60,12 +64,15 @@ bool Ledger::initLedger(std::shared_ptr<LedgerParamInterface> _ledgerParams)
     Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("DBInitializer");
     m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param, m_groupId);
     m_dbInitializer->setChannelRPCServer(m_channelRPCServer);
+
+    setSDKAllowList(m_param->mutablePermissionParam().sdkAllowList);
+
     // m_dbInitializer
     if (!m_dbInitializer)
         return false;
     m_dbInitializer->initStorageDB();
     /// init the DB
-    bool ret = initBlockChain(m_param->mutableGenesisBlockParam());
+    bool ret = initBlockChain();
     if (!ret)
         return false;
     dev::h256 genesisHash = m_blockChain->getBlockByNumber(0)->headerHash();
@@ -88,7 +95,7 @@ bool Ledger::initLedger(std::shared_ptr<LedgerParamInterface> _ledgerParams)
         // init network statistic handler
         initNetworkStatHandler();
     }
-    
+
     auto channelRPCServer = std::weak_ptr<dev::ChannelRPCServer>(m_channelRPCServer);
     m_handler = blockChain->onReady([this, channelRPCServer](int64_t number) {
         LOG(INFO) << "Push block notify: " << std::to_string(m_groupId) << "-" << number;
@@ -104,6 +111,38 @@ bool Ledger::initLedger(std::shared_ptr<LedgerParamInterface> _ledgerParams)
     /// init blockVerifier, txPool, sync and consensus
     return (initBlockVerifier() && initTxPool() && initSync() && consensusInitFactory() &&
             initEventLogFilterManager());
+}
+
+void Ledger::reloadSDKAllowList()
+{
+    // Note: here must catch the exception in case of sdk allowlist reload failed
+    try
+    {
+        boost::property_tree::ptree pt;
+        boost::property_tree::read_ini(m_param->iniConfigPath(), pt);
+        dev::h512s sdkAllowList;
+        m_param->parseSDKAllowList(sdkAllowList, pt);
+        setSDKAllowList(sdkAllowList);
+        Ledger_LOG(INFO) << LOG_DESC("reloadSDKAllowList")
+                         << LOG_KV("config", m_param->iniConfigPath())
+                         << LOG_KV("allowListSize", sdkAllowList.size());
+    }
+    catch (std::exception const& e)
+    {
+        Ledger_LOG(ERROR) << LOG_DESC("reloadSDKAllowList failed")
+                          << LOG_KV("EINFO", boost::diagnostic_information(e));
+    }
+}
+
+void Ledger::setSDKAllowList(dev::h512s const& _sdkList)
+{
+    Ledger_LOG(INFO) << LOG_DESC("setSDKAllowList") << LOG_KV("groupId", m_groupId)
+                     << LOG_KV("sdkAllowListSize", _sdkList.size());
+    PeerWhitelist::Ptr sdkAllowList = std::make_shared<PeerWhitelist>(_sdkList, true);
+    if (m_channelRPCServer)
+    {
+        m_channelRPCServer->registerSDKAllowListByGroupId(m_groupId, sdkAllowList);
+    }
 }
 
 void Ledger::initNetworkStatHandler()
@@ -224,7 +263,7 @@ bool Ledger::initBlockVerifier()
     return true;
 }
 
-bool Ledger::initBlockChain(GenesisBlockParam& _genesisParam)
+bool Ledger::initBlockChain()
 {
     Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("initBlockChain");
     if (!m_dbInitializer->storage())
@@ -245,10 +284,18 @@ bool Ledger::initBlockChain(GenesisBlockParam& _genesisParam)
     if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "External") ||
         !dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "MySQL"))
     {
-        Ledger_LOG(INFO) << LOG_DESC("set enableHexBlock to be true")
-                         << LOG_KV("version", g_BCOSConfig.version())
+        if (g_BCOSConfig.version() < V2_6_0)
+        {
+            Ledger_LOG(INFO) << LOG_DESC("set enableHexBlock to be true");
+            blockChain->setEnableHexBlock(true);
+        }
+        // supported_version >= v2.6.0, store block and nonce in bytes in mysql
+        else
+        {
+            blockChain->setEnableHexBlock(false);
+        }
+        Ledger_LOG(INFO) << LOG_DESC("initBlockChain") << LOG_KV("version", g_BCOSConfig.version())
                          << LOG_KV("storageType", m_param->mutableStorageParam().type);
-        blockChain->setEnableHexBlock(true);
     }
     // >= v2.2.0
     else if (g_BCOSConfig.version() >= V2_2_0)
@@ -269,40 +316,42 @@ bool Ledger::initBlockChain(GenesisBlockParam& _genesisParam)
     blockChain->setTableFactoryFactory(m_dbInitializer->tableFactoryFactory());
 
     m_blockChain = blockChain;
-    bool ret = m_blockChain->checkAndBuildGenesisBlock(_genesisParam, shouldBuild);
-    if (!ret)
-    {
-        /// It is a subsequent block without same extra data, so do reset.
-        Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("initBlockChain")
-                         << LOG_DESC("The configuration item will be reset");
-        m_param->mutableConsensusParam().consensusType = _genesisParam.consensusType;
-        if (g_BCOSConfig.version() <= RC2_VERSION)
-        {
-            m_param->mutableStorageParam().type = _genesisParam.storageType;
-        }
-        m_param->mutableStateParam().type = _genesisParam.stateType;
-        m_param->mutableGenesisParam().evmFlags = _genesisParam.evmFlags;
-    }
+    m_blockChain->checkAndBuildGenesisBlock(m_param, shouldBuild);
     Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_DESC("initBlockChain SUCC");
     return true;
-}
-
-bool Ledger::isRotatingPBFTEnabled()
-{
-    return (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "rpbft") == 0);
 }
 
 ConsensusInterface::Ptr Ledger::createConsensusEngine(dev::PROTOCOL_ID const& _protocolId)
 {
     if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0)
     {
+        Ledger_LOG(INFO) << LOG_DESC("createConsensusEngine: create PBFTEngine");
         return std::make_shared<PBFTEngine>(m_service, m_txPool, m_blockChain, m_sync,
             m_blockVerifier, _protocolId, m_keyPair, m_param->mutableConsensusParam().sealerList);
     }
-    if (isRotatingPBFTEnabled())
+    if (normalrPBFTEnabled())
     {
+        Ledger_LOG(INFO) << LOG_DESC("createConsensusEngine: create RotatingPBFTEngine");
         return std::make_shared<RotatingPBFTEngine>(m_service, m_txPool, m_blockChain, m_sync,
             m_blockVerifier, _protocolId, m_keyPair, m_param->mutableConsensusParam().sealerList);
+    }
+    if (vrfBasedrPBFTEnabled())
+    {
+        // Note: since WorkingSealerManagerPrecompiled is enabled after v2.6.0,
+        //       vrf based rpbft is supported after v2.6.0
+        if (g_BCOSConfig.version() >= V2_6_0)
+        {
+            Ledger_LOG(INFO) << LOG_DESC("createConsensusEngine: create VRFBasedrPBFTEngine");
+            return std::make_shared<VRFBasedrPBFTEngine>(m_service, m_txPool, m_blockChain, m_sync,
+                m_blockVerifier, _protocolId, m_keyPair,
+                m_param->mutableConsensusParam().sealerList);
+        }
+        else
+        {
+            BOOST_THROW_EXCEPTION(dev::InitLedgerConfigFailed() << errinfo_comment(
+                                      m_param->mutableConsensusParam().consensusType +
+                                      " is supported after when supported_version >= v2.6.0!"));
+        }
     }
     return nullptr;
 }
@@ -325,8 +374,21 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
     /// create consensus engine according to "consensusType"
     Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("createPBFTSealer")
                      << LOG_KV("baseDir", m_param->baseDir()) << LOG_KV("Protocol", protocol_id);
-    std::shared_ptr<PBFTSealer> pbftSealer =
-        std::make_shared<PBFTSealer>(m_txPool, m_blockChain, m_sync);
+    std::shared_ptr<PBFTSealer> pbftSealer;
+    if (vrfBasedrPBFTEnabled())
+    {
+        pbftSealer = std::make_shared<VRFBasedrPBFTSealer>(m_txPool, m_blockChain, m_sync);
+        Ledger_LOG(INFO) << LOG_BADGE("initLedger")
+                         << LOG_DESC("createPBFTSealer for VRF-based rPBFT")
+                         << LOG_KV("consensusType", m_param->mutableConsensusParam().consensusType);
+    }
+    else
+    {
+        pbftSealer = std::make_shared<PBFTSealer>(m_txPool, m_blockChain, m_sync);
+        Ledger_LOG(INFO) << LOG_BADGE("initLedger")
+                         << LOG_DESC("createPBFTSealer for PBFT or rPBFT")
+                         << LOG_KV("consensusType", m_param->mutableConsensusParam().consensusType);
+    }
 
     ConsensusInterface::Ptr pbftEngine = createConsensusEngine(protocol_id);
     if (!pbftEngine)
@@ -335,11 +397,20 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
                                   "create PBFTEngine failed, maybe unsupported consensus type " +
                                   m_param->mutableConsensusParam().consensusType));
     }
+    // only when supported_version>=v2.6.0, support adjust consensus interval at runtime
+    if (g_BCOSConfig.version() >= V2_6_0)
+    {
+        pbftEngine->setSupportConsensusTimeAdjust(true);
+    }
+    else
+    {
+        pbftEngine->setSupportConsensusTimeAdjust(false);
+    }
     pbftSealer->setConsensusEngine(pbftEngine);
     pbftSealer->setEnableDynamicBlockSize(m_param->mutableConsensusParam().enableDynamicBlockSize);
     pbftSealer->setBlockSizeIncreaseRatio(m_param->mutableConsensusParam().blockSizeIncreaseRatio);
     initPBFTEngine(pbftSealer);
-    initRotatingPBFTEngine(pbftSealer);
+    initrPBFTEngine(pbftSealer);
     return pbftSealer;
 }
 
@@ -351,7 +422,7 @@ dev::eth::BlockFactory::Ptr Ledger::createBlockFactory()
     }
     // only create PartiallyBlockFactory when using pbft or rpbft
     if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0 ||
-        isRotatingPBFTEnabled())
+        normalrPBFTEnabled() || vrfBasedrPBFTEnabled())
     {
         return std::make_shared<dev::eth::PartiallyBlockFactory>();
     }
@@ -362,10 +433,11 @@ void Ledger::initPBFTEngine(Sealer::Ptr _sealer)
 {
     /// set params for PBFTEngine
     PBFTEngine::Ptr pbftEngine = std::dynamic_pointer_cast<PBFTEngine>(_sealer->consensusEngine());
-    /// set the range of block generation time
+
+    // set the range of block generation time
+    // supported_version < v2.6.0, the consensus time is c_intervalBlockTime
     pbftEngine->setEmptyBlockGenTime(g_BCOSConfig.c_intervalBlockTime);
     pbftEngine->setMinBlockGenerationTime(m_param->mutableConsensusParam().minBlockGenTime);
-
     pbftEngine->setOmitEmptyBlock(g_BCOSConfig.c_omitEmptyBlock);
     pbftEngine->setMaxTTL(m_param->mutableConsensusParam().maxTTL);
     pbftEngine->setBaseDir(m_param->baseDir());
@@ -375,18 +447,14 @@ void Ledger::initPBFTEngine(Sealer::Ptr _sealer)
 }
 
 // init rotating-pbft engine
-void Ledger::initRotatingPBFTEngine(dev::consensus::Sealer::Ptr _sealer)
+void Ledger::initrPBFTEngine(dev::consensus::Sealer::Ptr _sealer)
 {
-    if (!isRotatingPBFTEnabled())
+    if (!normalrPBFTEnabled() && !vrfBasedrPBFTEnabled())
     {
         return;
     }
-
     RotatingPBFTEngine::Ptr rotatingPBFT =
         std::dynamic_pointer_cast<RotatingPBFTEngine>(_sealer->consensusEngine());
-    assert(rotatingPBFT);
-    rotatingPBFT->setEpochSealerNum(m_param->mutableConsensusParam().epochSealerNum);
-    rotatingPBFT->setEpochBlockNum(m_param->mutableConsensusParam().epochBlockNum);
     rotatingPBFT->setMaxRequestMissedTxsWaitTime(
         m_param->mutableConsensusParam().maxRequestMissedTxsWaitTime);
     rotatingPBFT->setMaxRequestPrepareWaitTime(
@@ -434,7 +502,7 @@ bool Ledger::consensusInitFactory()
     // create PBFTSealer
     else if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") ==
                  0 ||
-             isRotatingPBFTEnabled())
+             normalrPBFTEnabled() || vrfBasedrPBFTEnabled())
     {
         m_sealer = createPBFTSealer();
     }
@@ -451,6 +519,8 @@ bool Ledger::consensusInitFactory()
         BOOST_THROW_EXCEPTION(
             dev::InitLedgerConfigFailed() << errinfo_comment("create sealer failed"));
     }
+    // set nodeTimeMaintenance
+    m_sealer->consensusEngine()->setNodeTimeMaintenance(m_nodeTimeMaintenance);
     // create blockFactory
     auto blockFactory = createBlockFactory();
     m_sealer->setBlockFactory(blockFactory);
@@ -489,6 +559,22 @@ bool Ledger::initSync()
         m_param->mutableSyncParam().idleWaitMs, m_param->mutableSyncParam().gossipInterval,
         m_param->mutableSyncParam().gossipPeers, enableSendTxsByTree, enableSendBlockStatusByTree,
         m_param->mutableSyncParam().syncTreeWidth);
+
+    // create and setSyncMsgPacketFactory
+    SyncMsgPacketFactory::Ptr syncMsgPacketFactory;
+    if (g_BCOSConfig.version() >= V2_6_0)
+    {
+        syncMsgPacketFactory = std::make_shared<SyncMsgPacketWithAlignedTimeFactory>();
+        // create NodeTimeMaintenance
+        m_nodeTimeMaintenance = std::make_shared<NodeTimeMaintenance>();
+        syncMaster->setNodeTimeMaintenance(m_nodeTimeMaintenance);
+    }
+    else
+    {
+        syncMsgPacketFactory = std::make_shared<SyncMsgPacketFactory>();
+    }
+    syncMaster->setSyncMsgPacketFactory(syncMsgPacketFactory);
+
     // set the max block queue size for sync module(bytes)
     syncMaster->setMaxBlockQueueSize(m_param->mutableSyncParam().maxQueueSizeForBlockSync);
     syncMaster->setTxsStatusGossipMaxPeers(m_param->mutableSyncParam().txsStatusGossipMaxPeers);

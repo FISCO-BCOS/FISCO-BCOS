@@ -52,13 +52,13 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - deps-cache-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
-            - deps-cache-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
-            - deps-cache-{{ .Environment.CIRCLE_JOB }}-
+            - deps-cache-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+            - deps-cache-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
+            - deps-cache-v1-{{ .Environment.CIRCLE_JOB }}-
       - compile:
           options: "-DBUILD_STATIC=ON -DTESTS=ON -DCOVERAGE=ON -DCMAKE_BUILD_TYPE=Debug"
       - save_cache:
-          key: deps-cache-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+          key: deps-cache-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
           paths:
             - deps
             - /ccache
@@ -115,23 +115,26 @@ jobs:
       - run:
           name: Setup dependencies
           command: |
-            yum install -y epel-release
-            yum install -y git make gcc-c++ cmake3 openssl-devel openssl ccache flex patch bison gmp-static
+            yum install -y epel-release centos-release-scl
+            yum install -y git make gcc-c++ cmake3 openssl-devel openssl ccache flex patch bison gmp-static devtoolset-7
             echo 'export CCACHE_DIR=/ccache' >> $BASH_ENV
+
       - checkout
       - restore_cache:
           keys:
-            - deps-cache-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
-            - deps-cache-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
-            - deps-cache-{{ .Environment.CIRCLE_JOB }}-
+            - deps-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+            - deps-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
+            - deps-v1-{{ .Environment.CIRCLE_JOB }}-
       - run:
           name: Compile
           command: |
+            source /opt/rh/devtoolset-7/enable
+            yum list devtoolset-7\*
             mkdir -p build && cd build
             cmake3 -DTESTS=ON -DTOOL=ON -DDEMO=ON ..
             make -j2
       - save_cache:
-          key: deps-cache-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+          key: deps-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
           paths:
             - deps
             - /ccache
@@ -215,7 +218,6 @@ workflows:
             branches:
               only:
                 - /^pull.*/
-                - /^release.*/
             tags:
               ignore: /.*/
       - generate_coverage:
@@ -225,7 +227,6 @@ workflows:
             branches:
               only:
                 - /^pull.*/
-                - /^release.*/
             tags:
               ignore: /.*/
       - integration_test:
@@ -235,7 +236,6 @@ workflows:
             branches:
               only:
                 - /^pull.*/
-                - /^release.*/
             tags:
               ignore: /.*/
       - build_test_guomi:

@@ -44,7 +44,18 @@ enum ResponseCode
     INVALID_REQUEST_RANGE = -41003,
     INVALID_RESPONSE = -41004,
     REQUST_TIMEOUT = -41005,
-    UNKNOWN_ERROR = -41006
+    SDK_PERMISSION_DENIED = -41006,
+};
+enum filter_status
+{
+    GROUP_ID_NOT_EXIST,
+    CALLBACK_FAILED,
+    ERROR_STATUS,
+    STATUS_PUSH_COMPLETED,
+    WAIT_FOR_MORE_BLOCK,
+    WAIT_FOR_NEXT_LOOP,
+    REMOTE_PEERS_ACCESS_DENIED,
+    CHECK_VALID = 5000,
 };
 }  // namespace event
 }  // namespace dev

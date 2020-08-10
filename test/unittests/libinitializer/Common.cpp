@@ -55,9 +55,11 @@ BOOST_AUTO_TEST_CASE(test_initGlobalConfig)
     pt.put("compatibility.supported_version", "2.0.3");
     initGlobalConfig(pt);
     BOOST_CHECK(g_BCOSConfig.version() == static_cast<VERSION>(33555200));
-    pt.put("compatibility.supported_version", "5.1.3");
+    pt.put("compatibility.supported_version", "2.5.3");
     initGlobalConfig(pt);
-    BOOST_CHECK(g_BCOSConfig.version() == static_cast<VERSION>(83952384));
+    BOOST_CHECK(g_BCOSConfig.version() == static_cast<VERSION>(0x02050300));
+    pt.put("compatibility.supported_version", "22.5.3");
+    BOOST_CHECK_THROW(initGlobalConfig(pt), std::exception);
     pt.put("compatibility.supported_version", "2.0.0-rc2");
     initGlobalConfig(pt);
     BOOST_CHECK(g_BCOSConfig.version() == RC2_VERSION);

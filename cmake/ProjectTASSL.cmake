@@ -2,9 +2,9 @@ include(ExternalProject)
 include(GNUInstallDirs)
 
 if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
-set(TASSL_CONFIG_COMMAND sh ./Configure darwin64-x86_64-cc)
+    set(TASSL_CONFIG_COMMAND sh ./Configure darwin64-x86_64-cc)
 else()
-	set(TASSL_CONFIG_COMMAND bash config -Wl,--rpath=./ shared)
+    set(TASSL_CONFIG_COMMAND bash config -DOPENSSL_PIC no-shared)
 endif ()
 
 set(TASSL_BUILD_COMMAND make)

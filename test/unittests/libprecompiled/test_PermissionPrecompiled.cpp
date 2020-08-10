@@ -33,6 +33,7 @@
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
+using namespace std;
 using namespace dev;
 using namespace dev::blockverifier;
 using namespace dev::storage;
@@ -178,6 +179,109 @@ BOOST_AUTO_TEST_CASE(remove)
     in = abi.abiIn("remove(string,string)", tableName, addr);
     authorityPrecompiled->call(context, bytesConstRef(&in));
     BOOST_TEST(entries->size() == 0u);
+
+    // add committee member permission
+    m_version = g_BCOSConfig.version();
+    m_supportedVersion = g_BCOSConfig.supportedVersion();
+    g_BCOSConfig.setSupportedVersion("2.4.0", V2_4_0);
+    auto origin = Address(addr);
+    in = abi.abiIn("insert(string,string)", SYS_ACCESS_TABLE, addr);
+    callResult = authorityPrecompiled->call(context, bytesConstRef(&in), origin);
+    out = callResult->execResult();
+    s256 ret = 0;
+    abi.abiOut(&out, ret);
+    BOOST_TEST(ret == 1);
+    in = abi.abiIn("insert(string,string)", SYS_CONSENSUS, addr);
+    callResult = authorityPrecompiled->call(context, bytesConstRef(&in), origin);
+    out = callResult->execResult();
+    ret = 0;
+    abi.abiOut(&out, ret);
+    BOOST_TEST(ret == 1);
+    g_BCOSConfig.setSupportedVersion("2.5.0", V2_5_0);
+    in = abi.abiIn("remove(string,string)", SYS_CONSENSUS, addr);
+    callResult = authorityPrecompiled->call(context, bytesConstRef(&in), origin);
+    out = callResult->execResult();
+    ret = 0;
+    abi.abiOut(&out, ret);
+    BOOST_TEST(ret == 1);
+    in = abi.abiIn("insert(string,string)", SYS_CONSENSUS, addr);
+    callResult = authorityPrecompiled->call(context, bytesConstRef(&in), origin);
+    out = callResult->execResult();
+    ret = 0;
+    abi.abiOut(&out, ret);
+    BOOST_TEST(ret == 1);
+    g_BCOSConfig.setSupportedVersion("2.6.0", V2_6_0);
+    in = abi.abiIn("remove(string,string)", SYS_CONSENSUS, addr);
+    callResult = authorityPrecompiled->call(context, bytesConstRef(&in), origin);
+    out = callResult->execResult();
+    ret = 0;
+    abi.abiOut(&out, ret);
+    BOOST_TEST(ret == CODE_NO_AUTHORIZED);
+    g_BCOSConfig.setSupportedVersion(m_supportedVersion, m_version);
+}
+
+BOOST_AUTO_TEST_CASE(grantWrite)
+{
+    // first insert
+    eth::ContractABI abi;
+    std::string tableName = "t_test";
+    std::string addr = "0x420f853b49838bd3e9466c85a4cc3428c960dde2";
+    bytes in = abi.abiIn("insert(string,string)", tableName, addr);
+    auto callResult = authorityPrecompiled->call(context, bytesConstRef(&in));
+    bytes out = callResult->execResult();
+
+    memoryTableFactory->setBlockNum(5);
+    // have committee and operator, can't grantWrite
+    m_version = g_BCOSConfig.version();
+    m_supportedVersion = g_BCOSConfig.supportedVersion();
+    auto origin = Address(addr);
+    auto acTable = memoryTableFactory->openTable(SYS_ACCESS_TABLE);
+    auto entry = acTable->newEntry();
+    entry->setField(SYS_AC_TABLE_NAME, SYS_ACCESS_TABLE);
+    entry->setField(SYS_AC_ADDRESS, addr);
+    entry->setField(SYS_AC_ENABLENUM, "0");
+    acTable->insert(SYS_ACCESS_TABLE, entry, std::make_shared<AccessOptions>(origin, false));
+    auto tableInfo = acTable->tableInfo();
+    tableInfo->authorizedAddress.emplace_back(origin);
+    // create contract table
+    tableName = string("c_420f853b49838bd3e9466c85a4cc3428c960dde4");
+    Address contract("420f853b49838bd3e9466c85a4cc3428c960dde4");
+    std::string addr2 = "0x420f853b49838bd3e9466c85a4cc3428c960dde3";
+    auto origin2 = Address("420f853b49838bd3e9466c85a4cc3428c960dde3");
+    auto table = memoryTableFactory->createTable(tableName, "key", "value", false);
+    entry = table->newEntry();
+    entry->setField("key", "authority");
+    entry->setField("value", origin2.hex());
+    table->insert("authority", entry);
+
+    g_BCOSConfig.setSupportedVersion("2.5.0", V2_5_0);
+    auto origin3 = Address("0x420f853b49838bd3e9466c85a4cc3428c960dde5");
+    in = abi.abiIn("grantWrite(address,address)", contract, origin3);
+    callResult = authorityPrecompiled->call(context, bytesConstRef(&in), origin2);
+    out = callResult->execResult();
+    s256 ret = 0;
+    abi.abiOut(&out, ret);
+    BOOST_TEST(ret == CODE_NO_AUTHORIZED);
+    g_BCOSConfig.setSupportedVersion("2.6.0", V2_6_0);
+    callResult = authorityPrecompiled->call(context, bytesConstRef(&in), origin2);
+    out = callResult->execResult();
+    ret = 0;
+    abi.abiOut(&out, ret);
+    BOOST_TEST(ret == 1);
+    g_BCOSConfig.setSupportedVersion("2.5.0", V2_5_0);
+    in = abi.abiIn("revokeWrite(address,address)", contract, origin3);
+    callResult = authorityPrecompiled->call(context, bytesConstRef(&in), origin2);
+    out = callResult->execResult();
+    ret = 0;
+    abi.abiOut(&out, ret);
+    BOOST_TEST(ret == CODE_NO_AUTHORIZED);
+    g_BCOSConfig.setSupportedVersion("2.6.0", V2_6_0);
+    callResult = authorityPrecompiled->call(context, bytesConstRef(&in), origin2);
+    out = callResult->execResult();
+    ret = 0;
+    abi.abiOut(&out, ret);
+    BOOST_TEST(ret == 1);
+    g_BCOSConfig.setSupportedVersion(m_supportedVersion, m_version);
 }
 
 BOOST_AUTO_TEST_CASE(grantWrite_contract)

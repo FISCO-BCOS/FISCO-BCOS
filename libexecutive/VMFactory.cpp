@@ -22,17 +22,13 @@
  */
 
 #include "VMFactory.h"
-#include "EVMC.h"
+#include "EVMInstance.h"
 
 #include <libinterpreter/interpreter.h>
 
 #include <evmc/loader.h>
-
-#ifdef ETH_EVMJIT
-#include <evmjit.h>
-#endif
-
-#ifdef ETH_HERA
+#include <evmone/evmone.h>
+#ifdef HERA
 #include <hera/hera.h>
 #endif
 
@@ -44,9 +40,9 @@ namespace eth
 {
 namespace
 {
-auto g_kind = VMKind::Interpreter;
+auto g_kind = VMKind::evmone;
 
-/// The pointer to EVMC create function in DLL EVMC VM.
+/// The pointer to EVMInstance create function in DLL EVMInstance VM.
 ///
 /// This variable is only written once when processing command line arguments,
 /// so access is thread-safe.
@@ -67,13 +63,10 @@ struct VMKindTableEntry
 /// We don't use a map to avoid complex dynamic initialization. This list will never be long,
 /// so linear search only to parse command line arguments is not a problem.
 VMKindTableEntry vmKindsTable[] = {
-#ifdef ETH_EVMJIT
-    {VMKind::JIT, "jit"},
-#endif
-#ifdef ETH_HERA
+#ifdef HERA
     {VMKind::Hera, "hera"},
 #endif
-    {VMKind::Interpreter, "interpreter"}};
+    {VMKind::Interpreter, "interpreter"}, {VMKind::evmone, "evmone"}};
 
 void setVMKind(const std::string& _name)
 {
@@ -86,7 +79,7 @@ void setVMKind(const std::string& _name)
             return;
         }
     }
-    // If not match for predefined VM names, try loading it as an EVMC DLL.
+    // If not match for predefined VM names, try loading it as an EVMInstance DLL.
     evmc_loader_error_code ec;
     g_evmcCreateFn = evmc_load(_name.c_str(), &ec);
     switch (ec)
@@ -98,7 +91,7 @@ void setVMKind(const std::string& _name)
             po::validation_error(po::validation_error::invalid_option_value, "vm", _name, 1));
     case EVMC_LOADER_SYMBOL_NOT_FOUND:
         BOOST_THROW_EXCEPTION(std::system_error(std::make_error_code(std::errc::invalid_seek),
-            "loading " + _name + " failed: EVMC create function not found"));
+            "loading " + _name + " failed: EVMInstance create function not found"));
     default:
         BOOST_THROW_EXCEPTION(
             std::system_error(std::error_code(static_cast<int>(ec), std::generic_category()),
@@ -175,28 +168,29 @@ po::options_description vmProgramOptions(unsigned _lineLength)
 }
 
 
-std::unique_ptr<VMFace> VMFactory::create()
+std::unique_ptr<EVMInterface> VMFactory::create()
 {
     return create(g_kind);
 }
 
-std::unique_ptr<VMFace> VMFactory::create(VMKind _kind)
+std::unique_ptr<EVMInterface> VMFactory::create(VMKind _kind)
 {
     switch (_kind)
     {
-#ifdef ETH_EVMJIT
-    case VMKind::JIT:
-        return std::unique_ptr<VMFace>(new EVMC{evmjit_create()});
-#endif
-#ifdef ETH_HERA
+#ifdef HERA
     case VMKind::Hera:
-        return std::unique_ptr<VMFace>(new EVMC{evmc_create_hera()});
+        return std::unique_ptr<EVMInterface>(new EVMInstance{evmc_create_hera()});
 #endif
+    case VMKind::evmone:
+        return std::unique_ptr<EVMInterface>(new EVMInstance{evmc_create_evmone()});
     case VMKind::DLL:
-        return std::unique_ptr<VMFace>(new EVMC{g_evmcCreateFn()});
+        return std::unique_ptr<EVMInterface>(new EVMInstance{g_evmcCreateFn()});
+#if 0
     case VMKind::Interpreter:
+        return std::unique_ptr<EVMInterface>(new EVMInstance{evmc_create_interpreter()});
+#endif
     default:
-        return std::unique_ptr<VMFace>(new EVMC{evmc_create_interpreter()});
+        return std::unique_ptr<EVMInterface>(new EVMInstance{evmc_create_evmone()});
     }
 }
 }  // namespace eth

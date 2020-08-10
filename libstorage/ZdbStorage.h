@@ -75,8 +75,12 @@ private:
     void createSysConfigTables();
     void createSysBlock2NoncesTables();
     void insertSysTables();
+    // create blob table
+    void createBlobSysHash2BlockHeaderTable();
 
     int m_maxRetry = 60;
+    std::string m_rowFormat = "";
+    std::string m_valueFieldType = "longtext";
 };
 
 }  // namespace storage

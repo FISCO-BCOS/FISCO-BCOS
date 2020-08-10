@@ -132,6 +132,15 @@ public:
         m_networkStat = _handler;
     }
 
+    void setRemotePublicKey(dev::h512 const& _remotePublicKey)
+    {
+        CHANNEL_SESSION_LOG(INFO) << LOG_DESC("setRemotePublicKey: set sdk public key")
+                                  << LOG_KV("sdkPublicKey", _remotePublicKey.abridged());
+        m_remotePublicKey = _remotePublicKey;
+    }
+
+    dev::h512 const& remotePublicKey() { return m_remotePublicKey; }
+
 private:
     bool isAMOPMessage(Message::Ptr _request);
     void startRead();
@@ -228,6 +237,8 @@ private:
     dev::ProtocolVersion m_maximumProtocol = dev::ProtocolVersion::maxVersion;
     std::string m_clientType;
     size_t _idleTime = 30000;
+
+    dev::h512 m_remotePublicKey;
 };
 
 }  // namespace channel

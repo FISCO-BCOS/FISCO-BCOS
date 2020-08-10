@@ -121,6 +121,63 @@ shared_ptr<TableFactory> BlockChainImp::getMemoryTableFactory(int64_t num)
     return memoryTableFactory;
 }
 
+std::shared_ptr<BlockHeaderInfo> BlockChainImp::getBlockHeaderInfo(int64_t _blockNumber)
+{
+    if (_blockNumber > number())
+    {
+        return nullptr;
+    }
+    // get block hash
+    auto blockHash = numberHash(_blockNumber);
+    if (blockHash != h256(""))
+    {
+        return getBlockHeaderInfoByHash(blockHash);
+    }
+    return nullptr;
+}
+
+std::shared_ptr<BlockHeaderInfo> BlockChainImp::getBlockHeaderFromBlock(dev::eth::Block::Ptr _block)
+{
+    if (!_block)
+    {
+        return nullptr;
+    }
+    // TODO: remove the copy overhead
+    return std::make_shared<BlockHeaderInfo>(
+        std::make_pair(std::make_shared<BlockHeader>(_block->blockHeader()), _block->sigList()));
+}
+
+std::shared_ptr<BlockHeaderInfo> BlockChainImp::getBlockHeaderInfoByHash(
+    dev::h256 const& _blockHash)
+{
+    auto cachedBlockInfo = m_blockCache.get(_blockHash);
+    // hit the cache, get block header from the cache directly
+    if (cachedBlockInfo.first)
+    {
+        return getBlockHeaderFromBlock(cachedBlockInfo.first);
+    }
+    // miss the cache, read from the SYS_HASH_2_BLOCKHEAER firstly
+    // Note: the SYS_HASH_2_BLOCKHEADER can always be opened successfully
+    auto table = getMemoryTableFactory()->openTable(SYS_HASH_2_BLOCKHEADER);
+    // query block to obtain the block header and signature list
+    auto entries = table->select(_blockHash.hex(), table->newCondition());
+    if (entries->size() <= 0)
+    {
+        return getBlockHeaderFromBlock(getBlock(_blockHash));
+    }
+    auto entry = entries->get(0);
+    // decode block header
+    auto blockHeaderBytes = entry->getFieldConst(SYS_VALUE);
+    auto blockHeader = std::make_shared<BlockHeader>(blockHeaderBytes, BlockDataType::HeaderData);
+
+    // decode signature list
+    auto sigListBytes = entry->getFieldConst(SYS_SIG_LIST);
+    auto sigList = std::make_shared<dev::eth::Block::SigListType>();
+    RLP rlp(sigListBytes);
+    *sigList = rlp.toVector<std::pair<u256, std::vector<unsigned char>>>();
+    return std::make_shared<BlockHeaderInfo>(std::make_pair(blockHeader, sigList));
+}
+
 std::shared_ptr<Block> BlockChainImp::getBlock(int64_t _blockNumber)
 {
     /// the future block
@@ -128,18 +185,11 @@ std::shared_ptr<Block> BlockChainImp::getBlock(int64_t _blockNumber)
     {
         return nullptr;
     }
-    Table::Ptr tb = getMemoryTableFactory(_blockNumber)->openTable(SYS_NUMBER_2_HASH);
-    if (tb)
+    auto blockHash = numberHash(_blockNumber);
+    if (blockHash != h256(""))
     {
-        auto entries = tb->select(lexical_cast<std::string>(_blockNumber), tb->newCondition());
-        if (entries->size() > 0)
-        {
-            auto entry = entries->get(0);
-            h256 blockHash = h256((entry->getField(SYS_VALUE)));
-            return getBlock(blockHash, _blockNumber);
-        }
+        return getBlock(blockHash, _blockNumber);
     }
-
     BLOCKCHAIN_LOG(WARNING) << LOG_DESC("[getBlock]Can't find block")
                             << LOG_KV("number", _blockNumber);
     return nullptr;
@@ -435,11 +485,61 @@ std::shared_ptr<Block> BlockChainImp::getBlockByHash(h256 const& _blockHash, int
     }
 }
 
-bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam, bool _shouldBuild)
+void BlockChainImp::initGenesisWorkingSealers(dev::storage::Table::Ptr _consTable,
+    std::shared_ptr<dev::ledger::LedgerParamInterface> _initParam)
+{
+    // only used for vrf based rPBFT
+    auto sealerList = _initParam->mutableConsensusParam().sealerList;
+    bool rPBFTEnabled =
+        (dev::stringCmpIgnoreCase(_initParam->mutableConsensusParam().consensusType, "rpbft") == 0);
+    if (!rPBFTEnabled || g_BCOSConfig.version() < V2_6_0)
+    {
+        return;
+    }
+
+    std::sort(sealerList.begin(), sealerList.end());
+
+    int64_t sealersSize = sealerList.size();
+    auto selectedNum = std::min(_initParam->mutableConsensusParam().epochSealerNum, sealersSize);
+
+    // shuffle the sealerList according to the genesis hash
+    // select the genesis working sealers randomly according to genesis hash
+    if (sealersSize > selectedNum)
+    {
+        for (ssize_t i = sealersSize - 1; i > 0; i--)
+        {
+            int64_t selectedNode = (int64_t)(u256(crypto::Hash(sealerList[i])) % (i + 1));
+            std::swap(sealerList[i], sealerList[selectedNode]);
+        }
+    }
+    // output workingSealers
+    std::string workingSealers;
+    for (int64_t i = 0; i < selectedNum; i++)
+    {
+        workingSealers += (sealerList[i]).abridged() + ",";
+    }
+    BLOCKCHAIN_LOG(INFO) << LOG_DESC("initGenesisWorkingSealers")
+                         << LOG_KV("workingSealerNum", selectedNum)
+                         << LOG_KV("workingSealers", workingSealers);
+    // update selected sealers into workingSealers
+    initGensisConsensusInfoByNodeType(
+        _consTable, NODE_TYPE_WORKING_SEALER, sealerList, selectedNum, true);
+}
+
+// Configuration item written to the genesis block:
+// groupMark:
+//          groupId, sealerList, observerList, consensusType,
+//          storageType, stateType, evmFlags, tx_count_limit
+//          tx_gas_limit, epochSealerNum(for rPBFT), epochBlockNum(for rPBFT)
+bool BlockChainImp::checkAndBuildGenesisBlock(
+    std::shared_ptr<dev::ledger::LedgerParamInterface> _initParam, bool _shouldBuild)
 {
     BLOCKCHAIN_LOG(INFO) << LOG_DESC("[#checkAndBuildGenesisBlock]")
                          << LOG_KV("shouldBuild", _shouldBuild);
     std::shared_ptr<Block> block = getBlockByNumber(0);
+
+    auto groupGenesisMark = _initParam->mutableGenesisMark();
+
     if (block == nullptr && !_shouldBuild)
     {
         BLOCKCHAIN_LOG(FATAL) << "Can't find the genesis block";
@@ -448,8 +548,8 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam, bool
     {
         block = std::make_shared<Block>();
         /// modification 2019.3.20: set timestamp to block header
-        block->setEmptyBlock(initParam.timeStamp);
-        block->header().appendExtraDataArray(asBytes(initParam.groupMark));
+        block->setEmptyBlock(_initParam->mutableGenesisParam().timeStamp);
+        block->header().appendExtraDataArray(asBytes(groupGenesisMark));
         shared_ptr<TableFactory> mtb = getMemoryTableFactory();
         Table::Ptr tb = mtb->openTable(SYS_NUMBER_2_HASH, false);
         if (tb)
@@ -465,44 +565,51 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam, bool
         {
             // init for tx_count_limit
             initSystemConfig(tb, SYSTEM_KEY_TX_COUNT_LIMIT,
-                boost::lexical_cast<std::string>(initParam.txCountLimit));
+                boost::lexical_cast<std::string>(
+                    _initParam->mutableConsensusParam().maxTransactions));
 
             // init for tx_gas_limit
             initSystemConfig(tb, SYSTEM_KEY_TX_GAS_LIMIT,
-                boost::lexical_cast<std::string>(initParam.txGasLimit));
+                boost::lexical_cast<std::string>(_initParam->mutableTxParam().txGasLimit));
             // init configurations for RPBFT
-            if (dev::stringCmpIgnoreCase(initParam.consensusType, "rpbft") == 0)
+            auto consensusType = _initParam->mutableConsensusParam().consensusType;
+            if (dev::stringCmpIgnoreCase(consensusType, "rpbft") == 0)
             {
-                // init rotating-epoch-size
+                // init epoch_sealer_num
                 initSystemConfig(tb, SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM,
-                    boost::lexical_cast<std::string>(initParam.rpbftEpochSize));
+                    boost::lexical_cast<std::string>(
+                        _initParam->mutableConsensusParam().epochSealerNum));
+                // init epoch_block_num
                 initSystemConfig(tb, SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM,
-                    boost::lexical_cast<std::string>(initParam.rpbftRotatingInterval));
+                    boost::lexical_cast<std::string>(
+                        _initParam->mutableConsensusParam().epochBlockNum));
+                initSystemConfig(tb, INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE, "0");
+                BLOCKCHAIN_LOG(INFO) << LOG_DESC("set configuration for rPBFT")
+                                     << LOG_KV(SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM,
+                                            _initParam->mutableConsensusParam().epochSealerNum)
+                                     << LOG_KV(SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM,
+                                            _initParam->mutableConsensusParam().epochBlockNum);
+            }
+            if (g_BCOSConfig.version() >= V2_6_0)
+            {
+                // init consensus time
+                initSystemConfig(tb, SYSTEM_KEY_CONSENSUS_TIMEOUT,
+                    boost::lexical_cast<std::string>(
+                        _initParam->mutableConsensusParam().consensusTimeout));
+                BLOCKCHAIN_LOG(INFO) << LOG_DESC("init consensus timeout")
+                                     << LOG_KV(SYSTEM_KEY_CONSENSUS_TIMEOUT,
+                                            _initParam->mutableConsensusParam().consensusTimeout);
             }
         }
 
         tb = mtb->openTable(SYS_CONSENSUS);
         if (tb)
         {
-            for (dev::h512 node : initParam.sealerList)
-            {
-                Entry::Ptr entry = std::make_shared<Entry>();
-                entry->setField(PRI_COLUMN, PRI_KEY);
-                entry->setField(NODE_TYPE, NODE_TYPE_SEALER);
-                entry->setField(NODE_KEY_NODEID, dev::toHex(node));
-                entry->setField(NODE_KEY_ENABLENUM, "0");
-                tb->insert(PRI_KEY, entry);
-            }
-
-            for (dev::h512 node : initParam.observerList)
-            {
-                Entry::Ptr entry = std::make_shared<Entry>();
-                entry->setField(PRI_COLUMN, PRI_KEY);
-                entry->setField(NODE_TYPE, NODE_TYPE_OBSERVER);
-                entry->setField(NODE_KEY_NODEID, dev::toHex(node));
-                entry->setField(NODE_KEY_ENABLENUM, "0");
-                tb->insert(PRI_KEY, entry);
-            }
+            initGensisConsensusInfoByNodeType(
+                tb, NODE_TYPE_SEALER, _initParam->mutableConsensusParam().sealerList);
+            initGensisConsensusInfoByNodeType(
+                tb, NODE_TYPE_OBSERVER, _initParam->mutableConsensusParam().observerList);
+            initGenesisWorkingSealers(tb, _initParam);
         }
 
         tb = mtb->openTable(SYS_HASH_2_BLOCK, false);
@@ -530,7 +637,8 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam, bool
         std::string extraData = asString(block->header().extraData(0));
         /// compare() return 0 means equal!
         /// If not equal, only print warning, willnot kill process.
-        if (!initParam.groupMark.compare(extraData))
+
+        if (!groupGenesisMark.compare(extraData))
         {
             BLOCKCHAIN_LOG(INFO) << LOG_DESC(
                 "[#checkAndBuildGenesisBlock]Already have the 0th block, 0th groupMark is "
@@ -539,35 +647,37 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam, bool
         }
         else
         {
-            BLOCKCHAIN_LOG(WARNING) << LOG_DESC(
-                                           "[#checkAndBuildGenesisBlock]Already have the 0th "
-                                           "block, 0th group mark is not equal to file groupMark")
-                                    << LOG_KV("0thGroupMark:", extraData)
-                                    << LOG_KV("fileGroupMark", initParam.groupMark);
+            BLOCKCHAIN_LOG(WARNING)
+                << LOG_DESC(
+                       "[#checkAndBuildGenesisBlock]Already have the 0th "
+                       "block, 0th group mark is not equal to file groupMark")
+                << LOG_KV("0thGroupMark:", extraData) << LOG_KV("fileGroupMark", groupGenesisMark);
 
             // maybe consensusType/storageType/stateType diff, then update config
             std::vector<std::string> s;
             try
             {
                 boost::split(s, extraData, boost::is_any_of("-"), boost::token_compress_on);
-                initParam.consensusType = s[2];
+                _initParam->mutableConsensusParam().consensusType = s[2];
                 if (g_BCOSConfig.version() <= RC2_VERSION)
                 {
-                    initParam.storageType = s[3];
-                    initParam.stateType = s[4];
+                    _initParam->mutableStorageParam().type = s[3];
+                    _initParam->mutableStateParam().type = s[4];
                 }
                 else
                 {
-                    initParam.stateType = s[3];
+                    _initParam->mutableStateParam().type = s[3];
                 }
                 if (g_BCOSConfig.version() >= V2_4_0)
                 {
-                    initParam.evmFlags = boost::lexical_cast<VMFlagType>(s[4]);
+                    _initParam->mutableGenesisParam().evmFlags =
+                        boost::lexical_cast<VMFlagType>(s[4]);
                 }
-                BLOCKCHAIN_LOG(INFO) << LOG_BADGE("checkAndBuildGenesisBlock")
-                                     << LOG_DESC("Load genesis config from extraData")
-                                     << LOG_KV("stateType", initParam.stateType)
-                                     << LOG_KV("evmFlags", initParam.evmFlags);
+                BLOCKCHAIN_LOG(INFO)
+                    << LOG_BADGE("checkAndBuildGenesisBlock")
+                    << LOG_DESC("Load genesis config from extraData")
+                    << LOG_KV("stateType", _initParam->mutableStateParam().type)
+                    << LOG_KV("evmFlags", _initParam->mutableGenesisParam().evmFlags);
             }
             catch (std::exception& e)
             {
@@ -579,6 +689,35 @@ bool BlockChainImp::checkAndBuildGenesisBlock(GenesisBlockParam& initParam, bool
         }
     }
     return true;
+}
+
+void BlockChainImp::initGensisConsensusInfoByNodeType(dev::storage::Table::Ptr _consTable,
+    std::string const& _nodeType, dev::h512s const& _nodeList, int64_t _nodeNum, bool _update)
+{
+    int64_t initedNodeSize = _nodeNum;
+    if (-1 == _nodeNum)
+    {
+        initedNodeSize = _nodeList.size();
+    }
+    for (int64_t i = 0; i < initedNodeSize; i++)
+    {
+        auto const& node = _nodeList[i];
+        auto entry = std::make_shared<Entry>();
+        entry->setField(PRI_COLUMN, PRI_KEY);
+        entry->setField(NODE_TYPE, _nodeType);
+        entry->setField(NODE_KEY_NODEID, dev::toHex(node));
+        entry->setField(NODE_KEY_ENABLENUM, "0");
+        if (_update)
+        {
+            auto condition = _consTable->newCondition();
+            condition->EQ(NODE_KEY_NODEID, dev::toHex(node));
+            _consTable->update(PRI_KEY, entry, condition);
+        }
+        else
+        {
+            _consTable->insert(PRI_KEY, entry);
+        }
+    }
 }
 
 // init system config
@@ -603,24 +742,7 @@ dev::h512s BlockChainImp::getNodeListByType(int64_t blockNumber, std::string con
             BLOCKCHAIN_LOG(ERROR) << LOG_DESC("[#getNodeListByType]Open table error");
             return list;
         }
-
-        auto nodes = tb->select(PRI_KEY, tb->newCondition());
-        if (!nodes)
-            return list;
-
-        for (size_t i = 0; i < nodes->size(); i++)
-        {
-            auto node = nodes->get(i);
-            if (!node)
-                return list;
-
-            if ((node->getField(NODE_TYPE) == type) &&
-                (boost::lexical_cast<int>(node->getField(NODE_KEY_ENABLENUM)) <= blockNumber))
-            {
-                h512 nodeID = h512(node->getField(NODE_KEY_NODEID));
-                list.push_back(nodeID);
-            }
-        }
+        list = dev::precompiled::getNodeListByType(tb, blockNumber, type);
     }
     catch (std::exception& e)
     {
@@ -637,40 +759,49 @@ dev::h512s BlockChainImp::getNodeListByType(int64_t blockNumber, std::string con
     return list;
 }
 
+// return the working sealer
+dev::h512s BlockChainImp::workingSealerList()
+{
+    return getNodeList(
+        m_cacheNumByWorkingSealer, m_workingSealerList, m_nodeListMutex, NODE_TYPE_WORKING_SEALER);
+}
+
+dev::h512s BlockChainImp::pendingSealerList()
+{
+    return getNodeList(m_cacheNumBySealer, m_sealerList, m_nodeListMutex, NODE_TYPE_SEALER);
+}
+
+// Union of type=NODE_TYPE_WORKING_SEALER and type=NODE_TYPE_SEALER
 dev::h512s BlockChainImp::sealerList()
 {
-    int64_t blockNumber = number();
-    UpgradableGuard l(m_nodeListMutex);
-    if (m_cacheNumBySealer == blockNumber)
-    {
-        BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#sealerList]Get sealer list by cache")
-                              << LOG_KV("size", m_sealerList.size());
-        return m_sealerList;
-    }
-    dev::h512s list = getNodeListByType(blockNumber, NODE_TYPE_SEALER);
-    UpgradeGuard ul(l);
-    m_cacheNumBySealer = blockNumber;
-    m_sealerList = list;
-
-    return list;
+    return (workingSealerList() + pendingSealerList());
 }
 
 dev::h512s BlockChainImp::observerList()
 {
-    int64_t blockNumber = number();
-    UpgradableGuard l(m_nodeListMutex);
-    if (m_cacheNumByObserver == blockNumber)
-    {
-        BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#observerList]Get observer list by cache")
-                              << LOG_KV("size", m_observerList.size());
-        return m_observerList;
-    }
-    dev::h512s list = getNodeListByType(blockNumber, NODE_TYPE_OBSERVER);
-    UpgradeGuard ul(l);
-    m_cacheNumByObserver = blockNumber;
-    m_observerList = list;
+    return getNodeList(m_cacheNumByObserver, m_observerList, m_nodeListMutex, NODE_TYPE_OBSERVER);
+}
 
-    return list;
+// TODO: Use pointers as return values to reduce copy overhead
+dev::h512s BlockChainImp::getNodeList(dev::eth::BlockNumber& _cachedNumber,
+    dev::h512s& _cachedNodeList, SharedMutex& _mutex, std::string const& _nodeListType)
+{
+    auto blockNumber = number();
+    UpgradableGuard l(_mutex);
+    // hit the cache
+    if (_cachedNumber == blockNumber)
+    {
+        BLOCKCHAIN_LOG(TRACE) << LOG_DESC("getNodeList: hit the cache")
+                              << LOG_KV("type", _nodeListType)
+                              << LOG_KV("size", _cachedNodeList.size());
+        return _cachedNodeList;
+    }
+    // miss the cache
+    auto nodeList = getNodeListByType(blockNumber, _nodeListType);
+    UpgradeGuard ul(l);
+    _cachedNumber = blockNumber;
+    _cachedNodeList = nodeList;
+    return nodeList;
 }
 
 std::string BlockChainImp::getSystemConfigByKey(std::string const& key, int64_t num)
@@ -686,9 +817,6 @@ std::pair<std::string, BlockNumber> BlockChainImp::getSystemConfigInfoByKey(
     // The param was reset at height number(), and takes effect in next block.
     // So we query the status of number() + 1.
     int64_t blockNumber = (-1 == num) ? number() + 1 : num;
-
-    BlockNumber enableNumber = -1;
-
     UpgradableGuard l(m_systemConfigMutex);
     auto it = m_systemConfigRecord.find(key);
     if (it != m_systemConfigRecord.end() && it->second.curBlockNum == blockNumber)
@@ -697,7 +825,7 @@ std::pair<std::string, BlockNumber> BlockChainImp::getSystemConfigInfoByKey(
         return std::make_pair(it->second.value, it->second.enableNumber);
     }
 
-    std::string ret;
+    auto result = std::make_shared<std::pair<std::string, BlockNumber>>(std::make_pair("", -1));
     // cannot find the system config key or need to update the value with different block height
     // get value from db
     try
@@ -706,43 +834,21 @@ std::pair<std::string, BlockNumber> BlockChainImp::getSystemConfigInfoByKey(
         if (!tb)
         {
             BLOCKCHAIN_LOG(ERROR) << LOG_DESC("[#getSystemConfigByKey]Open table error");
-            return std::make_pair(ret, -1);
+            return *result;
         }
-        auto values = tb->select(key, tb->newCondition());
-        if (!values || values->size() != 1)
-        {
-            BLOCKCHAIN_LOG(ERROR) << LOG_DESC("[#getSystemConfigByKey]Select error")
-                                  << LOG_KV("key", key);
-            // FIXME: throw exception here, or fatal error
-            return std::make_pair(ret, enableNumber);
-        }
-
-        auto value = values->get(0);
-        if (!value)
-        {
-            BLOCKCHAIN_LOG(ERROR) << LOG_DESC("[#getSystemConfigByKey]Null pointer");
-            // FIXME: throw exception here, or fatal error
-            return std::make_pair(ret, enableNumber);
-        }
-
-        if (boost::lexical_cast<BlockNumber>(value->getField(SYSTEM_CONFIG_ENABLENUM)) <=
-            blockNumber)
-        {
-            ret = value->getField(SYSTEM_CONFIG_VALUE);
-            enableNumber =
-                boost::lexical_cast<BlockNumber>(value->getField(SYSTEM_CONFIG_ENABLENUM));
-        }
+        result = dev::precompiled::getSysteConfigByKey(tb, key, blockNumber);
     }
     catch (std::exception& e)
     {
         BLOCKCHAIN_LOG(ERROR) << LOG_DESC("[#getSystemConfigByKey]Failed")
                               << LOG_KV("EINFO", boost::diagnostic_information(e));
+        return *result;
     }
 
     // update cache
     {
         UpgradeGuard ul(l);
-        SystemConfigRecord systemConfigRecord(ret, enableNumber, blockNumber);
+        SystemConfigRecord systemConfigRecord(result->first, result->second, blockNumber);
         if (it != m_systemConfigRecord.end())
         {
             it->second = systemConfigRecord;
@@ -755,8 +861,8 @@ std::pair<std::string, BlockNumber> BlockChainImp::getSystemConfigInfoByKey(
     }
 
     BLOCKCHAIN_LOG(TRACE) << LOG_DESC("[#getSystemConfigByKey]Data in db") << LOG_KV("key", key)
-                          << LOG_KV("value", ret);
-    return std::make_pair(ret, enableNumber);
+                          << LOG_KV("value", result->first);
+    return *result;
 }
 
 std::shared_ptr<Block> BlockChainImp::getBlockByNumber(int64_t _i)
@@ -1060,7 +1166,7 @@ BlockChainImp::getTransactionReceiptByHashWithProof(
         BLOCKCHAIN_LOG(ERROR) << LOG_DESC("get block info  failed")
                               << LOG_KV("_txHash", _txHash.hex());
         return std::make_pair(std::make_shared<dev::eth::LocalisedTransactionReceipt>(
-                                  executive::TransactionException::None),
+                                  eth::TransactionException::None),
             merkleProof);
     }
     auto txIndex = blockInfoWithTxIndex.second;
@@ -1073,7 +1179,7 @@ BlockChainImp::getTransactionReceiptByHashWithProof(
     {
         BLOCKCHAIN_LOG(ERROR) << LOG_DESC("txindex is invalidate ") << LOG_KV("txIndex", txIndex);
         return std::make_pair(std::make_shared<dev::eth::LocalisedTransactionReceipt>(
-                                  executive::TransactionException::None),
+                                  eth::TransactionException::None),
             merkleProof);
     }
 
@@ -1398,6 +1504,24 @@ void BlockChainImp::writeHash2Block(Block& block, std::shared_ptr<ExecutiveConte
     }
 }
 
+void BlockChainImp::writeHash2BlockHeader(Block& _block, std::shared_ptr<ExecutiveContext> _context)
+{
+    auto table = _context->getMemoryTableFactory()->openTable(SYS_HASH_2_BLOCKHEADER, false);
+    Entry::Ptr entry = std::make_shared<Entry>();
+    // encode and write the block header into SYS_VALUE field
+    bytes encodededBlockHeader;
+    _block.header().encode(encodededBlockHeader);
+    entry->setField(SYS_VALUE, encodededBlockHeader.data(), encodededBlockHeader.size());
+    // encode and write the sigList into the SYS_SIG_LIST field
+    RLPStream rlp;
+    rlp.appendVector(*(_block.sigList()));
+    bytes encodedSigList;
+    rlp.swapOut(encodedSigList);
+    entry->setField(SYS_SIG_LIST, encodedSigList.data(), encodedSigList.size());
+    entry->setForce(true);
+    table->insert(_block.blockHeader().hash().hex(), entry);
+}
+
 bool BlockChainImp::isBlockShouldCommit(int64_t const& _blockNumber)
 {
     if (_blockNumber != number() + 1)
@@ -1446,7 +1570,9 @@ CommitResult BlockChainImp::commitBlock(
                 [this, block, context]() { writeNumber2Hash(*block, context); },
                 [this, block, context]() { writeNumber(*block, context); },
                 [this, block, context]() { writeTotalTransactionCount(*block, context); },
-                [this, block, context]() { writeTxToBlock(*block, context); });
+                [this, block, context]() { writeTxToBlock(*block, context); },
+                [this, block, context]() { writeHash2BlockHeader(*block, context); });
+
             auto write_table_time = utcTime() - write_record_time;
 
             write_record_time = utcTime();

@@ -390,7 +390,7 @@ public:
     {}
     explicit SecureFixedHash(bytes const* _d, ConstructFromPointerType _t) : FixedHash<T>(_d, _t) {}
     ~SecureFixedHash() { ref().cleanse(); }
-
+    SecureFixedHash(SecureFixedHash<T> const& _c) = default;
     SecureFixedHash<T>& operator=(SecureFixedHash<T> const& _c)
     {
         if (&_c == this)
@@ -612,6 +612,9 @@ inline std::string toString(h256s const& _bs)
     out << "]";
     return out.str();
 }
+
+bool isNodeIDOk(dev::h512 const& _nodeID);
+bool isNodeIDOk(const std::string& _nodeID);
 
 }  // namespace dev
 

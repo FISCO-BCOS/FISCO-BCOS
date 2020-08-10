@@ -14,12 +14,11 @@
 
 #pragma once
 
-#include "ExecutionResult.h"
+#include "Common.h"
 #include <libethcore/BlockHeader.h>
 #include <libethcore/Common.h>
 #include <libethcore/EVMFlags.h>
 #include <libethcore/Transaction.h>
-#include <libevm/VMFace.h>
 #include <functional>
 
 namespace Json
@@ -39,6 +38,7 @@ class TableFactory;
 namespace eth
 {
 class Block;
+class Result;
 }  // namespace eth
 namespace precompiled
 {
@@ -67,22 +67,23 @@ class PrecompiledExecResult;
  */
 namespace executive
 {
-class ExtVM;
+class EVMHostContext;
 class StateFace;
 class Executive
 {
 public:
     using Ptr = std::shared_ptr<Executive>;
     /// Simple constructor; executive will operate on given state, with the given environment info.
-    Executive(std::shared_ptr<StateFace> _s, dev::eth::EnvInfo const& _envInfo, unsigned _level = 0)
-      : m_s(_s), m_envInfo(_envInfo), m_depth(_level)
+    Executive(std::shared_ptr<StateFace> _s, dev::executive::EnvInfo const& _envInfo,
+        unsigned _level = 0, bool _freeStorage = false)
+      : m_s(_s), m_envInfo(_envInfo), m_depth(_level), m_enableFreeStorage(_freeStorage)
     {}
 
-    Executive() {}
+    Executive(bool _freeStorage = false) : m_enableFreeStorage(_freeStorage) {}
 
 
     // template <typename T>
-    // Executive(T _s, dev::eth::EnvInfo const& _envInfo, unsigned _level = 0)
+    // Executive(T _s, dev::executive::EnvInfo const& _envInfo, unsigned _level = 0)
     //  : m_s(dynamic_cast<std::shared_ptr<StateFace>>(_s)), m_envInfo(_envInfo), m_depth(_level)
     //{}
 
@@ -91,12 +92,6 @@ public:
      * info from given Block and the LastHashes portion from the BlockChain.
      */
     // Executive(Block& _s, BlockChain const& _bc, unsigned _level = 0);
-
-    /** LastHashes-split constructor.
-     * Creates executive to operate on the state of end of the given block, populating environment
-     * info accordingly, with last hashes given explicitly.
-     */
-    // Executive(Block& _s, LastBlockHashesFace const& _lh, unsigned _level = 0);
 
     /** Previous-state constructor.
      * Creates executive to operate on the state of a particular transaction in the given block,
@@ -154,28 +149,26 @@ public:
     /// @returns false iff go() must be called (and thus a VM execution in required).
     bool call(Address const& _receiveAddress, Address const& _txSender, u256 const& _txValue,
         u256 const& _gasPrice, bytesConstRef _txData, u256 const& _gas);
-    bool call(dev::eth::CallParameters const& _cp, u256 const& _gasPrice, Address const& _origin);
+    bool call(
+        dev::executive::CallParameters const& _cp, u256 const& _gasPrice, Address const& _origin);
     bool callRC2(
-        dev::eth::CallParameters const& _cp, u256 const& _gasPrice, Address const& _origin);
+        dev::executive::CallParameters const& _cp, u256 const& _gasPrice, Address const& _origin);
     /// Finalise an operation through accruing the substate into the parent context.
-    void accrueSubState(dev::eth::SubState& _parentContext);
+    void accrueSubState(dev::executive::SubState& _parentContext);
 
     /// Executes (or continues execution of) the VM.
     /// @returns false iff go() must be called again to finish the transaction.
-    bool go(dev::eth::OnOpFunc const& _onOp = dev::eth::OnOpFunc());
+    bool go();
 
     /// @returns gas remaining after the transaction/operation. Valid after the transaction has been
     /// executed.
     u256 gas() const { return m_gas; }
-    executive::TransactionException status() const { return m_excepted; }
+    eth::TransactionException status() const { return m_excepted; }
     /// @returns the new address for the created contract in the CREATE operation.
     Address newAddress() const { return m_newAddress; }
 
     /// @returns The exception that has happened during the execution if any.
-    TransactionException getException() const noexcept { return m_excepted; }
-
-    /// Collect execution results in the result storage provided.
-    // void setResultRecipient(ExecutionResult& _res) { m_res = &_res; }
+    eth::TransactionException getException() const noexcept { return m_excepted; }
 
     /// Revert all changes made to the state by this execution.
     void revert();
@@ -188,7 +181,7 @@ public:
         m_ext = nullptr;
         m_output = owning_bytes_ref();
         m_depth = 0;
-        m_excepted = TransactionException::None;
+        m_excepted = eth::TransactionException::None;
         m_exceptionReason.clear();
         m_baseGasRequired = 0;
         m_gas = 0;
@@ -200,20 +193,14 @@ public:
         m_tableFactorySavepoint = 0;
         m_logs.clear();
         m_t.reset();
-        m_res.reset();
     }
 
-    void setEnvInfo(dev::eth::EnvInfo const& _envInfo) { m_envInfo = _envInfo; }
+    void setEnvInfo(dev::executive::EnvInfo const& _envInfo) { m_envInfo = _envInfo; }
 
     void setState(std::shared_ptr<StateFace> _state) { m_s = _state; }
 
-    void setEvmFlags(VMFlagType const& _evmFlags)
-    {
-        m_evmFlags = _evmFlags;
-        m_enableFreeStorage = enableFreeStorage(_evmFlags);
-    }
-
 private:
+    void parseEVMCResult(std::shared_ptr<eth::Result> _result);
     /// @returns false iff go() must be called (and thus a VM execution in required).
     bool executeCreate(Address const& _txSender, u256 const& _endowment, u256 const& _gasPrice,
         u256 const& _gas, bytesConstRef _code, Address const& _originAddress);
@@ -227,17 +214,17 @@ private:
 
     std::shared_ptr<StateFace> m_s;  ///< The state to which this operation/transaction is applied.
     // TODO: consider changign to EnvInfo const& to avoid LastHashes copy at every CALL/CREATE
-    dev::eth::EnvInfo m_envInfo;   ///< Information on the runtime environment.
-    std::shared_ptr<ExtVM> m_ext;  ///< The VM externality object for the VM execution or null if no
-                                   ///< VM is required. shared_ptr used only to allow ExtVM forward
-                                   ///< reference. This field does *NOT* survive this object.
-    owning_bytes_ref m_output;     ///< Execution output.
-
-    ExecutionResult m_res;  ///< Optional storage for execution results.
+    dev::executive::EnvInfo m_envInfo;      ///< Information on the runtime environment.
+    std::shared_ptr<EVMHostContext> m_ext;  ///< The VM externality object for the VM execution or
+                                            ///< null if no VM is required. shared_ptr used only to
+                                            ///< allow EVMHostContext forward reference. This field
+                                            ///< does *NOT* survive this object.
+    owning_bytes_ref m_output;              ///< Execution output.
 
     unsigned m_depth = 0;  ///< The context's call-depth.
-    TransactionException m_excepted =
-        TransactionException::None;  ///< Details if the VM's execution resulted in an exception.
+    eth::TransactionException m_excepted =
+        eth::TransactionException::None;  ///< Details if the VM's execution resulted in an
+                                          ///< exception.
     std::stringstream m_exceptionReason;
 
     int64_t m_baseGasRequired;  ///< The base amount of gas requried for executing this transaction.
@@ -256,7 +243,6 @@ private:
     size_t m_savepoint = 0;
     size_t m_tableFactorySavepoint = 0;
 
-    VMFlagType m_evmFlags;
     // determine whether the freeStorageVMSchedule enabled or not
     bool m_enableFreeStorage = false;
 };

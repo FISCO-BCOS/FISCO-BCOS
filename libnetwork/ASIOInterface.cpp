@@ -25,12 +25,13 @@
 namespace ba = boost::asio;
 namespace bi = ba::ip;
 using namespace dev::network;
+using namespace std;
 
-void ASIOInterface::asyncResolveConnect(std::shared_ptr<SocketFace> socket, Handler_Type handler,
-    const bi::tcp::resolver::protocol_type& _protocol)
+void ASIOInterface::asyncResolveConnect(std::shared_ptr<SocketFace> socket, Handler_Type handler)
 {
-    m_resolver->async_resolve(_protocol, socket->nodeIPEndpoint().host,
-        socket->nodeIPEndpoint().port,
+    auto protocol = socket->nodeIPEndpoint().isIPv6() ? bi::tcp::tcp::v6() : bi::tcp::tcp::v4();
+    m_resolver->async_resolve(protocol, socket->nodeIPEndpoint().address(),
+        to_string(socket->nodeIPEndpoint().port()),
         [=](const boost::system::error_code& ec, bi::tcp::resolver::results_type results) {
             if (!ec)
             {
@@ -42,8 +43,8 @@ void ASIOInterface::asyncResolveConnect(std::shared_ptr<SocketFace> socket, Hand
             else
             {
                 ASIO_LOG(WARNING) << LOG_DESC("asyncResolve failed")
-                                  << LOG_KV("host", socket->nodeIPEndpoint().host)
-                                  << LOG_KV("port", socket->nodeIPEndpoint().port);
+                                  << LOG_KV("host", socket->nodeIPEndpoint().address())
+                                  << LOG_KV("port", socket->nodeIPEndpoint().port());
             }
         });
 }

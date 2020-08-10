@@ -22,7 +22,7 @@
 #pragma once
 
 #include "MemoryDB.h"
-#include "dbfwd.h"
+#include "libdevcore/dbfwd.h"
 #include <memory>
 
 namespace dev

@@ -25,6 +25,7 @@
 #include <libdevcrypto/Common.h>
 #include <libnetwork/Common.h>
 #include <libsync/SyncMsgPacket.h>
+#include <libsync/SyncMsgPacketFactory.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libethcore/FakeBlock.h>
 #include <boost/test/unit_test.hpp>
@@ -53,7 +54,7 @@ public:
 
     std::shared_ptr<P2PSession> createFakeSession(std::string ip = "127.0.0.1")
     {
-        NodeIPEndpoint peer_endpoint(std::string(ip), m_listenPort);
+        NodeIPEndpoint peer_endpoint(boost::asio::ip::make_address(ip), m_listenPort);
         ;
         KeyPair key_pair = KeyPair::create();
 #if 0
@@ -130,16 +131,42 @@ BOOST_AUTO_TEST_CASE(PacketDecodeTest)
     BOOST_CHECK(isSuccessful == true);
 }
 
+void testSyncStatus(SyncMsgPacketFactory::Ptr _statusFactory, int64_t _blockNumber,
+    h256 const& _genesisHash, h256 const& _latestHash, bool _checkTime)
+{
+    auto peer = dev::KeyPair::create().pub();
+    auto status =
+        _statusFactory->createSyncStatusPacket(peer, _blockNumber, _genesisHash, _latestHash);
+    status->alignedTime = utcTime();
+    status->encode();
+    auto p2pMessage = status->toMessage(0x01);
+    // decode Packet
+    auto decodedStatus = _statusFactory->createSyncStatusPacket();
+    auto fakeSession = std::make_shared<dev::p2p::P2PSession>();
+    decodedStatus->decode(fakeSession, p2pMessage);
+    decodedStatus->decodePacket(decodedStatus->rlp(), peer);
+
+    BOOST_CHECK(decodedStatus->number == status->number);
+    BOOST_CHECK(decodedStatus->genesisHash == status->genesisHash);
+    BOOST_CHECK(decodedStatus->latestHash == status->latestHash);
+    if (_checkTime)
+    {
+        BOOST_CHECK(decodedStatus->alignedTime == status->alignedTime);
+    }
+}
+
 BOOST_AUTO_TEST_CASE(SyncStatusPacketTest)
 {
-    SyncStatusPacket statusPacket;
-    statusPacket.encode(0x00, h256(0xab), h256(0xcd));
-    auto msgPtr = statusPacket.toMessage(0x01);
-    statusPacket.decode(fakeSessionPtr, msgPtr);
-    auto rlpStatus = statusPacket.rlp();
-    BOOST_CHECK(rlpStatus[0].toInt<int64_t>() == 0x00);
-    BOOST_CHECK(rlpStatus[1].toHash<h256>() == h256(0xab));
-    BOOST_CHECK(rlpStatus[2].toHash<h256>() == h256(0xcd));
+    std::srand(utcTime());
+    // case1: test without time
+    auto syncStatusFactory = std::make_shared<SyncMsgPacketFactory>();
+    testSyncStatus(syncStatusFactory, (utcTime() + std::rand() % 12000), dev::sha3("genesisHash"),
+        dev::sha3("latestHash"), false);
+
+    // case2: test with large blockNumber and time
+    syncStatusFactory = std::make_shared<SyncMsgPacketWithAlignedTimeFactory>();
+    testSyncStatus(syncStatusFactory, (utcTime() + std::rand() % 12000), dev::sha3("genesisHashT"),
+        dev::sha3("latestHashT"), true);
 }
 
 BOOST_AUTO_TEST_CASE(SyncTransactionsPacketTest)

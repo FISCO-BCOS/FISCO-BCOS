@@ -105,7 +105,6 @@ public:
     {
         m_timeManager.m_emptyBlockGenTime = _intervalBlockTime;
     }
-
     /// get max block generation time
     inline unsigned const& getEmptyBlockGenTime() const
     {
@@ -119,7 +118,14 @@ public:
         {
             m_timeManager.m_minBlockGenTime = time;
         }
-        PBFTENGINE_LOG(INFO) << LOG_KV("minBlockGenerationTime", m_timeManager.m_minBlockGenTime);
+        else
+        {
+            m_timeManager.m_minBlockGenTime = (m_timeManager.m_emptyBlockGenTime - 1);
+        }
+
+        PBFTENGINE_LOG(INFO) << LOG_DESC("setMinBlockGenerationTime")
+                             << LOG_KV("minBlockGenerationTime", m_timeManager.m_minBlockGenTime)
+                             << LOG_KV("consensusTime", m_timeManager.m_emptyBlockGenTime);
     }
 
     void start() override;
@@ -251,6 +257,8 @@ public:
     }
 
 protected:
+    virtual void resetConsensusTimeout();
+
     virtual bool locatedInChosedConsensensusNodes() const { return m_idx != MAXIDX; }
     virtual void addRawPrepare(PrepareReq::Ptr _prepareReq);
     void reportBlockWithoutLock(dev::eth::Block const& block);
@@ -261,11 +269,14 @@ protected:
     bool getNodeIDByIndex(dev::network::NodeID& nodeId, const IDXTYPE& idx) const;
     virtual dev::h512 selectNodeToRequestMissedTxs(PrepareReq::Ptr _prepareReq);
 
-    inline void checkBlockValid(dev::eth::Block const& block) override
+    void checkBlockValid(dev::eth::Block const& block) override
     {
         ConsensusEngineBase::checkBlockValid(block);
         checkSealerList(block);
     }
+
+    virtual void checkTransactionsValid(dev::eth::Block::Ptr, PrepareReq::Ptr) {}
+
     bool needOmit(Sealing const& sealing);
 
     void getAllNodesViewStatus(Json::Value& status);
@@ -582,7 +593,7 @@ protected:
     void checkSealerList(dev::eth::Block const& block);
     /// check block
     bool checkBlock(dev::eth::Block const& block);
-    void execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream& oss);
+    void execBlock(Sealing& sealing, PrepareReq::Ptr _req, std::ostringstream& oss);
     void changeViewForFastViewChange()
     {
         m_timeManager.changeView();
@@ -622,8 +633,8 @@ protected:
                 PBFTENGINE_LOG(DEBUG) << "[decodeToRequests] Invalid network-received packet";
                 return false;
             }
-            _req->setOtherField(
-                peerIndex, _session->nodeID(), _session->session()->nodeIPEndpoint().name());
+            _req->setOtherField(peerIndex, _session->nodeID(),
+                boost::lexical_cast<std::string>(_session->session()->nodeIPEndpoint()));
         }
         return valid;
     }

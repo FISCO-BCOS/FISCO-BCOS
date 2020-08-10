@@ -28,8 +28,6 @@
 #include <libethcore/Block.h>
 #include <libethcore/Transaction.h>
 #include <libethcore/TransactionReceipt.h>
-#include <libevm/ExtVMFace.h>
-#include <libexecutive/ExecutionResult.h>
 #include <libmptstate/State.h>
 #include <memory>
 

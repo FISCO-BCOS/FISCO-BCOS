@@ -285,14 +285,31 @@ void ConsensusPrecompiled::showConsensusTable(ExecutiveContext::Ptr context)
                            << LOG_KV("consensusTable", s.str());
 }
 
+storage::Entries::ConstPtr ConsensusPrecompiled::selectEntriesByNodeType(
+    std::shared_ptr<storage::Table> _table, std::string const& _nodeType)
+{
+    // Check is last sealer or not.
+    auto condition = _table->newCondition();
+    condition->EQ(NODE_TYPE, _nodeType);
+    return _table->select(PRI_KEY, condition);
+}
+
 bool ConsensusPrecompiled::checkIsLastSealer(storage::Table::Ptr table, std::string const& nodeID)
 {
     // Check is last sealer or not.
-    auto condition = table->newCondition();
-    condition->EQ(NODE_TYPE, NODE_TYPE_SEALER);
-    auto entries = table->select(PRI_KEY, condition);
+    auto entries = selectEntriesByNodeType(table, NODE_TYPE_SEALER);
     if (entries->size() == 1u && entries->get(0)->getField(NODE_KEY_NODEID) == nodeID)
     {
+        // check if workingSealer exists
+        entries = selectEntriesByNodeType(table, NODE_TYPE_WORKING_SEALER);
+        if (entries->size() > 0)
+        {
+            PRECOMPILED_LOG(DEBUG)
+                << LOG_BADGE("ConsensusPrecompiled")
+                << LOG_DESC("the nodeID is the last sealer, but there are workingSealers exist")
+                << LOG_KV("nodeID", nodeID) << LOG_KV("workingSealerSize", entries->size());
+            return false;
+        }
         // The nodeID in param is the last sealer, cannot be deleted.
         PRECOMPILED_LOG(WARNING) << LOG_BADGE("ConsensusPrecompiled")
                                  << LOG_DESC(
@@ -300,6 +317,25 @@ bool ConsensusPrecompiled::checkIsLastSealer(storage::Table::Ptr table, std::str
                                         "sealer, cannot be deleted.")
                                  << LOG_KV("nodeID", nodeID);
         return true;
+    }
+    // check the last working sealer
+    auto condition = table->newCondition();
+    condition->EQ(NODE_KEY_NODEID, nodeID);
+    entries = table->select(PRI_KEY, condition);
+    if (entries->size() > 0 && entries->get(0)->getField(NODE_TYPE) == NODE_TYPE_WORKING_SEALER)
+    {
+        // check working sealer
+        condition = table->newCondition();
+        condition->EQ(NODE_TYPE, NODE_TYPE_WORKING_SEALER);
+        entries = table->select(PRI_KEY, condition);
+        if (entries->size() == 1u && entries->get(0)->getField(NODE_KEY_NODEID) == nodeID)
+        {
+            PRECOMPILED_LOG(WARNING)
+                << LOG_BADGE("ConsensusPrecompiled")
+                << LOG_DESC("the nodeID in param is the last working sealer, cannot be deleted.")
+                << LOG_KV("nodeID", nodeID);
+            return true;
+        }
     }
     return false;
 }

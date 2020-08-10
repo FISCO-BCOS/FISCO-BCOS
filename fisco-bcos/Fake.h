@@ -137,8 +137,8 @@ public:
         std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
     getTransactionReceiptByHashWithProof(dev::h256 const&, dev::eth::LocalisedTransaction&) override
     {
-        return std::make_pair(std::make_shared<LocalisedTransactionReceipt>(
-                                  dev::executive::TransactionException::None),
+        return std::make_pair(
+            std::make_shared<LocalisedTransactionReceipt>(dev::eth::TransactionException::None),
             std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>());
     }
     std::pair<LocalisedTransaction::Ptr,
@@ -170,7 +170,11 @@ public:
         return std::make_shared<std::vector<dev::eth::NonceKeyType>>();
     }
 
-    bool checkAndBuildGenesisBlock(GenesisBlockParam&, bool = true) override { return true; }
+    bool checkAndBuildGenesisBlock(
+        std::shared_ptr<dev::ledger::LedgerParamInterface>, bool = true) override
+    {
+        return true;
+    }
 
     dev::h512s sealerList() override { return dev::h512s(); };
     dev::h512s observerList() override { return dev::h512s(); };
@@ -240,7 +244,7 @@ public:
         for (unsigned index = 0; index < block.getTransactionSize(); index++)
         {
             TransactionReceipt::Ptr receipt = std::make_shared<TransactionReceipt>(u256(0),
-                u256(100), LogEntries(), executive::TransactionException::None, bytes(),
+                u256(100), LogEntries(), eth::TransactionException::None, bytes(),
                 (*block.transactions())[index]->receiveAddress());
             receipts->push_back(receipt);
         }
@@ -273,7 +277,7 @@ public:
         /// init dbInitializer
         m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param, m_groupId);
         /// init blockChain
-        initBlockChain(m_genesisParam);
+        initBlockChain();
         /// intit blockVerifier
         initBlockVerifier();
         /// init txPool
@@ -293,7 +297,7 @@ public:
         m_blockVerifier = std::make_shared<FakeBlockVerifier>();
         return true;
     }
-    bool initBlockChain(GenesisBlockParam&) override
+    bool initBlockChain() override
     {
         m_blockChain = std::make_shared<FakeBlockChain>();
         return true;
@@ -305,7 +309,6 @@ public:
         return true;
     }
 
-    GenesisBlockParam m_genesisParam;
     /// init the blockSync
     /// void initSync() override { m_sync = std::make_shared<FakeBlockSync>(); }
 };

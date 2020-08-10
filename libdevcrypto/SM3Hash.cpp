@@ -40,3 +40,9 @@ bool dev::sm3(bytesConstRef _input, bytesRef o_output)
         (const unsigned char*)_input.data(), _input.size(), (unsigned char*)o_output.data());
     return true;
 }
+
+bool dev::sm3(const uint8_t* _data, size_t _size, uint8_t* _hash)
+{
+    SM3Hash::getInstance().sm3(_data, _size, _hash);
+    return true;
+}

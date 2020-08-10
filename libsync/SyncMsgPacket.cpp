@@ -74,10 +74,44 @@ RLPStream& SyncMsgPacket::prep(RLPStream& _s, unsigned _id, unsigned _args)
     return _s.appendRaw(bytes(1, _id + c_syncPacketIDBase)).appendList(_args);
 }
 
-void SyncStatusPacket::encode(int64_t _number, h256 const& _genesisHash, h256 const& _latestHash)
+void SyncStatusPacket::encode()
 {
     m_rlpStream.clear();
-    prep(m_rlpStream, StatusPacket, 3) << _number << _genesisHash << _latestHash;
+    // add aligned time into the fields
+    prep(m_rlpStream, StatusPacket, m_itemCount);
+    // Note: here must encode int64_t type value with append(bigint)
+    // Otherwise, when the number is large the result of decode is incorrect
+    m_rlpStream.append(bigint(number));
+    m_rlpStream << genesisHash << latestHash;
+}
+
+void SyncStatusPacket::decodePacket(RLP const& _rlp, dev::h512 const& _peer)
+{
+    if (_rlp.itemCount() != m_itemCount)
+    {
+        LOG(WARNING) << LOG_BADGE("SYNC")
+                     << LOG_DESC("SyncStatusPacket: receive invalid status packet format")
+                     << LOG_KV("peer", _peer.abridged());
+        BOOST_THROW_EXCEPTION(
+            InValidSyncPacket() << errinfo_comment("receive invalid SyncStatusPacket format"));
+    }
+    nodeId = _peer;
+    number = _rlp[0].toInt<int64_t>();
+    genesisHash = _rlp[1].toHash<h256>();
+    latestHash = _rlp[2].toHash<h256>();
+}
+
+void SyncStatusPacketWithAlignedTime::encode()
+{
+    SyncStatusPacket::encode();
+    m_rlpStream.append(bigint(alignedTime));
+}
+
+void SyncStatusPacketWithAlignedTime::decodePacket(RLP const& _rlp, dev::h512 const& _peer)
+{
+    SyncStatusPacket::decodePacket(_rlp, _peer);
+    // get alignedTime
+    alignedTime = _rlp[3].toInt<int64_t>();
 }
 
 void SyncTransactionsPacket::encode(

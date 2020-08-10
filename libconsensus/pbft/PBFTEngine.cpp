@@ -54,8 +54,8 @@ void PBFTEngine::start()
     // register P2P callback after create PBFTMsgFactory
     m_service->registerHandlerByProtoclID(
         m_protocolId, boost::bind(&PBFTEngine::handleP2PMessage, this, _1, _2, _3));
-    initPBFTEnv(3 * getEmptyBlockGenTime());
     ConsensusEngineBase::start();
+    initPBFTEnv(3 * getEmptyBlockGenTime());
     PBFTENGINE_LOG(INFO) << "[Start PBFTEngine...]";
 }
 
@@ -108,9 +108,9 @@ void PBFTEngine::initPBFTEnv(unsigned view_timeout)
     {
         PBFTENGINE_LOG(FATAL) << "can't find latest block";
     }
+    m_timeManager.initTimerManager(view_timeout);
     reportBlock(*block);
     initBackupDB();
-    m_timeManager.initTimerManager(view_timeout);
     PBFTENGINE_LOG(INFO) << "[PBFT init env successfully]";
 }
 
@@ -198,8 +198,10 @@ void PBFTEngine::initBackupDB()
     {
         PBFTENGINE_LOG(INFO) << LOG_DESC(
             "diskEncryption enabled: set encrypt and decrypt handler for pbftBackup");
-        m_backupDB->setEncryptHandler(getEncryptHandler());
-        m_backupDB->setDecryptHandler(getDecryptHandler());
+        m_backupDB->setEncryptHandler(
+            getEncryptHandler(asBytes(g_BCOSConfig.diskEncryption.dataKey)));
+        m_backupDB->setDecryptHandler(
+            getDecryptHandler(asBytes(g_BCOSConfig.diskEncryption.dataKey)));
     }
 
     if (!isDiskSpaceEnough(path))
@@ -509,7 +511,7 @@ bool PBFTEngine::sendMsg(dev::network::NodeID const& nodeId, unsigned const& pac
                 session.nodeID(), transDataToMessage(data, packetType, ttl, forwardNodes), nullptr);
             PBFTENGINE_LOG(DEBUG) << LOG_DESC("sendMsg") << LOG_KV("packetType", packetType)
                                   << LOG_KV("dstNodeId", nodeId.abridged())
-                                  << LOG_KV("remote_endpoint", session.nodeIPEndpoint.name())
+                                  << LOG_KV("remote_endpoint", session.nodeIPEndpoint)
                                   << LOG_KV("nodeIdx", nodeIdx())
                                   << LOG_KV("myNode", m_keyPair.pub().abridged());
             broadcastMark(session.nodeID(), packetType, key);
@@ -557,7 +559,7 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, PBFTMsg const& _pbftMs
             continue;
         PBFTENGINE_LOG(TRACE) << LOG_DESC("broadcastMsg") << LOG_KV("packetType", packetType)
                               << LOG_KV("dstNodeId", session.nodeID().abridged())
-                              << LOG_KV("dstIp", session.nodeIPEndpoint.name())
+                              << LOG_KV("dstIp", session.nodeIPEndpoint)
                               << LOG_KV("ttl", (ttl == 0 ? maxTTL : ttl))
                               << LOG_KV("nodeIdx", nodeIdx())
                               << LOG_KV("toNode", session.nodeID().abridged());
@@ -801,20 +803,20 @@ void PBFTEngine::notifySealing(dev::eth::Block const& block)
     }
 }
 
-void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostringstream&)
+void PBFTEngine::execBlock(Sealing& sealing, PrepareReq::Ptr _req, std::ostringstream&)
 {
     /// no need to decode the local generated prepare packet
     auto start_time = utcTime();
     auto record_time = utcTime();
-    if (req.pBlock)
+    if (_req->pBlock)
     {
-        sealing.block = req.pBlock;
+        sealing.block = _req->pBlock;
     }
     /// decode the network received prepare packet
     else
     {
         // without receipt, with transaction hash(parallel calc txs' hash)
-        sealing.block->decode(ref(*req.block), CheckTransaction::None, false, true);
+        sealing.block->decode(ref(*_req->block), CheckTransaction::None, false, true);
     }
     auto decode_time_cost = utcTime() - record_time;
     record_time = utcTime();
@@ -829,12 +831,13 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     }
 
     checkBlockValid(*(sealing.block));
+    checkTransactionsValid(sealing.block, _req);
     auto check_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
     /// notify the next leader seal a new block
     /// this if condition to in case of dead-lock when generate local prepare and notifySealing
-    if (req.idx != nodeIdx())
+    if (_req->idx != nodeIdx())
     {
         notifySealing(*(sealing.block));
     }
@@ -851,12 +854,11 @@ void PBFTEngine::execBlock(Sealing& sealing, PrepareReq const& req, std::ostring
     m_txPool->verifyAndSetSenderForBlock(*sealing.block);
     auto verifyAndSetSender_time_cost = utcTime() - record_time;
     record_time = utcTime();
-
     sealing.p_execContext = executeBlock(*sealing.block);
     auto exec_time_cost = utcTime() - record_time;
     PBFTENGINE_LOG(INFO)
         << LOG_DESC("execBlock") << LOG_KV("blkNum", sealing.block->header().number())
-        << LOG_KV("reqIdx", req.idx) << LOG_KV("hash", sealing.block->header().hash().abridged())
+        << LOG_KV("reqIdx", _req->idx) << LOG_KV("hash", sealing.block->header().hash().abridged())
         << LOG_KV("nodeIdx", nodeIdx()) << LOG_KV("myNode", m_keyPair.pub().abridged())
         << LOG_KV("decodeCost", decode_time_cost) << LOG_KV("checkCost", check_time_cost)
         << LOG_KV("notifyCost", notify_time_cost)
@@ -1001,6 +1003,7 @@ bool PBFTEngine::handlePrepareMsg(PrepareReq::Ptr prepareReq, std::string const&
     clearPreRawPrepare();
     /// add raw prepare request
     addRawPrepare(prepareReq);
+
     return execPrepareAndGenerateSignMsg(prepareReq, oss);
 }
 
@@ -1017,7 +1020,14 @@ bool PBFTEngine::execPrepareAndGenerateSignMsg(
     Sealing workingSealing(m_blockFactory);
     try
     {
-        execBlock(workingSealing, *_prepareReq, _oss);
+        // update the latest time of receiving the rawPrepare and ready to execute the block
+        m_timeManager.m_lastAddRawPrepareTime = utcSteadyTime();
+
+        execBlock(workingSealing, _prepareReq, _oss);
+
+        // update the latest execution time when processed the block execution
+        m_timeManager.m_lastExecTime = utcSteadyTime();
+
         // old block (has already executed correctly by block sync)
         if (workingSealing.p_execContext == nullptr &&
             workingSealing.block->getTransactionSize() > 0)
@@ -1876,7 +1886,8 @@ std::shared_ptr<dev::h512s> PBFTEngine::getForwardNodes(bool const& _printLog)
         {
             if (_printLog)
             {
-                connectedNodeList += session.nodeIPEndpoint.name() + ", ";
+                connectedNodeList +=
+                    boost::lexical_cast<std::string>(session.nodeIPEndpoint) + ", ";
             }
             consensusNodes.erase(session.nodeID());
         }
@@ -1960,6 +1971,9 @@ void PBFTEngine::forwardMsg(PBFTMsgPacket::Ptr _pbftMsgPacket, PBFTMsg const& _p
 void PBFTEngine::resetConfig()
 {
     ConsensusEngineBase::resetConfig();
+    // adjust consensus time at runtime
+    resetConsensusTimeout();
+
     if (!m_sealerListUpdated)
     {
         return;
@@ -2305,6 +2319,31 @@ void PBFTEngine::clearInvalidCachedForwardMsg()
         {
             it++;
         }
+    }
+}
+
+void PBFTEngine::resetConsensusTimeout()
+{
+    if (!m_supportConsensusTimeAdjust)
+    {
+        return;
+    }
+    auto consensusTimeoutStr =
+        m_blockChain->getSystemConfigByKey(dev::precompiled::SYSTEM_KEY_CONSENSUS_TIMEOUT);
+    uint64_t consensusTimeout = boost::lexical_cast<uint64_t>(consensusTimeoutStr) * 1000;
+
+    // Prevent external users from modifying the empty block time by modifying the code
+    if (m_timeManager.m_emptyBlockGenTime > consensusTimeout)
+    {
+        m_timeManager.m_emptyBlockGenTime = consensusTimeout / 3;
+    }
+    // update emptyBlockGenTime
+    if (m_timeManager.m_viewTimeout != consensusTimeout)
+    {
+        m_timeManager.resetConsensusTimeout(consensusTimeout);
+        PBFTENGINE_LOG(INFO) << LOG_DESC("resetConsensusTimeout")
+                             << LOG_KV("updatedConsensusTimeout", consensusTimeout)
+                             << LOG_KV("minBlockGenTime", m_timeManager.m_minBlockGenTime);
     }
 }
 

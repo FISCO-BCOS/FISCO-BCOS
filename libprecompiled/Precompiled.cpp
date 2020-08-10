@@ -20,7 +20,6 @@
  */
 
 #include "Precompiled.h"
-#include "Common.h"
 #include "libstorage/Table.h"
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcrypto/CryptoInterface.h>
@@ -41,17 +40,9 @@ uint32_t Precompiled::getFuncSelector(std::string const& _functionName)
     {
         return s_name2SelectCache[_functionName];
     }
-    uint32_t func = *(uint32_t*)(crypto::Hash(_functionName).ref().cropped(0, 4).data());
-    uint32_t selector = ((func & 0x000000FF) << 24) | ((func & 0x0000FF00) << 8) |
-                        ((func & 0x00FF0000) >> 8) | ((func & 0xFF000000) >> 24);
+    auto selector = getFuncSelectorByFunctionName(_functionName);
     s_name2SelectCache.insert(std::make_pair(_functionName, selector));
     return selector;
-}
-
-storage::Table::Ptr Precompiled::openTable(
-    ExecutiveContext::Ptr context, const std::string& tableName)
-{
-    return context->getMemoryTableFactory()->openTable(tableName);
 }
 
 storage::Table::Ptr Precompiled::createTable(

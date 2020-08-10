@@ -56,11 +56,6 @@ namespace dev
 {
 namespace network
 {
-struct NodeIPEndpoint;
-class Node;
-extern const NodeIPEndpoint UnspecifiedNodeIPEndpoint;
-extern const Node UnspecifiedNode;
-
 /// define Exceptions
 DEV_SIMPLE_EXCEPTION(NetworkStartRequired);
 DEV_SIMPLE_EXCEPTION(InvalidPublicIPAddress);
@@ -198,49 +193,57 @@ inline std::string reasonOf(DisconnectReason _r)
     }
 }
 
+// using NodeIPEndpoint = boost::asio::ip::tcp::endpoint;
 /**
  * @brief client end endpoint. Node will connect to NodeIPEndpoint.
  */
 struct NodeIPEndpoint
 {
     NodeIPEndpoint() = default;
-    NodeIPEndpoint(const std::string& _host, const std::string& _port) : host(_host), port(_port) {}
-    NodeIPEndpoint(const std::string& _host, uint16_t _port)
-      : host(_host), port(std::to_string(_port))
-    {}
+    NodeIPEndpoint(const std::string& _host, uint16_t _port) : m_host(_host), m_port(_port) {}
     NodeIPEndpoint(bi::address _addr, uint16_t _port)
-      : host(_addr.to_string()), port(std::to_string(_port))
+      : m_host(_addr.to_string()), m_port(_port), m_ipv6(_addr.is_v6())
     {}
-    NodeIPEndpoint(const NodeIPEndpoint& _nodeIPEndpoint)
-    {
-        host = _nodeIPEndpoint.host;
-        port = _nodeIPEndpoint.port;
-    }
 
+    virtual ~NodeIPEndpoint() = default;
+    NodeIPEndpoint(const NodeIPEndpoint& _nodeIPEndpoint) = default;
+    NodeIPEndpoint(const boost::asio::ip::tcp::endpoint& _endpoint)
+    {
+        m_host = _endpoint.address().to_string();
+        m_port = _endpoint.port();
+        m_ipv6 = _endpoint.address().is_v6();
+    }
     bool operator<(const NodeIPEndpoint& rhs) const
     {
-        if (host + port < rhs.host + rhs.port)
+        if (m_host + std::to_string(m_port) < rhs.m_host + std::to_string(rhs.m_port))
         {
             return true;
         }
         return false;
     }
-
     bool operator==(const NodeIPEndpoint& rhs) const
     {
-        return (host + port == rhs.host + rhs.port);
+        return (m_host + std::to_string(m_port) == rhs.m_host + std::to_string(rhs.m_port));
+    }
+    operator boost::asio::ip::tcp::endpoint() const
+    {
+        return boost::asio::ip::tcp::endpoint(boost::asio::ip::make_address(m_host), m_port);
     }
 
-    std::string name() const
-    {
-        std::ostringstream os;
-        os << host << ":" << port;
-        return os.str();
-    }
-    std::string host;
-    // port may be a descriptive name or a numeric string corresponding to a port number
-    std::string port;
+    // Get the port associated with the endpoint.
+    uint16_t port() const { return m_port; };
+
+    // Get the IP address associated with the endpoint.
+    std::string address() const { return m_host; };
+    bool isIPv6() const { return m_ipv6; }
+
+    std::string m_host;
+    uint16_t m_port;
+    bool m_ipv6 = false;
 };
 
+std::ostream& operator<<(std::ostream& _out, NodeIPEndpoint const& _endpoint);
+
+bool getPublicKeyFromCert(std::shared_ptr<std::string> _nodeIDOut, X509* cert);
 }  // namespace network
 }  // namespace dev

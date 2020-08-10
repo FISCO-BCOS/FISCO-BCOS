@@ -28,7 +28,6 @@
 #include <libethcore/Common.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
-#include <libexecutive/ExecutionResult.h>
 #include <libprecompiled/SystemConfigPrecompiled.h>
 #include <libsync/SyncStatus.h>
 #include <libtxpool/TxPoolInterface.h>
@@ -57,8 +56,9 @@ std::map<int, std::string> dev::rpc::RPCMsg{{RPCExceptionType::Success, "Success
     {RPCExceptionType::InvalidSystemConfig, "Invalid System Config"},
     {RPCExceptionType::InvalidRequest,
         "Don't send request to this node who doesn't belong to the group"},
-    {RPCExceptionType::IncompleteInitialization, "RPC module initialization is incomplete."},
-    {RPCExceptionType::OverQPSLimit, "Over QPS limit"}};
+    {RPCExceptionType::IncompleteInitialization, "RPC module initialization is incomplete"},
+    {RPCExceptionType::OverQPSLimit, "Over QPS limit"},
+    {RPCExceptionType::PermissionDenied, "The SDK is not allowed to access this group"}};
 
 Rpc::Rpc(
     LedgerInitializer::Ptr _ledgerInitializer, std::shared_ptr<dev::p2p::P2PInterface> _service)
@@ -89,8 +89,7 @@ std::shared_ptr<dev::p2p::P2PInterface> Rpc::service()
 
 bool Rpc::isValidSystemConfig(std::string const& _key)
 {
-    return (_key == SYSTEM_KEY_TX_COUNT_LIMIT || _key == SYSTEM_KEY_TX_GAS_LIMIT ||
-            _key == SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM || _key == SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM);
+    return (c_supportedSystemConfigKeys.count(_key));
 }
 
 void Rpc::checkRequest(int _groupID)
@@ -258,15 +257,19 @@ Json::Value Rpc::getEpochSealersList(int _groupID)
 {
     try
     {
-        auto consensusType =
-            ledgerManager()->getParamByGroupId(_groupID)->mutableConsensusParam().consensusType;
+        auto ledgerParam = ledgerManager()->getParamByGroupId(_groupID);
+        checkLedgerStatus(ledgerParam, "ledgerParam", "getEpochSealersList");
+        checkRequest(_groupID);
+
+        auto consensusType = ledgerParam->mutableConsensusParam().consensusType;
         if (stringCmpIgnoreCase(consensusType, "rpbft") != 0)
         {
-            RPC_LOG(ERROR) << LOG_DESC("Only support getEpochSealersList when RPBFT is used")
+            RPC_LOG(ERROR) << LOG_DESC("Only support getEpochSealersList when rpbft is used")
                            << LOG_KV("consensusType", consensusType) << LOG_KV("groupID", _groupID);
 
             BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::InvalidRequest,
-                "method getEpochSealersList only supported when RPBFT is used, current consensus "
+                "method getEpochSealersList only supported when rpbft is used, current "
+                "consensus "
                 "type is " +
                     consensusType));
         }
@@ -435,7 +438,7 @@ Json::Value Rpc::getPeers(int)
         {
             Json::Value node;
             node["NodeID"] = it->nodeInfo.nodeID.hex();
-            node["IPAndPort"] = it->nodeIPEndpoint.name();
+            node["IPAndPort"] = boost::lexical_cast<std::string>(it->nodeIPEndpoint);
             node["Agency"] = it->nodeInfo.agencyName;
             node["Node"] = it->nodeInfo.nodeName;
             node["Topic"] = Json::Value(Json::arrayValue);
@@ -601,6 +604,124 @@ Json::Value Rpc::getBlockByHash(
                 response["transactions"].append(toJS((*transactions)[i]->sha3()));
         }
 
+        return response;
+    }
+    catch (JsonRpcException& e)
+    {
+        throw e;
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
+    }
+}
+
+
+void Rpc::generateBlockHeaderInfo(Json::Value& _response,
+    std::shared_ptr<
+        std::pair<std::shared_ptr<dev::eth::BlockHeader>, dev::eth::Block::SigListPtrType>>
+        _headerInfo,
+    bool _includeSigList)
+{
+    auto blockHeader = _headerInfo->first;
+    _response["number"] = blockHeader->number();
+
+    _response["hash"] = toJS(blockHeader->hash());
+    _response["parentHash"] = toJS(blockHeader->parentHash());
+    _response["logsBloom"] = toJS(blockHeader->logBloom());
+    _response["transactionsRoot"] = toJS(blockHeader->transactionsRoot());
+    _response["receiptsRoot"] = toJS(blockHeader->receiptsRoot());
+    _response["dbHash"] = toJS(blockHeader->dbHash());
+    _response["stateRoot"] = toJS(blockHeader->stateRoot());
+    _response["sealer"] = toJS(blockHeader->sealer());
+    _response["sealerList"] = Json::Value(Json::arrayValue);
+    auto const sealerList = blockHeader->sealerList();
+    for (auto it = sealerList.begin(); it != sealerList.end(); ++it)
+    {
+        _response["sealerList"].append((*it).hex());
+    }
+    _response["extraData"] = Json::Value(Json::arrayValue);
+    auto datas = blockHeader->extraData();
+    for (auto const& data : datas)
+    {
+        _response["extraData"].append(toJS(data));
+    }
+    _response["gasLimit"] = toJS(blockHeader->gasLimit());
+    _response["gasUsed"] = toJS(blockHeader->gasUsed());
+    _response["timestamp"] = toJS(blockHeader->timestamp());
+    if (!_includeSigList)
+    {
+        return;
+    }
+    // signature list
+    _response["signatureList"] = Json::Value(Json::arrayValue);
+    auto sigList = _headerInfo->second;
+    if (!sigList)
+    {
+        return;
+    }
+    for (auto const& signature : *sigList)
+    {
+        Json::Value sigJsonObj;
+        sigJsonObj["index"] = toJS(signature.first);
+        sigJsonObj["signature"] = toJS(signature.second);
+        _response["signatureList"].append(sigJsonObj);
+    }
+}
+
+Json::Value Rpc::getBlockHeaderByNumber(
+    int _groupID, const std::string& _blockNumber, bool _includeSigList)
+{
+    try
+    {
+        RPC_LOG(INFO) << LOG_BADGE("getBlockHeaderByNumber") << LOG_DESC("request")
+                      << LOG_KV("groupID", _groupID) << LOG_KV("blockNumber", _blockNumber);
+        auto blockChain = ledgerManager()->blockChain(_groupID);
+        checkLedgerStatus(blockChain, "blockchain", "getBlockHeaderByNumber");
+        checkRequest(_groupID);
+
+        BlockNumber number = jsToBlockNumber(_blockNumber);
+        auto blockHeaderInfo = blockChain->getBlockHeaderInfo(number);
+        if (!blockHeaderInfo)
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::BlockNumberT, RPCMsg[RPCExceptionType::BlockNumberT]));
+        }
+        Json::Value response;
+        generateBlockHeaderInfo(response, blockHeaderInfo, _includeSigList);
+        return response;
+    }
+    catch (JsonRpcException& e)
+    {
+        throw e;
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
+    }
+}
+
+Json::Value Rpc::getBlockHeaderByHash(
+    int _groupID, const std::string& _blockHash, bool _includeSigList)
+{
+    try
+    {
+        RPC_LOG(INFO) << LOG_BADGE("getBlockHeaderByHash") << LOG_DESC("request")
+                      << LOG_KV("groupID", _groupID);
+        auto blockChain = ledgerManager()->blockChain(_groupID);
+        checkLedgerStatus(blockChain, "blockchain", "getBlockHeaderByHash");
+        checkRequest(_groupID);
+        h256 blockHash = jsToFixed<32>(_blockHash);
+        auto blockHeaderInfo = blockChain->getBlockHeaderInfoByHash(blockHash);
+        if (!blockHeaderInfo)
+        {
+            BOOST_THROW_EXCEPTION(
+                JsonRpcException(RPCExceptionType::BlockHash, RPCMsg[RPCExceptionType::BlockHash]));
+        }
+        Json::Value response;
+        generateBlockHeaderInfo(response, blockHeaderInfo, _includeSigList);
         return response;
     }
     catch (JsonRpcException& e)
@@ -1029,24 +1150,6 @@ Json::Value Rpc::getTotalTransactionCount(int _groupID)
         result = blockChain->totalFailedTransactionCount();
         response["failedTxSum"] = toJS(result.first);
         return response;
-#if 0
-        RPC_LOG(INFO) << LOG_BADGE("getTotalTransactionCount") << LOG_DESC("request")
-                      << LOG_KV("groupID", _groupID);
-
-        checkRequest(_groupID);
-        auto blockChain = ledgerManager()->blockChain(_groupID);
-
-        std::pair<int64_t, int64_t> result = blockChain->totalTransactionCount();
-
-        Json::Value response;
-        auto txPool = ledgerManager()->txPool(_groupID);
-
-        auto ret = txPool->totalTransactionNum();
-        response["txSum"] = toJS(ret);
-        response["blockNumber"] = toJS(result.second);
-        result = blockChain->totalFailedTransactionCount();
-        response["failedTxSum"] = toJS(result.first);
-#endif
     }
     catch (JsonRpcException& e)
     {
@@ -1090,12 +1193,12 @@ Json::Value Rpc::call(int _groupID, const Json::Value& request)
             maxTransactionGasLimit, txSkeleton.to, txSkeleton.data, txSkeleton.nonce);
         auto blockHeader = block->header();
         tx->forceSender(txSkeleton.from);
-        auto executionResult = blockverfier->executeTransaction(blockHeader, tx);
+        auto transactionReceipt = blockverfier->executeTransaction(blockHeader, tx);
 
         Json::Value response;
         response["currentBlockNumber"] = toJS(blockNumber);
-        response["status"] = toJS(executionResult->status());
-        response["output"] = toJS(executionResult->outputBytes());
+        response["status"] = toJS(transactionReceipt->status());
+        response["output"] = toJS(transactionReceipt->outputBytes());
         return response;
     }
     catch (JsonRpcException& e)
@@ -1283,7 +1386,6 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp,
             checkSyncStatus(_groupID);
             ret = txPool->submitTransactions(tx);
             break;
-        // TODO: the SDK protocol upgrade to 3,
         // the v2 submit transactions sync
         // and v3 submit transactions async
         case ProtocolVersion::v3:
@@ -1585,7 +1687,7 @@ Json::Value Rpc::startGroup(int _groupID)
         response["code"] = LedgerManagementStatusCode::GROUP_IS_STOPPING;
         response["message"] = "Group " + std::to_string(_groupID) + " is stopping";
     }
-    catch (GroupAlreadyDeleted)
+    catch (GroupAlreadyDeleted const&)
     {
         response["code"] = LedgerManagementStatusCode::GROUP_ALREADY_DELETED;
         response["message"] = "Group " + std::to_string(_groupID) + " has been deleted";

@@ -420,7 +420,7 @@ void fastSyncGroupData(std::shared_ptr<LedgerParamInterface> _param,
     else if (!dev::stringCmpIgnoreCase(_param->mutableStorageParam().type, "RocksDB"))
     {
         writerStorage =
-            createRocksDBStorage(_param->mutableStorageParam().path, false, false, true);
+            createRocksDBStorage(_param->mutableStorageParam().path, bytes(), false, true);
     }
     else
     {
@@ -433,8 +433,8 @@ void fastSyncGroupData(std::shared_ptr<LedgerParamInterface> _param,
         rocksDBStorageFactory->setDBOpitons(getRocksDBOptions());
         scalableStorage->setStorageFactory(rocksDBStorageFactory);
         // make RocksDBStorage think cachedStorage is exist
-        auto stateStorage =
-            createRocksDBStorage(_param->mutableStorageParam().path + "/state", false, false, true);
+        auto stateStorage = createRocksDBStorage(
+            _param->mutableStorageParam().path + "/state", bytes(), false, true);
         scalableStorage->setStateStorage(stateStorage);
         auto archiveStorage = rocksDBStorageFactory->getStorage(to_string(blockNumber));
         scalableStorage->setArchiveStorage(archiveStorage, blockNumber);

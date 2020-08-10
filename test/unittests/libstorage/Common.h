@@ -16,5 +16,4 @@
  */
 
 #pragma once
-
 #define BOOST_TEST_TRUE(exp) BOOST_CHECK_EQUAL((exp), true)

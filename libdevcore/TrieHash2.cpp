@@ -24,7 +24,7 @@
 #include "TrieHash2.h"
 #include "Log.h"
 #include "TrieCommon.h"
-#include "TrieDB.h"  // @TODO replace ASAP!
+#include "libdevcrypto/CryptoInterface.h"
 #include <tbb/parallel_for.h>
 #include <mutex>
 

@@ -26,6 +26,7 @@ sm_crypto_channel="false"
 log_level="info"
 logfile=${PWD}/build.log
 listen_ip="127.0.0.1"
+default_listen_ip="0.0.0.0"
 bcos_bin_name=fisco-bcos
 guomi_mode=
 docker_mode=
@@ -47,23 +48,23 @@ days=36500 # 100 years
 timestamp=$(($(date '+%s')*1000))
 chain_id=1
 compatibility_version=""
-default_version="2.5.0"
+default_version="2.6.0"
 macOS=""
 x86_64_arch="true"
 download_timeout=240
 cdn_link_header="https://www.fisco.com.cn/cdn/fisco-bcos/releases/download"
-
+use_ipv6=
 help() {
-    echo $1
     cat << EOF
 Usage:
     -l <IP list>                        [Required] "ip1:nodeNum1,ip2:nodeNum2" e.g:"192.168.0.1:2,192.168.0.2:3"
     -f <IP list file>                   [Optional] split by line, every line should be "ip:nodeNum agencyName groupList p2p_port,channel_port,jsonrpc_port". eg "127.0.0.1:4 agency1 1,2 30300,20200,8545"
+    -v <FISCO-BCOS binary version>      Default is the latest v${default_version}
     -e <FISCO-BCOS binary path>         Default download fisco-bcos from GitHub. If set -e, use the binary at the specified location
     -o <Output Dir>                     Default ./nodes/
     -p <Start Port>                     Default 30300,20200,8545 means p2p_port start from 30300, channel_port from 20200, jsonrpc_port from 8545
+    -q <List FISCO-BCOS releases>       List FISCO-BCOS released versions
     -i <Host ip>                        Default 127.0.0.1. If set -i, listen 0.0.0.0
-    -v <FISCO-BCOS binary version>      Default get version from https://github.com/FISCO-BCOS/FISCO-BCOS/releases. If set use specificd version binary
     -s <DB type>                        Default rocksdb. Options can be rocksdb / mysql / scalable, rocksdb is recommended
     -d <docker mode>                    Default off. If set -d, build with docker
     -c <Consensus Algorithm>            Default PBFT. Options can be pbft / raft /rpbft, pbft is recommended
@@ -71,6 +72,7 @@ Usage:
     -g <Generate guomi nodes>           Default no
     -z <Generate tar packet>            Default no
     -t <Cert config file>               Default auto generate
+    -6 <Use ipv6>                       Default no. If set -6, treat IP as IPv6
     -k <The path of ca root>            Default auto generate, the ca.crt and ca.key must in the path, if use intermediate the root.crt must in the path
     -K <The path of sm crypto ca root>  Default auto generate, the gmca.crt and gmca.key must in the path, if use intermediate the gmroot.crt must in the path
     -D <Use Deployment mode>            Default false, If set -D, use deploy mode directory struct and make tar
@@ -130,7 +132,7 @@ exit_with_clean()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:t:v:s:C:c:k:K:X:izhgGTNFSdEDZ" option;do
+while getopts "f:l:o:p:e:t:v:s:C:c:k:K:X:izhgGTNFSdEDZ6q" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -140,7 +142,8 @@ while getopts "f:l:o:p:e:t:v:s:C:c:k:K:X:izhgGTNFSdEDZ" option;do
     ;;
     o) output_dir=$OPTARG;;
     i) listen_ip="0.0.0.0" && LOG_WARN "jsonrpc_listen_ip linstens 0.0.0.0 is unsafe.";;
-    v) compatibility_version="$OPTARG";;
+    q) LOG_INFO "Show the history releases of FISCO-BCOS " && curl -sS https://gitee.com/api/v5/repos/FISCO-BCOS/FISCO-BCOS/tags | grep -oe "\"name\":\"v[2-9]*\.[0-9]*\.[0-9]*\"" | cut -d \" -f 4 | sort -V && exit 0;;
+    v) compatibility_version="${OPTARG//[vV]/}";;
     p) port_start=(${OPTARG//,/ })
     if [ ${#port_start[@]} -ne 3 ];then LOG_WARN "start port error. e.g: 30300,20200,8545" && exit 1;fi
     ;;
@@ -195,6 +198,7 @@ while getopts "f:l:o:p:e:t:v:s:C:c:k:K:X:izhgGTNFSdEDZ" option;do
     Z) copy_cert="true";;
     z) make_tar="true";;
     g) guomi_mode="true";;
+    6) use_ipv6="true" && default_listen_ip="::";;
     d) docker_mode="true"
         if [ "$(uname)" == "Darwin" ];then LOG_WARN "Docker desktop of macOS can't support docker mode of FISCO BCOS!" && exit 1;fi
     ;;
@@ -253,10 +257,18 @@ if [ -n "${guomi_mode}" ]; then
     if [ ! -f "${TASSL_CMD}" ];then
         LOG_INFO "Downloading tassl binary ..."
         if [[ -n "${macOS}" ]];then
-            curl -LO https://github.com/FISCO-BCOS/LargeFiles/raw/master/tools/tassl_mac.tar.gz
+            curl -#LO https://github.com/FISCO-BCOS/LargeFiles/raw/master/tools/tassl_mac.tar.gz
             mv tassl_mac.tar.gz tassl.tar.gz
         else
-            curl -LO https://github.com/FISCO-BCOS/LargeFiles/raw/master/tools/tassl.tar.gz
+            if [[ "$(uname -p)" == "aarch64" ]];then
+                curl -#LO https://github.com/FISCO-BCOS/LargeFiles/raw/master/tools/tassl-aarch64.tar.gz
+                mv tassl-aarch64.tar.gz tassl.tar.gz
+            elif [[ "$(uname -p)" == "x86_64" ]];then
+                curl -#LO https://github.com/FISCO-BCOS/LargeFiles/raw/master/tools/tassl.tar.gz
+            else
+                LOG_ERROR "Unsupported platform"
+                exit 1
+            fi
         fi
         tar zxvf tassl.tar.gz && rm tassl.tar.gz
         chmod u+x tassl
@@ -324,7 +336,7 @@ gen_agency_cert() {
     # openssl genrsa -out "$agencydir/agency.key" 2048 2> /dev/null
     openssl ecparam -out "$agencydir/secp256k1.param" -name secp256k1 2> /dev/null
     openssl genpkey -paramfile "$agencydir/secp256k1.param" -out "$agencydir/agency.key" 2> /dev/null
-    openssl req -new -sha256 -subj "/CN=$name/O=fisco-bcos/OU=agency" -key "$agencydir/agency.key" -config "$chain/cert.cnf" -out "$agencydir/agency.csr" 2> /dev/null
+    openssl req -new -sha256 -subj "/CN=$name/O=fisco-bcos/OU=agency" -key "$agencydir/agency.key" -out "$agencydir/agency.csr" 2> /dev/null
     openssl x509 -req -days 3650 -sha256 -CA "$chain/ca.crt" -CAkey "$chain/ca.key" -CAcreateserial\
         -in "$agencydir/agency.csr" -out "$agencydir/agency.crt"  -extensions v4_req -extfile "$chain/cert.cnf" 2> /dev/null
     # cat "$chain/ca.crt" >> "$agencydir/agency.crt"
@@ -342,7 +354,7 @@ gen_cert_secp256k1() {
     openssl ecparam -out "$certpath/secp256k1.param" -name secp256k1 2> /dev/null
     openssl genpkey -paramfile "$certpath/secp256k1.param" -out "$certpath/${type}.key" 2> /dev/null
     openssl pkey -in "$certpath/${type}.key" -pubout -out "$certpath/${type}.pubkey" 2> /dev/null
-    openssl req -new -sha256 -subj "/CN=${name}/O=fisco-bcos/OU=${type}" -key "$certpath/${type}.key" -config "$agpath/cert.cnf" -out "$certpath/${type}.csr" 2> /dev/null
+    openssl req -new -sha256 -subj "/CN=${name}/O=fisco-bcos/OU=${type}" -key "$certpath/${type}.key" -out "$certpath/${type}.csr" 2> /dev/null
     if [ -n "${no_agency}" ];then
         echo "not use $(basename $agpath) to sign $(basename $certpath) ${type}" >>"${logfile}"
         openssl x509 -req -days "${days}" -sha256 -in "$certpath/${type}.csr" -CAkey "$agpath/../ca.key" -CA "$agpath/../ca.crt" \
@@ -383,7 +395,7 @@ gen_cert() {
     mkdir -p $ndpath
     gen_cert_secp256k1 "$agpath" "$ndpath" "$node" "${cert_name}"
     #nodeid is pubkey
-    openssl ec -in "$ndpath"/node.key -text -noout 2> /dev/null | sed -n '7,11p' | tr -d ": \n" | awk '{print substr($0,3);}' | cat >"$ndpath"/node.nodeid
+    openssl ec -text -noout -in "$ndpath/${cert_name}.key" 2> /dev/null | sed -n '7,11p' | tr -d ": \n" | awk '{print substr($0,3);}' | cat >"$ndpath"/node.nodeid
     # openssl x509 -serial -noout -in $ndpath/node.crt | awk -F= '{print $2}' | cat >$ndpath/node.serial
     cd "$ndpath"
     if [ "${cert_name}" == "node" ];then
@@ -502,14 +514,14 @@ generate_config_ini()
     local output=${1}
     local ip=${2}
     local offset=0
-    offset=$(get_value "${ip//./}_port_offset")
+    offset=$(get_value "${ip//[\.:]/_}_port_offset")
     local node_groups=(${3//,/ })
     local port_array=
     read -r -a port_array <<< "${port_start[*]}"
     local node_index="${5}"
     if [[ -n "${4}" ]];then
         read -r -a port_array <<< "${4//,/ }"
-        [ "${node_index}" == "0" ] && { offset=0 && set_value "${ip//./}_port_offset" 0; }
+        [ "${node_index}" == "0" ] && { offset=0 && set_value "${ip//[\.:]/_}_port_offset" 0; }
     fi
 
     sm_crypto="false"
@@ -521,12 +533,12 @@ generate_config_ini()
 
     cat << EOF > "${output}"
 [rpc]
-    channel_listen_ip=0.0.0.0
-    jsonrpc_listen_ip=${listen_ip}
+    channel_listen_ip=${default_listen_ip}
     channel_listen_port=$(( offset + port_array[1] ))
+    jsonrpc_listen_ip=${listen_ip}
     jsonrpc_listen_port=$(( offset + port_array[2] ))
 [p2p]
-    listen_ip=0.0.0.0
+    listen_ip=${default_listen_ip}
     listen_port=$(( offset + port_array[0] ))
     ; nodes to connect
     $ip_list
@@ -581,7 +593,6 @@ generate_config_ini()
     ; MB
     max_log_file_size=200
     flush=${auto_flush}
-    log_flush_threshold=100
 
 [flow_control]
     ; restrict QPS of the node
@@ -603,12 +614,14 @@ generate_group_genesis()
     cat << EOF > "${output}"
 [consensus]
     ; consensus algorithm now support PBFT(consensus_type=pbft), Raft(consensus_type=raft)
-    ; and rpbft(consensus_type=rpbft)
+    ; rpbft(consensus_type=rpbft)
     consensus_type=${consensus_type}
     ; the max number of transactions of a block
     max_trans_num=1000
+    ; in seconds, block consensus timeout, at least 3s
+    consensus_timeout=3
     ; rpbft related configuration
-    ; the sealers num of each consensus epoch
+    ; the working sealers num of each consensus epoch
     epoch_sealer_num=${sealer_size}
     ; the number of generated blocks each epoch
     epoch_block_num=1000
@@ -634,9 +647,9 @@ function generate_group_ini()
 [consensus]
     ; the ttl for broadcasting pbft message
     ttl=2
-    ; min block generation time(ms), the max block generation time is 1000 ms
+    ; min block generation time(ms)
     min_block_generation_time=500
-    ;enable_dynamic_block_size=true
+    enable_dynamic_block_size=true
     enable_ttl_optimization=true
     enable_prepare_with_txsHash=true
     ; The following is the relevant configuration of rpbft
@@ -699,6 +712,12 @@ function generate_group_ini()
     ; Mb, can be a decimal
     ; when the outgoing bandwidth exceeds the limit, the block synchronization operation will not proceed
     ;outgoing_bandwidth_limit=2
+
+[sdk_allowlist]
+    ; When sdk_allowlist is empty, all SDKs can connect to this node
+    ; when sdk_allowlist is not empty, only the SDK in the allowlist can connect to this node
+    ; public_key.0 should be nodeid, nodeid's length is 128
+    ;public_key.0=
 EOF
 }
 
@@ -1177,6 +1196,21 @@ done
 check_all_node_work_properly \${work_dir}
 
 EOF
+generate_script_template "$output/scripts/reload_sdk_allowlist.sh"
+    cat << EOF >> "$output/scripts/reload_sdk_allowlist.sh"
+cd \${SHELL_FOLDER}/../
+NODE_FOLDER=\$(pwd)
+fisco_bcos=\${NODE_FOLDER}/${fisco_bin_path}
+node=\$(basename \${NODE_FOLDER})
+node_pid=${ps_cmd}
+if [ -n "\${node_pid}" ];then
+    LOG_INFO "\${node} is trying to reload sdk allowlist. Check log for more information."
+    touch config.ini.reset_allowlist
+    exit 0
+else
+    echo "\${node} is not running, use start.sh to start all group directlly."
+fi
+EOF
 }
 
 genDownloadConsole() {
@@ -1198,19 +1232,19 @@ while getopts "v:f" option;do
 done
 
 if [[ -z "\${version}" ]];then
-    version=\$(curl -s https://api.github.com/repos/FISCO-BCOS/console/releases | grep "tag_name" | sort -u | tail -n 1 | cut -d \" -f 4 | sed "s/^[vV]//")
+    version=\$(curl -s https://api.github.com/repos/FISCO-BCOS/console/releases | grep "tag_name" | cut -d \" -f 4 | sort -V | tail -n 1 | sed "s/^[vV]//")
 fi
 package_name="console.tar.gz"
 echo "Downloading console \${version}"
 download_link=https://github.com/FISCO-BCOS/console/releases/download/v\${version}/\${package_name}
 
 if [ \$(curl -IL -o /dev/null -s -w %{http_code}  https://www.fisco.com.cn/cdn/console/releases/download/v\${version}/\${package_name}) == 200 ];then
-    curl -LO \${download_link} --speed-time 30 --speed-limit 102400 -m 450 || {
+    curl -#LO \${download_link} --speed-time 30 --speed-limit 102400 -m 450 || {
         echo -e "\033[32m Download speed is too low, try https://www.fisco.com.cn/cdn/console/releases/download/v\${version}/\${package_name} \033[0m"
-        curl -LO https://www.fisco.com.cn/cdn/console/releases/download/v\${version}/\${package_name}
+        curl -#LO https://www.fisco.com.cn/cdn/console/releases/download/v\${version}/\${package_name}
     }
 else
-    curl -LO \${download_link}
+    curl -#LO \${download_link}
 fi
 tar -zxf \${package_name} && cd console && chmod +x *.sh
 
@@ -1320,6 +1354,143 @@ do
 done
 wait
 EOF
+    generate_script_template "$output/download_bin.sh"
+    cat << EOF >> "$output/download_bin.sh"
+#!/bin/bash
+
+project=FISCO-BCOS/FISCO-BCOS
+cdn_link_header="${cdn_link_header}"
+download_branch=
+output_dir=bin/
+download_mini=
+download_version=
+latest_version=
+download_timeout=${download_timeout}
+
+help() {
+    echo "
+Usage:
+    -v <Version>           Download binary of spectfic version, default latest
+    -b <Branch>            Download binary of spectfic branch
+    -o <Output Dir>        Default ./bin
+    -l                     List released FISCO-BCOS versions
+    -m                     Download mini binary, only works with -b option
+    -h Help
+e.g
+    \$0 -v 2.6.0
+"
+exit 0
+}
+
+parse_params(){
+while getopts "b:o:v:hml" option;do
+    case \$option in
+    o) output_dir=\$OPTARG;;
+    b) download_branch="\$OPTARG";;
+    v) download_version="\${OPTARG//[vV]/}";;
+    m) download_mini="true";;
+    l) LOG_INFO "Show the history releases of FISCO-BCOS " && curl -sS https://gitee.com/api/v5/repos/\${project}/tags | grep -oe "\"name\":\"v[2-9]*\.[0-9]*\.[0-9]*\"" | cut -d \" -f 4 | sort -V && exit 0;;
+    h) help;;
+    *) help;;
+    esac
+done
+}
+
+download_artifact_linux(){
+    local branch="\$1"
+    build_num=\$(curl https://circleci.com/api/v1.1/project/github/\${project}/tree/\${branch}\?circle-token\=\&limit\=1\&offset\=0\&filter\=successful 2>/dev/null| grep build_num | sed "s/ //g"| cut -d ":" -f 2| sed "s/,//g" | sort -u | tail -n1)
+
+    local response="\$(curl https://circleci.com/api/v1.1/project/github/\${project}/\${build_num}/artifacts?circle-token= 2>/dev/null)"
+    if [ -z "\${download_mini}" ];then
+        link="\$(echo \${response}| grep -o 'https://[^"]*' | grep -v mini)"
+    else
+        link="\$(echo \${response}| grep -o 'https://[^"]*' | grep mini)"
+    fi
+    if [ -z "\${link}" ];then
+        build_num=\$(( build_num - 1 ))
+        response="\$(curl https://circleci.com/api/v1.1/project/github/\${project}/\${build_num}/artifacts?circle-token= 2>/dev/null)"
+        if [ -z "\${download_mini}" ];then
+            link="\$(echo \${response}| grep -o 'https://[^"]*' | grep -v mini| tail -n 1)"
+        else
+            link="\$(echo \${response}| grep -o 'https://[^"]*' | grep mini| tail -n 1)"
+        fi
+    fi
+    if [ -z "\${link}" ];then
+        echo "CircleCI build_num:\${build_num} can't find artifacts."
+        exit 1
+    fi
+    LOG_INFO "Downloading binary from \${link} "
+    curl -#LO \${link} && tar -zxf fisco*.tar.gz && rm fisco*.tar.gz
+    result=\$?
+    if [[ "\${result}" != "0" ]];then LOG_ERROR "Download failed, please try again" && exit 1;fi
+
+}
+
+download_artifact_macOS(){
+    echo "unsupported for now."
+    exit 1
+    local branch="\$1"
+    # TODO: https://developer.github.com/v3/actions/artifacts/#download-an-artifact
+    local workflow_artifacts_url="\$(curl https://api.github.com/repos/\${project}/actions/runs\?branch\=\${branch}\&status\=success\&event\=push | grep artifacts_url | head -n 1 | cut -d \" -f 4)"
+    local archive_download_url="\$(curl \${workflow_artifacts_url} | grep archive_download_url | cut -d \" -f 4)"
+    if [ -z "\${archive_download_url}" ];then
+        echo "GitHub action \${workflow_artifacts_url} can't find artifact."
+        exit 1
+    fi
+    LOG_INFO "Downloading macOS binary from \${archive_download_url} "
+    # FIXME: https://github.com/actions/upload-artifact/issues/51
+    curl -#LO "\${archive_download_url}" && tar -zxf fisco-bcos-macOS.tar.gz && rm fisco-bcos-macOS.tar.gz
+}
+
+download_branch_artifact(){
+    local branch="\$1"
+    if [ "\$(uname)" == "Darwin" ];then
+        LOG_INFO "Downloading binary of \${branch} on macOS "
+        download_artifact_macOS "\${branch}"
+    else
+        LOG_INFO "Downloading binary of \${branch} on Linux "
+        download_artifact_linux "\${branch}"
+    fi
+}
+
+download_released_artifact(){
+    local version="\$1"
+    local package_name="fisco-bcos.tar.gz"
+    if [ "\$(uname)" == "Darwin" ];then
+        package_name="fisco-bcos-macOS.tar.gz"
+    fi
+    local download_link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/\${version}/\${package_name}"
+    local cdn_download_link="\${cdn_link_header}/\${version}/\${package_name}"
+    LOG_INFO "Downloading binary of \${version}, from \${download_link}"
+    if [ \$(curl -IL -o /dev/null -s -w %{http_code} \${cdn_download_link}) == 200 ];then
+        curl -#LO \${download_link} --speed-time 20 --speed-limit 102400 -m \${download_timeout} || {
+            echo "Download speed is too low, try \${cdn_download_link}"
+            curl -#LO "\${cdn_download_link}"
+        }
+    else
+        curl -#LO \${download_link}
+    fi
+    tar -zxf "\${package_name}" && rm "\${package_name}"
+}
+
+main() {
+    [ -f "\${output_dir}/fisco-bcos" ] && mv "\${output_dir}/fisco-bcos" "\${output_dir}/fisco-bcos.bak"
+    mkdir -p "\${output_dir}" && cd "\${output_dir}"
+    latest_version=\$(curl -sS https://gitee.com/api/v5/repos/\${project}/tags | grep -oe "\"name\":\"v[2-9]*\.[0-9]*\.[0-9]*\"" | cut -d \" -f 4 | sort -V | tail -n 1)
+    if [ -n "\${download_version}" ];then
+        download_released_artifact "v\${download_version}"
+    elif [ -n "\${download_branch}" ];then
+        download_branch_artifact "\${download_branch}"
+    else
+        download_released_artifact "\${latest_version}"
+    fi
+    LOG_INFO "Finished. Please check \${output_dir}"
+}
+
+parse_params "\$@"
+main
+
+EOF
 }
 
 parse_ip_config()
@@ -1350,12 +1521,12 @@ download_bin()
     Download_Link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${compatibility_version}/${package_name}"
     LOG_INFO "Downloading fisco-bcos binary from ${Download_Link} ..."
     if [ $(curl -IL -o /dev/null -s -w %{http_code}  ${cdn_link_header}/v${compatibility_version}/${package_name}) == 200 ];then
-        curl -LO ${Download_Link} --speed-time 20 --speed-limit 102400 -m ${download_timeout} || {
+        curl -#LO "${Download_Link}" --speed-time 20 --speed-limit 102400 -m "${download_timeout}" || {
             LOG_INFO "Download speed is too low, try ${cdn_link_header}/v${compatibility_version}/${package_name}"
-            curl -LO ${cdn_link_header}/v${compatibility_version}/${package_name}
+            curl -#LO "${cdn_link_header}/v${compatibility_version}/${package_name}"
         }
     else
-        curl -LO ${Download_Link}
+        curl -#LO "${Download_Link}"
     fi
     if [[ $(ls -al . | grep tar.gz | awk '{print $5}') -lt 1048576 ]];then
         exit_with_clean "Download fisco-bcos failed, please try again. Or download and extract it manually from ${Download_Link} and use -e option."
@@ -1364,12 +1535,18 @@ download_bin()
     chmod a+x ${bin_path}
 }
 
+function version_gt() { test "$(echo "$@" | tr " " "\n" | sort -V | head -n 1)" != "$1"; }
+
 check_bin()
 {
     echo "Checking fisco-bcos binary..."
-    bin_version=$(${bin_path} -v)
-    if [ -z "$(echo ${bin_version} | grep 'FISCO-BCOS')" ];then
+    bin_version=$()
+    if ! ${bin_path} -v | grep -q 'FISCO-BCOS';then
         exit_with_clean "${bin_path} is wrong. Please correct it and try again."
+    fi
+    bin_version=$(${bin_path} -v | grep -oe "[2-9]*\.[0-9]*\.[0-9]*")
+    if version_gt "${compatibility_version}" "${bin_version}";then
+        exit_with_clean "${bin_version} is less than ${compatibility_version}. Please correct it and try again."
     fi
     echo "Binary check passed."
 }
@@ -1458,11 +1635,11 @@ fi
 dir_must_not_exists "${output_dir}"
 mkdir -p "${output_dir}"
 
-if [ -z "${compatibility_version}" ];then
-    set +e
-    compatibility_version=$(curl -s https://api.github.com/repos/FISCO-BCOS/FISCO-BCOS/releases | grep "tag_name" | grep "\"v2\.[0-9]\.[0-9]\"" | sort -u | tail -n 1 | cut -d \" -f 4 | sed "s/^[vV]//")
-    set -e
-fi
+# if [ -z "${compatibility_version}" ];then
+#     set +e
+#     compatibility_version=$(curl -s https://api.github.com/repos/FISCO-BCOS/FISCO-BCOS/releases | grep "tag_name" | grep "\"v2\.[0-9]*\.[0-9]*\"" | sort -V | tail -n 1 | cut -d \" -f 4 | sed "s/^[vV]//")
+#     set -e
+# fi
 
 # use default version as compatibility_version
 if [ -z "${compatibility_version}" ];then
@@ -1500,13 +1677,13 @@ groups=
 groups_count=
 for line in ${ip_array[*]};do
     ip=${line%:*}
-    num=${line#*:}
-    if [ -z $(echo $ip | grep -E "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$") ];then
+    num=${line##*:}
+    if [[ $(echo "$ip" | grep -qE "^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$") && -z "${use_ipv6}" ]];then
         LOG_WARN "Please check IP address: ${ip}, if you use domain name please ignore this."
     fi
     [ "$num" == "$ip" ] || [ -z "${num}" ] && num=${node_num}
-    echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
-    [ -z "$(get_value ${ip//./}_count)" ] && set_value ${ip//./}_count 0
+    echo "Processing IP=${ip} Total=${num} Agency=${agency_array[${server_count}]} Groups=${group_array[server_count]}"
+    [ -z "$(get_value "${ip//[\.:]/_}_count")" ] && set_value "${ip//[\.:]/_}_count" 0
     sdk_path="${output_dir}/${ip}/sdk"
     if [ ! -d "${sdk_path}" ];then
         gen_cert "${output_dir}/cert/${agency_array[${server_count}]}" "${sdk_path}" "sdk"
@@ -1514,7 +1691,7 @@ for line in ${ip_array[*]};do
         cp sdk.crt node.crt
         cp sdk.key node.key
         # FIXME: delete the upside unbelievable ugliest operation in future
-        rm node.nodeid
+        mv node.nodeid sdk.publickey
         cd "${output_dir}"
         if [ -n "${guomi_mode}" ];then
             mkdir -p "${sdk_path}/gm"
@@ -1523,11 +1700,13 @@ for line in ${ip_array[*]};do
             cat "${output_dir}/gmcert/${agency_array[${server_count}]}/../gmca.crt" >> "${sdk_path}/gm/gmsdk.crt"
             gen_node_cert_with_extensions_gm "${output_dir}/gmcert/${agency_array[${server_count}]}" "${sdk_path}/gm" "sdk" ensdk v3enc_req
             cp "${output_dir}/gmcert/gmca.crt" "${sdk_path}/gm/"
+            $TASSL_CMD ec -in "$sdk_path/gm/gmsdk.key" -text -noout 2> /dev/null | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}'  | cat > "$ndpath/gmsdk.publickey"
+            mv "$sdk_path/gmsdk.publickey" "$sdk_path/gm"
         fi
     fi
     for ((i=0;i<num;++i));do
-        echo "Processing IP:${ip} ID:${i} node's key" >>"${logfile}"
-        local node_count="$(get_value ${ip//./}_count)"
+        echo "Processing IP=${ip} ID=${i} node's key" >>"${logfile}"
+        local node_count="$(get_value "${ip//[\.:]/_}_count")"
         local node_dir="${output_dir}/${ip}/node${node_count}"
         [ -d "${node_dir}" ] && exit_with_clean "${node_dir} exist! Please delete!"
 
@@ -1586,12 +1765,17 @@ for line in ${ip_array[*]};do
         if [ -n "${ports_array[server_count]}" ];then
             read -r -a node_ports <<< "${ports_array[server_count]//,/ }"
             echo "node_ports ${node_ports[*]}" >>"${logfile}"
-            [ "${i}" == "0" ] && { set_value "${ip//./}_port_offset" 0; }
+            [ "${i}" == "0" ] && { set_value "${ip//[\.:]/_}_port_offset" 0; }
         fi
-        ip_list="${ip_list}node.${count}=${ip}:$(( $(get_value ${ip//./}_port_offset) + node_ports[0] ))
+        if [ -n "${use_ipv6}" ];then
+        ip_list="${ip_list}node.${count}=[${ip}]:$(( $(get_value ${ip//[\.:]/_}_port_offset) + node_ports[0] ))
     "
-        set_value ${ip//./}_count $(( $(get_value ${ip//./}_count) + 1 ))
-        set_value "${ip//./}_port_offset" $(( $(get_value "${ip//./}_port_offset") + 1 ))
+        else
+        ip_list="${ip_list}node.${count}=${ip}:$(( $(get_value ${ip//[\.:]/_}_port_offset) + node_ports[0] ))
+    "
+        fi
+        set_value "${ip//[\.:]/_}_count" $(( $(get_value "${ip//[\.:]/_}_count") + 1 ))
+        set_value "${ip//[\.:]/_}_port_offset" $(( $(get_value "${ip//[\.:]/_}_port_offset") + 1 ))
         ((++count))
     done
     ((++server_count))
@@ -1600,8 +1784,8 @@ done
 # clean
 for line in ${ip_array[*]};do
     ip=${line%:*}
-    set_value ${ip//./}_count 0
-    set_value "${ip//./}_port_offset" 0
+    set_value "${ip//[\.:]/_}_count" 0
+    set_value "${ip//[\.:]/_}_port_offset" 0
 done
 
 echo "=============================================================="
@@ -1610,13 +1794,13 @@ cd ${current_dir}
 server_count=0
 for line in ${ip_array[*]};do
     ip=${line%:*}
-    num=${line#*:}
+    num=${line##*:}
     [ "$num" == "$ip" ] || [ -z "${num}" ] && num=${node_num}
-    echo "Processing IP:${ip} Total:${num} Agency:${agency_array[${server_count}]} Groups:${group_array[server_count]}"
+    echo "Processing IP=${ip} Total=${num} Agency=${agency_array[${server_count}]} Groups=${group_array[server_count]}"
     for ((i=0;i<num;++i));do
-        local node_count="$(get_value ${ip//./}_count)"
+        local node_count="$(get_value "${ip//[\.:]/_}_count")"
         local node_dir="${output_dir}/${ip}/node${node_count}"
-        echo "Processing IP:${ip} ID:${i} ${node_dir} config files..." >> "${logfile}"
+        echo "Processing IP=${ip} ID=${i} ${node_dir} config files..." >> "${logfile}"
         generate_config_ini "${node_dir}/config.ini" "${ip}" "${group_array[server_count]}" "${ports_array[server_count]}" ${i}
         if [ "${use_ip_param}" == "false" ];then
             node_groups=(${group_array[${server_count}]//,/ })
@@ -1634,8 +1818,8 @@ for line in ${ip_array[*]};do
             p2p_port=$(grep listen_port < "${node_dir}"/config.ini | grep -v _listen_port | cut -d = -f 2)
             mv "${node_dir}" "${output_dir}/${ip}/node_${ip}_${p2p_port}"
         fi
-        set_value ${ip//./}_count $(( $(get_value ${ip//./}_count) + 1 ))
-        set_value "${ip//./}_port_offset" $(( $(get_value "${ip//./}_port_offset") + 1 ))
+        set_value "${ip//[\.:]/_}_count" $(( $(get_value "${ip//[\.:]/_}_count") + 1 ))
+        set_value "${ip//[\.:]/_}_port_offset" $(( $(get_value "${ip//[\.:]/_}_port_offset") + 1 ))
     done
     generate_server_scripts "${output_dir}/${ip}"
     genDownloadConsole "${output_dir}/${ip}"
