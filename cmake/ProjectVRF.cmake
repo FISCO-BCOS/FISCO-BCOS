@@ -37,6 +37,7 @@ ExternalProject_Add(libvrf
     DOWNLOAD_NAME libvrf.tar.gz
     DOWNLOAD_NO_PROGRESS 1
     URL https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/libvrf.tar.gz
+        https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/FISCO-BCOS/deps/libvrf.tar.gz
     URL_HASH SHA256=c67ec43606137c82853bbf816c88990988c51ac99c8c83ccd6defa7c382a39ec
     BUILD_IN_SOURCE 1
     LOG_CONFIGURE 1

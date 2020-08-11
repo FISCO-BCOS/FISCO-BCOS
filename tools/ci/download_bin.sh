@@ -1,7 +1,7 @@
 #!/bin/bash
 
 project=FISCO-BCOS/FISCO-BCOS
-cdn_link_header="https://www.fisco.com.cn/cdn/fisco-bcos/releases/download"
+cdn_link_header="https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS"
 download_branch=
 output_dir=bin/
 download_mini=
@@ -111,7 +111,7 @@ download_released_artifact(){
         package_name="fisco-bcos-macOS.tar.gz"
     fi
     local download_link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/${version}/${package_name}"
-    local cdn_download_link="${cdn_link_header}/${version}/${package_name}"
+    local cdn_download_link="${cdn_link_header}/FISCO-BCOS/releases/${version}/${package_name}"
     LOG_INFO "Downloading binary of ${version}, from ${download_link}"
     if [ $(curl -IL -o /dev/null -s -w %{http_code} ${cdn_download_link}) == 200 ];then
         curl -#LO ${download_link} --speed-time 20 --speed-limit 102400 -m ${download_timeout} || {
