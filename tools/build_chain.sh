@@ -52,7 +52,7 @@ default_version="2.6.0"
 macOS=""
 x86_64_arch="true"
 download_timeout=240
-cdn_link_header="https://www.fisco.com.cn/cdn/fisco-bcos/releases/download"
+cdn_link_header="https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS"
 use_ipv6=
 help() {
     cat << EOF
@@ -255,16 +255,17 @@ check_env() {
 check_and_install_tassl(){
 if [ -n "${guomi_mode}" ]; then
     if [ ! -f "${TASSL_CMD}" ];then
-        LOG_INFO "Downloading tassl binary ..."
+        local tassl_link_perfix="${cdn_link_header}/FISCO-BCOS/tools/tassl-1.0.2"
+        LOG_INFO "Downloading tassl binary from ${tassl_link_perfix}..."
         if [[ -n "${macOS}" ]];then
-            curl -#LO https://github.com/FISCO-BCOS/LargeFiles/raw/master/tools/tassl_mac.tar.gz
+            curl -#LO "${tassl_link_perfix}/tassl_mac.tar.gz"
             mv tassl_mac.tar.gz tassl.tar.gz
         else
             if [[ "$(uname -p)" == "aarch64" ]];then
-                curl -#LO https://github.com/FISCO-BCOS/LargeFiles/raw/master/tools/tassl-aarch64.tar.gz
+                curl -#LO "${tassl_link_perfix}/tassl-aarch64.tar.gz"
                 mv tassl-aarch64.tar.gz tassl.tar.gz
             elif [[ "$(uname -p)" == "x86_64" ]];then
-                curl -#LO https://github.com/FISCO-BCOS/LargeFiles/raw/master/tools/tassl.tar.gz
+                curl -#LO "${tassl_link_perfix}/tassl.tar.gz"
             else
                 LOG_ERROR "Unsupported platform"
                 exit 1
@@ -1237,11 +1238,11 @@ fi
 package_name="console.tar.gz"
 echo "Downloading console \${version}"
 download_link=https://github.com/FISCO-BCOS/console/releases/download/v\${version}/\${package_name}
-
-if [ \$(curl -IL -o /dev/null -s -w %{http_code}  https://www.fisco.com.cn/cdn/console/releases/download/v\${version}/\${package_name}) == 200 ];then
+cos_download_link=${cdn_link_header}/console/releases/v\${version}/\${package_name}
+if [ \$(curl -IL -o /dev/null -s -w %{http_code}  \${cos_download_link}) == 200 ];then
     curl -#LO \${download_link} --speed-time 30 --speed-limit 102400 -m 450 || {
-        echo -e "\033[32m Download speed is too low, try https://www.fisco.com.cn/cdn/console/releases/download/v\${version}/\${package_name} \033[0m"
-        curl -#LO https://www.fisco.com.cn/cdn/console/releases/download/v\${version}/\${package_name}
+        echo -e "\033[32m Download speed is too low, try \${cos_download_link} \033[0m"
+        curl -#LO \${cos_download_link}
     }
 else
     curl -#LO \${download_link}
@@ -1460,7 +1461,7 @@ download_released_artifact(){
         package_name="fisco-bcos-macOS.tar.gz"
     fi
     local download_link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/\${version}/\${package_name}"
-    local cdn_download_link="\${cdn_link_header}/\${version}/\${package_name}"
+    local cdn_download_link="\${cdn_link_header}/FISCO-BCOS/releases/\${version}/\${package_name}"
     LOG_INFO "Downloading binary of \${version}, from \${download_link}"
     if [ \$(curl -IL -o /dev/null -s -w %{http_code} \${cdn_download_link}) == 200 ];then
         curl -#LO \${download_link} --speed-time 20 --speed-limit 102400 -m \${download_timeout} || {
@@ -1519,11 +1520,12 @@ download_bin()
     fi
 
     Download_Link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${compatibility_version}/${package_name}"
+    local cdn_download_link="${cdn_link_header}/FISCO-BCOS/releases/v${compatibility_version}/${package_name}"
     LOG_INFO "Downloading fisco-bcos binary from ${Download_Link} ..."
-    if [ $(curl -IL -o /dev/null -s -w %{http_code}  ${cdn_link_header}/v${compatibility_version}/${package_name}) == 200 ];then
+    if [ $(curl -IL -o /dev/null -s -w %{http_code} "${cdn_download_link}") == 200 ];then
         curl -#LO "${Download_Link}" --speed-time 20 --speed-limit 102400 -m "${download_timeout}" || {
-            LOG_INFO "Download speed is too low, try ${cdn_link_header}/v${compatibility_version}/${package_name}"
-            curl -#LO "${cdn_link_header}/v${compatibility_version}/${package_name}"
+            LOG_INFO "Download speed is too low, try ${cdn_download_link}"
+            curl -#LO "${cdn_download_link}"
         }
     else
         curl -#LO "${Download_Link}"
