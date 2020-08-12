@@ -39,7 +39,7 @@
 | SDK        | 2.6.0                   | 2.0.4     |                        |
 | generator  | 1.6.0                   | 1.1.0     | 搭建新链需要使用该版本 |
 | 浏览器     | 2.0.2                   | 2.0.0-rc2 |                        |
-| Solidity   | 最高支持 solidity 0.5.2 | 0.4.11    |                        |
+| Solidity   | 最高支持 solidity 0.6.10 | 0.4.11    |                        |
 | amdb-proxy | 2.3.0                   | 2.0.2     |                        |
 
 更多，请参考[版本与兼容性描述](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/docs/change_log/index.html)。
