@@ -132,7 +132,7 @@ jobs:
       - name: install ubuntu dependencies
         run: sudo apt install -y git curl build-essential clang cmake openssl libssl-dev zlib1g-dev ccache libgmp-dev flex bison
       - name: configure
-        run: cmake . -DARCH_NATIVE=on
+        run: cmake .
       - name: compile
         run: make -j2
       - name: run integration testing
