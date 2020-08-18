@@ -90,6 +90,9 @@ public:
     /// @returns 0 if no account exists at that address.
     u256 storage(Address const& _contract, u256 const& _memory) override;
 
+    std::string get(Address const& _contract, const std::string& _key) override;
+    void set(Address const& _contract, const std::string& _key, const std::string& _value) override;
+
     /// Set the value of a storage position of an account.
     void setStorage(Address const& _contract, u256 const& _location, u256 const& _value) override;
 

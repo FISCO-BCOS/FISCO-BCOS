@@ -18,6 +18,17 @@
 #
 # (c) 2016-2018 fisco-dev contributors.
 #------------------------------------------------------------------------------
+
+# common settings
+set(ETH_CMAKE_DIR ${CMAKE_CURRENT_LIST_DIR})
+set(ETH_SCRIPTS_DIR ${ETH_CMAKE_DIR}/scripts)
+
+set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
+
+if("${CMAKE_SIZEOF_VOID_P}" STREQUAL "4")
+    message(FATAL_ERROR "The ${PROJECT_NAME} does not support compiling on 32-bit systems")
+endif()
+
 if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang"))
     find_program(CCACHE_PROGRAM ccache)
     if(CCACHE_PROGRAM)

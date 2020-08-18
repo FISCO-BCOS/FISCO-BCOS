@@ -25,6 +25,8 @@
 #include "libethcore/Exceptions.h"
 #include <libblockverifier/ExecutiveContext.h>
 
+using namespace std;
+
 namespace dev
 {
 namespace executive
@@ -41,6 +43,50 @@ bool accountExists(evmc_host_context* _context, const evmc_address* _addr) noexc
     auto& env = static_cast<EVMHostContext&>(*_context);
     Address addr = fromEvmC(*_addr);
     return env.exists(addr);
+}
+
+int32_t get(evmc_host_context* _context, const evmc_address* _addr, const char* _key,
+    int32_t _keyLength, char* _value, int32_t _valueLength)
+{
+    auto& hostContext = static_cast<EVMHostContext&>(*_context);
+
+    // programming assert for debug
+    assert(fromEvmC(*_addr) == hostContext.myAddress());
+    auto value = hostContext.get(string(_key, _keyLength));
+    if (value.size() > (size_t)_valueLength)
+    {
+        return -1;
+    }
+    memcpy(_value,value.data(),value.size());
+    return value.size();
+}
+
+evmc_storage_status set(evmc_host_context* _context, const evmc_address* _addr, const char* _key,
+    int32_t _keyLength, const char* _value, int32_t _valueLength)
+{
+    auto& hostContext = static_cast<EVMHostContext&>(*_context);
+    if (!hostContext.isPermitted())
+    {  // FIXME: return status instead of throw exception
+        BOOST_THROW_EXCEPTION(eth::PermissionDenied());
+    }
+    assert(fromEvmC(*_addr) == hostContext.myAddress());
+    string key(_key, _keyLength);
+    string value(_value, _valueLength);
+    auto oldValue = hostContext.get(string(_key, _keyLength));
+
+    if (value == oldValue)
+        return EVMC_STORAGE_UNCHANGED;
+
+    auto status = EVMC_STORAGE_MODIFIED;
+    if (oldValue.size() == 0)
+        status = EVMC_STORAGE_ADDED;
+    else if (value.size() == 0)
+    {
+        status = EVMC_STORAGE_DELETED;
+        hostContext.sub().refunds += hostContext.evmSchedule().sstoreRefundGas;
+    }
+    hostContext.set(key, value);  // Interface uses native endianness
+    return status;
 }
 
 evmc_bytes32 getStorage(
@@ -226,6 +272,8 @@ evmc_host_interface const fnTable = {
     getTxContext,
     getBlockHash,
     log,
+    get,
+    set,
 };
 
 }  // namespace

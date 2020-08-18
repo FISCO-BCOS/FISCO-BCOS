@@ -80,6 +80,19 @@ h256 MPTState::storageRoot(Address const& _contract) const
     return m_state.storageRoot(_contract);
 }
 
+std::string MPTState::get(Address const&, const std::string&)
+{
+    // FIXME: not support mpt state, abandon mpt state
+    abort();
+    return 0;
+}
+
+void MPTState::set(Address const&, const std::string&, const std::string&)
+{
+    // FIXME: not support mpt state, abandon mpt state
+    abort();
+}
+
 u256 MPTState::storage(Address const& _contract, u256 const& _memory)
 {
     return m_state.storage(_contract, _memory);
