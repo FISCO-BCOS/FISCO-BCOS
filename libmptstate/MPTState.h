@@ -79,6 +79,8 @@ public:
 
     h256 storageRoot(Address const& _contract) const override;
 
+    std::string get(Address const& _contract, const std::string& _key) override;
+    void set(Address const& _contract, const std::string& _key, const std::string& _value) override;
     u256 storage(Address const& _contract, u256 const& _memory) override;
 
     void setStorage(Address const& _contract, u256 const& _location, u256 const& _value) override;

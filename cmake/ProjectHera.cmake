@@ -3,12 +3,16 @@ if(NOT WASM)
 endif()
 include(ExternalProject)
 include(GNUInstallDirs)
+find_program(CARGO_COMMAND cargo)
+if(NOT CARGO_COMMAND)
+    message(FATAL_ERROR "cargo/rustc is not installed")
+endif()
 
 ExternalProject_Add(hera
         PREFIX ${CMAKE_SOURCE_DIR}/deps
         DOWNLOAD_NO_PROGRESS 1
         GIT_REPOSITORY https://github.com/bxq2011hust/hera.git
-        GIT_TAG 7245c731177b402fb5d5919f459638eecc718a45
+        GIT_TAG 1177582b87b9af850666424dccd9a7f5e2a81182
         CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
                    -DBUILD_SHARED_LIBS=OFF
                    -DHERA_WASMER=ON
@@ -34,4 +38,5 @@ endif()
 add_library(HERA INTERFACE IMPORTED)
 set_property(TARGET HERA PROPERTY INTERFACE_LINK_LIBRARIES ${HERA_LIBRARIES})
 set_property(TARGET HERA PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${HERA_INCLUDE_DIRS})
+add_dependencies(hera EVMONE)
 add_dependencies(HERA hera EVMC)

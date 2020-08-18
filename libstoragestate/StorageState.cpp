@@ -27,8 +27,10 @@
 #include "libdevcrypto/CryptoInterface.h"
 #include "libethcore/Exceptions.h"
 #include "libstorage/Table.h"
+// #include <boost/utility/string_view.hpp>
 
 using namespace dev;
+using namespace std;
 using namespace dev::eth;
 using namespace dev::storagestate;
 using namespace dev::storage;
@@ -183,6 +185,42 @@ h256 StorageState::storageRoot(Address const& _address) const
         return table->hash();
     }
     return h256();
+}
+
+std::string StorageState::get(Address const& _contract, const std::string& _key)
+{  // FIXME: use boost::string_view instead of std::string
+    auto table = getTable(_contract);
+    if (table)
+    {  // FIXME: use boost::string_view instead of std::string
+        auto entries = table->select(_key, table->newCondition());
+        if (entries->size() != 0u)
+        {
+            return  entries->get(0)->getField(STORAGE_VALUE);
+        }
+    }
+    return "";
+}
+
+void StorageState::set(Address const& _contract, const std::string& _key, const std::string& _value)
+{  // FIXME: use boost::string_view instead of std::string
+    auto table = getTable(_contract);
+    if (table)
+    {  // FIXME: use boost::string_view instead of std::string
+        auto option = std::make_shared<AccessOptions>(Address(), false);
+        auto entries = table->select(_key, table->newCondition());
+        auto entry = table->newEntry();
+        entry->setForce(true);
+        entry->setField(STORAGE_KEY, _key);
+        entry->setField(STORAGE_VALUE, _value);
+        if (entries->size() == 0u)
+        {
+            table->insert(_key, entry, option);
+        }
+        else
+        {
+            table->update(_key, entry, table->newCondition(), option);
+        }
+    }
 }
 
 u256 StorageState::storage(Address const& _address, u256 const& _key)

@@ -55,6 +55,15 @@ public:
     EVMHostContext(EVMHostContext const&) = delete;
     EVMHostContext& operator=(EVMHostContext const&) = delete;
 
+    std::string get(const std::string& _key)
+    {
+        return m_s->get(myAddress(), _key);
+    }
+    void set(const std::string& _key, const std::string& _value)
+    {
+         m_s->set(myAddress(), _key,_value);
+    }
+
     /// Read storage location.
     virtual u256 store(u256 const& _n) { return m_s->storage(myAddress(), _n); }
 

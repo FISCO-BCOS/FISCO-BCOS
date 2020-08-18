@@ -85,6 +85,7 @@ install: |
   #if [[ $TRAVIS_OS_NAME == linux && "$TRAVIS_BRANCH" != "master" ]]; then
   #  bash tools/ci/check-commit.sh;
   #fi
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 script: |
   if [[ $TRAVIS_OS_NAME == linux ]]; then
     cmake -DARCH_NATIVE=ON . && make -j2 &&  cd tools && bash ci/ci_check.sh

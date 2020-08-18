@@ -58,6 +58,11 @@ jobs:
       - name: install Ubuntu dependencies
         if: runner.os == 'Linux'
         run: sudo apt install -y git curl build-essential clang cmake libssl-dev zlib1g-dev ccache libgmp-dev flex bison patch
+      - name: install rust language
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
       - name: configure
         run: CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DTESTS=ON .
       - name: compile
@@ -92,6 +97,11 @@ jobs:
             ccache-v2-notest-${{ runner.temp }}-
       - name: install macOS dependencies
         run: brew install openssl@1.1 ccache
+      - name: install rust language
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
       - name: configure
         run: cmake .
       - name: compile
@@ -131,6 +141,11 @@ jobs:
             ccache-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
             ccache-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-
             ccache-v2-notest-${{ runner.temp }}-
+      - name: install rust language
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
       - name: install ubuntu dependencies
         run: sudo apt install -y git curl build-essential clang cmake openssl libssl-dev zlib1g-dev ccache libgmp-dev flex bison
       - name: configure
@@ -166,6 +181,11 @@ jobs:
             ccache-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
             ccache-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-
             ccache-v2-notest-${{ runner.temp }}-
+      - name: install rust language
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
       - name: install ubuntu dependencies
         run: sudo apt install -y git curl build-essential clang cmake openssl libssl-dev zlib1g-dev ccache libgmp-dev flex bison
       - name: configure

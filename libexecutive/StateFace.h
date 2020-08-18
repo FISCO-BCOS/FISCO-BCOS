@@ -77,6 +77,8 @@ public:
     /// Get the root of the storage of an account.
     virtual h256 storageRoot(Address const& _contract) const = 0;
 
+    virtual std::string get(Address const& _contract, const std::string& _key) = 0;
+    virtual void set(Address const& _contract, const std::string& _key, const std::string& _value) = 0;
     /// Get the value of a storage position of an account.
     /// @returns 0 if no account exists at that address.
     virtual u256 storage(Address const& _contract, u256 const& _memory) = 0;
