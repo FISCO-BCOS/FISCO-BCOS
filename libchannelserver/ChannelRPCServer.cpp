@@ -288,7 +288,10 @@ void dev::ChannelRPCServer::onClientRequest(dev::channel::ChannelSession::Ptr se
             onClientHandshake(session, message);
             break;
         case CLIENT_REGISTER_EVENT_LOG:
-            onClientEventLogRequest(session, message);
+            onClientRegisterEventLogRequest(session, message);
+            break;
+        case CLIENT_UNREGISTER_EVENT_LOG:
+            onClientUnregisterEventLogRequest(session, message);
             break;
         case AMOP_REQUEST:
         case AMOP_RESPONSE:
@@ -455,7 +458,7 @@ bool dev::ChannelRPCServer::OnRpcRequest(
     return true;
 }
 
-void dev::ChannelRPCServer::onClientEventLogRequest(
+void dev::ChannelRPCServer::onClientRegisterEventLogRequest(
     dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message)
 {
     try
@@ -530,7 +533,7 @@ void dev::ChannelRPCServer::onClientEventLogRequest(
                 return checkSDKPermission(_groupId, session->remotePublicKey());
             });
 
-        CHANNEL_LOG(TRACE) << "onClientEventLogRequest" << LOG_KV("seq", seq) << LOG_KV("ret", ret)
+        CHANNEL_LOG(TRACE) << "onClientRegisterEventLogRequest" << LOG_KV("seq", seq) << LOG_KV("ret", ret)
                            << LOG_KV("request", data);
 
         // send event register request back
@@ -550,7 +553,46 @@ void dev::ChannelRPCServer::onClientEventLogRequest(
     }
     catch (std::exception& e)
     {
-        CHANNEL_LOG(ERROR) << "onClientEventLogRequest" << boost::diagnostic_information(e);
+        CHANNEL_LOG(ERROR) << "onClientRegisterEventLogRequest" << boost::diagnostic_information(e);
+    }
+}
+
+void dev::ChannelRPCServer::onClientUnregisterEventLogRequest(
+    dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message)
+{
+    try
+    {
+        auto seq = message->seq();
+        uint8_t topicLen = *((uint8_t*)message->data());
+        // skip topic field
+        std::string data(message->data() + topicLen, message->data() + message->dataSize());
+        auto protocolVersion = static_cast<uint32_t>(session->protocolVersion());
+
+        int32_t ret = m_eventCancelFilterCallBack(data, protocolVersion, [this, session](dev::GROUP_ID _groupId) {
+                return checkSDKPermission(_groupId, session->remotePublicKey());
+            });
+
+        CHANNEL_LOG(TRACE) << "onClientUnregisterEventLogRequest" << LOG_KV("seq", seq) << LOG_KV("ret", ret)
+                           << LOG_KV("request", data);
+                           
+        // send event unregister request back
+        Json::Value response;
+        response["result"] = ret;
+        Json::FastWriter writer;
+        auto resp = writer.write(response);
+
+        std::shared_ptr<dev::channel::TopicChannelMessage> message =
+            std::make_shared<dev::channel::TopicChannelMessage>();
+        message->setType(CLIENT_UNREGISTER_EVENT_LOG);
+        message->setSeq(seq);
+        message->setResult(0);
+        message->setTopicData(std::string(""), (const byte*)resp.data(), resp.size());
+
+        session->asyncSendMessage(message, dev::channel::ChannelSession::CallbackType(), 0);
+    }
+    catch (std::exception& e)
+    {
+        CHANNEL_LOG(ERROR) << "onClientUnregisterEventLogRequest" << boost::diagnostic_information(e);
     }
 }
 
