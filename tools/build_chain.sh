@@ -1540,7 +1540,7 @@ download_bin()
     else
         curl -#LO "${Download_Link}"
     fi
-    if [[ $(ls -al . | grep tar.gz | awk '{print $5}') -lt 1048576 ]];then
+    if [[ "$(ls -al . | grep tar.gz | awk '{print $5}')" -lt "1048576" ]];then
         exit_with_clean "Download fisco-bcos failed, please try again. Or download and extract it manually from ${Download_Link} and use -e option."
     fi
     tar -zxf ${package_name} && mv fisco-bcos ${bin_path} && rm ${package_name}

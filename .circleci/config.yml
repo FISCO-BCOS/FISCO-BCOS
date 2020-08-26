@@ -14,7 +14,8 @@ commands:
             apt-get update
             apt-get install -y git curl build-essential clang cmake libssl-dev zlib1g-dev openssh-client << parameters.packages >>
             echo 'export CCACHE_DIR=/ccache' >> $BASH_ENV
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+            echo 'export PATH=$HOME/.cargo/bin:$PATH' >> $BASH_ENV
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.45.0
   compile:
     description: Compile
     parameters:
@@ -119,7 +120,8 @@ jobs:
             yum install -y epel-release centos-release-scl
             yum install -y git make gcc-c++ cmake3 openssl-devel openssl ccache flex patch bison gmp-static devtoolset-7
             echo 'export CCACHE_DIR=/ccache' >> $BASH_ENV
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+            echo 'export PATH=$HOME/.cargo/bin:$PATH' >> $BASH_ENV
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.45.0
 
       - checkout
       - restore_cache:

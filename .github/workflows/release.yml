@@ -19,9 +19,14 @@ jobs:
           fetch-depth: 5
       - name: install macOS dependencies
         if: runner.os == 'macOS'
-        run: brew install openssl
+        run: brew install openssl gmp
+      - name: install rust language
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: 1.44.1
+          override: true
       - name: configure
-        run: cmake .
+        run: source $HOME/.cargo/env && cmake .
       - name: compile
         run: make -j2
       - name: prepare artifact

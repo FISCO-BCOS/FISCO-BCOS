@@ -54,17 +54,16 @@ jobs:
             ccache-v3-${{ runner.temp }}-
       - name: install macOS dependencies
         if: runner.os == 'macOS'
-        run: brew install openssl@1.1 ccache gmp
+        run: |
+          brew install openssl@1.1 ccache gmp
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.44.1
       - name: install Ubuntu dependencies
         if: runner.os == 'Linux'
-        run: sudo apt install -y git curl build-essential clang cmake libssl-dev zlib1g-dev ccache libgmp-dev flex bison patch
-      - name: install rust language
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
+        run: |
+          sudo apt install -y git curl build-essential clang cmake libssl-dev zlib1g-dev ccache libgmp-dev flex bison patch
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.45.0
       - name: configure
-        run: CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DTESTS=ON .
+        run: source $HOME/.cargo/env && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DTESTS=ON .
       - name: compile
         run: make -j2
       - name: run uint tests
@@ -100,10 +99,10 @@ jobs:
       - name: install rust language
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: 1.44.1
           override: true
       - name: configure
-        run: cmake .
+        run: source $HOME/.cargo/env && cmake .
       - name: compile
         run: make -j2
       - name: run integration testing
@@ -144,12 +143,12 @@ jobs:
       - name: install rust language
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: 1.45.0
           override: true
       - name: install ubuntu dependencies
         run: sudo apt install -y git curl build-essential clang cmake openssl libssl-dev zlib1g-dev ccache libgmp-dev flex bison
       - name: configure
-        run: cmake .
+        run: source $HOME/.cargo/env && cmake .
       - name: compile
         run: make -j2
       - name: run integration testing
@@ -184,12 +183,12 @@ jobs:
       - name: install rust language
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: 1.45.0
           override: true
       - name: install ubuntu dependencies
         run: sudo apt install -y git curl build-essential clang cmake openssl libssl-dev zlib1g-dev ccache libgmp-dev flex bison
       - name: configure
-        run: cmake .
+        run: source $HOME/.cargo/env && cmake .
       - name: compile
         run: make -j2
       - name: run integration testing

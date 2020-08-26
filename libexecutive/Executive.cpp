@@ -568,7 +568,12 @@ bool Executive::go()
                         m_ext->data().size(), toEvmC(m_ext->value()), toEvmC(0x0_cppui256)});
             };
             // Create VM instance.
-            auto vm = VMFactory::create();
+            auto vmKind = VMKind::evmone;
+            if(hasWasmPreamble(m_ext->code()))
+            {
+                vmKind= VMKind::Hera;
+            }
+            auto vm = VMFactory::create(vmKind);
             if (m_isCreation)
             {
                 m_s->clearStorage(m_ext->myAddress());
@@ -739,6 +744,7 @@ void Executive::revert()
 
 void Executive::parseEVMCResult(std::shared_ptr<eth::Result> _result)
 {
+    //FIXME: if EVMC_REJECTED, then use default vm to run. maybe wasm call evm need this
     auto outputRef = _result->output();
     switch (_result->status())
     {
