@@ -28,9 +28,7 @@
 
 #include <evmc/loader.h>
 #include <evmone/evmone.h>
-#ifdef HERA_WASM
 #include <hera/hera.h>
-#endif
 
 namespace po = boost::program_options;
 
@@ -40,11 +38,7 @@ namespace eth
 {
 namespace
 {
-#ifdef HERA_WASM
-auto g_kind = VMKind::Hera;
-#else
 auto g_kind = VMKind::evmone;
-#endif
 
 /// The pointer to EVMInstance create function in DLL EVMInstance VM.
 ///
@@ -67,9 +61,7 @@ struct VMKindTableEntry
 /// We don't use a map to avoid complex dynamic initialization. This list will never be long,
 /// so linear search only to parse command line arguments is not a problem.
 VMKindTableEntry vmKindsTable[] = {
-#ifdef HERA_WASM
     {VMKind::Hera, "hera"},
-#endif
     {VMKind::Interpreter, "interpreter"}, {VMKind::evmone, "evmone"}};
 
 void setVMKind(const std::string& _name)
@@ -181,10 +173,8 @@ std::unique_ptr<EVMInterface> VMFactory::create(VMKind _kind)
 {
     switch (_kind)
     {
-#ifdef HERA_WASM
     case VMKind::Hera:
         return std::unique_ptr<EVMInterface>(new EVMInstance{evmc_create_hera()});
-#endif
     case VMKind::evmone:
         return std::unique_ptr<EVMInterface>(new EVMInstance{evmc_create_evmone()});
     case VMKind::DLL:
