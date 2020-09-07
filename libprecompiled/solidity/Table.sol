@@ -27,7 +27,7 @@ contract Condition {
 //one record
 contract Entry {
     function getInt(string) public view returns (int256);
-    function getUInt(string) public view returns (uint256);
+    function getUInt(string) public view returns (int256);
     function getAddress(string) public view returns (address);
     function getBytes64(string) public view returns (bytes1[64]);
     function getBytes32(string) public view returns (bytes32);
