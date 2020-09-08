@@ -46,8 +46,9 @@ void EventLogFilterManager::stop()
 // main loop thread
 void EventLogFilterManager::doWork()
 {
-    // add new EventLogFilter to m_filters
+    // add or delete new EventLogFilter to m_filters
     addFilter();
+    cancelFilter();
     executeFilters();
 }
 
@@ -200,6 +201,41 @@ void EventLogFilterManager::addEventLogFilter(EventLogFilter::Ptr _filter)
     }
 }
 
+// delete EventLogFilter in m_filters by client json request
+int32_t EventLogFilterManager::cancelEventLogFilterByRequest(const EventLogFilterParams::Ptr _params, uint32_t _version)
+{
+    ResponseCode responseCode = ResponseCode::SUCCESS;
+    
+    EventLogFilter::Ptr filter = NULL;
+    for (auto it = m_filters.begin(); it != m_filters.end(); it++)
+    {
+        if ((*it)->getParams()->getFilterID() == _params->getFilterID()) 
+        {
+            filter = *it;
+        }
+    }
+    if (filter != NULL)
+    {
+        cancelEventLogFilter(filter);
+    } else {
+        responseCode = NONEXISTENT_EVENT;
+    }
+
+    EVENT_LOG(INFO) << LOG_BADGE("cancelEventLogFilterByRequest") << LOG_KV("result", responseCode)
+                    << LOG_KV("channel protocol version", _version);
+    return responseCode;
+}
+
+// delete _filter in m_filters waiting for loop thread to process
+void EventLogFilterManager::cancelEventLogFilter(EventLogFilter::Ptr _filter)
+{
+    {
+        std::lock_guard<std::mutex> l(m_cancelMetux);
+        m_waitCancelFilter.push_back(_filter);
+        m_waitCancelCount += 1;
+    }
+}
+
 void EventLogFilterManager::addFilter()
 {
     uint64_t addCount = m_waitAddCount.load(std::memory_order_relaxed);
@@ -216,6 +252,37 @@ void EventLogFilterManager::addFilter()
     }
 }
 
+void EventLogFilterManager::cancelFilter()
+{
+    uint64_t cancelCount = m_waitCancelCount.load(std::memory_order_relaxed);
+    if (cancelCount > 0)
+    {
+        std::lock_guard<std::mutex> l(m_cancelMetux);
+        {
+            // delelte all waiting filters in m_filters to be processed
+            for (EventLogFilter::Ptr filter : m_waitCancelFilter) {
+                string cannelFilterID = filter->getParams()->getFilterID();
+                for (auto it = m_filters.begin(); it != m_filters.end();)
+                {
+                    string filterID = (*it)->getParams()->getFilterID();
+                    if (filterID == cannelFilterID)
+                    {
+                        EVENT_LOG(TRACE) << LOG_BADGE("cancelFilter") << LOG_KV("filterID", filterID);
+                        m_filters.erase(it);
+                    } 
+                    else 
+                    {
+                        it++;
+                    }
+                }
+            }
+
+            m_waitCancelFilter.clear();
+            m_waitCancelCount = 0;
+        }
+    }
+}
+
 void EventLogFilterManager::executeFilters()
 {
     // event log filter and send response to client
@@ -223,7 +290,7 @@ void EventLogFilterManager::executeFilters()
     for (auto it = m_filters.begin(); it != m_filters.end();)
     {
         EventLogFilter::Ptr filter = *it;
-        EVENT_LOG(TRACE) << LOG_BADGE("executeFilters")
+        EVENT_LOG(TRACE) << LOG_BADGE("executeFilters") << LOG_KV("filterId", filter->getParams()->getFilterID())
                          << LOG_KV("groupID", filter->getParams()->getGroupID())
                          << LOG_KV("nextBlockToProcess", filter->getNextBlockToProcess())
                          << LOG_KV("startBlockNumber", filter->getParams()->getFromBlock())

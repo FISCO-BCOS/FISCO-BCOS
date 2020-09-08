@@ -45,6 +45,7 @@ enum ResponseCode
     INVALID_RESPONSE = -41004,
     REQUST_TIMEOUT = -41005,
     SDK_PERMISSION_DENIED = -41006,
+    NONEXISTENT_EVENT = -41007,
 };
 enum filter_status
 {
