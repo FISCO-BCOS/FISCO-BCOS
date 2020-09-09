@@ -41,6 +41,8 @@ const char* const CGP_METHOD_UPDATE_CM_WEIGHT = "updateCommitteeMemberWeight(add
 const char* const CGP_METHOD_UPDATE_CM_THRESHOLD = "updateThreshold(int256)";
 const char* const CGP_METHOD_QUERY_CM_THRESHOLD = "queryThreshold()";
 const char* const CGP_METHOD_QUERY_CM_WEIGHT = "queryCommitteeMemberWeight(address)";
+const char* const CGP_METHOD_QUERY_VOTES_OF_CM = "queryVotesOfMember(address)";
+const char* const CGP_METHOD_QUERY_VOTES_OF_THRESHOLD = "queryVotesOfThreshold()";
 
 const char* const CGP_METHOD_GRANT_OP = "grantOperator(address)";
 const char* const CGP_METHOD_REVOKE_OP = "revokeOperator(address)";
@@ -53,6 +55,8 @@ const char* const CGP_GET_ACCOUNT_STATUS = "getAccountStatus(address)";
 const char* const CGP_COMMITTEE_TABLE = "_sys_committee_votes_";
 const char* const CGP_COMMITTEE_TABLE_KEY = "key";
 const char* const CGP_COMMITTEE_TABLE_VALUE = "value";
+const char* const CGP_COMMITTEE_TABLE_GRANT = "grant";
+const char* const CGP_COMMITTEE_TABLE_REVOKE = "revoke";
 const char* const CGP_COMMITTEE_TABLE_ORIGIN = "origin";
 const char* const CGP_COMMITTEE_TABLE_BLOCKLIMIT = "block_limit";
 const char* const CGP_WEIGTH_SUFFIX = "_weight";
@@ -74,6 +78,9 @@ ChainGovernancePrecompiled::ChainGovernancePrecompiled()
     name2Selector[CGP_METHOD_LIST_CM] = getFuncSelector(CGP_METHOD_LIST_CM);
     name2Selector[CGP_METHOD_UPDATE_CM_WEIGHT] = getFuncSelector(CGP_METHOD_UPDATE_CM_WEIGHT);
     name2Selector[CGP_METHOD_UPDATE_CM_THRESHOLD] = getFuncSelector(CGP_METHOD_UPDATE_CM_THRESHOLD);
+    name2Selector[CGP_METHOD_QUERY_VOTES_OF_CM] = getFuncSelector(CGP_METHOD_QUERY_VOTES_OF_CM);
+    name2Selector[CGP_METHOD_QUERY_VOTES_OF_THRESHOLD] =
+        getFuncSelector(CGP_METHOD_QUERY_VOTES_OF_THRESHOLD);
     name2Selector[CGP_METHOD_GRANT_OP] = getFuncSelector(CGP_METHOD_GRANT_OP);
     name2Selector[CGP_METHOD_REVOKE_OP] = getFuncSelector(CGP_METHOD_REVOKE_OP);
     name2Selector[CGP_METHOD_LIST_OP] = getFuncSelector(CGP_METHOD_LIST_OP);
@@ -178,6 +185,18 @@ PrecompiledExecResult::Ptr ChainGovernancePrecompiled::call(
                 << LOG_KV("threshold", to_string(threshold)) << LOG_KV("return", result);
         } while (0);
         getErrorCodeOut(callResult->mutableExecResult(), result);
+    }
+    else if (func == name2Selector[CGP_METHOD_QUERY_VOTES_OF_CM])
+    {  // queryVotesOfMember(address);
+        Address member;
+        abi.abiOut(data, member);
+        auto resultJson = queryVotesOfMember(_context, member);
+        callResult->setExecResult(abi.abiIn("", resultJson));
+    }
+    else if (func == name2Selector[CGP_METHOD_QUERY_VOTES_OF_THRESHOLD])
+    {  // queryVotesOfThreshold();
+        auto resultJson = queryVotesOfThreshold(_context);
+        callResult->setExecResult(abi.abiIn("", resultJson));
     }
     else if (func == name2Selector[CGP_METHOD_LIST_CM])
     {  // listCommitteeMembers();
@@ -557,7 +576,7 @@ int ChainGovernancePrecompiled::verifyAndRecord(
     {
     case GrantCommitteeMember:
     {
-        auto value = "grant";
+        auto value = CGP_COMMITTEE_TABLE_GRANT;
         recordVote(_user, value, _origin);
         if (validate(_user, value, currentBlockNumber))
         {  // grant committee member
@@ -583,7 +602,7 @@ int ChainGovernancePrecompiled::verifyAndRecord(
     }
     case RevokeCommitteeMember:
     {
-        auto value = "revoke";
+        auto value = CGP_COMMITTEE_TABLE_REVOKE;
         recordVote(_user, value, _origin);
         if (validate(_user, value, currentBlockNumber))
         {  // grant committee member
@@ -691,6 +710,69 @@ string ChainGovernancePrecompiled::listOperators(
     }
     Json::FastWriter fastWriter;
     return fastWriter.write(AuthorityInfos);
+}
+
+string ChainGovernancePrecompiled::queryVotesOfMember(
+    shared_ptr<dev::blockverifier::ExecutiveContext> _context, const Address& _origin)
+{
+    Table::Ptr table = getCommitteeTable(_context);
+    auto condition = table->newCondition();
+    auto entries = table->select(_origin.hexPrefixed(), condition);
+    Json::Value voteInfo;
+    if (entries)
+    {
+        for (size_t i = 0; i < entries->size(); i++)
+        {
+            auto entry = entries->get(i);
+            if (!entry)
+                continue;
+            Json::Value vote;
+            vote[CGP_COMMITTEE_TABLE_ORIGIN] = entry->getField(CGP_COMMITTEE_TABLE_ORIGIN);
+            vote[CGP_COMMITTEE_TABLE_BLOCKLIMIT] = entry->getField(CGP_COMMITTEE_TABLE_BLOCKLIMIT);
+            voteInfo[entry->getField(CGP_COMMITTEE_TABLE_VALUE)].append(vote);
+        }
+    }
+    entries = table->select(_origin.hexPrefixed() + CGP_UPDATE_WEIGTH_SUFFIX, condition);
+    if (entries)
+    {
+        for (size_t i = 0; i < entries->size(); i++)
+        {
+            auto entry = entries->get(i);
+            if (!entry)
+                continue;
+            Json::Value vote;
+            vote[CGP_COMMITTEE_TABLE_ORIGIN] = entry->getField(CGP_COMMITTEE_TABLE_ORIGIN);
+            vote[CGP_COMMITTEE_TABLE_BLOCKLIMIT] = entry->getField(CGP_COMMITTEE_TABLE_BLOCKLIMIT);
+            voteInfo["update_weight"].append(vote);
+        }
+    }
+    Json::FastWriter fastWriter;
+    return fastWriter.write(voteInfo);
+}
+
+
+string ChainGovernancePrecompiled::queryVotesOfThreshold(
+    shared_ptr<dev::blockverifier::ExecutiveContext> _context)
+{
+    Table::Ptr table = getCommitteeTable(_context);
+    auto condition = table->newCondition();
+    auto entries = table->select(CGP_UPDATE_AUTH_THRESHOLD, condition);
+    Json::Value voteInfo;
+    if (entries)
+    {
+        for (size_t i = 0; i < entries->size(); i++)
+        {
+            auto entry = entries->get(i);
+            if (!entry)
+                continue;
+            Json::Value vote;
+            vote[CGP_COMMITTEE_TABLE_ORIGIN] = entry->getField(CGP_COMMITTEE_TABLE_ORIGIN);
+            vote[CGP_COMMITTEE_TABLE_BLOCKLIMIT] = entry->getField(CGP_COMMITTEE_TABLE_BLOCKLIMIT);
+            voteInfo[entry->getField(CGP_COMMITTEE_TABLE_VALUE)].append(vote);
+        }
+    }
+    Json::FastWriter fastWriter;
+    return fastWriter.write(voteInfo);
 }
 
 int ChainGovernancePrecompiled::grantTablePermission(
