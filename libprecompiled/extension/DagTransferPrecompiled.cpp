@@ -241,7 +241,7 @@ void DagTransferPrecompiled::userAddCall(dev::blockverifier::ExecutiveContext::P
         if (!table)
         {
             strErrorMsg = "openTable failed.";
-            ret = CODE_INVALID_OPENTALBLE_FAILED;
+            ret = CODE_INVALID_OPENTABLE_FAILED;
             break;
         }
 
@@ -307,7 +307,7 @@ void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::
         if (!table)
         {
             strErrorMsg = "openTable failed.";
-            ret = CODE_INVALID_OPENTALBLE_FAILED;
+            ret = CODE_INVALID_OPENTABLE_FAILED;
             break;
         }
 
@@ -315,7 +315,7 @@ void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::
         if (!entries.get() || (0u == entries->size()))
         {
             // If user is not exist, insert it. With this strategy, we can also add user by save
-            // opeation.
+            // operation.
 
             auto entry = table->newEntry();
             entry->setField(DAG_TRANSFER_FIELD_NAME, user);
@@ -395,7 +395,7 @@ void DagTransferPrecompiled::userDrawCall(dev::blockverifier::ExecutiveContext::
         if (!table)
         {
             strErrorMsg = "openTable failed.";
-            ret = CODE_INVALID_OPENTALBLE_FAILED;
+            ret = CODE_INVALID_OPENTABLE_FAILED;
             break;
         }
 
@@ -460,7 +460,7 @@ void DagTransferPrecompiled::userBalanceCall(dev::blockverifier::ExecutiveContex
         if (!table)
         {
             strErrorMsg = "openTable failed.";
-            ret = CODE_INVALID_OPENTALBLE_FAILED;
+            ret = CODE_INVALID_OPENTABLE_FAILED;
             break;
         }
 
@@ -522,7 +522,7 @@ void DagTransferPrecompiled::userTransferCall(
         if (!table)
         {
             strErrorMsg = "openTable failed.";
-            ret = CODE_INVALID_OPENTALBLE_FAILED;
+            ret = CODE_INVALID_OPENTABLE_FAILED;
             break;
         }
 

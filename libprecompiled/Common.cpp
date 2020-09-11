@@ -154,7 +154,7 @@ void dev::precompiled::checkNameValidate(const string& tableName, string& keyFie
                 if (throwStorageException)
                 {
                     BOOST_THROW_EXCEPTION(StorageException(
-                        CODE_TABLE_DUMPLICATE_FIELD, string("dumplicate field:") + valueField));
+                        CODE_TABLE_DUPLICATE_FIELD, string("dumplicate field:") + valueField));
                 }
                 else
                 {
