@@ -109,7 +109,7 @@ PrecompiledExecResult::Ptr TableFactoryPrecompiled::call(ExecutiveContext::Ptr c
         boost::trim(keyField);
         if (keyField.size() > (size_t)SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)
         {  // mysql TableName and fieldName length limit is 64
-            BOOST_THROW_EXCEPTION(StorageException(CODE_TABLE_FILED_LENGTH_OVERFLOW,
+            BOOST_THROW_EXCEPTION(StorageException(CODE_TABLE_FIELD_LENGTH_OVERFLOW,
                 std::string("table field name length overflow ") +
                     std::to_string(SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)));
         }
@@ -118,7 +118,7 @@ PrecompiledExecResult::Ptr TableFactoryPrecompiled::call(ExecutiveContext::Ptr c
             boost::trim(str);
             if (str.size() > (size_t)SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)
             {  // mysql TableName and fieldName length limit is 64
-                BOOST_THROW_EXCEPTION(StorageException(CODE_TABLE_FILED_LENGTH_OVERFLOW,
+                BOOST_THROW_EXCEPTION(StorageException(CODE_TABLE_FIELD_LENGTH_OVERFLOW,
                     std::string("table field name length overflow ") +
                         std::to_string(SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)));
             }
@@ -129,7 +129,7 @@ PrecompiledExecResult::Ptr TableFactoryPrecompiled::call(ExecutiveContext::Ptr c
         valueFiled = boost::join(fieldNameList, ",");
         if (valueFiled.size() > (size_t)SYS_TABLE_VALUE_FIELD_MAX_LENGTH)
         {
-            BOOST_THROW_EXCEPTION(StorageException(CODE_TABLE_FILED_TOTALLENGTH_OVERFLOW,
+            BOOST_THROW_EXCEPTION(StorageException(CODE_TABLE_FIELD_TOTALLENGTH_OVERFLOW,
                 std::string("total table field name length overflow ") +
                     std::to_string(SYS_TABLE_VALUE_FIELD_MAX_LENGTH)));
         }

@@ -205,7 +205,7 @@ void ContractLifeCyclePrecompiled::freeze(ExecutiveContext::Ptr context, bytesCo
     }
     else if (ContractStatus::Frozen == status)
     {
-        result = CODE_INVALID_CONTRACT_FEOZEN;
+        result = CODE_INVALID_CONTRACT_FROZEN;
     }
     else
     {
