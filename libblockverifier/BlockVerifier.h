@@ -89,7 +89,8 @@ public:
         m_pNumberHash = _pNumberHash;
     }
 
-    dev::executive::Executive::Ptr createAndInitExecutive();
+    dev::executive::Executive::Ptr createAndInitExecutive(
+        std::shared_ptr<executive::StateFace> _s, dev::executive::EnvInfo const& _envInfo);
     void setEvmFlags(VMFlagType const& _evmFlags) { m_evmFlags = _evmFlags; }
 
 private:

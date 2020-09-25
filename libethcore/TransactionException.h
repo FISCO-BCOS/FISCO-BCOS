@@ -65,6 +65,10 @@ enum class TransactionException : uint32_t
     TransactionRefused = 29,
     ContractFrozen = 30,
     AccountFrozen = 31,
+    WASMValidationFailuer = 32,
+    WASMArgumentOutOfRange = 33,
+    WASMUnreacheableInstruction = 34,
+    WASMTrap = 35,
     AlreadyKnown = 10000,  /// txPool related errors
     AlreadyInChain = 10001,
     InvalidChainId = 10002,

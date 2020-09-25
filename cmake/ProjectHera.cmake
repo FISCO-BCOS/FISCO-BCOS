@@ -7,10 +7,7 @@ if(NOT CARGO_COMMAND OR NOT RUSTUP_COMMAND)
 endif()
 
 execute_process(COMMAND rustup show OUTPUT_VARIABLE RUSTC_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
-set(RUSTC_VERSION_REQUIRED "1.45.0")
-if(APPLE)
-    set(RUSTC_VERSION_REQUIRED "1.44.1")
-endif()
+set(RUSTC_VERSION_REQUIRED "1.47.0")
 string(FIND ${RUSTC_VERSION} ${RUSTC_VERSION_REQUIRED} RUSTC_OK)
 if (${RUSTC_OK} EQUAL -1)
     message(STATUS "${RUSTC_VERSION}")
@@ -23,26 +20,27 @@ ExternalProject_Add(hera
         PREFIX ${CMAKE_SOURCE_DIR}/deps
         DOWNLOAD_NO_PROGRESS 1
         GIT_REPOSITORY https://github.com/bxq2011hust/hera.git
-        GIT_TAG 14cf1497faac3705b91b5dcff4b18c5a052d2f1d
+        GIT_SHALLOW true
+        GIT_TAG 1c285a2cd933834f6d87823d64a3e40a04c74fe3
         CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
                    -DBUILD_SHARED_LIBS=OFF
                    -DHERA_WASMER=ON
                    -DHERA_DEBUGGING=${DEBUG}
                    -DEVMC_ROOT=<INSTALL_DIR>
                    -DHUNTER_ROOT=${CMAKE_SOURCE_DIR}/deps/src/.hunter
-        # BUILD_COMMAND cmake --build . -- -j
         BUILD_IN_SOURCE 1
+        BUILD_COMMAND cmake --build . -- -j
         LOG_DOWNLOAD 1
         LOG_CONFIGURE 1
-        LOG_BUILD 0
+        LOG_BUILD 1
         LOG_INSTALL 1
-        BUILD_BYPRODUCTS <INSTALL_DIR>/lib/libevmone.a <INSTALL_DIR>/lib/libhera-buildinfo.a <INSTALL_DIR>/lib/libwasmer_runtime_c_api.a
+        BUILD_BYPRODUCTS <INSTALL_DIR>/lib/libevmone.a <INSTALL_DIR>/lib/libhera-buildinfo.a <INSTALL_DIR>/lib/libwasmer_c_api.a
 )
 
 ExternalProject_Get_Property(hera INSTALL_DIR)
 set(HERA_INCLUDE_DIRS ${INSTALL_DIR}/include)
 file(MAKE_DIRECTORY ${HERA_INCLUDE_DIRS})  # Must exist.
-set(HERA_LIBRARIES ${INSTALL_DIR}/lib/libhera.a ${INSTALL_DIR}/lib/libhera-buildinfo.a ${INSTALL_DIR}/lib/libwasmer_runtime_c_api.a)
+set(HERA_LIBRARIES ${INSTALL_DIR}/lib/libhera.a ${INSTALL_DIR}/lib/libhera-buildinfo.a ${INSTALL_DIR}/lib/libwasmer_c_api.a)
 if(DEBUG)
     set(HERA_LIBRARIES ${HERA_LIBRARIES} ${EVMC_INSTRUCTIONS_LIBRARIES})
 endif()

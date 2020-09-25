@@ -32,6 +32,8 @@
 #include <boost/timer.hpp>
 #include <numeric>
 
+#define EXECUTIVE_LOG(LEVEL) LOG(LEVEL) << "[EXECUTIVE]"
+
 using namespace std;
 using namespace dev;
 using namespace dev::eth;
@@ -158,8 +160,8 @@ void Executive::updateGas(std::shared_ptr<dev::precompiled::PrecompiledExecResul
     if (m_gas < gasUsed)
     {
         m_excepted = TransactionException::OutOfGas;
-        LOG(WARNING) << LOG_DESC("OutOfGas when executing precompiled Contract")
-                     << LOG_KV("gasUsed", gasUsed) << LOG_KV("curGas", m_gas);
+        EXECUTIVE_LOG(WARNING) << LOG_DESC("OutOfGas when executing precompiled Contract")
+                               << LOG_KV("gasUsed", gasUsed) << LOG_KV("curGas", m_gas);
         BOOST_THROW_EXCEPTION(dev::precompiled::PrecompiledException(
             "OutOfGas when executing precompiled Contract, gasUsed: " +
             boost::lexical_cast<std::string>(gasUsed) +
@@ -204,7 +206,7 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
                  m_envInfo.precompiledEngine()->isPrecompiled(_p.codeAddress))
         {
             m_gas = _p.gas;
-            LOG(TRACE) << "Execute Precompiled: " << _p.codeAddress;
+            EXECUTIVE_LOG(TRACE) << "Execute Precompiled: " << _p.codeAddress;
             auto callResult = m_envInfo.precompiledEngine()->call(
                 _p.codeAddress, _p.data, _origin, _p.senderAddress);
             size_t outputSize = callResult->execResult().size();
@@ -216,8 +218,8 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
             m_gas = _p.gas;
             if (m_s->frozen(_p.codeAddress))
             {
-                LOG(DEBUG) << LOG_DESC("execute transaction failed for ContractFrozen")
-                           << LOG_KV("contractAddr", _p.codeAddress);
+                EXECUTIVE_LOG(DEBUG) << LOG_DESC("execute transaction failed for ContractFrozen")
+                                     << LOG_KV("contractAddr", _p.codeAddress);
                 m_excepted = TransactionException::ContractFrozen;
             }
             else if (m_s->addressHasCode(_p.codeAddress))
@@ -260,8 +262,8 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
 
     if (g_BCOSConfig.version() >= V2_5_0 && m_t && m_s->frozen(_origin))
     {
-        LOG(DEBUG) << LOG_DESC("execute transaction failed for account frozen")
-                   << LOG_KV("account", _origin);
+        EXECUTIVE_LOG(DEBUG) << LOG_DESC("execute transaction failed for account frozen")
+                             << LOG_KV("account", _origin);
         writeErrInfoToOutput("Frozen account:0x" + _origin.hex());
         revert();
         m_excepted = TransactionException::AccountFrozen;
@@ -342,8 +344,8 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
     }
     else if (m_s->frozen(_p.codeAddress))
     {
-        LOG(DEBUG) << LOG_DESC("execute transaction failed for ContractFrozen")
-                   << LOG_KV("contractAddr", _p.codeAddress);
+        EXECUTIVE_LOG(DEBUG) << LOG_DESC("execute transaction failed for ContractFrozen")
+                             << LOG_KV("contractAddr", _p.codeAddress);
         writeErrInfoToOutput("Frozen contract:" + _p.codeAddress.hex());
         revert();
         m_excepted = TransactionException::ContractFrozen;
@@ -401,8 +403,8 @@ bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u2
     auto table = memoryTableFactory->openTable(SYS_TABLES);
     if (!table->checkAuthority(_origin))
     {
-        LOG(WARNING) << "Executive deploy contract checkAuthority of " << _origin.hex()
-                     << " failed!";
+        EXECUTIVE_LOG(WARNING) << "Executive deploy contract checkAuthority of " << _origin.hex()
+                               << " failed!";
         m_gas = 0;
         m_excepted = TransactionException::PermissionDenied;
         revert();
@@ -412,8 +414,8 @@ bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u2
 
     if (g_BCOSConfig.version() >= V2_5_0 && m_s->frozen(_origin))
     {
-        LOG(DEBUG) << LOG_DESC("deploy contract failed for account frozen")
-                   << LOG_KV("account", _origin);
+        EXECUTIVE_LOG(DEBUG) << LOG_DESC("deploy contract failed for account frozen")
+                             << LOG_KV("account", _origin);
         writeErrInfoToOutput("Frozen account:0x" + _origin.hex());
         m_gas = 0;
         revert();
@@ -437,7 +439,7 @@ bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u2
         (m_s->addressHasCode(m_newAddress) || m_s->getNonce(m_newAddress) > 0);
     if (accountAlreadyExist)
     {
-        LOG(TRACE) << "Executive Address already used: " << m_newAddress;
+        EXECUTIVE_LOG(TRACE) << "Executive Address already used: " << m_newAddress;
         m_gas = 0;
         m_excepted = TransactionException::AddressAlreadyUsed;
         revert();
@@ -463,14 +465,28 @@ bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u2
     if (!_init.empty())
     {
         auto codes = _init.toBytes();
-        auto callData = bytesConstRef();
+        auto callData = bytesConstRef(m_t->extraData().data(), m_t->extraData().size());
         if (hasWasmPreamble(codes))
         {
-            callData = bytesConstRef(m_t->extraData().data(),m_t->extraData().size());
+            auto result = m_gasInjector->InjectMeter(codes);
+            if (result.status == wasm::GasInjector::Status::Success)
+            {
+                result.byteCode->swap(codes);
+            }
+            else
+            {
+                revert();
+                m_ext = {};
+                m_excepted = result.status == wasm::GasInjector::Status::InvalidFormat ?
+                                 TransactionException::InvalidFormat :
+                                 TransactionException::BadInstruction;
+                EXECUTIVE_LOG(ERROR) << "wasm bytecode invalid or use unsupported opcode";
+                return !m_ext;
+            }
         }
         m_ext = make_shared<EVMHostContext>(m_s, m_envInfo, m_newAddress, _sender, _origin,
-            _endowment, _gasPrice, callData, codes, crypto::Hash(_init), m_depth,
-            true, false, m_enableFreeStorage);
+            _endowment, _gasPrice, callData, codes, crypto::Hash(_init), m_depth, true, false,
+            m_enableFreeStorage);
     }
     return !m_ext;
 }
@@ -478,15 +494,15 @@ bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u2
 void Executive::grantContractStatusManager(TableFactory::Ptr memoryTableFactory,
     Address const& newAddress, Address const& sender, Address const& origin)
 {
-    LOG(DEBUG) << LOG_DESC("grantContractStatusManager") << LOG_KV("contract", newAddress)
-               << LOG_KV("sender", sender) << LOG_KV("origin", origin);
+    EXECUTIVE_LOG(DEBUG) << LOG_DESC("grantContractStatusManager") << LOG_KV("contract", newAddress)
+                         << LOG_KV("sender", sender) << LOG_KV("origin", origin);
 
     std::string tableName = precompiled::getContractTableName(newAddress);
     auto table = memoryTableFactory->openTable(tableName);
 
     if (!table)
     {
-        LOG(ERROR) << LOG_DESC("grantContractStatusManager get newAddress table error!");
+        EXECUTIVE_LOG(ERROR) << LOG_DESC("grantContractStatusManager get newAddress table error!");
         return;
     }
 
@@ -495,8 +511,8 @@ void Executive::grantContractStatusManager(TableFactory::Ptr memoryTableFactory,
     entry->setField("key", "authority");
     entry->setField("value", origin.hex());
     table->insert("authority", entry);
-    LOG(DEBUG) << LOG_DESC("grantContractStatusManager add authoriy")
-               << LOG_KV("origin", origin.hex());
+    EXECUTIVE_LOG(DEBUG) << LOG_DESC("grantContractStatusManager add authoriy")
+                         << LOG_KV("origin", origin.hex());
 
     if (origin != sender)
     {
@@ -505,14 +521,15 @@ void Executive::grantContractStatusManager(TableFactory::Ptr memoryTableFactory,
         auto senderTable = memoryTableFactory->openTable(senderTableName);
         if (!senderTable)
         {
-            LOG(ERROR) << LOG_DESC("grantContractStatusManager get sender table error!");
+            EXECUTIVE_LOG(ERROR) << LOG_DESC("grantContractStatusManager get sender table error!");
             return;
         }
 
         auto entries = senderTable->select("authority", senderTable->newCondition());
         if (entries->size() == 0)
         {
-            LOG(ERROR) << LOG_DESC("grantContractStatusManager no sender authority is granted");
+            EXECUTIVE_LOG(ERROR) << LOG_DESC(
+                "grantContractStatusManager no sender authority is granted");
         }
         else
         {
@@ -526,8 +543,8 @@ void Executive::grantContractStatusManager(TableFactory::Ptr memoryTableFactory,
                     entry->setField("key", "authority");
                     entry->setField("value", authority);
                     table->insert("authority", entry);
-                    LOG(DEBUG) << LOG_DESC("grantContractStatusManager add authoriy")
-                               << LOG_KV("sender", authority);
+                    EXECUTIVE_LOG(DEBUG) << LOG_DESC("grantContractStatusManager add authoriy")
+                                         << LOG_KV("sender", authority);
                 }
             }
         }
@@ -551,9 +568,9 @@ bool Executive::go()
                 constexpr int64_t int64max = std::numeric_limits<int64_t>::max();
                 if (m_gas > int64max || m_ext->envInfo().gasLimit() > int64max)
                 {
-                    LOG(ERROR) << LOG_DESC("Gas overflow") << LOG_KV("gas", m_gas)
-                               << LOG_KV("gasLimit", m_ext->envInfo().gasLimit())
-                               << LOG_KV("max gas/gasLimit", int64max);
+                    EXECUTIVE_LOG(ERROR) << LOG_DESC("Gas overflow") << LOG_KV("gas", m_gas)
+                                         << LOG_KV("gasLimit", m_ext->envInfo().gasLimit())
+                                         << LOG_KV("max gas/gasLimit", int64max);
                     BOOST_THROW_EXCEPTION(GasOverflow());
                 }
                 assert(m_ext->depth() <= static_cast<size_t>(std::numeric_limits<int32_t>::max()));
@@ -569,9 +586,9 @@ bool Executive::go()
             };
             // Create VM instance.
             auto vmKind = VMKind::evmone;
-            if(hasWasmPreamble(m_ext->code()))
+            if (hasWasmPreamble(m_ext->code()))
             {
-                vmKind= VMKind::Hera;
+                vmKind = VMKind::Hera;
             }
             auto vm = VMFactory::create(vmKind);
             if (m_isCreation)
@@ -641,7 +658,7 @@ bool Executive::go()
         }
         catch (VMException const& _e)
         {
-            LOG(TRACE) << "Safe VM Exception. " << diagnostic_information(_e);
+            EXECUTIVE_LOG(TRACE) << "Safe VM Exception. " << diagnostic_information(_e);
             m_gas = 0;
             m_excepted = toTransactionException(_e);
             revert();
@@ -673,9 +690,9 @@ bool Executive::go()
         {
             using errinfo_evmcStatusCode =
                 boost::error_info<struct tag_evmcStatusCode, evmc_status_code>;
-            LOG(WARNING) << "Internal VM Error ("
-                         << *boost::get_error_info<errinfo_evmcStatusCode>(_e) << ")\n"
-                         << diagnostic_information(_e);
+            EXECUTIVE_LOG(WARNING) << "Internal VM Error ("
+                                   << *boost::get_error_info<errinfo_evmcStatusCode>(_e) << ")\n"
+                                   << diagnostic_information(_e);
             revert();
             exit(1);
         }
@@ -683,8 +700,9 @@ bool Executive::go()
         {
             // TODO: AUDIT: check that this can never reasonably happen. Consider what to do if it
             // does.
-            LOG(ERROR) << "Unexpected exception in VM. There may be a bug in this implementation. "
-                       << diagnostic_information(_e);
+            EXECUTIVE_LOG(ERROR)
+                << "Unexpected exception in VM. There may be a bug in this implementation. "
+                << diagnostic_information(_e);
             exit(1);
             // Another solution would be to reject this transaction, but that also
             // has drawbacks. Essentially, the amount of ram has to be increased here.
@@ -693,7 +711,8 @@ bool Executive::go()
         {
             // TODO: AUDIT: check that this can never reasonably happen. Consider what to do if it
             // does.
-            LOG(ERROR) << "Unexpected std::exception in VM. Not enough RAM? " << _e.what();
+            EXECUTIVE_LOG(ERROR) << "Unexpected std::exception in VM. Not enough RAM? "
+                                 << _e.what();
             exit(1);
             // Another solution would be to reject this transaction, but that also
             // has drawbacks. Essentially, the amount of ram has to be increased here.
@@ -744,7 +763,7 @@ void Executive::revert()
 
 void Executive::parseEVMCResult(std::shared_ptr<eth::Result> _result)
 {
-    //FIXME: if EVMC_REJECTED, then use default vm to run. maybe wasm call evm need this
+    // FIXME: if EVMC_REJECTED, then use default vm to run. maybe wasm call evm need this
     auto outputRef = _result->output();
     switch (_result->status())
     {
@@ -809,7 +828,7 @@ void Executive::parseEVMCResult(std::shared_ptr<eth::Result> _result)
     case EVMC_INVALID_MEMORY_ACCESS:
     {
         m_gas = 0;
-        LOG(WARNING) << LOG_DESC("VM error, BufferOverrun");
+        EXECUTIVE_LOG(WARNING) << LOG_DESC("VM error, BufferOverrun");
         m_excepted = TransactionException::Unknown;
         revert();
         // BOOST_THROW_EXCEPTION(BufferOverrun());
@@ -818,10 +837,24 @@ void Executive::parseEVMCResult(std::shared_ptr<eth::Result> _result)
     case EVMC_STATIC_MODE_VIOLATION:
     {
         m_gas = 0;
-        LOG(WARNING) << LOG_DESC("VM error, DisallowedStateChange");
+        EXECUTIVE_LOG(WARNING) << LOG_DESC("VM error, DisallowedStateChange");
         m_excepted = TransactionException::Unknown;
         revert();
         // BOOST_THROW_EXCEPTION(DisallowedStateChange());
+        break;
+    }
+    case EVMC_CONTRACT_VALIDATION_FAILURE:
+    {  // FIXME: deal with compatibility
+        EXECUTIVE_LOG(WARNING) << LOG_DESC("WASM Argument Out Of Range");
+        m_excepted = TransactionException::WASMValidationFailuer;
+        revert();
+        break;
+    }
+    case EVMC_WASM_UNREACHABLE_INSTRUCTION:
+    {  // FIXME: deal with compatibility
+        EXECUTIVE_LOG(WARNING) << LOG_DESC("WASM Unreacheable Instruction");
+        m_excepted = TransactionException::WASMUnreacheableInstruction;
+        revert();
         break;
     }
     case EVMC_INTERNAL_ERROR:
@@ -844,10 +877,10 @@ void Executive::loggingException()
 {
     if (m_excepted != TransactionException::None)
     {
-        LOG(ERROR) << LOG_BADGE("TxExeError") << LOG_DESC("Transaction execution error")
-                   << LOG_KV("TransactionExceptionID", (uint32_t)m_excepted)
-                   << LOG_KV("hash", (m_t->hasSignature()) ? toHex(m_t->hash()) : "call")
-                   << m_exceptionReason.str();
+        EXECUTIVE_LOG(ERROR) << LOG_BADGE("TxExeError") << LOG_DESC("Transaction execution error")
+                             << LOG_KV("TransactionExceptionID", (uint32_t)m_excepted)
+                             << LOG_KV("hash", (m_t->hasSignature()) ? toHex(m_t->sha3()) : "call")
+                             << m_exceptionReason.str();
     }
 }
 

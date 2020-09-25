@@ -237,16 +237,16 @@ LOG_INFO "All completed. Files in ${output_dir}"
 }
 
 check_env() {
-    [ ! -z "$(openssl version | grep 1.0.2)" ] || [ ! -z "$(openssl version | grep 1.1)" ] || [ ! -z "$(openssl version | grep reSSL)" ] || {
+    if [ "$(uname)" == "Darwin" ];then
+        export PATH="/usr/local/opt/openssl/bin:$PATH"
+        macOS="macOS"
+    fi
+    [ ! -z "$(openssl version | grep 1.0.2)" ] || [ ! -z "$(openssl version | grep 1.1)" ] || {
         echo "please install openssl!"
         #echo "download openssl from https://www.openssl.org."
         echo "use \"openssl version\" command to check."
         exit 1
     }
-    if [ "$(uname)" == "Darwin" ];then
-        export PATH="/usr/local/opt/openssl/bin:$PATH"
-        macOS="macOS"
-    fi
     if [ "$(uname -m)" != "x86_64" ];then
         x86_64_arch="false"
     fi

@@ -19,16 +19,6 @@
 # (c) 2016-2018 fisco-dev contributors.
 #------------------------------------------------------------------------------
 
-# common settings
-set(ETH_CMAKE_DIR ${CMAKE_CURRENT_LIST_DIR})
-set(ETH_SCRIPTS_DIR ${ETH_CMAKE_DIR}/scripts)
-
-set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
-
-if("${CMAKE_SIZEOF_VOID_P}" STREQUAL "4")
-    message(FATAL_ERROR "The ${PROJECT_NAME} does not support compiling on 32-bit systems")
-endif()
-
 if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang"))
     find_program(CCACHE_PROGRAM ccache)
     if(CCACHE_PROGRAM)
@@ -96,11 +86,10 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
 
     # Additional GCC-specific compiler settings.
     if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
-        # Check that we've got GCC 5.4 or newer.
         execute_process(
             COMMAND ${CMAKE_CXX_COMPILER} -dumpversion OUTPUT_VARIABLE GCC_VERSION)
-        if (NOT (GCC_VERSION VERSION_GREATER 5.4 OR GCC_VERSION VERSION_EQUAL 5.4))
-            message(FATAL_ERROR "${PROJECT_NAME} requires g++ 5.4 or greater. Current is ${GCC_VERSION}")
+        if (NOT (GCC_VERSION VERSION_GREATER 7.0 OR GCC_VERSION VERSION_EQUAL 7.0))
+            message(FATAL_ERROR "${PROJECT_NAME} requires g++ 7.0 or greater. Current is ${GCC_VERSION}")
         endif ()
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${MARCH_TYPE}")
         set(CMAKE_C_FLAGS "-std=c99 ${CMAKE_C_FLAGS} ${MARCH_TYPE}")
