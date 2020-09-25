@@ -247,7 +247,6 @@ check_env() {
         echo "use \"openssl version\" command to check."
         exit 1
     }
-
     if [ "$(uname -m)" != "x86_64" ];then
         x86_64_arch="false"
     fi

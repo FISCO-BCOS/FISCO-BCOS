@@ -15,6 +15,7 @@
 #pragma once
 
 #include "Common.h"
+#include "libmetering/GasInjector.h"
 #include <libethcore/BlockHeader.h>
 #include <libethcore/Common.h>
 #include <libethcore/EVMFlags.h>
@@ -76,9 +77,12 @@ public:
     /// Simple constructor; executive will operate on given state, with the given environment info.
     Executive(std::shared_ptr<StateFace> _s, dev::executive::EnvInfo const& _envInfo,
         bool _freeStorage = false, unsigned _level = 0)
-      : m_s(_s), m_envInfo(_envInfo), m_depth(_level), m_enableFreeStorage(_freeStorage)
+      : m_s(_s),
+        m_envInfo(_envInfo),
+        m_depth(_level),
+        m_enableFreeStorage(_freeStorage),
+        m_gasInjector(std::make_shared<wasm::GasInjector>(wasm::GetInstructionTable()))
     {}
-
 
     // template <typename T>
     // Executive(T _s, dev::executive::EnvInfo const& _envInfo, unsigned _level = 0)
@@ -239,6 +243,7 @@ private:
 
     // determine whether the freeStorageVMSchedule enabled or not
     bool m_enableFreeStorage = false;
+    std::shared_ptr<wasm::GasInjector> m_gasInjector;
 };
 
 }  // namespace executive

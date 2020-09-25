@@ -62,6 +62,7 @@ include(ProjectEVMC)
 include(ProjectVRF)
 include(ProjectEVMONE)
 include(ProjectHera)
+include(ProjectWABT)
 
 
 include_directories("${CMAKE_SOURCE_DIR}")
@@ -90,6 +91,7 @@ add_subdirectory(librpc)
 add_subdirectory(libinitializer)
 add_subdirectory(libsecurity)
 add_subdirectory(libeventfilter)
+add_subdirectory(libmetering)
 # generate executable binary fisco-bcos
 add_subdirectory(fisco-bcos)
 

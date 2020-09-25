@@ -32,6 +32,8 @@
 #include <boost/timer.hpp>
 #include <numeric>
 
+#define EXECUTIVE_LOG(LEVEL) LOG(LEVEL) << "[EXECUTIVE]"
+
 using namespace std;
 using namespace dev;
 using namespace dev::eth;
@@ -463,14 +465,28 @@ bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u2
     if (!_init.empty())
     {
         auto codes = _init.toBytes();
-        auto callData = bytesConstRef();
+        auto callData = bytesConstRef(m_t->extraData().data(), m_t->extraData().size());
         if (hasWasmPreamble(codes))
         {
-            callData = bytesConstRef(m_t->extraData().data(),m_t->extraData().size());
+            auto result = m_gasInjector->InjectMeter(codes);
+            if (result.status == wasm::GasInjector::Status::Success)
+            {
+                result.byteCode->swap(codes);
+            }
+            else
+            {
+                revert();
+                m_ext = {};
+                m_excepted = result.status == wasm::GasInjector::Status::InvalidFormat ?
+                                 TransactionException::InvalidFormat :
+                                 TransactionException::BadInstruction;
+                EXECUTIVE_LOG(ERROR) << "wasm bytecode invalid or use unsupported opcode";
+                return !m_ext;
+            }
         }
         m_ext = make_shared<EVMHostContext>(m_s, m_envInfo, m_newAddress, _sender, _origin,
-            _endowment, _gasPrice, callData, codes, crypto::Hash(_init), m_depth,
-            true, false, m_enableFreeStorage);
+            _endowment, _gasPrice, callData, codes, crypto::Hash(_init), m_depth, true, false,
+            m_enableFreeStorage);
     }
     return !m_ext;
 }
@@ -570,9 +586,9 @@ bool Executive::go()
             };
             // Create VM instance.
             auto vmKind = VMKind::evmone;
-            if(hasWasmPreamble(m_ext->code()))
+            if (hasWasmPreamble(m_ext->code()))
             {
-                vmKind= VMKind::Hera;
+                vmKind = VMKind::Hera;
             }
             auto vm = VMFactory::create(vmKind);
             if (m_isCreation)
@@ -747,7 +763,7 @@ void Executive::revert()
 
 void Executive::parseEVMCResult(std::shared_ptr<eth::Result> _result)
 {
-    //FIXME: if EVMC_REJECTED, then use default vm to run. maybe wasm call evm need this
+    // FIXME: if EVMC_REJECTED, then use default vm to run. maybe wasm call evm need this
     auto outputRef = _result->output();
     switch (_result->status())
     {
@@ -825,6 +841,20 @@ void Executive::parseEVMCResult(std::shared_ptr<eth::Result> _result)
         m_excepted = TransactionException::Unknown;
         revert();
         // BOOST_THROW_EXCEPTION(DisallowedStateChange());
+        break;
+    }
+    case EVMC_CONTRACT_VALIDATION_FAILURE:
+    {  // FIXME: deal with compatibility
+        EXECUTIVE_LOG(WARNING) << LOG_DESC("WASM Argument Out Of Range");
+        m_excepted = TransactionException::WASMValidationFailuer;
+        revert();
+        break;
+    }
+    case EVMC_WASM_UNREACHABLE_INSTRUCTION:
+    {  // FIXME: deal with compatibility
+        EXECUTIVE_LOG(WARNING) << LOG_DESC("WASM Unreacheable Instruction");
+        m_excepted = TransactionException::WASMUnreacheableInstruction;
+        revert();
         break;
     }
     case EVMC_INTERNAL_ERROR:

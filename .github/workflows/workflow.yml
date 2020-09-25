@@ -38,11 +38,11 @@ jobs:
         id: cache
         with:
           path: deps/src
-          key: deps-v7-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: deps-v8-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            deps-v7-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            deps-v7-${{ runner.temp }}-${{ github.base_ref }}-
-            deps-v7-${{ runner.temp }}-
+            deps-v8-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            deps-v8-${{ runner.temp }}-${{ github.base_ref }}-
+            deps-v8-${{ runner.temp }}-
       - uses: actions/cache@v2
         id: ccache
         with:
@@ -56,12 +56,12 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           brew install openssl@1.1 ccache gmp
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.44.1
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.47.0
       - name: install Ubuntu dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt install -y git curl build-essential clang cmake libssl-dev zlib1g-dev ccache libgmp-dev flex bison patch
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.45.0
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.47.0
       - name: configure
         run: source $HOME/.cargo/env && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DTESTS=ON .
       - name: compile
@@ -79,12 +79,12 @@ jobs:
         id: cache
         with:
           path: deps/src
-          key: deps-v4-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: deps-v5-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            deps-v4-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            deps-v4-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            deps-v4-notest-${{ runner.temp }}-
-            deps-v4-${{ runner.temp }}-
+            deps-v5-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            deps-v5-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            deps-v5-notest-${{ runner.temp }}-
+            deps-v5-${{ runner.temp }}-
       - uses: actions/cache@v2
         id: ccache
         with:
@@ -99,7 +99,7 @@ jobs:
       - name: install rust language
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: 1.44.1
+          toolchain: 1.47.0
           override: true
       - name: configure
         run: source $HOME/.cargo/env && cmake .
@@ -125,12 +125,12 @@ jobs:
         id: cache
         with:
           path: deps/src
-          key: deps-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: deps-v4-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            deps-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            deps-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            deps-v3-notest-${{ runner.temp }}-
-            deps-v3-${{ runner.temp }}-
+            deps-v4-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            deps-v4-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            deps-v4-notest-${{ runner.temp }}-
+            deps-v4-${{ runner.temp }}-
       - uses: actions/cache@v2
         id: ccache
         with:
@@ -143,12 +143,14 @@ jobs:
       - name: install rust language
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: 1.45.0
+          toolchain: 1.47.0
           override: true
       - name: install ubuntu dependencies
         run: sudo apt install -y git curl build-essential clang cmake openssl libssl-dev zlib1g-dev ccache libgmp-dev flex bison
+      - name: install gcc 7
+        run: sudo apt install -y software-properties-common && sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test && sudo apt-get update && sudo apt-get install g++-7 gcc-7 -y
       - name: configure
-        run: source $HOME/.cargo/env && cmake .
+        run: source $HOME/.cargo/env && CC=/usr/bin/gcc-7 CXX=/usr/bin/g++-7 cmake .
       - name: compile
         run: make -j2
       - name: run integration testing
@@ -183,10 +185,10 @@ jobs:
       - name: install rust language
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: 1.45.0
+          toolchain: 1.47.0
           override: true
       - name: install ubuntu dependencies
-        run: sudo apt install -y git curl build-essential clang cmake openssl libssl-dev zlib1g-dev ccache libgmp-dev flex bison
+        run: sudo apt install -y git curl build-essential clang cmake openssl libssl-dev zlib1g-dev ccache libgmp-dev flex bison libtool
       - name: configure
         run: source $HOME/.cargo/env && cmake . -DBUILD_STATIC=ON
       - name: compile
