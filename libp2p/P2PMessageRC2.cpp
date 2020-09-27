@@ -112,7 +112,7 @@ ssize_t P2PMessageRC2::decode(const byte* buffer, size_t size)
     }
 
     m_cache->clear();
-    m_cache->insert(m_cache->end(), buffer, buffer + size);
+    m_cache->insert(m_cache->end(), buffer, buffer + m_length);
 
     /// get version
     offset += sizeof(m_length);
