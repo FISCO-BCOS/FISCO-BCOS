@@ -354,6 +354,8 @@ public:
 
     void clearNodeTransactionMarker() { m_nodeTransactionMarker.clear(); }
 
+    std::shared_ptr<crypto::Signature> vrs() { return m_vrs; }
+
 protected:
     static bool isZeroSignature(u256 const& _r, u256 const& _s) { return !_r && !_s; }
 
