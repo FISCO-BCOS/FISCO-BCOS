@@ -107,9 +107,9 @@ public:
 
     // block part
     Json::Value getBlockByHash(
-        int _groupID, const std::string& _blockHash, bool _includeTransactions) override;
+        int _groupID, const std::string& _blockHash, bool _includeAllData) override;
     Json::Value getBlockByNumber(
-        int _groupID, const std::string& _blockNumber, bool _includeTransactions) override;
+        int _groupID, const std::string& _blockNumber, bool _includeAllData) override;
 
     Json::Value getBlockHeaderByNumber(
         int _groupID, const std::string& _blockNumber, bool _includeSigList = false) override;
@@ -243,6 +243,9 @@ private:
 
     void parseReceiptIntoResponse(Json::Value& _response, dev::bytesConstRef _input,
         dev::eth::LocalisedTransactionReceipt::Ptr _receipt);
+
+    void parseSignatureIntoResponse(
+        Json::Value& _response, dev::eth::Block::SigListPtrType _signatureList);
 };
 
 }  // namespace rpc
