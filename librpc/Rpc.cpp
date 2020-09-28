@@ -1319,7 +1319,8 @@ Json::Value Rpc::getTransactionByHashWithProof(int _groupID, const std::string& 
         auto tx = blockchain->getTransactionByHashWithProof(hash);
 
         auto transaction = tx.first;
-        if (transaction->blockNumber() == INVALIDNUMBER)
+
+        if (!transaction || transaction->blockNumber() == INVALIDNUMBER)
         {
             return Json::nullValue;
         }
@@ -1382,8 +1383,11 @@ Json::Value Rpc::getTransactionReceiptByHashWithProof(
         dev::eth::LocalisedTransaction transaction;
         auto receipt = blockchain->getTransactionReceiptByHashWithProof(hash, transaction);
         auto txReceipt = receipt.first;
-        if (txReceipt->blockNumber() == INVALIDNUMBER || transaction.blockNumber() == INVALIDNUMBER)
+        if (!txReceipt || txReceipt->blockNumber() == INVALIDNUMBER ||
+            transaction.blockNumber() == INVALIDNUMBER)
+        {
             return Json::nullValue;
+        }
 
         Json::Value receiptResponse;
         parseReceiptIntoResponse(receiptResponse, ref(transaction.data()), txReceipt);
@@ -1909,6 +1913,10 @@ void Rpc::parseTransactionIntoResponse(Json::Value& _response, dev::h256 const& 
     _response["hash"] = toJS(_tx->sha3());
 
     // the signature
+    if (!_tx->vrs())
+    {
+        return;
+    }
     Json::Value signatureResponse;
     signatureResponse["r"] = toJS(_tx->vrs()->r);
     signatureResponse["s"] = toJS(_tx->vrs()->s);
