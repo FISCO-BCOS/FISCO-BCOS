@@ -31,27 +31,6 @@ namespace dev
 {
 namespace rpc
 {
-Json::Value toJson(
-    Transaction const& _t, std::pair<h256, unsigned> _location, BlockNumber _blockNumber)
-{
-    Json::Value res;
-    if (_t)
-    {
-        res["hash"] = toJS(_t.sha3());
-        res["input"] = toJS(_t.data());
-        res["to"] = _t.isCreation() ? Json::Value() : toJS(_t.receiveAddress());
-        res["from"] = toJS(_t.safeSender());
-        res["gas"] = toJS(_t.gas());
-        res["gasPrice"] = toJS(_t.gasPrice());
-        res["nonce"] = toJS(_t.nonce());
-        res["value"] = toJS(_t.value());
-        res["blockHash"] = toJS(_location.first);
-        res["transactionIndex"] = toJS(_location.second);
-        res["blockNumber"] = toJS(_blockNumber);
-    }
-    return res;
-}
-
 TransactionSkeleton toTransactionSkeleton(Json::Value const& _json)
 {
     TransactionSkeleton ret;

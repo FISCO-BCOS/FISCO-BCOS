@@ -131,7 +131,6 @@ public:
     {
         m_blockNumber = 0;
         m_totalTransactionCount = 0;
-        blockHash = h256("0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e");
         blockHeader.setNumber(m_blockNumber);
         blockHeader.setParentHash(h256(0x1));
         blockHeader.setLogBloom(h2048(0x2));
@@ -144,7 +143,8 @@ public:
         blockHeader.setGasLimit(u256(9));
         blockHeader.setGasUsed(u256(8));
         blockHeader.setTimestamp(9);
-
+        blockHash = blockHeader.hash();
+        std::cout << "* MockBlockChain, genesis block hash is " << toHex(blockHash);
         createTransaction();
         std::shared_ptr<Transaction> p_tx = std::make_shared<Transaction>(transaction);
         transactions = std::make_shared<Transactions>();
@@ -257,6 +257,8 @@ public:
         RLP rlpObj(rlpBytes);
         bytesConstRef d = rlpObj.data();
         transaction = Transaction(d, eth::CheckTransaction::Everything);
+        std::cout << "* MockBlockChain: hash of the transaction: " << transaction.sha3()
+                  << std::endl;
     }
     dev::h256 numberHash(int64_t) override { return blockHash; }
 
@@ -281,8 +283,7 @@ public:
     dev::eth::LocalisedTransactionReceipt::Ptr getLocalisedTxReceiptByHash(
         dev::h256 const& _txHash) override
     {
-        if (_txHash ==
-            jsToFixed<32>("0x7536cf1286b5ce6c110cd4fea5c891467884240c9af366d678eb4191e1c31c6f"))
+        if (_txHash == transaction.sha3())
         {
             auto tx = getLocalisedTxByHash(_txHash);
             auto txReceipt = getTransactionReceiptByHash(_txHash);
