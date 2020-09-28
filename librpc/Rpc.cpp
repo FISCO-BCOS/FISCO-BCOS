@@ -554,14 +554,13 @@ Json::Value Rpc::getGroupList()
 }
 
 
-Json::Value Rpc::getBlockByHash(
-    int _groupID, const std::string& _blockHash, bool _includeTransactions)
+Json::Value Rpc::getBlockByHash(int _groupID, const std::string& _blockHash, bool _includeAllData)
 {
     try
     {
         RPC_LOG(INFO) << LOG_BADGE("getBlockByHash") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID) << LOG_KV("blockHash", _blockHash)
-                      << LOG_KV("includeTransaction", _includeTransactions);
+                      << LOG_KV("includeAllData", _includeAllData);
 
         auto blockchain = ledgerManager()->blockChain(_groupID);
         checkLedgerStatus(blockchain, "blockchain", "getBlockByHash");
@@ -579,7 +578,7 @@ Json::Value Rpc::getBlockByHash(
         response["transactions"] = Json::Value(Json::arrayValue);
         for (unsigned i = 0; i < transactions->size(); i++)
         {
-            if (_includeTransactions)
+            if (_includeAllData)
             {
                 Json::Value transactionResponse;
                 parseTransactionIntoResponse(transactionResponse, block->blockHeader().hash(),
@@ -591,7 +590,12 @@ Json::Value Rpc::getBlockByHash(
                 response["transactions"].append(toJS((*transactions)[i]->sha3()));
             }
         }
-
+        if (_includeAllData)
+        {
+            Json::Value signatureListResponse;
+            parseSignatureIntoResponse(signatureListResponse, block->sigList());
+            response["signatureList"] = signatureListResponse;
+        }
         return response;
     }
     catch (JsonRpcException& e)
@@ -643,14 +647,9 @@ void Rpc::generateBlockHeaderInfo(Json::Value& _response, dev::eth::BlockHeader 
         return;
     }
     // signature list
-    _response["signatureList"] = Json::Value(Json::arrayValue);
-    for (auto const& signature : *(_signatureList))
-    {
-        Json::Value sigJsonObj;
-        sigJsonObj["index"] = toJS(signature.first);
-        sigJsonObj["signature"] = toJS(signature.second);
-        _response["signatureList"].append(sigJsonObj);
-    }
+    Json::Value signatureListResponse;
+    parseSignatureIntoResponse(signatureListResponse, _signatureList);
+    _response["signatureList"] = signatureListResponse;
 }
 
 Json::Value Rpc::getBlockHeaderByNumber(
@@ -722,13 +721,13 @@ Json::Value Rpc::getBlockHeaderByHash(
 
 
 Json::Value Rpc::getBlockByNumber(
-    int _groupID, const std::string& _blockNumber, bool _includeTransactions)
+    int _groupID, const std::string& _blockNumber, bool _includeAllData)
 {
     try
     {
         RPC_LOG(INFO) << LOG_BADGE("getBlockByNumber") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID) << LOG_KV("blockNumber", _blockNumber)
-                      << LOG_KV("includeTransaction", _includeTransactions);
+                      << LOG_KV("includeAllData", _includeAllData);
 
         auto blockchain = ledgerManager()->blockChain(_groupID);
         checkLedgerStatus(blockchain, "blockchain", "getBlockByNumber");
@@ -747,7 +746,7 @@ Json::Value Rpc::getBlockByNumber(
         response["transactions"] = Json::Value(Json::arrayValue);
         for (unsigned i = 0; i < transactions->size(); i++)
         {
-            if (_includeTransactions)
+            if (_includeAllData)
             {
                 Json::Value transactionResponse;
                 parseTransactionIntoResponse(transactionResponse, block->blockHeader().hash(),
@@ -757,7 +756,12 @@ Json::Value Rpc::getBlockByNumber(
             else
                 response["transactions"].append(toJS((*transactions)[i]->sha3()));
         }
-
+        if (_includeAllData)
+        {
+            Json::Value signatureListResponse;
+            parseSignatureIntoResponse(signatureListResponse, block->sigList());
+            response["signatureList"] = signatureListResponse;
+        }
         return response;
     }
     catch (JsonRpcException& e)
@@ -1880,7 +1884,7 @@ bool Rpc::checkParamsForGenerateGroup(
 }
 
 void Rpc::parseTransactionIntoResponse(Json::Value& _response, dev::h256 const& _blockHash,
-    int64_t _blockNumber, int64_t _txIndex, Transaction::Ptr _tx, bool onChain)
+    int64_t _blockNumber, int64_t _txIndex, Transaction::Ptr _tx, bool _onChain)
 {
     /// the fields that required when calculate transaction hash
     // transaction nonce
@@ -1901,7 +1905,7 @@ void Rpc::parseTransactionIntoResponse(Json::Value& _response, dev::h256 const& 
     // the extraData
     _response["extraData"] = toJS(_tx->extraData());
     // the fields that are useful for the users
-    if (onChain)
+    if (_onChain)
     {
         // these fields are only displayed when the transactions commit to the blockchain
         _response["blockHash"] = toJS(_blockHash);
@@ -1971,4 +1975,22 @@ void Rpc::parseReceiptIntoResponse(Json::Value& _response, dev::bytesConstRef _i
     _response["from"] = toJS(_receipt->from());
     _response["to"] = toJS(_receipt->to());
     _response["input"] = toJS(_input);
+}
+
+void Rpc::parseSignatureIntoResponse(
+    Json::Value& _response, dev::eth::Block::SigListPtrType _signatureList)
+{
+    if (!_signatureList)
+    {
+        return;
+    }
+    _response = Json::Value(Json::arrayValue);
+    // signature list
+    for (auto const& signature : *(_signatureList))
+    {
+        Json::Value sigJsonObj;
+        sigJsonObj["index"] = toJS(signature.first);
+        sigJsonObj["signature"] = toJS(signature.second);
+        _response.append(sigJsonObj);
+    }
 }
