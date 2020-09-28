@@ -1005,7 +1005,7 @@ BlockChainImp::getTransactionByHashWithProof(dev::h256 const& _txHash)
         BOOST_THROW_EXCEPTION(
             MethodNotSupport() << errinfo_comment("method not support in this version"));
     }
-    auto tx = std::make_shared<dev::eth::LocalisedTransaction>();
+    auto tx = std::make_shared<dev::eth::LocalisedTransaction>(Transaction(), h256(0), -1, -1);
     std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>> merkleProof;
     std::pair<std::shared_ptr<dev::eth::Block>, std::string> blockInfoWithTxIndex;
     if (!getBlockAndIndexByTxHash(_txHash, blockInfoWithTxIndex))
@@ -1160,14 +1160,13 @@ BlockChainImp::getTransactionReceiptByHashWithProof(
         BOOST_THROW_EXCEPTION(
             MethodNotSupport() << errinfo_comment("method not support in this version"));
     }
-
+    auto emptyReceipt = std::make_shared<LocalisedTransactionReceipt>(
+        TransactionReceipt(), h256(0), h256(0), -1, Address(), Address(), -1, 0);
     if (!getBlockAndIndexByTxHash(_txHash, blockInfoWithTxIndex))
     {
         BLOCKCHAIN_LOG(ERROR) << LOG_DESC("get block info  failed")
                               << LOG_KV("_txHash", _txHash.hex());
-        return std::make_pair(std::make_shared<dev::eth::LocalisedTransactionReceipt>(
-                                  eth::TransactionException::None),
-            merkleProof);
+        return std::make_pair(emptyReceipt, merkleProof);
     }
     auto txIndex = blockInfoWithTxIndex.second;
     auto blockInfo = blockInfoWithTxIndex.first;
@@ -1178,9 +1177,7 @@ BlockChainImp::getTransactionReceiptByHashWithProof(
         (txs->size() <= lexical_cast<uint>(txIndex)))
     {
         BLOCKCHAIN_LOG(ERROR) << LOG_DESC("txindex is invalidate ") << LOG_KV("txIndex", txIndex);
-        return std::make_pair(std::make_shared<dev::eth::LocalisedTransactionReceipt>(
-                                  eth::TransactionException::None),
-            merkleProof);
+        return std::make_pair(emptyReceipt, merkleProof);
     }
 
     auto receipt = (*receipts)[lexical_cast<uint>(txIndex)];
