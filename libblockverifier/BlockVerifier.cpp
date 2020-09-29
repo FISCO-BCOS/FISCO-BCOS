@@ -361,7 +361,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
             for (size_t i = 0; i < receipts->size(); ++i)
             {
                 BLOCKVERIFIER_LOG(ERROR) << LOG_BADGE("FISCO_DEBUG") << LOG_KV("index", i)
-                                         << LOG_KV("hash", block.transaction(i)->sha3())
+                                         << LOG_KV("hash", block.transaction(i)->hash())
                                          << ",receipt=" << *receipts->at(i);
             }
 #endif

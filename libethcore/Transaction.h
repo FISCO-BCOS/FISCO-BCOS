@@ -211,8 +211,8 @@ public:
         return out;
     }
 
-    /// @returns the SHA3 hash of the RLP serialisation of this transaction.
-    h256 sha3(IncludeSignature _sig = WithSignature) const;
+    /// @returns the hash of the RLP serialisation of this transaction.
+    h256 hash(IncludeSignature _sig = WithSignature) const;
 
     /// @returns the amount of ETH to be transferred by this (message-call)
     /// transaction, in Wei. Synonym for endowment().
@@ -417,7 +417,7 @@ using Transactions = std::vector<Transaction::Ptr>;
 /// Simple human-readable stream-shift operator.
 inline std::ostream& operator<<(std::ostream& _out, Transaction const& _t)
 {
-    _out << _t.sha3().abridged() << "{";
+    _out << _t.hash().abridged() << "{";
     if (_t.receiveAddress())
         _out << _t.receiveAddress().abridged();
     else

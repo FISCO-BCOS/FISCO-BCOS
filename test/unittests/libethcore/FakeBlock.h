@@ -214,7 +214,7 @@ public:
         bytes data(str.begin(), str.end());
         m_singleTransaction = Transaction(value, gasPrice, gas, dst, data, 2);
         std::shared_ptr<crypto::Signature> sig =
-            dev::crypto::Sign(m_keyPair, m_singleTransaction.sha3(WithoutSignature));
+            dev::crypto::Sign(m_keyPair, m_singleTransaction.hash(WithoutSignature));
         /// update the signature of transaction
         m_singleTransaction.updateSignature(sig);
     }
@@ -250,7 +250,7 @@ public:
             tx->setBlockLimit(u256(_currentBlockNumber) + c_maxBlockLimit);
             tx->setRpcTx(true);
             std::shared_ptr<crypto::Signature> sig =
-                dev::crypto::Sign(sigKeyPair.secret(), tx->sha3(WithoutSignature));
+                dev::crypto::Sign(sigKeyPair.secret(), tx->hash(WithoutSignature));
             /// update the signature of transaction
             tx->updateSignature(sig);
             // std::pair<h256, Address> ret = txPool->submit(tx);

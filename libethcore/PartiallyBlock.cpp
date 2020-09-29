@@ -59,7 +59,7 @@ void PartiallyBlock::calTxsHashBytes()
         [&](const tbb::blocked_range<size_t>& _r) {
             for (uint32_t i = _r.begin(); i < _r.end(); ++i)
             {
-                (*m_txsHash)[i] = (*m_transactions)[i]->sha3();
+                (*m_txsHash)[i] = (*m_transactions)[i]->hash();
             }
         });
 }
@@ -144,12 +144,12 @@ void PartiallyBlock::fillBlock(RLP const& _rlp)
     int64_t index = 0;
     for (auto tx : *m_missedTransactions)
     {
-        if (tx->sha3() != (*m_missedTxs)[index].first)
+        if (tx->hash() != (*m_missedTxs)[index].first)
         {
             PartiallyBlock_LOG(WARNING)
                 << LOG_DESC("fillBlock failed for inconsistent transaction hash")
                 << LOG_KV("expectedHash", (*m_missedTxs)[index].first.abridged())
-                << LOG_KV("fetchedHash", tx->sha3().abridged());
+                << LOG_KV("fetchedHash", tx->hash().abridged());
             BOOST_THROW_EXCEPTION(
                 InvalidTransaction() << errinfo_comment(
                     "fillBlock: invalid fetched transaction for inconsistent transaction hash"));
@@ -206,12 +206,12 @@ void PartiallyBlock::encodeMissedTxs(std::shared_ptr<bytes> _encodedBytes,
     for (auto const& txsInfo : *_missedTxs)
     {
         auto tx = (*m_transactions)[txsInfo.second];
-        if (tx->sha3() != txsInfo.first)
+        if (tx->hash() != txsInfo.first)
         {
             PartiallyBlock_LOG(WARNING)
                 << LOG_DESC("fetchMissedTxs failed for inconsistent transaction hash")
                 << LOG_KV("requestHash", txsInfo.first.abridged())
-                << LOG_KV("txHash", tx->sha3().abridged());
+                << LOG_KV("txHash", tx->hash().abridged());
             BOOST_THROW_EXCEPTION(
                 InvalidTransaction() << errinfo_comment(
                     "encodeMissedTxs: invalid transaction for inconsistent transaction hash"));

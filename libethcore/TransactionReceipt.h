@@ -72,13 +72,13 @@ public:
         return m_receipt;
     }
 
-    const bytes& sha3()
+    const bytes& hash()
     {
-        if (m_sha3 == bytes())
+        if (m_hash == bytes())
         {
-            m_sha3 = crypto::Hash(receipt()).asBytes();
+            m_hash = crypto::Hash(receipt()).asBytes();
         }
-        return m_sha3;
+        return m_hash;
     }
 
     bytes rlp() const
@@ -106,7 +106,7 @@ private:
 
 private:
     bytes m_receipt = bytes();
-    bytes m_sha3 = bytes();
+    bytes m_hash = bytes();
 };
 
 using TransactionReceipts = std::vector<TransactionReceipt::Ptr>;

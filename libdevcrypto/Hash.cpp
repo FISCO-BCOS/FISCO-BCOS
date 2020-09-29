@@ -36,7 +36,7 @@ namespace keccak
 {
 /** libkeccak-tiny
  *
- * A single-file implementation of SHA-3 and SHAKE.
+ * A single-file implementation of Keccak and SHAKE.
  *
  * Implementor: David Leon Gil
  * License: CC0, attribution kindly requested. Blame taken too,
@@ -45,9 +45,9 @@ namespace keccak
 
 #define decshake(bits) int shake##bits(uint8_t*, size_t, const uint8_t*, size_t);
 
-#define decsha3(bits) int sha3_##bits(uint8_t*, size_t, const uint8_t*, size_t);
+#define deckeccak(bits) int keccak_##bits(uint8_t*, size_t, const uint8_t*, size_t);
 
-decshake(128) decshake(256) decsha3(224) decsha3(256) decsha3(384) decsha3(512)
+decshake(128) decshake(256) deckeccak(224) deckeccak(256) deckeccak(384) deckeccak(512)
 
     /******** The Keccak-f[1600] permutation ********/
 
@@ -150,14 +150,14 @@ mkapply_ds(xorin, dst[i] ^= src[i])      // xorin
     return 0;
 }
 
-/*** Helper macros to define SHA3 and SHAKE instances. ***/
+/*** Helper macros to define Keccak and SHAKE instances. ***/
 #define defshake(bits)                                                            \
     int shake##bits(uint8_t* out, size_t outlen, const uint8_t* in, size_t inlen) \
     {                                                                             \
         return hash(out, outlen, in, inlen, 200 - (bits / 4), 0x1f);              \
     }
-#define defsha3(bits)                                                             \
-    int sha3_##bits(uint8_t* out, size_t outlen, const uint8_t* in, size_t inlen) \
+#define defkeccak(bits)                                                             \
+    int keccak_##bits(uint8_t* out, size_t outlen, const uint8_t* in, size_t inlen) \
     {                                                                             \
         if (outlen > (bits / 8))                                                  \
         {                                                                         \
@@ -169,17 +169,17 @@ mkapply_ds(xorin, dst[i] ^= src[i])      // xorin
 /*** FIPS202 SHAKE VOFs ***/
 defshake(128) defshake(256)
 
-    /*** FIPS202 SHA3 FOFs ***/
-    defsha3(224) defsha3(256) defsha3(384) defsha3(512)
+    /*** FIPS202 Keccak FOFs ***/
+    defkeccak(224) defkeccak(256) defkeccak(384) defkeccak(512)
 
 }  // namespace keccak
 
-bool sha3(bytesConstRef _input, bytesRef o_output)
+bool keccak256(bytesConstRef _input, bytesRef o_output)
 {
     // FIXME: What with unaligned memory?
     if (o_output.size() != 32)
         return false;
-    keccak::sha3_256(o_output.data(), 32, _input.data(), _input.size());
+    keccak::keccak_256(o_output.data(), 32, _input.data(), _input.size());
     return true;
 }
 

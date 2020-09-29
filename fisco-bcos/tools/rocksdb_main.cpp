@@ -124,7 +124,7 @@ int main(int argc, const char* argv[])
         else
         {  // keccak256
             g_BCOSConfig.setUseSMCrypto(false);
-            encryptKey = sha3(dataKey).asBytes();
+            encryptKey = keccak256(dataKey).asBytes();
         }
     }
 

@@ -33,7 +33,7 @@ namespace dev
 namespace test
 {
 BOOST_FIXTURE_TEST_SUITE(SM_Hash, SM_CryptoTestFixture)
-BOOST_AUTO_TEST_CASE(SM_testEmptySHA3)
+BOOST_AUTO_TEST_CASE(SM_testEmptyKeccak256)
 {
     std::string ts = EmptyHash.hex();
     BOOST_CHECK_EQUAL(
@@ -43,11 +43,11 @@ BOOST_AUTO_TEST_CASE(SM_testEmptySHA3)
     BOOST_CHECK_EQUAL(
         ts, std::string("afe4ccac5ab7d52bcae36373676215368baf52d3905e1fecbe369cc120e97628"));
 
-    h256 emptySHA3(fromHex("1ab21d8355cfa17f8e61194831e81a8f22bec8c728fefb747ed035eb5082aa2b"));
-    BOOST_REQUIRE_EQUAL(emptySHA3, EmptyHash);
+    h256 emptyKeccak256(fromHex("1ab21d8355cfa17f8e61194831e81a8f22bec8c728fefb747ed035eb5082aa2b"));
+    BOOST_REQUIRE_EQUAL(emptyKeccak256, EmptyHash);
 }
 
-BOOST_AUTO_TEST_CASE(SM_testSha3General)
+BOOST_AUTO_TEST_CASE(SM_testKeccak256General)
 {
     BOOST_REQUIRE_EQUAL(
         crypto::Hash(""), h256("1ab21d8355cfa17f8e61194831e81a8f22bec8c728fefb747ed035eb5082aa2b"));
@@ -55,23 +55,23 @@ BOOST_AUTO_TEST_CASE(SM_testSha3General)
         h256("becbbfaae6548b8bf0cfcad5a27183cd1be6093b1cceccc303d9c61d0a645268"));
 }
 
-/// test sha3Secure and
-BOOST_AUTO_TEST_CASE(SM_testSha3CommonFunc)
+/// test keccak256Secure and
+BOOST_AUTO_TEST_CASE(SM_testKeccak256CommonFunc)
 {
     std::string content = "abcd";
     bytes content_bytes(content.begin(), content.end());
-    // test sha3Secure
-    SecureFixedHash<32> sec_sha3 = sha3Secure(ref(content_bytes));
-    SecureFixedHash<32> copyed_sha3 = sec_sha3;
-    // const byte* ptr = copyed_sha3.data();
-    /// const byte* p_sec = sec_sha3.data();
-    BOOST_CHECK(copyed_sha3.data() != sec_sha3.data());
-    BOOST_CHECK(sec_sha3.data());
+    // test keccak256Secure
+    SecureFixedHash<32> sec_keccak256 = keccak256Secure(ref(content_bytes));
+    SecureFixedHash<32> copyed_keccak256 = sec_keccak256;
+    // const byte* ptr = copyed_keccak256.data();
+    /// const byte* p_sec = sec_keccak256.data();
+    BOOST_CHECK(copyed_keccak256.data() != sec_keccak256.data());
+    BOOST_CHECK(sec_keccak256.data());
 #if 0
-    // test sha3 with SecureFixedHash input
-    BOOST_CHECK(crypto::Hash(sec_sha3).data());
+    // test keccak256 with SecureFixedHash input
+    BOOST_CHECK(crypto::Hash(sec_keccak256).data());
 #endif
-    // test sha3Mac
+    // test keccak256Mac
     h256 egressMac(crypto::Hash("+++"));
     bytes magic{0x22, 0x40, 0x08, 0x91};
     sm3mac(egressMac.ref(), &magic, egressMac.ref());
@@ -109,8 +109,8 @@ BOOST_AUTO_TEST_CASE(SM_testRipemd160)
 BOOST_AUTO_TEST_SUITE_END()
 
 BOOST_FIXTURE_TEST_SUITE(Hash, TestOutputHelperFixture)
-// test sha3
-BOOST_AUTO_TEST_CASE(testEmptySHA3)
+// test keccak256
+BOOST_AUTO_TEST_CASE(testEmptyKeccak256)
 {
     std::string ts = EmptyHash.hex();
     BOOST_CHECK_EQUAL(
@@ -120,11 +120,11 @@ BOOST_AUTO_TEST_CASE(testEmptySHA3)
     BOOST_CHECK_EQUAL(
         ts, std::string("6377c7e66081cb65e473c1b95db5195a27d04a7108b468890224bedbe1a8a6eb"));
 
-    h256 emptySHA3(fromHex("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"));
-    BOOST_REQUIRE_EQUAL(emptySHA3, EmptyHash);
+    h256 emptyKeccak256(fromHex("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"));
+    BOOST_REQUIRE_EQUAL(emptyKeccak256, EmptyHash);
 }
 
-BOOST_AUTO_TEST_CASE(testSha3General)
+BOOST_AUTO_TEST_CASE(testKeccak256General)
 {
     BOOST_REQUIRE_EQUAL(
         crypto::Hash(""), h256("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"));
@@ -132,24 +132,24 @@ BOOST_AUTO_TEST_CASE(testSha3General)
         h256("1c8aff950685c2ed4bc3174f3472287b56d9517b9c948127319a09a7a36deac8"));
 }
 
-/// test sha3Secure and
-BOOST_AUTO_TEST_CASE(testSha3CommonFunc)
+/// test keccak256Secure and
+BOOST_AUTO_TEST_CASE(testKeccak256CommonFunc)
 {
     std::string content = "abcd";
     bytes content_bytes(content.begin(), content.end());
-    // test sha3Secure
-    SecureFixedHash<32> sec_sha3 = sha3Secure(ref(content_bytes));
-    SecureFixedHash<32> copyed_sha3 = sec_sha3;
-    BOOST_CHECK(copyed_sha3.data() != sec_sha3.data());
-    BOOST_CHECK(sec_sha3.data());
+    // test keccak256Secure
+    SecureFixedHash<32> sec_keccak256 = keccak256Secure(ref(content_bytes));
+    SecureFixedHash<32> copyed_keccak256 = sec_keccak256;
+    BOOST_CHECK(copyed_keccak256.data() != sec_keccak256.data());
+    BOOST_CHECK(sec_keccak256.data());
 #if 0
-    // test sha3 with SecureFixedHash input
-    BOOST_CHECK(crypto::Hash(sec_sha3).data());
+    // test keccak256 with SecureFixedHash input
+    BOOST_CHECK(crypto::Hash(sec_keccak256).data());
 #endif
-    // test sha3Mac
+    // test keccak256Mac
     h256 egressMac(crypto::Hash("+++"));
     bytes magic{0x22, 0x40, 0x08, 0x91};
-    sha3mac(egressMac.ref(), &magic, egressMac.ref());
+    keccak256mac(egressMac.ref(), &magic, egressMac.ref());
     BOOST_CHECK(toHex(egressMac) ==
                 "75759ba49fdef48a80840b669"
                 "9c4cc25ecb5e60f5dd0bf889381084ca6fc4199");

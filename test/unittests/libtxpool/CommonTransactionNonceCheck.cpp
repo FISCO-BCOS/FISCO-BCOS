@@ -49,7 +49,7 @@ Transaction fakeTransaction(size_t _idx = 0)
 
     auto keyPair = KeyPair::create();
     std::shared_ptr<crypto::Signature> sig =
-        dev::crypto::Sign(keyPair, fakeTx.sha3(WithoutSignature));
+        dev::crypto::Sign(keyPair, fakeTx.hash(WithoutSignature));
     /// update the signature of transaction
     fakeTx.updateSignature(sig);
     return fakeTx;

@@ -257,7 +257,7 @@ public:
         RLP rlpObj(rlpBytes);
         bytesConstRef d = rlpObj.data();
         transaction = Transaction(d, eth::CheckTransaction::Everything);
-        std::cout << "* MockBlockChain: hash of the transaction: " << transaction.sha3()
+        std::cout << "* MockBlockChain: hash of the transaction: " << transaction.hash()
                   << std::endl;
     }
     dev::h256 numberHash(int64_t) override { return blockHash; }
@@ -283,7 +283,7 @@ public:
     dev::eth::LocalisedTransactionReceipt::Ptr getLocalisedTxReceiptByHash(
         dev::h256 const& _txHash) override
     {
-        if (_txHash == transaction.sha3())
+        if (_txHash == transaction.hash())
         {
             auto tx = getLocalisedTxByHash(_txHash);
             auto txReceipt = getTransactionReceiptByHash(_txHash);
@@ -528,11 +528,11 @@ public:
     }
     std::pair<h256, Address> submit(dev::eth::Transaction::Ptr _tx) override
     {
-        return make_pair(_tx->sha3(), toAddress(_tx->from(), _tx->nonce()));
+        return make_pair(_tx->hash(), toAddress(_tx->from(), _tx->nonce()));
     }
     std::pair<h256, Address> submitTransactions(dev::eth::Transaction::Ptr _tx) override
     {
-        return make_pair(_tx->sha3(), toAddress(_tx->from(), _tx->nonce()));
+        return make_pair(_tx->hash(), toAddress(_tx->from(), _tx->nonce()));
     }
     dev::eth::ImportResult import(
         dev::eth::Transaction::Ptr, dev::eth::IfDropped = dev::eth::IfDropped::Ignore) override

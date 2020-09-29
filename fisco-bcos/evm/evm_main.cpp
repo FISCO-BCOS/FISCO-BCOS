@@ -120,7 +120,7 @@ int main()
     EnvInfo envInfo(header, boost::bind(&FakeBlockChain::numberHash, blockChain, _1), u256(0));
     /// init state
     std::shared_ptr<MPTState> mptState = std::make_shared<MPTState>(
-        u256(0), MPTState::openDB("./", sha3("0x1234")), BaseState::Empty);
+        u256(0), MPTState::openDB("./", keccak256("0x1234")), BaseState::Empty);
     /// test deploy
     for (size_t i = 0; i < param.code().size(); i++)
     {

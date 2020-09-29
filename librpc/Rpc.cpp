@@ -588,7 +588,7 @@ Json::Value Rpc::getBlockByHash(
             }
             else
             {
-                response["transactions"].append(toJS((*transactions)[i]->sha3()));
+                response["transactions"].append(toJS((*transactions)[i]->hash()));
             }
         }
 
@@ -755,7 +755,7 @@ Json::Value Rpc::getBlockByNumber(
                 response["transactions"].append(transactionResponse);
             }
             else
-                response["transactions"].append(toJS((*transactions)[i]->sha3()));
+                response["transactions"].append(toJS((*transactions)[i]->hash()));
         }
 
         return response;
@@ -1254,8 +1254,8 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp,
                     transactionCallback(receiptContent, _groupID);
                 });
         }
-        // calculate the sha3 before submit into the transaction pool
-        tx->sha3();
+        // calculate the keccak256 before submit into the transaction pool
+        tx->hash();
         std::pair<h256, Address> ret;
         switch (clientProtocolversion)
         {
@@ -1906,7 +1906,7 @@ void Rpc::parseTransactionIntoResponse(Json::Value& _response, dev::h256 const& 
     }
 
     _response["from"] = toJS(_tx->from());
-    _response["hash"] = toJS(_tx->sha3());
+    _response["hash"] = toJS(_tx->hash());
 
     // the signature
     Json::Value signatureResponse;
@@ -1932,7 +1932,7 @@ void Rpc::parseTransactionIntoResponse(Json::Value& _response, dev::h256 const& 
 void Rpc::parseReceiptIntoResponse(Json::Value& _response, dev::bytesConstRef _input,
     dev::eth::LocalisedTransactionReceipt::Ptr _receipt)
 {
-    // the fields required for calculate sha3 for the transactionReceipt
+    // the fields required for calculate keccak256 for the transactionReceipt
     // Note: the hash of the transactionReceipt is equal to the hash of the corresponding
     // transaction
     _response["root"] = toJS(_receipt->stateRoot());

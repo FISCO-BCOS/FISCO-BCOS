@@ -79,7 +79,7 @@ public:
             Transaction::Ptr tx =
                 std::make_shared<Transaction>(value, gasPrice, gas, dest, data, nonce);
             tx->setBlockLimit(250);
-            auto sig = dev::crypto::Sign(keyPair, tx->sha3(WithoutSignature));
+            auto sig = dev::crypto::Sign(keyPair, tx->hash(WithoutSignature));
             tx->updateSignature(sig);
             tx->forceSender(Address(0x2333));
             txs->push_back(tx);
@@ -137,7 +137,7 @@ public:
             Transaction::Ptr tx =
                 std::make_shared<Transaction>(value, gasPrice, gas, dest, data, nonce);
             tx->setBlockLimit(250);
-            auto sig = dev::crypto::Sign(keyPair, tx->sha3(WithoutSignature));
+            auto sig = dev::crypto::Sign(keyPair, tx->hash(WithoutSignature));
             tx->updateSignature(sig);
             tx->forceSender(Address(0x2333));
             txs->push_back(tx);
@@ -167,7 +167,7 @@ public:
             Transaction::Ptr tx =
                 std::make_shared<Transaction>(value, gasPrice, gas, dest, data, nonce);
             tx->setBlockLimit(250);
-            auto sig = dev::crypto::Sign(keyPair, tx->sha3(WithoutSignature));
+            auto sig = dev::crypto::Sign(keyPair, tx->hash(WithoutSignature));
             tx->updateSignature(sig);
             tx->forceSender(Address(0x2333));
             BOOST_CHECK_NO_THROW(_verifier->executeTransaction(_block.header(), tx));
