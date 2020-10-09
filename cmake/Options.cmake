@@ -35,7 +35,14 @@ macro(eth_default_option O DEF)
     endif()
 endmacro()
 
+# common settings
 set(MARCH_TYPE "-march=x86-64 -mtune=generic -fvisibility=hidden -fvisibility-inlines-hidden")
+set(ETH_CMAKE_DIR ${CMAKE_CURRENT_LIST_DIR})
+set(ETH_SCRIPTS_DIR ${ETH_CMAKE_DIR}/scripts)
+set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
+if("${CMAKE_SIZEOF_VOID_P}" STREQUAL "4")
+    message(FATAL "The ${PROJECT_NAME} does not support compiling on 32-bit systems")
+endif()
 
 macro(configure_project)
      set(NAME ${PROJECT_NAME})
@@ -56,6 +63,7 @@ macro(configure_project)
     if(ARCH_NATIVE)
         set(MARCH_TYPE "-march=native -mtune=native -fvisibility=hidden -fvisibility-inlines-hidden")
     endif()
+
     # unit tests
     eth_default_option(TESTS OFF)
     # mini demos

@@ -199,7 +199,7 @@ public:
         for (size_t i = 0; i < size; ++i)
         {
             (*m_transactionReceipt)[i] =
-                std::make_shared<TransactionReceipt>(m_singleTransactionReceipt);
+                std::make_shared<TransactionReceipt>(*m_singleTransactionReceipt);
         }
     }
 
@@ -227,8 +227,8 @@ public:
         eth::TransactionException status = eth::TransactionException::Unknown;
         bytes outputBytes = bytes();
         Address address = toAddress(KeyPair::create().pub());
-        m_singleTransactionReceipt =
-            TransactionReceipt(root, gasUsed, logEntries, status, outputBytes, address);
+        m_singleTransactionReceipt = std::make_shared<TransactionReceipt>(
+            root, gasUsed, logEntries, status, outputBytes, address);
     }
 
     shared_ptr<Transactions> fakeTransactions(size_t _num, int64_t _currentBlockNumber)
@@ -272,7 +272,7 @@ public:
     std::shared_ptr<Transactions> m_transaction;
     Transaction m_singleTransaction;
     std::shared_ptr<TransactionReceipts> m_transactionReceipt;
-    TransactionReceipt m_singleTransactionReceipt;
+    TransactionReceipt::Ptr m_singleTransactionReceipt = std::make_shared<TransactionReceipt>();
     std::shared_ptr<std::vector<std::pair<u256, std::vector<unsigned char>>>> m_sigList;
     bytes m_blockHeaderData;
     bytes m_blockData;

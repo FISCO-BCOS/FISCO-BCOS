@@ -92,19 +92,20 @@ public:
     void decode(RLP const& rlp);
 
 private:
-    h256 m_stateRoot;
-    u256 m_gasUsed;
-    Address m_contractAddress;
-    LogBloom m_bloom;
+    void decodeLog(RLP const& _r);
 
 protected:
     eth::TransactionException m_status;
 
 private:
+    h256 m_stateRoot;
+    u256 m_gasUsed;
+    Address m_contractAddress;
+    LogBloom m_bloom;
+
     bytes m_outputBytes;
     LogEntries m_log;
 
-private:
     bytes m_receipt = bytes();
     bytes m_sha3 = bytes();
 };
