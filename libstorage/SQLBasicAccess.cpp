@@ -111,7 +111,7 @@ int SQLBasicAccess::Select(int64_t, const string& _table, const string&, Conditi
     {
         SQLBasicAccess_LOG(ERROR) << "select exception:" << Exception_frame.message;
         m_connPool->ReturnConnection(conn);
-        return 0;
+        return -1;
     }
     END_TRY;
     m_connPool->ReturnConnection(conn);
