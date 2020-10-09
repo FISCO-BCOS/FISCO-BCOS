@@ -243,7 +243,9 @@ public:
 
 private:
     void checkGroupStatus(dev::GROUP_ID const& _groupID, LedgerStatus _allowedStatus);
-    std::string getGroupStatusFilePath(dev::GROUP_ID const& _groupID) const;
+    std::string generateAndGetGroupStatusFile(dev::GROUP_ID const& _groupID) const;
+
+    bool isGroupExist(dev::GROUP_ID const& _groupID) const;
 
     std::string generateGenesisConfig(dev::GROUP_ID _groupId, const GroupParams& _params);
     std::string generateGroupConfig();

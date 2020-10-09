@@ -1852,6 +1852,13 @@ bool Rpc::checkParamsForGenerateGroup(
     }
 
     int pos = 1;
+    if (_params["sealers"].size() == 0)
+    {
+        _response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
+        _response["message"] =
+            "GenerateGroup failed for empty sealer list, expect at least one sealer";
+        return false;
+    }
     for (auto& sealer : _params["sealers"])
     {
         if (!sealer.isString() || !checkSealerID(sealer.asString()))
