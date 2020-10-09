@@ -1,6 +1,6 @@
 name: FISCO-BCOS GitHub Actions
 on:
-  push:
+  pull_request:
     branches-ignore:
       - "**-1.3"
       - "**-1.5"
@@ -10,9 +10,6 @@ on:
       - "docs/**"
       - "Changelog.md"
       - "README.md"
-  pull_request:
-    # branches:
-    #     - '**'
   release:
     types: [published, created, edited]
 env:
