@@ -52,13 +52,13 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - deps-cache-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
-            - deps-cache-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
-            - deps-cache-v1-{{ .Environment.CIRCLE_JOB }}-
+            - deps-cache-v2-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+            - deps-cache-v2-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
+            - deps-cache-v2-{{ .Environment.CIRCLE_JOB }}-
       - compile:
           options: "-DBUILD_STATIC=ON -DTESTS=ON -DCOVERAGE=ON -DCMAKE_BUILD_TYPE=Debug"
       - save_cache:
-          key: deps-cache-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+          key: deps-cache-v2-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
           paths:
             - deps
             - /ccache
