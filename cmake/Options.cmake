@@ -44,6 +44,8 @@ if("${CMAKE_SIZEOF_VOID_P}" STREQUAL "4")
     message(FATAL "The ${PROJECT_NAME} does not support compiling on 32-bit systems")
 endif()
 
+EXECUTE_PROCESS(COMMAND uname -m COMMAND tr -d '\n' OUTPUT_VARIABLE ARCHITECTURE)
+
 macro(configure_project)
      set(NAME ${PROJECT_NAME})
 
@@ -118,7 +120,7 @@ macro(print_config NAME)
     message("-- CMake              Cmake version and location   ${CMAKE_VERSION} (${CMAKE_COMMAND})")
     message("-- Compiler           C++ compiler version         ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
     message("-- CMAKE_BUILD_TYPE   Build type                   ${CMAKE_BUILD_TYPE}")
-    message("-- TARGET_PLATFORM    Target platform              ${CMAKE_SYSTEM_NAME}")
+    message("-- TARGET_PLATFORM    Target platform              ${CMAKE_SYSTEM_NAME} ${ARCHITECTURE}")
     message("-- BUILD_STATIC       Build static                 ${BUILD_STATIC}")
     message("-- DEMO               Build demos                  ${DEMO}")
     message("-- TOOL               Build tools                  ${TOOL}")

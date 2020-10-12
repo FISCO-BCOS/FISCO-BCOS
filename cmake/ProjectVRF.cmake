@@ -20,7 +20,6 @@
 include(ExternalProject)
 
 if("${CMAKE_HOST_SYSTEM_NAME}" MATCHES "Linux")
-    EXECUTE_PROCESS(COMMAND uname -m COMMAND tr -d '\n' OUTPUT_VARIABLE ARCHITECTURE)
     if("${ARCHITECTURE}" MATCHES "aarch64")
         set(VRF_LIB_NAME libffi_vrf_aarch64.a)
     else()
@@ -36,9 +35,9 @@ ExternalProject_Add(libvrf
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NAME libvrf.tar.gz
     DOWNLOAD_NO_PROGRESS 1
-    URL https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/libvrf.tar.gz
-        https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/FISCO-BCOS/deps/libvrf.tar.gz
-    URL_HASH SHA256=c67ec43606137c82853bbf816c88990988c51ac99c8c83ccd6defa7c382a39ec
+    URL https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/libvrf-rust1.47.tar.gz
+        https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/FISCO-BCOS/deps/libvrf-rust1.47.tar.gz
+    URL_HASH SHA256=9a626bda04824f85575e28c72081f14ed5f1531e6247fff2edfb03cbef858570
     BUILD_IN_SOURCE 1
     LOG_CONFIGURE 1
     LOG_BUILD 1
