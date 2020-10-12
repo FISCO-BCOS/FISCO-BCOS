@@ -146,25 +146,25 @@ jobs:
         id: cache
         with:
           path: deps/src
-          key: deps-v0-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: deps-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            deps-v0-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            deps-v0-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            deps-v0-notest-${{ runner.temp }}-
-            deps-v0-${{ runner.temp }}-
+            deps-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            deps-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            deps-v1-notest-${{ runner.temp }}-
+            deps-v1-${{ runner.temp }}-
       - uses: actions/cache@v2
         id: ccache
         with:
           path: ccache
-          key: ccache-v0-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: ccache-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            ccache-v0-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            ccache-v0-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            ccache-v0-notest-${{ runner.temp }}-
+            ccache-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            ccache-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            ccache-v1-notest-${{ runner.temp }}-
       - name: install ubuntu dependencies
         run: sudo apt install -y git curl build-essential clang cmake openssl libssl-dev zlib1g-dev ccache libgmp-dev flex bison
       - name: configure
-        run: cmake . -DARCH_NATIVE=on
+        run: cmake .
       - name: compile
         run: make -j2
       - name: run integration testing

@@ -49,16 +49,17 @@ matrix:
         - CACHE_NAME=ubuntu16
         - ZIP_SUFFIX=ubuntu-xenial
 
-    # - language: cpp
-    #   os: osx
-    #   osx_image: xcode11.4
-    #   env:
-    #     - CACHE_NAME=osx
-    #     - PROJECT_USERNAME=FISCO-BCOS
-    #     - PROJECT_REPONAME=FISCO-BCOS
+    - language: cpp
+      arch: arm64
+      os: linux
+      dist: bionic
+      sudo: required
+      env:
+        - CACHE_NAME=ubuntu18
+        - ZIP_SUFFIX=ubuntu-bionic
+
 git:
   depth: 1
-compiler: clang
 cache:
   directories:
     - $TRAVIS_BUILD_DIR/deps
@@ -86,7 +87,7 @@ install: |
   #fi
 script: |
   if [[ $TRAVIS_OS_NAME == linux ]]; then
-    cmake . && make -j2 &&  cd tools && bash ci/ci_check.sh
+    cmake -DARCH_NATIVE=ON . && make -j2 &&  cd tools && bash ci/ci_check.sh
   else
     CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . && \
     make -j2 && cd tools && bash ci/ci_check.sh
