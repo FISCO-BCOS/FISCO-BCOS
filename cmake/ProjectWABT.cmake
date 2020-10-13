@@ -1,11 +1,18 @@
 include(ExternalProject)
 
+if (APPLE)
+    set(PATCH_COMMAND "")
+else()
+    set(PATCH_COMMAND COMMAND sed -i "53a if (NOT \"\${CMAKE_PROJECT_VERSION}\")" CMakeLists.txt COMMAND sed -i "54a set(CMAKE_PROJECT_VERSION \${PROJECT_VERSION})" CMakeLists.txt COMMAND sed -i "55a endif()" CMakeLists.txt)
+endif()
+
 ExternalProject_Add(wabt
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NAME wabt_1.0.19.tar.gz
     DOWNLOAD_NO_PROGRESS 1
-    URL https://github.com/WebAssembly/wabt/archive/cd5ff133f84854f0b269f5cb06193ad8205f05d3.tar.gz
-    URL_HASH SHA256=c8704a45585d4f23b2368602a3d4583a1fab5de620e024e6fe002846b1537033
+    URL https://codeload.github.com/WebAssembly/wabt/tar.gz/1.0.19
+    URL_HASH SHA256=134f2afc8205d0a3ab89c5f0d424ff3823e9d2769c39d2235aa37eba7abc15ba
+    PATCH_COMMAND ${PATCH_COMMAND}
     BUILD_IN_SOURCE 0
     CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
     -DCMAKE_POSITION_INDEPENDENT_CODE=ON
@@ -15,7 +22,7 @@ ExternalProject_Add(wabt
     LOG_DOWNLOAD 1
     LOG_UPDATE 1
     LOG_BUILD 1
-    LOG_INSTALL 0
+    LOG_INSTALL 1
     BUILD_BYPRODUCTS <BINARY_DIR>/libwabt.a
 )
 

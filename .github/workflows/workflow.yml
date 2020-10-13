@@ -42,7 +42,7 @@ jobs:
           restore-keys: |
             deps-v8-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
             deps-v8-${{ runner.temp }}-${{ github.base_ref }}-
-            deps-v8-${{ runner.temp }}-
+            # deps-v8-${{ runner.temp }}-
       - uses: actions/cache@v2
         id: ccache
         with:
@@ -55,7 +55,7 @@ jobs:
       - name: install macOS dependencies
         if: runner.os == 'macOS'
         run: |
-          brew install openssl@1.1 ccache gmp
+          brew install openssl@1.1 ccache gmp automake
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.47.0
       - name: install Ubuntu dependencies
         if: runner.os == 'Linux'
@@ -79,12 +79,12 @@ jobs:
         id: cache
         with:
           path: deps/src
-          key: deps-v5-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: deps-v6-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            deps-v5-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            deps-v5-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            deps-v5-notest-${{ runner.temp }}-
-            deps-v5-${{ runner.temp }}-
+            deps-v6-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            deps-v6-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            # deps-v6-notest-${{ runner.temp }}-
+            # deps-v6-${{ runner.temp }}-
       - uses: actions/cache@v2
         id: ccache
         with:
@@ -95,7 +95,7 @@ jobs:
             ccache-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-
             ccache-v2-notest-${{ runner.temp }}-
       - name: install macOS dependencies
-        run: brew install openssl@1.1 ccache
+        run: brew install openssl@1.1 ccache automake
       - name: install rust language
         uses: actions-rs/toolchain@v1
         with:
@@ -148,9 +148,11 @@ jobs:
       - name: install ubuntu dependencies
         run: sudo apt install -y git curl build-essential clang cmake openssl libssl-dev zlib1g-dev ccache libgmp-dev flex bison
       - name: install gcc 7
-        run: sudo apt install -y software-properties-common && sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test && sudo apt-get update && sudo apt-get install g++-7 gcc-7 -y
+        run:
+          sudo apt install -y software-properties-common && sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test && sudo apt-get update && sudo apt-get install libltdl-dev g++-7 gcc-7 -y &&
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-7 60 --slave /usr/bin/g++ g++ /usr/bin/g++-7 --slave /usr/bin/gcov gcov /usr/bin/gcov-7 --slave /usr/bin/gcov-tool gcov-tool /usr/bin/gcov-tool-7 --slave /usr/bin/gcc-ar gcc-ar /usr/bin/gcc-ar-7 --slave /usr/bin/gcc-nm gcc-nm /usr/bin/gcc-nm-7 --slave /usr/bin/gcc-ranlib gcc-ranlib /usr/bin/gcc-ranlib-7
       - name: configure
-        run: source $HOME/.cargo/env && CC=/usr/bin/gcc-7 CXX=/usr/bin/g++-7 cmake .
+        run: source $HOME/.cargo/env && cmake .
       - name: compile
         run: make -j2
       - name: run integration testing
@@ -188,7 +190,7 @@ jobs:
           toolchain: 1.47.0
           override: true
       - name: install ubuntu dependencies
-        run: sudo apt install -y git curl build-essential clang cmake openssl libssl-dev zlib1g-dev ccache libgmp-dev flex bison libtool
+        run: sudo apt install -y git curl build-essential clang cmake openssl libssl-dev zlib1g-dev ccache libgmp-dev flex bison automake libtool
       - name: configure
         run: source $HOME/.cargo/env && cmake .
       - name: compile

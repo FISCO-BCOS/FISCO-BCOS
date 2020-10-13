@@ -73,6 +73,9 @@ addons:
       - libssl-dev
       - clang
       - ccache
+      - automake
+      - libtool
+      - libltdl-dev
       # - ninja-build
       - libomp-dev
       - openssl
@@ -89,8 +92,9 @@ install: |
   source $HOME/.cargo/env
 script: |
   if [[ $TRAVIS_OS_NAME == linux ]]; then
-    sudo apt-get install -y software-properties-common python-software-properties && sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test && sudo apt update && sudo apt-get install g++-7 gcc-7 -y
-    CC=/usr/bin/gcc-7 CXX=/usr/bin/g++-7 cmake -DARCH_NATIVE=ON . && make -j2 &&  cd tools && bash ci/ci_check.sh
+    sudo apt-get install -y software-properties-common && sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test && sudo apt update && sudo apt-get install g++-7 gcc-7 -y &&
+    sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-7 60 --slave /usr/bin/g++ g++ /usr/bin/g++-7 --slave /usr/bin/gcov gcov /usr/bin/gcov-7 --slave /usr/bin/gcov-tool gcov-tool /usr/bin/gcov-tool-7 --slave /usr/bin/gcc-ar gcc-ar /usr/bin/gcc-ar-7 --slave /usr/bin/gcc-nm gcc-nm /usr/bin/gcc-nm-7 --slave /usr/bin/gcc-ranlib gcc-ranlib /usr/bin/gcc-ranlib-7
+    cmake -DARCH_NATIVE=ON . && make -j2 &&  cd tools && bash ci/ci_check.sh
   else
     CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . && \
     make -j2 && cd tools && bash ci/ci_check.sh

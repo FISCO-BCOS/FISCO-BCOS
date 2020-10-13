@@ -2,18 +2,16 @@ include(ExternalProject)
 
 set(TBB_LIB_SUFFIX a)
 if (APPLE)
-    set(ENABLE_STD_LIB cpp0x=1 stdlib=libc++)
-else()
-    set(ENABLE_STD_LIB cpp0x=1)
+    set(ENABLE_STD_LIB stdlib=libc++)
 endif()
 
 ExternalProject_Add(tbb
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NO_PROGRESS 1
-    DOWNLOAD_NAME oneTBB-2020.1.tar.gz
-    URL https://codeload.github.com/oneapi-src/oneTBB/tar.gz/v2020.1
-        https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/oneTBB-2020.1.tar.gz
-    URL_HASH SHA256=7c96a150ed22bc3c6628bc3fef9ed475c00887b26d37bca61518d76a56510971
+    DOWNLOAD_NAME oneTBB-2020.3.tar.gz
+    URL https://codeload.github.com/oneapi-src/oneTBB/tar.gz/v2020.3
+        https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/oneTBB-2020.3.tar.gz
+    URL_HASH SHA256=ebc4f6aa47972daed1f7bf71d100ae5bf6931c2e3144cf299c8cc7d041dca2f3
     BUILD_IN_SOURCE 1
     LOG_CONFIGURE 1
     LOG_BUILD 1

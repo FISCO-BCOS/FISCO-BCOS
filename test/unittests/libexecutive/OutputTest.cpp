@@ -156,7 +156,7 @@ struct OutputFixture
         entry->setField(STORAGE_VALUE, "true");
         accountTable->insert(ACCOUNT_FROZEN, entry);
 
-        executive = std::make_shared<Executive>();
+        executive = std::make_shared<Executive>(nullptr, dev::executive::EnvInfo());
         EnvInfo envInfo{fakeBlockHeader(), fakeCallBack, 0};
         envInfo.setPrecompiledEngine(context);
         executive->setEnvInfo(envInfo);

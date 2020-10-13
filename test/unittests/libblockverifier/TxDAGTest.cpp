@@ -128,8 +128,7 @@ BOOST_AUTO_TEST_CASE(PureParallelTxDAGTest)
         exeTrans.emplace_back(_tr);
         return true;
     });
-
-    dev::executive::Executive::Ptr executive = std::make_shared<dev::executive::Executive>();
+    dev::executive::Executive::Ptr executive = std::make_shared<dev::executive::Executive>(nullptr, dev::executive::EnvInfo());
     while (!txDag->hasFinished())
     {
         txDag->executeUnit(executive);
@@ -165,7 +164,7 @@ BOOST_AUTO_TEST_CASE(NormalAndParallelTxDAGTest)
         return true;
     });
 
-    dev::executive::Executive::Ptr executive = std::make_shared<dev::executive::Executive>();
+    dev::executive::Executive::Ptr executive = std::make_shared<dev::executive::Executive>(nullptr, dev::executive::EnvInfo());
     while (!txDag->hasFinished())
     {
         txDag->executeUnit(executive);
