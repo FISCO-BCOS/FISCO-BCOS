@@ -465,9 +465,10 @@ bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u2
     if (!_init.empty())
     {
         auto codes = _init.toBytes();
-        auto callData = bytesConstRef(m_t->extraData().data(), m_t->extraData().size());
+        auto callData = bytesConstRef();
         if (hasWasmPreamble(codes))
         {
+            callData = bytesConstRef(m_t->extraData().data(), m_t->extraData().size());
             auto result = m_gasInjector->InjectMeter(codes);
             if (result.status == wasm::GasInjector::Status::Success)
             {

@@ -118,7 +118,7 @@ jobs:
           name: Setup dependencies
           command: |
             yum install -y epel-release centos-release-scl
-            yum install -y git make gcc-c++ cmake3 openssl-devel openssl ccache flex patch bison gmp-static devtoolset-7
+            yum install -y git make gcc-c++ cmake3 openssl-devel openssl ccache flex patch bison gmp-static devtoolset-7 llvm-toolset-7.0 llvm-toolset-7.0-llvm-devel
             echo 'export CCACHE_DIR=/ccache' >> $BASH_ENV
             echo 'export PATH=$HOME/.cargo/bin:$PATH' >> $BASH_ENV
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.47.0
@@ -133,6 +133,7 @@ jobs:
           name: Compile
           command: |
             source /opt/rh/devtoolset-7/enable
+            source /opt/rh/llvm-toolset-7.0/enable
             yum list devtoolset-7\*
             mkdir -p build && cd build
             cmake3 -DTESTS=ON -DTOOL=ON -DDEMO=ON ..
