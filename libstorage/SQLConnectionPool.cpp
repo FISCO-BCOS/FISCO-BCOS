@@ -34,9 +34,15 @@ bool SQLConnectionPool::InitConnectionPool(const storage::ConnectionPoolConfig& 
     if (_dbConfig.dbType == "mysql")
     {
         stringstream ss;
+        // Note: [auth-plugin=mysql_native_password] only appliable for mysql-connector with version
+        // no smaller than 8.0
+        //       in current period, this param is useless since mysql-connector-c has not been
+        //       upgraded, we can only configure this option in mysql server and configure ssl=0
+        //       when using mysql 8.x
         ss << "mysql://" << _dbConfig.dbIP << ":" << _dbConfig.dbPort << "/" << _dbConfig.dbName
-           << "?user=" << _dbConfig.dbUsername << "&password=" << _dbConfig.dbPasswd
-           << "&charset=" << _dbConfig.dbCharset << "&useUnicode=yes";
+           << "?auth-plugin=mysql_native_password&user=" << _dbConfig.dbUsername
+           << "&password=" << _dbConfig.dbPasswd << "&charset=" << _dbConfig.dbCharset
+           << "&useUnicode=yes";
 
         m_url = URL_new(ss.str().c_str());
         if (m_url == NULL)
@@ -157,8 +163,13 @@ void SQLConnectionPool::createDataBase(const ConnectionPoolConfig& _dbConfig)
     if (_dbConfig.dbType == "mysql")
     {
         stringstream ss;
+        // Note: [auth-plugin=mysql_native_password] only appliable for mysql-connector with version
+        // no smaller than 8.0
+        //       in current period, this param is useless since mysql-connector-c has not been
+        //       upgraded, we can only configure this option in mysql server and configure ssl=0
+        //       when using mysql 8.x
         ss << "mysql://" << _dbConfig.dbIP << ":" << _dbConfig.dbPort
-           << "/information_schema?user=" << _dbConfig.dbUsername
+           << "/information_schema?auth-plugin=mysql_native_password&user=" << _dbConfig.dbUsername
            << "&password=" << _dbConfig.dbPasswd << "&charset=" << _dbConfig.dbCharset
            << "&useUnicode=yes";
         URL_T url = URL_new(ss.str().c_str());
@@ -180,7 +191,6 @@ void SQLConnectionPool::createDataBase(const ConnectionPoolConfig& _dbConfig)
             ConnectionPool_setInitialConnections(_connectionPool, 2);
             ConnectionPool_setMaxConnections(_connectionPool, 2);
             ConnectionPool_start(_connectionPool);
-
             _connection = ConnectionPool_getConnection(_connectionPool);
             if (_connection == nullptr)
             {
@@ -203,11 +213,17 @@ void SQLConnectionPool::createDataBase(const ConnectionPoolConfig& _dbConfig)
             // https://mariadb.com/kb/en/innodb-compressed-row-format/
             // Use the select * from INFORMATION_SCHEMA.INNODB_CMP;
             // command to see if mysql has table compression enabled
-            _sql = "SET GLOBAL innodb_file_per_table=ON";
-            Connection_execute(_connection, "%s", _sql.c_str());
 
-            _sql = "SET GLOBAL innodb_file_format='Barracuda'";
-            Connection_execute(_connection, "%s", _sql.c_str());
+            // when mysql version>8, no need to set innodb_file_format
+            stringstream ss;
+            ss << "SET @s = IF(version() < 8 OR version() LIKE '%MariaDB%',"
+               << "'SET GLOBAL innodb_file_per_table = ON,"
+               << "innodb_large_prefix = ON;',"
+               << "'SET GLOBAL innodb_file_per_table = ON;')";
+
+            PreparedStatement_T _prepareStatement =
+                Connection_prepareStatement(_connection, "%s", ss.str().c_str());
+            PreparedStatement_execute(_prepareStatement);
         }
         CATCH(SQLException)
         {
