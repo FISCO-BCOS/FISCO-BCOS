@@ -23,7 +23,9 @@
 #include "BasicRocksDB.h"
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcore/Exceptions.h>
+#include <libdevcore/SnappyCompress.h>
 #include <boost/filesystem.hpp>
+#include <string>
 
 using namespace std;
 using namespace dev;
@@ -48,15 +50,33 @@ rocksdb::Options dev::storage::getRocksDBOptions()
 
 
 std::function<void(std::string const&, std::string&)> dev::storage::getEncryptHandler(
-    const std::vector<uint8_t>& _encryptKey)
+    const std::vector<uint8_t>& _encryptKey, bool _enableCompress)
 {
     // get dataKey according to ciperDataKey from keyCenter
     return [=](std::string const& data, std::string& encData) {
         try
         {
-            encData = crypto::SymmetricEncrypt((const unsigned char*)data.data(), data.size(),
-                (const unsigned char*)_encryptKey.data(), _encryptKey.size(),
-                (const unsigned char*)_encryptKey.data());
+            if (!_enableCompress)
+            {
+                encData = crypto::SymmetricEncrypt((const unsigned char*)data.data(), data.size(),
+                    (const unsigned char*)_encryptKey.data(), _encryptKey.size(),
+                    (const unsigned char*)_encryptKey.data());
+                return;
+            }
+            // compress before encrypt
+            std::shared_ptr<bytes> compressedData = std::make_shared<bytes>();
+            size_t compressedSize = dev::compress::SnappyCompress::compress(
+                bytesConstRef((const unsigned char*)data.data(), data.length()), *compressedData);
+            if (compressedSize == 0)
+            {
+                std::string errorInfo =
+                    "Compress data for " + toHex(_encryptKey) + " failed for compress failed";
+                ROCKSDB_LOG(ERROR) << LOG_DESC(errorInfo);
+                BOOST_THROW_EXCEPTION(EncryptFailed() << errinfo_comment(errorInfo));
+            }
+            encData = crypto::SymmetricEncrypt((const unsigned char*)compressedData->data(),
+                compressedData->size(), (const unsigned char*)_encryptKey.data(),
+                _encryptKey.size(), (const unsigned char*)_encryptKey.data());
         }
         catch (const std::exception& e)
         {
@@ -69,7 +89,7 @@ std::function<void(std::string const&, std::string&)> dev::storage::getEncryptHa
 }
 
 std::function<void(std::string&)> dev::storage::getDecryptHandler(
-    const std::vector<uint8_t>& _decryptKey)
+    const std::vector<uint8_t>& _decryptKey, bool _enableCompress)
 {
     return [=](std::string& data) {
         try
@@ -77,10 +97,30 @@ std::function<void(std::string&)> dev::storage::getDecryptHandler(
             data = crypto::SymmetricDecrypt((const unsigned char*)data.data(), data.size(),
                 (const unsigned char*)_decryptKey.data(), _decryptKey.size(),
                 (const unsigned char*)_decryptKey.data());
+
+            if (!_enableCompress)
+            {
+                return;
+            }
+            // uncompress the decrypted data
+            std::shared_ptr<bytes> uncompressedData = std::make_shared<bytes>();
+            auto uncompressedDataSize = dev::compress::SnappyCompress::uncompress(
+                bytesConstRef((const unsigned char*)data.data(), data.length()), *uncompressedData);
+            if (uncompressedDataSize == 0)
+            {
+                std::string errorInfo =
+                    "decrypt value for key " + toHex(_decryptKey) + " failed for uncompress failed";
+                ROCKSDB_LOG(ERROR) << LOG_DESC(errorInfo);
+                BOOST_THROW_EXCEPTION(DecryptFailed() << errinfo_comment(errorInfo));
+            }
+            // resize and copy the uncompressed data
+            data.resize(uncompressedData->size());
+            memcpy((void*)data.data(), (const void*)uncompressedData->data(),
+                uncompressedData->size());
         }
         catch (const std::exception& e)
         {
-            std::string error_info = "decrypt value for data=" + data + " failed";
+            std::string error_info = "decrypt value for key=" + toHex(_decryptKey) + " failed";
             ROCKSDB_LOG(ERROR) << LOG_DESC(error_info);
             BOOST_THROW_EXCEPTION(DecryptFailed() << errinfo_comment(error_info));
         }

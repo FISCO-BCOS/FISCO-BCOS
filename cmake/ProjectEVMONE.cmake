@@ -27,4 +27,5 @@ set(EVMONE_LIBRARIES ${INSTALL_DIR}/lib/libevmone.a ${INSTALL_DIR}/lib/libintx.a
 add_library(EVMONE INTERFACE IMPORTED)
 set_property(TARGET EVMONE PROPERTY INTERFACE_LINK_LIBRARIES ${EVMONE_LIBRARIES})
 set_property(TARGET EVMONE PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${EVMONE_INCLUDE_DIRS})
-add_dependencies(EVMONE evmone EVMC)
+add_dependencies(evmone EVMC)
+add_dependencies(EVMONE evmone)
