@@ -1423,7 +1423,7 @@ void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<Executive
                             entry->setField("index", lexical_cast<std::string>(i));
                             entry->setForce(true);
 
-                            tb->insert((*txs)[i]->sha3().hex(), entry,
+                            tb->insert((*txs)[i]->hash().hex(), entry,
                                 std::make_shared<dev::storage::AccessOptions>(), false);
                         }
                     });

@@ -151,7 +151,7 @@ private:
     u256 m_gasPrice;   ///< Price of gas (that we already paid).
     bytesConstRef m_data;       ///< Current input data.
     bytes m_code;               ///< Current code that is executing.
-    h256 m_codeHash;            ///< SHA3 hash of the executing code
+    h256 m_codeHash;            ///< Keccak256 hash of the executing code
     u256 m_salt;                ///< Values used in new address construction by CREATE2
     SubState m_sub;             ///< Sub-band VM state (suicides, refund counter, logs).
     unsigned m_depth = 0;       ///< Depth of the present call.

@@ -791,7 +791,7 @@ void PBFTEngine::notifySealing(dev::eth::Block const& block)
         h256Hash filter;
         for (auto& trans : *(block.transactions()))
         {
-            filter.insert(trans->sha3());
+            filter.insert(trans->hash());
         }
         PBFTENGINE_LOG(INFO) << "I am the next leader = " << getNextLeader()
                              << ", filter trans size = " << filter.size()

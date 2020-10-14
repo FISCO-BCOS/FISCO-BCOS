@@ -135,7 +135,7 @@ void DownloadingTxsQueue::pop2TxPool(
             tbb::blocked_range<size_t>(0, txs->size()), [&](const tbb::blocked_range<size_t>& _r) {
                 for (size_t j = _r.begin(); j != _r.end(); ++j)
                 {
-                    if (!_txPool->txExists((*txs)[j]->sha3()))
+                    if (!_txPool->txExists((*txs)[j]->hash()))
                         (*txs)[j]->sender();
                 }
             });
@@ -162,7 +162,7 @@ void DownloadingTxsQueue::pop2TxPool(
                         << LOG_DESC("Import peer transaction into txPool DUPLICATED from peer")
                         << LOG_KV("reason", int(importResult))
                         << LOG_KV("peer", fromPeer.abridged())
-                        << LOG_KV("txHash", tx->sha3().abridged());
+                        << LOG_KV("txHash", tx->hash().abridged());
                 }
                 else
                 {
@@ -171,7 +171,7 @@ void DownloadingTxsQueue::pop2TxPool(
                         << LOG_DESC("Import peer transaction into txPool FAILED from peer")
                         << LOG_KV("reason", int(importResult))
                         << LOG_KV("peer", fromPeer.abridged())
-                        << LOG_KV("txHash", tx->sha3().abridged());
+                        << LOG_KV("txHash", tx->hash().abridged());
                 }
             }
             catch (std::exception& e)

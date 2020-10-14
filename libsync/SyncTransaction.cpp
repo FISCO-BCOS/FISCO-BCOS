@@ -283,7 +283,7 @@ void SyncTransaction::sendTxsStatus(
                     m_txsHash->insert(
                         std::make_pair(peer, std::make_shared<std::set<dev::h256>>()));
                 }
-                (*m_txsHash)[peer]->insert(tx->sha3());
+                (*m_txsHash)[peer]->insert(tx->hash());
             }
         }
     }

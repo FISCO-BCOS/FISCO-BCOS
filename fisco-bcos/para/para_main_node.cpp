@@ -69,7 +69,7 @@ void generateUserAddTx(std::shared_ptr<LedgerManager> ledgerManager, size_t _use
             u256 nonce = u256(utcTime());
             Transaction::Ptr tx =
                 std::make_shared<Transaction>(value, gasPrice, gas, dest, data, nonce);
-            auto sig = dev::crypto::Sign(keyPair, tx->sha3(WithoutSignature));
+            auto sig = dev::crypto::Sign(keyPair, tx->hash(WithoutSignature));
 
             for (auto group : ledgerManager->getGroupList())
             {
@@ -132,7 +132,7 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
 
                 Transaction::Ptr tx =
                     std::make_shared<Transaction>(value, gasPrice, gas, dest, data, nonce);
-                auto sig = crypto::Sign(keyPair, tx->sha3(WithoutSignature));
+                auto sig = crypto::Sign(keyPair, tx->hash(WithoutSignature));
 
                 tx->setBlockLimit(u256(ledgerManager->blockChain(group)->number()) + maxBlockLimit);
                 tx->updateSignature(sig);

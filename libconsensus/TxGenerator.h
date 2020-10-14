@@ -69,7 +69,7 @@ public:
         auto generatedTx =
             generateTransactionWithoutSig(_interface, _currentNumber, _to, _type, _params...);
         // sign with KeyPair for the generated transaction
-        auto hashToSign = generatedTx->sha3(dev::eth::IncludeSignature::WithoutSignature);
+        auto hashToSign = generatedTx->hash(dev::eth::IncludeSignature::WithoutSignature);
         auto sign = dev::crypto::Sign(_keyPair, hashToSign);
         generatedTx->updateSignature(sign);
         TXGEN_LOG(DEBUG) << LOG_DESC("generateTransactionWithSig")

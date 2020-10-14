@@ -32,7 +32,7 @@ int main(int argc, char** argv)
         cout << addr << endl;
         return 0;
     }
-    auto addr = right160(sha3(bytesConstRef((const unsigned char*)source.data(), 64)));
+    auto addr = right160(keccak256(bytesConstRef((const unsigned char*)source.data(), 64)));
     cout << addr << endl;
     return 0;
 }

@@ -27,7 +27,6 @@
 
 namespace dev
 {
-// SHA-3 convenience routines.
 
 /// Calculate SM3-256 hash of the given input and load it into the given output.
 /// @returns false if o_output.size() != 32.

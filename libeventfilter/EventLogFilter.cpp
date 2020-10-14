@@ -37,7 +37,7 @@ void EventLogFilter::matches(Block const& _block, Json::Value& _value)
                 resp["topics"].append(toJS(log.topics[k]));
             }
 
-            resp["transactionHash"] = toJS(tx->sha3());
+            resp["transactionHash"] = toJS(tx->hash());
             resp["transactionIndex"] = toJS(i);
 
             _value.append(resp);
