@@ -2001,3 +2001,138 @@ void Rpc::parseSignatureIntoResponse(
         _response.append(sigJsonObj);
     }
 }
+
+Json::Value Rpc::getBatchReceiptsByBlockNumberAndRange(int _groupID,
+    const std::string& _blockNumber, std::string const& _from, std::string const& _count,
+    bool _compress)
+{
+    try
+    {
+        RPC_LOG(INFO) << LOG_BADGE("getBatchReceiptsByBlockNumberAndRange") << LOG_DESC("request")
+                      << LOG_KV("groupID", _groupID) << LOG_KV("blockNumber", _blockNumber)
+                      << LOG_KV("from", _from) << LOG_KV("receiptSize", _count);
+        checkRequest(_groupID);
+        BlockNumber number = jsToBlockNumber(_blockNumber);
+
+        auto blockchain = ledgerManager()->blockChain(_groupID);
+        auto block = blockchain->getBlockByNumber(number);
+        if (!block)
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::BlockNumberT, RPCMsg[RPCExceptionType::BlockNumberT]));
+        }
+        Json::Value response;
+        getBatchReceipts(response, block, _from, _count, _compress);
+        return response;
+    }
+    catch (JsonRpcException& e)
+    {
+        throw e;
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
+    }
+}
+
+Json::Value Rpc::getBatchReceiptsByBlockHashAndRange(int _groupID, const std::string& _blockHash,
+    std::string const& _from, std::string const& _count, bool _compress)
+{
+    try
+    {
+        RPC_LOG(INFO) << LOG_BADGE("getBatchReceiptsByBlockHashAndRange") << LOG_DESC("request")
+                      << LOG_KV("groupID", _groupID) << LOG_KV("blockHash", _blockHash)
+                      << LOG_KV("from", _from) << LOG_KV("count", _count);
+
+        checkRequest(_groupID);
+        h256 hash = jsToFixed<32>(_blockHash);
+        auto blockchain = ledgerManager()->blockChain(_groupID);
+        auto block = blockchain->getBlockByHash(hash);
+        if (!block)
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::BlockNumberT, RPCMsg[RPCExceptionType::BlockNumberT]));
+        }
+        Json::Value response;
+        getBatchReceipts(response, block, _from, _count, _compress);
+        return response;
+    }
+    catch (JsonRpcException& e)
+    {
+        throw e;
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
+    }
+}
+
+void Rpc::getBatchReceipts(Json::Value& _response, dev::eth::Block::Ptr _block,
+    std::string const& _from, std::string const& _count, bool _compress)
+{
+    auto transactions = _block->transactions();
+    auto receipts = _block->transactionReceipts();
+    int64_t receiptsSize = receipts->size();
+    int64_t startIndex = jsToInt(_from);
+    // check the startIndex
+    if (startIndex >= (int64_t)transactions->size() || startIndex >= receiptsSize)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(-40099,
+            "start index out of range, the number of receipt is " + std::to_string(receiptsSize)));
+    }
+    int64_t endIndex = receiptsSize;
+    // return all receipts when count is -1
+    if (_count != "-1")
+    {
+        endIndex = startIndex + jsToInt(_count);
+        endIndex = (endIndex > receiptsSize) ? receiptsSize : endIndex;
+    }
+
+    RPC_LOG(INFO) << LOG_DESC("getBatchReceipts")
+                  << LOG_KV("blockHash", _block->blockHeader().hash().abridged())
+                  << LOG_KV("startIndex", startIndex) << LOG_KV("endIndex", endIndex)
+                  << LOG_KV("receiptsSize", receiptsSize);
+    Json::Value blockInfo;
+
+    blockInfo["receiptRoot"] = toJS(_block->receiptRoot());
+    blockInfo["blockNumber"] = toJS(_block->blockHeader().number());
+    blockInfo["blockHash"] = toJS(_block->headerHash());
+    blockInfo["receiptsCount"] = toJS(receiptsSize);
+    _response["blockInfo"] = blockInfo;
+
+    for (auto i = startIndex; i < endIndex; ++i)
+    {
+        auto const& receipt = receipts->at(i);
+        auto const& transaction = transactions->at(i);
+
+        Json::Value receiptJson;
+        receiptJson["transactionHash"] = toJS(transaction->hash());
+        receiptJson["transactionIndex"] = toJS(i);
+        receiptJson["from"] = toJS(transaction->from());
+        receiptJson["to"] = toJS(transaction->to());
+        receiptJson["gasUsed"] = toJS(receipt->gasUsed());
+        receiptJson["contractAddress"] = toJS(receipt->contractAddress());
+        receiptJson["logs"] = Json::Value(Json::arrayValue);
+        for (unsigned int i = 0; i < receipt->log().size(); ++i)
+        {
+            Json::Value log;
+            log["address"] = toJS(receipt->log()[i].address);
+            log["topics"] = Json::Value(Json::arrayValue);
+            for (unsigned int j = 0; j < receipt->log()[i].topics.size(); ++j)
+                log["topics"].append(toJS(receipt->log()[i].topics[j]));
+            log["data"] = toJS(receipt->log()[i].data);
+            receiptJson["logs"].append(log);
+        }
+        receiptJson["status"] = toJS(receipt->status());
+        receiptJson["output"] = toJS(receipt->outputBytes());
+        _response["transactionReceipts"].append(receiptJson);
+    }
+    if (!_compress)
+    {
+        return;
+    }
+    Json::FastWriter fastWriter;
+    _response = base64Encode(compress(fastWriter.write(_response)));
+}
