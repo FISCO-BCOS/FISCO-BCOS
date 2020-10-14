@@ -418,9 +418,9 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
     m_asioInterface->asyncResolveConnect(socket, [=](boost::system::error_code const& ec) {
         if (ec)
         {
-            HOST_LOG(WARNING) << LOG_DESC("TCP Connection refused by node")
-                              << LOG_KV("endpoint", _nodeIPEndpoint)
-                              << LOG_KV("message", ec.message());
+            HOST_LOG(ERROR) << LOG_DESC("TCP Connection refused by node")
+                            << LOG_KV("endpoint", _nodeIPEndpoint)
+                            << LOG_KV("message", ec.message());
             socket->close();
 
             m_threadPool->enqueue([callback, _nodeIPEndpoint]() {
