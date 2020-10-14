@@ -285,7 +285,7 @@ void ConsensusEngineBase::reportBlock(dev::eth::Block const& _block)
         auto receipt = (*receipts)[receiptIndex];
         auto gasUsed = receipt->gasUsed() - prevGasUsed;
         STAT_LOG(INFO) << LOG_TYPE("TxsGasUsed") << LOG_KV("g", m_groupId)
-                       << LOG_KV("txHash", toHex(tx->sha3())) << LOG_KV("gasUsed", gasUsed);
+                       << LOG_KV("txHash", toHex(tx->hash())) << LOG_KV("gasUsed", gasUsed);
         prevGasUsed = receipt->gasUsed();
         receiptIndex++;
     }

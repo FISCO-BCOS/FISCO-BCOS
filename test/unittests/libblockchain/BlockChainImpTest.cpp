@@ -327,13 +327,13 @@ BOOST_AUTO_TEST_CASE(getBlockRLPByNumber)
 BOOST_AUTO_TEST_CASE(getLocalisedTxByHash)
 {
     Transaction::Ptr tx = m_blockChainImp->getLocalisedTxByHash(h256(c_commonHashPrefix));
-    BOOST_CHECK_EQUAL(tx->sha3(), (*m_fakeBlock->m_transaction)[0]->sha3());
+    BOOST_CHECK_EQUAL(tx->hash(), (*m_fakeBlock->m_transaction)[0]->hash());
 }
 
 BOOST_AUTO_TEST_CASE(getTxByHash)
 {
     Transaction::Ptr tx = m_blockChainImp->getTxByHash(h256(c_commonHashPrefix));
-    BOOST_CHECK_EQUAL(tx->sha3(), (*m_fakeBlock->m_transaction)[0]->sha3());
+    BOOST_CHECK_EQUAL(tx->hash(), (*m_fakeBlock->m_transaction)[0]->hash());
 }
 
 BOOST_AUTO_TEST_CASE(getTransactionReceiptByHash)

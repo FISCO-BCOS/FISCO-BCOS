@@ -50,7 +50,7 @@ using Secrets = std::vector<Secret>;
 Public toPublic(Secret const& _secret);
 
 /// Convert a public key to address.
-/// right160(sha3(_public.ref()))
+/// right160(keccak256(_public.ref()))
 Address toAddress(Public const& _public);
 
 /// Convert a secret key into address of public key equivalent.

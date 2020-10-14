@@ -32,7 +32,7 @@ public:
     virtual MemTrieNode* remove(bytesConstRef _key) = 0;
     void putRLP(RLPStream& _parentStream) const;
 
-    /// 256-bit hash of the node - this is a SHA-3/256 hash of the RLP of the node.
+    /// 256-bit hash of the node - this is a Keccak256 hash of the RLP of the node.
     h256 hash256() const
     {
         RLPStream s;

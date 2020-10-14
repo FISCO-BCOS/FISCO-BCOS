@@ -330,9 +330,9 @@ int main(int argc, char* argv[])
             auto context = blockVerifier->executeBlock(*block, parentBlockInfo);
             blockChain->commitBlock(block, context);
             dev::eth::TransactionReceipt::Ptr receipt =
-                blockChain->getTransactionReceiptByHash(tx->sha3());
+                blockChain->getTransactionReceiptByHash(tx->hash());
             LOG(INFO) << "receipt " << *receipt;
-            receipt = blockChain->getTransactionReceiptByHash(tx2->sha3());
+            receipt = blockChain->getTransactionReceiptByHash(tx2->hash());
             LOG(INFO) << "receipt2 " << *receipt;
         }
     }

@@ -34,8 +34,8 @@ using namespace std;
 using namespace dev;
 using namespace dev::crypto;
 
-h256 dev::EmptyHash = sha3(bytesConstRef());
-h256 dev::EmptyTrie = sha3(rlp(""));
+h256 dev::EmptyHash = keccak256(bytesConstRef());
+h256 dev::EmptyTrie = keccak256(rlp(""));
 
 std::function<std::string(const unsigned char* _plainData, size_t _plainDataSize,
     const unsigned char* _key, size_t _keySize, const unsigned char* _ivData)>
@@ -85,8 +85,8 @@ void dev::crypto::initSMCrypto()
 
 void dev::crypto::initCrypto()
 {
-    EmptyHash = sha3(bytesConstRef());
-    EmptyTrie = sha3(rlp(""));
+    EmptyHash = keccak256(bytesConstRef());
+    EmptyTrie = keccak256(rlp(""));
     SignatureFromRLP = ecdsaSignatureFromRLP;
     SignatureFromBytes = ecdsaSignatureFromBytes;
     dev::crypto::SymmetricEncrypt = static_cast<std::string (*)(const unsigned char*, size_t,

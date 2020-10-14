@@ -201,7 +201,7 @@ pair<bool, bytes> dev::ecRecover(bytesConstRef _in)
                 {
                     if (g_BCOSConfig.version() >= V2_5_0)
                     {
-                        ret = dev::sha3(rec);
+                        ret = dev::keccak256(rec);
 
                     }
                     else

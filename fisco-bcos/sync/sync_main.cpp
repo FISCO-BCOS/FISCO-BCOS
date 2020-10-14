@@ -139,7 +139,7 @@ static void createTx(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
             {
                 tx->setNonce(u256(noncePrefix + to_string(txSeqNonce++)));
                 tx->setBlockLimit(u256(_blockChain->number()) + 50);
-                auto sig = dev::crypto::Sign(keyPair, tx->sha3(WithoutSignature));
+                auto sig = dev::crypto::Sign(keyPair, tx->hash(WithoutSignature));
                 tx->updateSignature(sig);
                 _txPool->submit(tx);
             }

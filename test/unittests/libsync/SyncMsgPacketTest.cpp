@@ -84,7 +84,7 @@ public:
         KeyPair sigKeyPair = KeyPair::create();
 
         std::shared_ptr<crypto::Signature> sig =
-            dev::crypto::Sign(sigKeyPair, tx.sha3(WithoutSignature));
+            dev::crypto::Sign(sigKeyPair, tx.hash(WithoutSignature));
         /// update the signature of transaction
         tx.updateSignature(sig);
         return tx;
@@ -160,13 +160,13 @@ BOOST_AUTO_TEST_CASE(SyncStatusPacketTest)
     std::srand(utcTime());
     // case1: test without time
     auto syncStatusFactory = std::make_shared<SyncMsgPacketFactory>();
-    testSyncStatus(syncStatusFactory, (utcTime() + std::rand() % 12000), dev::sha3("genesisHash"),
-        dev::sha3("latestHash"), false);
+    testSyncStatus(syncStatusFactory, (utcTime() + std::rand() % 12000), dev::keccak256("genesisHash"),
+        dev::keccak256("latestHash"), false);
 
     // case2: test with large blockNumber and time
     syncStatusFactory = std::make_shared<SyncMsgPacketWithAlignedTimeFactory>();
-    testSyncStatus(syncStatusFactory, (utcTime() + std::rand() % 12000), dev::sha3("genesisHashT"),
-        dev::sha3("latestHashT"), true);
+    testSyncStatus(syncStatusFactory, (utcTime() + std::rand() % 12000), dev::keccak256("genesisHashT"),
+        dev::keccak256("latestHashT"), true);
 }
 
 BOOST_AUTO_TEST_CASE(SyncTransactionsPacketTest)

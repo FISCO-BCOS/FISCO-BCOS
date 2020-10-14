@@ -237,7 +237,7 @@ public:
         m_codeHash = EmptyHash;
     }
 
-    /// Specify to the object what the actual code is for the account. @a _code must have a SHA3
+    /// Specify to the object what the actual code is for the account. @a _code must have a Keccak256
     /// equal to codeHash() and must only be called when isFreshCode() returns false.
     void noteCode(bytesConstRef _code)
     {
@@ -282,7 +282,7 @@ private:
     /// The map with is overlaid onto whatever storage is implied by the m_storageRoot in the trie.
     std::unordered_map<u256, u256> m_storageOverlay;
 
-    /// The associated code for this account. The SHA3 of this should be equal to m_codeHash unless
+    /// The associated code for this account. The Keccak256 of this should be equal to m_codeHash unless
     /// m_codeHash equals c_contractConceptionCodeHash.
     bytes m_codeCache;
 

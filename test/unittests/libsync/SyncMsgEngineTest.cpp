@@ -236,7 +236,7 @@ BOOST_AUTO_TEST_CASE(SyncTransactionPacketTest)
     auto topTxs = txPoolPtr->topTransactions(1);
     std::cout << "topTransactions finished" << std::endl;
     BOOST_CHECK(topTxs->size() == 1);
-    BOOST_CHECK_EQUAL((*topTxs)[0]->sha3(), txPtr->sha3());
+    BOOST_CHECK_EQUAL((*topTxs)[0]->hash(), txPtr->hash());
     // TODO: this unit test may cause fatal error randomly
 }
 

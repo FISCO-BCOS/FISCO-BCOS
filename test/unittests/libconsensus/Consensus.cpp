@@ -61,7 +61,7 @@ public:
             auto tx = std::make_shared<Transaction>(value, gasPrice, gas, dst, data);
             tx->setNonce(tx->nonce() + utcTime() + u256(i));
             tx->setBlockLimit(m_txpoolCreator->m_blockChain->number() + 2);
-            auto sig = crypto::Sign(keyPair, tx->sha3(WithoutSignature));
+            auto sig = crypto::Sign(keyPair, tx->hash(WithoutSignature));
             tx->updateSignature(sig);
             m_txpoolCreator->m_txPool->submitTransactions(tx);
         }

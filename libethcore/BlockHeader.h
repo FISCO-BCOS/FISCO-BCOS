@@ -290,7 +290,7 @@ private:  /// private data fields
     h512s m_sealerList;          /// sealer list
     /// -------structure of block header end------
 
-    mutable h256 m_hash;       ///< (Memoised) SHA3 hash of the block header with seal.
+    mutable h256 m_hash;       ///< (Memoised) hash of the block header with seal.
     mutable Mutex m_hashLock;  ///< A lock for both m_hash
 };
 
