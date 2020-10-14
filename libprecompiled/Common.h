@@ -22,6 +22,7 @@
 #include "libdevcore/Exceptions.h"
 #include "libprecompiled/Precompiled.h"
 #include <libdevcore/Address.h>
+#include <libstorage/StorageException.h>
 #include <memory>
 #include <string>
 
@@ -124,6 +125,8 @@ enum PrecompiledError : int
 class PrecompiledException : public dev::Exception
 {
 public:
+    // covert StorageException to  PrecompiledException
+    PrecompiledException(dev::storage::StorageException const& _e) : dev::Exception(_e.what()) {}
     PrecompiledException(const std::string& what) : dev::Exception(what) {}
     bytes ToOutput();
 };

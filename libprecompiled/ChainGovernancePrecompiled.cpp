@@ -146,8 +146,18 @@ PrecompiledExecResult::Ptr ChainGovernancePrecompiled::call(
         Address user;
         s256 weight = 0;
         abi.abiOut(data, user, weight);
-        int result = updateCommitteeMemberWeight(
-            _context, user.hexPrefixed(), boost::lexical_cast<string>(weight), _origin);
+        std::string weightStr = boost::lexical_cast<string>(weight);
+        // check the weight, must be greater than 0
+        if (g_BCOSConfig.version() >= V2_7_0 && weight <= 0)
+        {
+            CHAIN_GOVERNANCE_LOG(ERROR)
+                << LOG_DESC("updateCommitteeMemberWeight: invalid weight, must be greater than 0")
+                << LOG_KV("weight", weight);
+            BOOST_THROW_EXCEPTION(
+                PrecompiledException("updateCommitteeMemberWeight failed for invalid weight \"" +
+                                     weightStr + "\", the weight must be greater than 0"));
+        }
+        int result = updateCommitteeMemberWeight(_context, user.hexPrefixed(), weightStr, _origin);
         getErrorCodeOut(callResult->mutableExecResult(), result);
     }
     else if (func == name2Selector[CGP_METHOD_UPDATE_CM_THRESHOLD])

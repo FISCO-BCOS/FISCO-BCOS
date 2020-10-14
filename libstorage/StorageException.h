@@ -35,7 +35,7 @@ public:
       : dev::Exception(what), m_errorCode(errorCode)
     {}
 
-    virtual int errorCode() { return m_errorCode; }
+    virtual int errorCode() const { return m_errorCode; }
 
 private:
     int m_errorCode = 0;
