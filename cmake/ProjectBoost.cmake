@@ -76,6 +76,8 @@ ExternalProject_Add(boost
         --with-serialization
         --with-program_options
         --with-log
+        --with-iostreams
+        -s NO_BZIP2=1 -s NO_LZMA=1 -s NO_ZSTD=1
         -j${CORES}
     LOG_CONFIGURE 1
     LOG_BUILD 1
@@ -146,4 +148,9 @@ set_property(TARGET Boost::Serialization PROPERTY IMPORTED_LOCATION ${BOOST_LIB_
 set_property(TARGET Boost::Serialization PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${BOOST_INCLUDE_DIR})
 add_dependencies(Boost::Serialization boost)
 
+# for boost compress/base64encode
+add_library(Boost::iostreams STATIC IMPORTED GLOBAL)
+set_property(TARGET Boost::iostreams PROPERTY IMPORTED_LOCATION ${BOOST_LIB_DIR}/libboost_iostreams${BOOST_LIBRARY_SUFFIX})
+set_property(TARGET Boost::iostreams PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${BOOST_INCLUDE_DIR})
+add_dependencies(Boost::iostreams boost)
 unset(SOURCE_DIR)

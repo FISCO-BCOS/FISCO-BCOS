@@ -14,7 +14,7 @@
  * along with FISCO-BCOS.  If not, see <http:www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  *
- * @file Rpc.cpp
+ * @file Common.h
  * @author: caryliao
  * @date 2018-11-6
  */
@@ -47,9 +47,10 @@ enum RPCExceptionType : int
     JsonParse = -40002,
     GroupID = -40001,
 };
-
 extern std::map<int, std::string> RPCMsg;
-
-
 }  // namespace rpc
+std::string compress(const std::string& _data);
+std::string decompress(const std::string& _data);
+std::string base64Encode(const std::string& _data);
+std::string base64Decode(const std::string& _data);
 }  // namespace dev
