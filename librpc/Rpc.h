@@ -147,6 +147,12 @@ public:
     Json::Value recoverGroup(int _groupID) override;
     Json::Value queryGroupStatus(int _groupID) override;
 
+    Json::Value getBatchReceiptsByBlockNumberAndRange(int _groupID, const std::string& _blockNumber,
+        std::string const& _from, std::string const& _count, bool compress = true) override;
+    Json::Value getBatchReceiptsByBlockHashAndRange(int _groupID, const std::string& _blockHash,
+        std::string const& _from, std::string const& _count, bool compress = true) override;
+
+
     void setCurrentTransactionCallback(
         std::function<void(const std::string& receiptContext, GROUP_ID _groupId)>* _callback,
         std::function<uint32_t()>* _callbackVersion)
@@ -191,6 +197,7 @@ protected:
 
     void generateBlockHeaderInfo(Json::Value& _response, dev::eth::BlockHeader const& _blockHeader,
         dev::eth::Block::SigListPtrType _signatureList, bool _includeSigList);
+
 
     std::shared_ptr<dev::ledger::LedgerManager> m_ledgerManager;
     dev::initializer::LedgerInitializer::Ptr m_ledgerInitializer;
@@ -246,6 +253,9 @@ private:
 
     void parseSignatureIntoResponse(
         Json::Value& _response, dev::eth::Block::SigListPtrType _signatureList);
+
+    void getBatchReceipts(Json::Value& _response, dev::eth::Block::Ptr _block,
+        std::string const& _from, std::string const& _size, bool _compress);
 };
 
 }  // namespace rpc
