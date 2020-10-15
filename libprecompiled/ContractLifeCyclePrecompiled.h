@@ -66,6 +66,14 @@ private:
         Address const& origin, PrecompiledExecResult::Ptr _callResult);
     void grantManager(std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,
         Address const& origin, PrecompiledExecResult::Ptr _callResult);
+
+    void revokeManager(std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,
+        Address const& origin, PrecompiledExecResult::Ptr _callResult);
+
+    bool checkContractManager(std::string const& _tableName,
+        std::shared_ptr<blockverifier::ExecutiveContext> _context, Address const& _contractAddress,
+        Address const& _userAddress, Address const& _origin, int& _result);
+
     void getStatus(std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,
         PrecompiledExecResult::Ptr _callResult);
     void listManager(std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,
