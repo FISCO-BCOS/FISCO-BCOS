@@ -349,8 +349,20 @@ void ContractLifeCyclePrecompiled::revokeManager(
     }
     Table::Ptr table = openTable(context, tableName);
     auto condition = table->newCondition();
-    condition->EQ(storagestate::STORAGE_VALUE, userAddress.hex());
+    // check the account size that can freeze/unfreeze the contract
     auto entries = table->select(storagestate::ACCOUNT_AUTHORITY, condition);
+    if (entries->size() == 1)
+    {
+        PRECOMPILED_LOG(WARNING) << LOG_DESC(
+                                        "revokeManager: the last contractManager can't be revoked")
+                                 << LOG_KV("contractAddress", contractAddress);
+        result = CODE_INVALID_REVOKE_LAST_AUTHORIZATION;
+        getErrorCodeOut(_callResult->mutableExecResult(), result);
+        return;
+    }
+    condition = table->newCondition();
+    condition->EQ(storagestate::STORAGE_VALUE, userAddress.hex());
+    entries = table->select(storagestate::ACCOUNT_AUTHORITY, condition);
     if (entries->size() == 0u)
     {
         PRECOMPILED_LOG(WARNING) << LOG_DESC("revokeManager: non-exist authorization")
