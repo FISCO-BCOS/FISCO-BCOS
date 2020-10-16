@@ -80,7 +80,9 @@ public:
         this->bindAndAddMethod(jsonrpc::Procedure("getNodeIDList", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
             &dev::rpc::RpcFace::getNodeIDListI);
-
+        this->bindAndAddMethod(jsonrpc::Procedure("getAmopTopicSubscribers", jsonrpc::PARAMS_BY_POSITION,
+                                   jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
+            &dev::rpc::RpcFace::getAmopTopicSubscribersI);
         this->bindAndAddMethod(jsonrpc::Procedure("getBlockByHash", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, "param2",
                                    jsonrpc::JSON_STRING, "param3", jsonrpc::JSON_BOOLEAN, NULL),
@@ -262,6 +264,10 @@ public:
     {
         response = this->getNodeIDList(boost::lexical_cast<int>(request[0u].asString()));
     }
+    inline virtual void getAmopTopicSubscribersI(const Json::Value& request, Json::Value& response)
+    {
+        response = this->getAmopTopicSubscribers(request[0u].asString());
+    }
 
     inline virtual void getBlockByHashI(const Json::Value& request, Json::Value& response)
     {
@@ -432,6 +438,7 @@ public:
     virtual Json::Value getGroupPeers(int param1) = 0;
     virtual Json::Value getGroupList() = 0;
     virtual Json::Value getNodeIDList(int param1) = 0;
+    virtual Json::Value getAmopTopicSubscribers(const std::string& param1) = 0;
 
     // block part
     virtual Json::Value getBlockByHash(int param1, const std::string& param2, bool param3) = 0;

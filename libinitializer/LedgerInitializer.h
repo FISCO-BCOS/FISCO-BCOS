@@ -58,6 +58,7 @@ public:
         m_channelRPCServer = _channelRPCServer;
     }
     void setKeyPair(KeyPair const& _keyPair) { m_keyPair = _keyPair; }
+    ChannelRPCServer::Ptr channelRPCServer() { return m_channelRPCServer; }
 
     ~LedgerInitializer() { stopAll(); }
 

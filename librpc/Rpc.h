@@ -104,6 +104,7 @@ public:
     Json::Value getGroupPeers(int _groupID) override;
     Json::Value getGroupList() override;
     Json::Value getNodeIDList(int _groupID) override;
+    Json::Value getAmopTopicSubscribers(const std::string& _topicName) override;
 
     // block part
     Json::Value getBlockByHash(

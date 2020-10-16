@@ -126,8 +126,7 @@ bool ChannelRPCServer::SendResponse(const std::string& _response, void* _addInfo
 
     if (session)
     {
-        CHANNEL_LOG(TRACE) << "send ethereum resp seq"
-                           << LOG_KV("seq", seq.substr(0, c_seqAbridgedLen))
+        CHANNEL_LOG(TRACE) << "send rpc resp seq" << LOG_KV("seq", seq.substr(0, c_seqAbridgedLen))
                            << LOG_KV("response", _response);
 
         std::shared_ptr<bytes> resp(new bytes());
@@ -533,8 +532,8 @@ void dev::ChannelRPCServer::onClientRegisterEventLogRequest(
                 return checkSDKPermission(_groupId, session->remotePublicKey());
             });
 
-        CHANNEL_LOG(TRACE) << "onClientRegisterEventLogRequest" << LOG_KV("seq", seq) << LOG_KV("ret", ret)
-                           << LOG_KV("request", data);
+        CHANNEL_LOG(TRACE) << "onClientRegisterEventLogRequest" << LOG_KV("seq", seq)
+                           << LOG_KV("ret", ret) << LOG_KV("request", data);
 
         // send event register request back
         Json::Value response;
@@ -568,13 +567,14 @@ void dev::ChannelRPCServer::onClientUnregisterEventLogRequest(
         std::string data(message->data() + topicLen, message->data() + message->dataSize());
         auto protocolVersion = static_cast<uint32_t>(session->protocolVersion());
 
-        int32_t ret = m_eventCancelFilterCallBack(data, protocolVersion, [this, session](dev::GROUP_ID _groupId) {
+        int32_t ret = m_eventCancelFilterCallBack(
+            data, protocolVersion, [this, session](dev::GROUP_ID _groupId) {
                 return checkSDKPermission(_groupId, session->remotePublicKey());
             });
 
-        CHANNEL_LOG(TRACE) << "onClientUnregisterEventLogRequest" << LOG_KV("seq", seq) << LOG_KV("ret", ret)
-                           << LOG_KV("request", data);
-                           
+        CHANNEL_LOG(TRACE) << "onClientUnregisterEventLogRequest" << LOG_KV("seq", seq)
+                           << LOG_KV("ret", ret) << LOG_KV("request", data);
+
         // send event unregister request back
         Json::Value response;
         response["result"] = ret;
@@ -592,7 +592,8 @@ void dev::ChannelRPCServer::onClientUnregisterEventLogRequest(
     }
     catch (std::exception& e)
     {
-        CHANNEL_LOG(ERROR) << "onClientUnregisterEventLogRequest" << boost::diagnostic_information(e);
+        CHANNEL_LOG(ERROR) << "onClientUnregisterEventLogRequest"
+                           << boost::diagnostic_information(e);
     }
 }
 

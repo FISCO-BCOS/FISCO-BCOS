@@ -553,6 +553,71 @@ Json::Value Rpc::getGroupList()
     }
 }
 
+Json::Value Rpc::getAmopTopicSubscribers(const std::string& _topicName)
+{
+    try
+    {
+        RPC_LOG(INFO) << LOG_BADGE("getAmopTopicSubscribers") << LOG_DESC("request")
+                      << LOG_KV("topicName", _topicName);
+
+        Json::Value response;
+
+        // search node subscribers
+        Json::Value nodes = Json::Value(Json::arrayValue);
+        auto sessions = service()->sessionInfos();
+
+        for (auto it = sessions.begin(); it != sessions.end(); ++it)
+        {
+            for (auto topic : it->topics)
+            {
+                if (topic.topic.compare(_topicName) == 0 &&
+                    topic.topicStatus == dev::TopicStatus::VERIFYI_SUCCESS_STATUS)
+                {
+                    nodes.append(boost::lexical_cast<std::string>(it->nodeIPEndpoint));
+                    break;
+                }
+            }
+        }
+
+
+        // search sdk subscribers
+        Json::Value sdks = Json::Value(Json::arrayValue);
+        auto channelRPCServer = m_ledgerInitializer->channelRPCServer();
+        std::vector<dev::channel::ChannelSession::Ptr> activedSessions =
+            channelRPCServer->getSessionByTopic(_topicName);
+        for (auto& it : activedSessions)
+        {
+            sdks.append(it->host() + ":" + std::to_string(it->port()));
+        }
+
+
+        // make response
+        int size = 0;
+        if (!nodes.isNull())
+        {
+            size += nodes.size();
+        }
+        if (!sdks.isNull())
+        {
+            size += sdks.size();
+        }
+
+        response["total"] = size;
+        response["nodes"] = nodes;
+        response["sdks"] = sdks;
+        return response;
+    }
+    catch (JsonRpcException& e)
+    {
+        throw e;
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
+    }
+}
+
 
 Json::Value Rpc::getBlockByHash(int _groupID, const std::string& _blockHash, bool _includeAllData)
 {
