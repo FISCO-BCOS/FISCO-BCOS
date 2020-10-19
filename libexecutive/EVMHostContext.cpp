@@ -95,7 +95,7 @@ void go(unsigned _depth, Executive& _e)
 
     if (_depth == c_offloadPoint)
     {
-        LOG(TRACE) << "Stack offloading (depth: " << c_offloadPoint << ")";
+        EXECUTIVE_LOG(TRACE) << "Stack offloading (depth: " << c_offloadPoint << ")";
         goOnOffloadedStack(_e);
     }
     else
@@ -270,8 +270,8 @@ bool EVMHostContext::isPermitted()
     // check authority by tx.origin
     if (!m_s->checkAuthority(origin(), myAddress()))
     {
-        LOG(ERROR) << "EVMHostContext::isPermitted PermissionDenied" << LOG_KV("origin", origin())
-                   << LOG_KV("address", myAddress());
+        EXECUTIVE_LOG(ERROR) << "EVMHostContext::isPermitted PermissionDenied"
+                             << LOG_KV("origin", origin()) << LOG_KV("address", myAddress());
         return false;
     }
     return true;
