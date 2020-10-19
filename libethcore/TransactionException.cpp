@@ -114,6 +114,78 @@ std::ostream& dev::eth::operator<<(std::ostream& _out, TransactionException cons
     case TransactionException::StackUnderflow:
         _out << "StackUnderflow";
         break;
+    case TransactionException::NonceCheckFail:
+        _out << "NonceCheckFail";
+        break;
+    case TransactionException::BlockLimitCheckFail:
+        _out << "BlockLimitCheckFail";
+        break;
+    case TransactionException::FilterCheckFail:
+        _out << "FilterCheckFail";
+        break;
+    case TransactionException::NoDeployPermission:
+        _out << "NoDeployPermission";
+        break;
+    case TransactionException::NoCallPermission:
+        _out << "NoCallPermission";
+        break;
+    case TransactionException::NoTxPermission:
+        _out << "NoTxPermission";
+        break;
+    case TransactionException::PrecompiledError:
+        _out << "PrecompiledError";
+        break;
+    case TransactionException::RevertInstruction:
+        _out << "RevertInstruction";
+        break;
+    case TransactionException::InvalidZeroSignatureFormat:
+        _out << "InvalidZeroSignatureFormat";
+        break;
+    case TransactionException::AddressAlreadyUsed:
+        _out << "AddressAlreadyUsed";
+        break;
+    case TransactionException::PermissionDenied:
+        _out << "PermissionDenied";
+        break;
+    case TransactionException::CallAddressError:
+        _out << "CallAddressError";
+        break;
+    case TransactionException::GasOverflow:
+        _out << "GasOverflow";
+        break;
+    case TransactionException::TxPoolIsFull:
+        _out << "TxPoolIsFull";
+        break;
+    case TransactionException::TransactionRefused:
+        _out << "TransactionRefused";
+        break;
+    case TransactionException::ContractFrozen:
+        _out << "ContractFrozen";
+        break;
+    case TransactionException::AccountFrozen:
+        _out << "AccountFrozen";
+        break;
+    case TransactionException::AlreadyKnown:
+        _out << "StackUnderflow";
+        break;
+    case TransactionException::AlreadyInChain:
+        _out << "AlreadyInChain";
+        break;
+    case TransactionException::InvalidChainId:
+        _out << "InvalidChainId";
+        break;
+    case TransactionException::InvalidGroupId:
+        _out << "InvalidGroupId";
+        break;
+    case TransactionException::RequestNotBelongToTheGroup:
+        _out << "RequestNotBelongToTheGroup";
+        break;
+    case TransactionException::MalformedTx:
+        _out << "MalformedTx";
+        break;
+    case TransactionException::OverGroupMemoryLimit:
+        _out << "OverGroupMemoryLimit";
+        break;
     default:
         _out << "Unknown";
         break;

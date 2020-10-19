@@ -7,20 +7,21 @@ contract TableFactory {
 
 //select condition
 contract Condition {
-    function EQ(string, int256) public;
-    function EQ(string, string) public;
+    function EQ(string, int256) public view;
+    function EQ(string, string) public view;
+    function EQ(string, address) public view;
 
-    function NE(string, int256) public;
-    function NE(string, string) public;
+    function NE(string, int256) public view;
+    function NE(string, string) public view;
 
-    function GT(string, int256) public;
-    function GE(string, int256) public;
+    function GT(string, int256) public view;
+    function GE(string, int256) public view;
 
-    function LT(string, int256) public;
-    function LE(string, int256) public;
+    function LT(string, int256) public view;
+    function LE(string, int256) public view;
 
-    function limit(int256) public;
-    function limit(int256, int256) public;
+    function limit(int256) public view;
+    function limit(int256, int256) public view;
 }
 
 //one record

@@ -30,20 +30,21 @@ namespace precompiled
 {
 #if 0
 contract Condition {
-    function EQ(string, int);
-    function EQ(string, string);
+    function EQ(string, int) public view;
+    function EQ(string, string) public view;
+    function EQ(string, address) public view;
 
-    function NE(string, int);
-    function NE(string, string);
+    function NE(string, int) public view;
+    function NE(string, string) public view;
 
-    function GT(string, int);
-    function GE(string, int);
+    function GT(string, int) public view;
+    function GE(string, int) public view;
 
-    function LT(string, int);
-    function LE(string, int);
+    function LT(string, int) public view;
+    function LE(string, int) public view;
 
-    function limit(int);
-    function limit(int, int);
+    function limit(int) public view;
+    function limit(int, int) public view;
 }
 {
     "e44594b9": "EQ(string,int256)",
