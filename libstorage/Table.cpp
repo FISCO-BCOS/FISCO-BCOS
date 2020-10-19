@@ -108,6 +108,11 @@ std::string Entry::getField(const std::string& key) const
     return "";
 }
 
+bool Entry::fieldExist(std::string const& _key) const
+{
+    return m_data->m_fields.count(_key);
+}
+
 vector<byte> Entry::getFieldBytes(const std::string& key) const
 {
     RWMutexScoped lock(m_data->m_mutex, false);
@@ -318,7 +323,7 @@ void Entry::setDeleted(bool deleted)
 }
 
 ssize_t Entry::capacity() const
-{ // the capacity is used to calculate gas, must return the same value in different DB
+{  // the capacity is used to calculate gas, must return the same value in different DB
     RWMutexScoped lock(m_data->m_mutex, false);
     return m_capacity;
 }
