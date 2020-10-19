@@ -1959,6 +1959,12 @@ void Rpc::parseReceiptIntoResponse(Json::Value& _response, dev::bytesConstRef _i
     _response["contractAddress"] = toJS(_receipt->contractAddress());
     _response["logsBloom"] = toJS(_receipt->bloom());
     _response["status"] = toJS(_receipt->status());
+    dev::eth::TransactionException status = _receipt->status();
+    // parse statusMsg
+    std::stringstream ss;
+    ss << status;
+    _response["statusMsg"] = ss.str();
+
     _response["output"] = toJS(_receipt->outputBytes());
     // logs
     _response["logs"] = Json::Value(Json::arrayValue);

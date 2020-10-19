@@ -45,7 +45,7 @@ struct ConditionPrecompiledFixture
         conditionPrecompiled->setCondition(condition);
 
         precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
-        auto precompiledExecResultFactory =
+        precompiledExecResultFactory =
             std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
         precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
         conditionPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
@@ -53,10 +53,21 @@ struct ConditionPrecompiledFixture
 
     PrecompiledGas::Ptr createGasPricer() { return precompiledGasFactory->createPrecompiledGas(); }
 
+    dev::precompiled::ConditionPrecompiled::Ptr createConditionPrecompiled()
+    {
+        auto conditionPrecompiled = std::make_shared<dev::precompiled::ConditionPrecompiled>();
+        auto condition = std::make_shared<storage::Condition>();
+        conditionPrecompiled->setPrecompiledEngine(context);
+        conditionPrecompiled->setCondition(condition);
+        conditionPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
+        return conditionPrecompiled;
+    }
     ~ConditionPrecompiledFixture() {}
+
     dev::precompiled::ConditionPrecompiled::Ptr conditionPrecompiled;
     ExecutiveContext::Ptr context;
     dev::precompiled::PrecompiledGasFactory::Ptr precompiledGasFactory;
+    dev::precompiled::PrecompiledExecResultFactory::Ptr precompiledExecResultFactory;
 };
 
 BOOST_FIXTURE_TEST_SUITE(ConditionPrecompiled, ConditionPrecompiledFixture)
@@ -104,7 +115,8 @@ BOOST_AUTO_TEST_CASE(call)
     g_BCOSConfig.setSupportedVersion("v2.7.0", V2_7_0);
     Address addr("0x2fa250d45dfb04f4cc4c030b8df393aca37efac2");
     in = abi.abiIn("EQ(string,address)", std::string("test_string_address"), addr);
-    auto callResult = conditionPrecompiled->call(context, bytesConstRef(&in));
+    auto createdConditionPrecompiled = createConditionPrecompiled();
+    auto callResult = createdConditionPrecompiled->call(context, bytesConstRef(&in));
     PrecompiledGas::Ptr gasPricer = createGasPricer();
     gasPricer->setMemUsed(in.size());
     gasPricer->appendOperation(InterfaceOpcode::EQ);
@@ -112,7 +124,8 @@ BOOST_AUTO_TEST_CASE(call)
 
     // set supported version to v2.6.0
     g_BCOSConfig.setSupportedVersion("v2.6.0", V2_6_0);
-    callResult = conditionPrecompiled->call(context, bytesConstRef(&in));
+    createdConditionPrecompiled = createConditionPrecompiled();
+    callResult = createdConditionPrecompiled->call(context, bytesConstRef(&in));
     gasPricer = createGasPricer();
     gasPricer->setMemUsed(in.size());
     BOOST_CHECK(gasPricer->calTotalGas() == callResult->gasPricer()->calTotalGas());
