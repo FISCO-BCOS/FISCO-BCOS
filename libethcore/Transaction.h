@@ -299,8 +299,6 @@ public:
     static int64_t baseGasRequired(
         bool _contractCreation, bytesConstRef _data, EVMSchedule const& _es);
 
-    void updateTransactionHashWithSig(dev::h256 const& txHash);
-
     bool checkChainId(u256 _chainId);
     bool checkGroupId(u256 _groupId);
 
@@ -316,12 +314,32 @@ public:
     int64_t capacity() { return (m_data.size() + m_rlpBuffer.size() + m_extraData.size()); }
 
     // Note: Provide for node transaction generation
-    void setReceiveAddress(Address const& _receiveAddr) { m_receiveAddress = _receiveAddr; }
-    void setData(std::shared_ptr<dev::bytes const> _dataPtr) { m_data = *_dataPtr; }
+    void setReceiveAddress(Address const& _receiveAddr)
+    {
+        m_hashWith = h256(0);
+        m_rlpBuffer = bytes();
+        m_receiveAddress = _receiveAddr;
+    }
+    void setData(std::shared_ptr<dev::bytes const> _dataPtr)
+    {
+        m_hashWith = h256(0);
+        m_rlpBuffer = bytes();
+        m_data = *_dataPtr;
+    }
 
-    void setChainId(u256 const& _chainId) { m_chainId = _chainId; }
+    void setChainId(u256 const& _chainId)
+    {
+        m_hashWith = h256(0);
+        m_rlpBuffer = bytes();
+        m_chainId = _chainId;
+    }
 
-    void setGroupId(u256 const& _groupId) { m_groupId = _groupId; }
+    void setGroupId(u256 const& _groupId)
+    {
+        m_hashWith = h256(0);
+        m_rlpBuffer = bytes();
+        m_groupId = _groupId;
+    }
 
     /// Type of transaction.
     enum Type
@@ -332,7 +350,12 @@ public:
         MessageCall        ///< Transaction to invoke a message call - receiveAddress() is
                            ///< used.
     };
-    void setType(Type const& _type) { m_type = _type; }
+    void setType(Type const& _type)
+    {
+        m_hashWith = h256(0);
+        m_rlpBuffer = bytes();
+        m_type = _type;
+    }
     Type const& type() { return m_type; }
 
     void appendNodeContainsTransaction(dev::h512 const& _node)
