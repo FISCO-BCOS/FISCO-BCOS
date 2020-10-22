@@ -65,7 +65,7 @@ public:
         P2PSessionInfo info(node_info, m_endpoint, topicList);
         TopicItem item;
         item.topic = "Topic1";
-        item.topicStatus = TopicStatus::VERIFYI_SUCCESS_STATUS;
+        item.topicStatus = TopicStatus::VERIFY_SUCCESS_STATUS;
         topicList.insert(std::move(item));
         m_sessionInfos.push_back(P2PSessionInfo(node_info, m_endpoint, topicList));
         h512s nodeList;

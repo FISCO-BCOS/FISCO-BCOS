@@ -68,6 +68,9 @@ public:
         this->bindAndAddMethod(jsonrpc::Procedure("getClientVersion", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, NULL),
             &dev::rpc::RpcFace::getClientVersionI);
+        this->bindAndAddMethod(jsonrpc::Procedure("getNodeInfo", jsonrpc::PARAMS_BY_POSITION,
+                                   jsonrpc::JSON_OBJECT, NULL),
+            &dev::rpc::RpcFace::getNodeInfoI);
         this->bindAndAddMethod(jsonrpc::Procedure("getPeers", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
             &dev::rpc::RpcFace::getPeersI);
@@ -245,6 +248,10 @@ public:
     inline virtual void getClientVersionI(const Json::Value&, Json::Value& response)
     {
         response = this->getClientVersion();
+    }
+    inline virtual void getNodeInfoI(const Json::Value&, Json::Value& response)
+    {
+        response = this->getNodeInfo();
     }
     inline virtual void getPeersI(const Json::Value& request, Json::Value& response)
     {
@@ -428,6 +435,7 @@ public:
 
     // p2p part
     virtual Json::Value getClientVersion() = 0;
+    virtual Json::Value getNodeInfo() = 0;
     virtual Json::Value getPeers(int param1) = 0;
     virtual Json::Value getGroupPeers(int param1) = 0;
     virtual Json::Value getGroupList() = 0;

@@ -135,7 +135,7 @@ public:
         ++m_topicSeq;
     }
 
-    virtual std::shared_ptr<dev::network::Host> host() { return m_host; }
+    virtual std::shared_ptr<dev::network::Host> host() override { return m_host; }
     virtual void setHost(std::shared_ptr<dev::network::Host> host) { m_host = host; }
 
     std::shared_ptr<P2PMessageFactory> p2pMessageFactory() override { return m_p2pMessageFactory; }

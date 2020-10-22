@@ -100,6 +100,7 @@ public:
 
     // p2p part
     Json::Value getClientVersion() override;
+    Json::Value getNodeInfo() override;
     Json::Value getPeers(int) override;
     Json::Value getGroupPeers(int _groupID) override;
     Json::Value getGroupList() override;
