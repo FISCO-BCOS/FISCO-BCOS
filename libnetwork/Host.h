@@ -121,6 +121,10 @@ public:
     virtual void setWhitelist(dev::PeerWhitelist::Ptr _whitelist) { m_whitelist = _whitelist; }
     virtual dev::PeerWhitelist::Ptr whitelist() { return m_whitelist; }
 
+    /// obtain the common name from the subject:
+    /// the subject format is: /CN=xx/O=xxx/OU=xxx/ commonly
+    std::string obtainCommonNameFromSubject(std::string const& subject);
+
 private:
     /// called by 'startedWorking' to accept connections
     void startAccept(boost::system::error_code ec = boost::system::error_code());
@@ -129,10 +133,6 @@ private:
     /// @return: node id of the connected peer
     std::function<bool(bool, boost::asio::ssl::verify_context&)> newVerifyCallback(
         std::shared_ptr<std::string> nodeIDOut);
-
-    /// obtain the common name from the subject:
-    /// the subject format is: /CN=xx/O=xxx/OU=xxx/ commonly
-    std::string obtainCommonNameFromSubject(std::string const& subject);
 
     /// obtain nodeInfo from given vector
     void obtainNodeInfo(NodeInfo& info, std::string const& node_info);

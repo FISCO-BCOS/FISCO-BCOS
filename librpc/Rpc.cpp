@@ -21,6 +21,7 @@
 
 #include "Rpc.h"
 #include "JsonHelper.h"
+#include "libnetwork/ASIOInterface.h"
 #include <jsonrpccpp/common/exception.h>
 #include <jsonrpccpp/server.h>
 #include <libconfig/GlobalConfigure.h>
@@ -412,7 +413,26 @@ Json::Value Rpc::getClientVersion()
         version["Build Type"] = g_BCOSConfig.binaryInfo.buildInfo;
         version["Git Branch"] = g_BCOSConfig.binaryInfo.gitBranch;
         version["Git Commit Hash"] = g_BCOSConfig.binaryInfo.gitCommitHash;
-
+        version["NodeID"] = service()->id().hex();
+        auto sslContext = service()->host()->asioInterface()->sslContext()->native_handle();
+        auto cert = SSL_CTX_get0_certificate(sslContext);
+        const char* issuer = X509_NAME_oneline(X509_get_issuer_name(cert), NULL, 0);
+        std::string issuerName(issuer);
+        const char* subject = X509_NAME_oneline(X509_get_subject_name(cert), NULL, 0);
+        std::string subjectName(subject);
+        std::string host = service()->host()->listenHost();
+        uint16_t port = service()->host()->listenPort();
+        NodeIPEndpoint endPoint = NodeIPEndpoint(boost::asio::ip::make_address(host), port);
+        version["IPAndPort"] = boost::lexical_cast<std::string>(endPoint);
+        version["Agency"] = service()->host()->obtainCommonNameFromSubject(issuerName);
+        version["Node"] = service()->host()->obtainCommonNameFromSubject(subjectName);
+        version["Topic"] = Json::Value(Json::arrayValue);
+        for (auto topic : service()->topics())
+        {
+            version["Topic"].append(topic);
+        }
+        OPENSSL_free((void*)issuer);
+        OPENSSL_free((void*)subject);
         return version;
     }
     catch (JsonRpcException& e)
@@ -446,14 +466,13 @@ Json::Value Rpc::getPeers(int)
             node["Topic"] = Json::Value(Json::arrayValue);
             for (auto topic : it->topics)
             {
-                if (topic.topicStatus == dev::TopicStatus::VERIFYI_SUCCESS_STATUS)
+                if (topic.topicStatus == dev::TopicStatus::VERIFY_SUCCESS_STATUS)
                 {
                     node["Topic"].append(topic.topic);
                 }
             }
             response.append(node);
         }
-
         return response;
     }
     catch (JsonRpcException& e)

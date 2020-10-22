@@ -48,7 +48,8 @@ enum ChannelMessageType
     CLIENT_HEARTBEAT = 0x13,              // type for heart beat for sdk
     CLIENT_HANDSHAKE = 0x14,              // type for hand shake
     CLIENT_REGISTER_EVENT_LOG = 0x15,     // type for event log filter register request and response
-    CLIENT_UNREGISTER_EVENT_LOG = 0x16,   // type for event log filter unregister request and response
+    CLIENT_UNREGISTER_EVENT_LOG = 0x16,   // type for event log filter unregister request and
+                                          // response
     AMOP_REQUEST = 0x30,                  // type for request from sdk
     AMOP_RESPONSE = 0x31,                 // type for response to sdk
     AMOP_CLIENT_SUBSCRIBE_TOPICS = 0x32,  // type for topic request

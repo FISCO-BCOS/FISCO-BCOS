@@ -163,7 +163,9 @@ public:
         m_eventFilterCallBack = _callback;
     };
 
-    void setEventCancelFilterCallback(std::function<int32_t(const std::string&, uint32_t, std::function<bool(GROUP_ID _groupId)>)> _callback)
+    void setEventCancelFilterCallback(
+        std::function<int32_t(const std::string&, uint32_t, std::function<bool(GROUP_ID _groupId)>)>
+            _callback)
     {
         m_eventCancelFilterCallBack = _callback;
     };
@@ -199,6 +201,9 @@ public:
 
     // remove the registered sdk allowlist when stop/delete the group
     void removeSDKAllowListByGroupId(dev::GROUP_ID const& _groupId);
+
+
+    std::vector<dev::channel::ChannelSession::Ptr> getSessionByTopic(const std::string& topic);
 
 private:
     bool checkSDKPermission(dev::GROUP_ID _groupId, dev::h512 const& _sdkPublicKey);
@@ -243,8 +248,6 @@ private:
 
     void updateHostTopics();
 
-    std::vector<dev::channel::ChannelSession::Ptr> getSessionByTopic(const std::string& topic);
-
     void onClientUpdateTopicStatusRequest(dev::channel::Message::Ptr message);
     bool limitAMOPBandwidth(dev::channel::ChannelSession::Ptr _session,
         dev::channel::Message::Ptr _AMOPReq, dev::p2p::P2PMessage::Ptr _p2pMessage);
@@ -280,8 +283,9 @@ private:
             GROUP_ID const& _groupId)>,
         std::function<int(GROUP_ID _groupId)>, std::function<bool(GROUP_ID _groupId)>)>
         m_eventFilterCallBack;
-    
-    std::function<int32_t(const std::string&, uint32_t, std::function<bool(GROUP_ID _groupId)>)> m_eventCancelFilterCallBack;
+
+    std::function<int32_t(const std::string&, uint32_t, std::function<bool(GROUP_ID _groupId)>)>
+        m_eventCancelFilterCallBack;
 
     std::vector<dev::eth::Handler<int64_t>> m_handlers;
 

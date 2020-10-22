@@ -52,6 +52,8 @@ public:
         m_ledgerManager = std::make_shared<LedgerManager>();
         m_ledgerInitializer = std::make_shared<LedgerInitializer>();
         m_ledgerInitializer->setLedgerManager(m_ledgerManager);
+        m_channelRPCServer = std::make_shared<ChannelRPCServer>();
+        m_ledgerInitializer->setChannelRPCServer(m_channelRPCServer);
         std::shared_ptr<LedgerInterface> ledger =
             std::make_shared<FakeLedger>(m_service, groupId, m_keyPair, "", configurationPath);
         auto ledgerParams = std::make_shared<LedgerParam>();
@@ -67,6 +69,7 @@ public:
     std::shared_ptr<FakesService> m_service;
     std::shared_ptr<LedgerManager> m_ledgerManager;
     LedgerInitializer::Ptr m_ledgerInitializer;
+    ChannelRPCServer::Ptr m_channelRPCServer;
 
     std::string clientVersion = "2.0";
     std::string listenIp = "127.0.0.1";
