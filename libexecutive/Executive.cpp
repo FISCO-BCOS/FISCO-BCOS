@@ -846,8 +846,15 @@ void Executive::parseEVMCResult(std::shared_ptr<eth::Result> _result)
     }
     case EVMC_CONTRACT_VALIDATION_FAILURE:
     {  // FIXME: deal with compatibility
-        EXECUTIVE_LOG(WARNING) << LOG_DESC("WASM Argument Out Of Range");
+        EXECUTIVE_LOG(WARNING) << LOG_DESC("WASM validation failed, contract hash algorithm dose not match host.");
         m_excepted = TransactionException::WASMValidationFailuer;
+        revert();
+        break;
+    }
+    case EVMC_ARGUMENT_OUT_OF_RANGE:
+    {  // FIXME: deal with compatibility
+        EXECUTIVE_LOG(WARNING) << LOG_DESC("WASM Argument Out Of Range");
+        m_excepted = TransactionException::WASMArgumentOutOfRange;
         revert();
         break;
     }

@@ -21,7 +21,7 @@ ExternalProject_Add(hera
         DOWNLOAD_NO_PROGRESS 1
         GIT_REPOSITORY https://github.com/bxq2011hust/hera.git
         GIT_SHALLOW true
-        GIT_TAG 7a7d03440f226cea0a683365027a34867dcc2faa
+        GIT_TAG 0717d705394ffc9dc2b63bdd38af035ad97bf942
         CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
                    -DBUILD_SHARED_LIBS=OFF
                    -DHERA_WASMER=ON
