@@ -276,7 +276,15 @@ void DBInitializer::initTableFactory2(
         boost::filesystem::create_directories(path);
         auto binaryLogger = make_shared<BinLogHandler>(path);
         binaryLogger->setBinaryLogSize(g_BCOSConfig.c_binaryLogSize);
+        if (m_cacheStorage)
+        {  // turn off cachedStorage ForwardBlock when recover from binlog
+            m_cacheStorage->setMaxForwardBlock(0);
+        }
         recoverFromBinaryLog(binaryLogger, backendStorage);
+        if (m_cacheStorage)
+        {
+            m_cacheStorage->setMaxForwardBlock(_param->mutableStorageParam().maxForwardBlock);
+        }
         binaryLogStorage->setBinaryLogger(binaryLogger);
         DBInitializer_LOG(INFO) << LOG_BADGE("init BinaryLogger") << LOG_KV("BinaryLogsPath", path);
         m_storage = binaryLogStorage;
