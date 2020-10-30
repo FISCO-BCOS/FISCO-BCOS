@@ -89,5 +89,20 @@ BOOST_AUTO_TEST_CASE(rlpRandom)
         }
     }
 }
+BOOST_AUTO_TEST_CASE(testTxRlp)
+{
+    std::string txRlpString =
+        "f8ae9f3446824a94c2461d08bd9f4dbb583e6f066fb8ae67c5b6e2933020b41f19c185051f4d5c0083419ce082"
+        "026994d1b50090cf3c7588359a670b775546a72a2be95480a466c9913900000000000000000000000000000000"
+        "000000000000000000000000000000040101801ba03faa8232ad248fc31c68eb56e8bbedf4e70be9381460afd9"
+        "9819b8cf8b6c91cba052121430a55f5ec0c2a2db3000324335507a46b697f961bb86be2687d0d8caf9";
+    dev::bytes rlpBytes = dev::fromHex(txRlpString);
+    bytesConstRef rlpData = ref(rlpBytes);
+    RLP const rlp(rlpData);
+    dev::h256 r = rlp[11].toInt<u256>();
+    std::cout << "decoded r:" << toHex(r);
+    BOOST_CHECK(
+        dev::toHex(r) == "3faa8232ad248fc31c68eb56e8bbedf4e70be9381460afd99819b8cf8b6c91cb");
+}
 
 BOOST_AUTO_TEST_SUITE_END()

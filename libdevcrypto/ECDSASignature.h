@@ -34,9 +34,12 @@ struct ECDSASignature : public Signature
 {
     ECDSASignature() = default;
     ~ECDSASignature() {}
-
-    ECDSASignature(h256 const& _r, h256 const& _s, unsigned char _v) : Signature(_r, _s), v(_v) {}
-
+    ECDSASignature(u256 const& _r, u256 const& _s, byte _v)
+    {
+        r = _r;
+        s = _s;
+        v = _v;
+    }
     void encode(RLPStream& _s) const noexcept;
     std::vector<unsigned char> asBytes() const;
 
