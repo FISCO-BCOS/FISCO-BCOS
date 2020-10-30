@@ -82,7 +82,7 @@ std::shared_ptr<dev::txpool::NonceVec> TransactionNonceCheck::getNonceAndUpdateC
         }
         else
         {
-            NONCECHECKER_LOG(TRACE)
+            NONCECHECKER_LOG(WARNING)
                 << LOG_DESC("Can't get block") << LOG_KV("blockNumber", blockNumber);
         }
     }

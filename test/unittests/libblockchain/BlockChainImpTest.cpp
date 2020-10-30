@@ -282,8 +282,11 @@ BOOST_AUTO_TEST_CASE(emptyChain)
 
     BOOST_CHECK_EQUAL(
         empty.m_blockChainImp->getBlockByHash(h256(c_commonHashPrefix)), std::shared_ptr<Block>());
-    BOOST_CHECK_EQUAL(*(empty.m_blockChainImp->getLocalisedTxByHash(h256(c_commonHashPrefix))),
-        LocalisedTransaction(Transaction(), h256(0), -1));
+    BOOST_CHECK_EQUAL(
+        (empty.m_blockChainImp->getLocalisedTxByHash(h256(c_commonHashPrefix)))->blockHash(),
+        h256(0));
+    BOOST_CHECK_EQUAL(
+        (empty.m_blockChainImp->getLocalisedTxByHash(h256(c_commonHashPrefix)))->blockNumber(), -1);
     BOOST_CHECK_EQUAL(
         *(empty.m_blockChainImp->getTxByHash(h256(c_commonHashPrefix))), Transaction());
     BOOST_CHECK_EQUAL(
@@ -326,8 +329,9 @@ BOOST_AUTO_TEST_CASE(getBlockRLPByNumber)
 
 BOOST_AUTO_TEST_CASE(getLocalisedTxByHash)
 {
-    Transaction::Ptr tx = m_blockChainImp->getLocalisedTxByHash(h256(c_commonHashPrefix));
-    BOOST_CHECK_EQUAL(tx->hash(), (*m_fakeBlock->m_transaction)[0]->hash());
+    LocalisedTransaction::Ptr localizedTx =
+        m_blockChainImp->getLocalisedTxByHash(h256(c_commonHashPrefix));
+    BOOST_CHECK_EQUAL(localizedTx->tx()->hash(), (*m_fakeBlock->m_transaction)[0]->hash());
 }
 
 BOOST_AUTO_TEST_CASE(getTxByHash)
@@ -405,8 +409,11 @@ BOOST_FIXTURE_TEST_CASE(SM_emptyChain, SM_CryptoTestFixture)
 
     BOOST_CHECK_EQUAL(
         empty.m_blockChainImp->getBlockByHash(h256(c_commonHashPrefix)), std::shared_ptr<Block>());
-    BOOST_CHECK_EQUAL(*(empty.m_blockChainImp->getLocalisedTxByHash(h256(c_commonHashPrefix))),
-        LocalisedTransaction(Transaction(), h256(0), -1));
+    BOOST_CHECK_EQUAL(
+        empty.m_blockChainImp->getLocalisedTxByHash(h256(c_commonHashPrefix))->blockHash(),
+        h256(0));
+    BOOST_CHECK_EQUAL(
+        empty.m_blockChainImp->getLocalisedTxByHash(h256(c_commonHashPrefix))->blockNumber(), -1);
     BOOST_CHECK_EQUAL(
         *(empty.m_blockChainImp->getTxByHash(h256(c_commonHashPrefix))), Transaction());
     BOOST_CHECK_EQUAL(

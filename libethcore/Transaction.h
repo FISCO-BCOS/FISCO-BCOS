@@ -60,13 +60,6 @@ struct NodeTransactionMarker
 {
 public:
     NodeTransactionMarker() = default;
-    NodeTransactionMarker(NodeTransactionMarker const& _nodeTransactionMarker)
-      : m_nodeListWithTheTransaction(_nodeTransactionMarker.nodeListWithTheTransaction())
-    {}
-    void operator=(NodeTransactionMarker const& _nodeTransactionMarker)
-    {
-        m_nodeListWithTheTransaction = _nodeTransactionMarker.nodeListWithTheTransaction();
-    }
     void appendNodeContainsTransaction(dev::h512 const& _node)
     {
         WriteGuard l(x_nodeListWithTheTransaction);
@@ -87,11 +80,6 @@ public:
     {
         ReadGuard l(x_nodeListWithTheTransaction);
         return m_nodeListWithTheTransaction.count(_node);
-    }
-
-    std::set<dev::h512> const& nodeListWithTheTransaction() const
-    {
-        return m_nodeListWithTheTransaction;
     }
 
     bool isKnownBySomeone()
@@ -165,6 +153,9 @@ public:
     explicit Transaction(bytes const& _rlp, CheckTransaction _checkSig)
       : Transaction(&_rlp, _checkSig)
     {}
+    Transaction(Transaction const&) = delete;
+
+    Transaction& operator=(Transaction const&) = delete;
 
     /// Checks equality of transactions.
     bool operator==(Transaction const& _c) const
@@ -452,15 +443,23 @@ inline std::ostream& operator<<(std::ostream& _out, Transaction const& _t)
     return _out;
 }
 
-class LocalisedTransaction : public Transaction
+class LocalisedTransaction
 {
 public:
     typedef std::shared_ptr<LocalisedTransaction> Ptr;
 
     LocalisedTransaction() {}
-    LocalisedTransaction(Transaction const& _t, h256 const& _blockHash, unsigned _transactionIndex,
+    LocalisedTransaction(
+        h256 const& _blockHash, unsigned _transactionIndex, BlockNumber _blockNumber = 0)
+      : m_tx(std::make_shared<Transaction>()),
+        m_blockHash(_blockHash),
+        m_transactionIndex(_transactionIndex),
+        m_blockNumber(_blockNumber)
+    {}
+
+    LocalisedTransaction(Transaction::Ptr _tx, h256 const& _blockHash, unsigned _transactionIndex,
         BlockNumber _blockNumber = 0)
-      : Transaction(_t),
+      : m_tx(_tx),
         m_blockHash(_blockHash),
         m_transactionIndex(_transactionIndex),
         m_blockNumber(_blockNumber)
@@ -469,8 +468,10 @@ public:
     h256 const& blockHash() const { return m_blockHash; }
     unsigned transactionIndex() const { return m_transactionIndex; }
     BlockNumber blockNumber() const { return m_blockNumber; }
+    Transaction::Ptr tx() { return m_tx; }
 
 private:
+    Transaction::Ptr m_tx;
     h256 m_blockHash;
     unsigned m_transactionIndex;
     BlockNumber m_blockNumber;

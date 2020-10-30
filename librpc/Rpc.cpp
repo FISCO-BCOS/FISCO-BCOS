@@ -825,7 +825,7 @@ Json::Value Rpc::getTransactionByHash(int _groupID, const std::string& _transact
             return Json::nullValue;
 
         parseTransactionIntoResponse(
-            response, tx->blockHash(), tx->blockNumber(), tx->transactionIndex(), tx);
+            response, tx->blockHash(), tx->blockNumber(), tx->transactionIndex(), tx->tx());
         return response;
     }
     catch (JsonRpcException& e)
@@ -940,15 +940,15 @@ Json::Value Rpc::getTransactionReceipt(int _groupID, const std::string& _transac
 
         h256 hash = jsToFixed<32>(_transactionHash);
 
-        auto tx = blockchain->getLocalisedTxByHash(hash);
-        if (tx->blockNumber() == INVALIDNUMBER)
+        auto localisedTx = blockchain->getLocalisedTxByHash(hash);
+        if (localisedTx->blockNumber() == INVALIDNUMBER)
             return Json::nullValue;
         auto txReceipt = blockchain->getLocalisedTxReceiptByHash(hash);
         if (txReceipt->blockNumber() == INVALIDNUMBER)
             return Json::nullValue;
 
         Json::Value response;
-        parseReceiptIntoResponse(response, ref(tx->data()), txReceipt);
+        parseReceiptIntoResponse(response, ref(localisedTx->tx()->data()), txReceipt);
         return response;
     }
     catch (JsonRpcException& e)
@@ -1321,15 +1321,16 @@ Json::Value Rpc::getTransactionByHashWithProof(int _groupID, const std::string& 
         h256 hash = jsToFixed<32>(_transactionHash);
         auto tx = blockchain->getTransactionByHashWithProof(hash);
 
-        auto transaction = tx.first;
+        auto localizedTransaction = tx.first;
 
-        if (!transaction || transaction->blockNumber() == INVALIDNUMBER)
+        if (!localizedTransaction || localizedTransaction->blockNumber() == INVALIDNUMBER)
         {
             return Json::nullValue;
         }
         Json::Value transactionResponse;
-        parseTransactionIntoResponse(transactionResponse, transaction->blockHash(),
-            transaction->blockNumber(), transaction->transactionIndex(), transaction);
+        parseTransactionIntoResponse(transactionResponse, localizedTransaction->blockHash(),
+            localizedTransaction->blockNumber(), localizedTransaction->transactionIndex(),
+            localizedTransaction->tx());
         response["transaction"] = transactionResponse;
 
         const auto& merkleList = tx.second;
@@ -1393,7 +1394,7 @@ Json::Value Rpc::getTransactionReceiptByHashWithProof(
         }
 
         Json::Value receiptResponse;
-        parseReceiptIntoResponse(receiptResponse, ref(transaction.data()), txReceipt);
+        parseReceiptIntoResponse(receiptResponse, ref(transaction.tx()->data()), txReceipt);
         Json::Value response;
         response["transactionReceipt"] = receiptResponse;
         const auto& merkleList = receipt.second;
