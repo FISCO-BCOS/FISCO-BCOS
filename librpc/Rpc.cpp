@@ -1227,7 +1227,6 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp,
                 JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
         }
         auto blockChain = ledgerManager()->blockChain(_groupID);
-        // Transaction tx(jsToBytes(_rlp, OnFailed::Throw), CheckTransaction::Everything);
         Transaction::Ptr tx = std::make_shared<Transaction>(
             jsToBytes(_rlp, OnFailed::Throw), CheckTransaction::Everything);
         // receive transaction from channel or rpc

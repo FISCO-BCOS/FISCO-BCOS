@@ -76,6 +76,7 @@ enum DisconnectReason
     LocalIdentity,
     PingTimeout,
     UserReason = 0x10,
+    IdleWaitTimeout = 0x11,
     NoDisconnect = 0xffff
 };
 
@@ -188,6 +189,8 @@ inline std::string reasonOf(DisconnectReason _r)
         return "Subprotocol reason.";
     case NoDisconnect:
         return "(No disconnect has happened.)";
+    case IdleWaitTimeout:
+        return "(Idle connection for no network io happens during 5s time intervals.)";
     default:
         return "Unknown reason.";
     }
@@ -200,13 +203,13 @@ inline std::string reasonOf(DisconnectReason _r)
 struct NodeIPEndpoint
 {
     NodeIPEndpoint() = default;
+    NodeIPEndpoint(const NodeIPEndpoint& _nodeIPEndpoint) = default;
     NodeIPEndpoint(const std::string& _host, uint16_t _port) : m_host(_host), m_port(_port) {}
     NodeIPEndpoint(bi::address _addr, uint16_t _port)
       : m_host(_addr.to_string()), m_port(_port), m_ipv6(_addr.is_v6())
     {}
 
     virtual ~NodeIPEndpoint() = default;
-    NodeIPEndpoint(const NodeIPEndpoint& _nodeIPEndpoint) = default;
     NodeIPEndpoint(const boost::asio::ip::tcp::endpoint& _endpoint)
     {
         m_host = _endpoint.address().to_string();

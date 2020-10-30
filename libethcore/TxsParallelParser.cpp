@@ -158,8 +158,8 @@ void TxsParallelParser::decode(std::shared_ptr<Transactions> _txs, bytesConstRef
                         if (_withHash)
                         {
                             // cache the keccak256
-                            // Note: can't calculate keccak256 with keccak256(txBytes.cropped(offset, size))
-                            // directly
+                            // Note: can't calculate keccak256 with
+                            // keccak256(txBytes.cropped(offset, size)) directly
                             //       considering that some cases the encodedData is not
                             //       equal to txBytes.cropped(offset, size)
                             (*_txs)[i]->hash();
@@ -174,7 +174,7 @@ void TxsParallelParser::decode(std::shared_ptr<Transactions> _txs, bytesConstRef
     }
     catch (Exception& e)
     {
-        throwInvalidBlockFormat(e.what());
+        throwInvalidBlockFormat(boost::diagnostic_information(e));
     }
 }
 
