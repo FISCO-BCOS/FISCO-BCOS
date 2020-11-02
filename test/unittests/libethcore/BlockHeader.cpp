@@ -76,7 +76,7 @@ public:
         for (int i = 0; i < 3; i++)
         {
             bytes tmp_bytes;
-            m_singleTransaction.encode(tmp_bytes);
+            m_singleTransaction->encode(tmp_bytes);
             txs_rlp.appendRaw(tmp_bytes);
         }
         block_rlp.appendRaw(txs_rlp.out());
@@ -90,18 +90,18 @@ public:
         Address dst = toAddress(KeyPair::create().pub());
         std::string str = "test transaction";
         bytes data(str.begin(), str.end());
-        m_singleTransaction = Transaction(value, gasPrice, gas, dst, data);
+        m_singleTransaction = std::make_shared<Transaction>(value, gasPrice, gas, dst, data);
         KeyPair sigKeyPair = KeyPair::create();
         std::shared_ptr<crypto::Signature> sig =
-            dev::crypto::Sign(sigKeyPair, m_singleTransaction.hash(WithoutSignature));
+            dev::crypto::Sign(sigKeyPair, m_singleTransaction->hash(WithoutSignature));
         /// update the signature of transaction
-        m_singleTransaction.updateSignature(sig);
+        m_singleTransaction->updateSignature(sig);
     }
 
     ~BlockHeaderFixture() { block_header_genesis.clear(); }
     RLPStream block_rlp;
     BlockHeader block_header_genesis;
-    Transaction m_singleTransaction;
+    Transaction::Ptr m_singleTransaction;
     uint64_t current_time;
     h512s sealer_list;
 };

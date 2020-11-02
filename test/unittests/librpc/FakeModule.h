@@ -145,8 +145,8 @@ public:
         blockHeader.setTimestamp(9);
         blockHash = blockHeader.hash();
         std::cout << "* MockBlockChain, genesis block hash is " << toHex(blockHash);
-        createTransaction();
-        std::shared_ptr<Transaction> p_tx = std::make_shared<Transaction>(transaction);
+        std::shared_ptr<Transaction> p_tx = createTransaction();
+        ;
         transactions = std::make_shared<Transactions>();
         transactions->push_back(p_tx);
 
@@ -190,7 +190,7 @@ public:
         return "300000000";
     };
 
-    void createTransaction()
+    Transaction::Ptr createTransaction()
     {
         bytes rlpBytes;
         if (g_BCOSConfig.SMCrypto())
@@ -256,9 +256,10 @@ public:
         }
         RLP rlpObj(rlpBytes);
         bytesConstRef d = rlpObj.data();
-        transaction = Transaction(d, eth::CheckTransaction::Everything);
-        std::cout << "* MockBlockChain: hash of the transaction: " << transaction.hash()
+        transaction = std::make_shared<Transaction>(d, eth::CheckTransaction::Everything);
+        std::cout << "* MockBlockChain: hash of the transaction: " << transaction->hash()
                   << std::endl;
+        return transaction;
     }
     dev::h256 numberHash(int64_t) override { return blockHash; }
 
@@ -283,13 +284,13 @@ public:
     dev::eth::LocalisedTransactionReceipt::Ptr getLocalisedTxReceiptByHash(
         dev::h256 const& _txHash) override
     {
-        if (_txHash == transaction.hash())
+        if (_txHash == transaction->hash())
         {
             auto tx = getLocalisedTxByHash(_txHash);
             auto txReceipt = getTransactionReceiptByHash(_txHash);
             return std::make_shared<LocalisedTransactionReceipt>(*txReceipt, _txHash,
-                tx->blockHash(), tx->blockNumber(), tx->from(), tx->to(), tx->transactionIndex(),
-                txReceipt->gasUsed(), txReceipt->contractAddress());
+                tx->blockHash(), tx->blockNumber(), tx->tx()->from(), tx->tx()->to(),
+                tx->transactionIndex(), txReceipt->gasUsed(), txReceipt->contractAddress());
         }
         else
             return std::make_shared<LocalisedTransactionReceipt>(
@@ -389,7 +390,7 @@ public:
 
     BlockHeader blockHeader;
     std::shared_ptr<Transactions> transactions;
-    Transaction transaction;
+    Transaction::Ptr transaction = std::make_shared<Transaction>();
     bytes extraData;
     Block block;
     h256 blockHash;
@@ -498,9 +499,10 @@ public:
         }
         RLP rlpObj(rlpBytes);
         bytesConstRef d = rlpObj.data();
-        transaction = Transaction(d, eth::CheckTransaction::Everything);
+        transaction = std::make_shared<Transaction>(d, eth::CheckTransaction::Everything);
         transactions = std::make_shared<dev::eth::Transactions>();
-        std::shared_ptr<Transaction> tx = std::make_shared<Transaction>(transaction);
+        std::shared_ptr<Transaction> tx =
+            std::make_shared<Transaction>(d, eth::CheckTransaction::Everything);
         transactions->push_back(tx);
     };
     virtual ~MockTxPool(){};
@@ -546,7 +548,7 @@ public:
 
 private:
     std::shared_ptr<Transactions> transactions;
-    Transaction transaction;
+    Transaction::Ptr transaction = std::make_shared<Transaction>();
     PROTOCOL_ID protocolId = 0;
 };
 
