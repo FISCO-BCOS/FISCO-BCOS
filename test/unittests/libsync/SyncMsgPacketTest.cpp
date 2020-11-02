@@ -69,7 +69,7 @@ public:
         return session;
     }
 
-    Transaction createFakeTransaction(int64_t _currentBlockNumber)
+    Transaction::Ptr createFakeTransaction(int64_t _currentBlockNumber)
     {
         u256 value = u256(100);
         u256 gas = u256(100000000);
@@ -77,21 +77,21 @@ public:
         Address dst = toAddress(KeyPair::create().pub());
         std::string str = "test transaction";
         bytes data(str.begin(), str.end());
-        Transaction tx(value, gasPrice, gas, dst, data);
-        tx.setNonce(tx.nonce() + u256(rand()));
+        Transaction::Ptr tx = std::make_shared<Transaction>(value, gasPrice, gas, dst, data);
+        tx->setNonce(tx->nonce() + u256(rand()));
         u256 c_maxBlockLimit = u256(500);
-        tx.setBlockLimit(u256(_currentBlockNumber) + c_maxBlockLimit);
+        tx->setBlockLimit(u256(_currentBlockNumber) + c_maxBlockLimit);
         KeyPair sigKeyPair = KeyPair::create();
 
         std::shared_ptr<crypto::Signature> sig =
-            dev::crypto::Sign(sigKeyPair, tx.hash(WithoutSignature));
+            dev::crypto::Sign(sigKeyPair, tx->hash(WithoutSignature));
         /// update the signature of transaction
-        tx.updateSignature(sig);
+        tx->updateSignature(sig);
         return tx;
     }
 
     std::shared_ptr<P2PSession> fakeSessionPtr;
-    Transaction fakeTransaction;
+    Transaction::Ptr fakeTransaction = std::make_shared<Transaction>();
 
 protected:
     // FakeHost* m_host;
@@ -160,20 +160,20 @@ BOOST_AUTO_TEST_CASE(SyncStatusPacketTest)
     std::srand(utcTime());
     // case1: test without time
     auto syncStatusFactory = std::make_shared<SyncMsgPacketFactory>();
-    testSyncStatus(syncStatusFactory, (utcTime() + std::rand() % 12000), dev::keccak256("genesisHash"),
-        dev::keccak256("latestHash"), false);
+    testSyncStatus(syncStatusFactory, (utcTime() + std::rand() % 12000),
+        dev::keccak256("genesisHash"), dev::keccak256("latestHash"), false);
 
     // case2: test with large blockNumber and time
     syncStatusFactory = std::make_shared<SyncMsgPacketWithAlignedTimeFactory>();
-    testSyncStatus(syncStatusFactory, (utcTime() + std::rand() % 12000), dev::keccak256("genesisHashT"),
-        dev::keccak256("latestHashT"), true);
+    testSyncStatus(syncStatusFactory, (utcTime() + std::rand() % 12000),
+        dev::keccak256("genesisHashT"), dev::keccak256("latestHashT"), true);
 }
 
 BOOST_AUTO_TEST_CASE(SyncTransactionsPacketTest)
 {
     SyncTransactionsPacket txPacket;
     vector<bytes> txRLPs;
-    txRLPs.emplace_back(fakeTransaction.rlp());
+    txRLPs.emplace_back(fakeTransaction->rlp());
 
     txPacket.encode(txRLPs);
     auto msgPtr = txPacket.toMessage(0x02);
@@ -182,7 +182,7 @@ BOOST_AUTO_TEST_CASE(SyncTransactionsPacketTest)
     auto rlpTx = txPacket.rlp()[0];
     std::shared_ptr<Transactions> txs = std::make_shared<Transactions>();
     dev::eth::TxsParallelParser::decode(txs, rlpTx.toBytesConstRef());
-    BOOST_CHECK((*(*txs)[0]) == fakeTransaction);
+    BOOST_CHECK((*(*txs)[0]) == *fakeTransaction);
 }
 
 BOOST_AUTO_TEST_CASE(SyncBlocksPacketTest)

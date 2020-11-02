@@ -188,7 +188,7 @@ public:
         fakeSingleTransaction();
         for (size_t i = 0; i < size; i++)
         {
-            (*m_transaction)[i] = std::make_shared<Transaction>(m_singleTransaction);
+            (*m_transaction)[i] = fakeSingleTransaction();
         }
         m_transactionData = TxsParallelParser::encode(m_transaction);
     }
@@ -204,7 +204,7 @@ public:
     }
 
     /// fake single transaction
-    void fakeSingleTransaction()
+    Transaction::Ptr fakeSingleTransaction()
     {
         u256 value = u256(100);
         u256 gas = u256(100000000);
@@ -212,11 +212,13 @@ public:
         Address dst;
         std::string str = "test transaction";
         bytes data(str.begin(), str.end());
-        m_singleTransaction = Transaction(value, gasPrice, gas, dst, data, 2);
+        auto fakedTx = std::make_shared<Transaction>(value, gasPrice, gas, dst, data, 2);
+        m_singleTransaction = fakedTx;
         std::shared_ptr<crypto::Signature> sig =
-            dev::crypto::Sign(m_keyPair, m_singleTransaction.hash(WithoutSignature));
+            dev::crypto::Sign(m_keyPair, m_singleTransaction->hash(WithoutSignature));
         /// update the signature of transaction
-        m_singleTransaction.updateSignature(sig);
+        m_singleTransaction->updateSignature(sig);
+        return fakedTx;
     }
 
     void fakeSingleTransactionReceipt()
@@ -270,7 +272,7 @@ public:
     std::shared_ptr<Block> m_block;
     BlockHeader m_blockHeader;
     std::shared_ptr<Transactions> m_transaction;
-    Transaction m_singleTransaction;
+    Transaction::Ptr m_singleTransaction;
     std::shared_ptr<TransactionReceipts> m_transactionReceipt;
     TransactionReceipt::Ptr m_singleTransactionReceipt = std::make_shared<TransactionReceipt>();
     std::shared_ptr<std::vector<std::pair<u256, std::vector<unsigned char>>>> m_sigList;
