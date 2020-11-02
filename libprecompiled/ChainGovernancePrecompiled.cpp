@@ -660,7 +660,14 @@ int ChainGovernancePrecompiled::verifyAndRecord(
             entry->setField(CGP_COMMITTEE_TABLE_ORIGIN, _origin);
             int count = committeeTable->update(CGP_AUTH_THRESHOLD, entry,
                 committeeTable->newCondition(), make_shared<AccessOptions>(Address(), false));
-            deleteUsedVotes(_user + CGP_WEIGTH_SUFFIX, value);
+            if (g_BCOSConfig.version() >= V2_7_0)
+            {
+                deleteUsedVotes(CGP_UPDATE_AUTH_THRESHOLD, value);
+            }
+            else
+            {
+                deleteUsedVotes(_user + CGP_WEIGTH_SUFFIX, value);
+            }
             return count;
         }
         break;
@@ -753,6 +760,7 @@ string ChainGovernancePrecompiled::queryVotesOfMember(
             Json::Value vote;
             vote[CGP_COMMITTEE_TABLE_ORIGIN] = entry->getField(CGP_COMMITTEE_TABLE_ORIGIN);
             vote[CGP_COMMITTEE_TABLE_BLOCKLIMIT] = entry->getField(CGP_COMMITTEE_TABLE_BLOCKLIMIT);
+            vote[CGP_COMMITTEE_TABLE_VALUE] = entry->getField(CGP_COMMITTEE_TABLE_VALUE);
             voteInfo["update_weight"].append(vote);
         }
     }
