@@ -24,16 +24,6 @@ namespace dev
 {
 namespace precompiled
 {
-enum ContractStatus
-{
-    Invalid = 0,
-    Available,
-    Frozen,
-    AddressNonExistent,
-    NotContractAddress,
-    Count
-};
-
 const std::string CONTRACT_STATUS_DESC[ContractStatus::Count] = {"Invalid",
     "The contract is available.",
     "The contract has been frozen. You can invoke this contract after unfreezing it.",
@@ -56,8 +46,6 @@ public:
 private:
     bool checkPermission(std::shared_ptr<blockverifier::ExecutiveContext> context,
         std::string const& tableName, Address const& origin);
-    ContractStatus getContractStatus(
-        std::shared_ptr<blockverifier::ExecutiveContext> context, std::string const& tableName);
     int updateFrozenStatus(std::shared_ptr<blockverifier::ExecutiveContext> context,
         std::string const& tableName, std::string const& frozen, Address const& origin);
     void freeze(std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,

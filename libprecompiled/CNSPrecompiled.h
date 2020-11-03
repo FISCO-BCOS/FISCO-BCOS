@@ -48,6 +48,10 @@ public:
 
     std::string toString() override;
 
+    bool checkCNSParam(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
+        std::string const& _contractAddress, std::string const& _contractName,
+        std::string const& _contractAbi);
+
     PrecompiledExecResult::Ptr call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
         bytesConstRef param, Address const& origin = Address(),
         Address const& _sender = Address()) override;

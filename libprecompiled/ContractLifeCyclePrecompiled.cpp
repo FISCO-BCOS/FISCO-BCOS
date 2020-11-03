@@ -110,48 +110,6 @@ bool ContractLifeCyclePrecompiled::checkPermission(
     return false;
 }
 
-ContractStatus ContractLifeCyclePrecompiled::getContractStatus(
-    ExecutiveContext::Ptr context, std::string const& tableName)
-{
-    Table::Ptr table = openTable(context, tableName);
-    if (!table)
-    {
-        return ContractStatus::AddressNonExistent;
-    }
-
-    auto codeHashEntries = table->select(storagestate::ACCOUNT_CODE_HASH, table->newCondition());
-    h256 codeHash;
-    if (g_BCOSConfig.version() >= V2_5_0)
-    {
-        codeHash = h256(codeHashEntries->get(0)->getFieldBytes(storagestate::STORAGE_VALUE));
-    }
-    else
-    {
-        codeHash = h256(fromHex(codeHashEntries->get(0)->getField(storagestate::STORAGE_VALUE)));
-    }
-
-    if (EmptyHash == codeHash)
-    {
-        return ContractStatus::NotContractAddress;
-    }
-
-    auto frozenEntries = table->select(storagestate::ACCOUNT_FROZEN, table->newCondition());
-    if (frozenEntries->size() > 0 &&
-        STATUS_TRUE == frozenEntries->get(0)->getField(storagestate::STORAGE_VALUE))
-    {
-        return ContractStatus::Frozen;
-    }
-    else
-    {
-        return ContractStatus::Available;
-    }
-
-    PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractLifeCyclePrecompiled")
-                           << LOG_DESC("getContractStatus error")
-                           << LOG_KV("table name", tableName);
-
-    return ContractStatus::Invalid;
-}
 
 int ContractLifeCyclePrecompiled::updateFrozenStatus(ExecutiveContext::Ptr context,
     std::string const& tableName, std::string const& frozen, Address const& origin)
