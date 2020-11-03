@@ -125,6 +125,16 @@ enum PrecompiledError : int
     CODE_SUCCESS = 0
 };
 
+enum ContractStatus
+{
+    Invalid = 0,
+    Available,
+    Frozen,
+    AddressNonExistent,
+    NotContractAddress,
+    Count
+};
+
 class PrecompiledException : public dev::Exception
 {
 public:
@@ -156,6 +166,9 @@ std::shared_ptr<std::pair<std::string, int64_t>> getSysteConfigByKey(
 
 std::shared_ptr<dev::storage::Table> openTable(
     std::shared_ptr<dev::blockverifier::ExecutiveContext> context, const std::string& tableName);
+
+dev::precompiled::ContractStatus getContractStatus(
+    std::shared_ptr<dev::blockverifier::ExecutiveContext> context, std::string const& tableName);
 
 const int SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH = 64;
 const int SYS_TABLE_VALUE_FIELD_MAX_LENGTH = 1024;
