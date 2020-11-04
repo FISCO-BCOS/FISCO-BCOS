@@ -21,6 +21,7 @@
 
 #include "Rpc.h"
 #include "JsonHelper.h"
+#include "libnetwork/ASIOInterface.h"
 #include <jsonrpccpp/common/exception.h>
 #include <jsonrpccpp/server.h>
 #include <libconfig/GlobalConfigure.h>
@@ -412,7 +413,6 @@ Json::Value Rpc::getClientVersion()
         version["Build Type"] = g_BCOSConfig.binaryInfo.buildInfo;
         version["Git Branch"] = g_BCOSConfig.binaryInfo.gitBranch;
         version["Git Commit Hash"] = g_BCOSConfig.binaryInfo.gitCommitHash;
-
         return version;
     }
     catch (JsonRpcException& e)
@@ -427,6 +427,40 @@ Json::Value Rpc::getClientVersion()
 
     return Json::Value();
 }
+
+Json::Value Rpc::getNodeInfo()
+{
+    try
+    {
+        RPC_LOG(INFO) << LOG_BADGE("getNodeInfo") << LOG_DESC("request");
+        dev::network::NodeInfo hostNodeInfo = service()->host()->nodeInfo();
+        std::string host = service()->host()->listenHost();
+        uint16_t port = service()->host()->listenPort();
+        NodeIPEndpoint endPoint = NodeIPEndpoint(boost::asio::ip::make_address(host), port);
+        Json::Value nodeInfo;
+        nodeInfo["NodeID"] = service()->id().hex();
+        nodeInfo["IPAndPort"] = boost::lexical_cast<std::string>(endPoint);
+        nodeInfo["Agency"] = hostNodeInfo.agencyName;
+        nodeInfo["Node"] = hostNodeInfo.nodeName;
+        nodeInfo["Topic"] = Json::Value(Json::arrayValue);
+        for (auto topic : service()->topics())
+        {
+            nodeInfo["Topic"].append(topic);
+        }
+        return nodeInfo;
+    }
+    catch (JsonRpcException& e)
+    {
+        throw e;
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
+    }
+    return Json::Value();
+}
+
 
 Json::Value Rpc::getPeers(int)
 {
@@ -446,14 +480,13 @@ Json::Value Rpc::getPeers(int)
             node["Topic"] = Json::Value(Json::arrayValue);
             for (auto topic : it->topics)
             {
-                if (topic.topicStatus == dev::TopicStatus::VERIFYI_SUCCESS_STATUS)
+                if (topic.topicStatus == dev::TopicStatus::VERIFY_SUCCESS_STATUS)
                 {
                     node["Topic"].append(topic.topic);
                 }
             }
             response.append(node);
         }
-
         return response;
     }
     catch (JsonRpcException& e)

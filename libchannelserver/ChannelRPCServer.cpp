@@ -361,7 +361,7 @@ void dev::ChannelRPCServer::onClientUpdateTopicStatusRequest(
         if (session)
         {
             session->updateTopicStatus(
-                topic, checkResult == 0 ? dev::VERIFYI_SUCCESS_STATUS : dev::VERIFYI_FAILED_STATUS);
+                topic, checkResult == 0 ? dev::VERIFY_SUCCESS_STATUS : dev::VERIFY_FAILED_STATUS);
         }
     }
     catch (ChannelException& e)
@@ -533,8 +533,8 @@ void dev::ChannelRPCServer::onClientRegisterEventLogRequest(
                 return checkSDKPermission(_groupId, session->remotePublicKey());
             });
 
-        CHANNEL_LOG(TRACE) << "onClientRegisterEventLogRequest" << LOG_KV("seq", seq) << LOG_KV("ret", ret)
-                           << LOG_KV("request", data);
+        CHANNEL_LOG(TRACE) << "onClientRegisterEventLogRequest" << LOG_KV("seq", seq)
+                           << LOG_KV("ret", ret) << LOG_KV("request", data);
 
         // send event register request back
         Json::Value response;
@@ -568,13 +568,14 @@ void dev::ChannelRPCServer::onClientUnregisterEventLogRequest(
         std::string data(message->data() + topicLen, message->data() + message->dataSize());
         auto protocolVersion = static_cast<uint32_t>(session->protocolVersion());
 
-        int32_t ret = m_eventCancelFilterCallBack(data, protocolVersion, [this, session](dev::GROUP_ID _groupId) {
+        int32_t ret = m_eventCancelFilterCallBack(
+            data, protocolVersion, [this, session](dev::GROUP_ID _groupId) {
                 return checkSDKPermission(_groupId, session->remotePublicKey());
             });
 
-        CHANNEL_LOG(TRACE) << "onClientUnregisterEventLogRequest" << LOG_KV("seq", seq) << LOG_KV("ret", ret)
-                           << LOG_KV("request", data);
-                           
+        CHANNEL_LOG(TRACE) << "onClientUnregisterEventLogRequest" << LOG_KV("seq", seq)
+                           << LOG_KV("ret", ret) << LOG_KV("request", data);
+
         // send event unregister request back
         Json::Value response;
         response["result"] = ret;
@@ -592,7 +593,8 @@ void dev::ChannelRPCServer::onClientUnregisterEventLogRequest(
     }
     catch (std::exception& e)
     {
-        CHANNEL_LOG(ERROR) << "onClientUnregisterEventLogRequest" << boost::diagnostic_information(e);
+        CHANNEL_LOG(ERROR) << "onClientUnregisterEventLogRequest"
+                           << boost::diagnostic_information(e);
     }
 }
 

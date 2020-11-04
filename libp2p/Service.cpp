@@ -933,7 +933,7 @@ NodeIDs Service::getPeersByTopic(std::string const& topic)
         {
             for (auto& j : it.second->topics())
             {
-                if ((j.topic == topic) && (j.topicStatus == TopicStatus::VERIFYI_SUCCESS_STATUS))
+                if ((j.topic == topic) && (j.topicStatus == TopicStatus::VERIFY_SUCCESS_STATUS))
                 {
                     nodeList.push_back(it.first);
                 }

@@ -23,6 +23,7 @@
 
 #include <libdevcore/TopicInfo.h>
 #include <libflowlimit/RateLimiter.h>
+#include <libnetwork/Host.h>
 #include <libsync/DownloadingTxsQueue.h>
 #include <libsync/SyncMsgEngine.h>
 #include <libsync/SyncMsgPacket.h>
@@ -143,6 +144,8 @@ public:
 public:
     // not used
     NodeID id() const override { return NodeID(); };
+
+    std::shared_ptr<dev::network::Host> host() override { return nullptr; };
 
     std::shared_ptr<P2PMessage> sendMessageByNodeID(NodeID, std::shared_ptr<P2PMessage>) override
     {

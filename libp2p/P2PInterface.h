@@ -22,6 +22,7 @@
 #pragma once
 
 #include <libdevcore/FixedHash.h>
+#include <libnetwork/Host.h>
 #include <libnetwork/SessionFace.h>
 #include <libp2p/Common.h>
 #include <libp2p/P2PMessage.h>
@@ -92,6 +93,8 @@ public:
     virtual bool isConnected(NodeID const& _nodeID) const = 0;
 
     virtual std::set<std::string> topics() = 0;
+
+    virtual std::shared_ptr<dev::network::Host> host() = 0;
 
     virtual dev::h512s getNodeListByGroupID(GROUP_ID groupID) = 0;
     virtual void setGroupID2NodeList(std::map<GROUP_ID, dev::h512s> _groupID2NodeList) = 0;
