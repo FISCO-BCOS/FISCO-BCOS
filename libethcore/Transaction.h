@@ -55,51 +55,6 @@ const int c_sigCount = 3;
 
 /// function called after the transaction has been submitted
 class Block;
-
-struct NodeTransactionMarker
-{
-public:
-    NodeTransactionMarker() = default;
-    void appendNodeContainsTransaction(dev::h512 const& _node)
-    {
-        WriteGuard l(x_nodeListWithTheTransaction);
-        m_nodeListWithTheTransaction.insert(_node);
-    }
-
-    template <typename T>
-    void appendNodeListContainTransaction(T const& _nodeList)
-    {
-        WriteGuard l(x_nodeListWithTheTransaction);
-        for (auto const& node : _nodeList)
-        {
-            m_nodeListWithTheTransaction.insert(node);
-        }
-    }
-
-    bool isTheNodeContainsTransaction(dev::h512 const& _node)
-    {
-        ReadGuard l(x_nodeListWithTheTransaction);
-        return m_nodeListWithTheTransaction.count(_node);
-    }
-
-    bool isKnownBySomeone()
-    {
-        ReadGuard l(x_nodeListWithTheTransaction);
-        return !m_nodeListWithTheTransaction.empty();
-    }
-
-    void clear()
-    {
-        WriteGuard l(x_nodeListWithTheTransaction);
-        m_nodeListWithTheTransaction.clear();
-    }
-
-private:
-    mutable dev::SharedMutex x_nodeListWithTheTransaction;
-    // Record the node where the transaction exists
-    std::set<dev::h512> m_nodeListWithTheTransaction;
-};
-
 using RPCCallback = std::function<void(LocalisedTransactionReceipt::Ptr, dev::bytesConstRef input,
     std::shared_ptr<dev::eth::Block> _blockPtr)>;
 /// Encodes a transaction, ready to be exported to or freshly imported from RLP.
@@ -351,22 +306,36 @@ public:
 
     void appendNodeContainsTransaction(dev::h512 const& _node)
     {
-        return m_nodeTransactionMarker.appendNodeContainsTransaction(_node);
+        WriteGuard l(x_nodeListWithTheTransaction);
+        m_nodeListWithTheTransaction.insert(_node);
     }
 
     template <typename T>
     void appendNodeListContainTransaction(T const& _nodeList)
     {
-        return m_nodeTransactionMarker.appendNodeListContainTransaction(_nodeList);
+        WriteGuard l(x_nodeListWithTheTransaction);
+        for (auto const& node : _nodeList)
+        {
+            m_nodeListWithTheTransaction.insert(node);
+        }
     }
 
     bool isTheNodeContainsTransaction(dev::h512 const& _node)
     {
-        return m_nodeTransactionMarker.isTheNodeContainsTransaction(_node);
+        ReadGuard l(x_nodeListWithTheTransaction);
+        return m_nodeListWithTheTransaction.count(_node);
     }
-    bool isKnownBySomeone() { return m_nodeTransactionMarker.isKnownBySomeone(); }
+    bool isKnownBySomeone()
+    {
+        ReadGuard l(x_nodeListWithTheTransaction);
+        return !m_nodeListWithTheTransaction.empty();
+    }
 
-    void clearNodeTransactionMarker() { m_nodeTransactionMarker.clear(); }
+    void clearNodeTransactionMarker()
+    {
+        WriteGuard l(x_nodeListWithTheTransaction);
+        m_nodeListWithTheTransaction.clear();
+    }
 
     std::shared_ptr<crypto::Signature> vrs() { return m_vrs; }
 
@@ -420,9 +389,9 @@ protected:
     // Whether the transaction has been synchronized
     bool m_synced = false;
     // Record the list of nodes containing the transaction and provide related query interfaces.
-    // This is separately abstracted as a class because the related map needs to be locked when
-    // updating the node list, which makes the default copy constructor of Transaction invalid.
-    NodeTransactionMarker m_nodeTransactionMarker;
+    mutable dev::SharedMutex x_nodeListWithTheTransaction;
+    // Record the node where the transaction exists
+    std::set<dev::h512> m_nodeListWithTheTransaction;
 };
 
 /// Nice name for vector of Transaction.
