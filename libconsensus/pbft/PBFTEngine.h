@@ -335,7 +335,7 @@ protected:
 
     /// if collect >= 2/3 SignReq and CommitReq, then callback this function to commit block
     void checkAndSave();
-    void checkAndChangeView();
+    bool checkAndChangeView(VIEWTYPE const& _view);
 
 
     void initPBFTEnv(unsigned _view_timeout);
