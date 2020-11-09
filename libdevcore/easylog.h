@@ -84,6 +84,12 @@ const int CPackageTimeLimit = 2000; //打包耗时超过2000ms告警
 #define StatLOG(LEVEL) CLOG(LEVEL, "statLogger")
 #define NormalStatLog() StatLOG(INFO)
 
+// BCOS log format
+#define LOG_BADGE(_NAME) "[" << (_NAME) << "]"
+#define LOG_TYPE(_TYPE) (_TYPE) << "|"
+#define LOG_DESC(_DESCRIPTION) (_DESCRIPTION)
+#define LOG_KV(_K, _V) "," << (_K) << "=" << (_V)
+
 namespace dev
 {
 class LogOutputStreamBase

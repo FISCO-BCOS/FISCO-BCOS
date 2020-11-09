@@ -43,6 +43,8 @@ namespace eth
 DEV_SIMPLE_EXCEPTION(PbftInitFailed);
 DEV_SIMPLE_EXCEPTION(UnexpectError);
 
+#define PBFT_LOG(level) LOG(level) << "[PBFT]"
+
 class PBFT: public SealEngineFace, Worker
 {
 public:
