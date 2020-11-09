@@ -28,7 +28,7 @@
 #include <libblockverifier/ExecutiveContext.h>
 #include <boost/thread.hpp>
 #include <exception>
-
+#include <sstream>
 
 using namespace std;
 using namespace dev;
@@ -237,6 +237,12 @@ EVMHostContext::EVMHostContext(std::shared_ptr<StateFace> _s,
 evmc_result EVMHostContext::call(CallParameters& _p)
 {
     Executive e{m_s, envInfo(), m_freeStorage, depth() + 1};
+    stringstream ss;
+    for (auto v : _p.data)
+    {
+        ss << v;
+    }
+    EXECUTIVE_LOG(ERROR) << "call data = " << ss.str();
     // Note: When create initializes Executive, the flags of evmc context must be passed in
     if (!e.call(_p, gasPrice(), origin()))
     {
