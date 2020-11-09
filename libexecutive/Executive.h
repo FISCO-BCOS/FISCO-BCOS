@@ -75,11 +75,9 @@ public:
     using Ptr = std::shared_ptr<Executive>;
     /// Simple constructor; executive will operate on given state, with the given environment info.
     Executive(std::shared_ptr<StateFace> _s, dev::executive::EnvInfo const& _envInfo,
-        unsigned _level = 0, bool _freeStorage = false)
+        bool _freeStorage = false, unsigned _level = 0)
       : m_s(_s), m_envInfo(_envInfo), m_depth(_level), m_enableFreeStorage(_freeStorage)
     {}
-
-    Executive(bool _freeStorage = false) : m_enableFreeStorage(_freeStorage) {}
 
 
     // template <typename T>
@@ -194,10 +192,6 @@ public:
         m_logs.clear();
         m_t.reset();
     }
-
-    void setEnvInfo(dev::executive::EnvInfo const& _envInfo) { m_envInfo = _envInfo; }
-
-    void setState(std::shared_ptr<StateFace> _state) { m_s = _state; }
 
 private:
     void parseEVMCResult(std::shared_ptr<eth::Result> _result);

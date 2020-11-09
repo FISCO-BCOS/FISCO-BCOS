@@ -156,11 +156,9 @@ struct OutputFixture
         entry->setField(STORAGE_VALUE, "true");
         accountTable->insert(ACCOUNT_FROZEN, entry);
 
-        executive = std::make_shared<Executive>();
         EnvInfo envInfo{fakeBlockHeader(), fakeCallBack, 0};
         envInfo.setPrecompiledEngine(context);
-        executive->setEnvInfo(envInfo);
-        executive->setState(context->getState());
+        executive = std::make_shared<Executive>(context->getState(), envInfo);
     }
 
     ~OutputFixture() { g_BCOSConfig.setSupportedVersion(m_supportedVersion, m_version); }

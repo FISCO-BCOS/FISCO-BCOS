@@ -11,6 +11,7 @@ ExternalProject_Add(evmone
                    -DBUILD_SHARED_LIBS=off
                    -DEVMC_ROOT=<INSTALL_DIR>
                    -DHUNTER_ROOT=${CMAKE_SOURCE_DIR}/deps/src/.hunter
+                   -DHUNTER_STATUS_DEBUG=ON
         # BUILD_COMMAND cmake --build . -- -j
         BUILD_IN_SOURCE 1
         LOG_DOWNLOAD 1
