@@ -499,7 +499,7 @@ void PBFT::checkTimeout() {
 				PBFT_LOG(WARNING) << "broadcastViewChangeReq failed";
 				return;
 			}
-			checkAndChangeView();
+			checkAndChangeView(m_to_view);
 			PBFT_LOG(DEBUG) << "checkTimeout timecost=" << t.elapsed() << ", m_view=" << m_view << ",m_to_view=" << m_to_view;
 		}
 	}
@@ -573,6 +573,8 @@ bool PBFT::broadcastViewChangeReq() {
 
 	PBFT_LOG(TRACE) << "broadcastMsg on broadcastViewChangeReq";
 	bool ret = broadcastMsg(req.uniqueKey(), ViewChangeReqPacket, ts.out());
+	// add the view change req
+	m_recv_view_change_req[req.view][req.idx] = req;
 	return ret;
 }
 
@@ -1087,10 +1089,10 @@ void PBFT::handleViewChangeMsg(u256 const & _from, ViewChangeReq const & _req, s
 	PBFT_LOG(INFO) << oss.str() << ", success";
 
 	m_recv_view_change_req[_req.view][_req.idx] = _req;
-
-	if (_req.view == m_to_view) {
-		checkAndChangeView();
-	} else  {
+	bool success = checkAndChangeView(_req.view);
+	// try to trigger fast view change
+	if(!success && _req.view > m_to_view)
+	{
 		u256 count = u256(0);
 		u256 min_view = Invalid256;
 		u256 min_height = Invalid256;
@@ -1222,15 +1224,15 @@ void PBFT::checkAndCommit() {
 	}
 }
 
-void PBFT::checkAndChangeView() {
-	u256 count = m_recv_view_change_req[m_to_view].size();
-	if (count >= quorum() - 1) {
-		PBFT_LOG(INFO) << "######### Reach consensus, to_view=" << m_to_view;
+bool PBFT::checkAndChangeView(u256 const& _view) {
+	u256 count = m_recv_view_change_req[_view].size();
+	if (count >= quorum()) {
+		PBFT_LOG(INFO) << "######### Reach consensus, to_view=" << _view;
 		// changeview finish 要在 m_view 赋值之前 destory state
-		PBFTFlowLog(m_highest_block.number() + m_view, "new_view:" + m_to_view.convert_to<string>() + " m_change_cycle:" + std::to_string(m_change_cycle));	
+		PBFTFlowLog(m_highest_block.number() + _view, "new_view:" + _view.convert_to<string>() + " m_change_cycle:" + std::to_string(m_change_cycle));	
 
 		m_leader_failed = false;
-		m_view = m_to_view;
+		m_view = m_to_view = _view;
 
 		m_raw_prepare_cache.clear();
 		m_prepare_cache.clear();
@@ -1252,7 +1254,9 @@ void PBFT::checkAndChangeView() {
 		// clearMask(); // can not clear mask here, it will lead to rebroadcast for many old message
 		// start new block log
 		PBFTFlowLog(m_highest_block.number() + m_view, "from viewchange", (int)isLeader(), true);
+		return true;
 	}
+	return false;
 }
 
 bool PBFT::addRawPrepare(PrepareReq const& _req) {

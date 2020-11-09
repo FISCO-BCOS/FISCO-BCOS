@@ -157,7 +157,7 @@ private:
 	bool isExistCommit(CommitReq const& _req);
 	bool isExistViewChange(ViewChangeReq const& _req);
 
-	void checkAndChangeView();
+	bool checkAndChangeView(u256 const& _view);
 	void checkAndCommit();
 	void checkAndSave();
 
