@@ -27,7 +27,7 @@ This manual helps FISCO BCOS beginners get started quickly.  FISCO BCOS provides
    ./build.sh
    ```
    
-> The following message indicates FISCO BCOS has been installed sucessfully.
+> The following message indicates FISCO BCOS has been installed successfully.
 
    ```log
    fisco-bcos build succ! path: /usr/local/bin/fisco-bcos
