@@ -1575,7 +1575,7 @@ bool PBFTEngine::checkAndChangeView(VIEWTYPE const& _view)
         PBFTENGINE_LOG(INFO) << LOG_DESC("checkAndChangeView: Reach consensus")
                              << LOG_KV("org_view", m_view)
                              << LOG_KV("cur_changeCycle", m_timeManager.m_changeCycle)
-                             << LOG_KV("to_view", m_toView);
+                             << LOG_KV("curView", m_view) << LOG_KV("view", _view);
 
 
         m_leaderFailed = false;
