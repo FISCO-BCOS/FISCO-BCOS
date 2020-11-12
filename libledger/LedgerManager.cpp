@@ -69,6 +69,10 @@ LedgerStatus LedgerManager::queryGroupStatus(dev::GROUP_ID const& _groupID)
     {
         return LedgerStatus::INEXISTENT;
     }
+    if (!fs::exists(generateAndGetGroupStatusFile(_groupID)))
+    {
+        return LedgerStatus::INEXISTENT;
+    }
 
     string status = "";
     ifstream statusFile;

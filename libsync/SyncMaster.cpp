@@ -234,7 +234,7 @@ void SyncMaster::maintainBlocks()
 
 
     int64_t number = m_blockChain->number();
-    h256 const& currentHash = m_blockChain->numberHash(number);
+    h256 currentHash = m_blockChain->numberHash(number);
 
     if (m_syncTreeRouter)
     {
@@ -543,7 +543,7 @@ bool SyncMaster::maintainDownloadingQueue()
     // has download finished ?
     if (currentNumber >= m_syncStatus->knownHighestNumber)
     {
-        h256 const& latestHash =
+        h256 latestHash =
             m_blockChain->getBlockByNumber(m_syncStatus->knownHighestNumber)->headerHash();
         SYNC_LOG(INFO) << LOG_BADGE("Download") << LOG_BADGE("BlockSync")
                        << LOG_DESC("Download finish") << LOG_KV("latestHash", latestHash.abridged())
@@ -608,7 +608,7 @@ void SyncMaster::maintainPeersConnection()
 
 
     // Add new peers
-    h256 const& currentHash = m_blockChain->numberHash(currentNumber);
+    h256 currentHash = m_blockChain->numberHash(currentNumber);
     for (auto const& member : memberSet)
     {
         if (member != m_nodeId && !m_syncStatus->hasPeer(member))
