@@ -191,7 +191,7 @@ BOOST_AUTO_TEST_CASE(grant_revoke_CM)
     BOOST_TEST(retJson["revoke"].size() == 0);
     BOOST_TEST(retJson["grant"].size() == 1);
     BOOST_TEST(retJson["grant"][(Json::ArrayIndex)0]["block_limit"].asString() == "10000");
-    BOOST_TEST(retJson["grant"][(Json::ArrayIndex)0]["origin"].asString() == member1.hexPrefixed());
+    BOOST_TEST(retJson["grant"][(Json::ArrayIndex)0]["voter"].asString() == member1.hexPrefixed());
     BOOST_TEST(retJson["update_weight"].size() == 0);
 
     // member1 grant member2 again, but should not work
@@ -221,7 +221,7 @@ BOOST_AUTO_TEST_CASE(grant_revoke_CM)
     BOOST_TEST(retJson["revoke"].size() == 1);
     BOOST_TEST(retJson["revoke"][(Json::ArrayIndex)0]["block_limit"].asString() == "10000");
     BOOST_TEST(
-        retJson["revoke"][(Json::ArrayIndex)0]["origin"].asString() == member1.hexPrefixed());
+        retJson["revoke"][(Json::ArrayIndex)0]["voter"].asString() == member1.hexPrefixed());
     BOOST_TEST(retJson["grant"].size() == 0);
     BOOST_TEST(retJson["update_weight"].size() == 0);
 
@@ -268,7 +268,7 @@ BOOST_AUTO_TEST_CASE(grant_revoke_CM)
     BOOST_TEST(retJson["revoke"].size() == 1);
     BOOST_TEST(retJson["revoke"][(Json::ArrayIndex)0]["block_limit"].asString() == "10000");
     BOOST_TEST(
-        retJson["revoke"][(Json::ArrayIndex)0]["origin"].asString() == member1.hexPrefixed());
+        retJson["revoke"][(Json::ArrayIndex)0]["voter"].asString() == member1.hexPrefixed());
     BOOST_TEST(retJson["grant"].size() == 0);
     BOOST_TEST(retJson["update_weight"].size() == 0);
 
@@ -361,7 +361,7 @@ BOOST_AUTO_TEST_CASE(updateCommitteeMemberWeight)
     BOOST_TEST(retJson["grant"].size() == 0);
     BOOST_TEST(retJson["update_weight"].size() == 1);
     BOOST_TEST(retJson["update_weight"][(Json::ArrayIndex)0]["block_limit"].asString() == "10000");
-    BOOST_TEST(retJson["update_weight"][(Json::ArrayIndex)0]["origin"].asString() ==
+    BOOST_TEST(retJson["update_weight"][(Json::ArrayIndex)0]["voter"].asString() ==
                member1.hexPrefixed());
 
     out = chainGovernancePrecompiled->call(context, bytesConstRef(&in), member2);
@@ -449,7 +449,7 @@ BOOST_AUTO_TEST_CASE(updateThreshold)
     BOOST_TEST(retJson["0.400000"].size() == 1);
     BOOST_TEST(retJson["0.400000"][(Json::ArrayIndex)0]["block_limit"].asString() == "10000");
     BOOST_TEST(
-        retJson["0.400000"][(Json::ArrayIndex)0]["origin"].asString() == member1.hexPrefixed());
+        retJson["0.400000"][(Json::ArrayIndex)0]["voter"].asString() == member1.hexPrefixed());
 
     out = chainGovernancePrecompiled->call(context, bytesConstRef(&in), member2);
     ret = 0;
