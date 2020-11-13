@@ -58,6 +58,7 @@ const char* const CGP_COMMITTEE_TABLE_VALUE = "value";
 const char* const CGP_COMMITTEE_TABLE_GRANT = "grant";
 const char* const CGP_COMMITTEE_TABLE_REVOKE = "revoke";
 const char* const CGP_COMMITTEE_TABLE_ORIGIN = "origin";
+const char* const CGP_COMMITTEE_TABLE_VOTER = "voter";
 const char* const CGP_COMMITTEE_TABLE_BLOCKLIMIT = "block_limit";
 const char* const CGP_WEIGTH_SUFFIX = "_weight";
 const char* const CGP_UPDATE_WEIGTH_SUFFIX = "_update_weight";
@@ -744,7 +745,7 @@ string ChainGovernancePrecompiled::queryVotesOfMember(
             if (!entry)
                 continue;
             Json::Value vote;
-            vote[CGP_COMMITTEE_TABLE_ORIGIN] = entry->getField(CGP_COMMITTEE_TABLE_ORIGIN);
+            vote[CGP_COMMITTEE_TABLE_VOTER] = entry->getField(CGP_COMMITTEE_TABLE_ORIGIN);
             vote[CGP_COMMITTEE_TABLE_BLOCKLIMIT] = entry->getField(CGP_COMMITTEE_TABLE_BLOCKLIMIT);
             voteInfo[entry->getField(CGP_COMMITTEE_TABLE_VALUE)].append(vote);
         }
@@ -758,9 +759,9 @@ string ChainGovernancePrecompiled::queryVotesOfMember(
             if (!entry)
                 continue;
             Json::Value vote;
-            vote[CGP_COMMITTEE_TABLE_ORIGIN] = entry->getField(CGP_COMMITTEE_TABLE_ORIGIN);
+            vote[CGP_COMMITTEE_TABLE_VOTER] = entry->getField(CGP_COMMITTEE_TABLE_ORIGIN);
             vote[CGP_COMMITTEE_TABLE_BLOCKLIMIT] = entry->getField(CGP_COMMITTEE_TABLE_BLOCKLIMIT);
-            vote[CGP_COMMITTEE_TABLE_VALUE] = entry->getField(CGP_COMMITTEE_TABLE_VALUE);
+            vote["target"] = entry->getField(CGP_COMMITTEE_TABLE_VALUE);
             voteInfo["update_weight"].append(vote);
         }
     }
@@ -784,7 +785,7 @@ string ChainGovernancePrecompiled::queryVotesOfThreshold(
             if (!entry)
                 continue;
             Json::Value vote;
-            vote[CGP_COMMITTEE_TABLE_ORIGIN] = entry->getField(CGP_COMMITTEE_TABLE_ORIGIN);
+            vote[CGP_COMMITTEE_TABLE_VOTER] = entry->getField(CGP_COMMITTEE_TABLE_ORIGIN);
             vote[CGP_COMMITTEE_TABLE_BLOCKLIMIT] = entry->getField(CGP_COMMITTEE_TABLE_BLOCKLIMIT);
             voteInfo[entry->getField(CGP_COMMITTEE_TABLE_VALUE)].append(vote);
         }
