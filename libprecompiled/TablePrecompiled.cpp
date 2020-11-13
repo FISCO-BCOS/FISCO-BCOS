@@ -212,6 +212,7 @@ PrecompiledExecResult::Ptr TablePrecompiled::call(ExecutiveContext::Ptr context,
             callResult->gasPricer()->appendOperation(InterfaceOpcode::Update, count);
         }
         callResult->setExecResult(abi.abiIn("", u256(count)));
+        PRECOMPILED_LOG(DEBUG) << LOG_DESC("Table update") << LOG_KV("ret", count);
     }
     else
     {

@@ -416,7 +416,7 @@ void SyncMaster::maintainPeersStatus()
             m_maxRequestNumber = max(m_maxRequestNumber, to);
 
             SYNC_LOG(INFO) << LOG_BADGE("Download") << LOG_BADGE("Request")
-                           << LOG_DESC("Request blocks") << LOG_KV("frm", from) << LOG_KV("to", to)
+                           << LOG_DESC("Request blocks") << LOG_KV("from", from) << LOG_KV("to", to)
                            << LOG_KV("peer", _p->nodeId.abridged());
 
             ++shard;  // shard move
