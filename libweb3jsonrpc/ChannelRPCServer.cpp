@@ -960,7 +960,7 @@ void ChannelRPCServer::updateHostTopics() {
 	std::lock_guard<std::mutex> lock(_sessionMutex);
 	for (auto it : _sessions) {
 		auto topics = it.second->topics();
-		allTopics->insert(topics->begin(), topics->end());
+		allTopics->insert(topics.begin(), topics.end());
 	}
 
 	_host.lock()->setTopics(allTopics);
@@ -971,12 +971,13 @@ std::vector<dev::channel::ChannelSession::Ptr> ChannelRPCServer::getSessionByTop
 
 	std::lock_guard<std::mutex> lock(_sessionMutex);
 	for (auto it : _sessions) {
-		if (it.second->topics()->empty() || !it.second->actived()) {
+		auto topics = it.second->topics();
+		if (topics.empty() || !it.second->actived()) {
 			continue;
 		}
 
-		auto topicIt = it.second->topics()->find(topic);
-		if (topicIt != it.second->topics()->end()) {
+		auto topicIt = topics.find(topic);
+		if (topicIt != topics.end()) {
 			activedSessions.push_back(it.second);
 		}
 	}
