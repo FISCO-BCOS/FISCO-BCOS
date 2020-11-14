@@ -123,7 +123,7 @@ protected:
 	virtual void transition(boost::system::error_code _ech = boost::system::error_code());
 
 	/// Timeout for remote to respond to transition events. Enforced by m_idleTimer and refreshed by transition().
-	boost::posix_time::milliseconds const c_timeout = boost::posix_time::milliseconds(1800);
+	boost::posix_time::milliseconds const c_timeout = boost::posix_time::milliseconds(10000);
 
 	State m_nextState = New;			///< Current or expected state of transition.
 	bool m_cancel = false;			///< Will be set to true if connection was canceled.
