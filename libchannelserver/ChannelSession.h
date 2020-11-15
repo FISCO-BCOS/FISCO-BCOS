@@ -28,6 +28,7 @@
 #include <queue>
 #include <arpa/inet.h>
 #include <libdevcore/easylog.h>
+#include <libdevcore/Guards.h>
 
 #include <libdevcore/FixedHash.h>
 #include <boost/asio.hpp>
@@ -77,8 +78,16 @@ public:
 
 	virtual void setIOService(std::shared_ptr<boost::asio::io_service> IOService) { _ioService = IOService; };
 
-	std::shared_ptr<std::set<std::string> > topics() { return _topics; };
-	void setTopics(std::shared_ptr<std::set<std::string> > topics) { _topics = topics; };
+	std::set<std::string> topics() 
+	{
+		dev::ReadGuard l(x_topics); 
+		return *_topics; 
+	};
+	void setTopics(std::shared_ptr<std::set<std::string> > topics) 
+	{
+		dev::WriteGuard l(x_topics); 
+		*_topics = *topics; 
+	};
 	void setThreadPool(ThreadPool::Ptr threadPool) { _threadPool = threadPool; }
 
 private:
@@ -131,6 +140,7 @@ private:
 
 	std::map<std::string, ResponseCallback::Ptr> _responseCallbacks;
 
+	mutable dev::SharedMutex x_topics;
 	std::shared_ptr<std::set<std::string> > _topics; //该session关注的topic
 	ThreadPool::Ptr _threadPool;
 };
