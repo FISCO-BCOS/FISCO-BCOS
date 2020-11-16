@@ -476,6 +476,10 @@ protected:
             }
         }
     }
+
+    void removeExpiredSignCache(h256 const& _blockHash, VIEWTYPE const& _view);
+    void removeExpiredCommitCache(h256 const& _blockHash, VIEWTYPE const& _view);
+
     /// remove sign cache according to block hash and view
     void removeInvalidSignCache(h256 const& blockHash, VIEWTYPE const& view);
     /// remove commit cache according to block hash and view

@@ -192,7 +192,7 @@ public:
     bool broadcastCommitReq(PrepareReq const& req) { return PBFTEngine::broadcastCommitReq(req); }
     bool broadcastViewChangeReq() { return PBFTEngine::broadcastViewChangeReq(); }
     void checkTimeout() { return PBFTEngine::checkTimeout(); }
-    void checkAndChangeView() { return PBFTEngine::checkAndChangeView(); }
+    bool checkAndChangeView(VIEWTYPE const& _view) { return PBFTEngine::checkAndChangeView(_view); }
     CheckResult isValidPrepare(PrepareReq const& req) const
     {
         std::ostringstream oss;

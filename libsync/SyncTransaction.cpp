@@ -277,7 +277,7 @@ void SyncTransaction::sendTxsStatus(
             }
             tx->appendNodeListContainTransaction(peers);
             tx->appendNodeContainsTransaction(m_nodeId);
-            for (auto const& peer : peers)
+            for (auto peer : peers)
             {
                 if (txsHash && !txsHash->count(peer))
                 {
