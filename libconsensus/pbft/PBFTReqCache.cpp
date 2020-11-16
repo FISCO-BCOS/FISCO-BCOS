@@ -35,7 +35,8 @@ namespace consensus
  */
 void PBFTReqCache::delCache(dev::eth::BlockHeader const& _highestBlockHeader)
 {
-    auto const& hash = _highestBlockHeader.hash();
+    // Note: the hash here must not be auto const& type, otherwise, the program will coredump
+    auto hash = _highestBlockHeader.hash();
     PBFTReqCache_LOG(DEBUG) << LOG_DESC("delCache") << LOG_KV("hash", hash.abridged());
     /// delete from sign cache
     auto psign = m_signCache.find(hash);
@@ -154,8 +155,6 @@ void PBFTReqCache::addViewChangeReq(ViewChangeReq::Ptr _req, int64_t const& _blo
         return;
     }
     // remove the expired viewChangeReq from cache
-    eraseExpiredViewChange(_req, _blockNumber);
-
     // insert the viewchangeReq with newer state
     auto it = m_recvViewChangeReq.find(_req->view);
     if (it != m_recvViewChangeReq.end())
@@ -348,13 +347,13 @@ void PBFTReqCache::triggerViewChange(VIEWTYPE const& curView, int64_t const& _hi
     // only remove the expired commitReq
     for (auto const& commitCacheIterator : m_commitCache)
     {
-        removeInvalidCommitCache(commitCacheIterator.first, curView);
+        removeExpiredCommitCache(commitCacheIterator.first, curView);
     }
     // remove expired signCache
     for (auto const& signCacheIterator : m_signCache)
     {
         // remove invalidSignCache
-        removeInvalidSignCache(signCacheIterator.first, curView);
+        removeExpiredSignCache(signCacheIterator.first, curView);
     }
     // go through all the items of m_signCache, only reserve signReq whose blockHash exists in
     // commitReqCache
@@ -371,19 +370,6 @@ void PBFTReqCache::triggerViewChange(VIEWTYPE const& curView, int64_t const& _hi
     }
     // remove the invalid future prepare cache
     removeInvalidFutureCache(_highestBlockNumber);
-    // go through all the m_futurePrepareCache, only reserve futurePrepareReq exists in
-    // commitReqCache
-    for (auto it = m_futurePrepareCache.begin(); it != m_futurePrepareCache.end();)
-    {
-        if (!m_commitCache.count(it->second->block_hash))
-        {
-            it = m_futurePrepareCache.erase(it);
-        }
-        else
-        {
-            it++;
-        }
-    }
     removeInvalidViewChange(curView);
 }
 
@@ -391,5 +377,36 @@ void PBFTReqCache::eraseLatestViewChangeCacheForNodeUpdated(ViewChangeReq const&
 {
     m_latestViewChangeReqCache->erase(_req.idx);
 }
+
+void PBFTReqCache::removeExpiredSignCache(h256 const& _blockHash, VIEWTYPE const& _view)
+{
+    auto it = m_signCache.find(_blockHash);
+    if (it == m_signCache.end())
+        return;
+    for (auto pcache = it->second.begin(); pcache != it->second.end();)
+    {
+        /// erase invalid view
+        if (pcache->second->view < _view)
+            pcache = it->second.erase(pcache);
+        else
+            pcache++;
+    }
+}
+
+void PBFTReqCache::removeExpiredCommitCache(h256 const& _blockHash, VIEWTYPE const& _view)
+{
+    auto it = m_commitCache.find(_blockHash);
+    if (it == m_commitCache.end())
+        return;
+    for (auto pcache = it->second.begin(); pcache != it->second.end();)
+    {
+        /// erase invalid view
+        if (pcache->second->view < _view)
+            pcache = it->second.erase(pcache);
+        else
+            pcache++;
+    }
+}
+
 }  // namespace consensus
 }  // namespace dev
