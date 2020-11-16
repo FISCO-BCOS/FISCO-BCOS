@@ -1644,7 +1644,6 @@ void PBFTEngine::checkTimeout()
             m_timeManager.m_lastConsensusTime = utcSteadyTime();
             flag = true;
             m_reqCache->removeInvalidViewChange(m_toView, m_highestBlock);
-
             if (!broadcastViewChangeReq())
             {
                 return;
