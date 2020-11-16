@@ -261,7 +261,7 @@ void SyncTransaction::sendTxsStatus(
     unsigned percent = 25;
     unsigned expectedSelectSize = (_selectedPeers->size() * percent + 99) / 100;
     int64_t selectSize = std::min(expectedSelectSize, m_txsStatusGossipMaxPeers);
-    auto txsHash = std::make_shared<std::map<dev::h512, std::shared_ptr<std::set<dev::h256>>>>();
+    std::map<dev::h512, std::shared_ptr<std::set<dev::h256>>> txsHash;
     {
         for (auto tx : *_txs)
         {
@@ -279,16 +279,16 @@ void SyncTransaction::sendTxsStatus(
             tx->appendNodeContainsTransaction(m_nodeId);
             for (auto peer : peers)
             {
-                if (txsHash && !txsHash->count(peer))
+                if (!txsHash.count(peer))
                 {
-                    txsHash->insert(std::make_pair(peer, std::make_shared<std::set<dev::h256>>()));
+                    txsHash[peer] = std::make_shared<std::set<dev::h256>>();
                 }
-                (*txsHash)[peer]->insert(tx->hash());
+                txsHash[peer]->insert(tx->hash());
             }
         }
     }
     auto blockNumber = m_blockChain->number();
-    for (auto const& it : *txsHash)
+    for (auto const& it : txsHash)
     {
         std::shared_ptr<SyncTxsStatusPacket> txsStatusPacket =
             std::make_shared<SyncTxsStatusPacket>();
