@@ -19,7 +19,7 @@ Usage:
     -m                     Download mini binary, only works with -b option
     -h Help
 e.g
-    $0 -v 2.6.0
+    $0 -v 2.7.0
 "
 
 exit 0
