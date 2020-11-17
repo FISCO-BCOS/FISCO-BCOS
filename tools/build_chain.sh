@@ -48,7 +48,7 @@ days=36500 # 100 years
 timestamp=$(($(date '+%s')*1000))
 chain_id=1
 compatibility_version=""
-default_version="2.6.0"
+default_version="2.7.0"
 macOS=""
 x86_64_arch="true"
 download_timeout=240
@@ -1400,7 +1400,7 @@ Usage:
     -m                     Download mini binary, only works with -b option
     -h Help
 e.g
-    \$0 -v 2.6.0
+    \$0 -v ${default_version}
 "
 exit 0
 }
