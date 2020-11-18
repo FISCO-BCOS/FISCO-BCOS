@@ -121,7 +121,7 @@ bool CNSPrecompiled::checkCNSParam(ExecutiveContext::Ptr _context,
     }
     // check the length of the key
     checkLengthValidate(
-        _contractName, USER_TABLE_KEY_VALUE_MAX_LENGTH, CODE_TABLE_KEYVALUE_LENGTH_OVERFLOW);
+        _contractName, CNS_CONTRACT_NAME_MAX_LENGTH, CODE_TABLE_KEYVALUE_LENGTH_OVERFLOW);
     // check the length of the field value
     // (since the contract version length will be checked, here no need to check _contractVersion)
     checkLengthValidate(
