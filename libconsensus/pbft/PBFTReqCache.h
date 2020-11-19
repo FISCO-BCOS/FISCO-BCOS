@@ -51,7 +51,8 @@ public:
         {
             return false;
         }
-        return m_rawPrepareCache->block_hash == req.block_hash;
+        return (m_rawPrepareCache->block_hash == req.block_hash) &&
+               (m_rawPrepareCache->view >= req.view);
     }
 
     PrepareReq::Ptr rawPrepareCachePtr() { return m_rawPrepareCache; }
@@ -379,7 +380,8 @@ public:
         m_recvViewChangeReq.clear();
     }
 
-    virtual void removeInvalidFutureCache(int64_t const& _highestBlockNumber);
+    virtual void removeInvalidFutureCache(
+        int64_t const& _highestBlockNumber, VIEWTYPE const& _view = 0);
 
     // only used for UT
     inline void clearAll()

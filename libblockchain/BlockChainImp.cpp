@@ -1447,9 +1447,6 @@ void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<Executive
 
                 entry_tb2nonces->setForce(true);
                 tb_nonces->insert(lexical_cast<std::string>(blockNumberStr), entry_tb2nonces);
-                // Destruct the entry_tb2nonces in m_destructorThread
-                HolderForDestructor<Entry> holder(std::move(entry_tb2nonces));
-                m_destructorThread->enqueue(std::move(holder));
             });
         auto insertTable_time_cost = utcTime() - record_time;
         BLOCKCHAIN_LOG(DEBUG) << LOG_BADGE("WriteTxOnCommit")
@@ -1491,10 +1488,6 @@ void BlockChainImp::writeHash2Block(Block& block, std::shared_ptr<ExecutiveConte
         writeBlockToField(block, entry);
         entry->setForce(true);
         tb->insert(block.blockHeader().hash().hex(), entry);
-        // Block entry destructor is time-consuming, add it to the thread pool to destruct
-        // asynchronously, Destruct the entry in m_destructorThread
-        HolderForDestructor<Entry> holder(std::move(entry));
-        m_destructorThread->enqueue(std::move(holder));
     }
     else
     {

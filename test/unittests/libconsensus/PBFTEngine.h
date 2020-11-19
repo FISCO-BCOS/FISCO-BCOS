@@ -383,7 +383,7 @@ static void testIsFuture(
         int64_t org_height = req.height;
         VIEWTYPE org_view = req.view;
         req.height = fake_pbft.consensus()->consensusBlockNumber();
-        req.view = fake_pbft.consensus()->view() + 1;
+        req.view = fake_pbft.consensus()->view();
         BOOST_CHECK(fake_pbft.consensus()->isValidPrepare(req) == CheckResult::INVALID);
         if (shouldFix)
         {
