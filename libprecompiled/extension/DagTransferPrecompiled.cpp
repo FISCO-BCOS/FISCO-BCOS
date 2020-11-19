@@ -24,10 +24,10 @@
 #include <libprecompiled/TableFactoryPrecompiled.h>
 
 using namespace std;
-using namespace dev;
-using namespace dev::blockverifier;
-using namespace dev::storage;
-using namespace dev::precompiled;
+using namespace bcos;
+using namespace bcos::blockverifier;
+using namespace bcos::storage;
+using namespace bcos::precompiled;
 
 // interface of DagTransferPrecompiled
 /*
@@ -76,12 +76,12 @@ std::vector<std::string> DagTransferPrecompiled::getParallelTag(bytesConstRef pa
     bytesConstRef data = getParamData(param);
 
     std::vector<std::string> results;
-    dev::eth::ContractABI abi;
+    bcos::eth::ContractABI abi;
     // user_name user_balance 2 fields in table, the key of table is user_name field
     if (func == name2Selector[DAG_TRANSFER_METHOD_ADD_STR_UINT])
     {  // userAdd(string,uint256)
         std::string user;
-        dev::u256 amount;
+        bcos::u256 amount;
         abi.abiOut(data, user, amount);
         // if params is invalid , parallel process can be done
         if (!invalidUserName(user))
@@ -92,7 +92,7 @@ std::vector<std::string> DagTransferPrecompiled::getParallelTag(bytesConstRef pa
     else if (func == name2Selector[DAG_TRANSFER_METHOD_SAV_STR_UINT])
     {  // userSave(string,uint256)
         std::string user;
-        dev::u256 amount;
+        bcos::u256 amount;
 
         abi.abiOut(data, user, amount);
         // if params is invalid , parallel process can be done
@@ -104,7 +104,7 @@ std::vector<std::string> DagTransferPrecompiled::getParallelTag(bytesConstRef pa
     else if (func == name2Selector[DAG_TRANSFER_METHOD_DRAW_STR_UINT])
     {  // userDraw(string,uint256)
         std::string user;
-        dev::u256 amount;
+        bcos::u256 amount;
 
         abi.abiOut(data, user, amount);
         // if params is invalid , parallel process can be done
@@ -117,7 +117,7 @@ std::vector<std::string> DagTransferPrecompiled::getParallelTag(bytesConstRef pa
     {
         // userTransfer(string,string,uint256)
         std::string fromUser, toUser;
-        dev::u256 amount;
+        bcos::u256 amount;
 
         abi.abiOut(data, fromUser, toUser, amount);
         // if params is invalid , parallel process can be done
@@ -142,7 +142,7 @@ std::string DagTransferPrecompiled::toString()
 }
 
 Table::Ptr DagTransferPrecompiled::openTable(
-    dev::blockverifier::ExecutiveContext::Ptr context, Address const& origin)
+    bcos::blockverifier::ExecutiveContext::Ptr context, Address const& origin)
 {
     string dagTableName;
     if (g_BCOSConfig.version() < V2_2_0)
@@ -153,7 +153,7 @@ Table::Ptr DagTransferPrecompiled::openTable(
     {
         dagTableName = precompiled::getTableName(DAG_TRANSFER);
     }
-    auto table = dev::precompiled::openTable(context, dagTableName);
+    auto table = bcos::precompiled::openTable(context, dagTableName);
     if (!table)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE(
@@ -168,14 +168,14 @@ Table::Ptr DagTransferPrecompiled::openTable(
             PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled: table already exist")
                                    << LOG_KV("tableName", dagTableName);
             // try to openTable and get the table again
-            table = dev::precompiled::openTable(context, dagTableName);
+            table = bcos::precompiled::openTable(context, dagTableName);
         }
     }
     return table;
 }
 
 PrecompiledExecResult::Ptr DagTransferPrecompiled::call(
-    dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin,
+    bcos::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin,
     Address const&)
 {
     // PRECOMPILED_LOG(TRACE) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("call")
@@ -218,12 +218,12 @@ PrecompiledExecResult::Ptr DagTransferPrecompiled::call(
     return callResult;
 }
 
-void DagTransferPrecompiled::userAddCall(dev::blockverifier::ExecutiveContext::Ptr context,
+void DagTransferPrecompiled::userAddCall(bcos::blockverifier::ExecutiveContext::Ptr context,
     bytesConstRef data, Address const& origin, bytes& out)
 {  // userAdd(string,uint256)
     std::string user;
-    dev::u256 amount;
-    dev::eth::ContractABI abi;
+    bcos::u256 amount;
+    bcos::eth::ContractABI abi;
     abi.abiOut(data, user, amount);
 
     int ret;
@@ -274,16 +274,16 @@ void DagTransferPrecompiled::userAddCall(dev::blockverifier::ExecutiveContext::P
     out = abi.abiIn("", u256(ret));
 }
 
-void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::Ptr context,
+void DagTransferPrecompiled::userSaveCall(bcos::blockverifier::ExecutiveContext::Ptr context,
     bytesConstRef data, Address const& origin, bytes& out)
 {  // userSave(string,uint256)
     std::string user;
-    dev::u256 amount;
-    dev::eth::ContractABI abi;
+    bcos::u256 amount;
+    bcos::eth::ContractABI abi;
     abi.abiOut(data, user, amount);
 
     int ret;
-    dev::u256 balance;
+    bcos::u256 balance;
     std::string strErrorMsg;
 
     do
@@ -332,7 +332,7 @@ void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::
         else
         {
             auto entry = entries->get(0);  // only one record for every user
-            balance = dev::u256(entry->getField(DAG_TRANSFER_FIELD_BALANCE));
+            balance = bcos::u256(entry->getField(DAG_TRANSFER_FIELD_BALANCE));
 
             // if overflow
             auto new_balance = balance + amount;
@@ -363,15 +363,15 @@ void DagTransferPrecompiled::userSaveCall(dev::blockverifier::ExecutiveContext::
     out = abi.abiIn("", u256(ret));
 }
 
-void DagTransferPrecompiled::userDrawCall(dev::blockverifier::ExecutiveContext::Ptr context,
+void DagTransferPrecompiled::userDrawCall(bcos::blockverifier::ExecutiveContext::Ptr context,
     bytesConstRef data, Address const& origin, bytes& out)
 {
     std::string user;
-    dev::u256 amount;
-    dev::eth::ContractABI abi;
+    bcos::u256 amount;
+    bcos::eth::ContractABI abi;
     abi.abiOut(data, user, amount);
 
-    dev::u256 balance;
+    bcos::u256 balance;
     int ret;
     std::string strErrorMsg;
 
@@ -408,7 +408,7 @@ void DagTransferPrecompiled::userDrawCall(dev::blockverifier::ExecutiveContext::
         }
 
         // only one record for every user
-        balance = dev::u256(entries->get(0)->getField(DAG_TRANSFER_FIELD_BALANCE));
+        balance = bcos::u256(entries->get(0)->getField(DAG_TRANSFER_FIELD_BALANCE));
         if (balance < amount)
         {
             strErrorMsg = "insufficient balance";
@@ -436,14 +436,14 @@ void DagTransferPrecompiled::userDrawCall(dev::blockverifier::ExecutiveContext::
     out = abi.abiIn("", u256(ret));
 }
 
-void DagTransferPrecompiled::userBalanceCall(dev::blockverifier::ExecutiveContext::Ptr context,
+void DagTransferPrecompiled::userBalanceCall(bcos::blockverifier::ExecutiveContext::Ptr context,
     bytesConstRef data, Address const& origin, bytes& out)
 {
     std::string user;
-    dev::eth::ContractABI abi;
+    bcos::eth::ContractABI abi;
     abi.abiOut(data, user);
 
-    dev::u256 balance;
+    bcos::u256 balance;
     int ret;
     std::string strErrorMsg;
 
@@ -473,7 +473,7 @@ void DagTransferPrecompiled::userBalanceCall(dev::blockverifier::ExecutiveContex
         }
 
         // only one record for every user
-        balance = dev::u256(entries->get(0)->getField(DAG_TRANSFER_FIELD_BALANCE));
+        balance = bcos::u256(entries->get(0)->getField(DAG_TRANSFER_FIELD_BALANCE));
         ret = 0;
     } while (0);
 
@@ -484,12 +484,12 @@ void DagTransferPrecompiled::userTransferCall(
     ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin, bytes& out)
 {
     std::string fromUser, toUser;
-    dev::u256 amount;
-    dev::eth::ContractABI abi;
+    bcos::u256 amount;
+    bcos::eth::ContractABI abi;
     abi.abiOut(data, fromUser, toUser, amount);
 
-    dev::u256 fromUserBalance, newFromUserBalance;
-    dev::u256 toUserBalance, newToUserBalance;
+    bcos::u256 fromUserBalance, newFromUserBalance;
+    bcos::u256 toUserBalance, newToUserBalance;
 
     std::string strErrorMsg;
     int ret;
@@ -534,7 +534,7 @@ void DagTransferPrecompiled::userTransferCall(
             break;
         }
 
-        fromUserBalance = dev::u256(entries->get(0)->getField(DAG_TRANSFER_FIELD_BALANCE));
+        fromUserBalance = bcos::u256(entries->get(0)->getField(DAG_TRANSFER_FIELD_BALANCE));
         if (fromUserBalance < amount)
         {
             strErrorMsg = "from user insufficient balance";
@@ -548,7 +548,7 @@ void DagTransferPrecompiled::userTransferCall(
             // If to user not exist, add it first.
             auto entry = table->newEntry();
             entry->setField(DAG_TRANSFER_FIELD_NAME, toUser);
-            entry->setField(DAG_TRANSFER_FIELD_BALANCE, dev::u256(0).str());
+            entry->setField(DAG_TRANSFER_FIELD_BALANCE, bcos::u256(0).str());
 
             auto count = table->insert(toUser, entry, std::make_shared<AccessOptions>(origin));
             if (count == CODE_NO_AUTHORIZED)
@@ -561,7 +561,7 @@ void DagTransferPrecompiled::userTransferCall(
         }
         else
         {
-            toUserBalance = dev::u256(entries->get(0)->getField(DAG_TRANSFER_FIELD_BALANCE));
+            toUserBalance = bcos::u256(entries->get(0)->getField(DAG_TRANSFER_FIELD_BALANCE));
         }
 
         // overflow check

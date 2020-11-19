@@ -23,13 +23,13 @@
 
 #include "libdevcrypto/CryptoInterface.h"
 #include "libethcore/TransactionException.h"
-#include <libdevcore/Address.h>
-#include <libdevcore/CommonIO.h>
-#include <libdevcore/RLP.h>
 #include <libethcore/Common.h>
 #include <libethcore/LogEntry.h>
+#include <libutilities/Address.h>
+#include <libutilities/CommonIO.h>
+#include <libutilities/RLP.h>
 #include <array>
-namespace dev
+namespace bcos
 {
 namespace eth
 {
@@ -166,4 +166,4 @@ private:
 };
 
 }  // namespace eth
-}  // namespace dev
+}  // namespace bcos

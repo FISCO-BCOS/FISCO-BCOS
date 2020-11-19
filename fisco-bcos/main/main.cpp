@@ -22,9 +22,9 @@
  */
 #include "Common.h"
 #include <include/BuildInfo.h>
-#include <libdevcore/Common.h>
-#include <libdevcore/FileSignal.h>
 #include <libinitializer/Initializer.h>
+#include <libutilities/Common.h>
+#include <libutilities/FileSignal.h>
 #include <boost/program_options.hpp>
 #include <clocale>
 #include <iostream>
@@ -32,24 +32,24 @@
 #include <thread>
 
 using namespace std;
-using namespace dev;
-using namespace dev::initializer;
+using namespace bcos;
+using namespace bcos::initializer;
 
 void checkAndCall(const std::string& configPath, shared_ptr<Initializer> initializer)
 {
     std::string moreGroupSignal = configPath + ".append_group";
-    dev::FileSignal::callIfFileExist(moreGroupSignal, [&]() {
+    bcos::FileSignal::callIfFileExist(moreGroupSignal, [&]() {
         cout << "Start more group" << endl;
         initializer->ledgerInitializer()->startMoreLedger();
     });
 
     std::string resetCalSignal = configPath + ".reset_certificate_whitelist";
-    dev::FileSignal::callIfFileExist(resetCalSignal, [&]() {
+    bcos::FileSignal::callIfFileExist(resetCalSignal, [&]() {
         cout << "Reset certificate whitelist(CAL)" << endl;
         initializer->p2pInitializer()->resetWhitelist(configPath);
     });
     std::string resetSDKAllowListSignal = configPath + ".reset_allowlist";
-    dev::FileSignal::callIfFileExist(resetSDKAllowListSignal, [&]() {
+    bcos::FileSignal::callIfFileExist(resetSDKAllowListSignal, [&]() {
         cout << "Reset sdk allowList(public keys)" << endl;
         initializer->ledgerInitializer()->reloadSDKAllowList();
     });
@@ -84,7 +84,7 @@ int main(int argc, const char* argv[])
         std::cerr << "Init failed!!!" << std::endl;
         return -1;
     }
-    dev::version();
+    bcos::version();
     std::cout << "[" << getCurrentDateTime() << "] ";
     std::cout << "The FISCO-BCOS is running..." << std::endl;
 

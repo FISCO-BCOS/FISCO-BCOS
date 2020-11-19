@@ -29,7 +29,7 @@
 #define MAX_VALUE_IN_MB (INT64_MAX / (1024 * 1024))
 #define MAX_VALUE_IN_Mb (INT64_MAX / (1024 * 128))
 
-namespace dev
+namespace bcos
 {
 typedef int16_t GROUP_ID;
 typedef uint16_t MODULE_ID;
@@ -95,4 +95,4 @@ inline std::pair<GROUP_ID, MODULE_ID> getGroupAndProtocol(PROTOCOL_ID id)
 }
 
 }  // namespace eth
-}  // namespace dev
+}  // namespace bcos

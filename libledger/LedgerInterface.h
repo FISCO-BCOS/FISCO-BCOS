@@ -31,7 +31,7 @@
 #include <libsync/SyncInterface.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <memory>
-namespace dev
+namespace bcos
 {
 namespace event
 {
@@ -43,31 +43,31 @@ namespace ledger
 class LedgerInterface
 {
 public:
-    LedgerInterface(dev::KeyPair const& keyPair) : m_keyPair(keyPair) {}
+    LedgerInterface(bcos::KeyPair const& keyPair) : m_keyPair(keyPair) {}
 
     virtual ~LedgerInterface(){};
     /// init the ledger(called by initializer)
     virtual bool initLedger(std::shared_ptr<LedgerParamInterface> _ledgerParams) = 0;
 
-    virtual std::shared_ptr<dev::txpool::TxPoolInterface> txPool() const = 0;
-    virtual std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier() const = 0;
-    virtual std::shared_ptr<dev::blockchain::BlockChainInterface> blockChain() const = 0;
-    virtual std::shared_ptr<dev::consensus::ConsensusInterface> consensus() const = 0;
-    virtual std::shared_ptr<dev::sync::SyncInterface> sync() const = 0;
-    virtual dev::GROUP_ID const& groupId() const = 0;
+    virtual std::shared_ptr<bcos::txpool::TxPoolInterface> txPool() const = 0;
+    virtual std::shared_ptr<bcos::blockverifier::BlockVerifierInterface> blockVerifier() const = 0;
+    virtual std::shared_ptr<bcos::blockchain::BlockChainInterface> blockChain() const = 0;
+    virtual std::shared_ptr<bcos::consensus::ConsensusInterface> consensus() const = 0;
+    virtual std::shared_ptr<bcos::sync::SyncInterface> sync() const = 0;
+    virtual bcos::GROUP_ID const& groupId() const = 0;
     virtual std::shared_ptr<LedgerParamInterface> getParam() const = 0;
     virtual void startAll() = 0;
     virtual void stopAll() = 0;
-    virtual dev::KeyPair const& keyPair() const { return m_keyPair; };
+    virtual bcos::KeyPair const& keyPair() const { return m_keyPair; };
     virtual void setChannelRPCServer(ChannelRPCServer::Ptr channelRPCServer)
     {
         (void)channelRPCServer;
     };
-    virtual std::shared_ptr<dev::event::EventLogFilterManager> getEventLogFilterManager() = 0;
+    virtual std::shared_ptr<bcos::event::EventLogFilterManager> getEventLogFilterManager() = 0;
     virtual void reloadSDKAllowList() {}
 
 protected:
-    dev::KeyPair m_keyPair;
+    bcos::KeyPair m_keyPair;
 };
 }  // namespace ledger
-}  // namespace dev
+}  // namespace bcos

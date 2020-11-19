@@ -25,8 +25,8 @@
 #include <libprecompiled/WorkingSealerManagerPrecompiled.h>
 #include <test/unittests/libconsensus/PBFTEngine.h>
 
-using namespace dev::test;
-using namespace dev::precompiled;
+using namespace bcos::test;
+using namespace bcos::precompiled;
 
 BOOST_FIXTURE_TEST_SUITE(VRFBasedrPBFTTest, TestOutputHelperFixture)
 
@@ -36,9 +36,9 @@ void fakeLeader(VRFBasedrPBFTFixture::Ptr _fixture)
     pbftEngine->setLocatedInConsensusNodes(true);
     auto leader = pbftEngine->getLeader();
     BOOST_CHECK(leader.first == true);
-    dev::h512 leaderNodeID;
+    bcos::h512 leaderNodeID;
     pbftEngine->wrapperGetNodeIDByIndex(leaderNodeID, leader.second);
-    BOOST_CHECK(leaderNodeID != dev::h512());
+    BOOST_CHECK(leaderNodeID != bcos::h512());
     BOOST_CHECK(_fixture->nodeID2KeyPair.count(leaderNodeID));
     auto keyPair = (_fixture->nodeID2KeyPair)[leaderNodeID];
     pbftEngine->setKeyPair(keyPair);
@@ -77,7 +77,7 @@ BOOST_AUTO_TEST_CASE(testVRFBasedrPBFT)
     // check transaction signature
     BOOST_CHECK(rotatingTx->sender() == toAddress(engine->keyPair().pub()));
     // check transaction type
-    BOOST_CHECK(rotatingTx->type() == dev::eth::Transaction::Type::MessageCall);
+    BOOST_CHECK(rotatingTx->type() == bcos::eth::Transaction::Type::MessageCall);
     // check input
     auto const& txData = rotatingTx->data();
     ContractABI abi;
@@ -143,7 +143,7 @@ BOOST_AUTO_TEST_CASE(testVRFBasedrPBFT)
     // receive pbftBackup from other leader(the sealer of the block is the sender of the
     // transaction)
     auto idx = (prepareReq->idx + 1) % (engine->consensusList().size() + 1);
-    dev::h512 nodeId;
+    bcos::h512 nodeId;
     engine->wrapperGetNodeIDByIndex(nodeId, idx);
     rotatingTx->forceSender(toAddress(nodeId));
     fakedSealer->mutableSealing().block->header().setSealer(idx);
@@ -155,9 +155,9 @@ BOOST_AUTO_TEST_CASE(testVRFBasedrPBFT)
     pbftEngine->setLocatedInConsensusNodes(true);
     auto leader = pbftEngine->getLeader();
     BOOST_CHECK(leader.first == true);
-    dev::h512 leaderNodeID;
+    bcos::h512 leaderNodeID;
     pbftEngine->wrapperGetNodeIDByIndex(leaderNodeID, leader.second);
-    BOOST_CHECK(leaderNodeID != dev::h512());
+    BOOST_CHECK(leaderNodeID != bcos::h512());
     BOOST_CHECK(_fixture->nodeID2KeyPair.count(leaderNodeID));
     auto keyPair = (_fixture->nodeID2KeyPair)[leaderNodeID];
     pbftEngine->setKeyPair(keyPair);

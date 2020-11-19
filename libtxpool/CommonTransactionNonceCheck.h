@@ -22,14 +22,13 @@
  */
 #pragma once
 
-#include <libdevcore/Common.h>
-#include <libdevcore/CommonIO.h>
-#include <libdevcore/Guards.h>
 #include <libethcore/Block.h>
 #include <libethcore/Protocol.h>
 #include <libethcore/Transaction.h>
+#include <libutilities/Common.h>
+#include <libutilities/CommonIO.h>
 #include <unordered_set>
-namespace dev
+namespace bcos
 {
 namespace txpool
 {
@@ -38,14 +37,14 @@ class CommonTransactionNonceCheck
 public:
     CommonTransactionNonceCheck() {}
     virtual ~CommonTransactionNonceCheck() = default;
-    virtual void delCache(dev::eth::NonceKeyType const& key);
-    virtual void delCache(dev::eth::Transactions const& _transactions);
-    virtual void insertCache(dev::eth::Transaction const& _transaction);
-    virtual bool isNonceOk(dev::eth::Transaction const& _trans, bool needInsert = false);
+    virtual void delCache(bcos::eth::NonceKeyType const& key);
+    virtual void delCache(bcos::eth::Transactions const& _transactions);
+    virtual void insertCache(bcos::eth::Transaction const& _transaction);
+    virtual bool isNonceOk(bcos::eth::Transaction const& _trans, bool needInsert = false);
 
 protected:
     mutable SharedMutex m_lock;
-    std::unordered_set<dev::eth::NonceKeyType> m_cache;
+    std::unordered_set<bcos::eth::NonceKeyType> m_cache;
 };
 }  // namespace txpool
-}  // namespace dev
+}  // namespace bcos

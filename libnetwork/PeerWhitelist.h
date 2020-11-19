@@ -20,23 +20,23 @@
  * @date: 2019-08-06
  */
 #pragma once
-#include <libdevcore/FixedHash.h>
+#include <libutilities/FixedHash.h>
 #include <memory>
 #include <set>
 #include <string>
 #include <vector>
 
-using NodeID = dev::h512;
+using NodeID = bcos::h512;
 using NodeIDs = std::vector<NodeID>;
 
-namespace dev
+namespace bcos
 {
 class PeerWhitelist : public std::enable_shared_from_this<PeerWhitelist>
 {
 public:
     using Ptr = std::shared_ptr<PeerWhitelist>;
     PeerWhitelist(std::vector<std::string> _strList, bool _enable = false);
-    PeerWhitelist(dev::h512s const& _nodeList, bool _enable);
+    PeerWhitelist(bcos::h512s const& _nodeList, bool _enable);
 
     bool has(NodeID _peer) const;
     bool has(const std::string& _peer) const;
@@ -49,4 +49,4 @@ private:
     bool m_enable = false;
     std::set<NodeID> m_whitelist;
 };
-}  // namespace dev
+}  // namespace bcos

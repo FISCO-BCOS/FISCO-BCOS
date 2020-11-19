@@ -24,12 +24,12 @@
 #include "WorkingSealerManagerImpl.h"
 #include <libblockverifier/ExecutiveContext.h>
 
-using namespace dev::precompiled;
-using namespace dev::blockverifier;
+using namespace bcos::precompiled;
+using namespace bcos::blockverifier;
 
 // The parameters are: VRF public key, VRF input, VRF proof, removedWorkingSealers,
 // insertedWorkingSealers
-const char* const dev::precompiled::WSM_METHOD_ROTATE_STR =
+const char* const bcos::precompiled::WSM_METHOD_ROTATE_STR =
     "rotateWorkingSealer(std::string, std::string, std::string)";
 
 // init function selector
@@ -43,8 +43,8 @@ std::string WorkingSealerManagerPrecompiled::toString()
     return "WorkingSealerManagerPrecompiled";
 }
 void WorkingSealerManagerPrecompiled::rotateWorkingSealer(
-    std::shared_ptr<dev::blockverifier::ExecutiveContext> _context, bytesConstRef _paramData,
-    dev::eth::ContractABI& _abi, Address const& _origin, Address const& _sender)
+    std::shared_ptr<bcos::blockverifier::ExecutiveContext> _context, bytesConstRef _paramData,
+    bcos::eth::ContractABI& _abi, Address const& _origin, Address const& _sender)
 {
     try
     {
@@ -75,13 +75,13 @@ void WorkingSealerManagerPrecompiled::rotateWorkingSealer(
 }
 
 PrecompiledExecResult::Ptr WorkingSealerManagerPrecompiled::call(
-    std::shared_ptr<dev::blockverifier::ExecutiveContext> _context, bytesConstRef _param,
+    std::shared_ptr<bcos::blockverifier::ExecutiveContext> _context, bytesConstRef _param,
     Address const& _origin, Address const& _sender)
 {
     // get function selector
     auto funcSelector = getParamFunc(_param);
     auto paramData = getParamData(_param);
-    dev::eth::ContractABI abi;
+    bcos::eth::ContractABI abi;
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
     // Call the corresponding function according to the selector
     if (funcSelector == name2Selector[WSM_METHOD_ROTATE_STR])

@@ -23,11 +23,11 @@
 
 #pragma once
 
-#include <libdevcore/FixedHash.h>
-#include <libdevcore/vector_ref.h>
+#include <libutilities/FixedHash.h>
+#include <libutilities/vector_ref.h>
 #include <string>
 
-namespace dev
+namespace bcos
 {
 // Keccak256 convenience routines.
 
@@ -67,8 +67,8 @@ inline SecureFixedHash<32> keccak256Secure(bytes const& _input)
     return keccak256Secure(bytesConstRef(&_input));
 }
 
-/// Calculate Keccak256 hash of the given input (presented as a binary-filled string), returning as a
-/// 256-bit hash.
+/// Calculate Keccak256 hash of the given input (presented as a binary-filled string), returning as
+/// a 256-bit hash.
 inline h256 keccak256(std::string const& _input)
 {
     return keccak256(bytesConstRef(_input));
@@ -114,7 +114,8 @@ inline SecureFixedHash<32> keccak256Secure(SecureFixedHash<N> const& _input)
 /// hash as a string filled with binary data.
 inline std::string keccak256(std::string const& _input, bool _isNibbles)
 {
-    return asString((_isNibbles ? keccak256(fromHex(_input)) : keccak256(bytesConstRef(&_input))).asBytes());
+    return asString(
+        (_isNibbles ? keccak256(fromHex(_input)) : keccak256(bytesConstRef(&_input))).asBytes());
 }
 
 /// Calculate Keccak256 MAC
@@ -123,4 +124,4 @@ inline void keccak256mac(bytesConstRef _secret, bytesConstRef _plain, bytesRef _
     keccak256(_secret.toBytes() + _plain.toBytes()).ref().populate(_output);
 }
 
-}  // namespace dev
+}  // namespace bcos

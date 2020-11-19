@@ -16,13 +16,12 @@
 */
 
 #include "OverlayDB.h"
-#include "libdevcore/Log.h"
-#include "libdevcore/TrieCommon.h"
-#include "libdevcore/db.h"
 #include "libdevcrypto/CryptoInterface.h"
+#include "libutilities/TrieCommon.h"
+#include "libutilities/db.h"
 #include <thread>
 
-namespace dev
+namespace bcos
 {
 namespace
 {
@@ -90,9 +89,6 @@ void OverlayDB::commit()
                 std::this_thread::sleep_for(std::chrono::seconds(i + 1));
             }
         }
-#if DEV_GUARDED_DB
-        DEV_WRITE_GUARDED(x_this)
-#endif
         {
             m_aux.clear();
             m_main.clear();
@@ -160,4 +156,4 @@ void OverlayDB::kill(h256 const& _h)
     }
 }
 
-}  // namespace dev
+}  // namespace bcos

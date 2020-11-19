@@ -21,8 +21,8 @@
  * @date: 2020-03-22
  */
 #include "ChannelNetworkStatHandler.h"
-using namespace dev::stat;
-using namespace dev::channel;
+using namespace bcos::stat;
+using namespace bcos::channel;
 
 void ChannelNetworkStatHandler::setFlushInterval(int64_t const& _flushInterval)
 {

@@ -22,8 +22,8 @@
  */
 #include "NetworkStatHandler.h"
 
-using namespace dev;
-using namespace dev::stat;
+using namespace bcos;
+using namespace bcos::stat;
 // update incoming traffic
 void NetworkStatHandler::updateIncomingTraffic(int32_t const& _msgType, uint64_t _msgSize)
 {

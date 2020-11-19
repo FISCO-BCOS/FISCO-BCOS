@@ -27,27 +27,27 @@
 #include <libstorage/StorageException.h>
 #include <libstorage/Table.h>
 
-using namespace dev::executive;
-using namespace dev::eth;
-using namespace dev::eth::abi;
-using namespace dev::blockverifier;
-using namespace dev;
+using namespace bcos::executive;
+using namespace bcos::eth;
+using namespace bcos::eth::abi;
+using namespace bcos::blockverifier;
+using namespace bcos;
 using namespace std;
 void ExecutiveContext::registerParallelPrecompiled(
-    std::shared_ptr<dev::precompiled::Precompiled> _precompiled)
+    std::shared_ptr<bcos::precompiled::Precompiled> _precompiled)
 {
     m_parallelConfigPrecompiled =
-        std::dynamic_pointer_cast<dev::precompiled::ParallelConfigPrecompiled>(_precompiled);
+        std::dynamic_pointer_cast<bcos::precompiled::ParallelConfigPrecompiled>(_precompiled);
 }
 
 // set PrecompiledExecResultFactory for each precompiled object
 void ExecutiveContext::setPrecompiledExecResultFactory(
-    dev::precompiled::PrecompiledExecResultFactory::Ptr _precompiledExecResultFactory)
+    bcos::precompiled::PrecompiledExecResultFactory::Ptr _precompiledExecResultFactory)
 {
     m_precompiledExecResultFactory = _precompiledExecResultFactory;
 }
 
-dev::precompiled::PrecompiledExecResult::Ptr ExecutiveContext::call(
+bcos::precompiled::PrecompiledExecResult::Ptr ExecutiveContext::call(
     Address const& address, bytesConstRef param, Address const& origin, Address const& sender)
 {
     try
@@ -63,27 +63,27 @@ dev::precompiled::PrecompiledExecResult::Ptr ExecutiveContext::call(
         {
             EXECUTIVECONTEXT_LOG(DEBUG)
                 << LOG_DESC("[call]Can't find address") << LOG_KV("address", address);
-            return std::make_shared<dev::precompiled::PrecompiledExecResult>();
+            return std::make_shared<bcos::precompiled::PrecompiledExecResult>();
         }
     }
-    catch (dev::precompiled::PrecompiledException& e)
+    catch (bcos::precompiled::PrecompiledException& e)
     {
         EXECUTIVECONTEXT_LOG(ERROR)
             << "PrecompiledException" << LOG_KV("address", address) << LOG_KV("message:", e.what());
         BOOST_THROW_EXCEPTION(e);
     }
-    catch (dev::storage::StorageException const& e)
+    catch (bcos::storage::StorageException const& e)
     {
         // throw PrecompiledError when supported_version < v2.7.0
         if (g_BCOSConfig.version() < V2_7_0)
         {
             EXECUTIVECONTEXT_LOG(ERROR) << "StorageException" << LOG_KV("address", address)
                                         << LOG_KV("errorCode", e.errorCode());
-            throw dev::eth::PrecompiledError();
+            throw bcos::eth::PrecompiledError();
         }
         else
         {
-            dev::precompiled::PrecompiledException precompiledException(e);
+            bcos::precompiled::PrecompiledException precompiledException(e);
             EXECUTIVECONTEXT_LOG(ERROR)
                 << LOG_DESC("precompiledException") << LOG_KV("msg", e.what());
             throw precompiledException;
@@ -94,7 +94,7 @@ dev::precompiled::PrecompiledExecResult::Ptr ExecutiveContext::call(
         EXECUTIVECONTEXT_LOG(ERROR) << LOG_DESC("[call]Precompiled call error")
                                     << LOG_KV("EINFO", boost::diagnostic_information(e));
 
-        throw dev::eth::PrecompiledError();
+        throw bcos::eth::PrecompiledError();
     }
 }
 
@@ -128,11 +128,11 @@ std::shared_ptr<precompiled::Precompiled> ExecutiveContext::getPrecompiled(Addre
     return std::shared_ptr<precompiled::Precompiled>();
 }
 
-std::shared_ptr<dev::executive::StateFace> ExecutiveContext::getState()
+std::shared_ptr<bcos::executive::StateFace> ExecutiveContext::getState()
 {
     return m_stateFace;
 }
-void ExecutiveContext::setState(std::shared_ptr<dev::executive::StateFace> state)
+void ExecutiveContext::setState(std::shared_ptr<bcos::executive::StateFace> state)
 {
     m_stateFace = state;
 }
@@ -193,10 +193,10 @@ std::shared_ptr<std::vector<std::string>> ExecutiveContext::getTxCriticals(const
     }
     else
     {
-        uint32_t selector = dev::precompiled::getParamFunc(ref(_tx.data()));
+        uint32_t selector = bcos::precompiled::getParamFunc(ref(_tx.data()));
 
         auto receiveAddress = _tx.receiveAddress();
-        std::shared_ptr<dev::precompiled::ParallelConfig> config = nullptr;
+        std::shared_ptr<bcos::precompiled::ParallelConfig> config = nullptr;
         // hit the cache, fetch ParallelConfig from the cache directly
         // Note: Only when initializing DAG, get ParallelConfig, will not get ParallelConfig during
         // transaction execution

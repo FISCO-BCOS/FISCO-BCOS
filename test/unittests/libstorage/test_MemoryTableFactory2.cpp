@@ -16,24 +16,24 @@
  */
 
 #include "Common.h"
-#include <libdevcore/FixedHash.h>
 #include <libstorage/Common.h>
 #include <libstorage/MemoryTable.h>
 #include <libstorage/MemoryTableFactory2.h>
 #include <libstorage/Storage.h>
 #include <libstorage/Table.h>
+#include <libutilities/FixedHash.h>
 #include <tbb/parallel_for.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
 #include <thread>
 #include <vector>
 
-using namespace dev;
-using namespace dev::storage;
+using namespace bcos;
+using namespace bcos::storage;
 
 namespace test_MemoryTableFactory2
 {
-class MockAMOPDB : public dev::storage::Storage
+class MockAMOPDB : public bcos::storage::Storage
 {
 public:
     virtual ~MockAMOPDB() {}
@@ -54,13 +54,13 @@ struct MemoryTableFactoryFixture2
     {
         std::shared_ptr<MockAMOPDB> mockAMOPDB = std::make_shared<MockAMOPDB>();
 
-        memoryDBFactory = std::make_shared<dev::storage::MemoryTableFactory2>();
+        memoryDBFactory = std::make_shared<bcos::storage::MemoryTableFactory2>();
         memoryDBFactory->setStateStorage(mockAMOPDB);
 
         BOOST_TEST_TRUE(memoryDBFactory->stateStorage() == mockAMOPDB);
     }
 
-    dev::storage::MemoryTableFactory2::Ptr memoryDBFactory;
+    bcos::storage::MemoryTableFactory2::Ptr memoryDBFactory;
 };
 
 BOOST_FIXTURE_TEST_SUITE(MemoryTableFactory2, MemoryTableFactoryFixture2)

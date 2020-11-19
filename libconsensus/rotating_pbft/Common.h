@@ -21,10 +21,10 @@
  * @date: 2020-01-14
  */
 #pragma once
-#include <libdevcore/Common.h>
-#include <libdevcore/Exceptions.h>
+#include <libutilities/Common.h>
+#include <libutilities/Exceptions.h>
 
-namespace dev
+namespace bcos
 {
 namespace consensus
 {
@@ -33,7 +33,7 @@ enum RPBFTPacketType : byte
     RawPrepareResponsePacket = 0x05,
 };
 
-DEV_SIMPLE_EXCEPTION(RequestedRawPrepareNotFound);
+DERIVE_BCOS_EXCEPTION(RequestedRawPrepareNotFound);
 
 }  // namespace consensus
-}  // namespace dev
+}  // namespace bcos

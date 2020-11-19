@@ -31,10 +31,10 @@
 
 
 using namespace std;
-using namespace dev;
-using namespace dev::crypto;
+using namespace bcos;
+using namespace bcos::crypto;
 
-string dev::crypto::aesCBCEncrypt(const unsigned char* _plainData, size_t _plainDataSize,
+string bcos::crypto::aesCBCEncrypt(const unsigned char* _plainData, size_t _plainDataSize,
     const unsigned char* _key, size_t _keySize, const unsigned char* _ivData)
 {
     string cipherData;
@@ -47,7 +47,7 @@ string dev::crypto::aesCBCEncrypt(const unsigned char* _plainData, size_t _plain
     return cipherData;
 }
 
-string dev::crypto::aesCBCDecrypt(const unsigned char* _cypherData, size_t _cypherDataSize,
+string bcos::crypto::aesCBCDecrypt(const unsigned char* _cypherData, size_t _cypherDataSize,
     const unsigned char* _key, size_t _keySize, const unsigned char* _ivData)
 {
     string decryptedData;
@@ -61,27 +61,27 @@ string dev::crypto::aesCBCDecrypt(const unsigned char* _cypherData, size_t _cyph
     return decryptedData;
 }
 
-string dev::crypto::aesCBCEncrypt(
+string bcos::crypto::aesCBCEncrypt(
     const string& _plainData, const string& _key, const std::string& _ivData)
 {
     return aesCBCEncrypt((const unsigned char*)_plainData.data(), _plainData.size(),
         (const unsigned char*)_key.data(), _key.size(), (const unsigned char*)_ivData.data());
 }
 
-string dev::crypto::aesCBCDecrypt(
+string bcos::crypto::aesCBCDecrypt(
     const string& _cypherData, const string& _key, const std::string& _ivData)
 {
     return aesCBCDecrypt((const unsigned char*)_cypherData.data(), _cypherData.size(),
         (const unsigned char*)_key.data(), _key.size(), (const unsigned char*)_ivData.data());
 }
 
-string dev::crypto::aesCBCEncrypt(const string& _plainData, const string& _key)
+string bcos::crypto::aesCBCEncrypt(const string& _plainData, const string& _key)
 {
     string ivData(_key.substr(0, 16));
     return aesCBCEncrypt(_plainData, _key, ivData);
 }
 
-string dev::crypto::aesCBCDecrypt(const string& _cypherData, const string& _key)
+string bcos::crypto::aesCBCDecrypt(const string& _cypherData, const string& _key)
 {
     string ivData(_key.substr(0, 16));
     return aesCBCDecrypt(_cypherData, _key, ivData);

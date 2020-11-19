@@ -29,9 +29,9 @@ using namespace boost::unit_test;
 
 using namespace std;
 using namespace boost;
-using namespace dev::test;
-using namespace dev::eth;
-namespace dev
+using namespace bcos::test;
+using namespace bcos::eth;
+namespace bcos
 {
 namespace test
 {
@@ -106,4 +106,4 @@ Options const& Options::get()
     return get(framework::master_test_suite().argc, framework::master_test_suite().argv);
 }
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

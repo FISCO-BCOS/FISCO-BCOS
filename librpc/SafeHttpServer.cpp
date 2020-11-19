@@ -20,14 +20,14 @@
  */
 
 #include "SafeHttpServer.h"
-#include "libdevcore/Log.h"
+#include "libutilities/Log.h"
 #include <arpa/inet.h>
 #include <jsonrpccpp/common/specificationparser.h>
 #include <netinet/in.h>
 #include <sstream>
 
 using namespace std;
-using namespace dev;
+using namespace bcos;
 
 /// structure copied from libjson-rpc-cpp httpserver version 0.6.0
 struct mhd_coninfo

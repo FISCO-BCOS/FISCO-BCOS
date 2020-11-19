@@ -41,18 +41,18 @@
 #include <ctime>
 
 using namespace std;
-using namespace dev;
-using namespace dev::eth;
-using namespace dev::ledger;
-using namespace dev::initializer;
-using namespace dev::txpool;
-using namespace dev::blockverifier;
-using namespace dev::blockchain;
-using namespace dev::storage;
-using namespace dev::mptstate;
-using namespace dev::executive;
+using namespace bcos;
+using namespace bcos::eth;
+using namespace bcos::ledger;
+using namespace bcos::initializer;
+using namespace bcos::txpool;
+using namespace bcos::blockverifier;
+using namespace bcos::blockchain;
+using namespace bcos::storage;
+using namespace bcos::mptstate;
+using namespace bcos::executive;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -72,14 +72,14 @@ public:
             Address dest = Address(0x5002);
             string usr = to_string(i);
             u256 money = 1000000000;
-            dev::eth::ContractABI abi;
+            bcos::eth::ContractABI abi;
             bytes data =
                 abi.abiIn("userSave(string,uint256)", usr, money);  // add 1000000000 to user i
             u256 nonce = u256(i);
             Transaction::Ptr tx =
                 std::make_shared<Transaction>(value, gasPrice, gas, dest, data, nonce);
             tx->setBlockLimit(250);
-            auto sig = dev::crypto::Sign(keyPair, tx->hash(WithoutSignature));
+            auto sig = bcos::crypto::Sign(keyPair, tx->hash(WithoutSignature));
             tx->updateSignature(sig);
             tx->forceSender(Address(0x2333));
             txs->push_back(tx);
@@ -91,8 +91,8 @@ public:
     }
 
     void initUser(size_t _userNum, BlockInfo _parentBlockInfo,
-        std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
-        std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain)
+        std::shared_ptr<bcos::blockverifier::BlockVerifierInterface> _blockVerifier,
+        std::shared_ptr<bcos::blockchain::BlockChainInterface> _blockChain)
     {
         Block userAddReqBlock;
         userAddReqBlock.header().setNumber(_parentBlockInfo.number + 1);
@@ -100,7 +100,8 @@ public:
 
         genTxUserAddBlock(userAddReqBlock, _userNum);
         auto exeCtx = _blockVerifier->executeBlock(userAddReqBlock, _parentBlockInfo);
-        std::shared_ptr<dev::eth::Block> block = std::make_shared<dev::eth::Block>(userAddReqBlock);
+        std::shared_ptr<bcos::eth::Block> block =
+            std::make_shared<bcos::eth::Block>(userAddReqBlock);
         _blockChain->commitBlock(block, exeCtx);
     }
 
@@ -130,14 +131,14 @@ public:
 
             LOG(DEBUG) << "Transfer user-" << userFrom << " to user-" << userTo;
             u256 money = 1;
-            dev::eth::ContractABI abi;
+            bcos::eth::ContractABI abi;
             bytes data = abi.abiIn("userTransfer(string,string,uint256)", userFrom, userTo,
                 money);  // add 1000000000 to user i
             u256 nonce = u256(i);
             Transaction::Ptr tx =
                 std::make_shared<Transaction>(value, gasPrice, gas, dest, data, nonce);
             tx->setBlockLimit(250);
-            auto sig = dev::crypto::Sign(keyPair, tx->hash(WithoutSignature));
+            auto sig = bcos::crypto::Sign(keyPair, tx->hash(WithoutSignature));
             tx->updateSignature(sig);
             tx->forceSender(Address(0x2333));
             txs->push_back(tx);
@@ -161,13 +162,13 @@ public:
             u256 gas = 10000000;
             Address dest = Address(0x5002);
             string usr = to_string(i);
-            dev::eth::ContractABI abi;
+            bcos::eth::ContractABI abi;
             bytes data = abi.abiIn("userBalance(string)", usr);  // add 1000000000 to user i
             u256 nonce = u256(i);
             Transaction::Ptr tx =
                 std::make_shared<Transaction>(value, gasPrice, gas, dest, data, nonce);
             tx->setBlockLimit(250);
-            auto sig = dev::crypto::Sign(keyPair, tx->hash(WithoutSignature));
+            auto sig = bcos::crypto::Sign(keyPair, tx->hash(WithoutSignature));
             tx->updateSignature(sig);
             tx->forceSender(Address(0x2333));
             BOOST_CHECK_NO_THROW(_verifier->executeTransaction(_block.header(), tx));
@@ -189,16 +190,16 @@ public:
         /// set state db related param
         params->mutableStateParam().type = "storage";
 
-        auto dbInitializer = std::make_shared<dev::ledger::DBInitializer>(params, 1);
+        auto dbInitializer = std::make_shared<bcos::ledger::DBInitializer>(params, 1);
         dbInitializer->initStorageDB();
         std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();
         blockChain->setStateStorage(dbInitializer->storage());
         blockChain->setTableFactoryFactory(dbInitializer->tableFactoryFactory());
 
-        auto initParam = std::make_shared<dev::ledger::LedgerParam>();
+        auto initParam = std::make_shared<bcos::ledger::LedgerParam>();
         initParam->mutableGenesisMark() = "";
-        initParam->mutableConsensusParam().sealerList = dev::h512s();
-        initParam->mutableConsensusParam().observerList = dev::h512s();
+        initParam->mutableConsensusParam().sealerList = bcos::h512s();
+        initParam->mutableConsensusParam().observerList = bcos::h512s();
         initParam->mutableConsensusParam().consensusType = "consensusType";
         initParam->mutableStorageParam().type = "storageType";
         initParam->mutableStateParam().type = "stateType";
@@ -208,7 +209,7 @@ public:
         bool ret = blockChain->checkAndBuildGenesisBlock(initParam);
         BOOST_CHECK(ret);
 
-        dev::h256 genesisHash = blockChain->getBlockByNumber(0)->headerHash();
+        bcos::h256 genesisHash = blockChain->getBlockByNumber(0)->headerHash();
         dbInitializer->initState(genesisHash);
 
         std::shared_ptr<BlockVerifier> blockVerifier = std::make_shared<BlockVerifier>(_enablePara);
@@ -269,4 +270,4 @@ BOOST_AUTO_TEST_CASE(executeTransactionTest) {}
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

@@ -28,10 +28,10 @@
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libethcore/FakeBlock.h>
 #include <boost/test/unit_test.hpp>
-using namespace dev::consensus;
-using namespace dev::eth;
+using namespace bcos::consensus;
+using namespace bcos::eth;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -81,7 +81,7 @@ BOOST_AUTO_TEST_CASE(testFetchMissedTxsAndFillBlock)
         std::make_shared<PrepareReq>(block, KeyPair::create(), view, nodeIdx, true);
     leaderReqCache->addRawPrepare(prepareReq);
     // encode proposal
-    std::shared_ptr<dev::bytes> encodedPrepareData = std::make_shared<dev::bytes>();
+    std::shared_ptr<bcos::bytes> encodedPrepareData = std::make_shared<bcos::bytes>();
     prepareReq->encode(*encodedPrepareData);
 
     // fake for the follow receive prepare packet from the leader
@@ -93,7 +93,7 @@ BOOST_AUTO_TEST_CASE(testFetchMissedTxsAndFillBlock)
     BOOST_CHECK(followsPrepareReq == followerReqCache->partiallyRawPrepare());
 
     // encode the missedInfo
-    std::shared_ptr<dev::txpool::TxPool> txPool = std::make_shared<dev::txpool::TxPool>();
+    std::shared_ptr<bcos::txpool::TxPool> txPool = std::make_shared<bcos::txpool::TxPool>();
     txPool->initPartiallyBlock(followsPrepareReq->pBlock);
 
     PartiallyBlock::Ptr partiallyBlock =
@@ -136,4 +136,4 @@ BOOST_AUTO_TEST_CASE(testFetchMissedTxsAndFillBlock)
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

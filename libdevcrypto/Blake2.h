@@ -4,9 +4,9 @@
 
 #pragma once
 
-#include <libdevcore/Common.h>
+#include <libutilities/Common.h>
 
-namespace dev
+namespace bcos
 {
 namespace crypto
 {
@@ -21,4 +21,4 @@ namespace crypto
 bytes blake2FCompression(uint32_t _rounds, bytesConstRef _stateVector, bytesConstRef _t0,
     bytesConstRef _t1, bool _lastBlock, bytesConstRef _messageBlock);
 }  // namespace crypto
-}  // namespace dev
+}  // namespace bcos

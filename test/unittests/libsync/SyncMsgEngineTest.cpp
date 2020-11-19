@@ -21,33 +21,33 @@
  * @date: 2018-10-25
  */
 
-#include <libdevcore/TopicInfo.h>
 #include <libflowlimit/RateLimiter.h>
 #include <libnetwork/Host.h>
 #include <libsync/DownloadingTxsQueue.h>
 #include <libsync/SyncMsgEngine.h>
 #include <libsync/SyncMsgPacket.h>
+#include <libutilities/TopicInfo.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libsync/FakeSyncToolsSet.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>
 
 using namespace std;
-using namespace dev;
-using namespace dev::test;
-using namespace dev::p2p;
-using namespace dev::sync;
+using namespace bcos;
+using namespace bcos::test;
+using namespace bcos::p2p;
+using namespace bcos::sync;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
 class FakeSyncMsgEngine : public SyncMsgEngine
 {
 public:
-    FakeSyncMsgEngine(std::shared_ptr<dev::p2p::P2PInterface> _service,
-        std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
-        std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
+    FakeSyncMsgEngine(std::shared_ptr<bcos::p2p::P2PInterface> _service,
+        std::shared_ptr<bcos::txpool::TxPoolInterface> _txPool,
+        std::shared_ptr<bcos::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<SyncMasterStatus> _syncStatus,
         std::shared_ptr<DownloadingTxsQueue> _txQueue, PROTOCOL_ID const& _protocolId,
         NodeID const& _nodeId, h256 const& _genesisHash)
@@ -60,8 +60,8 @@ public:
         m_syncMsgPacketFactory = std::make_shared<SyncMsgPacketFactory>();
     }
 
-    bool interpret(
-        SyncMsgPacket::Ptr _packet, dev::p2p::P2PMessage::Ptr _msg, dev::h512 const& _peer) override
+    bool interpret(SyncMsgPacket::Ptr _packet, bcos::p2p::P2PMessage::Ptr _msg,
+        bcos::h512 const& _peer) override
     {
         try
         {
@@ -134,7 +134,7 @@ public:
     ~FakeServiceForDownloadBlocksContainer(){};
 
     void asyncSendMessageByNodeID(NodeID, std::shared_ptr<P2PMessage>, CallbackFuncWithSession,
-        dev::network::Options) override
+        bcos::network::Options) override
     {
         sentCnt++;
     };
@@ -145,7 +145,7 @@ public:
     // not used
     NodeID id() const override { return NodeID(); };
 
-    std::shared_ptr<dev::network::Host> host() override { return nullptr; };
+    std::shared_ptr<bcos::network::Host> host() override { return nullptr; };
 
     std::shared_ptr<P2PMessage> sendMessageByNodeID(NodeID, std::shared_ptr<P2PMessage>) override
     {
@@ -158,17 +158,17 @@ public:
         return nullptr;
     };
     void asyncSendMessageByTopic(std::string, std::shared_ptr<P2PMessage>, CallbackFuncWithSession,
-        dev::network::Options) override{};
+        bcos::network::Options) override{};
 
     bool asyncMulticastMessageByTopic(
-        std::string, std::shared_ptr<P2PMessage>, dev::flowlimit::RateLimiter::Ptr) override
+        std::string, std::shared_ptr<P2PMessage>, bcos::flowlimit::RateLimiter::Ptr) override
     {
         return true;
     };
 
     void asyncMulticastMessageByNodeIDList(NodeIDs, std::shared_ptr<P2PMessage>) override{};
 
-    void asyncBroadcastMessage(std::shared_ptr<P2PMessage>, dev::network::Options) override{};
+    void asyncBroadcastMessage(std::shared_ptr<P2PMessage>, bcos::network::Options) override{};
 
     void registerHandlerByProtoclID(PROTOCOL_ID, CallbackFuncWithSession) override{};
 
@@ -184,8 +184,8 @@ public:
 
     std::set<std::string> topics() override { return std::set<std::string>(); };
 
-    dev::h512s getNodeListByGroupID(GROUP_ID) override { return dev::h512s(); };
-    void setGroupID2NodeList(std::map<GROUP_ID, dev::h512s>) override{};
+    bcos::h512s getNodeListByGroupID(GROUP_ID) override { return bcos::h512s(); };
+    void setGroupID2NodeList(std::map<GROUP_ID, bcos::h512s>) override{};
     void setNodeListByGroupID(GROUP_ID, const h512s&) override{};
 
     void setTopics(std::shared_ptr<std::set<std::string>>) override{};
@@ -199,7 +199,7 @@ public:
         return CallbackFuncForTopicVerify();
     }
 
-    std::shared_ptr<dev::p2p::P2PSession> getP2PSessionByNodeId(NodeID const&) override
+    std::shared_ptr<bcos::p2p::P2PSession> getP2PSessionByNodeId(NodeID const&) override
     {
         return nullptr;
     }
@@ -209,7 +209,7 @@ BOOST_FIXTURE_TEST_SUITE(SyncMsgEngineTest, SyncMsgEngineFixture)
 
 BOOST_AUTO_TEST_CASE(SyncStatusPacketTest)
 {
-    auto statusPacket = SyncStatusPacket(dev::h512(), 0x1, h256(0xcdef), h256(0xcd));
+    auto statusPacket = SyncStatusPacket(bcos::h512(), 0x1, h256(0xcdef), h256(0xcd));
     statusPacket.encode();
     auto msgPtr = statusPacket.toMessage(0x01);
     auto fakeSessionPtr = fakeSyncToolsSet.createSession();
@@ -278,7 +278,7 @@ BOOST_AUTO_TEST_CASE(SyncReqBlockPacketTest)
 BOOST_AUTO_TEST_CASE(BatchSendTest)
 {
     size_t maxPayloadSize =
-        dev::p2p::P2PMessage::MAX_LENGTH - 2048;  // should be the same as syncMsgEngine.cpp
+        bcos::p2p::P2PMessage::MAX_LENGTH - 2048;  // should be the same as syncMsgEngine.cpp
     size_t quarterPayloadSize = maxPayloadSize / 4;
 
     FakeServiceForDownloadBlocksContainer::Ptr service =
@@ -328,4 +328,4 @@ BOOST_AUTO_TEST_CASE(BatchSendTest)
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

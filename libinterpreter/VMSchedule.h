@@ -23,7 +23,7 @@
 #pragma once
 #include <memory>
 
-namespace dev
+namespace bcos
 {
 namespace eth
 {
@@ -79,4 +79,4 @@ public:
     virtual ~FreeStorageVMSchedule() {}
 };
 }  // namespace eth
-}  // namespace dev
+}  // namespace bcos

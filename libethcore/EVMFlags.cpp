@@ -23,7 +23,7 @@
 
 #include "EVMFlags.h"
 
-using namespace dev;
+using namespace bcos;
 
 // bit 64 is currently occupied, indicating whether to use FreeStorageVMSchedule
 const VMFlagType EVMFlags::FreeStorageGas = ((VMFlagType)1 << (sizeof(VMFlagType) * 8 - 1));

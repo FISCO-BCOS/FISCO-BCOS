@@ -36,11 +36,11 @@
 #include <boost/test/unit_test.hpp>
 
 using namespace std;
-using namespace dev;
-using namespace dev::blockverifier;
-using namespace dev::storage;
-using namespace dev::storagestate;
-using namespace dev::precompiled;
+using namespace bcos;
+using namespace bcos::blockverifier;
+using namespace bcos::storage;
+using namespace bcos::storagestate;
+using namespace bcos::precompiled;
 
 namespace test_ChainGovernancePrecompiled
 {
@@ -53,15 +53,15 @@ struct ChainGovernancePrecompiledFixture
         auto memStorage = std::make_shared<MemoryStorage2>();
         tableFactory = std::make_shared<MemoryTableFactory2>();
         tableFactory->setStateStorage(memStorage);
-        context = std::make_shared<dev::blockverifier::ExecutiveContext>();
+        context = std::make_shared<bcos::blockverifier::ExecutiveContext>();
         context->setMemoryTableFactory(tableFactory);
         context->setBlockInfo(blockInfo);
-        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
+        auto precompiledGasFactory = std::make_shared<bcos::precompiled::PrecompiledGasFactory>(0);
         auto precompiledExecResultFactory =
-            std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+            std::make_shared<bcos::precompiled::PrecompiledExecResultFactory>();
         precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
         chainGovernancePrecompiled =
-            std::make_shared<dev::precompiled::ChainGovernancePrecompiled>();
+            std::make_shared<bcos::precompiled::ChainGovernancePrecompiled>();
         chainGovernancePrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     }
 
@@ -220,8 +220,7 @@ BOOST_AUTO_TEST_CASE(grant_revoke_CM)
     BOOST_TEST(reader.parse(votes, retJson) == true);
     BOOST_TEST(retJson["revoke"].size() == 1);
     BOOST_TEST(retJson["revoke"][(Json::ArrayIndex)0]["block_limit"].asString() == "10000");
-    BOOST_TEST(
-        retJson["revoke"][(Json::ArrayIndex)0]["voter"].asString() == member1.hexPrefixed());
+    BOOST_TEST(retJson["revoke"][(Json::ArrayIndex)0]["voter"].asString() == member1.hexPrefixed());
     BOOST_TEST(retJson["grant"].size() == 0);
     BOOST_TEST(retJson["update_weight"].size() == 0);
 
@@ -267,8 +266,7 @@ BOOST_AUTO_TEST_CASE(grant_revoke_CM)
     BOOST_TEST(reader.parse(votes, retJson) == true);
     BOOST_TEST(retJson["revoke"].size() == 1);
     BOOST_TEST(retJson["revoke"][(Json::ArrayIndex)0]["block_limit"].asString() == "10000");
-    BOOST_TEST(
-        retJson["revoke"][(Json::ArrayIndex)0]["voter"].asString() == member1.hexPrefixed());
+    BOOST_TEST(retJson["revoke"][(Json::ArrayIndex)0]["voter"].asString() == member1.hexPrefixed());
     BOOST_TEST(retJson["grant"].size() == 0);
     BOOST_TEST(retJson["update_weight"].size() == 0);
 
@@ -361,8 +359,8 @@ BOOST_AUTO_TEST_CASE(updateCommitteeMemberWeight)
     BOOST_TEST(retJson["grant"].size() == 0);
     BOOST_TEST(retJson["update_weight"].size() == 1);
     BOOST_TEST(retJson["update_weight"][(Json::ArrayIndex)0]["block_limit"].asString() == "10000");
-    BOOST_TEST(retJson["update_weight"][(Json::ArrayIndex)0]["voter"].asString() ==
-               member1.hexPrefixed());
+    BOOST_TEST(
+        retJson["update_weight"][(Json::ArrayIndex)0]["voter"].asString() == member1.hexPrefixed());
 
     out = chainGovernancePrecompiled->call(context, bytesConstRef(&in), member2);
     ret = 0;

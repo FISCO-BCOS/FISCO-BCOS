@@ -37,12 +37,11 @@
 #include <boost/asio/ssl.hpp>
 #include <boost/logic/tribool.hpp>
 
-#include <libdevcore/Exceptions.h>
-#include <libdevcore/FixedHash.h>
-#include <libdevcore/Guards.h>
-#include <libdevcore/RLP.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/Protocol.h>
+#include <libutilities/Exceptions.h>
+#include <libutilities/FixedHash.h>
+#include <libutilities/RLP.h>
 #include <chrono>
 #include <sstream>
 
@@ -52,14 +51,14 @@ namespace bi = boost::asio::ip;
 #define SESSION_LOG(LEVEL) LOG(LEVEL) << "[NETWORK][Session]"
 #define ASIO_LOG(LEVEL) LOG(LEVEL) << "[NETWORK][ASIO]"
 
-namespace dev
+namespace bcos
 {
 namespace network
 {
 /// define Exceptions
-DEV_SIMPLE_EXCEPTION(NetworkStartRequired);
-DEV_SIMPLE_EXCEPTION(InvalidPublicIPAddress);
-DEV_SIMPLE_EXCEPTION(InvalidHostIPAddress);
+DERIVE_BCOS_EXCEPTION(NetworkStartRequired);
+DERIVE_BCOS_EXCEPTION(InvalidPublicIPAddress);
+DERIVE_BCOS_EXCEPTION(InvalidHostIPAddress);
 
 enum DisconnectReason
 {
@@ -100,7 +99,7 @@ enum PacketDecodeStatus
     PACKET_INCOMPLETE = 0
 };
 
-using NodeID = dev::h512;
+using NodeID = bcos::h512;
 
 struct Options
 {
@@ -249,4 +248,4 @@ std::ostream& operator<<(std::ostream& _out, NodeIPEndpoint const& _endpoint);
 
 bool getPublicKeyFromCert(std::shared_ptr<std::string> _nodeIDOut, X509* cert);
 }  // namespace network
-}  // namespace dev
+}  // namespace bcos

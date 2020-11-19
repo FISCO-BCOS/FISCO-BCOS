@@ -24,10 +24,10 @@
 #include "Exceptions.h"
 
 using namespace std;
-using namespace dev;
-using namespace dev::eth;
+using namespace bcos;
+using namespace bcos::eth;
 
-TransactionException dev::eth::toTransactionException(Exception const& _e)
+TransactionException bcos::eth::toTransactionException(Exception const& _e)
 {
     // Basic Transaction exceptions
     if (!!dynamic_cast<RLPException const*>(&_e))
@@ -68,7 +68,7 @@ TransactionException dev::eth::toTransactionException(Exception const& _e)
     return TransactionException::Unknown;
 }
 
-std::ostream& dev::eth::operator<<(std::ostream& _out, TransactionException const& _er)
+std::ostream& bcos::eth::operator<<(std::ostream& _out, TransactionException const& _er)
 {
     switch (_er)
     {

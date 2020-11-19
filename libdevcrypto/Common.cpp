@@ -30,13 +30,12 @@
 #include <cryptopp/modes.h>
 #include <cryptopp/pwdbased.h>
 #include <cryptopp/sha.h>
-#include <libdevcore/Guards.h>
-#include <libdevcore/RLP.h>
 #include <libethcore/Exceptions.h>
+#include <libutilities/RLP.h>
 
 using namespace std;
-using namespace dev;
-using namespace dev::crypto;
+using namespace bcos;
+using namespace bcos::crypto;
 
 namespace
 {
@@ -59,12 +58,12 @@ secp256k1_context const* getCtx()
  * @param _public : the public key need to convert to address
  * @return Address : the converted address
  */
-Address dev::toAddress(Public const& _public)
+Address bcos::toAddress(Public const& _public)
 {
     return right160(crypto::Hash(_public.ref()));
 }
 
-Address dev::toAddress(Secret const& _secret)
+Address bcos::toAddress(Secret const& _secret)
 {
     return toAddress(toPublic(_secret));
 }
@@ -78,12 +77,12 @@ Address dev::toAddress(Secret const& _secret)
  * @param _nonce : random number
  * @return Address : generated address
  */
-Address dev::toAddress(Address const& _from, u256 const& _nonce)
+Address bcos::toAddress(Address const& _from, u256 const& _nonce)
 {
     return right160(crypto::Hash(rlpList(_from, _nonce)));
 }
 
-Public dev::toPublic(Secret const& _secret)
+Public bcos::toPublic(Secret const& _secret)
 {
     if (!g_BCOSConfig.SMCrypto())
     {

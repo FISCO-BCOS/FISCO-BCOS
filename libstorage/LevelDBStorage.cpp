@@ -23,15 +23,14 @@
 #include "Table.h"
 #include <leveldb/db.h>
 #include <leveldb/write_batch.h>
-#include <libdevcore/FixedHash.h>
-#include <libdevcore/Guards.h>
-#include <libdevcore/RLP.h>
+#include <libutilities/FixedHash.h>
+#include <libutilities/RLP.h>
 #include <tbb/parallel_for.h>
 #include <memory>
 #include <thread>
 
-using namespace dev;
-using namespace dev::storage;
+using namespace bcos;
+using namespace bcos::storage;
 
 Entries::Ptr LevelDBStorage::select(
     int64_t, TableInfo::Ptr tableInfo, const std::string& key, Condition::Ptr)
@@ -95,7 +94,7 @@ Entries::Ptr LevelDBStorage::select(
     return Entries::Ptr();
 }
 
-size_t LevelDBStorage::commitTableDataRange(std::shared_ptr<dev::db::LevelDBWriteBatch>& batch,
+size_t LevelDBStorage::commitTableDataRange(std::shared_ptr<bcos::db::LevelDBWriteBatch>& batch,
     TableData::Ptr tableData, int64_t num, size_t from, size_t to)
 {
     // commit table data of given range, thread safe
@@ -167,10 +166,10 @@ size_t LevelDBStorage::commit(int64_t num, const std::vector<TableData::Ptr>& da
             // Parallel encode and batch
             size_t batchesSize = (totalSize + c_commitTableDataRangeEachThread - 1) /
                                  c_commitTableDataRangeEachThread;
-            std::shared_ptr<dev::db::LevelDBWriteBatch> batch = nullptr;
+            std::shared_ptr<bcos::db::LevelDBWriteBatch> batch = nullptr;
             batch = m_db->createWriteBatch();
 
-            std::vector<std::shared_ptr<dev::db::LevelDBWriteBatch>> batches(batchesSize, nullptr);
+            std::vector<std::shared_ptr<bcos::db::LevelDBWriteBatch>> batches(batchesSize, nullptr);
             tbb::parallel_for(tbb::blocked_range<size_t>(0, batchesSize),
                 [&](const tbb::blocked_range<size_t>& _r) {
                     for (size_t j = _r.begin(); j != _r.end(); ++j)
@@ -221,7 +220,7 @@ size_t LevelDBStorage::commit(int64_t num, const std::vector<TableData::Ptr>& da
     return 0;
 }
 
-void LevelDBStorage::setDB(std::shared_ptr<dev::db::BasicLevelDB> db)
+void LevelDBStorage::setDB(std::shared_ptr<bcos::db::BasicLevelDB> db)
 {
     m_db = db;
 }

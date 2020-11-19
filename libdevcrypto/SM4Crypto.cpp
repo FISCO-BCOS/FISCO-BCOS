@@ -26,11 +26,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-using namespace dev;
-using namespace dev::crypto;
+using namespace bcos;
+using namespace bcos::crypto;
 using namespace std;
 
-string dev::crypto::sm4Encrypt(const unsigned char* _plainData, size_t _plainDataSize,
+string bcos::crypto::sm4Encrypt(const unsigned char* _plainData, size_t _plainDataSize,
     const unsigned char* _key, size_t _keySize, const unsigned char* _ivData)
 {
     int padding = _plainDataSize % 16;
@@ -48,7 +48,7 @@ string dev::crypto::sm4Encrypt(const unsigned char* _plainData, size_t _plainDat
     return enData;
 }
 
-string dev::crypto::sm4Decrypt(const unsigned char* _cypherData, size_t _cypherDataSize,
+string bcos::crypto::sm4Decrypt(const unsigned char* _cypherData, size_t _cypherDataSize,
     const unsigned char* _key, size_t _keySize, const unsigned char* _ivData)
 {
     string deData;

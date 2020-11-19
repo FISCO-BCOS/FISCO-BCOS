@@ -12,7 +12,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
- * (c) 2016-2018 fisco-dev contributors.
+ * (c) 2016-2018 fisco-bcos contributors.
  *
  * @brief: a node generate parallel tx by itself
  *
@@ -41,13 +41,13 @@
 #include <thread>
 
 using namespace std;
-using namespace dev;
-using namespace dev::eth;
-using namespace dev::ledger;
-using namespace dev::initializer;
-using namespace dev::txpool;
-using namespace dev::blockverifier;
-using namespace dev::blockchain;
+using namespace bcos;
+using namespace bcos::eth;
+using namespace bcos::ledger;
+using namespace bcos::initializer;
+using namespace bcos::txpool;
+using namespace bcos::blockverifier;
+using namespace bcos::blockchain;
 
 void generateUserAddTx(std::shared_ptr<LedgerManager> ledgerManager, size_t _userNum)
 {
@@ -63,13 +63,13 @@ void generateUserAddTx(std::shared_ptr<LedgerManager> ledgerManager, size_t _use
             Address dest = Address(0x5002);
             string user = to_string(i);
             u256 money = 1000000000;
-            dev::eth::ContractABI abi;
+            bcos::eth::ContractABI abi;
             bytes data =
                 abi.abiIn("userSave(string,uint256)", user, money);  // add 1000000000 to user i
             u256 nonce = u256(utcTime());
             Transaction::Ptr tx =
                 std::make_shared<Transaction>(value, gasPrice, gas, dest, data, nonce);
-            auto sig = dev::crypto::Sign(keyPair, tx->hash(WithoutSignature));
+            auto sig = bcos::crypto::Sign(keyPair, tx->hash(WithoutSignature));
 
             for (auto group : ledgerManager->getGroupList())
             {
@@ -125,7 +125,7 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
                 userTo = to_string(dist(mt));
 
                 u256 money = 1;
-                dev::eth::ContractABI abi;
+                bcos::eth::ContractABI abi;
                 bytes data = abi.abiIn("userTransfer(string,string,uint256)", userFrom, userTo,
                     money);  // add 1000000000 to user i
                 u256 nonce = u256(utcTime() + rand());

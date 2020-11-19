@@ -60,7 +60,7 @@ namespace Json
 class Value;
 }  // namespace Json
 
-namespace dev
+namespace bcos
 {
 namespace channel
 {
@@ -96,7 +96,7 @@ public:
         _listenAddr(listenAddr),
         _listenPort(listenPort),
         m_group2SDKAllowList(
-            std::make_shared<std::map<dev::GROUP_ID, dev::PeerWhitelist::Ptr>>()){};
+            std::make_shared<std::map<bcos::GROUP_ID, bcos::PeerWhitelist::Ptr>>()){};
 
     virtual ~ChannelRPCServer();
     virtual bool StartListening() override;
@@ -105,15 +105,15 @@ public:
 
 
     virtual void onConnect(
-        dev::channel::ChannelException e, dev::channel::ChannelSession::Ptr session);
+        bcos::channel::ChannelException e, bcos::channel::ChannelSession::Ptr session);
 
 
     virtual void onDisconnect(
-        dev::channel::ChannelException e, dev::channel::ChannelSession::Ptr session);
+        bcos::channel::ChannelException e, bcos::channel::ChannelSession::Ptr session);
 
 
-    virtual void onClientRequest(dev::channel::ChannelSession::Ptr session,
-        dev::channel::ChannelException e, dev::channel::Message::Ptr message);
+    virtual void onClientRequest(bcos::channel::ChannelSession::Ptr session,
+        bcos::channel::ChannelException e, bcos::channel::Message::Ptr message);
     virtual void blockNotify(int16_t _groupID, int64_t _blockNumber);
 
     void setListenAddr(const std::string& listenAddr);
@@ -124,27 +124,27 @@ public:
 
     void CloseConnection(int _socket);
 
-    void onNodeChannelRequest(dev::network::NetworkException, std::shared_ptr<p2p::P2PSession>,
+    void onNodeChannelRequest(bcos::network::NetworkException, std::shared_ptr<p2p::P2PSession>,
         std::shared_ptr<p2p::P2PMessage>);
 
-    void setService(std::shared_ptr<dev::p2p::P2PInterface> _service);
+    void setService(std::shared_ptr<bcos::p2p::P2PInterface> _service);
 
     void setSSLContext(std::shared_ptr<boost::asio::ssl::context> sslContext);
 
-    std::shared_ptr<dev::channel::ChannelServer> channelServer() { return _server; }
-    void setChannelServer(std::shared_ptr<dev::channel::ChannelServer> server);
+    std::shared_ptr<bcos::channel::ChannelServer> channelServer() { return _server; }
+    void setChannelServer(std::shared_ptr<bcos::channel::ChannelServer> server);
 
-    void asyncPushChannelMessage(std::string topic, dev::channel::Message::Ptr message,
-        std::function<void(dev::channel::ChannelException, dev::channel::Message::Ptr,
-            dev::channel::ChannelSession::Ptr)>
+    void asyncPushChannelMessage(std::string topic, bcos::channel::Message::Ptr message,
+        std::function<void(bcos::channel::ChannelException, bcos::channel::Message::Ptr,
+            bcos::channel::ChannelSession::Ptr)>
             callback);
 
     void asyncPushChannelMessageHandler(const std::string& toTopic, const std::string& content);
 
-    void asyncBroadcastChannelMessage(std::string topic, dev::channel::Message::Ptr message);
+    void asyncBroadcastChannelMessage(std::string topic, bcos::channel::Message::Ptr message);
 
-    virtual dev::channel::TopicChannelMessage::Ptr pushChannelMessage(
-        dev::channel::TopicChannelMessage::Ptr message, size_t timeout);
+    virtual bcos::channel::TopicChannelMessage::Ptr pushChannelMessage(
+        bcos::channel::TopicChannelMessage::Ptr message, size_t timeout);
 
     void setCallbackSetter(std::function<void(
             std::function<void(const std::string& receiptContext, GROUP_ID _groupId)>*,
@@ -163,47 +163,49 @@ public:
         m_eventFilterCallBack = _callback;
     };
 
-    void setEventCancelFilterCallback(std::function<int32_t(const std::string&, uint32_t, std::function<bool(GROUP_ID _groupId)>)> _callback)
+    void setEventCancelFilterCallback(
+        std::function<int32_t(const std::string&, uint32_t, std::function<bool(GROUP_ID _groupId)>)>
+            _callback)
     {
         m_eventCancelFilterCallBack = _callback;
     };
 
-    void addHandler(const dev::eth::Handler<int64_t>& handler) { m_handlers.push_back(handler); }
+    void addHandler(const bcos::eth::Handler<int64_t>& handler) { m_handlers.push_back(handler); }
 
-    void setNetworkStatHandler(dev::stat::ChannelNetworkStatHandler::Ptr _handler)
+    void setNetworkStatHandler(bcos::stat::ChannelNetworkStatHandler::Ptr _handler)
     {
         m_networkStatHandler = _handler;
     }
 
-    dev::stat::ChannelNetworkStatHandler::Ptr networkStatHandler() { return m_networkStatHandler; }
+    bcos::stat::ChannelNetworkStatHandler::Ptr networkStatHandler() { return m_networkStatHandler; }
 
-    void setQPSLimiter(dev::flowlimit::RPCQPSLimiter::Ptr _qpsLimiter)
+    void setQPSLimiter(bcos::flowlimit::RPCQPSLimiter::Ptr _qpsLimiter)
     {
         m_qpsLimiter = _qpsLimiter;
     }
 
-    dev::flowlimit::RPCQPSLimiter::Ptr qpsLimiter() { return m_qpsLimiter; }
+    bcos::flowlimit::RPCQPSLimiter::Ptr qpsLimiter() { return m_qpsLimiter; }
 
-    void setNetworkBandwidthLimiter(dev::flowlimit::RateLimiter::Ptr _networkBandwidthLimiter)
+    void setNetworkBandwidthLimiter(bcos::flowlimit::RateLimiter::Ptr _networkBandwidthLimiter)
     {
         m_networkBandwidthLimiter = _networkBandwidthLimiter;
     }
 
-    dev::flowlimit::RateLimiter::Ptr networkBandwidthLimiter() const
+    bcos::flowlimit::RateLimiter::Ptr networkBandwidthLimiter() const
     {
         return m_networkBandwidthLimiter;
     }
 
     void registerSDKAllowListByGroupId(
-        dev::GROUP_ID const& _groupId, dev::PeerWhitelist::Ptr _allowList);
+        bcos::GROUP_ID const& _groupId, bcos::PeerWhitelist::Ptr _allowList);
 
     // remove the registered sdk allowlist when stop/delete the group
-    void removeSDKAllowListByGroupId(dev::GROUP_ID const& _groupId);
+    void removeSDKAllowListByGroupId(bcos::GROUP_ID const& _groupId);
 
 private:
-    bool checkSDKPermission(dev::GROUP_ID _groupId, dev::h512 const& _sdkPublicKey);
+    bool checkSDKPermission(bcos::GROUP_ID _groupId, bcos::h512 const& _sdkPublicKey);
 
-    dev::PeerWhitelist::Ptr getSDKAllowListByGroupId(dev::GROUP_ID const& _groupId)
+    bcos::PeerWhitelist::Ptr getSDKAllowListByGroupId(bcos::GROUP_ID const& _groupId)
     {
         ReadGuard l(x_group2SDKAllowList);
         if (m_group2SDKAllowList->count(_groupId))
@@ -214,43 +216,43 @@ private:
     }
 
     bool OnRpcRequest(
-        dev::channel::ChannelSession::Ptr _session, const std::string& request, void* addInfo);
+        bcos::channel::ChannelSession::Ptr _session, const std::string& request, void* addInfo);
 
     virtual void onClientRPCRequest(
-        dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
+        bcos::channel::ChannelSession::Ptr session, bcos::channel::Message::Ptr message);
 
     virtual void onClientTopicRequest(
-        dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
+        bcos::channel::ChannelSession::Ptr session, bcos::channel::Message::Ptr message);
 
     virtual void onClientChannelRequest(
-        dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
+        bcos::channel::ChannelSession::Ptr session, bcos::channel::Message::Ptr message);
 
     virtual void onClientRegisterEventLogRequest(
-        dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
+        bcos::channel::ChannelSession::Ptr session, bcos::channel::Message::Ptr message);
 
     virtual void onClientUnregisterEventLogRequest(
-        dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
+        bcos::channel::ChannelSession::Ptr session, bcos::channel::Message::Ptr message);
 
     virtual void onClientHandshake(
-        dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
+        bcos::channel::ChannelSession::Ptr session, bcos::channel::Message::Ptr message);
 
     virtual void onClientHeartbeat(
-        dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
+        bcos::channel::ChannelSession::Ptr session, bcos::channel::Message::Ptr message);
 
-    dev::channel::ChannelSession::Ptr sendChannelMessageToSession(std::string topic,
-        dev::channel::Message::Ptr message,
-        const std::set<dev::channel::ChannelSession::Ptr>& exclude);
+    bcos::channel::ChannelSession::Ptr sendChannelMessageToSession(std::string topic,
+        bcos::channel::Message::Ptr message,
+        const std::set<bcos::channel::ChannelSession::Ptr>& exclude);
 
     void updateHostTopics();
 
-    std::vector<dev::channel::ChannelSession::Ptr> getSessionByTopic(const std::string& topic);
+    std::vector<bcos::channel::ChannelSession::Ptr> getSessionByTopic(const std::string& topic);
 
-    void onClientUpdateTopicStatusRequest(dev::channel::Message::Ptr message);
-    bool limitAMOPBandwidth(dev::channel::ChannelSession::Ptr _session,
-        dev::channel::Message::Ptr _AMOPReq, dev::p2p::P2PMessage::Ptr _p2pMessage);
+    void onClientUpdateTopicStatusRequest(bcos::channel::Message::Ptr message);
+    bool limitAMOPBandwidth(bcos::channel::ChannelSession::Ptr _session,
+        bcos::channel::Message::Ptr _AMOPReq, bcos::p2p::P2PMessage::Ptr _p2pMessage);
 
     void sendRejectAMOPResponse(
-        dev::channel::ChannelSession::Ptr _session, dev::channel::Message::Ptr _AMOPReq);
+        bcos::channel::ChannelSession::Ptr _session, bcos::channel::Message::Ptr _AMOPReq);
 
     bool _running = false;
 
@@ -259,17 +261,17 @@ private:
     std::shared_ptr<boost::asio::io_service> _ioService;
 
     std::shared_ptr<boost::asio::ssl::context> _sslContext;
-    std::shared_ptr<dev::channel::ChannelServer> _server;
+    std::shared_ptr<bcos::channel::ChannelServer> _server;
 
-    std::map<int, dev::channel::ChannelSession::Ptr> _sessions;
+    std::map<int, bcos::channel::ChannelSession::Ptr> _sessions;
     std::mutex _sessionMutex;
 
-    std::map<std::string, dev::channel::ChannelSession::Ptr> _seq2session;
+    std::map<std::string, bcos::channel::ChannelSession::Ptr> _seq2session;
     std::mutex _seqMutex;
 
     int _sessionCount = 1;
 
-    std::shared_ptr<dev::p2p::P2PInterface> m_service;
+    std::shared_ptr<bcos::p2p::P2PInterface> m_service;
 
     std::function<void(std::function<void(const std::string& receiptContext, GROUP_ID _groupId)>*,
         std::function<uint32_t()>*)>
@@ -280,17 +282,18 @@ private:
             GROUP_ID const& _groupId)>,
         std::function<int(GROUP_ID _groupId)>, std::function<bool(GROUP_ID _groupId)>)>
         m_eventFilterCallBack;
-    
-    std::function<int32_t(const std::string&, uint32_t, std::function<bool(GROUP_ID _groupId)>)> m_eventCancelFilterCallBack;
 
-    std::vector<dev::eth::Handler<int64_t>> m_handlers;
+    std::function<int32_t(const std::string&, uint32_t, std::function<bool(GROUP_ID _groupId)>)>
+        m_eventCancelFilterCallBack;
 
-    dev::stat::ChannelNetworkStatHandler::Ptr m_networkStatHandler;
-    dev::flowlimit::RPCQPSLimiter::Ptr m_qpsLimiter;
-    dev::flowlimit::RateLimiter::Ptr m_networkBandwidthLimiter;
+    std::vector<bcos::eth::Handler<int64_t>> m_handlers;
 
-    std::shared_ptr<std::map<dev::GROUP_ID, dev::PeerWhitelist::Ptr>> m_group2SDKAllowList;
+    bcos::stat::ChannelNetworkStatHandler::Ptr m_networkStatHandler;
+    bcos::flowlimit::RPCQPSLimiter::Ptr m_qpsLimiter;
+    bcos::flowlimit::RateLimiter::Ptr m_networkBandwidthLimiter;
+
+    std::shared_ptr<std::map<bcos::GROUP_ID, bcos::PeerWhitelist::Ptr>> m_group2SDKAllowList;
     mutable SharedMutex x_group2SDKAllowList;
 };
 
-}  // namespace dev
+}  // namespace bcos

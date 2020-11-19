@@ -27,20 +27,20 @@
 #include <libconsensus/Sealer.h>
 #include <memory>
 
-namespace dev
+namespace bcos
 {
 namespace consensus
 {
 class RaftSealer : public Sealer
 {
 public:
-    RaftSealer(std::shared_ptr<dev::p2p::P2PInterface> _service,
-        std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
-        std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-        std::shared_ptr<dev::sync::SyncInterface> _blockSync,
-        std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
+    RaftSealer(std::shared_ptr<bcos::p2p::P2PInterface> _service,
+        std::shared_ptr<bcos::txpool::TxPoolInterface> _txPool,
+        std::shared_ptr<bcos::blockchain::BlockChainInterface> _blockChain,
+        std::shared_ptr<bcos::sync::SyncInterface> _blockSync,
+        std::shared_ptr<bcos::blockverifier::BlockVerifierInterface> _blockVerifier,
         KeyPair const& _keyPair, unsigned _minElectTime, unsigned _maxElectTime,
-        dev::PROTOCOL_ID const& _protocolId, dev::h512s const& _sealerList = dev::h512s())
+        bcos::PROTOCOL_ID const& _protocolId, bcos::h512s const& _sealerList = bcos::h512s())
       : Sealer(_txPool, _blockChain, _blockSync)
     {
         m_consensusEngine = std::make_shared<RaftEngine>(_service, _txPool, _blockChain, _blockSync,
@@ -70,4 +70,4 @@ private:
     std::shared_ptr<RaftEngine> m_raftEngine;
 };
 }  // namespace consensus
-}  // namespace dev
+}  // namespace bcos

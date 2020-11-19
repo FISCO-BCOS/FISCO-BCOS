@@ -21,14 +21,14 @@
 
 #pragma once
 
-#include <libdevcore/FixedHash.h>
 #include <libnetwork/Host.h>
 #include <libnetwork/SessionFace.h>
 #include <libp2p/Common.h>
 #include <libp2p/P2PMessage.h>
+#include <libutilities/FixedHash.h>
 #include <memory>
 
-namespace dev
+namespace bcos
 {
 namespace stat
 {
@@ -45,8 +45,8 @@ namespace p2p
 class P2PMessage;
 class P2PMessageFactory;
 class P2PSession;
-typedef std::function<void(dev::network::NetworkException, std::shared_ptr<dev::p2p::P2PSession>,
-    std::shared_ptr<dev::p2p::P2PMessage>)>
+typedef std::function<void(bcos::network::NetworkException, std::shared_ptr<bcos::p2p::P2PSession>,
+    std::shared_ptr<bcos::p2p::P2PMessage>)>
     CallbackFuncWithSession;
 typedef std::function<void(const std::string&, const std::string&)> CallbackFuncForTopicVerify;
 class P2PInterface
@@ -62,23 +62,23 @@ public:
 
     virtual void asyncSendMessageByNodeID(NodeID nodeID, std::shared_ptr<P2PMessage> message,
         CallbackFuncWithSession callback,
-        dev::network::Options options = dev::network::Options()) = 0;
+        bcos::network::Options options = bcos::network::Options()) = 0;
 
     virtual std::shared_ptr<P2PMessage> sendMessageByTopic(
         std::string topic, std::shared_ptr<P2PMessage> message) = 0;
 
     virtual void asyncSendMessageByTopic(std::string topic, std::shared_ptr<P2PMessage> message,
-        CallbackFuncWithSession callback, dev::network::Options options) = 0;
+        CallbackFuncWithSession callback, bcos::network::Options options) = 0;
 
     virtual bool asyncMulticastMessageByTopic(std::string topic,
         std::shared_ptr<P2PMessage> message,
-        std::shared_ptr<dev::flowlimit::RateLimiter> _bandwidthLimiter = nullptr) = 0;
+        std::shared_ptr<bcos::flowlimit::RateLimiter> _bandwidthLimiter = nullptr) = 0;
 
     virtual void asyncMulticastMessageByNodeIDList(
         NodeIDs nodeIDs, std::shared_ptr<P2PMessage> message) = 0;
 
     virtual void asyncBroadcastMessage(
-        std::shared_ptr<P2PMessage> message, dev::network::Options options) = 0;
+        std::shared_ptr<P2PMessage> message, bcos::network::Options options) = 0;
 
     virtual void registerHandlerByProtoclID(
         PROTOCOL_ID protocolID, CallbackFuncWithSession handler) = 0;
@@ -94,11 +94,11 @@ public:
 
     virtual std::set<std::string> topics() = 0;
 
-    virtual std::shared_ptr<dev::network::Host> host() = 0;
+    virtual std::shared_ptr<bcos::network::Host> host() = 0;
 
-    virtual dev::h512s getNodeListByGroupID(GROUP_ID groupID) = 0;
-    virtual void setGroupID2NodeList(std::map<GROUP_ID, dev::h512s> _groupID2NodeList) = 0;
-    virtual void setNodeListByGroupID(GROUP_ID _groupID, const dev::h512s& _nodeList) = 0;
+    virtual bcos::h512s getNodeListByGroupID(GROUP_ID groupID) = 0;
+    virtual void setGroupID2NodeList(std::map<GROUP_ID, bcos::h512s> _groupID2NodeList) = 0;
+    virtual void setNodeListByGroupID(GROUP_ID _groupID, const bcos::h512s& _nodeList) = 0;
 
     virtual void setTopics(std::shared_ptr<std::set<std::string>> _topics) = 0;
 
@@ -108,21 +108,22 @@ public:
 
     virtual CallbackFuncForTopicVerify callbackFuncForTopicVerify() = 0;
 
-    virtual std::shared_ptr<dev::p2p::P2PSession> getP2PSessionByNodeId(NodeID const& _nodeID) = 0;
+    virtual std::shared_ptr<bcos::p2p::P2PSession> getP2PSessionByNodeId(NodeID const& _nodeID) = 0;
     virtual void appendNetworkStatHandlerByGroupID(
-        GROUP_ID const&, std::shared_ptr<dev::stat::NetworkStatHandler>)
+        GROUP_ID const&, std::shared_ptr<bcos::stat::NetworkStatHandler>)
     {}
     virtual void removeNetworkStatHandlerByGroupID(GROUP_ID const&) {}
 
-    virtual void setNodeBandwidthLimiter(std::shared_ptr<dev::flowlimit::RateLimiter>) {}
+    virtual void setNodeBandwidthLimiter(std::shared_ptr<bcos::flowlimit::RateLimiter>) {}
     virtual void registerGroupBandwidthLimiter(
-        GROUP_ID const&, std::shared_ptr<dev::flowlimit::RateLimiter>)
+        GROUP_ID const&, std::shared_ptr<bcos::flowlimit::RateLimiter>)
     {}
     virtual void removeGroupBandwidthLimiter(GROUP_ID const&) {}
-    virtual void setChannelNetworkStatHandler(std::shared_ptr<dev::stat::ChannelNetworkStatHandler>)
+    virtual void setChannelNetworkStatHandler(
+        std::shared_ptr<bcos::stat::ChannelNetworkStatHandler>)
     {}
 };
 
 }  // namespace p2p
 
-}  // namespace dev
+}  // namespace bcos

@@ -24,19 +24,19 @@
 
 #include "libnetwork/Common.h"
 #include "libp2p/Common.h"
-#include <libdevcore/CommonIO.h>
+#include <libutilities/CommonIO.h>
 
-#include <libdevcore/Assertions.h>
 #include <libp2p/P2PMessage.h>
+#include <libutilities/Assertions.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
 
-using namespace dev;
-using namespace dev::network;
-using namespace dev::p2p;
+using namespace bcos;
+using namespace bcos::network;
+using namespace bcos::p2p;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -45,7 +45,7 @@ BOOST_FIXTURE_TEST_SUITE(P2pCommonTest, TestOutputHelperFixture)
 /// test reasonOf and disconnect reasons
 BOOST_AUTO_TEST_CASE(testDisconnectReason)
 {
-    reasonOf(dev::network::DisconnectRequested);
+    reasonOf(bcos::network::DisconnectRequested);
     BOOST_CHECK_MESSAGE(true, "Disconnect was requested.");
     reasonOf(TCPError);
     BOOST_CHECK_MESSAGE(true, "Low-level TCP communication error.");
@@ -71,14 +71,14 @@ BOOST_AUTO_TEST_CASE(testDisconnectReason)
     BOOST_CHECK_MESSAGE(true, "Subprotocol reason.");
     reasonOf(NoDisconnect);
     BOOST_CHECK_MESSAGE(true, "(No disconnect has happened.)");
-    reasonOf(dev::network::DisconnectReason(0x11));
+    reasonOf(bcos::network::DisconnectReason(0x11));
     BOOST_CHECK_MESSAGE(true, "Unknown reason.");
 }
 
 BOOST_AUTO_TEST_CASE(testNodeIPEndpoint)
 {
     /// test default construct
-    dev::network::NodeIPEndpoint m_endpoint(boost::asio::ip::make_address("0.0.0.0"), 0);
+    bcos::network::NodeIPEndpoint m_endpoint(boost::asio::ip::make_address("0.0.0.0"), 0);
     BOOST_CHECK(m_endpoint.address() == "0.0.0.0");
     BOOST_CHECK(m_endpoint.port() == 0);
     BOOST_CHECK(boost::lexical_cast<std::string>(m_endpoint) == "0.0.0.0:0");
@@ -137,4 +137,4 @@ BOOST_AUTO_TEST_CASE(testMessage)
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

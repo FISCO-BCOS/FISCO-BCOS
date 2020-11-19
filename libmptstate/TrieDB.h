@@ -21,14 +21,14 @@
 
 #pragma once
 
-#include "libdevcore/Exceptions.h"
-#include "libdevcore/TrieCommon.h"
 #include "libdevcrypto/CryptoInterface.h"
+#include "libutilities/Exceptions.h"
+#include "libutilities/TrieCommon.h"
 #include <memory>
 
-namespace dev
+namespace bcos
 {
-struct InvalidTrie : virtual dev::Exception
+struct InvalidTrie : virtual bcos::Exception
 {
 };
 
@@ -575,10 +575,10 @@ public:
 template <class KeyType, class DB>
 using TrieDB = SpecificTrieDB<GenericTrieDB<DB>, KeyType>;
 
-}  // namespace dev
+}  // namespace bcos
 
 // Template implementations...
-namespace dev
+namespace bcos
 {
 template <class DB>
 GenericTrieDB<DB>::iterator::iterator(GenericTrieDB const* _db)
@@ -1289,4 +1289,4 @@ bytes GenericTrieDB<DB>::branch(RLP const& _orig)
     return r.out();
 }
 
-}  // namespace dev
+}  // namespace bcos

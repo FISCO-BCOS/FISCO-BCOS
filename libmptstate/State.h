@@ -21,13 +21,13 @@
 #include "CodeSizeCache.h"
 #include "OverlayDB.h"
 #include "TrieDB.h"
-#include <libdevcore/Common.h>
-#include <libdevcore/RLP.h>
 #include <libethcore/Exceptions.h>
+#include <libutilities/Common.h>
+#include <libutilities/RLP.h>
 #include <array>
 #include <unordered_map>
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -62,8 +62,8 @@ using errinfo_receipts = boost::error_info<struct tag_receipts, std::vector<byte
 using errinfo_transaction = boost::error_info<struct tag_transaction, bytes>;
 using errinfo_phase = boost::error_info<struct tag_phase, unsigned>;
 using errinfo_required_LogBloom =
-    boost::error_info<struct tag_required_LogBloom, dev::eth::LogBloom>;
-using errinfo_got_LogBloom = boost::error_info<struct tag_get_LogBloom, dev::eth::LogBloom>;
+    boost::error_info<struct tag_required_LogBloom, bcos::eth::LogBloom>;
+using errinfo_got_LogBloom = boost::error_info<struct tag_get_LogBloom, bcos::eth::LogBloom>;
 using LogBloomRequirementError = boost::tuple<errinfo_required_LogBloom, errinfo_got_LogBloom>;
 
 class State;
@@ -163,8 +163,8 @@ using ChangeLog = std::vector<Change>;
  */
 class State
 {
-    friend class dev::test::ImportTest;
-    friend class dev::test::StateLoader;
+    friend class bcos::test::ImportTest;
+    friend class bcos::test::StateLoader;
 
 public:
     using AddressMap = std::map<h256, Address>;
@@ -200,7 +200,7 @@ public:
     OverlayDB const& db() const { return m_db; }
     OverlayDB& db() { return m_db; }
 
-    /// Populate the state from the given AccountMap. Just uses dev::mptstate::commit().
+    /// Populate the state from the given AccountMap. Just uses bcos::mptstate::commit().
     void populateFrom(AccountMap const& _map);
 
     /// @returns the set containing all addresses currently in use in Ethereum.
@@ -371,4 +371,4 @@ template <class DB>
 AddressHash commit(AccountMap const& _cache, SecureTrieDB<Address, DB>& _state);
 
 }  // namespace mptstate
-}  // namespace dev
+}  // namespace bcos

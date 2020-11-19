@@ -27,13 +27,12 @@
 
 #include "Common.h"
 #include "Exceptions.h"
-#include <libdevcore/Common.h>
-#include <libdevcore/Guards.h>
-#include <libdevcore/RLP.h>
 #include <libdevcrypto/Hash.h>
+#include <libutilities/Common.h>
+#include <libutilities/RLP.h>
 #include <algorithm>
 
-namespace dev
+namespace bcos
 {
 namespace eth
 {
@@ -304,4 +303,4 @@ inline std::ostream& operator<<(std::ostream& _out, BlockHeader const& _bi)
 }
 
 }  // namespace eth
-}  // namespace dev
+}  // namespace bcos

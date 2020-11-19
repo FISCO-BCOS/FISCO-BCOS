@@ -18,18 +18,18 @@
 #pragma once
 #include "libdevcrypto/CryptoInterface.h"
 #include <evmc/helpers.h>
-#include <libdevcore/CommonJS.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/BlockHeader.h>
 #include <libexecutive/EVMHostContext.h>
 #include <libexecutive/EVMHostInterface.h>
+#include <libutilities/CommonJS.h>
 #include <stdlib.h>
 #include <time.h>
 
-using namespace dev;
-using namespace dev::eth;
-using namespace dev::executive;
-namespace dev
+using namespace bcos;
+using namespace bcos::eth;
+using namespace bcos::executive;
+namespace bcos
 {
 namespace test
 {
@@ -99,7 +99,7 @@ public:
         return genesis;
     }
 
-    static dev::h256 fakeCallBack(int64_t) { return h256(); }
+    static bcos::h256 fakeCallBack(int64_t) { return h256(); }
 
     static EnvInfo& createEnvInfo(u256 const gasUsed, u256 const gasLimit = u256(300000))
     {
@@ -269,4 +269,4 @@ private:
     owning_bytes_ref output;
 };
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

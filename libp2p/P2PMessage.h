@@ -20,16 +20,16 @@
  */
 
 #pragma once
-#include <libdevcore/FixedHash.h>
 #include <libethcore/Protocol.h>
 #include <libnetwork/Common.h>
+#include <libutilities/FixedHash.h>
 #include <memory>
 
-namespace dev
+namespace bcos
 {
 namespace p2p
 {
-class P2PMessage : public dev::network::Message
+class P2PMessage : public bcos::network::Message
 {
 public:
     typedef std::shared_ptr<P2PMessage> Ptr;
@@ -117,4 +117,4 @@ enum AMOPPacketType
     SendTopics = 3,
 };
 }  // namespace p2p
-}  // namespace dev
+}  // namespace bcos

@@ -28,12 +28,12 @@
 #include <libethcore/Protocol.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
-using namespace dev::eth;
-using namespace dev::blockverifier;
-using namespace dev::txpool;
-using namespace dev::blockchain;
+using namespace bcos::eth;
+using namespace bcos::blockverifier;
+using namespace bcos::txpool;
+using namespace bcos::blockchain;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -189,7 +189,7 @@ BOOST_AUTO_TEST_CASE(testReportNewBlock)
 
     /// test resetBlock for the next leader
     /// 1. sealing for the next leader
-    fake_pbft->resetSealingBlock(dev::h256Hash(), true);
+    fake_pbft->resetSealingBlock(bcos::h256Hash(), true);
     fake_pbft->loadTransactions(5);
     /// note new block
     fake_pbft->onBlockChanged();
@@ -262,14 +262,14 @@ BOOST_AUTO_TEST_CASE(testUpdateConsensusNodeList)
     std::shared_ptr<FakePBFTSealer> fake_pbft = sealerFixture.fakePBFT();
     /// set SealerList
     /// fake sealer list
-    dev::h512s sealerList;
+    bcos::h512s sealerList;
     size_t sealerSize = 5;
     for (size_t i = 0; i < sealerSize; i++)
     {
         sealerList.push_back(KeyPair::create().pub());
     }
     /// fake observer list
-    dev::h512s observerList;
+    bcos::h512s observerList;
     size_t observerSize = 2;
     for (size_t i = 0; i < observerSize; i++)
     {
@@ -303,4 +303,4 @@ BOOST_AUTO_TEST_CASE(testStart)
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

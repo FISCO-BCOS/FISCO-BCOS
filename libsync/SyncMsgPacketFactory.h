@@ -25,7 +25,7 @@
 #pragma once
 #include "SyncMsgPacket.h"
 
-namespace dev
+namespace bcos
 {
 namespace sync
 {
@@ -68,4 +68,4 @@ public:
     }
 };
 }  // namespace sync
-}  // namespace dev
+}  // namespace bcos

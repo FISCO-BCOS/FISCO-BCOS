@@ -24,16 +24,16 @@
 #include "MemoryTableFactory2.h"
 #include "Storage.h"
 #include "Table.h"
-#include <libdevcore/FixedHash.h>
+#include <libutilities/FixedHash.h>
 
-namespace dev
+namespace bcos
 {
 namespace storage
 {
 class MemoryTableFactoryFactory2 : public TableFactoryFactory
 {
 public:
-    TableFactory::Ptr newTableFactory(const dev::h256& hash, int64_t number) override
+    TableFactory::Ptr newTableFactory(const bcos::h256& hash, int64_t number) override
     {
         MemoryTableFactory2::Ptr tableFactory = std::make_shared<MemoryTableFactory2>();
         tableFactory->setStateStorage(m_stroage);
@@ -45,12 +45,12 @@ public:
         return tableFactory;
     }
 
-    void setStorage(dev::storage::Storage::Ptr storage) { m_stroage = storage; }
+    void setStorage(bcos::storage::Storage::Ptr storage) { m_stroage = storage; }
 
 private:
-    dev::storage::Storage::Ptr m_stroage;
+    bcos::storage::Storage::Ptr m_stroage;
 };
 
 }  // namespace storage
 
-}  // namespace dev
+}  // namespace bcos

@@ -21,8 +21,8 @@
  */
 #include "GossipBlockStatus.h"
 
-using namespace dev;
-using namespace dev::sync;
+using namespace bcos;
+using namespace bcos::sync;
 
 // start gossip thread
 void GossipBlockStatus::start()

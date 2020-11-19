@@ -22,10 +22,10 @@
 #pragma once
 
 #include "Signature.h"
-#include "libdevcore/RLP.h"
+#include "libutilities/RLP.h"
 #include <vector>
 
-namespace dev
+namespace bcos
 {
 namespace crypto
 {
@@ -56,4 +56,4 @@ h512 sm2Recover(std::shared_ptr<crypto::Signature> _sig, const h256& _hash);
 std::shared_ptr<crypto::Signature> sm2SignatureFromRLP(RLP const& _rlp, size_t _start);
 std::shared_ptr<crypto::Signature> sm2SignatureFromBytes(std::vector<unsigned char> _data);
 std::pair<bool, std::vector<unsigned char>> recover(bytesConstRef _in);
-}  // namespace dev
+}  // namespace bcos

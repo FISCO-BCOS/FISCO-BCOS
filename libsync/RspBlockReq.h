@@ -23,13 +23,12 @@
 #pragma once
 #include "Common.h"
 #include <libblockchain/BlockChainInterface.h>
-#include <libdevcore/Guards.h>
 #include <climits>
 #include <queue>
 #include <set>
 #include <vector>
 
-namespace dev
+namespace bcos
 {
 namespace sync
 {
@@ -65,4 +64,4 @@ private:
     std::priority_queue<DownloadRequest, std::vector<DownloadRequest>, RequestQueueCmp> m_reqQueue;
 };
 }  // namespace sync
-}  // namespace dev
+}  // namespace bcos

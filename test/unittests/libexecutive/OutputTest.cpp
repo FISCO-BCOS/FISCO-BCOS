@@ -19,7 +19,6 @@
 #include "libdevcrypto/CryptoInterface.h"
 #include "libstoragestate/StorageStateFactory.h"
 #include <libblockverifier/ExecutiveContextFactory.h>
-#include <libdevcore/CommonJS.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/ABI.h>
 #include <libethcore/Block.h>
@@ -31,27 +30,28 @@
 #include <libstorage/MemoryTable.h>
 #include <libstorage/MemoryTableFactoryFactory.h>
 #include <libstoragestate/StorageState.h>
+#include <libutilities/CommonJS.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace std;
-using namespace dev;
-using namespace dev::eth;
-using namespace dev::executive;
-using namespace dev::blockverifier;
-using namespace dev::storage;
-using namespace dev::storagestate;
-using namespace dev::precompiled;
+using namespace bcos;
+using namespace bcos::eth;
+using namespace bcos::executive;
+using namespace bcos::blockverifier;
+using namespace bcos::storage;
+using namespace bcos::storagestate;
+using namespace bcos::precompiled;
 
 namespace OutputTest
 {
-class MockMemoryTableFactory : public dev::storage::MemoryTableFactory
+class MockMemoryTableFactory : public bcos::storage::MemoryTableFactory
 {
 public:
     virtual ~MockMemoryTableFactory(){};
 };
 struct OutputFixture
 {
-    static dev::h256 fakeCallBack(int64_t) { return h256(); }
+    static bcos::h256 fakeCallBack(int64_t) { return h256(); }
 
     OutputFixture()
     {
@@ -76,14 +76,14 @@ struct OutputFixture
         factory.initExecutiveContext(blockInfo, h256(0), context);
         memoryTableFactory = context->getMemoryTableFactory();
 
-        tableFactoryPrecompiled = std::make_shared<dev::precompiled::TableFactoryPrecompiled>();
+        tableFactoryPrecompiled = std::make_shared<bcos::precompiled::TableFactoryPrecompiled>();
         tableFactoryPrecompiled->setMemoryTableFactory(memoryTableFactory);
         clcPrecompiled = context->getPrecompiled(Address(0x1007));
         cgPrecompiled = context->getPrecompiled(Address(0x1008));
 
-        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
+        auto precompiledGasFactory = std::make_shared<bcos::precompiled::PrecompiledGasFactory>(0);
         auto precompiledExecResultFactory =
-            std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+            std::make_shared<bcos::precompiled::PrecompiledExecResultFactory>();
         precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
         clcPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
         cgPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
@@ -167,14 +167,14 @@ struct OutputFixture
     TableFactory::Ptr memoryTableFactory;
     Precompiled::Ptr clcPrecompiled;
     Precompiled::Ptr cgPrecompiled;
-    dev::precompiled::TableFactoryPrecompiled::Ptr tableFactoryPrecompiled;
+    bcos::precompiled::TableFactoryPrecompiled::Ptr tableFactoryPrecompiled;
     BlockInfo blockInfo;
     Table::Ptr table;
     Table::Ptr accountTable;
     Address contractAddress;
     Address accountAddress;
     Executive::Ptr executive;
-    dev::VERSION m_version;
+    bcos::VERSION m_version;
     std::string m_supportedVersion;
 
     void executeTransaction(Executive& _e, Transaction::Ptr _tx)
@@ -235,7 +235,7 @@ BOOST_AUTO_TEST_CASE(accountLiftCycle)
     tx->forceSender(accountAddress);
     executeTransaction(*executive, tx);
     auto output = abi.abiIn("Error(string)", string("Frozen account:0x" + accountAddress.hex()));
-    dev::owning_bytes_ref o = owning_bytes_ref{std::move(output), 0, output.size()};
+    bcos::owning_bytes_ref o = owning_bytes_ref{std::move(output), 0, output.size()};
     BOOST_TEST(toHex(executive->takeOutput()) == toHex(o));
 
     // grant
@@ -287,7 +287,7 @@ BOOST_AUTO_TEST_CASE(call)
     tx->forceSender(caller);
     executeTransaction(*executive, tx);
     auto output = abi.abiIn("Error(string)", string("Frozen contract:" + contractAddress.hex()));
-    dev::owning_bytes_ref o = owning_bytes_ref{std::move(output), 0, output.size()};
+    bcos::owning_bytes_ref o = owning_bytes_ref{std::move(output), 0, output.size()};
     BOOST_TEST(toHex(executive->takeOutput()) == toHex(o));
 
     // unfreeze success

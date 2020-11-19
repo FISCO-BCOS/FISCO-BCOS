@@ -21,17 +21,17 @@
  */
 #include <iostream>
 
-#include <libdevcore/Assertions.h>
-#include <libdevcore/CommonJS.h>
 #include <libdevcrypto/SM4Crypto.h>
+#include <libutilities/Assertions.h>
+#include <libutilities/CommonJS.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
 
 
-using namespace dev;
-using namespace dev::crypto;
-namespace dev
+using namespace bcos;
+using namespace bcos::crypto;
+namespace bcos
 {
 namespace test
 {
@@ -68,4 +68,4 @@ BOOST_AUTO_TEST_CASE(testSM4String)
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

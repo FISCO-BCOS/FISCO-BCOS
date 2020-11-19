@@ -16,11 +16,11 @@
  */
 
 #include "MemoryStorage2.h"
-#include <libdevcore/FixedHash.h>
 #include <libstorage/Common.h>
 #include <libstorage/MemoryTable2.h>
 #include <libstorage/Storage.h>
 #include <libstorage/Table.h>
+#include <libutilities/FixedHash.h>
 #include <tbb/parallel_for.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
@@ -28,8 +28,8 @@
 #include <vector>
 
 using namespace std;
-using namespace dev;
-using namespace dev::storage;
+using namespace bcos;
+using namespace bcos::storage;
 
 namespace test_MemoryTableFactory2
 {
@@ -51,7 +51,7 @@ struct MemoryTable2Fixture
             [&](Table::Ptr, Change::Kind, string const&, vector<Change::Record>&) {});
     }
 
-    dev::storage::MemoryTable2::Ptr m_table;
+    bcos::storage::MemoryTable2::Ptr m_table;
 };
 
 BOOST_FIXTURE_TEST_SUITE(MemoryTable2, MemoryTable2Fixture)

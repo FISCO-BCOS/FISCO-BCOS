@@ -28,8 +28,8 @@
 #include <boost/test/unit_test.hpp>
 #include <string>
 
-using namespace dev;
-namespace dev
+using namespace bcos;
+namespace bcos
 {
 namespace test
 {
@@ -64,17 +64,17 @@ BOOST_AUTO_TEST_CASE(testJsToPublic)
     BOOST_CHECK(jsToAddress(addr) == toAddress(key_pair.pub()));
     // exception test
     std::string invalid_addr = "0x1234";
-    BOOST_CHECK_THROW(jsToAddress(invalid_addr), dev::eth::InvalidAddress);
+    BOOST_CHECK_THROW(jsToAddress(invalid_addr), bcos::eth::InvalidAddress);
     invalid_addr = "adb234ef";
-    BOOST_CHECK_THROW(jsToAddress(invalid_addr), dev::eth::InvalidAddress);
+    BOOST_CHECK_THROW(jsToAddress(invalid_addr), bcos::eth::InvalidAddress);
 }
 
 BOOST_AUTO_TEST_CASE(testToBlockNumber)
 {
-    BOOST_CHECK(dev::eth::jsToBlockNumber("0x14") == (dev::eth::BlockNumber)(20));
-    BOOST_CHECK(dev::eth::jsToBlockNumber("100") == (dev::eth::BlockNumber)(100));
-    BOOST_CHECK_THROW(dev::eth::jsToBlockNumber("adk"), std::exception);
+    BOOST_CHECK(bcos::eth::jsToBlockNumber("0x14") == (bcos::eth::BlockNumber)(20));
+    BOOST_CHECK(bcos::eth::jsToBlockNumber("100") == (bcos::eth::BlockNumber)(100));
+    BOOST_CHECK_THROW(bcos::eth::jsToBlockNumber("adk"), std::exception);
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

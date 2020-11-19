@@ -20,9 +20,9 @@
  */
 #include "StatisticProtocolServer.h"
 
-using namespace dev;
+using namespace bcos;
 using namespace jsonrpc;
-using namespace dev::rpc;
+using namespace bcos::rpc;
 
 StatisticProtocolServer::StatisticProtocolServer(jsonrpc::IProcedureInvokationHandler& _handler)
   : RpcProtocolServerV2(_handler)
@@ -51,7 +51,7 @@ bool StatisticProtocolServer::limitRPCQPS(Json::Value const& _request, std::stri
 }
 
 bool StatisticProtocolServer::limitGroupQPS(
-    dev::GROUP_ID const& _groupId, Json::Value const& _request, std::string& _retValue)
+    bcos::GROUP_ID const& _groupId, Json::Value const& _request, std::string& _retValue)
 {
     if (_groupId == -1)
     {
@@ -87,7 +87,7 @@ void StatisticProtocolServer::wrapErrorResponse(Json::Value const& _request, std
 
 // Overload RpcProtocolServerV2 to implement RPC interface network statistics function
 void StatisticProtocolServer::HandleChannelRequest(const std::string& _request,
-    std::string& _retValue, std::function<bool(dev::GROUP_ID _groupId)> const& permissionChecker)
+    std::string& _retValue, std::function<bool(bcos::GROUP_ID _groupId)> const& permissionChecker)
 {  // except for adding statistical logic,
     // the following implementation is the same as RpcProtocolServerV2::HandleRequest
     Json::Reader reader;
@@ -95,7 +95,7 @@ void StatisticProtocolServer::HandleChannelRequest(const std::string& _request,
     Json::Value resp;
     Json::FastWriter w;
 
-    dev::GROUP_ID groupId = -1;
+    bcos::GROUP_ID groupId = -1;
     if (reader.parse(_request, req, false))
     {
         // get groupId
@@ -150,7 +150,7 @@ bool StatisticProtocolServer::isValidRequest(Json::Value const& _request)
     return true;
 }
 
-dev::GROUP_ID StatisticProtocolServer::getGroupID(Json::Value const& _request)
+bcos::GROUP_ID StatisticProtocolServer::getGroupID(Json::Value const& _request)
 {
     try
     {
@@ -164,7 +164,7 @@ dev::GROUP_ID StatisticProtocolServer::getGroupID(Json::Value const& _request)
         {
             return -1;
         }
-        return boost::lexical_cast<dev::GROUP_ID>(_request[KEY_REQUEST_PARAMETERS][0u].asString());
+        return boost::lexical_cast<bcos::GROUP_ID>(_request[KEY_REQUEST_PARAMETERS][0u].asString());
     }
     catch (std::exception const& _e)
     {

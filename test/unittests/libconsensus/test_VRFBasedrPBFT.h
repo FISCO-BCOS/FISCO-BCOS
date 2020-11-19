@@ -31,14 +31,14 @@
 #include <test/unittests/libtxpool/FakeBlockChain.h>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev::p2p;
-using namespace dev::txpool;
-using namespace dev::blockchain;
-using namespace dev::sync;
-using namespace dev::blockverifier;
-using namespace dev::consensus;
+using namespace bcos::p2p;
+using namespace bcos::txpool;
+using namespace bcos::blockchain;
+using namespace bcos::sync;
+using namespace bcos::blockverifier;
+using namespace bcos::consensus;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -64,25 +64,25 @@ public:
         return storageFixture->getSystemConfigByKey(_key);
     }
 
-    std::pair<std::string, dev::eth::BlockNumber> getSystemConfigInfoByKey(
+    std::pair<std::string, bcos::eth::BlockNumber> getSystemConfigInfoByKey(
         std::string const& _key, int64_t const&) override
     {
         return storageFixture->getSystemConfigAndEnableNumByKey(_key);
     }
 
-    dev::h512s sealerList() override
+    bcos::h512s sealerList() override
     {
         storageFixture->getSealerList();
         return (storageFixture->m_pendingSealerList) + (storageFixture->m_workingSealerList);
     }
 
-    dev::h512s workingSealerList() override
+    bcos::h512s workingSealerList() override
     {
         storageFixture->getSealerList();
         return (storageFixture->m_workingSealerList);
     }
 
-    dev::h512s observerList() override
+    bcos::h512s observerList() override
     {
         storageFixture->getSealerList();
         return (storageFixture->m_observerList);
@@ -97,12 +97,12 @@ public:
     using Ptr = std::shared_ptr<FakeVRFBasedrPBFTEngine>;
     FakeVRFBasedrPBFTEngine(P2PInterface::Ptr _service, TxPoolInterface::Ptr _txPool,
         BlockChainInterface::Ptr _blockChain, SyncInterface::Ptr _blockSync,
-        BlockVerifierInterface::Ptr _blockVerifier, dev::PROTOCOL_ID const& _protocolId,
+        BlockVerifierInterface::Ptr _blockVerifier, bcos::PROTOCOL_ID const& _protocolId,
         h512s const& _sealerList = h512s(), KeyPair const& _keyPair = KeyPair::create())
       : VRFBasedrPBFTEngine(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
             _keyPair, _sealerList)
     {
-        m_blockFactory = std::make_shared<dev::eth::BlockFactory>();
+        m_blockFactory = std::make_shared<bcos::eth::BlockFactory>();
         setEnableTTLOptimize(true);
         createPBFTMsgFactory();
         createPBFTReqCache();
@@ -116,7 +116,7 @@ public:
         return VRFBasedrPBFTEngine::updateConsensusNodeList();
     }
     void resetConfig() override { return VRFBasedrPBFTEngine::resetConfig(); }
-    void checkTransactionsValid(dev::eth::Block::Ptr _block, PrepareReq::Ptr _prepareReq) override
+    void checkTransactionsValid(bcos::eth::Block::Ptr _block, PrepareReq::Ptr _prepareReq) override
     {
         return VRFBasedrPBFTEngine::checkTransactionsValid(_block, _prepareReq);
     }
@@ -125,7 +125,7 @@ public:
     void setKeyPair(KeyPair const& _keyPair) { m_keyPair = _keyPair; }
     std::pair<bool, IDXTYPE> getLeader() const override { return VRFBasedrPBFTEngine::getLeader(); }
 
-    bool wrapperGetNodeIDByIndex(dev::network::NodeID& nodeId, const IDXTYPE& idx) const
+    bool wrapperGetNodeIDByIndex(bcos::network::NodeID& nodeId, const IDXTYPE& idx) const
     {
         return PBFTEngine::getNodeIDByIndex(nodeId, idx);
     }
@@ -219,7 +219,7 @@ public:
         m_vrfBasedrPBFTSealer->setConsensusEngine(m_VRFBasedrPBFT);
         m_vrfBasedrPBFTSealer->initConsensusEngine();
         m_vrfBasedrPBFTSealer->mutableSealing().setBlockFactory(
-            std::make_shared<dev::eth::BlockFactory>());
+            std::make_shared<bcos::eth::BlockFactory>());
     }
 
     FakeVRFBasedrPBFTEngine::Ptr vrfBasedrPBFT() { return m_VRFBasedrPBFT; }
@@ -233,12 +233,12 @@ public:
     FakeVRFBasedrPBFTEngine::Ptr m_VRFBasedrPBFT;
     FakeVRFBasedrPBFTSealer::Ptr m_vrfBasedrPBFTSealer;
     WorkingSealerManagerFixture::Ptr m_workingSealerManager;
-    dev::h512s sealerList;
+    bcos::h512s sealerList;
     std::vector<KeyPair> keyPairVec;
-    std::map<dev::h512, KeyPair> nodeID2KeyPair;
+    std::map<bcos::h512, KeyPair> nodeID2KeyPair;
 
     size_t m_sealersNum = 4;
 };
 
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

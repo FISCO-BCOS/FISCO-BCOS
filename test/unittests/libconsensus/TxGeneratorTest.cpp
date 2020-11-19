@@ -27,12 +27,12 @@
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev::consensus;
-using namespace dev::crypto;
-using namespace dev::eth;
-using namespace dev::precompiled;
+using namespace bcos::consensus;
+using namespace bcos::crypto;
+using namespace bcos::eth;
+using namespace bcos::precompiled;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -70,10 +70,10 @@ BOOST_AUTO_TEST_CASE(testGenerateTransaction)
 
     std::shared_ptr<TxGenerator> txGenerator = std::make_shared<TxGenerator>(1, 1, blockLimit);
     auto generatedTx = txGenerator->generateTransactionWithSig(interface, currentNumber, to,
-        keyPair, dev::eth::Transaction::Type::MessageCall, vrfProof, vrfPk, vrfInput);
+        keyPair, bcos::eth::Transaction::Type::MessageCall, vrfProof, vrfPk, vrfInput);
 
     // encode the transaction
-    std::shared_ptr<dev::bytes> encodedTxData = std::make_shared<dev::bytes>();
+    std::shared_ptr<bcos::bytes> encodedTxData = std::make_shared<bcos::bytes>();
     generatedTx->encode(*encodedTxData);
 
     // construct transaction from the encodedTxData
@@ -88,7 +88,7 @@ BOOST_AUTO_TEST_CASE(testGenerateTransaction)
     BOOST_CHECK(decodedTx->sender() == toAddress(keyPair.pub()));
     BOOST_CHECK(decodedTx->receiveAddress() == to);
     BOOST_CHECK(decodedTx->blockLimit() == currentNumber + blockLimit);
-    BOOST_CHECK(decodedTx->type() == dev::eth::Transaction::Type::MessageCall);
+    BOOST_CHECK(decodedTx->type() == bcos::eth::Transaction::Type::MessageCall);
 
     // parse the data
     // 1. check selector
@@ -96,7 +96,7 @@ BOOST_AUTO_TEST_CASE(testGenerateTransaction)
     BOOST_CHECK(functionSelector == selector);
     auto paramData = getParamData(ref(decodedTx->data()));
     // decode data and check params
-    dev::eth::ContractABI abi;
+    bcos::eth::ContractABI abi;
     std::string decodedvrfProof;
     std::string decodedvrfPk;
     std::string decodedvrfInput;
@@ -107,4 +107,4 @@ BOOST_AUTO_TEST_CASE(testGenerateTransaction)
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

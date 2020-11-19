@@ -22,15 +22,15 @@
  */
 
 
-#include <libdevcore/TopicInfo.h>
 #include <libinitializer/Initializer.h>
 #include <libinitializer/P2PInitializer.h>
+#include <libutilities/TopicInfo.h>
 #include <stdlib.h>
 
 
 using namespace std;
-using namespace dev;
-using namespace dev::initializer;
+using namespace bcos;
+using namespace bcos::initializer;
 
 int main()
 {

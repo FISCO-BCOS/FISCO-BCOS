@@ -28,7 +28,7 @@
 
 #include <evmc/evmc.h>
 
-namespace dev
+namespace bcos
 {
 namespace eth
 {
@@ -82,4 +82,4 @@ private:
 };
 
 }  // namespace eth
-}  // namespace dev
+}  // namespace bcos

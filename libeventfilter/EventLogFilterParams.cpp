@@ -3,9 +3,9 @@
 #include <libethcore/Common.h>
 #include <libethcore/CommonJS.h>
 
-using namespace dev;
-using namespace dev::eth;
-using namespace dev::event;
+using namespace bcos;
+using namespace bcos::eth;
+using namespace bcos::event;
 
 bool EventLogFilterParams::getFilterIDField(const Json::Value& _json, std::string& _filterID)
 {
@@ -137,7 +137,7 @@ EventLogFilterParams::Ptr EventLogFilterParams::buildEventLogFilterParamsObject(
 {
     BlockNumber startBlock = 0;
     BlockNumber endBlock = 0;
-    dev::GROUP_ID groupID = 0;
+    bcos::GROUP_ID groupID = 0;
     std::string filterID;
     std::string strDesc;
 

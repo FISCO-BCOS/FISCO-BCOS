@@ -24,15 +24,15 @@
 #include "libprecompiled/TableFactoryPrecompiled.h"
 #include "libstorage/StorageException.h"
 #include <json/json.h>
-#include <libdevcore/Common.h>
 #include <libdevcrypto/Hash.h>
 #include <libethcore/ABI.h>
+#include <libutilities/Common.h>
 
 using namespace std;
-using namespace dev;
-using namespace dev::blockverifier;
-using namespace dev::storage;
-using namespace dev::precompiled;
+using namespace bcos;
+using namespace bcos::blockverifier;
+using namespace bcos::storage;
+using namespace bcos::precompiled;
 
 const char* const CRUD_METHOD_INSERT_STR = "insert(string,string,string,string)";
 const char* const CRUD_METHOD_REMOVE_STR = "remove(string,string,string,string)";
@@ -63,7 +63,7 @@ PrecompiledExecResult::Ptr CRUDPrecompiled::call(
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
 
-    dev::eth::ContractABI abi;
+    bcos::eth::ContractABI abi;
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
     callResult->gasPricer()->setMemUsed(param.size());
 

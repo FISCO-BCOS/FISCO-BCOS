@@ -21,9 +21,8 @@
 
 #pragma once
 
-#include <libdevcore/Common.h>
-#include <libdevcore/Guards.h>
-#include <libdevcore/RLP.h>
+#include <libutilities/Common.h>
+#include <libutilities/RLP.h>
 #include <boost/heap/priority_queue.hpp>
 #include <array>
 #include <deque>
@@ -36,7 +35,7 @@
 #include "SessionFace.h"
 
 
-namespace dev
+namespace bcos
 {
 namespace network
 {
@@ -196,4 +195,4 @@ public:
 };
 
 }  // namespace network
-}  // namespace dev
+}  // namespace bcos

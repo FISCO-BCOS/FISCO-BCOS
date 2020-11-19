@@ -25,7 +25,7 @@
 
 #include "MPTState.h"
 
-namespace dev
+namespace bcos
 {
 namespace mptstate
 {
@@ -207,4 +207,4 @@ State& MPTState::getState()
 }
 
 }  // namespace mptstate
-}  // namespace dev
+}  // namespace bcos

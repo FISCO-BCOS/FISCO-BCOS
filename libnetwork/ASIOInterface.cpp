@@ -24,7 +24,7 @@
 
 namespace ba = boost::asio;
 namespace bi = ba::ip;
-using namespace dev::network;
+using namespace bcos::network;
 using namespace std;
 
 void ASIOInterface::asyncResolveConnect(std::shared_ptr<SocketFace> socket, Handler_Type handler)

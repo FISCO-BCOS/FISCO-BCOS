@@ -24,13 +24,13 @@
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
 #include <leveldb/db.h>
-#include <libdevcore/BasicLevelDB.h>
-#include <libdevcore/Common.h>
 #include <libstorage/BasicRocksDB.h>
 #include <libstorage/CachedStorage.h>
 #include <libstorage/MemoryTable2.h>
 #include <libstorage/MemoryTableFactoryFactory2.h>
 #include <libstorage/RocksDBStorage.h>
+#include <libutilities/BasicLevelDB.h>
+#include <libutilities/Common.h>
 #include <tbb/parallel_for.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
@@ -43,10 +43,10 @@
 
 
 using namespace std;
-using namespace dev;
+using namespace bcos;
 using namespace boost;
-using namespace dev::storage;
-using namespace dev::initializer;
+using namespace bcos::storage;
+using namespace bcos::initializer;
 
 void testMemoryTable2(size_t round, size_t count, bool verify)
 {
@@ -76,11 +76,11 @@ void testMemoryTable2(size_t round, size_t count, bool verify)
     auto factoryFactory = std::make_shared<MemoryTableFactoryFactory2>();
     factoryFactory->setStorage(cachedStorage);
 
-    auto createFactory = factoryFactory->newTableFactory(dev::h256(0), 0);
+    auto createFactory = factoryFactory->newTableFactory(bcos::h256(0), 0);
     createFactory->createTable("test_data", "key", "value", 1, Address(0x0));
     createFactory->createTable("tx_hash_2_block", "tx_hash", "block_hash", 1, Address(0x0));
 
-    createFactory->commitDB(dev::h256(0), 1);
+    createFactory->commitDB(bcos::h256(0), 1);
 
     std::set<std::string> accounts;
     for (size_t i = 0; i < count; ++i)
@@ -95,14 +95,14 @@ void testMemoryTable2(size_t round, size_t count, bool verify)
         dataTable->insert(key, entry);
     }
 
-    createFactory->commitDB(dev::h256(0), 1);
+    createFactory->commitDB(bcos::h256(0), 1);
 
     auto start = std::chrono::steady_clock::now();
 
     for (size_t i = 0; i < round; ++i)
     {
         auto roundStart = std::chrono::steady_clock::now();
-        auto factory = factoryFactory->newTableFactory(dev::h256(0), i + 2);
+        auto factory = factoryFactory->newTableFactory(bcos::h256(0), i + 2);
 
         tbb::parallel_for(
             tbb::blocked_range<size_t>(0, count), [&](const tbb::blocked_range<size_t>& range) {
@@ -137,7 +137,7 @@ void testMemoryTable2(size_t round, size_t count, bool verify)
                 }
             });
 
-        factory->commitDB(dev::h256(0), i + 2);
+        factory->commitDB(bcos::h256(0), i + 2);
 
         auto roundEnd = std::chrono::steady_clock::now();
         std::chrono::duration<double> roundElapsed = roundEnd - roundStart;
@@ -147,7 +147,7 @@ void testMemoryTable2(size_t round, size_t count, bool verify)
         {
             std::cout << "Checking round " << i << " ...";
 
-            auto factory = factoryFactory->newTableFactory(dev::h256(0), round + 2);
+            auto factory = factoryFactory->newTableFactory(bcos::h256(0), round + 2);
             tbb::parallel_for(
                 tbb::blocked_range<size_t>(0, count), [&](const tbb::blocked_range<size_t>& range) {
                     for (size_t j = range.begin(); j < range.end(); ++j)

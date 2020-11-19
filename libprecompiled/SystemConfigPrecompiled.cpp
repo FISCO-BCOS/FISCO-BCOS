@@ -26,10 +26,10 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
 
-using namespace dev;
-using namespace dev::blockverifier;
-using namespace dev::storage;
-using namespace dev::precompiled;
+using namespace bcos;
+using namespace bcos::blockverifier;
+using namespace bcos::storage;
+using namespace bcos::precompiled;
 
 const char* const SYSCONFIG_METHOD_SET_STR = "setValueByKey(string,string)";
 
@@ -45,7 +45,7 @@ PrecompiledExecResult::Ptr SystemConfigPrecompiled::call(
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
 
-    dev::eth::ContractABI abi;
+    bcos::eth::ContractABI abi;
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
     int count = 0;
     int result = 0;

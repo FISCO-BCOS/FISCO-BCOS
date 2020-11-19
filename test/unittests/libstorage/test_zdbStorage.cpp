@@ -22,18 +22,18 @@
  */
 
 #include "boost/test/unit_test.hpp"
-#include <libdevcore/FixedHash.h>
 #include <libstorage/SQLBasicAccess.h>
 #include <libstorage/StorageException.h>
 #include <libstorage/Table.h>
 #include <libstorage/ZdbStorage.h>
-using namespace dev;
-using namespace dev::storage;
+#include <libutilities/FixedHash.h>
+using namespace bcos;
+using namespace bcos::storage;
 using namespace boost;
 
 namespace test_zdbStorage
 {
-class MockSQLBasicAccess : public dev::storage::SQLBasicAccess
+class MockSQLBasicAccess : public bcos::storage::SQLBasicAccess
 {
 public:
     int Select(int64_t num, const std::string& table, const std::string& key,
@@ -76,7 +76,7 @@ struct zdbStorageFixture
 {
     zdbStorageFixture()
     {
-        zdbStorage = std::make_shared<dev::storage::ZdbStorage>();
+        zdbStorage = std::make_shared<bcos::storage::ZdbStorage>();
         std::shared_ptr<MockSQLBasicAccess> mockSqlBasicAccess =
             std::make_shared<MockSQLBasicAccess>();
         zdbStorage->SetSqlAccess(mockSqlBasicAccess);
@@ -99,7 +99,7 @@ struct zdbStorageFixture
         return entries;
     }
 
-    dev::storage::ZdbStorage::Ptr zdbStorage;
+    bcos::storage::ZdbStorage::Ptr zdbStorage;
 };
 
 BOOST_FIXTURE_TEST_SUITE(ZdbStorageTest, zdbStorageFixture)
@@ -142,8 +142,8 @@ BOOST_AUTO_TEST_CASE(commit)
     h256 h(0x01);
     int num = 1;
     h256 blockHash(0x11231);
-    std::vector<dev::storage::TableData::Ptr> datas;
-    dev::storage::TableData::Ptr tableData = std::make_shared<dev::storage::TableData>();
+    std::vector<bcos::storage::TableData::Ptr> datas;
+    bcos::storage::TableData::Ptr tableData = std::make_shared<bcos::storage::TableData>();
     tableData->info->name = "t_test";
     tableData->info->key = "Name";
     tableData->info->fields.push_back("id");

@@ -22,12 +22,12 @@
 #pragma once
 
 #include "TrieDB.h"
-#include <libdevcore/Common.h>
-#include <libdevcore/RLP.h>
 #include <libethcore/Common.h>
+#include <libutilities/Common.h>
+#include <libutilities/RLP.h>
 #include <boost/filesystem.hpp>
 
-namespace dev
+namespace bcos
 {
 namespace eth
 {
@@ -237,8 +237,8 @@ public:
         m_codeHash = EmptyHash;
     }
 
-    /// Specify to the object what the actual code is for the account. @a _code must have a Keccak256
-    /// equal to codeHash() and must only be called when isFreshCode() returns false.
+    /// Specify to the object what the actual code is for the account. @a _code must have a
+    /// Keccak256 equal to codeHash() and must only be called when isFreshCode() returns false.
     void noteCode(bytesConstRef _code)
     {
         assert(crypto::Hash(_code) == m_codeHash);
@@ -282,8 +282,8 @@ private:
     /// The map with is overlaid onto whatever storage is implied by the m_storageRoot in the trie.
     std::unordered_map<u256, u256> m_storageOverlay;
 
-    /// The associated code for this account. The Keccak256 of this should be equal to m_codeHash unless
-    /// m_codeHash equals c_contractConceptionCodeHash.
+    /// The associated code for this account. The Keccak256 of this should be equal to m_codeHash
+    /// unless m_codeHash equals c_contractConceptionCodeHash.
     bytes m_codeCache;
 
     /// Value for m_codeHash when this account is having its code determined.
@@ -323,6 +323,6 @@ private:
 
 using AccountMap = std::unordered_map<Address, Account>;
 using AccountMaskMap = std::unordered_map<Address, AccountMask>;
-using PrecompiledContractMap = std::unordered_map<Address, dev::eth::PrecompiledContract>;
+using PrecompiledContractMap = std::unordered_map<Address, bcos::eth::PrecompiledContract>;
 }  // namespace mptstate
-}  // namespace dev
+}  // namespace bcos

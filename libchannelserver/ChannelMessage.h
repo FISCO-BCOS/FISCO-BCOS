@@ -30,15 +30,15 @@
 #include "Message.h"
 
 #include <arpa/inet.h>
-#include <libdevcore/Common.h>
-#include <libdevcore/FixedHash.h>
+#include <libutilities/Common.h>
+#include <libutilities/FixedHash.h>
 #include <boost/lexical_cast.hpp>
 #include <climits>
 #include <queue>
 #include <string>
 #include <thread>
 
-namespace dev
+namespace bcos
 {
 namespace channel
 {
@@ -48,7 +48,8 @@ enum ChannelMessageType
     CLIENT_HEARTBEAT = 0x13,              // type for heart beat for sdk
     CLIENT_HANDSHAKE = 0x14,              // type for hand shake
     CLIENT_REGISTER_EVENT_LOG = 0x15,     // type for event log filter register request and response
-    CLIENT_UNREGISTER_EVENT_LOG = 0x16,   // type for event log filter unregister request and response
+    CLIENT_UNREGISTER_EVENT_LOG = 0x16,   // type for event log filter unregister request and
+                                          // response
     AMOP_REQUEST = 0x30,                  // type for request from sdk
     AMOP_RESPONSE = 0x31,                 // type for response to sdk
     AMOP_CLIENT_SUBSCRIBE_TOPICS = 0x32,  // type for topic request
@@ -222,7 +223,7 @@ public:
         m_data->insert(
             m_data->end(), (byte*)content.c_str(), (byte*)content.c_str() + content.length());
         m_type = REQUEST_TOPICCERT;
-        m_seq = dev::newSeq();
+        m_seq = bcos::newSeq();
     }
 
     void setData(const byte*, size_t) override { assert(false); };
@@ -231,4 +232,4 @@ public:
 
 }  // namespace channel
 
-}  // namespace dev
+}  // namespace bcos

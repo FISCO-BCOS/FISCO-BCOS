@@ -23,7 +23,7 @@
 
 #include "RPBFTReqCache.h"
 
-using namespace dev::consensus;
+using namespace bcos::consensus;
 
 bool RPBFTReqCache::checkReceivedRawPrepareStatus(
     PBFTMsg::Ptr _rawPrepareStatus, VIEWTYPE const& _currentView, int64_t const& _currentNumber)
@@ -78,7 +78,7 @@ bool RPBFTReqCache::checkRawPrepareStatus(
     return true;
 }
 
-void RPBFTReqCache::insertRequestedRawPrepare(dev::h256 const& _hash)
+void RPBFTReqCache::insertRequestedRawPrepare(bcos::h256 const& _hash)
 {
     WriteGuard requestedPrepareHashLock(x_requestedPrepareQueue);
     if (m_requestedPrepareQueue->size() >= m_maxRequestedPrepareQueueSize)
@@ -88,7 +88,7 @@ void RPBFTReqCache::insertRequestedRawPrepare(dev::h256 const& _hash)
     m_requestedPrepareQueue->push(_hash);
 }
 
-bool RPBFTReqCache::isRequestedPrepare(dev::h256 const& _hash)
+bool RPBFTReqCache::isRequestedPrepare(bcos::h256 const& _hash)
 {
     ReadGuard l(x_requestedPrepareQueue);
     // the rawPrepareReq has already been requested
@@ -118,7 +118,7 @@ bool RPBFTReqCache::checkAndRequestRawPrepare(PBFTMsg::Ptr _pbftMsg)
 
 // response the requested-rawPrepare
 void RPBFTReqCache::responseRawPrepare(
-    std::shared_ptr<dev::bytes> _encodedRawPrepare, PBFTMsg::Ptr _rawPrepareRequestMsg)
+    std::shared_ptr<bcos::bytes> _encodedRawPrepare, PBFTMsg::Ptr _rawPrepareRequestMsg)
 {
     std::ostringstream outputInfo;
     outputInfo << LOG_KV("reqHeight", _rawPrepareRequestMsg->height)
@@ -153,7 +153,7 @@ bool RPBFTReqCache::findTheRequestedRawPrepare(PBFTMsg::Ptr _rawPrepareRequestMs
 
 // update rawPrepare cache when receive _receivedRawPrepareStatus
 void RPBFTReqCache::updateRawPrepareStatusCache(
-    dev::h512 const& _nodeId, PBFTMsg::Ptr _receivedRawPrepareStatus)
+    bcos::h512 const& _nodeId, PBFTMsg::Ptr _receivedRawPrepareStatus)
 {
     UpgradableGuard l(x_nodeIDToPrepareStatus);
     if (!m_nodeIDToPrepareStatus->count(_nodeId) ||
@@ -170,7 +170,7 @@ void RPBFTReqCache::updateRawPrepareStatusCache(
         auto blockHash = _receivedRawPrepareStatus->block_hash;
         if (!m_prepareHashToNodeID->count(blockHash))
         {
-            (*m_prepareHashToNodeID)[blockHash] = std::make_shared<std::set<dev::h512>>();
+            (*m_prepareHashToNodeID)[blockHash] = std::make_shared<std::set<bcos::h512>>();
         }
         (*m_prepareHashToNodeID)[blockHash]->insert(_nodeId);
         m_signalled.notify_all();
@@ -183,34 +183,34 @@ void RPBFTReqCache::updateRawPrepareStatusCache(
     }
 }
 
-dev::h512 RPBFTReqCache::selectNodeToRequestTxs(
-    dev::h512 const& _expectedNodeID, PBFTMsg::Ptr _receivedRawPrepareStatus)
+bcos::h512 RPBFTReqCache::selectNodeToRequestTxs(
+    bcos::h512 const& _expectedNodeID, PBFTMsg::Ptr _receivedRawPrepareStatus)
 {
     auto startTime = utcSteadyTime();
     do
     {
         auto selectedNode =
             selectRequiredNodeToRequestTxs(_expectedNodeID, _receivedRawPrepareStatus);
-        if (selectedNode != dev::h512())
+        if (selectedNode != bcos::h512())
         {
             return selectedNode;
         }
         boost::unique_lock<boost::mutex> l(x_signalled);
         m_signalled.wait_for(l, boost::chrono::milliseconds(5));
     } while (utcSteadyTime() - startTime < m_maxRequestMissedTxsWaitTime);
-    return dev::h512();
+    return bcos::h512();
 }
 
 // select required node to request txs
-dev::h512 RPBFTReqCache::selectRequiredNodeToRequestTxs(
-    dev::h512 const& _expectedNodeID, PBFTMsg::Ptr _receivedRawPrepareStatus)
+bcos::h512 RPBFTReqCache::selectRequiredNodeToRequestTxs(
+    bcos::h512 const& _expectedNodeID, PBFTMsg::Ptr _receivedRawPrepareStatus)
 {
     ReadGuard l(x_nodeIDToPrepareStatus);
     auto blockHash = _receivedRawPrepareStatus->block_hash;
     if (!m_prepareHashToNodeID->count(blockHash) ||
         (*m_prepareHashToNodeID)[blockHash]->size() == 0)
     {
-        return dev::h512();
+        return bcos::h512();
     }
     // try to find the expected node
     if ((*m_prepareHashToNodeID)[blockHash]->count(_expectedNodeID))

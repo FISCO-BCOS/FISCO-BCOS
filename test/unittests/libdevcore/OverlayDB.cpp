@@ -22,15 +22,15 @@
  */
 
 #include "libdevcrypto/CryptoInterface.h"
-#include <libdevcore/LevelDB.h>
 #include <libmptstate/OverlayDB.h>
+#include <libutilities/LevelDB.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev;
+using namespace bcos;
 using namespace std;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -39,9 +39,9 @@ BOOST_FIXTURE_TEST_SUITE(OverlayDB, TestOutputHelperFixture)
 BOOST_AUTO_TEST_CASE(testOverlayDBKeyExist)
 {
     boost::filesystem::path path("./test_overlay_db.db");
-    std::unique_ptr<dev::db::DatabaseFace> dbp(new dev::db::LevelDB(path));
+    std::unique_ptr<bcos::db::DatabaseFace> dbp(new bcos::db::LevelDB(path));
 
-    dev::OverlayDB overlayDB(std::move(dbp));
+    bcos::OverlayDB overlayDB(std::move(dbp));
     h256 key("0x2979B90fF15080A5F956bE0dD2dF1A345b120183");
     BOOST_CHECK(overlayDB.exists(key) == false);
 
@@ -51,13 +51,13 @@ BOOST_AUTO_TEST_CASE(testOverlayDBKeyExist)
 BOOST_AUTO_TEST_CASE(testOverlayDBKeyValue)
 {
     boost::filesystem::path path("./test_overlay_db.db");
-    std::unique_ptr<dev::db::DatabaseFace> dbp(new dev::db::LevelDB(path));
+    std::unique_ptr<bcos::db::DatabaseFace> dbp(new bcos::db::LevelDB(path));
 
-    dev::OverlayDB overlayDB(std::move(dbp));
-    dev::OverlayDB overlayDB1(std::move(dbp));
+    bcos::OverlayDB overlayDB(std::move(dbp));
+    bcos::OverlayDB overlayDB1(std::move(dbp));
 
-    dev::EnforceRefs enforceRefs(overlayDB, true);
-    dev::EnforceRefs enforceRefs1(overlayDB1, true);
+    bcos::EnforceRefs enforceRefs(overlayDB, true);
+    bcos::EnforceRefs enforceRefs1(overlayDB1, true);
 
     h256 key = crypto::Hash("0x2979B90fF15080A5F956bE0dD2dF1A345b120183");
     bytesConstRef value("helloworld");
@@ -88,10 +88,10 @@ BOOST_AUTO_TEST_CASE(testOverlayDBKeyValue)
 BOOST_AUTO_TEST_CASE(testOverlayDBAux)
 {
     boost::filesystem::path path("./test_overlay_db.db");
-    std::unique_ptr<dev::db::DatabaseFace> dbp(new dev::db::LevelDB(path));
+    std::unique_ptr<bcos::db::DatabaseFace> dbp(new bcos::db::LevelDB(path));
 
-    dev::OverlayDB overlayDB(std::move(dbp));
-    dev::EnforceRefs enforceRefs(overlayDB, true);
+    bcos::OverlayDB overlayDB(std::move(dbp));
+    bcos::EnforceRefs enforceRefs(overlayDB, true);
 
     h256 key = crypto::Hash("aux_0x2979B90fF15080A5F956bE0dD2dF1A345b120183");
 
@@ -101,7 +101,7 @@ BOOST_AUTO_TEST_CASE(testOverlayDBAux)
     overlayDB.commit();
 
     auto valueBytes = overlayDB.lookupAux(key);
-    valueStr = dev::asString(valueBytes);
+    valueStr = bcos::asString(valueBytes);
     BOOST_CHECK(valueStr == "helloworld");
 
     boost::filesystem::remove_all(path);
@@ -109,4 +109,4 @@ BOOST_AUTO_TEST_CASE(testOverlayDBAux)
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

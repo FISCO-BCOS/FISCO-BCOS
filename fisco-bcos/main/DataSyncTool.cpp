@@ -42,11 +42,11 @@
 #include <memory>
 
 using namespace std;
-using namespace dev;
+using namespace bcos;
 using namespace boost;
-using namespace dev::ledger;
-using namespace dev::storage;
-using namespace dev::initializer;
+using namespace bcos::ledger;
+using namespace bcos::storage;
+using namespace bcos::initializer;
 namespace fs = boost::filesystem;
 
 uint32_t PageCount = 10000;
@@ -152,9 +152,9 @@ TableData::Ptr getBlockToNonceData(SQLStorage::Ptr _reader, int64_t _blockNumber
 {
     cout << endl << "[" << getCurrentDateTime() << "] process " << SYS_BLOCK_2_NONCES;
 
-    auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
+    auto tableFactoryFactory = std::make_shared<bcos::storage::MemoryTableFactoryFactory2>();
     tableFactoryFactory->setStorage(_reader);
-    auto memoryTableFactory = tableFactoryFactory->newTableFactory(dev::h256(), _blockNumber);
+    auto memoryTableFactory = tableFactoryFactory->newTableFactory(bcos::h256(), _blockNumber);
     Table::Ptr tb = memoryTableFactory->openTable(SYS_BLOCK_2_NONCES);
     auto entries = tb->select(lexical_cast<std::string>(_blockNumber), tb->newCondition());
 
@@ -184,9 +184,9 @@ TableData::Ptr getHashToBlockData(SQLStorage::Ptr _reader, int64_t _blockNumber)
 {
     cout << endl << "[" << getCurrentDateTime() << "] process " << SYS_HASH_2_BLOCK;
 
-    auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
+    auto tableFactoryFactory = std::make_shared<bcos::storage::MemoryTableFactoryFactory2>();
     tableFactoryFactory->setStorage(_reader);
-    auto memoryTableFactory = tableFactoryFactory->newTableFactory(dev::h256(), _blockNumber);
+    auto memoryTableFactory = tableFactoryFactory->newTableFactory(bcos::h256(), _blockNumber);
     Table::Ptr tb = memoryTableFactory->openTable(SYS_NUMBER_2_HASH);
     auto entries = tb->select(lexical_cast<std::string>(_blockNumber), tb->newCondition());
     h256 blockHash;
@@ -232,7 +232,7 @@ void conversionData(
     //     support version >= 2.2.0 and
     //     storage type in rocksdb,scalable
     if (HexTables.end() != find(HexTables.begin(), HexTables.end(), tableName) &&
-        g_BCOSConfig.version() >= V2_2_0 && dev::stringCmpIgnoreCase(dbType, "mysql"))
+        g_BCOSConfig.version() >= V2_2_0 && bcos::stringCmpIgnoreCase(dbType, "mysql"))
     {
         LOG(INFO) << LOG_BADGE("STORAGE") << LOG_DESC("conversion table data");
         for (size_t i = 0; i < tableData->newEntries->size(); i++)
@@ -403,12 +403,12 @@ void fastSyncGroupData(std::shared_ptr<LedgerParamInterface> _param,
     // create writer
     Storage::Ptr writerStorage;
     bool fullSync = true;
-    if (!dev::stringCmpIgnoreCase(_param->mutableStorageParam().type, "External"))
+    if (!bcos::stringCmpIgnoreCase(_param->mutableStorageParam().type, "External"))
     {
         cout << "error unsupported external storage" << endl;
         exit(0);
     }
-    else if (!dev::stringCmpIgnoreCase(_param->mutableStorageParam().type, "MySQL"))
+    else if (!bcos::stringCmpIgnoreCase(_param->mutableStorageParam().type, "MySQL"))
     {
         writerStorage = createZdbStorage(_param, [](std::exception& e) {
             LOG(ERROR) << LOG_BADGE("STORAGE") << LOG_BADGE("MySQL")
@@ -417,7 +417,7 @@ void fastSyncGroupData(std::shared_ptr<LedgerParamInterface> _param,
             BOOST_THROW_EXCEPTION(e);
         });
     }
-    else if (!dev::stringCmpIgnoreCase(_param->mutableStorageParam().type, "RocksDB"))
+    else if (!bcos::stringCmpIgnoreCase(_param->mutableStorageParam().type, "RocksDB"))
     {
         writerStorage =
             createRocksDBStorage(_param->mutableStorageParam().path, bytes(), false, true);

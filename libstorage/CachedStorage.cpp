@@ -21,8 +21,8 @@
 
 #include "CachedStorage.h"
 #include "StorageException.h"
-#include <libdevcore/Common.h>
-#include <libdevcore/FixedHash.h>
+#include <libutilities/Common.h>
+#include <libutilities/FixedHash.h>
 #include <tbb/concurrent_vector.h>
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_for_each.h>
@@ -30,8 +30,8 @@
 #include <thread>
 
 using namespace std;
-using namespace dev;
-using namespace dev::storage;
+using namespace bcos;
+using namespace bcos::storage;
 
 Cache::Cache()
 {
@@ -99,14 +99,14 @@ void Cache::setTableInfo(TableInfo::Ptr tableInfo)
     m_tableInfo = tableInfo;
 }
 
-CachedStorage::CachedStorage(dev::GROUP_ID const& _groupID) : m_groupID(_groupID)
+CachedStorage::CachedStorage(bcos::GROUP_ID const& _groupID) : m_groupID(_groupID)
 {
     CACHED_STORAGE_LOG(INFO) << "Init flushStorage thread";
     m_taskThreadPool =
-        std::make_shared<dev::ThreadPool>("taskPool-" + std::to_string(m_groupID), 1);
+        std::make_shared<bcos::ThreadPool>("taskPool-" + std::to_string(m_groupID), 1);
 
     m_asyncThreadPool =
-        std::make_shared<dev::ThreadPool>("touchMRU-" + std::to_string(m_groupID), 1);
+        std::make_shared<bcos::ThreadPool>("touchMRU-" + std::to_string(m_groupID), 1);
 
     m_mruQueue =
         std::make_shared<tbb::concurrent_queue<std::tuple<std::string, std::string, ssize_t>>>();
@@ -661,7 +661,7 @@ void CachedStorage::startClearThread()
     auto running = m_running;
     auto groupID = m_groupID;
     m_clearThread = std::make_shared<std::thread>([running, self, groupID]() {
-        dev::pthread_setThreadName("MemClear-" + to_string(groupID));
+        bcos::pthread_setThreadName("MemClear-" + to_string(groupID));
         while (true)
         {
             auto storage = self.lock();

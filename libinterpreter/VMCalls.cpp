@@ -23,7 +23,7 @@
 #include "VM.h"
 #include <libconfig/GlobalConfigure.h>
 
-namespace dev
+namespace bcos
 {
 namespace eth
 {
@@ -314,4 +314,4 @@ bool VM::caseCallSetup(evmc_message& o_msg, bytesRef& o_output)
     return false;
 }
 }  // namespace eth
-}  // namespace dev
+}  // namespace bcos

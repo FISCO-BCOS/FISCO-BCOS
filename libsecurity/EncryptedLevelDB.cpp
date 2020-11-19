@@ -25,10 +25,10 @@
 #include "libdevcrypto/CryptoInterface.h"
 
 using namespace std;
-using namespace dev;
-using namespace dev::db;
+using namespace bcos;
+using namespace bcos::db;
 
-namespace dev
+namespace bcos
 {
 namespace db
 {
@@ -71,7 +71,7 @@ std::string decryptValue(const bytes& _dataKey, const std::string& _value)
 }
 
 }  // namespace db
-}  // namespace dev
+}  // namespace bcos
 
 void EncryptedLevelDBWriteBatch::insertSlice(
     const leveldb::Slice& _key, const leveldb::Slice& _value)
@@ -93,7 +93,7 @@ void EncryptedLevelDBWriteBatch::insertSlice(
         BOOST_THROW_EXCEPTION(EncryptedLevelDBEncryptFailed()
                               << errinfo_comment("EncryptedLevelDB batch encrypt error"));
     }
-    dev::WriteGuard l(x_writeBatch);
+    bcos::WriteGuard l(x_writeBatch);
     m_writeBatch.Put(_key, leveldb::Slice(enData));
 }
 
@@ -117,7 +117,8 @@ EncryptedLevelDB::EncryptedLevelDB(const leveldb::Options& _options, const std::
     OpenDBStatus type = checkOpenDBStatus();
     switch (type)
     {
-    case OpenDBStatus::FirstCreation: {
+    case OpenDBStatus::FirstCreation:
+    {
         if (m_cipherDataKey.empty())
         {
             std::stringstream exitInfo;
@@ -134,14 +135,16 @@ EncryptedLevelDB::EncryptedLevelDB(const leveldb::Options& _options, const std::
                          << LOG_KV("cipherDataKey", m_cipherDataKey);
         break;
     }
-    case OpenDBStatus::Encrypted: {
+    case OpenDBStatus::Encrypted:
+    {
         ENCDB_LOG(DEBUG) << LOG_BADGE("open") << LOG_DESC(" Encrypted leveldb open success")
                          << LOG_KV("name", _name) << LOG_KV("db", m_db)
                          << LOG_KV("cipherDataKey", m_cipherDataKey);
         break;
     }
 
-    case OpenDBStatus::NoEncrypted: {
+    case OpenDBStatus::NoEncrypted:
+    {
         std::stringstream exitInfo;
         exitInfo << LOG_BADGE("Open")
                  << LOG_DESC("Database type ERROR! This DB is not EncryptedLevelDB")
@@ -150,7 +153,8 @@ EncryptedLevelDB::EncryptedLevelDB(const leveldb::Options& _options, const std::
         break;
     }
 
-    case OpenDBStatus::CipherKeyError: {
+    case OpenDBStatus::CipherKeyError:
+    {
         std::stringstream exitInfo;
         exitInfo
             << LOG_BADGE("Open")
@@ -163,7 +167,8 @@ EncryptedLevelDB::EncryptedLevelDB(const leveldb::Options& _options, const std::
         break;
     }
 
-    default: {
+    default:
+    {
         std::stringstream exitInfo;
         exitInfo << LOG_BADGE("Open") << LOG_DESC("Unknown Open encrypted DB TYPE")
                  << LOG_KV("name", _name) << endl;

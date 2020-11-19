@@ -26,10 +26,10 @@
 #include <libprecompiled/TableFactoryPrecompiled.h>
 
 using namespace std;
-using namespace dev;
-using namespace dev::blockverifier;
-using namespace dev::storage;
-using namespace dev::precompiled;
+using namespace bcos;
+using namespace bcos::blockverifier;
+using namespace bcos::storage;
+using namespace bcos::precompiled;
 
 const char* const CNS_METHOD_INS_STR4 = "insert(string,string,string,string)";
 const char* const CNS_METHOD_SLT_STR = "selectByName(string)";
@@ -139,7 +139,7 @@ PrecompiledExecResult::Ptr CNSPrecompiled::call(
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
 
-    dev::eth::ContractABI abi;
+    bcos::eth::ContractABI abi;
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
 
     callResult->gasPricer()->setMemUsed(param.size());

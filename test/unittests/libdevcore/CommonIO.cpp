@@ -20,14 +20,14 @@
  * @author: yujiechen
  * @date 2018-08-29
  */
-#include <libdevcore/CommonIO.h>
-#include <libdevcore/Exceptions.h>
-#include <libdevcore/secure_vector.h>
+#include <libutilities/CommonIO.h>
+#include <libutilities/Exceptions.h>
+#include <libutilities/secure_vector.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
-using namespace dev;
+using namespace bcos;
 using namespace std;
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -105,4 +105,4 @@ BOOST_AUTO_TEST_CASE(testFileOptions)
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

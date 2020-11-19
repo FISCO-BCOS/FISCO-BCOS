@@ -4,20 +4,20 @@
 
 #include "Blake2.h"
 
-#include <libdevcore/Exceptions.h>
+#include <libutilities/Exceptions.h>
 
 // The Blake 2 F compression function implemenation is based on the reference implementation,
 // see https://github.com/BLAKE2/BLAKE2/blob/master/ref/blake2b-ref.c
 // The changes in original code were done mostly to accommodate variable round number and to remove
 // unnecessary big endian support.
 
-namespace dev
+namespace bcos
 {
 namespace crypto
 {
 namespace
 {
-DEV_SIMPLE_EXCEPTION(InvalidInputSize);
+DERIVE_BCOS_EXCEPTION(InvalidInputSize);
 
 constexpr size_t BLAKE2B_BLOCKBYTES = 128;
 
@@ -157,4 +157,4 @@ bytes blake2FCompression(uint32_t _rounds, bytesConstRef _stateVector, bytesCons
 }
 
 }  // namespace crypto
-}  // namespace dev
+}  // namespace bcos

@@ -21,10 +21,10 @@
 #pragma once
 
 #include "Table.h"
-#include <libdevcore/FixedHash.h>
 #include <libethcore/Protocol.h>
+#include <libutilities/FixedHash.h>
 
-namespace dev
+namespace bcos
 {
 namespace storage
 {
@@ -54,4 +54,4 @@ public:
 
 }  // namespace storage
 
-}  // namespace dev
+}  // namespace bcos

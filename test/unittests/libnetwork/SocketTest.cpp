@@ -23,17 +23,17 @@
 
 #include "libnetwork/Socket.h"
 
-#include <libdevcore/FileSystem.h>
 #include <libinitializer/SecureInitializer.h>
+#include <libutilities/FileSystem.h>
 #include <openssl/ssl.h>
 #include <test/tools/libutils/Common.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev;
-using namespace dev::network;
+using namespace bcos;
+using namespace bcos::network;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -48,7 +48,7 @@ BOOST_AUTO_TEST_CASE(testSocket)
 
     boost::property_tree::ptree pt;
     pt.put("secure.data_path", getTestPath().string() + "/fisco-bcos-data/");
-    auto secureInitializer = std::make_shared<dev::initializer::SecureInitializer>();
+    auto secureInitializer = std::make_shared<bcos::initializer::SecureInitializer>();
     /// secureInitializer->setDataPath(getTestPath().string() + "/fisco-bcos-data/");
     secureInitializer->initConfig(pt);
     auto sslContext = secureInitializer->SSLContext();
@@ -68,4 +68,4 @@ BOOST_AUTO_TEST_CASE(testSocket)
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

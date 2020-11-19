@@ -33,11 +33,11 @@
 #include <boost/test/unit_test.hpp>
 
 using namespace std;
-using namespace dev;
-using namespace dev::blockverifier;
-using namespace dev::storage;
-using namespace dev::storagestate;
-using namespace dev::precompiled;
+using namespace bcos;
+using namespace bcos::blockverifier;
+using namespace bcos::storage;
+using namespace bcos::storagestate;
+using namespace bcos::precompiled;
 
 namespace test_CNSPrecompiled
 {
@@ -58,7 +58,7 @@ struct CNSPrecompiledFixture
         factory.initExecutiveContext(blockInfo, h256(0), context);
         cnsPrecompiled = std::make_shared<CNSPrecompiled>();
 
-        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
+        auto precompiledGasFactory = std::make_shared<bcos::precompiled::PrecompiledGasFactory>(0);
         auto precompiledExecResultFactory = std::make_shared<PrecompiledExecResultFactory>();
         precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
         cnsPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);

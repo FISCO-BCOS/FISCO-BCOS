@@ -38,21 +38,21 @@
 #include <libtxpool/TxPool.h>
 
 using namespace std;
-using namespace dev;
-using namespace dev::eth;
-using namespace dev::ledger;
-using namespace dev::initializer;
-using namespace dev::p2p;
-using namespace dev::txpool;
-using namespace dev::sync;
-using namespace dev::blockchain;
+using namespace bcos;
+using namespace bcos::eth;
+using namespace bcos::ledger;
+using namespace bcos::initializer;
+using namespace bcos::p2p;
+using namespace bcos::txpool;
+using namespace bcos::sync;
+using namespace bcos::blockchain;
 
-static void createTx(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
-    std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-    std::shared_ptr<dev::sync::SyncInterface> _sync, GROUP_ID const& _groupSize, float _txSpeed,
+static void createTx(std::shared_ptr<bcos::txpool::TxPoolInterface> _txPool,
+    std::shared_ptr<bcos::blockchain::BlockChainInterface> _blockChain,
+    std::shared_ptr<bcos::sync::SyncInterface> _sync, GROUP_ID const& _groupSize, float _txSpeed,
     int _totalTransactions)
 {
-    dev::bytes rlpBytes;
+    bcos::bytes rlpBytes;
     if (g_BCOSConfig.SMCrypto())
     {
         if (g_BCOSConfig.version() >= RC2_VERSION)
@@ -139,7 +139,7 @@ static void createTx(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
             {
                 tx->setNonce(u256(noncePrefix + to_string(txSeqNonce++)));
                 tx->setBlockLimit(u256(_blockChain->number()) + 50);
-                auto sig = dev::crypto::Sign(keyPair, tx->hash(WithoutSignature));
+                auto sig = bcos::crypto::Sign(keyPair, tx->hash(WithoutSignature));
                 tx->updateSignature(sig);
                 _txPool->submit(tx);
             }
@@ -189,8 +189,8 @@ static void startSync(Params& params)
     PROTOCOL_ID syncId = getGroupProtoclID(groupId, ProtocolID::BlockSync);
 
     shared_ptr<FakeBlockChain> blockChain = make_shared<FakeBlockChain>();
-    shared_ptr<dev::txpool::TxPool> txPool =
-        make_shared<dev::txpool::TxPool>(p2pService, blockChain, txPoolId);
+    shared_ptr<bcos::txpool::TxPool> txPool =
+        make_shared<bcos::txpool::TxPool>(p2pService, blockChain, txPoolId);
     shared_ptr<FakeBlockVerifier> blockVerifier = make_shared<FakeBlockVerifier>();
     shared_ptr<SyncMaster> sync = make_shared<SyncMaster>(p2pService, txPool, blockChain,
         blockVerifier, syncId, nodeId, blockChain->numberHash(0), 1000 / params.syncSpeed());

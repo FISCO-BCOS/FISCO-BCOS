@@ -19,7 +19,6 @@
 #include "StateFace.h"
 #include <json/json.h>
 #include <libblockverifier/ExecutiveContext.h>
-#include <libdevcore/CommonIO.h>
 #include <libethcore/ABI.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/EVMSchedule.h>
@@ -28,15 +27,16 @@
 #include <libstorage/Common.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/StorageException.h>
+#include <libutilities/CommonIO.h>
 #include <limits.h>
 #include <boost/timer.hpp>
 #include <numeric>
 
 using namespace std;
-using namespace dev;
-using namespace dev::eth;
-using namespace dev::executive;
-using namespace dev::storage;
+using namespace bcos;
+using namespace bcos::eth;
+using namespace bcos::executive;
+using namespace bcos::storage;
 
 /// Error info for EVMInstance status code.
 using errinfo_evmcStatusCode = boost::error_info<struct tag_evmcStatusCode, evmc_status_code>;
@@ -151,7 +151,7 @@ bool Executive::call(Address const& _receiveAddress, Address const& _senderAddre
     return call(params, _gasPrice, _senderAddress);
 }
 
-void Executive::updateGas(std::shared_ptr<dev::precompiled::PrecompiledExecResult> _callResult)
+void Executive::updateGas(std::shared_ptr<bcos::precompiled::PrecompiledExecResult> _callResult)
 {
     // calculate gas
     auto gasUsed = _callResult->calGasCost();
@@ -160,7 +160,7 @@ void Executive::updateGas(std::shared_ptr<dev::precompiled::PrecompiledExecResul
         m_excepted = TransactionException::OutOfGas;
         EXECUTIVE_LOG(WARNING) << LOG_DESC("OutOfGas when executing precompiled Contract")
                                << LOG_KV("gasUsed", gasUsed) << LOG_KV("curGas", m_gas);
-        BOOST_THROW_EXCEPTION(dev::precompiled::PrecompiledException(
+        BOOST_THROW_EXCEPTION(bcos::precompiled::PrecompiledException(
             "OutOfGas when executing precompiled Contract, gasUsed: " +
             boost::lexical_cast<std::string>(gasUsed) +
             ", leftGas:" + boost::lexical_cast<std::string>(m_gas)));
@@ -232,7 +232,7 @@ bool Executive::call(CallParameters const& _p, u256 const& _gasPrice, Address co
         // Transfer ether.
         m_s->transferBalance(_p.senderAddress, _p.receiveAddress, _p.valueTransfer);
     }
-    catch (dev::eth::PrecompiledError const& e)
+    catch (bcos::eth::PrecompiledError const& e)
     {
         revert();
         m_excepted = TransactionException::PrecompiledError;
@@ -314,14 +314,14 @@ bool Executive::callRC2(CallParameters const& _p, u256 const& _gasPrice, Address
             auto output = callResult->execResult();
             m_output = owning_bytes_ref{std::move(output), 0, outputSize};
         }
-        catch (dev::precompiled::PrecompiledException& e)
+        catch (bcos::precompiled::PrecompiledException& e)
         {
             revert();
             m_excepted = TransactionException::PrecompiledError;
             auto output = e.ToOutput();
             m_output = owning_bytes_ref{std::move(output), 0, output.size()};
         }
-        catch (dev::Exception& e)
+        catch (bcos::Exception& e)
         {
             if (g_BCOSConfig.version() >= V2_3_0)
             {
@@ -534,9 +534,6 @@ bool Executive::go()
 {
     if (m_ext)
     {
-#if ETH_TIMED_EXECUTIONS
-        Timer t;
-#endif
         try
         {
             auto getEVMCMessage = [=]() -> shared_ptr<evmc_message> {
@@ -690,10 +687,6 @@ bool Executive::go()
             // Another solution would be to reject this transaction, but that also
             // has drawbacks. Essentially, the amount of ram has to be increased here.
         }
-
-#if ETH_TIMED_EXECUTIONS
-        cnote << "VM took:" << t.elapsed() << "; gas used: " << (sgas - m_endGas);
-#endif
     }
     return true;
 }

@@ -27,15 +27,15 @@
 #include <boost/test/unit_test.hpp>
 
 using namespace std;
-using namespace dev;
-using namespace dev::blockverifier;
-using namespace dev::storage;
-using namespace dev::storagestate;
-using namespace dev::precompiled;
+using namespace bcos;
+using namespace bcos::blockverifier;
+using namespace bcos::storage;
+using namespace bcos::storagestate;
+using namespace bcos::precompiled;
 
 namespace test_CRUDPrecompiled
 {
-class MockMemoryTableFactory : public dev::storage::MemoryTableFactory
+class MockMemoryTableFactory : public bcos::storage::MemoryTableFactory
 {
 public:
     virtual ~MockMemoryTableFactory(){};
@@ -59,11 +59,11 @@ struct CRUDPrecompiledFixture
         factory.initExecutiveContext(blockInfo, h256(0), context);
         memoryTableFactory = context->getMemoryTableFactory();
 
-        tableFactoryPrecompiled = std::make_shared<dev::precompiled::TableFactoryPrecompiled>();
+        tableFactoryPrecompiled = std::make_shared<bcos::precompiled::TableFactoryPrecompiled>();
         tableFactoryPrecompiled->setMemoryTableFactory(memoryTableFactory);
         crudPrecompiled = context->getPrecompiled(Address(0x1002));
 
-        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
+        auto precompiledGasFactory = std::make_shared<bcos::precompiled::PrecompiledGasFactory>(0);
         auto precompiledExecResultFactory = std::make_shared<PrecompiledExecResultFactory>();
         precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
         crudPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
@@ -75,7 +75,7 @@ struct CRUDPrecompiledFixture
     ExecutiveContext::Ptr context;
     TableFactory::Ptr memoryTableFactory;
     Precompiled::Ptr crudPrecompiled;
-    dev::precompiled::TableFactoryPrecompiled::Ptr tableFactoryPrecompiled;
+    bcos::precompiled::TableFactoryPrecompiled::Ptr tableFactoryPrecompiled;
     BlockInfo blockInfo;
 };
 
@@ -84,7 +84,7 @@ BOOST_FIXTURE_TEST_SUITE(CRUDPrecompiled, CRUDPrecompiledFixture)
 BOOST_AUTO_TEST_CASE(CRUD)
 {
     // createTable
-    dev::eth::ContractABI abi;
+    bcos::eth::ContractABI abi;
     std::string tableName = "t_test", tableName2 = "t_demo", key = "name",
                 valueField = "item_id,item_name";
     bytes param = abi.abiIn("createTable(string,string,string)", tableName, key, valueField);

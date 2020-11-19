@@ -20,23 +20,23 @@
  */
 #pragma once
 #include "Common.h"
-namespace dev
+namespace bcos
 {
 namespace precompiled
 {
-class ConsensusPrecompiled : public dev::precompiled::Precompiled
+class ConsensusPrecompiled : public bcos::precompiled::Precompiled
 {
 public:
     typedef std::shared_ptr<ConsensusPrecompiled> Ptr;
     ConsensusPrecompiled();
     virtual ~ConsensusPrecompiled(){};
 
-    PrecompiledExecResult::Ptr call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+    PrecompiledExecResult::Ptr call(std::shared_ptr<bcos::blockverifier::ExecutiveContext> context,
         bytesConstRef param, Address const& origin = Address(),
         Address const& _sender = Address()) override;
 
 private:
-    void showConsensusTable(std::shared_ptr<dev::blockverifier::ExecutiveContext> context);
+    void showConsensusTable(std::shared_ptr<bcos::blockverifier::ExecutiveContext> context);
     bool checkIsLastSealer(std::shared_ptr<storage::Table> table, std::string const& nodeID);
     storage::Entries::ConstPtr selectEntriesByNodeType(
         std::shared_ptr<storage::Table> _table, std::string const& _nodeType);
@@ -44,4 +44,4 @@ private:
 
 }  // namespace precompiled
 
-}  // namespace dev
+}  // namespace bcos

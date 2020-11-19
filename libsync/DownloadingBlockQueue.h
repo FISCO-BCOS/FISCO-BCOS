@@ -23,14 +23,13 @@
 #pragma once
 #include "Common.h"
 #include <libblockchain/BlockChainInterface.h>
-#include <libdevcore/Guards.h>
 #include <libethcore/Block.h>
 #include <climits>
 #include <queue>
 #include <set>
 #include <vector>
 
-namespace dev
+namespace bcos
 {
 namespace sync
 {
@@ -61,7 +60,7 @@ public:
     using ShardPtrVec = std::list<ShardPtr>;
 
 public:
-    DownloadingBlockQueue(std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
+    DownloadingBlockQueue(std::shared_ptr<bcos::blockchain::BlockChainInterface> _blockChain,
         PROTOCOL_ID, NodeID const& _nodeId)
       : m_blockChain(_blockChain),
         m_nodeId(_nodeId),
@@ -112,7 +111,7 @@ private:
     bool flushOneShard(ShardPtr _blocksShard);
 
 private:
-    std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
+    std::shared_ptr<bcos::blockchain::BlockChainInterface> m_blockChain;
     NodeID m_nodeId;
     std::priority_queue<BlockPtr, BlockPtrVec, BlockQueueCmp> m_blocks;  //
     std::shared_ptr<ShardPtrVec> m_buffer;  // use buffer for faster push return
@@ -132,8 +131,8 @@ private:
     int64_t const m_blockSizeExpandCoeff = 3;
 
 private:
-    bool isNewerBlock(std::shared_ptr<dev::eth::Block> _block);
+    bool isNewerBlock(std::shared_ptr<bcos::eth::Block> _block);
 };
 
 }  // namespace sync
-}  // namespace dev
+}  // namespace bcos

@@ -26,19 +26,19 @@
 #include "PBFTReqCache.h"
 #include "libdevcrypto/CryptoInterface.h"
 #include <libconsensus/pbft/PBFTEngine.h>
-#include <libdevcore/TopicInfo.h>
 #include <libethcore/Protocol.h>
+#include <libutilities/TopicInfo.h>
 #include <test/unittests/libsync/FakeSyncToolsSet.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>
 
-using namespace dev;
-using namespace dev::eth;
-using namespace dev::blockverifier;
-using namespace dev::txpool;
-using namespace dev::blockchain;
+using namespace bcos;
+using namespace bcos::eth;
+using namespace bcos::blockverifier;
+using namespace bcos::txpool;
+using namespace bcos::blockchain;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -62,7 +62,7 @@ static void FakePBFTSealer(FakeConsensus<T>& fake_pbft)
 
 template <typename T>
 static void compareAsyncSendTime(
-    FakeConsensus<T>& fake_pbft, dev::h512 const& nodeID, size_t asyncSendTime)
+    FakeConsensus<T>& fake_pbft, bcos::h512 const& nodeID, size_t asyncSendTime)
 {
     FakeService* service =
         dynamic_cast<FakeService*>(fake_pbft.consensus()->mutableService().get());
@@ -71,7 +71,7 @@ static void compareAsyncSendTime(
 
 template <typename T>
 static void compareAndClearAsyncSendTime(
-    FakeConsensus<T>& fake_pbft, dev::h512 const& nodeID, size_t asyncSendTime)
+    FakeConsensus<T>& fake_pbft, bcos::h512 const& nodeID, size_t asyncSendTime)
 {
     FakeService* service =
         dynamic_cast<FakeService*>(fake_pbft.consensus()->mutableService().get());
@@ -88,9 +88,9 @@ static void appendSessionInfo(FakeConsensus<T>& fake_pbft, Public const& node_id
         dynamic_cast<FakeService*>(fake_pbft.consensus()->mutableService().get());
     NodeIPEndpoint m_endpoint(boost::asio::ip::make_address("127.0.0.1"), 30303);
 
-    dev::network::NodeInfo node_info;
+    bcos::network::NodeInfo node_info;
     node_info.nodeID = node_id;
-    std::set<dev::TopicItem> topicList;
+    std::set<bcos::TopicItem> topicList;
     P2PSessionInfo info(node_info, m_endpoint, topicList);
     size_t origin_size =
         service->sessionInfosByProtocolID(fake_pbft.consensus()->protocolId()).size();
@@ -151,7 +151,7 @@ static void FakeSignAndCommitCache(FakeConsensus<T>& fake_pbft, PrepareReq::Ptr 
         block.encode(*prepareReq->block);  /// encode block
         prepareReq->block_hash = block.header().hash();
         prepareReq->height = block.header().number();
-        prepareReq->pBlock = std::make_shared<dev::eth::Block>(std::move(block));
+        prepareReq->pBlock = std::make_shared<bcos::eth::Block>(std::move(block));
     }
     fake_pbft.consensus()->setConsensusBlockNumber(prepareReq->height);
     if (shouldAdd)
@@ -265,7 +265,7 @@ static inline void checkDelCommitCache(FakeConsensus<T>& fake_pbft, BlockHeader 
 }
 
 static inline std::string getDataFromBackupDB(
-    std::string const& _key, dev::storage::BasicRocksDB::Ptr _backupDB)
+    std::string const& _key, bcos::storage::BasicRocksDB::Ptr _backupDB)
 {
     std::string value;
     _backupDB->Get(rocksdb::ReadOptions(), _key, value);
@@ -451,15 +451,15 @@ static void fakeValidPrepare(FakeConsensus<T>& fake_pbft, PrepareReq& req)
     block.decode(ref(*req.block));
     req.block_hash = block.header().hash();
     req.height = block.header().number();
-    req.pBlock = std::make_shared<dev::eth::Block>(std::move(block));
+    req.pBlock = std::make_shared<bcos::eth::Block>(std::move(block));
     fake_pbft.consensus()->setConsensusBlockNumber(req.height);
     // get nodeID according to node index
-    dev::h512 nodeID;
+    bcos::h512 nodeID;
     fake_pbft.consensus()->wrapperGetNodeIDByIndex(nodeID, req.idx);
     BOOST_CHECK((fake_pbft.m_nodeID2KeyPair).count(nodeID));
     auto keyPair = (fake_pbft.m_nodeID2KeyPair)[nodeID];
-    req.sig = dev::crypto::Sign(keyPair, req.block_hash)->asBytes();
-    req.sig2 = dev::crypto::Sign(keyPair, req.fieldsWithoutBlock())->asBytes();
+    req.sig = bcos::crypto::Sign(keyPair, req.block_hash)->asBytes();
+    req.sig2 = bcos::crypto::Sign(keyPair, req.fieldsWithoutBlock())->asBytes();
 }
 
 /// test isValidPrepare
@@ -580,4 +580,4 @@ inline void fakePrepareMsg(std::shared_ptr<FakeConsensus<T>> _leaderPBFT,
 void checkPrepareReqEqual(PrepareReq::Ptr _first, PrepareReq::Ptr _second);
 
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

@@ -22,17 +22,17 @@
 
 #include "BasicRocksDB.h"
 #include <libconfig/GlobalConfigure.h>
-#include <libdevcore/Exceptions.h>
-#include <libdevcore/SnappyCompress.h>
+#include <libutilities/Exceptions.h>
+#include <libutilities/SnappyCompress.h>
 #include <boost/filesystem.hpp>
 #include <string>
 
 using namespace std;
-using namespace dev;
-using namespace dev::storage;
+using namespace bcos;
+using namespace bcos::storage;
 using namespace rocksdb;
 
-rocksdb::Options dev::storage::getRocksDBOptions()
+rocksdb::Options bcos::storage::getRocksDBOptions()
 {
     /// open and init the rocksDB
     rocksdb::Options options;
@@ -49,7 +49,7 @@ rocksdb::Options dev::storage::getRocksDBOptions()
 }
 
 
-std::function<void(std::string const&, std::string&)> dev::storage::getEncryptHandler(
+std::function<void(std::string const&, std::string&)> bcos::storage::getEncryptHandler(
     const std::vector<uint8_t>& _encryptKey, bool _enableCompress)
 {
     // get dataKey according to ciperDataKey from keyCenter
@@ -65,7 +65,7 @@ std::function<void(std::string const&, std::string&)> dev::storage::getEncryptHa
             }
             // compress before encrypt
             std::shared_ptr<bytes> compressedData = std::make_shared<bytes>();
-            size_t compressedSize = dev::compress::SnappyCompress::compress(
+            size_t compressedSize = bcos::compress::SnappyCompress::compress(
                 bytesConstRef((const unsigned char*)data.data(), data.length()), *compressedData);
             if (compressedSize == 0)
             {
@@ -88,7 +88,7 @@ std::function<void(std::string const&, std::string&)> dev::storage::getEncryptHa
     };
 }
 
-std::function<void(std::string&)> dev::storage::getDecryptHandler(
+std::function<void(std::string&)> bcos::storage::getDecryptHandler(
     const std::vector<uint8_t>& _decryptKey, bool _enableCompress)
 {
     return [=](std::string& data) {
@@ -104,8 +104,9 @@ std::function<void(std::string&)> dev::storage::getDecryptHandler(
             }
             // uncompress the decrypted data
             std::shared_ptr<bytes> uncompressedData = std::make_shared<bytes>();
-            auto uncompressedDataSize = dev::compress::SnappyCompress::uncompress(
-                bytesConstRef((const unsigned char*)data.data(), data.length()), *uncompressedData);
+            auto uncompressedDataSize = bcos::compress::SnappyCompress::uncompress(
+                bcos::bytesConstRef((const unsigned char*)data.data(), data.length()),
+                *uncompressedData);
             if (uncompressedDataSize == 0)
             {
                 std::string errorInfo =

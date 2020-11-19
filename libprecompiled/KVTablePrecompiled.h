@@ -23,7 +23,7 @@
 
 #include "libprecompiled/Precompiled.h"
 
-namespace dev
+namespace bcos
 {
 namespace precompiled
 {
@@ -35,7 +35,7 @@ contract KVTable {
 }
 #endif
 
-class KVTablePrecompiled : public dev::precompiled::Precompiled
+class KVTablePrecompiled : public bcos::precompiled::Precompiled
 {
 public:
     typedef std::shared_ptr<KVTablePrecompiled> Ptr;
@@ -45,12 +45,12 @@ public:
 
     std::string toString() override;
 
-    PrecompiledExecResult::Ptr call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+    PrecompiledExecResult::Ptr call(std::shared_ptr<bcos::blockverifier::ExecutiveContext> context,
         bytesConstRef param, Address const& origin = Address(),
         Address const& _sender = Address()) override;
 
-    std::shared_ptr<dev::storage::Table> getTable() { return m_table; }
-    void setTable(std::shared_ptr<dev::storage::Table> table) { m_table = table; }
+    std::shared_ptr<bcos::storage::Table> getTable() { return m_table; }
+    void setTable(std::shared_ptr<bcos::storage::Table> table) { m_table = table; }
 
     h256 hash();
 
@@ -60,4 +60,4 @@ private:
 
 }  // namespace precompiled
 
-}  // namespace dev
+}  // namespace bcos

@@ -26,9 +26,9 @@
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev;
-using namespace dev::storage;
-using namespace dev::test;
+using namespace bcos;
+using namespace bcos::storage;
+using namespace bcos::test;
 
 namespace test_Condition
 {

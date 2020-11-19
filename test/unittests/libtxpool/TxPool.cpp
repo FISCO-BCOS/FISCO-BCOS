@@ -25,10 +25,10 @@
 #include <libdevcrypto/Common.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
-using namespace dev;
-using namespace dev::txpool;
-using namespace dev::blockchain;
-namespace dev
+using namespace bcos;
+using namespace bcos::txpool;
+using namespace bcos::blockchain;
+namespace bcos
 {
 namespace test
 {
@@ -54,8 +54,8 @@ BOOST_AUTO_TEST_CASE(testImportAndSubmit)
     BOOST_CHECK(!!pool_test.m_txPool);
     BOOST_CHECK(!!pool_test.m_topicService);
     BOOST_CHECK(!!pool_test.m_blockChain);
-    std::shared_ptr<dev::ThreadPool> threadPool =
-        std::make_shared<dev::ThreadPool>("SessionCallBackThreadPool", 2);
+    std::shared_ptr<bcos::ThreadPool> threadPool =
+        std::make_shared<bcos::ThreadPool>("SessionCallBackThreadPool", 2);
 
     Transactions trans =
         *(pool_test.m_blockChain->getBlockByHash(pool_test.m_blockChain->numberHash(0))
@@ -126,7 +126,7 @@ BOOST_AUTO_TEST_CASE(testImportAndSubmit)
     BOOST_CHECK(top_transactions.size() == 0);
     /// check getProtocol id
     BOOST_CHECK(
-        pool_test.m_txPool->getProtocolId() == getGroupProtoclID(1, dev::eth::ProtocolID::TxPool));
+        pool_test.m_txPool->getProtocolId() == getGroupProtoclID(1, bcos::eth::ProtocolID::TxPool));
     BOOST_CHECK(pool_test.m_txPool->maxBlockLimit() == 1000);
     pool_test.m_txPool->setMaxBlockLimit(100);
     BOOST_CHECK(pool_test.m_txPool->maxBlockLimit() == 100);
@@ -154,4 +154,4 @@ BOOST_AUTO_TEST_CASE(BlockLimitCheck)
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

@@ -22,12 +22,12 @@
 
 #include "Common.h"
 #include "PrecompiledResult.h"
-#include <libdevcore/Address.h>
 #include <libstorage/Table.h>
+#include <libutilities/Address.h>
 #include <map>
 #include <memory>
 
-namespace dev
+namespace bcos
 {
 namespace storage
 {
@@ -48,7 +48,7 @@ public:
 
     virtual std::string toString() { return ""; }
     virtual PrecompiledExecResult::Ptr call(
-        std::shared_ptr<dev::blockverifier::ExecutiveContext> _context, bytesConstRef _param,
+        std::shared_ptr<bcos::blockverifier::ExecutiveContext> _context, bytesConstRef _param,
         Address const& _origin = Address(), Address const& _sender = Address()) = 0;
 
     // is this precompiled need parallel processing, default false.
@@ -74,13 +74,13 @@ protected:
     std::map<std::string, uint32_t> name2Selector;
 
 protected:
-    uint64_t getEntriesCapacity(std::shared_ptr<dev::storage::Entries const> _entries) const;
+    uint64_t getEntriesCapacity(std::shared_ptr<bcos::storage::Entries const> _entries) const;
 
-    std::shared_ptr<dev::storage::Table> createTable(
-        std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
+    std::shared_ptr<bcos::storage::Table> createTable(
+        std::shared_ptr<bcos::blockverifier::ExecutiveContext> _context,
         const std::string& _tableName, const std::string& _keyField, const std::string& _valueField,
         Address const& origin = Address());
-    bool checkAuthority(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+    bool checkAuthority(std::shared_ptr<bcos::blockverifier::ExecutiveContext> context,
         Address const& _origin, Address const& _contract);
 
     PrecompiledExecResultFactory::Ptr m_precompiledExecResultFactory;
@@ -89,4 +89,4 @@ protected:
 void clearName2SelectCache();
 
 }  // namespace precompiled
-}  // namespace dev
+}  // namespace bcos

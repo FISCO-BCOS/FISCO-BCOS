@@ -27,14 +27,14 @@
 #include "Hash.h"
 #include "Signature.h"
 #include <libconfig/GlobalConfigure.h>
-#include <libdevcore/Address.h>
-#include <libdevcore/Common.h>
-#include <libdevcore/Exceptions.h>
+#include <libutilities/Address.h>
+#include <libutilities/Common.h>
+#include <libutilities/Exceptions.h>
 #include <secp256k1.h>
 #include <secp256k1_recovery.h>
 #include <secp256k1_sha256.h>
 #include <mutex>
-namespace dev
+namespace bcos
 {
 using Secret = SecureFixedHash<32>;
 
@@ -101,7 +101,7 @@ private:
 
 namespace crypto
 {
-DEV_SIMPLE_EXCEPTION(InvalidState);
+DERIVE_BCOS_EXCEPTION(InvalidState);
 
 /**
  * @brief Generator for non-repeating nonce material.
@@ -132,4 +132,4 @@ private:
     Secret m_value;
 };
 }  // namespace crypto
-}  // namespace dev
+}  // namespace bcos

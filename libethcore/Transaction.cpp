@@ -24,14 +24,14 @@
 #include "Exceptions.h"
 #include "libdevcrypto/CryptoInterface.h"
 #include <libconfig/GlobalConfigure.h>
-#include <libdevcore/vector_ref.h>
 #include <libdevcrypto/Common.h>
 #include <libdevcrypto/Exceptions.h>
+#include <libutilities/vector_ref.h>
 
 using namespace std;
-using namespace dev;
-// using namespace dev::crypto;
-using namespace dev::eth;
+using namespace bcos;
+// using namespace bcos::crypto;
+using namespace bcos::eth;
 Transaction::Transaction(bytesConstRef _rlpData, CheckTransaction _checkSig)
 {
     m_rpcCallback = nullptr;
@@ -89,7 +89,7 @@ void Transaction::decodeRC1(RLP const& rlp, CheckTransaction _checkSig)
         // r -> rlp[8].toInt<u256>();             // 8
         // s -> rlp[9].toInt<u256>();             // 9
         invalidFieldName = "signature";
-        m_vrs = dev::crypto::SignatureFromRLP(rlp, 7);
+        m_vrs = bcos::crypto::SignatureFromRLP(rlp, 7);
 
         if (_checkSig >= CheckTransaction::Cheap && !m_vrs->isValid())
             BOOST_THROW_EXCEPTION(InvalidSignature());
@@ -144,7 +144,7 @@ void Transaction::decodeRC2(RLP const& rlp, CheckTransaction _checkSig)
         // u256 r = rlp[11].toInt<u256>();
         // u256 s = rlp[12].toInt<u256>();
         invalidFieldName = "signature";
-        m_vrs = dev::crypto::SignatureFromRLP(rlp, 10);
+        m_vrs = bcos::crypto::SignatureFromRLP(rlp, 10);
         if (_checkSig >= CheckTransaction::Cheap && !m_vrs->isValid())
             BOOST_THROW_EXCEPTION(InvalidSignature());
 

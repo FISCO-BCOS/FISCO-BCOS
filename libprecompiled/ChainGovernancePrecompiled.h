@@ -21,7 +21,7 @@
 #pragma once
 #include "Common.h"
 
-namespace dev
+namespace bcos
 {
 namespace storage
 {
@@ -40,7 +40,7 @@ enum AccountStatus
     AccCount
 };
 
-class ChainGovernancePrecompiled : public dev::precompiled::Precompiled
+class ChainGovernancePrecompiled : public bcos::precompiled::Precompiled
 {
 public:
     typedef std::shared_ptr<ChainGovernancePrecompiled> Ptr;
@@ -49,7 +49,7 @@ public:
 
     std::string toString() override;
 
-    PrecompiledExecResult::Ptr call(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
+    PrecompiledExecResult::Ptr call(std::shared_ptr<bcos::blockverifier::ExecutiveContext> _context,
         bytesConstRef _param, Address const& _origin = Address(),
         Address const& _sender = Address()) override;
 
@@ -65,26 +65,26 @@ protected:
     };
 
 private:
-    std::shared_ptr<dev::storage::Table> getCommitteeTable(
-        std::shared_ptr<dev::blockverifier::ExecutiveContext> _context);
-    int verifyAndRecord(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
+    std::shared_ptr<bcos::storage::Table> getCommitteeTable(
+        std::shared_ptr<bcos::blockverifier::ExecutiveContext> _context);
+    int verifyAndRecord(std::shared_ptr<bcos::blockverifier::ExecutiveContext> _context,
         Operation _op, const std::string& _user, const std::string& _value,
         const std::string& _origin);
     std::string queryTablePermissions(
-        std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
+        std::shared_ptr<bcos::blockverifier::ExecutiveContext> _context,
         const std::string& _tableName);
-    std::string listOperators(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context);
+    std::string listOperators(std::shared_ptr<bcos::blockverifier::ExecutiveContext> _context);
     std::string queryVotesOfMember(
-        std::shared_ptr<dev::blockverifier::ExecutiveContext> _context, const Address& _origin);
+        std::shared_ptr<bcos::blockverifier::ExecutiveContext> _context, const Address& _origin);
     std::string queryVotesOfThreshold(
-        std::shared_ptr<dev::blockverifier::ExecutiveContext> _context);
-    int grantCommitteeMember(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
+        std::shared_ptr<bcos::blockverifier::ExecutiveContext> _context);
+    int grantCommitteeMember(std::shared_ptr<bcos::blockverifier::ExecutiveContext> _context,
         const std::string& _user, const Address& _origin);
-    int updateCommitteeMemberWeight(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
+    int updateCommitteeMemberWeight(std::shared_ptr<bcos::blockverifier::ExecutiveContext> _context,
         const std::string& _member, const std::string& _weight, const Address& _origin);
-    int grantOperator(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
+    int grantOperator(std::shared_ptr<bcos::blockverifier::ExecutiveContext> _context,
         const std::string& _userAddress, const Address& _origin);
-    int revokeOperator(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
+    int revokeOperator(std::shared_ptr<bcos::blockverifier::ExecutiveContext> _context,
         const std::string& _userAddress, const Address& _origin);
 
     int grantTablePermission(std::shared_ptr<blockverifier::ExecutiveContext> _context,
@@ -111,4 +111,4 @@ private:
 
 }  // namespace precompiled
 
-}  // namespace dev
+}  // namespace bcos

@@ -24,8 +24,8 @@
 #include "RaftSealer.h"
 
 using namespace std;
-using namespace dev;
-using namespace dev::consensus;
+using namespace bcos;
+using namespace bcos::consensus;
 
 
 void RaftSealer::start()

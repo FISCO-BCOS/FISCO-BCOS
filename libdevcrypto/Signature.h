@@ -21,10 +21,10 @@
 
 #pragma once
 
-#include <libdevcore/FixedHash.h>
-#include <libdevcore/RLP.h>
+#include <libutilities/FixedHash.h>
+#include <libutilities/RLP.h>
 
-namespace dev
+namespace bcos
 {
 namespace crypto
 {
@@ -44,4 +44,4 @@ struct Signature
     h256 s;
 };
 }  // namespace crypto
-}  // namespace dev
+}  // namespace bcos

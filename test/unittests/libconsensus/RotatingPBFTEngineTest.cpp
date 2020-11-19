@@ -25,12 +25,12 @@
 #include <libconfig/GlobalConfigure.h>
 #include <random>
 
-using namespace dev::test;
+using namespace bcos::test;
 
-std::set<dev::h512> getExpectedSelectedNodes(
+std::set<bcos::h512> getExpectedSelectedNodes(
     RotatingPBFTEngineFixture::Ptr _fixture, int64_t const& _round, int64_t const& _epochSize)
 {
-    std::set<dev::h512> expectedSelectedNodes;
+    std::set<bcos::h512> expectedSelectedNodes;
     auto currentSealerList = _fixture->rotatingPBFT()->sealerList();
     for (auto i = _round; i < (_round + _epochSize); i++)
     {
@@ -177,8 +177,8 @@ BOOST_AUTO_TEST_CASE(testRawPrepareTreeBroadcast)
     followRPBFT->fakePBFTSuite()->consensus()->createTreeTopology(3);
     auto sealerList = leaderRPBFT->fakePBFTSuite()->consensus()->sealerList();
     // the leader only broadcast rawprepare request to the selected child nodes
-    std::shared_ptr<std::set<dev::h512>> sealerSet =
-        std::make_shared<std::set<dev::h512>>(sealerList.begin(), sealerList.end());
+    std::shared_ptr<std::set<bcos::h512>> sealerSet =
+        std::make_shared<std::set<bcos::h512>>(sealerList.begin(), sealerList.end());
     leaderRPBFT->fakePBFTSuite()->consensus()->setChosedConsensusNodes(sealerSet);
     followRPBFT->fakePBFTSuite()->consensus()->setChosedConsensusNodes(sealerSet);
 
@@ -245,7 +245,7 @@ BOOST_AUTO_TEST_CASE(testRawPrepareTreeBroadcast)
             99) /
         100;
     size_t sendedSize = 0;
-    std::vector<std::pair<dev::h512, IDXTYPE>> chosedNodes;
+    std::vector<std::pair<bcos::h512, IDXTYPE>> chosedNodes;
     ssize_t index = 0;
     for (auto const& node : sealerList)
     {

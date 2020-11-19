@@ -41,34 +41,34 @@
 #include <unordered_map>
 #include <unordered_set>
 
-namespace dev
+namespace bcos
 {
 namespace consensus
 {
-DEV_SIMPLE_EXCEPTION(RaftEngineInitFailed);
-DEV_SIMPLE_EXCEPTION(RaftEngineUnexpectError);
+DERIVE_BCOS_EXCEPTION(RaftEngineInitFailed);
+DERIVE_BCOS_EXCEPTION(RaftEngineUnexpectError);
 
 class RaftEngine : public ConsensusEngineBase
 {
 public:
-    RaftEngine(std::shared_ptr<dev::p2p::P2PInterface> _service,
-        std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
-        std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-        std::shared_ptr<dev::sync::SyncInterface> _blockSync,
-        std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
+    RaftEngine(std::shared_ptr<bcos::p2p::P2PInterface> _service,
+        std::shared_ptr<bcos::txpool::TxPoolInterface> _txPool,
+        std::shared_ptr<bcos::blockchain::BlockChainInterface> _blockChain,
+        std::shared_ptr<bcos::sync::SyncInterface> _blockSync,
+        std::shared_ptr<bcos::blockverifier::BlockVerifierInterface> _blockVerifier,
         KeyPair const& _keyPair, unsigned _minElectTime, unsigned _maxElectTime,
-        dev::PROTOCOL_ID const& _protocolId, dev::h512s const& _sealerList = dev::h512s())
+        bcos::PROTOCOL_ID const& _protocolId, bcos::h512s const& _sealerList = bcos::h512s())
       : ConsensusEngineBase(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
             _keyPair, _sealerList),
         m_minElectTimeout(_minElectTime),
         m_maxElectTimeout(_maxElectTime),
-        m_uncommittedBlock(dev::eth::Block()),
+        m_uncommittedBlock(bcos::eth::Block()),
         m_uncommittedBlockNumber(0),
         m_waitingForCommitting(false)
     {
         m_service->registerHandlerByProtoclID(
             m_protocolId, boost::bind(&RaftEngine::onRecvRaftMessage, this, _1, _2, _3));
-        m_blockSync->registerConsensusVerifyHandler([](dev::eth::Block const&) { return true; });
+        m_blockSync->registerConsensusVerifyHandler([](bcos::eth::Block const&) { return true; });
         /// set thread name for raftEngine
         std::string threadName = "Raft-" + std::to_string(m_groupId);
         setName(threadName);
@@ -86,7 +86,7 @@ public:
         return m_term;
     }
 
-    dev::eth::BlockHeader getHighestBlock() const
+    bcos::eth::BlockHeader getHighestBlock() const
     {
         Guard Guard(m_mutex);
         return m_highestBlock;
@@ -100,18 +100,18 @@ public:
 
     void start() override;
     void stop() override;
-    void reportBlock(dev::eth::Block const& _block) override;
+    void reportBlock(bcos::eth::Block const& _block) override;
     bool shouldSeal();
-    bool commit(dev::eth::Block const& _block);
+    bool commit(bcos::eth::Block const& _block);
     bool reachBlockIntervalTime();
-    void resetLastBlockTime() { m_lastBlockTime = dev::utcSteadyTime(); }
+    void resetLastBlockTime() { m_lastBlockTime = bcos::utcSteadyTime(); }
     const std::string consensusStatus() override;
 
 protected:
     void initRaftEnv();
-    void onRecvRaftMessage(dev::p2p::NetworkException _exception,
-        dev::p2p::P2PSession::Ptr _session, dev::p2p::P2PMessage::Ptr _message);
-    bool isValidReq(dev::p2p::P2PMessage::Ptr _message, dev::p2p::P2PSession::Ptr _session,
+    void onRecvRaftMessage(bcos::p2p::NetworkException _exception,
+        bcos::p2p::P2PSession::Ptr _session, bcos::p2p::P2PMessage::Ptr _message);
+    bool isValidReq(bcos::p2p::P2PMessage::Ptr _message, bcos::p2p::P2PSession::Ptr _session,
         ssize_t& _peerIndex) override;
 
     void resetElectTimeout();
@@ -123,12 +123,12 @@ protected:
     bool wonElection(u256 const& _votes) { return _votes >= m_nodeNum - m_f; }
     bool isMajorityVote(u256 const& _votes) { return _votes >= m_nodeNum - m_f; }
 
-    dev::p2p::P2PMessage::Ptr generateVoteReq();
-    dev::p2p::P2PMessage::Ptr generateHeartbeat();
+    bcos::p2p::P2PMessage::Ptr generateVoteReq();
+    bcos::p2p::P2PMessage::Ptr generateHeartbeat();
 
     void broadcastVoteReq();
     void broadcastHeartbeat();
-    void broadcastMsg(dev::p2p::P2PMessage::Ptr _data);
+    void broadcastMsg(bcos::p2p::P2PMessage::Ptr _data);
 
     // handle response
     bool handleVoteRequest(u256 const& _from, h512 const& _node, RaftVoteReq const& _req);
@@ -142,18 +142,18 @@ protected:
     void resetConfig() override;
 
     void runAsLeader();
-    bool runAsLeaderImp(std::unordered_map<dev::h512, unsigned>& _memberHeartbeatLog);
+    bool runAsLeaderImp(std::unordered_map<bcos::h512, unsigned>& _memberHeartbeatLog);
     void runAsFollower();
     bool runAsFollowerImp();
     void runAsCandidate();
-    bool runAsCandidateImp(dev::consensus::VoteState& _voteState);
+    bool runAsCandidateImp(bcos::consensus::VoteState& _voteState);
 
-    void tryCommitUncommitedBlock(dev::consensus::RaftHeartBeatResp& _resp);
+    void tryCommitUncommitedBlock(bcos::consensus::RaftHeartBeatResp& _resp);
     virtual bool checkHeartbeatTimeout();
     virtual bool checkElectTimeout();
-    ssize_t getIndexBySealer(dev::h512 const& _nodeId);
+    ssize_t getIndexBySealer(bcos::h512 const& _nodeId);
     bool getNodeIdByIndex(h512& _nodeId, const u256& _nodeIdx) const;
-    dev::p2p::P2PMessage::Ptr transDataToMessage(
+    bcos::p2p::P2PMessage::Ptr transDataToMessage(
         bytesConstRef data, RaftPacketType const& packetType, PROTOCOL_ID const& protocolId);
 
     RaftRole getState() const
@@ -178,10 +178,10 @@ protected:
     void recoverElectTime();
     void clearFirstVoteCache();
 
-    void execBlock(Sealing& _sealing, dev::eth::Block const& _block);
-    void checkBlockValid(dev::eth::Block const& _block) override;
-    void checkSealerList(dev::eth::Block const& _block);
-    bool checkAndExecute(dev::eth::Block const& _block);
+    void execBlock(Sealing& _sealing, bcos::eth::Block const& _block);
+    void checkBlockValid(bcos::eth::Block const& _block) override;
+    void checkSealerList(bcos::eth::Block const& _block);
+    bool checkAndExecute(bcos::eth::Block const& _block);
     void checkAndSave(Sealing& _sealing);
 
     mutable Mutex m_mutex;
@@ -230,17 +230,17 @@ protected:
     int64_t m_lastObtainSealerNum = 0;
     uint64_t m_lastBlockTime;
 
-    dev::eth::Block m_uncommittedBlock;
+    bcos::eth::Block m_uncommittedBlock;
     int64_t m_uncommittedBlockNumber;
 
     std::mutex m_commitMutex;
     std::condition_variable m_commitCV;
     bool m_commitReady;
     bool m_waitingForCommitting;
-    std::unordered_map<h256, std::unordered_set<dev::consensus::IDXTYPE>> m_commitFingerPrint;
+    std::unordered_map<h256, std::unordered_set<bcos::consensus::IDXTYPE>> m_commitFingerPrint;
 
 private:
     static typename raft::NodeIndex InvalidIndex;
 };
 }  // namespace consensus
-}  // namespace dev
+}  // namespace bcos

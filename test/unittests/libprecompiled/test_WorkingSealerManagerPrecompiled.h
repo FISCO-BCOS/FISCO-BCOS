@@ -27,24 +27,24 @@
 #include "libstoragestate/StorageStateFactory.h"
 #include <libblockverifier/ExecutiveContext.h>
 #include <libblockverifier/ExecutiveContextFactory.h>
-#include <libdevcore/Common.h>
 #include <libdevcrypto/Common.h>
 #include <libprecompiled/WorkingSealerManagerPrecompiled.h>
 #include <libstorage/CachedStorage.h>
 #include <libstorage/MemoryTable.h>
 #include <libstorage/MemoryTableFactoryFactory2.h>
+#include <libutilities/Common.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libstorage/Common.h>
 #include <test/unittests/libstorage/MemoryStorage2.h>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev::precompiled;
-using namespace dev::blockverifier;
-using namespace dev::eth;
-using namespace dev::storagestate;
-using namespace dev::storage;
+using namespace bcos::precompiled;
+using namespace bcos::blockverifier;
+using namespace bcos::eth;
+using namespace bcos::storagestate;
+using namespace bcos::storage;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -90,9 +90,9 @@ public:
         workingSealerManagerPrecompiled = std::make_shared<WorkingSealerManagerPrecompiled>();
         initContext();
 
-        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
+        auto precompiledGasFactory = std::make_shared<bcos::precompiled::PrecompiledGasFactory>(0);
         auto precompiledExecResultFactory =
-            std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+            std::make_shared<bcos::precompiled::PrecompiledExecResultFactory>();
         precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
         workingSealerManagerPrecompiled->setPrecompiledExecResultFactory(
             precompiledExecResultFactory);
@@ -147,12 +147,12 @@ public:
         return getSystemConfigAndEnableNumByKey(_key).first;
     }
 
-    std::pair<std::string, dev::eth::BlockNumber> getSystemConfigAndEnableNumByKey(
+    std::pair<std::string, bcos::eth::BlockNumber> getSystemConfigAndEnableNumByKey(
         std::string const& _key)
     {
         auto table = openTable(context, SYS_CONFIG);
         auto valueInfo =
-            dev::precompiled::getSysteConfigByKey(table, _key, context->blockInfo().number + 1);
+            bcos::precompiled::getSysteConfigByKey(table, _key, context->blockInfo().number + 1);
         return *valueInfo;
     }
 
@@ -176,7 +176,8 @@ public:
         }
     }
 
-    void updateNodeListType(dev::h512s const& _nodeList, size_t _size, std::string const& _nodeType)
+    void updateNodeListType(
+        bcos::h512s const& _nodeList, size_t _size, std::string const& _nodeType)
     {
         auto updateSize = std::min(_nodeList.size(), _size);
         auto table = openTable(context, SYS_CONSENSUS);
@@ -210,7 +211,7 @@ public:
         }
     }
 
-    void addSealerList(dev::h512s const& _sealerList)
+    void addSealerList(bcos::h512s const& _sealerList)
     {
         updateNodeListType(_sealerList, _sealerList.size(), NODE_TYPE_SEALER);
     }
@@ -257,14 +258,14 @@ public:
     std::string vrfPrivateKey;
     KeyPair m_keyPair;
 
-    dev::h512s sealerList;
-    std::map<dev::h512, dev::KeyPair> m_publicKey2KeyPair;
-    dev::h512s m_pendingSealerList;
-    dev::h512s m_workingSealerList;
-    dev::h512s m_observerList;
+    bcos::h512s sealerList;
+    std::map<bcos::h512, bcos::KeyPair> m_publicKey2KeyPair;
+    bcos::h512s m_pendingSealerList;
+    bcos::h512s m_workingSealerList;
+    bcos::h512s m_observerList;
 
     TableFactory::Ptr memoryTableFactory;
     CachedStorage::Ptr cachedStorage;
 };
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

@@ -22,7 +22,7 @@
 
 #pragma once
 
-namespace dev
+namespace bcos
 {
 namespace eth
 {
@@ -436,4 +436,4 @@ namespace eth
 #error No opcode dispatch configured
 #endif
 }  // namespace eth
-}  // namespace dev
+}  // namespace bcos

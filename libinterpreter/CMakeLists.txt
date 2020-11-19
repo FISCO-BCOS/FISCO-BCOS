@@ -7,4 +7,4 @@ endif()
 
 add_library(interpreter ${SRC_LIST} ${HEADERS})
 target_compile_options(interpreter PRIVATE -Wno-missing-field-initializers -Wno-pedantic)
-target_link_libraries(interpreter PUBLIC EVMC devcore)
+target_link_libraries(interpreter PUBLIC EVMC utilities)

@@ -24,7 +24,6 @@
 #include <libblockchain/BlockChainImp.h>
 #include <libblockverifier/ExecutiveContext.h>
 #include <libconfig/GlobalConfigure.h>
-#include <libdevcore/CommonData.h>
 #include <libethcore/Block.h>
 #include <libethcore/BlockHeader.h>
 #include <libethcore/Transaction.h>
@@ -32,6 +31,7 @@
 #include <libstorage/MemoryTable.h>
 #include <libstoragestate/StorageState.h>
 #include <libstoragestate/StorageStateFactory.h>
+#include <libutilities/CommonData.h>
 #include <test/tools/libutils/Common.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libethcore/FakeBlock.h>
@@ -39,13 +39,13 @@
 #include <boost/test/unit_test.hpp>
 #include <unordered_map>
 
-using namespace dev;
-using namespace dev::eth;
-using namespace dev::storage;
-using namespace dev::blockchain;
-using namespace dev::blockverifier;
-using namespace dev::storagestate;
-namespace dev
+using namespace bcos;
+using namespace bcos::eth;
+using namespace bcos::storage;
+using namespace bcos::blockchain;
+using namespace bcos::blockverifier;
+using namespace bcos::storagestate;
+namespace bcos
 {
 namespace test
 {
@@ -66,7 +66,7 @@ static std::string const c_commonHash =
     "0b9702045ea4b58d1bdae2f802f57ac22c6b63ce571777da8586337c69834ad3";
 static std::string const c_commonHashPrefix = std::string("0x").append(c_commonHash);
 
-class MockTable : public dev::storage::MemoryTable<Serial>
+class MockTable : public bcos::storage::MemoryTable<Serial>
 {
 public:
     typedef std::shared_ptr<MockTable> Ptr;
@@ -122,7 +122,7 @@ public:
     std::unordered_map<std::string, std::unordered_map<std::string, Entry::Ptr>> m_fakeStorage;
 };
 
-class MockMemoryTableFactory : public dev::storage::MemoryTableFactory
+class MockMemoryTableFactory : public bcos::storage::MemoryTableFactory
 {
 public:
     MockMemoryTableFactory() {}
@@ -157,16 +157,16 @@ public:
 class MockBlockChainImp : public BlockChainImp
 {
 public:
-    std::shared_ptr<dev::storage::TableFactory> getMemoryTableFactory(int64_t) override
+    std::shared_ptr<bcos::storage::TableFactory> getMemoryTableFactory(int64_t) override
     {
         return m_memoryTableFactory;
     }
 
-    void setMemoryTableFactory(std::shared_ptr<dev::storage::TableFactory> _m)
+    void setMemoryTableFactory(std::shared_ptr<bcos::storage::TableFactory> _m)
     {
         m_memoryTableFactory = _m;
     }
-    std::shared_ptr<dev::storage::TableFactory> m_memoryTableFactory;
+    std::shared_ptr<bcos::storage::TableFactory> m_memoryTableFactory;
 };
 
 class MockState : public StorageState
@@ -191,10 +191,10 @@ struct EmptyFixture
         m_executiveContext->setMemoryTableFactory(mockMemoryTableFactory);
         m_executiveContext->setState(std::make_shared<MockState>());
 
-        auto initParam = std::make_shared<dev::ledger::LedgerParam>();
+        auto initParam = std::make_shared<bcos::ledger::LedgerParam>();
         initParam->mutableGenesisMark() = "";
-        initParam->mutableConsensusParam().sealerList = dev::h512s();
-        initParam->mutableConsensusParam().observerList = dev::h512s();
+        initParam->mutableConsensusParam().sealerList = bcos::h512s();
+        initParam->mutableConsensusParam().observerList = bcos::h512s();
         initParam->mutableConsensusParam().consensusType = "";
         initParam->mutableStorageParam().type = "";
         initParam->mutableStateParam().type = "";
@@ -260,7 +260,7 @@ struct MemoryTableFactoryFixture : EmptyFixture
     }
 
     std::shared_ptr<FakeBlock> m_fakeBlock;
-    dev::VERSION m_version;
+    bcos::VERSION m_version;
     std::string m_supportedVersion;
 };
 
@@ -311,7 +311,7 @@ BOOST_AUTO_TEST_CASE(getCode)
 
 BOOST_AUTO_TEST_CASE(getBlockByHash)
 {
-    std::shared_ptr<dev::eth::Block> bptr =
+    std::shared_ptr<bcos::eth::Block> bptr =
         m_blockChainImp->getBlockByHash(h256(c_commonHashPrefix));
 
     BOOST_CHECK_EQUAL(bptr->getTransactionSize(), m_fakeBlock->getBlock()->getTransactionSize());
@@ -322,7 +322,7 @@ BOOST_AUTO_TEST_CASE(getBlockRLPByNumber)
 {
     std::shared_ptr<bytes> bRLPptr = m_blockChainImp->getBlockRLPByNumber(0);
 
-    std::shared_ptr<dev::eth::Block> bptr =
+    std::shared_ptr<bcos::eth::Block> bptr =
         m_blockChainImp->getBlockByHash(h256(c_commonHashPrefix));
     BOOST_CHECK(bptr->rlp() == *bRLPptr);
 }
@@ -388,9 +388,9 @@ BOOST_AUTO_TEST_CASE(commitBlock)
 
 BOOST_AUTO_TEST_CASE(query)
 {
-    dev::h512s sealerList = m_blockChainImp->sealerList();
+    bcos::h512s sealerList = m_blockChainImp->sealerList();
     BOOST_CHECK_EQUAL(sealerList.size(), 0);
-    dev::h512s observerList = m_blockChainImp->observerList();
+    bcos::h512s observerList = m_blockChainImp->observerList();
     BOOST_CHECK_EQUAL(observerList.size(), 0);
 }
 
@@ -428,4 +428,4 @@ BOOST_FIXTURE_TEST_CASE(SM_emptyChain, SM_CryptoTestFixture)
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

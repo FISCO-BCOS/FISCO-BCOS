@@ -22,7 +22,7 @@
 #include "Common.h"
 #include "libstorage/Table.h"
 
-namespace dev
+namespace bcos
 {
 namespace storage
 {
@@ -31,7 +31,7 @@ class Table;
 
 namespace precompiled
 {
-class CRUDPrecompiled : public dev::precompiled::Precompiled
+class CRUDPrecompiled : public bcos::precompiled::Precompiled
 {
 public:
     typedef std::shared_ptr<CRUDPrecompiled> Ptr;
@@ -40,7 +40,7 @@ public:
 
     std::string toString() override;
 
-    PrecompiledExecResult::Ptr call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+    PrecompiledExecResult::Ptr call(std::shared_ptr<bcos::blockverifier::ExecutiveContext> context,
         bytesConstRef param, Address const& origin = Address(),
         Address const& _sender = Address()) override;
 
@@ -52,4 +52,4 @@ private:
 
 }  // namespace precompiled
 
-}  // namespace dev
+}  // namespace bcos

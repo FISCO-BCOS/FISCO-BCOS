@@ -25,10 +25,10 @@
 #include <libdevcrypto/Common.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
-using namespace dev;
-using namespace dev::txpool;
-using namespace dev::blockchain;
-namespace dev
+using namespace bcos;
+using namespace bcos::txpool;
+using namespace bcos::blockchain;
+namespace bcos
 {
 namespace test
 {
@@ -49,7 +49,7 @@ Transaction::Ptr fakeTransaction(size_t _idx = 0)
 
     auto keyPair = KeyPair::create();
     std::shared_ptr<crypto::Signature> sig =
-        dev::crypto::Sign(keyPair, fakeTx->hash(WithoutSignature));
+        bcos::crypto::Sign(keyPair, fakeTx->hash(WithoutSignature));
     /// update the signature of transaction
     fakeTx->updateSignature(sig);
     return fakeTx;
@@ -77,7 +77,7 @@ BOOST_AUTO_TEST_CASE(updateTest)
     BOOST_CHECK(cache.isNonceOk(*txs[1], true));  // insert cache if true
     BOOST_CHECK(!cache.isNonceOk(*txs[1]));
 
-    dev::eth::NonceKeyType nonce = txs[0]->nonce();
+    bcos::eth::NonceKeyType nonce = txs[0]->nonce();
     cache.delCache(nonce);
     BOOST_CHECK(cache.isNonceOk(*txs[0]));
 
@@ -88,4 +88,4 @@ BOOST_AUTO_TEST_CASE(updateTest)
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

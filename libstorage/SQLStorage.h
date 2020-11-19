@@ -24,9 +24,9 @@
 #include "Storage.h"
 #include <json/json.h>
 #include <libchannelserver/ChannelRPCServer.h>
-#include <libdevcore/FixedHash.h>
+#include <libutilities/FixedHash.h>
 
-namespace dev
+namespace bcos
 {
 namespace storage
 {
@@ -46,7 +46,7 @@ public:
     bool onlyCommitDirty() override { return true; }
 
     virtual void setTopic(const std::string& topic);
-    virtual void setChannelRPCServer(dev::ChannelRPCServer::Ptr channelRPCServer);
+    virtual void setChannelRPCServer(bcos::ChannelRPCServer::Ptr channelRPCServer);
     virtual void setMaxRetry(int maxRetry);
 
     virtual void setFatalHandler(std::function<void(std::exception&)> fatalHandler)
@@ -62,11 +62,11 @@ private:
     std::function<void(std::exception&)> m_fatalHandler;
 
     std::string m_topic;
-    dev::ChannelRPCServer::Ptr m_channelRPCServer;
+    bcos::ChannelRPCServer::Ptr m_channelRPCServer;
     int m_maxRetry = 0;
     size_t m_timeout = 10 * 1000;  // timeout by ms
 };
 
 }  // namespace storage
 
-}  // namespace dev
+}  // namespace bcos

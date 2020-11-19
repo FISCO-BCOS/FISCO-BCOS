@@ -31,7 +31,7 @@
 #include <memory>
 #include <type_traits>
 
-namespace dev
+namespace bcos
 {
 namespace blockverifier
 {
@@ -80,4 +80,4 @@ private:
 
 }  // namespace storage
 
-}  // namespace dev
+}  // namespace bcos

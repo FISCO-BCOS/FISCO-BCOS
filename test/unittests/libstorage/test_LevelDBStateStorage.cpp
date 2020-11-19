@@ -17,13 +17,13 @@
 
 #include "libstorage/LevelDBStorage.h"
 #include <leveldb/db.h>
-#include <libdevcore/BasicLevelDB.h>
-#include <libdevcore/FixedHash.h>
-#include <libdevcore/LevelDB.h>
+#include <libutilities/BasicLevelDB.h>
+#include <libutilities/FixedHash.h>
+#include <libutilities/LevelDB.h>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev;
-using namespace dev::storage;
+using namespace bcos;
+using namespace bcos::storage;
 using namespace leveldb;
 
 namespace leveldb
@@ -121,10 +121,10 @@ struct MockWriteBatch
     int Count() { return DecodeFixed32(rep_.data() + 8); }
 };
 
-class MockLevelDB : public dev::db::BasicLevelDB
+class MockLevelDB : public bcos::db::BasicLevelDB
 {
 public:
-    MockLevelDB() : BasicLevelDB(dev::db::LevelDB::defaultDBOptions(), "test_LevelDBStateStorage")
+    MockLevelDB() : BasicLevelDB(bcos::db::LevelDB::defaultDBOptions(), "test_LevelDBStateStorage")
     {}
     virtual ~MockLevelDB() {}
 
@@ -184,7 +184,7 @@ struct LevelDBFixture
 {
     LevelDBFixture()
     {
-        levelDB = std::make_shared<dev::storage::LevelDBStorage>();
+        levelDB = std::make_shared<bcos::storage::LevelDBStorage>();
         std::shared_ptr<MockLevelDB> mockLevelDB = std::make_shared<MockLevelDB>();
         levelDB->setDB(mockLevelDB);
     }
@@ -197,7 +197,7 @@ struct LevelDBFixture
         entries->addEntry(entry);
         return entries;
     }
-    dev::storage::LevelDBStorage::Ptr levelDB;
+    bcos::storage::LevelDBStorage::Ptr levelDB;
 };
 
 BOOST_FIXTURE_TEST_SUITE(LevelDB, LevelDBFixture)
@@ -220,8 +220,8 @@ BOOST_AUTO_TEST_CASE(commit)
     h256 h(0x01);
     int num = 1;
     h256 blockHash(0x11231);
-    std::vector<dev::storage::TableData::Ptr> datas;
-    dev::storage::TableData::Ptr tableData = std::make_shared<dev::storage::TableData>();
+    std::vector<bcos::storage::TableData::Ptr> datas;
+    bcos::storage::TableData::Ptr tableData = std::make_shared<bcos::storage::TableData>();
     tableData->tableName = "t_test";
     Entries::Ptr entries = getEntries();
     tableData->data.insert(std::make_pair(std::string("LiSi"), entries));
@@ -244,8 +244,8 @@ BOOST_AUTO_TEST_CASE(exception)
     h256 h(0x01);
     int num = 1;
     h256 blockHash(0x11231);
-    std::vector<dev::storage::TableData::Ptr> datas;
-    dev::storage::TableData::Ptr tableData = std::make_shared<dev::storage::TableData>();
+    std::vector<bcos::storage::TableData::Ptr> datas;
+    bcos::storage::TableData::Ptr tableData = std::make_shared<bcos::storage::TableData>();
     tableData->tableName = "e";
     Entries::Ptr entries = getEntries();
     tableData->data.insert(std::make_pair(std::string("Exception"), entries));

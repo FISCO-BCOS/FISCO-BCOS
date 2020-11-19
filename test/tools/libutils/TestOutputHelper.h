@@ -20,11 +20,11 @@
 
 #pragma once
 #include <libconfig/GlobalConfigure.h>
-#include <libdevcore/Common.h>
+#include <libutilities/Common.h>
 #include <libdevcrypto/CryptoInterface.h>
 #include <boost/filesystem.hpp>
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -60,7 +60,6 @@ public:
 
 private:
     TestOutputHelper() {}
-    Timer m_timer;
     size_t m_currTest;
     size_t m_maxTests;
     std::string m_currentTestName;
@@ -68,6 +67,7 @@ private:
     boost::filesystem::path m_currentTestFileName;
     typedef std::pair<double, std::string> execTimeName;
     std::vector<execTimeName> m_execTimeResults;
+    int64_t m_startTime;
 };
 
 class TestOutputHelperFixture
@@ -107,4 +107,4 @@ private:
 };
 
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

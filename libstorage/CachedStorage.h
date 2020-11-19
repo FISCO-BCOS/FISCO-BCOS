@@ -23,8 +23,8 @@
 
 #include "Storage.h"
 #include "Table.h"
-#include <libdevcore/FixedHash.h>
-#include <libdevcore/ThreadPool.h>
+#include <libutilities/FixedHash.h>
+#include <libutilities/ThreadPool.h>
 #include <tbb/concurrent_queue.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <tbb/concurrent_unordered_set.h>
@@ -36,7 +36,7 @@
 #include <boost/multi_index_container.hpp>
 #include <mutex>
 
-namespace dev
+namespace bcos
 {
 namespace storage
 {
@@ -89,7 +89,7 @@ class CachedStorage : public Storage
 {
 public:
     typedef std::shared_ptr<CachedStorage> Ptr;
-    CachedStorage(dev::GROUP_ID const& _groupID = 0);
+    CachedStorage(bcos::GROUP_ID const& _groupID = 0);
 
     typedef tbb::spin_rw_mutex RWMutex;
     typedef tbb::spin_rw_mutex::scoped_lock RWMutexScoped;
@@ -120,10 +120,10 @@ public:
     void setMaxForwardBlock(size_t maxForwardBlock);
 
     void startClearThread();
-    dev::GROUP_ID groupID() const { return m_groupID; }
+    bcos::GROUP_ID groupID() const { return m_groupID; }
 
 protected:
-    dev::GROUP_ID m_groupID = 0;
+    bcos::GROUP_ID m_groupID = 0;
 
 private:
     void touchMRU(const std::string& table, const std::string& key, ssize_t capacity);
@@ -172,8 +172,8 @@ private:
     int64_t m_maxCapacity = 256 * 1024 * 1024;  // default 256MB for cache
     uint64_t m_clearInterval = 1000;
 
-    dev::ThreadPool::Ptr m_taskThreadPool;
-    dev::ThreadPool::Ptr m_asyncThreadPool;
+    bcos::ThreadPool::Ptr m_taskThreadPool;
+    bcos::ThreadPool::Ptr m_asyncThreadPool;
     std::shared_ptr<std::thread> m_clearThread;
 
     tbb::atomic<uint64_t> m_hitTimes;
@@ -184,4 +184,4 @@ private:
 
 }  // namespace storage
 
-}  // namespace dev
+}  // namespace bcos

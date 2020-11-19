@@ -27,13 +27,13 @@
 
 #include "libnetwork/Common.h"
 #include "libnetwork/SocketFace.h"
-#include <libdevcore/FileSystem.h>
+#include <libutilities/FileSystem.h>
 #include <openssl/ec.h>
 #include <openssl/ssl.h>
 #include <boost/beast.hpp>
 #include <boost/filesystem.hpp>
 
-namespace dev
+namespace bcos
 {
 namespace network
 {
@@ -141,4 +141,4 @@ protected:
 };
 
 }  // namespace network
-}  // namespace dev
+}  // namespace bcos

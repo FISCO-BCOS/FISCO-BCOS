@@ -23,10 +23,10 @@
 #include "RotatingPBFTEngine.h"
 #include <libprecompiled/SystemConfigPrecompiled.h>
 
-using namespace dev::eth;
-using namespace dev::consensus;
-using namespace dev::p2p;
-using namespace dev::network;
+using namespace bcos::eth;
+using namespace bcos::consensus;
+using namespace bcos::p2p;
+using namespace bcos::network;
 std::pair<bool, IDXTYPE> RotatingPBFTEngine::getLeader() const
 {
     // this node doesn't located in the chosed consensus node list
@@ -81,7 +81,7 @@ bool RotatingPBFTEngine::updateEpochSize()
 {
     // get the system-configured epoch size
     auto EpochStr =
-        m_blockChain->getSystemConfigByKey(dev::precompiled::SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM);
+        m_blockChain->getSystemConfigByKey(bcos::precompiled::SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM);
     int64_t Epoch = boost::lexical_cast<int64_t>(EpochStr);
 
     if (Epoch == m_epochSize)
@@ -104,7 +104,7 @@ bool RotatingPBFTEngine::updateRotatingInterval()
 {
     // get the system-configured rotating-interval
     auto ret =
-        m_blockChain->getSystemConfigInfoByKey(dev::precompiled::SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM);
+        m_blockChain->getSystemConfigInfoByKey(bcos::precompiled::SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM);
     int64_t rotatingInterval = boost::lexical_cast<int64_t>(ret.first);
     BlockNumber enableNumber = ret.second;
     if (rotatingInterval == m_rotatingInterval && enableNumber == m_rotatingIntervalEnableNumber)
@@ -148,7 +148,7 @@ void RotatingPBFTEngine::resetChosedConsensusNodes()
     }
     m_startNodeIdx = m_rotatingRound % m_sealersNum;
     int64_t idx = m_startNodeIdx;
-    std::set<dev::h512> chosedConsensusNodes;
+    std::set<bcos::h512> chosedConsensusNodes;
 
     ReadGuard l(m_sealerListMutex);
     for (auto i = 0; i < m_epochSize; i++)
@@ -192,7 +192,7 @@ void RotatingPBFTEngine::chooseConsensusNodes()
     // remove one consensus Node
     auto chosedOutIdx = m_rotatingRound % m_sealersNum;
     NodeID chosedOutNodeId = getNodeIDByIndex(chosedOutIdx);
-    if (chosedOutNodeId == dev::h512())
+    if (chosedOutNodeId == bcos::h512())
     {
         ReadGuard l(x_chosedConsensusNodes);
         RPBFTENGINE_LOG(FATAL) << LOG_DESC("chooseConsensusNodes:chosed out node is not a sealer")
@@ -216,7 +216,7 @@ void RotatingPBFTEngine::chooseConsensusNodes()
     auto epochSize = std::min(m_epochSize.load(), m_sealersNum.load());
     IDXTYPE chosedInNodeIdx = (m_startNodeIdx.load() + epochSize - 1) % m_sealersNum;
     NodeID chosedInNodeId = getNodeIDByIndex(chosedInNodeIdx);
-    if (chosedOutNodeId == dev::h512())
+    if (chosedOutNodeId == bcos::h512())
     {
         ReadGuard l(x_chosedConsensusNodes);
         RPBFTENGINE_LOG(FATAL) << LOG_DESC("chooseConsensusNodes: chosed out node is not a sealer")
@@ -304,7 +304,7 @@ void RotatingPBFTEngine::updateTreeTopologyInfo()
                           << LOG_KV("chosedSealerListSize", m_chosedSealerList->size());
 }
 
-ssize_t RotatingPBFTEngine::filterBroadcastTargets(dev::network::NodeID const& _nodeId)
+ssize_t RotatingPBFTEngine::filterBroadcastTargets(bcos::network::NodeID const& _nodeId)
 {
     // the node should be a sealer
     if (-1 == getIndexBySealer(_nodeId))
@@ -331,10 +331,10 @@ void RotatingPBFTEngine::resetLocatedInConsensusNodes()
     m_locatedInConsensusNodes = false;
 }
 
-dev::network::NodeID RotatingPBFTEngine::getSealerByIndex(size_t const& _index) const
+bcos::network::NodeID RotatingPBFTEngine::getSealerByIndex(size_t const& _index) const
 {
     auto nodeId = PBFTEngine::getSealerByIndex(_index);
-    if (nodeId != dev::network::NodeID())
+    if (nodeId != bcos::network::NodeID())
     {
         ReadGuard l(x_chosedConsensusNodes);
         if (m_chosedConsensusNodes->count(nodeId))
@@ -342,17 +342,17 @@ dev::network::NodeID RotatingPBFTEngine::getSealerByIndex(size_t const& _index) 
             return nodeId;
         }
     }
-    return dev::network::NodeID();
+    return bcos::network::NodeID();
 }
 
-dev::network::NodeID RotatingPBFTEngine::getNodeIDByIndex(size_t const& _index) const
+bcos::network::NodeID RotatingPBFTEngine::getNodeIDByIndex(size_t const& _index) const
 {
     return PBFTEngine::getSealerByIndex(_index);
 }
 
 // the leader forward prepareMsg to other nodes
 void RotatingPBFTEngine::sendPrepareMsgFromLeader(
-    PrepareReq::Ptr _prepareReq, bytesConstRef _data, dev::PACKET_TYPE const& _p2pPacketType)
+    PrepareReq::Ptr _prepareReq, bytesConstRef _data, bcos::PACKET_TYPE const& _p2pPacketType)
 {
     // the tree-topology has been disabled
     if (!m_treeRouter)
@@ -362,11 +362,11 @@ void RotatingPBFTEngine::sendPrepareMsgFromLeader(
     m_rpbftReqCache->insertRequestedRawPrepare(_prepareReq->block_hash);
 
     // send prepareReq by tree
-    std::shared_ptr<dev::h512s> selectedNodes;
+    std::shared_ptr<bcos::h512s> selectedNodes;
     {
         ReadGuard l(x_chosedConsensusNodes);
         NodeID leaderNodeID = getNodeIDByIndex(m_idx);
-        if (leaderNodeID == dev::h512())
+        if (leaderNodeID == bcos::h512())
         {
             return;
         }
@@ -415,11 +415,11 @@ void RotatingPBFTEngine::forwardReceivedPrepareMsgByTree(
         m_rpbftReqCache->insertRequestedRawPrepare(decodedPrepareMsg->block_hash);
 
         // select the nodes that should forward the prepareMsg
-        std::shared_ptr<dev::h512s> selectedNodes;
+        std::shared_ptr<bcos::h512s> selectedNodes;
         {
             ReadGuard l(x_chosedConsensusNodes);
             auto leaderNodeId = getNodeIDByIndex(leaderIdx);
-            if (leaderNodeId == dev::h512())
+            if (leaderNodeId == bcos::h512())
             {
                 return;
             }
@@ -477,7 +477,7 @@ void RotatingPBFTEngine::onRecvPBFTMessage(
 }
 
 bool RotatingPBFTEngine::handlePartiallyPrepare(
-    std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message)
+    std::shared_ptr<bcos::p2p::P2PSession> _session, bcos::p2p::P2PMessage::Ptr _message)
 {
     if (!m_treeRouter)
     {
@@ -493,7 +493,7 @@ bool RotatingPBFTEngine::handlePartiallyPrepare(
 }
 
 // select node to request missed transactions when enable bip 152
-dev::h512 RotatingPBFTEngine::selectNodeToRequestMissedTxs(PrepareReq::Ptr _prepareReq)
+bcos::h512 RotatingPBFTEngine::selectNodeToRequestMissedTxs(PrepareReq::Ptr _prepareReq)
 {
     if (!m_treeRouter)
     {
@@ -518,7 +518,7 @@ dev::h512 RotatingPBFTEngine::selectNodeToRequestMissedTxs(PrepareReq::Ptr _prep
     RPBFTENGINE_LOG(DEBUG) << LOG_DESC("selectNodeToRequestMissedTxs")
                            << LOG_KV("parentNodeID", expectedNodeId.abridged())
                            << LOG_KV("selectedNode", selectedNode.abridged()) << oss.str();
-    if (selectedNode == dev::h512())
+    if (selectedNode == bcos::h512())
     {
         RPBFTENGINE_LOG(DEBUG) << LOG_DESC(
             "selectNodeToRequestMissedTxs: request to leader for missed txs because of no required "
@@ -584,7 +584,7 @@ void RotatingPBFTEngine::sendRawPrepareStatusRandomly(PBFTMsg::Ptr _rawPrepareRe
 }
 
 PBFTMsg::Ptr RotatingPBFTEngine::decodeP2PMsgIntoPBFTMsg(
-    std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message)
+    std::shared_ptr<bcos::p2p::P2PSession> _session, bcos::p2p::P2PMessage::Ptr _message)
 {
     ssize_t consIndex = 0;
     bool valid = isValidReq(_message, _session, consIndex);
@@ -597,10 +597,10 @@ PBFTMsg::Ptr RotatingPBFTEngine::decodeP2PMsgIntoPBFTMsg(
     return pbftMsg;
 }
 
-std::shared_ptr<dev::h512s> RotatingPBFTEngine::getParentNode(PBFTMsg::Ptr _pbftMsg)
+std::shared_ptr<bcos::h512s> RotatingPBFTEngine::getParentNode(PBFTMsg::Ptr _pbftMsg)
 {
     NodeID leaderNodeID = getNodeIDByIndex(_pbftMsg->idx);
-    if (leaderNodeID == dev::h512())
+    if (leaderNodeID == bcos::h512())
     {
         return nullptr;
     }
@@ -663,7 +663,7 @@ void RotatingPBFTEngine::onReceiveRawPrepareStatus(
     }
 }
 
-bool RotatingPBFTEngine::connectWithParent(std::shared_ptr<const dev::h512s> _parentNodeList)
+bool RotatingPBFTEngine::connectWithParent(std::shared_ptr<const bcos::h512s> _parentNodeList)
 {
     for (auto const& node : *_parentNodeList)
     {
@@ -676,7 +676,7 @@ bool RotatingPBFTEngine::connectWithParent(std::shared_ptr<const dev::h512s> _pa
 }
 
 void RotatingPBFTEngine::waitAndRequestRawPrepare(PBFTMsg::Ptr _rawPrepareStatus,
-    dev::h512 const& _targetNode, std::shared_ptr<const dev::h512s> _parentNodeList)
+    bcos::h512 const& _targetNode, std::shared_ptr<const bcos::h512s> _parentNodeList)
 {
     try
     {
@@ -714,7 +714,7 @@ void RotatingPBFTEngine::waitAndRequestRawPrepare(PBFTMsg::Ptr _rawPrepareStatus
 }
 
 bool RotatingPBFTEngine::shouldRequestRawPrepare(PBFTMsg::Ptr _rawPrepareStatus,
-    dev::h512 const& _targetNode, std::shared_ptr<const dev::h512s> _parentNodeList)
+    bcos::h512 const& _targetNode, std::shared_ptr<const bcos::h512s> _parentNodeList)
 {
     auto startTime = utcSteadyTime();
     // wait for at most (m_maxRequestPrepareWaitTime)ms before request the rawPrepare
@@ -750,7 +750,7 @@ void RotatingPBFTEngine::addRawPrepare(PrepareReq::Ptr _prepareReq)
 
 // request rawPreparePacket from other node when the local rawPrepareReq is empty
 void RotatingPBFTEngine::requestRawPreparePacket(
-    dev::h512 const& _targetNode, PBFTMsg::Ptr _requestedRawPrepareStatus)
+    bcos::h512 const& _targetNode, PBFTMsg::Ptr _requestedRawPrepareStatus)
 {
     // encode and send the _requestedRawPrepareStatus to targetNode
     std::shared_ptr<bytes> rawPrepareStatusData = std::make_shared<bytes>();
@@ -821,7 +821,7 @@ void RotatingPBFTEngine::onReceiveRawPrepareRequest(
 
 
 void RotatingPBFTEngine::onReceiveRawPrepareResponse(
-    std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message)
+    std::shared_ptr<bcos::p2p::P2PSession> _session, bcos::p2p::P2PMessage::Ptr _message)
 {
     PBFTMsgPacket::Ptr pbftMsgPacket = m_pbftMsgFactory->createPBFTMsgPacket();
     // invalid pbftMsgPacket
@@ -844,8 +844,8 @@ void RotatingPBFTEngine::onReceiveRawPrepareResponse(
     handlePrepareMsg(prepareReq, pbftMsgPacket->endpoint);
 }
 
-void RotatingPBFTEngine::handleP2PMessage(dev::p2p::NetworkException _exception,
-    std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message)
+void RotatingPBFTEngine::handleP2PMessage(bcos::p2p::NetworkException _exception,
+    std::shared_ptr<bcos::p2p::P2PSession> _session, bcos::p2p::P2PMessage::Ptr _message)
 {
     try
     {

@@ -22,7 +22,7 @@
 #include <map>
 #include <string>
 
-namespace dev
+namespace bcos
 {
 namespace storage
 {
@@ -101,4 +101,4 @@ extern std::map<SQLFieldType, std::string> SQLFieldTypeName;
 
 bool isHashField(const std::string& _key);
 }  // namespace storage
-}  // namespace dev
+}  // namespace bcos

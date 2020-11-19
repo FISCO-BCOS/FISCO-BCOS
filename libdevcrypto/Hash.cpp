@@ -20,7 +20,7 @@
  */
 
 #include "Hash.h"
-#include <libdevcore/RLP.h>
+#include <libutilities/RLP.h>
 #include <secp256k1_sha256.h>
 #include <cstdint>
 #include <cstdio>
@@ -28,9 +28,9 @@
 #include <cstring>
 
 using namespace std;
-using namespace dev;
+using namespace bcos;
 
-namespace dev
+namespace bcos
 {
 namespace keccak
 {
@@ -158,12 +158,12 @@ mkapply_ds(xorin, dst[i] ^= src[i])      // xorin
     }
 #define defkeccak(bits)                                                             \
     int keccak_##bits(uint8_t* out, size_t outlen, const uint8_t* in, size_t inlen) \
-    {                                                                             \
-        if (outlen > (bits / 8))                                                  \
-        {                                                                         \
-            return -1;                                                            \
-        }                                                                         \
-        return hash(out, outlen, in, inlen, 200 - (bits / 4), 0x01);              \
+    {                                                                               \
+        if (outlen > (bits / 8))                                                    \
+        {                                                                           \
+            return -1;                                                              \
+        }                                                                           \
+        return hash(out, outlen, in, inlen, 200 - (bits / 4), 0x01);                \
     }
 
 /*** FIPS202 SHAKE VOFs ***/
@@ -602,4 +602,4 @@ h160 ripemd160(bytesConstRef _input)
 #undef BYTES_TO_DWORD
 #undef RMDsize
 
-}  // namespace dev
+}  // namespace bcos

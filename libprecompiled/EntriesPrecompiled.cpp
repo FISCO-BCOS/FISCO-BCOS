@@ -22,10 +22,10 @@
 #include "EntryPrecompiled.h"
 #include <libethcore/ABI.h>
 
-using namespace dev;
-using namespace dev::blockverifier;
-using namespace dev::precompiled;
-using namespace dev::storage;
+using namespace bcos;
+using namespace bcos::blockverifier;
+using namespace bcos::precompiled;
+using namespace bcos::storage;
 
 const char* const ENTRIES_GET_INT = "get(int256)";
 const char* const ENTRIES_SIZE = "size()";
@@ -47,7 +47,7 @@ PrecompiledExecResult::Ptr EntriesPrecompiled::call(
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
 
-    dev::eth::ContractABI abi;
+    bcos::eth::ContractABI abi;
 
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
     callResult->gasPricer()->setMemUsed(param.size());

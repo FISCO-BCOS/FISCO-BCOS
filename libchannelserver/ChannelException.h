@@ -31,7 +31,7 @@
 #include <boost/exception/diagnostic_information.hpp>
 #pragma warning(pop)
 #pragma GCC diagnostic pop
-namespace dev
+namespace bcos
 {
 namespace channel
 {
@@ -54,4 +54,4 @@ private:
 
 }  // namespace channel
 
-}  // namespace dev
+}  // namespace bcos

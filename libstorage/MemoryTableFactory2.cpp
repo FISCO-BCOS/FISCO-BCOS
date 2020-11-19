@@ -23,9 +23,9 @@
 #include "MemoryTable2.h"
 #include "StorageException.h"
 #include <libblockverifier/ExecutiveContext.h>
-#include <libdevcore/Common.h>
-#include <libdevcore/FixedHash.h>
 #include <libdevcrypto/CryptoInterface.h>
+#include <libutilities/Common.h>
+#include <libutilities/FixedHash.h>
 #include <tbb/concurrent_vector.h>
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_sort.h>
@@ -35,8 +35,8 @@
 #include <utility>
 #include <vector>
 
-using namespace dev;
-using namespace dev::storage;
+using namespace bcos;
+using namespace bcos::storage;
 using namespace std;
 
 MemoryTableFactory2::MemoryTableFactory2()
@@ -259,7 +259,7 @@ h256 MemoryTableFactory2::hash()
     {
         if (g_BCOSConfig.SMCrypto())
         {
-            m_hash = dev::sm3(&data);
+            m_hash = bcos::sm3(&data);
         }
         else
         {
@@ -267,7 +267,7 @@ h256 MemoryTableFactory2::hash()
             // for now, to keep consistent with transction's implementation, we decide to use
             // keccak256(...) to calculate hash of the data. This `else` branch is just for
             // compatibility.
-            m_hash = dev::sha256(&data);
+            m_hash = bcos::sha256(&data);
         }
     }
     else
@@ -297,11 +297,11 @@ void MemoryTableFactory2::rollback(size_t _savepoint)
     }
 }
 
-void MemoryTableFactory2::commitDB(dev::h256 const&, int64_t _blockNumber)
+void MemoryTableFactory2::commitDB(bcos::h256 const&, int64_t _blockNumber)
 {
     auto start_time = utcTime();
     auto record_time = utcTime();
-    vector<dev::storage::TableData::Ptr> datas;
+    vector<bcos::storage::TableData::Ptr> datas;
 
     for (auto& dbIt : m_name2Table)
     {
@@ -317,7 +317,7 @@ void MemoryTableFactory2::commitDB(dev::h256 const&, int64_t _blockNumber)
         }
     }
     tbb::parallel_sort(datas.begin(), datas.end(),
-        [](const dev::storage::TableData::Ptr& lhs, const dev::storage::TableData::Ptr& rhs) {
+        [](const bcos::storage::TableData::Ptr& lhs, const bcos::storage::TableData::Ptr& rhs) {
             return lhs->info->name < rhs->info->name;
         });
     ssize_t currentStateIdx = -1;

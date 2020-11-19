@@ -25,9 +25,9 @@
 #include <libconsensus/rotating_pbft/RPBFTReqCache.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
-using namespace dev::consensus;
-using namespace dev::eth;
-namespace dev
+using namespace bcos::consensus;
+using namespace bcos::eth;
+namespace bcos
 {
 namespace test
 {
@@ -35,7 +35,7 @@ class RPBFTReqCacheTestFixture : public TestOutputHelperFixture
 {
 public:
     template <typename T>
-    std::shared_ptr<T> fakeRawPrepareStatus(dev::h256 const& _blockHash,
+    std::shared_ptr<T> fakeRawPrepareStatus(bcos::h256 const& _blockHash,
         int64_t const& _blockHeight, VIEWTYPE const& _view, IDXTYPE const& _idx)
     {
         std::shared_ptr<T> pbftMsg = std::make_shared<T>();
@@ -51,7 +51,7 @@ BOOST_FIXTURE_TEST_SUITE(RPBFTReqCacheTest, RPBFTReqCacheTestFixture)
 BOOST_AUTO_TEST_CASE(testCheckReceivedRawPrepareStatus)
 {
     RPBFTReqCache::Ptr rpbftReqCache = std::make_shared<RPBFTReqCache>();
-    dev::h256 blockHash = crypto::Hash("test");
+    bcos::h256 blockHash = crypto::Hash("test");
     int64_t blockHeight = 10;
     VIEWTYPE view = 10;
     IDXTYPE nodeIdx = 1;
@@ -87,7 +87,7 @@ BOOST_AUTO_TEST_CASE(testCheckReceivedRawPrepareStatus)
 BOOST_AUTO_TEST_CASE(testCheckAndRequestRawPrepare)
 {
     RPBFTReqCache::Ptr pbftReqCache = std::make_shared<RPBFTReqCache>();
-    dev::h256 hash = crypto::Hash("test");
+    bcos::h256 hash = crypto::Hash("test");
     int64_t blockNumber = 11;
     VIEWTYPE reqView = 12;
     IDXTYPE idx = 1;
@@ -115,12 +115,12 @@ BOOST_AUTO_TEST_CASE(testResponseRawPrepare)
 {
     RPBFTReqCache::Ptr reqCache = std::make_shared<RPBFTReqCache>();
     // rawPrepareCache miss
-    dev::h256 blockHash = crypto::Hash("test");
+    bcos::h256 blockHash = crypto::Hash("test");
     int64_t blockHeight = 20;
     VIEWTYPE view = 15;
     IDXTYPE nodeIdx = 4;
     auto pbftMsg = fakeRawPrepareStatus<PBFTMsg>(blockHash, blockHeight, view, nodeIdx);
-    std::shared_ptr<dev::bytes> encodedRawPrepare = std::make_shared<dev::bytes>();
+    std::shared_ptr<bcos::bytes> encodedRawPrepare = std::make_shared<bcos::bytes>();
     BOOST_CHECK_THROW(
         reqCache->responseRawPrepare(encodedRawPrepare, pbftMsg), RequestedRawPrepareNotFound);
 
@@ -136,4 +136,4 @@ BOOST_AUTO_TEST_CASE(testResponseRawPrepare)
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

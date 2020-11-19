@@ -25,20 +25,20 @@
 #include "RspBlockReq.h"
 #include "SyncMsgPacket.h"
 #include <libblockchain/BlockChainInterface.h>
-#include <libdevcore/FixedHash.h>
-#include <libdevcore/Worker.h>
 #include <libethcore/Exceptions.h>
 #include <libnetwork/Common.h>
 #include <libnetwork/Session.h>
 #include <libp2p/P2PInterface.h>
 #include <libtxpool/TxPoolInterface.h>
+#include <libutilities/FixedHash.h>
+#include <libutilities/Worker.h>
 #include <map>
 #include <queue>
 #include <set>
 #include <vector>
 
 
-namespace dev
+namespace bcos
 {
 namespace sync
 {
@@ -91,7 +91,7 @@ class SyncMasterStatus
 {
 public:
     using Ptr = std::shared_ptr<SyncMasterStatus>;
-    SyncMasterStatus(std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
+    SyncMasterStatus(std::shared_ptr<bcos::blockchain::BlockChainInterface> _blockChain,
         PROTOCOL_ID const& _protocolId, h256 const& _genesisHash, NodeID const& _nodeId)
       : genesisHash(_genesisHash),
         knownHighestNumber(0),
@@ -161,4 +161,4 @@ private:
 };
 
 }  // namespace sync
-}  // namespace dev
+}  // namespace bcos

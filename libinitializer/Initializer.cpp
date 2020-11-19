@@ -24,9 +24,9 @@
 #include "Common.h"
 #include "GlobalConfigureInitializer.h"
 
-using namespace dev;
-using namespace dev::initializer;
-using namespace dev::p2p;
+using namespace bcos;
+using namespace bcos::initializer;
+using namespace bcos::p2p;
 
 void Initializer::init(std::string const& _path)
 {

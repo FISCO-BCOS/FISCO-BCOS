@@ -28,7 +28,7 @@
 #include <tbb/concurrent_unordered_map.h>
 #include <string>
 
-namespace dev
+namespace bcos
 {
 namespace storagestate
 {
@@ -42,7 +42,7 @@ const char* const ACCOUNT_ALIVE = "alive";
 const char* const ACCOUNT_AUTHORITY = "authority";
 const char* const ACCOUNT_FROZEN = "frozen";
 
-class StorageState : public dev::executive::StateFace
+class StorageState : public bcos::executive::StateFace
 {
 public:
     explicit StorageState(u256 const& _accountStartNonce)
@@ -172,16 +172,16 @@ public:
 
     bool checkAuthority(Address const& _origin, Address const& _contract) const override;
 
-    void setMemoryTableFactory(std::shared_ptr<dev::storage::TableFactory> _memoryTableFactory)
+    void setMemoryTableFactory(std::shared_ptr<bcos::storage::TableFactory> _memoryTableFactory)
     {
         m_memoryTableFactory = _memoryTableFactory;
     }
 
 private:
     void createAccount(Address const& _address, u256 const& _nonce, u256 const& _amount = u256(0));
-    std::shared_ptr<dev::storage::Table> getTable(Address const& _address) const;
+    std::shared_ptr<bcos::storage::Table> getTable(Address const& _address) const;
     u256 m_accountStartNonce;
-    std::shared_ptr<dev::storage::TableFactory> m_memoryTableFactory;
+    std::shared_ptr<bcos::storage::TableFactory> m_memoryTableFactory;
 };
 }  // namespace storagestate
-}  // namespace dev
+}  // namespace bcos

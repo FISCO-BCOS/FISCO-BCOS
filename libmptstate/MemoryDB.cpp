@@ -20,13 +20,13 @@
  */
 
 #include "MemoryDB.h"
-#include "libdevcore/Common.h"
-#include "libdevcore/CommonData.h"
+#include "libutilities/Common.h"
+#include "libutilities/CommonData.h"
 
 using namespace std;
-using namespace dev;
+using namespace bcos;
 
-namespace dev
+namespace bcos
 {
 std::unordered_map<h256, std::string> MemoryDB::get() const
 {
@@ -172,4 +172,4 @@ h256Hash MemoryDB::keys() const
     return ret;
 }
 
-}  // namespace dev
+}  // namespace bcos

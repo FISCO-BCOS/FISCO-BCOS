@@ -33,18 +33,18 @@
 #include <boost/test/unit_test.hpp>
 #include <memory>
 
-using namespace dev;
-using namespace dev::stat;
-using namespace dev::ledger;
-namespace dev
+using namespace bcos;
+using namespace bcos::stat;
+using namespace bcos::ledger;
+namespace bcos
 {
 namespace test
 {
 class FakeLedgerForTest : public FakeLedger
 {
 public:
-    FakeLedgerForTest(std::shared_ptr<dev::p2p::P2PInterface> service,
-        dev::GROUP_ID const& _groupId, dev::KeyPair const& _keyPair, std::string const& _baseDir)
+    FakeLedgerForTest(std::shared_ptr<bcos::p2p::P2PInterface> service,
+        bcos::GROUP_ID const& _groupId, bcos::KeyPair const& _keyPair, std::string const& _baseDir)
       : FakeLedger(service, _groupId, _keyPair, _baseDir)
     {}
     /// init the ledger(called by initializer)
@@ -52,7 +52,7 @@ public:
     {
         m_param = _ledgerParams;
         /// init dbInitializer
-        m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param, 1);
+        m_dbInitializer = std::make_shared<bcos::ledger::DBInitializer>(m_param, 1);
         BOOST_CHECK(m_dbInitializer->storage() == nullptr);
         BOOST_CHECK(m_dbInitializer->stateFactory() == nullptr);
         BOOST_CHECK(m_dbInitializer->executiveContextFactory() == nullptr);
@@ -122,7 +122,7 @@ public:
         }
     }
     void regenerateGenesisMark() { auto params = std::dynamic_pointer_cast<LedgerParam>(m_param); }
-    void setDBInitializer(std::shared_ptr<dev::ledger::DBInitializer> _dbInitializer)
+    void setDBInitializer(std::shared_ptr<bcos::ledger::DBInitializer> _dbInitializer)
     {
         m_dbInitializer = _dbInitializer;
     }
@@ -138,7 +138,7 @@ BOOST_AUTO_TEST_CASE(testGensisConfig)
     boost::filesystem::remove_all("./data", err);
     TxPoolFixture txpool_creator;
     KeyPair key_pair = KeyPair::create();
-    dev::GROUP_ID groupId = 10;
+    bcos::GROUP_ID groupId = 10;
     std::string configurationPath = getTestPath().string() + "/fisco-bcos-data/group.10.genesis";
     FakeLedgerForTest fakeLedger(txpool_creator.m_topicService, groupId, key_pair, "");
     fakeLedger.init(configurationPath);
@@ -201,8 +201,8 @@ BOOST_AUTO_TEST_CASE(testGensisConfig)
     BOOST_CHECK(fakeLedger.getParam()->mutableTxParam().enableParallel == true);
 
     /// test DBInitializer
-    std::shared_ptr<dev::ledger::DBInitializer> dbInitializer =
-        std::make_shared<dev::ledger::DBInitializer>(fakeLedger.getParam(), groupId);
+    std::shared_ptr<bcos::ledger::DBInitializer> dbInitializer =
+        std::make_shared<bcos::ledger::DBInitializer>(fakeLedger.getParam(), groupId);
     /// init storageDB
     BOOST_CHECK(dbInitializer->storage() == nullptr);
     dbInitializer->initStorageDB();
@@ -210,7 +210,7 @@ BOOST_AUTO_TEST_CASE(testGensisConfig)
         boost::filesystem::exists(fakeLedger.getParam()->mutableStorageParam().path) == true);
     BOOST_CHECK(dbInitializer->storage() != nullptr);
     /// create stateDB
-    dev::h256 genesisHash = crypto::Hash("abc");
+    bcos::h256 genesisHash = crypto::Hash("abc");
     BOOST_CHECK(dbInitializer->stateFactory() == nullptr);
     BOOST_CHECK(dbInitializer->executiveContextFactory() == nullptr);
     /// create executiveContext and stateFactory
@@ -242,7 +242,7 @@ BOOST_AUTO_TEST_CASE(testInitLedger)
     TxPoolFixture txpool_creator;
     KeyPair key_pair = KeyPair::create();
     std::shared_ptr<LedgerManager> ledgerManager = std::make_shared<LedgerManager>();
-    dev::GROUP_ID groupId = 10;
+    bcos::GROUP_ID groupId = 10;
     std::string configurationPath = getTestPath().string() + "/fisco-bcos-data/group.10.genesis";
 
     std::shared_ptr<LedgerInterface> ledger =
@@ -277,7 +277,7 @@ BOOST_AUTO_TEST_CASE(testInitStorageLevelDB)
     TxPoolFixture txpool_creator;
     KeyPair key_pair = KeyPair::create();
     std::shared_ptr<LedgerManager> ledgerManager = std::make_shared<LedgerManager>();
-    dev::GROUP_ID groupId = 11;
+    bcos::GROUP_ID groupId = 11;
     std::string configurationPath = getTestPath().string() + "/fisco-bcos-data/group.11.genesis";
 
     std::shared_ptr<LedgerInterface> ledger =
@@ -295,7 +295,7 @@ BOOST_AUTO_TEST_CASE(testInitStorageRocksDB)
     TxPoolFixture txpool_creator;
     KeyPair key_pair = KeyPair::create();
     std::shared_ptr<LedgerManager> ledgerManager = std::make_shared<LedgerManager>();
-    dev::GROUP_ID groupId = 12;
+    bcos::GROUP_ID groupId = 12;
     std::string configurationPath = getTestPath().string() + "/fisco-bcos-data/group.12.genesis";
 
     std::shared_ptr<LedgerInterface> ledger =
@@ -312,7 +312,7 @@ BOOST_AUTO_TEST_CASE(testInitMPTLevelDB)
     TxPoolFixture txpool_creator;
     KeyPair key_pair = KeyPair::create();
     std::shared_ptr<LedgerManager> ledgerManager = std::make_shared<LedgerManager>();
-    dev::GROUP_ID groupId = 15;
+    bcos::GROUP_ID groupId = 15;
     std::string configurationPath = getTestPath().string() + "/fisco-bcos-data/group.15.genesis";
 
     std::shared_ptr<LedgerInterface> ledger =
@@ -324,4 +324,4 @@ BOOST_AUTO_TEST_CASE(testInitMPTLevelDB)
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

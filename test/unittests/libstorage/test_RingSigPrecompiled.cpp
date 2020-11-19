@@ -26,9 +26,9 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev;
-using namespace dev::blockverifier;
-using namespace dev::precompiled;
+using namespace bcos;
+using namespace bcos::blockverifier;
+using namespace bcos::precompiled;
 
 namespace test_RingSigPrecompiled
 {
@@ -39,9 +39,9 @@ struct RingSigPrecompiledFixture
         context = std::make_shared<ExecutiveContext>();
         ringSigPrecompiled = std::make_shared<RingSigPrecompiled>();
 
-        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
+        auto precompiledGasFactory = std::make_shared<bcos::precompiled::PrecompiledGasFactory>(0);
         auto precompiledExecResultFactory =
-            std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+            std::make_shared<bcos::precompiled::PrecompiledExecResultFactory>();
         precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
         ringSigPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     }
@@ -96,7 +96,7 @@ BOOST_AUTO_TEST_CASE(TestRingSigVerify)
         "AzMDIxMjQ3NjY0NzA0MjA3NTY0NTg4OTIyNzA5MTA0NjQ0OTgzMDcwMTAzOTA4NDY5MjkyODUxMTgzODAwNjM5ODk5"
         "MjA3Nzg2NTA2NjczNzQwODI5OTQyMDU1MDExODY4MTU4NDMzMzM1MjY2NDk2NDg4MDQxMjg0NjM2OTgzNzI1OTY2Nz"
         "gzOTM4NTQ4MjI2NzIxNTQ1MjU4NDYzOTcwNjA5NTMwMzQwOS4ifQ==";
-    dev::eth::ContractABI abi;
+    bcos::eth::ContractABI abi;
     bytes in = abi.abiIn("ringSigVerify(string,string,string)", signature, message1, paramInfo);
     auto callResult = ringSigPrecompiled->call(context, bytesConstRef(&in));
     bytes out = callResult->execResult();
@@ -118,7 +118,7 @@ BOOST_AUTO_TEST_CASE(TestRingSigVerify)
 
 BOOST_AUTO_TEST_CASE(ErrorFunc)
 {
-    dev::eth::ContractABI abi;
+    bcos::eth::ContractABI abi;
     bytes in = abi.abiIn("ringSigVerify(string)", std::string("2AE3FFE2"));
     auto callResult = ringSigPrecompiled->call(context, bytesConstRef(&in));
     bytes out = callResult->execResult();
@@ -137,7 +137,7 @@ BOOST_AUTO_TEST_CASE(ErrorFunc)
 BOOST_AUTO_TEST_CASE(InvalidInputs)
 {
     // situation1
-    dev::eth::ContractABI abi;
+    bcos::eth::ContractABI abi;
     bytes in = abi.abiIn("ringSigVerify(string,string,string)", std::string("2AE3FFE2"),
         std::string("2AE3FFE2"), std::string("2AE3FFE2"));
     auto callResult = ringSigPrecompiled->call(context, bytesConstRef(&in));

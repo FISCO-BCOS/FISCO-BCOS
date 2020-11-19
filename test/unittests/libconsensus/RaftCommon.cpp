@@ -22,18 +22,18 @@
  * @date: 2018-12-27
  */
 #include <libconsensus/raft/Common.h>
-#include <libdevcore/RLP.h>
+#include <libutilities/RLP.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <cstring>
 
 using namespace std;
-using namespace dev;
-using namespace dev::test;
-using namespace dev::consensus;
-using namespace dev::eth;
+using namespace bcos;
+using namespace bcos::test;
+using namespace bcos::consensus;
+using namespace bcos::eth;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -217,4 +217,4 @@ BOOST_AUTO_TEST_CASE(testMsgPacket)
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

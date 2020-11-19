@@ -23,17 +23,16 @@
 #include "Storage.h"
 #include "Table.h"
 #include <json/json.h>
-#include <libdevcore/FixedHash.h>
-#include <libdevcore/Guards.h>
 #include <libdevcrypto/CryptoInterface.h>
 #include <libprecompiled/Common.h>
+#include <libutilities/FixedHash.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 #include <set>
 #include <type_traits>
 
-namespace dev
+namespace bcos
 {
 namespace storage
 {
@@ -81,7 +80,7 @@ public:
         return it != m_tableInfo->authorizedAddress.cend();
     }
 
-    dev::storage::TableData::Ptr dump() override;
+    bcos::storage::TableData::Ptr dump() override;
 
     void rollback(const Change& _change) override;
 
@@ -93,7 +92,7 @@ private:
 
 
     Entries::Ptr selectNoLock(const std::string& key, Condition::Ptr condition);
-    dev::storage::TableData::Ptr dumpWithoutOptimize();
+    bcos::storage::TableData::Ptr dumpWithoutOptimize();
 
     tbb::concurrent_unordered_map<std::string, Entries::Ptr> m_newEntries;
     tbb::concurrent_unordered_map<uint64_t, Entry::Ptr> m_dirty;
@@ -149,8 +148,8 @@ private:
     void proccessLimit(const Condition::Ptr& condition, const Entries::Ptr& entries,
         const Entries::Ptr& resultEntries);
 
-    dev::h256 m_hash;
-    dev::storage::TableData::Ptr m_tableData;
+    bcos::h256 m_hash;
+    bcos::storage::TableData::Ptr m_tableData;
 };
 }  // namespace storage
-}  // namespace dev
+}  // namespace bcos

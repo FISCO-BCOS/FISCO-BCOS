@@ -25,11 +25,10 @@
 #include "Table.h"
 #include <json/json.h>
 #include <leveldb/db.h>
-#include <libdevcore/BasicLevelDB.h>
-#include <libdevcore/FixedHash.h>
-#include <libdevcore/Guards.h>
+#include <libutilities/BasicLevelDB.h>
+#include <libutilities/FixedHash.h>
 
-namespace dev
+namespace bcos
 {
 namespace storage
 {
@@ -44,15 +43,15 @@ public:
         Condition::Ptr condition = nullptr) override;
     size_t commit(int64_t num, const std::vector<TableData::Ptr>& datas) override;
 
-    void setDB(std::shared_ptr<dev::db::BasicLevelDB> db);
+    void setDB(std::shared_ptr<bcos::db::BasicLevelDB> db);
 
 private:
-    size_t commitTableDataRange(std::shared_ptr<dev::db::LevelDBWriteBatch>& batch,
+    size_t commitTableDataRange(std::shared_ptr<bcos::db::LevelDBWriteBatch>& batch,
         TableData::Ptr tableData, int64_t num, size_t from, size_t to);
-    std::shared_ptr<dev::db::BasicLevelDB> m_db;
-    dev::SharedMutex m_remoteDBMutex;
+    std::shared_ptr<bcos::db::BasicLevelDB> m_db;
+    bcos::SharedMutex m_remoteDBMutex;
 };
 
 }  // namespace storage
 
-}  // namespace dev
+}  // namespace bcos

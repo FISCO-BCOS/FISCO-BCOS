@@ -33,8 +33,6 @@
 #include "rocksdb/options.h"
 #include "rocksdb/table.h"
 #include <libconfig/GlobalConfigure.h>
-#include <libdevcore/Common.h>
-#include <libdevcore/Exceptions.h>
 #include <libmptstate/MPTStateFactory.h>
 #include <libprecompiled/Precompiled.h>
 #include <libsecurity/EncryptedLevelDB.h>
@@ -46,27 +44,29 @@
 #include <libstorage/SQLStorage.h>
 #include <libstorage/ZdbStorage.h>
 #include <libstoragestate/StorageStateFactory.h>
+#include <libutilities/Common.h>
+#include <libutilities/Exceptions.h>
 #include <boost/lexical_cast.hpp>
 
 using namespace std;
-using namespace dev;
-using namespace dev::storage;
-using namespace dev::blockverifier;
-using namespace dev::db;
-using namespace dev::ledger;
-using namespace dev::eth;
-using namespace dev::mptstate;
-using namespace dev::executive;
-using namespace dev::storagestate;
+using namespace bcos;
+using namespace bcos::storage;
+using namespace bcos::blockverifier;
+using namespace bcos::db;
+using namespace bcos::ledger;
+using namespace bcos::eth;
+using namespace bcos::mptstate;
+using namespace bcos::executive;
+using namespace bcos::storagestate;
 
 void DBInitializer::initStorageDB()
 {
     DBInitializer_LOG(INFO) << LOG_BADGE("initStorageDB");
-    if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "LevelDB"))
+    if (!bcos::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "LevelDB"))
     {
         initLevelDBStorage();
     }
-    else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "External"))
+    else if (!bcos::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "External"))
     {
         // only support external when "supported_version < 2.3.0"
         if (g_BCOSConfig.version() < V2_3_0)
@@ -85,17 +85,17 @@ void DBInitializer::initStorageDB()
                     "Only support external when supported_version is lower than 2.3.0"));
         }
     }
-    else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "MySQL"))
+    else if (!bcos::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "MySQL"))
     {
         auto storage = initZdbStorage();
         initTableFactory2(storage, m_param);
     }
-    else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "RocksDB"))
+    else if (!bcos::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "RocksDB"))
     {
         auto storage = initRocksDBStorage(m_param);
         initTableFactory2(storage, m_param);
     }
-    else if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "Scalable"))
+    else if (!bcos::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "Scalable"))
     {
         auto storage = initScalableStorage(m_param);
         initTableFactory2(storage, m_param);
@@ -117,7 +117,7 @@ void DBInitializer::initLevelDBStorage()
     DBInitializer_LOG(INFO) << LOG_BADGE("initLevelDBStorage");
     /// open and init the levelDB
     leveldb::Options ldb_option;
-    dev::db::BasicLevelDB* pleveldb = nullptr;
+    bcos::db::BasicLevelDB* pleveldb = nullptr;
     try
     {
         boost::filesystem::create_directories(m_param->mutableStorageParam().path);
@@ -148,12 +148,12 @@ void DBInitializer::initLevelDBStorage()
         }
         DBInitializer_LOG(INFO) << LOG_BADGE("initLevelDBStorage") << LOG_KV("status", status.ok());
         std::shared_ptr<LevelDBStorage> leveldbStorage = std::make_shared<LevelDBStorage>();
-        std::shared_ptr<dev::db::BasicLevelDB> leveldb_handler =
-            std::shared_ptr<dev::db::BasicLevelDB>(pleveldb);
+        std::shared_ptr<bcos::db::BasicLevelDB> leveldb_handler =
+            std::shared_ptr<bcos::db::BasicLevelDB>(pleveldb);
         leveldbStorage->setDB(leveldb_handler);
         m_storage = leveldbStorage;
 
-        auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory>();
+        auto tableFactoryFactory = std::make_shared<bcos::storage::MemoryTableFactoryFactory>();
         tableFactoryFactory->setStorage(m_storage);
 
         m_tableFactoryFactory = tableFactoryFactory;
@@ -166,12 +166,12 @@ void DBInitializer::initLevelDBStorage()
     }
 }
 
-int64_t dev::ledger::getBlockNumberFromStorage(Storage::Ptr _storage)
+int64_t bcos::ledger::getBlockNumberFromStorage(Storage::Ptr _storage)
 {
     int64_t startNum = -1;
-    auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
+    auto tableFactoryFactory = std::make_shared<bcos::storage::MemoryTableFactoryFactory2>();
     tableFactoryFactory->setStorage(_storage);
-    auto memoryTableFactory = tableFactoryFactory->newTableFactory(dev::h256(), startNum);
+    auto memoryTableFactory = tableFactoryFactory->newTableFactory(bcos::h256(), startNum);
     Table::Ptr tb = memoryTableFactory->openTable(SYS_CURRENT_STATE, false);
     auto entries = tb->select(SYS_KEY_CURRENT_NUMBER, tb->newCondition());
     if (entries->size() > 0)
@@ -184,7 +184,8 @@ int64_t dev::ledger::getBlockNumberFromStorage(Storage::Ptr _storage)
 }
 
 void DBInitializer::recoverFromBinaryLog(
-    std::shared_ptr<dev::storage::BinLogHandler> _binaryLogger, dev::storage::Storage::Ptr _storage)
+    std::shared_ptr<bcos::storage::BinLogHandler> _binaryLogger,
+    bcos::storage::Storage::Ptr _storage)
 {
     int64_t startNum = getBlockNumberFromStorage(_storage);
     // getMissingBlocksFromBinLog from (startNum,lastBlockNum]
@@ -264,7 +265,7 @@ void DBInitializer::initTableFactory2(
                                        _param->mutableStorageParam().maxForwardBlock);
     }
 
-    auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
+    auto tableFactoryFactory = std::make_shared<bcos::storage::MemoryTableFactoryFactory2>();
     if (_param->mutableStorageParam().binaryLog)
     {
         auto binaryLogStorage = make_shared<BinaryLogStorage>();
@@ -298,7 +299,7 @@ void DBInitializer::initTableFactory2(
 }
 
 
-dev::storage::Storage::Ptr DBInitializer::initSQLStorage()
+bcos::storage::Storage::Ptr DBInitializer::initSQLStorage()
 {
     DBInitializer_LOG(INFO) << LOG_BADGE("initSQLStorage");
 
@@ -313,7 +314,7 @@ dev::storage::Storage::Ptr DBInitializer::initSQLStorage()
 }
 
 
-dev::storage::Storage::Ptr DBInitializer::initRocksDBStorage(
+bcos::storage::Storage::Ptr DBInitializer::initRocksDBStorage(
     std::shared_ptr<LedgerParamInterface> _param)
 {
     DBInitializer_LOG(INFO) << LOG_BADGE("initRocksDBStorage");
@@ -336,7 +337,7 @@ dev::storage::Storage::Ptr DBInitializer::initRocksDBStorage(
     }
 }
 
-dev::storage::Storage::Ptr DBInitializer::initScalableStorage(
+bcos::storage::Storage::Ptr DBInitializer::initScalableStorage(
     std::shared_ptr<LedgerParamInterface> _param)
 {
     DBInitializer_LOG(INFO) << LOG_BADGE("initScalableStorage");
@@ -425,7 +426,7 @@ void DBInitializer::setRemoteBlockNumber(
     catch (std::exception& e)
     {
         BOOST_THROW_EXCEPTION(
-            dev::StorageError() << errinfo_comment(boost::diagnostic_information(e)));
+            bcos::StorageError() << errinfo_comment(boost::diagnostic_information(e)));
     }
 }
 
@@ -438,7 +439,7 @@ void DBInitializer::unsupportedFeatures(std::string const& desc)
     }
 }
 
-dev::storage::Storage::Ptr DBInitializer::initZdbStorage()
+bcos::storage::Storage::Ptr DBInitializer::initZdbStorage()
 {
     DBInitializer_LOG(INFO) << LOG_BADGE("initStorageDB") << LOG_BADGE("initZdbStorage");
 
@@ -477,8 +478,8 @@ void DBInitializer::createExecutiveContext()
     m_executiveContextFactory->setTableFactoryFactory(m_tableFactoryFactory);
     // create precompiled related factory
     auto precompiledResultFactory =
-        std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
-    auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(
+        std::make_shared<bcos::precompiled::PrecompiledExecResultFactory>();
+    auto precompiledGasFactory = std::make_shared<bcos::precompiled::PrecompiledGasFactory>(
         m_param->mutableGenesisParam().evmFlags);
     precompiledResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
     m_executiveContextFactory->setPrecompiledExecResultFactory(precompiledResultFactory);
@@ -489,17 +490,17 @@ void DBInitializer::createExecutiveContext()
 }
 
 /// create stateFactory
-void DBInitializer::createStateFactory(dev::h256 const& genesisHash)
+void DBInitializer::createStateFactory(bcos::h256 const& genesisHash)
 {
     DBInitializer_LOG(INFO) << LOG_BADGE("createStateFactory")
                             << LOG_KV("type", m_param->mutableStateParam().type);
-    if (dev::stringCmpIgnoreCase(m_param->mutableStateParam().type, "mpt") == 0)
+    if (bcos::stringCmpIgnoreCase(m_param->mutableStateParam().type, "mpt") == 0)
     {
         m_stateFactory = std::make_shared<MPTStateFactory>(
             u256(0x0), m_param->baseDir(), genesisHash, WithExisting::Trust);
         DBInitializer_LOG(INFO) << LOG_DESC("create MptState success");
     }
-    else if (dev::stringCmpIgnoreCase(m_param->mutableStateParam().type, "storage") == 0)
+    else if (bcos::stringCmpIgnoreCase(m_param->mutableStateParam().type, "storage") == 0)
     {
         createStorageState();
     }
@@ -521,8 +522,8 @@ void DBInitializer::createStorageState()
     DBInitializer_LOG(INFO) << LOG_DESC("createStorageState SUCC");
 }
 
-Storage::Ptr dev::ledger::createRocksDBStorage(const std::string& _dbPath, const bytes& _encryptKey,
-    bool _disableWAL = false, bool _enableCache = true)
+Storage::Ptr bcos::ledger::createRocksDBStorage(const std::string& _dbPath,
+    const bytes& _encryptKey, bool _disableWAL = false, bool _enableCache = true)
 {
     boost::filesystem::create_directories(_dbPath);
 
@@ -553,7 +554,7 @@ Storage::Ptr dev::ledger::createRocksDBStorage(const std::string& _dbPath, const
     return rocksdbStorage;
 }
 
-dev::storage::Storage::Ptr dev::ledger::createSQLStorage(
+bcos::storage::Storage::Ptr bcos::ledger::createSQLStorage(
     std::shared_ptr<LedgerParamInterface> _param, ChannelRPCServer::Ptr _channelRPCServer,
     std::function<void(std::exception& e)> _fatalHandler)
 {
@@ -565,7 +566,7 @@ dev::storage::Storage::Ptr dev::ledger::createSQLStorage(
     return sqlStorage;
 }
 
-dev::storage::Storage::Ptr dev::ledger::createZdbStorage(
+bcos::storage::Storage::Ptr bcos::ledger::createZdbStorage(
     std::shared_ptr<LedgerParamInterface> _param,
     std::function<void(std::exception& e)> _fatalHandler)
 {

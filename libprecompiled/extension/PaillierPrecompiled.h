@@ -24,7 +24,7 @@
 #include <libprecompiled/Common.h>
 
 class CallPaillier;
-namespace dev
+namespace bcos
 {
 namespace precompiled
 {
@@ -35,14 +35,14 @@ contract Paillier
 }
 #endif
 
-class PaillierPrecompiled : public dev::precompiled::Precompiled
+class PaillierPrecompiled : public bcos::precompiled::Precompiled
 {
 public:
     typedef std::shared_ptr<PaillierPrecompiled> Ptr;
     PaillierPrecompiled();
     virtual ~PaillierPrecompiled(){};
 
-    PrecompiledExecResult::Ptr call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+    PrecompiledExecResult::Ptr call(std::shared_ptr<bcos::blockverifier::ExecutiveContext> context,
         bytesConstRef param, Address const& origin = Address(),
         Address const& sender = Address()) override;
 
@@ -51,4 +51,4 @@ private:
 };
 
 }  // namespace precompiled
-}  // namespace dev
+}  // namespace bcos

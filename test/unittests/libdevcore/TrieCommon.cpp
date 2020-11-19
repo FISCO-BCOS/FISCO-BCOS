@@ -15,14 +15,14 @@
     along with cpp-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <libdevcore/Common.h>
-#include <libdevcore/TrieCommon.h>
+#include <libutilities/Common.h>
+#include <libutilities/TrieCommon.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace std;
-using namespace dev;
-using namespace dev::test;
+using namespace bcos;
+using namespace bcos::test;
 
 BOOST_AUTO_TEST_SUITE(Crypto)
 

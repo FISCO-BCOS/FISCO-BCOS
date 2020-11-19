@@ -27,39 +27,39 @@
 #include <boost/timer.hpp>
 #include <thread>
 
-using namespace dev::eth;
-using namespace dev::blockchain;
+using namespace bcos::eth;
+using namespace bcos::blockchain;
 
 #define NONCECHECKER_LOG(LEVEL) \
     LOG(LEVEL) << LOG_BADGE("TXPOOL") << LOG_BADGE("TransactionNonceChecker")
 
-namespace dev
+namespace bcos
 {
 namespace txpool
 {
-using NonceVec = std::vector<dev::eth::NonceKeyType>;
+using NonceVec = std::vector<bcos::eth::NonceKeyType>;
 class TransactionNonceCheck : public CommonTransactionNonceCheck
 {
 public:
-    TransactionNonceCheck(std::shared_ptr<dev::blockchain::BlockChainInterface> const& _blockChain)
+    TransactionNonceCheck(std::shared_ptr<bcos::blockchain::BlockChainInterface> const& _blockChain)
       : CommonTransactionNonceCheck(), m_blockChain(_blockChain)
     {
         init();
     }
     ~TransactionNonceCheck() {}
     void init();
-    bool ok(dev::eth::Transaction const& _transaction);
+    bool ok(bcos::eth::Transaction const& _transaction);
     void updateCache(bool _rebuild = false);
     unsigned const& maxBlockLimit() const { return m_maxBlockLimit; }
     void setBlockLimit(unsigned const& limit) { m_maxBlockLimit = limit; }
 
-    bool isBlockLimitOk(dev::eth::Transaction const& _trans);
+    bool isBlockLimitOk(bcos::eth::Transaction const& _trans);
 
-    std::shared_ptr<dev::txpool::NonceVec> getNonceAndUpdateCache(
+    std::shared_ptr<bcos::txpool::NonceVec> getNonceAndUpdateCache(
         int64_t const& blockNumber, bool const& update = true);
 
 private:
-    std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
+    std::shared_ptr<bcos::blockchain::BlockChainInterface> m_blockChain;
     /// cache the block nonce to in case of accessing the DB to get nonces of given block frequently
     /// key: block number
     /// value: all the nonces of a given block
@@ -72,4 +72,4 @@ private:
     int64_t m_blockNumber;
 };
 }  // namespace txpool
-}  // namespace dev
+}  // namespace bcos

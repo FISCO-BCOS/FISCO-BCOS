@@ -25,7 +25,7 @@
 #include <libstorage/Storage.h>
 #include <libstorage/Table.h>
 
-namespace dev
+namespace bcos
 {
 namespace precompiled
 {
@@ -41,36 +41,36 @@ public:
     ExecutiveContextFactory()
     {
         m_precompiledContract.insert(std::make_pair(
-            dev::Address(1), dev::eth::PrecompiledContract(
-                                 3000, 0, dev::eth::PrecompiledRegistrar::executor("ecrecover"))));
+            bcos::Address(1), bcos::eth::PrecompiledContract(3000, 0,
+                                  bcos::eth::PrecompiledRegistrar::executor("ecrecover"))));
         m_precompiledContract.insert(std::make_pair(
-            dev::Address(2), dev::eth::PrecompiledContract(
-                                 60, 12, dev::eth::PrecompiledRegistrar::executor("sha256"))));
+            bcos::Address(2), bcos::eth::PrecompiledContract(
+                                  60, 12, bcos::eth::PrecompiledRegistrar::executor("sha256"))));
         m_precompiledContract.insert(std::make_pair(
-            dev::Address(3), dev::eth::PrecompiledContract(
-                                 600, 120, dev::eth::PrecompiledRegistrar::executor("ripemd160"))));
+            bcos::Address(3), bcos::eth::PrecompiledContract(600, 120,
+                                  bcos::eth::PrecompiledRegistrar::executor("ripemd160"))));
         m_precompiledContract.insert(std::make_pair(
-            dev::Address(4), dev::eth::PrecompiledContract(
-                                 15, 3, dev::eth::PrecompiledRegistrar::executor("identity"))));
+            bcos::Address(4), bcos::eth::PrecompiledContract(
+                                  15, 3, bcos::eth::PrecompiledRegistrar::executor("identity"))));
         if (g_BCOSConfig.version() >= V2_5_0)
         {
-            m_precompiledContract.insert({dev::Address{0x5},
-                dev::eth::PrecompiledContract(dev::eth::PrecompiledRegistrar::pricer("modexp"),
-                    dev::eth::PrecompiledRegistrar::executor("modexp"))});
-            m_precompiledContract.insert({dev::Address{0x6},
-                dev::eth::PrecompiledContract(
-                    150, 0, dev::eth::PrecompiledRegistrar::executor("alt_bn128_G1_add"))});
-            m_precompiledContract.insert({dev::Address{0x7},
-                dev::eth::PrecompiledContract(
-                    6000, 0, dev::eth::PrecompiledRegistrar::executor("alt_bn128_G1_mul"))});
-            m_precompiledContract.insert({dev::Address{0x8},
-                dev::eth::PrecompiledContract(
-                    dev::eth::PrecompiledRegistrar::pricer("alt_bn128_pairing_product"),
-                    dev::eth::PrecompiledRegistrar::executor("alt_bn128_pairing_product"))});
-            m_precompiledContract.insert({dev::Address{0x9},
-                dev::eth::PrecompiledContract(
-                    dev::eth::PrecompiledRegistrar::pricer("blake2_compression"),
-                    dev::eth::PrecompiledRegistrar::executor("blake2_compression"))});
+            m_precompiledContract.insert({bcos::Address{0x5},
+                bcos::eth::PrecompiledContract(bcos::eth::PrecompiledRegistrar::pricer("modexp"),
+                    bcos::eth::PrecompiledRegistrar::executor("modexp"))});
+            m_precompiledContract.insert({bcos::Address{0x6},
+                bcos::eth::PrecompiledContract(
+                    150, 0, bcos::eth::PrecompiledRegistrar::executor("alt_bn128_G1_add"))});
+            m_precompiledContract.insert({bcos::Address{0x7},
+                bcos::eth::PrecompiledContract(
+                    6000, 0, bcos::eth::PrecompiledRegistrar::executor("alt_bn128_G1_mul"))});
+            m_precompiledContract.insert({bcos::Address{0x8},
+                bcos::eth::PrecompiledContract(
+                    bcos::eth::PrecompiledRegistrar::pricer("alt_bn128_pairing_product"),
+                    bcos::eth::PrecompiledRegistrar::executor("alt_bn128_pairing_product"))});
+            m_precompiledContract.insert({bcos::Address{0x9},
+                bcos::eth::PrecompiledContract(
+                    bcos::eth::PrecompiledRegistrar::pricer("blake2_compression"),
+                    bcos::eth::PrecompiledRegistrar::executor("blake2_compression"))});
         }
     };
     virtual ~ExecutiveContextFactory(){};
@@ -78,27 +78,27 @@ public:
     virtual void initExecutiveContext(
         BlockInfo blockInfo, h256 const& stateRoot, ExecutiveContext::Ptr context);
 
-    virtual void setStateStorage(dev::storage::Storage::Ptr stateStorage);
+    virtual void setStateStorage(bcos::storage::Storage::Ptr stateStorage);
 
     virtual void setStateFactory(
-        std::shared_ptr<dev::executive::StateFactoryInterface> stateFactoryInterface);
+        std::shared_ptr<bcos::executive::StateFactoryInterface> stateFactoryInterface);
 
-    virtual void setTableFactoryFactory(dev::storage::TableFactoryFactory::Ptr tableFactoryFactory)
+    virtual void setTableFactoryFactory(bcos::storage::TableFactoryFactory::Ptr tableFactoryFactory)
     {
         m_tableFactoryFactory = tableFactoryFactory;
     }
 
     void setPrecompiledExecResultFactory(
-        std::shared_ptr<dev::precompiled::PrecompiledExecResultFactory>
+        std::shared_ptr<bcos::precompiled::PrecompiledExecResultFactory>
             _precompiledExecResultFactory);
 
 private:
-    dev::storage::TableFactoryFactory::Ptr m_tableFactoryFactory;
-    dev::storage::Storage::Ptr m_stateStorage;
-    std::shared_ptr<dev::executive::StateFactoryInterface> m_stateFactoryInterface;
-    std::unordered_map<Address, dev::eth::PrecompiledContract> m_precompiledContract;
+    bcos::storage::TableFactoryFactory::Ptr m_tableFactoryFactory;
+    bcos::storage::Storage::Ptr m_stateStorage;
+    std::shared_ptr<bcos::executive::StateFactoryInterface> m_stateFactoryInterface;
+    std::unordered_map<Address, bcos::eth::PrecompiledContract> m_precompiledContract;
 
-    std::shared_ptr<dev::precompiled::PrecompiledExecResultFactory> m_precompiledExecResultFactory;
+    std::shared_ptr<bcos::precompiled::PrecompiledExecResultFactory> m_precompiledExecResultFactory;
 
     void setTxGasLimitToContext(ExecutiveContext::Ptr context);
     void registerUserPrecompiled(ExecutiveContext::Ptr context);
@@ -106,4 +106,4 @@ private:
 
 }  // namespace blockverifier
 
-}  // namespace dev
+}  // namespace bcos

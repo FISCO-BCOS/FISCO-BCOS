@@ -21,7 +21,7 @@
  * @date 2018-08-24
  */
 
-#include <libdevcore/LevelDB.h>
+#include <libutilities/LevelDB.h>
 #include <boost/test/unit_test.hpp>
 
 
@@ -30,9 +30,9 @@ BOOST_AUTO_TEST_SUITE(LevelDB)
 BOOST_AUTO_TEST_CASE(testLevelDBKeyExist)
 {
     boost::filesystem::path path("./test_level_db.db");
-    dev::db::LevelDB ldb(path);
+    bcos::db::LevelDB ldb(path);
     std::string key = "hellow";
-    dev::db::Slice sliceKey(key.data(), key.size());
+    bcos::db::Slice sliceKey(key.data(), key.size());
     BOOST_CHECK(ldb.exists(sliceKey) == false);
     boost::filesystem::remove_all(path);
 }
@@ -40,11 +40,11 @@ BOOST_AUTO_TEST_CASE(testLevelDBKeyExist)
 BOOST_AUTO_TEST_CASE(testLevelDBKeyValue)
 {
     boost::filesystem::path path("./test_level_db.db");
-    dev::db::LevelDB ldb(path);
+    bcos::db::LevelDB ldb(path);
     std::string key = "hello";
     std::string value = "world";
-    dev::db::Slice sliceKey(key.data(), key.size());
-    dev::db::Slice sliceValue(value.data(), value.size());
+    bcos::db::Slice sliceKey(key.data(), key.size());
+    bcos::db::Slice sliceValue(value.data(), value.size());
     ldb.insert(sliceKey, sliceValue);
 
     // check key exist
@@ -62,15 +62,15 @@ BOOST_AUTO_TEST_CASE(testLevelDBKeyValue)
 BOOST_AUTO_TEST_CASE(testLevelDBBatch)
 {
     boost::filesystem::path path("./test_level_db.db");
-    dev::db::LevelDB ldb(path);
+    bcos::db::LevelDB ldb(path);
     auto wb = ldb.createWriteBatch();
 
     for (int i = 0; i < 10; i++)
     {
         std::string key = "hello" + std::to_string(i);
         std::string value = "world" + std::to_string(i);
-        dev::db::Slice sliceKey(key.data(), key.size());
-        dev::db::Slice sliceValue(value.data(), value.size());
+        bcos::db::Slice sliceKey(key.data(), key.size());
+        bcos::db::Slice sliceValue(value.data(), value.size());
         wb->insert(sliceKey, sliceValue);
         BOOST_CHECK(ldb.exists(sliceKey) == false);
     }
@@ -81,7 +81,7 @@ BOOST_AUTO_TEST_CASE(testLevelDBBatch)
     {
         std::string key = "hello" + std::to_string(i);
         std::string value = "world" + std::to_string(i);
-        dev::db::Slice sliceKey(key.data(), key.size());
+        bcos::db::Slice sliceKey(key.data(), key.size());
         std::string ret = ldb.lookup(sliceKey);
         BOOST_CHECK(ret == value);
         ldb.kill(sliceKey);
@@ -93,16 +93,16 @@ BOOST_AUTO_TEST_CASE(testLevelDBBatch)
 BOOST_AUTO_TEST_CASE(testLevelDBForeach)
 {
     boost::filesystem::path path("./test_level_db.db");
-    dev::db::LevelDB ldb(path);
+    bcos::db::LevelDB ldb(path);
 
     std::string key = "hello";
     std::string value = "world";
-    dev::db::Slice sliceKey(key.data(), key.size());
-    dev::db::Slice sliceValue(value.data(), value.size());
+    bcos::db::Slice sliceKey(key.data(), key.size());
+    bcos::db::Slice sliceValue(value.data(), value.size());
     ldb.insert(sliceKey, sliceValue);
 
     int count = 0;
-    auto f = [&](dev::db::Slice, dev::db::Slice) {
+    auto f = [&](bcos::db::Slice, bcos::db::Slice) {
         count++;
         return true;
     };

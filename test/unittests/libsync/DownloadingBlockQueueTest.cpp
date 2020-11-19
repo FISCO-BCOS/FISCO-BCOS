@@ -29,11 +29,11 @@
 #include <memory>
 
 using namespace std;
-using namespace dev;
-using namespace dev::eth;
-using namespace dev::sync;
+using namespace bcos;
+using namespace bcos::eth;
+using namespace bcos::sync;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -118,4 +118,4 @@ BOOST_AUTO_TEST_CASE(AllTest)
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

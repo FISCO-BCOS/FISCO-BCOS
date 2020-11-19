@@ -22,10 +22,10 @@
 #pragma once
 
 #include "MemoryDB.h"
-#include "libdevcore/dbfwd.h"
+#include "libutilities/dbfwd.h"
 #include <memory>
 
-namespace dev
+namespace bcos
 {
 class OverlayDB : public MemoryDB
 {
@@ -57,4 +57,4 @@ private:
     std::shared_ptr<db::DatabaseFace> m_db;
 };
 
-}  // namespace dev
+}  // namespace bcos

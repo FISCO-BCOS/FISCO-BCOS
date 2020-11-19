@@ -23,15 +23,15 @@
 
 #include <iostream>
 
-#include "libdevcore/Assertions.h"
-#include "libdevcore/Exceptions.h"
+#include "libutilities/Assertions.h"
+#include "libutilities/Exceptions.h"
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
 #include <vector>
 
-using namespace dev;
-namespace dev
+using namespace bcos;
+namespace bcos
 {
 namespace test
 {
@@ -99,18 +99,12 @@ BOOST_AUTO_TEST_CASE(testAssertEqualAux)
 /// test micro "assertThrow"
 BOOST_AUTO_TEST_CASE(testAssertThrow)
 {
-    BOOST_REQUIRE_NO_THROW(assertThrow(true, ExternalFunctionFailure, "ExternalFunctionFailure"));
-    BOOST_CHECK_THROW(assertThrow(false, ExternalFunctionFailure, "ExternalFunctionFailure"),
-        ExternalFunctionFailure);
     BOOST_CHECK_THROW(assertThrow(false, BadRoot, "BadRoot Throw"), BadRoot);
 }
 
 /// test template function "testAssertThrow"
 BOOST_AUTO_TEST_CASE(testAssertThrowAux)
 {
-    BOOST_REQUIRE_NO_THROW(
-        assertThrowAux<ExternalFunctionFailure>(true, "ExternalFunctionFailure No Throw", 20,
-            "test/unittests/Assertions.cpp", "testAssertThrow"));
     BOOST_CHECK_THROW(assertThrowAux<InterfaceNotSupported>(
                           false, "InterfaceNotSupported Throw", __LINE__, __FILE__, ETH_FUNC),
         InterfaceNotSupported);
@@ -120,4 +114,4 @@ BOOST_AUTO_TEST_CASE(testAssertThrowAux)
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

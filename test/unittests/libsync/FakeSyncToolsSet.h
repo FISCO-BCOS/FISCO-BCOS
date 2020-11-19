@@ -28,11 +28,11 @@
 #include <test/unittests/libethcore/FakeBlock.h>
 #include <test/unittests/libtxpool/FakeBlockChain.h>
 #include <memory>
-namespace dev
+namespace bcos
 {
 namespace test
 {
-class FakeBaseSession : public dev::network::SessionFace
+class FakeBaseSession : public bcos::network::SessionFace
 {
 public:
     FakeBaseSession()
@@ -41,19 +41,19 @@ public:
     }
     virtual NodeIPEndpoint nodeIPEndpoint() const override { return m_endpoint; }
     virtual void start() override {}
-    virtual void disconnect(dev::network::DisconnectReason) override {}
+    virtual void disconnect(bcos::network::DisconnectReason) override {}
 
-    virtual void asyncSendMessage(dev::network::Message::Ptr, dev::network::Options = Options(),
+    virtual void asyncSendMessage(bcos::network::Message::Ptr, bcos::network::Options = Options(),
         CallbackFunc = CallbackFunc()) override
     {}
     void setMessageHandler(std::function<void(NetworkException,
-            std::shared_ptr<dev::network::SessionFace>, dev::network::Message::Ptr)>) override
+            std::shared_ptr<bcos::network::SessionFace>, bcos::network::Message::Ptr)>) override
     {}
     bool actived() const override { return true; }
 
-    virtual std::shared_ptr<dev::network::SocketFace> socket() override
+    virtual std::shared_ptr<bcos::network::SocketFace> socket() override
     {
-        return std::shared_ptr<dev::network::SocketFace>();
+        return std::shared_ptr<bcos::network::SocketFace>();
     }
 
 private:
@@ -72,25 +72,25 @@ public:
 
     virtual void start() override { m_run = true; }
 
-    virtual void stop(dev::network::DisconnectReason) override { m_run = false; }
+    virtual void stop(bcos::network::DisconnectReason) override { m_run = false; }
 
     virtual NodeID nodeID() override { return m_id; }
 
     bool m_run = false;
 
-    dev::network::SessionFace::Ptr session() override { return m_session; }
+    bcos::network::SessionFace::Ptr session() override { return m_session; }
 
     NodeID m_id;
-    dev::network::SessionFace::Ptr m_session;
+    bcos::network::SessionFace::Ptr m_session;
 };
 
 class FakeSyncToolsSet
 {
-    using TxPoolPtr = std::shared_ptr<dev::txpool::TxPoolInterface>;
-    using ServicePtr = std::shared_ptr<dev::p2p::Service>;
-    using BlockChainPtr = std::shared_ptr<dev::blockchain::BlockChainInterface>;
-    using SessionPtr = std::shared_ptr<dev::network::SessionFace>;
-    using TransactionPtr = std::shared_ptr<dev::eth::Transaction>;
+    using TxPoolPtr = std::shared_ptr<bcos::txpool::TxPoolInterface>;
+    using ServicePtr = std::shared_ptr<bcos::p2p::Service>;
+    using BlockChainPtr = std::shared_ptr<bcos::blockchain::BlockChainInterface>;
+    using SessionPtr = std::shared_ptr<bcos::network::SessionFace>;
+    using TransactionPtr = std::shared_ptr<bcos::eth::Transaction>;
 
 public:
     FakeSyncToolsSet(uint64_t _blockNum = 5, size_t const& _transSize = 5)
@@ -128,7 +128,7 @@ public:
     {
         NodeIPEndpoint peer_endpoint(boost::asio::ip::make_address(_ip), m_listenPort);
 #if 0
-        dev::p2p::P2PSessionInfo peer_info(
+        bcos::p2p::P2PSessionInfo peer_info(
             {_peerID, peer_endpoint.address.to_string(), std::chrono::steady_clock::duration(), 0});
 #endif
 
@@ -231,4 +231,4 @@ private:
     FakeBlock m_fakeBlock;
 };
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

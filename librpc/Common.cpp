@@ -32,7 +32,7 @@
 using namespace std;
 
 // from https://stackoverflow.com/questions/4538586/how-to-compress-a-buffer-with-zlib
-std::string dev::compress(const std::string& _data)
+std::string bcos::compress(const std::string& _data)
 {
     boost::iostreams::filtering_streambuf<boost::iostreams::output> output_stream;
     output_stream.push(boost::iostreams::zlib_compressor());
@@ -43,7 +43,7 @@ std::string dev::compress(const std::string& _data)
     return string_stream.str();
 }
 
-std::string dev::decompress(const std::string& _data)
+std::string bcos::decompress(const std::string& _data)
 {
     std::stringstream string_stream;
     string_stream << _data;
@@ -57,7 +57,7 @@ std::string dev::decompress(const std::string& _data)
 }
 
 // https://stackoverflow.com/questions/7053538/how-do-i-encode-a-string-to-base64-using-only-boost
-std::string dev::base64Encode(const std::string& _data)
+std::string bcos::base64Encode(const std::string& _data)
 {
     using namespace boost::archive::iterators;
     using It = base64_from_binary<transform_width<std::string::const_iterator, 6, 8>>;
@@ -65,7 +65,7 @@ std::string dev::base64Encode(const std::string& _data)
     return tmp.append((3 - _data.size() % 3) % 3, '=');
 }
 
-std::string dev::base64Decode(const std::string& _data)
+std::string bcos::base64Decode(const std::string& _data)
 {
     using namespace boost::archive::iterators;
     using It = transform_width<binary_from_base64<std::string::const_iterator>, 8, 6>;

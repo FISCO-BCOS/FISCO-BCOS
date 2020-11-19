@@ -25,18 +25,18 @@
 #include "DownloadingTxsQueue.h"
 #include "SyncMsgEngine.h"
 #include "SyncStatus.h"
-#include <libdevcore/FixedHash.h>
-#include <libdevcore/Worker.h>
 #include <libethcore/Common.h>
 #include <libethcore/Exceptions.h>
 #include <libnetwork/Common.h>
 #include <libnetwork/Session.h>
 #include <libp2p/P2PInterface.h>
 #include <libtxpool/TxPoolInterface.h>
+#include <libutilities/FixedHash.h>
+#include <libutilities/Worker.h>
 #include <vector>
 
 
-namespace dev
+namespace bcos
 {
 namespace sync
 {
@@ -44,19 +44,19 @@ class SyncTransaction : public Worker
 {
 public:
     using Ptr = std::shared_ptr<SyncTransaction>;
-    SyncTransaction(std::shared_ptr<dev::p2p::P2PInterface> _service,
-        std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
+    SyncTransaction(std::shared_ptr<bcos::p2p::P2PInterface> _service,
+        std::shared_ptr<bcos::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<DownloadingTxsQueue> _txsQueue, PROTOCOL_ID const& _protocolId,
         NodeID const& _nodeId, std::shared_ptr<SyncMasterStatus> _syncStatus,
         std::shared_ptr<SyncMsgEngine> _msgEngine,
-        std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
+        std::shared_ptr<bcos::blockchain::BlockChainInterface> _blockChain,
         unsigned _idleWaitMs = 200)
       : Worker("Sync-" + std::to_string(_protocolId), _idleWaitMs),
         m_service(_service),
         m_txPool(_txPool),
         m_txQueue(_txsQueue),
         m_protocolId(_protocolId),
-        m_groupId(dev::eth::getGroupAndProtocol(_protocolId).first),
+        m_groupId(bcos::eth::getGroupAndProtocol(_protocolId).first),
         m_nodeId(_nodeId),
         m_syncStatus(_syncStatus),
         m_msgEngine(_msgEngine),
@@ -68,7 +68,7 @@ public:
         std::string threadName = "SyncTrans-" + std::to_string(m_groupId);
         setName(threadName);
         m_msgEngine->onNotifySyncTrans([&]() { m_signalled.notify_all(); });
-        m_fastForwardedNodes = std::make_shared<dev::h512s>();
+        m_fastForwardedNodes = std::make_shared<bcos::h512s>();
         m_treeRouter = m_txQueue->treeRouter();
     }
 
@@ -92,7 +92,7 @@ public:
     std::shared_ptr<SyncMasterStatus> syncStatus() { return m_syncStatus; }
 
     void registerTxsReceiversFilter(
-        std::function<std::shared_ptr<dev::p2p::NodeIDs>(std::shared_ptr<std::set<NodeID>>)>
+        std::function<std::shared_ptr<bcos::p2p::NodeIDs>(std::shared_ptr<std::set<NodeID>>)>
             _handler)
     {
         fp_txsReceiversFilter = _handler;
@@ -100,7 +100,7 @@ public:
 
     void updateNeedMaintainTransactions(bool const& _needMaintainTxs);
 
-    virtual void noteForwardRemainTxs(dev::h512 const& _targetNodeId)
+    virtual void noteForwardRemainTxs(bcos::h512 const& _targetNodeId)
     {
         Guard l(m_fastForwardMutex);
         m_needForwardRemainTxs = true;
@@ -122,9 +122,9 @@ public:
 
 private:
     /// p2p service handler
-    std::shared_ptr<dev::p2p::P2PInterface> m_service;
+    std::shared_ptr<bcos::p2p::P2PInterface> m_service;
     /// transaction pool handler
-    std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool;
+    std::shared_ptr<bcos::txpool::TxPoolInterface> m_txPool;
 
     std::shared_ptr<DownloadingTxsQueue> m_txQueue;
 
@@ -137,7 +137,7 @@ private:
     std::shared_ptr<SyncMasterStatus> m_syncStatus;
     /// Message handler of p2p
     std::shared_ptr<SyncMsgEngine> m_msgEngine;
-    std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
+    std::shared_ptr<bcos::blockchain::BlockChainInterface> m_blockChain;
 
     // Internal coding variable
     /// mutex to access m_signalled
@@ -151,14 +151,14 @@ private:
     std::atomic_bool m_needMaintainTransactions = {false};
 
     // settings
-    dev::eth::Handler<> m_tqReady;
+    bcos::eth::Handler<> m_tqReady;
 
-    std::function<std::shared_ptr<dev::p2p::NodeIDs>(std::shared_ptr<std::set<NodeID>>)>
+    std::function<std::shared_ptr<bcos::p2p::NodeIDs>(std::shared_ptr<std::set<NodeID>>)>
         fp_txsReceiversFilter = nullptr;
 
     mutable Mutex m_fastForwardMutex;
     std::atomic_bool m_needForwardRemainTxs = {false};
-    std::shared_ptr<dev::h512s> m_fastForwardedNodes;
+    std::shared_ptr<bcos::h512s> m_fastForwardedNodes;
 
     TreeTopology::Ptr m_treeRouter;
 
@@ -169,15 +169,15 @@ private:
 private:
     void forwardRemainingTxs();
 
-    void broadcastTransactions(std::shared_ptr<dev::p2p::NodeIDs> _selectedPeers,
-        std::shared_ptr<dev::eth::Transactions> _ts, bool const& _fastForwardRemainTxs,
+    void broadcastTransactions(std::shared_ptr<bcos::p2p::NodeIDs> _selectedPeers,
+        std::shared_ptr<bcos::eth::Transactions> _ts, bool const& _fastForwardRemainTxs,
         int64_t const& _startIndex);
 
-    void sendTransactions(std::shared_ptr<dev::eth::Transactions> _ts,
+    void sendTransactions(std::shared_ptr<bcos::eth::Transactions> _ts,
         bool const& _fastForwardRemainTxs, int64_t const& _startIndex);
     void sendTxsStatus(
-        std::shared_ptr<dev::eth::Transactions> _txs, std::shared_ptr<NodeIDs> _selectedPeers);
+        std::shared_ptr<bcos::eth::Transactions> _txs, std::shared_ptr<NodeIDs> _selectedPeers);
 };
 
 }  // namespace sync
-}  // namespace dev
+}  // namespace bcos

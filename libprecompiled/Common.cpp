@@ -27,16 +27,16 @@
 #include <libstorage/Table.h>
 
 using namespace std;
-using namespace dev;
-using namespace dev::storage;
+using namespace bcos;
+using namespace bcos::storage;
 
 static const string USER_TABLE_PREFIX = "_user_";
 static const string USER_TABLE_PREFIX_SHORT = "u_";
 static const string CONTRACT_TABLE_PREFIX_SHORT = "c_";
 
-void dev::precompiled::getErrorCodeOut(bytes& out, int const& result)
+void bcos::precompiled::getErrorCodeOut(bytes& out, int const& result)
 {
-    dev::eth::ContractABI abi;
+    bcos::eth::ContractABI abi;
     if (result > 0 && result < 128)
     {
         out = abi.abiIn("", u256(result));
@@ -53,7 +53,7 @@ void dev::precompiled::getErrorCodeOut(bytes& out, int const& result)
     }
 }
 
-std::string dev::precompiled::getTableName(const std::string& _tableName)
+std::string bcos::precompiled::getTableName(const std::string& _tableName)
 {
     if (g_BCOSConfig.version() < V2_2_0)
     {
@@ -62,13 +62,13 @@ std::string dev::precompiled::getTableName(const std::string& _tableName)
     return USER_TABLE_PREFIX_SHORT + _tableName;
 }
 
-std::string dev::precompiled::getContractTableName(Address const& _contractAddress)
+std::string bcos::precompiled::getContractTableName(Address const& _contractAddress)
 {
     return std::string(CONTRACT_TABLE_PREFIX_SHORT + _contractAddress.hex());
 }
 
 
-void dev::precompiled::checkNameValidate(const string& tableName, string& keyField,
+void bcos::precompiled::checkNameValidate(const string& tableName, string& keyField,
     vector<string>& valueFieldList, bool throwStorageException)
 {
     if (g_BCOSConfig.version() >= V2_2_0)
@@ -181,7 +181,7 @@ void dev::precompiled::checkNameValidate(const string& tableName, string& keyFie
     }
 }
 
-int dev::precompiled::checkLengthValidate(
+int bcos::precompiled::checkLengthValidate(
     const string& fieldValue, int32_t maxLength, int32_t errorCode, bool throwStorageException)
 {
     if (fieldValue.size() > (size_t)maxLength)
@@ -204,8 +204,8 @@ int dev::precompiled::checkLengthValidate(
     return 0;
 }
 
-dev::precompiled::ContractStatus dev::precompiled::getContractStatus(
-    std::shared_ptr<dev::blockverifier::ExecutiveContext> context, std::string const& tableName)
+bcos::precompiled::ContractStatus bcos::precompiled::getContractStatus(
+    std::shared_ptr<bcos::blockverifier::ExecutiveContext> context, std::string const& tableName)
 {
     Table::Ptr table = openTable(context, tableName);
     if (!table)
@@ -214,16 +214,16 @@ dev::precompiled::ContractStatus dev::precompiled::getContractStatus(
     }
 
     auto codeHashEntries =
-        table->select(dev::storagestate::ACCOUNT_CODE_HASH, table->newCondition());
+        table->select(bcos::storagestate::ACCOUNT_CODE_HASH, table->newCondition());
     h256 codeHash;
     if (g_BCOSConfig.version() >= V2_5_0)
     {
-        codeHash = h256(codeHashEntries->get(0)->getFieldBytes(dev::storagestate::STORAGE_VALUE));
+        codeHash = h256(codeHashEntries->get(0)->getFieldBytes(bcos::storagestate::STORAGE_VALUE));
     }
     else
     {
         codeHash =
-            h256(fromHex(codeHashEntries->get(0)->getField(dev::storagestate::STORAGE_VALUE)));
+            h256(fromHex(codeHashEntries->get(0)->getField(bcos::storagestate::STORAGE_VALUE)));
     }
 
     if (EmptyHash == codeHash)
@@ -231,9 +231,9 @@ dev::precompiled::ContractStatus dev::precompiled::getContractStatus(
         return ContractStatus::NotContractAddress;
     }
 
-    auto frozenEntries = table->select(dev::storagestate::ACCOUNT_FROZEN, table->newCondition());
+    auto frozenEntries = table->select(bcos::storagestate::ACCOUNT_FROZEN, table->newCondition());
     if (frozenEntries->size() > 0 &&
-        "true" == frozenEntries->get(0)->getField(dev::storagestate::STORAGE_VALUE))
+        "true" == frozenEntries->get(0)->getField(bcos::storagestate::STORAGE_VALUE))
     {
         return ContractStatus::Frozen;
     }
@@ -253,7 +253,7 @@ bytes precompiled::PrecompiledException::ToOutput()
     return abi.abiIn("Error(string)", string(what()));
 }
 
-uint32_t dev::precompiled::getParamFunc(bytesConstRef _param)
+uint32_t bcos::precompiled::getParamFunc(bytesConstRef _param)
 {
     auto funcBytes = _param.cropped(0, 4);
     uint32_t func = *((uint32_t*)(funcBytes.data()));
@@ -262,12 +262,12 @@ uint32_t dev::precompiled::getParamFunc(bytesConstRef _param)
            ((func & 0xFF000000) >> 24);
 }
 
-bytesConstRef dev::precompiled::getParamData(bytesConstRef _param)
+bytesConstRef bcos::precompiled::getParamData(bytesConstRef _param)
 {
     return _param.cropped(4);
 }
 
-uint32_t dev::precompiled::getFuncSelectorByFunctionName(std::string const& _functionName)
+uint32_t bcos::precompiled::getFuncSelectorByFunctionName(std::string const& _functionName)
 {
     uint32_t func = *(uint32_t*)(crypto::Hash(_functionName).ref().cropped(0, 4).data());
     uint32_t selector = ((func & 0x000000FF) << 24) | ((func & 0x0000FF00) << 8) |
@@ -276,10 +276,10 @@ uint32_t dev::precompiled::getFuncSelectorByFunctionName(std::string const& _fun
 }
 
 // get node list of the given type from the consensus table
-dev::h512s dev::precompiled::getNodeListByType(
-    dev::storage::Table::Ptr _consTable, int64_t _blockNumber, std::string const& _type)
+bcos::h512s bcos::precompiled::getNodeListByType(
+    bcos::storage::Table::Ptr _consTable, int64_t _blockNumber, std::string const& _type)
 {
-    dev::h512s list;
+    bcos::h512s list;
     try
     {
         auto nodes = _consTable->select(PRI_KEY, _consTable->newCondition());
@@ -309,8 +309,8 @@ dev::h512s dev::precompiled::getNodeListByType(
 }
 
 // Get the configuration value of the given key from the system configuration table
-std::shared_ptr<std::pair<std::string, int64_t>> dev::precompiled::getSysteConfigByKey(
-    dev::storage::Table::Ptr _sysConfigTable, std::string const& _key, int64_t const& _num)
+std::shared_ptr<std::pair<std::string, int64_t>> bcos::precompiled::getSysteConfigByKey(
+    bcos::storage::Table::Ptr _sysConfigTable, std::string const& _key, int64_t const& _num)
 {
     std::shared_ptr<std::pair<std::string, int64_t>> result =
         std::make_shared<std::pair<std::string, int64_t>>();
@@ -341,8 +341,8 @@ std::shared_ptr<std::pair<std::string, int64_t>> dev::precompiled::getSysteConfi
     return result;
 }
 
-dev::storage::Table::Ptr dev::precompiled::openTable(
-    dev::blockverifier::ExecutiveContext::Ptr _context, const std::string& _tableName)
+bcos::storage::Table::Ptr bcos::precompiled::openTable(
+    bcos::blockverifier::ExecutiveContext::Ptr _context, const std::string& _tableName)
 {
     return _context->getMemoryTableFactory()->openTable(_tableName);
 }

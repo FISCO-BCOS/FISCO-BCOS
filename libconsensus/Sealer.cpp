@@ -30,11 +30,11 @@
 #include <libethcore/LogEntry.h>
 #include <libsync/SyncStatus.h>
 using namespace std;
-using namespace dev::sync;
-using namespace dev::blockverifier;
-using namespace dev::eth;
-using namespace dev::p2p;
-using namespace dev::consensus;
+using namespace bcos::sync;
+using namespace bcos::blockverifier;
+using namespace bcos::eth;
+using namespace bcos::p2p;
+using namespace bcos::consensus;
 
 /// start the Sealer module
 void Sealer::start()
@@ -71,7 +71,7 @@ void Sealer::reportNewBlock()
     bool t = true;
     if (m_syncBlock.compare_exchange_strong(t, false))
     {
-        shared_ptr<dev::eth::Block> p_block =
+        shared_ptr<bcos::eth::Block> p_block =
             m_blockChain->getBlockByNumber(m_blockChain->number());
         if (!p_block)
         {
@@ -184,7 +184,7 @@ void Sealer::resetSealingBlock(Sealing& sealing, h256Hash const& filter, bool re
  * header should be reset to the current block number add 2 false: reset block for the current
  * leader; the block header should be populated from the current block
  */
-void Sealer::resetBlock(std::shared_ptr<dev::eth::Block> block, bool resetNextLeader)
+void Sealer::resetBlock(std::shared_ptr<bcos::eth::Block> block, bool resetNextLeader)
 {
     /// reset block for the next leader:
     /// 1. clear the block; 2. set the block number to current block number add 2

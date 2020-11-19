@@ -21,20 +21,20 @@
 
 #pragma once
 
-#include <libdevcore/CommonData.h>
-#include <libdevcore/Exceptions.h>
+#include <libutilities/CommonData.h>
+#include <libutilities/Exceptions.h>
 #include <functional>
 #include <unordered_map>
 
-namespace dev
+namespace bcos
 {
 namespace eth
 {
 using PrecompiledExecutor = std::function<std::pair<bool, bytes>(bytesConstRef _in)>;
 using PrecompiledPricer = std::function<bigint(bytesConstRef _in)>;
 
-DEV_SIMPLE_EXCEPTION(ExecutorNotFound);
-DEV_SIMPLE_EXCEPTION(PricerNotFound);
+DERIVE_BCOS_EXCEPTION(ExecutorNotFound);
+DERIVE_BCOS_EXCEPTION(PricerNotFound);
 
 class PrecompiledRegistrar
 {
@@ -80,14 +80,14 @@ private:
 #define ETH_REGISTER_PRECOMPILED(Name)                                                        \
     static std::pair<bool, bytes> __eth_registerPrecompiledFunction##Name(bytesConstRef _in); \
     static PrecompiledExecutor __eth_registerPrecompiledFactory##Name =                       \
-        ::dev::eth::PrecompiledRegistrar::registerExecutor(                                   \
+        ::bcos::eth::PrecompiledRegistrar::registerExecutor(                                  \
             #Name, &__eth_registerPrecompiledFunction##Name);                                 \
     static std::pair<bool, bytes> __eth_registerPrecompiledFunction##Name
 #define ETH_REGISTER_PRECOMPILED_PRICER(Name)                            \
     static bigint __eth_registerPricerFunction##Name(bytesConstRef _in); \
     static PrecompiledPricer __eth_registerPricerFactory##Name =         \
-        ::dev::eth::PrecompiledRegistrar::registerPricer(                \
+        ::bcos::eth::PrecompiledRegistrar::registerPricer(               \
             #Name, &__eth_registerPricerFunction##Name);                 \
     static bigint __eth_registerPricerFunction##Name
 }  // namespace eth
-}  // namespace dev
+}  // namespace bcos

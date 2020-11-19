@@ -40,7 +40,7 @@ class context;
 }  // namespace boost
 
 
-namespace dev
+namespace bcos
 {
 class SafeHttpServer;
 namespace ledger
@@ -115,13 +115,13 @@ public:
     std::shared_ptr<ledger::LedgerManager> getLedgerManager() { return m_ledgerManager; }
 
 private:
-    std::shared_ptr<dev::stat::ChannelNetworkStatHandler> createNetWorkStatHandler(
+    std::shared_ptr<bcos::stat::ChannelNetworkStatHandler> createNetWorkStatHandler(
         boost::property_tree::ptree const& _pt);
 
-    std::shared_ptr<dev::flowlimit::RPCQPSLimiter> createQPSLimiter(
+    std::shared_ptr<bcos::flowlimit::RPCQPSLimiter> createQPSLimiter(
         boost::property_tree::ptree const& _pt);
 
-    dev::flowlimit::RateLimiter::Ptr createNetworkBandwidthLimit(
+    bcos::flowlimit::RateLimiter::Ptr createNetworkBandwidthLimit(
         boost::property_tree::ptree const& _pt);
 
 private:
@@ -129,14 +129,14 @@ private:
     std::shared_ptr<ledger::LedgerManager> m_ledgerManager;
     LedgerInitializer::Ptr m_ledgerInitializer;
     std::shared_ptr<boost::asio::ssl::context> m_sslContext;
-    std::shared_ptr<dev::rpc::Rpc> m_rpcForChannel;
-    std::shared_ptr<dev::SafeHttpServer> m_safeHttpServer;
+    std::shared_ptr<bcos::rpc::Rpc> m_rpcForChannel;
+    std::shared_ptr<bcos::SafeHttpServer> m_safeHttpServer;
     ChannelRPCServer::Ptr m_channelRPCServer;
     ModularServer<>* m_channelRPCHttpServer;
     ModularServer<>* m_jsonrpcHttpServer;
-    dev::stat::ChannelNetworkStatHandler::Ptr m_networkStatHandler;
+    bcos::stat::ChannelNetworkStatHandler::Ptr m_networkStatHandler;
 };
 
 }  // namespace initializer
 
-}  // namespace dev
+}  // namespace bcos

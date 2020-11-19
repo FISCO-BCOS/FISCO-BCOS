@@ -27,20 +27,19 @@
 #include "libdevcrypto/sm2/sm2.h"
 #include <cryptopp/modes.h>
 #include <cryptopp/pwdbased.h>
-#include <libdevcore/Address.h>
-#include <libdevcore/Common.h>
-#include <libdevcore/Exceptions.h>
-#include <libdevcore/Guards.h>
-#include <libdevcore/RLP.h>
 #include <libethcore/Exceptions.h>
+#include <libutilities/Address.h>
+#include <libutilities/Common.h>
+#include <libutilities/Exceptions.h>
+#include <libutilities/RLP.h>
 #include <secp256k1.h>
 #include <secp256k1_recovery.h>
 #include <secp256k1_sha256.h>
 #include <mutex>
 
 using namespace std;
-using namespace dev;
-using namespace dev::crypto;
+using namespace bcos;
+using namespace bcos::crypto;
 
 static const u512 VBase = 0;
 using VType = h512;
@@ -51,7 +50,7 @@ void SM2Signature::encode(RLPStream& _s) const noexcept
     _s << (VType)(v) << (u256)r << (u256)s;
 }
 
-std::vector<unsigned char> dev::crypto::SM2Signature::asBytes() const
+std::vector<unsigned char> bcos::crypto::SM2Signature::asBytes() const
 {
     std::vector<unsigned char> data;
     data.resize(128);
@@ -61,7 +60,7 @@ std::vector<unsigned char> dev::crypto::SM2Signature::asBytes() const
     return data;
 }
 
-bool dev::crypto::SM2Signature::isValid() const noexcept
+bool bcos::crypto::SM2Signature::isValid() const noexcept
 {
     static const h256 s_max{"0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141"};
     static const h256 s_zero;
@@ -69,14 +68,14 @@ bool dev::crypto::SM2Signature::isValid() const noexcept
     return (v >= h512(1) && r > s_zero && s > s_zero && r < s_max && s < s_max);
 }
 
-std::shared_ptr<crypto::Signature> dev::sm2SignatureFromRLP(RLP const& _rlp, size_t _start)
+std::shared_ptr<crypto::Signature> bcos::sm2SignatureFromRLP(RLP const& _rlp, size_t _start)
 {
     h512 v = _rlp[_start++].toHash<h512>();
     u256 r = _rlp[_start++].toInt<u256>();
     u256 s = _rlp[_start++].toInt<u256>();
     return std::make_shared<SM2Signature>(r, s, v);
 }
-std::shared_ptr<crypto::Signature> dev::sm2SignatureFromBytes(std::vector<unsigned char> _data)
+std::shared_ptr<crypto::Signature> bcos::sm2SignatureFromBytes(std::vector<unsigned char> _data)
 {
     if (_data.size() != 128)
     {  // sm2 signature must be 128 bytes
@@ -88,7 +87,7 @@ std::shared_ptr<crypto::Signature> dev::sm2SignatureFromBytes(std::vector<unsign
     return std::make_shared<SM2Signature>(r, s, v);
 }
 
-std::shared_ptr<crypto::Signature> dev::sm2Sign(KeyPair const& _keyPair, h256 const& _hash)
+std::shared_ptr<crypto::Signature> bcos::sm2Sign(KeyPair const& _keyPair, h256 const& _hash)
 {
     string pri = toHex(bytesConstRef{_keyPair.secret().data(), 32});
     h256 r(0);
@@ -100,7 +99,7 @@ std::shared_ptr<crypto::Signature> dev::sm2Sign(KeyPair const& _keyPair, h256 co
     return make_shared<SM2Signature>(r, s, _keyPair.pub());
 }
 
-bool dev::sm2Verify(h512 const& _p, std::shared_ptr<crypto::Signature> _s, h256 const& _hash)
+bool bcos::sm2Verify(h512 const& _p, std::shared_ptr<crypto::Signature> _s, h256 const& _hash)
 {
     if (!_s)
     {
@@ -112,7 +111,7 @@ bool dev::sm2Verify(h512 const& _p, std::shared_ptr<crypto::Signature> _s, h256 
     return lresult;
 }
 
-h512 dev::sm2Recover(std::shared_ptr<crypto::Signature> _s, h256 const& _message)
+h512 bcos::sm2Recover(std::shared_ptr<crypto::Signature> _s, h256 const& _message)
 {
     auto _sig = dynamic_pointer_cast<SM2Signature>(_s);
     if (!_sig)
@@ -131,7 +130,7 @@ h512 dev::sm2Recover(std::shared_ptr<crypto::Signature> _s, h256 const& _message
     return h512{};
 }
 
-pair<bool, bytes> dev::recover(bytesConstRef _in)
+pair<bool, bytes> bcos::recover(bytesConstRef _in)
 {
     struct
     {

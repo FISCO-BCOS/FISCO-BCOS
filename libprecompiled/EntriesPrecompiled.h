@@ -23,7 +23,7 @@
 #include "libstorage/Table.h"
 #include <libblockverifier/ExecutiveContext.h>
 
-namespace dev
+namespace bcos
 {
 namespace precompiled
 {
@@ -47,21 +47,21 @@ public:
 
     std::string toString() override;
 
-    PrecompiledExecResult::Ptr call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+    PrecompiledExecResult::Ptr call(std::shared_ptr<bcos::blockverifier::ExecutiveContext> context,
         bytesConstRef param, Address const& origin = Address(),
         Address const& _sender = Address()) override;
 
-    void setEntries(dev::storage::Entries::ConstPtr entries) { m_entriesConst = entries; }
-    dev::storage::Entries::Ptr getEntries()
+    void setEntries(bcos::storage::Entries::ConstPtr entries) { m_entriesConst = entries; }
+    bcos::storage::Entries::Ptr getEntries()
     {
-        return std::const_pointer_cast<dev::storage::Entries>(m_entriesConst);
+        return std::const_pointer_cast<bcos::storage::Entries>(m_entriesConst);
     }
-    dev::storage::Entries::ConstPtr getEntries() const { return m_entriesConst; }
+    bcos::storage::Entries::ConstPtr getEntries() const { return m_entriesConst; }
 
 private:
-    dev::storage::Entries::ConstPtr m_entriesConst;
+    bcos::storage::Entries::ConstPtr m_entriesConst;
 };
 
 }  // namespace precompiled
 
-}  // namespace dev
+}  // namespace bcos

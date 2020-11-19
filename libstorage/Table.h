@@ -18,9 +18,8 @@
 #pragma once
 
 #include "Common.h"
-#include <libdevcore/Address.h>
-#include <libdevcore/FixedHash.h>
-#include <libdevcore/Guards.h>
+#include <libutilities/Address.h>
+#include <libutilities/FixedHash.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <tbb/concurrent_vector.h>
 #include <tbb/spin_rw_mutex.h>
@@ -31,7 +30,7 @@
 #include <type_traits>
 #include <vector>
 
-namespace dev
+namespace bcos
 {
 namespace storage
 {
@@ -337,7 +336,7 @@ public:
     virtual h256 hash() = 0;
     virtual void clear() = 0;
 
-    virtual dev::storage::TableData::Ptr dump() = 0;
+    virtual bcos::storage::TableData::Ptr dump() = 0;
     virtual void rollback(const Change& _change) = 0;
     virtual bool empty() = 0;
     virtual void setRecorder(
@@ -406,9 +405,9 @@ public:
 
     virtual ~TableFactoryFactory(){};
 
-    virtual TableFactory::Ptr newTableFactory(dev::h256 const& hash, int64_t number) = 0;
+    virtual TableFactory::Ptr newTableFactory(bcos::h256 const& hash, int64_t number) = 0;
 };
 TableInfo::Ptr getSysTableInfo(const std::string& tableName);
 
 }  // namespace storage
-}  // namespace dev
+}  // namespace bcos

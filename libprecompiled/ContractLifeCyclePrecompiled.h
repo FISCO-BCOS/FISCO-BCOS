@@ -20,7 +20,7 @@
  */
 #pragma once
 #include "Common.h"
-namespace dev
+namespace bcos
 {
 namespace precompiled
 {
@@ -32,14 +32,14 @@ const std::string CONTRACT_STATUS_DESC[ContractStatus::Count] = {"Invalid",
 const std::string STATUS_TRUE = "true";
 const std::string STATUS_FALSE = "false";
 
-class ContractLifeCyclePrecompiled : public dev::precompiled::Precompiled
+class ContractLifeCyclePrecompiled : public bcos::precompiled::Precompiled
 {
 public:
     typedef std::shared_ptr<ContractLifeCyclePrecompiled> Ptr;
     ContractLifeCyclePrecompiled();
     virtual ~ContractLifeCyclePrecompiled(){};
 
-    PrecompiledExecResult::Ptr call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+    PrecompiledExecResult::Ptr call(std::shared_ptr<bcos::blockverifier::ExecutiveContext> context,
         bytesConstRef param, Address const& origin = Address(),
         Address const& _sender = Address()) override;
 
@@ -70,4 +70,4 @@ private:
 
 }  // namespace precompiled
 
-}  // namespace dev
+}  // namespace bcos

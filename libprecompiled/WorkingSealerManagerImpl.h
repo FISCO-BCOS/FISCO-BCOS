@@ -22,11 +22,11 @@
  */
 
 #pragma once
-#include <libdevcore/Address.h>
-#include <libdevcore/Common.h>
-#include <libdevcore/FixedHash.h>
+#include <libutilities/Address.h>
+#include <libutilities/Common.h>
+#include <libutilities/FixedHash.h>
 
-namespace dev
+namespace bcos
 {
 namespace storage
 {
@@ -53,7 +53,7 @@ public:
     virtual ~VRFInfo() {}
 
     virtual bool verifyProof();
-    virtual dev::h256 getHashFromProof();
+    virtual bcos::h256 getHashFromProof();
     virtual bool isValidVRFPublicKey();
 
     std::string const& vrfProof() const { return m_vrfProof; }
@@ -77,8 +77,8 @@ class WorkingSealerManagerImpl
 {
 public:
     using Ptr = std::shared_ptr<WorkingSealerManagerImpl>;
-    WorkingSealerManagerImpl(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
-        dev::Address const& _origin, dev::Address const& _sender);
+    WorkingSealerManagerImpl(std::shared_ptr<bcos::blockverifier::ExecutiveContext> _context,
+        bcos::Address const& _origin, bcos::Address const& _sender);
 
     virtual ~WorkingSealerManagerImpl() {}
 
@@ -94,35 +94,35 @@ protected:
     // calculate the number of working sealers that need to be added and removed
     virtual NodeRotatingInfo::Ptr calNodeRotatingInfo();
 
-    virtual std::shared_ptr<dev::h512s> selectNodesFromList(
-        std::shared_ptr<dev::h512s> _nodeList, int64_t selectedNode);
+    virtual std::shared_ptr<bcos::h512s> selectNodesFromList(
+        std::shared_ptr<bcos::h512s> _nodeList, int64_t selectedNode);
 
 private:
-    void checkPermission(dev::Address const& _origin, dev::h512s const& _allowedAccountInfoList);
+    void checkPermission(bcos::Address const& _origin, bcos::h512s const& _allowedAccountInfoList);
     void getSealerList();
     bool shouldRotate();
-    void UpdateNodeType(dev::h512 const& _node, std::string const& _nodeType);
+    void UpdateNodeType(bcos::h512 const& _node, std::string const& _nodeType);
     void setSystemConfigByKey(
         std::string const& _key, std::string const& _value, int64_t _enableNumber);
     void tryToResetNotifyNextLeaderFlag();
 
 private:
-    std::shared_ptr<dev::blockverifier::ExecutiveContext> m_context;
+    std::shared_ptr<bcos::blockverifier::ExecutiveContext> m_context;
     Address m_origin;
     Address m_sender;
     VRFInfo::Ptr m_vrfInfo;
 
-    std::shared_ptr<dev::h512s> m_pendingSealerList;
-    std::shared_ptr<dev::h512s> m_workingSealerList;
+    std::shared_ptr<bcos::h512s> m_pendingSealerList;
+    std::shared_ptr<bcos::h512s> m_workingSealerList;
 
-    std::shared_ptr<dev::storage::Table> m_consTable;
-    std::shared_ptr<dev::storage::Table> m_sysConfigTable;
-    dev::h256 m_proofHash;
+    std::shared_ptr<bcos::storage::Table> m_consTable;
+    std::shared_ptr<bcos::storage::Table> m_sysConfigTable;
+    bcos::h256 m_proofHash;
 
     int64_t m_configuredEpochSealersSize;
     bool m_sealerListObtained = false;
     bool m_notifyNextLeaderRotateSetted = false;
-    std::shared_ptr<dev::storage::AccessOptions> m_skipAccessCheckOption;
+    std::shared_ptr<bcos::storage::AccessOptions> m_skipAccessCheckOption;
 };
 }  // namespace precompiled
-}  // namespace dev
+}  // namespace bcos

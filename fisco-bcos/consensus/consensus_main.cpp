@@ -32,13 +32,13 @@
 #include <libledger/LedgerManager.h>
 #include <libtxpool/TxPool.h>
 
-using namespace dev;
-using namespace dev::ledger;
-using namespace dev::initializer;
-using namespace dev::txpool;
+using namespace bcos;
+using namespace bcos::ledger;
+using namespace bcos::initializer;
+using namespace bcos::txpool;
 
 #define CONSENSUS_MAIN_LOG(LEVEL) LOG(LEVEL) << "[CONSENSUS_MAIN] "
-static void rpcCallbackTest(dev::eth::LocalisedTransactionReceipt::Ptr receiptPtr)
+static void rpcCallbackTest(bcos::eth::LocalisedTransactionReceipt::Ptr receiptPtr)
 {
     CONSENSUS_MAIN_LOG(TRACE) << "[rpcCallbackTest] [blockNumber/txHash/blockHash]:  "
                               << receiptPtr->blockNumber() << "/" << receiptPtr->hash() << "/"
@@ -47,7 +47,7 @@ static void rpcCallbackTest(dev::eth::LocalisedTransactionReceipt::Ptr receiptPt
 
 static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed, KeyPair const&)
 {
-    dev::bytes rlpBytes;
+    bcos::bytes rlpBytes;
     if (g_BCOSConfig.SMCrypto())
     {
         if (g_BCOSConfig.version() >= RC2_VERSION)
@@ -69,7 +69,7 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
         }
         else
         {
-            rlpBytes = dev::fromHex(
+            rlpBytes = bcos::fromHex(
                 "f901309f65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d14485174876e7ff"
                 "8609"
                 "184e729fff8204a294d6f1a71052366dbae2f7ab2d5d5845e77965cf0d80b86448f85bce0000000000"
@@ -105,7 +105,7 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
         }
         else
         {
-            rlpBytes = dev::fromHex(
+            rlpBytes = bcos::fromHex(
                 "f8ef9f65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d03f85174876e7ff"
                 "8609184e729fff82020394d6f1a71052366dbae2f7ab2d5d5845e77965cf0d80b86448f85bce000000"
                 "000000000000000000000000000000000000000000000000000000001bf5bd8a9e7ba8b936ea704292"
@@ -114,8 +114,8 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
                 "0255ca1ea0512500bc29f4cfe18ee1c88683006d73e56c934100b8abf4d2334560e1d2f75e");
         }
     }
-    dev::eth::Transaction::Ptr tx =
-        std::make_shared<dev::eth::Transaction>(ref(rlpBytes), dev::eth::CheckTransaction::None);
+    bcos::eth::Transaction::Ptr tx =
+        std::make_shared<bcos::eth::Transaction>(ref(rlpBytes), bcos::eth::CheckTransaction::None);
 
     /// Transaction tx(value, gasPrice, gas, dst, data);
     auto keyPair = KeyPair::create();
@@ -137,7 +137,7 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
             {
                 tx->setNonce(tx->nonce() + u256(utcTime()));
                 tx->setBlockLimit(u256(ledgerManager->blockChain(group)->number()) + maxBlockLimit);
-                auto sig = dev::crypto::Sign(keyPair, tx->hash(WithoutSignature));
+                auto sig = bcos::crypto::Sign(keyPair, tx->hash(WithoutSignature));
                 tx->updateSignature(sig);
                 ledgerManager->txPool(group)->submit(tx);
             }

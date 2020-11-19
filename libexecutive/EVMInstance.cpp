@@ -24,7 +24,7 @@
 #include "VMFactory.h"
 
 using namespace std;
-namespace dev
+namespace bcos
 {
 namespace eth
 {
@@ -65,4 +65,4 @@ evmc_revision toRevision(EVMSchedule const& _schedule)
     return EVMC_FRONTIER;
 }
 }  // namespace eth
-}  // namespace dev
+}  // namespace bcos

@@ -18,16 +18,16 @@
  * Preompiled contract implemetations testing.
  */
 
-#include <libdevcore/CommonIO.h>
 #include <libethcore/Precompiled.h>
+#include <libutilities/CommonIO.h>
 #include <test/tools/libbcos/Options.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace std;
-using namespace dev;
-using namespace dev::eth;
-using namespace dev::test;
+using namespace bcos;
+using namespace bcos::eth;
+using namespace bcos::test;
 namespace ut = boost::unit_test;
 
 BOOST_FIXTURE_TEST_SUITE(PrecompiledTests, TestOutputHelperFixture)
@@ -1428,7 +1428,6 @@ void benchmarkPrecompiled(char const name[], vector_ref<const PrecompiledTest> t
     }
 
     PrecompiledExecutor exec = PrecompiledRegistrar::executor(name);
-    Timer timer;
 
     for (auto&& test : tests)
     {
@@ -1439,14 +1438,8 @@ void benchmarkPrecompiled(char const name[], vector_ref<const PrecompiledTest> t
         BOOST_REQUIRE_MESSAGE(res.first, test.name);
         BOOST_REQUIRE_EQUAL(toHex(res.second), test.expected);
 
-        timer.restart();
         for (int i = 0; i < n; ++i)
             exec(inputRef);
-        auto d = timer.duration() / n;
-
-        auto t = std::chrono::duration_cast<std::chrono::nanoseconds>(d).count();
-        std::cout << ut::framework::current_test_case().p_name << "/" << test.name << ": " << t
-                  << " ns\n";
     }
 }
 }  // namespace

@@ -18,17 +18,16 @@
 #pragma once
 
 #include "TransactionReceipt.h"
-#include <libdevcore/FixedHash.h>
-#include <libdevcore/Guards.h>
-#include <libdevcore/RLP.h>
 #include <libdevcrypto/Common.h>
 #include <libdevcrypto/CryptoInterface.h>
 #include <libethcore/Common.h>
+#include <libutilities/FixedHash.h>
+#include <libutilities/RLP.h>
 #include <tbb/concurrent_unordered_set.h>
 #include <boost/optional.hpp>
 
 
-namespace dev
+namespace bcos
 {
 namespace eth
 {
@@ -55,8 +54,8 @@ const int c_sigCount = 3;
 
 /// function called after the transaction has been submitted
 class Block;
-using RPCCallback = std::function<void(LocalisedTransactionReceipt::Ptr, dev::bytesConstRef input,
-    std::shared_ptr<dev::eth::Block> _blockPtr)>;
+using RPCCallback = std::function<void(LocalisedTransactionReceipt::Ptr, bcos::bytesConstRef input,
+    std::shared_ptr<bcos::eth::Block> _blockPtr)>;
 /// Encodes a transaction, ready to be exported to or freshly imported from RLP.
 class Transaction
 {
@@ -222,7 +221,7 @@ public:
 
     u256 const& chainId() { return m_chainId; }
     u256 const& groupId() { return m_groupId; }
-    dev::bytes const& extraData() { return m_extraData; }
+    bcos::bytes const& extraData() { return m_extraData; }
 
     /// @returns the signature of the transaction (the signature has the sender
     /// encoded in it)
@@ -266,7 +265,7 @@ public:
         m_rlpBuffer = bytes();
         m_receiveAddress = _receiveAddr;
     }
-    void setData(std::shared_ptr<dev::bytes const> _dataPtr)
+    void setData(std::shared_ptr<bcos::bytes const> _dataPtr)
     {
         m_hashWith = h256(0);
         m_rlpBuffer = bytes();
@@ -304,7 +303,7 @@ public:
     }
     Type const& type() { return m_type; }
 
-    void appendNodeContainsTransaction(dev::h512 const& _node)
+    void appendNodeContainsTransaction(bcos::h512 const& _node)
     {
         WriteGuard l(x_nodeListWithTheTransaction);
         m_nodeListWithTheTransaction.insert(_node);
@@ -320,7 +319,7 @@ public:
         }
     }
 
-    bool isTheNodeContainsTransaction(dev::h512 const& _node)
+    bool isTheNodeContainsTransaction(bcos::h512 const& _node)
     {
         ReadGuard l(x_nodeListWithTheTransaction);
         return m_nodeListWithTheTransaction.count(_node);
@@ -389,9 +388,9 @@ protected:
     // Whether the transaction has been synchronized
     bool m_synced = false;
     // Record the list of nodes containing the transaction and provide related query interfaces.
-    mutable dev::SharedMutex x_nodeListWithTheTransaction;
+    mutable bcos::SharedMutex x_nodeListWithTheTransaction;
     // Record the node where the transaction exists
-    std::set<dev::h512> m_nodeListWithTheTransaction;
+    std::set<bcos::h512> m_nodeListWithTheTransaction;
 };
 
 /// Nice name for vector of Transaction.
@@ -447,4 +446,4 @@ private:
 };
 
 }  // namespace eth
-}  // namespace dev
+}  // namespace bcos

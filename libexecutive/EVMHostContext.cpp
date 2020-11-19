@@ -31,9 +31,9 @@
 
 
 using namespace std;
-using namespace dev;
-using namespace dev::eth;
-using namespace dev::executive;
+using namespace bcos;
+using namespace bcos::eth;
+using namespace bcos::executive;
 
 namespace  // anonymous
 {
@@ -183,7 +183,7 @@ evmc_status_code transactionExceptionToEvmcStatusCode(TransactionException ex) n
 
 }  // anonymous namespace
 
-namespace dev
+namespace bcos
 {
 namespace executive
 {
@@ -198,7 +198,7 @@ evmc_gas_metrics ethMetrics{32000, 20000, 5000, 200, 9000, 2300, 25000};
 evmc_gas_metrics freeStorageGasMetrics{16000, 1200, 1200, 1200, 0, 5, 5};
 
 EVMHostContext::EVMHostContext(std::shared_ptr<StateFace> _s,
-    dev::executive::EnvInfo const& _envInfo, Address const& _myAddress, Address const& _caller,
+    bcos::executive::EnvInfo const& _envInfo, Address const& _myAddress, Address const& _caller,
     Address const& _origin, u256 const& _value, u256 const& _gasPrice, bytesConstRef _data,
     const bytes& _code, h256 const& _codeHash, unsigned _depth, bool _isCreate, bool _staticCall,
     bool _freeStorage)
@@ -251,7 +251,7 @@ evmc_result EVMHostContext::call(CallParameters& _p)
     return evmcResult;
 }
 
-size_t EVMHostContext::codeSizeAt(dev::Address const& _a)
+size_t EVMHostContext::codeSizeAt(bcos::Address const& _a)
 {
     if (m_envInfo.precompiledEngine()->isPrecompiled(_a))
     {
@@ -334,4 +334,4 @@ h256 EVMHostContext::blockHash(int64_t _number)
     return envInfo().numberHash(_number);
 }
 }  // namespace executive
-}  // namespace dev
+}  // namespace bcos

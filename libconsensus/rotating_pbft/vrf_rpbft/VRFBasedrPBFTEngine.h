@@ -27,24 +27,24 @@
 #define VRFRPBFTEngine_LOG(LEVEL) \
     LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("VRFBasedrPBFTEngine")
 
-namespace dev
+namespace bcos
 {
 namespace consensus
 {
-class VRFBasedrPBFTEngine : public dev::consensus::RotatingPBFTEngine
+class VRFBasedrPBFTEngine : public bcos::consensus::RotatingPBFTEngine
 {
 public:
     using Ptr = std::shared_ptr<VRFBasedrPBFTEngine>;
-    VRFBasedrPBFTEngine(dev::p2p::P2PInterface::Ptr _service,
-        dev::txpool::TxPoolInterface::Ptr _txPool,
-        dev::blockchain::BlockChainInterface::Ptr _blockChain,
-        dev::sync::SyncInterface::Ptr _blockSync,
-        dev::blockverifier::BlockVerifierInterface::Ptr _blockVerifier,
-        dev::PROTOCOL_ID const& _protocolId, KeyPair const& _keyPair,
+    VRFBasedrPBFTEngine(bcos::p2p::P2PInterface::Ptr _service,
+        bcos::txpool::TxPoolInterface::Ptr _txPool,
+        bcos::blockchain::BlockChainInterface::Ptr _blockChain,
+        bcos::sync::SyncInterface::Ptr _blockSync,
+        bcos::blockverifier::BlockVerifierInterface::Ptr _blockVerifier,
+        bcos::PROTOCOL_ID const& _protocolId, KeyPair const& _keyPair,
         h512s const& _sealerList = h512s())
       : RotatingPBFTEngine(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
             _keyPair, _sealerList),
-        m_nodeID2Index(std::make_shared<std::map<dev::h512, IDXTYPE>>())
+        m_nodeID2Index(std::make_shared<std::map<bcos::h512, IDXTYPE>>())
     {}
 
     bool shouldRotateSealers() { return m_shouldRotateSealers.load(); }
@@ -56,16 +56,16 @@ protected:
     void updateConsensusNodeList() override;
 
     void resetConfig() override;
-    void checkTransactionsValid(dev::eth::Block::Ptr _block, PrepareReq::Ptr _prepareReq) override;
-    void tryToForwardRemainingTxs(std::set<dev::h512> const& _lastEpochWorkingSealers);
+    void checkTransactionsValid(bcos::eth::Block::Ptr _block, PrepareReq::Ptr _prepareReq) override;
+    void tryToForwardRemainingTxs(std::set<bcos::h512> const& _lastEpochWorkingSealers);
 
 private:
     // Used to notify Sealer whether it needs to rotate sealers
     std::atomic_bool m_shouldRotateSealers = {false};
     std::atomic<int64_t> m_workingSealersNum = {0};
 
-    std::shared_ptr<std::map<dev::h512, IDXTYPE>> m_nodeID2Index;
+    std::shared_ptr<std::map<bcos::h512, IDXTYPE>> m_nodeID2Index;
     mutable SharedMutex x_nodeID2Index;
 };
 }  // namespace consensus
-}  // namespace dev
+}  // namespace bcos

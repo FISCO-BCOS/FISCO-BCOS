@@ -29,13 +29,13 @@
 #pragma once
 #include "ConsensusEngineBase.h"
 #include <libblockchain/BlockChainInterface.h>
-#include <libdevcore/Worker.h>
 #include <libethcore/Block.h>
 #include <libethcore/Exceptions.h>
 #include <libsync/SyncInterface.h>
 #include <libtxpool/TxPool.h>
 #include <libtxpool/TxPoolInterface.h>
-namespace dev
+#include <libutilities/Worker.h>
+namespace bcos
 {
 namespace consensus
 {
@@ -52,9 +52,9 @@ public:
      * @param _protocolId: protocolId
      * @param _sealerList: sealers to generate and execute block
      */
-    Sealer(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
-        std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-        std::shared_ptr<dev::sync::SyncInterface> _blockSync)
+    Sealer(std::shared_ptr<bcos::txpool::TxPoolInterface> _txPool,
+        std::shared_ptr<bcos::blockchain::BlockChainInterface> _blockChain,
+        std::shared_ptr<bcos::sync::SyncInterface> _blockSync)
       : Worker("Sealer", 0),
         m_txPool(_txPool),
         m_blockSync(_blockSync),
@@ -106,7 +106,7 @@ public:
     }
 
     /// return the pointer of ConsensusInterface to access common interfaces
-    std::shared_ptr<dev::consensus::ConsensusInterface> const consensusEngine()
+    std::shared_ptr<bcos::consensus::ConsensusInterface> const consensusEngine()
     {
         return m_consensusEngine;
     }
@@ -117,7 +117,7 @@ public:
         m_consensusEngine = _consensusEngine;
     }
 
-    virtual void setBlockFactory(dev::eth::BlockFactory::Ptr _blockFactory)
+    virtual void setBlockFactory(bcos::eth::BlockFactory::Ptr _blockFactory)
     {
         m_sealing.setBlockFactory(_blockFactory);
         m_consensusEngine->setBlockFactory(_blockFactory);
@@ -162,11 +162,11 @@ protected:
     /// reset the sealing block before loadTransactions
     void resetSealingBlock(
         Sealing& sealing, h256Hash const& filter = h256Hash(), bool resetNextLeader = false);
-    void resetBlock(std::shared_ptr<dev::eth::Block> block, bool resetNextLeader = false);
+    void resetBlock(std::shared_ptr<bcos::eth::Block> block, bool resetNextLeader = false);
 
     /// reset the sealing Header after loadTransactions, before generate and broadcast local prepare
     /// message
-    void resetSealingHeader(dev::eth::BlockHeader& header);
+    void resetSealingHeader(bcos::eth::BlockHeader& header);
     /// reset timestamp of block header
     void resetCurrentTime()
     {
@@ -183,12 +183,12 @@ protected:
         return m_maxBlockCanSeal;
     }
     /// transaction pool handler
-    std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool;
+    std::shared_ptr<bcos::txpool::TxPoolInterface> m_txPool;
     /// handler of the block-sync module
-    std::shared_ptr<dev::sync::SyncInterface> m_blockSync;
+    std::shared_ptr<bcos::sync::SyncInterface> m_blockSync;
     /// handler of the block chain module
-    std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
-    std::shared_ptr<dev::consensus::ConsensusInterface> m_consensusEngine;
+    std::shared_ptr<bcos::blockchain::BlockChainInterface> m_blockChain;
+    std::shared_ptr<bcos::consensus::ConsensusInterface> m_consensusEngine;
 
     /// current sealing block(include block, transaction set of block and execute context)
     Sealing m_sealing;
@@ -222,4 +222,4 @@ protected:
     mutable SharedMutex x_maxBlockCanSeal;
 };
 }  // namespace consensus
-}  // namespace dev
+}  // namespace bcos

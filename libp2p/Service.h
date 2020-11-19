@@ -27,19 +27,19 @@
 #include "P2PInterface.h"
 #include "P2PMessageFactory.h"
 #include "P2PSession.h"
-#include <libdevcore/Common.h>
-#include <libdevcore/Exceptions.h>
-#include <libdevcore/FixedHash.h>
-#include <libdevcore/TopicInfo.h>
 #include <libflowlimit/RateLimiter.h>
 #include <libnetwork/Host.h>
 #include <libnetwork/PeerWhitelist.h>
 #include <libstat/ChannelNetworkStatHandler.h>
+#include <libutilities/Common.h>
+#include <libutilities/Exceptions.h>
+#include <libutilities/FixedHash.h>
+#include <libutilities/TopicInfo.h>
 #include <map>
 #include <memory>
 #include <unordered_map>
 
-namespace dev
+namespace bcos
 {
 namespace p2p
 {
@@ -61,32 +61,34 @@ public:
     virtual bool actived() { return m_run; }
     NodeID id() const override { return m_alias.pub(); }
 
-    virtual void onConnect(dev::network::NetworkException e, dev::network::NodeInfo const& nodeInfo,
-        std::shared_ptr<dev::network::SessionFace> session);
-    virtual void onDisconnect(dev::network::NetworkException e, P2PSession::Ptr p2pSession);
-    virtual void onMessage(dev::network::NetworkException e, dev::network::SessionFace::Ptr session,
-        dev::network::Message::Ptr message, P2PSession::Ptr p2pSession);
+    virtual void onConnect(bcos::network::NetworkException e,
+        bcos::network::NodeInfo const& nodeInfo,
+        std::shared_ptr<bcos::network::SessionFace> session);
+    virtual void onDisconnect(bcos::network::NetworkException e, P2PSession::Ptr p2pSession);
+    virtual void onMessage(bcos::network::NetworkException e,
+        bcos::network::SessionFace::Ptr session, bcos::network::Message::Ptr message,
+        P2PSession::Ptr p2pSession);
 
     void onLocalAMOPMessage(
-        P2PMessage::Ptr message, CallbackFuncWithSession callback, dev::network::Options options);
+        P2PMessage::Ptr message, CallbackFuncWithSession callback, bcos::network::Options options);
 
     std::shared_ptr<P2PMessage> sendMessageByNodeID(
         NodeID nodeID, std::shared_ptr<P2PMessage> message) override;
     void asyncSendMessageByNodeID(NodeID nodeID, std::shared_ptr<P2PMessage> message,
         CallbackFuncWithSession callback,
-        dev::network::Options options = dev::network::Options()) override;
+        bcos::network::Options options = bcos::network::Options()) override;
 
     std::shared_ptr<P2PMessage> sendMessageByTopic(
         std::string topic, std::shared_ptr<P2PMessage> message) override;
     void asyncSendMessageByTopic(std::string topic, std::shared_ptr<P2PMessage> message,
-        CallbackFuncWithSession callback, dev::network::Options options) override;
+        CallbackFuncWithSession callback, bcos::network::Options options) override;
 
     bool asyncMulticastMessageByTopic(std::string topic, std::shared_ptr<P2PMessage> message,
-        dev::flowlimit::RateLimiter::Ptr _bandwidthLimiter = nullptr) override;
+        bcos::flowlimit::RateLimiter::Ptr _bandwidthLimiter = nullptr) override;
     void asyncMulticastMessageByNodeIDList(
         NodeIDs nodeIDs, std::shared_ptr<P2PMessage> message) override;
     void asyncBroadcastMessage(
-        std::shared_ptr<P2PMessage> message, dev::network::Options options) override;
+        std::shared_ptr<P2PMessage> message, bcos::network::Options options) override;
 
     void registerHandlerByProtoclID(
         PROTOCOL_ID protocolID, CallbackFuncWithSession handler) override;
@@ -95,8 +97,8 @@ public:
 
     void registerHandlerByTopic(std::string topic, CallbackFuncWithSession handler) override;
 
-    virtual std::map<dev::network::NodeIPEndpoint, NodeID> staticNodes() { return m_staticNodes; }
-    virtual void setStaticNodes(std::map<dev::network::NodeIPEndpoint, NodeID> staticNodes)
+    virtual std::map<bcos::network::NodeIPEndpoint, NodeID> staticNodes() { return m_staticNodes; }
+    virtual void setStaticNodes(std::map<bcos::network::NodeIPEndpoint, NodeID> staticNodes)
     {
         m_staticNodes = staticNodes;
     }
@@ -135,8 +137,8 @@ public:
         ++m_topicSeq;
     }
 
-    virtual std::shared_ptr<dev::network::Host> host() override { return m_host; }
-    virtual void setHost(std::shared_ptr<dev::network::Host> host) { m_host = host; }
+    virtual std::shared_ptr<bcos::network::Host> host() override { return m_host; }
+    virtual void setHost(std::shared_ptr<bcos::network::Host> host) { m_host = host; }
 
     std::shared_ptr<P2PMessageFactory> p2pMessageFactory() override { return m_p2pMessageFactory; }
     virtual void setP2PMessageFactory(std::shared_ptr<P2PMessageFactory> _p2pMessageFactory)
@@ -147,7 +149,7 @@ public:
     virtual KeyPair keyPair() { return m_alias; }
     virtual void setKeyPair(KeyPair keyPair) { m_alias = keyPair; }
     void updateStaticNodes(
-        std::shared_ptr<dev::network::SocketFace> const& _s, NodeID const& nodeId);
+        std::shared_ptr<bcos::network::SocketFace> const& _s, NodeID const& nodeId);
 
     void setCallbackFuncForTopicVerify(CallbackFuncForTopicVerify channelRpcCallBack) override
     {
@@ -155,8 +157,9 @@ public:
     }
 
     RecursiveMutex& localAMOPCallbacksLock() { return x_localAMOPCallbacks; }
-    std::shared_ptr<std::unordered_map<uint32_t,
-        std::pair<std::shared_ptr<boost::asio::deadline_timer>, dev::p2p::CallbackFuncWithSession>>>
+    std::shared_ptr<
+        std::unordered_map<uint32_t, std::pair<std::shared_ptr<boost::asio::deadline_timer>,
+                                         bcos::p2p::CallbackFuncWithSession>>>
     localAMOPCallbacks()
     {
         return m_localAMOPCallbacks;
@@ -167,7 +170,7 @@ public:
         return m_channelRpcCallBack;
     }
 
-    std::shared_ptr<dev::p2p::P2PSession> getP2PSessionByNodeId(NodeID const& _nodeID) override
+    std::shared_ptr<bcos::p2p::P2PSession> getP2PSessionByNodeId(NodeID const& _nodeID) override
     {
         RecursiveGuard l(x_sessions);
         auto it = m_sessions.find(_nodeID);
@@ -178,18 +181,18 @@ public:
         return nullptr;
     }
 
-    void appendNetworkStatHandlerByGroupID(
-        GROUP_ID const& _groupID, std::shared_ptr<dev::stat::NetworkStatHandler> _handler) override;
+    void appendNetworkStatHandlerByGroupID(GROUP_ID const& _groupID,
+        std::shared_ptr<bcos::stat::NetworkStatHandler> _handler) override;
 
     void removeNetworkStatHandlerByGroupID(GROUP_ID const& _groupID) override;
 
-    void setNodeBandwidthLimiter(dev::flowlimit::RateLimiter::Ptr _bandwidthLimiter) override;
+    void setNodeBandwidthLimiter(bcos::flowlimit::RateLimiter::Ptr _bandwidthLimiter) override;
     void registerGroupBandwidthLimiter(
-        GROUP_ID const& _groupID, dev::flowlimit::RateLimiter::Ptr _bandwidthLimiter) override;
+        GROUP_ID const& _groupID, bcos::flowlimit::RateLimiter::Ptr _bandwidthLimiter) override;
     void removeGroupBandwidthLimiter(GROUP_ID const& _groupID) override;
 
     void setChannelNetworkStatHandler(
-        dev::stat::ChannelNetworkStatHandler::Ptr _channelNetworkStatHandler) override
+        bcos::stat::ChannelNetworkStatHandler::Ptr _channelNetworkStatHandler) override
     {
         m_channelNetworkStatHandler = _channelNetworkStatHandler;
     }
@@ -215,10 +218,10 @@ private:
     void acquirePermits(P2PMessage::Ptr _msg);
 
 private:
-    std::map<dev::network::NodeIPEndpoint, NodeID> m_staticNodes;
+    std::map<bcos::network::NodeIPEndpoint, NodeID> m_staticNodes;
     RecursiveMutex x_nodes;
 
-    std::shared_ptr<dev::network::Host> m_host;
+    std::shared_ptr<bcos::network::Host> m_host;
 
     std::unordered_map<NodeID, P2PSession::Ptr> m_sessions;
     mutable RecursiveMutex x_sessions;
@@ -252,23 +255,24 @@ private:
     PeerWhitelist::Ptr m_whitelist;
 
     // for network statistics
-    std::shared_ptr<std::map<GROUP_ID, std::shared_ptr<dev::stat::NetworkStatHandler>>>
+    std::shared_ptr<std::map<GROUP_ID, std::shared_ptr<bcos::stat::NetworkStatHandler>>>
         m_group2NetworkStatHandler;
     mutable SharedMutex x_group2NetworkStatHandler;
 
     // for bandwidth limitation
-    std::shared_ptr<std::map<GROUP_ID, dev::flowlimit::RateLimiter::Ptr>> m_group2BandwidthLimiter;
+    std::shared_ptr<std::map<GROUP_ID, bcos::flowlimit::RateLimiter::Ptr>> m_group2BandwidthLimiter;
     mutable SharedMutex x_group2BandwidthLimiter;
 
-    dev::flowlimit::RateLimiter::Ptr m_nodeBandwidthLimiter;
-    dev::stat::ChannelNetworkStatHandler::Ptr m_channelNetworkStatHandler;
+    bcos::flowlimit::RateLimiter::Ptr m_nodeBandwidthLimiter;
+    bcos::stat::ChannelNetworkStatHandler::Ptr m_channelNetworkStatHandler;
 
     mutable RecursiveMutex x_localAMOPCallbacks;
-    std::shared_ptr<std::unordered_map<uint32_t,
-        std::pair<std::shared_ptr<boost::asio::deadline_timer>, dev::p2p::CallbackFuncWithSession>>>
+    std::shared_ptr<
+        std::unordered_map<uint32_t, std::pair<std::shared_ptr<boost::asio::deadline_timer>,
+                                         bcos::p2p::CallbackFuncWithSession>>>
         m_localAMOPCallbacks;
 };
 
 }  // namespace p2p
 
-}  // namespace dev
+}  // namespace bcos

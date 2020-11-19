@@ -22,10 +22,10 @@
  */
 #include "SyncTreeTopology.h"
 
-using namespace dev;
-using namespace dev::sync;
+using namespace bcos;
+using namespace bcos::sync;
 
-void SyncTreeTopology::updateNodeListInfo(dev::h512s const& _nodeList)
+void SyncTreeTopology::updateNodeListInfo(bcos::h512s const& _nodeList)
 {
     Guard l(m_mutex);
 
@@ -46,7 +46,7 @@ void SyncTreeTopology::updateNodeListInfo(dev::h512s const& _nodeList)
 }
 
 void SyncTreeTopology::updateAllNodeInfo(
-    dev::h512s const& _consensusNodes, dev::h512s const& _nodeList)
+    bcos::h512s const& _consensusNodes, bcos::h512s const& _nodeList)
 {
     Guard l(m_mutex);
     if (_nodeList == *m_nodeList && _consensusNodes == *m_currentConsensusNodes)
@@ -138,8 +138,8 @@ bool SyncTreeTopology::locatedInGroup()
 }
 
 // select the child nodes by tree
-void SyncTreeTopology::recursiveSelectChildNodes(std::shared_ptr<dev::h512s> _selectedNodeList,
-    ssize_t const& _parentIndex, std::shared_ptr<std::set<dev::h512>> _peers,
+void SyncTreeTopology::recursiveSelectChildNodes(std::shared_ptr<bcos::h512s> _selectedNodeList,
+    ssize_t const& _parentIndex, std::shared_ptr<std::set<bcos::h512>> _peers,
     int64_t const& _startIndex)
 {
     // if the node doesn't locate in the group
@@ -152,8 +152,8 @@ void SyncTreeTopology::recursiveSelectChildNodes(std::shared_ptr<dev::h512s> _se
 }
 
 // select the parent nodes by tree
-void SyncTreeTopology::selectParentNodes(std::shared_ptr<dev::h512s> _selectedNodeList,
-    std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _nodeIndex,
+void SyncTreeTopology::selectParentNodes(std::shared_ptr<bcos::h512s> _selectedNodeList,
+    std::shared_ptr<std::set<bcos::h512>> _peers, int64_t const& _nodeIndex,
     int64_t const& _startIndex, bool const&)
 {
     // if the node doesn't locate in the group
@@ -176,11 +176,11 @@ void SyncTreeTopology::selectParentNodes(std::shared_ptr<dev::h512s> _selectedNo
     return TreeTopology::selectParentNodes(_selectedNodeList, _peers, _nodeIndex, _startIndex);
 }
 
-std::shared_ptr<dev::h512s> SyncTreeTopology::selectNodesForBlockSync(
-    std::shared_ptr<std::set<dev::h512>> _peers)
+std::shared_ptr<bcos::h512s> SyncTreeTopology::selectNodesForBlockSync(
+    std::shared_ptr<std::set<bcos::h512>> _peers)
 {
     Guard l(m_mutex);
-    std::shared_ptr<dev::h512s> selectedNodeList = std::make_shared<dev::h512s>();
+    std::shared_ptr<bcos::h512s> selectedNodeList = std::make_shared<bcos::h512s>();
     // the node doesn't locate in the group
     if (!locatedInGroup())
     {

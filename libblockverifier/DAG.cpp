@@ -23,8 +23,8 @@
 #include "DAG.h"
 #include <libconfig/GlobalConfigure.h>
 using namespace std;
-using namespace dev;
-using namespace dev::blockverifier;
+using namespace bcos;
+using namespace bcos::blockverifier;
 
 DAG::~DAG()
 {

@@ -24,12 +24,12 @@
 #include <json/json.h>
 #include <libblockverifier/BlockVerifierInterface.h>
 #include <libblockverifier/ExecutiveContext.h>
-#include <libdevcore/FixedHash.h>
 #include <libethcore/BlockFactory.h>
+#include <libutilities/FixedHash.h>
 
 #define SEAL_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("SEALER")
 #define ENGINE_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("ConsensusEngine")
-namespace dev
+namespace bcos
 {
 namespace consensus
 {
@@ -38,13 +38,13 @@ typedef int64_t VIEWTYPE;
 static const IDXTYPE MAXIDX = UINT16_MAX;
 static const VIEWTYPE MAXVIEW = INT64_MAX;
 static const uint8_t MAXTTL = 2;
-DEV_SIMPLE_EXCEPTION(DisabledFutureTime);
-DEV_SIMPLE_EXCEPTION(OverThresTransNum);
-DEV_SIMPLE_EXCEPTION(InvalidBlockHeight);
-DEV_SIMPLE_EXCEPTION(ExistedBlock);
-DEV_SIMPLE_EXCEPTION(ParentNoneExist);
-DEV_SIMPLE_EXCEPTION(WrongParentHash);
-DEV_SIMPLE_EXCEPTION(BlockSealerListWrong);
+DERIVE_BCOS_EXCEPTION(DisabledFutureTime);
+DERIVE_BCOS_EXCEPTION(OverThresTransNum);
+DERIVE_BCOS_EXCEPTION(InvalidBlockHeight);
+DERIVE_BCOS_EXCEPTION(ExistedBlock);
+DERIVE_BCOS_EXCEPTION(ParentNoneExist);
+DERIVE_BCOS_EXCEPTION(WrongParentHash);
+DERIVE_BCOS_EXCEPTION(BlockSealerListWrong);
 
 enum NodeAccountType
 {
@@ -56,19 +56,19 @@ class Sealing
 {
 public:
     Sealing() {}
-    Sealing(dev::eth::BlockFactory::Ptr _blockFactory) { setBlockFactory(_blockFactory); }
-    void setBlockFactory(dev::eth::BlockFactory::Ptr _blockFactory)
+    Sealing(bcos::eth::BlockFactory::Ptr _blockFactory) { setBlockFactory(_blockFactory); }
+    void setBlockFactory(bcos::eth::BlockFactory::Ptr _blockFactory)
     {
         m_blockFactory = _blockFactory;
         block = m_blockFactory->createBlock();
     }
 
-    std::shared_ptr<dev::eth::Block> block;
+    std::shared_ptr<bcos::eth::Block> block;
     /// hash set for filter fetched transactions
     h256Hash m_transactionSet;
-    dev::blockverifier::ExecutiveContext::Ptr p_execContext;
-    dev::eth::BlockFactory::Ptr m_blockFactory;
+    bcos::blockverifier::ExecutiveContext::Ptr p_execContext;
+    bcos::eth::BlockFactory::Ptr m_blockFactory;
 };
 
 }  // namespace consensus
-}  // namespace dev
+}  // namespace bcos

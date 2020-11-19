@@ -21,17 +21,17 @@
 
 #include "libdevcrypto/SM3Hash.h"
 #include "libdevcrypto/sm3/sm3.h"
-#include <libdevcore/RLP.h>
 #include <libethcore/Exceptions.h>
+#include <libutilities/RLP.h>
 #include <secp256k1_sha256.h>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 using namespace std;
-using namespace dev;
+using namespace bcos;
 
-bool dev::sm3(bytesConstRef _input, bytesRef o_output)
+bool bcos::sm3(bytesConstRef _input, bytesRef o_output)
 {  // FIXME: What with unaligned memory?
     if (o_output.size() != 32)
         return false;
@@ -41,7 +41,7 @@ bool dev::sm3(bytesConstRef _input, bytesRef o_output)
     return true;
 }
 
-bool dev::sm3(const uint8_t* _data, size_t _size, uint8_t* _hash)
+bool bcos::sm3(const uint8_t* _data, size_t _size, uint8_t* _hash)
 {
     SM3Hash::getInstance().sm3(_data, _size, _hash);
     return true;

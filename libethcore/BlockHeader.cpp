@@ -27,12 +27,12 @@
 #include "Common.h"
 #include "Exceptions.h"
 #include "libdevcrypto/CryptoInterface.h"
-#include <libdevcore/Common.h>
-#include <libdevcore/RLP.h>
-#include <libdevcore/TrieHash.h>
+#include <libutilities/Common.h>
+#include <libutilities/RLP.h>
+#include <libutilities/TrieHash.h>
 using namespace std;
-using namespace dev;
-using namespace dev::eth;
+using namespace bcos;
+using namespace bcos::eth;
 /// construct empty block header
 BlockHeader::BlockHeader() {}
 

@@ -26,7 +26,7 @@
 #include <iostream>
 #include <sstream>
 
-namespace dev
+namespace bcos
 {
 struct Exception;
 namespace eth
@@ -84,4 +84,4 @@ inline std::string toJS(eth::TransactionException const& _i)
     return stream.str();
 }
 }  // namespace eth
-}  // namespace dev
+}  // namespace bcos

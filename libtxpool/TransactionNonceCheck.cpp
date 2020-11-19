@@ -22,12 +22,12 @@
  */
 
 #include "TransactionNonceCheck.h"
-#include <libdevcore/Common.h>
+#include <libutilities/Common.h>
 
-using namespace dev;
-using namespace dev::eth;
-using namespace dev::blockchain;
-namespace dev
+using namespace bcos;
+using namespace bcos::eth;
+using namespace bcos::blockchain;
+namespace bcos
 {
 namespace txpool
 {
@@ -56,7 +56,7 @@ bool TransactionNonceCheck::ok(Transaction const& _transaction)
     return isBlockLimitOk(_transaction) && isNonceOk(_transaction);
 }
 
-std::shared_ptr<dev::txpool::NonceVec> TransactionNonceCheck::getNonceAndUpdateCache(
+std::shared_ptr<bcos::txpool::NonceVec> TransactionNonceCheck::getNonceAndUpdateCache(
     int64_t const& blockNumber, bool const& update)
 {
     std::shared_ptr<NonceVec> nonceVec;
@@ -108,7 +108,7 @@ void TransactionNonceCheck::updateCache(bool _rebuild)
     {
         try
         {
-            Timer timer;
+            // TIME_RECORD(LOG_DESC("updateCache") + LOG_KV("nonceCacheSize", m_cache.size()));
             m_blockNumber = m_blockChain->number();
             int64_t lastnumber = m_blockNumber;
             int64_t prestartblk = m_startblk;
@@ -162,9 +162,6 @@ void TransactionNonceCheck::updateCache(bool _rebuild)
                     m_cache.insert(nonce);
                 }
             }  // for
-            NONCECHECKER_LOG(DEBUG)
-                << LOG_DESC("updateCache") << LOG_KV("nonceCacheSize", m_cache.size())
-                << LOG_KV("costTime", timer.elapsed() * 1000);
         }
         catch (...)
         {
@@ -176,4 +173,4 @@ void TransactionNonceCheck::updateCache(bool _rebuild)
     }
 }  // fun
 }  // namespace txpool
-}  // namespace dev
+}  // namespace bcos

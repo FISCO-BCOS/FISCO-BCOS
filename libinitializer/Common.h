@@ -22,36 +22,36 @@
 
 #pragma once
 
-#include <libdevcore/Exceptions.h>
 #include <libdevcrypto/Common.h>
+#include <libutilities/Exceptions.h>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 
 #define INITIALIZER_LOG(LEVEL) LOG(LEVEL) << "[INITIALIZER]"
 #define ERROR_OUTPUT std::cout << "[INITIALIZER]"
 
-namespace dev
+namespace bcos
 {
-DEV_SIMPLE_EXCEPTION(InvalidListenPort);
-DEV_SIMPLE_EXCEPTION(ListenPortIsUsed);
-DEV_SIMPLE_EXCEPTION(ConfigNotExist);
-DEV_SIMPLE_EXCEPTION(InvalidConfig);
-DEV_SIMPLE_EXCEPTION(InitFailed);
+DERIVE_BCOS_EXCEPTION(InvalidListenPort);
+DERIVE_BCOS_EXCEPTION(ListenPortIsUsed);
+DERIVE_BCOS_EXCEPTION(ConfigNotExist);
+DERIVE_BCOS_EXCEPTION(InvalidConfig);
+DERIVE_BCOS_EXCEPTION(InitFailed);
 
 
 namespace initializer
 {
-DEV_SIMPLE_EXCEPTION(GroupExists);
-DEV_SIMPLE_EXCEPTION(GenesisNotExists);
-DEV_SIMPLE_EXCEPTION(GroupConfigNotExists);
+DERIVE_BCOS_EXCEPTION(GroupExists);
+DERIVE_BCOS_EXCEPTION(GenesisNotExists);
+DERIVE_BCOS_EXCEPTION(GroupConfigNotExists);
 
-DEV_SIMPLE_EXCEPTION(GenesisExists);
-DEV_SIMPLE_EXCEPTION(GroupConfigExists);
-DEV_SIMPLE_EXCEPTION(GroupGeneratorException);
-DEV_SIMPLE_EXCEPTION(InvalidGenesisGroupID);
-DEV_SIMPLE_EXCEPTION(InvalidGenesisTimestamp);
-DEV_SIMPLE_EXCEPTION(InvalidGenesisNodeid);
-DEV_SIMPLE_EXCEPTION(NotConnectGenesisNode);
+DERIVE_BCOS_EXCEPTION(GenesisExists);
+DERIVE_BCOS_EXCEPTION(GroupConfigExists);
+DERIVE_BCOS_EXCEPTION(GroupGeneratorException);
+DERIVE_BCOS_EXCEPTION(InvalidGenesisGroupID);
+DERIVE_BCOS_EXCEPTION(InvalidGenesisTimestamp);
+DERIVE_BCOS_EXCEPTION(InvalidGenesisNodeid);
+DERIVE_BCOS_EXCEPTION(NotConnectGenesisNode);
 
 inline bool isValidPort(int port)
 {
@@ -60,4 +60,4 @@ inline bool isValidPort(int port)
     return true;
 }
 }  // namespace initializer
-}  // namespace dev
+}  // namespace bcos

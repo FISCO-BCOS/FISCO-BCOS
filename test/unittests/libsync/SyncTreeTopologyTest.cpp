@@ -25,9 +25,9 @@
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev::sync;
+using namespace bcos::sync;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -37,15 +37,15 @@ class FakeSyncTreeTopology : public SyncTreeTopology
 {
 public:
     using Ptr = std::shared_ptr<FakeSyncTreeTopology>;
-    FakeSyncTreeTopology(dev::h512 const& _nodeId, unsigned const& _treeWidth = 2)
+    FakeSyncTreeTopology(bcos::h512 const& _nodeId, unsigned const& _treeWidth = 2)
       : SyncTreeTopology(_nodeId, _treeWidth)
     {}
 
-    virtual dev::h512s const& currentConsensusNodes() { return *m_currentConsensusNodes; }
+    virtual bcos::h512s const& currentConsensusNodes() { return *m_currentConsensusNodes; }
 
-    virtual dev::h512s const& nodeList() { return *m_nodeList; }
-    void recursiveSelectChildNodesWrapper(std::shared_ptr<dev::h512s> selectedNodeList,
-        ssize_t const& parentIndex, std::shared_ptr<std::set<dev::h512>> peers)
+    virtual bcos::h512s const& nodeList() { return *m_nodeList; }
+    void recursiveSelectChildNodesWrapper(std::shared_ptr<bcos::h512s> selectedNodeList,
+        ssize_t const& parentIndex, std::shared_ptr<std::set<bcos::h512>> peers)
     {
         int64_t offset = m_startIndex - 1;
         if (m_consIndex > 0)
@@ -60,8 +60,8 @@ public:
         }
     }
     // select the parent nodes by tree
-    void selectParentNodesWrapper(std::shared_ptr<dev::h512s> selectedNodeList,
-        std::shared_ptr<std::set<dev::h512>> peers, int64_t const& _nodeIndex)
+    void selectParentNodesWrapper(std::shared_ptr<bcos::h512s> selectedNodeList,
+        std::shared_ptr<std::set<bcos::h512>> peers, int64_t const& _nodeIndex)
     {
         int64_t offset = m_startIndex - 1;
         int64_t nodeIndex = _nodeIndex + 1 - m_startIndex;
@@ -69,7 +69,7 @@ public:
     }
     virtual int64_t nodeNum() { return m_nodeNum; }
 
-    virtual dev::h512 nodeId() { return m_nodeId; }
+    virtual bcos::h512 nodeId() { return m_nodeId; }
 
     virtual int64_t nodeIndex() const { return m_nodeIndex; }
     virtual int64_t consIndex() const { return m_consIndex; }
@@ -83,20 +83,20 @@ public:
     using Ptr = std::shared_ptr<SyncTreeToplogyFixture>;
     SyncTreeToplogyFixture(unsigned const& _treeWidth = 2)
     {
-        dev::h512 nodeId = KeyPair::create().pub();
+        bcos::h512 nodeId = KeyPair::create().pub();
         // create a 2-tree rounter
         m_syncTreeRouter = std::make_shared<FakeSyncTreeTopology>(nodeId, _treeWidth);
-        m_peers = std::make_shared<std::set<dev::h512>>();
+        m_peers = std::make_shared<std::set<bcos::h512>>();
     }
 
-    void addNodeIntoConsensusList(dev::h512 const& nodeId)
+    void addNodeIntoConsensusList(bcos::h512 const& nodeId)
     {
         m_nodeList.push_back(nodeId);
         m_consensusList.push_back(nodeId);
         m_peers->insert(nodeId);
     }
 
-    void addNodeIntoObserverList(dev::h512 const& nodeId)
+    void addNodeIntoObserverList(bcos::h512 const& nodeId)
     {
         m_nodeList.push_back(nodeId);
         m_peers->insert(nodeId);
@@ -107,7 +107,7 @@ public:
     {
         for (size_t i = 0; i < size; i++)
         {
-            dev::h512 nodeId = KeyPair::create().pub();
+            bcos::h512 nodeId = KeyPair::create().pub();
             m_consensusList.push_back(nodeId);
             m_nodeList.push_back(nodeId);
             m_peers->insert(nodeId);
@@ -119,7 +119,7 @@ public:
     {
         for (size_t i = 0; i < size; i++)
         {
-            dev::h512 nodeId = KeyPair::create().pub();
+            bcos::h512 nodeId = KeyPair::create().pub();
             m_nodeList.push_back(nodeId);
             m_peers->insert(nodeId);
         }
@@ -140,19 +140,19 @@ public:
         m_syncTreeRouter->updateAllNodeInfo(m_consensusList, m_nodeList);
     }
     std::shared_ptr<FakeSyncTreeTopology> syncTreeRouter() { return m_syncTreeRouter; }
-    dev::h512s const& consensusList() { return m_consensusList; }
-    dev::h512s const& nodeList() { return m_nodeList; }
-    std::shared_ptr<std::set<dev::h512>> peers() { return m_peers; }
+    bcos::h512s const& consensusList() { return m_consensusList; }
+    bcos::h512s const& nodeList() { return m_nodeList; }
+    std::shared_ptr<std::set<bcos::h512>> peers() { return m_peers; }
 
 private:
     std::shared_ptr<FakeSyncTreeTopology> m_syncTreeRouter = nullptr;
-    dev::h512s m_consensusList;  // faked consensus list
-    dev::h512s m_nodeList;       // faked node list
-    std::shared_ptr<std::set<dev::h512>> m_peers;
+    bcos::h512s m_consensusList;  // faked consensus list
+    bcos::h512s m_nodeList;       // faked node list
+    std::shared_ptr<std::set<bcos::h512>> m_peers;
 };
 
 void checkSelectedNodes(SyncTreeToplogyFixture::Ptr fakeSyncTreeTopology,
-    dev::h512s const& selectedNodes, std::vector<size_t> idxVec)
+    bcos::h512s const& selectedNodes, std::vector<size_t> idxVec)
 {
     BOOST_CHECK(selectedNodes.size() == idxVec.size());
     size_t i = 0;
@@ -194,10 +194,10 @@ BOOST_AUTO_TEST_CASE(testFreeNode)
     BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->endIndex() == 0);
 
     // selectNodes: no need to send blocks to any nodes
-    std::shared_ptr<dev::h512s> selectedNodeList = std::make_shared<dev::h512s>();
+    std::shared_ptr<bcos::h512s> selectedNodeList = std::make_shared<bcos::h512s>();
     fakeSyncTreeTopology->syncTreeRouter()->recursiveSelectChildNodesWrapper(
         selectedNodeList, -1, fakeSyncTreeTopology->peers());
-    BOOST_CHECK(*selectedNodeList == dev::h512s());
+    BOOST_CHECK(*selectedNodeList == bcos::h512s());
 }
 
 /// case2: the node locates in the observerList
@@ -225,16 +225,16 @@ BOOST_AUTO_TEST_CASE(testForTheObserverNode)
                 (int64_t)fakeSyncTreeTopology->nodeList().size());
 
     // select target nodes from peers for this node
-    std::shared_ptr<dev::h512s> selectedNodeList = std::make_shared<dev::h512s>();
+    std::shared_ptr<bcos::h512s> selectedNodeList = std::make_shared<bcos::h512s>();
     fakeSyncTreeTopology->syncTreeRouter()->recursiveSelectChildNodesWrapper(
         selectedNodeList, 2, fakeSyncTreeTopology->peers());
-    BOOST_CHECK(*selectedNodeList == dev::h512s());
+    BOOST_CHECK(*selectedNodeList == bcos::h512s());
 
     // select parent for the 2th nodes
     selectedNodeList->clear();
     fakeSyncTreeTopology->syncTreeRouter()->selectParentNodesWrapper(
         selectedNodeList, fakeSyncTreeTopology->peers(), 1);
-    BOOST_CHECK(*selectedNodeList == dev::h512s());
+    BOOST_CHECK(*selectedNodeList == bcos::h512s());
 
     /// case2: nodeIndex is 0
     fakeSyncTreeTopology->clearNodeList();
@@ -287,7 +287,7 @@ BOOST_AUTO_TEST_CASE(testForTheObserverNode)
         selectedNodeList->clear();
         fakeSyncTreeTopology->syncTreeRouter()->selectParentNodesWrapper(
             selectedNodeList, fakeSyncTreeTopology->peers(), i);
-        BOOST_CHECK(*selectedNodeList == dev::h512s());
+        BOOST_CHECK(*selectedNodeList == bcos::h512s());
     }
     // check parent for 2th node
     for (size_t i = 2; i <= 3; i++)
@@ -375,7 +375,7 @@ BOOST_AUTO_TEST_CASE(testForTheConsensusNode)
     BOOST_CHECK(fakeSyncTreeTopology->syncTreeRouter()->endIndex() == 6);
 
     // get childNodes and parentNodes for this node
-    std::shared_ptr<dev::h512s> selectedNodeList = std::make_shared<dev::h512s>();
+    std::shared_ptr<bcos::h512s> selectedNodeList = std::make_shared<bcos::h512s>();
     fakeSyncTreeTopology->syncTreeRouter()->recursiveSelectChildNodesWrapper(
         selectedNodeList, 0, fakeSyncTreeTopology->peers());
     checkSelectedNodes(fakeSyncTreeTopology, *selectedNodeList, {7, 8});
@@ -390,4 +390,4 @@ BOOST_AUTO_TEST_CASE(testForTheConsensusNode)
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

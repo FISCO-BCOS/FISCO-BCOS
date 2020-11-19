@@ -28,7 +28,7 @@
 #include <boost/algorithm/string/split.hpp>
 #include <boost/dynamic_bitset.hpp>
 
-using namespace dev::storage;
+using namespace bcos::storage;
 using namespace std;
 
 SQLBasicAccess::SQLBasicAccess()

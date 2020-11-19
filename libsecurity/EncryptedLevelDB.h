@@ -24,10 +24,10 @@
 #include "Common.h"
 #include <leveldb/db.h>
 #include <leveldb/slice.h>
-#include <libdevcore/BasicLevelDB.h>
+#include <libutilities/BasicLevelDB.h>
 #include <string>
 
-namespace dev
+namespace bcos
 {
 namespace db
 {
@@ -36,13 +36,13 @@ namespace db
 class EncryptedLevelDBWriteBatch : public LevelDBWriteBatch
 {
 public:
-    EncryptedLevelDBWriteBatch(const dev::bytes& _dataKey, const std::string& _name = "")
+    EncryptedLevelDBWriteBatch(const bcos::bytes& _dataKey, const std::string& _name = "")
       : m_dataKey(_dataKey), m_name(_name)
     {}
     void insertSlice(const leveldb::Slice& _key, const leveldb::Slice& _value) override;
 
 private:
-    dev::bytes m_dataKey;
+    bcos::bytes m_dataKey;
     std::string m_name;
 };
 
@@ -73,7 +73,7 @@ public:
 
 private:
     std::string m_cipherDataKey;
-    dev::bytes m_dataKey;
+    bcos::bytes m_dataKey;
 
 private:
     std::string getKeyOfDatabase();
@@ -81,4 +81,4 @@ private:
     EncryptedLevelDB::OpenDBStatus checkOpenDBStatus();
 };
 }  // namespace db
-}  // namespace dev
+}  // namespace bcos

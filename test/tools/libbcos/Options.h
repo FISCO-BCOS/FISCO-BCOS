@@ -23,13 +23,13 @@
  */
 
 #pragma once
-#include <libdevcore/Exceptions.h>
+#include <libutilities/Exceptions.h>
 #include <libexecutive/VMFactory.h>
-namespace dev
+namespace bcos
 {
 namespace test
 {
-DEV_SIMPLE_EXCEPTION(InvalidOption);
+DERIVE_BCOS_EXCEPTION(InvalidOption);
 
 class Options
 {
@@ -57,4 +57,4 @@ private:
 };
 
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

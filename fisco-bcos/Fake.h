@@ -42,12 +42,12 @@
 #include <unistd.h>
 #include <ctime>
 
-using namespace dev;
-using namespace dev::blockchain;
-using namespace dev::eth;
-using namespace dev::sync;
-using namespace dev::blockverifier;
-using namespace dev::ledger;
+using namespace bcos;
+using namespace bcos::blockchain;
+using namespace bcos::eth;
+using namespace bcos::sync;
+using namespace bcos::blockverifier;
+using namespace bcos::ledger;
 class FakeBlockChain : public BlockChainInterface
 {
 public:
@@ -89,14 +89,14 @@ public:
         return std::make_pair(m_totalFailedTransactionCount, m_blockChain.size() - 1);
     }
 
-    dev::h256 numberHash(int64_t _i) override
+    bcos::h256 numberHash(int64_t _i) override
     {
         ReadGuard l(x_blockChain);
         return m_blockChain[_i]->headerHash();
     }
 
-    std::shared_ptr<dev::eth::Block> getBlockByHash(
-        dev::h256 const& _blockHash, int64_t = -1) override
+    std::shared_ptr<bcos::eth::Block> getBlockByHash(
+        bcos::h256 const& _blockHash, int64_t = -1) override
     {
         ReadGuard l(x_blockChain);
         if (m_blockHash.count(_blockHash))
@@ -104,52 +104,53 @@ public:
         return nullptr;
     }
 
-    std::shared_ptr<dev::bytes> getBlockRLPByNumber(int64_t _i) override
+    std::shared_ptr<bcos::bytes> getBlockRLPByNumber(int64_t _i) override
     {
         return getBlockByHash(numberHash(_i))->rlpP();
     }
 
-    dev::eth::LocalisedTransaction::Ptr getLocalisedTxByHash(dev::h256 const&) override
+    bcos::eth::LocalisedTransaction::Ptr getLocalisedTxByHash(bcos::h256 const&) override
     {
         return std::make_shared<LocalisedTransaction>();
     }
-    dev::eth::Transaction::Ptr getTxByHash(dev::h256 const&) override
+    bcos::eth::Transaction::Ptr getTxByHash(bcos::h256 const&) override
     {
         return std::make_shared<Transaction>();
     }
-    dev::eth::TransactionReceipt::Ptr getTransactionReceiptByHash(dev::h256 const&) override
+    bcos::eth::TransactionReceipt::Ptr getTransactionReceiptByHash(bcos::h256 const&) override
     {
         return std::make_shared<TransactionReceipt>();
     }
 
-    dev::eth::LocalisedTransactionReceipt::Ptr getLocalisedTxReceiptByHash(
-        dev::h256 const&) override
+    bcos::eth::LocalisedTransactionReceipt::Ptr getLocalisedTxReceiptByHash(
+        bcos::h256 const&) override
     {
         return std::make_shared<LocalisedTransactionReceipt>(
             TransactionReceipt(), h256(0), h256(0), -1, Address(), Address(), -1, 0);
     }
 
-    std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) override
+    std::shared_ptr<bcos::eth::Block> getBlockByNumber(int64_t _i) override
     {
         return getBlockByHash(numberHash(_i));
     }
-    std::pair<dev::eth::LocalisedTransactionReceipt::Ptr,
+    std::pair<bcos::eth::LocalisedTransactionReceipt::Ptr,
         std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
-    getTransactionReceiptByHashWithProof(dev::h256 const&, dev::eth::LocalisedTransaction&) override
+    getTransactionReceiptByHashWithProof(
+        bcos::h256 const&, bcos::eth::LocalisedTransaction&) override
     {
         return std::make_pair(
-            std::make_shared<LocalisedTransactionReceipt>(dev::eth::TransactionException::None),
+            std::make_shared<LocalisedTransactionReceipt>(bcos::eth::TransactionException::None),
             std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>());
     }
     std::pair<LocalisedTransaction::Ptr,
         std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
-    getTransactionByHashWithProof(dev::h256 const&) override
+    getTransactionByHashWithProof(bcos::h256 const&) override
     {
         return std::make_pair(std::make_shared<LocalisedTransaction>(),
             std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>());
     }
-    CommitResult commitBlock(std::shared_ptr<dev::eth::Block> block,
-        std::shared_ptr<dev::blockverifier::ExecutiveContext>) override
+    CommitResult commitBlock(std::shared_ptr<bcos::eth::Block> block,
+        std::shared_ptr<bcos::blockverifier::ExecutiveContext>) override
     {
         if (block->blockHeader().number() == number() + 1)
         {
@@ -165,25 +166,25 @@ public:
         return CommitResult::OK;
     }
 
-    std::shared_ptr<std::vector<dev::eth::NonceKeyType>> getNonces(int64_t) override
+    std::shared_ptr<std::vector<bcos::eth::NonceKeyType>> getNonces(int64_t) override
     {
-        return std::make_shared<std::vector<dev::eth::NonceKeyType>>();
+        return std::make_shared<std::vector<bcos::eth::NonceKeyType>>();
     }
 
     bool checkAndBuildGenesisBlock(
-        std::shared_ptr<dev::ledger::LedgerParamInterface>, bool = true) override
+        std::shared_ptr<bcos::ledger::LedgerParamInterface>, bool = true) override
     {
         return true;
     }
 
-    dev::h512s sealerList() override { return dev::h512s(); };
-    dev::h512s observerList() override { return dev::h512s(); };
+    bcos::h512s sealerList() override { return bcos::h512s(); };
+    bcos::h512s observerList() override { return bcos::h512s(); };
     std::string getSystemConfigByKey(std::string const&, int64_t = -1) override
     {
         return "300000000";
     };
 
-    dev::bytes getCode(dev::Address) override { return bytes(); }
+    bcos::bytes getCode(bcos::Address) override { return bytes(); }
 
 private:
     std::map<h256, uint64_t> m_blockHash;
@@ -213,7 +214,7 @@ public:
     PROTOCOL_ID const& protocolId() const override { return m_protocolID; };
     void setProtocolId(PROTOCOL_ID const) override{};
 
-    void registerConsensusVerifyHandler(std::function<bool(dev::eth::Block const&)>) override{};
+    void registerConsensusVerifyHandler(std::function<bool(bcos::eth::Block const&)>) override{};
 
 private:
     SyncStatus m_status;
@@ -230,7 +231,7 @@ public:
     };
     virtual ~FakeBlockVerifier(){};
     std::shared_ptr<ExecutiveContext> executeBlock(
-        dev::eth::Block& block, BlockInfo const&) override
+        bcos::eth::Block& block, BlockInfo const&) override
     {
         /// execute time: 1000
         /// usleep(1000 * (block.getTransactionSize()));
@@ -238,7 +239,7 @@ public:
         return m_executiveContext;
     };
     /// fake the transaction receipt of the whole block
-    void fakeExecuteResult(dev::eth::Block& block)
+    void fakeExecuteResult(bcos::eth::Block& block)
     {
         std::shared_ptr<TransactionReceipts> receipts = std::make_shared<TransactionReceipts>();
         for (unsigned index = 0; index < block.getTransactionSize(); index++)
@@ -251,11 +252,11 @@ public:
         block.setTransactionReceipts(receipts);
     }
 
-    dev::eth::TransactionReceipt::Ptr executeTransaction(
-        const dev::eth::BlockHeader&, dev::eth::Transaction::Ptr) override
+    bcos::eth::TransactionReceipt::Ptr executeTransaction(
+        const bcos::eth::BlockHeader&, bcos::eth::Transaction::Ptr) override
     {
-        dev::eth::TransactionReceipt::Ptr receipt =
-            std::make_shared<dev::eth::TransactionReceipt>();
+        bcos::eth::TransactionReceipt::Ptr receipt =
+            std::make_shared<bcos::eth::TransactionReceipt>();
         return receipt;
     }
 
@@ -266,8 +267,8 @@ private:
 class FakeLedger : public Ledger
 {
 public:
-    FakeLedger(std::shared_ptr<dev::p2p::P2PInterface> service, dev::GROUP_ID const& _groupId,
-        dev::KeyPair const& _keyPair, std::string const&)
+    FakeLedger(std::shared_ptr<bcos::p2p::P2PInterface> service, bcos::GROUP_ID const& _groupId,
+        bcos::KeyPair const& _keyPair, std::string const&)
       : Ledger(service, _groupId, _keyPair)
     {}
     /// init the ledger(called by initializer)
@@ -275,7 +276,7 @@ public:
     {
         m_param = _ledgerParams;
         /// init dbInitializer
-        m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param, m_groupId);
+        m_dbInitializer = std::make_shared<bcos::ledger::DBInitializer>(m_param, m_groupId);
         /// init blockChain
         initBlockChain();
         /// intit blockVerifier
@@ -305,7 +306,8 @@ public:
 
     bool initEventLogFilterManager() override
     {
-        m_eventLogFilterManger = std::make_shared<dev::event::EventLogFilterManager>(nullptr, 0, 0);
+        m_eventLogFilterManger =
+            std::make_shared<bcos::event::EventLogFilterManager>(nullptr, 0, 0);
         return true;
     }
 

@@ -26,9 +26,9 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev;
-using namespace dev::blockverifier;
-using namespace dev::precompiled;
+using namespace bcos;
+using namespace bcos::blockverifier;
+using namespace bcos::precompiled;
 
 namespace test_GroupSigPrecompiled
 {
@@ -39,9 +39,9 @@ struct GroupSigPrecompiledFixture
         context = std::make_shared<ExecutiveContext>();
         groupSigPrecompiled = std::make_shared<GroupSigPrecompiled>();
 
-        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
+        auto precompiledGasFactory = std::make_shared<bcos::precompiled::PrecompiledGasFactory>(0);
         auto precompiledExecResultFactory =
-            std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+            std::make_shared<bcos::precompiled::PrecompiledExecResultFactory>();
         precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
         groupSigPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     }
@@ -133,7 +133,7 @@ BOOST_AUTO_TEST_CASE(TestGroupSigVerify)
         "IwNTg0NjEyNzQ3OTM2NTgyMDU5MjM5MzM3NzcyMzU2MTQ0MzcyMTc2NDAzMDA3MzU0Njk3NjgwMTg3NDI5ODE2Njkw"
         "MzQyNzY5MDAzMTg1ODE4NjQ4NjA1MDg1Mzc1Mzg4MjgxMTk0NjU2OTk0NjQzMzY0NDcxMTExNjgwMSBleHAyIDUxMi"
         "BleHAxIDMyIHNpZ24xIC0xIHNpZ24wIDE=";
-    dev::eth::ContractABI abi;
+    bcos::eth::ContractABI abi;
     bytes in = abi.abiIn(
         "groupSigVerify(string,string,string,string)", signature, message1, gpkInfo, paramInfo);
     auto execResult = groupSigPrecompiled->call(context, bytesConstRef(&in));
@@ -158,7 +158,7 @@ BOOST_AUTO_TEST_CASE(TestGroupSigVerify)
 
 BOOST_AUTO_TEST_CASE(ErrorFunc)
 {
-    dev::eth::ContractABI abi;
+    bcos::eth::ContractABI abi;
     bytes in = abi.abiIn("groupSigVerify(string)", std::string("2AE3FFE2"));
     auto execResult = groupSigPrecompiled->call(context, bytesConstRef(&in));
     bytes out = execResult->execResult();
@@ -177,7 +177,7 @@ BOOST_AUTO_TEST_CASE(ErrorFunc)
 BOOST_AUTO_TEST_CASE(InvalidInputs)
 {
     // situation1
-    dev::eth::ContractABI abi;
+    bcos::eth::ContractABI abi;
     bytes in = abi.abiIn("groupSigVerify(string,string,string,string)", std::string("2AE3FFE2"),
         std::string("2AE3FFE2"), std::string("2AE3FFE2"), std::string("2AE3FFE2"));
     auto execResult = groupSigPrecompiled->call(context, bytesConstRef(&in));

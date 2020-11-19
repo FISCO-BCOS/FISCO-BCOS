@@ -26,11 +26,11 @@
 #include <boost/algorithm/string.hpp>
 
 using namespace std;
-using namespace dev;
-using namespace dev::eth;
-using namespace dev::storage;
-using namespace dev::precompiled;
-using namespace dev::blockverifier;
+using namespace bcos;
+using namespace bcos::eth;
+using namespace bcos::storage;
+using namespace bcos::precompiled;
+using namespace bcos::blockverifier;
 
 /*
     table name: PARA_CONFIG_TABLE_PREFIX_CONTRACTADDR_
@@ -68,7 +68,7 @@ string ParallelConfigPrecompiled::toString()
 }
 
 PrecompiledExecResult::Ptr ParallelConfigPrecompiled::call(
-    dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin,
+    bcos::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin,
     Address const&)
 {
     // parse function name
@@ -94,7 +94,7 @@ PrecompiledExecResult::Ptr ParallelConfigPrecompiled::call(
     return callResult;
 }
 
-Table::Ptr ParallelConfigPrecompiled::openTable(dev::blockverifier::ExecutiveContext::Ptr context,
+Table::Ptr ParallelConfigPrecompiled::openTable(bcos::blockverifier::ExecutiveContext::Ptr context,
     Address const& contractAddress, Address const& origin, bool needCreate)
 {
     string tableName = PARA_CONFIG_TABLE_PREFIX + contractAddress.hex() + "_";
@@ -127,7 +127,7 @@ Table::Ptr ParallelConfigPrecompiled::openTable(dev::blockverifier::ExecutiveCon
 }
 
 void ParallelConfigPrecompiled::registerParallelFunction(
-    dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin,
+    bcos::blockverifier::ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin,
     bytes& out)
 {
     // registerParallelFunctionInternal(address,string,uint256)
@@ -183,7 +183,7 @@ void ParallelConfigPrecompiled::registerParallelFunction(
 }
 
 void ParallelConfigPrecompiled::unregisterParallelFunction(
-    dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin,
+    bcos::blockverifier::ExecutiveContext::Ptr context, bytesConstRef data, Address const& origin,
     bytes& out)
 {
     // unregisterParallelFunctionInternal(address,string)
@@ -209,7 +209,7 @@ void ParallelConfigPrecompiled::unregisterParallelFunction(
 
 
 ParallelConfig::Ptr ParallelConfigPrecompiled::getParallelConfig(
-    dev::blockverifier::ExecutiveContext::Ptr context, Address const& contractAddress,
+    bcos::blockverifier::ExecutiveContext::Ptr context, Address const& contractAddress,
     uint32_t selector, Address const& origin)
 {
     Table::Ptr table = openTable(context, contractAddress, origin, false);

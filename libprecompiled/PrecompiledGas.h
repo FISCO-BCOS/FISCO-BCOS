@@ -21,12 +21,12 @@
  * @date: 2020-03-23
  */
 #pragma once
-#include <libdevcore/Common.h>
 #include <libethcore/EVMFlags.h>
+#include <libutilities/Common.h>
 
 #define PrecompiledGas_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("LEDGER")
 
-namespace dev
+namespace bcos
 {
 namespace precompiled
 {
@@ -165,4 +165,4 @@ private:
     GasMetrics::Ptr m_gasMetric;
 };
 }  // namespace precompiled
-}  // namespace dev
+}  // namespace bcos

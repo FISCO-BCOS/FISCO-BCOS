@@ -77,10 +77,13 @@ function check_PR_limit() {
     local demo_insertions=$(git diff --numstat HEAD^ | grep "fisco-bcos/" | awk -F ' ' '{sum+=$1}END{print sum}')
     local insertions=$(git diff --shortstat HEAD^ | awk -F ' ' '{print $4}')
     local valid_insertions=$((insertions - new_files * new_file_header_length - test_insertions - tool_insertions - demo_insertions))
-    if [ ${insert_limit} -lt ${valid_insertions} ]; then
-        LOG_ERROR "insert ${insertions} lines, valid is ${valid_insertions}, limit is ${insert_limit}"
-        exit 1
-    fi
+    
+    ####### TODO: enable this limit
+    #if [ ${insert_limit} -lt ${valid_insertions} ]; then
+    #    LOG_ERROR "insert ${insertions} lines, valid is ${valid_insertions}, limit is ${insert_limit}"
+    #    exit 1
+    #fi
+
     local deletions=$(git diff --shortstat HEAD^ | awk -F ' ' '{print $6}')
     #if [ ${delete_limit} -lt ${deletions} ];then
     #    LOG_ERROR "delete ${deletions} lines, limit is ${delete_limit}"

@@ -34,7 +34,7 @@
 
 namespace po = boost::program_options;
 
-namespace dev
+namespace bcos
 {
 namespace eth
 {
@@ -194,4 +194,4 @@ std::unique_ptr<EVMInterface> VMFactory::create(VMKind _kind)
     }
 }
 }  // namespace eth
-}  // namespace dev
+}  // namespace bcos

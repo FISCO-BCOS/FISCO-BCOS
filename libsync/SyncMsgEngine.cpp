@@ -22,17 +22,17 @@
 #include "SyncMsgEngine.h"
 
 using namespace std;
-using namespace dev;
-using namespace dev::eth;
-using namespace dev::sync;
-using namespace dev::p2p;
-using namespace dev::blockchain;
-using namespace dev::txpool;
+using namespace bcos;
+using namespace bcos::eth;
+using namespace bcos::sync;
+using namespace bcos::p2p;
+using namespace bcos::blockchain;
+using namespace bcos::txpool;
 
-static size_t const c_maxPayload = dev::p2p::P2PMessage::MAX_LENGTH - 2048;
+static size_t const c_maxPayload = bcos::p2p::P2PMessage::MAX_LENGTH - 2048;
 
 void SyncMsgEngine::messageHandler(
-    NetworkException, std::shared_ptr<dev::p2p::P2PSession> _session, P2PMessage::Ptr _msg)
+    NetworkException, std::shared_ptr<bcos::p2p::P2PSession> _session, P2PMessage::Ptr _msg)
 {
     try
     {
@@ -70,7 +70,7 @@ void SyncMsgEngine::messageHandler(
     }
 }
 
-bool SyncMsgEngine::checkSession(std::shared_ptr<dev::p2p::P2PSession> _session)
+bool SyncMsgEngine::checkSession(std::shared_ptr<bcos::p2p::P2PSession> _session)
 {
     /// TODO: denine LocalIdentity after SyncPeer finished
     if (_session->nodeID() == m_nodeId)
@@ -95,7 +95,7 @@ bool SyncMsgEngine::checkGroupPacket(SyncMsgPacket const& _packet)
 }
 
 bool SyncMsgEngine::interpret(
-    SyncMsgPacket::Ptr _packet, dev::p2p::P2PMessage::Ptr _msg, dev::h512 const& _peer)
+    SyncMsgPacket::Ptr _packet, bcos::p2p::P2PMessage::Ptr _msg, bcos::h512 const& _peer)
 {
     try
     {
@@ -234,7 +234,7 @@ bool SyncMsgEngine::blockNumberFarBehind() const
     return m_syncStatus->knownHighestNumber - currentNumber > 20;
 }
 
-void SyncMsgEngine::onPeerTransactions(SyncMsgPacket::Ptr _packet, dev::p2p::P2PMessage::Ptr _msg)
+void SyncMsgEngine::onPeerTransactions(SyncMsgPacket::Ptr _packet, bcos::p2p::P2PMessage::Ptr _msg)
 {
     try
     {
@@ -323,7 +323,7 @@ void DownloadBlocksContainer::batchAndSend(BlockPtr _block)
     batchAndSend(blockRLP);
 }
 
-void DownloadBlocksContainer::batchAndSend(std::shared_ptr<dev::bytes> _blockRLP)
+void DownloadBlocksContainer::batchAndSend(std::shared_ptr<bcos::bytes> _blockRLP)
 {
     // TODO: thread safe
     bytes& blockRLP = *_blockRLP;
@@ -379,12 +379,12 @@ void DownloadBlocksContainer::sendBigBlock(bytes const& _blockRLP)
 
 // the last param (_msg) is necessary to ensure the life-time of _packet->rlp()
 void SyncMsgEngine::onPeerTxsStatus(
-    std::shared_ptr<SyncMsgPacket> _packet, dev::h512 const& _peer, dev::p2p::P2PMessage::Ptr)
+    std::shared_ptr<SyncMsgPacket> _packet, bcos::h512 const& _peer, bcos::p2p::P2PMessage::Ptr)
 {
     try
     {
         RLP const& rlps = _packet->rlp();
-        std::set<dev::h256> txsHash = rlps[1].toSet<dev::h256>();
+        std::set<bcos::h256> txsHash = rlps[1].toSet<bcos::h256>();
         // pop all downloaded txs into the txPool
         while (m_txQueue->bufferSize() > 0)
         {
@@ -418,13 +418,13 @@ void SyncMsgEngine::onPeerTxsStatus(
 }
 
 // the last param (_msg) is necessary to ensure the life-time of _txsReqPacket->rlp()
-void SyncMsgEngine::onReceiveTxsRequest(
-    std::shared_ptr<SyncMsgPacket> _txsReqPacket, dev::h512 const& _peer, dev::p2p::P2PMessage::Ptr)
+void SyncMsgEngine::onReceiveTxsRequest(std::shared_ptr<SyncMsgPacket> _txsReqPacket,
+    bcos::h512 const& _peer, bcos::p2p::P2PMessage::Ptr)
 {
     try
     {
         RLP const& rlps = _txsReqPacket->rlp();
-        std::vector<dev::h256> reqTxs = rlps[0].toVector<dev::h256>();
+        std::vector<bcos::h256> reqTxs = rlps[0].toVector<bcos::h256>();
         auto txs = m_txPool->obtainTransactions(reqTxs);
         if (0 == txs->size())
         {

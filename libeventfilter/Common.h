@@ -21,13 +21,12 @@
 
 #pragma once
 
-#include <libdevcore/Log.h>
 #include <libethcore/LogEntry.h>
 #include <libethcore/TransactionReceipt.h>
 
 #define EVENT_LOG(LEVEL) LOG(LEVEL) << "[EVENT]"
 
-namespace dev
+namespace bcos
 {
 namespace event
 {
@@ -59,4 +58,4 @@ enum filter_status
     CHECK_VALID = 5000,
 };
 }  // namespace event
-}  // namespace dev
+}  // namespace bcos

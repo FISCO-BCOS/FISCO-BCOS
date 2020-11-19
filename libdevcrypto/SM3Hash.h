@@ -21,13 +21,12 @@
 
 #pragma once
 
-#include <libdevcore/FixedHash.h>
-#include <libdevcore/vector_ref.h>
+#include <libutilities/FixedHash.h>
+#include <libutilities/vector_ref.h>
 #include <string>
 
-namespace dev
+namespace bcos
 {
-
 /// Calculate SM3-256 hash of the given input and load it into the given output.
 /// @returns false if o_output.size() != 32.
 bool sm3(bytesConstRef _input, bytesRef o_output);
@@ -114,4 +113,4 @@ inline void sm3mac(bytesConstRef _secret, bytesConstRef _plain, bytesRef _output
     sm3(_secret.toBytes() + _plain.toBytes()).ref().populate(_output);
 }
 
-}  // namespace dev
+}  // namespace bcos

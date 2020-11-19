@@ -22,14 +22,14 @@
 
 #pragma once
 
-#include "libdevcore/Common.h"
 #include "libethcore/BlockHeader.h"
 #include "libethcore/LogEntry.h"
+#include "libutilities/Common.h"
 #include <evmc/instructions.h>
 #include <functional>
 #include <set>
 
-namespace dev
+namespace bcos
 {
 namespace blockverifier
 {
@@ -93,7 +93,7 @@ struct CallParameters
 class EnvInfo
 {
 public:
-    typedef std::function<dev::h256(int64_t x)> CallBackFunction;
+    typedef std::function<bcos::h256(int64_t x)> CallBackFunction;
 
     // Constructor with custom gasLimit - used in some synthetic scenarios like eth_estimateGas RPC
     // method
@@ -128,14 +128,15 @@ public:
     /// @return used gas of the evm
     u256 const& gasUsed() const { return m_gasUsed; }
 
-    dev::h256 numberHash(int64_t x) const { return m_numberHash(x); }
+    bcos::h256 numberHash(int64_t x) const { return m_numberHash(x); }
 
-    std::shared_ptr<dev::blockverifier::ExecutiveContext> precompiledEngine() const
+    std::shared_ptr<bcos::blockverifier::ExecutiveContext> precompiledEngine() const
     {
         return m_executiveEngine;
     }
 
-    void setPrecompiledEngine(std::shared_ptr<dev::blockverifier::ExecutiveContext> executiveEngine)
+    void setPrecompiledEngine(
+        std::shared_ptr<bcos::blockverifier::ExecutiveContext> executiveEngine)
     {
         m_executiveEngine = executiveEngine;
     }
@@ -145,8 +146,8 @@ private:
     eth::BlockHeader m_headerInfo;
     CallBackFunction m_numberHash;
     u256 m_gasUsed;
-    std::shared_ptr<dev::blockverifier::ExecutiveContext> m_executiveEngine;
+    std::shared_ptr<bcos::blockverifier::ExecutiveContext> m_executiveEngine;
 };
 
 }  // namespace executive
-}  // namespace dev
+}  // namespace bcos

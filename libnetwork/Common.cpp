@@ -20,7 +20,7 @@
  */
 #include "Common.h"
 
-bool dev::network::getPublicKeyFromCert(std::shared_ptr<std::string> _nodeIDOut, X509* cert)
+bool bcos::network::getPublicKeyFromCert(std::shared_ptr<std::string> _nodeIDOut, X509* cert)
 {
     EVP_PKEY* evpPublicKey = X509_get_pubkey(cert);
     if (!evpPublicKey)
@@ -60,7 +60,7 @@ bool dev::network::getPublicKeyFromCert(std::shared_ptr<std::string> _nodeIDOut,
     return true;
 }
 
-std::ostream& dev::network::operator<<(std::ostream& _out, NodeIPEndpoint const& _endpoint)
+std::ostream& bcos::network::operator<<(std::ostream& _out, NodeIPEndpoint const& _endpoint)
 {
     _out << _endpoint.address() << ":" << _endpoint.port();
     return _out;

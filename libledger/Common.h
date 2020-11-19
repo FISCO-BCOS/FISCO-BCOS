@@ -22,24 +22,24 @@
  * @date: 2020-03-16
  */
 #pragma once
-#include <libdevcore/Exceptions.h>
+#include <libutilities/Exceptions.h>
 
-namespace dev
+namespace bcos
 {
 namespace ledger
 {
-DEV_SIMPLE_EXCEPTION(GenesisConfAlreadyExists);
-DEV_SIMPLE_EXCEPTION(GroupConfAlreadyExists);
+DERIVE_BCOS_EXCEPTION(GenesisConfAlreadyExists);
+DERIVE_BCOS_EXCEPTION(GroupConfAlreadyExists);
 
-DEV_SIMPLE_EXCEPTION(GroupNotFound);
-DEV_SIMPLE_EXCEPTION(GenesisConfNotFound);
-DEV_SIMPLE_EXCEPTION(GroupConfNotFound);
+DERIVE_BCOS_EXCEPTION(GroupNotFound);
+DERIVE_BCOS_EXCEPTION(GenesisConfNotFound);
+DERIVE_BCOS_EXCEPTION(GroupConfNotFound);
 
-DEV_SIMPLE_EXCEPTION(GroupIsRunning);
-DEV_SIMPLE_EXCEPTION(GroupIsStopping);
-DEV_SIMPLE_EXCEPTION(GroupAlreadyDeleted);
-DEV_SIMPLE_EXCEPTION(GroupAlreadyStopped);
+DERIVE_BCOS_EXCEPTION(GroupIsRunning);
+DERIVE_BCOS_EXCEPTION(GroupIsStopping);
+DERIVE_BCOS_EXCEPTION(GroupAlreadyDeleted);
+DERIVE_BCOS_EXCEPTION(GroupAlreadyStopped);
 
-DEV_SIMPLE_EXCEPTION(UnknownGroupStatus);
+DERIVE_BCOS_EXCEPTION(UnknownGroupStatus);
 }  // namespace ledger
-}  // namespace dev
+}  // namespace bcos

@@ -28,10 +28,10 @@
 #include <boost/lexical_cast.hpp>
 
 using namespace std;
-using namespace dev;
-using namespace dev::blockverifier;
-using namespace dev::storage;
-using namespace dev::precompiled;
+using namespace bcos;
+using namespace bcos::blockverifier;
+using namespace bcos::storage;
+using namespace bcos::precompiled;
 
 const char* const AUP_METHOD_INS = "insert(string,string)";
 const char* const AUP_METHOD_REM = "remove(string,string)";
@@ -68,7 +68,7 @@ PrecompiledExecResult::Ptr PermissionPrecompiled::call(
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
 
-    dev::eth::ContractABI abi;
+    bcos::eth::ContractABI abi;
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
     int result = 0;
     if (func == name2Selector[AUP_METHOD_INS])
@@ -304,7 +304,7 @@ PrecompiledExecResult::Ptr PermissionPrecompiled::call(
 }
 
 string PermissionPrecompiled::queryPermission(
-    std::shared_ptr<dev::blockverifier::ExecutiveContext> context, const string& tableName)
+    std::shared_ptr<bcos::blockverifier::ExecutiveContext> context, const string& tableName)
 {
     Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
 
@@ -330,7 +330,7 @@ string PermissionPrecompiled::queryPermission(
 }
 
 int PermissionPrecompiled::revokeWritePermission(
-    std::shared_ptr<dev::blockverifier::ExecutiveContext> context, const string& tableName,
+    std::shared_ptr<bcos::blockverifier::ExecutiveContext> context, const string& tableName,
     const string& user, Address const& origin, bool _isContractTable)
 {
     int result;

@@ -30,17 +30,16 @@
 
 #include "ChannelException.h"
 #include "Message.h"
-#include "libdevcore/ThreadPool.h"
+#include "libutilities/ThreadPool.h"
 #include <libconfig/GlobalConfigure.h>
-#include <libdevcore/Common.h>
-#include <libdevcore/FixedHash.h>
-#include <libdevcore/Guards.h>
 #include <libstat/ChannelNetworkStatHandler.h>
+#include <libutilities/Common.h>
+#include <libutilities/FixedHash.h>
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
 #include <boost/asio/ssl/stream.hpp>
 
-namespace dev
+namespace bcos
 {
 namespace channel
 {
@@ -51,14 +50,14 @@ public:
     virtual ~ChannelSession() { CHANNEL_LOG(TRACE) << "ChannelSession exit"; };
 
     typedef std::shared_ptr<ChannelSession> Ptr;
-    typedef std::function<void(dev::channel::ChannelException, dev::channel::Message::Ptr)>
+    typedef std::function<void(bcos::channel::ChannelException, bcos::channel::Message::Ptr)>
         CallbackType;
 
     const size_t bufferLength = 1024;
 
     virtual Message::Ptr sendMessage(Message::Ptr request, size_t timeout = 0);
     virtual void asyncSendMessage(Message::Ptr request,
-        std::function<void(dev::channel::ChannelException, Message::Ptr)> callback,
+        std::function<void(bcos::channel::ChannelException, Message::Ptr)> callback,
         uint32_t timeout = 0);
 
     virtual void run();
@@ -66,7 +65,7 @@ public:
     virtual bool actived() { return _actived; };
 
     virtual void setMessageHandler(
-        std::function<void(ChannelSession::Ptr, dev::channel::ChannelException, Message::Ptr)>
+        std::function<void(ChannelSession::Ptr, bcos::channel::ChannelException, Message::Ptr)>
             handler)
     {
         _messageHandler = handler;
@@ -95,13 +94,13 @@ public:
 
     std::set<std::string> topics()
     {
-        dev::ReadGuard l(x_topics);
+        bcos::ReadGuard l(x_topics);
         return *m_topics;
     };
 
     void setTopics(std::shared_ptr<std::set<std::string>> topics)
     {
-        dev::WriteGuard l(x_topics);
+        bcos::WriteGuard l(x_topics);
         m_topics = topics;
     };
 
@@ -118,28 +117,28 @@ public:
 
     void disconnectByQuit() { disconnect(ChannelException(-1, "quit")); }
 
-    dev::ProtocolVersion protocolVersion() { return m_channelProtocol; }
-    dev::ProtocolVersion maximumProtocolVersion() { return m_maximumProtocol; }
-    dev::ProtocolVersion minimumProtocolVersion() { return m_minimumProtocol; }
-    dev::ProtocolVersion setProtocolVersion(dev::ProtocolVersion _channelProtocol)
+    bcos::ProtocolVersion protocolVersion() { return m_channelProtocol; }
+    bcos::ProtocolVersion maximumProtocolVersion() { return m_maximumProtocol; }
+    bcos::ProtocolVersion minimumProtocolVersion() { return m_minimumProtocol; }
+    bcos::ProtocolVersion setProtocolVersion(bcos::ProtocolVersion _channelProtocol)
     {
         return m_channelProtocol = _channelProtocol;
     }
     std::string clientType() { return m_clientType; }
 
-    void setNetworkStat(dev::stat::ChannelNetworkStatHandler::Ptr _handler)
+    void setNetworkStat(bcos::stat::ChannelNetworkStatHandler::Ptr _handler)
     {
         m_networkStat = _handler;
     }
 
-    void setRemotePublicKey(dev::h512 const& _remotePublicKey)
+    void setRemotePublicKey(bcos::h512 const& _remotePublicKey)
     {
         CHANNEL_SESSION_LOG(INFO) << LOG_DESC("setRemotePublicKey: set sdk public key")
                                   << LOG_KV("sdkPublicKey", _remotePublicKey.abridged());
         m_remotePublicKey = _remotePublicKey;
     }
 
-    dev::h512 const& remotePublicKey() { return m_remotePublicKey; }
+    bcos::h512 const& remotePublicKey() { return m_remotePublicKey; }
 
 private:
     bool isAMOPMessage(Message::Ptr _request);
@@ -151,12 +150,12 @@ private:
         size_t bytesTransferred);
     void writeBuffer(std::shared_ptr<bytes> buffer);
 
-    void onMessage(dev::channel::ChannelException e, Message::Ptr message);
+    void onMessage(bcos::channel::ChannelException e, Message::Ptr message);
     void onTimeout(const boost::system::error_code& error, std::string seq);
 
     void onIdle(const boost::system::error_code& error);
 
-    void disconnect(dev::channel::ChannelException e);
+    void disconnect(bcos::channel::ChannelException e);
 
     void updateIdleTimer();
 
@@ -199,14 +198,14 @@ private:
     }
 
 private:
-    dev::stat::ChannelNetworkStatHandler::Ptr m_networkStat;
+    bcos::stat::ChannelNetworkStatHandler::Ptr m_networkStat;
 
     mutable SharedMutex x_responseCallbacks;
     std::map<std::string, ResponseCallback::Ptr> m_responseCallbacks;
 
 
     MessageFactory::Ptr _messageFactory;
-    std::function<void(ChannelSession::Ptr, dev::channel::ChannelException, Message::Ptr)>
+    std::function<void(ChannelSession::Ptr, bcos::channel::ChannelException, Message::Ptr)>
         _messageHandler;
 
     bool _actived = false;
@@ -232,16 +231,16 @@ private:
     ThreadPool::Ptr m_requestThreadPool;
     ThreadPool::Ptr m_responseThreadPool;
     // default m_channelProtocol is minVersion
-    dev::ProtocolVersion m_channelProtocol = dev::ProtocolVersion::v1;
-    dev::ProtocolVersion m_minimumProtocol = dev::ProtocolVersion::minVersion;
-    dev::ProtocolVersion m_maximumProtocol = dev::ProtocolVersion::maxVersion;
+    bcos::ProtocolVersion m_channelProtocol = bcos::ProtocolVersion::v1;
+    bcos::ProtocolVersion m_minimumProtocol = bcos::ProtocolVersion::minVersion;
+    bcos::ProtocolVersion m_maximumProtocol = bcos::ProtocolVersion::maxVersion;
     std::string m_clientType;
     // set idle time interval to 60s
     size_t _idleTime = 60;
 
-    dev::h512 m_remotePublicKey;
+    bcos::h512 m_remotePublicKey;
 };
 
 }  // namespace channel
 
-}  // namespace dev
+}  // namespace bcos

@@ -42,11 +42,11 @@ evmc_result execute(evmc_instance* _instance, evmc_context* _context, evmc_revis
     const evmc_message* _msg, uint8_t const* _code, size_t _codeSize) noexcept
 {
     (void)_instance;
-    std::unique_ptr<dev::eth::VM> vm{new dev::eth::VM};
+    std::unique_ptr<bcos::eth::VM> vm{new bcos::eth::VM};
     // create vm schedule according to evmc_context
     vm->createVMSchedule(_context);
     evmc_result result = {};
-    dev::owning_bytes_ref output;
+    bcos::owning_bytes_ref output;
 
     try
     {
@@ -54,49 +54,49 @@ evmc_result execute(evmc_instance* _instance, evmc_context* _context, evmc_revis
         result.status_code = EVMC_SUCCESS;
         result.gas_left = vm->m_io_gas;
     }
-    catch (dev::eth::RevertInstruction& ex)
+    catch (bcos::eth::RevertInstruction& ex)
     {
         result.status_code = EVMC_REVERT;
         result.gas_left = vm->m_io_gas;
         output = ex.output();  // This moves the output from the exception!
     }
-    catch (dev::eth::BadInstruction const&)
+    catch (bcos::eth::BadInstruction const&)
     {
         result.status_code = EVMC_UNDEFINED_INSTRUCTION;
     }
-    catch (dev::eth::OutOfStack const&)
+    catch (bcos::eth::OutOfStack const&)
     {
         result.status_code = EVMC_STACK_OVERFLOW;
     }
-    catch (dev::eth::StackUnderflow const&)
+    catch (bcos::eth::StackUnderflow const&)
     {
         result.status_code = EVMC_STACK_UNDERFLOW;
     }
-    catch (dev::eth::BufferOverrun const&)
+    catch (bcos::eth::BufferOverrun const&)
     {
         result.status_code = EVMC_INVALID_MEMORY_ACCESS;
     }
-    catch (dev::eth::OutOfGas const&)
+    catch (bcos::eth::OutOfGas const&)
     {
         result.status_code = EVMC_OUT_OF_GAS;
     }
-    catch (dev::eth::BadJumpDestination const&)
+    catch (bcos::eth::BadJumpDestination const&)
     {
         result.status_code = EVMC_BAD_JUMP_DESTINATION;
     }
-    catch (dev::eth::DisallowedStateChange const&)
+    catch (bcos::eth::DisallowedStateChange const&)
     {
         result.status_code = EVMC_STATIC_MODE_VIOLATION;
     }
-    catch (dev::eth::VMException const&)
+    catch (bcos::eth::VMException const&)
     {
         result.status_code = EVMC_FAILURE;
     }
-    catch (dev::eth::PermissionDenied const&)
+    catch (bcos::eth::PermissionDenied const&)
     {
         result.status_code = EVMC_REVERT;
     }
-    catch (dev::Exception const&)
+    catch (bcos::Exception const&)
     {
         result.status_code = EVMC_REVERT;
     }
@@ -123,7 +123,7 @@ extern "C" evmc_instance* evmc_create_interpreter() noexcept
 {
     // TODO: Allow creating multiple instances with different configurations.
     static evmc_instance s_instance{
-        EVMC_ABI_VERSION, "interpreter", dev::g_BCOSConfig.binaryInfo.version.c_str(), ::destroy,
+        EVMC_ABI_VERSION, "interpreter", bcos::g_BCOSConfig.binaryInfo.version.c_str(), ::destroy,
         ::execute,
         nullptr,  // set_tracer
         nullptr,  // set_option
@@ -132,7 +132,7 @@ extern "C" evmc_instance* evmc_create_interpreter() noexcept
 }
 
 
-namespace dev
+namespace bcos
 {
 namespace eth
 {
@@ -1428,4 +1428,4 @@ void VM::interpretCases()
     WHILE_CASES
 }
 }  // namespace eth
-}  // namespace dev
+}  // namespace bcos

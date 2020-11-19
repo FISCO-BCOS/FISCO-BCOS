@@ -12,11 +12,11 @@
 #include <libstorage/MemoryTableFactoryFactory2.h>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev;
-using namespace dev::blockverifier;
-using namespace dev::storage;
-using namespace dev::storagestate;
-using namespace dev::precompiled;
+using namespace bcos;
+using namespace bcos::blockverifier;
+using namespace bcos::storage;
+using namespace bcos::storagestate;
+using namespace bcos::precompiled;
 
 namespace test_ConsensusPrecompiled
 {
@@ -44,9 +44,9 @@ struct ConsensusPrecompiledFixture
         consensusPrecompiled = std::make_shared<ConsensusPrecompiled>();
         memoryTableFactory = context->getMemoryTableFactory();
 
-        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
+        auto precompiledGasFactory = std::make_shared<bcos::precompiled::PrecompiledGasFactory>(0);
         auto precompiledExecResultFactory =
-            std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+            std::make_shared<bcos::precompiled::PrecompiledExecResultFactory>();
         precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
         consensusPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     }

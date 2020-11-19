@@ -27,11 +27,11 @@
 #include <string>
 #include <vector>
 
-using namespace dev;
+using namespace bcos;
 using namespace std;
-using namespace dev::test;
+using namespace bcos::test;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -129,4 +129,4 @@ BOOST_AUTO_TEST_CASE(AllTest)
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

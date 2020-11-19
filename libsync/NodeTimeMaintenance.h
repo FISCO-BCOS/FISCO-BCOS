@@ -21,11 +21,10 @@
  * @date: 2020-06-12
  */
 #pragma once
-#include <libdevcore/Common.h>
-#include <libdevcore/FixedHash.h>
-#include <libdevcore/Guards.h>
+#include <libutilities/Common.h>
+#include <libutilities/FixedHash.h>
 
-namespace dev
+namespace bcos
 {
 namespace sync
 {
@@ -50,7 +49,7 @@ private:
 
 private:
     // maps between nodeID and the timeOffset
-    std::shared_ptr<std::map<dev::h512, int64_t> > m_node2TimeOffset;
+    std::shared_ptr<std::map<bcos::h512, int64_t> > m_node2TimeOffset;
     std::atomic<int64_t> m_medianTimeOffset = {0};
 
     // 30min
@@ -61,4 +60,4 @@ private:
     mutable Mutex x_mutex;
 };
 }  // namespace sync
-}  // namespace dev
+}  // namespace bcos

@@ -26,8 +26,8 @@
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev::eth;
-namespace dev
+using namespace bcos::eth;
+namespace bcos
 {
 namespace test
 {
@@ -102,4 +102,4 @@ BOOST_AUTO_TEST_CASE(testFreeStorageVMSchedule)
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

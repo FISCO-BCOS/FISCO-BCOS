@@ -26,19 +26,19 @@
 #include "evmc/evmc.h"
 #include "evmc/instructions.h"
 #include <libconfig/GlobalConfigure.h>
-#include <libdevcore/Common.h>
-#include <libdevcore/CommonData.h>
 #include <libethcore/BlockHeader.h>
 #include <libethcore/Common.h>
 #include <libethcore/EVMFlags.h>
 #include <libethcore/EVMSchedule.h>
 #include <libethcore/LogEntry.h>
+#include <libutilities/Common.h>
+#include <libutilities/CommonData.h>
 
 #include <boost/optional.hpp>
 #include <functional>
 #include <set>
 
-namespace dev
+namespace bcos
 {
 namespace executive
 {
@@ -84,4 +84,4 @@ inline Address fromEvmC(evmc_address const& _addr)
     return reinterpret_cast<Address const&>(_addr);
 }
 }  // namespace executive
-}  // namespace dev
+}  // namespace bcos

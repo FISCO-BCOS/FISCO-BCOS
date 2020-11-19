@@ -29,7 +29,7 @@
 #include <libstorage/MemoryTableFactory.h>
 #include <memory>
 
-namespace dev
+namespace bcos
 {
 namespace executive
 {
@@ -41,8 +41,8 @@ public:
     StateFactoryInterface() = default;
     virtual ~StateFactoryInterface(){};
     virtual std::shared_ptr<StateFace> getState(
-        h256 const& _root, std::shared_ptr<dev::storage::TableFactory> _factory) = 0;
+        h256 const& _root, std::shared_ptr<bcos::storage::TableFactory> _factory) = 0;
 };
 
 }  // namespace executive
-}  // namespace dev
+}  // namespace bcos

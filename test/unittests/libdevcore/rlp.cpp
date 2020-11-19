@@ -22,21 +22,21 @@
  */
 
 #include "rlp.h"
-#include <libdevcore/Common.h>
+#include <libutilities/Common.h>
 #include <test/tools/libutils/Common.h>
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
 void RlpTest::runRlpTest(std::string _name, fs::path const& _path)
 {
-    fs::path const testPath = dev::test::getTestPath() / _path;
+    fs::path const testPath = bcos::test::getTestPath() / _path;
     try
     {
         LOG(INFO) << "TEST " << _name << ":";
         std::string filePath = (testPath / fs::path(_name + ".json")).string();
-        std::string const s = dev::asString(dev::contents(filePath));
+        std::string const s = bcos::asString(bcos::contents(filePath));
         std::string empty_string =
             "Contents of " + (testPath / fs::path(_name + ".json")).string() + " is empty";
         BOOST_REQUIRE_MESSAGE(s.length() > 0, empty_string);
@@ -117,12 +117,12 @@ void RlpTest::doRlpTests(Json::Value const& jsonObj)
  *          (2) retRlp: serialized rlp stream transformed from json object
  * @ return: retRlp: serialized rlp stream
  */
-void RlpTest::buildRLP(Json::Value const& jsonObj, dev::RLPStream& retRlp)
+void RlpTest::buildRLP(Json::Value const& jsonObj, bcos::RLPStream& retRlp)
 {
     // array jason
     if (jsonObj.type() == Json::arrayValue)
     {
-        dev::RLPStream item_rlp;
+        bcos::RLPStream item_rlp;
         Json::Value::Members mem = jsonObj.getMemberNames();
         for (auto it = mem.begin(); it != mem.end(); it++)
         {
@@ -151,7 +151,7 @@ void RlpTest::buildRLP(Json::Value const& jsonObj, dev::RLPStream& retRlp)
  *          (2) rlp: rlp object transformed from json object
  * @ return:
  */
-void RlpTest::checkRlp(Json::Value const& jsonObj, dev::RLP const& rlp)
+void RlpTest::checkRlp(Json::Value const& jsonObj, bcos::RLP const& rlp)
 {
     if (jsonObj.type() == Json::arrayValue)
     {
@@ -202,4 +202,4 @@ void RlpTest::checkRlp(Json::Value const& jsonObj, dev::RLP const& rlp)
     }
 }
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

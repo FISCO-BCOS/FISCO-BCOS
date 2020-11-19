@@ -25,7 +25,6 @@
 #include <jsonrpccpp/common/exception.h>
 #include <jsonrpccpp/server.h>
 #include <libconfig/GlobalConfigure.h>
-#include <libdevcore/CommonData.h>
 #include <libdevcrypto/ECDSASignature.h>
 #include <libdevcrypto/SM2Signature.h>
 #include <libethcore/Common.h>
@@ -34,21 +33,22 @@
 #include <libprecompiled/SystemConfigPrecompiled.h>
 #include <libsync/SyncStatus.h>
 #include <libtxpool/TxPoolInterface.h>
+#include <libutilities/CommonData.h>
 #include <boost/algorithm/hex.hpp>
 #include <csignal>
 #include <sstream>
 
 using namespace jsonrpc;
-using namespace dev::rpc;
-using namespace dev::sync;
-using namespace dev::ledger;
-using namespace dev::precompiled;
-using namespace dev::initializer;
+using namespace bcos::rpc;
+using namespace bcos::sync;
+using namespace bcos::ledger;
+using namespace bcos::precompiled;
+using namespace bcos::initializer;
 
 static const int64_t maxTransactionGasLimit = 0x7fffffffffffffff;
 static const int64_t gasPrice = 1;
 
-std::map<int, std::string> dev::rpc::RPCMsg{{RPCExceptionType::Success, "Success"},
+std::map<int, std::string> bcos::rpc::RPCMsg{{RPCExceptionType::Success, "Success"},
     {RPCExceptionType::GroupID, "GroupID does not exist"},
     {RPCExceptionType::JsonParse, "Response json parse error"},
     {RPCExceptionType::BlockHash, "BlockHash does not exist"},
@@ -64,13 +64,13 @@ std::map<int, std::string> dev::rpc::RPCMsg{{RPCExceptionType::Success, "Success
     {RPCExceptionType::PermissionDenied, "The SDK is not allowed to access this group"}};
 
 Rpc::Rpc(
-    LedgerInitializer::Ptr _ledgerInitializer, std::shared_ptr<dev::p2p::P2PInterface> _service)
+    LedgerInitializer::Ptr _ledgerInitializer, std::shared_ptr<bcos::p2p::P2PInterface> _service)
   : m_service(_service)
 {
     setLedgerInitializer(_ledgerInitializer);
 }
 
-std::shared_ptr<dev::ledger::LedgerManager> Rpc::ledgerManager()
+std::shared_ptr<bcos::ledger::LedgerManager> Rpc::ledgerManager()
 {
     if (!m_ledgerManager)
     {
@@ -80,7 +80,7 @@ std::shared_ptr<dev::ledger::LedgerManager> Rpc::ledgerManager()
     return m_ledgerManager;
 }
 
-std::shared_ptr<dev::p2p::P2PInterface> Rpc::service()
+std::shared_ptr<bcos::p2p::P2PInterface> Rpc::service()
 {
     if (!m_service)
     {
@@ -210,7 +210,7 @@ std::string Rpc::getPbftView(int _groupID)
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
         }
-        dev::consensus::VIEWTYPE view = consensus->view();
+        bcos::consensus::VIEWTYPE view = consensus->view();
         return toJS(view);
     }
     catch (JsonRpcException& e)
@@ -433,7 +433,7 @@ Json::Value Rpc::getNodeInfo()
     try
     {
         RPC_LOG(INFO) << LOG_BADGE("getNodeInfo") << LOG_DESC("request");
-        dev::network::NodeInfo hostNodeInfo = service()->host()->nodeInfo();
+        bcos::network::NodeInfo hostNodeInfo = service()->host()->nodeInfo();
         std::string host = service()->host()->listenHost();
         uint16_t port = service()->host()->listenPort();
         NodeIPEndpoint endPoint = NodeIPEndpoint(boost::asio::ip::make_address(host), port);
@@ -480,7 +480,7 @@ Json::Value Rpc::getPeers(int)
             node["Topic"] = Json::Value(Json::arrayValue);
             for (auto topic : it->topics)
             {
-                if (topic.topicStatus == dev::TopicStatus::VERIFY_SUCCESS_STATUS)
+                if (topic.topicStatus == bcos::TopicStatus::VERIFY_SUCCESS_STATUS)
                 {
                     node["Topic"].append(topic.topic);
                 }
@@ -570,7 +570,7 @@ Json::Value Rpc::getGroupList()
         Json::Value response = Json::Value(Json::arrayValue);
 
         auto groupList = ledgerManager()->getGroupListForRpc();
-        for (dev::GROUP_ID id : groupList)
+        for (bcos::GROUP_ID id : groupList)
             response.append(id);
 
         return response;
@@ -643,8 +643,9 @@ Json::Value Rpc::getBlockByHash(int _groupID, const std::string& _blockHash, boo
 }
 
 
-void Rpc::generateBlockHeaderInfo(Json::Value& _response, dev::eth::BlockHeader const& _blockHeader,
-    dev::eth::Block::SigListPtrType _signatureList, bool _includeSigList)
+void Rpc::generateBlockHeaderInfo(Json::Value& _response,
+    bcos::eth::BlockHeader const& _blockHeader, bcos::eth::Block::SigListPtrType _signatureList,
+    bool _includeSigList)
 {
     _response["number"] = _blockHeader.number();
 
@@ -1013,7 +1014,7 @@ Json::Value Rpc::getPendingTransactions(int _groupID)
         {
             auto tx = (*transactions)[i];
             Json::Value transactionResponse;
-            parseTransactionIntoResponse(transactionResponse, dev::h256(), 0, 0, tx, false);
+            parseTransactionIntoResponse(transactionResponse, bcos::h256(), 0, 0, tx, false);
             response.append(transactionResponse);
         }
 
@@ -1158,8 +1159,9 @@ Json::Value Rpc::call(int _groupID, const Json::Value& request)
 }
 
 
-std::shared_ptr<Json::Value> Rpc::notifyReceipt(std::weak_ptr<dev::blockchain::BlockChainInterface>,
-    LocalisedTransactionReceipt::Ptr receipt, dev::bytesConstRef input, dev::eth::Block::Ptr)
+std::shared_ptr<Json::Value> Rpc::notifyReceipt(
+    std::weak_ptr<bcos::blockchain::BlockChainInterface>, LocalisedTransactionReceipt::Ptr receipt,
+    bcos::bytesConstRef input, bcos::eth::Block::Ptr)
 {
     std::shared_ptr<Json::Value> response = std::make_shared<Json::Value>();
 
@@ -1169,9 +1171,9 @@ std::shared_ptr<Json::Value> Rpc::notifyReceipt(std::weak_ptr<dev::blockchain::B
 }
 
 std::shared_ptr<Json::Value> Rpc::notifyReceiptWithProof(
-    std::weak_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-    LocalisedTransactionReceipt::Ptr _receipt, dev::bytesConstRef _input,
-    dev::eth::Block::Ptr _blockPtr)
+    std::weak_ptr<bcos::blockchain::BlockChainInterface> _blockChain,
+    LocalisedTransactionReceipt::Ptr _receipt, bcos::bytesConstRef _input,
+    bcos::eth::Block::Ptr _blockPtr)
 {
     auto response = notifyReceipt(_blockChain, _receipt, _input, _blockPtr);
     // only support merkleProof when supported_version >= v2.2.0
@@ -1203,7 +1205,7 @@ std::shared_ptr<Json::Value> Rpc::notifyReceiptWithProof(
 }
 
 void Rpc::addProofToResponse(std::shared_ptr<Json::Value> _response, std::string const& _key,
-    std::shared_ptr<dev::blockchain::MerkleProofType> _proofList)
+    std::shared_ptr<bcos::blockchain::MerkleProofType> _proofList)
 {
     uint32_t index = 0;
     for (const auto& merkleItem : *_proofList)
@@ -1241,9 +1243,9 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
 
 std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp,
     std::function<std::shared_ptr<Json::Value>(
-        std::weak_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-        LocalisedTransactionReceipt::Ptr receipt, dev::bytesConstRef input,
-        dev::eth::Block::Ptr _blockPtr)>
+        std::weak_ptr<bcos::blockchain::BlockChainInterface> _blockChain,
+        LocalisedTransactionReceipt::Ptr receipt, bcos::bytesConstRef input,
+        bcos::eth::Block::Ptr _blockPtr)>
         _notifyCallback)
 {
     try
@@ -1271,15 +1273,15 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp,
         {
             auto transactionCallback = *currentTransactionCallback;
             clientProtocolversion = (*m_transactionCallbackVersion)();
-            std::weak_ptr<dev::blockchain::BlockChainInterface> weakedBlockChain(blockChain);
+            std::weak_ptr<bcos::blockchain::BlockChainInterface> weakedBlockChain(blockChain);
             // Note: Since blockChain has a transaction cache, that is,
             //       BlockChain holds transactions, in order to prevent circular references,
             //       the callback of the transaction cannot hold the blockChain of shared_ptr,
             //       must be weak_ptr
             tx->setRpcCallback(
                 [weakedBlockChain, _notifyCallback, transactionCallback, clientProtocolversion,
-                    _groupID](LocalisedTransactionReceipt::Ptr receipt, dev::bytesConstRef input,
-                    dev::eth::Block::Ptr _blockPtr) {
+                    _groupID](LocalisedTransactionReceipt::Ptr receipt, bcos::bytesConstRef input,
+                    bcos::eth::Block::Ptr _blockPtr) {
                     std::shared_ptr<Json::Value> response = std::make_shared<Json::Value>();
                     if (clientProtocolversion > 0)
                     {
@@ -1417,7 +1419,7 @@ Json::Value Rpc::getTransactionReceiptByHashWithProof(
 
         checkRequest(_groupID);
         h256 hash = jsToFixed<32>(_transactionHash);
-        dev::eth::LocalisedTransaction transaction;
+        bcos::eth::LocalisedTransaction transaction;
         auto receipt = blockchain->getTransactionReceiptByHashWithProof(hash, transaction);
         auto txReceipt = receipt.first;
         if (!txReceipt || txReceipt->blockNumber() == INVALIDNUMBER ||
@@ -1542,7 +1544,7 @@ Json::Value Rpc::startGroup(int _groupID)
         bool success = m_ledgerInitializer->initLedgerByGroupID(_groupID);
         if (!success)
         {
-            throw new dev::Exception("Group" + std::to_string(_groupID) + " initialized failed");
+            throw new bcos::Exception("Group" + std::to_string(_groupID) + " initialized failed");
         }
 
         ledgerManager()->startByGroupID(_groupID);
@@ -1822,7 +1824,7 @@ bool Rpc::checkConnection(const std::set<std::string>& _sealerList, Json::Value&
 
 bool Rpc::checkGroupIDForGroupMgr(int _groupID, Json::Value& _response)
 {
-    if (_groupID < 1 || _groupID > dev::maxGroupID)
+    if (_groupID < 1 || _groupID > bcos::maxGroupID)
     {
         _response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
         _response["message"] = "GroupID should be between 1 and " + std::to_string(maxGroupID);
@@ -1833,7 +1835,7 @@ bool Rpc::checkGroupIDForGroupMgr(int _groupID, Json::Value& _response)
 
 bool Rpc::checkSealerID(const std::string& _sealer)
 {
-    if (!dev::isHex(_sealer) || _sealer.length() != 128 || _sealer.compare(0, 2, "0x") == 0)
+    if (!bcos::isHex(_sealer) || _sealer.length() != 128 || _sealer.compare(0, 2, "0x") == 0)
     {
         return false;
     }
@@ -1923,7 +1925,7 @@ bool Rpc::checkParamsForGenerateGroup(
     return true;
 }
 
-void Rpc::parseTransactionIntoResponse(Json::Value& _response, dev::h256 const& _blockHash,
+void Rpc::parseTransactionIntoResponse(Json::Value& _response, bcos::h256 const& _blockHash,
     int64_t _blockNumber, int64_t _txIndex, Transaction::Ptr _tx, bool _onChain)
 {
     /// the fields that required when calculate transaction hash
@@ -1967,22 +1969,22 @@ void Rpc::parseTransactionIntoResponse(Json::Value& _response, dev::h256 const& 
     // the sm signature
     if (g_BCOSConfig.SMCrypto())
     {
-        std::shared_ptr<dev::crypto::SM2Signature> sm2Signature =
-            std::dynamic_pointer_cast<dev::crypto::SM2Signature>(_tx->vrs());
+        std::shared_ptr<bcos::crypto::SM2Signature> sm2Signature =
+            std::dynamic_pointer_cast<bcos::crypto::SM2Signature>(_tx->vrs());
         signatureResponse["v"] = toJS(sm2Signature->v);
     }
     else
     {
-        std::shared_ptr<dev::crypto::ECDSASignature> ecdsaSignature =
-            std::dynamic_pointer_cast<dev::crypto::ECDSASignature>(_tx->vrs());
+        std::shared_ptr<bcos::crypto::ECDSASignature> ecdsaSignature =
+            std::dynamic_pointer_cast<bcos::crypto::ECDSASignature>(_tx->vrs());
         signatureResponse["v"] = toJS(ecdsaSignature->v);
     }
     signatureResponse["signature"] = toJS(_tx->vrs()->asBytes());
     _response["signature"] = signatureResponse;
 }
 
-void Rpc::parseReceiptIntoResponse(Json::Value& _response, dev::bytesConstRef _input,
-    dev::eth::LocalisedTransactionReceipt::Ptr _receipt)
+void Rpc::parseReceiptIntoResponse(Json::Value& _response, bcos::bytesConstRef _input,
+    bcos::eth::LocalisedTransactionReceipt::Ptr _receipt)
 {
     // the fields required for calculate keccak256 for the transactionReceipt
     // Note: the hash of the transactionReceipt is equal to the hash of the corresponding
@@ -1992,7 +1994,7 @@ void Rpc::parseReceiptIntoResponse(Json::Value& _response, dev::bytesConstRef _i
     _response["contractAddress"] = toJS(_receipt->contractAddress());
     _response["logsBloom"] = toJS(_receipt->bloom());
     _response["status"] = toJS(_receipt->status());
-    dev::eth::TransactionException status = _receipt->status();
+    bcos::eth::TransactionException status = _receipt->status();
     // parse statusMsg
     std::stringstream ss;
     ss << status;
@@ -2024,7 +2026,7 @@ void Rpc::parseReceiptIntoResponse(Json::Value& _response, dev::bytesConstRef _i
 }
 
 void Rpc::parseSignatureIntoResponse(
-    Json::Value& _response, dev::eth::Block::SigListPtrType _signatureList)
+    Json::Value& _response, bcos::eth::Block::SigListPtrType _signatureList)
 {
     if (!_signatureList)
     {
@@ -2108,7 +2110,7 @@ Json::Value Rpc::getBatchReceiptsByBlockHashAndRange(int _groupID, const std::st
     }
 }
 
-void Rpc::getBatchReceipts(Json::Value& _response, dev::eth::Block::Ptr _block,
+void Rpc::getBatchReceipts(Json::Value& _response, bcos::eth::Block::Ptr _block,
     std::string const& _from, std::string const& _count, bool _compress)
 {
     auto transactions = _block->transactions();

@@ -21,10 +21,10 @@
 
 #pragma once
 
-#include <libdevcore/Common.h>
-#include <libdevcore/FixedHash.h>
+#include <libutilities/Common.h>
+#include <libutilities/FixedHash.h>
 
-namespace dev
+namespace bcos
 {
 class MemTrieNode;
 
@@ -50,4 +50,4 @@ private:
     MemTrieNode* m_root;
 };
 
-}  // namespace dev
+}  // namespace bcos

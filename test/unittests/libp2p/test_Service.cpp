@@ -20,11 +20,11 @@
  */
 
 #include "../libnetwork/FakeASIOInterface.h"
-#include "libdevcore/ThreadPool.h"
 #include "libnetwork/Host.h"
 #include "libnetwork/Session.h"
 #include "libp2p/P2PMessageFactory.h"
 #include "libp2p/Service.h"
+#include "libutilities/ThreadPool.h"
 #include "test/tools/libutils/Common.h"
 #include <libconfig/GlobalConfigure.h>
 #include <libinitializer/SecureInitializer.h>
@@ -33,11 +33,11 @@
 #include <boost/property_tree/ptree.hpp>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev;
+using namespace bcos;
 using namespace std;
-using namespace dev::network;
-using namespace dev::p2p;
-using namespace dev::test;
+using namespace bcos::network;
+using namespace bcos::p2p;
+using namespace bcos::test;
 
 namespace test_Host
 {
@@ -47,7 +47,7 @@ struct ServiceFixture
     {
         boost::property_tree::ptree pt;
         pt.put("secure.data_path", getTestPath().string() + "/fisco-bcos-data/");
-        auto secureInitializer = std::make_shared<dev::initializer::SecureInitializer>();
+        auto secureInitializer = std::make_shared<bcos::initializer::SecureInitializer>();
         if (g_BCOSConfig.SMCrypto())
         {
             m_sslContext =
@@ -58,14 +58,14 @@ struct ServiceFixture
             secureInitializer->initConfig(pt);
             m_sslContext = secureInitializer->SSLContext();
         }
-        m_asioInterface = std::make_shared<dev::network::FakeASIOInterface>();
+        m_asioInterface = std::make_shared<bcos::network::FakeASIOInterface>();
         m_asioInterface->setIOService(std::make_shared<ba::io_service>());
         m_asioInterface->setSSLContext(m_sslContext);
-        m_asioInterface->setType(dev::network::ASIOInterface::SSL);
+        m_asioInterface->setType(bcos::network::ASIOInterface::SSL);
 
-        m_host = std::make_shared<dev::network::Host>();
+        m_host = std::make_shared<bcos::network::Host>();
         m_host->setASIOInterface(m_asioInterface);
-        m_sessionFactory = std::make_shared<dev::network::SessionFactory>();
+        m_sessionFactory = std::make_shared<bcos::network::SessionFactory>();
         m_host->setSessionFactory(m_sessionFactory);
         m_messageFactory = std::make_shared<P2PMessageFactory>();
         m_host->setMessageFactory(m_messageFactory);
@@ -85,16 +85,16 @@ struct ServiceFixture
     ~ServiceFixture() {}
     std::shared_ptr<Service> m_p2pService;
     string m_hostIP = "127.0.0.1";
-    std::map<dev::network::NodeIPEndpoint, NodeID> m_nodes;
+    std::map<bcos::network::NodeIPEndpoint, NodeID> m_nodes;
     uint16_t m_port = 8845;
-    std::shared_ptr<dev::network::Host> m_host;
+    std::shared_ptr<bcos::network::Host> m_host;
     std::shared_ptr<boost::asio::ssl::context> m_sslContext;
     P2PMessageFactory::Ptr m_messageFactory;
     std::shared_ptr<SessionFactory> m_sessionFactory;
-    std::shared_ptr<dev::ThreadPool> m_threadPool;
+    std::shared_ptr<bcos::ThreadPool> m_threadPool;
     std::vector<std::string> m_certBlacklist;
     std::shared_ptr<ASIOInterface> m_asioInterface;
-    std::vector<std::shared_ptr<dev::network::SessionFace>> m_sessions;
+    std::vector<std::shared_ptr<bcos::network::SessionFace>> m_sessions;
     std::function<void(NetworkException, NodeInfo const&, std::shared_ptr<SessionFace>)>
         m_connectionHandler;
 };

@@ -29,9 +29,9 @@
 #include <boost/test/unit_test.hpp>
 
 using namespace std;
-using namespace dev;
+using namespace bcos;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -97,7 +97,7 @@ BOOST_AUTO_TEST_CASE(SM_testKdf) {}
 /// test nonce
 BOOST_AUTO_TEST_CASE(SM_testNonce)
 {
-    BOOST_CHECK(dev::crypto::Nonce::get() != dev::crypto::Nonce::get());
+    BOOST_CHECK(bcos::crypto::Nonce::get() != bcos::crypto::Nonce::get());
 }
 
 // /// test ecdha
@@ -232,7 +232,7 @@ BOOST_AUTO_TEST_CASE(testKdf) {}
 /// test nonce
 BOOST_AUTO_TEST_CASE(testNonce)
 {
-    BOOST_CHECK(dev::crypto::Nonce::get() != dev::crypto::Nonce::get());
+    BOOST_CHECK(bcos::crypto::Nonce::get() != bcos::crypto::Nonce::get());
 }
 
 BOOST_AUTO_TEST_CASE(testSigAndVerify)
@@ -299,10 +299,10 @@ BOOST_AUTO_TEST_CASE(testSigecRocer)
     h256 ret("000000000000000000000000ceaccac640adf55b2028469bd36ba501f28b699d");
     RLP rlpObj(rlpBytes);
     bytesConstRef _in = rlpObj.data();
-    keyPair = dev::ecRecover(_in);
+    keyPair = bcos::ecRecover(_in);
     BOOST_CHECK(keyPair.first == true);
     BOOST_CHECK(keyPair.second != ret.asBytes());
-    KeyPairR = dev::ecRecover(ref(rlpBytesRight));
+    KeyPairR = bcos::ecRecover(ref(rlpBytesRight));
     cout << toHex(KeyPairR.second) << endl;
     cout << toHex(ret.asBytes()) << endl;
     BOOST_CHECK(KeyPairR.second == ret.asBytes());
@@ -316,11 +316,11 @@ BOOST_AUTO_TEST_CASE(testSign)
         "0xb2ef97867ca3b1030c2f14be1bfeeeabddf3354ae6e57c86a02ebc1383f8ef6c7713d7f12fcfd5da457f58ee"
         "eb9aa77eddedf69b7bd1a46adb5faf072e62892601";
     std::string blockHash = "0x39aeeacf66784ba18836280dcb56e454fe59eecde42812503e6a0d2c0a11937f";
-    dev::h512 publicKeyBytes = dev::h512(publicKey);
+    bcos::h512 publicKeyBytes = bcos::h512(publicKey);
     bytes signatureBytes = fromHex(signature);
-    dev::h256 blockHashBytes = dev::h256(blockHash);
+    bcos::h256 blockHashBytes = bcos::h256(blockHash);
     std::cout << "### before test sign" << std::endl;
-    BOOST_CHECK(dev::ecdsaVerify(publicKeyBytes, dev::crypto::SignatureFromBytes(signatureBytes),
+    BOOST_CHECK(bcos::ecdsaVerify(publicKeyBytes, bcos::crypto::SignatureFromBytes(signatureBytes),
                     blockHashBytes) == true);
     std::cout << "### test sign passed" << std::endl;
 }
@@ -329,4 +329,4 @@ BOOST_AUTO_TEST_CASE(testSign)
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

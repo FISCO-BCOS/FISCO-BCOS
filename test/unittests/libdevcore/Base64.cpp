@@ -21,15 +21,15 @@
  */
 #include <iostream>
 
-#include <libdevcore/Assertions.h>
-#include <libdevcore/Base64.h>
-#include <libdevcore/CommonJS.h>
+#include <libutilities/Assertions.h>
+#include <libutilities/Base64.h>
+#include <libutilities/CommonJS.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
 
-using namespace dev;
-namespace dev
+using namespace bcos;
+namespace bcos
 {
 namespace test
 {
@@ -60,4 +60,4 @@ BOOST_AUTO_TEST_CASE(testToBase64)
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

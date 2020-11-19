@@ -24,10 +24,10 @@
 
 #include "Common.h"
 
-#include <libdevcore/Address.h>
-#include <libdevcore/FixedHash.h>
+#include <libutilities/Address.h>
+#include <libutilities/FixedHash.h>
 
-namespace dev
+namespace bcos
 {
 class RLP;
 class RLPStream;
@@ -99,4 +99,4 @@ inline LogBloom bloom(LogEntries const& _logs)
 }
 
 }  // namespace eth
-}  // namespace dev
+}  // namespace bcos

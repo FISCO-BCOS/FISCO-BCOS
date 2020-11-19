@@ -20,15 +20,15 @@
  * @date 2018
  */
 
-#include <libdevcore/CommonData.h>
-#include <libdevcore/CommonJS.h>
-#include <libdevcore/FixedHash.h>
+#include <libutilities/CommonData.h>
+#include <libutilities/CommonJS.h>
+#include <libutilities/FixedHash.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
 
-using namespace dev;
-namespace dev
+using namespace bcos;
+namespace bcos
 {
 namespace test
 {
@@ -68,11 +68,11 @@ BOOST_AUTO_TEST_CASE(testRight160)
     u256 value(h256Data);
     // trans value to h256 again
     h256 convertedH256Data = value;
-    std::cout << "### value: " << value << ", h256Data:" << dev::toHex(h256Data)
-              << "convertedH256Data" << dev::toHex(convertedH256Data) << std::endl;
+    std::cout << "### value: " << value << ", h256Data:" << bcos::toHex(h256Data)
+              << "convertedH256Data" << bcos::toHex(convertedH256Data) << std::endl;
     BOOST_CHECK(convertedH256Data == h256Data);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

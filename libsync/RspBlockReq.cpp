@@ -23,9 +23,9 @@
 #include "RspBlockReq.h"
 
 using namespace std;
-using namespace dev;
-using namespace dev::eth;
-using namespace dev::sync;
+using namespace bcos;
+using namespace bcos::eth;
+using namespace bcos::sync;
 
 void DownloadRequestQueue::push(int64_t _fromNumber, int64_t _size)
 {

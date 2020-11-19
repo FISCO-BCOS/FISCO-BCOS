@@ -23,18 +23,18 @@
 
 #pragma once
 
-#include <libdevcore/FixedHash.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/Protocol.h>
 #include <libnetwork/Host.h>
 #include <libp2p/Service.h>
+#include <libutilities/FixedHash.h>
 #include <boost/program_options.hpp>
 #include <memory>
 
 
-using namespace dev;
-using namespace dev::p2p;
-using namespace dev::eth;
+using namespace bcos;
+using namespace bcos::p2p;
+using namespace bcos::eth;
 class Params
 {
 public:

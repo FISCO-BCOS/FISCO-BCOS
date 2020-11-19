@@ -22,16 +22,16 @@
  */
 #pragma once
 #include <libconsensus/Common.h>
-#include <libdevcore/RLP.h>
 #include <libdevcrypto/Common.h>
 #include <libdevcrypto/CryptoInterface.h>
 #include <libethcore/Block.h>
 #include <libethcore/Exceptions.h>
+#include <libutilities/RLP.h>
 
 #define PBFTENGINE_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("PBFT")
 #define PBFTSEALER_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("SEALER")
 #define PBFTReqCache_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("CONSENSUS")
-namespace dev
+namespace bcos
 {
 namespace consensus
 {
@@ -82,7 +82,7 @@ struct PBFTMsgPacket
     /// endpoint
     std::string endpoint;
     // the node that disconnected from this node, but the packet should reach
-    std::shared_ptr<dev::h512s> forwardNodes;
+    std::shared_ptr<bcos::h512s> forwardNodes;
 
     using Ptr = std::shared_ptr<PBFTMsgPacket>;
 
@@ -98,7 +98,7 @@ struct PBFTMsgPacket
 
     virtual ~PBFTMsgPacket() = default;
 
-    void setForwardNodes(std::shared_ptr<dev::h512s> _forwardNodes)
+    void setForwardNodes(std::shared_ptr<bcos::h512s> _forwardNodes)
     {
         forwardNodes = _forwardNodes;
     }
@@ -170,7 +170,7 @@ struct PBFTMsgPacket
         }
         catch (Exception const& e)
         {
-            e << dev::eth::errinfo_name("invalid msg format");
+            e << bcos::eth::errinfo_name("invalid msg format");
             throw;
         }
     }
@@ -184,7 +184,7 @@ public:
     OPBFTMsgPacket() : PBFTMsgPacket()
     {
         // the node that disconnected from this node, but the packet should reach
-        forwardNodes = std::make_shared<dev::h512s>();
+        forwardNodes = std::make_shared<bcos::h512s>();
     }
 
     void streamRLPFields(RLPStream& _s) const override
@@ -198,11 +198,11 @@ public:
         try
         {
             PBFTMsgPacket::populate(_rlp);
-            *forwardNodes = _rlp[3].toVector<dev::h512>();
+            *forwardNodes = _rlp[3].toVector<bcos::h512>();
         }
         catch (Exception const& e)
         {
-            e << dev::eth::errinfo_name("invalid msg format");
+            e << bcos::eth::errinfo_name("invalid msg format");
             throw;
         }
     }
@@ -320,8 +320,8 @@ struct PBFTMsg
         }
         catch (Exception const& _e)
         {
-            _e << dev::eth::errinfo_name("invalid msg format")
-               << dev::eth::BadFieldError(field, toHex(rlp[field].data().toBytes()));
+            _e << bcos::eth::errinfo_name("invalid msg format")
+               << bcos::eth::BadFieldError(field, toHex(rlp[field].data().toBytes()));
             throw;
         }
     }
@@ -354,7 +354,7 @@ struct PBFTMsg
      */
     std::vector<unsigned char> signHash(h256 const& hash, KeyPair const& keyPair) const
     {
-        return dev::crypto::Sign(keyPair, hash)->asBytes();
+        return bcos::crypto::Sign(keyPair, hash)->asBytes();
     }
 
     std::string uniqueKey() const { return toHex(sig) + toHex(sig2); }
@@ -366,18 +366,18 @@ struct PrepareReq : public PBFTMsg
     using Ptr = std::shared_ptr<PrepareReq>;
     /// block data
     std::shared_ptr<bytes> block;
-    std::shared_ptr<dev::eth::Block> pBlock = nullptr;
+    std::shared_ptr<bcos::eth::Block> pBlock = nullptr;
     /// execution result of block(save the execution result temporarily)
     /// no need to send or receive accross the network
-    dev::blockverifier::ExecutiveContext::Ptr p_execContext = nullptr;
+    bcos::blockverifier::ExecutiveContext::Ptr p_execContext = nullptr;
     /// default constructor
-    PrepareReq() { block = std::make_shared<dev::bytes>(); }
+    PrepareReq() { block = std::make_shared<bcos::bytes>(); }
     virtual ~PrepareReq() {}
     PrepareReq(KeyPair const& _keyPair, int64_t const& _height, VIEWTYPE const& _view,
         IDXTYPE const& _idx, h256 const _blockHash)
       : PBFTMsg(_keyPair, _height, _view, _idx, _blockHash), p_execContext(nullptr)
     {
-        block = std::make_shared<dev::bytes>();
+        block = std::make_shared<bcos::bytes>();
     }
     /**
      * @brief: populate the prepare request from specified prepare request,
@@ -391,7 +391,7 @@ struct PrepareReq : public PBFTMsg
     PrepareReq(
         PrepareReq const& req, KeyPair const& keyPair, VIEWTYPE const& _view, IDXTYPE const& _idx)
     {
-        block = std::make_shared<dev::bytes>();
+        block = std::make_shared<bcos::bytes>();
         height = req.height;
         view = _view;
         idx = _idx;
@@ -411,10 +411,10 @@ struct PrepareReq : public PBFTMsg
      * @param _view : current view
      * @param _idx : index of the node that generates this PrepareReq
      */
-    PrepareReq(dev::eth::Block::Ptr blockStruct, KeyPair const& keyPair, VIEWTYPE const& _view,
+    PrepareReq(bcos::eth::Block::Ptr blockStruct, KeyPair const& keyPair, VIEWTYPE const& _view,
         IDXTYPE const& _idx, bool const& _onlyHash = false)
     {
-        block = std::make_shared<dev::bytes>();
+        block = std::make_shared<bcos::bytes>();
         height = blockStruct->blockHeader().number();
         view = _view;
         idx = _idx;
@@ -435,7 +435,7 @@ struct PrepareReq : public PBFTMsg
      */
     PrepareReq(PrepareReq const& req, Sealing const& sealing, KeyPair const& keyPair)
     {
-        block = std::make_shared<dev::bytes>();
+        block = std::make_shared<bcos::bytes>();
         height = req.height;
         view = req.view;
         idx = req.idx;
@@ -473,8 +473,8 @@ struct PrepareReq : public PBFTMsg
         }
         catch (Exception const& _e)
         {
-            _e << dev::eth::errinfo_name("invalid msg format")
-               << dev::eth::BadFieldError(field, toHex(_rlp[field].data().toBytes()));
+            _e << bcos::eth::errinfo_name("invalid msg format")
+               << bcos::eth::BadFieldError(field, toHex(_rlp[field].data().toBytes()));
             throw;
         }
     }
@@ -555,4 +555,4 @@ struct ViewChangeReq : public PBFTMsg
     }
 };
 }  // namespace consensus
-}  // namespace dev
+}  // namespace bcos

@@ -30,7 +30,7 @@
 #include "SecureInitializer.h"
 #include <memory>
 
-namespace dev
+namespace bcos
 {
 namespace initializer
 {
@@ -64,4 +64,4 @@ private:
 
 }  // namespace initializer
 
-}  // namespace dev
+}  // namespace bcos

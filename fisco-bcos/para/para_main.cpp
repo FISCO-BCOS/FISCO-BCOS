@@ -12,7 +12,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
- * (c) 2016-2018 fisco-dev contributors.
+ * (c) 2016-2018 fisco-bcos contributors.
  *
  * @brief: simple demo of para tx executor
  *
@@ -34,13 +34,13 @@
 #include <ctime>
 
 using namespace std;
-using namespace dev;
-using namespace dev::eth;
-using namespace dev::ledger;
-using namespace dev::initializer;
-using namespace dev::txpool;
-using namespace dev::blockverifier;
-using namespace dev::blockchain;
+using namespace bcos;
+using namespace bcos::eth;
+using namespace bcos::ledger;
+using namespace bcos::initializer;
+using namespace bcos::txpool;
+using namespace bcos::blockverifier;
+using namespace bcos::blockchain;
 
 
 static shared_ptr<KeyPair> keyPair;
@@ -57,14 +57,14 @@ void genTxUserAddBlock(Block& _block, size_t _userNum)
         Address dest = Address(0x5002);
         string user = to_string(i);
         u256 money = 1000000000;
-        dev::eth::ContractABI abi;
+        bcos::eth::ContractABI abi;
         bytes data =
             abi.abiIn("userSave(string,uint256)", user, money);  // add 1000000000 to user i
         u256 nonce = u256(utcTime());
         Transaction::Ptr tx =
             std::make_shared<Transaction>(value, gasPrice, gas, dest, data, nonce);
         tx->setBlockLimit(250);
-        auto sig = dev::crypto::Sign(*keyPair, tx->hash(WithoutSignature));
+        auto sig = bcos::crypto::Sign(*keyPair, tx->hash(WithoutSignature));
         tx->updateSignature(sig);
         txs->push_back(tx);
     }
@@ -75,8 +75,8 @@ void genTxUserAddBlock(Block& _block, size_t _userNum)
 }
 
 void initUser(size_t _userNum, BlockInfo _parentBlockInfo,
-    std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
-    std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain)
+    std::shared_ptr<bcos::blockverifier::BlockVerifierInterface> _blockVerifier,
+    std::shared_ptr<bcos::blockchain::BlockChainInterface> _blockChain)
 {
     std::shared_ptr<Block> userAddBlock = std::make_shared<Block>();
     userAddBlock->header().setNumber(_parentBlockInfo.number + 1);
@@ -113,7 +113,7 @@ void genTxUserTransfer(Block& _block, size_t _userNum, size_t _txNum)
 
         LOG(DEBUG) << "Transfer user-" << userFrom << " to user-" << userTo;
         u256 money = 1;
-        dev::eth::ContractABI abi;
+        bcos::eth::ContractABI abi;
         bytes data = abi.abiIn("userTransfer(string,string,uint256)", userFrom, userTo,
             money);  // add 1000000000 to user i
         u256 nonce = u256(utcTime());
@@ -149,15 +149,15 @@ static void startExecute(int _totalUser, int _totalTxs)
     params->mutableStateParam().type = "storage";
 
 
-    auto dbInitializer = std::make_shared<dev::ledger::DBInitializer>(params, 1);
+    auto dbInitializer = std::make_shared<bcos::ledger::DBInitializer>(params, 1);
     dbInitializer->initStorageDB();
     std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();
     blockChain->setStateStorage(dbInitializer->storage());
     blockChain->setTableFactoryFactory(dbInitializer->tableFactoryFactory());
 
     params->mutableGenesisMark() = "";
-    params->mutableConsensusParam().sealerList = dev::h512s();
-    params->mutableConsensusParam().observerList = dev::h512s();
+    params->mutableConsensusParam().sealerList = bcos::h512s();
+    params->mutableConsensusParam().observerList = bcos::h512s();
     params->mutableConsensusParam().consensusType = "";
     params->mutableConsensusParam().maxTransactions = 5000;
     params->mutableTxParam().txGasLimit = 300000000;
@@ -165,7 +165,7 @@ static void startExecute(int _totalUser, int _totalTxs)
     bool ret = blockChain->checkAndBuildGenesisBlock(params);
     assert(ret == true);
 
-    dev::h256 genesisHash = blockChain->getBlockByNumber(0)->headerHash();
+    bcos::h256 genesisHash = blockChain->getBlockByNumber(0)->headerHash();
     dbInitializer->initState(genesisHash);
 
     std::shared_ptr<BlockVerifier> blockVerifier = std::make_shared<BlockVerifier>(true);

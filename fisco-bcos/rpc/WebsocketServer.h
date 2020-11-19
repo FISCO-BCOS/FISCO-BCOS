@@ -56,74 +56,74 @@ class session : public std::enable_shared_from_this<session>
     boost::asio::strand<boost::asio::io_context::executor_type> m_strand;
     boost::beast::multi_buffer m_buffer;
     std::map<std::string, std::function<void(const Json::Value&, Json::Value&)> > m_mapRpc;
-    std::shared_ptr<dev::rpc::RpcFace> m_rpcFace;
+    std::shared_ptr<bcos::rpc::RpcFace> m_rpcFace;
 
     void setMapRpc()
     {
         m_mapRpc.insert(std::make_pair(
-            "getSystemConfigByKey", std::bind(&dev::rpc::RpcFace::getSystemConfigByKeyI, m_rpcFace,
+            "getSystemConfigByKey", std::bind(&bcos::rpc::RpcFace::getSystemConfigByKeyI, m_rpcFace,
                                         std::placeholders::_1, std::placeholders::_2)));
         m_mapRpc.insert(std::make_pair(
-            "getBlockNumber", std::bind(&dev::rpc::RpcFace::getBlockNumberI, m_rpcFace,
+            "getBlockNumber", std::bind(&bcos::rpc::RpcFace::getBlockNumberI, m_rpcFace,
                                   std::placeholders::_1, std::placeholders::_2)));
         m_mapRpc.insert(
-            std::make_pair("getPbftView", std::bind(&dev::rpc::RpcFace::getPbftViewI, m_rpcFace,
+            std::make_pair("getPbftView", std::bind(&bcos::rpc::RpcFace::getPbftViewI, m_rpcFace,
                                               std::placeholders::_1, std::placeholders::_2)));
         m_mapRpc.insert(std::make_pair(
-            "getConsensusStatus", std::bind(&dev::rpc::RpcFace::getConsensusStatusI, m_rpcFace,
+            "getConsensusStatus", std::bind(&bcos::rpc::RpcFace::getConsensusStatusI, m_rpcFace,
                                       std::placeholders::_1, std::placeholders::_2)));
-        m_mapRpc.insert(
-            std::make_pair("getSyncStatus", std::bind(&dev::rpc::RpcFace::getSyncStatusI, m_rpcFace,
-                                                std::placeholders::_1, std::placeholders::_2)));
         m_mapRpc.insert(std::make_pair(
-            "getClientVersion", std::bind(&dev::rpc::RpcFace::getClientVersionI, m_rpcFace,
+            "getSyncStatus", std::bind(&bcos::rpc::RpcFace::getSyncStatusI, m_rpcFace,
+                                 std::placeholders::_1, std::placeholders::_2)));
+        m_mapRpc.insert(std::make_pair(
+            "getClientVersion", std::bind(&bcos::rpc::RpcFace::getClientVersionI, m_rpcFace,
                                     std::placeholders::_1, std::placeholders::_2)));
         m_mapRpc.insert(
-            std::make_pair("getNodeInfo", std::bind(&dev::rpc::RpcFace::getNodeInfoI, m_rpcFace,
+            std::make_pair("getNodeInfo", std::bind(&bcos::rpc::RpcFace::getNodeInfoI, m_rpcFace,
                                               std::placeholders::_1, std::placeholders::_2)));
         m_mapRpc.insert(
-            std::make_pair("getPeers", std::bind(&dev::rpc::RpcFace::getPeersI, m_rpcFace,
+            std::make_pair("getPeers", std::bind(&bcos::rpc::RpcFace::getPeersI, m_rpcFace,
                                            std::placeholders::_1, std::placeholders::_2)));
+        m_mapRpc.insert(std::make_pair(
+            "getGroupPeers", std::bind(&bcos::rpc::RpcFace::getGroupPeersI, m_rpcFace,
+                                 std::placeholders::_1, std::placeholders::_2)));
         m_mapRpc.insert(
-            std::make_pair("getGroupPeers", std::bind(&dev::rpc::RpcFace::getGroupPeersI, m_rpcFace,
-                                                std::placeholders::_1, std::placeholders::_2)));
-        m_mapRpc.insert(
-            std::make_pair("getGroupList", std::bind(&dev::rpc::RpcFace::getGroupListI, m_rpcFace,
+            std::make_pair("getGroupList", std::bind(&bcos::rpc::RpcFace::getGroupListI, m_rpcFace,
                                                std::placeholders::_1, std::placeholders::_2)));
         m_mapRpc.insert(std::make_pair(
-            "getBlockByHash", std::bind(&dev::rpc::RpcFace::getBlockByHashI, m_rpcFace,
+            "getBlockByHash", std::bind(&bcos::rpc::RpcFace::getBlockByHashI, m_rpcFace,
                                   std::placeholders::_1, std::placeholders::_2)));
         m_mapRpc.insert(std::make_pair(
-            "getBlockByNumber", std::bind(&dev::rpc::RpcFace::getBlockByNumberI, m_rpcFace,
+            "getBlockByNumber", std::bind(&bcos::rpc::RpcFace::getBlockByNumberI, m_rpcFace,
                                     std::placeholders::_1, std::placeholders::_2)));
         m_mapRpc.insert(std::make_pair(
-            "getBlockHashByNumber", std::bind(&dev::rpc::RpcFace::getBlockHashByNumberI, m_rpcFace,
+            "getBlockHashByNumber", std::bind(&bcos::rpc::RpcFace::getBlockHashByNumberI, m_rpcFace,
                                         std::placeholders::_1, std::placeholders::_2)));
         m_mapRpc.insert(std::make_pair(
-            "getTransactionByHash", std::bind(&dev::rpc::RpcFace::getTransactionByHashI, m_rpcFace,
+            "getTransactionByHash", std::bind(&bcos::rpc::RpcFace::getTransactionByHashI, m_rpcFace,
                                         std::placeholders::_1, std::placeholders::_2)));
         m_mapRpc.insert(std::make_pair("getTransactionByBlockHashAndIndex",
-            std::bind(&dev::rpc::RpcFace::getTransactionByBlockHashAndIndexI, m_rpcFace,
+            std::bind(&bcos::rpc::RpcFace::getTransactionByBlockHashAndIndexI, m_rpcFace,
                 std::placeholders::_1, std::placeholders::_2)));
         m_mapRpc.insert(std::make_pair("getTransactionByBlockNumberAndIndex",
-            std::bind(&dev::rpc::RpcFace::getTransactionByBlockNumberAndIndexI, m_rpcFace,
+            std::bind(&bcos::rpc::RpcFace::getTransactionByBlockNumberAndIndexI, m_rpcFace,
                 std::placeholders::_1, std::placeholders::_2)));
         m_mapRpc.insert(std::make_pair(
-            "getTransactionReceipt", std::bind(&dev::rpc::RpcFace::getTransactionReceiptI,
+            "getTransactionReceipt", std::bind(&bcos::rpc::RpcFace::getTransactionReceiptI,
                                          m_rpcFace, std::placeholders::_1, std::placeholders::_2)));
         m_mapRpc.insert(std::make_pair("getPendingTransactions",
-            std::bind(&dev::rpc::RpcFace::getPendingTransactionsI, m_rpcFace, std::placeholders::_1,
-                std::placeholders::_2)));
+            std::bind(&bcos::rpc::RpcFace::getPendingTransactionsI, m_rpcFace,
+                std::placeholders::_1, std::placeholders::_2)));
         m_mapRpc.insert(
-            std::make_pair("getCode", std::bind(&dev::rpc::RpcFace::getCodeI, m_rpcFace,
+            std::make_pair("getCode", std::bind(&bcos::rpc::RpcFace::getCodeI, m_rpcFace,
                                           std::placeholders::_1, std::placeholders::_2)));
         m_mapRpc.insert(std::make_pair("getTotalTransactionCount",
-            std::bind(&dev::rpc::RpcFace::getTotalTransactionCountI, m_rpcFace,
+            std::bind(&bcos::rpc::RpcFace::getTotalTransactionCountI, m_rpcFace,
                 std::placeholders::_1, std::placeholders::_2)));
-        m_mapRpc.insert(std::make_pair("call", std::bind(&dev::rpc::RpcFace::callI, m_rpcFace,
+        m_mapRpc.insert(std::make_pair("call", std::bind(&bcos::rpc::RpcFace::callI, m_rpcFace,
                                                    std::placeholders::_1, std::placeholders::_2)));
         m_mapRpc.insert(std::make_pair(
-            "sendRawTransaction", std::bind(&dev::rpc::RpcFace::sendRawTransactionI, m_rpcFace,
+            "sendRawTransaction", std::bind(&bcos::rpc::RpcFace::sendRawTransactionI, m_rpcFace,
                                       std::placeholders::_1, std::placeholders::_2)));
     }
 
@@ -131,20 +131,20 @@ public:
     // Take ownership of the socket
     explicit session(tcp::socket socket) : m_ws(std::move(socket)), m_strand(m_ws.get_executor())
     {
-        auto initialize = std::make_shared<dev::initializer::Initializer>();
+        auto initialize = std::make_shared<bcos::initializer::Initializer>();
         initialize->init("./config.ini");
 
         auto secureInitializer = initialize->secureInitializer();
-        dev::KeyPair key_pair = secureInitializer->keyPair();
+        bcos::KeyPair key_pair = secureInitializer->keyPair();
         auto ledgerInitializer = initialize->ledgerInitializer();
         auto ledgerManager = initialize->ledgerInitializer()->ledgerManager();
 
         auto p2pInitializer = initialize->p2pInitializer();
         auto p2pService = p2pInitializer->p2pService();
 
-        // auto rpc = new dev::rpc::Rpc(ledgerInitializer, p2pService);
+        // auto rpc = new bcos::rpc::Rpc(ledgerInitializer, p2pService);
 
-        m_rpcFace = std::make_shared<dev::rpc::Rpc>(ledgerInitializer, p2pService);
+        m_rpcFace = std::make_shared<bcos::rpc::Rpc>(ledgerInitializer, p2pService);
 
         setMapRpc();
     }

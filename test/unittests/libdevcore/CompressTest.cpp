@@ -21,15 +21,15 @@
  * @date 2019-03-21
  */
 
-#include <libdevcore/CommonData.h>
-#include <libdevcore/SnappyCompress.h>
+#include <libutilities/CommonData.h>
+#include <libutilities/SnappyCompress.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <iostream>
 
-using namespace dev;
-using namespace dev::compress;
-namespace dev
+using namespace bcos;
+using namespace bcos::compress;
+namespace bcos
 {
 namespace test
 {
@@ -64,4 +64,4 @@ BOOST_AUTO_TEST_CASE(testCompressAlgorithm)
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

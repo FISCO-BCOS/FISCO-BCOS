@@ -29,10 +29,10 @@
 #include <boost/lexical_cast.hpp>
 
 using namespace std;
-using namespace dev;
-using namespace dev::blockverifier;
-using namespace dev::storage;
-using namespace dev::precompiled;
+using namespace bcos;
+using namespace bcos::blockverifier;
+using namespace bcos::storage;
+using namespace bcos::precompiled;
 
 const char* const CGP_METHOD_GRANT_CM = "grantCommitteeMember(address)";
 const char* const CGP_METHOD_REVOKE_CM = "revokeCommitteeMember(address)";
@@ -103,7 +103,7 @@ PrecompiledExecResult::Ptr ChainGovernancePrecompiled::call(
     // parse function name
     uint32_t func = getParamFunc(_param);
     bytesConstRef data = getParamData(_param);
-    dev::eth::ContractABI abi;
+    bcos::eth::ContractABI abi;
     bytes out;
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
     int result = 0;
@@ -287,7 +287,7 @@ PrecompiledExecResult::Ptr ChainGovernancePrecompiled::call(
 }
 
 Table::Ptr ChainGovernancePrecompiled::getCommitteeTable(
-    shared_ptr<dev::blockverifier::ExecutiveContext> _context)
+    shared_ptr<bcos::blockverifier::ExecutiveContext> _context)
 {
     auto table = openTable(_context, CGP_COMMITTEE_TABLE);
     if (!table)
@@ -302,7 +302,7 @@ Table::Ptr ChainGovernancePrecompiled::getCommitteeTable(
 }
 
 int ChainGovernancePrecompiled::grantCommitteeMember(
-    shared_ptr<dev::blockverifier::ExecutiveContext> _context, const string& _member,
+    shared_ptr<bcos::blockverifier::ExecutiveContext> _context, const string& _member,
     const Address& _origin)
 {
     if (hasOperatorPermissions(_context, _member))
@@ -353,7 +353,7 @@ int ChainGovernancePrecompiled::grantCommitteeMember(
 }
 
 int ChainGovernancePrecompiled::updateCommitteeMemberWeight(
-    shared_ptr<dev::blockverifier::ExecutiveContext> _context, const string& _member,
+    shared_ptr<bcos::blockverifier::ExecutiveContext> _context, const string& _member,
     const string& _weight, const Address& _origin)
 {
     int result = 0;
@@ -389,7 +389,7 @@ int ChainGovernancePrecompiled::updateCommitteeMemberWeight(
 }
 
 int ChainGovernancePrecompiled::grantOperator(
-    shared_ptr<dev::blockverifier::ExecutiveContext> _context, const string& _userAddress,
+    shared_ptr<bcos::blockverifier::ExecutiveContext> _context, const string& _userAddress,
     const Address& _origin)
 {
     Table::Ptr acTable = openTable(_context, SYS_ACCESS_TABLE);
@@ -451,7 +451,7 @@ int ChainGovernancePrecompiled::grantOperator(
 }
 
 int ChainGovernancePrecompiled::revokeOperator(
-    shared_ptr<dev::blockverifier::ExecutiveContext> _context, const string& _userAddress,
+    shared_ptr<bcos::blockverifier::ExecutiveContext> _context, const string& _userAddress,
     const Address& _origin)
 {
     Table::Ptr acTable = openTable(_context, SYS_ACCESS_TABLE);
@@ -484,7 +484,7 @@ int ChainGovernancePrecompiled::revokeOperator(
     return result;
 }
 int ChainGovernancePrecompiled::verifyAndRecord(
-    shared_ptr<dev::blockverifier::ExecutiveContext> _context, Operation _op, const string& _user,
+    shared_ptr<bcos::blockverifier::ExecutiveContext> _context, Operation _op, const string& _user,
     const string& _value, const string& _origin)
 {
     Table::Ptr acTable = openTable(_context, SYS_ACCESS_TABLE);
@@ -680,7 +680,7 @@ int ChainGovernancePrecompiled::verifyAndRecord(
 }
 
 string ChainGovernancePrecompiled::queryTablePermissions(
-    shared_ptr<dev::blockverifier::ExecutiveContext> _context, const string& tableName)
+    shared_ptr<bcos::blockverifier::ExecutiveContext> _context, const string& tableName)
 {
     Table::Ptr table = openTable(_context, SYS_ACCESS_TABLE);
     auto condition = table->newCondition();
@@ -704,7 +704,7 @@ string ChainGovernancePrecompiled::queryTablePermissions(
 }
 
 string ChainGovernancePrecompiled::listOperators(
-    shared_ptr<dev::blockverifier::ExecutiveContext> _context)
+    shared_ptr<bcos::blockverifier::ExecutiveContext> _context)
 {
     Table::Ptr table = openTable(_context, SYS_ACCESS_TABLE);
     auto condition = table->newCondition();
@@ -731,7 +731,7 @@ string ChainGovernancePrecompiled::listOperators(
 }
 
 string ChainGovernancePrecompiled::queryVotesOfMember(
-    shared_ptr<dev::blockverifier::ExecutiveContext> _context, const Address& _origin)
+    shared_ptr<bcos::blockverifier::ExecutiveContext> _context, const Address& _origin)
 {
     Table::Ptr table = getCommitteeTable(_context);
     auto condition = table->newCondition();
@@ -771,7 +771,7 @@ string ChainGovernancePrecompiled::queryVotesOfMember(
 
 
 string ChainGovernancePrecompiled::queryVotesOfThreshold(
-    shared_ptr<dev::blockverifier::ExecutiveContext> _context)
+    shared_ptr<bcos::blockverifier::ExecutiveContext> _context)
 {
     Table::Ptr table = getCommitteeTable(_context);
     auto condition = table->newCondition();
@@ -939,7 +939,7 @@ int ChainGovernancePrecompiled::updateFrozenStatus(ExecutiveContext::Ptr context
 void ChainGovernancePrecompiled::freezeAccount(ExecutiveContext::Ptr context, bytesConstRef data,
     Address const& origin, PrecompiledExecResult::Ptr _callResult)
 {
-    dev::eth::ContractABI abi;
+    bcos::eth::ContractABI abi;
     Address accountAddress;
     abi.abiOut(data, accountAddress);
     int result = 0;
@@ -982,7 +982,7 @@ void ChainGovernancePrecompiled::freezeAccount(ExecutiveContext::Ptr context, by
 void ChainGovernancePrecompiled::unfreezeAccount(ExecutiveContext::Ptr context, bytesConstRef data,
     Address const& origin, PrecompiledExecResult::Ptr _callResult)
 {
-    dev::eth::ContractABI abi;
+    bcos::eth::ContractABI abi;
     Address accountAddress;
     abi.abiOut(data, accountAddress);
     int result = 0;
@@ -1020,7 +1020,7 @@ void ChainGovernancePrecompiled::unfreezeAccount(ExecutiveContext::Ptr context, 
 void ChainGovernancePrecompiled::getAccountStatus(
     ExecutiveContext::Ptr context, bytesConstRef data, PrecompiledExecResult::Ptr _callResult)
 {
-    dev::eth::ContractABI abi;
+    bcos::eth::ContractABI abi;
 
     Address accountAddress;
     abi.abiOut(data, accountAddress);

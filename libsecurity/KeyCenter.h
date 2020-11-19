@@ -21,9 +21,8 @@
  */
 #pragma once
 #include "Common.h"
-#include <libdevcore/Common.h>
-#include <libdevcore/Guards.h>
 #include <libethcore/CommonJS.h>
+#include <libutilities/Common.h>
 #include <boost/asio/connect.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/beast/core.hpp>
@@ -38,7 +37,7 @@ namespace Json
 class Value;
 }
 
-namespace dev
+namespace bcos
 {
 #define KC_LOG(_OBV)        \
     LOG(_OBV) << "[g:null]" \
@@ -80,11 +79,11 @@ public:
 
     KeyCenter(){};
     virtual ~KeyCenter(){};
-    virtual const dev::bytes getDataKey(const std::string& _cipherDataKey);
+    virtual const bcos::bytes getDataKey(const std::string& _cipherDataKey);
     void setIpPort(const std::string& _ip, int _port);
     const std::string url() { return m_ip + ":" + std::to_string(m_port); }
     void setKcClient(KeyCenterHttpClientInterface::Ptr _kcclient) { m_kcclient = _kcclient; };
-    dev::bytes uniformDataKey(const dev::bytes& _readableDataKey);
+    bcos::bytes uniformDataKey(const bcos::bytes& _readableDataKey);
 
     void clearCache()
     {
@@ -101,7 +100,7 @@ private:
 
     // Query cache
     std::string m_lastQueryCipherDataKey;
-    dev::bytes m_lastRcvDataKey;
+    bcos::bytes m_lastRcvDataKey;
 };
 
-}  // namespace dev
+}  // namespace bcos

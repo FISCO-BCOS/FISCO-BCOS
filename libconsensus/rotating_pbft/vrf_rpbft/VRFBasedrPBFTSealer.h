@@ -29,17 +29,17 @@
 #define VRFRPBFTSealer_LOG(LEVEL) \
     LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("VRFBasedrPBFTSealer")
 
-namespace dev
+namespace bcos
 {
 namespace consensus
 {
-class VRFBasedrPBFTSealer : public dev::consensus::PBFTSealer
+class VRFBasedrPBFTSealer : public bcos::consensus::PBFTSealer
 {
 public:
     using Ptr = std::shared_ptr<VRFBasedrPBFTSealer>;
-    VRFBasedrPBFTSealer(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
-        std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-        std::shared_ptr<dev::sync::SyncInterface> _blockSync);
+    VRFBasedrPBFTSealer(std::shared_ptr<bcos::txpool::TxPoolInterface> _txPool,
+        std::shared_ptr<bcos::blockchain::BlockChainInterface> _blockChain,
+        std::shared_ptr<bcos::sync::SyncInterface> _blockSync);
 
     ~VRFBasedrPBFTSealer() override {}
 
@@ -60,4 +60,4 @@ protected:
     std::string m_privateKey;
 };
 }  // namespace consensus
-}  // namespace dev
+}  // namespace bcos

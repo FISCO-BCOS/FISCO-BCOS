@@ -25,14 +25,14 @@
 #include "libconfig/GlobalConfigure.h"
 #include "libnetwork/ASIOInterface.h"
 #include <json/json.h>
-#include <libdevcore/Common.h>
-#include <libdevcore/TopicInfo.h>
 #include <libnetwork/Common.h>
 #include <libnetwork/Host.h>
+#include <libutilities/Common.h>
+#include <libutilities/TopicInfo.h>
 #include <boost/algorithm/string.hpp>
 
-using namespace dev;
-using namespace dev::p2p;
+using namespace bcos;
+using namespace bcos::p2p;
 
 void P2PSession::start()
 {
@@ -45,7 +45,7 @@ void P2PSession::start()
     }
 }
 
-void P2PSession::stop(dev::network::DisconnectReason reason)
+void P2PSession::stop(bcos::network::DisconnectReason reason)
 {
     if (m_run)
     {
@@ -71,7 +71,7 @@ void P2PSession::heartBeat()
             auto message =
                 std::dynamic_pointer_cast<P2PMessage>(service->p2pMessageFactory()->buildMessage());
 
-            message->setProtocolID(dev::eth::ProtocolID::Topic);
+            message->setProtocolID(bcos::eth::ProtocolID::Topic);
             message->setPacketType(AMOPPacketType::SendTopicSeq);
             std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
             std::string s = boost::lexical_cast<std::string>(service->topicSeq());
@@ -122,17 +122,17 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
                     auto requestTopics = std::dynamic_pointer_cast<P2PMessage>(
                         service->p2pMessageFactory()->buildMessage());
 
-                    requestTopics->setProtocolID(dev::eth::ProtocolID::Topic);
+                    requestTopics->setProtocolID(bcos::eth::ProtocolID::Topic);
                     requestTopics->setPacketType(AMOPPacketType::RequestTopics);
                     std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
                     requestTopics->setBuffer(buffer);
                     requestTopics->setSeq(service->p2pMessageFactory()->newSeq());
 
                     auto self = std::weak_ptr<P2PSession>(shared_from_this());
-                    dev::network::Options option;
+                    bcos::network::Options option;
                     option.timeout = 5 * 1000;  // 5 seconds timeout
                     m_session->asyncSendMessage(requestTopics, option,
-                        [self](NetworkException e, dev::network::Message::Ptr response) {
+                        [self](NetworkException e, bcos::network::Message::Ptr response) {
                             try
                             {
                                 if (e.errorCode())
@@ -154,7 +154,7 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
                                     boost::split(topics, s, boost::is_any_of("\t"));
 
                                     uint32_t topicSeq = 0;
-                                    auto topicList = std::make_shared<std::set<dev::TopicItem>>();
+                                    auto topicList = std::make_shared<std::set<bcos::TopicItem>>();
                                     auto orignTopicList = session->topics();
 
                                     session->parseTopicList(
@@ -183,7 +183,7 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
             {
                 auto responseTopics = std::dynamic_pointer_cast<P2PMessage>(
                     service->p2pMessageFactory()->buildMessage());
-                responseTopics->setProtocolID(-((PROTOCOL_ID)dev::eth::ProtocolID::Topic));
+                responseTopics->setProtocolID(-((PROTOCOL_ID)bcos::eth::ProtocolID::Topic));
                 responseTopics->setPacketType(AMOPPacketType::SendTopics);
                 std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
 
@@ -200,7 +200,7 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
                     responseTopics->setBuffer(buffer);
                     responseTopics->setSeq(message->seq());
                     m_session->asyncSendMessage(
-                        responseTopics, dev::network::Options(), CallbackFunc());
+                        responseTopics, bcos::network::Options(), CallbackFunc());
                 }
                 break;
             }
@@ -222,7 +222,7 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
 
 
 void P2PSession::requestCertTopic(
-    const std::set<dev::TopicItem>& topicList, const std::vector<std::string>& topics)
+    const std::set<bcos::TopicItem>& topicList, const std::vector<std::string>& topics)
 {
     for (auto topicIt : topicList)
     {
@@ -231,7 +231,7 @@ void P2PSession::requestCertTopic(
             std::string topicForCert = getTopicForCertRoute(topicIt.topic, topics);
             if (!topicForCert.empty())
             {
-                std::string toTopic = dev::pushChannelPrefix;
+                std::string toTopic = bcos::pushChannelPrefix;
                 toTopic.append(topicIt.topic);
                 Json::Value jsonValue;
                 jsonValue["topic"] = topicIt.topic;
@@ -251,7 +251,7 @@ void P2PSession::requestCertTopic(
 }
 
 
-std::vector<std::string> P2PSession::getTopicNameList(const std::set<dev::TopicItem>& topiclist)
+std::vector<std::string> P2PSession::getTopicNameList(const std::set<bcos::TopicItem>& topiclist)
 {
     std::vector<std::string> topicNameList;
     for (auto& topicInfo : topiclist)
@@ -262,10 +262,10 @@ std::vector<std::string> P2PSession::getTopicNameList(const std::set<dev::TopicI
 }
 
 void P2PSession::parseTopicList(const std::vector<std::string>& topics,
-    const std::set<dev::TopicItem>& originTopicList,
-    std::shared_ptr<std::set<dev::TopicItem>>& topicList, uint32_t& topicSeq)
+    const std::set<bcos::TopicItem>& originTopicList,
+    std::shared_ptr<std::set<bcos::TopicItem>>& topicList, uint32_t& topicSeq)
 {
-    dev::TopicItem item;
+    bcos::TopicItem item;
     for (uint32_t i = 0; i < topics.size(); ++i)
     {
         if (i == 0)
@@ -275,7 +275,7 @@ void P2PSession::parseTopicList(const std::vector<std::string>& topics,
         else
         {
             item.topic = topics[i];
-            item.topicStatus = dev::VERIFY_SUCCESS_STATUS;
+            item.topicStatus = bcos::VERIFY_SUCCESS_STATUS;
             if (item.topic.find(topicNeedVerifyPrefix) == 0)
             {
                 // if originTopicList has the topic status is set to status item
@@ -291,7 +291,7 @@ void P2PSession::parseTopicList(const std::vector<std::string>& topics,
                 }
                 if (!hasFound)
                 {
-                    item.topicStatus = dev::VERIFYING_STATUS;
+                    item.topicStatus = bcos::VERIFYING_STATUS;
                 }
             }
             topicList->insert(std::move(item));
@@ -302,7 +302,7 @@ void P2PSession::parseTopicList(const std::vector<std::string>& topics,
 std::string P2PSession::getTopicForCertRoute(
     const std::string& topic, const std::vector<std::string>& topics)
 {
-    std::string topicPrefix = dev::verifyChannelPrefix;
+    std::string topicPrefix = bcos::verifyChannelPrefix;
     topicPrefix.append(topic);
     for (auto& topicIt : topics)
     {
@@ -314,14 +314,14 @@ std::string P2PSession::getTopicForCertRoute(
     }
     return std::string();
 }
-void P2PSession::updateTopicStatus(const std::string& topic, dev::TopicStatus topicStatus)
+void P2PSession::updateTopicStatus(const std::string& topic, bcos::TopicStatus topicStatus)
 {
     std::lock_guard<std::mutex> lock(x_topic);
     auto topics = *m_topics;
-    auto topics2Set = std::make_shared<std::set<dev::TopicItem>>();
+    auto topics2Set = std::make_shared<std::set<bcos::TopicItem>>();
     for (auto it : topics)
     {
-        if (it.topic == topic && (it.topicStatus == dev::VERIFYING_STATUS))
+        if (it.topic == topic && (it.topicStatus == bcos::VERIFYING_STATUS))
         {
             it.topicStatus = topicStatus;
             SESSION_LOG(DEBUG)

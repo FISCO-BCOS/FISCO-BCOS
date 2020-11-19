@@ -34,11 +34,11 @@
 #include <boost/throw_exception.hpp>
 
 
-using namespace dev;
-using namespace dev::blockverifier;
+using namespace bcos;
+using namespace bcos::blockverifier;
 using namespace std;
-using namespace dev::storage;
-using namespace dev::precompiled;
+using namespace bcos::storage;
+using namespace bcos::precompiled;
 
 const char* const TABLE_METHOD_OPT_STR = "openTable(string)";
 const char* const TABLE_METHOD_CRT_STR_STR = "createTable(string,string,string)";
@@ -61,7 +61,7 @@ PrecompiledExecResult::Ptr TableFactoryPrecompiled::call(ExecutiveContext::Ptr c
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
 
-    dev::eth::ContractABI abi;
+    bcos::eth::ContractABI abi;
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
     callResult->gasPricer()->setMemUsed(param.size());
 
@@ -169,7 +169,7 @@ PrecompiledExecResult::Ptr TableFactoryPrecompiled::call(ExecutiveContext::Ptr c
                 callResult->gasPricer()->appendOperation(InterfaceOpcode::CreateTable);
             }
         }
-        catch (dev::storage::StorageException& e)
+        catch (bcos::storage::StorageException& e)
         {
             STORAGE_LOG(ERROR) << "Create table failed: " << boost::diagnostic_information(e);
             result = e.errorCode();

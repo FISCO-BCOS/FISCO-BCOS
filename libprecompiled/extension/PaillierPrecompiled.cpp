@@ -20,14 +20,14 @@
  */
 
 #include "PaillierPrecompiled.h"
-#include <libdevcore/Common.h>
 #include <libethcore/ABI.h>
+#include <libutilities/Common.h>
 #include <paillier/callpaillier.h>
 #include <string>
 
-using namespace dev;
-using namespace dev::blockverifier;
-using namespace dev::precompiled;
+using namespace bcos;
+using namespace bcos::blockverifier;
+using namespace bcos::precompiled;
 
 const char* const PAILLIER_METHOD_SET_STR = "paillierAdd(string,string)";
 
@@ -46,7 +46,7 @@ PrecompiledExecResult::Ptr PaillierPrecompiled::call(
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
 
-    dev::eth::ContractABI abi;
+    bcos::eth::ContractABI abi;
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
     callResult->gasPricer()->setMemUsed(param.size());
     if (func == name2Selector[PAILLIER_METHOD_SET_STR])

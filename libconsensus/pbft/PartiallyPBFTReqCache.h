@@ -29,7 +29,7 @@
     LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("PartiallyPBFTReqCache")
 
 
-namespace dev
+namespace bcos
 {
 namespace consensus
 {
@@ -66,7 +66,7 @@ public:
     virtual void clearPreRawPrepare();
 
     virtual void addPartiallyFuturePrepare(PrepareReq::Ptr _futurePrepare);
-    bool existInFuturePrepare(dev::h256 const& _blockHash);
+    bool existInFuturePrepare(bcos::h256 const& _blockHash);
     void fillFutureBlock(RLP const& _txsRLP);
 
 private:
@@ -79,4 +79,4 @@ private:
     PrepareReq::Ptr m_partiallyFuturePrepare;
 };
 }  // namespace consensus
-}  // namespace dev
+}  // namespace bcos

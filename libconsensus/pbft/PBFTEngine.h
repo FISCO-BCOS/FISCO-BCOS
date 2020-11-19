@@ -28,11 +28,11 @@
 #include "PartiallyPBFTReqCache.h"
 #include "TimeManager.h"
 #include <libconsensus/ConsensusEngineBase.h>
-#include <libdevcore/FileSystem.h>
-#include <libdevcore/ThreadPool.h>
-#include <libdevcore/concurrent_queue.h>
 #include <libstorage/Storage.h>
 #include <libsync/SyncStatus.h>
+#include <libutilities/FileSystem.h>
+#include <libutilities/ThreadPool.h>
+#include <libutilities/concurrent_queue.h>
 #include <sstream>
 
 #include <libp2p/P2PMessageFactory.h>
@@ -43,7 +43,7 @@
 #include <libstorage/BasicRocksDB.h>
 #include <libsync/SyncStatus.h>
 
-namespace dev
+namespace bcos
 {
 namespace consensus
 {
@@ -53,18 +53,18 @@ enum CheckResult
     INVALID = 1,
     FUTURE = 2
 };
-using PBFTMsgQueue = dev::concurrent_queue<PBFTMsgPacket::Ptr>;
+using PBFTMsgQueue = bcos::concurrent_queue<PBFTMsgPacket::Ptr>;
 class PBFTEngine : public ConsensusEngineBase, public std::enable_shared_from_this<PBFTEngine>
 {
 public:
     using Ptr = std::shared_ptr<PBFTEngine>;
     virtual ~PBFTEngine() { stop(); }
-    PBFTEngine(std::shared_ptr<dev::p2p::P2PInterface> _service,
-        std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
-        std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-        std::shared_ptr<dev::sync::SyncInterface> _blockSync,
-        std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
-        dev::PROTOCOL_ID const& _protocolId, KeyPair const& _keyPair,
+    PBFTEngine(std::shared_ptr<bcos::p2p::P2PInterface> _service,
+        std::shared_ptr<bcos::txpool::TxPoolInterface> _txPool,
+        std::shared_ptr<bcos::blockchain::BlockChainInterface> _blockChain,
+        std::shared_ptr<bcos::sync::SyncInterface> _blockSync,
+        std::shared_ptr<bcos::blockverifier::BlockVerifierInterface> _blockVerifier,
+        bcos::PROTOCOL_ID const& _protocolId, KeyPair const& _keyPair,
         h512s const& _sealerList = h512s())
       : ConsensusEngineBase(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
             _keyPair, _sealerList)
@@ -80,20 +80,20 @@ public:
         m_blockSync->registerConsensusVerifyHandler(boost::bind(&PBFTEngine::checkBlock, this, _1));
 
         m_threadPool =
-            std::make_shared<dev::ThreadPool>("pbftPool-" + std::to_string(m_groupId), 1);
+            std::make_shared<bcos::ThreadPool>("pbftPool-" + std::to_string(m_groupId), 1);
         m_broacastTargetsFilter = boost::bind(&PBFTEngine::getIndexBySealer, this, _1);
 
-        m_consensusSet = std::make_shared<std::set<dev::h512>>();
+        m_consensusSet = std::make_shared<std::set<bcos::h512>>();
 
         m_messageHandler =
-            std::make_shared<dev::ThreadPool>("PBFTMsg-" + std::to_string(m_groupId), 1);
+            std::make_shared<bcos::ThreadPool>("PBFTMsg-" + std::to_string(m_groupId), 1);
         m_prepareWorker =
-            std::make_shared<dev::ThreadPool>("PBFTWork-" + std::to_string(m_groupId), 1);
+            std::make_shared<bcos::ThreadPool>("PBFTWork-" + std::to_string(m_groupId), 1);
 
         m_destructorThread =
-            std::make_shared<dev::ThreadPool>("PBFTAsync-" + std::to_string(m_groupId), 1);
+            std::make_shared<bcos::ThreadPool>("PBFTAsync-" + std::to_string(m_groupId), 1);
         m_cachedForwardMsg =
-            std::make_shared<std::map<dev::h256, std::pair<int64_t, PBFTMsgPacket::Ptr>>>();
+            std::make_shared<std::map<bcos::h256, std::pair<int64_t, PBFTMsgPacket::Ptr>>>();
     }
 
     void setBaseDir(std::string const& _path) { m_baseDir = _path; }
@@ -174,15 +174,15 @@ public:
     void rehandleCommitedPrepareCache(PrepareReq const& req);
     bool shouldSeal();
     /// broadcast prepare message
-    bool generatePrepare(dev::eth::Block::Ptr _block);
+    bool generatePrepare(bcos::eth::Block::Ptr _block);
     /// update the context of PBFT after commit a block into the block-chain
-    void reportBlock(dev::eth::Block const& block) override;
+    void reportBlock(bcos::eth::Block const& block) override;
     void onViewChange(std::function<void()> const& _f)
     {
         m_onViewChange = _f;
         m_notifyNextLeaderSeal = false;
     }
-    void onNotifyNextLeaderReset(std::function<void(dev::h256Hash const& filter)> const& _f)
+    void onNotifyNextLeaderReset(std::function<void(bcos::h256Hash const& filter)> const& _f)
     {
         m_onNotifyNextLeaderReset = _f;
     }
@@ -198,7 +198,7 @@ public:
         m_onCommitBlock = _f;
     }
 
-    bool inline shouldReset(dev::eth::Block const& block)
+    bool inline shouldReset(bcos::eth::Block const& block)
     {
         return block.getTransactionSize() == 0 && m_omitEmptyBlock;
     }
@@ -241,7 +241,7 @@ public:
     /// @param nodeId: the node id of the sealer
     /// @return : 1. >0: the index of the sealer
     ///           2. equal to -1: the node is not a sealer(not exists in sealer list)
-    inline ssize_t getIndexBySealer(dev::network::NodeID const& nodeId)
+    inline ssize_t getIndexBySealer(bcos::network::NodeID const& nodeId)
     {
         ReadGuard l(m_sealerListMutex);
         ssize_t index = -1;
@@ -261,21 +261,21 @@ protected:
 
     virtual bool locatedInChosedConsensensusNodes() const { return m_idx != MAXIDX; }
     virtual void addRawPrepare(PrepareReq::Ptr _prepareReq);
-    void reportBlockWithoutLock(dev::eth::Block const& block);
+    void reportBlockWithoutLock(bcos::eth::Block const& block);
     void workLoop() override;
     void handleFutureBlock();
     void collectGarbage();
     void checkTimeout();
-    bool getNodeIDByIndex(dev::network::NodeID& nodeId, const IDXTYPE& idx) const;
-    virtual dev::h512 selectNodeToRequestMissedTxs(PrepareReq::Ptr _prepareReq);
+    bool getNodeIDByIndex(bcos::network::NodeID& nodeId, const IDXTYPE& idx) const;
+    virtual bcos::h512 selectNodeToRequestMissedTxs(PrepareReq::Ptr _prepareReq);
 
-    void checkBlockValid(dev::eth::Block const& block) override
+    void checkBlockValid(bcos::eth::Block const& block) override
     {
         ConsensusEngineBase::checkBlockValid(block);
         checkSealerList(block);
     }
 
-    virtual void checkTransactionsValid(dev::eth::Block::Ptr, PrepareReq::Ptr) {}
+    virtual void checkTransactionsValid(bcos::eth::Block::Ptr, PrepareReq::Ptr) {}
 
     bool needOmit(Sealing const& sealing);
 
@@ -284,23 +284,23 @@ protected:
     // broadcast given messages to all-peers with cache-filter and specified filter
     virtual bool broadcastMsg(unsigned const& _packetType, PBFTMsg const& _pbftMsg,
         bytesConstRef _data, PACKET_TYPE const& _p2pPacketType,
-        std::unordered_set<dev::network::NodeID> const& _filter, unsigned const& _ttl,
-        std::function<ssize_t(dev::network::NodeID const&)> const& _filterFunction);
+        std::unordered_set<bcos::network::NodeID> const& _filter, unsigned const& _ttl,
+        std::function<ssize_t(bcos::network::NodeID const&)> const& _filterFunction);
 
     bool broadcastMsg(unsigned const& _packetType, PBFTMsg const& _pbftMsg, bytesConstRef _data,
         PACKET_TYPE const& _p2pPacketType = 0,
-        std::unordered_set<dev::network::NodeID> const& _filter =
-            std::unordered_set<dev::network::NodeID>(),
+        std::unordered_set<bcos::network::NodeID> const& _filter =
+            std::unordered_set<bcos::network::NodeID>(),
         unsigned const& _ttl = 0)
     {
         return broadcastMsg(
             _packetType, _pbftMsg, _data, _p2pPacketType, _filter, _ttl, m_broacastTargetsFilter);
     }
 
-    void sendViewChangeMsg(dev::network::NodeID const& nodeId);
-    bool sendMsg(dev::network::NodeID const& nodeId, unsigned const& packetType,
+    void sendViewChangeMsg(bcos::network::NodeID const& nodeId);
+    bool sendMsg(bcos::network::NodeID const& nodeId, unsigned const& packetType,
         std::string const& key, bytesConstRef data, unsigned const& ttl = 1,
-        std::shared_ptr<dev::h512s> forwardNodes = nullptr);
+        std::shared_ptr<bcos::h512s> forwardNodes = nullptr);
     /// 1. generate and broadcast signReq according to given prepareReq
     /// 2. add the generated signReq into the cache
     bool broadcastSignReq(PrepareReq const& req);
@@ -311,12 +311,12 @@ protected:
     bool shouldBroadcastViewChange();
     bool broadcastViewChangeReq();
     /// handler called when receiving data from the network
-    void pushValidPBFTMsgIntoQueue(dev::p2p::NetworkException exception,
-        std::shared_ptr<dev::p2p::P2PSession> session, dev::p2p::P2PMessage::Ptr message,
+    void pushValidPBFTMsgIntoQueue(bcos::p2p::NetworkException exception,
+        std::shared_ptr<bcos::p2p::P2PSession> session, bcos::p2p::P2PMessage::Ptr message,
         std::function<void(PBFTMsgPacket::Ptr)> const& _f);
 
-    virtual void onRecvPBFTMessage(dev::p2p::NetworkException _exception,
-        std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);
+    virtual void onRecvPBFTMessage(bcos::p2p::NetworkException _exception,
+        std::shared_ptr<bcos::p2p::P2PSession> _session, bcos::p2p::P2PMessage::Ptr _message);
 
     bool handlePrepareMsg(PrepareReq::Ptr prepare_req, std::string const& endpoint = "self");
     /// handler prepare messages
@@ -346,10 +346,10 @@ protected:
 
     bool checkSign(PBFTMsg const& req) const;
     bool checkSign(
-        IDXTYPE const& _idx, dev::h256 const& _hash, std::vector<unsigned char> const& _sig);
+        IDXTYPE const& _idx, bcos::h256 const& _hash, std::vector<unsigned char> const& _sig);
 
     inline bool broadcastFilter(
-        dev::network::NodeID const& nodeId, unsigned const& packetType, std::string const& key)
+        bcos::network::NodeID const& nodeId, unsigned const& packetType, std::string const& key)
     {
         return m_broadCastCache->keyExists(nodeId, packetType, key);
     }
@@ -364,7 +364,7 @@ protected:
      * common
      */
     inline void broadcastMark(
-        dev::network::NodeID const& nodeId, unsigned const& packetType, std::string const& key)
+        bcos::network::NodeID const& nodeId, unsigned const& packetType, std::string const& key)
     {
         /// in case of useless insert
         if (m_broadCastCache->keyExists(nodeId, packetType, key))
@@ -377,22 +377,22 @@ protected:
     /// @param index: the index of the node
     /// @return h512(): the node is not in the sealer list
     /// @return node id: the node id of the node
-    virtual dev::network::NodeID getSealerByIndex(size_t const& index) const
+    virtual bcos::network::NodeID getSealerByIndex(size_t const& index) const
     {
         ReadGuard l(m_sealerListMutex);
         if (index < m_sealerList.size())
             return m_sealerList[index];
-        return dev::network::NodeID();
+        return bcos::network::NodeID();
     }
 
     virtual PBFTMsgPacket::Ptr createPBFTMsgPacket(bytesConstRef data,
         PACKET_TYPE const& packetType, unsigned const& ttl,
-        std::shared_ptr<dev::h512s> _forwardNodes);
+        std::shared_ptr<bcos::h512s> _forwardNodes);
 
     /// trans data into message
-    virtual dev::p2p::P2PMessage::Ptr transDataToMessage(bytesConstRef _data,
+    virtual bcos::p2p::P2PMessage::Ptr transDataToMessage(bytesConstRef _data,
         PACKET_TYPE const& _packetType, unsigned const& _ttl,
-        std::shared_ptr<dev::h512s> _forwardNodes = nullptr);
+        std::shared_ptr<bcos::h512s> _forwardNodes = nullptr);
 
     /**
      * @brief : the message received from the network is valid or not?
@@ -406,8 +406,8 @@ protected:
      * @return true : the network-received message is valid
      * @return false: the network-received message is invalid
      */
-    bool isValidReq(dev::p2p::P2PMessage::Ptr message,
-        std::shared_ptr<dev::p2p::P2PSession> session, ssize_t& peerIndex) override
+    bool isValidReq(bcos::p2p::P2PMessage::Ptr message,
+        std::shared_ptr<bcos::p2p::P2PSession> session, ssize_t& peerIndex) override
     {
         /// check message size
         if (message->buffer()->size() <= 0)
@@ -421,7 +421,7 @@ protected:
             return false;
         }
         /// check whether this node is in the sealer list
-        dev::network::NodeID node_id;
+        bcos::network::NodeID node_id;
         bool is_sealer = getNodeIDByIndex(node_id, nodeIdx());
         if (!is_sealer || session->nodeID() == node_id)
             return false;
@@ -590,9 +590,9 @@ protected:
         return true;
     }
 
-    void checkSealerList(dev::eth::Block const& block);
+    void checkSealerList(bcos::eth::Block const& block);
     /// check block
-    bool checkBlock(dev::eth::Block const& block);
+    bool checkBlock(bcos::eth::Block const& block);
     void execBlock(Sealing& sealing, PrepareReq::Ptr _req, std::ostringstream& oss);
     void changeViewForFastViewChange()
     {
@@ -600,7 +600,7 @@ protected:
         m_fastViewChange = true;
         m_signalled.notify_all();
     }
-    void notifySealing(dev::eth::Block const& block);
+    void notifySealing(bcos::eth::Block const& block);
     /// to ensure at least 100MB available disk space
     virtual bool isDiskSpaceEnough(std::string const& path)
     {
@@ -617,8 +617,8 @@ protected:
 
     template <class T>
     inline bool decodePBFTMsgPacket(std::shared_ptr<T> _req,
-        std::shared_ptr<dev::p2p::P2PMessage> _message,
-        std::shared_ptr<dev::p2p::P2PSession> _session)
+        std::shared_ptr<bcos::p2p::P2PMessage> _message,
+        std::shared_ptr<bcos::p2p::P2PSession> _session)
     {
         ssize_t peerIndex = 0;
         bool valid = isValidReq(_message, _session, peerIndex);
@@ -651,38 +651,38 @@ protected:
 
     virtual void createPBFTMsgFactory();
 
-    virtual void broadcastMsg(dev::h512s const& _targetNodes, bytesConstRef _data,
+    virtual void broadcastMsg(bcos::h512s const& _targetNodes, bytesConstRef _data,
         unsigned const& _packetType, unsigned const& _ttl, PACKET_TYPE const& _p2pPacketType,
         PBFTMsg const& _pbftMsg);
-    std::shared_ptr<dev::h512s> getForwardNodes(bool const& _printLog = false);
+    std::shared_ptr<bcos::h512s> getForwardNodes(bool const& _printLog = false);
 
 
     // BIP 152 related logic
-    virtual void handleP2PMessage(dev::p2p::NetworkException _exception,
-        std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);
+    virtual void handleP2PMessage(bcos::p2p::NetworkException _exception,
+        std::shared_ptr<bcos::p2p::P2PSession> _session, bcos::p2p::P2PMessage::Ptr _message);
 
 
-    virtual PrepareReq::Ptr constructPrepareReq(dev::eth::Block::Ptr _block);
+    virtual PrepareReq::Ptr constructPrepareReq(bcos::eth::Block::Ptr _block);
     virtual void sendPrepareMsgFromLeader(PrepareReq::Ptr _prepareReq, bytesConstRef _data,
-        dev::PACKET_TYPE const& _p2pPacketType = 0);
+        bcos::PACKET_TYPE const& _p2pPacketType = 0);
 
-    virtual dev::p2p::P2PMessage::Ptr toP2PMessage(
+    virtual bcos::p2p::P2PMessage::Ptr toP2PMessage(
         std::shared_ptr<bytes> _data, PACKET_TYPE const& _packetType);
 
-    bool handleReceivedPartiallyPrepare(std::shared_ptr<dev::p2p::P2PSession> _session,
-        dev::p2p::P2PMessage::Ptr _message, std::function<void(PBFTMsgPacket::Ptr)> const& _f);
+    bool handleReceivedPartiallyPrepare(std::shared_ptr<bcos::p2p::P2PSession> _session,
+        bcos::p2p::P2PMessage::Ptr _message, std::function<void(PBFTMsgPacket::Ptr)> const& _f);
 
     virtual bool handlePartiallyPrepare(
-        std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);
+        std::shared_ptr<bcos::p2p::P2PSession> _session, bcos::p2p::P2PMessage::Ptr _message);
 
     bool handlePartiallyPrepare(PrepareReq::Ptr _prepareReq);
 
     bool execPrepareAndGenerateSignMsg(PrepareReq::Ptr _prepareReq, std::ostringstream& _oss);
     void forwardPrepareMsg(PBFTMsgPacket::Ptr _pbftMsgPacket, PrepareReq::Ptr prepareReq);
     void onReceiveGetMissedTxsRequest(
-        std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);
+        std::shared_ptr<bcos::p2p::P2PSession> _session, bcos::p2p::P2PMessage::Ptr _message);
     void onReceiveMissedTxsResponse(
-        std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);
+        std::shared_ptr<bcos::p2p::P2PSession> _session, bcos::p2p::P2PMessage::Ptr _message);
     void clearInvalidCachedForwardMsg();
 
     void clearPreRawPrepare();
@@ -697,7 +697,7 @@ protected:
     std::atomic_bool m_notifyNextLeaderSeal = {false};
 
     // backup msg
-    dev::storage::BasicRocksDB::Ptr m_backupDB = nullptr;
+    bcos::storage::BasicRocksDB::Ptr m_backupDB = nullptr;
 
     /// static vars
     static const std::string c_backupKeyCommitted;
@@ -715,13 +715,13 @@ protected:
 
 
     std::function<void()> m_onViewChange = nullptr;
-    std::function<void(dev::h256Hash const& filter)> m_onNotifyNextLeaderReset = nullptr;
+    std::function<void(bcos::h256Hash const& filter)> m_onNotifyNextLeaderReset = nullptr;
     std::function<void(uint64_t const& sealingTxNumber)> m_onTimeout = nullptr;
     std::function<void(
         uint64_t const& blockNumber, uint64_t const& sealingTxNumber, unsigned const& changeCycle)>
         m_onCommitBlock = nullptr;
 
-    std::function<ssize_t(dev::network::NodeID const&)> m_broacastTargetsFilter = nullptr;
+    std::function<ssize_t(bcos::network::NodeID const&)> m_broacastTargetsFilter = nullptr;
 
     /// for output time-out caused viewchange
     /// m_fastViewChange is false: output viewchangeWarning to indicate PBFT consensus timeout
@@ -736,22 +736,23 @@ protected:
     std::atomic<uint64_t> m_sealingNumber = {0};
 
     // the thread pool is used to execute the async-function
-    dev::ThreadPool::Ptr m_threadPool;
+    bcos::ThreadPool::Ptr m_threadPool;
     PBFTMsgFactory::Ptr m_pbftMsgFactory = nullptr;
     // ttl-optimize related logic
     bool m_enableTTLOptimize = false;
     mutable SharedMutex x_consensusSet;
-    std::shared_ptr<std::set<dev::h512>> m_consensusSet;
+    std::shared_ptr<std::set<bcos::h512>> m_consensusSet;
 
     // bip 152 related logic
     PartiallyPBFTReqCache::Ptr m_partiallyPrepareCache = nullptr;
-    std::shared_ptr<std::map<dev::h256, std::pair<int64_t, PBFTMsgPacket::Ptr>>> m_cachedForwardMsg;
-    dev::ThreadPool::Ptr m_prepareWorker;
-    dev::ThreadPool::Ptr m_messageHandler;
+    std::shared_ptr<std::map<bcos::h256, std::pair<int64_t, PBFTMsgPacket::Ptr>>>
+        m_cachedForwardMsg;
+    bcos::ThreadPool::Ptr m_prepareWorker;
+    bcos::ThreadPool::Ptr m_messageHandler;
 
     // Make object destructive overhead asynchronous
-    dev::ThreadPool::Ptr m_destructorThread;
+    bcos::ThreadPool::Ptr m_destructorThread;
     bool m_enablePrepareWithTxsHash = false;
 };
 }  // namespace consensus
-}  // namespace dev
+}  // namespace bcos

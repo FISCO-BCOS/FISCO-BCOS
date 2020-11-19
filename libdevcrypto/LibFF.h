@@ -5,9 +5,9 @@
 
 #pragma once
 
-#include <libdevcore/Common.h>
+#include <libutilities/Common.h>
 
-namespace dev
+namespace bcos
 {
 namespace crypto
 {
@@ -16,4 +16,4 @@ std::pair<bool, bytes> alt_bn128_G1_add(bytesConstRef _in);
 std::pair<bool, bytes> alt_bn128_G1_mul(bytesConstRef _in);
 
 }  // namespace crypto
-}  // namespace dev
+}  // namespace bcos

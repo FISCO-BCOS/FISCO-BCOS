@@ -25,8 +25,8 @@
 #include <boost/test/unit_test.hpp>
 #include <thread>
 
-using namespace dev::flowlimit;
-namespace dev
+using namespace bcos::flowlimit;
+namespace bcos
 {
 namespace test
 {
@@ -205,4 +205,4 @@ BOOST_AUTO_TEST_CASE(testAcquireWithBurstSupported)
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

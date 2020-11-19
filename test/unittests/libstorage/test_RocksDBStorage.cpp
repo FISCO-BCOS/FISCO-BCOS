@@ -23,15 +23,15 @@
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/write_batch.h"
-#include <libdevcore/FixedHash.h>
-#include <libdevcore/Log.h>
 #include <libstorage/BasicRocksDB.h>
 #include <libstorage/RocksDBStorage.h>
+#include <libutilities/FixedHash.h>
+#include <libutilities/Log.h>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev;
+using namespace bcos;
 using namespace std;
-using namespace dev::storage;
+using namespace bcos::storage;
 using namespace rocksdb;
 namespace rocksdb
 {
@@ -218,7 +218,7 @@ struct RocksDBFixture
 {
     RocksDBFixture()
     {
-        rocksDB = std::make_shared<dev::storage::RocksDBStorage>();
+        rocksDB = std::make_shared<bcos::storage::RocksDBStorage>();
         std::shared_ptr<MockRocksDB> mockRocksDB = std::make_shared<MockRocksDB>();
         rocksDB->setDB(mockRocksDB);
     }
@@ -231,7 +231,7 @@ struct RocksDBFixture
         entries->addEntry(entry);
         return entries;
     }
-    dev::storage::RocksDBStorage::Ptr rocksDB;
+    bcos::storage::RocksDBStorage::Ptr rocksDB;
 };
 
 BOOST_FIXTURE_TEST_SUITE(RocksDB, RocksDBFixture)
@@ -254,8 +254,8 @@ BOOST_AUTO_TEST_CASE(commitNew)
     h256 h(0x01);
     int num = 1;
     h256 blockHash(0x11231);
-    std::vector<dev::storage::TableData::Ptr> datas;
-    dev::storage::TableData::Ptr tableData = std::make_shared<dev::storage::TableData>();
+    std::vector<bcos::storage::TableData::Ptr> datas;
+    bcos::storage::TableData::Ptr tableData = std::make_shared<bcos::storage::TableData>();
     tableData->info->name = "t_test";
     tableData->info->key = "Name";
     tableData->info->fields.push_back("id");
@@ -278,8 +278,8 @@ BOOST_AUTO_TEST_CASE(commitDirty)
     h256 h(0x01);
     int num = 1;
     h256 blockHash(0x11231);
-    std::vector<dev::storage::TableData::Ptr> datas;
-    dev::storage::TableData::Ptr tableData = std::make_shared<dev::storage::TableData>();
+    std::vector<bcos::storage::TableData::Ptr> datas;
+    bcos::storage::TableData::Ptr tableData = std::make_shared<bcos::storage::TableData>();
     tableData->info->name = "t_test";
     tableData->info->key = "Name";
     tableData->info->fields.push_back("id");
@@ -302,8 +302,8 @@ BOOST_AUTO_TEST_CASE(exception)
     h256 h(0x01);
     int num = 1;
     h256 blockHash(0x11231);
-    std::vector<dev::storage::TableData::Ptr> datas;
-    dev::storage::TableData::Ptr tableData = std::make_shared<dev::storage::TableData>();
+    std::vector<bcos::storage::TableData::Ptr> datas;
+    bcos::storage::TableData::Ptr tableData = std::make_shared<bcos::storage::TableData>();
     tableData->info->name = "e";
     tableData->info->key = "Name";
     tableData->info->fields.push_back("id");

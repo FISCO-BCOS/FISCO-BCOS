@@ -23,7 +23,7 @@
 
 #include "Storage.h"
 
-namespace dev
+namespace bcos
 {
 namespace storage
 {
@@ -55,4 +55,4 @@ private:
 
 }  // namespace storage
 
-}  // namespace dev
+}  // namespace bcos

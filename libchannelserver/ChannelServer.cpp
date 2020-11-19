@@ -30,9 +30,9 @@
 
 
 using namespace std;
-using namespace dev::channel;
+using namespace bcos::channel;
 
-void dev::channel::ChannelServer::run()
+void bcos::channel::ChannelServer::run()
 {
     auto sslCtx = m_sslContext->native_handle();
     auto cert = SSL_CTX_get0_certificate(sslCtx);
@@ -84,7 +84,7 @@ void dev::channel::ChannelServer::run()
 }
 
 
-void dev::channel::ChannelServer::onAccept(
+void bcos::channel::ChannelServer::onAccept(
     const boost::system::error_code& error, ChannelSession::Ptr session)
 {
     if (!error)
@@ -137,7 +137,7 @@ void dev::channel::ChannelServer::onAccept(
 
 
 std::function<bool(bool, boost::asio::ssl::verify_context&)>
-dev::channel::ChannelServer::newVerifyCallback(std::shared_ptr<std::string> _sdkPublicKey)
+bcos::channel::ChannelServer::newVerifyCallback(std::shared_ptr<std::string> _sdkPublicKey)
 {
     auto server = shared_from_this();
     return [server, _sdkPublicKey](bool preverified, boost::asio::ssl::verify_context& ctx) {
@@ -192,7 +192,7 @@ dev::channel::ChannelServer::newVerifyCallback(std::shared_ptr<std::string> _sdk
                 }
             }
 
-            dev::network::getPublicKeyFromCert(_sdkPublicKey, cert);
+            bcos::network::getPublicKeyFromCert(_sdkPublicKey, cert);
 
             return preverified;
         }
@@ -205,7 +205,7 @@ dev::channel::ChannelServer::newVerifyCallback(std::shared_ptr<std::string> _sdk
     };
 }
 
-void dev::channel::ChannelServer::startAccept()
+void bcos::channel::ChannelServer::startAccept()
 {
     try
     {
@@ -230,7 +230,7 @@ void dev::channel::ChannelServer::startAccept()
     }
 }
 
-void dev::channel::ChannelServer::stop()
+void bcos::channel::ChannelServer::stop()
 {
     try
     {
@@ -261,7 +261,7 @@ void dev::channel::ChannelServer::stop()
     m_serverThread->join();
 }
 
-void dev::channel::ChannelServer::onHandshake(const boost::system::error_code& error,
+void bcos::channel::ChannelServer::onHandshake(const boost::system::error_code& error,
     std::shared_ptr<std::string> _sdkPublicKey, ChannelSession::Ptr session)
 {
     try
@@ -277,7 +277,7 @@ void dev::channel::ChannelServer::onHandshake(const boost::system::error_code& e
             {
                 CHANNEL_LOG(ERROR) << LOG_DESC("connectionHandler empty");
             }
-            session->setRemotePublicKey(dev::h512(*_sdkPublicKey));
+            session->setRemotePublicKey(bcos::h512(*_sdkPublicKey));
         }
         else
         {

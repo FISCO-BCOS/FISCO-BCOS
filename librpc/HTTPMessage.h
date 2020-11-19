@@ -21,13 +21,13 @@
 
 #pragma once
 
-#include <libdevcore/FixedHash.h>
 #include <libethcore/Protocol.h>
 #include <libnetwork/Common.h>
+#include <libutilities/FixedHash.h>
 #include <boost/beast.hpp>
 #include <memory>
 
-namespace dev
+namespace bcos
 {
 namespace p2p
 {
@@ -210,4 +210,4 @@ public:
 };
 
 }  // namespace p2p
-}  // namespace dev
+}  // namespace bcos

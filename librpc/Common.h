@@ -26,7 +26,7 @@
 #define INVALIDNUMBER -1
 #define RPC_LOG(LEVEL) LOG(LEVEL) << "[RPC]"
 
-namespace dev
+namespace bcos
 {
 namespace rpc
 {
@@ -53,4 +53,4 @@ std::string compress(const std::string& _data);
 std::string decompress(const std::string& _data);
 std::string base64Encode(const std::string& _data);
 std::string base64Decode(const std::string& _data);
-}  // namespace dev
+}  // namespace bcos

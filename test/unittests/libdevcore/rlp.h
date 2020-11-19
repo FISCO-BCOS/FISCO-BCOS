@@ -28,18 +28,18 @@
 #include <string>
 
 #include <json/json.h>
-#include <libdevcore/Exceptions.h>
+#include <libutilities/Exceptions.h>
 #include <boost/filesystem.hpp>
 #include <boost/test/unit_test.hpp>
 
 
-#include <libdevcore/Common.h>
-#include <libdevcore/CommonIO.h>
-#include <libdevcore/RLP.h>
+#include <libutilities/Common.h>
+#include <libutilities/CommonIO.h>
+#include <libutilities/RLP.h>
 
 namespace fs = boost::filesystem;
-using namespace dev;
-namespace dev
+using namespace bcos;
+namespace bcos
 {
 namespace test
 {
@@ -95,8 +95,8 @@ private:
             LOG(ERROR) << "RLP Decode Exception:" << e.what();
         }
     }
-    static void buildRLP(Json::Value const& jsonObj, dev::RLPStream& retRlp);
-    static void checkRlp(Json::Value const& jsonObj, dev::RLP const& rlp);
+    static void buildRLP(Json::Value const& jsonObj, bcos::RLPStream& retRlp);
+    static void checkRlp(Json::Value const& jsonObj, bcos::RLP const& rlp);
 };
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

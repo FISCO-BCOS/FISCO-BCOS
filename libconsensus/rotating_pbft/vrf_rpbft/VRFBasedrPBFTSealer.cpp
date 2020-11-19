@@ -25,11 +25,11 @@
 #include "ffi_vrf.h"
 #include <libprecompiled/WorkingSealerManagerPrecompiled.h>
 
-using namespace dev::consensus;
+using namespace bcos::consensus;
 
-VRFBasedrPBFTSealer::VRFBasedrPBFTSealer(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
-    std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-    std::shared_ptr<dev::sync::SyncInterface> _blockSync)
+VRFBasedrPBFTSealer::VRFBasedrPBFTSealer(std::shared_ptr<bcos::txpool::TxPoolInterface> _txPool,
+    std::shared_ptr<bcos::blockchain::BlockChainInterface> _blockChain,
+    std::shared_ptr<bcos::sync::SyncInterface> _blockSync)
   : PBFTSealer(_txPool, _blockChain, _blockSync)
 {}
 
@@ -95,11 +95,11 @@ bool VRFBasedrPBFTSealer::generateTransactionForRotating()
         std::string vrfProof = vrfProofPtr;
 
         // generate "rotateWorkingSealer" transaction
-        std::string interface = dev::precompiled::WSM_METHOD_ROTATE_STR;
+        std::string interface = bcos::precompiled::WSM_METHOD_ROTATE_STR;
         auto generatedTx =
             m_txGenerator->generateTransactionWithSig(interface, m_blockChain->number(),
-                dev::precompiled::WORKING_SEALER_MGR_ADDRESS, m_vrfBasedrPBFTEngine->keyPair(),
-                dev::eth::Transaction::Type::MessageCall, m_vrfPublicKey, blockHashStr, vrfProof);
+                bcos::precompiled::WORKING_SEALER_MGR_ADDRESS, m_vrfBasedrPBFTEngine->keyPair(),
+                bcos::eth::Transaction::Type::MessageCall, m_vrfPublicKey, blockHashStr, vrfProof);
 
         // put the generated transaction into the 0th position of the block transactions
         // Note: must set generatedTx into the first transaction for other transactions may change

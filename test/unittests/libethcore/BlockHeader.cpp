@@ -22,17 +22,17 @@
  */
 
 #include "libdevcrypto/CryptoInterface.h"
-#include <libdevcore/CommonJS.h>
-#include <libdevcore/TrieHash.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/BlockHeader.h>
 #include <libethcore/Transaction.h>
+#include <libutilities/CommonJS.h>
+#include <libutilities/TrieHash.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev;
-using namespace dev::eth;
-namespace dev
+using namespace bcos;
+using namespace bcos::eth;
+namespace bcos
 {
 namespace test
 {
@@ -93,7 +93,7 @@ public:
         m_singleTransaction = std::make_shared<Transaction>(value, gasPrice, gas, dst, data);
         KeyPair sigKeyPair = KeyPair::create();
         std::shared_ptr<crypto::Signature> sig =
-            dev::crypto::Sign(sigKeyPair, m_singleTransaction->hash(WithoutSignature));
+            bcos::crypto::Sign(sigKeyPair, m_singleTransaction->hash(WithoutSignature));
         /// update the signature of transaction
         m_singleTransaction->updateSignature(sig);
     }
@@ -264,4 +264,4 @@ BOOST_AUTO_TEST_CASE(testBlockHeaderVerify)
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

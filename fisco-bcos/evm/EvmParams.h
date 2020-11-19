@@ -22,10 +22,10 @@
  */
 #pragma once
 
-#include <libdevcore/Common.h>
-#include <libdevcore/CommonIO.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/CommonJS.h>
+#include <libutilities/Common.h>
+#include <libutilities/CommonIO.h>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/lexical_cast.hpp>
@@ -37,18 +37,18 @@
 struct Input
 {
     std::string inputCall;
-    dev::bytes codeData;
-    dev::Address addr;
+    bcos::bytes codeData;
+    bcos::Address addr;
 };
 class EvmParams
 {
 public:
     EvmParams(boost::property_tree::ptree const& pt)
     {
-        m_transValue = pt.get<dev::u256>("evm.transValue", dev::u256(0));
-        m_gas = pt.get<dev::u256>("evm.gas", dev::u256(50000000000));
-        m_gasPrice = pt.get<dev::u256>("evm.gasPrice", dev::u256(0));
-        m_gasLimit = pt.get<dev::u256>("evm.gasLimit", dev::u256(100000000000));
+        m_transValue = pt.get<bcos::u256>("evm.transValue", bcos::u256(0));
+        m_gas = pt.get<bcos::u256>("evm.gas", bcos::u256(50000000000));
+        m_gasPrice = pt.get<bcos::u256>("evm.gasPrice", bcos::u256(0));
+        m_gasLimit = pt.get<bcos::u256>("evm.gasLimit", bcos::u256(100000000000));
         m_blockNumber = pt.get<int64_t>("evm.blockNumber", 0);
         ParseCodes(pt);
         ParseInput(pt);
@@ -61,7 +61,7 @@ public:
             for (auto it : pt.get_child("deploy"))
             {
                 if (it.first.find("code.") == 0)
-                    m_code.push_back(dev::fromHex(it.second.data()));
+                    m_code.push_back(bcos::fromHex(it.second.data()));
             }
         }
         catch (std::exception& e)
@@ -106,11 +106,11 @@ public:
                         if (m_input.size() < boost::lexical_cast<size_t>(s[1]))
                         {
                             Input input;
-                            input.addr = dev::Address(it.second.data());
+                            input.addr = bcos::Address(it.second.data());
                             m_input.push_back(input);
                         }
                         else
-                            m_input[index].addr = dev::Address(it.second.data());
+                            m_input[index].addr = bcos::Address(it.second.data());
                         continue;
                     }
                     std::string code_key = "code." + s[1];
@@ -119,11 +119,11 @@ public:
                         if (m_input.size() < boost::lexical_cast<size_t>(s[1]))
                         {
                             Input input;
-                            input.codeData = dev::fromHex(it.second.data());
+                            input.codeData = bcos::fromHex(it.second.data());
                             m_input.push_back(input);
                         }
                         else
-                            m_input[index].codeData = dev::fromHex(it.second.data());
+                            m_input[index].codeData = bcos::fromHex(it.second.data());
                     }
                 }
                 catch (std::exception& e)
@@ -142,22 +142,22 @@ public:
     }
 
     /// get interfaces
-    dev::u256 const& transValue() const { return m_transValue; }
-    dev::u256 const& gas() const { return m_gas; }
-    dev::u256 const& gasLimit() const { return m_gasLimit; }
-    dev::u256 const& gasPrice() const { return m_gasPrice; }
-    std::vector<dev::bytes> const& code() { return m_code; }
+    bcos::u256 const& transValue() const { return m_transValue; }
+    bcos::u256 const& gas() const { return m_gas; }
+    bcos::u256 const& gasLimit() const { return m_gasLimit; }
+    bcos::u256 const& gasPrice() const { return m_gasPrice; }
+    std::vector<bcos::bytes> const& code() { return m_code; }
     int64_t const& blockNumber() const { return m_blockNumber; }
-    std::vector<dev::bytes> const& code() const { return m_code; }
+    std::vector<bcos::bytes> const& code() const { return m_code; }
     std::vector<Input>& input() { return m_input; }
 
 private:
-    dev::u256 m_transValue;
-    dev::u256 m_gas;
-    dev::u256 m_gasLimit;
-    dev::u256 m_gasPrice;
+    bcos::u256 m_transValue;
+    bcos::u256 m_gas;
+    bcos::u256 m_gasLimit;
+    bcos::u256 m_gasPrice;
     /// transaction code
-    std::vector<dev::bytes> m_code;
+    std::vector<bcos::bytes> m_code;
     std::vector<Input> m_input;
     int64_t m_blockNumber;
 };

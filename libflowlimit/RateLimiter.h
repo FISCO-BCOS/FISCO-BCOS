@@ -21,12 +21,11 @@
  * @date: 2020-04-15
  */
 #pragma once
-#include <libdevcore/Common.h>
-#include <libdevcore/Guards.h>
+#include <libutilities/Common.h>
 
 #define RATELIMIT_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("RateLimiter")
 
-namespace dev
+namespace bcos
 {
 namespace flowlimit
 {
@@ -71,7 +70,7 @@ protected:
     void updateCurrentStoredPermits(int64_t const& _requiredPermits);
 
 protected:
-    mutable dev::Mutex m_mutex;
+    mutable bcos::Mutex m_mutex;
 
     // the max QPS
     int64_t m_maxQPS;
@@ -93,4 +92,4 @@ protected:
     uint64_t m_burstTimeInterval = 1000000;
 };
 }  // namespace flowlimit
-}  // namespace dev
+}  // namespace bcos

@@ -6,12 +6,12 @@
 
 #pragma once
 
-#include <libdevcore/FixedHash.h>
-#include <libdevcore/TopicInfo.h>
 #include <libnetwork/Common.h>
 #include <libp2p/P2PMessage.h>
+#include <libutilities/FixedHash.h>
+#include <libutilities/TopicInfo.h>
 
-namespace dev
+namespace bcos
 {
 namespace p2p
 {
@@ -20,10 +20,10 @@ enum DisconnectReason
     TOPIC_NOT_FOUND = 101
 };
 
-typedef dev::network::NodeID NodeID;
-typedef dev::network::Options Options;
-typedef dev::network::NetworkException NetworkException;
-typedef dev::network::NodeIPEndpoint NodeIPEndpoint;
+typedef bcos::network::NodeID NodeID;
+typedef bcos::network::Options Options;
+typedef bcos::network::NetworkException NetworkException;
+typedef bcos::network::NodeIPEndpoint NodeIPEndpoint;
 
 using NodeIDs = std::vector<NodeID>;
 
@@ -32,12 +32,12 @@ using NodeIDs = std::vector<NodeID>;
 
 struct P2PSessionInfo
 {
-    dev::network::NodeInfo nodeInfo;
-    dev::network::NodeIPEndpoint nodeIPEndpoint;
-    std::set<dev::TopicItem> topics;
-    P2PSessionInfo(dev::network::NodeInfo const& _nodeInfo,
-        dev::network::NodeIPEndpoint const& _nodeIPEndpoint,
-        std::set<dev::TopicItem> const& _topics)
+    bcos::network::NodeInfo nodeInfo;
+    bcos::network::NodeIPEndpoint nodeIPEndpoint;
+    std::set<bcos::TopicItem> topics;
+    P2PSessionInfo(bcos::network::NodeInfo const& _nodeInfo,
+        bcos::network::NodeIPEndpoint const& _nodeIPEndpoint,
+        std::set<bcos::TopicItem> const& _topics)
       : nodeInfo(_nodeInfo), nodeIPEndpoint(_nodeIPEndpoint), topics(_topics)
     {}
 
@@ -46,4 +46,4 @@ struct P2PSessionInfo
 using P2PSessionInfos = std::vector<P2PSessionInfo>;
 
 }  // namespace p2p
-}  // namespace dev
+}  // namespace bcos

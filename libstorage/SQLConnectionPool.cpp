@@ -26,7 +26,7 @@
 #include <csignal>
 #include <memory>
 
-using namespace dev::storage;
+using namespace bcos::storage;
 using namespace std;
 
 bool SQLConnectionPool::InitConnectionPool(const storage::ConnectionPoolConfig& _dbConfig)
@@ -123,7 +123,7 @@ int SQLConnectionPool::RollBack(const Connection_T& _connection)
     return 0;
 }
 
-inline void dev::storage::errorExitOut(std::stringstream& _exitInfo)
+inline void bcos::storage::errorExitOut(std::stringstream& _exitInfo)
 {
     SQLConnectionPool_LOG(ERROR) << _exitInfo.str();
 

@@ -21,9 +21,8 @@
  * @date: 2020-03-23
  */
 #include "PrecompiledGas.h"
-#include <libdevcore/Log.h>
-using namespace dev;
-using namespace dev::precompiled;
+using namespace bcos;
+using namespace bcos::precompiled;
 void PrecompiledGas::appendOperation(InterfaceOpcode const& _opType, unsigned const& _opSize)
 {
     m_operationList->push_back(std::make_pair(_opType, _opSize));

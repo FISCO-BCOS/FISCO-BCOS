@@ -23,12 +23,12 @@
 
 #pragma once
 #include "Common.h"
-#include <libdevcore/RLP.h>
 #include <libnetwork/Common.h>
 #include <libp2p/P2PMessageFactory.h>
 #include <libp2p/Service.h>
+#include <libutilities/RLP.h>
 
-namespace dev
+namespace bcos
 {
 namespace sync
 {
@@ -41,27 +41,27 @@ public:
         /// TODO:
         /// 1. implement these packet with SyncMsgPacketFactory
         /// 2. modify sync and PBFT related packet from reference to pointer
-        if (g_BCOSConfig.version() >= dev::RC2_VERSION)
+        if (g_BCOSConfig.version() >= bcos::RC2_VERSION)
         {
-            m_p2pFactory = std::make_shared<dev::p2p::P2PMessageFactoryRC2>();
+            m_p2pFactory = std::make_shared<bcos::p2p::P2PMessageFactoryRC2>();
         }
-        else if (g_BCOSConfig.version() <= dev::RC1_VERSION)
+        else if (g_BCOSConfig.version() <= bcos::RC1_VERSION)
         {
-            m_p2pFactory = std::make_shared<dev::p2p::P2PMessageFactory>();
+            m_p2pFactory = std::make_shared<bcos::p2p::P2PMessageFactory>();
         }
     }
     virtual ~SyncMsgPacket() {}
 
     /// Extract data by decoding the message
-    bool decode(
-        std::shared_ptr<dev::p2p::P2PSession> _session, std::shared_ptr<dev::p2p::P2PMessage> _msg);
+    bool decode(std::shared_ptr<bcos::p2p::P2PSession> _session,
+        std::shared_ptr<bcos::p2p::P2PMessage> _msg);
 
     /// encode is implement in derived class
     /// basic encode function
     RLPStream& prep(RLPStream& _s, unsigned _id, unsigned _args);
 
     /// Generate p2p message after encode
-    std::shared_ptr<dev::p2p::P2PMessage> toMessage(PROTOCOL_ID _protocolId);
+    std::shared_ptr<bcos::p2p::P2PMessage> toMessage(PROTOCOL_ID _protocolId);
 
     RLP const& rlp() const { return m_rlp; }
 
@@ -72,7 +72,7 @@ public:
 protected:
     RLP m_rlp;              /// The result of decode
     RLPStream m_rlpStream;  // The result of encode
-    std::shared_ptr<dev::p2p::P2PMessageFactory> m_p2pFactory;
+    std::shared_ptr<bcos::p2p::P2PMessageFactory> m_p2pFactory;
 
 private:
     bool checkPacket(bytesConstRef _msg);
@@ -91,7 +91,7 @@ public:
     }
     ~SyncStatusPacket() override {}
     virtual void encode();
-    virtual void decodePacket(RLP const& _rlp, dev::h512 const& _peer);
+    virtual void decodePacket(RLP const& _rlp, bcos::h512 const& _peer);
 
 public:
     NodeID nodeId;
@@ -120,7 +120,7 @@ public:
     ~SyncStatusPacketWithAlignedTime() override {}
 
     void encode() override;
-    void decodePacket(RLP const& _rlp, dev::h512 const& _peer) override;
+    void decodePacket(RLP const& _rlp, bcos::h512 const& _peer) override;
 };
 
 class SyncTransactionsPacket : public SyncMsgPacket
@@ -130,15 +130,15 @@ public:
     void encode(std::vector<bytes> const& _txRLPs, bool const& _enableTreeRouter = false,
         uint64_t const& _consIndex = 0);
     void encodeRC2(std::vector<bytes> const& _txRLPs, unsigned const& _fieldSize);
-    dev::p2p::P2PMessage::Ptr toMessage(PROTOCOL_ID _protocolId, bool const& _fromRPC = false);
+    bcos::p2p::P2PMessage::Ptr toMessage(PROTOCOL_ID _protocolId, bool const& _fromRPC = false);
 };
 
 class SyncBlocksPacket : public SyncMsgPacket
 {
 public:
     SyncBlocksPacket() { packetType = BlocksPacket; }
-    void encode(std::vector<dev::bytes> const& _blockRLPs);
-    void singleEncode(dev::bytes const& _blockRLP);
+    void encode(std::vector<bcos::bytes> const& _blockRLPs);
+    void singleEncode(bcos::bytes const& _blockRLP);
 };
 
 class SyncReqBlockPacket : public SyncMsgPacket
@@ -153,7 +153,7 @@ class SyncTxsStatusPacket : public SyncMsgPacket
 {
 public:
     SyncTxsStatusPacket() { packetType = TxsStatusPacket; }
-    void encode(int64_t const& _number, std::shared_ptr<std::set<dev::h256>> _txsHash);
+    void encode(int64_t const& _number, std::shared_ptr<std::set<bcos::h256>> _txsHash);
 };
 
 // transaction request packet
@@ -161,8 +161,8 @@ class SyncTxsReqPacket : public SyncMsgPacket
 {
 public:
     SyncTxsReqPacket() { packetType = TxsRequestPacekt; }
-    void encode(std::shared_ptr<std::vector<dev::h256>> _requestedTxs);
+    void encode(std::shared_ptr<std::vector<bcos::h256>> _requestedTxs);
 };
 
 }  // namespace sync
-}  // namespace dev
+}  // namespace bcos

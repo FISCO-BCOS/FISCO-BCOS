@@ -23,15 +23,15 @@
 #include "MemoryTable.h"
 #include "StorageException.h"
 #include <libblockverifier/ExecutiveContext.h>
-#include <libdevcore/FixedHash.h>
 #include <libdevcrypto/Hash.h>
+#include <libutilities/FixedHash.h>
 #include <boost/algorithm/string.hpp>
 #include <memory>
 #include <utility>
 #include <vector>
 
-using namespace dev;
-using namespace dev::storage;
+using namespace bcos;
+using namespace bcos::storage;
 using namespace std;
 
 const std::vector<string> MemoryTableFactory::c_sysTables = std::vector<string>{SYS_CONSENSUS,
@@ -188,7 +188,7 @@ h256 MemoryTableFactory::hash()
 
         bytes tableHash = hash.asBytes();
         // LOG(DEBUG) << LOG_BADGE("Report") << LOG_DESC("tableHash")
-        //<< LOG_KV(it.first, dev::sha256(ref(tableHash)));
+        //<< LOG_KV(it.first, bcos::sha256(ref(tableHash)));
 
         data.insert(data.end(), tableHash.begin(), tableHash.end());
     }
@@ -199,11 +199,11 @@ h256 MemoryTableFactory::hash()
 
     if (g_BCOSConfig.SMCrypto())
     {
-        m_hash = dev::sm3(&data);
+        m_hash = bcos::sm3(&data);
     }
     else
     {
-        m_hash = dev::sha256(&data);
+        m_hash = bcos::sha256(&data);
     }
     return m_hash;
 }
@@ -237,7 +237,7 @@ void MemoryTableFactory::commitDB(h256 const&, int64_t _blockNumber)
 {
     auto start_time = utcTime();
     auto record_time = utcTime();
-    vector<dev::storage::TableData::Ptr> datas;
+    vector<bcos::storage::TableData::Ptr> datas;
 
     for (auto& dbIt : m_name2Table)
     {

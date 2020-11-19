@@ -23,13 +23,13 @@
 #include "Common.h"
 #include "StorageException.h"
 #include "Table.h"
-#include <libdevcore/FixedHash.h>
+#include <libutilities/FixedHash.h>
 #include <thread>
 
 
 using namespace std;
-using namespace dev;
-using namespace dev::storage;
+using namespace bcos;
+using namespace bcos::storage;
 
 ZdbStorage::ZdbStorage() {}
 

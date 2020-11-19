@@ -21,8 +21,8 @@
  */
 
 #pragma once
-#include <libdevcore/Common.h>
 #include <libdevcrypto/CryptoInterface.h>
+#include <libutilities/Common.h>
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
 #include <rocksdb/slice.h>
@@ -36,7 +36,7 @@
 #define DecHookFunction std::function<void(std::string&)>
 #define EncHookFunction std::function<void(std::string const&, std::string&)>
 
-namespace dev
+namespace bcos
 {
 namespace storage
 {
@@ -100,4 +100,4 @@ std::function<void(std::string&)> getDecryptHandler(
 
 
 }  // namespace storage
-}  // namespace dev
+}  // namespace bcos

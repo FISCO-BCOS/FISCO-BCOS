@@ -22,15 +22,15 @@
  */
 #include <iostream>
 
-#include <libdevcore/Assertions.h>
-#include <libdevcore/Exceptions.h>
+#include <libutilities/Assertions.h>
+#include <libutilities/Exceptions.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>
 
-using namespace dev;
+using namespace bcos;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -80,9 +80,6 @@ BOOST_AUTO_TEST_CASE(testExceptions)
     BOOST_CHECK_THROW(
         assertThrow(false, InterfaceNotSupported, "Throw InterfaceNotSupported Exception"),
         InterfaceNotSupported);
-    BOOST_CHECK_THROW(
-        assertThrow(false, ExternalFunctionFailure, "Throw ExternalFunctionFailure Exception"),
-        ExternalFunctionFailure);
     BOOST_CHECK_THROW(assertThrow(false, InitLedgerConfigFailed, "Init ledger config failed"),
         InitLedgerConfigFailed);
     BOOST_CHECK_THROW(assertThrow(false, OpenDBFailed, "OpenDBFailed"), OpenDBFailed);
@@ -109,4 +106,4 @@ BOOST_AUTO_TEST_CASE(testErrorInfos)
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

@@ -21,32 +21,32 @@
  * @date 2018-08-24
  */
 
-#include <libdevcore/FileSystem.h>
+#include <libutilities/FileSystem.h>
 #include <boost/test/unit_test.hpp>
 
 BOOST_AUTO_TEST_SUITE(FileSystem)
 
 BOOST_AUTO_TEST_CASE(testFileSystem)
 {
-    dev::setDataDir("./data");
+    bcos::setDataDir("./data");
     /// test getDataDir
-    BOOST_CHECK((dev::getDataDir("ethereum").string() == "./ethereum") == true);
-    BOOST_CHECK((dev::getDataDir("fisco-bcos-data").string() == "./data") == true);
-    BOOST_CHECK((dev::getDataDir("test").filename() == "test") == true);
-    BOOST_CHECK((dev::getDataDir().string() == "./data") == true);
-    BOOST_CHECK(dev::getDataDir("/data").string() == "/data");
+    BOOST_CHECK((bcos::getDataDir("ethereum").string() == "./ethereum") == true);
+    BOOST_CHECK((bcos::getDataDir("fisco-bcos-data").string() == "./data") == true);
+    BOOST_CHECK((bcos::getDataDir("test").filename() == "test") == true);
+    BOOST_CHECK((bcos::getDataDir().string() == "./data") == true);
+    BOOST_CHECK(bcos::getDataDir("/data").string() == "/data");
 
     /// test getLedgerDir
-    BOOST_CHECK(dev::getLedgerDir("ledger1").string() == "./data/ledger1");
-    BOOST_CHECK(dev::getLedgerDir("ledger1", "/data").string() == "/data/ledger1");
+    BOOST_CHECK(bcos::getLedgerDir("ledger1").string() == "./data/ledger1");
+    BOOST_CHECK(bcos::getLedgerDir("ledger1", "/data").string() == "/data/ledger1");
 
-    dev::setIpcPath("/xxx/geth.ipc");
-    BOOST_CHECK((dev::getIpcPath().string() == "/xxx") == true);
+    bcos::setIpcPath("/xxx/geth.ipc");
+    BOOST_CHECK((bcos::getIpcPath().string() == "/xxx") == true);
 
-    dev::setIpcPath("/xxx/eth.ipc");
-    BOOST_CHECK((dev::getIpcPath().string() == "/xxx/eth.ipc") == true);
+    bcos::setIpcPath("/xxx/eth.ipc");
+    BOOST_CHECK((bcos::getIpcPath().string() == "/xxx/eth.ipc") == true);
 
-    dev::setIpcPath("geth.ipc");
+    bcos::setIpcPath("geth.ipc");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

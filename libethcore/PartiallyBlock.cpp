@@ -24,8 +24,8 @@
 #include "TxsParallelParser.h"
 #include <tbb/parallel_for.h>
 
-using namespace dev;
-using namespace dev::eth;
+using namespace bcos;
+using namespace bcos::eth;
 void PartiallyBlock::encodeProposal(std::shared_ptr<bytes> _out, bool const& _onlyTxsHash)
 {
     if (!_onlyTxsHash)
@@ -52,7 +52,7 @@ void PartiallyBlock::encodeProposal(std::shared_ptr<bytes> _out, bool const& _on
 
 void PartiallyBlock::calTxsHashBytes()
 {
-    std::shared_ptr<dev::bytes> txsHashBytes = std::make_shared<dev::bytes>();
+    std::shared_ptr<bcos::bytes> txsHashBytes = std::make_shared<bcos::bytes>();
     // get transaction hash
     m_txsHash->resize(m_transactions->size());
     tbb::parallel_for(tbb::blocked_range<size_t>(0, m_transactions->size()),
@@ -74,9 +74,9 @@ void PartiallyBlock::decodeProposal(bytesConstRef _blockBytes, bool const& _only
     RLP blockRlp = BlockHeader::extractBlock(_blockBytes);
     m_blockHeader.populate(blockRlp[0]);
     // decode transaction hash
-    *m_txsHash = blockRlp[1].toVector<dev::h256>();
+    *m_txsHash = blockRlp[1].toVector<bcos::h256>();
     // decode and check blockHash
-    dev::h256 blockHash = blockRlp[2].toHash<h256>(RLP::VeryStrict);
+    bcos::h256 blockHash = blockRlp[2].toHash<h256>(RLP::VeryStrict);
     if (blockHash != m_blockHeader.hash())
     {
         PartiallyBlock_LOG(WARNING) << LOG_DESC("decodeProposal failed for inconsistent block hash")
@@ -87,7 +87,7 @@ void PartiallyBlock::decodeProposal(bytesConstRef _blockBytes, bool const& _only
     m_transactions->resize(m_txsHash->size());
 }
 
-void PartiallyBlock::checkBasic(RLP const& rlp, dev::h256 const& _expectedHash)
+void PartiallyBlock::checkBasic(RLP const& rlp, bcos::h256 const& _expectedHash)
 {
     // check block number
     int64_t blockNumber = rlp[0].toPositiveInt64();
@@ -179,7 +179,7 @@ void PartiallyBlock::encodeMissedInfo(std::shared_ptr<bytes> _encodedBytes)
 // 2. blockHash
 // 3. encodedData of missed transactions
 void PartiallyBlock::fetchMissedTxs(
-    std::shared_ptr<bytes> _encodedBytes, bytesConstRef _missInfo, dev::h256 const& _expectedHash)
+    std::shared_ptr<bytes> _encodedBytes, bytesConstRef _missInfo, bcos::h256 const& _expectedHash)
 {
     // decode _missInfo
     RLP missedInfoRlp(_missInfo);
@@ -187,18 +187,18 @@ void PartiallyBlock::fetchMissedTxs(
     // so should check the block_hash of rawPrepareCache
     checkBasic(missedInfoRlp, _expectedHash);
 
-    std::shared_ptr<std::vector<std::pair<dev::h256, uint64_t>>> missedTxs =
-        std::make_shared<std::vector<std::pair<dev::h256, uint64_t>>>();
+    std::shared_ptr<std::vector<std::pair<bcos::h256, uint64_t>>> missedTxs =
+        std::make_shared<std::vector<std::pair<bcos::h256, uint64_t>>>();
 
-    *missedTxs = missedInfoRlp[2].toVector<std::pair<dev::h256, uint64_t>>();
+    *missedTxs = missedInfoRlp[2].toVector<std::pair<bcos::h256, uint64_t>>();
 
     encodeMissedTxs(_encodedBytes, missedTxs, _expectedHash);
 }
 
 
 void PartiallyBlock::encodeMissedTxs(std::shared_ptr<bytes> _encodedBytes,
-    std::shared_ptr<std::vector<std::pair<dev::h256, uint64_t>>> _missedTxs,
-    dev::h256 const& _expectedHash)
+    std::shared_ptr<std::vector<std::pair<bcos::h256, uint64_t>>> _missedTxs,
+    bcos::h256 const& _expectedHash)
 {
     std::shared_ptr<Transactions> missedTransactions = std::make_shared<Transactions>();
 

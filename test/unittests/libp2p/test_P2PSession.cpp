@@ -29,22 +29,22 @@
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev;
-using namespace dev::network;
-using namespace dev::p2p;
+using namespace bcos;
+using namespace bcos::network;
+using namespace bcos::p2p;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
-class MockSession : public dev::network::Session
+class MockSession : public bcos::network::Session
 {
 public:
     virtual ~MockSession() {}
 
     virtual void start() override {}
 
-    virtual void disconnect(dev::network::DisconnectReason) override {}
+    virtual void disconnect(bcos::network::DisconnectReason) override {}
 };
 
 class MockService : public p2p::Service
@@ -111,4 +111,4 @@ BOOST_AUTO_TEST_CASE(heartBeat)
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

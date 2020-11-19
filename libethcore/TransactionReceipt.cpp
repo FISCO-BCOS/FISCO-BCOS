@@ -23,8 +23,8 @@
 #include "Exceptions.h"
 
 using namespace std;
-using namespace dev;
-using namespace dev::eth;
+using namespace bcos;
+using namespace bcos::eth;
 
 TransactionReceipt::TransactionReceipt(bytesConstRef _rlp)
 {
@@ -109,7 +109,7 @@ void TransactionReceipt::decode(RLP const& r)
     }
 }
 
-std::ostream& dev::eth::operator<<(std::ostream& _out, TransactionReceipt const& _r)
+std::ostream& bcos::eth::operator<<(std::ostream& _out, TransactionReceipt const& _r)
 {
     _out << "Root: " << _r.stateRoot() << "\n";
     _out << "Gas used: " << _r.gasUsed() << "\n";

@@ -20,8 +20,8 @@
  */
 
 #include "PrecompiledContract.h"
-#include <libdevcore/CommonData.h>
-using namespace dev;
+#include <libutilities/CommonData.h>
+using namespace bcos;
 using namespace eth;
 
 PrecompiledContract::PrecompiledContract(

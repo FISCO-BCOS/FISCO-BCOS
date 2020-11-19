@@ -31,7 +31,7 @@ const static uint32_t maxPlaceHolderCnt = 60000;
 
 #define SQLBasicAccess_LOG(LEVEL) LOG(LEVEL) << "[SQLBasicAccess] "
 
-namespace dev
+namespace bcos
 {
 namespace storage
 {
@@ -98,4 +98,4 @@ private:
 
 }  // namespace storage
 
-}  // namespace dev
+}  // namespace bcos

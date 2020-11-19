@@ -27,21 +27,21 @@
 #include "libstorage/MemoryTableFactory2.h"
 #include <boost/test/unit_test.hpp>
 
-using namespace dev;
+using namespace bcos;
 
 namespace test_StorageState
 {
 struct StorageStateFixture
 {
-    StorageStateFixture() : m_state(dev::u256(0))
+    StorageStateFixture() : m_state(bcos::u256(0))
     {
-        auto storage = std::make_shared<dev::storage::MemoryStorage>();
-        auto tableFactory = std::make_shared<dev::storage::MemoryTableFactory2>();
+        auto storage = std::make_shared<bcos::storage::MemoryStorage>();
+        auto tableFactory = std::make_shared<bcos::storage::MemoryTableFactory2>();
         tableFactory->setStateStorage(storage);
         m_state.setMemoryTableFactory(tableFactory);
     }
 
-    dev::storagestate::StorageState m_state;
+    bcos::storagestate::StorageState m_state;
 };
 
 BOOST_FIXTURE_TEST_SUITE(StorageState, StorageStateFixture)

@@ -23,7 +23,7 @@
 
 #include "P2PMessage.h"
 
-namespace dev
+namespace bcos
 {
 namespace p2p
 {
@@ -61,9 +61,9 @@ protected:
 private:
     /// compress the data to be sended
     bool compress(std::shared_ptr<bytes>);
-    std::shared_ptr<dev::bytes> m_cache;
+    std::shared_ptr<bcos::bytes> m_cache;
     // the packet length delivered by the network
     uint32_t m_deliveredLength = 0;
 };
 }  // namespace p2p
-}  // namespace dev
+}  // namespace bcos

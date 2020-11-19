@@ -23,12 +23,12 @@
 #include "EncryptedFile.h"
 #include "libdevcrypto/CryptoInterface.h"
 #include <libconfig/GlobalConfigure.h>
-#include <libdevcore/Base64.h>
-#include <libdevcore/CommonIO.h>
-#include <libdevcore/Exceptions.h>
+#include <libutilities/Base64.h>
+#include <libutilities/CommonIO.h>
+#include <libutilities/Exceptions.h>
 
 using namespace std;
-using namespace dev;
+using namespace bcos;
 
 bytes EncryptedFile::decryptContents(const std::string& _filePath)
 {

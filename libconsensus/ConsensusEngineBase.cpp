@@ -22,12 +22,12 @@
  * @date: 2018-09-28
  */
 #include "ConsensusEngineBase.h"
-using namespace dev::eth;
-using namespace dev::db;
-using namespace dev::blockverifier;
-using namespace dev::blockchain;
-using namespace dev::p2p;
-namespace dev
+using namespace bcos::eth;
+using namespace bcos::db;
+using namespace bcos::blockverifier;
+using namespace bcos::blockchain;
+using namespace bcos::p2p;
+namespace bcos
 {
 namespace consensus
 {
@@ -63,7 +63,7 @@ void ConsensusEngineBase::stop()
 }
 
 /// update m_sealing and receiptRoot
-dev::blockverifier::ExecutiveContext::Ptr ConsensusEngineBase::executeBlock(Block& block)
+bcos::blockverifier::ExecutiveContext::Ptr ConsensusEngineBase::executeBlock(Block& block)
 {
     auto parentBlock = m_blockChain->getBlockByNumber(m_blockChain->number());
     BlockInfo parentBlockInfo{parentBlock->header().hash(), parentBlock->header().number(),
@@ -135,7 +135,7 @@ void ConsensusEngineBase::checkBlockValid(Block const& block)
     }
 }
 
-void ConsensusEngineBase::checkBlockTimeStamp(dev::eth::Block const& _block)
+void ConsensusEngineBase::checkBlockTimeStamp(bcos::eth::Block const& _block)
 {
     if (!m_nodeTimeMaintenance)
     {
@@ -177,12 +177,12 @@ void ConsensusEngineBase::updateConsensusNodeList()
             {
                 m_sealerListUpdated = false;
             }
-            for (dev::h512 node : m_sealerList)
+            for (bcos::h512 node : m_sealerList)
                 s2 << node.abridged() << ",";
         }
         s2 << "Observers:";
-        dev::h512s observerList = m_blockChain->observerList();
-        for (dev::h512 node : observerList)
+        bcos::h512s observerList = m_blockChain->observerList();
+        for (bcos::h512 node : observerList)
             s2 << node.abridged() << ",";
 
         if (m_lastNodeList != s2.str())
@@ -192,7 +192,7 @@ void ConsensusEngineBase::updateConsensusNodeList()
                               << s2.str();
 
             // get all nodes
-            dev::h512s nodeList = sealerList + observerList;
+            bcos::h512s nodeList = sealerList + observerList;
             std::sort(nodeList.begin(), nodeList.end());
             if (m_blockSync->syncTreeRouterEnabled())
             {
@@ -257,7 +257,7 @@ void ConsensusEngineBase::resetConfig()
     m_idx = node_idx;
 }
 
-void ConsensusEngineBase::reportBlock(dev::eth::Block const& _block)
+void ConsensusEngineBase::reportBlock(bcos::eth::Block const& _block)
 {
     if (!g_BCOSConfig.enableStat())
     {
@@ -292,4 +292,4 @@ void ConsensusEngineBase::reportBlock(dev::eth::Block const& _block)
 }
 
 }  // namespace consensus
-}  // namespace dev
+}  // namespace bcos

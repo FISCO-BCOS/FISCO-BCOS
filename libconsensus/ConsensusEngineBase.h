@@ -26,8 +26,6 @@
 #include "ConsensusInterface.h"
 #include <libblockchain/BlockChainInterface.h>
 #include <libblockverifier/BlockVerifierInterface.h>
-#include <libdevcore/FixedHash.h>
-#include <libdevcore/Worker.h>
 #include <libethcore/Block.h>
 #include <libp2p/P2PInterface.h>
 #include <libp2p/P2PMessage.h>
@@ -35,8 +33,10 @@
 #include <libsync/NodeTimeMaintenance.h>
 #include <libsync/SyncInterface.h>
 #include <libtxpool/TxPoolInterface.h>
+#include <libutilities/FixedHash.h>
+#include <libutilities/Worker.h>
 
-namespace dev
+namespace bcos
 {
 namespace consensus
 {
@@ -44,13 +44,13 @@ class ConsensusEngineBase : public Worker, virtual public ConsensusInterface
 {
 public:
     using Ptr = std::shared_ptr<ConsensusEngineBase>;
-    ConsensusEngineBase(std::shared_ptr<dev::p2p::P2PInterface> _service,
-        std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
-        std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-        std::shared_ptr<dev::sync::SyncInterface> _blockSync,
-        std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
+    ConsensusEngineBase(std::shared_ptr<bcos::p2p::P2PInterface> _service,
+        std::shared_ptr<bcos::txpool::TxPoolInterface> _txPool,
+        std::shared_ptr<bcos::blockchain::BlockChainInterface> _blockChain,
+        std::shared_ptr<bcos::sync::SyncInterface> _blockSync,
+        std::shared_ptr<bcos::blockverifier::BlockVerifierInterface> _blockVerifier,
         PROTOCOL_ID const& _protocolId, KeyPair const& _keyPair,
-        dev::h512s const& _sealerList = dev::h512s())
+        bcos::h512s const& _sealerList = bcos::h512s())
       : Worker("ConsensusEngine", 0),
         m_service(_service),
         m_txPool(_txPool),
@@ -64,17 +64,17 @@ public:
     {
         assert(m_service && m_txPool && m_blockChain && m_blockSync && m_blockVerifier);
         if (m_protocolId == 0)
-            BOOST_THROW_EXCEPTION(dev::eth::InvalidProtocolID()
+            BOOST_THROW_EXCEPTION(bcos::eth::InvalidProtocolID()
                                   << errinfo_comment("Protocol id must be larger than 0"));
-        m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
+        m_groupId = bcos::eth::getGroupAndProtocol(m_protocolId).first;
         std::sort(m_sealerList.begin(), m_sealerList.end());
         m_lastSealerListUpdateNumber = m_blockChain->number();
 
         // only send transactions to the current consensus nodes
         m_blockSync->registerTxsReceiversFilter(
-            [&](std::shared_ptr<std::set<dev::network::NodeID>> _peers) {
-                std::shared_ptr<dev::p2p::NodeIDs> selectedNode =
-                    std::make_shared<dev::p2p::NodeIDs>();
+            [&](std::shared_ptr<std::set<bcos::network::NodeID>> _peers) {
+                std::shared_ptr<bcos::p2p::NodeIDs> selectedNode =
+                    std::make_shared<bcos::p2p::NodeIDs>();
 
                 ReadGuard l(m_sealerListMutex);
                 for (auto const& peer : m_sealerList)
@@ -99,7 +99,7 @@ public:
                           << m_supportConsensusTimeAdjust;
     }
     /// get sealer list
-    dev::h512s sealerList() const override
+    bcos::h512s sealerList() const override
     {
         ReadGuard l(m_sealerListMutex);
         return m_sealerList;
@@ -157,7 +157,7 @@ public:
     ///@return NodeAccountType::ObserveAccout: the node can only sync block from other nodes
     NodeAccountType accountType() override { return m_accountType; }
     /// set the node account type
-    void setNodeAccountType(dev::consensus::NodeAccountType const& _accountType) override
+    void setNodeAccountType(bcos::consensus::NodeAccountType const& _accountType) override
     {
         m_accountType = _accountType;
     }
@@ -172,12 +172,12 @@ public:
 
     virtual IDXTYPE minValidNodes() const { return m_nodeNum - m_f; }
     /// update the context of PBFT after commit a block into the block-chain
-    void reportBlock(dev::eth::Block const&) override;
+    void reportBlock(bcos::eth::Block const&) override;
 
     /// obtain maxBlockTransactions
     uint64_t maxBlockTransactions() override { return m_maxBlockTransactions; }
     virtual void resetConfig();
-    void setBlockFactory(dev::eth::BlockFactory::Ptr _blockFactory) override
+    void setBlockFactory(bcos::eth::BlockFactory::Ptr _blockFactory) override
     {
         m_blockFactory = _blockFactory;
     }
@@ -193,13 +193,13 @@ public:
         return utcTime();
     }
 
-    void setNodeTimeMaintenance(dev::sync::NodeTimeMaintenance::Ptr _nodeTimeMaintenance) override
+    void setNodeTimeMaintenance(bcos::sync::NodeTimeMaintenance::Ptr _nodeTimeMaintenance) override
     {
         m_nodeTimeMaintenance = _nodeTimeMaintenance;
     }
 
 protected:
-    void dropHandledTransactions(std::shared_ptr<dev::eth::Block> block)
+    void dropHandledTransactions(std::shared_ptr<bcos::eth::Block> block)
     {
         m_txPool->dropBlockTrans(block);
     }
@@ -215,7 +215,7 @@ protected:
     }
 
     virtual bool isValidReq(
-        std::shared_ptr<dev::p2p::P2PMessage>, std::shared_ptr<dev::p2p::P2PSession>, ssize_t&)
+        std::shared_ptr<bcos::p2p::P2PMessage>, std::shared_ptr<bcos::p2p::P2PSession>, ssize_t&)
     {
         return false;
     }
@@ -231,8 +231,8 @@ protected:
      * @return false : decode failed
      */
     template <class T>
-    inline bool decodeToRequests(T& req, std::shared_ptr<dev::p2p::P2PMessage> message,
-        std::shared_ptr<dev::p2p::P2PSession> session)
+    inline bool decodeToRequests(T& req, std::shared_ptr<bcos::p2p::P2PMessage> message,
+        std::shared_ptr<bcos::p2p::P2PSession> session)
     {
         ssize_t peer_index = 0;
         bool valid = isValidReq(message, session, peer_index);
@@ -269,9 +269,9 @@ protected:
         }
     }
 
-    dev::blockverifier::ExecutiveContext::Ptr executeBlock(dev::eth::Block& block);
-    virtual void checkBlockValid(dev::eth::Block const& block);
-    virtual void checkBlockTimeStamp(dev::eth::Block const& _block);
+    bcos::blockverifier::ExecutiveContext::Ptr executeBlock(bcos::eth::Block& block);
+    virtual void checkBlockValid(bcos::eth::Block const& block);
+    virtual void checkBlockTimeStamp(bcos::eth::Block const& _block);
 
     virtual void updateConsensusNodeList();
 
@@ -287,7 +287,7 @@ protected:
                           << LOG_KV("txCountLimit", m_maxBlockTransactions);
     }
 
-    dev::h512s consensusList() const override
+    bcos::h512s consensusList() const override
     {
         ReadGuard l(m_sealerListMutex);
         return m_sealerList;
@@ -299,20 +299,20 @@ protected:
     std::atomic_bool m_sealerListUpdated = {true};
     int64_t m_lastSealerListUpdateNumber = 0;
     /// p2p service handler
-    std::shared_ptr<dev::p2p::P2PInterface> m_service;
+    std::shared_ptr<bcos::p2p::P2PInterface> m_service;
     /// transaction pool handler
-    std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool;
+    std::shared_ptr<bcos::txpool::TxPoolInterface> m_txPool;
     /// handler of the block chain module
-    std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
+    std::shared_ptr<bcos::blockchain::BlockChainInterface> m_blockChain;
     /// handler of the block-sync module
-    std::shared_ptr<dev::sync::SyncInterface> m_blockSync;
+    std::shared_ptr<bcos::sync::SyncInterface> m_blockSync;
     /// handler of the block-verifier module
-    std::shared_ptr<dev::blockverifier::BlockVerifierInterface> m_blockVerifier;
+    std::shared_ptr<bcos::blockverifier::BlockVerifierInterface> m_blockVerifier;
 
     // the block which is waiting consensus
     std::atomic<int64_t> m_consensusBlockNumber = {0};
     /// the latest block header
-    dev::eth::BlockHeader m_highestBlock;
+    bcos::eth::BlockHeader m_highestBlock;
     /// total number of nodes
     std::atomic<IDXTYPE> m_nodeNum = {0};
     /// at-least number of valid nodes
@@ -328,7 +328,7 @@ protected:
 
     /// sealer list
     mutable SharedMutex m_sealerListMutex;
-    dev::h512s m_sealerList;
+    bcos::h512s m_sealerList;
 
     /// allow future blocks or not
     bool m_allowFutureBlocks = true;
@@ -343,12 +343,12 @@ protected:
     std::atomic_bool m_cfgErr = {false};
 
     // block Factory used to create block
-    dev::eth::BlockFactory::Ptr m_blockFactory;
+    bcos::eth::BlockFactory::Ptr m_blockFactory;
 
     bool m_supportConsensusTimeAdjust = false;
-    dev::sync::NodeTimeMaintenance::Ptr m_nodeTimeMaintenance;
+    bcos::sync::NodeTimeMaintenance::Ptr m_nodeTimeMaintenance;
 
     int64_t m_maxBlockTimeOffset = 30 * 60 * 1000;
 };
 }  // namespace consensus
-}  // namespace dev
+}  // namespace bcos

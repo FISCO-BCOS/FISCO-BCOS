@@ -21,10 +21,10 @@
 
 #pragma once
 
-#include "libdevcore/RLP.h"
+#include "libutilities/RLP.h"
 #include <unordered_map>
 
-namespace dev
+namespace bcos
 {
 class MemoryDB
 {
@@ -93,4 +93,4 @@ inline std::ostream& operator<<(std::ostream& _out, MemoryDB const& _m)
     return _out;
 }
 
-}  // namespace dev
+}  // namespace bcos

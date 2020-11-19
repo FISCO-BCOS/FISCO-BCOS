@@ -25,7 +25,7 @@
 #include <libethcore/Block.h>
 #include <libethcore/LogEntry.h>
 #include <libeventfilter/EventLogFilterParams.h>
-namespace dev
+namespace bcos
 {
 namespace event
 {
@@ -101,4 +101,4 @@ private:
 };
 
 }  // namespace event
-}  // namespace dev
+}  // namespace bcos

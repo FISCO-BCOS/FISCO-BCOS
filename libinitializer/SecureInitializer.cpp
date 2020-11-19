@@ -23,18 +23,18 @@
 #include "SecureInitializer.h"
 #include "libdevcrypto/CryptoInterface.h"
 #include <libconfig/GlobalConfigure.h>
-#include <libdevcore/Common.h>
-#include <libdevcore/CommonIO.h>
 #include <libdevcrypto/Common.h>
 #include <libsecurity/EncryptedFile.h>
+#include <libutilities/Common.h>
+#include <libutilities/CommonIO.h>
 #include <openssl/engine.h>
 #include <openssl/rsa.h>
 #include <boost/algorithm/string/replace.hpp>
 #include <iostream>
 
 using namespace std;
-using namespace dev;
-using namespace dev::initializer;
+using namespace bcos;
+using namespace bcos::initializer;
 
 void SecureInitializer::initConfigWithCrypto(const boost::property_tree::ptree& pt)
 {
@@ -91,7 +91,7 @@ void SecureInitializer::initConfigWithCrypto(const boost::property_tree::ptree& 
 
             ecKey.reset(EVP_PKEY_get1_EC_KEY(evpPKey.get()), [](EC_KEY* p) { EC_KEY_free(p); });
         }
-        catch (dev::Exception& e)
+        catch (bcos::Exception& e)
         {
             INITIALIZER_LOG(ERROR)
                 << LOG_BADGE("SecureInitializer") << LOG_DESC("parse privateKey failed")
@@ -274,7 +274,7 @@ ConfigResult initOriginConfig(const string& _dataPath)
 
             ecKey.reset(EVP_PKEY_get1_EC_KEY(evpPKey.get()), [](EC_KEY* p) { EC_KEY_free(p); });
         }
-        catch (dev::Exception& e)
+        catch (bcos::Exception& e)
         {
             INITIALIZER_LOG(ERROR)
                 << LOG_BADGE("SecureInitializer") << LOG_DESC("load privateKey failed")
@@ -420,7 +420,7 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
 
             ecKey.reset(EVP_PKEY_get1_EC_KEY(evpPKey.get()), [](EC_KEY* p) { EC_KEY_free(p); });
         }
-        catch (dev::Exception& e)
+        catch (bcos::Exception& e)
         {
             INITIALIZER_LOG(ERROR)
                 << LOG_BADGE("SecureInitializerGM") << LOG_DESC("parse privateKey failed")

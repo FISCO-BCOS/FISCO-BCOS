@@ -30,7 +30,7 @@
 namespace ba = boost::asio;
 namespace bi = ba::ip;
 
-namespace dev
+namespace bcos
 {
 namespace network
 {
@@ -236,4 +236,4 @@ protected:
     int m_type = 0;
 };
 }  // namespace network
-}  // namespace dev
+}  // namespace bcos

@@ -39,22 +39,22 @@
 #include <libsync/SyncStatus.h>
 #include <unistd.h>
 #include <ctime>
-class FakeConcensus : public dev::Worker
+class FakeConcensus : public bcos::Worker
 {
     // FakeConcensus, only do: fetch tx from txPool and commit newBlock into blockchain
 public:
-    using BlockHeaderPtr = std::shared_ptr<dev::eth::BlockHeader>;
-    using BlockPtr = std::shared_ptr<dev::eth::Block>;
-    using TxPtr = std::shared_ptr<dev::eth::Transaction>;
-    using SigList = std::vector<std::pair<dev::u256, std::vector<unsigned char>>>;
+    using BlockHeaderPtr = std::shared_ptr<bcos::eth::BlockHeader>;
+    using BlockPtr = std::shared_ptr<bcos::eth::Block>;
+    using TxPtr = std::shared_ptr<bcos::eth::Transaction>;
+    using SigList = std::vector<std::pair<bcos::u256, std::vector<unsigned char>>>;
 
 public:
-    FakeConcensus(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
-        std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-        std::shared_ptr<dev::sync::SyncInterface> _sync,
-        std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
+    FakeConcensus(std::shared_ptr<bcos::txpool::TxPoolInterface> _txPool,
+        std::shared_ptr<bcos::blockchain::BlockChainInterface> _blockChain,
+        std::shared_ptr<bcos::sync::SyncInterface> _sync,
+        std::shared_ptr<bcos::blockverifier::BlockVerifierInterface> _blockVerifier,
         unsigned _idleWaitMs = 30)
-      : dev::Worker("FakeConcensusForSync", 0),
+      : bcos::Worker("FakeConcensusForSync", 0),
         m_txPool(_txPool),
         m_blockChain(_blockChain),
         m_sync(_sync),
@@ -64,7 +64,7 @@ public:
         m_nodeId(0),
         m_blockGenerationInterval(_idleWaitMs)
     {
-        m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
+        m_groupId = bcos::eth::getGroupAndProtocol(m_protocolId).first;
     }
 
     virtual ~FakeConcensus(){};
@@ -76,14 +76,14 @@ public:
     /// doWork every idleWaitMs
     virtual void doWork() override
     {
-        if (m_sync->status().state != dev::sync::SyncState::Idle)
+        if (m_sync->status().state != bcos::sync::SyncState::Idle)
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(m_blockGenerationInterval));
             return;
         }
 
         // seal
-        std::shared_ptr<dev::eth::Transactions> txs = m_txPool->pendingList();
+        std::shared_ptr<bcos::eth::Transactions> txs = m_txPool->pendingList();
 
         if (0 == txs->size())
         {
@@ -92,13 +92,13 @@ public:
         }
 
         int64_t currentNumber = m_blockChain->number();
-        dev::h256 const& parentHash = m_blockChain->numberHash(currentNumber);
+        bcos::h256 const& parentHash = m_blockChain->numberHash(currentNumber);
 
         m_sync->noteSealingBlockNumber(currentNumber + 1);
 
         BlockPtr block = newBlock(parentHash, currentNumber + 1, txs);
-        dev::blockverifier::BlockInfo parentBlockInfo;
-        dev::blockverifier::ExecutiveContext::Ptr exeCtx =
+        bcos::blockverifier::BlockInfo parentBlockInfo;
+        bcos::blockverifier::ExecutiveContext::Ptr exeCtx =
             m_blockVerifier->executeBlock(*block, parentBlockInfo);
 
         // consensus process waiting time simulation
@@ -118,16 +118,16 @@ public:
     }
 
 private:
-    BlockPtr newBlock(
-        dev::h256 _parentHash, int64_t _currentNumner, std::shared_ptr<dev::eth::Transactions> _txs)
+    BlockPtr newBlock(bcos::h256 _parentHash, int64_t _currentNumner,
+        std::shared_ptr<bcos::eth::Transactions> _txs)
     {
         // Generate block header
         BlockHeaderPtr header = newBlockHeader(_parentHash, _currentNumner);
-        dev::bytes blockHeaderBytes;
+        bcos::bytes blockHeaderBytes;
         header->encode(blockHeaderBytes);
 
         // Generate block
-        BlockPtr block = std::make_shared<dev::eth::Block>();
+        BlockPtr block = std::make_shared<bcos::eth::Block>();
         block->setSigList(sigList(_txs->size()));
         block->setTransactions(_txs);
 
@@ -137,24 +137,24 @@ private:
         return block;
     }
 
-    BlockHeaderPtr newBlockHeader(dev::h256 _parentHash, int64_t _currentNumner)
+    BlockHeaderPtr newBlockHeader(bcos::h256 _parentHash, int64_t _currentNumner)
     {
-        BlockHeaderPtr blockHeader = std::make_shared<dev::eth::BlockHeader>();
+        BlockHeaderPtr blockHeader = std::make_shared<bcos::eth::BlockHeader>();
         blockHeader->setParentHash(_parentHash);
-        blockHeader->setRoots(dev::crypto::Hash("transactionRoot"),
-            dev::crypto::Hash("receiptRoot"), dev::crypto::Hash("stateRoot"));
-        blockHeader->setLogBloom(dev::eth::LogBloom(0));
+        blockHeader->setRoots(bcos::crypto::Hash("transactionRoot"),
+            bcos::crypto::Hash("receiptRoot"), bcos::crypto::Hash("stateRoot"));
+        blockHeader->setLogBloom(bcos::eth::LogBloom(0));
         blockHeader->setNumber(_currentNumner);
-        blockHeader->setGasLimit(dev::u256(3000000));
-        blockHeader->setGasUsed(dev::u256(100000));
+        blockHeader->setGasLimit(bcos::u256(3000000));
+        blockHeader->setGasUsed(bcos::u256(100000));
         uint64_t current_time = 100000;  // utcTime();
         blockHeader->setTimestamp(current_time);
-        blockHeader->appendExtraDataArray(dev::jsToBytes("0x1020"));
-        blockHeader->setSealer(dev::u256(12));
-        std::vector<dev::h512> sealer_list;
+        blockHeader->appendExtraDataArray(bcos::jsToBytes("0x1020"));
+        blockHeader->setSealer(bcos::u256(12));
+        std::vector<bcos::h512> sealer_list;
         for (unsigned int i = 0; i < 10; i++)
         {
-            sealer_list.push_back(dev::toPublic(dev::Secret(dev::h256(i))));
+            sealer_list.push_back(bcos::toPublic(bcos::Secret(bcos::h256(i))));
         }
         blockHeader->setSealerList(sealer_list);
         return blockHeader;
@@ -164,35 +164,35 @@ private:
     {
         std::shared_ptr<SigList> retList = std::make_shared<SigList>();
         /// set sig list
-        dev::h256 block_hash;
-        auto keyPair = dev::KeyPair::create();
+        bcos::h256 block_hash;
+        auto keyPair = bcos::KeyPair::create();
         for (size_t i = 0; i < _size; i++)
         {
-            block_hash = dev::crypto::Hash("block " + std::to_string(i));
-            auto sig = dev::crypto::Sign(keyPair, block_hash);
-            retList->push_back(std::make_pair(dev::u256(block_hash), sig->asBytes()));
+            block_hash = bcos::crypto::Hash("block " + std::to_string(i));
+            auto sig = bcos::crypto::Sign(keyPair, block_hash);
+            retList->push_back(std::make_pair(bcos::u256(block_hash), sig->asBytes()));
         }
         return retList;
     }
 
 private:
     /// transaction pool handler
-    std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool;
+    std::shared_ptr<bcos::txpool::TxPoolInterface> m_txPool;
     /// handler of the block chain module
-    std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
+    std::shared_ptr<bcos::blockchain::BlockChainInterface> m_blockChain;
     /// sync
-    std::shared_ptr<dev::sync::SyncInterface> m_sync;
+    std::shared_ptr<bcos::sync::SyncInterface> m_sync;
     /// block verifier
-    std::shared_ptr<dev::blockverifier::BlockVerifierInterface> m_blockVerifier;
+    std::shared_ptr<bcos::blockverifier::BlockVerifierInterface> m_blockVerifier;
 
     size_t m_totalTxCommit;
-    dev::PROTOCOL_ID m_protocolId;
-    dev::h512 m_nodeId;
-    dev::GROUP_ID m_groupId;
+    bcos::PROTOCOL_ID m_protocolId;
+    bcos::h512 m_nodeId;
+    bcos::GROUP_ID m_groupId;
     unsigned m_blockGenerationInterval;
 };
 
-class FakeInitializer : public dev::initializer::InitializerInterface
+class FakeInitializer : public bcos::initializer::InitializerInterface
 {
 public:
     typedef std::shared_ptr<FakeInitializer> Ptr;
@@ -202,20 +202,20 @@ public:
         boost::property_tree::ptree pt;
         boost::property_tree::read_ini(_path, pt);
 
-        m_secureInitializer = std::make_shared<dev::initializer::SecureInitializer>();
+        m_secureInitializer = std::make_shared<bcos::initializer::SecureInitializer>();
         m_secureInitializer->initConfig(pt);
 
-        m_p2pInitializer = std::make_shared<dev::initializer::P2PInitializer>();
+        m_p2pInitializer = std::make_shared<bcos::initializer::P2PInitializer>();
         m_p2pInitializer->setSSLContext(m_secureInitializer->SSLContext());
         m_p2pInitializer->setKeyPair(m_secureInitializer->keyPair());
         m_p2pInitializer->initConfig(pt);
     }
 
 public:
-    dev::initializer::SecureInitializer::Ptr secureInitializer() { return m_secureInitializer; }
-    dev::initializer::P2PInitializer::Ptr p2pInitializer() { return m_p2pInitializer; }
+    bcos::initializer::SecureInitializer::Ptr secureInitializer() { return m_secureInitializer; }
+    bcos::initializer::P2PInitializer::Ptr p2pInitializer() { return m_p2pInitializer; }
 
 private:
-    dev::initializer::P2PInitializer::Ptr m_p2pInitializer;
-    dev::initializer::SecureInitializer::Ptr m_secureInitializer;
+    bcos::initializer::P2PInitializer::Ptr m_p2pInitializer;
+    bcos::initializer::SecureInitializer::Ptr m_secureInitializer;
 };

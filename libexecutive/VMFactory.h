@@ -26,7 +26,7 @@
 
 #include <boost/program_options/options_description.hpp>
 
-namespace dev
+namespace bcos
 {
 namespace eth
 {
@@ -61,4 +61,4 @@ public:
     static std::unique_ptr<EVMInterface> create(VMKind _kind);
 };
 }  // namespace eth
-}  // namespace dev
+}  // namespace bcos

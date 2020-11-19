@@ -22,7 +22,7 @@
 #include "Instruction.h"
 #include <map>
 
-namespace dev
+namespace bcos
 {
 namespace eth
 {
@@ -230,4 +230,4 @@ InstructionInfo instructionInfo(Instruction _inst)
 
 
 }  // namespace eth
-}  // namespace dev
+}  // namespace bcos

@@ -27,19 +27,19 @@
 #include <libstorage/Table.h>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev;
-using namespace dev::blockverifier;
-using namespace dev::storage;
+using namespace bcos;
+using namespace bcos::blockverifier;
+using namespace bcos::storage;
 
 namespace test_TableFactoryPrecompiled
 {
-class MockMemoryTableFactory : public dev::storage::MemoryTableFactory
+class MockMemoryTableFactory : public bcos::storage::MemoryTableFactory
 {
 public:
     virtual ~MockMemoryTableFactory(){};
 };
 
-class MockPrecompiledEngine : public dev::blockverifier::ExecutiveContext
+class MockPrecompiledEngine : public bcos::blockverifier::ExecutiveContext
 {
 public:
     virtual ~MockPrecompiledEngine() {}
@@ -53,22 +53,22 @@ struct TableFactoryPrecompiledFixture
         BlockInfo blockInfo{h256(0x001), 1, h256(0x001)};
         context->setBlockInfo(blockInfo);
         context->setMemoryTableFactory(std::make_shared<storage::MemoryTableFactory2>());
-        tableFactoryPrecompiled = std::make_shared<dev::precompiled::TableFactoryPrecompiled>();
+        tableFactoryPrecompiled = std::make_shared<bcos::precompiled::TableFactoryPrecompiled>();
         memStorage = std::make_shared<MemoryStorage>();
         auto mockMemoryTableFactory = std::make_shared<MockMemoryTableFactory>();
         mockMemoryTableFactory->setStateStorage(memStorage);
         tableFactoryPrecompiled->setMemoryTableFactory(mockMemoryTableFactory);
 
-        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
+        auto precompiledGasFactory = std::make_shared<bcos::precompiled::PrecompiledGasFactory>(0);
         auto precompiledExecResultFactory =
-            std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+            std::make_shared<bcos::precompiled::PrecompiledExecResultFactory>();
         precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
         tableFactoryPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     }
 
     ~TableFactoryPrecompiledFixture() {}
     Storage::Ptr memStorage;
-    dev::precompiled::TableFactoryPrecompiled::Ptr tableFactoryPrecompiled;
+    bcos::precompiled::TableFactoryPrecompiled::Ptr tableFactoryPrecompiled;
     ExecutiveContext::Ptr context;
     int addressCount = 0x10000;
 };
@@ -83,7 +83,7 @@ BOOST_AUTO_TEST_CASE(toString)
 BOOST_AUTO_TEST_CASE(call_afterBlock)
 {
     // createTable
-    dev::eth::ContractABI abi;
+    bcos::eth::ContractABI abi;
     bytes param = abi.abiIn("createTable(string,string,string)", std::string("t_test"),
         std::string("id"), std::string("item_name,item_id"));
     auto callResult = tableFactoryPrecompiled->call(context, bytesConstRef(&param));
