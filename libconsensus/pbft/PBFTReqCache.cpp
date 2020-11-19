@@ -51,7 +51,8 @@ void PBFTReqCache::delCache(dev::eth::BlockHeader const& _highestBlockHeader)
     {
         m_prepareCache->clear();
     }
-    removeInvalidFutureCache(_highestBlockHeader.number());
+    // remove all the future prepare
+    m_futurePrepareCache.clear();
 }
 
 /**
@@ -324,11 +325,16 @@ void PBFTReqCache::removeInvalidCommitCache(h256 const& blockHash, VIEWTYPE cons
 }
 
 /// clear the cache of future block to solve the memory leak problems
-void PBFTReqCache::removeInvalidFutureCache(int64_t const& _highestBlockNumber)
+void PBFTReqCache::removeInvalidFutureCache(
+    int64_t const& _highestBlockNumber, VIEWTYPE const& _view)
 {
     for (auto pcache = m_futurePrepareCache.begin(); pcache != m_futurePrepareCache.end();)
     {
         if (pcache->first <= (uint64_t)(_highestBlockNumber))
+        {
+            pcache = m_futurePrepareCache.erase(pcache);
+        }
+        else if (pcache->second->view < _view)
         {
             pcache = m_futurePrepareCache.erase(pcache);
         }
@@ -369,7 +375,7 @@ void PBFTReqCache::triggerViewChange(VIEWTYPE const& curView, int64_t const& _hi
         }
     }
     // remove the invalid future prepare cache
-    removeInvalidFutureCache(_highestBlockNumber);
+    removeInvalidFutureCache(_highestBlockNumber, curView);
     removeInvalidViewChange(curView);
 }
 
