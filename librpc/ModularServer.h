@@ -35,7 +35,7 @@
 #include <tuple>
 #include <vector>
 
-namespace dev
+namespace bcos
 {
 template <class I>
 using AbstractMethodPointer = void (I::*)(Json::Value const& _parameter, Json::Value& _result);
@@ -215,12 +215,12 @@ public:
             ModularServer<Is...>::HandleNotificationCall(_proc, _input);
     }
 
-    void setNetworkStatHandler(dev::stat::ChannelNetworkStatHandler::Ptr _handler)
+    void setNetworkStatHandler(bcos::stat::ChannelNetworkStatHandler::Ptr _handler)
     {
         this->m_handler->setNetworkStatHandler(_handler);
     }
 
-    void setQPSLimiter(dev::flowlimit::RPCQPSLimiter::Ptr _qpsLimiter)
+    void setQPSLimiter(bcos::flowlimit::RPCQPSLimiter::Ptr _qpsLimiter)
     {
         this->m_handler->setQPSLimiter(_qpsLimiter);
     }
@@ -230,4 +230,4 @@ private:
     std::map<std::string, MethodPointer> m_methods;
     std::map<std::string, NotificationPointer> m_notifications;
 };
-}  // namespace dev
+}  // namespace bcos

@@ -28,21 +28,21 @@
 #include <libstorage/Table.h>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev;
+using namespace bcos;
 using namespace std;
-using namespace dev::blockverifier;
-using namespace dev::storage;
-using namespace dev::precompiled;
+using namespace bcos::blockverifier;
+using namespace bcos::storage;
+using namespace bcos::precompiled;
 
 namespace test_KVTablePrecompiled
 {
-class MockPrecompiledEngine : public dev::blockverifier::ExecutiveContext
+class MockPrecompiledEngine : public bcos::blockverifier::ExecutiveContext
 {
 public:
     virtual ~MockPrecompiledEngine() {}
 };
 
-class MockMemoryDB : public dev::storage::MemoryTable2
+class MockMemoryDB : public bcos::storage::MemoryTable2
 {
 public:
     virtual ~MockMemoryDB() {}
@@ -58,7 +58,7 @@ struct TablePrecompiledFixture2
         context = std::make_shared<MockPrecompiledEngine>();
         context->setMemoryTableFactory(tableFactory);
         auto tableFactoryPrecompiled =
-            std::make_shared<dev::precompiled::TableFactoryPrecompiled>();
+            std::make_shared<bcos::precompiled::TableFactoryPrecompiled>();
         tableFactoryPrecompiled->setMemoryTableFactory(tableFactory);
         context->setAddress2Precompiled(Address(0x1001), tableFactoryPrecompiled);
 
@@ -77,7 +77,7 @@ struct TablePrecompiledFixture2
             [&](Table::Ptr, Change::Kind, string const&, vector<Change::Record>&) {});
         tablePrecompiled->setTable(table);
 
-        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
+        auto precompiledGasFactory = std::make_shared<bcos::precompiled::PrecompiledGasFactory>(0);
         auto precompiledExecResultFactory = std::make_shared<PrecompiledExecResultFactory>();
         precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
         tablePrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);

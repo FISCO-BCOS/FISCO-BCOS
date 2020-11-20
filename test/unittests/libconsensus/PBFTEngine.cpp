@@ -26,7 +26,7 @@
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/filesystem.hpp>
 #include <boost/test/unit_test.hpp>
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -54,9 +54,9 @@ void testCheckReq(FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareReq::Ptr prep
         BOOST_CHECK(fake_pbft.consensus()->reqCache()->isExistSign(copiedReq) == false);
         /// modify the signature
         copiedReq.sig =
-            dev::crypto::Sign(fake_pbft.m_keyPair[copiedReq.idx], copiedReq.block_hash)->asBytes();
+            bcos::crypto::Sign(fake_pbft.m_keyPair[copiedReq.idx], copiedReq.block_hash)->asBytes();
         copiedReq.sig2 =
-            dev::crypto::Sign(fake_pbft.m_keyPair[copiedReq.idx], copiedReq.fieldsWithoutBlock())
+            bcos::crypto::Sign(fake_pbft.m_keyPair[copiedReq.idx], copiedReq.fieldsWithoutBlock())
                 ->asBytes();
         BOOST_CHECK(fake_pbft.consensus()->isValidSignReq(copiedReq) == CheckResult::FUTURE);
         BOOST_CHECK(fake_pbft.consensus()->reqCache()->isExistSign(copiedReq) == true);
@@ -120,8 +120,8 @@ void fakeValidViewchange(FakeConsensus<FakePBFTEngine>& fake_pbft, ViewChangeReq
     req.height = highest.number();
     fake_pbft.consensus()->setConsensusBlockNumber(req.height + 1);
     auto keyPair = fake_pbft.m_keyPair[req.idx];
-    req.sig = dev::crypto::Sign(keyPair, req.block_hash)->asBytes();
-    req.sig2 = dev::crypto::Sign(keyPair, req.fieldsWithoutBlock())->asBytes();
+    req.sig = bcos::crypto::Sign(keyPair, req.block_hash)->asBytes();
+    req.sig2 = bcos::crypto::Sign(keyPair, req.fieldsWithoutBlock())->asBytes();
 }
 
 void testIsExistCommit(FakeConsensus<FakePBFTEngine>& fake_pbft, PrepareReq::Ptr prepareReq,
@@ -194,7 +194,7 @@ void TestIsValidViewChange(FakeConsensus<FakePBFTEngine>& fake_pbft, ViewChangeR
     BOOST_CHECK(fake_pbft.consensus()->isValidViewChangeReq(*req, nodeIdxSource) == true);
 
     /// case 4: check block hash
-    dev::h256 orgHash = req->block_hash;
+    bcos::h256 orgHash = req->block_hash;
     req->block_hash = crypto::Hash("fake");
     BOOST_CHECK(fake_pbft.consensus()->isValidViewChangeReq(*req, nodeIdxSource) == false);
     req->block_hash = orgHash;
@@ -1071,7 +1071,7 @@ BOOST_AUTO_TEST_CASE(testHandlePartiallyPrepare)
     std::shared_ptr<FakeSession> session =
         std::make_shared<FakeSession>(leaderPBFT->consensus()->keyPair().pub());
 
-    dev::p2p::NetworkException _exception;
+    bcos::p2p::NetworkException _exception;
     followerPBFT->consensus()->wrapperHandleP2PMessage(_exception, session, receivedP2pMsg);
 
     // the follower handlePartiallyPrepare and request missed transactions to the leader
@@ -1246,4 +1246,4 @@ BOOST_AUTO_TEST_CASE(testViewChange)
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

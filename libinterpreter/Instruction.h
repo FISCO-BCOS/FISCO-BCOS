@@ -26,7 +26,7 @@
 
 #undef MSIZE
 
-namespace dev
+namespace bcos
 {
 namespace eth
 {
@@ -272,4 +272,4 @@ struct InstructionMetric
 InstructionInfo instructionInfo(Instruction _inst);
 
 }  // namespace eth
-}  // namespace dev
+}  // namespace bcos

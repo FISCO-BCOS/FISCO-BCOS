@@ -22,17 +22,17 @@
 #include <iostream>
 
 #include <libconfig/GlobalConfigure.h>
-#include <libdevcore/Assertions.h>
-#include <libdevcore/CommonJS.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
+#include <libutilities/Assertions.h>
+#include <libutilities/CommonJS.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
 
-using namespace dev;
-using namespace dev::eth;
-namespace dev
+using namespace bcos;
+using namespace bcos::eth;
+namespace bcos
 {
 namespace test
 {
@@ -49,7 +49,7 @@ BOOST_AUTO_TEST_CASE(testCreateTxByRLP)
     Transaction tx(value, gasPrice, gas, dst, data);
     KeyPair sigKeyPair = KeyPair::create();
     std::shared_ptr<crypto::Signature> sig =
-        dev::crypto::Sign(sigKeyPair, tx.hash(WithoutSignature));
+        bcos::crypto::Sign(sigKeyPair, tx.hash(WithoutSignature));
     /// update the signature of transaction
     tx.updateSignature(sig);
     /// test encode
@@ -95,7 +95,7 @@ BOOST_FIXTURE_TEST_CASE(SM_testCreateTxByRLP, SM_CryptoTestFixture)
     Transaction tx(value, gasPrice, gas, dst, data);
     KeyPair sigKeyPair = KeyPair::create();
     std::shared_ptr<crypto::Signature> sig =
-        dev::crypto::Sign(sigKeyPair, tx.hash(WithoutSignature));
+        bcos::crypto::Sign(sigKeyPair, tx.hash(WithoutSignature));
     /// update the signature of transaction
     tx.updateSignature(sig);
     /// test encode
@@ -170,4 +170,4 @@ BOOST_FIXTURE_TEST_CASE(SM_testCreateTxByRLP, SM_CryptoTestFixture)
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

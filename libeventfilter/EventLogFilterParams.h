@@ -23,17 +23,17 @@
 
 #pragma once
 #include "Common.h"
-#include <libdevcore/Address.h>
-#include <libdevcore/CommonData.h>
 #include <libethcore/Common.h>
 #include <libethcore/Protocol.h>
+#include <libutilities/Address.h>
+#include <libutilities/CommonData.h>
 
 namespace Json
 {
 class Value;
 }
 
-namespace dev
+namespace bcos
 {
 namespace event
 {
@@ -44,7 +44,7 @@ public:
 
 private:
     static bool getFilterIDField(const Json::Value& _json, std::string& _filterID);
-    static bool getGroupIDField(const Json::Value& _json, dev::GROUP_ID& _groupID);
+    static bool getGroupIDField(const Json::Value& _json, bcos::GROUP_ID& _groupID);
     static bool getFromBlockField(const Json::Value& _json, eth::BlockNumber& _startBlock);
     static bool getToBlockField(const Json::Value& _json, eth::BlockNumber& _endBlock);
     static bool getAddressField(const Json::Value& _json, EventLogFilterParams::Ptr params);
@@ -61,7 +61,7 @@ public:
       : m_groupID(_groupID), m_filterID(_filterID), m_startBlock(_startBlock), m_endBlock(_endBlock)
     {}
     // m_groupID
-    dev::GROUP_ID getGroupID() const { return m_groupID; }
+    bcos::GROUP_ID getGroupID() const { return m_groupID; }
     // m_filterID
     std::string getFilterID() const { return m_filterID; }
     // m_startBlock
@@ -86,7 +86,7 @@ public:
     }
 
 private:
-    dev::GROUP_ID m_groupID;
+    bcos::GROUP_ID m_groupID;
     std::string m_filterID;
     eth::BlockNumber m_startBlock;
     eth::BlockNumber m_endBlock;
@@ -95,4 +95,4 @@ private:
 };
 
 }  // namespace event
-}  // namespace dev
+}  // namespace bcos

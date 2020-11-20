@@ -21,11 +21,11 @@
 #pragma once
 #include <libprecompiled/Common.h>
 
-namespace dev
+namespace bcos
 {
 namespace precompiled
 {
-class HelloWorldPrecompiled : public dev::precompiled::Precompiled
+class HelloWorldPrecompiled : public bcos::precompiled::Precompiled
 {
 public:
     typedef std::shared_ptr<HelloWorldPrecompiled> Ptr;
@@ -34,11 +34,11 @@ public:
 
     std::string toString() override;
 
-    PrecompiledExecResult::Ptr call(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
+    PrecompiledExecResult::Ptr call(std::shared_ptr<bcos::blockverifier::ExecutiveContext> _context,
         bytesConstRef _param, Address const& _origin = Address(),
         Address const& _sender = Address()) override;
 };
 
 }  // namespace precompiled
 
-}  // namespace dev
+}  // namespace bcos

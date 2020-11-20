@@ -24,7 +24,7 @@
 #include "Storage.h"
 #include <atomic>
 
-namespace dev
+namespace bcos
 {
 namespace storage
 {
@@ -80,4 +80,4 @@ private:
     const std::vector<std::string> m_archiveTables = {SYS_HASH_2_BLOCK, SYS_BLOCK_2_NONCES};
 };
 }  // namespace storage
-}  // namespace dev
+}  // namespace bcos

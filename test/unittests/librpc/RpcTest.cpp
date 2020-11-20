@@ -30,13 +30,13 @@
 #include <boost/test/unit_test.hpp>
 
 using namespace jsonrpc;
-using namespace dev;
-using namespace dev::rpc;
-using namespace dev::ledger;
-using namespace dev::initializer;
-using namespace dev::test;
+using namespace bcos;
+using namespace bcos::rpc;
+using namespace bcos::ledger;
+using namespace bcos::initializer;
+using namespace bcos::test;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -71,9 +71,9 @@ public:
     std::string clientVersion = "2.0";
     std::string listenIp = "127.0.0.1";
     uint16_t listenPort = 30304;
-    std::shared_ptr<dev::network::Host> m_host;
-    dev::GROUP_ID groupId = 1;
-    dev::GROUP_ID invalidGroup = 2;
+    std::shared_ptr<bcos::network::Host> m_host;
+    bcos::GROUP_ID groupId = 1;
+    bcos::GROUP_ID invalidGroup = 2;
 };
 
 class SM_RpcTestFixure : public SM_CryptoTestFixture, public RpcTestFixure
@@ -1001,4 +1001,4 @@ BOOST_AUTO_TEST_CASE(testSendRawTransaction)
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

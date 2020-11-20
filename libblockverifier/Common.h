@@ -22,24 +22,24 @@
 #pragma once
 
 
-#include <libdevcore/Common.h>
-#include <libdevcore/CommonData.h>
-#include <libdevcore/FixedHash.h>
+#include <libutilities/Common.h>
+#include <libutilities/CommonData.h>
+#include <libutilities/FixedHash.h>
 #include <memory>
 
 #define BLOCKVERIFIER_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("BLOCKVERIFIER")
 #define EXECUTIVECONTEXT_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("EXECUTIVECONTEXT")
 #define PARA_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("PARA") << LOG_BADGE(utcTime())
 
-namespace dev
+namespace bcos
 {
 namespace blockverifier
 {
 struct BlockInfo
 {
-    dev::h256 hash;
+    bcos::h256 hash;
     int64_t number;
-    dev::h256 stateRoot;
+    bcos::h256 stateRoot;
 };
 }  // namespace blockverifier
-}  // namespace dev
+}  // namespace bcos

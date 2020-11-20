@@ -20,12 +20,12 @@
  * Tests for functions in CommonJS.h
  */
 
-#include <libdevcore/CommonJS.h>
-#include <libdevcore/Exceptions.h>
+#include <libutilities/CommonJS.h>
+#include <libutilities/Exceptions.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev;
+using namespace bcos;
 using namespace std;
 using namespace test;
 
@@ -34,12 +34,10 @@ BOOST_FIXTURE_TEST_SUITE(CommonJSTests, TestOutputHelperFixture)
 BOOST_AUTO_TEST_CASE(test_toJS)
 {
     h64 a("0xbaadf00ddeadbeef");
-    u64 b("0xffff0000bbbaaaa");
     uint64_t c = 38990234243;
     bytes d = {0xff, 0x0, 0xef, 0xbc};
 
     BOOST_CHECK(toJS(a) == "0xbaadf00ddeadbeef");
-    BOOST_CHECK(toJS(b) == "0xffff0000bbbaaaa");
     BOOST_CHECK(toJS(c) == "0x913ffc283");
     BOOST_CHECK(toJS(d) == "0xff00efbc");
 }
@@ -125,15 +123,13 @@ BOOST_AUTO_TEST_CASE(test_jsToInt)
     BOOST_CHECK(u256("983298932490823474234") == jsToInt<32>("983298932490823474234"));
     BOOST_CHECK(u256("983298932490823474234") == jsToInt<32>("0x354e03915c00571c3a"));
     BOOST_CHECK_THROW(jsToInt<32>("NotAHexadecimalOrDecimal"), std::exception);
-    BOOST_CHECK(u128("228273101986715476958866839113050921216") ==
-                jsToInt<16>("0xabbbccddeeff11223344556677889900"));
-    BOOST_CHECK_THROW(jsToInt<16>("NotAHexadecimalOrDecimal"), dev::BadCast);
+    BOOST_CHECK_THROW(jsToInt<16>("NotAHexadecimalOrDecimal"), bcos::BadCast);
 }
 
 BOOST_AUTO_TEST_CASE(test_jsToU256)
 {
     BOOST_CHECK(u256("983298932490823474234") == jsToU256("983298932490823474234"));
-    BOOST_CHECK_THROW(jsToU256("NotAHexadecimalOrDecimal"), dev::BadCast);
+    BOOST_CHECK_THROW(jsToU256("NotAHexadecimalOrDecimal"), bcos::BadCast);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

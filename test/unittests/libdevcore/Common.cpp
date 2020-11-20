@@ -14,7 +14,7 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  *
- * @brief: unit test for Common.* of libdevcore
+ * @brief: unit test for Common.* of libutilities
  *
  * @file Common.cpp
  * @author: yujiechen
@@ -22,14 +22,14 @@
  */
 
 
-#include <libdevcore/Common.h>
-#include <libdevcore/Exceptions.h>
+#include <libutilities/Common.h>
+#include <libutilities/Exceptions.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <unistd.h>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev;
-namespace dev
+using namespace bcos;
+namespace bcos
 {
 namespace test
 {
@@ -57,18 +57,6 @@ BOOST_AUTO_TEST_CASE(testArithCal)
     BOOST_CHECK(exp10<1>() == u256(10));
     BOOST_CHECK(exp10<9>() == u256(1000000000));
     BOOST_CHECK(exp10<0>() == u256(1));
-    ///=========test diff==================
-    int a = 10;
-    int b = 20;
-    BOOST_CHECK(diff(a, b) == diff(b, a));
-    BOOST_CHECK(diff(b, a) == 10);
-    b = 10;
-    BOOST_CHECK(diff(a, b) == diff(b, a));
-    BOOST_CHECK(diff(b, a) == 0);
-    u256 a_u256("0xf170d8e0ae1b57d7ecc121f6fe5ceb03c1267801ff720edd2f8463e7effac6c6");
-    u256 b_u256("0xf170d8e0ae1b57d7ecc121f6fe5ceb03c1267801ff720edd2f8463e7effac6c4");
-    BOOST_CHECK(diff(a_u256, b_u256) == diff(b_u256, a_u256));
-    BOOST_CHECK(diff(a_u256, b_u256) == u256(2));
 }
 /// test utcTime
 BOOST_AUTO_TEST_CASE(testUtcTime)
@@ -77,36 +65,6 @@ BOOST_AUTO_TEST_CASE(testUtcTime)
     usleep(1000);
     BOOST_CHECK(old_time < utcTime());
 }
-/// test Timer
-BOOST_AUTO_TEST_CASE(testTimer)
-{
-    Timer timer;
-    usleep(10);
-    double elapsed = timer.elapsed();
-    BOOST_CHECK(elapsed >= 0.00001);
-    timer.restart();
-}
-
-class FakeCheckInvariants : public HasInvariants
-{
-public:
-    FakeCheckInvariants(bool _hasInvariants = true) : m_hasInvariants(_hasInvariants) {}
-    virtual bool invariants() const { return m_hasInvariants; }
-    void setHasInvariants(bool _hasInvariants) { m_hasInvariants = _hasInvariants; }
-    void check() { DEV_INVARIANT_CHECK_HERE; }
-
-private:
-    bool m_hasInvariants;
-};
-BOOST_AUTO_TEST_CASE(testCheckInvariants)
-{
-    FakeCheckInvariants fake_invariant;
-    BOOST_REQUIRE_NO_THROW(fake_invariant.check());
-#if FISCO_DEBUG
-    fake_invariant.setHasInvariants(false);
-    BOOST_CHECK_THROW(fake_invariant.check(), FailedInvariant);
-#endif
-}
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

@@ -20,7 +20,7 @@
  */
 #pragma once
 #include "Common.h"
-namespace dev
+namespace bcos
 {
 namespace precompiled
 {
@@ -32,14 +32,14 @@ contract SystemConfigTable
 }
 #endif
 
-class SystemConfigPrecompiled : public dev::precompiled::Precompiled
+class SystemConfigPrecompiled : public bcos::precompiled::Precompiled
 {
 public:
     typedef std::shared_ptr<SystemConfigPrecompiled> Ptr;
     SystemConfigPrecompiled();
     virtual ~SystemConfigPrecompiled(){};
 
-    PrecompiledExecResult::Ptr call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+    PrecompiledExecResult::Ptr call(std::shared_ptr<bcos::blockverifier::ExecutiveContext> context,
         bytesConstRef param, Address const& origin = Address(),
         Address const& _sender = Address()) override;
 
@@ -49,4 +49,4 @@ private:
 
 }  // namespace precompiled
 
-}  // namespace dev
+}  // namespace bcos

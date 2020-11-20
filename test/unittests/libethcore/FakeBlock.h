@@ -31,11 +31,11 @@
 #include <libethcore/TxsParallelParser.h>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev;
+using namespace bcos;
 using namespace std;
-using namespace dev::eth;
+using namespace bcos::eth;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -174,7 +174,7 @@ public:
         for (size_t i = 0; i < size; i++)
         {
             block_hash = m_blockHeader.hash();
-            auto sig = dev::crypto::Sign(m_keyPair, block_hash);
+            auto sig = bcos::crypto::Sign(m_keyPair, block_hash);
             m_sigList->push_back(std::make_pair(u256(i), sig->asBytes()));
         }
     }
@@ -215,7 +215,7 @@ public:
         auto fakedTx = std::make_shared<Transaction>(value, gasPrice, gas, dst, data, 2);
         m_singleTransaction = fakedTx;
         std::shared_ptr<crypto::Signature> sig =
-            dev::crypto::Sign(m_keyPair, m_singleTransaction->hash(WithoutSignature));
+            bcos::crypto::Sign(m_keyPair, m_singleTransaction->hash(WithoutSignature));
         /// update the signature of transaction
         m_singleTransaction->updateSignature(sig);
         return fakedTx;
@@ -252,7 +252,7 @@ public:
             tx->setBlockLimit(u256(_currentBlockNumber) + c_maxBlockLimit);
             tx->setRpcTx(true);
             std::shared_ptr<crypto::Signature> sig =
-                dev::crypto::Sign(sigKeyPair.secret(), tx->hash(WithoutSignature));
+                bcos::crypto::Sign(sigKeyPair.secret(), tx->hash(WithoutSignature));
             /// update the signature of transaction
             tx->updateSignature(sig);
             // std::pair<h256, Address> ret = txPool->submit(tx);
@@ -284,4 +284,4 @@ public:
 };
 
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

@@ -21,10 +21,10 @@
 
 #pragma once
 
-#include <libdevcore/Common.h>
+#include <libutilities/Common.h>
 #include <boost/filesystem/path.hpp>
 
-namespace dev
+namespace bcos
 {
 namespace mptstate
 {
@@ -51,4 +51,4 @@ private:
 };
 
 }  // namespace mptstate
-}  // namespace dev
+}  // namespace bcos

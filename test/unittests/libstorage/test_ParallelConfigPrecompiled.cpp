@@ -34,14 +34,14 @@
 #include <string>
 
 using namespace std;
-using namespace dev;
-using namespace dev::eth;
-using namespace dev::blockverifier;
-using namespace dev::storage;
-using namespace dev::storagestate;
-using namespace dev::precompiled;
+using namespace bcos;
+using namespace bcos::eth;
+using namespace bcos::blockverifier;
+using namespace bcos::storage;
+using namespace bcos::storagestate;
+using namespace bcos::precompiled;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -76,9 +76,9 @@ public:
         parallelConfigPrecompiled = std::dynamic_pointer_cast<ParallelConfigPrecompiled>(
             context->getPrecompiled(Address(0x1006)));
 
-        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
+        auto precompiledGasFactory = std::make_shared<bcos::precompiled::PrecompiledGasFactory>(0);
         auto precompiledExecResultFactory =
-            std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+            std::make_shared<bcos::precompiled::PrecompiledExecResultFactory>();
         precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
         parallelConfigPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     };
@@ -172,4 +172,4 @@ BOOST_AUTO_TEST_CASE(registerParallelFunction)
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

@@ -23,8 +23,8 @@
 
 #include "libdevcrypto/CryptoInterface.h"
 #include <evmc/evmc.h>
-#include <libdevcore/Address.h>
-#include <libdevcore/FixedHash.h>
+#include <libutilities/Address.h>
+#include <libutilities/FixedHash.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/EVMSchedule.h>
 #include <libethcore/LogEntry.h>
@@ -36,7 +36,7 @@
 #include <map>
 #include <memory>
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -75,7 +75,7 @@ inline Address fromEvmC(evmc_address const& _addr)
     return reinterpret_cast<Address const&>(_addr);
 }
 
-inline evmc_revision toRevision(dev::eth::EVMSchedule const& _schedule)
+inline evmc_revision toRevision(bcos::eth::EVMSchedule const& _schedule)
 {
     if (_schedule.haveCreate2)
         return EVMC_CONSTANTINOPLE;
@@ -151,7 +151,7 @@ private:
     AccountCodeStateType codeState;
 };
 
-extern dev::eth::LogEntries fakeLogs;
+extern bcos::eth::LogEntries fakeLogs;
 extern int64_t fakeDepth;
 
 class FakeEvmc
@@ -165,7 +165,7 @@ public:
             fakeLogs.clear();
     }
 
-    evmc_result execute(dev::eth::EVMSchedule const& schedule, bytes code, bytes data,
+    evmc_result execute(bcos::eth::EVMSchedule const& schedule, bytes code, bytes data,
         Address destination, Address caller, u256 value, int64_t gas, int32_t depth, bool isCreate,
         bool isStaticCall);
 
@@ -181,4 +181,4 @@ private:
 };
 
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

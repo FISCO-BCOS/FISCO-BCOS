@@ -26,10 +26,10 @@
 #include <boost/filesystem.hpp>
 #include <boost/lexical_cast.hpp>
 
-using namespace dev;
+using namespace bcos;
 using namespace std;
-using namespace dev::initializer;
-using namespace dev::ledger;
+using namespace bcos::initializer;
+using namespace bcos::ledger;
 
 void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
 {
@@ -48,7 +48,7 @@ void LedgerInitializer::initConfig(boost::property_tree::ptree const& _pt)
 }
 
 
-bool LedgerInitializer::initLedgerByGroupID(dev::GROUP_ID const& _groupId)
+bool LedgerInitializer::initLedgerByGroupID(bcos::GROUP_ID const& _groupId)
 {
     namespace fs = boost::filesystem;
 
@@ -70,12 +70,12 @@ bool LedgerInitializer::initLedgerByGroupID(dev::GROUP_ID const& _groupId)
 }
 
 
-vector<dev::GROUP_ID> LedgerInitializer::initLedgers()
+vector<bcos::GROUP_ID> LedgerInitializer::initLedgers()
 {
-    vector<dev::GROUP_ID> newGroupIDList;
+    vector<bcos::GROUP_ID> newGroupIDList;
     try
     {
-        newGroupIDList = foreachLedgerConfigure(m_groupConfigPath, [&](dev::GROUP_ID const&
+        newGroupIDList = foreachLedgerConfigure(m_groupConfigPath, [&](bcos::GROUP_ID const&
                                                                            _groupID,
                                                                        const string&
                                                                            _configFileName) {
@@ -138,13 +138,13 @@ vector<dev::GROUP_ID> LedgerInitializer::initLedgers()
     return newGroupIDList;
 }
 
-vector<dev::GROUP_ID> LedgerInitializer::foreachLedgerConfigure(
-    const string& _groupConfigPath, function<bool(dev::GROUP_ID const&, const string&)> _f)
+vector<bcos::GROUP_ID> LedgerInitializer::foreachLedgerConfigure(
+    const string& _groupConfigPath, function<bool(bcos::GROUP_ID const&, const string&)> _f)
 {
     namespace fs = boost::filesystem;
     LOG(INFO) << LOG_BADGE("LedgerInitializer") << LOG_KV("groupConfigPath", _groupConfigPath);
     fs::path path(_groupConfigPath);
-    vector<dev::GROUP_ID> reachList;
+    vector<bcos::GROUP_ID> reachList;
     if (fs::is_directory(path))
     {
         fs::directory_iterator endIter;
@@ -180,7 +180,7 @@ vector<dev::GROUP_ID> LedgerInitializer::foreachLedgerConfigure(
 void LedgerInitializer::startMoreLedger()
 {
     assert(m_groupConfigPath.length() != 0);
-    vector<dev::GROUP_ID> newGroupIDList = initLedgers();
+    vector<bcos::GROUP_ID> newGroupIDList = initLedgers();
 
     for (auto groupID : newGroupIDList)
     {
@@ -203,7 +203,7 @@ void LedgerInitializer::reloadSDKAllowList()
 }
 
 bool LedgerInitializer::initLedger(
-    dev::GROUP_ID const& _groupId, std::string const& _dataDir, std::string const& _configFileName)
+    bcos::GROUP_ID const& _groupId, std::string const& _dataDir, std::string const& _configFileName)
 {
     if (m_ledgerManager->isLedgerExist(_groupId))
     {

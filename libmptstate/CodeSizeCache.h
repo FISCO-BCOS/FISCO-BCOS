@@ -20,11 +20,10 @@
 
 #pragma once
 
-#include <libdevcore/FixedHash.h>
-#include <libdevcore/Guards.h>
+#include <libutilities/FixedHash.h>
 #include <map>
 
-namespace dev
+namespace bcos
 {
 namespace mptstate
 {
@@ -78,4 +77,4 @@ private:
 };
 
 }  // namespace mptstate
-}  // namespace dev
+}  // namespace bcos

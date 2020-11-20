@@ -24,15 +24,15 @@
 #include "Common.h"
 #include <json/json.h>
 #include <jsonrpccpp/common/exception.h>
-#include <libdevcore/Common.h>
-#include <libdevcore/Exceptions.h>
 #include <libdevcrypto/AES.h>
 #include <libdevcrypto/CryptoInterface.h>
+#include <libutilities/Common.h>
+#include <libutilities/Exceptions.h>
 #include <iostream>
 #include <string>
 
 using namespace std;
-using namespace dev;
+using namespace bcos;
 using namespace jsonrpc;
 
 namespace beast = boost::beast;  // from <boost/beast.hpp>
@@ -235,7 +235,7 @@ void KeyCenter::setIpPort(const std::string& _ip, int _port)
     KC_LOG(DEBUG) << LOG_DESC("Set instance url") << LOG_KV("IP", m_ip) << LOG_KV("port", m_port);
 }
 
-dev::bytes KeyCenter::uniformDataKey(const dev::bytes& _readableDataKey)
+bcos::bytes KeyCenter::uniformDataKey(const bcos::bytes& _readableDataKey)
 {
     bytes oneTurn = crypto::Hash(ref(_readableDataKey)).asBytes();
     if (g_BCOSConfig.SMCrypto())

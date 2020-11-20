@@ -23,21 +23,21 @@
 #include <iostream>
 
 #include "json/value.h"
-#include <libdevcore/Common.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/LogEntry.h>
 #include <libeventfilter/EventLogFilter.h>
 #include <libeventfilter/EventLogFilterManager.h>
 #include <libeventfilter/EventLogFilterParams.h>
+#include <libutilities/Common.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace std;
-using namespace dev;
-using namespace dev::eth;
-using namespace dev::event;
+using namespace bcos;
+using namespace bcos::eth;
+using namespace bcos::event;
 namespace ut = boost::unit_test;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -462,4 +462,4 @@ BOOST_AUTO_TEST_CASE(EventLogFilterManager_test0)
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

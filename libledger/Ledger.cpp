@@ -40,14 +40,14 @@
 #include <boost/property_tree/ini_parser.hpp>
 
 using namespace boost::property_tree;
-using namespace dev::blockverifier;
-using namespace dev::blockchain;
-using namespace dev::consensus;
-using namespace dev::sync;
-using namespace dev::precompiled;
+using namespace bcos::blockverifier;
+using namespace bcos::blockchain;
+using namespace bcos::consensus;
+using namespace bcos::sync;
+using namespace bcos::precompiled;
 using namespace std;
 
-namespace dev
+namespace bcos
 {
 namespace ledger
 {
@@ -62,7 +62,7 @@ bool Ledger::initLedger(std::shared_ptr<LedgerParamInterface> _ledgerParams)
     m_param = _ledgerParams;
     /// init dbInitializer
     Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("DBInitializer");
-    m_dbInitializer = std::make_shared<dev::ledger::DBInitializer>(m_param, m_groupId);
+    m_dbInitializer = std::make_shared<bcos::ledger::DBInitializer>(m_param, m_groupId);
     m_dbInitializer->setChannelRPCServer(m_channelRPCServer);
 
     setSDKAllowList(m_param->mutablePermissionParam().sdkAllowList);
@@ -75,7 +75,7 @@ bool Ledger::initLedger(std::shared_ptr<LedgerParamInterface> _ledgerParams)
     bool ret = initBlockChain();
     if (!ret)
         return false;
-    dev::h256 genesisHash = m_blockChain->getBlockByNumber(0)->headerHash();
+    bcos::h256 genesisHash = m_blockChain->getBlockByNumber(0)->headerHash();
     m_dbInitializer->initState(genesisHash);
     if (!m_dbInitializer->stateFactory())
     {
@@ -96,7 +96,7 @@ bool Ledger::initLedger(std::shared_ptr<LedgerParamInterface> _ledgerParams)
         initNetworkStatHandler();
     }
 
-    auto channelRPCServer = std::weak_ptr<dev::ChannelRPCServer>(m_channelRPCServer);
+    auto channelRPCServer = std::weak_ptr<bcos::ChannelRPCServer>(m_channelRPCServer);
     m_handler = blockChain->onReady([this, channelRPCServer](int64_t number) {
         LOG(INFO) << "Push block notify: " << std::to_string(m_groupId) << "-" << number;
         auto channelRpcServer = channelRPCServer.lock();
@@ -120,7 +120,7 @@ void Ledger::reloadSDKAllowList()
     {
         boost::property_tree::ptree pt;
         boost::property_tree::read_ini(m_param->iniConfigPath(), pt);
-        dev::h512s sdkAllowList;
+        bcos::h512s sdkAllowList;
         m_param->parseSDKAllowList(sdkAllowList, pt);
         setSDKAllowList(sdkAllowList);
         Ledger_LOG(INFO) << LOG_DESC("reloadSDKAllowList")
@@ -134,7 +134,7 @@ void Ledger::reloadSDKAllowList()
     }
 }
 
-void Ledger::setSDKAllowList(dev::h512s const& _sdkList)
+void Ledger::setSDKAllowList(bcos::h512s const& _sdkList)
 {
     Ledger_LOG(INFO) << LOG_DESC("setSDKAllowList") << LOG_KV("groupId", m_groupId)
                      << LOG_KV("sdkAllowListSize", _sdkList.size());
@@ -148,7 +148,7 @@ void Ledger::setSDKAllowList(dev::h512s const& _sdkList)
 void Ledger::initNetworkStatHandler()
 {
     Ledger_LOG(INFO) << LOG_BADGE("initNetworkStatHandler");
-    m_networkStatHandler = std::make_shared<dev::stat::NetworkStatHandler>();
+    m_networkStatHandler = std::make_shared<bcos::stat::NetworkStatHandler>();
     m_networkStatHandler->setGroupId(m_groupId);
     m_networkStatHandler->setConsensusMsgType(m_param->mutableConsensusParam().consensusType);
     m_service->appendNetworkStatHandlerByGroupID(m_groupId, m_networkStatHandler);
@@ -178,7 +178,7 @@ void Ledger::initNetworkBandWidthLimiter()
         return;
     }
 
-    m_networkBandwidthLimiter = std::make_shared<dev::flowlimit::RateLimiter>(
+    m_networkBandwidthLimiter = std::make_shared<bcos::flowlimit::RateLimiter>(
         m_param->mutableFlowControlParam().outGoingBandwidthLimit);
     m_networkBandwidthLimiter->setMaxPermitsSize(g_BCOSConfig.c_maxPermitsSize);
     if (m_service)
@@ -211,7 +211,7 @@ void Ledger::initQPSLimit()
         return;
     }
     auto qpsLimiter =
-        std::make_shared<dev::flowlimit::RateLimiter>(m_param->mutableFlowControlParam().maxQPS);
+        std::make_shared<bcos::flowlimit::RateLimiter>(m_param->mutableFlowControlParam().maxQPS);
     // register QPS
     rpcQPSLimiter->registerQPSLimiterByGroupID(m_groupId, qpsLimiter);
     Ledger_LOG(INFO) << LOG_BADGE("initQPSLimit") << LOG_KV("groupId", m_groupId)
@@ -221,7 +221,7 @@ void Ledger::initQPSLimit()
 /// init txpool
 bool Ledger::initTxPool()
 {
-    dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::TxPool);
+    bcos::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::TxPool);
     Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("initTxPool")
                      << LOG_KV("txPoolLimit", m_param->mutableTxPoolParam().txPoolLimit);
     if (!m_blockChain)
@@ -229,7 +229,7 @@ bool Ledger::initTxPool()
         Ledger_LOG(ERROR) << LOG_BADGE("initLedger") << LOG_DESC("initTxPool Failed");
         return false;
     }
-    auto txPool = std::make_shared<dev::txpool::TxPool>(m_service, m_blockChain, protocol_id,
+    auto txPool = std::make_shared<bcos::txpool::TxPool>(m_service, m_blockChain, protocol_id,
         m_param->mutableTxPoolParam().txPoolLimit, m_param->mutableTxPoolParam().notifyWorkerNum);
     txPool->setMaxBlockLimit(g_BCOSConfig.c_blockLimit);
     txPool->setMaxMemoryLimit(m_param->mutableTxPoolParam().maxTxPoolMemorySize);
@@ -281,8 +281,8 @@ bool Ledger::initBlockChain()
     std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();
 
     // write the hex-string block data when use external or mysql
-    if (!dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "External") ||
-        !dev::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "MySQL"))
+    if (!bcos::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "External") ||
+        !bcos::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "MySQL"))
     {
         if (g_BCOSConfig.version() < V2_6_0)
         {
@@ -321,9 +321,9 @@ bool Ledger::initBlockChain()
     return true;
 }
 
-ConsensusInterface::Ptr Ledger::createConsensusEngine(dev::PROTOCOL_ID const& _protocolId)
+ConsensusInterface::Ptr Ledger::createConsensusEngine(bcos::PROTOCOL_ID const& _protocolId)
 {
-    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0)
+    if (bcos::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0)
     {
         Ledger_LOG(INFO) << LOG_DESC("createConsensusEngine: create PBFTEngine");
         return std::make_shared<PBFTEngine>(m_service, m_txPool, m_blockChain, m_sync,
@@ -348,7 +348,7 @@ ConsensusInterface::Ptr Ledger::createConsensusEngine(dev::PROTOCOL_ID const& _p
         }
         else
         {
-            BOOST_THROW_EXCEPTION(dev::InitLedgerConfigFailed() << errinfo_comment(
+            BOOST_THROW_EXCEPTION(bcos::InitLedgerConfigFailed() << errinfo_comment(
                                       m_param->mutableConsensusParam().consensusType +
                                       " is supported after when supported_version >= v2.6.0!"));
         }
@@ -370,7 +370,7 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
         return nullptr;
     }
 
-    dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::PBFT);
+    bcos::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::PBFT);
     /// create consensus engine according to "consensusType"
     Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("createPBFTSealer")
                      << LOG_KV("baseDir", m_param->baseDir()) << LOG_KV("Protocol", protocol_id);
@@ -393,7 +393,7 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
     ConsensusInterface::Ptr pbftEngine = createConsensusEngine(protocol_id);
     if (!pbftEngine)
     {
-        BOOST_THROW_EXCEPTION(dev::InitLedgerConfigFailed() << errinfo_comment(
+        BOOST_THROW_EXCEPTION(bcos::InitLedgerConfigFailed() << errinfo_comment(
                                   "create PBFTEngine failed, maybe unsupported consensus type " +
                                   m_param->mutableConsensusParam().consensusType));
     }
@@ -414,19 +414,19 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
     return pbftSealer;
 }
 
-dev::eth::BlockFactory::Ptr Ledger::createBlockFactory()
+bcos::eth::BlockFactory::Ptr Ledger::createBlockFactory()
 {
     if (!m_param->mutableConsensusParam().enablePrepareWithTxsHash)
     {
-        return std::make_shared<dev::eth::BlockFactory>();
+        return std::make_shared<bcos::eth::BlockFactory>();
     }
     // only create PartiallyBlockFactory when using pbft or rpbft
-    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0 ||
+    if (bcos::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0 ||
         normalrPBFTEnabled() || vrfBasedrPBFTEnabled())
     {
-        return std::make_shared<dev::eth::PartiallyBlockFactory>();
+        return std::make_shared<bcos::eth::PartiallyBlockFactory>();
     }
-    return std::make_shared<dev::eth::BlockFactory>();
+    return std::make_shared<bcos::eth::BlockFactory>();
 }
 
 void Ledger::initPBFTEngine(Sealer::Ptr _sealer)
@@ -447,7 +447,7 @@ void Ledger::initPBFTEngine(Sealer::Ptr _sealer)
 }
 
 // init rotating-pbft engine
-void Ledger::initrPBFTEngine(dev::consensus::Sealer::Ptr _sealer)
+void Ledger::initrPBFTEngine(bcos::consensus::Sealer::Ptr _sealer)
 {
     if (!normalrPBFTEnabled() && !vrfBasedrPBFTEnabled())
     {
@@ -478,7 +478,7 @@ std::shared_ptr<Sealer> Ledger::createRaftSealer()
         return nullptr;
     }
 
-    dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::Raft);
+    bcos::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::Raft);
     /// create consensus engine according to "consensusType"
     Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("createRaftSealer")
                      << LOG_KV("Protocol", protocol_id);
@@ -495,12 +495,12 @@ bool Ledger::consensusInitFactory()
 {
     Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("consensusInitFactory");
     // create RaftSealer
-    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "raft") == 0)
+    if (bcos::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "raft") == 0)
     {
         m_sealer = createRaftSealer();
     }
     // create PBFTSealer
-    else if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") ==
+    else if (bcos::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") ==
                  0 ||
              normalrPBFTEnabled() || vrfBasedrPBFTEnabled())
     {
@@ -509,7 +509,7 @@ bool Ledger::consensusInitFactory()
     else
     {
         BOOST_THROW_EXCEPTION(
-            dev::InitLedgerConfigFailed()
+            bcos::InitLedgerConfigFailed()
             << errinfo_comment("create consensusEngine failed, maybe unsupported consensus type " +
                                m_param->mutableConsensusParam().consensusType +
                                ", supported consensus type are pbft, raft, rpbft"));
@@ -517,7 +517,7 @@ bool Ledger::consensusInitFactory()
     if (!m_sealer)
     {
         BOOST_THROW_EXCEPTION(
-            dev::InitLedgerConfigFailed() << errinfo_comment("create sealer failed"));
+            bcos::InitLedgerConfigFailed() << errinfo_comment("create sealer failed"));
     }
     // set nodeTimeMaintenance
     m_sealer->consensusEngine()->setNodeTimeMaintenance(m_nodeTimeMaintenance);
@@ -542,7 +542,7 @@ bool Ledger::initSync()
     // raft disable enableSendBlockStatusByTree
     bool enableSendBlockStatusByTree = m_param->mutableSyncParam().enableSendBlockStatusByTree;
     bool enableSendTxsByTree = m_param->mutableSyncParam().enableSendTxsByTree;
-    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "raft") == 0)
+    if (bcos::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "raft") == 0)
     {
         Ledger_LOG(INFO) << LOG_DESC("initLedger: disable send_by_tree when use raft");
         enableSendBlockStatusByTree = false;
@@ -552,8 +552,8 @@ bool Ledger::initSync()
                      << LOG_KV("enableSendBlockStatusByTree", enableSendBlockStatusByTree)
                      << LOG_KV("enableSendTxsByTree", enableSendTxsByTree);
 
-    dev::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::BlockSync);
-    dev::h256 genesisHash = m_blockChain->getBlockByNumber(int64_t(0))->headerHash();
+    bcos::PROTOCOL_ID protocol_id = getGroupProtoclID(m_groupId, ProtocolID::BlockSync);
+    bcos::h256 genesisHash = m_blockChain->getBlockByNumber(int64_t(0))->headerHash();
     auto syncMaster = std::make_shared<SyncMaster>(m_service, m_txPool, m_blockChain,
         m_blockVerifier, protocol_id, m_keyPair.pub(), genesisHash,
         m_param->mutableSyncParam().idleWaitMs, m_param->mutableSyncParam().gossipInterval,
@@ -612,4 +612,4 @@ bool Ledger::initEventLogFilterManager()
     return true;
 }
 }  // namespace ledger
-}  // namespace dev
+}  // namespace bcos

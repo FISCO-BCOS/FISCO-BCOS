@@ -27,7 +27,6 @@
 #include "LedgerParam.h"
 #include "LedgerParamInterface.h"
 #include <libconsensus/Sealer.h>
-#include <libdevcore/Exceptions.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/BlockFactory.h>
 #include <libethcore/Common.h>
@@ -35,12 +34,13 @@
 #include <libp2p/P2PInterface.h>
 #include <libp2p/Service.h>
 #include <libstat/NetworkStatHandler.h>
+#include <libutilities/Exceptions.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/property_tree/ptree.hpp>
 
 #define Ledger_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("LEDGER")
 
-namespace dev
+namespace bcos
 {
 namespace event
 {
@@ -72,8 +72,8 @@ public:
      * ./group${_groupId}.ini, (2) if configFileName is not empty, the configuration path is decided
      * by the param ${configFileName}
      */
-    Ledger(std::shared_ptr<dev::p2p::P2PInterface> service, dev::GROUP_ID const& _groupId,
-        dev::KeyPair const& _keyPair)
+    Ledger(std::shared_ptr<bcos::p2p::P2PInterface> service, bcos::GROUP_ID const& _groupId,
+        bcos::KeyPair const& _keyPair)
       : LedgerInterface(_keyPair), m_service(service), m_groupId(_groupId)
     {
         assert(m_service);
@@ -154,16 +154,16 @@ public:
 
     bool initLedger(std::shared_ptr<LedgerParamInterface> _ledgerParams) override;
 
-    std::shared_ptr<dev::txpool::TxPoolInterface> txPool() const override { return m_txPool; }
-    std::shared_ptr<dev::blockverifier::BlockVerifierInterface> blockVerifier() const override
+    std::shared_ptr<bcos::txpool::TxPoolInterface> txPool() const override { return m_txPool; }
+    std::shared_ptr<bcos::blockverifier::BlockVerifierInterface> blockVerifier() const override
     {
         return m_blockVerifier;
     }
-    std::shared_ptr<dev::blockchain::BlockChainInterface> blockChain() const override
+    std::shared_ptr<bcos::blockchain::BlockChainInterface> blockChain() const override
     {
         return m_blockChain;
     }
-    virtual std::shared_ptr<dev::consensus::ConsensusInterface> consensus() const override
+    virtual std::shared_ptr<bcos::consensus::ConsensusInterface> consensus() const override
     {
         if (m_sealer)
         {
@@ -171,8 +171,8 @@ public:
         }
         return nullptr;
     }
-    std::shared_ptr<dev::sync::SyncInterface> sync() const override { return m_sync; }
-    virtual dev::GROUP_ID const& groupId() const override { return m_groupId; }
+    std::shared_ptr<bcos::sync::SyncInterface> sync() const override { return m_sync; }
+    virtual bcos::GROUP_ID const& groupId() const override { return m_groupId; }
     std::shared_ptr<LedgerParamInterface> getParam() const override { return m_param; }
 
     virtual void setChannelRPCServer(ChannelRPCServer::Ptr channelRPCServer) override
@@ -180,7 +180,7 @@ public:
         m_channelRPCServer = channelRPCServer;
     }
 
-    std::shared_ptr<dev::event::EventLogFilterManager> getEventLogFilterManager() override
+    std::shared_ptr<bcos::event::EventLogFilterManager> getEventLogFilterManager() override
     {
         return m_eventLogFilterManger;
     }
@@ -207,56 +207,56 @@ protected:
     virtual void initQPSLimit();
 
     /// load ini config of group
-    dev::consensus::ConsensusInterface::Ptr createConsensusEngine(
-        dev::PROTOCOL_ID const& _protocolId);
-    dev::eth::BlockFactory::Ptr createBlockFactory();
-    void initPBFTEngine(dev::consensus::Sealer::Ptr _sealer);
-    void initrPBFTEngine(dev::consensus::Sealer::Ptr _sealer);
+    bcos::consensus::ConsensusInterface::Ptr createConsensusEngine(
+        bcos::PROTOCOL_ID const& _protocolId);
+    bcos::eth::BlockFactory::Ptr createBlockFactory();
+    void initPBFTEngine(bcos::consensus::Sealer::Ptr _sealer);
+    void initrPBFTEngine(bcos::consensus::Sealer::Ptr _sealer);
 
 private:
-    void setSDKAllowList(dev::h512s const& _sdkList);
+    void setSDKAllowList(bcos::h512s const& _sdkList);
     /// create PBFTConsensus
-    std::shared_ptr<dev::consensus::Sealer> createPBFTSealer();
+    std::shared_ptr<bcos::consensus::Sealer> createPBFTSealer();
     /// create RaftConsensus
-    std::shared_ptr<dev::consensus::Sealer> createRaftSealer();
+    std::shared_ptr<bcos::consensus::Sealer> createRaftSealer();
 
     bool inline normalrPBFTEnabled()
     {
-        return (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "rpbft") ==
-                   0) &&
+        return (bcos::stringCmpIgnoreCase(
+                    m_param->mutableConsensusParam().consensusType, "rpbft") == 0) &&
                (g_BCOSConfig.version() < V2_6_0);
     }
 
     bool inline vrfBasedrPBFTEnabled()
     {
-        return (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "rpbft") ==
-                   0) &&
+        return (bcos::stringCmpIgnoreCase(
+                    m_param->mutableConsensusParam().consensusType, "rpbft") == 0) &&
                (g_BCOSConfig.version() >= V2_6_0);
     }
 
 protected:
     std::shared_ptr<LedgerParamInterface> m_param = nullptr;
 
-    std::shared_ptr<dev::p2p::P2PInterface> m_service = nullptr;
-    dev::GROUP_ID m_groupId;
-    std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool = nullptr;
-    std::shared_ptr<dev::blockverifier::BlockVerifierInterface> m_blockVerifier = nullptr;
-    std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain = nullptr;
-    std::shared_ptr<dev::consensus::Sealer> m_sealer = nullptr;
-    std::shared_ptr<dev::sync::SyncInterface> m_sync = nullptr;
-    std::shared_ptr<dev::event::EventLogFilterManager> m_eventLogFilterManger = nullptr;
+    std::shared_ptr<bcos::p2p::P2PInterface> m_service = nullptr;
+    bcos::GROUP_ID m_groupId;
+    std::shared_ptr<bcos::txpool::TxPoolInterface> m_txPool = nullptr;
+    std::shared_ptr<bcos::blockverifier::BlockVerifierInterface> m_blockVerifier = nullptr;
+    std::shared_ptr<bcos::blockchain::BlockChainInterface> m_blockChain = nullptr;
+    std::shared_ptr<bcos::consensus::Sealer> m_sealer = nullptr;
+    std::shared_ptr<bcos::sync::SyncInterface> m_sync = nullptr;
+    std::shared_ptr<bcos::event::EventLogFilterManager> m_eventLogFilterManger = nullptr;
     // for network statistic
-    std::shared_ptr<dev::stat::NetworkStatHandler> m_networkStatHandler = nullptr;
+    std::shared_ptr<bcos::stat::NetworkStatHandler> m_networkStatHandler = nullptr;
     // for network bandwidth limitation
-    dev::flowlimit::RateLimiter::Ptr m_networkBandwidthLimiter = nullptr;
+    bcos::flowlimit::RateLimiter::Ptr m_networkBandwidthLimiter = nullptr;
 
-    std::shared_ptr<dev::ledger::DBInitializer> m_dbInitializer = nullptr;
+    std::shared_ptr<bcos::ledger::DBInitializer> m_dbInitializer = nullptr;
     ChannelRPCServer::Ptr m_channelRPCServer;
     std::atomic_bool m_stopped = {false};
 
-    dev::eth::Handler<int64_t> m_handler;
+    bcos::eth::Handler<int64_t> m_handler;
 
-    std::shared_ptr<dev::sync::NodeTimeMaintenance> m_nodeTimeMaintenance;
+    std::shared_ptr<bcos::sync::NodeTimeMaintenance> m_nodeTimeMaintenance;
 };
 }  // namespace ledger
-}  // namespace dev
+}  // namespace bcos

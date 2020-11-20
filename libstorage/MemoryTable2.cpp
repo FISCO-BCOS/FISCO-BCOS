@@ -25,9 +25,9 @@
 #include <arpa/inet.h>
 #include <json/json.h>
 #include <libconfig/GlobalConfigure.h>
-#include <libdevcore/FixedHash.h>
 #include <libdevcrypto/CryptoInterface.h>
 #include <libprecompiled/Common.h>
+#include <libutilities/FixedHash.h>
 #include <tbb/parallel_invoke.h>
 #include <tbb/parallel_sort.h>
 #include <boost/exception/diagnostic_information.hpp>
@@ -38,9 +38,9 @@
 #include <vector>
 
 using namespace std;
-using namespace dev;
-using namespace dev::storage;
-using namespace dev::precompiled;
+using namespace bcos;
+using namespace bcos::storage;
+using namespace bcos::precompiled;
 
 void prepareExit(const std::string& _key)
 {
@@ -329,11 +329,11 @@ int MemoryTable2::remove(
     return 0;
 }
 
-dev::h256 MemoryTable2::hash()
+bcos::h256 MemoryTable2::hash()
 {
     if (m_hashDirty)
     {
-        m_tableData.reset(new dev::storage::TableData());
+        m_tableData.reset(new bcos::storage::TableData());
         if (g_BCOSConfig.version() < V2_2_0)
         {
             dumpWithoutOptimize();
@@ -347,12 +347,12 @@ dev::h256 MemoryTable2::hash()
     return m_hash;
 }
 
-dev::storage::TableData::Ptr MemoryTable2::dumpWithoutOptimize()
+bcos::storage::TableData::Ptr MemoryTable2::dumpWithoutOptimize()
 {
     TIME_RECORD("MemoryTable2 Dump");
     if (m_hashDirty)
     {
-        m_tableData = std::make_shared<dev::storage::TableData>();
+        m_tableData = std::make_shared<bcos::storage::TableData>();
         m_tableData->info = m_tableInfo;
         m_tableData->dirtyEntries = std::make_shared<Entries>();
 
@@ -428,11 +428,11 @@ dev::storage::TableData::Ptr MemoryTable2::dumpWithoutOptimize()
 
         if (g_BCOSConfig.SMCrypto())
         {
-            m_hash = dev::sm3(bR);
+            m_hash = bcos::sm3(bR);
         }
         else
         {
-            m_hash = dev::sha256(bR);
+            m_hash = bcos::sha256(bR);
         }
         m_hashDirty = false;
     }
@@ -488,7 +488,7 @@ std::shared_ptr<std::vector<size_t>> MemoryTable2::genDataOffset(
     return dataOffset;
 }
 
-dev::storage::TableData::Ptr MemoryTable2::dump()
+bcos::storage::TableData::Ptr MemoryTable2::dump()
 {
     // >= v2.2.0
     TIME_RECORD("MemoryTable2 Dump-" + m_tableInfo->name);
@@ -496,7 +496,7 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
     {
         tbb::atomic<size_t> allSize = 0;
 
-        m_tableData = std::make_shared<dev::storage::TableData>();
+        m_tableData = std::make_shared<bcos::storage::TableData>();
         m_tableData->info = m_tableInfo;
         m_tableData->dirtyEntries = std::make_shared<Entries>();
 
@@ -600,15 +600,15 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
             {
                 if (g_BCOSConfig.SMCrypto())
                 {
-                    m_hash = dev::sm3(bR);
+                    m_hash = bcos::sm3(bR);
                 }
                 else
                 {
                     // in previous version(<= 2.4.0), we use sha256(...) to calculate hash of the
                     // data, for now, to keep consistent with transction's implementation, we decide
-                    // to use keccak256(...) to calculate hash of the data. This `else` branch is just
-                    // for compatibility.
-                    m_hash = dev::sha256(bR);
+                    // to use keccak256(...) to calculate hash of the data. This `else` branch is
+                    // just for compatibility.
+                    m_hash = bcos::sha256(bR);
                 }
             }
             else
@@ -622,7 +622,7 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
         }
         else
         {
-            m_hash = dev::h256();
+            m_hash = bcos::h256();
 
             STORAGE_LOG(DEBUG) << "Ignore sort and hash for: " << m_tableInfo->name
                                << " hash: " << m_hash.hex();

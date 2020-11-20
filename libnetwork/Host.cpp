@@ -35,13 +35,12 @@
  * Add send topicSeq
  */
 #include "Host.h"
-#include "Common.h"   // for HOST_LOG
-#include "Session.h"  // for Sessio...
-#include "libdevcore/CommonData.h"
-#include "libdevcore/Guards.h"         // for Guard
-#include "libdevcore/ThreadPool.h"     // for Thread...
+#include "Common.h"                    // for HOST_LOG
+#include "Session.h"                   // for Sessio...
 #include "libnetwork/ASIOInterface.h"  // for ASIOIn...
 #include "libnetwork/SocketFace.h"     // for Socket...
+#include "libutilities/CommonData.h"
+#include "libutilities/ThreadPool.h"  // for Thread...
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
@@ -53,10 +52,10 @@
 #include <thread>
 
 using namespace std;
-using namespace dev;
-using namespace dev::network;
-using namespace dev::eth;
-using namespace dev::crypto;
+using namespace bcos;
+using namespace bcos::network;
+using namespace bcos::eth;
+using namespace bcos::crypto;
 
 /**
  * @brief: accept connection requests, maily include procedures:
@@ -386,7 +385,7 @@ void Host::start()
         m_run = true;
         m_asioInterface->init(m_listenHost, m_listenPort);
         m_hostThread = std::make_shared<std::thread>([&] {
-            dev::pthread_setThreadName("io_service");
+            bcos::pthread_setThreadName("io_service");
             while (haveNetwork())
             {
                 try

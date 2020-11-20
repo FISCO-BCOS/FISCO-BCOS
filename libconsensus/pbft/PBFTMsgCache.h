@@ -25,11 +25,10 @@
 
 #pragma once
 #include <libconsensus/pbft/Common.h>
-#include <libdevcore/Common.h>
-#include <libdevcore/FixedHash.h>
-#include <libdevcore/Guards.h>
+#include <libutilities/Common.h>
+#include <libutilities/FixedHash.h>
 #include <unordered_map>
-namespace dev
+namespace bcos
 {
 namespace consensus
 {
@@ -211,4 +210,4 @@ private:
     mutable SharedMutex x_broadCastKeyCache;
 };
 }  // namespace consensus
-}  // namespace dev
+}  // namespace bcos

@@ -25,7 +25,7 @@
 #pragma once
 #include "Common.h"
 
-namespace dev
+namespace bcos
 {
 namespace consensus
 {
@@ -48,4 +48,4 @@ public:
     PBFTMsgPacket::Ptr createPBFTMsgPacket() override { return std::make_shared<OPBFTMsgPacket>(); }
 };
 }  // namespace consensus
-}  // namespace dev
+}  // namespace bcos

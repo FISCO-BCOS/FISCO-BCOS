@@ -26,11 +26,11 @@
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libtxpool/FakeBlockChain.h>
 #include <boost/test/unit_test.hpp>
-using namespace dev;
-using namespace dev::eth;
-using namespace dev::txpool;
+using namespace bcos;
+using namespace bcos::eth;
+using namespace bcos::txpool;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -50,7 +50,7 @@ public:
             tx->setNonce(utcTime() + index);
             tx->setBlockLimit(200);
             std::shared_ptr<crypto::Signature> sig =
-                dev::crypto::Sign(fakedBlock->m_keyPair, tx->hash(WithoutSignature));
+                bcos::crypto::Sign(fakedBlock->m_keyPair, tx->hash(WithoutSignature));
             tx->updateSignature(sig);
             index++;
         }
@@ -200,4 +200,4 @@ BOOST_AUTO_TEST_CASE(testEncodeFetchMissedTxs)
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

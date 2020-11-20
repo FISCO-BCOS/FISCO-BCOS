@@ -27,7 +27,7 @@ namespace rocksdb
 {
 class DB;
 }
-namespace dev
+namespace bcos
 {
 namespace storage
 {
@@ -50,4 +50,4 @@ private:
     std::pair<std::string, Storage::Ptr> m_cache;
 };
 }  // namespace storage
-}  // namespace dev
+}  // namespace bcos

@@ -22,7 +22,7 @@
 
 #include "libprecompiled/Precompiled.h"
 
-namespace dev
+namespace bcos
 {
 namespace storage
 {
@@ -51,16 +51,16 @@ public:
 
     std::string toString() override;
 
-    PrecompiledExecResult::Ptr call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+    PrecompiledExecResult::Ptr call(std::shared_ptr<bcos::blockverifier::ExecutiveContext> context,
         bytesConstRef param, Address const& origin = Address(),
         Address const& _sender = Address()) override;
 
-    void setMemoryTableFactory(std::shared_ptr<dev::storage::TableFactory> memoryTableFactory)
+    void setMemoryTableFactory(std::shared_ptr<bcos::storage::TableFactory> memoryTableFactory)
     {
         m_memoryTableFactory = memoryTableFactory;
     }
 
-    std::shared_ptr<dev::storage::TableFactory> getMemoryTableFactory()
+    std::shared_ptr<bcos::storage::TableFactory> getMemoryTableFactory()
     {
         return m_memoryTableFactory;
     }
@@ -68,9 +68,9 @@ public:
     h256 hash();
 
 private:
-    std::shared_ptr<dev::storage::TableFactory> m_memoryTableFactory;
+    std::shared_ptr<bcos::storage::TableFactory> m_memoryTableFactory;
 };
 
 }  // namespace precompiled
 
-}  // namespace dev
+}  // namespace bcos

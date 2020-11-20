@@ -21,13 +21,13 @@
  * @date: 2019-09-19
  */
 #pragma once
-#include <libdevcore/TreeTopology.h>
+#include <libutilities/TreeTopology.h>
 
 #define SYNCTREE_LOG(_OBV)                                                 \
     LOG(_OBV) << LOG_BADGE("SYNCTREE") << LOG_KV("nodeIndex", m_nodeIndex) \
               << LOG_KV("consIndex", m_consIndex) << LOG_KV("nodeId", m_nodeId.abridged())
 
-namespace dev
+namespace bcos
 {
 namespace sync
 {
@@ -35,33 +35,34 @@ class SyncTreeTopology : public TreeTopology
 {
 public:
     using Ptr = std::shared_ptr<SyncTreeTopology>;
-    SyncTreeTopology(dev::h512 const& _nodeId, unsigned const& _treeWidth = 3)
+    SyncTreeTopology(bcos::h512 const& _nodeId, unsigned const& _treeWidth = 3)
       : TreeTopology(_nodeId, _treeWidth)
     {
-        m_nodeList = std::make_shared<dev::h512s>();
+        m_nodeList = std::make_shared<bcos::h512s>();
     }
 
     virtual ~SyncTreeTopology() {}
     // update corresponding info when the nodes changed
-    virtual void updateNodeListInfo(dev::h512s const& _nodeList);
+    virtual void updateNodeListInfo(bcos::h512s const& _nodeList);
     // consensus info must be updated with nodeList
-    virtual void updateAllNodeInfo(dev::h512s const& _consensusNodes, dev::h512s const& _nodeList);
+    virtual void updateAllNodeInfo(
+        bcos::h512s const& _consensusNodes, bcos::h512s const& _nodeList);
     // select the nodes by tree topology
-    virtual std::shared_ptr<dev::h512s> selectNodesForBlockSync(
-        std::shared_ptr<std::set<dev::h512>> _peers);
+    virtual std::shared_ptr<bcos::h512s> selectNodesForBlockSync(
+        std::shared_ptr<std::set<bcos::h512>> _peers);
 
 protected:
-    bool getNodeIDByIndex(dev::h512& _nodeID, ssize_t const& _nodeIndex) const override;
+    bool getNodeIDByIndex(bcos::h512& _nodeID, ssize_t const& _nodeIndex) const override;
     // update the tree-topology range the nodes located in
     void updateStartAndEndIndex() override;
 
     // select the child nodes by tree
-    void recursiveSelectChildNodes(std::shared_ptr<dev::h512s> _selectedNodeList,
-        ssize_t const& _parentIndex, std::shared_ptr<std::set<dev::h512>> _peers,
+    void recursiveSelectChildNodes(std::shared_ptr<bcos::h512s> _selectedNodeList,
+        ssize_t const& _parentIndex, std::shared_ptr<std::set<bcos::h512>> _peers,
         int64_t const& _startIndex) override;
     // select the parent nodes by tree
-    void selectParentNodes(std::shared_ptr<dev::h512s> _selectedNodeList,
-        std::shared_ptr<std::set<dev::h512>> _peers, int64_t const& _nodeIndex,
+    void selectParentNodes(std::shared_ptr<bcos::h512s> _selectedNodeList,
+        std::shared_ptr<std::set<bcos::h512>> _peers, int64_t const& _nodeIndex,
         int64_t const& _startIndex, bool const& _selectAll = false) override;
 
 private:
@@ -70,9 +71,9 @@ private:
 protected:
     mutable Mutex m_mutex;
     // the nodeList include both the consensus nodes and the observer nodes
-    std::shared_ptr<dev::h512s> m_nodeList;
+    std::shared_ptr<bcos::h512s> m_nodeList;
 
     std::atomic<int64_t> m_nodeIndex = {0};
 };
 }  // namespace sync
-}  // namespace dev
+}  // namespace bcos

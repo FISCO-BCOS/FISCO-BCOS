@@ -24,7 +24,7 @@
 #pragma once
 #include "Common.h"
 #include "EventLogFilter.h"
-#include <libdevcore/Worker.h>
+#include <libutilities/Worker.h>
 #include <atomic>
 
 #define MAX_BLOCK_PER_PROCESS (3)
@@ -34,7 +34,7 @@ namespace Json
 class Value;
 }
 
-namespace dev
+namespace bcos
 {
 namespace blockchain
 {
@@ -51,7 +51,7 @@ public:
 
 public:
     // constructor function
-    EventLogFilterManager(std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
+    EventLogFilterManager(std::shared_ptr<bcos::blockchain::BlockChainInterface> _blockChain,
         int64_t _maxBlockRange = -1, int64_t _maxBlockPerLoopFilter = 10)
       : Worker("eventLog", 0),
         m_blockChain(_blockChain),
@@ -64,7 +64,7 @@ public:
 
 public:
     // m_blockChain
-    std::shared_ptr<dev::blockchain::BlockChainInterface> getBlockChain() const
+    std::shared_ptr<bcos::blockchain::BlockChainInterface> getBlockChain() const
     {
         return m_blockChain;
     }
@@ -92,7 +92,8 @@ public:
         std::function<int(GROUP_ID _groupId)> _sessionCheckerCallback);
 
     // delete EventLogFilter in m_filters by client json request
-    int32_t cancelEventLogFilterByRequest(const EventLogFilterParams::Ptr _params, uint32_t _version);
+    int32_t cancelEventLogFilterByRequest(
+        const EventLogFilterParams::Ptr _params, uint32_t _version);
 
 public:
     bool isErrorStatus(filter_status status)
@@ -129,7 +130,7 @@ private:
     // the count of EventLogFilter to be removed in m_filters, reduce the range of lock
     std::atomic<uint64_t> m_waitCancelCount{0};
     // the blockchain of this EventLogFilterManager own to
-    std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
+    std::shared_ptr<bcos::blockchain::BlockChainInterface> m_blockChain;
     //  max block range should be permited
     // | startBlock  < ------ range -------- >  blockNumber |
     int64_t m_maxBlockRange;
@@ -139,4 +140,4 @@ private:
     bool m_isInit{false};
 };
 }  // namespace event
-}  // namespace dev
+}  // namespace bcos

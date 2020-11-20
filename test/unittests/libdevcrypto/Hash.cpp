@@ -21,14 +21,14 @@
  */
 
 #include "libdevcrypto/CryptoInterface.h"
-#include <libdevcore/Assertions.h>
-#include <libdevcore/CommonJS.h>
+#include <libutilities/Assertions.h>
+#include <libutilities/CommonJS.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
 
-using namespace dev;
-namespace dev
+using namespace bcos;
+namespace bcos
 {
 namespace test
 {
@@ -43,7 +43,8 @@ BOOST_AUTO_TEST_CASE(SM_testEmptyKeccak256)
     BOOST_CHECK_EQUAL(
         ts, std::string("afe4ccac5ab7d52bcae36373676215368baf52d3905e1fecbe369cc120e97628"));
 
-    h256 emptyKeccak256(fromHex("1ab21d8355cfa17f8e61194831e81a8f22bec8c728fefb747ed035eb5082aa2b"));
+    h256 emptyKeccak256(
+        fromHex("1ab21d8355cfa17f8e61194831e81a8f22bec8c728fefb747ed035eb5082aa2b"));
     BOOST_REQUIRE_EQUAL(emptyKeccak256, EmptyHash);
 }
 
@@ -120,7 +121,8 @@ BOOST_AUTO_TEST_CASE(testEmptyKeccak256)
     BOOST_CHECK_EQUAL(
         ts, std::string("6377c7e66081cb65e473c1b95db5195a27d04a7108b468890224bedbe1a8a6eb"));
 
-    h256 emptyKeccak256(fromHex("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"));
+    h256 emptyKeccak256(
+        fromHex("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"));
     BOOST_REQUIRE_EQUAL(emptyKeccak256, EmptyHash);
 }
 
@@ -183,4 +185,4 @@ BOOST_AUTO_TEST_CASE(testRipemd160)
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

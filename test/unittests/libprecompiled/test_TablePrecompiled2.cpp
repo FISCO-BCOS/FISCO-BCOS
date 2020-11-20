@@ -27,21 +27,21 @@
 #include <libstorage/Table.h>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev;
+using namespace bcos;
 using namespace std;
-using namespace dev::blockverifier;
-using namespace dev::precompiled;
-using namespace dev::storage;
+using namespace bcos::blockverifier;
+using namespace bcos::precompiled;
+using namespace bcos::storage;
 
 namespace test_TablePrecompiled2
 {
-class MockPrecompiledEngine : public dev::blockverifier::ExecutiveContext
+class MockPrecompiledEngine : public bcos::blockverifier::ExecutiveContext
 {
 public:
     virtual ~MockPrecompiledEngine() {}
 };
 
-class MockMemoryDB : public dev::storage::MemoryTable2
+class MockMemoryDB : public bcos::storage::MemoryTable2
 {
 public:
     virtual ~MockMemoryDB() {}
@@ -53,7 +53,7 @@ struct TablePrecompiledFixture2
     {
         context = std::make_shared<MockPrecompiledEngine>();
         context->setMemoryTableFactory(std::make_shared<storage::MemoryTableFactory2>());
-        tablePrecompiled = std::make_shared<dev::precompiled::TablePrecompiled>();
+        tablePrecompiled = std::make_shared<bcos::precompiled::TablePrecompiled>();
         m_table = std::make_shared<MockMemoryDB>();
         TableInfo::Ptr info = std::make_shared<TableInfo>();
         info->fields.emplace_back(ID_FIELD);
@@ -66,16 +66,16 @@ struct TablePrecompiledFixture2
             [&](Table::Ptr, Change::Kind, string const&, vector<Change::Record>&) {});
         tablePrecompiled->setTable(m_table);
 
-        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
+        auto precompiledGasFactory = std::make_shared<bcos::precompiled::PrecompiledGasFactory>(0);
         auto precompiledExecResultFactory =
-            std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+            std::make_shared<bcos::precompiled::PrecompiledExecResultFactory>();
         precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
         tablePrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     }
 
     ~TablePrecompiledFixture2() {}
 
-    dev::precompiled::TablePrecompiled::Ptr tablePrecompiled;
+    bcos::precompiled::TablePrecompiled::Ptr tablePrecompiled;
     storage::Table::Ptr m_table;
     ExecutiveContext::Ptr context;
     BlockInfo blockInfo;

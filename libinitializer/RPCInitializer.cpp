@@ -24,17 +24,17 @@
 #include "libblockchain/BlockChainInterface.h"
 #include "libchannelserver/ChannelRPCServer.h"
 #include "libchannelserver/ChannelServer.h"
-#include "libdevcore/Common.h"                    // for byte
 #include "libeventfilter/EventLogFilterParams.h"  // for eventfilter
 #include "libinitializer/Common.h"
 #include "libledger/LedgerManager.h"
 #include "librpc/Rpc.h"  // for Rpc
 #include "librpc/SafeHttpServer.h"
+#include "libutilities/Common.h"  // for byte
 #include <libstat/ChannelNetworkStatHandler.h>
 
-using namespace dev;
-using namespace dev::initializer;
-using namespace dev::channel;
+using namespace bcos;
+using namespace bcos::initializer;
+using namespace bcos::channel;
 
 void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt)
 {
@@ -51,8 +51,7 @@ void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt
     if (!isValidPort(listenPort) || !isValidPort(httpListenPort))
     {
         ERROR_OUTPUT << LOG_BADGE("RPCInitializer")
-                     << LOG_DESC(
-                            "initChannelRPCServer failed! Invalid ListenPort for RPC!")
+                     << LOG_DESC("initChannelRPCServer failed! Invalid ListenPort for RPC!")
                      << std::endl;
         exit(1);
     }
@@ -78,13 +77,13 @@ void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt
     }
     auto ioService = std::make_shared<boost::asio::io_service>();
 
-    auto server = std::make_shared<dev::channel::ChannelServer>();
+    auto server = std::make_shared<bcos::channel::ChannelServer>();
     server->setIOService(ioService);
     server->setSSLContext(m_sslContext);
     server->setEnableSSL(true);
     server->setBind(listenIP, listenPort);
     server->setCheckCertIssuer(checkCertIssuer);
-    server->setMessageFactory(std::make_shared<dev::channel::ChannelMessageFactory>());
+    server->setMessageFactory(std::make_shared<bcos::channel::ChannelMessageFactory>());
 
     m_channelRPCServer->setChannelServer(server);
 
@@ -162,20 +161,20 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
                 std::function<int(GROUP_ID _groupId)> _sessionCheckerCallback,
                 std::function<bool(GROUP_ID _groupId)> _permissionChecker) -> int32_t {
                 auto params =
-                    dev::event::EventLogFilterParams::buildEventLogFilterParamsObject(_json);
+                    bcos::event::EventLogFilterParams::buildEventLogFilterParamsObject(_json);
                 if (!params)
                 {  // json parser failed
-                    return dev::event::ResponseCode::INVALID_REQUEST;
+                    return bcos::event::ResponseCode::INVALID_REQUEST;
                 }
 
                 auto ledger = getLedgerManager()->ledger(params->getGroupID());
                 if (!ledger)
                 {
-                    return dev::event::ResponseCode::GROUP_NOT_EXIST;
+                    return bcos::event::ResponseCode::GROUP_NOT_EXIST;
                 }
                 if (!_permissionChecker(params->getGroupID()))
                 {
-                    return dev::event::ResponseCode::SDK_PERMISSION_DENIED;
+                    return bcos::event::ResponseCode::SDK_PERMISSION_DENIED;
                 }
                 return ledger->getEventLogFilterManager()->addEventLogFilterByRequest(
                     params, _version, _respCallback, _sessionCheckerCallback);
@@ -184,27 +183,28 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
         // unregister event log filter callback
         m_channelRPCServer->setEventCancelFilterCallback(
             [this](const std::string& _json, uint32_t _version,
-            std::function<bool(GROUP_ID _groupId)> _permissionChecker) -> int32_t {
+                std::function<bool(GROUP_ID _groupId)> _permissionChecker) -> int32_t {
                 auto params =
-                    dev::event::EventLogFilterParams::buildEventLogFilterParamsObject(_json);
+                    bcos::event::EventLogFilterParams::buildEventLogFilterParamsObject(_json);
                 if (!params)
                 {  // json parser failed
-                    return dev::event::ResponseCode::INVALID_REQUEST;
+                    return bcos::event::ResponseCode::INVALID_REQUEST;
                 }
 
                 auto ledger = getLedgerManager()->ledger(params->getGroupID());
                 if (!ledger)
                 {
-                    return dev::event::ResponseCode::GROUP_NOT_EXIST;
+                    return bcos::event::ResponseCode::GROUP_NOT_EXIST;
                 }
                 if (!_permissionChecker(params->getGroupID()))
                 {
-                    return dev::event::ResponseCode::SDK_PERMISSION_DENIED;
+                    return bcos::event::ResponseCode::SDK_PERMISSION_DENIED;
                 }
-                return ledger->getEventLogFilterManager()->cancelEventLogFilterByRequest(params, _version);
+                return ledger->getEventLogFilterManager()->cancelEventLogFilterByRequest(
+                    params, _version);
             });
 
-        auto channelRPCServerWeak = std::weak_ptr<dev::ChannelRPCServer>(m_channelRPCServer);
+        auto channelRPCServerWeak = std::weak_ptr<bcos::ChannelRPCServer>(m_channelRPCServer);
         m_p2pService->setCallbackFuncForTopicVerify(
             [channelRPCServerWeak](const std::string& _1, const std::string& _2) {
                 auto channelRPCServer = channelRPCServerWeak.lock();
@@ -239,8 +239,7 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
     catch (std::exception& e)
     {
         // TODO: catch in Initializer::init, delete this catch
-        INITIALIZER_LOG(ERROR) << LOG_BADGE("RPCInitializer")
-                               << LOG_DESC("init RPC failed")
+        INITIALIZER_LOG(ERROR) << LOG_BADGE("RPCInitializer") << LOG_DESC("init RPC failed")
                                << LOG_KV("check jsonrpc_listen_port", httpListenPort)
                                << LOG_KV("check jsonrpc_IP", listenIP)
                                << LOG_KV("EINFO", boost::diagnostic_information(e));
@@ -253,16 +252,16 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
     }
 }
 
-dev::stat::ChannelNetworkStatHandler::Ptr RPCInitializer::createNetWorkStatHandler(
+bcos::stat::ChannelNetworkStatHandler::Ptr RPCInitializer::createNetWorkStatHandler(
     boost::property_tree::ptree const& _pt)
 {
-    auto networkStatHandler = std::make_shared<dev::stat::ChannelNetworkStatHandler>("SDK");
+    auto networkStatHandler = std::make_shared<bcos::stat::ChannelNetworkStatHandler>("SDK");
     // get flush interval in seconds
     int64_t flushInterval = _pt.get<int64_t>("log.stat_flush_interval", 60);
     if (flushInterval <= 0)
     {
         BOOST_THROW_EXCEPTION(
-            dev::InvalidConfig() << errinfo_comment(
+            bcos::InvalidConfig() << errinfo_comment(
                 "init network-stat-handler failed, log.stat_flush_interval must be positive!"));
     }
     INITIALIZER_LOG(DEBUG) << LOG_DESC("createNetWorkStatHandler")
@@ -272,10 +271,10 @@ dev::stat::ChannelNetworkStatHandler::Ptr RPCInitializer::createNetWorkStatHandl
     return networkStatHandler;
 }
 
-dev::flowlimit::RPCQPSLimiter::Ptr RPCInitializer::createQPSLimiter(
+bcos::flowlimit::RPCQPSLimiter::Ptr RPCInitializer::createQPSLimiter(
     boost::property_tree::ptree const& _pt)
 {
-    auto qpsLimiter = std::make_shared<dev::flowlimit::RPCQPSLimiter>();
+    auto qpsLimiter = std::make_shared<bcos::flowlimit::RPCQPSLimiter>();
     int64_t maxQPS = _pt.get<int64_t>("flow_control.limit_req", INT64_MAX);
     // the limit_req has not been setted
     if (maxQPS == INT64_MAX)
@@ -287,7 +286,7 @@ dev::flowlimit::RPCQPSLimiter::Ptr RPCInitializer::createQPSLimiter(
     if (maxQPS <= 0)
     {
         BOOST_THROW_EXCEPTION(
-            dev::InvalidConfig() << errinfo_comment(
+            bcos::InvalidConfig() << errinfo_comment(
                 "createQPSLimiter failed, flow_control.limit_req must be positive!"));
     }
     INITIALIZER_LOG(DEBUG) << LOG_DESC("createQPSLimiter") << LOG_KV("maxQPS", maxQPS);
@@ -295,7 +294,7 @@ dev::flowlimit::RPCQPSLimiter::Ptr RPCInitializer::createQPSLimiter(
     return qpsLimiter;
 }
 
-dev::flowlimit::RateLimiter::Ptr RPCInitializer::createNetworkBandwidthLimit(
+bcos::flowlimit::RateLimiter::Ptr RPCInitializer::createNetworkBandwidthLimit(
     boost::property_tree::ptree const& _pt)
 {
     auto outGoingBandwidthLimit =
@@ -310,14 +309,14 @@ dev::flowlimit::RateLimiter::Ptr RPCInitializer::createNetworkBandwidthLimit(
     if (outGoingBandwidthLimit <= (double)(-0.0) ||
         outGoingBandwidthLimit >= (double)MAX_VALUE_IN_Mb)
     {
-        BOOST_THROW_EXCEPTION(dev::InvalidConfig() << errinfo_comment(
+        BOOST_THROW_EXCEPTION(bcos::InvalidConfig() << errinfo_comment(
                                   "createNetworkBandwidthLimit for channel failed, "
                                   "flow_control.limit_req must be larger than 0 and smaller than " +
                                   std::to_string(MAX_VALUE_IN_Mb)));
     }
     outGoingBandwidthLimit *= 1024 * 1024 / 8;
     auto bandwidthLimiter =
-        std::make_shared<dev::flowlimit::RateLimiter>((int64_t)outGoingBandwidthLimit);
+        std::make_shared<bcos::flowlimit::RateLimiter>((int64_t)outGoingBandwidthLimit);
     bandwidthLimiter->setMaxPermitsSize(g_BCOSConfig.c_maxPermitsSize);
     INITIALIZER_LOG(INFO) << LOG_BADGE("createNetworkBandwidthLimit")
                           << LOG_KV("outGoingBandwidthLimit(Bytes)", outGoingBandwidthLimit)

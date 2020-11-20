@@ -23,15 +23,15 @@
 
 
 #include "MPTStateFactory.h"
-using namespace dev;
-using namespace dev::mptstate;
-using namespace dev::eth;
-using namespace dev::executive;
+using namespace bcos;
+using namespace bcos::mptstate;
+using namespace bcos::eth;
+using namespace bcos::executive;
 
 std::shared_ptr<StateFace> MPTStateFactory::getState(
-    h256 const& _root, std::shared_ptr<dev::storage::TableFactory>)
+    h256 const& _root, std::shared_ptr<bcos::storage::TableFactory>)
 {
-    if (_root == dev::h256())
+    if (_root == bcos::h256())
     {
         auto mptState = std::make_shared<MPTState>(m_accountStartNonce, m_db, BaseState::Empty);
 

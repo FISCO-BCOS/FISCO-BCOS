@@ -22,16 +22,16 @@
  */
 #include <iostream>
 
-#include <libdevcore/Assertions.h>
-#include <libdevcore/Exceptions.h>
 #include <libethcore/Exceptions.h>
+#include <libutilities/Assertions.h>
+#include <libutilities/Exceptions.h>
 #include <test/tools/libutils/Common.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev;
-using namespace dev::eth;
-namespace dev
+using namespace bcos;
+using namespace bcos::eth;
+namespace bcos
 {
 namespace test
 {
@@ -136,4 +136,4 @@ BOOST_AUTO_TEST_CASE(testEthcoreErrorInfo)
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

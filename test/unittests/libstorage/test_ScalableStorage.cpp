@@ -19,8 +19,8 @@
 #include "libstorage/ScalableStorage.h"
 #include <boost/test/unit_test.hpp>
 
-using namespace dev;
-using namespace dev::storage;
+using namespace bcos;
+using namespace bcos::storage;
 
 namespace test_ScalableStorage
 {
@@ -72,8 +72,8 @@ BOOST_AUTO_TEST_CASE(commit)
     h256 h(0x01);
     int num = 1;
     h256 blockHash(0x11231);
-    std::vector<dev::storage::TableData::Ptr> datas;
-    dev::storage::TableData::Ptr tableData = std::make_shared<dev::storage::TableData>();
+    std::vector<bcos::storage::TableData::Ptr> datas;
+    bcos::storage::TableData::Ptr tableData = std::make_shared<bcos::storage::TableData>();
     tableData->info->name = "t_test";
     tableData->info->key = "Name";
     tableData->info->fields.push_back("id");
@@ -100,8 +100,8 @@ BOOST_AUTO_TEST_CASE(archiveData)
     scalableStorage->setStorageFactory(storageFactory);
     h256 h(0x01);
     int num = 1;
-    std::vector<dev::storage::TableData::Ptr> datas;
-    dev::storage::TableData::Ptr tableData = std::make_shared<dev::storage::TableData>();
+    std::vector<bcos::storage::TableData::Ptr> datas;
+    bcos::storage::TableData::Ptr tableData = std::make_shared<bcos::storage::TableData>();
     tableData->info->name = SYS_HASH_2_BLOCK;
     tableData->info->key = "Name";
     tableData->info->fields.push_back("id");
@@ -135,8 +135,8 @@ BOOST_AUTO_TEST_CASE(exception)
 {
     scalableStorage->setRemoteStorage(nullptr);
     int num = 1;
-    std::vector<dev::storage::TableData::Ptr> datas;
-    dev::storage::TableData::Ptr tableData = std::make_shared<dev::storage::TableData>();
+    std::vector<bcos::storage::TableData::Ptr> datas;
+    bcos::storage::TableData::Ptr tableData = std::make_shared<bcos::storage::TableData>();
     tableData->info->name = "e";
     tableData->info->key = "Name";
     tableData->info->fields.push_back("id");

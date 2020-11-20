@@ -22,13 +22,13 @@
 #include <libprecompiled/ConditionPrecompiled.h>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev;
-using namespace dev::precompiled;
-using namespace dev::blockverifier;
+using namespace bcos;
+using namespace bcos::precompiled;
+using namespace bcos::blockverifier;
 
 namespace test_ConditionPrecompiled
 {
-class MockPrecompiledEngine : public dev::blockverifier::ExecutiveContext
+class MockPrecompiledEngine : public bcos::blockverifier::ExecutiveContext
 {
 public:
     virtual ~MockPrecompiledEngine() {}
@@ -39,23 +39,23 @@ struct ConditionPrecompiledFixture
     ConditionPrecompiledFixture()
     {
         context = std::make_shared<MockPrecompiledEngine>();
-        conditionPrecompiled = std::make_shared<dev::precompiled::ConditionPrecompiled>();
+        conditionPrecompiled = std::make_shared<bcos::precompiled::ConditionPrecompiled>();
         auto condition = std::make_shared<storage::Condition>();
         conditionPrecompiled->setPrecompiledEngine(context);
         conditionPrecompiled->setCondition(condition);
 
-        precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
+        precompiledGasFactory = std::make_shared<bcos::precompiled::PrecompiledGasFactory>(0);
         precompiledExecResultFactory =
-            std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+            std::make_shared<bcos::precompiled::PrecompiledExecResultFactory>();
         precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
         conditionPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     }
 
     PrecompiledGas::Ptr createGasPricer() { return precompiledGasFactory->createPrecompiledGas(); }
 
-    dev::precompiled::ConditionPrecompiled::Ptr createConditionPrecompiled()
+    bcos::precompiled::ConditionPrecompiled::Ptr createConditionPrecompiled()
     {
-        auto conditionPrecompiled = std::make_shared<dev::precompiled::ConditionPrecompiled>();
+        auto conditionPrecompiled = std::make_shared<bcos::precompiled::ConditionPrecompiled>();
         auto condition = std::make_shared<storage::Condition>();
         conditionPrecompiled->setPrecompiledEngine(context);
         conditionPrecompiled->setCondition(condition);
@@ -64,10 +64,10 @@ struct ConditionPrecompiledFixture
     }
     ~ConditionPrecompiledFixture() {}
 
-    dev::precompiled::ConditionPrecompiled::Ptr conditionPrecompiled;
+    bcos::precompiled::ConditionPrecompiled::Ptr conditionPrecompiled;
     ExecutiveContext::Ptr context;
-    dev::precompiled::PrecompiledGasFactory::Ptr precompiledGasFactory;
-    dev::precompiled::PrecompiledExecResultFactory::Ptr precompiledExecResultFactory;
+    bcos::precompiled::PrecompiledGasFactory::Ptr precompiledGasFactory;
+    bcos::precompiled::PrecompiledExecResultFactory::Ptr precompiledExecResultFactory;
 };
 
 BOOST_FIXTURE_TEST_SUITE(ConditionPrecompiled, ConditionPrecompiledFixture)
@@ -108,7 +108,7 @@ BOOST_AUTO_TEST_CASE(call)
     in = abi.abiIn("limit(int256,int256)", u256(2), u256(3));
     conditionPrecompiled->call(context, bytesConstRef(&in));
     // test EQ(string, address)
-    dev::VERSION orgVersionNumber = g_BCOSConfig.version();
+    bcos::VERSION orgVersionNumber = g_BCOSConfig.version();
     std::string orgSupportedVersion = g_BCOSConfig.supportedVersion();
 
     // set supported version to v2.7.0

@@ -26,10 +26,10 @@
 #include <libethcore/Transaction.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
-using namespace dev;
-using namespace dev::eth;
+using namespace bcos;
+using namespace bcos::eth;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -92,4 +92,4 @@ BOOST_AUTO_TEST_CASE(testExceptionCases)
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

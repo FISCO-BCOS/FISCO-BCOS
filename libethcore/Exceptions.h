@@ -26,10 +26,10 @@
 #pragma once
 
 #include "Common.h"
-#include <libdevcore/Common.h>
-#include <libdevcore/Exceptions.h>
+#include <libutilities/Common.h>
+#include <libutilities/Exceptions.h>
 
-namespace dev
+namespace bcos
 {
 namespace eth
 {
@@ -43,61 +43,61 @@ using errinfo_importResult = boost::error_info<struct tag_importResult, ImportRe
 using BadFieldError = boost::tuple<errinfo_field, errinfo_data>;
 
 /// gas related exceptions
-DEV_SIMPLE_EXCEPTION(OutOfGasBase);
-DEV_SIMPLE_EXCEPTION(OutOfGasIntrinsic);
-DEV_SIMPLE_EXCEPTION(NotEnoughCash);
-DEV_SIMPLE_EXCEPTION(GasPriceTooLow);
-DEV_SIMPLE_EXCEPTION(BlockGasLimitReached);
-DEV_SIMPLE_EXCEPTION(TooMuchGasUsed);
-DEV_SIMPLE_EXCEPTION(InvalidGasUsed);
-DEV_SIMPLE_EXCEPTION(InvalidGasLimit);
+DERIVE_BCOS_EXCEPTION(OutOfGasBase);
+DERIVE_BCOS_EXCEPTION(OutOfGasIntrinsic);
+DERIVE_BCOS_EXCEPTION(NotEnoughCash);
+DERIVE_BCOS_EXCEPTION(GasPriceTooLow);
+DERIVE_BCOS_EXCEPTION(BlockGasLimitReached);
+DERIVE_BCOS_EXCEPTION(TooMuchGasUsed);
+DERIVE_BCOS_EXCEPTION(InvalidGasUsed);
+DERIVE_BCOS_EXCEPTION(InvalidGasLimit);
 
 /// DB related exceptions
-DEV_SIMPLE_EXCEPTION(NotEnoughAvailableSpace);
-DEV_SIMPLE_EXCEPTION(ExtraDataTooBig);
-DEV_SIMPLE_EXCEPTION(ExtraDataIncorrect);
-DEV_SIMPLE_EXCEPTION(DatabaseAlreadyOpen);
-DEV_SIMPLE_EXCEPTION(PermissionDenied);
+DERIVE_BCOS_EXCEPTION(NotEnoughAvailableSpace);
+DERIVE_BCOS_EXCEPTION(ExtraDataTooBig);
+DERIVE_BCOS_EXCEPTION(ExtraDataIncorrect);
+DERIVE_BCOS_EXCEPTION(DatabaseAlreadyOpen);
+DERIVE_BCOS_EXCEPTION(PermissionDenied);
 
 /// transaction releated exceptions
-DEV_SIMPLE_EXCEPTION(InvalidTransactionFormat);
-DEV_SIMPLE_EXCEPTION(TransactionIsUnsigned);
-DEV_SIMPLE_EXCEPTION(TransactionRefused);
-DEV_SIMPLE_EXCEPTION(TransactionAlreadyInChain);
-DEV_SIMPLE_EXCEPTION(InvalidTransaction);
-DEV_SIMPLE_EXCEPTION(P2pEnqueueTransactionFailed);
+DERIVE_BCOS_EXCEPTION(InvalidTransactionFormat);
+DERIVE_BCOS_EXCEPTION(TransactionIsUnsigned);
+DERIVE_BCOS_EXCEPTION(TransactionRefused);
+DERIVE_BCOS_EXCEPTION(TransactionAlreadyInChain);
+DERIVE_BCOS_EXCEPTION(InvalidTransaction);
+DERIVE_BCOS_EXCEPTION(P2pEnqueueTransactionFailed);
 
 /// state trie related
-DEV_SIMPLE_EXCEPTION(InvalidTransactionsRoot);
-DEV_SIMPLE_EXCEPTION(InvalidReceiptsStateRoot);
-DEV_SIMPLE_EXCEPTION(InvalidAccountStartNonceInState);
-DEV_SIMPLE_EXCEPTION(IncorrectAccountStartNonceInState);
+DERIVE_BCOS_EXCEPTION(InvalidTransactionsRoot);
+DERIVE_BCOS_EXCEPTION(InvalidReceiptsStateRoot);
+DERIVE_BCOS_EXCEPTION(InvalidAccountStartNonceInState);
+DERIVE_BCOS_EXCEPTION(IncorrectAccountStartNonceInState);
 
 /// block && block header related
-DEV_SIMPLE_EXCEPTION(InvalidParentHash);
-DEV_SIMPLE_EXCEPTION(InvalidNumber);
-DEV_SIMPLE_EXCEPTION(UnknownParent);
-DEV_SIMPLE_EXCEPTION(InvalidBlockFormat);
-DEV_SIMPLE_EXCEPTION(InvalidBlockHeaderItemCount);
-DEV_SIMPLE_EXCEPTION(InvalidBlockWithBadStateOrReceipt);
-DEV_SIMPLE_EXCEPTION(ErrorBlockHash);
+DERIVE_BCOS_EXCEPTION(InvalidParentHash);
+DERIVE_BCOS_EXCEPTION(InvalidNumber);
+DERIVE_BCOS_EXCEPTION(UnknownParent);
+DERIVE_BCOS_EXCEPTION(InvalidBlockFormat);
+DERIVE_BCOS_EXCEPTION(InvalidBlockHeaderItemCount);
+DERIVE_BCOS_EXCEPTION(InvalidBlockWithBadStateOrReceipt);
+DERIVE_BCOS_EXCEPTION(ErrorBlockHash);
 
 /// block execution related
-DEV_SIMPLE_EXCEPTION(BlockExecutionFailed);
+DERIVE_BCOS_EXCEPTION(BlockExecutionFailed);
 
 /// sync related
-DEV_SIMPLE_EXCEPTION(InvalidBlockDownloadQueuePiorityInput);
-DEV_SIMPLE_EXCEPTION(InvalidSyncPeerCreation);
+DERIVE_BCOS_EXCEPTION(InvalidBlockDownloadQueuePiorityInput);
+DERIVE_BCOS_EXCEPTION(InvalidSyncPeerCreation);
 
 /// common exceptions
-DEV_SIMPLE_EXCEPTION(InvalidNonce);
-DEV_SIMPLE_EXCEPTION(InvalidSignature);
-DEV_SIMPLE_EXCEPTION(InvalidAddress);
-DEV_SIMPLE_EXCEPTION(AddressAlreadyUsed);
-DEV_SIMPLE_EXCEPTION(InvalidTimestamp);
-DEV_SIMPLE_EXCEPTION(InvalidProtocolID);
-DEV_SIMPLE_EXCEPTION(EmptySealers);
-DEV_SIMPLE_EXCEPTION(MethodNotSupport);
+DERIVE_BCOS_EXCEPTION(InvalidNonce);
+DERIVE_BCOS_EXCEPTION(InvalidSignature);
+DERIVE_BCOS_EXCEPTION(InvalidAddress);
+DERIVE_BCOS_EXCEPTION(AddressAlreadyUsed);
+DERIVE_BCOS_EXCEPTION(InvalidTimestamp);
+DERIVE_BCOS_EXCEPTION(InvalidProtocolID);
+DERIVE_BCOS_EXCEPTION(EmptySealers);
+DERIVE_BCOS_EXCEPTION(MethodNotSupport);
 
 struct VMException : Exception
 {
@@ -148,4 +148,4 @@ private:
     owning_bytes_ref m_output;
 };
 }  // namespace eth
-}  // namespace dev
+}  // namespace bcos

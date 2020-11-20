@@ -23,10 +23,10 @@
 #include <libethcore/ABI.h>
 #include <libprecompiled/TableFactoryPrecompiled.h>
 
-using namespace dev;
-using namespace dev::blockverifier;
-using namespace dev::storage;
-using namespace dev::precompiled;
+using namespace bcos;
+using namespace bcos::blockverifier;
+using namespace bcos::storage;
+using namespace bcos::precompiled;
 
 /*
 contract HelloWorld {
@@ -61,7 +61,7 @@ std::string HelloWorldPrecompiled::toString()
 }
 
 PrecompiledExecResult::Ptr HelloWorldPrecompiled::call(
-    dev::blockverifier::ExecutiveContext::Ptr _context, bytesConstRef _param,
+    bcos::blockverifier::ExecutiveContext::Ptr _context, bytesConstRef _param,
     Address const& _origin, Address const&)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("call")
@@ -72,7 +72,7 @@ PrecompiledExecResult::Ptr HelloWorldPrecompiled::call(
     bytesConstRef data = getParamData(_param);
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
     callResult->gasPricer()->setMemUsed(_param.size());
-    dev::eth::ContractABI abi;
+    bcos::eth::ContractABI abi;
 
     Table::Ptr table = openTable(_context, precompiled::getTableName(HELLO_WORLD_TABLE_NAME));
     callResult->gasPricer()->appendOperation(InterfaceOpcode::OpenTable);

@@ -23,11 +23,11 @@
 #pragma once
 #include "RPBFTReqCache.h"
 #include <libconsensus/pbft/PBFTEngine.h>
-#include <libdevcore/TreeTopology.h>
+#include <libutilities/TreeTopology.h>
 
 #define RPBFTENGINE_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("ROTATING-PBFT")
 
-namespace dev
+namespace bcos
 {
 namespace consensus
 {
@@ -35,25 +35,25 @@ class RotatingPBFTEngine : public PBFTEngine
 {
 public:
     using Ptr = std::shared_ptr<RotatingPBFTEngine>;
-    RotatingPBFTEngine(dev::p2p::P2PInterface::Ptr _service,
-        dev::txpool::TxPoolInterface::Ptr _txPool,
-        dev::blockchain::BlockChainInterface::Ptr _blockChain,
-        dev::sync::SyncInterface::Ptr _blockSync,
-        dev::blockverifier::BlockVerifierInterface::Ptr _blockVerifier,
-        dev::PROTOCOL_ID const& _protocolId, KeyPair const& _keyPair,
+    RotatingPBFTEngine(bcos::p2p::P2PInterface::Ptr _service,
+        bcos::txpool::TxPoolInterface::Ptr _txPool,
+        bcos::blockchain::BlockChainInterface::Ptr _blockChain,
+        bcos::sync::SyncInterface::Ptr _blockSync,
+        bcos::blockverifier::BlockVerifierInterface::Ptr _blockVerifier,
+        bcos::PROTOCOL_ID const& _protocolId, KeyPair const& _keyPair,
         h512s const& _sealerList = h512s())
       : PBFTEngine(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
             _keyPair, _sealerList)
     {
-        m_chosedConsensusNodes = std::make_shared<std::set<dev::h512>>();
+        m_chosedConsensusNodes = std::make_shared<std::set<bcos::h512>>();
         // only broadcast PBFT message to the current consensus nodes
         m_broacastTargetsFilter =
             boost::bind(&RotatingPBFTEngine::filterBroadcastTargets, this, _1);
         // only send transactions to the current consensus nodes
         m_blockSync->registerTxsReceiversFilter(
-            [&](std::shared_ptr<std::set<dev::network::NodeID>> _peers) {
-                std::shared_ptr<dev::p2p::NodeIDs> selectedNode =
-                    std::make_shared<dev::p2p::NodeIDs>();
+            [&](std::shared_ptr<std::set<bcos::network::NodeID>> _peers) {
+                std::shared_ptr<bcos::p2p::NodeIDs> selectedNode =
+                    std::make_shared<bcos::p2p::NodeIDs>();
                 for (auto const& peer : *_peers)
                 {
                     if (m_chosedConsensusNodes->count(peer))
@@ -61,22 +61,22 @@ public:
                 }
                 return selectedNode;
             });
-        m_chosedSealerList = std::make_shared<dev::h512s>();
+        m_chosedSealerList = std::make_shared<bcos::h512s>();
 
         m_requestRawPrepareWorker =
-            std::make_shared<dev::ThreadPool>("prepRequest-" + std::to_string(m_groupId), 1);
+            std::make_shared<bcos::ThreadPool>("prepRequest-" + std::to_string(m_groupId), 1);
         m_rawPrepareStatusReceiver =
-            std::make_shared<dev::ThreadPool>("prepRecv-" + std::to_string(m_groupId), 1);
+            std::make_shared<bcos::ThreadPool>("prepRecv-" + std::to_string(m_groupId), 1);
         m_rawPrepareResponse =
-            std::make_shared<dev::ThreadPool>("prepResp-" + std::to_string(m_groupId), 1);
+            std::make_shared<bcos::ThreadPool>("prepResp-" + std::to_string(m_groupId), 1);
         m_waitToRequestRawPrepare =
-            std::make_shared<dev::ThreadPool>("reqWait-" + std::to_string(m_groupId), 1);
+            std::make_shared<bcos::ThreadPool>("reqWait-" + std::to_string(m_groupId), 1);
     }
 
     // create TreeTopology to forward prepare message
     void createTreeTopology(unsigned const& _treeWidth)
     {
-        m_treeRouter = std::make_shared<dev::sync::TreeTopology>(m_keyPair.pub(), _treeWidth);
+        m_treeRouter = std::make_shared<bcos::sync::TreeTopology>(m_keyPair.pub(), _treeWidth);
         if (m_chosedSealerList->size() > 0)
         {
             m_treeRouter->updateConsensusNodeInfo(*m_chosedSealerList);
@@ -96,7 +96,7 @@ public:
     }
 
     /// get sealer list
-    dev::h512s consensusList() const override
+    bcos::h512s consensusList() const override
     {
         ReadGuard l(x_chosedSealerList);
         return *m_chosedSealerList;
@@ -109,7 +109,7 @@ public:
 
     void createPBFTReqCache() override;
 
-    dev::h512 selectNodeToRequestMissedTxs(PrepareReq::Ptr _prepareReq) override;
+    bcos::h512 selectNodeToRequestMissedTxs(PrepareReq::Ptr _prepareReq) override;
 
     void setMaxRequestMissedTxsWaitTime(uint64_t const& _maxRequestMissedTxsWaitTime)
     {
@@ -125,33 +125,33 @@ protected:
     // get the currentLeader
     std::pair<bool, IDXTYPE> getLeader() const override;
     bool locatedInChosedConsensensusNodes() const override;
-    dev::network::NodeID getSealerByIndex(size_t const& _index) const override;
-    dev::network::NodeID getNodeIDByIndex(size_t const& _index) const;
+    bcos::network::NodeID getSealerByIndex(size_t const& _index) const override;
+    bcos::network::NodeID getNodeIDByIndex(size_t const& _index) const;
 
     void sendPrepareMsgFromLeader(PrepareReq::Ptr _prepareReq, bytesConstRef _data,
-        dev::PACKET_TYPE const& _p2pPacketType = 0) override;
+        bcos::PACKET_TYPE const& _p2pPacketType = 0) override;
     // forward the received prepare message by tree
-    virtual void forwardReceivedPrepareMsgByTree(std::shared_ptr<dev::p2p::P2PSession> _session,
-        dev::p2p::P2PMessage::Ptr _prepareMsg, PBFTMsgPacket::Ptr _pbftMsg);
+    virtual void forwardReceivedPrepareMsgByTree(std::shared_ptr<bcos::p2p::P2PSession> _session,
+        bcos::p2p::P2PMessage::Ptr _prepareMsg, PBFTMsgPacket::Ptr _pbftMsg);
 
-    void onRecvPBFTMessage(dev::p2p::NetworkException _exception,
-        std::shared_ptr<dev::p2p::P2PSession> _session,
-        dev::p2p::P2PMessage::Ptr _message) override;
+    void onRecvPBFTMessage(bcos::p2p::NetworkException _exception,
+        std::shared_ptr<bcos::p2p::P2PSession> _session,
+        bcos::p2p::P2PMessage::Ptr _message) override;
 
-    bool handlePartiallyPrepare(std::shared_ptr<dev::p2p::P2PSession> _session,
-        dev::p2p::P2PMessage::Ptr _message) override;
+    bool handlePartiallyPrepare(std::shared_ptr<bcos::p2p::P2PSession> _session,
+        bcos::p2p::P2PMessage::Ptr _message) override;
 
     // fault-tolerant logic for broadcast-prepare-by-tree
     virtual void sendRawPrepareStatusRandomly(PBFTMsg::Ptr _rawPrepareReq);
     virtual void onReceiveRawPrepareStatus(
-        std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);
+        std::shared_ptr<bcos::p2p::P2PSession> _session, bcos::p2p::P2PMessage::Ptr _message);
 
     // receive the requested rawPreparePacket
     virtual void onReceiveRawPrepareRequest(
-        std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);
+        std::shared_ptr<bcos::p2p::P2PSession> _session, bcos::p2p::P2PMessage::Ptr _message);
 
     virtual void onReceiveRawPrepareResponse(
-        std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);
+        std::shared_ptr<bcos::p2p::P2PSession> _session, bcos::p2p::P2PMessage::Ptr _message);
 
     virtual IDXTYPE selectLeader() const;
 
@@ -166,31 +166,31 @@ protected:
     virtual void resetLocatedInConsensusNodes();
     IDXTYPE minValidNodes() const override { return std::min(m_epochSize, m_sealersNum) - m_f; }
 
-    virtual ssize_t filterBroadcastTargets(dev::network::NodeID const& _nodeId);
+    virtual ssize_t filterBroadcastTargets(bcos::network::NodeID const& _nodeId);
 
     virtual bool updateEpochSize();
     virtual bool updateRotatingInterval();
 
-    void handleP2PMessage(dev::p2p::NetworkException _exception,
-        std::shared_ptr<dev::p2p::P2PSession> _session,
-        dev::p2p::P2PMessage::Ptr _message) override;
+    void handleP2PMessage(bcos::p2p::NetworkException _exception,
+        std::shared_ptr<bcos::p2p::P2PSession> _session,
+        bcos::p2p::P2PMessage::Ptr _message) override;
 
-    bool connectWithParent(std::shared_ptr<const dev::h512s> _parentNodeList);
-    bool shouldRequestRawPrepare(PBFTMsg::Ptr _rawPrepareStatus, dev::h512 const& _targetNode,
-        std::shared_ptr<const dev::h512s> _parentNodeList);
-    void waitAndRequestRawPrepare(PBFTMsg::Ptr _rawPrepareStatus, dev::h512 const& _targetNode,
-        std::shared_ptr<const dev::h512s> _parentNodeList);
+    bool connectWithParent(std::shared_ptr<const bcos::h512s> _parentNodeList);
+    bool shouldRequestRawPrepare(PBFTMsg::Ptr _rawPrepareStatus, bcos::h512 const& _targetNode,
+        std::shared_ptr<const bcos::h512s> _parentNodeList);
+    void waitAndRequestRawPrepare(PBFTMsg::Ptr _rawPrepareStatus, bcos::h512 const& _targetNode,
+        std::shared_ptr<const bcos::h512s> _parentNodeList);
     void addRawPrepare(PrepareReq::Ptr _prepareReq) override;
 
 private:
     PBFTMsg::Ptr decodeP2PMsgIntoPBFTMsg(
-        std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message);
+        std::shared_ptr<bcos::p2p::P2PSession> _session, bcos::p2p::P2PMessage::Ptr _message);
 
     // request RawPrepare packet to the _targetNode
     void requestRawPreparePacket(
-        dev::h512 const& _targetNode, PBFTMsg::Ptr _requestedRawPrepareStatus);
+        bcos::h512 const& _targetNode, PBFTMsg::Ptr _requestedRawPrepareStatus);
 
-    std::shared_ptr<dev::h512s> getParentNode(PBFTMsg::Ptr _pbftMsg);
+    std::shared_ptr<bcos::h512s> getParentNode(PBFTMsg::Ptr _pbftMsg);
 
 protected:
     // configured epoch size
@@ -206,22 +206,22 @@ protected:
 
     std::atomic_bool m_chosedConsNodeChanged = {false};
     mutable SharedMutex x_chosedConsensusNodes;
-    std::shared_ptr<std::set<dev::h512>> m_chosedConsensusNodes;
+    std::shared_ptr<std::set<bcos::h512>> m_chosedConsensusNodes;
 
     mutable SharedMutex x_chosedSealerList;
-    std::shared_ptr<dev::h512s> m_chosedSealerList;
+    std::shared_ptr<bcos::h512s> m_chosedSealerList;
 
     // used to record the rotatingIntervalEnableNumber changed or not
-    dev::eth::BlockNumber m_rotatingIntervalEnableNumber = {-1};
+    bcos::eth::BlockNumber m_rotatingIntervalEnableNumber = {-1};
     bool m_rotatingIntervalUpdated = false;
 
-    std::shared_ptr<dev::sync::TreeTopology> m_treeRouter;
+    std::shared_ptr<bcos::sync::TreeTopology> m_treeRouter;
     std::shared_ptr<RPBFTReqCache> m_rpbftReqCache;
 
-    dev::ThreadPool::Ptr m_requestRawPrepareWorker;
-    dev::ThreadPool::Ptr m_rawPrepareStatusReceiver;
-    dev::ThreadPool::Ptr m_rawPrepareResponse;
-    dev::ThreadPool::Ptr m_waitToRequestRawPrepare;
+    bcos::ThreadPool::Ptr m_requestRawPrepareWorker;
+    bcos::ThreadPool::Ptr m_rawPrepareStatusReceiver;
+    bcos::ThreadPool::Ptr m_rawPrepareResponse;
+    bcos::ThreadPool::Ptr m_waitToRequestRawPrepare;
 
     unsigned m_prepareStatusBroadcastPercent = 33;
     uint64_t m_maxRequestMissedTxsWaitTime = 100;
@@ -232,4 +232,4 @@ protected:
     boost::mutex x_rawPrepareSignalled;
 };
 }  // namespace consensus
-}  // namespace dev
+}  // namespace bcos

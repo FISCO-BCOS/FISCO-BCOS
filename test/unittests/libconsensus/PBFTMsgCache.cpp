@@ -26,8 +26,8 @@
 #include <libconsensus/pbft/PBFTMsgFactory.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
-using namespace dev::consensus;
-namespace dev
+using namespace bcos::consensus;
+namespace bcos
 {
 namespace test
 {
@@ -36,7 +36,7 @@ BOOST_FIXTURE_TEST_SUITE(consensusTest, TestOutputHelperFixture)
 void checkKeyExist(PBFTBroadcastCache& cache, unsigned const& type, KeyPair const& keyPair,
     std::string const& str, bool const& insert = true, bool const& exist = true)
 {
-    std::string key = toHex(dev::crypto::Sign(keyPair, crypto::Hash(str))->asBytes());
+    std::string key = toHex(bcos::crypto::Sign(keyPair, crypto::Hash(str))->asBytes());
     if (insert)
         cache.insertKey(keyPair.pub(), type, key);
     if (exist)
@@ -49,7 +49,7 @@ BOOST_AUTO_TEST_CASE(testInsertKey)
 {
     PBFTBroadcastCache broadCast_cache;
     KeyPair key_pair = KeyPair::create();
-    std::string key = toHex(dev::crypto::Sign(key_pair, crypto::Hash("test"))->asBytes());
+    std::string key = toHex(bcos::crypto::Sign(key_pair, crypto::Hash("test"))->asBytes());
     /// test insertKey && keyExist
     /// test PrepareReqPacket
     checkKeyExist(broadCast_cache, PrepareReqPacket, key_pair, "test1");
@@ -79,7 +79,7 @@ BOOST_AUTO_TEST_CASE(testInsertKey)
 }
 
 PBFTMsgPacket::Ptr testAndCheckPBFTMsgFactory(
-    std::shared_ptr<PBFTMsgFactory> _factory, dev::h512 const& _nodeId)
+    std::shared_ptr<PBFTMsgFactory> _factory, bcos::h512 const& _nodeId)
 {
     auto msgPacket = _factory->createPBFTMsgPacket();
     uint8_t ttl = 4;
@@ -87,12 +87,12 @@ PBFTMsgPacket::Ptr testAndCheckPBFTMsgFactory(
     msgPacket->packet_id = 1;
     msgPacket->ttl = ttl;
     msgPacket->timestamp = utcTime();
-    msgPacket->data = dev::fromHex("0x100");
+    msgPacket->data = bcos::fromHex("0x100");
 
-    msgPacket->forwardNodes = std::make_shared<dev::h512s>();
+    msgPacket->forwardNodes = std::make_shared<bcos::h512s>();
     msgPacket->forwardNodes->push_back(_nodeId);
     // test encode/decode for msgPacket
-    std::shared_ptr<dev::bytes> encodedData = std::make_shared<dev::bytes>();
+    std::shared_ptr<bcos::bytes> encodedData = std::make_shared<bcos::bytes>();
     msgPacket->encode(*encodedData);
     auto decodedMsgPacket = _factory->createPBFTMsgPacket();
     decodedMsgPacket->decode(ref(*encodedData));
@@ -107,7 +107,7 @@ PBFTMsgPacket::Ptr testAndCheckPBFTMsgFactory(
 
 BOOST_AUTO_TEST_CASE(testPBFTMsgFactory)
 {
-    auto nodeId = dev::KeyPair::create().pub();
+    auto nodeId = bcos::KeyPair::create().pub();
     // test PBFTMsgPacket
     std::shared_ptr<PBFTMsgFactory> factory = std::make_shared<PBFTMsgFactory>();
     auto msgPacket = testAndCheckPBFTMsgFactory(factory, nodeId);
@@ -121,4 +121,4 @@ BOOST_AUTO_TEST_CASE(testPBFTMsgFactory)
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

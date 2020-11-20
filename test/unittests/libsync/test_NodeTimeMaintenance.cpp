@@ -26,9 +26,9 @@
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev::sync;
+using namespace bcos::sync;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -36,7 +36,7 @@ BOOST_FIXTURE_TEST_SUITE(NodeTimeMaintenanceTest, TestOutputHelperFixture)
 BOOST_AUTO_TEST_CASE(testTryToUpdatePeerTimeInfo)
 {
     auto nodeTimeMaintenance = std::make_shared<NodeTimeMaintenance>();
-    auto genesisHash = dev::keccak256("genesis");
+    auto genesisHash = bcos::keccak256("genesis");
     std::vector<SyncStatusPacket::Ptr> sycStatusVec;
     std::srand(utcTime());
     std::vector<int64_t> randomValues;
@@ -196,4 +196,4 @@ BOOST_AUTO_TEST_CASE(testTryToUpdatePeerTimeInfo)
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

@@ -25,7 +25,7 @@
 #include "Block.h"
 #include "PartiallyBlock.h"
 
-namespace dev
+namespace bcos
 {
 namespace eth
 {
@@ -47,4 +47,4 @@ public:
 };
 
 }  // namespace eth
-}  // namespace dev
+}  // namespace bcos

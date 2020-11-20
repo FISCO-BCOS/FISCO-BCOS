@@ -22,10 +22,10 @@
  */
 
 #include "MemoryStorage2.h"
-#include <libdevcore/FixedHash.h>
 #include <libstorage/CachedStorage.h>
 #include <libstorage/StorageException.h>
 #include <libstorage/Table.h>
+#include <libutilities/FixedHash.h>
 #include <tbb/parallel_for.h>
 #include <boost/random/mersenne_twister.hpp>
 #include <boost/random/uniform_int.hpp>
@@ -33,8 +33,8 @@
 #include <chrono>
 #include <thread>
 
-using namespace dev;
-using namespace dev::storage;
+using namespace bcos;
+using namespace bcos::storage;
 
 namespace test_CachedStorage
 {
@@ -231,7 +231,7 @@ struct CachedStorageFixture
         return entries;
     }
 
-    dev::storage::CachedStorage::Ptr cachedStorage;
+    bcos::storage::CachedStorage::Ptr cachedStorage;
     std::shared_ptr<MockStorage> mockStorage;
 };
 
@@ -299,8 +299,8 @@ BOOST_AUTO_TEST_CASE(commit_single_data)
     h256 h;
     int64_t num = 50;
     cachedStorage->setMaxForwardBlock(100);
-    std::vector<dev::storage::TableData::Ptr> datas;
-    dev::storage::TableData::Ptr tableData = std::make_shared<dev::storage::TableData>();
+    std::vector<bcos::storage::TableData::Ptr> datas;
+    bcos::storage::TableData::Ptr tableData = std::make_shared<bcos::storage::TableData>();
     tableData->info->name = "t_test";
     tableData->info->key = "Name";
     tableData->info->fields.push_back("id");
@@ -348,8 +348,8 @@ BOOST_AUTO_TEST_CASE(commit_multi_data)
     h256 h;
     int64_t num = 50;
     cachedStorage->setMaxForwardBlock(100);
-    std::vector<dev::storage::TableData::Ptr> datas;
-    dev::storage::TableData::Ptr tableData = std::make_shared<dev::storage::TableData>();
+    std::vector<bcos::storage::TableData::Ptr> datas;
+    bcos::storage::TableData::Ptr tableData = std::make_shared<bcos::storage::TableData>();
     tableData->info->name = "t_test";
     tableData->info->key = "Name";
     tableData->info->fields.push_back("id");
@@ -396,12 +396,12 @@ BOOST_AUTO_TEST_CASE(parllel_commit)
 {
     h256 h;
     int64_t num = 50;
-    std::vector<dev::storage::TableData::Ptr> datas;
+    std::vector<bcos::storage::TableData::Ptr> datas;
     cachedStorage->setMaxForwardBlock(100);
 
     for (size_t i = 100; i < 200; ++i)
     {
-        dev::storage::TableData::Ptr tableData = std::make_shared<dev::storage::TableData>();
+        bcos::storage::TableData::Ptr tableData = std::make_shared<bcos::storage::TableData>();
         tableData->info->name = "t_test" + boost::lexical_cast<std::string>(i);
         tableData->info->key = "Name";
         tableData->info->fields.push_back("id");
@@ -492,9 +492,9 @@ BOOST_AUTO_TEST_CASE(parllel_commit)
 BOOST_AUTO_TEST_CASE(ordered_commit)
 {
     cachedStorage->init();
-    cachedStorage->setBackend(dev::storage::Storage::Ptr());
+    cachedStorage->setBackend(bcos::storage::Storage::Ptr());
 
-    dev::storage::TableData::Ptr tableData = std::make_shared<dev::storage::TableData>();
+    bcos::storage::TableData::Ptr tableData = std::make_shared<bcos::storage::TableData>();
     tableData->info->name = "t_test";
     tableData->info->key = "Name";
     tableData->info->fields.push_back("id");
@@ -515,7 +515,7 @@ BOOST_AUTO_TEST_CASE(ordered_commit)
 
     tableData->newEntries = entries;
 
-    std::vector<dev::storage::TableData::Ptr> datas;
+    std::vector<bcos::storage::TableData::Ptr> datas;
     datas.push_back(tableData);
 
     cachedStorage->commit(0, datas);
@@ -554,18 +554,18 @@ BOOST_AUTO_TEST_CASE(parallel_samekey_commit)
     entry->setField("key", "1");
     entry->setField("value", "200");
 
-    auto data = std::make_shared<dev::storage::TableData>();
+    auto data = std::make_shared<bcos::storage::TableData>();
     data->newEntries->addEntry(entry);
     data->info = tableInfo;
 
-    std::vector<dev::storage::TableData::Ptr> datas;
+    std::vector<bcos::storage::TableData::Ptr> datas;
     datas.push_back(data);
     cachedStorage->commit(99, datas);
 
     for (size_t i = 0; i < 100; ++i)
     {
         auto result =
-            cachedStorage->selectNoCondition(0, tableInfo, "1", dev::storage::Condition::Ptr());
+            cachedStorage->selectNoCondition(0, tableInfo, "1", bcos::storage::Condition::Ptr());
         Cache::Ptr caches = std::get<1>(result);
         BOOST_TEST(caches->key() == "1");
         BOOST_TEST(caches->num() == 99);
@@ -892,8 +892,8 @@ BOOST_AUTO_TEST_CASE(exception)
     h256 h(0x01);
     int num = 1;
     h256 blockHash(0x11231);
-    std::vector<dev::storage::TableData::Ptr> datas;
-    dev::storage::TableData::Ptr tableData = std::make_shared<dev::storage::TableData>();
+    std::vector<bcos::storage::TableData::Ptr> datas;
+    bcos::storage::TableData::Ptr tableData = std::make_shared<bcos::storage::TableData>();
     tableData->info->name = "e";
     tableData->info->key = "Name";
     tableData->info->fields.push_back("id");

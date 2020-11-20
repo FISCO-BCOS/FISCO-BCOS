@@ -24,10 +24,10 @@
 #include "NodeTimeMaintenance.h"
 #include <libsync/SyncMsgPacket.h>
 
-using namespace dev::sync;
+using namespace bcos::sync;
 
 NodeTimeMaintenance::NodeTimeMaintenance()
-  : m_node2TimeOffset(std::make_shared<std::map<dev::h512, int64_t>>())
+  : m_node2TimeOffset(std::make_shared<std::map<bcos::h512, int64_t>>())
 {}
 
 void NodeTimeMaintenance::tryToUpdatePeerTimeInfo(SyncStatusPacket::Ptr _peerStatus)

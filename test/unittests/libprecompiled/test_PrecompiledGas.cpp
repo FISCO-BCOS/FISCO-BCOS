@@ -24,8 +24,8 @@
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev::precompiled;
-namespace dev
+using namespace bcos::precompiled;
+namespace bcos
 {
 namespace test
 {
@@ -72,7 +72,7 @@ BOOST_AUTO_TEST_CASE(testPrecompiledGasFactory)
     checkGasCost(metric, InterfaceOpcode::Remove, 2500);
 
     // enable FreeStorage
-    dev::VMFlagType evmFlags = 0;
+    bcos::VMFlagType evmFlags = 0;
     evmFlags |= EVMFlags::FreeStorageGas;
     precompiledGasFactory = std::make_shared<PrecompiledGasFactory>(evmFlags);
     BOOST_CHECK(precompiledGasFactory->gasMetric() != nullptr);
@@ -109,7 +109,7 @@ BOOST_AUTO_TEST_CASE(testPrecompiledGas)
     BOOST_CHECK(gasPricer->calTotalGas() == 38239);
 
     // enable freeStorage
-    dev::VMFlagType evmFlags = 0;
+    bcos::VMFlagType evmFlags = 0;
     evmFlags |= EVMFlags::FreeStorageGas;
     precompiledGasFactory = std::make_shared<PrecompiledGasFactory>(evmFlags);
     gasPricer = precompiledGasFactory->createPrecompiledGas();
@@ -158,4 +158,4 @@ BOOST_AUTO_TEST_CASE(testPrecompiledGas)
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

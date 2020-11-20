@@ -25,21 +25,21 @@
 #include <libflowlimit/RPCQPSLimiter.h>
 #include <libstat/ChannelNetworkStatHandler.h>
 
-namespace dev
+namespace bcos
 {
 class StatisticProtocolServer : public jsonrpc::RpcProtocolServerV2
 {
 public:
     StatisticProtocolServer(jsonrpc::IProcedureInvokationHandler& _handler);
     void HandleChannelRequest(const std::string& _request, std::string& _retValue,
-        std::function<bool(dev::GROUP_ID _groupId)> const& permissionChecker);
+        std::function<bool(bcos::GROUP_ID _groupId)> const& permissionChecker);
 
-    void setNetworkStatHandler(dev::stat::ChannelNetworkStatHandler::Ptr _networkStatHandler)
+    void setNetworkStatHandler(bcos::stat::ChannelNetworkStatHandler::Ptr _networkStatHandler)
     {
         m_networkStatHandler = _networkStatHandler;
     }
 
-    void setQPSLimiter(dev::flowlimit::RPCQPSLimiter::Ptr _qpsLimiter)
+    void setQPSLimiter(bcos::flowlimit::RPCQPSLimiter::Ptr _qpsLimiter)
     {
         m_qpsLimiter = _qpsLimiter;
     }
@@ -47,12 +47,12 @@ public:
 protected:
     bool limitRPCQPS(Json::Value const& _request, std::string& _retValue);
     bool limitGroupQPS(
-        dev::GROUP_ID const& _groupId, Json::Value const& _request, std::string& _retValue);
+        bcos::GROUP_ID const& _groupId, Json::Value const& _request, std::string& _retValue);
     void wrapResponseForNodeBusy(Json::Value const& _request, std::string& _retValue);
     void wrapErrorResponse(Json::Value const& _request, std::string& _retValue, int _errorCode,
         std::string const& _errorMsg);
 
-    dev::GROUP_ID getGroupID(Json::Value const& _request);
+    bcos::GROUP_ID getGroupID(Json::Value const& _request);
     bool isValidRequest(Json::Value const& _request);
 
 protected:
@@ -72,7 +72,7 @@ protected:
     // RPC interface without restrictions
     std::set<std::string> const m_noRestrictRpcMethodSet = {"getClientVersion"};
 
-    dev::stat::ChannelNetworkStatHandler::Ptr m_networkStatHandler;
-    dev::flowlimit::RPCQPSLimiter::Ptr m_qpsLimiter;
+    bcos::stat::ChannelNetworkStatHandler::Ptr m_networkStatHandler;
+    bcos::flowlimit::RPCQPSLimiter::Ptr m_qpsLimiter;
 };
-}  // namespace dev
+}  // namespace bcos

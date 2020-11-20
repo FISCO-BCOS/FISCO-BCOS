@@ -21,19 +21,19 @@
  * @date 2018-08-31
  */
 
-#include <libdevcore/RLP.h>
 #include <libethcore/LogEntry.h>
+#include <libutilities/RLP.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <iostream>
 
 using namespace std;
-using namespace dev;
-using namespace dev::eth;
-using namespace dev::test;
+using namespace bcos;
+using namespace bcos::eth;
+using namespace bcos::test;
 namespace ut = boost::unit_test;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -113,4 +113,4 @@ BOOST_FIXTURE_TEST_CASE(SM_BloomTest, SM_CryptoTestFixture)
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

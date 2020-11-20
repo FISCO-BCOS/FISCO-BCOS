@@ -22,8 +22,7 @@
 
 #include "Storage.h"
 #include <json/json.h>
-#include <libdevcore/FixedHash.h>
-#include <libdevcore/Guards.h>
+#include <libutilities/FixedHash.h>
 #include <tbb/spin_mutex.h>
 #include <map>
 
@@ -31,7 +30,7 @@ namespace rocksdb
 {
 class DB;
 }
-namespace dev
+namespace bcos
 {
 namespace storage
 {
@@ -71,4 +70,4 @@ private:
 
 }  // namespace storage
 
-}  // namespace dev
+}  // namespace bcos

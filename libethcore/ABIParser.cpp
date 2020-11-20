@@ -22,12 +22,12 @@
  */
 
 #include "ABIParser.h"
-#include <libdevcore/FixedHash.h>
+#include <libutilities/FixedHash.h>
 
 using namespace std;
-using namespace dev;
-using namespace dev::eth;
-using namespace dev::eth::abi;
+using namespace bcos;
+using namespace bcos::eth;
+using namespace bcos::eth::abi;
 
 // uint<M>: unsigned integer type of M bits, 0 < M <= 256, M % 8 == 0. e.g. uint32, uint8,
 // uint256.

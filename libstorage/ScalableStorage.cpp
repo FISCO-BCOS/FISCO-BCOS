@@ -21,17 +21,15 @@
 
 #include "ScalableStorage.h"
 #include "StorageException.h"
-#include "libdevcore/Common.h"
-#include "libdevcore/Guards.h"
-#include "libdevcore/Log.h"
+#include "libutilities/Common.h"
 #include <boost/lexical_cast.hpp>
 #include <algorithm>
 #include <mutex>
 
 using namespace std;
 using namespace boost;
-using namespace dev;
-using namespace dev::storage;
+using namespace bcos;
+using namespace bcos::storage;
 
 const string TABLE_BLOCK_TO_DB_NAME = "s_block_to_dbname";
 const string DB_NAME = "dbName";

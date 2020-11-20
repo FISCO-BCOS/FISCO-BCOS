@@ -30,12 +30,13 @@
 #include "Common.h"
 #include <memory>
 
-namespace dev
+namespace bcos
 {
 namespace network
 {
 class SocketFace;
-#define CallbackFunc std::function<void(dev::network::NetworkException, dev::network::Message::Ptr)>
+#define CallbackFunc \
+    std::function<void(bcos::network::NetworkException, bcos::network::Message::Ptr)>
 
 struct ResponseCallback : public std::enable_shared_from_this<ResponseCallback>
 {
@@ -70,4 +71,4 @@ public:
     virtual bool actived() const = 0;
 };
 }  // namespace network
-}  // namespace dev
+}  // namespace bcos

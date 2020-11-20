@@ -22,12 +22,10 @@
  */
 #pragma once
 #include <libchannelserver/ChannelMessage.h>
-#include <libdevcore/Common.h>
-#include <libdevcore/Guards.h>
-#include <libdevcore/Log.h>
 #include <libethcore/Protocol.h>
+#include <libutilities/Common.h>
 
-namespace dev
+namespace bcos
 {
 namespace stat
 {
@@ -47,15 +45,15 @@ public:
 
     void setConsensusMsgType(std::string const& _type)
     {
-        int32_t consType = dev::eth::ProtocolID::PBFT;
-        if (dev::stringCmpIgnoreCase(_type, "raft") == 0)
+        int32_t consType = bcos::eth::ProtocolID::PBFT;
+        if (bcos::stringCmpIgnoreCase(_type, "raft") == 0)
         {
-            consType = dev::eth::ProtocolID::Raft;
+            consType = bcos::eth::ProtocolID::Raft;
         }
-        m_p2pMsgTypeToDesc = {{consType, "CONS"}, {dev::eth::ProtocolID::BlockSync, "SYNC"}};
+        m_p2pMsgTypeToDesc = {{consType, "CONS"}, {bcos::eth::ProtocolID::BlockSync, "SYNC"}};
     }
 
-    void setGroupId(dev::GROUP_ID const& _groupId) { m_groupId = _groupId; }
+    void setGroupId(bcos::GROUP_ID const& _groupId) { m_groupId = _groupId; }
 
     virtual void updateIncomingTraffic(int32_t const& _msgType, uint64_t _msgSize);
     virtual void updateOutgoingTraffic(int32_t const& _msgType, uint64_t _msgSize);
@@ -81,19 +79,19 @@ protected:
     std::string const c_p2p_statisticName = "P2P";
     std::string const c_sdk_statisticName = "SDK";
 
-    dev::GROUP_ID m_groupId;
+    bcos::GROUP_ID m_groupId;
     // maps between message type and message description
     std::map<int32_t, std::string> m_p2pMsgTypeToDesc;
 
     std::map<int32_t, std::string> const c_sdkInMsgTypeToDesc = {
-        {dev::channel::ChannelMessageType::CHANNEL_RPC_REQUEST, "RPC"},
-        {dev::channel::ChannelMessageType::CLIENT_REGISTER_EVENT_LOG, "RegitsterEvent"},
-        {dev::channel::ChannelMessageType::CLIENT_UNREGISTER_EVENT_LOG, "UnregitsterEvent"}};
+        {bcos::channel::ChannelMessageType::CHANNEL_RPC_REQUEST, "RPC"},
+        {bcos::channel::ChannelMessageType::CLIENT_REGISTER_EVENT_LOG, "RegitsterEvent"},
+        {bcos::channel::ChannelMessageType::CLIENT_UNREGISTER_EVENT_LOG, "UnregitsterEvent"}};
 
     std::map<int32_t, std::string> const c_sdkOutMsgTypeToDesc = {
-        {dev::channel::ChannelMessageType::CHANNEL_RPC_REQUEST, "RPC"},
-        {dev::channel::ChannelMessageType::TRANSACTION_NOTIFY, "Txs"},
-        {dev::channel::ChannelMessageType::EVENT_LOG_PUSH, "EventLog"}};
+        {bcos::channel::ChannelMessageType::CHANNEL_RPC_REQUEST, "RPC"},
+        {bcos::channel::ChannelMessageType::TRANSACTION_NOTIFY, "Txs"},
+        {bcos::channel::ChannelMessageType::EVENT_LOG_PUSH, "EventLog"}};
 
     // incoming traffic statistics: message type to the total
     std::shared_ptr<std::map<int32_t, uint64_t>> m_InMsgTypeToBytes;
@@ -108,4 +106,4 @@ protected:
     std::string const m_OutMsgDescSuffix = "_Out";
 };
 }  // namespace stat
-}  // namespace dev
+}  // namespace bcos

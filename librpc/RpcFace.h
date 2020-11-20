@@ -26,7 +26,7 @@
 
 using namespace jsonrpc;
 
-namespace dev
+namespace bcos
 {
 namespace rpc
 {
@@ -38,176 +38,176 @@ public:
         this->bindAndAddMethod(jsonrpc::Procedure("getSystemConfigByKey",
                                    jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, "param1",
                                    jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_STRING, NULL),
-            &dev::rpc::RpcFace::getSystemConfigByKeyI);
+            &bcos::rpc::RpcFace::getSystemConfigByKeyI);
         this->bindAndAddMethod(jsonrpc::Procedure("getBlockNumber", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_STRING, "param1", jsonrpc::JSON_INTEGER, NULL),
-            &dev::rpc::RpcFace::getBlockNumberI);
+            &bcos::rpc::RpcFace::getBlockNumberI);
         this->bindAndAddMethod(jsonrpc::Procedure("getPbftView", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_STRING, "param1", jsonrpc::JSON_INTEGER, NULL),
-            &dev::rpc::RpcFace::getPbftViewI);
+            &bcos::rpc::RpcFace::getPbftViewI);
         this->bindAndAddMethod(jsonrpc::Procedure("getSealerList", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_STRING, "param1", jsonrpc::JSON_INTEGER, NULL),
-            &dev::rpc::RpcFace::getSealerListI);
+            &bcos::rpc::RpcFace::getSealerListI);
 
         this->bindAndAddMethod(
             jsonrpc::Procedure("getEpochSealersList", jsonrpc::PARAMS_BY_POSITION,
                 jsonrpc::JSON_STRING, "param1", jsonrpc::JSON_INTEGER, NULL),
-            &dev::rpc::RpcFace::getEpochSealersListI);
+            &bcos::rpc::RpcFace::getEpochSealersListI);
 
         this->bindAndAddMethod(jsonrpc::Procedure("getObserverList", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_STRING, "param1", jsonrpc::JSON_INTEGER, NULL),
-            &dev::rpc::RpcFace::getObserverListI);
+            &bcos::rpc::RpcFace::getObserverListI);
         this->bindAndAddMethod(jsonrpc::Procedure("getConsensusStatus", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
-            &dev::rpc::RpcFace::getConsensusStatusI);
+            &bcos::rpc::RpcFace::getConsensusStatusI);
 
         this->bindAndAddMethod(jsonrpc::Procedure("getSyncStatus", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
-            &dev::rpc::RpcFace::getSyncStatusI);
+            &bcos::rpc::RpcFace::getSyncStatusI);
 
         this->bindAndAddMethod(jsonrpc::Procedure("getClientVersion", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, NULL),
-            &dev::rpc::RpcFace::getClientVersionI);
+            &bcos::rpc::RpcFace::getClientVersionI);
         this->bindAndAddMethod(jsonrpc::Procedure("getNodeInfo", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, NULL),
-            &dev::rpc::RpcFace::getNodeInfoI);
+            &bcos::rpc::RpcFace::getNodeInfoI);
         this->bindAndAddMethod(jsonrpc::Procedure("getPeers", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
-            &dev::rpc::RpcFace::getPeersI);
+            &bcos::rpc::RpcFace::getPeersI);
         this->bindAndAddMethod(jsonrpc::Procedure("getGroupPeers", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
-            &dev::rpc::RpcFace::getGroupPeersI);
+            &bcos::rpc::RpcFace::getGroupPeersI);
         this->bindAndAddMethod(jsonrpc::Procedure("getGroupList", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, NULL),
-            &dev::rpc::RpcFace::getGroupListI);
+            &bcos::rpc::RpcFace::getGroupListI);
         this->bindAndAddMethod(jsonrpc::Procedure("getNodeIDList", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
-            &dev::rpc::RpcFace::getNodeIDListI);
+            &bcos::rpc::RpcFace::getNodeIDListI);
 
         this->bindAndAddMethod(jsonrpc::Procedure("getBlockByHash", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, "param2",
                                    jsonrpc::JSON_STRING, "param3", jsonrpc::JSON_BOOLEAN, NULL),
-            &dev::rpc::RpcFace::getBlockByHashI);
+            &bcos::rpc::RpcFace::getBlockByHashI);
 
         this->bindAndAddMethod(
             jsonrpc::Procedure("getBlockHeaderByHash", jsonrpc::PARAMS_BY_POSITION,
                 jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, "param2",
                 jsonrpc::JSON_STRING, "param3", jsonrpc::JSON_BOOLEAN, NULL),
-            &dev::rpc::RpcFace::getBlockHeaderByHashI);
+            &bcos::rpc::RpcFace::getBlockHeaderByHashI);
 
         this->bindAndAddMethod(jsonrpc::Procedure("getBlockByNumber", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, "param2",
                                    jsonrpc::JSON_STRING, "param3", jsonrpc::JSON_BOOLEAN, NULL),
-            &dev::rpc::RpcFace::getBlockByNumberI);
+            &bcos::rpc::RpcFace::getBlockByNumberI);
 
         this->bindAndAddMethod(
             jsonrpc::Procedure("getBlockHeaderByNumber", jsonrpc::PARAMS_BY_POSITION,
                 jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, "param2",
                 jsonrpc::JSON_STRING, "param3", jsonrpc::JSON_BOOLEAN, NULL),
-            &dev::rpc::RpcFace::getBlockHeaderByNumberI);
+            &bcos::rpc::RpcFace::getBlockHeaderByNumberI);
 
         this->bindAndAddMethod(jsonrpc::Procedure("getBlockHashByNumber",
                                    jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, "param1",
                                    jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_STRING, NULL),
-            &dev::rpc::RpcFace::getBlockHashByNumberI);
+            &bcos::rpc::RpcFace::getBlockHashByNumberI);
 
         this->bindAndAddMethod(jsonrpc::Procedure("getTransactionByHash",
                                    jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, "param1",
                                    jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_STRING, NULL),
-            &dev::rpc::RpcFace::getTransactionByHashI);
+            &bcos::rpc::RpcFace::getTransactionByHashI);
         this->bindAndAddMethod(
             jsonrpc::Procedure("getTransactionByBlockHashAndIndex", jsonrpc::PARAMS_BY_POSITION,
                 jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, "param2",
                 jsonrpc::JSON_STRING, "param3", jsonrpc::JSON_STRING, NULL),
-            &dev::rpc::RpcFace::getTransactionByBlockHashAndIndexI);
+            &bcos::rpc::RpcFace::getTransactionByBlockHashAndIndexI);
         this->bindAndAddMethod(
             jsonrpc::Procedure("getTransactionByBlockNumberAndIndex", jsonrpc::PARAMS_BY_POSITION,
                 jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, "param2",
                 jsonrpc::JSON_STRING, "param3", jsonrpc::JSON_STRING, NULL),
-            &dev::rpc::RpcFace::getTransactionByBlockNumberAndIndexI);
+            &bcos::rpc::RpcFace::getTransactionByBlockNumberAndIndexI);
         this->bindAndAddMethod(jsonrpc::Procedure("getTransactionReceipt",
                                    jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, "param1",
                                    jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_STRING, NULL),
-            &dev::rpc::RpcFace::getTransactionReceiptI);
+            &bcos::rpc::RpcFace::getTransactionReceiptI);
         this->bindAndAddMethod(
             jsonrpc::Procedure("getPendingTransactions", jsonrpc::PARAMS_BY_POSITION,
                 jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
-            &dev::rpc::RpcFace::getPendingTransactionsI);
+            &bcos::rpc::RpcFace::getPendingTransactionsI);
         this->bindAndAddMethod(jsonrpc::Procedure("getPendingTxSize", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_STRING, "param1", jsonrpc::JSON_INTEGER, NULL),
-            &dev::rpc::RpcFace::getPendingTxSizeI);
+            &bcos::rpc::RpcFace::getPendingTxSizeI);
         this->bindAndAddMethod(
             jsonrpc::Procedure("call", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, "param1",
                 jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_OBJECT, NULL),
-            &dev::rpc::RpcFace::callI);
+            &bcos::rpc::RpcFace::callI);
 
         this->bindAndAddMethod(jsonrpc::Procedure("sendRawTransaction", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, "param2",
                                    jsonrpc::JSON_STRING, NULL),
-            &dev::rpc::RpcFace::sendRawTransactionI);
+            &bcos::rpc::RpcFace::sendRawTransactionI);
 
         this->bindAndAddMethod(jsonrpc::Procedure("sendRawTransactionAndGetProof",
                                    jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, "param1",
                                    jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_STRING, NULL),
-            &dev::rpc::RpcFace::sendRawTransactionAndGetProofI);
+            &bcos::rpc::RpcFace::sendRawTransactionAndGetProofI);
 
         this->bindAndAddMethod(
             jsonrpc::Procedure("getCode", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT,
                 "param1", jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_STRING, NULL),
-            &dev::rpc::RpcFace::getCodeI);
+            &bcos::rpc::RpcFace::getCodeI);
         this->bindAndAddMethod(
             jsonrpc::Procedure("getTotalTransactionCount", jsonrpc::PARAMS_BY_POSITION,
                 jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
-            &dev::rpc::RpcFace::getTotalTransactionCountI);
+            &bcos::rpc::RpcFace::getTotalTransactionCountI);
 
         this->bindAndAddMethod(jsonrpc::Procedure("getTransactionByHashWithProof",
                                    jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, "param1",
                                    jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_STRING, NULL),
-            &dev::rpc::RpcFace::getTransactionByHashWithProofI);
+            &bcos::rpc::RpcFace::getTransactionByHashWithProofI);
 
         this->bindAndAddMethod(jsonrpc::Procedure("getTransactionReceiptByHashWithProof",
                                    jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, "param1",
                                    jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_STRING, NULL),
-            &dev::rpc::RpcFace::getTransactionReceiptByHashWithProofI);
+            &bcos::rpc::RpcFace::getTransactionReceiptByHashWithProofI);
 
         this->bindAndAddMethod(
             jsonrpc::Procedure("generateGroup", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT,
                 "param1", jsonrpc::JSON_INTEGER, "param2", jsonrpc::JSON_OBJECT, NULL),
-            &dev::rpc::RpcFace::generateGroupI);
+            &bcos::rpc::RpcFace::generateGroupI);
 
         this->bindAndAddMethod(jsonrpc::Procedure("startGroup", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
-            &dev::rpc::RpcFace::startGroupI);
+            &bcos::rpc::RpcFace::startGroupI);
 
         this->bindAndAddMethod(jsonrpc::Procedure("stopGroup", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
-            &dev::rpc::RpcFace::stopGroupI);
+            &bcos::rpc::RpcFace::stopGroupI);
 
         this->bindAndAddMethod(jsonrpc::Procedure("removeGroup", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
-            &dev::rpc::RpcFace::removeGroupI);
+            &bcos::rpc::RpcFace::removeGroupI);
 
         this->bindAndAddMethod(jsonrpc::Procedure("recoverGroup", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
-            &dev::rpc::RpcFace::recoverGroupI);
+            &bcos::rpc::RpcFace::recoverGroupI);
 
         this->bindAndAddMethod(jsonrpc::Procedure("queryGroupStatus", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
-            &dev::rpc::RpcFace::queryGroupStatusI);
+            &bcos::rpc::RpcFace::queryGroupStatusI);
 
         this->bindAndAddMethod(
             jsonrpc::Procedure("getBatchReceiptsByBlockNumberAndRange", jsonrpc::PARAMS_BY_POSITION,
                 jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, "param2",
                 jsonrpc::JSON_STRING, "param3", jsonrpc::JSON_STRING, "param4",
                 jsonrpc::JSON_STRING, "param5", jsonrpc::JSON_BOOLEAN, NULL),
-            &dev::rpc::RpcFace::getBatchReceiptsByBlockNumberAndRangeI);
+            &bcos::rpc::RpcFace::getBatchReceiptsByBlockNumberAndRangeI);
 
         this->bindAndAddMethod(
             jsonrpc::Procedure("getBatchReceiptsByBlockHashAndRange", jsonrpc::PARAMS_BY_POSITION,
                 jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, "param2",
                 jsonrpc::JSON_STRING, "param3", jsonrpc::JSON_STRING, "param4",
                 jsonrpc::JSON_STRING, "param5", jsonrpc::JSON_BOOLEAN, NULL),
-            &dev::rpc::RpcFace::getBatchReceiptsByBlockHashAndRangeI);
+            &bcos::rpc::RpcFace::getBatchReceiptsByBlockHashAndRangeI);
     }
 
     inline virtual void getSystemConfigByKeyI(const Json::Value& request, Json::Value& response)
@@ -499,4 +499,4 @@ public:
 };
 
 }  // namespace rpc
-}  // namespace dev
+}  // namespace bcos

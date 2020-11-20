@@ -23,15 +23,15 @@
 #include "Common.h"
 #include "ExecutiveContext.h"
 
-#include <libdevcore/FixedHash.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/Block.h>
 #include <libethcore/Transaction.h>
 #include <libethcore/TransactionReceipt.h>
 #include <libmptstate/State.h>
+#include <libutilities/FixedHash.h>
 #include <memory>
 
-namespace dev
+namespace bcos
 {
 namespace eth
 {
@@ -49,10 +49,10 @@ public:
     virtual ~BlockVerifierInterface(){};
 
     virtual ExecutiveContext::Ptr executeBlock(
-        dev::eth::Block& block, BlockInfo const& parentBlockInfo) = 0;
+        bcos::eth::Block& block, BlockInfo const& parentBlockInfo) = 0;
 
-    virtual dev::eth::TransactionReceipt::Ptr executeTransaction(
-        const dev::eth::BlockHeader& blockHeader, dev::eth::Transaction::Ptr _t) = 0;
+    virtual bcos::eth::TransactionReceipt::Ptr executeTransaction(
+        const bcos::eth::BlockHeader& blockHeader, bcos::eth::Transaction::Ptr _t) = 0;
 };
 }  // namespace blockverifier
-}  // namespace dev
+}  // namespace bcos

@@ -27,7 +27,7 @@
 #include <cstdlib>
 #include <string>
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -38,18 +38,18 @@ const static std::string TEST_PATH = "FISCO_BCOS_TEST_PATH";
 
 inline boost::filesystem::path getTestPath()
 {
-    if (dev::test::Options::get().testpath != "")
+    if (bcos::test::Options::get().testpath != "")
     {
-        return boost::filesystem::path(dev::test::Options::get().testpath);
+        return boost::filesystem::path(bcos::test::Options::get().testpath);
     }
 
     std::string testPath = "";
     // get test path from env
-    const char* pTestPath = getenv(dev::test::constVar::TEST_PATH.c_str());
+    const char* pTestPath = getenv(bcos::test::constVar::TEST_PATH.c_str());
     if (!pTestPath)
     {
         testPath = "../test/data";
-        LOG(WARNING) << "Test environment " << dev::test::constVar::TEST_PATH
+        LOG(WARNING) << "Test environment " << bcos::test::constVar::TEST_PATH
                      << " has not been setted, use default";
     }
     else
@@ -76,4 +76,4 @@ inline std::vector<boost::filesystem::path> getFiles(
 }
 
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

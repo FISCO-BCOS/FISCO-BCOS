@@ -26,7 +26,7 @@
 
 #define RPCQPSLIMIT_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("RPCQPSLimiter")
 
-namespace dev
+namespace bcos
 {
 namespace flowlimit
 {
@@ -37,21 +37,21 @@ public:
     RPCQPSLimiter();
     virtual ~RPCQPSLimiter() {}
     virtual void createRPCQPSLimiter(uint64_t const& _maxQPS);
-    void registerQPSLimiterByGroupID(dev::GROUP_ID const& _groupId, RateLimiter::Ptr);
+    void registerQPSLimiterByGroupID(bcos::GROUP_ID const& _groupId, RateLimiter::Ptr);
 
-    RateLimiter::Ptr getQPSLimiterByGroupId(dev::GROUP_ID const& _groupId);
+    RateLimiter::Ptr getQPSLimiterByGroupId(bcos::GROUP_ID const& _groupId);
 
     virtual bool acquire(int64_t const& _requiredPermits = 1);
     virtual void acquireWithoutWait(int64_t _requiredPermits = 1);
     virtual bool acquireFromGroup(
-        dev::GROUP_ID const& _groupId, int64_t const& _requiredPermits = 1);
+        bcos::GROUP_ID const& _groupId, int64_t const& _requiredPermits = 1);
 
     RateLimiter::Ptr rpcQPSLimiter() { return m_rpcQPSLimiter; }
 
 private:
-    std::shared_ptr<std::map<dev::GROUP_ID, RateLimiter::Ptr>> m_group2QPSLimiter;
+    std::shared_ptr<std::map<bcos::GROUP_ID, RateLimiter::Ptr>> m_group2QPSLimiter;
     mutable SharedMutex x_group2QPSLimiter;
     RateLimiter::Ptr m_rpcQPSLimiter;
 };
 }  // namespace flowlimit
-}  // namespace dev
+}  // namespace bcos

@@ -25,11 +25,11 @@
 #include "StorageState.h"
 
 using namespace std;
-using namespace dev;
-using namespace dev::storagestate;
-using namespace dev::executive;
+using namespace bcos;
+using namespace bcos::storagestate;
+using namespace bcos::executive;
 std::shared_ptr<StateFace> StorageStateFactory::getState(
-    h256 const&, std::shared_ptr<dev::storage::TableFactory> _factory)
+    h256 const&, std::shared_ptr<bcos::storage::TableFactory> _factory)
 {
     auto storageState = make_shared<StorageState>(m_accountStartNonce);
     storageState->setMemoryTableFactory(_factory);

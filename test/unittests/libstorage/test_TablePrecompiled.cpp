@@ -27,21 +27,21 @@
 #include <libstorage/Table.h>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev;
+using namespace bcos;
 using namespace std;
-using namespace dev::blockverifier;
-using namespace dev::precompiled;
-using namespace dev::storage;
+using namespace bcos::blockverifier;
+using namespace bcos::precompiled;
+using namespace bcos::storage;
 
 namespace test_TablePrecompiled
 {
-class MockPrecompiledEngine : public dev::blockverifier::ExecutiveContext
+class MockPrecompiledEngine : public bcos::blockverifier::ExecutiveContext
 {
 public:
     virtual ~MockPrecompiledEngine() {}
 };
 
-class MockMemoryDB : public dev::storage::MemoryTable<Serial>
+class MockMemoryDB : public bcos::storage::MemoryTable<Serial>
 {
 public:
     virtual ~MockMemoryDB() {}
@@ -53,7 +53,7 @@ struct TablePrecompiledFixture
     {
         context = std::make_shared<MockPrecompiledEngine>();
         context->setMemoryTableFactory(std::make_shared<storage::MemoryTableFactory>());
-        tablePrecompiled = std::make_shared<dev::precompiled::TablePrecompiled>();
+        tablePrecompiled = std::make_shared<bcos::precompiled::TablePrecompiled>();
         auto table = std::make_shared<MockMemoryDB>();
         TableInfo::Ptr info = std::make_shared<TableInfo>();
         info->fields.emplace_back("name");
@@ -63,16 +63,16 @@ struct TablePrecompiledFixture
             [&](Table::Ptr, Change::Kind, string const&, vector<Change::Record>&) {});
         tablePrecompiled->setTable(table);
 
-        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
+        auto precompiledGasFactory = std::make_shared<bcos::precompiled::PrecompiledGasFactory>(0);
         auto precompiledExecResultFactory =
-            std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+            std::make_shared<bcos::precompiled::PrecompiledExecResultFactory>();
         precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
         tablePrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     }
 
     ~TablePrecompiledFixture() {}
 
-    dev::precompiled::TablePrecompiled::Ptr tablePrecompiled;
+    bcos::precompiled::TablePrecompiled::Ptr tablePrecompiled;
     ExecutiveContext::Ptr context;
     BlockInfo blockInfo;
     int addressCount = 0x10000;

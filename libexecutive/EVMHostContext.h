@@ -35,7 +35,7 @@
 #include <functional>
 #include <map>
 
-namespace dev
+namespace bcos
 {
 namespace executive
 {
@@ -46,10 +46,10 @@ class EVMHostContext : public evmc_host_context
 public:
     /// Full constructor.
     EVMHostContext(std::shared_ptr<executive::StateFace> _s,
-        dev::executive::EnvInfo const& _envInfo, Address const& _myAddress, Address const& _caller,
+        bcos::executive::EnvInfo const& _envInfo, Address const& _myAddress, Address const& _caller,
         Address const& _origin, u256 const& _value, u256 const& _gasPrice, bytesConstRef _data,
         const bytes& _code, h256 const& _codeHash, unsigned _depth, bool _isCreate,
-        bool _staticCall, bool _freeStorage=false);
+        bool _staticCall, bool _freeStorage = false);
     virtual ~EVMHostContext() = default;
 
     EVMHostContext(EVMHostContext const&) = delete;
@@ -75,7 +75,7 @@ public:
         u256 const& _endowment, u256& io_gas, bytesConstRef _code, evmc_opcode _op, u256 _salt);
 
     /// Create a new message call.
-    virtual evmc_result call(dev::executive::CallParameters& _params);
+    virtual evmc_result call(bcos::executive::CallParameters& _params);
 
     /// Read address's balance.
     virtual u256 balance(Address const& _a) { return m_s->balance(_a); }
@@ -93,7 +93,7 @@ public:
     virtual void suicide(Address const& _a);
 
     /// Return the EVM gas-price schedule for this execution context.
-    virtual dev::eth::EVMSchedule const& evmSchedule() const { return g_BCOSConfig.evmSchedule(); }
+    virtual bcos::eth::EVMSchedule const& evmSchedule() const { return g_BCOSConfig.evmSchedule(); }
 
     virtual std::shared_ptr<executive::StateFace> const& state() const { return m_s; }
 
@@ -163,4 +163,4 @@ private:
 };
 
 }  // namespace executive
-}  // namespace dev
+}  // namespace bcos

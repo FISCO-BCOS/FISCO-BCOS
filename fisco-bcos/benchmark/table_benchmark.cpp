@@ -35,14 +35,14 @@
 #include <functional>
 
 using namespace std;
-using namespace dev;
+using namespace bcos;
 using namespace boost;
-using namespace dev::db;
-using namespace dev::ledger;
-using namespace dev::storage;
-using namespace dev::blockverifier;
-using namespace dev::initializer;
-using namespace dev::precompiled;
+using namespace bcos::db;
+using namespace bcos::ledger;
+using namespace bcos::storage;
+using namespace bcos::blockverifier;
+using namespace bcos::initializer;
+using namespace bcos::precompiled;
 
 namespace po = boost::program_options;
 
@@ -118,9 +118,9 @@ int main(int argc, const char* argv[])
         cachedStorage->init();
         storage = cachedStorage;
     }
-    auto tableFactoryFactory = std::make_shared<dev::storage::MemoryTableFactoryFactory2>();
+    auto tableFactoryFactory = std::make_shared<bcos::storage::MemoryTableFactoryFactory2>();
     tableFactoryFactory->setStorage(storage);
-    auto tableFactory = tableFactoryFactory->newTableFactory(dev::h256(), blockNumber);
+    auto tableFactory = tableFactoryFactory->newTableFactory(bcos::h256(), blockNumber);
     // create context
     auto context = std::make_shared<ExecutiveContext>();
     context->setMemoryTableFactory(tableFactory);
@@ -141,7 +141,7 @@ int main(int argc, const char* argv[])
     entry->setField(SYS_KEY, SYS_KEY_CURRENT_NUMBER);
     statetable->insert(SYS_KEY_CURRENT_NUMBER, entry);
     tableFactory->commitDB(h256(0), blockNumber++);
-    tableFactory = tableFactoryFactory->newTableFactory(dev::h256(), blockNumber);
+    tableFactory = tableFactoryFactory->newTableFactory(bcos::h256(), blockNumber);
 
 
     auto commitData = [&](int64_t block) {
@@ -151,7 +151,7 @@ int main(int argc, const char* argv[])
         entry->setField(SYS_KEY, SYS_KEY_CURRENT_NUMBER);
         statetable->update(SYS_KEY_CURRENT_NUMBER, entry, statetable->newCondition());
         tableFactory->commitDB(h256(0), block);
-        tableFactory = tableFactoryFactory->newTableFactory(dev::h256(), block + 1);
+        tableFactory = tableFactoryFactory->newTableFactory(bcos::h256(), block + 1);
     };
     auto setPermission = [&](const string& tableName, uint32_t accounts) {
         auto acTable = tableFactory->openTable(SYS_ACCESS_TABLE);

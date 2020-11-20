@@ -20,8 +20,8 @@
 #include <libstorage/Table.h>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev;
-using namespace dev::storage;
+using namespace bcos;
+using namespace bcos::storage;
 
 namespace test_Storage
 {
@@ -36,10 +36,10 @@ struct StorageFixture
 
     ~StorageFixture() {}
 
-    dev::storage::Entry::Ptr entry;
-    dev::storage::Entries::Ptr entries;
-    dev::storage::Condition::Ptr condition;
-    dev::storage::Table::Ptr stateDB;
+    bcos::storage::Entry::Ptr entry;
+    bcos::storage::Entries::Ptr entries;
+    bcos::storage::Condition::Ptr condition;
+    bcos::storage::Table::Ptr stateDB;
 };
 
 BOOST_FIXTURE_TEST_SUITE(Storage, StorageFixture)
@@ -70,7 +70,7 @@ BOOST_AUTO_TEST_CASE(entriesTest)
 
     BOOST_TEST_TRUE(entries->size() == 1u);
     BOOST_TEST_TRUE(entries->get(0) == entry);
-    BOOST_CHECK_THROW(entries->get(5), dev::storage::StorageException);
+    BOOST_CHECK_THROW(entries->get(5), bcos::storage::StorageException);
     BOOST_TEST_TRUE(entries->dirty() == true);
 }
 

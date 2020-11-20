@@ -27,37 +27,37 @@
 #include "SM2Signature.h"
 #include "SM3Hash.h"
 #include "SM4Crypto.h"
-#include "libdevcore/RLP.h"
+#include "libutilities/RLP.h"
 #include <libconfig/GlobalConfigure.h>
 
 using namespace std;
-using namespace dev;
-using namespace dev::crypto;
+using namespace bcos;
+using namespace bcos::crypto;
 
-h256 dev::EmptyHash = keccak256(bytesConstRef());
-h256 dev::EmptyTrie = keccak256(rlp(""));
+h256 bcos::EmptyHash = keccak256(bytesConstRef());
+h256 bcos::EmptyTrie = keccak256(rlp(""));
 
 std::function<std::string(const unsigned char* _plainData, size_t _plainDataSize,
     const unsigned char* _key, size_t _keySize, const unsigned char* _ivData)>
-    dev::crypto::SymmetricEncrypt = static_cast<std::string (*)(const unsigned char*, size_t,
-        const unsigned char*, size_t, const unsigned char*)>(dev::crypto::aesCBCEncrypt);
+    bcos::crypto::SymmetricEncrypt = static_cast<std::string (*)(const unsigned char*, size_t,
+        const unsigned char*, size_t, const unsigned char*)>(bcos::crypto::aesCBCEncrypt);
 std::function<std::string(const unsigned char* _encryptedData, size_t _encryptedDataSize,
     const unsigned char* _key, size_t _keySize, const unsigned char* _ivData)>
-    dev::crypto::SymmetricDecrypt = static_cast<std::string (*)(const unsigned char*, size_t,
-        const unsigned char*, size_t, const unsigned char*)>(dev::crypto::aesCBCDecrypt);
+    bcos::crypto::SymmetricDecrypt = static_cast<std::string (*)(const unsigned char*, size_t,
+        const unsigned char*, size_t, const unsigned char*)>(bcos::crypto::aesCBCDecrypt);
 std::function<std::shared_ptr<crypto::Signature>(RLP const& _rlp, size_t _start)>
-    dev::crypto::SignatureFromRLP = ecdsaSignatureFromRLP;
+    bcos::crypto::SignatureFromRLP = ecdsaSignatureFromRLP;
 std::function<std::shared_ptr<crypto::Signature>(std::vector<unsigned char>)>
-    dev::crypto::SignatureFromBytes = ecdsaSignatureFromBytes;
+    bcos::crypto::SignatureFromBytes = ecdsaSignatureFromBytes;
 
 std::function<std::shared_ptr<crypto::Signature>(KeyPair const& _keyPair, const h256& _hash)>
-    dev::crypto::Sign = ecdsaSign;
+    bcos::crypto::Sign = ecdsaSign;
 std::function<bool(h512 const& _pubKey, std::shared_ptr<crypto::Signature> _sig, const h256& _hash)>
-    dev::crypto::Verify = ecdsaVerify;
+    bcos::crypto::Verify = ecdsaVerify;
 std::function<h512(std::shared_ptr<crypto::Signature> _sig, const h256& _hash)>
-    dev::crypto::Recover = ecdsaRecover;
+    bcos::crypto::Recover = ecdsaRecover;
 
-size_t dev::crypto::signatureLength()
+size_t bcos::crypto::signatureLength()
 {
     if (g_BCOSConfig.SMCrypto())
     {
@@ -68,31 +68,31 @@ size_t dev::crypto::signatureLength()
     return 65;
 }
 
-void dev::crypto::initSMCrypto()
+void bcos::crypto::initSMCrypto()
 {
     EmptyHash = sm3(bytesConstRef());
     EmptyTrie = sm3(rlp(""));
     SignatureFromRLP = sm2SignatureFromRLP;
     SignatureFromBytes = sm2SignatureFromBytes;
-    dev::crypto::SymmetricEncrypt = static_cast<std::string (*)(const unsigned char*, size_t,
-        const unsigned char*, size_t, const unsigned char*)>(dev::crypto::sm4Encrypt);
-    dev::crypto::SymmetricDecrypt = static_cast<std::string (*)(const unsigned char*, size_t,
-        const unsigned char*, size_t, const unsigned char*)>(dev::crypto::sm4Decrypt);
+    bcos::crypto::SymmetricEncrypt = static_cast<std::string (*)(const unsigned char*, size_t,
+        const unsigned char*, size_t, const unsigned char*)>(bcos::crypto::sm4Encrypt);
+    bcos::crypto::SymmetricDecrypt = static_cast<std::string (*)(const unsigned char*, size_t,
+        const unsigned char*, size_t, const unsigned char*)>(bcos::crypto::sm4Decrypt);
     Sign = sm2Sign;
     Verify = sm2Verify;
     Recover = sm2Recover;
 }
 
-void dev::crypto::initCrypto()
+void bcos::crypto::initCrypto()
 {
     EmptyHash = keccak256(bytesConstRef());
     EmptyTrie = keccak256(rlp(""));
     SignatureFromRLP = ecdsaSignatureFromRLP;
     SignatureFromBytes = ecdsaSignatureFromBytes;
-    dev::crypto::SymmetricEncrypt = static_cast<std::string (*)(const unsigned char*, size_t,
-        const unsigned char*, size_t, const unsigned char*)>(dev::crypto::aesCBCEncrypt);
-    dev::crypto::SymmetricDecrypt = static_cast<std::string (*)(const unsigned char*, size_t,
-        const unsigned char*, size_t, const unsigned char*)>(dev::crypto::aesCBCDecrypt);
+    bcos::crypto::SymmetricEncrypt = static_cast<std::string (*)(const unsigned char*, size_t,
+        const unsigned char*, size_t, const unsigned char*)>(bcos::crypto::aesCBCEncrypt);
+    bcos::crypto::SymmetricDecrypt = static_cast<std::string (*)(const unsigned char*, size_t,
+        const unsigned char*, size_t, const unsigned char*)>(bcos::crypto::aesCBCDecrypt);
     Sign = ecdsaSign;
     Verify = ecdsaVerify;
     Recover = ecdsaRecover;

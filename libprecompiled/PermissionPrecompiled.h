@@ -21,7 +21,7 @@
 #pragma once
 #include "Common.h"
 
-namespace dev
+namespace bcos
 {
 namespace precompiled
 {
@@ -33,7 +33,7 @@ contract PermissionPrecompiled {
 }
 #endif
 
-class PermissionPrecompiled : public dev::precompiled::Precompiled
+class PermissionPrecompiled : public bcos::precompiled::Precompiled
 {
 public:
     typedef std::shared_ptr<PermissionPrecompiled> Ptr;
@@ -42,7 +42,7 @@ public:
 
     std::string toString() override;
 
-    PrecompiledExecResult::Ptr call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+    PrecompiledExecResult::Ptr call(std::shared_ptr<bcos::blockverifier::ExecutiveContext> context,
         bytesConstRef param, Address const& origin = Address(),
         Address const& _sender = Address()) override;
 
@@ -50,20 +50,20 @@ protected:
     void addPrefixToUserTable(std::string& tableName);
 
 private:
-    std::string queryPermission(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+    std::string queryPermission(std::shared_ptr<bcos::blockverifier::ExecutiveContext> context,
         const std::string& tableName);
     int revokeContractTablePermission(
-        std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
+        std::shared_ptr<bcos::blockverifier::ExecutiveContext> _context,
         const std::string& _tableName, const std::string& _user, Address const& _origin)
     {
         return revokeWritePermission(_context, _tableName, _user, _origin, true);
     }
-    int revokeTablePermission(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
+    int revokeTablePermission(std::shared_ptr<bcos::blockverifier::ExecutiveContext> _context,
         const std::string& _tableName, const std::string& _user, Address const& _origin)
     {
         return revokeWritePermission(_context, _tableName, _user, _origin, false);
     }
-    int revokeWritePermission(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+    int revokeWritePermission(std::shared_ptr<bcos::blockverifier::ExecutiveContext> context,
         const std::string& tableName, const std::string& user, Address const& origin,
         bool _isContractTable);
     bool checkPermission(std::shared_ptr<blockverifier::ExecutiveContext> context,
@@ -72,4 +72,4 @@ private:
 
 }  // namespace precompiled
 
-}  // namespace dev
+}  // namespace bcos

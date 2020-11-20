@@ -23,16 +23,16 @@
  */
 #include "TxPool.h"
 #include "tbb/parallel_for_each.h"
-#include <libdevcore/Common.h>
 #include <libethcore/Exceptions.h>
 #include <libethcore/PartiallyBlock.h>
+#include <libutilities/Common.h>
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_invoke.h>
 
 using namespace std;
-using namespace dev::p2p;
-using namespace dev::eth;
-namespace dev
+using namespace bcos::p2p;
+using namespace bcos::eth;
+namespace bcos
 {
 namespace txpool
 {
@@ -77,7 +77,7 @@ std::pair<h256, Address> TxPool::submit(Transaction::Ptr _tx)
 }
 
 // create receipt
-void TxPool::notifyReceipt(dev::eth::Transaction::Ptr _tx, ImportResult const& _verifyRet)
+void TxPool::notifyReceipt(bcos::eth::Transaction::Ptr _tx, ImportResult const& _verifyRet)
 {
     auto callback = _tx->rpcCallback();
     if (!callback)
@@ -136,12 +136,12 @@ void TxPool::notifyReceipt(dev::eth::Transaction::Ptr _tx, ImportResult const& _
     TXPOOL_LOG(ERROR) << LOG_DESC("notifyReceipt: txException")
                       << LOG_KV("hash", _tx->hash().abridged())
                       << LOG_KV("exception", int(txException));
-    dev::eth::LocalisedTransactionReceipt::Ptr receipt =
-        std::make_shared<dev::eth::LocalisedTransactionReceipt>(txException);
+    bcos::eth::LocalisedTransactionReceipt::Ptr receipt =
+        std::make_shared<bcos::eth::LocalisedTransactionReceipt>(txException);
     m_workerPool->enqueue([callback, receipt] { callback(receipt, bytesConstRef(), nullptr); });
 }
 
-std::pair<h256, Address> TxPool::submitTransactions(dev::eth::Transaction::Ptr _tx)
+std::pair<h256, Address> TxPool::submitTransactions(bcos::eth::Transaction::Ptr _tx)
 {
     ImportResult ret = import(_tx);
     if (ImportResult::Success == ret)
@@ -261,7 +261,7 @@ ImportResult TxPool::import(Transaction::Ptr _tx, IfDropped)
     return verify_ret;
 }
 
-void TxPool::verifyAndSetSenderForBlock(dev::eth::Block& block)
+void TxPool::verifyAndSetSenderForBlock(bcos::eth::Block& block)
 {
     auto trans_num = block.getTransactionSize();
     tbb::parallel_for(
@@ -288,7 +288,7 @@ void TxPool::verifyAndSetSenderForBlock(dev::eth::Block& block)
         });
 }
 
-bool TxPool::txExists(dev::h256 const& txHash)
+bool TxPool::txExists(bcos::h256 const& txHash)
 {
     ReadGuard l(m_lock);
     /// can't submit to the transaction pull, return false
@@ -370,7 +370,7 @@ ImportResult TxPool::verify(Transaction::Ptr trans, IfDropped _drop_policy)
 struct TxCallback
 {
     RPCCallback call;
-    dev::eth::LocalisedTransactionReceipt::Ptr pReceipt;
+    bcos::eth::LocalisedTransactionReceipt::Ptr pReceipt;
 };
 
 
@@ -378,7 +378,7 @@ struct TxCallback
  * @brief : remove latest transactions from queue after the transaction queue overloaded
  */
 bool TxPool::removeTrans(h256 const& _txHash, bool _needTriggerCallback,
-    std::shared_ptr<dev::eth::Block> _block, size_t _index)
+    std::shared_ptr<bcos::eth::Block> _block, size_t _index)
 {
     Transaction::Ptr transaction = nullptr;
     // remove transaction from txPool
@@ -403,10 +403,10 @@ bool TxPool::removeTrans(h256 const& _txHash, bool _needTriggerCallback,
             // m_callbackPool.enqueue(bind(p_tx->second->rpcCallback(), pReceipt));
             LocalisedTransactionReceipt::Ptr pReceipt = nullptr;
 
-            dev::bytesConstRef input = dev::bytesConstRef();
+            bcos::bytesConstRef input = bcos::bytesConstRef();
             if (_block && _block->transactionReceipts()->size() > _index)
             {
-                input = dev::bytesConstRef(transaction->data().data(), transaction->data().size());
+                input = bcos::bytesConstRef(transaction->data().data(), transaction->data().size());
                 pReceipt = constructTransactionReceipt((*(_block->transactions()))[_index],
                     (*(_block->transactionReceipts()))[_index], *_block, _index);
             }
@@ -466,11 +466,11 @@ bool TxPool::drop(h256 const& _txHash)
     return succ;
 }
 
-dev::eth::LocalisedTransactionReceipt::Ptr TxPool::constructTransactionReceipt(
+bcos::eth::LocalisedTransactionReceipt::Ptr TxPool::constructTransactionReceipt(
     Transaction::Ptr tx, TransactionReceipt::Ptr receipt, Block const& block, unsigned index)
 {
-    dev::eth::LocalisedTransactionReceipt::Ptr pTxReceipt =
-        std::make_shared<dev::eth::LocalisedTransactionReceipt>(*receipt, tx->hash(),
+    bcos::eth::LocalisedTransactionReceipt::Ptr pTxReceipt =
+        std::make_shared<bcos::eth::LocalisedTransactionReceipt>(*receipt, tx->hash(),
             block.blockHeader().hash(), block.blockHeader().number(), tx->safeSender(),
             tx->receiveAddress(), index, receipt->gasUsed(), receipt->contractAddress());
     return pTxReceipt;
@@ -500,7 +500,7 @@ bool TxPool::dropTransactions(std::shared_ptr<Block> block, bool)
     return succ;
 }
 
-void TxPool::dropBlockTxsFilter(std::shared_ptr<dev::eth::Block> _block)
+void TxPool::dropBlockTxsFilter(std::shared_ptr<bcos::eth::Block> _block)
 {
     if (!_block)
     {
@@ -584,7 +584,7 @@ bool TxPool::dropBlockTrans(std::shared_ptr<Block> block)
  * @param _condition : The function return false to avoid transaction to return.
  * @return Transactions : up to _limit transactions
  */
-std::shared_ptr<dev::eth::Transactions> TxPool::topTransactions(uint64_t const& _limit)
+std::shared_ptr<bcos::eth::Transactions> TxPool::topTransactions(uint64_t const& _limit)
 {
     h256Hash _avoid = h256Hash();
     return topTransactions(_limit, _avoid);
@@ -596,8 +596,8 @@ std::shared_ptr<Transactions> TxPool::topTransactions(
     uint64_t limit = min(m_limit, _limit);
     uint64_t txCnt = 0;
     auto ret = std::make_shared<Transactions>();
-    std::vector<dev::h256> invalidBlockLimitTxs;
-    std::vector<dev::eth::NonceKeyType> nonceKeyCache;
+    std::vector<bcos::h256> invalidBlockLimitTxs;
+    std::vector<bcos::eth::NonceKeyType> nonceKeyCache;
 
     {
         WriteGuard wl(x_invalidTxs);
@@ -645,7 +645,7 @@ std::shared_ptr<Transactions> TxPool::topTransactions(
 }
 
 std::shared_ptr<Transactions> TxPool::topTransactionsCondition(
-    uint64_t const& _limit, dev::h512 const&)
+    uint64_t const& _limit, bcos::h512 const&)
 {
     ReadGuard l(m_lock);
     std::shared_ptr<Transactions> ret = std::make_shared<Transactions>();
@@ -705,7 +705,7 @@ void TxPool::clear()
     m_dropped.clear();
 }
 
-std::shared_ptr<Transactions> TxPool::obtainTransactions(std::vector<dev::h256> const& _reqTxs)
+std::shared_ptr<Transactions> TxPool::obtainTransactions(std::vector<bcos::h256> const& _reqTxs)
 {
     std::shared_ptr<Transactions> ret = std::make_shared<Transactions>();
     ReadGuard l(m_lock);
@@ -719,10 +719,10 @@ std::shared_ptr<Transactions> TxPool::obtainTransactions(std::vector<dev::h256> 
     return ret;
 }
 
-void TxPool::setTransactionKnownBy(std::set<dev::h256> const& _txsHashSet, dev::h512 const& _peer)
+void TxPool::setTransactionKnownBy(std::set<bcos::h256> const& _txsHashSet, bcos::h512 const& _peer)
 {
     ReadGuard l(m_lock);
-    tbb::parallel_for_each(_txsHashSet.begin(), _txsHashSet.end(), [&](dev::h256 const& txHash) {
+    tbb::parallel_for_each(_txsHashSet.begin(), _txsHashSet.end(), [&](bcos::h256 const& txHash) {
         auto p_tx = m_txsHash.find(txHash);
         if (p_tx != m_txsHash.end())
         {
@@ -731,11 +731,12 @@ void TxPool::setTransactionKnownBy(std::set<dev::h256> const& _txsHashSet, dev::
     });
 }
 
-std::shared_ptr<std::vector<dev::h256>> TxPool::filterUnknownTxs(
-    std::set<dev::h256> const& _txsHashSet, dev::h512 const& _peer)
+std::shared_ptr<std::vector<bcos::h256>> TxPool::filterUnknownTxs(
+    std::set<bcos::h256> const& _txsHashSet, bcos::h512 const& _peer)
 {
     setTransactionKnownBy(_txsHashSet, _peer);
-    std::shared_ptr<std::vector<dev::h256>> unknownTxs = std::make_shared<std::vector<dev::h256>>();
+    std::shared_ptr<std::vector<bcos::h256>> unknownTxs =
+        std::make_shared<std::vector<bcos::h256>>();
     WriteGuard l(x_txsHashFilter);
     for (auto const& txHash : _txsHashSet)
     {
@@ -753,7 +754,7 @@ std::shared_ptr<std::vector<dev::h256>> TxPool::filterUnknownTxs(
 }
 
 // init the PartiallyBlock
-bool TxPool::initPartiallyBlock(dev::eth::Block::Ptr _block)
+bool TxPool::initPartiallyBlock(bcos::eth::Block::Ptr _block)
 {
     PartiallyBlock::Ptr partiallyBlock = std::dynamic_pointer_cast<PartiallyBlock>(_block);
     assert(partiallyBlock);
@@ -818,4 +819,4 @@ void TxPool::freshTxsStatus()
 }
 
 }  // namespace txpool
-}  // namespace dev
+}  // namespace bcos

@@ -23,10 +23,10 @@
 #include <libdevcrypto/Hash.h>
 #include <libethcore/ABI.h>
 
-using namespace dev;
-using namespace dev::blockverifier;
-using namespace dev::precompiled;
-using namespace dev::storage;
+using namespace bcos;
+using namespace bcos::blockverifier;
+using namespace bcos::precompiled;
+using namespace bcos::storage;
 
 
 const char* const CONDITION_METHOD_EQ_STR_INT = "EQ(string,int256)";
@@ -75,7 +75,7 @@ PrecompiledExecResult::Ptr ConditionPrecompiled::call(
 
     STORAGE_LOG(DEBUG) << "func:" << std::hex << func;
 
-    dev::eth::ContractABI abi;
+    bcos::eth::ContractABI abi;
 
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
     callResult->gasPricer()->setMemUsed(param.size());

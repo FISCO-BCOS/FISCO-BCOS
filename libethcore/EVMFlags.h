@@ -24,7 +24,7 @@
 #pragma once
 #include <stdint.h>
 #include <iosfwd>
-namespace dev
+namespace bcos
 {
 using VMFlagType = uint64_t;
 struct EVMFlags
@@ -36,4 +36,4 @@ inline bool enableFreeStorage(VMFlagType const& _vmFlags)
 {
     return _vmFlags & EVMFlags::FreeStorageGas;
 }
-}  // namespace dev
+}  // namespace bcos

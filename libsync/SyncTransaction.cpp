@@ -25,11 +25,11 @@
 #include <json/json.h>
 
 using namespace std;
-using namespace dev;
-using namespace dev::eth;
-using namespace dev::sync;
-using namespace dev::p2p;
-using namespace dev::txpool;
+using namespace bcos;
+using namespace bcos::eth;
+using namespace bcos::sync;
+using namespace bcos::p2p;
+using namespace bcos::txpool;
 
 static unsigned const c_maxSendTransactions = 1000;
 
@@ -104,7 +104,7 @@ void SyncTransaction::sendTransactions(std::shared_ptr<Transactions> _ts,
     bool const& _fastForwardRemainTxs, int64_t const& _startIndex)
 {
     std::shared_ptr<NodeIDs> selectedPeers;
-    std::shared_ptr<std::set<dev::h512>> peers = m_syncStatus->peersSet();
+    std::shared_ptr<std::set<bcos::h512>> peers = m_syncStatus->peersSet();
     // fastforward remaining transactions
     if (_fastForwardRemainTxs)
     {
@@ -256,12 +256,12 @@ void SyncTransaction::maintainDownloadingTransactions()
 
 // send transaction hash
 void SyncTransaction::sendTxsStatus(
-    std::shared_ptr<dev::eth::Transactions> _txs, std::shared_ptr<NodeIDs> _selectedPeers)
+    std::shared_ptr<bcos::eth::Transactions> _txs, std::shared_ptr<NodeIDs> _selectedPeers)
 {
     unsigned percent = 25;
     unsigned expectedSelectSize = (_selectedPeers->size() * percent + 99) / 100;
     int64_t selectSize = std::min(expectedSelectSize, m_txsStatusGossipMaxPeers);
-    std::map<dev::h512, std::shared_ptr<std::set<dev::h256>>> txsHash;
+    std::map<bcos::h512, std::shared_ptr<std::set<bcos::h256>>> txsHash;
     {
         for (auto tx : *_txs)
         {
@@ -281,7 +281,7 @@ void SyncTransaction::sendTxsStatus(
             {
                 if (!txsHash.count(peer))
                 {
-                    txsHash[peer] = std::make_shared<std::set<dev::h256>>();
+                    txsHash[peer] = std::make_shared<std::set<bcos::h256>>();
                 }
                 txsHash[peer]->insert(tx->hash());
             }

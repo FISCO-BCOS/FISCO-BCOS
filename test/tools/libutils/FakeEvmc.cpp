@@ -26,10 +26,10 @@
 #include "libexecutive/EVMHostContext.h"
 
 using namespace std;
-using namespace dev;
-using namespace dev::eth;
+using namespace bcos;
+using namespace bcos::eth;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -237,7 +237,7 @@ evmc_result FakeEvmc::execute(EVMSchedule const& schedule, bytes code, bytes dat
         data.size(), toEvmC(value), toEvmC(0x0_cppui256)};
     if (g_BCOSConfig.SMCrypto())
     {
-        m_context->sm3_hash_fn = dev::executive::sm3Hash;
+        m_context->sm3_hash_fn = bcos::executive::sm3Hash;
     }
     else
     {
@@ -267,4 +267,4 @@ FakeState& FakeEvmc::getState()
 }
 
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

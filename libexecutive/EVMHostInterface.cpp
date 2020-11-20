@@ -25,7 +25,7 @@
 #include "libethcore/Exceptions.h"
 #include <libblockverifier/ExecutiveContext.h>
 
-namespace dev
+namespace bcos
 {
 namespace executive
 {
@@ -235,4 +235,4 @@ const evmc_host_interface* getHostInterface()
     return &fnTable;
 }
 }  // namespace executive
-}  // namespace dev
+}  // namespace bcos

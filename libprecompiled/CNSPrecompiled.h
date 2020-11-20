@@ -30,7 +30,7 @@ contract CNS
 }
 #endif
 
-namespace dev
+namespace bcos
 {
 const std::string SYS_CNS_FIELD_NAME = "name";
 const std::string SYS_CNS_FIELD_VERSION = "version";
@@ -39,7 +39,7 @@ const std::string SYS_CNS_FIELD_ABI = "abi";
 
 namespace precompiled
 {
-class CNSPrecompiled : public dev::precompiled::Precompiled
+class CNSPrecompiled : public bcos::precompiled::Precompiled
 {
 public:
     typedef std::shared_ptr<CNSPrecompiled> Ptr;
@@ -48,15 +48,15 @@ public:
 
     std::string toString() override;
 
-    bool checkCNSParam(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
+    bool checkCNSParam(std::shared_ptr<bcos::blockverifier::ExecutiveContext> _context,
         std::string const& _contractAddress, std::string const& _contractName,
         std::string const& _contractAbi);
 
-    PrecompiledExecResult::Ptr call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+    PrecompiledExecResult::Ptr call(std::shared_ptr<bcos::blockverifier::ExecutiveContext> context,
         bytesConstRef param, Address const& origin = Address(),
         Address const& _sender = Address()) override;
 };
 
 }  // namespace precompiled
 
-}  // namespace dev
+}  // namespace bcos

@@ -2,16 +2,16 @@
 #include "EventLogFilterManager.h"
 #include <json/json.h>
 #include <libblockchain/BlockChainInterface.h>
-#include <libdevcore/TopicInfo.h>
 #include <libethcore/CommonJS.h>
 #include <libeventfilter/EventLogFilterParams.h>
 #include <libledger/LedgerParam.h>
+#include <libutilities/TopicInfo.h>
 
 
 using namespace std;
-using namespace dev;
-using namespace dev::event;
-using namespace dev::eth;
+using namespace bcos;
+using namespace bcos::event;
+using namespace bcos::eth;
 
 // start EventLogFilterManager
 void EventLogFilterManager::start()
@@ -202,14 +202,15 @@ void EventLogFilterManager::addEventLogFilter(EventLogFilter::Ptr _filter)
 }
 
 // delete EventLogFilter in m_filters by client json request
-int32_t EventLogFilterManager::cancelEventLogFilterByRequest(const EventLogFilterParams::Ptr _params, uint32_t _version)
+int32_t EventLogFilterManager::cancelEventLogFilterByRequest(
+    const EventLogFilterParams::Ptr _params, uint32_t _version)
 {
     ResponseCode responseCode = ResponseCode::SUCCESS;
-    
+
     EventLogFilter::Ptr filter = NULL;
     for (auto it = m_filters.begin(); it != m_filters.end(); it++)
     {
-        if ((*it)->getParams()->getFilterID() == _params->getFilterID()) 
+        if ((*it)->getParams()->getFilterID() == _params->getFilterID())
         {
             filter = *it;
         }
@@ -217,7 +218,9 @@ int32_t EventLogFilterManager::cancelEventLogFilterByRequest(const EventLogFilte
     if (filter != NULL)
     {
         cancelEventLogFilter(filter);
-    } else {
+    }
+    else
+    {
         responseCode = NONEXISTENT_EVENT;
     }
 
@@ -260,17 +263,19 @@ void EventLogFilterManager::cancelFilter()
         std::lock_guard<std::mutex> l(m_cancelMetux);
         {
             // delelte all waiting filters in m_filters to be processed
-            for (EventLogFilter::Ptr filter : m_waitCancelFilter) {
+            for (EventLogFilter::Ptr filter : m_waitCancelFilter)
+            {
                 string cannelFilterID = filter->getParams()->getFilterID();
                 for (auto it = m_filters.begin(); it != m_filters.end();)
                 {
                     string filterID = (*it)->getParams()->getFilterID();
                     if (filterID == cannelFilterID)
                     {
-                        EVENT_LOG(TRACE) << LOG_BADGE("cancelFilter") << LOG_KV("filterID", filterID);
+                        EVENT_LOG(TRACE)
+                            << LOG_BADGE("cancelFilter") << LOG_KV("filterID", filterID);
                         m_filters.erase(it);
-                    } 
-                    else 
+                    }
+                    else
                     {
                         it++;
                     }
@@ -290,7 +295,8 @@ void EventLogFilterManager::executeFilters()
     for (auto it = m_filters.begin(); it != m_filters.end();)
     {
         EventLogFilter::Ptr filter = *it;
-        EVENT_LOG(TRACE) << LOG_BADGE("executeFilters") << LOG_KV("filterId", filter->getParams()->getFilterID())
+        EVENT_LOG(TRACE) << LOG_BADGE("executeFilters")
+                         << LOG_KV("filterId", filter->getParams()->getFilterID())
                          << LOG_KV("groupID", filter->getParams()->getGroupID())
                          << LOG_KV("nextBlockToProcess", filter->getNextBlockToProcess())
                          << LOG_KV("startBlockNumber", filter->getParams()->getFromBlock())

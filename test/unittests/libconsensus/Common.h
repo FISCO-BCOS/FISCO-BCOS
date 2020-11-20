@@ -29,14 +29,14 @@
 #include <libdevcrypto/SM2Signature.h>
 #include <boost/test/unit_test.hpp>
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
 template <typename T>
 void checkPBFTMsg(T const& msg, KeyPair const _keyPair = KeyPair::create(),
-    int64_t const& _height = -1, dev::consensus::VIEWTYPE const& _view = dev::consensus::MAXVIEW,
-    dev::consensus::IDXTYPE const& _idx = dev::consensus::MAXIDX,
+    int64_t const& _height = -1, bcos::consensus::VIEWTYPE const& _view = bcos::consensus::MAXVIEW,
+    bcos::consensus::IDXTYPE const& _idx = bcos::consensus::MAXIDX,
     u256 const& _timestamp = Invalid256, h256 const& _blockHash = h256())
 {
     BOOST_CHECK(msg.height == _height);
@@ -74,4 +74,4 @@ void checkPBFTMsg(T const& msg, KeyPair const _keyPair = KeyPair::create(),
 }
 
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

@@ -27,7 +27,7 @@
 #include <boost/property_tree/ptree.hpp>
 #include <memory>
 #include <vector>
-namespace dev
+namespace bcos
 {
 namespace ledger
 {
@@ -68,7 +68,7 @@ public:
     virtual PermissionParam& mutablePermissionParam() = 0;
     virtual std::string const& iniConfigPath() = 0;
     virtual std::string const& genesisConfigPath() = 0;
-    virtual void parseSDKAllowList(dev::h512s&, boost::property_tree::ptree const&) = 0;
+    virtual void parseSDKAllowList(bcos::h512s&, boost::property_tree::ptree const&) = 0;
 };
 }  // namespace ledger
-}  // namespace dev
+}  // namespace bcos

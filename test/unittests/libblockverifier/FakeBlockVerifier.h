@@ -24,9 +24,9 @@
 #pragma once
 #include <libblockverifier/BlockVerifierInterface.h>
 #include <memory>
-using namespace dev::blockverifier;
+using namespace bcos::blockverifier;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -34,15 +34,15 @@ namespace test
 class FakeBlockverifier : public BlockVerifierInterface
 {
 public:
-    std::shared_ptr<ExecutiveContext> executeBlock(dev::eth::Block&, BlockInfo const&) override
+    std::shared_ptr<ExecutiveContext> executeBlock(bcos::eth::Block&, BlockInfo const&) override
     {
         return std::make_shared<ExecutiveContext>();
     }
-    dev::eth::TransactionReceipt::Ptr executeTransaction(
-        const dev::eth::BlockHeader&, dev::eth::Transaction::Ptr) override
+    bcos::eth::TransactionReceipt::Ptr executeTransaction(
+        const bcos::eth::BlockHeader&, bcos::eth::Transaction::Ptr) override
     {
-        dev::eth::TransactionReceipt::Ptr receipt =
-            std::make_shared<dev::eth::TransactionReceipt>();
+        bcos::eth::TransactionReceipt::Ptr receipt =
+            std::make_shared<bcos::eth::TransactionReceipt>();
         return receipt;
     }
 
@@ -51,4 +51,4 @@ private:
     std::shared_ptr<ExecutiveContext> m_execContext;
 };
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

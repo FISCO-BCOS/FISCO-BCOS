@@ -26,12 +26,11 @@
 #include "Transaction.h"
 #include "TransactionReceipt.h"
 #include <libconfig/GlobalConfigure.h>
-#include <libdevcore/Common.h>
-#include <libdevcore/Guards.h>
-#include <libdevcore/TrieHash.h>
-#include <libdevcore/TrieHash2.h>
+#include <libutilities/Common.h>
+#include <libutilities/TrieHash.h>
+#include <libutilities/TrieHash2.h>
 
-namespace dev
+namespace bcos
 {
 namespace eth
 {
@@ -133,8 +132,8 @@ public:
 
     std::shared_ptr<std::vector<u256>> getAllNonces() const
     {
-        std::shared_ptr<std::vector<dev::u256>> nonce_vec =
-            std::make_shared<std::vector<dev::u256>>();
+        std::shared_ptr<std::vector<bcos::u256>> nonce_vec =
+            std::make_shared<std::vector<bcos::u256>>();
         for (auto const& trans : *m_transactions)
         {
             nonce_vec->push_back(trans->nonce());
@@ -265,7 +264,7 @@ public:
     void calReceiptRoot(bool update = true) const;
     void calReceiptRootRC2(bool update = true) const;
     void calTransactionRootV2_2_0(bool update) const;
-    void getReceiptAndHash(RLPStream& txReceipts, std::vector<dev::bytes>& receiptList) const;
+    void getReceiptAndHash(RLPStream& txReceipts, std::vector<bcos::bytes>& receiptList) const;
     void calReceiptRootV2_2_0(bool update) const;
 
     std::shared_ptr<std::map<std::string, std::vector<std::string>>> getReceiptProof() const;
@@ -278,7 +277,7 @@ public:
      * @param index: the index of the transaction
      * @param sender: the sender address
      */
-    void setSenderForTransaction(size_t index, dev::Address const& sender = ZeroAddress)
+    void setSenderForTransaction(size_t index, bcos::Address const& sender = ZeroAddress)
     {
         if (sender == ZeroAddress)
         {
@@ -297,8 +296,8 @@ public:
         WriteGuard l_txscache(x_txsCache);
         m_txsCache = bytes();
     }
-protected:
 
+protected:
     /// callback this function when transaction receipt has been changed
     void noteReceiptChange()
     {
@@ -323,10 +322,10 @@ protected:
     mutable SharedMutex x_txReceiptsCache;
     mutable bytes m_tReceiptsCache;
 
-    mutable dev::h256 m_transRootCache;
-    mutable dev::h256 m_receiptRootCache;
+    mutable bcos::h256 m_transRootCache;
+    mutable bcos::h256 m_receiptRootCache;
 
     int64_t m_blockSize = 0;
 };
 }  // namespace eth
-}  // namespace dev
+}  // namespace bcos

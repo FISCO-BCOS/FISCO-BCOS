@@ -22,7 +22,6 @@
 
 #include "Common.h"                       // for MessageFactory::Ptr, NodeIP...
 #include "PeerWhitelist.h"                // for PeerWhitelist
-#include <libdevcore/Guards.h>            // for Guard, Mutex
 #include <boost/asio/deadline_timer.hpp>  // for deadline_timer
 #include <boost/system/error_code.hpp>    // for error_code
 #include <set>                            // for set
@@ -41,7 +40,7 @@ class verify_context;
 }
 }  // namespace asio
 }  // namespace boost
-namespace dev
+namespace bcos
 {
 class ThreadPool;
 
@@ -89,8 +88,8 @@ public:
         m_connectionHandler = connectionHandler;
     }
 
-    virtual std::shared_ptr<dev::ThreadPool> threadPool() const { return m_threadPool; }
-    virtual void setThreadPool(std::shared_ptr<dev::ThreadPool> threadPool)
+    virtual std::shared_ptr<bcos::ThreadPool> threadPool() const { return m_threadPool; }
+    virtual void setThreadPool(std::shared_ptr<bcos::ThreadPool> threadPool)
     {
         m_threadPool = threadPool;
     }
@@ -118,8 +117,8 @@ public:
     }
     virtual const std::vector<std::string>& certBlacklist() const { return m_certBlacklist; }
 
-    virtual void setWhitelist(dev::PeerWhitelist::Ptr _whitelist) { m_whitelist = _whitelist; }
-    virtual dev::PeerWhitelist::Ptr whitelist() { return m_whitelist; }
+    virtual void setWhitelist(bcos::PeerWhitelist::Ptr _whitelist) { m_whitelist = _whitelist; }
+    virtual bcos::PeerWhitelist::Ptr whitelist() { return m_whitelist; }
     virtual NodeInfo nodeInfo();
 
 
@@ -169,7 +168,7 @@ private:
             m_pendingConns.insert(_nodeIPEndpoint);
     }
 
-    std::shared_ptr<dev::ThreadPool> m_threadPool;
+    std::shared_ptr<bcos::ThreadPool> m_threadPool;
 
     /// representing to the network state
     std::shared_ptr<ASIOInterface> m_asioInterface;
@@ -196,8 +195,8 @@ private:
     NodeInfo m_nodeInfo;
 
     // certificate accepted list of nodeID
-    dev::PeerWhitelist::Ptr m_whitelist;
+    bcos::PeerWhitelist::Ptr m_whitelist;
 };
 }  // namespace network
 
-}  // namespace dev
+}  // namespace bcos

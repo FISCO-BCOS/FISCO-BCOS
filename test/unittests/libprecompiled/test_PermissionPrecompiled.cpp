@@ -34,12 +34,12 @@
 #include <boost/test/unit_test.hpp>
 
 using namespace std;
-using namespace dev;
-using namespace dev::blockverifier;
-using namespace dev::storage;
-using namespace dev::storagestate;
-using namespace dev::precompiled;
-using namespace dev::test;
+using namespace bcos;
+using namespace bcos::blockverifier;
+using namespace bcos::storage;
+using namespace bcos::storagestate;
+using namespace bcos::precompiled;
+using namespace bcos::test;
 
 namespace test_AuthorityPrecompiled
 {
@@ -70,7 +70,7 @@ struct AuthorityPrecompiledFixture
         authorityPrecompiled = context->getPrecompiled(Address(0x1005));
         memoryTableFactory = context->getMemoryTableFactory();
 
-        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
+        auto precompiledGasFactory = std::make_shared<bcos::precompiled::PrecompiledGasFactory>(0);
         auto precompiledExecResultFactory = std::make_shared<PrecompiledExecResultFactory>();
         precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
         authorityPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
@@ -90,7 +90,7 @@ struct AuthorityPrecompiledFixture
     TableFactory::Ptr memoryTableFactory;
     Precompiled::Ptr authorityPrecompiled;
     BlockInfo blockInfo;
-    dev::VERSION m_version;
+    bcos::VERSION m_version;
     std::string m_supportedVersion;
     bool m_useSMCrypto;
 };

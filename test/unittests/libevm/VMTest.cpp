@@ -31,11 +31,11 @@
 #include <boost/test/unit_test.hpp>
 
 using namespace std;
-using namespace dev;
-using namespace dev::test;
-using namespace dev::eth;
-using namespace dev::mptstate;
-using namespace dev::executive;
+using namespace bcos;
+using namespace bcos::test;
+using namespace bcos::eth;
+using namespace bcos::mptstate;
+using namespace bcos::executive;
 
 
 namespace
@@ -105,7 +105,7 @@ public:
     }
 
     BlockHeader blockHeader{initBlockHeader()};
-    static dev::h256 fakeCallBack(int64_t) { return h256(); }
+    static bcos::h256 fakeCallBack(int64_t) { return h256(); }
     EnvInfo envInfo{blockHeader, fakeCallBack, 0};
     Address address{KeyPair::create().address()};
 
@@ -276,7 +276,7 @@ public:
     }
 
     BlockHeader blockHeader{initBlockHeader()};
-    static dev::h256 fakeCallBack(int64_t) { return h256(); }
+    static bcos::h256 fakeCallBack(int64_t) { return h256(); }
     EnvInfo envInfo{blockHeader, fakeCallBack, 0};
     Address address{KeyPair::create().address()};
     Address extAddress{KeyPair::create().address()};

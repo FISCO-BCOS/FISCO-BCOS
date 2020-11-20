@@ -23,14 +23,14 @@
 #include <string>
 
 using namespace std;
-using namespace dev;
-using namespace dev::storage;
+using namespace bcos;
+using namespace bcos::storage;
 
-std::map<SQLFieldType, std::string> dev::storage::SQLFieldTypeName{
+std::map<SQLFieldType, std::string> bcos::storage::SQLFieldTypeName{
     {SQLFieldType::MediumBlobType, "mediumblob"}, {SQLFieldType::LongBlobType, "longblob"},
     {SQLFieldType::MediumStringType, "mediumtext"}, {SQLFieldType::LongStringType, "longtext"}};
 
-bool dev::storage::isHashField(const std::string& _key)
+bool bcos::storage::isHashField(const std::string& _key)
 {
     if (!_key.empty())
     {

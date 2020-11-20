@@ -17,9 +17,9 @@
 
 #include "MemTrie.h"
 #include "libdevcrypto/CryptoInterface.h"
-#include <libdevcore/TrieCommon.h>
+#include <libutilities/TrieCommon.h>
 
-namespace dev
+namespace bcos
 {
 class MemTrieNode
 {
@@ -405,12 +405,12 @@ MemTrie::~MemTrie()
 
 h256 MemTrie::hash256() const
 {
-    return m_root ? m_root->hash256() : crypto::Hash(dev::rlp(bytesConstRef()));
+    return m_root ? m_root->hash256() : crypto::Hash(bcos::rlp(bytesConstRef()));
 }
 
 bytes MemTrie::rlp() const
 {
-    return m_root ? m_root->rlp() : dev::rlp(bytesConstRef());
+    return m_root ? m_root->rlp() : bcos::rlp(bytesConstRef());
 }
 
 std::string const& MemTrie::at(std::string const& _key) const
@@ -438,4 +438,4 @@ void MemTrie::remove(std::string const& _key)
     }
 }
 
-}  // namespace dev
+}  // namespace bcos

@@ -22,32 +22,32 @@
  */
 
 #include <libblockverifier/ExecutiveContext.h>
-#include <libdevcore/CommonJS.h>
-#include <libdevcore/FixedHash.h>
 #include <libethcore/Block.h>
 #include <libethcore/Transaction.h>
 #include <libexecutive/EVMHostContext.h>
 #include <libexecutive/Executive.h>
 #include <libmptstate/MPTState.h>
 #include <libstorage/MemoryTableFactory.h>
+#include <libutilities/CommonJS.h>
+#include <libutilities/FixedHash.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <iostream>
 
 
 using namespace std;
-using namespace dev::eth;
-using namespace dev::mptstate;
-using namespace dev::executive;
+using namespace bcos::eth;
+using namespace bcos::mptstate;
+using namespace bcos::executive;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
 class ExecuteVMTestFixture : public TestOutputHelperFixture
 {
 public:
-    static dev::h256 fakeCallBack(int64_t) { return h256(); }
+    static bcos::h256 fakeCallBack(int64_t) { return h256(); }
 
     ExecuteVMTestFixture()
       : TestOutputHelperFixture(),
@@ -169,7 +169,7 @@ contract HelloWorld{
     Transaction::Ptr tx = std::make_shared<Transaction>(
         value, gasPrice, gas, code);  // Use contract creation constructor
     auto keyPair = KeyPair::create();
-    auto sig = dev::crypto::Sign(keyPair, tx->hash(WithoutSignature));
+    auto sig = bcos::crypto::Sign(keyPair, tx->hash(WithoutSignature));
     tx->updateSignature(sig);
     tx->forceSender(caller);
     executeTransaction(e0, tx);
@@ -201,7 +201,7 @@ contract HelloWorld{
                 string("00000000000000000000000000000000000000000000000000000000000000aa"));
     Transaction::Ptr setTx =
         std::make_shared<Transaction>(value, gasPrice, gas, newAddress, callDataToSet);
-    sig = dev::crypto::Sign(keyPair, setTx->hash(WithoutSignature));
+    sig = bcos::crypto::Sign(keyPair, setTx->hash(WithoutSignature));
     setTx->updateSignature(sig);
     setTx->forceSender(caller);
 
@@ -214,7 +214,7 @@ contract HelloWorld{
 
     Transaction::Ptr getTx =
         std::make_shared<Transaction>(value, gasPrice, gas, newAddress, callDataToGet);
-    sig = dev::crypto::Sign(keyPair, getTx->hash(WithoutSignature));
+    sig = bcos::crypto::Sign(keyPair, getTx->hash(WithoutSignature));
     getTx->updateSignature(sig);
     getTx->forceSender(caller);
 
@@ -231,7 +231,7 @@ contract HelloWorld{
 
     Transaction::Ptr getByCallTx =
         std::make_shared<Transaction>(value, gasPrice, gas, newAddress, callDataToGetByCall);
-    sig = dev::crypto::Sign(keyPair, getByCallTx->hash(WithoutSignature));
+    sig = bcos::crypto::Sign(keyPair, getByCallTx->hash(WithoutSignature));
     getByCallTx->updateSignature(sig);
     getByCallTx->forceSender(caller);
 
@@ -247,7 +247,7 @@ contract HelloWorld{
 
     Transaction::Ptr destroyTx =
         std::make_shared<Transaction>(value, gasPrice, gas, newAddress, callDestroy);
-    sig = dev::crypto::Sign(keyPair, destroyTx->hash(WithoutSignature));
+    sig = bcos::crypto::Sign(keyPair, destroyTx->hash(WithoutSignature));
     destroyTx->updateSignature(sig);
     destroyTx->forceSender(caller);
 
@@ -440,7 +440,7 @@ contract HelloWorld{
     Transaction::Ptr getByCallTx =
         std::make_shared<Transaction>(value, gasPrice, gas, newAddress, callDataToGetByCall);
     auto keyPair = KeyPair::create();
-    auto sig = dev::crypto::Sign(keyPair, tx->hash(WithoutSignature));
+    auto sig = bcos::crypto::Sign(keyPair, tx->hash(WithoutSignature));
     tx->updateSignature(sig);
     getByCallTx->forceSender(caller);
 
@@ -456,7 +456,7 @@ contract HelloWorld{
 
     Transaction::Ptr destroyTx =
         std::make_shared<Transaction>(value, gasPrice, gas, newAddress, callDestroy);
-    sig = dev::crypto::Sign(keyPair, destroyTx->hash(WithoutSignature));
+    sig = bcos::crypto::Sign(keyPair, destroyTx->hash(WithoutSignature));
     destroyTx->updateSignature(sig);
     destroyTx->forceSender(caller);
 
@@ -469,4 +469,4 @@ contract HelloWorld{
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

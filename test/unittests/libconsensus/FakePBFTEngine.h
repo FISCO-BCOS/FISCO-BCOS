@@ -25,19 +25,19 @@
 #include <libconsensus/Sealer.h>
 #include <libconsensus/pbft/PBFTEngine.h>
 #include <libconsensus/pbft/PBFTSealer.h>
-#include <libdevcore/TopicInfo.h>
 #include <libethcore/BlockFactory.h>
+#include <libutilities/TopicInfo.h>
 #include <test/unittests/libblockverifier/FakeBlockVerifier.h>
 #include <test/unittests/libsync/FakeBlockSync.h>
 #include <test/unittests/libtxpool/FakeBlockChain.h>
 #include <memory>
-using namespace dev::eth;
-using namespace dev::blockverifier;
-using namespace dev::txpool;
-using namespace dev::blockchain;
-using namespace dev::consensus;
+using namespace bcos::eth;
+using namespace bcos::blockverifier;
+using namespace bcos::txpool;
+using namespace bcos::blockchain;
+using namespace bcos::consensus;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -45,11 +45,11 @@ namespace test
 class FakePBFTEngine : public PBFTEngine
 {
 public:
-    FakePBFTEngine(std::shared_ptr<dev::p2p::P2PInterface> _service,
-        std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
-        std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-        std::shared_ptr<dev::sync::SyncInterface> _blockSync,
-        std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
+    FakePBFTEngine(std::shared_ptr<bcos::p2p::P2PInterface> _service,
+        std::shared_ptr<bcos::txpool::TxPoolInterface> _txPool,
+        std::shared_ptr<bcos::blockchain::BlockChainInterface> _blockChain,
+        std::shared_ptr<bcos::sync::SyncInterface> _blockSync,
+        std::shared_ptr<bcos::blockverifier::BlockVerifierInterface> _blockVerifier,
         PROTOCOL_ID const& _protocolId, h512s const& _sealerList = h512s(),
         std::string const& _baseDir = "./", KeyPair const& _key_pair = KeyPair::create())
       : PBFTEngine(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
@@ -65,7 +65,7 @@ public:
         setBaseDir(_baseDir);
         setMaxBlockTransactions(300000000);
         createPBFTMsgFactory();
-        m_blockFactory = std::make_shared<dev::eth::BlockFactory>();
+        m_blockFactory = std::make_shared<bcos::eth::BlockFactory>();
         m_reqCache = std::make_shared<PBFTReqCache>();
         m_reqCache->setCheckSignCallback(boost::bind(&FakePBFTEngine::checkSign, this, _1));
     }
@@ -76,7 +76,7 @@ public:
     const std::shared_ptr<PBFTReqCache> reqCache() const { return m_reqCache; }
     TimeManager const& timeManager() const { return m_timeManager; }
     TimeManager& mutableTimeManager() { return m_timeManager; }
-    const std::shared_ptr<dev::storage::BasicRocksDB> backupDB() const { return m_backupDB; }
+    const std::shared_ptr<bcos::storage::BasicRocksDB> backupDB() const { return m_backupDB; }
     int64_t consensusBlockNumber() const { return m_consensusBlockNumber; }
     void setConsensusBlockNumber(int64_t const& number) { m_consensusBlockNumber = number; }
 
@@ -130,11 +130,11 @@ public:
     {
         return PBFTEngine::broadcastFilter(nodeId, packetType, key);
     }
-    void setSealerList(dev::h512s const& sealerList) { m_sealerList = sealerList; }
+    void setSealerList(bcos::h512s const& sealerList) { m_sealerList = sealerList; }
 
     void setMaxBlockTransactions(size_t const& maxTrans) { m_maxBlockTransactions = maxTrans; }
     void updateMaxBlockTransactions() override {}
-    bool checkBlock(dev::eth::Block const& block)
+    bool checkBlock(bcos::eth::Block const& block)
     {
         auto orgNumber = m_blockChain->number();
         std::shared_ptr<FakeBlockChain> blockChain =
@@ -185,7 +185,7 @@ public:
         PBFTEngine::onNotifyNextLeaderReset(
             boost::bind(&FakePBFTEngine::resetBlockForNextLeaderTest, this, _1));
     }
-    void resetBlockForNextLeaderTest(dev::h256Hash const&) {}
+    void resetBlockForNextLeaderTest(bcos::h256Hash const&) {}
 
     void checkAndCommit() { return PBFTEngine::checkAndCommit(); }
     static std::string const& backupKeyCommitted() { return PBFTEngine::c_backupKeyCommitted; }
@@ -214,7 +214,7 @@ public:
         return PBFTEngine::handleMsg(pbftMsgPtr);
     }
 
-    void notifySealing(dev::eth::Block const& block) { return PBFTEngine::notifySealing(block); }
+    void notifySealing(bcos::eth::Block const& block) { return PBFTEngine::notifySealing(block); }
     bool handlePrepareMsg(PrepareReq::Ptr prepareReq, std::string const& ip = "self")
     {
         return PBFTEngine::handlePrepareMsg(prepareReq, ip);
@@ -227,7 +227,7 @@ public:
 
     std::shared_ptr<PBFTReqCache> reqCache() { return m_reqCache; }
 
-    PrepareReq::Ptr wrapperConstructPrepareReq(dev::eth::Block::Ptr _block)
+    PrepareReq::Ptr wrapperConstructPrepareReq(bcos::eth::Block::Ptr _block)
     {
         return PBFTEngine::constructPrepareReq(_block);
     }
@@ -278,12 +278,12 @@ public:
 
     PartiallyPBFTReqCache::Ptr partiallyReqCache() { return m_partiallyPrepareCache; }
 
-    void wrapperHandleP2PMessage(dev::p2p::NetworkException _exception,
-        std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message)
+    void wrapperHandleP2PMessage(bcos::p2p::NetworkException _exception,
+        std::shared_ptr<bcos::p2p::P2PSession> _session, bcos::p2p::P2PMessage::Ptr _message)
     {
         return PBFTEngine::handleP2PMessage(_exception, _session, _message);
     }
-    bool wrapperGetNodeIDByIndex(dev::network::NodeID& nodeId, const IDXTYPE& idx) const
+    bool wrapperGetNodeIDByIndex(bcos::network::NodeID& nodeId, const IDXTYPE& idx) const
     {
         return PBFTEngine::getNodeIDByIndex(nodeId, idx);
     }
@@ -307,7 +307,7 @@ public:
         resetSessionInfo();
     }
 
-    FakeConsensus(PROTOCOL_ID protocolID, dev::h512s const& _sealerList,
+    FakeConsensus(PROTOCOL_ID protocolID, bcos::h512s const& _sealerList,
         std::shared_ptr<BlockVerifierInterface> _blockVerifier,
         std::shared_ptr<BlockChainInterface> _blockChain, KeyPair const& _keyPair)
       : m_sealerList(_sealerList)
@@ -326,9 +326,9 @@ public:
         for (size_t i = 0; i < m_sealerList.size(); i++)
         {
             NodeIPEndpoint m_endpoint(bi::make_address("127.0.0.1"), 30303);
-            dev::network::NodeInfo node_info;
+            bcos::network::NodeInfo node_info;
             node_info.nodeID = m_sealerList[i];
-            std::set<dev::TopicItem> topicList;
+            std::set<bcos::TopicItem> topicList;
             P2PSessionInfo info(node_info, m_endpoint, topicList);
             service->appendSessionInfo(info);
         }
@@ -336,7 +336,7 @@ public:
 
     void setKeyPair(std::vector<KeyPair> const& _keyPair) { m_keyPair = _keyPair; }
 
-    void setNodeID2KeyPair(std::map<dev::h512, KeyPair> const& _nodeID2KeyPair)
+    void setNodeID2KeyPair(std::map<bcos::h512, KeyPair> const& _nodeID2KeyPair)
     {
         m_nodeID2KeyPair = _nodeID2KeyPair;
     }
@@ -361,7 +361,7 @@ public:
     h512s m_sealerList;
     std::vector<Secret> m_secrets;
     std::vector<KeyPair> m_keyPair;
-    std::map<dev::h512, KeyPair> m_nodeID2KeyPair;
+    std::map<bcos::h512, KeyPair> m_nodeID2KeyPair;
     std::shared_ptr<TxPoolFixture> txPoolCreator;
     std::shared_ptr<FakeBlockSync> fakeSync;
 
@@ -373,11 +373,11 @@ private:
 class FakePBFTSealer : public PBFTSealer
 {
 public:
-    FakePBFTSealer(std::shared_ptr<dev::p2p::P2PInterface> _service,
-        std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
-        std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-        std::shared_ptr<dev::sync::SyncInterface> _blockSync,
-        std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
+    FakePBFTSealer(std::shared_ptr<bcos::p2p::P2PInterface> _service,
+        std::shared_ptr<bcos::txpool::TxPoolInterface> _txPool,
+        std::shared_ptr<bcos::blockchain::BlockChainInterface> _blockChain,
+        std::shared_ptr<bcos::sync::SyncInterface> _blockSync,
+        std::shared_ptr<bcos::blockverifier::BlockVerifierInterface> _blockVerifier,
         int16_t const& _protocolId, std::string const& _baseDir = "",
         KeyPair const& _key_pair = KeyPair::create(), h512s const& _sealerList = h512s())
       : PBFTSealer(_txPool, _blockChain, _blockSync)
@@ -426,9 +426,9 @@ public:
     {
         return PBFTSealer::resetSealingBlock(filter, resetNextLeader);
     }
-    void resetBlock(dev::eth::Block& block, bool resetNextLeader = false)
+    void resetBlock(bcos::eth::Block& block, bool resetNextLeader = false)
     {
-        std::shared_ptr<dev::eth::Block> p_block = std::make_shared<dev::eth::Block>(block);
+        std::shared_ptr<bcos::eth::Block> p_block = std::make_shared<bcos::eth::Block>(block);
         return PBFTSealer::resetBlock(p_block, resetNextLeader);
     }
     void setBlock() { return PBFTSealer::setBlock(); }
@@ -436,4 +436,4 @@ public:
     bool shouldResetSealing() override { return Sealer::shouldResetSealing(); }
 };
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

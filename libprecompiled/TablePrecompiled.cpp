@@ -28,10 +28,10 @@
 #include <libblockverifier/ExecutiveContext.h>
 #include <libethcore/ABI.h>
 
-using namespace dev;
-using namespace dev::blockverifier;
-using namespace dev::storage;
-using namespace dev::precompiled;
+using namespace bcos;
+using namespace bcos::blockverifier;
+using namespace bcos::storage;
+using namespace bcos::precompiled;
 
 const char* const TABLE_METHOD_SLT_STR_ADD = "select(string,address)";
 const char* const TABLE_METHOD_INS_STR_ADD = "insert(string,address)";
@@ -62,7 +62,7 @@ PrecompiledExecResult::Ptr TablePrecompiled::call(ExecutiveContext::Ptr context,
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
 
-    dev::eth::ContractABI abi;
+    bcos::eth::ContractABI abi;
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
     callResult->gasPricer()->setMemUsed(param.size());
 

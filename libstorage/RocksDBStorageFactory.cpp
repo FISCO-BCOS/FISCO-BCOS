@@ -22,12 +22,11 @@
 #include "RocksDBStorageFactory.h"
 #include "BasicRocksDB.h"
 #include "RocksDBStorage.h"
-#include "libdevcore/Guards.h"
 #include <boost/filesystem.hpp>
 
 using namespace std;
-using namespace dev;
-using namespace dev::storage;
+using namespace bcos;
+using namespace bcos::storage;
 
 void RocksDBStorageFactory::setDBOpitons(rocksdb::Options _options)
 {

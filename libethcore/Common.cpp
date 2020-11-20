@@ -22,16 +22,15 @@
 #include "Common.h"
 #include "BlockHeader.h"
 #include "Exceptions.h"
-#include <libdevcore/Base64.h>
-#include <libdevcore/CommonIO.h>
 #include <libdevcrypto/Hash.h>
+#include <libutilities/CommonIO.h>
 #include <boost/throw_exception.hpp>
 
 using namespace std;
-using namespace dev;
-using namespace dev::eth;
+using namespace bcos;
+using namespace bcos::eth;
 
-namespace dev
+namespace bcos
 {
 namespace eth
 {
@@ -89,4 +88,4 @@ void badBlock(bytesConstRef _block, string const& _err)
 }
 
 }  // namespace eth
-}  // namespace dev
+}  // namespace bcos

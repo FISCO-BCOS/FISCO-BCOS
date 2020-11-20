@@ -25,7 +25,7 @@
 #include <boost/asio.hpp>
 #include <fstream>
 
-namespace dev
+namespace bcos
 {
 namespace storage
 {
@@ -152,4 +152,4 @@ private:
     const uint32_t BINLOG_VERSION = 1;             // binlog version
 };
 }  // namespace storage
-}  // namespace dev
+}  // namespace bcos

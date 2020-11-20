@@ -26,7 +26,7 @@
 #include <boost/log/support/date_time.hpp>
 #include <boost/log/utility/setup/common_attributes.hpp>
 
-using namespace dev::initializer;
+using namespace bcos::initializer;
 
 namespace logging = boost::log;
 namespace expr = boost::log::expressions;
@@ -96,7 +96,7 @@ void LogInitializer::initLog(boost::property_tree::ptree const& _pt, std::string
         << boost::log::expressions::smessage);
 }
 
-boost::shared_ptr<dev::initializer::LogInitializer::sink_t> LogInitializer::initLogSink(
+boost::shared_ptr<bcos::initializer::LogInitializer::sink_t> LogInitializer::initLogSink(
     boost::property_tree::ptree const& pt, unsigned const& _logLevel, std::string const& _logPath,
     std::string const& _logPrefix, std::string const& channel)
 {
@@ -139,15 +139,15 @@ boost::shared_ptr<dev::initializer::LogInitializer::sink_t> LogInitializer::init
  */
 unsigned LogInitializer::getLogLevel(std::string const& levelStr)
 {
-    if (dev::stringCmpIgnoreCase(levelStr, "trace") == 0)
+    if (bcos::stringCmpIgnoreCase(levelStr, "trace") == 0)
         return boost::log::trivial::severity_level::trace;
-    if (dev::stringCmpIgnoreCase(levelStr, "debug") == 0)
+    if (bcos::stringCmpIgnoreCase(levelStr, "debug") == 0)
         return boost::log::trivial::severity_level::debug;
-    if (dev::stringCmpIgnoreCase(levelStr, "warning") == 0)
+    if (bcos::stringCmpIgnoreCase(levelStr, "warning") == 0)
         return boost::log::trivial::severity_level::warning;
-    if (dev::stringCmpIgnoreCase(levelStr, "error") == 0)
+    if (bcos::stringCmpIgnoreCase(levelStr, "error") == 0)
         return boost::log::trivial::severity_level::error;
-    if (dev::stringCmpIgnoreCase(levelStr, "fatal") == 0)
+    if (bcos::stringCmpIgnoreCase(levelStr, "fatal") == 0)
         return boost::log::trivial::severity_level::fatal;
     /// default log level is info
     return boost::log::trivial::severity_level::info;

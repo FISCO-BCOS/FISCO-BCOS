@@ -24,7 +24,7 @@
 #pragma once
 #include <string>
 
-namespace dev
+namespace bcos
 {
 namespace initializer
 {
@@ -37,4 +37,4 @@ public:
     virtual void init(std::string const& _path) = 0;
 };
 }  // namespace initializer
-}  // namespace dev
+}  // namespace bcos

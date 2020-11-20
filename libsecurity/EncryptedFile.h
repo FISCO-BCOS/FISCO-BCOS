@@ -22,10 +22,10 @@
 
 #pragma once
 #include "Common.h"
-#include <libdevcore/Common.h>
+#include <libutilities/Common.h>
 #include <memory>
 
-namespace dev
+namespace bcos
 {
 class EncryptedFile
 {
@@ -34,4 +34,4 @@ public:
 };
 
 
-}  // namespace dev
+}  // namespace bcos

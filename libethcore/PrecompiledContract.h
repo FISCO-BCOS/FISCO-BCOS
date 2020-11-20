@@ -21,10 +21,10 @@
 
 #pragma once
 
-#include <libdevcore/Common.h>
 #include <libethcore/Precompiled.h>
+#include <libutilities/Common.h>
 
-namespace dev
+namespace bcos
 {
 namespace eth
 {
@@ -51,4 +51,4 @@ private:
 };
 
 }  // namespace eth
-}  // namespace dev
+}  // namespace bcos

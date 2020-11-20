@@ -17,10 +17,10 @@
 
 #include "MemTrie.h"
 #include <json/json.h>
-#include <libdevcore/CommonIO.h>
-#include <libdevcore/TrieHash.h>
 #include <libmptstate/MemoryDB.h>
 #include <libmptstate/TrieDB.h>
+#include <libutilities/CommonIO.h>
+#include <libutilities/TrieHash.h>
 #include <test/tools/libbcos/Options.h>
 #include <test/tools/libutils/Common.h>
 #include <test/tools/libutils/TestOutputHelper.h>
@@ -29,8 +29,8 @@
 #include <fstream>
 
 using namespace std;
-using namespace dev;
-using namespace dev::test;
+using namespace bcos;
+using namespace bcos::test;
 
 namespace fs = boost::filesystem;
 static unsigned fac(unsigned _i)
@@ -38,7 +38,8 @@ static unsigned fac(unsigned _i)
     return _i > 2 ? _i * fac(_i - 1) : _i;
 }
 
-using dev::operator<<;
+using bcos::operator<<;
+using StringMap = std::map<std::string, std::string>;
 
 BOOST_AUTO_TEST_SUITE(Crypto)
 
@@ -891,7 +892,6 @@ void perfTestTrie(char const* _name)
         d.init();
         LOG(INFO) << "TriePerf " << _name << p;
         std::vector<h256> keys(1000);
-        Timer t;
         size_t ki = 0;
         for (size_t i = 0; i < p; ++i)
         {
@@ -902,20 +902,18 @@ void perfTestTrie(char const* _name)
             if (i % (p / 1000) == 0)
                 keys[ki++] = k;
         }
-        LOG(INFO) << "Insert " << p << "values: " << t.elapsed();
-        t.restart();
+        LOG(INFO) << "Insert " << p << "values: ";
         for (auto k : keys)
             d.at(k);
-        LOG(INFO) << "Query 1000 values: " << t.elapsed();
-        t.restart();
+        LOG(INFO) << "Query 1000 values: ";
         size_t i = 0;
         for (auto it = d.begin(); i < 1000 && it != d.end(); ++it, ++i)
             *it;
-        LOG(INFO) << "Iterate 1000 values: " << t.elapsed();
-        t.restart();
+        LOG(INFO) << "Iterate 1000 values: ";
         for (auto k : keys)
             d.remove(k);
-        LOG(INFO) << "Remove 1000 values:" << t.elapsed() << "\n";
+        LOG(INFO) << "Remove 1000 values:"
+                  << "\n";
     }
 }
 

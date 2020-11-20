@@ -24,15 +24,14 @@
 #include "Common.h"
 #include "SyncMsgPacket.h"
 #include "SyncStatus.h"
-#include <libdevcore/Guards.h>
-#include <libdevcore/TreeTopology.h>
 #include <libethcore/Transaction.h>
 #include <libethcore/TxsParallelParser.h>
 #include <libp2p/P2PInterface.h>
 #include <libtxpool/TxPoolInterface.h>
+#include <libutilities/TreeTopology.h>
 #include <vector>
 
-namespace dev
+namespace bcos
 {
 namespace sync
 {
@@ -42,13 +41,13 @@ public:
     DownloadTxsShard(bytesConstRef _txsBytes, NodeID const& _fromPeer)
       : txsBytes(_txsBytes.toBytes()), fromPeer(_fromPeer)
     {
-        knownNodes = std::make_shared<dev::h512s>();
+        knownNodes = std::make_shared<bcos::h512s>();
     }
 
-    void appendKnownNode(dev::h512 const& _knownNode) { knownNodes->push_back(_knownNode); }
+    void appendKnownNode(bcos::h512 const& _knownNode) { knownNodes->push_back(_knownNode); }
     bytes txsBytes;
     NodeID fromPeer;
-    std::shared_ptr<dev::h512s> knownNodes;
+    std::shared_ptr<bcos::h512s> knownNodes;
 };
 
 class DownloadingTxsQueue
@@ -60,11 +59,11 @@ public:
     {}
     // push txs bytes in queue
     // void push(bytesConstRef _txsBytes, NodeID const& _fromPeer);
-    void push(SyncMsgPacket::Ptr _packet, dev::p2p::P2PMessage::Ptr _msg, NodeID const& _fromPeer);
+    void push(SyncMsgPacket::Ptr _packet, bcos::p2p::P2PMessage::Ptr _msg, NodeID const& _fromPeer);
 
     // pop all queue into tx pool
-    void pop2TxPool(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
-        dev::eth::CheckTransaction _checkSig = dev::eth::CheckTransaction::None);
+    void pop2TxPool(std::shared_ptr<bcos::txpool::TxPoolInterface> _txPool,
+        bcos::eth::CheckTransaction _checkSig = bcos::eth::CheckTransaction::None);
 
     ssize_t bufferSize() const
     {
@@ -74,9 +73,9 @@ public:
     void setTreeRouter(TreeTopology::Ptr _treeRouter) { m_treeRouter = _treeRouter; }
     void setSyncStatus(SyncMasterStatus::Ptr _syncStatus) { m_syncStatus = _syncStatus; }
 
-    void setService(dev::p2p::P2PInterface::Ptr _service) { m_service = _service; }
+    void setService(bcos::p2p::P2PInterface::Ptr _service) { m_service = _service; }
 
-    void updateConsensusNodeInfo(dev::h512s const& _consensusNodes)
+    void updateConsensusNodeInfo(bcos::h512s const& _consensusNodes)
     {
         if (m_treeRouter)
         {
@@ -97,9 +96,9 @@ private:
     mutable Mutex m_mutex;
     TreeTopology::Ptr m_treeRouter = nullptr;
     SyncMasterStatus::Ptr m_syncStatus;
-    dev::p2p::P2PInterface::Ptr m_service;
+    bcos::p2p::P2PInterface::Ptr m_service;
     std::atomic_bool m_needImportToTxPool = {true};
 };
 
 }  // namespace sync
-}  // namespace dev
+}  // namespace bcos

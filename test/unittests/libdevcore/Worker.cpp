@@ -21,14 +21,14 @@
  * @date 2018-08-24
  */
 
-#include <libdevcore/Worker.h>
+#include <libutilities/Worker.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev;
+using namespace bcos;
 using namespace std;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -65,4 +65,4 @@ BOOST_AUTO_TEST_CASE(testWorker)
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

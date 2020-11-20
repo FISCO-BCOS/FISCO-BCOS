@@ -21,12 +21,12 @@
  * @date: 2020-03-22
  */
 #pragma once
-#include <libdevcore/ThreadPool.h>
 #include <libstat/NetworkStatHandler.h>
+#include <libutilities/ThreadPool.h>
 
 #define CHANNEL_STAT_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("ChannelNetworkStatHandler")
 
-namespace dev
+namespace bcos
 {
 namespace stat
 {
@@ -37,7 +37,7 @@ public:
 
     ChannelNetworkStatHandler(std::string const& _statisticName)
       : m_statisticName(_statisticName),
-        m_statLogFlushThread(std::make_shared<dev::ThreadPool>("statFlush", 1)),
+        m_statLogFlushThread(std::make_shared<bcos::ThreadPool>("statFlush", 1)),
         m_p2pStatHandlers(std::make_shared<std::map<GROUP_ID, NetworkStatHandler::Ptr>>())
     {}
     virtual ~ChannelNetworkStatHandler() {}
@@ -68,7 +68,7 @@ private:
 private:
     std::string m_statisticName;
     int64_t m_flushInterval;
-    dev::ThreadPool::Ptr m_statLogFlushThread;
+    bcos::ThreadPool::Ptr m_statLogFlushThread;
 
     std::atomic<int64_t> m_AMOPIn = {0};
     std::atomic<int64_t> m_AMOPOut = {0};
@@ -78,4 +78,4 @@ private:
     std::atomic_bool m_running = {false};
 };
 }  // namespace stat
-}  // namespace dev
+}  // namespace bcos

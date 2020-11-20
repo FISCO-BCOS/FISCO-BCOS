@@ -25,7 +25,7 @@
 #include <map>
 #include <string>
 
-namespace dev
+namespace bcos
 {
 class SafeHttpServer : public jsonrpc::AbstractServerConnector
 {
@@ -73,4 +73,4 @@ private:
     std::string m_address;
 };
 
-}  // namespace dev
+}  // namespace bcos

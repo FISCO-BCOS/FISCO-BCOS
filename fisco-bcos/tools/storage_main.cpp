@@ -22,9 +22,9 @@
 #include "libinitializer/Initializer.h"
 #include "libstorage/MemoryTableFactory.h"
 #include <leveldb/db.h>
-#include <libdevcore/BasicLevelDB.h>
-#include <libdevcore/Common.h>
 #include <libstorage/LevelDBStorage.h>
+#include <libutilities/BasicLevelDB.h>
+#include <libutilities/Common.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
@@ -32,10 +32,10 @@
 
 
 using namespace std;
-using namespace dev;
+using namespace bcos;
 using namespace boost;
-using namespace dev::storage;
-using namespace dev::initializer;
+using namespace bcos::storage;
+using namespace bcos::initializer;
 namespace po = boost::program_options;
 
 po::options_description main_options("Main for mini-storage");
@@ -110,19 +110,19 @@ int main(int argc, const char* argv[])
     leveldb::Options option;
     option.create_if_missing = true;
     option.max_open_files = 1000;
-    dev::db::BasicLevelDB* dbPtr = NULL;
-    leveldb::Status s = dev::db::BasicLevelDB::Open(option, storagePath, &dbPtr);
+    bcos::db::BasicLevelDB* dbPtr = NULL;
+    leveldb::Status s = bcos::db::BasicLevelDB::Open(option, storagePath, &dbPtr);
     if (!s.ok())
     {
         cerr << "Open storage leveldb error: " << s.ToString() << endl;
         return -1;
     }
 
-    auto storageDB = std::shared_ptr<dev::db::BasicLevelDB>(dbPtr);
-    auto storage = std::make_shared<dev::storage::LevelDBStorage>();
+    auto storageDB = std::shared_ptr<bcos::db::BasicLevelDB>(dbPtr);
+    auto storage = std::make_shared<bcos::storage::LevelDBStorage>();
     storage->setDB(storageDB);
-    dev::storage::MemoryTableFactory::Ptr memoryTableFactory =
-        std::make_shared<dev::storage::MemoryTableFactory>();
+    bcos::storage::MemoryTableFactory::Ptr memoryTableFactory =
+        std::make_shared<bcos::storage::MemoryTableFactory>();
     memoryTableFactory->setStateStorage(storage);
     memoryTableFactory->setBlockHash(h256(0));
     memoryTableFactory->setBlockNum(0);

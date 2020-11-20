@@ -27,8 +27,8 @@
 #include <libp2p/P2PInterface.h>
 #include <libp2p/Service.h>
 
-using namespace dev::p2p;
-namespace dev
+using namespace bcos::p2p;
+namespace bcos
 {
 namespace initializer
 {
@@ -68,4 +68,4 @@ private:
 
 }  // namespace initializer
 
-}  // namespace dev
+}  // namespace bcos

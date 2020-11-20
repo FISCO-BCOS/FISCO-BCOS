@@ -27,10 +27,10 @@
 #include <set>
 
 using namespace std;
-using namespace dev;
-using namespace dev::blockverifier;
+using namespace bcos;
+using namespace bcos::blockverifier;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -175,4 +175,4 @@ BOOST_AUTO_TEST_CASE(DAGPopConsumeTest)
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

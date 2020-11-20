@@ -31,12 +31,12 @@
 #include <exception>
 #include <thread>
 
-using namespace dev;
+using namespace bcos;
 using namespace std;
-using namespace dev::eth;
-using namespace dev::blockverifier;
-using namespace dev::executive;
-using namespace dev::storage;
+using namespace bcos::eth;
+using namespace bcos::blockverifier;
+using namespace bcos::executive;
+using namespace bcos::storage;
 
 ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const& parentBlockInfo)
 {
@@ -387,7 +387,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
 
 
 TransactionReceipt::Ptr BlockVerifier::executeTransaction(
-    const BlockHeader& blockHeader, dev::eth::Transaction::Ptr _t)
+    const BlockHeader& blockHeader, bcos::eth::Transaction::Ptr _t)
 {
     ExecutiveContext::Ptr executiveContext = std::make_shared<ExecutiveContext>();
     BlockInfo blockInfo{blockHeader.hash(), blockHeader.number(), blockHeader.stateRoot()};
@@ -409,8 +409,8 @@ TransactionReceipt::Ptr BlockVerifier::executeTransaction(
     return execute(_t, executiveContext, executive);
 }
 
-dev::eth::TransactionReceipt::Ptr BlockVerifier::execute(dev::eth::Transaction::Ptr _t,
-    dev::blockverifier::ExecutiveContext::Ptr executiveContext, Executive::Ptr executive)
+bcos::eth::TransactionReceipt::Ptr BlockVerifier::execute(bcos::eth::Transaction::Ptr _t,
+    bcos::blockverifier::ExecutiveContext::Ptr executiveContext, Executive::Ptr executive)
 {
     // Create and initialize the executive. This will throw fairly cheaply and quickly if the
     // transaction is bad in any way.
@@ -445,8 +445,8 @@ dev::eth::TransactionReceipt::Ptr BlockVerifier::execute(dev::eth::Transaction::
         executive->takeOutput().takeBytes(), executive->newAddress());
 }
 
-dev::executive::Executive::Ptr BlockVerifier::createAndInitExecutive(
-    std::shared_ptr<StateFace> _s, dev::executive::EnvInfo const& _envInfo)
+bcos::executive::Executive::Ptr BlockVerifier::createAndInitExecutive(
+    std::shared_ptr<StateFace> _s, bcos::executive::EnvInfo const& _envInfo)
 {
     return std::make_shared<Executive>(_s, _envInfo, m_evmFlags & EVMFlags::FreeStorageGas);
 }

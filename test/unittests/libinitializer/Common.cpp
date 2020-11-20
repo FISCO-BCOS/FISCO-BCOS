@@ -28,10 +28,10 @@
 #include <boost/test/unit_test.hpp>
 
 using namespace std;
-using namespace dev;
-using namespace dev::initializer;
+using namespace bcos;
+using namespace bcos::initializer;
 
-namespace dev
+namespace bcos
 {
 namespace test_GlobalConfig
 {
@@ -70,4 +70,4 @@ BOOST_AUTO_TEST_CASE(test_initGlobalConfig)
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test_GlobalConfig
-}  // namespace dev
+}  // namespace bcos

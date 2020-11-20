@@ -21,15 +21,15 @@
  * @date 2019-07-10
  */
 
-#include <libdevcore/FileSignal.h>
+#include <libutilities/FileSignal.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <fstream>
 
-using namespace dev;
+using namespace bcos;
 using namespace std;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -45,7 +45,7 @@ BOOST_AUTO_TEST_CASE(FileSignal)
     BOOST_CHECK(!boost::filesystem::exists(file));
 
     // check caller is not triggered as the file is not exist
-    dev::FileSignal::callIfFileExist(file, caller);
+    bcos::FileSignal::callIfFileExist(file, caller);
     BOOST_CHECK(!called);
 
     // create the file
@@ -57,7 +57,7 @@ BOOST_AUTO_TEST_CASE(FileSignal)
     BOOST_CHECK(boost::filesystem::exists(file));
 
     // check caller is triggered as the file is exist
-    dev::FileSignal::callIfFileExist(file, caller);
+    bcos::FileSignal::callIfFileExist(file, caller);
     BOOST_CHECK(called);
 
     // check the file is deleted after trigger
@@ -66,4 +66,4 @@ BOOST_AUTO_TEST_CASE(FileSignal)
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

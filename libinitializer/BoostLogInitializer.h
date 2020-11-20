@@ -33,7 +33,7 @@
 #include <boost/log/utility/setup/file.hpp>
 #include <boost/shared_ptr.hpp>
 
-namespace dev
+namespace bcos
 {
 namespace initializer
 {
@@ -66,10 +66,10 @@ public:
     LogInitializer() {}
 
     void initLog(boost::property_tree::ptree const& _pt,
-        std::string const& _channel = dev::FileLogger, std::string const& _logPrefix = "log");
+        std::string const& _channel = bcos::FileLogger, std::string const& _logPrefix = "log");
 
     void initStatLog(boost::property_tree::ptree const& _pt,
-        std::string const& _channel = dev::StatFileLogger, std::string const& _logPrefix = "stat");
+        std::string const& _channel = bcos::StatFileLogger, std::string const& _logPrefix = "stat");
 
     void stopLogging();
 
@@ -88,4 +88,4 @@ private:
     std::vector<int> m_currentHourVec;
 };
 }  // namespace initializer
-}  // namespace dev
+}  // namespace bcos

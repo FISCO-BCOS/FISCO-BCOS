@@ -30,12 +30,12 @@
 #include <boost/program_options.hpp>
 
 using namespace std;
-using namespace dev;
+using namespace bcos;
 using namespace boost;
-using namespace dev::db;
-using namespace dev::ledger;
-using namespace dev::storage;
-using namespace dev::initializer;
+using namespace bcos::db;
+using namespace bcos::ledger;
+using namespace bcos::storage;
+using namespace bcos::initializer;
 namespace po = boost::program_options;
 
 po::options_description main_options("Main for rocksdb reader");
@@ -194,7 +194,8 @@ int main(int argc, const char* argv[])
                 entry->setField(p[4], p[5]);
                 cout << "update [" << p[4] << ":" << p[5] << "]" << endl;
                 int updatedLines = table->update(p[1], entry, condition);
-                if (updatedLines >= 1) {
+                if (updatedLines >= 1)
+                {
                     cout << "update successfully!" << endl;
                 }
                 commit();
@@ -222,7 +223,8 @@ int main(int argc, const char* argv[])
                     entry->setField(KV[0], KV[1]);
                 }
                 int insertedLines = table->insert(p[1], entry);
-                if (insertedLines >= 1) {
+                if (insertedLines >= 1)
+                {
                     cout << "insert successfully!" << endl;
                 }
                 commit();
@@ -241,7 +243,8 @@ int main(int argc, const char* argv[])
             {
                 cout << "open Table [" << p[0] << "] success!" << endl;
                 int removedLines = table->remove(p[1], table->newCondition());
-                if (removedLines >= 1) {
+                if (removedLines >= 1)
+                {
                     cout << "remove successfully!" << endl;
                 }
                 commit();

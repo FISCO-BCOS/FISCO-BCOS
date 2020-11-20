@@ -1,6 +1,6 @@
-#include "libdevcore/CommonData.h"
-#include "libdevcore/FixedHash.h"
 #include "libdevcrypto/CryptoInterface.h"
+#include "libutilities/CommonData.h"
+#include "libutilities/FixedHash.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,7 +9,7 @@
 #include <string>
 
 using namespace std;
-using namespace dev;
+using namespace bcos;
 
 int main(int argc, char** argv)
 {
@@ -24,7 +24,7 @@ int main(int argc, char** argv)
     {
         useSMCrypto = true;
     }
-    auto source = dev::fromHex(argv[argc - 1]);
+    auto source = bcos::fromHex(argv[argc - 1]);
 
     if (useSMCrypto)
     {

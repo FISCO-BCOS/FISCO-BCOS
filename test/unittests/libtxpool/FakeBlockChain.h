@@ -31,29 +31,32 @@
 #include <test/unittests/libethcore/FakeBlock.h>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev;
-using namespace dev::txpool;
-using namespace dev::p2p;
-using namespace dev::blockchain;
+using namespace bcos;
+using namespace bcos::txpool;
+using namespace bcos::p2p;
+using namespace bcos::blockchain;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
-class FakeService : public dev::p2p::Service
+class FakeService : public bcos::p2p::Service
 {
 public:
     FakeService() : Service()
     {
-        m_messageFactory = std::make_shared<dev::p2p::P2PMessageFactory>();
+        m_messageFactory = std::make_shared<bcos::p2p::P2PMessageFactory>();
     }
-    void setSessionInfos(dev::p2p::P2PSessionInfos& sessionInfos) { m_sessionInfos = sessionInfos; }
+    void setSessionInfos(bcos::p2p::P2PSessionInfos& sessionInfos)
+    {
+        m_sessionInfos = sessionInfos;
+    }
     void appendSessionInfo(P2PSessionInfo const& info) { m_sessionInfos.push_back(info); }
     void clearSessionInfo() { m_sessionInfos.clear(); }
     P2PSessionInfos sessionInfosByProtocolID(PROTOCOL_ID) const override { return m_sessionInfos; }
 
-    void asyncSendMessageByNodeID(
-        NodeID nodeID, P2PMessage::Ptr message, CallbackFuncWithSession, dev::p2p::Options) override
+    void asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message, CallbackFuncWithSession,
+        bcos::p2p::Options) override
     {
         if (m_asyncSend.count(nodeID))
             m_asyncSend[nodeID]++;
@@ -85,13 +88,13 @@ public:
         m_asyncSend.erase(nodeID);
     }
 
-    std::shared_ptr<dev::p2p::P2PSession> getP2PSessionByNodeId(NodeID const&) override
+    std::shared_ptr<bcos::p2p::P2PSession> getP2PSessionByNodeId(NodeID const&) override
     {
-        return std::make_shared<dev::p2p::P2PSession>();
+        return std::make_shared<bcos::p2p::P2PSession>();
     }
     void setConnected() { m_connected = true; }
     bool isConnected(NodeID const&) const override { return m_connected; }
-    std::shared_ptr<dev::p2p::P2PMessageFactory> p2pMessageFactory() override
+    std::shared_ptr<bcos::p2p::P2PMessageFactory> p2pMessageFactory() override
     {
         return m_messageFactory;
     }
@@ -100,23 +103,23 @@ private:
     P2PSessionInfos m_sessionInfos;
     std::map<NodeID, size_t> m_asyncSend;
     std::map<NodeID, P2PMessage::Ptr> m_asyncSendMsgs;
-    std::shared_ptr<dev::p2p::P2PMessageFactory> m_messageFactory;
+    std::shared_ptr<bcos::p2p::P2PMessageFactory> m_messageFactory;
     bool m_connected = false;
 };
 class FakeTxPool : public TxPool
 {
 public:
-    FakeTxPool(std::shared_ptr<dev::p2p::Service> _p2pService,
-        std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-        uint64_t const& _limit = 102400, int32_t const& _protocolId = dev::eth::ProtocolID::TxPool)
+    FakeTxPool(std::shared_ptr<bcos::p2p::Service> _p2pService,
+        std::shared_ptr<bcos::blockchain::BlockChainInterface> _blockChain,
+        uint64_t const& _limit = 102400, int32_t const& _protocolId = bcos::eth::ProtocolID::TxPool)
       : TxPool(_p2pService, _blockChain, _protocolId, _limit)
     {}
-    std::pair<h256, Address> submitTransactions(dev::eth::Transaction::Ptr _tx) override
+    std::pair<h256, Address> submitTransactions(bcos::eth::Transaction::Ptr _tx) override
     {
         return TxPool::submitTransactions(_tx);
     };
 
-    ImportResult import(dev::eth::Transaction::Ptr _tx, IfDropped _ik = IfDropped::Ignore) override
+    ImportResult import(bcos::eth::Transaction::Ptr _tx, IfDropped _ik = IfDropped::Ignore) override
     {
         return TxPool::import(_tx, _ik);
     }
@@ -155,14 +158,14 @@ public:
 
     int64_t number() override { return m_blockNumber - 1; }
     void setBlockNumber(int64_t const& number) { m_blockNumber = number; }
-    std::shared_ptr<std::vector<dev::eth::NonceKeyType>> getNonces(int64_t _blockNumber) override
+    std::shared_ptr<std::vector<bcos::eth::NonceKeyType>> getNonces(int64_t _blockNumber) override
     {
-        std::shared_ptr<std::vector<dev::eth::NonceKeyType>> nonceVector =
-            std::make_shared<std::vector<dev::eth::NonceKeyType>>();
+        std::shared_ptr<std::vector<bcos::eth::NonceKeyType>> nonceVector =
+            std::make_shared<std::vector<bcos::eth::NonceKeyType>>();
         auto pBlock = getBlockByNumber(_blockNumber);
         for (auto trans : *(pBlock->transactions()))
         {
-            nonceVector->push_back(boost::lexical_cast<dev::eth::NonceKeyType>(trans->nonce()));
+            nonceVector->push_back(boost::lexical_cast<bcos::eth::NonceKeyType>(trans->nonce()));
         }
         return nonceVector;
     }
@@ -176,7 +179,7 @@ public:
         return std::make_pair(m_totalTransactionCount, m_blockNumber - 1);
     }
 
-    dev::h256 numberHash(int64_t _i) override
+    bcos::h256 numberHash(int64_t _i) override
     {
         if ((size_t)_i >= m_blockChain.size())
         {
@@ -185,20 +188,20 @@ public:
         return m_blockChain[_i]->headerHash();
     }
 
-    std::shared_ptr<dev::eth::Block> getBlockByHash(
-        dev::h256 const& _blockHash, int64_t = -1) override
+    std::shared_ptr<bcos::eth::Block> getBlockByHash(
+        bcos::h256 const& _blockHash, int64_t = -1) override
     {
         if (m_blockHash.count(_blockHash))
             return m_blockChain[m_blockHash[_blockHash]];
         return nullptr;
     }
 
-    std::shared_ptr<dev::eth::Block> getBlockByNumber(int64_t _i) override
+    std::shared_ptr<bcos::eth::Block> getBlockByNumber(int64_t _i) override
     {
         return getBlockByHash(numberHash(_i));
     }
 
-    std::shared_ptr<dev::bytes> getBlockRLPByNumber(int64_t _i) override
+    std::shared_ptr<bcos::bytes> getBlockRLPByNumber(int64_t _i) override
     {
         auto blockHash = numberHash(_i);
         if (m_blockHash.count(blockHash))
@@ -206,44 +209,44 @@ public:
         return nullptr;
     }
 
-    dev::eth::Transaction::Ptr getTxByHash(dev::h256 const&) override
+    bcos::eth::Transaction::Ptr getTxByHash(bcos::h256 const&) override
     {
         return std::make_shared<Transaction>();
     }
-    dev::eth::LocalisedTransaction::Ptr getLocalisedTxByHash(dev::h256 const&) override
+    bcos::eth::LocalisedTransaction::Ptr getLocalisedTxByHash(bcos::h256 const&) override
     {
         return std::make_shared<LocalisedTransaction>();
     }
-    dev::eth::TransactionReceipt::Ptr getTransactionReceiptByHash(dev::h256 const&) override
+    bcos::eth::TransactionReceipt::Ptr getTransactionReceiptByHash(bcos::h256 const&) override
     {
         return std::make_shared<TransactionReceipt>();
     }
 
-    dev::eth::LocalisedTransactionReceipt::Ptr getLocalisedTxReceiptByHash(
-        dev::h256 const&) override
+    bcos::eth::LocalisedTransactionReceipt::Ptr getLocalisedTxReceiptByHash(
+        bcos::h256 const&) override
     {
         return std::make_shared<LocalisedTransactionReceipt>(
             TransactionReceipt(), h256(0), h256(0), -1, Address(), Address(), -1, 0);
     }
     std::pair<LocalisedTransaction::Ptr,
         std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
-    getTransactionByHashWithProof(dev::h256 const&) override
+    getTransactionByHashWithProof(bcos::h256 const&) override
     {
         return std::make_pair(std::make_shared<LocalisedTransaction>(),
             std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>());
     }
-    std::pair<dev::eth::LocalisedTransactionReceipt::Ptr,
+    std::pair<bcos::eth::LocalisedTransactionReceipt::Ptr,
         std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
     getTransactionReceiptByHashWithProof(
-        dev::h256 const& _txHash, dev::eth::LocalisedTransaction&) override
+        bcos::h256 const& _txHash, bcos::eth::LocalisedTransaction&) override
     {
         (void)_txHash;
         return std::make_pair(
-            std::make_shared<LocalisedTransactionReceipt>(dev::eth::TransactionException::None),
+            std::make_shared<LocalisedTransactionReceipt>(bcos::eth::TransactionException::None),
             std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>());
     }
-    CommitResult commitBlock(std::shared_ptr<dev::eth::Block> block,
-        std::shared_ptr<dev::blockverifier::ExecutiveContext>) override
+    CommitResult commitBlock(std::shared_ptr<bcos::eth::Block> block,
+        std::shared_ptr<bcos::blockverifier::ExecutiveContext>) override
     {
         block->header().setParentHash(m_blockChain[m_blockNumber - 1]->header().hash());
         block->header().setNumber(m_blockNumber);
@@ -255,25 +258,25 @@ public:
         return CommitResult::OK;
     }
 
-    dev::bytes getCode(dev::Address) override { return bytes(); }
+    bcos::bytes getCode(bcos::Address) override { return bytes(); }
     bool checkAndBuildGenesisBlock(
-        std::shared_ptr<dev::ledger::LedgerParamInterface>, bool = true) override
+        std::shared_ptr<bcos::ledger::LedgerParamInterface>, bool = true) override
     {
         return true;
     }
     std::string getSystemConfigByKey(std::string const&, int64_t) override { return "300000000"; };
-    dev::h512s sealerList() override { return m_sealerList; }
-    dev::h512s observerList() override { return m_observerList; }
-    void setSealerList(dev::h512s const& sealers) { m_sealerList = sealers; }
-    void setObserverList(dev::h512s const& observers) { m_observerList = observers; }
+    bcos::h512s sealerList() override { return m_sealerList; }
+    bcos::h512s observerList() override { return m_observerList; }
+    void setSealerList(bcos::h512s const& sealers) { m_sealerList = sealers; }
+    void setObserverList(bcos::h512s const& observers) { m_observerList = observers; }
 
     std::map<h256, int64_t> m_blockHash;
     std::vector<std::shared_ptr<Block>> m_blockChain;
     int64_t m_blockNumber;
     int64_t m_totalTransactionCount;
     KeyPair m_keyPair;
-    dev::h512s m_sealerList = dev::h512s();
-    dev::h512s m_observerList = dev::h512s();
+    bcos::h512s m_sealerList = bcos::h512s();
+    bcos::h512s m_observerList = bcos::h512s();
 };
 class TxPoolFixture
 {
@@ -292,7 +295,7 @@ public:
         std::shared_ptr<BlockChainInterface> blockChain =
             std::shared_ptr<BlockChainInterface>(m_blockChain);
         /// fake txpool
-        PROTOCOL_ID protocol = getGroupProtoclID(1, dev::eth::ProtocolID::TxPool);
+        PROTOCOL_ID protocol = getGroupProtoclID(1, bcos::eth::ProtocolID::TxPool);
         m_txPool = std::make_shared<FakeTxPool>(m_topicService, blockChain, 1024000, protocol);
     }
 
@@ -312,4 +315,4 @@ public:
     uint16_t listenPort = 30304;
 };
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

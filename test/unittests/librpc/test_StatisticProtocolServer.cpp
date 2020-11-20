@@ -30,11 +30,11 @@
 #include <boost/test/unit_test.hpp>
 #include <utility>
 
-using namespace dev;
-using namespace dev::rpc;
-using namespace dev::flowlimit;
+using namespace bcos;
+using namespace bcos::rpc;
+using namespace bcos::flowlimit;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -53,7 +53,7 @@ public:
         WrapError(_request, 0, "success", _response);
     }
 
-    dev::GROUP_ID WrapperGetGroupID(Json::Value const& _request)
+    bcos::GROUP_ID WrapperGetGroupID(Json::Value const& _request)
     {
         return StatisticProtocolServer::getGroupID(_request);
     }
@@ -102,7 +102,7 @@ void checkPermission(std::shared_ptr<FakeStatisticProtocolServer> fakeRPCHandler
         checkSuccessResponse(retValue);
         // with permission checker, and check passed
         fakeRPCHandler->HandleChannelRequest(
-            fakedRequestStr, retValue, [](dev::GROUP_ID) { return true; });
+            fakedRequestStr, retValue, [](bcos::GROUP_ID) { return true; });
         checkSuccessResponse(retValue);
     }
 
@@ -114,7 +114,7 @@ void checkPermission(std::shared_ptr<FakeStatisticProtocolServer> fakeRPCHandler
         std::string retValue;
         // with permission checker, and check failed
         fakeRPCHandler->HandleChannelRequest(
-            fakedRequestStr, retValue, [](dev::GROUP_ID) { return false; });
+            fakedRequestStr, retValue, [](bcos::GROUP_ID) { return false; });
         checkPermssionDenied(retValue);
     }
 }
@@ -148,4 +148,4 @@ BOOST_AUTO_TEST_CASE(testHandleChannelRequest)
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

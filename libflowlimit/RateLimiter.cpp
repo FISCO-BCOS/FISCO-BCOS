@@ -23,8 +23,8 @@
 #include "RateLimiter.h"
 #include <thread>
 
-using namespace dev;
-using namespace dev::flowlimit;
+using namespace bcos;
+using namespace bcos::flowlimit;
 
 RateLimiter::RateLimiter(int64_t const& _maxQPS) : m_maxQPS(_maxQPS)
 {

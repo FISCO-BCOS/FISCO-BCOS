@@ -21,15 +21,15 @@
  * @date 2018-08-24
  */
 
-#include <libdevcore/Guards.h>
+#include <libutilities/Common.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <thread>
 
-using namespace dev;
+using namespace bcos;
 using namespace std;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -42,11 +42,9 @@ BOOST_AUTO_TEST_CASE(testDevGuards)
     int max = 8;
 
     auto f = [&]() {
-        DEV_GUARDED(mutex)
-        {
-            count++;
-            usleep(1000);  // 1 ms
-        }
+        Guard l(mutex);
+        count++;
+        usleep(1000);  // 1 ms
     };
 
     struct timeval begin;
@@ -80,11 +78,9 @@ BOOST_AUTO_TEST_CASE(testWriteGuard)
     int max = 8;
 
     auto f = [&]() {
-        DEV_WRITE_GUARDED(mutex)
-        {
-            count++;
-            usleep(1000);  // 1 ms
-        }
+        WriteGuard l(mutex);
+        count++;
+        usleep(1000);  // 1 ms
     };
 
     struct timeval begin;
@@ -118,16 +114,15 @@ BOOST_AUTO_TEST_CASE(testRecursiveGuard)
     int max = 8;
 
     auto f0 = [&]() {
-        DEV_RECURSIVE_GUARDED(mutex) { count++; }
+        RecursiveGuard l(mutex);
+        count++;
     };
 
     auto f1 = [&]() {
-        DEV_RECURSIVE_GUARDED(mutex)
-        {
-            count++;
-            usleep(1000);  // 1 ms
-            f0();          // recursive
-        }
+        RecursiveGuard l(mutex);
+        count++;
+        usleep(1000);  // 1 ms
+        f0();          // recursive
     };
 
     struct timeval begin;
@@ -155,4 +150,4 @@ BOOST_AUTO_TEST_CASE(testRecursiveGuard)
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

@@ -33,9 +33,9 @@
 
 using namespace boost::property_tree;
 using namespace std;
-using namespace dev;
+using namespace bcos;
 
-namespace dev
+namespace bcos
 {
 namespace ledger
 {
@@ -81,7 +81,7 @@ void LedgerParam::parseGenesisConfig(const std::string& _genesisFile)
                                  " failed, error_msg: " + boost::diagnostic_information(e);
         LedgerParam_LOG(ERROR) << LOG_DESC("parseGenesisConfig Failed")
                                << LOG_KV("EINFO", boost::diagnostic_information(e));
-        BOOST_THROW_EXCEPTION(dev::InitLedgerConfigFailed() << errinfo_comment(error_info));
+        BOOST_THROW_EXCEPTION(bcos::InitLedgerConfigFailed() << errinfo_comment(error_info));
     }
     generateGenesisMark();
 }
@@ -120,7 +120,7 @@ void LedgerParam::generateGenesisMark()
     s << mutableTxParam().txGasLimit;
 
     // init epochSealerNum and epochBlockNum for rPBFT
-    if (dev::stringCmpIgnoreCase(mutableConsensusParam().consensusType, "rpbft") == 0)
+    if (bcos::stringCmpIgnoreCase(mutableConsensusParam().consensusType, "rpbft") == 0)
     {
         LedgerParam_LOG(INFO) << LOG_DESC("store rPBFT related configuration")
                               << LOG_KV("epochSealerNum", mutableConsensusParam().epochSealerNum)
@@ -185,7 +185,7 @@ void LedgerParam::init(const std::string& _configFilePath, const std::string& _d
 
 void LedgerParam::initTxExecuteConfig(ptree const& pt)
 {
-    if (dev::stringCmpIgnoreCase(mutableStateParam().type, "storage") == 0)
+    if (bcos::stringCmpIgnoreCase(mutableStateParam().type, "storage") == 0)
     {
         // enable parallel since v2.3.0 when stateType is storage
         if (g_BCOSConfig.version() >= V2_3_0)
@@ -386,14 +386,15 @@ void LedgerParam::initConsensusConfig(ptree const& pt)
     // init consensusTimeout
     auto consensusTimeout = pt.get<int64_t>("consensus.consensus_timeout", 3);
 
-    if (mutableConsensusParam().consensusTimeout < dev::precompiled::SYSTEM_CONSENSUS_TIMEOUT_MIN ||
-        mutableConsensusParam().consensusTimeout >= dev::precompiled::SYSTEM_CONSENSUS_TIMEOUT_MAX)
+    if (mutableConsensusParam().consensusTimeout <
+            bcos::precompiled::SYSTEM_CONSENSUS_TIMEOUT_MIN ||
+        mutableConsensusParam().consensusTimeout >= bcos::precompiled::SYSTEM_CONSENSUS_TIMEOUT_MAX)
     {
         BOOST_THROW_EXCEPTION(
             InvalidConfiguration() << errinfo_comment(
                 "Please set consensus.consensus_time must between " +
-                std::to_string(dev::precompiled::SYSTEM_CONSENSUS_TIMEOUT_MIN) + "s and " +
-                std::to_string(dev::precompiled::SYSTEM_CONSENSUS_TIMEOUT_MAX) + "s !"));
+                std::to_string(bcos::precompiled::SYSTEM_CONSENSUS_TIMEOUT_MIN) + "s and " +
+                std::to_string(bcos::precompiled::SYSTEM_CONSENSUS_TIMEOUT_MAX) + "s !"));
     }
     mutableConsensusParam().consensusTimeout = consensusTimeout;
 
@@ -454,12 +455,12 @@ void LedgerParam::initConsensusConfig(ptree const& pt)
     else
     {
         // epoch_block_num is at least 2 when supported_version >= v2.6.0
-        if (mutableConsensusParam().epochBlockNum <= dev::precompiled::RPBFT_EPOCH_BLOCK_NUM_MIN)
+        if (mutableConsensusParam().epochBlockNum <= bcos::precompiled::RPBFT_EPOCH_BLOCK_NUM_MIN)
         {
             BOOST_THROW_EXCEPTION(
                 InvalidConfiguration() << errinfo_comment(
                     "Please set consensus.epoch_block_num to be larger than " +
-                    std::to_string(dev::precompiled::RPBFT_EPOCH_BLOCK_NUM_MIN) + "!"));
+                    std::to_string(bcos::precompiled::RPBFT_EPOCH_BLOCK_NUM_MIN) + "!"));
         }
     }
     LedgerParam_LOG(DEBUG) << LOG_BADGE("initConsensusConfig")
@@ -585,18 +586,18 @@ void LedgerParam::initStorageConfig(ptree const& pt)
         mutableStorageParam().maxRetry = pt.get<uint>("storage.max_retry", 60);
         mutableStorageParam().binaryLog = pt.get<bool>("storage.binary_log", false);
         mutableStorageParam().CachedStorage = pt.get<bool>("storage.cached_storage", true);
-        if (!dev::stringCmpIgnoreCase(mutableStorageParam().type, "LevelDB"))
+        if (!bcos::stringCmpIgnoreCase(mutableStorageParam().type, "LevelDB"))
         {
             mutableStorageParam().type = "RocksDB";
             LedgerParam_LOG(WARNING) << "LevelDB is deprecated! RocksDB is recommended.";
         }
     }
     mutableStorageParam().path = baseDir() + "/block";
-    if (!dev::stringCmpIgnoreCase(mutableStorageParam().type, "RocksDB"))
+    if (!bcos::stringCmpIgnoreCase(mutableStorageParam().type, "RocksDB"))
     {
         mutableStorageParam().path += "/RocksDB";
     }
-    else if (!dev::stringCmpIgnoreCase(mutableStorageParam().type, "Scalable"))
+    else if (!bcos::stringCmpIgnoreCase(mutableStorageParam().type, "Scalable"))
     {
         mutableStorageParam().path += "/Scalable";
     }
@@ -702,7 +703,7 @@ void LedgerParam::initFlowControlConfig(boost::property_tree::ptree const& _pt)
                                  mutableFlowControlParam().outGoingBandwidthLimit);
 }
 
-void LedgerParam::parsePublicKeyListOfSection(dev::h512s& _nodeList,
+void LedgerParam::parsePublicKeyListOfSection(bcos::h512s& _nodeList,
     boost::property_tree::ptree const& _pt, std::string const& _sectionName,
     std::string const& _subSectionName)
 {
@@ -731,13 +732,13 @@ void LedgerParam::parsePublicKeyListOfSection(dev::h512s& _nodeList,
         }
         LedgerParam_LOG(INFO) << LOG_BADGE("parsePublicKeyListOfSection")
                               << LOG_KV("sectionName", _sectionName) << LOG_KV("it.first", data);
-        _nodeList.push_back(dev::h512(data));
+        _nodeList.push_back(bcos::h512(data));
     }
     LedgerParam_LOG(INFO) << LOG_BADGE("parsePublicKeyListOfSection")
                           << LOG_KV("totalPubKeySize", _nodeList.size());
 }
 
-void LedgerParam::parseSDKAllowList(dev::h512s& _nodeList, boost::property_tree::ptree const& _pt)
+void LedgerParam::parseSDKAllowList(bcos::h512s& _nodeList, boost::property_tree::ptree const& _pt)
 {
     parsePublicKeyListOfSection(_nodeList, _pt, "sdk_allowlist", "public_key.");
     bool enableSDKAllowListControl = (_nodeList.size() > 0);
@@ -746,4 +747,4 @@ void LedgerParam::parseSDKAllowList(dev::h512s& _nodeList, boost::property_tree:
 }
 
 }  // namespace ledger
-}  // namespace dev
+}  // namespace bcos

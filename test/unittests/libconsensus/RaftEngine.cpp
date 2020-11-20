@@ -36,14 +36,14 @@
 #include <thread>
 
 using namespace std;
-using namespace dev;
-using namespace dev::test;
-using namespace dev::consensus;
-using namespace dev::eth;
-using namespace dev::p2p;
-using namespace dev::network;
+using namespace bcos;
+using namespace bcos::test;
+using namespace bcos::consensus;
+using namespace bcos::eth;
+using namespace bcos::p2p;
+using namespace bcos::network;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -56,7 +56,7 @@ public:
     }
     NodeIPEndpoint nodeIPEndpoint() const override { return m_endpoint; }
     void start() override {}
-    void disconnect(dev::network::DisconnectReason) override {}
+    void disconnect(bcos::network::DisconnectReason) override {}
 
     void asyncSendMessage(Message::Ptr, Options = Options(), CallbackFunc = CallbackFunc()) override
     {}
@@ -83,7 +83,7 @@ public:
 
     void start() override { m_run = true; }
 
-    void stop(dev::network::DisconnectReason) override { m_run = false; }
+    void stop(bcos::network::DisconnectReason) override { m_run = false; }
 
     NodeID nodeID() override { return m_id; }
 
@@ -341,7 +341,7 @@ BOOST_AUTO_TEST_CASE(testHandleVoteRequest)
 BOOST_AUTO_TEST_CASE(testRunAsLeader)
 {
     bool flag = false;
-    std::unordered_map<dev::h512, unsigned> memberHeartbeatLog;
+    std::unordered_map<bcos::h512, unsigned> memberHeartbeatLog;
 
     BOOST_CHECK_NO_THROW(flag = raftEngine->runAsLeaderImp(memberHeartbeatLog));
     BOOST_CHECK(flag == false);
@@ -657,4 +657,4 @@ BOOST_AUTO_TEST_CASE(testCommitBlock)
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

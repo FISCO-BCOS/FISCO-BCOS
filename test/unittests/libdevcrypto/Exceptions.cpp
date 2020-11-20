@@ -22,15 +22,15 @@
  */
 #include <iostream>
 
-#include <libdevcore/Assertions.h>
 #include <libdevcrypto/Exceptions.h>
+#include <libutilities/Assertions.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>
 
-using namespace dev;
+using namespace bcos;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -39,11 +39,11 @@ BOOST_FIXTURE_TEST_SUITE(CryptoExceptionsTests, TestOutputHelperFixture)
 
 BOOST_AUTO_TEST_CASE(testExceptions)
 {
-    BOOST_CHECK_THROW(assertThrow(false, dev::crypto::CryptoException, "Throw crypto Exception"),
-        dev::crypto::CryptoException);
+    BOOST_CHECK_THROW(assertThrow(false, bcos::crypto::CryptoException, "Throw crypto Exception"),
+        bcos::crypto::CryptoException);
     BOOST_REQUIRE_NO_THROW(
-        assertThrow(true, dev::crypto::CryptoException, "Throw crypto Exception"));
+        assertThrow(true, bcos::crypto::CryptoException, "Throw crypto Exception"));
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

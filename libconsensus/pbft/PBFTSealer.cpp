@@ -27,15 +27,15 @@
  * @modifications: rename PBFTSealer.cpp to PBFTSealer.cpp
  */
 #include "PBFTSealer.h"
-#include <libdevcore/CommonJS.h>
-#include <libdevcore/Worker.h>
 #include <libethcore/CommonJS.h>
-using namespace dev::eth;
-using namespace dev::db;
-using namespace dev::blockverifier;
-using namespace dev::blockchain;
-using namespace dev::p2p;
-namespace dev
+#include <libutilities/CommonJS.h>
+#include <libutilities/Worker.h>
+using namespace bcos::eth;
+using namespace bcos::db;
+using namespace bcos::blockverifier;
+using namespace bcos::blockchain;
+using namespace bcos::p2p;
+namespace bcos
 {
 namespace consensus
 {
@@ -266,4 +266,4 @@ void PBFTSealer::increaseMaxTxsCanSeal()
 }
 
 }  // namespace consensus
-}  // namespace dev
+}  // namespace bcos

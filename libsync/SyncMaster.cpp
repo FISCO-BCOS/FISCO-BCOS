@@ -25,13 +25,13 @@
 #include <libblockchain/BlockChainInterface.h>
 
 using namespace std;
-using namespace dev;
-using namespace dev::eth;
-using namespace dev::sync;
-using namespace dev::p2p;
-using namespace dev::blockchain;
-using namespace dev::txpool;
-using namespace dev::blockverifier;
+using namespace bcos;
+using namespace bcos::eth;
+using namespace bcos::sync;
+using namespace bcos::p2p;
+using namespace bcos::blockchain;
+using namespace bcos::txpool;
+using namespace bcos::blockverifier;
 
 void SyncMaster::printSyncInfo()
 {
@@ -269,7 +269,7 @@ void SyncMaster::broadcastSyncStatus(BlockNumber const& _blockNumber, h256 const
 }
 
 bool SyncMaster::sendSyncStatusByNodeId(
-    BlockNumber const& blockNumber, h256 const& currentHash, dev::network::NodeID const& nodeId)
+    BlockNumber const& blockNumber, h256 const& currentHash, bcos::network::NodeID const& nodeId)
 {
     auto packet = m_syncMsgPacketFactory->createSyncStatusPacket(
         m_nodeId, blockNumber, m_genesisHash, currentHash);

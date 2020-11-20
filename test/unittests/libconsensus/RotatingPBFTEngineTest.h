@@ -28,20 +28,20 @@
 #include <test/unittests/libtxpool/FakeBlockChain.h>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev::consensus;
-using namespace dev::p2p;
-using namespace dev::txpool;
-using namespace dev::sync;
-using namespace dev::blockchain;
-using namespace dev::blockverifier;
-using namespace dev;
+using namespace bcos::consensus;
+using namespace bcos::p2p;
+using namespace bcos::txpool;
+using namespace bcos::sync;
+using namespace bcos::blockchain;
+using namespace bcos::blockverifier;
+using namespace bcos;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
 // override RotatingPBFTEngine to expose the protected interfaces
-class FakeRotatingPBFTEngine : public dev::consensus::RotatingPBFTEngine
+class FakeRotatingPBFTEngine : public bcos::consensus::RotatingPBFTEngine
 {
 public:
     using Ptr = std::shared_ptr<FakeRotatingPBFTEngine>;
@@ -60,7 +60,7 @@ public:
         setMaxTTL(1);
         setEmptyBlockGenTime(1000);
         createPBFTMsgFactory();
-        m_blockFactory = std::make_shared<dev::eth::BlockFactory>();
+        m_blockFactory = std::make_shared<bcos::eth::BlockFactory>();
         m_reqCache = std::make_shared<PBFTReqCache>();
         m_broacastTargetsFilter = boost::bind(&RotatingPBFTEngine::getIndexBySealer, this, _1);
     }
@@ -82,7 +82,7 @@ public:
 
     int64_t epochSize() { return m_epochSize; }
     int64_t rotatingInterval() { return m_rotatingInterval; }
-    std::set<dev::h512> chosedConsensusNodes() { return *m_chosedConsensusNodes; }
+    std::set<bcos::h512> chosedConsensusNodes() { return *m_chosedConsensusNodes; }
     IDXTYPE startNodeIdx() { return m_startNodeIdx; }
     int64_t rotatingRound() { return m_rotatingRound; }
     int64_t sealersNum() { return m_sealersNum; }
@@ -104,13 +104,14 @@ public:
 
     void clearStartIdx() { m_startNodeIdx = -1; }
 
-    void onRecvPBFTMessage(dev::p2p::NetworkException _exception,
-        std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message) override
+    void onRecvPBFTMessage(bcos::p2p::NetworkException _exception,
+        std::shared_ptr<bcos::p2p::P2PSession> _session,
+        bcos::p2p::P2PMessage::Ptr _message) override
     {
         return RotatingPBFTEngine::onRecvPBFTMessage(_exception, _session, _message);
     }
     void clearAllMsgCache() { m_broadCastCache->clearAll(); }
-    std::shared_ptr<dev::sync::TreeTopology> treeRouter() { return m_treeRouter; }
+    std::shared_ptr<bcos::sync::TreeTopology> treeRouter() { return m_treeRouter; }
     void wrapperOnRecvPBFTMessage(
         NetworkException exception, std::shared_ptr<P2PSession> session, P2PMessage::Ptr message)
     {
@@ -120,7 +121,7 @@ public:
     KeyPair const& keyPair() const { return m_keyPair; }
     void setKeyPair(KeyPair const& _keyPair) { m_keyPair = _keyPair; }
     void setView(VIEWTYPE const& _view) { m_view = _view; }
-    void setSealerList(dev::h512s const& sealerList) { m_sealerList = sealerList; }
+    void setSealerList(bcos::h512s const& sealerList) { m_sealerList = sealerList; }
     CheckResult isValidPrepare(PrepareReq const& req) const
     {
         std::ostringstream oss;
@@ -129,7 +130,7 @@ public:
 
     void setLeaderFailed(bool leaderFailed) { m_leaderFailed = leaderFailed; }
 
-    PrepareReq::Ptr wrapperConstructPrepareReq(dev::eth::Block::Ptr _block)
+    PrepareReq::Ptr wrapperConstructPrepareReq(bcos::eth::Block::Ptr _block)
     {
         return RotatingPBFTEngine::constructPrepareReq(_block);
     }
@@ -154,12 +155,12 @@ public:
         m_locatedInConsensusNodes = _locatedInConsensusNodes;
     }
 
-    dev::network::NodeID getSealerByIndex(size_t const& _index) const override
+    bcos::network::NodeID getSealerByIndex(size_t const& _index) const override
     {
         return PBFTEngine::getSealerByIndex(_index);
     }
 
-    void setChosedConsensusNodes(std::shared_ptr<std::set<dev::h512>> _chosedConsensusNodes)
+    void setChosedConsensusNodes(std::shared_ptr<std::set<bcos::h512>> _chosedConsensusNodes)
     {
         m_chosedConsensusNodes = _chosedConsensusNodes;
     }
@@ -168,26 +169,26 @@ public:
     {
         return RotatingPBFTEngine::sendRawPrepareStatusRandomly(_rawPrepareReq);
     }
-    void wrapperHandleP2PMessage(dev::p2p::NetworkException _exception,
-        std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message)
+    void wrapperHandleP2PMessage(bcos::p2p::NetworkException _exception,
+        std::shared_ptr<bcos::p2p::P2PSession> _session, bcos::p2p::P2PMessage::Ptr _message)
     {
         return RotatingPBFTEngine::handleP2PMessage(_exception, _session, _message);
     }
     unsigned prepareStatusBroadcastPercent() const { return m_prepareStatusBroadcastPercent; }
     RPBFTReqCache::Ptr rpbftReqCache() { return m_rpbftReqCache; }
     void wrapperOnReceiveRawPrepareStatus(
-        std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message)
+        std::shared_ptr<bcos::p2p::P2PSession> _session, bcos::p2p::P2PMessage::Ptr _message)
     {
         return RotatingPBFTEngine::onReceiveRawPrepareStatus(_session, _message);
     }
 
     void wrapperOnReceiveRawPrepareResponse(
-        std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message)
+        std::shared_ptr<bcos::p2p::P2PSession> _session, bcos::p2p::P2PMessage::Ptr _message)
     {
         return RotatingPBFTEngine::onReceiveRawPrepareResponse(_session, _message);
     }
 
-    bool wrapperGetNodeIDByIndex(dev::network::NodeID& nodeId, const IDXTYPE& idx) const
+    bool wrapperGetNodeIDByIndex(bcos::network::NodeID& nodeId, const IDXTYPE& idx) const
     {
         return PBFTEngine::getNodeIDByIndex(nodeId, idx);
     }
@@ -221,4 +222,4 @@ private:
     size_t m_sealersNum = 4;
 };
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

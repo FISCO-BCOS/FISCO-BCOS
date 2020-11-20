@@ -19,8 +19,8 @@
 #include "libstorage/RocksDBStorageFactory.h"
 #include <boost/test/unit_test.hpp>
 
-using namespace dev;
-using namespace dev::storage;
+using namespace bcos;
+using namespace bcos::storage;
 
 namespace test_RocksDBStorageFactory
 {

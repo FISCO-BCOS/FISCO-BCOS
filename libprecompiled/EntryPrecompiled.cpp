@@ -24,10 +24,10 @@
 #include <libdevcrypto/CryptoInterface.h>
 #include <libethcore/ABI.h>
 
-using namespace dev;
-using namespace dev::blockverifier;
-using namespace dev::precompiled;
-using namespace dev::storage;
+using namespace bcos;
+using namespace bcos::blockverifier;
+using namespace bcos::precompiled;
+using namespace bcos::storage;
 
 const char* const ENTRY_GET_INT = "getInt(string)";
 const char* const ENTRY_GET_UINT = "getUInt(string)";
@@ -42,7 +42,7 @@ const char* const ENTRY_GET_STR = "getString(string)";
 
 std::string setInt(bytesConstRef _data, std::string& _key, bool _isUint = false)
 {
-    dev::eth::ContractABI abi;
+    bcos::eth::ContractABI abi;
     std::string value;
 
     if (_isUint || g_BCOSConfig.version() <= RC2_VERSION)
@@ -85,7 +85,7 @@ PrecompiledExecResult::Ptr EntryPrecompiled::call(
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
 
-    dev::eth::ContractABI abi;
+    bcos::eth::ContractABI abi;
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
     callResult->gasPricer()->setMemUsed(param.size());
 
@@ -171,7 +171,7 @@ PrecompiledExecResult::Ptr EntryPrecompiled::call(
         abi.abiOut(data, str);
 
         std::string value = m_entry->getField(str);
-        dev::string32 s32 = dev::eth::toString32(value);
+        bcos::string32 s32 = bcos::eth::toString32(value);
         callResult->setExecResult(abi.abiIn("", s32));
         callResult->gasPricer()->appendOperation(InterfaceOpcode::GetByte32);
     }

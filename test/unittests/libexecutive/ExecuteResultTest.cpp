@@ -21,23 +21,23 @@
  * @date 2018-09-21
  */
 
-#include <libdevcore/CommonJS.h>
-#include <libdevcore/FixedHash.h>
 #include <libethcore/Block.h>
 #include <libethcore/Transaction.h>
 #include <libexecutive/EVMHostContext.h>
 #include <libexecutive/Executive.h>
 #include <libmptstate/MPTState.h>
+#include <libutilities/CommonJS.h>
+#include <libutilities/FixedHash.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <iostream>
 
 
 using namespace std;
-using namespace dev::eth;
-using namespace dev::executive;
+using namespace bcos::eth;
+using namespace bcos::executive;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -202,4 +202,4 @@ BOOST_AUTO_TEST_CASE(GettingSignatureForUnsignedTransactionThrows)
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

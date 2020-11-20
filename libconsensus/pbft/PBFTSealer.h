@@ -31,16 +31,16 @@
 #include "PBFTEngine.h"
 #include <libconsensus/Sealer.h>
 #include <sstream>
-namespace dev
+namespace bcos
 {
 namespace consensus
 {
 class PBFTSealer : public Sealer
 {
 public:
-    PBFTSealer(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
-        std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-        std::shared_ptr<dev::sync::SyncInterface> _blockSync)
+    PBFTSealer(std::shared_ptr<bcos::txpool::TxPoolInterface> _txPool,
+        std::shared_ptr<bcos::blockchain::BlockChainInterface> _blockChain,
+        std::shared_ptr<bcos::sync::SyncInterface> _blockSync)
       : Sealer(_txPool, _blockChain, _blockSync)
     {}
 
@@ -166,7 +166,7 @@ private:
     }
 
     /// reset block for the next leader
-    void resetBlockForNextLeader(dev::h256Hash const& filter)
+    void resetBlockForNextLeader(bcos::h256Hash const& filter)
     {
         {
             WriteGuard l(x_sealing);
@@ -193,4 +193,4 @@ protected:
     float m_blockSizeIncreaseRatio = 0.5;
 };
 }  // namespace consensus
-}  // namespace dev
+}  // namespace bcos

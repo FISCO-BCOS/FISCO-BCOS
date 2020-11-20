@@ -28,20 +28,19 @@
 #include <cryptopp/modes.h>
 #include <cryptopp/pwdbased.h>
 #include <cryptopp/sha.h>
-#include <libdevcore/Address.h>
-#include <libdevcore/Common.h>
-#include <libdevcore/Exceptions.h>
-#include <libdevcore/Guards.h>
-#include <libdevcore/RLP.h>
 #include <libethcore/Exceptions.h>
+#include <libutilities/Address.h>
+#include <libutilities/Common.h>
+#include <libutilities/Exceptions.h>
+#include <libutilities/RLP.h>
 #include <secp256k1.h>
 #include <secp256k1_recovery.h>
 #include <secp256k1_sha256.h>
 #include <mutex>
 
 using namespace std;
-using namespace dev;
-using namespace dev::crypto;
+using namespace bcos;
+using namespace bcos::crypto;
 
 
 static const u256 c_secp256k1n(
@@ -49,12 +48,12 @@ static const u256 c_secp256k1n(
 
 static const unsigned VBase = 27;
 
-void dev::crypto::ECDSASignature::encode(RLPStream& _s) const noexcept
+void bcos::crypto::ECDSASignature::encode(RLPStream& _s) const noexcept
 {
     _s << (byte)(v + VBase) << (u256)r << (u256)s;
 }
 
-std::vector<unsigned char> dev::crypto::ECDSASignature::asBytes() const
+std::vector<unsigned char> bcos::crypto::ECDSASignature::asBytes() const
 {
     std::vector<unsigned char> data;
     data.resize(65);
@@ -64,7 +63,7 @@ std::vector<unsigned char> dev::crypto::ECDSASignature::asBytes() const
     return data;
 }
 
-bool dev::crypto::ECDSASignature::isValid() const noexcept
+bool bcos::crypto::ECDSASignature::isValid() const noexcept
 {
     if (s > c_secp256k1n / 2)
     {
@@ -91,14 +90,14 @@ secp256k1_context const* getSecp256k1Ctx()
 }
 }  // namespace
 
-std::shared_ptr<crypto::Signature> dev::ecdsaSignatureFromRLP(RLP const& _rlp, size_t _start)
+std::shared_ptr<crypto::Signature> bcos::ecdsaSignatureFromRLP(RLP const& _rlp, size_t _start)
 {
     byte v = _rlp[_start++].toInt<byte>() - VBase;
     u256 r = _rlp[_start++].toInt<u256>();
     u256 s = _rlp[_start++].toInt<u256>();
     return std::make_shared<ECDSASignature>(r, s, v);
 }
-std::shared_ptr<crypto::Signature> dev::ecdsaSignatureFromBytes(std::vector<unsigned char> _data)
+std::shared_ptr<crypto::Signature> bcos::ecdsaSignatureFromBytes(std::vector<unsigned char> _data)
 {
     if (_data.size() != 65)
     {  // ecdsa signature must be 65 bytes
@@ -110,7 +109,7 @@ std::shared_ptr<crypto::Signature> dev::ecdsaSignatureFromBytes(std::vector<unsi
     return std::make_shared<ECDSASignature>(r, s, v);
 }
 
-std::shared_ptr<crypto::Signature> dev::ecdsaSign(KeyPair const& _keyPair, h256 const& _hash)
+std::shared_ptr<crypto::Signature> bcos::ecdsaSign(KeyPair const& _keyPair, h256 const& _hash)
 {
     auto* ctx = getSecp256k1Ctx();
     secp256k1_ecdsa_recoverable_signature rawSig;
@@ -135,7 +134,7 @@ std::shared_ptr<crypto::Signature> dev::ecdsaSign(KeyPair const& _keyPair, h256 
     return ss;
 }
 
-bool dev::ecdsaVerify(h512 const& _p, std::shared_ptr<crypto::Signature> _s, h256 const& _hash)
+bool bcos::ecdsaVerify(h512 const& _p, std::shared_ptr<crypto::Signature> _s, h256 const& _hash)
 {
     // TODO: Verify w/o recovery (if faster).
     if (!_p)
@@ -143,7 +142,7 @@ bool dev::ecdsaVerify(h512 const& _p, std::shared_ptr<crypto::Signature> _s, h25
     return _p == ecdsaRecover(_s, _hash);
 }
 
-Public dev::ecdsaRecover(std::shared_ptr<crypto::Signature> _s, h256 const& _message)
+Public bcos::ecdsaRecover(std::shared_ptr<crypto::Signature> _s, h256 const& _message)
 {
     auto _sig = dynamic_pointer_cast<ECDSASignature>(_s);
     if (!_sig)
@@ -175,7 +174,7 @@ Public dev::ecdsaRecover(std::shared_ptr<crypto::Signature> _s, h256 const& _mes
     return Public{&serializedPubkey[1], Public::ConstructFromPointer};
 }
 
-pair<bool, bytes> dev::ecRecover(bytesConstRef _in)
+pair<bool, bytes> bcos::ecRecover(bytesConstRef _in)
 {
     struct
     {
@@ -200,7 +199,7 @@ pair<bool, bytes> dev::ecRecover(bytesConstRef _in)
                 {
                     if (g_BCOSConfig.version() >= V2_5_0)
                     {
-                        ret = dev::keccak256(rec);
+                        ret = bcos::keccak256(rec);
                     }
                     else
                     {

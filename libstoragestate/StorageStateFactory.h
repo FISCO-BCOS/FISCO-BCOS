@@ -26,20 +26,20 @@
 
 #include <libexecutive/StateFactoryInterface.h>
 
-namespace dev
+namespace bcos
 {
 namespace storagestate
 {
-class StorageStateFactory : public dev::executive::StateFactoryInterface
+class StorageStateFactory : public bcos::executive::StateFactoryInterface
 {
 public:
     StorageStateFactory(u256 const& _accountStartNonce) : m_accountStartNonce(_accountStartNonce) {}
     virtual ~StorageStateFactory() {}
-    std::shared_ptr<dev::executive::StateFace> getState(
-        h256 const& _root, std::shared_ptr<dev::storage::TableFactory> _factory) override;
+    std::shared_ptr<bcos::executive::StateFace> getState(
+        h256 const& _root, std::shared_ptr<bcos::storage::TableFactory> _factory) override;
 
 private:
     u256 m_accountStartNonce;
 };
 }  // namespace storagestate
-}  // namespace dev
+}  // namespace bcos

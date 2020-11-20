@@ -33,22 +33,22 @@
 #include <boost/test/unit_test.hpp>
 
 using namespace std;
-using namespace dev;
-using namespace dev::eth;
-using namespace dev::sync;
-using namespace dev::blockverifier;
+using namespace bcos;
+using namespace bcos::eth;
+using namespace bcos::sync;
+using namespace bcos::blockverifier;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
 class FakeSyncMaster : public SyncMaster
 {
 public:
-    FakeSyncMaster(std::shared_ptr<dev::p2p::P2PInterface> _service,
-        std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
-        std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-        std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
+    FakeSyncMaster(std::shared_ptr<bcos::p2p::P2PInterface> _service,
+        std::shared_ptr<bcos::txpool::TxPoolInterface> _txPool,
+        std::shared_ptr<bcos::blockchain::BlockChainInterface> _blockChain,
+        std::shared_ptr<bcos::blockverifier::BlockVerifierInterface> _blockVerifier,
         PROTOCOL_ID const& _protocolId, NodeID const& _nodeId, h256 const& _genesisHash,
         unsigned const& _idleWaitMs = 200, int64_t const& _gossipInterval = 1000,
         int64_t const& _gossipPeers = 3, bool const& _enableSendTxsByTree = false,
@@ -107,7 +107,8 @@ public:
         std::shared_ptr<FakeSyncMaster> fakeSyncMaster =
             std::make_shared<FakeSyncMaster>(txpool_creator.m_topicService, txpool_creator.m_txPool,
                 txpool_creator.m_blockChain, blockVerifier, c_protocolId, _nodeId, m_genesisHash);
-        fakeSyncMaster->registerConsensusVerifyHandler([](dev::eth::Block const&) { return true; });
+        fakeSyncMaster->registerConsensusVerifyHandler(
+            [](bcos::eth::Block const&) { return true; });
         std::shared_ptr<DownloadingTxsQueue> txQueue =
             std::make_shared<DownloadingTxsQueue>(c_protocolId, _nodeId);
         return FakeSyncToolsSet{fakeSyncMaster, txpool_creator.m_topicService,
@@ -132,7 +133,7 @@ public:
             tx->setBlockLimit(u256(_currentBlockNumber) + c_maxBlockLimit);
             tx->setRpcTx(true);
             std::shared_ptr<crypto::Signature> sig =
-                dev::crypto::Sign(sigKeyPair.secret(), tx->hash(WithoutSignature));
+                bcos::crypto::Sign(sigKeyPair.secret(), tx->hash(WithoutSignature));
             /// update the signature of transaction
             tx->updateSignature(sig);
             // std::pair<h256, Address> ret = txPool->submit(tx);
@@ -312,7 +313,7 @@ BOOST_AUTO_TEST_CASE(MaintainDownloadingQueueTest)
 {
     int64_t currentBlockNumber = 0;
     int64_t latestNumber = 6;
-    Secret sec = dev::KeyPair::create().secret();
+    Secret sec = bcos::KeyPair::create().secret();
     FakeSyncToolsSet syncTools = fakeSyncToolsSet(currentBlockNumber + 1, 5, NodeID(100), sec);
     std::shared_ptr<SyncMaster> sync = syncTools.sync;
     std::shared_ptr<SyncMasterStatus> status = sync->syncStatus();
@@ -476,4 +477,4 @@ BOOST_AUTO_TEST_CASE(DoWorkTest)
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

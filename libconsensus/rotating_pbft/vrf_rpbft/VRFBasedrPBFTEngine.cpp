@@ -23,7 +23,7 @@
 #include "VRFBasedrPBFTEngine.h"
 #include "Common.h"
 
-using namespace dev::consensus;
+using namespace bcos::consensus;
 
 void VRFBasedrPBFTEngine::setShouldRotateSealers(bool _shouldRotateSealers)
 {
@@ -39,7 +39,7 @@ IDXTYPE VRFBasedrPBFTEngine::selectLeader() const
         return MAXIDX;
     }
     int64_t selectedIdx = ((m_view + m_highestBlock.number()) % m_chosedSealerList->size());
-    dev::h512 selectedNodeId;
+    bcos::h512 selectedNodeId;
     {
         ReadGuard l(x_chosedSealerList);
         selectedNodeId = (*m_chosedSealerList)[selectedIdx];
@@ -124,7 +124,7 @@ void VRFBasedrPBFTEngine::updateConsensusNodeList()
 }
 
 void VRFBasedrPBFTEngine::tryToForwardRemainingTxs(
-    std::set<dev::h512> const& _lastEpochWorkingSealers)
+    std::set<bcos::h512> const& _lastEpochWorkingSealers)
 {
     // the node is not the working sealer of this epoch
     auto nodeId = m_keyPair.pub();
@@ -195,7 +195,7 @@ void VRFBasedrPBFTEngine::resetConfig()
     // verification And the INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE flag was set to true, the current
     // leader needs to rotate workingsealers
     auto notifyRotateFlagInfo =
-        m_blockChain->getSystemConfigByKey(dev::precompiled::INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE);
+        m_blockChain->getSystemConfigByKey(bcos::precompiled::INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE);
     bool notifyRotateFlag = false;
     if (notifyRotateFlagInfo != "")
     {
@@ -233,7 +233,7 @@ void VRFBasedrPBFTEngine::resetConfig()
 // When you need to rotate nodes, check the node rotation transaction
 // (the last transaction in the block, the sender must be the leader)
 void VRFBasedrPBFTEngine::checkTransactionsValid(
-    dev::eth::Block::Ptr _block, PrepareReq::Ptr _prepareReq)
+    bcos::eth::Block::Ptr _block, PrepareReq::Ptr _prepareReq)
 {
     // Note: if the block contains rotatingTx when m_shouldRotateSealers is false
     //       the rotatingTx will be reverted by the ordinary node when executing
@@ -255,17 +255,17 @@ void VRFBasedrPBFTEngine::checkTransactionsValid(
                               << LOG_KV("nodeIdx", nodeIdx()) << LOG_KV("txSize", transactionSize);
     auto nodeRotatingTx = (*(_block->transactions()))[0];
     // check the contract address
-    if (nodeRotatingTx->to() != dev::precompiled::WORKING_SEALER_MGR_ADDRESS)
+    if (nodeRotatingTx->to() != bcos::precompiled::WORKING_SEALER_MGR_ADDRESS)
     {
         VRFRPBFTEngine_LOG(WARNING)
             << LOG_DESC("checkTransactionsValid failed") << LOG_KV("reqHeight", _prepareReq->height)
             << LOG_KV("reqHash", _prepareReq->block_hash.abridged())
             << LOG_KV("reqIdx", _prepareReq->idx)
-            << LOG_KV("expectedTo", toHex(dev::precompiled::WORKING_SEALER_MGR_ADDRESS))
+            << LOG_KV("expectedTo", toHex(bcos::precompiled::WORKING_SEALER_MGR_ADDRESS))
             << LOG_KV("currentTo", toHex(nodeRotatingTx->to()));
         BOOST_THROW_EXCEPTION(InvalidNodeRotationTx() << errinfo_comment(
                                   "Invalid node rotation transaction, expected contract address: " +
-                                  toHex(dev::precompiled::WORKING_SEALER_MGR_ADDRESS) +
+                                  toHex(bcos::precompiled::WORKING_SEALER_MGR_ADDRESS) +
                                   ", current to:" + toHex(nodeRotatingTx->to())));
     }
     // Note: When pbftBackup exists, the current leader is not necessarily equal to the transaction
@@ -276,7 +276,7 @@ void VRFBasedrPBFTEngine::checkTransactionsValid(
     }
     //
     auto leaderNodeID = RotatingPBFTEngine::getSealerByIndex(_prepareReq->idx);
-    if (leaderNodeID == dev::h512())
+    if (leaderNodeID == bcos::h512())
     {
         VRFRPBFTEngine_LOG(WARNING)
             << LOG_DESC("checkTransactionsValid failed for invalid prepareReq generator");

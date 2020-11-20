@@ -21,16 +21,15 @@
  * @date: 2018
  */
 #include "sm2.h"
-#include "libdevcore/CommonData.h"
-#include <libdevcore/Guards.h>
+#include "libutilities/CommonData.h"
 
 #define SM3_DIGEST_LENGTH 32
 
 using namespace std;
-using namespace dev;
+using namespace bcos;
 
 // cache for sign
-static dev::Mutex c_zValueCacheMutex;
+static bcos::Mutex c_zValueCacheMutex;
 // map between privateKey to {zValueCache, zValueLen}
 static std::map<std::string, std::pair<std::shared_ptr<unsigned char>, size_t>> c_mapTozValueCache;
 // max size of c_mapTozValueCache

@@ -25,9 +25,9 @@
 #include <libethcore/Transaction.h>
 
 using namespace std;
-using namespace dev::eth;
+using namespace bcos::eth;
 
-namespace dev
+namespace bcos
 {
 namespace rpc
 {
@@ -72,4 +72,4 @@ TransactionSkeleton toTransactionSkeleton(Json::Value const& _json)
 
 }  // namespace rpc
 
-}  // namespace dev
+}  // namespace bcos

@@ -32,12 +32,12 @@
 
 
 using namespace std;
-using namespace dev;
-using namespace dev::initializer;
+using namespace bcos;
+using namespace bcos::initializer;
 
-DEV_SIMPLE_EXCEPTION(UnknowSupportVersion);
+DERIVE_BCOS_EXCEPTION(UnknowSupportVersion);
 
-uint32_t dev::initializer::getVersionNumber(const string& _version)
+uint32_t bcos::initializer::getVersionNumber(const string& _version)
 {
     // 0XMNNPPTS, M=MAJOR N=MINOR P=PATCH T=TWEAK S=STATUS
     vector<string> versions;
@@ -63,20 +63,20 @@ uint32_t dev::initializer::getVersionNumber(const string& _version)
     return versionNumber;
 }
 
-void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
+void bcos::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
 {
     /// default version is RC1
     string version = _pt.get<string>("compatibility.supported_version", "2.0.0-rc1");
     uint32_t versionNumber = 0;
-    if (dev::stringCmpIgnoreCase(version, "2.0.0-rc1") == 0)
+    if (bcos::stringCmpIgnoreCase(version, "2.0.0-rc1") == 0)
     {
         g_BCOSConfig.setSupportedVersion(version, RC1_VERSION);
     }
-    else if (dev::stringCmpIgnoreCase(version, "2.0.0-rc2") == 0)
+    else if (bcos::stringCmpIgnoreCase(version, "2.0.0-rc2") == 0)
     {
         g_BCOSConfig.setSupportedVersion(version, RC2_VERSION);
     }
-    else if (dev::stringCmpIgnoreCase(version, "2.0.0-rc3") == 0)
+    else if (bcos::stringCmpIgnoreCase(version, "2.0.0-rc3") == 0)
     {
         g_BCOSConfig.setSupportedVersion(version, RC3_VERSION);
     }
@@ -89,15 +89,15 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
     // set evmSchedule
     if (g_BCOSConfig.version() >= V2_6_0)
     {
-        g_BCOSConfig.setEVMSchedule(dev::eth::FiscoBcosScheduleV3);
+        g_BCOSConfig.setEVMSchedule(bcos::eth::FiscoBcosScheduleV3);
     }
     else if (g_BCOSConfig.version() <= getVersionNumber("2.0.0"))
     {
-        g_BCOSConfig.setEVMSchedule(dev::eth::FiscoBcosSchedule);
+        g_BCOSConfig.setEVMSchedule(bcos::eth::FiscoBcosSchedule);
     }
     else
     {
-        g_BCOSConfig.setEVMSchedule(dev::eth::FiscoBcosScheduleV2);
+        g_BCOSConfig.setEVMSchedule(bcos::eth::FiscoBcosScheduleV2);
     }
 
     g_BCOSConfig.binaryInfo.version = FISCO_BCOS_PROJECT_VERSION;
@@ -197,7 +197,7 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
                           << LOG_KV("useSMCrypto", g_BCOSConfig.SMCrypto());
 }
 
-void dev::version()
+void bcos::version()
 {
     std::cout << "FISCO-BCOS Version : " << FISCO_BCOS_PROJECT_VERSION
               << (g_BCOSConfig.SMCrypto() ? " gm" : "") << std::endl;

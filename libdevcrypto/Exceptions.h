@@ -21,15 +21,15 @@
 
 #pragma once
 
-#include <libdevcore/Exceptions.h>
+#include <libutilities/Exceptions.h>
 
-namespace dev
+namespace bcos
 {
 namespace crypto
 {
 /// Rare malfunction of cryptographic functions.
-DEV_SIMPLE_EXCEPTION(CryptoException);
-DEV_SIMPLE_EXCEPTION(GmCryptoException);
+DERIVE_BCOS_EXCEPTION(CryptoException);
+DERIVE_BCOS_EXCEPTION(GmCryptoException);
 
 }  // namespace crypto
-}  // namespace dev
+}  // namespace bcos

@@ -23,7 +23,7 @@
 
 #pragma once
 
-#include <libdevcore/FixedHash.h>
+#include <libutilities/FixedHash.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -37,9 +37,9 @@
 #include "ChannelException.h"
 #include "ChannelSession.h"
 #include "Message.h"
-#include "libdevcore/ThreadPool.h"
+#include "libutilities/ThreadPool.h"
 
-namespace dev
+namespace bcos
 {
 namespace channel
 {
@@ -63,7 +63,7 @@ public:
     void setEnableSSL(bool enableSSL) { m_enableSSL = enableSSL; };
 
     void setConnectionHandler(
-        std::function<void(dev::channel::ChannelException, ChannelSession::Ptr)> handler)
+        std::function<void(bcos::channel::ChannelException, ChannelSession::Ptr)> handler)
     {
         m_connectionHandler = handler;
     };
@@ -103,7 +103,7 @@ private:
     ThreadPool::Ptr m_requestThreadPool;
     ThreadPool::Ptr m_responseThreadPool;
 
-    std::function<void(dev::channel::ChannelException, ChannelSession::Ptr)> m_connectionHandler;
+    std::function<void(bcos::channel::ChannelException, ChannelSession::Ptr)> m_connectionHandler;
     MessageFactory::Ptr m_messageFactory;
 
     std::string m_listenHost = "";
@@ -115,4 +115,4 @@ private:
 
 }  // namespace channel
 
-}  // namespace dev
+}  // namespace bcos

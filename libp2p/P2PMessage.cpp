@@ -23,8 +23,8 @@
 #include "P2PMessage.h"
 #include "Common.h"
 
-using namespace dev;
-using namespace dev::p2p;
+using namespace bcos;
+using namespace bcos::p2p;
 
 void P2PMessage::encode(bytes& buffer)
 {
@@ -47,7 +47,7 @@ ssize_t P2PMessage::decode(const byte* buffer, size_t size)
 {
     if (size < HEADER_LENGTH)
     {
-        return dev::network::PACKET_INCOMPLETE;
+        return bcos::network::PACKET_INCOMPLETE;
     }
 
     int32_t offset = 0;
@@ -60,7 +60,7 @@ ssize_t P2PMessage::decode(const byte* buffer, size_t size)
 
     if (size < m_length)
     {
-        return dev::network::PACKET_INCOMPLETE;
+        return bcos::network::PACKET_INCOMPLETE;
     }
 
     offset += 4;

@@ -21,10 +21,10 @@
  */
 
 #include "P2PInitializer.h"
-#include "libdevcore/ThreadPool.h"
 #include "libnetwork/ASIOInterface.h"
 #include "libnetwork/Session.h"
 #include "libp2p/P2PMessageFactory.h"
+#include "libutilities/ThreadPool.h"
 #include <libnetwork/Host.h>
 #include <libnetwork/PeerWhitelist.h>
 #include <boost/algorithm/string/case_conv.hpp>
@@ -32,9 +32,9 @@
 #include <boost/algorithm/string/split.hpp>
 
 using namespace std;
-using namespace dev;
-using namespace dev::p2p;
-using namespace dev::initializer;
+using namespace bcos;
+using namespace bcos::p2p;
+using namespace bcos::initializer;
 
 void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
 {
@@ -73,8 +73,7 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
                         boost::asio::ip::address ip_address =
                             boost::asio::ip::make_address(s[0].data() + 1);
                         uint16_t port = boost::lexical_cast<uint16_t>(s[1].data() + 1);
-                        nodes.insert(
-                            std::make_pair(NodeIPEndpoint{ip_address, port}, NodeID()));
+                        nodes.insert(std::make_pair(NodeIPEndpoint{ip_address, port}, NodeID()));
                     }
                     else if (s.size() == 1)
                     {  // ipv4 and ipv4 host
@@ -138,25 +137,25 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
 
         auto whitelist = parseWhitelistFromPropertyTree(_pt);
 
-        auto asioInterface = std::make_shared<dev::network::ASIOInterface>();
+        auto asioInterface = std::make_shared<bcos::network::ASIOInterface>();
         asioInterface->setIOService(std::make_shared<ba::io_service>());
         asioInterface->setSSLContext(m_SSLContext);
-        asioInterface->setType(dev::network::ASIOInterface::SSL);
+        asioInterface->setType(bcos::network::ASIOInterface::SSL);
 
         std::shared_ptr<P2PMessageFactory> messageFactory = nullptr;
 
-        if (g_BCOSConfig.version() >= dev::RC2_VERSION)
+        if (g_BCOSConfig.version() >= bcos::RC2_VERSION)
         {
             messageFactory = std::make_shared<P2PMessageFactoryRC2>();
         }
-        else if (g_BCOSConfig.version() <= dev::RC1_VERSION)
+        else if (g_BCOSConfig.version() <= bcos::RC1_VERSION)
         {
             messageFactory = std::make_shared<P2PMessageFactory>();
         }
 
-        auto host = std::make_shared<dev::network::Host>();
+        auto host = std::make_shared<bcos::network::Host>();
         host->setASIOInterface(asioInterface);
-        host->setSessionFactory(std::make_shared<dev::network::SessionFactory>());
+        host->setSessionFactory(std::make_shared<bcos::network::SessionFactory>());
         host->setMessageFactory(messageFactory);
         host->setHostPort(listenIP, listenPort);
         host->setThreadPool(std::make_shared<ThreadPool>("P2P", 4));

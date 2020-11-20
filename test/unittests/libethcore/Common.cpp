@@ -21,20 +21,20 @@
  */
 
 #include "libdevcrypto/CryptoInterface.h"
-#include <libdevcore/CommonJS.h>
-#include <libdevcore/TrieHash.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/BlockHeader.h>
 #include <libethcore/Common.h>
 #include <libethcore/Exceptions.h>
+#include <libutilities/CommonJS.h>
+#include <libutilities/TrieHash.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
 
-using namespace dev;
-using namespace dev::eth;
+using namespace bcos;
+using namespace bcos::eth;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -69,10 +69,10 @@ BOOST_AUTO_TEST_CASE(testBadBlock)
 
 BOOST_AUTO_TEST_CASE(testToAddress)
 {
-    BOOST_CHECK_NO_THROW(dev::eth::toAddress("0x64fa644d2a694681bd6addd6c5e36cccd8dcdde3"));
-    BOOST_CHECK_THROW(dev::eth::toAddress("0x64fa644d"), InvalidAddress);
+    BOOST_CHECK_NO_THROW(bcos::eth::toAddress("0x64fa644d2a694681bd6addd6c5e36cccd8dcdde3"));
+    BOOST_CHECK_THROW(bcos::eth::toAddress("0x64fa644d"), InvalidAddress);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

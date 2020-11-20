@@ -22,10 +22,10 @@
 
 #include "LogEntry.h"
 
-#include <libdevcore/RLP.h>
 #include <libdevcrypto/CryptoInterface.h>
+#include <libutilities/RLP.h>
 
-namespace dev
+namespace bcos
 {
 namespace eth
 {
@@ -52,4 +52,4 @@ LogBloom LogEntry::bloom() const
 }
 
 }  // namespace eth
-}  // namespace dev
+}  // namespace bcos

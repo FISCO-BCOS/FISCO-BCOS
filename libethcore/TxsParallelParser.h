@@ -24,10 +24,9 @@
 #pragma once
 #include "Common.h"
 #include "Transaction.h"
-#include <libdevcore/Guards.h>
-#include <libdevcore/RLP.h>
+#include <libutilities/RLP.h>
 
-namespace dev
+namespace bcos
 {
 namespace eth
 {
@@ -59,4 +58,4 @@ private:
 };
 
 }  // namespace eth
-}  // namespace dev
+}  // namespace bcos

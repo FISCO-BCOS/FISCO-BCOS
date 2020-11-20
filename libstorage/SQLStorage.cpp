@@ -26,12 +26,12 @@
 #include "Table.h"
 #include <libchannelserver/ChannelMessage.h>
 #include <libchannelserver/ChannelRPCServer.h>
-#include <libdevcore/Common.h>
-#include <libdevcore/FixedHash.h>
+#include <libutilities/Common.h>
+#include <libutilities/FixedHash.h>
 
-using namespace dev;
+using namespace bcos;
 using namespace std;
-using namespace dev::storage;
+using namespace bcos::storage;
 
 SQLStorage::SQLStorage() {}
 
@@ -367,10 +367,10 @@ Json::Value SQLStorage::requestDB(const Json::Value& value)
     {
         try
         {
-            dev::channel::TopicChannelMessage::Ptr request =
-                std::make_shared<dev::channel::TopicChannelMessage>();
+            bcos::channel::TopicChannelMessage::Ptr request =
+                std::make_shared<bcos::channel::TopicChannelMessage>();
             request->setType(channel::AMOP_REQUEST);
-            request->setSeq(dev::newSeq());
+            request->setSeq(bcos::newSeq());
 
             std::stringstream ssOut;
             ssOut << value;
@@ -379,7 +379,7 @@ Json::Value SQLStorage::requestDB(const Json::Value& value)
             STORAGE_EXTERNAL_LOG(TRACE) << "Request AMOPDB:" << request->seq() << " " << str;
 
 
-            dev::channel::TopicChannelMessage::Ptr response;
+            bcos::channel::TopicChannelMessage::Ptr response;
 
             STORAGE_EXTERNAL_LOG(TRACE) << "Retry Request amdb :" << retry;
             request->setTopicData(m_topic, (const byte*)str.data(), str.size());
@@ -426,7 +426,7 @@ Json::Value SQLStorage::requestDB(const Json::Value& value)
 
             return responseJson;
         }
-        catch (dev::channel::ChannelException& e)
+        catch (bcos::channel::ChannelException& e)
         {
             STORAGE_EXTERNAL_LOG(ERROR)
                 << "ChannelException error: " << boost::diagnostic_information(e);
@@ -453,7 +453,7 @@ Json::Value SQLStorage::requestDB(const Json::Value& value)
             // The SQLStorage unreachable, the program will exit with abnormal status
             auto e = StorageException(-1, "Reach max retry");
             // output the exit time
-            std::cout << "[" << dev::getCurrentDateTime() << "] ";
+            std::cout << "[" << bcos::getCurrentDateTime() << "] ";
             std::cout << "The sqlstorage doesn't work well,"
                       << "the fisco-bcos will exit." << std::endl;
 
@@ -471,7 +471,7 @@ void SQLStorage::setTopic(const std::string& topic)
     m_topic = topic;
 }
 
-void SQLStorage::setChannelRPCServer(dev::ChannelRPCServer::Ptr channelRPCServer)
+void SQLStorage::setChannelRPCServer(bcos::ChannelRPCServer::Ptr channelRPCServer)
 {
     m_channelRPCServer = channelRPCServer;
 }

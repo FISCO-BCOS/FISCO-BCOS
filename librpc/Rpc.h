@@ -24,10 +24,10 @@
 
 #pragma once
 #include "Common.h"
-#include "RpcFace.h"            // for RpcFace
-#include "libdevcore/Common.h"  // for bytes
+#include "RpcFace.h"  // for RpcFace
 #include "libp2p/Common.h"
 #include "librpc/ModularServer.h"  // for ServerInterface<>::RPCModule, Serv...
+#include "libutilities/Common.h"   // for bytes
 #include <json/value.h>            // for Value
 #include <libethcore/Transaction.h>
 #include <libinitializer/LedgerInitializer.h>
@@ -36,7 +36,7 @@
 #include <boost/thread/tss.hpp>  // for thread_specific_ptr
 #include <string>                // for string
 
-namespace dev
+namespace bcos
 {
 namespace ledger
 {
@@ -76,8 +76,8 @@ const std::string GROUP_HAS_NOT_DELETED = "0xe";
 class Rpc : public RpcFace
 {
 public:
-    Rpc(dev::initializer::LedgerInitializer::Ptr _ledgerInitializer,
-        std::shared_ptr<dev::p2p::P2PInterface> _service);
+    Rpc(bcos::initializer::LedgerInitializer::Ptr _ledgerInitializer,
+        std::shared_ptr<bcos::p2p::P2PInterface> _service);
 
     RPCModules implementedModules() const override
     {
@@ -162,7 +162,7 @@ public:
         m_transactionCallbackVersion.reset(_callbackVersion);
     }
     void clearCurrentTransactionCallback() { m_currentTransactionCallback.reset(NULL); }
-    void setLedgerInitializer(dev::initializer::LedgerInitializer::Ptr _ledgerInitializer)
+    void setLedgerInitializer(bcos::initializer::LedgerInitializer::Ptr _ledgerInitializer)
     {
         m_ledgerInitializer = _ledgerInitializer;
         if (_ledgerInitializer != nullptr)
@@ -170,50 +170,50 @@ public:
             m_ledgerManager = _ledgerInitializer->ledgerManager();
         }
     }
-    void setService(std::shared_ptr<dev::p2p::P2PInterface> _service) { m_service = _service; }
+    void setService(std::shared_ptr<bcos::p2p::P2PInterface> _service) { m_service = _service; }
 
 protected:
-    std::shared_ptr<dev::ledger::LedgerManager> ledgerManager();
-    std::shared_ptr<dev::p2p::P2PInterface> service();
+    std::shared_ptr<bcos::ledger::LedgerManager> ledgerManager();
+    std::shared_ptr<bcos::p2p::P2PInterface> service();
 
     std::string sendRawTransaction(int _groupID, const std::string& _rlp,
         std::function<std::shared_ptr<Json::Value>(
-            std::weak_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-            LocalisedTransactionReceipt::Ptr receipt, dev::bytesConstRef input,
-            dev::eth::Block::Ptr _blockPtr)>
+            std::weak_ptr<bcos::blockchain::BlockChainInterface> _blockChain,
+            LocalisedTransactionReceipt::Ptr receipt, bcos::bytesConstRef input,
+            bcos::eth::Block::Ptr _blockPtr)>
             _notifyCallback);
 
     std::shared_ptr<Json::Value> notifyReceipt(
-        std::weak_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-        LocalisedTransactionReceipt::Ptr receipt, dev::bytesConstRef input,
-        dev::eth::Block::Ptr _blockPtr);
+        std::weak_ptr<bcos::blockchain::BlockChainInterface> _blockChain,
+        LocalisedTransactionReceipt::Ptr receipt, bcos::bytesConstRef input,
+        bcos::eth::Block::Ptr _blockPtr);
 
     std::shared_ptr<Json::Value> notifyReceiptWithProof(
-        std::weak_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-        LocalisedTransactionReceipt::Ptr receipt, dev::bytesConstRef input,
-        dev::eth::Block::Ptr _blockPtr);
+        std::weak_ptr<bcos::blockchain::BlockChainInterface> _blockChain,
+        LocalisedTransactionReceipt::Ptr receipt, bcos::bytesConstRef input,
+        bcos::eth::Block::Ptr _blockPtr);
 
     void addProofToResponse(std::shared_ptr<Json::Value> _response, std::string const& _key,
-        std::shared_ptr<dev::blockchain::MerkleProofType> _proofList);
+        std::shared_ptr<bcos::blockchain::MerkleProofType> _proofList);
 
-    void generateBlockHeaderInfo(Json::Value& _response, dev::eth::BlockHeader const& _blockHeader,
-        dev::eth::Block::SigListPtrType _signatureList, bool _includeSigList);
+    void generateBlockHeaderInfo(Json::Value& _response, bcos::eth::BlockHeader const& _blockHeader,
+        bcos::eth::Block::SigListPtrType _signatureList, bool _includeSigList);
 
 
-    std::shared_ptr<dev::ledger::LedgerManager> m_ledgerManager;
-    dev::initializer::LedgerInitializer::Ptr m_ledgerInitializer;
+    std::shared_ptr<bcos::ledger::LedgerManager> m_ledgerManager;
+    bcos::initializer::LedgerInitializer::Ptr m_ledgerInitializer;
 
-    std::shared_ptr<dev::p2p::P2PInterface> m_service;
+    std::shared_ptr<bcos::p2p::P2PInterface> m_service;
 
     const std::set<std::string> c_supportedSystemConfigKeys = {
-        dev::precompiled::SYSTEM_KEY_TX_COUNT_LIMIT, dev::precompiled::SYSTEM_KEY_TX_GAS_LIMIT,
-        dev::precompiled::SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM,
-        dev::precompiled::SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM,
-        dev::precompiled::SYSTEM_KEY_CONSENSUS_TIMEOUT};
+        bcos::precompiled::SYSTEM_KEY_TX_COUNT_LIMIT, bcos::precompiled::SYSTEM_KEY_TX_GAS_LIMIT,
+        bcos::precompiled::SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM,
+        bcos::precompiled::SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM,
+        bcos::precompiled::SYSTEM_KEY_CONSENSUS_TIMEOUT};
 
 private:
-    bool isValidNodeId(dev::bytes const& precompileData,
-        std::shared_ptr<dev::ledger::LedgerParamInterface> ledgerParam);
+    bool isValidNodeId(bcos::bytes const& precompileData,
+        std::shared_ptr<bcos::ledger::LedgerParamInterface> ledgerParam);
     bool isValidSystemConfig(std::string const& key);
 
     template <typename T>
@@ -246,18 +246,18 @@ private:
     bool checkTimestamp(const std::string& _timestamp);
     bool checkConnection(const std::set<std::string>& _sealerList, Json::Value& _response);
 
-    void parseTransactionIntoResponse(Json::Value& _response, dev::h256 const& _blockHash,
+    void parseTransactionIntoResponse(Json::Value& _response, bcos::h256 const& _blockHash,
         int64_t _blockNumber, int64_t _txIndex, Transaction::Ptr _tx, bool onChain = true);
 
-    void parseReceiptIntoResponse(Json::Value& _response, dev::bytesConstRef _input,
-        dev::eth::LocalisedTransactionReceipt::Ptr _receipt);
+    void parseReceiptIntoResponse(Json::Value& _response, bcos::bytesConstRef _input,
+        bcos::eth::LocalisedTransactionReceipt::Ptr _receipt);
 
     void parseSignatureIntoResponse(
-        Json::Value& _response, dev::eth::Block::SigListPtrType _signatureList);
+        Json::Value& _response, bcos::eth::Block::SigListPtrType _signatureList);
 
-    void getBatchReceipts(Json::Value& _response, dev::eth::Block::Ptr _block,
+    void getBatchReceipts(Json::Value& _response, bcos::eth::Block::Ptr _block,
         std::string const& _from, std::string const& _size, bool _compress);
 };
 
 }  // namespace rpc
-}  // namespace dev
+}  // namespace bcos

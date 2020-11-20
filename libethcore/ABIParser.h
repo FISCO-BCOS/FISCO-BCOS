@@ -23,13 +23,13 @@
 
 #pragma once
 
-#include <libdevcore/Address.h>
-#include <libdevcore/Common.h>
-#include <libdevcore/CommonData.h>
 #include <libdevcrypto/CryptoInterface.h>
+#include <libutilities/Address.h>
+#include <libutilities/Common.h>
+#include <libutilities/CommonData.h>
 #include <boost/algorithm/string.hpp>
 
-namespace dev
+namespace bcos
 {
 namespace eth
 {
@@ -99,4 +99,4 @@ public:
 
 }  // namespace abi
 }  // namespace eth
-}  // namespace dev
+}  // namespace bcos

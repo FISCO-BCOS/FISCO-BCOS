@@ -25,7 +25,7 @@
 #include "Common.h"
 #include <libconfig/GlobalConfigure.h>
 
-namespace dev
+namespace bcos
 {
 namespace initializer
 {
@@ -35,4 +35,4 @@ uint32_t getVersionNumber(const std::string& _version);
 }  // namespace initializer
 
 void version();
-}  // namespace dev
+}  // namespace bcos

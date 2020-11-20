@@ -11,11 +11,11 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev;
-using namespace dev::blockverifier;
-using namespace dev::storage;
-using namespace dev::storagestate;
-using namespace dev::precompiled;
+using namespace bcos;
+using namespace bcos::blockverifier;
+using namespace bcos::storage;
+using namespace bcos::storagestate;
+using namespace bcos::precompiled;
 
 namespace test_SystemConfigPrecompiled
 {
@@ -37,9 +37,9 @@ struct SystemConfigPrecompiledFixture
         systemConfigPrecompiled = std::make_shared<SystemConfigPrecompiled>();
         memoryTableFactory = context->getMemoryTableFactory();
 
-        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
+        auto precompiledGasFactory = std::make_shared<bcos::precompiled::PrecompiledGasFactory>(0);
         auto precompiledExecResultFactory =
-            std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+            std::make_shared<bcos::precompiled::PrecompiledExecResultFactory>();
         precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
         systemConfigPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     }
@@ -66,7 +66,7 @@ void checkConfig(TableFactory::Ptr _memoryTableFactory, std::string const& _key,
     BOOST_TEST(ret == _expectedValue);
 }
 
-void updateValue(dev::precompiled::SystemConfigPrecompiled::Ptr _precompiled,
+void updateValue(bcos::precompiled::SystemConfigPrecompiled::Ptr _precompiled,
     ExecutiveContext::Ptr _context, std::string const& _key, std::string const& _value)
 {
     eth::ContractABI abi;

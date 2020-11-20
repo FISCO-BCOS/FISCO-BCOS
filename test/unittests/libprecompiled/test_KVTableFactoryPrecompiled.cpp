@@ -29,20 +29,20 @@
 #include <libstorage/Table.h>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev;
-using namespace dev::blockverifier;
-using namespace dev::precompiled;
-using namespace dev::storage;
+using namespace bcos;
+using namespace bcos::blockverifier;
+using namespace bcos::precompiled;
+using namespace bcos::storage;
 
 namespace test_KVTableFactoryPrecompiled
 {
-class MockMemoryTableFactory : public dev::storage::MemoryTableFactory
+class MockMemoryTableFactory : public bcos::storage::MemoryTableFactory
 {
 public:
     virtual ~MockMemoryTableFactory(){};
 };
 
-class MockPrecompiledEngine : public dev::blockverifier::ExecutiveContext
+class MockPrecompiledEngine : public bcos::blockverifier::ExecutiveContext
 {
 public:
     virtual ~MockPrecompiledEngine() {}
@@ -57,7 +57,7 @@ struct TableFactoryPrecompiledFixture
         MemoryTableFactory2::Ptr tableFactory = std::make_shared<MemoryTableFactory2>();
         tableFactory->setStateStorage(memStorage);
         context->setMemoryTableFactory(tableFactory);
-        auto tfPrecompiled = std::make_shared<dev::precompiled::TableFactoryPrecompiled>();
+        auto tfPrecompiled = std::make_shared<bcos::precompiled::TableFactoryPrecompiled>();
         tfPrecompiled->setMemoryTableFactory(tableFactory);
         context->setAddress2Precompiled(Address(0x1001), tfPrecompiled);
         BlockInfo blockInfo{h256(0x001), 1, h256(0x001)};
@@ -67,7 +67,7 @@ struct TableFactoryPrecompiledFixture
         mockMemoryTableFactory->setStateStorage(memStorage);
         tableFactoryPrecompiled->setMemoryTableFactory(mockMemoryTableFactory);
 
-        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
+        auto precompiledGasFactory = std::make_shared<bcos::precompiled::PrecompiledGasFactory>(0);
         auto precompiledExecResultFactory = std::make_shared<PrecompiledExecResultFactory>();
         precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
         tableFactoryPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
@@ -90,7 +90,7 @@ BOOST_AUTO_TEST_CASE(toString)
 BOOST_AUTO_TEST_CASE(call_afterBlock)
 {
     // createTable
-    dev::eth::ContractABI abi;
+    bcos::eth::ContractABI abi;
     bytes param = abi.abiIn("createTable(string,string,string)", std::string("t_test"),
         std::string("id"), std::string("item_name,item_id"));
     auto callResult = tableFactoryPrecompiled->call(context, bytesConstRef(&param));

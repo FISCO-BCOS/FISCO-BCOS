@@ -23,18 +23,18 @@
 
 #pragma once
 
-#include <libdevcore/FixedHash.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/Protocol.h>
 #include <libp2p/Service.h>
+#include <libutilities/FixedHash.h>
 #include <boost/program_options.hpp>
 #include <cstdlib>
 #include <memory>
 
 
-using namespace dev;
-using namespace dev::p2p;
-using namespace dev::eth;
+using namespace bcos;
+using namespace bcos::p2p;
+using namespace bcos::eth;
 class Params
 {
 public:
@@ -76,7 +76,7 @@ private:
     float m_txSpeed;
     float m_syncSpeed;
     int m_totalTransactions;
-    dev::GROUP_ID m_groupSize;
+    bcos::GROUP_ID m_groupSize;
 };
 
 static Params initCommandLine(int argc, const char* argv[])

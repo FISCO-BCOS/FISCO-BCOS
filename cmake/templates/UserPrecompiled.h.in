@@ -24,18 +24,18 @@
 
 
     void
-    dev::blockverifier::ExecutiveContextFactory::registerUserPrecompiled(
-        dev::blockverifier::ExecutiveContext::Ptr context)
+    bcos::blockverifier::ExecutiveContextFactory::registerUserPrecompiled(
+        bcos::blockverifier::ExecutiveContext::Ptr context)
 {
     // Address should in [0x5001,0xffff]
     // context->setAddress2Precompiled(Address(0x5001),
-    // std::make_shared<dev::precompiled::HelloWorldPrecompiled>());
+    // std::make_shared<bcos::precompiled::HelloWorldPrecompiled>());
     context->setAddress2Precompiled(
-        Address(0x5002), std::make_shared<dev::precompiled::DagTransferPrecompiled>());
+        Address(0x5002), std::make_shared<bcos::precompiled::DagTransferPrecompiled>());
     context->setAddress2Precompiled(
-        Address(0x5003), std::make_shared<dev::precompiled::PaillierPrecompiled>());
+        Address(0x5003), std::make_shared<bcos::precompiled::PaillierPrecompiled>());
     context->setAddress2Precompiled(
-        Address(0x5004), std::make_shared<dev::precompiled::GroupSigPrecompiled>());
+        Address(0x5004), std::make_shared<bcos::precompiled::GroupSigPrecompiled>());
     context->setAddress2Precompiled(
-        Address(0x5005), std::make_shared<dev::precompiled::RingSigPrecompiled>());
+        Address(0x5005), std::make_shared<bcos::precompiled::RingSigPrecompiled>());
 }

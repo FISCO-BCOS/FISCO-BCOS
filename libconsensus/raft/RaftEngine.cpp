@@ -25,7 +25,6 @@
 #include <libblockchain/BlockChainInterface.h>
 #include <libconfig/GlobalConfigure.h>
 #include <libconsensus/Common.h>
-#include <libdevcore/Guards.h>
 #include <boost/lexical_cast.hpp>
 #include <algorithm>
 #include <cassert>
@@ -35,11 +34,11 @@
 #include <thread>
 #include <unordered_map>
 
-using namespace dev;
-using namespace dev::consensus;
-using namespace dev::p2p;
-using namespace dev::eth;
-using namespace dev::blockchain;
+using namespace bcos;
+using namespace bcos::consensus;
+using namespace bcos::p2p;
+using namespace bcos::eth;
+using namespace bcos::blockchain;
 using namespace std;
 using namespace std::chrono;
 
@@ -148,7 +147,7 @@ void RaftEngine::stop()
     ConsensusEngineBase::stop();
 }
 
-void RaftEngine::reportBlock(dev::eth::Block const& _block)
+void RaftEngine::reportBlock(bcos::eth::Block const& _block)
 {
     ConsensusEngineBase::reportBlock(_block);
     auto shouldReport = false;
@@ -217,7 +216,7 @@ bool RaftEngine::isValidReq(P2PMessage::Ptr _message, P2PSession::Ptr _session, 
     return true;
 }
 
-ssize_t RaftEngine::getIndexBySealer(dev::h512 const& _nodeId)
+ssize_t RaftEngine::getIndexBySealer(bcos::h512 const& _nodeId)
 {
     ReadGuard guard(m_sealerListMutex);
     ssize_t index = -1;
@@ -244,8 +243,8 @@ bool RaftEngine::getNodeIdByIndex(h512& _nodeId, const u256& _nodeIdx) const
     return true;
 }
 
-void RaftEngine::onRecvRaftMessage(dev::p2p::NetworkException, dev::p2p::P2PSession::Ptr _session,
-    dev::p2p::P2PMessage::Ptr _message)
+void RaftEngine::onRecvRaftMessage(bcos::p2p::NetworkException, bcos::p2p::P2PSession::Ptr _session,
+    bcos::p2p::P2PMessage::Ptr _message)
 {
     RaftMsgPacket raftMsg;
 
@@ -930,9 +929,9 @@ void RaftEngine::broadcastVoteReq()
 P2PMessage::Ptr RaftEngine::transDataToMessage(
     bytesConstRef _data, RaftPacketType const& _packetType, PROTOCOL_ID const& _protocolId)
 {
-    dev::p2p::P2PMessage::Ptr message = std::dynamic_pointer_cast<dev::p2p::P2PMessage>(
+    bcos::p2p::P2PMessage::Ptr message = std::dynamic_pointer_cast<bcos::p2p::P2PMessage>(
         m_service->p2pMessageFactory()->buildMessage());
-    std::shared_ptr<dev::bytes> dataPtr = std::make_shared<dev::bytes>();
+    std::shared_ptr<bcos::bytes> dataPtr = std::make_shared<bcos::bytes>();
     RaftMsgPacket packet;
 
     RLPStream listRLP;
@@ -1508,7 +1507,7 @@ void RaftEngine::execBlock(Sealing& _sealing, Block const& _block)
     _sealing.block = working_block;
 }
 
-void RaftEngine::checkBlockValid(dev::eth::Block const& _block)
+void RaftEngine::checkBlockValid(bcos::eth::Block const& _block)
 {
     ConsensusEngineBase::checkBlockValid(_block);
     checkSealerList(_block);

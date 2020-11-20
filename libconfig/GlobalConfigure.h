@@ -25,7 +25,7 @@
 #include <libethcore/EVMSchedule.h>
 #include <atomic>
 #include <string>
-namespace dev
+namespace bcos
 {
 enum VERSION : uint32_t
 {
@@ -75,8 +75,8 @@ public:
     }
     std::string const& supportedVersion() { return m_supportedVersion; }
 
-    void setEVMSchedule(dev::eth::EVMSchedule const& _schedule) { m_evmSchedule = _schedule; }
-    dev::eth::EVMSchedule const& evmSchedule() const { return m_evmSchedule; }
+    void setEVMSchedule(bcos::eth::EVMSchedule const& _schedule) { m_evmSchedule = _schedule; }
+    bcos::eth::EVMSchedule const& evmSchedule() const { return m_evmSchedule; }
 
     void setConfDir(std::string _confDir) { m_confDir = _confDir; }
     const std::string& confDir() { return m_confDir; }
@@ -132,7 +132,7 @@ private:
     bool m_compress;
     int64_t m_chainId = 1;
     std::string m_supportedVersion;
-    dev::eth::EVMSchedule m_evmSchedule = dev::eth::DefaultSchedule;
+    bcos::eth::EVMSchedule m_evmSchedule = bcos::eth::DefaultSchedule;
     std::string m_confDir;
     std::string m_dataDir;
     bool m_enableStat;
@@ -141,4 +141,4 @@ private:
 
 #define g_BCOSConfig GlobalConfigure::instance()
 
-}  // namespace dev
+}  // namespace bcos

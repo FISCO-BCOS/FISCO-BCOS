@@ -19,14 +19,14 @@
  *  @date 20180921
  */
 #pragma once
-#include "libdevcore/Exceptions.h"
 #include "libprecompiled/Precompiled.h"
-#include <libdevcore/Address.h>
+#include "libutilities/Exceptions.h"
 #include <libstorage/StorageException.h>
+#include <libutilities/Address.h>
 #include <memory>
 #include <string>
 
-namespace dev
+namespace bcos
 {
 namespace blockverifier
 {
@@ -135,12 +135,12 @@ enum ContractStatus
     Count
 };
 
-class PrecompiledException : public dev::Exception
+class PrecompiledException : public bcos::Exception
 {
 public:
     // covert StorageException to  PrecompiledException
-    PrecompiledException(dev::storage::StorageException const& _e) : dev::Exception(_e.what()) {}
-    PrecompiledException(const std::string& what) : dev::Exception(what) {}
+    PrecompiledException(bcos::storage::StorageException const& _e) : bcos::Exception(_e.what()) {}
+    PrecompiledException(const std::string& what) : bcos::Exception(what) {}
     bytes ToOutput();
 };
 
@@ -157,18 +157,18 @@ uint32_t getFuncSelectorByFunctionName(std::string const& _functionName);
 
 bytesConstRef getParamData(bytesConstRef _param);
 
-dev::h512s getNodeListByType(std::shared_ptr<dev::storage::Table> _consTable, int64_t _blockNumber,
-    std::string const& _type);
+bcos::h512s getNodeListByType(std::shared_ptr<bcos::storage::Table> _consTable,
+    int64_t _blockNumber, std::string const& _type);
 
 std::shared_ptr<std::pair<std::string, int64_t>> getSysteConfigByKey(
-    std::shared_ptr<dev::storage::Table> _sysConfigTable, std::string const& _key,
+    std::shared_ptr<bcos::storage::Table> _sysConfigTable, std::string const& _key,
     int64_t const& _num);
 
-std::shared_ptr<dev::storage::Table> openTable(
-    std::shared_ptr<dev::blockverifier::ExecutiveContext> context, const std::string& tableName);
+std::shared_ptr<bcos::storage::Table> openTable(
+    std::shared_ptr<bcos::blockverifier::ExecutiveContext> context, const std::string& tableName);
 
-dev::precompiled::ContractStatus getContractStatus(
-    std::shared_ptr<dev::blockverifier::ExecutiveContext> context, std::string const& tableName);
+bcos::precompiled::ContractStatus getContractStatus(
+    std::shared_ptr<bcos::blockverifier::ExecutiveContext> context, std::string const& tableName);
 
 const int SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH = 64;
 const int SYS_TABLE_VALUE_FIELD_MAX_LENGTH = 1024;
@@ -229,4 +229,4 @@ const int RPBFT_EPOCH_BLOCK_NUM_MIN = 1;
 const unsigned SYSTEM_CONSENSUS_TIMEOUT_MIN = 3;
 const unsigned SYSTEM_CONSENSUS_TIMEOUT_MAX = (UINT_MAX / 1000);
 }  // namespace precompiled
-}  // namespace dev
+}  // namespace bcos

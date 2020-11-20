@@ -23,12 +23,12 @@
 
 #include "ChannelSession.h"
 #include "ChannelException.h"
-#include <libdevcore/Common.h>
+#include <libutilities/Common.h>
 #include <boost/bind.hpp>
 #include <boost/lexical_cast.hpp>
 #include <iostream>
 
-using namespace dev::channel;
+using namespace bcos::channel;
 
 ChannelSession::ChannelSession() : m_topics(std::make_shared<std::set<std::string>>()) {}
 
@@ -43,7 +43,7 @@ Message::Ptr ChannelSession::sendMessage(Message::Ptr request, size_t timeout)
 
             SessionCallback() { _mutex.lock(); }
 
-            void onResponse(dev::channel::ChannelException error, Message::Ptr message)
+            void onResponse(bcos::channel::ChannelException error, Message::Ptr message)
             {
                 _error = error;
                 _response = message;
@@ -51,14 +51,14 @@ Message::Ptr ChannelSession::sendMessage(Message::Ptr request, size_t timeout)
                 _mutex.unlock();
             }
 
-            dev::channel::ChannelException _error;
+            bcos::channel::ChannelException _error;
             Message::Ptr _response;
             std::mutex _mutex;
         };
 
         SessionCallback::Ptr callback = std::make_shared<SessionCallback>();
 
-        std::function<void(dev::channel::ChannelException, Message::Ptr)> fp = std::bind(
+        std::function<void(bcos::channel::ChannelException, Message::Ptr)> fp = std::bind(
             &SessionCallback::onResponse, callback, std::placeholders::_1, std::placeholders::_2);
         asyncSendMessage(request, fp, timeout);
 
@@ -85,7 +85,7 @@ Message::Ptr ChannelSession::sendMessage(Message::Ptr request, size_t timeout)
 }
 
 void ChannelSession::asyncSendMessage(Message::Ptr request,
-    std::function<void(dev::channel::ChannelException, Message::Ptr)> callback, uint32_t timeout)
+    std::function<void(bcos::channel::ChannelException, Message::Ptr)> callback, uint32_t timeout)
 {
     try
     {
@@ -440,7 +440,7 @@ void ChannelSession::onMessage(ChannelException e, Message::Ptr message)
         {
             if (_messageHandler)
             {
-                auto session = std::weak_ptr<dev::channel::ChannelSession>(shared_from_this());
+                auto session = std::weak_ptr<bcos::channel::ChannelSession>(shared_from_this());
                 m_requestThreadPool->enqueue([session, message]() {
                     auto s = session.lock();
                     if (s && s->_messageHandler)
@@ -541,7 +541,7 @@ void ChannelSession::onIdle(const boost::system::error_code& error)
     }
 }
 
-void ChannelSession::disconnect(dev::channel::ChannelException e)
+void ChannelSession::disconnect(bcos::channel::ChannelException e)
 {
     try
     {
@@ -594,7 +594,7 @@ void ChannelSession::disconnect(dev::channel::ChannelException e)
                 }
 
                 _messageHandler = std::function<void(
-                    ChannelSession::Ptr, dev::channel::ChannelException, Message::Ptr)>();
+                    ChannelSession::Ptr, bcos::channel::ChannelException, Message::Ptr)>();
             }
 
             auto sslSocket = _sslSocket;

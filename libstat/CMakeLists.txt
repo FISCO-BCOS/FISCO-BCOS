@@ -5,4 +5,4 @@ file(GLOB HEADERS "*.h")
 
 add_library(stat ${SRC_LIST} ${HEADERS})
 
-target_link_libraries(stat PUBLIC devcore)
+target_link_libraries(stat PUBLIC utilities)

@@ -24,7 +24,7 @@
 #include "Common.h"
 #include <libethcore/BlockFactory.h>
 #include <libethcore/Protocol.h>
-namespace dev
+namespace bcos
 {
 namespace sync
 {
@@ -62,14 +62,14 @@ public:
     virtual void setNodeAccountType(NodeAccountType const&) = 0;
     virtual IDXTYPE nodeIdx() const = 0;
     /// update the context of PBFT after commit a block into the block-chain
-    virtual void reportBlock(dev::eth::Block const& block) = 0;
+    virtual void reportBlock(bcos::eth::Block const& block) = 0;
     virtual uint64_t maxBlockTransactions() { return 1000; }
     virtual VIEWTYPE view() const { return 0; }
     virtual VIEWTYPE toView() const { return 0; }
-    virtual void setBlockFactory(dev::eth::BlockFactory::Ptr) {}
+    virtual void setBlockFactory(bcos::eth::BlockFactory::Ptr) {}
     virtual void setSupportConsensusTimeAdjust(bool) {}
-    virtual void setNodeTimeMaintenance(std::shared_ptr<dev::sync::NodeTimeMaintenance>) {}
+    virtual void setNodeTimeMaintenance(std::shared_ptr<bcos::sync::NodeTimeMaintenance>) {}
     virtual int64_t getAlignedTime() { return utcTime(); }
 };
 }  // namespace consensus
-}  // namespace dev
+}  // namespace bcos

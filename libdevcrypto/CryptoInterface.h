@@ -25,12 +25,12 @@
 #include "Hash.h"
 #include "SM3Hash.h"
 #include "Signature.h"
-#include "libdevcore/FixedHash.h"
+#include "libutilities/FixedHash.h"
 #include <libconfig/GlobalConfigure.h>
 #include <functional>
 #include <string>
 
-namespace dev
+namespace bcos
 {
 extern h256 EmptyHash;
 extern h256 EmptyTrie;
@@ -86,4 +86,4 @@ inline h256 Hash(T&& _data)
 }
 
 }  // namespace crypto
-}  // namespace dev
+}  // namespace bcos

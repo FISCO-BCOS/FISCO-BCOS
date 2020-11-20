@@ -24,16 +24,16 @@
 #pragma once
 
 
-#include <libdevcore/Common.h>
-#include <libdevcore/FixedHash.h>
 #include <libethcore/Protocol.h>
+#include <libutilities/Common.h>
+#include <libutilities/FixedHash.h>
 #include <boost/lexical_cast.hpp>
 #include <memory>
 #include <queue>
 #include <string>
 #include <thread>
 
-namespace dev
+namespace bcos
 {
 namespace channel
 {
@@ -76,7 +76,7 @@ protected:
     uint16_t m_type = 0;
     std::string m_seq = std::string(32, '0');
     int m_result = 0;
-    dev::GROUP_ID m_groupId = -1;
+    bcos::GROUP_ID m_groupId = -1;
 
     std::shared_ptr<bytes> m_data;
 };
@@ -92,4 +92,4 @@ public:
 
 }  // namespace channel
 
-}  // namespace dev
+}  // namespace bcos

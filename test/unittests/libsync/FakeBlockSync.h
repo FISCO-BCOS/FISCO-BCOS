@@ -26,10 +26,10 @@
 #include <libsync/SyncInterface.h>
 #include <libsync/SyncStatus.h>
 #include <memory>
-using namespace dev::sync;
-using namespace dev::eth;
+using namespace bcos::sync;
+using namespace bcos::eth;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -59,7 +59,7 @@ public:
     void setProtocolId(PROTOCOL_ID const _protocolId) override { m_protocolId = _protocolId; };
     void noteSealingBlockNumber(int64_t) override{};
 
-    void registerConsensusVerifyHandler(std::function<bool(dev::eth::Block const&)>) override{};
+    void registerConsensusVerifyHandler(std::function<bool(bcos::eth::Block const&)>) override{};
     bool syncTreeRouterEnabled() override { return m_syncTreeRouterEnabled; }
     void setSyncTreeRouterEnabled(bool const& _syncTreeRouterEnabled)
     {
@@ -75,4 +75,4 @@ private:
     bool m_syncTreeRouterEnabled = false;
 };
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

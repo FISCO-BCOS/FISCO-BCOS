@@ -24,12 +24,12 @@
 #pragma once
 
 #include "libdevcrypto/CryptoInterface.h"
-#include <libdevcore/Address.h>
-#include <libdevcore/Common.h>
-#include <libdevcore/CommonData.h>
+#include <libutilities/Address.h>
+#include <libutilities/Common.h>
+#include <libutilities/CommonData.h>
 #include <boost/algorithm/string.hpp>
 
-namespace dev
+namespace bcos
 {
 namespace eth
 {
@@ -503,4 +503,4 @@ inline string32 toString32(std::string const& _s)
 }
 
 }  // namespace eth
-}  // namespace dev
+}  // namespace bcos

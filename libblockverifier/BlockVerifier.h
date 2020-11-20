@@ -24,8 +24,6 @@
 #include "ExecutiveContext.h"
 #include "ExecutiveContextFactory.h"
 #include "libprecompiled/Precompiled.h"
-#include <libdevcore/FixedHash.h>
-#include <libdevcore/ThreadPool.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/Block.h>
 #include <libethcore/Protocol.h>
@@ -33,12 +31,14 @@
 #include <libethcore/TransactionReceipt.h>
 #include <libexecutive/Executive.h>
 #include <libmptstate/State.h>
+#include <libutilities/FixedHash.h>
+#include <libutilities/ThreadPool.h>
 #include <boost/function.hpp>
 #include <algorithm>
 #include <memory>
 #include <thread>
 
-namespace dev
+namespace bcos
 {
 namespace eth
 {
@@ -53,7 +53,7 @@ class BlockVerifier : public BlockVerifierInterface,
 {
 public:
     typedef std::shared_ptr<BlockVerifier> Ptr;
-    typedef boost::function<dev::h256(int64_t x)> NumberHashCallBackFunction;
+    typedef boost::function<bcos::h256(int64_t x)> NumberHashCallBackFunction;
     BlockVerifier(bool _enableParallel = false) : m_enableParallel(_enableParallel)
     {
         if (_enableParallel)
@@ -64,19 +64,19 @@ public:
 
     virtual ~BlockVerifier() {}
 
-    ExecutiveContext::Ptr executeBlock(dev::eth::Block& block, BlockInfo const& parentBlockInfo);
+    ExecutiveContext::Ptr executeBlock(bcos::eth::Block& block, BlockInfo const& parentBlockInfo);
     ExecutiveContext::Ptr serialExecuteBlock(
-        dev::eth::Block& block, BlockInfo const& parentBlockInfo);
+        bcos::eth::Block& block, BlockInfo const& parentBlockInfo);
     ExecutiveContext::Ptr parallelExecuteBlock(
-        dev::eth::Block& block, BlockInfo const& parentBlockInfo);
+        bcos::eth::Block& block, BlockInfo const& parentBlockInfo);
 
 
-    dev::eth::TransactionReceipt::Ptr executeTransaction(
-        const dev::eth::BlockHeader& blockHeader, dev::eth::Transaction::Ptr _t);
+    bcos::eth::TransactionReceipt::Ptr executeTransaction(
+        const bcos::eth::BlockHeader& blockHeader, bcos::eth::Transaction::Ptr _t);
 
-    dev::eth::TransactionReceipt::Ptr execute(dev::eth::Transaction::Ptr _t,
-        dev::blockverifier::ExecutiveContext::Ptr executiveContext,
-        dev::executive::Executive::Ptr executive);
+    bcos::eth::TransactionReceipt::Ptr execute(bcos::eth::Transaction::Ptr _t,
+        bcos::blockverifier::ExecutiveContext::Ptr executiveContext,
+        bcos::executive::Executive::Ptr executive);
 
 
     void setExecutiveContextFactory(ExecutiveContextFactory::Ptr executiveContextFactory)
@@ -89,8 +89,8 @@ public:
         m_pNumberHash = _pNumberHash;
     }
 
-    dev::executive::Executive::Ptr createAndInitExecutive(
-        std::shared_ptr<executive::StateFace> _s, dev::executive::EnvInfo const& _envInfo);
+    bcos::executive::Executive::Ptr createAndInitExecutive(
+        std::shared_ptr<executive::StateFace> _s, bcos::executive::EnvInfo const& _envInfo);
     void setEvmFlags(VMFlagType const& _evmFlags) { m_evmFlags = _evmFlags; }
 
 private:
@@ -107,4 +107,4 @@ private:
 
 }  // namespace blockverifier
 
-}  // namespace dev
+}  // namespace bcos

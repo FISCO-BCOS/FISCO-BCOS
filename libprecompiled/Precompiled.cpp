@@ -26,9 +26,9 @@
 #include <libprecompiled/TableFactoryPrecompiled.h>
 #include <libstorage/MemoryTableFactory.h>
 
-using namespace dev;
+using namespace bcos;
 using namespace precompiled;
-using namespace dev::blockverifier;
+using namespace bcos::blockverifier;
 
 // global function selector cache
 static tbb::concurrent_unordered_map<std::string, uint32_t> s_name2SelectCache;
@@ -46,14 +46,14 @@ uint32_t Precompiled::getFuncSelector(std::string const& _functionName)
 }
 
 storage::Table::Ptr Precompiled::createTable(
-    std::shared_ptr<dev::blockverifier::ExecutiveContext> context, const std::string& tableName,
+    std::shared_ptr<bcos::blockverifier::ExecutiveContext> context, const std::string& tableName,
     const std::string& keyField, const std::string& valueField, Address const& origin)
 {
     return context->getMemoryTableFactory()->createTable(
         tableName, keyField, valueField, false, origin, true);
 }
 
-bool Precompiled::checkAuthority(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
+bool Precompiled::checkAuthority(std::shared_ptr<bcos::blockverifier::ExecutiveContext> _context,
     Address const& _origin, Address const& _contract)
 {
     auto tableName = getContractTableName(_contract);
@@ -66,7 +66,7 @@ bool Precompiled::checkAuthority(std::shared_ptr<dev::blockverifier::ExecutiveCo
 }
 
 uint64_t Precompiled::getEntriesCapacity(
-    std::shared_ptr<dev::storage::Entries const> _entries) const
+    std::shared_ptr<bcos::storage::Entries const> _entries) const
 {
     int64_t totalCapacity = 0;
     int64_t entriesSize = _entries->size();
@@ -78,7 +78,7 @@ uint64_t Precompiled::getEntriesCapacity(
 }
 
 // for UT
-void dev::precompiled::clearName2SelectCache()
+void bcos::precompiled::clearName2SelectCache()
 {
     s_name2SelectCache.clear();
 }

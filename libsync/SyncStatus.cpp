@@ -24,12 +24,12 @@
 
 
 using namespace std;
-using namespace dev;
-using namespace dev::eth;
-using namespace dev::sync;
-using namespace dev::p2p;
-using namespace dev::blockchain;
-using namespace dev::txpool;
+using namespace bcos;
+using namespace bcos::eth;
+using namespace bcos::sync;
+using namespace bcos::p2p;
+using namespace bcos::blockchain;
+using namespace bcos::txpool;
 
 bool SyncMasterStatus::hasPeer(NodeID const& _id)
 {

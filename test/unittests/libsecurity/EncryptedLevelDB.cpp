@@ -24,19 +24,19 @@
 #include <leveldb/db.h>
 #include <leveldb/slice.h>
 #include <leveldb/status.h>
-#include <libdevcore/BasicLevelDB.h>
-#include <libdevcore/LevelDB.h>
 #include <libsecurity/EncryptedLevelDB.h>
+#include <libutilities/BasicLevelDB.h>
+#include <libutilities/LevelDB.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>
 #include <vector>
 
 using namespace std;
-using namespace dev;
-using namespace dev::db;
+using namespace bcos;
+using namespace bcos::db;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -54,7 +54,7 @@ public:
         {
             boost::filesystem::remove_all(_name);
         }
-        dev::db::BasicLevelDB* pleveldb = nullptr;
+        bcos::db::BasicLevelDB* pleveldb = nullptr;
         auto status = EncryptedLevelDB::Open(LevelDB::defaultDBOptions(), _name, &pleveldb,
             "85cf52964f7334c015545b394c1ffec9",
             asString(fromHex("3031323334353637303132333435363730313233343536373031323334353637")));
@@ -133,4 +133,4 @@ BOOST_AUTO_TEST_CASE(WriteTest)
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

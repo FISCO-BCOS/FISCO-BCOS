@@ -5,4 +5,4 @@ file(GLOB HEADERS "*.h")
 
 add_library(flowlimit ${SRC_LIST} ${HEADERS})
 
-target_link_libraries(flowlimit PUBLIC devcore)
+target_link_libraries(flowlimit PUBLIC utilities)

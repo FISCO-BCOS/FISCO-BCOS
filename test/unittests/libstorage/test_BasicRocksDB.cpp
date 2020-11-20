@@ -26,13 +26,13 @@
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev;
-using namespace dev::ledger;
-using namespace dev::crypto;
-using namespace dev::storage;
+using namespace bcos;
+using namespace bcos::ledger;
+using namespace bcos::crypto;
+using namespace bcos::storage;
 using namespace rocksdb;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -174,4 +174,4 @@ BOOST_AUTO_TEST_CASE(testWithEncryptDecryptHandler)
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

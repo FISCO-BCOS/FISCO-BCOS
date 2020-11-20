@@ -28,15 +28,15 @@
 #include <map>
 
 namespace bas = boost::asio::ssl;
-namespace dev
+namespace bcos
 {
 namespace initializer
 {
-DEV_SIMPLE_EXCEPTION(SecureInitializerNotInitConfig);
-DEV_SIMPLE_EXCEPTION(PrivateKeyError);
-DEV_SIMPLE_EXCEPTION(PrivateKeyNotExists);
-DEV_SIMPLE_EXCEPTION(CertificateError);
-DEV_SIMPLE_EXCEPTION(CertificateNotExists);
+DERIVE_BCOS_EXCEPTION(SecureInitializerNotInitConfig);
+DERIVE_BCOS_EXCEPTION(PrivateKeyError);
+DERIVE_BCOS_EXCEPTION(PrivateKeyNotExists);
+DERIVE_BCOS_EXCEPTION(CertificateError);
+DERIVE_BCOS_EXCEPTION(CertificateNotExists);
 
 class SecureInitializer : public std::enable_shared_from_this<SecureInitializer>
 {
@@ -68,4 +68,4 @@ private:
 };
 
 }  // namespace initializer
-}  // namespace dev
+}  // namespace bcos

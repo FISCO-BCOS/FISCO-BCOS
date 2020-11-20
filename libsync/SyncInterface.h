@@ -21,9 +21,9 @@
  */
 #pragma once
 #include "Common.h"
-#include <libdevcore/FixedHash.h>
-#include <libdevcore/Worker.h>
-namespace dev
+#include <libutilities/FixedHash.h>
+#include <libutilities/Worker.h>
+namespace bcos
 {
 namespace sync
 {
@@ -60,16 +60,16 @@ public:
 
     // verify handler to check downloading block
     virtual void registerConsensusVerifyHandler(
-        std::function<bool(dev::eth::Block const&)> _handler) = 0;
+        std::function<bool(bcos::eth::Block const&)> _handler) = 0;
 
-    virtual void registerTxsReceiversFilter(std::function<std::shared_ptr<dev::p2p::NodeIDs>(
-            std::shared_ptr<std::set<dev::network::NodeID>>)>)
+    virtual void registerTxsReceiversFilter(std::function<std::shared_ptr<bcos::p2p::NodeIDs>(
+            std::shared_ptr<std::set<bcos::network::NodeID>>)>)
     {}
-    virtual void updateNodeListInfo(dev::h512s const&) {}
-    virtual void updateConsensusNodeInfo(dev::h512s const&, dev::h512s const&) {}
+    virtual void updateNodeListInfo(bcos::h512s const&) {}
+    virtual void updateConsensusNodeInfo(bcos::h512s const&, bcos::h512s const&) {}
     virtual bool syncTreeRouterEnabled() { return false; }
-    virtual void noteForwardRemainTxs(dev::h512 const&) {}
+    virtual void noteForwardRemainTxs(bcos::h512 const&) {}
 };
 
 }  // namespace sync
-}  // namespace dev
+}  // namespace bcos

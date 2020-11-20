@@ -25,7 +25,7 @@
 #include "libdevcrypto/CryptoInterface.h"
 #include <libethcore/Block.h>
 #include <test/tools/libutils/TestOutputHelper.h>
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -121,8 +121,8 @@ BOOST_AUTO_TEST_CASE(testSigListSetting)
     /// check the signature
     for (auto& item : sig_list)
     {
-        auto p = dev::crypto::Recover(
-            dev::crypto::SignatureFromBytes(item.second), prepare_req->block_hash);
+        auto p = bcos::crypto::Recover(
+            bcos::crypto::SignatureFromBytes(item.second), prepare_req->block_hash);
         BOOST_CHECK(!!p);
     }
 }
@@ -264,4 +264,4 @@ BOOST_AUTO_TEST_CASE(testViewChangeReqRelated)
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

@@ -23,12 +23,12 @@
 #include "DownloadingTxsQueue.h"
 #include <tbb/parallel_for.h>
 
-using namespace dev;
-using namespace dev::sync;
-using namespace dev::eth;
+using namespace bcos;
+using namespace bcos::sync;
+using namespace bcos::eth;
 
 void DownloadingTxsQueue::push(
-    SyncMsgPacket::Ptr _packet, dev::p2p::P2PMessage::Ptr _msg, NodeID const& _fromPeer)
+    SyncMsgPacket::Ptr _packet, bcos::p2p::P2PMessage::Ptr _msg, NodeID const& _fromPeer)
 {
     std::shared_ptr<DownloadTxsShard> txsShard =
         std::make_shared<DownloadTxsShard>(_packet->rlp().data(), _fromPeer);
@@ -66,7 +66,7 @@ void DownloadingTxsQueue::push(
 
 
 void DownloadingTxsQueue::pop2TxPool(
-    std::shared_ptr<dev::txpool::TxPoolInterface> _txPool, dev::eth::CheckTransaction _checkSig)
+    std::shared_ptr<bcos::txpool::TxPoolInterface> _txPool, bcos::eth::CheckTransaction _checkSig)
 {
     try
     {
@@ -109,13 +109,13 @@ void DownloadingTxsQueue::pop2TxPool(
         {
             record_time = utcTime();
             // decode
-            auto txs = std::make_shared<dev::eth::Transactions>();
+            auto txs = std::make_shared<bcos::eth::Transactions>();
             std::shared_ptr<DownloadTxsShard> txsShard = (*localBuffer)[i];
             // TODO drop by Txs Shard
             if (g_BCOSConfig.version() >= RC2_VERSION)
             {
                 RLP const& txsBytesRLP = RLP(ref(txsShard->txsBytes))[0];
-                dev::eth::TxsParallelParser::decode(
+                bcos::eth::TxsParallelParser::decode(
                     txs, txsBytesRLP.toBytesConstRef(), _checkSig, true);
             }
             else
@@ -125,7 +125,7 @@ void DownloadingTxsQueue::pop2TxPool(
                 txs->resize(txNum);
                 for (unsigned j = 0; j < txNum; j++)
                 {
-                    (*txs)[j] = std::make_shared<dev::eth::Transaction>();
+                    (*txs)[j] = std::make_shared<bcos::eth::Transaction>();
                     (*txs)[j]->decode(txsBytesRLP[j]);
                 }
             }
@@ -162,13 +162,13 @@ void DownloadingTxsQueue::pop2TxPool(
                 try
                 {
                     auto importResult = _txPool->import(tx);
-                    if (dev::eth::ImportResult::Success == importResult)
+                    if (bcos::eth::ImportResult::Success == importResult)
                     {
                         tx->appendNodeContainsTransaction(fromPeer);
                         tx->appendNodeListContainTransaction(*(txsShard->knownNodes));
                         successCnt++;
                     }
-                    else if (dev::eth::ImportResult::AlreadyKnown == importResult)
+                    else if (bcos::eth::ImportResult::AlreadyKnown == importResult)
                     {
                         SYNC_LOG(TRACE)
                             << LOG_BADGE("Tx")

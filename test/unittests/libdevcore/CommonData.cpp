@@ -20,17 +20,17 @@
  * @author: yujiechen
  * @date 2018-08-24
  */
-#include <libdevcore/CommonData.h>
-#include <libdevcore/Exceptions.h>
-#include <libdevcore/vector_ref.h>
+#include <libutilities/CommonData.h>
+#include <libutilities/Exceptions.h>
+#include <libutilities/vector_ref.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <cstdlib>
 #include <ctime>
 #include <iostream>
 
-using namespace dev;
-namespace dev
+using namespace bcos;
+namespace bcos
 {
 namespace test
 {
@@ -148,4 +148,4 @@ BOOST_AUTO_TEST_CASE(testOperators)
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

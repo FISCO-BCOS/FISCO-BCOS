@@ -25,27 +25,27 @@
 #include <test/tools/libutils/Common.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 
-#include <libdevcore/Common.h>
-#include <libdevcore/CommonData.h>
-#include <libdevcore/Exceptions.h>
-#include <libdevcore/RLP.h>
+#include <libutilities/Common.h>
+#include <libutilities/CommonData.h>
+#include <libutilities/Exceptions.h>
+#include <libutilities/RLP.h>
 
 using namespace std;
-BOOST_FIXTURE_TEST_SUITE(RlpTests, dev::test::TestOutputHelperFixture)
+BOOST_FIXTURE_TEST_SUITE(RlpTests, bcos::test::TestOutputHelperFixture)
 
 BOOST_AUTO_TEST_CASE(EmptyArrayList)
 {
     try
     {
-        dev::bytes payloadToDecode = dev::fromHex("80");
-        dev::RLP payload(payloadToDecode);
+        bcos::bytes payloadToDecode = bcos::fromHex("80");
+        bcos::RLP payload(payloadToDecode);
         LOG(INFO) << payload;
 
-        payloadToDecode = dev::fromHex("c0");
-        dev::RLP payload2(payloadToDecode);
+        payloadToDecode = bcos::fromHex("c0");
+        bcos::RLP payload2(payloadToDecode);
         LOG(INFO) << payload2;
     }
-    catch (dev::Exception const& _e)
+    catch (bcos::Exception const& _e)
     {
         BOOST_ERROR("(EmptyArrayList) Failed test with Exception: " << _e.what());
     }
@@ -57,31 +57,31 @@ BOOST_AUTO_TEST_CASE(EmptyArrayList)
 
 BOOST_AUTO_TEST_CASE(invalidRLPtest)
 {
-    dev::test::RlpTest::runRlpTest("invalidRLPTest", "/RLPTests");
+    bcos::test::RlpTest::runRlpTest("invalidRLPTest", "/RLPTests");
 }
 
 BOOST_AUTO_TEST_CASE(rlptest)
 {
-    dev::test::RlpTest::runRlpTest("rlptest", "/RLPTests");
+    bcos::test::RlpTest::runRlpTest("rlptest", "/RLPTests");
 }
 
 BOOST_AUTO_TEST_CASE(rlpRandom)
 {
-    fs::path testPath = dev::test::getTestPath();
+    fs::path testPath = bcos::test::getTestPath();
     testPath /= fs::path("RLPTests/RandomRLPTests");
-    std::vector<fs::path> testFiles = dev::test::getFiles(testPath, {".json"});
+    std::vector<fs::path> testFiles = bcos::test::getFiles(testPath, {".json"});
     for (auto& path : testFiles)
     {
         try
         {
             LOG(INFO) << "Testing ... " << path.filename();
-            std::string s = dev::asString(dev::contents(path.string()));
+            std::string s = bcos::asString(bcos::contents(path.string()));
             std::string empty_str = "Content of " + path.string() + " is empty";
             BOOST_REQUIRE_MESSAGE(s.length() > 0, empty_str);
             Json::Value v;
             Json::Reader reader;
             reader.parse(s, v);
-            dev::test::RlpTest::doRlpTests(v);
+            bcos::test::RlpTest::doRlpTests(v);
         }
         catch (std::exception const& _e)
         {
@@ -96,13 +96,13 @@ BOOST_AUTO_TEST_CASE(testTxRlp)
         "026994d1b50090cf3c7588359a670b775546a72a2be95480a466c9913900000000000000000000000000000000"
         "000000000000000000000000000000040101801ba03faa8232ad248fc31c68eb56e8bbedf4e70be9381460afd9"
         "9819b8cf8b6c91cba052121430a55f5ec0c2a2db3000324335507a46b697f961bb86be2687d0d8caf9";
-    dev::bytes rlpBytes = dev::fromHex(txRlpString);
+    bcos::bytes rlpBytes = bcos::fromHex(txRlpString);
     bytesConstRef rlpData = ref(rlpBytes);
     RLP const rlp(rlpData);
-    dev::h256 r = rlp[11].toInt<u256>();
+    bcos::h256 r = rlp[11].toInt<u256>();
     std::cout << "decoded r:" << toHex(r);
     BOOST_CHECK(
-        dev::toHex(r) == "3faa8232ad248fc31c68eb56e8bbedf4e70be9381460afd99819b8cf8b6c91cb");
+        bcos::toHex(r) == "3faa8232ad248fc31c68eb56e8bbedf4e70be9381460afd99819b8cf8b6c91cb");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -21,17 +21,17 @@
  * @date 2018-08-24
  */
 
-#include <libdevcore/Common.h>
-#include <libdevcore/vector_ref.h>
+#include <libutilities/Common.h>
+#include <libutilities/vector_ref.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <iostream>
 #include <vector>
 
 
-using namespace dev;
+using namespace bcos;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -131,12 +131,9 @@ BOOST_AUTO_TEST_CASE(testContentsEqual)
     std::vector<int> v2(10, 19);
     vector_ref<int> ref_v1(&v1);
     BOOST_CHECK(vector_ref<int>(&v2) != ref_v1);
-    BOOST_CHECK(ref_v1.contentsEqual(v2));
     // test empty vec_ref
     vector_ref<int> empty_vec;
     vector_ref<int> empty_vec2;
-    BOOST_CHECK(empty_vec.contentsEqual(v1) == false);
-    BOOST_CHECK(empty_vec.contentsEqual(empty_vec2.toVector()) == true);
 }
 
 BOOST_AUTO_TEST_CASE(testEmptyCropped)
@@ -210,4 +207,4 @@ BOOST_AUTO_TEST_CASE(testCleanse) {}
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

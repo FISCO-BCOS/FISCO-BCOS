@@ -9,27 +9,25 @@
 #include <algebra/curves/alt_bn128/alt_bn128_pp.hpp>
 #include <common/profiling.hpp>
 
-#include <libdevcore/Exceptions.h>
-#include <libdevcore/Log.h>
+#include <libutilities/Exceptions.h>
+#include <libutilities/Log.h>
 
 using namespace std;
-using namespace dev;
-using namespace dev::crypto;
+using namespace bcos;
+using namespace bcos::crypto;
 
 namespace
 {
-DEV_SIMPLE_EXCEPTION(InvalidEncoding);
+DERIVE_BCOS_EXCEPTION(InvalidEncoding);
 
 void initLibFF() noexcept
 {
-    static bool s_initialized = []() noexcept
-    {
+    static bool s_initialized = []() noexcept {
         libff::inhibit_profiling_info = true;
         libff::inhibit_profiling_counters = true;
         libff::alt_bn128_pp::init_public_params();
         return true;
-    }
-    ();
+    }();
     (void)s_initialized;
 }
 
@@ -57,7 +55,7 @@ h256 fromLibsnarkBigint(libff::bigint<libff::alt_bn128_q_limbs> const& _b)
     return x;
 }
 
-libff::alt_bn128_Fq decodeFqElement(dev::bytesConstRef _data)
+libff::alt_bn128_Fq decodeFqElement(bcos::bytesConstRef _data)
 {
     // h256::AlignLeft ensures that the h256 is zero-filled on the right if _data
     // is too short.
@@ -68,7 +66,7 @@ libff::alt_bn128_Fq decodeFqElement(dev::bytesConstRef _data)
     return toLibsnarkBigint(xbin);
 }
 
-libff::alt_bn128_G1 decodePointG1(dev::bytesConstRef _data)
+libff::alt_bn128_G1 decodePointG1(bcos::bytesConstRef _data)
 {
     libff::alt_bn128_Fq x = decodeFqElement(_data.cropped(0));
     libff::alt_bn128_Fq y = decodeFqElement(_data.cropped(32));
@@ -89,7 +87,7 @@ bytes encodePointG1(libff::alt_bn128_G1 _p)
            fromLibsnarkBigint(_p.Y.as_bigint()).asBytes();
 }
 
-libff::alt_bn128_Fq2 decodeFq2Element(dev::bytesConstRef _data)
+libff::alt_bn128_Fq2 decodeFq2Element(bcos::bytesConstRef _data)
 {
     // Encoding: c1 (256 bits) c0 (256 bits)
     // "Big endian", just like the numbers
@@ -97,7 +95,7 @@ libff::alt_bn128_Fq2 decodeFq2Element(dev::bytesConstRef _data)
         decodeFqElement(_data.cropped(32)), decodeFqElement(_data.cropped(0)));
 }
 
-libff::alt_bn128_G2 decodePointG2(dev::bytesConstRef _data)
+libff::alt_bn128_G2 decodePointG2(bcos::bytesConstRef _data)
 {
     libff::alt_bn128_Fq2 const x = decodeFq2Element(_data);
     libff::alt_bn128_Fq2 const y = decodeFq2Element(_data.cropped(64));
@@ -111,7 +109,7 @@ libff::alt_bn128_G2 decodePointG2(dev::bytesConstRef _data)
 
 }  // namespace
 
-pair<bool, bytes> dev::crypto::alt_bn128_pairing_product(dev::bytesConstRef _in)
+pair<bool, bytes> bcos::crypto::alt_bn128_pairing_product(bcos::bytesConstRef _in)
 {
     // Input: list of pairs of G1 and G2 points
     // Output: 1 if pairing evaluates to 1, 0 otherwise (left-padded to 32 bytes)
@@ -149,7 +147,7 @@ pair<bool, bytes> dev::crypto::alt_bn128_pairing_product(dev::bytesConstRef _in)
     }
 }
 
-pair<bool, bytes> dev::crypto::alt_bn128_G1_add(dev::bytesConstRef _in)
+pair<bool, bytes> bcos::crypto::alt_bn128_G1_add(bcos::bytesConstRef _in)
 {
     try
     {
@@ -165,7 +163,7 @@ pair<bool, bytes> dev::crypto::alt_bn128_G1_add(dev::bytesConstRef _in)
     }
 }
 
-pair<bool, bytes> dev::crypto::alt_bn128_G1_mul(dev::bytesConstRef _in)
+pair<bool, bytes> bcos::crypto::alt_bn128_G1_mul(bcos::bytesConstRef _in)
 {
     try
     {

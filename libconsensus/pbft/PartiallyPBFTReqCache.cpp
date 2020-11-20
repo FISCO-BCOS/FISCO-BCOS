@@ -22,8 +22,8 @@
  * @date: 2019-11-13
  */
 #include "PartiallyPBFTReqCache.h"
-using namespace dev::consensus;
-using namespace dev::eth;
+using namespace bcos::consensus;
+using namespace bcos::eth;
 
 bool PartiallyPBFTReqCache::addPartiallyRawPrepare(PrepareReq::Ptr _partiallyRawPrepare)
 {
@@ -46,7 +46,7 @@ bool PartiallyPBFTReqCache::fetchMissedTxs(
     std::shared_ptr<bytes> _encodedBytes, bytesConstRef _missInfo)
 {
     PartiallyBlock::Ptr partiallyBlock = nullptr;
-    dev::h256 expectedHash;
+    bcos::h256 expectedHash;
     // check the m_preRawPrepare
     {
         ReadGuard l(x_preRawPrepare);
@@ -147,7 +147,7 @@ void PartiallyPBFTReqCache::addPartiallyFuturePrepare(PrepareReq::Ptr _futurePre
     }
 }
 
-bool PartiallyPBFTReqCache::existInFuturePrepare(dev::h256 const& _blockHash)
+bool PartiallyPBFTReqCache::existInFuturePrepare(bcos::h256 const& _blockHash)
 {
     if (m_partiallyFuturePrepare && m_partiallyFuturePrepare->block_hash == _blockHash)
     {

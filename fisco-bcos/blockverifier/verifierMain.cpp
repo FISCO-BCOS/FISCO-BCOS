@@ -26,7 +26,6 @@
 #include <libblockverifier/BlockVerifier.h>
 #include <libblockverifier/Common.h>
 #include <libblockverifier/ExecutiveContextFactory.h>
-#include <libdevcore/BasicLevelDB.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/Block.h>
 #include <libethcore/TransactionReceipt.h>
@@ -35,8 +34,9 @@
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/Storage.h>
 #include <libstoragestate/StorageStateFactory.h>
+#include <libutilities/BasicLevelDB.h>
 
-using namespace dev;
+using namespace bcos;
 
 int main(int argc, char* argv[])
 {
@@ -45,23 +45,23 @@ int main(int argc, char* argv[])
     leveldb::Options option;
     option.create_if_missing = true;
     option.max_open_files = 1000;
-    dev::db::BasicLevelDB* dbPtr = NULL;
-    leveldb::Status s = dev::db::BasicLevelDB::Open(option, storagePath, &dbPtr);
+    bcos::db::BasicLevelDB* dbPtr = NULL;
+    leveldb::Status s = bcos::db::BasicLevelDB::Open(option, storagePath, &dbPtr);
     if (!s.ok())
     {
         LOG(ERROR) << "Open storage db error: " << s.ToString();
     }
 
-    auto storageDB = std::shared_ptr<dev::db::BasicLevelDB>(dbPtr);
-    auto storage = std::make_shared<dev::storage::LevelDBStorage>();
+    auto storageDB = std::shared_ptr<bcos::db::BasicLevelDB>(dbPtr);
+    auto storage = std::make_shared<bcos::storage::LevelDBStorage>();
     storage->setDB(storageDB);
 
-    auto blockChain = std::make_shared<dev::blockchain::BlockChainImp>();
+    auto blockChain = std::make_shared<bcos::blockchain::BlockChainImp>();
     blockChain->setStateStorage(storage);
-    auto initParam = std::make_shared<dev::ledger::LedgerParam>();
+    auto initParam = std::make_shared<bcos::ledger::LedgerParam>();
     initParam->mutableGenesisMark() = "std";
-    initParam->mutableConsensusParam().sealerList = dev::h512s();
-    initParam->mutableConsensusParam().observerList = dev::h512s();
+    initParam->mutableConsensusParam().sealerList = bcos::h512s();
+    initParam->mutableConsensusParam().observerList = bcos::h512s();
     initParam->mutableConsensusParam().consensusType = "";
     initParam->mutableStorageParam().type = "";
     initParam->mutableStateParam().type = "";
@@ -70,17 +70,17 @@ int main(int argc, char* argv[])
     initParam->mutableGenesisParam().timeStamp = 0;
     blockChain->checkAndBuildGenesisBlock(initParam);
 
-    auto stateFactory = std::make_shared<dev::storagestate::StorageStateFactory>(dev::u256(0));
+    auto stateFactory = std::make_shared<bcos::storagestate::StorageStateFactory>(bcos::u256(0));
 
-    // auto stateFactory = std::make_shared<dev::mptstate::MPTStateFactory>(
-    //    dev::u256(0), "test_state", dev::h256(0), dev::WithExisting::Trust);
+    // auto stateFactory = std::make_shared<bcos::mptstate::MPTStateFactory>(
+    //    bcos::u256(0), "test_state", bcos::h256(0), bcos::WithExisting::Trust);
 
-    auto executiveContextFactory = std::make_shared<dev::blockverifier::ExecutiveContextFactory>();
+    auto executiveContextFactory = std::make_shared<bcos::blockverifier::ExecutiveContextFactory>();
     executiveContextFactory->setStateFactory(stateFactory);
     executiveContextFactory->setStateStorage(storage);
 
 
-    auto blockVerifier = std::make_shared<dev::blockverifier::BlockVerifier>();
+    auto blockVerifier = std::make_shared<bcos::blockverifier::BlockVerifier>();
     blockVerifier->setExecutiveContextFactory(executiveContextFactory);
     blockVerifier->setNumberHash(
         [blockChain](int64_t num) { return blockChain->getBlockByNumber(num)->headerHash(); });
@@ -91,18 +91,18 @@ int main(int argc, char* argv[])
         {
             auto max = blockChain->number();
             auto parentBlock = blockChain->getBlockByNumber(max);
-            dev::eth::BlockHeader header;
+            bcos::eth::BlockHeader header;
             header.setNumber(max + 1);
             header.setParentHash(parentBlock->headerHash());
-            header.setGasLimit(dev::u256(1024 * 1024 * 1024));
+            header.setGasLimit(bcos::u256(1024 * 1024 * 1024));
             header.setRoots(parentBlock->header().transactionsRoot(),
                 parentBlock->header().receiptsRoot(), parentBlock->header().stateRoot());
-            std::shared_ptr<dev::eth::Block> block = std::make_shared<dev::eth::Block>();
+            std::shared_ptr<bcos::eth::Block> block = std::make_shared<bcos::eth::Block>();
             block->setBlockHeader(header);
             LOG(INFO) << "max " << max << " parentHeader " << parentBlock->header() << " header "
                       << header;
 
-            dev::bytes rlpBytes = dev::fromHex(
+            bcos::bytes rlpBytes = bcos::fromHex(
                 "0xf92027a0039d7614c185b85512a00fcbb2e9012dac3869fccca2c345e8d10d4fba42b02d8401c9c3"
                 "808401c9c3808201f48080b91fb16060604052341561000c57fe5b5b611f958061001c6000396000f3"
                 "0060606040526000357c01000000000000000000000000000000000000000000000000000000009004"
@@ -304,7 +304,7 @@ int main(int argc, char* argv[])
                 "00815250905600a165627a7a7230582093b9498b96d50a5b320f578d8d5429fa5f6671fb7f396c5205"
                 "d9f6fe2cb8c8e500291ca02d225a81618d4b4720fd26bdbe30925de26be949c33ff84cfeb3bf358007"
                 "e2efa0785feb21b69a75402a4feb85e36b970c4d933fbc9dd9f71372eb67e3849387c5");
-            dev::bytes rlpBytesCall = dev::fromHex(
+            bcos::bytes rlpBytesCall = bcos::fromHex(
                 "0xf9016da0010061fb64122b6c683383ef45211e526e72d0412059ee52a5fbcce220e6a40b8401c9c3"
                 "808401c9c3808201f494919868496524eedc26dbb81915fa1547a20f899880b8e4ebf3b24f00000000"
                 "0000000000000000000000000000000000000000000000000000006000000000000000000000000000"
@@ -315,21 +315,21 @@ int main(int argc, char* argv[])
                 "0000000000000000000000000000001ba08b0e2cd9c48032ecf68cca6eb951a8b09195d23950555a34"
                 "6f6cb9f5f91ea00ea02726ce5352276dbb7bc166dfe036a0ce67ea25848823284c845bf3cf5c6969c"
                 "f");
-            dev::eth::Transaction::Ptr tx = std::make_shared<dev::eth::Transaction>(
-                ref(rlpBytes), dev::eth::CheckTransaction::Everything);
+            bcos::eth::Transaction::Ptr tx = std::make_shared<bcos::eth::Transaction>(
+                ref(rlpBytes), bcos::eth::CheckTransaction::Everything);
             LOG(INFO) << "Tx " << *tx;
 
-            dev::eth::Transaction::Ptr tx2 = std::make_shared<dev::eth::Transaction>(
-                ref(rlpBytesCall), dev::eth::CheckTransaction::Everything);
+            bcos::eth::Transaction::Ptr tx2 = std::make_shared<bcos::eth::Transaction>(
+                ref(rlpBytesCall), bcos::eth::CheckTransaction::Everything);
             block->appendTransaction(tx);
 
             block->appendTransaction(tx2);
             LOG(INFO) << "Tx2 " << *tx2;
-            dev::blockverifier::BlockInfo parentBlockInfo = {parentBlock->header().hash(),
+            bcos::blockverifier::BlockInfo parentBlockInfo = {parentBlock->header().hash(),
                 parentBlock->header().number(), parentBlock->header().stateRoot()};
             auto context = blockVerifier->executeBlock(*block, parentBlockInfo);
             blockChain->commitBlock(block, context);
-            dev::eth::TransactionReceipt::Ptr receipt =
+            bcos::eth::TransactionReceipt::Ptr receipt =
                 blockChain->getTransactionReceiptByHash(tx->hash());
             LOG(INFO) << "receipt " << *receipt;
             receipt = blockChain->getTransactionReceiptByHash(tx2->hash());

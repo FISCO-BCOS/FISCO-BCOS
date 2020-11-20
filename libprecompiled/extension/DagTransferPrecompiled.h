@@ -22,10 +22,10 @@
 #include <libblockverifier/ExecutiveContext.h>
 #include <libprecompiled/Common.h>
 
-#include <libdevcore/Common.h>
 #include <libethcore/Common.h>
+#include <libutilities/Common.h>
 
-namespace dev
+namespace bcos
 {
 namespace storage
 {
@@ -34,7 +34,7 @@ class Table;
 
 namespace precompiled
 {
-class DagTransferPrecompiled : public dev::precompiled::Precompiled
+class DagTransferPrecompiled : public bcos::precompiled::Precompiled
 {
 public:
     typedef std::shared_ptr<DagTransferPrecompiled> Ptr;
@@ -43,7 +43,7 @@ public:
 
     std::string toString() override;
 
-    PrecompiledExecResult::Ptr call(dev::blockverifier::ExecutiveContext::Ptr context,
+    PrecompiledExecResult::Ptr call(bcos::blockverifier::ExecutiveContext::Ptr context,
         bytesConstRef param, Address const& origin = Address(),
         Address const& sender = Address()) override;
 
@@ -54,22 +54,22 @@ public:
 
 protected:
     std::shared_ptr<storage::Table> openTable(
-        dev::blockverifier::ExecutiveContext::Ptr context, Address const& origin);
+        bcos::blockverifier::ExecutiveContext::Ptr context, Address const& origin);
 
 public:
     bool invalidUserName(const std::string& user);
-    void userAddCall(dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef data,
+    void userAddCall(bcos::blockverifier::ExecutiveContext::Ptr context, bytesConstRef data,
         Address const& origin, bytes& out);
-    void userSaveCall(dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef data,
+    void userSaveCall(bcos::blockverifier::ExecutiveContext::Ptr context, bytesConstRef data,
         Address const& origin, bytes& out);
-    void userDrawCall(dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef data,
+    void userDrawCall(bcos::blockverifier::ExecutiveContext::Ptr context, bytesConstRef data,
         Address const& origin, bytes& out);
-    void userBalanceCall(dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef data,
+    void userBalanceCall(bcos::blockverifier::ExecutiveContext::Ptr context, bytesConstRef data,
         Address const& origin, bytes& out);
-    void userTransferCall(dev::blockverifier::ExecutiveContext::Ptr context, bytesConstRef data,
+    void userTransferCall(bcos::blockverifier::ExecutiveContext::Ptr context, bytesConstRef data,
         Address const& origin, bytes& out);
 };
 
 }  // namespace precompiled
 
-}  // namespace dev
+}  // namespace bcos

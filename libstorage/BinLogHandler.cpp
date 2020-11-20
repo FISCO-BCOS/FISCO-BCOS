@@ -22,9 +22,9 @@
 #include "BinLogHandler.h"
 
 #include <json/json.h>
-#include <libdevcore/Exceptions.h>
-#include <libdevcore/FixedHash.h>
 #include <libethcore/Exceptions.h>
+#include <libutilities/Exceptions.h>
+#include <libutilities/FixedHash.h>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/crc.hpp>
@@ -32,8 +32,8 @@
 
 namespace fs = boost::filesystem;
 
-using namespace dev;
-using namespace dev::storage;
+using namespace bcos;
+using namespace bcos::storage;
 
 BinLogHandler::BinLogHandler(const std::string& path)
 {
@@ -62,7 +62,7 @@ bool BinLogHandler::writeBlocktoBinLog(int64_t num, const std::vector<TableData:
     {
         BINLOG_HANDLER_LOG(ERROR) << LOG_DESC("Disk space is insufficient.");
         raise(SIGTERM);
-        BOOST_THROW_EXCEPTION(dev::eth::NotEnoughAvailableSpace());
+        BOOST_THROW_EXCEPTION(bcos::eth::NotEnoughAvailableSpace());
     }
 
     bytes buffer;
@@ -131,7 +131,7 @@ int64_t BinLogHandler::getLastBlockNum()
         if (getFirstBlockNumInBinLog(it->string()) != std::stoll(it->filename().string()))
         {
             BOOST_THROW_EXCEPTION(
-                dev::StorageError() << errinfo_comment(
+                bcos::StorageError() << errinfo_comment(
                     "the first block num in binlog is not equal to file name! file name:" +
                     it->filename().string()));
         }
@@ -139,7 +139,7 @@ int64_t BinLogHandler::getLastBlockNum()
     catch (std::exception& e)
     {
         BOOST_THROW_EXCEPTION(
-            dev::StorageError() << errinfo_comment(boost::diagnostic_information(e)));
+            bcos::StorageError() << errinfo_comment(boost::diagnostic_information(e)));
     }
 
     BinLogContext binlog(it->string());
@@ -208,7 +208,7 @@ std::shared_ptr<BlockDataMap> BinLogHandler::getMissingBlocksFromBinLog(
                     int64_t num = getFirstBlockNumInBinLog(it->string());
                     if (num != std::stoll(it->filename().string()))
                     {
-                        BOOST_THROW_EXCEPTION(dev::StorageError() << errinfo_comment(
+                        BOOST_THROW_EXCEPTION(bcos::StorageError() << errinfo_comment(
                                                   "the first block num in binlog is not equal to "
                                                   "file name! file name:" +
                                                   it->filename().string()));
@@ -228,7 +228,7 @@ std::shared_ptr<BlockDataMap> BinLogHandler::getMissingBlocksFromBinLog(
         catch (std::exception& e)
         {
             BOOST_THROW_EXCEPTION(
-                dev::StorageError() << errinfo_comment(boost::diagnostic_information(e)));
+                bcos::StorageError() << errinfo_comment(boost::diagnostic_information(e)));
         }
     }
 

@@ -25,9 +25,8 @@
 #include "Table.h"
 #include "libdevcrypto/CryptoInterface.h"
 #include <json/json.h>
-#include <libdevcore/FixedHash.h>
-#include <libdevcore/Guards.h>
 #include <libprecompiled/Common.h>
+#include <libutilities/FixedHash.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
@@ -35,7 +34,7 @@
 #include <thread>
 #include <type_traits>
 
-namespace dev
+namespace bcos
 {
 namespace storage
 {
@@ -245,12 +244,12 @@ public:
         bytesConstRef bR(data.data(), data.size());
         if (g_BCOSConfig.SMCrypto())
         {
-            auto hash = dev::sm3(bR);
+            auto hash = bcos::sm3(bR);
             return hash;
         }
         else
         {
-            auto hash = dev::sha256(bR);
+            auto hash = bcos::sha256(bR);
             return hash;
         }
     }
@@ -462,4 +461,4 @@ private:
         m_recorder;
 };
 }  // namespace storage
-}  // namespace dev
+}  // namespace bcos

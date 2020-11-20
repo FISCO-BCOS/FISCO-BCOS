@@ -21,9 +21,9 @@
 
 #include "libnetwork/Host.h"
 #include "FakeASIOInterface.h"
-#include "libdevcore/ThreadPool.h"
 #include "libnetwork/Session.h"
 #include "libp2p/P2PMessageFactory.h"
+#include "libutilities/ThreadPool.h"
 #include "test/tools/libutils/Common.h"
 #include <libinitializer/SecureInitializer.h>
 #include <test/tools/libutils/TestOutputHelper.h>
@@ -31,12 +31,12 @@
 #include <boost/property_tree/ptree.hpp>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev;
+using namespace bcos;
 using namespace std;
-using namespace dev::network;
-using namespace dev::p2p;
-using namespace dev::test;
-using namespace dev::test;
+using namespace bcos::network;
+using namespace bcos::p2p;
+using namespace bcos::test;
+using namespace bcos::test;
 
 namespace test_Host
 {
@@ -53,18 +53,18 @@ struct HostFixture
         }
         else
         {
-            auto secureInitializer = std::make_shared<dev::initializer::SecureInitializer>();
+            auto secureInitializer = std::make_shared<bcos::initializer::SecureInitializer>();
             secureInitializer->initConfig(pt);
             m_sslContext = secureInitializer->SSLContext();
         }
-        m_asioInterface = std::make_shared<dev::network::FakeASIOInterface>();
+        m_asioInterface = std::make_shared<bcos::network::FakeASIOInterface>();
         m_asioInterface->setIOService(std::make_shared<ba::io_service>());
         m_asioInterface->setSSLContext(m_sslContext);
-        m_asioInterface->setType(dev::network::ASIOInterface::SSL);
+        m_asioInterface->setType(bcos::network::ASIOInterface::SSL);
 
-        m_host = std::make_shared<dev::network::Host>();
+        m_host = std::make_shared<bcos::network::Host>();
         m_host->setASIOInterface(m_asioInterface);
-        m_sessionFactory = std::make_shared<dev::network::SessionFactory>();
+        m_sessionFactory = std::make_shared<bcos::network::SessionFactory>();
         m_host->setSessionFactory(m_sessionFactory);
         m_messageFactory = std::make_shared<P2PMessageFactory>();
         m_host->setMessageFactory(m_messageFactory);
@@ -75,8 +75,8 @@ struct HostFixture
 
         m_host->setCRL(m_certBlacklist);
         m_host->setConnectionHandler(
-            [&](dev::network::NetworkException e, dev::network::NodeInfo const&,
-                std::shared_ptr<dev::network::SessionFace> p) {
+            [&](bcos::network::NetworkException e, bcos::network::NodeInfo const&,
+                std::shared_ptr<bcos::network::SessionFace> p) {
                 if (e.errorCode())
                 {
                     LOG(ERROR) << e.what();
@@ -93,14 +93,14 @@ struct HostFixture
     ~HostFixture() {}
     string m_hostIP = "127.0.0.1";
     uint16_t m_port = 8845;
-    std::shared_ptr<dev::network::Host> m_host;
+    std::shared_ptr<bcos::network::Host> m_host;
     std::shared_ptr<boost::asio::ssl::context> m_sslContext;
     MessageFactory::Ptr m_messageFactory;
     std::shared_ptr<SessionFactory> m_sessionFactory;
-    std::shared_ptr<dev::ThreadPool> m_threadPool;
+    std::shared_ptr<bcos::ThreadPool> m_threadPool;
     std::vector<std::string> m_certBlacklist;
     std::shared_ptr<ASIOInterface> m_asioInterface;
-    std::vector<std::shared_ptr<dev::network::SessionFace>> m_sessions;
+    std::vector<std::shared_ptr<bcos::network::SessionFace>> m_sessions;
     std::function<void(NetworkException, NodeInfo const&, std::shared_ptr<SessionFace>)>
         m_connectionHandler;
 };

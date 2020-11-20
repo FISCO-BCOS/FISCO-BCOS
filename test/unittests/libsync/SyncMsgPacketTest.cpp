@@ -32,12 +32,12 @@
 #include <memory>
 
 using namespace std;
-using namespace dev;
-using namespace dev::sync;
-using namespace dev::p2p;
-using namespace dev::test;
+using namespace bcos;
+using namespace bcos::sync;
+using namespace bcos::p2p;
+using namespace bcos::test;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -84,7 +84,7 @@ public:
         KeyPair sigKeyPair = KeyPair::create();
 
         std::shared_ptr<crypto::Signature> sig =
-            dev::crypto::Sign(sigKeyPair, tx->hash(WithoutSignature));
+            bcos::crypto::Sign(sigKeyPair, tx->hash(WithoutSignature));
         /// update the signature of transaction
         tx->updateSignature(sig);
         return tx;
@@ -134,7 +134,7 @@ BOOST_AUTO_TEST_CASE(PacketDecodeTest)
 void testSyncStatus(SyncMsgPacketFactory::Ptr _statusFactory, int64_t _blockNumber,
     h256 const& _genesisHash, h256 const& _latestHash, bool _checkTime)
 {
-    auto peer = dev::KeyPair::create().pub();
+    auto peer = bcos::KeyPair::create().pub();
     auto status =
         _statusFactory->createSyncStatusPacket(peer, _blockNumber, _genesisHash, _latestHash);
     status->alignedTime = utcTime();
@@ -142,7 +142,7 @@ void testSyncStatus(SyncMsgPacketFactory::Ptr _statusFactory, int64_t _blockNumb
     auto p2pMessage = status->toMessage(0x01);
     // decode Packet
     auto decodedStatus = _statusFactory->createSyncStatusPacket();
-    auto fakeSession = std::make_shared<dev::p2p::P2PSession>();
+    auto fakeSession = std::make_shared<bcos::p2p::P2PSession>();
     decodedStatus->decode(fakeSession, p2pMessage);
     decodedStatus->decodePacket(decodedStatus->rlp(), peer);
 
@@ -161,12 +161,12 @@ BOOST_AUTO_TEST_CASE(SyncStatusPacketTest)
     // case1: test without time
     auto syncStatusFactory = std::make_shared<SyncMsgPacketFactory>();
     testSyncStatus(syncStatusFactory, (utcTime() + std::rand() % 12000),
-        dev::keccak256("genesisHash"), dev::keccak256("latestHash"), false);
+        bcos::keccak256("genesisHash"), bcos::keccak256("latestHash"), false);
 
     // case2: test with large blockNumber and time
     syncStatusFactory = std::make_shared<SyncMsgPacketWithAlignedTimeFactory>();
     testSyncStatus(syncStatusFactory, (utcTime() + std::rand() % 12000),
-        dev::keccak256("genesisHashT"), dev::keccak256("latestHashT"), true);
+        bcos::keccak256("genesisHashT"), bcos::keccak256("latestHashT"), true);
 }
 
 BOOST_AUTO_TEST_CASE(SyncTransactionsPacketTest)
@@ -181,7 +181,7 @@ BOOST_AUTO_TEST_CASE(SyncTransactionsPacketTest)
 
     auto rlpTx = txPacket.rlp()[0];
     std::shared_ptr<Transactions> txs = std::make_shared<Transactions>();
-    dev::eth::TxsParallelParser::decode(txs, rlpTx.toBytesConstRef());
+    bcos::eth::TxsParallelParser::decode(txs, rlpTx.toBytesConstRef());
     BOOST_CHECK((*(*txs)[0]) == *fakeTransaction);
 }
 
@@ -214,4 +214,4 @@ BOOST_AUTO_TEST_CASE(SyncReqBlockPacketTest)
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

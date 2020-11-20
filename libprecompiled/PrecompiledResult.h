@@ -20,9 +20,9 @@
  */
 #pragma once
 #include "PrecompiledGas.h"
-#include <libdevcore/Common.h>
+#include <libutilities/Common.h>
 
-namespace dev
+namespace bcos
 {
 namespace precompiled
 {
@@ -71,4 +71,4 @@ private:
     PrecompiledGasFactory::Ptr m_precompiledGasFactory;
 };
 }  // namespace precompiled
-}  // namespace dev
+}  // namespace bcos

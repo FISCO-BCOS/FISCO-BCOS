@@ -20,12 +20,12 @@
  * @date: 2019-10-08
  */
 #pragma once
-#include <libdevcore/Worker.h>
 #include <libethcore/Protocol.h>
+#include <libutilities/Worker.h>
 
 #define GOSSIP_LOG(_OBV) LOG(_OBV) << LOG_BADGE("GossipBlockStatus")
 
-namespace dev
+namespace bcos
 {
 namespace sync
 {
@@ -33,9 +33,9 @@ class GossipBlockStatus : public Worker
 {
 public:
     using Ptr = std::shared_ptr<GossipBlockStatus>;
-    GossipBlockStatus(dev::PROTOCOL_ID const& _protocolId, int64_t const& _gossipInterval,
+    GossipBlockStatus(bcos::PROTOCOL_ID const& _protocolId, int64_t const& _gossipInterval,
         int64_t const& _gossipPeersNumber)
-      : Worker("gossip-" + std::to_string(dev::eth::getGroupAndProtocol(_protocolId).first),
+      : Worker("gossip-" + std::to_string(bcos::eth::getGroupAndProtocol(_protocolId).first),
             _gossipInterval),
         m_gossipPeersNumber(_gossipPeersNumber)
     {}
@@ -58,4 +58,4 @@ private:
     std::function<void(int64_t const&)> m_gossipBlockStatusHandler = nullptr;
 };
 }  // namespace sync
-}  // namespace dev
+}  // namespace bcos

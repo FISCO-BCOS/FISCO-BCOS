@@ -26,7 +26,7 @@
 
 #include <libethcore/Common.h>
 
-namespace dev
+namespace bcos
 {
 namespace executive
 {
@@ -165,4 +165,4 @@ public:
 };
 
 }  // namespace executive
-}  // namespace dev
+}  // namespace bcos

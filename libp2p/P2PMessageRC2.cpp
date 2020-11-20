@@ -22,11 +22,11 @@
 #include "P2PMessageRC2.h"
 #include "Common.h"
 #include <libconfig/GlobalConfigure.h>
-#include <libdevcore/SnappyCompress.h>
+#include <libutilities/SnappyCompress.h>
 
-using namespace dev;
-using namespace dev::p2p;
-using namespace dev::compress;
+using namespace bcos;
+using namespace bcos::p2p;
+using namespace bcos::compress;
 
 void P2PMessageRC2::encode(bytes& buffer)
 {
@@ -82,7 +82,7 @@ bool P2PMessageRC2::compress(std::shared_ptr<bytes> compressData)
         return false;
     }
     /// the packet has already been encoded
-    if ((m_version & dev::eth::CompressFlag) == dev::eth::CompressFlag)
+    if ((m_version & bcos::eth::CompressFlag) == bcos::eth::CompressFlag)
     {
         return false;
     }
@@ -91,7 +91,7 @@ bool P2PMessageRC2::compress(std::shared_ptr<bytes> compressData)
     {
         return false;
     }
-    m_version |= dev::eth::CompressFlag;
+    m_version |= bcos::eth::CompressFlag;
     return true;
 }
 
@@ -99,7 +99,7 @@ ssize_t P2PMessageRC2::decode(const byte* buffer, size_t size)
 {
     if (size < HEADER_LENGTH)
     {
-        return dev::network::PACKET_INCOMPLETE;
+        return bcos::network::PACKET_INCOMPLETE;
     }
     m_deliveredLength = size;
 
@@ -108,7 +108,7 @@ ssize_t P2PMessageRC2::decode(const byte* buffer, size_t size)
 
     if (size < m_length)
     {
-        return dev::network::PACKET_INCOMPLETE;
+        return bcos::network::PACKET_INCOMPLETE;
     }
 
     m_cache->clear();
@@ -129,14 +129,14 @@ ssize_t P2PMessageRC2::decode(const byte* buffer, size_t size)
 
     /// the data has been compressed
     if (g_BCOSConfig.compressEnabled() &&
-        ((m_version & dev::eth::CompressFlag) == dev::eth::CompressFlag))
+        ((m_version & bcos::eth::CompressFlag) == bcos::eth::CompressFlag))
     {
         /// uncompress data
         SnappyCompress::uncompress(
-            bytesConstRef((const byte*)(&buffer[HEADER_LENGTH]), m_length - HEADER_LENGTH),
+            bcos::bytesConstRef((const byte*)(&buffer[HEADER_LENGTH]), m_length - HEADER_LENGTH),
             *m_buffer);
         // reset version
-        m_version &= (~dev::eth::CompressFlag);
+        m_version &= (~bcos::eth::CompressFlag);
     }
     else
     {

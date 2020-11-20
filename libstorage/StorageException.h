@@ -20,19 +20,19 @@
  * @date 2018-09-13
  */
 #pragma once
-#include <libdevcore/Exceptions.h>
+#include <libutilities/Exceptions.h>
 #include <exception>
 #include <string>
 
-namespace dev
+namespace bcos
 {
 namespace storage
 {
-class StorageException : public dev::Exception
+class StorageException : public bcos::Exception
 {
 public:
     StorageException(int errorCode, const std::string& what)
-      : dev::Exception(what), m_errorCode(errorCode)
+      : bcos::Exception(what), m_errorCode(errorCode)
     {}
 
     virtual int errorCode() const { return m_errorCode; }
@@ -43,4 +43,4 @@ private:
 
 }  // namespace storage
 
-}  // namespace dev
+}  // namespace bcos

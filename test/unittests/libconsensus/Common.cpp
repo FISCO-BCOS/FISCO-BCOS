@@ -23,11 +23,11 @@
  */
 #include "Common.h"
 #include "libdevcrypto/CryptoInterface.h"
-#include <libdevcore/Assertions.h>
+#include <libutilities/Assertions.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libethcore/FakeBlock.h>
-using namespace dev::consensus;
-namespace dev
+using namespace bcos::consensus;
+namespace bcos
 {
 namespace test
 {
@@ -154,7 +154,7 @@ BOOST_AUTO_TEST_CASE(testPrepareReq)
     Sealing sealing;
     sealing.block = fake_block.m_block;
     *block_populated_prepare.block = bytes();
-    sealing.p_execContext = dev::blockverifier::ExecutiveContext::Ptr();
+    sealing.p_execContext = bcos::blockverifier::ExecutiveContext::Ptr();
 
     PrepareReq new_req(block_populated_prepare, sealing, key_pair2);
     checkPBFTMsg(new_req, key_pair2, fake_block.m_block->blockHeader().number(), 2, 135,
@@ -316,7 +316,7 @@ BOOST_AUTO_TEST_CASE(testPrepareReq)
     Sealing sealing;
     sealing.block = fake_block.m_block;
     *block_populated_prepare.block = bytes();
-    sealing.p_execContext = dev::blockverifier::ExecutiveContext::Ptr();
+    sealing.p_execContext = bcos::blockverifier::ExecutiveContext::Ptr();
 
     PrepareReq new_req(block_populated_prepare, sealing, key_pair2);
     checkPBFTMsg(new_req, key_pair2, fake_block.m_block->blockHeader().number(), 2, 135,
@@ -381,4 +381,4 @@ BOOST_AUTO_TEST_CASE(testPBFTMsgPacket)
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

@@ -28,7 +28,7 @@
 
 #define ZdbStorage_LOG(LEVEL) LOG(LEVEL) << "[ZdbStorage] "
 
-namespace dev
+namespace bcos
 {
 namespace storage
 {
@@ -85,4 +85,4 @@ private:
 
 }  // namespace storage
 
-}  // namespace dev
+}  // namespace bcos

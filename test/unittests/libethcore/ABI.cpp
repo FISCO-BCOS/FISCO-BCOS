@@ -28,13 +28,13 @@
 #include <boost/test/unit_test.hpp>
 
 using namespace std;
-using namespace dev;
-using namespace dev::eth;
-using namespace dev::eth::abi;
-using namespace dev::test;
+using namespace bcos;
+using namespace bcos::eth;
+using namespace bcos::eth::abi;
+using namespace bcos::test;
 namespace ut = boost::unit_test;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -673,4 +673,4 @@ BOOST_AUTO_TEST_CASE(ContractABI_AbiOutString1)
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

@@ -32,17 +32,16 @@
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
 #include "rocksdb/write_batch.h"
-#include <libdevcore/Common.h>
-#include <libdevcore/FixedHash.h>
-#include <libdevcore/Guards.h>
-#include <libdevcore/RLP.h>
+#include <libutilities/Common.h>
+#include <libutilities/FixedHash.h>
+#include <libutilities/RLP.h>
 #include <tbb/parallel_for.h>
 #include <memory>
 #include <thread>
 
 using namespace std;
-using namespace dev;
-using namespace dev::storage;
+using namespace bcos;
+using namespace bcos::storage;
 using namespace rocksdb;
 
 Entries::Ptr RocksDBStorage::select(

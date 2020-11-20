@@ -29,7 +29,7 @@
 #define ERROR_SOCKET_PORT 8889
 #define EMPTY_CERT_SOCKET_PORT 8887
 
-namespace dev
+namespace bcos
 {
 namespace network
 {
@@ -193,4 +193,4 @@ private:
     bool m_allowAccept = true;
 };
 }  // namespace network
-}  // namespace dev
+}  // namespace bcos

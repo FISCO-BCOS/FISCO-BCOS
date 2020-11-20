@@ -26,9 +26,9 @@
 #include "ffi_vrf.h"
 #include <libblockverifier/ExecutiveContext.h>
 
-using namespace dev::precompiled;
-using namespace dev::blockverifier;
-using namespace dev::storage;
+using namespace bcos::precompiled;
+using namespace bcos::blockverifier;
+using namespace bcos::storage;
 
 bool VRFInfo::isValidVRFPublicKey()
 {
@@ -41,20 +41,20 @@ bool VRFInfo::verifyProof()
         curve25519_vrf_verify(m_vrfPublicKey.c_str(), m_vrfInput.c_str(), m_vrfProof.c_str()) == 0);
 }
 
-dev::h256 VRFInfo::getHashFromProof()
+bcos::h256 VRFInfo::getHashFromProof()
 {
     std::string vrfHash = curve25519_vrf_proof_to_hash(m_vrfProof.c_str());
-    return dev::h256(fromHex(vrfHash));
+    return bcos::h256(fromHex(vrfHash));
 }
 
 WorkingSealerManagerImpl::WorkingSealerManagerImpl(
-    std::shared_ptr<dev::blockverifier::ExecutiveContext> _context, Address const& _origin,
+    std::shared_ptr<bcos::blockverifier::ExecutiveContext> _context, Address const& _origin,
     Address const& _sender)
   : m_context(_context),
     m_origin(_origin),
     m_sender(_sender),
-    m_pendingSealerList(std::make_shared<dev::h512s>()),
-    m_workingSealerList(std::make_shared<dev::h512s>()),
+    m_pendingSealerList(std::make_shared<bcos::h512s>()),
+    m_workingSealerList(std::make_shared<bcos::h512s>()),
     m_skipAccessCheckOption(std::make_shared<AccessOptions>(m_origin, false))
 {}
 
@@ -144,7 +144,7 @@ void WorkingSealerManagerImpl::rotateWorkingSealer()
                                   nodeRotatingInfo->removedWorkingSealerNum);
 }
 
-void WorkingSealerManagerImpl::UpdateNodeType(dev::h512 const& _node, std::string const& _nodeType)
+void WorkingSealerManagerImpl::UpdateNodeType(bcos::h512 const& _node, std::string const& _nodeType)
 {
     auto condition = m_consTable->newCondition();
     condition->EQ(NODE_KEY_NODEID, toHex(_node));
@@ -180,8 +180,8 @@ void WorkingSealerManagerImpl::UpdateNodeType(dev::h512 const& _node, std::strin
 }
 
 
-std::shared_ptr<dev::h512s> WorkingSealerManagerImpl::selectNodesFromList(
-    std::shared_ptr<dev::h512s> _nodeList, int64_t _selectedNode)
+std::shared_ptr<bcos::h512s> WorkingSealerManagerImpl::selectNodesFromList(
+    std::shared_ptr<bcos::h512s> _nodeList, int64_t _selectedNode)
 {
     // sort the nodeList firstly
     std::sort(_nodeList->begin(), _nodeList->end());
@@ -197,7 +197,7 @@ std::shared_ptr<dev::h512s> WorkingSealerManagerImpl::selectNodesFromList(
         proofHashValue = u256(crypto::Hash(std::to_string(selectedIdx)));
     }
     // get the selected node list from the shuffled _nodeList
-    std::shared_ptr<dev::h512s> selectedNodeList = std::make_shared<dev::h512s>();
+    std::shared_ptr<bcos::h512s> selectedNodeList = std::make_shared<bcos::h512s>();
     for (int64_t i = 0; i < _selectedNode; i++)
     {
         selectedNodeList->push_back((*_nodeList)[i]);
@@ -225,7 +225,7 @@ void WorkingSealerManagerImpl::getSealerList()
 }
 
 void WorkingSealerManagerImpl::checkPermission(
-    Address const& _origin, dev::h512s const& _allowedAccountInfoList)
+    Address const& _origin, bcos::h512s const& _allowedAccountInfoList)
 {
     for (auto const& _allowedAccount : _allowedAccountInfoList)
     {
@@ -248,7 +248,7 @@ void WorkingSealerManagerImpl::checkVRFInfos()
     }
     // check vrf input: must be equal to the parent block hash
     auto parentBlockHash = m_context->blockInfo().hash;
-    if (dev::h256(fromHex(m_vrfInfo->vrfInput())) != parentBlockHash)
+    if (bcos::h256(fromHex(m_vrfInfo->vrfInput())) != parentBlockHash)
     {
         PRECOMPILED_LOG(ERROR)
             << LOG_DESC("checkVRFInfos: Invalid VRFInput, must be the parent block hash")

@@ -21,16 +21,16 @@
  * @date: 2020-06-09
  */
 #pragma once
-#include <libdevcore/Common.h>
-#include <libdevcore/Exceptions.h>
+#include <libutilities/Common.h>
+#include <libutilities/Exceptions.h>
 
-namespace dev
+namespace bcos
 {
 namespace consensus
 {
-DEV_SIMPLE_EXCEPTION(InitVRFPublicKeyFailed);
-DEV_SIMPLE_EXCEPTION(InvalidLeader);
-DEV_SIMPLE_EXCEPTION(InvalidNodeRotationTx);
+DERIVE_BCOS_EXCEPTION(InitVRFPublicKeyFailed);
+DERIVE_BCOS_EXCEPTION(InvalidLeader);
+DERIVE_BCOS_EXCEPTION(InvalidNodeRotationTx);
 
 }  // namespace consensus
-}  // namespace dev
+}  // namespace bcos

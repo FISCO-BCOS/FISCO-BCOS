@@ -1,15 +1,15 @@
 #pragma once
-#include <libdevcore/Exceptions.h>
+#include <libutilities/Exceptions.h>
 
-namespace dev
+namespace bcos
 {
-DEV_SIMPLE_EXCEPTION(KeyCenterAlreadyInit);
-DEV_SIMPLE_EXCEPTION(KeyCenterDataKeyError);
-DEV_SIMPLE_EXCEPTION(KeyCenterConnectionError);
-DEV_SIMPLE_EXCEPTION(KeyCenterCall);
-DEV_SIMPLE_EXCEPTION(KeyCenterInitError);
-DEV_SIMPLE_EXCEPTION(KeyCenterCloseError);
-DEV_SIMPLE_EXCEPTION(EncryptedFileError);
-DEV_SIMPLE_EXCEPTION(EncryptedLevelDBEncryptFailed);
-DEV_SIMPLE_EXCEPTION(EncryptedLevelDBDecryptFailed);
-}  // namespace dev
+DERIVE_BCOS_EXCEPTION(KeyCenterAlreadyInit);
+DERIVE_BCOS_EXCEPTION(KeyCenterDataKeyError);
+DERIVE_BCOS_EXCEPTION(KeyCenterConnectionError);
+DERIVE_BCOS_EXCEPTION(KeyCenterCall);
+DERIVE_BCOS_EXCEPTION(KeyCenterInitError);
+DERIVE_BCOS_EXCEPTION(KeyCenterCloseError);
+DERIVE_BCOS_EXCEPTION(EncryptedFileError);
+DERIVE_BCOS_EXCEPTION(EncryptedLevelDBEncryptFailed);
+DERIVE_BCOS_EXCEPTION(EncryptedLevelDBDecryptFailed);
+}  // namespace bcos

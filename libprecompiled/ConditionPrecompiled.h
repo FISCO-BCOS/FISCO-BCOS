@@ -22,9 +22,9 @@
 
 #include "libstorage/Table.h"
 #include <libblockverifier/ExecutiveContext.h>
-#include <libdevcore/Common.h>
+#include <libutilities/Common.h>
 
-namespace dev
+namespace bcos
 {
 namespace precompiled
 {
@@ -70,24 +70,24 @@ public:
 
     std::string toString() override;
 
-    PrecompiledExecResult::Ptr call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+    PrecompiledExecResult::Ptr call(std::shared_ptr<bcos::blockverifier::ExecutiveContext> context,
         bytesConstRef param, Address const& origin = Address(),
         Address const& _sender = Address()) override;
 
-    void setPrecompiledEngine(std::shared_ptr<dev::blockverifier::ExecutiveContext> engine)
+    void setPrecompiledEngine(std::shared_ptr<bcos::blockverifier::ExecutiveContext> engine)
     {
         m_exeEngine = engine;
     }
 
-    void setCondition(dev::storage::Condition::Ptr condition) { m_condition = condition; }
-    dev::storage::Condition::Ptr getCondition() { return m_condition; }
+    void setCondition(bcos::storage::Condition::Ptr condition) { m_condition = condition; }
+    bcos::storage::Condition::Ptr getCondition() { return m_condition; }
 
 private:
-    std::shared_ptr<dev::blockverifier::ExecutiveContext> m_exeEngine;
+    std::shared_ptr<bcos::blockverifier::ExecutiveContext> m_exeEngine;
     // condition must been setted
-    dev::storage::Condition::Ptr m_condition;
+    bcos::storage::Condition::Ptr m_condition;
 };
 
 }  // namespace precompiled
 
-}  // namespace dev
+}  // namespace bcos

@@ -28,7 +28,7 @@
 
 #define SQLConnectionPool_LOG(LEVEL) LOG(LEVEL) << "[SQLConnectionPool] "
 
-namespace dev
+namespace bcos
 {
 namespace storage
 {
@@ -76,4 +76,4 @@ private:
 inline void errorExitOut(std::stringstream& _exitInfo);
 
 }  // namespace storage
-}  // namespace dev
+}  // namespace bcos

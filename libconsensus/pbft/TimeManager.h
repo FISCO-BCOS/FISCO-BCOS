@@ -22,8 +22,8 @@
  * @date: 2018-09-28
  */
 #pragma once
-#include <libdevcore/Common.h>
-namespace dev
+#include <libutilities/Common.h>
+namespace bcos
 {
 namespace consensus
 {
@@ -108,4 +108,4 @@ struct TimeManager
     }
 };
 }  // namespace consensus
-}  // namespace dev
+}  // namespace bcos

@@ -26,7 +26,7 @@
 
 #define RPBFTReqCache_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("RPBFTReqCache")
 
-namespace dev
+namespace bcos
 {
 namespace consensus
 {
@@ -36,10 +36,10 @@ public:
     using Ptr = std::shared_ptr<RPBFTReqCache>;
     RPBFTReqCache() : PartiallyPBFTReqCache()
     {
-        m_requestedPrepareQueue = std::make_shared<QueueSet<dev::h256>>();
-        m_nodeIDToPrepareStatus = std::make_shared<std::map<dev::h512, PBFTMsg::Ptr>>();
+        m_requestedPrepareQueue = std::make_shared<QueueSet<bcos::h256>>();
+        m_nodeIDToPrepareStatus = std::make_shared<std::map<bcos::h512, PBFTMsg::Ptr>>();
         m_prepareHashToNodeID =
-            std::make_shared<std::map<dev::h256, std::shared_ptr<std::set<dev::h512>>>>();
+            std::make_shared<std::map<bcos::h256, std::shared_ptr<std::set<bcos::h512>>>>();
     }
 
     ~RPBFTReqCache() override {}
@@ -53,7 +53,7 @@ public:
 
     // response rawPrepareCache when receive the rawPrepare request
     virtual void responseRawPrepare(
-        std::shared_ptr<dev::bytes> _encodedRawPrepare, PBFTMsg::Ptr _rawPrepareRequestMsg);
+        std::shared_ptr<bcos::bytes> _encodedRawPrepare, PBFTMsg::Ptr _rawPrepareRequestMsg);
 
     // hook to send rawPrepareStatus randomly after addRawPrepare into the cache
     void setRandomSendRawPrepareStatusCallback(std::function<void(PBFTMsg::Ptr)> const& _callback)
@@ -62,22 +62,25 @@ public:
     }
 
     // cache the block hash of requested-raw-prepare
-    virtual void insertRequestedRawPrepare(dev::h256 const& _hash);
+    virtual void insertRequestedRawPrepare(bcos::h256 const& _hash);
     // check the given raw-prepare-request has been sent or not
-    bool isRequestedPrepare(dev::h256 const& _hash);
+    bool isRequestedPrepare(bcos::h256 const& _hash);
 
     void setMaxRequestedPrepareQueueSize(size_t const& _maxRequestedPrepareQueueSize)
     {
         m_maxRequestedPrepareQueueSize = _maxRequestedPrepareQueueSize;
     }
 
-    std::shared_ptr<QueueSet<dev::h256>> requestedPrepareQueue() { return m_requestedPrepareQueue; }
+    std::shared_ptr<QueueSet<bcos::h256>> requestedPrepareQueue()
+    {
+        return m_requestedPrepareQueue;
+    }
 
     void updateRawPrepareStatusCache(
-        dev::h512 const& _nodeId, PBFTMsg::Ptr _receivedRawPrepareStatus);
+        bcos::h512 const& _nodeId, PBFTMsg::Ptr _receivedRawPrepareStatus);
 
-    dev::h512 selectNodeToRequestTxs(
-        dev::h512 const& _expectedNodeID, PBFTMsg::Ptr _receivedRawPrepareStatus);
+    bcos::h512 selectNodeToRequestTxs(
+        bcos::h512 const& _expectedNodeID, PBFTMsg::Ptr _receivedRawPrepareStatus);
     void setMaxRequestMissedTxsWaitTime(uint64_t const& _maxRequestMissedTxsWaitTime)
     {
         m_maxRequestMissedTxsWaitTime = _maxRequestMissedTxsWaitTime;
@@ -90,12 +93,12 @@ private:
     bool checkRawPrepareStatus(
         PBFTMsg::Ptr _cachedRawPrepareStatus, PBFTMsg::Ptr _receivedRawPrepareStatus);
 
-    dev::h512 selectRequiredNodeToRequestTxs(
-        dev::h512 const& _expectedNodeID, PBFTMsg::Ptr _receivedRawPrepareStatus);
+    bcos::h512 selectRequiredNodeToRequestTxs(
+        bcos::h512 const& _expectedNodeID, PBFTMsg::Ptr _receivedRawPrepareStatus);
 
 private:
     // record the requested rawPrepareReq
-    std::shared_ptr<QueueSet<dev::h256>> m_requestedPrepareQueue;
+    std::shared_ptr<QueueSet<bcos::h256>> m_requestedPrepareQueue;
     size_t m_maxRequestedPrepareQueueSize = 1024;
     mutable SharedMutex x_requestedPrepareQueue;
 
@@ -104,13 +107,13 @@ private:
     boost::mutex x_signalled;
 
     // maps between nodeID and prepare status
-    std::shared_ptr<std::map<dev::h512, PBFTMsg::Ptr>> m_nodeIDToPrepareStatus;
+    std::shared_ptr<std::map<bcos::h512, PBFTMsg::Ptr>> m_nodeIDToPrepareStatus;
     // maps between block hash and nodeID set
-    std::shared_ptr<std::map<dev::h256, std::shared_ptr<std::set<dev::h512>>>>
+    std::shared_ptr<std::map<bcos::h256, std::shared_ptr<std::set<bcos::h512>>>>
         m_prepareHashToNodeID;
     mutable SharedMutex x_nodeIDToPrepareStatus;
 
     uint64_t m_maxRequestMissedTxsWaitTime = 100;
 };
 }  // namespace consensus
-}  // namespace dev
+}  // namespace bcos

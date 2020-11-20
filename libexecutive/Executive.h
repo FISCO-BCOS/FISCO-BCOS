@@ -26,7 +26,7 @@ namespace Json
 class Value;
 }
 
-namespace dev
+namespace bcos
 {
 class OverlayDB;
 
@@ -74,14 +74,14 @@ class Executive
 public:
     using Ptr = std::shared_ptr<Executive>;
     /// Simple constructor; executive will operate on given state, with the given environment info.
-    Executive(std::shared_ptr<StateFace> _s, dev::executive::EnvInfo const& _envInfo,
+    Executive(std::shared_ptr<StateFace> _s, bcos::executive::EnvInfo const& _envInfo,
         bool _freeStorage = false, unsigned _level = 0)
       : m_s(_s), m_envInfo(_envInfo), m_depth(_level), m_enableFreeStorage(_freeStorage)
     {}
 
 
     // template <typename T>
-    // Executive(T _s, dev::executive::EnvInfo const& _envInfo, unsigned _level = 0)
+    // Executive(T _s, bcos::executive::EnvInfo const& _envInfo, unsigned _level = 0)
     //  : m_s(dynamic_cast<std::shared_ptr<StateFace>>(_s)), m_envInfo(_envInfo), m_depth(_level)
     //{}
 
@@ -106,10 +106,10 @@ public:
     /// point following this.
     void initialize(bytesConstRef _transaction)
     {
-        initialize(std::make_shared<dev::eth::Transaction>(
-            _transaction, dev::eth::CheckTransaction::None));
+        initialize(std::make_shared<bcos::eth::Transaction>(
+            _transaction, bcos::eth::CheckTransaction::None));
     }
-    void initialize(dev::eth::Transaction::Ptr _transaction);
+    void initialize(bcos::eth::Transaction::Ptr _transaction);
     /// Finalise a transaction previously set up with initialize().
     /// @warning Only valid after initialize() and execute(), and possibly go().
     /// @returns true if the outermost execution halted normally, false if exceptionally halted.
@@ -117,16 +117,16 @@ public:
     /// Begins execution of a transaction. You must call finalize() following this.
     /// @returns true if the transaction is done, false if go() must be called.
 
-    void verifyTransaction(dev::eth::ImportRequirements::value _ir, dev::eth::Transaction::Ptr _t,
-        dev::eth::BlockHeader const& _header, u256 const& _gasUsed);
+    void verifyTransaction(bcos::eth::ImportRequirements::value _ir, bcos::eth::Transaction::Ptr _t,
+        bcos::eth::BlockHeader const& _header, u256 const& _gasUsed);
 
     bool execute();
     /// @returns the transaction from initialize().
     /// @warning Only valid after initialize().
-    dev::eth::Transaction::Ptr tx() const { return m_t; }
+    bcos::eth::Transaction::Ptr tx() const { return m_t; }
     /// @returns the log entries created by this operation.
     /// @warning Only valid after finalise().
-    dev::eth::LogEntries const& logs() const { return m_logs; }
+    bcos::eth::LogEntries const& logs() const { return m_logs; }
     /// @returns total gas used in the transaction/operation.
     /// @warning Only valid after finalise().
     u256 gasUsed() const;
@@ -148,11 +148,11 @@ public:
     bool call(Address const& _receiveAddress, Address const& _txSender, u256 const& _txValue,
         u256 const& _gasPrice, bytesConstRef _txData, u256 const& _gas);
     bool call(
-        dev::executive::CallParameters const& _cp, u256 const& _gasPrice, Address const& _origin);
+        bcos::executive::CallParameters const& _cp, u256 const& _gasPrice, Address const& _origin);
     bool callRC2(
-        dev::executive::CallParameters const& _cp, u256 const& _gasPrice, Address const& _origin);
+        bcos::executive::CallParameters const& _cp, u256 const& _gasPrice, Address const& _origin);
     /// Finalise an operation through accruing the substate into the parent context.
-    void accrueSubState(dev::executive::SubState& _parentContext);
+    void accrueSubState(bcos::executive::SubState& _parentContext);
 
     /// Executes (or continues execution of) the VM.
     /// @returns false iff go() must be called again to finish the transaction.
@@ -199,16 +199,16 @@ private:
     bool executeCreate(Address const& _txSender, u256 const& _endowment, u256 const& _gasPrice,
         u256 const& _gas, bytesConstRef _code, Address const& _originAddress);
 
-    void grantContractStatusManager(std::shared_ptr<dev::storage::TableFactory> memoryTableFactory,
+    void grantContractStatusManager(std::shared_ptr<bcos::storage::TableFactory> memoryTableFactory,
         Address const& newAddress, Address const& sender, Address const& origin);
 
     void writeErrInfoToOutput(std::string const& errInfo);
 
-    void updateGas(std::shared_ptr<dev::precompiled::PrecompiledExecResult> _callResult);
+    void updateGas(std::shared_ptr<bcos::precompiled::PrecompiledExecResult> _callResult);
 
     std::shared_ptr<StateFace> m_s;  ///< The state to which this operation/transaction is applied.
     // TODO: consider changign to EnvInfo const& to avoid LastHashes copy at every CALL/CREATE
-    dev::executive::EnvInfo m_envInfo;      ///< Information on the runtime environment.
+    bcos::executive::EnvInfo m_envInfo;     ///< Information on the runtime environment.
     std::shared_ptr<EVMHostContext> m_ext;  ///< The VM externality object for the VM execution or
                                             ///< null if no VM is required. shared_ptr used only to
                                             ///< allow EVMHostContext forward reference. This field
@@ -226,9 +226,9 @@ private:
                           ///< final amount after go() execution.
     u256 m_refunded = 0;  ///< The amount of gas refunded.
 
-    dev::eth::Transaction::Ptr m_t;  ///< The original transaction. Set by setup().
-    dev::eth::LogEntries m_logs;     ///< The log entries created by this transaction. Set by
-                                     ///< finalize().
+    bcos::eth::Transaction::Ptr m_t;  ///< The original transaction. Set by setup().
+    bcos::eth::LogEntries m_logs;     ///< The log entries created by this transaction. Set by
+                                      ///< finalize().
 
     u256 m_gasCost;
 
@@ -242,4 +242,4 @@ private:
 };
 
 }  // namespace executive
-}  // namespace dev
+}  // namespace bcos

@@ -23,7 +23,6 @@
 
 #pragma once
 #include "Common.h"
-#include <libdevcore/Guards.h>
 #include <tbb/concurrent_queue.h>
 #include <condition_variable>
 #include <cstdint>
@@ -31,7 +30,7 @@
 #include <thread>
 #include <vector>
 
-namespace dev
+namespace bcos
 {
 namespace blockverifier
 {
@@ -85,4 +84,4 @@ private:
 };
 
 }  // namespace blockverifier
-}  // namespace dev
+}  // namespace bcos

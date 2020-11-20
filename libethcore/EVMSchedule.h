@@ -22,11 +22,11 @@
 
 #pragma once
 
-#include <libdevcore/Common.h>
+#include <libutilities/Common.h>
 #include <boost/optional.hpp>
 #include <array>
 
-namespace dev
+namespace bcos
 {
 namespace eth
 {
@@ -178,4 +178,4 @@ static const EVMSchedule FiscoBcosScheduleV3 = [] {
 static const EVMSchedule DefaultSchedule = FiscoBcosScheduleV3;
 
 }  // namespace eth
-}  // namespace dev
+}  // namespace bcos

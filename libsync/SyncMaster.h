@@ -34,9 +34,6 @@
 #include "SyncTreeTopology.h"
 #include <libblockchain/BlockChainInterface.h>
 #include <libblockverifier/BlockVerifierInterface.h>
-#include <libdevcore/FixedHash.h>
-#include <libdevcore/ThreadPool.h>
-#include <libdevcore/Worker.h>
 #include <libethcore/Common.h>
 #include <libethcore/Exceptions.h>
 #include <libflowlimit/RateLimiter.h>
@@ -44,20 +41,23 @@
 #include <libnetwork/Session.h>
 #include <libp2p/P2PInterface.h>
 #include <libtxpool/TxPoolInterface.h>
+#include <libutilities/FixedHash.h>
+#include <libutilities/ThreadPool.h>
+#include <libutilities/Worker.h>
 #include <vector>
 
 
-namespace dev
+namespace bcos
 {
 namespace sync
 {
 class SyncMaster : public SyncInterface, public Worker
 {
 public:
-    SyncMaster(std::shared_ptr<dev::p2p::P2PInterface> _service,
-        std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
-        std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-        std::shared_ptr<dev::blockverifier::BlockVerifierInterface> _blockVerifier,
+    SyncMaster(std::shared_ptr<bcos::p2p::P2PInterface> _service,
+        std::shared_ptr<bcos::txpool::TxPoolInterface> _txPool,
+        std::shared_ptr<bcos::blockchain::BlockChainInterface> _blockChain,
+        std::shared_ptr<bcos::blockverifier::BlockVerifierInterface> _blockVerifier,
         PROTOCOL_ID const& _protocolId, NodeID const& _nodeId, h256 const& _genesisHash,
         unsigned const& _idleWaitMs = 200, int64_t const& _gossipInterval = 1000,
         int64_t const& _gossipPeers = 3, bool const& _enableSendTxsByTree = false,
@@ -69,7 +69,7 @@ public:
         m_blockChain(_blockChain),
         m_blockVerifier(_blockVerifier),
         m_protocolId(_protocolId),
-        m_groupId(dev::eth::getGroupAndProtocol(_protocolId).first),
+        m_groupId(bcos::eth::getGroupAndProtocol(_protocolId).first),
         m_nodeId(_nodeId),
         m_genesisHash(_genesisHash),
         m_enableSendTxsByTree(_enableSendTxsByTree),
@@ -81,9 +81,9 @@ public:
         // signal registration
         m_blockSubmitted = m_blockChain->onReady([&](int64_t) { this->noteNewBlocks(); });
         m_downloadBlockProcessor =
-            std::make_shared<dev::ThreadPool>("Download-" + std::to_string(m_groupId), 1);
+            std::make_shared<bcos::ThreadPool>("Download-" + std::to_string(m_groupId), 1);
         m_sendBlockProcessor =
-            std::make_shared<dev::ThreadPool>("SyncSend-" + std::to_string(m_groupId), 1);
+            std::make_shared<bcos::ThreadPool>("SyncSend-" + std::to_string(m_groupId), 1);
 
         // syncStatus should be initialized firstly since it should be deconstruct at final
         m_syncStatus =
@@ -168,11 +168,11 @@ public:
     virtual void setProtocolId(PROTOCOL_ID const _protocolId) override
     {
         m_protocolId = _protocolId;
-        m_groupId = dev::eth::getGroupAndProtocol(m_protocolId).first;
+        m_groupId = bcos::eth::getGroupAndProtocol(m_protocolId).first;
     };
 
     virtual void registerConsensusVerifyHandler(
-        std::function<bool(dev::eth::Block const&)> _handler) override
+        std::function<bool(bcos::eth::Block const&)> _handler) override
     {
         fp_isConsensusOk = _handler;
     };
@@ -210,22 +210,22 @@ public:
     void maintainTransactions() { m_syncTrans->maintainTransactions(); }
     void maintainDownloadingTransactions() { m_syncTrans->maintainDownloadingTransactions(); }
     void broadcastSyncStatus(
-        dev::eth::BlockNumber const& _blockNumber, dev::h256 const& _currentHash);
+        bcos::eth::BlockNumber const& _blockNumber, bcos::h256 const& _currentHash);
 
-    void sendSyncStatusByTree(dev::eth::BlockNumber const& _blockNumber, h256 const& _currentHash);
+    void sendSyncStatusByTree(bcos::eth::BlockNumber const& _blockNumber, h256 const& _currentHash);
 
-    bool sendSyncStatusByNodeId(dev::eth::BlockNumber const& blockNumber,
-        dev::h256 const& currentHash, dev::network::NodeID const& nodeId);
+    bool sendSyncStatusByNodeId(bcos::eth::BlockNumber const& blockNumber,
+        bcos::h256 const& currentHash, bcos::network::NodeID const& nodeId);
     void sendBlockStatus(int64_t const& _gossipPeersNumber);
 
     void registerTxsReceiversFilter(
-        std::function<std::shared_ptr<dev::p2p::NodeIDs>(std::shared_ptr<std::set<NodeID>>)>
+        std::function<std::shared_ptr<bcos::p2p::NodeIDs>(std::shared_ptr<std::set<NodeID>>)>
             _handler) override
     {
         m_syncTrans->registerTxsReceiversFilter(_handler);
     }
 
-    void updateNodeListInfo(dev::h512s const& _nodeList) override
+    void updateNodeListInfo(bcos::h512s const& _nodeList) override
     {
         if (!m_syncTreeRouter)
         {
@@ -235,7 +235,7 @@ public:
     }
 
     void updateConsensusNodeInfo(
-        dev::h512s const& _consensusNodes, dev::h512s const& _nodeList) override
+        bcos::h512s const& _consensusNodes, bcos::h512s const& _nodeList) override
     {
         m_txQueue->updateConsensusNodeInfo(_consensusNodes);
         if (!m_syncTreeRouter)
@@ -246,17 +246,17 @@ public:
     }
 
     bool syncTreeRouterEnabled() override { return (m_syncTreeRouter != nullptr); }
-    void noteForwardRemainTxs(dev::h512 const& _targetNodeId) override
+    void noteForwardRemainTxs(bcos::h512 const& _targetNodeId) override
     {
         m_syncTrans->noteForwardRemainTxs(_targetNodeId);
     }
 
-    void setBandwidthLimiter(dev::flowlimit::RateLimiter::Ptr _bandwidthLimiter)
+    void setBandwidthLimiter(bcos::flowlimit::RateLimiter::Ptr _bandwidthLimiter)
     {
         m_bandwidthLimiter = _bandwidthLimiter;
     }
 
-    void setNodeBandwidthLimiter(dev::flowlimit::RateLimiter::Ptr _nodeBandwidthLimiter)
+    void setNodeBandwidthLimiter(bcos::flowlimit::RateLimiter::Ptr _nodeBandwidthLimiter)
     {
         m_nodeBandwidthLimiter = _nodeBandwidthLimiter;
     }
@@ -279,13 +279,13 @@ protected:
 
 private:
     /// p2p service handler
-    std::shared_ptr<dev::p2p::P2PInterface> m_service;
+    std::shared_ptr<bcos::p2p::P2PInterface> m_service;
     /// transaction pool handler
-    std::shared_ptr<dev::txpool::TxPoolInterface> m_txPool;
+    std::shared_ptr<bcos::txpool::TxPoolInterface> m_txPool;
     /// handler of the block chain module
-    std::shared_ptr<dev::blockchain::BlockChainInterface> m_blockChain;
+    std::shared_ptr<bcos::blockchain::BlockChainInterface> m_blockChain;
     /// block verifier
-    std::shared_ptr<dev::blockverifier::BlockVerifierInterface> m_blockVerifier;
+    std::shared_ptr<bcos::blockverifier::BlockVerifierInterface> m_blockVerifier;
 
     /// Downloading txs queue
     std::shared_ptr<DownloadingTxsQueue> m_txQueue;
@@ -296,8 +296,8 @@ private:
     /// Message handler of p2p
     std::shared_ptr<SyncMsgEngine> m_msgEngine;
 
-    dev::ThreadPool::Ptr m_downloadBlockProcessor = nullptr;
-    dev::ThreadPool::Ptr m_sendBlockProcessor = nullptr;
+    bcos::ThreadPool::Ptr m_downloadBlockProcessor = nullptr;
+    bcos::ThreadPool::Ptr m_sendBlockProcessor = nullptr;
 
     // Internal data
     PROTOCOL_ID m_protocolId;
@@ -338,13 +338,13 @@ private:
     GossipBlockStatus::Ptr m_blockStatusGossipThread = nullptr;
 
     // settings
-    dev::eth::Handler<int64_t> m_blockSubmitted;
+    bcos::eth::Handler<int64_t> m_blockSubmitted;
 
     // verify handler to check downloading block
-    std::function<bool(dev::eth::Block const&)> fp_isConsensusOk = nullptr;
+    std::function<bool(bcos::eth::Block const&)> fp_isConsensusOk = nullptr;
 
-    dev::flowlimit::RateLimiter::Ptr m_bandwidthLimiter;
-    dev::flowlimit::RateLimiter::Ptr m_nodeBandwidthLimiter;
+    bcos::flowlimit::RateLimiter::Ptr m_bandwidthLimiter;
+    bcos::flowlimit::RateLimiter::Ptr m_nodeBandwidthLimiter;
     NodeTimeMaintenance::Ptr m_nodeTimeMaintenance;
 
 public:
@@ -361,4 +361,4 @@ private:
 };
 
 }  // namespace sync
-}  // namespace dev
+}  // namespace bcos

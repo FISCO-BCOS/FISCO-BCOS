@@ -24,16 +24,16 @@
 #pragma once
 #include "LedgerParamInterface.h"
 #include <libblockchain/BlockChainInterface.h>
-#include <libdevcore/FixedHash.h>
 #include <libethcore/EVMFlags.h>
 #include <libethcore/Protocol.h>
+#include <libutilities/FixedHash.h>
 #include <memory>
 #include <vector>
 
 #define LedgerParam_LOG(LEVEL) \
     LOG(LEVEL) << "[g:" << std::to_string(groupId()) << "]" << LOG_BADGE("LedgerParam")
 
-namespace dev
+namespace bcos
 {
 namespace ledger
 {
@@ -53,8 +53,8 @@ struct ConsensusParam
 {
     // consensus related genesis param
     std::string consensusType;
-    dev::h512s sealerList = dev::h512s();
-    dev::h512s observerList = dev::h512s();
+    bcos::h512s sealerList = bcos::h512s();
+    bcos::h512s observerList = bcos::h512s();
     // default consensus timeout time is 3s
     int64_t consensusTimeout = 3;
     int64_t maxTransactions;
@@ -124,7 +124,7 @@ struct GenesisParam
     // evm related flags
     // Extensible parameters for passing VM configuration
     // bit 64 is currently occupied, indicating whether to use FreeStorageVMSchedule
-    dev::VMFlagType evmFlags = 0;
+    bcos::VMFlagType evmFlags = 0;
 };
 
 struct EventLogFilterManagerParams
@@ -182,7 +182,7 @@ struct FlowControlParam
 
 struct PermissionParam
 {
-    dev::h512s sdkAllowList;
+    bcos::h512s sdkAllowList;
 };
 
 class LedgerParam : public LedgerParamInterface
@@ -206,13 +206,13 @@ public:
     void parseGenesisConfig(const std::string& _genesisFile);
     void parseIniConfig(const std::string& _iniFile, const std::string& _dataPath = "data/");
     void init(const std::string& _configFilePath, const std::string& _dataPath = "data/");
-    const dev::GROUP_ID& groupId() const { return m_groupID; }
+    const bcos::GROUP_ID& groupId() const { return m_groupID; }
 
     std::string& mutableGenesisMark() override { return m_genesisMark; }
     PermissionParam& mutablePermissionParam() override { return m_permissionParam; }
     void generateGenesisMark();
 
-    void parseSDKAllowList(dev::h512s& _nodeList, boost::property_tree::ptree const& _pt) override;
+    void parseSDKAllowList(bcos::h512s& _nodeList, boost::property_tree::ptree const& _pt) override;
 
     std::string const& iniConfigPath() override { return m_iniConfigPath; }
     std::string const& genesisConfigPath() override { return m_genesisConfigPath; }
@@ -228,11 +228,11 @@ private:
     void initEventLogFilterManagerConfig(boost::property_tree::ptree const& pt);
     void initFlowControlConfig(boost::property_tree::ptree const& _pt);
     void setEVMFlags(boost::property_tree::ptree const& _pt);
-    void parsePublicKeyListOfSection(dev::h512s& _nodeList, boost::property_tree::ptree const& _pt,
+    void parsePublicKeyListOfSection(bcos::h512s& _nodeList, boost::property_tree::ptree const& _pt,
         std::string const& _sectionName, std::string const& _subSectionName);
 
 private:
-    dev::GROUP_ID m_groupID;
+    bcos::GROUP_ID m_groupID;
     TxPoolParam m_txPoolParam;
     ConsensusParam m_consensusParam;
     SyncParam m_syncParam;
@@ -254,4 +254,4 @@ private:
     std::string uriEncode(const std::string& keyWord);
 };
 }  // namespace ledger
-}  // namespace dev
+}  // namespace bcos

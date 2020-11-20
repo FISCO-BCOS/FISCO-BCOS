@@ -26,9 +26,9 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev;
-using namespace dev::blockverifier;
-using namespace dev::precompiled;
+using namespace bcos;
+using namespace bcos::blockverifier;
+using namespace bcos::precompiled;
 
 namespace test_PaillierPrecompiled
 {
@@ -39,9 +39,9 @@ struct PaillierPrecompiledFixture
         context = std::make_shared<ExecutiveContext>();
         paillierPrecompiled = std::make_shared<PaillierPrecompiled>();
 
-        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
+        auto precompiledGasFactory = std::make_shared<bcos::precompiled::PrecompiledGasFactory>(0);
         auto precompiledExecResultFactory =
-            std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+            std::make_shared<bcos::precompiled::PrecompiledExecResultFactory>();
         precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
         paillierPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     }
@@ -113,7 +113,7 @@ BOOST_AUTO_TEST_CASE(TestHomAdd)
         "1E2923D76CEE5171043E4D9D25BC0257FEBF113A9868494CB6BF6C8E5CBADE5478B65806ADB3825F1537D19DE0"
         "FE34667819DCC1893A8B6F5C1C37AB54EAA2D012D21CB6BF4DC88004FF2EF9EE836F3CC73F0D4DB13D1B5B8992"
         "C0D1C97483";
-    dev::eth::ContractABI abi;
+    bcos::eth::ContractABI abi;
     bytes in = abi.abiIn("paillierAdd(string,string)", cipher1, cipher2);
     auto callResult = paillierPrecompiled->call(context, bytesConstRef(&in));
     bytes out = callResult->execResult();
@@ -124,7 +124,7 @@ BOOST_AUTO_TEST_CASE(TestHomAdd)
 
 BOOST_AUTO_TEST_CASE(ErrorFunc)
 {
-    dev::eth::ContractABI abi;
+    bcos::eth::ContractABI abi;
     bytes in = abi.abiIn("add(string,string)", std::string("2AE3FFE2"), std::string("2AE3FFE2"));
     auto callResult = paillierPrecompiled->call(context, bytesConstRef(&in));
     bytes out = callResult->execResult();
@@ -143,7 +143,7 @@ BOOST_AUTO_TEST_CASE(ErrorFunc)
 BOOST_AUTO_TEST_CASE(InvalidInputs)
 {
     // situation1
-    dev::eth::ContractABI abi;
+    bcos::eth::ContractABI abi;
     bytes in = abi.abiIn(
         "paillierAdd(string,string)", std::string("2AE3FFE2"), std::string("2AE3FFE22AE3FFE2"));
     auto callResult = paillierPrecompiled->call(context, bytesConstRef(&in));

@@ -32,8 +32,8 @@
 #include <sstream>
 #include <string>
 
-using namespace dev;
-using namespace dev::ledger;
+using namespace bcos;
+using namespace bcos::ledger;
 using namespace std;
 namespace fs = boost::filesystem;
 
@@ -50,7 +50,7 @@ string LedgerManager::generateAndGetGroupStatusFile(GROUP_ID const& _groupID) co
     return statusFilePath.string();
 }
 
-bool LedgerManager::isGroupExist(dev::GROUP_ID const& _groupID) const
+bool LedgerManager::isGroupExist(bcos::GROUP_ID const& _groupID) const
 {
     RecursiveGuard l(x_ledgerManager);
     auto statusFilePath = fs::path(g_BCOSConfig.dataDir());
@@ -62,7 +62,7 @@ bool LedgerManager::isGroupExist(dev::GROUP_ID const& _groupID) const
     return true;
 }
 
-LedgerStatus LedgerManager::queryGroupStatus(dev::GROUP_ID const& _groupID)
+LedgerStatus LedgerManager::queryGroupStatus(bcos::GROUP_ID const& _groupID)
 {
     RecursiveGuard l(x_ledgerManager);
     if (!isGroupExist(_groupID))
@@ -102,7 +102,7 @@ LedgerStatus LedgerManager::queryGroupStatus(dev::GROUP_ID const& _groupID)
     BOOST_THROW_EXCEPTION(UnknownGroupStatus());
 }
 
-void LedgerManager::setGroupStatus(dev::GROUP_ID const& _groupID, LedgerStatus _status)
+void LedgerManager::setGroupStatus(bcos::GROUP_ID const& _groupID, LedgerStatus _status)
 {
     // this method assumes that caller has already acquired x_ledgerManager
 
@@ -135,7 +135,7 @@ void LedgerManager::setGroupStatus(dev::GROUP_ID const& _groupID, LedgerStatus _
     }
 }
 
-void LedgerManager::checkGroupStatus(dev::GROUP_ID const& _groupID, LedgerStatus _allowedStatus)
+void LedgerManager::checkGroupStatus(bcos::GROUP_ID const& _groupID, LedgerStatus _allowedStatus)
 {
     auto status = queryGroupStatus(_groupID);
 
@@ -161,7 +161,7 @@ void LedgerManager::checkGroupStatus(dev::GROUP_ID const& _groupID, LedgerStatus
     }
 }
 
-void LedgerManager::generateGroup(dev::GROUP_ID _groupID, const GroupParams& _params)
+void LedgerManager::generateGroup(bcos::GROUP_ID _groupID, const GroupParams& _params)
 {
     RecursiveGuard l(x_ledgerManager);
     checkGroupStatus(_groupID, LedgerStatus::INEXISTENT);
@@ -195,7 +195,7 @@ void LedgerManager::generateGroup(dev::GROUP_ID _groupID, const GroupParams& _pa
     setGroupStatus(_groupID, LedgerStatus::STOPPED);
 }
 
-string LedgerManager::generateGenesisConfig(dev::GROUP_ID _groupID, const GroupParams& _params)
+string LedgerManager::generateGenesisConfig(bcos::GROUP_ID _groupID, const GroupParams& _params)
 {
     static string configTemplate =
         "[consensus]\n"
@@ -359,7 +359,7 @@ void LedgerManager::stopByGroupID(GROUP_ID const& _groupID)
     MallocExtension::instance()->ReleaseFreeMemory();
 }
 
-void LedgerManager::removeByGroupID(dev::GROUP_ID const& _groupID)
+void LedgerManager::removeByGroupID(bcos::GROUP_ID const& _groupID)
 {
     RecursiveGuard l(x_ledgerManager);
     checkGroupStatus(_groupID, LedgerStatus::STOPPED);
@@ -367,7 +367,7 @@ void LedgerManager::removeByGroupID(dev::GROUP_ID const& _groupID)
     setGroupStatus(_groupID, LedgerStatus::DELETED);
 }
 
-void LedgerManager::recoverByGroupID(dev::GROUP_ID const& _groupID)
+void LedgerManager::recoverByGroupID(bcos::GROUP_ID const& _groupID)
 {
     RecursiveGuard l(x_ledgerManager);
     checkGroupStatus(_groupID, LedgerStatus::DELETED);
@@ -375,9 +375,9 @@ void LedgerManager::recoverByGroupID(dev::GROUP_ID const& _groupID)
     setGroupStatus(_groupID, LedgerStatus::STOPPED);
 }
 
-std::set<dev::GROUP_ID> LedgerManager::getGroupListForRpc() const
+std::set<bcos::GROUP_ID> LedgerManager::getGroupListForRpc() const
 {
-    std::set<dev::GROUP_ID> groupList;
+    std::set<bcos::GROUP_ID> groupList;
     for (auto const& ledger : m_ledgerMap)
     {
         // check sealer list

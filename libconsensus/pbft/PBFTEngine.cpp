@@ -24,18 +24,18 @@
 #include "PBFTEngine.h"
 #include "libdevcrypto/CryptoInterface.h"
 #include <libconfig/GlobalConfigure.h>
-#include <libdevcore/CommonJS.h>
 #include <libethcore/CommonJS.h>
 #include <libtxpool/TxPool.h>
-using namespace dev::eth;
-using namespace dev::db;
-using namespace dev::blockverifier;
-using namespace dev::blockchain;
-using namespace dev::p2p;
-using namespace dev::storage;
+#include <libutilities/CommonJS.h>
+using namespace bcos::eth;
+using namespace bcos::db;
+using namespace bcos::blockverifier;
+using namespace bcos::blockchain;
+using namespace bcos::p2p;
+using namespace bcos::storage;
 using namespace rocksdb;
 
-namespace dev
+namespace bcos
 {
 namespace consensus
 {
@@ -303,9 +303,9 @@ void PBFTEngine::backupMsg(std::string const& _key, std::shared_ptr<bytes> _msg)
     }
 }
 
-PrepareReq::Ptr PBFTEngine::constructPrepareReq(dev::eth::Block::Ptr _block)
+PrepareReq::Ptr PBFTEngine::constructPrepareReq(bcos::eth::Block::Ptr _block)
 {
-    dev::eth::Block::Ptr engineBlock = m_blockFactory->createBlock();
+    bcos::eth::Block::Ptr engineBlock = m_blockFactory->createBlock();
     *engineBlock = std::move(*_block);
     PrepareReq::Ptr prepareReq = std::make_shared<PrepareReq>(
         engineBlock, m_keyPair, m_view, nodeIdx(), m_enablePrepareWithTxsHash);
@@ -370,13 +370,13 @@ PrepareReq::Ptr PBFTEngine::constructPrepareReq(dev::eth::Block::Ptr _block)
 
 // broadcast prepare message to all the other nodes
 void PBFTEngine::sendPrepareMsgFromLeader(
-    PrepareReq::Ptr _prepareReq, bytesConstRef _data, dev::PACKET_TYPE const& _p2pPacketType)
+    PrepareReq::Ptr _prepareReq, bytesConstRef _data, bcos::PACKET_TYPE const& _p2pPacketType)
 {
     broadcastMsg(PrepareReqPacket, *_prepareReq, _data, _p2pPacketType);
 }
 
 /// sealing the generated block into prepareReq and push its to msgQueue
-bool PBFTEngine::generatePrepare(dev::eth::Block::Ptr _block)
+bool PBFTEngine::generatePrepare(bcos::eth::Block::Ptr _block)
 {
     Guard l(m_mutex);
     m_notifyNextLeaderSeal = false;
@@ -432,10 +432,10 @@ bool PBFTEngine::checkSign(PBFTMsg const& req) const
     h512 node_id;
     if (getNodeIDByIndex(node_id, req.idx))
     {
-        return dev::crypto::Verify(
-                   node_id, dev::crypto::SignatureFromBytes(req.sig), req.block_hash) &&
-               dev::crypto::Verify(
-                   node_id, dev::crypto::SignatureFromBytes(req.sig2), req.fieldsWithoutBlock());
+        return bcos::crypto::Verify(
+                   node_id, bcos::crypto::SignatureFromBytes(req.sig), req.block_hash) &&
+               bcos::crypto::Verify(
+                   node_id, bcos::crypto::SignatureFromBytes(req.sig2), req.fieldsWithoutBlock());
     }
     return false;
 }
@@ -458,7 +458,7 @@ bool PBFTEngine::broadcastCommitReq(PrepareReq const& req)
 
 
 /// send view change message to the given node
-void PBFTEngine::sendViewChangeMsg(dev::network::NodeID const& nodeId)
+void PBFTEngine::sendViewChangeMsg(bcos::network::NodeID const& nodeId)
 {
     ViewChangeReq req(
         m_keyPair, m_highestBlock.number(), m_toView, nodeIdx(), m_highestBlock.hash());
@@ -505,9 +505,9 @@ bool PBFTEngine::broadcastViewChangeReq()
 }
 
 /// set default ttl to 1 to in case of forward-broadcast
-bool PBFTEngine::sendMsg(dev::network::NodeID const& nodeId, unsigned const& packetType,
+bool PBFTEngine::sendMsg(bcos::network::NodeID const& nodeId, unsigned const& packetType,
     std::string const& key, bytesConstRef data, unsigned const& ttl,
-    std::shared_ptr<dev::h512s> forwardNodes)
+    std::shared_ptr<bcos::h512s> forwardNodes)
 {
     /// is sealer?
     if (getIndexBySealer(nodeId) < 0)
@@ -555,8 +555,8 @@ bool PBFTEngine::sendMsg(dev::network::NodeID const& nodeId, unsigned const& pac
  */
 bool PBFTEngine::broadcastMsg(unsigned const& packetType, PBFTMsg const& _pbftMsg,
     bytesConstRef data, PACKET_TYPE const& _p2pPacketType,
-    std::unordered_set<dev::network::NodeID> const& filter, unsigned const& ttl,
-    std::function<ssize_t(dev::network::NodeID const&)> const& filterFunction)
+    std::unordered_set<bcos::network::NodeID> const& filter, unsigned const& ttl,
+    std::function<ssize_t(bcos::network::NodeID const&)> const& filterFunction)
 {
     auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
     m_connectedNode = sessions.size();
@@ -592,11 +592,11 @@ bool PBFTEngine::broadcastMsg(unsigned const& packetType, PBFTMsg const& _pbftMs
     return true;
 }
 
-void PBFTEngine::broadcastMsg(dev::h512s const& _targetNodes, bytesConstRef _data,
+void PBFTEngine::broadcastMsg(bcos::h512s const& _targetNodes, bytesConstRef _data,
     unsigned const& _packetType, unsigned const& _ttl, PACKET_TYPE const& _p2pPacketType,
     PBFTMsg const& _pbftMsg)
 {
-    std::shared_ptr<dev::h512s> forwardNodes = nullptr;
+    std::shared_ptr<bcos::h512s> forwardNodes = nullptr;
     if (m_enableTTLOptimize)
     {
         // get the forwardNodes
@@ -783,12 +783,12 @@ bool PBFTEngine::checkBlock(Block const& block)
     return true;
 }
 
-bool PBFTEngine::checkSign(IDXTYPE const& _idx, dev::h256 const& _hash, bytes const& _sig)
+bool PBFTEngine::checkSign(IDXTYPE const& _idx, bcos::h256 const& _hash, bytes const& _sig)
 {
     h512 nodeId;
     if (getNodeIDByIndex(nodeId, _idx))
     {
-        return dev::crypto::Verify(nodeId, dev::crypto::SignatureFromBytes(_sig), _hash);
+        return bcos::crypto::Verify(nodeId, bcos::crypto::SignatureFromBytes(_sig), _hash);
     }
     return false;
 }
@@ -797,7 +797,7 @@ bool PBFTEngine::checkSign(IDXTYPE const& _idx, dev::h256 const& _hash, bytes co
  * @brief: notify the seal module to seal block if the current node is the next leader
  * @param block: block obtained from the prepare packet, used to filter transactions
  */
-void PBFTEngine::notifySealing(dev::eth::Block const& block)
+void PBFTEngine::notifySealing(bcos::eth::Block const& block)
 {
     if (!m_onNotifyNextLeaderReset)
     {
@@ -953,8 +953,8 @@ void PBFTEngine::pushValidPBFTMsgIntoQueue(NetworkException, std::shared_ptr<P2P
     }
 }
 
-void PBFTEngine::onRecvPBFTMessage(dev::p2p::NetworkException _exception,
-    std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message)
+void PBFTEngine::onRecvPBFTMessage(bcos::p2p::NetworkException _exception,
+    std::shared_ptr<bcos::p2p::P2PSession> _session, bcos::p2p::P2PMessage::Ptr _message)
 {
     return pushValidPBFTMsgIntoQueue(_exception, _session, _message, nullptr);
 }
@@ -1037,7 +1037,7 @@ void PBFTEngine::addRawPrepare(PrepareReq::Ptr _prepareReq)
 bool PBFTEngine::execPrepareAndGenerateSignMsg(
     PrepareReq::Ptr _prepareReq, std::ostringstream& _oss)
 {
-    Timer t;
+    auto recordT = utcTime();
     Sealing workingSealing(m_blockFactory);
     try
     {
@@ -1078,7 +1078,7 @@ bool PBFTEngine::execPrepareAndGenerateSignMsg(
 
     // destroy ExecutiveContext in m_destructorThread
     auto execContext = m_reqCache->prepareCache().p_execContext;
-    HolderForDestructor<dev::blockverifier::ExecutiveContext> holder(std::move(execContext));
+    HolderForDestructor<bcos::blockverifier::ExecutiveContext> holder(std::move(execContext));
     m_destructorThread->enqueue(std::move(holder));
 
     m_reqCache->addPrepareReq(sign_prepare);
@@ -1093,8 +1093,8 @@ bool PBFTEngine::execPrepareAndGenerateSignMsg(
     broadcastSignReq(*sign_prepare);
 
     checkAndCommit();
-    PBFTENGINE_LOG(INFO) << LOG_DESC("handlePrepareMsg Succ")
-                         << LOG_KV("Timecost", 1000 * t.elapsed()) << LOG_KV("INFO", _oss.str());
+    PBFTENGINE_LOG(INFO) << LOG_DESC("handlePrepareMsg Succ") << LOG_KV("INFO", _oss.str())
+                         << LOG_KV("cost", (utcTime() - recordT));
     return true;
 }
 
@@ -1203,7 +1203,7 @@ void PBFTEngine::checkAndSave()
         if (m_reqCache->prepareCache().height > m_highestBlock.number())
         {
             /// Block block(m_reqCache->prepareCache().block);
-            std::shared_ptr<dev::eth::Block> p_block = m_reqCache->prepareCache().pBlock;
+            std::shared_ptr<bcos::eth::Block> p_block = m_reqCache->prepareCache().pBlock;
             m_reqCache->generateAndSetSigList(*p_block, minValidNodes());
             auto genSig_time_cost = utcTime() - record_time;
             record_time = utcTime();
@@ -1315,7 +1315,7 @@ void PBFTEngine::reportBlockWithoutLock(Block const& block)
  */
 bool PBFTEngine::handleSignMsg(SignReq::Ptr sign_req, PBFTMsgPacket const& pbftMsg)
 {
-    Timer t;
+    auto startT = utcTime();
     bool valid = decodeToRequests(*sign_req, ref(pbftMsg.data));
     if (!valid)
     {
@@ -1342,8 +1342,8 @@ bool PBFTEngine::handleSignMsg(SignReq::Ptr sign_req, PBFTMsgPacket const& pbftM
     m_reqCache->addSignReq(sign_req);
 
     checkAndCommit();
-    PBFTENGINE_LOG(INFO) << LOG_DESC("handleSignMsg Succ") << LOG_KV("Timecost", 1000 * t.elapsed())
-                         << LOG_KV("INFO", oss.str());
+    PBFTENGINE_LOG(INFO) << LOG_DESC("handleSignMsg Succ") << LOG_KV("INFO", oss.str())
+                         << LOG_KV("cost", utcTime() - startT);
     return true;
 }
 
@@ -1391,7 +1391,7 @@ CheckResult PBFTEngine::isValidSignReq(SignReq::Ptr req, std::ostringstream& oss
  */
 bool PBFTEngine::handleCommitMsg(CommitReq::Ptr commit_req, PBFTMsgPacket const& pbftMsg)
 {
-    Timer t;
+    auto startT = utcTime();
     bool valid = decodeToRequests(*commit_req, ref(pbftMsg.data));
     if (!valid)
     {
@@ -1419,7 +1419,7 @@ bool PBFTEngine::handleCommitMsg(CommitReq::Ptr commit_req, PBFTMsgPacket const&
     m_reqCache->addCommitReq(commit_req);
     checkAndSave();
     PBFTENGINE_LOG(INFO) << LOG_DESC("handleCommitMsg Succ") << LOG_KV("INFO", oss.str())
-                         << LOG_KV("Timecost", 1000 * t.elapsed());
+                         << LOG_KV("cost", utcTime() - startT);
     return true;
 }
 
@@ -1551,7 +1551,7 @@ void PBFTEngine::catchupView(ViewChangeReq const& req, std::ostringstream& oss)
     {
         PBFTENGINE_LOG(INFO) << LOG_DESC("catchupView") << LOG_KV("toView", m_toView)
                              << LOG_KV("INFO", oss.str());
-        dev::network::NodeID nodeId;
+        bcos::network::NodeID nodeId;
         bool succ = getNodeIDByIndex(nodeId, req.idx);
         if (succ)
         {
@@ -1598,7 +1598,7 @@ void PBFTEngine::collectGarbage()
     {
         return;
     }
-    Timer t;
+    auto startT = utcTime();
     std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
     if (now - m_timeManager.m_lastGarbageCollection >
         std::chrono::seconds(m_timeManager.CollectInterval))
@@ -1609,12 +1609,8 @@ void PBFTEngine::collectGarbage()
         m_reqCache->collectGarbage(m_highestBlock);
         // clear m_cachedForwardMsg directly
         m_cachedForwardMsg->clear();
-        // clear all the future prepare directly
-
-        m_timeManager.m_lastGarbageCollection = now;
-        PBFTENGINE_LOG(DEBUG) << LOG_DESC("collectGarbage")
-                              << LOG_KV("Timecost", 1000 * t.elapsed());
     }
+    PBFTENGINE_LOG(INFO) << LOG_DESC("collectGarbage") << LOG_KV("cost", utcTime() - startT);
 }
 
 void PBFTEngine::checkTimeout()
@@ -1637,7 +1633,7 @@ void PBFTEngine::checkTimeout()
                 }
             }
             m_timeManager.updateChangeCycle();
-            Timer t;
+            auto startT = utcTime();
             m_toView += 1;
             m_leaderFailed = true;
             m_blockSync->noteSealingBlockNumber(m_blockChain->number());
@@ -1655,7 +1651,7 @@ void PBFTEngine::checkTimeout()
                                  << LOG_KV("toView", m_toView) << LOG_KV("nodeIdx", nodeIdx())
                                  << LOG_KV("changeCycle", m_timeManager.m_changeCycle)
                                  << LOG_KV("myNode", m_keyPair.pub().abridged())
-                                 << LOG_KV("timecost", t.elapsed() * 1000);
+                                 << LOG_KV("cost", utcTime() - startT);
         }
     }
     if (flag && m_onViewChange)
@@ -1848,10 +1844,10 @@ void PBFTEngine::getAllNodesViewStatus(Json::Value& status)
     for (auto it : m_viewMap)
     {
         Json::Value view_obj;
-        dev::network::NodeID node_id = getSealerByIndex(it.first);
-        if (node_id != dev::network::NodeID())
+        bcos::network::NodeID node_id = getSealerByIndex(it.first);
+        if (node_id != bcos::network::NodeID())
         {
-            view_obj["nodeId"] = dev::toHex(node_id);
+            view_obj["nodeId"] = bcos::toHex(node_id);
             view_obj["view"] = it.second;
             view_array.append(view_obj);
         }
@@ -1861,7 +1857,7 @@ void PBFTEngine::getAllNodesViewStatus(Json::Value& status)
 
 
 PBFTMsgPacket::Ptr PBFTEngine::createPBFTMsgPacket(bytesConstRef data,
-    PACKET_TYPE const& packetType, unsigned const& ttl, std::shared_ptr<dev::h512s> _forwardNodes)
+    PACKET_TYPE const& packetType, unsigned const& ttl, std::shared_ptr<bcos::h512s> _forwardNodes)
 {
     PBFTMsgPacket::Ptr pbftPacket = m_pbftMsgFactory->createPBFTMsgPacket();
     pbftPacket->data = data.toBytes();
@@ -1879,14 +1875,14 @@ PBFTMsgPacket::Ptr PBFTEngine::createPBFTMsgPacket(bytesConstRef data,
 }
 
 P2PMessage::Ptr PBFTEngine::transDataToMessage(bytesConstRef _data, PACKET_TYPE const& _packetType,
-    unsigned const& _ttl, std::shared_ptr<dev::h512s> _forwardNodes)
+    unsigned const& _ttl, std::shared_ptr<bcos::h512s> _forwardNodes)
 {
     P2PMessage::Ptr message =
         std::dynamic_pointer_cast<P2PMessage>(m_service->p2pMessageFactory()->buildMessage());
     bytes ret_data;
     PBFTMsgPacket::Ptr pbftPacket = createPBFTMsgPacket(_data, _packetType, _ttl, _forwardNodes);
     pbftPacket->encode(ret_data);
-    std::shared_ptr<dev::bytes> p_data = std::make_shared<dev::bytes>(std::move(ret_data));
+    std::shared_ptr<bcos::bytes> p_data = std::make_shared<bcos::bytes>(std::move(ret_data));
     message->setBuffer(p_data);
     message->setProtocolID(m_protocolId);
     return message;
@@ -1906,10 +1902,10 @@ void PBFTEngine::createPBFTMsgFactory()
 
 // get the forwardNodes
 // _printLog is true when viewChangeWarning to show more detailed info
-std::shared_ptr<dev::h512s> PBFTEngine::getForwardNodes(bool const& _printLog)
+std::shared_ptr<bcos::h512s> PBFTEngine::getForwardNodes(bool const& _printLog)
 {
     auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
-    std::shared_ptr<dev::h512s> forwardNodes = nullptr;
+    std::shared_ptr<bcos::h512s> forwardNodes = nullptr;
     std::set<h512> consensusNodes;
     {
         ReadGuard l(x_consensusSet);
@@ -1932,7 +1928,7 @@ std::shared_ptr<dev::h512s> PBFTEngine::getForwardNodes(bool const& _printLog)
     consensusNodes.erase(m_keyPair.pub());
     if (consensusNodes.size() > 0)
     {
-        forwardNodes = std::make_shared<dev::h512s>();
+        forwardNodes = std::make_shared<bcos::h512s>();
         forwardNodes->resize(consensusNodes.size());
         std::copy(consensusNodes.begin(), consensusNodes.end(), forwardNodes->begin());
         if (_printLog)
@@ -1964,8 +1960,8 @@ void PBFTEngine::forwardMsgByNodeInfo(
     auto sessions = m_service->sessionInfosByProtocolID(m_protocolId);
     // get the forwardNodes from the _pbftMsgPacket
     // find the remaining forwardNodes
-    std::shared_ptr<std::set<dev::h512>> remainingForwardNodes =
-        std::make_shared<std::set<dev::h512>>(
+    std::shared_ptr<std::set<bcos::h512>> remainingForwardNodes =
+        std::make_shared<std::set<bcos::h512>>(
             _pbftMsgPacket->forwardNodes->begin(), _pbftMsgPacket->forwardNodes->end());
     // send message to the forwardNodes
     for (auto const& session : sessions)
@@ -2022,10 +2018,10 @@ void PBFTEngine::resetConfig()
     ReadGuard rl(m_sealerListMutex);
     m_consensusSet->insert(m_sealerList.begin(), m_sealerList.end());
 }
-dev::p2p::P2PMessage::Ptr PBFTEngine::toP2PMessage(
+bcos::p2p::P2PMessage::Ptr PBFTEngine::toP2PMessage(
     std::shared_ptr<bytes> _data, PACKET_TYPE const& _packetType)
 {
-    dev::p2p::P2PMessage::Ptr message = std::dynamic_pointer_cast<dev::p2p::P2PMessage>(
+    bcos::p2p::P2PMessage::Ptr message = std::dynamic_pointer_cast<bcos::p2p::P2PMessage>(
         m_service->p2pMessageFactory()->buildMessage());
     message->setBuffer(_data);
     message->setPacketType(_packetType);
@@ -2033,13 +2029,13 @@ dev::p2p::P2PMessage::Ptr PBFTEngine::toP2PMessage(
     return message;
 }
 
-dev::h512 PBFTEngine::selectNodeToRequestMissedTxs(PrepareReq::Ptr _prepareReq)
+bcos::h512 PBFTEngine::selectNodeToRequestMissedTxs(PrepareReq::Ptr _prepareReq)
 {
     // can't find the node that generate the prepareReq
     h512 targetNode;
     if (!getNodeIDByIndex(targetNode, _prepareReq->idx))
     {
-        return dev::h512();
+        return bcos::h512();
     }
     return targetNode;
 }
@@ -2110,7 +2106,7 @@ bool PBFTEngine::requestMissedTxs(PrepareReq::Ptr _prepareReq)
 {
     // can't find the node that generate the prepareReq
     h512 targetNode = selectNodeToRequestMissedTxs(_prepareReq);
-    if (targetNode == dev::h512())
+    if (targetNode == bcos::h512())
     {
         return false;
     }
@@ -2141,7 +2137,7 @@ bool PBFTEngine::requestMissedTxs(PrepareReq::Ptr _prepareReq)
 void PBFTEngine::forwardPrepareMsg(PBFTMsgPacket::Ptr _pbftMsgPacket, PrepareReq::Ptr _prepareReq)
 {
     // forward the message
-    std::shared_ptr<dev::bytes> encodedBytes = std::make_shared<dev::bytes>();
+    std::shared_ptr<bcos::bytes> encodedBytes = std::make_shared<bcos::bytes>();
     _prepareReq->pBlock->encode(*(_prepareReq->block));
     _prepareReq->encode(*encodedBytes);
     if (m_enableTTLOptimize)
@@ -2250,7 +2246,7 @@ void PBFTEngine::handleP2PMessage(
 
 
 bool PBFTEngine::handlePartiallyPrepare(
-    std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _message)
+    std::shared_ptr<bcos::p2p::P2PSession> _session, bcos::p2p::P2PMessage::Ptr _message)
 {
     return handleReceivedPartiallyPrepare(_session, _message, nullptr);
 }
@@ -2366,7 +2362,7 @@ void PBFTEngine::resetConsensusTimeout()
         return;
     }
     auto consensusTimeoutStr =
-        m_blockChain->getSystemConfigByKey(dev::precompiled::SYSTEM_KEY_CONSENSUS_TIMEOUT);
+        m_blockChain->getSystemConfigByKey(bcos::precompiled::SYSTEM_KEY_CONSENSUS_TIMEOUT);
     uint64_t consensusTimeout = boost::lexical_cast<uint64_t>(consensusTimeoutStr) * 1000;
 
     // Prevent external users from modifying the empty block time by modifying the code
@@ -2385,4 +2381,4 @@ void PBFTEngine::resetConsensusTimeout()
 }
 
 }  // namespace consensus
-}  // namespace dev
+}  // namespace bcos

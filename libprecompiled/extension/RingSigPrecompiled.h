@@ -23,7 +23,7 @@
 #include <libblockverifier/ExecutiveContext.h>
 #include <libprecompiled/Common.h>
 
-namespace dev
+namespace bcos
 {
 namespace precompiled
 {
@@ -34,17 +34,17 @@ contract RingSig
 }
 #endif
 
-class RingSigPrecompiled : public dev::precompiled::Precompiled
+class RingSigPrecompiled : public bcos::precompiled::Precompiled
 {
 public:
     typedef std::shared_ptr<RingSigPrecompiled> Ptr;
     RingSigPrecompiled();
     virtual ~RingSigPrecompiled(){};
 
-    PrecompiledExecResult::Ptr call(std::shared_ptr<dev::blockverifier::ExecutiveContext> context,
+    PrecompiledExecResult::Ptr call(std::shared_ptr<bcos::blockverifier::ExecutiveContext> context,
         bytesConstRef param, Address const& origin = Address(),
         Address const& sender = Address()) override;
 };
 
 }  // namespace precompiled
-}  // namespace dev
+}  // namespace bcos

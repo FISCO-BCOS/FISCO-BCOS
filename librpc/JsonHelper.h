@@ -23,12 +23,12 @@
 #include <json/json.h>
 #include <libethcore/Common.h>
 
-namespace dev
+namespace bcos
 {
 namespace rpc
 {
-dev::eth::TransactionSkeleton toTransactionSkeleton(Json::Value const& _json);
+bcos::eth::TransactionSkeleton toTransactionSkeleton(Json::Value const& _json);
 
 }  // namespace rpc
 
-}  // namespace dev
+}  // namespace bcos

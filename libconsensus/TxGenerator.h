@@ -25,7 +25,7 @@
 #include <libethcore/Transaction.h>
 
 #define TXGEN_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("TxGenerator")
-namespace dev
+namespace bcos
 {
 namespace consensus
 {
@@ -39,14 +39,14 @@ public:
 
     // Specify interface declarations, from and to, generate unsigned transactions
     template <class... T>
-    dev::eth::Transaction::Ptr generateTransactionWithoutSig(std::string _interface,
-        dev::eth::BlockNumber const& _currentNumber, Address const& _to,
-        dev::eth::Transaction::Type const& _type, T const&... _params)
+    bcos::eth::Transaction::Ptr generateTransactionWithoutSig(std::string _interface,
+        bcos::eth::BlockNumber const& _currentNumber, Address const& _to,
+        bcos::eth::Transaction::Type const& _type, T const&... _params)
     {
-        dev::eth::Transaction::Ptr generatedTx = std::make_shared<dev::eth::Transaction>();
+        bcos::eth::Transaction::Ptr generatedTx = std::make_shared<bcos::eth::Transaction>();
         // get transaction data according to interface and params
-        dev::eth::ContractABI abiObject;
-        std::shared_ptr<dev::bytes> data = std::make_shared<dev::bytes>();
+        bcos::eth::ContractABI abiObject;
+        std::shared_ptr<bcos::bytes> data = std::make_shared<bcos::bytes>();
         *data = abiObject.abiIn(_interface, _params...);
         // set fields for the transaction
         generatedTx->setReceiveAddress(_to);
@@ -62,15 +62,15 @@ public:
 
     // Specify interface declaration, from and to, generate signed transaction
     template <class... T>
-    dev::eth::Transaction::Ptr generateTransactionWithSig(std::string _interface,
-        dev::eth::BlockNumber const& _currentNumber, Address const& _to, KeyPair const& _keyPair,
-        dev::eth::Transaction::Type const& _type, T const&... _params)
+    bcos::eth::Transaction::Ptr generateTransactionWithSig(std::string _interface,
+        bcos::eth::BlockNumber const& _currentNumber, Address const& _to, KeyPair const& _keyPair,
+        bcos::eth::Transaction::Type const& _type, T const&... _params)
     {
         auto generatedTx =
             generateTransactionWithoutSig(_interface, _currentNumber, _to, _type, _params...);
         // sign with KeyPair for the generated transaction
-        auto hashToSign = generatedTx->hash(dev::eth::IncludeSignature::WithoutSignature);
-        auto sign = dev::crypto::Sign(_keyPair, hashToSign);
+        auto hashToSign = generatedTx->hash(bcos::eth::IncludeSignature::WithoutSignature);
+        auto sign = bcos::crypto::Sign(_keyPair, hashToSign);
         generatedTx->updateSignature(sign);
         TXGEN_LOG(DEBUG) << LOG_DESC("generateTransactionWithSig")
                          << LOG_KV("interface", _interface) << LOG_KV("blockNumber", _currentNumber)
@@ -93,4 +93,4 @@ private:
     unsigned m_validBlockLimit;
 };
 }  // namespace consensus
-}  // namespace dev
+}  // namespace bcos

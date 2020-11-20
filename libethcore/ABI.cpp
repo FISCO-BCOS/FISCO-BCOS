@@ -22,12 +22,12 @@
  */
 
 #include "ABI.h"
-#include <libdevcore/FixedHash.h>
+#include <libutilities/FixedHash.h>
 
 using namespace std;
-using namespace dev;
-using namespace dev::eth;
-using namespace dev::eth::abi;
+using namespace bcos;
+using namespace bcos::eth;
+using namespace bcos::eth::abi;
 
 const int ContractABI::MAX_BYTE_LENGTH;
 
@@ -136,7 +136,7 @@ void ContractABI::deserialise(s256& out, std::size_t _offset)
     if (u > u256("0x8fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
     {
         auto r =
-            (dev::u256("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff") - u) +
+            (bcos::u256("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff") - u) +
             1;
         out = s256("-" + r.str());
     }

@@ -22,11 +22,11 @@
 #pragma once
 
 #include "Signature.h"
-#include "libdevcore/FixedHash.h"
-#include "libdevcore/RLP.h"
+#include "libutilities/FixedHash.h"
+#include "libutilities/RLP.h"
 #include <vector>
 
-namespace dev
+namespace bcos
 {
 namespace crypto
 {
@@ -57,4 +57,4 @@ h512 ecdsaRecover(std::shared_ptr<crypto::Signature> _sig, const h256& _hash);
 std::shared_ptr<crypto::Signature> ecdsaSignatureFromRLP(RLP const& _rlp, size_t _start);
 std::pair<bool, bytes> ecRecover(bytesConstRef _in);
 std::shared_ptr<crypto::Signature> ecdsaSignatureFromBytes(std::vector<unsigned char>);
-}  // namespace dev
+}  // namespace bcos

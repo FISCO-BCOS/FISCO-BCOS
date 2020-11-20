@@ -28,10 +28,10 @@
 #include <libblockverifier/ExecutiveContext.h>
 #include <libethcore/ABI.h>
 
-using namespace dev;
-using namespace dev::storage;
-using namespace dev::precompiled;
-using namespace dev::blockverifier;
+using namespace bcos;
+using namespace bcos::storage;
+using namespace bcos::precompiled;
+using namespace bcos::blockverifier;
 
 const char* const KVTABLE_METHOD_GET = "get(string)";
 const char* const KVTABLE_METHOD_SET = "set(string,address)";
@@ -56,7 +56,7 @@ PrecompiledExecResult::Ptr KVTablePrecompiled::call(ExecutiveContext::Ptr contex
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("KVTable") << LOG_DESC("call") << LOG_KV("func", func);
-    dev::eth::ContractABI abi;
+    bcos::eth::ContractABI abi;
 
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
 
@@ -82,7 +82,7 @@ PrecompiledExecResult::Ptr KVTablePrecompiled::call(ExecutiveContext::Ptr contex
             auto entryPrecompiled = std::make_shared<EntryPrecompiled>();
             // CachedStorage return entry use copy from
             entryPrecompiled->setEntry(
-                std::const_pointer_cast<dev::storage::Entries>(entries)->get(0));
+                std::const_pointer_cast<bcos::storage::Entries>(entries)->get(0));
             auto newAddress = context->registerPrecompiled(entryPrecompiled);
             callResult->setExecResult(abi.abiIn("", true, newAddress));
         }

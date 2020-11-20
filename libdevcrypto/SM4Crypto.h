@@ -23,7 +23,7 @@
 
 #include <string>
 
-namespace dev
+namespace bcos
 {
 namespace crypto
 {
@@ -32,4 +32,4 @@ std::string sm4Encrypt(const unsigned char* _plainData, size_t _plainDataSize,
 std::string sm4Decrypt(const unsigned char* _cypherData, size_t _cypherDataSize,
     const unsigned char* _key, size_t _keySize, const unsigned char* _ivData);
 }  // namespace crypto
-}  // namespace dev
+}  // namespace bcos

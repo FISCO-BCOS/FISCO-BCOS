@@ -65,7 +65,8 @@ include(ProjectEVMONE)
 include_directories("${CMAKE_SOURCE_DIR}")
 
 add_subdirectory(libchannelserver)
-add_subdirectory(libdevcore)
+
+add_subdirectory(libutilities)
 add_subdirectory(libdevcrypto)
 add_subdirectory(libethcore)
 # add_subdirectory(libinterpreter)

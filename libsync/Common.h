@@ -30,19 +30,19 @@
 #include <libnetwork/Common.h>
 #include <libp2p/Common.h>
 
-#include <libdevcore/Exceptions.h>
-#include <libdevcore/FixedHash.h>
 #include <libethcore/Block.h>
+#include <libutilities/Exceptions.h>
+#include <libutilities/FixedHash.h>
 
 
 #include <set>
 
-namespace dev
+namespace bcos
 {
 namespace sync
 {
-DEV_SIMPLE_EXCEPTION(SyncVerifyHandlerNotSet);
-DEV_SIMPLE_EXCEPTION(InValidSyncPacket);
+DERIVE_BCOS_EXCEPTION(SyncVerifyHandlerNotSet);
+DERIVE_BCOS_EXCEPTION(InValidSyncPacket);
 // Every downloading request timeout request:
 // c_maxRequestBlocks(each peer) * c_maxRequestShards(peer num) = blocks
 static int64_t const c_maxRequestBlocks = 32;
@@ -61,10 +61,10 @@ static unsigned const c_syncPacketIDBase = 1;
 
 static uint64_t const c_maintainBlocksTimeout = 5000;  // ms
 
-using NodeList = std::set<dev::p2p::NodeID>;
-using NodeID = dev::p2p::NodeID;
-using NodeIDs = std::vector<dev::p2p::NodeID>;
-using BlockPtr = std::shared_ptr<dev::eth::Block>;
+using NodeList = std::set<bcos::p2p::NodeID>;
+using NodeID = bcos::p2p::NodeID;
+using NodeIDs = std::vector<bcos::p2p::NodeID>;
+using BlockPtr = std::shared_ptr<bcos::eth::Block>;
 using BlockPtrVec = std::vector<BlockPtr>;
 
 #define PUBLIC_LOG LOG_BADGE("SYNC") << "[id:" << m_nodeId.abridged() << "]"
@@ -90,4 +90,4 @@ enum class SyncState
     Size          /// Must be kept last
 };
 }  // namespace sync
-}  // namespace dev
+}  // namespace bcos

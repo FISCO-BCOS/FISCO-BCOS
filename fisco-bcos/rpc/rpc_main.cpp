@@ -25,10 +25,10 @@
 #include <librpc/SafeHttpServer.h>
 
 
-using namespace dev;
-using namespace dev::rpc;
-using namespace dev::ledger;
-using namespace dev::initializer;
+using namespace bcos;
+using namespace bcos::rpc;
+using namespace bcos::ledger;
+using namespace bcos::initializer;
 using namespace rpcdemo;
 
 

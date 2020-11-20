@@ -26,7 +26,7 @@
 #include "VMSchedule.h"
 
 #include "Instruction.h"
-#include <libdevcore/Common.h>
+#include <libutilities/Common.h>
 #include <libethcore/Exceptions.h>
 
 #include <evmc/evmc.h>
@@ -34,7 +34,7 @@
 
 #include <boost/optional.hpp>
 
-namespace dev
+namespace bcos
 {
 namespace eth
 {
@@ -182,4 +182,4 @@ inline Address fromEvmC(evmc_address const& _addr)
 }
 
 }  // namespace eth
-}  // namespace dev
+}  // namespace bcos

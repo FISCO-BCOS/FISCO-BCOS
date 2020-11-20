@@ -26,7 +26,7 @@
 #include <libethcore/Exceptions.h>
 #include <memory>
 
-namespace dev
+namespace bcos
 {
 namespace eth
 {
@@ -45,4 +45,4 @@ public:
         evmc_message* _msg, const uint8_t* _code, size_t _code_size) = 0;
 };
 }  // namespace eth
-}  // namespace dev
+}  // namespace bcos

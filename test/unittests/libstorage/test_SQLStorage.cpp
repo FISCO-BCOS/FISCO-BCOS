@@ -22,24 +22,24 @@
  */
 
 #include <libchannelserver/ChannelRPCServer.h>
-#include <libdevcore/FixedHash.h>
 #include <libstorage/Common.h>
 #include <libstorage/SQLStorage.h>
 #include <libstorage/StorageException.h>
 #include <libstorage/Table.h>
+#include <libutilities/FixedHash.h>
 #include <boost/test/unit_test.hpp>
 
 
-using namespace dev;
-using namespace dev::storage;
+using namespace bcos;
+using namespace bcos::storage;
 
 namespace test_SQLStorage
 {
-class MockChannelRPCServer : public dev::ChannelRPCServer
+class MockChannelRPCServer : public bcos::ChannelRPCServer
 {
 public:
-    dev::channel::TopicChannelMessage::Ptr pushChannelMessage(
-        dev::channel::TopicChannelMessage::Ptr message, size_t timeout) override
+    bcos::channel::TopicChannelMessage::Ptr pushChannelMessage(
+        bcos::channel::TopicChannelMessage::Ptr message, size_t timeout) override
     {
         BOOST_TEST(timeout > 0);
 
@@ -136,10 +136,10 @@ public:
         std::string responseStr = responseJson.toStyledString();
         LOG(TRACE) << "AMOP Storage response:" << responseStr;
 
-        auto response = std::make_shared<dev::channel::TopicChannelMessage>();
+        auto response = std::make_shared<bcos::channel::TopicChannelMessage>();
         response->setResult(0);
         response->setSeq(message->seq());
-        response->setType(dev::channel::AMOP_RESPONSE);
+        response->setType(bcos::channel::AMOP_RESPONSE);
         response->setTopicData(
             message->topic(), (const unsigned char*)responseStr.data(), responseStr.size());
 
@@ -151,7 +151,7 @@ struct SQLStorageFixture
 {
     SQLStorageFixture()
     {
-        sqlStorage = std::make_shared<dev::storage::SQLStorage>();
+        sqlStorage = std::make_shared<bcos::storage::SQLStorage>();
         std::shared_ptr<MockChannelRPCServer> mockChannel =
             std::make_shared<MockChannelRPCServer>();
         sqlStorage->setChannelRPCServer(mockChannel);
@@ -166,7 +166,7 @@ struct SQLStorageFixture
         entries->addEntry(entry);
         return entries;
     }
-    dev::storage::SQLStorage::Ptr sqlStorage;
+    bcos::storage::SQLStorage::Ptr sqlStorage;
 };
 
 BOOST_FIXTURE_TEST_SUITE(SQLStorageTest, SQLStorageFixture)
@@ -216,8 +216,8 @@ BOOST_AUTO_TEST_CASE(commit)
     h256 h(0x01);
     int num = 1;
     h256 blockHash(0x11231);
-    std::vector<dev::storage::TableData::Ptr> datas;
-    dev::storage::TableData::Ptr tableData = std::make_shared<dev::storage::TableData>();
+    std::vector<bcos::storage::TableData::Ptr> datas;
+    bcos::storage::TableData::Ptr tableData = std::make_shared<bcos::storage::TableData>();
     tableData->info->name = "t_test";
     tableData->info->key = "Name";
     tableData->info->fields.push_back("id");
@@ -240,8 +240,8 @@ BOOST_AUTO_TEST_CASE(exception)
     h256 h(0x01);
     int num = 1;
     h256 blockHash(0x11231);
-    std::vector<dev::storage::TableData::Ptr> datas;
-    dev::storage::TableData::Ptr tableData = std::make_shared<dev::storage::TableData>();
+    std::vector<bcos::storage::TableData::Ptr> datas;
+    bcos::storage::TableData::Ptr tableData = std::make_shared<bcos::storage::TableData>();
     tableData->info->name = "e";
     tableData->info->key = "Name";
     tableData->info->fields.push_back("id");

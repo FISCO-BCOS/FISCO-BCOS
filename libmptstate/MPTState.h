@@ -24,16 +24,16 @@
  */
 #pragma once
 
-#include <libdevcore/Common.h>
 #include <libethcore/Exceptions.h>
 #include <libexecutive/StateFace.h>
 #include <libmptstate/State.h>
+#include <libutilities/Common.h>
 
-namespace dev
+namespace bcos
 {
 namespace mptstate
 {
-class MPTState : public dev::executive::StateFace
+class MPTState : public bcos::executive::StateFace
 {
 public:
     explicit MPTState(u256 const& _accountStartNonce) : m_state(_accountStartNonce){};
@@ -133,4 +133,4 @@ private:
 };
 
 }  // namespace mptstate
-}  // namespace dev
+}  // namespace bcos

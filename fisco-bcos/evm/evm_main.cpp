@@ -22,19 +22,19 @@
  */
 #include "EvmParams.h"
 #include <fisco-bcos/Fake.h>
-#include <libdevcore/Common.h>
 #include <libethcore/ABI.h>
 #include <libethcore/BlockHeader.h>
 #include <libethcore/Transaction.h>
 #include <libexecutive/Executive.h>
 #include <libexecutive/StateFace.h>
 #include <libmptstate/MPTState.h>
+#include <libutilities/Common.h>
 
-using namespace dev;
-using namespace dev::eth;
-using namespace dev::executive;
-using namespace dev::mptstate;
-using namespace dev::blockchain;
+using namespace bcos;
+using namespace bcos::eth;
+using namespace bcos::executive;
+using namespace bcos::mptstate;
+using namespace bcos::blockchain;
 using namespace boost::property_tree;
 static void FakeBlockHeader(BlockHeader& header, EvmParams const& param)
 {
@@ -51,7 +51,6 @@ static void ExecuteTransaction(
     /// execute transaction
     if (!executive.execute())
     {
-        /// Timer timer;
         executive.go();
         /// double execTime = timer.elapsed();
     }

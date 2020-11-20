@@ -22,7 +22,7 @@
 
 #include "VM.h"
 
-namespace dev
+namespace bcos
 {
 namespace eth
 {
@@ -196,4 +196,4 @@ u256 VM::exp256(u256 _base, u256 _exponent)
     return result;
 }
 }  // namespace eth
-}  // namespace dev
+}  // namespace bcos

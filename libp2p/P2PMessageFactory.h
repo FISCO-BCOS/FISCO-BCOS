@@ -24,17 +24,17 @@
 #include "P2PMessageRC2.h"
 #include <libconfig/GlobalConfigure.h>
 #include <libnetwork/Common.h>
-namespace dev
+namespace bcos
 {
 namespace p2p
 {
-class P2PMessageFactory : public dev::network::MessageFactory
+class P2PMessageFactory : public bcos::network::MessageFactory
 {
 public:
     typedef std::shared_ptr<P2PMessageFactory> Ptr;
 
     virtual ~P2PMessageFactory() {}
-    dev::network::Message::Ptr buildMessage() override
+    bcos::network::Message::Ptr buildMessage() override
     {
         auto message = std::make_shared<P2PMessage>();
         return message;
@@ -52,7 +52,7 @@ class P2PMessageFactoryRC2 : public P2PMessageFactory
 {
 public:
     virtual ~P2PMessageFactoryRC2() {}
-    dev::network::Message::Ptr buildMessage() override
+    bcos::network::Message::Ptr buildMessage() override
     {
         auto message = std::make_shared<P2PMessageRC2>();
         return message;
@@ -60,4 +60,4 @@ public:
 };
 
 }  // namespace p2p
-}  // namespace dev
+}  // namespace bcos

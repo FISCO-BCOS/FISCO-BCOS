@@ -26,10 +26,10 @@
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev;
+using namespace bcos;
 using namespace std;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -37,15 +37,15 @@ BOOST_FIXTURE_TEST_SUITE(MemoryDB, TestOutputHelperFixture)
 
 BOOST_AUTO_TEST_CASE(testMemoryDBKeyExist)
 {
-    dev::MemoryDB memoryDB;
+    bcos::MemoryDB memoryDB;
     h256 key("0x2979B90fF15080A5F956bE0dD2dF1A345b120183");
     BOOST_CHECK(memoryDB.exists(key) == false);
 }
 
 BOOST_AUTO_TEST_CASE(testMemoryDBKeyValue)
 {
-    dev::MemoryDB memoryDB;
-    dev::EnforceRefs enforceRefs(memoryDB, true);
+    bcos::MemoryDB memoryDB;
+    bcos::EnforceRefs enforceRefs(memoryDB, true);
 
     h256 key = crypto::Hash("0x2979B90fF15080A5F956bE0dD2dF1A345b120183");
     h256 keyNotExist = crypto::Hash("0x2979B90fF15080A5F956bE0dD2dF1A345b120184");
@@ -75,8 +75,8 @@ BOOST_AUTO_TEST_CASE(testMemoryDBKeyValue)
 
 BOOST_AUTO_TEST_CASE(testMemoryDBAux)
 {
-    dev::MemoryDB memoryDB;
-    dev::EnforceRefs enforceRefs(memoryDB, true);
+    bcos::MemoryDB memoryDB;
+    bcos::EnforceRefs enforceRefs(memoryDB, true);
 
     h256 key = crypto::Hash("aux_0x2979B90fF15080A5F956bE0dD2dF1A345b120183");
 
@@ -85,17 +85,17 @@ BOOST_AUTO_TEST_CASE(testMemoryDBAux)
     memoryDB.insertAux(key, value);
 
     auto valueBytes = memoryDB.lookupAux(key);
-    valueStr = dev::asString(valueBytes);
+    valueStr = bcos::asString(valueBytes);
     BOOST_CHECK(valueStr == "helloworld");
 
     memoryDB.removeAux(key);
-    BOOST_CHECK(memoryDB.lookupAux(key) == dev::bytes());
+    BOOST_CHECK(memoryDB.lookupAux(key) == bcos::bytes());
 
-    dev::EnforceRefs enforceRefsFalse(memoryDB, false);
+    bcos::EnforceRefs enforceRefsFalse(memoryDB, false);
     memoryDB.purge();
-    BOOST_CHECK(memoryDB.lookupAux(key) == dev::bytes());
+    BOOST_CHECK(memoryDB.lookupAux(key) == bcos::bytes());
 }
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

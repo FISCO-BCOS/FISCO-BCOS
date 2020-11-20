@@ -22,7 +22,7 @@
 #include "PeerWhitelist.h"
 #include <sstream>
 using namespace std;
-using namespace dev;
+using namespace bcos;
 
 PeerWhitelist::PeerWhitelist(std::vector<std::string> _strList, bool _enable) : m_enable(_enable)
 {
@@ -32,7 +32,7 @@ PeerWhitelist::PeerWhitelist(std::vector<std::string> _strList, bool _enable) : 
     }
 }
 
-PeerWhitelist::PeerWhitelist(dev::h512s const& _nodeList, bool _enable) : m_enable(_enable)
+PeerWhitelist::PeerWhitelist(bcos::h512s const& _nodeList, bool _enable) : m_enable(_enable)
 {
     for (auto const& node : _nodeList)
     {

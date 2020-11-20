@@ -23,19 +23,19 @@
 
 #include "Defaults.h"
 #include <libconfig/GlobalConfigure.h>
-#include <libdevcore/Assertions.h>
-#include <libdevcore/LevelDB.h>
-#include <libdevcore/TrieHash.h>
 #include <libsecurity/EncryptedLevelDB.h>
+#include <libutilities/Assertions.h>
+#include <libutilities/LevelDB.h>
+#include <libutilities/TrieHash.h>
 #include <boost/filesystem.hpp>
 #include <boost/timer.hpp>
 
 using namespace std;
-using namespace dev;
-using namespace dev::eth;
-using namespace dev::mptstate;
+using namespace bcos;
+using namespace bcos::eth;
+using namespace bcos::mptstate;
 namespace fs = boost::filesystem;
-namespace devdb = dev::db;
+namespace bcosdb = bcos::db;
 
 State::State(u256 const& _accountStartNonce, OverlayDB const& _db, BaseState _bs)
   : m_db(_db), m_state(&m_db), m_accountStartNonce(_accountStartNonce)
@@ -76,16 +76,16 @@ OverlayDB State::openDB(fs::path const& _basePath, h256 const&, WithExisting _we
         leveldb::Status status;
 
         if (g_BCOSConfig.diskEncryption.enable)
-            status = devdb::EncryptedLevelDB::Open(devdb::LevelDB::defaultDBOptions(),
+            status = bcos::db::EncryptedLevelDB::Open(bcos::db::LevelDB::defaultDBOptions(),
                 path.string(), &basicDB, g_BCOSConfig.diskEncryption.cipherDataKey,
                 g_BCOSConfig.diskEncryption.dataKey);
         else
-            status = devdb::BasicLevelDB::Open(
-                devdb::LevelDB::defaultDBOptions(), path.string(), &basicDB);
+            status = bcos::db::BasicLevelDB::Open(
+                bcos::db::LevelDB::defaultDBOptions(), path.string(), &basicDB);
 
-        devdb::LevelDB::checkStatus(status, path);
+        bcos::db::LevelDB::checkStatus(status, path);
 
-        std::shared_ptr<db::DatabaseFace> dbFace = std::make_shared<devdb::LevelDB>(basicDB);
+        std::shared_ptr<db::DatabaseFace> dbFace = std::make_shared<bcos::db::LevelDB>(basicDB);
 
         LOG(TRACE) << "statedb Opened state DB.";
         return OverlayDB(dbFace);
@@ -198,7 +198,7 @@ void State::clearCacheIfTooLarge() const
         // FIXME: Do not use random device as the engine. The random device should be only used to
         // seed other engine.
         size_t const randomIndex = std::uniform_int_distribution<size_t>(
-            0, m_unchangedCacheEntries.size() - 1)(dev::s_fixedHashEngine);
+            0, m_unchangedCacheEntries.size() - 1)(bcos::s_fixedHashEngine);
 
         Address const addr = m_unchangedCacheEntries[randomIndex];
         swap(m_unchangedCacheEntries[randomIndex], m_unchangedCacheEntries.back());
@@ -214,7 +214,7 @@ void State::commit()
 {
     // Remove empty accounts by default
     removeEmptyAccounts();
-    m_touched += dev::mptstate::commit(m_cache, m_state);
+    m_touched += bcos::mptstate::commit(m_cache, m_state);
     m_changeLog.clear();
     m_cache.clear();
     m_unchangedCacheEntries.clear();
@@ -623,7 +623,7 @@ void State::rollback(size_t _savepoint)
     }
 }
 #if 0
-std::ostream& dev::mptstate::operator<<(std::ostream& _out, State const& _s)
+std::ostream& bcos::mptstate::operator<<(std::ostream& _out, State const& _s)
 {
     _out << "--- " << _s.rootHash() << std::endl;
     std::set<Address> d;
@@ -741,7 +741,7 @@ std::ostream& dev::mptstate::operator<<(std::ostream& _out, State const& _s)
 #endif
 
 template <class DB>
-AddressHash dev::mptstate::commit(AccountMap const& _cache, SecureTrieDB<Address, DB>& _state)
+AddressHash bcos::mptstate::commit(AccountMap const& _cache, SecureTrieDB<Address, DB>& _state)
 {
     AddressHash ret;
     for (auto const& i : _cache)
@@ -792,7 +792,7 @@ AddressHash dev::mptstate::commit(AccountMap const& _cache, SecureTrieDB<Address
 }
 
 
-template AddressHash dev::mptstate::commit<OverlayDB>(
+template AddressHash bcos::mptstate::commit<OverlayDB>(
     AccountMap const& _cache, SecureTrieDB<Address, OverlayDB>& _state);
-template AddressHash dev::mptstate::commit<MemoryDB>(
+template AddressHash bcos::mptstate::commit<MemoryDB>(
     AccountMap const& _cache, SecureTrieDB<Address, MemoryDB>& _state);

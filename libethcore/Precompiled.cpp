@@ -31,9 +31,9 @@
 #include <libethcore/Common.h>
 
 using namespace std;
-using namespace dev;
-using namespace dev::eth;
-using namespace dev::crypto;
+using namespace bcos;
+using namespace bcos::eth;
+using namespace bcos::crypto;
 
 PrecompiledRegistrar* PrecompiledRegistrar::s_this = nullptr;
 
@@ -58,7 +58,7 @@ ETH_REGISTER_PRECOMPILED(ecrecover)(bytesConstRef _in)
     // When supported_version> = v2.4.0, ecRecover uniformly calls the ECDSA verification function
     if (g_BCOSConfig.version() >= V2_4_0)
     {
-        return dev::ecRecover(_in);
+        return bcos::ecRecover(_in);
     }
     // before 2.4.0, in sm crypto mode this use sm2 recover which is a bug
     if (g_BCOSConfig.SMCrypto())
@@ -67,7 +67,7 @@ ETH_REGISTER_PRECOMPILED(ecrecover)(bytesConstRef _in)
     }
     else
     {
-        return dev::ecRecover(_in);
+        return bcos::ecRecover(_in);
     }
 }
 
@@ -76,22 +76,22 @@ ETH_REGISTER_PRECOMPILED(sha256)(bytesConstRef _in)
     // When supported_version> = v2.4.0, sha256 uniformly calls the secp sha256 function
     if (g_BCOSConfig.version() >= V2_4_0)
     {
-        return {true, dev::sha256(_in).asBytes()};
+        return {true, bcos::sha256(_in).asBytes()};
     }
     // before 2.4.0, in sm crypto mode this use sm3 which is a bug
     if (g_BCOSConfig.SMCrypto())
     {
-        return {true, dev::sm3(_in).asBytes()};
+        return {true, bcos::sm3(_in).asBytes()};
     }
     else
     {
-        return {true, dev::sha256(_in).asBytes()};
+        return {true, bcos::sha256(_in).asBytes()};
     }
 }
 
 ETH_REGISTER_PRECOMPILED(ripemd160)(bytesConstRef _in)
 {
-    return {true, h256(dev::ripemd160(_in), h256::AlignRight).asBytes()};
+    return {true, h256(bcos::ripemd160(_in), h256::AlignRight).asBytes()};
 }
 
 ETH_REGISTER_PRECOMPILED(identity)(bytesConstRef _in)
@@ -193,17 +193,17 @@ ETH_REGISTER_PRECOMPILED_PRICER(modexp)(bytesConstRef _in)
 
 ETH_REGISTER_PRECOMPILED(alt_bn128_G1_add)(bytesConstRef _in)
 {
-    return dev::crypto::alt_bn128_G1_add(_in);
+    return bcos::crypto::alt_bn128_G1_add(_in);
 }
 
 ETH_REGISTER_PRECOMPILED(alt_bn128_G1_mul)(bytesConstRef _in)
 {
-    return dev::crypto::alt_bn128_G1_mul(_in);
+    return bcos::crypto::alt_bn128_G1_mul(_in);
 }
 
 ETH_REGISTER_PRECOMPILED(alt_bn128_pairing_product)(bytesConstRef _in)
 {
-    return dev::crypto::alt_bn128_pairing_product(_in);
+    return bcos::crypto::alt_bn128_pairing_product(_in);
 }
 
 ETH_REGISTER_PRECOMPILED_PRICER(alt_bn128_pairing_product)
@@ -239,7 +239,7 @@ ETH_REGISTER_PRECOMPILED(blake2_compression)(bytesConstRef _in)
     if (finalBlockIndicator != 0 && finalBlockIndicator != 1)
         return {false, {}};
 
-    return {true, dev::crypto::blake2FCompression(rounds, stateVector, offsetCounter0,
+    return {true, bcos::crypto::blake2FCompression(rounds, stateVector, offsetCounter0,
                       offsetCounter1, finalBlockIndicator, messageBlockVector)};
 }
 

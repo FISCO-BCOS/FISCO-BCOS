@@ -24,7 +24,7 @@
 #pragma once
 #include "Common.h"
 #include <boost/beast.hpp>
-namespace dev
+namespace bcos
 {
 namespace network
 {
@@ -49,4 +49,4 @@ public:
     virtual void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint) = 0;
 };
 }  // namespace network
-}  // namespace dev
+}  // namespace bcos

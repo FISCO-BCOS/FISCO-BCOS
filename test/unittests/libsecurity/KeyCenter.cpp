@@ -32,10 +32,10 @@
 #include <vector>
 
 using namespace std;
-using namespace dev;
+using namespace bcos;
 using namespace jsonrpc;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -127,4 +127,4 @@ BOOST_AUTO_TEST_CASE(getDataKeyTest)
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

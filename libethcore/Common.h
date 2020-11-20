@@ -31,16 +31,16 @@
 
 #pragma once
 
-#include <libdevcore/Address.h>
-#include <libdevcore/Common.h>
-#include <libdevcore/Exceptions.h>
-#include <libdevcore/FixedHash.h>
+#include <libutilities/Address.h>
+#include <libutilities/Common.h>
+#include <libutilities/Exceptions.h>
+#include <libutilities/FixedHash.h>
 #include <stdint.h>
 
 #include <functional>
 #include <string>
 
-namespace dev
+namespace bcos
 {
 class RLP;
 class RLPStream;
@@ -251,4 +251,4 @@ inline u256 fromAddress(Address _a)
 }
 
 }  // namespace eth
-}  // namespace dev
+}  // namespace bcos

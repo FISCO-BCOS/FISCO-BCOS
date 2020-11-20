@@ -1,9 +1,9 @@
 #include "EventLogFilter.h"
 #include <json/json.h>
 #include <libethcore/CommonJS.h>
-using namespace dev;
-using namespace dev::eth;
-using namespace dev::event;
+using namespace bcos;
+using namespace bcos::eth;
+using namespace bcos::event;
 
 void EventLogFilter::matches(Block const& _block, Json::Value& _value)
 {

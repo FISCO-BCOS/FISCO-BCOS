@@ -27,10 +27,10 @@
 #include <boost/program_options.hpp>
 
 using namespace std;
-using namespace dev;
+using namespace bcos;
 using namespace boost;
-using namespace dev::storage;
-using namespace dev::initializer;
+using namespace bcos::storage;
+using namespace bcos::initializer;
 namespace po = boost::program_options;
 
 po::options_description main_options("Main for binlog_reader");

@@ -21,13 +21,13 @@
 
 #include "Account.h"
 #include "libdevcrypto/CryptoInterface.h"
-#include <libdevcore/CommonIO.h>
 #include <libethcore/Precompiled.h>
+#include <libutilities/CommonIO.h>
 
 using namespace std;
-using namespace dev;
-using namespace dev::eth;
-using namespace dev::mptstate;
+using namespace bcos;
+using namespace bcos::eth;
+using namespace bcos::mptstate;
 
 namespace fs = boost::filesystem;
 

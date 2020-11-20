@@ -22,11 +22,11 @@
 #include <libstorage/Table.h>
 #include <boost/test/unit_test.hpp>
 
-using namespace dev;
-using namespace dev::storage;
-using namespace dev::precompiled;
-using namespace dev::blockverifier;
-using namespace dev::eth;
+using namespace bcos;
+using namespace bcos::storage;
+using namespace bcos::precompiled;
+using namespace bcos::blockverifier;
+using namespace bcos::eth;
 
 namespace test_precompiled
 {
@@ -35,22 +35,22 @@ struct EntryPrecompiledFixture
     EntryPrecompiledFixture()
     {
         entry = std::make_shared<Entry>();
-        precompiledContext = std::make_shared<dev::blockverifier::ExecutiveContext>();
-        entryPrecompiled = std::make_shared<dev::precompiled::EntryPrecompiled>();
+        precompiledContext = std::make_shared<bcos::blockverifier::ExecutiveContext>();
+        entryPrecompiled = std::make_shared<bcos::precompiled::EntryPrecompiled>();
 
         entryPrecompiled->setEntry(entry);
 
-        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
+        auto precompiledGasFactory = std::make_shared<bcos::precompiled::PrecompiledGasFactory>(0);
         auto precompiledExecResultFactory =
-            std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+            std::make_shared<bcos::precompiled::PrecompiledExecResultFactory>();
         precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
         entryPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     }
     ~EntryPrecompiledFixture() {}
 
-    dev::storage::Entry::Ptr entry;
-    dev::blockverifier::ExecutiveContext::Ptr precompiledContext;
-    dev::precompiled::EntryPrecompiled::Ptr entryPrecompiled;
+    bcos::storage::Entry::Ptr entry;
+    bcos::blockverifier::ExecutiveContext::Ptr precompiledContext;
+    bcos::precompiled::EntryPrecompiled::Ptr entryPrecompiled;
 };
 
 BOOST_FIXTURE_TEST_SUITE(EntryPrecompiled, EntryPrecompiledFixture)

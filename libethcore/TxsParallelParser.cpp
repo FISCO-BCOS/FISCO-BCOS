@@ -26,7 +26,7 @@
 #include "Exceptions.h"
 #include <tbb/parallel_for.h>
 
-namespace dev
+namespace bcos
 {
 namespace eth
 {
@@ -179,4 +179,4 @@ void TxsParallelParser::decode(std::shared_ptr<Transactions> _txs, bytesConstRef
 }
 
 }  // namespace eth
-}  // namespace dev
+}  // namespace bcos

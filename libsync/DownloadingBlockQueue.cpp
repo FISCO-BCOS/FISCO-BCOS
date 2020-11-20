@@ -25,9 +25,9 @@
 #include "gperftools/malloc_extension.h"
 
 using namespace std;
-using namespace dev;
-using namespace dev::eth;
-using namespace dev::sync;
+using namespace bcos;
+using namespace bcos::eth;
+using namespace bcos::sync;
 
 /// Push a block
 void DownloadingBlockQueue::push(RLP const& _rlps)

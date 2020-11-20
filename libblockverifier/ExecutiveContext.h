@@ -22,8 +22,6 @@
 
 #include "Common.h"
 #include "libprecompiled/Precompiled.h"
-#include <libdevcore/Common.h>
-#include <libdevcore/FixedHash.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/Block.h>
 #include <libethcore/PrecompiledContract.h>
@@ -31,6 +29,8 @@
 #include <libethcore/Transaction.h>
 #include <libexecutive/StateFace.h>
 #include <libstorage/Table.h>
+#include <libutilities/Common.h>
+#include <libutilities/FixedHash.h>
 // for concurrent_map
 #define TBB_PREVIEW_CONCURRENT_ORDERED_CONTAINERS 1
 #include <tbb/concurrent_map.h>
@@ -39,7 +39,7 @@
 #include <functional>
 #include <memory>
 
-namespace dev
+namespace bcos
 {
 namespace storage
 {
@@ -73,7 +73,7 @@ public:
         }
     };
 
-    virtual dev::precompiled::PrecompiledExecResult::Ptr call(
+    virtual bcos::precompiled::PrecompiledExecResult::Ptr call(
         Address const& address, bytesConstRef param, Address const& origin, Address const& sender);
 
     virtual Address registerPrecompiled(std::shared_ptr<precompiled::Precompiled> p);
@@ -92,16 +92,16 @@ public:
         m_address2Precompiled.insert(std::make_pair(address, precompiled));
     }
 
-    void registerParallelPrecompiled(std::shared_ptr<dev::precompiled::Precompiled> _precompiled);
+    void registerParallelPrecompiled(std::shared_ptr<bcos::precompiled::Precompiled> _precompiled);
 
     void setPrecompiledExecResultFactory(
-        dev::precompiled::PrecompiledExecResultFactory::Ptr _precompiledExecResultFactory);
+        bcos::precompiled::PrecompiledExecResultFactory::Ptr _precompiledExecResultFactory);
 
     BlockInfo const& blockInfo() { return m_blockInfo; }
     void setBlockInfo(BlockInfo blockInfo) { m_blockInfo = blockInfo; }
 
-    std::shared_ptr<dev::executive::StateFace> getState();
-    void setState(std::shared_ptr<dev::executive::StateFace> state);
+    std::shared_ptr<bcos::executive::StateFace> getState();
+    void setState(std::shared_ptr<bcos::executive::StateFace> state);
 
     virtual bool isEthereumPrecompiled(Address const& _a) const;
 
@@ -111,16 +111,16 @@ public:
     virtual bigint costOfPrecompiled(Address const& _a, bytesConstRef _in) const;
 
     void setPrecompiledContract(
-        std::unordered_map<Address, dev::eth::PrecompiledContract> const& precompiledContract);
+        std::unordered_map<Address, bcos::eth::PrecompiledContract> const& precompiledContract);
 
-    void dbCommit(dev::eth::Block& block);
+    void dbCommit(bcos::eth::Block& block);
 
-    void setMemoryTableFactory(std::shared_ptr<dev::storage::TableFactory> memoryTableFactory)
+    void setMemoryTableFactory(std::shared_ptr<bcos::storage::TableFactory> memoryTableFactory)
     {
         m_memoryTableFactory = memoryTableFactory;
     }
 
-    std::shared_ptr<dev::storage::TableFactory> getMemoryTableFactory()
+    std::shared_ptr<bcos::storage::TableFactory> getMemoryTableFactory()
     {
         return m_memoryTableFactory;
     }
@@ -129,7 +129,7 @@ public:
     void setTxGasLimit(uint64_t _txGasLimit) { m_txGasLimit = _txGasLimit; }
 
     // Get transaction criticals, return nullptr if critical to all
-    std::shared_ptr<std::vector<std::string>> getTxCriticals(const dev::eth::Transaction& _tx);
+    std::shared_ptr<std::vector<std::string>> getTxCriticals(const bcos::eth::Transaction& _tx);
 
 private:
     tbb::concurrent_unordered_map<Address, std::shared_ptr<precompiled::Precompiled>,
@@ -137,20 +137,20 @@ private:
         m_address2Precompiled;
     std::atomic<int> m_addressCount;
     BlockInfo m_blockInfo;
-    std::shared_ptr<dev::executive::StateFace> m_stateFace;
-    std::unordered_map<Address, dev::eth::PrecompiledContract> m_precompiledContract;
-    std::shared_ptr<dev::storage::TableFactory> m_memoryTableFactory;
+    std::shared_ptr<bcos::executive::StateFace> m_stateFace;
+    std::unordered_map<Address, bcos::eth::PrecompiledContract> m_precompiledContract;
+    std::shared_ptr<bcos::storage::TableFactory> m_memoryTableFactory;
     uint64_t m_txGasLimit = 300000000;
 
-    std::shared_ptr<dev::precompiled::PrecompiledExecResultFactory> m_precompiledExecResultFactory;
-    std::shared_ptr<dev::precompiled::ParallelConfigPrecompiled> m_parallelConfigPrecompiled;
+    std::shared_ptr<bcos::precompiled::PrecompiledExecResultFactory> m_precompiledExecResultFactory;
+    std::shared_ptr<bcos::precompiled::ParallelConfigPrecompiled> m_parallelConfigPrecompiled;
 
     // map between {receiveAddress, selector} to {ParallelConfig}
     // avoid multiple concurrent transactions of openTable to obtain ParallelConfig
-    tbb::concurrent_map<ParallelConfigKey, std::shared_ptr<dev::precompiled::ParallelConfig>>
+    tbb::concurrent_map<ParallelConfigKey, std::shared_ptr<bcos::precompiled::ParallelConfig>>
         m_parallelConfigCache;
 };
 
 }  // namespace blockverifier
 
-}  // namespace dev
+}  // namespace bcos

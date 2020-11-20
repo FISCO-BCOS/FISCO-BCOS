@@ -25,10 +25,10 @@
 #include "Common.h"
 #include <libconsensus/pbft/PBFTReqCache.h>
 #include <boost/test/unit_test.hpp>
-using namespace dev::consensus;
-using namespace dev::eth;
+using namespace bcos::consensus;
+using namespace bcos::eth;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -82,4 +82,4 @@ void FakeInvalidReq(PrepareReq::Ptr prepare_req, PBFTReqCache& reqCache, S& cach
 }
 
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

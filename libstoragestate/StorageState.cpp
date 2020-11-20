@@ -28,11 +28,11 @@
 #include "libethcore/Exceptions.h"
 #include "libstorage/Table.h"
 
-using namespace dev;
-using namespace dev::eth;
-using namespace dev::storagestate;
-using namespace dev::storage;
-using namespace dev::executive;
+using namespace bcos;
+using namespace bcos::eth;
+using namespace bcos::storagestate;
+using namespace bcos::storage;
+using namespace bcos::executive;
 
 bool StorageState::addressInUse(Address const& _address) const
 {

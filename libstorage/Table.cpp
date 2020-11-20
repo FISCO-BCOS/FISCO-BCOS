@@ -30,12 +30,13 @@
 #include "Common.h"
 #include "Table.h"
 #include "libconfig/GlobalConfigure.h"
-#include <libdevcore/Common.h>
+#include <libutilities/Common.h>
 #include <tbb/pipeline.h>
 #include <tbb/tbb_thread.h>
 #include <boost/lexical_cast.hpp>
 
-using namespace dev::storage;
+using namespace bcos;
+using namespace bcos::storage;
 using namespace std;
 
 Entry::Entry() : m_data(std::make_shared<EntryData>())
@@ -78,7 +79,7 @@ void Entry::setID(const std::string& id)
     m_dirty = true;
 }
 
-dev::bytesConstRef Entry::getFieldConst(const std::string& key) const
+bcos::bytesConstRef Entry::getFieldConst(const std::string& key) const
 {
     RWMutexScoped lock(m_data->m_mutex, false);
 
@@ -86,11 +87,11 @@ dev::bytesConstRef Entry::getFieldConst(const std::string& key) const
 
     if (it != m_data->m_fields.end())
     {
-        return dev::bytesConstRef(it->second);
+        return bcos::bytesConstRef(it->second);
     }
 
     STORAGE_LOG(ERROR) << LOG_BADGE("Entry") << LOG_DESC("can't find key") << LOG_KV("key", key);
-    return dev::bytesConstRef();
+    return bcos::bytesConstRef();
 }
 
 std::string Entry::getField(const std::string& key) const
@@ -851,7 +852,7 @@ bool Condition::related(Condition::Ptr condition)
     return false;
 }
 
-TableInfo::Ptr dev::storage::getSysTableInfo(const string& tableName)
+TableInfo::Ptr bcos::storage::getSysTableInfo(const string& tableName)
 {
     auto tableInfo = make_shared<storage::TableInfo>();
     tableInfo->name = tableName;

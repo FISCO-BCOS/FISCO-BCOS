@@ -22,10 +22,10 @@
 #include "BinaryLogStorage.h"
 #include "BinLogHandler.h"
 #include "StorageException.h"
-#include <libdevcore/Common.h>
+#include <libutilities/Common.h>
 
-using namespace dev;
-using namespace dev::storage;
+using namespace bcos;
+using namespace bcos::storage;
 
 BinaryLogStorage::BinaryLogStorage() {}
 

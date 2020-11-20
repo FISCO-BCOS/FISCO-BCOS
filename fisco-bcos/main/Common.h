@@ -32,8 +32,8 @@ class ExitHandler
 {
 public:
     void exit() { exitHandler(0); }
-    static void exitHandler(int) { dev::g_BCOSConfig.shouldExit.store(true); }
-    bool shouldExit() const { return dev::g_BCOSConfig.shouldExit.load(); }
+    static void exitHandler(int) { bcos::g_BCOSConfig.shouldExit.store(true); }
+    bool shouldExit() const { return bcos::g_BCOSConfig.shouldExit.load(); }
 };
 
 void setDefaultOrCLocale()
@@ -74,7 +74,7 @@ std::string initCommandLine(int argc, const char* argv[])
     /// version information
     if (vm.count("version") || vm.count("v"))
     {
-        dev::version();
+        bcos::version();
         exit(0);
     }
     std::string configPath("./config.ini");

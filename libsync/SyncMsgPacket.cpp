@@ -27,13 +27,13 @@
 #include <libp2p/Service.h>
 
 using namespace std;
-using namespace dev;
-using namespace dev::sync;
-using namespace dev::p2p;
-using namespace dev::eth;
+using namespace bcos;
+using namespace bcos::sync;
+using namespace bcos::p2p;
+using namespace bcos::eth;
 
 bool SyncMsgPacket::decode(
-    std::shared_ptr<dev::p2p::P2PSession> _session, dev::p2p::P2PMessage::Ptr _msg)
+    std::shared_ptr<bcos::p2p::P2PSession> _session, bcos::p2p::P2PMessage::Ptr _msg)
 {
     if (_msg == nullptr)
         return false;
@@ -85,7 +85,7 @@ void SyncStatusPacket::encode()
     m_rlpStream << genesisHash << latestHash;
 }
 
-void SyncStatusPacket::decodePacket(RLP const& _rlp, dev::h512 const& _peer)
+void SyncStatusPacket::decodePacket(RLP const& _rlp, bcos::h512 const& _peer)
 {
     if (_rlp.itemCount() != m_itemCount)
     {
@@ -107,7 +107,7 @@ void SyncStatusPacketWithAlignedTime::encode()
     m_rlpStream.append(bigint(alignedTime));
 }
 
-void SyncStatusPacketWithAlignedTime::decodePacket(RLP const& _rlp, dev::h512 const& _peer)
+void SyncStatusPacketWithAlignedTime::decodePacket(RLP const& _rlp, bcos::h512 const& _peer)
 {
     SyncStatusPacket::decodePacket(_rlp, _peer);
     // get alignedTime
@@ -147,7 +147,7 @@ void SyncTransactionsPacket::encodeRC2(
     std::vector<bytes> const& _txRLPs, unsigned const& _fieldSize)
 {
     m_rlpStream.clear();
-    bytes txsBytes = dev::eth::TxsParallelParser::encode(_txRLPs);
+    bytes txsBytes = bcos::eth::TxsParallelParser::encode(_txRLPs);
     prep(m_rlpStream, TransactionsPacket, _fieldSize).append(ref(txsBytes));
 }
 
@@ -158,7 +158,7 @@ P2PMessage::Ptr SyncTransactionsPacket::toMessage(PROTOCOL_ID _protocolId, bool 
     return msg;
 }
 
-void SyncBlocksPacket::encode(std::vector<dev::bytes> const& _blockRLPs)
+void SyncBlocksPacket::encode(std::vector<bcos::bytes> const& _blockRLPs)
 {
     m_rlpStream.clear();
     unsigned size = _blockRLPs.size();
@@ -167,7 +167,7 @@ void SyncBlocksPacket::encode(std::vector<dev::bytes> const& _blockRLPs)
         m_rlpStream.append(bs);
 }
 
-void SyncBlocksPacket::singleEncode(dev::bytes const& _blockRLP)
+void SyncBlocksPacket::singleEncode(bcos::bytes const& _blockRLP)
 {
     m_rlpStream.clear();
     prep(m_rlpStream, BlocksPacket, 1);
@@ -181,7 +181,7 @@ void SyncReqBlockPacket::encode(int64_t _from, unsigned _size)
 }
 
 void SyncTxsStatusPacket::encode(
-    int64_t const& _number, std::shared_ptr<std::set<dev::h256>> _txsHash)
+    int64_t const& _number, std::shared_ptr<std::set<bcos::h256>> _txsHash)
 {
     m_rlpStream.clear();
     auto& retRlp = prep(m_rlpStream, packetType, 2);
@@ -189,7 +189,7 @@ void SyncTxsStatusPacket::encode(
     retRlp.append(*_txsHash);
 }
 
-void SyncTxsReqPacket::encode(std::shared_ptr<std::vector<dev::h256>> _requestedTxs)
+void SyncTxsReqPacket::encode(std::shared_ptr<std::vector<bcos::h256>> _requestedTxs)
 {
     m_rlpStream.clear();
     prep(m_rlpStream, packetType, 1).append(*_requestedTxs);

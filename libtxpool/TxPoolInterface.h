@@ -26,7 +26,7 @@
 #include <libethcore/Common.h>
 #include <libethcore/Protocol.h>
 #include <libethcore/Transaction.h>
-namespace dev
+namespace bcos
 {
 namespace txpool
 {
@@ -43,8 +43,8 @@ public:
      * @param _txHash: transaction hash
      */
     virtual bool drop(h256 const& _txHash) = 0;
-    virtual bool dropBlockTrans(std::shared_ptr<dev::eth::Block> block) = 0;
-    virtual bool handleBadBlock(dev::eth::Block const& block) = 0;
+    virtual bool dropBlockTrans(std::shared_ptr<bcos::eth::Block> block) = 0;
+    virtual bool handleBadBlock(bcos::eth::Block const& block) = 0;
     /**
      * @brief Get top transactions from the queue
      *
@@ -53,20 +53,20 @@ public:
      * @param _condition : The function return false to avoid transaction to return.
      * @return Transactions : up to _limit transactions
      */
-    virtual std::shared_ptr<dev::eth::Transactions> topTransactions(uint64_t const& _limit) = 0;
-    virtual std::shared_ptr<dev::eth::Transactions> topTransactions(
+    virtual std::shared_ptr<bcos::eth::Transactions> topTransactions(uint64_t const& _limit) = 0;
+    virtual std::shared_ptr<bcos::eth::Transactions> topTransactions(
         uint64_t const& _limit, h256Hash& _avoid, bool _updateAvoid = false) = 0;
 
     /// param 1: the transaction limit
     /// param 2: the node id
-    virtual std::shared_ptr<dev::eth::Transactions> topTransactionsCondition(
-        uint64_t const&, dev::h512 const&)
+    virtual std::shared_ptr<bcos::eth::Transactions> topTransactionsCondition(
+        uint64_t const&, bcos::h512 const&)
     {
-        return std::make_shared<dev::eth::Transactions>();
+        return std::make_shared<bcos::eth::Transactions>();
     };
 
     /// get all current transactions(maybe blocksync module need this interface)
-    virtual std::shared_ptr<dev::eth::Transactions> pendingList() const = 0;
+    virtual std::shared_ptr<bcos::eth::Transactions> pendingList() const = 0;
     /// get current transaction num
     virtual size_t pendingSize() = 0;
 
@@ -75,8 +75,8 @@ public:
      * @param _t : transaction
      * @return std::pair<h256, Address>: maps from transaction hash to contract address
      */
-    virtual std::pair<h256, Address> submit(std::shared_ptr<dev::eth::Transaction> _tx) = 0;
-    virtual std::pair<h256, Address> submitTransactions(dev::eth::Transaction::Ptr)
+    virtual std::pair<h256, Address> submit(std::shared_ptr<bcos::eth::Transaction> _tx) = 0;
+    virtual std::pair<h256, Address> submitTransactions(bcos::eth::Transaction::Ptr)
     {
         return std::make_pair(h256(), Address());
     };
@@ -88,8 +88,8 @@ public:
      * @param _ik : Set to Retry to force re-addinga transaction that was previously dropped.
      * @return ImportResult : Import result code.
      */
-    virtual dev::eth::ImportResult import(
-        dev::eth::Transaction::Ptr, dev::eth::IfDropped _ik = dev::eth::IfDropped::Ignore) = 0;
+    virtual bcos::eth::ImportResult import(
+        bcos::eth::Transaction::Ptr, bcos::eth::IfDropped _ik = bcos::eth::IfDropped::Ignore) = 0;
     /// @returns the status of the transaction queue.
     virtual TxPoolStatus status() const = 0;
 
@@ -98,35 +98,35 @@ public:
 
     /// Register a handler that will be called once there is a new transaction imported
     template <class T>
-    dev::eth::Handler<> onReady(T const& _t)
+    bcos::eth::Handler<> onReady(T const& _t)
     {
         return m_onReady.add(_t);
     }
 
     /// param: transaction hash
     /// determine the given transaction hash exists in the transaction pool or not
-    virtual bool txExists(dev::h256 const&) { return false; }
+    virtual bool txExists(bcos::h256 const&) { return false; }
 
     /// param: the block that should be verified and set sender according to transactions of local
     /// transaction pool
-    virtual void verifyAndSetSenderForBlock(dev::eth::Block&) {}
+    virtual void verifyAndSetSenderForBlock(bcos::eth::Block&) {}
 
     virtual bool isFull() { return false; }
     virtual void start() {}
     virtual void stop() {}
 
-    virtual std::shared_ptr<dev::eth::Transactions> obtainTransactions(
-        std::vector<dev::h256> const&)
+    virtual std::shared_ptr<bcos::eth::Transactions> obtainTransactions(
+        std::vector<bcos::h256> const&)
     {
         return nullptr;
     }
-    virtual std::shared_ptr<std::vector<dev::h256>> filterUnknownTxs(
-        std::set<dev::h256> const&, dev::h512 const&)
+    virtual std::shared_ptr<std::vector<bcos::h256>> filterUnknownTxs(
+        std::set<bcos::h256> const&, bcos::h512 const&)
     {
         return nullptr;
     }
 
-    virtual bool initPartiallyBlock(std::shared_ptr<dev::eth::Block>) { return true; }
+    virtual bool initPartiallyBlock(std::shared_ptr<bcos::eth::Block>) { return true; }
     virtual void registerSyncStatusChecker(std::function<bool()>) {}
 
     // when the node is changed from sealer/observer node to free-node,
@@ -139,7 +139,7 @@ public:
 protected:
     ///< Called when a subsequent call to import transactions will return a non-empty container. Be
     ///< nice and exit fast.
-    dev::eth::Signal<> m_onReady;
+    bcos::eth::Signal<> m_onReady;
 };
 }  // namespace txpool
-}  // namespace dev
+}  // namespace bcos

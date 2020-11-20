@@ -32,11 +32,11 @@
 #include <set>
 
 using namespace std;
-using namespace dev;
-using namespace dev::blockverifier;
-using namespace dev::eth;
+using namespace bcos;
+using namespace bcos::blockverifier;
+using namespace bcos::eth;
 
-namespace dev
+namespace bcos
 {
 namespace test
 {
@@ -54,7 +54,7 @@ public:
         u256 gas = 10000000;
         Address dest = Address(0x5002);  // DagTransfer precompile address
 
-        dev::eth::ContractABI abi;
+        bcos::eth::ContractABI abi;
         bytes data = abi.abiIn("userTransfer(string,string,uint256)", _userFrom, _userTo,
             _money);  // add 1000000000 to user i
         u256 nonce = u256(utcTime() + rand());
@@ -62,7 +62,7 @@ public:
         Transaction::Ptr tx =
             std::make_shared<Transaction>(value, gasPrice, gas, dest, data, nonce);
         tx->setBlockLimit(500);
-        auto sig = dev::crypto::Sign(keyPair, tx->hash(WithoutSignature));
+        auto sig = bcos::crypto::Sign(keyPair, tx->hash(WithoutSignature));
         tx->updateSignature(sig);
         tx->forceSender(Address(0x2333));
 
@@ -76,7 +76,7 @@ public:
         u256 gas = 10000000;
         Address dest = Address("2233445566778899");  // Normal transaction address
 
-        dev::eth::ContractABI abi;
+        bcos::eth::ContractABI abi;
         bytes data = abi.abiIn("fake(string,string,uint256)", 0, 0, 0);
         u256 nonce = u256(utcTime() + rand());
 
@@ -84,7 +84,7 @@ public:
             std::make_shared<Transaction>(value, gasPrice, gas, dest, data, nonce);
         tx->setBlockLimit(500);
         auto keyPair = KeyPair::create();
-        auto sig = dev::crypto::Sign(keyPair, tx->hash(WithoutSignature));
+        auto sig = bcos::crypto::Sign(keyPair, tx->hash(WithoutSignature));
         tx->updateSignature(sig);
         tx->forceSender(Address(0x2333));
 
@@ -95,8 +95,9 @@ public:
     {
         ExecutiveContext::Ptr ctx = std::make_shared<ExecutiveContext>();
         ctx->setAddress2Precompiled(
-            Address(0x5002), make_shared<dev::precompiled::DagTransferPrecompiled>());
-        auto parallelConfigPrecompiled = make_shared<dev::precompiled::ParallelConfigPrecompiled>();
+            Address(0x5002), make_shared<bcos::precompiled::DagTransferPrecompiled>());
+        auto parallelConfigPrecompiled =
+            make_shared<bcos::precompiled::ParallelConfigPrecompiled>();
         ctx->setAddress2Precompiled(Address(0x1006), parallelConfigPrecompiled);
         ctx->registerParallelPrecompiled(parallelConfigPrecompiled);
         return ctx;
@@ -123,13 +124,14 @@ BOOST_AUTO_TEST_CASE(PureParallelTxDAGTest)
     txDag->init(executiveContext, trans, 0);
 
     Transactions exeTrans;
-    txDag->setTxExecuteFunc([&](Transaction::Ptr _tr, ID _txId, dev::executive::Executive::Ptr) {
+    txDag->setTxExecuteFunc([&](Transaction::Ptr _tr, ID _txId, bcos::executive::Executive::Ptr) {
         (void)_txId;
         exeTrans.emplace_back(_tr);
         return true;
     });
 
-    dev::executive::Executive::Ptr executive = std::make_shared<dev::executive::Executive>(nullptr, dev::executive::EnvInfo());
+    bcos::executive::Executive::Ptr executive =
+        std::make_shared<bcos::executive::Executive>(nullptr, bcos::executive::EnvInfo());
     while (!txDag->hasFinished())
     {
         txDag->executeUnit(executive);
@@ -159,13 +161,14 @@ BOOST_AUTO_TEST_CASE(NormalAndParallelTxDAGTest)
     txDag->init(executiveContext, trans, 0);
 
     Transactions exeTrans;
-    txDag->setTxExecuteFunc([&](Transaction::Ptr _tr, ID _txId, dev::executive::Executive::Ptr) {
+    txDag->setTxExecuteFunc([&](Transaction::Ptr _tr, ID _txId, bcos::executive::Executive::Ptr) {
         (void)_txId;
         exeTrans.emplace_back(_tr);
         return true;
     });
 
-    dev::executive::Executive::Ptr executive = std::make_shared<dev::executive::Executive>(nullptr, dev::executive::EnvInfo());
+    bcos::executive::Executive::Ptr executive =
+        std::make_shared<bcos::executive::Executive>(nullptr, bcos::executive::EnvInfo());
     while (!txDag->hasFinished())
     {
         txDag->executeUnit(executive);
@@ -182,4 +185,4 @@ BOOST_AUTO_TEST_CASE(NormalAndParallelTxDAGTest)
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace test
-}  // namespace dev
+}  // namespace bcos

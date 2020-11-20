@@ -32,12 +32,12 @@
 #include <queue>
 #include <vector>
 
-namespace dev
+namespace bcos
 {
 namespace blockverifier
 {
 using ExecuteTxFunc =
-    std::function<bool(dev::eth::Transaction::Ptr, ID, dev::executive::Executive::Ptr)>;
+    std::function<bool(bcos::eth::Transaction::Ptr, ID, bcos::executive::Executive::Ptr)>;
 
 class TxDAGFace
 {
@@ -48,7 +48,7 @@ public:
     // Called by thread
     // Execute a unit in DAG
     // This function can be parallel
-    virtual int executeUnit(dev::executive::Executive::Ptr) = 0;
+    virtual int executeUnit(bcos::executive::Executive::Ptr) = 0;
 
     virtual void getHaventRun(){};
 };
@@ -60,7 +60,7 @@ public:
     virtual ~TxDAG() {}
 
     // Generate DAG according with given transactions
-    void init(ExecutiveContext::Ptr _ctx, std::shared_ptr<dev::eth::Transactions> _txs,
+    void init(ExecutiveContext::Ptr _ctx, std::shared_ptr<bcos::eth::Transactions> _txs,
         int64_t _blockHeight);
 
     // Set transaction execution function
@@ -79,7 +79,7 @@ public:
     // Called by thread
     // Execute a unit in DAG
     // This function can be parallel
-    int executeUnit(dev::executive::Executive::Ptr _executive) override;
+    int executeUnit(bcos::executive::Executive::Ptr _executive) override;
 
     ID paraTxsNumber() { return m_totalParaTxs; }
 
@@ -87,7 +87,7 @@ public:
 
 private:
     ExecuteTxFunc f_executeTx;
-    std::shared_ptr<dev::eth::Transactions const> m_txs;
+    std::shared_ptr<bcos::eth::Transactions const> m_txs;
 
     DAG m_dag;
 
@@ -139,4 +139,4 @@ private:
 };
 
 }  // namespace blockverifier
-}  // namespace dev
+}  // namespace bcos
