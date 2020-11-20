@@ -282,7 +282,7 @@ void PBFTEngine::backupMsg(std::string const& _key, std::shared_ptr<bytes> _msg)
     try
     {
         WriteBatch batch;
-        m_backupDB->Put(batch, _key, toHex(*_msg));
+        m_backupDB->Put(batch, _key, *toHexString(*_msg));
         WriteOptions options;
         m_backupDB->Write(options, batch);
     }
@@ -767,7 +767,7 @@ bool PBFTEngine::checkBlock(Block const& block)
             PBFTENGINE_LOG(ERROR) << LOG_DESC("checkBlock: checkSign failed")
                                   << LOG_KV("sealerIdx", nodeIndex)
                                   << LOG_KV("blockHash", block.blockHeader().hash().abridged())
-                                  << LOG_KV("signature", toHex(sign.second));
+                                  << LOG_KV("signature", *toHexString(sign.second));
             return false;
         }
     }  /// end of check sign
@@ -1847,7 +1847,7 @@ void PBFTEngine::getAllNodesViewStatus(Json::Value& status)
         bcos::network::NodeID node_id = getSealerByIndex(it.first);
         if (node_id != bcos::network::NodeID())
         {
-            view_obj["nodeId"] = bcos::toHex(node_id);
+            view_obj["nodeId"] = *toHexString(node_id);
             view_obj["view"] = it.second;
             view_array.append(view_obj);
         }

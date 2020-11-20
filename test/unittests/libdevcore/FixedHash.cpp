@@ -20,8 +20,8 @@
  * @date 2018
  */
 
-#include <libutilities/CommonData.h>
 #include <libutilities/CommonJS.h>
+#include <libutilities/DataConvertUtility.h>
 #include <libutilities/FixedHash.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
@@ -43,13 +43,6 @@ BOOST_AUTO_TEST_CASE(testFromUUID)
     BOOST_CHECK(h128() == fromUUID(uuidError));
 }
 
-BOOST_AUTO_TEST_CASE(testToUUID)
-{
-    const std::string str = "0x067150c07dab4facb7160e075548007e";
-    h128 h = jsToFixed<16>(str);
-    BOOST_CHECK("067150c0-7dab-4fac-b716-0e075548007e" == toUUID(h));
-}
-
 BOOST_AUTO_TEST_CASE(testLeft160)
 {
     const std::string str = "0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e075548007e";
@@ -68,8 +61,8 @@ BOOST_AUTO_TEST_CASE(testRight160)
     u256 value(h256Data);
     // trans value to h256 again
     h256 convertedH256Data = value;
-    std::cout << "### value: " << value << ", h256Data:" << bcos::toHex(h256Data)
-              << "convertedH256Data" << bcos::toHex(convertedH256Data) << std::endl;
+    std::cout << "### value: " << value << ", h256Data:" << *toHexString(h256Data)
+              << "convertedH256Data" << *toHexString(convertedH256Data) << std::endl;
     BOOST_CHECK(convertedH256Data == h256Data);
 }
 

@@ -185,7 +185,8 @@ public:
 
     void operator()(Args const&... _args)
     {
-        for (auto const& f : valuesOf(m_fire))
+        auto convertedVec = convertMapToVector(m_fire);
+        for (auto const& f : *convertedVec)
             if (auto h = f.lock())
                 h->fire(_args...);
     }

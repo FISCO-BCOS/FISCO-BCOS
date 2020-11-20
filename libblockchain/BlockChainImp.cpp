@@ -31,7 +31,7 @@
 #include <libprecompiled/ConsensusPrecompiled.h>
 #include <libstorage/StorageException.h>
 #include <libstorage/Table.h>
-#include <libutilities/CommonData.h>
+#include <libutilities/DataConvertUtility.h>
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_invoke.h>
 #include <boost/algorithm/string/classification.hpp>
@@ -707,12 +707,12 @@ void BlockChainImp::initGensisConsensusInfoByNodeType(bcos::storage::Table::Ptr 
         auto entry = std::make_shared<Entry>();
         entry->setField(PRI_COLUMN, PRI_KEY);
         entry->setField(NODE_TYPE, _nodeType);
-        entry->setField(NODE_KEY_NODEID, bcos::toHex(node));
+        entry->setField(NODE_KEY_NODEID, *toHexString(node));
         entry->setField(NODE_KEY_ENABLENUM, "0");
         if (_update)
         {
             auto condition = _consTable->newCondition();
-            condition->EQ(NODE_KEY_NODEID, bcos::toHex(node));
+            condition->EQ(NODE_KEY_NODEID, *toHexString(node));
             _consTable->update(PRI_KEY, entry, condition);
         }
         else
@@ -1049,13 +1049,6 @@ bcos::bytes BlockChainImp::getHashNeed2Proof(uint32_t index, const bcos::bytes& 
     bytesHash.insert(bytesHash.end(), s.out().begin(), s.out().end());
     bcos::h256 dataHash = crypto::Hash(data);
     bytesHash.insert(bytesHash.end(), dataHash.begin(), dataHash.end());
-#if 0
-    bcos::h256 hashWithIndex = Hash(bytesHash);
-    BLOCKCHAIN_LOG(DEBUG) << "transactionindex:" << index << " data:" << toHex(data)
-                          << " bytesHash:" << toHex(bytesHash)
-                          << " hashWithIndex:" << hashWithIndex.hex();
-#endif
-
     return bytesHash;
 }
 
@@ -1087,7 +1080,7 @@ void BlockChainImp::getMerkleProof(bcos::bytes const& _txHash,
     const Child2ParentMap& child2Parent,
     std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>& merkleProof)
 {
-    std::string merkleNode = toHex(_txHash);
+    std::string merkleNode = *toHexString(_txHash);
     auto itChild2Parent = child2Parent.find(merkleNode);
     while (itChild2Parent != child2Parent.end())
     {

@@ -76,8 +76,8 @@ BOOST_AUTO_TEST_CASE(SM_testKeccak256CommonFunc)
     h256 egressMac(crypto::Hash("+++"));
     bytes magic{0x22, 0x40, 0x08, 0x91};
     sm3mac(egressMac.ref(), &magic, egressMac.ref());
-    BOOST_CHECK(
-        toHex(egressMac) == "c58b0b390d16cdfc1b81cbf01614aa3d8ec3f47c81cd0e29cd0a61718a38ec83");
+    BOOST_CHECK(*toHexString(egressMac) ==
+                "c58b0b390d16cdfc1b81cbf01614aa3d8ec3f47c81cd0e29cd0a61718a38ec83");
 }
 
 // test sha2
@@ -152,7 +152,7 @@ BOOST_AUTO_TEST_CASE(testKeccak256CommonFunc)
     h256 egressMac(crypto::Hash("+++"));
     bytes magic{0x22, 0x40, 0x08, 0x91};
     keccak256mac(egressMac.ref(), &magic, egressMac.ref());
-    BOOST_CHECK(toHex(egressMac) ==
+    BOOST_CHECK(*toHexString(egressMac) ==
                 "75759ba49fdef48a80840b669"
                 "9c4cc25ecb5e60f5dd0bf889381084ca6fc4199");
 }

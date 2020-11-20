@@ -236,7 +236,7 @@ BOOST_AUTO_TEST_CASE(accountLiftCycle)
     executeTransaction(*executive, tx);
     auto output = abi.abiIn("Error(string)", string("Frozen account:0x" + accountAddress.hex()));
     bcos::owning_bytes_ref o = owning_bytes_ref{std::move(output), 0, output.size()};
-    BOOST_TEST(toHex(executive->takeOutput()) == toHex(o));
+    BOOST_TEST(*toHexString(executive->takeOutput()) == *toHexString(o));
 
     // grant
     in = abi.abiIn(
@@ -288,7 +288,7 @@ BOOST_AUTO_TEST_CASE(call)
     executeTransaction(*executive, tx);
     auto output = abi.abiIn("Error(string)", string("Frozen contract:" + contractAddress.hex()));
     bcos::owning_bytes_ref o = owning_bytes_ref{std::move(output), 0, output.size()};
-    BOOST_TEST(toHex(executive->takeOutput()) == toHex(o));
+    BOOST_TEST(*toHexString(executive->takeOutput()) == *toHexString(o));
 
     // unfreeze success
     in = abi.abiIn("unfreeze(address)", contractAddress);
@@ -305,7 +305,7 @@ BOOST_AUTO_TEST_CASE(call)
     executeTransaction(*executive, tx);
     output = abi.abiIn("Error(string)", string("Error address:" + contractAddress.hex()));
     o = owning_bytes_ref{std::move(output), 0, output.size()};
-    BOOST_TEST(toHex(executive->takeOutput()) == toHex(o));
+    BOOST_TEST(*toHexString(executive->takeOutput()) == *toHexString(o));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

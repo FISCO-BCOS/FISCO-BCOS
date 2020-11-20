@@ -30,9 +30,9 @@
 #include <libconsensus/ConsensusEngineBase.h>
 #include <libstorage/Storage.h>
 #include <libsync/SyncStatus.h>
+#include <libutilities/ConcurrentQueue.h>
 #include <libutilities/FileSystem.h>
 #include <libutilities/ThreadPool.h>
-#include <libutilities/concurrent_queue.h>
 #include <sstream>
 
 #include <libp2p/P2PMessageFactory.h>
@@ -53,7 +53,7 @@ enum CheckResult
     INVALID = 1,
     FUTURE = 2
 };
-using PBFTMsgQueue = bcos::concurrent_queue<PBFTMsgPacket::Ptr>;
+using PBFTMsgQueue = bcos::ConcurrentQueue<PBFTMsgPacket::Ptr>;
 class PBFTEngine : public ConsensusEngineBase, public std::enable_shared_from_this<PBFTEngine>
 {
 public:

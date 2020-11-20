@@ -289,12 +289,13 @@ static void checkBackupMsg(FakeConsensus<T>& fake_pbft, std::string const& key,
             data = getDataFromBackupDB(key, fake_pbft.consensus()->backupDB());
             sleep(1);
         }
-        if (data != toHex(msgData))
+        auto hexData = toHexString(msgData);
+        if (data != *hexData)
         {
             std::cout << "error: PBFTBackup: Queried Data:" << data << std::endl;
-            std::cout << "error: PBFTBackup: Expected Data:" << toHex(msgData) << std::endl;
+            std::cout << "error: PBFTBackup: Expected Data:" << *hexData << std::endl;
         }
-        BOOST_CHECK(data == toHex(msgData));
+        BOOST_CHECK(data == *hexData);
         /// remove the key
         std::string empty = "";
         if (shouldClean)

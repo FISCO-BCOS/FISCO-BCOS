@@ -798,5 +798,4 @@ extern bytes RLPEmptyList;
 
 /// Human readable version of RLP.
 std::ostream& operator<<(std::ostream& _out, bcos::RLP const& _d);
-
 }  // namespace bcos

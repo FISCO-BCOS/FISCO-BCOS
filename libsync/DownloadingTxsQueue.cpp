@@ -192,7 +192,7 @@ void DownloadingTxsQueue::pop2TxPool(
                     SYNC_LOG(WARNING)
                         << LOG_BADGE("Tx") << LOG_DESC("Invalid transaction RLP received")
                         << LOG_KV("hash", tx->hash().abridged()) << LOG_KV("reason", e.what())
-                        << LOG_KV("rlp", toHex(tx->rlp()));
+                        << LOG_KV("rlp", *toHexString(tx->rlp()));
                     continue;
                 }
             }

@@ -44,7 +44,7 @@ BOOST_AUTO_TEST_CASE(testJsToPublic)
     BOOST_CHECK(pub == h512(public_str));
 
     KeyPair key_pair = KeyPair::create();
-    pub = jsToPublic(toHex(key_pair.pub()));
+    pub = jsToPublic(*toHexString(key_pair.pub()));
     BOOST_CHECK(pub != key_pair.pub());
     pub = jsToPublic(toHexPrefixed(key_pair.pub()));
     BOOST_CHECK(pub == key_pair.pub());

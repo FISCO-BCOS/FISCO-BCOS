@@ -134,7 +134,7 @@ PrecompiledExecResult::Ptr EntryPrecompiled::call(
         Address value;
         abi.abiOut(data, str, value);
 
-        m_entry->setField(str, toHex(value));
+        m_entry->setField(str, *toHexString(value));
         callResult->gasPricer()->appendOperation(InterfaceOpcode::Set);
     }
     else if (func == name2Selector[ENTRY_GETA_STR])

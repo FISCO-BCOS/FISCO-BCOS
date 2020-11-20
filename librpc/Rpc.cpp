@@ -33,7 +33,7 @@
 #include <libprecompiled/SystemConfigPrecompiled.h>
 #include <libsync/SyncStatus.h>
 #include <libtxpool/TxPoolInterface.h>
-#include <libutilities/CommonData.h>
+#include <libutilities/DataConvertUtility.h>
 #include <boost/algorithm/hex.hpp>
 #include <csignal>
 #include <sstream>
@@ -1835,7 +1835,7 @@ bool Rpc::checkGroupIDForGroupMgr(int _groupID, Json::Value& _response)
 
 bool Rpc::checkSealerID(const std::string& _sealer)
 {
-    if (!bcos::isHex(_sealer) || _sealer.length() != 128 || _sealer.compare(0, 2, "0x") == 0)
+    if (!bcos::isHexString(_sealer) || _sealer.length() != 128 || _sealer.compare(0, 2, "0x") == 0)
     {
         return false;
     }

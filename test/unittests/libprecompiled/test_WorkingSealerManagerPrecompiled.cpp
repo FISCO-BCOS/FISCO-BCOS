@@ -80,8 +80,8 @@ BOOST_AUTO_TEST_CASE(testRotateWorkingSealerWithoutRotate)
 
     // case3: invalid input(must be lastest hash)
     LOG(INFO) << LOG_DESC("testRotateWorkingSealerWithoutRotate: valid proof, invalid input");
-    in = abi.abiIn(WSM_METHOD_ROTATE_STR, fixture->vrfPublicKey, toHex(bcos::keccak256("test")),
-        vrfInputWithProof.second);
+    in = abi.abiIn(WSM_METHOD_ROTATE_STR, fixture->vrfPublicKey,
+        *toHexString(bcos::keccak256("test")), vrfInputWithProof.second);
     BOOST_CHECK_THROW(fixture->workingSealerManagerPrecompiled->call(
                           fixture->context, bytesConstRef(&in), nonSealerAccount, nonSealerAccount),
         PrecompiledException);
@@ -89,8 +89,9 @@ BOOST_AUTO_TEST_CASE(testRotateWorkingSealerWithoutRotate)
 
     // case4: invalid public key(the origin is not one of the sealers)
     LOG(INFO) << LOG_DESC("testRotateWorkingSealerWithoutRotate: invalid public key");
-    in = abi.abiIn(WSM_METHOD_ROTATE_STR, toHex(bytesConstRef{fixture->m_keyPair.pub().data(), 64}),
-        vrfInputWithProof.first, vrfInputWithProof.second);
+    in = abi.abiIn(WSM_METHOD_ROTATE_STR,
+        *toHexString(bytesConstRef{fixture->m_keyPair.pub().data(), 64}), vrfInputWithProof.first,
+        vrfInputWithProof.second);
     BOOST_CHECK_THROW(fixture->workingSealerManagerPrecompiled->call(
                           fixture->context, bytesConstRef(&in), nonSealerAccount, nonSealerAccount),
         PrecompiledException);

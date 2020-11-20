@@ -103,8 +103,7 @@ void TransactionReceipt::decode(RLP const& r)
     }
     catch (Exception& _e)
     {
-        _e << errinfo_name(
-            "invalid transaction format: " + toString(r) + " RLP: " + toHex(r.data()));
+        _e << errinfo_name("invalid transaction format, RLP: " + *toHexString(r.data()));
         throw;
     }
 }
@@ -115,7 +114,7 @@ std::ostream& bcos::eth::operator<<(std::ostream& _out, TransactionReceipt const
     _out << "Gas used: " << _r.gasUsed() << "\n";
     _out << "contractAddress : " << _r.contractAddress() << "\n";
     _out << "status : " << int(_r.status()) << "\n";
-    _out << "output: " << toHex(_r.outputBytes()) << " \n";
+    _out << "output: " << *toHexString(_r.outputBytes()) << " \n";
     _out << "Logs: " << _r.log().size() << " entries:"
          << "\n";
     for (LogEntry const& i : _r.log())
@@ -124,7 +123,7 @@ std::ostream& bcos::eth::operator<<(std::ostream& _out, TransactionReceipt const
              << "\n";
         for (auto const& j : i.topics)
             _out << "  " << j << "\n";
-        _out << "  Data: " << toHex(i.data) << "\n";
+        _out << "  Data: " << *toHexString(i.data) << "\n";
     }
     _out << "Bloom: " << _r.bloom() << "\n";
     return _out;

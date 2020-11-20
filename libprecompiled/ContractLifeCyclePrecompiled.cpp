@@ -403,7 +403,7 @@ void ContractLifeCyclePrecompiled::listManager(
     _callResult->setExecResult(abi.abiIn("", (u256)result, addrs));
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractLifeCyclePrecompiled")
                            << LOG_DESC("call query authority result")
-                           << LOG_KV("out", bcos::toHex(_callResult->execResult()));
+                           << LOG_KV("out", *toHexString(_callResult->execResult()));
 }
 
 PrecompiledExecResult::Ptr ContractLifeCyclePrecompiled::call(

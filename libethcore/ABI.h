@@ -26,7 +26,7 @@
 #include "libdevcrypto/CryptoInterface.h"
 #include <libutilities/Address.h>
 #include <libutilities/Common.h>
-#include <libutilities/CommonData.h>
+#include <libutilities/DataConvertUtility.h>
 #include <boost/algorithm/string.hpp>
 
 namespace bcos
@@ -223,7 +223,7 @@ private:
         {
             std::stringstream ss;
             ss << " deserialise failed, invalid offset , offset is " << _offset << " , length is "
-               << data.size() << " , data is " << toHex(data);
+               << data.size() << " , data is " << *toHexString(data);
 
             throw std::length_error(ss.str().c_str());
         }
@@ -389,7 +389,7 @@ public:
     template <class... T>
     std::string abiInHex(const std::string& _sig, T const&... _t)
     {
-        return toHex(abiIn(_sig, _t...));
+        return *toHexString(abiIn(_sig, _t...));
     }
 };
 

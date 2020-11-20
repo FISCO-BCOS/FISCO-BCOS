@@ -133,7 +133,7 @@ PrecompiledExecResult::Ptr CNSPrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin, Address const&)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("CNSPrecompiled") << LOG_DESC("call")
-                           << LOG_KV("param", toHex(param));
+                           << LOG_KV("param", *toHexString(param));
 
     // parse function name
     uint32_t func = getParamFunc(param);

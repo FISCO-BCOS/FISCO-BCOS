@@ -69,7 +69,7 @@ private:
         RLPStream transedRlp;
         // transform in into rlp
         buildRLP(jsonObj, transedRlp);
-        std::string hexRlp = toHex(transedRlp.out());
+        std::string hexRlp = *toHexString(transedRlp.out());
         std::string expectedRlp = (jsonObj["out"].asString());
         transform(expectedRlp.begin(), expectedRlp.end(), expectedRlp.begin(), ::tolower);
 

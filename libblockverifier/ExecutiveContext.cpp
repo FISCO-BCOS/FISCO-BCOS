@@ -241,7 +241,7 @@ std::shared_ptr<std::vector<std::string>> ExecutiveContext::getTxCriticals(const
                         << LOG_DESC("[getTxCriticals] params type less than  criticalSize")
                         << LOG_KV("func signature", config->functionName)
                         << LOG_KV("func criticalSize", config->criticalSize)
-                        << LOG_KV("input data", toHex(_tx.data()));
+                        << LOG_KV("input data", *toHexString(_tx.data()));
 
                     return nullptr;
                 }
@@ -254,7 +254,7 @@ std::shared_ptr<std::vector<std::string>> ExecutiveContext::getTxCriticals(const
                 {
                     EXECUTIVECONTEXT_LOG(DEBUG) << LOG_DESC("[getTxCriticals] abiout failed, ")
                                                 << LOG_KV("func signature", config->functionName)
-                                                << LOG_KV("input data", toHex(_tx.data()));
+                                                << LOG_KV("input data", *toHexString(_tx.data()));
 
                     return nullptr;
                 }

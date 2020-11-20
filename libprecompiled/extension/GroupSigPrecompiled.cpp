@@ -40,7 +40,7 @@ PrecompiledExecResult::Ptr GroupSigPrecompiled::call(
     ExecutiveContext::Ptr, bytesConstRef param, Address const&, Address const&)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("GroupSigPrecompiled") << LOG_DESC("call")
-                           << LOG_KV("param", toHex(param));
+                           << LOG_KV("param", *toHexString(param));
 
     // parse function name
     uint32_t func = getParamFunc(param);

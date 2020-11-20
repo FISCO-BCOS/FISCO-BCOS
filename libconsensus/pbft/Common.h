@@ -321,7 +321,7 @@ struct PBFTMsg
         catch (Exception const& _e)
         {
             _e << bcos::eth::errinfo_name("invalid msg format")
-               << bcos::eth::BadFieldError(field, toHex(rlp[field].data().toBytes()));
+               << bcos::eth::BadFieldError(field, *toHexString(rlp[field].data().toBytes()));
             throw;
         }
     }
@@ -357,7 +357,7 @@ struct PBFTMsg
         return bcos::crypto::Sign(keyPair, hash)->asBytes();
     }
 
-    std::string uniqueKey() const { return toHex(sig) + toHex(sig2); }
+    std::string uniqueKey() const { return *toHexString(sig) + *toHexString(sig2); }
 };
 
 /// definition of the prepare requests
@@ -474,7 +474,7 @@ struct PrepareReq : public PBFTMsg
         catch (Exception const& _e)
         {
             _e << bcos::eth::errinfo_name("invalid msg format")
-               << bcos::eth::BadFieldError(field, toHex(_rlp[field].data().toBytes()));
+               << bcos::eth::BadFieldError(field, *toHexString(_rlp[field].data().toBytes()));
             throw;
         }
     }

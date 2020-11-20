@@ -226,7 +226,7 @@ void BlockHeader::populate(RLP const& _header)
     catch (Exception const& _e)
     {
         _e << errinfo_name("invalid block header format")
-           << BadFieldError(field, toHex(_header[field].data().toBytes()));
+           << BadFieldError(field, *toHexString(_header[field].data().toBytes()));
         throw;
     }
 }

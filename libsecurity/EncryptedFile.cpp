@@ -41,7 +41,7 @@ bytes EncryptedFile::decryptContents(const std::string& _filePath)
         string encContextsStr = contentsString(_filePath);
         encFileBytes = fromHex(encContextsStr);
         LOG(DEBUG) << LOG_BADGE("ENCFILE") << LOG_DESC("Enc file contents")
-                   << LOG_KV("string", encContextsStr) << LOG_KV("bytes", toHex(encFileBytes));
+                   << LOG_KV("string", encContextsStr);
 
         auto dataKey = g_BCOSConfig.diskEncryption.dataKey;
 
@@ -59,7 +59,5 @@ bytes EncryptedFile::decryptContents(const std::string& _filePath)
                    << LOG_KV("what", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(EncryptedFileError());
     }
-    // LOG(DEBUG) << "[ENCFILE] Decrypt file [name/cipher/plain]: " << _filePath << "/"
-    //           << toHex(encFileBytes) << "/" << toHex(decFileBytes) << endl;
     return decFileBytes;
 }

@@ -45,10 +45,8 @@ BOOST_AUTO_TEST_CASE(SM_testCommonTrans)
         "bcec428d5205abe0f0cc8a7340839"
         "08d9eb8563e31f943d760786edf42ad67dd");
     Public pub1 = toPublic(sec1);
-    // std::cout << "public key:" << toHex(pub1) << std::endl;
     Secret sec2("bcec428d5205abe0");
     Public pub2 = toPublic(sec2);
-    // std::cout << "public key:" << toHex(pub1) << std::endl;
     BOOST_CHECK(pub1 != pub2);
     // check public->address
     Address addr_pub1 = toAddress(pub1);
@@ -184,10 +182,8 @@ BOOST_AUTO_TEST_CASE(testCommonTrans)
         "bcec428d5205abe0f0cc8a7340839"
         "08d9eb8563e31f943d760786edf42ad67dd");
     Public pub1 = toPublic(sec1);
-    // std::cout << "public key:" << toHex(pub1) << std::endl;
     Secret sec2("bcec428d5205abe0");
     Public pub2 = toPublic(sec2);
-    // std::cout << "public key:" << toHex(pub1) << std::endl;
     BOOST_CHECK(pub1 != pub2);
     // check public->address
     Address addr_pub1 = toAddress(pub1);
@@ -303,8 +299,8 @@ BOOST_AUTO_TEST_CASE(testSigecRocer)
     BOOST_CHECK(keyPair.first == true);
     BOOST_CHECK(keyPair.second != ret.asBytes());
     KeyPairR = bcos::ecRecover(ref(rlpBytesRight));
-    cout << toHex(KeyPairR.second) << endl;
-    cout << toHex(ret.asBytes()) << endl;
+    cout << *toHexString(KeyPairR.second) << endl;
+    cout << *toHexString(ret.asBytes()) << endl;
     BOOST_CHECK(KeyPairR.second == ret.asBytes());
 }
 BOOST_AUTO_TEST_CASE(testSign)

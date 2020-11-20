@@ -21,7 +21,7 @@
  * @date: 2018
  */
 #include "sm2.h"
-#include "libutilities/CommonData.h"
+#include "libutilities/DataConvertUtility.h"
 
 #define SM3_DIGEST_LENGTH 32
 
@@ -198,10 +198,10 @@ int SM2::verify(const unsigned char* _signData, size_t, const unsigned char* _or
     ECDSA_SIG* signData = NULL;
     unsigned char zValue[SM3_DIGEST_LENGTH];
     size_t zValueLen = SM3_DIGEST_LENGTH;
-    auto pubHex = toHex(_publicKey, _publicKey + 64, "04");
+    auto pubHex = *toHexString(_publicKey, _publicKey + 64, "04");
     sm2Group = EC_GROUP_new_by_curve_name(NID_sm2);
-    auto rHex = toHex(_signData, _signData + 32, "");
-    auto sHex = toHex(_signData + 32, _signData + 64, "");
+    auto rHex = *toHexString(_signData, _signData + 32, "");
+    auto sHex = *toHexString(_signData + 32, _signData + 64, "");
     if (sm2Group == NULL)
     {
         CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_GROUP_new_by_curve_name"

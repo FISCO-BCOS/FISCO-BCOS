@@ -23,7 +23,7 @@
 
 #pragma once
 
-#include "CommonData.h"
+#include "DataConvertUtility.h"
 #include <boost/functional/hash.hpp>
 #include <algorithm>
 #include <array>
@@ -151,7 +151,7 @@ public:
     /// Explicitly construct, copying from a  string.
     explicit FixedHash(std::string const& _s, ConstructFromStringType _t = FromHex,
         ConstructFromHashType _ht = FailIfDifferent)
-      : FixedHash(_t == FromHex ? fromHex(_s, WhenError::Throw) : bcos::asBytes(_s), _ht)
+      : FixedHash(_t == FromHex ? fromHex(_s) : bcos::asBytes(_s), _ht)
     {}
 
     /// Convert to arithmetic type.
@@ -227,17 +227,10 @@ public:
     byte operator[](unsigned _i) const { return m_data[_i]; }
 
     /// @returns an abridged version of the hash as a user-readable hex string.
-    std::string abridged() const { return toHex(ref().cropped(0, 4)) + "..."; }
-
-    /// @returns a version of the hash as a user-readable hex string that leaves out the middle
-    /// part.
-    std::string abridgedMiddle() const
-    {
-        return toHex(ref().cropped(0, 4)) + "..." + toHex(ref().cropped(N - 4));
-    }
+    std::string abridged() const { return *toHexString(ref().cropped(0, 4)) + "..."; }
 
     /// @returns the hash as a user-readable hex string.
-    std::string hex() const { return toHex(ref()); }
+    std::string hex() const { return *toHexString(ref()); }
 
     /// @returns the hash as a user-readable hex string with 0x perfix.
     std::string hexPrefixed() const { return toHexPrefixed(ref()); }
@@ -506,7 +499,6 @@ public:
     }
 
     using FixedHash<T>::abridged;
-    using FixedHash<T>::abridgedMiddle;
 
     bytesConstRef ref() const { return FixedHash<T>::ref(); }
     byte const* data() const { return FixedHash<T>::data(); }
@@ -544,7 +536,7 @@ inline size_t FixedHash<32>::hash::operator()(FixedHash<32> const& value) const
 template <unsigned N>
 inline std::ostream& operator<<(std::ostream& _out, FixedHash<N> const& _h)
 {
-    _out << toHex(_h);
+    _out << *toHexString(_h);
     return _out;
 }
 
@@ -620,6 +612,7 @@ bool isNodeIDOk(const std::string& _nodeID);
 
 namespace std
 {
+#if 0
 /// Forward std::hash<bcos::FixedHash> to bcos::FixedHash::hash.
 template <>
 struct hash<bcos::h64> : bcos::h64::hash
@@ -629,6 +622,7 @@ template <>
 struct hash<bcos::h128> : bcos::h128::hash
 {
 };
+#endif
 template <>
 struct hash<bcos::h160> : bcos::h160::hash
 {

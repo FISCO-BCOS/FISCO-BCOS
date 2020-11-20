@@ -189,7 +189,7 @@ public:
         {
             auto nodeId = _nodeList[i];
             auto condition = table->newCondition();
-            condition->EQ(NODE_KEY_NODEID, toHex(nodeId));
+            condition->EQ(NODE_KEY_NODEID, *toHexString(nodeId));
             // select the entries
             auto entries = table->select(PRI_KEY, condition);
             // select succ
@@ -201,7 +201,7 @@ public:
             // select failed
             if (!entries || entries->size() == 0)
             {
-                entry->setField(NODE_KEY_NODEID, toHex(nodeId));
+                entry->setField(NODE_KEY_NODEID, *toHexString(nodeId));
                 table->insert(PRI_KEY, entry);
             }
             else
@@ -218,7 +218,7 @@ public:
 
     std::pair<std::string, std::string> generateVRFKeyPair(KeyPair const& _keyPair)
     {
-        auto vrfPrivateKey = toHex(bytesConstRef{_keyPair.secret().data(), 32});
+        auto vrfPrivateKey = *toHexString(bytesConstRef{_keyPair.secret().data(), 32});
         // generate vrfPublicKey
         auto vrfPublicKey = curve25519_vrf_generate_key_pair(vrfPrivateKey.c_str());
         return std::make_pair(vrfPrivateKey, vrfPublicKey);
@@ -228,7 +228,7 @@ public:
         ExecutiveContext::Ptr _executiveContext, std::string const& _privateKey)
     {
         // get block Hash
-        std::string hash = toHex(_executiveContext->blockInfo().hash);
+        std::string hash = *toHexString(_executiveContext->blockInfo().hash);
         auto vrfProof = curve25519_vrf_proof(_privateKey.c_str(), hash.c_str());
         return std::make_pair(hash, vrfProof);
     }

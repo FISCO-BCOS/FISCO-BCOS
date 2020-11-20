@@ -100,7 +100,7 @@ void Transaction::decodeRC1(RLP const& rlp, CheckTransaction _checkSig)
     catch (Exception& _e)
     {
         _e << errinfo_name("invalid rc1 transaction format, invalid field name: " +
-                           invalidFieldName + " RLP: " + toHex(rlp.data()));
+                           invalidFieldName + " RLP: " + *toHexString(rlp.data()));
         throw;
     }
 }
@@ -154,7 +154,7 @@ void Transaction::decodeRC2(RLP const& rlp, CheckTransaction _checkSig)
     catch (Exception& _e)
     {
         _e << errinfo_name("invalid rc2 transaction format, invalid Field:" + invalidFieldName +
-                           ", RLP: " + toHex(rlp.data()));
+                           ", RLP: " + *toHexString(rlp.data()));
         throw;
     }
 }

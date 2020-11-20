@@ -26,8 +26,8 @@
 #include "VMSchedule.h"
 
 #include "Instruction.h"
-#include <libutilities/Common.h>
 #include <libethcore/Exceptions.h>
+#include <libutilities/Common.h>
 
 #include <evmc/evmc.h>
 #include <evmc/instructions.h>

@@ -109,18 +109,18 @@ void getMerkleProof(const std::vector<bcos::bytes>& _bytesCaches,
                     }
                     higherLevelList[i] = crypto::Hash(byteValue).asBytes();
                     std::lock_guard<std::mutex> l(mapMutex);
-                    std::string parentNode = toHex(higherLevelList[i]);
+                    std::string parentNode = *toHexString(higherLevelList[i]);
                     for (const auto& child : childList)
                     {
-                        (*_parent2ChildList)[parentNode].emplace_back(toHex(child));
+                        (*_parent2ChildList)[parentNode].emplace_back(*toHexString(child));
                     }
                 }
             });
         bytesCachesTemp = std::move(higherLevelList);
     }
 
-    (*_parent2ChildList)[toHex(crypto::Hash(bytesCachesTemp[0]).asBytes())].push_back(
-        toHex(bytesCachesTemp[0]));
+    (*_parent2ChildList)[*toHexString(crypto::Hash(bytesCachesTemp[0]).asBytes())].push_back(
+        *toHexString(bytesCachesTemp[0]));
 }
 
 }  // namespace bcos
