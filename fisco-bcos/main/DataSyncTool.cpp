@@ -224,14 +224,13 @@ TableData::Ptr getHashToBlockData(SQLStorage::Ptr _reader, int64_t _blockNumber)
     }
 }
 
-void conversionData(
-    const std::string& tableName, const std::string& dbType, TableData::Ptr tableData)
+void conversionData(const std::string& tableName, TableData::Ptr tableData)
 {
     // do the conversion from Hex to Byte in following situations:
     //     table in _sys_hash_2_block_,_sys_block_2_nonces_ and
     //     support version >= 2.2.0 and
     //     storage type in rocksdb,scalable
-    if (HexTables.end() != find(HexTables.begin(), HexTables.end(), tableName) &&
+    /*if (HexTables.end() != find(HexTables.begin(), HexTables.end(), tableName) &&
         g_BCOSConfig.version() >= V2_2_0 && dev::stringCmpIgnoreCase(dbType, "mysql"))
     {
         LOG(INFO) << LOG_BADGE("STORAGE") << LOG_DESC("conversion table data");
@@ -241,6 +240,45 @@ void conversionData(
             auto dataStr = entry->getField("value");
             auto dataBytes = std::make_shared<bytes>(fromHex(dataStr.c_str()));
             entry->setField("value", dataBytes->data(), dataBytes->size());
+        }
+    }*/
+    if (HexTables.end() != find(HexTables.begin(), HexTables.end(), tableName))
+    {
+        LOG(TRACE) << LOG_BADGE("STORAGE") << LOG_DESC("conversion table data") << LOG_KV("table name", tableName);
+        for (size_t i = 0; i < tableData->newEntries->size(); i++)
+        {
+            auto entry = tableData->newEntries->get(i);
+            auto dataStr = entry->getField("value");
+            auto dataBytes = std::make_shared<bytes>(fromHex(dataStr.c_str()));
+            entry->setField("value", dataBytes->data(), dataBytes->size());
+        }
+    } else if (tableName == SYS_HASH_2_BLOCKHEADER) {
+        LOG(TRACE) << LOG_BADGE("STORAGE") << LOG_DESC("conversion table data") << LOG_KV("table name", tableName);
+        for (size_t i = 0; i < tableData->newEntries->size(); i++)
+        {
+            auto entry = tableData->newEntries->get(i);
+            auto dataStr = entry->getField("value");
+            auto dataBytes = std::make_shared<bytes>(fromHex(dataStr.c_str()));
+            entry->setField("value", dataBytes->data(), dataBytes->size());
+            auto dataStr2 = entry->getField("sigs");
+            auto dataBytes2 = std::make_shared<bytes>(fromHex(dataStr2.c_str()));
+            entry->setField("sigs", dataBytes2->data(), dataBytes2->size());
+        }
+    } else if (tableName.find_first_of("c_") == 0) {
+        LOG(TRACE) << LOG_BADGE("STORAGE") << LOG_DESC("conversion table data") << LOG_KV("table name", tableName);
+        for (size_t i = 0; i < tableData->newEntries->size(); i++)
+        {
+            auto entry = tableData->newEntries->get(i);
+            auto dataKey = entry->getField("key");
+            if (dataKey == "code") {
+                auto dataStr = entry->getField("value");
+                auto dataBytes = std::make_shared<bytes>(fromHex(dataStr.c_str()));
+                entry->setField("code", dataBytes->data(), dataBytes->size());
+            } else if (dataKey == "codeHash") {
+                auto dataStr = entry->getField("value");
+                auto dataBytes = std::make_shared<bytes>(fromHex(dataStr.c_str()));
+                entry->setField("codeHash", dataBytes->data(), dataBytes->size());
+            }
         }
     }
 }
@@ -299,7 +337,7 @@ void syncData(SQLStorage::Ptr _reader, Storage::Ptr _writer, int64_t _blockNumbe
                      << "] " << tableInfo->name << " downloaded items : " << downloaded << flush;
                 break;
             }
-            conversionData(tableInfo->name, _param->mutableStorageParam().type, tableData);
+            conversionData(tableInfo->name, tableData);
             if (ForceTables.end() != find(ForceTables.begin(), ForceTables.end(), tableInfo->name))
             {
                 for (size_t i = 0; i < tableData->newEntries->size(); i++)
@@ -338,7 +376,7 @@ void syncData(SQLStorage::Ptr _reader, Storage::Ptr _writer, int64_t _blockNumbe
         if (!_fullSync)
         {
             auto data = getHashToBlockData(_reader, syncBlock);
-            conversionData(SYS_HASH_2_BLOCK, _param->mutableStorageParam().type, data);
+            conversionData(SYS_HASH_2_BLOCK, data);
             _writer->commit(syncBlock, vector<TableData::Ptr>{data});
             recorder->markStatus(SYS_HASH_2_BLOCK, make_pair(data->newEntries->size(), true));
         }
@@ -357,7 +395,7 @@ void syncData(SQLStorage::Ptr _reader, Storage::Ptr _writer, int64_t _blockNumbe
             auto data = getBlockToNonceData(_reader, syncBlock);
             if (data)
             {
-                conversionData(SYS_BLOCK_2_NONCES, _param->mutableStorageParam().type, data);
+                conversionData(SYS_BLOCK_2_NONCES, data);
                 _writer->commit(syncBlock, vector<TableData::Ptr>{data});
                 recorder->markStatus(SYS_BLOCK_2_NONCES, make_pair(data->newEntries->size(), true));
             }
@@ -388,6 +426,12 @@ void syncData(SQLStorage::Ptr _reader, Storage::Ptr _writer, int64_t _blockNumbe
 void fastSyncGroupData(std::shared_ptr<LedgerParamInterface> _param,
     ChannelRPCServer::Ptr _channelRPCServer, int64_t _rollbackNumber = 1000)
 {
+    if (g_BCOSConfig.version() < V2_6_0)
+    {
+        cout << "error unsupported version < 2.6.0" << endl;
+        exit(0);
+    }
+
     // create SQLStorage
     auto sqlStorage = createSQLStorage(_param, _channelRPCServer, [](std::exception& e) {
         LOG(ERROR) << LOG_BADGE("STORAGE") << LOG_BADGE("MySQL")
