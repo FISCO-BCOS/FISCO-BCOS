@@ -1235,9 +1235,31 @@ BOOST_AUTO_TEST_CASE(testViewChange)
     FakePBFTMsgPacket(viewchange_packet, *viewchange_req, ViewChangeReqPacket, nodeIdxSource,
         fake_pbft.m_sealerList[nodeIdxSource]);
 
+    // check latestViewChangeReqCache
+    BOOST_CHECK(fake_pbft.consensus()->reqCache()->latestViewChangeReqCache()->size() == 4);
+    BOOST_CHECK(fake_pbft.consensus()->reqCache()->latestViewChangeReqCache()->count(0) == true);
+    // erase the session
+    dev::network::NetworkException e;
+    auto p2pSession = FakeSessionFunc(fake_pbft.m_sealerList[0]);
+    // disconnect
+    Service::Ptr service =
+        std::dynamic_pointer_cast<Service>(fake_pbft.consensus()->mutableService());
+    service->onDisconnect(e, p2pSession);
+    // wait enqueue finished
+    int count = 10000;
+    auto latestViewChangeReqCacheSize =
+        fake_pbft.consensus()->reqCache()->latestViewChangeReqCache()->size();
+    while ((latestViewChangeReqCacheSize != 3) && --count > 0)
+    {
+        this_thread::sleep_for(std::chrono::milliseconds(1));
+        latestViewChangeReqCacheSize =
+            fake_pbft.consensus()->reqCache()->latestViewChangeReqCache()->size();
+    }
+    BOOST_CHECK(fake_pbft.consensus()->reqCache()->latestViewChangeReqCache()->size() == 3);
+    BOOST_CHECK(fake_pbft.consensus()->reqCache()->latestViewChangeReqCache()->count(0) == false);
+
     // set toView of the node increase by 1
     fake_pbft.consensus()->setToView(viewchange_req_decoded->view);
-
     // handler view change
     fake_pbft.consensus()->handleViewChangeMsg(viewchange_req_decoded, viewchange_packet);
     BOOST_CHECK(*viewchange_req_decoded == *viewchange_req);

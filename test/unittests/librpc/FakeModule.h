@@ -33,6 +33,7 @@
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
 #include <libledger/LedgerManager.h>
+#include <libnetwork/Host.h>
 #include <libp2p/Service.h>
 #include <libsync/SyncInterface.h>
 #include <libtxpool/TxPoolInterface.h>
@@ -73,6 +74,9 @@ public:
             h512("7dcce48da1c464c7025614a54a4e26df7d6f92cd4d315601e057c1659796736c5c8730e380fc"
                  "be637191cc2aebf4746846c0db2604adebf9c70c7f418d4d5a61"));
         m_groupID2NodeList[1] = nodeList;
+        std::shared_ptr<dev::network::Host> host = std::make_shared<dev::network::Host>();
+        host->setThreadPool(std::make_shared<dev::ThreadPool>("host", 1));
+        setHost(host);
     }
 
     P2PSessionInfos sessionInfos() override { return m_sessionInfos; }

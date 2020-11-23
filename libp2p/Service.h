@@ -91,7 +91,11 @@ public:
     void registerHandlerByProtoclID(
         PROTOCOL_ID protocolID, CallbackFuncWithSession handler) override;
 
+    void registerDisconnectHandlerByProtocolID(PROTOCOL_ID const& _protocolID,
+        DisconnectCallbackFuncWithSession _disconnectHandler) override;
+
     void removeHandlerByProtocolID(PROTOCOL_ID const& _protocolID) override;
+    void removeDisconnectHandlerByProtocolID(PROTOCOL_ID const& _protocolID) override;
 
     void registerHandlerByTopic(std::string topic, CallbackFuncWithSession handler) override;
 
@@ -195,6 +199,8 @@ public:
     }
 
 private:
+    void callDisconnectHandlers(dev::network::NetworkException _e, P2PSession::Ptr _p2pSession);
+
     NodeIDs getPeersByTopic(std::string const& topic);
     void checkWhitelistAndClearSession();
 
@@ -235,6 +241,9 @@ private:
 
     std::shared_ptr<std::unordered_map<uint32_t, CallbackFuncWithSession>> m_protocolID2Handler;
     RecursiveMutex x_protocolID2Handler;
+    std::shared_ptr<std::unordered_map<uint32_t, DisconnectCallbackFuncWithSession>>
+        m_protocolID2DisconnectHandler;
+    mutable SharedMutex x_protocolID2DisconnectHandler;
 
     ///< A call B, the function to call after the request is received by B in topic.
     std::shared_ptr<std::unordered_map<std::string, CallbackFuncWithSession>> m_topic2Handler;
