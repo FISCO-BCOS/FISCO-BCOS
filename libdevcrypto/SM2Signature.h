@@ -33,7 +33,11 @@ struct SM2Signature : public Signature
 {
     SM2Signature() = default;
 
-    SM2Signature(h256 const& _r, h256 const& _s, h512 _v) : Signature(_r, _s), v(_v) {}
+    SM2Signature(u256 const& _r, u256 const& _s, h512 _v) : v(_v)
+    {
+        r = _r;
+        s = _s;
+    }
 
     void encode(RLPStream& _s) const noexcept;
     std::vector<unsigned char> asBytes() const;

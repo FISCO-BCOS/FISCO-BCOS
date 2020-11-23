@@ -21,10 +21,13 @@
 
 #include "Rpc.h"
 #include "JsonHelper.h"
+#include "libnetwork/ASIOInterface.h"
 #include <jsonrpccpp/common/exception.h>
 #include <jsonrpccpp/server.h>
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcore/CommonData.h>
+#include <libdevcrypto/ECDSASignature.h>
+#include <libdevcrypto/SM2Signature.h>
 #include <libethcore/Common.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
@@ -410,7 +413,6 @@ Json::Value Rpc::getClientVersion()
         version["Build Type"] = g_BCOSConfig.binaryInfo.buildInfo;
         version["Git Branch"] = g_BCOSConfig.binaryInfo.gitBranch;
         version["Git Commit Hash"] = g_BCOSConfig.binaryInfo.gitCommitHash;
-
         return version;
     }
     catch (JsonRpcException& e)
@@ -425,6 +427,40 @@ Json::Value Rpc::getClientVersion()
 
     return Json::Value();
 }
+
+Json::Value Rpc::getNodeInfo()
+{
+    try
+    {
+        RPC_LOG(INFO) << LOG_BADGE("getNodeInfo") << LOG_DESC("request");
+        dev::network::NodeInfo hostNodeInfo = service()->host()->nodeInfo();
+        std::string host = service()->host()->listenHost();
+        uint16_t port = service()->host()->listenPort();
+        NodeIPEndpoint endPoint = NodeIPEndpoint(boost::asio::ip::make_address(host), port);
+        Json::Value nodeInfo;
+        nodeInfo["NodeID"] = service()->id().hex();
+        nodeInfo["IPAndPort"] = boost::lexical_cast<std::string>(endPoint);
+        nodeInfo["Agency"] = hostNodeInfo.agencyName;
+        nodeInfo["Node"] = hostNodeInfo.nodeName;
+        nodeInfo["Topic"] = Json::Value(Json::arrayValue);
+        for (auto topic : service()->topics())
+        {
+            nodeInfo["Topic"].append(topic);
+        }
+        return nodeInfo;
+    }
+    catch (JsonRpcException& e)
+    {
+        throw e;
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
+    }
+    return Json::Value();
+}
+
 
 Json::Value Rpc::getPeers(int)
 {
@@ -444,14 +480,13 @@ Json::Value Rpc::getPeers(int)
             node["Topic"] = Json::Value(Json::arrayValue);
             for (auto topic : it->topics)
             {
-                if (topic.topicStatus == dev::TopicStatus::VERIFYI_SUCCESS_STATUS)
+                if (topic.topicStatus == dev::TopicStatus::VERIFY_SUCCESS_STATUS)
                 {
                     node["Topic"].append(topic.topic);
                 }
             }
             response.append(node);
         }
-
         return response;
     }
     catch (JsonRpcException& e)
@@ -552,14 +587,13 @@ Json::Value Rpc::getGroupList()
 }
 
 
-Json::Value Rpc::getBlockByHash(
-    int _groupID, const std::string& _blockHash, bool _includeTransactions)
+Json::Value Rpc::getBlockByHash(int _groupID, const std::string& _blockHash, bool _includeAllData)
 {
     try
     {
         RPC_LOG(INFO) << LOG_BADGE("getBlockByHash") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID) << LOG_KV("blockHash", _blockHash)
-                      << LOG_KV("includeTransaction", _includeTransactions);
+                      << LOG_KV("includeAllData", _includeAllData);
 
         auto blockchain = ledgerManager()->blockChain(_groupID);
         checkLedgerStatus(blockchain, "blockchain", "getBlockByHash");
@@ -571,39 +605,30 @@ Json::Value Rpc::getBlockByHash(
         if (!block)
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(RPCExceptionType::BlockHash, RPCMsg[RPCExceptionType::BlockHash]));
-
-        response["number"] = toJS(block->header().number());
-        response["hash"] = _blockHash;
-        response["parentHash"] = toJS(block->header().parentHash());
-        response["logsBloom"] = toJS(block->header().logBloom());
-        response["transactionsRoot"] = toJS(block->header().transactionsRoot());
-        response["stateRoot"] = toJS(block->header().stateRoot());
-        response["receiptsRoot"] = toJS(block->header().receiptsRoot());
-        response["sealer"] = toJS(block->header().sealer());
-        response["sealerList"] = Json::Value(Json::arrayValue);
-        auto sealers = block->header().sealerList();
-        for (auto it = sealers.begin(); it != sealers.end(); ++it)
-        {
-            response["sealerList"].append((*it).hex());
-        }
-        response["extraData"] = Json::Value(Json::arrayValue);
-        auto datas = block->header().extraData();
-        for (auto const& data : datas)
-            response["extraData"].append(toJS(data));
-        response["gasLimit"] = toJS(block->header().gasLimit());
-        response["gasUsed"] = toJS(block->header().gasUsed());
-        response["timestamp"] = toJS(block->header().timestamp());
+        // get the blockHeader
+        generateBlockHeaderInfo(response, block->blockHeader(), nullptr, false);
         auto transactions = block->transactions();
         response["transactions"] = Json::Value(Json::arrayValue);
         for (unsigned i = 0; i < transactions->size(); i++)
         {
-            if (_includeTransactions)
-                response["transactions"].append(toJson(
-                    *((*transactions)[i]), std::make_pair(hash, i), block->header().number()));
+            if (_includeAllData)
+            {
+                Json::Value transactionResponse;
+                parseTransactionIntoResponse(transactionResponse, block->blockHeader().hash(),
+                    block->blockHeader().number(), i, (*transactions)[i]);
+                response["transactions"].append(transactionResponse);
+            }
             else
-                response["transactions"].append(toJS((*transactions)[i]->sha3()));
+            {
+                response["transactions"].append(toJS((*transactions)[i]->hash()));
+            }
         }
-
+        if (_includeAllData)
+        {
+            Json::Value signatureListResponse;
+            parseSignatureIntoResponse(signatureListResponse, block->sigList());
+            response["signatureList"] = signatureListResponse;
+        }
         return response;
     }
     catch (JsonRpcException& e)
@@ -618,56 +643,46 @@ Json::Value Rpc::getBlockByHash(
 }
 
 
-void Rpc::generateBlockHeaderInfo(Json::Value& _response,
-    std::shared_ptr<
-        std::pair<std::shared_ptr<dev::eth::BlockHeader>, dev::eth::Block::SigListPtrType>>
-        _headerInfo,
-    bool _includeSigList)
+void Rpc::generateBlockHeaderInfo(Json::Value& _response, dev::eth::BlockHeader const& _blockHeader,
+    dev::eth::Block::SigListPtrType _signatureList, bool _includeSigList)
 {
-    auto blockHeader = _headerInfo->first;
-    _response["number"] = blockHeader->number();
+    _response["number"] = _blockHeader.number();
 
-    _response["hash"] = toJS(blockHeader->hash());
-    _response["parentHash"] = toJS(blockHeader->parentHash());
-    _response["logsBloom"] = toJS(blockHeader->logBloom());
-    _response["transactionsRoot"] = toJS(blockHeader->transactionsRoot());
-    _response["receiptsRoot"] = toJS(blockHeader->receiptsRoot());
-    _response["dbHash"] = toJS(blockHeader->dbHash());
-    _response["stateRoot"] = toJS(blockHeader->stateRoot());
-    _response["sealer"] = toJS(blockHeader->sealer());
+    _response["hash"] = toJS(_blockHeader.hash());
+    _response["parentHash"] = toJS(_blockHeader.parentHash());
+    _response["logsBloom"] = toJS(_blockHeader.logBloom());
+    _response["transactionsRoot"] = toJS(_blockHeader.transactionsRoot());
+    _response["receiptsRoot"] = toJS(_blockHeader.receiptsRoot());
+    _response["dbHash"] = toJS(_blockHeader.dbHash());
+    _response["stateRoot"] = toJS(_blockHeader.stateRoot());
+    _response["sealer"] = toJS(_blockHeader.sealer());
     _response["sealerList"] = Json::Value(Json::arrayValue);
-    auto const sealerList = blockHeader->sealerList();
+    auto const sealerList = _blockHeader.sealerList();
     for (auto it = sealerList.begin(); it != sealerList.end(); ++it)
     {
         _response["sealerList"].append((*it).hex());
     }
     _response["extraData"] = Json::Value(Json::arrayValue);
-    auto datas = blockHeader->extraData();
+    auto datas = _blockHeader.extraData();
     for (auto const& data : datas)
     {
         _response["extraData"].append(toJS(data));
     }
-    _response["gasLimit"] = toJS(blockHeader->gasLimit());
-    _response["gasUsed"] = toJS(blockHeader->gasUsed());
-    _response["timestamp"] = toJS(blockHeader->timestamp());
+    _response["gasLimit"] = toJS(_blockHeader.gasLimit());
+    _response["gasUsed"] = toJS(_blockHeader.gasUsed());
+    _response["timestamp"] = toJS(_blockHeader.timestamp());
     if (!_includeSigList)
     {
         return;
     }
-    // signature list
-    _response["signatureList"] = Json::Value(Json::arrayValue);
-    auto sigList = _headerInfo->second;
-    if (!sigList)
+    if (!_signatureList)
     {
         return;
     }
-    for (auto const& signature : *sigList)
-    {
-        Json::Value sigJsonObj;
-        sigJsonObj["index"] = toJS(signature.first);
-        sigJsonObj["signature"] = toJS(signature.second);
-        _response["signatureList"].append(sigJsonObj);
-    }
+    // signature list
+    Json::Value signatureListResponse;
+    parseSignatureIntoResponse(signatureListResponse, _signatureList);
+    _response["signatureList"] = signatureListResponse;
 }
 
 Json::Value Rpc::getBlockHeaderByNumber(
@@ -689,7 +704,8 @@ Json::Value Rpc::getBlockHeaderByNumber(
                 RPCExceptionType::BlockNumberT, RPCMsg[RPCExceptionType::BlockNumberT]));
         }
         Json::Value response;
-        generateBlockHeaderInfo(response, blockHeaderInfo, _includeSigList);
+        generateBlockHeaderInfo(
+            response, *(blockHeaderInfo->first), blockHeaderInfo->second, _includeSigList);
         return response;
     }
     catch (JsonRpcException& e)
@@ -721,7 +737,8 @@ Json::Value Rpc::getBlockHeaderByHash(
                 JsonRpcException(RPCExceptionType::BlockHash, RPCMsg[RPCExceptionType::BlockHash]));
         }
         Json::Value response;
-        generateBlockHeaderInfo(response, blockHeaderInfo, _includeSigList);
+        generateBlockHeaderInfo(
+            response, *(blockHeaderInfo->first), blockHeaderInfo->second, _includeSigList);
         return response;
     }
     catch (JsonRpcException& e)
@@ -737,13 +754,13 @@ Json::Value Rpc::getBlockHeaderByHash(
 
 
 Json::Value Rpc::getBlockByNumber(
-    int _groupID, const std::string& _blockNumber, bool _includeTransactions)
+    int _groupID, const std::string& _blockNumber, bool _includeAllData)
 {
     try
     {
         RPC_LOG(INFO) << LOG_BADGE("getBlockByNumber") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID) << LOG_KV("blockNumber", _blockNumber)
-                      << LOG_KV("includeTransaction", _includeTransactions);
+                      << LOG_KV("includeAllData", _includeAllData);
 
         auto blockchain = ledgerManager()->blockChain(_groupID);
         checkLedgerStatus(blockchain, "blockchain", "getBlockByNumber");
@@ -756,40 +773,28 @@ Json::Value Rpc::getBlockByNumber(
         if (!block)
             BOOST_THROW_EXCEPTION(JsonRpcException(
                 RPCExceptionType::BlockNumberT, RPCMsg[RPCExceptionType::BlockNumberT]));
-
-        response["number"] = toJS(number);
-        response["hash"] = toJS(block->headerHash());
-        response["parentHash"] = toJS(block->header().parentHash());
-        response["logsBloom"] = toJS(block->header().logBloom());
-        response["transactionsRoot"] = toJS(block->header().transactionsRoot());
-        response["receiptsRoot"] = toJS(block->header().receiptsRoot());
-        response["dbHash"] = toJS(block->header().dbHash());
-        response["stateRoot"] = toJS(block->header().stateRoot());
-        response["sealer"] = toJS(block->header().sealer());
-        response["sealerList"] = Json::Value(Json::arrayValue);
-        auto sealers = block->header().sealerList();
-        for (auto it = sealers.begin(); it != sealers.end(); ++it)
-        {
-            response["sealerList"].append((*it).hex());
-        }
-        response["extraData"] = Json::Value(Json::arrayValue);
-        auto datas = block->header().extraData();
-        for (auto const& data : datas)
-            response["extraData"].append(toJS(data));
-        response["gasLimit"] = toJS(block->header().gasLimit());
-        response["gasUsed"] = toJS(block->header().gasUsed());
-        response["timestamp"] = toJS(block->header().timestamp());
+        // get the blockHeader
+        generateBlockHeaderInfo(response, block->blockHeader(), nullptr, false);
         auto transactions = block->transactions();
         response["transactions"] = Json::Value(Json::arrayValue);
         for (unsigned i = 0; i < transactions->size(); i++)
         {
-            if (_includeTransactions)
-                response["transactions"].append(toJson(*((*transactions)[i]),
-                    std::make_pair(block->headerHash(), i), block->header().number()));
+            if (_includeAllData)
+            {
+                Json::Value transactionResponse;
+                parseTransactionIntoResponse(transactionResponse, block->blockHeader().hash(),
+                    block->blockHeader().number(), i, (*transactions)[i]);
+                response["transactions"].append(transactionResponse);
+            }
             else
-                response["transactions"].append(toJS((*transactions)[i]->sha3()));
+                response["transactions"].append(toJS((*transactions)[i]->hash()));
         }
-
+        if (_includeAllData)
+        {
+            Json::Value signatureListResponse;
+            parseSignatureIntoResponse(signatureListResponse, block->sigList());
+            response["signatureList"] = signatureListResponse;
+        }
         return response;
     }
     catch (JsonRpcException& e)
@@ -852,18 +857,8 @@ Json::Value Rpc::getTransactionByHash(int _groupID, const std::string& _transact
         if (tx->blockNumber() == INVALIDNUMBER)
             return Json::nullValue;
 
-        response["blockHash"] = toJS(tx->blockHash());
-        response["blockNumber"] = toJS(tx->blockNumber());
-        response["from"] = toJS(tx->from());
-        response["gas"] = toJS(tx->gas());
-        response["gasPrice"] = toJS(tx->gasPrice());
-        response["hash"] = toJS(hash);
-        response["input"] = toJS(tx->data());
-        response["nonce"] = toJS(tx->nonce());
-        response["to"] = toJS(tx->to());
-        response["transactionIndex"] = toJS(tx->transactionIndex());
-        response["value"] = toJS(tx->value());
-
+        parseTransactionIntoResponse(
+            response, tx->blockHash(), tx->blockNumber(), tx->transactionIndex(), tx->tx());
         return response;
     }
     catch (JsonRpcException& e)
@@ -906,18 +901,8 @@ Json::Value Rpc::getTransactionByBlockHashAndIndex(
                 RPCExceptionType::TransactionIndex, RPCMsg[RPCExceptionType::TransactionIndex]));
 
         auto tx = (*transactions)[txIndex];
-        response["blockHash"] = _blockHash;
-        response["blockNumber"] = toJS(block->header().number());
-        response["from"] = toJS(tx->from());
-        response["gas"] = toJS(tx->gas());
-        response["gasPrice"] = toJS(tx->gasPrice());
-        response["hash"] = toJS(tx->sha3());
-        response["input"] = toJS(tx->data());
-        response["nonce"] = toJS(tx->nonce());
-        response["to"] = toJS(tx->to());
-        response["transactionIndex"] = toJS(txIndex);
-        response["value"] = toJS(tx->value());
-
+        parseTransactionIntoResponse(
+            response, block->blockHeader().hash(), block->blockHeader().number(), txIndex, tx);
         return response;
     }
     catch (JsonRpcException& e)
@@ -930,7 +915,6 @@ Json::Value Rpc::getTransactionByBlockHashAndIndex(
             JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
     }
 }
-
 
 Json::Value Rpc::getTransactionByBlockNumberAndIndex(
     int _groupID, const std::string& _blockNumber, const std::string& _transactionIndex)
@@ -960,18 +944,8 @@ Json::Value Rpc::getTransactionByBlockNumberAndIndex(
                 RPCExceptionType::TransactionIndex, RPCMsg[RPCExceptionType::TransactionIndex]));
 
         auto tx = (*transactions)[txIndex];
-        response["blockHash"] = toJS(block->header().hash());
-        response["blockNumber"] = toJS(block->header().number());
-        response["from"] = toJS(tx->from());
-        response["gas"] = toJS(tx->gas());
-        response["gasPrice"] = toJS(tx->gasPrice());
-        response["hash"] = toJS(tx->sha3());
-        response["input"] = toJS(tx->data());
-        response["nonce"] = toJS(tx->nonce());
-        response["to"] = toJS(tx->to());
-        response["transactionIndex"] = toJS(txIndex);
-        response["value"] = toJS(tx->value());
-
+        parseTransactionIntoResponse(
+            response, block->blockHeader().hash(), block->blockHeader().number(), txIndex, tx);
         return response;
     }
     catch (JsonRpcException& e)
@@ -990,7 +964,7 @@ Json::Value Rpc::getTransactionReceipt(int _groupID, const std::string& _transac
 {
     try
     {
-        RPC_LOG(INFO) << LOG_BADGE("getTransactionByBlockHashAndIndex") << LOG_DESC("request")
+        RPC_LOG(INFO) << LOG_BADGE("getTransactionReceipt") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID) << LOG_KV("transactionHash", _transactionHash);
 
         auto blockchain = ledgerManager()->blockChain(_groupID);
@@ -999,39 +973,15 @@ Json::Value Rpc::getTransactionReceipt(int _groupID, const std::string& _transac
 
         h256 hash = jsToFixed<32>(_transactionHash);
 
-        auto tx = blockchain->getLocalisedTxByHash(hash);
-        if (tx->blockNumber() == INVALIDNUMBER)
+        auto localisedTx = blockchain->getLocalisedTxByHash(hash);
+        if (localisedTx->blockNumber() == INVALIDNUMBER)
             return Json::nullValue;
         auto txReceipt = blockchain->getLocalisedTxReceiptByHash(hash);
         if (txReceipt->blockNumber() == INVALIDNUMBER)
             return Json::nullValue;
 
         Json::Value response;
-        response["transactionHash"] = _transactionHash;
-        response["transactionIndex"] = toJS(txReceipt->transactionIndex());
-        response["root"] = toJS(txReceipt->stateRoot());
-        response["blockNumber"] = toJS(txReceipt->blockNumber());
-        response["blockHash"] = toJS(txReceipt->blockHash());
-        response["from"] = toJS(txReceipt->from());
-        response["to"] = toJS(txReceipt->to());
-        response["gasUsed"] = toJS(txReceipt->gasUsed());
-        response["contractAddress"] = toJS(txReceipt->contractAddress());
-        response["logs"] = Json::Value(Json::arrayValue);
-        for (unsigned int i = 0; i < txReceipt->log().size(); ++i)
-        {
-            Json::Value log;
-            log["address"] = toJS(txReceipt->log()[i].address);
-            log["topics"] = Json::Value(Json::arrayValue);
-            for (unsigned int j = 0; j < txReceipt->log()[i].topics.size(); ++j)
-                log["topics"].append(toJS(txReceipt->log()[i].topics[j]));
-            log["data"] = toJS(txReceipt->log()[i].data);
-            response["logs"].append(log);
-        }
-        response["logsBloom"] = toJS(txReceipt->bloom());
-        response["status"] = toJS(txReceipt->status());
-        response["input"] = toJS(tx->data());
-        response["output"] = toJS(txReceipt->outputBytes());
-
+        parseReceiptIntoResponse(response, ref(localisedTx->tx()->data()), txReceipt);
         return response;
     }
     catch (JsonRpcException& e)
@@ -1062,16 +1012,9 @@ Json::Value Rpc::getPendingTransactions(int _groupID)
         for (size_t i = 0; i < transactions->size(); ++i)
         {
             auto tx = (*transactions)[i];
-            Json::Value txJson;
-            txJson["from"] = toJS(tx->from());
-            txJson["gas"] = toJS(tx->gas());
-            txJson["gasPrice"] = toJS(tx->gasPrice());
-            txJson["hash"] = toJS(tx->sha3());
-            txJson["input"] = toJS(tx->data());
-            txJson["nonce"] = toJS(tx->nonce());
-            txJson["to"] = toJS(tx->to());
-            txJson["value"] = toJS(tx->value());
-            response.append(txJson);
+            Json::Value transactionResponse;
+            parseTransactionIntoResponse(transactionResponse, dev::h256(), 0, 0, tx, false);
+            response.append(transactionResponse);
         }
 
         return response;
@@ -1221,33 +1164,7 @@ std::shared_ptr<Json::Value> Rpc::notifyReceipt(std::weak_ptr<dev::blockchain::B
     std::shared_ptr<Json::Value> response = std::make_shared<Json::Value>();
 
     // FIXME: If made protocol modify, please modify upside if
-    (*response)["transactionHash"] = toJS(receipt->hash());
-    (*response)["transactionIndex"] = toJS(receipt->transactionIndex());
-    (*response)["root"] = toJS(receipt->stateRoot());
-    (*response)["blockNumber"] = toJS(receipt->blockNumber());
-    (*response)["blockHash"] = toJS(receipt->blockHash());
-    (*response)["from"] = toJS(receipt->from());
-    (*response)["to"] = toJS(receipt->to());
-    (*response)["gasUsed"] = toJS(receipt->gasUsed());
-    (*response)["contractAddress"] = toJS(receipt->contractAddress());
-    (*response)["logs"] = Json::Value(Json::arrayValue);
-    for (unsigned int i = 0; i < receipt->log().size(); ++i)
-    {
-        Json::Value log;
-        log["address"] = toJS(receipt->log()[i].address);
-        log["topics"] = Json::Value(Json::arrayValue);
-        for (unsigned int j = 0; j < receipt->log()[i].topics.size(); ++j)
-            log["topics"].append(toJS(receipt->log()[i].topics[j]));
-        log["data"] = toJS(receipt->log()[i].data);
-        (*response)["logs"].append(log);
-    }
-    (*response)["logsBloom"] = toJS(receipt->bloom());
-    (*response)["status"] = toJS(receipt->status());
-    if (g_BCOSConfig.version() > RC3_VERSION)
-    {
-        (*response)["input"] = toJS(input);
-    }
-    (*response)["output"] = toJS(receipt->outputBytes());
+    parseReceiptIntoResponse(*response, input, receipt);
     return response;
 }
 
@@ -1343,7 +1260,6 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp,
                 JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
         }
         auto blockChain = ledgerManager()->blockChain(_groupID);
-        // Transaction tx(jsToBytes(_rlp, OnFailed::Throw), CheckTransaction::Everything);
         Transaction::Ptr tx = std::make_shared<Transaction>(
             jsToBytes(_rlp, OnFailed::Throw), CheckTransaction::Everything);
         // receive transaction from channel or rpc
@@ -1374,8 +1290,8 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp,
                     transactionCallback(receiptContent, _groupID);
                 });
         }
-        // calculate the sha3 before submit into the transaction pool
-        tx->sha3();
+        // calculate the keccak256 before submit into the transaction pool
+        tx->hash();
         std::pair<h256, Address> ret;
         switch (clientProtocolversion)
         {
@@ -1438,23 +1354,17 @@ Json::Value Rpc::getTransactionByHashWithProof(int _groupID, const std::string& 
         h256 hash = jsToFixed<32>(_transactionHash);
         auto tx = blockchain->getTransactionByHashWithProof(hash);
 
-        auto transaction = tx.first;
-        if (transaction->blockNumber() == INVALIDNUMBER)
+        auto localizedTransaction = tx.first;
+
+        if (!localizedTransaction || localizedTransaction->blockNumber() == INVALIDNUMBER)
         {
             return Json::nullValue;
         }
-        response["transaction"]["blockHash"] = toJS(transaction->blockHash());
-        response["transaction"]["blockNumber"] = toJS(transaction->blockNumber());
-        response["transaction"]["from"] = toJS(transaction->from());
-        response["transaction"]["gas"] = toJS(transaction->gas());
-        response["transaction"]["gasPrice"] = toJS(transaction->gasPrice());
-        response["transaction"]["hash"] = toJS(hash);
-        response["transaction"]["input"] = toJS(transaction->data());
-        response["transaction"]["nonce"] = toJS(transaction->nonce());
-        response["transaction"]["to"] = toJS(transaction->to());
-        response["transaction"]["transactionIndex"] = toJS(transaction->transactionIndex());
-        response["transaction"]["value"] = toJS(transaction->value());
-
+        Json::Value transactionResponse;
+        parseTransactionIntoResponse(transactionResponse, localizedTransaction->blockHash(),
+            localizedTransaction->blockNumber(), localizedTransaction->transactionIndex(),
+            localizedTransaction->tx());
+        response["transaction"] = transactionResponse;
 
         const auto& merkleList = tx.second;
         uint32_t index = 0;
@@ -1510,36 +1420,16 @@ Json::Value Rpc::getTransactionReceiptByHashWithProof(
         dev::eth::LocalisedTransaction transaction;
         auto receipt = blockchain->getTransactionReceiptByHashWithProof(hash, transaction);
         auto txReceipt = receipt.first;
-        if (txReceipt->blockNumber() == INVALIDNUMBER || transaction.blockNumber() == INVALIDNUMBER)
-            return Json::nullValue;
-
-        Json::Value response;
-        response["transactionReceipt"]["transactionHash"] = _transactionHash;
-        response["transactionReceipt"]["root"] = toJS(txReceipt->stateRoot());
-        response["transactionReceipt"]["transactionIndex"] = toJS(txReceipt->transactionIndex());
-        response["transactionReceipt"]["blockNumber"] = toJS(txReceipt->blockNumber());
-        response["transactionReceipt"]["blockHash"] = toJS(txReceipt->blockHash());
-        response["transactionReceipt"]["from"] = toJS(txReceipt->from());
-        response["transactionReceipt"]["to"] = toJS(txReceipt->to());
-        response["transactionReceipt"]["gasUsed"] = toJS(txReceipt->gasUsed());
-        response["transactionReceipt"]["contractAddress"] = toJS(txReceipt->contractAddress());
-        response["transactionReceipt"]["logs"] = Json::Value(Json::arrayValue);
-        for (unsigned int i = 0; i < txReceipt->log().size(); ++i)
+        if (!txReceipt || txReceipt->blockNumber() == INVALIDNUMBER ||
+            transaction.blockNumber() == INVALIDNUMBER)
         {
-            Json::Value log;
-            log["address"] = toJS(txReceipt->log()[i].address);
-            log["topics"] = Json::Value(Json::arrayValue);
-            for (unsigned int j = 0; j < txReceipt->log()[i].topics.size(); ++j)
-                log["topics"].append(toJS(txReceipt->log()[i].topics[j]));
-            log["data"] = toJS(txReceipt->log()[i].data);
-            response["transactionReceipt"]["logs"].append(log);
+            return Json::nullValue;
         }
-        response["transactionReceipt"]["logsBloom"] = toJS(txReceipt->bloom());
-        response["transactionReceipt"]["status"] = toJS(txReceipt->status());
-        response["transactionReceipt"]["input"] = toJS(transaction.data());
-        response["transactionReceipt"]["output"] = toJS(txReceipt->outputBytes());
 
-
+        Json::Value receiptResponse;
+        parseReceiptIntoResponse(receiptResponse, ref(transaction.tx()->data()), txReceipt);
+        Json::Value response;
+        response["transactionReceipt"] = receiptResponse;
         const auto& merkleList = receipt.second;
         uint32_t index = 0;
         for (const auto& merkleItem : merkleList)
@@ -1995,6 +1885,13 @@ bool Rpc::checkParamsForGenerateGroup(
     }
 
     int pos = 1;
+    if (_params["sealers"].size() == 0)
+    {
+        _response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
+        _response["message"] =
+            "GenerateGroup failed for empty sealer list, expect at least one sealer";
+        return false;
+    }
     for (auto& sealer : _params["sealers"])
     {
         if (!sealer.isString() || !checkSealerID(sealer.asString()))
@@ -2024,4 +1921,257 @@ bool Rpc::checkParamsForGenerateGroup(
     }
 
     return true;
+}
+
+void Rpc::parseTransactionIntoResponse(Json::Value& _response, dev::h256 const& _blockHash,
+    int64_t _blockNumber, int64_t _txIndex, Transaction::Ptr _tx, bool _onChain)
+{
+    /// the fields that required when calculate transaction hash
+    // transaction nonce
+    _response["nonce"] = toJS(_tx->nonce());
+    _response["gasPrice"] = toJS(_tx->gasPrice());
+    _response["gas"] = toJS(_tx->gas());
+    _response["blockLimit"] = toJS(_tx->blockLimit());
+    // the receiver address
+    _response["to"] = toJS(_tx->to());
+    // the value
+    _response["value"] = toJS(_tx->value());
+    // the input data
+    _response["input"] = toJS(_tx->data());
+    // the chainId
+    _response["chainId"] = toJS(_tx->chainId());
+    // the groupId
+    _response["groupId"] = toJS(_tx->groupId());
+    // the extraData
+    _response["extraData"] = toJS(_tx->extraData());
+    // the fields that are useful for the users
+    if (_onChain)
+    {
+        // these fields are only displayed when the transactions commit to the blockchain
+        _response["blockHash"] = toJS(_blockHash);
+        _response["blockNumber"] = toJS(_blockNumber);
+        _response["transactionIndex"] = toJS(_txIndex);
+    }
+
+    _response["from"] = toJS(_tx->from());
+    _response["hash"] = toJS(_tx->hash());
+
+    // the signature
+    if (!_tx->vrs())
+    {
+        return;
+    }
+    Json::Value signatureResponse;
+    signatureResponse["r"] = toJS(_tx->vrs()->r);
+    signatureResponse["s"] = toJS(_tx->vrs()->s);
+    // the sm signature
+    if (g_BCOSConfig.SMCrypto())
+    {
+        std::shared_ptr<dev::crypto::SM2Signature> sm2Signature =
+            std::dynamic_pointer_cast<dev::crypto::SM2Signature>(_tx->vrs());
+        signatureResponse["v"] = toJS(sm2Signature->v);
+    }
+    else
+    {
+        std::shared_ptr<dev::crypto::ECDSASignature> ecdsaSignature =
+            std::dynamic_pointer_cast<dev::crypto::ECDSASignature>(_tx->vrs());
+        signatureResponse["v"] = toJS(ecdsaSignature->v);
+    }
+    signatureResponse["signature"] = toJS(_tx->vrs()->asBytes());
+    _response["signature"] = signatureResponse;
+}
+
+void Rpc::parseReceiptIntoResponse(Json::Value& _response, dev::bytesConstRef _input,
+    dev::eth::LocalisedTransactionReceipt::Ptr _receipt)
+{
+    // the fields required for calculate keccak256 for the transactionReceipt
+    // Note: the hash of the transactionReceipt is equal to the hash of the corresponding
+    // transaction
+    _response["root"] = toJS(_receipt->stateRoot());
+    _response["gasUsed"] = toJS(_receipt->gasUsed());
+    _response["contractAddress"] = toJS(_receipt->contractAddress());
+    _response["logsBloom"] = toJS(_receipt->bloom());
+    _response["status"] = toJS(_receipt->status());
+    dev::eth::TransactionException status = _receipt->status();
+    // parse statusMsg
+    std::stringstream ss;
+    ss << status;
+    _response["statusMsg"] = ss.str();
+
+    _response["output"] = toJS(_receipt->outputBytes());
+    // logs
+    _response["logs"] = Json::Value(Json::arrayValue);
+    for (unsigned int i = 0; i < _receipt->log().size(); ++i)
+    {
+        Json::Value log;
+        log["address"] = toJS(_receipt->log()[i].address);
+        log["topics"] = Json::Value(Json::arrayValue);
+        for (unsigned int j = 0; j < _receipt->log()[i].topics.size(); ++j)
+        {
+            log["topics"].append(toJS(_receipt->log()[i].topics[j]));
+        }
+        log["data"] = toJS(_receipt->log()[i].data);
+        _response["logs"].append(log);
+    }
+    // the fields that are useful for the users
+    _response["transactionHash"] = toJS(_receipt->hash());
+    _response["transactionIndex"] = toJS(_receipt->transactionIndex());
+    _response["blockNumber"] = toJS(_receipt->blockNumber());
+    _response["blockHash"] = toJS(_receipt->blockHash());
+    _response["from"] = toJS(_receipt->from());
+    _response["to"] = toJS(_receipt->to());
+    _response["input"] = toJS(_input);
+}
+
+void Rpc::parseSignatureIntoResponse(
+    Json::Value& _response, dev::eth::Block::SigListPtrType _signatureList)
+{
+    if (!_signatureList)
+    {
+        return;
+    }
+    _response = Json::Value(Json::arrayValue);
+    // signature list
+    for (auto const& signature : *(_signatureList))
+    {
+        Json::Value sigJsonObj;
+        sigJsonObj["index"] = toJS(signature.first);
+        sigJsonObj["signature"] = toJS(signature.second);
+        _response.append(sigJsonObj);
+    }
+}
+
+Json::Value Rpc::getBatchReceiptsByBlockNumberAndRange(int _groupID,
+    const std::string& _blockNumber, std::string const& _from, std::string const& _count,
+    bool _compress)
+{
+    try
+    {
+        RPC_LOG(INFO) << LOG_BADGE("getBatchReceiptsByBlockNumberAndRange") << LOG_DESC("request")
+                      << LOG_KV("groupID", _groupID) << LOG_KV("blockNumber", _blockNumber)
+                      << LOG_KV("from", _from) << LOG_KV("receiptSize", _count);
+        checkRequest(_groupID);
+        BlockNumber number = jsToBlockNumber(_blockNumber);
+
+        auto blockchain = ledgerManager()->blockChain(_groupID);
+        auto block = blockchain->getBlockByNumber(number);
+        if (!block)
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::BlockNumberT, RPCMsg[RPCExceptionType::BlockNumberT]));
+        }
+        Json::Value response;
+        getBatchReceipts(response, block, _from, _count, _compress);
+        return response;
+    }
+    catch (JsonRpcException& e)
+    {
+        throw e;
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
+    }
+}
+
+Json::Value Rpc::getBatchReceiptsByBlockHashAndRange(int _groupID, const std::string& _blockHash,
+    std::string const& _from, std::string const& _count, bool _compress)
+{
+    try
+    {
+        RPC_LOG(INFO) << LOG_BADGE("getBatchReceiptsByBlockHashAndRange") << LOG_DESC("request")
+                      << LOG_KV("groupID", _groupID) << LOG_KV("blockHash", _blockHash)
+                      << LOG_KV("from", _from) << LOG_KV("count", _count);
+
+        checkRequest(_groupID);
+        h256 hash = jsToFixed<32>(_blockHash);
+        auto blockchain = ledgerManager()->blockChain(_groupID);
+        auto block = blockchain->getBlockByHash(hash);
+        if (!block)
+        {
+            BOOST_THROW_EXCEPTION(JsonRpcException(
+                RPCExceptionType::BlockNumberT, RPCMsg[RPCExceptionType::BlockNumberT]));
+        }
+        Json::Value response;
+        getBatchReceipts(response, block, _from, _count, _compress);
+        return response;
+    }
+    catch (JsonRpcException& e)
+    {
+        throw e;
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
+    }
+}
+
+void Rpc::getBatchReceipts(Json::Value& _response, dev::eth::Block::Ptr _block,
+    std::string const& _from, std::string const& _count, bool _compress)
+{
+    auto transactions = _block->transactions();
+    auto receipts = _block->transactionReceipts();
+    int64_t receiptsSize = receipts->size();
+    int64_t startIndex = jsToInt(_from);
+    // check the startIndex
+    if (startIndex >= (int64_t)transactions->size() || startIndex >= receiptsSize)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(-40099,
+            "start index out of range, the number of receipt is " + std::to_string(receiptsSize)));
+    }
+    int64_t endIndex = receiptsSize;
+    // return all receipts when count is -1
+    if (_count != "-1")
+    {
+        endIndex = startIndex + jsToInt(_count);
+        endIndex = (endIndex > receiptsSize) ? receiptsSize : endIndex;
+    }
+
+    RPC_LOG(INFO) << LOG_DESC("getBatchReceipts")
+                  << LOG_KV("blockHash", _block->blockHeader().hash().abridged())
+                  << LOG_KV("startIndex", startIndex) << LOG_KV("endIndex", endIndex)
+                  << LOG_KV("receiptsSize", receiptsSize);
+    Json::Value blockInfo;
+
+    blockInfo["receiptRoot"] = toJS(_block->receiptRoot());
+    blockInfo["blockNumber"] = toJS(_block->blockHeader().number());
+    blockInfo["blockHash"] = toJS(_block->headerHash());
+    blockInfo["receiptsCount"] = toJS(receiptsSize);
+    _response["blockInfo"] = blockInfo;
+
+    for (auto i = startIndex; i < endIndex; ++i)
+    {
+        auto const& receipt = receipts->at(i);
+        auto const& transaction = transactions->at(i);
+
+        Json::Value receiptJson;
+        receiptJson["transactionHash"] = toJS(transaction->hash());
+        receiptJson["transactionIndex"] = toJS(i);
+        receiptJson["from"] = toJS(transaction->from());
+        receiptJson["to"] = toJS(transaction->to());
+        receiptJson["gasUsed"] = toJS(receipt->gasUsed());
+        receiptJson["contractAddress"] = toJS(receipt->contractAddress());
+        receiptJson["logs"] = Json::Value(Json::arrayValue);
+        for (unsigned int i = 0; i < receipt->log().size(); ++i)
+        {
+            Json::Value log;
+            log["address"] = toJS(receipt->log()[i].address);
+            log["topics"] = Json::Value(Json::arrayValue);
+            for (unsigned int j = 0; j < receipt->log()[i].topics.size(); ++j)
+                log["topics"].append(toJS(receipt->log()[i].topics[j]));
+            log["data"] = toJS(receipt->log()[i].data);
+            receiptJson["logs"].append(log);
+        }
+        receiptJson["status"] = toJS(receipt->status());
+        receiptJson["output"] = toJS(receipt->outputBytes());
+        _response["transactionReceipts"].append(receiptJson);
+    }
+    if (!_compress)
+    {
+        return;
+    }
+    Json::FastWriter fastWriter;
+    _response = base64Encode(compress(fastWriter.write(_response)));
 }

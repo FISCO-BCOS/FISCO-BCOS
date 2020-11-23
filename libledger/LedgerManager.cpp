@@ -37,7 +37,7 @@ using namespace dev::ledger;
 using namespace std;
 namespace fs = boost::filesystem;
 
-string LedgerManager::getGroupStatusFilePath(GROUP_ID const& _groupID) const
+string LedgerManager::generateAndGetGroupStatusFile(GROUP_ID const& _groupID) const
 {
     RecursiveGuard l(x_ledgerManager);
     auto statusFilePath = fs::path(g_BCOSConfig.dataDir());
@@ -50,17 +50,33 @@ string LedgerManager::getGroupStatusFilePath(GROUP_ID const& _groupID) const
     return statusFilePath.string();
 }
 
+bool LedgerManager::isGroupExist(dev::GROUP_ID const& _groupID) const
+{
+    RecursiveGuard l(x_ledgerManager);
+    auto statusFilePath = fs::path(g_BCOSConfig.dataDir());
+    statusFilePath /= "group" + to_string(_groupID);
+    if (!fs::exists(statusFilePath) || !fs::is_directory(statusFilePath))
+    {
+        return false;
+    }
+    return true;
+}
+
 LedgerStatus LedgerManager::queryGroupStatus(dev::GROUP_ID const& _groupID)
 {
     RecursiveGuard l(x_ledgerManager);
-    if (!fs::exists(getGroupStatusFilePath(_groupID)))
+    if (!isGroupExist(_groupID))
+    {
+        return LedgerStatus::INEXISTENT;
+    }
+    if (!fs::exists(generateAndGetGroupStatusFile(_groupID)))
     {
         return LedgerStatus::INEXISTENT;
     }
 
     string status = "";
     ifstream statusFile;
-    statusFile.open(getGroupStatusFilePath(_groupID));
+    statusFile.open(generateAndGetGroupStatusFile(_groupID));
     statusFile >> status;
 
     if (status == "STOPPED")
@@ -114,7 +130,7 @@ void LedgerManager::setGroupStatus(dev::GROUP_ID const& _groupID, LedgerStatus _
     {
         ofstream statusFile;
         statusFile.exceptions(std::ofstream::failbit | std::ofstream::badbit);
-        statusFile.open(getGroupStatusFilePath(_groupID));
+        statusFile.open(generateAndGetGroupStatusFile(_groupID));
         statusFile << status;
     }
 }

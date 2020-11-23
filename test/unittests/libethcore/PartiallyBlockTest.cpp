@@ -50,7 +50,7 @@ public:
             tx->setNonce(utcTime() + index);
             tx->setBlockLimit(200);
             std::shared_ptr<crypto::Signature> sig =
-                dev::crypto::Sign(fakedBlock->m_keyPair, tx->sha3(WithoutSignature));
+                dev::crypto::Sign(fakedBlock->m_keyPair, tx->hash(WithoutSignature));
             tx->updateSignature(sig);
             index++;
         }
@@ -119,7 +119,7 @@ BOOST_AUTO_TEST_CASE(testEncodeDecodeProposal)
     size_t index = 0;
     for (auto tx : *(fakePartiallyBlock->m_block->transactions()))
     {
-        BOOST_CHECK(tx->sha3() == (*fakePartiallyBlock->m_block->txsHash())[index]);
+        BOOST_CHECK(tx->hash() == (*fakePartiallyBlock->m_block->txsHash())[index]);
         index++;
     }
 

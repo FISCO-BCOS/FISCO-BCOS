@@ -39,6 +39,7 @@ contract ContractLifeCyclePrecompiled {
     function freeze(address addr) public returns(int);
     function unfreeze(address addr) public returns(int);
     function grantManager(address contractAddr, address userAddr) public returns(int);
+    function revokeManager(address contractAddress, address userAddress) public returns(int);
     function getStatus(address addr) public constant returns(int,string);
     function listManager(address addr) public constant returns(int,address[]);
 }
@@ -47,6 +48,8 @@ contract ContractLifeCyclePrecompiled {
 const char* const METHOD_FREEZE_STR = "freeze(address)";
 const char* const METHOD_UNFREEZE_STR = "unfreeze(address)";
 const char* const METHOD_GRANT_STR = "grantManager(address,address)";
+// support revokeManager when supported_version >= v2.7.0
+const char* const METHOD_REVOKE_STR = "revokeManager(address,address)";
 const char* const METHOD_QUERY_STR = "getStatus(address)";
 const char* const METHOD_QUERY_AUTHORITY = "listManager(address)";
 
@@ -65,6 +68,7 @@ ContractLifeCyclePrecompiled::ContractLifeCyclePrecompiled()
     name2Selector[METHOD_FREEZE_STR] = getFuncSelector(METHOD_FREEZE_STR);
     name2Selector[METHOD_UNFREEZE_STR] = getFuncSelector(METHOD_UNFREEZE_STR);
     name2Selector[METHOD_GRANT_STR] = getFuncSelector(METHOD_GRANT_STR);
+    name2Selector[METHOD_REVOKE_STR] = getFuncSelector(METHOD_REVOKE_STR);
     name2Selector[METHOD_QUERY_STR] = getFuncSelector(METHOD_QUERY_STR);
     name2Selector[METHOD_QUERY_AUTHORITY] = getFuncSelector(METHOD_QUERY_AUTHORITY);
 }
@@ -106,48 +110,6 @@ bool ContractLifeCyclePrecompiled::checkPermission(
     return false;
 }
 
-ContractStatus ContractLifeCyclePrecompiled::getContractStatus(
-    ExecutiveContext::Ptr context, std::string const& tableName)
-{
-    Table::Ptr table = openTable(context, tableName);
-    if (!table)
-    {
-        return ContractStatus::AddressNonExistent;
-    }
-
-    auto codeHashEntries = table->select(storagestate::ACCOUNT_CODE_HASH, table->newCondition());
-    h256 codeHash;
-    if (g_BCOSConfig.version() >= V2_5_0)
-    {
-        codeHash = h256(codeHashEntries->get(0)->getFieldBytes(storagestate::STORAGE_VALUE));
-    }
-    else
-    {
-        codeHash = h256(fromHex(codeHashEntries->get(0)->getField(storagestate::STORAGE_VALUE)));
-    }
-
-    if (EmptyHash == codeHash)
-    {
-        return ContractStatus::NotContractAddress;
-    }
-
-    auto frozenEntries = table->select(storagestate::ACCOUNT_FROZEN, table->newCondition());
-    if (frozenEntries->size() > 0 &&
-        STATUS_TRUE == frozenEntries->get(0)->getField(storagestate::STORAGE_VALUE))
-    {
-        return ContractStatus::Frozen;
-    }
-    else
-    {
-        return ContractStatus::Available;
-    }
-
-    PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractLifeCyclePrecompiled")
-                           << LOG_DESC("getContractStatus error")
-                           << LOG_KV("table name", tableName);
-
-    return ContractStatus::Invalid;
-}
 
 int ContractLifeCyclePrecompiled::updateFrozenStatus(ExecutiveContext::Ptr context,
     std::string const& tableName, std::string const& frozen, Address const& origin)
@@ -205,7 +167,7 @@ void ContractLifeCyclePrecompiled::freeze(ExecutiveContext::Ptr context, bytesCo
     }
     else if (ContractStatus::Frozen == status)
     {
-        result = CODE_INVALID_CONTRACT_FEOZEN;
+        result = CODE_INVALID_CONTRACT_FROZEN;
     }
     else
     {
@@ -254,6 +216,39 @@ void ContractLifeCyclePrecompiled::unfreeze(ExecutiveContext::Ptr context, bytes
     getErrorCodeOut(_callResult->mutableExecResult(), result);
 }
 
+bool ContractLifeCyclePrecompiled::checkContractManager(std::string const& _tableName,
+    ExecutiveContext::Ptr _context, Address const& _contractAddress, Address const& _userAddress,
+    Address const& _origin, int& _result)
+{
+    bool ret = true;
+    // existence check > permission check > status check
+    ContractStatus status = getContractStatus(_context, _tableName);
+    if (ContractStatus::AddressNonExistent == status)
+    {
+        _result = CODE_INVALID_TABLE_NOT_EXIST;
+        ret = false;
+    }
+    else if (ContractStatus::NotContractAddress == status)
+    {
+        _result = CODE_INVALID_CONTRACT_ADDRESS;
+        ret = false;
+    }
+    else if (!checkPermission(_context, _tableName, _origin))
+    {
+        _result = CODE_INVALID_NO_AUTHORIZED;
+        ret = false;
+    }
+    if (_result != 0)
+    {
+        PRECOMPILED_LOG(WARNING) << LOG_BADGE(
+                                        "ContractLifeCyclePrecompiled checkContractManager failed")
+                                 << LOG_KV("retCode", _result) << LOG_KV("table", _tableName)
+                                 << LOG_KV("user", _userAddress)
+                                 << LOG_KV("contract", _contractAddress);
+    }
+    return ret;
+}
+
 void ContractLifeCyclePrecompiled::grantManager(ExecutiveContext::Ptr context, bytesConstRef data,
     Address const& origin, PrecompiledExecResult::Ptr _callResult)
 {
@@ -261,55 +256,84 @@ void ContractLifeCyclePrecompiled::grantManager(ExecutiveContext::Ptr context, b
     Address contractAddress;
     Address userAddress;
     abi.abiOut(data, contractAddress, userAddress);
-    int result = 0;
-
     std::string tableName = precompiled::getContractTableName(contractAddress);
+    int result = 0;
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractLifeCyclePrecompiled")
                            << LOG_DESC("grant authorization") << LOG_KV("table", tableName)
-                           << LOG_KV("user", userAddress);
+                           << LOG_KV("user", userAddress) << LOG_KV("contract", contractAddress);
 
-    // existence check > permission check > status check
-    ContractStatus status = getContractStatus(context, tableName);
-    if (ContractStatus::AddressNonExistent == status)
+    if (!checkContractManager(tableName, context, contractAddress, userAddress, origin, result))
     {
-        result = CODE_INVALID_TABLE_NOT_EXIST;
+        getErrorCodeOut(_callResult->mutableExecResult(), result);
+        return;
     }
-    else if (ContractStatus::NotContractAddress == status)
+
+    Table::Ptr table = openTable(context, tableName);
+    auto condition = table->newCondition();
+    condition->EQ(storagestate::STORAGE_VALUE, userAddress.hex());
+    auto entries = table->select(storagestate::ACCOUNT_AUTHORITY, condition);
+    if (entries->size() > 0u)
     {
-        result = CODE_INVALID_CONTRACT_ADDRESS;
-    }
-    else if (!checkPermission(context, tableName, origin))
-    {
-        result = CODE_INVALID_NO_AUTHORIZED;
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractLifeCyclePrecompiled")
-                               << LOG_DESC("permission denied");
+        result = CODE_INVALID_CONTRACT_REPEAT_AUTHORIZATION;
     }
     else
     {
-        bool flag = false;
-        Table::Ptr table = openTable(context, tableName);
-        auto entries = table->select(storagestate::ACCOUNT_AUTHORITY, table->newCondition());
-        for (size_t i = 0; i < entries->size(); i++)
-        {
-            std::string authority = entries->get(i)->getField(storagestate::STORAGE_VALUE);
-            if (userAddress.hex() == authority)
-            {
-                flag = true;
-                break;
-            }
-        }
-        if (flag == false)
-        {
-            auto entry = table->newEntry();
-            entry->setField(storagestate::STORAGE_KEY, storagestate::ACCOUNT_AUTHORITY);
-            entry->setField(storagestate::STORAGE_VALUE, userAddress.hex());
-            result = table->insert(storagestate::ACCOUNT_AUTHORITY, entry,
-                std::make_shared<AccessOptions>(origin, false));
-        }
-        else
-        {
-            result = CODE_INVALID_CONTRACT_REPEAT_AUTHORIZATION;
-        }
+        auto entry = table->newEntry();
+        entry->setField(storagestate::STORAGE_KEY, storagestate::ACCOUNT_AUTHORITY);
+        entry->setField(storagestate::STORAGE_VALUE, userAddress.hex());
+        result = table->insert(
+            storagestate::ACCOUNT_AUTHORITY, entry, std::make_shared<AccessOptions>(origin, false));
+    }
+    getErrorCodeOut(_callResult->mutableExecResult(), result);
+}
+
+void ContractLifeCyclePrecompiled::revokeManager(
+    std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,
+    Address const& origin, PrecompiledExecResult::Ptr _callResult)
+{
+    dev::eth::ContractABI abi;
+    Address contractAddress;
+    Address userAddress;
+    abi.abiOut(data, contractAddress, userAddress);
+    std::string tableName = precompiled::getContractTableName(contractAddress);
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractLifeCyclePrecompiled") << LOG_DESC("revokeManager")
+                           << LOG_KV("table", tableName) << LOG_KV("user", userAddress)
+                           << LOG_KV("contract", contractAddress);
+    int result = 0;
+    if (!checkContractManager(tableName, context, contractAddress, userAddress, origin, result))
+    {
+        getErrorCodeOut(_callResult->mutableExecResult(), result);
+        return;
+    }
+    Table::Ptr table = openTable(context, tableName);
+    auto condition = table->newCondition();
+    // check the account size that can freeze/unfreeze the contract
+    auto entries = table->select(storagestate::ACCOUNT_AUTHORITY, condition);
+    if (entries->size() == 1)
+    {
+        PRECOMPILED_LOG(WARNING) << LOG_DESC(
+                                        "revokeManager: the last contractManager can't be revoked")
+                                 << LOG_KV("contractAddress", contractAddress);
+        result = CODE_INVALID_REVOKE_LAST_AUTHORIZATION;
+        getErrorCodeOut(_callResult->mutableExecResult(), result);
+        return;
+    }
+    condition = table->newCondition();
+    condition->EQ(storagestate::STORAGE_VALUE, userAddress.hex());
+    entries = table->select(storagestate::ACCOUNT_AUTHORITY, condition);
+    if (entries->size() == 0u)
+    {
+        PRECOMPILED_LOG(WARNING) << LOG_DESC("revokeManager: non-exist authorization")
+                                 << LOG_KV("contractAddress", contractAddress);
+        result = CODE_INVALID_NON_EXIST_AUTHORIZATION;
+    }
+    else
+    {
+        PRECOMPILED_LOG(DEBUG) << LOG_DESC("revokeManager, remove contract manager authorization");
+        // Note: since the permission has been checked in [checkContractManager],
+        //       it's no need to determine the AccessOptions when remove the account
+        result = table->remove(storagestate::ACCOUNT_AUTHORITY, condition,
+            std::make_shared<AccessOptions>(origin, false));
     }
     getErrorCodeOut(_callResult->mutableExecResult(), result);
 }
@@ -404,6 +428,10 @@ PrecompiledExecResult::Ptr ContractLifeCyclePrecompiled::call(
     else if (func == name2Selector[METHOD_GRANT_STR])
     {
         grantManager(context, data, origin, callResult);
+    }
+    else if (func == name2Selector[METHOD_REVOKE_STR] && g_BCOSConfig.version() >= V2_7_0)
+    {
+        revokeManager(context, data, origin, callResult);
     }
     else if (func == name2Selector[METHOD_QUERY_STR])
     {

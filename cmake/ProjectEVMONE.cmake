@@ -11,6 +11,7 @@ ExternalProject_Add(evmone
                    -DBUILD_SHARED_LIBS=off
                    -DEVMC_ROOT=<INSTALL_DIR>
                    -DHUNTER_ROOT=${CMAKE_SOURCE_DIR}/deps/src/.hunter
+                   -DHUNTER_STATUS_DEBUG=ON
         # BUILD_COMMAND cmake --build . -- -j
         BUILD_IN_SOURCE 1
         LOG_DOWNLOAD 1
@@ -27,4 +28,5 @@ set(EVMONE_LIBRARIES ${INSTALL_DIR}/lib/libevmone.a ${INSTALL_DIR}/lib/libintx.a
 add_library(EVMONE INTERFACE IMPORTED)
 set_property(TARGET EVMONE PROPERTY INTERFACE_LINK_LIBRARIES ${EVMONE_LIBRARIES})
 set_property(TARGET EVMONE PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${EVMONE_INCLUDE_DIRS})
-add_dependencies(EVMONE evmone EVMC)
+add_dependencies(evmone EVMC)
+add_dependencies(EVMONE evmone)

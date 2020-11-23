@@ -55,7 +55,7 @@ secp256k1_context const* getCtx()
 
 /**
  * @brief obtain address from public key
- *        by adding the last 20Bytes of sha3(public key)
+ *        by adding the last 20Bytes of keccak256(public key)
  * @param _public : the public key need to convert to address
  * @return Address : the converted address
  */
@@ -71,8 +71,8 @@ Address dev::toAddress(Secret const& _secret)
 
 /**
  * @brief : 1.serialize (_from address, nonce) into rlpStream
- *          2.calculate the sha3 of serialized (_from, nonce)
- *          3.obtaining the last 20Bytes of the sha3 as address
+ *          2.calculate the keccak256 of serialized (_from, nonce)
+ *          3.obtaining the last 20Bytes of the keccak256 as address
  *          (mainly used for contract address generating)
  * @param _from : address that sending this transaction
  * @param _nonce : random number
@@ -137,7 +137,7 @@ Secret Nonce::next()
     }
     else
     {
-        m_value = sha3Secure(m_value.ref());
+        m_value = keccak256Secure(m_value.ref());
     }
 
     return crypto::Hash(~m_value);

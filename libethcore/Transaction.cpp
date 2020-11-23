@@ -145,7 +145,6 @@ void Transaction::decodeRC2(RLP const& rlp, CheckTransaction _checkSig)
         // u256 s = rlp[12].toInt<u256>();
         invalidFieldName = "signature";
         m_vrs = dev::crypto::SignatureFromRLP(rlp, 10);
-
         if (_checkSig >= CheckTransaction::Cheap && !m_vrs->isValid())
             BOOST_THROW_EXCEPTION(InvalidSignature());
 
@@ -179,7 +178,7 @@ Address const& Transaction::sender() const
         if (!m_vrs)
             BOOST_THROW_EXCEPTION(TransactionIsUnsigned());
 
-        auto p = crypto::Recover(m_vrs, sha3(WithoutSignature));
+        auto p = crypto::Recover(m_vrs, hash(WithoutSignature));
         if (!p)
             BOOST_THROW_EXCEPTION(InvalidSignature());
         m_sender = right160(crypto::Hash(bytesConstRef(p.data(), sizeof(p))));
@@ -269,23 +268,17 @@ int64_t Transaction::baseGasRequired(
     return g;
 }
 
-h256 Transaction::sha3(IncludeSignature _sig) const
+h256 Transaction::hash(IncludeSignature _sig) const
 {
     if (_sig == WithSignature && m_hashWith)
         return m_hashWith;
 
     bytes s;
     encode(s, _sig);
-
     auto ret = crypto::Hash(s);
     if (_sig == WithSignature)
         m_hashWith = ret;
     return ret;
-}
-
-void Transaction::updateTransactionHashWithSig(dev::h256 const& txHash)
-{
-    m_hashWith = txHash;
 }
 
 void Transaction::setRpcCallback(RPCCallback callBack)

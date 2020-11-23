@@ -35,8 +35,9 @@
  * Add send topicSeq
  */
 #include "Host.h"
-#include "Common.h"                    // for HOST_LOG
-#include "Session.h"                   // for Sessio...
+#include "Common.h"   // for HOST_LOG
+#include "Session.h"  // for Sessio...
+#include "libdevcore/CommonData.h"
 #include "libdevcore/Guards.h"         // for Guard
 #include "libdevcore/ThreadPool.h"     // for Thread...
 #include "libnetwork/ASIOInterface.h"  // for ASIOIn...
@@ -200,6 +201,50 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             return preverified;
         }
     };
+}
+
+NodeInfo Host::nodeInfo()
+{
+    try
+    {
+        if (m_nodeInfo.nodeID == h512())
+        {
+            /// get certificate
+            auto sslContext = m_asioInterface->sslContext()->native_handle();
+            X509* cert = SSL_CTX_get0_certificate(sslContext);
+
+            /// get issuer name
+            const char* issuer = X509_NAME_oneline(X509_get_issuer_name(cert), NULL, 0);
+            std::string issuerName(issuer);
+
+            /// get subject name
+            const char* subject = X509_NAME_oneline(X509_get_subject_name(cert), NULL, 0);
+            std::string subjectName(subject);
+
+            /// get nodeID
+            std::shared_ptr<std::string> nodeIDOut = std::make_shared<std::string>();
+            if (getPublicKeyFromCert(nodeIDOut, cert))
+            {
+                std::string nodeID = boost::to_upper_copy(*nodeIDOut);
+                m_nodeInfo.nodeID = NodeID(nodeID);
+            }
+
+            /// fill in the node informations
+            m_nodeInfo.agencyName = obtainCommonNameFromSubject(issuerName);
+            m_nodeInfo.nodeName = obtainCommonNameFromSubject(subjectName);
+
+            /// free resources
+            OPENSSL_free((void*)issuer);
+            OPENSSL_free((void*)subject);
+        }
+    }
+    catch (std::exception& e)
+    {
+        HOST_LOG(ERROR) << LOG_DESC("Get node information from cert failed.")
+                        << boost::diagnostic_information(e);
+        return m_nodeInfo;
+    }
+    return m_nodeInfo;
 }
 
 /**
@@ -418,9 +463,9 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
     m_asioInterface->asyncResolveConnect(socket, [=](boost::system::error_code const& ec) {
         if (ec)
         {
-            HOST_LOG(WARNING) << LOG_DESC("TCP Connection refused by node")
-                              << LOG_KV("endpoint", _nodeIPEndpoint)
-                              << LOG_KV("message", ec.message());
+            HOST_LOG(ERROR) << LOG_DESC("TCP Connection refused by node")
+                            << LOG_KV("endpoint", _nodeIPEndpoint)
+                            << LOG_KV("message", ec.message());
             socket->close();
 
             m_threadPool->enqueue([callback, _nodeIPEndpoint]() {

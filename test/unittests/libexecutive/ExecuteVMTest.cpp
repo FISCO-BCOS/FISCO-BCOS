@@ -76,11 +76,10 @@ public:
         return envInfo;
     }
 
-    void executeTransaction(Executive& _e, Transaction const& _transaction)
+    void executeTransaction(Executive& _e, Transaction::Ptr _transaction)
     {
-        std::shared_ptr<Transaction> tx = std::make_shared<Transaction>(_transaction);
         cout << "init" << endl;
-        _e.initialize(tx);
+        _e.initialize(_transaction);
         cout << "execute" << endl;
         if (!_e.execute())
         {
@@ -167,11 +166,12 @@ contract HelloWorld{
         string(""));
 
     Executive e0(m_mptStates, initEnvInfo());
-    Transaction tx(value, gasPrice, gas, code);  // Use contract creation constructor
+    Transaction::Ptr tx = std::make_shared<Transaction>(
+        value, gasPrice, gas, code);  // Use contract creation constructor
     auto keyPair = KeyPair::create();
-    auto sig = dev::crypto::Sign(keyPair, tx.sha3(WithoutSignature));
-    tx.updateSignature(sig);
-    tx.forceSender(caller);
+    auto sig = dev::crypto::Sign(keyPair, tx->hash(WithoutSignature));
+    tx->updateSignature(sig);
+    tx->forceSender(caller);
     executeTransaction(e0, tx);
 
     Address newAddress = e0.newAddress();
@@ -199,10 +199,11 @@ contract HelloWorld{
     bytes callDataToSet =
         fromHex(string("0x60fe47b1") +  // set(0xaa)
                 string("00000000000000000000000000000000000000000000000000000000000000aa"));
-    Transaction setTx(value, gasPrice, gas, newAddress, callDataToSet);
-    sig = dev::crypto::Sign(keyPair, setTx.sha3(WithoutSignature));
-    setTx.updateSignature(sig);
-    setTx.forceSender(caller);
+    Transaction::Ptr setTx =
+        std::make_shared<Transaction>(value, gasPrice, gas, newAddress, callDataToSet);
+    sig = dev::crypto::Sign(keyPair, setTx->hash(WithoutSignature));
+    setTx->updateSignature(sig);
+    setTx->forceSender(caller);
 
     Executive e1(m_mptStates, initEnvInfo());
     executeTransaction(e1, setTx);
@@ -211,10 +212,11 @@ contract HelloWorld{
     bytes callDataToGet = fromHex(string("6d4ce63c") +  // get()
                                   string(""));
 
-    Transaction getTx(value, gasPrice, gas, newAddress, callDataToGet);
-    sig = dev::crypto::Sign(keyPair, getTx.sha3(WithoutSignature));
-    getTx.updateSignature(sig);
-    getTx.forceSender(caller);
+    Transaction::Ptr getTx =
+        std::make_shared<Transaction>(value, gasPrice, gas, newAddress, callDataToGet);
+    sig = dev::crypto::Sign(keyPair, getTx->hash(WithoutSignature));
+    getTx->updateSignature(sig);
+    getTx->forceSender(caller);
 
     Executive e2(m_mptStates, initEnvInfo());
     executeTransaction(e2, getTx);
@@ -227,10 +229,11 @@ contract HelloWorld{
     bytes callDataToGetByCall = fromHex(string("b7379733") +  // getByCall()
                                         string(""));
 
-    Transaction getByCallTx(value, gasPrice, gas, newAddress, callDataToGetByCall);
-    sig = dev::crypto::Sign(keyPair, getByCallTx.sha3(WithoutSignature));
-    getByCallTx.updateSignature(sig);
-    getByCallTx.forceSender(caller);
+    Transaction::Ptr getByCallTx =
+        std::make_shared<Transaction>(value, gasPrice, gas, newAddress, callDataToGetByCall);
+    sig = dev::crypto::Sign(keyPair, getByCallTx->hash(WithoutSignature));
+    getByCallTx->updateSignature(sig);
+    getByCallTx->forceSender(caller);
 
     Executive e3(m_mptStates, initEnvInfo());
     executeTransaction(e3, getByCallTx);
@@ -242,10 +245,11 @@ contract HelloWorld{
     bytes callDestroy = fromHex(string("83197ef0") +  // destroy()
                                 string(""));
 
-    Transaction destroyTx(value, gasPrice, gas, newAddress, callDestroy);
-    sig = dev::crypto::Sign(keyPair, destroyTx.sha3(WithoutSignature));
-    destroyTx.updateSignature(sig);
-    destroyTx.forceSender(caller);
+    Transaction::Ptr destroyTx =
+        std::make_shared<Transaction>(value, gasPrice, gas, newAddress, callDestroy);
+    sig = dev::crypto::Sign(keyPair, destroyTx->hash(WithoutSignature));
+    destroyTx->updateSignature(sig);
+    destroyTx->forceSender(caller);
 
     Executive e4(m_mptStates, initEnvInfo());
     executeTransaction(e4, destroyTx);
@@ -261,8 +265,9 @@ BOOST_AUTO_TEST_CASE(OutOfGasIntrinsicTest)
     bytes code(692, 1);  // 100000 =?= 53000 + non-zero * 68 + zero * 4
 
     Executive e(m_mptStates, initEnvInfo(100000));  // set gas limit to little
-    Transaction tx(value, gasPrice, gas, code);     // Use contract creation constructor
-    tx.forceSender(caller);
+    Transaction::Ptr tx = std::make_shared<Transaction>(
+        value, gasPrice, gas, code);  // Use contract creation constructor
+    tx->forceSender(caller);
     BOOST_CHECK_THROW(executeTransaction(e, tx), OutOfGasIntrinsic);  // Throw in rc2 and later
 
     BOOST_CHECK_EQUAL(e.getException(), TransactionException::OutOfGasIntrinsic);
@@ -291,8 +296,9 @@ BOOST_AUTO_TEST_CASE(OutOfGasBaseTest)
         string(""));
 
     Executive e(m_mptStates, initEnvInfo());
-    Transaction tx(value, gasPrice, gas, code);  // Use contract creation constructor
-    tx.forceSender(caller);
+    Transaction::Ptr tx = std::make_shared<Transaction>(
+        value, gasPrice, gas, code);  // Use contract creation constructor
+    tx->forceSender(caller);
     if (g_BCOSConfig.version() <= RC3_VERSION)
     {
         BOOST_CHECK_THROW(executeTransaction(e, tx), OutOfGasBase);
@@ -313,8 +319,8 @@ BOOST_AUTO_TEST_CASE(CallAddressErrorTest)
     Address caller = Address("1000000000000000000000000000000000000000");
     Address addr = Address(0x4fff);  // non exist address
     bytes inputs = fromHex("0x0");
-    Transaction setTx(value, gasPrice, gas, addr, inputs);
-    setTx.forceSender(caller);
+    Transaction::Ptr setTx = std::make_shared<Transaction>(value, gasPrice, gas, addr, inputs);
+    setTx->forceSender(caller);
 
     Executive e(m_mptStates, initEnvInfo());
     executeTransaction(e, setTx);
@@ -375,8 +381,9 @@ contract HelloWorld{
         string(""));
 
     Executive e0(m_mptStates, initEnvInfo());
-    Transaction tx(value, gasPrice, gas, code);  // Use contract creation constructor
-    tx.forceSender(caller);
+    Transaction::Ptr tx = std::make_shared<Transaction>(
+        value, gasPrice, gas, code);  // Use contract creation constructor
+    tx->forceSender(caller);
     executeTransaction(e0, tx);
 
     Address newAddress = e0.newAddress();
@@ -404,8 +411,9 @@ contract HelloWorld{
     bytes callDataToSet =
         fromHex(string("0x60fe47b1") +  // set(0xaa)
                 string("00000000000000000000000000000000000000000000000000000000000000aa"));
-    Transaction setTx(value, gasPrice, gas, newAddress, callDataToSet);
-    setTx.forceSender(caller);
+    Transaction::Ptr setTx =
+        std::make_shared<Transaction>(value, gasPrice, gas, newAddress, callDataToSet);
+    setTx->forceSender(caller);
 
     Executive e1(m_mptStates, initEnvInfo());
     executeTransaction(e1, setTx);
@@ -414,8 +422,9 @@ contract HelloWorld{
     bytes callDataToGet = fromHex(string("6d4ce63c") +  // get()
                                   string(""));
 
-    Transaction getTx(value, gasPrice, gas, newAddress, callDataToGet);
-    getTx.forceSender(caller);
+    Transaction::Ptr getTx =
+        std::make_shared<Transaction>(value, gasPrice, gas, newAddress, callDataToGet);
+    getTx->forceSender(caller);
 
     Executive e2(m_mptStates, initEnvInfo());
     executeTransaction(e2, getTx);
@@ -428,11 +437,12 @@ contract HelloWorld{
     bytes callDataToGetByCall = fromHex(string("b7379733") +  // getByCall()
                                         string(""));
 
-    Transaction getByCallTx(value, gasPrice, gas, newAddress, callDataToGetByCall);
+    Transaction::Ptr getByCallTx =
+        std::make_shared<Transaction>(value, gasPrice, gas, newAddress, callDataToGetByCall);
     auto keyPair = KeyPair::create();
-    auto sig = dev::crypto::Sign(keyPair, tx.sha3(WithoutSignature));
-    tx.updateSignature(sig);
-    getByCallTx.forceSender(caller);
+    auto sig = dev::crypto::Sign(keyPair, tx->hash(WithoutSignature));
+    tx->updateSignature(sig);
+    getByCallTx->forceSender(caller);
 
     Executive e3(m_mptStates, initEnvInfo());
     executeTransaction(e3, getByCallTx);
@@ -444,10 +454,11 @@ contract HelloWorld{
     bytes callDestroy = fromHex(string("83197ef0") +  // destroy()
                                 string(""));
 
-    Transaction destroyTx(value, gasPrice, gas, newAddress, callDestroy);
-    sig = dev::crypto::Sign(keyPair, destroyTx.sha3(WithoutSignature));
-    destroyTx.updateSignature(sig);
-    destroyTx.forceSender(caller);
+    Transaction::Ptr destroyTx =
+        std::make_shared<Transaction>(value, gasPrice, gas, newAddress, callDestroy);
+    sig = dev::crypto::Sign(keyPair, destroyTx->hash(WithoutSignature));
+    destroyTx->updateSignature(sig);
+    destroyTx->forceSender(caller);
 
     Executive e4(m_mptStates, initEnvInfo());
     executeTransaction(e4, destroyTx);

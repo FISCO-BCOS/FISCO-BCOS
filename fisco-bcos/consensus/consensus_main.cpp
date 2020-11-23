@@ -137,7 +137,7 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
             {
                 tx->setNonce(tx->nonce() + u256(utcTime()));
                 tx->setBlockLimit(u256(ledgerManager->blockChain(group)->number()) + maxBlockLimit);
-                auto sig = dev::crypto::Sign(keyPair, tx->sha3(WithoutSignature));
+                auto sig = dev::crypto::Sign(keyPair, tx->hash(WithoutSignature));
                 tx->updateSignature(sig);
                 ledgerManager->txPool(group)->submit(tx);
             }

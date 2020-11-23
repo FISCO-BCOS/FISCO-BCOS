@@ -27,8 +27,6 @@ namespace dev
 {
 namespace rpc
 {
-Json::Value toJson(dev::eth::Transaction const& _t, std::pair<h256, unsigned> _location,
-    dev::eth::BlockNumber _blockNumber);
 dev::eth::TransactionSkeleton toTransactionSkeleton(Json::Value const& _json);
 
 }  // namespace rpc

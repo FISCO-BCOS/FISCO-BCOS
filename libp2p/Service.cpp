@@ -224,15 +224,23 @@ void Service::onConnect(dev::network::NetworkException e, dev::network::NodeInfo
     std::shared_ptr<dev::network::SessionFace> session)
 {
     NodeID nodeID = nodeInfo.nodeID;
+    std::string peer = "unknown";
+    if (session)
+    {
+        peer = session->nodeIPEndpoint().address();
+    }
     if (e.errorCode())
     {
         SERVICE_LOG(WARNING) << LOG_DESC("onConnect") << LOG_KV("errorCode", e.errorCode())
+                             << LOG_KV("nodeID", nodeID.abridged())
+                             << LOG_KV("nodeName", nodeInfo.nodeName) << LOG_KV("endpoint", peer)
                              << LOG_KV("what", e.what());
 
         return;
     }
 
-    SERVICE_LOG(TRACE) << LOG_DESC("Service onConnect") << LOG_KV("nodeID", nodeID.abridged());
+    SERVICE_LOG(TRACE) << LOG_DESC("Service onConnect") << LOG_KV("nodeID", nodeID.abridged())
+                       << LOG_KV("endpoint", peer);
 
     RecursiveGuard l(x_sessions);
     auto it = m_sessions.find(nodeID);
@@ -925,7 +933,7 @@ NodeIDs Service::getPeersByTopic(std::string const& topic)
         {
             for (auto& j : it.second->topics())
             {
-                if ((j.topic == topic) && (j.topicStatus == TopicStatus::VERIFYI_SUCCESS_STATUS))
+                if ((j.topic == topic) && (j.topicStatus == TopicStatus::VERIFY_SUCCESS_STATUS))
                 {
                     nodeList.push_back(it.first);
                 }

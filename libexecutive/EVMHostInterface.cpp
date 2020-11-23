@@ -189,7 +189,7 @@ evmc_result call(evmc_host_context* _context, const evmc_message* _msg) noexcept
     // * origin code: assert(_msg->gas >= 0)
     if (_msg->gas < 0)
     {
-        LOG(ERROR) << LOG_DESC("Gas overflow") << LOG_KV("cur gas", _msg->gas);
+        EXECUTIVE_LOG(ERROR) << LOG_DESC("Gas overflow") << LOG_KV("cur gas", _msg->gas);
         BOOST_THROW_EXCEPTION(eth::GasOverflow());
     }
 

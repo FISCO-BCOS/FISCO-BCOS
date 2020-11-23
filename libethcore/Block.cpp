@@ -199,7 +199,7 @@ void Block::calTransactionRootV2_2_0(bool update) const
                     RLPStream s;
                     s << i;
                     dev::bytes byteValue = s.out();
-                    dev::h256 hValue = ((*m_transactions)[i])->sha3();
+                    dev::h256 hValue = ((*m_transactions)[i])->hash();
                     byteValue.insert(byteValue.end(), hValue.begin(), hValue.end());
                     transactionList[i] = byteValue;
                 }
@@ -233,7 +233,7 @@ std::shared_ptr<std::map<std::string, std::vector<std::string>>> Block::getTrans
                 RLPStream s;
                 s << i;
                 dev::bytes byteValue = s.out();
-                dev::h256 hValue = ((*m_transactions)[i])->sha3();
+                dev::h256 hValue = ((*m_transactions)[i])->hash();
                 byteValue.insert(byteValue.end(), hValue.begin(), hValue.end());
                 transactionList[i] = byteValue;
             }
@@ -243,7 +243,7 @@ std::shared_ptr<std::map<std::string, std::vector<std::string>>> Block::getTrans
     return merklePath;
 }
 
-void Block::getReceiptAndSha3(RLPStream& txReceipts, std::vector<dev::bytes>& receiptList) const
+void Block::getReceiptAndHash(RLPStream& txReceipts, std::vector<dev::bytes>& receiptList) const
 {
     txReceipts.appendList(m_transactionReceipts->size());
     receiptList.resize(m_transactionReceipts->size());
@@ -252,7 +252,7 @@ void Block::getReceiptAndSha3(RLPStream& txReceipts, std::vector<dev::bytes>& re
             for (uint32_t i = _r.begin(); i < _r.end(); ++i)
             {
                 (*m_transactionReceipts)[i]->receipt();
-                dev::bytes receiptHash = (*m_transactionReceipts)[i]->sha3();
+                dev::bytes receiptHash = (*m_transactionReceipts)[i]->hash();
                 RLPStream s;
                 s << i;
                 dev::bytes receiptValue = s.out();
@@ -276,7 +276,7 @@ void Block::calReceiptRootV2_2_0(bool update) const
     {
         RLPStream txReceipts;
         std::vector<dev::bytes> receiptList;
-        getReceiptAndSha3(txReceipts, receiptList);
+        getReceiptAndHash(txReceipts, receiptList);
         txReceipts.swapOut(m_tReceiptsCache);
         m_receiptRootCache = dev::getHash256(receiptList);
     }
@@ -298,7 +298,7 @@ std::shared_ptr<std::map<std::string, std::vector<std::string>>> Block::getRecei
 
     RLPStream txReceipts;
     std::vector<dev::bytes> receiptList;
-    getReceiptAndSha3(txReceipts, receiptList);
+    getReceiptAndHash(txReceipts, receiptList);
     std::shared_ptr<std::map<std::string, std::vector<std::string>>> merklePath =
         std::make_shared<std::map<std::string, std::vector<std::string>>>();
     dev::getMerkleProof(receiptList, merklePath);

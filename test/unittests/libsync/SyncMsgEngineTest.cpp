@@ -23,6 +23,7 @@
 
 #include <libdevcore/TopicInfo.h>
 #include <libflowlimit/RateLimiter.h>
+#include <libnetwork/Host.h>
 #include <libsync/DownloadingTxsQueue.h>
 #include <libsync/SyncMsgEngine.h>
 #include <libsync/SyncMsgPacket.h>
@@ -144,6 +145,8 @@ public:
     // not used
     NodeID id() const override { return NodeID(); };
 
+    std::shared_ptr<dev::network::Host> host() override { return nullptr; };
+
     std::shared_ptr<P2PMessage> sendMessageByNodeID(NodeID, std::shared_ptr<P2PMessage>) override
     {
         return nullptr;
@@ -236,7 +239,7 @@ BOOST_AUTO_TEST_CASE(SyncTransactionPacketTest)
     auto topTxs = txPoolPtr->topTransactions(1);
     std::cout << "topTransactions finished" << std::endl;
     BOOST_CHECK(topTxs->size() == 1);
-    BOOST_CHECK_EQUAL((*topTxs)[0]->sha3(), txPtr->sha3());
+    BOOST_CHECK_EQUAL((*topTxs)[0]->hash(), txPtr->hash());
     // TODO: this unit test may cause fatal error randomly
 }
 

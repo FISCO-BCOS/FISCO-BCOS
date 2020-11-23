@@ -892,8 +892,14 @@ void CachedStorage::checkAndClear()
                 auto tableInfo = std::make_shared<TableInfo>();
                 tableInfo->name = it->first;
 
+                // The life cycle of the cache must be longer than the result, because the
+                // deconstruction order of the tuple is related to the gcc version and the compiler.
+                // It must be ensured that RWMutexScoped is deconstructed first, and the cache is
+                // deconstructed, otherwise the program will coredump
+                Cache::Ptr cache;
                 auto result = touchCache(tableInfo, it->second, true);
-                auto cache = std::get<1>(result);
+                cache = std::get<1>(result);
+
                 if (std::get<2>(result))
                 {  // FIXME: if always true, simplify this
                     if (m_syncNum > 0 && (cache->num() <= m_syncNum))

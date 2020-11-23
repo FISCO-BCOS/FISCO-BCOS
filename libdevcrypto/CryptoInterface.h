@@ -72,7 +72,7 @@ inline SecureFixedHash<32> Hash(SecureFixedHash<N>&& _data)
     {
         return sm3Secure(_data);
     }
-    return sha3Secure(_data);
+    return keccak256Secure(_data);
 }
 
 template <typename T>
@@ -82,7 +82,7 @@ inline h256 Hash(T&& _data)
     {
         return sm3(_data);
     }
-    return sha3(_data);
+    return keccak256(_data);
 }
 
 }  // namespace crypto

@@ -217,7 +217,7 @@ public:
             std::make_shared<Transaction>(ref(c_txBytes), CheckTransaction::Everything);
         txPtr->setNonce(txPtr->nonce() + utcTime() + u256(1));
         txPtr->setBlockLimit(u256(_currentBlockNumber) + c_maxBlockLimit);
-        auto sig = crypto::Sign(keyPair, txPtr->sha3(WithoutSignature));
+        auto sig = crypto::Sign(keyPair, txPtr->hash(WithoutSignature));
         txPtr->updateSignature(sig);
         return txPtr;
     }

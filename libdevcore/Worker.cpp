@@ -82,8 +82,9 @@ void Worker::startWorking()
                 }
                 catch (std::exception const& e)
                 {
-                    LOG(ERROR) << "Exception thrown in Worker thread: "
-                               << boost::diagnostic_information(e);
+                    LOG(ERROR) << LOG_DESC("Exception thrown in Worker thread")
+                               << LOG_KV("threadName", m_name)
+                               << LOG_KV("errorMsg", boost::diagnostic_information(e));
                 }
 
                 {

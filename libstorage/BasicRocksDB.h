@@ -94,7 +94,10 @@ protected:
 };
 rocksdb::Options getRocksDBOptions();
 std::function<void(std::string const&, std::string&)> getEncryptHandler(
-    const std::vector<uint8_t>& _encryptKey);
-std::function<void(std::string&)> getDecryptHandler(const std::vector<uint8_t>& _encryptKey);
+    const std::vector<uint8_t>& _encryptKey, bool _enableCompress = false);
+std::function<void(std::string&)> getDecryptHandler(
+    const std::vector<uint8_t>& _encryptKey, bool _enableCompress = false);
+
+
 }  // namespace storage
 }  // namespace dev

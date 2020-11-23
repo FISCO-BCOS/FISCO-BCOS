@@ -100,6 +100,7 @@ public:
 
     // p2p part
     Json::Value getClientVersion() override;
+    Json::Value getNodeInfo() override;
     Json::Value getPeers(int) override;
     Json::Value getGroupPeers(int _groupID) override;
     Json::Value getGroupList() override;
@@ -107,9 +108,9 @@ public:
 
     // block part
     Json::Value getBlockByHash(
-        int _groupID, const std::string& _blockHash, bool _includeTransactions) override;
+        int _groupID, const std::string& _blockHash, bool _includeAllData) override;
     Json::Value getBlockByNumber(
-        int _groupID, const std::string& _blockNumber, bool _includeTransactions) override;
+        int _groupID, const std::string& _blockNumber, bool _includeAllData) override;
 
     Json::Value getBlockHeaderByNumber(
         int _groupID, const std::string& _blockNumber, bool _includeSigList = false) override;
@@ -146,6 +147,12 @@ public:
     Json::Value removeGroup(int _groupID) override;
     Json::Value recoverGroup(int _groupID) override;
     Json::Value queryGroupStatus(int _groupID) override;
+
+    Json::Value getBatchReceiptsByBlockNumberAndRange(int _groupID, const std::string& _blockNumber,
+        std::string const& _from, std::string const& _count, bool compress = true) override;
+    Json::Value getBatchReceiptsByBlockHashAndRange(int _groupID, const std::string& _blockHash,
+        std::string const& _from, std::string const& _count, bool compress = true) override;
+
 
     void setCurrentTransactionCallback(
         std::function<void(const std::string& receiptContext, GROUP_ID _groupId)>* _callback,
@@ -189,11 +196,9 @@ protected:
     void addProofToResponse(std::shared_ptr<Json::Value> _response, std::string const& _key,
         std::shared_ptr<dev::blockchain::MerkleProofType> _proofList);
 
-    void generateBlockHeaderInfo(Json::Value& _response,
-        std::shared_ptr<
-            std::pair<std::shared_ptr<dev::eth::BlockHeader>, dev::eth::Block::SigListPtrType>>
-            _headerInfo,
-        bool _includeSigList);
+    void generateBlockHeaderInfo(Json::Value& _response, dev::eth::BlockHeader const& _blockHeader,
+        dev::eth::Block::SigListPtrType _signatureList, bool _includeSigList);
+
 
     std::shared_ptr<dev::ledger::LedgerManager> m_ledgerManager;
     dev::initializer::LedgerInitializer::Ptr m_ledgerInitializer;
@@ -240,6 +245,18 @@ private:
     bool checkSealerID(const std::string& _sealer);
     bool checkTimestamp(const std::string& _timestamp);
     bool checkConnection(const std::set<std::string>& _sealerList, Json::Value& _response);
+
+    void parseTransactionIntoResponse(Json::Value& _response, dev::h256 const& _blockHash,
+        int64_t _blockNumber, int64_t _txIndex, Transaction::Ptr _tx, bool onChain = true);
+
+    void parseReceiptIntoResponse(Json::Value& _response, dev::bytesConstRef _input,
+        dev::eth::LocalisedTransactionReceipt::Ptr _receipt);
+
+    void parseSignatureIntoResponse(
+        Json::Value& _response, dev::eth::Block::SigListPtrType _signatureList);
+
+    void getBatchReceipts(Json::Value& _response, dev::eth::Block::Ptr _block,
+        std::string const& _from, std::string const& _size, bool _compress);
 };
 
 }  // namespace rpc

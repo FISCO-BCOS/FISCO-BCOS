@@ -35,7 +35,7 @@ namespace test
 BOOST_FIXTURE_TEST_SUITE(CommonTransactionNonceCheckTest, TestOutputHelperFixture)
 
 /// fake single transaction
-Transaction fakeTransaction(size_t _idx = 0)
+Transaction::Ptr fakeTransaction(size_t _idx = 0)
 {
     u256 value = u256(100);
     u256 gas = u256(100000000);
@@ -45,13 +45,13 @@ Transaction fakeTransaction(size_t _idx = 0)
         "test transaction for CommonTransactionNonceCheck" + std::to_string(utcTime());
     bytes data(str.begin(), str.end());
     u256 const& nonce = u256(utcTime() + _idx);
-    Transaction fakeTx(value, gasPrice, gas, dst, data, nonce);
+    Transaction::Ptr fakeTx = std::make_shared<Transaction>(value, gasPrice, gas, dst, data, nonce);
 
     auto keyPair = KeyPair::create();
     std::shared_ptr<crypto::Signature> sig =
-        dev::crypto::Sign(keyPair, fakeTx.sha3(WithoutSignature));
+        dev::crypto::Sign(keyPair, fakeTx->hash(WithoutSignature));
     /// update the signature of transaction
-    fakeTx.updateSignature(sig);
+    fakeTx->updateSignature(sig);
     return fakeTx;
 }
 
@@ -62,7 +62,7 @@ BOOST_AUTO_TEST_CASE(updateTest)
     Transactions txs;
     for (size_t i = 0; i < 2; i++)
     {
-        std::shared_ptr<Transaction> p_tx = std::make_shared<Transaction>(fakeTransaction(i));
+        std::shared_ptr<Transaction> p_tx = fakeTransaction(i);
         txs.emplace_back(p_tx);
     }
 

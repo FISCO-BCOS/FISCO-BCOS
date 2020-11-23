@@ -52,13 +52,13 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - deps-cache-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
-            - deps-cache-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
-            - deps-cache-v1-{{ .Environment.CIRCLE_JOB }}-
+            - deps-cache-v3-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+            - deps-cache-v3-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
+            - deps-cache-v3-{{ .Environment.CIRCLE_JOB }}-
       - compile:
           options: "-DBUILD_STATIC=ON -DTESTS=ON -DCOVERAGE=ON -DCMAKE_BUILD_TYPE=Debug"
       - save_cache:
-          key: deps-cache-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+          key: deps-cache-v3-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
           paths:
             - deps
             - /ccache
@@ -122,9 +122,9 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - deps-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
-            - deps-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
-            - deps-v1-{{ .Environment.CIRCLE_JOB }}-
+            - deps-v2-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+            - deps-v2-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
+            - deps-v2-{{ .Environment.CIRCLE_JOB }}-
       - run:
           name: Compile
           command: |
@@ -134,7 +134,7 @@ jobs:
             cmake3 -DTESTS=ON -DTOOL=ON -DDEMO=ON ..
             make -j2
       - save_cache:
-          key: deps-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+          key: deps-v2-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
           paths:
             - deps
             - /ccache
@@ -158,12 +158,12 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - deps-cache-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+            - deps-cache-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
       - compile:
           options: "-DBUILD_STATIC=ON"
           compiler: "CC=/usr/bin/clang CXX=/usr/bin/clang++"
       - save_cache:
-          key: deps-cache-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+          key: deps-cache-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
           paths:
             - deps
             - /ccache

@@ -161,13 +161,19 @@ void PBFTEngine::rehandleCommitedPrepareCache(PrepareReq const& req)
     std::shared_ptr<PrepareReq> prepareReq =
         std::make_shared<PrepareReq>(req, m_keyPair, m_view, nodeIdx());
 
-    m_threadPool->enqueue([this, prepareReq]() {
+    auto self = std::weak_ptr<PBFTEngine>(shared_from_this());
+    m_threadPool->enqueue([self, prepareReq]() {
         try
         {
+            auto pbftEngine = self.lock();
+            if (!pbftEngine)
+            {
+                return;
+            }
             std::shared_ptr<bytes> prepare_data = std::make_shared<bytes>();
             // when rehandle the committedPrepareCache, broadcast prepare directly
             prepareReq->encode(*prepare_data);
-            broadcastMsg(PrepareReqPacket, *prepareReq, ref(*prepare_data));
+            pbftEngine->broadcastMsg(PrepareReqPacket, *prepareReq, ref(*prepare_data));
         }
         catch (std::exception const& e)
         {
@@ -315,10 +321,17 @@ PrepareReq::Ptr PBFTEngine::constructPrepareReq(dev::eth::Block::Ptr _block)
         // encode prepareReq with uncompleted transactions into sendedData
         std::shared_ptr<bytes> sendedData = std::make_shared<bytes>();
         prepareReq->encode(*sendedData);
-        m_threadPool->enqueue([this, prepareReq, sendedData]() {
+        auto self = std::weak_ptr<PBFTEngine>(shared_from_this());
+        m_threadPool->enqueue([self, prepareReq, sendedData]() {
             try
             {
-                sendPrepareMsgFromLeader(prepareReq, ref(*sendedData), PartiallyPreparePacket);
+                auto pbftEngine = self.lock();
+                if (!pbftEngine)
+                {
+                    return;
+                }
+                pbftEngine->sendPrepareMsgFromLeader(
+                    prepareReq, ref(*sendedData), PartiallyPreparePacket);
             }
             catch (std::exception const& e)
             {
@@ -332,12 +345,18 @@ PrepareReq::Ptr PBFTEngine::constructPrepareReq(dev::eth::Block::Ptr _block)
     // not enable-prepare-with-txs-hash or the empty block
     else
     {
-        m_threadPool->enqueue([this, prepareReq, engineBlock]() {
+        auto self = std::weak_ptr<PBFTEngine>(shared_from_this());
+        m_threadPool->enqueue([self, prepareReq, engineBlock]() {
             try
             {
+                auto pbftEngine = self.lock();
+                if (!pbftEngine)
+                {
+                    return;
+                }
                 std::shared_ptr<bytes> prepare_data = std::make_shared<bytes>();
                 prepareReq->encode(*prepare_data);
-                sendPrepareMsgFromLeader(prepareReq, ref(*prepare_data));
+                pbftEngine->sendPrepareMsgFromLeader(prepareReq, ref(*prepare_data));
             }
             catch (std::exception const& e)
             {
@@ -458,11 +477,13 @@ void PBFTEngine::sendViewChangeMsg(dev::network::NodeID const& nodeId)
 
 bool PBFTEngine::broadcastViewChangeReq()
 {
-    ViewChangeReq req(
+    ViewChangeReq::Ptr req = std::make_shared<ViewChangeReq>(
         m_keyPair, m_highestBlock.number(), m_toView, nodeIdx(), m_highestBlock.hash());
+    // add the viewChangeReq
+    m_reqCache->addViewChangeReq(req, m_blockChain->number());
     PBFTENGINE_LOG(DEBUG) << LOG_DESC("broadcastViewChangeReq ") << LOG_KV("v", m_view)
                           << LOG_KV("toV", m_toView) << LOG_KV("curNum", m_highestBlock.number())
-                          << LOG_KV("hash", req.block_hash.abridged())
+                          << LOG_KV("hash", req->block_hash.abridged())
                           << LOG_KV("nodeIdx", nodeIdx())
                           << LOG_KV("myNode", m_keyPair.pub().abridged());
     /// view change not caused by fast view change
@@ -471,7 +492,7 @@ bool PBFTEngine::broadcastViewChangeReq()
         PBFTENGINE_LOG(WARNING) << LOG_DESC("ViewChangeWarning: not caused by omit empty block ")
                                 << LOG_KV("v", m_view) << LOG_KV("toV", m_toView)
                                 << LOG_KV("curNum", m_highestBlock.number())
-                                << LOG_KV("hash", req.block_hash.abridged())
+                                << LOG_KV("hash", req->block_hash.abridged())
                                 << LOG_KV("nodeIdx", nodeIdx())
                                 << LOG_KV("myNode", m_keyPair.pub().abridged());
         // print the disconnected info
@@ -479,8 +500,8 @@ bool PBFTEngine::broadcastViewChangeReq()
     }
 
     bytes view_change_data;
-    req.encode(view_change_data);
-    return broadcastMsg(ViewChangeReqPacket, req, ref(view_change_data));
+    req->encode(view_change_data);
+    return broadcastMsg(ViewChangeReqPacket, *req, ref(view_change_data));
 }
 
 /// set default ttl to 1 to in case of forward-broadcast
@@ -791,7 +812,7 @@ void PBFTEngine::notifySealing(dev::eth::Block const& block)
         h256Hash filter;
         for (auto& trans : *(block.transactions()))
         {
-            filter.insert(trans->sha3());
+            filter.insert(trans->hash());
         }
         PBFTENGINE_LOG(INFO) << "I am the next leader = " << getNextLeader()
                              << ", filter trans size = " << filter.size()
@@ -1111,9 +1132,24 @@ void PBFTEngine::checkAndCommit()
                                     m_reqCache->committedPrepareCache().block_hash.abridged())
                              << LOG_KV("nodeIdx", nodeIdx())
                              << LOG_KV("myNode", m_keyPair.pub().abridged());
-        m_threadPool->enqueue([=]() {
-            auto committedPrepareMsg = m_reqCache->committedPrepareBytes();
-            backupMsg(c_backupKeyCommitted, committedPrepareMsg);
+        auto self = std::weak_ptr<PBFTEngine>(shared_from_this());
+        m_threadPool->enqueue([self]() {
+            try
+            {
+                auto pbftEngine = self.lock();
+                if (!pbftEngine)
+                {
+                    return;
+                }
+                auto committedPrepareMsg = pbftEngine->m_reqCache->committedPrepareBytes();
+                pbftEngine->backupMsg(c_backupKeyCommitted, committedPrepareMsg);
+            }
+            catch (std::exception const& _e)
+            {
+                PBFTENGINE_LOG(WARNING)
+                    << LOG_DESC("checkAndCommit: backup c`ommittedPrepareMsg failed")
+                    << LOG_KV("e", boost::diagnostic_information(_e));
+            }
         });
 
         PBFTENGINE_LOG(DEBUG) << LOG_DESC("checkAndCommit: broadcastCommitReq")
@@ -1438,11 +1474,9 @@ bool PBFTEngine::handleViewChangeMsg(
     }
 
     m_reqCache->addViewChangeReq(viewChange_req, m_blockChain->number());
-    if (viewChange_req->view == m_toView)
-    {
-        checkAndChangeView();
-    }
-    else
+    bool success = checkAndChangeView(viewChange_req->view);
+    // try to trigger fast view change
+    if (!success && viewChange_req->view > m_toView)
     {
         VIEWTYPE min_view = 0;
         bool should_trigger = m_reqCache->canTriggerViewChange(
@@ -1528,10 +1562,10 @@ void PBFTEngine::catchupView(ViewChangeReq const& req, std::ostringstream& oss)
     }
 }
 
-void PBFTEngine::checkAndChangeView()
+bool PBFTEngine::checkAndChangeView(VIEWTYPE const& _view)
 {
-    IDXTYPE count = m_reqCache->getViewChangeSize(m_toView);
-    if (count >= minValidNodes() - 1)
+    IDXTYPE count = m_reqCache->getViewChangeSize(_view);
+    if (count >= minValidNodes())
     {
         /// reach to consensue dure to fast view change
         if (m_timeManager.m_lastSignTime == 0)
@@ -1541,16 +1575,19 @@ void PBFTEngine::checkAndChangeView()
         PBFTENGINE_LOG(INFO) << LOG_DESC("checkAndChangeView: Reach consensus")
                              << LOG_KV("org_view", m_view)
                              << LOG_KV("cur_changeCycle", m_timeManager.m_changeCycle)
-                             << LOG_KV("to_view", m_toView);
+                             << LOG_KV("curView", m_view) << LOG_KV("view", _view);
 
 
         m_leaderFailed = false;
         m_timeManager.m_lastConsensusTime = utcSteadyTime();
-        m_view = m_toView.load();
+        m_view = _view;
+        m_toView.store(_view);
         m_notifyNextLeaderSeal = false;
         m_reqCache->triggerViewChange(m_view, m_blockChain->number());
         m_blockSync->noteSealingBlockNumber(m_blockChain->number());
+        return true;
     }
+    return false;
 }
 
 /// collect all caches
@@ -1607,13 +1644,12 @@ void PBFTEngine::checkTimeout()
             m_timeManager.m_lastConsensusTime = utcSteadyTime();
             flag = true;
             m_reqCache->removeInvalidViewChange(m_toView, m_highestBlock);
-
             if (!broadcastViewChangeReq())
             {
                 return;
             }
 
-            checkAndChangeView();
+            checkAndChangeView(m_toView);
             PBFTENGINE_LOG(INFO) << LOG_DESC("checkTimeout Succ") << LOG_KV("view", m_view)
                                  << LOG_KV("toView", m_toView) << LOG_KV("nodeIdx", nodeIdx())
                                  << LOG_KV("changeCycle", m_timeManager.m_changeCycle)

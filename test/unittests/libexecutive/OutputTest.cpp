@@ -156,11 +156,9 @@ struct OutputFixture
         entry->setField(STORAGE_VALUE, "true");
         accountTable->insert(ACCOUNT_FROZEN, entry);
 
-        executive = std::make_shared<Executive>();
         EnvInfo envInfo{fakeBlockHeader(), fakeCallBack, 0};
         envInfo.setPrecompiledEngine(context);
-        executive->setEnvInfo(envInfo);
-        executive->setState(context->getState());
+        executive = std::make_shared<Executive>(context->getState(), envInfo);
     }
 
     ~OutputFixture() { g_BCOSConfig.setSupportedVersion(m_supportedVersion, m_version); }
@@ -179,11 +177,10 @@ struct OutputFixture
     dev::VERSION m_version;
     std::string m_supportedVersion;
 
-    void executeTransaction(Executive& _e, Transaction const& _transaction)
+    void executeTransaction(Executive& _e, Transaction::Ptr _tx)
     {
-        std::shared_ptr<Transaction> tx = std::make_shared<Transaction>(_transaction);
         LOG(INFO) << "init";
-        _e.initialize(tx);
+        _e.initialize(_tx);
         LOG(INFO) << "execute";
         if (!_e.execute())
         {
@@ -233,8 +230,9 @@ BOOST_AUTO_TEST_CASE(accountLiftCycle)
     u256 gasPrice = 0;
     u256 gas = 100000000;
     bytes callData;
-    Transaction tx(value, gasPrice, gas, contractAddress, callData);
-    tx.forceSender(accountAddress);
+    Transaction::Ptr tx =
+        std::make_shared<Transaction>(value, gasPrice, gas, contractAddress, callData);
+    tx->forceSender(accountAddress);
     executeTransaction(*executive, tx);
     auto output = abi.abiIn("Error(string)", string("Frozen account:0x" + accountAddress.hex()));
     dev::owning_bytes_ref o = owning_bytes_ref{std::move(output), 0, output.size()};
@@ -284,8 +282,9 @@ BOOST_AUTO_TEST_CASE(call)
     u256 gas = 100000000;
     Address caller = Address("1000000000000000000000000000000000000000");
     bytes callData;
-    Transaction tx(value, gasPrice, gas, contractAddress, callData);
-    tx.forceSender(caller);
+    Transaction::Ptr tx =
+        std::make_shared<Transaction>(value, gasPrice, gas, contractAddress, callData);
+    tx->forceSender(caller);
     executeTransaction(*executive, tx);
     auto output = abi.abiIn("Error(string)", string("Frozen contract:" + contractAddress.hex()));
     dev::owning_bytes_ref o = owning_bytes_ref{std::move(output), 0, output.size()};

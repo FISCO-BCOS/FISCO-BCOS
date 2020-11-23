@@ -37,6 +37,7 @@ class ExecutiveContext;
 }
 namespace executive
 {
+#define EXECUTIVE_LOG(LEVEL) LOG(LEVEL) << "[EXECUTIVE]"
 struct SubState
 {
     std::set<Address> suicides;  ///< Any accounts that have suicided.
@@ -134,11 +135,10 @@ public:
         return m_executiveEngine;
     }
 
-    void setPrecompiledEngine(
-        std::shared_ptr<dev::blockverifier::ExecutiveContext> executiveEngine)
-        {
-            m_executiveEngine = executiveEngine;
-        }
+    void setPrecompiledEngine(std::shared_ptr<dev::blockverifier::ExecutiveContext> executiveEngine)
+    {
+        m_executiveEngine = executiveEngine;
+    }
 
 
 private:

@@ -276,7 +276,15 @@ void DBInitializer::initTableFactory2(
         boost::filesystem::create_directories(path);
         auto binaryLogger = make_shared<BinLogHandler>(path);
         binaryLogger->setBinaryLogSize(g_BCOSConfig.c_binaryLogSize);
+        if (m_cacheStorage)
+        {  // turn off cachedStorage ForwardBlock when recover from binlog
+            m_cacheStorage->setMaxForwardBlock(0);
+        }
         recoverFromBinaryLog(binaryLogger, backendStorage);
+        if (m_cacheStorage)
+        {
+            m_cacheStorage->setMaxForwardBlock(_param->mutableStorageParam().maxForwardBlock);
+        }
         binaryLogStorage->setBinaryLogger(binaryLogger);
         DBInitializer_LOG(INFO) << LOG_BADGE("init BinaryLogger") << LOG_KV("BinaryLogsPath", path);
         m_storage = binaryLogStorage;
@@ -523,11 +531,20 @@ Storage::Ptr dev::ledger::createRocksDBStorage(const std::string& _dbPath, const
     // any exception will cause the program to be stopped
     rocksDB->Open(options, _dbPath);
     if (!_encryptKey.empty())
-    {  // if enable disk encryption, this will not empty
+    {
+        bool enableCompress = true;
+        if (g_BCOSConfig.version() < V2_7_0)
+        {
+            enableCompress = false;
+        }
+        DBInitializer_LOG(INFO)
+            << LOG_DESC("rocksDB is empty, set compress property for disk encryption")
+            << LOG_KV("enableCompress", enableCompress);
+        // if enable disk encryption, this will not empty
         DBInitializer_LOG(INFO) << LOG_DESC(
             "diskEncryption enabled: set encrypt and decrypt handler for rocksDB");
-        rocksDB->setEncryptHandler(getEncryptHandler(_encryptKey));
-        rocksDB->setDecryptHandler(getDecryptHandler(_encryptKey));
+        rocksDB->setEncryptHandler(getEncryptHandler(_encryptKey, enableCompress));
+        rocksDB->setDecryptHandler(getDecryptHandler(_encryptKey, enableCompress));
     }
     // create and init rocksDBStorage
     std::shared_ptr<RocksDBStorage> rocksdbStorage =

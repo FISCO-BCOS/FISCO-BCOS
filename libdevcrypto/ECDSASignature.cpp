@@ -48,7 +48,6 @@ static const u256 c_secp256k1n(
     "115792089237316195423570985008687907852837564279074904382605163141518161494337");
 
 static const unsigned VBase = 27;
-using byte = unsigned char;
 
 void dev::crypto::ECDSASignature::encode(RLPStream& _s) const noexcept
 {
@@ -94,9 +93,9 @@ secp256k1_context const* getSecp256k1Ctx()
 
 std::shared_ptr<crypto::Signature> dev::ecdsaSignatureFromRLP(RLP const& _rlp, size_t _start)
 {
-    auto v = _rlp[_start++].toInt<unsigned char>() - VBase;
-    h256 r = _rlp[_start++].toInt<u256>();
-    h256 s = _rlp[_start++].toInt<u256>();
+    byte v = _rlp[_start++].toInt<byte>() - VBase;
+    u256 r = _rlp[_start++].toInt<u256>();
+    u256 s = _rlp[_start++].toInt<u256>();
     return std::make_shared<ECDSASignature>(r, s, v);
 }
 std::shared_ptr<crypto::Signature> dev::ecdsaSignatureFromBytes(std::vector<unsigned char> _data)
@@ -201,8 +200,7 @@ pair<bool, bytes> dev::ecRecover(bytesConstRef _in)
                 {
                     if (g_BCOSConfig.version() >= V2_5_0)
                     {
-                        ret = dev::sha3(rec);
-
+                        ret = dev::keccak256(rec);
                     }
                     else
                     {

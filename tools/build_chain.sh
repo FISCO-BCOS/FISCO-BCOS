@@ -48,7 +48,7 @@ days=36500 # 100 years
 timestamp=$(($(date '+%s')*1000))
 chain_id=1
 compatibility_version=""
-default_version="2.6.0"
+default_version="2.7.0"
 macOS=""
 x86_64_arch="true"
 download_timeout=240
@@ -237,16 +237,17 @@ LOG_INFO "All completed. Files in ${output_dir}"
 }
 
 check_env() {
-    [ ! -z "$(openssl version | grep 1.0.2)" ] || [ ! -z "$(openssl version | grep 1.1)" ] || [ ! -z "$(openssl version | grep reSSL)" ] || {
+    if [ "$(uname)" == "Darwin" ];then
+        export PATH="/usr/local/opt/openssl/bin:$PATH"
+        macOS="macOS"
+    fi
+    [ ! -z "$(openssl version | grep 1.0.2)" ] || [ ! -z "$(openssl version | grep 1.1)" ] || {
         echo "please install openssl!"
         #echo "download openssl from https://www.openssl.org."
         echo "use \"openssl version\" command to check."
         exit 1
     }
-    if [ "$(uname)" == "Darwin" ];then
-        export PATH="/usr/local/opt/openssl/bin:$PATH"
-        macOS="macOS"
-    fi
+
     if [ "$(uname -m)" != "x86_64" ];then
         x86_64_arch="false"
     fi
@@ -1224,6 +1225,7 @@ sed_cmd="sed -i"
 solc_suffix=""
 supported_solc_versions=(0.4 0.5 0.6)
 package_name="console.tar.gz"
+sm_crypto=false
 
 if [ "\$(uname)" == "Darwin" ];then
     sed_cmd="sed -i .bkp"
@@ -1246,6 +1248,7 @@ done
 if [[ -z "\${version}" ]];then
     version=\$(curl -s https://api.github.com/repos/FISCO-BCOS/console/releases | grep "tag_name" | cut -d \" -f 4 | sort -V | tail -n 1 | sed "s/^[vV]//")
 fi
+sm_crypto=\$(cat "\${SHELL_FOLDER}"/node*/config.ini | grep sm_crypto= | cut -d = -f 2 | head -n 1)
 download_link=https://github.com/FISCO-BCOS/console/releases/download/v\${version}/\${package_name}
 cos_download_link=${cdn_link_header}/console/releases/v\${version}/\${package_name}
 echo "Downloading console \${version} from \${download_link}"
@@ -1260,11 +1263,20 @@ fi
 tar -zxf \${package_name} && cd console && chmod +x *.sh
 
 if [[ -n "\${config}" ]];then
-    cp conf/applicationContext-sample.xml conf/applicationContext.xml
-    cp ../sdk/* conf/
+    if  [ "\${sm_crypto}" == "false" ];then
+        cp ../sdk/* conf/
+    else
+        cp ../sdk/gm/* conf/
+    fi
     channel_listen_port=\$(cat "\${SHELL_FOLDER}"/node*/config.ini | grep channel_listen_port | cut -d = -f 2 | head -n 1)
     channel_listen_ip=\$(cat "\${SHELL_FOLDER}"/node*/config.ini | grep channel_listen_ip | cut -d = -f 2 | head -n 1)
-    \${sed_cmd} "s/127.0.0.1:20200/127.0.0.1:\${channel_listen_port}/" conf/applicationContext.xml
+    if [ "\${version:0:1}" == "1" ];then
+        cp conf/applicationContext-sample.xml conf/applicationContext.xml
+        \${sed_cmd} "s/127.0.0.1:20200/127.0.0.1:\${channel_listen_port}/" conf/applicationContext.xml
+    else
+        cp conf/config-example.toml conf/config.toml
+        \${sed_cmd} "s/127.0.0.1:20200/127.0.0.1:\${channel_listen_port}/" conf/config.toml
+    fi
     echo -e "\033[32m console configuration completed successfully. \033[0m"
 fi
 EOF
@@ -1388,7 +1400,7 @@ Usage:
     -m                     Download mini binary, only works with -b option
     -h Help
 e.g
-    \$0 -v 2.6.0
+    \$0 -v ${default_version}
 "
 exit 0
 }
@@ -1540,7 +1552,7 @@ download_bin()
     else
         curl -#LO "${Download_Link}"
     fi
-    if [[ $(ls -al . | grep tar.gz | awk '{print $5}') -lt 1048576 ]];then
+    if [[ "$(ls -al . | grep tar.gz | awk '{print $5}')" -lt "1048576" ]];then
         exit_with_clean "Download fisco-bcos failed, please try again. Or download and extract it manually from ${Download_Link} and use -e option."
     fi
     tar -zxf ${package_name} && mv fisco-bcos ${bin_path} && rm ${package_name}

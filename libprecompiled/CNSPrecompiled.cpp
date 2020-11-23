@@ -51,6 +51,84 @@ std::string CNSPrecompiled::toString()
     return "CNS";
 }
 
+// check param of the cns
+bool CNSPrecompiled::checkCNSParam(ExecutiveContext::Ptr _context,
+    std::string const& _contractAddress, std::string const& _contractName,
+    std::string const& _contractAbi)
+{
+    // check address
+    Address contractAddress;
+    if (g_BCOSConfig.version() >= V2_2_0)
+    {
+        try
+        {
+            contractAddress = Address(_contractAddress);
+        }
+        catch (...)
+        {
+            return false;
+        }
+    }
+
+    try
+    {
+        // check the status of the contract(only print the error message to the log)
+        std::string tableName = precompiled::getContractTableName(contractAddress);
+        ContractStatus contractStatus = getContractStatus(_context, tableName);
+
+        if (contractStatus != ContractStatus::Available)
+        {
+            std::string errorMessage = "CNS operation failed for ";
+            switch (contractStatus)
+            {
+            case ContractStatus::Invalid:
+                errorMessage += "invalid contract \"" + _contractName +
+                                "\", contractAddress = " + _contractAddress;
+                break;
+            case ContractStatus::Frozen:
+                errorMessage += "\"" + _contractName +
+                                "\" has been frozen, contractAddress = " + _contractAddress;
+                break;
+            case ContractStatus::AddressNonExistent:
+                errorMessage += "the contract \"" + _contractName + "\" with address " +
+                                _contractAddress + " does not exist";
+                break;
+            case ContractStatus::NotContractAddress:
+                errorMessage += "invalid address " + _contractAddress +
+                                ", please make sure it's a contract address";
+                break;
+            default:
+                errorMessage += "invalid contract \"" + _contractName + "\" with address " +
+                                _contractAddress + ", error code:" + std::to_string(contractStatus);
+                break;
+            }
+            PRECOMPILED_LOG(INFO) << LOG_BADGE("CNSPrecompiled") << LOG_DESC(errorMessage)
+                                  << LOG_KV("contractAddress", _contractAddress)
+                                  << LOG_KV("contractName", _contractName);
+        }
+    }
+    catch (std::exception const& _e)
+    {
+        PRECOMPILED_LOG(WARNING) << LOG_BADGE("CNSPrecompiled")
+                                 << LOG_DESC("check contract status exception")
+                                 << LOG_KV("contractAddress", _contractAddress)
+                                 << LOG_KV("contractName", _contractName)
+                                 << LOG_KV("e", boost::diagnostic_information(_e));
+    }
+    if (g_BCOSConfig.version() < V2_7_0)
+    {
+        return true;
+    }
+    // check the length of the key
+    checkLengthValidate(
+        _contractName, CNS_CONTRACT_NAME_MAX_LENGTH, CODE_TABLE_KEYVALUE_LENGTH_OVERFLOW);
+    // check the length of the field value
+    // (since the contract version length will be checked, here no need to check _contractVersion)
+    checkLengthValidate(
+        _contractAbi, USER_TABLE_FIELD_VALUE_MAX_LENGTH, CODE_TABLE_FIELDVALUE_LENGTH_OVERFLOW);
+    return true;
+}
+
 PrecompiledExecResult::Ptr CNSPrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin, Address const&)
 {
@@ -74,20 +152,7 @@ PrecompiledExecResult::Ptr CNSPrecompiled::call(
         Table::Ptr table = openTable(context, SYS_CNS);
         callResult->gasPricer()->appendOperation(InterfaceOpcode::OpenTable);
 
-        bool isValidAddress = true;
-        if (g_BCOSConfig.version() >= V2_2_0)
-        {
-            try
-            {
-                Address address(contractAddress);
-                (void)address;
-            }
-            catch (...)
-            {
-                isValidAddress = false;
-            }
-        }
-
+        bool isValid = checkCNSParam(context, contractAddress, contractName, contractAbi);
         // check exist or not
         bool exist = false;
         auto entries = table->select(contractName, table->newCondition());
@@ -126,7 +191,7 @@ PrecompiledExecResult::Ptr CNSPrecompiled::call(
                 << LOG_KV("version", contractVersion);
             result = CODE_ADDRESS_AND_VERSION_EXIST;
         }
-        else if (!isValidAddress)
+        else if (!isValid)
         {
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("CNSPrecompiled") << LOG_DESC("address invalid")
                                    << LOG_KV("address", contractAddress);

@@ -29,35 +29,33 @@ using namespace dev::eth;
 TransactionReceipt::TransactionReceipt(bytesConstRef _rlp)
 {
     RLP r(_rlp);
+    m_status = static_cast<eth::TransactionException>((uint32_t)r[4]);
     m_stateRoot = (h256)r[0];
     m_gasUsed = (u256)r[1];
     m_contractAddress = (Address)r[2];
     m_bloom = (LogBloom)r[3];
-    m_status = static_cast<eth::TransactionException>((uint32_t)r[4]);
     m_outputBytes = (bytes)r[5];
-    for (auto const& i : r[6])
-        m_log.emplace_back(i);
+    decodeLog(r);
 }
 
 TransactionReceipt::TransactionReceipt(h256 const& _root, u256 const& _gasUsed,
     LogEntries const& _log, eth::TransactionException _status, bytes _bytes,
     Address const& _contractAddress)
-{
-    m_stateRoot = (_root);
-    m_gasUsed = (_gasUsed);
-    m_contractAddress = (_contractAddress);
-    m_bloom = (eth::bloom(_log));
-    m_status = _status;
-    m_outputBytes = _bytes;
-    m_log = (_log);
-}
+  : m_status(_status),
+    m_stateRoot(_root),
+    m_gasUsed(_gasUsed),
+    m_contractAddress(_contractAddress),
+    m_bloom(eth::bloom(_log)),
+    m_outputBytes(_bytes),
+    m_log(_log)
+{}
 
 TransactionReceipt::TransactionReceipt(TransactionReceipt const& _other)
-  : m_stateRoot(_other.stateRoot()),
+  : m_status(_other.status()),
+    m_stateRoot(_other.stateRoot()),
     m_gasUsed(_other.gasUsed()),
     m_contractAddress(_other.contractAddress()),
     m_bloom(_other.bloom()),
-    m_status(_other.status()),
     m_outputBytes(_other.outputBytes()),
     m_log(_other.log())
 {}
@@ -77,6 +75,14 @@ void TransactionReceipt::decode(bytesConstRef receiptsBytes)
     decode(rlp);
 }
 
+void TransactionReceipt::decodeLog(RLP const& _r)
+{
+    for (auto it = _r[6].begin(); it != _r[6].end(); it++)
+    {
+        m_log.emplace_back(*it);
+    }
+}
+
 void TransactionReceipt::decode(RLP const& r)
 {
     try
@@ -93,8 +99,7 @@ void TransactionReceipt::decode(RLP const& r)
         {
             m_outputBytes = r[5].toBytes();
         }
-        for (auto const& i : r[6])
-            m_log.emplace_back(i);
+        decodeLog(r);
     }
     catch (Exception& _e)
     {

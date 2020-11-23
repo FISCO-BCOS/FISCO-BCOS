@@ -45,7 +45,7 @@ bool TransactionNonceCheck::isBlockLimitOk(Transaction const& _tx)
         NONCECHECKER_LOG(WARNING) << LOG_DESC("InvalidBlockLimit")
                                   << LOG_KV("blkLimit", _tx.blockLimit())
                                   << LOG_KV("maxBlkLimit", m_maxBlockLimit)
-                                  << LOG_KV("curBlk", m_blockNumber) << LOG_KV("tx", _tx.sha3());
+                                  << LOG_KV("curBlk", m_blockNumber) << LOG_KV("tx", _tx.hash());
         return false;
     }
     return true;
@@ -82,7 +82,7 @@ std::shared_ptr<dev::txpool::NonceVec> TransactionNonceCheck::getNonceAndUpdateC
         }
         else
         {
-            NONCECHECKER_LOG(TRACE)
+            NONCECHECKER_LOG(WARNING)
                 << LOG_DESC("Can't get block") << LOG_KV("blockNumber", blockNumber);
         }
     }

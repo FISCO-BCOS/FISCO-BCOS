@@ -122,11 +122,9 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
 
     try
     {
-        auto executive = createAndInitExecutive();
         EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
         envInfo.setPrecompiledEngine(executiveContext);
-        executive->setEnvInfo(envInfo);
-        executive->setState(executiveContext->getState());
+        auto executive = createAndInitExecutive(executiveContext->getState(), envInfo);
         for (size_t i = 0; i < block.transactions()->size(); i++)
         {
             auto& tx = (*block.transactions())[i];
@@ -276,9 +274,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
                 (void)_r;
                 EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
                 envInfo.setPrecompiledEngine(executiveContext);
-                auto executive = createAndInitExecutive();
-                executive->setEnvInfo(envInfo);
-                executive->setState(executiveContext->getState());
+                auto executive = createAndInitExecutive(executiveContext->getState(), envInfo);
 
                 while (!txDag->hasFinished())
                 {
@@ -361,7 +357,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
             for (size_t i = 0; i < receipts->size(); ++i)
             {
                 BLOCKVERIFIER_LOG(ERROR) << LOG_BADGE("FISCO_DEBUG") << LOG_KV("index", i)
-                                         << LOG_KV("hash", block.transaction(i)->sha3())
+                                         << LOG_KV("hash", block.transaction(i)->hash())
                                          << ",receipt=" << *receipts->at(i);
             }
 #endif
@@ -406,11 +402,9 @@ TransactionReceipt::Ptr BlockVerifier::executeTransaction(
             << LOG_DESC("[executeTransaction] Error during execute initExecutiveContext")
             << LOG_KV("errorMsg", boost::diagnostic_information(e));
     }
-    auto executive = createAndInitExecutive();
     EnvInfo envInfo(blockHeader, m_pNumberHash, 0);
     envInfo.setPrecompiledEngine(executiveContext);
-    executive->setEnvInfo(envInfo);
-    executive->setState(executiveContext->getState());
+    auto executive = createAndInitExecutive(executiveContext->getState(), envInfo);
     // only Rpc::call will use executeTransaction, RPC do catch exception
     return execute(_t, executiveContext, executive);
 }
@@ -451,8 +445,8 @@ dev::eth::TransactionReceipt::Ptr BlockVerifier::execute(dev::eth::Transaction::
         executive->takeOutput().takeBytes(), executive->newAddress());
 }
 
-dev::executive::Executive::Ptr BlockVerifier::createAndInitExecutive()
+dev::executive::Executive::Ptr BlockVerifier::createAndInitExecutive(
+    std::shared_ptr<StateFace> _s, dev::executive::EnvInfo const& _envInfo)
 {
-    Executive::Ptr executive = std::make_shared<Executive>(m_evmFlags & EVMFlags::FreeStorageGas);
-    return executive;
+    return std::make_shared<Executive>(_s, _envInfo, m_evmFlags & EVMFlags::FreeStorageGas);
 }

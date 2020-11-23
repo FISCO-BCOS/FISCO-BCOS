@@ -153,6 +153,15 @@ PrecompiledExecResult::Ptr CRUDPrecompiled::call(
                 callResult->setExecResult(abi.abiIn("", u256(parseEntryResult)));
                 return callResult;
             }
+            // check the entry
+            if (entry->fieldExist(table->tableInfo()->key) && g_BCOSConfig.version() >= V2_7_0)
+            {
+                PRECOMPILED_LOG(ERROR)
+                    << LOG_BADGE("CRUDPrecompiled") << LOG_DESC("can't update the key")
+                    << LOG_KV("table", tableName) << LOG_KV("key", table->tableInfo()->key);
+                callResult->setExecResult(abi.abiIn("", u256(CODE_INVALID_UPDATE_TABLE_KEY)));
+                return callResult;
+            }
             Condition::Ptr condition = table->newCondition();
             int parseConditionResult = parseCondition(conditionStr, condition, callResult);
             if (parseConditionResult != CODE_SUCCESS)

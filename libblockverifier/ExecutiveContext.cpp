@@ -72,11 +72,22 @@ dev::precompiled::PrecompiledExecResult::Ptr ExecutiveContext::call(
             << "PrecompiledException" << LOG_KV("address", address) << LOG_KV("message:", e.what());
         BOOST_THROW_EXCEPTION(e);
     }
-    catch (dev::storage::StorageException& e)
+    catch (dev::storage::StorageException const& e)
     {
-        EXECUTIVECONTEXT_LOG(ERROR) << "StorageException" << LOG_KV("address", address)
-                                    << LOG_KV("errorCode", e.errorCode());
-        throw dev::eth::PrecompiledError();
+        // throw PrecompiledError when supported_version < v2.7.0
+        if (g_BCOSConfig.version() < V2_7_0)
+        {
+            EXECUTIVECONTEXT_LOG(ERROR) << "StorageException" << LOG_KV("address", address)
+                                        << LOG_KV("errorCode", e.errorCode());
+            throw dev::eth::PrecompiledError();
+        }
+        else
+        {
+            dev::precompiled::PrecompiledException precompiledException(e);
+            EXECUTIVECONTEXT_LOG(ERROR)
+                << LOG_DESC("precompiledException") << LOG_KV("msg", e.what());
+            throw precompiledException;
+        }
     }
     catch (std::exception& e)
     {

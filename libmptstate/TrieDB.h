@@ -131,6 +131,13 @@ public:
             return *this;
         }
 
+        iterator operator++(int)
+        {
+            auto ret = *this;
+            operator++();
+            return ret;
+        }
+
         value_type operator*() const { return at(); }
         value_type operator->() const { return at(); }
 
@@ -342,9 +349,11 @@ private:
 template <class DB>
 std::ostream& operator<<(std::ostream& _out, GenericTrieDB<DB> const& _db)
 {
-    for (auto const& i : _db)
-        _out << escaped(i.first.toString(), false) << ": " << escaped(i.second.toString(), false)
-             << std::endl;
+    for (auto it = _db.begin(); it != _db.end(); it++)
+    {
+        _out << escaped((*it).first.toString(), false) << ": "
+             << escaped((*it).second.toString(), false) << std::endl;
+    }
     return _out;
 }
 

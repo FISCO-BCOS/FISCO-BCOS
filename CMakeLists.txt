@@ -19,12 +19,12 @@
 # (c) 2016-2018 fisco-dev contributors.
 #------------------------------------------------------------------------------
 
-cmake_minimum_required(VERSION 3.7)
+cmake_minimum_required(VERSION 3.10)
 set(FISCO_BCOS_CMAKE_DIR "${CMAKE_CURRENT_LIST_DIR}/cmake" CACHE PATH "The path to the cmake directory")
 list(APPEND CMAKE_MODULE_PATH ${FISCO_BCOS_CMAKE_DIR})
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum OS X deployment version")
 
-project(FISCO-BCOS VERSION "2.6.0")
+project(FISCO-BCOS VERSION "2.7.0")
 # Suffix like "-rc1" e.t.c. to append to versions wherever needed.
 set(VERSION_SUFFIX "")
 
@@ -37,9 +37,9 @@ set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY ON)
 
 # basic setting
 include(Options)
+configure_project()
 include(CompilerSettings)
 include(Dependencies)
-configure_project()
 
 # install dependencies
 include(ProjectTBB)

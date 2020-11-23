@@ -22,6 +22,7 @@
 #include "libdevcore/Exceptions.h"
 #include "libprecompiled/Precompiled.h"
 #include <libdevcore/Address.h>
+#include <libstorage/StorageException.h>
 #include <memory>
 #include <string>
 
@@ -64,12 +65,14 @@ enum PrecompiledError : int
     CODE_COMMITTEE_MEMBER_EXIST = -52000,
 
     // ContractLifeCyclePrecompiled -51999 ~ -51900
+    CODE_INVALID_REVOKE_LAST_AUTHORIZATION = -51907,
+    CODE_INVALID_NON_EXIST_AUTHORIZATION = -51906,
     CODE_INVALID_NO_AUTHORIZED = -51905,
     CODE_INVALID_TABLE_NOT_EXIST = -51904,
     CODE_INVALID_CONTRACT_ADDRESS = -51903,
     CODE_INVALID_CONTRACT_REPEAT_AUTHORIZATION = -51902,
     CODE_INVALID_CONTRACT_AVAILABLE = -51901,
-    CODE_INVALID_CONTRACT_FEOZEN = -51900,
+    CODE_INVALID_CONTRACT_FROZEN = -51900,
 
     // RingSigPrecompiled -51899 ~ -51800
     VERIFY_RING_SIG_FAILED = -51800,
@@ -81,12 +84,13 @@ enum PrecompiledError : int
     CODE_INVALID_CIPHERS = -51600,
 
     // CRUDPrecompiled -51599 ~ -51500
+    CODE_INVALID_UPDATE_TABLE_KEY = -51503,
     CODE_CONDITION_OPERATION_UNDEFINED = -51502,
     CODE_PARSE_CONDITION_ERROR = -51501,
     CODE_PARSE_ENTRY_ERROR = -51500,
 
     // DagTransferPrecompiled -51499 ~ -51400
-    CODE_INVALID_OPENTALBLE_FAILED = -51406,
+    CODE_INVALID_OPENTABLE_FAILED = -51406,
     CODE_INVALID_BALANCE_OVERFLOW = -51405,
     CODE_INVALID_INSUFFICIENT_BALANCE = -51404,
     CODE_INVALID_USER_ALREADY_EXIST = -51403,
@@ -121,9 +125,21 @@ enum PrecompiledError : int
     CODE_SUCCESS = 0
 };
 
+enum ContractStatus
+{
+    Invalid = 0,
+    Available,
+    Frozen,
+    AddressNonExistent,
+    NotContractAddress,
+    Count
+};
+
 class PrecompiledException : public dev::Exception
 {
 public:
+    // covert StorageException to  PrecompiledException
+    PrecompiledException(dev::storage::StorageException const& _e) : dev::Exception(_e.what()) {}
     PrecompiledException(const std::string& what) : dev::Exception(what) {}
     bytes ToOutput();
 };
@@ -151,9 +167,13 @@ std::shared_ptr<std::pair<std::string, int64_t>> getSysteConfigByKey(
 std::shared_ptr<dev::storage::Table> openTable(
     std::shared_ptr<dev::blockverifier::ExecutiveContext> context, const std::string& tableName);
 
+dev::precompiled::ContractStatus getContractStatus(
+    std::shared_ptr<dev::blockverifier::ExecutiveContext> context, std::string const& tableName);
+
 const int SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH = 64;
 const int SYS_TABLE_VALUE_FIELD_MAX_LENGTH = 1024;
 const int CNS_VERSION_MAX_LENGTH = 128;
+const int CNS_CONTRACT_NAME_MAX_LENGTH = 128;
 const int USER_TABLE_KEY_VALUE_MAX_LENGTH = 255;
 const int USER_TABLE_FIELD_NAME_MAX_LENGTH = 64;
 const int USER_TABLE_NAME_MAX_LENGTH = 64;

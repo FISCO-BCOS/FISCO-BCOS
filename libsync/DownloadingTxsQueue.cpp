@@ -68,129 +68,150 @@ void DownloadingTxsQueue::push(
 void DownloadingTxsQueue::pop2TxPool(
     std::shared_ptr<dev::txpool::TxPoolInterface> _txPool, dev::eth::CheckTransaction _checkSig)
 {
-    auto start_time = utcTime();
-    auto record_time = utcTime();
-    int64_t moveBuffer_time_cost = 0;
-    int64_t newBuffer_time_cost = 0;
-    auto isBufferFull_time_cost = utcTime() - record_time;
-    record_time = utcTime();
-    // fetch from buffer(only one thread can callback this function)
-    std::shared_ptr<std::vector<std::shared_ptr<DownloadTxsShard>>> localBuffer;
+    try
     {
-        Guard ml(m_mutex);
-        UpgradableGuard l(x_buffer);
-        if (m_buffer->size() == 0)
+        auto start_time = utcTime();
+        auto record_time = utcTime();
+        int64_t moveBuffer_time_cost = 0;
+        int64_t newBuffer_time_cost = 0;
+        auto isBufferFull_time_cost = utcTime() - record_time;
+        record_time = utcTime();
+        // fetch from buffer(only one thread can callback this function)
+        std::shared_ptr<std::vector<std::shared_ptr<DownloadTxsShard>>> localBuffer;
         {
+            Guard ml(m_mutex);
+            UpgradableGuard l(x_buffer);
+            if (m_buffer->size() == 0)
+            {
+                return;
+            }
+            localBuffer = m_buffer;
+            moveBuffer_time_cost = utcTime() - record_time;
+            record_time = utcTime();
+            UpgradeGuard ul(l);
+            m_buffer = std::make_shared<std::vector<std::shared_ptr<DownloadTxsShard>>>();
+            newBuffer_time_cost = utcTime() - record_time;
+        }
+        // the node is not the group member, return without submit the transaction to the txPool
+        if (!m_needImportToTxPool)
+        {
+            SYNC_LOG(DEBUG) << LOG_DESC("stop pop2TxPool for the node is not belong to the group")
+                            << LOG_KV("pendingTxsSize", _txPool->pendingSize())
+                            << LOG_KV("shardSize", m_buffer->size());
             return;
         }
-        localBuffer = m_buffer;
-        moveBuffer_time_cost = utcTime() - record_time;
-        record_time = utcTime();
-        UpgradeGuard ul(l);
-        m_buffer = std::make_shared<std::vector<std::shared_ptr<DownloadTxsShard>>>();
-        newBuffer_time_cost = utcTime() - record_time;
-    }
-    // the node is not the group member, return without submit the transaction to the txPool
-    if (!m_needImportToTxPool)
-    {
-        SYNC_LOG(DEBUG) << LOG_DESC("stop pop2TxPool for the node is not belong to the group")
-                        << LOG_KV("pendingTxsSize", _txPool->pendingSize())
-                        << LOG_KV("shardSize", m_buffer->size());
-        return;
-    }
-    auto maintainBuffer_start_time = utcTime();
-    int64_t decode_time_cost = 0;
-    int64_t verifySig_time_cost = 0;
-    int64_t import_time_cost = 0;
-    size_t successCnt = 0;
-    for (size_t i = 0; i < localBuffer->size(); ++i)
-    {
-        record_time = utcTime();
-        // decode
-        auto txs = std::make_shared<dev::eth::Transactions>();
-        std::shared_ptr<DownloadTxsShard> txsShard = (*localBuffer)[i];
-        // TODO drop by Txs Shard
-        if (g_BCOSConfig.version() >= RC2_VERSION)
+        auto maintainBuffer_start_time = utcTime();
+        int64_t decode_time_cost = 0;
+        int64_t verifySig_time_cost = 0;
+        int64_t import_time_cost = 0;
+        size_t successCnt = 0;
+        for (size_t i = 0; i < localBuffer->size(); ++i)
         {
-            RLP const& txsBytesRLP = RLP(ref(txsShard->txsBytes))[0];
-            dev::eth::TxsParallelParser::decode(
-                txs, txsBytesRLP.toBytesConstRef(), _checkSig, true);
-        }
-        else
-        {
-            RLP const& txsBytesRLP = RLP(ref(txsShard->txsBytes));
-            unsigned txNum = txsBytesRLP.itemCount();
-            txs->resize(txNum);
-            for (unsigned j = 0; j < txNum; j++)
+            record_time = utcTime();
+            // decode
+            auto txs = std::make_shared<dev::eth::Transactions>();
+            std::shared_ptr<DownloadTxsShard> txsShard = (*localBuffer)[i];
+            // TODO drop by Txs Shard
+            if (g_BCOSConfig.version() >= RC2_VERSION)
             {
-                (*txs)[j] = std::make_shared<dev::eth::Transaction>();
-                (*txs)[j]->decode(txsBytesRLP[j]);
+                RLP const& txsBytesRLP = RLP(ref(txsShard->txsBytes))[0];
+                dev::eth::TxsParallelParser::decode(
+                    txs, txsBytesRLP.toBytesConstRef(), _checkSig, true);
             }
-        }
-        decode_time_cost += (utcTime() - record_time);
-        record_time = utcTime();
+            else
+            {
+                RLP const& txsBytesRLP = RLP(ref(txsShard->txsBytes));
+                unsigned txNum = txsBytesRLP.itemCount();
+                txs->resize(txNum);
+                for (unsigned j = 0; j < txNum; j++)
+                {
+                    (*txs)[j] = std::make_shared<dev::eth::Transaction>();
+                    (*txs)[j]->decode(txsBytesRLP[j]);
+                }
+            }
+            decode_time_cost += (utcTime() - record_time);
+            record_time = utcTime();
 
-        // parallel verify transaction before import
-        tbb::parallel_for(
-            tbb::blocked_range<size_t>(0, txs->size()), [&](const tbb::blocked_range<size_t>& _r) {
-                for (size_t j = _r.begin(); j != _r.end(); ++j)
-                {
-                    if (!_txPool->txExists((*txs)[j]->sha3()))
-                        (*txs)[j]->sender();
-                }
-            });
-        verifySig_time_cost += (utcTime() - record_time);
+            // parallel verify transaction before import
+            tbb::parallel_for(tbb::blocked_range<size_t>(0, txs->size()),
+                [&](const tbb::blocked_range<size_t>& _r) {
+                    for (size_t j = _r.begin(); j != _r.end(); ++j)
+                    {
+                        try
+                        {
+                            if (!_txPool->txExists((*txs)[j]->hash()))
+                            {
+                                (*txs)[j]->sender();
+                            }
+                        }
+                        catch (std::exception const& _e)
+                        {
+                            SYNC_LOG(WARNING) << LOG_DESC("verify sender for tx failed")
+                                              << LOG_KV("reason", boost::diagnostic_information(_e))
+                                              << LOG_KV("hash", (*txs)[j]->hash());
+                        }
+                    }
+                });
+            verifySig_time_cost += (utcTime() - record_time);
 
-        // import into tx pool
-        record_time = utcTime();
-        NodeID fromPeer = txsShard->fromPeer;
-        for (auto tx : *txs)
-        {
-            try
+            // import into tx pool
+            record_time = utcTime();
+            NodeID fromPeer = txsShard->fromPeer;
+            for (auto tx : *txs)
             {
-                auto importResult = _txPool->import(tx);
-                if (dev::eth::ImportResult::Success == importResult)
+                try
                 {
-                    tx->appendNodeContainsTransaction(fromPeer);
-                    tx->appendNodeListContainTransaction(*(txsShard->knownNodes));
-                    successCnt++;
+                    auto importResult = _txPool->import(tx);
+                    if (dev::eth::ImportResult::Success == importResult)
+                    {
+                        tx->appendNodeContainsTransaction(fromPeer);
+                        tx->appendNodeListContainTransaction(*(txsShard->knownNodes));
+                        successCnt++;
+                    }
+                    else if (dev::eth::ImportResult::AlreadyKnown == importResult)
+                    {
+                        SYNC_LOG(TRACE)
+                            << LOG_BADGE("Tx")
+                            << LOG_DESC("Import peer transaction into txPool DUPLICATED from peer")
+                            << LOG_KV("reason", int(importResult))
+                            << LOG_KV("peer", fromPeer.abridged())
+                            << LOG_KV("txHash", tx->hash().abridged());
+                    }
+                    else
+                    {
+                        SYNC_LOG(TRACE)
+                            << LOG_BADGE("Tx")
+                            << LOG_DESC("Import peer transaction into txPool FAILED from peer")
+                            << LOG_KV("reason", int(importResult))
+                            << LOG_KV("peer", fromPeer.abridged())
+                            << LOG_KV("txHash", tx->hash().abridged());
+                    }
                 }
-                else if (dev::eth::ImportResult::AlreadyKnown == importResult)
+                catch (std::exception& e)
                 {
-                    SYNC_LOG(TRACE)
-                        << LOG_BADGE("Tx")
-                        << LOG_DESC("Import peer transaction into txPool DUPLICATED from peer")
-                        << LOG_KV("reason", int(importResult))
-                        << LOG_KV("peer", fromPeer.abridged())
-                        << LOG_KV("txHash", tx->sha3().abridged());
-                }
-                else
-                {
-                    SYNC_LOG(TRACE)
-                        << LOG_BADGE("Tx")
-                        << LOG_DESC("Import peer transaction into txPool FAILED from peer")
-                        << LOG_KV("reason", int(importResult))
-                        << LOG_KV("peer", fromPeer.abridged())
-                        << LOG_KV("txHash", tx->sha3().abridged());
+                    SYNC_LOG(WARNING)
+                        << LOG_BADGE("Tx") << LOG_DESC("Invalid transaction RLP received")
+                        << LOG_KV("hash", tx->hash().abridged()) << LOG_KV("reason", e.what())
+                        << LOG_KV("rlp", toHex(tx->rlp()));
+                    continue;
                 }
             }
-            catch (std::exception& e)
-            {
-                SYNC_LOG(WARNING) << LOG_BADGE("Tx") << LOG_DESC("Invalid transaction RLP recieved")
-                                  << LOG_KV("reason", e.what()) << LOG_KV("rlp", toHex(tx->rlp()));
-                continue;
-            }
+            import_time_cost += (utcTime() - record_time);
         }
-        import_time_cost += (utcTime() - record_time);
+        SYNC_LOG(TRACE) << LOG_BADGE("Tx") << LOG_DESC("Import peer transactions")
+                        << LOG_KV("import", successCnt)
+                        << LOG_KV("moveBufferTimeCost", moveBuffer_time_cost)
+                        << LOG_KV("newBufferTimeCost", newBuffer_time_cost)
+                        << LOG_KV("isBufferFullTimeCost", isBufferFull_time_cost)
+                        << LOG_KV("decodTimeCost", decode_time_cost)
+                        << LOG_KV("verifySigTimeCost", verifySig_time_cost)
+                        << LOG_KV("importTimeCost", import_time_cost)
+                        << LOG_KV("maintainBufferTimeCost", utcTime() - maintainBuffer_start_time)
+                        << LOG_KV("totalTimeCostFromStart", utcTime() - start_time);
     }
-    SYNC_LOG(TRACE) << LOG_BADGE("Tx") << LOG_DESC("Import peer transactions")
-                    << LOG_KV("import", successCnt)
-                    << LOG_KV("moveBufferTimeCost", moveBuffer_time_cost)
-                    << LOG_KV("newBufferTimeCost", newBuffer_time_cost)
-                    << LOG_KV("isBufferFullTimeCost", isBufferFull_time_cost)
-                    << LOG_KV("decodTimeCost", decode_time_cost)
-                    << LOG_KV("verifySigTimeCost", verifySig_time_cost)
-                    << LOG_KV("importTimeCost", import_time_cost)
-                    << LOG_KV("maintainBufferTimeCost", utcTime() - maintainBuffer_start_time)
-                    << LOG_KV("totalTimeCostFromStart", utcTime() - start_time);
+    catch (std::exception const& _e)
+    {
+        SYNC_LOG(ERROR) << LOG_DESC("pop2TxPool failed")
+                        << LOG_KV("reason", boost::diagnostic_information(_e));
+    }
 }

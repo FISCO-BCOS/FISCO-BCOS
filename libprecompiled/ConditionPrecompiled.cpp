@@ -31,6 +31,7 @@ using namespace dev::storage;
 
 const char* const CONDITION_METHOD_EQ_STR_INT = "EQ(string,int256)";
 const char* const CONDITION_METHOD_EQ_STR_STR = "EQ(string,string)";
+const char* const CONDITION_METHOD_EQ_STR_ADDR = "EQ(string,address)";
 const char* const CONDITION_METHOD_GE_STR_INT = "GE(string,int256)";
 const char* const CONDITION_METHOD_GT_STR_INT = "GT(string,int256)";
 const char* const CONDITION_METHOD_LE_STR_INT = "LE(string,int256)";
@@ -52,6 +53,12 @@ ConditionPrecompiled::ConditionPrecompiled()
     name2Selector[CONDITION_METHOD_NE_STR_STR] = getFuncSelector(CONDITION_METHOD_NE_STR_STR);
     name2Selector[CONDITION_METHOD_LIMIT_INT] = getFuncSelector(CONDITION_METHOD_LIMIT_INT);
     name2Selector[CONDITION_METHOD_LIMIT_2INT] = getFuncSelector(CONDITION_METHOD_LIMIT_2INT);
+    if (g_BCOSConfig.version() >= V2_7_0)
+    {
+        name2Selector[CONDITION_METHOD_EQ_STR_ADDR] = getFuncSelector(CONDITION_METHOD_EQ_STR_ADDR);
+        STORAGE_LOG(INFO) << LOG_BADGE("ConditionPrecompiled") << "add "
+                          << CONDITION_METHOD_EQ_STR_ADDR << " definition";
+    }
 }
 
 std::string ConditionPrecompiled::toString()
@@ -91,6 +98,14 @@ PrecompiledExecResult::Ptr ConditionPrecompiled::call(
         abi.abiOut(data, str, value);
 
         m_condition->EQ(str, value);
+        callResult->gasPricer()->appendOperation(InterfaceOpcode::EQ);
+    }
+    else if (func == name2Selector[CONDITION_METHOD_EQ_STR_ADDR])
+    {  // EQ(string,address)
+        std::string str;
+        Address value;
+        abi.abiOut(data, str, value);
+        m_condition->EQ(str, toHex(value));
         callResult->gasPricer()->appendOperation(InterfaceOpcode::EQ);
     }
     else if (func == name2Selector[CONDITION_METHOD_GE_STR_INT])

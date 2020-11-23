@@ -121,7 +121,7 @@ private:
     std::shared_ptr<ChannelRPCServer> m_channelRPCServer;
 
     dev::storage::TableFactoryFactory::Ptr m_tableFactoryFactory;
-    std::shared_ptr<dev::storage::CachedStorage> m_cacheStorage;
+    std::shared_ptr<dev::storage::CachedStorage> m_cacheStorage = nullptr;
 };
 int64_t getBlockNumberFromStorage(dev::storage::Storage::Ptr _storage);
 dev::storage::Storage::Ptr createRocksDBStorage(

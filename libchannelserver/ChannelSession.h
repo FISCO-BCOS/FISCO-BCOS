@@ -236,7 +236,8 @@ private:
     dev::ProtocolVersion m_minimumProtocol = dev::ProtocolVersion::minVersion;
     dev::ProtocolVersion m_maximumProtocol = dev::ProtocolVersion::maxVersion;
     std::string m_clientType;
-    size_t _idleTime = 30000;
+    // set idle time interval to 60s
+    size_t _idleTime = 60;
 
     dev::h512 m_remotePublicKey;
 };

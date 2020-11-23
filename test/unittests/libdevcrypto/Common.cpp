@@ -307,6 +307,25 @@ BOOST_AUTO_TEST_CASE(testSigecRocer)
     cout << toHex(ret.asBytes()) << endl;
     BOOST_CHECK(KeyPairR.second == ret.asBytes());
 }
+BOOST_AUTO_TEST_CASE(testSign)
+{
+    std::string publicKey =
+        "15a264e29489f69fb74608a8a26600eb8f5c572d5829531aaab3246f7411492e2c4d3c329b6f4e5fc479908a29"
+        "44688da39071467035f8eb046625259a6bfd06";
+    std::string signature =
+        "0xb2ef97867ca3b1030c2f14be1bfeeeabddf3354ae6e57c86a02ebc1383f8ef6c7713d7f12fcfd5da457f58ee"
+        "eb9aa77eddedf69b7bd1a46adb5faf072e62892601";
+    std::string blockHash = "0x39aeeacf66784ba18836280dcb56e454fe59eecde42812503e6a0d2c0a11937f";
+    dev::h512 publicKeyBytes = dev::h512(publicKey);
+    bytes signatureBytes = fromHex(signature);
+    dev::h256 blockHashBytes = dev::h256(blockHash);
+    std::cout << "### before test sign" << std::endl;
+    BOOST_CHECK(dev::ecdsaVerify(publicKeyBytes, dev::crypto::SignatureFromBytes(signatureBytes),
+                    blockHashBytes) == true);
+    std::cout << "### test sign passed" << std::endl;
+}
+
+
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace test

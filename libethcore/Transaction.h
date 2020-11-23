@@ -55,63 +55,6 @@ const int c_sigCount = 3;
 
 /// function called after the transaction has been submitted
 class Block;
-
-struct NodeTransactionMarker
-{
-public:
-    NodeTransactionMarker() = default;
-    NodeTransactionMarker(NodeTransactionMarker const& _nodeTransactionMarker)
-      : m_nodeListWithTheTransaction(_nodeTransactionMarker.nodeListWithTheTransaction())
-    {}
-    void operator=(NodeTransactionMarker const& _nodeTransactionMarker)
-    {
-        m_nodeListWithTheTransaction = _nodeTransactionMarker.nodeListWithTheTransaction();
-    }
-    void appendNodeContainsTransaction(dev::h512 const& _node)
-    {
-        WriteGuard l(x_nodeListWithTheTransaction);
-        m_nodeListWithTheTransaction.insert(_node);
-    }
-
-    template <typename T>
-    void appendNodeListContainTransaction(T const& _nodeList)
-    {
-        WriteGuard l(x_nodeListWithTheTransaction);
-        for (auto const& node : _nodeList)
-        {
-            m_nodeListWithTheTransaction.insert(node);
-        }
-    }
-
-    bool isTheNodeContainsTransaction(dev::h512 const& _node)
-    {
-        ReadGuard l(x_nodeListWithTheTransaction);
-        return m_nodeListWithTheTransaction.count(_node);
-    }
-
-    std::set<dev::h512> const& nodeListWithTheTransaction() const
-    {
-        return m_nodeListWithTheTransaction;
-    }
-
-    bool isKnownBySomeone()
-    {
-        ReadGuard l(x_nodeListWithTheTransaction);
-        return !m_nodeListWithTheTransaction.empty();
-    }
-
-    void clear()
-    {
-        WriteGuard l(x_nodeListWithTheTransaction);
-        m_nodeListWithTheTransaction.clear();
-    }
-
-private:
-    mutable dev::SharedMutex x_nodeListWithTheTransaction;
-    // Record the node where the transaction exists
-    std::set<dev::h512> m_nodeListWithTheTransaction;
-};
-
 using RPCCallback = std::function<void(LocalisedTransactionReceipt::Ptr, dev::bytesConstRef input,
     std::shared_ptr<dev::eth::Block> _blockPtr)>;
 /// Encodes a transaction, ready to be exported to or freshly imported from RLP.
@@ -165,6 +108,9 @@ public:
     explicit Transaction(bytes const& _rlp, CheckTransaction _checkSig)
       : Transaction(&_rlp, _checkSig)
     {}
+    Transaction(Transaction const&) = delete;
+
+    Transaction& operator=(Transaction const&) = delete;
 
     /// Checks equality of transactions.
     bool operator==(Transaction const& _c) const
@@ -211,8 +157,8 @@ public:
         return out;
     }
 
-    /// @returns the SHA3 hash of the RLP serialisation of this transaction.
-    h256 sha3(IncludeSignature _sig = WithSignature) const;
+    /// @returns the hash of the RLP serialisation of this transaction.
+    h256 hash(IncludeSignature _sig = WithSignature) const;
 
     /// @returns the amount of ETH to be transferred by this (message-call)
     /// transaction, in Wei. Synonym for endowment().
@@ -299,8 +245,6 @@ public:
     static int64_t baseGasRequired(
         bool _contractCreation, bytesConstRef _data, EVMSchedule const& _es);
 
-    void updateTransactionHashWithSig(dev::h256 const& txHash);
-
     bool checkChainId(u256 _chainId);
     bool checkGroupId(u256 _groupId);
 
@@ -316,12 +260,32 @@ public:
     int64_t capacity() { return (m_data.size() + m_rlpBuffer.size() + m_extraData.size()); }
 
     // Note: Provide for node transaction generation
-    void setReceiveAddress(Address const& _receiveAddr) { m_receiveAddress = _receiveAddr; }
-    void setData(std::shared_ptr<dev::bytes const> _dataPtr) { m_data = *_dataPtr; }
+    void setReceiveAddress(Address const& _receiveAddr)
+    {
+        m_hashWith = h256(0);
+        m_rlpBuffer = bytes();
+        m_receiveAddress = _receiveAddr;
+    }
+    void setData(std::shared_ptr<dev::bytes const> _dataPtr)
+    {
+        m_hashWith = h256(0);
+        m_rlpBuffer = bytes();
+        m_data = *_dataPtr;
+    }
 
-    void setChainId(u256 const& _chainId) { m_chainId = _chainId; }
+    void setChainId(u256 const& _chainId)
+    {
+        m_hashWith = h256(0);
+        m_rlpBuffer = bytes();
+        m_chainId = _chainId;
+    }
 
-    void setGroupId(u256 const& _groupId) { m_groupId = _groupId; }
+    void setGroupId(u256 const& _groupId)
+    {
+        m_hashWith = h256(0);
+        m_rlpBuffer = bytes();
+        m_groupId = _groupId;
+    }
 
     /// Type of transaction.
     enum Type
@@ -332,27 +296,48 @@ public:
         MessageCall        ///< Transaction to invoke a message call - receiveAddress() is
                            ///< used.
     };
-    void setType(Type const& _type) { m_type = _type; }
+    void setType(Type const& _type)
+    {
+        m_hashWith = h256(0);
+        m_rlpBuffer = bytes();
+        m_type = _type;
+    }
     Type const& type() { return m_type; }
 
     void appendNodeContainsTransaction(dev::h512 const& _node)
     {
-        return m_nodeTransactionMarker.appendNodeContainsTransaction(_node);
+        WriteGuard l(x_nodeListWithTheTransaction);
+        m_nodeListWithTheTransaction.insert(_node);
     }
 
     template <typename T>
     void appendNodeListContainTransaction(T const& _nodeList)
     {
-        return m_nodeTransactionMarker.appendNodeListContainTransaction(_nodeList);
+        WriteGuard l(x_nodeListWithTheTransaction);
+        for (auto const& node : _nodeList)
+        {
+            m_nodeListWithTheTransaction.insert(node);
+        }
     }
 
     bool isTheNodeContainsTransaction(dev::h512 const& _node)
     {
-        return m_nodeTransactionMarker.isTheNodeContainsTransaction(_node);
+        ReadGuard l(x_nodeListWithTheTransaction);
+        return m_nodeListWithTheTransaction.count(_node);
     }
-    bool isKnownBySomeone() { return m_nodeTransactionMarker.isKnownBySomeone(); }
+    bool isKnownBySomeone()
+    {
+        ReadGuard l(x_nodeListWithTheTransaction);
+        return !m_nodeListWithTheTransaction.empty();
+    }
 
-    void clearNodeTransactionMarker() { m_nodeTransactionMarker.clear(); }
+    void clearNodeTransactionMarker()
+    {
+        WriteGuard l(x_nodeListWithTheTransaction);
+        m_nodeListWithTheTransaction.clear();
+    }
+
+    std::shared_ptr<crypto::Signature> vrs() { return m_vrs; }
 
 protected:
     static bool isZeroSignature(u256 const& _r, u256 const& _s) { return !_r && !_s; }
@@ -404,9 +389,9 @@ protected:
     // Whether the transaction has been synchronized
     bool m_synced = false;
     // Record the list of nodes containing the transaction and provide related query interfaces.
-    // This is separately abstracted as a class because the related map needs to be locked when
-    // updating the node list, which makes the default copy constructor of Transaction invalid.
-    NodeTransactionMarker m_nodeTransactionMarker;
+    mutable dev::SharedMutex x_nodeListWithTheTransaction;
+    // Record the node where the transaction exists
+    std::set<dev::h512> m_nodeListWithTheTransaction;
 };
 
 /// Nice name for vector of Transaction.
@@ -415,7 +400,7 @@ using Transactions = std::vector<Transaction::Ptr>;
 /// Simple human-readable stream-shift operator.
 inline std::ostream& operator<<(std::ostream& _out, Transaction const& _t)
 {
-    _out << _t.sha3().abridged() << "{";
+    _out << _t.hash().abridged() << "{";
     if (_t.receiveAddress())
         _out << _t.receiveAddress().abridged();
     else
@@ -427,15 +412,23 @@ inline std::ostream& operator<<(std::ostream& _out, Transaction const& _t)
     return _out;
 }
 
-class LocalisedTransaction : public Transaction
+class LocalisedTransaction
 {
 public:
     typedef std::shared_ptr<LocalisedTransaction> Ptr;
 
     LocalisedTransaction() {}
-    LocalisedTransaction(Transaction const& _t, h256 const& _blockHash, unsigned _transactionIndex,
+    LocalisedTransaction(
+        h256 const& _blockHash, unsigned _transactionIndex, BlockNumber _blockNumber = 0)
+      : m_tx(std::make_shared<Transaction>()),
+        m_blockHash(_blockHash),
+        m_transactionIndex(_transactionIndex),
+        m_blockNumber(_blockNumber)
+    {}
+
+    LocalisedTransaction(Transaction::Ptr _tx, h256 const& _blockHash, unsigned _transactionIndex,
         BlockNumber _blockNumber = 0)
-      : Transaction(_t),
+      : m_tx(_tx),
         m_blockHash(_blockHash),
         m_transactionIndex(_transactionIndex),
         m_blockNumber(_blockNumber)
@@ -444,8 +437,10 @@ public:
     h256 const& blockHash() const { return m_blockHash; }
     unsigned transactionIndex() const { return m_transactionIndex; }
     BlockNumber blockNumber() const { return m_blockNumber; }
+    Transaction::Ptr tx() { return m_tx; }
 
 private:
+    Transaction::Ptr m_tx;
     h256 m_blockHash;
     unsigned m_transactionIndex;
     BlockNumber m_blockNumber;

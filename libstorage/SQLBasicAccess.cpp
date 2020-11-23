@@ -109,8 +109,11 @@ int SQLBasicAccess::Select(int64_t, const string& _table, const string&, Conditi
     }
     CATCH(SQLException)
     {
-        SQLBasicAccess_LOG(ERROR) << "select exception:" << Exception_frame.message;
         m_connPool->ReturnConnection(conn);
+        // Note: when select exception caused by table doesn't exist and sql error,
+        //       here must return 0, in case of the DB is normal but the sql syntax error or the
+        //       table will be created later
+        SQLBasicAccess_LOG(ERROR) << "select exception for sql error:" << Exception_frame.message;
         return 0;
     }
     END_TRY;

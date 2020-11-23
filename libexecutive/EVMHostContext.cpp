@@ -95,7 +95,7 @@ void go(unsigned _depth, Executive& _e)
 
     if (_depth == c_offloadPoint)
     {
-        LOG(TRACE) << "Stack offloading (depth: " << c_offloadPoint << ")";
+        EXECUTIVE_LOG(TRACE) << "Stack offloading (depth: " << c_offloadPoint << ")";
         goOnOffloadedStack(_e);
     }
     else
@@ -236,7 +236,7 @@ EVMHostContext::EVMHostContext(std::shared_ptr<StateFace> _s,
 
 evmc_result EVMHostContext::call(CallParameters& _p)
 {
-    Executive e{m_s, envInfo(), depth() + 1, m_freeStorage};
+    Executive e{m_s, envInfo(), m_freeStorage, depth() + 1};
     // Note: When create initializes Executive, the flags of evmc context must be passed in
     if (!e.call(_p, gasPrice(), origin()))
     {
@@ -270,8 +270,8 @@ bool EVMHostContext::isPermitted()
     // check authority by tx.origin
     if (!m_s->checkAuthority(origin(), myAddress()))
     {
-        LOG(ERROR) << "EVMHostContext::isPermitted PermissionDenied" << LOG_KV("origin", origin())
-                   << LOG_KV("address", myAddress());
+        EXECUTIVE_LOG(ERROR) << "EVMHostContext::isPermitted PermissionDenied"
+                             << LOG_KV("origin", origin()) << LOG_KV("address", myAddress());
         return false;
     }
     return true;
@@ -285,7 +285,7 @@ void EVMHostContext::setStore(u256 const& _n, u256 const& _v)
 evmc_result EVMHostContext::create(
     u256 const& _endowment, u256& io_gas, bytesConstRef _code, evmc_opcode _op, u256 _salt)
 {
-    Executive e{m_s, envInfo(), depth() + 1, m_freeStorage};
+    Executive e{m_s, envInfo(), m_freeStorage, depth() + 1};
     // Note: When create initializes Executive, the flags of evmc context must be passed in
     bool result = false;
     if (_op == evmc_opcode::OP_CREATE)

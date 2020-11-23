@@ -163,6 +163,11 @@ public:
         m_eventFilterCallBack = _callback;
     };
 
+    void setEventCancelFilterCallback(std::function<int32_t(const std::string&, uint32_t, std::function<bool(GROUP_ID _groupId)>)> _callback)
+    {
+        m_eventCancelFilterCallBack = _callback;
+    };
+
     void addHandler(const dev::eth::Handler<int64_t>& handler) { m_handlers.push_back(handler); }
 
     void setNetworkStatHandler(dev::stat::ChannelNetworkStatHandler::Ptr _handler)
@@ -220,7 +225,10 @@ private:
     virtual void onClientChannelRequest(
         dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
 
-    virtual void onClientEventLogRequest(
+    virtual void onClientRegisterEventLogRequest(
+        dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
+
+    virtual void onClientUnregisterEventLogRequest(
         dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message);
 
     virtual void onClientHandshake(
@@ -272,6 +280,8 @@ private:
             GROUP_ID const& _groupId)>,
         std::function<int(GROUP_ID _groupId)>, std::function<bool(GROUP_ID _groupId)>)>
         m_eventFilterCallBack;
+    
+    std::function<int32_t(const std::string&, uint32_t, std::function<bool(GROUP_ID _groupId)>)> m_eventCancelFilterCallBack;
 
     std::vector<dev::eth::Handler<int64_t>> m_handlers;
 

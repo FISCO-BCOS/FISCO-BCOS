@@ -181,6 +181,29 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
                     params, _version, _respCallback, _sessionCheckerCallback);
             });
 
+        // unregister event log filter callback
+        m_channelRPCServer->setEventCancelFilterCallback(
+            [this](const std::string& _json, uint32_t _version,
+            std::function<bool(GROUP_ID _groupId)> _permissionChecker) -> int32_t {
+                auto params =
+                    dev::event::EventLogFilterParams::buildEventLogFilterParamsObject(_json);
+                if (!params)
+                {  // json parser failed
+                    return dev::event::ResponseCode::INVALID_REQUEST;
+                }
+
+                auto ledger = getLedgerManager()->ledger(params->getGroupID());
+                if (!ledger)
+                {
+                    return dev::event::ResponseCode::GROUP_NOT_EXIST;
+                }
+                if (!_permissionChecker(params->getGroupID()))
+                {
+                    return dev::event::ResponseCode::SDK_PERMISSION_DENIED;
+                }
+                return ledger->getEventLogFilterManager()->cancelEventLogFilterByRequest(params, _version);
+            });
+
         auto channelRPCServerWeak = std::weak_ptr<dev::ChannelRPCServer>(m_channelRPCServer);
         m_p2pService->setCallbackFuncForTopicVerify(
             [channelRPCServerWeak](const std::string& _1, const std::string& _2) {

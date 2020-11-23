@@ -306,11 +306,16 @@ public:
         if (isList())
         {
             ret.reserve(itemCount());
-            for (auto const& i : *this)
-                ret.push_back(i.convert<T>(_flags));
+            for (auto it = begin(); it != end(); it++)
+            {
+                ret.push_back((*it).convert<T>(_flags));
+            }
         }
         else if (_flags & ThrowOnFail)
+        {
             BOOST_THROW_EXCEPTION(BadCast());
+        }
+
         return ret;
     }
 
@@ -319,10 +324,17 @@ public:
     {
         std::set<T> ret;
         if (isList())
-            for (auto const& i : *this)
-                ret.insert(i.convert<T>(_flags));
+        {
+            for (auto it = begin(); it != end(); it++)
+            {
+                ret.insert((*it).convert<T>(_flags));
+            }
+        }
         else if (_flags & ThrowOnFail)
+        {
             BOOST_THROW_EXCEPTION(BadCast());
+        }
+
         return ret;
     }
 
@@ -331,10 +343,18 @@ public:
     {
         std::unordered_set<T> ret;
         if (isList())
-            for (auto const& i : *this)
-                ret.insert(i.convert<T>(_flags));
+        {
+            for (auto it = begin(); it != end(); it++)
+            {
+                ret.insert((*it).convert<T>(_flags));
+            }
+        }
+
         else if (_flags & ThrowOnFail)
+        {
             BOOST_THROW_EXCEPTION(BadCast());
+        }
+
         return ret;
     }
 

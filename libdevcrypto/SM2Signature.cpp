@@ -72,8 +72,8 @@ bool dev::crypto::SM2Signature::isValid() const noexcept
 std::shared_ptr<crypto::Signature> dev::sm2SignatureFromRLP(RLP const& _rlp, size_t _start)
 {
     h512 v = _rlp[_start++].toHash<h512>();
-    h256 r = _rlp[_start++].toInt<u256>();
-    h256 s = _rlp[_start++].toInt<u256>();
+    u256 r = _rlp[_start++].toInt<u256>();
+    u256 s = _rlp[_start++].toInt<u256>();
     return std::make_shared<SM2Signature>(r, s, v);
 }
 std::shared_ptr<crypto::Signature> dev::sm2SignatureFromBytes(std::vector<unsigned char> _data)

@@ -80,7 +80,7 @@ BOOST_AUTO_TEST_CASE(testRotateWorkingSealerWithoutRotate)
 
     // case3: invalid input(must be lastest hash)
     LOG(INFO) << LOG_DESC("testRotateWorkingSealerWithoutRotate: valid proof, invalid input");
-    in = abi.abiIn(WSM_METHOD_ROTATE_STR, fixture->vrfPublicKey, toHex(dev::sha3("test")),
+    in = abi.abiIn(WSM_METHOD_ROTATE_STR, fixture->vrfPublicKey, toHex(dev::keccak256("test")),
         vrfInputWithProof.second);
     BOOST_CHECK_THROW(fixture->workingSealerManagerPrecompiled->call(
                           fixture->context, bytesConstRef(&in), nonSealerAccount, nonSealerAccount),

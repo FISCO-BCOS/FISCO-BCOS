@@ -62,7 +62,7 @@ public:
     virtual bool actived() const override;
 
     virtual std::weak_ptr<Host> host() { return m_server; }
-    virtual void setHost(std::weak_ptr<Host> host) { m_server = host; }
+    virtual void setHost(std::weak_ptr<Host> host);
 
     virtual std::shared_ptr<SocketFace> socket() override { return m_socket; }
     virtual void setSocket(std::shared_ptr<SocketFace> socket) { m_socket = socket; }
@@ -129,6 +129,8 @@ private:
     bool checkRead(boost::system::error_code _ec);
 
     void onTimeout(const boost::system::error_code& error, uint32_t seq);
+    void updateIdleTimer(std::shared_ptr<boost::asio::deadline_timer> _idleTimer);
+    void onIdle(const boost::system::error_code& error);
 
     /// Perform a single round of the write operation. This could end up calling itself
     /// asynchronously.
@@ -169,6 +171,12 @@ private:
 
     std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> m_messageHandler;
     uint64_t m_shutDownTimeThres = 50000;
+    // 1min
+    uint64_t m_idleTimeInterval = 60;
+
+    // timer to check the connection
+    std::shared_ptr<boost::asio::deadline_timer> m_readIdleTimer;
+    std::shared_ptr<boost::asio::deadline_timer> m_writeIdleTimer;
 };
 
 class SessionFactory

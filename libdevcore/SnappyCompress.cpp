@@ -37,7 +37,7 @@ size_t SnappyCompress::compress(bytesConstRef inputData, bytes& compressedData)
     /// compress failed
     if (compressLen < 1)
     {
-        LOG(ERROR) << LOG_BADGE("SnappyCompressio") << LOG_DESC("compress failed");
+        LOG(ERROR) << LOG_BADGE("SnappyCompress") << LOG_DESC("compress failed");
         return 0;
     }
 #if 0
@@ -62,11 +62,11 @@ size_t SnappyCompress::uncompress(bytesConstRef compressedData, bytes& uncompres
     /// uncompress failed
     if (!status)
     {
-        LOG(ERROR) << LOG_BADGE("SnappyCompressio") << LOG_DESC("uncompress failed");
+        LOG(ERROR) << LOG_BADGE("SnappyCompress") << LOG_DESC("uncompress failed");
         return 0;
     }
 #if 0
-    LOG(DEBUG) << LOG_BADGE("SnappyCompressio") << LOG_DESC("uncompress")
+    LOG(DEBUG) << LOG_BADGE("SnappyCompress") << LOG_DESC("uncompress")
                << LOG_KV("org_len", uncompressedLen)
                << LOG_KV("compress_len", compressedData.size())
                << LOG_KV("ratio", (float)uncompressedLen / (float)compressedData.size())

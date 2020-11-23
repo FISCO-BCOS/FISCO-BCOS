@@ -36,7 +36,7 @@ BOOST_FIXTURE_TEST_SUITE(NodeTimeMaintenanceTest, TestOutputHelperFixture)
 BOOST_AUTO_TEST_CASE(testTryToUpdatePeerTimeInfo)
 {
     auto nodeTimeMaintenance = std::make_shared<NodeTimeMaintenance>();
-    auto genesisHash = dev::sha3("genesis");
+    auto genesisHash = dev::keccak256("genesis");
     std::vector<SyncStatusPacket::Ptr> sycStatusVec;
     std::srand(utcTime());
     std::vector<int64_t> randomValues;

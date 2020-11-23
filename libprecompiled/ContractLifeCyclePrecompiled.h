@@ -24,16 +24,6 @@ namespace dev
 {
 namespace precompiled
 {
-enum ContractStatus
-{
-    Invalid = 0,
-    Available,
-    Frozen,
-    AddressNonExistent,
-    NotContractAddress,
-    Count
-};
-
 const std::string CONTRACT_STATUS_DESC[ContractStatus::Count] = {"Invalid",
     "The contract is available.",
     "The contract has been frozen. You can invoke this contract after unfreezing it.",
@@ -56,8 +46,6 @@ public:
 private:
     bool checkPermission(std::shared_ptr<blockverifier::ExecutiveContext> context,
         std::string const& tableName, Address const& origin);
-    ContractStatus getContractStatus(
-        std::shared_ptr<blockverifier::ExecutiveContext> context, std::string const& tableName);
     int updateFrozenStatus(std::shared_ptr<blockverifier::ExecutiveContext> context,
         std::string const& tableName, std::string const& frozen, Address const& origin);
     void freeze(std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,
@@ -66,6 +54,14 @@ private:
         Address const& origin, PrecompiledExecResult::Ptr _callResult);
     void grantManager(std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,
         Address const& origin, PrecompiledExecResult::Ptr _callResult);
+
+    void revokeManager(std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,
+        Address const& origin, PrecompiledExecResult::Ptr _callResult);
+
+    bool checkContractManager(std::string const& _tableName,
+        std::shared_ptr<blockverifier::ExecutiveContext> _context, Address const& _contractAddress,
+        Address const& _userAddress, Address const& _origin, int& _result);
+
     void getStatus(std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,
         PrecompiledExecResult::Ptr _callResult);
     void listManager(std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,

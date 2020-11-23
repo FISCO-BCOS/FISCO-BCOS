@@ -112,8 +112,10 @@ RLPs RLP::toList(int _flags) const
         else
             return ret;
     }
-    for (auto const& i : *this)
-        ret.push_back(i);
+    for (auto it = begin(); it != end(); ++it)
+    {
+        ret.push_back(*it);
+    }
     return ret;
 }
 

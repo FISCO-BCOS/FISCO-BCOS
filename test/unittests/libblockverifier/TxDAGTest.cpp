@@ -62,7 +62,7 @@ public:
         Transaction::Ptr tx =
             std::make_shared<Transaction>(value, gasPrice, gas, dest, data, nonce);
         tx->setBlockLimit(500);
-        auto sig = dev::crypto::Sign(keyPair, tx->sha3(WithoutSignature));
+        auto sig = dev::crypto::Sign(keyPair, tx->hash(WithoutSignature));
         tx->updateSignature(sig);
         tx->forceSender(Address(0x2333));
 
@@ -84,7 +84,7 @@ public:
             std::make_shared<Transaction>(value, gasPrice, gas, dest, data, nonce);
         tx->setBlockLimit(500);
         auto keyPair = KeyPair::create();
-        auto sig = dev::crypto::Sign(keyPair, tx->sha3(WithoutSignature));
+        auto sig = dev::crypto::Sign(keyPair, tx->hash(WithoutSignature));
         tx->updateSignature(sig);
         tx->forceSender(Address(0x2333));
 
@@ -129,17 +129,17 @@ BOOST_AUTO_TEST_CASE(PureParallelTxDAGTest)
         return true;
     });
 
-    dev::executive::Executive::Ptr executive = std::make_shared<dev::executive::Executive>();
+    dev::executive::Executive::Ptr executive = std::make_shared<dev::executive::Executive>(nullptr, dev::executive::EnvInfo());
     while (!txDag->hasFinished())
     {
         txDag->executeUnit(executive);
     }
 
-    BOOST_CHECK_EQUAL(exeTrans[0]->sha3(), (*trans)[0]->sha3());
-    BOOST_CHECK_EQUAL(exeTrans[1]->sha3(), (*trans)[1]->sha3());
-    BOOST_CHECK_EQUAL(exeTrans[2]->sha3(), (*trans)[3]->sha3());
-    BOOST_CHECK_EQUAL(exeTrans[3]->sha3(), (*trans)[2]->sha3());
-    BOOST_CHECK_EQUAL(exeTrans[4]->sha3(), (*trans)[4]->sha3());
+    BOOST_CHECK_EQUAL(exeTrans[0]->hash(), (*trans)[0]->hash());
+    BOOST_CHECK_EQUAL(exeTrans[1]->hash(), (*trans)[1]->hash());
+    BOOST_CHECK_EQUAL(exeTrans[2]->hash(), (*trans)[3]->hash());
+    BOOST_CHECK_EQUAL(exeTrans[3]->hash(), (*trans)[2]->hash());
+    BOOST_CHECK_EQUAL(exeTrans[4]->hash(), (*trans)[4]->hash());
 }
 
 
@@ -165,18 +165,18 @@ BOOST_AUTO_TEST_CASE(NormalAndParallelTxDAGTest)
         return true;
     });
 
-    dev::executive::Executive::Ptr executive = std::make_shared<dev::executive::Executive>();
+    dev::executive::Executive::Ptr executive = std::make_shared<dev::executive::Executive>(nullptr, dev::executive::EnvInfo());
     while (!txDag->hasFinished())
     {
         txDag->executeUnit(executive);
     }
 
-    BOOST_CHECK_EQUAL(exeTrans[0]->sha3(), (*trans)[0]->sha3());
-    BOOST_CHECK_EQUAL(exeTrans[1]->sha3(), (*trans)[1]->sha3());
-    BOOST_CHECK_EQUAL(exeTrans[2]->sha3(), (*trans)[2]->sha3());
-    BOOST_CHECK_EQUAL(exeTrans[3]->sha3(), (*trans)[3]->sha3());
-    BOOST_CHECK_EQUAL(exeTrans[4]->sha3(), (*trans)[4]->sha3());
-    BOOST_CHECK_EQUAL(exeTrans[5]->sha3(), (*trans)[5]->sha3());
+    BOOST_CHECK_EQUAL(exeTrans[0]->hash(), (*trans)[0]->hash());
+    BOOST_CHECK_EQUAL(exeTrans[1]->hash(), (*trans)[1]->hash());
+    BOOST_CHECK_EQUAL(exeTrans[2]->hash(), (*trans)[2]->hash());
+    BOOST_CHECK_EQUAL(exeTrans[3]->hash(), (*trans)[3]->hash());
+    BOOST_CHECK_EQUAL(exeTrans[4]->hash(), (*trans)[4]->hash());
+    BOOST_CHECK_EQUAL(exeTrans[5]->hash(), (*trans)[5]->hash());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

@@ -20,6 +20,7 @@
  */
 #include "Common.h"
 #include "libstorage/StorageException.h"
+#include "libstoragestate/StorageState.h"
 #include <libblockverifier/ExecutiveContext.h>
 #include <libconfig/GlobalConfigure.h>
 #include <libethcore/ABI.h>
@@ -75,22 +76,27 @@ void dev::precompiled::checkNameValidate(const string& tableName, string& keyFie
         set<string> valueFieldSet;
         boost::trim(keyField);
         valueFieldSet.insert(keyField);
-
         vector<char> allowChar = {'$', '_', '@'};
-
-        auto checkTableNameValidate = [allowChar, throwStorageException](const string& tableName) {
+        std::string allowCharString = "{$, _, @}";
+        auto checkTableNameValidate = [allowChar, allowCharString, throwStorageException](
+                                          const string& tableName) {
             size_t iSize = tableName.size();
             for (size_t i = 0; i < iSize; i++)
             {
                 if (!isalnum(tableName[i]) &&
                     (allowChar.end() == find(allowChar.begin(), allowChar.end(), tableName[i])))
                 {
-                    STORAGE_LOG(ERROR)
-                        << LOG_DESC("invalid tablename") << LOG_KV("table name", tableName);
+                    std::string errorMessage =
+                        "Invalid table name \"" + tableName +
+                        "\", the table name must be letters or numbers, and only supports \"" +
+                        allowCharString + "\" as special character set";
+                    STORAGE_LOG(ERROR) << LOG_DESC(errorMessage);
+                    // Note: the StorageException and PrecompiledException content can't be modified
+                    // at will for the information will be write to the blockchain
                     if (throwStorageException)
                     {
-                        BOOST_THROW_EXCEPTION(StorageException(
-                            CODE_TABLE_INVALIDATE_FIELD, string("invalid tablename:") + tableName));
+                        BOOST_THROW_EXCEPTION(
+                            StorageException(CODE_TABLE_INVALIDATE_FIELD, errorMessage));
                     }
                     else
                     {
@@ -100,16 +106,19 @@ void dev::precompiled::checkNameValidate(const string& tableName, string& keyFie
                 }
             }
         };
-        auto checkFieldNameValidate = [allowChar, throwStorageException](
+        auto checkFieldNameValidate = [allowChar, allowCharString, throwStorageException](
                                           const string& tableName, const string& fieldName) {
             if (fieldName.size() == 0 || fieldName[0] == '_')
             {
+                string errorMessage = "Invalid field \"" + fieldName +
+                                      "\", the size of the field must be larger than 0 and the "
+                                      "field can't start with \"_\"";
                 STORAGE_LOG(ERROR) << LOG_DESC("error key") << LOG_KV("field name", fieldName)
                                    << LOG_KV("table name", tableName);
                 if (throwStorageException)
                 {
-                    BOOST_THROW_EXCEPTION(StorageException(
-                        CODE_TABLE_INVALIDATE_FIELD, string("invalid field:") + fieldName));
+                    BOOST_THROW_EXCEPTION(
+                        StorageException(CODE_TABLE_INVALIDATE_FIELD, errorMessage));
                 }
                 else
                 {
@@ -123,13 +132,18 @@ void dev::precompiled::checkNameValidate(const string& tableName, string& keyFie
                 if (!isalnum(fieldName[i]) &&
                     (allowChar.end() == find(allowChar.begin(), allowChar.end(), fieldName[i])))
                 {
+                    std::string errorMessage =
+                        "Invalid field \"" + fieldName +
+                        "\", the field name must be letters or numbers, and only supports \"" +
+                        allowCharString + "\" as special character set";
+
                     STORAGE_LOG(ERROR)
                         << LOG_DESC("invalid fieldname") << LOG_KV("field name", fieldName)
                         << LOG_KV("table name", tableName);
                     if (throwStorageException)
                     {
-                        BOOST_THROW_EXCEPTION(StorageException(
-                            CODE_TABLE_INVALIDATE_FIELD, string("invalid field:") + fieldName));
+                        BOOST_THROW_EXCEPTION(
+                            StorageException(CODE_TABLE_INVALIDATE_FIELD, errorMessage));
                     }
                     else
                     {
@@ -154,7 +168,7 @@ void dev::precompiled::checkNameValidate(const string& tableName, string& keyFie
                 if (throwStorageException)
                 {
                     BOOST_THROW_EXCEPTION(StorageException(
-                        CODE_TABLE_DUMPLICATE_FIELD, string("dumplicate field:") + valueField));
+                        CODE_TABLE_DUPLICATE_FIELD, string("duplicate field:") + valueField));
                 }
                 else
                 {
@@ -188,6 +202,49 @@ int dev::precompiled::checkLengthValidate(
         return errorCode;
     }
     return 0;
+}
+
+dev::precompiled::ContractStatus dev::precompiled::getContractStatus(
+    std::shared_ptr<dev::blockverifier::ExecutiveContext> context, std::string const& tableName)
+{
+    Table::Ptr table = openTable(context, tableName);
+    if (!table)
+    {
+        return ContractStatus::AddressNonExistent;
+    }
+
+    auto codeHashEntries =
+        table->select(dev::storagestate::ACCOUNT_CODE_HASH, table->newCondition());
+    h256 codeHash;
+    if (g_BCOSConfig.version() >= V2_5_0)
+    {
+        codeHash = h256(codeHashEntries->get(0)->getFieldBytes(dev::storagestate::STORAGE_VALUE));
+    }
+    else
+    {
+        codeHash =
+            h256(fromHex(codeHashEntries->get(0)->getField(dev::storagestate::STORAGE_VALUE)));
+    }
+
+    if (EmptyHash == codeHash)
+    {
+        return ContractStatus::NotContractAddress;
+    }
+
+    auto frozenEntries = table->select(dev::storagestate::ACCOUNT_FROZEN, table->newCondition());
+    if (frozenEntries->size() > 0 &&
+        "true" == frozenEntries->get(0)->getField(dev::storagestate::STORAGE_VALUE))
+    {
+        return ContractStatus::Frozen;
+    }
+    else
+    {
+        return ContractStatus::Available;
+    }
+    PRECOMPILED_LOG(ERROR) << LOG_DESC("getContractStatus error")
+                           << LOG_KV("table name", tableName);
+
+    return ContractStatus::Invalid;
 }
 
 bytes precompiled::PrecompiledException::ToOutput()

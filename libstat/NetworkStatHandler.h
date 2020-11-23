@@ -87,7 +87,8 @@ protected:
 
     std::map<int32_t, std::string> const c_sdkInMsgTypeToDesc = {
         {dev::channel::ChannelMessageType::CHANNEL_RPC_REQUEST, "RPC"},
-        {dev::channel::ChannelMessageType::CLIENT_REGISTER_EVENT_LOG, "EventLog"}};
+        {dev::channel::ChannelMessageType::CLIENT_REGISTER_EVENT_LOG, "RegitsterEvent"},
+        {dev::channel::ChannelMessageType::CLIENT_UNREGISTER_EVENT_LOG, "UnregitsterEvent"}};
 
     std::map<int32_t, std::string> const c_sdkOutMsgTypeToDesc = {
         {dev::channel::ChannelMessageType::CHANNEL_RPC_REQUEST, "RPC"},
