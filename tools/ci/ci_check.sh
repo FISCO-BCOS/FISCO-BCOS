@@ -145,9 +145,6 @@ check_rpbft()
     ${sed_cmd} "s/epoch_sealer_num=4/epoch_sealer_num=2/" node*/conf/group.1.genesis
     ${sed_cmd} "s/epoch_block_num=1000/epoch_block_num=2/" node*/conf/group.1.genesis
     ${sed_cmd} "s/supported_version=${fisco_version}/supported_version=2.5.0/g" node*/config.ini
-    # test ipv6
-    ${sed_cmd} "s/127.0.0.1:/\[::1\]:/g" node*/config.ini
-    ${sed_cmd} "s/0.0.0.0/::/g" node*/config.ini
     check_consensus_and_sync 12
 }
 
@@ -163,6 +160,22 @@ check_vrf_rpbft()
     check_consensus_and_sync 12
 }
 
+check_ipv6_pbft()
+{
+    local last_consensus_algorithm="$1"
+    LOG_INFO "***************check pbft when enable ipv6"
+    rm -rf node*/log node*/data
+    local sed_cmd="sed -i"
+    if [ "$(uname)" == "Darwin" ];then
+        sed_cmd="sed -i .bkp"
+    fi
+    # test ipv6
+    ${sed_cmd} "s/127.0.0.1:/\[::1\]:/g" node*/config.ini
+    ${sed_cmd} "s/0.0.0.0/::/g" node*/config.ini
+    ${sed_cmd} "s/consensus_type=${last_consensus_algorithm}/consensus_type=pbft/" node*/conf/group.1.genesis
+    check_consensus_and_sync 12 
+}
+
 fisco_version=$(../bin/fisco-bcos -v | grep -o "2\.[0-9]\.[0-9]" | head -n 1)
 if [ -z "${fisco_version}" ];then LOG_ERROR "get fisco_version failed" && ../bin/fisco-bcos -v ;fi
 init
@@ -173,3 +186,4 @@ check_raft
 is_raft=0
 check_rpbft
 check_vrf_rpbft
+check_ipv6_pbft "rpbft"
