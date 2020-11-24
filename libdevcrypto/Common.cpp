@@ -103,7 +103,7 @@ Public bcos::toPublic(Secret const& _secret)
     }
     else
     {
-        string pri = toHex(bytesConstRef{_secret.data(), 32});
+        string pri = *toHexString(bytesConstRef{_secret.data(), 32});
         string pub = SM2::getInstance().priToPub(pri);
         return h512(fromHex(pub));
     }

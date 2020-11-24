@@ -21,7 +21,7 @@
 
 #include "MemoryDB.h"
 #include "libutilities/Common.h"
-#include "libutilities/CommonData.h"
+#include "libutilities/DataConvertUtility.h"
 
 using namespace std;
 using namespace bcos;

@@ -1,26 +1,25 @@
 /**
- * @CopyRight:
- * FISCO-BCOS is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ *  Copyright (C) 2020 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
  *
- * FISCO-BCOS is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
- * (c) 2016-2018 fisco-dev contributors.
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
  *
- * @brief unit test for CommonData.*(mainly type covert)
+ * @brief unit test for DataConvertUtility.*(mainly type covert)
  *
- * @file CommonData.cpp
+ * @file DataConvertUtility.cpp
  * @author: yujiechen
  * @date 2018-08-24
  */
-#include <libutilities/CommonData.h>
+#include <libutilities/DataConvertUtility.h>
 #include <libutilities/Exceptions.h>
 #include <libutilities/vector_ref.h>
 #include <test/tools/libutils/TestOutputHelper.h>
@@ -36,7 +35,6 @@ namespace test
 {
 BOOST_FIXTURE_TEST_SUITE(CommonDataTests, TestOutputHelperFixture)
 
-/// test toHex && fromHex && isHex && isHash
 BOOST_AUTO_TEST_CASE(testHex)
 {
     // toHex && fromHex
@@ -52,28 +50,18 @@ BOOST_AUTO_TEST_CASE(testHex)
         {
             hexVec[j] = std::rand() % 16;
         }
-        hexStr = toHex(hexVec);
-        hexStrWithPrefix = toHex(hexVec);
+        hexStr = *toHexString(hexVec);
+        hexStrWithPrefix = *toHexString(hexVec);
         BOOST_CHECK(fromHex(hexStr) == hexVec);
         BOOST_CHECK(fromHex(hexStrWithPrefix) == hexVec);
     }
     // fromHex Exception
-    BOOST_REQUIRE_NO_THROW(fromHex("0934xyz", WhenError::DontThrow));
-    BOOST_CHECK_THROW(fromHex("0934xyz", WhenError::Throw), BadHexCharacter);
-    // isHex && isHash
-    BOOST_CHECK(isHex("0934xyz") == false);
+    BOOST_CHECK_THROW(fromHex("0934xyz"), BadHexCharacter);
+    BOOST_CHECK(isHexString("0934xyz") == false);
 
-    BOOST_CHECK(isHex("0x000abc") == true);
-    BOOST_CHECK(isHash<h256>("0x000abc") == false);
+    BOOST_CHECK(isHexString("0x000abc") == true);
 
-    BOOST_CHECK(isHex("000123123") == true);
-    BOOST_CHECK(isHash<h256>("000123123") == false);
-    BOOST_CHECK(
-        isHash<h256>("06d012b348ff19750bd253a1a508064ce7752f0adb8304a4c5bbb63ccc106f0d") == true);
-    BOOST_CHECK(
-        isHash<h256>("0x06d012b348ff19750bd253a1a508064ce7752f0adb8304a4c5bbb63ccc106f0d") == true);
-    BOOST_CHECK(isHash<h128>("b2b4085dcee9c8af9a420fe87dcb7d4b") == true);
-    BOOST_CHECK(isHash<h128>("0xb2b4085dcee9c8af9a420fe87dcb7d4b") == true);
+    BOOST_CHECK(isHexString("000123123") == true);
 }
 
 /// test asString && asBytes
@@ -113,8 +101,6 @@ BOOST_AUTO_TEST_CASE(testBigEndian)
     bytes big_endian_bytes = toBigEndian(number);
     BOOST_CHECK(fromBigEndian<u256>(big_endian_bytes) == number);
     BOOST_CHECK(fromBigEndian<u160>(toBigEndian(number_u160)) == number_u160);
-    BOOST_CHECK(fromBigEndian<u256>(toBigEndianString(number)) == number);
-    BOOST_CHECK(fromBigEndian<u160>(toBigEndianString(number_u160)) == number_u160);
 }
 /// test operator+
 BOOST_AUTO_TEST_CASE(testOperators)

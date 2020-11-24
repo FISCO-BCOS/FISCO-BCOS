@@ -69,8 +69,8 @@ std::function<void(std::string const&, std::string&)> bcos::storage::getEncryptH
                 bytesConstRef((const unsigned char*)data.data(), data.length()), *compressedData);
             if (compressedSize == 0)
             {
-                std::string errorInfo =
-                    "Compress data for " + toHex(_encryptKey) + " failed for compress failed";
+                std::string errorInfo = "Compress data for " + *toHexString(_encryptKey) +
+                                        " failed for compress failed";
                 ROCKSDB_LOG(ERROR) << LOG_DESC(errorInfo);
                 BOOST_THROW_EXCEPTION(EncryptFailed() << errinfo_comment(errorInfo));
             }
@@ -109,8 +109,8 @@ std::function<void(std::string&)> bcos::storage::getDecryptHandler(
                 *uncompressedData);
             if (uncompressedDataSize == 0)
             {
-                std::string errorInfo =
-                    "decrypt value for key " + toHex(_decryptKey) + " failed for uncompress failed";
+                std::string errorInfo = "decrypt value for key " + *toHexString(_decryptKey) +
+                                        " failed for uncompress failed";
                 ROCKSDB_LOG(ERROR) << LOG_DESC(errorInfo);
                 BOOST_THROW_EXCEPTION(DecryptFailed() << errinfo_comment(errorInfo));
             }
@@ -121,7 +121,8 @@ std::function<void(std::string&)> bcos::storage::getDecryptHandler(
         }
         catch (const std::exception& e)
         {
-            std::string error_info = "decrypt value for key=" + toHex(_decryptKey) + " failed";
+            std::string error_info =
+                "decrypt value for key=" + *toHexString(_decryptKey) + " failed";
             ROCKSDB_LOG(ERROR) << LOG_DESC(error_info);
             BOOST_THROW_EXCEPTION(DecryptFailed() << errinfo_comment(error_info));
         }

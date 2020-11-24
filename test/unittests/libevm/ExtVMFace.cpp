@@ -44,7 +44,6 @@ BOOST_AUTO_TEST_CASE(testEVMCTrans)
     evmc_address evm_addr = toEvmC(eth_addr);
     /// test fromEVMC
     Address transed_eth_addr = fromEvmC(evm_addr);
-    // std::cout << "transed address:" << toHex(transed_eth_addr) << std::endl;
     BOOST_CHECK(eth_addr == transed_eth_addr);
     /// test u256 translation
     evmc_uint256be evm_uint = toEvmC(crypto::Hash("+++"));

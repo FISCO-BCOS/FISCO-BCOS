@@ -830,7 +830,8 @@ void Executive::loggingException()
     {
         EXECUTIVE_LOG(ERROR) << LOG_BADGE("TxExeError") << LOG_DESC("Transaction execution error")
                              << LOG_KV("TransactionExceptionID", (uint32_t)m_excepted)
-                             << LOG_KV("hash", (m_t->hasSignature()) ? toHex(m_t->hash()) : "call")
+                             << LOG_KV("hash",
+                                    (m_t->hasSignature()) ? *toHexString(m_t->hash()) : "call")
                              << m_exceptionReason.str();
     }
 }

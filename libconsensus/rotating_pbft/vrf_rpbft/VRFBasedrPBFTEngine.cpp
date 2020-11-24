@@ -261,12 +261,12 @@ void VRFBasedrPBFTEngine::checkTransactionsValid(
             << LOG_DESC("checkTransactionsValid failed") << LOG_KV("reqHeight", _prepareReq->height)
             << LOG_KV("reqHash", _prepareReq->block_hash.abridged())
             << LOG_KV("reqIdx", _prepareReq->idx)
-            << LOG_KV("expectedTo", toHex(bcos::precompiled::WORKING_SEALER_MGR_ADDRESS))
-            << LOG_KV("currentTo", toHex(nodeRotatingTx->to()));
+            << LOG_KV("expectedTo", *toHexString(bcos::precompiled::WORKING_SEALER_MGR_ADDRESS))
+            << LOG_KV("currentTo", *toHexString(nodeRotatingTx->to()));
         BOOST_THROW_EXCEPTION(InvalidNodeRotationTx() << errinfo_comment(
                                   "Invalid node rotation transaction, expected contract address: " +
-                                  toHex(bcos::precompiled::WORKING_SEALER_MGR_ADDRESS) +
-                                  ", current to:" + toHex(nodeRotatingTx->to())));
+                                  *toHexString(bcos::precompiled::WORKING_SEALER_MGR_ADDRESS) +
+                                  ", current to:" + *toHexString(nodeRotatingTx->to())));
     }
     // Note: When pbftBackup exists, the current leader is not necessarily equal to the transaction
     //       generation node, and the sender of the transaction is not checked

@@ -97,12 +97,7 @@ PrecompiledExecResult::Ptr ParallelConfigPrecompiled::call(
 Table::Ptr ParallelConfigPrecompiled::openTable(bcos::blockverifier::ExecutiveContext::Ptr context,
     Address const& contractAddress, Address const& origin, bool needCreate)
 {
-    string tableName = PARA_CONFIG_TABLE_PREFIX + contractAddress.hex() + "_";
-    if (g_BCOSConfig.version() >= V2_2_0)
-    {
-        tableName = PARA_CONFIG_TABLE_PREFIX_SHORT + contractAddress.hex();
-    }
-
+    std::string tableName = PARA_CONFIG_TABLE_PREFIX_SHORT + contractAddress.hex();
     auto tableFactory = context->getMemoryTableFactory();
     if (!tableFactory)
     {
@@ -148,18 +143,7 @@ void ParallelConfigPrecompiled::registerParallelFunction(
         Entry::Ptr entry = table->newEntry();
         entry->setField(PARA_SELECTOR, to_string(selector));
         entry->setField(PARA_FUNC_NAME, functionName);
-        // important:
-        // this will cause rc3 blockchain that use this version is incompatible with release-2.0.0
-        // when upgrade the blockchain to release-2.0.0, please make sure that this contract hasn't
-        // been used
-        if (g_BCOSConfig.version() <= RC3_VERSION)
-        {
-            entry->setField(PARA_CRITICAL_SIZE, toBigEndianString(criticalSize));
-        }
-        else
-        {
-            entry->setField(PARA_CRITICAL_SIZE, boost::lexical_cast<std::string>(criticalSize));
-        }
+        entry->setField(PARA_CRITICAL_SIZE, boost::lexical_cast<std::string>(criticalSize));
 
 
         Condition::Ptr cond = table->newCondition();
@@ -229,18 +213,8 @@ ParallelConfig::Ptr ParallelConfigPrecompiled::getParallelConfig(
         auto entry = entries->get(0);
         string funtionName = entry->getField(PARA_FUNC_NAME);
         u256 criticalSize;
-        // important:
-        // this will cause rc3 blockchain that use this version is incompatible with release-2.0.0
-        // when upgrade the blockchain to release-2.0.0, please make sure that this contract hasn't
-        // been used
-        if (g_BCOSConfig.version() <= RC3_VERSION)
-        {
-            criticalSize = fromBigEndian<u256, string>(entry->getField(PARA_CRITICAL_SIZE));
-        }
-        else
-        {
-            criticalSize = boost::lexical_cast<u256>(entry->getField(PARA_CRITICAL_SIZE));
-        }
+        criticalSize = boost::lexical_cast<u256>(entry->getField(PARA_CRITICAL_SIZE));
+
         return make_shared<ParallelConfig>(ParallelConfig{funtionName, criticalSize});
     }
 }

@@ -34,7 +34,7 @@
 #include <libp2p/Service.h>
 #include <libsync/SyncInterface.h>
 #include <libtxpool/TxPoolInterface.h>
-#include <libutilities/CommonData.h>
+#include <libutilities/DataConvertUtility.h>
 #include <libutilities/TopicInfo.h>
 #include <test/tools/libutils/Common.h>
 #include <test/unittests/libconsensus/FakePBFTEngine.h>
@@ -144,7 +144,7 @@ public:
         blockHeader.setGasUsed(u256(8));
         blockHeader.setTimestamp(9);
         blockHash = blockHeader.hash();
-        std::cout << "* MockBlockChain, genesis block hash is " << toHex(blockHash);
+        std::cout << "* MockBlockChain, genesis block hash is " << *toHexString(blockHash);
         std::shared_ptr<Transaction> p_tx = createTransaction();
         ;
         transactions = std::make_shared<Transactions>();

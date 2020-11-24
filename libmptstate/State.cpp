@@ -711,7 +711,7 @@ std::ostream& bcos::mptstate::operator<<(std::ostream& _out, State const& _s)
                 else
                     contout << r[2].toHash<h256>();
                 if (cache && cache->hasNewCode())
-                    contout << " $" << toHex(cache->code());
+                    contout << " $" << *toHexString(cache->code());
                 else
                     contout << " $" << (cache ? cache->codeHash() : r[3].toHash<h256>());
 

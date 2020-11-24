@@ -32,7 +32,7 @@
 #include <libethcore/EVMSchedule.h>
 #include <libethcore/LogEntry.h>
 #include <libutilities/Common.h>
-#include <libutilities/CommonData.h>
+#include <libutilities/DataConvertUtility.h>
 
 #include <boost/optional.hpp>
 #include <functional>

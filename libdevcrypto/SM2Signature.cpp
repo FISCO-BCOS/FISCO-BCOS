@@ -89,7 +89,7 @@ std::shared_ptr<crypto::Signature> bcos::sm2SignatureFromBytes(std::vector<unsig
 
 std::shared_ptr<crypto::Signature> bcos::sm2Sign(KeyPair const& _keyPair, h256 const& _hash)
 {
-    string pri = toHex(bytesConstRef{_keyPair.secret().data(), 32});
+    string pri = *toHexString(bytesConstRef{_keyPair.secret().data(), 32});
     h256 r(0);
     h256 s(0);
     if (!SM2::getInstance().sign((const char*)_hash.data(), h256::size, pri, r.data(), s.data()))

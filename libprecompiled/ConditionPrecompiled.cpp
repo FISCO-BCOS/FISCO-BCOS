@@ -105,7 +105,7 @@ PrecompiledExecResult::Ptr ConditionPrecompiled::call(
         std::string str;
         Address value;
         abi.abiOut(data, str, value);
-        m_condition->EQ(str, toHex(value));
+        m_condition->EQ(str, *toHexString(value));
         callResult->gasPricer()->appendOperation(InterfaceOpcode::EQ);
     }
     else if (func == name2Selector[CONDITION_METHOD_GE_STR_INT])

@@ -21,7 +21,7 @@
 
 #pragma once
 
-#include <libutilities/CommonData.h>
+#include <libutilities/DataConvertUtility.h>
 #include <libutilities/Exceptions.h>
 #include <functional>
 #include <unordered_map>

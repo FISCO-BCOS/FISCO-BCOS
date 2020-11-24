@@ -26,7 +26,7 @@
 #include <test/tools/libutils/TestOutputHelper.h>
 
 #include <libutilities/Common.h>
-#include <libutilities/CommonData.h>
+#include <libutilities/DataConvertUtility.h>
 #include <libutilities/Exceptions.h>
 #include <libutilities/RLP.h>
 
@@ -100,9 +100,9 @@ BOOST_AUTO_TEST_CASE(testTxRlp)
     bytesConstRef rlpData = ref(rlpBytes);
     RLP const rlp(rlpData);
     bcos::h256 r = rlp[11].toInt<u256>();
-    std::cout << "decoded r:" << toHex(r);
+    std::cout << "decoded r:" << *toHexString(r);
     BOOST_CHECK(
-        bcos::toHex(r) == "3faa8232ad248fc31c68eb56e8bbedf4e70be9381460afd99819b8cf8b6c91cb");
+        *toHexString(r) == "3faa8232ad248fc31c68eb56e8bbedf4e70be9381460afd99819b8cf8b6c91cb");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

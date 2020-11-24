@@ -178,7 +178,7 @@ contract HelloWorld{
     cout << "Contract created at: " << newAddress << endl;
 
     bytes createdCode = m_mptStates->code(newAddress);
-    cout << "Created code: " << toHex(createdCode) << endl;
+    cout << "Created code: " << *toHexString(createdCode) << endl;
 
     bytes runtimeCode = fromHex(
         "608060405260043610610062576000357c01000000000000000000000000000000000000000000000000000000"
@@ -222,8 +222,6 @@ contract HelloWorld{
     executeTransaction(e2, getTx);
 
     bytes compareName = fromHex("00000000000000000000000000000000000000000000000000000000000000aa");
-    // cout << "get() result: " << toHex(getExeRes.output) << endl;
-    // BOOST_CHECK(getExeRes.output == compareName);
 
     // getByCall()
     bytes callDataToGetByCall = fromHex(string("b7379733") +  // getByCall()
@@ -237,10 +235,6 @@ contract HelloWorld{
 
     Executive e3(m_mptStates, initEnvInfo());
     executeTransaction(e3, getByCallTx);
-
-    // cout << "getByCall() result: " << toHex(getExeResByCall.output) << endl;
-    // BOOST_CHECK(getExeResByCall.output == compareName);
-
     // destroy
     bytes callDestroy = fromHex(string("83197ef0") +  // destroy()
                                 string(""));
@@ -390,7 +384,7 @@ contract HelloWorld{
     cout << "Contract created at: " << newAddress << endl;
 
     bytes createdCode = m_mptStates->code(newAddress);
-    cout << "Created code: " << toHex(createdCode) << endl;
+    cout << "Created code: " << *toHexString(createdCode) << endl;
 
     bytes runtimeCode = fromHex(
         "608060405260043610610062576000357c01000000000000000000000000000000000000000000000000000000"
@@ -430,8 +424,6 @@ contract HelloWorld{
     executeTransaction(e2, getTx);
 
     bytes compareName = fromHex("00000000000000000000000000000000000000000000000000000000000000aa");
-    // cout << "get() result: " << toHex(getExeRes.output) << endl;
-    // BOOST_CHECK(getExeRes.output == compareName);
 
     // getByCall()
     bytes callDataToGetByCall = fromHex(string("b7379733") +  // getByCall()
@@ -446,9 +438,6 @@ contract HelloWorld{
 
     Executive e3(m_mptStates, initEnvInfo());
     executeTransaction(e3, getByCallTx);
-
-    // cout << "getByCall() result: " << toHex(getExeResByCall.output) << endl;
-    // BOOST_CHECK(getExeResByCall.output == compareName);
 
     // destroy
     bytes callDestroy = fromHex(string("83197ef0") +  // destroy()

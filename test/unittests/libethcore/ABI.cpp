@@ -54,7 +54,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_func0)
 
     auto r = ct.abiInHex("", a, b, c, d);
     auto rb = ct.abiIn("", a, b, c, d);
-    BOOST_CHECK(r == toHex(rb));
+    BOOST_CHECK(r == *toHexString(rb));
 
     BOOST_CHECK_EQUAL(
         r, std::string("0000000000000000000000000000000000000000000000000000000000000123"
@@ -87,7 +87,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_func1)
     std::vector<u256> c{1, 2, 3};
 
     auto rb = ct.abiIn("", a, b, c);
-    auto r = toHex(rb);
+    auto r = *toHexString(rb);
     BOOST_CHECK_EQUAL(
         r, std::string("0000000000000000000000000000000000000000000000000000000000000060"
                        "0000000000000000000000000000000000000000000000000000000000000001"
@@ -120,7 +120,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_func2)
     Address f("0x692a70d2e424a56d2c6c27aa97d1a86395877b3a");
 
     auto rb = ct.abiIn("", a, b, c, d, e, f);
-    auto r = toHex(rb);
+    auto r = *toHexString(rb);
 
     std::string outA;
     u256 outB;
@@ -150,7 +150,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_func3)
     int d = -11111;
 
     auto rb = ct.abiIn("", a, b, c, d);
-    auto r = toHex(rb);
+    auto r = *toHexString(rb);
 
     BOOST_CHECK_EQUAL(
         r, std::string(
@@ -186,7 +186,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_func4)
     std::vector<std::array<std::string, 3>> f(3);
 
     auto rb = ct.abiIn("", a, b, c, d, e, f);
-    auto r = toHex(rb);
+    auto r = *toHexString(rb);
 
     std::string outA = "HelloWorld";
     u256 outB = 11111;
@@ -210,19 +210,19 @@ BOOST_AUTO_TEST_CASE(ContractABIType_u256)
     ContractABI ct;
 
     u256 x = 0;
-    std::string r = toHex(ct.serialise(x));
+    std::string r = *toHexString(ct.serialise(x));
     BOOST_CHECK(r == "0000000000000000000000000000000000000000000000000000000000000000");
 
     u256 y("0x7fffffffffffffff");
-    r = toHex(ct.serialise(y));
+    r = *toHexString(ct.serialise(y));
     BOOST_CHECK(r == "0000000000000000000000000000000000000000000000007fffffffffffffff");
 
     u256 z("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
-    r = toHex(ct.serialise(z));
+    r = *toHexString(ct.serialise(z));
     BOOST_CHECK(r == "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
 
     u256 u("0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe");
-    r = toHex(ct.serialise(u));
+    r = *toHexString(ct.serialise(u));
     BOOST_CHECK(r == "fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe");
 }
 
@@ -231,19 +231,19 @@ BOOST_AUTO_TEST_CASE(ContractABIType_s256)
     ContractABI ct;
 
     s256 x = 0;
-    std::string r = toHex(ct.serialise(x));
+    std::string r = *toHexString(ct.serialise(x));
     BOOST_CHECK_EQUAL(r, "0000000000000000000000000000000000000000000000000000000000000000");
 
     s256 y("0x7fffffffffffffff");
-    r = toHex(ct.serialise(y));
+    r = *toHexString(ct.serialise(y));
     BOOST_CHECK_EQUAL(r, "0000000000000000000000000000000000000000000000007fffffffffffffff");
 
     s256 z = -1;
-    r = toHex(ct.serialise(z));
+    r = *toHexString(ct.serialise(z));
     BOOST_CHECK_EQUAL(r, "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
 
     s256 s = 1000;
-    r = toHex(ct.serialise(s));
+    r = *toHexString(ct.serialise(s));
     BOOST_CHECK_EQUAL(r, "00000000000000000000000000000000000000000000000000000000000003e8");
 }
 
@@ -252,12 +252,12 @@ BOOST_AUTO_TEST_CASE(ContractABIType_bool)
     ContractABI ct;
 
     bool x = true;
-    std::string r = toHex(ct.serialise(x));
+    std::string r = *toHexString(ct.serialise(x));
     BOOST_CHECK_EQUAL(r, "0000000000000000000000000000000000000000000000000000000000000001");
 
 
     bool y = false;
-    r = toHex(ct.serialise(y));
+    r = *toHexString(ct.serialise(y));
     BOOST_CHECK_EQUAL(r, "0000000000000000000000000000000000000000000000000000000000000000");
 }
 
@@ -266,12 +266,12 @@ BOOST_AUTO_TEST_CASE(ContractABIType_addr)
     ContractABI ct;
 
     Address x;
-    std::string r = toHex(ct.serialise(x));
+    std::string r = *toHexString(ct.serialise(x));
     BOOST_CHECK_EQUAL(r, "0000000000000000000000000000000000000000000000000000000000000000");
 
 
     Address y("0xbe5422d15f39373eb0a97ff8c10fbd0e40e29338");
-    r = toHex(ct.serialise(y));
+    r = *toHexString(ct.serialise(y));
     BOOST_CHECK_EQUAL(r, "000000000000000000000000be5422d15f39373eb0a97ff8c10fbd0e40e29338");
 }
 
@@ -280,13 +280,13 @@ BOOST_AUTO_TEST_CASE(ContractABIType_string)
     ContractABI ct;
 
     std::string x("Hello, world!");
-    std::string r = toHex(ct.serialise(x));
+    std::string r = *toHexString(ct.serialise(x));
     BOOST_CHECK_EQUAL(
         r, std::string("000000000000000000000000000000000000000000000000000000000000000d48656c6c6"
                        "f2c20776f726c642100000000000000000000000000000000000000"));
 
     std::string y("");
-    r = toHex(ct.serialise(y));
+    r = *toHexString(ct.serialise(y));
     BOOST_CHECK_EQUAL(
         r, std::string("0000000000000000000000000000000000000000000000000000000000000000"));
 }
@@ -296,7 +296,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_array_uint256)
     ContractABI ct;
 
     std::array<u256, 3> x{1, 2, 3};
-    std::string r = toHex(ct.serialise(x));
+    std::string r = *toHexString(ct.serialise(x));
     BOOST_CHECK_EQUAL(
         r, std::string("00000000000000000000000000000000000000000000000000000000000000010"
                        "0000000000000000000000000"
@@ -305,7 +305,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_array_uint256)
                        "000000000003"));
 
     std::vector<u256> y{1, 2, 3};
-    r = toHex(ct.serialise(y));
+    r = *toHexString(ct.serialise(y));
     BOOST_CHECK_EQUAL(
         r, std::string("000000000000000000000000000000000000000000000000000000000000000300000000000"
                        "000000000000000"
@@ -325,7 +325,7 @@ BOOST_AUTO_TEST_CASE(ContractABITest0)
     string32 d = toString32(std::string("adsggsakjffl;kajsdf"));
 
     auto rb = ct.abiIn("", a, b, c, d);
-    auto r = toHex(rb);
+    auto r = *toHexString(rb);
 
     u256 outA;
     s256 outB;
@@ -371,7 +371,7 @@ BOOST_AUTO_TEST_CASE(ContractABITest1)
 
     ContractABI ct;
     auto rb = ct.abiIn("", a, b, c, d, e);
-    auto r = toHex(rb);
+    auto r = *toHexString(rb);
     BOOST_CHECK_EQUAL(r, expect);
 
     u256 outA;
@@ -409,7 +409,7 @@ BOOST_AUTO_TEST_CASE(ContractABITest2)
 
     ContractABI ct;
     auto rb = ct.abiIn("", a);
-    auto r = toHex(rb);
+    auto r = *toHexString(rb);
 
     BOOST_CHECK(r == expect);
 
@@ -436,7 +436,7 @@ BOOST_AUTO_TEST_CASE(ContractABITest3)
     std::vector<std::array<u256, 3>> i{{4, 4, 4}, {5, 5, 5}};
 
     auto rb = ct.abiIn("", a, b, c, d, e, f, g, h, i);
-    auto r = toHex(rb);
+    auto r = *toHexString(rb);
 
     std::string expect =
         "000000000000000000000000000000000000000000000000000000000000007b00000000000000000000000069"

@@ -1436,7 +1436,7 @@ void benchmarkPrecompiled(char const name[], vector_ref<const PrecompiledTest> t
 
         auto res = exec(inputRef);
         BOOST_REQUIRE_MESSAGE(res.first, test.name);
-        BOOST_REQUIRE_EQUAL(toHex(res.second), test.expected);
+        BOOST_REQUIRE_EQUAL(*toHexString(res.second), test.expected);
 
         for (int i = 0; i < n; ++i)
             exec(inputRef);
@@ -1601,7 +1601,7 @@ void testPrecompiled(char const name[], vector_ref<const PrecompiledTest> tests)
 
         auto res = exec(inputRef);
         BOOST_REQUIRE_MESSAGE(res.first, test.name);
-        BOOST_REQUIRE_EQUAL(toHex(res.second), test.expected);
+        BOOST_REQUIRE_EQUAL(*toHexString(res.second), test.expected);
 
         std::cout << ut::framework::current_test_case().p_name << "/" << test.name << " PASSED\n";
     }

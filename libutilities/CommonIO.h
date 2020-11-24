@@ -22,7 +22,7 @@
  */
 
 #pragma once
-#include "CommonData.h"
+#include "DataConvertUtility.h"
 #include <boost/filesystem.hpp>
 #include <array>
 #include <chrono>

@@ -26,7 +26,7 @@
 #include <libdevcrypto/CryptoInterface.h>
 #include <libutilities/Address.h>
 #include <libutilities/Common.h>
-#include <libutilities/CommonData.h>
+#include <libutilities/DataConvertUtility.h>
 #include <boost/algorithm/string.hpp>
 
 namespace bcos

@@ -629,7 +629,7 @@ BOOST_AUTO_TEST_CASE(contextTest)
         "111561025e576000816000905550600101610246565b5090565b90565b6035806102736000396000f300608060"
         "4052600080fd00a165627a7a723058204d40cf1e6a3425cc568088e0eaf1e55e129ced45df2b6a0af442d7ec2b"
         "6bfd050029"));
-    bytes data = fromHex("jimmyshi");
+    bytes data = asBytes("jimmyshi");
     Address destination{KeyPair::create().address()};
     Address caller = right160(crypto::Hash(
         fromHex("ff") + destination.asBytes() + toBigEndian(0x123_cppui256) + crypto::Hash(data)));

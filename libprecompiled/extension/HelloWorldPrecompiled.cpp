@@ -65,7 +65,7 @@ PrecompiledExecResult::Ptr HelloWorldPrecompiled::call(
     Address const& _origin, Address const&)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("call")
-                           << LOG_KV("param", toHex(_param));
+                           << LOG_KV("param", *toHexString(_param));
 
     // parse function name
     uint32_t func = getParamFunc(_param);

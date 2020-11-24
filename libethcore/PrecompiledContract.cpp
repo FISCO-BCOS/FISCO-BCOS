@@ -20,7 +20,7 @@
  */
 
 #include "PrecompiledContract.h"
-#include <libutilities/CommonData.h>
+#include <libutilities/DataConvertUtility.h>
 using namespace bcos;
 using namespace eth;
 

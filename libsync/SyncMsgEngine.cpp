@@ -52,7 +52,7 @@ void SyncMsgEngine::messageHandler(
                 << LOG_KV("reason", "decode failed")
                 << LOG_KV("nodeId", _session->nodeID().abridged())
                 << LOG_KV("size", _msg->buffer()->size())
-                << LOG_KV("message", toHex(*_msg->buffer()));
+                << LOG_KV("message", *toHexString(*_msg->buffer()));
             return;
         }
 

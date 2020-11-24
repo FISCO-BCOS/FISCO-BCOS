@@ -430,7 +430,7 @@ void LedgerParam::initConsensusConfig(ptree const& pt)
     // init nodeListMark
     for (auto const& node : mutableConsensusParam().sealerList)
     {
-        nodeListMark << toHex(node) << ",";
+        nodeListMark << *toHexString(node) << ",";
     }
     mutableGenesisParam().nodeListMark = nodeListMark.str();
 

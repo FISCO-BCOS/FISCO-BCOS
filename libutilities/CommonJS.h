@@ -22,9 +22,8 @@
  */
 
 #pragma once
-
-#include "CommonData.h"
 #include "CommonIO.h"
+#include "DataConvertUtility.h"
 #include "FixedHash.h"
 #include "libutilities/Exceptions.h"
 #include <string>
@@ -47,7 +46,7 @@ std::string toJS(boost::multiprecision::number<boost::multiprecision::cpp_int_ba
         boost::multiprecision::unsigned_magnitude, boost::multiprecision::unchecked, void>> const&
         _n)
 {
-    std::string h = toHex(toCompactBigEndian(_n, 1));
+    std::string h = *toHexString(toCompactBigEndian(_n, 1));
     // remove first 0, if it is necessary;
     std::string res = h[0] != '0' ? h : h.substr(1);
     return "0x" + res;
@@ -121,7 +120,7 @@ jsToInt(std::string const& _s)
         // Hex
         return fromBigEndian<boost::multiprecision::number<boost::multiprecision::cpp_int_backend<
             N * 8, N * 8, boost::multiprecision::unsigned_magnitude,
-            boost::multiprecision::unchecked, void>>>(fromHex(_s.substr(2), WhenError::Throw));
+            boost::multiprecision::unchecked, void>>>(fromHex(_s.substr(2)));
     else if (_s.find_first_not_of("0123456789") == std::string::npos)
         // Decimal
         return boost::multiprecision::number<boost::multiprecision::cpp_int_backend<N * 8, N * 8,

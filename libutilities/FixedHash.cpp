@@ -34,14 +34,6 @@ h128 fromUUID(std::string const& _uuid)
     }
 }
 
-std::string toUUID(h128 const& _uuid)
-{
-    std::string ret = toHex(_uuid.ref());
-    for (unsigned i : {20, 16, 12, 8})
-        ret.insert(ret.begin() + i, '-');
-    return ret;
-}
-
 bool isNodeIDOk(bcos::h512 const& _nodeID)
 {
     return bcos::h512() != _nodeID;

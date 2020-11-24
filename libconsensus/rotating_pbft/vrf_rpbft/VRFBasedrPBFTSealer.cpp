@@ -46,8 +46,8 @@ void VRFBasedrPBFTSealer::initConsensusEngine()
         m_pbftEngine->groupId(), g_BCOSConfig.chainId(), m_txPool->maxBlockLimit() / 2);
 
     // get private key and generate vrf-public-key
-    m_privateKey =
-        toHex(bytesConstRef{m_vrfBasedrPBFTEngine->keyPair().secret().data(), c_privateKeyLen});
+    m_privateKey = *toHexString(
+        bytesConstRef{m_vrfBasedrPBFTEngine->keyPair().secret().data(), c_privateKeyLen});
     auto vrfPublicKey = curve25519_vrf_generate_key_pair(m_privateKey.c_str());
     if (vrfPublicKey == nullptr)
     {
@@ -83,13 +83,13 @@ bool VRFBasedrPBFTSealer::generateTransactionForRotating()
         // get VRF proof
         auto blockNumber = m_blockChain->number();
         auto blockHash = m_blockChain->numberHash(blockNumber);
-        auto blockHashStr = toHex(blockHash);
-        auto vrfProofPtr = curve25519_vrf_proof(m_privateKey.c_str(), blockHashStr.c_str());
+        auto blockHashStr = toHexString(blockHash);
+        auto vrfProofPtr = curve25519_vrf_proof(m_privateKey.c_str(), blockHashStr->c_str());
         if (!vrfProofPtr)
         {
             VRFRPBFTSealer_LOG(WARNING)
                 << LOG_DESC("generateTransactionForRotating: generate vrf-proof failed")
-                << LOG_KV("inputData", blockHashStr);
+                << LOG_KV("inputData", *blockHashStr);
             return false;
         }
         std::string vrfProof = vrfProofPtr;
@@ -99,7 +99,7 @@ bool VRFBasedrPBFTSealer::generateTransactionForRotating()
         auto generatedTx =
             m_txGenerator->generateTransactionWithSig(interface, m_blockChain->number(),
                 bcos::precompiled::WORKING_SEALER_MGR_ADDRESS, m_vrfBasedrPBFTEngine->keyPair(),
-                bcos::eth::Transaction::Type::MessageCall, m_vrfPublicKey, blockHashStr, vrfProof);
+                bcos::eth::Transaction::Type::MessageCall, m_vrfPublicKey, *blockHashStr, vrfProof);
 
         // put the generated transaction into the 0th position of the block transactions
         // Note: must set generatedTx into the first transaction for other transactions may change

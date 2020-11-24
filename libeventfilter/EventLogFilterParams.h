@@ -26,7 +26,7 @@
 #include <libethcore/Common.h>
 #include <libethcore/Protocol.h>
 #include <libutilities/Address.h>
-#include <libutilities/CommonData.h>
+#include <libutilities/DataConvertUtility.h>
 
 namespace Json
 {

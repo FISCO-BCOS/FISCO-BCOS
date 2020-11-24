@@ -147,10 +147,10 @@ BOOST_AUTO_TEST_CASE(testGensisConfig)
     /// check consensus params
     BOOST_CHECK(param->mutableConsensusParam().consensusType == "raft");
     BOOST_CHECK(param->mutableConsensusParam().maxTransactions == 2000);
-    BOOST_CHECK(toHex(param->mutableConsensusParam().sealerList[0]) ==
+    BOOST_CHECK(*toHexString(param->mutableConsensusParam().sealerList[0]) ==
                 "7dcce48da1c464c7025614a54a4e26df7d6f92cd4d315601e057c1659796736c5c8730e380fcbe63"
                 "7191cc2aebf4746846c0db2604adebf9c70c7f418d4d5a61");
-    BOOST_CHECK(toHex(param->mutableConsensusParam().sealerList[1]) ==
+    BOOST_CHECK(*toHexString(param->mutableConsensusParam().sealerList[1]) ==
                 "46787132f4d6285bfe108427658baf2b48de169bdb745e01610efd7930043dcc414dc6f6ddc3"
                 "da6fc491cc1c15f46e621ea7304a9b5f0b3fb85ba20a6b1c0fc1");
     /// check state DB param

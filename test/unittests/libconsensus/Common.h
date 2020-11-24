@@ -54,7 +54,8 @@ void checkPBFTMsg(T const& msg, KeyPair const _keyPair = KeyPair::create(),
         }
         else
         {
-            BOOST_CHECK_EQUAL(toHex(msg.sig), toHex(msg.signHash(msg.block_hash, _keyPair)));
+            BOOST_CHECK_EQUAL(
+                *toHexString(msg.sig), *toHexString(msg.signHash(msg.block_hash, _keyPair)));
         }
     }
     if (!msg.sig2.empty())
@@ -67,8 +68,8 @@ void checkPBFTMsg(T const& msg, KeyPair const _keyPair = KeyPair::create(),
         }
         else
         {
-            BOOST_CHECK_EQUAL(
-                toHex(msg.sig2), toHex(msg.signHash(msg.fieldsWithoutBlock(), _keyPair)));
+            BOOST_CHECK_EQUAL(*toHexString(msg.sig2),
+                *toHexString(msg.signHash(msg.fieldsWithoutBlock(), _keyPair)));
         }
     }
 }

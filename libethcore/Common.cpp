@@ -47,7 +47,7 @@ Address toAddress(std::string const& _s)
 {
     try
     {
-        auto b = fromHex(_s.substr(0, 2) == "0x" ? _s.substr(2) : _s, WhenError::Throw);
+        auto b = fromHex(_s.substr(0, 2) == "0x" ? _s.substr(2) : _s);
         if (b.size() == 20)
             return Address(b);
     }

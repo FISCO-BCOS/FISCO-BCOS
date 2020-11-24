@@ -87,7 +87,7 @@ inline std::ostream& operator<<(std::ostream& _out, MemoryDB const& _m)
     {
         _out << i.first << ": ";
         _out << RLP(i.second);
-        _out << " " << toHex(i.second);
+        _out << " " << *toHexString(i.second);
         _out << std::endl;
     }
     return _out;

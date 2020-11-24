@@ -70,7 +70,6 @@ static void updateSender(
 static void deployContract(
     std::shared_ptr<MPTState> mptState, EnvInfo& info, bytes const& code, EvmParams const& param)
 {
-    /// LOG(DEBUG) << "[evm_main] codeData: " << toHex(code);
     Transaction::Ptr tx = std::make_shared<Transaction>(
         param.transValue(), param.gasPrice(), param.gas(), code, u256(0));
     updateSender(mptState, tx, param);
@@ -98,7 +97,7 @@ static void callTransaction(
     }
     ContractABI abi;
     bytes inputData = abi.abiIn(input.inputCall);
-    EVMC_LOG(INFO) << "[evm_main/callTransaction/Parms]: " << toHex(inputData);
+    EVMC_LOG(INFO) << "[evm_main/callTransaction/Parms]: " << *toHexString(inputData);
     Transaction::Ptr tx = std::make_shared<Transaction>(
         param.transValue(), param.gasPrice(), param.gas(), input.addr, inputData, u256(0));
     updateSender(mptState, tx, param);

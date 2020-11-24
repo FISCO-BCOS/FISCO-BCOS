@@ -178,9 +178,6 @@ PrecompiledExecResult::Ptr DagTransferPrecompiled::call(
     bcos::blockverifier::ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin,
     Address const&)
 {
-    // PRECOMPILED_LOG(TRACE) << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("call")
-    //                       << LOG_KV("param", toHex(param));
-
     // parse function name
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);

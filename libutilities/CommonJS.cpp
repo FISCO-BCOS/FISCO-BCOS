@@ -31,7 +31,7 @@ bytes jsToBytes(string const& _s, OnFailed _f)
 {
     try
     {
-        return fromHex(_s, WhenError::Throw);
+        return fromHex(_s);
     }
     catch (...)
     {

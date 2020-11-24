@@ -136,13 +136,13 @@ public:
         status_obj["accountType"] = NodeAccountType(m_accountType);
         status_obj["cfgErr"] = bool(m_cfgErr);
         status_obj["omitEmptyBlock"] = m_omitEmptyBlock;
-        status_obj["nodeId"] = toHex(m_keyPair.pub());
+        status_obj["nodeId"] = *toHexString(m_keyPair.pub());
         {
             int i = 0;
             ReadGuard l(m_sealerListMutex);
             for (auto sealer : m_sealerList)
             {
-                status_obj["sealer." + toString(i)] = toHex(sealer);
+                status_obj["sealer." + toString(i)] = *toHexString(sealer);
                 i++;
             }
         }

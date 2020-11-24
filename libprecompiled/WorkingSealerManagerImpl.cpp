@@ -147,7 +147,8 @@ void WorkingSealerManagerImpl::rotateWorkingSealer()
 void WorkingSealerManagerImpl::UpdateNodeType(bcos::h512 const& _node, std::string const& _nodeType)
 {
     auto condition = m_consTable->newCondition();
-    condition->EQ(NODE_KEY_NODEID, toHex(_node));
+    auto hexNode = toHexString(_node);
+    condition->EQ(NODE_KEY_NODEID, *hexNode);
     // select the entries
     auto entries = m_consTable->select(PRI_KEY, condition);
     // select failed
@@ -157,7 +158,7 @@ void WorkingSealerManagerImpl::UpdateNodeType(bcos::h512 const& _node, std::stri
                                << LOG_KV("nodeId", _node.abridged())
                                << LOG_KV("targetType", _nodeType);
         BOOST_THROW_EXCEPTION(
-            PrecompiledException("update " + toHex(_node) + " type to " + _nodeType +
+            PrecompiledException("update " + *hexNode + " type to " + _nodeType +
                                  " failed for no corresponding node record was found"));
     }
     // select succ
@@ -174,8 +175,8 @@ void WorkingSealerManagerImpl::UpdateNodeType(bcos::h512 const& _node, std::stri
         PRECOMPILED_LOG(ERROR) << LOG_DESC("UpdateNodeType: update table failed")
                                << LOG_KV("nodeId", _node.abridged())
                                << LOG_KV("targetType", _nodeType);
-        BOOST_THROW_EXCEPTION(PrecompiledException("update " + toHex(_node) + " type to " +
-                                                   _nodeType + " failed for update table failed"));
+        BOOST_THROW_EXCEPTION(PrecompiledException(
+            "update " + *hexNode + " type to " + _nodeType + " failed for update table failed"));
     }
 }
 

@@ -1520,12 +1520,12 @@ void RaftEngine::checkSealerList(Block const& _block)
     {
         std::string sealers;
         for (auto sealer : m_sealerList)
-            sealers += toHex(sealer) + "/";
+            sealers += *toHexString(sealer) + "/";
 
         std::string blockSealers;
         for (auto sealer : _block.blockHeader().sealerList())
         {
-            blockSealers += toHex(sealer) + "/";
+            blockSealers += *toHexString(sealer) + "/";
         }
 
         RAFTENGINE_LOG(ERROR) << LOG_DESC("[#checkSealerList]Wrong sealers")

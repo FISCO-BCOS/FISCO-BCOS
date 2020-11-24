@@ -58,13 +58,13 @@ public:
     /// specified SignReq exists in the sign-cache or not?
     inline bool isExistSign(SignReq const& req)
     {
-        return cacheExists(m_signCache, req.block_hash, toHex(req.sig));
+        return cacheExists(m_signCache, req.block_hash, *toHexString(req.sig));
     }
 
     /// specified commitReq exists in the commit-cache or not?
     inline bool isExistCommit(CommitReq const& req)
     {
-        return cacheExists(m_commitCache, req.block_hash, toHex(req.sig));
+        return cacheExists(m_commitCache, req.block_hash, *toHexString(req.sig));
     }
 
     /// specified viewchangeReq exists in the viewchang-cache or not?
@@ -271,7 +271,7 @@ public:
     /// add specified signReq to the sign-cache
     inline void addSignReq(SignReq::Ptr req)
     {
-        auto signature = toHex(req->sig);
+        auto signature = *toHexString(req->sig);
         // determine existence: in case of assign overhead
         if (m_signCache.count(req->block_hash) && m_signCache[req->block_hash].count(signature))
         {
@@ -283,7 +283,7 @@ public:
     /// add specified commit cache to the commit-cache
     inline void addCommitReq(CommitReq::Ptr req)
     {
-        auto signature = toHex(req->sig);
+        auto signature = *toHexString(req->sig);
         // determine existence: in case of assign overhead
         if (m_commitCache.count(req->block_hash) && m_commitCache[req->block_hash].count(signature))
         {
@@ -305,7 +305,7 @@ public:
     template <typename T, typename S>
     inline void addReq(std::shared_ptr<T> req, S& cache)
     {
-        cache[req->block_hash][toHex(req->sig)] = req;
+        cache[req->block_hash][*toHexString(req->sig)] = req;
     }
 
     /// add future-prepare cache
