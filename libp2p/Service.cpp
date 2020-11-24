@@ -44,6 +44,8 @@ static const uint32_t CHECK_INTERVEL = 10000;
 Service::Service()
   : m_topics(std::make_shared<std::set<std::string>>()),
     m_protocolID2Handler(std::make_shared<std::unordered_map<uint32_t, CallbackFuncWithSession>>()),
+    m_protocolID2DisconnectHandler(
+        std::make_shared<std::unordered_map<uint32_t, DisconnectCallbackFuncWithSession>>()),
     m_topic2Handler(std::make_shared<std::unordered_map<std::string, CallbackFuncWithSession>>()),
     m_group2NetworkStatHandler(std::make_shared<std::map<GROUP_ID, NetworkStatHandler::Ptr>>()),
     m_group2BandwidthLimiter(
@@ -280,8 +282,27 @@ void Service::onConnect(dev::network::NetworkException e, dev::network::NodeInfo
                       << LOG_KV("endpoint", session->nodeIPEndpoint());
 }
 
+void Service::callDisconnectHandlers(dev::network::NetworkException _e, P2PSession::Ptr _p2pSession)
+{
+    ReadGuard l(x_protocolID2DisconnectHandler);
+    for (auto it : *m_protocolID2DisconnectHandler)
+    {
+        SERVICE_LOG(DEBUG) << LOG_DESC("callDisconnectHandlers")
+                           << LOG_KV("protocol", std::to_string(it.first))
+                           << LOG_KV("peer", _p2pSession->nodeID().abridged());
+        auto disconnectCallback = it.second;
+        m_host->threadPool()->enqueue([disconnectCallback, _p2pSession, _e]() {
+            if (disconnectCallback)
+            {
+                disconnectCallback(_e, _p2pSession);
+            }
+        });
+    }
+}
+
 void Service::onDisconnect(dev::network::NetworkException e, P2PSession::Ptr p2pSession)
 {
+    callDisconnectHandlers(e, p2pSession);
     RecursiveGuard l(x_sessions);
     auto it = m_sessions.find(p2pSession->nodeID());
     if (it != m_sessions.end() && it->second == p2pSession)
@@ -837,6 +858,34 @@ void Service::registerHandlerByProtoclID(PROTOCOL_ID protocolID, CallbackFuncWit
     else
     {
         it->second = handler;
+    }
+}
+
+void Service::registerDisconnectHandlerByProtocolID(
+    PROTOCOL_ID const& _protocolID, DisconnectCallbackFuncWithSession _disconnectHandler)
+{
+    SERVICE_LOG(DEBUG) << LOG_DESC("registerDisconnectHandlerByProtocolID")
+                       << LOG_KV("_protocolID", std::to_string(_protocolID));
+    WriteGuard l(x_protocolID2DisconnectHandler);
+    auto it = m_protocolID2DisconnectHandler->find(_protocolID);
+    if (it == m_protocolID2DisconnectHandler->end())
+    {
+        m_protocolID2DisconnectHandler->insert(std::make_pair(_protocolID, _disconnectHandler));
+    }
+    else
+    {
+        it->second = _disconnectHandler;
+    }
+}
+
+void Service::removeDisconnectHandlerByProtocolID(PROTOCOL_ID const& _protocolID)
+{
+    SERVICE_LOG(DEBUG) << LOG_DESC("removeDisconnectHandlerByProtocolID")
+                       << LOG_KV("_protocolID", std::to_string(_protocolID));
+    WriteGuard l(x_protocolID2DisconnectHandler);
+    if (m_protocolID2DisconnectHandler && m_protocolID2DisconnectHandler->count(_protocolID))
+    {
+        m_protocolID2DisconnectHandler->erase(_protocolID);
     }
 }
 

@@ -257,8 +257,8 @@ public:
     }
 
 protected:
+    virtual void registerDisconnectHandler();
     virtual void resetConsensusTimeout();
-
     virtual bool locatedInChosedConsensensusNodes() const { return m_idx != MAXIDX; }
     virtual void addRawPrepare(PrepareReq::Ptr _prepareReq);
     void reportBlockWithoutLock(dev::eth::Block const& block);
