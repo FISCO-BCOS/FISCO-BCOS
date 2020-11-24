@@ -54,9 +54,53 @@ void PBFTEngine::start()
     // register P2P callback after create PBFTMsgFactory
     m_service->registerHandlerByProtoclID(
         m_protocolId, boost::bind(&PBFTEngine::handleP2PMessage, this, _1, _2, _3));
+    registerDisconnectHandler();
     ConsensusEngineBase::start();
     initPBFTEnv(3 * getEmptyBlockGenTime());
     PBFTENGINE_LOG(INFO) << "[Start PBFTEngine...]";
+}
+
+void PBFTEngine::registerDisconnectHandler()
+{
+    try
+    {
+        // register disconnect callback
+        auto self = std::weak_ptr<PBFTEngine>(shared_from_this());
+        m_service->registerDisconnectHandlerByProtocolID(
+            m_protocolId, [self](dev::network::NetworkException,
+                              std::shared_ptr<dev::p2p::P2PSession> _p2pSession) {
+                try
+                {
+                    auto pbftEngine = self.lock();
+                    if (!pbftEngine)
+                    {
+                        return;
+                    }
+                    ssize_t nodeIndex = pbftEngine->getIndexBySealer(_p2pSession->nodeID());
+                    if (nodeIndex < 0)
+                    {
+                        return;
+                    }
+                    Guard l(pbftEngine->m_mutex);
+                    PBFTENGINE_LOG(DEBUG)
+                        << LOG_DESC("eraseLatestViewChangeCache for disconnected node")
+                        << LOG_KV("node", _p2pSession->nodeID().abridged())
+                        << LOG_KV("idx", nodeIndex);
+                    pbftEngine->m_reqCache->eraseLatestViewChangeCacheForNodeUpdated(nodeIndex);
+                }
+                catch (std::exception const& e)
+                {
+                    PBFTENGINE_LOG(WARNING)
+                        << LOG_DESC("call disconnect handler for PBFTEngine failed")
+                        << LOG_KV("e", boost::diagnostic_information(e));
+                }
+            });
+    }
+    catch (std::exception const& e)
+    {
+        PBFTENGINE_LOG(ERROR) << LOG_DESC("registerDisconnectHandler for PBFTEngine failed")
+                              << LOG_KV("e", boost::diagnostic_information(e));
+    }
 }
 
 void PBFTEngine::createPBFTReqCache()
@@ -81,6 +125,7 @@ void PBFTEngine::stop()
         if (m_service)
         {
             m_service->removeHandlerByProtocolID(m_protocolId);
+            m_service->removeDisconnectHandlerByProtocolID(m_protocolId);
         }
         if (m_threadPool)
         {
@@ -1557,7 +1602,7 @@ void PBFTEngine::catchupView(ViewChangeReq const& req, std::ostringstream& oss)
         {
             sendViewChangeMsg(nodeId);
             // erase the cache
-            m_reqCache->eraseLatestViewChangeCacheForNodeUpdated(req);
+            m_reqCache->eraseLatestViewChangeCacheForNodeUpdated(req.idx);
         }
     }
 }
