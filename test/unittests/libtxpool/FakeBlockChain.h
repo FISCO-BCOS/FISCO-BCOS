@@ -24,6 +24,7 @@
 #pragma once
 #include <libblockchain/BlockChainInterface.h>
 #include <libledger/LedgerParamInterface.h>
+#include <libnetwork/Host.h>
 #include <libp2p/P2PMessageFactory.h>
 #include <libp2p/Service.h>
 #include <libtxpool/TxPool.h>
@@ -46,6 +47,9 @@ public:
     FakeService() : Service()
     {
         m_messageFactory = std::make_shared<dev::p2p::P2PMessageFactory>();
+        std::shared_ptr<dev::network::Host> host = std::make_shared<dev::network::Host>();
+        host->setThreadPool(std::make_shared<dev::ThreadPool>("host", 1));
+        setHost(host);
     }
     void setSessionInfos(dev::p2p::P2PSessionInfos& sessionInfos) { m_sessionInfos = sessionInfos; }
     void appendSessionInfo(P2PSessionInfo const& info) { m_sessionInfos.push_back(info); }

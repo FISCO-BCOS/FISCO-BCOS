@@ -299,7 +299,7 @@ public:
 
     // When the node restarts and the view becomes smaller, call this function to clear the history
     // cache
-    void eraseLatestViewChangeCacheForNodeUpdated(ViewChangeReq const& _req);
+    void eraseLatestViewChangeCacheForNodeUpdated(IDXTYPE const& _reqIdx);
 
     void addViewChangeReq(ViewChangeReq::Ptr _req, int64_t const& _blockNumber = 0);
 
@@ -426,6 +426,12 @@ public:
     void setCheckSignCallback(std::function<bool(PBFTMsg const&)> const& _checkSignCallback)
     {
         m_checkSignCallback = _checkSignCallback;
+    }
+
+    // for ut
+    std::shared_ptr<std::unordered_map<IDXTYPE, ViewChangeReq::Ptr>> latestViewChangeReqCache()
+    {
+        return m_latestViewChangeReqCache;
     }
 
 protected:
