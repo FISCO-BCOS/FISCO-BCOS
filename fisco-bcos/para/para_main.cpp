@@ -164,9 +164,7 @@ static void startExecute(int _totalUser, int _totalTxs)
     params->mutableGenesisParam().timeStamp = 0;
     bool ret = blockChain->checkAndBuildGenesisBlock(params);
     assert(ret == true);
-
-    bcos::h256 genesisHash = blockChain->getBlockByNumber(0)->headerHash();
-    dbInitializer->initState(genesisHash);
+    dbInitializer->initState();
 
     std::shared_ptr<BlockVerifier> blockVerifier = std::make_shared<BlockVerifier>(true);
     /// set params for blockverifier

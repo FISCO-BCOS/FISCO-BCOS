@@ -23,13 +23,11 @@
 #include "libstorage/MemoryTableFactory.h"
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
-#include <leveldb/db.h>
 #include <libstorage/BasicRocksDB.h>
 #include <libstorage/CachedStorage.h>
 #include <libstorage/MemoryTable2.h>
 #include <libstorage/MemoryTableFactoryFactory2.h>
 #include <libstorage/RocksDBStorage.h>
-#include <libutilities/BasicLevelDB.h>
 #include <libutilities/Common.h>
 #include <tbb/parallel_for.h>
 #include <boost/algorithm/string.hpp>

@@ -37,7 +37,6 @@
 using namespace std;
 using namespace bcos;
 using namespace boost;
-using namespace bcos::db;
 using namespace bcos::ledger;
 using namespace bcos::storage;
 using namespace bcos::blockverifier;

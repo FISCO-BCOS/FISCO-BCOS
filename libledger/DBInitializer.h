@@ -27,7 +27,6 @@
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libchannelserver/ChannelRPCServer.h>
 #include <libexecutive/StateFactoryInterface.h>
-#include <libmptstate/OverlayDB.h>
 #include <libstorage/CachedStorage.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/MemoryTableFactory2.h>
@@ -63,12 +62,12 @@ public:
         }
         DBInitializer_LOG(INFO) << LOG_DESC("storage stopped");
     };
-    virtual void initState(bcos::h256 const& genesisHash)
+    virtual void initState()
     {
         if (!m_param)
             return;
         /// create state storage
-        createStateFactory(genesisHash);
+        createStateFactory();
         /// create executive context
         createExecutiveContext();
     }
@@ -94,16 +93,13 @@ public:
 protected:
     bcos::GROUP_ID m_groupID = 0;
     /// create stateStorage (mpt or storageState options)
-    virtual void createStateFactory(bcos::h256 const& genesisHash);
+    virtual void createStateFactory();
     /// create ExecutiveContextFactory
     virtual void createExecutiveContext();
 
     void unsupportedFeatures(std::string const& desc);
 
 private:
-    void initLevelDBStorage();
-    // below use MemoryTableFactory2
-    bcos::storage::Storage::Ptr initSQLStorage();
     void initTableFactory2(
         bcos::storage::Storage::Ptr _backend, std::shared_ptr<LedgerParamInterface> _param);
     bcos::storage::Storage::Ptr initRocksDBStorage(std::shared_ptr<LedgerParamInterface> _param);

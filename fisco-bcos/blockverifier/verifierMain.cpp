@@ -21,7 +21,6 @@
  * @date: 2018-09-21
  */
 
-#include <leveldb/db.h>
 #include <libblockchain/BlockChainImp.h>
 #include <libblockverifier/BlockVerifier.h>
 #include <libblockverifier/Common.h>
@@ -29,32 +28,24 @@
 #include <libdevcrypto/Common.h>
 #include <libethcore/Block.h>
 #include <libethcore/TransactionReceipt.h>
-#include <libmptstate/MPTStateFactory.h>
-#include <libstorage/LevelDBStorage.h>
+#include <libstorage/BasicRocksDB.h>
 #include <libstorage/MemoryTableFactory.h>
+#include <libstorage/RocksDBStorage.h>
 #include <libstorage/Storage.h>
 #include <libstoragestate/StorageStateFactory.h>
-#include <libutilities/BasicLevelDB.h>
 
 using namespace bcos;
+using namespace bcos::storage;
 
 int main(int argc, char* argv[])
 {
     auto storagePath = std::string("test_storage/");
     boost::filesystem::create_directories(storagePath);
-    leveldb::Options option;
-    option.create_if_missing = true;
-    option.max_open_files = 1000;
-    bcos::db::BasicLevelDB* dbPtr = NULL;
-    leveldb::Status s = bcos::db::BasicLevelDB::Open(option, storagePath, &dbPtr);
-    if (!s.ok())
-    {
-        LOG(ERROR) << "Open storage db error: " << s.ToString();
-    }
-
-    auto storageDB = std::shared_ptr<bcos::db::BasicLevelDB>(dbPtr);
-    auto storage = std::make_shared<bcos::storage::LevelDBStorage>();
-    storage->setDB(storageDB);
+    auto basicRocksDB = std::make_shared<BasicRocksDB>();
+    auto options = getRocksDBOptions();
+    basicRocksDB->Open(options, storagePath);
+    auto storage = std::make_shared<bcos::storage::RocksDBStorage>();
+    storage->setDB(basicRocksDB);
 
     auto blockChain = std::make_shared<bcos::blockchain::BlockChainImp>();
     blockChain->setStateStorage(storage);
@@ -71,10 +62,6 @@ int main(int argc, char* argv[])
     blockChain->checkAndBuildGenesisBlock(initParam);
 
     auto stateFactory = std::make_shared<bcos::storagestate::StorageStateFactory>(bcos::u256(0));
-
-    // auto stateFactory = std::make_shared<bcos::mptstate::MPTStateFactory>(
-    //    bcos::u256(0), "test_state", bcos::h256(0), bcos::WithExisting::Trust);
-
     auto executiveContextFactory = std::make_shared<bcos::blockverifier::ExecutiveContextFactory>();
     executiveContextFactory->setStateFactory(stateFactory);
     executiveContextFactory->setStateStorage(storage);

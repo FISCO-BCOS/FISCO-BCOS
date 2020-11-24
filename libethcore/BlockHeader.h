@@ -111,10 +111,7 @@ public:
 
     /// block header verify
     // TODO: pull out into abstract class Verifier.
-    void verify(Strictness _s = CheckEverything, BlockHeader const& _parent = BlockHeader(),
-        bytesConstRef _block = bytesConstRef()) const;
-    void verify(Strictness _s, bytesConstRef _block) const { verify(_s, BlockHeader(), _block); }
-
+    void verify(Strictness _s = CheckEverything, BlockHeader const& _parent = BlockHeader()) const;
     ///------set interfaces related to block header------
     ///
     h256 hash() const;

@@ -26,7 +26,6 @@
 #include <libethcore/Common.h>
 #include <libethcore/Exceptions.h>
 #include <libutilities/CommonJS.h>
-#include <libutilities/TrieHash.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <string>

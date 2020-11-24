@@ -27,7 +27,6 @@
 #include "TransactionReceipt.h"
 #include <libconfig/GlobalConfigure.h>
 #include <libutilities/Common.h>
-#include <libutilities/TrieHash.h>
 #include <libutilities/TrieHash2.h>
 
 namespace bcos
@@ -89,14 +88,10 @@ public:
 
     ///-----encode functions
     void encode(bytes& _out) const;
-    void encodeRC2(bytes& _out) const;
 
     ///-----decode functions
     void decode(bytesConstRef _block, CheckTransaction const _option = CheckTransaction::Everything,
         bool _withReceipt = true, bool _withTxHash = false);
-    void decodeRC2(bytesConstRef _block,
-        CheckTransaction const _option = CheckTransaction::Everything, bool _withReceipt = true,
-        bool _withTxHash = false);
 
     virtual void encodeProposal(std::shared_ptr<bytes> _out, bool const& _onlyTxsHash = false);
 
@@ -260,12 +255,8 @@ public:
     }
 
     void calTransactionRoot(bool update = true) const;
-    void calTransactionRootRC2(bool update = true) const;
     void calReceiptRoot(bool update = true) const;
-    void calReceiptRootRC2(bool update = true) const;
-    void calTransactionRootV2_2_0(bool update) const;
     void getReceiptAndHash(RLPStream& txReceipts, std::vector<bcos::bytes>& receiptList) const;
-    void calReceiptRootV2_2_0(bool update) const;
 
     std::shared_ptr<std::map<std::string, std::vector<std::string>>> getReceiptProof() const;
     std::shared_ptr<std::map<std::string, std::vector<std::string>>> getTransactionProof() const;

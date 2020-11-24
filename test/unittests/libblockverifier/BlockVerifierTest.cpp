@@ -21,7 +21,6 @@
  * @date 2018-09-21
  */
 
-#include <leveldb/db.h>
 #include <libblockchain/BlockChainImp.h>
 #include <libblockverifier/BlockVerifier.h>
 #include <libethcore/ABI.h>
@@ -31,8 +30,6 @@
 #include <libinitializer/LedgerInitializer.h>
 #include <libledger/DBInitializer.h>
 #include <libledger/LedgerManager.h>
-#include <libmptstate/MPTStateFactory.h>
-#include <libstorage/LevelDBStorage.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libethcore/FakeBlock.h>
 #include <unistd.h>
@@ -49,7 +46,6 @@ using namespace bcos::txpool;
 using namespace bcos::blockverifier;
 using namespace bcos::blockchain;
 using namespace bcos::storage;
-using namespace bcos::mptstate;
 using namespace bcos::executive;
 
 namespace bcos
@@ -209,8 +205,7 @@ public:
         bool ret = blockChain->checkAndBuildGenesisBlock(initParam);
         BOOST_CHECK(ret);
 
-        bcos::h256 genesisHash = blockChain->getBlockByNumber(0)->headerHash();
-        dbInitializer->initState(genesisHash);
+        dbInitializer->initState();
 
         std::shared_ptr<BlockVerifier> blockVerifier = std::make_shared<BlockVerifier>(_enablePara);
         /// set params for blockverifier
@@ -254,13 +249,13 @@ BOOST_FIXTURE_TEST_SUITE(BlockVerifierTest, BlockVerifierFixture)
 BOOST_AUTO_TEST_CASE(executeBlockTest)
 {
     FakeVerifierWithDagTransfer serialExe;
-    auto serialState = serialExe.executeVerifier(4, 20, "LevelDB", false);
+    auto serialState = serialExe.executeVerifier(4, 20, "RocksDB", false);
     cout << "Serial exec root: " << serialState << endl;
 
 
     FakeVerifierWithDagTransfer paraExe;
-    auto paraState = paraExe.executeVerifier(4, 20, "LevelDB", true);
-    cout << "Para exec root: " << paraExe.executeVerifier(4, 20, "LevelDB", true) << endl;
+    auto paraState = paraExe.executeVerifier(4, 20, "RocksDB", true);
+    cout << "Para exec root: " << paraExe.executeVerifier(4, 20, "RocksDB", true) << endl;
 
     BOOST_CHECK_EQUAL(serialState, paraState);
 }
