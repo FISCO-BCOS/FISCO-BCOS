@@ -646,7 +646,7 @@ Json::Value Rpc::getBlockByHash(int _groupID, const std::string& _blockHash, boo
 void Rpc::generateBlockHeaderInfo(Json::Value& _response, dev::eth::BlockHeader const& _blockHeader,
     dev::eth::Block::SigListPtrType _signatureList, bool _includeSigList)
 {
-    _response["number"] = _blockHeader.number();
+    _response["number"] = toJS(_blockHeader.number());
 
     _response["hash"] = toJS(_blockHeader.hash());
     _response["parentHash"] = toJS(_blockHeader.parentHash());

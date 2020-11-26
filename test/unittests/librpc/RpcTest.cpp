@@ -670,7 +670,7 @@ BOOST_AUTO_TEST_CASE(getBlockHeader)
 
     auto hash = "0xba6e71fbc207e776c74b66bc031d1a599d5b35cd03fd9f5e2331fa5ecdccdc87";
     response = rpc->getBlockHeaderByHash(groupId, hash, true);
-    BOOST_CHECK(response["number"].asString() == "0");
+    BOOST_CHECK(response["number"].asString() == "0x0");
     BOOST_CHECK(response["sealer"].asString() == "0x1");
     BOOST_CHECK(response["extraData"][0].asString() == "0x0a");
     BOOST_CHECK(response["gasLimit"].asString() == "0x9");
