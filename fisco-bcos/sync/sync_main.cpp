@@ -36,6 +36,7 @@
 #include <libsync/Common.h>
 #include <libsync/SyncMaster.h>
 #include <libtxpool/TxPool.h>
+#include <libutilities/FileUtility.h>
 
 using namespace std;
 using namespace bcos;
@@ -181,7 +182,7 @@ static void startSync(Params& params)
     p2pService->setGroupID2NodeList(groudID2NodeList);
 
     // NodeID nodeId = NodeID(fromHex(asString(contents(getDataDir().string() + "/node.nodeid"))));
-    auto nodeIdstr = asString(contents("conf/node.nodeid"));
+    auto nodeIdstr = asString(*readContents("conf/node.nodeid"));
     NodeID nodeId = NodeID(nodeIdstr.substr(0, 128));
     LOG(INFO) << "Load node id: " << nodeIdstr << "  " << nodeId.abridged() << endl;
 

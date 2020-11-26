@@ -29,7 +29,6 @@
 #include <cryptopp/pwdbased.h>
 #include <cryptopp/sha.h>
 #include <libethcore/Exceptions.h>
-#include <libutilities/Address.h>
 #include <libutilities/Common.h>
 #include <libutilities/Exceptions.h>
 #include <libutilities/RLP.h>

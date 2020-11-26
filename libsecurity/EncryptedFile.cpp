@@ -24,24 +24,22 @@
 #include "libdevcrypto/CryptoInterface.h"
 #include <libconfig/GlobalConfigure.h>
 #include <libutilities/Base64.h>
-#include <libutilities/CommonIO.h>
 #include <libutilities/Exceptions.h>
+#include <libutilities/FileUtility.h>
 
 using namespace std;
 using namespace bcos;
 
-bytes EncryptedFile::decryptContents(const std::string& _filePath)
+std::shared_ptr<bytes> EncryptedFile::decryptContents(const std::string& _filePath)
 {
-    bytes encFileBytes;
-    bytes decFileBytes;
     try
     {
         LOG(DEBUG) << LOG_BADGE("ENCFILE") << LOG_DESC("Trying to read enc file")
                    << LOG_KV("file", _filePath);
-        string encContextsStr = contentsString(_filePath);
-        encFileBytes = fromHex(encContextsStr);
+        auto encContextsStr = readContentsToString(_filePath);
+        auto encFileBytes = fromHex(*encContextsStr);
         LOG(DEBUG) << LOG_BADGE("ENCFILE") << LOG_DESC("Enc file contents")
-                   << LOG_KV("string", encContextsStr);
+                   << LOG_KV("string", *encContextsStr);
 
         auto dataKey = g_BCOSConfig.diskEncryption.dataKey;
 
@@ -51,7 +49,7 @@ bytes EncryptedFile::decryptContents(const std::string& _filePath)
                 (const unsigned char*)dataKey.substr(0, 16).data());
 
         LOG(DEBUG) << "[ENCFILE] EncryptedFile Base64 key: " << decFileBytesBase64 << endl;
-        decFileBytes = fromBase64(decFileBytesBase64);
+        return base64DecodeBytes(decFileBytesBase64);
     }
     catch (exception& e)
     {
@@ -59,5 +57,4 @@ bytes EncryptedFile::decryptContents(const std::string& _filePath)
                    << LOG_KV("what", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(EncryptedFileError());
     }
-    return decFileBytes;
 }

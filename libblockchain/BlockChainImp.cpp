@@ -755,7 +755,7 @@ bcos::h512s BlockChainImp::getNodeListByType(int64_t blockNumber, std::string co
     std::stringstream s;
     s << "[#getNodeListByType] " << type << ":";
     for (bcos::h512 node : list)
-        s << toJS(node) << ",";
+        s << toHexStringWithPrefix(node) << ",";
     BLOCKCHAIN_LOG(TRACE) << LOG_DESC(s.str());
 
     return list;
@@ -1436,9 +1436,7 @@ void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<Executive
                 std::shared_ptr<bytes> nonceData = std::make_shared<bytes>();
                 rs.swapOut(*nonceData);
                 Entry::Ptr entry_tb2nonces = std::make_shared<Entry>();
-                // store nonce directly >= v2.2.0
-                // store the hex string < 2.2.0
-                writeBytesToField(nonceData, entry_tb2nonces, SYS_VALUE);
+                entry_tb2nonces->setField(SYS_VALUE, nonceData->data(), nonceData->size());
 
                 entry_tb2nonces->setForce(true);
                 tb_nonces->insert(lexical_cast<std::string>(blockNumberStr), entry_tb2nonces);
@@ -1634,42 +1632,16 @@ CommitResult BlockChainImp::commitBlock(
 // decode the block from the block data fetched from system table
 std::shared_ptr<Block> BlockChainImp::decodeBlock(bcos::storage::Entry::ConstPtr _entry)
 {
-    std::shared_ptr<Block> block = nullptr;
-    // >= v2.2.0
-    if (!m_enableHexBlock)
-    {
-        auto bytesBlock = _entry->getFieldConst(SYS_VALUE);
-        block = std::make_shared<Block>(bytesBlock, CheckTransaction::None);
-    }
-    else
-    {
-        // < v2.2.0 or use mysql, external
-        auto strBlock = _entry->getField(SYS_VALUE);
-        block = std::make_shared<Block>(fromHex(strBlock.c_str()), CheckTransaction::None);
-    }
-
-    return block;
+    auto bytesBlock = _entry->getFieldConst(SYS_VALUE);
+    return std::make_shared<Block>(bytesBlock, CheckTransaction::None);
 }
 
 // get data from the system table
 std::shared_ptr<bytes> BlockChainImp::getDataBytes(
     bcos::storage::Entry::ConstPtr _entry, std::string const& _fieldName)
 {
-    std::shared_ptr<bytes> dataRlp = nullptr;
-    // >= v2.2.0
-    if (!m_enableHexBlock)
-    {
-        auto dataBytes = _entry->getFieldConst(_fieldName);
-        dataRlp = std::make_shared<bytes>(dataBytes.begin(), dataBytes.end());
-    }
-    else
-    {
-        // < v2.2.0 or use mysql, external
-        auto dataStr = _entry->getField(_fieldName);
-        dataRlp = std::make_shared<bytes>(fromHex(dataStr.c_str()));
-    }
-
-    return dataRlp;
+    auto dataBytes = _entry->getFieldConst(_fieldName);
+    return std::make_shared<bytes>(dataBytes.begin(), dataBytes.end());
 }
 
 // write block data into the system table
@@ -1678,23 +1650,7 @@ void BlockChainImp::writeBlockToField(
 {
     std::shared_ptr<bytes> out = std::make_shared<bytes>();
     _block.encode(*out);
-    writeBytesToField(out, _entry, SYS_VALUE);
-}
-
-// write bytes to the SYS_VALUE field
-void BlockChainImp::writeBytesToField(std::shared_ptr<bcos::bytes> _data,
-    bcos::storage::Entry::Ptr _entry, std::string const& _fieldName)
-{
-    // >= v2.2.0
-    if (!m_enableHexBlock)
-    {
-        _entry->setField(_fieldName, _data->data(), _data->size());
-    }
-    // < v2.2.0
-    else
-    {
-        _entry->setField(_fieldName, toHexPrefixed(*_data));
-    }
+    _entry->setField(SYS_VALUE, out->data(), out->size());
 }
 
 std::shared_ptr<Child2ParentMap> BlockChainImp::getChild2ParentCache(SharedMutex& _mutex,

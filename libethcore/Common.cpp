@@ -23,7 +23,6 @@
 #include "BlockHeader.h"
 #include "Exceptions.h"
 #include <libdevcrypto/Hash.h>
-#include <libutilities/CommonIO.h>
 #include <boost/throw_exception.hpp>
 
 using namespace std;

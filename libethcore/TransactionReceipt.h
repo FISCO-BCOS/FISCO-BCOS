@@ -25,8 +25,6 @@
 #include "libethcore/TransactionException.h"
 #include <libethcore/Common.h>
 #include <libethcore/LogEntry.h>
-#include <libutilities/Address.h>
-#include <libutilities/CommonIO.h>
 #include <libutilities/RLP.h>
 #include <array>
 namespace bcos

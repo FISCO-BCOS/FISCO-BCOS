@@ -75,7 +75,7 @@ BOOST_AUTO_TEST_CASE(rlpRandom)
         try
         {
             LOG(INFO) << "Testing ... " << path.filename();
-            std::string s = bcos::asString(bcos::contents(path.string()));
+            std::string s = bcos::asString(*bcos::readContents(path.string()));
             std::string empty_str = "Content of " + path.string() + " is empty";
             BOOST_REQUIRE_MESSAGE(s.length() > 0, empty_str);
             Json::Value v;

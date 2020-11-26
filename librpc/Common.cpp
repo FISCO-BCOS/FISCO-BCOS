@@ -21,9 +21,6 @@
 
 #include "Common.h"
 #include <boost/algorithm/string.hpp>
-#include <boost/archive/iterators/base64_from_binary.hpp>
-#include <boost/archive/iterators/binary_from_base64.hpp>
-#include <boost/archive/iterators/transform_width.hpp>
 #include <boost/iostreams/copy.hpp>
 #include <boost/iostreams/filter/zlib.hpp>
 #include <boost/iostreams/filtering_streambuf.hpp>
@@ -54,21 +51,4 @@ std::string bcos::decompress(const std::string& _data)
     std::stringstream unpacked_text;
     boost::iostreams::copy(input_stream, unpacked_text);
     return unpacked_text.str();
-}
-
-// https://stackoverflow.com/questions/7053538/how-do-i-encode-a-string-to-base64-using-only-boost
-std::string bcos::base64Encode(const std::string& _data)
-{
-    using namespace boost::archive::iterators;
-    using It = base64_from_binary<transform_width<std::string::const_iterator, 6, 8>>;
-    auto tmp = std::string(It(std::begin(_data)), It(std::end(_data)));
-    return tmp.append((3 - _data.size() % 3) % 3, '=');
-}
-
-std::string bcos::base64Decode(const std::string& _data)
-{
-    using namespace boost::archive::iterators;
-    using It = transform_width<binary_from_base64<std::string::const_iterator>, 8, 6>;
-    return boost::algorithm::trim_right_copy_if(
-        std::string(It(std::begin(_data)), It(std::end(_data))), [](char c) { return c == '\0'; });
 }

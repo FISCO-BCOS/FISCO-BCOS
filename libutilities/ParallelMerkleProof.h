@@ -13,20 +13,22 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file Base64.h
- * @author: xingqiangbai
- * @date 2020-10-14
+ * @brief: calc trie hash with merkle tree
+ *
+ * @file: ParallelMerkleProof.h
+ * @author: darrenyin
+ * @date 2019-09-24
  */
 #pragma once
-#include "Common.h"
+
+#include "FixedHash.h"
+#include <vector>
 
 namespace bcos
 {
-std::string base64Encode(const byte* _begin, const size_t _dataSize);
+h256 getMerkleProofRoot(const std::vector<bcos::bytes>& bytesCaches);
 
-std::string base64Encode(std::string const& _data);
-std::string base64Encode(bytesConstRef _data);
+void getMerkleProof(const std::vector<bcos::bytes>& bytesCaches,
+    std::shared_ptr<std::map<std::string, std::vector<std::string>>> _parent2ChildList);
 
-std::shared_ptr<bytes> base64DecodeBytes(std::string const& _data);
-std::string base64Decode(std::string const& _data);
 }  // namespace bcos

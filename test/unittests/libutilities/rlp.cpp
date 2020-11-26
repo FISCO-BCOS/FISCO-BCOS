@@ -36,7 +36,7 @@ void RlpTest::runRlpTest(std::string _name, fs::path const& _path)
     {
         LOG(INFO) << "TEST " << _name << ":";
         std::string filePath = (testPath / fs::path(_name + ".json")).string();
-        std::string const s = bcos::asString(bcos::contents(filePath));
+        std::string const s = bcos::asString(*bcos::readContents(filePath));
         std::string empty_string =
             "Contents of " + (testPath / fs::path(_name + ".json")).string() + " is empty";
         BOOST_REQUIRE_MESSAGE(s.length() > 0, empty_string);

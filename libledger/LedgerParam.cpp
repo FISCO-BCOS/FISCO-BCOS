@@ -28,6 +28,7 @@
 #include <libeventfilter/EventLogFilterManager.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/bind.hpp>
+#include <boost/filesystem.hpp>
 #include <boost/function_output_iterator.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 
@@ -742,7 +743,7 @@ void LedgerParam::parseSDKAllowList(bcos::h512s& _nodeList, boost::property_tree
 {
     parsePublicKeyListOfSection(_nodeList, _pt, "sdk_allowlist", "public_key.");
     bool enableSDKAllowListControl = (_nodeList.size() > 0);
-    LedgerParam_LOG(INFO) << LOG_DESC("parseSDKAllowList") << LOG_KV("sdkAllowList", _nodeList)
+    LedgerParam_LOG(INFO) << LOG_DESC("parseSDKAllowList")
                           << LOG_KV("enableSDKAllowListControl", enableSDKAllowListControl);
 }
 

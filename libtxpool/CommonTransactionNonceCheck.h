@@ -26,7 +26,6 @@
 #include <libethcore/Protocol.h>
 #include <libethcore/Transaction.h>
 #include <libutilities/Common.h>
-#include <libutilities/CommonIO.h>
 #include <unordered_set>
 namespace bcos
 {

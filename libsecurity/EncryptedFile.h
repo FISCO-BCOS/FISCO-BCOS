@@ -30,7 +30,7 @@ namespace bcos
 class EncryptedFile
 {
 public:
-    static bytes decryptContents(const std::string& _filePath);
+    static std::shared_ptr<bytes> decryptContents(const std::string& _filePath);
 };
 
 

@@ -33,6 +33,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/archive/text_iarchive.hpp>
 #include <boost/archive/text_oarchive.hpp>
+#include <boost/filesystem.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/serialization/serialization.hpp>
 #include <boost/serialization/unordered_map.hpp>

@@ -1597,19 +1597,21 @@ void PBFTEngine::collectGarbage()
     {
         return;
     }
-    auto startT = utcTime();
     std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
     if (now - m_timeManager.m_lastGarbageCollection >
         std::chrono::seconds(m_timeManager.CollectInterval))
     {
+        auto startT = utcTime();
         PBFTENGINE_LOG(DEBUG) << LOG_DESC("collectGarbage")
                               << LOG_KV(
                                      "cachedForwardMsgSizeBeforeClear", m_cachedForwardMsg->size());
         m_reqCache->collectGarbage(m_highestBlock);
         // clear m_cachedForwardMsg directly
         m_cachedForwardMsg->clear();
+        // clear all the future prepare directly
+        m_timeManager.m_lastGarbageCollection = now;
+        PBFTENGINE_LOG(INFO) << LOG_DESC("collectGarbage") << LOG_KV("cost", utcTime() - startT);
     }
-    PBFTENGINE_LOG(INFO) << LOG_DESC("collectGarbage") << LOG_KV("cost", utcTime() - startT);
 }
 
 void PBFTEngine::checkTimeout()

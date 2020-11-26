@@ -122,15 +122,3 @@ std::string bcos::toString(string32 const& _s)
         ret.push_back(_s[i]);
     return ret;
 }
-
-bytes bcos::asNibbles(bytesConstRef const& _s)
-{
-    std::vector<uint8_t> ret;
-    ret.reserve(_s.size() * 2);
-    for (auto i : _s)
-    {
-        ret.push_back(i / 16);
-        ret.push_back(i % 16);
-    }
-    return ret;
-}

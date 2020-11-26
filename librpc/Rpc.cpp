@@ -35,6 +35,7 @@
 #include <libtxpool/TxPoolInterface.h>
 #include <libutilities/DataConvertUtility.h>
 #include <boost/algorithm/hex.hpp>
+#include <libutilities/Base64.h>
 #include <csignal>
 #include <sstream>
 

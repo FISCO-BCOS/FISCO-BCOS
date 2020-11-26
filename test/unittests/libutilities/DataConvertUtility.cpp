@@ -88,13 +88,9 @@ BOOST_AUTO_TEST_CASE(testStringTrans)
     }
 }
 
-/// test asNibbles && toBigEndian && fromBigEndian
+/// test toBigEndian && fromBigEndian
 BOOST_AUTO_TEST_CASE(testBigEndian)
 {
-    // check asNibbles
-    // asNibbles:Converts a string into the big-endian base-16 stream of integers (NOT ASCII).
-    std::string str = "A";
-    BOOST_CHECK((asNibbles(bytesConstRef(str))[0]) == 4 && (asNibbles(bytesConstRef(str))[1] == 1));
     // check u256
     u256 number("9832989324908234742342343243243234324324243432432234324");
     u160 number_u160("983298932");

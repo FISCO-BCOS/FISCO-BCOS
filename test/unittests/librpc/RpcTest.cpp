@@ -461,8 +461,8 @@ BOOST_AUTO_TEST_CASE(SM_testGetTotalTransactionCount)
 BOOST_AUTO_TEST_CASE(SM_testCall)
 {
     Json::Value request;
-    request["from"] = toHexPrefixed(toAddress(KeyPair::create().pub()));
-    request["to"] = toHexPrefixed(toAddress(KeyPair::create().pub()));
+    request["from"] = toHexStringWithPrefix(toAddress(KeyPair::create().pub()));
+    request["to"] = toHexStringWithPrefix(toAddress(KeyPair::create().pub()));
     request["value"] = "0x1";
     request["gas"] = "0x12";
     request["gasPrice"] = "0x1";
@@ -953,8 +953,8 @@ BOOST_AUTO_TEST_CASE(testGetTotalTransactionCount)
 BOOST_AUTO_TEST_CASE(testCall)
 {
     Json::Value request;
-    request["from"] = toHexPrefixed(toAddress(KeyPair::create().pub()));
-    request["to"] = toHexPrefixed(toAddress(KeyPair::create().pub()));
+    request["from"] = toHexStringWithPrefix(toAddress(KeyPair::create().pub()));
+    request["to"] = toHexStringWithPrefix(toAddress(KeyPair::create().pub()));
     request["value"] = "0x1";
     request["gas"] = "0x12";
     request["gasPrice"] = "0x1";

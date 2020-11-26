@@ -19,7 +19,6 @@
  */
 
 #include <libethcore/Precompiled.h>
-#include <libutilities/CommonIO.h>
 #include <test/tools/libbcos/Options.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
