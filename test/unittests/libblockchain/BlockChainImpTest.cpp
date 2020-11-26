@@ -29,6 +29,7 @@
 #include <libethcore/Transaction.h>
 #include <libstorage/Common.h>
 #include <libstorage/MemoryTable.h>
+#include <libstorage/MemoryTableFactory.h>
 #include <libstoragestate/StorageState.h>
 #include <libstoragestate/StorageStateFactory.h>
 #include <libutilities/DataConvertUtility.h>
@@ -66,7 +67,7 @@ static std::string const c_commonHash =
     "0b9702045ea4b58d1bdae2f802f57ac22c6b63ce571777da8586337c69834ad3";
 static std::string const c_commonHashPrefix = std::string("0x").append(c_commonHash);
 
-class MockTable : public bcos::storage::MemoryTable<Serial>
+class MockTable : public bcos::storage::MemoryTable
 {
 public:
     typedef std::shared_ptr<MockTable> Ptr;

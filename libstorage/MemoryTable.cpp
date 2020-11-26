@@ -14,11 +14,11 @@
  * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
  * (c) 2016-2018 fisco-dev contributors.
  */
-/** @file MemoryTable2.cpp
+/** @file MemoryTable.cpp
  *  @author ancelmo
  *  @date 20180921
  */
-#include "MemoryTable2.h"
+#include "MemoryTable.h"
 #include "Common.h"
 #include "StorageException.h"
 #include "Table.h"
@@ -44,7 +44,7 @@ using namespace bcos::precompiled;
 
 void prepareExit(const std::string& _key)
 {
-    STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable2 prepare to exit") << LOG_KV("key", _key);
+    STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable prepare to exit") << LOG_KV("key", _key);
     raise(SIGTERM);
     while (!g_BCOSConfig.shouldExit.load())
     {  // wait to exit
@@ -54,25 +54,16 @@ void prepareExit(const std::string& _key)
         StorageException(-1, string("backend DB is dead. Prepare to exit.") + _key));
 }
 
-Entries::ConstPtr MemoryTable2::select(const std::string& key, Condition::Ptr condition)
+Entries::ConstPtr MemoryTable::select(const std::string& key, Condition::Ptr condition)
 {
     return selectNoLock(key, condition);
 }
 
-void MemoryTable2::proccessLimit(
+void MemoryTable::proccessLimit(
     const Condition::Ptr& condition, const Entries::Ptr& entries, const Entries::Ptr& resultEntries)
 {
     int begin = condition->getOffset();
-    int end = 0;
-
-    if (g_BCOSConfig.version() < V2_1_0)
-    {
-        end = begin + condition->getCount();
-    }
-    else
-    {
-        end = (int)std::min((size_t)INT_MAX, (size_t)begin + (size_t)condition->getCount());
-    }
+    int end = (int)std::min((size_t)INT_MAX, (size_t)begin + (size_t)condition->getCount());
 
     int size = entries->size();
     if (begin >= size)
@@ -89,7 +80,7 @@ void MemoryTable2::proccessLimit(
     }
 }
 
-Entries::Ptr MemoryTable2::selectNoLock(const std::string& key, Condition::Ptr condition)
+Entries::Ptr MemoryTable::selectNoLock(const std::string& key, Condition::Ptr condition)
 {
     try
     {
@@ -111,7 +102,7 @@ Entries::Ptr MemoryTable2::selectNoLock(const std::string& key, Condition::Ptr c
                 if (entryIt != m_dirty.end())
                 {
                     processed.insert(entryIt->second->getID());
-                    if (g_BCOSConfig.version() >= V2_5_0 && !condition->process(entryIt->second))
+                    if (!condition->process(entryIt->second))
                     {
                         continue;
                     }
@@ -122,16 +113,13 @@ Entries::Ptr MemoryTable2::selectNoLock(const std::string& key, Condition::Ptr c
                     entries->addEntry(dbEntries->get(i));
                 }
             }
-            if (g_BCOSConfig.version() >= V2_5_0)
+            std::set_difference(m_dirty_updated[key].begin(), m_dirty_updated[key].end(),
+                processed.begin(), processed.end(), std::inserter(diff, diff.begin()));
+            for (auto id : diff)
             {
-                std::set_difference(m_dirty_updated[key].begin(), m_dirty_updated[key].end(),
-                    processed.begin(), processed.end(), std::inserter(diff, diff.begin()));
-                for (auto id : diff)
+                if (condition->process(m_dirty[id]))
                 {
-                    if (condition->process(m_dirty[id]))
-                    {
-                        entries->addEntry(m_dirty[id]);
-                    }
+                    entries->addEntry(m_dirty[id]);
                 }
             }
         }
@@ -156,7 +144,7 @@ Entries::Ptr MemoryTable2::selectNoLock(const std::string& key, Condition::Ptr c
     }
     catch (std::exception& e)
     {
-        STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable2") << LOG_DESC("Table select failed")
+        STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("Table select failed")
                            << LOG_KV("what", e.what());
         m_remoteDB->stop();
         prepareExit(key);
@@ -165,15 +153,14 @@ Entries::Ptr MemoryTable2::selectNoLock(const std::string& key, Condition::Ptr c
     return std::make_shared<Entries>();
 }
 
-int MemoryTable2::update(
+int MemoryTable::update(
     const std::string& key, Entry::Ptr entry, Condition::Ptr condition, AccessOptions::Ptr options)
 {
     try
     {
         if (options->check && !checkAuthority(options->origin))
         {
-            STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable2")
-                                 << LOG_DESC("update permission denied")
+            STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable") << LOG_DESC("update permission denied")
                                  << LOG_KV("origin", options->origin.hex()) << LOG_KV("key", key);
 
             return storage::CODE_NO_AUTHORIZED;
@@ -220,8 +207,7 @@ int MemoryTable2::update(
     }
     catch (std::exception& e)
     {
-        STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable2")
-                           << LOG_DESC("Access MemoryTable2 failed for")
+        STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("Access MemoryTable failed for")
                            << LOG_KV("msg", boost::diagnostic_information(e));
         m_remoteDB->stop();
         prepareExit(key);
@@ -230,14 +216,13 @@ int MemoryTable2::update(
     return 0;
 }
 
-int MemoryTable2::insert(const std::string& key, Entry::Ptr entry, AccessOptions::Ptr options, bool)
+int MemoryTable::insert(const std::string& key, Entry::Ptr entry, AccessOptions::Ptr options, bool)
 {
     try
     {
         if (options->check && !checkAuthority(options->origin))
         {
-            STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable2")
-                                 << LOG_DESC("insert permission denied")
+            STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable") << LOG_DESC("insert permission denied")
                                  << LOG_KV("origin", options->origin.hex()) << LOG_KV("key", key);
             return storage::CODE_NO_AUTHORIZED;
         }
@@ -271,23 +256,21 @@ int MemoryTable2::insert(const std::string& key, Entry::Ptr entry, AccessOptions
     catch (std::exception& e)
     {
         // impossible, so exit
-        STORAGE_LOG(FATAL) << LOG_BADGE("MemoryTable2")
-                           << LOG_DESC("Access MemoryTable2 failed for")
+        STORAGE_LOG(FATAL) << LOG_BADGE("MemoryTable") << LOG_DESC("Access MemoryTable failed for")
                            << LOG_KV("msg", boost::diagnostic_information(e));
     }
 
     return 0;
 }
 
-int MemoryTable2::remove(
+int MemoryTable::remove(
     const std::string& key, Condition::Ptr condition, AccessOptions::Ptr options)
 {
     try
     {
         if (options->check && !checkAuthority(options->origin))
         {
-            STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable2")
-                                 << LOG_DESC("remove permission denied")
+            STORAGE_LOG(WARNING) << LOG_BADGE("MemoryTable") << LOG_DESC("remove permission denied")
                                  << LOG_KV("origin", options->origin.hex()) << LOG_KV("key", key);
             return storage::CODE_NO_AUTHORIZED;
         }
@@ -319,8 +302,7 @@ int MemoryTable2::remove(
     catch (std::exception& e)
     {  // this catch is redundant, because selectNoLock already catch.
         // TODO: make catch simple, remove catch in selectNoLock
-        STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable2")
-                           << LOG_DESC("Access MemoryTable2 failed for")
+        STORAGE_LOG(ERROR) << LOG_BADGE("MemoryTable") << LOG_DESC("Access MemoryTable failed for")
                            << LOG_KV("msg", boost::diagnostic_information(e));
         m_remoteDB->stop();
         prepareExit(key);
@@ -329,118 +311,18 @@ int MemoryTable2::remove(
     return 0;
 }
 
-bcos::h256 MemoryTable2::hash()
+bcos::h256 MemoryTable::hash()
 {
     if (m_hashDirty)
     {
         m_tableData.reset(new bcos::storage::TableData());
-        if (g_BCOSConfig.version() < V2_2_0)
-        {
-            dumpWithoutOptimize();
-        }
-        else
-        {
-            dump();
-        }
+        dump();
     }
 
     return m_hash;
 }
 
-bcos::storage::TableData::Ptr MemoryTable2::dumpWithoutOptimize()
-{
-    TIME_RECORD("MemoryTable2 Dump");
-    if (m_hashDirty)
-    {
-        m_tableData = std::make_shared<bcos::storage::TableData>();
-        m_tableData->info = m_tableInfo;
-        m_tableData->dirtyEntries = std::make_shared<Entries>();
-
-        auto tempEntries = tbb::concurrent_vector<Entry::Ptr>();
-
-        tbb::parallel_for(m_dirty.range(),
-            [&](tbb::concurrent_unordered_map<uint64_t, Entry::Ptr>::range_type& range) {
-                for (auto it = range.begin(); it != range.end(); ++it)
-                {
-                    if (!it->second->deleted())
-                    {
-                        m_tableData->dirtyEntries->addEntry(it->second);
-                        tempEntries.push_back(it->second);
-                    }
-                }
-            });
-
-        m_tableData->newEntries = std::make_shared<Entries>();
-        tbb::parallel_for(m_newEntries.range(),
-            [&](tbb::concurrent_unordered_map<std::string, Entries::Ptr>::range_type& range) {
-                for (auto it = range.begin(); it != range.end(); ++it)
-                {
-                    tbb::parallel_for(tbb::blocked_range<size_t>(0, it->second->size(), 1000),
-                        [&](tbb::blocked_range<size_t>& rangeIndex) {
-                            for (auto i = rangeIndex.begin(); i < rangeIndex.end(); ++i)
-                            {
-                                if (!it->second->get(i)->deleted())
-                                {
-                                    m_tableData->newEntries->addEntry(it->second->get(i));
-                                    tempEntries.push_back(it->second->get(i));
-                                }
-                            }
-                        });
-                }
-            });
-
-        TIME_RECORD("Sort data");
-        tbb::parallel_sort(tempEntries.begin(), tempEntries.end(), EntryLessNoLock(m_tableInfo));
-        tbb::parallel_sort(m_tableData->dirtyEntries->begin(), m_tableData->dirtyEntries->end(),
-            EntryLessNoLock(m_tableInfo));
-        tbb::parallel_sort(m_tableData->newEntries->begin(), m_tableData->newEntries->end(),
-            EntryLessNoLock(m_tableInfo));
-        TIME_RECORD("Submmit data");
-        bytes allData;
-        for (size_t i = 0; i < tempEntries.size(); ++i)
-        {
-            auto entry = tempEntries[i];
-            if (g_BCOSConfig.version() < RC3_VERSION)
-            {  // RC2 STATUS is in entry fields
-                entry->setField(STATUS, to_string(entry->getStatus()));
-            }
-            for (auto fieldIt : *(entry))
-            {
-                if (isHashField(fieldIt.first))
-                {
-                    allData.insert(allData.end(), fieldIt.first.begin(), fieldIt.first.end());
-                    allData.insert(allData.end(), fieldIt.second.begin(), fieldIt.second.end());
-                }
-            }
-            if (g_BCOSConfig.version() < RC3_VERSION)
-            {
-                continue;
-            }
-            char status = (char)entry->getStatus();
-            allData.insert(allData.end(), &status, &status + sizeof(status));
-        }
-        if (allData.empty())
-        {
-            m_hash = h256();
-        }
-
-        bytesConstRef bR(allData.data(), allData.size());
-
-        if (g_BCOSConfig.SMCrypto())
-        {
-            m_hash = bcos::sm3(bR);
-        }
-        else
-        {
-            m_hash = bcos::sha256(bR);
-        }
-        m_hashDirty = false;
-    }
-
-    return m_tableData;
-}
-
-void MemoryTable2::parallelGenData(
+void MemoryTable::parallelGenData(
     bytes& _generatedData, std::shared_ptr<std::vector<size_t>> _offsetVec, Entries::Ptr _entries)
 {
     if (_entries->size() == 0)
@@ -473,7 +355,7 @@ void MemoryTable2::parallelGenData(
         });
 }
 
-std::shared_ptr<std::vector<size_t>> MemoryTable2::genDataOffset(
+std::shared_ptr<std::vector<size_t>> MemoryTable::genDataOffset(
     Entries::Ptr _entries, size_t _startOffset)
 {
     std::shared_ptr<std::vector<size_t>> dataOffset = std::make_shared<std::vector<size_t>>();
@@ -488,10 +370,10 @@ std::shared_ptr<std::vector<size_t>> MemoryTable2::genDataOffset(
     return dataOffset;
 }
 
-bcos::storage::TableData::Ptr MemoryTable2::dump()
+bcos::storage::TableData::Ptr MemoryTable::dump()
 {
     // >= v2.2.0
-    TIME_RECORD("MemoryTable2 Dump-" + m_tableInfo->name);
+    TIME_RECORD("MemoryTable Dump-" + m_tableInfo->name);
     if (m_hashDirty)
     {
         tbb::atomic<size_t> allSize = 0;
@@ -596,27 +478,9 @@ bcos::storage::TableData::Ptr MemoryTable2::dump()
             bytesConstRef bR(allData->data(), allData->size());
             auto transDataT = utcTime() - startT;
             startT = utcTime();
-            if (g_BCOSConfig.version() <= V2_4_0)
-            {
-                if (g_BCOSConfig.SMCrypto())
-                {
-                    m_hash = bcos::sm3(bR);
-                }
-                else
-                {
-                    // in previous version(<= 2.4.0), we use sha256(...) to calculate hash of the
-                    // data, for now, to keep consistent with transction's implementation, we decide
-                    // to use keccak256(...) to calculate hash of the data. This `else` branch is
-                    // just for compatibility.
-                    m_hash = bcos::sha256(bR);
-                }
-            }
-            else
-            {
-                m_hash = crypto::Hash(bR);
-            }
+            m_hash = crypto::Hash(bR);
             auto getHashT = utcTime() - startT;
-            STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable2 dump") << LOG_KV("writeDataT", writeDataT)
+            STORAGE_LOG(DEBUG) << LOG_BADGE("MemoryTable dump") << LOG_KV("writeDataT", writeDataT)
                                << LOG_KV("transDataT", transDataT) << LOG_KV("getHashT", getHashT)
                                << LOG_KV("hash", m_hash.abridged());
         }
@@ -633,7 +497,7 @@ bcos::storage::TableData::Ptr MemoryTable2::dump()
     return m_tableData;
 }
 
-void MemoryTable2::rollback(const Change& _change)
+void MemoryTable::rollback(const Change& _change)
 {
 #if 0
     LOG(TRACE) << "Before rollback newEntries size: " << m_newEntries.size();

@@ -24,7 +24,6 @@
 #include <libdevcrypto/Common.h>
 #include <libethcore/ABI.h>
 #include <libprecompiled/ParallelConfigPrecompiled.h>
-#include <libstorage/MemoryTable.h>
 #include <libstorage/MemoryTableFactoryFactory.h>
 #include <libstoragestate/StorageState.h>
 #include <libstoragestate/StorageStateFactory.h>

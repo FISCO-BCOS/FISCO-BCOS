@@ -20,13 +20,12 @@
  */
 
 #include "libinitializer/Initializer.h"
-#include "libstorage/MemoryTableFactory.h"
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
 #include <libstorage/BasicRocksDB.h>
 #include <libstorage/CachedStorage.h>
-#include <libstorage/MemoryTable2.h>
-#include <libstorage/MemoryTableFactoryFactory2.h>
+#include <libstorage/MemoryTable.h>
+#include <libstorage/MemoryTableFactoryFactory.h>
 #include <libstorage/RocksDBStorage.h>
 #include <libutilities/Common.h>
 #include <tbb/parallel_for.h>
@@ -71,7 +70,7 @@ void testMemoryTable2(size_t round, size_t count, bool verify)
     cachedStorage->setMaxCapacity(32 * 1024 * 1024);
     cachedStorage->setMaxForwardBlock(5);
 
-    auto factoryFactory = std::make_shared<MemoryTableFactoryFactory2>();
+    auto factoryFactory = std::make_shared<MemoryTableFactoryFactory>();
     factoryFactory->setStorage(cachedStorage);
 
     auto createFactory = factoryFactory->newTableFactory(bcos::h256(0), 0);

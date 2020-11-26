@@ -52,11 +52,6 @@ namespace blockverifier
 {
 class ExecutiveContext;
 }  // namespace blockverifier
-namespace storage
-{
-class MemoryTableFactory;
-}
-
 namespace blockchain
 {
 class BlockChainImp;

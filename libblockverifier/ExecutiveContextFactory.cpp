@@ -33,7 +33,6 @@
 #include <libprecompiled/TableFactoryPrecompiled.h>
 #include <libprecompiled/WorkingSealerManagerPrecompiled.h>
 #include <libprecompiled/extension/DagTransferPrecompiled.h>
-#include <libstorage/MemoryTableFactory.h>
 #include <libutilities/Common.h>
 
 using namespace bcos;

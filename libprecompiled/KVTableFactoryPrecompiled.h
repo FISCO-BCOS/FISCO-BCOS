@@ -24,11 +24,6 @@
 
 namespace bcos
 {
-namespace storage
-{
-class MemoryTableFactory;
-}
-
 namespace precompiled
 {
 #if 0

@@ -36,7 +36,6 @@
 #include <libprecompiled/Precompiled.h>
 #include <libstorage/BasicRocksDB.h>
 #include <libstorage/MemoryTableFactoryFactory.h>
-#include <libstorage/MemoryTableFactoryFactory2.h>
 #include <libstorage/RocksDBStorage.h>
 #include <libstorage/SQLStorage.h>
 #include <libstorage/ZdbStorage.h>
@@ -86,7 +85,7 @@ void DBInitializer::initStorageDB()
 int64_t bcos::ledger::getBlockNumberFromStorage(Storage::Ptr _storage)
 {
     int64_t startNum = -1;
-    auto tableFactoryFactory = std::make_shared<bcos::storage::MemoryTableFactoryFactory2>();
+    auto tableFactoryFactory = std::make_shared<bcos::storage::MemoryTableFactoryFactory>();
     tableFactoryFactory->setStorage(_storage);
     auto memoryTableFactory = tableFactoryFactory->newTableFactory(bcos::h256(), startNum);
     Table::Ptr tb = memoryTableFactory->openTable(SYS_CURRENT_STATE, false);
@@ -182,7 +181,7 @@ void DBInitializer::initTableFactory2(
                                        _param->mutableStorageParam().maxForwardBlock);
     }
 
-    auto tableFactoryFactory = std::make_shared<bcos::storage::MemoryTableFactoryFactory2>();
+    auto tableFactoryFactory = std::make_shared<bcos::storage::MemoryTableFactoryFactory>();
     if (_param->mutableStorageParam().binaryLog)
     {
         auto binaryLogStorage = make_shared<BinaryLogStorage>();

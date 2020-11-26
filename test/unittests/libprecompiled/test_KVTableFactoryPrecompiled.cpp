@@ -18,13 +18,12 @@
 #include "../libstorage/MemoryStorage.h"
 #include "../libstorage/MemoryStorage2.h"
 #include "libprecompiled/TableFactoryPrecompiled.h"
-#include "libstorage/MemoryTableFactory2.h"
+#include "libstorage/MemoryTableFactory.h"
 #include <json/json.h>
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/ABI.h>
 #include <libprecompiled/KVTableFactoryPrecompiled.h>
-#include <libstorage/MemoryTableFactory.h>
 #include <libstorage/Storage.h>
 #include <libstorage/Table.h>
 #include <boost/test/unit_test.hpp>
@@ -54,7 +53,7 @@ struct TableFactoryPrecompiledFixture
     {
         context = std::make_shared<MockPrecompiledEngine>();
         memStorage = std::make_shared<MemoryStorage2>();
-        MemoryTableFactory2::Ptr tableFactory = std::make_shared<MemoryTableFactory2>();
+        MemoryTableFactory::Ptr tableFactory = std::make_shared<MemoryTableFactory>();
         tableFactory->setStateStorage(memStorage);
         context->setMemoryTableFactory(tableFactory);
         auto tfPrecompiled = std::make_shared<bcos::precompiled::TableFactoryPrecompiled>();

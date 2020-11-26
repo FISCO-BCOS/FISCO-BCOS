@@ -24,8 +24,8 @@
 #include "libprecompiled/KVTableFactoryPrecompiled.h"
 #include "libprecompiled/TableFactoryPrecompiled.h"
 #include "libstorage/BasicRocksDB.h"
-#include "libstorage/MemoryTableFactory2.h"
-#include "libstorage/MemoryTableFactoryFactory2.h"
+#include "libstorage/MemoryTableFactory.h"
+#include "libstorage/MemoryTableFactoryFactory.h"
 #include "libstorage/RocksDBStorage.h"
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
@@ -117,7 +117,7 @@ int main(int argc, const char* argv[])
         cachedStorage->init();
         storage = cachedStorage;
     }
-    auto tableFactoryFactory = std::make_shared<bcos::storage::MemoryTableFactoryFactory2>();
+    auto tableFactoryFactory = std::make_shared<bcos::storage::MemoryTableFactoryFactory>();
     tableFactoryFactory->setStorage(storage);
     auto tableFactory = tableFactoryFactory->newTableFactory(bcos::h256(), blockNumber);
     // create context

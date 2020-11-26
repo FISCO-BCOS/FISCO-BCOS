@@ -17,12 +17,12 @@
 
 #include "../libstorage/MemoryStorage.h"
 #include "libstoragestate/StorageStateFactory.h"
+#include <json/json.h>
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/ABI.h>
 #include <libprecompiled/CRUDPrecompiled.h>
 #include <libprecompiled/TableFactoryPrecompiled.h>
-#include <libstorage/MemoryTable.h>
 #include <libstorage/MemoryTableFactoryFactory.h>
 #include <boost/test/unit_test.hpp>
 

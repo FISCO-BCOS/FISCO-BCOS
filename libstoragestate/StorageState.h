@@ -24,7 +24,7 @@
 
 #pragma once
 #include "libexecutive/StateFace.h"
-#include <libstorage/MemoryTableFactory.h>
+#include <libstorage/Table.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <string>
 

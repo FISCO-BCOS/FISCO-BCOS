@@ -22,8 +22,8 @@
 #include <libprecompiled/EntriesPrecompiled.h>
 #include <libprecompiled/EntryPrecompiled.h>
 #include <libprecompiled/TablePrecompiled.h>
-#include <libstorage/MemoryTable2.h>
-#include <libstorage/MemoryTableFactory2.h>
+#include <libstorage/MemoryTable.h>
+#include <libstorage/MemoryTableFactory.h>
 #include <libstorage/Table.h>
 #include <boost/test/unit_test.hpp>
 
@@ -41,7 +41,7 @@ public:
     virtual ~MockPrecompiledEngine() {}
 };
 
-class MockMemoryDB : public bcos::storage::MemoryTable2
+class MockMemoryDB : public bcos::storage::MemoryTable
 {
 public:
     virtual ~MockMemoryDB() {}
@@ -52,7 +52,7 @@ struct TablePrecompiledFixture2
     TablePrecompiledFixture2()
     {
         context = std::make_shared<MockPrecompiledEngine>();
-        context->setMemoryTableFactory(std::make_shared<storage::MemoryTableFactory2>());
+        context->setMemoryTableFactory(std::make_shared<storage::MemoryTableFactory>());
         tablePrecompiled = std::make_shared<bcos::precompiled::TablePrecompiled>();
         m_table = std::make_shared<MockMemoryDB>();
         TableInfo::Ptr info = std::make_shared<TableInfo>();
@@ -223,20 +223,9 @@ BOOST_AUTO_TEST_CASE(insert_remove_select)
     condition->EQ("name", "WangWu");
     auto ret = m_table->remove(std::string("WangWu"), condition);
     BOOST_TEST(ret == 1);
-
-    auto m_version = g_BCOSConfig.version();
-    auto m_supportedVersion = g_BCOSConfig.supportedVersion();
-    g_BCOSConfig.setSupportedVersion("2.4.0", V2_4_0);
-    // select
-    condition = std::make_shared<storage::Condition>();
-    entries = m_table->select(std::string("WangWu"), condition);
-    BOOST_TEST(entries->size() == 1u);
-
-    g_BCOSConfig.setSupportedVersion("2.5.0", V2_5_0);
     condition = std::make_shared<storage::Condition>();
     entries = m_table->select(std::string("WangWu"), condition);
     BOOST_TEST(entries->size() == 0);
-    g_BCOSConfig.setSupportedVersion(m_supportedVersion, m_version);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

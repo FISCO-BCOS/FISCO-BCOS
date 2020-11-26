@@ -24,7 +24,6 @@
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcrypto/CryptoInterface.h>
 #include <libprecompiled/TableFactoryPrecompiled.h>
-#include <libstorage/MemoryTableFactory.h>
 
 using namespace bcos;
 using namespace precompiled;

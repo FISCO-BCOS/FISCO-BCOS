@@ -33,12 +33,14 @@ namespace storage
 class MemoryTableFactoryFactory : public TableFactoryFactory
 {
 public:
-    TableFactory::Ptr newTableFactory(bcos::h256 const& hash, int64_t number) override
+    TableFactory::Ptr newTableFactory(const bcos::h256& hash, int64_t number) override
     {
         MemoryTableFactory::Ptr tableFactory = std::make_shared<MemoryTableFactory>();
         tableFactory->setStateStorage(m_stroage);
         tableFactory->setBlockHash(hash);
         tableFactory->setBlockNum(number);
+        // TODO: check if need handle exception
+        tableFactory->init();
 
         return tableFactory;
     }

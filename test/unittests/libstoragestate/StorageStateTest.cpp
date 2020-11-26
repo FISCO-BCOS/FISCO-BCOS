@@ -24,7 +24,7 @@
 #include "libstoragestate/StorageState.h"
 #include "../libstorage/MemoryStorage.h"
 #include "libdevcrypto/CryptoInterface.h"
-#include "libstorage/MemoryTableFactory2.h"
+#include "libstorage/MemoryTableFactory.h"
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -36,7 +36,7 @@ struct StorageStateFixture
     StorageStateFixture() : m_state(bcos::u256(0))
     {
         auto storage = std::make_shared<bcos::storage::MemoryStorage>();
-        auto tableFactory = std::make_shared<bcos::storage::MemoryTableFactory2>();
+        auto tableFactory = std::make_shared<bcos::storage::MemoryTableFactory>();
         tableFactory->setStateStorage(storage);
         m_state.setMemoryTableFactory(tableFactory);
     }

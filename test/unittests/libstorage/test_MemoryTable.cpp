@@ -17,7 +17,7 @@
 
 #include "MemoryStorage2.h"
 #include <libstorage/Common.h>
-#include <libstorage/MemoryTable2.h>
+#include <libstorage/MemoryTable.h>
 #include <libstorage/Storage.h>
 #include <libstorage/Table.h>
 #include <libutilities/FixedHash.h>
@@ -38,7 +38,7 @@ struct MemoryTable2Fixture
     MemoryTable2Fixture()
     {
         auto storage = std::make_shared<MemoryStorage2>();
-        m_table = std::make_shared<MemoryTable2>();
+        m_table = std::make_shared<MemoryTable>();
         TableInfo::Ptr info = std::make_shared<TableInfo>();
         info->fields.emplace_back(ID_FIELD);
         info->fields.emplace_back("name");
@@ -51,10 +51,10 @@ struct MemoryTable2Fixture
             [&](Table::Ptr, Change::Kind, string const&, vector<Change::Record>&) {});
     }
 
-    bcos::storage::MemoryTable2::Ptr m_table;
+    bcos::storage::MemoryTable::Ptr m_table;
 };
 
-BOOST_FIXTURE_TEST_SUITE(MemoryTable2, MemoryTable2Fixture)
+BOOST_FIXTURE_TEST_SUITE(MemoryTable, MemoryTable2Fixture)
 
 BOOST_AUTO_TEST_CASE(update_select)
 {
@@ -83,21 +83,6 @@ BOOST_AUTO_TEST_CASE(update_select)
     auto ret = m_table->update(std::string("WangWu"), entry, condition);
     BOOST_TEST(ret == 1);
 
-    auto m_version = g_BCOSConfig.version();
-    auto m_supportedVersion = g_BCOSConfig.supportedVersion();
-    g_BCOSConfig.setSupportedVersion("2.4.0", V2_4_0);
-    // select 0.6 should success
-    condition = std::make_shared<storage::Condition>();
-    condition->EQ("value", "0.6");
-    entries = m_table->select(std::string("WangWu"), condition);
-    BOOST_TEST(entries->size() == 0);
-    // select 0.5 should failed
-    condition = std::make_shared<storage::Condition>();
-    condition->EQ("value", "0.5");
-    entries = m_table->select(std::string("WangWu"), condition);
-    BOOST_TEST(entries->size() == 1u);
-
-    g_BCOSConfig.setSupportedVersion("2.5.0", V2_5_0);
     condition = std::make_shared<storage::Condition>();
     condition->EQ("value", "0.6");
     entries = m_table->select(std::string("WangWu"), condition);
@@ -106,7 +91,6 @@ BOOST_AUTO_TEST_CASE(update_select)
     condition->EQ("value", "0.5");
     entries = m_table->select(std::string("WangWu"), condition);
     BOOST_TEST(entries->size() == 0);
-    g_BCOSConfig.setSupportedVersion(m_supportedVersion, m_version);
 }
 
 

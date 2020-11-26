@@ -17,14 +17,14 @@
 
 #include "../libstorage/MemoryStorage2.h"
 #include "libprecompiled/TableFactoryPrecompiled.h"
-#include "libstorage/MemoryTableFactory2.h"
+#include "libstorage/MemoryTableFactory.h"
 #include <libdevcrypto/Common.h>
 #include <libethcore/ABI.h>
 #include <libprecompiled/ConditionPrecompiled.h>
 #include <libprecompiled/EntriesPrecompiled.h>
 #include <libprecompiled/EntryPrecompiled.h>
 #include <libprecompiled/KVTablePrecompiled.h>
-#include <libstorage/MemoryTable2.h>
+#include <libstorage/MemoryTable.h>
 #include <libstorage/Table.h>
 #include <boost/test/unit_test.hpp>
 
@@ -42,7 +42,7 @@ public:
     virtual ~MockPrecompiledEngine() {}
 };
 
-class MockMemoryDB : public bcos::storage::MemoryTable2
+class MockMemoryDB : public bcos::storage::MemoryTable
 {
 public:
     virtual ~MockMemoryDB() {}
@@ -53,7 +53,7 @@ struct TablePrecompiledFixture2
     TablePrecompiledFixture2()
     {
         auto memStorage = std::make_shared<MemoryStorage2>();
-        MemoryTableFactory2::Ptr tableFactory = std::make_shared<MemoryTableFactory2>();
+        MemoryTableFactory::Ptr tableFactory = std::make_shared<MemoryTableFactory>();
         tableFactory->setStateStorage(memStorage);
         context = std::make_shared<MockPrecompiledEngine>();
         context->setMemoryTableFactory(tableFactory);

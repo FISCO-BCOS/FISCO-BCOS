@@ -41,7 +41,7 @@ public:
     virtual ~MockPrecompiledEngine() {}
 };
 
-class MockMemoryDB : public bcos::storage::MemoryTable<Serial>
+class MockMemoryDB : public bcos::storage::MemoryTable
 {
 public:
     virtual ~MockMemoryDB() {}

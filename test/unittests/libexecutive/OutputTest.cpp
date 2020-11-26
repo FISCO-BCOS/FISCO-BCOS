@@ -27,7 +27,6 @@
 #include <libprecompiled/ChainGovernancePrecompiled.h>
 #include <libprecompiled/ContractLifeCyclePrecompiled.h>
 #include <libprecompiled/TableFactoryPrecompiled.h>
-#include <libstorage/MemoryTable.h>
 #include <libstorage/MemoryTableFactoryFactory.h>
 #include <libstoragestate/StorageState.h>
 #include <libutilities/CommonJS.h>
