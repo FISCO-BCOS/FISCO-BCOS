@@ -24,8 +24,7 @@
 #include <libdevcrypto/Common.h>
 #include <libethcore/ABI.h>
 #include <libprecompiled/extension/DagTransferPrecompiled.h>
-#include <libstorage/MemoryTable.h>
-#include <libstorage/MemoryTableFactoryFactory2.h>
+#include <libstorage/MemoryTableFactoryFactory.h>
 #include <libstoragestate/StorageStateFactory.h>
 #include <boost/test/unit_test.hpp>
 
@@ -49,7 +48,7 @@ struct DagTransferPrecompiledFixture
         auto storageStateFactory = std::make_shared<StorageStateFactory>(h256(0));
         factory.setStateStorage(storage);
         factory.setStateFactory(storageStateFactory);
-        auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory2>();
+        auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory>();
         factory.setTableFactoryFactory(tableFactoryFactory);
         factory.initExecutiveContext(blockInfo, h256(0), context);
         dtPrecompiled = std::make_shared<DagTransferPrecompiled>();

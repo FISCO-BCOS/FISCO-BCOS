@@ -21,7 +21,7 @@
 
 #pragma once
 
-#include "MemoryTableFactory2.h"
+#include "MemoryTableFactory.h"
 #include "Storage.h"
 #include "Table.h"
 #include <libutilities/FixedHash.h>
@@ -30,12 +30,12 @@ namespace bcos
 {
 namespace storage
 {
-class MemoryTableFactoryFactory2 : public TableFactoryFactory
+class MemoryTableFactoryFactory : public TableFactoryFactory
 {
 public:
     TableFactory::Ptr newTableFactory(const bcos::h256& hash, int64_t number) override
     {
-        MemoryTableFactory2::Ptr tableFactory = std::make_shared<MemoryTableFactory2>();
+        MemoryTableFactory::Ptr tableFactory = std::make_shared<MemoryTableFactory>();
         tableFactory->setStateStorage(m_stroage);
         tableFactory->setBlockHash(hash);
         tableFactory->setBlockNum(number);

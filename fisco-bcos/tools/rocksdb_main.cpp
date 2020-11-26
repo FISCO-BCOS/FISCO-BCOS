@@ -22,7 +22,7 @@
 #include "libinitializer/Initializer.h"
 #include "libledger/DBInitializer.h"
 #include "libstorage/BasicRocksDB.h"
-#include "libstorage/MemoryTableFactory2.h"
+#include "libstorage/MemoryTableFactory.h"
 #include "libstorage/RocksDBStorage.h"
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
@@ -128,7 +128,7 @@ int main(int argc, const char* argv[])
     }
 
     auto rocksdbStorage = createRocksDBStorage(storagePath, encryptKey, false, false);
-    MemoryTableFactory2::Ptr tableFactory = std::make_shared<MemoryTableFactory2>();
+    MemoryTableFactory::Ptr tableFactory = std::make_shared<MemoryTableFactory>();
     tableFactory->setStateStorage(rocksdbStorage);
     tableFactory->setBlockHash(h256(0));
     tableFactory->setBlockNum(0);

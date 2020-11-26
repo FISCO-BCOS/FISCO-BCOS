@@ -27,8 +27,7 @@
 #include <libdevcrypto/Common.h>
 #include <libethcore/ABI.h>
 #include <libprecompiled/CNSPrecompiled.h>
-#include <libstorage/MemoryTable.h>
-#include <libstorage/MemoryTableFactoryFactory2.h>
+#include <libstorage/MemoryTableFactoryFactory.h>
 #include <libstoragestate/StorageStateFactory.h>
 #include <boost/test/unit_test.hpp>
 
@@ -51,7 +50,7 @@ struct CNSPrecompiledFixture
         ExecutiveContextFactory factory;
         auto storage = std::make_shared<MemoryStorage>();
         auto storageStateFactory = std::make_shared<StorageStateFactory>(h256(0));
-        auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory2>();
+        auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory>();
         factory.setStateStorage(storage);
         factory.setStateFactory(storageStateFactory);
         factory.setTableFactoryFactory(tableFactoryFactory);

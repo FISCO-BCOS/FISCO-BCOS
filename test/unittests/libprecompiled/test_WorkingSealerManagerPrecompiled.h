@@ -30,8 +30,7 @@
 #include <libdevcrypto/Common.h>
 #include <libprecompiled/WorkingSealerManagerPrecompiled.h>
 #include <libstorage/CachedStorage.h>
-#include <libstorage/MemoryTable.h>
-#include <libstorage/MemoryTableFactoryFactory2.h>
+#include <libstorage/MemoryTableFactoryFactory.h>
 #include <libutilities/Common.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libstorage/Common.h>
@@ -120,7 +119,7 @@ public:
         // init storage and tables
         ExecutiveContextFactory factory;
         auto storageStateFactory = std::make_shared<StorageStateFactory>(h256(0));
-        auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory2>();
+        auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory>();
         auto memStorage = std::make_shared<MemoryStorage2>();
         cachedStorage = std::make_shared<CachedStorage>();
         cachedStorage->setBackend(memStorage);

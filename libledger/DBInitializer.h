@@ -29,7 +29,6 @@
 #include <libexecutive/StateFactoryInterface.h>
 #include <libstorage/CachedStorage.h>
 #include <libstorage/MemoryTableFactory.h>
-#include <libstorage/MemoryTableFactory2.h>
 #include <libstorage/Storage.h>
 #include <memory>
 

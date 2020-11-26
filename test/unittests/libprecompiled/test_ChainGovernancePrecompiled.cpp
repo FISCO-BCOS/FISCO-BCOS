@@ -30,8 +30,7 @@
 #include <libprecompiled/ChainGovernancePrecompiled.h>
 #include <libprecompiled/PermissionPrecompiled.h>
 #include <libprecompiled/PrecompiledResult.h>
-#include <libstorage/MemoryTable.h>
-#include <libstorage/MemoryTableFactoryFactory2.h>
+#include <libstorage/MemoryTableFactoryFactory.h>
 #include <libstoragestate/StorageStateFactory.h>
 #include <boost/test/unit_test.hpp>
 
@@ -51,7 +50,7 @@ struct ChainGovernancePrecompiledFixture
         blockInfo.hash = h256(0);
         blockInfo.number = 0;
         auto memStorage = std::make_shared<MemoryStorage2>();
-        tableFactory = std::make_shared<MemoryTableFactory2>();
+        tableFactory = std::make_shared<MemoryTableFactory>();
         tableFactory->setStateStorage(memStorage);
         context = std::make_shared<bcos::blockverifier::ExecutiveContext>();
         context->setMemoryTableFactory(tableFactory);
@@ -68,7 +67,7 @@ struct ChainGovernancePrecompiledFixture
     ~ChainGovernancePrecompiledFixture() {}
 
     ExecutiveContext::Ptr context;
-    MemoryTableFactory2::Ptr tableFactory;
+    MemoryTableFactory::Ptr tableFactory;
     Precompiled::Ptr chainGovernancePrecompiled;
     BlockInfo blockInfo;
 };

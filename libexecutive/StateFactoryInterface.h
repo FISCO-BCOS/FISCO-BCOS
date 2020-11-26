@@ -26,7 +26,7 @@
 
 #include "StateFace.h"
 #include <libethcore/Common.h>
-#include <libstorage/MemoryTableFactory.h>
+#include <libstorage/Table.h>
 #include <memory>
 
 namespace bcos

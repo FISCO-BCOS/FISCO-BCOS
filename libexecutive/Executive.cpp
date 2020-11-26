@@ -25,7 +25,6 @@
 #include <libexecutive/EVMInterface.h>
 #include <libexecutive/VMFactory.h>
 #include <libstorage/Common.h>
-#include <libstorage/MemoryTableFactory.h>
 #include <libstorage/StorageException.h>
 #include <libutilities/CommonIO.h>
 #include <limits.h>

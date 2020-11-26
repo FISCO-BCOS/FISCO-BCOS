@@ -29,7 +29,6 @@
 #include <libethcore/Block.h>
 #include <libethcore/TransactionReceipt.h>
 #include <libstorage/BasicRocksDB.h>
-#include <libstorage/MemoryTableFactory.h>
 #include <libstorage/RocksDBStorage.h>
 #include <libstorage/Storage.h>
 #include <libstoragestate/StorageStateFactory.h>
