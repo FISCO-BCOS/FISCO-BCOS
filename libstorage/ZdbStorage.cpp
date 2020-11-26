@@ -347,7 +347,7 @@ void ZdbStorage::insertSysTables()
     ss << "	('" << SYS_HASH_2_BLOCK << "', 'hash','value'),\n";
     ss << "	('" << SYS_CNS << "', 'name','version,address,abi'),\n";
     ss << "	('" << SYS_CONFIG << "', 'key','value,enable_num'),\n";
-    ss << "	('" << SYS_BLOCK_2_NONCES << "', 'number','value');";
+    ss << "	('" << SYS_BLOCK_2_NONCES << "', 'number','value'),\n";
     ss << "	('" << SYS_HASH_2_BLOCKHEADER << "', 'hash','value', 'sigs');";
     string sql = ss.str();
     m_sqlBasicAcc->ExecuteSql(sql);
