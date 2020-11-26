@@ -29,7 +29,6 @@
 #include "libdevcrypto/CryptoInterface.h"
 #include <libutilities/Common.h>
 #include <libutilities/RLP.h>
-#include <libutilities/TrieHash.h>
 using namespace std;
 using namespace bcos;
 using namespace bcos::eth;
@@ -256,7 +255,7 @@ void BlockHeader::populateFromParent(BlockHeader const& _parent)
  *                default is empty, doesn't need to be verified
  *                if the block is not empty, must check the transacton state
  */
-void BlockHeader::verify(Strictness _s, BlockHeader const& _parent, bytesConstRef _block) const
+void BlockHeader::verify(Strictness _s, BlockHeader const& _parent) const
 {
     /// check block number
     if (m_number >= MaxBlockNumber || m_number < 0)
@@ -281,6 +280,7 @@ void BlockHeader::verify(Strictness _s, BlockHeader const& _parent, bytesConstRe
         if (m_number != _parent.m_number + 1)
             BOOST_THROW_EXCEPTION(InvalidNumber());
     }
+#if 0
     /// check the stateroot and transactions of the block
     if (_block)
     {
@@ -294,4 +294,5 @@ void BlockHeader::verify(Strictness _s, BlockHeader const& _parent, bytesConstRe
             BOOST_THROW_EXCEPTION(InvalidTransactionsRoot()
                                   << Hash256RequirementError(expectedRoot, m_transactionsRoot));
     }
+#endif
 }

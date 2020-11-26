@@ -32,7 +32,6 @@ namespace executive
 {
 enum class StateType
 {
-    MptState,
     StorageState
 };
 

@@ -27,7 +27,6 @@
 #include <libethcore/Block.h>
 #include <libethcore/Transaction.h>
 #include <libethcore/TransactionReceipt.h>
-#include <libmptstate/State.h>
 #include <libutilities/FixedHash.h>
 #include <memory>
 

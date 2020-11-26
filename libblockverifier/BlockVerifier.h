@@ -30,7 +30,6 @@
 #include <libethcore/Transaction.h>
 #include <libethcore/TransactionReceipt.h>
 #include <libexecutive/Executive.h>
-#include <libmptstate/State.h>
 #include <libutilities/FixedHash.h>
 #include <libutilities/ThreadPool.h>
 #include <boost/function.hpp>

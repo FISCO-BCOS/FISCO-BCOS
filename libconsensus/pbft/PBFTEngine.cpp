@@ -28,7 +28,6 @@
 #include <libtxpool/TxPool.h>
 #include <libutilities/CommonJS.h>
 using namespace bcos::eth;
-using namespace bcos::db;
 using namespace bcos::blockverifier;
 using namespace bcos::blockchain;
 using namespace bcos::p2p;

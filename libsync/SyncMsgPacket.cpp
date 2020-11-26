@@ -117,34 +117,21 @@ void SyncStatusPacketWithAlignedTime::decodePacket(RLP const& _rlp, bcos::h512 c
 void SyncTransactionsPacket::encode(
     std::vector<bytes> const& _txRLPs, bool const& _enableTreeRouter, uint64_t const& _consIndex)
 {
-    if (g_BCOSConfig.version() >= RC2_VERSION)
+    unsigned fieldSize = 1;
+    if (_enableTreeRouter)
     {
-        unsigned fieldSize = 1;
-        if (_enableTreeRouter)
-        {
-            fieldSize = 2;
-        }
-        encodeRC2(_txRLPs, fieldSize);
-        // append _consIndex
-        if (_enableTreeRouter)
-        {
-            m_rlpStream << _consIndex;
-        }
-        return;
+        fieldSize = 2;
     }
-
-    m_rlpStream.clear();
-    bytes txRLPS;
-    unsigned txsSize = unsigned(_txRLPs.size());
-    for (size_t i = 0; i < _txRLPs.size(); i++)
+    encode(_txRLPs, fieldSize);
+    // append _consIndex
+    if (_enableTreeRouter)
     {
-        txRLPS += _txRLPs[i];
+        m_rlpStream << _consIndex;
     }
-    prep(m_rlpStream, TransactionsPacket, txsSize).appendRaw(txRLPS, txsSize);
+    return;
 }
 
-void SyncTransactionsPacket::encodeRC2(
-    std::vector<bytes> const& _txRLPs, unsigned const& _fieldSize)
+void SyncTransactionsPacket::encode(std::vector<bytes> const& _txRLPs, unsigned const& _fieldSize)
 {
     m_rlpStream.clear();
     bytes txsBytes = bcos::eth::TxsParallelParser::encode(_txRLPs);

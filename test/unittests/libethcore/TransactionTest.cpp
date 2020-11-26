@@ -63,15 +63,12 @@ BOOST_AUTO_TEST_CASE(testCreateTxByRLP)
     BOOST_CHECK_NO_THROW(decodeTx.signature());
     /*bytes s;
     BOOST_CHECK_NO_THROW(tx.encode(s, eth::IncludeSignature::WithSignature));*/
-
-    auto version = g_BCOSConfig.version();
-    auto supportedVersion = g_BCOSConfig.supportedVersion();
-    // RC1_VERSION encode and decode
-    g_BCOSConfig.setSupportedVersion("2.0.0-rc1", RC1_VERSION);
     /// test encode
     bytes encodeBytesRC1;
     BOOST_CHECK_NO_THROW(tx.encode(encodeBytesRC1, eth::IncludeSignature::WithSignature));
-    /// test decode
+/// test decode
+#if 0
+    // TODO: replace with the latest tx rlp
     bytes rlpBytesRC1 = fromHex(
         "f8ef9f65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d03f85174876e7ff"
         "8609184e729fff82020394d6f1a71052366dbae2f7ab2d5d5845e77965cf0d80b86448f85bce000000"
@@ -81,7 +78,7 @@ BOOST_AUTO_TEST_CASE(testCreateTxByRLP)
         "0255ca1ea0512500bc29f4cfe18ee1c88683006d73e56c934100b8abf4d2334560e1d2f75e");
     Transaction decodeTxRC1;
     BOOST_CHECK_NO_THROW(decodeTxRC1.decode(ref(rlpBytesRC1)));
-    g_BCOSConfig.setSupportedVersion(supportedVersion, version);
+#endif
 }
 
 BOOST_FIXTURE_TEST_CASE(SM_testCreateTxByRLP, SM_CryptoTestFixture)
@@ -109,32 +106,7 @@ BOOST_FIXTURE_TEST_CASE(SM_testCreateTxByRLP, SM_CryptoTestFixture)
     BOOST_CHECK_NO_THROW(decodeTx.signature());
     /*bytes s;
     BOOST_CHECK_NO_THROW(tx.encode(s, eth::IncludeSignature::WithSignature));*/
-
-    auto version = g_BCOSConfig.version();
-    auto supportedVersion = g_BCOSConfig.supportedVersion();
-    // RC1_VERSION encode and decode
-    g_BCOSConfig.setSupportedVersion("2.0.0-rc1", RC1_VERSION);
-    /// test encode
-    bytes encodeBytesRC1;
-    BOOST_CHECK_NO_THROW(tx.encode(encodeBytesRC1, eth::IncludeSignature::WithSignature));
-    /// test decode
-    bytes rlpBytesRC1 = fromHex(
-        "f901309f65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d14485174876e7ff8609"
-        "184e729fff8204a294d6f1a71052366dbae2f7ab2d5d5845e77965cf0d80b86448f85bce00000000000000"
-        "0000000000000000000000000000000000000000000000001bf5bd8a9e7ba8b936ea704292ff4aaa5797bf"
-        "671fdc8526dcd159f23c1f5a05f44e9fa862834dc7cb4541558f2b4961dc39eaaf0af7f7395028658d0e01"
-        "b86a37b840c7ca78e7ab80ee4be6d3936ba8e899d8fe12c12114502956ebe8c8629d36d88481dec9973574"
-        "2ea523c88cf3becba1cc4375bc9e225143fe1e8e43abc8a7c493a0ba3ce8383b7c91528bede9cf890b4b1e"
-        "9b99c1d8e56d6f8292c827470a606827a0ed511490a1666791b2bd7fc4f499eb5ff18fb97ba68ff9aee206"
-        "8fd63b88e817");
-    Transaction decodeTxRC1;
-    BOOST_CHECK_NO_THROW(decodeTxRC1.decode(ref(rlpBytesRC1)));
-    g_BCOSConfig.setSupportedVersion(supportedVersion, version);
-
-    version = g_BCOSConfig.version();
-    supportedVersion = g_BCOSConfig.supportedVersion();
-    g_BCOSConfig.setSupportedVersion("2.0.0-rc2", RC2_VERSION);
-
+    BOOST_CHECK_NO_THROW(tx.encode(encodeBytes, eth::IncludeSignature::WithSignature));
     Transaction decodeTxRC2;
     bytes rlpBytesRC2 = fromHex(
         "f904a8a00148abbf95a2cd7851a238a393cd0b37e98c6b7602d86765633dc58ca5a27d538411e1a3008411e1a3"
@@ -165,7 +137,6 @@ BOOST_FIXTURE_TEST_CASE(SM_testCreateTxByRLP, SM_CryptoTestFixture)
         "2125ea8fa035fcfcd60f0ee3b088b673e70334bb56fbed5edc57555393621edb8c0ccdbee2a0075b746d47379a"
         "6a32534f792e75eb0f86d20ef77240f0b4ca78747e4e81b53f");
     BOOST_CHECK_NO_THROW(decodeTxRC2.decode(ref(rlpBytesRC2)));
-    g_BCOSConfig.setSupportedVersion(supportedVersion, version);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

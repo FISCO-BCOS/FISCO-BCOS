@@ -2022,7 +2022,7 @@ void Rpc::parseReceiptIntoResponse(Json::Value& _response, bcos::bytesConstRef _
     _response["blockHash"] = toJS(_receipt->blockHash());
     _response["from"] = toJS(_receipt->from());
     _response["to"] = toJS(_receipt->to());
-    _response["input"] = toJS(_input);
+    _response["input"] = toJS(_input.toBytes());
 }
 
 void Rpc::parseSignatureIntoResponse(

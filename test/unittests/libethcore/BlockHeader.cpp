@@ -26,7 +26,6 @@
 #include <libethcore/BlockHeader.h>
 #include <libethcore/Transaction.h>
 #include <libutilities/CommonJS.h>
-#include <libutilities/TrieHash.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
@@ -201,18 +200,10 @@ BOOST_AUTO_TEST_CASE(testBlockHeaderVerify)
     BOOST_REQUIRE_NO_THROW(block_header_genesis.verify(CheckEverything));
     BOOST_REQUIRE_NO_THROW(block_header_genesis.verify(QuickNonce));
     BOOST_REQUIRE_NO_THROW(block_header_genesis.verify(CheckNothingNew));
-    /// verify block header and state
-    BOOST_CHECK_THROW(block_header_genesis.verify(CheckEverything, ref(block_rlp.out())),
-        InvalidTransactionsRoot);
     /// modify state of block_header_genesis, and check, require no throw
     RLP root(block_rlp.out());
     auto txList = root[1];
-    auto expectedRoot = trieRootOver(
-        txList.itemCount(), [&](unsigned i) { return rlp(i); },
-        [&](unsigned i) { return txList[i].data().toBytes(); });
-    block_header_genesis.setRoots(
-        expectedRoot, block_header_genesis.receiptsRoot(), block_header_genesis.stateRoot());
-    BOOST_REQUIRE_NO_THROW(block_header_genesis.verify(CheckEverything, ref(block_rlp.out())));
+    BOOST_REQUIRE_NO_THROW(block_header_genesis.verify(CheckEverything));
     /// populate child and check
     BlockHeader block_header_child;
     block_header_child.populateFromParent(block_header_genesis);
@@ -222,45 +213,33 @@ BOOST_AUTO_TEST_CASE(testBlockHeaderVerify)
     constructBlock(block_child_rlp, block_header_child);
     root = RLP(block_child_rlp.out());
     txList = root[1];
-    expectedRoot = trieRootOver(
-        txList.itemCount(), [&](unsigned i) { return rlp(i); },
-        [&](unsigned i) { return txList[i].data().toBytes(); });
-    block_header_child.setRoots(
-        expectedRoot, block_header_child.receiptsRoot(), block_header_child.stateRoot());
-    BOOST_REQUIRE_NO_THROW(block_header_child.verify(
-        CheckEverything, block_header_genesis, ref(block_child_rlp.out())));
+    BOOST_REQUIRE_NO_THROW(block_header_child.verify(CheckEverything, block_header_genesis));
     /// test invalid timestamp
     block_header_child.setTimestamp(current_time);
-    BOOST_CHECK_THROW(block_header_child.verify(
-                          CheckEverything, block_header_genesis, ref(block_child_rlp.out())),
-        InvalidTimestamp);
+    BOOST_CHECK_THROW(
+        block_header_child.verify(CheckEverything, block_header_genesis), InvalidTimestamp);
     /// test invalid number
     block_header_child.setTimestamp(current_time + 100);
     block_header_child.setNumber(block_header_child.number() + 2);
-    BOOST_CHECK_THROW(block_header_child.verify(
-                          CheckEverything, block_header_genesis, ref(block_child_rlp.out())),
-        InvalidNumber);
+    BOOST_CHECK_THROW(
+        block_header_child.verify(CheckEverything, block_header_genesis), InvalidNumber);
     /// test invalid parentHash
     block_header_child.setNumber(block_header_child.number() - 2);
     block_header_child.setParentHash(crypto::Hash("+++"));
-    BOOST_CHECK_THROW(block_header_child.verify(
-                          CheckEverything, block_header_genesis, ref(block_child_rlp.out())),
-        InvalidParentHash);
+    BOOST_CHECK_THROW(
+        block_header_child.verify(CheckEverything, block_header_genesis), InvalidParentHash);
     /// test invalid number
     block_header_child.setNumber(INT64_MAX);
-    BOOST_CHECK_THROW(block_header_child.verify(
-                          CheckEverything, block_header_genesis, ref(block_child_rlp.out())),
-        InvalidNumber);
+    BOOST_CHECK_THROW(
+        block_header_child.verify(CheckEverything, block_header_genesis), InvalidNumber);
     // test gas
     block_header_child.setParentHash(block_header_genesis.hash());
     block_header_child.setNumber(block_header_genesis.number() + 1);
     block_header_child.setGasUsed(u256(1000000));
     block_header_child.setGasLimit(u256(1000));
-    BOOST_CHECK_THROW(block_header_child.verify(
-                          CheckEverything, block_header_genesis, ref(block_child_rlp.out())),
-        TooMuchGasUsed);
-    BOOST_REQUIRE_NO_THROW(block_header_child.verify(
-        CheckNothingNew, block_header_genesis, ref(block_child_rlp.out())));
+    BOOST_CHECK_THROW(
+        block_header_child.verify(CheckEverything, block_header_genesis), TooMuchGasUsed);
+    BOOST_REQUIRE_NO_THROW(block_header_child.verify(CheckNothingNew, block_header_genesis));
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test

@@ -75,8 +75,7 @@ bool Ledger::initLedger(std::shared_ptr<LedgerParamInterface> _ledgerParams)
     bool ret = initBlockChain();
     if (!ret)
         return false;
-    bcos::h256 genesisHash = m_blockChain->getBlockByNumber(0)->headerHash();
-    m_dbInitializer->initState(genesisHash);
+    m_dbInitializer->initState();
     if (!m_dbInitializer->stateFactory())
     {
         Ledger_LOG(ERROR) << LOG_BADGE("initLedger")

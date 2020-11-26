@@ -129,7 +129,7 @@ public:
     SyncTransactionsPacket() { packetType = TransactionsPacket; }
     void encode(std::vector<bytes> const& _txRLPs, bool const& _enableTreeRouter = false,
         uint64_t const& _consIndex = 0);
-    void encodeRC2(std::vector<bytes> const& _txRLPs, unsigned const& _fieldSize);
+    void encode(std::vector<bytes> const& _txRLPs, unsigned const& _fieldSize);
     bcos::p2p::P2PMessage::Ptr toMessage(PROTOCOL_ID _protocolId, bool const& _fromRPC = false);
 };
 

@@ -10,6 +10,4 @@ DERIVE_BCOS_EXCEPTION(KeyCenterCall);
 DERIVE_BCOS_EXCEPTION(KeyCenterInitError);
 DERIVE_BCOS_EXCEPTION(KeyCenterCloseError);
 DERIVE_BCOS_EXCEPTION(EncryptedFileError);
-DERIVE_BCOS_EXCEPTION(EncryptedLevelDBEncryptFailed);
-DERIVE_BCOS_EXCEPTION(EncryptedLevelDBDecryptFailed);
 }  // namespace bcos

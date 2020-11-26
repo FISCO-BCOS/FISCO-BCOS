@@ -33,11 +33,8 @@
 #include "rocksdb/options.h"
 #include "rocksdb/table.h"
 #include <libconfig/GlobalConfigure.h>
-#include <libmptstate/MPTStateFactory.h>
 #include <libprecompiled/Precompiled.h>
-#include <libsecurity/EncryptedLevelDB.h>
 #include <libstorage/BasicRocksDB.h>
-#include <libstorage/LevelDBStorage.h>
 #include <libstorage/MemoryTableFactoryFactory.h>
 #include <libstorage/MemoryTableFactoryFactory2.h>
 #include <libstorage/RocksDBStorage.h>
@@ -52,40 +49,15 @@ using namespace std;
 using namespace bcos;
 using namespace bcos::storage;
 using namespace bcos::blockverifier;
-using namespace bcos::db;
 using namespace bcos::ledger;
 using namespace bcos::eth;
-using namespace bcos::mptstate;
 using namespace bcos::executive;
 using namespace bcos::storagestate;
 
 void DBInitializer::initStorageDB()
 {
     DBInitializer_LOG(INFO) << LOG_BADGE("initStorageDB");
-    if (!bcos::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "LevelDB"))
-    {
-        initLevelDBStorage();
-    }
-    else if (!bcos::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "External"))
-    {
-        // only support external when "supported_version < 2.3.0"
-        if (g_BCOSConfig.version() < V2_3_0)
-        {
-            auto storage = initSQLStorage();
-            initTableFactory2(storage, m_param);
-        }
-        else
-        {
-            DBInitializer_LOG(ERROR)
-                << LOG_DESC("Only support external when supported_version is lower than 2.3.0")
-                << LOG_KV("storage_type", m_param->mutableStorageParam().type)
-                << LOG_KV("supported_version", g_BCOSConfig.version());
-            BOOST_THROW_EXCEPTION(
-                UnsupportedFeature() << errinfo_comment(
-                    "Only support external when supported_version is lower than 2.3.0"));
-        }
-    }
-    else if (!bcos::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "MySQL"))
+    if (!bcos::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "MySQL"))
     {
         auto storage = initZdbStorage();
         initTableFactory2(storage, m_param);
@@ -108,61 +80,6 @@ void DBInitializer::initStorageDB()
         DBInitializer_LOG(ERROR) << LOG_DESC("Unsupported dbType")
                                  << LOG_KV("config storage", m_param->mutableStorageParam().type);
         BOOST_THROW_EXCEPTION(StorageError() << errinfo_comment("initStorage failed"));
-    }
-}
-
-/// init the storage with leveldb
-void DBInitializer::initLevelDBStorage()
-{
-    DBInitializer_LOG(INFO) << LOG_BADGE("initLevelDBStorage");
-    /// open and init the levelDB
-    leveldb::Options ldb_option;
-    bcos::db::BasicLevelDB* pleveldb = nullptr;
-    try
-    {
-        boost::filesystem::create_directories(m_param->mutableStorageParam().path);
-        ldb_option.create_if_missing = true;
-        ldb_option.max_open_files = 1000;
-        ldb_option.compression = leveldb::kSnappyCompression;
-        leveldb::Status status;
-
-        if (g_BCOSConfig.diskEncryption.enable)
-        {
-            // Use disk encryption
-            DBInitializer_LOG(INFO) << LOG_DESC("open encrypted leveldb handler");
-            status =
-                EncryptedLevelDB::Open(ldb_option, m_param->mutableStorageParam().path, &(pleveldb),
-                    g_BCOSConfig.diskEncryption.cipherDataKey, g_BCOSConfig.diskEncryption.dataKey);
-        }
-        else
-        {
-            // Not to use disk encryption
-            DBInitializer_LOG(INFO) << LOG_DESC("open leveldb handler");
-            status =
-                BasicLevelDB::Open(ldb_option, m_param->mutableStorageParam().path, &(pleveldb));
-        }
-
-        if (!status.ok())
-        {
-            BOOST_THROW_EXCEPTION(OpenDBFailed() << errinfo_comment(status.ToString()));
-        }
-        DBInitializer_LOG(INFO) << LOG_BADGE("initLevelDBStorage") << LOG_KV("status", status.ok());
-        std::shared_ptr<LevelDBStorage> leveldbStorage = std::make_shared<LevelDBStorage>();
-        std::shared_ptr<bcos::db::BasicLevelDB> leveldb_handler =
-            std::shared_ptr<bcos::db::BasicLevelDB>(pleveldb);
-        leveldbStorage->setDB(leveldb_handler);
-        m_storage = leveldbStorage;
-
-        auto tableFactoryFactory = std::make_shared<bcos::storage::MemoryTableFactoryFactory>();
-        tableFactoryFactory->setStorage(m_storage);
-
-        m_tableFactoryFactory = tableFactoryFactory;
-    }
-    catch (std::exception& e)
-    {
-        DBInitializer_LOG(ERROR) << LOG_DESC("initLevelDBStorage failed")
-                                 << LOG_KV("EINFO", boost::diagnostic_information(e));
-        BOOST_THROW_EXCEPTION(OpenDBFailed() << errinfo_comment("initLevelDBStorage failed"));
     }
 }
 
@@ -297,22 +214,6 @@ void DBInitializer::initTableFactory2(
         m_storage = backendStorage;
     }
 }
-
-
-bcos::storage::Storage::Ptr DBInitializer::initSQLStorage()
-{
-    DBInitializer_LOG(INFO) << LOG_BADGE("initSQLStorage");
-
-    unsupportedFeatures("SQLStorage(External)");
-    auto sqlStorage = createSQLStorage(m_param, m_channelRPCServer, [](std::exception& e) {
-        DBInitializer_LOG(ERROR) << LOG_BADGE("STORAGE") << LOG_BADGE("External")
-                                 << "Access amdb failed exit:" << e.what();
-        raise(SIGTERM);
-        BOOST_THROW_EXCEPTION(e);
-    });
-    return sqlStorage;
-}
-
 
 bcos::storage::Storage::Ptr DBInitializer::initRocksDBStorage(
     std::shared_ptr<LedgerParamInterface> _param)
@@ -490,27 +391,9 @@ void DBInitializer::createExecutiveContext()
 }
 
 /// create stateFactory
-void DBInitializer::createStateFactory(bcos::h256 const& genesisHash)
+void DBInitializer::createStateFactory()
 {
-    DBInitializer_LOG(INFO) << LOG_BADGE("createStateFactory")
-                            << LOG_KV("type", m_param->mutableStateParam().type);
-    if (bcos::stringCmpIgnoreCase(m_param->mutableStateParam().type, "mpt") == 0)
-    {
-        m_stateFactory = std::make_shared<MPTStateFactory>(
-            u256(0x0), m_param->baseDir(), genesisHash, WithExisting::Trust);
-        DBInitializer_LOG(INFO) << LOG_DESC("create MptState success");
-    }
-    else if (bcos::stringCmpIgnoreCase(m_param->mutableStateParam().type, "storage") == 0)
-    {
-        createStorageState();
-    }
-    else
-    {  // default is storage state
-        DBInitializer_LOG(WARNING)
-            << LOG_BADGE("createStateFactory")
-            << LOG_DESC("only support storage and mpt now, create storage by default");
-        createStorageState();
-    }
+    createStorageState();
     DBInitializer_LOG(INFO) << LOG_BADGE("createStateFactory SUCC");
 }
 

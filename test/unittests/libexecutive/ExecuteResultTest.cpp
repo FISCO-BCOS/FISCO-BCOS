@@ -25,7 +25,6 @@
 #include <libethcore/Transaction.h>
 #include <libexecutive/EVMHostContext.h>
 #include <libexecutive/Executive.h>
-#include <libmptstate/MPTState.h>
 #include <libutilities/CommonJS.h>
 #include <libutilities/FixedHash.h>
 #include <test/tools/libutils/TestOutputHelper.h>

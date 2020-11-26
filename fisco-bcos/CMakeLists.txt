@@ -28,7 +28,6 @@ if (DEMO)
     add_subdirectory(consensus)
     add_subdirectory(blockverifier)
     add_subdirectory(sync)
-    add_subdirectory(evm)
     add_subdirectory(rpc)
 endif()
 

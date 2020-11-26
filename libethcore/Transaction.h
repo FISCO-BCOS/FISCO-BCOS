@@ -340,12 +340,6 @@ public:
 
 protected:
     static bool isZeroSignature(u256 const& _r, u256 const& _s) { return !_r && !_s; }
-
-    void encodeRC1(bytes& _trans, IncludeSignature _sig = WithSignature) const;
-    void encodeRC2(bytes& _trans, IncludeSignature _sig = WithSignature) const;
-    void decodeRC1(RLP const& rlp, CheckTransaction _checkSig = CheckTransaction::Everything);
-    void decodeRC2(RLP const& rlp, CheckTransaction _checkSig = CheckTransaction::Everything);
-
     /// Clears the signature.
     void clearSignature()
     {

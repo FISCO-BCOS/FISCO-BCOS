@@ -23,7 +23,6 @@
  */
 #include "ConsensusEngineBase.h"
 using namespace bcos::eth;
-using namespace bcos::db;
 using namespace bcos::blockverifier;
 using namespace bcos::blockchain;
 using namespace bcos::p2p;
