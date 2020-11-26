@@ -51,6 +51,7 @@ namespace fs = boost::filesystem;
 
 uint32_t PageCount = 10000;
 uint32_t BigTablePageCount = 50;
+uint32_t MinVerifyBlocks = 0;
 const string SYNCED_BLOCK_NUMBER = "#extra_synce_block_number#";
 const std::vector<std::string> ForceTables = {
     SYS_HASH_2_BLOCK, SYS_BLOCK_2_NONCES, SYS_TX_HASH_2_BLOCK};
@@ -270,14 +271,12 @@ void conversionData(const std::string& tableName, TableData::Ptr tableData)
         {
             auto entry = tableData->newEntries->get(i);
             auto dataKey = entry->getField("key");
-            if (dataKey == "code") {
+            if (dataKey == "code" || dataKey == "codeHash") {
                 auto dataStr = entry->getField("value");
-                auto dataBytes = std::make_shared<bytes>(fromHex(dataStr.c_str()));
-                entry->setField("code", dataBytes->data(), dataBytes->size());
-            } else if (dataKey == "codeHash") {
-                auto dataStr = entry->getField("value");
-                auto dataBytes = std::make_shared<bytes>(fromHex(dataStr.c_str()));
-                entry->setField("codeHash", dataBytes->data(), dataBytes->size());
+                if (dataStr.size() > 0) {
+                    auto dataBytes = std::make_shared<bytes>(fromHex(dataStr.c_str()));
+                    entry->setField("value", dataBytes->data(), dataBytes->size());
+                }
             }
         }
     }
@@ -534,7 +533,7 @@ int main(int argc, const char* argv[])
         exit(0);
     }
     int64_t verifyBlocks = vm["verify"].as<int64_t>();
-    verifyBlocks = verifyBlocks < 100 ? 100 : verifyBlocks;
+    verifyBlocks = verifyBlocks < MinVerifyBlocks ? MinVerifyBlocks : verifyBlocks;
     PageCount = vm["limit"].as<uint32_t>();
     BigTablePageCount = vm["sys_limit"].as<uint32_t>();
     string configPath = vm["config"].as<std::string>();
