@@ -31,7 +31,6 @@
 
 #pragma once
 
-#include <libutilities/Address.h>
 #include <libutilities/Common.h>
 #include <libutilities/Exceptions.h>
 #include <libutilities/FixedHash.h>

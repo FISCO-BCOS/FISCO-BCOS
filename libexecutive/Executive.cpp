@@ -26,7 +26,6 @@
 #include <libexecutive/VMFactory.h>
 #include <libstorage/Common.h>
 #include <libstorage/StorageException.h>
-#include <libutilities/CommonIO.h>
 #include <limits.h>
 #include <boost/timer.hpp>
 #include <numeric>

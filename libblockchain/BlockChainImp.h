@@ -150,8 +150,6 @@ public:
     getTransactionReceiptByHashWithProof(
         bcos::h256 const& _txHash, bcos::eth::LocalisedTransaction& transaction) override;
 
-    void setEnableHexBlock(bool const& _enableHexBlock) { m_enableHexBlock = _enableHexBlock; }
-
     std::shared_ptr<MerkleProofType> getTransactionReceiptProof(
         bcos::eth::Block::Ptr _block, uint64_t const& _index) override;
 
@@ -197,9 +195,6 @@ private:
     std::shared_ptr<bcos::eth::Block> decodeBlock(bcos::storage::Entry::ConstPtr _entry);
     std::shared_ptr<bcos::bytes> getDataBytes(
         bcos::storage::Entry::ConstPtr _entry, std::string const& _fieldName);
-
-    void writeBytesToField(std::shared_ptr<bcos::bytes> _data, bcos::storage::Entry::Ptr _entry,
-        std::string const& _fieldName = bcos::storage::SYS_VALUE);
     void writeBlockToField(bcos::eth::Block const& _block, bcos::storage::Entry::Ptr _entry);
 
     std::shared_ptr<bcos::eth::Block> getBlock(int64_t _blockNumber);
@@ -286,8 +281,6 @@ private:
 
     std::pair<bcos::eth::BlockNumber, std::shared_ptr<Child2ParentMap>> m_txsChild2ParentCache;
     mutable SharedMutex x_txsChild2ParentCache;
-
-    bool m_enableHexBlock = false;
     bcos::ThreadPool::Ptr m_destructorThread;
 };
 }  // namespace blockchain

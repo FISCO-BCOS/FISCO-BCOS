@@ -26,7 +26,7 @@
 #include <libdevcrypto/Common.h>
 #include <libsecurity/EncryptedFile.h>
 #include <libutilities/Common.h>
-#include <libutilities/CommonIO.h>
+#include <libutilities/FileUtility.h>
 #include <openssl/engine.h>
 #include <openssl/rsa.h>
 #include <boost/algorithm/string/replace.hpp>
@@ -48,7 +48,7 @@ void SecureInitializer::initConfigWithCrypto(const boost::property_tree::ptree& 
     std::string cert = dataPath + "/" + pt.get<std::string>(sectionName + ".cert", "node.crt");
     std::string caCert = dataPath + "/" + pt.get<std::string>(sectionName + ".ca_cert", "ca.crt");
     std::string caPath = dataPath + "/" + pt.get<std::string>(sectionName + ".ca_path", "");
-    bytes keyContent;
+    std::shared_ptr<bytes> keyContent;
     if (!key.empty())
     {
         try
@@ -56,7 +56,7 @@ void SecureInitializer::initConfigWithCrypto(const boost::property_tree::ptree& 
             if (g_BCOSConfig.diskEncryption.enable)
                 keyContent = EncryptedFile::decryptContents(key);
             else
-                keyContent = contents(key);
+                keyContent = readContents(key);
         }
         catch (std::exception& e)
         {
@@ -69,14 +69,14 @@ void SecureInitializer::initConfigWithCrypto(const boost::property_tree::ptree& 
     }
 
     std::shared_ptr<EC_KEY> ecKey;
-    if (!keyContent.empty())
+    if (!keyContent->empty())
     {
         try
         {
             INITIALIZER_LOG(INFO) << LOG_BADGE("SecureInitializer")
                                   << LOG_DESC("loading privateKey");
             std::shared_ptr<BIO> bioMem(BIO_new(BIO_s_mem()), [&](BIO* p) { BIO_free(p); });
-            BIO_write(bioMem.get(), keyContent.data(), keyContent.size());
+            BIO_write(bioMem.get(), keyContent->data(), keyContent->size());
 
             std::shared_ptr<EVP_PKEY> evpPKey(
                 PEM_read_bio_PrivateKey(bioMem.get(), NULL, NULL, NULL),
@@ -135,10 +135,10 @@ void SecureInitializer::initConfigWithCrypto(const boost::property_tree::ptree& 
         INITIALIZER_LOG(INFO) << LOG_BADGE("SecureInitializer") << LOG_DESC("get pub of node")
                               << LOG_KV("nodeID", m_key.pub().hex());
 
-        boost::asio::const_buffer keyBuffer(keyContent.data(), keyContent.size());
+        boost::asio::const_buffer keyBuffer(keyContent->data(), keyContent->size());
         sslContext->use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
 
-        if (!cert.empty() && !contents(cert).empty())
+        if (!cert.empty() && !(readContents(cert)->empty()))
         {
             INITIALIZER_LOG(INFO) << LOG_BADGE("SecureInitializer")
                                   << LOG_DESC("use user certificate") << LOG_KV("file", cert);
@@ -163,13 +163,13 @@ void SecureInitializer::initConfigWithCrypto(const boost::property_tree::ptree& 
             exit(1);
         }
 
-        auto caCertContent = contents(caCert);
-        if (!caCert.empty() && !caCertContent.empty())
+        auto caCertContent = readContents(caCert);
+        if (!caCert.empty() && !caCertContent->empty())
         {
             INITIALIZER_LOG(INFO) << LOG_BADGE("SecureInitializer")
                                   << LOG_DESC("use ca certificate") << LOG_KV("file", caCert);
             sslContext->add_certificate_authority(
-                boost::asio::const_buffer(caCertContent.data(), caCertContent.size()));
+                boost::asio::const_buffer(caCertContent->data(), caCertContent->size()));
         }
         else
         {
@@ -234,7 +234,7 @@ ConfigResult initOriginConfig(const string& _dataPath)
     std::string cert = originDataPath + "node.crt";
     std::string caCert = originDataPath + "ca.crt";
     std::string caPath = originDataPath;
-    bytes keyContent;
+    std::shared_ptr<bytes> keyContent = std::make_shared<bytes>();
     if (!key.empty())
     {
         try
@@ -242,7 +242,7 @@ ConfigResult initOriginConfig(const string& _dataPath)
             if (g_BCOSConfig.diskEncryption.enable)
                 keyContent = EncryptedFile::decryptContents(key);
             else
-                keyContent = contents(key);
+                keyContent = readContents(key);
         }
         catch (std::exception& e)
         {
@@ -254,14 +254,14 @@ ConfigResult initOriginConfig(const string& _dataPath)
     }
 
     std::shared_ptr<EC_KEY> ecKey;
-    if (!keyContent.empty())
+    if (!keyContent->empty())
     {
         try
         {
             INITIALIZER_LOG(DEBUG)
                 << LOG_BADGE("SecureInitializer") << LOG_DESC("loading privateKey");
             std::shared_ptr<BIO> bioMem(BIO_new(BIO_s_mem()), [&](BIO* p) { BIO_free(p); });
-            BIO_write(bioMem.get(), keyContent.data(), keyContent.size());
+            BIO_write(bioMem.get(), keyContent->data(), keyContent->size());
 
             std::shared_ptr<EVP_PKEY> evpPKey(
                 PEM_read_bio_PrivateKey(bioMem.get(), NULL, NULL, NULL),
@@ -314,10 +314,10 @@ ConfigResult initOriginConfig(const string& _dataPath)
     INITIALIZER_LOG(INFO) << LOG_BADGE("SecureInitializer") << LOG_DESC("get pub of node")
                           << LOG_KV("nodeID", keyPair.pub().hex());
 
-    boost::asio::const_buffer keyBuffer(keyContent.data(), keyContent.size());
+    boost::asio::const_buffer keyBuffer(keyContent->data(), keyContent->size());
     sslContext->use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
 
-    if (!cert.empty() && !contents(cert).empty())
+    if (!cert.empty() && !readContents(cert)->empty())
     {
         INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializer") << LOG_DESC("use user certificate")
                                << LOG_KV("file", cert);
@@ -340,14 +340,14 @@ ConfigResult initOriginConfig(const string& _dataPath)
         BOOST_THROW_EXCEPTION(CertificateNotExists());
     }
 
-    auto caCertContent = contents(caCert);
-    if (!caCert.empty() && !caCertContent.empty())
+    auto caCertContent = readContents(caCert);
+    if (!caCert.empty() && !caCertContent->empty())
     {
         INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializer") << LOG_DESC("use ca certificate")
                                << LOG_KV("file", caCert);
 
         sslContext->add_certificate_authority(
-            boost::asio::const_buffer(caCertContent.data(), caCertContent.size()));
+            boost::asio::const_buffer(caCertContent->data(), caCertContent->size()));
     }
     else
     {
@@ -381,7 +381,7 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
     std::string caPath = dataPath + "/" + pt.get<std::string>(sectionName + ".ca_path", "");
     std::string enKey = dataPath + pt.get<std::string>(sectionName + ".en_key", "gmennode.key");
     std::string enCert = dataPath + pt.get<std::string>(sectionName + ".en_cert", "gmennode.crt");
-    bytes keyContent;
+    std::shared_ptr<bytes> keyContent = std::make_shared<bytes>();
     if (!key.empty())
     {
         try
@@ -389,7 +389,7 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
             if (g_BCOSConfig.diskEncryption.enable)
                 keyContent = EncryptedFile::decryptContents(key);
             else
-                keyContent = contents(key);
+                keyContent = readContents(key);
         }
         catch (std::exception& e)
         {
@@ -400,14 +400,14 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
     }
 
     std::shared_ptr<EC_KEY> ecKey;
-    if (!keyContent.empty())
+    if (!keyContent->empty())
     {
         try
         {
             INITIALIZER_LOG(DEBUG)
                 << LOG_BADGE("SecureInitializerGM") << LOG_DESC("loading privateKey");
             std::shared_ptr<BIO> bioMem(BIO_new(BIO_s_mem()), [&](BIO* p) { BIO_free(p); });
-            BIO_write(bioMem.get(), keyContent.data(), keyContent.size());
+            BIO_write(bioMem.get(), keyContent->data(), keyContent->size());
 
             std::shared_ptr<EVP_PKEY> evpPKey(
                 PEM_read_bio_PrivateKey(bioMem.get(), NULL, NULL, NULL),
@@ -455,10 +455,10 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
     INITIALIZER_LOG(INFO) << LOG_BADGE("SecureInitializerGM") << LOG_DESC("get pub of node")
                           << LOG_KV("nodeID", keyPair.pub().hex());
 
-    boost::asio::const_buffer keyBuffer(keyContent.data(), keyContent.size());
+    boost::asio::const_buffer keyBuffer(keyContent->data(), keyContent->size());
     sslContext->use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
 
-    if (!cert.empty() && !contents(cert).empty())
+    if (!cert.empty() && !readContents(cert)->empty())
     {
         INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializerGM")
                                << LOG_DESC("use user certificate") << LOG_KV("file", cert);
@@ -495,14 +495,14 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
         BOOST_THROW_EXCEPTION(CertificateNotExists());
     }
 
-    auto caCertContent = contents(caCert);
-    if (!caCert.empty() && !caCertContent.empty())
+    auto caCertContent = readContents(caCert);
+    if (!caCert.empty() && !caCertContent->empty())
     {
         INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializerGM") << LOG_DESC("use ca certificate")
                                << LOG_KV("file", caCert);
 
         sslContext->add_certificate_authority(
-            boost::asio::const_buffer(caCertContent.data(), caCertContent.size()));
+            boost::asio::const_buffer(caCertContent->data(), caCertContent->size()));
     }
     else
     {

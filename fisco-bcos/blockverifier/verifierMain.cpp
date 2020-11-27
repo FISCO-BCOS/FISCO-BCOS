@@ -32,6 +32,7 @@
 #include <libstorage/RocksDBStorage.h>
 #include <libstorage/Storage.h>
 #include <libstoragestate/StorageStateFactory.h>
+#include <boost/filesystem.hpp>
 
 using namespace bcos;
 using namespace bcos::storage;

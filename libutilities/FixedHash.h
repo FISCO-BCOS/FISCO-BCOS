@@ -233,7 +233,7 @@ public:
     std::string hex() const { return *toHexString(ref()); }
 
     /// @returns the hash as a user-readable hex string with 0x perfix.
-    std::string hexPrefixed() const { return toHexPrefixed(ref()); }
+    std::string hexPrefixed() const { return toHexStringWithPrefix(ref()); }
 
     /// @returns a mutable byte vector_ref to the object's data.
     bytesRef ref() { return bytesRef(m_data.data(), N); }
@@ -574,6 +574,13 @@ using h256Set = std::set<h256>;
 using h160Set = std::set<h160>;
 using h256Hash = std::unordered_set<h256>;
 using h160Hash = std::unordered_set<h160>;
+
+using Address = h160;
+/// A vector of addresses.
+using Addresses = h160s;
+/// A hash set of addresses.
+using AddressHash = std::unordered_set<h160>;
+Address const ZeroAddress;
 
 /// Convert the given value into h160 (160-bit unsigned integer) using the right 20 bytes.
 inline h160 right160(h256 const& _t)

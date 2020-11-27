@@ -24,7 +24,6 @@
 #include "libnetwork/Socket.h"
 
 #include <libinitializer/SecureInitializer.h>
-#include <libutilities/FileSystem.h>
 #include <openssl/ssl.h>
 #include <test/tools/libutils/Common.h>
 #include <test/tools/libutils/TestOutputHelper.h>
@@ -44,8 +43,6 @@ BOOST_AUTO_TEST_CASE(testSocket)
     std::string address = "127.0.0.1";
     int port = 30303;
     NodeIPEndpoint m_endpoint(boost::asio::ip::make_address(address), port);
-    setDataDir(getTestPath().string() + "/fisco-bcos-data");
-
     boost::property_tree::ptree pt;
     pt.put("secure.data_path", getTestPath().string() + "/fisco-bcos-data/");
     auto secureInitializer = std::make_shared<bcos::initializer::SecureInitializer>();

@@ -42,6 +42,7 @@
 #include <libstoragestate/StorageStateFactory.h>
 #include <libutilities/Common.h>
 #include <libutilities/Exceptions.h>
+#include <boost/filesystem.hpp>
 #include <boost/lexical_cast.hpp>
 
 using namespace std;

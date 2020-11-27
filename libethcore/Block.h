@@ -27,7 +27,7 @@
 #include "TransactionReceipt.h"
 #include <libconfig/GlobalConfigure.h>
 #include <libutilities/Common.h>
-#include <libutilities/TrieHash2.h>
+#include <libutilities/ParallelMerkleProof.h>
 
 namespace bcos
 {

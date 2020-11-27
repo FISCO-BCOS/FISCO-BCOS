@@ -22,7 +22,6 @@
 #include <iostream>
 
 #include <libdevcrypto/SM4Crypto.h>
-#include <libutilities/Assertions.h>
 #include <libutilities/CommonJS.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>

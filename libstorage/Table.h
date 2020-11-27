@@ -18,7 +18,6 @@
 #pragma once
 
 #include "Common.h"
-#include <libutilities/Address.h>
 #include <libutilities/FixedHash.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <tbb/concurrent_vector.h>

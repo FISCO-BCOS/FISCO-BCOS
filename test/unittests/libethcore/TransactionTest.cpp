@@ -24,7 +24,6 @@
 #include <libconfig/GlobalConfigure.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
-#include <libutilities/Assertions.h>
 #include <libutilities/CommonJS.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>

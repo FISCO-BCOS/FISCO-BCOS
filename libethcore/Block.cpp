@@ -136,7 +136,7 @@ void Block::calTransactionRoot(bool update) const
                 }
             });
         m_txsCache = TxsParallelParser::encode(m_transactions);
-        m_transRootCache = bcos::getHash256(transactionList);
+        m_transRootCache = bcos::getMerkleProofRoot(transactionList);
     }
     if (update == true)
     {
@@ -203,7 +203,7 @@ void Block::calReceiptRoot(bool update) const
         std::vector<bcos::bytes> receiptList;
         getReceiptAndHash(txReceipts, receiptList);
         txReceipts.swapOut(m_tReceiptsCache);
-        m_receiptRootCache = bcos::getHash256(receiptList);
+        m_receiptRootCache = bcos::getMerkleProofRoot(receiptList);
     }
     if (update == true)
     {

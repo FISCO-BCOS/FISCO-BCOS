@@ -24,10 +24,7 @@
 
 #include "libnetwork/Common.h"
 #include "libp2p/Common.h"
-#include <libutilities/CommonIO.h>
-
 #include <libp2p/P2PMessage.h>
-#include <libutilities/Assertions.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 

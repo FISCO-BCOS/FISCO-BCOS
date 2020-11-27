@@ -31,7 +31,6 @@
 #include <libstorage/Storage.h>
 #include <libsync/SyncStatus.h>
 #include <libutilities/ConcurrentQueue.h>
-#include <libutilities/FileSystem.h>
 #include <libutilities/ThreadPool.h>
 #include <sstream>
 
@@ -42,6 +41,7 @@
 #include "PBFTMsgFactory.h"
 #include <libstorage/BasicRocksDB.h>
 #include <libsync/SyncStatus.h>
+#include <boost/filesystem.hpp>
 
 namespace bcos
 {

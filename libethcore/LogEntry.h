@@ -23,8 +23,6 @@
 #pragma once
 
 #include "Common.h"
-
-#include <libutilities/Address.h>
 #include <libutilities/FixedHash.h>
 
 namespace bcos

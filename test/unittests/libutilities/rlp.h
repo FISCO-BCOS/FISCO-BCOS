@@ -34,7 +34,7 @@
 
 
 #include <libutilities/Common.h>
-#include <libutilities/CommonIO.h>
+#include <libutilities/FileUtility.h>
 #include <libutilities/RLP.h>
 
 namespace fs = boost::filesystem;

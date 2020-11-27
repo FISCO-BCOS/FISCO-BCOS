@@ -23,13 +23,10 @@
 
 #include "libdevcrypto/CryptoInterface.h"
 #include <evmc/evmc.h>
-#include <libutilities/Address.h>
-#include <libutilities/FixedHash.h>
 #include <libdevcrypto/Common.h>
 #include <libethcore/EVMSchedule.h>
 #include <libethcore/LogEntry.h>
-// #include <libinterpreter/Instruction.h>
-// #include <libinterpreter/interpreter.h>
+#include <libutilities/FixedHash.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <iosfwd>

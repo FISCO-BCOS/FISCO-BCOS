@@ -278,39 +278,6 @@ bool Ledger::initBlockChain()
         shouldBuild = false;
     }
     std::shared_ptr<BlockChainImp> blockChain = std::make_shared<BlockChainImp>();
-
-    // write the hex-string block data when use external or mysql
-    if (!bcos::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "External") ||
-        !bcos::stringCmpIgnoreCase(m_param->mutableStorageParam().type, "MySQL"))
-    {
-        if (g_BCOSConfig.version() < V2_6_0)
-        {
-            Ledger_LOG(INFO) << LOG_DESC("set enableHexBlock to be true");
-            blockChain->setEnableHexBlock(true);
-        }
-        // supported_version >= v2.6.0, store block and nonce in bytes in mysql
-        else
-        {
-            blockChain->setEnableHexBlock(false);
-        }
-        Ledger_LOG(INFO) << LOG_DESC("initBlockChain") << LOG_KV("version", g_BCOSConfig.version())
-                         << LOG_KV("storageType", m_param->mutableStorageParam().type);
-    }
-    // >= v2.2.0
-    else if (g_BCOSConfig.version() >= V2_2_0)
-    {
-        Ledger_LOG(INFO) << LOG_DESC("set enableHexBlock to be false")
-                         << LOG_KV("version", g_BCOSConfig.version());
-        blockChain->setEnableHexBlock(false);
-    }
-    // < v2.2.0
-    else
-    {
-        Ledger_LOG(INFO) << LOG_DESC("set enableHexBlock to be true")
-                         << LOG_KV("version", g_BCOSConfig.version());
-        blockChain->setEnableHexBlock(true);
-    }
-
     blockChain->setStateStorage(m_dbInitializer->storage());
     blockChain->setTableFactoryFactory(m_dbInitializer->tableFactoryFactory());
 

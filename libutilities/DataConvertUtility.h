@@ -71,10 +71,15 @@ std::shared_ptr<std::string> toHexString(T const& _data)
     return toHexString(_data.begin(), _data.end());
 }
 
-/// Convert a series of bytes to the corresponding hex string with 0x prefix.
-/// @example toHexPrefixed("A\x69") == "0x4169"
+/**
+ * @brief convert the bytes into hex string with 0x prefixed
+ *
+ * @tparam T : the type of data to be converted
+ * @param _data : the data to be converted
+ * @return std::string : the hex string
+ */
 template <class T>
-std::string toHexPrefixed(T const& _data)
+std::string toHexStringWithPrefix(T const& _data)
 {
     return *toHexString(_data.begin(), _data.end(), "0x");
 }
@@ -283,8 +288,18 @@ inline std::vector<T> operator+(std::vector<T> const& _a, std::vector<T> const& 
     return ret += _b;
 }
 
-/// Make normal string from fixed-length string.
-std::string toString(string32 const& _s);
+template <class T>
+inline std::ostream& operator<<(std::ostream& _out, std::vector<T> const& _e)
+{
+    _out << "[";
+    for (auto const& element : _e)
+    {
+        _out << "," << element;
+    }
+
+    _out << "]";
+    return _out;
+}
 
 // TODO: remove all these
 /// Determine bytes required to encode the given integer value. @returns 0 if @a _i is zero.
@@ -299,9 +314,6 @@ inline unsigned bytesRequired(T _i)
     }
     return i;
 }
-/// Converts a string into the big-endian base-16 stream of integers (NOT ASCII).
-/// @example asNibbles("A")[0] == 4 && asNibbles("A")[1] == 1
-bytes asNibbles(bytesConstRef const& _s);
 
 template <class T, class U>
 std::shared_ptr<std::vector<U>> convertMapToVector(std::map<T, U> const& _map)
@@ -313,5 +325,32 @@ std::shared_ptr<std::vector<U>> convertMapToVector(std::map<T, U> const& _map)
     }
     return convertedVec;
 }
+
+/// Make normal string from fixed-length string.
+std::string toString(string32 const& _s);
+
+/// Converts arbitrary value to string representation using std::stringstream.
+template <class _T>
+inline std::string toString(_T const& _t)
+{
+    std::ostringstream o;
+    o << _t;
+    return o.str();
+}
+
+template <>
+inline std::string toString<std::string>(std::string const& _s)
+{
+    return _s;
+}
+
+template <>
+inline std::string toString<uint8_t>(uint8_t const& _u)
+{
+    std::ostringstream o;
+    o << static_cast<uint16_t>(_u);
+    return o.str();
+}
+
 
 }  // namespace bcos

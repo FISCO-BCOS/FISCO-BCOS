@@ -27,7 +27,6 @@
 #include "Hash.h"
 #include "Signature.h"
 #include <libconfig/GlobalConfigure.h>
-#include <libutilities/Address.h>
 #include <libutilities/Common.h>
 #include <libutilities/Exceptions.h>
 #include <secp256k1.h>
