@@ -25,7 +25,7 @@
 #pragma once
 #include <libconsensus/pbft/Common.h>
 #include <libethcore/Protocol.h>
-#include <libutilities/CommonJS.h>
+#include <libutilities/JsonDataConvertUtility.h>
 namespace bcos
 {
 namespace consensus

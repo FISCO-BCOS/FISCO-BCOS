@@ -24,7 +24,7 @@
 #include "Storage.h"
 #include <json/json.h>
 #include <libchannelserver/ChannelRPCServer.h>
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 
 namespace bcos
 {

@@ -33,7 +33,7 @@
 #include <libsync/NodeTimeMaintenance.h>
 #include <libsync/SyncInterface.h>
 #include <libtxpool/TxPoolInterface.h>
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 #include <libutilities/Worker.h>
 
 namespace bcos

@@ -240,7 +240,7 @@ void conversionData(
         {
             auto entry = tableData->newEntries->get(i);
             auto dataStr = entry->getField("value");
-            auto dataBytes = std::make_shared<bytes>(fromHex(dataStr.c_str()));
+            auto dataBytes = fromHexString(dataStr.c_str());
             entry->setField("value", dataBytes->data(), dataBytes->size());
         }
     }

@@ -23,7 +23,7 @@
 
 #include "Storage.h"
 #include "Table.h"
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 #include <libutilities/ThreadPool.h>
 #include <tbb/concurrent_queue.h>
 #include <tbb/concurrent_unordered_map.h>

@@ -24,7 +24,7 @@
 
 #include <libutilities/Common.h>
 #include <libutilities/DataConvertUtility.h>
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 #include <memory>
 
 #define BLOCKVERIFIER_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("BLOCKVERIFIER")

@@ -40,7 +40,7 @@
 #include <libdevcrypto/Common.h>
 #include <libethcore/Protocol.h>
 #include <libutilities/Exceptions.h>
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 #include <libutilities/RLP.h>
 #include <chrono>
 #include <sstream>

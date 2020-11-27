@@ -1,4 +1,4 @@
-/**
+/*
  *  Copyright (C) 2020 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,22 +13,33 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief: calc trie hash with merkle tree
- *
- * @file: ParallelMerkleProof.h
- * @author: darrenyin
- * @date 2019-09-24
+ * @file JsonDataConvertUtility.h
  */
-#pragma once
 
-#include "FixedBytes.h"
-#include <vector>
+#include "JsonDataConvertUtility.h"
+
+using namespace std;
 
 namespace bcos
 {
-h256 getMerkleProofRoot(const std::vector<bcos::bytes>& bytesCaches);
-
-void getMerkleProof(const std::vector<bcos::bytes>& bytesCaches,
-    std::shared_ptr<std::map<std::string, std::vector<std::string>>> _parent2ChildList);
-
+bytes jonStringToBytes(string const& _stringData, OnFailed _action)
+{
+    try
+    {
+        return *fromHexString(_stringData);
+    }
+    catch (...)
+    {
+        if (_action == OnFailed::InterpretRaw)
+        {
+            return asBytes(_stringData);
+        }
+        else if (_action == OnFailed::Throw)
+        {
+            throw invalid_argument("Cannot intepret '" + _stringData +
+                                   "' as bytes; must be 0x-prefixed hex or decimal.");
+        }
+    }
+    return bytes();
+}
 }  // namespace bcos

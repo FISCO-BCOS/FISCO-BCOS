@@ -23,7 +23,7 @@
 #pragma once
 
 #include "Common.h"
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 
 namespace bcos
 {

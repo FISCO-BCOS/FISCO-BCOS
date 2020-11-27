@@ -72,7 +72,7 @@ class SyncFixture : public TestOutputHelperFixture
 {
 public:
     const PROTOCOL_ID c_protocolId = 66;
-    const bytes c_txBytes = fromHex(
+    const bytes c_txBytes = *fromHexString(
         "f8aa8401be1a7d80830f4240941dc8def0867ea7e3626e03acee3eb40ee17251c880b84494e78a100000000000"
         "000000000000003ca576d469d7aa0244071d27eb33c5629753593e000000000000000000000000000000000000"
         "00000000000000000000000013881ba0f44a5ce4a1d1d6c2e4385a7985cdf804cb10a7fb892e9c08ff6d62657c"

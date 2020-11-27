@@ -27,7 +27,7 @@
 #include <libethcore/Protocol.h>
 #include <libnetwork/Host.h>
 #include <libp2p/Service.h>
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 #include <boost/program_options.hpp>
 #include <memory>
 

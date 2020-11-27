@@ -20,7 +20,7 @@
  * @date: 2019-08-06
  */
 #pragma once
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 #include <memory>
 #include <set>
 #include <string>

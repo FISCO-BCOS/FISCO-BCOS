@@ -89,7 +89,7 @@ int main(int argc, char* argv[])
             LOG(INFO) << "max " << max << " parentHeader " << parentBlock->header() << " header "
                       << header;
 
-            bcos::bytes rlpBytes = bcos::fromHex(
+            bcos::bytes rlpBytes = *bcos::fromHexString(
                 "0xf92027a0039d7614c185b85512a00fcbb2e9012dac3869fccca2c345e8d10d4fba42b02d8401c9c3"
                 "808401c9c3808201f48080b91fb16060604052341561000c57fe5b5b611f958061001c6000396000f3"
                 "0060606040526000357c01000000000000000000000000000000000000000000000000000000009004"
@@ -291,7 +291,7 @@ int main(int argc, char* argv[])
                 "00815250905600a165627a7a7230582093b9498b96d50a5b320f578d8d5429fa5f6671fb7f396c5205"
                 "d9f6fe2cb8c8e500291ca02d225a81618d4b4720fd26bdbe30925de26be949c33ff84cfeb3bf358007"
                 "e2efa0785feb21b69a75402a4feb85e36b970c4d933fbc9dd9f71372eb67e3849387c5");
-            bcos::bytes rlpBytesCall = bcos::fromHex(
+            bcos::bytes rlpBytesCall = *bcos::fromHexString(
                 "0xf9016da0010061fb64122b6c683383ef45211e526e72d0412059ee52a5fbcce220e6a40b8401c9c3"
                 "808401c9c3808201f494919868496524eedc26dbb81915fa1547a20f899880b8e4ebf3b24f00000000"
                 "0000000000000000000000000000000000000000000000000000006000000000000000000000000000"

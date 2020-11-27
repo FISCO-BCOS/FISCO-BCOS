@@ -33,7 +33,7 @@
 
 #include <libutilities/Common.h>
 #include <libutilities/Exceptions.h>
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 #include <stdint.h>
 
 #include <functional>

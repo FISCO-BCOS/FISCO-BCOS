@@ -28,7 +28,7 @@
  */
 #include "PBFTSealer.h"
 #include <libethcore/CommonJS.h>
-#include <libutilities/CommonJS.h>
+#include <libutilities/JsonDataConvertUtility.h>
 #include <libutilities/Worker.h>
 using namespace bcos::eth;
 using namespace bcos::blockverifier;

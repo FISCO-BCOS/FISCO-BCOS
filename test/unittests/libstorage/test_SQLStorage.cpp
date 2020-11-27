@@ -26,7 +26,7 @@
 #include <libstorage/SQLStorage.h>
 #include <libstorage/StorageException.h>
 #include <libstorage/Table.h>
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 #include <boost/test/unit_test.hpp>
 
 

@@ -19,7 +19,6 @@
 
 #pragma once
 #include "Common.h"
-#include "FixedHash.h"
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/exception/errinfo_api_function.hpp>
 #include <boost/exception/exception.hpp>
@@ -68,15 +67,12 @@ DERIVE_BCOS_EXCEPTION_RLP(BadRLP);
 DERIVE_BCOS_EXCEPTION_RLP(OversizeRLP);
 DERIVE_BCOS_EXCEPTION_RLP(UndersizeRLP);
 
+DERIVE_BCOS_EXCEPTION(ConstructFixedBytesFailed);
 DERIVE_BCOS_EXCEPTION(BadHexCharacter);
-DERIVE_BCOS_EXCEPTION(RootNotFound);
-DERIVE_BCOS_EXCEPTION(BadRoot);
 DERIVE_BCOS_EXCEPTION(MissingField);
 
-DERIVE_BCOS_EXCEPTION(NoNetworking);
 DERIVE_BCOS_EXCEPTION(FileError);
 DERIVE_BCOS_EXCEPTION(Overflow);
-DERIVE_BCOS_EXCEPTION(FailedInvariant);
 
 DERIVE_BCOS_EXCEPTION(InterfaceNotSupported);
 DERIVE_BCOS_EXCEPTION(InitLedgerConfigFailed);
@@ -112,10 +108,6 @@ using errinfo_min = boost::error_info<struct tag_min, bigint>;
 using errinfo_max = boost::error_info<struct tag_max, bigint>;
 using RequirementError = boost::tuple<errinfo_required, errinfo_got>;
 using RequirementErrorComment = boost::tuple<errinfo_required, errinfo_got, errinfo_comment>;
-using errinfo_hash256 = boost::error_info<struct tag_hash, h256>;
-using errinfo_required_h256 = boost::error_info<struct tag_required_h256, h256>;
-using errinfo_got_h256 = boost::error_info<struct tag_get_h256, h256>;
-using Hash256RequirementError = boost::tuple<errinfo_required_h256, errinfo_got_h256>;
 using errinfo_extraData = boost::error_info<struct tag_extraData, bytes>;
 using errinfo_externalFunction = boost::errinfo_api_function;
 using errinfo_interface = boost::error_info<struct tag_interface, std::string>;

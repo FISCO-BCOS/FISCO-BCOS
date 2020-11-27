@@ -80,9 +80,9 @@ std::shared_ptr<crypto::Signature> bcos::sm2SignatureFromBytes(std::vector<unsig
     {  // sm2 signature must be 128 bytes
         return nullptr;
     }
-    h256 r(_data.data(), FixedHash<32>::ConstructFromPointerType::ConstructFromPointer);
-    h256 s(_data.data() + 32, FixedHash<32>::ConstructFromPointerType::ConstructFromPointer);
-    h512 v(_data.data() + 64, FixedHash<64>::ConstructFromPointerType::ConstructFromPointer);
+    h256 r(_data.data(), h256::ConstructorType::FromPointer);
+    h256 s(_data.data() + 32, h256::ConstructorType::FromPointer);
+    h512 v(_data.data() + 64, h512::ConstructorType::FromPointer);
     return std::make_shared<SM2Signature>(r, s, v);
 }
 

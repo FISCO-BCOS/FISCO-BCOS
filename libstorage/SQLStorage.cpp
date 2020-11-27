@@ -27,7 +27,7 @@
 #include <libchannelserver/ChannelMessage.h>
 #include <libchannelserver/ChannelRPCServer.h>
 #include <libutilities/Common.h>
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 
 using namespace bcos;
 using namespace std;

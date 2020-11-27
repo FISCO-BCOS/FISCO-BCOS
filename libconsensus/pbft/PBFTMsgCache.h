@@ -26,7 +26,7 @@
 #pragma once
 #include <libconsensus/pbft/Common.h>
 #include <libutilities/Common.h>
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 #include <unordered_map>
 namespace bcos
 {

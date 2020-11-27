@@ -84,13 +84,13 @@ std::string toHexStringWithPrefix(T const& _data)
     return *toHexString(_data.begin(), _data.end(), "0x");
 }
 
-/// Converts a (printable) ASCII hex string into the corresponding byte stream.
-/// @example fromHex("41626261") == asBytes("Abba")
-/// If _throw = ThrowType::DontThrow, it replaces bad hex characters with 0's, otherwise it will
-/// throw an exception.
-bytes fromHex(std::string const& _hexedString);
-
-/// @returns true if @a _s is a hex string.
+/**
+ * @brief convert hex string to bytes
+ *
+ * @param _hexedString: the hex string need to be converted
+ * @return std::shared_ptr<bytes>: the converted bytes
+ */
+std::shared_ptr<bytes> fromHexString(std::string const& _hexedString);
 
 /**
  * @brief determine the input string is hex string or not
@@ -351,6 +351,4 @@ inline std::string toString<uint8_t>(uint8_t const& _u)
     o << static_cast<uint16_t>(_u);
     return o.str();
 }
-
-
 }  // namespace bcos

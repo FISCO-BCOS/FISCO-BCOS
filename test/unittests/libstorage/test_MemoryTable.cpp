@@ -20,7 +20,7 @@
 #include <libstorage/MemoryTable.h>
 #include <libstorage/Storage.h>
 #include <libstorage/Table.h>
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 #include <tbb/parallel_for.h>
 #include <boost/test/unit_test.hpp>
 #include <string>

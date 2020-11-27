@@ -33,7 +33,7 @@
 #include "rocksdb/slice.h"
 #include "rocksdb/write_batch.h"
 #include <libutilities/Common.h>
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 #include <libutilities/RLP.h>
 #include <tbb/parallel_for.h>
 #include <memory>

@@ -87,7 +87,7 @@ PBFTMsgPacket::Ptr testAndCheckPBFTMsgFactory(
     msgPacket->packet_id = 1;
     msgPacket->ttl = ttl;
     msgPacket->timestamp = utcTime();
-    msgPacket->data = bcos::fromHex("0x100");
+    msgPacket->data = *fromHexString("0x100");
 
     msgPacket->forwardNodes = std::make_shared<bcos::h512s>();
     msgPacket->forwardNodes->push_back(_nodeId);

@@ -25,7 +25,7 @@
 #include "Hash.h"
 #include "SM3Hash.h"
 #include "Signature.h"
-#include "libutilities/FixedHash.h"
+#include "libutilities/FixedBytes.h"
 #include <libconfig/GlobalConfigure.h>
 #include <functional>
 #include <string>
@@ -66,7 +66,7 @@ size_t signatureLength();
 size_t signatureLength();
 
 template <unsigned N>
-inline SecureFixedHash<32> Hash(SecureFixedHash<N>&& _data)
+inline SecureFixedBytes<32> Hash(SecureFixedBytes<N>&& _data)
 {
     if (g_BCOSConfig.SMCrypto())
     {

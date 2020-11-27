@@ -26,7 +26,7 @@
 #include <libblockchain/BlockChainInterface.h>
 #include <libethcore/EVMFlags.h>
 #include <libethcore/Protocol.h>
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 #include <memory>
 #include <vector>
 

@@ -25,7 +25,7 @@
 #include <json/json.h>
 #include <libdevcrypto/CryptoInterface.h>
 #include <libprecompiled/Common.h>
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>

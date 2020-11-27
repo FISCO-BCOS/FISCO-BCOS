@@ -280,19 +280,4 @@ void BlockHeader::verify(Strictness _s, BlockHeader const& _parent) const
         if (m_number != _parent.m_number + 1)
             BOOST_THROW_EXCEPTION(InvalidNumber());
     }
-#if 0
-    /// check the stateroot and transactions of the block
-    if (_block)
-    {
-        RLP root(_block);
-        auto txList = root[1];
-        auto expectedRoot = trieRootOver(
-            txList.itemCount(), [&](unsigned i) { return rlp(i); },
-            [&](unsigned i) { return txList[i].data().toBytes(); });
-        LOG(WARNING) << "Expected trie root: " << expectedRoot;
-        if (m_transactionsRoot != expectedRoot)
-            BOOST_THROW_EXCEPTION(InvalidTransactionsRoot()
-                                  << Hash256RequirementError(expectedRoot, m_transactionsRoot));
-    }
-#endif
 }

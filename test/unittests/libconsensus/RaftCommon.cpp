@@ -44,7 +44,7 @@ void InsertBasicMsgInfo(_MT& _msg)
     _msg.term = 10;
     _msg.height = 10;
     _msg.blockHash =
-        h256(fromHex("0xeb8b84af3f35165d52cb41abe1a9a3d684703aca4966ce720ecd940bd885517c"));
+        h256(*fromHexString("0xeb8b84af3f35165d52cb41abe1a9a3d684703aca4966ce720ecd940bd885517c"));
 }
 
 template <typename _MT>
@@ -158,7 +158,7 @@ BOOST_AUTO_TEST_CASE(testRaftHeartBeatResp)
 
     InsertBasicMsgInfo(resp1);
     resp1.uncommitedBlockHash =
-        h256(fromHex("0xaaaaaaf3f35165d52cb41abe1a9a3d684703aca4966ce720ecd940bd885517c"));
+        h256(*fromHexString("0xaaaaaaf3f35165d52cb41abe1a9a3d684703aca4966ce720ecd940bd885517c"));
 
     RLPStream s;
     resp1.streamRLPFields(s);
@@ -203,7 +203,7 @@ BOOST_AUTO_TEST_CASE(testMsgPacket)
 
     packet1.setOtherField(2, Public("0x1234"), "127.0.0.1");
     packet1.packetType = RaftPacketType::RaftHeartBeatPacket;
-    packet1.data = fromHex("0xfff0fff");
+    packet1.data = *fromHexString("0xfff0fff");
 
     bytes data;
     packet1.encode(data);

@@ -10,6 +10,7 @@
 #include <common/profiling.hpp>
 
 #include <libutilities/Exceptions.h>
+#include <libutilities/FixedBytes.h>
 #include <libutilities/Log.h>
 
 using namespace std;

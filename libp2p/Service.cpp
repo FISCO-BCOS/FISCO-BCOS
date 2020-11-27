@@ -28,7 +28,7 @@
 #include "libp2p/P2PInterface.h"       // for CallbackFunc...
 #include "libp2p/P2PMessageFactory.h"  // for P2PMessageFa...
 #include "libp2p/P2PSession.h"         // for P2PSession
-#include "libutilities/FixedHash.h"    // for FixedHash, hash
+#include "libutilities/FixedBytes.h"    // for FixedBytes, hash
 #include "libutilities/ThreadPool.h"   // for ThreadPool
 #include <libstat/NetworkStatHandler.h>
 #include <boost/random.hpp>

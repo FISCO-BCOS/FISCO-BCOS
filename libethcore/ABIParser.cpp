@@ -22,7 +22,7 @@
  */
 
 #include "ABIParser.h"
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 
 using namespace std;
 using namespace bcos;

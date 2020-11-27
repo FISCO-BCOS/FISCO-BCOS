@@ -33,7 +33,7 @@
 #include <libstat/ChannelNetworkStatHandler.h>
 #include <libutilities/Common.h>
 #include <libutilities/Exceptions.h>
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 #include <libutilities/TopicInfo.h>
 #include <map>
 #include <memory>

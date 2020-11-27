@@ -25,8 +25,8 @@
 #include <libethcore/Transaction.h>
 #include <libexecutive/EVMHostContext.h>
 #include <libexecutive/Executive.h>
-#include <libutilities/CommonJS.h>
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
+#include <libutilities/JsonDataConvertUtility.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <iostream>
@@ -50,7 +50,7 @@ BOOST_AUTO_TEST_CASE(ExecutionResultOutput)
 
     exRes.gasUsed = u256("12345");
     exRes.newAddress = Address("a94f5374fce5edbc8e2a8697c15331677e6ebf0b");
-    exRes.output = fromHex("001122334455");
+    exRes.output = *fromHexString("001122334455");
 
     buffer << exRes;
     BOOST_CHECK_MESSAGE(

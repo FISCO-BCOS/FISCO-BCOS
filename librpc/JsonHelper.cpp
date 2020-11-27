@@ -46,26 +46,26 @@ TransactionSkeleton toTransactionSkeleton(Json::Value const& _json)
         ret.creation = true;
 
     if (!_json["value"].empty())
-        ret.value = jsToU256(_json["value"].asString());
+        ret.value = jonStringToU256(_json["value"].asString());
 
     if (!_json["gas"].empty())
-        ret.gas = jsToU256(_json["gas"].asString());
+        ret.gas = jonStringToU256(_json["gas"].asString());
 
     if (!_json["gasPrice"].empty())
-        ret.gasPrice = jsToU256(_json["gasPrice"].asString());
+        ret.gasPrice = jonStringToU256(_json["gasPrice"].asString());
 
     if (!_json["data"].empty() && _json["data"].isString())
-        ret.data = jsToBytes(_json["data"].asString(), OnFailed::Throw);
+        ret.data = jonStringToBytes(_json["data"].asString(), OnFailed::Throw);
 
     if (!_json["code"].empty())
-        ret.data = jsToBytes(_json["code"].asString(), OnFailed::Throw);
+        ret.data = jonStringToBytes(_json["code"].asString(), OnFailed::Throw);
 
     if (!_json["randomid"].empty())
-        ret.nonce = jsToU256(_json["randomid"].asString());
+        ret.nonce = jonStringToU256(_json["randomid"].asString());
 
     // add blocklimit params
     if (!_json["blockLimit"].empty())
-        ret.blockLimit = jsToU256(_json["blockLimit"].asString());
+        ret.blockLimit = jonStringToU256(_json["blockLimit"].asString());
 
     return ret;
 }

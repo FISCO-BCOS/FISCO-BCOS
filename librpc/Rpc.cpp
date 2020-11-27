@@ -33,9 +33,9 @@
 #include <libprecompiled/SystemConfigPrecompiled.h>
 #include <libsync/SyncStatus.h>
 #include <libtxpool/TxPoolInterface.h>
+#include <libutilities/Base64.h>
 #include <libutilities/DataConvertUtility.h>
 #include <boost/algorithm/hex.hpp>
-#include <libutilities/Base64.h>
 #include <csignal>
 #include <sstream>
 
@@ -172,7 +172,7 @@ std::string Rpc::getBlockNumber(int _groupID)
         checkLedgerStatus(blockchain, "BlockChain", "getBlockNumber");
 
         checkRequest(_groupID);
-        return toJS(blockchain->number());
+        return toJonString(blockchain->number());
     }
     catch (JsonRpcException& e)
     {
@@ -212,7 +212,7 @@ std::string Rpc::getPbftView(int _groupID)
                 JsonRpcException(RPCExceptionType::GroupID, RPCMsg[RPCExceptionType::GroupID]));
         }
         bcos::consensus::VIEWTYPE view = consensus->view();
-        return toJS(view);
+        return toJonString(view);
     }
     catch (JsonRpcException& e)
     {
@@ -621,7 +621,7 @@ Json::Value Rpc::getBlockByHash(int _groupID, const std::string& _blockHash, boo
             }
             else
             {
-                response["transactions"].append(toJS((*transactions)[i]->hash()));
+                response["transactions"].append(toJonString((*transactions)[i]->hash()));
             }
         }
         if (_includeAllData)
@@ -650,14 +650,14 @@ void Rpc::generateBlockHeaderInfo(Json::Value& _response,
 {
     _response["number"] = _blockHeader.number();
 
-    _response["hash"] = toJS(_blockHeader.hash());
-    _response["parentHash"] = toJS(_blockHeader.parentHash());
-    _response["logsBloom"] = toJS(_blockHeader.logBloom());
-    _response["transactionsRoot"] = toJS(_blockHeader.transactionsRoot());
-    _response["receiptsRoot"] = toJS(_blockHeader.receiptsRoot());
-    _response["dbHash"] = toJS(_blockHeader.dbHash());
-    _response["stateRoot"] = toJS(_blockHeader.stateRoot());
-    _response["sealer"] = toJS(_blockHeader.sealer());
+    _response["hash"] = toJonString(_blockHeader.hash());
+    _response["parentHash"] = toJonString(_blockHeader.parentHash());
+    _response["logsBloom"] = toJonString(_blockHeader.logBloom());
+    _response["transactionsRoot"] = toJonString(_blockHeader.transactionsRoot());
+    _response["receiptsRoot"] = toJonString(_blockHeader.receiptsRoot());
+    _response["dbHash"] = toJonString(_blockHeader.dbHash());
+    _response["stateRoot"] = toJonString(_blockHeader.stateRoot());
+    _response["sealer"] = toJonString(_blockHeader.sealer());
     _response["sealerList"] = Json::Value(Json::arrayValue);
     auto const sealerList = _blockHeader.sealerList();
     for (auto it = sealerList.begin(); it != sealerList.end(); ++it)
@@ -668,11 +668,11 @@ void Rpc::generateBlockHeaderInfo(Json::Value& _response,
     auto datas = _blockHeader.extraData();
     for (auto const& data : datas)
     {
-        _response["extraData"].append(toJS(data));
+        _response["extraData"].append(toJonString(data));
     }
-    _response["gasLimit"] = toJS(_blockHeader.gasLimit());
-    _response["gasUsed"] = toJS(_blockHeader.gasUsed());
-    _response["timestamp"] = toJS(_blockHeader.timestamp());
+    _response["gasLimit"] = toJonString(_blockHeader.gasLimit());
+    _response["gasUsed"] = toJonString(_blockHeader.gasUsed());
+    _response["timestamp"] = toJonString(_blockHeader.timestamp());
     if (!_includeSigList)
     {
         return;
@@ -789,7 +789,7 @@ Json::Value Rpc::getBlockByNumber(
                 response["transactions"].append(transactionResponse);
             }
             else
-                response["transactions"].append(toJS((*transactions)[i]->hash()));
+                response["transactions"].append(toJonString((*transactions)[i]->hash()));
         }
         if (_includeAllData)
         {
@@ -829,7 +829,7 @@ std::string Rpc::getBlockHashByNumber(int _groupID, const std::string& _blockNum
             BOOST_THROW_EXCEPTION(JsonRpcException(
                 RPCExceptionType::BlockNumberT, RPCMsg[RPCExceptionType::BlockNumberT]));
         }
-        return toJS(blockHash);
+        return toJonString(blockHash);
     }
     catch (JsonRpcException& e)
     {
@@ -897,7 +897,7 @@ Json::Value Rpc::getTransactionByBlockHashAndIndex(
                 JsonRpcException(RPCExceptionType::BlockHash, RPCMsg[RPCExceptionType::BlockHash]));
 
         auto transactions = block->transactions();
-        int64_t txIndex = jsToInt(_transactionIndex);
+        int64_t txIndex = jonStringToInt(_transactionIndex);
         if (txIndex >= int64_t(transactions->size()))
             BOOST_THROW_EXCEPTION(JsonRpcException(
                 RPCExceptionType::TransactionIndex, RPCMsg[RPCExceptionType::TransactionIndex]));
@@ -940,7 +940,7 @@ Json::Value Rpc::getTransactionByBlockNumberAndIndex(
                 RPCExceptionType::BlockNumberT, RPCMsg[RPCExceptionType::BlockNumberT]));
 
         auto transactions = block->transactions();
-        int64_t txIndex = jsToInt(_transactionIndex);
+        int64_t txIndex = jonStringToInt(_transactionIndex);
         if (txIndex >= int64_t(transactions->size()))
             BOOST_THROW_EXCEPTION(JsonRpcException(
                 RPCExceptionType::TransactionIndex, RPCMsg[RPCExceptionType::TransactionIndex]));
@@ -1041,7 +1041,7 @@ std::string Rpc::getPendingTxSize(int _groupID)
         auto txPool = ledgerManager()->txPool(_groupID);
         checkLedgerStatus(txPool, "txPool", "getPendingTxSize");
 
-        return toJS(txPool->status().current);
+        return toJonString(txPool->status().current);
     }
     catch (JsonRpcException& e)
     {
@@ -1065,7 +1065,7 @@ std::string Rpc::getCode(int _groupID, const std::string& _address)
         checkLedgerStatus(blockChain, "blockChain", "getCode");
         checkRequest(_groupID);
 
-        return toJS(blockChain->getCode(jsToAddress(_address)));
+        return toJonString(blockChain->getCode(jsToAddress(_address)));
     }
     catch (JsonRpcException& e)
     {
@@ -1090,10 +1090,10 @@ Json::Value Rpc::getTotalTransactionCount(int _groupID)
 
         Json::Value response;
         std::pair<int64_t, int64_t> result = blockChain->totalTransactionCount();
-        response["txSum"] = toJS(result.first);
-        response["blockNumber"] = toJS(result.second);
+        response["txSum"] = toJonString(result.first);
+        response["blockNumber"] = toJonString(result.second);
         result = blockChain->totalFailedTransactionCount();
-        response["failedTxSum"] = toJS(result.first);
+        response["failedTxSum"] = toJonString(result.first);
         return response;
     }
     catch (JsonRpcException& e)
@@ -1141,9 +1141,9 @@ Json::Value Rpc::call(int _groupID, const Json::Value& request)
         auto transactionReceipt = blockverfier->executeTransaction(blockHeader, tx);
 
         Json::Value response;
-        response["currentBlockNumber"] = toJS(blockNumber);
-        response["status"] = toJS(transactionReceipt->status());
-        response["output"] = toJS(transactionReceipt->outputBytes());
+        response["currentBlockNumber"] = toJonString(blockNumber);
+        response["status"] = toJonString(transactionReceipt->status());
+        response["output"] = toJonString(transactionReceipt->outputBytes());
         return response;
     }
     catch (JsonRpcException& e)
@@ -1264,7 +1264,7 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp,
         }
         auto blockChain = ledgerManager()->blockChain(_groupID);
         Transaction::Ptr tx = std::make_shared<Transaction>(
-            jsToBytes(_rlp, OnFailed::Throw), CheckTransaction::Everything);
+            jonStringToBytes(_rlp, OnFailed::Throw), CheckTransaction::Everything);
         // receive transaction from channel or rpc
         tx->setRpcTx(true);
         auto currentTransactionCallback = m_currentTransactionCallback.get();
@@ -1317,7 +1317,7 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp,
             ret = txPool->submitTransactions(tx);
             break;
         }
-        return toJS(ret.first);
+        return toJonString(ret.first);
     }
     catch (JsonRpcException& e)
     {
@@ -1931,33 +1931,33 @@ void Rpc::parseTransactionIntoResponse(Json::Value& _response, bcos::h256 const&
 {
     /// the fields that required when calculate transaction hash
     // transaction nonce
-    _response["nonce"] = toJS(_tx->nonce());
-    _response["gasPrice"] = toJS(_tx->gasPrice());
-    _response["gas"] = toJS(_tx->gas());
-    _response["blockLimit"] = toJS(_tx->blockLimit());
+    _response["nonce"] = toJonString(_tx->nonce());
+    _response["gasPrice"] = toJonString(_tx->gasPrice());
+    _response["gas"] = toJonString(_tx->gas());
+    _response["blockLimit"] = toJonString(_tx->blockLimit());
     // the receiver address
-    _response["to"] = toJS(_tx->to());
+    _response["to"] = toJonString(_tx->to());
     // the value
-    _response["value"] = toJS(_tx->value());
+    _response["value"] = toJonString(_tx->value());
     // the input data
-    _response["input"] = toJS(_tx->data());
+    _response["input"] = toJonString(_tx->data());
     // the chainId
-    _response["chainId"] = toJS(_tx->chainId());
+    _response["chainId"] = toJonString(_tx->chainId());
     // the groupId
-    _response["groupId"] = toJS(_tx->groupId());
+    _response["groupId"] = toJonString(_tx->groupId());
     // the extraData
-    _response["extraData"] = toJS(_tx->extraData());
+    _response["extraData"] = toJonString(_tx->extraData());
     // the fields that are useful for the users
     if (_onChain)
     {
         // these fields are only displayed when the transactions commit to the blockchain
-        _response["blockHash"] = toJS(_blockHash);
-        _response["blockNumber"] = toJS(_blockNumber);
-        _response["transactionIndex"] = toJS(_txIndex);
+        _response["blockHash"] = toJonString(_blockHash);
+        _response["blockNumber"] = toJonString(_blockNumber);
+        _response["transactionIndex"] = toJonString(_txIndex);
     }
 
-    _response["from"] = toJS(_tx->from());
-    _response["hash"] = toJS(_tx->hash());
+    _response["from"] = toJonString(_tx->from());
+    _response["hash"] = toJonString(_tx->hash());
 
     // the signature
     if (!_tx->vrs())
@@ -1965,22 +1965,22 @@ void Rpc::parseTransactionIntoResponse(Json::Value& _response, bcos::h256 const&
         return;
     }
     Json::Value signatureResponse;
-    signatureResponse["r"] = toJS(_tx->vrs()->r);
-    signatureResponse["s"] = toJS(_tx->vrs()->s);
+    signatureResponse["r"] = toJonString(_tx->vrs()->r);
+    signatureResponse["s"] = toJonString(_tx->vrs()->s);
     // the sm signature
     if (g_BCOSConfig.SMCrypto())
     {
         std::shared_ptr<bcos::crypto::SM2Signature> sm2Signature =
             std::dynamic_pointer_cast<bcos::crypto::SM2Signature>(_tx->vrs());
-        signatureResponse["v"] = toJS(sm2Signature->v);
+        signatureResponse["v"] = toJonString(sm2Signature->v);
     }
     else
     {
         std::shared_ptr<bcos::crypto::ECDSASignature> ecdsaSignature =
             std::dynamic_pointer_cast<bcos::crypto::ECDSASignature>(_tx->vrs());
-        signatureResponse["v"] = toJS(ecdsaSignature->v);
+        signatureResponse["v"] = toJonString(ecdsaSignature->v);
     }
-    signatureResponse["signature"] = toJS(_tx->vrs()->asBytes());
+    signatureResponse["signature"] = toJonString(_tx->vrs()->asBytes());
     _response["signature"] = signatureResponse;
 }
 
@@ -1990,40 +1990,40 @@ void Rpc::parseReceiptIntoResponse(Json::Value& _response, bcos::bytesConstRef _
     // the fields required for calculate keccak256 for the transactionReceipt
     // Note: the hash of the transactionReceipt is equal to the hash of the corresponding
     // transaction
-    _response["root"] = toJS(_receipt->stateRoot());
-    _response["gasUsed"] = toJS(_receipt->gasUsed());
-    _response["contractAddress"] = toJS(_receipt->contractAddress());
-    _response["logsBloom"] = toJS(_receipt->bloom());
-    _response["status"] = toJS(_receipt->status());
+    _response["root"] = toJonString(_receipt->stateRoot());
+    _response["gasUsed"] = toJonString(_receipt->gasUsed());
+    _response["contractAddress"] = toJonString(_receipt->contractAddress());
+    _response["logsBloom"] = toJonString(_receipt->bloom());
+    _response["status"] = toJonString(_receipt->status());
     bcos::eth::TransactionException status = _receipt->status();
     // parse statusMsg
     std::stringstream ss;
     ss << status;
     _response["statusMsg"] = ss.str();
 
-    _response["output"] = toJS(_receipt->outputBytes());
+    _response["output"] = toJonString(_receipt->outputBytes());
     // logs
     _response["logs"] = Json::Value(Json::arrayValue);
     for (unsigned int i = 0; i < _receipt->log().size(); ++i)
     {
         Json::Value log;
-        log["address"] = toJS(_receipt->log()[i].address);
+        log["address"] = toJonString(_receipt->log()[i].address);
         log["topics"] = Json::Value(Json::arrayValue);
         for (unsigned int j = 0; j < _receipt->log()[i].topics.size(); ++j)
         {
-            log["topics"].append(toJS(_receipt->log()[i].topics[j]));
+            log["topics"].append(toJonString(_receipt->log()[i].topics[j]));
         }
-        log["data"] = toJS(_receipt->log()[i].data);
+        log["data"] = toJonString(_receipt->log()[i].data);
         _response["logs"].append(log);
     }
     // the fields that are useful for the users
-    _response["transactionHash"] = toJS(_receipt->hash());
-    _response["transactionIndex"] = toJS(_receipt->transactionIndex());
-    _response["blockNumber"] = toJS(_receipt->blockNumber());
-    _response["blockHash"] = toJS(_receipt->blockHash());
-    _response["from"] = toJS(_receipt->from());
-    _response["to"] = toJS(_receipt->to());
-    _response["input"] = toJS(_input.toBytes());
+    _response["transactionHash"] = toJonString(_receipt->hash());
+    _response["transactionIndex"] = toJonString(_receipt->transactionIndex());
+    _response["blockNumber"] = toJonString(_receipt->blockNumber());
+    _response["blockHash"] = toJonString(_receipt->blockHash());
+    _response["from"] = toJonString(_receipt->from());
+    _response["to"] = toJonString(_receipt->to());
+    _response["input"] = toJonString(_input.toBytes());
 }
 
 void Rpc::parseSignatureIntoResponse(
@@ -2038,8 +2038,8 @@ void Rpc::parseSignatureIntoResponse(
     for (auto const& signature : *(_signatureList))
     {
         Json::Value sigJsonObj;
-        sigJsonObj["index"] = toJS(signature.first);
-        sigJsonObj["signature"] = toJS(signature.second);
+        sigJsonObj["index"] = toJonString(signature.first);
+        sigJsonObj["signature"] = toJonString(signature.second);
         _response.append(sigJsonObj);
     }
 }
@@ -2117,7 +2117,7 @@ void Rpc::getBatchReceipts(Json::Value& _response, bcos::eth::Block::Ptr _block,
     auto transactions = _block->transactions();
     auto receipts = _block->transactionReceipts();
     int64_t receiptsSize = receipts->size();
-    int64_t startIndex = jsToInt(_from);
+    int64_t startIndex = jonStringToInt(_from);
     // check the startIndex
     if (startIndex >= (int64_t)transactions->size() || startIndex >= receiptsSize)
     {
@@ -2128,7 +2128,7 @@ void Rpc::getBatchReceipts(Json::Value& _response, bcos::eth::Block::Ptr _block,
     // return all receipts when count is -1
     if (_count != "-1")
     {
-        endIndex = startIndex + jsToInt(_count);
+        endIndex = startIndex + jonStringToInt(_count);
         endIndex = (endIndex > receiptsSize) ? receiptsSize : endIndex;
     }
 
@@ -2138,10 +2138,10 @@ void Rpc::getBatchReceipts(Json::Value& _response, bcos::eth::Block::Ptr _block,
                   << LOG_KV("receiptsSize", receiptsSize);
     Json::Value blockInfo;
 
-    blockInfo["receiptRoot"] = toJS(_block->receiptRoot());
-    blockInfo["blockNumber"] = toJS(_block->blockHeader().number());
-    blockInfo["blockHash"] = toJS(_block->headerHash());
-    blockInfo["receiptsCount"] = toJS(receiptsSize);
+    blockInfo["receiptRoot"] = toJonString(_block->receiptRoot());
+    blockInfo["blockNumber"] = toJonString(_block->blockHeader().number());
+    blockInfo["blockHash"] = toJonString(_block->headerHash());
+    blockInfo["receiptsCount"] = toJonString(receiptsSize);
     _response["blockInfo"] = blockInfo;
 
     for (auto i = startIndex; i < endIndex; ++i)
@@ -2150,25 +2150,25 @@ void Rpc::getBatchReceipts(Json::Value& _response, bcos::eth::Block::Ptr _block,
         auto const& transaction = transactions->at(i);
 
         Json::Value receiptJson;
-        receiptJson["transactionHash"] = toJS(transaction->hash());
-        receiptJson["transactionIndex"] = toJS(i);
-        receiptJson["from"] = toJS(transaction->from());
-        receiptJson["to"] = toJS(transaction->to());
-        receiptJson["gasUsed"] = toJS(receipt->gasUsed());
-        receiptJson["contractAddress"] = toJS(receipt->contractAddress());
+        receiptJson["transactionHash"] = toJonString(transaction->hash());
+        receiptJson["transactionIndex"] = toJonString(i);
+        receiptJson["from"] = toJonString(transaction->from());
+        receiptJson["to"] = toJonString(transaction->to());
+        receiptJson["gasUsed"] = toJonString(receipt->gasUsed());
+        receiptJson["contractAddress"] = toJonString(receipt->contractAddress());
         receiptJson["logs"] = Json::Value(Json::arrayValue);
         for (unsigned int i = 0; i < receipt->log().size(); ++i)
         {
             Json::Value log;
-            log["address"] = toJS(receipt->log()[i].address);
+            log["address"] = toJonString(receipt->log()[i].address);
             log["topics"] = Json::Value(Json::arrayValue);
             for (unsigned int j = 0; j < receipt->log()[i].topics.size(); ++j)
-                log["topics"].append(toJS(receipt->log()[i].topics[j]));
-            log["data"] = toJS(receipt->log()[i].data);
+                log["topics"].append(toJonString(receipt->log()[i].topics[j]));
+            log["data"] = toJonString(receipt->log()[i].data);
             receiptJson["logs"].append(log);
         }
-        receiptJson["status"] = toJS(receipt->status());
-        receiptJson["output"] = toJS(receipt->outputBytes());
+        receiptJson["status"] = toJonString(receipt->status());
+        receiptJson["output"] = toJonString(receipt->outputBytes());
         _response["transactionReceipts"].append(receiptJson);
     }
     if (!_compress)

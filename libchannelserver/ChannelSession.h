@@ -34,7 +34,7 @@
 #include <libconfig/GlobalConfigure.h>
 #include <libstat/ChannelNetworkStatHandler.h>
 #include <libutilities/Common.h>
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
 #include <boost/asio/ssl/stream.hpp>

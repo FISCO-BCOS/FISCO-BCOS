@@ -99,13 +99,13 @@ Public bcos::toPublic(Secret const& _secret)
         // Expect single byte header of value 0x04 -- uncompressed public key.
         assert(serializedPubkey[0] == 0x04);
         // Create the Public skipping the header.
-        return Public{&serializedPubkey[1], Public::ConstructFromPointer};
+        return Public{&serializedPubkey[1], Public::ConstructorType::FromPointer};
     }
     else
     {
         string pri = *toHexString(bytesConstRef{_secret.data(), 32});
         string pub = SM2::getInstance().priToPub(pri);
-        return h512(fromHex(pub));
+        return h512(*fromHexString(pub));
     }
 }
 
@@ -113,7 +113,7 @@ KeyPair KeyPair::create()
 {
     while (true)
     {
-        KeyPair keyPair(Secret::random());
+        KeyPair keyPair(Secret::generateRandomFixedBytes());
         if (keyPair.address())
             return keyPair;
     }
@@ -124,7 +124,7 @@ Secret Nonce::next()
     Guard l(x_value);
     if (!m_value)
     {
-        m_value = Secret::random();
+        m_value = Secret::generateRandomFixedBytes();
         if (!m_value)
             BOOST_THROW_EXCEPTION(InvalidState());
     }

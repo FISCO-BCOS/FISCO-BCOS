@@ -32,7 +32,7 @@
 
 #include <libethcore/Block.h>
 #include <libutilities/Exceptions.h>
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 
 
 #include <set>

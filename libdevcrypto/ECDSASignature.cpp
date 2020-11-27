@@ -102,8 +102,8 @@ std::shared_ptr<crypto::Signature> bcos::ecdsaSignatureFromBytes(std::vector<uns
     {  // ecdsa signature must be 65 bytes
         return nullptr;
     }
-    h256 r(_data.data(), FixedHash<32>::ConstructFromPointerType::ConstructFromPointer);
-    h256 s(_data.data() + 32, FixedHash<32>::ConstructFromPointerType::ConstructFromPointer);
+    h256 r(_data.data(), h256::ConstructorType::FromPointer);
+    h256 s(_data.data() + 32, h256::ConstructorType::FromPointer);
     auto v = _data[64];
     return std::make_shared<ECDSASignature>(r, s, v);
 }
@@ -121,8 +121,8 @@ std::shared_ptr<crypto::Signature> bcos::ecdsaSign(KeyPair const& _keyPair, h256
     secp256k1_ecdsa_recoverable_signature_serialize_compact(ctx, s, &v, &rawSig);
 
     auto ss = std::make_shared<ECDSASignature>();
-    ss->r = h256(s, FixedHash<32>::ConstructFromPointerType::ConstructFromPointer);
-    ss->s = h256(s + 32, FixedHash<32>::ConstructFromPointerType::ConstructFromPointer);
+    ss->r = h256(s, h256::ConstructorType::FromPointer);
+    ss->s = h256(s + 32, h256::ConstructorType::FromPointer);
     ss->v = static_cast<byte>(v);
     if (ss->s > c_secp256k1n / 2)
     {
@@ -170,7 +170,7 @@ Public bcos::ecdsaRecover(std::shared_ptr<crypto::Signature> _s, h256 const& _me
     // Expect single byte header of value 0x04 -- uncompressed public key.
     assert(serializedPubkey[0] == 0x04);
     // Create the Public skipping the header.
-    return Public{&serializedPubkey[1], Public::ConstructFromPointer};
+    return Public{&serializedPubkey[1], Public::ConstructorType::FromPointer};
 }
 
 pair<bool, bytes> bcos::ecRecover(bytesConstRef _in)
@@ -196,14 +196,7 @@ pair<bool, bytes> bcos::ecRecover(bytesConstRef _in)
             {
                 if (Public rec = ecdsaRecover(sig, in.hash))
                 {
-                    if (g_BCOSConfig.version() >= V2_5_0)
-                    {
-                        ret = bcos::keccak256(rec);
-                    }
-                    else
-                    {
-                        ret = crypto::Hash(rec);
-                    }
+                    ret = bcos::keccak256(rec);
                     memset(ret.data(), 0, 12);
                     return {true, ret.asBytes()};
                 }

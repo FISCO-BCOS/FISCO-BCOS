@@ -22,7 +22,7 @@
 #pragma once
 
 #include "Signature.h"
-#include "libutilities/FixedHash.h"
+#include "libutilities/FixedBytes.h"
 #include "libutilities/RLP.h"
 #include <vector>
 

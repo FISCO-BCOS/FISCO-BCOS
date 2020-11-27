@@ -25,7 +25,7 @@
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcrypto/CryptoInterface.h>
 #include <libutilities/Common.h>
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 #include <tbb/concurrent_vector.h>
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_sort.h>

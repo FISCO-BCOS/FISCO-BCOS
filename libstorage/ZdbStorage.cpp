@@ -23,7 +23,7 @@
 #include "Common.h"
 #include "StorageException.h"
 #include "Table.h"
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 #include <thread>
 
 

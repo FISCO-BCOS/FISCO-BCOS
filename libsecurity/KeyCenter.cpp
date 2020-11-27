@@ -211,8 +211,8 @@ const bytes KeyCenter::getDataKey(const std::string& _cipherDataKey)
 
         // update query cache
         m_lastQueryCipherDataKey = _cipherDataKey;
-        bytes readableDataKey = fromHex(dataKeyBytesStr);
-        m_lastRcvDataKey = uniformDataKey(readableDataKey);
+        auto readableDataKey = fromHexString(dataKeyBytesStr);
+        m_lastRcvDataKey = uniformDataKey(*readableDataKey);
 
         // close
         kcclient->close();

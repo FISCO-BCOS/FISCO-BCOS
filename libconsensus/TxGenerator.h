@@ -83,7 +83,7 @@ public:
 private:
     u256 generateRandomValue()
     {
-        auto randomValue = h256::random();
+        auto randomValue = h256::generateRandomFixedBytes();
         return u256(randomValue);
     }
 

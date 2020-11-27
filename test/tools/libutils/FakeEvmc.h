@@ -26,7 +26,7 @@
 #include <libdevcrypto/Common.h>
 #include <libethcore/EVMSchedule.h>
 #include <libethcore/LogEntry.h>
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <iosfwd>
@@ -58,7 +58,7 @@ inline evmc_uint256be toEvmC(h256 const& _h)
 
 inline evmc_uint256be toEvmC(u256 const& _u)
 {
-    h256 h = FixedHash<32>(_u);
+    h256 h = FixedBytes<32>(_u);
     return reinterpret_cast<evmc_uint256be const&>(h);
 }
 
@@ -122,7 +122,7 @@ public:
         AccountStateType& accountState = state[toKey(addr)];
         for (auto& s : accountState)
         {
-            std::cout << s.first << ":" << FixedHash<32>(fromEvmC(s.second)).hex() << std::endl;
+            std::cout << s.first << ":" << FixedBytes<32>(fromEvmC(s.second)).hex() << std::endl;
         }
     }
 

@@ -154,7 +154,7 @@ public:
         m_blockHeader.setGasUsed(u256(100000));
         uint64_t current_time = 100000;  // utcTime();
         m_blockHeader.setTimestamp(current_time);
-        m_blockHeader.appendExtraDataArray(jsToBytes("0x1020"));
+        m_blockHeader.appendExtraDataArray(jonStringToBytes("0x1020"));
         m_blockHeader.setSealer(u256(12));
         std::vector<h512> sealer_list;
         for (unsigned int i = 0; i < 13; i++)

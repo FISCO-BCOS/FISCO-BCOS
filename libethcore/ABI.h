@@ -365,8 +365,8 @@ public:
     template <class... T>
     bool abiOutHex(const std::string& _data, T&... _t)
     {
-        auto data = fromHex(_data);
-        return abiOut(bytesConstRef(&data), _t...);
+        auto data = fromHexString(_data);
+        return abiOut(bytesConstRef(data->data(), data->size()), _t...);
     }
 
     bool abiOutByFuncSelector(bytesConstRef _data, const std::vector<std::string>& _allTypes,

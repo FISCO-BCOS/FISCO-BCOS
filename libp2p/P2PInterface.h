@@ -25,7 +25,7 @@
 #include <libnetwork/SessionFace.h>
 #include <libp2p/Common.h>
 #include <libp2p/P2PMessage.h>
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 #include <memory>
 
 namespace bcos
