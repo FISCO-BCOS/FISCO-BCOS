@@ -116,6 +116,9 @@ Entries::Ptr ScalableStorage::select(
 {
     if (isStateData(tableInfo->name))
     {
+        SCALABLE_STORAGE_LOG(TRACE)
+            << "select from state DB" << LOG_KV("dbName", tableInfo->name)
+            << LOG_KV("key", key) << LOG_KV("number", num);
         return m_state->select(num, tableInfo, key, condition);
     }
     else
@@ -129,6 +132,7 @@ Entries::Ptr ScalableStorage::select(
             {
                 SCALABLE_STORAGE_LOG(FATAL) << "select from remote DB failed";
             }
+            conversionData(tableInfo->name, entries);
             return entries;
         }
         else if (m_archive)
@@ -138,6 +142,25 @@ Entries::Ptr ScalableStorage::select(
     }
     SCALABLE_STORAGE_LOG(FATAL) << "Can't find data or remote storage died, please check!";
     return nullptr;
+}
+
+void ScalableStorage::conversionData(const std::string& tableName, Entries::Ptr entries)
+{
+    if (m_archiveTables.end() != find(m_archiveTables.begin(), m_archiveTables.end(), tableName))
+    {
+        LOG(TRACE) << LOG_BADGE("ScalableStorage") << LOG_DESC("conversion table data") << LOG_KV("table name", tableName);
+        for (size_t i = 0; i < entries->size(); i++)
+        {
+            auto entry = entries->get(i);
+            auto dataStr = entry->getField("value");
+            auto dataBytes = std::make_shared<bytes>(fromHex(dataStr.c_str()));
+            entry->setField("value", dataBytes->data(), dataBytes->size());
+        }
+    } 
+    else 
+    {
+        LOG(ERROR) << LOG_BADGE("ScalableStorage") << LOG_DESC("invalid table data") << LOG_KV("table name", tableName);
+    }
 }
 
 void ScalableStorage::separateData(const vector<TableData::Ptr>& datas,

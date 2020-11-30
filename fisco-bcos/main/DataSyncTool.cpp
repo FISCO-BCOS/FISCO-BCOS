@@ -245,7 +245,7 @@ void conversionData(const std::string& tableName, TableData::Ptr tableData)
     }*/
     if (HexTables.end() != find(HexTables.begin(), HexTables.end(), tableName))
     {
-        LOG(TRACE) << LOG_BADGE("STORAGE") << LOG_DESC("conversion table data") << LOG_KV("table name", tableName);
+        LOG(TRACE) << LOG_BADGE("STORAGE") << LOG_DESC("conversion table data") << LOG_KV("table name", tableName) << LOG_KV("new entry count", tableData->newEntries->size()) << LOG_KV("dirty entry count", tableData->dirtyEntries->size());
         for (size_t i = 0; i < tableData->newEntries->size(); i++)
         {
             auto entry = tableData->newEntries->get(i);
@@ -253,8 +253,15 @@ void conversionData(const std::string& tableName, TableData::Ptr tableData)
             auto dataBytes = std::make_shared<bytes>(fromHex(dataStr.c_str()));
             entry->setField("value", dataBytes->data(), dataBytes->size());
         }
+        for (size_t i = 0; i < tableData->dirtyEntries->size(); i++)
+        {
+            auto entry = tableData->dirtyEntries->get(i);
+            auto dataStr = entry->getField("value");
+            auto dataBytes = std::make_shared<bytes>(fromHex(dataStr.c_str()));
+            entry->setField("value", dataBytes->data(), dataBytes->size());
+        }
     } else if (tableName == SYS_HASH_2_BLOCKHEADER) {
-        LOG(TRACE) << LOG_BADGE("STORAGE") << LOG_DESC("conversion table data") << LOG_KV("table name", tableName);
+        LOG(TRACE) << LOG_BADGE("STORAGE") << LOG_DESC("conversion table data") << LOG_KV("table name", tableName) << LOG_KV("new entry count", tableData->newEntries->size()) << LOG_KV("dirty entry count", tableData->dirtyEntries->size());
         for (size_t i = 0; i < tableData->newEntries->size(); i++)
         {
             auto entry = tableData->newEntries->get(i);
@@ -265,8 +272,8 @@ void conversionData(const std::string& tableName, TableData::Ptr tableData)
             auto dataBytes2 = std::make_shared<bytes>(fromHex(dataStr2.c_str()));
             entry->setField("sigs", dataBytes2->data(), dataBytes2->size());
         }
-    } else if (tableName.find_first_of("c_") == 0) {
-        LOG(TRACE) << LOG_BADGE("STORAGE") << LOG_DESC("conversion table data") << LOG_KV("table name", tableName);
+    } else if (tableName.substr(0, 2) == "c_") {
+        LOG(TRACE) << LOG_BADGE("STORAGE") << LOG_DESC("conversion table data") << LOG_KV("table name", tableName) << LOG_KV("new entry count", tableData->newEntries->size()) << LOG_KV("dirty entry count", tableData->dirtyEntries->size());
         for (size_t i = 0; i < tableData->newEntries->size(); i++)
         {
             auto entry = tableData->newEntries->get(i);
@@ -280,6 +287,7 @@ void conversionData(const std::string& tableName, TableData::Ptr tableData)
             }
         }
     }
+    LOG(TRACE) << LOG_BADGE("STORAGE") << LOG_DESC("conversion end!");
 }
 
 void syncData(SQLStorage::Ptr _reader, Storage::Ptr _writer, int64_t _blockNumber,
@@ -510,7 +518,7 @@ int main(int argc, const char* argv[])
         boost::program_options::value<std::string>()->default_value("./config.ini"),
         "config file path, eg. config.ini")("verify,v",
         boost::program_options::value<int64_t>()->default_value(1000),
-        "verify number of blocks, minimum is 100")("limit,l",
+        "verify number of blocks, default 1000")("limit,l",
         boost::program_options::value<uint32_t>()->default_value(10000), "page counts of table")(
         "sys_limit,s", boost::program_options::value<uint32_t>()->default_value(50),
         "page counts of system table")(
