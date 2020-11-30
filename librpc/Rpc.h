@@ -197,7 +197,8 @@ protected:
         std::shared_ptr<dev::blockchain::MerkleProofType> _proofList);
 
     void generateBlockHeaderInfo(Json::Value& _response, dev::eth::BlockHeader const& _blockHeader,
-        dev::eth::Block::SigListPtrType _signatureList, bool _includeSigList);
+        dev::eth::Block::SigListPtrType _signatureList, bool _includeSigList,
+        bool _withHexBlockNumber);
 
 
     std::shared_ptr<dev::ledger::LedgerManager> m_ledgerManager;
