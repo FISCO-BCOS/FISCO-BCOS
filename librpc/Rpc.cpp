@@ -606,7 +606,7 @@ Json::Value Rpc::getBlockByHash(int _groupID, const std::string& _blockHash, boo
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(RPCExceptionType::BlockHash, RPCMsg[RPCExceptionType::BlockHash]));
         // get the blockHeader
-        generateBlockHeaderInfo(response, block->blockHeader(), nullptr, false);
+        generateBlockHeaderInfo(response, block->blockHeader(), nullptr, false, true);
         auto transactions = block->transactions();
         response["transactions"] = Json::Value(Json::arrayValue);
         for (unsigned i = 0; i < transactions->size(); i++)
@@ -644,10 +644,16 @@ Json::Value Rpc::getBlockByHash(int _groupID, const std::string& _blockHash, boo
 
 
 void Rpc::generateBlockHeaderInfo(Json::Value& _response, dev::eth::BlockHeader const& _blockHeader,
-    dev::eth::Block::SigListPtrType _signatureList, bool _includeSigList)
+    dev::eth::Block::SigListPtrType _signatureList, bool _includeSigList, bool _withHexBlockNumber)
 {
-    _response["number"] = toJS(_blockHeader.number());
-
+    if (_withHexBlockNumber)
+    {
+        _response["number"] = toJS(_blockHeader.number());
+    }
+    else
+    {
+        _response["number"] = _blockHeader.number();
+    }
     _response["hash"] = toJS(_blockHeader.hash());
     _response["parentHash"] = toJS(_blockHeader.parentHash());
     _response["logsBloom"] = toJS(_blockHeader.logBloom());
@@ -705,7 +711,7 @@ Json::Value Rpc::getBlockHeaderByNumber(
         }
         Json::Value response;
         generateBlockHeaderInfo(
-            response, *(blockHeaderInfo->first), blockHeaderInfo->second, _includeSigList);
+            response, *(blockHeaderInfo->first), blockHeaderInfo->second, _includeSigList, false);
         return response;
     }
     catch (JsonRpcException& e)
@@ -738,7 +744,7 @@ Json::Value Rpc::getBlockHeaderByHash(
         }
         Json::Value response;
         generateBlockHeaderInfo(
-            response, *(blockHeaderInfo->first), blockHeaderInfo->second, _includeSigList);
+            response, *(blockHeaderInfo->first), blockHeaderInfo->second, _includeSigList, false);
         return response;
     }
     catch (JsonRpcException& e)
@@ -774,7 +780,7 @@ Json::Value Rpc::getBlockByNumber(
             BOOST_THROW_EXCEPTION(JsonRpcException(
                 RPCExceptionType::BlockNumberT, RPCMsg[RPCExceptionType::BlockNumberT]));
         // get the blockHeader
-        generateBlockHeaderInfo(response, block->blockHeader(), nullptr, false);
+        generateBlockHeaderInfo(response, block->blockHeader(), nullptr, false, true);
         auto transactions = block->transactions();
         response["transactions"] = Json::Value(Json::arrayValue);
         for (unsigned i = 0; i < transactions->size(); i++)
