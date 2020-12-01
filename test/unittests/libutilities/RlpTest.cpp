@@ -31,21 +31,22 @@
 #include <libutilities/RLP.h>
 
 using namespace std;
+using namespace bcos;
 BOOST_FIXTURE_TEST_SUITE(RlpTests, bcos::test::TestOutputHelperFixture)
 
 BOOST_AUTO_TEST_CASE(EmptyArrayList)
 {
     try
     {
-        bcos::bytes payloadToDecode = bcos::fromHex("80");
-        bcos::RLP payload(payloadToDecode);
+        bytes payloadToDecode = *fromHexString("80");
+        RLP payload(payloadToDecode);
         LOG(INFO) << payload;
 
-        payloadToDecode = bcos::fromHex("c0");
-        bcos::RLP payload2(payloadToDecode);
+        payloadToDecode = *fromHexString("c0");
+        RLP payload2(payloadToDecode);
         LOG(INFO) << payload2;
     }
-    catch (bcos::Exception const& _e)
+    catch (Exception const& _e)
     {
         BOOST_ERROR("(EmptyArrayList) Failed test with Exception: " << _e.what());
     }
@@ -75,7 +76,7 @@ BOOST_AUTO_TEST_CASE(rlpRandom)
         try
         {
             LOG(INFO) << "Testing ... " << path.filename();
-            std::string s = bcos::asString(*bcos::readContents(path.string()));
+            std::string s = asString(*readContents(path.string()));
             std::string empty_str = "Content of " + path.string() + " is empty";
             BOOST_REQUIRE_MESSAGE(s.length() > 0, empty_str);
             Json::Value v;
@@ -96,10 +97,10 @@ BOOST_AUTO_TEST_CASE(testTxRlp)
         "026994d1b50090cf3c7588359a670b775546a72a2be95480a466c9913900000000000000000000000000000000"
         "000000000000000000000000000000040101801ba03faa8232ad248fc31c68eb56e8bbedf4e70be9381460afd9"
         "9819b8cf8b6c91cba052121430a55f5ec0c2a2db3000324335507a46b697f961bb86be2687d0d8caf9";
-    bcos::bytes rlpBytes = bcos::fromHex(txRlpString);
+    bytes rlpBytes = *fromHexString(txRlpString);
     bytesConstRef rlpData = ref(rlpBytes);
     RLP const rlp(rlpData);
-    bcos::h256 r = rlp[11].toInt<u256>();
+    h256 r = rlp[11].toInt<u256>();
     std::cout << "decoded r:" << *toHexString(r);
     BOOST_CHECK(
         *toHexString(r) == "3faa8232ad248fc31c68eb56e8bbedf4e70be9381460afd99819b8cf8b6c91cb");

@@ -23,7 +23,7 @@
 
 #pragma once
 
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/types.h>

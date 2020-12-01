@@ -44,7 +44,7 @@ bool VRFInfo::verifyProof()
 bcos::h256 VRFInfo::getHashFromProof()
 {
     std::string vrfHash = curve25519_vrf_proof_to_hash(m_vrfProof.c_str());
-    return bcos::h256(fromHex(vrfHash));
+    return bcos::h256(*fromHexString(vrfHash));
 }
 
 WorkingSealerManagerImpl::WorkingSealerManagerImpl(
@@ -249,7 +249,7 @@ void WorkingSealerManagerImpl::checkVRFInfos()
     }
     // check vrf input: must be equal to the parent block hash
     auto parentBlockHash = m_context->blockInfo().hash;
-    if (bcos::h256(fromHex(m_vrfInfo->vrfInput())) != parentBlockHash)
+    if (bcos::h256(*fromHexString(m_vrfInfo->vrfInput())) != parentBlockHash)
     {
         PRECOMPILED_LOG(ERROR)
             << LOG_DESC("checkVRFInfos: Invalid VRFInput, must be the parent block hash")

@@ -35,7 +35,7 @@
 #include <mutex>
 namespace bcos
 {
-using Secret = SecureFixedHash<32>;
+using Secret = SecureFixedBytes<32>;
 
 /// A public key: 64 bytes.
 /// @NOTE This is not endian-specific; it's just a bunch of bytes.

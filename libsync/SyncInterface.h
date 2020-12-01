@@ -21,7 +21,7 @@
  */
 #pragma once
 #include "Common.h"
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 #include <libutilities/Worker.h>
 namespace bcos
 {

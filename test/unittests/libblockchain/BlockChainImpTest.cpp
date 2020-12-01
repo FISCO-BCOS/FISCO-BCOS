@@ -273,16 +273,21 @@ BOOST_AUTO_TEST_CASE(emptyChain)
     EmptyFixture empty;
 
     BOOST_CHECK_EQUAL(empty.m_blockChainImp->number(), 0);
+    std::cout << "### pass 1" << std::endl;
     BOOST_CHECK_EQUAL(empty.m_blockChainImp->totalTransactionCount().first, 0);
     BOOST_CHECK_EQUAL(empty.m_blockChainImp->totalTransactionCount().second, 0);
     BOOST_CHECK_NO_THROW(empty.m_blockChainImp->getCode(Address(0x0)));
+    std::cout << "### pass 2" << std::endl;
 
     /// modify the hash of the empty block since "timestamp" has been added into groupMark
     BOOST_CHECK_EQUAL(empty.m_blockChainImp->numberHash(0),
         h256("0x2d1c730a81f92c9888f508a9c1a4cdeed7063b831f1a21d61a4d6d97584fc260"));
+    std::cout << "### pass 3" << std::endl;
 
     BOOST_CHECK_EQUAL(
         empty.m_blockChainImp->getBlockByHash(h256(c_commonHashPrefix)), std::shared_ptr<Block>());
+    std::cout << "### pass 4" << std::endl;
+
     BOOST_CHECK_EQUAL(
         (empty.m_blockChainImp->getLocalisedTxByHash(h256(c_commonHashPrefix)))->blockHash(),
         h256(0));

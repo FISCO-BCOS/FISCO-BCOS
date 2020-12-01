@@ -21,6 +21,7 @@
 #pragma once
 #include "libprecompiled/Precompiled.h"
 #include "libutilities/Exceptions.h"
+#include "libutilities/FixedBytes.h"
 #include <libstorage/StorageException.h>
 #include <memory>
 #include <string>

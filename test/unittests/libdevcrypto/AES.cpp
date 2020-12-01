@@ -22,7 +22,7 @@
 #include <iostream>
 
 #include "libdevcrypto/AES.h"
-#include <libutilities/CommonJS.h>
+#include <libutilities/JsonDataConvertUtility.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <string>

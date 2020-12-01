@@ -21,7 +21,7 @@
 #include <libdevcrypto/Common.h>
 #include <libdevcrypto/CryptoInterface.h>
 #include <libethcore/Common.h>
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 #include <libutilities/RLP.h>
 #include <tbb/concurrent_unordered_set.h>
 #include <boost/optional.hpp>

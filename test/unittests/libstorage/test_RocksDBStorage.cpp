@@ -25,7 +25,7 @@
 #include "rocksdb/write_batch.h"
 #include <libstorage/BasicRocksDB.h>
 #include <libstorage/RocksDBStorage.h>
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 #include <libutilities/Log.h>
 #include <boost/test/unit_test.hpp>
 

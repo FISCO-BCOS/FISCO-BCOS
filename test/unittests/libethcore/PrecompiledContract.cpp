@@ -39,7 +39,7 @@ BOOST_AUTO_TEST_CASE(testEthcorePrecompiledContract)
     PrecompiledPricer pricer = PrecompiledRegistrar::pricer("modexp");
     PrecompiledExecutor exec = PrecompiledRegistrar::executor("modexp");
     PrecompiledContract defaultPrecompiledContract(pricer, exec, 0);
-    bytes in = fromHex(
+    bytes in = *fromHexString(
         "0000000000000000000000000000000000000000000000000000000000000001"
         "0000000000000000000000000000000000000000000000000000000000000020"
         "0000000000000000000000000000000000000000000000000000000000000020"
@@ -50,7 +50,7 @@ BOOST_AUTO_TEST_CASE(testEthcorePrecompiledContract)
     auto res = defaultPrecompiledContract.cost(bytesConstRef(in.data(), in.size()));
     BOOST_REQUIRE_EQUAL(static_cast<int>(res), 13056);
 
-    in = fromHex(
+    in = *fromHexString(
         "0000000000000000000000000000000000000000000000000000000000000001"
         "0000000000000000000000000000000000000000000000000000000000000001"
         "0000000000000000000000000000000000000000000000000000000000000020"
@@ -60,7 +60,8 @@ BOOST_AUTO_TEST_CASE(testEthcorePrecompiledContract)
 
     auto res0 = defaultPrecompiledContract.execute(bytesConstRef(in.data(), in.size()));
     BOOST_REQUIRE(res0.first);
-    bytes expected = fromHex("0000000000000000000000000000000000000000000000000000000000000000");
+    bytes expected =
+        *fromHexString("0000000000000000000000000000000000000000000000000000000000000000");
     BOOST_REQUIRE_EQUAL_COLLECTIONS(
         res0.second.begin(), res0.second.end(), expected.begin(), expected.end());
 

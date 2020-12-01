@@ -21,7 +21,7 @@
 
 #pragma once
 
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 #include <libutilities/vector_ref.h>
 #include <string>
 
@@ -38,9 +38,9 @@ inline h256 sm3(bytesConstRef _input)
     sm3(_input, ret.ref());
     return ret;
 }
-inline SecureFixedHash<32> sm3Secure(bytesConstRef _input)
+inline SecureFixedBytes<32> sm3Secure(bytesConstRef _input)
 {
-    SecureFixedHash<32> ret;
+    SecureFixedBytes<32> ret;
     sm3(_input, ret.writable().ref());
     return ret;
 }
@@ -52,7 +52,7 @@ inline h256 sm3(bytes const& _input)
 {
     return sm3(bytesConstRef(&_input));
 }
-inline SecureFixedHash<32> sm3Secure(bytes const& _input)
+inline SecureFixedBytes<32> sm3Secure(bytes const& _input)
 {
     return sm3Secure(bytesConstRef(&_input));
 }
@@ -63,39 +63,39 @@ inline h256 sm3(std::string const& _input)
 {
     return sm3(bytesConstRef(_input));
 }
-inline SecureFixedHash<32> sm3Secure(std::string const& _input)
+inline SecureFixedBytes<32> sm3Secure(std::string const& _input)
 {
     return sm3Secure(bytesConstRef(_input));
 }
 
-/// Calculate SM3-256 hash of the given input (presented as a FixedHash), returns a 256-bit hash.
+/// Calculate SM3-256 hash of the given input (presented as a FixedBytes), returns a 256-bit hash.
 template <unsigned N>
-inline h256 sm3(FixedHash<N> const& _input)
+inline h256 sm3(FixedBytes<N> const& _input)
 {
     return sm3(_input.ref());
 }
 template <unsigned N>
-inline SecureFixedHash<32> sm3Secure(FixedHash<N> const& _input)
+inline SecureFixedBytes<32> sm3Secure(FixedBytes<N> const& _input)
 {
     return sm3Secure(_input.ref());
 }
 
 /// Fully secure variants are equivalent for sm3 and sm3Secure.
-inline SecureFixedHash<32> sm3(bytesSec const& _input)
+inline SecureFixedBytes<32> sm3(secBytes const& _input)
 {
     return sm3Secure(_input.ref());
 }
-inline SecureFixedHash<32> sm3Secure(bytesSec const& _input)
-{
-    return sm3Secure(_input.ref());
-}
-template <unsigned N>
-inline SecureFixedHash<32> sm3(SecureFixedHash<N> const& _input)
+inline SecureFixedBytes<32> sm3Secure(secBytes const& _input)
 {
     return sm3Secure(_input.ref());
 }
 template <unsigned N>
-inline SecureFixedHash<32> sm3Secure(SecureFixedHash<N> const& _input)
+inline SecureFixedBytes<32> sm3(SecureFixedBytes<N> const& _input)
+{
+    return sm3Secure(_input.ref());
+}
+template <unsigned N>
+inline SecureFixedBytes<32> sm3Secure(SecureFixedBytes<N> const& _input)
 {
     return sm3Secure(_input.ref());
 }
@@ -104,7 +104,8 @@ inline SecureFixedHash<32> sm3Secure(SecureFixedHash<N> const& _input)
 /// hash as a string filled with binary data.
 inline std::string sm3(std::string const& _input, bool _isNibbles)
 {
-    return asString((_isNibbles ? sm3(fromHex(_input)) : sm3(bytesConstRef(&_input))).asBytes());
+    return asString(
+        (_isNibbles ? sm3(*fromHexString(_input)) : sm3(bytesConstRef(&_input))).asBytes());
 }
 
 /// Calculate SM3-256 MAC

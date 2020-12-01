@@ -26,19 +26,19 @@ void EventLogFilter::matches(Block const& _block, Json::Value& _value)
 
             Json::Value resp;
             resp["blockNumber"] = toString(_block.blockHeader().number());
-            resp["blockHash"] = toJS(_block.blockHeader().hash());
-            resp["address"] = toJS(log.address);
-            resp["logIndex"] = toJS(j);
-            resp["data"] = toJS(log.data);
+            resp["blockHash"] = toJonString(_block.blockHeader().hash());
+            resp["address"] = toJonString(log.address);
+            resp["logIndex"] = toJonString(j);
+            resp["data"] = toJonString(log.data);
             resp["topics"] = Json::Value(Json::arrayValue);
 
             for (std::size_t k = 0; k < log.topics.size(); ++k)
             {
-                resp["topics"].append(toJS(log.topics[k]));
+                resp["topics"].append(toJonString(log.topics[k]));
             }
 
-            resp["transactionHash"] = toJS(tx->hash());
-            resp["transactionIndex"] = toJS(i);
+            resp["transactionHash"] = toJonString(tx->hash());
+            resp["transactionIndex"] = toJonString(i);
 
             _value.append(resp);
         }

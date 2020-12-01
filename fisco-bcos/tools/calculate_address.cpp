@@ -1,6 +1,6 @@
 #include "libdevcrypto/CryptoInterface.h"
 #include "libutilities/DataConvertUtility.h"
-#include "libutilities/FixedHash.h"
+#include "libutilities/FixedBytes.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,15 +24,15 @@ int main(int argc, char** argv)
     {
         useSMCrypto = true;
     }
-    auto source = bcos::fromHex(argv[argc - 1]);
+    auto source = bcos::fromHexString(argv[argc - 1]);
 
     if (useSMCrypto)
     {
-        auto addr = right160(sm3(bytesConstRef((const unsigned char*)source.data(), 64)));
+        auto addr = right160(sm3(bytesConstRef((const unsigned char*)source->data(), 64)));
         cout << addr << endl;
         return 0;
     }
-    auto addr = right160(keccak256(bytesConstRef((const unsigned char*)source.data(), 64)));
+    auto addr = right160(keccak256(bytesConstRef((const unsigned char*)source->data(), 64)));
     cout << addr << endl;
     return 0;
 }

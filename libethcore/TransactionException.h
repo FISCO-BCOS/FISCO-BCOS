@@ -77,7 +77,7 @@ enum class TransactionException : uint32_t
 TransactionException toTransactionException(Exception const& _e);
 std::ostream& operator<<(std::ostream& _out, TransactionException const& _er);
 
-inline std::string toJS(eth::TransactionException const& _i)
+inline std::string toJonString(eth::TransactionException const& _i)
 {
     std::stringstream stream;
     stream << "0x" << std::hex << static_cast<int>(_i);

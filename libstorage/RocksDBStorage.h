@@ -22,7 +22,7 @@
 
 #include "Storage.h"
 #include <json/json.h>
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 #include <tbb/spin_mutex.h>
 #include <map>
 

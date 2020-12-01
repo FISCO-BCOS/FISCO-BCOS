@@ -109,7 +109,7 @@ BOOST_AUTO_TEST_CASE(getDataKeyTest)
     BOOST_CHECK_EQUAL(kcClient->queryCnt, 0);
 
     bytes key = keyCenter->getDataKey(fakeKey);
-    bytes compareKey = keyCenter->uniformDataKey(fromHex(kcClient->dataKeyStr));
+    bytes compareKey = keyCenter->uniformDataKey(*fromHexString(kcClient->dataKeyStr));
     BOOST_CHECK(key == compareKey);
     BOOST_CHECK_EQUAL(kcClient->queryCnt, 1);
 

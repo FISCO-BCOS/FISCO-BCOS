@@ -25,7 +25,7 @@
 #include <libblockverifier/BlockVerifierInterface.h>
 #include <libblockverifier/ExecutiveContext.h>
 #include <libethcore/BlockFactory.h>
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 
 #define SEAL_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("SEALER")
 #define ENGINE_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("ConsensusEngine")

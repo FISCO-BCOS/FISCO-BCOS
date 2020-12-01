@@ -86,7 +86,7 @@ std::string bcos::escaped(std::string const& _s, bool _all)
 }
 
 
-bytes bcos::fromHex(std::string const& _hexedString)
+std::shared_ptr<bytes> bcos::fromHexString(std::string const& _hexedString)
 {
     unsigned startIndex =
         (_hexedString.size() >= 2 && _hexedString[0] == '0' && _hexedString[1] == 'x') ? 2 : 0;
@@ -112,7 +112,7 @@ bytes bcos::fromHex(std::string const& _hexedString)
         }
         bytesData->push_back((bcos::byte)(highValue << 4) + lowValue);
     }
-    return *bytesData;
+    return bytesData;
 }
 
 std::string bcos::toString(string32 const& _s)

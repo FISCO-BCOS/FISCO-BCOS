@@ -67,7 +67,7 @@ bool PBFTReqCache::generateAndSetSigList(bcos::eth::Block& block, IDXTYPE const&
     {
         for (auto const& item : m_commitCache[m_prepareCache->block_hash])
         {
-            sig_list->push_back(std::make_pair(u256(item.second->idx), fromHex(item.first)));
+            sig_list->push_back(std::make_pair(u256(item.second->idx), *fromHexString(item.first)));
         }
         if (sig_list->size() < minSigSize)
         {

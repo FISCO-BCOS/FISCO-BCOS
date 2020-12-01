@@ -222,8 +222,8 @@ bcos::precompiled::ContractStatus bcos::precompiled::getContractStatus(
     }
     else
     {
-        codeHash =
-            h256(fromHex(codeHashEntries->get(0)->getField(bcos::storagestate::STORAGE_VALUE)));
+        codeHash = h256(
+            *fromHexString(codeHashEntries->get(0)->getField(bcos::storagestate::STORAGE_VALUE)));
     }
 
     if (EmptyHash == codeHash)

@@ -24,7 +24,7 @@ bool EventLogFilterParams::getGroupIDField(const Json::Value& _json, GROUP_ID& _
     // groupID field
     if (_json.isMember("groupID"))
     {  // groupID field not exist
-        int groupID = jsToInt(_json["groupID"].asString());
+        int groupID = jonStringToInt(_json["groupID"].asString());
         if (validGroupID(groupID))
         {
             _groupID = (GROUP_ID)groupID;

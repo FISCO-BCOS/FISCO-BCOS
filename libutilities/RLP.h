@@ -23,7 +23,7 @@
 
 #pragma once
 
-#include "FixedHash.h"
+#include "FixedBytes.h"
 #include "libutilities/Exceptions.h"
 #include "libutilities/vector_ref.h"
 #include <array>
@@ -163,12 +163,12 @@ public:
     bool operator==(std::string const& _s) const { return isData() && toString() == _s; }
     bool operator!=(std::string const& _s) const { return isData() && toString() != _s; }
     template <unsigned _N>
-    bool operator==(FixedHash<_N> const& _h) const
+    bool operator==(FixedBytes<_N> const& _h) const
     {
         return isData() && toHash<_N>() == _h;
     }
     template <unsigned _N>
-    bool operator!=(FixedHash<_N> const& _s) const
+    bool operator!=(FixedBytes<_N> const& _s) const
     {
         return isData() && toHash<_N>() != _s;
     }
@@ -235,9 +235,9 @@ public:
     explicit operator u256() const { return toInt<u256>(); }
     explicit operator bigint() const { return toInt<bigint>(); }
     template <unsigned N>
-    explicit operator FixedHash<N>() const
+    explicit operator FixedBytes<N>() const
     {
-        return toHash<FixedHash<N>>();
+        return toHash<FixedBytes<N>>();
     }
     template <class T, class U>
     explicit operator std::pair<T, U>() const
@@ -560,11 +560,11 @@ struct Converter<bigint>
     static bigint convert(RLP const& _r, int _flags) { return _r.toInt<bigint>(_flags); }
 };
 template <unsigned N>
-struct Converter<FixedHash<N>>
+struct Converter<FixedBytes<N>>
 {
-    static FixedHash<N> convert(RLP const& _r, int _flags)
+    static FixedBytes<N> convert(RLP const& _r, int _flags)
     {
-        return _r.toHash<FixedHash<N>>(_flags);
+        return _r.toHash<FixedBytes<N>>(_flags);
     }
 };
 template <class T, class U>
@@ -626,7 +626,7 @@ public:
     RLPStream& append(std::string const& _s) { return append(bytesConstRef(_s)); }
     RLPStream& append(char const* _s) { return append(std::string(_s)); }
     template <unsigned N>
-    RLPStream& append(FixedHash<N> _s, bool _compact = false, bool _allOrNothing = false)
+    RLPStream& append(FixedBytes<N> _s, bool _compact = false, bool _allOrNothing = false)
     {
         return _allOrNothing && !_s ? append(bytesConstRef()) : append(_s.ref(), _compact);
     }

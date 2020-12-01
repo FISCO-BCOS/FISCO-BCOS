@@ -37,15 +37,15 @@ std::shared_ptr<bytes> EncryptedFile::decryptContents(const std::string& _filePa
         LOG(DEBUG) << LOG_BADGE("ENCFILE") << LOG_DESC("Trying to read enc file")
                    << LOG_KV("file", _filePath);
         auto encContextsStr = readContentsToString(_filePath);
-        auto encFileBytes = fromHex(*encContextsStr);
+        auto encFileBytes = fromHexString(*encContextsStr);
         LOG(DEBUG) << LOG_BADGE("ENCFILE") << LOG_DESC("Enc file contents")
                    << LOG_KV("string", *encContextsStr);
 
         auto dataKey = g_BCOSConfig.diskEncryption.dataKey;
 
         string decFileBytesBase64 =
-            crypto::SymmetricDecrypt((const unsigned char*)encFileBytes.data(), encFileBytes.size(),
-                (const unsigned char*)dataKey.data(), dataKey.size(),
+            crypto::SymmetricDecrypt((const unsigned char*)encFileBytes->data(),
+                encFileBytes->size(), (const unsigned char*)dataKey.data(), dataKey.size(),
                 (const unsigned char*)dataKey.substr(0, 16).data());
 
         LOG(DEBUG) << "[ENCFILE] EncryptedFile Base64 key: " << decFileBytesBase64 << endl;

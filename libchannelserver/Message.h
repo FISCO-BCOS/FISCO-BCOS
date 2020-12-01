@@ -26,7 +26,7 @@
 
 #include <libethcore/Protocol.h>
 #include <libutilities/Common.h>
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 #include <boost/lexical_cast.hpp>
 #include <memory>
 #include <queue>

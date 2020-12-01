@@ -24,7 +24,7 @@
 #include <json/json.h>
 #include <libethcore/Exceptions.h>
 #include <libutilities/Exceptions.h>
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/crc.hpp>

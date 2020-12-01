@@ -25,7 +25,7 @@
 #include <libdevcrypto/Common.h>
 #include <libethcore/BlockHeader.h>
 #include <libethcore/Transaction.h>
-#include <libutilities/CommonJS.h>
+#include <libutilities/JsonDataConvertUtility.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
@@ -50,11 +50,11 @@ public:
         block_header_genesis.setGasUsed(u256(100000));
         current_time = utcTime();
         block_header_genesis.setTimestamp(current_time);
-        block_header_genesis.appendExtraDataArray(jsToBytes("0x1020"));
+        block_header_genesis.appendExtraDataArray(jonStringToBytes("0x1020"));
         block_header_genesis.setSealer(u256("0x00"));
         for (unsigned int i = 0; i < 10; i++)
         {
-            sealer_list.push_back(toPublic(Secret::random()));
+            sealer_list.push_back(toPublic(Secret::generateRandomFixedBytes()));
         }
         block_header_genesis.setSealerList(sealer_list);
         /// construct block
@@ -122,7 +122,7 @@ BOOST_AUTO_TEST_CASE(testBlockerHeaderGetter)
     BOOST_CHECK(block_header_genesis.timestamp() == current_time);
     bytes valid_item = block_header_genesis.extraData(0);
     BOOST_CHECK(valid_item.size());
-    BOOST_CHECK(valid_item == jsToBytes("0x1020"));
+    BOOST_CHECK(valid_item == jonStringToBytes("0x1020"));
     BOOST_CHECK(block_header_genesis.extraData().size() == 1);
     BOOST_CHECK(block_header_genesis.sealer() == u256("0x00"));
     BOOST_CHECK(block_header_genesis.sealerList() == sealer_list);

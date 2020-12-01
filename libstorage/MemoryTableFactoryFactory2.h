@@ -24,7 +24,7 @@
 #include "MemoryTableFactory.h"
 #include "Storage.h"
 #include "Table.h"
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 
 namespace bcos
 {

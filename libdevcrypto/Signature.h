@@ -21,7 +21,7 @@
 
 #pragma once
 
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 #include <libutilities/RLP.h>
 
 namespace bcos

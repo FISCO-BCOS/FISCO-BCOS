@@ -140,8 +140,8 @@ BOOST_AUTO_TEST_CASE(testWithEncryptDecryptHandler)
     // fake param
     std::string dbName = "tmp/testRocksDB";
     // set datakey
-    g_BCOSConfig.diskEncryption.dataKey =
-        asString(fromHex("3031323334353637303132333435363730313233343536373031323334353637"));
+    g_BCOSConfig.diskEncryption.dataKey = asString(
+        *fromHexString("3031323334353637303132333435363730313233343536373031323334353637"));
     rocksdb::Options options;
     options.create_if_missing = true;
     std::shared_ptr<BasicRocksDB> basicRocksDB = std::make_shared<BasicRocksDB>();

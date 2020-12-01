@@ -52,7 +52,7 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
     {
         if (g_BCOSConfig.version() >= RC2_VERSION)
         {
-            rlpBytes = fromHex(
+            rlpBytes = *fromHexString(
                 "f90114a003eebc46c9c0e3b84799097c5a6ccd6657a9295c11270407707366d0750fcd598411e1a300"
                 "84b2"
                 "d05e008201f594bab78cea98af2320ad4ee81bba8a7473e0c8c48d80a48fff0fc40000000000000000"
@@ -69,7 +69,7 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
         }
         else
         {
-            rlpBytes = bcos::fromHex(
+            rlpBytes = *fromHexString(
                 "f901309f65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d14485174876e7ff"
                 "8609"
                 "184e729fff8204a294d6f1a71052366dbae2f7ab2d5d5845e77965cf0d80b86448f85bce0000000000"
@@ -91,7 +91,7 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
     {
         if (g_BCOSConfig.version() >= RC2_VERSION)
         {
-            rlpBytes = fromHex(
+            rlpBytes = *fromHexString(
                 "f8d3a003922ee720bb7445e3a914d8ab8f507d1a647296d563100e49548d83fd98865c8411e1a30084"
                 "11e1"
                 "a3008201f894d6c8a04b8826b0a37c6d4aa0eaa8644d8e35b79f80a466c99139000000000000000000"
@@ -105,7 +105,7 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
         }
         else
         {
-            rlpBytes = bcos::fromHex(
+            rlpBytes = *fromHexString(
                 "f8ef9f65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d03f85174876e7ff"
                 "8609184e729fff82020394d6f1a71052366dbae2f7ab2d5d5845e77965cf0d80b86448f85bce000000"
                 "000000000000000000000000000000000000000000000000000000001bf5bd8a9e7ba8b936ea704292"

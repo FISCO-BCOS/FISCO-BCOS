@@ -78,11 +78,16 @@ BOOST_AUTO_TEST_CASE(SM_testEcKeypair)
     KeyPair k = KeyPair::create();
     BOOST_CHECK(k.secret());
     BOOST_CHECK(k.pub());
+    std::cout << "### SM_testEcKeypair pass 1" << std::endl;
     Public test = toPublic(k.secret());
+    std::cout << "### SM_testEcKeypair pass 2" << std::endl;
     BOOST_CHECK_EQUAL(k.pub(), test);
+    std::cout << "### SM_testEcKeypair pass 3" << std::endl;
 
     Secret empty;
+    std::cout << "### SM_testEcKeypair pass 4" << std::endl;
     KeyPair kNot(empty);
+    std::cout << "### SM_testEcKeypair pass 5" << std::endl;
     BOOST_CHECK(!kNot.address());
 #if 0
     KeyPair k2(crypto::Hash(empty));
@@ -138,7 +143,7 @@ BOOST_AUTO_TEST_CASE(SM_testSigAndVerify)
     invalid_pub = crypto::Recover(another_sig, hash);
     BOOST_CHECK(invalid_pub != key_pair.pub());
     // check3: invalid secret
-    Public random_key = Public::random();
+    Public random_key = Public::generateRandomFixedBytes();
     result = crypto::Verify(random_key, sig, hash);
     BOOST_CHECK(result == false);
 
@@ -153,7 +158,7 @@ BOOST_AUTO_TEST_CASE(SM_testSigAndVerify)
 BOOST_AUTO_TEST_CASE(SM_testSigecRocer)
 {
     std::pair<bool, bytes> KeyPair;
-    bytes rlpBytes = fromHex(
+    bytes rlpBytes = *fromHexString(
         "f901309f65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d14485174876e7ff8609"
         "184e729fff8204a294d6f1a71052366dbae2f7ab2d5d5845e77965cf0d80b86448f85bce00000000000000"
         "0000000000000000000000000000000000000000000000001bf5bd8a9e7ba8b936ea704292ff4aaa5797bf"
@@ -262,7 +267,7 @@ BOOST_AUTO_TEST_CASE(testSigAndVerify)
     invalid_pub = crypto::Recover(another_sig, hash);
     BOOST_CHECK(invalid_pub != key_pair.pub());
     // check3: invalid secret
-    Public random_key = Public::random();
+    Public random_key = Public::generateRandomFixedBytes();
     result = crypto::Verify(random_key, sig, hash);
     BOOST_CHECK(result == false);
 
@@ -278,7 +283,7 @@ BOOST_AUTO_TEST_CASE(testSigecRocer)
 {
     std::pair<bool, bytes> keyPair;
     std::pair<bool, bytes> KeyPairR;
-    bytes rlpBytes = fromHex(
+    bytes rlpBytes = *fromHexString(
         "f8ef9f65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d03f85174876e7ff"
         "8609184e729fff82020394d6f1a71052366dbae2f7ab2d5d5845e77965cf0d80b86448f85bce000000"
         "000000000000000000000000000000000000000000000000000000001bf5bd8a9e7ba8b936ea704292"
@@ -286,7 +291,7 @@ BOOST_AUTO_TEST_CASE(testSigecRocer)
         "f7395028658d0e01b86a371ca00b2b3fabd8598fefdda4efdb54f626367fc68e1735a8047f0f1c4f84"
         "0255ca1ea0512500bc29f4cfe18ee1c88683006d73e56c934100b8abf4d2334560e1d2f75e");
 
-    bytes rlpBytesRight = fromHex(
+    bytes rlpBytesRight = *fromHexString(
         "38d18acb67d25c8bb9942764b62f18e17054f66a817bd4295423adf9ed98873e"
         "000000000000000000000000000000000000000000000000000000000000001b"
         "38d18acb67d25c8bb9942764b62f18e17054f66a817bd4295423adf9ed98873e"
@@ -313,7 +318,7 @@ BOOST_AUTO_TEST_CASE(testSign)
         "eb9aa77eddedf69b7bd1a46adb5faf072e62892601";
     std::string blockHash = "0x39aeeacf66784ba18836280dcb56e454fe59eecde42812503e6a0d2c0a11937f";
     bcos::h512 publicKeyBytes = bcos::h512(publicKey);
-    bytes signatureBytes = fromHex(signature);
+    bytes signatureBytes = *fromHexString(signature);
     bcos::h256 blockHashBytes = bcos::h256(blockHash);
     std::cout << "### before test sign" << std::endl;
     BOOST_CHECK(bcos::ecdsaVerify(publicKeyBytes, bcos::crypto::SignatureFromBytes(signatureBytes),

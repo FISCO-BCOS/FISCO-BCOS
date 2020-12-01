@@ -19,7 +19,6 @@
  * @date 2018
  */
 #include <libutilities/Base64.h>
-#include <libutilities/CommonJS.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <iostream>
@@ -43,7 +42,7 @@ BOOST_AUTO_TEST_CASE(testBase64DecodeBytes)
     BOOST_CHECK(oriStr == "1234ABcd");
 
     std::string originString = "1ab21d8355cfa17f8e61194831e81a8f22bec8c728fefb747ed035eb5082aa2b";
-    bytes originBytes = fromHex(originString);
+    bytes originBytes = *fromHexString(originString);
     std::string base64Str = base64Encode(bytesConstRef(originBytes.data(), originBytes.size()));
     std::cout << "base64Encode for " << *toHexString(originBytes) << " is: " << base64Str
               << std::endl;

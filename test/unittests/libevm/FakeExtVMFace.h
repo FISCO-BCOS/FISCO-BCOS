@@ -22,7 +22,7 @@
 #include <libethcore/BlockHeader.h>
 #include <libexecutive/EVMHostContext.h>
 #include <libexecutive/EVMHostInterface.h>
-#include <libutilities/CommonJS.h>
+#include <libutilities/JsonDataConvertUtility.h>
 #include <stdlib.h>
 #include <time.h>
 
@@ -40,9 +40,9 @@ public:
     static void createRandomElements(Address& sender_addr, Address& contract_addr,
         Address& receive_addr, u256& transfer, u256& gas, u256& apparent_value, bytesConstRef& data)
     {
-        sender_addr = toAddress(Public::random());
-        contract_addr = toAddress(Public::random());
-        receive_addr = toAddress(Public::random());
+        sender_addr = toAddress(Public::generateRandomFixedBytes());
+        contract_addr = toAddress(Public::generateRandomFixedBytes());
+        receive_addr = toAddress(Public::generateRandomFixedBytes());
         transfer = u256(rand());
         gas = u256(3000000);
         apparent_value = u256(rand());
@@ -88,12 +88,12 @@ public:
         genesis.setGasUsed(u256(100000));
         int64_t current_time = utcTime();
         genesis.setTimestamp(current_time);
-        genesis.appendExtraDataArray(jsToBytes("0x1020"));
+        genesis.appendExtraDataArray(jonStringToBytes("0x1020"));
         genesis.setSealer(u256("0x00"));
         h512s sealer_list;
         for (unsigned int i = 0; i < 10; i++)
         {
-            sealer_list.push_back(toPublic(Secret::random()));
+            sealer_list.push_back(toPublic(Secret::generateRandomFixedBytes()));
         }
         genesis.setSealerList(sealer_list);
         return genesis;

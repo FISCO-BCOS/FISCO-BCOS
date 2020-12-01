@@ -37,7 +37,7 @@ BOOST_FIXTURE_TEST_SUITE(CommonDataTests, TestOutputHelperFixture)
 
 BOOST_AUTO_TEST_CASE(testHex)
 {
-    // toHex && fromHex
+    // toHex && fromHexString
     unsigned int round = 10;
     unsigned int size = 10;
     bytes hexVec(size, 0);
@@ -52,11 +52,11 @@ BOOST_AUTO_TEST_CASE(testHex)
         }
         hexStr = *toHexString(hexVec);
         hexStrWithPrefix = *toHexString(hexVec);
-        BOOST_CHECK(fromHex(hexStr) == hexVec);
-        BOOST_CHECK(fromHex(hexStrWithPrefix) == hexVec);
+        BOOST_CHECK(*fromHexString(hexStr) == hexVec);
+        BOOST_CHECK(*fromHexString(hexStrWithPrefix) == hexVec);
     }
-    // fromHex Exception
-    BOOST_CHECK_THROW(fromHex("0934xyz"), BadHexCharacter);
+    // fromHexString Exception
+    BOOST_CHECK_THROW(fromHexString("0934xyz"), BadHexCharacter);
     BOOST_CHECK(isHexString("0934xyz") == false);
 
     BOOST_CHECK(isHexString("0x000abc") == true);

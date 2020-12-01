@@ -35,7 +35,7 @@
 #include <libp2p/P2PInterface.h>
 #include <libp2p/P2PMessage.h>
 #include <libtxpool/TxPoolInterface.h>
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 #include <libutilities/ThreadPool.h>
 #include <libutilities/Worker.h>
 

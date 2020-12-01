@@ -29,7 +29,7 @@
 #include <libprecompiled/TableFactoryPrecompiled.h>
 #include <libstorage/MemoryTableFactoryFactory.h>
 #include <libstoragestate/StorageState.h>
-#include <libutilities/CommonJS.h>
+#include <libutilities/JsonDataConvertUtility.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace std;
@@ -202,12 +202,12 @@ struct OutputFixture
         fakeHeader.setGasUsed(u256(1000000));
         uint64_t current_time = utcTime();
         fakeHeader.setTimestamp(current_time);
-        fakeHeader.appendExtraDataArray(jsToBytes("0x1020"));
+        fakeHeader.appendExtraDataArray(jonStringToBytes("0x1020"));
         fakeHeader.setSealer(u256("0x00"));
         std::vector<h512> sealer_list;
         for (unsigned int i = 0; i < 10; i++)
         {
-            sealer_list.push_back(toPublic(Secret::random()));
+            sealer_list.push_back(toPublic(Secret::generateRandomFixedBytes()));
         }
         fakeHeader.setSealerList(sealer_list);
         return fakeHeader;

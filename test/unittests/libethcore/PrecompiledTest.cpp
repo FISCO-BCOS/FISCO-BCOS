@@ -35,7 +35,7 @@ BOOST_AUTO_TEST_CASE(modexpFermatTheorem)
 {
     PrecompiledExecutor exec = PrecompiledRegistrar::executor("modexp");
 
-    bytes in = fromHex(
+    bytes in = *fromHexString(
         "0000000000000000000000000000000000000000000000000000000000000001"
         "0000000000000000000000000000000000000000000000000000000000000020"
         "0000000000000000000000000000000000000000000000000000000000000020"
@@ -45,7 +45,8 @@ BOOST_AUTO_TEST_CASE(modexpFermatTheorem)
     auto res = exec(bytesConstRef(in.data(), in.size()));
 
     BOOST_REQUIRE(res.first);
-    bytes expected = fromHex("0000000000000000000000000000000000000000000000000000000000000001");
+    bytes expected =
+        *fromHexString("0000000000000000000000000000000000000000000000000000000000000001");
     BOOST_REQUIRE_EQUAL_COLLECTIONS(
         res.second.begin(), res.second.end(), expected.begin(), expected.end());
 }
@@ -54,7 +55,7 @@ BOOST_AUTO_TEST_CASE(modexpZeroBase)
 {
     PrecompiledExecutor exec = PrecompiledRegistrar::executor("modexp");
 
-    bytes in = fromHex(
+    bytes in = *fromHexString(
         "0000000000000000000000000000000000000000000000000000000000000000"
         "0000000000000000000000000000000000000000000000000000000000000020"
         "0000000000000000000000000000000000000000000000000000000000000020"
@@ -63,7 +64,8 @@ BOOST_AUTO_TEST_CASE(modexpZeroBase)
     auto res = exec(bytesConstRef(in.data(), in.size()));
 
     BOOST_REQUIRE(res.first);
-    bytes expected = fromHex("0000000000000000000000000000000000000000000000000000000000000000");
+    bytes expected =
+        *fromHexString("0000000000000000000000000000000000000000000000000000000000000000");
     BOOST_REQUIRE_EQUAL_COLLECTIONS(
         res.second.begin(), res.second.end(), expected.begin(), expected.end());
 }
@@ -72,7 +74,7 @@ BOOST_AUTO_TEST_CASE(modexpExtraByteIgnored)
 {
     PrecompiledExecutor exec = PrecompiledRegistrar::executor("modexp");
 
-    bytes in = fromHex(
+    bytes in = *fromHexString(
         "0000000000000000000000000000000000000000000000000000000000000001"
         "0000000000000000000000000000000000000000000000000000000000000002"
         "0000000000000000000000000000000000000000000000000000000000000020"
@@ -83,7 +85,8 @@ BOOST_AUTO_TEST_CASE(modexpExtraByteIgnored)
     auto res = exec(bytesConstRef(in.data(), in.size()));
 
     BOOST_REQUIRE(res.first);
-    bytes expected = fromHex("3b01b01ac41f2d6e917c6d6a221ce793802469026d9ab7578fa2e79e4da6aaab");
+    bytes expected =
+        *fromHexString("3b01b01ac41f2d6e917c6d6a221ce793802469026d9ab7578fa2e79e4da6aaab");
     BOOST_REQUIRE_EQUAL_COLLECTIONS(
         res.second.begin(), res.second.end(), expected.begin(), expected.end());
 }
@@ -92,7 +95,7 @@ BOOST_AUTO_TEST_CASE(modexpRightPadding)
 {
     PrecompiledExecutor exec = PrecompiledRegistrar::executor("modexp");
 
-    bytes in = fromHex(
+    bytes in = *fromHexString(
         "0000000000000000000000000000000000000000000000000000000000000001"
         "0000000000000000000000000000000000000000000000000000000000000002"
         "0000000000000000000000000000000000000000000000000000000000000020"
@@ -102,7 +105,8 @@ BOOST_AUTO_TEST_CASE(modexpRightPadding)
     auto res = exec(bytesConstRef(in.data(), in.size()));
 
     BOOST_REQUIRE(res.first);
-    bytes expected = fromHex("3b01b01ac41f2d6e917c6d6a221ce793802469026d9ab7578fa2e79e4da6aaab");
+    bytes expected =
+        *fromHexString("3b01b01ac41f2d6e917c6d6a221ce793802469026d9ab7578fa2e79e4da6aaab");
     BOOST_REQUIRE_EQUAL_COLLECTIONS(
         res.second.begin(), res.second.end(), expected.begin(), expected.end());
 }
@@ -111,7 +115,7 @@ BOOST_AUTO_TEST_CASE(modexpMissingValues)
 {
     PrecompiledExecutor exec = PrecompiledRegistrar::executor("modexp");
 
-    bytes in = fromHex(
+    bytes in = *fromHexString(
         "0000000000000000000000000000000000000000000000000000000000000001"
         "0000000000000000000000000000000000000000000000000000000000000002"
         "0000000000000000000000000000000000000000000000000000000000000020"
@@ -119,7 +123,8 @@ BOOST_AUTO_TEST_CASE(modexpMissingValues)
     auto res = exec(bytesConstRef(in.data(), in.size()));
 
     BOOST_REQUIRE(res.first);
-    bytes expected = fromHex("0000000000000000000000000000000000000000000000000000000000000000");
+    bytes expected =
+        *fromHexString("0000000000000000000000000000000000000000000000000000000000000000");
     BOOST_REQUIRE_EQUAL_COLLECTIONS(
         res.second.begin(), res.second.end(), expected.begin(), expected.end());
 }
@@ -128,7 +133,7 @@ BOOST_AUTO_TEST_CASE(modexpEmptyValue)
 {
     PrecompiledExecutor exec = PrecompiledRegistrar::executor("modexp");
 
-    bytes in = fromHex(
+    bytes in = *fromHexString(
         "0000000000000000000000000000000000000000000000000000000000000001"
         "0000000000000000000000000000000000000000000000000000000000000000"
         "0000000000000000000000000000000000000000000000000000000000000020"
@@ -137,7 +142,8 @@ BOOST_AUTO_TEST_CASE(modexpEmptyValue)
     auto res = exec(bytesConstRef(in.data(), in.size()));
 
     BOOST_REQUIRE(res.first);
-    bytes expected = fromHex("0000000000000000000000000000000000000000000000000000000000000001");
+    bytes expected =
+        *fromHexString("0000000000000000000000000000000000000000000000000000000000000001");
     BOOST_REQUIRE_EQUAL_COLLECTIONS(
         res.second.begin(), res.second.end(), expected.begin(), expected.end());
 }
@@ -146,7 +152,7 @@ BOOST_AUTO_TEST_CASE(modexpZeroPowerZero)
 {
     PrecompiledExecutor exec = PrecompiledRegistrar::executor("modexp");
 
-    bytes in = fromHex(
+    bytes in = *fromHexString(
         "0000000000000000000000000000000000000000000000000000000000000001"
         "0000000000000000000000000000000000000000000000000000000000000001"
         "0000000000000000000000000000000000000000000000000000000000000020"
@@ -156,7 +162,8 @@ BOOST_AUTO_TEST_CASE(modexpZeroPowerZero)
     auto res = exec(bytesConstRef(in.data(), in.size()));
 
     BOOST_REQUIRE(res.first);
-    bytes expected = fromHex("0000000000000000000000000000000000000000000000000000000000000001");
+    bytes expected =
+        *fromHexString("0000000000000000000000000000000000000000000000000000000000000001");
     BOOST_REQUIRE_EQUAL_COLLECTIONS(
         res.second.begin(), res.second.end(), expected.begin(), expected.end());
 }
@@ -165,7 +172,7 @@ BOOST_AUTO_TEST_CASE(modexpZeroPowerZeroModZero)
 {
     PrecompiledExecutor exec = PrecompiledRegistrar::executor("modexp");
 
-    bytes in = fromHex(
+    bytes in = *fromHexString(
         "0000000000000000000000000000000000000000000000000000000000000001"
         "0000000000000000000000000000000000000000000000000000000000000001"
         "0000000000000000000000000000000000000000000000000000000000000020"
@@ -175,7 +182,8 @@ BOOST_AUTO_TEST_CASE(modexpZeroPowerZeroModZero)
     auto res = exec(bytesConstRef(in.data(), in.size()));
 
     BOOST_REQUIRE(res.first);
-    bytes expected = fromHex("0000000000000000000000000000000000000000000000000000000000000000");
+    bytes expected =
+        *fromHexString("0000000000000000000000000000000000000000000000000000000000000000");
     BOOST_REQUIRE_EQUAL_COLLECTIONS(
         res.second.begin(), res.second.end(), expected.begin(), expected.end());
 }
@@ -184,7 +192,7 @@ BOOST_AUTO_TEST_CASE(modexpModLengthZero)
 {
     PrecompiledExecutor exec = PrecompiledRegistrar::executor("modexp");
 
-    bytes in = fromHex(
+    bytes in = *fromHexString(
         "0000000000000000000000000000000000000000000000000000000000000001"
         "0000000000000000000000000000000000000000000000000000000000000001"
         "0000000000000000000000000000000000000000000000000000000000000000"
@@ -200,7 +208,7 @@ BOOST_AUTO_TEST_CASE(modexpCostFermatTheorem)
 {
     PrecompiledPricer cost = PrecompiledRegistrar::pricer("modexp");
 
-    bytes in = fromHex(
+    bytes in = *fromHexString(
         "0000000000000000000000000000000000000000000000000000000000000001"
         "0000000000000000000000000000000000000000000000000000000000000020"
         "0000000000000000000000000000000000000000000000000000000000000020"
@@ -216,7 +224,7 @@ BOOST_AUTO_TEST_CASE(modexpCostTooLarge)
 {
     PrecompiledPricer cost = PrecompiledRegistrar::pricer("modexp");
 
-    bytes in = fromHex(
+    bytes in = *fromHexString(
         "0000000000000000000000000000000000000000000000000000000000000000"
         "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
         "0000000000000000000000000000000000000000000000000000000000000020"
@@ -235,7 +243,7 @@ BOOST_AUTO_TEST_CASE(modexpCostEmptyExponent)
 {
     PrecompiledPricer cost = PrecompiledRegistrar::pricer("modexp");
 
-    bytes in = fromHex(
+    bytes in = *fromHexString(
         "0000000000000000000000000000000000000000000000000000000000000008"  // length of B
         "0000000000000000000000000000000000000000000000000000000000000000"  // length of E
         "0000000000000000000000000000000000000000000000000000000000000010"  // length of M
@@ -253,7 +261,7 @@ BOOST_AUTO_TEST_CASE(modexpCostZeroExponent)
 {
     PrecompiledPricer cost = PrecompiledRegistrar::pricer("modexp");
 
-    bytes in = fromHex(
+    bytes in = *fromHexString(
         "0000000000000000000000000000000000000000000000000000000000000000"  // length of B
         "0000000000000000000000000000000000000000000000000000000000000003"  // length of E
         "000000000000000000000000000000000000000000000000000000000000000a"  // length of M
@@ -270,7 +278,7 @@ BOOST_AUTO_TEST_CASE(modexpCostApproximated)
 {
     PrecompiledPricer cost = PrecompiledRegistrar::pricer("modexp");
 
-    bytes in = fromHex(
+    bytes in = *fromHexString(
         "0000000000000000000000000000000000000000000000000000000000000003"    // length of B
         "0000000000000000000000000000000000000000000000000000000000000021"    // length of E
         "000000000000000000000000000000000000000000000000000000000000000a"    // length of M
@@ -287,7 +295,7 @@ BOOST_AUTO_TEST_CASE(modexpCostApproximatedPartialByte)
 {
     PrecompiledPricer cost = PrecompiledRegistrar::pricer("modexp");
 
-    bytes in = fromHex(
+    bytes in = *fromHexString(
         "0000000000000000000000000000000000000000000000000000000000000003"    // length of B
         "0000000000000000000000000000000000000000000000000000000000000021"    // length of E
         "000000000000000000000000000000000000000000000000000000000000000a"    // length of M
@@ -304,7 +312,7 @@ BOOST_AUTO_TEST_CASE(modexpCostApproximatedGhost)
 {
     PrecompiledPricer cost = PrecompiledRegistrar::pricer("modexp");
 
-    bytes in = fromHex(
+    bytes in = *fromHexString(
         "0000000000000000000000000000000000000000000000000000000000000003"    // length of B
         "0000000000000000000000000000000000000000000000000000000000000021"    // length of E
         "000000000000000000000000000000000000000000000000000000000000000a"    // length of M
@@ -321,7 +329,7 @@ BOOST_AUTO_TEST_CASE(modexpCostMidRange)
 {
     PrecompiledPricer cost = PrecompiledRegistrar::pricer("modexp");
 
-    bytes in = fromHex(
+    bytes in = *fromHexString(
         "0000000000000000000000000000000000000000000000000000000000000003"    // length of B
         "0000000000000000000000000000000000000000000000000000000000000021"    // length of E
         "000000000000000000000000000000000000000000000000000000000000004a"    // length of M = 74
@@ -339,7 +347,7 @@ BOOST_AUTO_TEST_CASE(modexpCostHighRange)
 {
     PrecompiledPricer cost = PrecompiledRegistrar::pricer("modexp");
 
-    bytes in = fromHex(
+    bytes in = *fromHexString(
         "0000000000000000000000000000000000000000000000000000000000000003"    // length of B
         "0000000000000000000000000000000000000000000000000000000000000021"    // length of E
         "0000000000000000000000000000000000000000000000000000000000000401"    // length of M = 1025
@@ -1430,7 +1438,7 @@ void benchmarkPrecompiled(char const name[], vector_ref<const PrecompiledTest> t
 
     for (auto&& test : tests)
     {
-        bytes input = fromHex(test.input);
+        bytes input = *fromHexString(test.input);
         bytesConstRef inputRef = &input;
 
         auto res = exec(inputRef);
@@ -1485,7 +1493,7 @@ BOOST_AUTO_TEST_CASE(ecpairingCost)
 {
     PrecompiledPricer cost = PrecompiledRegistrar::pricer("alt_bn128_pairing_product");
 
-    bytes in{fromHex(
+    bytes in{*fromHexString(
         "0x1c76476f4def4bb94541d57ebba1193381ffa7aa76ada664dd31c16024c43f593034dd2920f673e204fee281"
         "1c678745fc819b55d3e9d294e45c9b03a76aef41209dd15ebff5d46c4bd888e51a93cf99a7329636c63514396b"
         "4a452003a35bf704bf11ca01483bfa8b34b43561848d28905960114c8ac04049af4b6315a416782bb8324af6cf"
@@ -1595,7 +1603,7 @@ void testPrecompiled(char const name[], vector_ref<const PrecompiledTest> tests)
 
     for (auto&& test : tests)
     {
-        bytes input = fromHex(test.input);
+        bytes input = *fromHexString(test.input);
         bytesConstRef inputRef = &input;
 
         auto res = exec(inputRef);
@@ -1612,7 +1620,7 @@ void testPrecompiledFail(char const name[], vector_ref<const PrecompiledTest> te
 
     for (auto&& test : tests)
     {
-        bytes input = fromHex(test.input);
+        bytes input = *fromHexString(test.input);
         bytesConstRef inputRef = &input;
 
         auto res = exec(inputRef);

@@ -26,7 +26,7 @@
 #include <libconfig/GlobalConfigure.h>
 #include <libethcore/CommonJS.h>
 #include <libtxpool/TxPool.h>
-#include <libutilities/CommonJS.h>
+#include <libutilities/JsonDataConvertUtility.h>
 using namespace bcos::eth;
 using namespace bcos::blockverifier;
 using namespace bcos::blockchain;
@@ -243,15 +243,15 @@ void PBFTEngine::reloadMsg(std::string const& key, PBFTMsg* msg)
             BOOST_THROW_EXCEPTION(DatabaseError() << errinfo_comment(
                                       "reloadMsg failed, status = " + status.ToString()));
         }
-        bytes data = fromHex(value);
-        if (data.empty())
+        auto data = fromHexString(value);
+        if (data->empty())
         {
             PBFTENGINE_LOG(DEBUG) << LOG_DESC("reloadMsg: Empty message stored")
                                   << LOG_KV("nodeIdx", nodeIdx())
                                   << LOG_KV("nodeId", m_keyPair.pub().abridged());
             return;
         }
-        msg->decode(ref(data), 0);
+        msg->decode(ref(*data), 0);
         PBFTENGINE_LOG(DEBUG) << LOG_DESC("reloadMsg") << LOG_KV("fromIdx", msg->idx)
                               << LOG_KV("nodeId", m_keyPair.pub().abridged())
                               << LOG_KV("H", msg->height)

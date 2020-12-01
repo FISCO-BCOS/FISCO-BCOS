@@ -18,12 +18,12 @@
  * @author Alex Leverington <nessence@gmail.com> Asherli
  * @date 2018
  *
- * The FixedHash fixed-size "hash" container type.
+ * The FixedBytes fixed-size "hash" container type.
  */
 
 #pragma once
 
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 #include <libutilities/vector_ref.h>
 #include <string>
 
@@ -50,9 +50,9 @@ inline h256 keccak256(bytesConstRef _input)
     keccak256(_input, ret.ref());
     return ret;
 }
-inline SecureFixedHash<32> keccak256Secure(bytesConstRef _input)
+inline SecureFixedBytes<32> keccak256Secure(bytesConstRef _input)
 {
-    SecureFixedHash<32> ret;
+    SecureFixedBytes<32> ret;
     keccak256(_input, ret.writable().ref());
     return ret;
 }
@@ -62,7 +62,7 @@ inline h256 keccak256(bytes const& _input)
 {
     return keccak256(bytesConstRef(&_input));
 }
-inline SecureFixedHash<32> keccak256Secure(bytes const& _input)
+inline SecureFixedBytes<32> keccak256Secure(bytes const& _input)
 {
     return keccak256Secure(bytesConstRef(&_input));
 }
@@ -73,39 +73,39 @@ inline h256 keccak256(std::string const& _input)
 {
     return keccak256(bytesConstRef(_input));
 }
-inline SecureFixedHash<32> keccak256Secure(std::string const& _input)
+inline SecureFixedBytes<32> keccak256Secure(std::string const& _input)
 {
     return keccak256Secure(bytesConstRef(_input));
 }
 
-/// Calculate Keccak256 hash of the given input (presented as a FixedHash), returns a 256-bit hash.
+/// Calculate Keccak256 hash of the given input (presented as a FixedBytes), returns a 256-bit hash.
 template <unsigned N>
-inline h256 keccak256(FixedHash<N> const& _input)
+inline h256 keccak256(FixedBytes<N> const& _input)
 {
     return keccak256(_input.ref());
 }
 template <unsigned N>
-inline SecureFixedHash<32> keccak256Secure(FixedHash<N> const& _input)
+inline SecureFixedBytes<32> keccak256Secure(FixedBytes<N> const& _input)
 {
     return keccak256Secure(_input.ref());
 }
 
 /// Fully secure variants are equivalent for keccak256 and keccak256Secure.
-inline SecureFixedHash<32> keccak256(bytesSec const& _input)
+inline SecureFixedBytes<32> keccak256(secBytes const& _input)
 {
     return keccak256Secure(_input.ref());
 }
-inline SecureFixedHash<32> keccak256Secure(bytesSec const& _input)
-{
-    return keccak256Secure(_input.ref());
-}
-template <unsigned N>
-inline SecureFixedHash<32> keccak256(SecureFixedHash<N> const& _input)
+inline SecureFixedBytes<32> keccak256Secure(secBytes const& _input)
 {
     return keccak256Secure(_input.ref());
 }
 template <unsigned N>
-inline SecureFixedHash<32> keccak256Secure(SecureFixedHash<N> const& _input)
+inline SecureFixedBytes<32> keccak256(SecureFixedBytes<N> const& _input)
+{
+    return keccak256Secure(_input.ref());
+}
+template <unsigned N>
+inline SecureFixedBytes<32> keccak256Secure(SecureFixedBytes<N> const& _input)
 {
     return keccak256Secure(_input.ref());
 }
@@ -115,7 +115,8 @@ inline SecureFixedHash<32> keccak256Secure(SecureFixedHash<N> const& _input)
 inline std::string keccak256(std::string const& _input, bool _isNibbles)
 {
     return asString(
-        (_isNibbles ? keccak256(fromHex(_input)) : keccak256(bytesConstRef(&_input))).asBytes());
+        (_isNibbles ? keccak256(*fromHexString(_input)) : keccak256(bytesConstRef(&_input)))
+            .asBytes());
 }
 
 /// Calculate Keccak256 MAC

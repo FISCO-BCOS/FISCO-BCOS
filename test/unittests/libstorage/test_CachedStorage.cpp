@@ -25,7 +25,7 @@
 #include <libstorage/CachedStorage.h>
 #include <libstorage/StorageException.h>
 #include <libstorage/Table.h>
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 #include <tbb/parallel_for.h>
 #include <boost/random/mersenne_twister.hpp>
 #include <boost/random/uniform_int.hpp>

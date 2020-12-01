@@ -21,8 +21,8 @@
  */
 #pragma once
 
-#include "FixedHash.h"
-#include <libutilities/Common.h>
+#include "Common.h"
+#include "FixedBytes.h"
 
 #define TREE_LOG(_OBV)                                                 \
     LOG(_OBV) << LOG_BADGE("TREE") << LOG_KV("consIndex", m_consIndex) \

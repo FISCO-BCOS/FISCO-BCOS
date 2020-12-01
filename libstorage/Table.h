@@ -18,7 +18,7 @@
 #pragma once
 
 #include "Common.h"
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <tbb/concurrent_vector.h>
 #include <tbb/spin_rw_mutex.h>

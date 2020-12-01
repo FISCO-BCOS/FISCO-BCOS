@@ -22,7 +22,7 @@
 #pragma once
 #include <libethcore/Protocol.h>
 #include <libnetwork/Common.h>
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 #include <memory>
 
 namespace bcos

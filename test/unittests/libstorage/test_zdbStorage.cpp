@@ -26,7 +26,7 @@
 #include <libstorage/StorageException.h>
 #include <libstorage/Table.h>
 #include <libstorage/ZdbStorage.h>
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 using namespace bcos;
 using namespace bcos::storage;
 using namespace boost;

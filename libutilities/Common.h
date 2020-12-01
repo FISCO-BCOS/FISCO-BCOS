@@ -60,7 +60,7 @@ using bytes = std::vector<byte>;
 using bytesRef = vector_ref<byte>;
 using bytesConstRef = vector_ref<byte const>;
 // manage vector securely in memory
-using bytesSec = secure_vector<byte>;
+using secBytes = secure_vector<byte>;
 
 // Numeric types.
 using bigint = boost::multiprecision::number<boost::multiprecision::cpp_int_backend<>>;
@@ -145,11 +145,7 @@ inline u256 s2u(s256 _u)
 
 inline int stringCmpIgnoreCase(const std::string& lhs, const std::string& rhs)
 {
-#if defined(_WIN32)
-    return _stricmp(lhs.c_str(), rhs.c_str());
-#else
     return strcasecmp(lhs.c_str(), rhs.c_str());
-#endif
 }
 
 

@@ -8,7 +8,7 @@
 
 #include <libnetwork/Common.h>
 #include <libp2p/P2PMessage.h>
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 #include <libutilities/TopicInfo.h>
 
 namespace bcos

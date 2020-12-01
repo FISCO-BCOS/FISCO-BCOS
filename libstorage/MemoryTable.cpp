@@ -27,7 +27,7 @@
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcrypto/CryptoInterface.h>
 #include <libprecompiled/Common.h>
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 #include <tbb/parallel_invoke.h>
 #include <tbb/parallel_sort.h>
 #include <boost/exception/diagnostic_information.hpp>

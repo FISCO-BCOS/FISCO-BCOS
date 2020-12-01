@@ -27,7 +27,7 @@
 #include <libdevcrypto/Common.h>
 #include <libethcore/EVMSchedule.h>
 #include <libinterpreter/interpreter.h>
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 #include <test/tools/libutils/FakeEvmc.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
@@ -120,8 +120,8 @@ BOOST_AUTO_TEST_CASE(addTest)
     // RETURN
 
     bcos::eth::EVMSchedule const& schedule = DefaultSchedule;
-    bytes code = fromHex("602060006001600201600052f3");
-    bytes data = fromHex("");
+    bytes code = *fromHexString("602060006001600201600052f3");
+    bytes data = *fromHexString("");
     Address destination{KeyPair::create().address()};
     Address caller = destination;
     u256 value = 0;
@@ -151,10 +151,10 @@ BOOST_AUTO_TEST_CASE(contractDeployTest)
     */
 
     bcos::eth::EVMSchedule const& schedule = DefaultSchedule;
-    bytes code = fromHex(
+    bytes code = *fromHexString(
         "60606040523415600b57fe5b5b60338060196000396000f30060606040525bfe00a165627a7a72305820de136e"
         "86e236113a9f32948ce4a57e1f7a409db615e7ef07a26ef1ebc39de3580029");
-    bytes data = fromHex("");
+    bytes data = *fromHexString("");
     Address destination{KeyPair::create().address()};
     Address caller = destination;
     u256 value = 0;
@@ -167,7 +167,7 @@ BOOST_AUTO_TEST_CASE(contractDeployTest)
         schedule, code, data, destination, caller, value, gas, depth, isCreate, isStaticCall);
     printResult(result);
 
-    bytes compare = fromHex(
+    bytes compare = *fromHexString(
         "60606040525bfe00a165627a7a72305820de136e86e236113a9f32948ce4a57e1f7a409db615e7ef07a26ef1eb"
         "c39de3580029");
     bytes codeRes = bytesConstRef(result.output_data, result.output_size).toVector();
@@ -191,13 +191,13 @@ BOOST_AUTO_TEST_CASE(contractConstructorTest)
     param: 66 in hex 0000000000000000000000000000000000000000000000000000000000000042
     */
     bcos::eth::EVMSchedule const& schedule = DefaultSchedule;
-    bytes code = fromHex(
+    bytes code = *fromHexString(
         string(
             "60606040523415600b57fe5b6040516020806078833981016040528080519060200190919050505b806000"
             "81905550806001819055505b505b60338060456000396000f30060606040525bfe00a165627a7a72305820"
             "4a8d7ec58458a207cc1e6ab502444332fe0648d29f307852289dbc1b87b07d510029") +
         string("0000000000000000000000000000000000000000000000000000000000000042"));
-    bytes data = fromHex("");
+    bytes data = *fromHexString("");
     Address destination{KeyPair::create().address()};
     Address caller = destination;
     u256 value = 0;
@@ -249,7 +249,7 @@ BOOST_AUTO_TEST_CASE(arithmeticCaculateTest1)
     param: 66 in hex 0000000000000000000000000000000000000000000000000000000000000042
     */
     bcos::eth::EVMSchedule const& schedule = DefaultSchedule;
-    bytes code = fromHex(
+    bytes code = *fromHexString(
         string(
             "60606040523415600b57fe5b60405160208060d3833981016040528080519060200190919050505b600181"
             "016000819055506001810360018190555060648102600281905550600381811515605057fe5b0460038190"
@@ -257,7 +257,7 @@ BOOST_AUTO_TEST_CASE(arithmeticCaculateTest1)
             "506001819060020a90046007819055505b505b60338060a06000396000f30060606040525bfe00a165627a"
             "7a7230582089c2307e810ceda56160585b80561a69fc72cb46a335d905cd748801c9ba2d830029") +
         string("0000000000000000000000000000000000000000000000000000000000000042"));
-    bytes data = fromHex("");
+    bytes data = *fromHexString("");
     Address destination{KeyPair::create().address()};
     Address caller = destination;
     u256 value = 0;
@@ -340,7 +340,7 @@ BOOST_AUTO_TEST_CASE(arithmeticCaculateTest2)
     param: 66 in hex 0000000000000000000000000000000000000000000000000000000000000042
     */
     bcos::eth::EVMSchedule const& schedule = DefaultSchedule;
-    bytes code = fromHex(
+    bytes code = *fromHexString(
         string("608060405234801561001057600080fd5b5060405160208061023683398101806040528101908080519"
                "06020019092919050505060018101600081905550606481036001819055507fffffffffffffffffffff"
                "ffffffffffffffffffffffffffffffffffffffffff9c810260028190555060038181151561007c57fe5"
@@ -356,7 +356,7 @@ BOOST_AUTO_TEST_CASE(arithmeticCaculateTest2)
                "5060076004600309915060ff601f1a90509091929394955600a165627a7a72305820cc4f9b8d08e25bd"
                "e5e4071499ce01359a27bd898c321c7c0150eac91b3a38aa50029") +
         string("0000000000000000000000000000000000000000000000000000000000000042"));
-    bytes data = fromHex("");
+    bytes data = *fromHexString("");
     Address destination{KeyPair::create().address()};
     Address caller = destination;
     u256 value = 0;
@@ -432,7 +432,7 @@ BOOST_AUTO_TEST_CASE(comparisonsTest1)
     param: 66 in hex 0000000000000000000000000000000000000000000000000000000000000042
     */
     bcos::eth::EVMSchedule const& schedule = DefaultSchedule;
-    bytes code = fromHex(
+    bytes code = *fromHexString(
         string("60606040523415600b57fe5b60405160208061010c833981016040528080519060200190919050505b6"
                "0006000829150600183019050808210600060006101000a81548160ff02191690831515021790555080"
                "821115600060016101000a81548160ff02191690831515021790555080821415600060026101000a815"
@@ -441,7 +441,7 @@ BOOST_AUTO_TEST_CASE(comparisonsTest1)
                "100d96000396000f30060606040525bfe00a165627a7a7230582074f82852a7899b3b0a67289c346f50"
                "f08b2eca7ab65580af33dedb3e72b68bde0029") +
         string("0000000000000000000000000000000000000000000000000000000000000042"));
-    bytes data = fromHex("");
+    bytes data = *fromHexString("");
     Address destination{KeyPair::create().address()};
     Address caller = destination;
     u256 value = 0;
@@ -488,14 +488,14 @@ BOOST_AUTO_TEST_CASE(comparisonsTest2)
     param: 66 in hex 0000000000000000000000000000000000000000000000000000000000000042
     */
     bcos::eth::EVMSchedule const& schedule = DefaultSchedule;
-    bytes code = fromHex(
+    bytes code = *fromHexString(
         string("60606040523415600b57fe5b60405160208060c283398101604052515b6000805460ff1916600183018"
                "0841291821761ff001916610100828613159081029190911762ff000019168286141562010000021763"
                "ff00000019166301000000919091021764ff00000000191664010000000092909202919091179091558"
                "1905b5050505b603380608f6000396000f30060606040525bfe00a165627a7a723058207ffb02d83832"
                "bb77d2f385eac28618b0d66b382244251d54fec46642f8252eeb0029") +
         string("0000000000000000000000000000000000000000000000000000000000000042"));
-    bytes data = fromHex("");
+    bytes data = *fromHexString("");
     Address destination{KeyPair::create().address()};
     Address caller = destination;
     u256 value = 0;
@@ -538,12 +538,12 @@ BOOST_AUTO_TEST_CASE(bitOperationTest)
     param: 66 in hex 0000000000000000000000000000000000000000000000000000000000000042
     */
     bcos::eth::EVMSchedule const& schedule = DefaultSchedule;
-    bytes code = fromHex(
+    bytes code = *fromHexString(
         string("60606040523415600b57fe5b604051602080607883398101604052515b6101018082166000558082176"
                "00155811860025580196003555b505b60338060456000396000f30060606040525bfe00a165627a7a72"
                "305820defb2016449ae0c78dc39227ce845b9b0ca1f975a4dd3bcf448f0296b9ac2e920029") +
         string("0000000000000000000000000000000000000000000000000000000000000042"));
-    bytes data = fromHex("");
+    bytes data = *fromHexString("");
     Address destination{KeyPair::create().address()};
     Address caller = destination;
     u256 value = 0;
@@ -612,7 +612,7 @@ BOOST_AUTO_TEST_CASE(contextTest)
 
     */
     bcos::eth::EVMSchedule const& schedule = DefaultSchedule;
-    bytes code = fromHex(string(
+    bytes code = *fromHexString(string(
         "6080604052326000806101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffff"
         "ffffffffffffffffffffffffffffffffffff16021790555030600160006101000a81548173ffffffffffffffff"
         "ffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff16021790555033"
@@ -631,8 +631,8 @@ BOOST_AUTO_TEST_CASE(contextTest)
         "6bfd050029"));
     bytes data = asBytes("jimmyshi");
     Address destination{KeyPair::create().address()};
-    Address caller = right160(crypto::Hash(
-        fromHex("ff") + destination.asBytes() + toBigEndian(0x123_cppui256) + crypto::Hash(data)));
+    Address caller = right160(crypto::Hash(*fromHexString("ff") + destination.asBytes() +
+                                           toBigEndian(0x123_cppui256) + crypto::Hash(data)));
     u256 value = 1024;
     int64_t gas = 1000000;
     int32_t depth = 0;
@@ -684,7 +684,7 @@ BOOST_AUTO_TEST_CASE(contextTest)
         destination, "0000000000000000000000000000000000000000000000000000000000000009");
     u256 gasPriceResult = getStateValueU256(
         destination, "000000000000000000000000000000000000000000000000000000000000000a");
-    h256 blockHashResult = FixedHash<32>(getStateValueU256(
+    h256 blockHashResult = FixedBytes<32>(getStateValueU256(
         destination, "000000000000000000000000000000000000000000000000000000000000000d"));
 
     BOOST_CHECK(originResult == FAKE_ORIGIN);
@@ -716,12 +716,12 @@ BOOST_AUTO_TEST_CASE(balanceTest)
     }
     */
     bcos::eth::EVMSchedule const& schedule = DefaultSchedule;
-    bytes code =
-        fromHex(string("60606040525b3073ffffffffffffffffffffffffffffffffffffffff16316000819055505b5"
-                       "b60338060326000396000f30060606040525bfe00a165627a7a723058206e9b4f242a829a77"
-                       "e5b3bcee4d2e4fb9beae368d11d3d541423c8f481f7959fb0029") +
-                string(""));
-    bytes data = fromHex("");
+    bytes code = *fromHexString(
+        string("60606040525b3073ffffffffffffffffffffffffffffffffffffffff16316000819055505b5"
+               "b60338060326000396000f30060606040525bfe00a165627a7a723058206e9b4f242a829a77"
+               "e5b3bcee4d2e4fb9beae368d11d3d541423c8f481f7959fb0029") +
+        string(""));
+    bytes data = *fromHexString("");
     Address destination{KeyPair::create().address()};
     Address caller = destination;
     u256 value = 0;
@@ -762,7 +762,7 @@ BOOST_AUTO_TEST_CASE(LogTest)
     }
     */
     bcos::eth::EVMSchedule const& schedule = DefaultSchedule;
-    bytes code = fromHex(
+    bytes code = *fromHexString(
         string("6060604052341561000c57fe5b5b7ff4560403888256621a13abd81f4930ecb469c609f6317e1dd2ee3"
                "4fe69293e1b60405180905060405180910390a17f0b24d1aaf91c6017a8257e85108e3ce49d5461be0d"
                "d82383c5eb5f3eb47a1b4e60016040518082815260200191505060405180910390a160017fce34f015a"
@@ -773,7 +773,7 @@ BOOST_AUTO_TEST_CASE(LogTest)
                "05180910390a45b5b6033806101386000396000f30060606040525bfe00a165627a7a723058207517a3"
                "9f110484c49f94079c16e3775ecbe1a3c4cd46afac460426f8426fc4270029") +
         string(""));
-    bytes data = fromHex("");
+    bytes data = *fromHexString("");
     Address destination{KeyPair::create().address()};
     Address caller = Address("1000000000000000000000000000000000000000");
     u256 value = 0;
@@ -819,7 +819,7 @@ BOOST_AUTO_TEST_CASE(accessFunctionTest)
     }
     */
     bcos::eth::EVMSchedule const& schedule = DefaultSchedule;
-    bytes code = fromHex(
+    bytes code = *fromHexString(
         string("608060405234801561001057600080fd5b50607b60008190555060df806100276000396000f30060806"
                "04052600436106049576000357c01000000000000000000000000000000000000000000000000000000"
                "00900463ffffffff16806360fe47b114604e5780636d4ce63c146078575b600080fd5b3480156059576"
@@ -828,7 +828,7 @@ BOOST_AUTO_TEST_CASE(accessFunctionTest)
                "0565b600080549050905600a165627a7a723058206ed282a30254e86080aeca513abfda612e92567697"
                "0bdf4f17a8e5d36bcd8d230029") +
         string(""));
-    bytes data = fromHex("");
+    bytes data = *fromHexString("");
     Address destination{KeyPair::create().address()};
     Address caller = Address("1000000000000000000000000000000000000000");
     u256 value = 0;
@@ -845,7 +845,7 @@ BOOST_AUTO_TEST_CASE(accessFunctionTest)
 
     // call function get()
     code = getContractCode(destination);
-    data = fromHex("0x6d4ce63c");
+    data = *fromHexString("0x6d4ce63c");
     isCreate = false;
     isStaticCall = true;
 
@@ -857,7 +857,8 @@ BOOST_AUTO_TEST_CASE(accessFunctionTest)
 
     // call function set(456)
     code = getContractCode(destination);
-    data = fromHex("0x60fe47b100000000000000000000000000000000000000000000000000000000000001c8");
+    data = *fromHexString(
+        "0x60fe47b100000000000000000000000000000000000000000000000000000000000001c8");
     isCreate = false;
     isStaticCall = false;
 
@@ -892,7 +893,7 @@ BOOST_AUTO_TEST_CASE(createTest)
     }
     */
     bcos::eth::EVMSchedule const& schedule = DefaultSchedule;
-    bytes code = fromHex(
+    bytes code = *fromHexString(
         string("6080604052348015600f57600080fd5b5060166075565b604051809103906000f0801580156031573d6"
                "000803e3d6000fd5b506000806101000a81548173ffffffffffffffffffffffffffffffffffffffff02"
                "1916908373ffffffffffffffffffffffffffffffffffffffff1602179055506084565b604051605a806"
@@ -901,7 +902,7 @@ BOOST_AUTO_TEST_CASE(createTest)
                "00f57600080fd5b50606460008190555060358060256000396000f3006080604052600080fd00a16562"
                "7a7a723058204be97116cdf15dc1417911f0162644ac0d28eced5dcbdb48c32e813c6fbccf130029") +
         string(""));
-    bytes data = fromHex("");
+    bytes data = *fromHexString("");
     Address destination{KeyPair::create().address()};
     Address caller = destination;
     u256 value = 0;
@@ -915,7 +916,7 @@ BOOST_AUTO_TEST_CASE(createTest)
     printResult(result);
     printAccount(destination);
 
-    Address newContractAddr = FixedHash<20>(u160(getStateValueU256(
+    Address newContractAddr = FixedBytes<20>(u160(getStateValueU256(
         destination, "0000000000000000000000000000000000000000000000000000000000000000")));
 
     cout << "new addr: " << newContractAddr.hex() << endl;
@@ -956,7 +957,7 @@ BOOST_AUTO_TEST_CASE(callTest)
     }
     */
     bcos::eth::EVMSchedule const& schedule = DefaultSchedule;
-    bytes code = fromHex(
+    bytes code = *fromHexString(
         string(
             "608060405234801561001057600080fd5b50600061001b6100eb565b604051809103906000f08015801561"
             "0037573d6000803e3d6000fd5b5060008054600160a060020a03808416600160a060020a03199092169190"
@@ -972,7 +973,7 @@ BOOST_AUTO_TEST_CASE(callTest)
             "408051918252519081900360200190f35b600055565b600054905600a165627a7a7230582061f8c02f4a0f"
             "53e2f4b173d7a8475ec61c5138d08bddb39b3d1ee308bd30d37d0029") +
         string(""));
-    bytes data = fromHex("");
+    bytes data = *fromHexString("");
     Address destination{KeyPair::create().address()};
     Address caller = destination;
     u256 value = 0;
@@ -986,7 +987,7 @@ BOOST_AUTO_TEST_CASE(callTest)
     printResult(result);
     printAccount(destination);
 
-    Address newContractAddr = FixedHash<20>(u160(getStateValueU256(
+    Address newContractAddr = FixedBytes<20>(u160(getStateValueU256(
         destination, "0000000000000000000000000000000000000000000000000000000000000000")));
     printAccount(newContractAddr);
 
@@ -1030,7 +1031,7 @@ BOOST_FIXTURE_TEST_CASE(SM_callTest, SM_InterpreterFixture)
     }
     */
     bcos::eth::EVMSchedule const& schedule = DefaultSchedule;
-    bytes code = fromHex(
+    bytes code = *fromHexString(
         string(
             "608060405234801561001057600080fd5b50600061001b6100eb565b604051809103906000f08015801561"
             "0037573d6000803e3d6000fd5b5060008054600160a060020a03808416600160a060020a03199092169190"
@@ -1046,7 +1047,7 @@ BOOST_FIXTURE_TEST_CASE(SM_callTest, SM_InterpreterFixture)
             "408051918252519081900360200190f35b600055565b600054905600a165627a7a7230582061f8c02f4a0f"
             "53e2f4b173d7a8475ec61c5138d08bddb39b3d1ee308bd30d37d0029") +
         string(""));
-    bytes data = fromHex("");
+    bytes data = *fromHexString("");
     Address destination{KeyPair::create().address()};
     Address caller = destination;
     u256 value = 0;
@@ -1060,7 +1061,7 @@ BOOST_FIXTURE_TEST_CASE(SM_callTest, SM_InterpreterFixture)
     printResult(result);
     printAccount(destination);
 
-    Address newContractAddr = FixedHash<20>(u160(getStateValueU256(
+    Address newContractAddr = FixedBytes<20>(u160(getStateValueU256(
         destination, "0000000000000000000000000000000000000000000000000000000000000000")));
     printAccount(newContractAddr);
 
@@ -1101,7 +1102,7 @@ BOOST_AUTO_TEST_CASE(internalStaticCallTest)
     }
     */
     bcos::eth::EVMSchedule const& schedule = DefaultSchedule;
-    bytes code = fromHex(
+    bytes code = *fromHexString(
         string(
             "608060405234801561001057600080fd5b5061001961005b565b604051809103906000f080158015610035"
             "573d6000803e3d6000fd5b5060008054600160a060020a031916600160a060020a03929092169190911790"
@@ -1119,7 +1120,7 @@ BOOST_AUTO_TEST_CASE(internalStaticCallTest)
             "5b60408051918252519081900360200190f35b600054905600a165627a7a7230582047b02b4d358706093f"
             "734a13695269576b9df6caaa576fa6a8b7c6cd8465bee90029") +
         string(""));
-    bytes data = fromHex("");
+    bytes data = *fromHexString("");
     Address destination{KeyPair::create().address()};
     Address caller = destination;
     u256 value = 0;
@@ -1134,7 +1135,7 @@ BOOST_AUTO_TEST_CASE(internalStaticCallTest)
     printResult(result);
     printAccount(destination);
 
-    Address newContractAddr = FixedHash<20>(u160(getStateValueU256(
+    Address newContractAddr = FixedBytes<20>(u160(getStateValueU256(
         destination, "0000000000000000000000000000000000000000000000000000000000000000")));
     printAccount(newContractAddr);
 
@@ -1144,7 +1145,7 @@ BOOST_AUTO_TEST_CASE(internalStaticCallTest)
     BOOST_CHECK_EQUAL(123, xResult);
 
     code = getContractCode(destination);
-    data = fromHex("0xd4ad860c");
+    data = *fromHexString("0xd4ad860c");
     value = 0;
     gas = 1000000;
     depth = evmc.depth();
@@ -1192,7 +1193,7 @@ BOOST_AUTO_TEST_CASE(internalCallTest)
     }
     */
     bcos::eth::EVMSchedule const& schedule = DefaultSchedule;
-    bytes code = fromHex(
+    bytes code = *fromHexString(
         string("608060405234801561001057600080fd5b5061001961005b565b604051809103906000f080158015610"
                "035573d6000803e3d6000fd5b5060008054600160a060020a031916600160a060020a03929092169190"
                "9117905561006a565b60405160ae8061018383390190565b61010a806100796000396000f3006080604"
@@ -1208,7 +1209,7 @@ BOOST_AUTO_TEST_CASE(internalCallTest)
                "80fd5b506058600435605a565b005b6000555600a165627a7a72305820676d280cb50f611a551dba463"
                "5b1eca2d393a69238156d9ad799423989f581180029") +
         string(""));
-    bytes data = fromHex("");
+    bytes data = *fromHexString("");
     Address destination{KeyPair::create().address()};
     Address caller = destination;
     u256 value = 0;
@@ -1222,7 +1223,7 @@ BOOST_AUTO_TEST_CASE(internalCallTest)
     printResult(result);
     printAccount(destination);
 
-    Address newContractAddr = FixedHash<20>(u160(getStateValueU256(
+    Address newContractAddr = FixedBytes<20>(u160(getStateValueU256(
         destination, "0000000000000000000000000000000000000000000000000000000000000000")));
     printAccount(newContractAddr);
 
@@ -1231,7 +1232,7 @@ BOOST_AUTO_TEST_CASE(internalCallTest)
     BOOST_CHECK_EQUAL(123, xResult);
 
     code = getContractCode(destination);
-    data = fromHex("0xf306c05c");
+    data = *fromHexString("0xf306c05c");
     value = 0;
     gas = 1000000;
     depth = evmc.depth();
@@ -1252,8 +1253,8 @@ BOOST_AUTO_TEST_CASE(internalCallTest)
 BOOST_AUTO_TEST_CASE(errorCodeTest)
 {
     bcos::eth::EVMSchedule const& schedule = DefaultSchedule;
-    bytes code = fromHex("");
-    bytes data = fromHex("");
+    bytes code = *fromHexString("");
+    bytes data = *fromHexString("");
     Address destination{KeyPair::create().address()};
     Address caller = destination;
     u256 value = 0;
@@ -1267,14 +1268,14 @@ BOOST_AUTO_TEST_CASE(errorCodeTest)
     // PUSH 0
     // PUSH 0
     // REVERT
-    code = fromHex("60006000fd");
+    code = *fromHexString("60006000fd");
     result = evmc.execute(
         schedule, code, data, destination, caller, value, gas, depth, isCreate, isStaticCall);
     printResult(result);
     BOOST_CHECK(result.status_code == EVMC_REVERT);
 
     // BadInstruction
-    code = fromHex("4f");
+    code = *fromHexString("4f");
     result = evmc.execute(
         schedule, code, data, destination, caller, value, gas, depth, isCreate, isStaticCall);
     printResult(result);
@@ -1284,13 +1285,13 @@ BOOST_AUTO_TEST_CASE(errorCodeTest)
     // PUSH 0
     // PUSH 0
     // JUMP
-    // code = fromHex("5600560056");
+    // code = *fromHexString("5600560056");
     // result = evmc.execute(schedule, code, data, destination, caller, value, gas, depth, isCreate,
     // isStaticCall); printResult(result); BOOST_CHECK(result.status_code == EVMC_STACK_OVERFLOW);
 
     // StackUnderflow
     // JUMP
-    code = fromHex("56");
+    code = *fromHexString("56");
     result = evmc.execute(
         schedule, code, data, destination, caller, value, gas, depth, isCreate, isStaticCall);
     printResult(result);
@@ -1299,7 +1300,7 @@ BOOST_AUTO_TEST_CASE(errorCodeTest)
     // Bad jump destination
     // PUSH8 FFFFFFFFFFFFFFFF
     // JUMP
-    code = fromHex("67FFFFFFFFFFFFFFFF56");
+    code = *fromHexString("67FFFFFFFFFFFFFFFF56");
     result = evmc.execute(
         schedule, code, data, destination, caller, value, gas, depth, isCreate, isStaticCall);
     printResult(result);

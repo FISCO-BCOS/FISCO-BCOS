@@ -30,7 +30,7 @@
 #include <libexecutive/StateFace.h>
 #include <libstorage/Table.h>
 #include <libutilities/Common.h>
-#include <libutilities/FixedHash.h>
+#include <libutilities/FixedBytes.h>
 // for concurrent_map
 #define TBB_PREVIEW_CONCURRENT_ORDERED_CONTAINERS 1
 #include <tbb/concurrent_map.h>

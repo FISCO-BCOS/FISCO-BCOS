@@ -149,7 +149,7 @@ private:
         blockHeader->setGasUsed(bcos::u256(100000));
         uint64_t current_time = 100000;  // utcTime();
         blockHeader->setTimestamp(current_time);
-        blockHeader->appendExtraDataArray(bcos::jsToBytes("0x1020"));
+        blockHeader->appendExtraDataArray(bcos::jonStringToBytes("0x1020"));
         blockHeader->setSealer(bcos::u256(12));
         std::vector<bcos::h512> sealer_list;
         for (unsigned int i = 0; i < 10; i++)

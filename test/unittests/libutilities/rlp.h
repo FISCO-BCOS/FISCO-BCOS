@@ -84,7 +84,7 @@ private:
         is_exception = false;
         try
         {
-            bytes rlpBytes = fromHex(jsonObj["out"].asString());
+            bytes rlpBytes = *fromHexString(jsonObj["out"].asString());
             RLP rlpObj(rlpBytes);
             if (rlpType == RlpType::Test)
                 checkRlp(jsonObj["in"], rlpObj);

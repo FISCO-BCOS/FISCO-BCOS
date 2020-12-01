@@ -25,7 +25,7 @@
 #include <libethcore/BlockHeader.h>
 #include <libethcore/Common.h>
 #include <libethcore/Exceptions.h>
-#include <libutilities/CommonJS.h>
+#include <libutilities/JsonDataConvertUtility.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
@@ -51,12 +51,12 @@ BOOST_AUTO_TEST_CASE(testBadBlock)
     blockHeader.setGasUsed(u256(100000));
     uint64_t current_time = utcTime();
     blockHeader.setTimestamp(current_time);
-    blockHeader.appendExtraDataArray(jsToBytes("0x1020"));
+    blockHeader.appendExtraDataArray(jonStringToBytes("0x1020"));
     blockHeader.setSealer(u256("0x00"));
     h512s sealer_list;
     for (unsigned int i = 0; i < 10; i++)
     {
-        sealer_list.push_back(toPublic(Secret::random()));
+        sealer_list.push_back(toPublic(Secret::generateRandomFixedBytes()));
     }
     blockHeader.setSealerList(sealer_list);
 

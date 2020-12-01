@@ -24,7 +24,7 @@
 #include <libconfig/GlobalConfigure.h>
 #include <libethcore/CommonJS.h>
 #include <libethcore/Transaction.h>
-#include <libutilities/CommonJS.h>
+#include <libutilities/JsonDataConvertUtility.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
@@ -68,7 +68,7 @@ BOOST_AUTO_TEST_CASE(testCreateTxByRLP)
 /// test decode
 #if 0
     // TODO: replace with the latest tx rlp
-    bytes rlpBytesRC1 = fromHex(
+    bytes rlpBytesRC1 = *fromHexString(
         "f8ef9f65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d03f85174876e7ff"
         "8609184e729fff82020394d6f1a71052366dbae2f7ab2d5d5845e77965cf0d80b86448f85bce000000"
         "000000000000000000000000000000000000000000000000000000001bf5bd8a9e7ba8b936ea704292"
@@ -107,7 +107,7 @@ BOOST_FIXTURE_TEST_CASE(SM_testCreateTxByRLP, SM_CryptoTestFixture)
     BOOST_CHECK_NO_THROW(tx.encode(s, eth::IncludeSignature::WithSignature));*/
     BOOST_CHECK_NO_THROW(tx.encode(encodeBytes, eth::IncludeSignature::WithSignature));
     Transaction decodeTxRC2;
-    bytes rlpBytesRC2 = fromHex(
+    bytes rlpBytesRC2 = *fromHexString(
         "f904a8a00148abbf95a2cd7851a238a393cd0b37e98c6b7602d86765633dc58ca5a27d538411e1a3008411e1a3"
         "00830314f08080b903ed608060405234801561001057600080fd5b506040805190810160405280600d81526020"
         "017f48656c6c6f2c20576f726c6421000000000000000000000000000000000000008152506000908051906020"
