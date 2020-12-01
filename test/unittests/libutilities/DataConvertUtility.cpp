@@ -21,7 +21,6 @@
  */
 #include <libutilities/DataConvertUtility.h>
 #include <libutilities/Exceptions.h>
-#include <libutilities/vector_ref.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 #include <cstdlib>

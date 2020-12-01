@@ -112,7 +112,7 @@ bigint parseBigEndianRightPadded(bytesConstRef _in, bigint const& _begin, bigint
     size_t const count{_count};
 
     // crop _in, not going beyond its size
-    bytesConstRef cropped = _in.cropped(begin, min(count, _in.count() - begin));
+    bytesConstRef cropped = _in.getCroppedData(begin, min(count, _in.count() - begin));
 
     bigint ret = fromBigEndian<bigint>(cropped);
     // shift as if we had right-padding zeroes
@@ -226,12 +226,13 @@ ETH_REGISTER_PRECOMPILED(blake2_compression)(bytesConstRef _in)
     if (_in.size() != totalInputSize)
         return {false, {}};
 
-    auto const rounds = fromBigEndian<uint32_t>(_in.cropped(0, roundsSize));
-    auto const stateVector = _in.cropped(roundsSize, stateVectorSize);
-    auto const messageBlockVector = _in.cropped(roundsSize + stateVectorSize, messageBlockSize);
+    auto const rounds = fromBigEndian<uint32_t>(_in.getCroppedData(0, roundsSize));
+    auto const stateVector = _in.getCroppedData(roundsSize, stateVectorSize);
+    auto const messageBlockVector =
+        _in.getCroppedData(roundsSize + stateVectorSize, messageBlockSize);
     auto const offsetCounter0 =
-        _in.cropped(roundsSize + stateVectorSize + messageBlockSize, offsetCounterSize);
-    auto const offsetCounter1 = _in.cropped(
+        _in.getCroppedData(roundsSize + stateVectorSize + messageBlockSize, offsetCounterSize);
+    auto const offsetCounter1 = _in.getCroppedData(
         roundsSize + stateVectorSize + messageBlockSize + offsetCounterSize, offsetCounterSize);
     uint8_t const finalBlockIndicator =
         _in[roundsSize + stateVectorSize + messageBlockSize + 2 * offsetCounterSize];
@@ -246,7 +247,7 @@ ETH_REGISTER_PRECOMPILED(blake2_compression)(bytesConstRef _in)
 ETH_REGISTER_PRECOMPILED_PRICER(blake2_compression)
 (bytesConstRef _in)
 {
-    auto const rounds = fromBigEndian<uint32_t>(_in.cropped(0, 4));
+    auto const rounds = fromBigEndian<uint32_t>(_in.getCroppedData(0, 4));
     return rounds;
 }
 

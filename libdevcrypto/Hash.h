@@ -23,8 +23,8 @@
 
 #pragma once
 
+#include <libutilities/Common.h>
 #include <libutilities/FixedBytes.h>
-#include <libutilities/vector_ref.h>
 #include <string>
 
 namespace bcos
@@ -90,15 +90,6 @@ inline SecureFixedBytes<32> keccak256Secure(FixedBytes<N> const& _input)
     return keccak256Secure(_input.ref());
 }
 
-/// Fully secure variants are equivalent for keccak256 and keccak256Secure.
-inline SecureFixedBytes<32> keccak256(secBytes const& _input)
-{
-    return keccak256Secure(_input.ref());
-}
-inline SecureFixedBytes<32> keccak256Secure(secBytes const& _input)
-{
-    return keccak256Secure(_input.ref());
-}
 template <unsigned N>
 inline SecureFixedBytes<32> keccak256(SecureFixedBytes<N> const& _input)
 {

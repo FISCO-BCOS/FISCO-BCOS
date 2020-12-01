@@ -222,15 +222,15 @@ public:
     byte operator[](unsigned _index) const { return m_data[_index]; }
 
     // @returns an abridged version of the hash as a user-readable hex string
-    std::string abridged() const { return *toHexString(ref().cropped(0, 4)) + "..."; }
+    std::string abridged() const { return *toHexString(ref().getCroppedData(0, 4)) + "..."; }
     /// @returns the hash as a user-readable hex string.
     std::string hex() const { return *toHexString(ref()); }
     /// @returns the hash as a user-readable hex string with 0x perfix.
     std::string hexPrefixed() const { return toHexStringWithPrefix(ref()); }
 
-    /// @returns a mutable byte vector_ref to the object's data.
+    /// @returns a mutable byte RefDataContainer to the object's data.
     bytesRef ref() { return bytesRef(m_data.data(), N); }
-    /// @returns a constant byte vector_ref to the object's data.
+    /// @returns a constant byte RefDataContainer to the object's data.
     bytesConstRef ref() const { return bytesConstRef(m_data.data(), N); }
     /// @returns a mutable byte pointer to the object's data.
     byte* data() { return m_data.data(); }
@@ -376,10 +376,7 @@ public:
         bytesConstRef _fixedBytesRef, DataAlignType _alignType = DataAlignType::AlignRight)
       : FixedBytes<T>(_fixedBytesRef, _alignType)
     {}
-    explicit SecureFixedBytes(
-        secBytes const& _bytesData, DataAlignType _alignType = DataAlignType::AlignRight)
-      : FixedBytes<T>(_bytesData.ref(), _alignType)
-    {}
+
     template <unsigned M>
     explicit SecureFixedBytes(
         FixedBytes<M> const& _fixedBytes, DataAlignType _alignType = DataAlignType::AlignLeft)
@@ -399,14 +396,14 @@ public:
       : FixedBytes<T>(_stringData, _stringType, _alignType)
     {}
     SecureFixedBytes(SecureFixedBytes<T> const& _c) = default;
-    ~SecureFixedBytes() { ref().cleanse(); }
+    ~SecureFixedBytes() { ref().cleanMemory(); }
     SecureFixedBytes<T>& operator=(SecureFixedBytes<T> const& _secureFixedBytes)
     {
         if (&_secureFixedBytes == this)
         {
             return *this;
         }
-        ref().cleanse();
+        ref().cleanMemory();
         FixedBytes<T>::operator=(static_cast<FixedBytes<T> const&>(_secureFixedBytes));
         return *this;
     }
@@ -535,7 +532,7 @@ public:
     }
     using FixedBytes<T>::firstBitSet;
 
-    void clear() { ref().cleanse(); }
+    void clear() { ref().cleanMemory(); }
 };
 
 /// Fast equality operator for h256.

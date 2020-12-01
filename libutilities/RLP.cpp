@@ -62,7 +62,7 @@ RLP::iterator& RLP::iterator::operator++()
     if (m_remaining)
     {
         m_currentItem.retarget(m_currentItem.next().data(), m_remaining);
-        m_currentItem = m_currentItem.cropped(0, sizeAsEncoded(m_currentItem));
+        m_currentItem = m_currentItem.getCroppedData(0, sizeAsEncoded(m_currentItem));
         m_remaining -= std::min<size_t>(m_remaining, m_currentItem.size());
     }
     else
@@ -75,12 +75,12 @@ RLP::iterator::iterator(RLP const& _parent, bool _begin)
     if (_begin && _parent.isList())
     {
         auto pl = _parent.payload();
-        m_currentItem = pl.cropped(0, sizeAsEncoded(pl));
+        m_currentItem = pl.getCroppedData(0, sizeAsEncoded(pl));
         m_remaining = pl.size() - m_currentItem.size();
     }
     else
     {
-        m_currentItem = _parent.data().cropped(_parent.data().size());
+        m_currentItem = _parent.data().getCroppedData(_parent.data().size());
         m_remaining = 0;
     }
 }
@@ -90,13 +90,13 @@ RLP RLP::operator[](size_t _i) const
     if (_i < m_lastIndex)
     {
         m_lastEnd = sizeAsEncoded(payload());
-        m_lastItem = payload().cropped(0, m_lastEnd);
+        m_lastItem = payload().getCroppedData(0, m_lastEnd);
         m_lastIndex = 0;
     }
     for (; m_lastIndex < _i && m_lastItem.size(); ++m_lastIndex)
     {
-        m_lastItem = payload().cropped(m_lastEnd);
-        m_lastItem = m_lastItem.cropped(0, sizeAsEncoded(m_lastItem));
+        m_lastItem = payload().getCroppedData(m_lastEnd);
+        m_lastItem = m_lastItem.getCroppedData(0, sizeAsEncoded(m_lastItem));
         m_lastEnd += m_lastItem.size();
     }
     return RLP(m_lastItem, ThrowOnFail | FailIfTooSmall);
@@ -235,7 +235,7 @@ size_t RLP::items() const
         bytesConstRef d = payload();
         size_t i = 0;
         for (; d.size(); ++i)
-            d = d.cropped(sizeAsEncoded(d));
+            d = d.getCroppedData(sizeAsEncoded(d));
         return i;
     }
     return 0;

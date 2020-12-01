@@ -49,7 +49,7 @@ public:
     virtual void stop();
 
     // gossip block status
-    void doWork() override;
+    void executeTask() override;
 
 private:
     // send block status to random neighbors every m_gossipInterval

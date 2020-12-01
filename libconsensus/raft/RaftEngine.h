@@ -138,7 +138,7 @@ protected:
     bool sendResponse(
         u256 const& _to, h512 const& _node, RaftPacketType _packetType, RaftMsg const& _resp);
 
-    void workLoop() override;
+    void taskProcessLoop() override;
     void resetConfig() override;
 
     void runAsLeader();

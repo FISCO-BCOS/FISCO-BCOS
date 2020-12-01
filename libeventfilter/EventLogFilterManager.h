@@ -104,7 +104,7 @@ public:
     }
 
     // main loop thread
-    void doWork() override;
+    void executeTask() override;
     void addFilter();
     void cancelFilter();
     void executeFilters();

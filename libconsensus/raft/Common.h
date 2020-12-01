@@ -116,9 +116,9 @@ struct RaftMsgPacket
     {
         try
         {
-            packetType =
-                (RaftPacketType)RLP(_reqData.cropped(0, 1)).toInt<unsigned>(RLP::ThrowOnFail);
-            data = RLP(_reqData.cropped(1)).toBytes();
+            packetType = (RaftPacketType)RLP(_reqData.getCroppedData(0, 1))
+                             .toInt<unsigned>(RLP::ThrowOnFail);
+            data = RLP(_reqData.getCroppedData(1)).toBytes();
         }
         catch (Exception const& e)
         {

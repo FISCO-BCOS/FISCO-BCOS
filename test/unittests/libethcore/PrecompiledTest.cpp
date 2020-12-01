@@ -1426,7 +1426,7 @@ constexpr PrecompiledTest bn256PairingTests[] = {
 
 namespace
 {
-void benchmarkPrecompiled(char const name[], vector_ref<const PrecompiledTest> tests, int n)
+void benchmarkPrecompiled(char const name[], RefDataContainer<const PrecompiledTest> tests, int n)
 {
     if (!Options::get().all)
     {
@@ -1455,14 +1455,14 @@ void benchmarkPrecompiled(char const name[], vector_ref<const PrecompiledTest> t
 
 BOOST_AUTO_TEST_CASE(bench_ecrecover, *ut::label("bench"))
 {
-    vector_ref<const PrecompiledTest> tests{
+    RefDataContainer<const PrecompiledTest> tests{
         ecrecoverTests, sizeof(ecrecoverTests) / sizeof(ecrecoverTests[0])};
     benchmarkPrecompiled("ecrecover", tests, 100000);
 }
 
 BOOST_AUTO_TEST_CASE(bench_modexp, *ut::label("bench"))
 {
-    vector_ref<const PrecompiledTest> tests{
+    RefDataContainer<const PrecompiledTest> tests{
         modexpTests, sizeof(modexpTests) / sizeof(modexpTests[0])};
     benchmarkPrecompiled("modexp", tests, 10000);
 }
@@ -1470,21 +1470,21 @@ BOOST_AUTO_TEST_CASE(bench_modexp, *ut::label("bench"))
 
 BOOST_AUTO_TEST_CASE(bench_bn256Add, *ut::label("bench"))
 {
-    vector_ref<const PrecompiledTest> tests{
+    RefDataContainer<const PrecompiledTest> tests{
         bn256AddTests, sizeof(bn256AddTests) / sizeof(bn256AddTests[0])};
     benchmarkPrecompiled("alt_bn128_G1_add", tests, 1000000);
 }
 
 BOOST_AUTO_TEST_CASE(bench_bn256ScalarMul, *ut::label("bench"))
 {
-    vector_ref<const PrecompiledTest> tests{
+    RefDataContainer<const PrecompiledTest> tests{
         bn256ScalarMulTests, sizeof(bn256ScalarMulTests) / sizeof(bn256ScalarMulTests[0])};
     benchmarkPrecompiled("alt_bn128_G1_mul", tests, 10000);
 }
 
 BOOST_AUTO_TEST_CASE(bench_bn256Pairing, *ut::label("bench"))
 {
-    vector_ref<const PrecompiledTest> tests{
+    RefDataContainer<const PrecompiledTest> tests{
         bn256PairingTests, sizeof(bn256PairingTests) / sizeof(bn256PairingTests[0])};
     benchmarkPrecompiled("alt_bn128_pairing_product", tests, 1000);
 }
@@ -1597,7 +1597,7 @@ constexpr PrecompiledTest blake2FCompressionLargeTests[] = {{
 
 namespace
 {
-void testPrecompiled(char const name[], vector_ref<const PrecompiledTest> tests)
+void testPrecompiled(char const name[], RefDataContainer<const PrecompiledTest> tests)
 {
     PrecompiledExecutor exec = PrecompiledRegistrar::executor(name);
 
@@ -1614,7 +1614,7 @@ void testPrecompiled(char const name[], vector_ref<const PrecompiledTest> tests)
     }
 }
 
-void testPrecompiledFail(char const name[], vector_ref<const PrecompiledTest> tests)
+void testPrecompiledFail(char const name[], RefDataContainer<const PrecompiledTest> tests)
 {
     PrecompiledExecutor exec = PrecompiledRegistrar::executor(name);
 
@@ -1633,28 +1633,28 @@ void testPrecompiledFail(char const name[], vector_ref<const PrecompiledTest> te
 
 BOOST_AUTO_TEST_CASE(blake2compression)
 {
-    vector_ref<const PrecompiledTest> tests{blake2FCompressionTests,
+    RefDataContainer<const PrecompiledTest> tests{blake2FCompressionTests,
         sizeof(blake2FCompressionTests) / sizeof(blake2FCompressionTests[0])};
     testPrecompiled("blake2_compression", tests);
 }
 
 BOOST_AUTO_TEST_CASE(blake2compressionFail)
 {
-    vector_ref<const PrecompiledTest> tests{blake2FCompressionFailTests,
+    RefDataContainer<const PrecompiledTest> tests{blake2FCompressionFailTests,
         sizeof(blake2FCompressionFailTests) / sizeof(blake2FCompressionFailTests[0])};
     testPrecompiledFail("blake2_compression", tests);
 }
 
 BOOST_AUTO_TEST_CASE(bench_blake2compression, *ut::label("bench"))
 {
-    vector_ref<const PrecompiledTest> tests{blake2FCompressionTests,
+    RefDataContainer<const PrecompiledTest> tests{blake2FCompressionTests,
         sizeof(blake2FCompressionTests) / sizeof(blake2FCompressionTests[0])};
     benchmarkPrecompiled("blake2_compression", tests, 100000);
 }
 
 BOOST_AUTO_TEST_CASE(bench_blake2compression_maxrounds, *ut::label("bench"))
 {
-    vector_ref<const PrecompiledTest> tests{blake2FCompressionLargeTests,
+    RefDataContainer<const PrecompiledTest> tests{blake2FCompressionLargeTests,
         sizeof(blake2FCompressionLargeTests) / sizeof(blake2FCompressionLargeTests[0])};
     benchmarkPrecompiled("blake2_compression", tests, 1);
 }

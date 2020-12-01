@@ -38,11 +38,11 @@ jobs:
         id: cache
         with:
           path: deps/src
-          key: deps-v7-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: deps-v8-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            deps-v7-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            deps-v7-${{ runner.temp }}-${{ github.base_ref }}-
-            deps-v7-${{ runner.temp }}-
+            deps-v8-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            deps-v8-${{ runner.temp }}-${{ github.base_ref }}-
+            deps-v8-${{ runner.temp }}-
       - uses: actions/cache@v2
         id: ccache
         with:

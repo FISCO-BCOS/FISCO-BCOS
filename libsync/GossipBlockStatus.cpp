@@ -56,7 +56,7 @@ void GossipBlockStatus::stop()
     }
 }
 
-void GossipBlockStatus::doWork()
+void GossipBlockStatus::executeTask()
 {
     assert(m_gossipBlockStatusHandler);
     m_gossipBlockStatusHandler(m_gossipPeersNumber);

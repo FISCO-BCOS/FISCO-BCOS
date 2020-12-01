@@ -26,7 +26,7 @@
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcrypto/Common.h>
 #include <libdevcrypto/Exceptions.h>
-#include <libutilities/vector_ref.h>
+#include <libutilities/Common.h>
 
 using namespace std;
 using namespace bcos;

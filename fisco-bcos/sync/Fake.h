@@ -73,8 +73,8 @@ public:
 
     /// stop blockSync
     void stop() { stopWorking(); }
-    /// doWork every idleWaitMs
-    virtual void doWork() override
+    /// executeTask every idleWaitMs
+    virtual void executeTask() override
     {
         if (m_sync->status().state != bcos::sync::SyncState::Idle)
         {

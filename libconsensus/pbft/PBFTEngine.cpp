@@ -910,7 +910,7 @@ bool PBFTEngine::needOmit(Sealing const& sealing)
  *        1. check the validation of the network-received data(include the account type of the
  * sender and receiver)
  *        2. decode the data into PBFTMsgPacket
- *        3. push the message into message queue to handler later by workLoop
+ *        3. push the message into message queue to handler later by taskProcessLoop
  * @param exception: exceptions related to the received-message
  * @param session: the session related to the network data(can get informations about the sender)
  * @param message: message constructed from data received from the network
@@ -1750,7 +1750,7 @@ void PBFTEngine::forwardMsgByTTL(
 }
 
 /// start a new thread to handle the network-receivied message
-void PBFTEngine::workLoop()
+void PBFTEngine::taskProcessLoop()
 {
     while (isWorking())
     {
@@ -1765,7 +1765,7 @@ void PBFTEngine::workLoop()
             if (ret.first)
             {
                 PBFTENGINE_LOG(TRACE)
-                    << LOG_DESC("workLoop: handleMsg")
+                    << LOG_DESC("taskProcessLoop: handleMsg")
                     << LOG_KV("type", std::to_string(ret.second->packet_id))
                     << LOG_KV("fromIdx", ret.second->node_idx) << LOG_KV("nodeIdx", nodeIdx())
                     << LOG_KV("myNode", m_keyPair.pub().abridged());

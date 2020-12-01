@@ -454,7 +454,7 @@ BOOST_AUTO_TEST_CASE(maintainBlockRequestTest)
     BOOST_CHECK_EQUAL(service->getAsyncSendSizeByNodeID(NodeID(102)), 2);
 }
 
-BOOST_AUTO_TEST_CASE(DoWorkTest)
+BOOST_AUTO_TEST_CASE(ScheduleTaskTest)
 {
     int64_t currentBlockNumber = 0;
     FakeSyncToolsSet syncTools = fakeSyncToolsSet(currentBlockNumber + 1, 5, NodeID(100));
@@ -462,11 +462,11 @@ BOOST_AUTO_TEST_CASE(DoWorkTest)
 
     sync->noteNewTransactions();
     sync->noteNewBlocks();
-    sync->doWork();
+    sync->executeTask();
 
     sync->noteDownloadingBegin();
     BOOST_CHECK(sync->status().state == SyncState::Downloading);
-    sync->doWork();
+    sync->executeTask();
     // BOOST_CHECK(sync->status().state == SyncState::Idle);
 
     sync->noteDownloadingBegin();

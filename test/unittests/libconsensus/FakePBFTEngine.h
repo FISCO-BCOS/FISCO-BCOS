@@ -420,7 +420,7 @@ public:
         return PBFTSealer::canHandleBlockForNextLeader();
     }
     bool reachBlockIntervalTime() override { return PBFTSealer::reachBlockIntervalTime(); }
-    void doWork(bool wait) override { return PBFTSealer::doWork(wait); }
+    void executeTask(bool wait) override { return PBFTSealer::executeTask(wait); }
     bool shouldHandleBlock() override { return PBFTSealer::shouldHandleBlock(); }
     void resetSealingBlock(h256Hash const& filter = h256Hash(), bool resetNextLeader = false)
     {

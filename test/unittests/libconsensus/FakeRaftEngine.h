@@ -161,7 +161,7 @@ public:
         bcos::consensus::RaftEngine::reportBlock(_block);
     }
 
-    void workLoop() override {}
+    void taskProcessLoop() override {}
 
     void fakeLeader()
     {

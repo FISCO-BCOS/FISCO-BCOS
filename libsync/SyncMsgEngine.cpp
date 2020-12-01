@@ -84,7 +84,7 @@ bool SyncMsgEngine::checkMessage(P2PMessage::Ptr _msg)
     bytesConstRef msgBytes = ref(*_msg->buffer());
     if (msgBytes.size() < 2 || msgBytes[0] > 0x7f)
         return false;
-    if (RLP(msgBytes.cropped(1)).actualSize() + 1 != msgBytes.size())
+    if (RLP(msgBytes.getCroppedData(1)).actualSize() + 1 != msgBytes.size())
         return false;
     return true;
 }

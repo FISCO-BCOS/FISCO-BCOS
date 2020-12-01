@@ -148,8 +148,8 @@ protected:
     virtual bool reachBlockIntervalTime() { return false; }
     virtual void handleBlock() {}
     virtual bool shouldHandleBlock() { return true; }
-    virtual void doWork(bool wait);
-    void doWork() override { doWork(true); }
+    virtual void executeTask(bool wait);
+    void executeTask() override { executeTask(true); }
     bool isBlockSyncing();
 
     inline void resetSealingBlock(h256Hash const& filter = h256Hash(), bool resetNextLeader = false)

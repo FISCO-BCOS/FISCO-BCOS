@@ -249,7 +249,8 @@ std::shared_ptr<std::vector<std::string>> ExecutiveContext::getTxCriticals(const
                 paramTypes.resize((size_t)config->criticalSize);
 
                 ContractABI abi;
-                isOk = abi.abiOutByFuncSelector(ref(_tx.data()).cropped(4), paramTypes, *res);
+                isOk =
+                    abi.abiOutByFuncSelector(ref(_tx.data()).getCroppedData(4), paramTypes, *res);
                 if (!isOk)
                 {
                     EXECUTIVECONTEXT_LOG(DEBUG) << LOG_DESC("[getTxCriticals] abiout failed, ")
