@@ -70,20 +70,15 @@ void ExecutiveContextFactory::initExecutiveContext(
         std::make_shared<bcos::precompiled::ParallelConfigPrecompiled>();
     context->setAddress2Precompiled(PARALLEL_CONFIG_ADDRESS, parallelConfigPrecompiled);
     context->registerParallelPrecompiled(parallelConfigPrecompiled);
-    if (g_BCOSConfig.version() >= V2_3_0)
-    {
-        context->setAddress2Precompiled(CONTRACT_LIFECYCLE_ADDRESS,
-            std::make_shared<bcos::precompiled::ContractLifeCyclePrecompiled>());
-        auto kvTableFactoryPrecompiled =
-            std::make_shared<bcos::precompiled::KVTableFactoryPrecompiled>();
-        kvTableFactoryPrecompiled->setMemoryTableFactory(memoryTableFactory);
-        context->setAddress2Precompiled(KVTABLE_FACTORY_ADDRESS, kvTableFactoryPrecompiled);
-    }
-    if (g_BCOSConfig.version() >= V2_5_0)
-    {
-        context->setAddress2Precompiled(CHAINGOVERNANCE_ADDRESS,
-            std::make_shared<bcos::precompiled::ChainGovernancePrecompiled>());
-    }
+
+    context->setAddress2Precompiled(CONTRACT_LIFECYCLE_ADDRESS,
+        std::make_shared<bcos::precompiled::ContractLifeCyclePrecompiled>());
+    auto kvTableFactoryPrecompiled =
+        std::make_shared<bcos::precompiled::KVTableFactoryPrecompiled>();
+    kvTableFactoryPrecompiled->setMemoryTableFactory(memoryTableFactory);
+    context->setAddress2Precompiled(KVTABLE_FACTORY_ADDRESS, kvTableFactoryPrecompiled);
+    context->setAddress2Precompiled(
+        CHAINGOVERNANCE_ADDRESS, std::make_shared<bcos::precompiled::ChainGovernancePrecompiled>());
     // register User developed Precompiled contract
     registerUserPrecompiled(context);
     context->setMemoryTableFactory(memoryTableFactory);
@@ -91,13 +86,9 @@ void ExecutiveContextFactory::initExecutiveContext(
     context->setPrecompiledContract(m_precompiledContract);
     context->setState(m_stateFactoryInterface->getState(stateRoot, memoryTableFactory));
     setTxGasLimitToContext(context);
-
-    if (g_BCOSConfig.version() >= V2_6_0)
-    {
-        // register workingSealerManagerPrecompiled for VRF-based-rPBFT
-        context->setAddress2Precompiled(WORKING_SEALER_MGR_ADDRESS,
-            std::make_shared<bcos::precompiled::WorkingSealerManagerPrecompiled>());
-    }
+    // register workingSealerManagerPrecompiled for VRF-based-rPBFT
+    context->setAddress2Precompiled(WORKING_SEALER_MGR_ADDRESS,
+        std::make_shared<bcos::precompiled::WorkingSealerManagerPrecompiled>());
 }
 
 void ExecutiveContextFactory::setStateStorage(bcos::storage::Storage::Ptr stateStorage)

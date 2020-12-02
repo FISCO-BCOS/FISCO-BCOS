@@ -92,7 +92,7 @@ PrecompiledExecResult::Ptr TablePrecompiled::call(ExecutiveContext::Ptr context,
     }
     else if (func == name2Selector[TABLE_METHOD_INS_STR_ADD])
     {  // insert(string,address)
-        if (g_BCOSConfig.version() >= V2_3_0 && !checkAuthority(context, origin, sender))
+        if (!checkAuthority(context, origin, sender))
         {
             PRECOMPILED_LOG(ERROR)
                 << LOG_BADGE("TablePrecompiled") << LOG_DESC("permission denied")
@@ -147,7 +147,7 @@ PrecompiledExecResult::Ptr TablePrecompiled::call(ExecutiveContext::Ptr context,
     }
     else if (func == name2Selector[TABLE_METHOD_RE_STR_ADD])
     {  // remove(string,address)
-        if (g_BCOSConfig.version() >= V2_3_0 && !checkAuthority(context, origin, sender))
+        if (!checkAuthority(context, origin, sender))
         {
             PRECOMPILED_LOG(ERROR)
                 << LOG_BADGE("TablePrecompiled") << LOG_DESC("permission denied")
@@ -176,7 +176,7 @@ PrecompiledExecResult::Ptr TablePrecompiled::call(ExecutiveContext::Ptr context,
     }
     else if (func == name2Selector[TABLE_METHOD_UP_STR_2ADD])
     {  // update(string,address,address)
-        if (g_BCOSConfig.version() >= V2_3_0 && !checkAuthority(context, origin, sender))
+        if (!checkAuthority(context, origin, sender))
         {
             PRECOMPILED_LOG(ERROR)
                 << LOG_BADGE("TablePrecompiled") << LOG_DESC("permission denied")

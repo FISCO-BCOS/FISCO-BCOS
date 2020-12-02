@@ -147,13 +147,10 @@ void ZdbStorage::initSysTables()
 
     createCnsTables();
     createSysConfigTables();
-    if (g_BCOSConfig.version() >= V2_6_0)
-    {
-        // the compressed table include:
-        // _sys_hash_2_block, _sys_block_2_nonce_ and _sys_hash_2_header_
-        m_rowFormat = " ROW_FORMAT=COMPRESSED ";
-        m_valueFieldType = "longblob";
-    }
+    // the compressed table include:
+    // _sys_hash_2_block, _sys_block_2_nonce_ and _sys_hash_2_header_
+    m_rowFormat = " ROW_FORMAT=COMPRESSED ";
+    m_valueFieldType = "longblob";
     createHash2BlockTables();
     createSysBlock2NoncesTables();
 
@@ -167,10 +164,6 @@ std::string ZdbStorage::getCommonFileds()
         " `_id_` BIGINT(10) unsigned NOT NULL AUTO_INCREMENT,\n"
         " `_num_` BIGINT(11) DEFAULT '0',\n"
         " `_status_` int(11) DEFAULT '0',\n");
-    if (g_BCOSConfig.version() <= V2_1_0)
-    {
-        commonFields += "`_hash_` varchar(128) DEFAULT NULL,\n";
-    }
     return commonFields;
 }
 

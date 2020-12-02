@@ -90,7 +90,7 @@ PrecompiledExecResult::Ptr TableFactoryPrecompiled::call(ExecutiveContext::Ptr c
     }
     else if (func == name2Selector[TABLE_METHOD_CRT_STR_STR])
     {  // createTable(string,string,string)
-        if (g_BCOSConfig.version() >= V2_3_0 && !checkAuthority(context, origin, sender))
+        if (!checkAuthority(context, origin, sender))
         {
             PRECOMPILED_LOG(ERROR)
                 << LOG_BADGE("TableFactoryPrecompiled") << LOG_DESC("permission denied")
@@ -136,8 +136,7 @@ PrecompiledExecResult::Ptr TableFactoryPrecompiled::call(ExecutiveContext::Ptr c
 
         tableName = precompiled::getTableName(tableName);
         if (tableName.size() > (size_t)USER_TABLE_NAME_MAX_LENGTH ||
-            (g_BCOSConfig.version() > V2_1_0 &&
-                tableName.size() > (size_t)USER_TABLE_NAME_MAX_LENGTH_S))
+            (tableName.size() > (size_t)USER_TABLE_NAME_MAX_LENGTH_S))
         {  // mysql TableName and fieldName length limit is 64
            // 2.2.0 user tableName length limit is 50-2=48
             BOOST_THROW_EXCEPTION(StorageException(
@@ -146,11 +145,6 @@ PrecompiledExecResult::Ptr TableFactoryPrecompiled::call(ExecutiveContext::Ptr c
         }
 
         int result = 0;
-
-        if (g_BCOSConfig.version() < RC2_VERSION)
-        {  // RC1 success result is 1
-            result = 1;
-        }
         try
         {
             auto table =
@@ -158,11 +152,6 @@ PrecompiledExecResult::Ptr TableFactoryPrecompiled::call(ExecutiveContext::Ptr c
             if (!table)
             {  // table already exist
                 result = CODE_TABLE_NAME_ALREADY_EXIST;
-                /// RC1 table already exist: 0
-                if (g_BCOSConfig.version() < RC2_VERSION)
-                {
-                    result = 0;
-                }
             }
             else
             {

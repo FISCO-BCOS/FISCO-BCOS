@@ -71,10 +71,7 @@ void LedgerParam::parseGenesisConfig(const std::string& _genesisFile)
         mutableStorageParam().type = pt.get<std::string>("storage.type", "LevelDB");
         mutableStorageParam().topic = pt.get<std::string>("storage.topic", "DB");
         mutableStorageParam().maxRetry = pt.get<uint>("storage.max_retry", 60);
-        if (g_BCOSConfig.version() >= V2_4_0)
-        {
-            setEVMFlags(pt);
-        }
+        setEVMFlags(pt);
     }
     catch (std::exception& e)
     {
@@ -105,17 +102,10 @@ void LedgerParam::generateGenesisMark()
     s << int(m_groupID) << "-";
     s << mutableGenesisParam().nodeListMark << "-";
     s << mutableConsensusParam().consensusType << "-";
-    if (g_BCOSConfig.version() <= RC2_VERSION)
-    {
-        s << mutableStorageParam().type << "-";
-    }
     s << mutableStateParam().type << "-";
-    if (g_BCOSConfig.version() >= V2_4_0)
-    {
-        LedgerParam_LOG(INFO) << LOG_DESC("store evmFlag")
-                              << LOG_KV("evmFlag", mutableGenesisParam().evmFlags);
-        s << mutableGenesisParam().evmFlags << "-";
-    }
+    LedgerParam_LOG(INFO) << LOG_DESC("store evmFlag")
+                          << LOG_KV("evmFlag", mutableGenesisParam().evmFlags);
+    s << mutableGenesisParam().evmFlags << "-";
 
     s << mutableConsensusParam().maxTransactions << "-";
     s << mutableTxParam().txGasLimit;
@@ -129,15 +119,9 @@ void LedgerParam::generateGenesisMark()
         s << "-" << mutableConsensusParam().epochSealerNum << "-";
         s << mutableConsensusParam().epochBlockNum;
     }
-    // only the supported_version is greater than or equal to v2.6.0,
-    // the consensus time runtime setting is enabled
-    if (g_BCOSConfig.version() >= V2_6_0)
-    {
-        LedgerParam_LOG(INFO) << LOG_DESC("store consensus time")
-                              << LOG_KV(
-                                     "consensusTimeout", mutableConsensusParam().consensusTimeout);
-        s << "-" << mutableConsensusParam().consensusTimeout;
-    }
+    LedgerParam_LOG(INFO) << LOG_DESC("store consensus time")
+                          << LOG_KV("consensusTimeout", mutableConsensusParam().consensusTimeout);
+    s << "-" << mutableConsensusParam().consensusTimeout;
     m_genesisMark = s.str();
     LedgerParam_LOG(INFO) << LOG_BADGE("initMark") << LOG_KV("genesisMark", m_genesisMark);
 }
@@ -164,7 +148,7 @@ void LedgerParam::parseIniConfig(const std::string& _iniConfigFile, const std::s
     initStorageConfig(pt);
     initTxPoolConfig(pt);
     initSyncConfig(pt);
-    initTxExecuteConfig(pt);
+    initTxExecuteConfig();
     // init params releated to consensus(ttl)
     initConsensusIniConfig(pt);
     initFlowControlConfig(pt);
@@ -184,20 +168,11 @@ void LedgerParam::init(const std::string& _configFilePath, const std::string& _d
     parseIniConfig(iniConfigFileName, _dataPath);
 }
 
-void LedgerParam::initTxExecuteConfig(ptree const& pt)
+void LedgerParam::initTxExecuteConfig()
 {
     if (bcos::stringCmpIgnoreCase(mutableStateParam().type, "storage") == 0)
     {
-        // enable parallel since v2.3.0 when stateType is storage
-        if (g_BCOSConfig.version() >= V2_3_0)
-        {
-            mutableTxParam().enableParallel = true;
-        }
-        // can configure enable_parallel before v2.3.0
-        else
-        {
-            mutableTxParam().enableParallel = pt.get<bool>("tx_execute.enable_parallel", true);
-        }
+        mutableTxParam().enableParallel = true;
     }
     else
     {
@@ -327,33 +302,12 @@ void LedgerParam::initConsensusIniConfig(ptree const& pt)
         mutableConsensusParam().blockSizeIncreaseRatio = 0.5;
     }
     // set enableTTLOptimize
-    if (g_BCOSConfig.version() >= V2_2_0)
-    {
-        mutableConsensusParam().enableTTLOptimize =
-            pt.get<bool>("consensus.enable_ttl_optimization", true);
-    }
-    else
-    {
-        mutableConsensusParam().enableTTLOptimize =
-            pt.get<bool>("consensus.enable_ttl_optimization", false);
-    }
+    mutableConsensusParam().enableTTLOptimize =
+        pt.get<bool>("consensus.enable_ttl_optimization", true);
 
     // set enableTxsWithTxsHash
-    if (g_BCOSConfig.version() >= V2_2_0)
-    {
-        mutableConsensusParam().enablePrepareWithTxsHash =
-            pt.get<bool>("consensus.enable_prepare_with_txsHash", true);
-    }
-    else
-    {
-        mutableConsensusParam().enablePrepareWithTxsHash =
-            pt.get<bool>("consensus.enable_prepare_with_txsHash", false);
-    }
-    // only support >= 2.2.0-rc2
-    if (g_BCOSConfig.version() < RC2_VERSION)
-    {
-        mutableConsensusParam().enablePrepareWithTxsHash = false;
-    }
+    mutableConsensusParam().enablePrepareWithTxsHash =
+        pt.get<bool>("consensus.enable_prepare_with_txsHash", true);
 
     LedgerParam_LOG(INFO)
         << LOG_BADGE("initConsensusIniConfig")
@@ -445,24 +399,14 @@ void LedgerParam::initConsensusConfig(ptree const& pt)
     }
 
     mutableConsensusParam().epochBlockNum = pt.get<int64_t>("consensus.epoch_block_num", 1000);
-    if (g_BCOSConfig.version() < V2_6_0)
+
+    // epoch_block_num is at least 2 when supported_version >= v2.6.0
+    if (mutableConsensusParam().epochBlockNum <= bcos::precompiled::RPBFT_EPOCH_BLOCK_NUM_MIN)
     {
-        if (mutableConsensusParam().epochBlockNum <= 0)
-        {
-            BOOST_THROW_EXCEPTION(ForbidNegativeValue() << errinfo_comment(
-                                      "Please set consensus.epoch_block_num to positive !"));
-        }
-    }
-    else
-    {
-        // epoch_block_num is at least 2 when supported_version >= v2.6.0
-        if (mutableConsensusParam().epochBlockNum <= bcos::precompiled::RPBFT_EPOCH_BLOCK_NUM_MIN)
-        {
-            BOOST_THROW_EXCEPTION(
-                InvalidConfiguration() << errinfo_comment(
-                    "Please set consensus.epoch_block_num to be larger than " +
-                    std::to_string(bcos::precompiled::RPBFT_EPOCH_BLOCK_NUM_MIN) + "!"));
-        }
+        BOOST_THROW_EXCEPTION(
+            InvalidConfiguration()
+            << errinfo_comment("Please set consensus.epoch_block_num to be larger than " +
+                               std::to_string(bcos::precompiled::RPBFT_EPOCH_BLOCK_NUM_MIN) + "!"));
     }
     LedgerParam_LOG(DEBUG) << LOG_BADGE("initConsensusConfig")
                            << LOG_KV("epochSealerNum", mutableConsensusParam().epochSealerNum)
@@ -481,26 +425,9 @@ void LedgerParam::initSyncConfig(ptree const& pt)
 
     LedgerParam_LOG(INFO) << LOG_BADGE("initSyncConfig")
                           << LOG_KV("idleWaitMs", mutableSyncParam().idleWaitMs);
-
-    // send_txs_by_tree only supported after RC2
-    if (g_BCOSConfig.version() < RC2_VERSION)
-    {
-        mutableSyncParam().enableSendTxsByTree = false;
-    }
-    // the support_version is lower than 2.2.0, default disable send_txs_by_tree
-    else if (g_BCOSConfig.version() <= V2_1_0)
-    {
-        mutableSyncParam().enableSendTxsByTree = pt.get<bool>("sync.send_txs_by_tree", false);
-        mutableSyncParam().enableSendBlockStatusByTree =
-            pt.get<bool>("sync.sync_block_by_tree", false);
-    }
     // the supported_version >= v2.2.0, default enable send_txs_by_tree
-    else
-    {
-        mutableSyncParam().enableSendTxsByTree = pt.get<bool>("sync.send_txs_by_tree", true);
-        mutableSyncParam().enableSendBlockStatusByTree =
-            pt.get<bool>("sync.sync_block_by_tree", true);
-    }
+    mutableSyncParam().enableSendTxsByTree = pt.get<bool>("sync.send_txs_by_tree", true);
+    mutableSyncParam().enableSendBlockStatusByTree = pt.get<bool>("sync.sync_block_by_tree", true);
     LedgerParam_LOG(INFO) << LOG_BADGE("initSyncConfig")
                           << LOG_KV("enableSendTxsByTree", mutableSyncParam().enableSendTxsByTree)
                           << LOG_KV("enableSendBlockStatusByTree",
@@ -580,18 +507,15 @@ std::string LedgerParam::uriEncode(const std::string& keyWord)
 
 void LedgerParam::initStorageConfig(ptree const& pt)
 {
-    if (g_BCOSConfig.version() > RC2_VERSION)
+    mutableStorageParam().type = pt.get<std::string>("storage.type", "RocksDB");
+    mutableStorageParam().topic = pt.get<std::string>("storage.topic", "DB");
+    mutableStorageParam().maxRetry = pt.get<uint>("storage.max_retry", 60);
+    mutableStorageParam().binaryLog = pt.get<bool>("storage.binary_log", false);
+    mutableStorageParam().CachedStorage = pt.get<bool>("storage.cached_storage", true);
+    if (!bcos::stringCmpIgnoreCase(mutableStorageParam().type, "LevelDB"))
     {
-        mutableStorageParam().type = pt.get<std::string>("storage.type", "RocksDB");
-        mutableStorageParam().topic = pt.get<std::string>("storage.topic", "DB");
-        mutableStorageParam().maxRetry = pt.get<uint>("storage.max_retry", 60);
-        mutableStorageParam().binaryLog = pt.get<bool>("storage.binary_log", false);
-        mutableStorageParam().CachedStorage = pt.get<bool>("storage.cached_storage", true);
-        if (!bcos::stringCmpIgnoreCase(mutableStorageParam().type, "LevelDB"))
-        {
-            mutableStorageParam().type = "RocksDB";
-            LedgerParam_LOG(WARNING) << "LevelDB is deprecated! RocksDB is recommended.";
-        }
+        mutableStorageParam().type = "RocksDB";
+        LedgerParam_LOG(WARNING) << "LevelDB is deprecated! RocksDB is recommended.";
     }
     mutableStorageParam().path = baseDir() + "/block";
     if (!bcos::stringCmpIgnoreCase(mutableStorageParam().type, "RocksDB"))

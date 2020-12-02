@@ -93,19 +93,16 @@ bool ContractLifeCyclePrecompiled::checkPermission(
             }
         }
     }
-    if (g_BCOSConfig.version() >= V2_5_0)
+    auto acTable = openTable(context, SYS_ACCESS_TABLE);
+    auto condition = acTable->newCondition();
+    condition->EQ(SYS_AC_ADDRESS, origin.hexPrefixed());
+    auto entries = acTable->select(SYS_ACCESS_TABLE, condition);
+    if (entries->size() != 0u)
     {
-        auto acTable = openTable(context, SYS_ACCESS_TABLE);
-        auto condition = acTable->newCondition();
-        condition->EQ(SYS_AC_ADDRESS, origin.hexPrefixed());
-        auto entries = acTable->select(SYS_ACCESS_TABLE, condition);
-        if (entries->size() != 0u)
-        {
-            PRECOMPILED_LOG(INFO) << LOG_BADGE("ContractLifeCyclePrecompiled")
-                                  << LOG_DESC("committee member is permitted to manage contract")
-                                  << LOG_KV("origin", origin.hex());
-            return true;
-        }
+        PRECOMPILED_LOG(INFO) << LOG_BADGE("ContractLifeCyclePrecompiled")
+                              << LOG_DESC("committee member is permitted to manage contract")
+                              << LOG_KV("origin", origin.hex());
+        return true;
     }
     return false;
 }
@@ -429,7 +426,7 @@ PrecompiledExecResult::Ptr ContractLifeCyclePrecompiled::call(
     {
         grantManager(context, data, origin, callResult);
     }
-    else if (func == name2Selector[METHOD_REVOKE_STR] && g_BCOSConfig.version() >= V2_7_0)
+    else if (func == name2Selector[METHOD_REVOKE_STR])
     {
         revokeManager(context, data, origin, callResult);
     }

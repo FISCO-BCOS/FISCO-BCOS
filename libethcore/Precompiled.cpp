@@ -55,38 +55,12 @@ namespace
 {
 ETH_REGISTER_PRECOMPILED(ecrecover)(bytesConstRef _in)
 {
-    // When supported_version> = v2.4.0, ecRecover uniformly calls the ECDSA verification function
-    if (g_BCOSConfig.version() >= V2_4_0)
-    {
-        return bcos::ecRecover(_in);
-    }
-    // before 2.4.0, in sm crypto mode this use sm2 recover which is a bug
-    if (g_BCOSConfig.SMCrypto())
-    {
-        return recover(_in);
-    }
-    else
-    {
-        return bcos::ecRecover(_in);
-    }
+    return bcos::ecRecover(_in);
 }
 
 ETH_REGISTER_PRECOMPILED(sha256)(bytesConstRef _in)
 {
-    // When supported_version> = v2.4.0, sha256 uniformly calls the secp sha256 function
-    if (g_BCOSConfig.version() >= V2_4_0)
-    {
-        return {true, bcos::sha256(_in).asBytes()};
-    }
-    // before 2.4.0, in sm crypto mode this use sm3 which is a bug
-    if (g_BCOSConfig.SMCrypto())
-    {
-        return {true, bcos::sm3(_in).asBytes()};
-    }
-    else
-    {
-        return {true, bcos::sha256(_in).asBytes()};
-    }
+    return {true, bcos::sha256(_in).asBytes()};
 }
 
 ETH_REGISTER_PRECOMPILED(ripemd160)(bytesConstRef _in)

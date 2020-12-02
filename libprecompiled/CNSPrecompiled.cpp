@@ -58,16 +58,13 @@ bool CNSPrecompiled::checkCNSParam(ExecutiveContext::Ptr _context,
 {
     // check address
     Address contractAddress;
-    if (g_BCOSConfig.version() >= V2_2_0)
+    try
     {
-        try
-        {
-            contractAddress = Address(_contractAddress);
-        }
-        catch (...)
-        {
-            return false;
-        }
+        contractAddress = Address(_contractAddress);
+    }
+    catch (...)
+    {
+        return false;
     }
 
     try
@@ -114,10 +111,6 @@ bool CNSPrecompiled::checkCNSParam(ExecutiveContext::Ptr _context,
                                  << LOG_KV("contractAddress", _contractAddress)
                                  << LOG_KV("contractName", _contractName)
                                  << LOG_KV("e", boost::diagnostic_information(_e));
-    }
-    if (g_BCOSConfig.version() < V2_7_0)
-    {
-        return true;
     }
     // check the length of the key
     checkLengthValidate(

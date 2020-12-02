@@ -233,7 +233,7 @@ void conversionData(
     //     support version >= 2.2.0 and
     //     storage type in rocksdb,scalable
     if (HexTables.end() != find(HexTables.begin(), HexTables.end(), tableName) &&
-        g_BCOSConfig.version() >= V2_2_0 && bcos::stringCmpIgnoreCase(dbType, "mysql"))
+        bcos::stringCmpIgnoreCase(dbType, "mysql"))
     {
         LOG(INFO) << LOG_BADGE("STORAGE") << LOG_DESC("conversion table data");
         for (size_t i = 0; i < tableData->newEntries->size(); i++)

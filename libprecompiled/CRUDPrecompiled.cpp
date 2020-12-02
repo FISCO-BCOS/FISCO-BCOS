@@ -154,7 +154,7 @@ PrecompiledExecResult::Ptr CRUDPrecompiled::call(
                 return callResult;
             }
             // check the entry
-            if (entry->fieldExist(table->tableInfo()->key) && g_BCOSConfig.version() >= V2_7_0)
+            if (entry->fieldExist(table->tableInfo()->key))
             {
                 PRECOMPILED_LOG(ERROR)
                     << LOG_BADGE("CRUDPrecompiled") << LOG_DESC("can't update the key")

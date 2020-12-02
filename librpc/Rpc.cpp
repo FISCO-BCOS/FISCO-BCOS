@@ -1177,8 +1177,7 @@ std::shared_ptr<Json::Value> Rpc::notifyReceiptWithProof(
     bcos::eth::Block::Ptr _blockPtr)
 {
     auto response = notifyReceipt(_blockChain, _receipt, _input, _blockPtr);
-    // only support merkleProof when supported_version >= v2.2.0
-    if (!_blockPtr || g_BCOSConfig.version() < V2_2_0)
+    if (!_blockPtr)
     {
         return response;
     }
@@ -1340,12 +1339,6 @@ Json::Value Rpc::getTransactionByHashWithProof(int _groupID, const std::string& 
 {
     try
     {
-        if (g_BCOSConfig.version() < V2_2_0)
-        {
-            RPC_LOG(ERROR) << "getTransactionByHashWithProof only support after by v2.2.0";
-            BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::InvalidRequest,
-                "method getTransactionByHashWithProof not support this version"));
-        }
         RPC_LOG(INFO) << LOG_BADGE("getTransactionByHashWithProof") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID) << LOG_KV("transactionHash", _transactionHash);
 
@@ -1408,13 +1401,6 @@ Json::Value Rpc::getTransactionReceiptByHashWithProof(
     {
         RPC_LOG(INFO) << LOG_BADGE("getTransactionReceiptByHashWithProof") << LOG_DESC("request")
                       << LOG_KV("groupID", _groupID) << LOG_KV("transactionHash", _transactionHash);
-
-        if (g_BCOSConfig.version() < V2_2_0)
-        {
-            RPC_LOG(ERROR) << "getTransactionReceiptByHashWithProof only support after by v2.2.0";
-            BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::InvalidRequest,
-                "method getTransactionReceiptByHashWithProof not support this version"));
-        }
         auto blockchain = ledgerManager()->blockChain(_groupID);
         checkLedgerStatus(blockchain, "blockChain", "getTransactionReceiptByHashWithProof");
 
@@ -1470,8 +1456,6 @@ Json::Value Rpc::generateGroup(int _groupID, const Json::Value& _params)
 {
     RPC_LOG(INFO) << LOG_BADGE("generateGroup") << LOG_DESC("request")
                   << LOG_KV("groupID", _groupID) << LOG_KV("params", _params);
-
-    checkNodeVersionForGroupMgr("generateGroup");
 
     Json::Value response;
     if (!checkGroupIDForGroupMgr(_groupID, response))
@@ -1530,9 +1514,6 @@ Json::Value Rpc::generateGroup(int _groupID, const Json::Value& _params)
 Json::Value Rpc::startGroup(int _groupID)
 {
     RPC_LOG(INFO) << LOG_BADGE("startGroup") << LOG_DESC("request") << LOG_KV("groupID", _groupID);
-
-    checkNodeVersionForGroupMgr("startGroup");
-
     Json::Value response;
 
     if (!checkGroupIDForGroupMgr(_groupID, response))
@@ -1598,8 +1579,6 @@ Json::Value Rpc::stopGroup(int _groupID)
 {
     RPC_LOG(INFO) << LOG_BADGE("stopGroup") << LOG_DESC("request") << LOG_KV("groupID", _groupID);
 
-    checkNodeVersionForGroupMgr("stopGroup");
-
     Json::Value response;
 
     if (!checkGroupIDForGroupMgr(_groupID, response))
@@ -1644,8 +1623,6 @@ Json::Value Rpc::stopGroup(int _groupID)
 Json::Value Rpc::removeGroup(int _groupID)
 {
     RPC_LOG(INFO) << LOG_BADGE("removeGroup") << LOG_DESC("request") << LOG_KV("groupID", _groupID);
-
-    checkNodeVersionForGroupMgr("generateGroup");
 
     Json::Value response;
 
@@ -1693,8 +1670,6 @@ Json::Value Rpc::recoverGroup(int _groupID)
     RPC_LOG(INFO) << LOG_BADGE("recoverGroup") << LOG_DESC("request")
                   << LOG_KV("groupID", _groupID);
 
-    checkNodeVersionForGroupMgr("recoverGroup");
-
     Json::Value response;
 
     if (!checkGroupIDForGroupMgr(_groupID, response))
@@ -1735,9 +1710,6 @@ Json::Value Rpc::queryGroupStatus(int _groupID)
 {
     RPC_LOG(INFO) << LOG_BADGE("queryGroupStatus") << LOG_DESC("request")
                   << LOG_KV("groupID", _groupID);
-
-    checkNodeVersionForGroupMgr("queryGroupStatus");
-
     Json::Value response;
     if (!checkGroupIDForGroupMgr(_groupID, response))
     {
@@ -1782,16 +1754,6 @@ Json::Value Rpc::queryGroupStatus(int _groupID)
         break;
     }
     return response;
-}
-
-void Rpc::checkNodeVersionForGroupMgr(const char* _methodName)
-{
-    if (g_BCOSConfig.version() < V2_2_0)
-    {
-        RPC_LOG(ERROR) << _methodName << " only support after by v2.2.0";
-        BOOST_THROW_EXCEPTION(JsonRpcException(
-            RPCExceptionType::InvalidRequest, "method stopGroup not support this version"));
-    }
 }
 
 bool Rpc::checkConnection(const std::set<std::string>& _sealerList, Json::Value& _response)

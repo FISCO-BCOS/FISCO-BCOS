@@ -186,6 +186,18 @@ BOOST_AUTO_TEST_CASE(CRUD)
     out = callResult->execResult();
     u256 updateResult = 0;
     abi.abiOut(&out, updateResult);
+    BOOST_TEST(updateResult == CODE_INVALID_UPDATE_TABLE_KEY);
+
+    updateFunc = "update(string,string,string,string,string)";
+    entryStr = "{\"item_id\":\"1\",\"item_name\":\"orange\"}";
+    conditionStr = "{\"item_id\":{\"eq\":\"1\"}}";
+    param.clear();
+    out.clear();
+    param = abi.abiIn(updateFunc, tableName, key, entryStr, conditionStr, std::string(""));
+    callResult = crudPrecompiled->call(context, bytesConstRef(&param));
+    out = callResult->execResult();
+    updateResult = 0;
+    abi.abiOut(&out, updateResult);
     BOOST_TEST(updateResult == 1u);
 
     // update table not exist
@@ -213,7 +225,7 @@ BOOST_AUTO_TEST_CASE(CRUD)
     BOOST_TEST(updateResult == CODE_PARSE_ENTRY_ERROR);
 
     // update condition error
-    entryStr = "{\"item_id\":\"1\",\"name\":\"fruit\",\"item_name\":\"orange\"}";
+    entryStr = "{\"item_id\":\"1\",\"item_name\":\"orange\"}";
     conditionStr = "{\"item_id\"\"eq\":\"1\"}}";
     param.clear();
     out.clear();

@@ -150,22 +150,11 @@ bool SystemConfigPrecompiled::checkValueValid(std::string const& key, std::strin
     }
     else if (SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM == key)
     {
-        if (g_BCOSConfig.version() < V2_6_0)
-        {
-            return (configuredValue >= RPBFT_EPOCH_BLOCK_NUM_MIN);
-        }
-        else
-        {
-            // epoch_block_num is at least 2 when supported_version >= v2.6.0
-            return (configuredValue > RPBFT_EPOCH_BLOCK_NUM_MIN);
-        }
+        // epoch_block_num is at least 2 when supported_version >= v2.6.0
+        return (configuredValue > RPBFT_EPOCH_BLOCK_NUM_MIN);
     }
     else if (SYSTEM_KEY_CONSENSUS_TIMEOUT == key)
     {
-        if (g_BCOSConfig.version() < V2_6_0)
-        {
-            return false;
-        }
         return (configuredValue >= SYSTEM_CONSENSUS_TIMEOUT_MIN &&
                 configuredValue < SYSTEM_CONSENSUS_TIMEOUT_MAX);
     }

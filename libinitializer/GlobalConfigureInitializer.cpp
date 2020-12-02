@@ -87,19 +87,7 @@ void bcos::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
     }
 
     // set evmSchedule
-    if (g_BCOSConfig.version() >= V2_6_0)
-    {
-        g_BCOSConfig.setEVMSchedule(bcos::eth::FiscoBcosScheduleV3);
-    }
-    else if (g_BCOSConfig.version() <= getVersionNumber("2.0.0"))
-    {
-        g_BCOSConfig.setEVMSchedule(bcos::eth::FiscoBcosSchedule);
-    }
-    else
-    {
-        g_BCOSConfig.setEVMSchedule(bcos::eth::FiscoBcosScheduleV2);
-    }
-
+    g_BCOSConfig.setEVMSchedule(bcos::eth::FiscoBcosScheduleV3);
     g_BCOSConfig.binaryInfo.version = FISCO_BCOS_PROJECT_VERSION;
     g_BCOSConfig.binaryInfo.buildTime = FISCO_BCOS_BUILD_TIME;
     g_BCOSConfig.binaryInfo.buildInfo =
@@ -143,29 +131,12 @@ void bcos::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
             ForbidNegativeValue() << errinfo_comment("Please set chain.id to positive!"));
     }
     g_BCOSConfig.setChainId(chainId);
-    if (g_BCOSConfig.version() >= V2_5_0)
+    bool useSMCrypto = _pt.get<bool>("chain.sm_crypto", false);
+    g_BCOSConfig.setUseSMCrypto(useSMCrypto);
+    if (useSMCrypto)
     {
-        bool useSMCrypto = _pt.get<bool>("chain.sm_crypto", false);
-        g_BCOSConfig.setUseSMCrypto(useSMCrypto);
-        if (useSMCrypto)
-        {
-            crypto::initSMCrypto();
-        }
+        crypto::initSMCrypto();
     }
-    else
-    {
-        boost::filesystem::path gmNodeKeyPath = "conf/gmnode.key";
-        if (boost::filesystem::exists(gmNodeKeyPath))
-        {
-            g_BCOSConfig.setUseSMCrypto(true);
-            crypto::initSMCrypto();
-        }
-        else
-        {
-            g_BCOSConfig.setUseSMCrypto(false);
-        }
-    }
-
     if (g_BCOSConfig.diskEncryption.enable)
     {
         auto cipherDataKey = _pt.get<string>(sectionName + ".cipher_data_key", "");

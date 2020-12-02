@@ -42,14 +42,7 @@ Entries::Ptr SQLStorage::select(
     {
         STORAGE_EXTERNAL_LOG(TRACE) << "Query AMOPDB data";
         Json::Value requestJson;
-        if (g_BCOSConfig.version() <= RC3_VERSION)
-        {
-            requestJson["op"] = "select";
-        }
-        else
-        {
-            requestJson["op"] = "select2";
-        }
+        requestJson["op"] = "select2";
         // TODO: remove params blockhash
         requestJson["params"]["blockHash"] = "0";
         requestJson["params"]["num"] = num;
@@ -114,69 +107,24 @@ Entries::Ptr SQLStorage::select(
         }
 
         Entries::Ptr entries = std::make_shared<Entries>();
-        if (g_BCOSConfig.version() <= RC3_VERSION)
+
+        for (Json::ArrayIndex i = 0; i < responseJson["result"]["columnValue"].size(); ++i)
         {
-            std::vector<std::string> columns;
-            for (Json::ArrayIndex i = 0; i < responseJson["result"]["columns"].size(); ++i)
+            Json::Value line = responseJson["result"]["columnValue"][i];
+            Entry::Ptr entry = std::make_shared<Entry>();
+
+            for (auto key : line.getMemberNames())
             {
-                std::string fieldName = responseJson["result"]["columns"].get(i, "").asString();
-                columns.push_back(fieldName);
+                entry->setField(key, line.get(key, "").asString());
             }
+            entry->setID(line.get(ID_FIELD, "").asString());
+            entry->setNum(line.get(NUM_FIELD, "").asString());
+            entry->setStatus(line.get(STATUS, "").asString());
 
-            for (Json::ArrayIndex i = 0; i < responseJson["result"]["data"].size(); ++i)
+            if (entry->getStatus() == 0)
             {
-                Json::Value line = responseJson["result"]["data"].get(i, "");
-                Entry::Ptr entry = std::make_shared<Entry>();
-
-                for (Json::ArrayIndex j = 0; j < line.size(); ++j)
-                {
-                    std::string fieldValue = line.get(j, "").asString();
-
-                    if (columns[j] == ID_FIELD)
-                    {
-                        entry->setID(fieldValue);
-                    }
-                    else if (columns[j] == NUM_FIELD)
-                    {
-                        entry->setNum(fieldValue);
-                    }
-                    else if (columns[j] == STATUS)
-                    {
-                        entry->setStatus(fieldValue);
-                    }
-                    else
-                    {
-                        entry->setField(columns[j], fieldValue);
-                    }
-                }
-
-                if (entry->getStatus() == 0)
-                {
-                    entry->setDirty(false);
-                    entries->addEntry(entry);
-                }
-            }
-        }
-        else
-        {
-            for (Json::ArrayIndex i = 0; i < responseJson["result"]["columnValue"].size(); ++i)
-            {
-                Json::Value line = responseJson["result"]["columnValue"][i];
-                Entry::Ptr entry = std::make_shared<Entry>();
-
-                for (auto key : line.getMemberNames())
-                {
-                    entry->setField(key, line.get(key, "").asString());
-                }
-                entry->setID(line.get(ID_FIELD, "").asString());
-                entry->setNum(line.get(NUM_FIELD, "").asString());
-                entry->setStatus(line.get(STATUS, "").asString());
-
-                if (entry->getStatus() == 0)
-                {
-                    entry->setDirty(false);
-                    entries->addEntry(entry);
-                }
+                entry->setDirty(false);
+                entries->addEntry(entry);
             }
         }
         return entries;

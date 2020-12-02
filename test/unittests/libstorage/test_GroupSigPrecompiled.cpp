@@ -164,14 +164,7 @@ BOOST_AUTO_TEST_CASE(ErrorFunc)
     bytes out = execResult->execResult();
     s256 count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    if (g_BCOSConfig.version() > RC2_VERSION)
-    {
-        BOOST_TEST(count == CODE_UNKNOW_FUNCTION_CALL);
-    }
-    else
-    {
-        BOOST_TEST(count == -CODE_UNKNOW_FUNCTION_CALL);
-    }
+    BOOST_TEST(count == CODE_UNKNOW_FUNCTION_CALL);
 }
 
 BOOST_AUTO_TEST_CASE(InvalidInputs)
@@ -184,14 +177,7 @@ BOOST_AUTO_TEST_CASE(InvalidInputs)
     bytes out = execResult->execResult();
     s256 count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    if (g_BCOSConfig.version() > RC2_VERSION)
-    {
-        BOOST_TEST(count == VERIFY_GROUP_SIG_FAILED);
-    }
-    else
-    {
-        BOOST_TEST(count == -VERIFY_GROUP_SIG_FAILED);
-    }
+    BOOST_TEST(count == VERIFY_GROUP_SIG_FAILED);
 
     // situation2
     std::string signature2 =
@@ -228,14 +214,7 @@ BOOST_AUTO_TEST_CASE(InvalidInputs)
     out = execResult->execResult();
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    if (g_BCOSConfig.version() > RC2_VERSION)
-    {
-        BOOST_TEST(count == VERIFY_GROUP_SIG_FAILED);
-    }
-    else
-    {
-        BOOST_TEST(count == -VERIFY_GROUP_SIG_FAILED);
-    }
+    BOOST_TEST(count == VERIFY_GROUP_SIG_FAILED);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

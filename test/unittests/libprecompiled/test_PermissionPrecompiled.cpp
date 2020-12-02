@@ -49,12 +49,6 @@ struct AuthorityPrecompiledFixture
         m_useSMCrypto = useSMCrypto;
         blockInfo.hash = h256(0);
         blockInfo.number = 0;
-        if (!useSMCrypto)
-        {
-            m_version = g_BCOSConfig.version();
-            m_supportedVersion = g_BCOSConfig.supportedVersion();
-            g_BCOSConfig.setSupportedVersion("2.3.0", V2_3_0);
-        }
         // clear global name2Selector cache
         clearName2SelectCache();
         context = std::make_shared<ExecutiveContext>();
@@ -77,10 +71,6 @@ struct AuthorityPrecompiledFixture
 
     ~AuthorityPrecompiledFixture()
     {
-        if (!m_useSMCrypto)
-        {
-            g_BCOSConfig.setSupportedVersion(m_supportedVersion, m_version);
-        }
         // clear global name2Selector cache
         clearName2SelectCache();
     }
@@ -180,43 +170,34 @@ BOOST_AUTO_TEST_CASE(remove)
     BOOST_TEST(entries->size() == 0u);
 
     // add committee member permission
-    m_version = g_BCOSConfig.version();
-    m_supportedVersion = g_BCOSConfig.supportedVersion();
-    g_BCOSConfig.setSupportedVersion("2.4.0", V2_4_0);
     auto origin = Address(addr);
     in = abi.abiIn("insert(string,string)", SYS_ACCESS_TABLE, addr);
     callResult = authorityPrecompiled->call(context, bytesConstRef(&in), origin);
     out = callResult->execResult();
     s256 ret = 0;
     abi.abiOut(&out, ret);
-    BOOST_TEST(ret == 1);
+    BOOST_TEST(ret == CODE_COMMITTEE_PERMISSION);
+
     in = abi.abiIn("insert(string,string)", SYS_CONSENSUS, addr);
     callResult = authorityPrecompiled->call(context, bytesConstRef(&in), origin);
     out = callResult->execResult();
     ret = 0;
     abi.abiOut(&out, ret);
     BOOST_TEST(ret == 1);
-    g_BCOSConfig.setSupportedVersion("2.5.0", V2_5_0);
+
     in = abi.abiIn("remove(string,string)", SYS_CONSENSUS, addr);
     callResult = authorityPrecompiled->call(context, bytesConstRef(&in), origin);
     out = callResult->execResult();
     ret = 0;
     abi.abiOut(&out, ret);
     BOOST_TEST(ret == 1);
+
     in = abi.abiIn("insert(string,string)", SYS_CONSENSUS, addr);
     callResult = authorityPrecompiled->call(context, bytesConstRef(&in), origin);
     out = callResult->execResult();
     ret = 0;
     abi.abiOut(&out, ret);
     BOOST_TEST(ret == 1);
-    g_BCOSConfig.setSupportedVersion("2.6.0", V2_6_0);
-    in = abi.abiIn("remove(string,string)", SYS_CONSENSUS, addr);
-    callResult = authorityPrecompiled->call(context, bytesConstRef(&in), origin);
-    out = callResult->execResult();
-    ret = 0;
-    abi.abiOut(&out, ret);
-    BOOST_TEST(ret == CODE_NO_AUTHORIZED);
-    g_BCOSConfig.setSupportedVersion(m_supportedVersion, m_version);
 }
 
 BOOST_AUTO_TEST_CASE(grantWrite)
@@ -253,34 +234,29 @@ BOOST_AUTO_TEST_CASE(grantWrite)
     entry->setField("value", origin2.hex());
     table->insert("authority", entry);
 
-    g_BCOSConfig.setSupportedVersion("2.5.0", V2_5_0);
     auto origin3 = Address("0x420f853b49838bd3e9466c85a4cc3428c960dde5");
     in = abi.abiIn("grantWrite(address,address)", contract, origin3);
     callResult = authorityPrecompiled->call(context, bytesConstRef(&in), origin2);
     out = callResult->execResult();
     s256 ret = 0;
     abi.abiOut(&out, ret);
-    BOOST_TEST(ret == CODE_NO_AUTHORIZED);
-    g_BCOSConfig.setSupportedVersion("2.6.0", V2_6_0);
+    BOOST_TEST(ret == 1);
     callResult = authorityPrecompiled->call(context, bytesConstRef(&in), origin2);
     out = callResult->execResult();
     ret = 0;
     abi.abiOut(&out, ret);
-    BOOST_TEST(ret == 1);
-    g_BCOSConfig.setSupportedVersion("2.5.0", V2_5_0);
+    BOOST_TEST(ret == CODE_TABLE_AND_ADDRESS_EXIST);
     in = abi.abiIn("revokeWrite(address,address)", contract, origin3);
     callResult = authorityPrecompiled->call(context, bytesConstRef(&in), origin2);
     out = callResult->execResult();
     ret = 0;
     abi.abiOut(&out, ret);
-    BOOST_TEST(ret == CODE_NO_AUTHORIZED);
-    g_BCOSConfig.setSupportedVersion("2.6.0", V2_6_0);
+    BOOST_TEST(ret == 1);
     callResult = authorityPrecompiled->call(context, bytesConstRef(&in), origin2);
     out = callResult->execResult();
     ret = 0;
     abi.abiOut(&out, ret);
-    BOOST_TEST(ret == 1);
-    g_BCOSConfig.setSupportedVersion(m_supportedVersion, m_version);
+    BOOST_TEST(ret == CODE_TABLE_AND_ADDRESS_NOT_EXIST);
 }
 
 BOOST_AUTO_TEST_CASE(grantWrite_contract)
@@ -308,7 +284,7 @@ BOOST_AUTO_TEST_CASE(grantWrite_contract)
     out = callResult->execResult();
     ret = 0;
     abi.abiOut(&out, ret);
-    BOOST_TEST(ret == 1u);
+    BOOST_TEST(ret == CODE_NO_AUTHORIZED);
 
     // query
     auto entries = table->select(tableName, table->newCondition());
@@ -320,7 +296,7 @@ BOOST_AUTO_TEST_CASE(grantWrite_contract)
     // query
     table = memoryTableFactory->openTable(SYS_ACCESS_TABLE);
     entries = table->select(tableName, table->newCondition());
-    BOOST_TEST(entries->size() == 1u);
+    BOOST_TEST(entries->size() == 0u);
 
     // insert new item with same table name, but different address
     Address addr2("0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b");
@@ -329,19 +305,19 @@ BOOST_AUTO_TEST_CASE(grantWrite_contract)
     out = callResult->execResult();
     ret = 0;
     abi.abiOut(&out, ret);
-    BOOST_TEST(ret == 1);
+    BOOST_TEST(ret == CODE_NO_AUTHORIZED);
 
     // query
     table = memoryTableFactory->openTable(SYS_ACCESS_TABLE);
     entries = table->select(tableName, table->newCondition());
-    BOOST_TEST(entries->size() == 2u);
+    BOOST_TEST(entries->size() == 0u);
     // remove
     in = abi.abiIn("revokeWrite(address,address)", contractAddress, addr2);
     callResult = authorityPrecompiled->call(context, bytesConstRef(&in));
     out = callResult->execResult();
     ret = 0;
     abi.abiOut(&out, ret);
-    BOOST_TEST(ret == 1);
+    BOOST_TEST(ret == CODE_TABLE_AND_ADDRESS_NOT_EXIST);
 
     // queryByName by a existing key
     in = abi.abiIn("queryPermission(address)", contractAddress);
@@ -353,7 +329,7 @@ BOOST_AUTO_TEST_CASE(grantWrite_contract)
     Json::Value retJson;
     Json::Reader reader;
     BOOST_TEST(reader.parse(retStr, retJson) == true);
-    BOOST_TEST(retJson.size() == 1);
+    BOOST_TEST(retJson.size() == 0);
 }
 
 BOOST_AUTO_TEST_CASE(queryByName)

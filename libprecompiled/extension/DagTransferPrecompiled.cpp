@@ -144,15 +144,7 @@ std::string DagTransferPrecompiled::toString()
 Table::Ptr DagTransferPrecompiled::openTable(
     bcos::blockverifier::ExecutiveContext::Ptr context, Address const& origin)
 {
-    string dagTableName;
-    if (g_BCOSConfig.version() < V2_2_0)
-    {
-        dagTableName = "_dag_transfer_";
-    }
-    else
-    {
-        dagTableName = precompiled::getTableName(DAG_TRANSFER);
-    }
+    std::string dagTableName = precompiled::getTableName(DAG_TRANSFER);
     auto table = bcos::precompiled::openTable(context, dagTableName);
     if (!table)
     {

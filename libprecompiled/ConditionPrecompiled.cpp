@@ -53,12 +53,9 @@ ConditionPrecompiled::ConditionPrecompiled()
     name2Selector[CONDITION_METHOD_NE_STR_STR] = getFuncSelector(CONDITION_METHOD_NE_STR_STR);
     name2Selector[CONDITION_METHOD_LIMIT_INT] = getFuncSelector(CONDITION_METHOD_LIMIT_INT);
     name2Selector[CONDITION_METHOD_LIMIT_2INT] = getFuncSelector(CONDITION_METHOD_LIMIT_2INT);
-    if (g_BCOSConfig.version() >= V2_7_0)
-    {
-        name2Selector[CONDITION_METHOD_EQ_STR_ADDR] = getFuncSelector(CONDITION_METHOD_EQ_STR_ADDR);
-        STORAGE_LOG(INFO) << LOG_BADGE("ConditionPrecompiled") << "add "
-                          << CONDITION_METHOD_EQ_STR_ADDR << " definition";
-    }
+    name2Selector[CONDITION_METHOD_EQ_STR_ADDR] = getFuncSelector(CONDITION_METHOD_EQ_STR_ADDR);
+    STORAGE_LOG(INFO) << LOG_BADGE("ConditionPrecompiled") << "add " << CONDITION_METHOD_EQ_STR_ADDR
+                      << " definition";
 }
 
 std::string ConditionPrecompiled::toString()

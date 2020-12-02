@@ -41,14 +41,7 @@ public:
         /// TODO:
         /// 1. implement these packet with SyncMsgPacketFactory
         /// 2. modify sync and PBFT related packet from reference to pointer
-        if (g_BCOSConfig.version() >= bcos::RC2_VERSION)
-        {
-            m_p2pFactory = std::make_shared<bcos::p2p::P2PMessageFactoryRC2>();
-        }
-        else if (g_BCOSConfig.version() <= bcos::RC1_VERSION)
-        {
-            m_p2pFactory = std::make_shared<bcos::p2p::P2PMessageFactory>();
-        }
+        m_p2pFactory = std::make_shared<bcos::p2p::P2PMessageFactoryRC2>();
     }
     virtual ~SyncMsgPacket() {}
 

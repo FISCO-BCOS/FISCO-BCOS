@@ -64,10 +64,6 @@ BOOST_AUTO_TEST_CASE(process)
     condition = std::make_shared<Condition>();
     condition->EQ("name", "myname2");
     BOOST_TEST(condition->process(entry) == false);
-
-    auto version = g_BCOSConfig.version();
-    auto supportedVersion = g_BCOSConfig.supportedVersion();
-    g_BCOSConfig.setSupportedVersion("2.3.0", V2_3_0);
     condition = std::make_shared<Condition>();
     condition->NE("name", "myname");
     BOOST_TEST(condition->process(entry) == false);
@@ -124,7 +120,6 @@ BOOST_AUTO_TEST_CASE(process)
     condition->GE("item_id", "100");
     condition->LT("item_id", "101");
     BOOST_TEST(condition->process(entry) == true);
-    g_BCOSConfig.setSupportedVersion(supportedVersion, version);
 }
 
 BOOST_FIXTURE_TEST_CASE(SM_process, SM_ConditionFixture)

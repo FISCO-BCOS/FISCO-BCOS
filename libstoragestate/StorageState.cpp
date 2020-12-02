@@ -448,10 +448,7 @@ bool StorageState::checkAuthority(Address const& _origin, Address const& _contra
 void StorageState::createAccount(Address const& _address, u256 const& _nonce, u256 const& _amount)
 {
     std::string tableName("_contract_data_" + _address.hex() + "_");
-    if (g_BCOSConfig.version() >= V2_2_0)
-    {
-        tableName = std::string("c_" + _address.hex());
-    }
+    tableName = std::string("c_" + _address.hex());
     auto table = m_memoryTableFactory->createTable(tableName, STORAGE_KEY, STORAGE_VALUE, false);
     if (!table)
     {
@@ -490,9 +487,6 @@ void StorageState::createAccount(Address const& _address, u256 const& _nonce, u2
 inline storage::Table::Ptr StorageState::getTable(Address const& _address) const
 {
     std::string tableName("_contract_data_" + _address.hex() + "_");
-    if (g_BCOSConfig.version() >= V2_2_0)
-    {
-        tableName = std::string("c_" + _address.hex());
-    }
+    tableName = std::string("c_" + _address.hex());
     return m_memoryTableFactory->openTable(tableName);
 }

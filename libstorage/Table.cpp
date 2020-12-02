@@ -755,19 +755,16 @@ bool Condition::process(Entry::Ptr entry)
                             return false;
                         }
                     }
-                    if (g_BCOSConfig.version() >= V2_3_0)
+                    if (it.second.left.second == it.second.right.second && !it.second.left.first &&
+                        !it.second.right.first)
                     {
-                        if (it.second.left.second == it.second.right.second &&
-                            !it.second.left.first && !it.second.right.first)
+                        if (it.second.left.second != fieldIt->second)
+                        {  // NE
+                            continue;
+                        }
+                        else
                         {
-                            if (it.second.left.second != fieldIt->second)
-                            {  // NE
-                                continue;
-                            }
-                            else
-                            {
-                                return false;
-                            }
+                            return false;
                         }
                     }
 

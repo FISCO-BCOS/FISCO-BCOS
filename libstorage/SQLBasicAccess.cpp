@@ -33,11 +33,8 @@ using namespace std;
 
 SQLBasicAccess::SQLBasicAccess()
 {
-    if (g_BCOSConfig.version() >= V2_6_0)
-    {
-        // supported_version >= v2.6.0, enable compress
-        m_rowFormat = " ROW_FORMAT=COMPRESSED ";
-    }
+    // supported_version >= v2.6.0, enable compress
+    m_rowFormat = " ROW_FORMAT=COMPRESSED ";
 }
 
 int SQLBasicAccess::Select(int64_t, const string& _table, const string&, Condition::Ptr _condition,
@@ -187,11 +184,7 @@ SQLFieldType SQLBasicAccess::getFieldType(std::string const& _tableName)
     // _sys_hash_2_block_ or _sys_block_2_nonce, the SYS_VALUE field is blob
     if (_tableName == SYS_HASH_2_BLOCK || _tableName == SYS_BLOCK_2_NONCES || _tableName == SYS_CNS)
     {
-        if (g_BCOSConfig.version() >= V2_6_0)
-        {
-            return SQLFieldType::LongBlobType;
-        }
-        return SQLFieldType::LongStringType;
+        return SQLFieldType::LongBlobType;
     }
     // _sys_hash_2_blockheader_, the SYS_VALUE and SYS_SIG_LIST are blob
     if (_tableName == SYS_HASH_2_BLOCKHEADER)
@@ -201,18 +194,9 @@ SQLFieldType SQLBasicAccess::getFieldType(std::string const& _tableName)
     // contract table, all the fields are blob type
     if (boost::starts_with(_tableName, string("c_")))
     {
-        if (g_BCOSConfig.version() >= V2_5_0)
-        {
-            return SQLFieldType::MediumBlobType;
-        }
-    }
-    // supported_version >= v2.6.0, all the field type of user created table is mediumblob
-    if (g_BCOSConfig.version() >= V2_6_0)
-    {
         return SQLFieldType::MediumBlobType;
     }
-    // supported_version < v2.6.0, the user created table is mediumtext
-    return SQLFieldType::MediumStringType;
+    return SQLFieldType::MediumBlobType;
 }
 
 string SQLBasicAccess::BuildCreateTableSql(
@@ -221,10 +205,6 @@ string SQLBasicAccess::BuildCreateTableSql(
     stringstream ss;
     ss << "CREATE TABLE IF NOT EXISTS `" << _tableName << "`(\n";
     ss << " `_id_` BIGINT unsigned auto_increment,\n";
-    if (g_BCOSConfig.version() <= V2_1_0)
-    {
-        ss << " `_hash_` varchar(128) DEFAULT NULL,\n";
-    }
     ss << " `_num_` BIGINT not null,\n";
     ss << " `_status_` int not null,\n";
     ss << "`" << _keyField << "` varchar(255) default '',\n";
@@ -289,12 +269,6 @@ void SQLBasicAccess::GetCommitFieldNameAndValueEachTable(const string& _num,
             }
             _valueList.push_back(fieldIt.second);
         }
-
-        if (g_BCOSConfig.version() <= V2_1_0)
-        {
-            _valueList.push_back("0");
-        }
-
         _valueList.push_back(_num);
         _valueList.push_back(boost::lexical_cast<string>(entry->getID()));
         _valueList.push_back(boost::lexical_cast<string>(entry->getStatus()));
@@ -303,10 +277,6 @@ void SQLBasicAccess::GetCommitFieldNameAndValueEachTable(const string& _num,
 
     if (!_fieldStr.empty())
     {
-        if (g_BCOSConfig.version() <= V2_1_0)
-        {
-            _fieldStr.append("`_hash_`,");
-        }
         _fieldStr.append("`").append(NUM_FIELD).append("`,");
         _fieldStr.append("`").append(ID_FIELD).append("`,");
         _fieldStr.append("`").append(STATUS).append("`");

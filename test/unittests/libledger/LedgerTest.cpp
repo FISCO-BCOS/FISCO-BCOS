@@ -162,20 +162,10 @@ BOOST_AUTO_TEST_CASE(testGensisConfig)
     fakeLedger.regenerateGenesisMark();
     std::string mark =
         "10-"
-        "7dcce48da1c464c7025614a54a4e26df7d6f92cd4d315601e057c1659796736c5c8730e380fcbe637191cc"
-        "2aeb"
+        "7dcce48da1c464c7025614a54a4e26df7d6f92cd4d315601e057c1659796736c5c8730e380fcbe637191cc2aeb"
         "f4746846c0db2604adebf9c70c7f418d4d5a61,"
-        "46787132f4d6285bfe108427658baf2b48de169bdb745e01610efd7930043dcc414dc6f6ddc3da6fc491cc"
-        "1c15"
-        "f46e621ea7304a9b5f0b3fb85ba20a6b1c0fc1,-raft-";
-    if (g_BCOSConfig.version() < RC3_VERSION)
-    {
-        mark += "sql-mpt-2000-300000000";
-    }
-    else
-    {
-        mark += "mpt-2000-300000000";
-    }
+        "46787132f4d6285bfe108427658baf2b48de169bdb745e01610efd7930043dcc414dc6f6ddc3da6fc491cc1c15"
+        "f46e621ea7304a9b5f0b3fb85ba20a6b1c0fc1,-raft-mpt-0-2000-300000000-3";
     BOOST_CHECK(fakeLedger.getParam()->mutableGenesisMark() == mark);
 
     /// init ini config
@@ -188,14 +178,8 @@ BOOST_AUTO_TEST_CASE(testGensisConfig)
     /// modify state to storage(the default option)
     boost::property_tree::ptree pt;
     // fakeLedger.initDBConfig(pt);
-    if (g_BCOSConfig.version() > RC2_VERSION)
-    {
-        BOOST_CHECK(fakeLedger.getParam()->mutableStorageParam().type == "RocksDB");
-    }
-    else
-    {
-        fakeLedger.getParam()->mutableStorageParam().type = "LevelDB";
-    }
+
+    BOOST_CHECK(fakeLedger.getParam()->mutableStorageParam().type == "RocksDB");
     BOOST_CHECK(fakeLedger.getParam()->mutableStateParam().type == "storage");
     fakeLedger.initIniConfig(configurationPath);
     BOOST_CHECK(fakeLedger.getParam()->mutableTxParam().enableParallel == true);

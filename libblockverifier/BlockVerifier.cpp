@@ -57,7 +57,7 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const&
     ExecutiveContext::Ptr context = nullptr;
     try
     {
-        if (g_BCOSConfig.version() >= RC2_VERSION && m_enableParallel)
+        if (m_enableParallel)
         {
             context = parallelExecuteBlock(block, parentBlockInfo);
         }
@@ -153,12 +153,7 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
 
     h256 stateRoot = executiveContext->getState()->rootHash();
     // set stateRoot in receipts
-    if (g_BCOSConfig.version() >= V2_2_0)
-    {
-        // when support_version is lower than v2.2.0, doesn't setStateRootToAllReceipt
-        // enable_parallel=true can't be run with enable_parallel=false
-        block.setStateRootToAllReceipt(stateRoot);
-    }
+    block.setStateRootToAllReceipt(stateRoot);
     block.updateSequenceReceiptGas();
     block.calReceiptRoot();
     block.header().setStateRoot(stateRoot);

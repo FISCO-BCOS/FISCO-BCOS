@@ -219,19 +219,10 @@ private:
     std::shared_ptr<bcos::consensus::Sealer> createPBFTSealer();
     /// create RaftConsensus
     std::shared_ptr<bcos::consensus::Sealer> createRaftSealer();
-
-    bool inline normalrPBFTEnabled()
-    {
-        return (bcos::stringCmpIgnoreCase(
-                    m_param->mutableConsensusParam().consensusType, "rpbft") == 0) &&
-               (g_BCOSConfig.version() < V2_6_0);
-    }
-
     bool inline vrfBasedrPBFTEnabled()
     {
         return (bcos::stringCmpIgnoreCase(
-                    m_param->mutableConsensusParam().consensusType, "rpbft") == 0) &&
-               (g_BCOSConfig.version() >= V2_6_0);
+                    m_param->mutableConsensusParam().consensusType, "rpbft") == 0);
     }
 
 protected:

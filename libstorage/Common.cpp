@@ -34,11 +34,6 @@ bool bcos::storage::isHashField(const std::string& _key)
 {
     if (!_key.empty())
     {
-        if (g_BCOSConfig.version() < RC3_VERSION)
-        {
-            return ((_key.substr(0, 1) != "_" && _key.substr(_key.size() - 1, 1) != "_") ||
-                    (_key == STATUS));
-        }
         return ((_key.substr(0, 1) != "_" && _key.substr(_key.size() - 1, 1) != "_"));
     }
     return false;

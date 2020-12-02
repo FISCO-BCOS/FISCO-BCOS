@@ -223,7 +223,6 @@ EVMHostContext::EVMHostContext(std::shared_ptr<StateFace> _s,
     {
         sm3_hash_fn = sm3Hash;
     }
-    version = g_BCOSConfig.version();
     if (m_freeStorage)
     {
         metrics = &freeStorageGasMetrics;
@@ -310,23 +309,15 @@ evmc_result EVMHostContext::create(
     return evmcResult;
 }
 
-void EVMHostContext::suicide(Address const& _a)
+void EVMHostContext::suicide(Address const&)
 {
     // Why transfer is not used here? That caused a consensus issue before (see Quirk #2 in
     // http://martin.swende.se/blog/Ethereum_quirks_and_vulns.html). There is one test case
     // witnessing the current consensus
     // 'GeneralStateTests/stSystemOperationsTest/suicideSendEtherPostDeath.json'.
-
-    if (g_BCOSConfig.version() >= RC2_VERSION)
-    {
-        // No balance here in BCOS. Balance has data racing in parallel suicide.
-        m_sub.suicides.insert(m_myAddress);
-        return;
-    }
-
-    m_s->addBalance(_a, m_s->balance(myAddress()));
-    m_s->setBalance(myAddress(), 0);
+    // No balance here in BCOS. Balance has data racing in parallel suicide.
     m_sub.suicides.insert(m_myAddress);
+    return;
 }
 
 h256 EVMHostContext::blockHash(int64_t _number)

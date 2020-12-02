@@ -219,10 +219,6 @@ bcos::storage::Storage::Ptr DBInitializer::initRocksDBStorage(
     std::shared_ptr<LedgerParamInterface> _param)
 {
     DBInitializer_LOG(INFO) << LOG_BADGE("initRocksDBStorage");
-    if (g_BCOSConfig.diskEncryption.enable && g_BCOSConfig.version() <= RC3_VERSION)
-    {
-        unsupportedFeatures("RocksDB in RC3");
-    }
     try
     {
         auto rocksdbStorage = createRocksDBStorage(_param->mutableStorageParam().path,
@@ -417,10 +413,6 @@ Storage::Ptr bcos::ledger::createRocksDBStorage(const std::string& _dbPath,
     if (!_encryptKey.empty())
     {
         bool enableCompress = true;
-        if (g_BCOSConfig.version() < V2_7_0)
-        {
-            enableCompress = false;
-        }
         DBInitializer_LOG(INFO)
             << LOG_DESC("rocksDB is empty, set compress property for disk encryption")
             << LOG_KV("enableCompress", enableCompress);

@@ -295,29 +295,11 @@ ConsensusInterface::Ptr Ledger::createConsensusEngine(bcos::PROTOCOL_ID const& _
         return std::make_shared<PBFTEngine>(m_service, m_txPool, m_blockChain, m_sync,
             m_blockVerifier, _protocolId, m_keyPair, m_param->mutableConsensusParam().sealerList);
     }
-    if (normalrPBFTEnabled())
-    {
-        Ledger_LOG(INFO) << LOG_DESC("createConsensusEngine: create RotatingPBFTEngine");
-        return std::make_shared<RotatingPBFTEngine>(m_service, m_txPool, m_blockChain, m_sync,
-            m_blockVerifier, _protocolId, m_keyPair, m_param->mutableConsensusParam().sealerList);
-    }
     if (vrfBasedrPBFTEnabled())
     {
-        // Note: since WorkingSealerManagerPrecompiled is enabled after v2.6.0,
-        //       vrf based rpbft is supported after v2.6.0
-        if (g_BCOSConfig.version() >= V2_6_0)
-        {
-            Ledger_LOG(INFO) << LOG_DESC("createConsensusEngine: create VRFBasedrPBFTEngine");
-            return std::make_shared<VRFBasedrPBFTEngine>(m_service, m_txPool, m_blockChain, m_sync,
-                m_blockVerifier, _protocolId, m_keyPair,
-                m_param->mutableConsensusParam().sealerList);
-        }
-        else
-        {
-            BOOST_THROW_EXCEPTION(bcos::InitLedgerConfigFailed() << errinfo_comment(
-                                      m_param->mutableConsensusParam().consensusType +
-                                      " is supported after when supported_version >= v2.6.0!"));
-        }
+        Ledger_LOG(INFO) << LOG_DESC("createConsensusEngine: create VRFBasedrPBFTEngine");
+        return std::make_shared<VRFBasedrPBFTEngine>(m_service, m_txPool, m_blockChain, m_sync,
+            m_blockVerifier, _protocolId, m_keyPair, m_param->mutableConsensusParam().sealerList);
     }
     return nullptr;
 }
@@ -363,15 +345,7 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
                                   "create PBFTEngine failed, maybe unsupported consensus type " +
                                   m_param->mutableConsensusParam().consensusType));
     }
-    // only when supported_version>=v2.6.0, support adjust consensus interval at runtime
-    if (g_BCOSConfig.version() >= V2_6_0)
-    {
-        pbftEngine->setSupportConsensusTimeAdjust(true);
-    }
-    else
-    {
-        pbftEngine->setSupportConsensusTimeAdjust(false);
-    }
+    pbftEngine->setSupportConsensusTimeAdjust(true);
     pbftSealer->setConsensusEngine(pbftEngine);
     pbftSealer->setEnableDynamicBlockSize(m_param->mutableConsensusParam().enableDynamicBlockSize);
     pbftSealer->setBlockSizeIncreaseRatio(m_param->mutableConsensusParam().blockSizeIncreaseRatio);
@@ -388,7 +362,7 @@ bcos::eth::BlockFactory::Ptr Ledger::createBlockFactory()
     }
     // only create PartiallyBlockFactory when using pbft or rpbft
     if (bcos::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0 ||
-        normalrPBFTEnabled() || vrfBasedrPBFTEnabled())
+        vrfBasedrPBFTEnabled())
     {
         return std::make_shared<bcos::eth::PartiallyBlockFactory>();
     }
@@ -415,7 +389,7 @@ void Ledger::initPBFTEngine(Sealer::Ptr _sealer)
 // init rotating-pbft engine
 void Ledger::initrPBFTEngine(bcos::consensus::Sealer::Ptr _sealer)
 {
-    if (!normalrPBFTEnabled() && !vrfBasedrPBFTEnabled())
+    if (!vrfBasedrPBFTEnabled())
     {
         return;
     }
@@ -468,7 +442,7 @@ bool Ledger::consensusInitFactory()
     // create PBFTSealer
     else if (bcos::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") ==
                  0 ||
-             normalrPBFTEnabled() || vrfBasedrPBFTEnabled())
+             vrfBasedrPBFTEnabled())
     {
         m_sealer = createPBFTSealer();
     }
@@ -528,17 +502,10 @@ bool Ledger::initSync()
 
     // create and setSyncMsgPacketFactory
     SyncMsgPacketFactory::Ptr syncMsgPacketFactory;
-    if (g_BCOSConfig.version() >= V2_6_0)
-    {
-        syncMsgPacketFactory = std::make_shared<SyncMsgPacketWithAlignedTimeFactory>();
-        // create NodeTimeMaintenance
-        m_nodeTimeMaintenance = std::make_shared<NodeTimeMaintenance>();
-        syncMaster->setNodeTimeMaintenance(m_nodeTimeMaintenance);
-    }
-    else
-    {
-        syncMsgPacketFactory = std::make_shared<SyncMsgPacketFactory>();
-    }
+    syncMsgPacketFactory = std::make_shared<SyncMsgPacketWithAlignedTimeFactory>();
+    // create NodeTimeMaintenance
+    m_nodeTimeMaintenance = std::make_shared<NodeTimeMaintenance>();
+    syncMaster->setNodeTimeMaintenance(m_nodeTimeMaintenance);
     syncMaster->setSyncMsgPacketFactory(syncMsgPacketFactory);
 
     // set the max block queue size for sync module(bytes)

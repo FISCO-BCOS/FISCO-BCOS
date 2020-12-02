@@ -220,7 +220,7 @@ public:
 private:
     void initStorageConfig(boost::property_tree::ptree const& pt);
     void initTxPoolConfig(boost::property_tree::ptree const& pt);
-    void initTxExecuteConfig(boost::property_tree::ptree const& pt);
+    void initTxExecuteConfig();
     void initConsensusConfig(boost::property_tree::ptree const& pt);
     void initConsensusIniConfig(boost::property_tree::ptree const& pt);
     void initRPBFTConsensusIniConfig(boost::property_tree::ptree const& pt);
