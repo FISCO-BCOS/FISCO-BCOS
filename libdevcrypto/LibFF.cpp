@@ -69,8 +69,8 @@ libff::alt_bn128_Fq decodeFqElement(bcos::bytesConstRef _data)
 
 libff::alt_bn128_G1 decodePointG1(bcos::bytesConstRef _data)
 {
-    libff::alt_bn128_Fq x = decodeFqElement(_data.cropped(0));
-    libff::alt_bn128_Fq y = decodeFqElement(_data.cropped(32));
+    libff::alt_bn128_Fq x = decodeFqElement(_data.getCroppedData(0));
+    libff::alt_bn128_Fq y = decodeFqElement(_data.getCroppedData(32));
     if (x == libff::alt_bn128_Fq::zero() && y == libff::alt_bn128_Fq::zero())
         return libff::alt_bn128_G1::zero();
     libff::alt_bn128_G1 p(x, y, libff::alt_bn128_Fq::one());
@@ -93,13 +93,13 @@ libff::alt_bn128_Fq2 decodeFq2Element(bcos::bytesConstRef _data)
     // Encoding: c1 (256 bits) c0 (256 bits)
     // "Big endian", just like the numbers
     return libff::alt_bn128_Fq2(
-        decodeFqElement(_data.cropped(32)), decodeFqElement(_data.cropped(0)));
+        decodeFqElement(_data.getCroppedData(32)), decodeFqElement(_data.getCroppedData(0)));
 }
 
 libff::alt_bn128_G2 decodePointG2(bcos::bytesConstRef _data)
 {
     libff::alt_bn128_Fq2 const x = decodeFq2Element(_data);
-    libff::alt_bn128_Fq2 const y = decodeFq2Element(_data.cropped(64));
+    libff::alt_bn128_Fq2 const y = decodeFq2Element(_data.getCroppedData(64));
     if (x == libff::alt_bn128_Fq2::zero() && y == libff::alt_bn128_Fq2::zero())
         return libff::alt_bn128_G2::zero();
     libff::alt_bn128_G2 p(x, y, libff::alt_bn128_Fq2::one());
@@ -127,9 +127,9 @@ pair<bool, bytes> bcos::crypto::alt_bn128_pairing_product(bcos::bytesConstRef _i
         libff::alt_bn128_Fq12 x = libff::alt_bn128_Fq12::one();
         for (size_t i = 0; i < pairs; ++i)
         {
-            bytesConstRef const pair = _in.cropped(i * pairSize, pairSize);
+            bytesConstRef const pair = _in.getCroppedData(i * pairSize, pairSize);
             libff::alt_bn128_G1 const g1 = decodePointG1(pair);
-            libff::alt_bn128_G2 const p = decodePointG2(pair.cropped(2 * 32));
+            libff::alt_bn128_G2 const p = decodePointG2(pair.getCroppedData(2 * 32));
             if (-libff::alt_bn128_G2::scalar_field::one() * p + p != libff::alt_bn128_G2::zero())
                 // p is not an element of the group (has wrong order)
                 return {false, bytes()};
@@ -154,7 +154,7 @@ pair<bool, bytes> bcos::crypto::alt_bn128_G1_add(bcos::bytesConstRef _in)
     {
         initLibFF();
         libff::alt_bn128_G1 const p1 = decodePointG1(_in);
-        libff::alt_bn128_G1 const p2 = decodePointG1(_in.cropped(32 * 2));
+        libff::alt_bn128_G1 const p2 = decodePointG1(_in.getCroppedData(32 * 2));
         return {true, encodePointG1(p1 + p2)};
     }
     catch (InvalidEncoding const&)
@@ -169,9 +169,9 @@ pair<bool, bytes> bcos::crypto::alt_bn128_G1_mul(bcos::bytesConstRef _in)
     try
     {
         initLibFF();
-        libff::alt_bn128_G1 const p = decodePointG1(_in.cropped(0));
+        libff::alt_bn128_G1 const p = decodePointG1(_in.getCroppedData(0));
         libff::alt_bn128_G1 const result =
-            toLibsnarkBigint(h256(_in.cropped(64), h256::AlignLeft)) * p;
+            toLibsnarkBigint(h256(_in.getCroppedData(64), h256::AlignLeft)) * p;
         return {true, encodePointG1(result)};
     }
     catch (InvalidEncoding const&)

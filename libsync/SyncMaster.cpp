@@ -136,7 +136,7 @@ void SyncMaster::stop()
     SYNC_LOG(INFO) << LOG_BADGE("g:" + std::to_string(m_groupId)) << LOG_DESC("SyncMaster stopped");
 }
 
-void SyncMaster::doWork()
+void SyncMaster::executeTask()
 {
     // Debug print
     if (isSyncing())
@@ -185,11 +185,11 @@ void SyncMaster::doWork()
     });
 }
 
-void SyncMaster::workLoop()
+void SyncMaster::taskProcessLoop()
 {
     while (workerState() == WorkerState::Started)
     {
-        doWork();
+        executeTask();
         if (idleWaitMs())
         {
             boost::unique_lock<boost::mutex> l(x_signalled);

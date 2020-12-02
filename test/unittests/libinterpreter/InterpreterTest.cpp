@@ -170,8 +170,7 @@ BOOST_AUTO_TEST_CASE(contractDeployTest)
     bytes compare = *fromHexString(
         "60606040525bfe00a165627a7a72305820de136e86e236113a9f32948ce4a57e1f7a409db615e7ef07a26ef1eb"
         "c39de3580029");
-    bytes codeRes = bytesConstRef(result.output_data, result.output_size).toVector();
-
+    bytes codeRes = bytesConstRef(result.output_data, result.output_size).toBytes();
     BOOST_CHECK(compare == codeRes);
     BOOST_CHECK(0 == result.status_code);
 }

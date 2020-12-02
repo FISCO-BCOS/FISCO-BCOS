@@ -77,9 +77,9 @@ public:
     virtual void start();
     /// stop blockSync
     virtual void stop();
-    /// doWork every idleWaitMs
-    void doWork() override;
-    void workLoop() override;
+    /// executeTask every idleWaitMs
+    void executeTask() override;
+    void taskProcessLoop() override;
     void noteNewTransactions()
     {
         m_newTransactions = true;

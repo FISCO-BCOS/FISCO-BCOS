@@ -118,7 +118,7 @@ void TxsParallelParser::decode(std::shared_ptr<Transactions> _txs, bytesConstRef
         size_t bytesSize = _bytes.size();
         if (bytesSize == 0)
             return;
-        Offset_t txNum = fromBytes(_bytes.cropped(0));
+        Offset_t txNum = fromBytes(_bytes.getCroppedData(0));
         // check txNum
         size_t objectStart = sizeof(Offset_t) * (txNum + 2);
         if (objectStart >= bytesSize)
@@ -127,13 +127,13 @@ void TxsParallelParser::decode(std::shared_ptr<Transactions> _txs, bytesConstRef
         }
 
         // Get offsets space
-        vector_ref<Offset_t> offsets(reinterpret_cast<Offset_t*>(const_cast<unsigned char*>(
-                                         _bytes.cropped(sizeof(Offset_t)).data())),
+        RefDataContainer<Offset_t> offsets(reinterpret_cast<Offset_t*>(const_cast<unsigned char*>(
+                                               _bytes.getCroppedData(sizeof(Offset_t)).data())),
             txNum + 1);
         _txs->resize(txNum);
 
         // Get objects space
-        bytesConstRef txBytes = _bytes.cropped(sizeof(Offset_t) * (txNum + 2));
+        bytesConstRef txBytes = _bytes.getCroppedData(sizeof(Offset_t) * (txNum + 2));
 
         // check objects space
         if (offsets.size() == 0 || txBytes.size() == 0)
@@ -154,7 +154,7 @@ void TxsParallelParser::decode(std::shared_ptr<Transactions> _txs, bytesConstRef
                             throwInvalidBlockFormat("offset > maxOffset");
 
                         (*_txs)[i] = std::make_shared<Transaction>();
-                        (*_txs)[i]->decode(txBytes.cropped(offset, size), _checkSig);
+                        (*_txs)[i]->decode(txBytes.getCroppedData(offset, size), _checkSig);
                         if (_withHash)
                         {
                             // cache the keccak256

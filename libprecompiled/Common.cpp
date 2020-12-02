@@ -255,7 +255,7 @@ bytes precompiled::PrecompiledException::ToOutput()
 
 uint32_t bcos::precompiled::getParamFunc(bytesConstRef _param)
 {
-    auto funcBytes = _param.cropped(0, 4);
+    auto funcBytes = _param.getCroppedData(0, 4);
     uint32_t func = *((uint32_t*)(funcBytes.data()));
 
     return ((func & 0x000000FF) << 24) | ((func & 0x0000FF00) << 8) | ((func & 0x00FF0000) >> 8) |
@@ -264,12 +264,12 @@ uint32_t bcos::precompiled::getParamFunc(bytesConstRef _param)
 
 bytesConstRef bcos::precompiled::getParamData(bytesConstRef _param)
 {
-    return _param.cropped(4);
+    return _param.getCroppedData(4);
 }
 
 uint32_t bcos::precompiled::getFuncSelectorByFunctionName(std::string const& _functionName)
 {
-    uint32_t func = *(uint32_t*)(crypto::Hash(_functionName).ref().cropped(0, 4).data());
+    uint32_t func = *(uint32_t*)(crypto::Hash(_functionName).ref().getCroppedData(0, 4).data());
     uint32_t selector = ((func & 0x000000FF) << 24) | ((func & 0x0000FF00) << 8) |
                         ((func & 0x00FF0000) >> 8) | ((func & 0xFF000000) >> 24);
     return selector;

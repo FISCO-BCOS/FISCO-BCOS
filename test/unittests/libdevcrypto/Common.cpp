@@ -78,16 +78,11 @@ BOOST_AUTO_TEST_CASE(SM_testEcKeypair)
     KeyPair k = KeyPair::create();
     BOOST_CHECK(k.secret());
     BOOST_CHECK(k.pub());
-    std::cout << "### SM_testEcKeypair pass 1" << std::endl;
     Public test = toPublic(k.secret());
-    std::cout << "### SM_testEcKeypair pass 2" << std::endl;
     BOOST_CHECK_EQUAL(k.pub(), test);
-    std::cout << "### SM_testEcKeypair pass 3" << std::endl;
 
     Secret empty;
-    std::cout << "### SM_testEcKeypair pass 4" << std::endl;
     KeyPair kNot(empty);
-    std::cout << "### SM_testEcKeypair pass 5" << std::endl;
     BOOST_CHECK(!kNot.address());
 #if 0
     KeyPair k2(crypto::Hash(empty));

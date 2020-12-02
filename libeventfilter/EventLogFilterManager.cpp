@@ -44,7 +44,7 @@ void EventLogFilterManager::stop()
 }
 
 // main loop thread
-void EventLogFilterManager::doWork()
+void EventLogFilterManager::executeTask()
 {
     // add or delete new EventLogFilter to m_filters
     addFilter();

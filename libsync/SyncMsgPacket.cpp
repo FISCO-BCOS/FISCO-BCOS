@@ -42,9 +42,10 @@ bool SyncMsgPacket::decode(
     if (!checkPacket(frame))
         return false;
 
-    packetType = (SyncPacketType)(RLP(frame.cropped(0, 1)).toInt<unsigned>() - c_syncPacketIDBase);
+    packetType =
+        (SyncPacketType)(RLP(frame.getCroppedData(0, 1)).toInt<unsigned>() - c_syncPacketIDBase);
     nodeId = _session->nodeID();
-    m_rlp = RLP(frame.cropped(1));
+    m_rlp = RLP(frame.getCroppedData(1));
 
     return true;
 }
@@ -64,7 +65,7 @@ bool SyncMsgPacket::checkPacket(bytesConstRef _msg)
 {
     if (_msg.size() < 2 || _msg[0] > 0x7f)
         return false;
-    if (RLP(_msg.cropped(1)).actualSize() + 1 != _msg.size())
+    if (RLP(_msg.getCroppedData(1)).actualSize() + 1 != _msg.size())
         return false;
     return true;
 }

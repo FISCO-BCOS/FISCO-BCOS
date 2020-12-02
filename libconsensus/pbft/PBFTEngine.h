@@ -262,7 +262,7 @@ protected:
     virtual bool locatedInChosedConsensensusNodes() const { return m_idx != MAXIDX; }
     virtual void addRawPrepare(PrepareReq::Ptr _prepareReq);
     void reportBlockWithoutLock(bcos::eth::Block const& block);
-    void workLoop() override;
+    void taskProcessLoop() override;
     void handleFutureBlock();
     void collectGarbage();
     void checkTimeout();

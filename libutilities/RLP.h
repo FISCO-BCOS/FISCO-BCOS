@@ -24,8 +24,8 @@
 #pragma once
 
 #include "FixedBytes.h"
+#include "libutilities/Common.h"
 #include "libutilities/Exceptions.h"
-#include "libutilities/vector_ref.h"
 #include <array>
 #include <exception>
 #include <iomanip>
@@ -282,7 +282,7 @@ public:
             else
                 return bytesConstRef();
         }
-        return payload().cropped(0, length());
+        return payload().getCroppedData(0, length());
     }
     /// Converts to string. @returns the empty string if not a string.
     std::string toString(int _flags = LaissezFaire) const
@@ -294,7 +294,7 @@ public:
             else
                 return std::string();
         }
-        return payload().cropped(0, length()).toString();
+        return payload().getCroppedData(0, length()).toString();
     }
     /// Converts to string. @throws BadCast if not a string.
     std::string toStringStrict() const { return toString(Strict); }
@@ -455,7 +455,7 @@ public:
         auto l = length();
         if (l > m_data.size())
             BOOST_THROW_EXCEPTION(BadRLP());
-        return m_data.cropped(payloadOffset(), l);
+        return m_data.getCroppedData(payloadOffset(), l);
     }
 
     /// @returns the theoretical size of this item as encoded in the data.

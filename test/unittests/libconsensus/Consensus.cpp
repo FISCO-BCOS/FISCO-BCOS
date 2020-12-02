@@ -223,8 +223,8 @@ BOOST_AUTO_TEST_CASE(testReachBlockIntervalTime)
     BOOST_CHECK(fake_pbft->reachBlockIntervalTime() == false);
 }
 
-/// test doWork
-BOOST_AUTO_TEST_CASE(testDoWork)
+/// test executeTask
+BOOST_AUTO_TEST_CASE(testScheduleTask)
 {
     SealerFixture sealerFixture;
     std::shared_ptr<FakePBFTSealer> fake_pbft = sealerFixture.fakePBFT();
@@ -235,7 +235,7 @@ BOOST_AUTO_TEST_CASE(testDoWork)
     /// m_sealing has not been sealed yet
     fake_pbft->resetSealingBlock();
     fake_pbft->engine()->setAccountType(NodeAccountType::SealerAccount);
-    fake_pbft->doWork(true);
+    fake_pbft->executeTask(true);
 
     /// check txpool status
     BOOST_CHECK(sealerFixture.m_txpoolCreator->m_txPool->pendingSize() == 10);

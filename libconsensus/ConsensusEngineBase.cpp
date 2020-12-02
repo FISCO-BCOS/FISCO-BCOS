@@ -38,7 +38,7 @@ void ConsensusEngineBase::start()
         return;
     }
     ENGINE_LOG(INFO) << "[Start ConsensusEngineBase]";
-    /// start  a thread to execute doWork()&&workLoop()
+    /// start  a thread to execute executeTask()&&taskProcessLoop()
     startWorking();
     m_startConsensusEngine = true;
 }

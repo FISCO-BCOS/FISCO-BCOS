@@ -49,7 +49,7 @@ void Sealer::start()
     m_consensusEngine->reportBlock(*(m_blockChain->getBlockByNumber(m_blockChain->number())));
     m_maxBlockCanSeal = m_consensusEngine->maxBlockTransactions();
     m_syncBlock = false;
-    /// start  a thread to execute doWork()&&workLoop()
+    /// start  a thread to execute executeTask()&&taskProcessLoop()
     startWorking();
     m_startConsensus = true;
 }
@@ -97,7 +97,7 @@ bool Sealer::shouldWait(bool const& wait) const
     return !m_syncBlock && wait;
 }
 
-void Sealer::doWork(bool wait)
+void Sealer::executeTask(bool wait)
 {
     reportNewBlock();
     if (shouldSeal() && m_startConsensus.load())

@@ -25,13 +25,6 @@
 
 namespace bcos
 {
-enum class IfRunning
-{
-    Fail,
-    Join,
-    Detach
-};
-
 enum class WorkerState
 {
     Starting,
@@ -47,62 +40,50 @@ protected:
     Worker(std::string const& _threadName = "worker", unsigned _idleWaitMs = 30)
       : m_threadName(_threadName), m_idleWaitMs(_idleWaitMs)
     {}
-
-    /// Move-constructor.
-    Worker(Worker&& _m) { std::swap(m_threadName, _m.m_threadName); }
-
-    /// Move-assignment.
-    Worker& operator=(Worker&& _m)
-    {
-        assert(&_m != this);
-        std::swap(m_threadName, _m.m_threadName);
-        return *this;
-    }
-
     virtual ~Worker() { terminate(); }
 
-    /// Allows changing worker name if work is stopped.
-    /// m_threadName: ${module}-${groupID}
-    void setName(std::string const& _n)
+    /**
+     * @brief Set thread name for the worker
+     *
+     * @param _threadName: the thread name
+     */
+    void setName(std::string const& _threadName)
     {
         if (!isWorking())
-            m_threadName = _n;
+            m_threadName = _threadName;
     }
 
-    std::string const& name() const { return m_threadName; }
-    /// Starts worker thread; causes startedWorking() to be called.
+    std::string const& threadName() const { return m_threadName; }
+
+    /// Starts worker thread by calling startedWorking
     void startWorking();
 
-    /// Stop worker thread; causes call to stopWorking().
+    /// Stop worker thread
     void stopWorking();
 
-    /// Returns if worker thread is present.
+    // Return true if the worker thread is working
     bool isWorking() const
     {
         boost::unique_lock<boost::mutex> l(x_work);
-        return m_state == WorkerState::Started;
+        return m_workerState == WorkerState::Started;
     }
 
-    /// Called after thread is started from startWorking().
+    // Called after thread is started from startWorking().
     virtual void startedWorking() {}
 
-    /// Called continuously following sleep for m_idleWaitMs.
-    virtual void doWork() {}
+    // task execute logic (Called continuously following sleep for m_idleWaitMs)
+    virtual void executeTask() {}
 
-    /// Overrides doWork(); should call shouldStop() often and exit when true.
-    virtual void workLoop();
-    bool shouldStop() const { return m_state != WorkerState::Started; }
+    // schedule the task inner a loop before stop the worker thread
+    virtual void taskProcessLoop();
+    bool shouldStop() const { return m_workerState != WorkerState::Started; }
 
     /// Called when is to be stopped, just prior to thread being joined.
     virtual void doneWorking() {}
-
-    /// Stop and never start again.
-    /// This has to be called in the destructor of any most derived class.  Otherwise the worker
-    /// thread will try to lookup vptrs. It's OK to call terminate() in destructors of multiple
-    /// derived classes.
+    // stop the worker
     void terminate();
 
-    std::atomic<WorkerState>& workerState() { return m_state; }
+    std::atomic<WorkerState>& workerState() { return m_workerState; }
     unsigned idleWaitMs() { return m_idleWaitMs; }
 
 private:
@@ -110,10 +91,12 @@ private:
 
     unsigned m_idleWaitMs = 0;
 
-    mutable boost::mutex x_work;          ///< Lock for the network existence and m_stateNotifier.
-    std::unique_ptr<std::thread> m_work;  ///< The network thread.
-    mutable boost::condition_variable m_stateNotifier;  //< Notification when m_state changes.
-    std::atomic<WorkerState> m_state = {WorkerState::Starting};
+    mutable boost::mutex x_work;
+    // the worker thread
+    std::unique_ptr<std::thread> m_workerThread;
+    // Notification when m_workerState changes
+    mutable boost::condition_variable m_workerStateNotifier;
+    std::atomic<WorkerState> m_workerState = {WorkerState::Starting};
 };
 
 }  // namespace bcos

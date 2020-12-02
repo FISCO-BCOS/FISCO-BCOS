@@ -36,17 +36,17 @@ void setThreadName(const char* _threadName)
 void Worker::startWorking()
 {
     boost::unique_lock<boost::mutex> l(x_work);
-    if (m_work)
+    if (m_workerThread)
     {
-        WorkerState ex = WorkerState::Stopped;
-        m_state.compare_exchange_strong(ex, WorkerState::Starting);
-        m_stateNotifier.notify_all();
+        WorkerState workerState = WorkerState::Stopped;
+        m_workerState.compare_exchange_strong(workerState, WorkerState::Starting);
+        m_workerStateNotifier.notify_all();
     }
     else
     {
-        m_state = WorkerState::Starting;
-        m_stateNotifier.notify_all();
-        m_work.reset(new thread([&]() {
+        m_workerState = WorkerState::Starting;
+        m_workerStateNotifier.notify_all();
+        m_workerThread.reset(new thread([&]() {
             // set threadName for log
             if (boost::log::core::get())
             {
@@ -59,21 +59,21 @@ void Worker::startWorking()
                 }
             }
             setThreadName(m_threadName.c_str());
-            while (m_state != WorkerState::Killing)
+            while (m_workerState != WorkerState::Killing)
             {
                 WorkerState ex = WorkerState::Starting;
                 {
                     // the condition variable-related lock
                     boost::unique_lock<boost::mutex> l(x_work);
-                    m_state = WorkerState::Started;
+                    m_workerState = WorkerState::Started;
                 }
 
-                m_stateNotifier.notify_all();
+                m_workerStateNotifier.notify_all();
 
                 try
                 {
                     startedWorking();
-                    workLoop();
+                    taskProcessLoop();
                     doneWorking();
                 }
                 catch (std::exception const& e)
@@ -86,40 +86,40 @@ void Worker::startWorking()
                 {
                     // the condition variable-related lock
                     boost::unique_lock<boost::mutex> l(x_work);
-                    ex = m_state.exchange(WorkerState::Stopped);
+                    ex = m_workerState.exchange(WorkerState::Stopped);
                     if (ex == WorkerState::Killing || ex == WorkerState::Starting)
-                        m_state.exchange(ex);
+                        m_workerState.exchange(ex);
                 }
-                m_stateNotifier.notify_all();
+                m_workerStateNotifier.notify_all();
 
                 {
                     boost::unique_lock<boost::mutex> l(x_work);
                     TIME_RECORD("Worker stopping");
-                    while (m_state == WorkerState::Stopped)
-                        m_stateNotifier.wait_for(l, boost::chrono::milliseconds(100));
+                    while (m_workerState == WorkerState::Stopped)
+                        m_workerStateNotifier.wait_for(l, boost::chrono::milliseconds(100));
                 }
             }
         }));
     }
 
     TIME_RECORD("Start worker");
-    while (m_state == WorkerState::Starting)
-        m_stateNotifier.wait_for(l, boost::chrono::milliseconds(100));
+    while (m_workerState == WorkerState::Starting)
+        m_workerStateNotifier.wait_for(l, boost::chrono::milliseconds(100));
 }
 
 void Worker::stopWorking()
 {
     boost::unique_lock<boost::mutex> l(x_work);
-    if (m_work)
+    if (m_workerThread)
     {
         WorkerState ex = WorkerState::Started;
-        if (!m_state.compare_exchange_strong(ex, WorkerState::Stopping))
+        if (!m_workerState.compare_exchange_strong(ex, WorkerState::Stopping))
             return;
-        m_stateNotifier.notify_all();
+        m_workerStateNotifier.notify_all();
         TIME_RECORD("Stop worker");
-        while (m_state != WorkerState::Stopped)
+        while (m_workerState != WorkerState::Stopped)
         {
-            m_stateNotifier.wait_for(l, boost::chrono::milliseconds(100));
+            m_workerStateNotifier.wait_for(l, boost::chrono::milliseconds(100));
         }
     }
 }
@@ -127,26 +127,26 @@ void Worker::stopWorking()
 void Worker::terminate()
 {
     boost::unique_lock<boost::mutex> l(x_work);
-    if (m_work)
+    if (m_workerThread)
     {
-        if (m_state.exchange(WorkerState::Killing) == WorkerState::Killing)
+        if (m_workerState.exchange(WorkerState::Killing) == WorkerState::Killing)
             return;  // Somebody else is doing this
         l.unlock();
-        m_stateNotifier.notify_all();
+        m_workerStateNotifier.notify_all();
         TIME_RECORD("Terminate worker");
-        m_work->join();
+        m_workerThread->join();
 
         l.lock();
-        m_work.reset();
+        m_workerThread.reset();
     }
 }
 
-void Worker::workLoop()
+void Worker::taskProcessLoop()
 {
-    while (m_state == WorkerState::Started)
+    while (m_workerState == WorkerState::Started)
     {
         if (m_idleWaitMs)
             this_thread::sleep_for(chrono::milliseconds(m_idleWaitMs));
-        doWork();
+        executeTask();
     }
 }

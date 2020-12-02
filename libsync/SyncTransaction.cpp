@@ -58,7 +58,7 @@ void SyncTransaction::stop()
     }
 }
 
-void SyncTransaction::doWork()
+void SyncTransaction::executeTask()
 {
     maintainDownloadingTransactions();
 
@@ -74,11 +74,11 @@ void SyncTransaction::doWork()
     }
 }
 
-void SyncTransaction::workLoop()
+void SyncTransaction::taskProcessLoop()
 {
     while (workerState() == WorkerState::Started)
     {
-        doWork();
+        executeTask();
         // no new transactions and the size of transactions need to be broadcasted is zero
         if (idleWaitMs() && !m_newTransactions && m_txQueue->bufferSize() == 0)
         {

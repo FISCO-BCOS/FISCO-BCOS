@@ -267,14 +267,14 @@ void RaftEngine::onRecvRaftMessage(bcos::p2p::NetworkException, bcos::p2p::P2PSe
     }
 }
 
-void RaftEngine::workLoop()
+void RaftEngine::taskProcessLoop()
 {
     while (isWorking())
     {
         auto isSyncing = m_blockSync->isSyncing();
         if (isSyncing)
         {
-            RAFTENGINE_LOG(TRACE) << LOG_DESC("[#workLoop]work loop suspend due to syncing");
+            RAFTENGINE_LOG(TRACE) << LOG_DESC("[#taskProcessLoop]work loop suspend due to syncing");
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
             continue;
         }
@@ -283,10 +283,9 @@ void RaftEngine::workLoop()
 
         if (m_cfgErr || m_accountType != NodeAccountType::SealerAccount)
         {
-            RAFTENGINE_LOG(DEBUG) << LOG_DESC(
-                                         "[#workLoop]work loop suspend due to disturbing config")
-                                  << LOG_KV("cfgError", m_cfgErr)
-                                  << LOG_KV("accountType", m_accountType);
+            RAFTENGINE_LOG(DEBUG)
+                << LOG_DESC("[#taskProcessLoop]work loop suspend due to disturbing config")
+                << LOG_KV("cfgError", m_cfgErr) << LOG_KV("accountType", m_accountType);
             std::this_thread::sleep_for(std::chrono::milliseconds(1000));
             continue;
         }
@@ -311,7 +310,7 @@ void RaftEngine::workLoop()
         default:
         {
             RAFTENGINE_LOG(WARNING)
-                << LOG_DESC("[#workLoop]Unknown work state") << LOG_KV("state", m_state);
+                << LOG_DESC("[#taskProcessLoop]Unknown work state") << LOG_KV("state", m_state);
             break;
         }
         }

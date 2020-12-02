@@ -124,7 +124,7 @@ bytes ContractABI::serialise(const std::string& _in)
     bytes ret;
     ret = h256(u256(_in.size())).asBytes();
     ret.resize(ret.size() + (_in.size() + 31) / MAX_BYTE_LENGTH * MAX_BYTE_LENGTH);
-    bytesConstRef(&_in).populate(bytesRef(&ret).cropped(32));
+    bytesConstRef(&_in).populate(bytesRef(&ret).getCroppedData(32));
     return ret;
 }
 
@@ -132,7 +132,7 @@ void ContractABI::deserialise(s256& out, std::size_t _offset)
 {
     validOffset(_offset + MAX_BYTE_LENGTH - 1);
 
-    u256 u = fromBigEndian<u256>(data.cropped(_offset, MAX_BYTE_LENGTH));
+    u256 u = fromBigEndian<u256>(data.getCroppedData(_offset, MAX_BYTE_LENGTH));
     if (u > u256("0x8fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"))
     {
         auto r =
@@ -150,14 +150,14 @@ void ContractABI::deserialise(u256& _out, std::size_t _offset)
 {
     validOffset(_offset + MAX_BYTE_LENGTH - 1);
 
-    _out = fromBigEndian<u256>(data.cropped(_offset, MAX_BYTE_LENGTH));
+    _out = fromBigEndian<u256>(data.getCroppedData(_offset, MAX_BYTE_LENGTH));
 }
 
 void ContractABI::deserialise(bool& _out, std::size_t _offset)
 {
     validOffset(_offset + MAX_BYTE_LENGTH - 1);
 
-    u256 ret = fromBigEndian<u256>(data.cropped(_offset, MAX_BYTE_LENGTH));
+    u256 ret = fromBigEndian<u256>(data.getCroppedData(_offset, MAX_BYTE_LENGTH));
     _out = ret > 0 ? true : false;
 }
 
@@ -165,22 +165,23 @@ void ContractABI::deserialise(Address& _out, std::size_t _offset)
 {
     validOffset(_offset + MAX_BYTE_LENGTH - 1);
 
-    data.cropped(_offset + MAX_BYTE_LENGTH - 20, 20).populate(_out.ref());
+    data.getCroppedData(_offset + MAX_BYTE_LENGTH - 20, 20).populate(_out.ref());
 }
 
 void ContractABI::deserialise(string32& _out, std::size_t _offset)
 {
     validOffset(_offset + MAX_BYTE_LENGTH - 1);
 
-    data.cropped(_offset, MAX_BYTE_LENGTH).populate(bytesRef((byte*)_out.data(), MAX_BYTE_LENGTH));
+    data.getCroppedData(_offset, MAX_BYTE_LENGTH)
+        .populate(bytesRef((byte*)_out.data(), MAX_BYTE_LENGTH));
 }
 
 void ContractABI::deserialise(std::string& _out, std::size_t _offset)
 {
     validOffset(_offset + MAX_BYTE_LENGTH - 1);
 
-    u256 len = fromBigEndian<u256>(data.cropped(_offset, MAX_BYTE_LENGTH));
+    u256 len = fromBigEndian<u256>(data.getCroppedData(_offset, MAX_BYTE_LENGTH));
     validOffset(_offset + MAX_BYTE_LENGTH + (std::size_t)len - 1);
-    auto result = data.cropped(_offset + MAX_BYTE_LENGTH, static_cast<size_t>(len));
+    auto result = data.getCroppedData(_offset + MAX_BYTE_LENGTH, static_cast<size_t>(len));
     _out.assign((const char*)result.data(), result.size());
 }

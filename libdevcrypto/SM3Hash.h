@@ -21,8 +21,8 @@
 
 #pragma once
 
+#include <libutilities/Common.h>
 #include <libutilities/FixedBytes.h>
-#include <libutilities/vector_ref.h>
 #include <string>
 
 namespace bcos
@@ -80,15 +80,6 @@ inline SecureFixedBytes<32> sm3Secure(FixedBytes<N> const& _input)
     return sm3Secure(_input.ref());
 }
 
-/// Fully secure variants are equivalent for sm3 and sm3Secure.
-inline SecureFixedBytes<32> sm3(secBytes const& _input)
-{
-    return sm3Secure(_input.ref());
-}
-inline SecureFixedBytes<32> sm3Secure(secBytes const& _input)
-{
-    return sm3Secure(_input.ref());
-}
 template <unsigned N>
 inline SecureFixedBytes<32> sm3(SecureFixedBytes<N> const& _input)
 {

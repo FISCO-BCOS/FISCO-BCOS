@@ -151,9 +151,9 @@ public:
     virtual void start() override;
     /// stop blockSync
     virtual void stop() override;
-    /// doWork every idleWaitMs
-    virtual void doWork() override;
-    virtual void workLoop() override;
+    /// executeTask every idleWaitMs
+    virtual void executeTask() override;
+    virtual void taskProcessLoop() override;
 
     /// get status of block sync
     /// @returns Synchonization status
@@ -182,7 +182,7 @@ public:
     void noteNewBlocks()
     {
         m_newBlocks = true;
-        m_signalled.notify_all();  // awake doWork
+        m_signalled.notify_all();  // awake executeTask
     }
 
     void noteDownloadingBegin()

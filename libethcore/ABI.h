@@ -381,8 +381,9 @@ public:
 
         abiInAux(_t...);
 
-        return _sig.empty() ? fixed + dynamic :
-                              crypto::Hash(_sig).ref().cropped(0, 4).toBytes() + fixed + dynamic;
+        return _sig.empty() ?
+                   fixed + dynamic :
+                   crypto::Hash(_sig).ref().getCroppedData(0, 4).toBytes() + fixed + dynamic;
     }
 
     template <class... T>

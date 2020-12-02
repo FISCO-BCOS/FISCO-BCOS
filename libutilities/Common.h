@@ -34,8 +34,7 @@
 #pragma warning(pop)
 #pragma GCC diagnostic pop
 #include "Log.h"
-#include "secure_vector.h"
-#include "vector_ref.h"
+#include "RefDataContainer.h"
 #include <boost/thread.hpp>
 #include <atomic>
 #include <condition_variable>
@@ -57,10 +56,8 @@ using namespace boost::multiprecision::literals;
 // vector of byte data
 using byte = uint8_t;
 using bytes = std::vector<byte>;
-using bytesRef = vector_ref<byte>;
-using bytesConstRef = vector_ref<byte const>;
-// manage vector securely in memory
-using secBytes = secure_vector<byte>;
+using bytesRef = RefDataContainer<byte>;
+using bytesConstRef = RefDataContainer<byte const>;
 
 // Numeric types.
 using bigint = boost::multiprecision::number<boost::multiprecision::cpp_int_backend<>>;
@@ -175,7 +172,7 @@ void errorExit(std::stringstream& _exitInfo, Exception const& exception);
 /// Reference to a slice of buffer that also owns the buffer.
 ///
 /// This is extension to the concept C++ STL library names as array_view
-/// (also known as gsl::span, array_ref, here vector_ref) -- reference to
+/// (also known as gsl::span, array_ref, here RefDataContainer) -- reference to
 /// continuous non-modifiable memory. The extension makes the object also owning
 /// the referenced buffer.
 ///
@@ -187,7 +184,7 @@ void errorExit(std::stringstream& _exitInfo, Exception const& exception);
 /// with it was moved out of VM interface making VMs "stateless".
 ///
 /// The type is movable, but not copyable. Default constructor available.
-class owning_bytes_ref : public vector_ref<byte const>
+class owning_bytes_ref : public RefDataContainer<byte const>
 {
 public:
     owning_bytes_ref() = default;
