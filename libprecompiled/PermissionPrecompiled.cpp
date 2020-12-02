@@ -46,14 +46,11 @@ PermissionPrecompiled::PermissionPrecompiled()
     name2Selector[AUP_METHOD_INS] = getFuncSelector(AUP_METHOD_INS);
     name2Selector[AUP_METHOD_REM] = getFuncSelector(AUP_METHOD_REM);
     name2Selector[AUP_METHOD_QUE] = getFuncSelector(AUP_METHOD_QUE);
-    if (g_BCOSConfig.version() >= V2_3_0)
-    {
-        name2Selector[AUP_METHOD_GRANT_WRITE_CONTRACT] =
-            getFuncSelector(AUP_METHOD_GRANT_WRITE_CONTRACT);
-        name2Selector[AUP_METHOD_REVOKE_WRITE_CONTRACT] =
-            getFuncSelector(AUP_METHOD_REVOKE_WRITE_CONTRACT);
-        name2Selector[AUP_METHOD_QUERY_CONTRACT] = getFuncSelector(AUP_METHOD_QUERY_CONTRACT);
-    }
+    name2Selector[AUP_METHOD_GRANT_WRITE_CONTRACT] =
+        getFuncSelector(AUP_METHOD_GRANT_WRITE_CONTRACT);
+    name2Selector[AUP_METHOD_REVOKE_WRITE_CONTRACT] =
+        getFuncSelector(AUP_METHOD_REVOKE_WRITE_CONTRACT);
+    name2Selector[AUP_METHOD_QUERY_CONTRACT] = getFuncSelector(AUP_METHOD_QUERY_CONTRACT);
 }
 
 std::string PermissionPrecompiled::toString()
@@ -76,47 +73,38 @@ PrecompiledExecResult::Ptr PermissionPrecompiled::call(
         // insert(string tableName,string addr)
         std::string tableName, addr;
         abi.abiOut(data, tableName, addr);
-        if (g_BCOSConfig.version() >= V2_5_0)
-        {
-            boost::to_lower(addr);
-        }
+        boost::to_lower(addr);
         do
         {
             Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
-            if (g_BCOSConfig.version() >= V2_5_0)
+            if (tableName == SYS_ACCESS_TABLE)
             {
-                if (tableName == SYS_ACCESS_TABLE)
-                {
-                    result = CODE_COMMITTEE_PERMISSION;
-                    PRECOMPILED_LOG(WARNING)
-                        << LOG_BADGE("PermissionPrecompiled")
-                        << LOG_DESC("Committee permission controlled by ChainGovernancePrecompiled")
-                        << LOG_KV("return", result);
-                    break;
-                }
-                auto condition = table->newCondition();
-                condition->EQ(SYS_AC_ADDRESS, addr);
-                auto entries = table->select(SYS_ACCESS_TABLE, condition);
-                if (entries->size() != 0u && (tableName == SYS_TABLES || tableName == SYS_CNS))
-                {  // committee
-                    result = CODE_OPERATOR_CANNOT_BE_COMMITTEE_MEMBER;
-                    if (g_BCOSConfig.version() >= V2_6_0)
-                    {
-                        result = CODE_COMMITTEE_MEMBER_CANNOT_BE_OPERATOR;
-                    }
-                    PRECOMPILED_LOG(WARNING)
-                        << LOG_BADGE("PermissionPrecompiled")
-                        << LOG_DESC("committee member should not have operator permission")
-                        << LOG_KV("account", addr)
-                        << LOG_KV("return", CODE_COMMITTEE_MEMBER_CANNOT_BE_OPERATOR);
-                    break;
-                }
+                result = CODE_COMMITTEE_PERMISSION;
+                PRECOMPILED_LOG(WARNING)
+                    << LOG_BADGE("PermissionPrecompiled")
+                    << LOG_DESC("Committee permission controlled by ChainGovernancePrecompiled")
+                    << LOG_KV("return", result);
+                break;
+            }
+            auto condition = table->newCondition();
+            condition->EQ(SYS_AC_ADDRESS, addr);
+            auto entries = table->select(SYS_ACCESS_TABLE, condition);
+            if (entries->size() != 0u && (tableName == SYS_TABLES || tableName == SYS_CNS))
+            {  // committee
+                result = CODE_COMMITTEE_MEMBER_CANNOT_BE_OPERATOR;
+
+                PRECOMPILED_LOG(WARNING)
+                    << LOG_BADGE("PermissionPrecompiled")
+                    << LOG_DESC("committee member should not have operator permission")
+                    << LOG_KV("account", addr)
+                    << LOG_KV("return", CODE_COMMITTEE_MEMBER_CANNOT_BE_OPERATOR);
+                break;
             }
             addPrefixToUserTable(tableName);
 
-            auto condition = table->newCondition();
+            condition = table->newCondition();
             condition->EQ(SYS_AC_ADDRESS, addr);
-            auto entries = table->select(tableName, condition);
+            entries = table->select(tableName, condition);
             if (entries->size() != 0u)
             {
                 PRECOMPILED_LOG(WARNING) << LOG_BADGE("PermissionPrecompiled")
@@ -164,16 +152,13 @@ PrecompiledExecResult::Ptr PermissionPrecompiled::call(
     {  // remove(string tableName,string addr)
         std::string tableName, addr;
         abi.abiOut(data, tableName, addr);
-        if (g_BCOSConfig.version() >= V2_5_0)
-        {
-            boost::to_lower(addr);
-        }
+        boost::to_lower(addr);
         int result = 0;
         Table::Ptr table = openTable(context, SYS_ACCESS_TABLE);
         auto condition = table->newCondition();
         condition->EQ(SYS_AC_ADDRESS, addr);
         auto entries = table->select(SYS_ACCESS_TABLE, condition);
-        if (g_BCOSConfig.version() >= V2_5_0 && tableName == SYS_ACCESS_TABLE)
+        if (tableName == SYS_ACCESS_TABLE)
         {
             result = CODE_COMMITTEE_PERMISSION;
             PRECOMPILED_LOG(WARNING)
@@ -181,8 +166,7 @@ PrecompiledExecResult::Ptr PermissionPrecompiled::call(
                 << LOG_DESC("Committee permission controlled by ChainGovernancePrecompiled")
                 << LOG_KV("return", result);
         }
-        else if (g_BCOSConfig.version() >= V2_6_0 && entries->size() != 0u &&
-                 (tableName == SYS_CONSENSUS || tableName == SYS_CONFIG))
+        else if (entries->size() != 0u && (tableName == SYS_CONSENSUS || tableName == SYS_CONFIG))
         {
             result = storage::CODE_NO_AUTHORIZED;
             PRECOMPILED_LOG(WARNING)
@@ -249,7 +233,7 @@ PrecompiledExecResult::Ptr PermissionPrecompiled::call(
                 result = CODE_CONTRACT_NOT_EXIST;
                 break;
             }
-            if (g_BCOSConfig.version() >= V2_5_0 && !checkPermission(context, tableName, origin))
+            if (!checkPermission(context, tableName, origin))
             {
                 PRECOMPILED_LOG(INFO) << LOG_BADGE("PermissionPrecompiled")
                                       << LOG_DESC("only deployer of contract can grantWrite")
@@ -263,11 +247,8 @@ PrecompiledExecResult::Ptr PermissionPrecompiled::call(
             entry->setField(SYS_AC_ADDRESS, addr);
             entry->setField(SYS_AC_ENABLENUM,
                 boost::lexical_cast<std::string>(context->blockInfo().number + 1));
-            auto accessOption = std::make_shared<AccessOptions>(origin);
-            if (g_BCOSConfig.version() >= V2_6_0)
-            {
-                accessOption = std::make_shared<AccessOptions>(origin, false);
-            }
+            auto accessOption = std::make_shared<AccessOptions>(origin, false);
+
             int count = table->insert(tableName, entry, accessOption);
             result = count;
             PRECOMPILED_LOG(INFO) << LOG_BADGE("PermissionPrecompiled grantWrite")
@@ -344,8 +325,7 @@ int PermissionPrecompiled::revokeWritePermission(
                                  << LOG_DESC("tableName and address does not exist");
         return result = CODE_TABLE_AND_ADDRESS_NOT_EXIST;
     }
-    if (g_BCOSConfig.version() >= V2_5_0 && _isContractTable &&
-        !checkPermission(context, tableName, origin))
+    if (_isContractTable && !checkPermission(context, tableName, origin))
     {
         PRECOMPILED_LOG(INFO) << LOG_BADGE("PermissionPrecompiled")
                               << LOG_DESC("only deployer of contract can revokeWrite")
@@ -354,7 +334,7 @@ int PermissionPrecompiled::revokeWritePermission(
         return storage::CODE_NO_AUTHORIZED;
     }
     auto accessOption = std::make_shared<AccessOptions>(origin);
-    if (g_BCOSConfig.version() >= V2_6_0 && _isContractTable)
+    if (_isContractTable)
     {
         accessOption = std::make_shared<AccessOptions>(origin, false);
     }

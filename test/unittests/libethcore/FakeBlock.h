@@ -132,14 +132,7 @@ public:
         BOOST_CHECK_THROW(m_block->decode(ref(result_bytes)), InvalidBlockFormat);
 
         result_bytes = FakeInvalidBlockData(2, size);
-        if (g_BCOSConfig.version() >= RC2_VERSION)
-        {
-            BOOST_CHECK_THROW(m_block->decode(ref(result_bytes)), InvalidBlockFormat);
-        }
-        else
-        {
-            BOOST_CHECK_THROW(m_block->decode(ref(result_bytes)), BadCast);
-        }
+        BOOST_CHECK_THROW(m_block->decode(ref(result_bytes)), InvalidBlockFormat);
     }
 
     /// fake block header

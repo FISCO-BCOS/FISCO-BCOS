@@ -43,22 +43,10 @@ void bcos::precompiled::getErrorCodeOut(bytes& out, int const& result)
         return;
     }
     out = abi.abiIn("", s256(result));
-    if (g_BCOSConfig.version() < RC2_VERSION)
-    {
-        out = abi.abiIn("", -result);
-    }
-    else if (g_BCOSConfig.version() == RC2_VERSION)
-    {
-        out = abi.abiIn("", u256(-result));
-    }
 }
 
 std::string bcos::precompiled::getTableName(const std::string& _tableName)
 {
-    if (g_BCOSConfig.version() < V2_2_0)
-    {
-        return USER_TABLE_PREFIX + _tableName;
-    }
     return USER_TABLE_PREFIX_SHORT + _tableName;
 }
 
@@ -71,50 +59,71 @@ std::string bcos::precompiled::getContractTableName(Address const& _contractAddr
 void bcos::precompiled::checkNameValidate(const string& tableName, string& keyField,
     vector<string>& valueFieldList, bool throwStorageException)
 {
-    if (g_BCOSConfig.version() >= V2_2_0)
-    {
-        set<string> valueFieldSet;
-        boost::trim(keyField);
-        valueFieldSet.insert(keyField);
-        vector<char> allowChar = {'$', '_', '@'};
-        std::string allowCharString = "{$, _, @}";
-        auto checkTableNameValidate = [allowChar, allowCharString, throwStorageException](
-                                          const string& tableName) {
-            size_t iSize = tableName.size();
-            for (size_t i = 0; i < iSize; i++)
+    set<string> valueFieldSet;
+    boost::trim(keyField);
+    valueFieldSet.insert(keyField);
+    vector<char> allowChar = {'$', '_', '@'};
+    std::string allowCharString = "{$, _, @}";
+    auto checkTableNameValidate = [allowChar, allowCharString, throwStorageException](
+                                      const string& tableName) {
+        size_t iSize = tableName.size();
+        for (size_t i = 0; i < iSize; i++)
+        {
+            if (!isalnum(tableName[i]) &&
+                (allowChar.end() == find(allowChar.begin(), allowChar.end(), tableName[i])))
             {
-                if (!isalnum(tableName[i]) &&
-                    (allowChar.end() == find(allowChar.begin(), allowChar.end(), tableName[i])))
+                std::string errorMessage =
+                    "Invalid table name \"" + tableName +
+                    "\", the table name must be letters or numbers, and only supports \"" +
+                    allowCharString + "\" as special character set";
+                STORAGE_LOG(ERROR) << LOG_DESC(errorMessage);
+                // Note: the StorageException and PrecompiledException content can't be modified
+                // at will for the information will be write to the blockchain
+                if (throwStorageException)
                 {
-                    std::string errorMessage =
-                        "Invalid table name \"" + tableName +
-                        "\", the table name must be letters or numbers, and only supports \"" +
-                        allowCharString + "\" as special character set";
-                    STORAGE_LOG(ERROR) << LOG_DESC(errorMessage);
-                    // Note: the StorageException and PrecompiledException content can't be modified
-                    // at will for the information will be write to the blockchain
-                    if (throwStorageException)
-                    {
-                        BOOST_THROW_EXCEPTION(
-                            StorageException(CODE_TABLE_INVALIDATE_FIELD, errorMessage));
-                    }
-                    else
-                    {
-                        BOOST_THROW_EXCEPTION(
-                            PrecompiledException(string("invalid tablename:") + tableName));
-                    }
+                    BOOST_THROW_EXCEPTION(
+                        StorageException(CODE_TABLE_INVALIDATE_FIELD, errorMessage));
+                }
+                else
+                {
+                    BOOST_THROW_EXCEPTION(
+                        PrecompiledException(string("invalid tablename:") + tableName));
                 }
             }
-        };
-        auto checkFieldNameValidate = [allowChar, allowCharString, throwStorageException](
-                                          const string& tableName, const string& fieldName) {
-            if (fieldName.size() == 0 || fieldName[0] == '_')
+        }
+    };
+    auto checkFieldNameValidate = [allowChar, allowCharString, throwStorageException](
+                                      const string& tableName, const string& fieldName) {
+        if (fieldName.size() == 0 || fieldName[0] == '_')
+        {
+            string errorMessage = "Invalid field \"" + fieldName +
+                                  "\", the size of the field must be larger than 0 and the "
+                                  "field can't start with \"_\"";
+            STORAGE_LOG(ERROR) << LOG_DESC("error key") << LOG_KV("field name", fieldName)
+                               << LOG_KV("table name", tableName);
+            if (throwStorageException)
             {
-                string errorMessage = "Invalid field \"" + fieldName +
-                                      "\", the size of the field must be larger than 0 and the "
-                                      "field can't start with \"_\"";
-                STORAGE_LOG(ERROR) << LOG_DESC("error key") << LOG_KV("field name", fieldName)
-                                   << LOG_KV("table name", tableName);
+                BOOST_THROW_EXCEPTION(StorageException(CODE_TABLE_INVALIDATE_FIELD, errorMessage));
+            }
+            else
+            {
+                BOOST_THROW_EXCEPTION(PrecompiledException(string("invalid field:") + fieldName));
+            }
+        }
+        size_t iSize = fieldName.size();
+        for (size_t i = 0; i < iSize; i++)
+        {
+            if (!isalnum(fieldName[i]) &&
+                (allowChar.end() == find(allowChar.begin(), allowChar.end(), fieldName[i])))
+            {
+                std::string errorMessage =
+                    "Invalid field \"" + fieldName +
+                    "\", the field name must be letters or numbers, and only supports \"" +
+                    allowCharString + "\" as special character set";
+
+                STORAGE_LOG(ERROR)
+                    << LOG_DESC("invalid fieldname") << LOG_KV("field name", fieldName)
+                    << LOG_KV("table name", tableName);
                 if (throwStorageException)
                 {
                     BOOST_THROW_EXCEPTION(
@@ -126,58 +135,31 @@ void bcos::precompiled::checkNameValidate(const string& tableName, string& keyFi
                         PrecompiledException(string("invalid field:") + fieldName));
                 }
             }
-            size_t iSize = fieldName.size();
-            for (size_t i = 0; i < iSize; i++)
-            {
-                if (!isalnum(fieldName[i]) &&
-                    (allowChar.end() == find(allowChar.begin(), allowChar.end(), fieldName[i])))
-                {
-                    std::string errorMessage =
-                        "Invalid field \"" + fieldName +
-                        "\", the field name must be letters or numbers, and only supports \"" +
-                        allowCharString + "\" as special character set";
-
-                    STORAGE_LOG(ERROR)
-                        << LOG_DESC("invalid fieldname") << LOG_KV("field name", fieldName)
-                        << LOG_KV("table name", tableName);
-                    if (throwStorageException)
-                    {
-                        BOOST_THROW_EXCEPTION(
-                            StorageException(CODE_TABLE_INVALIDATE_FIELD, errorMessage));
-                    }
-                    else
-                    {
-                        BOOST_THROW_EXCEPTION(
-                            PrecompiledException(string("invalid field:") + fieldName));
-                    }
-                }
-            }
-        };
-
-        checkTableNameValidate(tableName);
-        checkFieldNameValidate(tableName, keyField);
-
-        for (auto& valueField : valueFieldList)
-        {
-            auto ret = valueFieldSet.insert(valueField);
-            if (!ret.second)
-            {
-                STORAGE_LOG(ERROR)
-                    << LOG_DESC("dumplicate field") << LOG_KV("field name", valueField)
-                    << LOG_KV("table name", tableName);
-                if (throwStorageException)
-                {
-                    BOOST_THROW_EXCEPTION(StorageException(
-                        CODE_TABLE_DUPLICATE_FIELD, string("duplicate field:") + valueField));
-                }
-                else
-                {
-                    BOOST_THROW_EXCEPTION(
-                        PrecompiledException(string("dumplicate field:") + valueField));
-                }
-            }
-            checkFieldNameValidate(tableName, valueField);
         }
+    };
+
+    checkTableNameValidate(tableName);
+    checkFieldNameValidate(tableName, keyField);
+
+    for (auto& valueField : valueFieldList)
+    {
+        auto ret = valueFieldSet.insert(valueField);
+        if (!ret.second)
+        {
+            STORAGE_LOG(ERROR) << LOG_DESC("dumplicate field") << LOG_KV("field name", valueField)
+                               << LOG_KV("table name", tableName);
+            if (throwStorageException)
+            {
+                BOOST_THROW_EXCEPTION(StorageException(
+                    CODE_TABLE_DUPLICATE_FIELD, string("duplicate field:") + valueField));
+            }
+            else
+            {
+                BOOST_THROW_EXCEPTION(
+                    PrecompiledException(string("dumplicate field:") + valueField));
+            }
+        }
+        checkFieldNameValidate(tableName, valueField);
     }
 }
 
@@ -216,15 +198,7 @@ bcos::precompiled::ContractStatus bcos::precompiled::getContractStatus(
     auto codeHashEntries =
         table->select(bcos::storagestate::ACCOUNT_CODE_HASH, table->newCondition());
     h256 codeHash;
-    if (g_BCOSConfig.version() >= V2_5_0)
-    {
-        codeHash = h256(codeHashEntries->get(0)->getFieldBytes(bcos::storagestate::STORAGE_VALUE));
-    }
-    else
-    {
-        codeHash = h256(
-            *fromHexString(codeHashEntries->get(0)->getField(bcos::storagestate::STORAGE_VALUE)));
-    }
+    codeHash = h256(codeHashEntries->get(0)->getFieldBytes(bcos::storagestate::STORAGE_VALUE));
 
     if (EmptyHash == codeHash)
     {

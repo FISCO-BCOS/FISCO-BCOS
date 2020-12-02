@@ -404,15 +404,6 @@ std::pair<int64_t, int64_t> BlockChainImp::totalTransactionCount()
             std::string strCount = entry->getField(SYS_VALUE);
             count = lexical_cast<int64_t>(strCount);
             number = entry->num();
-            if (g_BCOSConfig.version() <= RC2_VERSION)
-            {
-                std::string strNumber = entry->getField(NUM_FIELD);
-                if (!strNumber.empty())
-                {
-                    // Bugfix: rc2 leveldb has NUM_FIELD field but rc2 amdb is not
-                    number = lexical_cast<int64_t>(strNumber);
-                }
-            }
         }
     }
     return std::make_pair(count, number);
@@ -494,7 +485,7 @@ void BlockChainImp::initGenesisWorkingSealers(bcos::storage::Table::Ptr _consTab
     auto sealerList = _initParam->mutableConsensusParam().sealerList;
     bool rPBFTEnabled = (bcos::stringCmpIgnoreCase(
                              _initParam->mutableConsensusParam().consensusType, "rpbft") == 0);
-    if (!rPBFTEnabled || g_BCOSConfig.version() < V2_6_0)
+    if (!rPBFTEnabled)
     {
         return;
     }
@@ -592,16 +583,13 @@ bool BlockChainImp::checkAndBuildGenesisBlock(
                                      << LOG_KV(SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM,
                                             _initParam->mutableConsensusParam().epochBlockNum);
             }
-            if (g_BCOSConfig.version() >= V2_6_0)
-            {
-                // init consensus time
-                initSystemConfig(tb, SYSTEM_KEY_CONSENSUS_TIMEOUT,
-                    boost::lexical_cast<std::string>(
-                        _initParam->mutableConsensusParam().consensusTimeout));
-                BLOCKCHAIN_LOG(INFO) << LOG_DESC("init consensus timeout")
-                                     << LOG_KV(SYSTEM_KEY_CONSENSUS_TIMEOUT,
-                                            _initParam->mutableConsensusParam().consensusTimeout);
-            }
+            // init consensus time
+            initSystemConfig(tb, SYSTEM_KEY_CONSENSUS_TIMEOUT,
+                boost::lexical_cast<std::string>(
+                    _initParam->mutableConsensusParam().consensusTimeout));
+            BLOCKCHAIN_LOG(INFO) << LOG_DESC("init consensus timeout")
+                                 << LOG_KV(SYSTEM_KEY_CONSENSUS_TIMEOUT,
+                                        _initParam->mutableConsensusParam().consensusTimeout);
         }
 
         tb = mtb->openTable(SYS_CONSENSUS);
@@ -661,20 +649,8 @@ bool BlockChainImp::checkAndBuildGenesisBlock(
             {
                 boost::split(s, extraData, boost::is_any_of("-"), boost::token_compress_on);
                 _initParam->mutableConsensusParam().consensusType = s[2];
-                if (g_BCOSConfig.version() <= RC2_VERSION)
-                {
-                    _initParam->mutableStorageParam().type = s[3];
-                    _initParam->mutableStateParam().type = s[4];
-                }
-                else
-                {
-                    _initParam->mutableStateParam().type = s[3];
-                }
-                if (g_BCOSConfig.version() >= V2_4_0)
-                {
-                    _initParam->mutableGenesisParam().evmFlags =
-                        boost::lexical_cast<VMFlagType>(s[4]);
-                }
+                _initParam->mutableStateParam().type = s[3];
+                _initParam->mutableGenesisParam().evmFlags = boost::lexical_cast<VMFlagType>(s[4]);
                 BLOCKCHAIN_LOG(INFO)
                     << LOG_BADGE("checkAndBuildGenesisBlock")
                     << LOG_DESC("Load genesis config from extraData")
@@ -1001,12 +977,6 @@ std::pair<LocalisedTransaction::Ptr,
     std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
 BlockChainImp::getTransactionByHashWithProof(bcos::h256 const& _txHash)
 {
-    if (g_BCOSConfig.version() < V2_2_0)
-    {
-        BLOCKCHAIN_LOG(ERROR) << "getTransactionByHashWithProof only support after by v2.2.0";
-        BOOST_THROW_EXCEPTION(
-            MethodNotSupport() << errinfo_comment("method not support in this version"));
-    }
     auto localizedTx = std::make_shared<bcos::eth::LocalisedTransaction>(h256(0), -1, -1);
     std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>> merkleProof;
     std::pair<std::shared_ptr<bcos::eth::Block>, std::string> blockInfoWithTxIndex;
@@ -1147,14 +1117,6 @@ BlockChainImp::getTransactionReceiptByHashWithProof(
     std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>> merkleProof;
 
     std::pair<std::shared_ptr<bcos::eth::Block>, std::string> blockInfoWithTxIndex;
-
-    if (g_BCOSConfig.version() < V2_2_0)
-    {
-        BLOCKCHAIN_LOG(ERROR)
-            << "getTransactionReceiptByHashWithProof only support after by v2.2.0";
-        BOOST_THROW_EXCEPTION(
-            MethodNotSupport() << errinfo_comment("method not support in this version"));
-    }
     auto emptyReceipt = std::make_shared<LocalisedTransactionReceipt>(
         TransactionReceipt(), h256(0), h256(0), -1, Address(), Address(), -1, 0);
     if (!getBlockAndIndexByTxHash(_txHash, blockInfoWithTxIndex))

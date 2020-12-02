@@ -130,14 +130,7 @@ BOOST_AUTO_TEST_CASE(ErrorFunc)
     bytes out = callResult->execResult();
     s256 count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    if (g_BCOSConfig.version() > RC2_VERSION)
-    {
-        BOOST_TEST(count == CODE_UNKNOW_FUNCTION_CALL);
-    }
-    else
-    {
-        BOOST_TEST(count == -CODE_UNKNOW_FUNCTION_CALL);
-    }
+    BOOST_TEST(count == CODE_UNKNOW_FUNCTION_CALL);
 }
 
 BOOST_AUTO_TEST_CASE(InvalidInputs)
@@ -150,15 +143,7 @@ BOOST_AUTO_TEST_CASE(InvalidInputs)
     bytes out = callResult->execResult();
     s256 count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    if (g_BCOSConfig.version() > RC2_VERSION)
-    {
-        BOOST_TEST(count == CODE_INVALID_CIPHERS);
-    }
-    else
-    {
-        BOOST_TEST(count == -CODE_INVALID_CIPHERS);
-    }
-
+    BOOST_TEST(count == CODE_INVALID_CIPHERS);
     // situation2
     in = abi.abiIn("paillierAdd(string,string)", std::string("1111FFE22AE3FFE2"),
         std::string("2AE3FFE22AE3FFE2"));
@@ -166,14 +151,7 @@ BOOST_AUTO_TEST_CASE(InvalidInputs)
     out = callResult->execResult();
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    if (g_BCOSConfig.version() > RC2_VERSION)
-    {
-        BOOST_TEST(count == CODE_INVALID_CIPHERS);
-    }
-    else
-    {
-        BOOST_TEST(count == -CODE_INVALID_CIPHERS);
-    }
+    BOOST_TEST(count == CODE_INVALID_CIPHERS);
 
     // situation3
     std::string cipher3 =
@@ -191,14 +169,7 @@ BOOST_AUTO_TEST_CASE(InvalidInputs)
     out = callResult->execResult();
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    if (g_BCOSConfig.version() > RC2_VERSION)
-    {
-        BOOST_TEST(count == CODE_INVALID_CIPHERS);
-    }
-    else
-    {
-        BOOST_TEST(count == -CODE_INVALID_CIPHERS);
-    }
+    BOOST_TEST(count == CODE_INVALID_CIPHERS);
 
     // situation4
     std::string cipher4 =
@@ -220,14 +191,7 @@ BOOST_AUTO_TEST_CASE(InvalidInputs)
     out = callResult->execResult();
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    if (g_BCOSConfig.version() > RC2_VERSION)
-    {
-        BOOST_TEST(count == CODE_INVALID_CIPHERS);
-    }
-    else
-    {
-        BOOST_TEST(count == -CODE_INVALID_CIPHERS);
-    }
+    BOOST_TEST(count == CODE_INVALID_CIPHERS);
 
     // situation5
     std::string cipher51 =
@@ -255,14 +219,7 @@ BOOST_AUTO_TEST_CASE(InvalidInputs)
     out = callResult->execResult();
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    if (g_BCOSConfig.version() > RC2_VERSION)
-    {
-        BOOST_TEST(count == CODE_INVALID_CIPHERS);
-    }
-    else
-    {
-        BOOST_TEST(count == -CODE_INVALID_CIPHERS);
-    }
+    BOOST_TEST(count == CODE_INVALID_CIPHERS);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

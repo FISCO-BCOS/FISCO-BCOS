@@ -237,8 +237,6 @@ private:
 
     void checkRequest(int _groupID);
     void checkSyncStatus(int _groupID);
-
-    void checkNodeVersionForGroupMgr(const char* _methodName);
     bool checkParamsForGenerateGroup(
         const Json::Value& _params, ledger::GroupParams& _groupParams, Json::Value& _response);
     bool checkGroupIDForGroupMgr(int _groupID, Json::Value& _response);

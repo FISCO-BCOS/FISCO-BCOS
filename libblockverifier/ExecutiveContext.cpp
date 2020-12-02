@@ -75,19 +75,9 @@ bcos::precompiled::PrecompiledExecResult::Ptr ExecutiveContext::call(
     catch (bcos::storage::StorageException const& e)
     {
         // throw PrecompiledError when supported_version < v2.7.0
-        if (g_BCOSConfig.version() < V2_7_0)
-        {
-            EXECUTIVECONTEXT_LOG(ERROR) << "StorageException" << LOG_KV("address", address)
-                                        << LOG_KV("errorCode", e.errorCode());
-            throw bcos::eth::PrecompiledError();
-        }
-        else
-        {
-            bcos::precompiled::PrecompiledException precompiledException(e);
-            EXECUTIVECONTEXT_LOG(ERROR)
-                << LOG_DESC("precompiledException") << LOG_KV("msg", e.what());
-            throw precompiledException;
-        }
+        bcos::precompiled::PrecompiledException precompiledException(e);
+        EXECUTIVECONTEXT_LOG(ERROR) << LOG_DESC("precompiledException") << LOG_KV("msg", e.what());
+        throw precompiledException;
     }
     catch (std::exception& e)
     {

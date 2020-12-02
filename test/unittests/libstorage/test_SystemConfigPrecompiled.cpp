@@ -128,28 +128,14 @@ BOOST_AUTO_TEST_CASE(InvalidValue)
     bytes out = callResult->execResult();
     s256 count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    if (g_BCOSConfig.version() > RC2_VERSION)
-    {
-        BOOST_TEST(count == CODE_INVALID_CONFIGURATION_VALUES);
-    }
-    else
-    {
-        BOOST_TEST(count == -CODE_INVALID_CONFIGURATION_VALUES);
-    }
+    BOOST_TEST(count == CODE_INVALID_CONFIGURATION_VALUES);
 
     in = abi.abiIn("setValueByKey(string,string)", std::string("tx_count_limit"), std::string("0"));
     callResult = systemConfigPrecompiled->call(context, bytesConstRef(&in));
     out = callResult->execResult();
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    if (g_BCOSConfig.version() > RC2_VERSION)
-    {
-        BOOST_TEST(count == CODE_INVALID_CONFIGURATION_VALUES);
-    }
-    else
-    {
-        BOOST_TEST(count == -CODE_INVALID_CONFIGURATION_VALUES);
-    }
+    BOOST_TEST(count == CODE_INVALID_CONFIGURATION_VALUES);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

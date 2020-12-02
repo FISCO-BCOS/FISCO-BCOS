@@ -315,40 +315,19 @@ BOOST_AUTO_TEST_CASE(TestErrorNodeID)
     bytes out = callResult->execResult();
     s256 count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    if (g_BCOSConfig.version() > RC2_VERSION)
-    {
-        BOOST_TEST(count == CODE_INVALID_NODEID);
-    }
-    else
-    {
-        BOOST_TEST(count == -CODE_INVALID_NODEID);
-    }
+    BOOST_TEST(count == CODE_INVALID_NODEID);
     in = abi.abiIn("addObserver(string)", nodeID);
     callResult = consensusPrecompiled->call(context, bytesConstRef(&in));
     out = callResult->execResult();
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    if (g_BCOSConfig.version() > RC2_VERSION)
-    {
-        BOOST_TEST(count == CODE_INVALID_NODEID);
-    }
-    else
-    {
-        BOOST_TEST(count == -CODE_INVALID_NODEID);
-    }
+    BOOST_TEST(count == CODE_INVALID_NODEID);
     in = abi.abiIn("remove(string)", nodeID);
     callResult = consensusPrecompiled->call(context, bytesConstRef(&in));
     out = callResult->execResult();
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    if (g_BCOSConfig.version() > RC2_VERSION)
-    {
-        BOOST_TEST(count == CODE_INVALID_NODEID);
-    }
-    else
-    {
-        BOOST_TEST(count == -CODE_INVALID_NODEID);
-    }
+    BOOST_TEST(count == CODE_INVALID_NODEID);
 }
 
 BOOST_AUTO_TEST_CASE(TestRemoveLastSealer)
@@ -382,27 +361,13 @@ BOOST_AUTO_TEST_CASE(TestRemoveLastSealer)
     out = callResult->execResult();
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    if (g_BCOSConfig.version() > RC2_VERSION)
-    {
-        BOOST_TEST(count == CODE_LAST_SEALER);
-    }
-    else
-    {
-        BOOST_TEST(count == -CODE_LAST_SEALER);
-    }
+    BOOST_TEST(count == CODE_LAST_SEALER);
     in = abi.abiIn("addObserver(string)", nodeID1);
     callResult = consensusPrecompiled->call(context, bytesConstRef(&in));
     out = callResult->execResult();
     count = 1;
     abi.abiOut(bytesConstRef(&out), count);
-    if (g_BCOSConfig.version() > RC2_VERSION)
-    {
-        BOOST_TEST(count == CODE_LAST_SEALER);
-    }
-    else
-    {
-        BOOST_TEST(count == -CODE_LAST_SEALER);
-    }
+    BOOST_TEST(count == CODE_LAST_SEALER);
 }
 
 BOOST_AUTO_TEST_CASE(errFunc)

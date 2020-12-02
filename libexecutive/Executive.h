@@ -149,8 +149,6 @@ public:
         u256 const& _gasPrice, bytesConstRef _txData, u256 const& _gas);
     bool call(
         bcos::executive::CallParameters const& _cp, u256 const& _gasPrice, Address const& _origin);
-    bool callRC2(
-        bcos::executive::CallParameters const& _cp, u256 const& _gasPrice, Address const& _origin);
     /// Finalise an operation through accruing the substate into the parent context.
     void accrueSubState(bcos::executive::SubState& _parentContext);
 

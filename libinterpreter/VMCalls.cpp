@@ -233,11 +233,6 @@ bool VM::caseCallSetup(evmc_message& o_msg, bytesRef& o_output)
 
     evmc_address destination = toEvmC(asAddress(m_SP[1]));
     int destinationExists = 1;
-    if (g_BCOSConfig.version() < V2_5_0)
-    {
-        destinationExists = m_context->fn_table->account_exists(m_context, &destination);
-    }
-
     if (m_OP == Instruction::CALL && !destinationExists)
     {
         if (m_SP[2] > 0 || m_rev < EVMC_SPURIOUS_DRAGON)

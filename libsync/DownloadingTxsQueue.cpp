@@ -112,23 +112,10 @@ void DownloadingTxsQueue::pop2TxPool(
             auto txs = std::make_shared<bcos::eth::Transactions>();
             std::shared_ptr<DownloadTxsShard> txsShard = (*localBuffer)[i];
             // TODO drop by Txs Shard
-            if (g_BCOSConfig.version() >= RC2_VERSION)
-            {
-                RLP const& txsBytesRLP = RLP(ref(txsShard->txsBytes))[0];
-                bcos::eth::TxsParallelParser::decode(
-                    txs, txsBytesRLP.toBytesConstRef(), _checkSig, true);
-            }
-            else
-            {
-                RLP const& txsBytesRLP = RLP(ref(txsShard->txsBytes));
-                unsigned txNum = txsBytesRLP.itemCount();
-                txs->resize(txNum);
-                for (unsigned j = 0; j < txNum; j++)
-                {
-                    (*txs)[j] = std::make_shared<bcos::eth::Transaction>();
-                    (*txs)[j]->decode(txsBytesRLP[j]);
-                }
-            }
+
+            RLP const& txsBytesRLP = RLP(ref(txsShard->txsBytes))[0];
+            bcos::eth::TxsParallelParser::decode(
+                txs, txsBytesRLP.toBytesConstRef(), _checkSig, true);
             decode_time_cost += (utcTime() - record_time);
             record_time = utcTime();
 

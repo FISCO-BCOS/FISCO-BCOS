@@ -97,15 +97,7 @@ BOOST_AUTO_TEST_CASE(call_afterBlock)
     callResult = tableFactoryPrecompiled->call(context, bytesConstRef(&param));
     out = callResult->execResult();
     abi.abiOut(&out, errCode);
-    if (g_BCOSConfig.version() > RC2_VERSION)
-    {
-        BOOST_TEST(errCode == CODE_TABLE_NAME_ALREADY_EXIST);
-    }
-    else
-    {
-        BOOST_TEST(errCode == -CODE_TABLE_NAME_ALREADY_EXIST);
-    }
-
+    BOOST_TEST(errCode == CODE_TABLE_NAME_ALREADY_EXIST);
     // openTable not exist
     param.clear();
     out.clear();

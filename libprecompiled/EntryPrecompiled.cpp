@@ -45,7 +45,7 @@ std::string setInt(bytesConstRef _data, std::string& _key, bool _isUint = false)
     bcos::eth::ContractABI abi;
     std::string value;
 
-    if (_isUint || g_BCOSConfig.version() <= RC2_VERSION)
+    if (_isUint)
     {
         u256 num;
         abi.abiOut(_data, _key, num);

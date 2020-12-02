@@ -70,28 +70,15 @@ inline PROTOCOL_ID getGroupProtoclID(GROUP_ID groupID, MODULE_ID moduleID)
 {
     if (groupID < 0)
         return 0;
-    if (g_BCOSConfig.version() <= RC1_VERSION)
-    {
-        return (groupID << 8) | moduleID;
-    }
     return (groupID << (8 * sizeof(MODULE_ID))) | moduleID;
 }
 
 inline std::pair<GROUP_ID, MODULE_ID> getGroupAndProtocol(PROTOCOL_ID id)
 {
     ///< The base should be 1, not 2.
-    if (g_BCOSConfig.version() <= RC1_VERSION)
-    {
-        int32_t high = (1 << 8) - 1;
-        int32_t low = (1 << 8) - 1;
-        return std::make_pair((id >> 8) & high, id & low);
-    }
-    else
-    {
-        int32_t high = (1 << (8 * sizeof(GROUP_ID))) - 1;
-        int32_t low = (1 << (8 * sizeof(MODULE_ID))) - 1;
-        return std::make_pair((id >> (8 * sizeof(MODULE_ID))) & high, id & low);
-    }
+    int32_t high = (1 << (8 * sizeof(GROUP_ID))) - 1;
+    int32_t low = (1 << (8 * sizeof(MODULE_ID))) - 1;
+    return std::make_pair((id >> (8 * sizeof(MODULE_ID))) & high, id & low);
 }
 
 }  // namespace eth

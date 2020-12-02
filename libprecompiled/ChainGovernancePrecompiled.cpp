@@ -149,7 +149,7 @@ PrecompiledExecResult::Ptr ChainGovernancePrecompiled::call(
         abi.abiOut(data, user, weight);
         std::string weightStr = boost::lexical_cast<string>(weight);
         // check the weight, must be greater than 0
-        if (g_BCOSConfig.version() >= V2_7_0 && weight <= 0)
+        if (weight <= 0)
         {
             CHAIN_GOVERNANCE_LOG(ERROR)
                 << LOG_DESC("updateCommitteeMemberWeight: invalid weight, must be greater than 0")
@@ -661,14 +661,7 @@ int ChainGovernancePrecompiled::verifyAndRecord(
             entry->setField(CGP_COMMITTEE_TABLE_ORIGIN, _origin);
             int count = committeeTable->update(CGP_AUTH_THRESHOLD, entry,
                 committeeTable->newCondition(), make_shared<AccessOptions>(Address(), false));
-            if (g_BCOSConfig.version() >= V2_7_0)
-            {
-                deleteUsedVotes(CGP_UPDATE_AUTH_THRESHOLD, value);
-            }
-            else
-            {
-                deleteUsedVotes(_user + CGP_WEIGTH_SUFFIX, value);
-            }
+            deleteUsedVotes(CGP_UPDATE_AUTH_THRESHOLD, value);
             return count;
         }
         break;

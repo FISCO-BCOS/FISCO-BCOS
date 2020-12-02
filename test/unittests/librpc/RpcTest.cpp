@@ -134,33 +134,16 @@ BOOST_AUTO_TEST_CASE(SM_testGetBlockByHash)
     BOOST_CHECK(response["gasLimit"].asString() == "0x9");
     BOOST_CHECK(response["gasUsed"].asString() == "0x8");
     BOOST_CHECK(response["timestamp"].asString() == "0x9");
-
-    if (g_BCOSConfig.version() == RC1_VERSION)
-    {
-        BOOST_CHECK_EQUAL(response["transactions"][0]["hash"].asString(),
-            "0x9319b663d2982b6d3894b455757843b5b68ca84a94356eebccdfa6d1eb34d680");
-        BOOST_CHECK(response["transactions"][0]["to"].asString() ==
-                    "0xd6f1a71052366dbae2f7ab2d5d5845e77965cf0d");
-        BOOST_CHECK_EQUAL(response["transactions"][0]["from"].asString(),
-            "0xb5e55058e234c6a58cde2d0f128546d31ea80c1d");
-        BOOST_CHECK(response["transactions"][0]["gas"].asString() == "0x9184e729fff");
-        BOOST_CHECK(response["transactions"][0]["gasPrice"].asString() == "0x174876e7ff");
-        BOOST_CHECK_EQUAL(response["transactions"][0]["nonce"].asString(),
-            "0x65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d144");
-    }
-    else
-    {
-        BOOST_CHECK_EQUAL(response["transactions"][0]["hash"].asString(),
-            "0xe1054f38907ab3bef251caf8cbd8b25e779a40445b8dd4fcf15fce917d3e4ebe");
-        BOOST_CHECK_EQUAL(response["transactions"][0]["to"].asString(),
-            "0xbab78cea98af2320ad4ee81bba8a7473e0c8c48d");
-        BOOST_CHECK_EQUAL(response["transactions"][0]["from"].asString(),
-            "0x1a3fc157bd47c3fc2e260b34abbf481730d0f80f");
-        BOOST_CHECK_EQUAL(response["transactions"][0]["gas"].asString(), "0xb2d05e00");
-        BOOST_CHECK_EQUAL(response["transactions"][0]["gasPrice"].asString(), "0x11e1a300");
-        BOOST_CHECK_EQUAL(response["transactions"][0]["nonce"].asString(),
-            "0x3eebc46c9c0e3b84799097c5a6ccd6657a9295c11270407707366d0750fcd59");
-    }
+    BOOST_CHECK_EQUAL(response["transactions"][0]["hash"].asString(),
+        "0xe1054f38907ab3bef251caf8cbd8b25e779a40445b8dd4fcf15fce917d3e4ebe");
+    BOOST_CHECK_EQUAL(
+        response["transactions"][0]["to"].asString(), "0xbab78cea98af2320ad4ee81bba8a7473e0c8c48d");
+    BOOST_CHECK_EQUAL(response["transactions"][0]["from"].asString(),
+        "0x1a3fc157bd47c3fc2e260b34abbf481730d0f80f");
+    BOOST_CHECK_EQUAL(response["transactions"][0]["gas"].asString(), "0xb2d05e00");
+    BOOST_CHECK_EQUAL(response["transactions"][0]["gasPrice"].asString(), "0x11e1a300");
+    BOOST_CHECK_EQUAL(response["transactions"][0]["nonce"].asString(),
+        "0x3eebc46c9c0e3b84799097c5a6ccd6657a9295c11270407707366d0750fcd59");
 
     BOOST_CHECK(response["transactions"][0]["value"].asString() == "0x0");
     BOOST_CHECK(response["transactions"][0]["blockHash"].asString() ==
@@ -169,17 +152,8 @@ BOOST_AUTO_TEST_CASE(SM_testGetBlockByHash)
     BOOST_CHECK(response["transactions"][0]["blockNumber"].asString() == "0x0");
 
     response = rpc->getBlockByHash(groupId, blockHash, false);
-    if (g_BCOSConfig.version() == RC1_VERSION)
-    {
-        BOOST_CHECK_EQUAL(response["transactions"][0].asString(),
-            "0x9319b663d2982b6d3894b455757843b5b68ca84a94356eebccdfa6d1eb34d680");
-    }
-    else
-    {
-        BOOST_CHECK_EQUAL(response["transactions"][0].asString(),
-            "0xe1054f38907ab3bef251caf8cbd8b25e779a40445b8dd4fcf15fce917d3e4ebe");
-    }
-
+    BOOST_CHECK_EQUAL(response["transactions"][0].asString(),
+        "0xe1054f38907ab3bef251caf8cbd8b25e779a40445b8dd4fcf15fce917d3e4ebe");
     BOOST_CHECK_THROW(rpc->getBlockByHash(invalidGroup, blockHash, false), JsonRpcException);
     blockHash = "0x9319b663d2982b6d3894b455757843b5b68ca84a94356eebccdfa6d1eb34d680";
     BOOST_CHECK_THROW(rpc->getBlockByHash(groupId, blockHash, false), JsonRpcException);
@@ -196,33 +170,16 @@ BOOST_AUTO_TEST_CASE(SM_getBlockByNumber)
     BOOST_CHECK(response["gasLimit"].asString() == "0x9");
     BOOST_CHECK(response["gasUsed"].asString() == "0x8");
     BOOST_CHECK(response["timestamp"].asString() == "0x9");
-
-    if (g_BCOSConfig.version() == RC1_VERSION)
-    {
-        BOOST_CHECK_EQUAL(response["transactions"][0]["hash"].asString(),
-            "0x9319b663d2982b6d3894b455757843b5b68ca84a94356eebccdfa6d1eb34d680");
-        BOOST_CHECK(response["transactions"][0]["to"].asString() ==
-                    "0xd6f1a71052366dbae2f7ab2d5d5845e77965cf0d");
-        BOOST_CHECK_EQUAL(response["transactions"][0]["from"].asString(),
-            "0xb5e55058e234c6a58cde2d0f128546d31ea80c1d");
-        BOOST_CHECK(response["transactions"][0]["gas"].asString() == "0x9184e729fff");
-        BOOST_CHECK(response["transactions"][0]["gasPrice"].asString() == "0x174876e7ff");
-        BOOST_CHECK_EQUAL(response["transactions"][0]["nonce"].asString(),
-            "0x65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d144");
-    }
-    else
-    {
-        BOOST_CHECK_EQUAL(response["transactions"][0]["hash"].asString(),
-            "0xe1054f38907ab3bef251caf8cbd8b25e779a40445b8dd4fcf15fce917d3e4ebe");
-        BOOST_CHECK_EQUAL(response["transactions"][0]["to"].asString(),
-            "0xbab78cea98af2320ad4ee81bba8a7473e0c8c48d");
-        BOOST_CHECK_EQUAL(response["transactions"][0]["from"].asString(),
-            "0x1a3fc157bd47c3fc2e260b34abbf481730d0f80f");
-        BOOST_CHECK_EQUAL(response["transactions"][0]["gas"].asString(), "0xb2d05e00");
-        BOOST_CHECK_EQUAL(response["transactions"][0]["gasPrice"].asString(), "0x11e1a300");
-        BOOST_CHECK_EQUAL(response["transactions"][0]["nonce"].asString(),
-            "0x3eebc46c9c0e3b84799097c5a6ccd6657a9295c11270407707366d0750fcd59");
-    }
+    BOOST_CHECK_EQUAL(response["transactions"][0]["hash"].asString(),
+        "0xe1054f38907ab3bef251caf8cbd8b25e779a40445b8dd4fcf15fce917d3e4ebe");
+    BOOST_CHECK_EQUAL(
+        response["transactions"][0]["to"].asString(), "0xbab78cea98af2320ad4ee81bba8a7473e0c8c48d");
+    BOOST_CHECK_EQUAL(response["transactions"][0]["from"].asString(),
+        "0x1a3fc157bd47c3fc2e260b34abbf481730d0f80f");
+    BOOST_CHECK_EQUAL(response["transactions"][0]["gas"].asString(), "0xb2d05e00");
+    BOOST_CHECK_EQUAL(response["transactions"][0]["gasPrice"].asString(), "0x11e1a300");
+    BOOST_CHECK_EQUAL(response["transactions"][0]["nonce"].asString(),
+        "0x3eebc46c9c0e3b84799097c5a6ccd6657a9295c11270407707366d0750fcd59");
     BOOST_CHECK(response["transactions"][0]["value"].asString() == "0x0");
     BOOST_CHECK_EQUAL(response["transactions"][0]["blockHash"].asString(),
         "0xa5529e6035e28f69977bb893888d338b9f76f023124216484e4056219d4e7e68");
@@ -230,16 +187,8 @@ BOOST_AUTO_TEST_CASE(SM_getBlockByNumber)
     BOOST_CHECK(response["transactions"][0]["blockNumber"].asString() == "0x0");
 
     response = rpc->getBlockByNumber(groupId, "0x0", false);
-    if (g_BCOSConfig.version() == RC1_VERSION)
-    {
-        BOOST_CHECK_EQUAL(response["transactions"][0].asString(),
-            "0x9319b663d2982b6d3894b455757843b5b68ca84a94356eebccdfa6d1eb34d680");
-    }
-    else
-    {
-        BOOST_CHECK_EQUAL(response["transactions"][0].asString(),
-            "0xe1054f38907ab3bef251caf8cbd8b25e779a40445b8dd4fcf15fce917d3e4ebe");
-    }
+    BOOST_CHECK_EQUAL(response["transactions"][0].asString(),
+        "0xe1054f38907ab3bef251caf8cbd8b25e779a40445b8dd4fcf15fce917d3e4ebe");
 
     BOOST_CHECK_THROW(rpc->getBlockByNumber(invalidGroup, "0x0", false), JsonRpcException);
 }
@@ -260,26 +209,12 @@ BOOST_AUTO_TEST_CASE(SM_testGetTransactionByHash)
     BOOST_CHECK(response["hash"].asString() ==
                 "0xe1054f38907ab3bef251caf8cbd8b25e779a40445b8dd4fcf15fce917d3e4ebe");
     BOOST_CHECK(response["blockNumber"].asString() == "0x0");
-    if (g_BCOSConfig.version() == RC1_VERSION)
-    {
-        BOOST_CHECK_EQUAL(
-            response["from"].asString(), "0xb5e55058e234c6a58cde2d0f128546d31ea80c1d");
-        BOOST_CHECK(response["gas"].asString() == "0x9184e729fff");
-        BOOST_CHECK(response["gasPrice"].asString() == "0x174876e7ff");
-        BOOST_CHECK_EQUAL(response["nonce"].asString(),
-            "0x65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d144");
-        BOOST_CHECK(response["to"].asString() == "0xd6f1a71052366dbae2f7ab2d5d5845e77965cf0d");
-    }
-    else
-    {
-        BOOST_CHECK_EQUAL(
-            response["from"].asString(), "0x1a3fc157bd47c3fc2e260b34abbf481730d0f80f");
-        BOOST_CHECK_EQUAL(response["gas"].asString(), "0xb2d05e00");
-        BOOST_CHECK_EQUAL(response["gasPrice"].asString(), "0x11e1a300");
-        BOOST_CHECK_EQUAL(response["nonce"].asString(),
-            "0x3eebc46c9c0e3b84799097c5a6ccd6657a9295c11270407707366d0750fcd59");
-        BOOST_CHECK_EQUAL(response["to"].asString(), "0xbab78cea98af2320ad4ee81bba8a7473e0c8c48d");
-    }
+    BOOST_CHECK_EQUAL(response["from"].asString(), "0x1a3fc157bd47c3fc2e260b34abbf481730d0f80f");
+    BOOST_CHECK_EQUAL(response["gas"].asString(), "0xb2d05e00");
+    BOOST_CHECK_EQUAL(response["gasPrice"].asString(), "0x11e1a300");
+    BOOST_CHECK_EQUAL(response["nonce"].asString(),
+        "0x3eebc46c9c0e3b84799097c5a6ccd6657a9295c11270407707366d0750fcd59");
+    BOOST_CHECK_EQUAL(response["to"].asString(), "0xbab78cea98af2320ad4ee81bba8a7473e0c8c48d");
     BOOST_CHECK(response["transactionIndex"].asString() == "0x0");
     BOOST_CHECK(response["value"].asString() == "0x0");
 
@@ -295,30 +230,14 @@ BOOST_AUTO_TEST_CASE(SM_testGetTransactionByBlockHashAndIndex)
     BOOST_CHECK(response["blockHash"].asString() ==
                 "0xa5529e6035e28f69977bb893888d338b9f76f023124216484e4056219d4e7e68");
     BOOST_CHECK(response["blockNumber"].asString() == "0x0");
-    if (g_BCOSConfig.version() == RC1_VERSION)
-    {
-        BOOST_CHECK_EQUAL(
-            response["from"].asString(), "0xb5e55058e234c6a58cde2d0f128546d31ea80c1d");
-        BOOST_CHECK(response["gas"].asString() == "0x9184e729fff");
-        BOOST_CHECK(response["gasPrice"].asString() == "0x174876e7ff");
-        BOOST_CHECK_EQUAL(response["hash"].asString(),
-            "0x9319b663d2982b6d3894b455757843b5b68ca84a94356eebccdfa6d1eb34d680");
-        BOOST_CHECK_EQUAL(response["nonce"].asString(),
-            "0x65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d144");
-        BOOST_CHECK(response["to"].asString() == "0xd6f1a71052366dbae2f7ab2d5d5845e77965cf0d");
-    }
-    else
-    {
-        BOOST_CHECK_EQUAL(response["hash"].asString(),
-            "0xe1054f38907ab3bef251caf8cbd8b25e779a40445b8dd4fcf15fce917d3e4ebe");
-        BOOST_CHECK_EQUAL(response["to"].asString(), "0xbab78cea98af2320ad4ee81bba8a7473e0c8c48d");
-        BOOST_CHECK_EQUAL(
-            response["from"].asString(), "0x1a3fc157bd47c3fc2e260b34abbf481730d0f80f");
-        BOOST_CHECK_EQUAL(response["gas"].asString(), "0xb2d05e00");
-        BOOST_CHECK_EQUAL(response["gasPrice"].asString(), "0x11e1a300");
-        BOOST_CHECK_EQUAL(response["nonce"].asString(),
-            "0x3eebc46c9c0e3b84799097c5a6ccd6657a9295c11270407707366d0750fcd59");
-    }
+    BOOST_CHECK_EQUAL(response["hash"].asString(),
+        "0xe1054f38907ab3bef251caf8cbd8b25e779a40445b8dd4fcf15fce917d3e4ebe");
+    BOOST_CHECK_EQUAL(response["to"].asString(), "0xbab78cea98af2320ad4ee81bba8a7473e0c8c48d");
+    BOOST_CHECK_EQUAL(response["from"].asString(), "0x1a3fc157bd47c3fc2e260b34abbf481730d0f80f");
+    BOOST_CHECK_EQUAL(response["gas"].asString(), "0xb2d05e00");
+    BOOST_CHECK_EQUAL(response["gasPrice"].asString(), "0x11e1a300");
+    BOOST_CHECK_EQUAL(response["nonce"].asString(),
+        "0x3eebc46c9c0e3b84799097c5a6ccd6657a9295c11270407707366d0750fcd59");
     BOOST_CHECK(response["transactionIndex"].asString() == "0x0");
     BOOST_CHECK(response["value"].asString() == "0x0");
 
@@ -342,30 +261,14 @@ BOOST_AUTO_TEST_CASE(SM_testGetTransactionByBlockNumberAndIndex)
     BOOST_CHECK_EQUAL(response["blockHash"].asString(),
         "0xa5529e6035e28f69977bb893888d338b9f76f023124216484e4056219d4e7e68");
     BOOST_CHECK(response["blockNumber"].asString() == "0x0");
-    if (g_BCOSConfig.version() == RC1_VERSION)
-    {
-        BOOST_CHECK_EQUAL(
-            response["from"].asString(), "0xb5e55058e234c6a58cde2d0f128546d31ea80c1d");
-        BOOST_CHECK(response["gas"].asString() == "0x9184e729fff");
-        BOOST_CHECK(response["gasPrice"].asString() == "0x174876e7ff");
-        BOOST_CHECK_EQUAL(response["hash"].asString(),
-            "0x9319b663d2982b6d3894b455757843b5b68ca84a94356eebccdfa6d1eb34d680");
-        BOOST_CHECK_EQUAL(response["nonce"].asString(),
-            "0x65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d144");
-        BOOST_CHECK(response["to"].asString() == "0xd6f1a71052366dbae2f7ab2d5d5845e77965cf0d");
-    }
-    else
-    {
-        BOOST_CHECK_EQUAL(response["hash"].asString(),
-            "0xe1054f38907ab3bef251caf8cbd8b25e779a40445b8dd4fcf15fce917d3e4ebe");
-        BOOST_CHECK_EQUAL(response["to"].asString(), "0xbab78cea98af2320ad4ee81bba8a7473e0c8c48d");
-        BOOST_CHECK_EQUAL(
-            response["from"].asString(), "0x1a3fc157bd47c3fc2e260b34abbf481730d0f80f");
-        BOOST_CHECK_EQUAL(response["gas"].asString(), "0xb2d05e00");
-        BOOST_CHECK_EQUAL(response["gasPrice"].asString(), "0x11e1a300");
-        BOOST_CHECK_EQUAL(response["nonce"].asString(),
-            "0x3eebc46c9c0e3b84799097c5a6ccd6657a9295c11270407707366d0750fcd59");
-    }
+    BOOST_CHECK_EQUAL(response["hash"].asString(),
+        "0xe1054f38907ab3bef251caf8cbd8b25e779a40445b8dd4fcf15fce917d3e4ebe");
+    BOOST_CHECK_EQUAL(response["to"].asString(), "0xbab78cea98af2320ad4ee81bba8a7473e0c8c48d");
+    BOOST_CHECK_EQUAL(response["from"].asString(), "0x1a3fc157bd47c3fc2e260b34abbf481730d0f80f");
+    BOOST_CHECK_EQUAL(response["gas"].asString(), "0xb2d05e00");
+    BOOST_CHECK_EQUAL(response["gasPrice"].asString(), "0x11e1a300");
+    BOOST_CHECK_EQUAL(response["nonce"].asString(),
+        "0x3eebc46c9c0e3b84799097c5a6ccd6657a9295c11270407707366d0750fcd59");
     BOOST_CHECK(response["transactionIndex"].asString() == "0x0");
     BOOST_CHECK(response["value"].asString() == "0x0");
 
@@ -387,18 +290,8 @@ BOOST_AUTO_TEST_CASE(SM_testGetTransactionReceipt)
     BOOST_CHECK(response["blockNumber"].asString() == "0x0");
     BOOST_CHECK(response["blockHash"].asString() ==
                 "0xa5529e6035e28f69977bb893888d338b9f76f023124216484e4056219d4e7e68");
-    if (g_BCOSConfig.version() == RC1_VERSION)
-    {
-        BOOST_CHECK_EQUAL(
-            response["from"].asString(), "0xb5e55058e234c6a58cde2d0f128546d31ea80c1d");
-        BOOST_CHECK(response["to"].asString() == "0xd6f1a71052366dbae2f7ab2d5d5845e77965cf0d");
-    }
-    else
-    {
-        BOOST_CHECK_EQUAL(
-            response["from"].asString(), "0x1a3fc157bd47c3fc2e260b34abbf481730d0f80f");
-        BOOST_CHECK_EQUAL(response["to"].asString(), "0xbab78cea98af2320ad4ee81bba8a7473e0c8c48d");
-    }
+    BOOST_CHECK_EQUAL(response["from"].asString(), "0x1a3fc157bd47c3fc2e260b34abbf481730d0f80f");
+    BOOST_CHECK_EQUAL(response["to"].asString(), "0xbab78cea98af2320ad4ee81bba8a7473e0c8c48d");
     BOOST_CHECK(response["gasUsed"].asString() == "0x8");
     BOOST_CHECK(
         response["contractAddress"].asString() == "0x0000000000000000000000000000000000001000");
@@ -413,28 +306,12 @@ BOOST_AUTO_TEST_CASE(SM_testGetTransactionReceipt)
 BOOST_AUTO_TEST_CASE(SM_testGetpendingTransactions)
 {
     Json::Value response = rpc->getPendingTransactions(groupId);
-
-    if (g_BCOSConfig.version() == RC1_VERSION)
-    {
-        BOOST_CHECK_EQUAL(
-            response[0]["from"].asString(), "0xb5e55058e234c6a58cde2d0f128546d31ea80c1d");
-        BOOST_CHECK(response[0]["gas"].asString() == "0x9184e729fff");
-        BOOST_CHECK(response[0]["gasPrice"].asString() == "0x174876e7ff");
-        BOOST_CHECK_EQUAL(response[0]["nonce"].asString(),
-            "0x65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d144");
-        BOOST_CHECK(response[0]["to"].asString() == "0xd6f1a71052366dbae2f7ab2d5d5845e77965cf0d");
-    }
-    else
-    {
-        BOOST_CHECK_EQUAL(
-            response[0]["to"].asString(), "0xbab78cea98af2320ad4ee81bba8a7473e0c8c48d");
-        BOOST_CHECK_EQUAL(
-            response[0]["from"].asString(), "0x1a3fc157bd47c3fc2e260b34abbf481730d0f80f");
-        BOOST_CHECK_EQUAL(response[0]["gas"].asString(), "0xb2d05e00");
-        BOOST_CHECK_EQUAL(response[0]["gasPrice"].asString(), "0x11e1a300");
-        BOOST_CHECK_EQUAL(response[0]["nonce"].asString(),
-            "0x3eebc46c9c0e3b84799097c5a6ccd6657a9295c11270407707366d0750fcd59");
-    }
+    BOOST_CHECK_EQUAL(response[0]["to"].asString(), "0xbab78cea98af2320ad4ee81bba8a7473e0c8c48d");
+    BOOST_CHECK_EQUAL(response[0]["from"].asString(), "0x1a3fc157bd47c3fc2e260b34abbf481730d0f80f");
+    BOOST_CHECK_EQUAL(response[0]["gas"].asString(), "0xb2d05e00");
+    BOOST_CHECK_EQUAL(response[0]["gasPrice"].asString(), "0x11e1a300");
+    BOOST_CHECK_EQUAL(response[0]["nonce"].asString(),
+        "0x3eebc46c9c0e3b84799097c5a6ccd6657a9295c11270407707366d0750fcd59");
     BOOST_CHECK(response[0]["value"].asString() == "0x0");
     // no need to avoid getPendingTransactions for the node that doesn't belong to the group
     // BOOST_CHECK_THROW(rpc->getPendingTransactions(invalidGroup), JsonRpcException);
@@ -481,39 +358,17 @@ BOOST_AUTO_TEST_CASE(SM_testCall)
 BOOST_AUTO_TEST_CASE(SM_testSendRawTransaction)
 {
     std::string rlpStr =
-        "f901309f65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d14485174876e7ff8609"
-        "184e729fff8204a294d6f1a71052366dbae2f7ab2d5d5845e77965cf0d80b86448f85bce00000000000000"
-        "0000000000000000000000000000000000000000000000001bf5bd8a9e7ba8b936ea704292ff4aaa5797bf"
-        "671fdc8526dcd159f23c1f5a05f44e9fa862834dc7cb4541558f2b4961dc39eaaf0af7f7395028658d0e01"
-        "b86a37b840c7ca78e7ab80ee4be6d3936ba8e899d8fe12c12114502956ebe8c8629d36d88481dec9973574"
-        "2ea523c88cf3becba1cc4375bc9e225143fe1e8e43abc8a7c493a0ba3ce8383b7c91528bede9cf890b4b1e"
-        "9b99c1d8e56d6f8292c827470a606827a0ed511490a1666791b2bd7fc4f499eb5ff18fb97ba68ff9aee206"
-        "8fd63b88e817";
-    if (g_BCOSConfig.version() >= RC2_VERSION)
-    {
-        rlpStr =
-            "f90114a003eebc46c9c0e3b84799097c5a6ccd6657a9295c11270407707366d0750fcd598411e1a30084b2"
-            "d05e008201f594bab78cea98af2320ad4ee81bba8a7473e0c8c48d80a48fff0fc400000000000000000000"
-            "000000000000000000000000000000000000000000040101a48fff0fc40000000000000000000000000000"
-            "000000000000000000000000000000000004b8408234c544a9f3ce3b401a92cc7175602ce2a1e29b1ec135"
-            "381c7d2a9e8f78f3edc9c06ee55252857c9a4560cb39e9d70d40f4331cace4d2b3121b967fa7a829f0a00f"
-            "16d87c5065ad5c3b110ef0b97fe9a67b62443cb8ddde60d4e001a64429dc6ea03d2569e0449e9a900c2365"
-            "41afb9d8a8d5e1a36844439c7076f6e75ed624256f";
-    }
+        "f90114a003eebc46c9c0e3b84799097c5a6ccd6657a9295c11270407707366d0750fcd598411e1a30084b2"
+        "d05e008201f594bab78cea98af2320ad4ee81bba8a7473e0c8c48d80a48fff0fc400000000000000000000"
+        "000000000000000000000000000000000000000000040101a48fff0fc40000000000000000000000000000"
+        "000000000000000000000000000000000004b8408234c544a9f3ce3b401a92cc7175602ce2a1e29b1ec135"
+        "381c7d2a9e8f78f3edc9c06ee55252857c9a4560cb39e9d70d40f4331cace4d2b3121b967fa7a829f0a00f"
+        "16d87c5065ad5c3b110ef0b97fe9a67b62443cb8ddde60d4e001a64429dc6ea03d2569e0449e9a900c2365"
+        "41afb9d8a8d5e1a36844439c7076f6e75ed624256f";
 
     std::string response = rpc->sendRawTransaction(groupId, rlpStr);
-
-    if (g_BCOSConfig.version() == RC1_VERSION)
-    {
-        BOOST_CHECK_EQUAL(
-            response, "0x9319b663d2982b6d3894b455757843b5b68ca84a94356eebccdfa6d1eb34d680");
-    }
-    else
-    {
-        BOOST_CHECK_EQUAL(
-            response, "0xe1054f38907ab3bef251caf8cbd8b25e779a40445b8dd4fcf15fce917d3e4ebe");
-    }
-
+    BOOST_CHECK_EQUAL(
+        response, "0xe1054f38907ab3bef251caf8cbd8b25e779a40445b8dd4fcf15fce917d3e4ebe");
     BOOST_CHECK_THROW(rpc->sendRawTransaction(invalidGroup, rlpStr), JsonRpcException);
 }
 BOOST_AUTO_TEST_SUITE_END()
@@ -594,33 +449,16 @@ BOOST_AUTO_TEST_CASE(testGetBlockByHash)
     BOOST_CHECK(response["gasLimit"].asString() == "0x9");
     BOOST_CHECK(response["gasUsed"].asString() == "0x8");
     BOOST_CHECK(response["timestamp"].asString() == "0x9");
-
-    if (g_BCOSConfig.version() == RC1_VERSION)
-    {
-        BOOST_CHECK(response["transactions"][0]["hash"].asString() ==
-                    "0x7536cf1286b5ce6c110cd4fea5c891467884240c9af366d678eb4191e1c31c6f");
-        BOOST_CHECK(response["transactions"][0]["to"].asString() ==
-                    "0xd6f1a71052366dbae2f7ab2d5d5845e77965cf0d");
-        BOOST_CHECK(response["transactions"][0]["from"].asString() ==
-                    "0x6bc952a2e4db9c0c86a368d83e9df0c6ab481102");
-        BOOST_CHECK(response["transactions"][0]["gas"].asString() == "0x9184e729fff");
-        BOOST_CHECK(response["transactions"][0]["gasPrice"].asString() == "0x174876e7ff");
-        BOOST_CHECK(response["transactions"][0]["nonce"].asString() ==
-                    "0x65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d03f");
-    }
-    else
-    {
-        BOOST_CHECK(response["transactions"][0]["hash"].asString() ==
-                    "0x0accad4228274b0d78939f48149767883a6e99c95941baa950156e926f1c96ba");
-        BOOST_CHECK(response["transactions"][0]["to"].asString() ==
-                    "0xd6c8a04b8826b0a37c6d4aa0eaa8644d8e35b79f");
-        BOOST_CHECK(response["transactions"][0]["from"].asString() ==
-                    "0x148947262ec5e21739fe3a931c29e8b84ee34a0f");
-        BOOST_CHECK(response["transactions"][0]["gas"].asString() == "0x11e1a300");
-        BOOST_CHECK(response["transactions"][0]["gasPrice"].asString() == "0x11e1a300");
-        BOOST_CHECK(response["transactions"][0]["nonce"].asString() ==
-                    "0x3922ee720bb7445e3a914d8ab8f507d1a647296d563100e49548d83fd98865c");
-    }
+    BOOST_CHECK(response["transactions"][0]["hash"].asString() ==
+                "0x0accad4228274b0d78939f48149767883a6e99c95941baa950156e926f1c96ba");
+    BOOST_CHECK(response["transactions"][0]["to"].asString() ==
+                "0xd6c8a04b8826b0a37c6d4aa0eaa8644d8e35b79f");
+    BOOST_CHECK(response["transactions"][0]["from"].asString() ==
+                "0x148947262ec5e21739fe3a931c29e8b84ee34a0f");
+    BOOST_CHECK(response["transactions"][0]["gas"].asString() == "0x11e1a300");
+    BOOST_CHECK(response["transactions"][0]["gasPrice"].asString() == "0x11e1a300");
+    BOOST_CHECK(response["transactions"][0]["nonce"].asString() ==
+                "0x3922ee720bb7445e3a914d8ab8f507d1a647296d563100e49548d83fd98865c");
 
     BOOST_CHECK(response["transactions"][0]["value"].asString() == "0x0");
     BOOST_CHECK(response["transactions"][0]["blockHash"].asString() ==
@@ -629,16 +467,8 @@ BOOST_AUTO_TEST_CASE(testGetBlockByHash)
     BOOST_CHECK(response["transactions"][0]["blockNumber"].asString() == "0x0");
 
     response = rpc->getBlockByHash(groupId, blockHash, false);
-    if (g_BCOSConfig.version() == RC1_VERSION)
-    {
-        BOOST_CHECK(response["transactions"][0].asString() ==
-                    "0x7536cf1286b5ce6c110cd4fea5c891467884240c9af366d678eb4191e1c31c6f");
-    }
-    else
-    {
-        BOOST_CHECK(response["transactions"][0].asString() ==
-                    "0x0accad4228274b0d78939f48149767883a6e99c95941baa950156e926f1c96ba");
-    }
+    BOOST_CHECK(response["transactions"][0].asString() ==
+                "0x0accad4228274b0d78939f48149767883a6e99c95941baa950156e926f1c96ba");
 
     BOOST_CHECK_THROW(rpc->getBlockByHash(invalidGroup, blockHash, false), JsonRpcException);
     blockHash = "0x067150c07dab4facb7160e075548007e067150c07dab4facb7160e0755480070";
@@ -716,16 +546,8 @@ BOOST_AUTO_TEST_CASE(getBlockByNumber)
     BOOST_CHECK(response["transactions"][0]["blockNumber"].asString() == "0x0");
 
     response = rpc->getBlockByNumber(groupId, "0x0", false);
-    if (g_BCOSConfig.version() == RC1_VERSION)
-    {
-        BOOST_CHECK(response["transactions"][0].asString() ==
-                    "0x7536cf1286b5ce6c110cd4fea5c891467884240c9af366d678eb4191e1c31c6f");
-    }
-    else
-    {
-        BOOST_CHECK(response["transactions"][0].asString() ==
-                    "0x0accad4228274b0d78939f48149767883a6e99c95941baa950156e926f1c96ba");
-    }
+    BOOST_CHECK(response["transactions"][0].asString() ==
+                "0x0accad4228274b0d78939f48149767883a6e99c95941baa950156e926f1c96ba");
 
     BOOST_CHECK_THROW(rpc->getBlockByNumber(invalidGroup, "0x0", false), JsonRpcException);
 }
@@ -741,36 +563,18 @@ BOOST_AUTO_TEST_CASE(testGetBlockHashByNumber)
 
 BOOST_AUTO_TEST_CASE(testGetTransactionByHash)
 {
-    std::string txHash = "0x7536cf1286b5ce6c110cd4fea5c891467884240c9af366d678eb4191e1c31c6f";
-    if (g_BCOSConfig.version() >= RC2_VERSION)
-    {
-        txHash = "0x0accad4228274b0d78939f48149767883a6e99c95941baa950156e926f1c96ba";
-    }
+    std::string txHash = "0x0accad4228274b0d78939f48149767883a6e99c95941baa950156e926f1c96ba";
     Json::Value response = rpc->getTransactionByHash(groupId, txHash);
 
     BOOST_CHECK(response["blockNumber"].asString() == "0x0");
-    if (g_BCOSConfig.version() == RC1_VERSION)
-    {
-        BOOST_CHECK(response["from"].asString() == "0x6bc952a2e4db9c0c86a368d83e9df0c6ab481102");
-        BOOST_CHECK(response["gas"].asString() == "0x9184e729fff");
-        BOOST_CHECK(response["gasPrice"].asString() == "0x174876e7ff");
-        BOOST_CHECK(response["hash"].asString() ==
-                    "0x7536cf1286b5ce6c110cd4fea5c891467884240c9af366d678eb4191e1c31c6f");
-        BOOST_CHECK(response["nonce"].asString() ==
-                    "0x65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d03f");
-        BOOST_CHECK(response["to"].asString() == "0xd6f1a71052366dbae2f7ab2d5d5845e77965cf0d");
-    }
-    else
-    {
-        BOOST_CHECK(response["from"].asString() == "0x148947262ec5e21739fe3a931c29e8b84ee34a0f");
-        BOOST_CHECK(response["gas"].asString() == "0x11e1a300");
-        BOOST_CHECK(response["gasPrice"].asString() == "0x11e1a300");
-        BOOST_CHECK(response["hash"].asString() ==
-                    "0x0accad4228274b0d78939f48149767883a6e99c95941baa950156e926f1c96ba");
-        BOOST_CHECK(response["nonce"].asString() ==
-                    "0x3922ee720bb7445e3a914d8ab8f507d1a647296d563100e49548d83fd98865c");
-        BOOST_CHECK(response["to"].asString() == "0xd6c8a04b8826b0a37c6d4aa0eaa8644d8e35b79f");
-    }
+    BOOST_CHECK(response["from"].asString() == "0x148947262ec5e21739fe3a931c29e8b84ee34a0f");
+    BOOST_CHECK(response["gas"].asString() == "0x11e1a300");
+    BOOST_CHECK(response["gasPrice"].asString() == "0x11e1a300");
+    BOOST_CHECK(response["hash"].asString() ==
+                "0x0accad4228274b0d78939f48149767883a6e99c95941baa950156e926f1c96ba");
+    BOOST_CHECK(response["nonce"].asString() ==
+                "0x3922ee720bb7445e3a914d8ab8f507d1a647296d563100e49548d83fd98865c");
+    BOOST_CHECK(response["to"].asString() == "0xd6c8a04b8826b0a37c6d4aa0eaa8644d8e35b79f");
     BOOST_CHECK(response["transactionIndex"].asString() == "0x0");
     BOOST_CHECK(response["value"].asString() == "0x0");
 
@@ -786,28 +590,14 @@ BOOST_AUTO_TEST_CASE(testGetTransactionByBlockHashAndIndex)
     BOOST_CHECK(response["blockHash"].asString() ==
                 "0xba6e71fbc207e776c74b66bc031d1a599d5b35cd03fd9f5e2331fa5ecdccdc87");
     BOOST_CHECK(response["blockNumber"].asString() == "0x0");
-    if (g_BCOSConfig.version() == RC1_VERSION)
-    {
-        BOOST_CHECK(response["from"].asString() == "0x6bc952a2e4db9c0c86a368d83e9df0c6ab481102");
-        BOOST_CHECK(response["gas"].asString() == "0x9184e729fff");
-        BOOST_CHECK(response["gasPrice"].asString() == "0x174876e7ff");
-        BOOST_CHECK(response["hash"].asString() ==
-                    "0x7536cf1286b5ce6c110cd4fea5c891467884240c9af366d678eb4191e1c31c6f");
-        BOOST_CHECK(response["nonce"].asString() ==
-                    "0x65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d03f");
-        BOOST_CHECK(response["to"].asString() == "0xd6f1a71052366dbae2f7ab2d5d5845e77965cf0d");
-    }
-    else
-    {
-        BOOST_CHECK(response["hash"].asString() ==
-                    "0x0accad4228274b0d78939f48149767883a6e99c95941baa950156e926f1c96ba");
-        BOOST_CHECK(response["to"].asString() == "0xd6c8a04b8826b0a37c6d4aa0eaa8644d8e35b79f");
-        BOOST_CHECK(response["from"].asString() == "0x148947262ec5e21739fe3a931c29e8b84ee34a0f");
-        BOOST_CHECK(response["gas"].asString() == "0x11e1a300");
-        BOOST_CHECK(response["gasPrice"].asString() == "0x11e1a300");
-        BOOST_CHECK(response["nonce"].asString() ==
-                    "0x3922ee720bb7445e3a914d8ab8f507d1a647296d563100e49548d83fd98865c");
-    }
+    BOOST_CHECK(response["hash"].asString() ==
+                "0x0accad4228274b0d78939f48149767883a6e99c95941baa950156e926f1c96ba");
+    BOOST_CHECK(response["to"].asString() == "0xd6c8a04b8826b0a37c6d4aa0eaa8644d8e35b79f");
+    BOOST_CHECK(response["from"].asString() == "0x148947262ec5e21739fe3a931c29e8b84ee34a0f");
+    BOOST_CHECK(response["gas"].asString() == "0x11e1a300");
+    BOOST_CHECK(response["gasPrice"].asString() == "0x11e1a300");
+    BOOST_CHECK(response["nonce"].asString() ==
+                "0x3922ee720bb7445e3a914d8ab8f507d1a647296d563100e49548d83fd98865c");
     BOOST_CHECK(response["transactionIndex"].asString() == "0x0");
     BOOST_CHECK(response["value"].asString() == "0x0");
 
@@ -831,28 +621,14 @@ BOOST_AUTO_TEST_CASE(testGetTransactionByBlockNumberAndIndex)
     BOOST_CHECK(response["blockHash"].asString() ==
                 "0xba6e71fbc207e776c74b66bc031d1a599d5b35cd03fd9f5e2331fa5ecdccdc87");
     BOOST_CHECK(response["blockNumber"].asString() == "0x0");
-    if (g_BCOSConfig.version() == RC1_VERSION)
-    {
-        BOOST_CHECK(response["from"].asString() == "0x6bc952a2e4db9c0c86a368d83e9df0c6ab481102");
-        BOOST_CHECK(response["gas"].asString() == "0x9184e729fff");
-        BOOST_CHECK(response["gasPrice"].asString() == "0x174876e7ff");
-        BOOST_CHECK(response["hash"].asString() ==
-                    "0x7536cf1286b5ce6c110cd4fea5c891467884240c9af366d678eb4191e1c31c6f");
-        BOOST_CHECK(response["nonce"].asString() ==
-                    "0x65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d03f");
-        BOOST_CHECK(response["to"].asString() == "0xd6f1a71052366dbae2f7ab2d5d5845e77965cf0d");
-    }
-    else
-    {
-        BOOST_CHECK(response["hash"].asString() ==
-                    "0x0accad4228274b0d78939f48149767883a6e99c95941baa950156e926f1c96ba");
-        BOOST_CHECK(response["to"].asString() == "0xd6c8a04b8826b0a37c6d4aa0eaa8644d8e35b79f");
-        BOOST_CHECK(response["from"].asString() == "0x148947262ec5e21739fe3a931c29e8b84ee34a0f");
-        BOOST_CHECK(response["gas"].asString() == "0x11e1a300");
-        BOOST_CHECK(response["gasPrice"].asString() == "0x11e1a300");
-        BOOST_CHECK(response["nonce"].asString() ==
-                    "0x3922ee720bb7445e3a914d8ab8f507d1a647296d563100e49548d83fd98865c");
-    }
+    BOOST_CHECK(response["hash"].asString() ==
+                "0x0accad4228274b0d78939f48149767883a6e99c95941baa950156e926f1c96ba");
+    BOOST_CHECK(response["to"].asString() == "0xd6c8a04b8826b0a37c6d4aa0eaa8644d8e35b79f");
+    BOOST_CHECK(response["from"].asString() == "0x148947262ec5e21739fe3a931c29e8b84ee34a0f");
+    BOOST_CHECK(response["gas"].asString() == "0x11e1a300");
+    BOOST_CHECK(response["gasPrice"].asString() == "0x11e1a300");
+    BOOST_CHECK(response["nonce"].asString() ==
+                "0x3922ee720bb7445e3a914d8ab8f507d1a647296d563100e49548d83fd98865c");
     BOOST_CHECK(response["transactionIndex"].asString() == "0x0");
     BOOST_CHECK(response["value"].asString() == "0x0");
 
@@ -874,16 +650,8 @@ BOOST_AUTO_TEST_CASE(testGetTransactionReceipt)
     BOOST_CHECK(response["blockNumber"].asString() == "0x0");
     BOOST_CHECK(response["blockHash"].asString() ==
                 "0xba6e71fbc207e776c74b66bc031d1a599d5b35cd03fd9f5e2331fa5ecdccdc87");
-    if (g_BCOSConfig.version() == RC1_VERSION)
-    {
-        BOOST_CHECK(response["from"].asString() == "0x6bc952a2e4db9c0c86a368d83e9df0c6ab481102");
-        BOOST_CHECK(response["to"].asString() == "0xd6f1a71052366dbae2f7ab2d5d5845e77965cf0d");
-    }
-    else
-    {
-        BOOST_CHECK(response["from"].asString() == "0x148947262ec5e21739fe3a931c29e8b84ee34a0f");
-        BOOST_CHECK(response["to"].asString() == "0xd6c8a04b8826b0a37c6d4aa0eaa8644d8e35b79f");
-    }
+    BOOST_CHECK(response["from"].asString() == "0x148947262ec5e21739fe3a931c29e8b84ee34a0f");
+    BOOST_CHECK(response["to"].asString() == "0xd6c8a04b8826b0a37c6d4aa0eaa8644d8e35b79f");
     BOOST_CHECK(response["gasUsed"].asString() == "0x8");
     BOOST_CHECK(
         response["contractAddress"].asString() == "0x0000000000000000000000000000000000001000");
@@ -898,25 +666,12 @@ BOOST_AUTO_TEST_CASE(testGetTransactionReceipt)
 BOOST_AUTO_TEST_CASE(testGetPendingTransactions)
 {
     Json::Value response = rpc->getPendingTransactions(groupId);
-
-    if (g_BCOSConfig.version() == RC1_VERSION)
-    {
-        BOOST_CHECK(response[0]["from"].asString() == "0x6bc952a2e4db9c0c86a368d83e9df0c6ab481102");
-        BOOST_CHECK(response[0]["gas"].asString() == "0x9184e729fff");
-        BOOST_CHECK(response[0]["gasPrice"].asString() == "0x174876e7ff");
-        BOOST_CHECK(response[0]["nonce"].asString() ==
-                    "0x65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d03f");
-        BOOST_CHECK(response[0]["to"].asString() == "0xd6f1a71052366dbae2f7ab2d5d5845e77965cf0d");
-    }
-    else
-    {
-        BOOST_CHECK(response[0]["to"].asString() == "0xd6c8a04b8826b0a37c6d4aa0eaa8644d8e35b79f");
-        BOOST_CHECK(response[0]["from"].asString() == "0x148947262ec5e21739fe3a931c29e8b84ee34a0f");
-        BOOST_CHECK(response[0]["gas"].asString() == "0x11e1a300");
-        BOOST_CHECK(response[0]["gasPrice"].asString() == "0x11e1a300");
-        BOOST_CHECK(response[0]["nonce"].asString() ==
-                    "0x3922ee720bb7445e3a914d8ab8f507d1a647296d563100e49548d83fd98865c");
-    }
+    BOOST_CHECK(response[0]["to"].asString() == "0xd6c8a04b8826b0a37c6d4aa0eaa8644d8e35b79f");
+    BOOST_CHECK(response[0]["from"].asString() == "0x148947262ec5e21739fe3a931c29e8b84ee34a0f");
+    BOOST_CHECK(response[0]["gas"].asString() == "0x11e1a300");
+    BOOST_CHECK(response[0]["gasPrice"].asString() == "0x11e1a300");
+    BOOST_CHECK(response[0]["nonce"].asString() ==
+                "0x3922ee720bb7445e3a914d8ab8f507d1a647296d563100e49548d83fd98865c");
     BOOST_CHECK(response[0]["value"].asString() == "0x0");
 
     // no need to check the node in the group or not
@@ -973,21 +728,11 @@ BOOST_AUTO_TEST_CASE(testCall)
 BOOST_AUTO_TEST_CASE(testSendRawTransaction)
 {
     std::string rlpStr =
-        "f8ef9f65f0d06e39dc3c08e32ac10a5070858962bc6c0f5760baca823f2d5582d03f85174876e7ff"
-        "8609184e729fff82020394d6f1a71052366dbae2f7ab2d5d5845e77965cf0d80b86448f85bce000000"
-        "000000000000000000000000000000000000000000000000000000001bf5bd8a9e7ba8b936ea704292"
-        "ff4aaa5797bf671fdc8526dcd159f23c1f5a05f44e9fa862834dc7cb4541558f2b4961dc39eaaf0af7"
-        "f7395028658d0e01b86a371ca00b2b3fabd8598fefdda4efdb54f626367fc68e1735a8047f0f1c4f84"
-        "0255ca1ea0512500bc29f4cfe18ee1c88683006d73e56c934100b8abf4d2334560e1d2f75e";
-    if (g_BCOSConfig.version() >= RC2_VERSION)
-    {
-        rlpStr =
-            "f8d3a003922ee720bb7445e3a914d8ab8f507d1a647296d563100e49548d83fd98865c8411e1a3008411e1"
-            "a3008201f894d6c8a04b8826b0a37c6d4aa0eaa8644d8e35b79f80a466c991390000000000000000000000"
-            "0000000000000000000000000000000000000000040101a466c99139000000000000000000000000000000"
-            "00000000000000000000000000000000041ba08e0d3fae10412c584c977721aeda88df932b2a019f084fed"
-            "a1e0a42d199ea979a016c387f79eb85078be5db40abe1670b8b480a12c7eab719bedee212b7972f775";
-    }
+        "f8d3a003922ee720bb7445e3a914d8ab8f507d1a647296d563100e49548d83fd98865c8411e1a3008411e1"
+        "a3008201f894d6c8a04b8826b0a37c6d4aa0eaa8644d8e35b79f80a466c991390000000000000000000000"
+        "0000000000000000000000000000000000000000040101a466c99139000000000000000000000000000000"
+        "00000000000000000000000000000000041ba08e0d3fae10412c584c977721aeda88df932b2a019f084fed"
+        "a1e0a42d199ea979a016c387f79eb85078be5db40abe1670b8b480a12c7eab719bedee212b7972f775";
 
     std::string response = rpc->sendRawTransaction(groupId, rlpStr);
 

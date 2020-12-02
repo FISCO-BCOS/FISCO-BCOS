@@ -54,9 +54,6 @@ struct OutputFixture
 
     OutputFixture()
     {
-        m_version = g_BCOSConfig.version();
-        m_supportedVersion = g_BCOSConfig.supportedVersion();
-        g_BCOSConfig.setSupportedVersion("2.5.0", V2_5_0);
         contractAddress = Address("0xa4adafef4c989e17675479565b9abb5821d81f2c");
         accountAddress = Address("0x420f853b49838bd3e9466c85a4cc3428c960dde1");
 
@@ -160,7 +157,7 @@ struct OutputFixture
         executive = std::make_shared<Executive>(context->getState(), envInfo);
     }
 
-    ~OutputFixture() { g_BCOSConfig.setSupportedVersion(m_supportedVersion, m_version); }
+    ~OutputFixture() {}
 
     ExecutiveContext::Ptr context;
     TableFactory::Ptr memoryTableFactory;
@@ -173,9 +170,6 @@ struct OutputFixture
     Address contractAddress;
     Address accountAddress;
     Executive::Ptr executive;
-    bcos::VERSION m_version;
-    std::string m_supportedVersion;
-
     void executeTransaction(Executive& _e, Transaction::Ptr _tx)
     {
         LOG(INFO) << "init";
