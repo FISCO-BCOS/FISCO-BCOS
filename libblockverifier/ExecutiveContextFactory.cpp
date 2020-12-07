@@ -99,6 +99,10 @@ void ExecutiveContextFactory::initExecutiveContext(
         context->setAddress2Precompiled(WORKING_SEALER_MGR_ADDRESS,
             std::make_shared<dev::precompiled::WorkingSealerManagerPrecompiled>());
     }
+    if (g_BCOSConfig.version() >= V2_8_0)
+    {
+        context->setAddress2Precompiled(CRYPTO_ADDRESS, std::make_shared<CryptoPrecompiled>());
+    }
 }
 
 void ExecutiveContextFactory::setStateStorage(dev::storage::Storage::Ptr stateStorage)
