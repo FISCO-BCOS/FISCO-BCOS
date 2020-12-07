@@ -72,6 +72,7 @@ public:
         return RotatingPBFTEngine::resetChosedConsensusNodes();
     }
 
+    void registerDisconnectHandler() override { return PBFTEngine::registerDisconnectHandler(); }
     void chooseConsensusNodes() override { return RotatingPBFTEngine::chooseConsensusNodes(); }
 
     void updateConsensusInfo() override { return RotatingPBFTEngine::updateConsensusInfo(); }

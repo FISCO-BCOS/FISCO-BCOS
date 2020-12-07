@@ -379,9 +379,9 @@ void PBFTReqCache::triggerViewChange(VIEWTYPE const& curView, int64_t const& _hi
     removeInvalidViewChange(curView);
 }
 
-void PBFTReqCache::eraseLatestViewChangeCacheForNodeUpdated(ViewChangeReq const& _req)
+void PBFTReqCache::eraseLatestViewChangeCacheForNodeUpdated(IDXTYPE const& _reqIdx)
 {
-    m_latestViewChangeReqCache->erase(_req.idx);
+    m_latestViewChangeReqCache->erase(_reqIdx);
 }
 
 void PBFTReqCache::removeExpiredSignCache(h256 const& _blockHash, VIEWTYPE const& _view)

@@ -99,6 +99,7 @@ public:
         header.setGasUsed(u256(0));
     }
 
+    void registerDisconnectHandler() override { return PBFTEngine::registerDisconnectHandler(); }
 
     void resetBlock(Block& block)
     {
@@ -301,6 +302,7 @@ public:
         txPoolCreator = std::make_shared<TxPoolFixture>(5, 5);
         m_consensus = std::make_shared<T>(txPoolCreator->m_topicService, txPoolCreator->m_txPool,
             txPoolCreator->m_blockChain, sync, blockVerifier, protocolID, m_sealerList);
+        m_consensus->registerDisconnectHandler();
         fakeSync = std::dynamic_pointer_cast<FakeBlockSync>(sync);
         /// fake sealerList
         FakeSealerList(sealerSize);
