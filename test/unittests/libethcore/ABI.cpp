@@ -671,6 +671,45 @@ BOOST_AUTO_TEST_CASE(ContractABI_AbiOutString1)
     BOOST_CHECK(allOut[0] == "aaaaaaa");
 }
 
+BOOST_AUTO_TEST_CASE(testABIOutBytes)
+{
+    // test byte32
+    std::string hashStr = "1ab21d8355cfa17f8e61194831e81a8f22bec8c728fefb747ed035eb5082aa2b";
+    h256 hashData = h256(hashStr);
+    std::string plainText = "test";
+    bytes plainBytes = fromHex(toHex(plainText));
+    ABIFunc afunc;
+    auto ok = afunc.parser("f(bytes32,bytes,bytes32)");
+    BOOST_CHECK(ok == true);
+    auto allTypes = afunc.getParamsType();
+
+    BOOST_CHECK(allTypes.size() == 3);
+    BOOST_CHECK(allTypes[0] == "bytes32");
+    BOOST_CHECK(allTypes[1] == "bytes");
+    BOOST_CHECK(allTypes[2] == "bytes32");
+
+    ContractABI abi;
+    auto paramData = abi.abiIn("", toString32(hashData), plainBytes, toString32(hashData));
+    string32 decodedParam1;
+    bytes decodedParam2;
+    string32 decodedParam3;
+    abi.abiOut(ref(paramData), decodedParam1, decodedParam2, decodedParam3);
+
+    BOOST_CHECK(toHex(fromString32(decodedParam1)) == hashStr);
+    BOOST_CHECK(toHex(fromString32(decodedParam3)) == hashStr);
+    std::cout << "decodedParam1: " << toHex(decodedParam1) << std::endl;
+    std::cout << "decodedParam2: " << toHex(decodedParam2) << std::endl;
+    std::cout << "decodedParam3: " << toHex(decodedParam3) << std::endl;
+    BOOST_CHECK(toHex(decodedParam2) == toHex(plainText));
+
+    // test bytes
+    plainText = "testabcxxd";
+    bytesConstRef refPlainBytes(plainText);
+    paramData = abi.abiIn("", refPlainBytes.toBytes());
+    bytes decodedParam;
+    abi.abiOut(ref(paramData), decodedParam);
+    BOOST_CHECK(toHex(decodedParam) == toHex(plainText));
+}
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test
 }  // namespace dev

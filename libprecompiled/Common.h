@@ -193,6 +193,13 @@ const Address CHAINGOVERNANCE_ADDRESS = Address(0x1008);
 const Address KVTABLE_FACTORY_ADDRESS = Address(0x1010);
 const Address WORKING_SEALER_MGR_ADDRESS = Address(0x1011);
 
+// crypto/extension precompiled contract address
+const Address DAG_TRANSFER_ADDRESS = Address(0x5002);
+const Address PAILLIER_ADDRESS = Address(0x5003);
+const Address GROUP_SIG_ADDRESS = Address(0x5004);
+const Address RING_SIG_ADDRESS = Address(0x5005);
+const Address CRYPTO_ADDRESS = Address(0x5006);
+
 /// \brief Sign of the sealer is valid or not
 const char* const NODE_TYPE = "type";
 const char* const NODE_TYPE_SEALER = "sealer";
