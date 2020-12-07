@@ -170,10 +170,11 @@ jobs:
       - run:
           name: Upload binary
           command: |
+            cp tools/build_chain.sh build/bin/
             cd build/bin
-            tar -zcf fisco-bcos.tar.gz fisco-bcos
+            tar -zcf fisco-bcos.tar.gz fisco-bcos build_chain.sh
             strip fisco-bcos
-            tar -zcf fisco-bcos-mini.tar.gz fisco-bcos
+            tar -zcf fisco-bcos-mini.tar.gz fisco-bcos build_chain.sh
       - store_artifacts:
           path: /FISCO-BCOS/build/bin/fisco-bcos.tar.gz
           destination: fisco-bcos.tar.gz
