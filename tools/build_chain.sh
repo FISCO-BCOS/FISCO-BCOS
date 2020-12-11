@@ -921,7 +921,7 @@ generate_node_scripts()
     if [ -n "${deploy_mode}" ];then fisco_bin_path="${bcos_bin_name}"; fi
     if [ -n "${docker_mode}" ];then
         ps_cmd="\$(docker ps |grep \${SHELL_FOLDER//\//} | grep -v grep|awk '{print \$1}')"
-        start_cmd="docker run -d --rm --name \${SHELL_FOLDER//\//} -v \${SHELL_FOLDER}:/data --network=host -w=/data fiscoorg/fiscobcos:${docker_tag} -c config.ini"
+        start_cmd="docker run -d --rm --name \${SHELL_FOLDER//\//} -v \${SHELL_FOLDER}:/data --network=host -w=/data --privileged=true fiscoorg/fiscobcos:${docker_tag} -c config.ini"
         stop_cmd="docker kill \${node_pid} 2>/dev/null"
         pid="container id"
         log_cmd="tail -n20 \$(docker inspect --format='{{.LogPath}}' \${SHELL_FOLDER//\//})"
