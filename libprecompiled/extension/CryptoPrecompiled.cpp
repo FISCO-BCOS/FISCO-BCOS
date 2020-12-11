@@ -33,7 +33,8 @@ using namespace dev::blockverifier;
 
 // precompiled interfaces related to hash calculation
 const char* const CRYPTO_METHOD_SM3_STR = "sm3(bytes)";
-const char* const CRYPTO_METHOD_KECCAK256_STR = "keccak256(bytes)";
+// Note: the interface here can't be keccak256k1 for naming conflict
+const char* const CRYPTO_METHOD_KECCAK256_STR = "keccak256Hash(bytes)";
 // precompiled interfaces related to verify
 // sm2 verify: (message, v, r, s)
 const char* const CRYPTO_METHOD_SM2_VERIFY_STR = "sm2Verify(bytes32,bytes,bytes32,bytes32)";
