@@ -94,14 +94,14 @@ void testHash(CryptoPrecompiled::Ptr _cryptoPrecompiled, ExecutiveContext::Ptr _
     std::cout << "== testHash-sm3: hash:" << toHex(hash) << std::endl;
     BOOST_CHECK(hash == fromString32(decodedHash));
 
-    encodedData = abi.abiIn("keccak256(bytes)", dataRef.toBytes());
+    encodedData = abi.abiIn("keccak256Hash(bytes)", dataRef.toBytes());
     callResult = _cryptoPrecompiled->call(_precompiledContext, bytesConstRef(&encodedData));
     out = callResult->execResult();
     abi.abiOut(bytesConstRef(&out), decodedHash);
     hash = h256("48bed44d1bcd124a28c27f343a817e5f5243190d3c52bf347daf876de1dbbf77");
-    std::cout << "== testHash-keccak256: decodedHash: " << toHex(fromString32(decodedHash))
+    std::cout << "== testHash-keccak256Hash: decodedHash: " << toHex(fromString32(decodedHash))
               << std::endl;
-    std::cout << "== testHash-keccak256: hash:" << toHex(hash) << std::endl;
+    std::cout << "== testHash-keccak256Hash: hash:" << toHex(hash) << std::endl;
     BOOST_CHECK(hash == fromString32(decodedHash));
 }
 
