@@ -37,6 +37,10 @@
 
 namespace dev
 {
+namespace storage
+{
+class TableFactory;
+}
 namespace executive
 {
 evmc_bytes32 sm3Hash(const uint8_t* data, size_t size);
@@ -49,21 +53,29 @@ public:
         dev::executive::EnvInfo const& _envInfo, Address const& _myAddress, Address const& _caller,
         Address const& _origin, u256 const& _value, u256 const& _gasPrice, bytesConstRef _data,
         const bytes& _code, h256 const& _codeHash, unsigned _depth, bool _isCreate,
-        bool _staticCall, bool _freeStorage=false);
+        bool _staticCall, bool _freeStorage = false);
     virtual ~EVMHostContext() = default;
 
     EVMHostContext(EVMHostContext const&) = delete;
     EVMHostContext& operator=(EVMHostContext const&) = delete;
 
-    std::string get(const std::string& _key)
-    {
-        return m_s->get(myAddress(), _key);
-    }
+    std::string get(const std::string& _key) { return m_s->get(myAddress(), _key); }
     void set(const std::string& _key, const std::string& _value)
     {
-         m_s->set(myAddress(), _key,_value);
+        m_s->set(myAddress(), _key, _value);
     }
-
+    virtual bool registerAsset(const std::string& _assetName, Address const& _issuer,
+        bool _fungible, uint64_t _total, const std::string& _description);
+    virtual bool issueFungibleAsset(
+        Address const& _to, const std::string& _assetName, uint64_t _amount);
+    virtual uint64_t issueNotFungibleAsset(
+        Address const& _to, const std::string& _assetName, const std::string& _uri);
+    virtual std::string getNotFungibleAssetInfo(Address const& _owner, const std::string& _assetName, uint64_t _id);
+    bool transferAsset(
+        Address const& _to, const std::string& _assetName, uint64_t _amountOrID, bool _fromSelf);
+    // if NFT return counts, else return value
+    uint64_t getAssetBanlance(Address const& _account, const std::string& _assetName);
+    std::vector<uint64_t> getNotFungibleAssetIDs(Address const& _account, const std::string& _assetName);
     /// Read storage location.
     virtual u256 store(u256 const& _n) { return m_s->storage(myAddress(), _n); }
 
@@ -148,6 +160,11 @@ public:
     virtual void setCreate(bool _isCreate) { m_isCreate = _isCreate; }
     virtual void setStaticCall(bool _staticCall) { m_staticCall = _staticCall; }
 
+private:
+    void depositFungibleAsset(Address const& _to, const std::string& _assetName, uint64_t _amount);
+    void depositNotFungibleAsset(Address const& _to, const std::string& _assetName,
+        uint64_t _assetID, const std::string& _uri);
+
 protected:
     EnvInfo const& m_envInfo;
 
@@ -169,6 +186,7 @@ private:
 
     bool m_freeStorage = false;
     std::shared_ptr<executive::StateFace> m_s;  ///< A reference to the base state.
+    std::shared_ptr<dev::storage::TableFactory> m_memoryTableFactory;
 };
 
 }  // namespace executive

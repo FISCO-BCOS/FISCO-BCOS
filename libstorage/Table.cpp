@@ -917,5 +917,11 @@ TableInfo::Ptr dev::storage::getSysTableInfo(const string& tableName)
         tableInfo->fields = vector<string>{SYS_VALUE};
         tableInfo->enableConsensus = false;
     }
+    else if (tableName == SYS_ASSET_INFO)
+    {
+        tableInfo->key = SYS_ASSET_NAME;
+        tableInfo->fields = vector<string>{SYS_ASSET_FUNGIBLE, SYS_ASSET_TOTAL, SYS_ASSET_SUPPLIED,
+            SYS_ASSET_ISSUER, SYS_ASSET_DESCRIPTION};
+    }
     return tableInfo;
 }

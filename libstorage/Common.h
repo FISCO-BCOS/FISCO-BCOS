@@ -46,6 +46,12 @@ static const std::string SYS_KEY_TOTAL_FAILED_TRANSACTION = "total_failed_transa
 static const std::string SYS_VALUE = "value";
 static const std::string SYS_SIG_LIST = "sigs";
 static const std::string SYS_KEY = "key";
+static const std::string SYS_ASSET_NAME = "name";
+static const std::string SYS_ASSET_FUNGIBLE = "fungible";
+static const std::string SYS_ASSET_TOTAL = "total";
+static const std::string SYS_ASSET_SUPPLIED = "supplied";
+static const std::string SYS_ASSET_ISSUER = "issuer";
+static const std::string SYS_ASSET_DESCRIPTION = "description";
 
 static const std::string SYS_TABLES = "_sys_tables_";
 static const std::string SYS_CONSENSUS = "_sys_consensus_";
@@ -58,6 +64,8 @@ static const std::string SYS_CONFIG = "_sys_config_";
 static const std::string SYS_ACCESS_TABLE = "_sys_table_access_";
 static const std::string SYS_BLOCK_2_NONCES = "_sys_block_2_nonces_";
 static const std::string SYS_HASH_2_BLOCKHEADER = "_sys_hash_2_header_";
+static const std::string SYS_ASSET_INFO = "_sys_asset_info_";
+
 
 #if 0
 const char* const ID_FIELD = "_id_";

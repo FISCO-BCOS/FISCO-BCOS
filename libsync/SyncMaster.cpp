@@ -277,7 +277,7 @@ bool SyncMaster::sendSyncStatusByNodeId(
     packet->encode();
     m_service->asyncSendMessageByNodeID(
         nodeId, packet->toMessage(m_protocolId), CallbackFuncWithSession(), Options());
-    SYNC_LOG(DEBUG) << LOG_BADGE("Status") << LOG_DESC("Send current status when maintainBlocks")
+    SYNC_LOG(TRACE) << LOG_BADGE("Status") << LOG_DESC("Send current status when maintainBlocks")
                     << LOG_KV("number", blockNumber)
                     << LOG_KV("genesisHash", m_genesisHash.abridged())
                     << LOG_KV("currentHash", currentHash.abridged())

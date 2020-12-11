@@ -40,9 +40,77 @@ static_assert(alignof(h256) == alignof(evmc_bytes32), "Hash types alignment mism
 
 bool accountExists(evmc_host_context* _context, const evmc_address* _addr) noexcept
 {
-    auto& env = static_cast<EVMHostContext&>(*_context);
+    auto& hostContext = static_cast<EVMHostContext&>(*_context);
     Address addr = fromEvmC(*_addr);
-    return env.exists(addr);
+    return hostContext.exists(addr);
+}
+
+bool registerAsset(evmc_host_context* _context, const char* _assetName, int32_t _nameLength,
+    const evmc_address* _issuer, bool _fungible, uint64_t _total, const char* _desc,
+    int32_t _descLength)
+{
+    auto& hostContext = static_cast<EVMHostContext&>(*_context);
+    return hostContext.registerAsset(string(_assetName, _nameLength), fromEvmC(*_issuer), _fungible,
+        _total, string(_desc, _descLength));
+}
+
+bool issueFungibleAsset(evmc_host_context* _context, const evmc_address* _to,
+    const char* _assetName, int32_t _nameLength, uint64_t _amount)
+{
+    auto& hostContext = static_cast<EVMHostContext&>(*_context);
+    return hostContext.issueFungibleAsset(fromEvmC(*_to), string(_assetName, _nameLength), _amount);
+}
+
+uint64_t issueNotFungibleAsset(evmc_host_context* _context, const evmc_address* _to,
+    const char* _assetName, int32_t _nameLength, const char* _uri, int32_t _uriLength)
+{
+    auto& hostContext = static_cast<EVMHostContext&>(*_context);
+    return hostContext.issueNotFungibleAsset(
+        fromEvmC(*_to), string(_assetName, _nameLength), string(_uri, _uriLength));
+}
+
+bool transferAsset(evmc_host_context* _context, const evmc_address* _to, const char* _assetName,
+    int32_t _nameLength, uint64_t _amountOrID, bool _fromSelf)
+{
+    auto& hostContext = static_cast<EVMHostContext&>(*_context);
+    return hostContext.transferAsset(
+        fromEvmC(*_to), string(_assetName, _nameLength), _amountOrID, _fromSelf);
+}
+
+uint64_t getAssetBanlance(evmc_host_context* _context, const evmc_address* _account,
+    const char* _assetName, int32_t _nameLength)
+{
+    auto& hostContext = static_cast<EVMHostContext&>(*_context);
+    return hostContext.getAssetBanlance(fromEvmC(*_account), string(_assetName, _nameLength));
+}
+
+int32_t getNotFungibleAssetIDs(evmc_host_context* _context, const evmc_address* _account,
+    const char* _assetName, int32_t _nameLength, char* _value, int32_t _valueLength)
+{
+    auto& hostContext = static_cast<EVMHostContext&>(*_context);
+    auto tokenIDs =
+        hostContext.getNotFungibleAssetIDs(fromEvmC(*_account), string(_assetName, _nameLength));
+    if (tokenIDs.size() > (size_t)_valueLength / sizeof(uint64_t))
+    {
+        return -1;
+    }
+    int32_t length = tokenIDs.size() * sizeof(uint64_t);
+    memcpy(_value, tokenIDs.data(), length);
+    return length;
+}
+
+int32_t getNotFungibleAssetInfo(evmc_host_context* _context, const evmc_address* _account,
+    const char* _assetName, int32_t _nameLength, uint64_t _assetId, char* _value, int32_t _valueLength)
+{
+    auto& hostContext = static_cast<EVMHostContext&>(*_context);
+    auto info =
+        hostContext.getNotFungibleAssetInfo(fromEvmC(*_account), string(_assetName, _nameLength), _assetId);
+    if (info.size() > (size_t)_valueLength)
+    {
+        return -1;
+    }
+    memcpy(_value, info.data(), info.size());
+    return info.size();
 }
 
 int32_t get(evmc_host_context* _context, const evmc_address* _addr, const char* _key,
@@ -57,7 +125,7 @@ int32_t get(evmc_host_context* _context, const evmc_address* _addr, const char* 
     {
         return -1;
     }
-    memcpy(_value,value.data(),value.size());
+    memcpy(_value, value.data(), value.size());
     return value.size();
 }
 
@@ -92,26 +160,26 @@ evmc_storage_status set(evmc_host_context* _context, const evmc_address* _addr, 
 evmc_bytes32 getStorage(
     evmc_host_context* _context, const evmc_address* _addr, const evmc_bytes32* _key)
 {
-    auto& env = static_cast<EVMHostContext&>(*_context);
+    auto& hostContext = static_cast<EVMHostContext&>(*_context);
 
     // programming assert for debug
-    assert(fromEvmC(*_addr) == env.myAddress());
+    assert(fromEvmC(*_addr) == hostContext.myAddress());
     u256 key = fromEvmC(*_key);
-    return toEvmC(env.store(key));
+    return toEvmC(hostContext.store(key));
 }
 
 evmc_storage_status setStorage(evmc_host_context* _context, const evmc_address* _addr,
     const evmc_bytes32* _key, const evmc_bytes32* _value)
 {
-    auto& env = static_cast<EVMHostContext&>(*_context);
-    if (!env.isPermitted())
+    auto& hostContext = static_cast<EVMHostContext&>(*_context);
+    if (!hostContext.isPermitted())
     {
         BOOST_THROW_EXCEPTION(eth::PermissionDenied());
     }
-    assert(fromEvmC(*_addr) == env.myAddress());
+    assert(fromEvmC(*_addr) == hostContext.myAddress());
     u256 index = fromEvmC(*_key);
     u256 value = fromEvmC(*_value);
-    u256 oldValue = env.store(index);
+    u256 oldValue = hostContext.store(index);
 
     if (value == oldValue)
         return EVMC_STORAGE_UNCHANGED;
@@ -122,28 +190,28 @@ evmc_storage_status setStorage(evmc_host_context* _context, const evmc_address* 
     else if (value == 0)
     {
         status = EVMC_STORAGE_DELETED;
-        env.sub().refunds += env.evmSchedule().sstoreRefundGas;
+        hostContext.sub().refunds += hostContext.evmSchedule().sstoreRefundGas;
     }
-    env.setStore(index, value);  // Interface uses native endianness
+    hostContext.setStore(index, value);  // Interface uses native endianness
     return status;
 }
 
 evmc_bytes32 getBalance(evmc_host_context* _context, const evmc_address* _addr) noexcept
 {
-    auto& env = static_cast<EVMHostContext&>(*_context);
-    return toEvmC(env.balance(fromEvmC(*_addr)));
+    auto& hostContext = static_cast<EVMHostContext&>(*_context);
+    return toEvmC(hostContext.balance(fromEvmC(*_addr)));
 }
 
 size_t getCodeSize(evmc_host_context* _context, const evmc_address* _addr)
 {
-    auto& env = static_cast<EVMHostContext&>(*_context);
-    return env.codeSizeAt(fromEvmC(*_addr));
+    auto& hostContext = static_cast<EVMHostContext&>(*_context);
+    return hostContext.codeSizeAt(fromEvmC(*_addr));
 }
 
 evmc_bytes32 getCodeHash(evmc_host_context* _context, const evmc_address* _addr)
 {
-    auto& env = static_cast<EVMHostContext&>(*_context);
-    return toEvmC(env.codeHashAt(fromEvmC(*_addr)));
+    auto& hostContext = static_cast<EVMHostContext&>(*_context);
+    return toEvmC(hostContext.codeHashAt(fromEvmC(*_addr)));
 }
 
 /**
@@ -161,9 +229,9 @@ evmc_bytes32 getCodeHash(evmc_host_context* _context, const evmc_address* _addr)
 size_t copyCode(evmc_host_context* _context, const evmc_address* _addr, size_t _codeOffset,
     uint8_t* _bufferData, size_t _bufferSize)
 {
-    auto& env = static_cast<EVMHostContext&>(*_context);
+    auto& hostContext = static_cast<EVMHostContext&>(*_context);
     Address addr = fromEvmC(*_addr);
-    bytes const& code = env.codeAt(addr);
+    bytes const& code = hostContext.codeAt(addr);
 
     // Handle "big offset" edge case.
     if (_codeOffset >= code.size())
@@ -179,9 +247,9 @@ void selfdestruct(evmc_host_context* _context, const evmc_address* _addr,
     const evmc_address* _beneficiary) noexcept
 {
     (void)_addr;
-    auto& env = static_cast<EVMHostContext&>(*_context);
-    assert(fromEvmC(*_addr) == env.myAddress());
-    env.suicide(fromEvmC(*_beneficiary));
+    auto& hostContext = static_cast<EVMHostContext&>(*_context);
+    assert(fromEvmC(*_addr) == hostContext.myAddress());
+    hostContext.suicide(fromEvmC(*_beneficiary));
 }
 
 
@@ -189,28 +257,28 @@ void log(evmc_host_context* _context, const evmc_address* _addr, uint8_t const* 
     size_t _dataSize, const evmc_bytes32 _topics[], size_t _numTopics) noexcept
 {
     (void)_addr;
-    auto& env = static_cast<EVMHostContext&>(*_context);
-    assert(fromEvmC(*_addr) == env.myAddress());
+    auto& hostContext = static_cast<EVMHostContext&>(*_context);
+    assert(fromEvmC(*_addr) == hostContext.myAddress());
     h256 const* pTopics = reinterpret_cast<h256 const*>(_topics);
-    env.log(h256s{pTopics, pTopics + _numTopics}, bytesConstRef{_data, _dataSize});
+    hostContext.log(h256s{pTopics, pTopics + _numTopics}, bytesConstRef{_data, _dataSize});
 }
 
 evmc_tx_context getTxContext(evmc_host_context* _context) noexcept
 {
-    auto& env = static_cast<EVMHostContext&>(*_context);
+    auto& hostContext = static_cast<EVMHostContext&>(*_context);
     evmc_tx_context result;
-    result.tx_gas_price = toEvmC(env.gasPrice());
-    result.tx_origin = toEvmC(env.origin());
-    result.block_number = env.envInfo().number();
-    result.block_timestamp = env.envInfo().timestamp();
-    result.block_gas_limit = static_cast<int64_t>(env.envInfo().gasLimit());
+    result.tx_gas_price = toEvmC(hostContext.gasPrice());
+    result.tx_origin = toEvmC(hostContext.origin());
+    result.block_number = hostContext.envInfo().number();
+    result.block_timestamp = hostContext.envInfo().timestamp();
+    result.block_gas_limit = static_cast<int64_t>(hostContext.envInfo().gasLimit());
     return result;
 }
 
 evmc_bytes32 getBlockHash(evmc_host_context* _envPtr, int64_t _number)
 {
-    auto& env = static_cast<EVMHostContext&>(*_envPtr);
-    return toEvmC(env.blockHash(_number));
+    auto& hostContext = static_cast<EVMHostContext&>(*_envPtr);
+    return toEvmC(hostContext.blockHash(_number));
 }
 
 evmc_result create(EVMHostContext& _env, evmc_message const* _msg) noexcept
@@ -239,11 +307,11 @@ evmc_result call(evmc_host_context* _context, const evmc_message* _msg) noexcept
         BOOST_THROW_EXCEPTION(eth::GasOverflow());
     }
 
-    auto& env = static_cast<EVMHostContext&>(*_context);
+    auto& hostContext = static_cast<EVMHostContext&>(*_context);
 
     // Handle CREATE separately.
     if (_msg->kind == EVMC_CREATE || _msg->kind == EVMC_CREATE2)
-        return create(env, _msg);
+        return create(hostContext, _msg);
 
     CallParameters params;
     params.gas = _msg->gas;
@@ -251,11 +319,11 @@ evmc_result call(evmc_host_context* _context, const evmc_message* _msg) noexcept
     params.valueTransfer = _msg->kind == EVMC_DELEGATECALL ? 0 : params.apparentValue;
     params.senderAddress = fromEvmC(_msg->sender);
     params.codeAddress = fromEvmC(_msg->destination);
-    params.receiveAddress = _msg->kind == EVMC_CALL ? params.codeAddress : env.myAddress();
+    params.receiveAddress = _msg->kind == EVMC_CALL ? params.codeAddress : hostContext.myAddress();
     params.data = {_msg->input_data, _msg->input_size};
     params.staticCall = (_msg->flags & EVMC_STATIC) != 0;
 
-    return env.call(params);
+    return hostContext.call(params);
 }
 
 /// function table
@@ -274,6 +342,13 @@ evmc_host_interface const fnTable = {
     log,
     get,
     set,
+    registerAsset,
+    issueFungibleAsset,
+    issueNotFungibleAsset,
+    transferAsset,
+    getAssetBanlance,
+    getNotFungibleAssetInfo,
+    getNotFungibleAssetIDs,
 };
 
 }  // namespace

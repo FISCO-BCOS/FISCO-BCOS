@@ -156,6 +156,7 @@ void ZdbStorage::initSysTables()
     }
     createHash2BlockTables();
     createSysBlock2NoncesTables();
+    createSysAssetInfoTable();
 
     createBlobSysHash2BlockHeaderTable();
     insertSysTables();
@@ -333,6 +334,25 @@ void ZdbStorage::createSysBlock2NoncesTables()
     m_sqlBasicAcc->ExecuteSql(sql);
 }
 
+void ZdbStorage::createSysAssetInfoTable()
+{
+    stringstream ss;
+    ss << "CREATE TABLE IF NOT EXISTS `" << SYS_ASSET_INFO << "` (\n";
+    ss << getCommonFileds();
+    ss << "`name` varchar(128) DEFAULT NULL,\n";
+    ss << "`fungible` char,\n";
+    ss << "`total` varchar(128),\n";
+    ss << "`supplied` varchar(128),\n";
+    ss << "`issuer` varchar(128),\n";
+    ss << "`description` text,\n";
+    ss << " PRIMARY KEY (`_id_`),\n";
+    ss << "KEY `name` (`name`)\n";
+    ss << ") " << m_rowFormat << " ENGINE=InnoDB AUTO_INCREMENT=10 DEFAULT CHARSET=utf8mb4;";
+    string sql = ss.str();
+    m_sqlBasicAcc->ExecuteSql(sql);
+}
+
+
 void ZdbStorage::insertSysTables()
 {
     stringstream ss;
@@ -348,7 +368,8 @@ void ZdbStorage::insertSysTables()
     ss << "	('" << SYS_CNS << "', 'name','version,address,abi'),\n";
     ss << "	('" << SYS_CONFIG << "', 'key','value,enable_num'),\n";
     ss << "	('" << SYS_BLOCK_2_NONCES << "', 'number','value'),\n";
-    ss << "	('" << SYS_HASH_2_BLOCKHEADER << "', 'hash','value,sigs');";
+    ss << "	('" << SYS_HASH_2_BLOCKHEADER << "', 'hash','value,sigs'),\n";
+    ss << "	('" << SYS_ASSET_INFO << "', 'name','fungible,total,supplied,issuer,description');";
     string sql = ss.str();
     m_sqlBasicAcc->ExecuteSql(sql);
 }

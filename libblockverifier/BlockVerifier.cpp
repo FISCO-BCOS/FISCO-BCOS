@@ -239,8 +239,6 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
                               << errinfo_comment("Error during initExecutiveContext"));
     }
 
-    auto memoryTableFactory = executiveContext->getMemoryTableFactory();
-
     auto initExeCtx_time_cost = utcTime() - record_time;
     record_time = utcTime();
 

@@ -77,6 +77,7 @@ private:
     void insertSysTables();
     // create blob table
     void createBlobSysHash2BlockHeaderTable();
+    void createSysAssetInfoTable();
 
     int m_maxRetry = 60;
     std::string m_rowFormat = "";

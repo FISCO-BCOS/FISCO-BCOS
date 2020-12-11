@@ -469,7 +469,7 @@ int SQLBasicAccess::CommitDo(int64_t _num, const vector<TableData::Ptr>& _datas,
                     PreparedStatement_T preStatement =
                         Connection_prepareStatement(conn, "%s", placeholder.sql.c_str());
                     SQLBasicAccess_LOG(TRACE)
-                        << "table:" << tableName << " sql:" << placeholder.sql;
+                        << "table:" << tableName << " sql:" << placeholder.sql << LOG_KV("isBlob", tableWithBlobField);
 
                     uint32_t index = 0;
                     for (; itValue != values.end(); ++itValue)

@@ -25,15 +25,21 @@
 #include "EVMHostContext.h"
 #include "EVMHostInterface.h"
 #include "evmc/evmc.hpp"
+#include "libstorage/MemoryTableFactory2.h"
 #include <libblockverifier/ExecutiveContext.h>
+#include <boost/algorithm/string/split.hpp>
 #include <boost/thread.hpp>
+#include <algorithm>
 #include <exception>
+#include <limits>
 #include <sstream>
+#include <vector>
 
 using namespace std;
 using namespace dev;
 using namespace dev::eth;
 using namespace dev::executive;
+using namespace dev::storage;
 
 namespace  // anonymous
 {
@@ -217,6 +223,7 @@ EVMHostContext::EVMHostContext(std::shared_ptr<StateFace> _s,
     m_freeStorage(_freeStorage),
     m_s(_s)
 {
+    m_memoryTableFactory = m_envInfo.precompiledEngine()->getMemoryTableFactory();
     interface = getHostInterface();
     sm3_hash_fn = nullptr;
     if (g_BCOSConfig.SMCrypto())
@@ -276,8 +283,8 @@ bool EVMHostContext::isPermitted()
     // check authority by tx.origin
     if (!m_s->checkAuthority(origin(), myAddress()))
     {
-        EXECUTIVE_LOG(ERROR) << "EVMHostContext::isPermitted PermissionDenied"
-                             << LOG_KV("origin", origin()) << LOG_KV("address", myAddress());
+        EXECUTIVE_LOG(ERROR) << "isPermitted PermissionDenied" << LOG_KV("origin", origin())
+                             << LOG_KV("address", myAddress());
         return false;
     }
     return true;
@@ -338,6 +345,344 @@ void EVMHostContext::suicide(Address const& _a)
 h256 EVMHostContext::blockHash(int64_t _number)
 {
     return envInfo().numberHash(_number);
+}
+
+bool EVMHostContext::registerAsset(const std::string& _assetName, Address const& _addr,
+    bool _fungible, uint64_t _total, const std::string& _description)
+{
+    auto table = m_memoryTableFactory->openTable(SYS_ASSET_INFO, false);
+    auto entries = table->select(_assetName, table->newCondition());
+    if (entries->size() != 0)
+    {
+        return false;
+    }
+    auto entry = table->newEntry();
+    entry->setField(SYS_ASSET_NAME, _assetName);
+    entry->setField(SYS_ASSET_ISSUER, _addr.hexPrefixed());
+    entry->setField(SYS_ASSET_FUNGIBLE, to_string(_fungible));
+    entry->setField(SYS_ASSET_TOTAL, to_string(_total));
+    entry->setField(SYS_ASSET_SUPPLIED, "0");
+    entry->setField(SYS_ASSET_DESCRIPTION, _description);
+    auto count = table->insert(_assetName, entry);
+    return count == 1;
+}
+
+bool EVMHostContext::issueFungibleAsset(
+    Address const& _to, const std::string& _assetName, uint64_t _amount)
+{
+    auto table = m_memoryTableFactory->openTable(SYS_ASSET_INFO, false);
+    auto entries = table->select(_assetName, table->newCondition());
+    if (entries->size() != 1)
+    {
+        EXECUTIVE_LOG(WARNING) << "issueFungibleAsset " << _assetName << "is not exist";
+        return false;
+    }
+    auto entry = entries->get(0);
+    auto issuer = Address(entry->getField(SYS_ASSET_ISSUER));
+    if (caller() != issuer)
+    {
+        EXECUTIVE_LOG(WARNING) << "issueFungibleAsset not issuer of " << _assetName;
+        return false;
+    }
+    // TODO: check supplied is less than total_supply
+    auto total = boost::lexical_cast<uint64_t>(entry->getField(SYS_ASSET_TOTAL));
+    auto supplied = boost::lexical_cast<uint64_t>(entry->getField(SYS_ASSET_SUPPLIED));
+    if (total - supplied < _amount)
+    {
+        EXECUTIVE_LOG(WARNING) << "issueFungibleAsset overflow total supply";
+        return false;
+    }
+    // TODO: update supplied
+    auto updateEntry = table->newEntry();
+    updateEntry->setField(SYS_ASSET_SUPPLIED, to_string(supplied + _amount));
+    table->update(_assetName, updateEntry, table->newCondition());
+    // TODO: create new tokens
+    depositFungibleAsset(_to, _assetName, _amount);
+    return true;
+}
+
+uint64_t EVMHostContext::issueNotFungibleAsset(
+    Address const& _to, const std::string& _assetName, const std::string& _uri)
+{
+    // check issuer
+    auto table = m_memoryTableFactory->openTable(SYS_ASSET_INFO, false);
+    auto entries = table->select(_assetName, table->newCondition());
+    if (entries->size() != 1)
+    {
+        EXECUTIVE_LOG(WARNING) << "issueNotFungibleAsset " << _assetName << "is not exist";
+        return false;
+    }
+    auto entry = entries->get(0);
+    auto issuer = Address(entry->getField(SYS_ASSET_ISSUER));
+    if (caller() != issuer)
+    {
+        EXECUTIVE_LOG(WARNING) << "issueNotFungibleAsset not issuer of " << _assetName;
+        return false;
+    }
+    // check supplied
+    auto total = boost::lexical_cast<uint64_t>(entry->getField(SYS_ASSET_TOTAL));
+    auto supplied = boost::lexical_cast<uint64_t>(entry->getField(SYS_ASSET_SUPPLIED));
+    if (total - supplied == 0)
+    {
+        EXECUTIVE_LOG(WARNING) << "issueNotFungibleAsset overflow total supply";
+        return false;
+    }
+    // get asset id and update supplied
+    auto assetID = supplied + 1;
+    auto updateEntry = table->newEntry();
+    updateEntry->setField(SYS_ASSET_SUPPLIED, to_string(assetID));
+    table->update(_assetName, updateEntry, table->newCondition());
+
+    // create new tokens
+    depositNotFungibleAsset(_to, _assetName, assetID, _uri);
+    return assetID;
+}
+
+void EVMHostContext::depositFungibleAsset(
+    Address const& _to, const std::string& _assetName, uint64_t _amount)
+{
+    auto tableName = "c_" + _to.hex();
+    auto table = m_memoryTableFactory->openTable(tableName, false);
+    if (!table)
+    {
+        EXECUTIVE_LOG(DEBUG) << LOG_DESC("depositFungibleAsset createAccount")
+                             << LOG_KV("account", _to.hex());
+        m_s->setNonce(_to, u256(0));
+        table = m_memoryTableFactory->openTable(tableName, false);
+    }
+    auto entries = table->select(_assetName, table->newCondition());
+    if (entries->size() == 0)
+    {
+        auto entry = table->newEntry();
+        entry->setField("key", _assetName);
+        entry->setField("value", to_string(_amount));
+        table->insert(_assetName, entry);
+        return;
+    }
+    auto entry = entries->get(0);
+    auto value = boost::lexical_cast<uint64_t>(entry->getField("value"));
+    value += _amount;
+    auto updateEntry = table->newEntry();
+    updateEntry->setField("value", to_string(value));
+    table->update(_assetName, updateEntry, table->newCondition());
+}
+
+void EVMHostContext::depositNotFungibleAsset(
+    Address const& _to, const std::string& _assetName, uint64_t _assetID, const std::string& _uri)
+{
+    auto tableName = "c_" + _to.hex();
+    auto table = m_memoryTableFactory->openTable(tableName, false);
+    if (!table)
+    {
+        EXECUTIVE_LOG(DEBUG) << LOG_DESC("depositNotFungibleAsset createAccount")
+                             << LOG_KV("account", _to.hex());
+        m_s->setNonce(_to, u256(0));
+        table = m_memoryTableFactory->openTable(tableName, false);
+    }
+    auto entries = table->select(_assetName, table->newCondition());
+    if (entries->size() == 0)
+    {
+        auto entry = table->newEntry();
+        entry->setField("value", to_string(_assetID));
+        entry->setField("key", _assetName);
+        table->insert(_assetName, entry);
+    }
+    else
+    {
+        auto entry = entries->get(0);
+        auto assetIDs = entry->getField("value");
+        if (assetIDs.empty())
+        {
+            assetIDs = to_string(_assetID);
+        }
+        else
+        {
+            assetIDs = assetIDs + "," + to_string(_assetID);
+        }
+        auto updateEntry = table->newEntry();
+        updateEntry->setField("key", _assetName);
+        updateEntry->setField("value", assetIDs);
+        table->update(_assetName, updateEntry, table->newCondition());
+    }
+    auto entry = table->newEntry();
+    auto key = _assetName + "-" + to_string(_assetID);
+    entry->setField("key", key);
+    entry->setField("value", _uri);
+    table->insert(key, entry);
+}
+
+bool EVMHostContext::transferAsset(
+    Address const& _to, const std::string& _assetName, uint64_t _amountOrID, bool _fromSelf)
+{
+    // get asset info
+    auto table = m_memoryTableFactory->openTable(SYS_ASSET_INFO, false);
+    auto entries = table->select(_assetName, table->newCondition());
+    if (entries->size() != 1)
+    {
+        EXECUTIVE_LOG(WARNING) << "transferAsset " << _assetName << " is not exist";
+        return false;
+    }
+    auto assetEntry = entries->get(0);
+    auto fungible = boost::lexical_cast<bool>(assetEntry->getField(SYS_ASSET_FUNGIBLE));
+    auto from = caller();
+    if (_fromSelf)
+    {
+        from = myAddress();
+    }
+    auto tableName = "c_" + from.hex();
+    table = m_memoryTableFactory->openTable(tableName, false);
+    entries = table->select(_assetName, table->newCondition());
+    if (entries->size() == 0)
+    {
+        EXECUTIVE_LOG(WARNING) << LOG_DESC("transferAsset account does not have")
+                               << LOG_KV("asset", _assetName)
+                               << LOG_KV("account", from.hexPrefixed());
+        return false;
+    }
+    EXECUTIVE_LOG(DEBUG) << LOG_DESC("transferAsset") << LOG_KV("asset", _assetName)
+                         << LOG_KV("fungible", fungible) << LOG_KV("account", from.hexPrefixed());
+    try
+    {
+        if (fungible)
+        {
+            auto entry = entries->get(0);
+            auto value = boost::lexical_cast<uint64_t>(entry->getField("value"));
+            value -= _amountOrID;
+            auto updateEntry = table->newEntry();
+            updateEntry->setField("key", _assetName);
+            updateEntry->setField("value", to_string(value));
+            table->update(_assetName, updateEntry, table->newCondition());
+            depositFungibleAsset(_to, _assetName, _amountOrID);
+        }
+        else
+        {
+            // TODO: check if from has asset
+            auto entry = entries->get(0);
+            auto tokenIDs = entry->getField("value");
+            // find id in tokenIDs
+            auto tokenID = to_string(_amountOrID);
+            std::size_t found = tokenIDs.find(tokenID);
+            if (found != std::string::npos)
+            {
+                auto start = found == 0 ? found : found - 1;
+                auto end = found == 0 ? tokenID.size() + 1 : tokenID.size();
+                tokenIDs.replace(start, end <= tokenIDs.size() ? end : tokenIDs.size(), "");
+                auto updateEntry = table->newEntry();
+                updateEntry->setField("value", tokenIDs);
+                table->update(_assetName, updateEntry, table->newCondition());
+                auto tokenKey = _assetName + "-" + tokenID;
+                entries = table->select(tokenKey, table->newCondition());
+                entry = entries->get(0);
+                auto tokenURI = entry->getField("value");
+                table->remove(tokenKey, table->newCondition());
+                depositNotFungibleAsset(_to, _assetName, _amountOrID, tokenURI);
+            }
+            else
+            {
+                EXECUTIVE_LOG(WARNING)
+                    << LOG_DESC("transferAsset account does not have")
+                    << LOG_KV("asset", _assetName) << LOG_KV("account", from.hexPrefixed());
+                return false;
+            }
+        }
+    }
+    catch (std::exception& e)
+    {
+        EXECUTIVE_LOG(ERROR) << "transferAsset exception" << LOG_KV("what", e.what());
+        return false;
+    }
+
+    return true;
+}
+
+uint64_t EVMHostContext::getAssetBanlance(Address const& _account, const std::string& _assetName)
+{
+    auto table = m_memoryTableFactory->openTable(SYS_ASSET_INFO, false);
+    auto entries = table->select(_assetName, table->newCondition());
+    if (entries->size() != 1)
+    {
+        EXECUTIVE_LOG(WARNING) << "getAssetBanlance " << _assetName << " is not exist";
+        return false;
+    }
+    auto assetEntry = entries->get(0);
+    auto fungible = boost::lexical_cast<bool>(assetEntry->getField(SYS_ASSET_FUNGIBLE));
+    auto tableName = "c_" + _account.hex();
+    table = m_memoryTableFactory->openTable(tableName, false);
+    if (!table)
+    {
+        return 0;
+    }
+    entries = table->select(_assetName, table->newCondition());
+    if (entries->size() == 0)
+    {
+        return 0;
+    }
+    auto entry = entries->get(0);
+    if (fungible)
+    {
+        return boost::lexical_cast<uint64_t>(entry->getField("value"));
+    }
+    // not fungible
+    auto tokenIDS = entry->getField("value");
+    uint64_t counts = std::count(tokenIDS.begin(), tokenIDS.end(), ',') + 1;
+    return counts;
+}
+
+std::string EVMHostContext::getNotFungibleAssetInfo(
+    Address const& _owner, const std::string& _assetName, uint64_t _assetID)
+{
+    auto tableName = "c_" + _owner.hex();
+    auto table = m_memoryTableFactory->openTable(tableName, false);
+    if (!table)
+    {
+        EXECUTIVE_LOG(WARNING) << "getNotFungibleAssetInfo failed, account not exist"
+                               << LOG_KV("account", _owner.hex());
+        return "";
+    }
+    auto assetKey = _assetName + "-" + to_string(_assetID);
+    auto entries = table->select(assetKey, table->newCondition());
+    if (entries->size() == 0)
+    {
+        EXECUTIVE_LOG(WARNING) << "getNotFungibleAssetInfo failed"
+                               << LOG_KV("account", _owner.hex()) << LOG_KV("asset", assetKey);
+        return "";
+    }
+    auto entry = entries->get(0);
+    EXECUTIVE_LOG(DEBUG) << "getNotFungibleAssetInfo" << LOG_KV("account", _owner.hex())
+                         << LOG_KV("asset", _assetName) << LOG_KV("uri", entry->getField("value"));
+    return entry->getField("value");
+}
+
+std::vector<uint64_t> EVMHostContext::getNotFungibleAssetIDs(
+    Address const& _account, const std::string& _assetName)
+{
+    auto tableName = "c_" + _account.hex();
+    auto table = m_memoryTableFactory->openTable(tableName, false);
+    if (!table)
+    {
+        EXECUTIVE_LOG(WARNING) << "getNotFungibleAssetIDs account not exist"
+                               << LOG_KV("account", _account.hex());
+        return vector<uint64_t>();
+    }
+    auto entries = table->select(_assetName, table->newCondition());
+    auto entry = entries->get(0);
+    auto tokenIDs = entry->getField("value");
+    if (tokenIDs.empty())
+    {
+        EXECUTIVE_LOG(WARNING) << "getNotFungibleAssetIDs account has none asset"
+                               << LOG_KV("account", _account.hex()) << LOG_KV("asset", _assetName);
+        return vector<uint64_t>();
+    }
+    vector<string> tokenIDList;
+    boost::split(tokenIDList, tokenIDs, boost::is_any_of(","));
+    vector<uint64_t> ret(tokenIDList.size(), 0);
+    EXECUTIVE_LOG(DEBUG) << "getNotFungibleAssetIDs" << LOG_KV("account", _account.hex())
+                         << LOG_KV("asset", _assetName) << LOG_KV("tokenIDs", tokenIDs);
+    for (size_t i = 0; i < tokenIDList.size(); ++i)
+    {
+        ret[i] = boost::lexical_cast<uint64_t>(tokenIDList[i]);
+    }
+    return ret;
 }
 }  // namespace executive
 }  // namespace dev
