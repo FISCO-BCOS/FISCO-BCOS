@@ -111,7 +111,7 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
     {
         BOOST_THROW_EXCEPTION(InvalidSupportedVersion() << errinfo_comment(
                                   "initGlobalConfig supported_version:" + version +
-                                  " bigger than binary version: " + to_string(binaryVersion)));
+                                  " bigger than binary version: " + g_BCOSConfig.binaryInfo.version));
     }
     string sectionName = "data_secure";
     if (_pt.get_child_optional("storage_security"))
