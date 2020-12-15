@@ -89,7 +89,7 @@ download_github_action_artifact(){
     fi
     local artifact_link="https://nightly.link/FISCO-BCOS/FISCO-BCOS/workflows/workflow/${branch}/${package_name}.zip"
     LOG_INFO "Downloading binary from ${artifact_link} "
-    curl -#LO "${artifact_link}" && tar -zxf "${package_name}.zip" && tar -zxf fisco-bcos.tar.gz && rm *.tar.gz.*
+    curl -LO "${artifact_link}" && unzip "${package_name}.zip" && tar -zxf fisco-bcos.tar.gz && rm *.tar.gz.*
     result=$?
     if [[ "${result}" != "0" ]];then LOG_WARN "Download failed, please try again" && exit 1;fi
 
@@ -115,14 +115,13 @@ download_artifact_macOS(){
 
 download_branch_artifact(){
     local branch="$1"
-    download_github_action_artifact "${branch}"
-    # if [ "$(uname)" == "Darwin" ];then
-    #     LOG_INFO "Downloading binary of ${branch} on macOS "
-    #     download_artifact_macOS "${branch}"
-    # else
-    #     LOG_INFO "Downloading binary of ${branch} on Linux "
-    #     download_artifact_linux "${branch}"
-    # fi
+    if [ "$(uname)" == "Darwin" ];then
+        LOG_INFO "Downloading binary of ${branch} on macOS "
+        download_github_action_artifact "${branch}"
+    else
+        LOG_INFO "Downloading binary of ${branch} on Linux "
+        download_artifact_linux "${branch}"
+    fi
 }
 
 download_released_artifact(){
