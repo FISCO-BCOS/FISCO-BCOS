@@ -25,7 +25,7 @@
 #include <libutilities/Common.h>
 
 using namespace bcos;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::blockchain;
 namespace bcos
 {

@@ -23,7 +23,7 @@
 
 using namespace std;
 using namespace bcos;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::sync;
 using namespace bcos::p2p;
 using namespace bcos::blockchain;

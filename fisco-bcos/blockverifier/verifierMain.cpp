@@ -26,8 +26,8 @@
 #include <libblockverifier/Common.h>
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcrypto/Common.h>
-#include <libethcore/Block.h>
-#include <libethcore/TransactionReceipt.h>
+#include <libprotocol/Block.h>
+#include <libprotocol/TransactionReceipt.h>
 #include <libstorage/BasicRocksDB.h>
 #include <libstorage/RocksDBStorage.h>
 #include <libstorage/Storage.h>
@@ -78,13 +78,14 @@ int main(int argc, char* argv[])
         {
             auto max = blockChain->number();
             auto parentBlock = blockChain->getBlockByNumber(max);
-            bcos::eth::BlockHeader header;
+            bcos::protocol::BlockHeader header;
             header.setNumber(max + 1);
             header.setParentHash(parentBlock->headerHash());
             header.setGasLimit(bcos::u256(1024 * 1024 * 1024));
             header.setRoots(parentBlock->header().transactionsRoot(),
                 parentBlock->header().receiptsRoot(), parentBlock->header().stateRoot());
-            std::shared_ptr<bcos::eth::Block> block = std::make_shared<bcos::eth::Block>();
+            std::shared_ptr<bcos::protocol::Block> block =
+                std::make_shared<bcos::protocol::Block>();
             block->setBlockHeader(header);
             LOG(INFO) << "max " << max << " parentHeader " << parentBlock->header() << " header "
                       << header;
@@ -302,12 +303,12 @@ int main(int argc, char* argv[])
                 "0000000000000000000000000000001ba08b0e2cd9c48032ecf68cca6eb951a8b09195d23950555a34"
                 "6f6cb9f5f91ea00ea02726ce5352276dbb7bc166dfe036a0ce67ea25848823284c845bf3cf5c6969c"
                 "f");
-            bcos::eth::Transaction::Ptr tx = std::make_shared<bcos::eth::Transaction>(
-                ref(rlpBytes), bcos::eth::CheckTransaction::Everything);
+            bcos::protocol::Transaction::Ptr tx = std::make_shared<bcos::protocol::Transaction>(
+                ref(rlpBytes), bcos::protocol::CheckTransaction::Everything);
             LOG(INFO) << "Tx " << *tx;
 
-            bcos::eth::Transaction::Ptr tx2 = std::make_shared<bcos::eth::Transaction>(
-                ref(rlpBytesCall), bcos::eth::CheckTransaction::Everything);
+            bcos::protocol::Transaction::Ptr tx2 = std::make_shared<bcos::protocol::Transaction>(
+                ref(rlpBytesCall), bcos::protocol::CheckTransaction::Everything);
             block->appendTransaction(tx);
 
             block->appendTransaction(tx2);
@@ -316,7 +317,7 @@ int main(int argc, char* argv[])
                 parentBlock->header().number(), parentBlock->header().stateRoot()};
             auto context = blockVerifier->executeBlock(*block, parentBlockInfo);
             blockChain->commitBlock(block, context);
-            bcos::eth::TransactionReceipt::Ptr receipt =
+            bcos::protocol::TransactionReceipt::Ptr receipt =
                 blockChain->getTransactionReceiptByHash(tx->hash());
             LOG(INFO) << "receipt " << *receipt;
             receipt = blockChain->getTransactionReceiptByHash(tx2->hash());

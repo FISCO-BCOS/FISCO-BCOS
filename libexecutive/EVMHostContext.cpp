@@ -32,7 +32,7 @@
 
 using namespace std;
 using namespace bcos;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::executive;
 
 namespace  // anonymous

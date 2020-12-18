@@ -24,7 +24,7 @@
 #include "interpreter.h"
 #include "libconfig/GlobalConfigure.h"
 #include "libdevcrypto/CryptoInterface.h"
-#include <libethcore/EVMFlags.h>
+#include <libprotocol/EVMFlags.h>
 
 namespace
 {
@@ -42,7 +42,7 @@ evmc_result execute(evmc_instance* _instance, evmc_context* _context, evmc_revis
     const evmc_message* _msg, uint8_t const* _code, size_t _codeSize) noexcept
 {
     (void)_instance;
-    std::unique_ptr<bcos::eth::VM> vm{new bcos::eth::VM};
+    std::unique_ptr<bcos::protocol::VM> vm{new bcos::protocol::VM};
     // create vm schedule according to evmc_context
     vm->createVMSchedule(_context);
     evmc_result result = {};
@@ -54,45 +54,45 @@ evmc_result execute(evmc_instance* _instance, evmc_context* _context, evmc_revis
         result.status_code = EVMC_SUCCESS;
         result.gas_left = vm->m_io_gas;
     }
-    catch (bcos::eth::RevertInstruction& ex)
+    catch (bcos::protocol::RevertInstruction& ex)
     {
         result.status_code = EVMC_REVERT;
         result.gas_left = vm->m_io_gas;
         output = ex.output();  // This moves the output from the exception!
     }
-    catch (bcos::eth::BadInstruction const&)
+    catch (bcos::protocol::BadInstruction const&)
     {
         result.status_code = EVMC_UNDEFINED_INSTRUCTION;
     }
-    catch (bcos::eth::OutOfStack const&)
+    catch (bcos::protocol::OutOfStack const&)
     {
         result.status_code = EVMC_STACK_OVERFLOW;
     }
-    catch (bcos::eth::StackUnderflow const&)
+    catch (bcos::protocol::StackUnderflow const&)
     {
         result.status_code = EVMC_STACK_UNDERFLOW;
     }
-    catch (bcos::eth::BufferOverrun const&)
+    catch (bcos::protocol::BufferOverrun const&)
     {
         result.status_code = EVMC_INVALID_MEMORY_ACCESS;
     }
-    catch (bcos::eth::OutOfGas const&)
+    catch (bcos::protocol::OutOfGas const&)
     {
         result.status_code = EVMC_OUT_OF_GAS;
     }
-    catch (bcos::eth::BadJumpDestination const&)
+    catch (bcos::protocol::BadJumpDestination const&)
     {
         result.status_code = EVMC_BAD_JUMP_DESTINATION;
     }
-    catch (bcos::eth::DisallowedStateChange const&)
+    catch (bcos::protocol::DisallowedStateChange const&)
     {
         result.status_code = EVMC_STATIC_MODE_VIOLATION;
     }
-    catch (bcos::eth::VMException const&)
+    catch (bcos::protocol::VMException const&)
     {
         result.status_code = EVMC_FAILURE;
     }
-    catch (bcos::eth::PermissionDenied const&)
+    catch (bcos::protocol::PermissionDenied const&)
     {
         result.status_code = EVMC_REVERT;
     }
@@ -134,7 +134,7 @@ extern "C" evmc_instance* evmc_create_interpreter() noexcept
 
 namespace bcos
 {
-namespace eth
+namespace protocol
 {
 void VM::createVMSchedule(evmc_context* _context)
 {
@@ -1427,5 +1427,5 @@ void VM::interpretCases()
     }
     WHILE_CASES
 }
-}  // namespace eth
+}  // namespace protocol
 }  // namespace bcos

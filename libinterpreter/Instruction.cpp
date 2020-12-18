@@ -24,7 +24,7 @@
 
 namespace bcos
 {
-namespace eth
+namespace protocol
 {
 static const std::map<Instruction, InstructionInfo> c_instructionInfo = {
     //                                                   Args,  Ret,  GasPriceTier
@@ -229,5 +229,5 @@ InstructionInfo instructionInfo(Instruction _inst)
 }
 
 
-}  // namespace eth
+}  // namespace protocol
 }  // namespace bcos

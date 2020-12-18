@@ -26,14 +26,14 @@
 #include "PBFTReqCache.h"
 #include "libdevcrypto/CryptoInterface.h"
 #include <libconsensus/pbft/PBFTEngine.h>
-#include <libethcore/Protocol.h>
+#include <libprotocol/Protocol.h>
 #include <libutilities/TopicInfo.h>
 #include <test/unittests/libsync/FakeSyncToolsSet.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>
 
 using namespace bcos;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::blockverifier;
 using namespace bcos::txpool;
 using namespace bcos::blockchain;
@@ -151,7 +151,7 @@ static void FakeSignAndCommitCache(FakeConsensus<T>& fake_pbft, PrepareReq::Ptr 
         block.encode(*prepareReq->block);  /// encode block
         prepareReq->block_hash = block.header().hash();
         prepareReq->height = block.header().number();
-        prepareReq->pBlock = std::make_shared<bcos::eth::Block>(std::move(block));
+        prepareReq->pBlock = std::make_shared<bcos::protocol::Block>(std::move(block));
     }
     fake_pbft.consensus()->setConsensusBlockNumber(prepareReq->height);
     if (shouldAdd)
@@ -452,7 +452,7 @@ static void fakeValidPrepare(FakeConsensus<T>& fake_pbft, PrepareReq& req)
     block.decode(ref(*req.block));
     req.block_hash = block.header().hash();
     req.height = block.header().number();
-    req.pBlock = std::make_shared<bcos::eth::Block>(std::move(block));
+    req.pBlock = std::make_shared<bcos::protocol::Block>(std::move(block));
     fake_pbft.consensus()->setConsensusBlockNumber(req.height);
     // get nodeID according to node index
     bcos::h512 nodeID;

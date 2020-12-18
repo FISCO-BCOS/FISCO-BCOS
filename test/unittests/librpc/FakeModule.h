@@ -27,11 +27,11 @@
 #include <libblockverifier/BlockVerifierInterface.h>
 #include <libconfig/GlobalConfigure.h>
 #include <libconsensus/ConsensusInterface.h>
-#include <libethcore/Common.h>
-#include <libethcore/CommonJS.h>
-#include <libethcore/Transaction.h>
 #include <libledger/LedgerManager.h>
 #include <libp2p/Service.h>
+#include <libprotocol/Common.h>
+#include <libprotocol/CommonJS.h>
+#include <libprotocol/Transaction.h>
 #include <libsync/SyncInterface.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <libutilities/DataConvertUtility.h>
@@ -42,7 +42,7 @@
 using namespace std;
 using namespace bcos;
 using namespace bcos::blockchain;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::blockverifier;
 using namespace bcos::sync;
 using namespace bcos::ledger;
@@ -169,9 +169,9 @@ public:
         return std::make_pair(m_totalTransactionCount, m_blockNumber - 1);
     }
 
-    std::shared_ptr<std::vector<bcos::eth::NonceKeyType>> getNonces(int64_t) override
+    std::shared_ptr<std::vector<bcos::protocol::NonceKeyType>> getNonces(int64_t) override
     {
-        return std::make_shared<std::vector<bcos::eth::NonceKeyType>>();
+        return std::make_shared<std::vector<bcos::protocol::NonceKeyType>>();
     }
     bool checkAndBuildGenesisBlock(
         std::shared_ptr<LedgerParamInterface> initParam, bool = true) override
@@ -227,14 +227,14 @@ public:
         }
         RLP rlpObj(rlpBytes);
         bytesConstRef d = rlpObj.data();
-        transaction = std::make_shared<Transaction>(d, eth::CheckTransaction::Everything);
+        transaction = std::make_shared<Transaction>(d, protocol::CheckTransaction::Everything);
         std::cout << "* MockBlockChain: hash of the transaction: " << transaction->hash()
                   << std::endl;
         return transaction;
     }
     bcos::h256 numberHash(int64_t) override { return blockHash; }
 
-    std::shared_ptr<bcos::eth::Block> getBlockByHash(
+    std::shared_ptr<bcos::protocol::Block> getBlockByHash(
         bcos::h256 const& _blockHash, int64_t = -1) override
     {
         if (m_blockHash.count(_blockHash))
@@ -247,12 +247,12 @@ public:
         return getBlockByHash(numberHash(_i))->rlpP();
     }
 
-    bcos::eth::LocalisedTransaction::Ptr getLocalisedTxByHash(bcos::h256 const&) override
+    bcos::protocol::LocalisedTransaction::Ptr getLocalisedTxByHash(bcos::h256 const&) override
     {
         return std::make_shared<LocalisedTransaction>(transaction, blockHash, 0, 0);
     }
 
-    bcos::eth::LocalisedTransactionReceipt::Ptr getLocalisedTxReceiptByHash(
+    bcos::protocol::LocalisedTransactionReceipt::Ptr getLocalisedTxReceiptByHash(
         bcos::h256 const& _txHash) override
     {
         if (_txHash == transaction->hash())
@@ -268,12 +268,12 @@ public:
                 TransactionReceipt(), h256(0), h256(0), -1, Address(), Address(), -1, 0);
     }
 
-    bcos::eth::Transaction::Ptr getTxByHash(bcos::h256 const&) override
+    bcos::protocol::Transaction::Ptr getTxByHash(bcos::h256 const&) override
     {
         return std::make_shared<Transaction>();
     }
 
-    bcos::eth::TransactionReceipt::Ptr getTransactionReceiptByHash(bcos::h256 const&) override
+    bcos::protocol::TransactionReceipt::Ptr getTransactionReceiptByHash(bcos::h256 const&) override
     {
         LogEntries entries;
         LogEntry entry;
@@ -281,17 +281,17 @@ public:
         entry.data = bytes();
         entry.topics = h256s();
         entries.push_back(entry);
-        return std::make_shared<TransactionReceipt>(
-            h256(0x3), u256(8), entries, eth::TransactionException::None, bytes(), Address(0x1000));
+        return std::make_shared<TransactionReceipt>(h256(0x3), u256(8), entries,
+            protocol::TransactionException::None, bytes(), Address(0x1000));
     }
 
-    std::shared_ptr<bcos::eth::Block> getBlockByNumber(int64_t _i) override
+    std::shared_ptr<bcos::protocol::Block> getBlockByNumber(int64_t _i) override
     {
         return getBlockByHash(numberHash(_i));
     }
 
-    std::shared_ptr<
-        std::pair<std::shared_ptr<bcos::eth::BlockHeader>, bcos::eth::Block::SigListPtrType>>
+    std::shared_ptr<std::pair<std::shared_ptr<bcos::protocol::BlockHeader>,
+        bcos::protocol::Block::SigListPtrType>>
     getBlockHeaderInfo(int64_t _blockNumber) override
     {
         auto block = getBlockByNumber(_blockNumber);
@@ -299,15 +299,15 @@ public:
         {
             return nullptr;
         }
-        auto result = std::make_shared<
-            std::pair<std::shared_ptr<bcos::eth::BlockHeader>, bcos::eth::Block::SigListPtrType>>();
+        auto result = std::make_shared<std::pair<std::shared_ptr<bcos::protocol::BlockHeader>,
+            bcos::protocol::Block::SigListPtrType>>();
         result->first = std::make_shared<BlockHeader>(block->blockHeader());
         result->second = nullptr;
         return result;
     }
 
-    std::shared_ptr<
-        std::pair<std::shared_ptr<bcos::eth::BlockHeader>, bcos::eth::Block::SigListPtrType>>
+    std::shared_ptr<std::pair<std::shared_ptr<bcos::protocol::BlockHeader>,
+        bcos::protocol::Block::SigListPtrType>>
     getBlockHeaderInfoByHash(bcos::h256 const& _blockHash) override
     {
         auto block = getBlockByHash(_blockHash);
@@ -315,8 +315,8 @@ public:
         {
             return nullptr;
         }
-        auto result = std::make_shared<
-            std::pair<std::shared_ptr<bcos::eth::BlockHeader>, bcos::eth::Block::SigListPtrType>>();
+        auto result = std::make_shared<std::pair<std::shared_ptr<bcos::protocol::BlockHeader>,
+            bcos::protocol::Block::SigListPtrType>>();
         result->first = std::make_shared<BlockHeader>(block->blockHeader());
         // fake sigList
         auto hash = block->header().hash();
@@ -326,7 +326,7 @@ public:
             auto signature = bcos::crypto::Sign(keyPair, hash)->asBytes();
             sigList.push_back(std::make_pair(i, signature));
         }
-        result->second = std::make_shared<bcos::eth::Block::SigListType>(sigList);
+        result->second = std::make_shared<bcos::protocol::Block::SigListType>(sigList);
         return result;
     }
 
@@ -338,16 +338,16 @@ public:
         return std::make_pair(std::make_shared<LocalisedTransaction>(),
             std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>());
     }
-    std::pair<bcos::eth::LocalisedTransactionReceipt::Ptr,
+    std::pair<bcos::protocol::LocalisedTransactionReceipt::Ptr,
         std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
     getTransactionReceiptByHashWithProof(
-        bcos::h256 const&, bcos::eth::LocalisedTransaction&) override
+        bcos::h256 const&, bcos::protocol::LocalisedTransaction&) override
     {
-        return std::make_pair(
-            std::make_shared<LocalisedTransactionReceipt>(bcos::eth::TransactionException::None),
+        return std::make_pair(std::make_shared<LocalisedTransactionReceipt>(
+                                  bcos::protocol::TransactionException::None),
             std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>());
     }
-    CommitResult commitBlock(std::shared_ptr<bcos::eth::Block> block,
+    CommitResult commitBlock(std::shared_ptr<bcos::protocol::Block> block,
         std::shared_ptr<bcos::blockverifier::ExecutiveContext>) override
     {
         m_blockHash[block->blockHeader().hash()] = block->blockHeader().number();
@@ -386,15 +386,15 @@ public:
     };
     virtual ~MockBlockVerifier(){};
     std::shared_ptr<ExecutiveContext> executeBlock(
-        bcos::eth::Block& block, BlockInfo const&) override
+        bcos::protocol::Block& block, BlockInfo const&) override
     {
         usleep(1000 * (block.getTransactionSize()));
         return m_executiveContext;
     };
-    bcos::eth::TransactionReceipt::Ptr executeTransaction(
-        const bcos::eth::BlockHeader&, bcos::eth::Transaction::Ptr) override
+    bcos::protocol::TransactionReceipt::Ptr executeTransaction(
+        const bcos::protocol::BlockHeader&, bcos::protocol::Transaction::Ptr) override
     {
-        bcos::eth::TransactionReceipt::Ptr receipt = std::make_shared<TransactionReceipt>();
+        bcos::protocol::TransactionReceipt::Ptr receipt = std::make_shared<TransactionReceipt>();
         return receipt;
     }
 
@@ -442,26 +442,29 @@ public:
         }
         RLP rlpObj(rlpBytes);
         bytesConstRef d = rlpObj.data();
-        transaction = std::make_shared<Transaction>(d, eth::CheckTransaction::Everything);
-        transactions = std::make_shared<bcos::eth::Transactions>();
+        transaction = std::make_shared<Transaction>(d, protocol::CheckTransaction::Everything);
+        transactions = std::make_shared<bcos::protocol::Transactions>();
         std::shared_ptr<Transaction> tx =
-            std::make_shared<Transaction>(d, eth::CheckTransaction::Everything);
+            std::make_shared<Transaction>(d, protocol::CheckTransaction::Everything);
         transactions->push_back(tx);
     };
     virtual ~MockTxPool(){};
-    std::shared_ptr<bcos::eth::Transactions> pendingList() const override { return transactions; };
+    std::shared_ptr<bcos::protocol::Transactions> pendingList() const override
+    {
+        return transactions;
+    };
     size_t pendingSize() override { return 1; }
-    std::shared_ptr<bcos::eth::Transactions> topTransactions(
+    std::shared_ptr<bcos::protocol::Transactions> topTransactions(
         uint64_t const&, h256Hash&, bool = false) override
     {
         return transactions;
     }
-    std::shared_ptr<bcos::eth::Transactions> topTransactions(uint64_t const&) override
+    std::shared_ptr<bcos::protocol::Transactions> topTransactions(uint64_t const&) override
     {
         return transactions;
     }
     bool drop(h256 const&) override { return true; }
-    bool dropBlockTrans(std::shared_ptr<bcos::eth::Block>) override { return true; }
+    bool dropBlockTrans(std::shared_ptr<bcos::protocol::Block>) override { return true; }
     bool handleBadBlock(Block const&) override { return true; }
     PROTOCOL_ID const& getProtocolId() const override { return protocolId; }
     TxPoolStatus status() const override
@@ -471,21 +474,21 @@ public:
         status.dropped = 0;
         return status;
     }
-    std::pair<h256, Address> submit(bcos::eth::Transaction::Ptr _tx) override
+    std::pair<h256, Address> submit(bcos::protocol::Transaction::Ptr _tx) override
     {
         return make_pair(_tx->hash(), toAddress(_tx->from(), _tx->nonce()));
     }
-    std::pair<h256, Address> submitTransactions(bcos::eth::Transaction::Ptr _tx) override
+    std::pair<h256, Address> submitTransactions(bcos::protocol::Transaction::Ptr _tx) override
     {
         return make_pair(_tx->hash(), toAddress(_tx->from(), _tx->nonce()));
     }
-    bcos::eth::ImportResult import(
-        bcos::eth::Transaction::Ptr, bcos::eth::IfDropped = bcos::eth::IfDropped::Ignore) override
+    bcos::protocol::ImportResult import(bcos::protocol::Transaction::Ptr,
+        bcos::protocol::IfDropped = bcos::protocol::IfDropped::Ignore) override
     {
         return ImportResult::Success;
     }
-    bcos::eth::ImportResult import(
-        bytesConstRef, bcos::eth::IfDropped = bcos::eth::IfDropped::Ignore)
+    bcos::protocol::ImportResult import(
+        bytesConstRef, bcos::protocol::IfDropped = bcos::protocol::IfDropped::Ignore)
     {
         return ImportResult::Success;
     }
@@ -536,7 +539,8 @@ public:
     void setProtocolId(PROTOCOL_ID const _protocolId) override { m_protocolId = _protocolId; };
     void noteSealingBlockNumber(int64_t) override{};
 
-    void registerConsensusVerifyHandler(std::function<bool(bcos::eth::Block const&)>) override{};
+    void registerConsensusVerifyHandler(
+        std::function<bool(bcos::protocol::Block const&)>) override{};
 
 private:
     SyncStatus m_syncStatus;

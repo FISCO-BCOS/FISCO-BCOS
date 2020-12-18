@@ -26,7 +26,7 @@
 #include "VMSchedule.h"
 
 #include "Instruction.h"
-#include <libethcore/Exceptions.h>
+#include <libprotocol/Exceptions.h>
 #include <libutilities/Common.h>
 
 #include <evmc/evmc.h>
@@ -36,7 +36,7 @@
 
 namespace bcos
 {
-namespace eth
+namespace protocol
 {
 class VM
 {
@@ -181,5 +181,5 @@ inline Address fromEvmC(evmc_address const& _addr)
     return reinterpret_cast<Address const&>(_addr);
 }
 
-}  // namespace eth
+}  // namespace protocol
 }  // namespace bcos

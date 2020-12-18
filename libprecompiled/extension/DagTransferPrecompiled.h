@@ -22,7 +22,7 @@
 #include <libblockverifier/ExecutiveContext.h>
 #include <libprecompiled/Common.h>
 
-#include <libethcore/Common.h>
+#include <libprotocol/Common.h>
 #include <libutilities/Common.h>
 
 namespace bcos

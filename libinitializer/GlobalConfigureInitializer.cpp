@@ -87,7 +87,7 @@ void bcos::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
     }
 
     // set evmSchedule
-    g_BCOSConfig.setEVMSchedule(bcos::eth::FiscoBcosScheduleV3);
+    g_BCOSConfig.setEVMSchedule(bcos::protocol::FiscoBcosScheduleV3);
     g_BCOSConfig.binaryInfo.version = FISCO_BCOS_PROJECT_VERSION;
     g_BCOSConfig.binaryInfo.buildTime = FISCO_BCOS_BUILD_TIME;
     g_BCOSConfig.binaryInfo.buildInfo =

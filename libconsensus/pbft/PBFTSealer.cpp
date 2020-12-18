@@ -27,10 +27,10 @@
  * @modifications: rename PBFTSealer.cpp to PBFTSealer.cpp
  */
 #include "PBFTSealer.h"
-#include <libethcore/CommonJS.h>
+#include <libprotocol/CommonJS.h>
 #include <libutilities/JsonDataConvertUtility.h>
 #include <libutilities/Worker.h>
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::blockverifier;
 using namespace bcos::blockchain;
 using namespace bcos::p2p;

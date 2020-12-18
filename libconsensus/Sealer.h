@@ -29,8 +29,8 @@
 #pragma once
 #include "ConsensusEngineBase.h"
 #include <libblockchain/BlockChainInterface.h>
-#include <libethcore/Block.h>
-#include <libethcore/Exceptions.h>
+#include <libprotocol/Block.h>
+#include <libprotocol/Exceptions.h>
 #include <libsync/SyncInterface.h>
 #include <libtxpool/TxPool.h>
 #include <libtxpool/TxPoolInterface.h>
@@ -117,7 +117,7 @@ public:
         m_consensusEngine = _consensusEngine;
     }
 
-    virtual void setBlockFactory(bcos::eth::BlockFactory::Ptr _blockFactory)
+    virtual void setBlockFactory(bcos::protocol::BlockFactory::Ptr _blockFactory)
     {
         m_sealing.setBlockFactory(_blockFactory);
         m_consensusEngine->setBlockFactory(_blockFactory);
@@ -162,11 +162,11 @@ protected:
     /// reset the sealing block before loadTransactions
     void resetSealingBlock(
         Sealing& sealing, h256Hash const& filter = h256Hash(), bool resetNextLeader = false);
-    void resetBlock(std::shared_ptr<bcos::eth::Block> block, bool resetNextLeader = false);
+    void resetBlock(std::shared_ptr<bcos::protocol::Block> block, bool resetNextLeader = false);
 
     /// reset the sealing Header after loadTransactions, before generate and broadcast local prepare
     /// message
-    void resetSealingHeader(bcos::eth::BlockHeader& header);
+    void resetSealingHeader(bcos::protocol::BlockHeader& header);
     /// reset timestamp of block header
     void resetCurrentTime()
     {

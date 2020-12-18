@@ -25,7 +25,7 @@
 
 using namespace bcos;
 using namespace bcos::sync;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 
 void DownloadingTxsQueue::push(
     SyncMsgPacket::Ptr _packet, bcos::p2p::P2PMessage::Ptr _msg, NodeID const& _fromPeer)
@@ -65,8 +65,8 @@ void DownloadingTxsQueue::push(
 }
 
 
-void DownloadingTxsQueue::pop2TxPool(
-    std::shared_ptr<bcos::txpool::TxPoolInterface> _txPool, bcos::eth::CheckTransaction _checkSig)
+void DownloadingTxsQueue::pop2TxPool(std::shared_ptr<bcos::txpool::TxPoolInterface> _txPool,
+    bcos::protocol::CheckTransaction _checkSig)
 {
     try
     {
@@ -109,12 +109,12 @@ void DownloadingTxsQueue::pop2TxPool(
         {
             record_time = utcTime();
             // decode
-            auto txs = std::make_shared<bcos::eth::Transactions>();
+            auto txs = std::make_shared<bcos::protocol::Transactions>();
             std::shared_ptr<DownloadTxsShard> txsShard = (*localBuffer)[i];
             // TODO drop by Txs Shard
 
             RLP const& txsBytesRLP = RLP(ref(txsShard->txsBytes))[0];
-            bcos::eth::TxsParallelParser::decode(
+            bcos::protocol::TxsParallelParser::decode(
                 txs, txsBytesRLP.toBytesConstRef(), _checkSig, true);
             decode_time_cost += (utcTime() - record_time);
             record_time = utcTime();
@@ -149,13 +149,13 @@ void DownloadingTxsQueue::pop2TxPool(
                 try
                 {
                     auto importResult = _txPool->import(tx);
-                    if (bcos::eth::ImportResult::Success == importResult)
+                    if (bcos::protocol::ImportResult::Success == importResult)
                     {
                         tx->appendNodeContainsTransaction(fromPeer);
                         tx->appendNodeListContainTransaction(*(txsShard->knownNodes));
                         successCnt++;
                     }
-                    else if (bcos::eth::ImportResult::AlreadyKnown == importResult)
+                    else if (bcos::protocol::ImportResult::AlreadyKnown == importResult)
                     {
                         SYNC_LOG(TRACE)
                             << LOG_BADGE("Tx")

@@ -22,8 +22,8 @@
 #include "MemoryStorage.h"
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcrypto/Common.h>
-#include <libethcore/ABI.h>
 #include <libprecompiled/ParallelConfigPrecompiled.h>
+#include <libprotocol/ABI.h>
 #include <libstorage/MemoryTableFactoryFactory.h>
 #include <libstoragestate/StorageState.h>
 #include <libstoragestate/StorageStateFactory.h>
@@ -34,7 +34,7 @@
 
 using namespace std;
 using namespace bcos;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::blockverifier;
 using namespace bcos::storage;
 using namespace bcos::storagestate;

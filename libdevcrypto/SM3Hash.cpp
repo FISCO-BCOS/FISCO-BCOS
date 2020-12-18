@@ -21,7 +21,7 @@
 
 #include "libdevcrypto/SM3Hash.h"
 #include "libdevcrypto/sm3/sm3.h"
-#include <libethcore/Exceptions.h>
+#include <libprotocol/Exceptions.h>
 #include <libutilities/RLP.h>
 #include <secp256k1_sha256.h>
 #include <cstdint>

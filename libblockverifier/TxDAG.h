@@ -24,9 +24,9 @@
 #include "DAG.h"
 #include "ExecutiveContext.h"
 #include <libconfig/GlobalConfigure.h>
-#include <libethcore/Block.h>
-#include <libethcore/Transaction.h>
 #include <libexecutive/Executive.h>
+#include <libprotocol/Block.h>
+#include <libprotocol/Transaction.h>
 #include <map>
 #include <memory>
 #include <queue>
@@ -37,7 +37,7 @@ namespace bcos
 namespace blockverifier
 {
 using ExecuteTxFunc =
-    std::function<bool(bcos::eth::Transaction::Ptr, ID, bcos::executive::Executive::Ptr)>;
+    std::function<bool(bcos::protocol::Transaction::Ptr, ID, bcos::executive::Executive::Ptr)>;
 
 class TxDAGFace
 {
@@ -60,7 +60,7 @@ public:
     virtual ~TxDAG() {}
 
     // Generate DAG according with given transactions
-    void init(ExecutiveContext::Ptr _ctx, std::shared_ptr<bcos::eth::Transactions> _txs,
+    void init(ExecutiveContext::Ptr _ctx, std::shared_ptr<bcos::protocol::Transactions> _txs,
         int64_t _blockHeight);
 
     // Set transaction execution function
@@ -87,7 +87,7 @@ public:
 
 private:
     ExecuteTxFunc f_executeTx;
-    std::shared_ptr<bcos::eth::Transactions const> m_txs;
+    std::shared_ptr<bcos::protocol::Transactions const> m_txs;
 
     DAG m_dag;
 

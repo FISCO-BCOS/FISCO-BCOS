@@ -22,7 +22,7 @@
  */
 #pragma once
 #include "RateLimiter.h"
-#include <libethcore/Protocol.h>
+#include <libprotocol/Protocol.h>
 
 #define RPCQPSLIMIT_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("RPCQPSLimiter")
 

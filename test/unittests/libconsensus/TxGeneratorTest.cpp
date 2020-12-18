@@ -29,7 +29,7 @@
 
 using namespace bcos::consensus;
 using namespace bcos::crypto;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::precompiled;
 
 namespace bcos
@@ -70,7 +70,7 @@ BOOST_AUTO_TEST_CASE(testGenerateTransaction)
 
     std::shared_ptr<TxGenerator> txGenerator = std::make_shared<TxGenerator>(1, 1, blockLimit);
     auto generatedTx = txGenerator->generateTransactionWithSig(interface, currentNumber, to,
-        keyPair, bcos::eth::Transaction::Type::MessageCall, vrfProof, vrfPk, vrfInput);
+        keyPair, bcos::protocol::Transaction::Type::MessageCall, vrfProof, vrfPk, vrfInput);
 
     // encode the transaction
     std::shared_ptr<bcos::bytes> encodedTxData = std::make_shared<bcos::bytes>();
@@ -88,7 +88,7 @@ BOOST_AUTO_TEST_CASE(testGenerateTransaction)
     BOOST_CHECK(decodedTx->sender() == toAddress(keyPair.pub()));
     BOOST_CHECK(decodedTx->receiveAddress() == to);
     BOOST_CHECK(decodedTx->blockLimit() == currentNumber + blockLimit);
-    BOOST_CHECK(decodedTx->type() == bcos::eth::Transaction::Type::MessageCall);
+    BOOST_CHECK(decodedTx->type() == bcos::protocol::Transaction::Type::MessageCall);
 
     // parse the data
     // 1. check selector
@@ -96,7 +96,7 @@ BOOST_AUTO_TEST_CASE(testGenerateTransaction)
     BOOST_CHECK(functionSelector == selector);
     auto paramData = getParamData(ref(decodedTx->data()));
     // decode data and check params
-    bcos::eth::ContractABI abi;
+    bcos::protocol::ContractABI abi;
     std::string decodedvrfProof;
     std::string decodedvrfPk;
     std::string decodedvrfInput;

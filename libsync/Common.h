@@ -30,7 +30,7 @@
 #include <libnetwork/Common.h>
 #include <libp2p/Common.h>
 
-#include <libethcore/Block.h>
+#include <libprotocol/Block.h>
 #include <libutilities/Exceptions.h>
 #include <libutilities/FixedBytes.h>
 
@@ -64,7 +64,7 @@ static uint64_t const c_maintainBlocksTimeout = 5000;  // ms
 using NodeList = std::set<bcos::p2p::NodeID>;
 using NodeID = bcos::p2p::NodeID;
 using NodeIDs = std::vector<bcos::p2p::NodeID>;
-using BlockPtr = std::shared_ptr<bcos::eth::Block>;
+using BlockPtr = std::shared_ptr<bcos::protocol::Block>;
 using BlockPtrVec = std::vector<BlockPtr>;
 
 #define PUBLIC_LOG LOG_BADGE("SYNC") << "[id:" << m_nodeId.abridged() << "]"

@@ -24,10 +24,10 @@
 #include "PBFTEngine.h"
 #include "libdevcrypto/CryptoInterface.h"
 #include <libconfig/GlobalConfigure.h>
-#include <libethcore/CommonJS.h>
+#include <libprotocol/CommonJS.h>
 #include <libtxpool/TxPool.h>
 #include <libutilities/JsonDataConvertUtility.h>
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::blockverifier;
 using namespace bcos::blockchain;
 using namespace bcos::p2p;
@@ -302,9 +302,9 @@ void PBFTEngine::backupMsg(std::string const& _key, std::shared_ptr<bytes> _msg)
     }
 }
 
-PrepareReq::Ptr PBFTEngine::constructPrepareReq(bcos::eth::Block::Ptr _block)
+PrepareReq::Ptr PBFTEngine::constructPrepareReq(bcos::protocol::Block::Ptr _block)
 {
-    bcos::eth::Block::Ptr engineBlock = m_blockFactory->createBlock();
+    bcos::protocol::Block::Ptr engineBlock = m_blockFactory->createBlock();
     *engineBlock = std::move(*_block);
     PrepareReq::Ptr prepareReq = std::make_shared<PrepareReq>(
         engineBlock, m_keyPair, m_view, nodeIdx(), m_enablePrepareWithTxsHash);
@@ -375,7 +375,7 @@ void PBFTEngine::sendPrepareMsgFromLeader(
 }
 
 /// sealing the generated block into prepareReq and push its to msgQueue
-bool PBFTEngine::generatePrepare(bcos::eth::Block::Ptr _block)
+bool PBFTEngine::generatePrepare(bcos::protocol::Block::Ptr _block)
 {
     Guard l(m_mutex);
     m_notifyNextLeaderSeal = false;
@@ -796,7 +796,7 @@ bool PBFTEngine::checkSign(IDXTYPE const& _idx, bcos::h256 const& _hash, bytes c
  * @brief: notify the seal module to seal block if the current node is the next leader
  * @param block: block obtained from the prepare packet, used to filter transactions
  */
-void PBFTEngine::notifySealing(bcos::eth::Block const& block)
+void PBFTEngine::notifySealing(bcos::protocol::Block const& block)
 {
     if (!m_onNotifyNextLeaderReset)
     {
@@ -1202,7 +1202,7 @@ void PBFTEngine::checkAndSave()
         if (m_reqCache->prepareCache().height > m_highestBlock.number())
         {
             /// Block block(m_reqCache->prepareCache().block);
-            std::shared_ptr<bcos::eth::Block> p_block = m_reqCache->prepareCache().pBlock;
+            std::shared_ptr<bcos::protocol::Block> p_block = m_reqCache->prepareCache().pBlock;
             m_reqCache->generateAndSetSigList(*p_block, minValidNodes());
             auto genSig_time_cost = utcTime() - record_time;
             record_time = utcTime();

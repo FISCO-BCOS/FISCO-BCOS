@@ -39,7 +39,7 @@
 
 using namespace bcos::precompiled;
 using namespace bcos::blockverifier;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::storagestate;
 using namespace bcos::storage;
 
@@ -146,7 +146,7 @@ public:
         return getSystemConfigAndEnableNumByKey(_key).first;
     }
 
-    std::pair<std::string, bcos::eth::BlockNumber> getSystemConfigAndEnableNumByKey(
+    std::pair<std::string, bcos::protocol::BlockNumber> getSystemConfigAndEnableNumByKey(
         std::string const& _key)
     {
         auto table = openTable(context, SYS_CONFIG);

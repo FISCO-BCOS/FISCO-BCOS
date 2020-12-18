@@ -25,7 +25,7 @@
 
 namespace bcos
 {
-namespace eth
+namespace protocol
 {
 void VM::copyDataToMemory(bytesConstRef _data, u256* _sp)
 {
@@ -308,5 +308,5 @@ bool VM::caseCallSetup(evmc_message& o_msg, bytesRef& o_output)
     }
     return false;
 }
-}  // namespace eth
+}  // namespace protocol
 }  // namespace bcos

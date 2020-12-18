@@ -34,15 +34,16 @@ namespace test
 class FakeBlockverifier : public BlockVerifierInterface
 {
 public:
-    std::shared_ptr<ExecutiveContext> executeBlock(bcos::eth::Block&, BlockInfo const&) override
+    std::shared_ptr<ExecutiveContext> executeBlock(
+        bcos::protocol::Block&, BlockInfo const&) override
     {
         return std::make_shared<ExecutiveContext>();
     }
-    bcos::eth::TransactionReceipt::Ptr executeTransaction(
-        const bcos::eth::BlockHeader&, bcos::eth::Transaction::Ptr) override
+    bcos::protocol::TransactionReceipt::Ptr executeTransaction(
+        const bcos::protocol::BlockHeader&, bcos::protocol::Transaction::Ptr) override
     {
-        bcos::eth::TransactionReceipt::Ptr receipt =
-            std::make_shared<bcos::eth::TransactionReceipt>();
+        bcos::protocol::TransactionReceipt::Ptr receipt =
+            std::make_shared<bcos::protocol::TransactionReceipt>();
         return receipt;
     }
 

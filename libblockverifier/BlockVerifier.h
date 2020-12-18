@@ -25,11 +25,11 @@
 #include "ExecutiveContextFactory.h"
 #include "libprecompiled/Precompiled.h"
 #include <libdevcrypto/Common.h>
-#include <libethcore/Block.h>
-#include <libethcore/Protocol.h>
-#include <libethcore/Transaction.h>
-#include <libethcore/TransactionReceipt.h>
 #include <libexecutive/Executive.h>
+#include <libprotocol/Block.h>
+#include <libprotocol/Protocol.h>
+#include <libprotocol/Transaction.h>
+#include <libprotocol/TransactionReceipt.h>
 #include <libutilities/FixedBytes.h>
 #include <libutilities/ThreadPool.h>
 #include <boost/function.hpp>
@@ -39,11 +39,11 @@
 
 namespace bcos
 {
-namespace eth
+namespace protocol
 {
 class TransactionReceipt;
 
-}  // namespace eth
+}  // namespace protocol
 
 namespace blockverifier
 {
@@ -63,17 +63,18 @@ public:
 
     virtual ~BlockVerifier() {}
 
-    ExecutiveContext::Ptr executeBlock(bcos::eth::Block& block, BlockInfo const& parentBlockInfo);
+    ExecutiveContext::Ptr executeBlock(
+        bcos::protocol::Block& block, BlockInfo const& parentBlockInfo);
     ExecutiveContext::Ptr serialExecuteBlock(
-        bcos::eth::Block& block, BlockInfo const& parentBlockInfo);
+        bcos::protocol::Block& block, BlockInfo const& parentBlockInfo);
     ExecutiveContext::Ptr parallelExecuteBlock(
-        bcos::eth::Block& block, BlockInfo const& parentBlockInfo);
+        bcos::protocol::Block& block, BlockInfo const& parentBlockInfo);
 
 
-    bcos::eth::TransactionReceipt::Ptr executeTransaction(
-        const bcos::eth::BlockHeader& blockHeader, bcos::eth::Transaction::Ptr _t);
+    bcos::protocol::TransactionReceipt::Ptr executeTransaction(
+        const bcos::protocol::BlockHeader& blockHeader, bcos::protocol::Transaction::Ptr _t);
 
-    bcos::eth::TransactionReceipt::Ptr execute(bcos::eth::Transaction::Ptr _t,
+    bcos::protocol::TransactionReceipt::Ptr execute(bcos::protocol::Transaction::Ptr _t,
         bcos::blockverifier::ExecutiveContext::Ptr executiveContext,
         bcos::executive::Executive::Ptr executive);
 

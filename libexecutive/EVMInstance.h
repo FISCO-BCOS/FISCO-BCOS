@@ -24,13 +24,13 @@
 
 #include "EVMInterface.h"
 
-#include <libethcore/EVMSchedule.h>
+#include <libprotocol/EVMSchedule.h>
 
 #include <evmc/evmc.h>
 
 namespace bcos
 {
-namespace eth
+namespace protocol
 {
 class Result
 {
@@ -81,5 +81,5 @@ private:
     evmc_vm* m_instance = nullptr;
 };
 
-}  // namespace eth
+}  // namespace protocol
 }  // namespace bcos

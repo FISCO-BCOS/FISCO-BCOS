@@ -28,7 +28,7 @@
 
 namespace bcos
 {
-namespace eth
+namespace protocol
 {
 enum class VMKind
 {
@@ -60,5 +60,5 @@ public:
     /// Creates a VM instance of the kind provided.
     static std::unique_ptr<EVMInterface> create(VMKind _kind);
 };
-}  // namespace eth
+}  // namespace protocol
 }  // namespace bcos

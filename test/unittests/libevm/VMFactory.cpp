@@ -31,7 +31,7 @@
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 namespace bcos
 {
 namespace test

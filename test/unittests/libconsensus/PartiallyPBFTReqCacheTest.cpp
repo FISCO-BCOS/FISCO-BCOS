@@ -26,10 +26,10 @@
 #include <libconsensus/pbft/PartiallyPBFTReqCache.h>
 #include <libtxpool/TxPool.h>
 #include <test/tools/libutils/TestOutputHelper.h>
-#include <test/unittests/libethcore/FakeBlock.h>
+#include <test/unittests/libprotocol/FakeBlock.h>
 #include <boost/test/unit_test.hpp>
 using namespace bcos::consensus;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 
 namespace bcos
 {

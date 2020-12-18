@@ -22,7 +22,7 @@
 #include "BinLogHandler.h"
 
 #include <json/json.h>
-#include <libethcore/Exceptions.h>
+#include <libprotocol/Exceptions.h>
 #include <libutilities/Exceptions.h>
 #include <libutilities/FixedBytes.h>
 #include <boost/algorithm/string/classification.hpp>
@@ -62,7 +62,7 @@ bool BinLogHandler::writeBlocktoBinLog(int64_t num, const std::vector<TableData:
     {
         BINLOG_HANDLER_LOG(ERROR) << LOG_DESC("Disk space is insufficient.");
         raise(SIGTERM);
-        BOOST_THROW_EXCEPTION(bcos::eth::NotEnoughAvailableSpace());
+        BOOST_THROW_EXCEPTION(bcos::protocol::NotEnoughAvailableSpace());
     }
 
     bytes buffer;

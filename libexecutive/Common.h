@@ -22,8 +22,8 @@
 
 #pragma once
 
-#include "libethcore/BlockHeader.h"
-#include "libethcore/LogEntry.h"
+#include "libprotocol/BlockHeader.h"
+#include "libprotocol/LogEntry.h"
 #include "libutilities/Common.h"
 #include <evmc/instructions.h>
 #include <functional>
@@ -41,7 +41,7 @@ namespace executive
 struct SubState
 {
     std::set<Address> suicides;  ///< Any accounts that have suicided.
-    eth::LogEntries logs;        ///< Any logs.
+    protocol::LogEntries logs;   ///< Any logs.
     u256 refunds;                ///< Refund counter of SSTORE nonzero->zero.
 
     SubState& operator+=(SubState const& _s)
@@ -97,7 +97,7 @@ public:
 
     // Constructor with custom gasLimit - used in some synthetic scenarios like eth_estimateGas RPC
     // method
-    EnvInfo(eth::BlockHeader const& _current, CallBackFunction _callback, u256 const& _gasUsed,
+    EnvInfo(protocol::BlockHeader const& _current, CallBackFunction _callback, u256 const& _gasUsed,
         u256 const& _gasLimit)
       : EnvInfo(_current, _callback, _gasUsed)
     {
@@ -105,7 +105,7 @@ public:
         m_headerInfo.setGasLimit(_gasLimit);
     }
 
-    EnvInfo(eth::BlockHeader const& _current, CallBackFunction _callback, u256 const& _gasUsed)
+    EnvInfo(protocol::BlockHeader const& _current, CallBackFunction _callback, u256 const& _gasUsed)
       : m_headerInfo(_current), m_numberHash(_callback), m_gasUsed(_gasUsed)
     {}
 
@@ -113,7 +113,7 @@ public:
 
 
     /// @return block header
-    eth::BlockHeader const& header() const { return m_headerInfo; }
+    protocol::BlockHeader const& header() const { return m_headerInfo; }
 
     /// @return block number
     int64_t number() const { return m_headerInfo.number(); }
@@ -143,7 +143,7 @@ public:
 
 
 private:
-    eth::BlockHeader m_headerInfo;
+    protocol::BlockHeader m_headerInfo;
     CallBackFunction m_numberHash;
     u256 m_gasUsed;
     std::shared_ptr<bcos::blockverifier::ExecutiveContext> m_executiveEngine;

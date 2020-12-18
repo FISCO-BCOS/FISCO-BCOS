@@ -23,7 +23,7 @@
 
 #pragma once
 #include "Precompiled.h"
-#include <libethcore/ABI.h>
+#include <libprotocol/ABI.h>
 
 namespace bcos
 {
@@ -56,7 +56,7 @@ public:
 
 private:
     void rotateWorkingSealer(std::shared_ptr<bcos::blockverifier::ExecutiveContext> _context,
-        bytesConstRef _paramData, bcos::eth::ContractABI& _abi, Address const& _origin,
+        bytesConstRef _paramData, bcos::protocol::ContractABI& _abi, Address const& _origin,
         Address const& _sender);
 };
 }  // namespace precompiled

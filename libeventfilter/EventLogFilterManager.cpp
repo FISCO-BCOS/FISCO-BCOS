@@ -2,16 +2,16 @@
 #include "EventLogFilterManager.h"
 #include <json/json.h>
 #include <libblockchain/BlockChainInterface.h>
-#include <libethcore/CommonJS.h>
 #include <libeventfilter/EventLogFilterParams.h>
 #include <libledger/LedgerParam.h>
+#include <libprotocol/CommonJS.h>
 #include <libutilities/TopicInfo.h>
 
 
 using namespace std;
 using namespace bcos;
 using namespace bcos::event;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 
 // start EventLogFilterManager
 void EventLogFilterManager::start()

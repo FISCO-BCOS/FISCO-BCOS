@@ -29,8 +29,8 @@
 #include "ChannelMessage.h"  // for TopicChannelM...
 #include "ChannelSession.h"  // for ChannelSessio...
 #include "Message.h"         // for Message, Mess...
-#include "libethcore/Common.h"
 #include "libp2p/P2PMessage.h"
+#include "libprotocol/Common.h"
 #include <jsonrpccpp/server/abstractserverconnector.h>
 #include <libflowlimit/RPCQPSLimiter.h>
 #include <libnetwork/PeerWhitelist.h>
@@ -170,7 +170,10 @@ public:
         m_eventCancelFilterCallBack = _callback;
     };
 
-    void addHandler(const bcos::eth::Handler<int64_t>& handler) { m_handlers.push_back(handler); }
+    void addHandler(const bcos::protocol::Handler<int64_t>& handler)
+    {
+        m_handlers.push_back(handler);
+    }
 
     void setNetworkStatHandler(bcos::stat::ChannelNetworkStatHandler::Ptr _handler)
     {
@@ -286,7 +289,7 @@ private:
     std::function<int32_t(const std::string&, uint32_t, std::function<bool(GROUP_ID _groupId)>)>
         m_eventCancelFilterCallBack;
 
-    std::vector<bcos::eth::Handler<int64_t>> m_handlers;
+    std::vector<bcos::protocol::Handler<int64_t>> m_handlers;
 
     bcos::stat::ChannelNetworkStatHandler::Ptr m_networkStatHandler;
     bcos::flowlimit::RPCQPSLimiter::Ptr m_qpsLimiter;

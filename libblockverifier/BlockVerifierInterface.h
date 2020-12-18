@@ -24,19 +24,19 @@
 #include "ExecutiveContext.h"
 
 #include <libdevcrypto/Common.h>
-#include <libethcore/Block.h>
-#include <libethcore/Transaction.h>
-#include <libethcore/TransactionReceipt.h>
+#include <libprotocol/Block.h>
+#include <libprotocol/Transaction.h>
+#include <libprotocol/TransactionReceipt.h>
 #include <libutilities/FixedBytes.h>
 #include <memory>
 
 namespace bcos
 {
-namespace eth
+namespace protocol
 {
 class PrecompiledContract;
 
-}  // namespace eth
+}  // namespace protocol
 namespace blockverifier
 {
 class BlockVerifierInterface
@@ -48,10 +48,10 @@ public:
     virtual ~BlockVerifierInterface(){};
 
     virtual ExecutiveContext::Ptr executeBlock(
-        bcos::eth::Block& block, BlockInfo const& parentBlockInfo) = 0;
+        bcos::protocol::Block& block, BlockInfo const& parentBlockInfo) = 0;
 
-    virtual bcos::eth::TransactionReceipt::Ptr executeTransaction(
-        const bcos::eth::BlockHeader& blockHeader, bcos::eth::Transaction::Ptr _t) = 0;
+    virtual bcos::protocol::TransactionReceipt::Ptr executeTransaction(
+        const bcos::protocol::BlockHeader& blockHeader, bcos::protocol::Transaction::Ptr _t) = 0;
 };
 }  // namespace blockverifier
 }  // namespace bcos

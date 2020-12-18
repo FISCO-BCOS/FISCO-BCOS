@@ -20,8 +20,8 @@
 
 #pragma once
 #include <libconfig/GlobalConfigure.h>
-#include <libutilities/Common.h>
 #include <libdevcrypto/CryptoInterface.h>
+#include <libutilities/Common.h>
 #include <boost/filesystem.hpp>
 
 namespace bcos

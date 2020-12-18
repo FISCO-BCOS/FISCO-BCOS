@@ -233,7 +233,7 @@ void VRFBasedrPBFTEngine::resetConfig()
 // When you need to rotate nodes, check the node rotation transaction
 // (the last transaction in the block, the sender must be the leader)
 void VRFBasedrPBFTEngine::checkTransactionsValid(
-    bcos::eth::Block::Ptr _block, PrepareReq::Ptr _prepareReq)
+    bcos::protocol::Block::Ptr _block, PrepareReq::Ptr _prepareReq)
 {
     // Note: if the block contains rotatingTx when m_shouldRotateSealers is false
     //       the rotatingTx will be reverted by the ordinary node when executing

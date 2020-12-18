@@ -23,7 +23,7 @@
 #include "libprecompiled/EntriesPrecompiled.h"
 #include "libprecompiled/TableFactoryPrecompiled.h"
 #include "libstoragestate/StorageState.h"
-#include <libethcore/ABI.h>
+#include <libprotocol/ABI.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/lexical_cast.hpp>
@@ -137,7 +137,7 @@ int ContractLifeCyclePrecompiled::updateFrozenStatus(ExecutiveContext::Ptr conte
 void ContractLifeCyclePrecompiled::freeze(ExecutiveContext::Ptr context, bytesConstRef data,
     Address const& origin, PrecompiledExecResult::Ptr _callResult)
 {
-    bcos::eth::ContractABI abi;
+    bcos::protocol::ContractABI abi;
     Address contractAddress;
     abi.abiOut(data, contractAddress);
     int result = 0;
@@ -176,7 +176,7 @@ void ContractLifeCyclePrecompiled::freeze(ExecutiveContext::Ptr context, bytesCo
 void ContractLifeCyclePrecompiled::unfreeze(ExecutiveContext::Ptr context, bytesConstRef data,
     Address const& origin, PrecompiledExecResult::Ptr _callResult)
 {
-    bcos::eth::ContractABI abi;
+    bcos::protocol::ContractABI abi;
     Address contractAddress;
     abi.abiOut(data, contractAddress);
     int result = 0;
@@ -249,7 +249,7 @@ bool ContractLifeCyclePrecompiled::checkContractManager(std::string const& _tabl
 void ContractLifeCyclePrecompiled::grantManager(ExecutiveContext::Ptr context, bytesConstRef data,
     Address const& origin, PrecompiledExecResult::Ptr _callResult)
 {
-    bcos::eth::ContractABI abi;
+    bcos::protocol::ContractABI abi;
     Address contractAddress;
     Address userAddress;
     abi.abiOut(data, contractAddress, userAddress);
@@ -288,7 +288,7 @@ void ContractLifeCyclePrecompiled::revokeManager(
     std::shared_ptr<blockverifier::ExecutiveContext> context, bytesConstRef data,
     Address const& origin, PrecompiledExecResult::Ptr _callResult)
 {
-    bcos::eth::ContractABI abi;
+    bcos::protocol::ContractABI abi;
     Address contractAddress;
     Address userAddress;
     abi.abiOut(data, contractAddress, userAddress);
@@ -338,7 +338,7 @@ void ContractLifeCyclePrecompiled::revokeManager(
 void ContractLifeCyclePrecompiled::getStatus(
     ExecutiveContext::Ptr context, bytesConstRef data, PrecompiledExecResult::Ptr _callResult)
 {
-    bcos::eth::ContractABI abi;
+    bcos::protocol::ContractABI abi;
 
     Address contractAddress;
     abi.abiOut(data, contractAddress);
@@ -355,7 +355,7 @@ void ContractLifeCyclePrecompiled::getStatus(
 void ContractLifeCyclePrecompiled::listManager(
     ExecutiveContext::Ptr context, bytesConstRef data, PrecompiledExecResult::Ptr _callResult)
 {
-    bcos::eth::ContractABI abi;
+    bcos::protocol::ContractABI abi;
 
     Address contractAddress;
     abi.abiOut(data, contractAddress);
@@ -387,7 +387,7 @@ void ContractLifeCyclePrecompiled::listManager(
                 for (size_t i = 0; i < entries->size(); i++)
                 {
                     auto authority = entries->get(i)->getField(storagestate::STORAGE_VALUE);
-                    addrs.push_back(bcos::eth::toAddress(authority));
+                    addrs.push_back(bcos::protocol::toAddress(authority));
                 }
             }
             else

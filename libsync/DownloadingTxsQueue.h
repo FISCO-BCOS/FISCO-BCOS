@@ -24,9 +24,9 @@
 #include "Common.h"
 #include "SyncMsgPacket.h"
 #include "SyncStatus.h"
-#include <libethcore/Transaction.h>
-#include <libethcore/TxsParallelParser.h>
 #include <libp2p/P2PInterface.h>
+#include <libprotocol/Transaction.h>
+#include <libprotocol/TxsParallelParser.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <libutilities/TreeTopology.h>
 #include <vector>
@@ -63,7 +63,7 @@ public:
 
     // pop all queue into tx pool
     void pop2TxPool(std::shared_ptr<bcos::txpool::TxPoolInterface> _txPool,
-        bcos::eth::CheckTransaction _checkSig = bcos::eth::CheckTransaction::None);
+        bcos::protocol::CheckTransaction _checkSig = bcos::protocol::CheckTransaction::None);
 
     ssize_t bufferSize() const
     {

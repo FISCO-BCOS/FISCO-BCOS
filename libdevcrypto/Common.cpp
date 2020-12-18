@@ -30,7 +30,7 @@
 #include <cryptopp/modes.h>
 #include <cryptopp/pwdbased.h>
 #include <cryptopp/sha.h>
-#include <libethcore/Exceptions.h>
+#include <libprotocol/Exceptions.h>
 #include <libutilities/RLP.h>
 
 using namespace std;

@@ -19,11 +19,11 @@
 #include "libprecompiled/TableFactoryPrecompiled.h"
 #include "libstorage/MemoryTableFactory.h"
 #include <libdevcrypto/Common.h>
-#include <libethcore/ABI.h>
 #include <libprecompiled/ConditionPrecompiled.h>
 #include <libprecompiled/EntriesPrecompiled.h>
 #include <libprecompiled/EntryPrecompiled.h>
 #include <libprecompiled/KVTablePrecompiled.h>
+#include <libprotocol/ABI.h>
 #include <libstorage/MemoryTable.h>
 #include <libstorage/Table.h>
 #include <boost/test/unit_test.hpp>
@@ -117,7 +117,7 @@ BOOST_AUTO_TEST_CASE(toString)
 
 BOOST_AUTO_TEST_CASE(call_get_set)
 {
-    eth::ContractABI abi;
+    protocol::ContractABI abi;
     bytes in = abi.abiIn("get(string)", std::string("name"));
     auto callResult = tablePrecompiled->call(context, bytesConstRef(&in));
     bytes out = callResult->execResult();
@@ -151,7 +151,7 @@ BOOST_AUTO_TEST_CASE(call_get_set)
 
 BOOST_AUTO_TEST_CASE(call_set_permission_denied)
 {
-    eth::ContractABI abi;
+    protocol::ContractABI abi;
     auto entry = std::make_shared<storage::Entry>();
     entry->setField("name", "WangWu");
     auto entryPrecompiled = std::make_shared<EntryPrecompiled>();
@@ -169,7 +169,7 @@ BOOST_AUTO_TEST_CASE(call_set_permission_denied)
 
 BOOST_AUTO_TEST_CASE(call_newEntry)
 {
-    eth::ContractABI abi;
+    protocol::ContractABI abi;
     bytes in = abi.abiIn("newEntry()");
     auto callResult = tablePrecompiled->call(context, bytesConstRef(&in));
     bytes out1 = callResult->execResult();

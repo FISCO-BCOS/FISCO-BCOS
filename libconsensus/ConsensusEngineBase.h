@@ -26,10 +26,10 @@
 #include "ConsensusInterface.h"
 #include <libblockchain/BlockChainInterface.h>
 #include <libblockverifier/BlockVerifierInterface.h>
-#include <libethcore/Block.h>
 #include <libp2p/P2PInterface.h>
 #include <libp2p/P2PMessage.h>
 #include <libp2p/P2PSession.h>
+#include <libprotocol/Block.h>
 #include <libsync/NodeTimeMaintenance.h>
 #include <libsync/SyncInterface.h>
 #include <libtxpool/TxPoolInterface.h>
@@ -64,9 +64,9 @@ public:
     {
         assert(m_service && m_txPool && m_blockChain && m_blockSync && m_blockVerifier);
         if (m_protocolId == 0)
-            BOOST_THROW_EXCEPTION(bcos::eth::InvalidProtocolID()
+            BOOST_THROW_EXCEPTION(bcos::protocol::InvalidProtocolID()
                                   << errinfo_comment("Protocol id must be larger than 0"));
-        m_groupId = bcos::eth::getGroupAndProtocol(m_protocolId).first;
+        m_groupId = bcos::protocol::getGroupAndProtocol(m_protocolId).first;
         std::sort(m_sealerList.begin(), m_sealerList.end());
         m_lastSealerListUpdateNumber = m_blockChain->number();
 
@@ -172,12 +172,12 @@ public:
 
     virtual IDXTYPE minValidNodes() const { return m_nodeNum - m_f; }
     /// update the context of PBFT after commit a block into the block-chain
-    void reportBlock(bcos::eth::Block const&) override;
+    void reportBlock(bcos::protocol::Block const&) override;
 
     /// obtain maxBlockTransactions
     uint64_t maxBlockTransactions() override { return m_maxBlockTransactions; }
     virtual void resetConfig();
-    void setBlockFactory(bcos::eth::BlockFactory::Ptr _blockFactory) override
+    void setBlockFactory(bcos::protocol::BlockFactory::Ptr _blockFactory) override
     {
         m_blockFactory = _blockFactory;
     }
@@ -199,7 +199,7 @@ public:
     }
 
 protected:
-    void dropHandledTransactions(std::shared_ptr<bcos::eth::Block> block)
+    void dropHandledTransactions(std::shared_ptr<bcos::protocol::Block> block)
     {
         m_txPool->dropBlockTrans(block);
     }
@@ -269,9 +269,9 @@ protected:
         }
     }
 
-    bcos::blockverifier::ExecutiveContext::Ptr executeBlock(bcos::eth::Block& block);
-    virtual void checkBlockValid(bcos::eth::Block const& block);
-    virtual void checkBlockTimeStamp(bcos::eth::Block const& _block);
+    bcos::blockverifier::ExecutiveContext::Ptr executeBlock(bcos::protocol::Block& block);
+    virtual void checkBlockValid(bcos::protocol::Block const& block);
+    virtual void checkBlockTimeStamp(bcos::protocol::Block const& _block);
 
     virtual void updateConsensusNodeList();
 
@@ -312,7 +312,7 @@ protected:
     // the block which is waiting consensus
     std::atomic<int64_t> m_consensusBlockNumber = {0};
     /// the latest block header
-    bcos::eth::BlockHeader m_highestBlock;
+    bcos::protocol::BlockHeader m_highestBlock;
     /// total number of nodes
     std::atomic<IDXTYPE> m_nodeNum = {0};
     /// at-least number of valid nodes
@@ -343,7 +343,7 @@ protected:
     std::atomic_bool m_cfgErr = {false};
 
     // block Factory used to create block
-    bcos::eth::BlockFactory::Ptr m_blockFactory;
+    bcos::protocol::BlockFactory::Ptr m_blockFactory;
 
     bool m_supportConsensusTimeAdjust = false;
     bcos::sync::NodeTimeMaintenance::Ptr m_nodeTimeMaintenance;

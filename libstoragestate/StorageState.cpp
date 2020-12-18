@@ -25,11 +25,11 @@
 #include "StorageState.h"
 #include "libconfig/GlobalConfigure.h"
 #include "libdevcrypto/CryptoInterface.h"
-#include "libethcore/Exceptions.h"
+#include "libprotocol/Exceptions.h"
 #include "libstorage/Table.h"
 
 using namespace bcos;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::storagestate;
 using namespace bcos::storage;
 using namespace bcos::executive;

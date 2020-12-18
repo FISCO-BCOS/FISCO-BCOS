@@ -96,10 +96,10 @@ bool VRFBasedrPBFTSealer::generateTransactionForRotating()
 
         // generate "rotateWorkingSealer" transaction
         std::string interface = bcos::precompiled::WSM_METHOD_ROTATE_STR;
-        auto generatedTx =
-            m_txGenerator->generateTransactionWithSig(interface, m_blockChain->number(),
-                bcos::precompiled::WORKING_SEALER_MGR_ADDRESS, m_vrfBasedrPBFTEngine->keyPair(),
-                bcos::eth::Transaction::Type::MessageCall, m_vrfPublicKey, *blockHashStr, vrfProof);
+        auto generatedTx = m_txGenerator->generateTransactionWithSig(interface,
+            m_blockChain->number(), bcos::precompiled::WORKING_SEALER_MGR_ADDRESS,
+            m_vrfBasedrPBFTEngine->keyPair(), bcos::protocol::Transaction::Type::MessageCall,
+            m_vrfPublicKey, *blockHashStr, vrfProof);
 
         // put the generated transaction into the 0th position of the block transactions
         // Note: must set generatedTx into the first transaction for other transactions may change

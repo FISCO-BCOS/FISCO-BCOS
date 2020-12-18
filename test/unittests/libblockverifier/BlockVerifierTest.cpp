@@ -23,15 +23,15 @@
 
 #include <libblockchain/BlockChainImp.h>
 #include <libblockverifier/BlockVerifier.h>
-#include <libethcore/ABI.h>
-#include <libethcore/PrecompiledContract.h>
-#include <libethcore/Protocol.h>
 #include <libinitializer/Initializer.h>
 #include <libinitializer/LedgerInitializer.h>
 #include <libledger/DBInitializer.h>
 #include <libledger/LedgerManager.h>
+#include <libprotocol/ABI.h>
+#include <libprotocol/PrecompiledContract.h>
+#include <libprotocol/Protocol.h>
 #include <test/tools/libutils/TestOutputHelper.h>
-#include <test/unittests/libethcore/FakeBlock.h>
+#include <test/unittests/libprotocol/FakeBlock.h>
 #include <unistd.h>
 #include <boost/test/unit_test.hpp>
 #include <chrono>
@@ -39,7 +39,7 @@
 
 using namespace std;
 using namespace bcos;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::ledger;
 using namespace bcos::initializer;
 using namespace bcos::txpool;
@@ -68,7 +68,7 @@ public:
             Address dest = Address(0x5002);
             string usr = to_string(i);
             u256 money = 1000000000;
-            bcos::eth::ContractABI abi;
+            bcos::protocol::ContractABI abi;
             bytes data =
                 abi.abiIn("userSave(string,uint256)", usr, money);  // add 1000000000 to user i
             u256 nonce = u256(i);
@@ -96,8 +96,8 @@ public:
 
         genTxUserAddBlock(userAddReqBlock, _userNum);
         auto exeCtx = _blockVerifier->executeBlock(userAddReqBlock, _parentBlockInfo);
-        std::shared_ptr<bcos::eth::Block> block =
-            std::make_shared<bcos::eth::Block>(userAddReqBlock);
+        std::shared_ptr<bcos::protocol::Block> block =
+            std::make_shared<bcos::protocol::Block>(userAddReqBlock);
         _blockChain->commitBlock(block, exeCtx);
     }
 
@@ -127,7 +127,7 @@ public:
 
             LOG(DEBUG) << "Transfer user-" << userFrom << " to user-" << userTo;
             u256 money = 1;
-            bcos::eth::ContractABI abi;
+            bcos::protocol::ContractABI abi;
             bytes data = abi.abiIn("userTransfer(string,string,uint256)", userFrom, userTo,
                 money);  // add 1000000000 to user i
             u256 nonce = u256(i);
@@ -158,7 +158,7 @@ public:
             u256 gas = 10000000;
             Address dest = Address(0x5002);
             string usr = to_string(i);
-            bcos::eth::ContractABI abi;
+            bcos::protocol::ContractABI abi;
             bytes data = abi.abiIn("userBalance(string)", usr);  // add 1000000000 to user i
             u256 nonce = u256(i);
             Transaction::Ptr tx =

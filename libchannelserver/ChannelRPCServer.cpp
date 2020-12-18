@@ -29,11 +29,11 @@
 #include "libchannelserver/ChannelMessage.h"    // for TopicChannelM...
 #include "libchannelserver/ChannelServer.h"     // for ChannelServer
 #include "libchannelserver/ChannelSession.h"    // for ChannelSessio...
-#include "libethcore/Protocol.h"                // for AMOP, ProtocolID
 #include "libnetwork/Common.h"                  // for NetworkException
 #include "libp2p/P2PInterface.h"                // for P2PInterface
 #include "libp2p/P2PMessageFactory.h"           // for P2PMessageFac...
 #include "libp2p/P2PSession.h"                  // for P2PSession
+#include "libprotocol/Protocol.h"               // for AMOP, ProtocolID
 #include "libutilities/Common.h"                // for bytes, byte
 #include <json/json.h>
 #include <libeventfilter/Common.h>
@@ -52,7 +52,7 @@
 
 using namespace std;
 using namespace bcos;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::channel;
 using namespace bcos::p2p;
 
@@ -82,7 +82,7 @@ bool ChannelRPCServer::StartListening()
             channelHandler = std::bind(&ChannelRPCServer::onNodeChannelRequest, shared_from_this(),
                 std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
 
-        m_service->registerHandlerByProtoclID(bcos::eth::ProtocolID::AMOP, channelHandler);
+        m_service->registerHandlerByProtoclID(bcos::protocol::ProtocolID::AMOP, channelHandler);
 
         CHANNEL_LOG(INFO) << "ChannelRPCServer started";
 
@@ -794,7 +794,7 @@ void bcos::ChannelRPCServer::onNodeChannelRequest(
                             auto p2pResponse = std::dynamic_pointer_cast<bcos::p2p::P2PMessage>(
                                 service->p2pMessageFactory()->buildMessage());
                             p2pResponse->setBuffer(buffer);
-                            p2pResponse->setProtocolID(-bcos::eth::ProtocolID::AMOP);
+                            p2pResponse->setProtocolID(-bcos::protocol::ProtocolID::AMOP);
                             p2pResponse->setPacketType(0u);
                             p2pResponse->setSeq(p2pMessage->seq());
                             service->asyncSendMessageByNodeID(nodeID, p2pResponse,
@@ -809,7 +809,7 @@ void bcos::ChannelRPCServer::onNodeChannelRequest(
                         auto p2pResponse = std::dynamic_pointer_cast<bcos::p2p::P2PMessage>(
                             service->p2pMessageFactory()->buildMessage());
                         p2pResponse->setBuffer(buffer);
-                        p2pResponse->setProtocolID(-bcos::eth::ProtocolID::AMOP);
+                        p2pResponse->setProtocolID(-bcos::protocol::ProtocolID::AMOP);
                         p2pResponse->setPacketType(0u);
                         p2pResponse->setSeq(p2pMessage->seq());
                         service->asyncSendMessageByNodeID(nodeID, p2pResponse,
@@ -829,7 +829,7 @@ void bcos::ChannelRPCServer::onNodeChannelRequest(
                 auto p2pResponse = std::dynamic_pointer_cast<bcos::p2p::P2PMessage>(
                     m_service->p2pMessageFactory()->buildMessage());
                 p2pResponse->setBuffer(buffer);
-                p2pResponse->setProtocolID(bcos::eth::ProtocolID::AMOP);
+                p2pResponse->setProtocolID(bcos::protocol::ProtocolID::AMOP);
                 p2pResponse->setPacketType(0u);
                 p2pResponse->setSeq(msg->seq());
                 m_service->asyncSendMessageByNodeID(
@@ -963,7 +963,7 @@ void bcos::ChannelRPCServer::onClientChannelRequest(
             auto p2pMessage = std::dynamic_pointer_cast<p2p::P2PMessage>(
                 m_service->p2pMessageFactory()->buildMessage());
             p2pMessage->setBuffer(buffer);
-            p2pMessage->setProtocolID(bcos::eth::ProtocolID::AMOP);
+            p2pMessage->setProtocolID(bcos::protocol::ProtocolID::AMOP);
             p2pMessage->setPacketType(0u);
 
             // Exceed the bandwidth-limit, return REJECT_AMOP_REQ_FOR_OVER_BANDWIDTHLIMIT AMOP
@@ -1029,7 +1029,7 @@ void bcos::ChannelRPCServer::onClientChannelRequest(
             auto p2pMessage = std::dynamic_pointer_cast<p2p::P2PMessage>(
                 m_service->p2pMessageFactory()->buildMessage());
             p2pMessage->setBuffer(buffer);
-            p2pMessage->setProtocolID(bcos::eth::ProtocolID::AMOP);
+            p2pMessage->setProtocolID(bcos::protocol::ProtocolID::AMOP);
             p2pMessage->setPacketType(1u);
 
             // Exceed the bandwidth limit, return REJECT_AMOP_REQ_FOR_OVER_BANDWIDTHLIMIT AMOP

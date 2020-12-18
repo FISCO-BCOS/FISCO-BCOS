@@ -21,11 +21,11 @@
 
 #include "JsonHelper.h"
 #include <jsonrpccpp/common/exception.h>
-#include <libethcore/CommonJS.h>
-#include <libethcore/Transaction.h>
+#include <libprotocol/CommonJS.h>
+#include <libprotocol/Transaction.h>
 
 using namespace std;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 
 namespace bcos
 {

@@ -37,7 +37,7 @@
 using namespace bcos;
 using namespace bcos::consensus;
 using namespace bcos::p2p;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::blockchain;
 using namespace std;
 using namespace std::chrono;
@@ -147,7 +147,7 @@ void RaftEngine::stop()
     ConsensusEngineBase::stop();
 }
 
-void RaftEngine::reportBlock(bcos::eth::Block const& _block)
+void RaftEngine::reportBlock(bcos::protocol::Block const& _block)
 {
     ConsensusEngineBase::reportBlock(_block);
     auto shouldReport = false;
@@ -1506,7 +1506,7 @@ void RaftEngine::execBlock(Sealing& _sealing, Block const& _block)
     _sealing.block = working_block;
 }
 
-void RaftEngine::checkBlockValid(bcos::eth::Block const& _block)
+void RaftEngine::checkBlockValid(bcos::protocol::Block const& _block)
 {
     ConsensusEngineBase::checkBlockValid(_block);
     checkSealerList(_block);

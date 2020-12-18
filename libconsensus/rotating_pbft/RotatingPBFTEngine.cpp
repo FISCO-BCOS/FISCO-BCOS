@@ -23,7 +23,7 @@
 #include "RotatingPBFTEngine.h"
 #include <libprecompiled/SystemConfigPrecompiled.h>
 
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::consensus;
 using namespace bcos::p2p;
 using namespace bcos::network;

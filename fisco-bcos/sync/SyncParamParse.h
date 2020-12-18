@@ -23,9 +23,9 @@
 
 #pragma once
 
-#include <libethcore/CommonJS.h>
-#include <libethcore/Protocol.h>
 #include <libp2p/Service.h>
+#include <libprotocol/CommonJS.h>
+#include <libprotocol/Protocol.h>
 #include <libutilities/FixedBytes.h>
 #include <boost/program_options.hpp>
 #include <cstdlib>
@@ -34,7 +34,7 @@
 
 using namespace bcos;
 using namespace bcos::p2p;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 class Params
 {
 public:

@@ -24,7 +24,7 @@
 #include "PBFTReqCache.h"
 #include <memory>
 
-using namespace bcos::eth;
+using namespace bcos::protocol;
 namespace bcos
 {
 namespace consensus
@@ -33,7 +33,7 @@ namespace consensus
  * @brief: delete requests cached in m_signCache, m_commitCache and m_prepareCache according to hash
  * @param hash
  */
-void PBFTReqCache::delCache(bcos::eth::BlockHeader const& _highestBlockHeader)
+void PBFTReqCache::delCache(bcos::protocol::BlockHeader const& _highestBlockHeader)
 {
     // Note: the hash here must not be auto const& type, otherwise, the program will coredump
     auto hash = _highestBlockHeader.hash();
@@ -60,7 +60,7 @@ void PBFTReqCache::delCache(bcos::eth::BlockHeader const& _highestBlockHeader)
  * @param block: block need to append sig-list
  * @param minSigSize: minimum size of the sig list
  */
-bool PBFTReqCache::generateAndSetSigList(bcos::eth::Block& block, IDXTYPE const& minSigSize)
+bool PBFTReqCache::generateAndSetSigList(bcos::protocol::Block& block, IDXTYPE const& minSigSize)
 {
     auto sig_list = std::make_shared<std::vector<std::pair<u256, std::vector<unsigned char>>>>();
     if (m_commitCache.count(m_prepareCache->block_hash) > 0)
@@ -197,7 +197,7 @@ void PBFTReqCache::addViewChangeReq(ViewChangeReq::Ptr _req, int64_t const& _blo
  * @return false: can't trigger viewchange
  */
 bool PBFTReqCache::canTriggerViewChange(VIEWTYPE& minView, IDXTYPE const& maxInvalidNodeNum,
-    VIEWTYPE const& toView, bcos::eth::BlockHeader const& highestBlock,
+    VIEWTYPE const& toView, bcos::protocol::BlockHeader const& highestBlock,
     int64_t const& consensusBlockNumber)
 {
     std::map<IDXTYPE, VIEWTYPE> idx_view_map;
@@ -247,7 +247,7 @@ bool PBFTReqCache::canTriggerViewChange(VIEWTYPE& minView, IDXTYPE const& maxInv
  * @param highestBlock: the current block header
  */
 void PBFTReqCache::removeInvalidViewChange(
-    VIEWTYPE const& view, bcos::eth::BlockHeader const& highestBlock)
+    VIEWTYPE const& view, bcos::protocol::BlockHeader const& highestBlock)
 {
     auto it = m_recvViewChangeReq.find(view);
     if (it == m_recvViewChangeReq.end())
@@ -270,7 +270,7 @@ void PBFTReqCache::removeInvalidViewChange(
     removeInvalidLatestViewChangeReq(highestBlock);
 }
 
-void PBFTReqCache::removeInvalidLatestViewChangeReq(bcos::eth::BlockHeader const& highestBlock)
+void PBFTReqCache::removeInvalidLatestViewChangeReq(bcos::protocol::BlockHeader const& highestBlock)
 {
     for (auto pLatestView = m_latestViewChangeReqCache->begin();
          pLatestView != m_latestViewChangeReqCache->end();)

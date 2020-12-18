@@ -19,15 +19,15 @@
 #include "libdevcrypto/CryptoInterface.h"
 #include <evmc/helpers.h>
 #include <libdevcrypto/Common.h>
-#include <libethcore/BlockHeader.h>
 #include <libexecutive/EVMHostContext.h>
 #include <libexecutive/EVMHostInterface.h>
+#include <libprotocol/BlockHeader.h>
 #include <libutilities/JsonDataConvertUtility.h>
 #include <stdlib.h>
 #include <time.h>
 
 using namespace bcos;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::executive;
 namespace bcos
 {

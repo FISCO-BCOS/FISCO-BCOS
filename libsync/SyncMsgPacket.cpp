@@ -22,15 +22,15 @@
  */
 
 #include "SyncMsgPacket.h"
-#include <libethcore/TxsParallelParser.h>
 #include <libp2p/P2PSession.h>
 #include <libp2p/Service.h>
+#include <libprotocol/TxsParallelParser.h>
 
 using namespace std;
 using namespace bcos;
 using namespace bcos::sync;
 using namespace bcos::p2p;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 
 bool SyncMsgPacket::decode(
     std::shared_ptr<bcos::p2p::P2PSession> _session, bcos::p2p::P2PMessage::Ptr _msg)
@@ -135,7 +135,7 @@ void SyncTransactionsPacket::encode(
 void SyncTransactionsPacket::encode(std::vector<bytes> const& _txRLPs, unsigned const& _fieldSize)
 {
     m_rlpStream.clear();
-    bytes txsBytes = bcos::eth::TxsParallelParser::encode(_txRLPs);
+    bytes txsBytes = bcos::protocol::TxsParallelParser::encode(_txRLPs);
     prep(m_rlpStream, TransactionsPacket, _fieldSize).append(ref(txsBytes));
 }
 

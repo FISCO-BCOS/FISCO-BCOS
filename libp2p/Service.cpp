@@ -28,7 +28,7 @@
 #include "libp2p/P2PInterface.h"       // for CallbackFunc...
 #include "libp2p/P2PMessageFactory.h"  // for P2PMessageFa...
 #include "libp2p/P2PSession.h"         // for P2PSession
-#include "libutilities/FixedBytes.h"    // for FixedBytes, hash
+#include "libutilities/FixedBytes.h"   // for FixedBytes, hash
 #include "libutilities/ThreadPool.h"   // for ThreadPool
 #include <libstat/NetworkStatHandler.h>
 #include <boost/random.hpp>
@@ -339,7 +339,7 @@ void Service::onMessage(bcos::network::NetworkException e, bcos::network::Sessio
         auto p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
 
         // AMOP topic message, redirect to p2psession
-        if (p2pSession && abs(p2pMessage->protocolID()) == bcos::eth::ProtocolID::Topic)
+        if (p2pSession && abs(p2pMessage->protocolID()) == bcos::protocol::ProtocolID::Topic)
         {
             p2pSession->onTopicMessage(p2pMessage);
             return;
@@ -347,7 +347,7 @@ void Service::onMessage(bcos::network::NetworkException e, bcos::network::Sessio
 
         // AMOP-incoming-network-traffic between nodes
         bool isAMOPMessage =
-            (abs(p2pMessage->protocolID()) == bcos::eth::ProtocolID::AMOP ? true : false);
+            (abs(p2pMessage->protocolID()) == bcos::protocol::ProtocolID::AMOP ? true : false);
         if (m_channelNetworkStatHandler && isAMOPMessage)
         {
             m_channelNetworkStatHandler->updateAMOPInTraffic(p2pMessage->length());
@@ -532,7 +532,7 @@ void Service::asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
     try
     {
         bool isAMOPMessage =
-            (abs(message->protocolID()) == bcos::eth::ProtocolID::AMOP ? true : false);
+            (abs(message->protocolID()) == bcos::protocol::ProtocolID::AMOP ? true : false);
 
         if (nodeID == id())
         {
@@ -572,7 +572,7 @@ void Service::asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
                 session->session()->asyncSendMessage(message, options, nullptr);
             }
             bool isAMOPMessage =
-                (abs(message->protocolID()) == bcos::eth::ProtocolID::AMOP ? true : false);
+                (abs(message->protocolID()) == bcos::protocol::ProtocolID::AMOP ? true : false);
 
             // AMOP-outgoing-network-traffic between nodes
             if (m_channelNetworkStatHandler && isAMOPMessage)
@@ -886,7 +886,7 @@ P2PSessionInfos Service::sessionInfos()
 
 P2PSessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const
 {
-    std::pair<GROUP_ID, MODULE_ID> ret = bcos::eth::getGroupAndProtocol(_protocolID);
+    std::pair<GROUP_ID, MODULE_ID> ret = bcos::protocol::getGroupAndProtocol(_protocolID);
     P2PSessionInfos infos;
 
     RecursiveGuard l(x_nodeList);
@@ -997,7 +997,7 @@ void Service::removeNetworkStatHandlerByGroupID(GROUP_ID const& _groupID)
 void Service::updateIncomingTraffic(P2PMessage::Ptr _msg)
 {
     // split groupID and moduleID from the _protocolID
-    auto ret = bcos::eth::getGroupAndProtocol(abs(_msg->protocolID()));
+    auto ret = bcos::protocol::getGroupAndProtocol(abs(_msg->protocolID()));
     auto networkStatHandler =
         getHandlerByGroupId(ret.first, m_group2NetworkStatHandler, x_group2NetworkStatHandler);
 
@@ -1009,7 +1009,7 @@ void Service::updateIncomingTraffic(P2PMessage::Ptr _msg)
 
 void Service::updateOutgoingTraffic(P2PMessage::Ptr _msg)
 {
-    auto ret = bcos::eth::getGroupAndProtocol(abs(_msg->protocolID()));
+    auto ret = bcos::protocol::getGroupAndProtocol(abs(_msg->protocolID()));
     auto networkStatHandler =
         getHandlerByGroupId(ret.first, m_group2NetworkStatHandler, x_group2NetworkStatHandler);
     if (networkStatHandler)
@@ -1029,7 +1029,7 @@ void Service::acquirePermits(P2PMessage::Ptr _msg)
         m_nodeBandwidthLimiter->acquireWithoutWait(_msg->length());
     }
     // get groupId
-    auto ret = bcos::eth::getGroupAndProtocol(abs(_msg->protocolID()));
+    auto ret = bcos::protocol::getGroupAndProtocol(abs(_msg->protocolID()));
     auto bandwidthLimiter =
         getHandlerByGroupId(ret.first, m_group2BandwidthLimiter, x_group2BandwidthLimiter);
     if (!bandwidthLimiter)

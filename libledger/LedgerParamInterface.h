@@ -23,7 +23,7 @@
  */
 #pragma once
 #include <libdevcrypto/Common.h>
-#include <libethcore/Common.h>
+#include <libprotocol/Common.h>
 #include <boost/property_tree/ptree.hpp>
 #include <memory>
 #include <vector>

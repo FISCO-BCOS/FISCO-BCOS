@@ -19,8 +19,8 @@
 #include <json/json.h>
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcrypto/Common.h>
-#include <libethcore/ABI.h>
 #include <libprecompiled/TableFactoryPrecompiled.h>
+#include <libprotocol/ABI.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/Storage.h>
 #include <libstorage/Table.h>
@@ -82,7 +82,7 @@ BOOST_AUTO_TEST_CASE(toString)
 BOOST_AUTO_TEST_CASE(call_afterBlock)
 {
     // createTable
-    bcos::eth::ContractABI abi;
+    bcos::protocol::ContractABI abi;
     bytes param = abi.abiIn("createTable(string,string,string)", std::string("t_test"),
         std::string("id"), std::string("item_name,item_id"));
     auto callResult = tableFactoryPrecompiled->call(context, bytesConstRef(&param));

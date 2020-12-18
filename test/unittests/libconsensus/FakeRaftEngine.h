@@ -42,7 +42,7 @@ public:
       : RaftEngine(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _keyPair,
             _minElectTime, _maxElectTime, _protocolId, _sealerList)
     {
-        m_blockFactory = std::make_shared<bcos::eth::BlockFactory>();
+        m_blockFactory = std::make_shared<bcos::protocol::BlockFactory>();
     }
 
     /*
@@ -93,7 +93,7 @@ public:
     }
     void setFirstVote(bcos::consensus::raft::NodeIndex _firstVote) { m_firstVote = _firstVote; }
     void setLastLeaderTerm(size_t _term) { m_lastLeaderTerm = _term; }
-    void setUncommitedBlock(bcos::eth::Block const& _block) { m_uncommittedBlock = _block; }
+    void setUncommitedBlock(bcos::protocol::Block const& _block) { m_uncommittedBlock = _block; }
     void setUncommitedNumber(int64_t _number) { m_uncommittedBlockNumber = _number; }
     void setConsensusBlockNumber(int64_t _number) { m_consensusBlockNumber = _number; }
     void setLeader(bcos::consensus::raft::NodeIndex _leader)
@@ -102,11 +102,11 @@ public:
     }
 
 
-    bcos::eth::Block& getUncommitedBlock() { return m_uncommittedBlock; }
+    bcos::protocol::Block& getUncommitedBlock() { return m_uncommittedBlock; }
 
     std::shared_ptr<bcos::blockchain::BlockChainInterface> getBlockChain() { return m_blockChain; }
 
-    bcos::eth::BlockHeader getHighestBlock()
+    bcos::protocol::BlockHeader getHighestBlock()
     {
         return bcos::consensus::RaftEngine::getHighestBlock();
     }
@@ -156,7 +156,7 @@ public:
         return bcos::consensus::RaftEngine::handleVoteResponse(_from, _node, _resp, vote);
     }
 
-    void reportBlock(bcos::eth::Block const& _block) override
+    void reportBlock(bcos::protocol::Block const& _block) override
     {
         bcos::consensus::RaftEngine::reportBlock(_block);
     }

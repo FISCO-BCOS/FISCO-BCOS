@@ -24,8 +24,8 @@
 #include <libconsensus/Common.h>
 #include <libdevcrypto/Common.h>
 #include <libdevcrypto/CryptoInterface.h>
-#include <libethcore/Block.h>
-#include <libethcore/Exceptions.h>
+#include <libprotocol/Block.h>
+#include <libprotocol/Exceptions.h>
 #include <libutilities/RLP.h>
 
 #define PBFTENGINE_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("PBFT")
@@ -170,7 +170,7 @@ struct PBFTMsgPacket
         }
         catch (Exception const& e)
         {
-            e << bcos::eth::errinfo_name("invalid msg format");
+            e << bcos::protocol::errinfo_name("invalid msg format");
             throw;
         }
     }
@@ -202,7 +202,7 @@ public:
         }
         catch (Exception const& e)
         {
-            e << bcos::eth::errinfo_name("invalid msg format");
+            e << bcos::protocol::errinfo_name("invalid msg format");
             throw;
         }
     }
@@ -320,8 +320,8 @@ struct PBFTMsg
         }
         catch (Exception const& _e)
         {
-            _e << bcos::eth::errinfo_name("invalid msg format")
-               << bcos::eth::BadFieldError(field, *toHexString(rlp[field].data().toBytes()));
+            _e << bcos::protocol::errinfo_name("invalid msg format")
+               << bcos::protocol::BadFieldError(field, *toHexString(rlp[field].data().toBytes()));
             throw;
         }
     }
@@ -366,7 +366,7 @@ struct PrepareReq : public PBFTMsg
     using Ptr = std::shared_ptr<PrepareReq>;
     /// block data
     std::shared_ptr<bytes> block;
-    std::shared_ptr<bcos::eth::Block> pBlock = nullptr;
+    std::shared_ptr<bcos::protocol::Block> pBlock = nullptr;
     /// execution result of block(save the execution result temporarily)
     /// no need to send or receive accross the network
     bcos::blockverifier::ExecutiveContext::Ptr p_execContext = nullptr;
@@ -411,8 +411,8 @@ struct PrepareReq : public PBFTMsg
      * @param _view : current view
      * @param _idx : index of the node that generates this PrepareReq
      */
-    PrepareReq(bcos::eth::Block::Ptr blockStruct, KeyPair const& keyPair, VIEWTYPE const& _view,
-        IDXTYPE const& _idx, bool const& _onlyHash = false)
+    PrepareReq(bcos::protocol::Block::Ptr blockStruct, KeyPair const& keyPair,
+        VIEWTYPE const& _view, IDXTYPE const& _idx, bool const& _onlyHash = false)
     {
         block = std::make_shared<bcos::bytes>();
         height = blockStruct->blockHeader().number();
@@ -473,8 +473,8 @@ struct PrepareReq : public PBFTMsg
         }
         catch (Exception const& _e)
         {
-            _e << bcos::eth::errinfo_name("invalid msg format")
-               << bcos::eth::BadFieldError(field, *toHexString(_rlp[field].data().toBytes()));
+            _e << bcos::protocol::errinfo_name("invalid msg format")
+               << bcos::protocol::BadFieldError(field, *toHexString(_rlp[field].data().toBytes()));
             throw;
         }
     }

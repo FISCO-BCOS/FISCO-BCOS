@@ -24,9 +24,9 @@
 #include <libblockchain/BlockChainImp.h>
 #include <libblockverifier/ExecutiveContext.h>
 #include <libconfig/GlobalConfigure.h>
-#include <libethcore/Block.h>
-#include <libethcore/BlockHeader.h>
-#include <libethcore/Transaction.h>
+#include <libprotocol/Block.h>
+#include <libprotocol/BlockHeader.h>
+#include <libprotocol/Transaction.h>
 #include <libstorage/Common.h>
 #include <libstorage/MemoryTable.h>
 #include <libstorage/MemoryTableFactory.h>
@@ -35,13 +35,13 @@
 #include <libutilities/DataConvertUtility.h>
 #include <test/tools/libutils/Common.h>
 #include <test/tools/libutils/TestOutputHelper.h>
-#include <test/unittests/libethcore/FakeBlock.h>
+#include <test/unittests/libprotocol/FakeBlock.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 #include <unordered_map>
 
 using namespace bcos;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::storage;
 using namespace bcos::blockchain;
 using namespace bcos::blockverifier;
@@ -304,7 +304,7 @@ BOOST_AUTO_TEST_CASE(getCode)
 
 BOOST_AUTO_TEST_CASE(getBlockByHash)
 {
-    std::shared_ptr<bcos::eth::Block> bptr =
+    std::shared_ptr<bcos::protocol::Block> bptr =
         m_blockChainImp->getBlockByHash(h256(c_commonHashPrefix));
 
     BOOST_CHECK_EQUAL(bptr->getTransactionSize(), m_fakeBlock->getBlock()->getTransactionSize());
@@ -315,7 +315,7 @@ BOOST_AUTO_TEST_CASE(getBlockRLPByNumber)
 {
     std::shared_ptr<bytes> bRLPptr = m_blockChainImp->getBlockRLPByNumber(0);
 
-    std::shared_ptr<bcos::eth::Block> bptr =
+    std::shared_ptr<bcos::protocol::Block> bptr =
         m_blockChainImp->getBlockByHash(h256(c_commonHashPrefix));
     BOOST_CHECK(bptr->rlp() == *bRLPptr);
 }

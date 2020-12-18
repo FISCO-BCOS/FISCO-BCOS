@@ -27,7 +27,7 @@
 #include "libdevcrypto/sm2/sm2.h"
 #include <cryptopp/modes.h>
 #include <cryptopp/pwdbased.h>
-#include <libethcore/Exceptions.h>
+#include <libprotocol/Exceptions.h>
 #include <libutilities/Common.h>
 #include <libutilities/Exceptions.h>
 #include <libutilities/RLP.h>

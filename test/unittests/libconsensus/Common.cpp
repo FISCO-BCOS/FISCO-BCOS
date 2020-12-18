@@ -24,7 +24,7 @@
 #include "Common.h"
 #include "libdevcrypto/CryptoInterface.h"
 #include <test/tools/libutils/TestOutputHelper.h>
-#include <test/unittests/libethcore/FakeBlock.h>
+#include <test/unittests/libprotocol/FakeBlock.h>
 using namespace bcos::consensus;
 namespace bcos
 {

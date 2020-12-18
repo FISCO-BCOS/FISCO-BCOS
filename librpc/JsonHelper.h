@@ -21,13 +21,13 @@
 #pragma once
 
 #include <json/json.h>
-#include <libethcore/Common.h>
+#include <libprotocol/Common.h>
 
 namespace bcos
 {
 namespace rpc
 {
-bcos::eth::TransactionSkeleton toTransactionSkeleton(Json::Value const& _json);
+bcos::protocol::TransactionSkeleton toTransactionSkeleton(Json::Value const& _json);
 
 }  // namespace rpc
 

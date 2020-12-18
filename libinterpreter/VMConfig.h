@@ -24,7 +24,7 @@
 
 namespace bcos
 {
-namespace eth
+namespace protocol
 {
 ///////////////////////////////////////////////////////////////////////////////
 //
@@ -435,5 +435,5 @@ namespace eth
 #else
 #error No opcode dispatch configured
 #endif
-}  // namespace eth
+}  // namespace protocol
 }  // namespace bcos

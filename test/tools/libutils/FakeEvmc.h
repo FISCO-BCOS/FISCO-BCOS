@@ -24,8 +24,8 @@
 #include "libdevcrypto/CryptoInterface.h"
 #include <evmc/evmc.h>
 #include <libdevcrypto/Common.h>
-#include <libethcore/EVMSchedule.h>
-#include <libethcore/LogEntry.h>
+#include <libprotocol/EVMSchedule.h>
+#include <libprotocol/LogEntry.h>
 #include <libutilities/FixedBytes.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
@@ -72,7 +72,7 @@ inline Address fromEvmC(evmc_address const& _addr)
     return reinterpret_cast<Address const&>(_addr);
 }
 
-inline evmc_revision toRevision(bcos::eth::EVMSchedule const& _schedule)
+inline evmc_revision toRevision(bcos::protocol::EVMSchedule const& _schedule)
 {
     if (_schedule.haveCreate2)
         return EVMC_CONSTANTINOPLE;
@@ -148,7 +148,7 @@ private:
     AccountCodeStateType codeState;
 };
 
-extern bcos::eth::LogEntries fakeLogs;
+extern bcos::protocol::LogEntries fakeLogs;
 extern int64_t fakeDepth;
 
 class FakeEvmc
@@ -162,7 +162,7 @@ public:
             fakeLogs.clear();
     }
 
-    evmc_result execute(bcos::eth::EVMSchedule const& schedule, bytes code, bytes data,
+    evmc_result execute(bcos::protocol::EVMSchedule const& schedule, bytes code, bytes data,
         Address destination, Address caller, u256 value, int64_t gas, int32_t depth, bool isCreate,
         bool isStaticCall);
 

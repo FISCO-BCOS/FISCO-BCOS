@@ -20,7 +20,7 @@
  * @date: 2019-10-08
  */
 #pragma once
-#include <libethcore/Protocol.h>
+#include <libprotocol/Protocol.h>
 #include <libutilities/Worker.h>
 
 #define GOSSIP_LOG(_OBV) LOG(_OBV) << LOG_BADGE("GossipBlockStatus")
@@ -35,7 +35,7 @@ public:
     using Ptr = std::shared_ptr<GossipBlockStatus>;
     GossipBlockStatus(bcos::PROTOCOL_ID const& _protocolId, int64_t const& _gossipInterval,
         int64_t const& _gossipPeersNumber)
-      : Worker("gossip-" + std::to_string(bcos::eth::getGroupAndProtocol(_protocolId).first),
+      : Worker("gossip-" + std::to_string(bcos::protocol::getGroupAndProtocol(_protocolId).first),
             _gossipInterval),
         m_gossipPeersNumber(_gossipPeersNumber)
     {}

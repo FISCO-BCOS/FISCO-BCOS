@@ -21,8 +21,8 @@
 
 #pragma once
 
-#include <libethcore/LogEntry.h>
-#include <libethcore/TransactionReceipt.h>
+#include <libprotocol/LogEntry.h>
+#include <libprotocol/TransactionReceipt.h>
 
 #define EVENT_LOG(LEVEL) LOG(LEVEL) << "[EVENT]"
 
@@ -30,7 +30,7 @@ namespace bcos
 {
 namespace event
 {
-using MatchedLogEntry = std::pair<eth::LogEntry, eth::TransactionReceipt>;
+using MatchedLogEntry = std::pair<protocol::LogEntry, protocol::TransactionReceipt>;
 using MatchedLogEntries = std::vector<MatchedLogEntry>;
 
 enum ResponseCode

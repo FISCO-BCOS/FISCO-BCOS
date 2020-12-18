@@ -60,7 +60,7 @@ public:
 
     // verify handler to check downloading block
     virtual void registerConsensusVerifyHandler(
-        std::function<bool(bcos::eth::Block const&)> _handler) = 0;
+        std::function<bool(bcos::protocol::Block const&)> _handler) = 0;
 
     virtual void registerTxsReceiversFilter(std::function<std::shared_ptr<bcos::p2p::NodeIDs>(
             std::shared_ptr<std::set<bcos::network::NodeID>>)>)

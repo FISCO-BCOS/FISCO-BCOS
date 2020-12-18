@@ -24,7 +24,7 @@
 
 namespace bcos
 {
-namespace eth
+namespace protocol
 {
 std::array<evmc_instruction_metrics, 256> VM::c_metrics{{}};
 void VM::initMetrics()
@@ -193,5 +193,5 @@ u256 VM::exp256(u256 _base, u256 _exponent)
     }
     return result;
 }
-}  // namespace eth
+}  // namespace protocol
 }  // namespace bcos

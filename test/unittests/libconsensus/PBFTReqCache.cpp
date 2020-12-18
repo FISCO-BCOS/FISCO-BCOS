@@ -23,7 +23,7 @@
  */
 #include "PBFTReqCache.h"
 #include "libdevcrypto/CryptoInterface.h"
-#include <libethcore/Block.h>
+#include <libprotocol/Block.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 namespace bcos
 {

@@ -28,11 +28,11 @@
 #include "LedgerParamInterface.h"
 #include <libconsensus/Sealer.h>
 #include <libdevcrypto/Common.h>
-#include <libethcore/BlockFactory.h>
-#include <libethcore/Common.h>
 #include <libeventfilter/EventLogFilterManager.h>
 #include <libp2p/P2PInterface.h>
 #include <libp2p/Service.h>
+#include <libprotocol/BlockFactory.h>
+#include <libprotocol/Common.h>
 #include <libstat/NetworkStatHandler.h>
 #include <libutilities/Exceptions.h>
 #include <boost/algorithm/string.hpp>
@@ -209,7 +209,7 @@ protected:
     /// load ini config of group
     bcos::consensus::ConsensusInterface::Ptr createConsensusEngine(
         bcos::PROTOCOL_ID const& _protocolId);
-    bcos::eth::BlockFactory::Ptr createBlockFactory();
+    bcos::protocol::BlockFactory::Ptr createBlockFactory();
     void initPBFTEngine(bcos::consensus::Sealer::Ptr _sealer);
     void initrPBFTEngine(bcos::consensus::Sealer::Ptr _sealer);
 
@@ -245,7 +245,7 @@ protected:
     ChannelRPCServer::Ptr m_channelRPCServer;
     std::atomic_bool m_stopped = {false};
 
-    bcos::eth::Handler<int64_t> m_handler;
+    bcos::protocol::Handler<int64_t> m_handler;
 
     std::shared_ptr<bcos::sync::NodeTimeMaintenance> m_nodeTimeMaintenance;
 };

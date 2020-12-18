@@ -23,12 +23,12 @@
 #pragma once
 
 #include "EVMHostContext.h"
-#include <libethcore/Exceptions.h>
+#include <libprotocol/Exceptions.h>
 #include <memory>
 
 namespace bcos
 {
-namespace eth
+namespace protocol
 {
 class Result;
 /// EVM Virtual Machine interface
@@ -44,5 +44,5 @@ public:
     virtual std::shared_ptr<Result> exec(executive::EVMHostContext& _ext, evmc_revision _rev,
         evmc_message* _msg, const uint8_t* _code, size_t _code_size) = 0;
 };
-}  // namespace eth
+}  // namespace protocol
 }  // namespace bcos

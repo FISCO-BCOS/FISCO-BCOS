@@ -25,11 +25,11 @@
 #include "DownloadingTxsQueue.h"
 #include "SyncMsgEngine.h"
 #include "SyncStatus.h"
-#include <libethcore/Common.h>
-#include <libethcore/Exceptions.h>
 #include <libnetwork/Common.h>
 #include <libnetwork/Session.h>
 #include <libp2p/P2PInterface.h>
+#include <libprotocol/Common.h>
+#include <libprotocol/Exceptions.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <libutilities/FixedBytes.h>
 #include <libutilities/Worker.h>
@@ -56,7 +56,7 @@ public:
         m_txPool(_txPool),
         m_txQueue(_txsQueue),
         m_protocolId(_protocolId),
-        m_groupId(bcos::eth::getGroupAndProtocol(_protocolId).first),
+        m_groupId(bcos::protocol::getGroupAndProtocol(_protocolId).first),
         m_nodeId(_nodeId),
         m_syncStatus(_syncStatus),
         m_msgEngine(_msgEngine),
@@ -151,7 +151,7 @@ private:
     std::atomic_bool m_needMaintainTransactions = {false};
 
     // settings
-    bcos::eth::Handler<> m_tqReady;
+    bcos::protocol::Handler<> m_tqReady;
 
     std::function<std::shared_ptr<bcos::p2p::NodeIDs>(std::shared_ptr<std::set<NodeID>>)>
         fp_txsReceiversFilter = nullptr;
@@ -170,13 +170,13 @@ private:
     void forwardRemainingTxs();
 
     void broadcastTransactions(std::shared_ptr<bcos::p2p::NodeIDs> _selectedPeers,
-        std::shared_ptr<bcos::eth::Transactions> _ts, bool const& _fastForwardRemainTxs,
+        std::shared_ptr<bcos::protocol::Transactions> _ts, bool const& _fastForwardRemainTxs,
         int64_t const& _startIndex);
 
-    void sendTransactions(std::shared_ptr<bcos::eth::Transactions> _ts,
+    void sendTransactions(std::shared_ptr<bcos::protocol::Transactions> _ts,
         bool const& _fastForwardRemainTxs, int64_t const& _startIndex);
-    void sendTxsStatus(
-        std::shared_ptr<bcos::eth::Transactions> _txs, std::shared_ptr<NodeIDs> _selectedPeers);
+    void sendTxsStatus(std::shared_ptr<bcos::protocol::Transactions> _txs,
+        std::shared_ptr<NodeIDs> _selectedPeers);
 };
 
 }  // namespace sync

@@ -25,13 +25,13 @@
 #include <libconsensus/Sealer.h>
 #include <libconsensus/pbft/PBFTEngine.h>
 #include <libconsensus/pbft/PBFTSealer.h>
-#include <libethcore/BlockFactory.h>
+#include <libprotocol/BlockFactory.h>
 #include <libutilities/TopicInfo.h>
 #include <test/unittests/libblockverifier/FakeBlockVerifier.h>
 #include <test/unittests/libsync/FakeBlockSync.h>
 #include <test/unittests/libtxpool/FakeBlockChain.h>
 #include <memory>
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::blockverifier;
 using namespace bcos::txpool;
 using namespace bcos::blockchain;
@@ -65,7 +65,7 @@ public:
         setBaseDir(_baseDir);
         setMaxBlockTransactions(300000000);
         createPBFTMsgFactory();
-        m_blockFactory = std::make_shared<bcos::eth::BlockFactory>();
+        m_blockFactory = std::make_shared<bcos::protocol::BlockFactory>();
         m_reqCache = std::make_shared<PBFTReqCache>();
         m_reqCache->setCheckSignCallback(boost::bind(&FakePBFTEngine::checkSign, this, _1));
     }
@@ -134,7 +134,7 @@ public:
 
     void setMaxBlockTransactions(size_t const& maxTrans) { m_maxBlockTransactions = maxTrans; }
     void updateMaxBlockTransactions() override {}
-    bool checkBlock(bcos::eth::Block const& block)
+    bool checkBlock(bcos::protocol::Block const& block)
     {
         auto orgNumber = m_blockChain->number();
         std::shared_ptr<FakeBlockChain> blockChain =
@@ -214,7 +214,10 @@ public:
         return PBFTEngine::handleMsg(pbftMsgPtr);
     }
 
-    void notifySealing(bcos::eth::Block const& block) { return PBFTEngine::notifySealing(block); }
+    void notifySealing(bcos::protocol::Block const& block)
+    {
+        return PBFTEngine::notifySealing(block);
+    }
     bool handlePrepareMsg(PrepareReq::Ptr prepareReq, std::string const& ip = "self")
     {
         return PBFTEngine::handlePrepareMsg(prepareReq, ip);
@@ -227,7 +230,7 @@ public:
 
     std::shared_ptr<PBFTReqCache> reqCache() { return m_reqCache; }
 
-    PrepareReq::Ptr wrapperConstructPrepareReq(bcos::eth::Block::Ptr _block)
+    PrepareReq::Ptr wrapperConstructPrepareReq(bcos::protocol::Block::Ptr _block)
     {
         return PBFTEngine::constructPrepareReq(_block);
     }
@@ -426,9 +429,10 @@ public:
     {
         return PBFTSealer::resetSealingBlock(filter, resetNextLeader);
     }
-    void resetBlock(bcos::eth::Block& block, bool resetNextLeader = false)
+    void resetBlock(bcos::protocol::Block& block, bool resetNextLeader = false)
     {
-        std::shared_ptr<bcos::eth::Block> p_block = std::make_shared<bcos::eth::Block>(block);
+        std::shared_ptr<bcos::protocol::Block> p_block =
+            std::make_shared<bcos::protocol::Block>(block);
         return PBFTSealer::resetBlock(p_block, resetNextLeader);
     }
     void setBlock() { return PBFTSealer::setBlock(); }

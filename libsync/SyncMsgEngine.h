@@ -29,11 +29,11 @@
 #include "SyncMsgPacketFactory.h"
 #include "SyncStatus.h"
 #include <libblockchain/BlockChainInterface.h>
-#include <libethcore/Exceptions.h>
 #include <libnetwork/Common.h>
 #include <libnetwork/Session.h>
 #include <libp2p/P2PInterface.h>
 #include <libp2p/P2PMessage.h>
+#include <libprotocol/Exceptions.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <libutilities/FixedBytes.h>
 #include <libutilities/ThreadPool.h>
@@ -58,7 +58,7 @@ public:
         m_syncStatus(_syncStatus),
         m_txQueue(_txQueue),
         m_protocolId(_protocolId),
-        m_groupId(bcos::eth::getGroupAndProtocol(_protocolId).first),
+        m_groupId(bcos::protocol::getGroupAndProtocol(_protocolId).first),
         m_nodeId(_nodeId),
         m_genesisHash(_genesisHash)
     {
@@ -155,7 +155,7 @@ public:
         std::shared_ptr<bcos::p2p::P2PInterface> _service, PROTOCOL_ID _protocolId, NodeID _nodeId)
       : m_service(_service), m_protocolId(_protocolId), m_nodeId(_nodeId), m_blockRLPsBatch()
     {
-        m_groupId = bcos::eth::getGroupAndProtocol(_protocolId).first;
+        m_groupId = bcos::protocol::getGroupAndProtocol(_protocolId).first;
     }
     ~DownloadBlocksContainer() { clearBatchAndSend(); }
 

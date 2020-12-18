@@ -21,12 +21,13 @@
  * @date: 2018-11-08
  */
 #include "CommonTransactionNonceCheck.h"
-using namespace bcos::eth;
+using namespace bcos::protocol;
 namespace bcos
 {
 namespace txpool
 {
-bool CommonTransactionNonceCheck::isNonceOk(bcos::eth::Transaction const& _trans, bool needInsert)
+bool CommonTransactionNonceCheck::isNonceOk(
+    bcos::protocol::Transaction const& _trans, bool needInsert)
 {
     UpgradableGuard l(m_lock);
     {
@@ -50,7 +51,7 @@ bool CommonTransactionNonceCheck::isNonceOk(bcos::eth::Transaction const& _trans
     return false;
 }
 
-void CommonTransactionNonceCheck::delCache(bcos::eth::NonceKeyType const& key)
+void CommonTransactionNonceCheck::delCache(bcos::protocol::NonceKeyType const& key)
 {
     UpgradableGuard l(m_lock);
     {
@@ -67,7 +68,7 @@ void CommonTransactionNonceCheck::delCache(Transactions const& _transactions)
 {
     UpgradableGuard l(m_lock);
     {
-        std::vector<bcos::eth::NonceKeyType> delList;
+        std::vector<bcos::protocol::NonceKeyType> delList;
         for (unsigned i = 0; i < _transactions.size(); i++)
         {
             const auto& key = _transactions[i]->nonce();
@@ -88,7 +89,7 @@ void CommonTransactionNonceCheck::delCache(Transactions const& _transactions)
     }
 }
 
-void CommonTransactionNonceCheck::insertCache(bcos::eth::Transaction const& _transaction)
+void CommonTransactionNonceCheck::insertCache(bcos::protocol::Transaction const& _transaction)
 {
     WriteGuard l(m_lock);
     {

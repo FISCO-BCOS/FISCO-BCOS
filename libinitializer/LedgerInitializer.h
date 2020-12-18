@@ -22,10 +22,10 @@
 
 #pragma once
 #include "Common.h"
-#include <libethcore/PrecompiledContract.h>
 #include <libledger/Ledger.h>
 #include <libledger/LedgerManager.h>
 #include <libp2p/Service.h>
+#include <libprotocol/PrecompiledContract.h>
 #include <libutilities/Exceptions.h>
 #include <functional>
 #include <vector>

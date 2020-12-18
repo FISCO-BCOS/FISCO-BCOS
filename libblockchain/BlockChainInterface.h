@@ -22,11 +22,11 @@
  */
 #pragma once
 
-#include <libethcore/Block.h>
-#include <libethcore/Common.h>
-#include <libethcore/EVMFlags.h>
-#include <libethcore/Transaction.h>
-#include <libethcore/TransactionReceipt.h>
+#include <libprotocol/Block.h>
+#include <libprotocol/Common.h>
+#include <libprotocol/EVMFlags.h>
+#include <libprotocol/Transaction.h>
+#include <libprotocol/TransactionReceipt.h>
 #include <libutilities/FixedBytes.h>
 namespace bcos
 {
@@ -58,34 +58,34 @@ public:
     virtual ~BlockChainInterface(){};
     virtual int64_t number() = 0;
     virtual bcos::h256 numberHash(int64_t _i) = 0;
-    virtual bcos::eth::Transaction::Ptr getTxByHash(bcos::h256 const& _txHash) = 0;
-    virtual bcos::eth::LocalisedTransaction::Ptr getLocalisedTxByHash(
+    virtual bcos::protocol::Transaction::Ptr getTxByHash(bcos::h256 const& _txHash) = 0;
+    virtual bcos::protocol::LocalisedTransaction::Ptr getLocalisedTxByHash(
         bcos::h256 const& _txHash) = 0;
-    virtual bcos::eth::TransactionReceipt::Ptr getTransactionReceiptByHash(
+    virtual bcos::protocol::TransactionReceipt::Ptr getTransactionReceiptByHash(
         bcos::h256 const& _txHash) = 0;
-    virtual bcos::eth::LocalisedTransactionReceipt::Ptr getLocalisedTxReceiptByHash(
+    virtual bcos::protocol::LocalisedTransactionReceipt::Ptr getLocalisedTxReceiptByHash(
         bcos::h256 const& _txHash) = 0;
-    virtual std::shared_ptr<bcos::eth::Block> getBlockByHash(
+    virtual std::shared_ptr<bcos::protocol::Block> getBlockByHash(
         bcos::h256 const& _blockHash, int64_t _blockNumber = -1) = 0;
-    virtual std::shared_ptr<bcos::eth::Block> getBlockByNumber(int64_t _i) = 0;
+    virtual std::shared_ptr<bcos::protocol::Block> getBlockByNumber(int64_t _i) = 0;
     virtual std::shared_ptr<bcos::bytes> getBlockRLPByNumber(int64_t _i) = 0;
-    virtual CommitResult commitBlock(std::shared_ptr<bcos::eth::Block> block,
+    virtual CommitResult commitBlock(std::shared_ptr<bcos::protocol::Block> block,
         std::shared_ptr<bcos::blockverifier::ExecutiveContext>) = 0;
     virtual std::pair<int64_t, int64_t> totalTransactionCount() = 0;
     virtual std::pair<int64_t, int64_t> totalFailedTransactionCount() = 0;
     virtual bcos::bytes getCode(bcos::Address _address) = 0;
-    virtual std::shared_ptr<std::vector<bcos::eth::NonceKeyType>> getNonces(
+    virtual std::shared_ptr<std::vector<bcos::protocol::NonceKeyType>> getNonces(
         int64_t _blockNumber) = 0;
 
-    virtual std::pair<bcos::eth::LocalisedTransaction::Ptr,
+    virtual std::pair<bcos::protocol::LocalisedTransaction::Ptr,
         std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
     getTransactionByHashWithProof(bcos::h256 const& _txHash) = 0;
 
 
-    virtual std::pair<bcos::eth::LocalisedTransactionReceipt::Ptr,
+    virtual std::pair<bcos::protocol::LocalisedTransactionReceipt::Ptr,
         std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
     getTransactionReceiptByHashWithProof(
-        bcos::h256 const& _txHash, bcos::eth::LocalisedTransaction& _transaction) = 0;
+        bcos::h256 const& _txHash, bcos::protocol::LocalisedTransaction& _transaction) = 0;
 
     /// If it is a genesis block, function returns true.
     /// If it is a subsequent block with same extra data, function returns true.
@@ -101,7 +101,7 @@ public:
 
     /// get system config
     virtual std::string getSystemConfigByKey(std::string const& key, int64_t number = -1) = 0;
-    virtual std::pair<std::string, bcos::eth::BlockNumber> getSystemConfigInfoByKey(
+    virtual std::pair<std::string, bcos::protocol::BlockNumber> getSystemConfigInfoByKey(
         std::string const&, int64_t const& _num = -1)
     {
         return std::make_pair("", _num);
@@ -109,31 +109,31 @@ public:
 
     /// Register a handler that will be called once there is a new transaction imported
     template <class T>
-    bcos::eth::Handler<int64_t> onReady(T const& _t)
+    bcos::protocol::Handler<int64_t> onReady(T const& _t)
     {
         return m_onReady.add(_t);
     }
 
     virtual std::shared_ptr<MerkleProofType> getTransactionReceiptProof(
-        bcos::eth::Block::Ptr, uint64_t const&)
+        bcos::protocol::Block::Ptr, uint64_t const&)
     {
         return nullptr;
     }
 
     virtual std::shared_ptr<MerkleProofType> getTransactionProof(
-        bcos::eth::Block::Ptr, uint64_t const&)
+        bcos::protocol::Block::Ptr, uint64_t const&)
     {
         return nullptr;
     }
 
-    virtual std::shared_ptr<
-        std::pair<std::shared_ptr<bcos::eth::BlockHeader>, bcos::eth::Block::SigListPtrType>>
+    virtual std::shared_ptr<std::pair<std::shared_ptr<bcos::protocol::BlockHeader>,
+        bcos::protocol::Block::SigListPtrType>>
         getBlockHeaderInfo(int64_t)
     {
         return nullptr;
     }
-    virtual std::shared_ptr<
-        std::pair<std::shared_ptr<bcos::eth::BlockHeader>, bcos::eth::Block::SigListPtrType>>
+    virtual std::shared_ptr<std::pair<std::shared_ptr<bcos::protocol::BlockHeader>,
+        bcos::protocol::Block::SigListPtrType>>
     getBlockHeaderInfoByHash(bcos::h256 const&)
     {
         return nullptr;
@@ -142,7 +142,7 @@ public:
 protected:
     ///< Called when a subsequent call to import transactions will return a non-empty container. Be
     ///< nice and exit fast.
-    bcos::eth::Signal<int64_t> m_onReady;
+    bcos::protocol::Signal<int64_t> m_onReady;
 };
 }  // namespace blockchain
 }  // namespace bcos

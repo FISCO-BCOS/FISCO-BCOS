@@ -21,10 +21,10 @@
  * @date 2018-09-21
  */
 
-#include <libethcore/Block.h>
-#include <libethcore/Transaction.h>
 #include <libexecutive/EVMHostContext.h>
 #include <libexecutive/Executive.h>
+#include <libprotocol/Block.h>
+#include <libprotocol/Transaction.h>
 #include <libutilities/FixedBytes.h>
 #include <libutilities/JsonDataConvertUtility.h>
 #include <test/tools/libutils/TestOutputHelper.h>
@@ -33,7 +33,7 @@
 
 
 using namespace std;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::executive;
 
 namespace bcos

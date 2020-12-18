@@ -1,8 +1,8 @@
 #include "EventLogFilter.h"
 #include <json/json.h>
-#include <libethcore/CommonJS.h>
+#include <libprotocol/CommonJS.h>
 using namespace bcos;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::event;
 
 void EventLogFilter::matches(Block const& _block, Json::Value& _value)
@@ -55,7 +55,7 @@ bool EventLogFilter::matches(LogEntry const& _log)
         return false;
 
     bool isMatch = true;
-    for (unsigned i = 0; i < eth::MAX_NUM_TOPIC_EVENT_LOG; ++i)
+    for (unsigned i = 0; i < protocol::MAX_NUM_TOPIC_EVENT_LOG; ++i)
     {
         // The corresponding topic must be the same
         if (!topics[i].empty() && (_log.topics.size() < i || !topics[i].count(_log.topics[i])))
