@@ -20,8 +20,8 @@
  *  @date 20190111
  */
 #include "DagTransferPrecompiled.h"
-#include <libethcore/ABI.h>
 #include <libprecompiled/TableFactoryPrecompiled.h>
+#include <libprotocol/ABI.h>
 
 using namespace std;
 using namespace bcos;
@@ -76,7 +76,7 @@ std::vector<std::string> DagTransferPrecompiled::getParallelTag(bytesConstRef pa
     bytesConstRef data = getParamData(param);
 
     std::vector<std::string> results;
-    bcos::eth::ContractABI abi;
+    bcos::protocol::ContractABI abi;
     // user_name user_balance 2 fields in table, the key of table is user_name field
     if (func == name2Selector[DAG_TRANSFER_METHOD_ADD_STR_UINT])
     {  // userAdd(string,uint256)
@@ -212,7 +212,7 @@ void DagTransferPrecompiled::userAddCall(bcos::blockverifier::ExecutiveContext::
 {  // userAdd(string,uint256)
     std::string user;
     bcos::u256 amount;
-    bcos::eth::ContractABI abi;
+    bcos::protocol::ContractABI abi;
     abi.abiOut(data, user, amount);
 
     int ret;
@@ -268,7 +268,7 @@ void DagTransferPrecompiled::userSaveCall(bcos::blockverifier::ExecutiveContext:
 {  // userSave(string,uint256)
     std::string user;
     bcos::u256 amount;
-    bcos::eth::ContractABI abi;
+    bcos::protocol::ContractABI abi;
     abi.abiOut(data, user, amount);
 
     int ret;
@@ -357,7 +357,7 @@ void DagTransferPrecompiled::userDrawCall(bcos::blockverifier::ExecutiveContext:
 {
     std::string user;
     bcos::u256 amount;
-    bcos::eth::ContractABI abi;
+    bcos::protocol::ContractABI abi;
     abi.abiOut(data, user, amount);
 
     bcos::u256 balance;
@@ -429,7 +429,7 @@ void DagTransferPrecompiled::userBalanceCall(bcos::blockverifier::ExecutiveConte
     bytesConstRef data, Address const& origin, bytes& out)
 {
     std::string user;
-    bcos::eth::ContractABI abi;
+    bcos::protocol::ContractABI abi;
     abi.abiOut(data, user);
 
     bcos::u256 balance;
@@ -474,7 +474,7 @@ void DagTransferPrecompiled::userTransferCall(
 {
     std::string fromUser, toUser;
     bcos::u256 amount;
-    bcos::eth::ContractABI abi;
+    bcos::protocol::ContractABI abi;
     abi.abiOut(data, fromUser, toUser, amount);
 
     bcos::u256 fromUserBalance, newFromUserBalance;

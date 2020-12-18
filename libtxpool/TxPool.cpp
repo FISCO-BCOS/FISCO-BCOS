@@ -23,15 +23,15 @@
  */
 #include "TxPool.h"
 #include "tbb/parallel_for_each.h"
-#include <libethcore/Exceptions.h>
-#include <libethcore/PartiallyBlock.h>
+#include <libprotocol/Exceptions.h>
+#include <libprotocol/PartiallyBlock.h>
 #include <libutilities/Common.h>
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_invoke.h>
 
 using namespace std;
 using namespace bcos::p2p;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 namespace bcos
 {
 namespace txpool
@@ -77,7 +77,7 @@ std::pair<h256, Address> TxPool::submit(Transaction::Ptr _tx)
 }
 
 // create receipt
-void TxPool::notifyReceipt(bcos::eth::Transaction::Ptr _tx, ImportResult const& _verifyRet)
+void TxPool::notifyReceipt(bcos::protocol::Transaction::Ptr _tx, ImportResult const& _verifyRet)
 {
     auto callback = _tx->rpcCallback();
     if (!callback)
@@ -136,12 +136,12 @@ void TxPool::notifyReceipt(bcos::eth::Transaction::Ptr _tx, ImportResult const& 
     TXPOOL_LOG(ERROR) << LOG_DESC("notifyReceipt: txException")
                       << LOG_KV("hash", _tx->hash().abridged())
                       << LOG_KV("exception", int(txException));
-    bcos::eth::LocalisedTransactionReceipt::Ptr receipt =
-        std::make_shared<bcos::eth::LocalisedTransactionReceipt>(txException);
+    bcos::protocol::LocalisedTransactionReceipt::Ptr receipt =
+        std::make_shared<bcos::protocol::LocalisedTransactionReceipt>(txException);
     m_workerPool->enqueue([callback, receipt] { callback(receipt, bytesConstRef(), nullptr); });
 }
 
-std::pair<h256, Address> TxPool::submitTransactions(bcos::eth::Transaction::Ptr _tx)
+std::pair<h256, Address> TxPool::submitTransactions(bcos::protocol::Transaction::Ptr _tx)
 {
     ImportResult ret = import(_tx);
     if (ImportResult::Success == ret)
@@ -261,7 +261,7 @@ ImportResult TxPool::import(Transaction::Ptr _tx, IfDropped)
     return verify_ret;
 }
 
-void TxPool::verifyAndSetSenderForBlock(bcos::eth::Block& block)
+void TxPool::verifyAndSetSenderForBlock(bcos::protocol::Block& block)
 {
     auto trans_num = block.getTransactionSize();
     tbb::parallel_for(
@@ -370,7 +370,7 @@ ImportResult TxPool::verify(Transaction::Ptr trans, IfDropped _drop_policy)
 struct TxCallback
 {
     RPCCallback call;
-    bcos::eth::LocalisedTransactionReceipt::Ptr pReceipt;
+    bcos::protocol::LocalisedTransactionReceipt::Ptr pReceipt;
 };
 
 
@@ -378,7 +378,7 @@ struct TxCallback
  * @brief : remove latest transactions from queue after the transaction queue overloaded
  */
 bool TxPool::removeTrans(h256 const& _txHash, bool _needTriggerCallback,
-    std::shared_ptr<bcos::eth::Block> _block, size_t _index)
+    std::shared_ptr<bcos::protocol::Block> _block, size_t _index)
 {
     Transaction::Ptr transaction = nullptr;
     // remove transaction from txPool
@@ -466,11 +466,11 @@ bool TxPool::drop(h256 const& _txHash)
     return succ;
 }
 
-bcos::eth::LocalisedTransactionReceipt::Ptr TxPool::constructTransactionReceipt(
+bcos::protocol::LocalisedTransactionReceipt::Ptr TxPool::constructTransactionReceipt(
     Transaction::Ptr tx, TransactionReceipt::Ptr receipt, Block const& block, unsigned index)
 {
-    bcos::eth::LocalisedTransactionReceipt::Ptr pTxReceipt =
-        std::make_shared<bcos::eth::LocalisedTransactionReceipt>(*receipt, tx->hash(),
+    bcos::protocol::LocalisedTransactionReceipt::Ptr pTxReceipt =
+        std::make_shared<bcos::protocol::LocalisedTransactionReceipt>(*receipt, tx->hash(),
             block.blockHeader().hash(), block.blockHeader().number(), tx->safeSender(),
             tx->receiveAddress(), index, receipt->gasUsed(), receipt->contractAddress());
     return pTxReceipt;
@@ -500,7 +500,7 @@ bool TxPool::dropTransactions(std::shared_ptr<Block> block, bool)
     return succ;
 }
 
-void TxPool::dropBlockTxsFilter(std::shared_ptr<bcos::eth::Block> _block)
+void TxPool::dropBlockTxsFilter(std::shared_ptr<bcos::protocol::Block> _block)
 {
     if (!_block)
     {
@@ -584,7 +584,7 @@ bool TxPool::dropBlockTrans(std::shared_ptr<Block> block)
  * @param _condition : The function return false to avoid transaction to return.
  * @return Transactions : up to _limit transactions
  */
-std::shared_ptr<bcos::eth::Transactions> TxPool::topTransactions(uint64_t const& _limit)
+std::shared_ptr<bcos::protocol::Transactions> TxPool::topTransactions(uint64_t const& _limit)
 {
     h256Hash _avoid = h256Hash();
     return topTransactions(_limit, _avoid);
@@ -597,7 +597,7 @@ std::shared_ptr<Transactions> TxPool::topTransactions(
     uint64_t txCnt = 0;
     auto ret = std::make_shared<Transactions>();
     std::vector<bcos::h256> invalidBlockLimitTxs;
-    std::vector<bcos::eth::NonceKeyType> nonceKeyCache;
+    std::vector<bcos::protocol::NonceKeyType> nonceKeyCache;
 
     {
         WriteGuard wl(x_invalidTxs);
@@ -754,7 +754,7 @@ std::shared_ptr<std::vector<bcos::h256>> TxPool::filterUnknownTxs(
 }
 
 // init the PartiallyBlock
-bool TxPool::initPartiallyBlock(bcos::eth::Block::Ptr _block)
+bool TxPool::initPartiallyBlock(bcos::protocol::Block::Ptr _block)
 {
     PartiallyBlock::Ptr partiallyBlock = std::dynamic_pointer_cast<PartiallyBlock>(_block);
     assert(partiallyBlock);

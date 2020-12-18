@@ -71,7 +71,7 @@ void P2PSession::heartBeat()
             auto message =
                 std::dynamic_pointer_cast<P2PMessage>(service->p2pMessageFactory()->buildMessage());
 
-            message->setProtocolID(bcos::eth::ProtocolID::Topic);
+            message->setProtocolID(bcos::protocol::ProtocolID::Topic);
             message->setPacketType(AMOPPacketType::SendTopicSeq);
             std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
             std::string s = boost::lexical_cast<std::string>(service->topicSeq());
@@ -122,7 +122,7 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
                     auto requestTopics = std::dynamic_pointer_cast<P2PMessage>(
                         service->p2pMessageFactory()->buildMessage());
 
-                    requestTopics->setProtocolID(bcos::eth::ProtocolID::Topic);
+                    requestTopics->setProtocolID(bcos::protocol::ProtocolID::Topic);
                     requestTopics->setPacketType(AMOPPacketType::RequestTopics);
                     std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
                     requestTopics->setBuffer(buffer);
@@ -183,7 +183,7 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
             {
                 auto responseTopics = std::dynamic_pointer_cast<P2PMessage>(
                     service->p2pMessageFactory()->buildMessage());
-                responseTopics->setProtocolID(-((PROTOCOL_ID)bcos::eth::ProtocolID::Topic));
+                responseTopics->setProtocolID(-((PROTOCOL_ID)bcos::protocol::ProtocolID::Topic));
                 responseTopics->setPacketType(AMOPPacketType::SendTopics);
                 std::shared_ptr<bytes> buffer = std::make_shared<bytes>();
 

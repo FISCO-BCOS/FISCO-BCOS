@@ -23,7 +23,7 @@
  */
 #pragma once
 #include "PBFTReqCache.h"
-#include <libethcore/PartiallyBlock.h>
+#include <libprotocol/PartiallyBlock.h>
 
 #define PartiallyPBFTReqCache_LOG(LEVEL) \
     LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("PartiallyPBFTReqCache")

@@ -60,7 +60,7 @@ public:
         setMaxTTL(1);
         setEmptyBlockGenTime(1000);
         createPBFTMsgFactory();
-        m_blockFactory = std::make_shared<bcos::eth::BlockFactory>();
+        m_blockFactory = std::make_shared<bcos::protocol::BlockFactory>();
         m_reqCache = std::make_shared<PBFTReqCache>();
         m_broacastTargetsFilter = boost::bind(&RotatingPBFTEngine::getIndexBySealer, this, _1);
     }
@@ -130,7 +130,7 @@ public:
 
     void setLeaderFailed(bool leaderFailed) { m_leaderFailed = leaderFailed; }
 
-    PrepareReq::Ptr wrapperConstructPrepareReq(bcos::eth::Block::Ptr _block)
+    PrepareReq::Ptr wrapperConstructPrepareReq(bcos::protocol::Block::Ptr _block)
     {
         return RotatingPBFTEngine::constructPrepareReq(_block);
     }

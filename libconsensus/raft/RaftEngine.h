@@ -27,11 +27,11 @@
 #include <libblockchain/BlockChainInterface.h>
 #include <libblockverifier/BlockVerifierInterface.h>
 #include <libconsensus/ConsensusEngineBase.h>
-#include <libethcore/Block.h>
 #include <libnetwork/Common.h>
 #include <libp2p/P2PInterface.h>
 #include <libp2p/P2PMessageFactory.h>
 #include <libp2p/P2PSession.h>
+#include <libprotocol/Block.h>
 #include <libstorage/Storage.h>
 #include <libsync/SyncInterface.h>
 #include <libtxpool/TxPoolInterface.h>
@@ -62,13 +62,14 @@ public:
             _keyPair, _sealerList),
         m_minElectTimeout(_minElectTime),
         m_maxElectTimeout(_maxElectTime),
-        m_uncommittedBlock(bcos::eth::Block()),
+        m_uncommittedBlock(bcos::protocol::Block()),
         m_uncommittedBlockNumber(0),
         m_waitingForCommitting(false)
     {
         m_service->registerHandlerByProtoclID(
             m_protocolId, boost::bind(&RaftEngine::onRecvRaftMessage, this, _1, _2, _3));
-        m_blockSync->registerConsensusVerifyHandler([](bcos::eth::Block const&) { return true; });
+        m_blockSync->registerConsensusVerifyHandler(
+            [](bcos::protocol::Block const&) { return true; });
         /// set thread name for raftEngine
         std::string threadName = "Raft-" + std::to_string(m_groupId);
         setName(threadName);
@@ -86,7 +87,7 @@ public:
         return m_term;
     }
 
-    bcos::eth::BlockHeader getHighestBlock() const
+    bcos::protocol::BlockHeader getHighestBlock() const
     {
         Guard Guard(m_mutex);
         return m_highestBlock;
@@ -100,9 +101,9 @@ public:
 
     void start() override;
     void stop() override;
-    void reportBlock(bcos::eth::Block const& _block) override;
+    void reportBlock(bcos::protocol::Block const& _block) override;
     bool shouldSeal();
-    bool commit(bcos::eth::Block const& _block);
+    bool commit(bcos::protocol::Block const& _block);
     bool reachBlockIntervalTime();
     void resetLastBlockTime() { m_lastBlockTime = bcos::utcSteadyTime(); }
     const std::string consensusStatus() override;
@@ -178,10 +179,10 @@ protected:
     void recoverElectTime();
     void clearFirstVoteCache();
 
-    void execBlock(Sealing& _sealing, bcos::eth::Block const& _block);
-    void checkBlockValid(bcos::eth::Block const& _block) override;
-    void checkSealerList(bcos::eth::Block const& _block);
-    bool checkAndExecute(bcos::eth::Block const& _block);
+    void execBlock(Sealing& _sealing, bcos::protocol::Block const& _block);
+    void checkBlockValid(bcos::protocol::Block const& _block) override;
+    void checkSealerList(bcos::protocol::Block const& _block);
+    bool checkAndExecute(bcos::protocol::Block const& _block);
     void checkAndSave(Sealing& _sealing);
 
     mutable Mutex m_mutex;
@@ -230,7 +231,7 @@ protected:
     int64_t m_lastObtainSealerNum = 0;
     uint64_t m_lastBlockTime;
 
-    bcos::eth::Block m_uncommittedBlock;
+    bcos::protocol::Block m_uncommittedBlock;
     int64_t m_uncommittedBlockNumber;
 
     std::mutex m_commitMutex;

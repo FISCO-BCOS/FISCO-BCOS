@@ -25,10 +25,10 @@
 #include "libdevcrypto/CryptoInterface.h"
 #include "tbb/parallel_for_each.h"
 #include <libblockverifier/ExecutiveContext.h>
-#include <libethcore/Block.h>
-#include <libethcore/CommonJS.h>
-#include <libethcore/Transaction.h>
 #include <libprecompiled/ConsensusPrecompiled.h>
+#include <libprotocol/Block.h>
+#include <libprotocol/CommonJS.h>
+#include <libprotocol/Transaction.h>
 #include <libstorage/StorageException.h>
 #include <libstorage/Table.h>
 #include <libutilities/DataConvertUtility.h>
@@ -44,7 +44,7 @@
 
 using namespace bcos;
 using namespace std;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::blockchain;
 using namespace bcos::storage;
 using namespace bcos::blockverifier;
@@ -137,7 +137,7 @@ std::shared_ptr<BlockHeaderInfo> BlockChainImp::getBlockHeaderInfo(int64_t _bloc
 }
 
 std::shared_ptr<BlockHeaderInfo> BlockChainImp::getBlockHeaderFromBlock(
-    bcos::eth::Block::Ptr _block)
+    bcos::protocol::Block::Ptr _block)
 {
     if (!_block)
     {
@@ -173,7 +173,7 @@ std::shared_ptr<BlockHeaderInfo> BlockChainImp::getBlockHeaderInfoByHash(
 
     // decode signature list
     auto sigListBytes = entry->getFieldConst(SYS_SIG_LIST);
-    auto sigList = std::make_shared<bcos::eth::Block::SigListType>();
+    auto sigList = std::make_shared<bcos::protocol::Block::SigListType>();
     RLP rlp(sigListBytes);
     *sigList = rlp.toVector<std::pair<u256, std::vector<unsigned char>>>();
     return std::make_shared<BlockHeaderInfo>(std::make_pair(blockHeader, sigList));
@@ -363,14 +363,15 @@ int64_t BlockChainImp::obtainNumber()
     return num;
 }
 
-std::shared_ptr<std::vector<bcos::eth::NonceKeyType>> BlockChainImp::getNonces(int64_t _blockNumber)
+std::shared_ptr<std::vector<bcos::protocol::NonceKeyType>> BlockChainImp::getNonces(
+    int64_t _blockNumber)
 {
     if (_blockNumber > number())
     {
         BLOCKCHAIN_LOG(TRACE) << LOG_DESC("getNonces failed for invalid block number")
                               << LOG_KV("invalidNumber", _blockNumber)
                               << LOG_KV("blockNumber", m_blockNumber);
-        return std::shared_ptr<std::vector<bcos::eth::NonceKeyType>>();
+        return std::shared_ptr<std::vector<bcos::protocol::NonceKeyType>>();
     }
     BLOCKCHAIN_LOG(DEBUG) << LOG_DESC("getNonces") << LOG_KV("blkNumber", _blockNumber);
     Table::Ptr tb = getMemoryTableFactory(_blockNumber)->openTable(SYS_BLOCK_2_NONCES);
@@ -382,12 +383,12 @@ std::shared_ptr<std::vector<bcos::eth::NonceKeyType>> BlockChainImp::getNonces(i
             auto entry = entries->get(0);
             auto nonceRLPData = getDataBytes(entry, SYS_VALUE);
             RLP rlp(*nonceRLPData);
-            return std::make_shared<std::vector<bcos::eth::NonceKeyType>>(
-                rlp.toVector<bcos::eth::NonceKeyType>());
+            return std::make_shared<std::vector<bcos::protocol::NonceKeyType>>(
+                rlp.toVector<bcos::protocol::NonceKeyType>());
         }
     }
 
-    return std::make_shared<std::vector<bcos::eth::NonceKeyType>>();
+    return std::make_shared<std::vector<bcos::protocol::NonceKeyType>>();
 }
 
 std::pair<int64_t, int64_t> BlockChainImp::totalTransactionCount()
@@ -761,7 +762,7 @@ bcos::h512s BlockChainImp::observerList()
 }
 
 // TODO: Use pointers as return values to reduce copy overhead
-bcos::h512s BlockChainImp::getNodeList(bcos::eth::BlockNumber& _cachedNumber,
+bcos::h512s BlockChainImp::getNodeList(bcos::protocol::BlockNumber& _cachedNumber,
     bcos::h512s& _cachedNodeList, SharedMutex& _mutex, std::string const& _nodeListType)
 {
     auto blockNumber = number();
@@ -945,7 +946,7 @@ LocalisedTransaction::Ptr BlockChainImp::getLocalisedTxByHash(bcos::h256 const& 
 
 
 bool BlockChainImp::getBlockAndIndexByTxHash(const bcos::h256& _txHash,
-    std::pair<std::shared_ptr<bcos::eth::Block>, std::string>& blockInfoWithTxIndex)
+    std::pair<std::shared_ptr<bcos::protocol::Block>, std::string>& blockInfoWithTxIndex)
 {
     Table::Ptr tb = getMemoryTableFactory()->openTable(SYS_TX_HASH_2_BLOCK, false, true);
     if (!tb)
@@ -977,9 +978,9 @@ std::pair<LocalisedTransaction::Ptr,
     std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
 BlockChainImp::getTransactionByHashWithProof(bcos::h256 const& _txHash)
 {
-    auto localizedTx = std::make_shared<bcos::eth::LocalisedTransaction>(h256(0), -1, -1);
+    auto localizedTx = std::make_shared<bcos::protocol::LocalisedTransaction>(h256(0), -1, -1);
     std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>> merkleProof;
-    std::pair<std::shared_ptr<bcos::eth::Block>, std::string> blockInfoWithTxIndex;
+    std::pair<std::shared_ptr<bcos::protocol::Block>, std::string> blockInfoWithTxIndex;
     if (!getBlockAndIndexByTxHash(_txHash, blockInfoWithTxIndex))
     {
         BLOCKCHAIN_LOG(ERROR) << LOG_DESC("get block info  failed")
@@ -1109,14 +1110,14 @@ TransactionReceipt::Ptr BlockChainImp::getTransactionReceiptByHash(bcos::h256 co
 }
 
 
-std::pair<bcos::eth::LocalisedTransactionReceipt::Ptr,
+std::pair<bcos::protocol::LocalisedTransactionReceipt::Ptr,
     std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
 BlockChainImp::getTransactionReceiptByHashWithProof(
-    bcos::h256 const& _txHash, bcos::eth::LocalisedTransaction& transaction)
+    bcos::h256 const& _txHash, bcos::protocol::LocalisedTransaction& transaction)
 {
     std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>> merkleProof;
 
-    std::pair<std::shared_ptr<bcos::eth::Block>, std::string> blockInfoWithTxIndex;
+    std::pair<std::shared_ptr<bcos::protocol::Block>, std::string> blockInfoWithTxIndex;
     auto emptyReceipt = std::make_shared<LocalisedTransactionReceipt>(
         TransactionReceipt(), h256(0), h256(0), -1, Address(), Address(), -1, 0);
     if (!getBlockAndIndexByTxHash(_txHash, blockInfoWithTxIndex))
@@ -1160,7 +1161,7 @@ BlockChainImp::getTransactionReceiptByHashWithProof(
 }
 
 std::shared_ptr<Parent2ChildListMap> BlockChainImp::getParent2ChildListByReceiptProofCache(
-    bcos::eth::Block::Ptr _block)
+    bcos::protocol::Block::Ptr _block)
 {
     UpgradableGuard l(m_receiptWithProofMutex);
     // cache for the block parent2ChildList
@@ -1182,7 +1183,7 @@ std::shared_ptr<Parent2ChildListMap> BlockChainImp::getParent2ChildListByReceipt
 }
 
 std::shared_ptr<Parent2ChildListMap> BlockChainImp::getParent2ChildListByTxsProofCache(
-    bcos::eth::Block::Ptr _block)
+    bcos::protocol::Block::Ptr _block)
 {
     UpgradableGuard l(m_transactionWithProofMutex);
     // cache for the block parent2ChildList
@@ -1205,7 +1206,7 @@ std::shared_ptr<Parent2ChildListMap> BlockChainImp::getParent2ChildListByTxsProo
 }
 
 std::shared_ptr<MerkleProofType> BlockChainImp::getTransactionReceiptProof(
-    bcos::eth::Block::Ptr _block, uint64_t const& _index)
+    bcos::protocol::Block::Ptr _block, uint64_t const& _index)
 {
     if (!_block || _block->transactionReceipts()->size() <= _index)
     {
@@ -1226,7 +1227,7 @@ std::shared_ptr<MerkleProofType> BlockChainImp::getTransactionReceiptProof(
 }
 
 std::shared_ptr<MerkleProofType> BlockChainImp::getTransactionProof(
-    bcos::eth::Block::Ptr _block, uint64_t const& _index)
+    bcos::protocol::Block::Ptr _block, uint64_t const& _index)
 {
     if (!_block || _block->getTransactionSize() <= _index)
     {
@@ -1387,7 +1388,7 @@ void BlockChainImp::writeTxToBlock(const Block& block, std::shared_ptr<Executive
                     });
             },
             [this, tb_nonces, txs, blockNumberStr]() {
-                std::vector<bcos::eth::NonceKeyType> nonce_vector(txs->size());
+                std::vector<bcos::protocol::NonceKeyType> nonce_vector(txs->size());
                 for (size_t i = 0; i < txs->size(); i++)
                 {
                     nonce_vector[i] = (*txs)[i]->nonce();
@@ -1608,7 +1609,7 @@ std::shared_ptr<bytes> BlockChainImp::getDataBytes(
 
 // write block data into the system table
 void BlockChainImp::writeBlockToField(
-    bcos::eth::Block const& _block, bcos::storage::Entry::Ptr _entry)
+    bcos::protocol::Block const& _block, bcos::storage::Entry::Ptr _entry)
 {
     std::shared_ptr<bytes> out = std::make_shared<bytes>();
     _block.encode(*out);
@@ -1616,8 +1617,8 @@ void BlockChainImp::writeBlockToField(
 }
 
 std::shared_ptr<Child2ParentMap> BlockChainImp::getChild2ParentCache(SharedMutex& _mutex,
-    std::pair<bcos::eth::BlockNumber, std::shared_ptr<Child2ParentMap>>& _cache,
-    std::shared_ptr<Parent2ChildListMap> _parent2Child, bcos::eth::Block::Ptr _block)
+    std::pair<bcos::protocol::BlockNumber, std::shared_ptr<Child2ParentMap>>& _cache,
+    std::shared_ptr<Parent2ChildListMap> _parent2Child, bcos::protocol::Block::Ptr _block)
 {
     UpgradableGuard l(_mutex);
     if (_cache.second && _cache.first == _block->blockHeader().number())
@@ -1638,14 +1639,14 @@ std::shared_ptr<Child2ParentMap> BlockChainImp::getChild2ParentCache(SharedMutex
 }
 
 std::shared_ptr<Child2ParentMap> BlockChainImp::getChild2ParentCacheByReceipt(
-    std::shared_ptr<Parent2ChildListMap> _parent2ChildList, bcos::eth::Block::Ptr _block)
+    std::shared_ptr<Parent2ChildListMap> _parent2ChildList, bcos::protocol::Block::Ptr _block)
 {
     return getChild2ParentCache(
         x_receiptChild2ParentCache, m_receiptChild2ParentCache, _parent2ChildList, _block);
 }
 
 std::shared_ptr<Child2ParentMap> BlockChainImp::getChild2ParentCacheByTransaction(
-    std::shared_ptr<Parent2ChildListMap> _parent2ChildList, bcos::eth::Block::Ptr _block)
+    std::shared_ptr<Parent2ChildListMap> _parent2ChildList, bcos::protocol::Block::Ptr _block)
 {
     return getChild2ParentCache(
         x_txsChild2ParentCache, m_txsChild2ParentCache, _parent2ChildList, _block);

@@ -22,7 +22,7 @@
  */
 #pragma once
 #include <libchannelserver/ChannelMessage.h>
-#include <libethcore/Protocol.h>
+#include <libprotocol/Protocol.h>
 #include <libutilities/Common.h>
 
 namespace bcos
@@ -45,12 +45,12 @@ public:
 
     void setConsensusMsgType(std::string const& _type)
     {
-        int32_t consType = bcos::eth::ProtocolID::PBFT;
+        int32_t consType = bcos::protocol::ProtocolID::PBFT;
         if (bcos::stringCmpIgnoreCase(_type, "raft") == 0)
         {
-            consType = bcos::eth::ProtocolID::Raft;
+            consType = bcos::protocol::ProtocolID::Raft;
         }
-        m_p2pMsgTypeToDesc = {{consType, "CONS"}, {bcos::eth::ProtocolID::BlockSync, "SYNC"}};
+        m_p2pMsgTypeToDesc = {{consType, "CONS"}, {bcos::protocol::ProtocolID::BlockSync, "SYNC"}};
     }
 
     void setGroupId(bcos::GROUP_ID const& _groupId) { m_groupId = _groupId; }

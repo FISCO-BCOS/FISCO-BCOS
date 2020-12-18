@@ -22,7 +22,7 @@
  * @date: 2018-09-28
  */
 #include "ConsensusEngineBase.h"
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::blockverifier;
 using namespace bcos::blockchain;
 using namespace bcos::p2p;
@@ -134,7 +134,7 @@ void ConsensusEngineBase::checkBlockValid(Block const& block)
     }
 }
 
-void ConsensusEngineBase::checkBlockTimeStamp(bcos::eth::Block const& _block)
+void ConsensusEngineBase::checkBlockTimeStamp(bcos::protocol::Block const& _block)
 {
     if (!m_nodeTimeMaintenance)
     {
@@ -256,7 +256,7 @@ void ConsensusEngineBase::resetConfig()
     m_idx = node_idx;
 }
 
-void ConsensusEngineBase::reportBlock(bcos::eth::Block const& _block)
+void ConsensusEngineBase::reportBlock(bcos::protocol::Block const& _block)
 {
     if (!g_BCOSConfig.enableStat())
     {

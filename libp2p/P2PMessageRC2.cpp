@@ -82,7 +82,7 @@ bool P2PMessageRC2::compress(std::shared_ptr<bytes> compressData)
         return false;
     }
     /// the packet has already been encoded
-    if ((m_version & bcos::eth::CompressFlag) == bcos::eth::CompressFlag)
+    if ((m_version & bcos::protocol::CompressFlag) == bcos::protocol::CompressFlag)
     {
         return false;
     }
@@ -91,7 +91,7 @@ bool P2PMessageRC2::compress(std::shared_ptr<bytes> compressData)
     {
         return false;
     }
-    m_version |= bcos::eth::CompressFlag;
+    m_version |= bcos::protocol::CompressFlag;
     return true;
 }
 
@@ -129,14 +129,14 @@ ssize_t P2PMessageRC2::decode(const byte* buffer, size_t size)
 
     /// the data has been compressed
     if (g_BCOSConfig.compressEnabled() &&
-        ((m_version & bcos::eth::CompressFlag) == bcos::eth::CompressFlag))
+        ((m_version & bcos::protocol::CompressFlag) == bcos::protocol::CompressFlag))
     {
         /// uncompress data
         SnappyCompress::uncompress(
             bcos::bytesConstRef((const byte*)(&buffer[HEADER_LENGTH]), m_length - HEADER_LENGTH),
             *m_buffer);
         // reset version
-        m_version &= (~bcos::eth::CompressFlag);
+        m_version &= (~bcos::protocol::CompressFlag);
     }
     else
     {

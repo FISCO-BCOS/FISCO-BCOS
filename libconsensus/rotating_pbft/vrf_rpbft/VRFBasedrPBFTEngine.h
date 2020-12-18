@@ -56,7 +56,8 @@ protected:
     void updateConsensusNodeList() override;
 
     void resetConfig() override;
-    void checkTransactionsValid(bcos::eth::Block::Ptr _block, PrepareReq::Ptr _prepareReq) override;
+    void checkTransactionsValid(
+        bcos::protocol::Block::Ptr _block, PrepareReq::Ptr _prepareReq) override;
     void tryToForwardRemainingTxs(std::set<bcos::h512> const& _lastEpochWorkingSealers);
 
 private:

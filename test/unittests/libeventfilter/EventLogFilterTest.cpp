@@ -23,17 +23,17 @@
 #include <iostream>
 
 #include "json/value.h"
-#include <libethcore/CommonJS.h>
-#include <libethcore/LogEntry.h>
 #include <libeventfilter/EventLogFilter.h>
 #include <libeventfilter/EventLogFilterManager.h>
 #include <libeventfilter/EventLogFilterParams.h>
+#include <libprotocol/CommonJS.h>
+#include <libprotocol/LogEntry.h>
 #include <libutilities/Common.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace std;
 using namespace bcos;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::event;
 namespace ut = boost::unit_test;
 
@@ -118,8 +118,8 @@ BOOST_AUTO_TEST_CASE(EventLogFilterParams_test1)
         "\"0x0000000000000000000000000aff3454fce5edbc8cca8697c15331677e6ebccc\"]]}";
     auto params = EventLogFilterParams::buildEventLogFilterParamsObject(json);
 
-    BOOST_CHECK_EQUAL(params->getFromBlock(), int64_t(eth::MAX_BLOCK_NUMBER));
-    BOOST_CHECK_EQUAL(params->getToBlock(), int64_t(eth::MAX_BLOCK_NUMBER));
+    BOOST_CHECK_EQUAL(params->getFromBlock(), int64_t(protocol::MAX_BLOCK_NUMBER));
+    BOOST_CHECK_EQUAL(params->getToBlock(), int64_t(protocol::MAX_BLOCK_NUMBER));
     BOOST_CHECK_EQUAL(params->getAddresses().size(), 1);
     BOOST_CHECK_EQUAL(toHexStringWithPrefix(*(params->getAddresses().begin())),
         "0x8888f1f195afa192cfee860698584c030f4c9db1");

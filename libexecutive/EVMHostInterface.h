@@ -26,11 +26,11 @@
 #include "evmc/evmc.h"
 #include "evmc/instructions.h"
 #include <libconfig/GlobalConfigure.h>
-#include <libethcore/BlockHeader.h>
-#include <libethcore/Common.h>
-#include <libethcore/EVMFlags.h>
-#include <libethcore/EVMSchedule.h>
-#include <libethcore/LogEntry.h>
+#include <libprotocol/BlockHeader.h>
+#include <libprotocol/Common.h>
+#include <libprotocol/EVMFlags.h>
+#include <libprotocol/EVMSchedule.h>
+#include <libprotocol/LogEntry.h>
 #include <libutilities/Common.h>
 #include <libutilities/DataConvertUtility.h>
 

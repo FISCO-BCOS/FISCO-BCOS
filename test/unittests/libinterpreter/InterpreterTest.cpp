@@ -25,8 +25,8 @@
 #include "libdevcrypto/CryptoInterface.h"
 #include <evmc/evmc.h>
 #include <libdevcrypto/Common.h>
-#include <libethcore/EVMSchedule.h>
 #include <libinterpreter/interpreter.h>
+#include <libprotocol/EVMSchedule.h>
 #include <libutilities/FixedBytes.h>
 #include <test/tools/libutils/FakeEvmc.h>
 #include <test/tools/libutils/TestOutputHelper.h>
@@ -39,7 +39,7 @@
 using namespace std;
 using namespace bcos;
 using namespace bcos::test;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 
 namespace bcos
 {
@@ -119,7 +119,7 @@ BOOST_AUTO_TEST_CASE(addTest)
     // MSTORE
     // RETURN
 
-    bcos::eth::EVMSchedule const& schedule = DefaultSchedule;
+    bcos::protocol::EVMSchedule const& schedule = DefaultSchedule;
     bytes code = *fromHexString("602060006001600201600052f3");
     bytes data = *fromHexString("");
     Address destination{KeyPair::create().address()};
@@ -150,7 +150,7 @@ BOOST_AUTO_TEST_CASE(contractDeployTest)
     }
     */
 
-    bcos::eth::EVMSchedule const& schedule = DefaultSchedule;
+    bcos::protocol::EVMSchedule const& schedule = DefaultSchedule;
     bytes code = *fromHexString(
         "60606040523415600b57fe5b5b60338060196000396000f30060606040525bfe00a165627a7a72305820de136e"
         "86e236113a9f32948ce4a57e1f7a409db615e7ef07a26ef1ebc39de3580029");
@@ -189,7 +189,7 @@ BOOST_AUTO_TEST_CASE(contractConstructorTest)
     }
     param: 66 in hex 0000000000000000000000000000000000000000000000000000000000000042
     */
-    bcos::eth::EVMSchedule const& schedule = DefaultSchedule;
+    bcos::protocol::EVMSchedule const& schedule = DefaultSchedule;
     bytes code = *fromHexString(
         string(
             "60606040523415600b57fe5b6040516020806078833981016040528080519060200190919050505b806000"
@@ -247,7 +247,7 @@ BOOST_AUTO_TEST_CASE(arithmeticCaculateTest1)
 
     param: 66 in hex 0000000000000000000000000000000000000000000000000000000000000042
     */
-    bcos::eth::EVMSchedule const& schedule = DefaultSchedule;
+    bcos::protocol::EVMSchedule const& schedule = DefaultSchedule;
     bytes code = *fromHexString(
         string(
             "60606040523415600b57fe5b60405160208060d3833981016040528080519060200190919050505b600181"
@@ -338,7 +338,7 @@ BOOST_AUTO_TEST_CASE(arithmeticCaculateTest2)
 
     param: 66 in hex 0000000000000000000000000000000000000000000000000000000000000042
     */
-    bcos::eth::EVMSchedule const& schedule = DefaultSchedule;
+    bcos::protocol::EVMSchedule const& schedule = DefaultSchedule;
     bytes code = *fromHexString(
         string("608060405234801561001057600080fd5b5060405160208061023683398101806040528101908080519"
                "06020019092919050505060018101600081905550606481036001819055507fffffffffffffffffffff"
@@ -430,7 +430,7 @@ BOOST_AUTO_TEST_CASE(comparisonsTest1)
 
     param: 66 in hex 0000000000000000000000000000000000000000000000000000000000000042
     */
-    bcos::eth::EVMSchedule const& schedule = DefaultSchedule;
+    bcos::protocol::EVMSchedule const& schedule = DefaultSchedule;
     bytes code = *fromHexString(
         string("60606040523415600b57fe5b60405160208061010c833981016040528080519060200190919050505b6"
                "0006000829150600183019050808210600060006101000a81548160ff02191690831515021790555080"
@@ -486,7 +486,7 @@ BOOST_AUTO_TEST_CASE(comparisonsTest2)
 
     param: 66 in hex 0000000000000000000000000000000000000000000000000000000000000042
     */
-    bcos::eth::EVMSchedule const& schedule = DefaultSchedule;
+    bcos::protocol::EVMSchedule const& schedule = DefaultSchedule;
     bytes code = *fromHexString(
         string("60606040523415600b57fe5b60405160208060c283398101604052515b6000805460ff1916600183018"
                "0841291821761ff001916610100828613159081029190911762ff000019168286141562010000021763"
@@ -536,7 +536,7 @@ BOOST_AUTO_TEST_CASE(bitOperationTest)
 
     param: 66 in hex 0000000000000000000000000000000000000000000000000000000000000042
     */
-    bcos::eth::EVMSchedule const& schedule = DefaultSchedule;
+    bcos::protocol::EVMSchedule const& schedule = DefaultSchedule;
     bytes code = *fromHexString(
         string("60606040523415600b57fe5b604051602080607883398101604052515b6101018082166000558082176"
                "00155811860025580196003555b505b60338060456000396000f30060606040525bfe00a165627a7a72"
@@ -610,7 +610,7 @@ BOOST_AUTO_TEST_CASE(contextTest)
     }
 
     */
-    bcos::eth::EVMSchedule const& schedule = DefaultSchedule;
+    bcos::protocol::EVMSchedule const& schedule = DefaultSchedule;
     bytes code = *fromHexString(string(
         "6080604052326000806101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffff"
         "ffffffffffffffffffffffffffffffffffff16021790555030600160006101000a81548173ffffffffffffffff"
@@ -714,7 +714,7 @@ BOOST_AUTO_TEST_CASE(balanceTest)
         }
     }
     */
-    bcos::eth::EVMSchedule const& schedule = DefaultSchedule;
+    bcos::protocol::EVMSchedule const& schedule = DefaultSchedule;
     bytes code = *fromHexString(
         string("60606040525b3073ffffffffffffffffffffffffffffffffffffffff16316000819055505b5"
                "b60338060326000396000f30060606040525bfe00a165627a7a723058206e9b4f242a829a77"
@@ -760,7 +760,7 @@ BOOST_AUTO_TEST_CASE(LogTest)
         }
     }
     */
-    bcos::eth::EVMSchedule const& schedule = DefaultSchedule;
+    bcos::protocol::EVMSchedule const& schedule = DefaultSchedule;
     bytes code = *fromHexString(
         string("6060604052341561000c57fe5b5b7ff4560403888256621a13abd81f4930ecb469c609f6317e1dd2ee3"
                "4fe69293e1b60405180905060405180910390a17f0b24d1aaf91c6017a8257e85108e3ce49d5461be0d"
@@ -817,7 +817,7 @@ BOOST_AUTO_TEST_CASE(accessFunctionTest)
         }
     }
     */
-    bcos::eth::EVMSchedule const& schedule = DefaultSchedule;
+    bcos::protocol::EVMSchedule const& schedule = DefaultSchedule;
     bytes code = *fromHexString(
         string("608060405234801561001057600080fd5b50607b60008190555060df806100276000396000f30060806"
                "04052600436106049576000357c01000000000000000000000000000000000000000000000000000000"
@@ -891,7 +891,7 @@ BOOST_AUTO_TEST_CASE(createTest)
         }
     }
     */
-    bcos::eth::EVMSchedule const& schedule = DefaultSchedule;
+    bcos::protocol::EVMSchedule const& schedule = DefaultSchedule;
     bytes code = *fromHexString(
         string("6080604052348015600f57600080fd5b5060166075565b604051809103906000f0801580156031573d6"
                "000803e3d6000fd5b506000806101000a81548173ffffffffffffffffffffffffffffffffffffffff02"
@@ -955,7 +955,7 @@ BOOST_AUTO_TEST_CASE(callTest)
         }
     }
     */
-    bcos::eth::EVMSchedule const& schedule = DefaultSchedule;
+    bcos::protocol::EVMSchedule const& schedule = DefaultSchedule;
     bytes code = *fromHexString(
         string(
             "608060405234801561001057600080fd5b50600061001b6100eb565b604051809103906000f08015801561"
@@ -1029,7 +1029,7 @@ BOOST_FIXTURE_TEST_CASE(SM_callTest, SM_InterpreterFixture)
         }
     }
     */
-    bcos::eth::EVMSchedule const& schedule = DefaultSchedule;
+    bcos::protocol::EVMSchedule const& schedule = DefaultSchedule;
     bytes code = *fromHexString(
         string(
             "608060405234801561001057600080fd5b50600061001b6100eb565b604051809103906000f08015801561"
@@ -1100,7 +1100,7 @@ BOOST_AUTO_TEST_CASE(internalStaticCallTest)
         }
     }
     */
-    bcos::eth::EVMSchedule const& schedule = DefaultSchedule;
+    bcos::protocol::EVMSchedule const& schedule = DefaultSchedule;
     bytes code = *fromHexString(
         string(
             "608060405234801561001057600080fd5b5061001961005b565b604051809103906000f080158015610035"
@@ -1191,7 +1191,7 @@ BOOST_AUTO_TEST_CASE(internalCallTest)
         }
     }
     */
-    bcos::eth::EVMSchedule const& schedule = DefaultSchedule;
+    bcos::protocol::EVMSchedule const& schedule = DefaultSchedule;
     bytes code = *fromHexString(
         string("608060405234801561001057600080fd5b5061001961005b565b604051809103906000f080158015610"
                "035573d6000803e3d6000fd5b5060008054600160a060020a031916600160a060020a03929092169190"
@@ -1251,7 +1251,7 @@ BOOST_AUTO_TEST_CASE(internalCallTest)
 
 BOOST_AUTO_TEST_CASE(errorCodeTest)
 {
-    bcos::eth::EVMSchedule const& schedule = DefaultSchedule;
+    bcos::protocol::EVMSchedule const& schedule = DefaultSchedule;
     bytes code = *fromHexString("");
     bytes data = *fromHexString("");
     Address destination{KeyPair::create().address()};

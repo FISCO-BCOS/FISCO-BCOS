@@ -25,7 +25,7 @@
 #pragma once
 
 #include "StateFace.h"
-#include <libethcore/Common.h>
+#include <libprotocol/Common.h>
 #include <libstorage/Table.h>
 #include <memory>
 

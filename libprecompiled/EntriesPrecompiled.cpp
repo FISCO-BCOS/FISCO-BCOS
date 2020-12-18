@@ -20,7 +20,7 @@
  */
 #include "EntriesPrecompiled.h"
 #include "EntryPrecompiled.h"
-#include <libethcore/ABI.h>
+#include <libprotocol/ABI.h>
 
 using namespace bcos;
 using namespace bcos::blockverifier;
@@ -47,7 +47,7 @@ PrecompiledExecResult::Ptr EntriesPrecompiled::call(
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
 
-    bcos::eth::ContractABI abi;
+    bcos::protocol::ContractABI abi;
 
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
     callResult->gasPricer()->setMemUsed(param.size());

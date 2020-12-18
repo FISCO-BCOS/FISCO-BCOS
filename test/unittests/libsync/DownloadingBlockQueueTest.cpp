@@ -23,14 +23,14 @@
 
 #include <libsync/DownloadingBlockQueue.h>
 #include <test/tools/libutils/TestOutputHelper.h>
-#include <test/unittests/libethcore/FakeBlock.h>
+#include <test/unittests/libprotocol/FakeBlock.h>
 #include <boost/test/unit_test.hpp>
 #include <iostream>
 #include <memory>
 
 using namespace std;
 using namespace bcos;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::sync;
 
 namespace bcos

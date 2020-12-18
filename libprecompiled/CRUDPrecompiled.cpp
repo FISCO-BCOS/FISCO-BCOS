@@ -25,7 +25,7 @@
 #include "libstorage/StorageException.h"
 #include <json/json.h>
 #include <libdevcrypto/Hash.h>
-#include <libethcore/ABI.h>
+#include <libprotocol/ABI.h>
 #include <libutilities/Common.h>
 
 using namespace std;
@@ -63,7 +63,7 @@ PrecompiledExecResult::Ptr CRUDPrecompiled::call(
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
 
-    bcos::eth::ContractABI abi;
+    bcos::protocol::ContractABI abi;
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
     callResult->gasPricer()->setMemUsed(param.size());
 

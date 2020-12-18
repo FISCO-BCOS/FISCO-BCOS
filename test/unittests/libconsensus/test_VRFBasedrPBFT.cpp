@@ -77,7 +77,7 @@ BOOST_AUTO_TEST_CASE(testVRFBasedrPBFT)
     // check transaction signature
     BOOST_CHECK(rotatingTx->sender() == toAddress(engine->keyPair().pub()));
     // check transaction type
-    BOOST_CHECK(rotatingTx->type() == bcos::eth::Transaction::Type::MessageCall);
+    BOOST_CHECK(rotatingTx->type() == bcos::protocol::Transaction::Type::MessageCall);
     // check input
     auto const& txData = rotatingTx->data();
     ContractABI abi;

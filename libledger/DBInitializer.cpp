@@ -50,7 +50,7 @@ using namespace bcos;
 using namespace bcos::storage;
 using namespace bcos::blockverifier;
 using namespace bcos::ledger;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::executive;
 using namespace bcos::storagestate;
 

@@ -24,7 +24,7 @@
 
 using namespace std;
 using namespace bcos;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::sync;
 
 void DownloadRequestQueue::push(int64_t _fromNumber, int64_t _size)

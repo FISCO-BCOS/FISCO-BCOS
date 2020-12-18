@@ -19,11 +19,11 @@
 #include "StateFace.h"
 #include <json/json.h>
 #include <libblockverifier/ExecutiveContext.h>
-#include <libethcore/ABI.h>
-#include <libethcore/CommonJS.h>
-#include <libethcore/EVMSchedule.h>
 #include <libexecutive/EVMInterface.h>
 #include <libexecutive/VMFactory.h>
+#include <libprotocol/ABI.h>
+#include <libprotocol/CommonJS.h>
+#include <libprotocol/EVMSchedule.h>
 #include <libstorage/Common.h>
 #include <libstorage/StorageException.h>
 #include <limits.h>
@@ -32,7 +32,7 @@
 
 using namespace std;
 using namespace bcos;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::executive;
 using namespace bcos::storage;
 
@@ -77,7 +77,7 @@ void Executive::initialize(Transaction::Ptr _transaction)
 void Executive::verifyTransaction(
     ImportRequirements::value _ir, Transaction::Ptr _t, BlockHeader const&, u256 const&)
 {
-    eth::EVMSchedule const& schedule = g_BCOSConfig.evmSchedule();
+    protocol::EVMSchedule const& schedule = g_BCOSConfig.evmSchedule();
 
     uint64_t txGasLimit = m_envInfo.precompiledEngine()->txGasLimit();
     // The gas limit is dynamic, not fixed.
@@ -595,7 +595,7 @@ void Executive::revert()
     memoryTableFactory->rollback(m_tableFactorySavepoint);
 }
 
-void Executive::parseEVMCResult(std::shared_ptr<eth::Result> _result)
+void Executive::parseEVMCResult(std::shared_ptr<protocol::Result> _result)
 {
     auto outputRef = _result->output();
     switch (_result->status())
@@ -706,7 +706,7 @@ void Executive::loggingException()
 
 void Executive::writeErrInfoToOutput(string const& errInfo)
 {
-    eth::ContractABI abi;
+    protocol::ContractABI abi;
     auto output = abi.abiIn("Error(string)", errInfo);
     m_output = owning_bytes_ref{std::move(output), 0, output.size()};
 }

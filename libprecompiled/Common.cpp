@@ -23,7 +23,7 @@
 #include "libstoragestate/StorageState.h"
 #include <libblockverifier/ExecutiveContext.h>
 #include <libconfig/GlobalConfigure.h>
-#include <libethcore/ABI.h>
+#include <libprotocol/ABI.h>
 #include <libstorage/Table.h>
 
 using namespace std;
@@ -36,7 +36,7 @@ static const string CONTRACT_TABLE_PREFIX_SHORT = "c_";
 
 void bcos::precompiled::getErrorCodeOut(bytes& out, int const& result)
 {
-    bcos::eth::ContractABI abi;
+    bcos::protocol::ContractABI abi;
     if (result > 0 && result < 128)
     {
         out = abi.abiIn("", u256(result));
@@ -223,7 +223,7 @@ bcos::precompiled::ContractStatus bcos::precompiled::getContractStatus(
 
 bytes precompiled::PrecompiledException::ToOutput()
 {
-    eth::ContractABI abi;
+    protocol::ContractABI abi;
     return abi.abiIn("Error(string)", string(what()));
 }
 

@@ -27,7 +27,7 @@
 
 using namespace std;
 using namespace bcos;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::storage;
 using namespace bcos::precompiled;
 using namespace bcos::blockverifier;

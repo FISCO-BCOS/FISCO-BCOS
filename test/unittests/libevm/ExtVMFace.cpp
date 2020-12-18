@@ -28,7 +28,7 @@
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 namespace bcos
 {
 namespace test
@@ -148,7 +148,7 @@ BOOST_AUTO_TEST_CASE(testFunctionTables)
     /// test evmc_get_optional_storage
     auto* data = evmc_get_optional_storage(&call_result);
     BOOST_CHECK(memcmp(data->pointer, origin_str.c_str(), call_result.output_size) == 0);
-    ///========== TEST emit_log(eth::log)=====================
+    ///========== TEST emit_log(protocol::log)=====================
     evmc_uint256be topics[2];
     topics[0] = toEvmC(crypto::Hash("0"));
     topics[1] = toEvmC(crypto::Hash("1"));

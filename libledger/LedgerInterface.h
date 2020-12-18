@@ -27,7 +27,7 @@
 #include <libblockverifier/BlockVerifierInterface.h>
 #include <libchannelserver/ChannelRPCServer.h>
 #include <libconsensus/ConsensusInterface.h>
-#include <libethcore/Protocol.h>
+#include <libprotocol/Protocol.h>
 #include <libsync/SyncInterface.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <memory>

@@ -25,7 +25,7 @@
 #include <libconfig/GlobalConfigure.h>
 #include <libp2p/Common.h>
 #include <libp2p/Service.h>
-#include <test/unittests/libethcore/FakeBlock.h>
+#include <test/unittests/libprotocol/FakeBlock.h>
 #include <test/unittests/libtxpool/FakeBlockChain.h>
 #include <memory>
 namespace bcos
@@ -90,7 +90,7 @@ class FakeSyncToolsSet
     using ServicePtr = std::shared_ptr<bcos::p2p::Service>;
     using BlockChainPtr = std::shared_ptr<bcos::blockchain::BlockChainInterface>;
     using SessionPtr = std::shared_ptr<bcos::network::SessionFace>;
-    using TransactionPtr = std::shared_ptr<bcos::eth::Transaction>;
+    using TransactionPtr = std::shared_ptr<bcos::protocol::Transaction>;
 
 public:
     FakeSyncToolsSet(uint64_t _blockNum = 5, size_t const& _transSize = 5)

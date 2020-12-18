@@ -31,7 +31,7 @@ using namespace std;
 using namespace bcos;
 using namespace bcos::test;
 using namespace bcos::consensus;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 
 namespace bcos
 {

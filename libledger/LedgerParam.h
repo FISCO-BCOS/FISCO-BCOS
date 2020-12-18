@@ -24,8 +24,8 @@
 #pragma once
 #include "LedgerParamInterface.h"
 #include <libblockchain/BlockChainInterface.h>
-#include <libethcore/EVMFlags.h>
-#include <libethcore/Protocol.h>
+#include <libprotocol/EVMFlags.h>
+#include <libprotocol/Protocol.h>
 #include <libutilities/FixedBytes.h>
 #include <memory>
 #include <vector>

@@ -21,8 +21,8 @@
 #pragma once
 #include "Common.h"
 #include "jsonrpccpp/server/rpcprotocolserverv2.h"
-#include <libethcore/Protocol.h>
 #include <libflowlimit/RPCQPSLimiter.h>
+#include <libprotocol/Protocol.h>
 #include <libstat/ChannelNetworkStatHandler.h>
 
 namespace bcos

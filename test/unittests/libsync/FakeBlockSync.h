@@ -22,12 +22,12 @@
  * @date: 2018-10-10
  */
 #pragma once
-#include <libethcore/Block.h>
+#include <libprotocol/Block.h>
 #include <libsync/SyncInterface.h>
 #include <libsync/SyncStatus.h>
 #include <memory>
 using namespace bcos::sync;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 
 namespace bcos
 {
@@ -59,7 +59,8 @@ public:
     void setProtocolId(PROTOCOL_ID const _protocolId) override { m_protocolId = _protocolId; };
     void noteSealingBlockNumber(int64_t) override{};
 
-    void registerConsensusVerifyHandler(std::function<bool(bcos::eth::Block const&)>) override{};
+    void registerConsensusVerifyHandler(
+        std::function<bool(bcos::protocol::Block const&)>) override{};
     bool syncTreeRouterEnabled() override { return m_syncTreeRouterEnabled; }
     void setSyncTreeRouterEnabled(bool const& _syncTreeRouterEnabled)
     {

@@ -26,7 +26,7 @@
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 using namespace bcos::consensus;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 namespace bcos
 {
 namespace test

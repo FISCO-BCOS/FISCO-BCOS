@@ -77,7 +77,7 @@ BOOST_AUTO_TEST_CASE(updateTest)
     BOOST_CHECK(cache.isNonceOk(*txs[1], true));  // insert cache if true
     BOOST_CHECK(!cache.isNonceOk(*txs[1]));
 
-    bcos::eth::NonceKeyType nonce = txs[0]->nonce();
+    bcos::protocol::NonceKeyType nonce = txs[0]->nonce();
     cache.delCache(nonce);
     BOOST_CHECK(cache.isNonceOk(*txs[0]));
 

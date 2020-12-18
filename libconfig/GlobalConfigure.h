@@ -22,7 +22,7 @@
 
 #pragma once
 
-#include <libethcore/EVMSchedule.h>
+#include <libprotocol/EVMSchedule.h>
 #include <atomic>
 #include <string>
 namespace bcos
@@ -75,8 +75,8 @@ public:
     }
     std::string const& supportedVersion() { return m_supportedVersion; }
 
-    void setEVMSchedule(bcos::eth::EVMSchedule const& _schedule) { m_evmSchedule = _schedule; }
-    bcos::eth::EVMSchedule const& evmSchedule() const { return m_evmSchedule; }
+    void setEVMSchedule(bcos::protocol::EVMSchedule const& _schedule) { m_evmSchedule = _schedule; }
+    bcos::protocol::EVMSchedule const& evmSchedule() const { return m_evmSchedule; }
 
     void setConfDir(std::string _confDir) { m_confDir = _confDir; }
     const std::string& confDir() { return m_confDir; }
@@ -132,7 +132,7 @@ private:
     bool m_compress;
     int64_t m_chainId = 1;
     std::string m_supportedVersion;
-    bcos::eth::EVMSchedule m_evmSchedule = bcos::eth::DefaultSchedule;
+    bcos::protocol::EVMSchedule m_evmSchedule = bcos::protocol::DefaultSchedule;
     std::string m_confDir;
     std::string m_dataDir;
     bool m_enableStat;

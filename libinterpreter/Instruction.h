@@ -28,7 +28,7 @@
 
 namespace bcos
 {
-namespace eth
+namespace protocol
 {
 /// Virtual machine bytecode instruction.
 enum class Instruction : uint8_t
@@ -271,5 +271,5 @@ struct InstructionMetric
 /// Information on all the instructions.
 InstructionInfo instructionInfo(Instruction _inst);
 
-}  // namespace eth
+}  // namespace protocol
 }  // namespace bcos

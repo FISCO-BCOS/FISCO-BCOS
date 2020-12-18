@@ -26,7 +26,7 @@
 
 using namespace std;
 using namespace bcos;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::sync;
 using namespace bcos::p2p;
 using namespace bcos::txpool;
@@ -256,7 +256,7 @@ void SyncTransaction::maintainDownloadingTransactions()
 
 // send transaction hash
 void SyncTransaction::sendTxsStatus(
-    std::shared_ptr<bcos::eth::Transactions> _txs, std::shared_ptr<NodeIDs> _selectedPeers)
+    std::shared_ptr<bcos::protocol::Transactions> _txs, std::shared_ptr<NodeIDs> _selectedPeers)
 {
     unsigned percent = 25;
     unsigned expectedSelectSize = (_selectedPeers->size() * percent + 99) / 100;

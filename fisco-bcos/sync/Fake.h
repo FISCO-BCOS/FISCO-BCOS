@@ -26,14 +26,14 @@
 #include <libblockchain/BlockChainInterface.h>
 #include <libblockverifier/BlockVerifierInterface.h>
 #include <libdevcrypto/Common.h>
-#include <libethcore/Block.h>
-#include <libethcore/BlockHeader.h>
-#include <libethcore/CommonJS.h>
-#include <libethcore/Transaction.h>
 #include <libinitializer/Common.h>
 #include <libinitializer/InitializerInterface.h>
 #include <libinitializer/P2PInitializer.h>
 #include <libinitializer/SecureInitializer.h>
+#include <libprotocol/Block.h>
+#include <libprotocol/BlockHeader.h>
+#include <libprotocol/CommonJS.h>
+#include <libprotocol/Transaction.h>
 #include <libsync/Common.h>
 #include <libsync/SyncInterface.h>
 #include <libsync/SyncStatus.h>
@@ -43,9 +43,9 @@ class FakeConcensus : public bcos::Worker
 {
     // FakeConcensus, only do: fetch tx from txPool and commit newBlock into blockchain
 public:
-    using BlockHeaderPtr = std::shared_ptr<bcos::eth::BlockHeader>;
-    using BlockPtr = std::shared_ptr<bcos::eth::Block>;
-    using TxPtr = std::shared_ptr<bcos::eth::Transaction>;
+    using BlockHeaderPtr = std::shared_ptr<bcos::protocol::BlockHeader>;
+    using BlockPtr = std::shared_ptr<bcos::protocol::Block>;
+    using TxPtr = std::shared_ptr<bcos::protocol::Transaction>;
     using SigList = std::vector<std::pair<bcos::u256, std::vector<unsigned char>>>;
 
 public:
@@ -64,7 +64,7 @@ public:
         m_nodeId(0),
         m_blockGenerationInterval(_idleWaitMs)
     {
-        m_groupId = bcos::eth::getGroupAndProtocol(m_protocolId).first;
+        m_groupId = bcos::protocol::getGroupAndProtocol(m_protocolId).first;
     }
 
     virtual ~FakeConcensus(){};
@@ -83,7 +83,7 @@ public:
         }
 
         // seal
-        std::shared_ptr<bcos::eth::Transactions> txs = m_txPool->pendingList();
+        std::shared_ptr<bcos::protocol::Transactions> txs = m_txPool->pendingList();
 
         if (0 == txs->size())
         {
@@ -119,7 +119,7 @@ public:
 
 private:
     BlockPtr newBlock(bcos::h256 _parentHash, int64_t _currentNumner,
-        std::shared_ptr<bcos::eth::Transactions> _txs)
+        std::shared_ptr<bcos::protocol::Transactions> _txs)
     {
         // Generate block header
         BlockHeaderPtr header = newBlockHeader(_parentHash, _currentNumner);
@@ -127,7 +127,7 @@ private:
         header->encode(blockHeaderBytes);
 
         // Generate block
-        BlockPtr block = std::make_shared<bcos::eth::Block>();
+        BlockPtr block = std::make_shared<bcos::protocol::Block>();
         block->setSigList(sigList(_txs->size()));
         block->setTransactions(_txs);
 
@@ -139,11 +139,11 @@ private:
 
     BlockHeaderPtr newBlockHeader(bcos::h256 _parentHash, int64_t _currentNumner)
     {
-        BlockHeaderPtr blockHeader = std::make_shared<bcos::eth::BlockHeader>();
+        BlockHeaderPtr blockHeader = std::make_shared<bcos::protocol::BlockHeader>();
         blockHeader->setParentHash(_parentHash);
         blockHeader->setRoots(bcos::crypto::Hash("transactionRoot"),
             bcos::crypto::Hash("receiptRoot"), bcos::crypto::Hash("stateRoot"));
-        blockHeader->setLogBloom(bcos::eth::LogBloom(0));
+        blockHeader->setLogBloom(bcos::protocol::LogBloom(0));
         blockHeader->setNumber(_currentNumner);
         blockHeader->setGasLimit(bcos::u256(3000000));
         blockHeader->setGasUsed(bcos::u256(100000));

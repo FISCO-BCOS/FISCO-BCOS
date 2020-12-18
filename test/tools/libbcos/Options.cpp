@@ -30,7 +30,7 @@ using namespace boost::unit_test;
 using namespace std;
 using namespace boost;
 using namespace bcos::test;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 namespace bcos
 {
 namespace test

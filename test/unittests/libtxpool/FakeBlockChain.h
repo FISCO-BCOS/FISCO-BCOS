@@ -28,7 +28,7 @@
 #include <libp2p/Service.h>
 #include <libtxpool/TxPool.h>
 #include <test/tools/libutils/TestOutputHelper.h>
-#include <test/unittests/libethcore/FakeBlock.h>
+#include <test/unittests/libprotocol/FakeBlock.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -111,15 +111,17 @@ class FakeTxPool : public TxPool
 public:
     FakeTxPool(std::shared_ptr<bcos::p2p::Service> _p2pService,
         std::shared_ptr<bcos::blockchain::BlockChainInterface> _blockChain,
-        uint64_t const& _limit = 102400, int32_t const& _protocolId = bcos::eth::ProtocolID::TxPool)
+        uint64_t const& _limit = 102400,
+        int32_t const& _protocolId = bcos::protocol::ProtocolID::TxPool)
       : TxPool(_p2pService, _blockChain, _protocolId, _limit)
     {}
-    std::pair<h256, Address> submitTransactions(bcos::eth::Transaction::Ptr _tx) override
+    std::pair<h256, Address> submitTransactions(bcos::protocol::Transaction::Ptr _tx) override
     {
         return TxPool::submitTransactions(_tx);
     };
 
-    ImportResult import(bcos::eth::Transaction::Ptr _tx, IfDropped _ik = IfDropped::Ignore) override
+    ImportResult import(
+        bcos::protocol::Transaction::Ptr _tx, IfDropped _ik = IfDropped::Ignore) override
     {
         return TxPool::import(_tx, _ik);
     }
@@ -158,14 +160,16 @@ public:
 
     int64_t number() override { return m_blockNumber - 1; }
     void setBlockNumber(int64_t const& number) { m_blockNumber = number; }
-    std::shared_ptr<std::vector<bcos::eth::NonceKeyType>> getNonces(int64_t _blockNumber) override
+    std::shared_ptr<std::vector<bcos::protocol::NonceKeyType>> getNonces(
+        int64_t _blockNumber) override
     {
-        std::shared_ptr<std::vector<bcos::eth::NonceKeyType>> nonceVector =
-            std::make_shared<std::vector<bcos::eth::NonceKeyType>>();
+        std::shared_ptr<std::vector<bcos::protocol::NonceKeyType>> nonceVector =
+            std::make_shared<std::vector<bcos::protocol::NonceKeyType>>();
         auto pBlock = getBlockByNumber(_blockNumber);
         for (auto trans : *(pBlock->transactions()))
         {
-            nonceVector->push_back(boost::lexical_cast<bcos::eth::NonceKeyType>(trans->nonce()));
+            nonceVector->push_back(
+                boost::lexical_cast<bcos::protocol::NonceKeyType>(trans->nonce()));
         }
         return nonceVector;
     }
@@ -188,7 +192,7 @@ public:
         return m_blockChain[_i]->headerHash();
     }
 
-    std::shared_ptr<bcos::eth::Block> getBlockByHash(
+    std::shared_ptr<bcos::protocol::Block> getBlockByHash(
         bcos::h256 const& _blockHash, int64_t = -1) override
     {
         if (m_blockHash.count(_blockHash))
@@ -196,7 +200,7 @@ public:
         return nullptr;
     }
 
-    std::shared_ptr<bcos::eth::Block> getBlockByNumber(int64_t _i) override
+    std::shared_ptr<bcos::protocol::Block> getBlockByNumber(int64_t _i) override
     {
         return getBlockByHash(numberHash(_i));
     }
@@ -209,20 +213,20 @@ public:
         return nullptr;
     }
 
-    bcos::eth::Transaction::Ptr getTxByHash(bcos::h256 const&) override
+    bcos::protocol::Transaction::Ptr getTxByHash(bcos::h256 const&) override
     {
         return std::make_shared<Transaction>();
     }
-    bcos::eth::LocalisedTransaction::Ptr getLocalisedTxByHash(bcos::h256 const&) override
+    bcos::protocol::LocalisedTransaction::Ptr getLocalisedTxByHash(bcos::h256 const&) override
     {
         return std::make_shared<LocalisedTransaction>();
     }
-    bcos::eth::TransactionReceipt::Ptr getTransactionReceiptByHash(bcos::h256 const&) override
+    bcos::protocol::TransactionReceipt::Ptr getTransactionReceiptByHash(bcos::h256 const&) override
     {
         return std::make_shared<TransactionReceipt>();
     }
 
-    bcos::eth::LocalisedTransactionReceipt::Ptr getLocalisedTxReceiptByHash(
+    bcos::protocol::LocalisedTransactionReceipt::Ptr getLocalisedTxReceiptByHash(
         bcos::h256 const&) override
     {
         return std::make_shared<LocalisedTransactionReceipt>(
@@ -235,17 +239,17 @@ public:
         return std::make_pair(std::make_shared<LocalisedTransaction>(),
             std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>());
     }
-    std::pair<bcos::eth::LocalisedTransactionReceipt::Ptr,
+    std::pair<bcos::protocol::LocalisedTransactionReceipt::Ptr,
         std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
     getTransactionReceiptByHashWithProof(
-        bcos::h256 const& _txHash, bcos::eth::LocalisedTransaction&) override
+        bcos::h256 const& _txHash, bcos::protocol::LocalisedTransaction&) override
     {
         (void)_txHash;
-        return std::make_pair(
-            std::make_shared<LocalisedTransactionReceipt>(bcos::eth::TransactionException::None),
+        return std::make_pair(std::make_shared<LocalisedTransactionReceipt>(
+                                  bcos::protocol::TransactionException::None),
             std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>());
     }
-    CommitResult commitBlock(std::shared_ptr<bcos::eth::Block> block,
+    CommitResult commitBlock(std::shared_ptr<bcos::protocol::Block> block,
         std::shared_ptr<bcos::blockverifier::ExecutiveContext>) override
     {
         block->header().setParentHash(m_blockChain[m_blockNumber - 1]->header().hash());
@@ -295,7 +299,7 @@ public:
         std::shared_ptr<BlockChainInterface> blockChain =
             std::shared_ptr<BlockChainInterface>(m_blockChain);
         /// fake txpool
-        PROTOCOL_ID protocol = getGroupProtoclID(1, bcos::eth::ProtocolID::TxPool);
+        PROTOCOL_ID protocol = getGroupProtoclID(1, bcos::protocol::ProtocolID::TxPool);
         m_txPool = std::make_shared<FakeTxPool>(m_topicService, blockChain, 1024000, protocol);
     }
 

@@ -22,7 +22,7 @@
 
 #include "EVMHostInterface.h"
 #include "EVMHostContext.h"
-#include "libethcore/Exceptions.h"
+#include "libprotocol/Exceptions.h"
 #include <libblockverifier/ExecutiveContext.h>
 
 namespace bcos
@@ -60,7 +60,7 @@ evmc_storage_status setStorage(evmc_host_context* _context, const evmc_address* 
     auto& env = static_cast<EVMHostContext&>(*_context);
     if (!env.isPermitted())
     {
-        BOOST_THROW_EXCEPTION(eth::PermissionDenied());
+        BOOST_THROW_EXCEPTION(protocol::PermissionDenied());
     }
     assert(fromEvmC(*_addr) == env.myAddress());
     u256 index = fromEvmC(*_key);
@@ -190,7 +190,7 @@ evmc_result call(evmc_host_context* _context, const evmc_message* _msg) noexcept
     if (_msg->gas < 0)
     {
         EXECUTIVE_LOG(ERROR) << LOG_DESC("Gas overflow") << LOG_KV("cur gas", _msg->gas);
-        BOOST_THROW_EXCEPTION(eth::GasOverflow());
+        BOOST_THROW_EXCEPTION(protocol::GasOverflow());
     }
 
     auto& env = static_cast<EVMHostContext&>(*_context);

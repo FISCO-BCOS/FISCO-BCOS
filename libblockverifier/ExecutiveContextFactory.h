@@ -41,34 +41,35 @@ public:
     ExecutiveContextFactory()
     {
         m_precompiledContract.insert(std::make_pair(
-            bcos::Address(1), bcos::eth::PrecompiledContract(3000, 0,
-                                  bcos::eth::PrecompiledRegistrar::executor("ecrecover"))));
+            bcos::Address(1), bcos::protocol::PrecompiledContract(3000, 0,
+                                  bcos::protocol::PrecompiledRegistrar::executor("ecrecover"))));
         m_precompiledContract.insert(std::make_pair(
-            bcos::Address(2), bcos::eth::PrecompiledContract(
-                                  60, 12, bcos::eth::PrecompiledRegistrar::executor("sha256"))));
+            bcos::Address(2), bcos::protocol::PrecompiledContract(60, 12,
+                                  bcos::protocol::PrecompiledRegistrar::executor("sha256"))));
         m_precompiledContract.insert(std::make_pair(
-            bcos::Address(3), bcos::eth::PrecompiledContract(600, 120,
-                                  bcos::eth::PrecompiledRegistrar::executor("ripemd160"))));
+            bcos::Address(3), bcos::protocol::PrecompiledContract(600, 120,
+                                  bcos::protocol::PrecompiledRegistrar::executor("ripemd160"))));
         m_precompiledContract.insert(std::make_pair(
-            bcos::Address(4), bcos::eth::PrecompiledContract(
-                                  15, 3, bcos::eth::PrecompiledRegistrar::executor("identity"))));
-        m_precompiledContract.insert({bcos::Address{0x5},
-            bcos::eth::PrecompiledContract(bcos::eth::PrecompiledRegistrar::pricer("modexp"),
-                bcos::eth::PrecompiledRegistrar::executor("modexp"))});
+            bcos::Address(4), bcos::protocol::PrecompiledContract(15, 3,
+                                  bcos::protocol::PrecompiledRegistrar::executor("identity"))));
+        m_precompiledContract.insert(
+            {bcos::Address{0x5}, bcos::protocol::PrecompiledContract(
+                                     bcos::protocol::PrecompiledRegistrar::pricer("modexp"),
+                                     bcos::protocol::PrecompiledRegistrar::executor("modexp"))});
         m_precompiledContract.insert({bcos::Address{0x6},
-            bcos::eth::PrecompiledContract(
-                150, 0, bcos::eth::PrecompiledRegistrar::executor("alt_bn128_G1_add"))});
+            bcos::protocol::PrecompiledContract(
+                150, 0, bcos::protocol::PrecompiledRegistrar::executor("alt_bn128_G1_add"))});
         m_precompiledContract.insert({bcos::Address{0x7},
-            bcos::eth::PrecompiledContract(
-                6000, 0, bcos::eth::PrecompiledRegistrar::executor("alt_bn128_G1_mul"))});
+            bcos::protocol::PrecompiledContract(
+                6000, 0, bcos::protocol::PrecompiledRegistrar::executor("alt_bn128_G1_mul"))});
         m_precompiledContract.insert({bcos::Address{0x8},
-            bcos::eth::PrecompiledContract(
-                bcos::eth::PrecompiledRegistrar::pricer("alt_bn128_pairing_product"),
-                bcos::eth::PrecompiledRegistrar::executor("alt_bn128_pairing_product"))});
+            bcos::protocol::PrecompiledContract(
+                bcos::protocol::PrecompiledRegistrar::pricer("alt_bn128_pairing_product"),
+                bcos::protocol::PrecompiledRegistrar::executor("alt_bn128_pairing_product"))});
         m_precompiledContract.insert({bcos::Address{0x9},
-            bcos::eth::PrecompiledContract(
-                bcos::eth::PrecompiledRegistrar::pricer("blake2_compression"),
-                bcos::eth::PrecompiledRegistrar::executor("blake2_compression"))});
+            bcos::protocol::PrecompiledContract(
+                bcos::protocol::PrecompiledRegistrar::pricer("blake2_compression"),
+                bcos::protocol::PrecompiledRegistrar::executor("blake2_compression"))});
     };
     virtual ~ExecutiveContextFactory(){};
 
@@ -93,7 +94,7 @@ private:
     bcos::storage::TableFactoryFactory::Ptr m_tableFactoryFactory;
     bcos::storage::Storage::Ptr m_stateStorage;
     std::shared_ptr<bcos::executive::StateFactoryInterface> m_stateFactoryInterface;
-    std::unordered_map<Address, bcos::eth::PrecompiledContract> m_precompiledContract;
+    std::unordered_map<Address, bcos::protocol::PrecompiledContract> m_precompiledContract;
 
     std::shared_ptr<bcos::precompiled::PrecompiledExecResultFactory> m_precompiledExecResultFactory;
 

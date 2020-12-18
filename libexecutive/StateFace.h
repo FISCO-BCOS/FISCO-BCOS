@@ -24,7 +24,7 @@
 
 #pragma once
 
-#include <libethcore/Common.h>
+#include <libprotocol/Common.h>
 
 namespace bcos
 {

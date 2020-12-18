@@ -24,7 +24,7 @@
 #include <json/json.h>
 #include <libblockverifier/BlockVerifierInterface.h>
 #include <libblockverifier/ExecutiveContext.h>
-#include <libethcore/BlockFactory.h>
+#include <libprotocol/BlockFactory.h>
 #include <libutilities/FixedBytes.h>
 
 #define SEAL_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("SEALER")
@@ -56,18 +56,18 @@ class Sealing
 {
 public:
     Sealing() {}
-    Sealing(bcos::eth::BlockFactory::Ptr _blockFactory) { setBlockFactory(_blockFactory); }
-    void setBlockFactory(bcos::eth::BlockFactory::Ptr _blockFactory)
+    Sealing(bcos::protocol::BlockFactory::Ptr _blockFactory) { setBlockFactory(_blockFactory); }
+    void setBlockFactory(bcos::protocol::BlockFactory::Ptr _blockFactory)
     {
         m_blockFactory = _blockFactory;
         block = m_blockFactory->createBlock();
     }
 
-    std::shared_ptr<bcos::eth::Block> block;
+    std::shared_ptr<bcos::protocol::Block> block;
     /// hash set for filter fetched transactions
     h256Hash m_transactionSet;
     bcos::blockverifier::ExecutiveContext::Ptr p_execContext;
-    bcos::eth::BlockFactory::Ptr m_blockFactory;
+    bcos::protocol::BlockFactory::Ptr m_blockFactory;
 };
 
 }  // namespace consensus

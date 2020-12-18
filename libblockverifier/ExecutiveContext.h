@@ -23,11 +23,11 @@
 #include "Common.h"
 #include "libprecompiled/Precompiled.h"
 #include <libdevcrypto/Common.h>
-#include <libethcore/Block.h>
-#include <libethcore/PrecompiledContract.h>
-#include <libethcore/Protocol.h>
-#include <libethcore/Transaction.h>
 #include <libexecutive/StateFace.h>
+#include <libprotocol/Block.h>
+#include <libprotocol/PrecompiledContract.h>
+#include <libprotocol/Protocol.h>
+#include <libprotocol/Transaction.h>
 #include <libstorage/Table.h>
 #include <libutilities/Common.h>
 #include <libutilities/FixedBytes.h>
@@ -111,9 +111,10 @@ public:
     virtual bigint costOfPrecompiled(Address const& _a, bytesConstRef _in) const;
 
     void setPrecompiledContract(
-        std::unordered_map<Address, bcos::eth::PrecompiledContract> const& precompiledContract);
+        std::unordered_map<Address, bcos::protocol::PrecompiledContract> const&
+            precompiledContract);
 
-    void dbCommit(bcos::eth::Block& block);
+    void dbCommit(bcos::protocol::Block& block);
 
     void setMemoryTableFactory(std::shared_ptr<bcos::storage::TableFactory> memoryTableFactory)
     {
@@ -129,7 +130,8 @@ public:
     void setTxGasLimit(uint64_t _txGasLimit) { m_txGasLimit = _txGasLimit; }
 
     // Get transaction criticals, return nullptr if critical to all
-    std::shared_ptr<std::vector<std::string>> getTxCriticals(const bcos::eth::Transaction& _tx);
+    std::shared_ptr<std::vector<std::string>> getTxCriticals(
+        const bcos::protocol::Transaction& _tx);
 
 private:
     tbb::concurrent_unordered_map<Address, std::shared_ptr<precompiled::Precompiled>,
@@ -138,7 +140,7 @@ private:
     std::atomic<int> m_addressCount;
     BlockInfo m_blockInfo;
     std::shared_ptr<bcos::executive::StateFace> m_stateFace;
-    std::unordered_map<Address, bcos::eth::PrecompiledContract> m_precompiledContract;
+    std::unordered_map<Address, bcos::protocol::PrecompiledContract> m_precompiledContract;
     std::shared_ptr<bcos::storage::TableFactory> m_memoryTableFactory;
     uint64_t m_txGasLimit = 300000000;
 

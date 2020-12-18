@@ -27,7 +27,7 @@
 #include <boost/timer.hpp>
 #include <thread>
 
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::blockchain;
 
 #define NONCECHECKER_LOG(LEVEL) \
@@ -37,7 +37,7 @@ namespace bcos
 {
 namespace txpool
 {
-using NonceVec = std::vector<bcos::eth::NonceKeyType>;
+using NonceVec = std::vector<bcos::protocol::NonceKeyType>;
 class TransactionNonceCheck : public CommonTransactionNonceCheck
 {
 public:
@@ -48,12 +48,12 @@ public:
     }
     ~TransactionNonceCheck() {}
     void init();
-    bool ok(bcos::eth::Transaction const& _transaction);
+    bool ok(bcos::protocol::Transaction const& _transaction);
     void updateCache(bool _rebuild = false);
     unsigned const& maxBlockLimit() const { return m_maxBlockLimit; }
     void setBlockLimit(unsigned const& limit) { m_maxBlockLimit = limit; }
 
-    bool isBlockLimitOk(bcos::eth::Transaction const& _trans);
+    bool isBlockLimitOk(bcos::protocol::Transaction const& _trans);
 
     std::shared_ptr<bcos::txpool::NonceVec> getNonceAndUpdateCache(
         int64_t const& blockNumber, bool const& update = true);

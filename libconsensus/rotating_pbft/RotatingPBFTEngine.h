@@ -212,7 +212,7 @@ protected:
     std::shared_ptr<bcos::h512s> m_chosedSealerList;
 
     // used to record the rotatingIntervalEnableNumber changed or not
-    bcos::eth::BlockNumber m_rotatingIntervalEnableNumber = {-1};
+    bcos::protocol::BlockNumber m_rotatingIntervalEnableNumber = {-1};
     bool m_rotatingIntervalUpdated = false;
 
     std::shared_ptr<bcos::sync::TreeTopology> m_treeRouter;

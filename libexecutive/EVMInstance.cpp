@@ -26,7 +26,7 @@
 using namespace std;
 namespace bcos
 {
-namespace eth
+namespace protocol
 {
 EVMInstance::EVMInstance(evmc_vm* _instance) noexcept : m_instance(_instance)
 {
@@ -64,5 +64,5 @@ evmc_revision toRevision(EVMSchedule const& _schedule)
         return EVMC_HOMESTEAD;
     return EVMC_FRONTIER;
 }
-}  // namespace eth
+}  // namespace protocol
 }  // namespace bcos

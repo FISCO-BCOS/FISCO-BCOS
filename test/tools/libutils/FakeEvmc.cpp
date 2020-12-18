@@ -27,7 +27,7 @@
 
 using namespace std;
 using namespace bcos;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 
 namespace bcos
 {
@@ -42,7 +42,7 @@ bool operator==(evmc_uint256be const& a, evmc_uint256be const& b)
 }
 
 FakeState fakeState;
-eth::LogEntries fakeLogs;
+protocol::LogEntries fakeLogs;
 int64_t fakeDepth = -1;
 
 bool accountExists(evmc_host_context* _context, const evmc_address* _addr) noexcept
@@ -129,7 +129,7 @@ void log(evmc_host_context* _context, evmc_address const* _addr, uint8_t const* 
     h256 const* pTopics = reinterpret_cast<h256 const*>(_topics);
     h256s topics = h256s{pTopics, pTopics + _numTopics};
     bytes data = bytesConstRef{_data, _dataSize}.toBytes();
-    fakeLogs.push_back(eth::LogEntry(myAddress, topics, data));
+    fakeLogs.push_back(protocol::LogEntry(myAddress, topics, data));
 }
 
 

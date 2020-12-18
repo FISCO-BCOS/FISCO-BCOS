@@ -27,10 +27,10 @@
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcrypto/ECDSASignature.h>
 #include <libdevcrypto/SM2Signature.h>
-#include <libethcore/Common.h>
-#include <libethcore/CommonJS.h>
-#include <libethcore/Transaction.h>
 #include <libprecompiled/SystemConfigPrecompiled.h>
+#include <libprotocol/Common.h>
+#include <libprotocol/CommonJS.h>
+#include <libprotocol/Transaction.h>
 #include <libsync/SyncStatus.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <libutilities/Base64.h>
@@ -645,8 +645,8 @@ Json::Value Rpc::getBlockByHash(int _groupID, const std::string& _blockHash, boo
 
 
 void Rpc::generateBlockHeaderInfo(Json::Value& _response,
-    bcos::eth::BlockHeader const& _blockHeader, bcos::eth::Block::SigListPtrType _signatureList,
-    bool _includeSigList)
+    bcos::protocol::BlockHeader const& _blockHeader,
+    bcos::protocol::Block::SigListPtrType _signatureList, bool _includeSigList)
 {
     _response["number"] = _blockHeader.number();
 
@@ -1162,7 +1162,7 @@ Json::Value Rpc::call(int _groupID, const Json::Value& request)
 
 std::shared_ptr<Json::Value> Rpc::notifyReceipt(
     std::weak_ptr<bcos::blockchain::BlockChainInterface>, LocalisedTransactionReceipt::Ptr receipt,
-    bcos::bytesConstRef input, bcos::eth::Block::Ptr)
+    bcos::bytesConstRef input, bcos::protocol::Block::Ptr)
 {
     std::shared_ptr<Json::Value> response = std::make_shared<Json::Value>();
 
@@ -1174,7 +1174,7 @@ std::shared_ptr<Json::Value> Rpc::notifyReceipt(
 std::shared_ptr<Json::Value> Rpc::notifyReceiptWithProof(
     std::weak_ptr<bcos::blockchain::BlockChainInterface> _blockChain,
     LocalisedTransactionReceipt::Ptr _receipt, bcos::bytesConstRef _input,
-    bcos::eth::Block::Ptr _blockPtr)
+    bcos::protocol::Block::Ptr _blockPtr)
 {
     auto response = notifyReceipt(_blockChain, _receipt, _input, _blockPtr);
     if (!_blockPtr)
@@ -1245,7 +1245,7 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp,
     std::function<std::shared_ptr<Json::Value>(
         std::weak_ptr<bcos::blockchain::BlockChainInterface> _blockChain,
         LocalisedTransactionReceipt::Ptr receipt, bcos::bytesConstRef input,
-        bcos::eth::Block::Ptr _blockPtr)>
+        bcos::protocol::Block::Ptr _blockPtr)>
         _notifyCallback)
 {
     try
@@ -1281,7 +1281,7 @@ std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp,
             tx->setRpcCallback(
                 [weakedBlockChain, _notifyCallback, transactionCallback, clientProtocolversion,
                     _groupID](LocalisedTransactionReceipt::Ptr receipt, bcos::bytesConstRef input,
-                    bcos::eth::Block::Ptr _blockPtr) {
+                    bcos::protocol::Block::Ptr _blockPtr) {
                     std::shared_ptr<Json::Value> response = std::make_shared<Json::Value>();
                     if (clientProtocolversion > 0)
                     {
@@ -1406,7 +1406,7 @@ Json::Value Rpc::getTransactionReceiptByHashWithProof(
 
         checkRequest(_groupID);
         h256 hash = jsToFixed<32>(_transactionHash);
-        bcos::eth::LocalisedTransaction transaction;
+        bcos::protocol::LocalisedTransaction transaction;
         auto receipt = blockchain->getTransactionReceiptByHashWithProof(hash, transaction);
         auto txReceipt = receipt.first;
         if (!txReceipt || txReceipt->blockNumber() == INVALIDNUMBER ||
@@ -1947,7 +1947,7 @@ void Rpc::parseTransactionIntoResponse(Json::Value& _response, bcos::h256 const&
 }
 
 void Rpc::parseReceiptIntoResponse(Json::Value& _response, bcos::bytesConstRef _input,
-    bcos::eth::LocalisedTransactionReceipt::Ptr _receipt)
+    bcos::protocol::LocalisedTransactionReceipt::Ptr _receipt)
 {
     // the fields required for calculate keccak256 for the transactionReceipt
     // Note: the hash of the transactionReceipt is equal to the hash of the corresponding
@@ -1957,7 +1957,7 @@ void Rpc::parseReceiptIntoResponse(Json::Value& _response, bcos::bytesConstRef _
     _response["contractAddress"] = toJonString(_receipt->contractAddress());
     _response["logsBloom"] = toJonString(_receipt->bloom());
     _response["status"] = toJonString(_receipt->status());
-    bcos::eth::TransactionException status = _receipt->status();
+    bcos::protocol::TransactionException status = _receipt->status();
     // parse statusMsg
     std::stringstream ss;
     ss << status;
@@ -1989,7 +1989,7 @@ void Rpc::parseReceiptIntoResponse(Json::Value& _response, bcos::bytesConstRef _
 }
 
 void Rpc::parseSignatureIntoResponse(
-    Json::Value& _response, bcos::eth::Block::SigListPtrType _signatureList)
+    Json::Value& _response, bcos::protocol::Block::SigListPtrType _signatureList)
 {
     if (!_signatureList)
     {
@@ -2073,7 +2073,7 @@ Json::Value Rpc::getBatchReceiptsByBlockHashAndRange(int _groupID, const std::st
     }
 }
 
-void Rpc::getBatchReceipts(Json::Value& _response, bcos::eth::Block::Ptr _block,
+void Rpc::getBatchReceipts(Json::Value& _response, bcos::protocol::Block::Ptr _block,
     std::string const& _from, std::string const& _count, bool _compress)
 {
     auto transactions = _block->transactions();

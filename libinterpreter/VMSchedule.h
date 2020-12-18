@@ -25,7 +25,7 @@
 
 namespace bcos
 {
-namespace eth
+namespace protocol
 {
 struct VMSchedule
 {
@@ -78,5 +78,5 @@ public:
     }
     virtual ~FreeStorageVMSchedule() {}
 };
-}  // namespace eth
+}  // namespace protocol
 }  // namespace bcos

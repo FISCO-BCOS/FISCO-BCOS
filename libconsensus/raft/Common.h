@@ -26,7 +26,7 @@
 
 #include <libconsensus/Common.h>
 #include <libdevcrypto/Common.h>
-#include <libethcore/Exceptions.h>
+#include <libprotocol/Exceptions.h>
 #include <libutilities/ConcurrentQueue.h>
 #include <libutilities/RLP.h>
 
@@ -122,7 +122,7 @@ struct RaftMsgPacket
         }
         catch (Exception const& e)
         {
-            e << bcos::eth::errinfo_name("invalid msg format");
+            e << bcos::protocol::errinfo_name("invalid msg format");
             throw;
         }
     }
@@ -158,8 +158,8 @@ struct RaftMsg
         }
         catch (Exception const& _e)
         {
-            _e << bcos::eth::errinfo_name("invalid msg format")
-               << bcos::eth::BadFieldError(field, *toHexString(_rlp[field].data().toBytes()));
+            _e << bcos::protocol::errinfo_name("invalid msg format")
+               << bcos::protocol::BadFieldError(field, *toHexString(_rlp[field].data().toBytes()));
             throw;
         }
     }
@@ -189,8 +189,8 @@ struct RaftVoteReq : public RaftMsg
         }
         catch (Exception const& _e)
         {
-            _e << bcos::eth::errinfo_name("invalid msg format")
-               << bcos::eth::BadFieldError(field, *toHexString(_rlp[field].data().toBytes()));
+            _e << bcos::protocol::errinfo_name("invalid msg format")
+               << bcos::protocol::BadFieldError(field, *toHexString(_rlp[field].data().toBytes()));
             throw;
         }
     }
@@ -233,8 +233,8 @@ struct RaftVoteResp : public RaftMsg
         }
         catch (Exception const& _e)
         {
-            _e << bcos::eth::errinfo_name("invalid msg format")
-               << bcos::eth::BadFieldError(field, *toHexString(_rlp[field].data().toBytes()));
+            _e << bcos::protocol::errinfo_name("invalid msg format")
+               << bcos::protocol::BadFieldError(field, *toHexString(_rlp[field].data().toBytes()));
             throw;
         }
     }
@@ -266,8 +266,8 @@ struct RaftHeartBeat : public RaftMsg
         }
         catch (Exception const& _e)
         {
-            _e << bcos::eth::errinfo_name("invalid msg format")
-               << bcos::eth::BadFieldError(field, *toHexString(_rlp[field].data().toBytes()));
+            _e << bcos::protocol::errinfo_name("invalid msg format")
+               << bcos::protocol::BadFieldError(field, *toHexString(_rlp[field].data().toBytes()));
             throw;
         }
     }
@@ -293,8 +293,8 @@ struct RaftHeartBeatResp : public RaftMsg
         }
         catch (Exception const& _e)
         {
-            _e << bcos::eth::errinfo_name("invalid msg format")
-               << bcos::eth::BadFieldError(field, *toHexString(_rlp[field].data().toBytes()));
+            _e << bcos::protocol::errinfo_name("invalid msg format")
+               << bcos::protocol::BadFieldError(field, *toHexString(_rlp[field].data().toBytes()));
             throw;
         }
     }

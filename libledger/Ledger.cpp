@@ -354,19 +354,19 @@ std::shared_ptr<Sealer> Ledger::createPBFTSealer()
     return pbftSealer;
 }
 
-bcos::eth::BlockFactory::Ptr Ledger::createBlockFactory()
+bcos::protocol::BlockFactory::Ptr Ledger::createBlockFactory()
 {
     if (!m_param->mutableConsensusParam().enablePrepareWithTxsHash)
     {
-        return std::make_shared<bcos::eth::BlockFactory>();
+        return std::make_shared<bcos::protocol::BlockFactory>();
     }
     // only create PartiallyBlockFactory when using pbft or rpbft
     if (bcos::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0 ||
         vrfBasedrPBFTEnabled())
     {
-        return std::make_shared<bcos::eth::PartiallyBlockFactory>();
+        return std::make_shared<bcos::protocol::PartiallyBlockFactory>();
     }
-    return std::make_shared<bcos::eth::BlockFactory>();
+    return std::make_shared<bcos::protocol::BlockFactory>();
 }
 
 void Ledger::initPBFTEngine(Sealer::Ptr _sealer)

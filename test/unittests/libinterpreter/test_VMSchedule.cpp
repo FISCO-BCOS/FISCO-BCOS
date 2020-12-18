@@ -20,13 +20,13 @@
  * @author: yujiechen
  * @date 20200410
  */
-#include <libethcore/EVMFlags.h>
+#include <libprotocol/EVMFlags.h>
 // #include <libinterpreter/VM.h>
 // #include <libinterpreter/VMSchedule.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
-using namespace bcos::eth;
+using namespace bcos::protocol;
 namespace bcos
 {
 namespace test

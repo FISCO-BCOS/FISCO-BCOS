@@ -20,9 +20,9 @@
 #include <json/json.h>
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcrypto/Common.h>
-#include <libethcore/ABI.h>
 #include <libprecompiled/CRUDPrecompiled.h>
 #include <libprecompiled/TableFactoryPrecompiled.h>
+#include <libprotocol/ABI.h>
 #include <libstorage/MemoryTableFactoryFactory.h>
 #include <boost/test/unit_test.hpp>
 
@@ -84,7 +84,7 @@ BOOST_FIXTURE_TEST_SUITE(CRUDPrecompiled, CRUDPrecompiledFixture)
 BOOST_AUTO_TEST_CASE(CRUD)
 {
     // createTable
-    bcos::eth::ContractABI abi;
+    bcos::protocol::ContractABI abi;
     std::string tableName = "t_test", tableName2 = "t_demo", key = "name",
                 valueField = "item_id,item_name";
     bytes param = abi.abiIn("createTable(string,string,string)", tableName, key, valueField);

@@ -34,12 +34,12 @@
 #include "SyncTreeTopology.h"
 #include <libblockchain/BlockChainInterface.h>
 #include <libblockverifier/BlockVerifierInterface.h>
-#include <libethcore/Common.h>
-#include <libethcore/Exceptions.h>
 #include <libflowlimit/RateLimiter.h>
 #include <libnetwork/Common.h>
 #include <libnetwork/Session.h>
 #include <libp2p/P2PInterface.h>
+#include <libprotocol/Common.h>
+#include <libprotocol/Exceptions.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <libutilities/FixedBytes.h>
 #include <libutilities/ThreadPool.h>
@@ -69,7 +69,7 @@ public:
         m_blockChain(_blockChain),
         m_blockVerifier(_blockVerifier),
         m_protocolId(_protocolId),
-        m_groupId(bcos::eth::getGroupAndProtocol(_protocolId).first),
+        m_groupId(bcos::protocol::getGroupAndProtocol(_protocolId).first),
         m_nodeId(_nodeId),
         m_genesisHash(_genesisHash),
         m_enableSendTxsByTree(_enableSendTxsByTree),
@@ -168,11 +168,11 @@ public:
     virtual void setProtocolId(PROTOCOL_ID const _protocolId) override
     {
         m_protocolId = _protocolId;
-        m_groupId = bcos::eth::getGroupAndProtocol(m_protocolId).first;
+        m_groupId = bcos::protocol::getGroupAndProtocol(m_protocolId).first;
     };
 
     virtual void registerConsensusVerifyHandler(
-        std::function<bool(bcos::eth::Block const&)> _handler) override
+        std::function<bool(bcos::protocol::Block const&)> _handler) override
     {
         fp_isConsensusOk = _handler;
     };
@@ -210,11 +210,12 @@ public:
     void maintainTransactions() { m_syncTrans->maintainTransactions(); }
     void maintainDownloadingTransactions() { m_syncTrans->maintainDownloadingTransactions(); }
     void broadcastSyncStatus(
-        bcos::eth::BlockNumber const& _blockNumber, bcos::h256 const& _currentHash);
+        bcos::protocol::BlockNumber const& _blockNumber, bcos::h256 const& _currentHash);
 
-    void sendSyncStatusByTree(bcos::eth::BlockNumber const& _blockNumber, h256 const& _currentHash);
+    void sendSyncStatusByTree(
+        bcos::protocol::BlockNumber const& _blockNumber, h256 const& _currentHash);
 
-    bool sendSyncStatusByNodeId(bcos::eth::BlockNumber const& blockNumber,
+    bool sendSyncStatusByNodeId(bcos::protocol::BlockNumber const& blockNumber,
         bcos::h256 const& currentHash, bcos::network::NodeID const& nodeId);
     void sendBlockStatus(int64_t const& _gossipPeersNumber);
 
@@ -338,10 +339,10 @@ private:
     GossipBlockStatus::Ptr m_blockStatusGossipThread = nullptr;
 
     // settings
-    bcos::eth::Handler<int64_t> m_blockSubmitted;
+    bcos::protocol::Handler<int64_t> m_blockSubmitted;
 
     // verify handler to check downloading block
-    std::function<bool(bcos::eth::Block const&)> fp_isConsensusOk = nullptr;
+    std::function<bool(bcos::protocol::Block const&)> fp_isConsensusOk = nullptr;
 
     bcos::flowlimit::RateLimiter::Ptr m_bandwidthLimiter;
     bcos::flowlimit::RateLimiter::Ptr m_nodeBandwidthLimiter;

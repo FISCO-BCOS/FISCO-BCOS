@@ -23,7 +23,7 @@
 #pragma once
 #include "Common.h"
 #include <libblockchain/BlockChainInterface.h>
-#include <libethcore/Block.h>
+#include <libprotocol/Block.h>
 #include <climits>
 #include <queue>
 #include <set>
@@ -131,7 +131,7 @@ private:
     int64_t const m_blockSizeExpandCoeff = 3;
 
 private:
-    bool isNewerBlock(std::shared_ptr<bcos::eth::Block> _block);
+    bool isNewerBlock(std::shared_ptr<bcos::protocol::Block> _block);
 };
 
 }  // namespace sync

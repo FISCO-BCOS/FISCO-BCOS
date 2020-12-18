@@ -20,13 +20,13 @@
 #include "libstoragestate/StorageStateFactory.h"
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcrypto/Common.h>
-#include <libethcore/ABI.h>
-#include <libethcore/Block.h>
-#include <libethcore/Transaction.h>
 #include <libexecutive/Executive.h>
 #include <libprecompiled/ChainGovernancePrecompiled.h>
 #include <libprecompiled/ContractLifeCyclePrecompiled.h>
 #include <libprecompiled/TableFactoryPrecompiled.h>
+#include <libprotocol/ABI.h>
+#include <libprotocol/Block.h>
+#include <libprotocol/Transaction.h>
 #include <libstorage/MemoryTableFactoryFactory.h>
 #include <libstoragestate/StorageState.h>
 #include <libutilities/JsonDataConvertUtility.h>
@@ -34,7 +34,7 @@
 
 using namespace std;
 using namespace bcos;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::executive;
 using namespace bcos::blockverifier;
 using namespace bcos::storage;
@@ -212,7 +212,7 @@ BOOST_FIXTURE_TEST_SUITE(Output, OutputFixture)
 
 BOOST_AUTO_TEST_CASE(accountLiftCycle)
 {
-    eth::ContractABI abi;
+    protocol::ContractABI abi;
     bytes in;
     bytes out;
     s256 result = 0;
@@ -257,7 +257,7 @@ BOOST_AUTO_TEST_CASE(call)
 {
     LOG(INFO) << LOG_BADGE("OutputTest") << LOG_DESC("freeze");
 
-    eth::ContractABI abi;
+    protocol::ContractABI abi;
     bytes in;
     bytes out;
     s256 result = 0;

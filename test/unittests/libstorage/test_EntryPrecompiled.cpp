@@ -17,8 +17,8 @@
 
 #include "Common.h"
 #include <libblockverifier/ExecutiveContext.h>
-#include <libethcore/ABI.h>
 #include <libprecompiled/EntryPrecompiled.h>
+#include <libprotocol/ABI.h>
 #include <libstorage/Table.h>
 #include <boost/test/unit_test.hpp>
 
@@ -26,7 +26,7 @@ using namespace bcos;
 using namespace bcos::storage;
 using namespace bcos::precompiled;
 using namespace bcos::blockverifier;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 
 namespace test_precompiled
 {

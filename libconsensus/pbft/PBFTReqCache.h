@@ -24,7 +24,7 @@
  */
 #pragma once
 #include <libconsensus/pbft/Common.h>
-#include <libethcore/Protocol.h>
+#include <libprotocol/Protocol.h>
 #include <libutilities/JsonDataConvertUtility.h>
 namespace bcos
 {
@@ -340,10 +340,10 @@ public:
         m_committedPrepareCache = *m_rawPrepareCache;
     }
     /// obtain the sig-list from m_commitCache, and append the sig-list to given block
-    bool generateAndSetSigList(bcos::eth::Block& block, const IDXTYPE& minSigSize);
+    bool generateAndSetSigList(bcos::protocol::Block& block, const IDXTYPE& minSigSize);
     ///  determine can trigger viewchange or not
     bool canTriggerViewChange(VIEWTYPE& minView, IDXTYPE const& minInvalidNodeNum,
-        VIEWTYPE const& toView, bcos::eth::BlockHeader const& highestBlock,
+        VIEWTYPE const& toView, bcos::protocol::BlockHeader const& highestBlock,
         int64_t const& consensusBlockNumber);
 
     /// trigger viewchange
@@ -353,8 +353,8 @@ public:
     /// update the sign cache and commit cache immediately
     /// in case of that the commit/sign requests with the same hash are solved in
     /// handleCommitMsg/handleSignMsg again
-    virtual void delCache(bcos::eth::BlockHeader const& _highestBlockHeader);
-    inline void collectGarbage(bcos::eth::BlockHeader const& highestBlockHeader)
+    virtual void delCache(bcos::protocol::BlockHeader const& _highestBlockHeader);
+    inline void collectGarbage(bcos::protocol::BlockHeader const& highestBlockHeader)
     {
         removeInvalidEntryFromCache(highestBlockHeader, m_signCache);
         removeInvalidEntryFromCache(highestBlockHeader, m_commitCache);
@@ -365,10 +365,11 @@ public:
         removeInvalidLatestViewChangeReq(highestBlockHeader);
     }
     /// remove invalid view-change requests according to view and the current block header
-    void removeInvalidViewChange(VIEWTYPE const& view, bcos::eth::BlockHeader const& highestBlock);
-    void removeInvalidLatestViewChangeReq(bcos::eth::BlockHeader const& highestBlock);
+    void removeInvalidViewChange(
+        VIEWTYPE const& view, bcos::protocol::BlockHeader const& highestBlock);
+    void removeInvalidLatestViewChangeReq(bcos::protocol::BlockHeader const& highestBlock);
 
-    inline void delInvalidViewChange(bcos::eth::BlockHeader const& curHeader)
+    inline void delInvalidViewChange(bcos::protocol::BlockHeader const& curHeader)
     {
         removeInvalidEntryFromCache(curHeader, m_recvViewChangeReq);
     }
@@ -429,7 +430,7 @@ public:
 protected:
     /// remove invalid requests cached in cache according to current block
     template <typename T, typename U, typename S>
-    void inline removeInvalidEntryFromCache(bcos::eth::BlockHeader const& highestBlockHeader,
+    void inline removeInvalidEntryFromCache(bcos::protocol::BlockHeader const& highestBlockHeader,
         std::unordered_map<T, std::unordered_map<U, S>>& cache)
     {
         for (auto it = cache.begin(); it != cache.end();)

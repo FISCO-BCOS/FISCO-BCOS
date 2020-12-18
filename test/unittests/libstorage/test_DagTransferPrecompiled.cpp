@@ -22,8 +22,8 @@
 #include "MemoryStorage.h"
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcrypto/Common.h>
-#include <libethcore/ABI.h>
 #include <libprecompiled/extension/DagTransferPrecompiled.h>
+#include <libprotocol/ABI.h>
 #include <libstorage/MemoryTableFactoryFactory.h>
 #include <libstoragestate/StorageStateFactory.h>
 #include <boost/test/unit_test.hpp>
@@ -106,7 +106,7 @@ BOOST_AUTO_TEST_CASE(getParallelTag)
     // valid user name with valid amount
     std::string user = "user";
     bcos::u256 amount = 1111111;
-    bcos::eth::ContractABI abi;
+    bcos::protocol::ContractABI abi;
     bytes param;
 
     std::vector<std::string> vTags;
@@ -176,7 +176,7 @@ BOOST_AUTO_TEST_CASE(getParallelTag)
 BOOST_AUTO_TEST_CASE(userAdd)
 {  // function userAdd(string user, uint256 balance) public returns(bool);
     Address origin;
-    bcos::eth::ContractABI abi;
+    bcos::protocol::ContractABI abi;
 
     std::string user;
     bcos::u256 amount;
@@ -215,7 +215,7 @@ BOOST_AUTO_TEST_CASE(userAdd)
 BOOST_AUTO_TEST_CASE(userSave)
 {  // function userSave(string user, uint256 balance) public returns(bool);
     Address origin;
-    bcos::eth::ContractABI abi;
+    bcos::protocol::ContractABI abi;
 
     std::string user;
     bcos::u256 amount;
@@ -281,7 +281,7 @@ BOOST_AUTO_TEST_CASE(userSave)
 BOOST_AUTO_TEST_CASE(userDraw)
 {  // function userDraw(string user, uint256 balance) public returns(bool);
     Address origin;
-    bcos::eth::ContractABI abi;
+    bcos::protocol::ContractABI abi;
 
     std::string user;
     bytes out;
@@ -345,7 +345,7 @@ BOOST_AUTO_TEST_CASE(userDraw)
 BOOST_AUTO_TEST_CASE(userBalance)
 {  // function userBalance(string user) public constant returns(bool,uint256);
     Address origin;
-    bcos::eth::ContractABI abi;
+    bcos::protocol::ContractABI abi;
 
     std::string user;
     bcos::u256 balance;
@@ -392,7 +392,7 @@ BOOST_AUTO_TEST_CASE(userBalance)
 BOOST_AUTO_TEST_CASE(userTransfer)
 {  // function userTransfer(string user_a, string user_b, uint256 amount) public returns(bool);
     Address origin;
-    bcos::eth::ContractABI abi;
+    bcos::protocol::ContractABI abi;
 
     std::string from, to;
     // bcos::u256 amount;

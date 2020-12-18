@@ -1,10 +1,10 @@
 #include "EventLogFilterParams.h"
 #include "json/json.h"
-#include <libethcore/Common.h>
-#include <libethcore/CommonJS.h>
+#include <libprotocol/Common.h>
+#include <libprotocol/CommonJS.h>
 
 using namespace bcos;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::event;
 
 bool EventLogFilterParams::getFilterIDField(const Json::Value& _json, std::string& _filterID)
@@ -101,7 +101,7 @@ bool EventLogFilterParams::getTopicField(const Json::Value& _json, EventLogFilte
 
     if (_json["topics"].isArray())
     {
-        if (_json["topics"].size() > eth::MAX_NUM_TOPIC_EVENT_LOG)
+        if (_json["topics"].size() > protocol::MAX_NUM_TOPIC_EVENT_LOG)
         {  // there is at most 4 topics in one event log
             return false;
         }

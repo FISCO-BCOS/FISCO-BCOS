@@ -23,7 +23,7 @@
  */
 #include "PartiallyPBFTReqCache.h"
 using namespace bcos::consensus;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 
 bool PartiallyPBFTReqCache::addPartiallyRawPrepare(PrepareReq::Ptr _partiallyRawPrepare)
 {

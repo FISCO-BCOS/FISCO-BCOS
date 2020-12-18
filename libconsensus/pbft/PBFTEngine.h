@@ -174,9 +174,9 @@ public:
     void rehandleCommitedPrepareCache(PrepareReq const& req);
     bool shouldSeal();
     /// broadcast prepare message
-    bool generatePrepare(bcos::eth::Block::Ptr _block);
+    bool generatePrepare(bcos::protocol::Block::Ptr _block);
     /// update the context of PBFT after commit a block into the block-chain
-    void reportBlock(bcos::eth::Block const& block) override;
+    void reportBlock(bcos::protocol::Block const& block) override;
     void onViewChange(std::function<void()> const& _f)
     {
         m_onViewChange = _f;
@@ -198,7 +198,7 @@ public:
         m_onCommitBlock = _f;
     }
 
-    bool inline shouldReset(bcos::eth::Block const& block)
+    bool inline shouldReset(bcos::protocol::Block const& block)
     {
         return block.getTransactionSize() == 0 && m_omitEmptyBlock;
     }
@@ -261,7 +261,7 @@ protected:
 
     virtual bool locatedInChosedConsensensusNodes() const { return m_idx != MAXIDX; }
     virtual void addRawPrepare(PrepareReq::Ptr _prepareReq);
-    void reportBlockWithoutLock(bcos::eth::Block const& block);
+    void reportBlockWithoutLock(bcos::protocol::Block const& block);
     void taskProcessLoop() override;
     void handleFutureBlock();
     void collectGarbage();
@@ -269,13 +269,13 @@ protected:
     bool getNodeIDByIndex(bcos::network::NodeID& nodeId, const IDXTYPE& idx) const;
     virtual bcos::h512 selectNodeToRequestMissedTxs(PrepareReq::Ptr _prepareReq);
 
-    void checkBlockValid(bcos::eth::Block const& block) override
+    void checkBlockValid(bcos::protocol::Block const& block) override
     {
         ConsensusEngineBase::checkBlockValid(block);
         checkSealerList(block);
     }
 
-    virtual void checkTransactionsValid(bcos::eth::Block::Ptr, PrepareReq::Ptr) {}
+    virtual void checkTransactionsValid(bcos::protocol::Block::Ptr, PrepareReq::Ptr) {}
 
     bool needOmit(Sealing const& sealing);
 
@@ -590,9 +590,9 @@ protected:
         return true;
     }
 
-    void checkSealerList(bcos::eth::Block const& block);
+    void checkSealerList(bcos::protocol::Block const& block);
     /// check block
-    bool checkBlock(bcos::eth::Block const& block);
+    bool checkBlock(bcos::protocol::Block const& block);
     void execBlock(Sealing& sealing, PrepareReq::Ptr _req, std::ostringstream& oss);
     void changeViewForFastViewChange()
     {
@@ -600,7 +600,7 @@ protected:
         m_fastViewChange = true;
         m_signalled.notify_all();
     }
-    void notifySealing(bcos::eth::Block const& block);
+    void notifySealing(bcos::protocol::Block const& block);
     /// to ensure at least 100MB available disk space
     virtual bool isDiskSpaceEnough(std::string const& path)
     {
@@ -662,7 +662,7 @@ protected:
         std::shared_ptr<bcos::p2p::P2PSession> _session, bcos::p2p::P2PMessage::Ptr _message);
 
 
-    virtual PrepareReq::Ptr constructPrepareReq(bcos::eth::Block::Ptr _block);
+    virtual PrepareReq::Ptr constructPrepareReq(bcos::protocol::Block::Ptr _block);
     virtual void sendPrepareMsgFromLeader(PrepareReq::Ptr _prepareReq, bytesConstRef _data,
         bcos::PACKET_TYPE const& _p2pPacketType = 0);
 

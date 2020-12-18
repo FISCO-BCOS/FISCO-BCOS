@@ -27,7 +27,7 @@
 #include <libsync/SyncMsgPacket.h>
 #include <libsync/SyncMsgPacketFactory.h>
 #include <test/tools/libutils/TestOutputHelper.h>
-#include <test/unittests/libethcore/FakeBlock.h>
+#include <test/unittests/libprotocol/FakeBlock.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>
 
@@ -181,7 +181,7 @@ BOOST_AUTO_TEST_CASE(SyncTransactionsPacketTest)
 
     auto rlpTx = txPacket.rlp()[0];
     std::shared_ptr<Transactions> txs = std::make_shared<Transactions>();
-    bcos::eth::TxsParallelParser::decode(txs, rlpTx.toBytesConstRef());
+    bcos::protocol::TxsParallelParser::decode(txs, rlpTx.toBytesConstRef());
     BOOST_CHECK((*(*txs)[0]) == *fakeTransaction);
 }
 

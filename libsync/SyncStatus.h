@@ -25,10 +25,10 @@
 #include "RspBlockReq.h"
 #include "SyncMsgPacket.h"
 #include <libblockchain/BlockChainInterface.h>
-#include <libethcore/Exceptions.h>
 #include <libnetwork/Common.h>
 #include <libnetwork/Session.h>
 #include <libp2p/P2PInterface.h>
+#include <libprotocol/Exceptions.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <libutilities/FixedBytes.h>
 #include <libutilities/Worker.h>

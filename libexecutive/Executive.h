@@ -15,10 +15,10 @@
 #pragma once
 
 #include "Common.h"
-#include <libethcore/BlockHeader.h>
-#include <libethcore/Common.h>
-#include <libethcore/EVMFlags.h>
-#include <libethcore/Transaction.h>
+#include <libprotocol/BlockHeader.h>
+#include <libprotocol/Common.h>
+#include <libprotocol/EVMFlags.h>
+#include <libprotocol/Transaction.h>
 #include <functional>
 
 namespace Json
@@ -35,11 +35,11 @@ namespace storage
 class TableFactory;
 }
 
-namespace eth
+namespace protocol
 {
 class Block;
 class Result;
-}  // namespace eth
+}  // namespace protocol
 namespace precompiled
 {
 class PrecompiledExecResult;
@@ -106,10 +106,10 @@ public:
     /// point following this.
     void initialize(bytesConstRef _transaction)
     {
-        initialize(std::make_shared<bcos::eth::Transaction>(
-            _transaction, bcos::eth::CheckTransaction::None));
+        initialize(std::make_shared<bcos::protocol::Transaction>(
+            _transaction, bcos::protocol::CheckTransaction::None));
     }
-    void initialize(bcos::eth::Transaction::Ptr _transaction);
+    void initialize(bcos::protocol::Transaction::Ptr _transaction);
     /// Finalise a transaction previously set up with initialize().
     /// @warning Only valid after initialize() and execute(), and possibly go().
     /// @returns true if the outermost execution halted normally, false if exceptionally halted.
@@ -117,16 +117,17 @@ public:
     /// Begins execution of a transaction. You must call finalize() following this.
     /// @returns true if the transaction is done, false if go() must be called.
 
-    void verifyTransaction(bcos::eth::ImportRequirements::value _ir, bcos::eth::Transaction::Ptr _t,
-        bcos::eth::BlockHeader const& _header, u256 const& _gasUsed);
+    void verifyTransaction(bcos::protocol::ImportRequirements::value _ir,
+        bcos::protocol::Transaction::Ptr _t, bcos::protocol::BlockHeader const& _header,
+        u256 const& _gasUsed);
 
     bool execute();
     /// @returns the transaction from initialize().
     /// @warning Only valid after initialize().
-    bcos::eth::Transaction::Ptr tx() const { return m_t; }
+    bcos::protocol::Transaction::Ptr tx() const { return m_t; }
     /// @returns the log entries created by this operation.
     /// @warning Only valid after finalise().
-    bcos::eth::LogEntries const& logs() const { return m_logs; }
+    bcos::protocol::LogEntries const& logs() const { return m_logs; }
     /// @returns total gas used in the transaction/operation.
     /// @warning Only valid after finalise().
     u256 gasUsed() const;
@@ -159,12 +160,12 @@ public:
     /// @returns gas remaining after the transaction/operation. Valid after the transaction has been
     /// executed.
     u256 gas() const { return m_gas; }
-    eth::TransactionException status() const { return m_excepted; }
+    protocol::TransactionException status() const { return m_excepted; }
     /// @returns the new address for the created contract in the CREATE operation.
     Address newAddress() const { return m_newAddress; }
 
     /// @returns The exception that has happened during the execution if any.
-    eth::TransactionException getException() const noexcept { return m_excepted; }
+    protocol::TransactionException getException() const noexcept { return m_excepted; }
 
     /// Revert all changes made to the state by this execution.
     void revert();
@@ -177,7 +178,7 @@ public:
         m_ext = nullptr;
         m_output = owning_bytes_ref();
         m_depth = 0;
-        m_excepted = eth::TransactionException::None;
+        m_excepted = protocol::TransactionException::None;
         m_exceptionReason.clear();
         m_baseGasRequired = 0;
         m_gas = 0;
@@ -192,7 +193,7 @@ public:
     }
 
 private:
-    void parseEVMCResult(std::shared_ptr<eth::Result> _result);
+    void parseEVMCResult(std::shared_ptr<protocol::Result> _result);
     /// @returns false iff go() must be called (and thus a VM execution in required).
     bool executeCreate(Address const& _txSender, u256 const& _endowment, u256 const& _gasPrice,
         u256 const& _gas, bytesConstRef _code, Address const& _originAddress);
@@ -214,9 +215,9 @@ private:
     owning_bytes_ref m_output;              ///< Execution output.
 
     unsigned m_depth = 0;  ///< The context's call-depth.
-    eth::TransactionException m_excepted =
-        eth::TransactionException::None;  ///< Details if the VM's execution resulted in an
-                                          ///< exception.
+    protocol::TransactionException m_excepted =
+        protocol::TransactionException::None;  ///< Details if the VM's execution resulted in an
+                                               ///< exception.
     std::stringstream m_exceptionReason;
 
     int64_t m_baseGasRequired;  ///< The base amount of gas requried for executing this transaction.
@@ -224,9 +225,9 @@ private:
                           ///< final amount after go() execution.
     u256 m_refunded = 0;  ///< The amount of gas refunded.
 
-    bcos::eth::Transaction::Ptr m_t;  ///< The original transaction. Set by setup().
-    bcos::eth::LogEntries m_logs;     ///< The log entries created by this transaction. Set by
-                                      ///< finalize().
+    bcos::protocol::Transaction::Ptr m_t;  ///< The original transaction. Set by setup().
+    bcos::protocol::LogEntries m_logs;     ///< The log entries created by this transaction. Set by
+                                           ///< finalize().
 
     u256 m_gasCost;
 

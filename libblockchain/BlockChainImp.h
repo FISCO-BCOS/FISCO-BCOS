@@ -24,14 +24,14 @@
 
 #include "BlockChainInterface.h"
 
-#include <libethcore/Block.h>
-#include <libethcore/Common.h>
-#include <libethcore/Protocol.h>
-#include <libethcore/Transaction.h>
-#include <libethcore/TransactionReceipt.h>
 #include <libexecutive/StateFactoryInterface.h>
 #include <libledger/LedgerParam.h>
 #include <libprecompiled/SystemConfigPrecompiled.h>
+#include <libprotocol/Block.h>
+#include <libprotocol/Common.h>
+#include <libprotocol/Protocol.h>
+#include <libprotocol/Transaction.h>
+#include <libprotocol/TransactionReceipt.h>
 #include <libstorage/Common.h>
 #include <libstorage/Storage.h>
 #include <libstorage/Table.h>
@@ -60,8 +60,8 @@ class BlockCache
 {
 public:
     BlockCache(){};
-    std::shared_ptr<bcos::eth::Block> add(std::shared_ptr<bcos::eth::Block> _block);
-    std::pair<std::shared_ptr<bcos::eth::Block>, bcos::h256> get(h256 const& _hash);
+    std::shared_ptr<bcos::protocol::Block> add(std::shared_ptr<bcos::protocol::Block> _block);
+    std::pair<std::shared_ptr<bcos::protocol::Block>, bcos::h256> get(h256 const& _hash);
 
     void setDestructorThread(bcos::ThreadPool::Ptr _destructorThread)
     {
@@ -70,7 +70,7 @@ public:
 
 private:
     mutable boost::shared_mutex m_sharedMutex;
-    mutable std::map<bcos::h256, std::shared_ptr<bcos::eth::Block>> m_blockCache;
+    mutable std::map<bcos::h256, std::shared_ptr<bcos::protocol::Block>> m_blockCache;
     mutable std::deque<bcos::h256> m_blockCacheFIFO;  // insert queue log for m_blockCache
     const unsigned c_blockCacheSize = 10;             // m_blockCache size, default set 10
     // used to destructor time-consuming, large memory objects
@@ -81,7 +81,7 @@ DERIVE_BCOS_EXCEPTION(OpenSysTableFailed);
 using Parent2ChildListMap = std::map<std::string, std::vector<std::string>>;
 using Child2ParentMap = tbb::concurrent_unordered_map<std::string, std::string>;
 using BlockHeaderInfo =
-    std::pair<std::shared_ptr<bcos::eth::BlockHeader>, bcos::eth::Block::SigListPtrType>;
+    std::pair<std::shared_ptr<bcos::protocol::BlockHeader>, bcos::protocol::Block::SigListPtrType>;
 class BlockChainImp : public BlockChainInterface
 {
 public:
@@ -94,17 +94,18 @@ public:
     virtual ~BlockChainImp(){};
     int64_t number() override;
     bcos::h256 numberHash(int64_t _i) override;
-    bcos::eth::Transaction::Ptr getTxByHash(bcos::h256 const& _txHash) override;
-    bcos::eth::LocalisedTransaction::Ptr getLocalisedTxByHash(bcos::h256 const& _txHash) override;
-    bcos::eth::TransactionReceipt::Ptr getTransactionReceiptByHash(
+    bcos::protocol::Transaction::Ptr getTxByHash(bcos::h256 const& _txHash) override;
+    bcos::protocol::LocalisedTransaction::Ptr getLocalisedTxByHash(
         bcos::h256 const& _txHash) override;
-    virtual bcos::eth::LocalisedTransactionReceipt::Ptr getLocalisedTxReceiptByHash(
+    bcos::protocol::TransactionReceipt::Ptr getTransactionReceiptByHash(
         bcos::h256 const& _txHash) override;
-    std::shared_ptr<bcos::eth::Block> getBlockByHash(
+    virtual bcos::protocol::LocalisedTransactionReceipt::Ptr getLocalisedTxReceiptByHash(
+        bcos::h256 const& _txHash) override;
+    std::shared_ptr<bcos::protocol::Block> getBlockByHash(
         bcos::h256 const& _blockHash, int64_t _blockNumber = -1) override;
-    std::shared_ptr<bcos::eth::Block> getBlockByNumber(int64_t _i) override;
+    std::shared_ptr<bcos::protocol::Block> getBlockByNumber(int64_t _i) override;
     std::shared_ptr<bcos::bytes> getBlockRLPByNumber(int64_t _i) override;
-    CommitResult commitBlock(std::shared_ptr<bcos::eth::Block> block,
+    CommitResult commitBlock(std::shared_ptr<bcos::protocol::Block> block,
         std::shared_ptr<bcos::blockverifier::ExecutiveContext> context) override;
 
     virtual void setStateStorage(bcos::storage::Storage::Ptr stateStorage);
@@ -130,9 +131,10 @@ public:
 
     std::string getSystemConfigByKey(std::string const& key, int64_t num = -1) override;
 
-    std::shared_ptr<std::vector<bcos::eth::NonceKeyType>> getNonces(int64_t _blockNumber) override;
+    std::shared_ptr<std::vector<bcos::protocol::NonceKeyType>> getNonces(
+        int64_t _blockNumber) override;
 
-    std::pair<std::string, bcos::eth::BlockNumber> getSystemConfigInfoByKey(
+    std::pair<std::string, bcos::protocol::BlockNumber> getSystemConfigInfoByKey(
         std::string const& _key, int64_t const& _num = -1) override;
 
     void setTableFactoryFactory(bcos::storage::TableFactoryFactory::Ptr tableFactoryFactory)
@@ -140,28 +142,28 @@ public:
         m_tableFactoryFactory = tableFactoryFactory;
     }
 
-    std::pair<bcos::eth::LocalisedTransaction::Ptr,
+    std::pair<bcos::protocol::LocalisedTransaction::Ptr,
         std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
     getTransactionByHashWithProof(bcos::h256 const& _txHash) override;
 
 
-    std::pair<bcos::eth::LocalisedTransactionReceipt::Ptr,
+    std::pair<bcos::protocol::LocalisedTransactionReceipt::Ptr,
         std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
     getTransactionReceiptByHashWithProof(
-        bcos::h256 const& _txHash, bcos::eth::LocalisedTransaction& transaction) override;
+        bcos::h256 const& _txHash, bcos::protocol::LocalisedTransaction& transaction) override;
 
     std::shared_ptr<MerkleProofType> getTransactionReceiptProof(
-        bcos::eth::Block::Ptr _block, uint64_t const& _index) override;
+        bcos::protocol::Block::Ptr _block, uint64_t const& _index) override;
 
     std::shared_ptr<MerkleProofType> getTransactionProof(
-        bcos::eth::Block::Ptr _block, uint64_t const& _index) override;
+        bcos::protocol::Block::Ptr _block, uint64_t const& _index) override;
 
     std::shared_ptr<BlockHeaderInfo> getBlockHeaderInfo(int64_t _blockNumber) override;
     std::shared_ptr<BlockHeaderInfo> getBlockHeaderInfoByHash(
         bcos::h256 const& _blockHash) override;
 
 private:
-    std::shared_ptr<BlockHeaderInfo> getBlockHeaderFromBlock(bcos::eth::Block::Ptr _block);
+    std::shared_ptr<BlockHeaderInfo> getBlockHeaderFromBlock(bcos::protocol::Block::Ptr _block);
 
     // Randomly select epochSealerSize nodes from workingList as workingSealer and write them into
     // the system table Only used in vrf rpbft consensus type
@@ -172,49 +174,49 @@ private:
         std::string const& _nodeType, bcos::h512s const& _nodeList, int64_t _nodeNum = -1,
         bool _update = false);
 
-    bcos::h512s getNodeList(bcos::eth::BlockNumber& _cachedNumber, bcos::h512s& _cachedNodeList,
-        SharedMutex& _mutex, std::string const& _nodeListType);
+    bcos::h512s getNodeList(bcos::protocol::BlockNumber& _cachedNumber,
+        bcos::h512s& _cachedNodeList, SharedMutex& _mutex, std::string const& _nodeListType);
 
     std::shared_ptr<Parent2ChildListMap> getParent2ChildListByReceiptProofCache(
-        bcos::eth::Block::Ptr _block);
+        bcos::protocol::Block::Ptr _block);
     std::shared_ptr<Parent2ChildListMap> getParent2ChildListByTxsProofCache(
-        bcos::eth::Block::Ptr _block);
+        bcos::protocol::Block::Ptr _block);
 
     std::shared_ptr<Child2ParentMap> getChild2ParentCacheByReceipt(
-        std::shared_ptr<Parent2ChildListMap> _parent2ChildList, bcos::eth::Block::Ptr _block);
+        std::shared_ptr<Parent2ChildListMap> _parent2ChildList, bcos::protocol::Block::Ptr _block);
     std::shared_ptr<Child2ParentMap> getChild2ParentCacheByTransaction(
-        std::shared_ptr<Parent2ChildListMap> _parent2Child, bcos::eth::Block::Ptr _block);
+        std::shared_ptr<Parent2ChildListMap> _parent2Child, bcos::protocol::Block::Ptr _block);
 
     std::shared_ptr<Child2ParentMap> getChild2ParentCache(SharedMutex& _mutex,
-        std::pair<bcos::eth::BlockNumber, std::shared_ptr<Child2ParentMap>>& _cache,
-        std::shared_ptr<Parent2ChildListMap> _parent2Child, bcos::eth::Block::Ptr _block);
+        std::pair<bcos::protocol::BlockNumber, std::shared_ptr<Child2ParentMap>>& _cache,
+        std::shared_ptr<Parent2ChildListMap> _parent2Child, bcos::protocol::Block::Ptr _block);
 
     void initSystemConfig(
         bcos::storage::Table::Ptr _tb, std::string const& _key, std::string const& _value);
 
-    std::shared_ptr<bcos::eth::Block> decodeBlock(bcos::storage::Entry::ConstPtr _entry);
+    std::shared_ptr<bcos::protocol::Block> decodeBlock(bcos::storage::Entry::ConstPtr _entry);
     std::shared_ptr<bcos::bytes> getDataBytes(
         bcos::storage::Entry::ConstPtr _entry, std::string const& _fieldName);
-    void writeBlockToField(bcos::eth::Block const& _block, bcos::storage::Entry::Ptr _entry);
+    void writeBlockToField(bcos::protocol::Block const& _block, bcos::storage::Entry::Ptr _entry);
 
-    std::shared_ptr<bcos::eth::Block> getBlock(int64_t _blockNumber);
-    std::shared_ptr<bcos::eth::Block> getBlock(
+    std::shared_ptr<bcos::protocol::Block> getBlock(int64_t _blockNumber);
+    std::shared_ptr<bcos::protocol::Block> getBlock(
         bcos::h256 const& _blockHash, int64_t _blockNumber = -1);
     std::shared_ptr<bcos::bytes> getBlockRLP(int64_t _i);
     std::shared_ptr<bcos::bytes> getBlockRLP(bcos::h256 const& _blockHash, int64_t _blockNumber);
     int64_t obtainNumber();
-    void writeNumber(const bcos::eth::Block& block,
+    void writeNumber(const bcos::protocol::Block& block,
         std::shared_ptr<bcos::blockverifier::ExecutiveContext> context);
-    void writeTotalTransactionCount(const bcos::eth::Block& block,
+    void writeTotalTransactionCount(const bcos::protocol::Block& block,
         std::shared_ptr<bcos::blockverifier::ExecutiveContext> context);
-    void writeTxToBlock(const bcos::eth::Block& block,
+    void writeTxToBlock(const bcos::protocol::Block& block,
         std::shared_ptr<bcos::blockverifier::ExecutiveContext> context);
-    void writeNumber2Hash(const bcos::eth::Block& block,
+    void writeNumber2Hash(const bcos::protocol::Block& block,
         std::shared_ptr<bcos::blockverifier::ExecutiveContext> context);
-    void writeHash2Block(
-        bcos::eth::Block& block, std::shared_ptr<bcos::blockverifier::ExecutiveContext> context);
-    void writeHash2BlockHeader(
-        bcos::eth::Block& _block, std::shared_ptr<bcos::blockverifier::ExecutiveContext> _context);
+    void writeHash2Block(bcos::protocol::Block& block,
+        std::shared_ptr<bcos::blockverifier::ExecutiveContext> context);
+    void writeHash2BlockHeader(bcos::protocol::Block& _block,
+        std::shared_ptr<bcos::blockverifier::ExecutiveContext> _context);
 
     bool isBlockShouldCommit(int64_t const& _blockNumber);
 
@@ -229,7 +231,7 @@ private:
 
     bcos::bytes getHashNeed2Proof(uint32_t index, const bcos::bytes& data);
     bool getBlockAndIndexByTxHash(const bcos::h256& _txHash,
-        std::pair<std::shared_ptr<bcos::eth::Block>, std::string>& blockInfoWithTxIndex);
+        std::pair<std::shared_ptr<bcos::protocol::Block>, std::string>& blockInfoWithTxIndex);
 
     bcos::storage::Storage::Ptr m_stateStorage;
     std::mutex commitMutex;
@@ -249,10 +251,10 @@ private:
     struct SystemConfigRecord
     {
         std::string value;
-        bcos::eth::BlockNumber enableNumber;
+        bcos::protocol::BlockNumber enableNumber;
         int64_t curBlockNum = -1;  // at which block gets the configuration value
-        SystemConfigRecord(std::string const& _value, bcos::eth::BlockNumber const& _enableNumber,
-            int64_t const& _num)
+        SystemConfigRecord(std::string const& _value,
+            bcos::protocol::BlockNumber const& _enableNumber, int64_t const& _num)
           : value(_value), enableNumber(_enableNumber), curBlockNum(_num){};
     };
     std::map<std::string, SystemConfigRecord> m_systemConfigRecord;
@@ -265,21 +267,22 @@ private:
 
     bcos::storage::TableFactoryFactory::Ptr m_tableFactoryFactory;
 
-    std::pair<bcos::eth::BlockNumber,
+    std::pair<bcos::protocol::BlockNumber,
         std::shared_ptr<std::map<std::string, std::vector<std::string>>>>
         m_transactionWithProof = std::make_pair(0, nullptr);
 
     mutable SharedMutex m_transactionWithProofMutex;
 
-    std::pair<bcos::eth::BlockNumber,
+    std::pair<bcos::protocol::BlockNumber,
         std::shared_ptr<std::map<std::string, std::vector<std::string>>>>
         m_receiptWithProof = std::make_pair(0, nullptr);
     mutable SharedMutex m_receiptWithProofMutex;
 
-    std::pair<bcos::eth::BlockNumber, std::shared_ptr<Child2ParentMap>> m_receiptChild2ParentCache;
+    std::pair<bcos::protocol::BlockNumber, std::shared_ptr<Child2ParentMap>>
+        m_receiptChild2ParentCache;
     mutable SharedMutex x_receiptChild2ParentCache;
 
-    std::pair<bcos::eth::BlockNumber, std::shared_ptr<Child2ParentMap>> m_txsChild2ParentCache;
+    std::pair<bcos::protocol::BlockNumber, std::shared_ptr<Child2ParentMap>> m_txsChild2ParentCache;
     mutable SharedMutex x_txsChild2ParentCache;
     bcos::ThreadPool::Ptr m_destructorThread;
 };

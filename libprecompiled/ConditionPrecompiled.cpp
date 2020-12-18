@@ -21,7 +21,7 @@
 #include "ConditionPrecompiled.h"
 #include "libstorage/Common.h"
 #include <libdevcrypto/Hash.h>
-#include <libethcore/ABI.h>
+#include <libprotocol/ABI.h>
 
 using namespace bcos;
 using namespace bcos::blockverifier;
@@ -72,7 +72,7 @@ PrecompiledExecResult::Ptr ConditionPrecompiled::call(
 
     STORAGE_LOG(DEBUG) << "func:" << std::hex << func;
 
-    bcos::eth::ContractABI abi;
+    bcos::protocol::ContractABI abi;
 
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
     callResult->gasPricer()->setMemUsed(param.size());

@@ -20,8 +20,8 @@
  */
 #include "HelloWorldPrecompiled.h"
 #include <libblockverifier/ExecutiveContext.h>
-#include <libethcore/ABI.h>
 #include <libprecompiled/TableFactoryPrecompiled.h>
+#include <libprotocol/ABI.h>
 
 using namespace bcos;
 using namespace bcos::blockverifier;
@@ -72,7 +72,7 @@ PrecompiledExecResult::Ptr HelloWorldPrecompiled::call(
     bytesConstRef data = getParamData(_param);
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
     callResult->gasPricer()->setMemUsed(_param.size());
-    bcos::eth::ContractABI abi;
+    bcos::protocol::ContractABI abi;
 
     Table::Ptr table = openTable(_context, precompiled::getTableName(HELLO_WORLD_TABLE_NAME));
     callResult->gasPricer()->appendOperation(InterfaceOpcode::OpenTable);

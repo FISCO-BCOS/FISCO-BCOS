@@ -23,8 +23,8 @@
  */
 
 #pragma once
-#include <libutilities/Exceptions.h>
 #include <libexecutive/VMFactory.h>
+#include <libutilities/Exceptions.h>
 namespace bcos
 {
 namespace test

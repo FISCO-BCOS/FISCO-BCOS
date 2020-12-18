@@ -21,8 +21,8 @@
 
 #pragma once
 
-#include <libethcore/Protocol.h>
 #include <libnetwork/Common.h>
+#include <libprotocol/Protocol.h>
 #include <libutilities/FixedBytes.h>
 #include <boost/beast.hpp>
 #include <memory>

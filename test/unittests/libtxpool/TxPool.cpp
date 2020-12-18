@@ -125,8 +125,8 @@ BOOST_AUTO_TEST_CASE(testImportAndSubmit)
     top_transactions = *(pool_test.m_txPool->topTransactions(20, avoid));
     BOOST_CHECK(top_transactions.size() == 0);
     /// check getProtocol id
-    BOOST_CHECK(
-        pool_test.m_txPool->getProtocolId() == getGroupProtoclID(1, bcos::eth::ProtocolID::TxPool));
+    BOOST_CHECK(pool_test.m_txPool->getProtocolId() ==
+                getGroupProtoclID(1, bcos::protocol::ProtocolID::TxPool));
     BOOST_CHECK(pool_test.m_txPool->maxBlockLimit() == 1000);
     pool_test.m_txPool->setMaxBlockLimit(100);
     BOOST_CHECK(pool_test.m_txPool->maxBlockLimit() == 100);

@@ -20,7 +20,7 @@
  */
 
 #include "PaillierPrecompiled.h"
-#include <libethcore/ABI.h>
+#include <libprotocol/ABI.h>
 #include <libutilities/Common.h>
 #include <paillier/callpaillier.h>
 #include <string>
@@ -46,7 +46,7 @@ PrecompiledExecResult::Ptr PaillierPrecompiled::call(
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
 
-    bcos::eth::ContractABI abi;
+    bcos::protocol::ContractABI abi;
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
     callResult->gasPricer()->setMemUsed(param.size());
     if (func == name2Selector[PAILLIER_METHOD_SET_STR])

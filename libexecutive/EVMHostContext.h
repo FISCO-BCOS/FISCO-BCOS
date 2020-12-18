@@ -25,13 +25,13 @@
 #pragma once
 
 #include "Common.h"
-#include "libethcore/EVMSchedule.h"
 #include "libexecutive/Executive.h"
 #include "libexecutive/StateFace.h"
+#include "libprotocol/EVMSchedule.h"
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
 #include <evmc/instructions.h>
-#include <libethcore/Common.h>
+#include <libprotocol/Common.h>
 #include <functional>
 #include <map>
 
@@ -93,7 +93,10 @@ public:
     virtual void suicide(Address const& _a);
 
     /// Return the EVM gas-price schedule for this execution context.
-    virtual bcos::eth::EVMSchedule const& evmSchedule() const { return g_BCOSConfig.evmSchedule(); }
+    virtual bcos::protocol::EVMSchedule const& evmSchedule() const
+    {
+        return g_BCOSConfig.evmSchedule();
+    }
 
     virtual std::shared_ptr<executive::StateFace> const& state() const { return m_s; }
 
@@ -108,7 +111,7 @@ public:
     /// Revert any changes made (by any of the other calls).
     virtual void log(h256s&& _topics, bytesConstRef _data)
     {
-        m_sub.logs.push_back(eth::LogEntry(m_myAddress, std::move(_topics), _data.toBytes()));
+        m_sub.logs.push_back(protocol::LogEntry(m_myAddress, std::move(_topics), _data.toBytes()));
     }
     /// ------ get interfaces related to EVMHostContext------
     virtual Address const& myAddress() { return m_myAddress; }

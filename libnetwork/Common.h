@@ -38,7 +38,7 @@
 #include <boost/logic/tribool.hpp>
 
 #include <libdevcrypto/Common.h>
-#include <libethcore/Protocol.h>
+#include <libprotocol/Protocol.h>
 #include <libutilities/Exceptions.h>
 #include <libutilities/FixedBytes.h>
 #include <libutilities/RLP.h>

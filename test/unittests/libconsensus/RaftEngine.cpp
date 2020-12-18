@@ -23,8 +23,8 @@
  */
 #include "FakeRaftEngine.h"
 #include <libdevcrypto/Common.h>
-#include <libethcore/Protocol.h>
 #include <libp2p/P2PSession.h>
+#include <libprotocol/Protocol.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libblockverifier/FakeBlockVerifier.h>
 #include <test/unittests/libsync/FakeBlockSync.h>
@@ -39,7 +39,7 @@ using namespace std;
 using namespace bcos;
 using namespace bcos::test;
 using namespace bcos::consensus;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::p2p;
 using namespace bcos::network;
 

@@ -21,8 +21,8 @@
  * @date: 2020-06-03
  */
 #pragma once
-#include <libethcore/ABI.h>
-#include <libethcore/Transaction.h>
+#include <libprotocol/ABI.h>
+#include <libprotocol/Transaction.h>
 
 #define TXGEN_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("TxGenerator")
 namespace bcos
@@ -39,13 +39,14 @@ public:
 
     // Specify interface declarations, from and to, generate unsigned transactions
     template <class... T>
-    bcos::eth::Transaction::Ptr generateTransactionWithoutSig(std::string _interface,
-        bcos::eth::BlockNumber const& _currentNumber, Address const& _to,
-        bcos::eth::Transaction::Type const& _type, T const&... _params)
+    bcos::protocol::Transaction::Ptr generateTransactionWithoutSig(std::string _interface,
+        bcos::protocol::BlockNumber const& _currentNumber, Address const& _to,
+        bcos::protocol::Transaction::Type const& _type, T const&... _params)
     {
-        bcos::eth::Transaction::Ptr generatedTx = std::make_shared<bcos::eth::Transaction>();
+        bcos::protocol::Transaction::Ptr generatedTx =
+            std::make_shared<bcos::protocol::Transaction>();
         // get transaction data according to interface and params
-        bcos::eth::ContractABI abiObject;
+        bcos::protocol::ContractABI abiObject;
         std::shared_ptr<bcos::bytes> data = std::make_shared<bcos::bytes>();
         *data = abiObject.abiIn(_interface, _params...);
         // set fields for the transaction
@@ -62,14 +63,15 @@ public:
 
     // Specify interface declaration, from and to, generate signed transaction
     template <class... T>
-    bcos::eth::Transaction::Ptr generateTransactionWithSig(std::string _interface,
-        bcos::eth::BlockNumber const& _currentNumber, Address const& _to, KeyPair const& _keyPair,
-        bcos::eth::Transaction::Type const& _type, T const&... _params)
+    bcos::protocol::Transaction::Ptr generateTransactionWithSig(std::string _interface,
+        bcos::protocol::BlockNumber const& _currentNumber, Address const& _to,
+        KeyPair const& _keyPair, bcos::protocol::Transaction::Type const& _type,
+        T const&... _params)
     {
         auto generatedTx =
             generateTransactionWithoutSig(_interface, _currentNumber, _to, _type, _params...);
         // sign with KeyPair for the generated transaction
-        auto hashToSign = generatedTx->hash(bcos::eth::IncludeSignature::WithoutSignature);
+        auto hashToSign = generatedTx->hash(bcos::protocol::IncludeSignature::WithoutSignature);
         auto sign = bcos::crypto::Sign(_keyPair, hashToSign);
         generatedTx->updateSignature(sign);
         TXGEN_LOG(DEBUG) << LOG_DESC("generateTransactionWithSig")

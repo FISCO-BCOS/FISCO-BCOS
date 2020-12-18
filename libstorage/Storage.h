@@ -21,7 +21,7 @@
 #pragma once
 
 #include "Table.h"
-#include <libethcore/Protocol.h>
+#include <libprotocol/Protocol.h>
 #include <libutilities/FixedBytes.h>
 
 namespace bcos

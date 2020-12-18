@@ -21,9 +21,9 @@
 #include "CNSPrecompiled.h"
 #include <json/json.h>
 #include <libblockverifier/ExecutiveContext.h>
-#include <libethcore/ABI.h>
 #include <libprecompiled/EntriesPrecompiled.h>
 #include <libprecompiled/TableFactoryPrecompiled.h>
+#include <libprotocol/ABI.h>
 
 using namespace std;
 using namespace bcos;
@@ -132,7 +132,7 @@ PrecompiledExecResult::Ptr CNSPrecompiled::call(
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
 
-    bcos::eth::ContractABI abi;
+    bcos::protocol::ContractABI abi;
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
 
     callResult->gasPricer()->setMemUsed(param.size());

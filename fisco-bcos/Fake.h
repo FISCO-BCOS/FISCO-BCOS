@@ -30,10 +30,10 @@
 #include <libblockchain/BlockChainInterface.h>
 #include <libblockverifier/BlockVerifierInterface.h>
 #include <libdevcrypto/Common.h>
-#include <libethcore/Block.h>
-#include <libethcore/CommonJS.h>
-#include <libethcore/Transaction.h>
-#include <libethcore/TransactionReceipt.h>
+#include <libprotocol/Block.h>
+#include <libprotocol/CommonJS.h>
+#include <libprotocol/Transaction.h>
+#include <libprotocol/TransactionReceipt.h>
 #include <libeventfilter/EventLogFilterManager.h>
 #include <libledger/Ledger.h>
 #include <libledger/LedgerParam.h>
@@ -44,7 +44,7 @@
 
 using namespace bcos;
 using namespace bcos::blockchain;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::sync;
 using namespace bcos::blockverifier;
 using namespace bcos::ledger;
@@ -95,7 +95,7 @@ public:
         return m_blockChain[_i]->headerHash();
     }
 
-    std::shared_ptr<bcos::eth::Block> getBlockByHash(
+    std::shared_ptr<bcos::protocol::Block> getBlockByHash(
         bcos::h256 const& _blockHash, int64_t = -1) override
     {
         ReadGuard l(x_blockChain);
@@ -109,37 +109,37 @@ public:
         return getBlockByHash(numberHash(_i))->rlpP();
     }
 
-    bcos::eth::LocalisedTransaction::Ptr getLocalisedTxByHash(bcos::h256 const&) override
+    bcos::protocol::LocalisedTransaction::Ptr getLocalisedTxByHash(bcos::h256 const&) override
     {
         return std::make_shared<LocalisedTransaction>();
     }
-    bcos::eth::Transaction::Ptr getTxByHash(bcos::h256 const&) override
+    bcos::protocol::Transaction::Ptr getTxByHash(bcos::h256 const&) override
     {
         return std::make_shared<Transaction>();
     }
-    bcos::eth::TransactionReceipt::Ptr getTransactionReceiptByHash(bcos::h256 const&) override
+    bcos::protocol::TransactionReceipt::Ptr getTransactionReceiptByHash(bcos::h256 const&) override
     {
         return std::make_shared<TransactionReceipt>();
     }
 
-    bcos::eth::LocalisedTransactionReceipt::Ptr getLocalisedTxReceiptByHash(
+    bcos::protocol::LocalisedTransactionReceipt::Ptr getLocalisedTxReceiptByHash(
         bcos::h256 const&) override
     {
         return std::make_shared<LocalisedTransactionReceipt>(
             TransactionReceipt(), h256(0), h256(0), -1, Address(), Address(), -1, 0);
     }
 
-    std::shared_ptr<bcos::eth::Block> getBlockByNumber(int64_t _i) override
+    std::shared_ptr<bcos::protocol::Block> getBlockByNumber(int64_t _i) override
     {
         return getBlockByHash(numberHash(_i));
     }
-    std::pair<bcos::eth::LocalisedTransactionReceipt::Ptr,
+    std::pair<bcos::protocol::LocalisedTransactionReceipt::Ptr,
         std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>>
     getTransactionReceiptByHashWithProof(
-        bcos::h256 const&, bcos::eth::LocalisedTransaction&) override
+        bcos::h256 const&, bcos::protocol::LocalisedTransaction&) override
     {
         return std::make_pair(
-            std::make_shared<LocalisedTransactionReceipt>(bcos::eth::TransactionException::None),
+            std::make_shared<LocalisedTransactionReceipt>(bcos::protocol::TransactionException::None),
             std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>());
     }
     std::pair<LocalisedTransaction::Ptr,
@@ -149,7 +149,7 @@ public:
         return std::make_pair(std::make_shared<LocalisedTransaction>(),
             std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>());
     }
-    CommitResult commitBlock(std::shared_ptr<bcos::eth::Block> block,
+    CommitResult commitBlock(std::shared_ptr<bcos::protocol::Block> block,
         std::shared_ptr<bcos::blockverifier::ExecutiveContext>) override
     {
         if (block->blockHeader().number() == number() + 1)
@@ -166,9 +166,9 @@ public:
         return CommitResult::OK;
     }
 
-    std::shared_ptr<std::vector<bcos::eth::NonceKeyType>> getNonces(int64_t) override
+    std::shared_ptr<std::vector<bcos::protocol::NonceKeyType>> getNonces(int64_t) override
     {
-        return std::make_shared<std::vector<bcos::eth::NonceKeyType>>();
+        return std::make_shared<std::vector<bcos::protocol::NonceKeyType>>();
     }
 
     bool checkAndBuildGenesisBlock(
@@ -214,7 +214,7 @@ public:
     PROTOCOL_ID const& protocolId() const override { return m_protocolID; };
     void setProtocolId(PROTOCOL_ID const) override{};
 
-    void registerConsensusVerifyHandler(std::function<bool(bcos::eth::Block const&)>) override{};
+    void registerConsensusVerifyHandler(std::function<bool(bcos::protocol::Block const&)>) override{};
 
 private:
     SyncStatus m_status;
@@ -231,7 +231,7 @@ public:
     };
     virtual ~FakeBlockVerifier(){};
     std::shared_ptr<ExecutiveContext> executeBlock(
-        bcos::eth::Block& block, BlockInfo const&) override
+        bcos::protocol::Block& block, BlockInfo const&) override
     {
         /// execute time: 1000
         /// usleep(1000 * (block.getTransactionSize()));
@@ -239,24 +239,24 @@ public:
         return m_executiveContext;
     };
     /// fake the transaction receipt of the whole block
-    void fakeExecuteResult(bcos::eth::Block& block)
+    void fakeExecuteResult(bcos::protocol::Block& block)
     {
         std::shared_ptr<TransactionReceipts> receipts = std::make_shared<TransactionReceipts>();
         for (unsigned index = 0; index < block.getTransactionSize(); index++)
         {
             TransactionReceipt::Ptr receipt = std::make_shared<TransactionReceipt>(u256(0),
-                u256(100), LogEntries(), eth::TransactionException::None, bytes(),
+                u256(100), LogEntries(), protocol::TransactionException::None, bytes(),
                 (*block.transactions())[index]->receiveAddress());
             receipts->push_back(receipt);
         }
         block.setTransactionReceipts(receipts);
     }
 
-    bcos::eth::TransactionReceipt::Ptr executeTransaction(
-        const bcos::eth::BlockHeader&, bcos::eth::Transaction::Ptr) override
+    bcos::protocol::TransactionReceipt::Ptr executeTransaction(
+        const bcos::protocol::BlockHeader&, bcos::protocol::Transaction::Ptr) override
     {
-        bcos::eth::TransactionReceipt::Ptr receipt =
-            std::make_shared<bcos::eth::TransactionReceipt>();
+        bcos::protocol::TransactionReceipt::Ptr receipt =
+            std::make_shared<bcos::protocol::TransactionReceipt>();
         return receipt;
     }
 

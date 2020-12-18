@@ -23,9 +23,9 @@
 #include "TxDAG.h"
 #include "libstorage/StorageException.h"
 #include "libstoragestate/StorageState.h"
-#include <libethcore/Exceptions.h>
-#include <libethcore/PrecompiledContract.h>
-#include <libethcore/TransactionReceipt.h>
+#include <libprotocol/Exceptions.h>
+#include <libprotocol/PrecompiledContract.h>
+#include <libprotocol/TransactionReceipt.h>
 #include <libstorage/Table.h>
 #include <tbb/parallel_for.h>
 #include <exception>
@@ -33,7 +33,7 @@
 
 using namespace bcos;
 using namespace std;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::blockverifier;
 using namespace bcos::executive;
 using namespace bcos::storage;
@@ -382,7 +382,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
 
 
 TransactionReceipt::Ptr BlockVerifier::executeTransaction(
-    const BlockHeader& blockHeader, bcos::eth::Transaction::Ptr _t)
+    const BlockHeader& blockHeader, bcos::protocol::Transaction::Ptr _t)
 {
     ExecutiveContext::Ptr executiveContext = std::make_shared<ExecutiveContext>();
     BlockInfo blockInfo{blockHeader.hash(), blockHeader.number(), blockHeader.stateRoot()};
@@ -404,7 +404,7 @@ TransactionReceipt::Ptr BlockVerifier::executeTransaction(
     return execute(_t, executiveContext, executive);
 }
 
-bcos::eth::TransactionReceipt::Ptr BlockVerifier::execute(bcos::eth::Transaction::Ptr _t,
+bcos::protocol::TransactionReceipt::Ptr BlockVerifier::execute(bcos::protocol::Transaction::Ptr _t,
     bcos::blockverifier::ExecutiveContext::Ptr executiveContext, Executive::Ptr executive)
 {
     // Create and initialize the executive. This will throw fairly cheaply and quickly if the

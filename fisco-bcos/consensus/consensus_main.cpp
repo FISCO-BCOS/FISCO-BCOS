@@ -24,12 +24,12 @@
 #include "ParamParse.h"
 
 #include <libconfig/GlobalConfigure.h>
-#include <libethcore/Protocol.h>
 #include <libinitializer/Initializer.h>
 #include <libinitializer/LedgerInitializer.h>
 #include <libinitializer/P2PInitializer.h>
 #include <libinitializer/SecureInitializer.h>
 #include <libledger/LedgerManager.h>
+#include <libprotocol/Protocol.h>
 #include <libtxpool/TxPool.h>
 
 using namespace bcos;
@@ -38,7 +38,7 @@ using namespace bcos::initializer;
 using namespace bcos::txpool;
 
 #define CONSENSUS_MAIN_LOG(LEVEL) LOG(LEVEL) << "[CONSENSUS_MAIN] "
-static void rpcCallbackTest(bcos::eth::LocalisedTransactionReceipt::Ptr receiptPtr)
+static void rpcCallbackTest(bcos::protocol::LocalisedTransactionReceipt::Ptr receiptPtr)
 {
     CONSENSUS_MAIN_LOG(TRACE) << "[rpcCallbackTest] [blockNumber/txHash/blockHash]:  "
                               << receiptPtr->blockNumber() << "/" << receiptPtr->hash() << "/"
@@ -79,8 +79,8 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
             "a1e0a42d199ea979a016c387f79eb85078be5db40abe1670b8b480a12c7eab719bedee212b7972f77"
             "5");
     }
-    bcos::eth::Transaction::Ptr tx =
-        std::make_shared<bcos::eth::Transaction>(ref(rlpBytes), bcos::eth::CheckTransaction::None);
+    bcos::protocol::Transaction::Ptr tx = std::make_shared<bcos::protocol::Transaction>(
+        ref(rlpBytes), bcos::protocol::CheckTransaction::None);
 
     /// Transaction tx(value, gasPrice, gas, dst, data);
     auto keyPair = KeyPair::create();

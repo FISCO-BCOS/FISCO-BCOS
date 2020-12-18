@@ -26,13 +26,13 @@
 #include "libdevcrypto/CryptoInterface.h"
 #include <fisco-bcos/Fake.h>
 #include <libconfig/GlobalConfigure.h>
-#include <libethcore/Protocol.h>
 #include <libinitializer/Initializer.h>
 #include <libinitializer/LedgerInitializer.h>
 #include <libinitializer/P2PInitializer.h>
 #include <libinitializer/SecureInitializer.h>
 #include <libledger/LedgerManager.h>
 #include <libp2p/P2PInterface.h>
+#include <libprotocol/Protocol.h>
 #include <libsync/Common.h>
 #include <libsync/SyncMaster.h>
 #include <libtxpool/TxPool.h>
@@ -40,7 +40,7 @@
 
 using namespace std;
 using namespace bcos;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::ledger;
 using namespace bcos::initializer;
 using namespace bcos::p2p;

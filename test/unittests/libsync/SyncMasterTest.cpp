@@ -22,7 +22,7 @@
  */
 
 #include <json/json.h>
-#include <libethcore/Transaction.h>
+#include <libprotocol/Transaction.h>
 #include <libsync/Common.h>
 #include <libsync/SyncMaster.h>
 #include <libsync/SyncMsgEngine.h>
@@ -34,7 +34,7 @@
 
 using namespace std;
 using namespace bcos;
-using namespace bcos::eth;
+using namespace bcos::protocol;
 using namespace bcos::sync;
 using namespace bcos::blockverifier;
 
@@ -108,7 +108,7 @@ public:
             std::make_shared<FakeSyncMaster>(txpool_creator.m_topicService, txpool_creator.m_txPool,
                 txpool_creator.m_blockChain, blockVerifier, c_protocolId, _nodeId, m_genesisHash);
         fakeSyncMaster->registerConsensusVerifyHandler(
-            [](bcos::eth::Block const&) { return true; });
+            [](bcos::protocol::Block const&) { return true; });
         std::shared_ptr<DownloadingTxsQueue> txQueue =
             std::make_shared<DownloadingTxsQueue>(c_protocolId, _nodeId);
         return FakeSyncToolsSet{fakeSyncMaster, txpool_creator.m_topicService,

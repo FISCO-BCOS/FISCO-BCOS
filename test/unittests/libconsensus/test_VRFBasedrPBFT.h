@@ -64,7 +64,7 @@ public:
         return storageFixture->getSystemConfigByKey(_key);
     }
 
-    std::pair<std::string, bcos::eth::BlockNumber> getSystemConfigInfoByKey(
+    std::pair<std::string, bcos::protocol::BlockNumber> getSystemConfigInfoByKey(
         std::string const& _key, int64_t const&) override
     {
         return storageFixture->getSystemConfigAndEnableNumByKey(_key);
@@ -102,7 +102,7 @@ public:
       : VRFBasedrPBFTEngine(_service, _txPool, _blockChain, _blockSync, _blockVerifier, _protocolId,
             _keyPair, _sealerList)
     {
-        m_blockFactory = std::make_shared<bcos::eth::BlockFactory>();
+        m_blockFactory = std::make_shared<bcos::protocol::BlockFactory>();
         setEnableTTLOptimize(true);
         createPBFTMsgFactory();
         createPBFTReqCache();
@@ -116,7 +116,8 @@ public:
         return VRFBasedrPBFTEngine::updateConsensusNodeList();
     }
     void resetConfig() override { return VRFBasedrPBFTEngine::resetConfig(); }
-    void checkTransactionsValid(bcos::eth::Block::Ptr _block, PrepareReq::Ptr _prepareReq) override
+    void checkTransactionsValid(
+        bcos::protocol::Block::Ptr _block, PrepareReq::Ptr _prepareReq) override
     {
         return VRFBasedrPBFTEngine::checkTransactionsValid(_block, _prepareReq);
     }
@@ -219,7 +220,7 @@ public:
         m_vrfBasedrPBFTSealer->setConsensusEngine(m_VRFBasedrPBFT);
         m_vrfBasedrPBFTSealer->initConsensusEngine();
         m_vrfBasedrPBFTSealer->mutableSealing().setBlockFactory(
-            std::make_shared<bcos::eth::BlockFactory>());
+            std::make_shared<bcos::protocol::BlockFactory>());
     }
 
     FakeVRFBasedrPBFTEngine::Ptr vrfBasedrPBFT() { return m_VRFBasedrPBFT; }

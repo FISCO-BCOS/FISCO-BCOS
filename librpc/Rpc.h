@@ -29,10 +29,10 @@
 #include "librpc/ModularServer.h"  // for ServerInterface<>::RPCModule, Serv...
 #include "libutilities/Common.h"   // for bytes
 #include <json/value.h>            // for Value
-#include <libethcore/Transaction.h>
 #include <libinitializer/LedgerInitializer.h>
 #include <libledger/LedgerManager.h>
 #include <libprecompiled/Common.h>
+#include <libprotocol/Transaction.h>
 #include <boost/thread/tss.hpp>  // for thread_specific_ptr
 #include <string>                // for string
 
@@ -180,24 +180,25 @@ protected:
         std::function<std::shared_ptr<Json::Value>(
             std::weak_ptr<bcos::blockchain::BlockChainInterface> _blockChain,
             LocalisedTransactionReceipt::Ptr receipt, bcos::bytesConstRef input,
-            bcos::eth::Block::Ptr _blockPtr)>
+            bcos::protocol::Block::Ptr _blockPtr)>
             _notifyCallback);
 
     std::shared_ptr<Json::Value> notifyReceipt(
         std::weak_ptr<bcos::blockchain::BlockChainInterface> _blockChain,
         LocalisedTransactionReceipt::Ptr receipt, bcos::bytesConstRef input,
-        bcos::eth::Block::Ptr _blockPtr);
+        bcos::protocol::Block::Ptr _blockPtr);
 
     std::shared_ptr<Json::Value> notifyReceiptWithProof(
         std::weak_ptr<bcos::blockchain::BlockChainInterface> _blockChain,
         LocalisedTransactionReceipt::Ptr receipt, bcos::bytesConstRef input,
-        bcos::eth::Block::Ptr _blockPtr);
+        bcos::protocol::Block::Ptr _blockPtr);
 
     void addProofToResponse(std::shared_ptr<Json::Value> _response, std::string const& _key,
         std::shared_ptr<bcos::blockchain::MerkleProofType> _proofList);
 
-    void generateBlockHeaderInfo(Json::Value& _response, bcos::eth::BlockHeader const& _blockHeader,
-        bcos::eth::Block::SigListPtrType _signatureList, bool _includeSigList);
+    void generateBlockHeaderInfo(Json::Value& _response,
+        bcos::protocol::BlockHeader const& _blockHeader,
+        bcos::protocol::Block::SigListPtrType _signatureList, bool _includeSigList);
 
 
     std::shared_ptr<bcos::ledger::LedgerManager> m_ledgerManager;
@@ -248,12 +249,12 @@ private:
         int64_t _blockNumber, int64_t _txIndex, Transaction::Ptr _tx, bool onChain = true);
 
     void parseReceiptIntoResponse(Json::Value& _response, bcos::bytesConstRef _input,
-        bcos::eth::LocalisedTransactionReceipt::Ptr _receipt);
+        bcos::protocol::LocalisedTransactionReceipt::Ptr _receipt);
 
     void parseSignatureIntoResponse(
-        Json::Value& _response, bcos::eth::Block::SigListPtrType _signatureList);
+        Json::Value& _response, bcos::protocol::Block::SigListPtrType _signatureList);
 
-    void getBatchReceipts(Json::Value& _response, bcos::eth::Block::Ptr _block,
+    void getBatchReceipts(Json::Value& _response, bcos::protocol::Block::Ptr _block,
         std::string const& _from, std::string const& _size, bool _compress);
 };
 

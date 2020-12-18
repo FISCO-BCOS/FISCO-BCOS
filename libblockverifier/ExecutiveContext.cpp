@@ -21,15 +21,15 @@
 
 #include "ExecutiveContext.h"
 
-#include <libethcore/ABIParser.h>
-#include <libethcore/Exceptions.h>
 #include <libprecompiled/ParallelConfigPrecompiled.h>
+#include <libprotocol/ABIParser.h>
+#include <libprotocol/Exceptions.h>
 #include <libstorage/StorageException.h>
 #include <libstorage/Table.h>
 
 using namespace bcos::executive;
-using namespace bcos::eth;
-using namespace bcos::eth::abi;
+using namespace bcos::protocol;
+using namespace bcos::protocol::abi;
 using namespace bcos::blockverifier;
 using namespace bcos;
 using namespace std;
@@ -84,7 +84,7 @@ bcos::precompiled::PrecompiledExecResult::Ptr ExecutiveContext::call(
         EXECUTIVECONTEXT_LOG(ERROR) << LOG_DESC("[call]Precompiled call error")
                                     << LOG_KV("EINFO", boost::diagnostic_information(e));
 
-        throw bcos::eth::PrecompiledError();
+        throw bcos::protocol::PrecompiledError();
     }
 }
 

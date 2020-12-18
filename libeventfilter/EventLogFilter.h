@@ -22,9 +22,9 @@
  */
 
 #pragma once
-#include <libethcore/Block.h>
-#include <libethcore/LogEntry.h>
 #include <libeventfilter/EventLogFilterParams.h>
+#include <libprotocol/Block.h>
+#include <libprotocol/LogEntry.h>
 namespace bcos
 {
 namespace event
@@ -36,8 +36,8 @@ public:
 
 public:
     // constructor function
-    EventLogFilter(
-        EventLogFilterParams::Ptr _params, eth::BlockNumber _nextBlockToProcess, uint32_t _version)
+    EventLogFilter(EventLogFilterParams::Ptr _params, protocol::BlockNumber _nextBlockToProcess,
+        uint32_t _version)
       : m_params(_params),
         m_nextBlockToProcess(_nextBlockToProcess),
         m_channelProtocolVersion(_version)
@@ -47,7 +47,7 @@ public:
     // m_params
     EventLogFilterParams::Ptr getParams() const { return m_params; }
     // m_nextBlockToProcess
-    eth::BlockNumber getNextBlockToProcess() const { return m_nextBlockToProcess; }
+    protocol::BlockNumber getNextBlockToProcess() const { return m_nextBlockToProcess; }
     // m_responseCallback
     std::function<bool(const std::string& _filterID, int32_t _result, const Json::Value& _logs,
         GROUP_ID const& _groupId)>
@@ -62,7 +62,7 @@ public:
     bool pushCompleted() const { return m_nextBlockToProcess > m_params->getToBlock(); }
 
     // update m_nextBlockToProcess
-    void updateNextBlockToProcess(eth::BlockNumber _nextBlockToProcess)
+    void updateNextBlockToProcess(protocol::BlockNumber _nextBlockToProcess)
     {
         m_nextBlockToProcess = _nextBlockToProcess;
     }
@@ -81,15 +81,15 @@ public:
 
     uint32_t getChannelProtocolVersion() const { return m_channelProtocolVersion; }
 
-    void matches(eth::Block const& _block, Json::Value& _result);
+    void matches(protocol::Block const& _block, Json::Value& _result);
     // filter individual log to see if the requirements are met
-    bool matches(eth::LogEntry const& _log);
+    bool matches(protocol::LogEntry const& _log);
 
 private:
     // event filter params generate from client request.
     EventLogFilterParams::Ptr m_params;
     // next block number to be processed.
-    eth::BlockNumber m_nextBlockToProcess;
+    protocol::BlockNumber m_nextBlockToProcess;
     // channel protocol version
     uint32_t m_channelProtocolVersion;
     // response callback function
