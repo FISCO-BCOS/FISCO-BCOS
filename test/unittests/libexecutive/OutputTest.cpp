@@ -24,8 +24,8 @@
 #include <libprecompiled/ChainGovernancePrecompiled.h>
 #include <libprecompiled/ContractLifeCyclePrecompiled.h>
 #include <libprecompiled/TableFactoryPrecompiled.h>
-#include <libprotocol/ABI.h>
 #include <libprotocol/Block.h>
+#include <libprotocol/ContractABICodec.h>
 #include <libprotocol/Transaction.h>
 #include <libstorage/MemoryTableFactoryFactory.h>
 #include <libstoragestate/StorageState.h>
@@ -212,7 +212,7 @@ BOOST_FIXTURE_TEST_SUITE(Output, OutputFixture)
 
 BOOST_AUTO_TEST_CASE(accountLiftCycle)
 {
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
     bytes in;
     bytes out;
     s256 result = 0;
@@ -257,7 +257,7 @@ BOOST_AUTO_TEST_CASE(call)
 {
     LOG(INFO) << LOG_BADGE("OutputTest") << LOG_DESC("freeze");
 
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
     bytes in;
     bytes out;
     s256 result = 0;

@@ -20,9 +20,9 @@
  */
 
 #include "JsonHelper.h"
+#include "libprotocol/Common.h"
+#include "libutilities/JsonDataConvertUtility.h"
 #include <jsonrpccpp/common/exception.h>
-#include <libprotocol/CommonJS.h>
-#include <libprotocol/Transaction.h>
 
 using namespace std;
 using namespace bcos::protocol;
@@ -38,10 +38,10 @@ TransactionSkeleton toTransactionSkeleton(Json::Value const& _json)
         return ret;
 
     if (!_json["from"].empty())
-        ret.from = jsToAddress(_json["from"].asString());
+        ret.from = jsonStringToAddress(_json["from"].asString());
     if ((!_json["to"].empty()) && (!_json["to"].asString().empty()) &&
         _json["to"].asString() != "0x")
-        ret.to = jsToAddress(_json["to"].asString());
+        ret.to = jsonStringToAddress(_json["to"].asString());
     else
         ret.creation = true;
 

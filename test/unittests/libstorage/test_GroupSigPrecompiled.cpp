@@ -22,7 +22,7 @@
 #include "Common.h"
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libprecompiled/extension/GroupSigPrecompiled.h>
-#include <libprotocol/ABI.h>
+#include <libprotocol/ContractABICodec.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 
@@ -133,7 +133,7 @@ BOOST_AUTO_TEST_CASE(TestGroupSigVerify)
         "IwNTg0NjEyNzQ3OTM2NTgyMDU5MjM5MzM3NzcyMzU2MTQ0MzcyMTc2NDAzMDA3MzU0Njk3NjgwMTg3NDI5ODE2Njkw"
         "MzQyNzY5MDAzMTg1ODE4NjQ4NjA1MDg1Mzc1Mzg4MjgxMTk0NjU2OTk0NjQzMzY0NDcxMTExNjgwMSBleHAyIDUxMi"
         "BleHAxIDMyIHNpZ24xIC0xIHNpZ24wIDE=";
-    bcos::protocol::ContractABI abi;
+    bcos::protocol::ContractABICodec abi;
     bytes in = abi.abiIn(
         "groupSigVerify(string,string,string,string)", signature, message1, gpkInfo, paramInfo);
     auto execResult = groupSigPrecompiled->call(context, bytesConstRef(&in));
@@ -158,7 +158,7 @@ BOOST_AUTO_TEST_CASE(TestGroupSigVerify)
 
 BOOST_AUTO_TEST_CASE(ErrorFunc)
 {
-    bcos::protocol::ContractABI abi;
+    bcos::protocol::ContractABICodec abi;
     bytes in = abi.abiIn("groupSigVerify(string)", std::string("2AE3FFE2"));
     auto execResult = groupSigPrecompiled->call(context, bytesConstRef(&in));
     bytes out = execResult->execResult();
@@ -170,7 +170,7 @@ BOOST_AUTO_TEST_CASE(ErrorFunc)
 BOOST_AUTO_TEST_CASE(InvalidInputs)
 {
     // situation1
-    bcos::protocol::ContractABI abi;
+    bcos::protocol::ContractABICodec abi;
     bytes in = abi.abiIn("groupSigVerify(string,string,string,string)", std::string("2AE3FFE2"),
         std::string("2AE3FFE2"), std::string("2AE3FFE2"), std::string("2AE3FFE2"));
     auto execResult = groupSigPrecompiled->call(context, bytesConstRef(&in));

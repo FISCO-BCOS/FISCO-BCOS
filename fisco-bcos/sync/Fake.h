@@ -32,7 +32,6 @@
 #include <libinitializer/SecureInitializer.h>
 #include <libprotocol/Block.h>
 #include <libprotocol/BlockHeader.h>
-#include <libprotocol/CommonJS.h>
 #include <libprotocol/Transaction.h>
 #include <libsync/Common.h>
 #include <libsync/SyncInterface.h>

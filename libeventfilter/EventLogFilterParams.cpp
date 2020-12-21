@@ -1,7 +1,5 @@
 #include "EventLogFilterParams.h"
 #include "json/json.h"
-#include <libprotocol/Common.h>
-#include <libprotocol/CommonJS.h>
 
 using namespace bcos;
 using namespace bcos::protocol;
@@ -24,7 +22,7 @@ bool EventLogFilterParams::getGroupIDField(const Json::Value& _json, GROUP_ID& _
     // groupID field
     if (_json.isMember("groupID"))
     {  // groupID field not exist
-        int groupID = jonStringToInt(_json["groupID"].asString());
+        int groupID = jsonStringToInt(_json["groupID"].asString());
         if (validGroupID(groupID))
         {
             _groupID = (GROUP_ID)groupID;
@@ -42,7 +40,8 @@ bool EventLogFilterParams::getFromBlockField(const Json::Value& _json, BlockNumb
     if (_json.isMember("fromBlock"))
     {
         std::string strFromBlock = _json["fromBlock"].asString();
-        _startBlock = (strFromBlock == "latest" ? MAX_BLOCK_NUMBER : jsToBlockNumber(strFromBlock));
+        _startBlock =
+            (strFromBlock == "latest" ? MAX_BLOCK_NUMBER : jsonStringToBlockNumber(strFromBlock));
     }
     else
     {
@@ -58,7 +57,8 @@ bool EventLogFilterParams::getToBlockField(const Json::Value& _json, BlockNumber
     if (_json.isMember("toBlock"))
     {
         std::string strEndBlock = _json["toBlock"].asString();
-        _endBlock = (strEndBlock == "latest" ? MAX_BLOCK_NUMBER : jsToBlockNumber(strEndBlock));
+        _endBlock =
+            (strEndBlock == "latest" ? MAX_BLOCK_NUMBER : jsonStringToBlockNumber(strEndBlock));
     }
     else
     {
@@ -81,12 +81,12 @@ bool EventLogFilterParams::getAddressField(
     {  // Multiple addresses
         for (auto i : _json["addresses"])
         {
-            params->addAddress(jsToAddress(i.asString()));
+            params->addAddress(jsonStringToAddress(i.asString()));
         }
     }
     else
     {  // Single address
-        params->addAddress(jsToAddress(_json["addresses"].asString()));
+        params->addAddress(jsonStringToAddress(_json["addresses"].asString()));
     }
 
     return true;

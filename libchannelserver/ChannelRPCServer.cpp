@@ -33,12 +33,12 @@
 #include "libp2p/P2PInterface.h"                // for P2PInterface
 #include "libp2p/P2PMessageFactory.h"           // for P2PMessageFac...
 #include "libp2p/P2PSession.h"                  // for P2PSession
-#include "libprotocol/Protocol.h"               // for AMOP, ProtocolID
 #include "libutilities/Common.h"                // for bytes, byte
 #include <json/json.h>
 #include <libeventfilter/Common.h>
 #include <libp2p/P2PMessage.h>
 #include <libp2p/Service.h>
+#include <libprotocol/CommonProtocolType.h>
 #include <librpc/StatisticProtocolServer.h>
 #include <unistd.h>
 #include <boost/algorithm/string/classification.hpp>

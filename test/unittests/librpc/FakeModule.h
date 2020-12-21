@@ -29,8 +29,6 @@
 #include <libconsensus/ConsensusInterface.h>
 #include <libledger/LedgerManager.h>
 #include <libp2p/Service.h>
-#include <libprotocol/Common.h>
-#include <libprotocol/CommonJS.h>
 #include <libprotocol/Transaction.h>
 #include <libsync/SyncInterface.h>
 #include <libtxpool/TxPoolInterface.h>
@@ -482,16 +480,8 @@ public:
     {
         return make_pair(_tx->hash(), toAddress(_tx->from(), _tx->nonce()));
     }
-    bcos::protocol::ImportResult import(bcos::protocol::Transaction::Ptr,
-        bcos::protocol::IfDropped = bcos::protocol::IfDropped::Ignore) override
-    {
-        return ImportResult::Success;
-    }
-    bcos::protocol::ImportResult import(
-        bytesConstRef, bcos::protocol::IfDropped = bcos::protocol::IfDropped::Ignore)
-    {
-        return ImportResult::Success;
-    }
+    ImportResult import(bcos::protocol::Transaction::Ptr) override { return ImportResult::Success; }
+    ImportResult import(bytesConstRef) { return ImportResult::Success; }
 
 private:
     std::shared_ptr<Transactions> transactions;

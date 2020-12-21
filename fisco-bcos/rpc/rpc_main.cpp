@@ -20,7 +20,6 @@
  */
 #include "WebsocketServer.h"
 #include <libdevcrypto/Common.h>
-#include <libprotocol/CommonJS.h>
 #include <librpc/Rpc.h>
 #include <librpc/SafeHttpServer.h>
 

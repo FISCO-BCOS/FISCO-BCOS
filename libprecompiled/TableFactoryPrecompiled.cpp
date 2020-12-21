@@ -27,7 +27,7 @@
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcrypto/Common.h>
 #include <libdevcrypto/Hash.h>
-#include <libprotocol/ABI.h>
+#include <libprotocol/ContractABICodec.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
@@ -61,7 +61,7 @@ PrecompiledExecResult::Ptr TableFactoryPrecompiled::call(ExecutiveContext::Ptr c
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
 
-    bcos::protocol::ContractABI abi;
+    bcos::protocol::ContractABICodec abi;
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
     callResult->gasPricer()->setMemUsed(param.size());
 

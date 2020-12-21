@@ -21,9 +21,7 @@
 #pragma once
 #include "Common.h"
 #include <libblockverifier/ExecutiveContext.h>
-#include <libprotocol/ABI.h>
-
-#include <libprotocol/Common.h>
+#include <libprotocol/ContractABICodec.h>
 #include <libutilities/Common.h>
 
 namespace bcos

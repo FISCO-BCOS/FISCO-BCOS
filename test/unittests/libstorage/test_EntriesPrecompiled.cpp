@@ -19,7 +19,7 @@
 #include <libblockverifier/ExecutiveContext.h>
 #include <libprecompiled/EntriesPrecompiled.h>
 #include <libprecompiled/EntryPrecompiled.h>
-#include <libprotocol/ABI.h>
+#include <libprotocol/ContractABICodec.h>
 #include <libstorage/Table.h>
 #include <boost/test/unit_test.hpp>
 
@@ -75,7 +75,7 @@ BOOST_AUTO_TEST_CASE(testGet)
     entry->setField("key", "hello");
     entries->addEntry(entry);
     u256 num = u256(0);
-    ContractABI abi;
+    ContractABICodec abi;
     bytes bint = abi.abiIn("get(int256)", num);
     auto callResult = entriesPrecompiled->call(precompiledContext, bytesConstRef(&bint));
     bytes out = callResult->execResult();
@@ -89,7 +89,7 @@ BOOST_AUTO_TEST_CASE(testSize)
 {
     entry->setField("key", "hello");
     entries->addEntry(entry);
-    ContractABI abi;
+    ContractABICodec abi;
     bytes bint = abi.abiIn("size()");
     auto callResult = entriesPrecompiled->call(precompiledContext, bytesConstRef(&bint));
     bytes out = callResult->execResult();

@@ -22,7 +22,7 @@
 #include "Common.h"
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libprecompiled/extension/RingSigPrecompiled.h>
-#include <libprotocol/ABI.h>
+#include <libprotocol/ContractABICodec.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 
@@ -96,7 +96,7 @@ BOOST_AUTO_TEST_CASE(TestRingSigVerify)
         "AzMDIxMjQ3NjY0NzA0MjA3NTY0NTg4OTIyNzA5MTA0NjQ0OTgzMDcwMTAzOTA4NDY5MjkyODUxMTgzODAwNjM5ODk5"
         "MjA3Nzg2NTA2NjczNzQwODI5OTQyMDU1MDExODY4MTU4NDMzMzM1MjY2NDk2NDg4MDQxMjg0NjM2OTgzNzI1OTY2Nz"
         "gzOTM4NTQ4MjI2NzIxNTQ1MjU4NDYzOTcwNjA5NTMwMzQwOS4ifQ==";
-    bcos::protocol::ContractABI abi;
+    bcos::protocol::ContractABICodec abi;
     bytes in = abi.abiIn("ringSigVerify(string,string,string)", signature, message1, paramInfo);
     auto callResult = ringSigPrecompiled->call(context, bytesConstRef(&in));
     bytes out = callResult->execResult();
@@ -118,7 +118,7 @@ BOOST_AUTO_TEST_CASE(TestRingSigVerify)
 
 BOOST_AUTO_TEST_CASE(ErrorFunc)
 {
-    bcos::protocol::ContractABI abi;
+    bcos::protocol::ContractABICodec abi;
     bytes in = abi.abiIn("ringSigVerify(string)", std::string("2AE3FFE2"));
     auto callResult = ringSigPrecompiled->call(context, bytesConstRef(&in));
     bytes out = callResult->execResult();
@@ -130,7 +130,7 @@ BOOST_AUTO_TEST_CASE(ErrorFunc)
 BOOST_AUTO_TEST_CASE(InvalidInputs)
 {
     // situation1
-    bcos::protocol::ContractABI abi;
+    bcos::protocol::ContractABICodec abi;
     bytes in = abi.abiIn("ringSigVerify(string,string,string)", std::string("2AE3FFE2"),
         std::string("2AE3FFE2"), std::string("2AE3FFE2"));
     auto callResult = ringSigPrecompiled->call(context, bytesConstRef(&in));

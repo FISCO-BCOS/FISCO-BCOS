@@ -20,7 +20,7 @@
  * @date: 2019-10-08
  */
 #pragma once
-#include <libprotocol/Protocol.h>
+#include <libprotocol/CommonProtocolType.h>
 #include <libutilities/Worker.h>
 
 #define GOSSIP_LOG(_OBV) LOG(_OBV) << LOG_BADGE("GossipBlockStatus")

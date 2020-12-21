@@ -5,7 +5,7 @@
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcrypto/Common.h>
 #include <libprecompiled/SystemConfigPrecompiled.h>
-#include <libprotocol/ABI.h>
+#include <libprotocol/ContractABICodec.h>
 #include <libstorage/MemoryTableFactoryFactory.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
@@ -68,7 +68,7 @@ void checkConfig(TableFactory::Ptr _memoryTableFactory, std::string const& _key,
 void updateValue(bcos::precompiled::SystemConfigPrecompiled::Ptr _precompiled,
     ExecutiveContext::Ptr _context, std::string const& _key, std::string const& _value)
 {
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
 
     LOG(INFO) << "Add a config key-value";
     bytes in = abi.abiIn("setValueByKey(string,string)", _key, _value);
@@ -113,7 +113,7 @@ BOOST_AUTO_TEST_CASE(TestAddConfig)
 
 BOOST_AUTO_TEST_CASE(errFunc)
 {
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
     bytes in = abi.abiIn("insert(string)", std::string("test"));
     auto callResult = systemConfigPrecompiled->call(context, bytesConstRef(&in));
     bytes out = callResult->execResult();
@@ -121,7 +121,7 @@ BOOST_AUTO_TEST_CASE(errFunc)
 
 BOOST_AUTO_TEST_CASE(InvalidValue)
 {
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
     bytes in =
         abi.abiIn("setValueByKey(string,string)", std::string("tx_count_limit"), std::string("0"));
     auto callResult = systemConfigPrecompiled->call(context, bytesConstRef(&in));

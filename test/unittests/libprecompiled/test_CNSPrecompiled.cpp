@@ -26,7 +26,7 @@
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcrypto/Common.h>
 #include <libprecompiled/CNSPrecompiled.h>
-#include <libprotocol/ABI.h>
+#include <libprotocol/ContractABICodec.h>
 #include <libstorage/MemoryTableFactoryFactory.h>
 #include <libstoragestate/StorageStateFactory.h>
 #include <boost/test/unit_test.hpp>
@@ -77,7 +77,7 @@ BOOST_FIXTURE_TEST_SUITE(test_CNSPrecompiled, CNSPrecompiledFixture)
 BOOST_AUTO_TEST_CASE(insert)
 {
     // first insert
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
     std::string contractName = "Ok";
     std::string contractVersion = "1.0";
     std::string contractAddress = "0x420f853b49838bd3e9466c85a4cc3428c960dde2";
@@ -133,7 +133,7 @@ BOOST_AUTO_TEST_CASE(insert)
 BOOST_AUTO_TEST_CASE(select)
 {
     // first insert
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
     std::string contractName = "Ok";
     std::string contractVersion = "1.0";
     std::string contractAddress = "0x420f853b49838bd3e9466c85a4cc3428c960dde2";
@@ -218,7 +218,7 @@ BOOST_AUTO_TEST_CASE(toString)
 
 BOOST_AUTO_TEST_CASE(errFunc)
 {
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
     bytes in = abi.abiIn("insert(string)", std::string("test"));
     auto callResult = cnsPrecompiled->call(context, bytesConstRef(&in));
     bytes out = callResult->execResult();

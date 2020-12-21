@@ -27,7 +27,6 @@
  * @modifications: rename PBFTSealer.cpp to PBFTSealer.cpp
  */
 #include "PBFTSealer.h"
-#include <libprotocol/CommonJS.h>
 #include <libutilities/JsonDataConvertUtility.h>
 #include <libutilities/Worker.h>
 using namespace bcos::protocol;

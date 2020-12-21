@@ -636,16 +636,6 @@ bool isNodeIDOk(const std::string& _nodeID);
 
 namespace std
 {
-#if 0
-template <>
-struct hash<bcos::h64> : bcos::h64::hash
-{
-};
-template <>
-struct hash<bcos::h128> : bcos::h128::hash
-{
-};
-#endif
 template <>
 struct hash<bcos::h160> : bcos::h160::hash
 {

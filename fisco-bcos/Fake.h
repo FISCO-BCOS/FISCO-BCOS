@@ -30,13 +30,12 @@
 #include <libblockchain/BlockChainInterface.h>
 #include <libblockverifier/BlockVerifierInterface.h>
 #include <libdevcrypto/Common.h>
-#include <libprotocol/Block.h>
-#include <libprotocol/CommonJS.h>
-#include <libprotocol/Transaction.h>
-#include <libprotocol/TransactionReceipt.h>
 #include <libeventfilter/EventLogFilterManager.h>
 #include <libledger/Ledger.h>
 #include <libledger/LedgerParam.h>
+#include <libprotocol/Block.h>
+#include <libprotocol/Transaction.h>
+#include <libprotocol/TransactionReceipt.h>
 #include <libsync/SyncInterface.h>
 #include <libsync/SyncStatus.h>
 #include <unistd.h>
@@ -138,8 +137,8 @@ public:
     getTransactionReceiptByHashWithProof(
         bcos::h256 const&, bcos::protocol::LocalisedTransaction&) override
     {
-        return std::make_pair(
-            std::make_shared<LocalisedTransactionReceipt>(bcos::protocol::TransactionException::None),
+        return std::make_pair(std::make_shared<LocalisedTransactionReceipt>(
+                                  bcos::protocol::TransactionException::None),
             std::vector<std::pair<std::vector<std::string>, std::vector<std::string>>>());
     }
     std::pair<LocalisedTransaction::Ptr,
@@ -214,7 +213,8 @@ public:
     PROTOCOL_ID const& protocolId() const override { return m_protocolID; };
     void setProtocolId(PROTOCOL_ID const) override{};
 
-    void registerConsensusVerifyHandler(std::function<bool(bcos::protocol::Block const&)>) override{};
+    void registerConsensusVerifyHandler(
+        std::function<bool(bcos::protocol::Block const&)>) override{};
 
 private:
     SyncStatus m_status;

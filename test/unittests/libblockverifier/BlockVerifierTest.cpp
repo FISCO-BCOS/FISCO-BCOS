@@ -27,9 +27,9 @@
 #include <libinitializer/LedgerInitializer.h>
 #include <libledger/DBInitializer.h>
 #include <libledger/LedgerManager.h>
-#include <libprotocol/ABI.h>
+#include <libprotocol/CommonProtocolType.h>
+#include <libprotocol/ContractABICodec.h>
 #include <libprotocol/PrecompiledContract.h>
-#include <libprotocol/Protocol.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libprotocol/FakeBlock.h>
 #include <unistd.h>
@@ -68,7 +68,7 @@ public:
             Address dest = Address(0x5002);
             string usr = to_string(i);
             u256 money = 1000000000;
-            bcos::protocol::ContractABI abi;
+            bcos::protocol::ContractABICodec abi;
             bytes data =
                 abi.abiIn("userSave(string,uint256)", usr, money);  // add 1000000000 to user i
             u256 nonce = u256(i);
@@ -127,7 +127,7 @@ public:
 
             LOG(DEBUG) << "Transfer user-" << userFrom << " to user-" << userTo;
             u256 money = 1;
-            bcos::protocol::ContractABI abi;
+            bcos::protocol::ContractABICodec abi;
             bytes data = abi.abiIn("userTransfer(string,string,uint256)", userFrom, userTo,
                 money);  // add 1000000000 to user i
             u256 nonce = u256(i);
@@ -158,7 +158,7 @@ public:
             u256 gas = 10000000;
             Address dest = Address(0x5002);
             string usr = to_string(i);
-            bcos::protocol::ContractABI abi;
+            bcos::protocol::ContractABICodec abi;
             bytes data = abi.abiIn("userBalance(string)", usr);  // add 1000000000 to user i
             u256 nonce = u256(i);
             Transaction::Ptr tx =

@@ -23,7 +23,7 @@
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcrypto/Common.h>
 #include <libprecompiled/ParallelConfigPrecompiled.h>
-#include <libprotocol/ABI.h>
+#include <libprotocol/ContractABICodec.h>
 #include <libstorage/MemoryTableFactoryFactory.h>
 #include <libstoragestate/StorageState.h>
 #include <libstoragestate/StorageStateFactory.h>
@@ -134,7 +134,7 @@ BOOST_AUTO_TEST_CASE(registerParallelFunction)
     BOOST_CHECK(hasRegistered(contractAddr, TRANSFER_FUNC) == false);
 
     // insert
-    ContractABI abi;
+    ContractABICodec abi;
     bytes param =
         abi.abiIn(PARA_CONFIG_REGISTER_METHOD_ADDR_STR_UINT, contractAddr, TRANSFER_FUNC, 2);
     bytes ret = callPrecompiled(ref(param));

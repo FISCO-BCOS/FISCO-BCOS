@@ -26,7 +26,7 @@
 #include "libstorage/StorageException.h"
 #include "libstorage/Table.h"
 #include <libblockverifier/ExecutiveContext.h>
-#include <libprotocol/ABI.h>
+#include <libprotocol/ContractABICodec.h>
 
 using namespace bcos;
 using namespace bcos::storage;
@@ -56,7 +56,7 @@ PrecompiledExecResult::Ptr KVTablePrecompiled::call(ExecutiveContext::Ptr contex
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("KVTable") << LOG_DESC("call") << LOG_KV("func", func);
-    bcos::protocol::ContractABI abi;
+    bcos::protocol::ContractABICodec abi;
 
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
 

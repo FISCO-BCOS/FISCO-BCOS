@@ -61,15 +61,15 @@ BOOST_AUTO_TEST_CASE(test_jsToFixed)
 
 BOOST_AUTO_TEST_CASE(test_jsToInt)
 {
-    BOOST_CHECK(43832124 == jonStringToInt("43832124"));
-    BOOST_CHECK(1342356623 == jonStringToInt("0x5002bc8f"));
-    BOOST_CHECK(3483942 == jonStringToInt("015224446"));
-    BOOST_CHECK_THROW(jonStringToInt("NotAHexadecimalOrDecimal"), std::exception);
+    BOOST_CHECK(43832124 == jsonStringToInt("43832124"));
+    BOOST_CHECK(1342356623 == jsonStringToInt("0x5002bc8f"));
+    BOOST_CHECK(3483942 == jsonStringToInt("015224446"));
+    BOOST_CHECK_THROW(jsonStringToInt("NotAHexadecimalOrDecimal"), std::exception);
 
-    BOOST_CHECK(u256("983298932490823474234") == jonStringToInt<32>("983298932490823474234"));
-    BOOST_CHECK(u256("983298932490823474234") == jonStringToInt<32>("0x354e03915c00571c3a"));
-    BOOST_CHECK_THROW(jonStringToInt<32>("NotAHexadecimalOrDecimal"), std::exception);
-    BOOST_CHECK_THROW(jonStringToInt<16>("NotAHexadecimalOrDecimal"), bcos::BadCast);
+    BOOST_CHECK(u256("983298932490823474234") == jsonStringToInt<32>("983298932490823474234"));
+    BOOST_CHECK(u256("983298932490823474234") == jsonStringToInt<32>("0x354e03915c00571c3a"));
+    BOOST_CHECK_THROW(jsonStringToInt<32>("NotAHexadecimalOrDecimal"), std::exception);
+    BOOST_CHECK_THROW(jsonStringToInt<16>("NotAHexadecimalOrDecimal"), bcos::BadCast);
 }
 
 BOOST_AUTO_TEST_CASE(test_jsToU256)

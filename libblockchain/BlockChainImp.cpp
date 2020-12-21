@@ -27,7 +27,6 @@
 #include <libblockverifier/ExecutiveContext.h>
 #include <libprecompiled/ConsensusPrecompiled.h>
 #include <libprotocol/Block.h>
-#include <libprotocol/CommonJS.h>
 #include <libprotocol/Transaction.h>
 #include <libstorage/StorageException.h>
 #include <libstorage/Table.h>

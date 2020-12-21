@@ -31,7 +31,6 @@
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
 #include <evmc/instructions.h>
-#include <libprotocol/Common.h>
 #include <functional>
 #include <map>
 

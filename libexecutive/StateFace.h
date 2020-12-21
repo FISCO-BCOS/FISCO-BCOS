@@ -23,9 +23,7 @@
  */
 
 #pragma once
-
-#include <libprotocol/Common.h>
-
+#include <libutilities/FixedBytes.h>
 namespace bcos
 {
 namespace executive

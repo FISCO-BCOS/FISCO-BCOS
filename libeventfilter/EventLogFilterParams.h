@@ -24,7 +24,6 @@
 #pragma once
 #include "Common.h"
 #include <libprotocol/Common.h>
-#include <libprotocol/Protocol.h>
 #include <libutilities/DataConvertUtility.h>
 
 namespace Json

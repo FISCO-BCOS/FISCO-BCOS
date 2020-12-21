@@ -27,8 +27,7 @@
 #include <libblockchain/BlockChainInterface.h>
 #include <libp2p/P2PInterface.h>
 #include <libprotocol/Block.h>
-#include <libprotocol/Common.h>
-#include <libprotocol/Protocol.h>
+#include <libprotocol/CommonProtocolType.h>
 #include <libprotocol/Transaction.h>
 #include <libutilities/ThreadPool.h>
 #include <unordered_map>
@@ -42,17 +41,10 @@ namespace bcos
 {
 namespace txpool
 {
-class TxPool;
-
 struct TxPoolStatus
 {
     size_t current;
     size_t dropped;
-};
-
-class TxPoolNonceManager
-{
-public:
 };
 struct transactionCompare
 {
@@ -186,10 +178,9 @@ protected:
      * @param _ik : Set to Retry to force re-addinga transaction that was previously dropped.
      * @return ImportResult : Import result code.
      */
-    ImportResult import(
-        bcos::protocol::Transaction::Ptr _tx, IfDropped _ik = IfDropped::Ignore) override;
+    ImportResult import(bcos::protocol::Transaction::Ptr _tx) override;
     /// verify transaction
-    virtual ImportResult verify(Transaction::Ptr trans, IfDropped _ik = IfDropped::Ignore);
+    virtual ImportResult verify(Transaction::Ptr trans);
     /// interface for filter check
     virtual u256 filterCheck(Transaction::Ptr) const { return u256(0); };
     void clear();

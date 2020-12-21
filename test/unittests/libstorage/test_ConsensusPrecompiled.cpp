@@ -6,7 +6,7 @@
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcrypto/Common.h>
 #include <libprecompiled/ConsensusPrecompiled.h>
-#include <libprotocol/ABI.h>
+#include <libprotocol/ContractABICodec.h>
 #include <libstorage/CachedStorage.h>
 #include <libstorage/MemoryTableFactoryFactory.h>
 #include <boost/test/unit_test.hpp>
@@ -63,7 +63,7 @@ BOOST_FIXTURE_TEST_SUITE(ConsensusPrecompiled, ConsensusPrecompiledFixture)
 
 BOOST_AUTO_TEST_CASE(TestAddNode)
 {
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
     std::string nodeID1(
         "10bf7d8cdeff9b0e85a035b9138e06c6cab68e21767872b2ebbdb14701464c53a4d435b5648bedb18c7bb1ae68"
         "fb6b32df4cf4fbadbccf7123b4dce271157aae");
@@ -139,7 +139,7 @@ BOOST_AUTO_TEST_CASE(TestRemoveNode)
     entry->setField(SYS_KEY, SYS_KEY_CURRENT_NUMBER);
     table->insert(SYS_KEY_CURRENT_NUMBER, entry);
     memoryTableFactory->commitDB(h256(0x100), 0);
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
     std::string nodeID1(
         "10bf7d8cdeff9b0e85a035b9138e06c6cab68e21767872b2ebbdb14701464c53a4d435b5648bedb18c7bb1ae68"
         "fb6b32df4cf4fbadbccf7123b4dce271157aae");
@@ -240,7 +240,7 @@ BOOST_AUTO_TEST_CASE(TestMultiAddAndRemove)
     entry->setField(SYS_KEY, SYS_KEY_CURRENT_NUMBER);
     table->insert(SYS_KEY_CURRENT_NUMBER, entry);
     memoryTableFactory->commitDB(h256(0x100), 0);
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
     std::string nodeID1(
         "10bf7d8cdeff9b0e85a035b9138e06c6cab68e21767872b2ebbdb14701464c53a4d435b5648bedb18c7bb1ae68"
         "fb6b32df4cf4fbadbccf7123b4dce271157aae");
@@ -308,7 +308,7 @@ BOOST_AUTO_TEST_CASE(TestMultiAddAndRemove)
 
 BOOST_AUTO_TEST_CASE(TestErrorNodeID)
 {
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
     std::string nodeID("12345678");
     bytes in = abi.abiIn("addSealer(string)", nodeID);
     auto callResult = consensusPrecompiled->call(context, bytesConstRef(&in));
@@ -333,7 +333,7 @@ BOOST_AUTO_TEST_CASE(TestErrorNodeID)
 BOOST_AUTO_TEST_CASE(TestRemoveLastSealer)
 {
     LOG(INFO) << "Add a sealer node and a observer node";
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
     std::string nodeID1(
         "10bf7d8cdeff9b0e85a035b9138e06c6cab68e21767872b2ebbdb14701464c53a4d435b5648bedb18c7bb1ae68"
         "fb6b32df4cf4fbadbccf7123b4dce271157aae");
@@ -372,7 +372,7 @@ BOOST_AUTO_TEST_CASE(TestRemoveLastSealer)
 
 BOOST_AUTO_TEST_CASE(errFunc)
 {
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
     bytes in = abi.abiIn("add(string)", std::string("test"));
     auto callResult = consensusPrecompiled->call(context, bytesConstRef(&in));
     bytes out = callResult->execResult();

@@ -32,7 +32,6 @@
 #include <libinitializer/SecureInitializer.h>
 #include <libledger/LedgerManager.h>
 #include <libp2p/P2PInterface.h>
-#include <libprotocol/Protocol.h>
 #include <libsync/Common.h>
 #include <libsync/SyncMaster.h>
 #include <libtxpool/TxPool.h>

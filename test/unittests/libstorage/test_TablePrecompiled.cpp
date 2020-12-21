@@ -21,7 +21,7 @@
 #include <libprecompiled/EntriesPrecompiled.h>
 #include <libprecompiled/EntryPrecompiled.h>
 #include <libprecompiled/TablePrecompiled.h>
-#include <libprotocol/ABI.h>
+#include <libprotocol/ContractABICodec.h>
 #include <libstorage/MemoryTable.h>
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/Table.h>
@@ -108,7 +108,7 @@ BOOST_AUTO_TEST_CASE(call_select)
     auto conditionPrecompiled = std::make_shared<ConditionPrecompiled>();
     conditionPrecompiled->setCondition(condition);
     Address conditionAddress = context->registerPrecompiled(conditionPrecompiled);
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
     bytes in = abi.abiIn("select(string,address)", std::string("name"), conditionAddress);
     auto callResult = tablePrecompiled->call(context, bytesConstRef(&in));
     bytes out = callResult->execResult();
@@ -128,7 +128,7 @@ BOOST_AUTO_TEST_CASE(call_insert)
     entryPrecompiled->setEntry(entry);
 
     auto entryAddress = context->registerPrecompiled(entryPrecompiled);
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
     bytes in = abi.abiIn("insert(string,address)", std::string("name"), entryAddress);
     auto callResult = tablePrecompiled->call(context, bytesConstRef(&in));
     bytes out = callResult->execResult();
@@ -139,7 +139,7 @@ BOOST_AUTO_TEST_CASE(call_insert)
 
 BOOST_AUTO_TEST_CASE(call_newCondition)
 {
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
     bytes in = abi.abiIn("newCondition()");
     auto callResult = tablePrecompiled->call(context, bytesConstRef(&in));
     bytes out1 = callResult->execResult();
@@ -150,7 +150,7 @@ BOOST_AUTO_TEST_CASE(call_newCondition)
 
 BOOST_AUTO_TEST_CASE(call_newEntry)
 {
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
     bytes in = abi.abiIn("newEntry()");
     auto callResult = tablePrecompiled->call(context, bytesConstRef(&in));
     bytes out1 = callResult->execResult();
@@ -166,7 +166,7 @@ BOOST_AUTO_TEST_CASE(call_remove)
     auto conditionPrecompiled = std::make_shared<ConditionPrecompiled>();
     conditionPrecompiled->setCondition(condition);
     Address conditionAddress = context->registerPrecompiled(conditionPrecompiled);
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
     bytes in = abi.abiIn("remove(string,address)", std::string("name"), conditionAddress);
     auto callResult = tablePrecompiled->call(context, bytesConstRef(&in));
     bytes out = callResult->execResult();
@@ -186,7 +186,7 @@ BOOST_AUTO_TEST_CASE(call_update2)
     auto entryPrecompiled = std::make_shared<EntryPrecompiled>();
     entryPrecompiled->setEntry(entry);
     auto entryAddress = context->registerPrecompiled(entryPrecompiled);
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
     bytes in = abi.abiIn(
         "update(string,address,address)", std::string("name"), entryAddress, conditionAddress);
     auto callResult = tablePrecompiled->call(context, bytesConstRef(&in));

@@ -80,7 +80,7 @@ BOOST_AUTO_TEST_CASE(testVRFBasedrPBFT)
     BOOST_CHECK(rotatingTx->type() == bcos::protocol::Transaction::Type::MessageCall);
     // check input
     auto const& txData = rotatingTx->data();
-    ContractABI abi;
+    ContractABICodec abi;
     std::string vrfPublicKey;
     std::string blockHashStr;
     std::string vrfProof;

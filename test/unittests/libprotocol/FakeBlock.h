@@ -26,7 +26,6 @@
 #include <libprotocol/Block.h>
 #include <libprotocol/BlockFactory.h>
 #include <libprotocol/BlockHeader.h>
-#include <libprotocol/CommonJS.h>
 #include <libprotocol/Transaction.h>
 #include <libprotocol/TxsParallelParser.h>
 #include <boost/test/unit_test.hpp>

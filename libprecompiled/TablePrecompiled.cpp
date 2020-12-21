@@ -26,7 +26,7 @@
 #include "libstorage/StorageException.h"
 #include "libstorage/Table.h"
 #include <libblockverifier/ExecutiveContext.h>
-#include <libprotocol/ABI.h>
+#include <libprotocol/ContractABICodec.h>
 
 using namespace bcos;
 using namespace bcos::blockverifier;
@@ -62,7 +62,7 @@ PrecompiledExecResult::Ptr TablePrecompiled::call(ExecutiveContext::Ptr context,
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
 
-    bcos::protocol::ContractABI abi;
+    bcos::protocol::ContractABICodec abi;
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
     callResult->gasPricer()->setMemUsed(param.size());
 

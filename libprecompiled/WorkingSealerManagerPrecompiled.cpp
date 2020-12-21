@@ -44,7 +44,7 @@ std::string WorkingSealerManagerPrecompiled::toString()
 }
 void WorkingSealerManagerPrecompiled::rotateWorkingSealer(
     std::shared_ptr<bcos::blockverifier::ExecutiveContext> _context, bytesConstRef _paramData,
-    bcos::protocol::ContractABI& _abi, Address const& _origin, Address const& _sender)
+    bcos::protocol::ContractABICodec& _abi, Address const& _origin, Address const& _sender)
 {
     try
     {
@@ -81,7 +81,7 @@ PrecompiledExecResult::Ptr WorkingSealerManagerPrecompiled::call(
     // get function selector
     auto funcSelector = getParamFunc(_param);
     auto paramData = getParamData(_param);
-    bcos::protocol::ContractABI abi;
+    bcos::protocol::ContractABICodec abi;
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
     // Call the corresponding function according to the selector
     if (funcSelector == name2Selector[WSM_METHOD_ROTATE_STR])

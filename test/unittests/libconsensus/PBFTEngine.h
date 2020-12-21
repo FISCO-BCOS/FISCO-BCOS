@@ -26,7 +26,7 @@
 #include "PBFTReqCache.h"
 #include "libdevcrypto/CryptoInterface.h"
 #include <libconsensus/pbft/PBFTEngine.h>
-#include <libprotocol/Protocol.h>
+#include <libprotocol/CommonProtocolType.h>
 #include <libutilities/TopicInfo.h>
 #include <test/unittests/libsync/FakeSyncToolsSet.h>
 #include <boost/test/unit_test.hpp>

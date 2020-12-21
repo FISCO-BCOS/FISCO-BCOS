@@ -27,7 +27,6 @@
 #include <libdevcrypto/Common.h>
 #include <libexecutive/Executive.h>
 #include <libprotocol/Block.h>
-#include <libprotocol/Protocol.h>
 #include <libprotocol/Transaction.h>
 #include <libprotocol/TransactionReceipt.h>
 #include <libutilities/FixedBytes.h>

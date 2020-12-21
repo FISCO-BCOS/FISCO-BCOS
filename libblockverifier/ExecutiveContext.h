@@ -26,7 +26,6 @@
 #include <libexecutive/StateFace.h>
 #include <libprotocol/Block.h>
 #include <libprotocol/PrecompiledContract.h>
-#include <libprotocol/Protocol.h>
 #include <libprotocol/Transaction.h>
 #include <libstorage/Table.h>
 #include <libutilities/Common.h>

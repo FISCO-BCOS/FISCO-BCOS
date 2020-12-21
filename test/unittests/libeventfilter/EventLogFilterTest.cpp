@@ -26,7 +26,6 @@
 #include <libeventfilter/EventLogFilter.h>
 #include <libeventfilter/EventLogFilterManager.h>
 #include <libeventfilter/EventLogFilterParams.h>
-#include <libprotocol/CommonJS.h>
 #include <libprotocol/LogEntry.h>
 #include <libutilities/Common.h>
 #include <boost/test/unit_test.hpp>
@@ -195,7 +194,7 @@ BOOST_AUTO_TEST_CASE(EventLogFilter_test1)
     BOOST_CHECK_EQUAL(toHexStringWithPrefix(*(params->getTopics()[0].begin())),
         "0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa4");
 
-    Address addr = jsToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3a");
+    Address addr = jsonStringToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3a");
     h256s h{jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa4")};
 
     LogEntry _log{addr, h, bytes{}};
@@ -228,7 +227,8 @@ BOOST_AUTO_TEST_CASE(EventLogFilter_test2)
     h256s topics{
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa4")};
 
-    LogEntry _log{jsToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3a"), topics, bytes{}};
+    LogEntry _log{
+        jsonStringToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3a"), topics, bytes{}};
 
     BOOST_CHECK_EQUAL(filter->matches(_log), false);
 
@@ -237,14 +237,16 @@ BOOST_AUTO_TEST_CASE(EventLogFilter_test2)
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa4"),
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa5"),
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa6")};
-    LogEntry _log0{jsToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3a"), topics0, bytes{}};
+    LogEntry _log0{
+        jsonStringToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3a"), topics0, bytes{}};
     BOOST_CHECK_EQUAL(filter->matches(_log0), true);
 
     h256s topics1{
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa5"),
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa4"),
     };
-    LogEntry _log1{jsToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3a"), topics1, bytes{}};
+    LogEntry _log1{
+        jsonStringToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3a"), topics1, bytes{}};
     BOOST_CHECK_EQUAL(filter->matches(_log1), true);
 }
 
@@ -288,7 +290,8 @@ BOOST_AUTO_TEST_CASE(EventLogFilter_test3)
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa4"),
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa5"),
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa6")};
-    LogEntry _log0{jsToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3a"), topics0, bytes{}};
+    LogEntry _log0{
+        jsonStringToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3a"), topics0, bytes{}};
     BOOST_CHECK_EQUAL(filter->matches(_log0), true);
 
     h256s topics1{
@@ -296,7 +299,8 @@ BOOST_AUTO_TEST_CASE(EventLogFilter_test3)
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa4"),
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa5"),
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa6")};
-    LogEntry _log1{jsToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3b"), topics1, bytes{}};
+    LogEntry _log1{
+        jsonStringToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3b"), topics1, bytes{}};
     BOOST_CHECK_EQUAL(filter->matches(_log1), true);
 
     h256s topics2{
@@ -304,7 +308,8 @@ BOOST_AUTO_TEST_CASE(EventLogFilter_test3)
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa4"),
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa5"),
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa6")};
-    LogEntry _log2{jsToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3c"), topics2, bytes{}};
+    LogEntry _log2{
+        jsonStringToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3c"), topics2, bytes{}};
     BOOST_CHECK_EQUAL(filter->matches(_log2), true);
 
     h256s topics3{
@@ -312,7 +317,8 @@ BOOST_AUTO_TEST_CASE(EventLogFilter_test3)
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa4"),
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa5"),
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa7")};
-    LogEntry _log3{jsToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3a"), topics3, bytes{}};
+    LogEntry _log3{
+        jsonStringToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3a"), topics3, bytes{}};
     BOOST_CHECK_EQUAL(filter->matches(_log3), true);
 
     h256s topics4{
@@ -320,7 +326,8 @@ BOOST_AUTO_TEST_CASE(EventLogFilter_test3)
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa4"),
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa5"),
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa7")};
-    LogEntry _log4{jsToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3b"), topics4, bytes{}};
+    LogEntry _log4{
+        jsonStringToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3b"), topics4, bytes{}};
     BOOST_CHECK_EQUAL(filter->matches(_log4), true);
 
     h256s topics5{
@@ -328,7 +335,8 @@ BOOST_AUTO_TEST_CASE(EventLogFilter_test3)
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa4"),
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa5"),
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa7")};
-    LogEntry _log5{jsToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3c"), topics5, bytes{}};
+    LogEntry _log5{
+        jsonStringToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3c"), topics5, bytes{}};
     BOOST_CHECK_EQUAL(filter->matches(_log5), true);
 
     h256s topics6{
@@ -336,7 +344,8 @@ BOOST_AUTO_TEST_CASE(EventLogFilter_test3)
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa4"),
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa5"),
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa7")};
-    LogEntry _log6{jsToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3d"), topics6, bytes{}};
+    LogEntry _log6{
+        jsonStringToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3d"), topics6, bytes{}};
     BOOST_CHECK_EQUAL(filter->matches(_log6), false);
 }
 
@@ -369,7 +378,8 @@ BOOST_AUTO_TEST_CASE(EventLogFilter_test4)
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa4"),
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa5"),
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa6")};
-    LogEntry _log0{jsToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3a"), topics0, bytes{}};
+    LogEntry _log0{
+        jsonStringToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3a"), topics0, bytes{}};
     BOOST_CHECK_EQUAL(filter->matches(_log0), true);
 
     h256s topics1{
@@ -377,7 +387,8 @@ BOOST_AUTO_TEST_CASE(EventLogFilter_test4)
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa4"),
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa5"),
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa6")};
-    LogEntry _log1{jsToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3b"), topics1, bytes{}};
+    LogEntry _log1{
+        jsonStringToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3b"), topics1, bytes{}};
     BOOST_CHECK_EQUAL(filter->matches(_log1), true);
 
     h256s topics2{
@@ -385,7 +396,8 @@ BOOST_AUTO_TEST_CASE(EventLogFilter_test4)
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa4"),
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa5"),
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa6")};
-    LogEntry _log2{jsToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3c"), topics2, bytes{}};
+    LogEntry _log2{
+        jsonStringToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3c"), topics2, bytes{}};
     BOOST_CHECK_EQUAL(filter->matches(_log2), true);
 
     h256s topics3{
@@ -393,7 +405,8 @@ BOOST_AUTO_TEST_CASE(EventLogFilter_test4)
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa4"),
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa5"),
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa7")};
-    LogEntry _log3{jsToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3a"), topics3, bytes{}};
+    LogEntry _log3{
+        jsonStringToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3a"), topics3, bytes{}};
     BOOST_CHECK_EQUAL(filter->matches(_log3), true);
 
     h256s topics4{
@@ -401,12 +414,14 @@ BOOST_AUTO_TEST_CASE(EventLogFilter_test4)
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa4"),
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa5"),
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa7")};
-    LogEntry _log4{jsToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3b"), topics4, bytes{}};
+    LogEntry _log4{
+        jsonStringToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3b"), topics4, bytes{}};
     BOOST_CHECK_EQUAL(filter->matches(_log4), true);
 
     h256s topics5{
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa4")};
-    LogEntry _log5{jsToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3b"), topics4, bytes{}};
+    LogEntry _log5{
+        jsonStringToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3b"), topics4, bytes{}};
     BOOST_CHECK_EQUAL(filter->matches(_log5), true);
 
     h256s topics6{
@@ -414,7 +429,8 @@ BOOST_AUTO_TEST_CASE(EventLogFilter_test4)
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa4"),
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa5"),
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa7")};
-    LogEntry _log6{jsToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3c"), topics5, bytes{}};
+    LogEntry _log6{
+        jsonStringToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3c"), topics5, bytes{}};
     BOOST_CHECK_EQUAL(filter->matches(_log6), true);
 
     h256s topics7{
@@ -422,7 +438,8 @@ BOOST_AUTO_TEST_CASE(EventLogFilter_test4)
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa4"),
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa5"),
         jsToFixed<32>("0x1be7c4acf0f0eba0992603759c32d028600239a9034d28a643e234992e646aa7")};
-    LogEntry _log7{jsToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3d"), topics6, bytes{}};
+    LogEntry _log7{
+        jsonStringToAddress("0x692a70d2e424a56d2c6c27aa97d1a86395877b3d"), topics6, bytes{}};
     BOOST_CHECK_EQUAL(filter->matches(_log7), true);
 }
 

@@ -21,8 +21,6 @@
 #pragma once
 #include <libblockverifier/ExecutiveContext.h>
 #include <libprecompiled/Common.h>
-
-#include <libprotocol/Common.h>
 #include <libutilities/Common.h>
 
 namespace bcos

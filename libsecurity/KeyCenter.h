@@ -21,7 +21,6 @@
  */
 #pragma once
 #include "Common.h"
-#include <libprotocol/CommonJS.h>
 #include <libutilities/Common.h>
 #include <boost/asio/connect.hpp>
 #include <boost/asio/ip/tcp.hpp>

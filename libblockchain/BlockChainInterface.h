@@ -23,10 +23,9 @@
 #pragma once
 
 #include <libprotocol/Block.h>
-#include <libprotocol/Common.h>
-#include <libprotocol/EVMFlags.h>
 #include <libprotocol/Transaction.h>
 #include <libprotocol/TransactionReceipt.h>
+#include <libutilities/CallbackCollectionHandler.h>
 #include <libutilities/FixedBytes.h>
 namespace bcos
 {
@@ -109,7 +108,7 @@ public:
 
     /// Register a handler that will be called once there is a new transaction imported
     template <class T>
-    bcos::protocol::Handler<int64_t> onReady(T const& _t)
+    bcos::Handler<int64_t> onReady(T const& _t)
     {
         return m_onReady.add(_t);
     }
@@ -142,7 +141,7 @@ public:
 protected:
     ///< Called when a subsequent call to import transactions will return a non-empty container. Be
     ///< nice and exit fast.
-    bcos::protocol::Signal<int64_t> m_onReady;
+    bcos::CallbackCollectionHandler<int64_t> m_onReady;
 };
 }  // namespace blockchain
 }  // namespace bcos

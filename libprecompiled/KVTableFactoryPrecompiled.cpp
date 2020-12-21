@@ -27,7 +27,7 @@
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcrypto/Common.h>
 #include <libdevcrypto/CryptoInterface.h>
-#include <libprotocol/ABI.h>
+#include <libprotocol/ContractABICodec.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
@@ -64,7 +64,7 @@ PrecompiledExecResult::Ptr KVTableFactoryPrecompiled::call(ExecutiveContext::Ptr
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("KVTableFactory") << LOG_DESC("call")
                            << LOG_KV("func", func);
 
-    bcos::protocol::ContractABI abi;
+    bcos::protocol::ContractABICodec abi;
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
     callResult->gasPricer()->setMemUsed(param.size());
 

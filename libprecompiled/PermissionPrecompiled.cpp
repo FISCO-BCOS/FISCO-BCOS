@@ -24,7 +24,7 @@
 #include <json/json.h>
 #include <libblockverifier/ExecutiveContext.h>
 #include <libprecompiled/TableFactoryPrecompiled.h>
-#include <libprotocol/ABI.h>
+#include <libprotocol/ContractABICodec.h>
 #include <boost/lexical_cast.hpp>
 
 using namespace std;
@@ -65,7 +65,7 @@ PrecompiledExecResult::Ptr PermissionPrecompiled::call(
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
 
-    bcos::protocol::ContractABI abi;
+    bcos::protocol::ContractABICodec abi;
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
     int result = 0;
     if (func == name2Selector[AUP_METHOD_INS])

@@ -26,6 +26,7 @@
 using namespace bcos;
 using namespace bcos::sync;
 using namespace bcos::protocol;
+using namespace bcos::txpool;
 
 void DownloadingTxsQueue::push(
     SyncMsgPacket::Ptr _packet, bcos::p2p::P2PMessage::Ptr _msg, NodeID const& _fromPeer)
@@ -149,13 +150,13 @@ void DownloadingTxsQueue::pop2TxPool(std::shared_ptr<bcos::txpool::TxPoolInterfa
                 try
                 {
                     auto importResult = _txPool->import(tx);
-                    if (bcos::protocol::ImportResult::Success == importResult)
+                    if (ImportResult::Success == importResult)
                     {
                         tx->appendNodeContainsTransaction(fromPeer);
                         tx->appendNodeListContainTransaction(*(txsShard->knownNodes));
                         successCnt++;
                     }
-                    else if (bcos::protocol::ImportResult::AlreadyKnown == importResult)
+                    else if (ImportResult::AlreadyKnown == importResult)
                     {
                         SYNC_LOG(TRACE)
                             << LOG_BADGE("Tx")

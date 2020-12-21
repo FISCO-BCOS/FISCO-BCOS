@@ -22,7 +22,6 @@
 #include <iostream>
 
 #include <libconfig/GlobalConfigure.h>
-#include <libprotocol/CommonJS.h>
 #include <libprotocol/Transaction.h>
 #include <libutilities/JsonDataConvertUtility.h>
 #include <test/tools/libutils/TestOutputHelper.h>

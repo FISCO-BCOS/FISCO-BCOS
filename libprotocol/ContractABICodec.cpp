@@ -1,27 +1,24 @@
 /*
- * @CopyRight:
- * FISCO-BCOS is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ *  Copyright (C) 2020 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
  *
- * FISCO-BCOS is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
- * (c) 2016-2018 fisco-dev contributors.
- */
-
-/**
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
  * @brief Contract ABI serialize and deserialize tool.
  * @author: octopuswang
  * @date: 2019-04-01
  */
 
-#include "ABI.h"
+#include "ContractABICodec.h"
 #include <libutilities/FixedBytes.h>
 
 using namespace std;
@@ -29,9 +26,9 @@ using namespace bcos;
 using namespace bcos::protocol;
 using namespace bcos::protocol::abi;
 
-const int ContractABI::MAX_BYTE_LENGTH;
+const int ContractABICodec::MAX_BYTE_LENGTH;
 
-bool ContractABI::abiOutByFuncSelector(
+bool ContractABICodec::abiOutByFuncSelector(
     bytesConstRef _data, const std::vector<std::string>& _allTypes, std::vector<std::string>& _out)
 {
     data = _data;
@@ -78,26 +75,26 @@ bool ContractABI::abiOutByFuncSelector(
 }
 
 // unsigned integer type uint256.
-bytes ContractABI::serialise(const int& _in)
+bytes ContractABICodec::serialise(const int& _in)
 {
     return serialise((s256)_in);
 }
 
 // unsigned integer type uint256.
-bytes ContractABI::serialise(const u256& _in)
+bytes ContractABICodec::serialise(const u256& _in)
 {
     return h256(_in).asBytes();
 }
 
 // two’s complement signed integer type int256.
-bytes ContractABI::serialise(const s256& _in)
+bytes ContractABICodec::serialise(const s256& _in)
 {
     return h256(_in.convert_to<u256>()).asBytes();
 }
 
 // equivalent to uint8 restricted to the values 0 and 1. For computing the function selector,
 // bool is used
-bytes ContractABI::serialise(const bool& _in)
+bytes ContractABICodec::serialise(const bool& _in)
 {
     return h256(u256(_in ? 1 : 0)).asBytes();
 }
@@ -105,13 +102,13 @@ bytes ContractABI::serialise(const bool& _in)
 // equivalent to uint160, except for the assumed interpretation and language typing. For
 // computing the function selector, address is used.
 // bool is used.
-bytes ContractABI::serialise(const Address& _in)
+bytes ContractABICodec::serialise(const Address& _in)
 {
     return bytes(12, 0) + _in.asBytes();
 }
 
 // binary type of 32 bytes
-bytes ContractABI::serialise(const string32& _in)
+bytes ContractABICodec::serialise(const string32& _in)
 {
     bytes ret(32, 0);
     bytesConstRef((byte const*)_in.data(), 32).populate(bytesRef(&ret));
@@ -119,7 +116,7 @@ bytes ContractABI::serialise(const string32& _in)
 }
 
 // dynamic sized unicode string assumed to be UTF-8 encoded.
-bytes ContractABI::serialise(const std::string& _in)
+bytes ContractABICodec::serialise(const std::string& _in)
 {
     bytes ret;
     ret = h256(u256(_in.size())).asBytes();
@@ -128,7 +125,7 @@ bytes ContractABI::serialise(const std::string& _in)
     return ret;
 }
 
-void ContractABI::deserialise(s256& out, std::size_t _offset)
+void ContractABICodec::deserialise(s256& out, std::size_t _offset)
 {
     validOffset(_offset + MAX_BYTE_LENGTH - 1);
 
@@ -146,14 +143,14 @@ void ContractABI::deserialise(s256& out, std::size_t _offset)
     }
 }
 
-void ContractABI::deserialise(u256& _out, std::size_t _offset)
+void ContractABICodec::deserialise(u256& _out, std::size_t _offset)
 {
     validOffset(_offset + MAX_BYTE_LENGTH - 1);
 
     _out = fromBigEndian<u256>(data.getCroppedData(_offset, MAX_BYTE_LENGTH));
 }
 
-void ContractABI::deserialise(bool& _out, std::size_t _offset)
+void ContractABICodec::deserialise(bool& _out, std::size_t _offset)
 {
     validOffset(_offset + MAX_BYTE_LENGTH - 1);
 
@@ -161,14 +158,14 @@ void ContractABI::deserialise(bool& _out, std::size_t _offset)
     _out = ret > 0 ? true : false;
 }
 
-void ContractABI::deserialise(Address& _out, std::size_t _offset)
+void ContractABICodec::deserialise(Address& _out, std::size_t _offset)
 {
     validOffset(_offset + MAX_BYTE_LENGTH - 1);
 
     data.getCroppedData(_offset + MAX_BYTE_LENGTH - 20, 20).populate(_out.ref());
 }
 
-void ContractABI::deserialise(string32& _out, std::size_t _offset)
+void ContractABICodec::deserialise(string32& _out, std::size_t _offset)
 {
     validOffset(_offset + MAX_BYTE_LENGTH - 1);
 
@@ -176,7 +173,7 @@ void ContractABI::deserialise(string32& _out, std::size_t _offset)
         .populate(bytesRef((byte*)_out.data(), MAX_BYTE_LENGTH));
 }
 
-void ContractABI::deserialise(std::string& _out, std::size_t _offset)
+void ContractABICodec::deserialise(std::string& _out, std::size_t _offset)
 {
     validOffset(_offset + MAX_BYTE_LENGTH - 1);
 

@@ -28,7 +28,6 @@
 #include <libnetwork/Common.h>
 #include <libnetwork/Session.h>
 #include <libp2p/P2PInterface.h>
-#include <libprotocol/Common.h>
 #include <libprotocol/Exceptions.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <libutilities/FixedBytes.h>
@@ -151,7 +150,7 @@ private:
     std::atomic_bool m_needMaintainTransactions = {false};
 
     // settings
-    bcos::protocol::Handler<> m_tqReady;
+    bcos::Handler<> m_tqReady;
 
     std::function<std::shared_ptr<bcos::p2p::NodeIDs>(std::shared_ptr<std::set<NodeID>>)>
         fp_txsReceiversFilter = nullptr;

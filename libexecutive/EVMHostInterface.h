@@ -27,8 +27,6 @@
 #include "evmc/instructions.h"
 #include <libconfig/GlobalConfigure.h>
 #include <libprotocol/BlockHeader.h>
-#include <libprotocol/Common.h>
-#include <libprotocol/EVMFlags.h>
 #include <libprotocol/EVMSchedule.h>
 #include <libprotocol/LogEntry.h>
 #include <libutilities/Common.h>

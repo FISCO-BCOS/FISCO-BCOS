@@ -24,7 +24,7 @@
 #include <libdevcrypto/Common.h>
 #include <libprecompiled/ParallelConfigPrecompiled.h>
 #include <libprecompiled/extension/DagTransferPrecompiled.h>
-#include <libprotocol/ABI.h>
+#include <libprotocol/ContractABICodec.h>
 #include <libprotocol/Transaction.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
@@ -54,7 +54,7 @@ public:
         u256 gas = 10000000;
         Address dest = Address(0x5002);  // DagTransfer precompile address
 
-        bcos::protocol::ContractABI abi;
+        bcos::protocol::ContractABICodec abi;
         bytes data = abi.abiIn("userTransfer(string,string,uint256)", _userFrom, _userTo,
             _money);  // add 1000000000 to user i
         u256 nonce = u256(utcTime() + rand());
@@ -76,7 +76,7 @@ public:
         u256 gas = 10000000;
         Address dest = Address("2233445566778899");  // Normal transaction address
 
-        bcos::protocol::ContractABI abi;
+        bcos::protocol::ContractABICodec abi;
         bytes data = abi.abiIn("fake(string,string,uint256)", 0, 0, 0);
         u256 nonce = u256(utcTime() + rand());
 

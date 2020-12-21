@@ -26,7 +26,7 @@
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcrypto/Common.h>
 #include <libprecompiled/extension/HelloWorldPrecompiled.h>
-#include <libprotocol/ABI.h>
+#include <libprotocol/ContractABICodec.h>
 #include <libstorage/MemoryTableFactoryFactory.h>
 #include <libstoragestate/StorageStateFactory.h>
 #include <boost/test/unit_test.hpp>
@@ -84,7 +84,7 @@ BOOST_AUTO_TEST_CASE(toString)
 
 BOOST_AUTO_TEST_CASE(get)
 {  // function get() public constant returns(string);
-    bcos::protocol::ContractABI abi;
+    bcos::protocol::ContractABICodec abi;
     bytes out;
 
     std::string defaultValue = "Hello World!";
@@ -100,7 +100,7 @@ BOOST_AUTO_TEST_CASE(get)
 
 BOOST_AUTO_TEST_CASE(set)
 {  // function get() public constant returns(string);
-    bcos::protocol::ContractABI abi;
+    bcos::protocol::ContractABICodec abi;
     bytes out;
     bytes params;
 

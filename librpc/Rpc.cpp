@@ -28,8 +28,6 @@
 #include <libdevcrypto/ECDSASignature.h>
 #include <libdevcrypto/SM2Signature.h>
 #include <libprecompiled/SystemConfigPrecompiled.h>
-#include <libprotocol/Common.h>
-#include <libprotocol/CommonJS.h>
 #include <libprotocol/Transaction.h>
 #include <libsync/SyncStatus.h>
 #include <libtxpool/TxPoolInterface.h>
@@ -698,7 +696,7 @@ Json::Value Rpc::getBlockHeaderByNumber(
         checkLedgerStatus(blockChain, "blockchain", "getBlockHeaderByNumber");
         checkRequest(_groupID);
 
-        BlockNumber number = jsToBlockNumber(_blockNumber);
+        BlockNumber number = jsonStringToBlockNumber(_blockNumber);
         auto blockHeaderInfo = blockChain->getBlockHeaderInfo(number);
         if (!blockHeaderInfo)
         {
@@ -769,7 +767,7 @@ Json::Value Rpc::getBlockByNumber(
         checkRequest(_groupID);
         Json::Value response;
 
-        BlockNumber number = jsToBlockNumber(_blockNumber);
+        BlockNumber number = jsonStringToBlockNumber(_blockNumber);
 
         auto block = blockchain->getBlockByNumber(number);
         if (!block)
@@ -821,7 +819,7 @@ std::string Rpc::getBlockHashByNumber(int _groupID, const std::string& _blockNum
         checkLedgerStatus(blockchain, "blockchain", "getBlockHashByNumber");
         checkRequest(_groupID);
 
-        BlockNumber number = jsToBlockNumber(_blockNumber);
+        BlockNumber number = jsonStringToBlockNumber(_blockNumber);
         h256 blockHash = blockchain->numberHash(number);
         // get blockHash failed
         if (blockHash == h256())
@@ -897,7 +895,7 @@ Json::Value Rpc::getTransactionByBlockHashAndIndex(
                 JsonRpcException(RPCExceptionType::BlockHash, RPCMsg[RPCExceptionType::BlockHash]));
 
         auto transactions = block->transactions();
-        int64_t txIndex = jonStringToInt(_transactionIndex);
+        int64_t txIndex = jsonStringToInt(_transactionIndex);
         if (txIndex >= int64_t(transactions->size()))
             BOOST_THROW_EXCEPTION(JsonRpcException(
                 RPCExceptionType::TransactionIndex, RPCMsg[RPCExceptionType::TransactionIndex]));
@@ -933,14 +931,14 @@ Json::Value Rpc::getTransactionByBlockNumberAndIndex(
         Json::Value response;
 
 
-        BlockNumber number = jsToBlockNumber(_blockNumber);
+        BlockNumber number = jsonStringToBlockNumber(_blockNumber);
         auto block = blockchain->getBlockByNumber(number);
         if (!block)
             BOOST_THROW_EXCEPTION(JsonRpcException(
                 RPCExceptionType::BlockNumberT, RPCMsg[RPCExceptionType::BlockNumberT]));
 
         auto transactions = block->transactions();
-        int64_t txIndex = jonStringToInt(_transactionIndex);
+        int64_t txIndex = jsonStringToInt(_transactionIndex);
         if (txIndex >= int64_t(transactions->size()))
             BOOST_THROW_EXCEPTION(JsonRpcException(
                 RPCExceptionType::TransactionIndex, RPCMsg[RPCExceptionType::TransactionIndex]));
@@ -1065,7 +1063,7 @@ std::string Rpc::getCode(int _groupID, const std::string& _address)
         checkLedgerStatus(blockChain, "blockChain", "getCode");
         checkRequest(_groupID);
 
-        return toJonString(blockChain->getCode(jsToAddress(_address)));
+        return toJonString(blockChain->getCode(jsonStringToAddress(_address)));
     }
     catch (JsonRpcException& e)
     {
@@ -2016,7 +2014,7 @@ Json::Value Rpc::getBatchReceiptsByBlockNumberAndRange(int _groupID,
                       << LOG_KV("groupID", _groupID) << LOG_KV("blockNumber", _blockNumber)
                       << LOG_KV("from", _from) << LOG_KV("receiptSize", _count);
         checkRequest(_groupID);
-        BlockNumber number = jsToBlockNumber(_blockNumber);
+        BlockNumber number = jsonStringToBlockNumber(_blockNumber);
 
         auto blockchain = ledgerManager()->blockChain(_groupID);
         auto block = blockchain->getBlockByNumber(number);
@@ -2079,7 +2077,7 @@ void Rpc::getBatchReceipts(Json::Value& _response, bcos::protocol::Block::Ptr _b
     auto transactions = _block->transactions();
     auto receipts = _block->transactionReceipts();
     int64_t receiptsSize = receipts->size();
-    int64_t startIndex = jonStringToInt(_from);
+    int64_t startIndex = jsonStringToInt(_from);
     // check the startIndex
     if (startIndex >= (int64_t)transactions->size() || startIndex >= receiptsSize)
     {
@@ -2090,7 +2088,7 @@ void Rpc::getBatchReceipts(Json::Value& _response, bcos::protocol::Block::Ptr _b
     // return all receipts when count is -1
     if (_count != "-1")
     {
-        endIndex = startIndex + jonStringToInt(_count);
+        endIndex = startIndex + jsonStringToInt(_count);
         endIndex = (endIndex > receiptsSize) ? receiptsSize : endIndex;
     }
 

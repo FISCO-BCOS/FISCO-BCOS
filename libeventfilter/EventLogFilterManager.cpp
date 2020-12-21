@@ -4,7 +4,6 @@
 #include <libblockchain/BlockChainInterface.h>
 #include <libeventfilter/EventLogFilterParams.h>
 #include <libledger/LedgerParam.h>
-#include <libprotocol/CommonJS.h>
 #include <libutilities/TopicInfo.h>
 
 

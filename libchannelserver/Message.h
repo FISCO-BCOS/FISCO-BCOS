@@ -24,7 +24,7 @@
 #pragma once
 
 
-#include <libprotocol/Protocol.h>
+#include <libprotocol/CommonProtocolType.h>
 #include <libutilities/Common.h>
 #include <libutilities/FixedBytes.h>
 #include <boost/lexical_cast.hpp>

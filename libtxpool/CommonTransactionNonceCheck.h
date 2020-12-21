@@ -23,7 +23,7 @@
 #pragma once
 
 #include <libprotocol/Block.h>
-#include <libprotocol/Protocol.h>
+#include <libprotocol/CommonProtocolType.h>
 #include <libprotocol/Transaction.h>
 #include <libutilities/Common.h>
 #include <unordered_set>

@@ -28,7 +28,6 @@
 #include <libconfig/GlobalConfigure.h>
 #include <libdevcrypto/Common.h>
 #include <libdevcrypto/Hash.h>
-#include <libprotocol/Common.h>
 
 using namespace std;
 using namespace bcos;

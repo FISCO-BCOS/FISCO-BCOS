@@ -1,6 +1,5 @@
 #include "EventLogFilter.h"
 #include <json/json.h>
-#include <libprotocol/CommonJS.h>
 using namespace bcos;
 using namespace bcos::protocol;
 using namespace bcos::event;

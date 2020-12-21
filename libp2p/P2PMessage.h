@@ -21,7 +21,7 @@
 
 #pragma once
 #include <libnetwork/Common.h>
-#include <libprotocol/Protocol.h>
+#include <libprotocol/CommonProtocolType.h>
 #include <libutilities/FixedBytes.h>
 #include <memory>
 

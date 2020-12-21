@@ -13,33 +13,33 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file Common.cpp
- * @author chaychen asherli
- * @date 2018
+ * @author wheatli
+ * @date 2018.8.27
+ * @modify add CallbackCollectionHandler.h
+ *
  */
 
-#include "Common.h"
-#include "BlockHeader.h"
-#include "Exceptions.h"
-#include <libdevcrypto/Hash.h>
-#include <boost/throw_exception.hpp>
-
-using namespace std;
-using namespace bcos;
-using namespace bcos::protocol;
+#pragma once
 
 namespace bcos
 {
-namespace protocol
+namespace txpool
 {
-Address toAddress(std::string const& _address)
+enum class ImportResult
 {
-    auto address = fromHexString(_address);
-    if (address->size() == 20)
-    {
-        return Address(*address);
-    }
-    BOOST_THROW_EXCEPTION(InvalidAddress());
+    Success = 0,
+    AlreadyInChain,
+    AlreadyKnown,
+    Malformed,
+    TransactionNonceCheckFail,
+    TxPoolNonceCheckFail,
+    TransactionPoolIsFull,
+    InvalidChainId,
+    InvalidGroupId,
+    BlockLimitCheckFailed,
+    NotBelongToTheGroup,
+    TransactionRefused,
+    OverGroupMemoryLimit
+};
 }
-}  // namespace protocol
 }  // namespace bcos

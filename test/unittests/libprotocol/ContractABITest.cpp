@@ -1,29 +1,26 @@
-/**
- * @CopyRight:
- * FISCO-BCOS is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+/*
+ *  Copyright (C) 2020 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
  *
- * FISCO-BCOS is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ *   http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU General Public License
- * along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
- * (c) 2016-2018 fisco-dev contributors.
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
  *
- * @brief
- *
- * @file ABI.cpp
+ * @file ContractABITest.cpp
  * @author: jimmyshi
  * @date 2018-09-02
  */
 #include <iostream>
 
-#include <libprotocol/ABI.h>
-#include <libprotocol/ABIParser.h>
+#include <libprotocol/ContractABICodec.h>
+#include <libprotocol/ContractABIType.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 
@@ -38,11 +35,11 @@ namespace bcos
 {
 namespace test
 {
-BOOST_FIXTURE_TEST_SUITE(ABITest, TestOutputHelperFixture)
+BOOST_FIXTURE_TEST_SUITE(ContractABITest, TestOutputHelperFixture)
 
 BOOST_AUTO_TEST_CASE(ContractABIType_func0)
 {
-    ContractABI ct;
+    ContractABICodec ct;
     u256 a("0x123");
     std::vector<u256> b;
     u256 u0("0x456");
@@ -81,7 +78,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_func0)
 
 BOOST_AUTO_TEST_CASE(ContractABIType_func1)
 {
-    ContractABI ct;
+    ContractABICodec ct;
     std::string a("dave");
     bool b(true);
     std::vector<u256> c{1, 2, 3};
@@ -111,7 +108,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_func1)
 
 BOOST_AUTO_TEST_CASE(ContractABIType_func2)
 {
-    ContractABI ct;
+    ContractABICodec ct;
     std::string a("daslfjaklfdaskl");
     u256 b = 1111;
     std::array<u256, 6> c{1, 2, 3, 4, 5, 6};
@@ -143,7 +140,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_func2)
 BOOST_AUTO_TEST_CASE(ContractABIType_func3)
 {
     //"aaafadsfsfadsfdasf","0x35ef07393b57464e93deb59175ff72e6499450cf",11111,-11111
-    ContractABI ct;
+    ContractABICodec ct;
     std::string a("aaafadsfsfadsfdasf");
     Address b("0x35ef07393b57464e93deb59175ff72e6499450cf");
     u256 c = 11111;
@@ -177,7 +174,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_func3)
 BOOST_AUTO_TEST_CASE(ContractABIType_func4)
 {
     //"aaafadsfsfadsfdasf","0x35ef07393b57464e93deb59175ff72e6499450cf",11111,-11111
-    ContractABI ct;
+    ContractABICodec ct;
     std::string a;
     u256 b;
     s256 c;
@@ -207,7 +204,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_func4)
 
 BOOST_AUTO_TEST_CASE(ContractABIType_u256)
 {
-    ContractABI ct;
+    ContractABICodec ct;
 
     u256 x = 0;
     std::string r = *toHexString(ct.serialise(x));
@@ -228,7 +225,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_u256)
 
 BOOST_AUTO_TEST_CASE(ContractABIType_s256)
 {
-    ContractABI ct;
+    ContractABICodec ct;
 
     s256 x = 0;
     std::string r = *toHexString(ct.serialise(x));
@@ -249,7 +246,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_s256)
 
 BOOST_AUTO_TEST_CASE(ContractABIType_bool)
 {
-    ContractABI ct;
+    ContractABICodec ct;
 
     bool x = true;
     std::string r = *toHexString(ct.serialise(x));
@@ -263,7 +260,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_bool)
 
 BOOST_AUTO_TEST_CASE(ContractABIType_addr)
 {
-    ContractABI ct;
+    ContractABICodec ct;
 
     Address x;
     std::string r = *toHexString(ct.serialise(x));
@@ -277,7 +274,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_addr)
 
 BOOST_AUTO_TEST_CASE(ContractABIType_string)
 {
-    ContractABI ct;
+    ContractABICodec ct;
 
     std::string x("Hello, world!");
     std::string r = *toHexString(ct.serialise(x));
@@ -293,7 +290,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_string)
 
 BOOST_AUTO_TEST_CASE(ContractABIType_array_uint256)
 {
-    ContractABI ct;
+    ContractABICodec ct;
 
     std::array<u256, 3> x{1, 2, 3};
     std::string r = *toHexString(ct.serialise(x));
@@ -317,7 +314,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_array_uint256)
 
 BOOST_AUTO_TEST_CASE(ContractABITest0)
 {
-    ContractABI ct;
+    ContractABICodec ct;
 
     u256 a = 12345;
     s256 b = -67890;
@@ -369,7 +366,7 @@ BOOST_AUTO_TEST_CASE(ContractABITest1)
         "000000000000000000000000000000000000000000000000000000000000000000000361626300000000000000"
         "00000000000000000000000000000000000000000000";
 
-    ContractABI ct;
+    ContractABICodec ct;
     auto rb = ct.abiIn("", a, b, c, d, e);
     auto r = *toHexString(rb);
     BOOST_CHECK_EQUAL(r, expect);
@@ -407,7 +404,7 @@ BOOST_AUTO_TEST_CASE(ContractABITest2)
         "000000000000000000000000000000000000000000000005000000000000000000000000000000000000000000"
         "0000000000000000000006";
 
-    ContractABI ct;
+    ContractABICodec ct;
     auto rb = ct.abiIn("", a);
     auto r = *toHexString(rb);
 
@@ -422,7 +419,7 @@ BOOST_AUTO_TEST_CASE(ContractABITest2)
 
 BOOST_AUTO_TEST_CASE(ContractABITest3)
 {
-    ContractABI ct;
+    ContractABICodec ct;
     u256 a = 123;
     Address b("0x692a70d2e424a56d2c6c27aa97d1a86395877b3a");
     std::string c = "string c";
@@ -624,7 +621,7 @@ BOOST_AUTO_TEST_CASE(ContractABI_AbiOutString0)
 {
     u256 u = 111111111;
     std::string s = "test string";
-    ContractABI ct;
+    ContractABICodec ct;
     auto in = ct.abiIn("", u, s);
 
     ABIFunc afunc;
@@ -649,7 +646,7 @@ BOOST_AUTO_TEST_CASE(ContractABI_AbiOutString1)
     u256 u = 111111111;
     s256 i = -11111111;
     std::string s = "aaaaaaa";
-    ContractABI ct;
+    ContractABICodec ct;
     auto in = ct.abiIn("", s, u, i);
 
     ABIFunc afunc;

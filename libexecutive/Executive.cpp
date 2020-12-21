@@ -21,8 +21,7 @@
 #include <libblockverifier/ExecutiveContext.h>
 #include <libexecutive/EVMInterface.h>
 #include <libexecutive/VMFactory.h>
-#include <libprotocol/ABI.h>
-#include <libprotocol/CommonJS.h>
+#include <libprotocol/ContractABICodec.h>
 #include <libprotocol/EVMSchedule.h>
 #include <libstorage/Common.h>
 #include <libstorage/StorageException.h>
@@ -62,7 +61,7 @@ void Executive::initialize(Transaction::Ptr _transaction)
         m_baseGasRequired = m_t->baseGasRequired(g_BCOSConfig.evmSchedule());
     }
 
-    verifyTransaction(ImportRequirements::Everything, m_t, m_envInfo.header(), m_envInfo.gasUsed());
+    verifyTransaction(m_t, m_envInfo.header(), m_envInfo.gasUsed());
 
     if (!m_t->hasZeroSignature())
     {
@@ -74,16 +73,14 @@ void Executive::initialize(Transaction::Ptr _transaction)
     }
 }
 
-void Executive::verifyTransaction(
-    ImportRequirements::value _ir, Transaction::Ptr _t, BlockHeader const&, u256 const&)
+void Executive::verifyTransaction(Transaction::Ptr _t, BlockHeader const&, u256 const&)
 {
     protocol::EVMSchedule const& schedule = g_BCOSConfig.evmSchedule();
 
     uint64_t txGasLimit = m_envInfo.precompiledEngine()->txGasLimit();
     // The gas limit is dynamic, not fixed.
     // Pre calculate the gas needed for execution
-    if ((_ir & ImportRequirements::TransactionBasic) &&
-        _t->baseGasRequired(schedule) > (bigint)txGasLimit)
+    if (_t->baseGasRequired(schedule) > (bigint)txGasLimit)
     {
         m_excepted = TransactionException::OutOfGasIntrinsic;
         m_exceptionReason << LOG_KV("reason",
@@ -326,7 +323,7 @@ bool Executive::executeCreate(Address const& _sender, u256 const& _endowment, u2
         return !m_ext;
     }
 
-    // Transfer ether before deploying the code. This will also create new
+    // This will also create new
     // account if it does not exist yet.
     m_s->transferBalance(_sender, m_newAddress, _endowment);
 
@@ -706,7 +703,7 @@ void Executive::loggingException()
 
 void Executive::writeErrInfoToOutput(string const& errInfo)
 {
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
     auto output = abi.abiIn("Error(string)", errInfo);
     m_output = owning_bytes_ref{std::move(output), 0, output.size()};
 }

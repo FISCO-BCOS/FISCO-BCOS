@@ -29,7 +29,7 @@
 #include <libprecompiled/ChainGovernancePrecompiled.h>
 #include <libprecompiled/PermissionPrecompiled.h>
 #include <libprecompiled/PrecompiledResult.h>
-#include <libprotocol/ABI.h>
+#include <libprotocol/ContractABICodec.h>
 #include <libstorage/MemoryTableFactoryFactory.h>
 #include <libstoragestate/StorageStateFactory.h>
 #include <boost/test/unit_test.hpp>
@@ -76,7 +76,7 @@ BOOST_FIXTURE_TEST_SUITE(test_ChainGovernancePrecompiled, ChainGovernancePrecomp
 
 BOOST_AUTO_TEST_CASE(grant_revoke_CM)
 {
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
     Address member1("0x420f853b49838bd3e9466c85a4cc3428c960dde1");
     bytes in = abi.abiIn("grantCommitteeMember(address)", member1);
     auto out = chainGovernancePrecompiled->call(context, bytesConstRef(&in));
@@ -302,7 +302,7 @@ BOOST_AUTO_TEST_CASE(grant_first_committee)
     int count = acTable->insert(SYS_TABLES, entry, make_shared<AccessOptions>(Address(), false));
     BOOST_TEST(count == 1);
 
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
     bytes in = abi.abiIn("grantCommitteeMember(address)", member1);
     auto out = chainGovernancePrecompiled->call(context, bytesConstRef(&in));
     s256 ret = 0;
@@ -312,7 +312,7 @@ BOOST_AUTO_TEST_CASE(grant_first_committee)
 
 BOOST_AUTO_TEST_CASE(updateCommitteeMemberWeight)
 {
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
     Address member1("0x420f853b49838bd3e9466c85a4cc3428c960dde1");
     bytes in = abi.abiIn("grantCommitteeMember(address)", member1);
     auto out = chainGovernancePrecompiled->call(context, bytesConstRef(&in));
@@ -400,7 +400,7 @@ BOOST_AUTO_TEST_CASE(updateCommitteeMemberWeight)
 
 BOOST_AUTO_TEST_CASE(updateThreshold)
 {
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
     Address member1("0x420f853b49838bd3e9466c85a4cc3428c960dde1");
     bytes in = abi.abiIn("grantCommitteeMember(address)", member1);
     auto out = chainGovernancePrecompiled->call(context, bytesConstRef(&in));

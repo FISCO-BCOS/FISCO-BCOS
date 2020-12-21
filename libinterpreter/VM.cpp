@@ -24,7 +24,6 @@
 #include "interpreter.h"
 #include "libconfig/GlobalConfigure.h"
 #include "libdevcrypto/CryptoInterface.h"
-#include <libprotocol/EVMFlags.h>
 
 namespace
 {

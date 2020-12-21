@@ -82,7 +82,7 @@ struct CallParameters
     Address senderAddress;   /// address of the transaction sender
     Address codeAddress;     /// address of the contract
     Address receiveAddress;  /// address of the transaction receiver
-    u256 valueTransfer;      /// transferred wei between the sender and receiver
+    u256 valueTransfer;      /// transferred between the sender and receiver
     u256 apparentValue;
     u256 gas;
     bytesConstRef data;       /// transaction data

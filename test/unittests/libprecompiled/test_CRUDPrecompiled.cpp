@@ -22,7 +22,7 @@
 #include <libdevcrypto/Common.h>
 #include <libprecompiled/CRUDPrecompiled.h>
 #include <libprecompiled/TableFactoryPrecompiled.h>
-#include <libprotocol/ABI.h>
+#include <libprotocol/ContractABICodec.h>
 #include <libstorage/MemoryTableFactoryFactory.h>
 #include <boost/test/unit_test.hpp>
 
@@ -84,7 +84,7 @@ BOOST_FIXTURE_TEST_SUITE(CRUDPrecompiled, CRUDPrecompiledFixture)
 BOOST_AUTO_TEST_CASE(CRUD)
 {
     // createTable
-    bcos::protocol::ContractABI abi;
+    bcos::protocol::ContractABICodec abi;
     std::string tableName = "t_test", tableName2 = "t_demo", key = "name",
                 valueField = "item_id,item_name";
     bytes param = abi.abiIn("createTable(string,string,string)", tableName, key, valueField);

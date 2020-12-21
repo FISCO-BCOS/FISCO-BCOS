@@ -38,7 +38,6 @@
 #include <libnetwork/Common.h>
 #include <libnetwork/Session.h>
 #include <libp2p/P2PInterface.h>
-#include <libprotocol/Common.h>
 #include <libprotocol/Exceptions.h>
 #include <libtxpool/TxPoolInterface.h>
 #include <libutilities/FixedBytes.h>
@@ -339,7 +338,7 @@ private:
     GossipBlockStatus::Ptr m_blockStatusGossipThread = nullptr;
 
     // settings
-    bcos::protocol::Handler<int64_t> m_blockSubmitted;
+    bcos::Handler<int64_t> m_blockSubmitted;
 
     // verify handler to check downloading block
     std::function<bool(bcos::protocol::Block const&)> fp_isConsensusOk = nullptr;

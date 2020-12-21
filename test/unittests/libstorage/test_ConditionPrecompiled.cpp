@@ -19,7 +19,7 @@
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcrypto/Common.h>
 #include <libprecompiled/ConditionPrecompiled.h>
-#include <libprotocol/ABI.h>
+#include <libprotocol/ContractABICodec.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -84,7 +84,7 @@ BOOST_AUTO_TEST_CASE(getCondition)
 
 BOOST_AUTO_TEST_CASE(call)
 {
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
 
     bytes in = abi.abiIn("EQ(string,int256)", std::string("price"), s256(256));
     conditionPrecompiled->call(context, bytesConstRef(&in));

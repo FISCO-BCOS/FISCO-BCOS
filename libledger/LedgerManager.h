@@ -25,7 +25,6 @@
 #include "Common.h"
 #include "Ledger.h"
 #include "LedgerInterface.h"
-#include <libprotocol/Protocol.h>
 #include <map>
 #include <set>
 #include <string>

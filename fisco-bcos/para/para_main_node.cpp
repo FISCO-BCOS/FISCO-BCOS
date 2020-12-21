@@ -30,8 +30,7 @@
 #include <libinitializer/SecureInitializer.h>
 #include <libledger/DBInitializer.h>
 #include <libledger/LedgerManager.h>
-#include <libprotocol/ABI.h>
-#include <libprotocol/Protocol.h>
+#include <libprotocol/ContractABICodec.h>
 #include <libtxpool/TxPool.h>
 #include <unistd.h>
 #include <chrono>
@@ -63,7 +62,7 @@ void generateUserAddTx(std::shared_ptr<LedgerManager> ledgerManager, size_t _use
             Address dest = Address(0x5002);
             string user = to_string(i);
             u256 money = 1000000000;
-            bcos::protocol::ContractABI abi;
+            bcos::protocol::ContractABICodec abi;
             bytes data =
                 abi.abiIn("userSave(string,uint256)", user, money);  // add 1000000000 to user i
             u256 nonce = u256(utcTime());
@@ -125,7 +124,7 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
                 userTo = to_string(dist(mt));
 
                 u256 money = 1;
-                bcos::protocol::ContractABI abi;
+                bcos::protocol::ContractABICodec abi;
                 bytes data = abi.abiIn("userTransfer(string,string,uint256)", userFrom, userTo,
                     money);  // add 1000000000 to user i
                 u256 nonce = u256(utcTime() + rand());

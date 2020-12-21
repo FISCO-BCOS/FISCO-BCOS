@@ -21,7 +21,7 @@
  * @date: 2020-06-03
  */
 #pragma once
-#include <libprotocol/ABI.h>
+#include <libprotocol/ContractABICodec.h>
 #include <libprotocol/Transaction.h>
 
 #define TXGEN_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("TxGenerator")
@@ -46,7 +46,7 @@ public:
         bcos::protocol::Transaction::Ptr generatedTx =
             std::make_shared<bcos::protocol::Transaction>();
         // get transaction data according to interface and params
-        bcos::protocol::ContractABI abiObject;
+        bcos::protocol::ContractABICodec abiObject;
         std::shared_ptr<bcos::bytes> data = std::make_shared<bcos::bytes>();
         *data = abiObject.abiIn(_interface, _params...);
         // set fields for the transaction

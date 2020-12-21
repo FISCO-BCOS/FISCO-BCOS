@@ -120,10 +120,9 @@ public:
         return TxPool::submitTransactions(_tx);
     };
 
-    ImportResult import(
-        bcos::protocol::Transaction::Ptr _tx, IfDropped _ik = IfDropped::Ignore) override
+    ImportResult import(bcos::protocol::Transaction::Ptr _tx) override
     {
-        return TxPool::import(_tx, _ik);
+        return TxPool::import(_tx);
     }
 };
 

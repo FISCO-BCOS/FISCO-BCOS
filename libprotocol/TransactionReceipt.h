@@ -23,7 +23,6 @@
 
 #include "libdevcrypto/CryptoInterface.h"
 #include "libprotocol/TransactionException.h"
-#include <libprotocol/Common.h>
 #include <libprotocol/LogEntry.h>
 #include <libutilities/RLP.h>
 #include <array>

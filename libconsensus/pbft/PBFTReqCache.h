@@ -24,7 +24,6 @@
  */
 #pragma once
 #include <libconsensus/pbft/Common.h>
-#include <libprotocol/Protocol.h>
 #include <libutilities/JsonDataConvertUtility.h>
 namespace bcos
 {

@@ -23,7 +23,7 @@
 #pragma once
 #include "Common.h"
 #include <libprotocol/BlockFactory.h>
-#include <libprotocol/Protocol.h>
+#include <libprotocol/CommonProtocolType.h>
 namespace bcos
 {
 namespace sync

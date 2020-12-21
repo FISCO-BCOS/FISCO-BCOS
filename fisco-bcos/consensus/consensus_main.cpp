@@ -29,7 +29,6 @@
 #include <libinitializer/P2PInitializer.h>
 #include <libinitializer/SecureInitializer.h>
 #include <libledger/LedgerManager.h>
-#include <libprotocol/Protocol.h>
 #include <libtxpool/TxPool.h>
 
 using namespace bcos;

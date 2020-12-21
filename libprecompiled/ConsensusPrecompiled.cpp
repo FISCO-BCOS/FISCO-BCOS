@@ -22,7 +22,7 @@
 #include "ConsensusPrecompiled.h"
 #include "libprecompiled/EntriesPrecompiled.h"
 #include "libprecompiled/TableFactoryPrecompiled.h"
-#include <libprotocol/ABI.h>
+#include <libprotocol/ContractABICodec.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
 
@@ -58,7 +58,7 @@ PrecompiledExecResult::Ptr ConsensusPrecompiled::call(
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
 
-    bcos::protocol::ContractABI abi;
+    bcos::protocol::ContractABICodec abi;
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
     int count = 0;
 

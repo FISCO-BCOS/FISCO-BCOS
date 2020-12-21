@@ -96,7 +96,7 @@ BOOST_AUTO_TEST_CASE(testGenerateTransaction)
     BOOST_CHECK(functionSelector == selector);
     auto paramData = getParamData(ref(decodedTx->data()));
     // decode data and check params
-    bcos::protocol::ContractABI abi;
+    bcos::protocol::ContractABICodec abi;
     std::string decodedvrfProof;
     std::string decodedvrfPk;
     std::string decodedvrfInput;

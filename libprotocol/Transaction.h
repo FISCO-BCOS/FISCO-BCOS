@@ -20,7 +20,6 @@
 #include "TransactionReceipt.h"
 #include <libdevcrypto/Common.h>
 #include <libdevcrypto/CryptoInterface.h>
-#include <libprotocol/Common.h>
 #include <libutilities/FixedBytes.h>
 #include <libutilities/RLP.h>
 #include <tbb/concurrent_unordered_set.h>

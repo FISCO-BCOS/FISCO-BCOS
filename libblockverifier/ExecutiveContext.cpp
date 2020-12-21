@@ -22,7 +22,7 @@
 #include "ExecutiveContext.h"
 
 #include <libprecompiled/ParallelConfigPrecompiled.h>
-#include <libprotocol/ABIParser.h>
+#include <libprotocol/ContractABIType.h>
 #include <libprotocol/Exceptions.h>
 #include <libstorage/StorageException.h>
 #include <libstorage/Table.h>
@@ -238,7 +238,7 @@ std::shared_ptr<std::vector<std::string>> ExecutiveContext::getTxCriticals(const
 
                 paramTypes.resize((size_t)config->criticalSize);
 
-                ContractABI abi;
+                ContractABICodec abi;
                 isOk =
                     abi.abiOutByFuncSelector(ref(_tx.data()).getCroppedData(4), paramTypes, *res);
                 if (!isOk)

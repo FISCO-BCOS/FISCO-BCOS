@@ -23,7 +23,7 @@
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcrypto/Common.h>
 #include <libprecompiled/KVTableFactoryPrecompiled.h>
-#include <libprotocol/ABI.h>
+#include <libprotocol/ContractABICodec.h>
 #include <libstorage/Storage.h>
 #include <libstorage/Table.h>
 #include <boost/test/unit_test.hpp>
@@ -89,7 +89,7 @@ BOOST_AUTO_TEST_CASE(toString)
 BOOST_AUTO_TEST_CASE(call_afterBlock)
 {
     // createTable
-    bcos::protocol::ContractABI abi;
+    bcos::protocol::ContractABICodec abi;
     bytes param = abi.abiIn("createTable(string,string,string)", std::string("t_test"),
         std::string("id"), std::string("item_name,item_id"));
     auto callResult = tableFactoryPrecompiled->call(context, bytesConstRef(&param));

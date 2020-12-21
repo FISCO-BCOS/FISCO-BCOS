@@ -24,8 +24,7 @@
 #pragma once
 
 #include <libp2p/Service.h>
-#include <libprotocol/CommonJS.h>
-#include <libprotocol/Protocol.h>
+#include <libprotocol/CommonProtocolType.h>
 #include <libutilities/FixedBytes.h>
 #include <boost/program_options.hpp>
 #include <cstdlib>

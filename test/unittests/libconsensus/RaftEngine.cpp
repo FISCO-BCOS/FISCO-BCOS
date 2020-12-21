@@ -24,7 +24,7 @@
 #include "FakeRaftEngine.h"
 #include <libdevcrypto/Common.h>
 #include <libp2p/P2PSession.h>
-#include <libprotocol/Protocol.h>
+#include <libprotocol/CommonProtocolType.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <test/unittests/libblockverifier/FakeBlockVerifier.h>
 #include <test/unittests/libsync/FakeBlockSync.h>

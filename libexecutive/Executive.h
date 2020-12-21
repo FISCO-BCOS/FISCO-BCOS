@@ -16,8 +16,6 @@
 
 #include "Common.h"
 #include <libprotocol/BlockHeader.h>
-#include <libprotocol/Common.h>
-#include <libprotocol/EVMFlags.h>
 #include <libprotocol/Transaction.h>
 #include <functional>
 
@@ -117,9 +115,8 @@ public:
     /// Begins execution of a transaction. You must call finalize() following this.
     /// @returns true if the transaction is done, false if go() must be called.
 
-    void verifyTransaction(bcos::protocol::ImportRequirements::value _ir,
-        bcos::protocol::Transaction::Ptr _t, bcos::protocol::BlockHeader const& _header,
-        u256 const& _gasUsed);
+    void verifyTransaction(bcos::protocol::Transaction::Ptr _t,
+        bcos::protocol::BlockHeader const& _header, u256 const& _gasUsed);
 
     bool execute();
     /// @returns the transaction from initialize().

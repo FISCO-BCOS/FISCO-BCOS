@@ -63,13 +63,34 @@ BOOST_AUTO_TEST_CASE(testBadBlock)
     RLPStream blockHeaderStream;
     bytes blockHeaderBytes;
     blockHeader.encode(blockHeaderBytes);
-    badBlock(blockHeaderBytes, "This blockheader no bad.");
 }
 
 BOOST_AUTO_TEST_CASE(testToAddress)
 {
     BOOST_CHECK_NO_THROW(bcos::protocol::toAddress("0x64fa644d2a694681bd6addd6c5e36cccd8dcdde3"));
     BOOST_CHECK_THROW(bcos::protocol::toAddress("0x64fa644d"), InvalidAddress);
+}
+
+BOOST_AUTO_TEST_CASE(testJsonStringToAddress)
+{
+    KeyPair key_pair = KeyPair::create();
+    /// test jsonStringToAddress
+    std::string addr = toHexStringWithPrefix(toAddress(key_pair.pub()));
+    BOOST_CHECK(jsonStringToAddress(addr) == toAddress(key_pair.pub()));
+    // exception test
+    std::string invalid_addr = "0x1234";
+    BOOST_CHECK_THROW(jsonStringToAddress(invalid_addr), bcos::protocol::InvalidAddress);
+    invalid_addr = "adb234ef";
+    BOOST_CHECK_THROW(jsonStringToAddress(invalid_addr), bcos::protocol::InvalidAddress);
+}
+
+BOOST_AUTO_TEST_CASE(testToBlockNumber)
+{
+    BOOST_CHECK(
+        bcos::protocol::jsonStringToBlockNumber("0x14") == (bcos::protocol::BlockNumber)(20));
+    BOOST_CHECK(
+        bcos::protocol::jsonStringToBlockNumber("100") == (bcos::protocol::BlockNumber)(100));
+    BOOST_CHECK_THROW(bcos::protocol::jsonStringToBlockNumber("adk"), std::exception);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

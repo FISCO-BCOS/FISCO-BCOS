@@ -85,7 +85,7 @@ FixedBytes<N> jsToFixed(std::string const& _s)
 template <unsigned N>
 boost::multiprecision::number<boost::multiprecision::cpp_int_backend<N * 8, N * 8,
     boost::multiprecision::unsigned_magnitude, boost::multiprecision::unchecked, void>>
-jonStringToInt(std::string const& _s)
+jsonStringToInt(std::string const& _s)
 {
     // Hex
     if (_s.substr(0, 2) == "0x")
@@ -109,14 +109,14 @@ jonStringToInt(std::string const& _s)
 
 inline u256 jonStringToU256(std::string const& _s)
 {
-    return jonStringToInt<32>(_s);
+    return jsonStringToInt<32>(_s);
 }
 
 /// Convert a string representation of a number to an int
 /// String can be a normal decimal number, or a hex prefixed by 0x or 0X, or an octal if prefixed by
 /// 0 Returns 0 in case of failure
-inline int64_t jonStringToInt(std::string const& _s)
+inline int64_t jsonStringToInt(std::string const& _s)
 {
-    return int64_t(jonStringToInt<8>(_s));
+    return int64_t(jsonStringToInt<8>(_s));
 }
 }  // namespace bcos

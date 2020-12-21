@@ -26,7 +26,7 @@
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libdevcrypto/Common.h>
 #include <libprecompiled/PermissionPrecompiled.h>
-#include <libprotocol/ABI.h>
+#include <libprotocol/ContractABICodec.h>
 #include <libstorage/MemoryTableFactoryFactory.h>
 #include <libstoragestate/StorageStateFactory.h>
 #include <test/tools/libutils/TestOutputHelper.h>
@@ -95,7 +95,7 @@ BOOST_FIXTURE_TEST_SUITE(test_AuthorityPrecompiled, AuthorityPrecompiledFixture)
 BOOST_AUTO_TEST_CASE(insert)
 {
     // first insert
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
     std::string tableName = "t_test";
     std::string addr = "0x420f853b49838bd3e9466c85a4cc3428c960dde2";
     bytes in = abi.abiIn("insert(string,string)", tableName, addr);
@@ -126,7 +126,7 @@ BOOST_AUTO_TEST_CASE(insert)
 BOOST_AUTO_TEST_CASE(insert_overflow)
 {
     // first insert
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
     std::string tableName = "66666012345678901234567890123456789012345678901234567890123456789";
     std::string addr = "0x420f853b49838bd3e9466c85a4cc3428c960dde2";
     bytes in = abi.abiIn("insert(string,string)", tableName, addr);
@@ -140,7 +140,7 @@ BOOST_AUTO_TEST_CASE(insert_overflow)
 BOOST_AUTO_TEST_CASE(remove)
 {
     // first insert
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
     std::string tableName = "t_test";
     std::string addr = "0x420f853b49838bd3e9466c85a4cc3428c960dde2";
     bytes in = abi.abiIn("insert(string,string)", tableName, addr);
@@ -203,7 +203,7 @@ BOOST_AUTO_TEST_CASE(remove)
 BOOST_AUTO_TEST_CASE(grantWrite)
 {
     // first insert
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
     std::string tableName = "t_test";
     std::string addr = "0x420f853b49838bd3e9466c85a4cc3428c960dde2";
     bytes in = abi.abiIn("insert(string,string)", tableName, addr);
@@ -262,7 +262,7 @@ BOOST_AUTO_TEST_CASE(grantWrite)
 BOOST_AUTO_TEST_CASE(grantWrite_contract)
 {
     // first insert
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
     Address contractAddress("0x420f853b49838bd3e9466c85a4cc3428c960dde1");
     std::string tableName = precompiled::getContractTableName(contractAddress);
     Address addr("0x420f853b49838bd3e9466c85a4cc3428c960dde2");
@@ -335,7 +335,7 @@ BOOST_AUTO_TEST_CASE(grantWrite_contract)
 BOOST_AUTO_TEST_CASE(queryByName)
 {
     // insert
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
     std::string tableName = "t_test";
     std::string addr = "0x420f853b49838bd3e9466c85a4cc3428c960dde2";
     bytes in = abi.abiIn("insert(string,string)", tableName, addr);
@@ -368,7 +368,7 @@ BOOST_AUTO_TEST_CASE(queryByName)
 BOOST_AUTO_TEST_CASE(error_func)
 {
     // insert
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
     std::string tableName = "t_test";
     std::string addr = "0x420f853b49838bd3e9466c85a4cc3428c960dde2";
     bytes in = abi.abiIn("insert(string)", tableName, addr);
@@ -388,7 +388,7 @@ BOOST_FIXTURE_TEST_SUITE(SM_test_AuthorityPrecompiled, SM_AuthorityPrecompiledFi
 BOOST_AUTO_TEST_CASE(insert)
 {
     // first insert
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
     std::string tableName = "t_test";
     std::string addr = "0x420f853b49838bd3e9466c85a4cc3428c960dde2";
     bytes in = abi.abiIn("insert(string,string)", tableName, addr);
@@ -419,7 +419,7 @@ BOOST_AUTO_TEST_CASE(insert)
 BOOST_AUTO_TEST_CASE(insert_overflow)
 {
     // first insert
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
     std::string tableName = "66666012345678901234567890123456789012345678901234567890123456789";
     std::string addr = "0x420f853b49838bd3e9466c85a4cc3428c960dde2";
     bytes in = abi.abiIn("insert(string,string)", tableName, addr);
@@ -433,7 +433,7 @@ BOOST_AUTO_TEST_CASE(insert_overflow)
 BOOST_AUTO_TEST_CASE(remove)
 {
     // first insert
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
     std::string tableName = "t_test";
     std::string addr = "0x420f853b49838bd3e9466c85a4cc3428c960dde2";
     bytes in = abi.abiIn("insert(string,string)", tableName, addr);
@@ -466,7 +466,7 @@ BOOST_AUTO_TEST_CASE(remove)
 BOOST_AUTO_TEST_CASE(queryByName)
 {
     // insert
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
     std::string tableName = "t_test";
     std::string addr = "0x420f853b49838bd3e9466c85a4cc3428c960dde2";
     bytes in = abi.abiIn("insert(string,string)", tableName, addr);
@@ -499,7 +499,7 @@ BOOST_AUTO_TEST_CASE(queryByName)
 BOOST_AUTO_TEST_CASE(error_func)
 {
     // insert
-    protocol::ContractABI abi;
+    protocol::ContractABICodec abi;
     std::string tableName = "t_test";
     std::string addr = "0x420f853b49838bd3e9466c85a4cc3428c960dde2";
     bytes in = abi.abiIn("insert(string)", tableName, addr);

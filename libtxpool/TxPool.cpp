@@ -221,7 +221,7 @@ bool TxPool::isSealerOrObserver()
  * @param _ik : Set to Retry to force re-addinga transaction that was previously dropped.
  * @return ImportResult : Import result code.
  */
-ImportResult TxPool::import(Transaction::Ptr _tx, IfDropped)
+ImportResult TxPool::import(Transaction::Ptr _tx)
 {
     _tx->setImportTime(u256(utcTime()));
     auto memoryUsed = m_usedMemorySize + _tx->capacity();
@@ -312,7 +312,7 @@ bool TxPool::txExists(bcos::h256 const& txHash)
  * @param _drop_policy : Import transaction policy
  * @return ImportResult : import result
  */
-ImportResult TxPool::verify(Transaction::Ptr trans, IfDropped _drop_policy)
+ImportResult TxPool::verify(Transaction::Ptr trans)
 {
     /// check whether this transaction has been existed
     h256 tx_hash = trans->hash();
@@ -323,7 +323,7 @@ ImportResult TxPool::verify(Transaction::Ptr trans, IfDropped _drop_policy)
         return ImportResult::AlreadyKnown;
     }
     /// the transaction has been dropped before
-    if (m_dropped.count(tx_hash) && _drop_policy == IfDropped::Ignore)
+    if (m_dropped.count(tx_hash))
     {
         TXPOOL_LOG(TRACE) << LOG_DESC("Verify: already dropped tx: ")
                           << LOG_KV("hash", tx_hash.abridged());

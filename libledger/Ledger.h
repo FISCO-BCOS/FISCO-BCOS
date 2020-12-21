@@ -32,7 +32,6 @@
 #include <libp2p/P2PInterface.h>
 #include <libp2p/Service.h>
 #include <libprotocol/BlockFactory.h>
-#include <libprotocol/Common.h>
 #include <libstat/NetworkStatHandler.h>
 #include <libutilities/Exceptions.h>
 #include <boost/algorithm/string.hpp>
@@ -245,7 +244,7 @@ protected:
     ChannelRPCServer::Ptr m_channelRPCServer;
     std::atomic_bool m_stopped = {false};
 
-    bcos::protocol::Handler<int64_t> m_handler;
+    bcos::Handler<int64_t> m_handler;
 
     std::shared_ptr<bcos::sync::NodeTimeMaintenance> m_nodeTimeMaintenance;
 };

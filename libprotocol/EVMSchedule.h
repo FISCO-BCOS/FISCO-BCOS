@@ -137,7 +137,6 @@ static const EVMSchedule ByzantiumSchedule = [] {
     schedule.haveRevert = true;
     schedule.haveReturnData = true;
     schedule.haveStaticCall = true;
-    // schedule.blockRewardOverwrite = {3 * ether};
     return schedule;
 }();
 

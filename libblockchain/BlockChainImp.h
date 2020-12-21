@@ -28,8 +28,6 @@
 #include <libledger/LedgerParam.h>
 #include <libprecompiled/SystemConfigPrecompiled.h>
 #include <libprotocol/Block.h>
-#include <libprotocol/Common.h>
-#include <libprotocol/Protocol.h>
 #include <libprotocol/Transaction.h>
 #include <libprotocol/TransactionReceipt.h>
 #include <libstorage/Common.h>

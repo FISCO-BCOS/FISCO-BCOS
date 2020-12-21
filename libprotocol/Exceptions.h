@@ -37,26 +37,17 @@ namespace protocol
 using errinfo_name = boost::error_info<struct tag_field, std::string>;
 using errinfo_field = boost::error_info<struct tag_field, int>;
 using errinfo_data = boost::error_info<struct tag_data, std::string>;
-using errinfo_nonce = boost::error_info<struct tag_nonce, h64>;
-using errinfo_target = boost::error_info<struct tag_target, h256>;
-using errinfo_importResult = boost::error_info<struct tag_importResult, ImportResult>;
 using BadFieldError = boost::tuple<errinfo_field, errinfo_data>;
 
 /// gas related exceptions
 DERIVE_BCOS_EXCEPTION(OutOfGasBase);
 DERIVE_BCOS_EXCEPTION(OutOfGasIntrinsic);
 DERIVE_BCOS_EXCEPTION(NotEnoughCash);
-DERIVE_BCOS_EXCEPTION(GasPriceTooLow);
 DERIVE_BCOS_EXCEPTION(BlockGasLimitReached);
 DERIVE_BCOS_EXCEPTION(TooMuchGasUsed);
-DERIVE_BCOS_EXCEPTION(InvalidGasUsed);
-DERIVE_BCOS_EXCEPTION(InvalidGasLimit);
 
 /// DB related exceptions
 DERIVE_BCOS_EXCEPTION(NotEnoughAvailableSpace);
-DERIVE_BCOS_EXCEPTION(ExtraDataTooBig);
-DERIVE_BCOS_EXCEPTION(ExtraDataIncorrect);
-DERIVE_BCOS_EXCEPTION(DatabaseAlreadyOpen);
 DERIVE_BCOS_EXCEPTION(PermissionDenied);
 
 /// transaction releated exceptions
@@ -65,20 +56,15 @@ DERIVE_BCOS_EXCEPTION(TransactionIsUnsigned);
 DERIVE_BCOS_EXCEPTION(TransactionRefused);
 DERIVE_BCOS_EXCEPTION(TransactionAlreadyInChain);
 DERIVE_BCOS_EXCEPTION(InvalidTransaction);
-DERIVE_BCOS_EXCEPTION(P2pEnqueueTransactionFailed);
 
 /// state trie related
-DERIVE_BCOS_EXCEPTION(InvalidTransactionsRoot);
-DERIVE_BCOS_EXCEPTION(InvalidReceiptsStateRoot);
 DERIVE_BCOS_EXCEPTION(InvalidAccountStartNonceInState);
 DERIVE_BCOS_EXCEPTION(IncorrectAccountStartNonceInState);
 
 /// block && block header related
 DERIVE_BCOS_EXCEPTION(InvalidParentHash);
 DERIVE_BCOS_EXCEPTION(InvalidNumber);
-DERIVE_BCOS_EXCEPTION(UnknownParent);
 DERIVE_BCOS_EXCEPTION(InvalidBlockFormat);
-DERIVE_BCOS_EXCEPTION(InvalidBlockHeaderItemCount);
 DERIVE_BCOS_EXCEPTION(InvalidBlockWithBadStateOrReceipt);
 DERIVE_BCOS_EXCEPTION(ErrorBlockHash);
 
@@ -86,7 +72,6 @@ DERIVE_BCOS_EXCEPTION(ErrorBlockHash);
 DERIVE_BCOS_EXCEPTION(BlockExecutionFailed);
 
 /// sync related
-DERIVE_BCOS_EXCEPTION(InvalidBlockDownloadQueuePiorityInput);
 DERIVE_BCOS_EXCEPTION(InvalidSyncPeerCreation);
 
 /// common exceptions

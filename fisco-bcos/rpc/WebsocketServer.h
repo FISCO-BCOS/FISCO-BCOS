@@ -23,7 +23,6 @@
 #include <libinitializer/LedgerInitializer.h>
 #include <libinitializer/P2PInitializer.h>
 #include <libinitializer/SecureInitializer.h>
-#include <libprotocol/CommonJS.h>
 #include <librpc/Rpc.h>
 #include <boost/asio/bind_executor.hpp>
 #include <boost/asio/ip/tcp.hpp>

@@ -20,14 +20,27 @@
  */
 #pragma once
 
+#include "libutilities/Common.h"
+#include "libutilities/FixedBytes.h"
 #include <json/json.h>
-#include <libprotocol/Common.h>
 
 namespace bcos
 {
 namespace rpc
 {
-bcos::protocol::TransactionSkeleton toTransactionSkeleton(Json::Value const& _json);
+struct TransactionSkeleton
+{
+    bool creation = false;
+    bcos::Address from;
+    bcos::Address to;
+    bcos::u256 value;
+    bcos::bytes data;
+    bcos::u256 nonce = Invalid256;
+    bcos::u256 gas = Invalid256;
+    bcos::u256 gasPrice = Invalid256;
+    bcos::u256 blockLimit = Invalid256;
+};
+TransactionSkeleton toTransactionSkeleton(Json::Value const& _json);
 
 }  // namespace rpc
 

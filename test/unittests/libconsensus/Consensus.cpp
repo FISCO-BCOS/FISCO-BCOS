@@ -25,7 +25,7 @@
 #include <libconsensus/Sealer.h>
 #include <libconsensus/pbft/PBFTSealer.h>
 #include <libdevcrypto/CryptoInterface.h>
-#include <libprotocol/Protocol.h>
+#include <libprotocol/CommonProtocolType.h>
 #include <test/tools/libutils/TestOutputHelper.h>
 #include <boost/test/unit_test.hpp>
 using namespace bcos::protocol;

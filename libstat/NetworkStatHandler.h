@@ -22,7 +22,7 @@
  */
 #pragma once
 #include <libchannelserver/ChannelMessage.h>
-#include <libprotocol/Protocol.h>
+#include <libprotocol/CommonProtocolType.h>
 #include <libutilities/Common.h>
 
 namespace bcos

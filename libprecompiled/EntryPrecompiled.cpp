@@ -22,7 +22,7 @@
 #include "libstorage/Table.h"
 #include <libblockverifier/ExecutiveContext.h>
 #include <libdevcrypto/CryptoInterface.h>
-#include <libprotocol/ABI.h>
+#include <libprotocol/ContractABICodec.h>
 
 using namespace bcos;
 using namespace bcos::blockverifier;
@@ -42,7 +42,7 @@ const char* const ENTRY_GET_STR = "getString(string)";
 
 std::string setInt(bytesConstRef _data, std::string& _key, bool _isUint = false)
 {
-    bcos::protocol::ContractABI abi;
+    bcos::protocol::ContractABICodec abi;
     std::string value;
 
     if (_isUint)
@@ -85,7 +85,7 @@ PrecompiledExecResult::Ptr EntryPrecompiled::call(
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
 
-    bcos::protocol::ContractABI abi;
+    bcos::protocol::ContractABICodec abi;
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
     callResult->gasPricer()->setMemUsed(param.size());
 

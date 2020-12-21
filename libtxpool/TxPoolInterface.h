@@ -22,10 +22,11 @@
  * @date: 2018-09-21
  */
 #pragma once
+#include "TxImportResult.h"
 #include <libprotocol/Block.h>
-#include <libprotocol/Common.h>
-#include <libprotocol/Protocol.h>
+#include <libprotocol/CommonProtocolType.h>
 #include <libprotocol/Transaction.h>
+#include <libutilities/CallbackCollectionHandler.h>
 namespace bcos
 {
 namespace txpool
@@ -89,8 +90,7 @@ public:
      * @param _ik : Set to Retry to force re-addinga transaction that was previously dropped.
      * @return ImportResult : Import result code.
      */
-    virtual bcos::protocol::ImportResult import(bcos::protocol::Transaction::Ptr,
-        bcos::protocol::IfDropped _ik = bcos::protocol::IfDropped::Ignore) = 0;
+    virtual ImportResult import(bcos::protocol::Transaction::Ptr) = 0;
     /// @returns the status of the transaction queue.
     virtual TxPoolStatus status() const = 0;
 
@@ -99,7 +99,7 @@ public:
 
     /// Register a handler that will be called once there is a new transaction imported
     template <class T>
-    bcos::protocol::Handler<> onReady(T const& _t)
+    bcos::Handler<> onReady(T const& _t)
     {
         return m_onReady.add(_t);
     }
@@ -140,7 +140,7 @@ public:
 protected:
     ///< Called when a subsequent call to import transactions will return a non-empty container. Be
     ///< nice and exit fast.
-    bcos::protocol::Signal<> m_onReady;
+    bcos::CallbackCollectionHandler<> m_onReady;
 };
 }  // namespace txpool
 }  // namespace bcos

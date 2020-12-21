@@ -24,7 +24,6 @@
 #include "PBFTEngine.h"
 #include "libdevcrypto/CryptoInterface.h"
 #include <libconfig/GlobalConfigure.h>
-#include <libprotocol/CommonJS.h>
 #include <libtxpool/TxPool.h>
 #include <libutilities/JsonDataConvertUtility.h>
 using namespace bcos::protocol;

@@ -75,7 +75,7 @@ PrecompiledExecResult::Ptr ParallelConfigPrecompiled::call(
     uint32_t func = getParamFunc(param);
     bytesConstRef data = getParamData(param);
 
-    ContractABI abi;
+    ContractABICodec abi;
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
 
     if (func == name2Selector[PARA_CONFIG_REGISTER_METHOD_ADDR_STR_UINT])
@@ -133,7 +133,7 @@ void ParallelConfigPrecompiled::registerParallelFunction(
     string functionName;
     u256 criticalSize;
 
-    ContractABI abi;
+    ContractABICodec abi;
     abi.abiOut(data, contractAddress, functionName, criticalSize);
     uint32_t selector = getFuncSelector(functionName);
 
@@ -175,7 +175,7 @@ void ParallelConfigPrecompiled::unregisterParallelFunction(
     Address contractAddress;
     string functionName;
 
-    ContractABI abi;
+    ContractABICodec abi;
     abi.abiOut(data, contractAddress, functionName);
     uint32_t selector = getFuncSelector(functionName);
 

@@ -21,7 +21,7 @@
  * @date: 2020-03-23
  */
 #pragma once
-#include <libprotocol/EVMFlags.h>
+#include <libprotocol/CommonProtocolType.h>
 #include <libutilities/Common.h>
 
 #define PrecompiledGas_LOG(LEVEL) LOG(LEVEL) << LOG_BADGE("LEDGER")

@@ -25,7 +25,7 @@
 #include <json/json.h>
 #include <libblockverifier/ExecutiveContext.h>
 #include <libprecompiled/TableFactoryPrecompiled.h>
-#include <libprotocol/ABI.h>
+#include <libprotocol/ContractABICodec.h>
 #include <boost/lexical_cast.hpp>
 
 using namespace std;
@@ -103,7 +103,7 @@ PrecompiledExecResult::Ptr ChainGovernancePrecompiled::call(
     // parse function name
     uint32_t func = getParamFunc(_param);
     bytesConstRef data = getParamData(_param);
-    bcos::protocol::ContractABI abi;
+    bcos::protocol::ContractABICodec abi;
     bytes out;
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
     int result = 0;
@@ -932,7 +932,7 @@ int ChainGovernancePrecompiled::updateFrozenStatus(ExecutiveContext::Ptr context
 void ChainGovernancePrecompiled::freezeAccount(ExecutiveContext::Ptr context, bytesConstRef data,
     Address const& origin, PrecompiledExecResult::Ptr _callResult)
 {
-    bcos::protocol::ContractABI abi;
+    bcos::protocol::ContractABICodec abi;
     Address accountAddress;
     abi.abiOut(data, accountAddress);
     int result = 0;
@@ -975,7 +975,7 @@ void ChainGovernancePrecompiled::freezeAccount(ExecutiveContext::Ptr context, by
 void ChainGovernancePrecompiled::unfreezeAccount(ExecutiveContext::Ptr context, bytesConstRef data,
     Address const& origin, PrecompiledExecResult::Ptr _callResult)
 {
-    bcos::protocol::ContractABI abi;
+    bcos::protocol::ContractABICodec abi;
     Address accountAddress;
     abi.abiOut(data, accountAddress);
     int result = 0;
@@ -1013,7 +1013,7 @@ void ChainGovernancePrecompiled::unfreezeAccount(ExecutiveContext::Ptr context, 
 void ChainGovernancePrecompiled::getAccountStatus(
     ExecutiveContext::Ptr context, bytesConstRef data, PrecompiledExecResult::Ptr _callResult)
 {
-    bcos::protocol::ContractABI abi;
+    bcos::protocol::ContractABICodec abi;
 
     Address accountAddress;
     abi.abiOut(data, accountAddress);

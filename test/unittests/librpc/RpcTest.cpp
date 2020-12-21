@@ -23,7 +23,6 @@
 #include <jsonrpccpp/common/exception.h>
 #include <libdevcrypto/Common.h>
 #include <libinitializer/LedgerInitializer.h>
-#include <libprotocol/CommonJS.h>
 #include <librpc/Rpc.h>
 #include <test/tools/libutils/Common.h>
 #include <test/tools/libutils/TestOutputHelper.h>
