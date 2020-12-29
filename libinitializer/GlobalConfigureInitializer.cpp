@@ -86,8 +86,14 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
         g_BCOSConfig.setSupportedVersion(version, static_cast<VERSION>(versionNumber));
     }
 
+    //FIXME: make enableWasm a configuration option
+    bool enableWasm = true;
     // set evmSchedule
-    if (g_BCOSConfig.version() >= V2_6_0)
+    if (enableWasm)
+    { // g_BCOSConfig.version() >= V2_8_0
+        g_BCOSConfig.setEVMSchedule(dev::eth::EWASMSchedule);
+    }
+    else if (g_BCOSConfig.version() >= V2_6_0)
     {
         g_BCOSConfig.setEVMSchedule(dev::eth::FiscoBcosScheduleV3);
     }

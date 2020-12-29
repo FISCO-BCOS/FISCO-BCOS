@@ -141,13 +141,6 @@ static const EVMSchedule ByzantiumSchedule = [] {
     return schedule;
 }();
 
-static const EVMSchedule EWASMSchedule = [] {
-    EVMSchedule schedule = ByzantiumSchedule;
-    schedule.maxCodeSize = std::numeric_limits<unsigned>::max();
-    // Ensure that zero bytes are not subsidised and are charged the same as non-zero bytes.
-    schedule.txDataZeroGas = schedule.txDataNonZeroGas;
-    return schedule;
-}();
 
 static const EVMSchedule ConstantinopleSchedule = [] {
     EVMSchedule schedule = ByzantiumSchedule;
@@ -172,6 +165,14 @@ static const EVMSchedule FiscoBcosScheduleV2 = [] {
 static const EVMSchedule FiscoBcosScheduleV3 = [] {
     EVMSchedule schedule = FiscoBcosScheduleV2;
     schedule.enableIstanbul = true;
+    return schedule;
+}();
+
+static const EVMSchedule EWASMSchedule = [] {
+    EVMSchedule schedule = FiscoBcosScheduleV3;
+    schedule.maxCodeSize = std::numeric_limits<unsigned>::max();
+    // Ensure that zero bytes are not subsidised and are charged the same as non-zero bytes.
+    schedule.txDataZeroGas = schedule.txDataNonZeroGas;
     return schedule;
 }();
 
