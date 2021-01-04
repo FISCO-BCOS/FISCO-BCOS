@@ -245,11 +245,6 @@ evmc_result EVMHostContext::call(CallParameters& _p)
 {
     Executive e{m_s, envInfo(), m_freeStorage, depth() + 1};
     stringstream ss;
-    for (auto v : _p.data)
-    {
-        ss << v;
-    }
-    EXECUTIVE_LOG(ERROR) << "call data = " << ss.str();
     // Note: When create initializes Executive, the flags of evmc context must be passed in
     if (!e.call(_p, gasPrice(), origin()))
     {
@@ -381,7 +376,8 @@ bool EVMHostContext::issueFungibleAsset(
     auto issuer = Address(entry->getField(SYS_ASSET_ISSUER));
     if (caller() != issuer)
     {
-        EXECUTIVE_LOG(WARNING) << "issueFungibleAsset not issuer of " << _assetName;
+        EXECUTIVE_LOG(WARNING) << "issueFungibleAsset not issuer of " << _assetName
+                               << LOG_KV("issuer", issuer) << LOG_KV("caller", caller());
         return false;
     }
     // TODO: check supplied is less than total_supply
@@ -561,14 +557,14 @@ bool EVMHostContext::transferAsset(
             auto tokenIDs = entry->getField("value");
             // find id in tokenIDs
             auto tokenID = to_string(_amountOrID);
-            std::size_t found = tokenIDs.find(tokenID);
-            if (found != std::string::npos)
+            vector<string> tokenIDList;
+            boost::split(tokenIDList, tokenIDs, boost::is_any_of(","));
+            auto it = find(tokenIDList.begin(), tokenIDList.end(), tokenID);
+            if (it != tokenIDList.end())
             {
-                auto start = found == 0 ? found : found - 1;
-                auto end = found == 0 ? tokenID.size() + 1 : tokenID.size();
-                tokenIDs.replace(start, end <= tokenIDs.size() ? end : tokenIDs.size(), "");
+                tokenIDList.erase(it);
                 auto updateEntry = table->newEntry();
-                updateEntry->setField("value", tokenIDs);
+                updateEntry->setField("value", boost::algorithm::join(tokenIDList, ","));
                 table->update(_assetName, updateEntry, table->newCondition());
                 auto tokenKey = _assetName + "-" + tokenID;
                 entries = table->select(tokenKey, table->newCondition());

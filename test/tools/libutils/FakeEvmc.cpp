@@ -213,6 +213,13 @@ evmc_host_interface const fakeFnTable = {
     log,
     nullptr,
     nullptr,
+    nullptr,
+    nullptr,
+    nullptr,
+    nullptr,
+    nullptr,
+    nullptr,
+    nullptr,
 };
 
 evmc_gas_metrics ethMetrics{32000, 20000, 5000, 200, 9000, 2300, 25000};
