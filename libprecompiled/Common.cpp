@@ -204,49 +204,6 @@ int dev::precompiled::checkLengthValidate(
     return 0;
 }
 
-dev::precompiled::ContractStatus dev::precompiled::getContractStatus(
-    std::shared_ptr<dev::blockverifier::ExecutiveContext> context, std::string const& tableName)
-{
-    Table::Ptr table = openTable(context, tableName);
-    if (!table)
-    {
-        return ContractStatus::AddressNonExistent;
-    }
-
-    auto codeHashEntries =
-        table->select(dev::storagestate::ACCOUNT_CODE_HASH, table->newCondition());
-    h256 codeHash;
-    if (g_BCOSConfig.version() >= V2_5_0)
-    {
-        codeHash = h256(codeHashEntries->get(0)->getFieldBytes(dev::storagestate::STORAGE_VALUE));
-    }
-    else
-    {
-        codeHash =
-            h256(fromHex(codeHashEntries->get(0)->getField(dev::storagestate::STORAGE_VALUE)));
-    }
-
-    if (EmptyHash == codeHash)
-    {
-        return ContractStatus::NotContractAddress;
-    }
-
-    auto frozenEntries = table->select(dev::storagestate::ACCOUNT_FROZEN, table->newCondition());
-    if (frozenEntries->size() > 0 &&
-        "true" == frozenEntries->get(0)->getField(dev::storagestate::STORAGE_VALUE))
-    {
-        return ContractStatus::Frozen;
-    }
-    else
-    {
-        return ContractStatus::Available;
-    }
-    PRECOMPILED_LOG(ERROR) << LOG_DESC("getContractStatus error")
-                           << LOG_KV("table name", tableName);
-
-    return ContractStatus::Invalid;
-}
-
 bytes precompiled::PrecompiledException::ToOutput()
 {
     eth::ContractABI abi;
@@ -309,7 +266,7 @@ dev::h512s dev::precompiled::getNodeListByType(
 }
 
 // Get the configuration value of the given key from the system configuration table
-std::shared_ptr<std::pair<std::string, int64_t>> dev::precompiled::getSysteConfigByKey(
+std::shared_ptr<std::pair<std::string, int64_t>> dev::precompiled::getSystemConfigByKey(
     dev::storage::Table::Ptr _sysConfigTable, std::string const& _key, int64_t const& _num)
 {
     std::shared_ptr<std::pair<std::string, int64_t>> result =

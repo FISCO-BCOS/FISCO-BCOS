@@ -336,7 +336,7 @@ bool WorkingSealerManagerImpl::shouldRotate()
         BOOST_THROW_EXCEPTION(PrecompiledException(
             "Open system configuration table failed! tableName: " + SYS_CONFIG));
     }
-    auto notifyRotateFlagInfo = getSysteConfigByKey(
+    auto notifyRotateFlagInfo = getSystemConfigByKey(
         m_sysConfigTable, INTERNAL_SYSTEM_KEY_NOTIFY_ROTATE, m_context->blockInfo().number);
     m_notifyNextLeaderRotateSetted = false;
     if (notifyRotateFlagInfo->first != "")
@@ -349,7 +349,7 @@ bool WorkingSealerManagerImpl::shouldRotate()
         return true;
     }
     // get epoch_sealer_num from the table
-    auto epochSealersInfo = getSysteConfigByKey(
+    auto epochSealersInfo = getSystemConfigByKey(
         m_sysConfigTable, SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM, m_context->blockInfo().number);
     m_configuredEpochSealersSize = boost::lexical_cast<int64_t>(epochSealersInfo->first);
     PRECOMPILED_LOG(DEBUG) << LOG_DESC("shouldRotate: get epoch_sealer_num")
@@ -370,7 +370,7 @@ bool WorkingSealerManagerImpl::shouldRotate()
         return true;
     }
     // get epoch_block_num from the table
-    auto epochBlockInfo = getSysteConfigByKey(
+    auto epochBlockInfo = getSystemConfigByKey(
         m_sysConfigTable, SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM, m_context->blockInfo().number);
     auto epochBlockNum = boost::lexical_cast<int64_t>(epochBlockInfo->first);
     if ((m_context->blockInfo().number - epochBlockInfo->second) % epochBlockNum == 0)
