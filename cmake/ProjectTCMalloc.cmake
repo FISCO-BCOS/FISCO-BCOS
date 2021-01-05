@@ -1,6 +1,13 @@
 include(ExternalProject)
 
-set(TCMALLOC_CONFIG ./configure  --disable-shared CXXFLAGS=-DHAVE_POSIX_MEMALIGN_SYMBOL=1 --enable-frame-pointers --disable-cpu-profiler --disable-heap-profiler --disable-heap-checker --disable-debugalloc --enable-minimal --prefix=${CMAKE_SOURCE_DIR}/deps/src/gperftools)
+set(GPERFTOOLS_OPTIONS --disable-shared --disable-cpu-profiler --disable-heap-profiler --disable-heap-checker --disable-debugalloc --enable-minimal)
+set(TCMALLOC_LIB_NAME "libtcmalloc_minimal.a")
+if (DEBUG)
+    set(GPERFTOOLS_OPTIONS "")
+    set(TCMALLOC_LIB_NAME "libtcmalloc${CMAKE_STATIC_LIBRARY_SUFFIX}")
+endif()
+
+set(TCMALLOC_CONFIG ./configure CXXFLAGS=-DHAVE_POSIX_MEMALIGN_SYMBOL=1 --enable-frame-pointers ${GPERFTOOLS_OPTIONS} --prefix=${CMAKE_SOURCE_DIR}/deps/src/gperftools)
 
 set(TCMALLOC_MAKE make install)
 
@@ -15,17 +22,17 @@ ExternalProject_Add(gperftools
     LOG_CONFIGURE 1
     LOG_BUILD 1
     LOG_INSTALL 1
-    CONFIGURE_COMMAND ${TCMALLOC_CONFIG} 
+    CONFIGURE_COMMAND ${TCMALLOC_CONFIG}
     BUILD_COMMAND ${TCMALLOC_MAKE}
     INSTALL_COMMAND ""
-    BUILD_BYPRODUCTS <SOURCE_DIR>/.libs/libtcmalloc_minimal.a
+    BUILD_BYPRODUCTS <SOURCE_DIR>/.libs/${TCMALLOC_LIB_NAME}
 )
 
 ExternalProject_Get_Property(gperftools SOURCE_DIR)
 add_library(TCMalloc STATIC IMPORTED GLOBAL)
 
 set(TCMALLOC_INCLUDE_DIR ${SOURCE_DIR}/include/)
-set(TCMALLOC_LIBRARY ${SOURCE_DIR}/.libs/libtcmalloc_minimal.a)
+set(TCMALLOC_LIBRARY ${SOURCE_DIR}/.libs/${TCMALLOC_LIB_NAME})
 file(MAKE_DIRECTORY ${TCMALLOC_INCLUDE_DIR})  # Must exist.
 
 set_property(TARGET TCMalloc PROPERTY IMPORTED_LOCATION ${TCMALLOC_LIBRARY})
