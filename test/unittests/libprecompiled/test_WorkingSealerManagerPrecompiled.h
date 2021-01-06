@@ -152,7 +152,7 @@ public:
     {
         auto table = openTable(context, SYS_CONFIG);
         auto valueInfo =
-            dev::precompiled::getSysteConfigByKey(table, _key, context->blockInfo().number + 1);
+            dev::precompiled::getSystemConfigByKey(table, _key, context->blockInfo().number + 1);
         return *valueInfo;
     }
 

@@ -19,6 +19,7 @@
  *  @date 20181119
  */
 #include "CNSPrecompiled.h"
+#include "AccountInfoUtility.h"
 #include <json/json.h>
 #include <libblockverifier/ExecutiveContext.h>
 #include <libethcore/ABI.h>
