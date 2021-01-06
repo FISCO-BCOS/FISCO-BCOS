@@ -30,7 +30,7 @@ contract GasChargeManagePrecompiled
 {
     function charge(address userAccount, uint256 gasValue) public returns(int256, uint256){}
     function deduct(address userAccount, uint256 gasValue) public returns(int256, uint256){}
-    function queryRemainGas(address userAccount) public view returns(uint256){}
+    function queryRemainGas(address userAccount) public view returns(int256, int256){}
 
     function grantCharger(address chargerAccount) public returns(int256){}
     function revokeCharger(address chargerAccount) public returns(int256){}
@@ -68,17 +68,29 @@ private:
         std::shared_ptr<dev::blockverifier::ExecutiveContext> _context, bytesConstRef _paramData,
         Address const& _origin);
 
-    bool checkAccountStatus(PrecompiledExecResult::Ptr _callResult,
-        std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
+    void grantCharger(PrecompiledExecResult::Ptr _callResult,
+        std::shared_ptr<dev::blockverifier::ExecutiveContext> _context, bytesConstRef _paramData,
+        Address const& _origin, Address const& _sender);
+
+    void revokeCharger(PrecompiledExecResult::Ptr _callResult,
+        std::shared_ptr<dev::blockverifier::ExecutiveContext> _context, bytesConstRef _paramData,
+        Address const& _origin, Address const& _sender);
+
+    void listChargers(PrecompiledExecResult::Ptr _callResult,
+        std::shared_ptr<dev::blockverifier::ExecutiveContext> _context);
+
+    int checkAccountStatus(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
         Address const& _userAccount);
 
-    bool checkParams(PrecompiledExecResult::Ptr _callResult,
-        std::shared_ptr<dev::blockverifier::ExecutiveContext> _context, Address const& _userAccount,
-        u256 const& _gasValue, Address const& _origin, Address const& _sender);
+    int checkParams(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
+        Address const& _userAccount, u256 const& _gasValue, Address const& _origin,
+        Address const& _sender);
 
     std::shared_ptr<std::set<Address>> getChargerList(
         std::shared_ptr<dev::blockverifier::ExecutiveContext> _context);
     std::shared_ptr<std::set<Address>> parseChargerList(std::string const& _chargerListStr);
+    void updateChargers(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
+        std::shared_ptr<std::set<Address>> _chargerList, Address const& _origin);
 
 private:
     std::string const c_chargerListSplitStr = ",";

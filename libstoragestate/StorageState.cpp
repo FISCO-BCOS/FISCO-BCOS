@@ -549,3 +549,55 @@ inline storage::Table::Ptr StorageState::getTable(Address const& _address) const
     }
     return m_memoryTableFactory->openTable(tableName);
 }
+
+std::pair<bool, u256> StorageState::remainGas(Address const& _accountAddress)
+{
+    if (m_accountGasCache.count(_accountAddress))
+    {
+        return std::make_pair(true, m_accountGasCache.at(_accountAddress));
+    }
+    // get remainGas from the table
+    auto table = getTable(_accountAddress);
+    // the account does not exist
+    if (!table)
+    {
+        return std::make_pair(false, 0);
+    }
+    auto entries = table->select(REMAIN_GAS, table->newCondition());
+    if (entries->size() != 0u)
+    {
+        auto remainGasStr = entries->get(0)->getField(STORAGE_VALUE);
+        u256 remainGasValue = boost::lexical_cast<u256>(remainGasStr);
+        // udpate the accountGasCache
+        m_accountGasCache.insert(std::make_pair(_accountAddress, remainGasValue));
+        return std::make_pair(true, remainGasValue);
+    }
+    return std::make_pair(true, 0);
+}
+
+bool StorageState::updateRemainGas(
+    Address const& _accountAddress, u256 const& _updatedGas, Address const& _origin)
+{
+    // update the accountGasCache
+    m_accountGasCache[_accountAddress] = _updatedGas;
+    // get remainGas from the table
+    auto table = getTable(_accountAddress);
+    if (!table)
+    {
+        return false;
+    }
+    auto entry = table->newEntry();
+    entry->setField(STORAGE_KEY, REMAIN_GAS);
+    entry->setField(STORAGE_VALUE, boost::lexical_cast<std::string>(_updatedGas));
+    auto entries = table->select(REMAIN_GAS, table->newCondition());
+    if (entries->size() == 0)
+    {
+        table->insert(REMAIN_GAS, entry, std::make_shared<AccessOptions>(_origin, false));
+    }
+    else
+    {
+        table->update(REMAIN_GAS, entry, table->newCondition(),
+            std::make_shared<AccessOptions>(_origin, false));
+    }
+    return true;
+}
