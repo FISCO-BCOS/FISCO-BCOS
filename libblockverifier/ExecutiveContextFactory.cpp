@@ -26,6 +26,7 @@
 #include <libprecompiled/ChainGovernancePrecompiled.h>
 #include <libprecompiled/ConsensusPrecompiled.h>
 #include <libprecompiled/ContractLifeCyclePrecompiled.h>
+#include <libprecompiled/GasChargeManagePrecompiled.h>
 #include <libprecompiled/KVTableFactoryPrecompiled.h>
 #include <libprecompiled/ParallelConfigPrecompiled.h>
 #include <libprecompiled/PermissionPrecompiled.h>
@@ -102,6 +103,8 @@ void ExecutiveContextFactory::initExecutiveContext(
     if (g_BCOSConfig.version() >= V2_8_0)
     {
         context->setAddress2Precompiled(CRYPTO_ADDRESS, std::make_shared<CryptoPrecompiled>());
+        context->setAddress2Precompiled(
+            GASCHARGEMANAGE_ADDRESS, std::make_shared<GasChargeManagePrecompiled>());
     }
 }
 
