@@ -38,6 +38,43 @@ SystemConfigPrecompiled::SystemConfigPrecompiled()
     name2Selector[SYSCONFIG_METHOD_SET_STR] = getFuncSelector(SYSCONFIG_METHOD_SET_STR);
 }
 
+int SystemConfigPrecompiled::setSystemConfigByKey(
+    dev::blockverifier::ExecutiveContext::Ptr _context, std::string const& _configKey,
+    std::string const& _configValue, std::shared_ptr<AccessOptions> _accessOption)
+{
+    storage::Table::Ptr table = openTable(_context, SYS_CONFIG);
+
+    auto condition = table->newCondition();
+    auto entries = table->select(_configKey, condition);
+    auto entry = table->newEntry();
+    entry->setField(SYSTEM_CONFIG_KEY, _configKey);
+    entry->setField(SYSTEM_CONFIG_VALUE, _configValue);
+    entry->setField(SYSTEM_CONFIG_ENABLENUM,
+        boost::lexical_cast<std::string>(_context->blockInfo().number + 1));
+    int count = 0;
+    if (entries->size() == 0u)
+    {
+        count = table->insert(_configKey, entry, _accessOption);
+        if (count == dev::storage::CODE_NO_AUTHORIZED)
+        {
+            PRECOMPILED_LOG(DEBUG)
+                << LOG_BADGE("setSystemConfigByKey") << LOG_DESC("permission denied");
+            return dev::storage::CODE_NO_AUTHORIZED;
+        }
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("setSystemConfigByKey")
+                               << LOG_DESC("setValueByKey successfully");
+        return count;
+    }
+    count = table->update(_configKey, entry, condition, _accessOption);
+    if (count == dev::storage::CODE_NO_AUTHORIZED)
+    {
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("SystemConfigPrecompiled")
+                               << LOG_DESC("permission denied");
+        return dev::storage::CODE_NO_AUTHORIZED;
+    }
+    return count;
+}
+
 PrecompiledExecResult::Ptr SystemConfigPrecompiled::call(
     ExecutiveContext::Ptr context, bytesConstRef param, Address const& origin, Address const&)
 {
@@ -47,7 +84,6 @@ PrecompiledExecResult::Ptr SystemConfigPrecompiled::call(
 
     dev::eth::ContractABI abi;
     auto callResult = m_precompiledExecResultFactory->createPrecompiledResult();
-    int count = 0;
     int result = 0;
     if (func == name2Selector[SYSCONFIG_METHOD_SET_STR])
     {
@@ -68,50 +104,8 @@ PrecompiledExecResult::Ptr SystemConfigPrecompiled::call(
             getErrorCodeOut(callResult->mutableExecResult(), CODE_INVALID_CONFIGURATION_VALUES);
             return callResult;
         }
-
-        storage::Table::Ptr table = openTable(context, SYS_CONFIG);
-
-        auto condition = table->newCondition();
-        auto entries = table->select(configKey, condition);
-        auto entry = table->newEntry();
-        entry->setField(SYSTEM_CONFIG_KEY, configKey);
-        entry->setField(SYSTEM_CONFIG_VALUE, configValue);
-        entry->setField(SYSTEM_CONFIG_ENABLENUM,
-            boost::lexical_cast<std::string>(context->blockInfo().number + 1));
-
-        if (entries->size() == 0u)
-        {
-            count = table->insert(configKey, entry, std::make_shared<AccessOptions>(origin));
-            if (count == storage::CODE_NO_AUTHORIZED)
-            {
-                PRECOMPILED_LOG(DEBUG)
-                    << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("permission denied");
-                result = storage::CODE_NO_AUTHORIZED;
-            }
-            else
-            {
-                PRECOMPILED_LOG(DEBUG) << LOG_BADGE("SystemConfigPrecompiled")
-                                       << LOG_DESC("setValueByKey successfully");
-                result = count;
-            }
-        }
-        else
-        {
-            count =
-                table->update(configKey, entry, condition, std::make_shared<AccessOptions>(origin));
-            if (count == storage::CODE_NO_AUTHORIZED)
-            {
-                PRECOMPILED_LOG(DEBUG)
-                    << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("permission denied");
-                result = storage::CODE_NO_AUTHORIZED;
-            }
-            else
-            {
-                PRECOMPILED_LOG(DEBUG) << LOG_BADGE("SystemConfigPrecompiled")
-                                       << LOG_DESC("update value by key successfully");
-                result = count;
-            }
-        }
+        result = SystemConfigPrecompiled::setSystemConfigByKey(
+            context, configKey, configValue, std::make_shared<AccessOptions>(origin));
     }
     else
     {

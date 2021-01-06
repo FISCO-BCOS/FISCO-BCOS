@@ -36,7 +36,7 @@ class ExecutiveContext;
 namespace storage
 {
 class Table;
-}
+}  // namespace storage
 
 namespace precompiled
 {
@@ -50,6 +50,11 @@ const std::string SYS_AC_ENABLENUM = "enable_num";
 enum PrecompiledError : int
 {
     // GasChargerManagePrecompiled -53099 ~ -53000
+    CODE_GCM_UNDEFINED_FUNCTION = -53008,
+    CODE_GCM_CHARGER_NOT_EXISTS = -53007,
+    CODE_GCM_CHARGER_ALREADY_EXISTS = -53006,
+    CODE_GCM_REVOKE_PERMISSION_DENIED = -53005,
+    CODE_GCM_GRANT_PERMISSION_DENIED = -53004,
     CODE_GCM_NOT_ENOUGH_REMAIN_GAS = -53003,
     CODE_GCM_CHARGED_GAS_OVERFLOW = -53002,
     CODE_GCM_INVALID_ZERO_GAS_VALUE = -53001,
@@ -184,7 +189,7 @@ const Address PERMISSION_ADDRESS = Address(0x1005);
 const Address PARALLEL_CONFIG_ADDRESS = Address(0x1006);
 const Address CONTRACT_LIFECYCLE_ADDRESS = Address(0x1007);
 const Address CHAINGOVERNANCE_ADDRESS = Address(0x1008);
-const Address GASCHARGEMANAGER_ADDRESS = Address(0x1009);
+const Address GASCHARGEMANAGE_ADDRESS = Address(0x1009);
 const Address KVTABLE_FACTORY_ADDRESS = Address(0x1010);
 const Address WORKING_SEALER_MGR_ADDRESS = Address(0x1011);
 
