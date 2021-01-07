@@ -164,9 +164,9 @@ public:
     virtual bool checkAuthority(Address const& _origin, Address const& _contract) const = 0;
 
     // get the remainGas of the given account
-    virtual u256 remainGas(Address const&) const{ return 0; };
+    virtual std::pair<bool, u256> remainGas(Address const&) { return std::make_pair(false, 0); };
 
-    virtual void updateRemainGas(Address const&, u256 const&){};
+    virtual bool updateRemainGas(Address const&, u256 const&, Address const&) { return false; };
 };
 
 }  // namespace executive
