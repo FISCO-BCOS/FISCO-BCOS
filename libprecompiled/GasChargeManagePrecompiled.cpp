@@ -174,7 +174,8 @@ int GasChargeManagePrecompiled::checkParams(std::shared_ptr<ExecutiveContext> _c
     }
     // check the account status
     auto retCode = checkAccountStatus(_context, _userAccount);
-    if (retCode != CODE_SUCCESS)
+    // Note: if the account doesn not exist, updateRemainGas will create the account
+    if (retCode != CODE_SUCCESS && retCode != CODE_ACCOUNT_NOT_EXIST)
     {
         return retCode;
     }
