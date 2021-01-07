@@ -159,7 +159,12 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
         // enable_parallel=true can't be run with enable_parallel=false
         block.setStateRootToAllReceipt(stateRoot);
     }
-    block.updateSequenceReceiptGas();
+    // supported_version >= 2.8.0, no accumulative calculation of gas
+    if (g_BCOSConfig.version() < V2_8_0)
+    {
+        block.updateSequenceReceiptGas();
+    }
+
     block.calReceiptRoot();
     block.header().setStateRoot(stateRoot);
     if (dynamic_pointer_cast<storagestate::StorageState>(executiveContext->getState()))
@@ -314,7 +319,11 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
 
     // set stateRoot in receipts
     block.setStateRootToAllReceipt(stateRoot);
-    block.updateSequenceReceiptGas();
+    // supported_version >= 2.8.0, no accumulative calculation of gas
+    if (g_BCOSConfig.version() < V2_8_0)
+    {
+        block.updateSequenceReceiptGas();
+    }
     auto setAllReceipt_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
@@ -448,5 +457,10 @@ dev::eth::TransactionReceipt::Ptr BlockVerifier::execute(dev::eth::Transaction::
 dev::executive::Executive::Ptr BlockVerifier::createAndInitExecutive(
     std::shared_ptr<StateFace> _s, dev::executive::EnvInfo const& _envInfo)
 {
-    return std::make_shared<Executive>(_s, _envInfo, m_evmFlags & EVMFlags::FreeStorageGas);
+    auto executive =
+        std::make_shared<Executive>(_s, _envInfo, m_evmFlags & EVMFlags::FreeStorageGas, 0);
+    ReadGuard l(x_gasFreeAccounts);
+    executive->setEnableGasCharge(m_enableGasCharge);
+    executive->setGasFreeAccounts(m_gasFreeAccounts);
+    return executive;
 }

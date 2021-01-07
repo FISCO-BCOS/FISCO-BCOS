@@ -88,7 +88,6 @@ private:
 
     std::shared_ptr<std::set<Address>> getChargerList(
         std::shared_ptr<dev::blockverifier::ExecutiveContext> _context);
-    std::shared_ptr<std::set<Address>> parseChargerList(std::string const& _chargerListStr);
     void updateChargers(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
         std::shared_ptr<std::set<Address>> _chargerList, Address const& _origin);
 
