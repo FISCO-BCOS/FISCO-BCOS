@@ -591,6 +591,13 @@ bool StorageState::updateRemainGas(
     auto table = getTable(_accountAddress);
     if (!table)
     {
+        // create account for the _accountAddress
+        createAccount(_accountAddress, requireAccountStartNonce());
+        // try to open table again
+        table = getTable(_accountAddress);
+    }
+    if (!table)
+    {
         return false;
     }
     auto entry = table->newEntry();
