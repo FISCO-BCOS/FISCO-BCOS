@@ -52,7 +52,6 @@ public:
     }
 
     ~CryptoPrecompiledFixture() {}
-
     CryptoPrecompiled::Ptr cryptoPrecompiled;
     ExecutiveContext::Ptr precompiledContext;
 };
@@ -60,8 +59,9 @@ public:
 class SMCryptoPrecompiledFixture : public CryptoPrecompiledFixture
 {
 public:
-    SMCryptoPrecompiledFixture() : smCrypto(g_BCOSConfig.SMCrypto())
+    SMCryptoPrecompiledFixture()
     {
+        smCrypto = g_BCOSConfig.SMCrypto();
         g_BCOSConfig.setUseSMCrypto(true);
         if (!smCrypto)
         {
@@ -74,8 +74,11 @@ public:
     {
         g_BCOSConfig.setUseSMCrypto(smCrypto);
         clearName2SelectCache();
+        if (!smCrypto)
+        {
+            crypto::initCrypto();
+        }
     }
-
     bool smCrypto;
 };
 
@@ -169,7 +172,7 @@ void testVRFVerify(
     BOOST_CHECK(verifySucc == false);
     BOOST_CHECK(randomValue == 0);
 }
-BOOST_FIXTURE_TEST_SUITE(CryptoPrecompiled, CryptoPrecompiledFixture)
+BOOST_FIXTURE_TEST_SUITE(CryptoPrecompiledTest, CryptoPrecompiledFixture)
 BOOST_AUTO_TEST_CASE(testSM3AndKeccak256)
 {
     testHash(cryptoPrecompiled, precompiledContext);

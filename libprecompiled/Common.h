@@ -232,6 +232,9 @@ const char* const SYSTEM_INIT_VALUE_TX_GAS_LIMIT = "300000000";
 
 // system configuration for charger-list
 const char* const SYSTEM_KEY_CHARGER_LIST = "charger_list";
+const char* const SYSTEM_KEY_CHARGE_MANAGE_SWITCH = "enable_charge_mgr";
+const char* const SYSTEM_KEY_CHARGE_MANAGE_SWITCH_ON = "on";
+const char* const SYSTEM_KEY_CHARGE_MANAGE_SWITCH_OFF = "off";
 
 const int TX_COUNT_LIMIT_MIN = 1;
 const int TX_GAS_LIMIT_MIN = 100000;
