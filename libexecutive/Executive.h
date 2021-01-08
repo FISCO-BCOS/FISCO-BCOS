@@ -192,8 +192,17 @@ public:
         m_logs.clear();
         m_t.reset();
     }
+    void setGasFreeAccounts(std::set<Address> _gasFreeAccounts)
+    {
+        m_gasFreeAccounts = _gasFreeAccounts;
+    }
+    void setEnableGasCharge(bool _enableGasCharge) { m_enableGasCharge = _enableGasCharge; }
 
 private:
+    bool shouldCheckAccountGas(dev::eth::Transaction::Ptr _tx);
+    void checkAccountRemainGas(dev::eth::Transaction::Ptr _tx, int64_t const& _requiredGas);
+    void deductRuntimeGas(dev::eth::Transaction::Ptr _tx, u256 const& _refundedGas);
+
     void parseEVMCResult(std::shared_ptr<eth::Result> _result);
     /// @returns false iff go() must be called (and thus a VM execution in required).
     bool executeCreate(Address const& _txSender, u256 const& _endowment, u256 const& _gasPrice,
@@ -239,6 +248,9 @@ private:
 
     // determine whether the freeStorageVMSchedule enabled or not
     bool m_enableFreeStorage = false;
+
+    bool m_enableGasCharge = false;
+    std::set<Address> m_gasFreeAccounts;
 };
 
 }  // namespace executive
