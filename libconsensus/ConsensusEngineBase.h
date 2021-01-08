@@ -276,22 +276,16 @@ protected:
     virtual void updateConsensusNodeList();
 
     /// set the max number of transactions in a block
-    virtual void updateMaxBlockTransactions()
-    {
-        /// update m_maxBlockTransactions stored in sealer when reporting a new block
-        std::string ret = m_blockChain->getSystemConfigByKey("tx_count_limit");
-        {
-            m_maxBlockTransactions = boost::lexical_cast<uint64_t>(ret);
-        }
-        ENGINE_LOG(DEBUG) << LOG_DESC("resetConfig: updateMaxBlockTransactions")
-                          << LOG_KV("txCountLimit", m_maxBlockTransactions);
-    }
+    virtual void updateMaxBlockTransactions();
+    virtual void updateGasChargeManageSwitch();
 
     dev::h512s consensusList() const override
     {
         ReadGuard l(m_sealerListMutex);
         return m_sealerList;
     }
+
+    void statGasUsed(dev::eth::Block const& _block);
 
 protected:
     std::atomic<uint64_t> m_maxBlockTransactions = {1000};

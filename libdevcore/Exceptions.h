@@ -113,6 +113,8 @@ DEV_SIMPLE_EXCEPTION(ForbidNegativeValue);
 DEV_SIMPLE_EXCEPTION(InvalidConfiguration);
 DEV_SIMPLE_EXCEPTION(InvalidPort);
 DEV_SIMPLE_EXCEPTION(InvalidSupportedVersion);
+
+DEV_SIMPLE_EXCEPTION(InvalidAddress);
 /**
  * @brief : error information to be added to exceptions
  */

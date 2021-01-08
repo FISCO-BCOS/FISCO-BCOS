@@ -101,31 +101,6 @@ PrecompiledExecResult::Ptr GasChargeManagePrecompiled::call(
     return callResult;
 }
 
-std::shared_ptr<std::set<Address>> GasChargeManagePrecompiled::parseChargerList(
-    std::string const& _chargerListStr)
-{
-    std::vector<std::string> chargerList;
-    boost::split(chargerList, _chargerListStr, boost::is_any_of(c_chargerListSplitStr));
-    std::shared_ptr<std::set<Address>> chargerAddressList = std::make_shared<std::set<Address>>();
-    for (auto const& charger : chargerList)
-    {
-        if (charger.length() == 0)
-        {
-            continue;
-        }
-        try
-        {
-            chargerAddressList->insert(dev::eth::toAddress(charger));
-        }
-        catch (const std::exception& e)
-        {
-            PRECOMPILED_LOG(WARNING) << LOG_DESC("convert charger str to address failed")
-                                     << LOG_KV("chargerAccount", charger);
-        }
-    }
-    return chargerAddressList;
-}
-
 std::shared_ptr<std::set<Address>> GasChargeManagePrecompiled::getChargerList(
     std::shared_ptr<ExecutiveContext> _context)
 {
@@ -139,7 +114,7 @@ std::shared_ptr<std::set<Address>> GasChargeManagePrecompiled::getChargerList(
         sysConfigTable, SYSTEM_KEY_CHARGER_LIST, _context->blockInfo().number);
 
     PRECOMPILED_LOG(DEBUG) << LOG_DESC("getChargerList") << LOG_KV("chargerList", result->first);
-    return parseChargerList(result->first);
+    return convertStringToAddressSet(result->first, c_chargerListSplitStr);
 }
 
 // check the account status

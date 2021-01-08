@@ -118,6 +118,17 @@ PrecompiledExecResult::Ptr SystemConfigPrecompiled::call(
 
 bool SystemConfigPrecompiled::checkValueValid(std::string const& key, std::string const& value)
 {
+    // switch for gasChargeManager
+    if (SYSTEM_KEY_CHARGE_MANAGE_SWITCH == key)
+    {
+        if (g_BCOSConfig.version() < V2_8_0)
+        {
+            return false;
+        }
+        return ((value.compare(SYSTEM_KEY_CHARGE_MANAGE_SWITCH_ON) == 0) ||
+                (value.compare(SYSTEM_KEY_CHARGE_MANAGE_SWITCH_OFF) == 0));
+    }
+
     int64_t configuredValue = 0;
     try
     {
