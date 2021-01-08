@@ -74,6 +74,10 @@ public:
     {
         g_BCOSConfig.setUseSMCrypto(smCrypto);
         clearName2SelectCache();
+        if (!smCrypto)
+        {
+            crypto::initCrypto();
+        }
     }
 
     bool smCrypto;
