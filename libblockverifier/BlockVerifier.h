@@ -54,7 +54,8 @@ class BlockVerifier : public BlockVerifierInterface,
 public:
     typedef std::shared_ptr<BlockVerifier> Ptr;
     typedef boost::function<dev::h256(int64_t x)> NumberHashCallBackFunction;
-    BlockVerifier(bool _enableParallel = false) : m_enableParallel(_enableParallel)
+    BlockVerifier(bool _enableParallel = false)
+      : m_enableParallel(_enableParallel), m_orgEnableParallel(_enableParallel)
     {
         if (_enableParallel)
         {
@@ -102,6 +103,10 @@ public:
         {
             m_enableParallel = false;
         }
+        else
+        {
+            m_enableParallel = m_orgEnableParallel;
+        }
     }
 
     void setGasFreeAccounts(std::set<Address> const& _gasFreeAccounts) override
@@ -114,6 +119,7 @@ private:
     ExecutiveContextFactory::Ptr m_executiveContextFactory;
     NumberHashCallBackFunction m_pNumberHash;
     std::atomic_bool m_enableParallel = {false};
+    bool m_orgEnableParallel;
     unsigned int m_threadNum = -1;
 
     std::mutex m_executingMutex;
