@@ -83,6 +83,7 @@ void RaftEngine::resetConfig()
 {
     updateMaxBlockTransactions();
     updateGasChargeManageSwitch();
+    updateGasFreeAccounts();
     updateConsensusNodeList();
 
     auto shouldSwitchToFollower = false;

@@ -224,6 +224,7 @@ void ConsensusEngineBase::resetConfig()
 {
     updateMaxBlockTransactions();
     updateGasChargeManageSwitch();
+    updateGasFreeAccounts();
     auto node_idx = MAXIDX;
     m_accountType = NodeAccountType::ObserverAccount;
     size_t nodeNum = 0;
@@ -325,13 +326,48 @@ void ConsensusEngineBase::updateGasChargeManageSwitch()
         m_blockChain->getSystemConfigByKey(dev::precompiled::SYSTEM_KEY_CHARGE_MANAGE_SWITCH);
     if (ret.compare(dev::precompiled::SYSTEM_KEY_CHARGE_MANAGE_SWITCH_ON) == 0)
     {
+        m_enableGasCharge = true;
         m_blockVerifier->setEnableGasCharge(true);
+        ENGINE_LOG(DEBUG) << LOG_DESC("updateGasChargeManageSwitch")
+                          << LOG_KV("enableGasCharge", true);
     }
     if (ret.compare(dev::precompiled::SYSTEM_KEY_CHARGE_MANAGE_SWITCH_OFF) == 0)
     {
+        m_enableGasCharge = false;
         m_blockVerifier->setEnableGasCharge(false);
+        ENGINE_LOG(DEBUG) << LOG_DESC("updateGasChargeManageSwitch")
+                          << LOG_KV("enableGasCharge", false);
     }
 }
 
+void ConsensusEngineBase::updateGasFreeAccounts()
+{
+    if (!m_enableGasCharge)
+    {
+        return;
+    }
+    // the chargers use gas for free
+    std::string chargers =
+        m_blockChain->getSystemConfigByKey(dev::precompiled::SYSTEM_KEY_CHARGER_LIST);
+    auto currentGasFreeAccount = convertStringToAddressSet(chargers, ",");
+
+    // the committees use gas for free
+    auto committees = m_blockChain->getCommitteeMembers();
+    if (committees->size() > 0)
+    {
+        currentGasFreeAccount->insert(committees->begin(), committees->end());
+    }
+    UpgradableGuard l(x_gasFreeAccounts);
+    // Note: the set is ordered
+    if (*m_gasFreeAccounts != *currentGasFreeAccount)
+    {
+        m_blockVerifier->setGasFreeAccounts(*currentGasFreeAccount);
+        ENGINE_LOG(DEBUG) << LOG_DESC("updateGasFreeAccounts")
+                          << LOG_KV("currentGasFreeAccount", *currentGasFreeAccount)
+                          << LOG_KV("orgGasFreeAccount", *m_gasFreeAccounts);
+        UpgradeGuard ul(l);
+        *m_gasFreeAccounts = *currentGasFreeAccount;
+    }
+}
 }  // namespace consensus
 }  // namespace dev
