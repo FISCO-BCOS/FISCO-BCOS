@@ -137,6 +137,8 @@ void Executive::checkAccountRemainGas(Transaction::Ptr _tx, int64_t const& _requ
         return;
     }
     m_excepted = TransactionException::NotEnoughRemainGas;
+    // reset gasUsed to zero when NotEnoughRemainGas
+    m_gas = m_envInfo.precompiledEngine()->txGasLimit();
     m_exceptionReason << LOG_KV("reason",
                              "The remain gas of the account is less than the base required gas")
                       << LOG_KV("account", sender.hex()) << LOG_KV("baseRequiredGas", _requiredGas);
