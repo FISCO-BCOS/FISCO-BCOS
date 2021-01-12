@@ -131,6 +131,8 @@ public:
     /// @warning Only valid after finalise().
     u256 gasUsed() const;
 
+    u256 remainGas(Address const& _account);
+
     owning_bytes_ref takeOutput() { return std::move(m_output); }
 
     /// Set up the executive for evaluating a bare CREATE (contract-creation) operation.
@@ -200,7 +202,7 @@ public:
 
 private:
     bool shouldCheckAccountGas(dev::eth::Transaction::Ptr _tx);
-    bool chargeAdmin(dev::eth::Transaction::Ptr _tx);
+    bool adminChargerTx(dev::eth::Transaction::Ptr _tx);
     void checkAccountRemainGas(dev::eth::Transaction::Ptr _tx, int64_t const& _requiredGas);
     void deductRuntimeGas(dev::eth::Transaction::Ptr _tx, u256 const& _refundedGas);
 

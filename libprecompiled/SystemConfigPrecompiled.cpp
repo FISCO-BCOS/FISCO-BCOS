@@ -96,7 +96,7 @@ PrecompiledExecResult::Ptr SystemConfigPrecompiled::call(
                                << LOG_DESC("setValueByKey func") << LOG_KV("configKey", configKey)
                                << LOG_KV("configValue", configValue);
 
-        if (!checkValueValid(configKey, configValue))
+        if (!checkValueValid(context, configKey, configValue))
         {
             PRECOMPILED_LOG(DEBUG)
                 << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("set invalid value")
@@ -116,12 +116,18 @@ PrecompiledExecResult::Ptr SystemConfigPrecompiled::call(
     return callResult;
 }
 
-bool SystemConfigPrecompiled::checkValueValid(std::string const& key, std::string const& value)
+bool SystemConfigPrecompiled::checkValueValid(
+    std::shared_ptr<dev::blockverifier::ExecutiveContext> _context, std::string const& key,
+    std::string const& value)
 {
     // switch for gasChargeManager
     if (SYSTEM_KEY_CHARGE_MANAGE_SWITCH == key)
     {
         if (g_BCOSConfig.version() < V2_8_0)
+        {
+            return false;
+        }
+        if (_context->getState()->getStateType() != dev::executive::StateType::StorageState)
         {
             return false;
         }

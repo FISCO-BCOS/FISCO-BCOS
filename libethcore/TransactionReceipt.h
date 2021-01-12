@@ -48,6 +48,8 @@ public:
     void setStateRoot(h256 const& _stateRoot) { m_stateRoot = _stateRoot; }
     u256 const& gasUsed() const { return m_gasUsed; }
     void setGasUsed(u256 const& _gas) { m_gasUsed = _gas; }
+    void setRemainGas(u256 const& _remainGas) { m_remainGas = _remainGas; }
+    u256 const& remainGas() const {return m_remainGas;}
     Address const& contractAddress() const { return m_contractAddress; }
     LogBloom const& bloom() const { return m_bloom; }
     LogEntries const& log() const { return m_log; }
@@ -92,7 +94,7 @@ public:
     void decode(RLP const& rlp);
 
 private:
-    void decodeLog(RLP const& _r);
+    void decodeLog(size_t _fromIndex, RLP const& _r);
 
 protected:
     eth::TransactionException m_status;
@@ -100,6 +102,8 @@ protected:
 private:
     h256 m_stateRoot;
     u256 m_gasUsed;
+    // the remain gas of the account
+    u256 m_remainGas = 0;
     Address m_contractAddress;
     LogBloom m_bloom;
 
