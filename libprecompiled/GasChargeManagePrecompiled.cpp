@@ -250,15 +250,6 @@ void GasChargeManagePrecompiled::queryRemainGas(PrecompiledExecResult::Ptr _call
         _callResult->setExecResult(abi.abiIn("", (u256)retCode, u256(0)));
         return;
     }
-    // check permission: only the chargers or the user self can call this interface
-    auto chargerList = getChargerList(_context);
-    if (!chargerList->count(_origin) && (_origin != userAccount))
-    {
-        PRECOMPILED_LOG(WARNING) << LOG_BADGE("GasChargeManagePrecompiled")
-                                 << LOG_DESC("queryRemainGas failed for no permission");
-        _callResult->setExecResult(abi.abiIn("", (u256)CODE_GCM_QUERY_PERMISSION_DENIED, u256(0)));
-        return;
-    }
     // return the latest remain gas
     auto remainGas = _context->getState()->remainGas(userAccount);
     _callResult->setExecResult(abi.abiIn("", u256(CODE_SUCCESS), (u256)remainGas.second));
