@@ -200,6 +200,7 @@ public:
 
 private:
     bool shouldCheckAccountGas(dev::eth::Transaction::Ptr _tx);
+    bool chargeAdmin(dev::eth::Transaction::Ptr _tx);
     void checkAccountRemainGas(dev::eth::Transaction::Ptr _tx, int64_t const& _requiredGas);
     void deductRuntimeGas(dev::eth::Transaction::Ptr _tx, u256 const& _refundedGas);
 

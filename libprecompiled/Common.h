@@ -51,7 +51,6 @@ const std::string SYS_AC_ENABLENUM = "enable_num";
 enum PrecompiledError : int
 {
     // GasChargerManagePrecompiled -53099 ~ -53000
-    CODE_GCM_QUERY_PERMISSION_DENIED = -53009,
     CODE_GCM_UNDEFINED_FUNCTION = -53008,
     CODE_GCM_CHARGER_NOT_EXISTS = -53007,
     CODE_GCM_CHARGER_ALREADY_EXISTS = -53006,
