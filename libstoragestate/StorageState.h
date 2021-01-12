@@ -183,6 +183,11 @@ public:
     bool updateRemainGas(
         Address const& accountAddress, u256 const& updatedGas, Address const& _origin) override;
 
+    dev::executive::StateType getStateType() override
+    {
+        return dev::executive::StateType::StorageState;
+    }
+
 private:
     void createAccount(Address const& _address, u256 const& _nonce, u256 const& _amount = u256(0));
     std::shared_ptr<dev::storage::Table> getTable(Address const& _address) const;

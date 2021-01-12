@@ -46,6 +46,11 @@ u256 Executive::gasUsed() const
     return m_envInfo.precompiledEngine()->txGasLimit() - m_gas;
 }
 
+u256 Executive::remainGas(Address const& _account)
+{
+    return m_s->remainGas(_account).second;
+}
+
 void Executive::accrueSubState(SubState& _parentContext)
 {
     if (m_ext)
@@ -102,7 +107,7 @@ void Executive::verifyTransaction(
         checkAccountRemainGas(_t, requiredGas);
     }
 }
-bool Executive::chargeAdmin(dev::eth::Transaction::Ptr _tx)
+bool Executive::adminChargerTx(dev::eth::Transaction::Ptr _tx)
 {
     return (_tx->receiveAddress() == Address(0x1008) || m_gasFreeAccounts.count(_tx->sender()));
 }
@@ -114,7 +119,7 @@ bool Executive::shouldCheckAccountGas(Transaction::Ptr _tx)
     // 2. the constant call transaction(the signature is empty)
     // 3. the chainGovernance transactions
     // 4. the transaction comes from the gasFreeAccount
-    if (!m_enableGasCharge || !_tx->hasSignature() || chargeAdmin(_tx))
+    if (!m_enableGasCharge || !_tx->hasSignature() || adminChargerTx(_tx))
     {
         return false;
     }
@@ -751,14 +756,18 @@ bool Executive::go()
 
 void Executive::deductRuntimeGas(dev::eth::Transaction::Ptr _tx, u256 const& _refundedGas)
 {
-    auto txGasLimit = m_envInfo.precompiledEngine()->txGasLimit();
-    if (chargeAdmin(_tx))
-    {
-        m_gas = txGasLimit;
-    }
-    if (!shouldCheckAccountGas(_tx))
+    if (!m_enableGasCharge)
     {
         m_gas += _refundedGas;
+        return;
+    }
+    auto txGasLimit = m_envInfo.precompiledEngine()->txGasLimit();
+    if (!shouldCheckAccountGas(_tx))
+    {
+        if (adminChargerTx(_tx))
+        {
+            m_gas = txGasLimit;
+        }
         return;
     }
     auto accountAddress = _tx->sender();

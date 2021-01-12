@@ -122,7 +122,7 @@ int GasChargeManagePrecompiled::checkAccountStatus(
     ExecutiveContext::Ptr _context, Address const& _userAccount)
 {
     auto tableName = dev::precompiled::getContractTableName(_userAccount);
-    auto accountStatusRet = dev::precompiled::getAccountStatus(_context, tableName, true);
+    auto accountStatusRet = dev::precompiled::getAccountStatus(_context, tableName);
     int retCode = dev::precompiled::parseAccountStatus(accountStatusRet.first);
     if (retCode != CODE_SUCCESS)
     {
