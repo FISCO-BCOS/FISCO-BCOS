@@ -449,9 +449,11 @@ dev::eth::TransactionReceipt::Ptr BlockVerifier::execute(dev::eth::Transaction::
     }
 
     executive->loggingException();
-    return std::make_shared<TransactionReceipt>(executiveContext->getState()->rootHash(false),
-        executive->gasUsed(), executive->logs(), executive->status(),
-        executive->takeOutput().takeBytes(), executive->newAddress());
+    auto receipt = std::make_shared<TransactionReceipt>(
+        executiveContext->getState()->rootHash(false), executive->gasUsed(), executive->logs(),
+        executive->status(), executive->takeOutput().takeBytes(), executive->newAddress());
+    receipt->setRemainGas(executive->remainGas(_t->from()));
+    return receipt;
 }
 
 dev::executive::Executive::Ptr BlockVerifier::createAndInitExecutive(

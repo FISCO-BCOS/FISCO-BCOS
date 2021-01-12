@@ -48,8 +48,7 @@ dev::precompiled::ContractStatus getContractStatus(
     std::shared_ptr<dev::blockverifier::ExecutiveContext> context, std::string const& tableName);
 
 std::pair<dev::precompiled::AccountStatus, std::shared_ptr<dev::storage::Table>> getAccountStatus(
-    std::shared_ptr<dev::blockverifier::ExecutiveContext> _context, std::string const& _tableName,
-    bool _allowContractAccount = false);
+    std::shared_ptr<dev::blockverifier::ExecutiveContext> _context, std::string const& _tableName);
 
 int parseAccountStatus(dev::precompiled::AccountStatus const& _status);
 bool isCommitteeMember(

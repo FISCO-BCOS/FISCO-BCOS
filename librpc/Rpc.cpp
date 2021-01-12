@@ -1995,6 +1995,7 @@ void Rpc::parseReceiptIntoResponse(Json::Value& _response, dev::bytesConstRef _i
     // transaction
     _response["root"] = toJS(_receipt->stateRoot());
     _response["gasUsed"] = toJS(_receipt->gasUsed());
+    _response["remainGas"] = toJS(_receipt->remainGas());
     _response["contractAddress"] = toJS(_receipt->contractAddress());
     _response["logsBloom"] = toJS(_receipt->bloom());
     _response["status"] = toJS(_receipt->status());

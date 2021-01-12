@@ -71,8 +71,7 @@ dev::precompiled::ContractStatus dev::precompiled::getContractStatus(
 }
 
 std::pair<dev::precompiled::AccountStatus, std::shared_ptr<dev::storage::Table>>
-dev::precompiled::getAccountStatus(
-    ExecutiveContext::Ptr _context, std::string const& _tableName, bool _allowContractAccount)
+dev::precompiled::getAccountStatus(ExecutiveContext::Ptr _context, std::string const& _tableName)
 {
     Table::Ptr table = dev::precompiled::openTable(_context, _tableName);
     std::pair<AccountStatus, std::shared_ptr<dev::storage::Table>> accountStatusRet;
@@ -82,16 +81,13 @@ dev::precompiled::getAccountStatus(
         accountStatusRet.first = AccountStatus::AccAddressNonExistent;
         return accountStatusRet;
     }
-    // only allow the external account
-    if (!_allowContractAccount)
+    auto codeHashEntries = table->select(ACCOUNT_CODE_HASH, table->newCondition());
+    if (EmptyHash != h256(codeHashEntries->get(0)->getFieldBytes(STORAGE_VALUE)))
     {
-        auto codeHashEntries = table->select(ACCOUNT_CODE_HASH, table->newCondition());
-        if (EmptyHash != h256(codeHashEntries->get(0)->getFieldBytes(STORAGE_VALUE)))
-        {
-            accountStatusRet.first = AccountStatus::InvalidAccountAddress;
-            return accountStatusRet;
-        }
+        accountStatusRet.first = AccountStatus::InvalidAccountAddress;
+        return accountStatusRet;
     }
+
     auto frozenEntries = table->select(ACCOUNT_FROZEN, table->newCondition());
     if (frozenEntries->size() > 0 && "true" == frozenEntries->get(0)->getField(STORAGE_VALUE))
     {

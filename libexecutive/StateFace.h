@@ -159,7 +159,6 @@ public:
 
     /// Clear state's cache
     virtual void clear() = 0;
-
     /// Check authority
     virtual bool checkAuthority(Address const& _origin, Address const& _contract) const = 0;
 
@@ -167,6 +166,8 @@ public:
     virtual std::pair<bool, u256> remainGas(Address const&) { return std::make_pair(false, 0); };
 
     virtual bool updateRemainGas(Address const&, u256 const&, Address const&) { return false; };
+    // get the stateType
+    virtual StateType getStateType() = 0;
 };
 
 }  // namespace executive
