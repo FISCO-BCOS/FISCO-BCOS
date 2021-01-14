@@ -126,16 +126,18 @@ bool SM2::sign(const char* originalData, int originalDataLen, const string& priv
     ECDSA_SIG* signData = NULL;
     string str = "";   // big int data
     string _str = "";  // big int swap data
-    // int _size = 0;     // big int padding size
-    BIGNUM start;
     BIGNUM* res = NULL;
     BN_CTX* ctx = NULL;
     int len = 0;
     int i = 0;
-    BN_init(&start);
     ctx = BN_CTX_new();
 
-    res = &start;
+    res = BN_new();
+    if (res == NULL)
+    {
+        CRYPTO_LOG(ERROR) << "[SM2::sign] malloc BigNumber failed";
+        goto err;
+    }
     BN_hex2bn(&res, (const char*)privateKey.c_str());
     sm2Key = EC_KEY_new_by_curve_name(NID_sm2);
     EC_KEY_set_private_key(sm2Key, res);
@@ -179,6 +181,10 @@ bool SM2::sign(const char* originalData, int originalDataLen, const string& priv
     lresult = true;
     // LOG(DEBUG)<<"r:"<<r<<" rLen:"<<r.length()<<" s:"<<s<<" sLen:"<<s.length();
 err:
+    if (res)
+    {
+        BN_free(res);
+    }
     if (ctx)
         BN_CTX_free(ctx);
     if (sm2Key)
@@ -253,13 +259,13 @@ int SM2::verify(const unsigned char* _signData, size_t, const unsigned char* _or
 
     /*Now Verify it*/
     signData = ECDSA_SIG_new();
-    signData->r = BN_bin2bn(_signData, 32, NULL);
+    BN_bin2bn(_signData, 32, signData->r);
     if (!signData->r)
     {
         CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of BN_bin2bn r" << LOG_KV("pubKey", pubHex);
         goto err;
     }
-    signData->s = BN_bin2bn(_signData + 32, 32, NULL);
+    BN_bin2bn(_signData + 32, 32, signData->s);
     if (!signData->s)
     {
         CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR BN_bin2bn s" << LOG_KV("pubKey", pubHex);
@@ -317,14 +323,22 @@ string SM2::priToPub(const string& pri)
     EC_POINT* pubPoint = NULL;
     const EC_GROUP* sm2Group = NULL;
     string pubKey = "";
-    BIGNUM start;
-    BIGNUM* res;
-    BN_CTX* ctx;
-    BN_init(&start);
-    ctx = BN_CTX_new();
+    BIGNUM* res = NULL;
+    BN_CTX* ctx = NULL;
     char* pub = NULL;
+    ctx = BN_CTX_new();
+    if (ctx == NULL)
+    {
+        CRYPTO_LOG(ERROR) << "[SM2::priToPub] malloc ctx failed";
+        goto err;
+    }
     // LOG(DEBUG)<<"pri:"<<pri;
-    res = &start;
+    res = BN_new();
+    if (res == NULL)
+    {
+        CRYPTO_LOG(ERROR) << "[SM2::priToPub] malloc BigNumber failed";
+        goto err;
+    }
     BN_hex2bn(&res, (const char*)pri.c_str());
     sm2Key = EC_KEY_new_by_curve_name(NID_sm2);
     if (!EC_KEY_set_private_key(sm2Key, res))
@@ -349,6 +363,10 @@ string SM2::priToPub(const string& pri)
     // LOG(DEBUG) << LOG_KV("pri:", pri) << LOG_KV(" pri size:", pri.size())
     //            << LOG_KV("PriToPub:", pubKey) << LOG_KV("PriToPubLen:", pubKey.length());
 err:
+    if (res)
+    {
+        BN_free(res);
+    }
     if (pub)
         OPENSSL_free(pub);
     if (ctx)
