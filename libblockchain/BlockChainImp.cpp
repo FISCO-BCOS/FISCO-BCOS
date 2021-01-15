@@ -892,7 +892,7 @@ std::pair<std::string, BlockNumber> BlockChainImp::getSystemConfigInfoByKey(
             BLOCKCHAIN_LOG(ERROR) << LOG_DESC("[#getSystemConfigByKey]Open table error");
             return *result;
         }
-        result = dev::precompiled::getSysteConfigByKey(m_stateStorage, key, blockNumber);
+        result = dev::precompiled::getSystemConfigByKey(m_stateStorage, key, blockNumber);
     }
     catch (std::exception& e)
     {

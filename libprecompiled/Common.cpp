@@ -274,7 +274,7 @@ dev::h512s dev::precompiled::getNodeListByType(
  * @param _num: the current block number
  * @return: {value, enableNumber}
  */
-std::shared_ptr<std::pair<std::string, int64_t>> dev::precompiled::getSysteConfigByKey(
+std::shared_ptr<std::pair<std::string, int64_t>> dev::precompiled::getSystemConfigByKey(
     dev::storage::Storage::Ptr _stateStorage, std::string const& _key, int64_t const& _num)
 {
     std::shared_ptr<std::pair<std::string, int64_t>> result =
@@ -321,7 +321,7 @@ std::shared_ptr<std::pair<std::string, int64_t>> dev::precompiled::getSysteConfi
  * @param _num: current blockNumber
  * @return: {value, enableNumber}
  */
-std::shared_ptr<std::pair<std::string, int64_t>> dev::precompiled::getSysteConfigByKey(
+std::shared_ptr<std::pair<std::string, int64_t>> dev::precompiled::getSystemConfigByKey(
     dev::storage::Table::Ptr _sysConfigTable, std::string const& _key, int64_t const& _num)
 {
     std::shared_ptr<std::pair<std::string, int64_t>> result =

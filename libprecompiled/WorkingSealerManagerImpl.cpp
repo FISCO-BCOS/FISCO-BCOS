@@ -370,7 +370,7 @@ bool WorkingSealerManagerImpl::shouldRotate()
         return true;
     }
     // get epoch_block_num from the table
-    auto epochBlockInfo = getSysteConfigByKey(
+    auto epochBlockInfo = getSystemConfigByKey(
         m_context->stateStorage(), SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM, m_context->blockInfo().number);
     auto epochBlockNum = boost::lexical_cast<int64_t>(epochBlockInfo->first);
     if ((m_context->blockInfo().number - epochBlockInfo->second) % epochBlockNum == 0)
