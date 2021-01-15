@@ -91,6 +91,8 @@ void ExecutiveContextFactory::initExecutiveContext(
     context->setBlockInfo(blockInfo);
     context->setPrecompiledContract(m_precompiledContract);
     context->setState(m_stateFactoryInterface->getState(stateRoot, memoryTableFactory));
+    context->setStateStorage(m_stateStorage);
+
     setTxGasLimitToContext(context);
 
     if (g_BCOSConfig.version() >= V2_6_0)
@@ -123,34 +125,8 @@ void ExecutiveContextFactory::setTxGasLimitToContext(ExecutiveContext::Ptr conte
     {
         std::string key = "tx_gas_limit";
         BlockInfo blockInfo = context->blockInfo();
-        std::string ret;
-
-        auto tableInfo = std::make_shared<storage::TableInfo>();
-        tableInfo->name = storage::SYS_CONFIG;
-        tableInfo->key = storage::SYS_KEY;
-        tableInfo->fields = std::vector<std::string>{"value"};
-
-        auto condition = std::make_shared<dev::storage::Condition>();
-        condition->EQ("key", key);
-        auto values = m_stateStorage->select(blockInfo.number, tableInfo, key, condition);
-        if (!values || values->size() != 1)
-        {
-            EXECUTIVECONTEXT_LOG(ERROR) << LOG_DESC("[setTxGasLimitToContext]Select error");
-            return;
-        }
-
-        auto value = values->get(0);
-        if (!value)
-        {
-            EXECUTIVECONTEXT_LOG(ERROR) << LOG_DESC("[setTxGasLimitToContext]Null pointer");
-            return;
-        }
-
-        if (boost::lexical_cast<int>(value->getField("enable_num")) <= blockInfo.number)
-        {
-            ret = value->getField("value");
-        }
-
+        auto configRet = getSysteConfigByKey(m_stateStorage, key, blockInfo.number);
+        auto ret = configRet->first;
         if (ret != "")
         {
             context->setTxGasLimit(boost::lexical_cast<uint64_t>(ret));
