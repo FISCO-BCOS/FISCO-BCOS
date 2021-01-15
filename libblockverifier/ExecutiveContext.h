@@ -44,6 +44,7 @@ namespace dev
 namespace storage
 {
 class Table;
+class Storage;
 }  // namespace storage
 
 namespace executive
@@ -131,6 +132,9 @@ public:
     // Get transaction criticals, return nullptr if critical to all
     std::shared_ptr<std::vector<std::string>> getTxCriticals(const dev::eth::Transaction& _tx);
 
+    std::shared_ptr<dev::storage::Storage> stateStorage();
+    void setStateStorage(std::shared_ptr<dev::storage::Storage> _stateStorage);
+
 private:
     tbb::concurrent_unordered_map<Address, std::shared_ptr<precompiled::Precompiled>,
         std::hash<Address>>
@@ -149,6 +153,7 @@ private:
     // avoid multiple concurrent transactions of openTable to obtain ParallelConfig
     tbb::concurrent_map<ParallelConfigKey, std::shared_ptr<dev::precompiled::ParallelConfig>>
         m_parallelConfigCache;
+    std::shared_ptr<dev::storage::Storage> m_stateStorage;
 };
 
 }  // namespace blockverifier
