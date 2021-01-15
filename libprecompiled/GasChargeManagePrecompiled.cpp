@@ -104,14 +104,9 @@ PrecompiledExecResult::Ptr GasChargeManagePrecompiled::call(
 std::shared_ptr<std::set<Address>> GasChargeManagePrecompiled::getChargerList(
     std::shared_ptr<ExecutiveContext> _context)
 {
-    auto sysConfigTable = openTable(_context, SYS_CONFIG);
-    if (!sysConfigTable)
-    {
-        BOOST_THROW_EXCEPTION(PrecompiledException("Open table to get charger list failed"));
-    }
     // get charger list from the _sys_config_ table
     auto result = dev::precompiled::getSystemConfigByKey(
-        sysConfigTable, SYSTEM_KEY_CHARGER_LIST, _context->blockInfo().number);
+        _context->stateStorage(), SYSTEM_KEY_CHARGER_LIST, _context->blockInfo().number);
 
     PRECOMPILED_LOG(DEBUG) << LOG_DESC("getChargerList") << LOG_KV("chargerList", result->first);
     return convertStringToAddressSet(result->first, c_chargerListSplitStr);

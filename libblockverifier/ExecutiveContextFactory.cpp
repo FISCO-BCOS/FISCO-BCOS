@@ -128,7 +128,7 @@ void ExecutiveContextFactory::setTxGasLimitToContext(ExecutiveContext::Ptr conte
     {
         std::string key = "tx_gas_limit";
         BlockInfo blockInfo = context->blockInfo();
-        auto configRet = getSysteConfigByKey(m_stateStorage, key, blockInfo.number);
+        auto configRet = getSystemConfigByKey(m_stateStorage, key, blockInfo.number);
         auto ret = configRet->first;
         if (ret != "")
         {

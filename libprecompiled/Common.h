@@ -163,11 +163,11 @@ bytesConstRef getParamData(bytesConstRef _param);
 dev::h512s getNodeListByType(std::shared_ptr<dev::storage::Table> _consTable, int64_t _blockNumber,
     std::string const& _type);
 
-std::shared_ptr<std::pair<std::string, int64_t>> getSysteConfigByKey(
+std::shared_ptr<std::pair<std::string, int64_t>> getSystemConfigByKey(
     std::shared_ptr<dev::storage::Storage> _stateStorage, std::string const& _key,
     int64_t const& _num);
 
-std::shared_ptr<std::pair<std::string, int64_t>> getSysteConfigByKey(
+std::shared_ptr<std::pair<std::string, int64_t>> getSystemConfigByKey(
     std::shared_ptr<dev::storage::Table> _sysConfigTable, std::string const& _key,
     int64_t const& _num);
 
