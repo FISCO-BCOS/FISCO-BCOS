@@ -267,7 +267,8 @@ dev::h512s dev::precompiled::getNodeListByType(
 
 // Get the configuration value of the given key from the system configuration table
 std::shared_ptr<std::pair<std::string, int64_t>> dev::precompiled::getSystemConfigByKey(
-    dev::storage::Table::Ptr _sysConfigTable, std::string const& _key, int64_t const& _num)
+    dev::storage::Table::Ptr _sysConfigTable, std::string const& _key, int64_t const& _num,
+    bool _forceEnableNumCompare)
 {
     std::shared_ptr<std::pair<std::string, int64_t>> result =
         std::make_shared<std::pair<std::string, int64_t>>();
@@ -290,7 +291,8 @@ std::shared_ptr<std::pair<std::string, int64_t>> dev::precompiled::getSystemConf
         // FIXME: throw exception here, or fatal error
         return result;
     }
-    if (boost::lexical_cast<int64_t>(value->getField(SYSTEM_CONFIG_ENABLENUM)) <= _num)
+    if (!_forceEnableNumCompare ||
+        boost::lexical_cast<int64_t>(value->getField(SYSTEM_CONFIG_ENABLENUM)) <= _num)
     {
         result->first = value->getField(SYSTEM_CONFIG_VALUE);
         result->second = boost::lexical_cast<int64_t>(value->getField(SYSTEM_CONFIG_ENABLENUM));

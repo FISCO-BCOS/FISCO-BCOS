@@ -164,7 +164,7 @@ dev::h512s getNodeListByType(std::shared_ptr<dev::storage::Table> _consTable, in
 
 std::shared_ptr<std::pair<std::string, int64_t>> getSystemConfigByKey(
     std::shared_ptr<dev::storage::Table> _sysConfigTable, std::string const& _key,
-    int64_t const& _num);
+    int64_t const& _num, bool _forceEnableNumCompare = false);
 
 std::shared_ptr<dev::storage::Table> openTable(
     std::shared_ptr<dev::blockverifier::ExecutiveContext> context, const std::string& tableName);
