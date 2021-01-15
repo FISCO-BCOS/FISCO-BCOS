@@ -144,6 +144,7 @@ int GasChargeManagePrecompiled::checkParams(std::shared_ptr<ExecutiveContext> _c
     {
         PRECOMPILED_LOG(WARNING) << LOG_BADGE("GasChargeManagePrecompiled")
                                  << LOG_DESC("Invalid gasValue: must be larger than 0")
+                                 << LOG_KV("userAccount", _userAccount.hex())
                                  << LOG_KV("gasValue", _gasValue);
         return CODE_GCM_INVALID_ZERO_GAS_VALUE;
     }
@@ -193,11 +194,13 @@ void GasChargeManagePrecompiled::deduct(PrecompiledExecResult::Ptr _callResult,
     }
     _context->getState()->updateRemainGas(
         userAccount, (accountRemainGas.second - gasValue), _origin);
-    _callResult->setExecResult(
-        abi.abiIn("", (u256)CODE_SUCCESS, _context->getState()->remainGas(userAccount).second));
-    PRECOMPILED_LOG(WARNING) << LOG_DESC("GasChargeManagePrecompiled deduct success")
-                             << LOG_KV("user", userAccount.hex()) << LOG_KV("deductValue", gasValue)
-                             << LOG_KV("charger", _origin.hex()) << LOG_KV("sender", _sender.hex());
+    auto remainGas = _context->getState()->remainGas(userAccount).second;
+    _callResult->setExecResult(abi.abiIn("", (u256)CODE_SUCCESS, remainGas));
+    PRECOMPILED_LOG(INFO) << LOG_DESC("GasChargeManagePrecompiled deduct success")
+                          << LOG_KV("user", userAccount.hex()) << LOG_KV("deductValue", gasValue)
+                          << LOG_KV("remainGas", remainGas)
+                          << LOG_KV("onChainNum", _context->blockInfo().number + 1)
+                          << LOG_KV("charger", _origin.hex()) << LOG_KV("sender", _sender.hex());
 }
 
 void GasChargeManagePrecompiled::charge(PrecompiledExecResult::Ptr _callResult,
@@ -228,12 +231,13 @@ void GasChargeManagePrecompiled::charge(PrecompiledExecResult::Ptr _callResult,
         return;
     }
     _context->getState()->updateRemainGas(userAccount, updatedGasValue, _origin);
-    _callResult->setExecResult(
-        abi.abiIn("", (u256)CODE_SUCCESS, _context->getState()->remainGas(userAccount).second));
-    PRECOMPILED_LOG(WARNING) << LOG_DESC("GasChargeManagePrecompiled charge success")
-                             << LOG_KV("user", userAccount.hex())
-                             << LOG_KV("chargedValue", gasValue) << LOG_KV("charger", _origin.hex())
-                             << LOG_KV("sender", _sender.hex());
+    auto remainGas = _context->getState()->remainGas(userAccount).second;
+    _callResult->setExecResult(abi.abiIn("", (u256)CODE_SUCCESS, remainGas));
+    PRECOMPILED_LOG(INFO) << LOG_DESC("GasChargeManagePrecompiled charge success")
+                          << LOG_KV("user", userAccount.hex()) << LOG_KV("chargedValue", gasValue)
+                          << LOG_KV("remainGas", remainGas)
+                          << LOG_KV("onChainNum", _context->blockInfo().number + 1)
+                          << LOG_KV("charger", _origin.hex()) << LOG_KV("sender", _sender.hex());
 }
 
 void GasChargeManagePrecompiled::queryRemainGas(PrecompiledExecResult::Ptr _callResult,
