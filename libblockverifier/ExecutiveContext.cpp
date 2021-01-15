@@ -24,6 +24,7 @@
 #include <libethcore/ABIParser.h>
 #include <libethcore/Exceptions.h>
 #include <libprecompiled/ParallelConfigPrecompiled.h>
+#include <libstorage/Storage.h>
 #include <libstorage/StorageException.h>
 #include <libstorage/Table.h>
 
@@ -33,6 +34,16 @@ using namespace dev::eth::abi;
 using namespace dev::blockverifier;
 using namespace dev;
 using namespace std;
+
+dev::storage::Storage::Ptr ExecutiveContext::stateStorage()
+{
+    return m_stateStorage;
+}
+void ExecutiveContext::setStateStorage(dev::storage::Storage::Ptr _stateStorage)
+{
+    m_stateStorage = _stateStorage;
+}
+
 void ExecutiveContext::registerParallelPrecompiled(
     std::shared_ptr<dev::precompiled::Precompiled> _precompiled)
 {
