@@ -277,7 +277,19 @@ void GasChargeManagePrecompiled::grantCharger(PrecompiledExecResult::Ptr _callRe
     ContractABI abi;
     Address chargerAccount;
     abi.abiOut(_paramData, chargerAccount);
-
+    // check the account status, Since the charger is stored separately in the sys_config_ system
+    // table, there is no need to guarantee that the charger must have an account table
+    auto retCode = checkAccountStatus(_context, chargerAccount);
+    if (retCode != CODE_SUCCESS && retCode != CODE_ACCOUNT_NOT_EXIST)
+    {
+        _callResult->setExecResult(abi.abiIn("", (u256)retCode));
+        PRECOMPILED_LOG(WARNING) << LOG_BADGE("GasChargeManagePrecompiled")
+                                 << LOG_DESC(
+                                        "grantCharger failed for invalid status of granted charger")
+                                 << LOG_KV("chargerAccount", chargerAccount.hex())
+                                 << LOG_KV("_origin", _origin.hex()) << LOG_KV("retCode", retCode);
+        return;
+    }
     // check the origin, must be the  committee member
     if (!dev::precompiled::isCommitteeMember(_context, _origin))
     {
@@ -285,7 +297,7 @@ void GasChargeManagePrecompiled::grantCharger(PrecompiledExecResult::Ptr _callRe
         PRECOMPILED_LOG(WARNING)
             << LOG_BADGE("GasChargeManagePrecompiled")
             << LOG_DESC("grantCharger failed for the origin not the committee member")
-            << LOG_KV("_origin", _origin.hex());
+            << LOG_KV("_origin", _origin.hex()) << LOG_KV("chargerAccount", chargerAccount.hex());
 
         return;
     }
