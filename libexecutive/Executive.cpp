@@ -792,6 +792,12 @@ void Executive::deductRuntimeGas(dev::eth::Transaction::Ptr _tx, u256 const& _re
     }
     auto gasUsed = txGasLimit - m_gas;
     auto accountRemainGas = (result.second <= gasUsed) ? 0 : (result.second - gasUsed);
+    // the case that the remainGas is less than the consumed Gas, should reset the m_gas to ensure
+    // balance
+    if (result.second < gasUsed)
+    {
+        m_gas = txGasLimit - result.second;
+    }
     m_s->updateRemainGas(accountAddress, accountRemainGas, _tx->sender());
 }
 
