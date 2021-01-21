@@ -107,6 +107,9 @@ public:
         {
             m_enableParallel = m_orgEnableParallel;
         }
+        BLOCKVERIFIER_LOG(INFO) << LOG_DESC("setEnableGasCharge")
+                                << LOG_KV("enableGasCharge", m_enableGasCharge)
+                                << LOG_KV("enableParallel", m_enableParallel);
     }
 
     void setGasFreeAccounts(std::set<Address> const& _gasFreeAccounts) override
