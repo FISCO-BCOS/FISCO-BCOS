@@ -200,11 +200,12 @@ public:
     }
     void setEnableGasCharge(bool _enableGasCharge) { m_enableGasCharge = _enableGasCharge; }
 
+    void deductRuntimeGas(dev::eth::Transaction::Ptr _tx, u256 const& _refundedGas);
+
 private:
     bool shouldCheckAccountGas(dev::eth::Transaction::Ptr _tx);
     bool adminChargerTx(dev::eth::Transaction::Ptr _tx);
     void checkAccountRemainGas(dev::eth::Transaction::Ptr _tx, int64_t const& _requiredGas);
-    void deductRuntimeGas(dev::eth::Transaction::Ptr _tx, u256 const& _refundedGas);
 
     void parseEVMCResult(std::shared_ptr<eth::Result> _result);
     /// @returns false iff go() must be called (and thus a VM execution in required).

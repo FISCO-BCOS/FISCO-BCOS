@@ -424,7 +424,7 @@ dev::eth::TransactionReceipt::Ptr BlockVerifier::execute(dev::eth::Transaction::
     // Create and initialize the executive. This will throw fairly cheaply and quickly if the
     // transaction is bad in any way.
     executive->reset();
-
+    bool executeSuccess = false;
     // OK - transaction looks valid - execute.
     try
     {
@@ -432,6 +432,7 @@ dev::eth::TransactionReceipt::Ptr BlockVerifier::execute(dev::eth::Transaction::
         if (!executive->execute())
             executive->go();
         executive->finalize();
+        executeSuccess = true;
     }
     catch (NotEnoughRemainGas const& _e)
     {
@@ -453,7 +454,11 @@ dev::eth::TransactionReceipt::Ptr BlockVerifier::execute(dev::eth::Transaction::
     {
         BLOCKVERIFIER_LOG(ERROR) << _e.what();
     }
-
+    // The exception case
+    if (!executeSuccess)
+    {
+        executive->deductRuntimeGas(_t, 0);
+    }
     executive->loggingException();
     auto receipt = std::make_shared<TransactionReceipt>(
         executiveContext->getState()->rootHash(false), executive->gasUsed(), executive->logs(),
