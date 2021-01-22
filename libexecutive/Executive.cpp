@@ -147,10 +147,11 @@ void Executive::checkAccountRemainGas(Transaction::Ptr _tx, int64_t const& _requ
     m_excepted = TransactionException::NotEnoughRemainGas;
     // reset gasUsed to zero when NotEnoughRemainGas
     m_gas = m_envInfo.precompiledEngine()->txGasLimit();
-    m_exceptionReason << LOG_KV("reason",
-                             "The remain gas of the account is less than the base required gas")
-                      << LOG_KV("account", sender.hex()) << LOG_KV("baseRequiredGas", _requiredGas);
-    BOOST_THROW_EXCEPTION(NotEnoughRemainGas() << errinfo_comment(m_exceptionReason.str()));
+    std::stringstream exceptionReason;
+    exceptionReason << LOG_KV("reason",
+                           "The remain gas of the account is less than the base required gas")
+                    << LOG_KV("account", sender.hex()) << LOG_KV("baseRequiredGas", _requiredGas);
+    BOOST_THROW_EXCEPTION(NotEnoughRemainGas() << errinfo_comment(exceptionReason.str()));
 }
 
 bool Executive::execute()
@@ -938,10 +939,24 @@ void Executive::loggingException()
 {
     if (m_excepted != TransactionException::None)
     {
-        EXECUTIVE_LOG(ERROR) << LOG_BADGE("TxExeError") << LOG_DESC("Transaction execution error")
-                             << LOG_KV("TransactionExceptionID", (uint32_t)m_excepted)
-                             << LOG_KV("hash", (m_t->hasSignature()) ? toHex(m_t->hash()) : "call")
-                             << m_exceptionReason.str();
+        if (m_excepted == TransactionException::NotEnoughRemainGas)
+        {
+            EXECUTIVE_LOG(DEBUG) << LOG_BADGE("TxExeError")
+                                 << LOG_DESC("Transaction execution error")
+                                 << LOG_KV("TransactionExceptionID", (uint32_t)m_excepted)
+                                 << LOG_KV(
+                                        "hash", (m_t->hasSignature()) ? toHex(m_t->hash()) : "call")
+                                 << m_exceptionReason.str();
+        }
+        else
+        {
+            EXECUTIVE_LOG(ERROR) << LOG_BADGE("TxExeError")
+                                 << LOG_DESC("Transaction execution error")
+                                 << LOG_KV("TransactionExceptionID", (uint32_t)m_excepted)
+                                 << LOG_KV(
+                                        "hash", (m_t->hasSignature()) ? toHex(m_t->hash()) : "call")
+                                 << m_exceptionReason.str();
+        }
     }
 }
 

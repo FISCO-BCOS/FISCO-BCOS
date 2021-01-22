@@ -433,6 +433,12 @@ dev::eth::TransactionReceipt::Ptr BlockVerifier::execute(dev::eth::Transaction::
             executive->go();
         executive->finalize();
     }
+    catch (NotEnoughRemainGas const& _e)
+    {
+        // use DEBUG level in case of frequent log output
+        BLOCKVERIFIER_LOG(DEBUG) << LOG_DESC("NotEnoughRemainGas")
+                                 << LOG_KV("errorMessage", boost::diagnostic_information(_e));
+    }
     catch (StorageException const& e)
     {
         BLOCKVERIFIER_LOG(ERROR) << LOG_DESC("get StorageException") << LOG_KV("what", e.what());
