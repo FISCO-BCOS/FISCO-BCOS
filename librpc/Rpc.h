@@ -172,6 +172,11 @@ public:
     }
     void setService(std::shared_ptr<dev::p2p::P2PInterface> _service) { m_service = _service; }
 
+    virtual void setDisableDynamicGroup(bool _disableDynamicGroup)
+    {
+        m_disableDynamicGroup = _disableDynamicGroup;
+    }
+
 protected:
     std::shared_ptr<dev::ledger::LedgerManager> ledgerManager();
     std::shared_ptr<dev::p2p::P2PInterface> service();
@@ -205,6 +210,7 @@ protected:
     dev::initializer::LedgerInitializer::Ptr m_ledgerInitializer;
 
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
+    bool m_disableDynamicGroup;
 
     const std::set<std::string> c_supportedSystemConfigKeys = {
         dev::precompiled::SYSTEM_KEY_TX_COUNT_LIMIT, dev::precompiled::SYSTEM_KEY_TX_GAS_LIMIT,

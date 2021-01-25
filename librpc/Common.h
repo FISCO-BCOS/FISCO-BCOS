@@ -34,6 +34,9 @@ namespace rpc
 enum RPCExceptionType : int
 {
     Success = 0,
+    // for external support
+    DynamicGroupDisabled = -100001,
+    // reserve for the released features
     PermissionDenied = -40012,
     OverQPSLimit = -40011,
     IncompleteInitialization = -40010,
