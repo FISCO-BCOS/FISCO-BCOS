@@ -246,6 +246,8 @@ void dev::ChannelRPCServer::blockNotify(int16_t _groupID, int64_t _blockNumber)
     response["blockNumber"] = _blockNumber;
     Json::FastWriter writer;
     auto resp = writer.write(response);
+    stringstream ss;
+
     for (auto session : activedSessions)
     {
         message->clearData();
@@ -261,10 +263,11 @@ void dev::ChannelRPCServer::blockNotify(int16_t _groupID, int64_t _blockNumber)
         session->asyncSendMessage(
             message, std::function<void(dev::channel::ChannelException, Message::Ptr)>(), 0);
 
-        CHANNEL_LOG(INFO) << "Push channel message success" << LOG_KV("topic", topic)
-                          << LOG_KV("seq", message->seq().substr(0, c_seqAbridgedLen))
-                          << LOG_KV("session", session->host()) << ":" << session->port();
+        ss << session->host() << ":" << session->port() << ",";
     }
+    CHANNEL_LOG(INFO) << "Push message success" << LOG_KV("topic", topic)
+                      << LOG_KV("seq", message->seq().substr(0, c_seqAbridgedLen))
+                      << LOG_KV("session", ss.str());
 }
 
 void dev::ChannelRPCServer::onClientRequest(dev::channel::ChannelSession::Ptr session,
@@ -1210,7 +1213,7 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
                         std::placeholders::_2);
                 session->asyncSendMessage(m_message, fp, 5000);
 
-                CHANNEL_LOG(INFO) << "Push channel message success"
+                CHANNEL_LOG(INFO) << "Push message success"
                                   << LOG_KV("seq", m_message->seq().substr(0, c_seqAbridgedLen))
                                   << LOG_KV("session", session->host()) << ":" << session->port();
                 m_currentSession = session;
@@ -1251,16 +1254,16 @@ void ChannelRPCServer::asyncBroadcastChannelMessage(
         CHANNEL_LOG(TRACE) << "no session use topic" << LOG_KV("topic", topic);
         return;
     }
-
+    stringstream ss;
     for (auto session : activedSessions)
     {
         session->asyncSendMessage(
             message, std::function<void(dev::channel::ChannelException, Message::Ptr)>(), 0);
-
-        CHANNEL_LOG(INFO) << "Push channel message success" << LOG_KV("topic", topic)
-                          << LOG_KV("seq", message->seq().substr(0, c_seqAbridgedLen))
-                          << LOG_KV("session", session->host()) << ":" << session->port();
+        ss << session->host() << ":" << session->port() << ",";
     }
+    CHANNEL_LOG(INFO) << "Push message success" << LOG_KV("topic", topic)
+                      << LOG_KV("seq", message->seq().substr(0, c_seqAbridgedLen))
+                      << LOG_KV("session", ss.str());
 }
 
 dev::channel::TopicChannelMessage::Ptr ChannelRPCServer::pushChannelMessage(

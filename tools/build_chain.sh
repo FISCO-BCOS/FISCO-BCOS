@@ -1248,7 +1248,7 @@ done
 if [[ -z "\${version}" ]];then
     version=\$(curl -s https://api.github.com/repos/FISCO-BCOS/console/releases | grep "tag_name" | cut -d \" -f 4 | sort -V | tail -n 1 | sed "s/^[vV]//")
 fi
-sm_crypto=\$(cat "\${SHELL_FOLDER}"/node*/config.ini | grep sm_crypto= | cut -d = -f 2 | head -n 1)
+sm_crypto=\$(cat "\${SHELL_FOLDER}"/node*/config.ini | grep sm_crypto_channel= | cut -d = -f 2 | head -n 1)
 download_link=https://github.com/FISCO-BCOS/console/releases/download/v\${version}/\${package_name}
 cos_download_link=${cdn_link_header}/console/releases/v\${version}/\${package_name}
 echo "Downloading console \${version} from \${download_link}"
@@ -1263,19 +1263,24 @@ fi
 tar -zxf \${package_name} && cd console && chmod +x *.sh
 
 if [[ -n "\${config}" ]];then
-    if  [ "\${sm_crypto}" == "false" ];then
-        cp ../sdk/* conf/
-    else
-        cp ../sdk/gm/* conf/
-    fi
     channel_listen_port=\$(cat "\${SHELL_FOLDER}"/node*/config.ini | grep channel_listen_port | cut -d = -f 2 | head -n 1)
     channel_listen_ip=\$(cat "\${SHELL_FOLDER}"/node*/config.ini | grep channel_listen_ip | cut -d = -f 2 | head -n 1)
     if [ "\${version:0:1}" == "1" ];then
         cp conf/applicationContext-sample.xml conf/applicationContext.xml
         \${sed_cmd} "s/127.0.0.1:20200/127.0.0.1:\${channel_listen_port}/" conf/applicationContext.xml
+        if  [ "\${sm_crypto}" == "false" ];then
+            cp "\${SHELL_FOLDER}/sdk/*" conf/
+        else
+            cp "\${SHELL_FOLDER}/sdk/gm/*" conf/
+        fi
     else
         cp conf/config-example.toml conf/config.toml
         \${sed_cmd} "s/127.0.0.1:20200/127.0.0.1:\${channel_listen_port}/" conf/config.toml
+        if  [ "\${sm_crypto}" == "false" ];then
+            cp "\${SHELL_FOLDER}/sdk/*" conf/
+        else
+            cp -r "\${SHELL_FOLDER}/sdk/gm" conf/
+        fi
     fi
     echo -e "\033[32m console configuration completed successfully. \033[0m"
 fi
@@ -1568,7 +1573,7 @@ check_bin()
     if ! ${bin_path} -v | grep -q 'FISCO-BCOS';then
         exit_with_clean "${bin_path} is wrong. Please correct it and try again."
     fi
-    bin_version=$(${bin_path} -v | grep -oe "[2-9]*\.[0-9]*\.[0-9]*")
+    bin_version=$(${bin_path} -v | grep -i version | grep -oe "[2-9]*\.[0-9]*\.[0-9]*")
     if version_gt "${compatibility_version}" "${bin_version}";then
         exit_with_clean "${bin_version} is less than ${compatibility_version}. Please correct it and try again."
     fi
@@ -1711,10 +1716,6 @@ for line in ${ip_array[*]};do
     sdk_path="${output_dir}/${ip}/sdk"
     if [ ! -d "${sdk_path}" ];then
         gen_cert "${output_dir}/cert/${agency_array[${server_count}]}" "${sdk_path}" "sdk"
-        # FIXME: delete the below unbelievable ugliest operation in future
-        cp sdk.crt node.crt
-        cp sdk.key node.key
-        # FIXME: delete the upside unbelievable ugliest operation in future
         mv node.nodeid sdk.publickey
         cd "${output_dir}"
         if [ -n "${guomi_mode}" ];then
