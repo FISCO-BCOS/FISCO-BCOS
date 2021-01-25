@@ -176,7 +176,7 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr> CachedStorage::selectNo
         }
         else
         {
-            CACHED_STORAGE_LOG(FATAL) << "CachedStorage needs a backend storage.";
+            CACHED_STORAGE_LOG(FATAL) << "backend storage doesn't set.";
         }
 
         return std::make_tuple(emptyScoped, cache);
@@ -207,7 +207,7 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr> CachedStorage::selectNo
         }
         else
         {
-            CACHED_STORAGE_LOG(FATAL) << "CachedStorage needs a backend storage.";
+            CACHED_STORAGE_LOG(FATAL) << "backend storage doesn't set.";
         }
     }
     else
@@ -220,7 +220,7 @@ std::tuple<std::shared_ptr<Cache::RWScoped>, Cache::Ptr> CachedStorage::selectNo
 
 size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& datas)
 {
-    CACHED_STORAGE_LOG(INFO) << "CachedStorage commit: " << datas.size() << " num: " << num;
+    CACHED_STORAGE_LOG(INFO) << "commit: " << datas.size() << " num: " << num;
 
     tbb::atomic<size_t> total = 0;
 
@@ -485,7 +485,7 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
                                 caches->setEmpty(false);
                             }
 #if 0
-            STORAGE_LOG(TRACE) << "new cached: " << commitData->info->name << "-" << key
+            CACHED_STORAGE_LOG(TRACE) << "new cached: " << commitData->info->name << "-" << key
                                << ", capacity: " << cacheEntry->capacity();
 #endif
                             touchMRU(commitData->info->name, key, cacheEntry->capacity());
@@ -521,7 +521,7 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
                 }
             });
 
-            STORAGE_LOG(INFO) << "Submited block task: " << num
+            CACHED_STORAGE_LOG(INFO) << "Submited block task: " << num
                               << ", current syncd block: " << m_syncNum;
 
             uint64_t waitCount = 0;
@@ -557,7 +557,7 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
     }
     else
     {
-        STORAGE_LOG(INFO) << "No backend storage, skip commit...";
+        CACHED_STORAGE_LOG(INFO) << "No backend storage, skip commit...";
 
         setSyncNum(num);
     }
@@ -606,10 +606,10 @@ void CachedStorage::stop()
 {
     if (!m_running)
     {
-        STORAGE_LOG(INFO) << LOG_DESC("CachedStorage already stopped!");
+        CACHED_STORAGE_LOG(INFO) << LOG_DESC("already stopped!");
         return;
     }
-    STORAGE_LOG(INFO) << "Stopping flushStorage thread";
+    CACHED_STORAGE_LOG(INFO) << "Stopping flushStorage thread";
     m_running->store(false);
     m_taskThreadPool->stop();
 
@@ -625,7 +625,7 @@ void CachedStorage::stop()
             m_clearThread->detach();
         }
     }
-    STORAGE_LOG(INFO) << "flushStorage thread stopped.";
+    CACHED_STORAGE_LOG(INFO) << "flushStorage thread stopped.";
 }
 
 void CachedStorage::clear()
@@ -806,7 +806,8 @@ bool CachedStorage::commitBackend(Task::Ptr task)
 {
     auto now = std::chrono::steady_clock::now();
 
-    STORAGE_LOG(INFO) << "Start commit block: " << task->num << " to backend storage";
+    CACHED_STORAGE_LOG(INFO) << "Start commit block: " << task->num
+                      << " to backend storage";
     try
     {
         m_backend->commit(task->num, *(task->datas));
@@ -814,8 +815,7 @@ bool CachedStorage::commitBackend(Task::Ptr task)
         setSyncNum(task->num);
 
         std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - now;
-        STORAGE_LOG(INFO)
-            << "[g:" << std::to_string(groupID()) << "]"
+        CACHED_STORAGE_LOG(INFO)
             << "\n---------------------------------------------------------------------\n"
             << "Commit block: " << task->num
             << " to backend storage finished, current cached block: " << m_commitNum << "\n"
@@ -833,7 +833,7 @@ bool CachedStorage::commitBackend(Task::Ptr task)
         m_running->store(false);
         m_taskThreadPool->stop();
         raise(SIGTERM);
-        STORAGE_LOG(ERROR) << "Stop commit thread. Fail to commit data: " << e.what();
+        CACHED_STORAGE_LOG(ERROR) << "Stop commit thread. Fail to commit data: " << e.what();
         return false;
     }
     return true;
