@@ -127,6 +127,7 @@ void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt
         m_networkStatHandler->start();
     }
     INITIALIZER_LOG(INFO) << LOG_BADGE("RPCInitializer")
+                          << LOG_KV("disableDynamicGroup", disableDynamicGroup)
                           << LOG_DESC("ChannelRPCHttpServer started.");
     m_channelRPCServer->setCallbackSetter(std::bind(&rpc::Rpc::setCurrentTransactionCallback,
         rpcEntity, std::placeholders::_1, std::placeholders::_2));
