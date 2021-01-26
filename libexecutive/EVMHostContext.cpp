@@ -385,7 +385,9 @@ bool EVMHostContext::issueFungibleAsset(
     auto supplied = boost::lexical_cast<uint64_t>(entry->getField(SYS_ASSET_SUPPLIED));
     if (total - supplied < _amount)
     {
-        EXECUTIVE_LOG(WARNING) << "issueFungibleAsset overflow total supply";
+        EXECUTIVE_LOG(WARNING) << "issueFungibleAsset overflow total supply"
+                               << LOG_KV("amount", _amount) << LOG_KV("supplied", supplied)
+                               << LOG_KV("total", total);
         return false;
     }
     // TODO: update supplied
@@ -420,7 +422,8 @@ uint64_t EVMHostContext::issueNotFungibleAsset(
     auto supplied = boost::lexical_cast<uint64_t>(entry->getField(SYS_ASSET_SUPPLIED));
     if (total - supplied == 0)
     {
-        EXECUTIVE_LOG(WARNING) << "issueNotFungibleAsset overflow total supply";
+        EXECUTIVE_LOG(WARNING) << "issueNotFungibleAsset overflow total supply"
+                               << LOG_KV("supplied", supplied) << LOG_KV("total", total);
         return false;
     }
     // get asset id and update supplied

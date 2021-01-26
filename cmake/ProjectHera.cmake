@@ -21,10 +21,12 @@ ExternalProject_Add(hera
         DOWNLOAD_NO_PROGRESS 1
         GIT_REPOSITORY https://github.com/bxq2011hust/hera.git
         GIT_SHALLOW false
-        GIT_TAG d70a4f2de4003ebde9345975a2ae86499ba0438d
+        GIT_TAG b43026a05c034d0295937b6af80e3c0fb2082a2a
         CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
                    -DBUILD_SHARED_LIBS=OFF
                    -DHERA_WASMER=ON
+                   -DHERA_WASMER_NATIVE_ENGINE=OFF
+                   -DHERA_WASMER_LLVM_BACKEND=OFF
                    -DHERA_DEBUGGING=${DEBUG}
                    -DEVMC_ROOT=<INSTALL_DIR>
                    -DHUNTER_ROOT=${CMAKE_SOURCE_DIR}/deps/src/.hunter
