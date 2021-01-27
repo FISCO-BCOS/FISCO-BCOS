@@ -126,9 +126,8 @@ void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt
     {
         m_networkStatHandler->start();
     }
-    INITIALIZER_LOG(INFO) << LOG_BADGE("RPCInitializer")
-                          << LOG_KV("disableDynamicGroup", disableDynamicGroup)
-                          << LOG_DESC("ChannelRPCHttpServer started.");
+    INITIALIZER_LOG(INFO) << LOG_BADGE("RPCInitializer: ChannelRPCHttpServer started.")
+                          << LOG_KV("disableDynamicGroup", disableDynamicGroup);
     m_channelRPCServer->setCallbackSetter(std::bind(&rpc::Rpc::setCurrentTransactionCallback,
         rpcEntity, std::placeholders::_1, std::placeholders::_2));
 }
@@ -218,7 +217,9 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
             });
 
         // Don't to set destructor, the ModularServer will destruct.
+        bool disableDynamicGroup = _pt.get<bool>("rpc.disable_dynamic_group", true);
         auto rpcEntity = new rpc::Rpc(m_ledgerInitializer, m_p2pService);
+        rpcEntity->setDisableDynamicGroup(disableDynamicGroup);
         auto ipAddress = boost::asio::ip::make_address(listenIP);
         m_safeHttpServer.reset(new SafeHttpServer(listenIP, httpListenPort, ipAddress.is_v6()),
             [](SafeHttpServer* p) { (void)p; });
@@ -237,7 +238,8 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
         INITIALIZER_LOG(INFO) << LOG_BADGE("RPCInitializer JsonrpcHttpServer started")
                               << LOG_KV("jsonrpc_IP", listenIP)
                               << LOG_KV("jsonrpc_listen_port", httpListenPort)
-                              << LOG_KV("ipv6", ipAddress.is_v6());
+                              << LOG_KV("ipv6", ipAddress.is_v6())
+                              << LOG_KV("disableDynamicGroup", disableDynamicGroup);
     }
     catch (std::exception& e)
     {
