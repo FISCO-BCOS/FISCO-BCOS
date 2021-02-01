@@ -52,7 +52,7 @@ Read [Quick Start](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/
 - Copyright: copyright registration and trading, etc.
 - Social management: real-estate registration, etc.
 
-Featured use cases are provided [here](http://www.fisco-bcos.org/assets/docs/FISCO%20BCOS%20-%20Featured%20Cases.pdf).
+Featured use cases are provided [here](https://fisco.com.cn/upload/files/20200908/1599550366718158.pdf).
 
 ## Code contribution
 
