@@ -48,7 +48,7 @@ days=36500 # 100 years
 timestamp=$(($(date '+%s')*1000))
 chain_id=1
 compatibility_version=""
-default_version="2.7.1"
+default_version="2.7.2"
 macOS=""
 x86_64_arch="true"
 download_timeout=240
@@ -1220,7 +1220,6 @@ genDownloadConsole() {
     local file="${output}/download_console.sh"
     generate_script_template "${file}"
     cat << EOF >> "${file}"
-set -e
 sed_cmd="sed -i"
 solc_suffix=""
 supported_solc_versions=(0.4 0.5 0.6)
@@ -1269,17 +1268,17 @@ if [[ -n "\${config}" ]];then
         cp conf/applicationContext-sample.xml conf/applicationContext.xml
         \${sed_cmd} "s/127.0.0.1:20200/127.0.0.1:\${channel_listen_port}/" conf/applicationContext.xml
         if  [ "\${sm_crypto}" == "false" ];then
-            cp "\${SHELL_FOLDER}/sdk/*" conf/
+            cp \${SHELL_FOLDER}/sdk/* conf/
         else
-            cp "\${SHELL_FOLDER}/sdk/gm/*" conf/
+            cp \${SHELL_FOLDER}/sdk/gm/* conf/
         fi
     else
         cp conf/config-example.toml conf/config.toml
         \${sed_cmd} "s/127.0.0.1:20200/127.0.0.1:\${channel_listen_port}/" conf/config.toml
         if  [ "\${sm_crypto}" == "false" ];then
-            cp "\${SHELL_FOLDER}/sdk/*" conf/
+            cp \${SHELL_FOLDER}/sdk/* conf/
         else
-            cp -r "\${SHELL_FOLDER}/sdk/gm" conf/
+            cp -r \${SHELL_FOLDER}/sdk/gm conf/
         fi
     fi
     echo -e "\033[32m console configuration completed successfully. \033[0m"
@@ -1648,8 +1647,11 @@ prepare_ca(){
 
 main()
 {
+
+[ -z $use_ip_param ] && LOG_WARN "Please set -l or -f option." && help
 output_dir="$(pwd)/${output_dir}"
-[ -z $use_ip_param ] && help 'ERROR: Please set -l or -f option.'
+dir_must_not_exists "${output_dir}"
+mkdir -p "${output_dir}"
 if [ "${use_ip_param}" == "true" ];then
     ip_array=(${ip_param//,/ })
 elif [ "${use_ip_param}" == "false" ];then
@@ -1659,10 +1661,6 @@ elif [ "${use_ip_param}" == "false" ];then
 else
     help
 fi
-
-
-dir_must_not_exists "${output_dir}"
-mkdir -p "${output_dir}"
 
 # if [ -z "${compatibility_version}" ];then
 #     set +e
