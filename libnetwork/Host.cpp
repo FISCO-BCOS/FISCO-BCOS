@@ -270,6 +270,11 @@ std::string Host::obtainCommonNameFromSubject(std::string const& subject)
             {
                 return field;
             }
+            // the key field must be CN
+            if (dev::stringCmpIgnoreCase(cn_fields[0], "CN") != 0)
+            {
+                continue;
+            }
             /// return real common name
             return cn_fields[1];
         }
