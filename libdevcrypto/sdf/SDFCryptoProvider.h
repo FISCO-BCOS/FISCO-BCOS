@@ -19,12 +19,35 @@
  * @date 2021-02-01
  */
 
+#include <libdevcrypto/Common.h>
 #include <string>
-
 namespace dev
 {
 namespace crypto
 {
+enum AlgorithmType : uint32_t
+{
+    SM2 = 0x00020100,  // SGD_SM2_1
+    SM3 = 0x00000001,  // SGD_SM3
+    SM4 = 0x00002002,  // SGD_SM4_CBC
+};
+
+class Key : KeyPair
+{
+public:
+    Key(unsigned int keyIndex, std::string& password)
+    {
+        m_keyIndex = keyIndex;
+        m_keyPassword = password;
+    };
+    unsigned int Identifier() { return m_keyIndex; };
+    std::string Password() { return m_keyPassword; };
+
+private:
+    unsigned int m_keyIndex;
+    std::string m_keyPassword;
+};
+
 /**
  *  SDFCryptoProvider suply SDF function calls
  *  Singleton
@@ -47,8 +70,6 @@ public:
      * Close sessions and close devices.
      */
     ~SDFCryptoProvider();
-
-    class Key;
     /**
      * Return the instance
      */
@@ -58,37 +79,37 @@ public:
      * Generate key
      * Return error code
      */
-    unsigned int KeyGen(std::string algorithm, Key* key);
+    unsigned int KeyGen(AlgorithmType algorithm, Key* key);
 
     /**
      * Sign
      */
-    unsigned int Sign(Key const* key, std::string algorithm, unsigned char const* digest,
+    unsigned int Sign(Key const& key, AlgorithmType algorithm, unsigned char const* digest,
         unsigned int const digestLen, unsigned char* signature, unsigned int* signatureLen);
 
     /**
      * Verify signature
      */
-    unsigned int Verify(Key const* key, std::string algorithm, unsigned char const* digest,
+    unsigned int Verify(Key const& key, AlgorithmType algorithm, unsigned char const* digest,
         unsigned int const digestLen, unsigned char const* signature, unsigned int* signatureLen,
         bool result);
 
     /**
      * Make hash
      */
-    unsigned int Hash(char const* message, std::string algorithm, unsigned int const messageLen,
+    unsigned int Hash(char const* message, AlgorithmType algorithm, unsigned int const messageLen,
         char* digest, unsigned int* digestLen);
 
     /**
      * Encrypt
      */
-    unsigned int Encrypt(Key const* key, std::string algorithm, unsigned char const* plantext,
+    unsigned int Encrypt(Key const& key, AlgorithmType algorithm, unsigned char const* plantext,
         unsigned int const plantextLen, unsigned char* cyphertext, unsigned int* cyphertextLen);
 
     /**
      * Decrypt
      */
-    unsigned int Decrypt(Key const* key, std::string algorithm, unsigned char const* cyphertext,
+    unsigned int Decrypt(Key const& key, AlgorithmType algorithm, unsigned char const* cyphertext,
         unsigned int const cyphertextLen, unsigned char* plantext, unsigned int* plantextLen);
 };
 }  // namespace crypto
