@@ -66,7 +66,7 @@ include_directories("${CMAKE_SOURCE_DIR}")
 
 add_subdirectory(libchannelserver)
 add_subdirectory(libdevcore)
-add_subdirectory(libdevcrypto)
+add_subdirectory(libdevcrypto EXCLUDE_FROM_ALL libdevcrypto/sdf)
 add_subdirectory(libethcore)
 # add_subdirectory(libinterpreter)
 add_subdirectory(libstat)
