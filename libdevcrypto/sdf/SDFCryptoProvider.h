@@ -32,7 +32,7 @@ enum AlgorithmType : uint32_t
     SM4 = 0x00002002,  // SGD_SM4_CBC
 };
 
-class Key : KeyPair
+class SDFKey : KeyPair
 {
 public:
     Key(unsigned int keyIndex, std::string& password)
