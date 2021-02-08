@@ -19,98 +19,126 @@
  * @date 2021-02-01
  */
 
-#include <libdevcrypto/Common.h>
 #include <string>
+#include "swsds.h"
+#include <iostream>
+#include <cstring>
+
+using namespace std;
 namespace dev
 {
-namespace crypto
-{
-enum AlgorithmType : uint32_t
-{
-    SM2 = 0x00020100,  // SGD_SM2_1
-    SM3 = 0x00000001,  // SGD_SM3
-    SM4 = 0x00002002,  // SGD_SM4_CBC
-};
-
-class SDFKey : KeyPair
-{
-public:
-    Key(unsigned int keyIndex, std::string& password)
+    namespace crypto
     {
-        m_keyIndex = keyIndex;
-        m_keyPassword = password;
-    };
-    unsigned int Identifier() { return m_keyIndex; };
-    std::string Password() { return m_keyPassword; };
 
-private:
-    unsigned int m_keyIndex;
-    std::string m_keyPassword;
-};
+        enum AlgorithmType : uint32_t
+        {
+            SM2 = 0x00020100, // SGD_SM2_1
+            SM3 = 0x00000001,     // SGD_SM3
+            SM4_CBC = 0x00002002,     // SGD_SM4_CBC
+        };
 
-/**
- *  SDFCryptoProvider suply SDF function calls
- *  Singleton
- */
-class SDFCryptoProvider
-{
-private:
-    /**
-     * Get session from session pool
-     */
-    void getSession(void** handle, unsigned int* code);
+        class Key
+        {
+        public:
+            unsigned char *PublicKey() const
+            {
+                return m_publicKey;
+            }
+            unsigned char *PrivateKey() const
+            {
+                return m_privateKey;
+            }
+            Key(void){};
+            Key(unsigned char *privateKey,unsigned char *publicKey){
+               cout << "init a key"<< endl;
+               m_privateKey = privateKey;
+               m_publicKey = publicKey;
+            };
+            Key(const unsigned int keyIndex, std::string &password)
+            {
+                m_keyIndex = keyIndex;
+                m_keyPassword = password;
+            };
+            unsigned int Identifier() { return m_keyIndex; };
+            std::string Password() { return m_keyPassword; };
+            void setPrivateKey(unsigned char *privateKey, unsigned int len){
+                m_privateKey = (unsigned char*)malloc(len*sizeof(char));
+                strncpy((char *)m_privateKey,(char *)privateKey, len);
+            };
+            void setPublicKey(unsigned char *publicKey, unsigned int len){
+                m_publicKey = (unsigned char*)malloc(len*sizeof(char));
+                strncpy((char *)m_publicKey,(char *)publicKey, len);
+            };
 
-public:
-    /**
-     * Detect all crypto devices
-     * Open each device, and start a session
-     */
-    SDFCryptoProvider(/* args */);
-    /**
-     * Close sessions and close devices.
-     */
-    ~SDFCryptoProvider();
-    /**
-     * Return the instance
-     */
-    static SDFCryptoProvider& GetInstance();
+        private:
+            unsigned int m_keyIndex;
+            std::string m_keyPassword;
+            unsigned char *m_privateKey;
+            unsigned char *m_publicKey;
+        };
 
-    /**
-     * Generate key
-     * Return error code
-     */
-    unsigned int KeyGen(AlgorithmType algorithm, Key* key);
+        /**
+         *  SDFCryptoProvider suply SDF function calls
+         *  Singleton
+         */
+        class SDFCryptoProvider
+        {
+        private:
+            SGD_HANDLE m_deviceHandle;
+            SGD_HANDLE m_sessionHandle;
+            SDFCryptoProvider();
+            ~SDFCryptoProvider();
+            SDFCryptoProvider(const SDFCryptoProvider &);
+            SDFCryptoProvider &operator=(const SDFCryptoProvider &);
 
-    /**
-     * Sign
-     */
-    unsigned int Sign(Key const& key, AlgorithmType algorithm, unsigned char const* digest,
-        unsigned int const digestLen, unsigned char* signature, unsigned int* signatureLen);
+        public:
+            /**
+             * Return the instance
+             */
+            static SDFCryptoProvider &GetInstance();
 
-    /**
-     * Verify signature
-     */
-    unsigned int Verify(Key const& key, AlgorithmType algorithm, unsigned char const* digest,
-        unsigned int const digestLen, unsigned char const* signature, unsigned int* signatureLen,
-        bool result);
+            unsigned int PrintDeviceInfo();   
+            /**
+             * Generate key
+             * Return error code
+             */
+            unsigned int KeyGen(AlgorithmType algorithm, Key *key);
 
-    /**
-     * Make hash
-     */
-    unsigned int Hash(char const* message, AlgorithmType algorithm, unsigned int const messageLen,
-        char* digest, unsigned int* digestLen);
+            /**
+             * Sign
+             */
+            unsigned int Sign(Key const &key, AlgorithmType algorithm, unsigned char const *digest,
+                              unsigned int const digestLen, unsigned char *signature, unsigned int *signatureLen);
 
-    /**
-     * Encrypt
-     */
-    unsigned int Encrypt(Key const& key, AlgorithmType algorithm, unsigned char const* plantext,
-        unsigned int const plantextLen, unsigned char* cyphertext, unsigned int* cyphertextLen);
+            /**
+             * Verify signature
+             */
+            unsigned int Verify(Key const &key, AlgorithmType algorithm, unsigned char const *digest,
+                                unsigned int const digestLen, unsigned char const *signature, unsigned int *signatureLen,
+                                bool *result);
 
-    /**
-     * Decrypt
-     */
-    unsigned int Decrypt(Key const& key, AlgorithmType algorithm, unsigned char const* cyphertext,
-        unsigned int const cyphertextLen, unsigned char* plantext, unsigned int* plantextLen);
-};
-}  // namespace crypto
-}  // namespace dev
+            /**
+             * Make hash
+             */
+            unsigned int Hash(char const *message, AlgorithmType algorithm, unsigned int const messageLen,
+                              unsigned char *digest, unsigned int *digestLen);
+
+            /**
+             * Encrypt
+             */
+            unsigned int Encrypt(Key const &key, AlgorithmType algorithm, unsigned char const *plantext,
+                                 unsigned int const plantextLen, unsigned char *cyphertext, unsigned int *cyphertextLen);
+
+            /**
+             * Decrypt
+             */
+            unsigned int Decrypt(Key const &key, AlgorithmType algorithm, unsigned char const *cyphertext,
+                                 unsigned int const cyphertextLen, unsigned char *plantext, unsigned int *plantextLen);
+        
+
+            std::string GetErrorMessage(SGD_RV code);
+        };
+        inline int PrintData(char *itemName, unsigned char *sourceData, unsigned int dataLength, unsigned int rowCount);
+    } // namespace crypto
+} // namespace dev
+
