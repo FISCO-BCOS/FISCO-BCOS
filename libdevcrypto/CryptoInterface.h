@@ -59,6 +59,7 @@ extern std::function<std::shared_ptr<crypto::Signature>(std::vector<unsigned cha
     SignatureFromBytes;
 
 void initSMCrypto();
+void initHsmSMCrypto();
 void initCrypto();
 
 size_t signatureLength();

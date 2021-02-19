@@ -62,6 +62,7 @@ include(ProjectEVMC)
 include(ProjectVRF)
 include(ProjectEVMONE)
 
+
 include_directories("${CMAKE_SOURCE_DIR}")
 
 add_subdirectory(libchannelserver)
@@ -91,12 +92,12 @@ add_subdirectory(libeventfilter)
 # generate executable binary fisco-bcos
 add_subdirectory(fisco-bcos)
 
-
 if (TESTS)
     enable_testing()
     set(CTEST_OUTPUT_ON_FAILURE TRUE)
     add_subdirectory(test)
 endif()
+
 
 find_package(Doxygen QUIET)
 if(DOXYGEN_FOUND)
