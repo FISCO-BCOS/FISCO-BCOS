@@ -664,6 +664,12 @@ std::vector<uint64_t> EVMHostContext::getNotFungibleAssetIDs(
         return vector<uint64_t>();
     }
     auto entries = table->select(_assetName, table->newCondition());
+    if (entries->size() == 0)
+    {
+        EXECUTIVE_LOG(WARNING) << "getNotFungibleAssetIDs account has none asset"
+                               << LOG_KV("account", _account.hex()) << LOG_KV("asset", _assetName);
+        return vector<uint64_t>();
+    }
     auto entry = entries->get(0);
     auto tokenIDs = entry->getField("value");
     if (tokenIDs.empty())
