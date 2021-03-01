@@ -208,13 +208,6 @@ gen_node_cert_gm() {
     #nodeid is pubkey
     $TASSL_CMD ec -in $ndpath/gmnode.key -text -noout | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}'  | cat > $ndpath/gmnode.nodeid
 
-    #serial
-    if [ "" != "$($TASSL_CMD version | grep 1.0.2)" ];then
-        $TASSL_CMD x509  -text -in $ndpath/gmnode.crt | sed -n '5p' |  sed 's/://g' | tr "\n" " " | sed 's/ //g' | sed 's/[a-z]/\u&/g' | cat > $ndpath/gmnode.serial
-    else
-        $TASSL_CMD x509  -text -in $ndpath/gmnode.crt | sed -n '4p' |  sed 's/ //g' | sed 's/.*(0x//g' | sed 's/)//g' |sed 's/[a-z]/\u&/g' | cat > $ndpath/gmnode.serial
-    fi
-
     cp $agpath/gmca.crt $agpath/gmagency.crt $ndpath
     cd $ndpath
 }
@@ -334,14 +327,12 @@ main(){
             mv "${output_dir}/${conf_path}/gmnode.crt" "${output_dir}/${conf_path}/gmsdk.crt"
             mv "${output_dir}/${conf_path}/gmennode.key" "${output_dir}/${conf_path}/gmensdk.key"
             mv "${output_dir}/${conf_path}/gmennode.crt" "${output_dir}/${conf_path}/gmensdk.crt"
-            mv "${output_dir}/${conf_path}/gmca.crt" "${output_dir}/${conf_path}/gmca.crt"
             mv "${output_dir}/${conf_path}/gmnode.nodeid" "${output_dir}/${conf_path}/gmsdk.publickey"
             mv "${output_dir}/${conf_path}/origin_cert/node.key" "${output_dir}/sdk.key"
             mv "${output_dir}/${conf_path}/origin_cert/node.crt" "${output_dir}/sdk.crt"
             mv "${output_dir}/${conf_path}/origin_cert/ca.crt" "${output_dir}/ca.crt"
             mv "${output_dir}/${conf_path}/origin_cert/node.nodeid" "${output_dir}/sdk.publickey"
             rm -rf "${output_dir:?}/${conf_path}/origin_cert"
-            rm "${output_dir}/${conf_path}/gmnode*"
             mv "${output_dir}/${conf_path}" "${output_dir}/gm"
         else
             mv "${output_dir}/${conf_path}/node.key" "${output_dir}/sdk.key"
