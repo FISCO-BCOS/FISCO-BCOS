@@ -5,10 +5,8 @@ ExternalProject_Add(evmc
         PREFIX ${CMAKE_SOURCE_DIR}/deps
         DOWNLOAD_NO_PROGRESS 1
         DOWNLOAD_NAME evmc-e0bd9d5d.tar.gz
-        # URL https://github.com/FISCO-BCOS/evmc/archive/e0bd9d5dc68ec3a00fe9a3c5e81c98946449a20d.tar.gz
-        # URL_HASH SHA256=a9983643415c8473cd696ff4aa93e014308f0292057bce740bc0b4ca84a40462
-        GIT_REPOSITORY https://github.com/bxq2011hust/evmc.git
-        GIT_TAG d951b1ef088be6922d80f41c3c83c0cbd69d2bfa
+        URL https://github.com/FISCO-BCOS/evmc/archive/d951b1ef088be6922d80f41c3c83c0cbd69d2bfa.tar.gz
+        URL_HASH SHA256=96b7edd81f72d02936cd9632ca72bacc959d8ff2934edfe3486e01b813fbe39d
         CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
         BUILD_IN_SOURCE 1
         LOG_CONFIGURE 1

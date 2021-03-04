@@ -19,9 +19,9 @@ endif()
 ExternalProject_Add(hera
         PREFIX ${CMAKE_SOURCE_DIR}/deps
         DOWNLOAD_NO_PROGRESS 1
-        GIT_REPOSITORY https://github.com/bxq2011hust/hera.git
+        GIT_REPOSITORY https://github.com/FISCO-BCOS/hera.git
         GIT_SHALLOW false
-        GIT_TAG b43026a05c034d0295937b6af80e3c0fb2082a2a
+        GIT_TAG d1a35ff143cfb3ae40a47aefa95f6f18650aef0e
         CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
                    -DBUILD_SHARED_LIBS=OFF
                    -DHERA_WASMER=ON
