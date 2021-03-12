@@ -50,17 +50,17 @@ jobs:
     executor: ubuntu-build-env
     steps:
       - install_depencies:
-          packages: "ccache lcov patch flex bison libgmp-dev"
+          packages: "ccache lcov patch flex bison libgmp-dev autoconf libtool"
       - checkout
       - restore_cache:
           keys:
-            - deps-cache-v3-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
-            - deps-cache-v3-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
-            - deps-cache-v3-{{ .Environment.CIRCLE_JOB }}-
+            - deps-cache-v4-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+            - deps-cache-v4-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
+            - deps-cache-v4-{{ .Environment.CIRCLE_JOB }}-
       - compile:
           options: "-DBUILD_STATIC=ON -DTESTS=ON -DCOVERAGE=ON -DCMAKE_BUILD_TYPE=Debug"
       - save_cache:
-          key: deps-cache-v3-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+          key: deps-cache-v4-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
           paths:
             - deps
             - /ccache
@@ -118,7 +118,7 @@ jobs:
           name: Setup dependencies
           command: |
             yum install -y epel-release centos-release-scl
-            yum install -y git make gcc-c++ cmake3 openssl-devel openssl ccache flex patch bison gmp-static devtoolset-7 llvm-toolset-7.0 llvm-toolset-7.0-llvm-devel
+            yum install -y git make gcc-c++ cmake3 openssl-devel openssl ccache flex patch bison gmp-static devtoolset-7 llvm-toolset-7.0 llvm-toolset-7.0-llvm-devel libtool autoconf
             echo 'export CCACHE_DIR=/ccache' >> $BASH_ENV
             echo 'export PATH=$HOME/.cargo/bin:$PATH' >> $BASH_ENV
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain 1.47.0
@@ -126,9 +126,9 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - deps-v2-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
-            - deps-v2-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
-            - deps-v2-{{ .Environment.CIRCLE_JOB }}-
+            - deps-v3-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+            - deps-v3-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
+            - deps-v3-{{ .Environment.CIRCLE_JOB }}-
       - run:
           name: Compile
           command: |
@@ -139,7 +139,7 @@ jobs:
             cmake3 -DTESTS=ON -DTOOL=ON -DDEMO=ON ..
             make -j2
       - save_cache:
-          key: deps-v2-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+          key: deps-v3-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
           paths:
             - deps
             - /ccache

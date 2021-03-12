@@ -94,8 +94,6 @@ InstructionTable GetInstructionTable()
     // Constants
     defaultInstructionTable[Instruction::Enum::I32Const].Cost = 0;
     defaultInstructionTable[Instruction::Enum::I64Const].Cost = 0;
-    // defaultInstructionTable[Instruction::Enum::F32Const].Cost = 0;
-    // defaultInstructionTable[Instruction::Enum::F64Const].Cost = 0;
 
     // 32-bit Integer operators
     defaultInstructionTable[Instruction::Enum::I32Clz].Cost = 3;
@@ -165,6 +163,78 @@ InstructionTable GetInstructionTable()
     defaultInstructionTable[Instruction::Enum::I32WrapI64].Cost = 3;
     defaultInstructionTable[Instruction::Enum::I64ExtendI32S].Cost = 3;
     defaultInstructionTable[Instruction::Enum::I64ExtendI32U].Cost = 3;
+
+#ifdef WASM_FLOAT_ENABLE
+    // 32-bit Float operators
+    //FIXME: the price need to reconsider carefully， for now it make no sense
+    defaultInstructionTable[Instruction::Enum::F32Load].Cost = 3;
+    defaultInstructionTable[Instruction::Enum::F32Store].Cost = 3;
+    defaultInstructionTable[Instruction::Enum::F32Const].Cost = 0;
+
+    defaultInstructionTable[Instruction::Enum::F32Eq].Cost = 1;
+    defaultInstructionTable[Instruction::Enum::F32Ne].Cost = 1;
+    defaultInstructionTable[Instruction::Enum::F32Lt].Cost = 1;
+    defaultInstructionTable[Instruction::Enum::F32Gt].Cost = 1;
+    defaultInstructionTable[Instruction::Enum::F32Le].Cost = 1;
+    defaultInstructionTable[Instruction::Enum::F32Ge].Cost = 1;
+
+    defaultInstructionTable[Instruction::Enum::F32Abs].Cost = 3;
+    defaultInstructionTable[Instruction::Enum::F32Neg].Cost = 6;
+    defaultInstructionTable[Instruction::Enum::F32Ceil].Cost = 3;
+
+    defaultInstructionTable[Instruction::Enum::F32Floor].Cost = 1;
+    defaultInstructionTable[Instruction::Enum::F32Trunc].Cost = 1;
+    defaultInstructionTable[Instruction::Enum::F32Nearest].Cost = 3;
+    defaultInstructionTable[Instruction::Enum::F32Sqrt].Cost = 80;
+    defaultInstructionTable[Instruction::Enum::F32Add].Cost = 80;
+    defaultInstructionTable[Instruction::Enum::F32Sub].Cost = 1;
+    defaultInstructionTable[Instruction::Enum::F32Mul].Cost = 3;
+    defaultInstructionTable[Instruction::Enum::F32Div].Cost = 80;
+    defaultInstructionTable[Instruction::Enum::F32Min].Cost = 80;
+    defaultInstructionTable[Instruction::Enum::F32Max].Cost = 80;
+    defaultInstructionTable[Instruction::Enum::F32Copysign].Cost = 80;
+
+    defaultInstructionTable[Instruction::Enum::F32ConvertI32S].Cost = 80;
+    defaultInstructionTable[Instruction::Enum::F32ConvertI32U].Cost = 80;
+    defaultInstructionTable[Instruction::Enum::F32ConvertI64S].Cost = 1;
+    defaultInstructionTable[Instruction::Enum::F32ConvertI64U].Cost = 1;
+    defaultInstructionTable[Instruction::Enum::F32DemoteF64].Cost = 1;
+    defaultInstructionTable[Instruction::Enum::F32ReinterpretI32].Cost = 2;
+
+   // 64-bit Float operators
+    defaultInstructionTable[Instruction::Enum::F64Load].Cost = 3;
+    defaultInstructionTable[Instruction::Enum::F64Store].Cost = 3;
+    defaultInstructionTable[Instruction::Enum::F64Const].Cost = 0;
+
+    defaultInstructionTable[Instruction::Enum::F64Eq].Cost = 1;
+    defaultInstructionTable[Instruction::Enum::F64Ne].Cost = 1;
+    defaultInstructionTable[Instruction::Enum::F64Lt].Cost = 1;
+    defaultInstructionTable[Instruction::Enum::F64Gt].Cost = 1;
+    defaultInstructionTable[Instruction::Enum::F64Le].Cost = 1;
+    defaultInstructionTable[Instruction::Enum::F64Ge].Cost = 1;
+
+    defaultInstructionTable[Instruction::Enum::F64Abs].Cost = 3;
+    defaultInstructionTable[Instruction::Enum::F64Neg].Cost = 6;
+    defaultInstructionTable[Instruction::Enum::F64Ceil].Cost = 3;
+    defaultInstructionTable[Instruction::Enum::F64Floor].Cost = 1;
+    defaultInstructionTable[Instruction::Enum::F64Trunc].Cost = 1;
+    defaultInstructionTable[Instruction::Enum::F64Nearest].Cost = 3;
+    defaultInstructionTable[Instruction::Enum::F64Sqrt].Cost = 80;
+    defaultInstructionTable[Instruction::Enum::F64Add].Cost = 80;
+    defaultInstructionTable[Instruction::Enum::F64Sub].Cost = 1;
+    defaultInstructionTable[Instruction::Enum::F64Mul].Cost = 3;
+    defaultInstructionTable[Instruction::Enum::F64Div].Cost = 80;
+    defaultInstructionTable[Instruction::Enum::F64Min].Cost = 80;
+    defaultInstructionTable[Instruction::Enum::F64Max].Cost = 80;
+    defaultInstructionTable[Instruction::Enum::F64Copysign].Cost = 80;
+
+    defaultInstructionTable[Instruction::Enum::F64ConvertI32S].Cost = 80;
+    defaultInstructionTable[Instruction::Enum::F64ConvertI32U].Cost = 80;
+    defaultInstructionTable[Instruction::Enum::F64ConvertI64S].Cost = 1;
+    defaultInstructionTable[Instruction::Enum::F64ConvertI64U].Cost = 1;
+    defaultInstructionTable[Instruction::Enum::F64PromoteF32].Cost = 1;
+    defaultInstructionTable[Instruction::Enum::F64ReinterpretI64].Cost = 2;
+#endif
 
     // Type-parametric operators
     defaultInstructionTable[Instruction::Enum::Drop].Cost = 3;
