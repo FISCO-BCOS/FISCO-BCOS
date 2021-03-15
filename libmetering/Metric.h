@@ -22,6 +22,8 @@
 #include <string>
 #include <array>
 
+// #define WASM_FLOAT_ENABLE
+
 namespace wasm{
 
 struct Instruction{

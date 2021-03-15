@@ -17,6 +17,7 @@
 
 #pragma once
 #include "libdevcrypto/CryptoInterface.h"
+#include "libblockverifier/ExecutiveContext.h"
 #include <evmc/helpers.h>
 #include <libdevcore/CommonJS.h>
 #include <libdevcrypto/Common.h>
@@ -104,6 +105,7 @@ public:
     static EnvInfo& createEnvInfo(u256 const gasUsed, u256 const gasLimit = u256(300000))
     {
         static EnvInfo env_info(genBlockHeader(), fakeCallBack, gasUsed, gasLimit);
+        env_info.setPrecompiledEngine(std::make_shared<blockverifier::ExecutiveContext>());
         return env_info;
     }
 };

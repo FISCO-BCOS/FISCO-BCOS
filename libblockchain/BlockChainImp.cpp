@@ -978,7 +978,7 @@ bool BlockChainImp::getBlockAndIndexByTxHash(const dev::h256& _txHash,
     auto entries = tb->select(_txHash.hex(), tb->newCondition());
     if (entries->size() == 0)
     {
-        BLOCKCHAIN_LOG(ERROR) << LOG_DESC("record not exist int tx_hash_2_block")
+        BLOCKCHAIN_LOG(ERROR) << LOG_DESC("record not exist in tx_hash_2_block")
                               << LOG_KV("_txHash", _txHash.hex());
         return false;
     }
