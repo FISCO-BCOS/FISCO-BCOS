@@ -423,7 +423,25 @@ void PBFTEngine::sendPrepareMsgFromLeader(
 /// sealing the generated block into prepareReq and push its to msgQueue
 bool PBFTEngine::generatePrepare(dev::eth::Block::Ptr _block)
 {
+    // fix the deadlock cases below
+    // 1. the sealer has sealed enough txs and is handling the block, but stucked at the
+    // generatePrepare for the PBFTEngine is checking timeout and ready to change view
+    // 2. the PBFTEngine trigger view change and release the m_mutex, the leader has been changed
+    // 3. the PBFTEngine calls handlePrepare for receive the PBFT prepare message from the leader,
+    // and handle the block
+    // 4. the next leader is the node-self, the PBFTEngine tries to notify the node to seal the next
+    // block
+    // 5. since the x_sealing is stucked at step 1, the PBFTEngine has been stucked at notifySeal
+    // Solution:
+    // if the sealer execute step1 (m_generatePrepare is equal to true), won't trigger notifySeal
+    m_generatePrepare = true;
     Guard l(m_mutex);
+    // the leader has been changed
+    if (!getLeader().first || getLeader().second != nodeIdx())
+    {
+        m_generatePrepare = false;
+        return true;
+    }
     m_notifyNextLeaderSeal = false;
     auto prepareReq = constructPrepareReq(_block);
 
@@ -442,6 +460,7 @@ bool PBFTEngine::generatePrepare(dev::eth::Block::Ptr _block)
                          << LOG_KV("H", prepareReq->height) << LOG_KV("nodeIdx", nodeIdx())
                          << LOG_KV("myNode", m_keyPair.pub().abridged());
     m_signalled.notify_all();
+    m_generatePrepare = false;
     return true;
 }
 
@@ -844,7 +863,7 @@ bool PBFTEngine::checkSign(IDXTYPE const& _idx, dev::h256 const& _hash, bytes co
  */
 void PBFTEngine::notifySealing(dev::eth::Block const& block)
 {
-    if (!m_onNotifyNextLeaderReset)
+    if (!m_onNotifyNextLeaderReset || m_generatePrepare)
     {
         return;
     }
