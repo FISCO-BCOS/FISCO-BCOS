@@ -61,6 +61,14 @@ bool LedgerManager::isGroupExist(dev::GROUP_ID const& _groupID) const
     {
         return false;
     }
+    // check the genesis file
+    string genesisConfFileName = "group." + std::to_string(_groupID) + ".genesis";
+    fs::path genesisConfFilePath(
+        g_BCOSConfig.confDir() + fs::path::separator + genesisConfFileName);
+    if (!exists(genesisConfFilePath))
+    {
+        return false;
+    }
     return true;
 }
 
@@ -333,8 +341,10 @@ void LedgerManager::startByGroupID(GROUP_ID const& _groupID)
         m_groupListCache.erase(_groupID);
         auto ledger = m_ledgerMap[_groupID];
         m_ledgerMap.erase(_groupID);
-        ledger->stopAll();
-
+        if (ledger)
+        {
+            ledger->stopAll();
+        }
         throw;
     }
     setGroupStatus(_groupID, LedgerStatus::RUNNING);
@@ -351,9 +361,10 @@ void LedgerManager::stopByGroupID(GROUP_ID const& _groupID)
         ledger = m_ledgerMap[_groupID];
         m_ledgerMap.erase(_groupID);
     }
-
-    ledger->stopAll();
-
+    if (ledger)
+    {
+        ledger->stopAll();
+    }
     {
         RecursiveGuard l(x_ledgerManager);
         setGroupStatus(_groupID, LedgerStatus::STOPPED);
