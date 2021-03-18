@@ -16,15 +16,25 @@ else()
     execute_process(COMMAND rustup override set ${RUSTC_VERSION_REQUIRED} --path ${CMAKE_SOURCE_DIR}/deps/src/hera OUTPUT_QUIET ERROR_QUIET)
 endif()
 
+set(USE_WASMER ON)
+if(USE_WASMER)
+    set(USE_WASMTIME OFF)
+    set(WASM_ENGINE_LIBRARY "wasmer_c_api")
+else()
+    set(USE_WASMTIME ON)
+    set(WASM_ENGINE_LIBRARY "wasmtime")
+endif()
+
 ExternalProject_Add(hera
         PREFIX ${CMAKE_SOURCE_DIR}/deps
         DOWNLOAD_NO_PROGRESS 1
-        GIT_REPOSITORY https://github.com/FISCO-BCOS/hera.git
+        GIT_REPOSITORY https://github.com/bxq2011hust/hera.git
         GIT_SHALLOW false
-        GIT_TAG b89a35db97da7089a4b51161de2962bb21bf8490
+        GIT_TAG 620a6f79b3aaef451bbe9cac7691648e71c6d3e8
         CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
                    -DBUILD_SHARED_LIBS=OFF
-                   -DHERA_WASMER=ON
+                   -DHERA_WASMTIME=${USE_WASMTIME}
+                   -DHERA_WASMER=${USE_WASMER}
                    -DHERA_WASMER_NATIVE_ENGINE=OFF
                    -DHERA_WASMER_LLVM_BACKEND=OFF
                    -DHERA_DEBUGGING=${DEBUG}
@@ -33,17 +43,17 @@ ExternalProject_Add(hera
                    -DHUNTER_STATUS_DEBUG=ON
         BUILD_IN_SOURCE 1
         # BUILD_COMMAND cmake --build . -- -j
-        LOG_DOWNLOAD 1
-        LOG_CONFIGURE 1
-        LOG_BUILD 1
+        # LOG_DOWNLOAD 1
+        # LOG_CONFIGURE 1
+        # LOG_BUILD 1
         LOG_INSTALL 1
-        BUILD_BYPRODUCTS <INSTALL_DIR>/lib/libevmone.a <INSTALL_DIR>/lib/libhera-buildinfo.a <INSTALL_DIR>/lib/libwasmer_c_api.a
+        BUILD_BYPRODUCTS <INSTALL_DIR>/lib/libevmone.a <INSTALL_DIR>/lib/libhera-buildinfo.a <INSTALL_DIR>/lib/lib${WASM_ENGINE_LIBRARY}.a
 )
 
 ExternalProject_Get_Property(hera INSTALL_DIR)
 set(HERA_INCLUDE_DIRS ${INSTALL_DIR}/include)
 file(MAKE_DIRECTORY ${HERA_INCLUDE_DIRS})  # Must exist.
-set(HERA_LIBRARIES ${INSTALL_DIR}/lib/libhera.a ${INSTALL_DIR}/lib/libhera-buildinfo.a ${INSTALL_DIR}/lib/libwasmer_c_api.a)
+set(HERA_LIBRARIES ${INSTALL_DIR}/lib/libhera.a ${INSTALL_DIR}/lib/libhera-buildinfo.a ${INSTALL_DIR}/lib/lib${WASM_ENGINE_LIBRARY}.a)
 if(DEBUG)
     set(HERA_LIBRARIES ${HERA_LIBRARIES} ${EVMC_INSTRUCTIONS_LIBRARIES})
 endif()
