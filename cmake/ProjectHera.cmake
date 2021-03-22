@@ -16,15 +16,25 @@ else()
     execute_process(COMMAND rustup override set ${RUSTC_VERSION_REQUIRED} --path ${CMAKE_SOURCE_DIR}/deps/src/hera OUTPUT_QUIET ERROR_QUIET)
 endif()
 
+set(USE_WASMER OFF)
+if(USE_WASMER)
+    set(USE_WASMTIME OFF)
+    set(WASM_ENGINE_LIBRARY "wasmer_c_api")
+else()
+    set(USE_WASMTIME ON)
+    set(WASM_ENGINE_LIBRARY "wasmtime")
+endif()
+
 ExternalProject_Add(hera
         PREFIX ${CMAKE_SOURCE_DIR}/deps
         DOWNLOAD_NO_PROGRESS 1
         GIT_REPOSITORY https://github.com/FISCO-BCOS/hera.git
         GIT_SHALLOW false
-        GIT_TAG d1a35ff143cfb3ae40a47aefa95f6f18650aef0e
+        GIT_TAG b916a75549d5e5c38bcd357fe92a28e7890c0657
         CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
                    -DBUILD_SHARED_LIBS=OFF
-                   -DHERA_WASMER=ON
+                   -DHERA_WASMTIME=${USE_WASMTIME}
+                   -DHERA_WASMER=${USE_WASMER}
                    -DHERA_WASMER_NATIVE_ENGINE=OFF
                    -DHERA_WASMER_LLVM_BACKEND=OFF
                    -DHERA_DEBUGGING=${DEBUG}
@@ -37,13 +47,13 @@ ExternalProject_Add(hera
         LOG_CONFIGURE 1
         LOG_BUILD 1
         LOG_INSTALL 1
-        BUILD_BYPRODUCTS <INSTALL_DIR>/lib/libevmone.a <INSTALL_DIR>/lib/libhera-buildinfo.a <INSTALL_DIR>/lib/libwasmer_c_api.a
+        BUILD_BYPRODUCTS <INSTALL_DIR>/lib/libevmone.a <INSTALL_DIR>/lib/libhera-buildinfo.a <INSTALL_DIR>/lib/lib${WASM_ENGINE_LIBRARY}.a
 )
 
 ExternalProject_Get_Property(hera INSTALL_DIR)
 set(HERA_INCLUDE_DIRS ${INSTALL_DIR}/include)
 file(MAKE_DIRECTORY ${HERA_INCLUDE_DIRS})  # Must exist.
-set(HERA_LIBRARIES ${INSTALL_DIR}/lib/libhera.a ${INSTALL_DIR}/lib/libhera-buildinfo.a ${INSTALL_DIR}/lib/libwasmer_c_api.a)
+set(HERA_LIBRARIES ${INSTALL_DIR}/lib/libhera.a ${INSTALL_DIR}/lib/libhera-buildinfo.a ${INSTALL_DIR}/lib/lib${WASM_ENGINE_LIBRARY}.a)
 if(DEBUG)
     set(HERA_LIBRARIES ${HERA_LIBRARIES} ${EVMC_INSTRUCTIONS_LIBRARIES})
 endif()
