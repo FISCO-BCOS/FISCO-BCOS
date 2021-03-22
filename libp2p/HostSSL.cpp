@@ -744,6 +744,9 @@ void HostSSL::keepAlivePeers()
 
 void HostSSL::reconnectAllNodes()
 {
+	std::chrono::seconds const c_reconnectNodesInterval = std::chrono::seconds(20);
+	if (chrono::steady_clock::now() - c_reconnectNodesInterval < m_lastReconnect)
+		return;
 	std::map<std::string, NodeIPEndpoint> mConnectParams;
 	NodeConnManagerSingleton::GetInstance().getAllConnect(mConnectParams);
 	std::map<std::string, NodeIPEndpoint> mMergeConnectParams;//merge 
