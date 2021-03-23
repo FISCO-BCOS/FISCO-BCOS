@@ -50,10 +50,6 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const&
         return nullptr;
     }
     std::lock_guard<std::mutex> l(m_executingMutex);
-    if (block.blockHeader().number() < m_executingNumber)
-    {
-        return nullptr;
-    }
     ExecutiveContext::Ptr context = nullptr;
     try
     {
