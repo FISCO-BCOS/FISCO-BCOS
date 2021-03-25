@@ -24,6 +24,10 @@ set(FISCO_BCOS_CMAKE_DIR "${CMAKE_CURRENT_LIST_DIR}/cmake" CACHE PATH "The path 
 list(APPEND CMAKE_MODULE_PATH ${FISCO_BCOS_CMAKE_DIR})
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum OS X deployment version")
 
+if(APPLE)
+  set(CMAKE_EXE_LINKER_FLAGS ${CMAKE_EXE_LINNKER_FLAGS} "-w")
+endif()
+
 project(FISCO-BCOS VERSION "2.7.2")
 # Suffix like "-rc1" e.t.c. to append to versions wherever needed.
 set(VERSION_SUFFIX "")
