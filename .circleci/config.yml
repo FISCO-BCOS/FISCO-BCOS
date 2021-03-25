@@ -54,13 +54,13 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - deps-cache-v4-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
-            - deps-cache-v4-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
-            - deps-cache-v4-{{ .Environment.CIRCLE_JOB }}-
+            - deps-cache-v5-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+            - deps-cache-v5-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
+            - deps-cache-v5-{{ .Environment.CIRCLE_JOB }}-
       - compile:
           options: "-DBUILD_STATIC=ON -DTESTS=ON -DCOVERAGE=ON -DCMAKE_BUILD_TYPE=Debug"
       - save_cache:
-          key: deps-cache-v4-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+          key: deps-cache-v5-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
           paths:
             - deps
             - /ccache
@@ -159,7 +159,7 @@ jobs:
     executor: ubuntu-build-env
     steps:
       - install_depencies:
-          packages: "ccache libgmp-dev flex bison patch"
+          packages: "ccache libgmp-dev flex bison patch automake libtool"
       - checkout
       - restore_cache:
           keys:
