@@ -90,6 +90,7 @@ add_subdirectory(libsecurity)
 add_subdirectory(libeventfilter)
 # generate executable binary fisco-bcos
 add_subdirectory(fisco-bcos)
+add_subdirectory(cppsdk)
 
 
 if (TESTS)

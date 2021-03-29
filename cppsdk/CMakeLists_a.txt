@@ -1,0 +1,12 @@
+
+file(GLOB SRC_LIST "*.cpp")
+file(GLOB HEADERS "*.h")
+
+#add_library(sslcli  ${SRC_LIST} ${HEADERS})
+add_library(sslcli  ChannelConn.cpp  ChannelRPCClient.cpp  CliConfigureInitializer.cpp  CliSecureInitializer.cpp  sslcli.cpp    ${HEADERS})
+
+#link_directories(${CMAKE_SOURCE_DIR}/deps/lib)
+target_include_directories(sslcli   PRIVATE ..)
+target_link_libraries(sslcli  PUBLIC    devcore     rpc  JsonRpcCpp::Client    ssl crypto   )
+install(TARGETS sslcli  DESTINATION bin)
+eth_use(sslcli  OPTIONAL OpenSSL)
