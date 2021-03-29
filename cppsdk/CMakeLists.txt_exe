@@ -1,0 +1,35 @@
+#------------------------------------------------------------------------------
+# Link libraries into main.cpp to generate executable binrary thchain
+# ------------------------------------------------------------------------------
+# This file is part of FISCO-BCOS-CHAIN.
+#
+# FISCO-BCOS-CHAIN is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# FISCO-BCOS-CHAIN is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with FISCO-BCOS-CHAIN.  If not, see <http://www.gnu.org/licenses/>
+#
+# (c) 2016-2018 tianhe-dev contributors.
+#------------------------------------------------------------------------------
+
+file(GLOB SRC_LIST "*.cpp")
+file(GLOB HEADERS "*.h")
+
+add_executable(sslcli  ChannelConn.cpp  ChannelRPCClient.cpp  CliConfigureInitializer.cpp  CliSecureInitializer.cpp  sslcli.cpp    ${HEADERS})
+#add_executable(sslcli  ${SRC_LIST}    ${HEADERS})
+
+eth_use(sslcli OPTIONAL OpenSSL)
+
+#link_directories(${CMAKE_SOURCE_DIR}/deps/lib)
+#message("CMAKE_SOURCE_DIR= ${CMAKE_SOURCE_DIR}")
+target_include_directories(sslcli  PRIVATE ..)
+#target_link_libraries(sslcli PUBLIC   devcore      rpc ssl crypto)
+target_link_libraries(sslcli PUBLIC   devcore     rpc  JsonRpcCpp::Client    ssl crypto )
+install(TARGETS sslcli  DESTINATION bin)
