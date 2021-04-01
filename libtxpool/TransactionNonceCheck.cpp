@@ -157,6 +157,10 @@ void TransactionNonceCheck::updateCache(bool _rebuild)
             for (auto i = std::max(preendblk + 1, m_startblk); i <= m_endblk; i++)
             {
                 auto nonce_vec = getNonceAndUpdateCache(i);
+                if (!nonce_vec)
+                {
+                    continue;
+                }
                 for (auto& nonce : *nonce_vec)
                 {
                     m_cache.insert(nonce);

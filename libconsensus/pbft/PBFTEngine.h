@@ -752,6 +752,7 @@ protected:
     // Make object destructive overhead asynchronous
     dev::ThreadPool::Ptr m_destructorThread;
     bool m_enablePrepareWithTxsHash = false;
+    std::atomic_bool m_generatePrepare = {false};
 };
 }  // namespace consensus
 }  // namespace dev
