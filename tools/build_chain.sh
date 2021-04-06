@@ -261,6 +261,7 @@ if [ -n "${guomi_mode}" ]; then
         if [[ -n "${macOS}" ]];then
             curl -#LO "${tassl_link_perfix}/tassl_mac.tar.gz"
             mv tassl_mac.tar.gz tassl.tar.gz
+            export OPENSSL_CONF=/etc/ssl/
         else
             if [[ "$(uname -p)" == "aarch64" ]];then
                 curl -#LO "${tassl_link_perfix}/tassl-aarch64.tar.gz"
@@ -445,7 +446,7 @@ gen_agency_cert_gm() {
     mkdir -p $agencydir
 
     $TASSL_CMD genpkey -paramfile "$chain/gmsm2.param" -out "$agencydir/gmagency.key" 2> /dev/null
-    $TASSL_CMD req -new -subj "/CN=${name}_son/O=fisco-bcos/OU=agency" -key "$agencydir/gmagency.key" -config "$chain/gmcert.cnf" -out "$agencydir/gmagency.csr" 2> /dev/null
+    $TASSL_CMD req -new -subj "/CN=${name}/O=fisco-bcos/OU=agency" -key "$agencydir/gmagency.key" -config "$chain/gmcert.cnf" -out "$agencydir/gmagency.csr" 2> /dev/null
     $TASSL_CMD x509 -sm3 -req -CA "$chain/gmca.crt" -CAkey "$chain/gmca.key" -days 3650 -CAcreateserial -in "$agencydir/gmagency.csr" -out "$agencydir/gmagency.crt" -extfile "$chain/gmcert.cnf" -extensions v3_agency_root 2> /dev/null
     # cat "$chain/gmca.crt" >> "$agencydir/gmagency.crt"
     cp "$chain/gmca.crt" "$chain/gmcert.cnf" "$chain/gmsm2.param" "$agencydir/"
@@ -1636,11 +1637,11 @@ prepare_ca(){
         if [ "${use_ip_param}" == "false" ];then
             for agency_name in ${agency_array[*]};do
                 if [ ! -d "${output_dir}/gmcert/${agency_name}" ];then
-                    gen_agency_cert_gm "${output_dir}/gmcert" "${output_dir}/gmcert/${agency_name}" >"${logfile}" 2>&1
+                    gen_agency_cert_gm "${output_dir}/gmcert" "${output_dir}/gmcert/${agency_name}-gm" >"${logfile}" 2>&1
                 fi
             done
         else
-            gen_agency_cert_gm "${output_dir}/gmcert" "${output_dir}/gmcert/agency" >"${logfile}" 2>&1
+            gen_agency_cert_gm "${output_dir}/gmcert" "${output_dir}/gmcert/agency-gm" >"${logfile}" 2>&1
         fi
     fi
 }
@@ -1712,16 +1713,17 @@ for line in ${ip_array[*]};do
     echo "Processing IP=${ip} Total=${num} Agency=${agency_array[${server_count}]} Groups=${group_array[server_count]}"
     [ -z "$(get_value "${ip//[\.:]/_}_count")" ] && set_value "${ip//[\.:]/_}_count" 0
     sdk_path="${output_dir}/${ip}/sdk"
+    local agency_gm_path="${output_dir}/gmcert/${agency_array[${server_count}]}-gm"
     if [ ! -d "${sdk_path}" ];then
         gen_cert "${output_dir}/cert/${agency_array[${server_count}]}" "${sdk_path}" "sdk"
         mv node.nodeid sdk.publickey
         cd "${output_dir}"
         if [ -n "${guomi_mode}" ];then
             mkdir -p "${sdk_path}/gm"
-            gen_node_cert_with_extensions_gm "${output_dir}/gmcert/${agency_array[${server_count}]}" "${sdk_path}/gm" "sdk" sdk v3_req
-            if [ -z "${no_agency}" ];then cat "${output_dir}/gmcert/${agency_array[${server_count}]}/gmagency.crt" >> "${sdk_path}/gm/gmsdk.crt";fi
-            cat "${output_dir}/gmcert/${agency_array[${server_count}]}/../gmca.crt" >> "${sdk_path}/gm/gmsdk.crt"
-            gen_node_cert_with_extensions_gm "${output_dir}/gmcert/${agency_array[${server_count}]}" "${sdk_path}/gm" "sdk" ensdk v3enc_req
+            gen_node_cert_with_extensions_gm "${agency_gm_path}" "${sdk_path}/gm" "sdk" sdk v3_req
+            if [ -z "${no_agency}" ];then cat "${agency_gm_path}/gmagency.crt" >> "${sdk_path}/gm/gmsdk.crt";fi
+            cat "${agency_gm_path}/../gmca.crt" >> "${sdk_path}/gm/gmsdk.crt"
+            gen_node_cert_with_extensions_gm "${agency_gm_path}" "${sdk_path}/gm" "sdk" ensdk v3enc_req
             cp "${output_dir}/gmcert/gmca.crt" "${sdk_path}/gm/"
             $TASSL_CMD ec -in "$sdk_path/gm/gmsdk.key" -text -noout 2> /dev/null | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}'  | cat > "$ndpath/gmsdk.publickey"
             mv "$sdk_path/gmsdk.publickey" "$sdk_path/gm"
@@ -1747,7 +1749,7 @@ for line in ${ip_array[*]};do
             fi
 
             if [ -n "$guomi_mode" ]; then
-                gen_node_cert_gm "${output_dir}/gmcert/${agency_array[${server_count}]}" "${node_dir}"
+                gen_node_cert_gm "${agency_gm_path}" "${node_dir}"
                 privateKey=$($TASSL_CMD ec -in "${node_dir}/${gm_conf_path}/gmnode.key" -text 2> /dev/null| sed -n '3,5p' | sed 's/://g'| tr "\n" " "|sed 's/ //g')
                 len=${#privateKey}
                 head2=${privateKey:0:2}
@@ -1863,7 +1865,7 @@ if [ -n "${no_agency}" ];then
 # delete agency crt
     for agency_name in ${agency_array[*]};do
         if [ -d "${output_dir}/cert/${agency_name}" ];then rm -rf "${output_dir}/cert/${agency_name}";fi
-        if [ -d "${output_dir}/gmcert/${agency_name}" ];then rm -rf "${output_dir}/gmcert/${agency_name}";fi
+        if [ -d "${output_dir}/gmcert/${agency_name}-gm" ];then rm -rf "${output_dir}/gmcert/${agency_name}-gm";fi
     done
 fi
 }
