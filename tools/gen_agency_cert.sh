@@ -333,8 +333,8 @@ gen_agency_cert_gm() {
     dir_must_not_exists "$agencydir"
     mkdir -p "$agencydir"
 
-    $TASSL_CMD genpkey -paramfile "$chain/gmsm2.param" -out "$agencydir/gmagency.key" 2> /dev/null
-    $TASSL_CMD req -new -subj "/CN=$name/O=fisco-bcos/OU=agency" -key "$agencydir/gmagency.key" -out "$agencydir/gmagency.csr" 2> /dev/null
+    $TASSL_CMD genpkey -paramfile "$chain/gmsm2.param" -out "$agencydir/gmagency.key" >> "${logfile}" 2>&1
+    $TASSL_CMD req -new -subj "/CN=$name/O=fisco-bcos/OU=agency" -key "$agencydir/gmagency.key" -config "$chain/gmcert.cnf" -out "$agencydir/gmagency.csr" >> "${logfile}" 2>&1
     $TASSL_CMD x509 -req -CA "$chain/gmca.crt" -CAkey "$chain/gmca.key" -days 3650 -CAcreateserial -in "$agencydir/gmagency.csr" -out "$agencydir/gmagency.crt" -extfile "$chain/gmcert.cnf" -extensions v3_agency_root 2> /dev/null
 
     if [[ -n "${gmroot_crt}" ]];then
@@ -357,7 +357,7 @@ main()
         check_and_install_tassl
         generate_cert_conf_gm "${gmca_path}/gmcert.cnf"
         generate_gmsm2_param "${gmca_path}/gmsm2.param"
-        gen_agency_cert_gm "${gmca_path}" "${gmca_path}/${agency}" >"${logfile}" 2>&1
+        gen_agency_cert_gm "${gmca_path}" "${gmca_path}/${agency}" > "${logfile}"
     fi
     rm "${logfile}"
 }

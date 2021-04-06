@@ -68,9 +68,9 @@ foreach(file ${sources})
 endforeach(file)
 
 add_executable(test-fisco-bcos ${sources})
-target_include_directories(test-fisco-bcos SYSTEM BEFORE PRIVATE ${BOOST_INCLUDE_DIR})
+target_include_directories(test-fisco-bcos SYSTEM BEFORE PRIVATE ${BOOST_INCLUDE_DIR} ${TCMALLOC_INCLUDE_DIR})
 target_include_directories(test-fisco-bcos PRIVATE ..)
 target_include_directories(test-fisco-bcos PRIVATE ../utils)
 target_include_directories(test-fisco-bcos PRIVATE ${ROCKSDB_INCLUDE_DIR})
-target_link_libraries(test-fisco-bcos Boost::UnitTestFramework)
-target_link_libraries(test-fisco-bcos initializer channelserver)
+target_link_libraries(test-fisco-bcos Boost::UnitTestFramework initializer channelserver)
+

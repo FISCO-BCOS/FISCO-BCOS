@@ -31,11 +31,11 @@
     // context->setAddress2Precompiled(Address(0x5001),
     // std::make_shared<dev::precompiled::HelloWorldPrecompiled>());
     context->setAddress2Precompiled(
-        Address(0x5002), std::make_shared<dev::precompiled::DagTransferPrecompiled>());
+        Address(dev::precompiled::DAG_TRANSFER_ADDRESS), std::make_shared<dev::precompiled::DagTransferPrecompiled>());
     context->setAddress2Precompiled(
-        Address(0x5003), std::make_shared<dev::precompiled::PaillierPrecompiled>());
+        Address(dev::precompiled::PAILLIER_ADDRESS), std::make_shared<dev::precompiled::PaillierPrecompiled>());
     context->setAddress2Precompiled(
-        Address(0x5004), std::make_shared<dev::precompiled::GroupSigPrecompiled>());
+        Address(dev::precompiled::GROUP_SIG_ADDRESS), std::make_shared<dev::precompiled::GroupSigPrecompiled>());
     context->setAddress2Precompiled(
-        Address(0x5005), std::make_shared<dev::precompiled::RingSigPrecompiled>());
+        Address(dev::precompiled::RING_SIG_ADDRESS), std::make_shared<dev::precompiled::RingSigPrecompiled>());
 }

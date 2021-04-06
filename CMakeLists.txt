@@ -28,7 +28,8 @@ if(APPLE)
   set(CMAKE_EXE_LINKER_FLAGS ${CMAKE_EXE_LINNKER_FLAGS} "-w")
 endif()
 
-project(FISCO-BCOS VERSION "2.7.2")
+project(FISCO-BCOS VERSION "2.8.0")
+
 # Suffix like "-rc1" e.t.c. to append to versions wherever needed.
 set(VERSION_SUFFIX "")
 
