@@ -269,7 +269,7 @@ if [ -n "${guomi_mode}" ]; then
             elif [[ "$(uname -p)" == "x86_64" ]];then
                 curl -#LO "${tassl_link_perfix}/tassl.tar.gz"
             else
-                LOG_ERROR "Unsupported platform"
+                LOG_WARN "Unsupported platform"
                 exit 1
             fi
         fi
