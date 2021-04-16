@@ -26,36 +26,39 @@ using namespace std;
 using namespace dev;
 using namespace crypto;
 
-std::string SDFSM4Encrypt(const unsigned char* _plainData, size_t _plainDataSize,
-    const unsigned char* _key, size_t _keySize, const unsigned char* _ivData){
-        // Add padding
-        int padding = _plainDataSize % 16;
-        int nSize = 16 - padding;
-        int inDataVLen = _plainDataSize + nSize;
-        bytes inDataV(inDataVLen);
-        memcpy(inDataV.data(), _plainData, _plainDataSize);
-        memset(inDataV.data() + _plainDataSize, nSize, nSize);
-        // Encrypt
-        Key key = Key();
-        key.setPrivateKey((unsigned char *)_key,_keySize);
-        SDFCryptoProvider& provider = SDFCryptoProvider::GetInstance();
-        unsigned int size;
-        string enData;
-        enData.resize(inDataVLen);
-        provider.Encrypt(key,SM4_CBC,(unsigned char *)_ivData,_plainData,_plainDataSize,(unsigned char*)enData.data(),&size);
-        return enData;
+std::string dev::crypto::SDFSM4Encrypt(const unsigned char* _plainData, size_t _plainDataSize,
+    const unsigned char* _key, size_t _keySize, const unsigned char* _ivData)
+{
+    // Add padding
+    int padding = _plainDataSize % 16;
+    int nSize = 16 - padding;
+    int inDataVLen = _plainDataSize + nSize;
+    bytes inDataV(inDataVLen);
+    memcpy(inDataV.data(), _plainData, _plainDataSize);
+    memset(inDataV.data() + _plainDataSize, nSize, nSize);
+    // Encrypt
+    Key key = Key();
+    key.setPrivateKey((unsigned char*)_key, _keySize);
+    SDFCryptoProvider& provider = SDFCryptoProvider::GetInstance();
+    unsigned int size;
+    string enData;
+    enData.resize(inDataVLen);
+    provider.Encrypt(key, SM4_CBC, (unsigned char*)_ivData, _plainData, _plainDataSize,
+        (unsigned char*)enData.data(), &size);
+    return enData;
 }
-std::string SDFSM4Decrypt(const unsigned char* _cypherData, size_t _cypherDataSize,
-    const unsigned char* _key, size_t _keySize, const unsigned char* _ivData){
-        
-        string deData;
-        deData.resize(_cypherDataSize);
-        Key key = Key();
-        key.setPrivateKey((unsigned char *)_key,_keySize);
-        SDFCryptoProvider& provider = SDFCryptoProvider::GetInstance();
-        unsigned int size;
-        provider.Decrypt(key,SM4_CBC,(unsigned char *)_ivData,_cypherData,_cypherDataSize,(unsigned char *)deData.data(),&size);
-        int padding = deData.at(_cypherDataSize - 1);
-        int deLen = _cypherDataSize - padding;
-        return deData.substr(0, deLen);
+std::string dev::crypto::SDFSM4Decrypt(const unsigned char* _cypherData, size_t _cypherDataSize,
+    const unsigned char* _key, size_t _keySize, const unsigned char* _ivData)
+{
+    string deData;
+    deData.resize(_cypherDataSize);
+    Key key = Key();
+    key.setPrivateKey((unsigned char*)_key, _keySize);
+    SDFCryptoProvider& provider = SDFCryptoProvider::GetInstance();
+    unsigned int size;
+    provider.Decrypt(key, SM4_CBC, (unsigned char*)_ivData, _cypherData, _cypherDataSize,
+        (unsigned char*)deData.data(), &size);
+    int padding = deData.at(_cypherDataSize - 1);
+    int deLen = _cypherDataSize - padding;
+    return deData.substr(0, deLen);
 }

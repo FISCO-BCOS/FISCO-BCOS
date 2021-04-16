@@ -20,11 +20,11 @@
  */
 #include "SDFCryptoProvider.h"
 #include "csmsds.h"
-#include <cstring>
-#include <list>
-#include <iostream>
 #include <stdio.h>
 #include <cstdlib>
+#include <cstring>
+#include <iostream>
+#include <list>
 #include <string>
 #include <vector>
 
@@ -119,20 +119,27 @@ unsigned int SDFCryptoProvider::Sign(Key const& key, AlgorithmType algorithm,
     {
         SGD_HANDLE sessionHandle = m_sessionPool->GetSession();
         SGD_RV signCode;
-        if (key.IsInternalKey()){
-            SGD_RV getAccessRightCode = SDF_GetPrivateKeyAccessRight(sessionHandle, key.Identifier(), (unsigned char *) key.Password(), (unsigned int)strlen(key.Password()));
-            if (getAccessRightCode != SDR_OK){
+        if (key.IsInternalKey())
+        {
+            SGD_RV getAccessRightCode =
+                SDF_GetPrivateKeyAccessRight(sessionHandle, key.Identifier(),
+                    (unsigned char*)key.Password(), (unsigned int)strlen(key.Password()));
+            if (getAccessRightCode != SDR_OK)
+            {
                 m_sessionPool->ReturnSession(sessionHandle);
                 return getAccessRightCode;
             }
-            signCode = SDF_InternalSign_ECC(sessionHandle, key.Identifier(),(SGD_UCHAR*)digest, digestLen, (ECCSignature*)signature);
+            signCode = SDF_InternalSign_ECC(sessionHandle, key.Identifier(), (SGD_UCHAR*)digest,
+                digestLen, (ECCSignature*)signature);
             SDF_ReleasePrivateKeyAccessRight(sessionHandle, key.Identifier());
-        } else{
+        }
+        else
+        {
             ECCrefPrivateKey eccKey;
             eccKey.bits = 32 * 8;
             memcpy(eccKey.D, key.PrivateKey(), 32);
-            signCode = SDF_ExternalSign_ECC(sessionHandle, SGD_SM2_1, &eccKey,
-            (SGD_UCHAR*)digest, digestLen, (ECCSignature*)signature);
+            signCode = SDF_ExternalSign_ECC(sessionHandle, SGD_SM2_1, &eccKey, (SGD_UCHAR*)digest,
+                digestLen, (ECCSignature*)signature);
         }
         if (signCode != SDR_OK)
         {
@@ -166,8 +173,8 @@ unsigned int SDFCryptoProvider::KeyGen(AlgorithmType algorithm, Key* key)
             return result;
         }
         unsigned char pk_xy[64];
-        memcpy(pk_xy,pk.x,32);
-        memcpy(pk_xy+32,pk.y,32);
+        memcpy(pk_xy, pk.x, 32);
+        memcpy(pk_xy + 32, pk.y, 32);
         key->setPrivateKey(sk.D, 32);
         key->setPublicKey(pk_xy, 64);
         m_sessionPool->ReturnSession(sessionHandle);
@@ -213,9 +220,9 @@ unsigned int SDFCryptoProvider::Hash(Key*, AlgorithmType algorithm, unsigned cha
         return SDR_ALGNOTSUPPORT;
     }
 }
-unsigned int SDFCryptoProvider::HashWithZ(Key*, AlgorithmType algorithm, unsigned char const* zValue,
-    unsigned int const zValueLen, unsigned char const* message, unsigned int const messageLen,
-    unsigned char* digest, unsigned int* digestLen)
+unsigned int SDFCryptoProvider::HashWithZ(Key*, AlgorithmType algorithm,
+    unsigned char const* zValue, unsigned int const zValueLen, unsigned char const* message,
+    unsigned int const messageLen, unsigned char* digest, unsigned int* digestLen)
 {
     switch (algorithm)
     {
@@ -274,15 +281,19 @@ unsigned int SDFCryptoProvider::Verify(Key const& key, AlgorithmType algorithm,
         memcpy(eccSignature.s, signature + 32, 32);
         SGD_RV code;
 
-        if (key.IsInternalKey()){
-            code = SDF_InternalVerify_ECC(sessionHandle, key.Identifier(), (SGD_UCHAR*)digest, digestLen, &eccSignature);
-        } else{
+        if (key.IsInternalKey())
+        {
+            code = SDF_InternalVerify_ECC(
+                sessionHandle, key.Identifier(), (SGD_UCHAR*)digest, digestLen, &eccSignature);
+        }
+        else
+        {
             ECCrefPublicKey eccKey;
             eccKey.bits = 32 * 8;
             memcpy(eccKey.x, key.PublicKey(), 32);
             memcpy(eccKey.y, key.PublicKey() + 32, 32);
             code = SDF_ExternalVerify_ECC(
-            sessionHandle, SGD_SM2_1, &eccKey, (SGD_UCHAR*)digest, digestLen, &eccSignature);
+                sessionHandle, SGD_SM2_1, &eccKey, (SGD_UCHAR*)digest, digestLen, &eccSignature);
         }
         if (code == SDR_OK)
         {
@@ -300,125 +311,141 @@ unsigned int SDFCryptoProvider::Verify(Key const& key, AlgorithmType algorithm,
     }
 }
 
-unsigned int SDFCryptoProvider::Encrypt(Key const& key, AlgorithmType algorithm, unsigned char* iv, unsigned char const* plantext,
-        unsigned int const plantextLen, unsigned char* cyphertext, unsigned int* cyphertextLen){
-     switch (algorithm) {
-         case SM4_CBC: {
-             SGD_HANDLE sessionHandle = m_sessionPool->GetSession();
-             SGD_HANDLE keyHandler;
-             SGD_RV importResult = SDF_ImportKey(sessionHandle, (SGD_UCHAR*)key.Symmetrickey(), key.SymmetrickeyLen(), &keyHandler);
-             if (!importResult == SDR_OK){
-                 m_sessionPool->ReturnSession(sessionHandle);
-                return importResult;
-             }
-             SGD_RV result = SDF_Encrypt(sessionHandle, keyHandler, SGD_SM4_CBC, (SGD_UCHAR*)iv, (SGD_UCHAR*)plantext, plantextLen, (SGD_UCHAR*) cyphertext, cyphertextLen);
-             SDF_DestroyKey(sessionHandle, keyHandler);
-             m_sessionPool->ReturnSession(sessionHandle);
-             return result;
-         }
-     default:
+unsigned int SDFCryptoProvider::Encrypt(Key const& key, AlgorithmType algorithm, unsigned char* iv,
+    unsigned char const* plantext, unsigned int const plantextLen, unsigned char* cyphertext,
+    unsigned int* cyphertextLen)
+{
+    switch (algorithm)
+    {
+    case SM4_CBC:
+    {
+        SGD_HANDLE sessionHandle = m_sessionPool->GetSession();
+        SGD_HANDLE keyHandler;
+        SGD_RV importResult = SDF_ImportKey(
+            sessionHandle, (SGD_UCHAR*)key.Symmetrickey(), key.SymmetrickeyLen(), &keyHandler);
+        if (!importResult == SDR_OK)
+        {
+            m_sessionPool->ReturnSession(sessionHandle);
+            return importResult;
+        }
+        SGD_RV result = SDF_Encrypt(sessionHandle, keyHandler, SGD_SM4_CBC, (SGD_UCHAR*)iv,
+            (SGD_UCHAR*)plantext, plantextLen, (SGD_UCHAR*)cyphertext, cyphertextLen);
+        SDF_DestroyKey(sessionHandle, keyHandler);
+        m_sessionPool->ReturnSession(sessionHandle);
+        return result;
+    }
+    default:
         return SDR_ALGNOTSUPPORT;
     }
 }
-unsigned int SDFCryptoProvider::Decrypt(Key const& key, AlgorithmType algorithm, unsigned char* iv, unsigned char const* cyphertext,
-        unsigned int const cyphertextLen, unsigned char* plantext, unsigned int* plantextLen){
-     switch (algorithm) {
-         case SM4_CBC: {
-             SGD_HANDLE sessionHandle = m_sessionPool->GetSession();
-             SGD_HANDLE keyHandler;
-             SGD_RV importResult = SDF_ImportKey(sessionHandle, key.Symmetrickey(), key.SymmetrickeyLen(), &keyHandler);
-             if (!importResult == SDR_OK){
-                 m_sessionPool->ReturnSession(sessionHandle);
-                return importResult;
-             }
-             SGD_RV result = SDF_Decrypt(sessionHandle, keyHandler, SGD_SM4_CBC, (SGD_UCHAR*)iv, (SGD_UCHAR*)cyphertext, cyphertextLen, (SGD_UCHAR*)plantext, plantextLen);
-			 SDF_DestroyKey(sessionHandle, keyHandler);
-             m_sessionPool->ReturnSession(sessionHandle);
-             return result;
-         }
-     default:
+unsigned int SDFCryptoProvider::Decrypt(Key const& key, AlgorithmType algorithm, unsigned char* iv,
+    unsigned char const* cyphertext, unsigned int const cyphertextLen, unsigned char* plantext,
+    unsigned int* plantextLen)
+{
+    switch (algorithm)
+    {
+    case SM4_CBC:
+    {
+        SGD_HANDLE sessionHandle = m_sessionPool->GetSession();
+        SGD_HANDLE keyHandler;
+        SGD_RV importResult =
+            SDF_ImportKey(sessionHandle, key.Symmetrickey(), key.SymmetrickeyLen(), &keyHandler);
+        if (!importResult == SDR_OK)
+        {
+            m_sessionPool->ReturnSession(sessionHandle);
+            return importResult;
+        }
+        SGD_RV result = SDF_Decrypt(sessionHandle, keyHandler, SGD_SM4_CBC, (SGD_UCHAR*)iv,
+            (SGD_UCHAR*)cyphertext, cyphertextLen, (SGD_UCHAR*)plantext, plantextLen);
+        SDF_DestroyKey(sessionHandle, keyHandler);
+        m_sessionPool->ReturnSession(sessionHandle);
+        return result;
+    }
+    default:
         return SDR_ALGNOTSUPPORT;
     }
 }
-unsigned int
-SDFCryptoProvider::ExportInternalPublicKey(Key &key, AlgorithmType algorithm) {
-  switch (algorithm) {
-  case SM2: {
-    if (!key.IsInternalKey()) {
-      return SDR_ALGNOTSUPPORT;
+unsigned int SDFCryptoProvider::ExportInternalPublicKey(Key& key, AlgorithmType algorithm)
+{
+    switch (algorithm)
+    {
+    case SM2:
+    {
+        if (!key.IsInternalKey())
+        {
+            return SDR_ALGNOTSUPPORT;
+        }
+        ECCrefPublicKey pk;
+        SGD_HANDLE sessionHandle = m_sessionPool->GetSession();
+        SGD_RV result = SDF_ExportSignPublicKey_ECC(sessionHandle, key.Identifier(), &pk);
+        if (result != SDR_OK)
+        {
+            m_sessionPool->ReturnSession(sessionHandle);
+            return result;
+        }
+        unsigned char pk_xy[64];
+        memcpy(pk_xy, pk.x, 32);
+        memcpy(pk_xy + 32, pk.y, 32);
+        key.setPublicKey(pk_xy, 64);
+        m_sessionPool->ReturnSession(sessionHandle);
+        return result;
     }
-    ECCrefPublicKey pk;
-    SGD_HANDLE sessionHandle = m_sessionPool->GetSession();
-    SGD_RV result =
-        SDF_ExportSignPublicKey_ECC(sessionHandle, key.Identifier(), &pk);
-    if (result != SDR_OK) {
-      m_sessionPool->ReturnSession(sessionHandle);
-      return result;
+    default:
+        return SDR_ALGNOTSUPPORT;
     }
-    unsigned char pk_xy[64];
-    memcpy(pk_xy, pk.x, 32);
-    memcpy(pk_xy + 32, pk.y, 32);
-    key.setPublicKey(pk_xy, 64);
-    m_sessionPool->ReturnSession(sessionHandle);
-    return result;
-  }
-  default:
-    return SDR_ALGNOTSUPPORT;
-  }
 }
 
 
-
-char * SDFCryptoProvider::GetErrorMessage(unsigned int code)
+char* SDFCryptoProvider::GetErrorMessage(unsigned int code)
 {
     switch (code)
     {
     case SDR_OK:
-        return (char *)"success";
+        return (char*)"success";
     case SDR_UNKNOWERR:
-        return (char *)"unknown error";
+        return (char*)"unknown error";
     case SDR_NOTSUPPORT:
-        return (char *)"not support";
+        return (char*)"not support";
     case SDR_COMMFAIL:
-        return (char *)"communication failed";
+        return (char*)"communication failed";
     case SDR_OPENDEVICE:
-        return (char *)"failed open device";
+        return (char*)"failed open device";
     case SDR_OPENSESSION:
-        return (char *)"failed open session";
+        return (char*)"failed open session";
     case SDR_PARDENY:
-        return (char *)"permission deny";
+        return (char*)"permission deny";
     case SDR_KEYNOTEXIST:
-        return (char *)"key not exit";
+        return (char*)"key not exit";
     case SDR_ALGNOTSUPPORT:
-        return (char *)"algorithm not support";
+        return (char*)"algorithm not support";
     case SDR_ALGMODNOTSUPPORT:
-        return (char *)"algorithm not support mode";
+        return (char*)"algorithm not support mode";
     case SDR_PKOPERR:
-        return (char *)"public key calculate error";
+        return (char*)"public key calculate error";
     case SDR_SKOPERR:
-        return (char *)"private key calculate error";
+        return (char*)"private key calculate error";
     case SDR_SIGNERR:
-        return (char *)"signature error";
+        return (char*)"signature error";
     case SDR_VERIFYERR:
-        return (char *)"verify signature error";
+        return (char*)"verify signature error";
     case SDR_SYMOPERR:
-        return (char *)"symmetric crypto calculate error";
+        return (char*)"symmetric crypto calculate error";
     case SDR_STEPERR:
-        return (char *)"step error";
+        return (char*)"step error";
     case SDR_FILESIZEERR:
-        return (char *)"file size error";
+        return (char*)"file size error";
     case SDR_FILENOEXIST:
-        return (char *)"file not exist";
+        return (char*)"file not exist";
     case SDR_FILEOFSERR:
-        return (char *)"file offset error";
+        return (char*)"file offset error";
     case SDR_KEYTYPEERR:
-        return (char *)"key type not right";
+        return (char*)"key type not right";
     case SDR_KEYERR:
-        return (char *)"key error";
+        return (char*)"key error";
     default:
-        std::string err = "unkown code " + std::to_string(code);
-        char * c_err = new char[err.length()+1];
-        strcpy(c_err,err.c_str());
+        std::string err = "unknown code " + std::to_string(code);
+        char* c_err = new char[err.length() + 1];
+        strcpy(c_err, err.c_str());
         return c_err;
     }
 }

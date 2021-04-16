@@ -21,9 +21,9 @@
 #pragma once
 #include <stdio.h>
 #include <cstdlib>
+#include <cstring>
 #include <list>
 #include <string>
-#include <cstring>
 #include <vector>
 using namespace std;
 namespace dev
@@ -40,17 +40,17 @@ enum AlgorithmType : uint32_t
 class Key
 {
 public:
-    unsigned char * PublicKey() const { return m_publicKey; }
-    unsigned char * PrivateKey() const { return m_privateKey; }
-    unsigned char * Symmetrickey() const {return m_symmetricKey;}
+    unsigned char* PublicKey() const { return m_publicKey; }
+    unsigned char* PrivateKey() const { return m_privateKey; }
+    unsigned char* Symmetrickey() const { return m_symmetricKey; }
     int PublicKeyLen() const { return m_publicKeyLen; }
     int PrivateKeyLen() const { return m_privateKeyLen; }
-    int SymmetrickeyLen() const {return m_symmetricKeyLen;}
+    int SymmetrickeyLen() const { return m_symmetricKeyLen; }
     unsigned int Identifier() const { return m_keyIndex; };
-    char * Password() const { return m_keyPassword; };
+    char* Password() const { return m_keyPassword; };
     bool IsInternalKey() const { return m_isInternalKey; }
     Key(void){};
-    Key(unsigned char* privateKey,int privateKeyLen, unsigned char* publicKey, int publicKeyLen)
+    Key(unsigned char* privateKey, int privateKeyLen, unsigned char* publicKey, int publicKeyLen)
     {
         m_privateKey = (unsigned char*)malloc(privateKeyLen * sizeof(char));
         memcpy(m_privateKey, privateKey, privateKeyLen);
@@ -59,7 +59,7 @@ public:
         memcpy(m_publicKey, publicKey, publicKeyLen);
         m_publicKeyLen = publicKeyLen;
     };
-    Key(const unsigned int keyIndex, char *& password)
+    Key(const unsigned int keyIndex, char*& password)
     {
         m_keyIndex = keyIndex;
         m_keyPassword = password;
@@ -92,10 +92,10 @@ public:
 
 private:
     unsigned int m_keyIndex;
-    char * m_keyPassword;
-    unsigned char * m_privateKey;
-    unsigned char * m_publicKey;
-    unsigned char * m_symmetricKey;
+    char* m_keyPassword;
+    unsigned char* m_privateKey;
+    unsigned char* m_publicKey;
+    unsigned char* m_symmetricKey;
     int m_privateKeyLen;
     int m_publicKeyLen;
     int m_symmetricKeyLen;
@@ -105,16 +105,16 @@ private:
 class SessionPool
 {
 public:
-    SessionPool(int size, void * deviceHandle);
+    SessionPool(int size, void* deviceHandle);
     virtual ~SessionPool();
-    void * GetSession();
-    void ReturnSession(void * session);
+    void* GetSession();
+    void ReturnSession(void* session);
 
 
 private:
-    void * m_deviceHandle;
+    void* m_deviceHandle;
     size_t m_size;
-    list<void *> m_pool;
+    list<void*> m_pool;
 };
 
 /**
@@ -124,7 +124,7 @@ private:
 class SDFCryptoProvider
 {
 private:
-    void * m_deviceHandle;
+    void* m_deviceHandle;
     SessionPool* m_sessionPool;
     SDFCryptoProvider();
     ~SDFCryptoProvider();
@@ -161,19 +161,21 @@ public:
      * Make hash
      */
     unsigned int Hash(Key* key, AlgorithmType algorithm, unsigned char const* message,
-        unsigned int const messageLen, unsigned char*  digest, unsigned int* digestLen);
+        unsigned int const messageLen, unsigned char* digest, unsigned int* digestLen);
 
     /**
      * Encrypt
      */
-    unsigned int Encrypt(Key const& key, AlgorithmType algorithm, unsigned char* iv, unsigned char const* plantext,
-        unsigned int const plantextLen, unsigned char* cyphertext, unsigned int* cyphertextLen);
+    unsigned int Encrypt(Key const& key, AlgorithmType algorithm, unsigned char* iv,
+        unsigned char const* plantext, unsigned int const plantextLen, unsigned char* cyphertext,
+        unsigned int* cyphertextLen);
 
     /**
      * Decrypt
      */
-    unsigned int Decrypt(Key const& key, AlgorithmType algorithm, unsigned char* iv, unsigned char const* cyphertext,
-        unsigned int const cyphertextLen, unsigned char* plantext, unsigned int* plantextLen);
+    unsigned int Decrypt(Key const& key, AlgorithmType algorithm, unsigned char* iv,
+        unsigned char const* cyphertext, unsigned int const cyphertextLen, unsigned char* plantext,
+        unsigned int* plantextLen);
 
     /**
      * Make sm3 hash with z value
@@ -185,9 +187,9 @@ public:
     /**
      *  Get public key of an internal key
      */
-    unsigned int ExportInternalPublicKey(Key &key, AlgorithmType algorithm);
+    unsigned int ExportInternalPublicKey(Key& key, AlgorithmType algorithm);
 
-    static char * GetErrorMessage(unsigned int code);
+    static char* GetErrorMessage(unsigned int code);
 };
 }  // namespace crypto
 }  // namespace dev

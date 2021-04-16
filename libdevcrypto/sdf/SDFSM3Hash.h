@@ -20,11 +20,11 @@
  */
 
 #pragma once
+#include "SDFCryptoProvider.h"
+#include "csmsds.h"
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/vector_ref.h>
 #include <string>
-#include "SDFCryptoProvider.h"
-#include "csmsds.h"
 
 namespace dev
 {
@@ -38,7 +38,8 @@ inline h256 SDFSM3(bytesConstRef _input)
 {
     h256 ret;
     unsigned int code = SDFSM3(_input, ret.ref());
-    if(code != SDR_OK){
+    if (code != SDR_OK)
+    {
         throw SDFCryptoProvider::GetErrorMessage(code);
     }
     return ret;

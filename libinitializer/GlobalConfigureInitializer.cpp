@@ -150,7 +150,7 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
         if (useSMCrypto)
         {
             string crypto_provider = _pt.get<string>("crypto_provider.type", "ssm");
-            
+
             if (dev::stringCmpIgnoreCase(crypto_provider, "hsm") == 0)
             {
                 crypto::initHsmSMCrypto();

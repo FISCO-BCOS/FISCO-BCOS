@@ -20,12 +20,12 @@
  */
 #include "SDFSM2Signature.h"
 #include "SDFCryptoProvider.h"
+#include "csmsds.h"
 #include "libdevcore/Common.h"
 #include "libdevcore/FixedHash.h"
 #include "libdevcrypto/Common.h"
 #include "libdevcrypto/SM2Signature.h"
 #include "libdevcrypto/sm2/sm2.h"
-#include "csmsds.h"
 
 using namespace std;
 using namespace dev;
@@ -38,8 +38,8 @@ std::shared_ptr<crypto::Signature> dev::crypto::SDFSM2Sign(
     unsigned char signature[64];
     unsigned int signLen;
     Key key = Key();
-    key.setPrivateKey((unsigned char*)_keyPair.secret().ref().data(),32);
-    key.setPublicKey((unsigned char*)_keyPair.pub().ref().data(),64);
+    key.setPrivateKey((unsigned char*)_keyPair.secret().ref().data(), 32);
+    key.setPublicKey((unsigned char*)_keyPair.pub().ref().data(), 64);
     h256 privk((byte const*)key.PrivateKey(),
         FixedHash<32>::ConstructFromPointerType::ConstructFromPointer);
 
@@ -69,8 +69,8 @@ std::shared_ptr<crypto::Signature> dev::crypto::SDFSM2Sign(
     // step 2 : e = H(M')
     unsigned char hashResult[SM3_DIGEST_LENGTH];
     unsigned int uiHashResultLen;
-    unsigned int code = provider.HashWithZ(nullptr, SM3, zValue, zValueLen,
-        _hash.data(), SM3_DIGEST_LENGTH, (unsigned char*)hashResult, &uiHashResultLen);
+    unsigned int code = provider.HashWithZ(nullptr, SM3, zValue, zValueLen, _hash.data(),
+        SM3_DIGEST_LENGTH, (unsigned char*)hashResult, &uiHashResultLen);
     if (code != SDR_OK)
     {
         throw provider.GetErrorMessage(code);
@@ -89,14 +89,14 @@ std::shared_ptr<crypto::Signature> dev::crypto::SDFSM2Sign(
 }
 
 bool dev::crypto::SDFSM2Verify(
-    h512 const& _pubKey, std::shared_ptr<crypto::Signature> _sig,  const h256& _hash)
+    h512 const& _pubKey, std::shared_ptr<crypto::Signature> _sig, const h256& _hash)
 {
     // get provider
     SDFCryptoProvider& provider = SDFCryptoProvider::GetInstance();
 
     // parse input
     Key key = Key();
-    key.setPublicKey((unsigned char*)_pubKey.ref().data(),64);
+    key.setPublicKey((unsigned char*)_pubKey.ref().data(), 64);
     bool verifyResult;
 
 
@@ -128,8 +128,8 @@ bool dev::crypto::SDFSM2Verify(
 
     unsigned char hashResult[SM3_DIGEST_LENGTH];
     unsigned int uiHashResultLen;
-    unsigned int code = provider.HashWithZ(nullptr, SM3, zValue, zValueLen,
-        _hash.data(), SM3_DIGEST_LENGTH, (unsigned char*)hashResult, &uiHashResultLen);
+    unsigned int code = provider.HashWithZ(nullptr, SM3, zValue, zValueLen, _hash.data(),
+        SM3_DIGEST_LENGTH, (unsigned char*)hashResult, &uiHashResultLen);
     if (code != SDR_OK)
     {
         throw provider.GetErrorMessage(code);
@@ -152,7 +152,7 @@ bool dev::crypto::SDFSM2Verify(
     }
 }
 
-h512 dev::crypto::SDFSM2Recover(std::shared_ptr<crypto::Signature> _s,  const h256& _message)
+h512 dev::crypto::SDFSM2Recover(std::shared_ptr<crypto::Signature> _s, const h256& _message)
 {
     auto _sig = dynamic_pointer_cast<SM2Signature>(_s);
     if (!_sig)

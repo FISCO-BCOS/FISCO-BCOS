@@ -40,19 +40,19 @@ int main(int, const char* argv[])
 
     std::cout << "#### begin function test" << std::endl;
     KeyPair kp = KeyPair::create();
-    
+
     std::string pubHex = toHex(kp.pub().data(), kp.pub().data() + 64, "04");
     h256 h(fromHex("0x68b5bae5fe19851624298fd1e9b4d788627ac27c13aad3240102ffd292a17911"));
-    std::shared_ptr<crypto::Signature> swResult = sm2Sign(kp,h);
-    std::shared_ptr<crypto::Signature>  sdfResult = SDFSM2Sign(kp,h);	
-    bool result1 = sm2Verify(kp.pub(),swResult,h);
-    cout<< "*** soft sign, soft verify :"<< result1 <<endl <<endl;
-    bool result2 = sm2Verify(kp.pub(),sdfResult,h);
-    cout<<"*** hardware sign, soft verify： "<< result2 <<endl;
-    bool result3 = SDFSM2Verify(kp.pub(),sdfResult,h);
-    cout <<"*** hardware sign, hardware verify: "<< result3 <<endl;
-    bool result4 = SDFSM2Verify(kp.pub(),swResult,h);
-    cout <<"*** soft sign, hardware verify: "<< result4 <<endl;
+    std::shared_ptr<crypto::Signature> swResult = sm2Sign(kp, h);
+    std::shared_ptr<crypto::Signature> sdfResult = SDFSM2Sign(kp, h);
+    bool result1 = sm2Verify(kp.pub(), swResult, h);
+    cout << "*** soft sign, soft verify :" << result1 << endl << endl;
+    bool result2 = sm2Verify(kp.pub(), sdfResult, h);
+    cout << "*** hardware sign, soft verify： " << result2 << endl;
+    bool result3 = SDFSM2Verify(kp.pub(), sdfResult, h);
+    cout << "*** hardware sign, hardware verify: " << result3 << endl;
+    bool result4 = SDFSM2Verify(kp.pub(), swResult, h);
+    cout << "*** soft sign, hardware verify: " << result4 << endl;
     getchar();
     std::cout << "#### begin performance test" << std::endl;
 
@@ -67,7 +67,8 @@ int main(int, const char* argv[])
     clock_t end = clock();
     std::cout << "Number of calculate round: " << loopRound
               << ",  duration(s) : " << (double)(end - start) / CLOCKS_PER_SEC << endl;
-    std::cout << "Times per second: " << loopRound / ((double)(end - start) / CLOCKS_PER_SEC) << endl
+    std::cout << "Times per second: " << loopRound / ((double)(end - start) / CLOCKS_PER_SEC)
+              << endl
               << endl;
 
 
@@ -80,7 +81,8 @@ int main(int, const char* argv[])
     end = clock();
     std::cout << "Number of calculate round: " << loopRound
               << ",  duration(s) : " << (double)(end - start) / CLOCKS_PER_SEC << endl;
-    std::cout << "Times per second: " << loopRound / ((double)(end - start) / CLOCKS_PER_SEC) << endl
+    std::cout << "Times per second: " << loopRound / ((double)(end - start) / CLOCKS_PER_SEC)
+              << endl
               << endl;
 
     std::cout << "### test sm2 sign" << std::endl;
@@ -93,20 +95,21 @@ int main(int, const char* argv[])
     end = clock();
     std::cout << "Number of calculate round: " << loopRound
               << ",  duration(s) : " << (double)(end - start) / CLOCKS_PER_SEC << endl;
-    std::cout << "Times per second: " << loopRound / ((double)(end - start) / CLOCKS_PER_SEC) << endl
+    std::cout << "Times per second: " << loopRound / ((double)(end - start) / CLOCKS_PER_SEC)
+              << endl
               << endl;
 
     std::cout << "### test SDF sm2 sign" << std::endl;
     start = clock();
     for (size_t i = 0; i < loopRound; i++)
     {
-
         SDFSM2Sign(keyPair, hash);
     }
     end = clock();
     std::cout << "Number of calculate round: " << loopRound
               << ",  duration(s) : " << (double)(end - start) / CLOCKS_PER_SEC << endl;
-    std::cout << "Times per second: " << loopRound / ((double)(end - start) / CLOCKS_PER_SEC) << endl
+    std::cout << "Times per second: " << loopRound / ((double)(end - start) / CLOCKS_PER_SEC)
+              << endl
               << endl;
 
     auto signatureResult = sm2Sign(keyPair, hash);
@@ -119,7 +122,8 @@ int main(int, const char* argv[])
     end = clock();
     std::cout << "Number of calculate round: " << loopRound
               << ",  duration(s) : " << (double)(end - start) / CLOCKS_PER_SEC << endl;
-    std::cout << "Times per second: " << loopRound / ((double)(end - start) / CLOCKS_PER_SEC) << endl
+    std::cout << "Times per second: " << loopRound / ((double)(end - start) / CLOCKS_PER_SEC)
+              << endl
               << endl;
 
     std::cout << "### test SDF sm2 verify" << std::endl;
@@ -131,9 +135,9 @@ int main(int, const char* argv[])
     end = clock();
     std::cout << "Number of calculate round: " << loopRound
               << ",  duration(s) : " << (double)(end - start) / CLOCKS_PER_SEC << endl;
-    std::cout << "Times per second: " << loopRound / ((double)(end - start) / CLOCKS_PER_SEC) << endl
+    std::cout << "Times per second: " << loopRound / ((double)(end - start) / CLOCKS_PER_SEC)
+              << endl
               << endl;
     std::cout << "#### test end" << std::endl;
     getchar();
 }
-

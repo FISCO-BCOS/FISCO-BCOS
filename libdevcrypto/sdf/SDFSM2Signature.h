@@ -20,8 +20,8 @@
  */
 
 #pragma once
-#include "libdevcrypto/Signature.h"
 #include "libdevcore/RLP.h"
+#include "libdevcrypto/Signature.h"
 #include <vector>
 
 namespace dev
@@ -36,4 +36,3 @@ std::shared_ptr<crypto::Signature> SDFSM2SignatureFromRLP(RLP const& _rlp, size_
 std::shared_ptr<crypto::Signature> SDFSM2SignatureFromBytes(std::vector<unsigned char> _data);
 }  // namespace crypto
 }  // namespace dev
-
