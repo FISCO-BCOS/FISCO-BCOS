@@ -153,7 +153,11 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
 
             if (dev::stringCmpIgnoreCase(crypto_provider, "hsm") == 0)
             {
+#ifdef SDF
                 crypto::initHsmSMCrypto();
+#else
+                crypto::initSMCrypto();
+#endif
             }
             else
             {

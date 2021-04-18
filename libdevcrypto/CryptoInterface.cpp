@@ -29,9 +29,11 @@
 #include "SM4Crypto.h"
 #include "libdevcore/Log.h"
 #include "libdevcore/RLP.h"
+#ifndef SDF
 #include "sdf/SDFSM2Signature.h"
 #include "sdf/SDFSM3Hash.h"
 #include "sdf/SDFSM4Crypto.h"
+#endif
 #include <libconfig/GlobalConfigure.h>
 #define CRYPTO_LOG(LEVEL) LOG(LEVEL) << "[CRYPTO] "
 
@@ -88,7 +90,7 @@ void dev::crypto::initSMCrypto()
     Verify = sm2Verify;
     Recover = sm2Recover;
 }
-
+#ifndef SDF
 void dev::crypto::initHsmSMCrypto()
 {
     CRYPTO_LOG(INFO) << "[CryptoInterface:initHsmSMCrypto] use hardware secure module";
@@ -104,7 +106,7 @@ void dev::crypto::initHsmSMCrypto()
     Verify = SDFSM2Verify;
     Recover = SDFSM2Recover;
 }
-
+#endif
 void dev::crypto::initCrypto()
 {
     EmptyHash = keccak256(bytesConstRef());
