@@ -62,6 +62,10 @@ include(ProjectEVMC)
 include(ProjectVRF)
 include(ProjectEVMONE)
 
+if(SDF)
+include(ProjectSDF)
+endif()
+
 include_directories("${CMAKE_SOURCE_DIR}")
 
 add_subdirectory(libchannelserver)
