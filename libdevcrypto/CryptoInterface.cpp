@@ -29,7 +29,7 @@
 #include "SM4Crypto.h"
 #include "libdevcore/Log.h"
 #include "libdevcore/RLP.h"
-#ifndef SDF
+#if FISCO_SDF
 #include "sdf/SDFSM2Signature.h"
 #include "sdf/SDFSM3Hash.h"
 #include "sdf/SDFSM4Crypto.h"
@@ -90,7 +90,7 @@ void dev::crypto::initSMCrypto()
     Verify = sm2Verify;
     Recover = sm2Recover;
 }
-#ifndef SDF
+#if FISCO_SDF
 void dev::crypto::initHsmSMCrypto()
 {
     CRYPTO_LOG(INFO) << "[CryptoInterface:initHsmSMCrypto] use hardware secure module";

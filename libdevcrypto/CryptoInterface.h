@@ -59,7 +59,9 @@ extern std::function<std::shared_ptr<crypto::Signature>(std::vector<unsigned cha
     SignatureFromBytes;
 
 void initSMCrypto();
+#if FISCO_SDF
 void initHsmSMCrypto();
+#endif
 void initCrypto();
 
 size_t signatureLength();
