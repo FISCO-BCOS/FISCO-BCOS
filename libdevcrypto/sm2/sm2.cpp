@@ -317,6 +317,64 @@ int SM2::sm2GetZ(std::string const& _privateKey, const EC_KEY* _ecKey, unsigned 
     return ret;
 }
 
+int SM2::sm2GetZFromPublicKey(std::string const & _publicKeyHex, unsigned char* _zValue, size_t& _zValueLen){
+    bool lresult = false;
+    EC_KEY* sm2Key = NULL;
+    EC_POINT* pubPoint = NULL;
+    EC_GROUP* sm2Group = NULL;
+    _zValueLen = SM3_DIGEST_LENGTH;
+    sm2Group = EC_GROUP_new_by_curve_name(NID_sm2);
+    if (sm2Group == NULL)
+    {
+        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_GROUP_new_by_curve_name"
+                          << LOG_KV("pubKey", _publicKeyHex);
+        goto err;
+    }
+
+    if ((pubPoint = EC_POINT_new(sm2Group)) == NULL)
+    {
+        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_POINT_new"
+                          << LOG_KV("pubKey", _publicKeyHex);
+        goto err;
+    }
+
+    if (!EC_POINT_hex2point(sm2Group, (const char*)_publicKeyHex.c_str(), pubPoint, NULL))
+    {
+        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_POINT_hex2point"
+                          << LOG_KV("pubKey", _publicKeyHex);
+        goto err;
+    }
+    sm2Key = EC_KEY_new_by_curve_name(NID_sm2);
+    if (sm2Key == NULL)
+    {
+        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_KEY_new_by_curve_name"
+                          << LOG_KV("pubKey", _publicKeyHex);
+        goto err;
+    }
+
+    if (!EC_KEY_set_public_key(sm2Key, pubPoint))
+    {
+        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of Verify EC_KEY_set_public_key"
+                          << LOG_KV("pubKey", _publicKeyHex);
+        goto err;
+    }
+
+    if (!ECDSA_sm2_get_Z((const EC_KEY*)sm2Key, NULL, NULL, 0, _zValue, &_zValueLen))
+    {
+        CRYPTO_LOG(ERROR) << "[SM2::veify] Error Of Compute Z" << LOG_KV("pubKey", _publicKeyHex);
+        goto err;
+    }
+    lresult = true;
+    err:
+        if (sm2Key)
+            EC_KEY_free(sm2Key);
+        if (pubPoint)
+            EC_POINT_free(pubPoint);
+        if (sm2Group)
+            EC_GROUP_free(sm2Group);
+        return lresult;
+}
+
 string SM2::priToPub(const string& pri)
 {
     EC_KEY* sm2Key = NULL;
