@@ -21,22 +21,22 @@ include(ExternalProject)
 
 if("${CMAKE_HOST_SYSTEM_NAME}" MATCHES "Linux")
     if("${ARCHITECTURE}" MATCHES "aarch64")
-        set(SDF_LIB_NAME sdf_crypto_arm.a)
+        set(SDF_LIB_NAME libsdf-crypto_arm.a)
     else()
-        message(FATAL "unsupported platform")
+        message(FATAL "HSM  SDF only support aarch64 Linux, the ${CMAKE_HOST_SYSTEM_NAME} ${ARCHITECTURE} is not supported.")
     endif()
 elseif(APPLE)
-    message(FATAL "unsupported platform")
+    message(FATAL "HSM  SDF only support aarch64 Linux, the ${CMAKE_HOST_SYSTEM_NAME} ${ARCHITECTURE} is not supported.")
 else()
-    message(FATAL "unsupported platform")
+    message(FATAL "HSM  SDF only support aarch64 Linux, the ${CMAKE_HOST_SYSTEM_NAME} ${ARCHITECTURE} is not supported.")
 endif()
 
 ExternalProject_Add(libsdf
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NAME sdf.tar.gz
     DOWNLOAD_NO_PROGRESS 1
-    URL https://github.com/MaggieNgWu/sdf-crypto-1/archive/refs/tags/V0.2.7.tar.gz
-    URL_HASH SHA256=28c25ca2fa92278fb2423e10014c3545438c7cdfa62e345d674d39376e3c1420
+    URL https://github.com/WeBankBlockchain/sdf-crypto/archive/refs/tags/V0.1.0.tar.gz
+    URL_HASH SHA256=9942cadef59fd9f5c75265ca0efd4d3212e3d43317da6501baab3cee23af0d05
     BUILD_IN_SOURCE 1
     LOG_CONFIGURE 1
     LOG_BUILD 1
@@ -52,7 +52,7 @@ add_library(SDF STATIC IMPORTED)
 set(SDF_INCLUDE_DIR ${SOURCE_DIR}/include)
 file(MAKE_DIRECTORY ${SDF_INCLUDE_DIR})  # Must exist.
 
-set(SDF_LIB "${SOURCE_DIR}/lib/sdf_crypto_arm.a" "/lib/libswsds.so")
+set(SDF_LIB "${SOURCE_DIR}/lib/libsdf-crypto_arm.a")
 
 set_property(TARGET SDF PROPERTY IMPORTED_LOCATION ${SDF_LIB})
 set_property(TARGET SDF PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${SDF_INCLUDE_DIR})

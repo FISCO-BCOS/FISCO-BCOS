@@ -62,7 +62,7 @@ include(ProjectEVMC)
 include(ProjectVRF)
 include(ProjectEVMONE)
 
-if(SDF)
+if(USE_HSM_SDF)
 include(ProjectSDF)
 endif()
 

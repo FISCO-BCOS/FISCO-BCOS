@@ -48,22 +48,15 @@ std::shared_ptr<crypto::Signature> dev::crypto::SDFSM2Sign(
     // step 2 : e = H(M')
     // step 3 : signature = Sign(e)
     // get provider
-    BIGNUM* res = NULL;
-    size_t zValueLen;
+
+    // Get Z
     unsigned char zValue[SM3_DIGEST_LENGTH];
-    zValueLen = sizeof(zValue);
-    res = BN_new();
-    if (res == NULL)
-    {
-        throw "[SM2::sign] malloc BigNumber failed";
-    }
-    string pri = toHex(bytesConstRef{_keyPair.secret().data(), 32});
-    BN_hex2bn(&res, (const char*)pri.c_str());
-    EC_KEY* sm2Key = EC_KEY_new_by_curve_name(NID_sm2);
-    EC_KEY_set_private_key(sm2Key, res);
-    if (!SM2::sm2GetZ(pri, (const EC_KEY*)sm2Key, zValue, zValueLen))
-    {
-        throw "Error Of Compute Z";
+    size_t zValueLen = SM3_DIGEST_LENGTH;
+    std::string pubHex = toHex(_keyPair.pub().ref().data(), _keyPair.pub().ref().data() + 64, "04");
+    bool getZ = SM2::sm2GetZFromPublicKey(pubHex,zValue,zValueLen);
+    if(!getZ){
+        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of compute z" << LOG_KV("pubKey", pubHex);
+        return nullptr;
     }
 
     // step 2 : e = H(M')
@@ -97,33 +90,16 @@ bool dev::crypto::SDFSM2Verify(
     // parse input
     Key key = Key();
     key.setPublicKey((unsigned char*)_pubKey.ref().data(), 64);
-    bool verifyResult;
-
+    bool verifyResult = false;
 
     // Get Z
-    EC_KEY* sm2Key = NULL;
-    EC_POINT* pubPoint = NULL;
-    EC_GROUP* sm2Group = NULL;
     unsigned char zValue[SM3_DIGEST_LENGTH];
     size_t zValueLen = SM3_DIGEST_LENGTH;
     std::string pubHex = toHex(_pubKey.data(), _pubKey.data() + 64, "04");
-    sm2Group = EC_GROUP_new_by_curve_name(NID_sm2);
-    if ((pubPoint = EC_POINT_new(sm2Group)) == NULL)
-    {
-        throw "[SDFSM2::verify] ERROR of Verify EC_POINT_new";
-    }
-    if (!EC_POINT_hex2point(sm2Group, (const char*)pubHex.c_str(), pubPoint, NULL))
-    {
-        throw "[SDFSM2::verify] ERROR of Verify EC_POINT_hex2point";
-    }
-    sm2Key = EC_KEY_new_by_curve_name(NID_sm2);
-    if (!EC_KEY_set_public_key(sm2Key, pubPoint))
-    {
-        throw "[SDFSM2::verify] ERROR of Verify EC_KEY_set_public_key";
-    }
-    if (!ECDSA_sm2_get_Z((const EC_KEY*)sm2Key, NULL, NULL, 0, zValue, &zValueLen))
-    {
-        throw "[SDFSM2::verify] Error Of Compute Z";
+    bool getZ = SM2::sm2GetZFromPublicKey(pubHex,zValue,zValueLen);
+    if(!getZ){
+        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of compute z" << LOG_KV("pubKey", pubHex);
+        return false;
     }
 
     unsigned char hashResult[SM3_DIGEST_LENGTH];
