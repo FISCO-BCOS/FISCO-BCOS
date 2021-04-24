@@ -120,7 +120,7 @@ void LedgerParam::generateGenesisMark()
     s << mutableTxParam().txGasLimit;
 
     // init epochSealerNum and epochBlockNum for rPBFT
-    if (dev::stringCmpIgnoreCase(mutableConsensusParam().consensusType, "rpbft") == 0)
+    if (dev::stringCmpIgnoreCase(mutableConsensusParam().consensusType, RPBFT_CONSENSUS_TYPE) == 0)
     {
         LedgerParam_LOG(INFO) << LOG_DESC("store rPBFT related configuration")
                               << LOG_KV("epochSealerNum", mutableConsensusParam().epochSealerNum)
@@ -374,7 +374,8 @@ void LedgerParam::initConsensusIniConfig(ptree const& pt)
 /// 4. sealer.${idx}: define the node id of every sealer related to the group
 void LedgerParam::initConsensusConfig(ptree const& pt)
 {
-    mutableConsensusParam().consensusType = pt.get<std::string>("consensus.consensus_type", "pbft");
+    mutableConsensusParam().consensusType =
+        pt.get<std::string>("consensus.consensus_type", PBFT_CONSENSUS_TYPE);
 
     mutableConsensusParam().maxTransactions = pt.get<int64_t>("consensus.max_trans_num", 1000);
     if (mutableConsensusParam().maxTransactions <= 0)

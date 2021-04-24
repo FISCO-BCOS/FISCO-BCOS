@@ -490,8 +490,8 @@ void BlockChainImp::initGenesisWorkingSealers(dev::storage::Table::Ptr _consTabl
 {
     // only used for vrf based rPBFT
     auto sealerList = _initParam->mutableConsensusParam().sealerList;
-    bool rPBFTEnabled =
-        (dev::stringCmpIgnoreCase(_initParam->mutableConsensusParam().consensusType, "rpbft") == 0);
+    bool rPBFTEnabled = (dev::stringCmpIgnoreCase(_initParam->mutableConsensusParam().consensusType,
+                             RPBFT_CONSENSUS_TYPE) == 0);
     if (!rPBFTEnabled || g_BCOSConfig.version() < V2_6_0)
     {
         return;
@@ -573,7 +573,7 @@ bool BlockChainImp::checkAndBuildGenesisBlock(
                 boost::lexical_cast<std::string>(_initParam->mutableTxParam().txGasLimit));
             // init configurations for RPBFT
             auto consensusType = _initParam->mutableConsensusParam().consensusType;
-            if (dev::stringCmpIgnoreCase(consensusType, "rpbft") == 0)
+            if (dev::stringCmpIgnoreCase(consensusType, RPBFT_CONSENSUS_TYPE) == 0)
             {
                 // init epoch_sealer_num
                 initSystemConfig(tb, SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM,
