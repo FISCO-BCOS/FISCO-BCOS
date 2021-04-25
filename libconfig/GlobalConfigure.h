@@ -142,4 +142,7 @@ private:
 
 #define g_BCOSConfig GlobalConfigure::instance()
 
+std::string const PBFT_CONSENSUS_TYPE = "pbft";
+std::string const RPBFT_CONSENSUS_TYPE = "rpbft";
+std::string const RAFT_CONSENSUS_TYPE = "raft";
 }  // namespace dev
