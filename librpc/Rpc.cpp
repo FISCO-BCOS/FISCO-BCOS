@@ -199,8 +199,8 @@ std::string Rpc::getPbftView(int _groupID)
         auto ledgerParam = ledgerManager()->getParamByGroupId(_groupID);
         auto consensusParam = ledgerParam->mutableConsensusParam();
         std::string consensusType = consensusParam.consensusType;
-        if (stringCmpIgnoreCase(consensusType, "pbft") != 0 &&
-            stringCmpIgnoreCase(consensusType, "rpbft") != 0)
+        if (stringCmpIgnoreCase(consensusType, PBFT_CONSENSUS_TYPE) != 0 &&
+            stringCmpIgnoreCase(consensusType, RPBFT_CONSENSUS_TYPE) != 0)
         {
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(RPCExceptionType::NoView, RPCMsg[RPCExceptionType::NoView]));
@@ -265,7 +265,7 @@ Json::Value Rpc::getEpochSealersList(int _groupID)
         checkRequest(_groupID);
 
         auto consensusType = ledgerParam->mutableConsensusParam().consensusType;
-        if (stringCmpIgnoreCase(consensusType, "rpbft") != 0)
+        if (stringCmpIgnoreCase(consensusType, RPBFT_CONSENSUS_TYPE) != 0)
         {
             RPC_LOG(ERROR) << LOG_DESC("Only support getEpochSealersList when rpbft is used")
                            << LOG_KV("consensusType", consensusType) << LOG_KV("groupID", _groupID);
