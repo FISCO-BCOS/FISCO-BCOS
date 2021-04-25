@@ -35,8 +35,8 @@ ExternalProject_Add(libsdf
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NAME sdf.tar.gz
     DOWNLOAD_NO_PROGRESS 1
-    URL https://github.com/WeBankBlockchain/sdf-crypto/archive/refs/tags/V0.1.0.tar.gz
-    URL_HASH SHA256=9942cadef59fd9f5c75265ca0efd4d3212e3d43317da6501baab3cee23af0d05
+    URL https://github.com/WeBankBlockchain/sdf-crypto/archive/refs/tags/V0.1.1.tar.gz
+    URL_HASH SHA256=dc4b7c919f5f5e59f55869e75b828744f4ea8e01391ad4e777f698c3a76b4fb6
     BUILD_IN_SOURCE 1
     LOG_CONFIGURE 1
     LOG_BUILD 1
