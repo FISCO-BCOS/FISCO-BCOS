@@ -1,0 +1,43 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/libvrf"
+		},
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/libvrf.rule"
+		},
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/libvrf-complete.rule"
+		},
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/libvrf-stamp/libvrf-install.rule"
+		},
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/libvrf-stamp/libvrf-mkdir.rule"
+		},
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/libvrf-stamp/libvrf-download.rule"
+		},
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/libvrf-stamp/libvrf-update.rule"
+		},
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/libvrf-stamp/libvrf-patch.rule"
+		},
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/libvrf-stamp/libvrf-configure.rule"
+		},
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/libvrf-stamp/libvrf-build.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"libvrf"
+		],
+		"name" : "libvrf"
+	}
+}

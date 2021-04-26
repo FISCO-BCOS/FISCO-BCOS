@@ -1,0 +1,13 @@
+# Target labels
+ jsoncpp
+# Source files and their labels
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/jsoncpp
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/jsoncpp.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/jsoncpp-complete.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/jsoncpp-stamp/jsoncpp-install.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/jsoncpp-stamp/jsoncpp-mkdir.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/jsoncpp-stamp/jsoncpp-download.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/jsoncpp-stamp/jsoncpp-update.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/jsoncpp-stamp/jsoncpp-patch.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/jsoncpp-stamp/jsoncpp-configure.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/jsoncpp-stamp/jsoncpp-build.rule

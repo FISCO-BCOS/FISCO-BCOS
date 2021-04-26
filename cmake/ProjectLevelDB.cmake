@@ -8,7 +8,7 @@ endif()
 
 ExternalProject_Add(leveldb
     PREFIX ${CMAKE_SOURCE_DIR}/deps
-    DOWNLOAD_NAME leveldb-1.20.tar.gz
+    DOWNLOAD_NAME leveldb-1.22.tar.gz
     DOWNLOAD_NO_PROGRESS 1
     URL https://codeload.github.com/google/leveldb/tar.gz/v1.20
         https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/leveldb-1.20.tar.gz
@@ -17,7 +17,7 @@ ExternalProject_Add(leveldb
     LOG_CONFIGURE 1
     LOG_BUILD 1
     LOG_INSTALL 1
-    CONFIGURE_COMMAND ${SED_CMMAND} "s#-lsnappy##g" build_detect_platform COMMAND ${SED_CMMAND} "s#-DSNAPPY##g" build_detect_platform
+    CONFIGURE_COMMAND ${SED_CMMAND} "s#-lsnappy##g" build_detect_platform COMMAND ${SED_CMMAND} "s#-DSNAPPY##g" build_detect_platform COMMAND ${SED_CMMAND} "228s#int\ main\(\)\ {}#int\ main\(\)\ {\ __builtin_ia32_crc32qi\(0,\ 0\)'\ \\'\ }#g" build_detect_platform
     BUILD_COMMAND make out-static/libleveldb.a
     INSTALL_COMMAND ""
     BUILD_BYPRODUCTS <SOURCE_DIR>/out-static/libleveldb.a

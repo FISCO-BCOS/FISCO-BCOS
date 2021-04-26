@@ -7,6 +7,8 @@ ExternalProject_Add(evmone
         DOWNLOAD_NAME evmone-579065d3.tar.gz
         URL https://github.com/FISCO-BCOS/evmone/archive/579065d38990f032c786ffc11b1796130cb1c38f.tar.gz
         URL_HASH SHA256=a0c3298deeae7f61c1d4bbe3ace8e8f8d424a89d3da2c4a02ca311c6d5ec65e8
+#        PATCH_COMMAND ${SED_CMMAND} -e "39s/^//p" ./build/macos.inc
+#        PATCH_COMMAND && ${SED_CMMAND} -e "39s#^.*#ifeq\ \(\$\(shell\ /usr/sbin/sysctl\ -n\ hw.machine\),arm64\)\\nexport\ arch:=arm64\\nelse#g" ./build/macos.inc
         CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
                    -DBUILD_SHARED_LIBS=off
                    -DEVMC_ROOT=<INSTALL_DIR>

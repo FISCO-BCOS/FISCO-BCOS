@@ -1,0 +1,2 @@
+/usr/local/bin/ccache /Library/Developer/CommandLineTools/usr/bin/ar qc libnetwork.a  CMakeFiles/network.dir/ASIOInterface.cpp.o CMakeFiles/network.dir/Common.cpp.o CMakeFiles/network.dir/Host.cpp.o CMakeFiles/network.dir/PeerWhitelist.cpp.o CMakeFiles/network.dir/Session.cpp.o
+/usr/local/bin/ccache /Library/Developer/CommandLineTools/usr/bin/ranlib libnetwork.a

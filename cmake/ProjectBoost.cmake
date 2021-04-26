@@ -27,7 +27,11 @@ elseif(CORES GREATER 2)
   set(CORES 2)
 endif()
 
-set(BOOST_CXXFLAGS "cxxflags=${MARCH_TYPE}")
+if (APPLE AND ${CMAKE_HOST_SYSTEM_PROCESSOR} STREQUAL "arm64")
+    set(BOOST_CXXFLAGS "cxxflags=-march=armv8")
+else()
+    set(BOOST_CXXFLAGS "cxxflags=${MARCH_TYPE}")
+endif ()
 
 if (APPLE)
     set(SED_CMMAND sed -i .bkp)
@@ -52,10 +56,7 @@ set(BOOST_BUILD_FILES ${BOOST_LIB_PREFIX}chrono.a ${BOOST_LIB_PREFIX}date_time.a
 ExternalProject_Add(boost
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NO_PROGRESS 1
-    URL https://nchc.dl.sourceforge.net/project/boost/boost/1.68.0/boost_1_68_0.tar.bz2
-        http://dl.bintray.com/boostorg/release/1.68.0/source/boost_1_68_0.tar.bz2
-        https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/boost_1_68_0.tar.bz2
-        https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/FISCO-BCOS/deps/boost_1_68_0.tar.bz2
+    URL file://${THIRD_PARTY_ROOT}/LargeFiles/libs/boost_1_68_0.tar.bz2
     URL_HASH SHA256=7f6130bc3cf65f56a618888ce9d5ea704fa10b462be126ad053e80e553d6d8b7
     BUILD_IN_SOURCE 1
     CONFIGURE_COMMAND ${BOOST_BOOTSTRAP_COMMAND}

@@ -1,0 +1,43 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/secp256k1"
+		},
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/secp256k1.rule"
+		},
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/secp256k1-complete.rule"
+		},
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/secp256k1-stamp/secp256k1-install.rule"
+		},
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/secp256k1-stamp/secp256k1-mkdir.rule"
+		},
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/secp256k1-stamp/secp256k1-download.rule"
+		},
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/secp256k1-stamp/secp256k1-update.rule"
+		},
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/secp256k1-stamp/secp256k1-patch.rule"
+		},
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/secp256k1-stamp/secp256k1-configure.rule"
+		},
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/secp256k1-stamp/secp256k1-build.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"secp256k1"
+		],
+		"name" : "secp256k1"
+	}
+}

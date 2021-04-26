@@ -23,6 +23,7 @@ cmake_minimum_required(VERSION 3.10)
 set(FISCO_BCOS_CMAKE_DIR "${CMAKE_CURRENT_LIST_DIR}/cmake" CACHE PATH "The path to the cmake directory")
 list(APPEND CMAKE_MODULE_PATH ${FISCO_BCOS_CMAKE_DIR})
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum OS X deployment version")
+set(THIRD_PARTY_ROOT "${CMAKE_CURRENT_LIST_DIR}/third_parity/")
 
 project(FISCO-BCOS VERSION "2.7.2")
 # Suffix like "-rc1" e.t.c. to append to versions wherever needed.
@@ -33,7 +34,8 @@ if(NOT GIT_FOUND)
   message(FATAL_ERROR "Please install git")
 endif()
 
-set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY ON)
+set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY OFF)
+include_directories(. /usr/local/include)
 
 # basic setting
 include(Options)
@@ -60,7 +62,7 @@ include(ProjectPaillier)
 include(ProjectGroupSig)
 include(ProjectEVMC)
 include(ProjectVRF)
-include(ProjectEVMONE)
+include(ProjectEVMONE2)
 
 include_directories("${CMAKE_SOURCE_DIR}")
 

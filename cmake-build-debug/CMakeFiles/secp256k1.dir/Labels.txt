@@ -1,0 +1,13 @@
+# Target labels
+ secp256k1
+# Source files and their labels
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/secp256k1
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/secp256k1.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/secp256k1-complete.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/secp256k1-stamp/secp256k1-install.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/secp256k1-stamp/secp256k1-mkdir.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/secp256k1-stamp/secp256k1-download.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/secp256k1-stamp/secp256k1-update.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/secp256k1-stamp/secp256k1-patch.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/secp256k1-stamp/secp256k1-configure.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/secp256k1-stamp/secp256k1-build.rule

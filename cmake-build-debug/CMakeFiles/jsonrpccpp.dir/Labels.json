@@ -1,0 +1,43 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/jsonrpccpp"
+		},
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/jsonrpccpp.rule"
+		},
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/jsonrpccpp-complete.rule"
+		},
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/jsonrpccpp-stamp/jsonrpccpp-install.rule"
+		},
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/jsonrpccpp-stamp/jsonrpccpp-mkdir.rule"
+		},
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/jsonrpccpp-stamp/jsonrpccpp-download.rule"
+		},
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/jsonrpccpp-stamp/jsonrpccpp-update.rule"
+		},
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/jsonrpccpp-stamp/jsonrpccpp-patch.rule"
+		},
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/jsonrpccpp-stamp/jsonrpccpp-configure.rule"
+		},
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/jsonrpccpp-stamp/jsonrpccpp-build.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"jsonrpccpp"
+		],
+		"name" : "jsonrpccpp"
+	}
+}

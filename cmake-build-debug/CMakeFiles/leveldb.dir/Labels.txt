@@ -1,0 +1,13 @@
+# Target labels
+ leveldb
+# Source files and their labels
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/leveldb
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/leveldb.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/leveldb-complete.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/leveldb-stamp/leveldb-install.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/leveldb-stamp/leveldb-mkdir.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/leveldb-stamp/leveldb-download.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/leveldb-stamp/leveldb-update.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/leveldb-stamp/leveldb-patch.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/leveldb-stamp/leveldb-configure.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/leveldb-stamp/leveldb-build.rule

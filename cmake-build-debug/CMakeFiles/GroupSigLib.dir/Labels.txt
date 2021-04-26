@@ -1,0 +1,13 @@
+# Target labels
+ GroupSigLib
+# Source files and their labels
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/GroupSigLib
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/GroupSigLib.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/GroupSigLib-complete.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/GroupSigLib-stamp/GroupSigLib-install.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/GroupSigLib-stamp/GroupSigLib-mkdir.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/GroupSigLib-stamp/GroupSigLib-download.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/GroupSigLib-stamp/GroupSigLib-update.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/GroupSigLib-stamp/GroupSigLib-patch.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/GroupSigLib-stamp/GroupSigLib-configure.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/GroupSigLib-stamp/GroupSigLib-build.rule

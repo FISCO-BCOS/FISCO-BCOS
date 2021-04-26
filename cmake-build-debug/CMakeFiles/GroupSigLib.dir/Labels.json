@@ -1,0 +1,43 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/GroupSigLib"
+		},
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/GroupSigLib.rule"
+		},
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/GroupSigLib-complete.rule"
+		},
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/GroupSigLib-stamp/GroupSigLib-install.rule"
+		},
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/GroupSigLib-stamp/GroupSigLib-mkdir.rule"
+		},
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/GroupSigLib-stamp/GroupSigLib-download.rule"
+		},
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/GroupSigLib-stamp/GroupSigLib-update.rule"
+		},
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/GroupSigLib-stamp/GroupSigLib-patch.rule"
+		},
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/GroupSigLib-stamp/GroupSigLib-configure.rule"
+		},
+		{
+			"file" : "/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/GroupSigLib-stamp/GroupSigLib-build.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"GroupSigLib"
+		],
+		"name" : "GroupSigLib"
+	}
+}

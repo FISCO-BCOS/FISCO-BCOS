@@ -1,0 +1,2 @@
+/usr/local/bin/ccache /Library/Developer/CommandLineTools/usr/bin/ar qc libblockchain.a  CMakeFiles/blockchain.dir/BlockChainImp.cpp.o
+/usr/local/bin/ccache /Library/Developer/CommandLineTools/usr/bin/ranlib libblockchain.a

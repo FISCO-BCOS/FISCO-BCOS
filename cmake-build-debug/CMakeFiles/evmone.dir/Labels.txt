@@ -1,0 +1,13 @@
+# Target labels
+ evmone
+# Source files and their labels
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/evmone
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/evmone.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/evmone-complete.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/evmone-stamp/evmone-install.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/evmone-stamp/evmone-mkdir.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/evmone-stamp/evmone-download.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/evmone-stamp/evmone-update.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/evmone-stamp/evmone-patch.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/evmone-stamp/evmone-configure.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/evmone-stamp/evmone-build.rule

@@ -1,0 +1,13 @@
+# Target labels
+ tbb
+# Source files and their labels
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/tbb
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/tbb.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/tbb-complete.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/tbb-stamp/tbb-install.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/tbb-stamp/tbb-mkdir.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/tbb-stamp/tbb-download.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/tbb-stamp/tbb-update.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/tbb-stamp/tbb-patch.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/tbb-stamp/tbb-configure.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/tbb-stamp/tbb-build.rule

@@ -1,0 +1,13 @@
+# Target labels
+ libzdb
+# Source files and their labels
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/libzdb
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/libzdb.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/libzdb-complete.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/libzdb-stamp/libzdb-install.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/libzdb-stamp/libzdb-mkdir.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/libzdb-stamp/libzdb-download.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/libzdb-stamp/libzdb-update.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/libzdb-stamp/libzdb-patch.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/libzdb-stamp/libzdb-configure.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/libzdb-stamp/libzdb-build.rule

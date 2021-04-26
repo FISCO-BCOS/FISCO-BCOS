@@ -1,0 +1,13 @@
+# Target labels
+ libvrf
+# Source files and their labels
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/libvrf
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/libvrf.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/libvrf-complete.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/libvrf-stamp/libvrf-install.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/libvrf-stamp/libvrf-mkdir.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/libvrf-stamp/libvrf-download.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/libvrf-stamp/libvrf-update.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/libvrf-stamp/libvrf-patch.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/libvrf-stamp/libvrf-configure.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/deps/src/libvrf-stamp/libvrf-build.rule

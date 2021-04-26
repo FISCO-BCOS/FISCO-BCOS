@@ -1,0 +1,13 @@
+# Target labels
+ libff
+# Source files and their labels
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/libff
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/libff.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/CMakeFiles/libff-complete.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/deps/src/libff-stamp/libff-install.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/deps/src/libff-stamp/libff-mkdir.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/deps/src/libff-stamp/libff-download.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/deps/src/libff-stamp/libff-update.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/deps/src/libff-stamp/libff-patch.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/deps/src/libff-stamp/libff-configure.rule
+/Users/chenquan/Workspace/cpp/FISCO-BCOS/cmake-build-debug/deps/src/libff-stamp/libff-build.rule

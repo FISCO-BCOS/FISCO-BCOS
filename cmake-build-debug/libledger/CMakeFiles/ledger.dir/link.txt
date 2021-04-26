@@ -1,0 +1,2 @@
+/usr/local/bin/ccache /Library/Developer/CommandLineTools/usr/bin/ar qc libledger.a  CMakeFiles/ledger.dir/DBInitializer.cpp.o CMakeFiles/ledger.dir/Ledger.cpp.o CMakeFiles/ledger.dir/LedgerManager.cpp.o CMakeFiles/ledger.dir/LedgerParam.cpp.o
+/usr/local/bin/ccache /Library/Developer/CommandLineTools/usr/bin/ranlib libledger.a

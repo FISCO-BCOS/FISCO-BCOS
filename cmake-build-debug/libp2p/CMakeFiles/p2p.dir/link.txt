@@ -1,0 +1,2 @@
+/usr/local/bin/ccache /Library/Developer/CommandLineTools/usr/bin/ar qc libp2p.a  CMakeFiles/p2p.dir/P2PMessage.cpp.o CMakeFiles/p2p.dir/P2PMessageRC2.cpp.o CMakeFiles/p2p.dir/P2PSession.cpp.o CMakeFiles/p2p.dir/Service.cpp.o
+/usr/local/bin/ccache /Library/Developer/CommandLineTools/usr/bin/ranlib libp2p.a

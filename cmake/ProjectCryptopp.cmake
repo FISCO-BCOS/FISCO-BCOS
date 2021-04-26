@@ -24,6 +24,12 @@
 include(ExternalProject)
 include(GNUInstallDirs)
 
+if(APPLE AND ${CMAKE_HOST_SYSTEM_PROCESSOR} STREQUAL "arm64")
+    set(FIXED_MARCH_TYPE armv8)
+else()
+    set(FIXED_MARCH_TYPE ${MARCH_TYPE})
+endif()
+
 ExternalProject_Add(cryptopp
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     # This points to unreleased version 5.6.5+ but contains very small
@@ -141,8 +147,8 @@ ExternalProject_Add(cryptopp
         -DCMAKE_POSITION_INDEPENDENT_CODE=${BUILD_SHARED_LIBS}
         -DBUILD_SHARED=OFF
         -DBUILD_TESTING=OFF
-        -DCMAKE_C_FLAGS=${MARCH_TYPE}
-        -DCMAKE_CXX_FLAGS=${MARCH_TYPE}
+        -DCMAKE_C_FLAGS=-march=${FIXED_MARCH_TYPE}
+        -DCMAKE_CXX_FLAGS=-march=${FIXED_MARCH_TYPE}
         -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
         -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
     BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config Release

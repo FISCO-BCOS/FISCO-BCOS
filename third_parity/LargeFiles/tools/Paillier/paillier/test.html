@@ -1,0 +1,49 @@
+<html>
+    <head>
+        <script type="text/javascript" src="asn1hex.js"></script>
+        <script type="text/javascript" src="base64.js"></script>
+        <script type="text/javascript" src="seedrandom.js"></script>
+        <script type="text/javascript" src="biginteger.js"></script>
+        <script type="text/javascript" src="paillierKey.js"></script>
+    </head>
+    <body>
+    <textarea id="txta" rows="500" cols="150">test</textarea>
+    <script type="text/javascript">
+        var txtObj = document.getElementById('txta');
+        var paillier = new PaillierKey();
+        paillier.genKeyPair(1024);
+        txtObj.value = paillier.publicKeyToX509PemString();
+        txtObj.value = txtObj.value + "\n" + paillier.privateKeyToPkcs8PemString();
+        txtObj.value = txtObj.value + "\nN.length = " + paillier.n.bitLength();
+
+        var i1 = new BigInteger("100");
+        var c1 = paillier.encrypt(i1);
+        txtObj.value = txtObj.value + "\n C1.length:" + c1.length;
+        txtObj.value = txtObj.value + "\n-----BEGIN C1-----";
+        txtObj.value = txtObj.value + "\n" + _paillier_splitKey(c1, 64);
+        txtObj.value = txtObj.value + "\n-----END C1-----";
+
+        var o1 = paillier.decrypt(c1);
+        txtObj.value = txtObj.value + "\n O1:" + o1.intValue();
+
+        var i2 = new BigInteger("-20000");
+        var c2 = paillier.encrypt(i2);
+        txtObj.value = txtObj.value + "\n C2.length:" + c2.length;
+        txtObj.value = txtObj.value + "\n-----BEGIN C2-----";
+        txtObj.value = txtObj.value + "\n" + _paillier_splitKey(c2, 64);
+        txtObj.value = txtObj.value + "\n-----END C2-----";
+
+        var o2 = paillier.decrypt(c2);
+        txtObj.value = txtObj.value + "\n O2:" + o2.intValue();
+
+        var c3 = paillier.add(c1, c2);
+        txtObj.value = txtObj.value + "\n C3.length:" + c3.length;
+        txtObj.value = txtObj.value + "\n-----BEGIN C3-----";
+        txtObj.value = txtObj.value + "\n" + _paillier_splitKey(c3, 64);
+        txtObj.value = txtObj.value + "\n-----END C3-----";
+
+        var o3 = paillier.decrypt(c3);
+        txtObj.value = txtObj.value + "\n O3:" + o3.intValue();
+    </script>
+    </body>
+</html>

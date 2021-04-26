@@ -1,0 +1,2 @@
+/usr/local/bin/ccache /Library/Developer/CommandLineTools/usr/bin/ar qc libinitializer.a  CMakeFiles/initializer.dir/BoostLogInitializer.cpp.o CMakeFiles/initializer.dir/GlobalConfigureInitializer.cpp.o CMakeFiles/initializer.dir/Initializer.cpp.o CMakeFiles/initializer.dir/LedgerInitializer.cpp.o CMakeFiles/initializer.dir/P2PInitializer.cpp.o CMakeFiles/initializer.dir/RPCInitializer.cpp.o CMakeFiles/initializer.dir/SecureInitializer.cpp.o
+/usr/local/bin/ccache /Library/Developer/CommandLineTools/usr/bin/ranlib libinitializer.a
