@@ -1636,7 +1636,7 @@ prepare_ca(){
         fi
         if [ "${use_ip_param}" == "false" ];then
             for agency_name in ${agency_array[*]};do
-                if [ ! -d "${output_dir}/gmcert/${agency_name}" ];then
+                if [ ! -d "${output_dir}/gmcert/${agency_name}-gm" ];then
                     gen_agency_cert_gm "${output_dir}/gmcert" "${output_dir}/gmcert/${agency_name}-gm" >"${logfile}" 2>&1
                 fi
             done
