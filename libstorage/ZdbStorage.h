@@ -42,6 +42,8 @@ public:
 
     Entries::Ptr select(int64_t _num, TableInfo::Ptr _tableInfo, const std::string& _key,
         Condition::Ptr _condition = nullptr) override;
+    TableData::Ptr selectTableDataByNum(
+        int64_t num, TableInfo::Ptr tableInfo, uint64_t start, uint32_t counts);
     size_t commit(int64_t _num, const std::vector<TableData::Ptr>& _datas) override;
     bool onlyCommitDirty() override { return true; }
 

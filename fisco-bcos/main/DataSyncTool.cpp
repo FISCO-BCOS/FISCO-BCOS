@@ -30,6 +30,7 @@
 #include "libstorage/RocksDBStorage.h"
 #include "libstorage/RocksDBStorageFactory.h"
 #include "libstorage/SQLStorage.h"
+#include "libstorage/ZdbStorage.h"
 #include <boost/algorithm/string.hpp>
 #include <boost/archive/text_iarchive.hpp>
 #include <boost/archive/text_oarchive.hpp>
@@ -290,6 +291,150 @@ void conversionData(const std::string& tableName, TableData::Ptr tableData)
     LOG(TRACE) << LOG_BADGE("STORAGE") << LOG_DESC("conversion end!");
 }
 
+void syncData_Link(ZdbStorage::Ptr _reader, Storage::Ptr _writer, int64_t _startBlockNumber,
+                    std::shared_ptr<LedgerParamInterface> _param, bool _fullSync)
+{
+    const std::string& _dataPath = _param->mutableStorageParam().path;
+    boost::filesystem::create_directories(_dataPath);
+    auto recorder = std::make_shared<SyncRecorder>(_dataPath, _blockNumber);
+    auto syncBlock = recorder->syncBlock();
+    cout << "sync block number : " << syncBlock << ", data path : " << _dataPath
+        << ", new sync : " << recorder->isNewSync() << endl;
+    auto sysTableInfo = getSysTableInfo(SYS_TABLES);
+    TableData::Ptr sysTableData = std::make_shared<TableData>();
+    sysTableData->info = sysTableInfo;
+    uint64_t begin = _startBlockNumber;
+
+    while (true)
+    {
+        auto data = _reader-> selectTableDataByNum(syncBlock, sysTableInfo, begin, PageCount);
+        for (size_t i = 0; i < data->newEntries->size(); ++i)
+        {
+            sysTableData->newEntries->addEntry(data->newEntries->get(i));
+        }
+        if (data->newEntries->size() == 0)
+        {
+            break;
+        }
+        auto lastEntry = data->newEntries->get(data->newEntries->size() - 1);
+        begin = lastEntry->getID();
+        if (data->newEntries->size() < PageCount)
+        {
+            break;
+        }
+    }
+
+    auto tableInfos = parseTableNames(sysTableData, recorder);
+    auto totalTable = tableInfos.size();
+    size_t syncedCount = 1;
+    auto pullCommitTableData = [&](TableInfo::Ptr tableInfo, uint64_t start, uint32_t counts) {
+      cout << endl
+           << "[" << getCurrentDateTime() << "][" << syncedCount << "/" << totalTable
+           << "] processing " << tableInfo->name << endl;
+      int64_t downloaded = 0;
+      while (true)
+      {
+          Condition::Ptr condition = std::make_shared<Condition>();
+          condition->limit(PageCount);
+          auto tableData = _reader->selectTableDataByNum(syncBlock, tableInfo, start, counts);
+
+          if (!tableData)
+          {
+              cerr << "query failed. Table=" << tableInfo->name << endl;
+              break;
+          }
+          if (tableData->newEntries->size() == 0)
+          {
+              cout << "\r[" << getCurrentDateTime() << "][" << syncedCount << "/" << totalTable
+                   << "] " << tableInfo->name << " downloaded items : " << downloaded << flush;
+              break;
+          }
+          conversionData(tableInfo->name, tableData);
+          if (ForceTables.end() != find(ForceTables.begin(), ForceTables.end(), tableInfo->name))
+          {
+              for (size_t i = 0; i < tableData->newEntries->size(); i++)
+              {
+                  auto entry = tableData->newEntries->get(i);
+                  entry->setForce(true);
+              }
+          }
+          auto lastEntry = tableData->newEntries->get(tableData->newEntries->size() - 1);
+          start = lastEntry->getID();
+          _writer->commit(syncBlock, vector<TableData::Ptr>{tableData});
+          recorder->markStatus(tableInfo->name, make_pair(start, false));
+          downloaded += tableData->newEntries->size();
+          cout << "\r[" << getCurrentDateTime() << "][" << syncedCount << "/" << totalTable
+               << "] " << tableInfo->name << " downloaded items : " << downloaded << flush;
+
+          if (tableData->newEntries->size() < counts)
+          {
+              break;
+          }
+      }
+      recorder->markStatus(tableInfo->name, make_pair(start, true));
+      ++syncedCount;
+      cout << " done.\r" << flush;
+    };
+
+    // SYS_TABLES
+    if (!recorder->isCompleted(SYS_TABLES))
+    {
+        auto tableInfo = getSysTableInfo(SYS_TABLES);
+        pullCommitTableData(tableInfo, recorder->tableSyncOffset(tableInfo->name), PageCount);
+    }
+    // SYS_HASH_2_BLOCK
+    if (!recorder->isCompleted(SYS_HASH_2_BLOCK))
+    {
+        if (!_fullSync)
+        {
+            auto data = getHashToBlockData(_reader, syncBlock);
+            conversionData(SYS_HASH_2_BLOCK, data);
+            _writer->commit(syncBlock, vector<TableData::Ptr>{data});
+            recorder->markStatus(SYS_HASH_2_BLOCK, make_pair(data->newEntries->size(), true));
+        }
+        else
+        {
+            auto tableInfo = getSysTableInfo(SYS_HASH_2_BLOCK);
+            pullCommitTableData(
+                tableInfo, recorder->tableSyncOffset(tableInfo->name), BigTablePageCount);
+        }
+    }
+    // SYS_BLOCK_2_NONCES
+    if (!recorder->isCompleted(SYS_BLOCK_2_NONCES))
+    {
+        if (!_fullSync)
+        {
+            auto data = getBlockToNonceData(_reader, syncBlock);
+            if (data)
+            {
+                conversionData(SYS_BLOCK_2_NONCES, data);
+                _writer->commit(syncBlock, vector<TableData::Ptr>{data});
+                recorder->markStatus(SYS_BLOCK_2_NONCES, make_pair(data->newEntries->size(), true));
+            }
+            else
+            {
+                cout << ", nonce is empty" << endl;
+            }
+        }
+        else
+        {
+            auto tableInfo = getSysTableInfo(SYS_BLOCK_2_NONCES);
+            pullCommitTableData(
+                tableInfo, recorder->tableSyncOffset(tableInfo->name), BigTablePageCount);
+        }
+    }
+
+    for (const auto& tableInfo : tableInfos)
+    {
+        if (tableInfo->name == SYS_TABLES || tableInfo->name == SYS_BLOCK_2_NONCES ||
+            tableInfo->name == SYS_HASH_2_BLOCK)
+        {
+            continue;
+        }
+        pullCommitTableData(tableInfo, recorder->tableSyncOffset(tableInfo->name), PageCount);
+    }
+}
+
 void syncData(SQLStorage::Ptr _reader, Storage::Ptr _writer, int64_t _blockNumber,
     std::shared_ptr<LedgerParamInterface> _param, bool _fullSync)
 {
@@ -429,6 +574,33 @@ void syncData(SQLStorage::Ptr _reader, Storage::Ptr _writer, int64_t _blockNumbe
         pullCommitTableData(tableInfo, recorder->tableSyncOffset(tableInfo->name), PageCount);
     }
 }
+
+void fastSyncData(std::shared_ptr<LedgerParamInterface> _param, int64_t _rollbackNumber = 1000, int64_t _startBlockNumber)
+{
+    if (g_BCOSConfig.version() < V2_6_0)
+    {
+        cout << "error unsupported version < 2.6.0" << endl;
+        exit(0);
+    }
+    Storage::Ptr readerStorage;
+    readerStorage = createZdbStorage(_param, [](std::exception& e) {
+      LOG(ERROR) << LOG_BADGE("STORAGE") << LOG_BADGE("MySQL")
+                 << "access mysql failed exit:" << e.what();
+      raise(SIGTERM);
+      BOOST_THROW_EXCEPTION(e);
+    });
+
+    // create writer
+    Storage::Ptr writerStorage;
+    bool fullSync = true;
+
+    writerStorage = createRocksDBStorage(_param->mutableStorageParam().path, bytes(), false, true);
+
+    // fast sync data
+    syncData_Link(readerStorage, writerStorage, blockNumber, _param, fullSync);
+
+}
+
 
 void fastSyncGroupData(std::shared_ptr<LedgerParamInterface> _param,
     ChannelRPCServer::Ptr _channelRPCServer, int64_t _rollbackNumber = 1000)

@@ -33,6 +33,88 @@ using namespace dev::storage;
 
 ZdbStorage::ZdbStorage() {}
 
+TableData::Ptr ZdbStorage::selectTableDataByNum(
+        int64_t num, TableInfo::Ptr tableInfo, uint64_t start, uint32_t counts)
+{
+    try
+    {
+        std::vector<std::map<std::string, std::string> > values;
+        int ret = 0, i = 0;
+        for (i = 0; i < m_maxRetry; ++i)
+        {
+            ret = m_sqlBasicAcc->SelectTableDataByNum(num, tableInfo, start,counts, values);
+            if (ret < 0)
+            {
+                ZdbStorage_LOG(ERROR) << "Remote select datdbase return error:" << ret
+                                      << " table:" << _tableInfo->name << LOG_KV("retry", i + 1);
+                this_thread::sleep_for(chrono::milliseconds(1000));
+                continue;
+            }
+            else
+            {
+                break;
+            }
+        }
+        if (i == m_maxRetry && ret < 0)
+        {
+            ZdbStorage_LOG(ERROR) << "MySQL select return error: " << ret
+                                  << LOG_KV("table", _tableInfo->name) << LOG_KV("retry", m_maxRetry);
+            auto e = StorageException(
+                    -1, "MySQL select return error:" + to_string(ret) + " table:" + _tableInfo->name);
+            m_fatalHandler(e);
+            BOOST_THROW_EXCEPTION(e);
+        }
+        TableData::Ptr tableData = std::make_shared<TableData>();
+        tableInfo->fields.emplace_back(tableInfo->key);
+        tableInfo->fields.emplace_back(STATUS);
+        tableInfo->fields.emplace_back(NUM_FIELD);
+        tableInfo->fields.emplace_back(ID_FIELD);
+        tableInfo->fields.emplace_back("_hash_");
+        tableData->info = tableInfo;
+
+        for (auto it : values)
+        {
+            Entry::Ptr entry = std::make_shared<Entry>();
+            for (auto it2 : it)
+            {
+                if (it2.first == ID_FIELD)
+                {
+                    entry->setID(it2.second);
+                }
+                else if (it2.first == NUM_FIELD)
+                {
+                    entry->setNum(it2.second);
+                }
+                else if (it2.first == STATUS)
+                {
+                    entry->setStatus(it2.second);
+                }
+                else
+                {
+                    entry->setField(it2.first, it2.second);
+                }
+            }
+            if (entry->getStatus() == 0)
+            {
+                entry->setDirty(false);
+                tableData->newEntries->addEntry(entry);
+            }
+        }
+        tableData->dirtyEntries = std::make_shared<Entries>();
+        return tableData;
+    }
+    catch (std::exception& e)
+    {
+        STORAGE_EXTERNAL_LOG(ERROR) << "Query database error:" << e.what();
+
+        BOOST_THROW_EXCEPTION(
+                StorageException(-1, std::string("Query database error:") + e.what()));
+    }
+    return TableData::Ptr();
+}
+
+
+
 Entries::Ptr ZdbStorage::select(
     int64_t _num, TableInfo::Ptr _tableInfo, const std::string& _key, Condition::Ptr _condition)
 {
