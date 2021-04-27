@@ -575,7 +575,7 @@ void syncData(SQLStorage::Ptr _reader, Storage::Ptr _writer, int64_t _blockNumbe
     }
 }
 
-void fastSyncData(std::shared_ptr<LedgerParamInterface> _param, int64_t _rollbackNumber = 1000, int64_t _startBlockNumber)
+void fastSyncData(std::shared_ptr<LedgerParamInterface> _param, int64_t _rollbackNumber = 1000, int64_t _startBlockNumber = 0)
 {
     if (g_BCOSConfig.version() < V2_6_0)
     {
@@ -597,7 +597,7 @@ void fastSyncData(std::shared_ptr<LedgerParamInterface> _param, int64_t _rollbac
     writerStorage = createRocksDBStorage(_param->mutableStorageParam().path, bytes(), false, true);
 
     // fast sync data
-    syncData_Link(readerStorage, writerStorage, blockNumber, _param, fullSync);
+    syncData_Link(readerStorage, writerStorage, _startBlockNumber, _param, fullSync);
 
 }
 
@@ -686,9 +686,9 @@ int main(int argc, const char* argv[])
     std::cout << "[" << getCurrentDateTime() << "] "
               << "The sync-tool is Initializing..." << std::endl;
     boost::program_options::options_description main_options("Usage of fisco-sync");
-    main_options.add_options()("help,h", "print help information")("config,c",
-        boost::program_options::value<std::string>()->default_value("./config.ini"),
-        "config file path, eg. config.ini")("verify,v",
+    main_options.add_options()("help,h", "print help information")("startBlockNumber,n","MYSQL startBlockNumber")
+        ("ip,i","MYSQL ip")("port,t","MYSQL port")("username,u","MYSQL name")
+        ("password,p","MYSQL password")("username,u","MYSQL name")("verify,v",
         boost::program_options::value<int64_t>()->default_value(1000),
         "verify number of blocks, default 1000")("limit,l",
         boost::program_options::value<uint32_t>()->default_value(10000), "page counts of table")(
@@ -716,8 +716,12 @@ int main(int argc, const char* argv[])
     verifyBlocks = verifyBlocks < MinVerifyBlocks ? MinVerifyBlocks : verifyBlocks;
     PageCount = vm["limit"].as<uint32_t>();
     BigTablePageCount = vm["sys_limit"].as<uint32_t>();
-    string configPath = vm["config"].as<std::string>();
+    string ip = vm["ip"].as<std::string>();
+    string name = vm["username"].as<std::string>();
+    string password = vm["password"].as<std::string>();
+    uint32_t port = vm["port"].as<uint32_t>();
     int groupID = vm["group"].as<uint>();
+    int64_t startBlockNumber = vm["startBlockNumber"].as<int64_t>();
 
     try
     {
@@ -739,30 +743,42 @@ int main(int argc, const char* argv[])
         auto p2pService = std::make_shared<Service>();
         rpcInitializer->setP2PService(p2pService);
         rpcInitializer->initChannelRPCServer(pt);
-        auto groupConfigPath = pt.get<string>("group.group_config_path", "conf/");
-        auto dataPath = pt.get<string>("group.group_data_path", "data/");
-        boost::filesystem::path path(groupConfigPath);
-        if (fs::is_directory(path))
-        {
-            fs::directory_iterator endIter;
-            for (fs::directory_iterator iter(path); iter != endIter; iter++)
-            {
-                if (fs::extension(*iter) == ".genesis" &&
-                    iter->path().stem().string() == "group." + to_string(groupID))
-                {
-                    std::cout << "[" << getCurrentDateTime() << "] The sync-tool is syncing group "
-                              << groupID << ". config file " << iter->path().string() << std::endl;
-                    auto params = std::make_shared<LedgerParam>();
-                    params->init(iter->path().string(), dataPath);
-                    fastSyncGroupData(params, rpcInitializer->channelRPCServer(), verifyBlocks);
-                    std::cout << endl
-                              << "[" << getCurrentDateTime() << "] sync complete." << std::endl;
-                    return 0;
-                }
-            }
-            std::cout << "[" << getCurrentDateTime() << "] "
-                      << "Can't find genesis and ini config of group" << groupID << std::endl;
-        }
+
+//        auto dataPath = pt.get<string>("group.group_data_path", "data/");
+        auto params = std::make_shared<LedgerParam>();
+        params->mutableStorageParam().dbIP = ip;
+        params->mutableStorageParam().dbPort = port;
+        params->mutableStorageParam().dbName = name;
+        params->mutableStorageParam().dbPasswd = password;
+        params->mutableStorageParam().dbType = "mysql";
+        params->mutableStorageParam().dbCharset = "utf8mb4";
+        params->mutableStorageParam().initConnections = 15;
+        params->mutableStorageParam().maxConnections = 50;
+        fastSyncData(params,verifyBlocks,blockNumber)
+
+
+//        boost::filesystem::path path(groupConfigPath);
+//        if (fs::is_directory(path))
+//        {
+//            fs::directory_iterator endIter;
+//            for (fs::directory_iterator iter(path); iter != endIter; iter++)
+//            {
+//                if (fs::extension(*iter) == ".genesis" &&
+//                    iter->path().stem().string() == "group." + to_string(groupID))
+//                {
+//                    std::cout << "[" << getCurrentDateTime() << "] The sync-tool is syncing group "
+//                              << groupID << ". config file " << iter->path().string() << std::endl;
+//                    auto params = std::make_shared<LedgerParam>();
+//                    params->init(iter->path().string(), dataPath);
+//                    fastSyncGroupData(params, rpcInitializer->channelRPCServer(), verifyBlocks);
+//                    std::cout << endl
+//                              << "[" << getCurrentDateTime() << "] sync complete." << std::endl;
+//                    return 0;
+//                }
+//            }
+//            std::cout << "[" << getCurrentDateTime() << "] "
+//                      << "Can't find genesis and ini config of group" << groupID << std::endl;
+//        }
     }
     catch (std::exception& e)
     {
