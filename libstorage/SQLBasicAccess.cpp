@@ -52,13 +52,13 @@ int SQLBasicAccess::SelectTableDataByNum(int64_t num, TableInfo::Ptr tableInfo, 
     while (conn == NULL && retryCnt++ < retryMax)
     {
         SQLBasicAccess_LOG(WARNING)
-            << "table:" << _table << "sql:" << sql << " get connection failed";
+            << "table:" << tableInfo->name << "sql:" << sql << " get connection failed";
         sleep(1);
         conn = m_connPool->GetConnection();
     }
     if (conn == NULL)
     {
-        SQLBasicAccess_LOG(ERROR) << "table:" << _table << "sql:" << sql
+        SQLBasicAccess_LOG(ERROR) << "table:" << tableInfo->name << "sql:" << sql
                                   << " get connection failed";
         return -1;
     }
@@ -66,19 +66,10 @@ int SQLBasicAccess::SelectTableDataByNum(int64_t num, TableInfo::Ptr tableInfo, 
     {
         PreparedStatement_T _prepareStatement =
             Connection_prepareStatement(conn, "%s", sql.c_str());
-        if (_condition)
-        {
-            uint32_t index = 0;
-            for (auto& it : *(_condition))
-            {
-                PreparedStatement_setString(
-                    _prepareStatement, ++index, it.second.right.second.c_str());
-            }
-        }
         ResultSet_T result = PreparedStatement_executeQuery(_prepareStatement);
         int32_t columnCnt = ResultSet_getColumnCount(result);
 
-        bool tableWithBlobField = isBlobType(_table);
+        bool tableWithBlobField = isBlobType(tableInfo->name);
         while (ResultSet_next(result))
         {
             map<string, string> value;

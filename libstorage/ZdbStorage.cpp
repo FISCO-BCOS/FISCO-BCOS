@@ -34,7 +34,7 @@ using namespace dev::storage;
 ZdbStorage::ZdbStorage() {}
 
 TableData::Ptr ZdbStorage::selectTableDataByNum(
-        int64_t num, TableInfo::Ptr tableInfo, uint64_t start, uint32_t counts)
+        int64_t num, TableInfo::Ptr _tableInfo, uint64_t start, uint32_t counts)
 {
     try
     {
@@ -42,7 +42,7 @@ TableData::Ptr ZdbStorage::selectTableDataByNum(
         int ret = 0, i = 0;
         for (i = 0; i < m_maxRetry; ++i)
         {
-            ret = m_sqlBasicAcc->SelectTableDataByNum(num, tableInfo, start,counts, values);
+            ret = m_sqlBasicAcc->SelectTableDataByNum(num, _tableInfo, start,counts, values);
             if (ret < 0)
             {
                 ZdbStorage_LOG(ERROR) << "Remote select datdbase return error:" << ret
@@ -65,12 +65,12 @@ TableData::Ptr ZdbStorage::selectTableDataByNum(
             BOOST_THROW_EXCEPTION(e);
         }
         TableData::Ptr tableData = std::make_shared<TableData>();
-        tableInfo->fields.emplace_back(tableInfo->key);
-        tableInfo->fields.emplace_back(STATUS);
-        tableInfo->fields.emplace_back(NUM_FIELD);
-        tableInfo->fields.emplace_back(ID_FIELD);
-        tableInfo->fields.emplace_back("_hash_");
-        tableData->info = tableInfo;
+        _tableInfo->fields.emplace_back(_tableInfo->key);
+        _tableInfo->fields.emplace_back(STATUS);
+        _tableInfo->fields.emplace_back(NUM_FIELD);
+        _tableInfo->fields.emplace_back(ID_FIELD);
+        _tableInfo->fields.emplace_back("_hash_");
+        tableData->info = _tableInfo;
 
         for (auto it : values)
         {
