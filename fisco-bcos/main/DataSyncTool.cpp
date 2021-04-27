@@ -725,24 +725,24 @@ int main(int argc, const char* argv[])
 
     try
     {
-        /// init log
-        boost::property_tree::ptree pt;
-        boost::property_tree::read_ini(configPath, pt);
-        auto logInitializer = std::make_shared<LogInitializer>();
-        logInitializer->initLog(pt);
+//        /// init log
+//        boost::property_tree::ptree pt;
+//        boost::property_tree::read_ini(configPath, pt);
+//        auto logInitializer = std::make_shared<LogInitializer>();
+//        logInitializer->initLog(pt);
+//
+//        /// init global config. must init before DB, for compatibility
+//        initGlobalConfig(pt);
+//        /// init channelServer
+//        auto secureInitializer = std::make_shared<SecureInitializer>();
+//        secureInitializer->initConfig(pt);
 
-        /// init global config. must init before DB, for compatibility
-        initGlobalConfig(pt);
-        /// init channelServer
-        auto secureInitializer = std::make_shared<SecureInitializer>();
-        secureInitializer->initConfig(pt);
-
-        auto rpcInitializer = std::make_shared<RPCInitializer>();
-        rpcInitializer->setSSLContext(
-            secureInitializer->SSLContext(SecureInitializer::Usage::ForRPC));
-        auto p2pService = std::make_shared<Service>();
-        rpcInitializer->setP2PService(p2pService);
-        rpcInitializer->initChannelRPCServer(pt);
+//        auto rpcInitializer = std::make_shared<RPCInitializer>();
+//        rpcInitializer->setSSLContext(
+//            secureInitializer->SSLContext(SecureInitializer::Usage::ForRPC));
+//        auto p2pService = std::make_shared<Service>();
+//        rpcInitializer->setP2PService(p2pService);
+//        rpcInitializer->initChannelRPCServer(pt);
 
 //        auto dataPath = pt.get<string>("group.group_data_path", "data/");
         auto params = std::make_shared<LedgerParam>();
