@@ -139,28 +139,14 @@ vector<TableInfo::Ptr> parseTableNames(TableData::Ptr data, SyncRecorder::Ptr re
         }
         else
         {
-            cout << "entry->getField(key_field)==" << endl;
-            cout << entry << endl;
-            cout << entry->getField("key_field") << endl;
-
             tableInfo->key = entry->getField("key_field");
             auto valueFields = entry->getField("value_field");
-
-            cout << entry->getField("value_field") << endl;
-
             boost::split(tableInfo->fields, valueFields, boost::is_any_of(","));
-
-            cout << tableInfo->fields << endl;
-
             // new sync insert will faie
             recorder->tables.insert(std::make_pair(tableInfo->name, make_pair(0, false)));
-
-            cout << tableInfo << endl;
-
             res.push_back(tableInfo);
         }
     }
-    cout << res << endl;
 
     return res;
 }
