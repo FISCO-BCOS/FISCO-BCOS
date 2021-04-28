@@ -77,7 +77,10 @@ macro(configure_project)
     # hardware crypto sdf interface
     eth_default_option(USE_HSM_SDF OFF)
     if(USE_HSM_SDF)
-        add_definitions(-FISCO_SDF)
+        if(NOT "${ARCHITECTURE}" MATCHES "aarch64")
+            message(FATAL "${CMAKE_SYSTEM_NAME} ${ARCHITECTURE} does not support compiling hardware secure module")
+        endif()
+        add_definitions(-DFISCO_SDF)
     endif()
     
 
