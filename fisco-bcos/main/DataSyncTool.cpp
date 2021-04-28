@@ -440,9 +440,12 @@ void fastSyncData(std::shared_ptr<LedgerParamInterface> _param, uint64_t _startB
 {
     cout << "fastSyncData begin sync " << endl;
 
-    auto readerStorage = createZdbStorage(_param, [](std::exception& e) {
+    auto readerStorage = createStashStorage(_param, [](std::exception& e) {
       LOG(ERROR) << LOG_BADGE("STORAGE") << LOG_BADGE("MySQL")
                  << "access mysql failed exit:" << e.what();
+      cout << "createZdbStorage create failed " << endl;
+      cout << e.what() << endl;
+
       raise(SIGTERM);
       BOOST_THROW_EXCEPTION(e);
     });
@@ -507,16 +510,16 @@ int main(int argc, const char* argv[])
         exit(0);
     }
 
-
 //    int64_t verifyBlocks = vm["verify"].as<int64_t>();
 //    verifyBlocks = verifyBlocks < MinVerifyBlocks ? MinVerifyBlocks : verifyBlocks;
+//    int groupID = vm["group"].as<uint>();
+
     PageCount = vm["limit"].as<uint32_t>();
     BigTablePageCount = vm["sys_limit"].as<uint32_t>();
     string ip = vm["ip"].as<std::string>();
     string name = vm["username"].as<std::string>();
     string password = vm["password"].as<std::string>();
     uint32_t port = vm["port"].as<uint32_t>();
-//    int groupID = vm["group"].as<uint>();
     uint64_t startBlockNumber = vm["startnumber"].as<uint64_t>();
     string dbName = vm["dbname"].as<std::string>();
     std::cout << name << std::endl;
