@@ -509,6 +509,7 @@ int main(int argc, const char* argv[])
         ("password,p",boost::program_options::value<std::string>()->default_value("123456"),"MYSQL password")
         ("limit,l",boost::program_options::value<uint32_t>()->default_value(10000), "page counts of table")
         ("sys_limit,s", boost::program_options::value<uint32_t>()->default_value(50),"page counts of system table")
+        ("configpath,c", boost::program_options::value<std::string>()->default_value("./data"),"configpath")
         ("type,e", boost::program_options::value<std::string>()->default_value("RocksDB"), "Storage type,RocksDB/Scalable")
         ("group,g", boost::program_options::value<uint>()->default_value(1), "sync group Id");
 
@@ -542,6 +543,7 @@ int main(int argc, const char* argv[])
     uint64_t startBlockNumber = vm["startnumber"].as<uint64_t>();
     string dbName = vm["dbname"].as<std::string>();
     string type = vm["type"].as<std::string>();
+    string configpath = vm["configpath"].as<std::string>();
 
     try
     {
@@ -564,7 +566,7 @@ int main(int argc, const char* argv[])
         params->mutableStorageParam().maxConnections = 50;
         params->mutableStorageParam().type=type;
         params->mutableStorageParam().maxRetry=5;
-        params->mutableStorageParam().path="./data/group" + to_string(groupID);
+        params->mutableStorageParam().path=configpath + "/group" + to_string(groupID);
 
         std::cout << "begin sync ..." << std::endl;
         fastSyncData(params,startBlockNumber);
