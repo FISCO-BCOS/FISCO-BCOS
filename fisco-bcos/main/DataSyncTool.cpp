@@ -139,14 +139,29 @@ vector<TableInfo::Ptr> parseTableNames(TableData::Ptr data, SyncRecorder::Ptr re
         }
         else
         {
+            cout << "entry->getField(key_field)==" << endl;
+            cout << entry << endl;
+            cout << entry->getField("key_field") << endl;
+
             tableInfo->key = entry->getField("key_field");
             auto valueFields = entry->getField("value_field");
+
+            cout << entry->getField("value_field") << endl;
+
             boost::split(tableInfo->fields, valueFields, boost::is_any_of(","));
+
+            cout << tableInfo->fields << endl;
+
             // new sync insert will faie
             recorder->tables.insert(std::make_pair(tableInfo->name, make_pair(0, false)));
+
+            cout << tableInfo << endl;
+
             res.push_back(tableInfo);
         }
     }
+    cout << res << endl;
+
     return res;
 }
 
@@ -300,9 +315,11 @@ void syncData_Link(ZdbStorage::Ptr _reader, Storage::Ptr _writer, uint64_t _star
     auto syncBlock = recorder->syncBlock();
     cout << "sync block number : " << syncBlock << ", data path : " << _dataPath
         << ", new sync : " << recorder->isNewSync() << endl;
+
     auto sysTableInfo = getSysTableInfo(SYS_TABLES);
     TableData::Ptr sysTableData = std::make_shared<TableData>();
     sysTableData->info = sysTableInfo;
+    sysTableData->newEntries = std::make_shared<Entries>();
     uint64_t begin = _startBlockNumber;
 
     while (true)
@@ -326,6 +343,7 @@ void syncData_Link(ZdbStorage::Ptr _reader, Storage::Ptr _writer, uint64_t _star
 
     auto tableInfos = parseTableNames(sysTableData, recorder);
     auto totalTable = tableInfos.size();
+
     size_t syncedCount = 1;
     auto pullCommitTableData = [&](TableInfo::Ptr tableInfo, uint64_t start, uint32_t counts) {
       cout << endl
@@ -438,7 +456,7 @@ void syncData_Link(ZdbStorage::Ptr _reader, Storage::Ptr _writer, uint64_t _star
 
 void fastSyncData(std::shared_ptr<LedgerParamInterface> _param, uint64_t _startBlockNumber = 0)
 {
-    cout << "fastSyncData begin sync " << endl;
+    cout << "fastSyncData begin ... " << endl;
 
     auto readerStorage = createStashStorage(_param, [](std::exception& e) {
       LOG(ERROR) << LOG_BADGE("STORAGE") << LOG_BADGE("MySQL")
@@ -455,7 +473,29 @@ void fastSyncData(std::shared_ptr<LedgerParamInterface> _param, uint64_t _startB
     Storage::Ptr writerStorage;
     bool fullSync = true;
 
-    writerStorage = createRocksDBStorage(_param->mutableStorageParam().path, bytes(), false, true);
+    if (!dev::stringCmpIgnoreCase(_param->mutableStorageParam().type, "RocksDB"))
+    {
+        writerStorage = createRocksDBStorage(_param->mutableStorageParam().path, bytes(), false, true);
+    }
+    else if(!dev::stringCmpIgnoreCase(_param->mutableStorageParam().type, "Scalable"))
+    {
+        fullSync = false;
+        auto scalableStorage =
+            std::make_shared<ScalableStorage>(_param->mutableStorageParam().scrollThreshold);
+        auto rocksDBStorageFactory = std::make_shared<RocksDBStorageFactory>(
+            _param->mutableStorageParam().path + "/blocksDB",
+            _param->mutableStorageParam().binaryLog, false);
+        rocksDBStorageFactory->setDBOpitons(getRocksDBOptions());
+        scalableStorage->setStorageFactory(rocksDBStorageFactory);
+        // make RocksDBStorage think cachedStorage is exist
+        auto stateStorage = createRocksDBStorage(
+            _param->mutableStorageParam().path + "/state", bytes(), false, true);
+        scalableStorage->setStateStorage(stateStorage);
+        auto archiveStorage = rocksDBStorageFactory->getStorage(to_string(_startBlockNumber));
+        scalableStorage->setArchiveStorage(archiveStorage, _startBlockNumber);
+        scalableStorage->setRemoteBlockNumber(_startBlockNumber);
+        writerStorage = scalableStorage;
+    }
 
     // fast sync data
     syncData_Link(dynamic_pointer_cast<ZdbStorage>(readerStorage), writerStorage, _startBlockNumber, _param, fullSync);
@@ -465,12 +505,6 @@ void fastSyncData(std::shared_ptr<LedgerParamInterface> _param, uint64_t _startB
 
 int main(int argc, const char* argv[])
 {
-    /// set LC_ALL
-    setDefaultOrCLocale();
-    std::set_terminate([]() {
-        std::cerr << "terminate handler called" << endl;
-        abort();
-    });
     std::cout << "fisco-sync version : "
               << "0.1.0" << std::endl;
     std::cout << "Build Time         : " << FISCO_BCOS_BUILD_TIME << std::endl;
@@ -487,10 +521,10 @@ int main(int argc, const char* argv[])
         ("dbname,d",boost::program_options::value<std::string>()->default_value("stash"),"MYSQL dbname")
         ("username,u",boost::program_options::value<std::string>()->default_value("root"),"MYSQL name")
         ("password,p",boost::program_options::value<std::string>()->default_value("123456"),"MYSQL password")
-//                                    ("verify,v",boost::program_options::value<int64_t>()->default_value(1000),"verify number of blocks, default 1000")
         ("limit,l",boost::program_options::value<uint32_t>()->default_value(10000), "page counts of table")
         ("sys_limit,s", boost::program_options::value<uint32_t>()->default_value(50),"page counts of system table")
-        ("group,g", boost::program_options::value<uint>()->default_value(1), "sync specific group");
+        ("type,e", boost::program_options::value<std::string>()->default_value("RocksDB"), "Storage type,RocksDB/Scalable")
+        ("group,g", boost::program_options::value<uint>()->default_value(1), "sync group Id");
 
     boost::program_options::variables_map vm;
     try
@@ -512,8 +546,7 @@ int main(int argc, const char* argv[])
 
 //    int64_t verifyBlocks = vm["verify"].as<int64_t>();
 //    verifyBlocks = verifyBlocks < MinVerifyBlocks ? MinVerifyBlocks : verifyBlocks;
-//    int groupID = vm["group"].as<uint>();
-
+    int groupID = vm["group"].as<uint>();
     PageCount = vm["limit"].as<uint32_t>();
     BigTablePageCount = vm["sys_limit"].as<uint32_t>();
     string ip = vm["ip"].as<std::string>();
@@ -522,15 +555,16 @@ int main(int argc, const char* argv[])
     uint32_t port = vm["port"].as<uint32_t>();
     uint64_t startBlockNumber = vm["startnumber"].as<uint64_t>();
     string dbName = vm["dbname"].as<std::string>();
-    std::cout << name << std::endl;
-    std::cout << password << std::endl;
+    string type = vm["type"].as<std::string>();
 
     try
     {
 //        /// init log
-        boost::property_tree::ptree pt;
+//        boost::property_tree::ptree pt;
+//        boost::property_tree::read_ini("./config.ini", pt);
         auto logInitializer = std::make_shared<LogInitializer>();
-        logInitializer->initLog(pt);
+//        logInitializer->initLog(pt);
+//        initGlobalConfig(pt);
 
         auto params = std::make_shared<LedgerParam>();
         params->mutableStorageParam().dbIP = ip;
@@ -542,15 +576,18 @@ int main(int argc, const char* argv[])
         params->mutableStorageParam().dbCharset = "utf8mb4";
         params->mutableStorageParam().initConnections = 15;
         params->mutableStorageParam().maxConnections = 50;
+        params->mutableStorageParam().type=type;
+        params->mutableStorageParam().maxRetry=5;
+        params->mutableStorageParam().path="/data/group" + to_string(groupID);
 
-        std::cout << "begin sync" << std::endl;
+        std::cout << "begin sync ..." << std::endl;
         fastSyncData(params,startBlockNumber);
+        std::cout << "begin sync ..." << std::endl;
 
     }
     catch (std::exception& e)
     {
         std::cerr << boost::diagnostic_information(e);
-        std::cerr << "sync failed!!!" << std::endl;
         return -1;
     }
 

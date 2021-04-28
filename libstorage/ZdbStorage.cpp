@@ -34,7 +34,7 @@ using namespace dev::storage;
 ZdbStorage::ZdbStorage() {}
 
 TableData::Ptr ZdbStorage::selectTableDataByNum(
-        int64_t num, TableInfo::Ptr _tableInfo, uint64_t start, uint32_t counts)
+        int64_t num, const TableInfo::Ptr& _tableInfo, uint64_t start, uint32_t counts)
 {
     try
     {
@@ -71,11 +71,12 @@ TableData::Ptr ZdbStorage::selectTableDataByNum(
         _tableInfo->fields.emplace_back(ID_FIELD);
         _tableInfo->fields.emplace_back("_hash_");
         tableData->info = _tableInfo;
+        tableData->newEntries = std::make_shared<Entries>();
 
-        for (auto it : values)
+        for (const auto& it : values)
         {
             Entry::Ptr entry = std::make_shared<Entry>();
-            for (auto it2 : it)
+            for (const auto& it2 : it)
             {
                 if (it2.first == ID_FIELD)
                 {
@@ -106,7 +107,6 @@ TableData::Ptr ZdbStorage::selectTableDataByNum(
     catch (std::exception& e)
     {
         STORAGE_EXTERNAL_LOG(ERROR) << "Query database error:" << e.what();
-
         BOOST_THROW_EXCEPTION(
                 StorageException(-1, std::string("Query database error:") + e.what()));
     }

@@ -44,7 +44,7 @@ int SQLBasicAccess::SelectTableDataByNum(int64_t num, TableInfo::Ptr tableInfo, 
                            vector<map<string, string>>& _values)
 {
     string sql = "select * from " + tableInfo->name + " where (_id_, _num_) in ( select _id_, num from (select _id_, max(_num_) as num from  "
-                 + tableInfo->name + " where _id_ > " + to_string(start) + " and _num_ &lt;= " + to_string(num) +" group by _id_ order by _id_ limit "+ to_string(counts) +") as tmp)";
+                 + tableInfo->name + " where _id_ > " + to_string(start) + " and _num_ >= " + to_string(num) +" group by _id_ order by _id_ limit "+ to_string(counts) +") as tmp)";
 
     Connection_T conn = m_connPool->GetConnection();
     uint32_t retryCnt = 0;
@@ -68,7 +68,6 @@ int SQLBasicAccess::SelectTableDataByNum(int64_t num, TableInfo::Ptr tableInfo, 
             Connection_prepareStatement(conn, "%s", sql.c_str());
         ResultSet_T result = PreparedStatement_executeQuery(_prepareStatement);
         int32_t columnCnt = ResultSet_getColumnCount(result);
-
         bool tableWithBlobField = isBlobType(tableInfo->name);
         while (ResultSet_next(result))
         {

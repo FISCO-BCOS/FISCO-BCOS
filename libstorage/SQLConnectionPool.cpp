@@ -45,8 +45,6 @@ bool SQLConnectionPool::InitConnectionPool(const storage::ConnectionPoolConfig& 
            << "&useUnicode=yes";
 
         m_url = URL_new(ss.str().c_str());
-        std::cout << "ConnectionPoolConfig mysql... " << std::endl;
-
         if (m_url == NULL)
         {
             stringstream exitInfo;
@@ -57,10 +55,7 @@ bool SQLConnectionPool::InitConnectionPool(const storage::ConnectionPoolConfig& 
         SQLConnectionPool_LOG(DEBUG)
             << "init connection pool IP:" << _dbConfig.dbIP << ":" << _dbConfig.dbPort;
         std::cout << "init connection pool IP:" << std::endl;
-        std::cout << _dbConfig.dbIP << std::endl;
-        std::cout << _dbConfig.dbPort << std::endl;
         std::cout << ss.str().c_str() << std::endl;
-
 
         TRY
         {
@@ -74,8 +69,6 @@ bool SQLConnectionPool::InitConnectionPool(const storage::ConnectionPoolConfig& 
         CATCH(SQLException)
         {
             std::cout << Exception_frame.message << std::endl;
-            std::cout << Exception_frame.exception << std::endl;
-
             SQLConnectionPool_LOG(ERROR)
                 << "init connection pool failed IP:" << _dbConfig.dbIP << ":" << _dbConfig.dbPort
                 << " error msg:" << Exception_frame.message;
