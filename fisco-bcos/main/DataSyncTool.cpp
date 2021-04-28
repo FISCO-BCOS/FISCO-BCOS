@@ -578,11 +578,11 @@ int main(int argc, const char* argv[])
         params->mutableStorageParam().maxConnections = 50;
         params->mutableStorageParam().type=type;
         params->mutableStorageParam().maxRetry=5;
-        params->mutableStorageParam().path="/data/group" + to_string(groupID);
+        params->mutableStorageParam().path="./data/group" + to_string(groupID);
 
         std::cout << "begin sync ..." << std::endl;
         fastSyncData(params,startBlockNumber);
-        std::cout << "begin sync ..." << std::endl;
+        std::cout << "end sync ..." << std::endl;
 
     }
     catch (std::exception& e)
