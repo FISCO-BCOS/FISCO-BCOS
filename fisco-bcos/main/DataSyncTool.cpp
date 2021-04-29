@@ -306,7 +306,7 @@ void syncData_Link(ZdbStorage::Ptr _reader, Storage::Ptr _writer, uint64_t _star
     TableData::Ptr sysTableData = std::make_shared<TableData>();
     sysTableData->info = sysTableInfo;
     sysTableData->newEntries = std::make_shared<Entries>();
-    uint64_t begin = _startBlockNumber;
+    uint64_t begin = 0;
 
     while (true)
     {
@@ -338,10 +338,7 @@ void syncData_Link(ZdbStorage::Ptr _reader, Storage::Ptr _writer, uint64_t _star
       int64_t downloaded = 0;
       while (true)
       {
-          Condition::Ptr condition = std::make_shared<Condition>();
-          condition->limit(PageCount);
           auto tableData = _reader->selectTableDataByNum(syncBlock, tableInfo, start, counts);
-
           if (!tableData)
           {
               cerr << "query failed. Table=" << tableInfo->name << endl;
