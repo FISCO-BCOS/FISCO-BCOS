@@ -292,12 +292,12 @@ void conversionData(const std::string& tableName, TableData::Ptr tableData)
     LOG(TRACE) << LOG_BADGE("STORAGE") << LOG_DESC("conversion end!");
 }
 
-void syncData_Link(ZdbStorage::Ptr _reader, Storage::Ptr _writer, uint64_t _startBlockNumber,
+void syncData_Link(ZdbStorage::Ptr _reader, Storage::Ptr _writer, uint64_t _stopBlockNumber,
                     std::shared_ptr<LedgerParamInterface> _param, bool _fullSync)
 {
     const std::string& _dataPath = _param->mutableStorageParam().path;
     boost::filesystem::create_directories(_dataPath);
-    auto recorder = std::make_shared<SyncRecorder>(_dataPath, _startBlockNumber);
+    auto recorder = std::make_shared<SyncRecorder>(_dataPath, _stopBlockNumber);
     auto syncBlock = recorder->syncBlock();
     cout << "sync block number : " << syncBlock << ", data path : " << _dataPath
         << ", new sync : " << recorder->isNewSync() << endl;
@@ -437,7 +437,7 @@ void syncData_Link(ZdbStorage::Ptr _reader, Storage::Ptr _writer, uint64_t _star
 }
 
 
-void fastSyncData(std::shared_ptr<LedgerParamInterface> _param, uint64_t _startBlockNumber = 0)
+void fastSyncData(std::shared_ptr<LedgerParamInterface> _param, uint64_t _stopBlockNumber = 0)
 {
     cout << "fastSyncData begin ... " << endl;
 
@@ -474,14 +474,14 @@ void fastSyncData(std::shared_ptr<LedgerParamInterface> _param, uint64_t _startB
         auto stateStorage = createRocksDBStorage(
             _param->mutableStorageParam().path + "/state", bytes(), false, true);
         scalableStorage->setStateStorage(stateStorage);
-        auto archiveStorage = rocksDBStorageFactory->getStorage(to_string(_startBlockNumber));
-        scalableStorage->setArchiveStorage(archiveStorage, _startBlockNumber);
-        scalableStorage->setRemoteBlockNumber(_startBlockNumber);
+        auto archiveStorage = rocksDBStorageFactory->getStorage(to_string(_stopBlockNumber));
+        scalableStorage->setArchiveStorage(archiveStorage, _stopBlockNumber);
+        scalableStorage->setRemoteBlockNumber(_stopBlockNumber);
         writerStorage = scalableStorage;
     }
 
     // fast sync data
-    syncData_Link(dynamic_pointer_cast<ZdbStorage>(readerStorage), writerStorage, _startBlockNumber, _param, fullSync);
+    syncData_Link(dynamic_pointer_cast<ZdbStorage>(readerStorage), writerStorage, _stopBlockNumber, _param, fullSync);
 
 }
 
@@ -498,7 +498,7 @@ int main(int argc, const char* argv[])
     boost::program_options::options_description main_options("Usage of fisco-sync");
     main_options.add_options()
         ("help,h", "print help information")
-        ("startnumber,n",boost::program_options::value<uint64_t>()->default_value(0), "MYSQL startBlockNumber")
+        ("stopnumber,n",boost::program_options::value<uint64_t>()->default_value(10000), "MYSQL stopBlockNumber")
         ("ip,i",boost::program_options::value<std::string>()->default_value("127.0.0.1"),"MYSQL ip")
         ("port,t",boost::program_options::value<uint32_t>()->default_value(3306),"MYSQL port")
         ("dbname,d",boost::program_options::value<std::string>()->default_value("stash"),"MYSQL dbname")
@@ -535,7 +535,7 @@ int main(int argc, const char* argv[])
     string name = vm["username"].as<std::string>();
     string password = vm["password"].as<std::string>();
     uint32_t port = vm["port"].as<uint32_t>();
-    uint64_t startBlockNumber = vm["startnumber"].as<uint64_t>();
+    uint64_t stopBlockNumber = vm["stopnumber"].as<uint64_t>();
     string dbName = vm["dbname"].as<std::string>();
     string type = vm["type"].as<std::string>();
     string configpath = vm["configpath"].as<std::string>();
@@ -564,7 +564,7 @@ int main(int argc, const char* argv[])
         params->mutableStorageParam().path=configpath;
 
         std::cout << "begin sync ..." << std::endl;
-        fastSyncData(params,startBlockNumber);
+        fastSyncData(params,stopBlockNumber);
         std::cout << "end sync ..." << std::endl;
 
     }
