@@ -531,8 +531,6 @@ int main(int argc, const char* argv[])
         exit(0);
     }
 
-//    int64_t verifyBlocks = vm["verify"].as<int64_t>();
-//    verifyBlocks = verifyBlocks < MinVerifyBlocks ? MinVerifyBlocks : verifyBlocks;
     int groupID = vm["group"].as<uint>();
     PageCount = vm["limit"].as<uint32_t>();
     BigTablePageCount = vm["sys_limit"].as<uint32_t>();
