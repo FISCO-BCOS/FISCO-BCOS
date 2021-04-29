@@ -510,8 +510,8 @@ int main(int argc, const char* argv[])
         ("limit,l",boost::program_options::value<uint32_t>()->default_value(10000), "page counts of table")
         ("sys_limit,s", boost::program_options::value<uint32_t>()->default_value(50),"page counts of system table")
         ("configpath,c", boost::program_options::value<std::string>()->default_value("./data"),"configpath")
-        ("type,e", boost::program_options::value<std::string>()->default_value("RocksDB"), "Storage type,RocksDB/Scalable")
-        ("group,g", boost::program_options::value<uint>()->default_value(1), "sync group Id");
+        ("type,e", boost::program_options::value<std::string>()->default_value("RocksDB"), "Storage type,RocksDB/Scalable");
+//        ("group,g", boost::program_options::value<uint>()->default_value(1), "sync group Id");
 
     boost::program_options::variables_map vm;
     try
@@ -531,7 +531,7 @@ int main(int argc, const char* argv[])
         exit(0);
     }
 
-    int groupID = vm["group"].as<uint>();
+//    int groupID = vm["group"].as<uint>();
     PageCount = vm["limit"].as<uint32_t>();
     BigTablePageCount = vm["sys_limit"].as<uint32_t>();
     string ip = vm["ip"].as<std::string>();
@@ -564,7 +564,7 @@ int main(int argc, const char* argv[])
         params->mutableStorageParam().maxConnections = 50;
         params->mutableStorageParam().type=type;
         params->mutableStorageParam().maxRetry=5;
-        params->mutableStorageParam().path=configpath + "/group" + to_string(groupID);
+        params->mutableStorageParam().path=configpath;
 
         std::cout << "begin sync ..." << std::endl;
         fastSyncData(params,startBlockNumber);
