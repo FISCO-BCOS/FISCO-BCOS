@@ -1,0 +1,59 @@
+version: "{build}"
+image: Visual Studio 2017
+
+branches:
+  only:
+  - master
+  - /release\/.*/
+  - appveyor
+  - hunter
+  - /v\d+\..+/
+configuration:
+  - Release
+environment:
+  GITHUB_TOKEN:
+    secure: OE3TGKRyt/hvk5Gt3DLXvs3Y+F1NLDQAL/bHplDffR+hY2aFg6HrapThKjYo/XX2
+  matrix:
+    - APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2017
+      GENERATOR: "Ninja"
+
+cache:
+  - C:\.hunter\_Base\Cache -> cmake\Hunter\init.cmake
+
+install:
+  - cmake --version
+  - git submodule update --init --recursive
+
+before_build:
+  - call "%ProgramFiles(x86)%\Microsoft Visual Studio\2017\Community\Common7\Tools\vsdevcmd" -arch=amd64
+  - cmake -S . -B build -DEVMONE_TESTING=ON -Wno-dev -G "%GENERATOR%" -DCMAKE_INSTALL_PREFIX=C:\install
+
+build_script:
+  - cmake --build build --target package
+  - mkdir package
+  - mv build/evmone-* package
+
+artifacts:
+  - path: package/*
+    name: package
+
+test_script:
+  - cd build && ctest -j4 --output-on-failure --schedule-random
+
+deploy_script:
+  - ps: >-
+      if ($env:appveyor_repo_tag_name -match 'v\d+\..+') {
+
+        $env:GO111MODULE = "on"
+        go get github.com/tcnksm/ghr@v0.12.1 2>$null
+        $env:PATH += ";$env:USERPROFILE\go\bin"
+
+        cd $env:appveyor_build_folder
+        $name = "evmone " + ($env:appveyor_repo_tag_name).Remove(0,1)
+        if (($env:appveyor_repo_tag_name).Contains("-")) {
+          $prerelease_flag = "-prerelease"
+        }
+        echo $name
+        echo $prerelease_flag
+        ghr -u ethereum -r evmone -n "$name" $prerelease_flag $env:appveyor_repo_tag_name package/
+      }
