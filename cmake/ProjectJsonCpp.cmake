@@ -28,13 +28,21 @@ else()
     set(JSONCPP_CMAKE_COMMAND ${CMAKE_COMMAND})
 endif()
 
+set(JSONCPP_SRC_FILE_URL  file://${THIRD_PARTY_ROOT}/jsoncpp-1.7.7.tar.gz)
+set(JSONCPP_FILE_DIGEST SHA256=087640ebcf7fbcfe8e2717a0b9528fff89c52fcf69fa2a18cc2b538008098f97)
+
+
 ExternalProject_Add(jsoncpp
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NAME jsoncpp-1.7.7.tar.gz
     DOWNLOAD_NO_PROGRESS 1
-    URL https://github.com/open-source-parsers/jsoncpp/archive/1.7.7.tar.gz
-        https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/jsoncpp-1.7.7.tar.gz
-    URL_HASH SHA256=087640ebcf7fbcfe8e2717a0b9528fff89c52fcf69fa2a18cc2b538008098f97
+    # URL https://github.com/open-source-parsers/jsoncpp/archive/1.7.7.tar.gz
+        # https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/jsoncpp-1.7.7.tar.gz
+    # URL_HASH SHA256=087640ebcf7fbcfe8e2717a0b9528fff89c52fcf69fa2a18cc2b538008098f97
+
+    URL ${JSONCPP_SRC_FILE_URL}
+    URL_HASH ${JSONCPP_FILE_DIGEST}
+
     CMAKE_COMMAND ${JSONCPP_CMAKE_COMMAND}
     CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
                # Build static lib but suitable to be included in a shared lib.
@@ -51,6 +59,7 @@ ExternalProject_Add(jsoncpp
     BUILD_COMMAND ""
     ${_overwrite_install_command}
     LOG_INSTALL 1
+    LOG_MERGED_STDOUTERR 1
     BUILD_BYPRODUCTS <INSTALL_DIR>/lib/libjsoncpp.a
 )
 

@@ -3,19 +3,27 @@ include(ExternalProject)
 set(MHD_CONFIG ./configure --enable-spdy=no --disable-curl --disable-messages --disable-postprocessor --enable-https=no)
 set(MHD_BUILD make)
 
+
+set(MDH_SRC_FILE_URL  file://${THIRD_PARTY_ROOT}/libmicrohttpd-0.9.63.tar.gz)
+set(MDH_FILE_DIGEST SHA256=37c36f1be177f0e37ef181a645cd3baac1000bd322a01c2eff70f3cc8c91749c)
+
+
 ExternalProject_Add(mhd
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NO_PROGRESS 1
     DOWNLOAD_NAME libmicrohttpd-0.9.63.tar.gz
-    URL https://ftp.gnu.org/gnu/libmicrohttpd/libmicrohttpd-0.9.63.tar.gz
-        https://mirrors.ustc.edu.cn/gnu/libmicrohttpd/libmicrohttpd-0.9.63.tar.gz 
-        https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/libmicrohttpd-0.9.63.tar.gz
-    URL_HASH SHA256=37c36f1be177f0e37ef181a645cd3baac1000bd322a01c2eff70f3cc8c91749c
+    # URL https://ftp.gnu.org/gnu/libmicrohttpd/libmicrohttpd-0.9.63.tar.gz
+    #     https://mirrors.ustc.edu.cn/gnu/libmicrohttpd/libmicrohttpd-0.9.63.tar.gz 
+    #     https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/libmicrohttpd-0.9.63.tar.gz
+    # URL_HASH SHA256=37c36f1be177f0e37ef181a645cd3baac1000bd322a01c2eff70f3cc8c91749c
+    URL ${MDH_SRC_FILE_URL}
+    URL_HASH ${MDH_FILE_DIGEST}
     BUILD_IN_SOURCE 1
     CONFIGURE_COMMAND ${MHD_CONFIG}
     LOG_CONFIGURE 1
     LOG_BUILD 1
     LOG_INSTALL 1
+    LOG_MERGED_STDOUTERR 1
     BUILD_COMMAND make
     INSTALL_COMMAND ""
     BUILD_BYPRODUCTS <SOURCE_DIR>/src/microhttpd/.libs/libmicrohttpd.a

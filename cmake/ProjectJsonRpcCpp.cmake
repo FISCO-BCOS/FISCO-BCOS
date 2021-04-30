@@ -52,14 +52,20 @@ set(CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
                -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
                )
 
+set(JSONRPCCPP_SRC_FILE_URL  file://${THIRD_PARTY_ROOT}/jsonrcpcpp-0.7.0.tar.gz)
+set(JSONRPCCPP_FILE_DIGEST SHA256=669c2259909f11a8c196923a910f9a16a8225ecc14e6c30e2bcb712bab9097eb)
 
+               
 ExternalProject_Add(jsonrpccpp
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NAME jsonrcpcpp-0.7.0.tar.gz
     DOWNLOAD_NO_PROGRESS 1
-    URL https://github.com/cinemast/libjson-rpc-cpp/archive/v0.7.0.tar.gz
-        https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/jsonrcpcpp-0.7.0.tar.gz
-    URL_HASH SHA256=669c2259909f11a8c196923a910f9a16a8225ecc14e6c30e2bcb712bab9097eb
+    # URL https://github.com/cinemast/libjson-rpc-cpp/archive/v0.7.0.tar.gz
+        # https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/jsonrcpcpp-0.7.0.tar.gz
+    # URL_HASH SHA256=669c2259909f11a8c196923a910f9a16a8225ecc14e6c30e2bcb712bab9097eb
+    URL ${JSONRPCCPP_SRC_FILE_URL}
+    URL_HASH ${JSONRPCCPP_FILE_DIGEST}
+    
     # On Windows it tries to install this dir. Create it to prevent failure.
     PATCH_COMMAND ${CMAKE_COMMAND} -E make_directory <SOURCE_DIR>/win32-deps/include
     CMAKE_ARGS ${CMAKE_ARGS}
@@ -68,6 +74,7 @@ ExternalProject_Add(jsonrpccpp
     INSTALL_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config Release --target install
     LOG_BUILD 1
     LOG_INSTALL 1
+    LOG_MERGED_STDOUTERR 1
     BUILD_BYPRODUCTS ${CMAKE_SOURCE_DIR}/deps/lib/libjsonrpccpp-server.a ${CMAKE_SOURCE_DIR}/deps/lib/libjsonrpccpp-common.a
 )
 

@@ -1,13 +1,20 @@
 include(ExternalProject)
 include(GNUInstallDirs)
 
+
+set(SNAPPY_SRC_FILE_URL  file://${THIRD_PARTY_ROOT}/snappy-1.1.7.tar.gz)
+set(SNAPPY_FILE_DIGEST SHA256=3dfa02e873ff51a11ee02b9ca391807f0c8ea0529a4924afa645fbf97163f9d4)
+
 ExternalProject_Add(snappy
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NAME snappy-1.1.7.tar.gz
     DOWNLOAD_NO_PROGRESS 1
-    URL https://codeload.github.com/google/snappy/tar.gz/1.1.7
-        https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/snappy-1.1.7.tar.gz
-    URL_HASH SHA256=3dfa02e873ff51a11ee02b9ca391807f0c8ea0529a4924afa645fbf97163f9d4
+    # URL https://codeload.github.com/google/snappy/tar.gz/1.1.7
+        # https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/snappy-1.1.7.tar.gz
+    # URL_HASH SHA256=3dfa02e873ff51a11ee02b9ca391807f0c8ea0529a4924afa645fbf97163f9d4
+
+    URL ${SNAPPY_SRC_FILE_URL}
+    URL_HASH ${SNAPPY_FILE_DIGEST}
     CMAKE_COMMAND ${CMAKE_COMMAND}
     CMAKE_ARGS  -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
     -DCMAKE_POSITION_INDEPENDENT_CODE=${BUILD_SHARED_LIBS}
@@ -19,6 +26,7 @@ ExternalProject_Add(snappy
     LOG_CONFIGURE 1
     LOG_BUILD 1
     LOG_INSTALL 1
+    LOG_MERGED_STDOUTERR 1
     # BUILD_COMMAND make
     ${_overwrite_install_command}
     BUILD_BYPRODUCTS <INSTALL_DIR>/${CMAKE_INSTALL_LIBDIR}/${CMAKE_STATIC_LIBRARY_PREFIX}snappy${CMAKE_STATIC_LIBRARY_SUFFIX}

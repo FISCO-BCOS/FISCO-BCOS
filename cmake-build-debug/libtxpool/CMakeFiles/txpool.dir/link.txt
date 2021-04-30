@@ -1,2 +1,0 @@
-/usr/local/bin/ccache /Library/Developer/CommandLineTools/usr/bin/ar qc libtxpool.a  CMakeFiles/txpool.dir/CommonTransactionNonceCheck.cpp.o CMakeFiles/txpool.dir/TransactionNonceCheck.cpp.o CMakeFiles/txpool.dir/TxPool.cpp.o
-/usr/local/bin/ccache /Library/Developer/CommandLineTools/usr/bin/ranlib libtxpool.a

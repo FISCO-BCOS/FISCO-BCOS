@@ -7,12 +7,20 @@ set(prefix "${CMAKE_BINARY_DIR}/deps")
 set(libff_library "${prefix}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}ff${CMAKE_STATIC_LIBRARY_SUFFIX}")
 set(libff_inlcude_dir "${prefix}/include/libff")
 
+
+
+set(LIBFF_SRC_FILE_URL  file://${THIRD_PARTY_ROOT}/libff.tar.gz)
+set(LIBFF_FILE_DIGEST SHA256=81b476089af43025c8f253cb1a9b5038a1c375baccffea402fa82042e608ab02)
+
+
 ExternalProject_Add(libff
     PREFIX "${prefix}"
     DOWNLOAD_NAME libff-03b719a7.tar.gz
     DOWNLOAD_NO_PROGRESS TRUE
-    URL https://github.com/scipr-lab/libff/archive/03b719a7c81757071f99fc60be1f7f7694e51390.tar.gz
-    URL_HASH SHA256=81b476089af43025c8f253cb1a9b5038a1c375baccffea402fa82042e608ab02
+    # URL https://github.com/scipr-lab/libff/archive/03b719a7c81757071f99fc60be1f7f7694e51390.tar.gz
+    # URL_HASH SHA256=81b476089af43025c8f253cb1a9b5038a1c375baccffea402fa82042e608ab02
+    URL ${LIBFF_SRC_FILE_URL}
+    URL_HASH ${LIBFF_FILE_DIGEST}
     CMAKE_ARGS
         -DCMAKE_BUILD_TYPE=Release
         -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
@@ -31,6 +39,7 @@ ExternalProject_Add(libff
     LOG_UPDATE 1
     LOG_BUILD 1
     LOG_INSTALL 1
+    LOG_MERGED_STDOUTERR 1
     INSTALL_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> --config Release --target install
     BUILD_BYPRODUCTS "${libff_library}"
 )

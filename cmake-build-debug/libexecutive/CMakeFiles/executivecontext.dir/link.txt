@@ -1,2 +1,0 @@
-/usr/local/bin/ccache /Library/Developer/CommandLineTools/usr/bin/ar qc libexecutivecontext.a  CMakeFiles/executivecontext.dir/EVMHostContext.cpp.o CMakeFiles/executivecontext.dir/EVMHostInterface.cpp.o CMakeFiles/executivecontext.dir/EVMInstance.cpp.o CMakeFiles/executivecontext.dir/Executive.cpp.o CMakeFiles/executivecontext.dir/VMFactory.cpp.o
-/usr/local/bin/ccache /Library/Developer/CommandLineTools/usr/bin/ranlib libexecutivecontext.a

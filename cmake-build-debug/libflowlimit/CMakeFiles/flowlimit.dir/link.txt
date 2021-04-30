@@ -1,2 +1,0 @@
-/usr/local/bin/ccache /Library/Developer/CommandLineTools/usr/bin/ar qc libflowlimit.a  CMakeFiles/flowlimit.dir/RPCQPSLimiter.cpp.o CMakeFiles/flowlimit.dir/RateLimiter.cpp.o
-/usr/local/bin/ccache /Library/Developer/CommandLineTools/usr/bin/ranlib libflowlimit.a

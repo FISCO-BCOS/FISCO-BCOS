@@ -23,12 +23,18 @@
 
 include(ExternalProject)
 
+set(SECKP256K1_SRC_FILE_URL  file://${THIRD_PARTY_ROOT}/secp256k1.tar.gz)
+set(SECKP256K1_FILE_DIGEST SHA256=02f8f05c9e9d2badc91be8e229a07ad5e4984c1e77193d6b00e549df129e7c3a)
+
+
 ExternalProject_Add(secp256k1
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NAME secp256k1-ac8ccf29.tar.gz
     DOWNLOAD_NO_PROGRESS 1
-    URL https://github.com/FISCO-BCOS/secp256k1/archive/ac8ccf29b8c6b2b793bc734661ce43d1f952977a.tar.gz
-    URL_HASH SHA256=02f8f05c9e9d2badc91be8e229a07ad5e4984c1e77193d6b00e549df129e7c3a
+    # URL https://github.com/FISCO-BCOS/secp256k1/archive/ac8ccf29b8c6b2b793bc734661ce43d1f952977a.tar.gz
+    # URL_HASH SHA256=02f8f05c9e9d2badc91be8e229a07ad5e4984c1e77193d6b00e549df129e7c3a
+    URL ${SECKP256K1_SRC_FILE_URL}
+    URL_HASH ${SECKP256K1_FILE_DIGEST}
     PATCH_COMMAND ${CMAKE_COMMAND} -E copy_if_different
         ${CMAKE_CURRENT_LIST_DIR}/secp256k1/CMakeLists.txt <SOURCE_DIR>
     CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
@@ -42,6 +48,7 @@ ExternalProject_Add(secp256k1
     # BUILD_COMMAND ""
     LOG_BUILD 1
     LOG_INSTALL 1
+    LOG_MERGED_STDOUTERR 1
     BUILD_BYPRODUCTS ${CMAKE_SOURCE_DIR}/deps/lib/libsecp256k1.a
 )
 

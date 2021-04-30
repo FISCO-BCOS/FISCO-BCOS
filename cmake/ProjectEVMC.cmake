@@ -1,12 +1,17 @@
 include(ExternalProject)
 include(GNUInstallDirs)
+ 
+set(EVMC_SRC_FILE_URL  file://${THIRD_PARTY_ROOT}/evmc.tar.gz)
+set(EVMC_SRC_FILE_DIGEST SHA256=a9983643415c8473cd696ff4aa93e014308f0292057bce740bc0b4ca84a40462)
 
 ExternalProject_Add(evmc
         PREFIX ${CMAKE_SOURCE_DIR}/deps
         DOWNLOAD_NO_PROGRESS 1
         DOWNLOAD_NAME evmc-e0bd9d5d.tar.gz
-	URL https://github.com/FISCO-BCOS/evmc/archive/e0bd9d5dc68ec3a00fe9a3c5e81c98946449a20d.tar.gz
-        URL_HASH SHA256=a9983643415c8473cd696ff4aa93e014308f0292057bce740bc0b4ca84a40462
+	# URL https://github.com/FISCO-BCOS/evmc/archive/e0bd9d5dc68ec3a00fe9a3c5e81c98946449a20d.tar.gz
+        # URL_HASH SHA256=a9983643415c8473cd696ff4aa93e014308f0292057bce740bc0b4ca84a40462
+        URL ${EVMC_SRC_FILE_URL}
+        URL_HASH ${EVMC_SRC_FILE_DIGEST}
         # GIT_REPOSITORY https://github.com/FISCO-BCOS/evmc.git
         # GIT_TAG e0bd9d5dc68ec3a00fe9a3c5e81c98946449a20d
         CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
@@ -14,6 +19,7 @@ ExternalProject_Add(evmc
         LOG_CONFIGURE 1
         LOG_BUILD 1
         LOG_INSTALL 1
+        LOG_MERGED_STDOUTERR 1
         BUILD_BYPRODUCTS <INSTALL_DIR>/lib/libevmc-instructions.a <INSTALL_DIR>/lib/libevmc-loader.a
 )
 

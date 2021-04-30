@@ -1,2 +1,0 @@
-/usr/local/bin/ccache /Library/Developer/CommandLineTools/usr/bin/ar qc libsecurity.a  CMakeFiles/security.dir/EncryptedFile.cpp.o CMakeFiles/security.dir/EncryptedLevelDB.cpp.o CMakeFiles/security.dir/KeyCenter.cpp.o
-/usr/local/bin/ccache /Library/Developer/CommandLineTools/usr/bin/ranlib libsecurity.a

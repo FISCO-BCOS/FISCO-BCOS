@@ -1,4 +1,0 @@
-comment:
-  layout: "diff"
-ignore:
-  - "test/.*"

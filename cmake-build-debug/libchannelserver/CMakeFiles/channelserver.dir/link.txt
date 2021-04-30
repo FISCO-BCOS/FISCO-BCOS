@@ -1,2 +1,0 @@
-/usr/local/bin/ccache /Library/Developer/CommandLineTools/usr/bin/ar qc libchannelserver.a  CMakeFiles/channelserver.dir/ChannelRPCServer.cpp.o CMakeFiles/channelserver.dir/ChannelServer.cpp.o CMakeFiles/channelserver.dir/ChannelSession.cpp.o
-/usr/local/bin/ccache /Library/Developer/CommandLineTools/usr/bin/ranlib libchannelserver.a

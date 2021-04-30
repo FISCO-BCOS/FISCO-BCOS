@@ -11,15 +11,20 @@ endif()
 if(APPLE AND ${CMAKE_HOST_SYSTEM_PROCESSOR} STREQUAL "arm64")
     set(FIXED_MARCH_TYPE armv8)
 else()
-    set(FIXED_MARCH_TYPE ${MARCH_TYPE})
+    set(FIXED_MARCH_TYPE native)
 endif()
+
+set(ROCKSDB_SRC_FILE_URL  file://${THIRD_PARTY_ROOT}/rocksdb-v6.0.2.tar.gz)
+set(ROCKSDB_FILE_DIGEST SHA256=89e0832f1fb00ac240a9438d4bbdae37dd3e52f7c15c3f646dc26887da16f342)
 
 ExternalProject_Add(rocksdb
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NAME rocksdb_6.0.2.tar.gz
     DOWNLOAD_NO_PROGRESS 1
-    URL https://codeload.github.com/facebook/rocksdb/tar.gz/v6.0.2
-    URL_HASH SHA256=89e0832f1fb00ac240a9438d4bbdae37dd3e52f7c15c3f646dc26887da16f342
+    # URL https://codeload.github.com/facebook/rocksdb/tar.gz/v6.0.2
+    # URL_HASH SHA256=89e0832f1fb00ac240a9438d4bbdae37dd3e52f7c15c3f646dc26887da16f342
+    URL ${ROCKSDB_SRC_FILE_URL}
+    URL_HASH ${ROCKSDB_FILE_DIGEST}
     # remove dynamic lib and gtest. NOTE: sed line number should update once RocksDB upgrade
     PATCH_COMMAND ${SED_CMMAND} "s#-march=native#-march=${FIXED_MARCH_TYPE} ${COMPILER_FLAGS} #g" CMakeLists.txt COMMAND ${SED_CMMAND} "464d" CMakeLists.txt COMMAND ${SED_CMMAND} "739,749d" CMakeLists.txt COMMAND ${SED_CMMAND} "805,813d" CMakeLists.txt COMMAND ${SED_CMMAND} "s#-Werror##g" CMakeLists.txt
     BUILD_IN_SOURCE 1
@@ -44,6 +49,7 @@ ExternalProject_Add(rocksdb
     LOG_UPDATE 1
     LOG_BUILD 1
     LOG_INSTALL 1
+    LOG_MERGED_STDOUTERR 1
     BUILD_BYPRODUCTS <SOURCE_DIR>/librocksdb.a
 )
 

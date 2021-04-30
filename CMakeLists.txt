@@ -62,7 +62,7 @@ include(ProjectPaillier)
 include(ProjectGroupSig)
 include(ProjectEVMC)
 include(ProjectVRF)
-include(ProjectEVMONE2)
+include(ProjectEVMONE)
 
 include_directories("${CMAKE_SOURCE_DIR}")
 

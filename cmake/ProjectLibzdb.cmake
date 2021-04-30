@@ -1,5 +1,9 @@
 include(ExternalProject)
 
+
+set(MYSQL_CONNECTORC_SRC_FILE_URL  file://${THIRD_PARTY_ROOT}/mysql-connector-c-6.1.11-src.tar.gz)
+set(MYSQL_CONNECTORC_FILE_DIGEST SHA256=c8664851487200162b38b6f3c8db69850bd4f0e4c5ff5a6d161dbfb5cb76b6c4)
+
 ExternalProject_Add(mysqlclient
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NAME mysql-connector-c-6.1.11-src.tar.gz
@@ -8,10 +12,13 @@ ExternalProject_Add(mysqlclient
     LOG_CONFIGURE 1
     LOG_BUILD 1
     LOG_INSTALL 1
-    URL https://cdn.mysql.com/archives/mysql-connector-c/mysql-connector-c-6.1.11-src.tar.gz
-        https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/mysql-connector-c-6.1.11-src.tar.gz
-    URL_HASH SHA256=c8664851487200162b38b6f3c8db69850bd4f0e4c5ff5a6d161dbfb5cb76b6c4
+    LOG_MERGED_STDOUTERR 1
+    # URL https://cdn.mysql.com/archives/mysql-connector-c/mysql-connector-c-6.1.11-src.tar.gz
+        # https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/mysql-connector-c-6.1.11-src.tar.gz
+    # URL_HASH SHA256=c8664851487200162b38b6f3c8db69850bd4f0e4c5ff5a6d161dbfb5cb76b6c4
     #please make sure MYSQL_TCP_PORT is set and not equal to 3306
+    URL ${MYSQL_CONNECTORC_SRC_FILE_URL}
+    URL_HASH ${MYSQL_CONNECTORC_FILE_DIGEST}
     CMAKE_ARGS  -DMYSQL_TCP_PORT=3305 -DCMAKE_INSTALL_PREFIX=${CMAKE_SOURCE_DIR}/deps/
     BUILD_BYPRODUCTS ${CMAKE_SOURCE_DIR}/deps/lib/libmysqlclient.a
 )
@@ -22,17 +29,23 @@ ExternalProject_Get_Property(mysqlclient SOURCE_DIR)
 set(MYSQL_CLIENT_LIB ${CMAKE_SOURCE_DIR}/deps/lib/libmysqlclient.a)
 set(ZDB_CONFIGURE_COMMAND ./configure --with-mysql=${SOURCE_DIR}/scripts/mysql_config --without-sqlite --without-postgresql --enable-shared=false --enable-protected)
 
+set(LIBZDB_SRC_FILE_URL  file://${THIRD_PARTY_ROOT}/libzdb-3.2.tar.gz)
+set(LIBZDB_FILE_DIGEST SHA256=005ddf4b29c6db622e16303298c2f914dfd82590111cea7cfd09b4acf46cf4f2)
+
 ExternalProject_Add(libzdb DEPENDS mysqlclient
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NAME libzdb-3.2.tar.gz
     DOWNLOAD_NO_PROGRESS 1
-    URL https://tildeslash.com/libzdb/dist/libzdb-3.2.tar.gz
-        https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/libzdb-3.2.tar.gz
-    URL_HASH SHA256=005ddf4b29c6db622e16303298c2f914dfd82590111cea7cfd09b4acf46cf4f2
+    # URL https://tildeslash.com/libzdb/dist/libzdb-3.2.tar.gz
+        # https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/libzdb-3.2.tar.gz
+    # URL_HASH SHA256=005ddf4b29c6db622e16303298c2f914dfd82590111cea7cfd09b4acf46cf4f2
+    URL ${LIBZDB_SRC_FILE_URL}
+    URL_HASH ${LIBZDB_FILE_DIGEST}
     BUILD_IN_SOURCE 1
     LOG_CONFIGURE 1
     LOG_BUILD 1
     LOG_INSTALL 1
+    LOG_MERGED_STDOUTERR 1
     CONFIGURE_COMMAND ${ZDB_CONFIGURE_COMMAND} 
     BUILD_COMMAND make
     INSTALL_COMMAND ""

@@ -8,12 +8,20 @@ else()
 endif ()
 
 set(TASSL_BUILD_COMMAND make)
+
+
+
+set(TASSL_SRC_FILE_URL  file://${THIRD_PARTY_ROOT}/tassl.tar.gz)
+set(TASSL_SRC_FILE_DIGEST SHA256=534c3ba12a75e6eb87aef4b86967c55a8845edd9e22be95ded27d1abd853f160)
+
 ExternalProject_Add(tassl
         PREFIX ${CMAKE_SOURCE_DIR}/deps
         DOWNLOAD_NAME tassl_1.0.2o-ccdfc64c.tar.gz
         DOWNLOAD_NO_PROGRESS 1
-        URL https://github.com/jntass/TASSL/archive/ccdfc64c5f56988f76abc0390a12ed9865bc49e9.tar.gz
-        URL_HASH SHA256=534c3ba12a75e6eb87aef4b86967c55a8845edd9e22be95ded27d1abd853f160
+        # URL https://github.com/jntass/TASSL/archive/ccdfc64c5f56988f76abc0390a12ed9865bc49e9.tar.gz
+        # URL_HASH SHA256=534c3ba12a75e6eb87aef4b86967c55a8845edd9e22be95ded27d1abd853f160
+        URL ${TASSL_SRC_FILE_URL}
+        URL_HASH ${TASSL_SRC_FILE_DIGEST}
         # GIT_REPOSITORY https://github.com/jntass/TASSL.git
         # GIT_TAG ccdfc64c5f56988f76abc0390a12ed9865bc49e9
         # GIT_SHALLOW true
@@ -22,6 +30,7 @@ ExternalProject_Add(tassl
         LOG_CONFIGURE 1
         LOG_BUILD 1
         LOG_INSTALL 1
+        LOG_MERGED_STDOUTERR 1
         BUILD_COMMAND ${TASSL_BUILD_COMMAND}
         INSTALL_COMMAND ""
 )

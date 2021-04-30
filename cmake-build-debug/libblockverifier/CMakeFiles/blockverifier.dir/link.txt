@@ -1,2 +1,0 @@
-/usr/local/bin/ccache /Library/Developer/CommandLineTools/usr/bin/ar qc libblockverifier.a  CMakeFiles/blockverifier.dir/BlockVerifier.cpp.o CMakeFiles/blockverifier.dir/DAG.cpp.o CMakeFiles/blockverifier.dir/ExecutiveContext.cpp.o CMakeFiles/blockverifier.dir/ExecutiveContextFactory.cpp.o CMakeFiles/blockverifier.dir/TxDAG.cpp.o
-/usr/local/bin/ccache /Library/Developer/CommandLineTools/usr/bin/ranlib libblockverifier.a

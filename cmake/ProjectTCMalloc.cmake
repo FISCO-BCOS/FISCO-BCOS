@@ -4,17 +4,26 @@ set(TCMALLOC_CONFIG ./configure  --disable-shared CXXFLAGS=-DHAVE_POSIX_MEMALIGN
 
 set(TCMALLOC_MAKE make install)
 
+
+set(gperftools_SRC_FILE_URL  file://${THIRD_PARTY_ROOT}/gperftools-2.7.tar.gz)
+set(gperftools_FILE_DIGEST SHA256=1ee8c8699a0eff6b6a203e59b43330536b22bbcbe6448f54c7091e5efb0763c9)
+
+
 ExternalProject_Add(gperftools
     PREFIX ${CMAKE_SOURCE_DIR}/deps/
     DOWNLOAD_NAME gperftools-2.7.tar.gz
     DOWNLOAD_NO_PROGRESS 1
-    URL https://github.com/gperftools/gperftools/releases/download/gperftools-2.7/gperftools-2.7.tar.gz
-        https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/gperftools-2.7.tar.gz
-    URL_HASH SHA256=1ee8c8699a0eff6b6a203e59b43330536b22bbcbe6448f54c7091e5efb0763c9
+    # URL https://github.com/gperftools/gperftools/releases/download/gperftools-2.7/gperftools-2.7.tar.gz
+        # https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/gperftools-2.7.tar.gz
+    # URL_HASH SHA256=1ee8c8699a0eff6b6a203e59b43330536b22bbcbe6448f54c7091e5efb0763c9
+
+    URL ${gperftools_SRC_FILE_URL}
+    URL_HASH ${gperftools_FILE_DIGEST}
     BUILD_IN_SOURCE 1
     LOG_CONFIGURE 1
     LOG_BUILD 1
     LOG_INSTALL 1
+    LOG_MERGED_STDOUTERR 1
     CONFIGURE_COMMAND ${TCMALLOC_CONFIG} 
     BUILD_COMMAND ${TCMALLOC_MAKE}
     INSTALL_COMMAND ""

@@ -27,8 +27,15 @@ include(GNUInstallDirs)
 if(APPLE AND ${CMAKE_HOST_SYSTEM_PROCESSOR} STREQUAL "arm64")
     set(FIXED_MARCH_TYPE armv8)
 else()
-    set(FIXED_MARCH_TYPE ${MARCH_TYPE})
+    set(FIXED_MARCH_TYPE x86-64)
 endif()
+
+
+
+
+
+set(CRYPTOPP_SRC_FILE_URL  file://${THIRD_PARTY_ROOT}/cryptopp.tar.gz)
+set(CRYPTOPP_SRC_FILE_DIGEST SHA256=f1fddacadd2a0873f795d5614a85fecd5b6ff1d1c6e21dedc251703c54ce63aa)
 
 ExternalProject_Add(cryptopp
     PREFIX ${CMAKE_SOURCE_DIR}/deps
@@ -37,9 +44,11 @@ ExternalProject_Add(cryptopp
     # https://github.com/weidai11/cryptopp/commit/903b8feaa70199eb39a313b32a71268745ddb600
     DOWNLOAD_NAME cryptopp_bccc6443.tar.gz
     DOWNLOAD_NO_PROGRESS 1
-    URL https://github.com/weidai11/cryptopp/archive/bccc6443c4d4d611066c2de4c17109380cf97704.tar.gz
-        https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/cryptopp_bccc6443.tar.gz
-    URL_HASH SHA256=f1fddacadd2a0873f795d5614a85fecd5b6ff1d1c6e21dedc251703c54ce63aa
+    # URL https://github.com/weidai11/cryptopp/archive/bccc6443c4d4d611066c2de4c17109380cf97704.tar.gz
+        # https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/cryptopp_bccc6443.tar.gz
+    # URL_HASH SHA256=f1fddacadd2a0873f795d5614a85fecd5b6ff1d1c6e21dedc251703c54ce63aa
+    URL ${CRYPTOPP_SRC_FILE_URL}
+    URL_HASH ${CRYPTOPP_SRC_FILE_DIGEST}
     PATCH_COMMAND ${CMAKE_COMMAND} -E remove
         3way.cpp
         adler32.cpp
@@ -156,6 +165,7 @@ ExternalProject_Add(cryptopp
     LOG_CONFIGURE 1
     LOG_BUILD 1
     LOG_INSTALL 1
+    LOG_MERGED_STDOUTERR 1
     BUILD_BYPRODUCTS <INSTALL_DIR>/${CMAKE_INSTALL_LIBDIR}/libcryptopp.a
 )
 ExternalProject_Get_Property(cryptopp INSTALL_DIR)

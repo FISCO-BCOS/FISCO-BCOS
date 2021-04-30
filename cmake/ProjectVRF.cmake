@@ -31,17 +31,24 @@ else()
     message(FATAL "unsupported platform")
 endif()
 
+
+set(LIBVRF_SRC_FILE_URL  file://${THIRD_PARTY_ROOT}/libvrf-rust1.47.tar.gz)
+set(LIBVRF_FILE_DIGEST SHA256=9a626bda04824f85575e28c72081f14ed5f1531e6247fff2edfb03cbef858570)
+
 ExternalProject_Add(libvrf
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NAME libvrf.tar.gz
     DOWNLOAD_NO_PROGRESS 1
-    URL https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/libvrf-rust1.47.tar.gz
-        https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/FISCO-BCOS/deps/libvrf-rust1.47.tar.gz
-    URL_HASH SHA256=9a626bda04824f85575e28c72081f14ed5f1531e6247fff2edfb03cbef858570
+    # URL https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/libvrf-rust1.47.tar.gz
+        # https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/FISCO-BCOS/deps/libvrf-rust1.47.tar.gz
+    # URL_HASH SHA256=9a626bda04824f85575e28c72081f14ed5f1531e6247fff2edfb03cbef858570
+    URL ${LIBVRF_SRC_FILE_URL}
+    URL_HASH ${LIBVRF_FILE_DIGEST}
     BUILD_IN_SOURCE 1
     LOG_CONFIGURE 1
     LOG_BUILD 1
     LOG_INSTALL 1
+    LOG_MERGED_STDOUTERR 1
     CONFIGURE_COMMAND ""
     BUILD_COMMAND ""
     INSTALL_COMMAND bash -c "/bin/cp ${CMAKE_SOURCE_DIR}/deps/src/libvrf/${VRF_LIB_NAME} ${CMAKE_SOURCE_DIR}/deps/lib/libffi_vrf.a"

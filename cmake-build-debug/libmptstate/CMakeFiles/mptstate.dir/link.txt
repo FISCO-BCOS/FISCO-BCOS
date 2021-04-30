@@ -1,2 +1,0 @@
-/usr/local/bin/ccache /Library/Developer/CommandLineTools/usr/bin/ar qc libmptstate.a  CMakeFiles/mptstate.dir/Account.cpp.o CMakeFiles/mptstate.dir/Defaults.cpp.o CMakeFiles/mptstate.dir/MPTState.cpp.o CMakeFiles/mptstate.dir/MPTStateFactory.cpp.o CMakeFiles/mptstate.dir/MemoryDB.cpp.o CMakeFiles/mptstate.dir/OverlayDB.cpp.o CMakeFiles/mptstate.dir/State.cpp.o
-/usr/local/bin/ccache /Library/Developer/CommandLineTools/usr/bin/ranlib libmptstate.a
