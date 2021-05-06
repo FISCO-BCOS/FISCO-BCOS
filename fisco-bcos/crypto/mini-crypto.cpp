@@ -26,8 +26,8 @@
 #include <libdevcrypto/Hash.h>
 #include <libdevcrypto/SM2Signature.h>
 #include <libdevcrypto/SM3Hash.h>
-#include <libdevcrypto/sdf/SDFSM2Signature.h>
-#include <libdevcrypto/sdf/SDFSM3Hash.h>
+#include <libdevcrypto/hsm/HSMSignature.h>
+#include <libdevcrypto/hsm/HSMHash.h>
 using namespace dev::crypto;
 using namespace dev;
 int main(int, const char* argv[])

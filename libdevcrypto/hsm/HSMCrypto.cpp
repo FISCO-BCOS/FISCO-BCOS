@@ -18,8 +18,9 @@
  * @author maggie
  * @date 2021-04-02
  */
-#include "SDFSM4Crypto.h"
+#include "HSMCrypto.h"
 #include "SDFCryptoProvider.h"
+#include "CryptoProvider.h"
 #include "libdevcore/Common.h"
 
 using namespace std;
@@ -39,7 +40,7 @@ std::string dev::crypto::SDFSM4Encrypt(const unsigned char* _plainData, size_t _
     // Encrypt
     Key key = Key();
     key.setPrivateKey((unsigned char*)_key, _keySize);
-    SDFCryptoProvider& provider = SDFCryptoProvider::GetInstance();
+    CryptoProvider& provider = SDFCryptoProvider::GetInstance();
     unsigned int size;
     string enData;
     enData.resize(inDataVLen);
@@ -54,7 +55,7 @@ std::string dev::crypto::SDFSM4Decrypt(const unsigned char* _cypherData, size_t 
     deData.resize(_cypherDataSize);
     Key key = Key();
     key.setPrivateKey((unsigned char*)_key, _keySize);
-    SDFCryptoProvider& provider = SDFCryptoProvider::GetInstance();
+    CryptoProvider& provider = SDFCryptoProvider::GetInstance();
     unsigned int size;
     provider.Decrypt(key, SM4_CBC, (unsigned char*)_ivData, _cypherData, _cypherDataSize,
         (unsigned char*)deData.data(), &size);

@@ -18,7 +18,8 @@
  * @author maggiewu
  * @date 2021-02-01
  */
-#include "SDFSM2Signature.h"
+#include "HSMSignature.h"
+#include "CryptoProvider.h"
 #include "SDFCryptoProvider.h"
 #include "csmsds.h"
 #include "libdevcore/Common.h"
@@ -34,7 +35,7 @@ using namespace dev::crypto;
 std::shared_ptr<crypto::Signature> dev::crypto::SDFSM2Sign(
     KeyPair const& _keyPair, const h256& _hash)
 {
-    SDFCryptoProvider& provider = SDFCryptoProvider::GetInstance();
+    CryptoProvider& provider = SDFCryptoProvider::GetInstance();
     unsigned char signature[64];
     unsigned int signLen;
     Key key = Key();
@@ -85,7 +86,7 @@ bool dev::crypto::SDFSM2Verify(
     h512 const& _pubKey, std::shared_ptr<crypto::Signature> _sig, const h256& _hash)
 {
     // get provider
-    SDFCryptoProvider& provider = SDFCryptoProvider::GetInstance();
+    CryptoProvider& provider = SDFCryptoProvider::GetInstance();
 
     // parse input
     Key key = Key();

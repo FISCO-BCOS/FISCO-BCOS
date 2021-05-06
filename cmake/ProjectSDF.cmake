@@ -23,7 +23,7 @@ if("${CMAKE_HOST_SYSTEM_NAME}" MATCHES "Linux")
     if("${ARCHITECTURE}" MATCHES "aarch64")
         set(SDF_LIB_NAME libsdf-crypto_arm.a)
     else()
-        message(FATAL "HSM  SDF only support aarch64 Linux, the ${CMAKE_HOST_SYSTEM_NAME} ${ARCHITECTURE} is not supported.")
+        set(SDF_LIB_NAME libsdf-crypto_arm.a)
     endif()
 elseif(APPLE)
     message(FATAL "HSM  SDF only support aarch64 Linux, the ${CMAKE_HOST_SYSTEM_NAME} ${ARCHITECTURE} is not supported.")
@@ -35,7 +35,7 @@ ExternalProject_Add(libsdf
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NAME sdf.tar.gz
     DOWNLOAD_NO_PROGRESS 1
-    URL https://github.com/WeBankBlockchain/sdf-crypto/archive/refs/tags/V0.1.1.tar.gz
+    URL https://github.com/WeBankBlockchain/hsm-crypto/archive/refs/tags/V0.1.1.tar.gz
     URL_HASH SHA256=dc4b7c919f5f5e59f55869e75b828744f4ea8e01391ad4e777f698c3a76b4fb6
     BUILD_IN_SOURCE 1
     LOG_CONFIGURE 1

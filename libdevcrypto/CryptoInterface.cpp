@@ -30,9 +30,9 @@
 #include "libdevcore/Log.h"
 #include "libdevcore/RLP.h"
 #if FISCO_SDF
-#include "sdf/SDFSM2Signature.h"
-#include "sdf/SDFSM3Hash.h"
-#include "sdf/SDFSM4Crypto.h"
+#include "hsm/HSMSignature.h"
+#include "sm/HSMHash.h"
+#include "sm/HSMCrypto.h"
 #endif
 #include <libconfig/GlobalConfigure.h>
 #define CRYPTO_LOG(LEVEL) LOG(LEVEL) << "[CRYPTO] "

@@ -19,8 +19,9 @@
  * @date 2021-02-01
  */
 
-#include "SDFSM3Hash.h"
+#include "HSMHash.h"
 #include "SDFCryptoProvider.h"
+#include "CryptoProvider.h"
 #include <libdevcore/FixedHash.h>
 using namespace std;
 using namespace dev;
@@ -32,7 +33,7 @@ unsigned int dev::crypto::SDFSM3(bytesConstRef _input, bytesRef o_output)
     if (o_output.size() != 32)
         return false;
     // get provider
-    SDFCryptoProvider& provider = SDFCryptoProvider::GetInstance();
+    CryptoProvider& provider = SDFCryptoProvider::GetInstance();
     unsigned int uiHashResultLen;
     unsigned int code = provider.Hash(nullptr, SM3, _input.data(), _input.size(),
         (unsigned char*)o_output.data(), &uiHashResultLen);
