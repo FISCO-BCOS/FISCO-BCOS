@@ -22,6 +22,8 @@
 #------------------------------------------------------------------------------
 include(ExternalProject)
 
+add_compile_options(-std=c++11)
+
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Emscripten")
     set(JSONCPP_CMAKE_COMMAND emcmake cmake)
 else()
@@ -57,7 +59,13 @@ ExternalProject_Add(jsoncpp
 # Create jsoncpp imported library
 ExternalProject_Get_Property(jsoncpp INSTALL_DIR)
 add_library(JsonCpp STATIC IMPORTED)
-set(JSONCPP_LIBRARY ${INSTALL_DIR}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}jsoncpp${CMAKE_STATIC_LIBRARY_SUFFIX})
+
+if(APPLE)
+    set(JSONCPP_LIBRARY ${INSTALL_DIR}/lib/libjsoncpp.a)
+ELSE()
+    set(JSONCPP_LIBRARY ${INSTALL_DIR}/lib/${CMAKE_STATIC_LIBRARY_PREFIX}jsoncpp${CMAKE_STATIC_LIBRARY_SUFFIX})
+ENDIF()
+
 set(JSONCPP_INCLUDE_DIR ${INSTALL_DIR}/include)
 file(MAKE_DIRECTORY ${JSONCPP_INCLUDE_DIR})  # Must exist.
 set_property(TARGET JsonCpp PROPERTY IMPORTED_LOCATION ${JSONCPP_LIBRARY})

@@ -51,3 +51,7 @@ deps/**
 
 # others
 .clang-format
+
+#idea
+.idea
+cmake-build-debug/
