@@ -26,8 +26,8 @@
 #include <libdevcrypto/Hash.h>
 #include <libdevcrypto/SM2Signature.h>
 #include <libdevcrypto/SM3Hash.h>
-#include <libdevcrypto/hsm/HSMSignature.h>
 #include <libdevcrypto/hsm/HSMHash.h>
+#include <libdevcrypto/hsm/HSMSignature.h>
 using namespace dev::crypto;
 using namespace dev;
 int main(int, const char* argv[])
@@ -42,7 +42,7 @@ int main(int, const char* argv[])
     KeyPair kp = KeyPair::create();
 
     std::string pubHex = toHex(kp.pub().data(), kp.pub().data() + 64, "04");
-    h256 h(fromHex("0x68b5bae5fe19851624298fd1e9b4d788627ac27c13aad3240102ffd292a17911"));
+    h256 h(dev::fromHex("0x68b5bae5fe19851624298fd1e9b4d788627ac27c13aad3240102ffd292a17911"));
     std::shared_ptr<crypto::Signature> swResult = sm2Sign(kp, h);
     std::shared_ptr<crypto::Signature> sdfResult = SDFSM2Sign(kp, h);
     bool result1 = sm2Verify(kp.pub(), swResult, h);

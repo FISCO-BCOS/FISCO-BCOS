@@ -20,12 +20,16 @@
  */
 
 #include "HSMHash.h"
-#include "SDFCryptoProvider.h"
 #include "CryptoProvider.h"
+#include "sdf/SDFCryptoProvider.h"
 #include <libdevcore/FixedHash.h>
 using namespace std;
 using namespace dev;
 using namespace dev::crypto;
+#if FISCO_SDF
+using namespace hsm;
+using namespace hsm::sdf;
+#endif
 
 unsigned int dev::crypto::SDFSM3(bytesConstRef _input, bytesRef o_output)
 {
@@ -35,7 +39,7 @@ unsigned int dev::crypto::SDFSM3(bytesConstRef _input, bytesRef o_output)
     // get provider
     CryptoProvider& provider = SDFCryptoProvider::GetInstance();
     unsigned int uiHashResultLen;
-    unsigned int code = provider.Hash(nullptr, SM3, _input.data(), _input.size(),
-        (unsigned char*)o_output.data(), &uiHashResultLen);
+    unsigned int code = provider.Hash(nullptr, SM3, (const unsigned char*)_input.data(),
+        _input.size(), (unsigned char*)o_output.data(), &uiHashResultLen);
     return code;
 }

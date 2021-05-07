@@ -21,12 +21,12 @@
 
 #pragma once
 #include "libdevcore/RLP.h"
+#include "libdevcrypto/Common.h"
 #include "libdevcrypto/Signature.h"
-#include <vector>
 
+#include <vector>
 namespace dev
 {
-class KeyPair;
 namespace crypto
 {
 std::shared_ptr<crypto::Signature> SDFSM2Sign(KeyPair const& _keyPair, const h256& _hash);

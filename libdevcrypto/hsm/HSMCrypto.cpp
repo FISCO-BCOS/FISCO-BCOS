@@ -19,16 +19,21 @@
  * @date 2021-04-02
  */
 #include "HSMCrypto.h"
-#include "SDFCryptoProvider.h"
 #include "CryptoProvider.h"
 #include "libdevcore/Common.h"
+#include "sdf/SDFCryptoProvider.h"
 
 using namespace std;
 using namespace dev;
 using namespace crypto;
 
+#if FISCO_SDF
+using namespace hsm;
+using namespace hsm::sdf;
+#endif
+
 std::string dev::crypto::SDFSM4Encrypt(const unsigned char* _plainData, size_t _plainDataSize,
-    const unsigned char* _key, size_t _keySize, const unsigned char* _ivData)
+    const unsigned char* _key, size_t, const unsigned char* _ivData)
 {
     // Add padding
     int padding = _plainDataSize % 16;
@@ -39,7 +44,9 @@ std::string dev::crypto::SDFSM4Encrypt(const unsigned char* _plainData, size_t _
     memset(inDataV.data() + _plainDataSize, nSize, nSize);
     // Encrypt
     Key key = Key();
-    key.setPrivateKey((unsigned char*)_key, _keySize);
+    std::shared_ptr<const std::vector<byte>> pbKeyValue =
+        std::make_shared<const std::vector<byte>>(_key, _key + 32);
+    key.setSymmetricKey(pbKeyValue);
     CryptoProvider& provider = SDFCryptoProvider::GetInstance();
     unsigned int size;
     string enData;
@@ -49,12 +56,14 @@ std::string dev::crypto::SDFSM4Encrypt(const unsigned char* _plainData, size_t _
     return enData;
 }
 std::string dev::crypto::SDFSM4Decrypt(const unsigned char* _cypherData, size_t _cypherDataSize,
-    const unsigned char* _key, size_t _keySize, const unsigned char* _ivData)
+    const unsigned char* _key, size_t, const unsigned char* _ivData)
 {
     string deData;
     deData.resize(_cypherDataSize);
     Key key = Key();
-    key.setPrivateKey((unsigned char*)_key, _keySize);
+    std::shared_ptr<const std::vector<byte>> pbKeyValue =
+        std::make_shared<const std::vector<byte>>(_key, _key + 32);
+    key.setSymmetricKey(pbKeyValue);
     CryptoProvider& provider = SDFCryptoProvider::GetInstance();
     unsigned int size;
     provider.Decrypt(key, SM4_CBC, (unsigned char*)_ivData, _cypherData, _cypherDataSize,
