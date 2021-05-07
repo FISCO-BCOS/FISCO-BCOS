@@ -11,8 +11,8 @@ aux_source_directory(./sm4 SRC_LIST)
 include_directories(./sm4)
 
 if (USE_HSM_SDF)
-aux_source_directory(./sdf SRC_LIST)
-include_directories(./sdf)
+aux_source_directory(./hsm SRC_LIST)
+include_directories(./hsm)
 endif()
 
 add_library(devcrypto ${SRC_LIST} ${HEADERS})

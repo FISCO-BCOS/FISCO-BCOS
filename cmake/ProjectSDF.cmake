@@ -20,23 +20,19 @@
 include(ExternalProject)
 
 if("${CMAKE_HOST_SYSTEM_NAME}" MATCHES "Linux")
-    if("${ARCHITECTURE}" MATCHES "aarch64")
-        set(SDF_LIB_NAME libsdf-crypto_arm.a)
-    else()
-        message(FATAL "HSM  SDF only support aarch64 Linux, the ${CMAKE_HOST_SYSTEM_NAME} ${ARCHITECTURE} is not supported.")
-    endif()
+    set(SDF_LIB_NAME libsdf-crypto_arm.a)
 elseif(APPLE)
-    message(FATAL "HSM  SDF only support aarch64 Linux, the ${CMAKE_HOST_SYSTEM_NAME} ${ARCHITECTURE} is not supported.")
+    message(FATAL "HSM  SDF only support Linux, the ${CMAKE_HOST_SYSTEM_NAME} ${ARCHITECTURE} is not supported.")
 else()
-    message(FATAL "HSM  SDF only support aarch64 Linux, the ${CMAKE_HOST_SYSTEM_NAME} ${ARCHITECTURE} is not supported.")
+    message(FATAL "HSM  SDF only support Linux, the ${CMAKE_HOST_SYSTEM_NAME} ${ARCHITECTURE} is not supported.")
 endif()
 
 ExternalProject_Add(libsdf
     PREFIX ${CMAKE_SOURCE_DIR}/deps
-    DOWNLOAD_NAME sdf.tar.gz
+    DOWNLOAD_NAME sdf.zip
     DOWNLOAD_NO_PROGRESS 1
-    URL https://github.com/WeBankBlockchain/sdf-crypto/archive/refs/tags/V0.1.1.tar.gz
-    URL_HASH SHA256=dc4b7c919f5f5e59f55869e75b828744f4ea8e01391ad4e777f698c3a76b4fb6
+    URL https://github.com/WeBankBlockchain/hsm-crypto/archive/refs/heads/v1.0.0.zip   
+    URL_HASH SHA256=eee9f05add9b590f7f9c1ec86fee6e841b4bb08a94cc2ffeaebed306118940f7
     BUILD_IN_SOURCE 1
     LOG_CONFIGURE 1
     LOG_BUILD 1
@@ -49,12 +45,13 @@ ExternalProject_Add(libsdf
 ExternalProject_Get_Property(libsdf SOURCE_DIR)
 add_library(SDF STATIC IMPORTED)
 
-set(SDF_INCLUDE_DIR ${SOURCE_DIR}/include)
+set(HSM_INCLUDE_DIR ${SOURCE_DIR}/include)
+set(SDF_INCLUDE_DIR ${SOURCE_DIR}/include/sdf)
 file(MAKE_DIRECTORY ${SDF_INCLUDE_DIR})  # Must exist.
 
 set(SDF_LIB "${SOURCE_DIR}/lib/libsdf-crypto_arm.a")
 
 set_property(TARGET SDF PROPERTY IMPORTED_LOCATION ${SDF_LIB})
-set_property(TARGET SDF PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${SDF_INCLUDE_DIR})
+set_property(TARGET SDF PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${HSM_INCLUDE_DIR} ${SDF_INCLUDE_DIR})
 add_dependencies(SDF libsdf)
 unset(SOURCE_DIR)

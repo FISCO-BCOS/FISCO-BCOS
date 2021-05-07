@@ -20,11 +20,16 @@
  */
 
 #pragma once
-#include "SDFCryptoProvider.h"
+#include "CryptoProvider.h"
 #include "csmsds.h"
+#include "sdf/SDFCryptoProvider.h"
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/vector_ref.h>
 #include <string>
+#if FISCO_SDF
+using namespace hsm;
+using namespace hsm::sdf;
+#endif
 
 namespace dev
 {
@@ -36,11 +41,12 @@ inline h256 SDFSM3(bytesSec const& _input);
 /// Calculate SM3-256 hash of the given input, returning as a 256-bit hash.
 inline h256 SDFSM3(bytesConstRef _input)
 {
+    CryptoProvider& provider = SDFCryptoProvider::GetInstance();
     h256 ret;
     unsigned int code = SDFSM3(_input, ret.ref());
     if (code != SDR_OK)
     {
-        throw SDFCryptoProvider::GetErrorMessage(code);
+        throw provider.GetErrorMessage(code);
     }
     return ret;
 }
