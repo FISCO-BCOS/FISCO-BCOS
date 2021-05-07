@@ -14,27 +14,25 @@
     You should have received a copy of the GNU General Public License
     along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>.
 */
-/** @file SDFSM3Hash.cpp
- * @author maggie
+/** @file SDFSM2Signature.h
+ * @author maggiewu
  * @date 2021-02-01
  */
 
-#include "SDFSM3Hash.h"
-#include "SDFCryptoProvider.h"
-#include <libdevcore/FixedHash.h>
-using namespace std;
-using namespace dev;
-using namespace dev::crypto;
+#pragma once
+#include "libdevcore/RLP.h"
+#include "libdevcrypto/Common.h"
+#include "libdevcrypto/Signature.h"
 
-unsigned int dev::crypto::SDFSM3(bytesConstRef _input, bytesRef o_output)
+#include <vector>
+namespace dev
 {
-    // FIXME: What with unaligned memory?
-    if (o_output.size() != 32)
-        return false;
-    // get provider
-    SDFCryptoProvider& provider = SDFCryptoProvider::GetInstance();
-    unsigned int uiHashResultLen;
-    unsigned int code = provider.Hash(nullptr, SM3, _input.data(), _input.size(),
-        (unsigned char*)o_output.data(), &uiHashResultLen);
-    return code;
-}
+namespace crypto
+{
+std::shared_ptr<crypto::Signature> SDFSM2Sign(KeyPair const& _keyPair, const h256& _hash);
+bool SDFSM2Verify(h512 const& _pubKey, std::shared_ptr<crypto::Signature> _sig, const h256& _hash);
+h512 SDFSM2Recover(std::shared_ptr<crypto::Signature> _sig, const h256& _hash);
+std::shared_ptr<crypto::Signature> SDFSM2SignatureFromRLP(RLP const& _rlp, size_t _start);
+std::shared_ptr<crypto::Signature> SDFSM2SignatureFromBytes(std::vector<unsigned char> _data);
+}  // namespace crypto
+}  // namespace dev
