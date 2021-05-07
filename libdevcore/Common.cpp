@@ -26,6 +26,9 @@
 #include <csignal>
 #ifdef __APPLE__
 #include <pthread.h>
+#ifdef BOOST_EXCEPTION_DISABLE
+#undef BOOST_EXCEPTION_DISABLE
+#endif
 #endif
 
 using namespace std;
@@ -42,7 +45,9 @@ void InvariantChecker::checkInvariants(
     {
         LOG(WARNING) << (_pre ? "Pre" : "Post") << "invariant failed in" << _fn << "at" << _file
                      << ":" << _line;
-        ::boost::exception_detail::throw_exception_(FailedInvariant(), _fn, _file, _line);
+        // ::boost::exception_detail::throw_exception_(FailedInvariant(), _fn, _file, _line);
+        ::boost::throw_exception(FailedInvariant());
+
     }
 }
 

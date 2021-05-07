@@ -1,7 +1,7 @@
 include(ExternalProject)
 
-set(PAILLIER_SRC_FILE_URL  file://${THIRD_PARTY_ROOT}/mpir.tar.gz)
-set(PAILLIER_FILE_DIGEST SHA256=f09fab14ce96624ddfb2803f515326b9fbb503010258fd8b74d290ea205b463c)
+set(PAILLIER_SRC_FILE_URL  file://${THIRD_PARTY_ROOT}/paillier-lib.tar.gz)
+set(PAILLIER_FILE_DIGEST SHA256=574c8315961ea2ba9534a739675172a0e580ca140c9b2a6fb1008aaf608ae1c9)
 
 
 ExternalProject_Add(paillier

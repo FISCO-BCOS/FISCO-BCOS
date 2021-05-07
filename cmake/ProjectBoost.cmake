@@ -30,7 +30,7 @@ endif()
 if (APPLE AND ${CMAKE_HOST_SYSTEM_PROCESSOR} STREQUAL "arm64")
     set(BOOST_CXXFLAGS "cxxflags=-march=armv8")
 else()
-    set(BOOST_CXXFLAGS "cxxflags=${MARCH_TYPE}")
+    set(BOOST_CXXFLAGS "cxxflags=${MARCH_TYPE} -stdlib=libc++ -std=c++11")
 endif ()
 
 if (APPLE)
@@ -45,7 +45,7 @@ set(BOOST_INSTALL_COMMAND ./b2 install --prefix=${CMAKE_SOURCE_DIR}/deps)
 set(BOOST_BUILD_TOOL ./b2)
 set(BOOST_LIBRARY_SUFFIX .a)
 
-set(BOOST_LIB_PREFIX ${CMAKE_SOURCE_DIR}/deps/src/boost/stage/lib/libboost_)
+set(BOOST_LIB_PREFIX ${CMAKE_SOURCE_DIR}/deps/lib/libboost_)
 set(BOOST_BUILD_FILES ${BOOST_LIB_PREFIX}chrono.a ${BOOST_LIB_PREFIX}date_time.a
         ${BOOST_LIB_PREFIX}random.a ${BOOST_LIB_PREFIX}regex.a
         ${BOOST_LIB_PREFIX}filesystem.a ${BOOST_LIB_PREFIX}system.a
@@ -81,6 +81,7 @@ ExternalProject_Add(boost
         --with-program_options
         --with-log
         --with-iostreams
+        --stagedir=${CMAKE_SOURCE_DIR}/deps
         -s NO_BZIP2=1 -s NO_LZMA=1 -s NO_ZSTD=1
         -j${CORES}
     LOG_CONFIGURE 1
@@ -95,7 +96,7 @@ add_dependencies(boost tassl)
 
 ExternalProject_Get_Property(boost SOURCE_DIR)
 set(BOOST_INCLUDE_DIR ${SOURCE_DIR})
-set(BOOST_LIB_DIR ${SOURCE_DIR}/stage/lib)
+set(BOOST_LIB_DIR ${CMAKE_SOURCE_DIR}/deps/lib)
 
 add_library(Boost::System STATIC IMPORTED GLOBAL)
 set_property(TARGET Boost::System PROPERTY IMPORTED_LOCATION ${BOOST_LIB_DIR}/libboost_system${BOOST_LIBRARY_SUFFIX})
