@@ -121,6 +121,78 @@ int SQLBasicAccess::Select(int64_t, const string& _table, const string&, Conditi
     return 0;
 }
 
+int SQLBasicAccess::SelectTableDataByNum(int64_t num, TableInfo::Ptr tableInfo, uint64_t start, uint32_t counts,
+                           vector<map<string, string>>& _values)
+{
+    string sql = "select * from " + tableInfo->name + " where (_id_, _num_) in ( select _id_, num from (select _id_, max(_num_) as num from  "
+                 + tableInfo->name + " where _id_ > " + to_string(start) + " and _num_ <= " + to_string(num) +" group by _id_ order by _id_ limit "+ to_string(counts) +") as tmp)";
+
+    Connection_T conn = m_connPool->GetConnection();
+    uint32_t retryCnt = 0;
+    uint32_t retryMax = 10;
+    while (conn == NULL && retryCnt++ < retryMax)
+    {
+        SQLBasicAccess_LOG(WARNING)
+            << "table:" << tableInfo->name << "sql:" << sql << " get connection failed";
+        sleep(1);
+        conn = m_connPool->GetConnection();
+    }
+    if (conn == NULL)
+    {
+        SQLBasicAccess_LOG(ERROR) << "table:" << tableInfo->name << "sql:" << sql
+                                  << " get connection failed";
+        return -1;
+    }
+    TRY
+    {
+        PreparedStatement_T _prepareStatement =
+            Connection_prepareStatement(conn, "%s", sql.c_str());
+        ResultSet_T result = PreparedStatement_executeQuery(_prepareStatement);
+        int32_t columnCnt = ResultSet_getColumnCount(result);
+        bool tableWithBlobField = isBlobType(tableInfo->name);
+        while (ResultSet_next(result))
+        {
+            map<string, string> value;
+            for (int32_t index = 1; index <= columnCnt; ++index)
+            {
+                auto fieldName = ResultSet_getColumnName(result, index);
+                if (tableWithBlobField)
+                {
+                    int size;
+                    auto bytes = ResultSet_getBlob(result, index, &size);
+                    // Note: Since the field may not be set, it must be added here to determine
+                    //       whether the value of the obtained field is nullptr
+                    if (bytes)
+                    {
+                        value[fieldName] = string((char*)bytes, size);
+                    }
+                }
+                else
+                {
+                    auto selectResult = ResultSet_getString(result, index);
+                    if (selectResult)
+                    {
+                        value[fieldName] = selectResult;
+                    }
+                }
+            }
+            _values.push_back(move(value));
+        }
+    }
+    CATCH(SQLException)
+    {
+        m_connPool->ReturnConnection(conn);
+        // Note: when select exception caused by table doesn't exist and sql error,
+        //       here must return 0, in case of the DB is normal but the sql syntax error or the
+        //       table will be created later
+        SQLBasicAccess_LOG(ERROR) << "select exception for sql error:" << Exception_frame.message;
+        return 0;
+    }
+    END_TRY;
+    m_connPool->ReturnConnection(conn);
+    return 0;
+}
+
 string SQLBasicAccess::BuildQuerySql(string _table, Condition::Ptr _condition)
 {
     _table = boost::algorithm::replace_all_copy(_table, "\\", "\\\\");

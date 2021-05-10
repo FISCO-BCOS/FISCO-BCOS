@@ -131,5 +131,7 @@ dev::storage::Storage::Ptr createSQLStorage(std::shared_ptr<LedgerParamInterface
     std::function<void(std::exception& e)> _fatalHandler);
 dev::storage::Storage::Ptr createZdbStorage(std::shared_ptr<LedgerParamInterface> _param,
     std::function<void(std::exception& e)> _fatalHandler);
+dev::storage::Storage::Ptr createStashStorage(std::shared_ptr<LedgerParamInterface> _param,
+    std::function<void(std::exception& e)> _fatalHandler);
 }  // namespace ledger
 }  // namespace dev

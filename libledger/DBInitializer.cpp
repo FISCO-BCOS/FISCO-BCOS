@@ -590,3 +590,31 @@ dev::storage::Storage::Ptr dev::ledger::createZdbStorage(
 
     return zdbStorage;
 }
+dev::storage::Storage::Ptr dev::ledger::createStashStorage(
+    std::shared_ptr<LedgerParamInterface> _param,
+    std::function<void(std::exception& e)> _fatalHandler)
+{
+    std::cout << "ConnectionPoolConfig connectionConfig" << std::endl;
+    ConnectionPoolConfig connectionConfig{_param->mutableStorageParam().dbType,
+                                          _param->mutableStorageParam().dbIP, _param->mutableStorageParam().dbPort,
+                                          _param->mutableStorageParam().dbUsername, _param->mutableStorageParam().dbPasswd,
+                                          _param->mutableStorageParam().dbName, _param->mutableStorageParam().dbCharset,
+                                          _param->mutableStorageParam().initConnections,
+                                          _param->mutableStorageParam().maxConnections};
+    auto zdbStorage = std::make_shared<ZdbStorage>();
+
+    std::cout << "ConnectionPoolConfig connectionConfig build finish " << std::endl;
+
+    auto sqlconnpool = std::make_shared<SQLConnectionPool>();
+    sqlconnpool->InitConnectionPool(connectionConfig);
+
+    std::cout << "ConnectionPoolConfig InitConnectionPool finish " << std::endl;
+    auto sqlAccess = std::make_shared<SQLBasicAccess>();
+    zdbStorage->SetSqlAccess(sqlAccess);
+    zdbStorage->setConnPool(sqlconnpool);
+
+    zdbStorage->setFatalHandler(_fatalHandler);
+    zdbStorage->setMaxRetry(_param->mutableStorageParam().maxRetry);
+
+    return zdbStorage;
+}

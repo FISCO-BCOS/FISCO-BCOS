@@ -30,6 +30,7 @@
 #include "libstorage/RocksDBStorage.h"
 #include "libstorage/RocksDBStorageFactory.h"
 #include "libstorage/SQLStorage.h"
+#include "libstorage/ZdbStorage.h"
 #include <boost/algorithm/string.hpp>
 #include <boost/archive/text_iarchive.hpp>
 #include <boost/archive/text_oarchive.hpp>
@@ -146,10 +147,11 @@ vector<TableInfo::Ptr> parseTableNames(TableData::Ptr data, SyncRecorder::Ptr re
             res.push_back(tableInfo);
         }
     }
+
     return res;
 }
 
-TableData::Ptr getBlockToNonceData(SQLStorage::Ptr _reader, int64_t _blockNumber)
+TableData::Ptr getBlockToNonceData(ZdbStorage::Ptr _reader, int64_t _blockNumber)
 {
     cout << endl << "[" << getCurrentDateTime() << "] process " << SYS_BLOCK_2_NONCES;
 
@@ -181,7 +183,7 @@ TableData::Ptr getBlockToNonceData(SQLStorage::Ptr _reader, int64_t _blockNumber
     }
 }
 
-TableData::Ptr getHashToBlockData(SQLStorage::Ptr _reader, int64_t _blockNumber)
+TableData::Ptr getHashToBlockData(ZdbStorage::Ptr _reader, int64_t _blockNumber)
 {
     cout << endl << "[" << getCurrentDateTime() << "] process " << SYS_HASH_2_BLOCK;
 
@@ -290,22 +292,25 @@ void conversionData(const std::string& tableName, TableData::Ptr tableData)
     LOG(TRACE) << LOG_BADGE("STORAGE") << LOG_DESC("conversion end!");
 }
 
-void syncData(SQLStorage::Ptr _reader, Storage::Ptr _writer, int64_t _blockNumber,
-    std::shared_ptr<LedgerParamInterface> _param, bool _fullSync)
+void syncData_Link(ZdbStorage::Ptr _reader, Storage::Ptr _writer, uint64_t _stopBlockNumber,
+                    std::shared_ptr<LedgerParamInterface> _param, bool _fullSync)
 {
     const std::string& _dataPath = _param->mutableStorageParam().path;
     boost::filesystem::create_directories(_dataPath);
-    auto recorder = std::make_shared<SyncRecorder>(_dataPath, _blockNumber);
+    auto recorder = std::make_shared<SyncRecorder>(_dataPath, _stopBlockNumber);
     auto syncBlock = recorder->syncBlock();
     cout << "sync block number : " << syncBlock << ", data path : " << _dataPath
-         << ", new sync : " << recorder->isNewSync() << endl;
+        << ", new sync : " << recorder->isNewSync() << endl;
+
     auto sysTableInfo = getSysTableInfo(SYS_TABLES);
     TableData::Ptr sysTableData = std::make_shared<TableData>();
     sysTableData->info = sysTableInfo;
+    sysTableData->newEntries = std::make_shared<Entries>();
     uint64_t begin = 0;
+
     while (true)
     {
-        auto data = _reader->selectTableDataByNum(syncBlock, sysTableInfo, begin, PageCount);
+        auto data = _reader-> selectTableDataByNum(syncBlock, sysTableInfo, begin, PageCount);
         for (size_t i = 0; i < data->newEntries->size(); ++i)
         {
             sysTableData->newEntries->addEntry(data->newEntries->get(i));
@@ -324,51 +329,52 @@ void syncData(SQLStorage::Ptr _reader, Storage::Ptr _writer, int64_t _blockNumbe
 
     auto tableInfos = parseTableNames(sysTableData, recorder);
     auto totalTable = tableInfos.size();
+
     size_t syncedCount = 1;
     auto pullCommitTableData = [&](TableInfo::Ptr tableInfo, uint64_t start, uint32_t counts) {
-        cout << endl
-             << "[" << getCurrentDateTime() << "][" << syncedCount << "/" << totalTable
-             << "] processing " << tableInfo->name << endl;
-        int64_t downloaded = 0;
-        while (true)
-        {
-            auto tableData = _reader->selectTableDataByNum(syncBlock, tableInfo, start, counts);
-            if (!tableData)
-            {
-                cerr << "query failed. Table=" << tableInfo->name << endl;
-                break;
-            }
-            if (tableData->newEntries->size() == 0)
-            {
-                cout << "\r[" << getCurrentDateTime() << "][" << syncedCount << "/" << totalTable
-                     << "] " << tableInfo->name << " downloaded items : " << downloaded << flush;
-                break;
-            }
-            conversionData(tableInfo->name, tableData);
-            if (ForceTables.end() != find(ForceTables.begin(), ForceTables.end(), tableInfo->name))
-            {
-                for (size_t i = 0; i < tableData->newEntries->size(); i++)
-                {
-                    auto entry = tableData->newEntries->get(i);
-                    entry->setForce(true);
-                }
-            }
-            auto lastEntry = tableData->newEntries->get(tableData->newEntries->size() - 1);
-            start = lastEntry->getID();
-            _writer->commit(syncBlock, vector<TableData::Ptr>{tableData});
-            recorder->markStatus(tableInfo->name, make_pair(start, false));
-            downloaded += tableData->newEntries->size();
-            cout << "\r[" << getCurrentDateTime() << "][" << syncedCount << "/" << totalTable
-                 << "] " << tableInfo->name << " downloaded items : " << downloaded << flush;
+      cout << endl
+           << "[" << getCurrentDateTime() << "][" << syncedCount << "/" << totalTable
+           << "] processing " << tableInfo->name << endl;
+      int64_t downloaded = 0;
+      while (true)
+      {
+          auto tableData = _reader->selectTableDataByNum(syncBlock, tableInfo, start, counts);
+          if (!tableData)
+          {
+              cerr << "query failed. Table=" << tableInfo->name << endl;
+              break;
+          }
+          if (tableData->newEntries->size() == 0)
+          {
+              cout << "\r[" << getCurrentDateTime() << "][" << syncedCount << "/" << totalTable
+                   << "] " << tableInfo->name << " downloaded items : " << downloaded << flush;
+              break;
+          }
+          conversionData(tableInfo->name, tableData);
+          if (ForceTables.end() != find(ForceTables.begin(), ForceTables.end(), tableInfo->name))
+          {
+              for (size_t i = 0; i < tableData->newEntries->size(); i++)
+              {
+                  auto entry = tableData->newEntries->get(i);
+                  entry->setForce(true);
+              }
+          }
+          auto lastEntry = tableData->newEntries->get(tableData->newEntries->size() - 1);
+          start = lastEntry->getID();
+          _writer->commit(syncBlock, vector<TableData::Ptr>{tableData});
+          recorder->markStatus(tableInfo->name, make_pair(start, false));
+          downloaded += tableData->newEntries->size();
+          cout << "\r[" << getCurrentDateTime() << "][" << syncedCount << "/" << totalTable
+               << "] " << tableInfo->name << " downloaded items : " << downloaded << flush;
 
-            if (tableData->newEntries->size() < counts)
-            {
-                break;
-            }
-        }
-        recorder->markStatus(tableInfo->name, make_pair(start, true));
-        ++syncedCount;
-        cout << " done.\r" << flush;
+          if (tableData->newEntries->size() < counts)
+          {
+              break;
+          }
+      }
+      recorder->markStatus(tableInfo->name, make_pair(start, true));
+      ++syncedCount;
+      cout << " done.\r" << flush;
     };
 
     // SYS_TABLES
@@ -430,50 +436,31 @@ void syncData(SQLStorage::Ptr _reader, Storage::Ptr _writer, int64_t _blockNumbe
     }
 }
 
-void fastSyncGroupData(std::shared_ptr<LedgerParamInterface> _param,
-    ChannelRPCServer::Ptr _channelRPCServer, int64_t _rollbackNumber = 1000)
-{
-    if (g_BCOSConfig.version() < V2_6_0)
-    {
-        cout << "error unsupported version < 2.6.0" << endl;
-        exit(0);
-    }
 
-    // create SQLStorage
-    auto sqlStorage = createSQLStorage(_param, _channelRPCServer, [](std::exception& e) {
-        LOG(ERROR) << LOG_BADGE("STORAGE") << LOG_BADGE("MySQL")
-                   << "access mysql failed exit:" << e.what();
-        raise(SIGTERM);
-        BOOST_THROW_EXCEPTION(e);
+void fastSyncData(std::shared_ptr<LedgerParamInterface> _param, uint64_t _stopBlockNumber = 0)
+{
+    cout << "fastSyncData begin ... " << endl;
+
+    auto readerStorage = createStashStorage(_param, [](std::exception& e) {
+      LOG(ERROR) << LOG_BADGE("STORAGE") << LOG_BADGE("MySQL")
+                 << "access mysql failed exit:" << e.what();
+      cout << "createZdbStorage create failed " << endl;
+      cout << e.what() << endl;
+
+      raise(SIGTERM);
+      BOOST_THROW_EXCEPTION(e);
     });
-    auto p = dynamic_pointer_cast<SQLStorage>(sqlStorage);
-    p->setTimeout(15);
-    auto blockNumber = getBlockNumberFromStorage(sqlStorage);
-    blockNumber = blockNumber >= _rollbackNumber ? blockNumber - _rollbackNumber : 0;
+    cout << "readerStorage create success " << endl;
 
     // create writer
     Storage::Ptr writerStorage;
     bool fullSync = true;
-    if (!dev::stringCmpIgnoreCase(_param->mutableStorageParam().type, "External"))
+
+    if (!dev::stringCmpIgnoreCase(_param->mutableStorageParam().type, "RocksDB"))
     {
-        cout << "error unsupported external storage" << endl;
-        exit(0);
+        writerStorage = createRocksDBStorage(_param->mutableStorageParam().path, bytes(), false, true);
     }
-    else if (!dev::stringCmpIgnoreCase(_param->mutableStorageParam().type, "MySQL"))
-    {
-        writerStorage = createZdbStorage(_param, [](std::exception& e) {
-            LOG(ERROR) << LOG_BADGE("STORAGE") << LOG_BADGE("MySQL")
-                       << "access mysql failed exit:" << e.what();
-            raise(SIGTERM);
-            BOOST_THROW_EXCEPTION(e);
-        });
-    }
-    else if (!dev::stringCmpIgnoreCase(_param->mutableStorageParam().type, "RocksDB"))
-    {
-        writerStorage =
-            createRocksDBStorage(_param->mutableStorageParam().path, bytes(), false, true);
-    }
-    else
+    else if(!dev::stringCmpIgnoreCase(_param->mutableStorageParam().type, "Scalable"))
     {
         fullSync = false;
         auto scalableStorage =
@@ -487,42 +474,40 @@ void fastSyncGroupData(std::shared_ptr<LedgerParamInterface> _param,
         auto stateStorage = createRocksDBStorage(
             _param->mutableStorageParam().path + "/state", bytes(), false, true);
         scalableStorage->setStateStorage(stateStorage);
-        auto archiveStorage = rocksDBStorageFactory->getStorage(to_string(blockNumber));
-        scalableStorage->setArchiveStorage(archiveStorage, blockNumber);
-        scalableStorage->setRemoteBlockNumber(blockNumber);
+        auto archiveStorage = rocksDBStorageFactory->getStorage(to_string(_stopBlockNumber));
+        scalableStorage->setArchiveStorage(archiveStorage, _stopBlockNumber);
+        scalableStorage->setRemoteBlockNumber(_stopBlockNumber);
         writerStorage = scalableStorage;
     }
 
     // fast sync data
-    syncData(
-        dynamic_pointer_cast<SQLStorage>(sqlStorage), writerStorage, blockNumber, _param, fullSync);
+    syncData_Link(dynamic_pointer_cast<ZdbStorage>(readerStorage), writerStorage, _stopBlockNumber, _param, fullSync);
+
 }
+
 
 int main(int argc, const char* argv[])
 {
-    /// set LC_ALL
-    setDefaultOrCLocale();
-    std::set_terminate([]() {
-        std::cerr << "terminate handler called" << endl;
-        abort();
-    });
-    std::cout << "fisco-sync version : "
-              << "0.1.0" << std::endl;
+    std::cout << "fisco-sync version : " << "0.1.0" << std::endl;
     std::cout << "Build Time         : " << FISCO_BCOS_BUILD_TIME << std::endl;
     std::cout << "Commit Hash        : " << FISCO_BCOS_COMMIT_HASH << std::endl;
     /// init params
     std::cout << "[" << getCurrentDateTime() << "] "
               << "The sync-tool is Initializing..." << std::endl;
     boost::program_options::options_description main_options("Usage of fisco-sync");
-    main_options.add_options()("help,h", "print help information")("config,c",
-        boost::program_options::value<std::string>()->default_value("./config.ini"),
-        "config file path, eg. config.ini")("verify,v",
-        boost::program_options::value<int64_t>()->default_value(1000),
-        "verify number of blocks, default 1000")("limit,l",
-        boost::program_options::value<uint32_t>()->default_value(10000), "page counts of table")(
-        "sys_limit,s", boost::program_options::value<uint32_t>()->default_value(50),
-        "page counts of system table")(
-        "group,g", boost::program_options::value<uint>()->default_value(1), "sync specific group");
+    main_options.add_options()
+        ("help,h", "print help information")
+        ("stopnumber,n",boost::program_options::value<uint64_t>()->default_value(10000), "MYSQL stopBlockNumber")
+        ("ip,i",boost::program_options::value<std::string>()->default_value("127.0.0.1"),"MYSQL ip")
+        ("port,t",boost::program_options::value<uint32_t>()->default_value(3306),"MYSQL port")
+        ("dbname,d",boost::program_options::value<std::string>()->default_value("stash"),"MYSQL dbname")
+        ("username,u",boost::program_options::value<std::string>()->default_value("root"),"MYSQL name")
+        ("password,p",boost::program_options::value<std::string>()->default_value("123456"),"MYSQL password")
+        ("limit,l",boost::program_options::value<uint32_t>()->default_value(10000), "page counts of table")
+        ("sys_limit,s", boost::program_options::value<uint32_t>()->default_value(50),"page counts of system table")
+        ("configpath,c", boost::program_options::value<std::string>()->default_value("./data"),"configpath")
+        ("type,e", boost::program_options::value<std::string>()->default_value("RocksDB"), "Storage type,RocksDB/Scalable");
+
     boost::program_options::variables_map vm;
     try
     {
@@ -540,62 +525,43 @@ int main(int argc, const char* argv[])
         std::cout << main_options << std::endl;
         exit(0);
     }
-    int64_t verifyBlocks = vm["verify"].as<int64_t>();
-    verifyBlocks = verifyBlocks < MinVerifyBlocks ? MinVerifyBlocks : verifyBlocks;
+
     PageCount = vm["limit"].as<uint32_t>();
     BigTablePageCount = vm["sys_limit"].as<uint32_t>();
-    string configPath = vm["config"].as<std::string>();
-    int groupID = vm["group"].as<uint>();
+    string ip = vm["ip"].as<std::string>();
+    string name = vm["username"].as<std::string>();
+    string password = vm["password"].as<std::string>();
+    uint32_t port = vm["port"].as<uint32_t>();
+    uint64_t stopBlockNumber = vm["stopnumber"].as<uint64_t>();
+    string dbName = vm["dbname"].as<std::string>();
+    string type = vm["type"].as<std::string>();
+    string configpath = vm["configpath"].as<std::string>();
 
     try
     {
-        /// init log
-        boost::property_tree::ptree pt;
-        boost::property_tree::read_ini(configPath, pt);
         auto logInitializer = std::make_shared<LogInitializer>();
-        logInitializer->initLog(pt);
+        auto params = std::make_shared<LedgerParam>();
+        params->mutableStorageParam().dbIP = ip;
+        params->mutableStorageParam().dbPort = port;
+        params->mutableStorageParam().dbName = dbName;
+        params->mutableStorageParam().dbUsername = name;
+        params->mutableStorageParam().dbPasswd = password;
+        params->mutableStorageParam().dbType = "mysql";
+        params->mutableStorageParam().dbCharset = "utf8mb4";
+        params->mutableStorageParam().initConnections = 15;
+        params->mutableStorageParam().maxConnections = 50;
+        params->mutableStorageParam().type=type;
+        params->mutableStorageParam().maxRetry=5;
+        params->mutableStorageParam().path=configpath;
 
-        /// init global config. must init before DB, for compatibility
-        initGlobalConfig(pt);
-        /// init channelServer
-        auto secureInitializer = std::make_shared<SecureInitializer>();
-        secureInitializer->initConfig(pt);
+        std::cout << "begin sync ..." << std::endl;
+        fastSyncData(params,stopBlockNumber);
+        std::cout << "end sync ..." << std::endl;
 
-        auto rpcInitializer = std::make_shared<RPCInitializer>();
-        rpcInitializer->setSSLContext(
-            secureInitializer->SSLContext(SecureInitializer::Usage::ForRPC));
-        auto p2pService = std::make_shared<Service>();
-        rpcInitializer->setP2PService(p2pService);
-        rpcInitializer->initChannelRPCServer(pt);
-        auto groupConfigPath = pt.get<string>("group.group_config_path", "conf/");
-        auto dataPath = pt.get<string>("group.group_data_path", "data/");
-        boost::filesystem::path path(groupConfigPath);
-        if (fs::is_directory(path))
-        {
-            fs::directory_iterator endIter;
-            for (fs::directory_iterator iter(path); iter != endIter; iter++)
-            {
-                if (fs::extension(*iter) == ".genesis" &&
-                    iter->path().stem().string() == "group." + to_string(groupID))
-                {
-                    std::cout << "[" << getCurrentDateTime() << "] The sync-tool is syncing group "
-                              << groupID << ". config file " << iter->path().string() << std::endl;
-                    auto params = std::make_shared<LedgerParam>();
-                    params->init(iter->path().string(), dataPath);
-                    fastSyncGroupData(params, rpcInitializer->channelRPCServer(), verifyBlocks);
-                    std::cout << endl
-                              << "[" << getCurrentDateTime() << "] sync complete." << std::endl;
-                    return 0;
-                }
-            }
-            std::cout << "[" << getCurrentDateTime() << "] "
-                      << "Can't find genesis and ini config of group" << groupID << std::endl;
-        }
     }
     catch (std::exception& e)
     {
         std::cerr << boost::diagnostic_information(e);
-        std::cerr << "sync failed!!!" << std::endl;
         return -1;
     }
 
