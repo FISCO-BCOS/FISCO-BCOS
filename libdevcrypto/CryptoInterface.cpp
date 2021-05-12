@@ -27,8 +27,16 @@
 #include "SM2Signature.h"
 #include "SM3Hash.h"
 #include "SM4Crypto.h"
+#include "libdevcore/Log.h"
 #include "libdevcore/RLP.h"
+#if FISCO_SDF
+#include "sdf/SDFSM2Signature.h"
+#include "sdf/SDFSM3Hash.h"
+#include "sdf/SDFSM4Crypto.h"
+#endif
 #include <libconfig/GlobalConfigure.h>
+#define CRYPTO_LOG(LEVEL) LOG(LEVEL) << "[CRYPTO] "
+
 
 using namespace std;
 using namespace dev;
@@ -82,7 +90,23 @@ void dev::crypto::initSMCrypto()
     Verify = sm2Verify;
     Recover = sm2Recover;
 }
-
+#if FISCO_SDF
+void dev::crypto::initHsmSMCrypto()
+{
+    CRYPTO_LOG(INFO) << "[CryptoInterface:initHsmSMCrypto] use hardware secure module";
+    EmptyHash = SDFSM3(bytesConstRef());
+    EmptyTrie = SDFSM3(rlp(""));
+    SignatureFromRLP = sm2SignatureFromRLP;
+    SignatureFromBytes = sm2SignatureFromBytes;
+    dev::crypto::SymmetricEncrypt = static_cast<std::string (*)(const unsigned char*, size_t,
+        const unsigned char*, size_t, const unsigned char*)>(dev::crypto::SDFSM4Encrypt);
+    dev::crypto::SymmetricDecrypt = static_cast<std::string (*)(const unsigned char*, size_t,
+        const unsigned char*, size_t, const unsigned char*)>(dev::crypto::SDFSM4Decrypt);
+    Sign = SDFSM2Sign;
+    Verify = SDFSM2Verify;
+    Recover = SDFSM2Recover;
+}
+#endif
 void dev::crypto::initCrypto()
 {
     EmptyHash = keccak256(bytesConstRef());

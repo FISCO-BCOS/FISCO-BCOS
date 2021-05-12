@@ -45,6 +45,8 @@ public:
 
     static int sm2GetZ(std::string const& _privateKey, const EC_KEY* _ecKey, unsigned char* _zValue,
         size_t& _zValueLen);
+    
+    static int sm2GetZFromPublicKey(std::string const & _publicKeyHex, unsigned char* _zValue, size_t& _zValueLen);
 
 private:
     std::string publicKey;

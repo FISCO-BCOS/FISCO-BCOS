@@ -30,9 +30,13 @@ if (DEMO)
     add_subdirectory(sync)
     add_subdirectory(evm)
     add_subdirectory(rpc)
+    if(USE_HSM_SDF)
+    add_subdirectory(crypto)
+    endif()
 endif()
 
 if (TOOL)
     add_subdirectory(benchmark)
     add_subdirectory(tools)
 endif()
+

@@ -12,7 +12,10 @@ commands:
           name: Setup dependencies
           command: |
             apt-get update
-            apt-get install -y git curl build-essential clang cmake libssl-dev zlib1g-dev openssh-client << parameters.packages >>
+            apt-get install -y git snapd curl build-essential clang cmake libssl-dev zlib1g-dev openssh-client << parameters.packages >>
+            curl -LO https://github.com/Kitware/CMake/releases/download/v3.20.0/cmake-3.20.0-linux-x86_64.sh
+            rm /usr/bin/cmake && bash cmake-3.20.0-linux-x86_64.sh --prefix=/usr/bin/ --skip-license --include-subdir && rm cmake-3.20.0-linux-x86_64.sh
+            ln -s /usr/bin/cmake-3.20.0-linux-x86_64/bin/cmake /usr/bin/cmake
             echo 'export CCACHE_DIR=/ccache' >> $BASH_ENV
   compile:
     description: Compile
@@ -52,13 +55,13 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - deps-cache-v3-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
-            - deps-cache-v3-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
-            - deps-cache-v3-{{ .Environment.CIRCLE_JOB }}-
+            - deps-cache-v4-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+            - deps-cache-v4-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
+            - deps-cache-v4-{{ .Environment.CIRCLE_JOB }}-
       - compile:
           options: "-DBUILD_STATIC=ON -DTESTS=ON -DCOVERAGE=ON -DCMAKE_BUILD_TYPE=Debug"
       - save_cache:
-          key: deps-cache-v3-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+          key: deps-cache-v4-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
           paths:
             - deps
             - /ccache
@@ -170,10 +173,11 @@ jobs:
       - run:
           name: Upload binary
           command: |
+            cp tools/build_chain.sh build/bin/
             cd build/bin
-            tar -zcf fisco-bcos.tar.gz fisco-bcos
+            tar -zcf fisco-bcos.tar.gz fisco-bcos build_chain.sh
             strip fisco-bcos
-            tar -zcf fisco-bcos-mini.tar.gz fisco-bcos
+            tar -zcf fisco-bcos-mini.tar.gz fisco-bcos build_chain.sh
       - store_artifacts:
           path: /FISCO-BCOS/build/bin/fisco-bcos.tar.gz
           destination: fisco-bcos.tar.gz

@@ -19,18 +19,9 @@
 # (c) 2016-2018 fisco-dev contributors.
 #------------------------------------------------------------------------------
 
+
 file(GLOB SRC_LIST "*.cpp")
 file(GLOB HEADERS "*.h")
-
-add_executable(fisco-bcos main.cpp ${HEADERS})
-target_include_directories(fisco-bcos PRIVATE ..)
-target_link_libraries(fisco-bcos PUBLIC initializer)
-
-install(TARGETS fisco-bcos DESTINATION bin)
-
-if (TOOL)
-    add_executable(fisco-sync ../datasync/DataSyncTool.cpp)
-    target_include_directories(fisco-sync PUBLIC ..)
-    target_link_libraries(fisco-sync PUBLIC initializer storage)
-    install(TARGETS fisco-sync DESTINATION bin)
-endif()
+add_executable(mini-crypto ${SRC_LIST} ${HEADERS})
+target_link_libraries(mini-crypto PUBLIC devcrypto)
+ 

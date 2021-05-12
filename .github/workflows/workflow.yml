@@ -38,11 +38,11 @@ jobs:
         id: cache
         with:
           path: deps/src
-          key: deps-v7-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: deps-v8-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            deps-v7-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            deps-v7-${{ runner.temp }}-${{ github.base_ref }}-
-            deps-v7-${{ runner.temp }}-
+            deps-v8-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            deps-v8-${{ runner.temp }}-${{ github.base_ref }}-
+            deps-v8-${{ runner.temp }}-
       - uses: actions/cache@v2
         id: ccache
         with:
@@ -54,7 +54,7 @@ jobs:
             ccache-v3-${{ runner.temp }}-
       - name: install macOS dependencies
         if: runner.os == 'macOS'
-        run: brew install openssl@1.1 ccache gmp
+        run: brew install openssl@1.1 ccache gmp cmake
       - name: install Ubuntu dependencies
         if: runner.os == 'Linux'
         run: sudo apt install -y git curl build-essential clang cmake libssl-dev zlib1g-dev ccache libgmp-dev flex bison patch
@@ -75,12 +75,12 @@ jobs:
         id: cache
         with:
           path: deps/src
-          key: deps-v4-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: deps-v5-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            deps-v4-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            deps-v4-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            deps-v4-notest-${{ runner.temp }}-
-            deps-v4-${{ runner.temp }}-
+            deps-v5-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            deps-v5-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            deps-v5-notest-${{ runner.temp }}-
+            deps-v5-${{ runner.temp }}-
       - uses: actions/cache@v2
         id: ccache
         with:
@@ -91,7 +91,7 @@ jobs:
             ccache-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-
             ccache-v2-notest-${{ runner.temp }}-
       - name: install macOS dependencies
-        run: brew install openssl@1.1 ccache
+        run: brew install openssl@1.1 ccache cmake
       - name: configure
         run: cmake .
       - name: compile
@@ -99,15 +99,50 @@ jobs:
       - name: run integration testing
         run: cd tools && bash ci/ci_check.sh
       - name: tar fisco-bcos for macOS
-        run: cd bin && strip fisco-bcos && tar -zcf fisco-bcos.tar.gz fisco-bcos
+        run: cp tools/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -zcf fisco-bcos.tar.gz fisco-bcos build_chain.sh
       - uses: actions/upload-artifact@v2
         with:
           name: fisco-bcos-macOS.tar.gz
           path: bin/fisco-bcos.tar.gz
 
-  ubuntu16_integration_test:
-    name: ubuntu16_integration_test
-    runs-on: ubuntu-16.04
+  # ubuntu16_integration_test:
+  #   name: ubuntu16_integration_test
+  #   runs-on: ubuntu-16.04
+  #   steps:
+  #     - uses: actions/checkout@v2
+  #       with:
+  #         fetch-depth: 5
+  #     - uses: actions/cache@v2
+  #       id: cache
+  #       with:
+  #         path: deps/src
+  #         key: deps-v4-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+  #         restore-keys: |
+  #           deps-v4-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+  #           deps-v4-notest-${{ runner.temp }}-${{ github.base_ref }}-
+  #           deps-v4-notest-${{ runner.temp }}-
+  #           deps-v4-${{ runner.temp }}-
+  #     - uses: actions/cache@v2
+  #       id: ccache
+  #       with:
+  #         path: ccache
+  #         key: ccache-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+  #         restore-keys: |
+  #           ccache-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+  #           ccache-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-
+  #           ccache-v2-notest-${{ runner.temp }}-
+  #     - name: install ubuntu dependencies
+  #       run: sudo apt install -y git curl build-essential clang cmake openssl libssl-dev zlib1g-dev ccache libgmp-dev flex bison
+  #     - name: configure
+  #       run: CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake .
+  #     - name: compile
+  #       run: make -j2
+  #     - name: run integration testing
+  #       run: cd tools && bash ci/ci_check.sh
+
+  ubuntu20_integration_test:
+    name: ubuntu20_test
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v2
         with:
@@ -134,43 +169,14 @@ jobs:
       - name: install ubuntu dependencies
         run: sudo apt install -y git curl build-essential clang cmake openssl libssl-dev zlib1g-dev ccache libgmp-dev flex bison
       - name: configure
-        run: cmake .
+        run: /usr/bin/cmake . -DBUILD_STATIC=ON
       - name: compile
         run: make -j2
       - name: run integration testing
         run: cd tools && bash ci/ci_check.sh
-
-  ubuntu20_integration_test:
-    name: ubuntu20_test
-    runs-on: ubuntu-20.04
-    steps:
-      - uses: actions/checkout@v2
+      - name: tar fisco-bcos for Linux
+        run: cp tools/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -zcf fisco-bcos.tar.gz fisco-bcos build_chain.sh
+      - uses: actions/upload-artifact@v2
         with:
-          fetch-depth: 5
-      - uses: actions/cache@v2
-        id: cache
-        with:
-          path: deps/src
-          key: deps-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-          restore-keys: |
-            deps-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            deps-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            deps-v1-notest-${{ runner.temp }}-
-            deps-v1-${{ runner.temp }}-
-      - uses: actions/cache@v2
-        id: ccache
-        with:
-          path: ccache
-          key: ccache-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-          restore-keys: |
-            ccache-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            ccache-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            ccache-v1-notest-${{ runner.temp }}-
-      - name: install ubuntu dependencies
-        run: sudo apt install -y git curl build-essential clang cmake openssl libssl-dev zlib1g-dev ccache libgmp-dev flex bison
-      - name: configure
-        run: cmake .
-      - name: compile
-        run: make -j2
-      - name: run integration testing
-        run: cd tools && bash ci/ci_check.sh
+          name: fisco-bcos.tar.gz
+          path: bin/fisco-bcos.tar.gz

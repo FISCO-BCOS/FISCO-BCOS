@@ -19,7 +19,7 @@ Usage:
     -m                     Download mini binary, only works with -b option
     -h Help
 e.g
-    $0 -v 2.7.0
+    $0 -v 2.7.2
 "
 
 exit 0
@@ -29,6 +29,12 @@ LOG_INFO()
 {
     local content=${1}
     echo -e "\033[32m[INFO] ${content}\033[0m"
+}
+
+LOG_WARN()
+{
+    local content=${1}
+    echo -e "\033[31m[WARN] ${content}\033[0m"
 }
 
 parse_params(){
@@ -71,7 +77,21 @@ download_artifact_linux(){
     LOG_INFO "Downloading binary from ${link} "
     curl -#LO ${link} && tar -zxf fisco*.tar.gz && rm fisco*.tar.gz
     result=$?
-    if [[ "${result}" != "0" ]];then LOG_ERROR "Download failed, please try again" && exit 1;fi
+    if [[ "${result}" != "0" ]];then LOG_WARN "Download failed, please try again" && exit 1;fi
+
+}
+
+download_github_action_artifact(){
+    local branch="$1"
+    local package_name="fisco-bcos.tar.gz"
+    if [ "$(uname)" == "Darwin" ];then
+        package_name="fisco-bcos-macOS.tar.gz"
+    fi
+    local artifact_link="https://nightly.link/FISCO-BCOS/FISCO-BCOS/workflows/workflow/${branch}/${package_name}.zip"
+    LOG_INFO "Downloading binary from ${artifact_link} "
+    curl -LO "${artifact_link}" && unzip "${package_name}.zip" && tar -zxf fisco-bcos.tar.gz && rm *.tar.gz.*
+    result=$?
+    if [[ "${result}" != "0" ]];then LOG_WARN "Download failed, please try again" && exit 1;fi
 
 }
 
@@ -97,7 +117,7 @@ download_branch_artifact(){
     local branch="$1"
     if [ "$(uname)" == "Darwin" ];then
         LOG_INFO "Downloading binary of ${branch} on macOS "
-        download_artifact_macOS "${branch}"
+        download_github_action_artifact "${branch}"
     else
         LOG_INFO "Downloading binary of ${branch} on Linux "
         download_artifact_linux "${branch}"

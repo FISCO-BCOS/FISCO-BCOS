@@ -22,7 +22,10 @@
 
 #include "DownloadingBlockQueue.h"
 #include "Common.h"
+
+#ifndef FISCO_DEBUG
 #include "gperftools/malloc_extension.h"
+#endif
 
 using namespace std;
 using namespace dev;
@@ -157,7 +160,9 @@ void DownloadingBlockQueue::clearQueue()
     std::priority_queue<BlockPtr, BlockPtrVec, BlockQueueCmp> emptyQueue;
     swap(m_blocks, emptyQueue);  // Does memory leak here ?
     // give back the memory to os
+#ifndef FISCO_DEBUG
     MallocExtension::instance()->ReleaseFreeMemory();
+#endif
 }
 
 void DownloadingBlockQueue::flushBufferToQueue()
