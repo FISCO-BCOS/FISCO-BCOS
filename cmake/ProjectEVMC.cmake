@@ -10,6 +10,7 @@ ExternalProject_Add(evmc
         # GIT_REPOSITORY https://github.com/FISCO-BCOS/evmc.git
         # GIT_TAG e0bd9d5dc68ec3a00fe9a3c5e81c98946449a20d
         CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
+                -DHUNTER_USE_CACHE_SERVERS=NO
         BUILD_IN_SOURCE 1
         LOG_CONFIGURE 1
         LOG_BUILD 1

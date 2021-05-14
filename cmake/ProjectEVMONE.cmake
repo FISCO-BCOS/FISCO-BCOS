@@ -10,6 +10,7 @@ ExternalProject_Add(evmone
         CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
                    -DBUILD_SHARED_LIBS=off
                    -DEVMC_ROOT=<INSTALL_DIR>
+                   -DHUNTER_USE_CACHE_SERVERS=NO
                 #    -DHUNTER_ROOT=${CMAKE_SOURCE_DIR}/deps/src/.hunter
                    -DHUNTER_STATUS_DEBUG=ON
         # BUILD_COMMAND cmake --build . -- -j
