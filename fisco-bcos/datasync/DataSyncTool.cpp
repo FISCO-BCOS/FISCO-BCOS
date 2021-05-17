@@ -529,22 +529,19 @@ int main(int argc, const char* argv[])
     main_options.add_options()("help,h", "print help information")("stopnumber,n",
         boost::program_options::value<uint64_t>()->default_value(10000),
         "MYSQL stopBlockNumber")("ip,i",
-        boost::program_options::value<std::string>()->default_value("127.0.0.1"),
-        "MYSQL ip")("port,t", boost::program_options::value<uint32_t>()->default_value(3306),
-        "MYSQL port")("dbname,d",
-        boost::program_options::value<std::string>()->default_value("stash"),
+        boost::program_options::value<std::string>()->default_value("127.0.0.1"), "MYSQL ip")(
+        "port,t", boost::program_options::value<uint32_t>()->default_value(3306), "MYSQL port")(
+        "dbname,d", boost::program_options::value<std::string>()->default_value("stash"),
         "MYSQL dbname")("username,u",
-        boost::program_options::value<std::string>()->default_value("root"),
-        "MYSQL name")("password,p",
-        boost::program_options::value<std::string>()->default_value("123456"),
+        boost::program_options::value<std::string>()->default_value("root"), "MYSQL name")(
+        "password,p", boost::program_options::value<std::string>()->default_value("123456"),
         "MYSQL password")("limit,l",
-        boost::program_options::value<uint32_t>()->default_value(10000),
-        "page counts of table")("sys_limit,s",
-        boost::program_options::value<uint32_t>()->default_value(50),
+        boost::program_options::value<uint32_t>()->default_value(10000), "page counts of table")(
+        "sys_limit,s", boost::program_options::value<uint32_t>()->default_value(50),
         "page counts of system table")("config,c",
         boost::program_options::value<std::string>()->default_value("./config.ini"),
-        "node config path")("group,g", boost::program_options::value<uint>()->default_value(1),
-        "sync specific group");
+        "node config path")(
+        "group,g", boost::program_options::value<uint>()->default_value(1), "sync specific group");
 
     boost::program_options::variables_map vm;
     try
