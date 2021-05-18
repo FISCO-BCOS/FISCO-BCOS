@@ -50,6 +50,11 @@ set(SDF_INCLUDE_DIR ${SOURCE_DIR}/include/sdf)
 file(MAKE_DIRECTORY ${SDF_INCLUDE_DIR})  # Must exist.
 
 set(SDF_LIB "${SOURCE_DIR}/lib/libsdf-crypto_arm.a")
+find_library(SWSDS swsds /usr/lib)
+if(NOT SWSDS)
+    message()
+    message(FATAL " Can not find library libswsds.so under /usr/lib, please make sure you have a crypto PCI card on your machine, as well as the the driver and libraries are installed.")
+endif()
 
 set_property(TARGET SDF PROPERTY IMPORTED_LOCATION ${SDF_LIB})
 set_property(TARGET SDF PROPERTY INTERFACE_INCLUDE_DIRECTORIES ${HSM_INCLUDE_DIR} ${SDF_INCLUDE_DIR})
