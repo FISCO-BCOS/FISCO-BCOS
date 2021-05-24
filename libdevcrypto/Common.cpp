@@ -110,6 +110,14 @@ Public dev::toPublic(Secret const& _secret)
     }
 }
 
+void KeyPair::set_pub(const std::string& certfile)
+{
+    string pub = SM2::getInstance().get_certpub(certfile);
+    m_public = h512(fromHex(pub));
+    m_address = toAddress(m_public);
+}
+
+
 KeyPair KeyPair::create()
 {
     while (true)

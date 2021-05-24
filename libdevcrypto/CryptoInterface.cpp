@@ -94,17 +94,23 @@ void dev::crypto::initSMCrypto()
 void dev::crypto::initHsmSMCrypto()
 {
     CRYPTO_LOG(INFO) << "[CryptoInterface:initHsmSMCrypto] use hardware secure module";
-    EmptyHash = SDFSM3(bytesConstRef());
-    EmptyTrie = SDFSM3(rlp(""));
+    EmptyHash = sm3(bytesConstRef());
+    EmptyTrie = sm3(rlp(""));
+    CRYPTO_LOG(INFO) << "[CryptoInterface:initHsmSMCrypto] SDFSM3";
     SignatureFromRLP = sm2SignatureFromRLP;
     SignatureFromBytes = sm2SignatureFromBytes;
+    CRYPTO_LOG(INFO) << "[CryptoInterface:initHsmSMCrypto] sm2SignatureFromBytes";
     dev::crypto::SymmetricEncrypt = static_cast<std::string (*)(const unsigned char*, size_t,
         const unsigned char*, size_t, const unsigned char*)>(dev::crypto::SDFSM4Encrypt);
     dev::crypto::SymmetricDecrypt = static_cast<std::string (*)(const unsigned char*, size_t,
         const unsigned char*, size_t, const unsigned char*)>(dev::crypto::SDFSM4Decrypt);
+    CRYPTO_LOG(INFO) << "[CryptoInterface:initHsmSMCrypto] SDFSM4Decrypto";
     Sign = SDFSM2Sign;
+    CRYPTO_LOG(INFO) << "[CryptoInterface:initHsmSMCrypto] SDFSM2Sign";
     Verify = SDFSM2Verify;
+    CRYPTO_LOG(INFO) << "[CryptoInterface:initHsmSMCrypto] SDFSM2Verify";
     Recover = SDFSM2Recover;
+    CRYPTO_LOG(INFO) << "[CryptoInterface:initHsmSMCrypto] SDFSM2Recover";
 }
 #endif
 void dev::crypto::initCrypto()

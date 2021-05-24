@@ -22,8 +22,11 @@
  */
 #pragma once
 #include "libdevcore/Log.h"
+#include <openssl/evp.h>
+#include <openssl/pem.h>
 #include <openssl/sm2.h>
 #include <openssl/sm3.h>
+#include <openssl/x509.h>
 #include <iostream>
 #include <string>
 #define CRYPTO_LOG(LEVEL) LOG(LEVEL) << "[CRYPTO] "
@@ -47,6 +50,8 @@ public:
         size_t& _zValueLen);
     
     static int sm2GetZFromPublicKey(std::string const & _publicKeyHex, unsigned char* _zValue, size_t& _zValueLen);
+
+    static std::string get_certpub(const std::string& certfile);
 
 private:
     std::string publicKey;

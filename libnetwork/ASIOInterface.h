@@ -208,7 +208,8 @@ public:
     virtual void asyncHandshake(std::shared_ptr<SocketFace> socket,
         ba::ssl::stream_base::handshake_type type, Handler_Type handler)
     {
-        socket->sslref().async_handshake(type, handler);
+            socket->sslref().async_handshake(type, handler);
+        
     }
 
     virtual void asyncWait(boost::asio::deadline_timer* m_timer,
