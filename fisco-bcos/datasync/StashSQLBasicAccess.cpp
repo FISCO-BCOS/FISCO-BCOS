@@ -32,6 +32,148 @@ using namespace std;
 
 StashSQLBasicAccess::StashSQLBasicAccess() {}
 
+int StashSQLBasicAccess::Select(int64_t, const string& _table, const string&, Condition::Ptr _condition,
+                           vector<map<string, string>>& _values)
+{
+    string sql = this->BuildQuerySql(_table, _condition);
+    Connection_T conn = m_connPool->GetConnection();
+    uint32_t retryCnt = 0;
+    uint32_t retryMax = 10;
+    while (conn == NULL && retryCnt++ < retryMax)
+    {
+        StashSQLBasicAccess_LOG(WARNING)
+                << "table:" << _table << "sql:" << sql << " get connection failed";
+        sleep(1);
+        conn = m_connPool->GetConnection();
+    }
+
+    if (conn == NULL)
+    {
+        StashSQLBasicAccess_LOG(ERROR) << "table:" << _table << "sql:" << sql
+                                  << " get connection failed";
+        return -1;
+    }
+    TRY
+            {
+                PreparedStatement_T _prepareStatement =
+                    Connection_prepareStatement(conn, "%s", sql.c_str());
+                if (_condition)
+                {
+                    uint32_t index = 0;
+                    for (auto& it : *(_condition))
+                    {
+                        PreparedStatement_setString(
+                            _prepareStatement, ++index, it.second.right.second.c_str());
+                    }
+                }
+                ResultSet_T result = PreparedStatement_executeQuery(_prepareStatement);
+                int32_t columnCnt = ResultSet_getColumnCount(result);
+
+                bool tableWithBlobField = isBlobType(_table);
+                while (ResultSet_next(result))
+                {
+                    map<string, string> value;
+                    for (int32_t index = 1; index <= columnCnt; ++index)
+                    {
+                        auto fieldName = ResultSet_getColumnName(result, index);
+                        if (tableWithBlobField)
+                        {
+                            int size;
+                            auto bytes = ResultSet_getBlob(result, index, &size);
+                            // Note: Since the field may not be set, it must be added here to determine
+                            //       whether the value of the obtained field is nullptr
+                            if (bytes)
+                            {
+                                value[fieldName] = string((char*)bytes, size);
+                            }
+                        }
+                        else
+                        {
+                            auto selectResult = ResultSet_getString(result, index);
+                            if (selectResult)
+                            {
+                                value[fieldName] = selectResult;
+                            }
+                        }
+                    }
+                    _values.push_back(move(value));
+                }
+            }
+        CATCH(SQLException)
+            {
+                m_connPool->ReturnConnection(conn);
+                // Note: when select exception caused by table doesn't exist and sql error,
+                //       here must return 0, in case of the DB is normal but the sql syntax error or the
+                //       table will be created later
+                StashSQLBasicAccess_LOG(ERROR) << "select exception for sql error:" << Exception_frame.message;
+                return 0;
+            }
+    END_TRY;
+    m_connPool->ReturnConnection(conn);
+    return 0;
+}
+
+string StashSQLBasicAccess::BuildQuerySql(string _table, Condition::Ptr _condition)
+{
+    _table = boost::algorithm::replace_all_copy(_table, "\\", "\\\\");
+    _table = boost::algorithm::replace_all_copy(_table, "`", "\\`");
+    string sql = "select * from `";
+    sql.append(_table).append("`");
+    if (_condition)
+    {
+        bool hasWhereClause = false;
+        for (auto it = _condition->begin(); it != _condition->end(); ++it)
+        {
+            if (!hasWhereClause)
+            {
+                hasWhereClause = true;
+                sql.append(BuildConditionSql(" where", it, _condition));
+            }
+            else
+            {
+                sql.append(BuildConditionSql(" and", it, _condition));
+            }
+        }
+    }
+    return sql;
+}
+
+string StashSQLBasicAccess::BuildConditionSql(const string& _strPrefix,
+                                         map<string, Condition::Range>::const_iterator& _it, Condition::Ptr _condition)
+{
+    string strConditionSql = _strPrefix;
+    if (_it->second.left.second == _it->second.right.second && _it->second.left.first &&
+        _it->second.right.first)
+    {
+        strConditionSql.append(" `").append(_it->first).append("`=").append("?");
+    }
+    else
+    {
+        if (_it->second.left.second != _condition->unlimitedField())
+        {
+            if (_it->second.left.first)
+            {
+                strConditionSql.append(" `").append(_it->first).append("`>=").append("?");
+            }
+            else
+            {
+                strConditionSql.append(" `").append(_it->first).append("`>").append("?");
+            }
+        }
+        if (_it->second.right.second != _condition->unlimitedField())
+        {
+            if (_it->second.right.first)
+            {
+                strConditionSql.append(" `").append(_it->first).append("`<=").append("?");
+            }
+            else
+            {
+                strConditionSql.append(" `").append(_it->first).append("`<").append("?");
+            }
+        }
+    }
+    return strConditionSql;
+}
 
 int StashSQLBasicAccess::SelectTableDataByNum(int64_t num, TableInfo::Ptr tableInfo, uint64_t start,
     uint32_t counts, vector<map<string, string>>& _values)

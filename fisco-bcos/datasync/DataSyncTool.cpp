@@ -452,7 +452,7 @@ void syncData(StashStorage::Ptr _reader, Storage::Ptr _writer, uint64_t _stopBlo
 
 
 void fastSyncData(std::shared_ptr<LedgerParamInterface> _param,
-    std::shared_ptr<LedgerParamInterface> stashParam, uint64_t _stopBlockNumber = 0)
+    std::shared_ptr<LedgerParamInterface> stashParam, int64_t _stopBlockNumber = 0)
 {
     if (g_BCOSConfig.version() < V2_6_0)
     {
@@ -471,6 +471,9 @@ void fastSyncData(std::shared_ptr<LedgerParamInterface> _param,
         BOOST_THROW_EXCEPTION(e);
     });
     cout << "readerStorage create success " << endl;
+
+    auto blockNumber = getBlockNumberFromStorage(readerStorage);
+    _stopBlockNumber = blockNumber >= _stopBlockNumber ? _stopBlockNumber : blockNumber;
 
     // create writer
     Storage::Ptr writerStorage;
@@ -527,7 +530,7 @@ int main(int argc, const char* argv[])
               << "The sync-tool is Initializing..." << std::endl;
     boost::program_options::options_description main_options("Usage of fisco-sync");
     main_options.add_options()("help,h", "print help information")("stopnumber,n",
-        boost::program_options::value<uint64_t>()->default_value(10000),
+        boost::program_options::value<int64_t>()->default_value(10000),
         "MYSQL stopBlockNumber")("ip,i",
         boost::program_options::value<std::string>()->default_value("127.0.0.1"), "MYSQL ip")(
         "port,t", boost::program_options::value<uint32_t>()->default_value(3306), "MYSQL port")(
@@ -567,7 +570,7 @@ int main(int argc, const char* argv[])
     string name = vm["username"].as<std::string>();
     string password = vm["password"].as<std::string>();
     uint32_t port = vm["port"].as<uint32_t>();
-    uint64_t stopBlockNumber = vm["stopnumber"].as<uint64_t>();
+    int64_t stopBlockNumber = vm["stopnumber"].as<int64_t>();
     string dbName = vm["dbname"].as<std::string>();
     int groupID = vm["group"].as<uint>();
     string configPath = vm["config"].as<std::string>();
