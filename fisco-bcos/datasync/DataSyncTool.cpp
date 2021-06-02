@@ -507,7 +507,7 @@ void fastSyncData(std::shared_ptr<LedgerParamInterface> _param,
         auto stateStorage = createRocksDBStorage(
             _param->mutableStorageParam().path + "/state", bytes(), false, true);
         scalableStorage->setStateStorage(stateStorage);
-        auto archiveStorage = rocksDBStorageFactory->getStorage(to_string(_stopBlockNumber));
+        auto archiveStorage = rocksDBStorageFactory->getStorage(to_string(_stopBlockNumber + 1));
         scalableStorage->setArchiveStorage(archiveStorage, _stopBlockNumber);
         scalableStorage->setRemoteBlockNumber(_stopBlockNumber);
         writerStorage = scalableStorage;
