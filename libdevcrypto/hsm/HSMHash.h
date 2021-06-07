@@ -41,9 +41,7 @@ inline h256 SDFSM3(bytesSec const& _input);
 /// Calculate SM3-256 hash of the given input, returning as a 256-bit hash.
 inline h256 SDFSM3(bytesConstRef _input)
 {
-    std::cout << "SDFSM3 called "<<std::endl;
     CryptoProvider& provider = SDFCryptoProvider::GetInstance();
-    std::cout << "SDFSM3 get provider "<<std::endl;
     h256 ret;
     unsigned int code = SDFSM3(_input, ret.ref());
     if (code != SDR_OK)

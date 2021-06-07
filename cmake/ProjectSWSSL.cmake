@@ -12,7 +12,7 @@ ExternalProject_Add(swssl
         PREFIX ${CMAKE_SOURCE_DIR}/deps
         DOWNLOAD_NAME swssl.tar.gz
         DOWNLOAD_NO_PROGRESS 1
-        URL /home/maggie/5.25/swssl-20010-0018-3.10.0-1160.el7.x86_64.tgz
+        URL /root/5.25/swssl-20010-0018-3.10.0-1160.el7.x86_64.tgz
         URL_HASH SHA256=a773ff33207a54f7c2ac95a392d43131214cfe3140f2af58d2a86b42c0f47064
         # GIT_TAG ccdfc64c5f56988f76abc0390a12ed9865bc49e9
         # GIT_SHALLOW true

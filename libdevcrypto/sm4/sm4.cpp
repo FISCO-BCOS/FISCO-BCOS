@@ -22,23 +22,29 @@
  */
 
 #include "sm4.h"
-#include <stdlib.h>
 #include <cstring>
+#ifdef FISCO_SDF
+#include <stdlib.h>
+#endif
 
 int SM4::setKey(const unsigned char* userKey, size_t length)
 {
+#ifdef FISCO_SDF
     (void)length;
-    return SM4_set_key(userKey, &key);
+    return ::SM4_set_key(userKey, &key);
+#else
+    return ::SM4_set_key(userKey, length, &key);
+#endif
 }
 
 void SM4::encrypt(const unsigned char* in, unsigned char* out)
 {
-    SM4_encrypt(in, out, &key);
+    ::SM4_encrypt(in, out, &key);
 }
 
 void SM4::decrypt(const unsigned char* in, unsigned char* out)
 {
-    SM4_decrypt(in, out, &key);
+    ::SM4_decrypt(in, out, &key);
 }
 
 void SM4::cbcEncrypt(
@@ -46,7 +52,7 @@ void SM4::cbcEncrypt(
 {
     unsigned char* iv = (unsigned char*)malloc(16);
     std::memcpy(iv, ivec, 16);
-    SM4_cbc_encrypt(in, out, length, &key, iv, enc);
+    ::SM4_cbc_encrypt(in, out, length, &key, iv, enc);
     free(iv);
 }
 

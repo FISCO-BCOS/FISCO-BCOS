@@ -22,13 +22,15 @@
  */
 #pragma once
 #include "libdevcore/Log.h"
-#include <openssl/evp.h>
-#include <openssl/pem.h>
 #include <openssl/sm2.h>
 #include <openssl/sm3.h>
-#include <openssl/x509.h>
 #include <iostream>
 #include <string>
+#ifdef FISCO_SDF
+#include <openssl/evp.h>
+#include <openssl/pem.h>
+#include <openssl/x509.h>
+#endif
 #define CRYPTO_LOG(LEVEL) LOG(LEVEL) << "[CRYPTO] "
 
 class SM2
@@ -50,8 +52,9 @@ public:
         size_t& _zValueLen);
     
     static int sm2GetZFromPublicKey(std::string const & _publicKeyHex, unsigned char* _zValue, size_t& _zValueLen);
-
+#ifdef FISCO_SDF
     static std::string get_certpub(const std::string& certfile);
+#endif
 
 private:
     std::string publicKey;

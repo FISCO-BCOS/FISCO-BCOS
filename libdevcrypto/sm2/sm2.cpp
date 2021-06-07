@@ -118,6 +118,12 @@ bool SM2::sign(const char* originalData, int originalDataLen, const string& priv
     unsigned char* r, unsigned char* s)
 {
     bool lresult = false;
+#ifndef FISCO_SDF
+    SM3_CTX sm3Ctx;
+    unsigned char zValue[SM3_DIGEST_LENGTH];
+    size_t zValueLen;
+#endif
+
     EC_KEY* sm2Key = NULL;
 
     ECDSA_SIG* signData = NULL;
@@ -127,10 +133,6 @@ bool SM2::sign(const char* originalData, int originalDataLen, const string& priv
     BN_CTX* ctx = NULL;
     int len = 0;
     int i = 0;
-
-    const EC_GROUP* group;
-    EC_POINT* pubkey;
-
 
     ctx = BN_CTX_new();
 
@@ -144,6 +146,9 @@ bool SM2::sign(const char* originalData, int originalDataLen, const string& priv
     sm2Key = EC_KEY_new_by_curve_name(NID_sm2);
     EC_KEY_set_private_key(sm2Key, res);
 
+#ifdef FISCO_SDF
+    const EC_GROUP* group;
+    EC_POINT* pubkey;
     group = EC_KEY_get0_group(sm2Key);
     pubkey = EC_POINT_new(group);
     if (!pubkey)
@@ -159,15 +164,37 @@ bool SM2::sign(const char* originalData, int originalDataLen, const string& priv
         goto err;
     }
     EC_KEY_set_public_key(sm2Key, pubkey);
+#else
+    zValueLen = sizeof(zValue);
+    if (!sm2GetZ(privateKey, (const EC_KEY*)sm2Key, zValue, zValueLen))
+    {
+        CRYPTO_LOG(ERROR) << "[SM2::sign] Error Of Compute Z";
+        goto err;
+    }
+    // SM3 Degist
+    SM3_Init(&sm3Ctx);
+    SM3_Update(&sm3Ctx, zValue, zValueLen);
+    SM3_Update(&sm3Ctx, originalData, originalDataLen);
+    SM3_Final(zValue, &sm3Ctx);
+#endif
 
+#ifdef FISCO_SDF
     signData = SM2_do_sign(sm2Key, EVP_sm3(), (const uint8_t *)SM2_DEFAULT_USERID, strlen(SM2_DEFAULT_USERID), 
         (const uint8_t *)originalData, originalDataLen);
+#else
+    signData = ECDSA_do_sign_ex(zValue, zValueLen, NULL, NULL, sm2Key);
+#endif
     if (signData == NULL)
     {
         CRYPTO_LOG(ERROR) << "[SM2::sign] Error Of SM2 Signature";
         goto err;
     }
+
+#ifdef FISCO_SDF
     len = BN_bn2bin(ECDSA_SIG_get0_r(signData), r);
+#else
+    len = BN_bn2bin(signData->r, r);
+#endif
     for (i = 31; len > 0 && len != 32; --len, --i)
     {
         r[i] = r[len - 1];
@@ -176,7 +203,11 @@ bool SM2::sign(const char* originalData, int originalDataLen, const string& priv
     {
         r[i] = 0;
     }
+#ifdef FISCO_SDF
     len = BN_bn2bin(ECDSA_SIG_get0_s(signData), s);
+#else
+    len = BN_bn2bin(signData->s, s);
+#endif
     for (i = 31; len > 0 && len != 32; --len, --i)
     {
         s[i] = s[len - 1];
@@ -209,7 +240,13 @@ int SM2::verify(const unsigned char* _signData, size_t, const unsigned char* _or
     EC_POINT* pubPoint = NULL;
     EC_GROUP* sm2Group = NULL;
     ECDSA_SIG* signData = NULL;
+#ifdef FISCO_SDF
     BIGNUM *bn_r, *bn_s;
+#else
+    SM3_CTX sm3Ctx;
+    unsigned char zValue[SM3_DIGEST_LENGTH];
+    size_t zValueLen = SM3_DIGEST_LENGTH;
+#endif
     auto pubHex = toHex(_publicKey, _publicKey + 64, "04");
     sm2Group = EC_GROUP_new_by_curve_name(NID_sm2);
     auto rHex = toHex(_signData, _signData + 32, "");
@@ -251,10 +288,27 @@ int SM2::verify(const unsigned char* _signData, size_t, const unsigned char* _or
         goto err;
     }
 
+#ifndef FISCO_SDF
+    if (!ECDSA_sm2_get_Z((const EC_KEY*)sm2Key, NULL, NULL, 0, zValue, &zValueLen))
+    {
+        CRYPTO_LOG(ERROR) << "[SM2::veify] Error Of Compute Z" << LOG_KV("pubKey", pubHex);
+        goto err;
+    }
+    // SM3 Degist
+    SM3_Init(&sm3Ctx);
+    SM3_Update(&sm3Ctx, zValue, zValueLen);
+    SM3_Update(&sm3Ctx, _originalData, _originalLength);
+    SM3_Final(zValue, &sm3Ctx);
+#endif
     /*Now Verify it*/
     signData = ECDSA_SIG_new();
+#ifdef FISCO_SDF
     bn_r = BN_bin2bn(_signData, 32, NULL);
     if (!bn_r)
+#else
+    BN_bin2bn(_signData, 32, signData->r);
+    if (!signData->r)
+#endif
     {
         CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of BN_bin2bn r" << LOG_KV("pubKey", pubHex);
         goto err;
@@ -265,10 +319,13 @@ int SM2::verify(const unsigned char* _signData, size_t, const unsigned char* _or
         CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR BN_bin2bn s" << LOG_KV("pubKey", pubHex);
         goto err;
     }
+#ifdef FISCO_SDF
     ECDSA_SIG_set0(signData, bn_r, bn_s);
-
     if (SM2_do_verify(sm2Key, EVP_sm3(), signData, (const uint8_t *)SM2_DEFAULT_USERID, strlen(SM2_DEFAULT_USERID), 
         (const uint8_t *)_originalData, _originalLength) != 1)
+#else
+    if (ECDSA_do_verify(zValue, zValueLen, signData, sm2Key) != 1)
+#endif
     {
         CRYPTO_LOG(ERROR) << "[SM2::veify] Error Of SM2 Verify" << LOG_KV("pubKey", pubHex);
         goto err;
@@ -298,7 +355,11 @@ int SM2::sm2GetZ(std::string const& _privateKey, const EC_KEY* _ecKey, unsigned 
         _zValueLen = cache.second;
         return 1;
     }
+#ifdef FISCO_SDF
     auto ret = SM2_compute_z_digest(_zValue, EVP_sm3(), (const uint8_t *)SM2_DEFAULT_USERID, strlen(SM2_DEFAULT_USERID), _ecKey);
+#else
+    auto ret = ECDSA_sm2_get_Z(_ecKey, NULL, NULL, 0, _zValue, &_zValueLen);
+#endif
     // clear the cache if over the capacity limit
     if (c_mapTozValueCache.size() >= c_maxMapTozValueCacheSize)
     {
@@ -355,13 +416,18 @@ int SM2::sm2GetZFromPublicKey(std::string const & _publicKeyHex, unsigned char* 
                           << LOG_KV("pubKey", _publicKeyHex);
         goto err;
     }
-
+#ifdef FISCO_SDF
     if (!SM2_compute_z_digest(_zValue, EVP_sm3(), (const uint8_t *)SM2_DEFAULT_USERID, strlen(SM2_DEFAULT_USERID), sm2Key))
+#else
+    if (!ECDSA_sm2_get_Z((const EC_KEY*)sm2Key, NULL, NULL, 0, _zValue, &_zValueLen))
+#endif
     {
         CRYPTO_LOG(ERROR) << "[SM2::veify] Error Of Compute Z" << LOG_KV("pubKey", _publicKeyHex);
         goto err;
     }
+#ifdef FISCO_SDF
     _zValueLen = 32;
+#endif
     lresult = true;
     err:
         if (sm2Key)
@@ -372,7 +438,7 @@ int SM2::sm2GetZFromPublicKey(std::string const & _publicKeyHex, unsigned char* 
             EC_GROUP_free(sm2Group);
         return lresult;
 }
-
+#ifdef FISCO_SDF
 std::string SM2::get_certpub(const std::string& certfile)
 {
     BIO* bio;
@@ -433,7 +499,7 @@ err:
         X509_free(x);
     return pubKey;
 }
-
+#endif
 string SM2::priToPub(const string& pri)
 {
     EC_KEY* sm2Key = NULL;
