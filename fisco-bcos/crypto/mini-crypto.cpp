@@ -74,6 +74,7 @@ int main(int, const char* argv[])
     cout << "*** soft sm4 enc, hardware decrypt: " << softHardSM4 << endl;
 
 
+
     // const std::string dedata = sm4Decrypt((const unsigned char*)endata.data(),
     // endata.size(),(const unsigned char*)key.data(), key.size(), (const unsigned char*)iv.data());
     // BOOST_CHECK_EQUAL(plainData, dedata);
@@ -91,6 +92,7 @@ int main(int, const char* argv[])
         (const unsigned char*)keyWithoutIv.data());
 
     int softHardSM4WithoutIv = plainDataWithoutIv.compare(dedataWithoutIv);
+
     cout << "*** soft sm4 enc, hardware decrypt without iv: " << softHardSM4WithoutIv << endl;
 
     std::cout << "*** internal key sign and verify" << std::endl;
@@ -99,6 +101,7 @@ int main(int, const char* argv[])
     std::shared_ptr<crypto::Signature> sdfInternalSignResult = SDFSM2Sign(keyPair2, h);
     std::cout << "*** internal sign result: r = " << sdfInternalSignResult->r.hex()
               << " s = " << sdfInternalSignResult->s.hex() << std::endl;
+
     getchar();
     std::cout << "#### begin performance test" << std::endl;
 
