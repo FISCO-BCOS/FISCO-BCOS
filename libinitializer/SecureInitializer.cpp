@@ -615,24 +615,26 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
             exit(1);
         }
     }
-    @ @-481, 19 + 518,
-        20 @ @ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
-            BOOST_THROW_EXCEPTION(CertificateNotExists());
-}
+    else
+    {
+        INITIALIZER_LOG(ERROR) << LOG_BADGE("SecureInitializerGM")
+                               << LOG_DESC("certificate doesn't exist!");
+        BOOST_THROW_EXCEPTION(CertificateNotExists());
+    }
     // encrypt certificate should set after connect certificate
-sslContext->use_certificate_file(enCert, boost::asio::ssl::context::file_format::pem);
-if (SSL_CTX_use_enc_PrivateKey_file(sslContext->native_handle(), enKey.c_str(), SSL_FILETYPE_PEM) >
-    0)
-{
-    INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializerGM")
-                           << LOG_DESC("use GM enc ca certificate") << LOG_KV("file", enKey);
-}
-else
-{
-    INITIALIZER_LOG(ERROR) << LOG_BADGE("SecureInitializerGM")
-                           << LOG_DESC("GM enc ca certificate not exists!");
-    BOOST_THROW_EXCEPTION(CertificateNotExists());
-}
+    sslContext->use_certificate_file(enCert, boost::asio::ssl::context::file_format::pem);
+    if (SSL_CTX_use_enc_PrivateKey_file(
+            sslContext->native_handle(), enKey.c_str(), SSL_FILETYPE_PEM) > 0)
+    {
+        INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializerGM")
+                               << LOG_DESC("use GM enc ca certificate") << LOG_KV("file", enKey);
+    }
+    else
+    {
+        INITIALIZER_LOG(ERROR) << LOG_BADGE("SecureInitializerGM")
+                               << LOG_DESC("GM enc ca certificate not exists!");
+        BOOST_THROW_EXCEPTION(CertificateNotExists());
+    }
 #endif
 
     auto caCertContent = contents(caCert);

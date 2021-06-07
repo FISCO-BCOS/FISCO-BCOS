@@ -313,8 +313,13 @@ int SM2::verify(const unsigned char* _signData, size_t, const unsigned char* _or
         CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of BN_bin2bn r" << LOG_KV("pubKey", pubHex);
         goto err;
     }
+#ifdef FISCO_SDF
     bn_s = BN_bin2bn(_signData + 32, 32, NULL);
     if (!bn_s)
+#else
+    BN_bin2bn(_signData + 32, 32, signData->s);
+    if (!signData->s)
+#endif
     {
         CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR BN_bin2bn s" << LOG_KV("pubKey", pubHex);
         goto err;
