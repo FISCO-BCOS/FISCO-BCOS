@@ -20,6 +20,8 @@
  *  @date 20181022
  */
 
+#define OPENSSL_LOAD_CONF
+
 #include "SecureInitializer.h"
 #include "libdevcrypto/CryptoInterface.h"
 #include <libconfig/GlobalConfigure.h>
@@ -29,6 +31,9 @@
 #include <libsecurity/EncryptedFile.h>
 #include <openssl/engine.h>
 #include <openssl/rsa.h>
+#ifdef FISCO_SDF
+#include <openssl/evp.h>
+#endif
 #include <boost/algorithm/string/replace.hpp>
 #include <iostream>
 
@@ -49,6 +54,8 @@ void SecureInitializer::initConfigWithCrypto(const boost::property_tree::ptree& 
     std::string caCert = dataPath + "/" + pt.get<std::string>(sectionName + ".ca_cert", "ca.crt");
     std::string caPath = dataPath + "/" + pt.get<std::string>(sectionName + ".ca_path", "");
     bytes keyContent;
+
+    // Read disk encryption key file
     if (!key.empty())
     {
         try
@@ -68,6 +75,7 @@ void SecureInitializer::initConfigWithCrypto(const boost::property_tree::ptree& 
         }
     }
 
+    // Load disk encryption key content to ecKey
     std::shared_ptr<EC_KEY> ecKey;
     if (!keyContent.empty())
     {
@@ -381,6 +389,140 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
     std::string caPath = dataPath + "/" + pt.get<std::string>(sectionName + ".ca_path", "");
     std::string enKey = dataPath + pt.get<std::string>(sectionName + ".en_key", "gmennode.key");
     std::string enCert = dataPath + pt.get<std::string>(sectionName + ".en_cert", "gmennode.crt");
+#ifdef FISCO_SDF
+    bool use_hsm_key = pt.get<bool>("chain.sm_crypto_hsm_key", false);
+    std::string keyId = pt.get<std::string>(sectionName + ".key_id", "");
+    std::string enckeyId = pt.get<std::string>(sectionName + ".enckey_id", "");
+
+    std::shared_ptr<boost::asio::ssl::context> sslContext =
+        std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::gmtls);
+
+    KeyPair keyPair;
+    keyPair.set_pub(cert);
+    if (use_hsm_key)
+    {
+        std::string keyName = "sm2_" + keyId;
+        std::string encKeyName = "sm2_" + enckeyId;
+        boost::asio::const_buffer keyBuffer(keyName.c_str(), keyName.length());
+        boost::asio::const_buffer keyBufferEnc(encKeyName.c_str(), encKeyName.length());
+        INITIALIZER_LOG(INFO) << LOG_BADGE("SecureInitializerGM use_hsm_key")
+                              << LOG_KV("keyId", keyId) << LOG_KV("enckeyId", enckeyId);
+
+        keyPair.setKeyIndex(std::stoi(keyId.c_str()));
+        INITIALIZER_LOG(INFO) << LOG_BADGE("SecureInitializerGM")
+                              << LOG_KV("keyPair.keyId", keyPair.keyIndex());
+        sslContext->use_private_key(keyBuffer, boost::asio::ssl::context::file_format::engine);
+        sslContext->use_private_key(keyBufferEnc, boost::asio::ssl::context::file_format::engine);
+    }
+    else
+    {
+        bytes keyContent, keyContentEnc;
+        // Load gmnode.key
+        if (!key.empty())
+        {
+            try
+            {
+                if (g_BCOSConfig.diskEncryption.enable)
+                {
+                    keyContent = EncryptedFile::decryptContents(key);
+                    keyContentEnc = EncryptedFile::decryptContents(key);
+                }
+                else
+                {
+                    keyContent = contents(key);
+                    keyContentEnc = contents(enKey);
+                }
+            }
+            catch (std::exception& e)
+            {
+                INITIALIZER_LOG(ERROR) << LOG_BADGE("SecureInitializerGM")
+                                       << LOG_DESC("open privateKey failed") << LOG_KV("file", key);
+                BOOST_THROW_EXCEPTION(PrivateKeyError());
+            }
+        }
+        boost::asio::const_buffer keyBuffer(keyContent.data(), keyContent.size());
+        boost::asio::const_buffer keyBufferEnc(keyContentEnc.data(), keyContentEnc.size());
+        sslContext->use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
+        sslContext->use_private_key(keyBufferEnc, boost::asio::ssl::context::file_format::pem);
+        std::shared_ptr<EC_KEY> ecKey;
+        if (!keyContent.empty())
+        {
+            try
+            {
+                INITIALIZER_LOG(DEBUG)
+                    << LOG_BADGE("SecureInitializerGM") << LOG_DESC("loading privateKey");
+                std::shared_ptr<BIO> bioMem(BIO_new(BIO_s_mem()), [&](BIO* p) { BIO_free(p); });
+                BIO_write(bioMem.get(), keyContent.data(), keyContent.size());
+
+                std::shared_ptr<EVP_PKEY> evpPKey(
+                    PEM_read_bio_PrivateKey(bioMem.get(), NULL, NULL, NULL),
+                    [](EVP_PKEY* p) { EVP_PKEY_free(p); });
+
+                if (!evpPKey)
+                {
+                    BOOST_THROW_EXCEPTION(PrivateKeyError());
+                }
+
+                ecKey.reset(EVP_PKEY_get1_EC_KEY(evpPKey.get()), [](EC_KEY* p) { EC_KEY_free(p); });
+            }
+            catch (dev::Exception& e)
+            {
+                INITIALIZER_LOG(ERROR)
+                    << LOG_BADGE("SecureInitializerGM") << LOG_DESC("parse privateKey failed")
+                    << LOG_KV("EINFO", boost::diagnostic_information(e));
+                BOOST_THROW_EXCEPTION(e);
+            }
+        }
+        else
+        {
+            INITIALIZER_LOG(ERROR)
+                << LOG_BADGE("SecureInitializerGM") << LOG_DESC("privateKey doesn't exist!");
+            BOOST_THROW_EXCEPTION(PrivateKeyNotExists());
+        }
+
+        std::shared_ptr<const BIGNUM> ecPrivateKey(
+            EC_KEY_get0_private_key(ecKey.get()), [](const BIGNUM*) {});
+
+        std::shared_ptr<char> privateKeyData(
+            BN_bn2hex(ecPrivateKey.get()), [](char* p) { OPENSSL_free(p); });
+
+        std::string keyHex(privateKeyData.get());
+        if (keyHex.size() != 64u)
+        {
+            throw std::invalid_argument("Private Key file error! Missing bytes!");
+        }
+
+        keyPair = KeyPair(Secret(keyHex));
+        INITIALIZER_LOG(INFO) << LOG_BADGE("SecureInitializerGM") << LOG_DESC("get pub of node")
+                              << LOG_KV("nodeID", keyPair.pub().hex());
+    }
+    if (!cert.empty() && !contents(cert).empty() && !enCert.empty() && !contents(enCert).empty())
+    {
+        INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializerGM")
+                               << LOG_DESC("use user certificate") << LOG_KV("file", cert);
+        INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializerGM")
+                               << LOG_DESC("use user enc certificate") << LOG_KV("file", enCert);
+        sslContext->use_certificate_file(cert, boost::asio::ssl::context::file_format::pem);
+        sslContext->use_certificate_file(enCert, boost::asio::ssl::context::file_format::pem);
+        if (!SSL_CTX_get0_certificate(sslContext->native_handle()))
+        {
+            INITIALIZER_LOG(ERROR)
+                << LOG_BADGE("SecureInitializer")
+                << LOG_DESC("certificate load failed, please check") << LOG_KV("file", cert)
+                << LOG_DESC("certificate load failed, please check") << LOG_KV("file", enCert);
+            ERROR_OUTPUT << LOG_BADGE("SecureInitializer")
+                         << LOG_DESC("certificate load failed, please check")
+                         << LOG_KV("file", cert) << LOG_KV("file", enCert) << std::endl;
+            exit(1);
+        }
+    }
+    else
+    {
+        INITIALIZER_LOG(ERROR) << LOG_BADGE("SecureInitializerGM")
+                               << LOG_DESC("certificate doesn't exist!");
+        BOOST_THROW_EXCEPTION(CertificateNotExists());
+    }
+#else
     bytes keyContent;
     if (!key.empty())
     {
@@ -398,7 +540,6 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
             BOOST_THROW_EXCEPTION(PrivateKeyError());
         }
     }
-
     std::shared_ptr<EC_KEY> ecKey;
     if (!keyContent.empty())
     {
@@ -474,26 +615,25 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
             exit(1);
         }
     }
-    else
-    {
-        INITIALIZER_LOG(ERROR) << LOG_BADGE("SecureInitializerGM")
-                               << LOG_DESC("certificate doesn't exist!");
-        BOOST_THROW_EXCEPTION(CertificateNotExists());
-    }
+    @ @-481, 19 + 518,
+        20 @ @ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
+            BOOST_THROW_EXCEPTION(CertificateNotExists());
+}
     // encrypt certificate should set after connect certificate
-    sslContext->use_certificate_file(enCert, boost::asio::ssl::context::file_format::pem);
-    if (SSL_CTX_use_enc_PrivateKey_file(
-            sslContext->native_handle(), enKey.c_str(), SSL_FILETYPE_PEM) > 0)
-    {
-        INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializerGM")
-                               << LOG_DESC("use GM enc ca certificate") << LOG_KV("file", enKey);
-    }
-    else
-    {
-        INITIALIZER_LOG(ERROR) << LOG_BADGE("SecureInitializerGM")
-                               << LOG_DESC("GM enc ca certificate not exists!");
-        BOOST_THROW_EXCEPTION(CertificateNotExists());
-    }
+sslContext->use_certificate_file(enCert, boost::asio::ssl::context::file_format::pem);
+if (SSL_CTX_use_enc_PrivateKey_file(sslContext->native_handle(), enKey.c_str(), SSL_FILETYPE_PEM) >
+    0)
+{
+    INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializerGM")
+                           << LOG_DESC("use GM enc ca certificate") << LOG_KV("file", enKey);
+}
+else
+{
+    INITIALIZER_LOG(ERROR) << LOG_BADGE("SecureInitializerGM")
+                           << LOG_DESC("GM enc ca certificate not exists!");
+    BOOST_THROW_EXCEPTION(CertificateNotExists());
+}
+#endif
 
     auto caCertContent = contents(caCert);
     if (!caCert.empty() && !caCertContent.empty())
@@ -571,6 +711,10 @@ std::shared_ptr<bas::context> SecureInitializer::SSLContextWithSMCrypto(Usage _u
 
 void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
 {
+#ifdef FISCO_SDF
+    OpenSSL_add_all_algorithms();
+#endif
+
     if (g_BCOSConfig.SMCrypto())
     {
         initConfigWithSMCrypto(pt);

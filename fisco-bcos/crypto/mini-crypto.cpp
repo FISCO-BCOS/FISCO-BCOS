@@ -45,7 +45,11 @@ int main(int, const char* argv[])
     std::string pubHex = toHex(kp.pub().data(), kp.pub().data() + 64, "04");
     h256 h(dev::fromHex("0x68b5bae5fe19851624298fd1e9b4d788627ac27c13aad3240102ffd292a17911"));
     std::shared_ptr<crypto::Signature> swResult = sm2Sign(kp, h);
+    std::cout << "****before sdf sm2 sign" << endl;
     std::shared_ptr<crypto::Signature> sdfResult = SDFSM2Sign(kp, h);
+    std::cout << ">>> after sdf sm2 sign" << endl;
+    std::cout << "*** internal sign result: r = " << sdfResult->r.hex()
+              << " s = " << sdfResult->s.hex() << std::endl;
     bool result1 = sm2Verify(kp.pub(), swResult, h);
     cout << "*** soft sign, soft verify :" << result1 << endl;
     bool result2 = sm2Verify(kp.pub(), sdfResult, h);
@@ -67,7 +71,7 @@ int main(int, const char* argv[])
     const std::string dedata = SDFSM4Decrypt((const unsigned char*)endata.data(), endata.size(),
         (const unsigned char*)key.data(), key.size(), (const unsigned char*)iv.data());
     int softHardSM4 = plainData.compare(dedata);
-    cout << "*** soft sm4 enc, hardware decrypt: " << softHardSM4 == 0 << endl;
+    cout << "*** soft sm4 enc, hardware decrypt: " << softHardSM4 << endl;
 
 
     // const std::string dedata = sm4Decrypt((const unsigned char*)endata.data(),
@@ -87,8 +91,14 @@ int main(int, const char* argv[])
         (const unsigned char*)keyWithoutIv.data());
 
     int softHardSM4WithoutIv = plainDataWithoutIv.compare(dedataWithoutIv);
-    cout << "*** soft sm4 enc, hardware decrypt without iv: " << softHardSM4WithoutIv == 0 << endl;
+    cout << "*** soft sm4 enc, hardware decrypt without iv: " << softHardSM4WithoutIv << endl;
 
+    std::cout << "*** internal key sign and verify" << std::endl;
+    KeyPair keyPair2 = KeyPair::create();
+    keyPair2.setKeyIndex(1);
+    std::shared_ptr<crypto::Signature> sdfInternalSignResult = SDFSM2Sign(keyPair2, h);
+    std::cout << "*** internal sign result: r = " << sdfInternalSignResult->r.hex()
+              << " s = " << sdfInternalSignResult->s.hex() << std::endl;
     getchar();
     std::cout << "#### begin performance test" << std::endl;
 

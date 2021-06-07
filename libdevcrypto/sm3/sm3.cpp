@@ -39,7 +39,15 @@ int SM3Hash::final(unsigned char* md, SM3_CTX* c)
 
 unsigned char* SM3Hash::sm3(const unsigned char* d, size_t n, unsigned char* md)
 {
+#ifdef FISCO_SDF
+    SM3_CTX ctx;
+    ::SM3_Init(&ctx);
+    ::SM3_Update(&ctx, d, n);
+    ::SM3_Final(md, &ctx);
+    return md;
+#else
     return ::SM3(d, n, md);
+#endif
 }
 
 void SM3Hash::transForm(SM3_CTX* c, const unsigned char* data)
