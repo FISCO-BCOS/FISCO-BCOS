@@ -62,7 +62,8 @@ public:
         createPBFTMsgFactory();
         m_blockFactory = std::make_shared<dev::eth::BlockFactory>();
         m_reqCache = std::make_shared<PBFTReqCache>();
-        m_broacastTargetsFilter = boost::bind(&RotatingPBFTEngine::getIndexBySealer, this, _1);
+        m_broacastTargetsFilter =
+            boost::bind(&RotatingPBFTEngine::getIndexBySealer, this, boost::placeholders::_1);
     }
     // override the virtual function
     std::pair<bool, IDXTYPE> getLeader() const override { return PBFTEngine::getLeader(); }

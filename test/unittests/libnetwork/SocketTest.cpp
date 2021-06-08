@@ -56,7 +56,6 @@ BOOST_AUTO_TEST_CASE(testSocket)
     Socket m_socket(m_io_service, *sslContext, m_endpoint);
     m_socket.ref();
     m_socket.sslref();
-    m_socket.wsref();
     auto endpoint = m_socket.nodeIPEndpoint();
     m_socket.setNodeIPEndpoint(endpoint);
     BOOST_CHECK(m_socket.isConnected() == false);
