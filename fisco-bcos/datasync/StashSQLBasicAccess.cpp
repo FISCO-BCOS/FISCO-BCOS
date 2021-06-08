@@ -239,6 +239,10 @@ int StashSQLBasicAccess::SelectTableDataByNum(int64_t num, TableInfo::Ptr tableI
                     for (int32_t index = 1; index <= columnCnt; ++index)
                     {
                         auto fieldName = ResultSet_getColumnName(result, index);
+                        string field = fieldName;
+                        if (!dev::stringCmpIgnoreCase(field, "pk_id") || !dev::stringCmpIgnoreCase(field, "_hash_")){
+                            continue;
+                        }
                         if (tableWithBlobField)
                         {
                             int size;
