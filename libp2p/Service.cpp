@@ -263,12 +263,11 @@ void Service::onConnect(dev::network::NetworkException e, dev::network::NodeInfo
     }
 
     auto p2pSession = std::make_shared<P2PSession>();
-    auto p2pSessionWeakPtr = std::weak_ptr<P2PSession>(p2pSession);
     p2pSession->setSession(session);
     p2pSession->setNodeInfo(nodeInfo);
     p2pSession->setService(std::weak_ptr<Service>(shared_from_this()));
     p2pSession->session()->setMessageHandler(std::bind(&Service::onMessage, shared_from_this(),
-        std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, p2pSessionWeakPtr));
+        std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, p2pSession));
     p2pSession->start();
     updateStaticNodes(session->socket(), nodeID);
     if (it != m_sessions.end())
@@ -330,15 +329,10 @@ void Service::onDisconnect(dev::network::NetworkException e, P2PSession::Ptr p2p
 }
 
 void Service::onMessage(dev::network::NetworkException e, dev::network::SessionFace::Ptr session,
-    dev::network::Message::Ptr message, std::weak_ptr<P2PSession> p2pSessionWeakPtr)
+    dev::network::Message::Ptr message, P2PSession::Ptr p2pSession)
 {
     try
     {
-        auto p2pSession = p2pSessionWeakPtr.lock();
-        if (!p2pSession)
-        {  // P2PSession is released
-            return;
-        }
         NodeID nodeID = id();
         NodeIPEndpoint nodeIPEndpoint(boost::asio::ip::address(), 0);
         if (session && p2pSession)

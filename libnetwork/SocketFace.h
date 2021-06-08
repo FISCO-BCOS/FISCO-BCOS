@@ -43,7 +43,6 @@ public:
 
     virtual bi::tcp::socket& ref() = 0;
     virtual ba::ssl::stream<bi::tcp::socket>& sslref() = 0;
-    virtual boost::beast::websocket::stream<ba::ssl::stream<bi::tcp::socket>>& wsref() = 0;
 
     virtual const NodeIPEndpoint& nodeIPEndpoint() const = 0;
     virtual void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint) = 0;
