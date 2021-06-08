@@ -23,9 +23,7 @@
 
 #include "sm4.h"
 #include <cstring>
-#ifdef FISCO_SDF
 #include <stdlib.h>
-#endif
 
 int SM4::setKey(const unsigned char* userKey, size_t length)
 {

@@ -44,7 +44,7 @@ std::shared_ptr<crypto::Signature> dev::crypto::SDFSM2Sign(
 {
     CryptoProvider& provider = SDFCryptoProvider::GetInstance();
     Key key = Key();
-    if (_keyPair.isInternalKey() == true)
+    if (_keyPair.isInternalKey())
     {
         key = Key((_keyPair.keyIndex() + 1) / 2, NULL);
         CRYPTO_LOG(DEBUG) << "[HSMSignature::key] is internal key "
@@ -99,8 +99,6 @@ std::shared_ptr<crypto::Signature> dev::crypto::SDFSM2Sign(
                           << LOG_KV("error", provider.GetErrorMessage(code));
         return nullptr;
     }
-    // cout<<"hash "<< toHex(hashResult)<<endl;
-    cout << "Signature = " << toHex(signature.data(), signature.data() + 64, "") << endl;
     h256 r((byte const*)signature.data(),
         FixedHash<32>::ConstructFromPointerType::ConstructFromPointer);
     h256 s((byte const*)(signature.data() + 32),
