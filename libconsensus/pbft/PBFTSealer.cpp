@@ -93,8 +93,9 @@ void PBFTSealer::start()
 {
     if (m_enableDynamicBlockSize)
     {
-        m_pbftEngine->onTimeout(boost::bind(&PBFTSealer::onTimeout, this, _1));
-        m_pbftEngine->onCommitBlock(boost::bind(&PBFTSealer::onCommitBlock, this, _1, _2, _3));
+        m_pbftEngine->onTimeout(boost::bind(&PBFTSealer::onTimeout, this, boost::placeholders::_1));
+        m_pbftEngine->onCommitBlock(boost::bind(&PBFTSealer::onCommitBlock, this,
+            boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3));
         m_lastBlockNumber = m_blockChain->number();
     }
     m_pbftEngine->start();

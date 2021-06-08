@@ -136,6 +136,27 @@ enum ContractStatus
     Count
 };
 
+inline bool operator==(const u256& _value, PrecompiledError _precompiledError)
+{
+    return _value == u256(static_cast<int>(_precompiledError));
+}
+
+inline bool operator==(const s256& _value, PrecompiledError _precompiledError)
+{
+    int precompiledErrorValue = static_cast<int>(_precompiledError);
+    return _value.convert_to<int>() == precompiledErrorValue;
+}
+
+inline bool operator==(PrecompiledError _precompiledError, const u256& _value)
+{
+    return _value == u256(static_cast<int>(_precompiledError));
+}
+
+inline bool operator==(PrecompiledError _precompiledError, const s256& _value)
+{
+    int precompiledErrorValue = static_cast<int>(_precompiledError);
+    return _value.convert_to<int>() == precompiledErrorValue;
+}
 class PrecompiledException : public dev::Exception
 {
 public:

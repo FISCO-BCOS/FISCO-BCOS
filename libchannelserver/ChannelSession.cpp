@@ -24,7 +24,7 @@
 #include "ChannelSession.h"
 #include "ChannelException.h"
 #include <libdevcore/Common.h>
-#include <boost/bind.hpp>
+#include <boost/bind/bind.hpp>
 #include <boost/lexical_cast.hpp>
 #include <iostream>
 
@@ -178,7 +178,7 @@ void ChannelSession::setSSLSocket(
 {
     _sslSocket = socket;
 
-    _idleTimer = std::make_shared<boost::asio::deadline_timer>(_sslSocket->get_io_service());
+    _idleTimer = std::make_shared<boost::asio::deadline_timer>(*_ioService);
 }
 
 void ChannelSession::startRead()
@@ -317,7 +317,7 @@ void ChannelSession::startWrite()
 
         auto session = std::weak_ptr<ChannelSession>(shared_from_this());
 
-        _sslSocket->get_io_service().post([session, buffer] {
+        _ioService->post([session, buffer] {
             auto s = session.lock();
             if (s)
             {

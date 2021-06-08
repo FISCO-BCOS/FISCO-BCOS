@@ -41,6 +41,58 @@ using namespace std;
 using namespace dev;
 using namespace dev::initializer;
 
+
+#ifdef FISCO_SDF
+static void openssl_debug_message(const std::string& _method)
+{
+    char buf[256] = {0};
+    auto error = ::ERR_get_error();
+    ::ERR_error_string_n(error, buf, sizeof(buf));
+    if (error != 0)
+    {
+        INITIALIZER_LOG(WARNING) << LOG_BADGE("OpenSSL") << LOG_DESC("openssl error message")
+                                 << LOG_KV("method", _method) << LOG_KV("error", error)
+                                 << LOG_KV("desc", std::string(buf));
+    }
+}
+
+static ENGINE* try_load_engine(const char* engine = "sdf")
+{
+    ::ENGINE_load_builtin_engines();
+    openssl_debug_message("ENGINE_load_builtin_engines");
+    ENGINE* e = ::ENGINE_by_id(engine);
+    openssl_debug_message("ENGINE_by_id");
+    if (!e)
+    {
+        e = ::ENGINE_by_id("dynamic");
+        openssl_debug_message("ENGINE_by_id");
+        if (e)
+        {
+            if (!::ENGINE_ctrl_cmd_string(e, "SO_PATH", engine, 0) ||
+                !::ENGINE_ctrl_cmd_string(e, "LOAD", NULL, 0))
+            {
+                ::ENGINE_free(e);
+                e = NULL;
+            }
+        }
+    }
+
+    if (e)
+    {
+        ::ENGINE_set_default(e, ENGINE_METHOD_ALL);
+        openssl_debug_message("ENGINE_set_default");
+    }
+    else
+    {
+        INITIALIZER_LOG(ERROR) << LOG_BADGE("SecureInitializer")
+                               << LOG_DESC("try_load_engine failed");
+        exit(1);
+    }
+
+    return e;
+}
+#endif
+
 void SecureInitializer::initConfigWithCrypto(const boost::property_tree::ptree& pt)
 {
     std::string sectionName = "secure";
@@ -394,8 +446,15 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
     std::string keyId = pt.get<std::string>(sectionName + ".key_id", "");
     std::string enckeyId = pt.get<std::string>(sectionName + ".enckey_id", "");
 
+    // create SSL_CTX* first then use it as params to construct context
+    auto handle = ::SSL_CTX_new(::GMTLS_method());
+    if (!handle)
+    {
+        BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_new error"));
+    }
+
     std::shared_ptr<boost::asio::ssl::context> sslContext =
-        std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::gmtls);
+        std::make_shared<boost::asio::ssl::context>(handle);
 
     KeyPair keyPair;
     keyPair.set_pub(cert);
@@ -411,8 +470,76 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
         keyPair.setKeyIndex(std::stoi(keyId.c_str()));
         INITIALIZER_LOG(INFO) << LOG_BADGE("SecureInitializerGM")
                               << LOG_KV("keyPair.keyId", keyPair.keyIndex());
-        sslContext->use_private_key(keyBuffer, boost::asio::ssl::context::file_format::engine);
-        sslContext->use_private_key(keyBufferEnc, boost::asio::ssl::context::file_format::engine);
+
+        ENGINE* e = ::ENGINE_get_pkey_meth_engine(EVP_PKEY_SM2);
+        if (!e)
+        {
+            BOOST_THROW_EXCEPTION(std::runtime_error("ENGINE_get_pkey_meth_engine error"));
+        }
+
+        {
+            char key_id[32] = {0};
+            memcpy(key_id, keyBuffer.data(), keyBuffer.size());
+
+            std::shared_ptr<EVP_PKEY> evpPKey(
+                ::ENGINE_load_private_key(e, key_id, NULL, NULL), [](EVP_PKEY* p) {
+                    if (p)
+                    {
+                        ::EVP_PKEY_free(p);
+                    }
+                });
+
+            if (!evpPKey)
+            {
+                INITIALIZER_LOG(ERROR)
+                    << LOG_BADGE("SecureInitializerGM") << LOG_DESC("ENGINE_load_private_key error")
+                    << LOG_KV("keyName", keyName);
+
+                BOOST_THROW_EXCEPTION(std::runtime_error("ENGINE_load_private_key error"));
+            }
+
+            auto ret = ::SSL_CTX_use_PrivateKey(sslContext->native_handle(), evpPKey.get());
+            INITIALIZER_LOG(INFO) << LOG_BADGE("SSL_CTX_use_PrivateKey")
+                                  << LOG_KV("keyName", keyName) << LOG_KV("ret", ret);
+            if (ret <= 0)
+            {
+                BOOST_THROW_EXCEPTION(
+                    std::runtime_error("SSL_CTX_use_PrivateKey ret: " + std::to_string(ret)));
+            }
+        }
+
+        {
+            char key_id[32] = {0};
+            memcpy(key_id, keyBufferEnc.data(), keyBufferEnc.size());
+
+            std::shared_ptr<EVP_PKEY> evpPKey(
+                ::ENGINE_load_private_key(e, key_id, NULL, NULL), [](EVP_PKEY* p) {
+                    if (p)
+                    {
+                        ::EVP_PKEY_free(p);
+                    }
+                });
+
+            if (!evpPKey)
+            {
+                INITIALIZER_LOG(ERROR)
+                    << LOG_BADGE("SecureInitializerGM") << LOG_DESC("ENGINE_load_private_key error")
+                    << LOG_KV("encKeyName", encKeyName);
+                BOOST_THROW_EXCEPTION(std::runtime_error("ENGINE_load_private_key error"));
+            }
+
+
+            auto ret = ::SSL_CTX_use_PrivateKey(sslContext->native_handle(), evpPKey.get());
+            INITIALIZER_LOG(INFO) << LOG_BADGE("SSL_CTX_use_PrivateKey")
+                                  << LOG_KV("encKeyName", encKeyName) << LOG_KV("ret", ret);
+            if (ret <= 0)
+            {
+                INITIALIZER_LOG(ERROR)
+                    << LOG_BADGE("SecureInitializerGM") << LOG_DESC("SSL_CTX_use_PrivateKey error")
+                    << LOG_KV("encKeyName", encKeyName) << LOG_KV("ret", ret);
+                BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_PrivateKey error"));
+            }
+        }
     }
     else
     {
@@ -714,7 +841,7 @@ std::shared_ptr<bas::context> SecureInitializer::SSLContextWithSMCrypto(Usage _u
 void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
 {
 #ifdef FISCO_SDF
-    OpenSSL_add_all_algorithms();
+    try_load_engine("sdf");
 #endif
 
     if (g_BCOSConfig.SMCrypto())

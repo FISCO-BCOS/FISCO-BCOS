@@ -99,6 +99,7 @@ std::shared_ptr<crypto::Signature> dev::crypto::SDFSM2Sign(
                           << LOG_KV("error", provider.GetErrorMessage(code));
         return nullptr;
     }
+
     h256 r((byte const*)signature.data(),
         FixedHash<32>::ConstructFromPointerType::ConstructFromPointer);
     h256 s((byte const*)(signature.data() + 32),

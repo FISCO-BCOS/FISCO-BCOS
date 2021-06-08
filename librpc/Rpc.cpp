@@ -1234,14 +1234,16 @@ void Rpc::addProofToResponse(std::shared_ptr<Json::Value> _response, std::string
 // send transactions and notify receipts with receipt, transactionProof, receiptProof
 std::string Rpc::sendRawTransactionAndGetProof(int _groupID, const std::string& _rlp)
 {
-    return sendRawTransaction(
-        _groupID, _rlp, boost::bind(&Rpc::notifyReceiptWithProof, this, _1, _2, _3, _4));
+    return sendRawTransaction(_groupID, _rlp,
+        boost::bind(&Rpc::notifyReceiptWithProof, this, boost::placeholders::_1,
+            boost::placeholders::_2, boost::placeholders::_3, boost::placeholders::_4));
 }
 
 std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
 {
-    return sendRawTransaction(
-        _groupID, _rlp, boost::bind(&Rpc::notifyReceipt, this, _1, _2, _3, _4));
+    return sendRawTransaction(_groupID, _rlp,
+        boost::bind(&Rpc::notifyReceipt, this, boost::placeholders::_1, boost::placeholders::_2,
+            boost::placeholders::_3, boost::placeholders::_4));
 }
 
 
