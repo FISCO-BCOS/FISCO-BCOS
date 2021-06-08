@@ -31,8 +31,8 @@ ExternalProject_Add(libsdf
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NAME sdf.zip
     DOWNLOAD_NO_PROGRESS 1
-    URL https://github.com/WeBankBlockchain/hsm-crypto/archive/refs/heads/v1.0.0.zip   
-    URL_HASH SHA256=b97edd8c099097a03988f674b0091b801b6f1496210aedc066cede2fd8c7c430
+    URL https://github.com/WeBankBlockchain/hsm-crypto/archive/refs/heads/GMT0018.zip 
+    URL_HASH SHA256=ac91937f8a83aeddaca33892eeaa24b26b48128b332bd83260c7380250e72b6a
     BUILD_IN_SOURCE 1
     LOG_CONFIGURE 1
     LOG_BUILD 1
@@ -52,7 +52,6 @@ file(MAKE_DIRECTORY ${SDF_INCLUDE_DIR})  # Must exist.
 set(SDF_LIB "${SOURCE_DIR}/lib/libsdf-crypto_arm.a")
 find_library(SWSDS swsds /usr/lib)
 if(NOT SWSDS)
-    message()
     message(FATAL " Can not find library libswsds.so under /usr/lib, please make sure you have a crypto PCI card on your machine, as well as the the driver and libraries are installed.")
 endif()
 

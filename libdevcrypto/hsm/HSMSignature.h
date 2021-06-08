@@ -23,7 +23,6 @@
 #include "libdevcore/RLP.h"
 #include "libdevcrypto/Common.h"
 #include "libdevcrypto/Signature.h"
-
 #include <vector>
 namespace dev
 {

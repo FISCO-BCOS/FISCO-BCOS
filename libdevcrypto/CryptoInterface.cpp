@@ -94,8 +94,8 @@ void dev::crypto::initSMCrypto()
 void dev::crypto::initHsmSMCrypto()
 {
     CRYPTO_LOG(INFO) << "[CryptoInterface:initHsmSMCrypto] use hardware secure module";
-    EmptyHash = SDFSM3(bytesConstRef());
-    EmptyTrie = SDFSM3(rlp(""));
+    EmptyHash = sm3(bytesConstRef());
+    EmptyTrie = sm3(rlp(""));
     SignatureFromRLP = sm2SignatureFromRLP;
     SignatureFromBytes = sm2SignatureFromBytes;
     dev::crypto::SymmetricEncrypt = static_cast<std::string (*)(const unsigned char*, size_t,

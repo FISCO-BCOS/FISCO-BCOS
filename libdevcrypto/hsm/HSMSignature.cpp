@@ -30,6 +30,7 @@
 #include <memory>
 #include <vector>
 
+
 using namespace std;
 using namespace dev;
 using namespace dev::crypto;
@@ -43,9 +44,18 @@ std::shared_ptr<crypto::Signature> dev::crypto::SDFSM2Sign(
 {
     CryptoProvider& provider = SDFCryptoProvider::GetInstance();
     Key key = Key();
-    std::shared_ptr<const vector<byte>> privKey = std::make_shared<const std::vector<byte>>(
-        (byte*)_keyPair.secret().data(), (byte*)_keyPair.secret().data() + 32);
-    key.setPrivateKey(privKey);
+    if (_keyPair.isInternalKey())
+    {
+        key = Key((_keyPair.keyIndex() + 1) / 2, NULL);
+        CRYPTO_LOG(DEBUG) << "[HSMSignature::key] is internal key "
+                          << LOG_KV("keyIndex", key.identifier());
+    }
+    else
+    {
+        std::shared_ptr<const vector<byte>> privKey = std::make_shared<const std::vector<byte>>(
+            (byte*)_keyPair.secret().data(), (byte*)_keyPair.secret().data() + 32);
+        key.setPrivateKey(privKey);
+    }
     std::vector<byte> signature(64);
 
     // According to the SM2 standard
@@ -57,11 +67,13 @@ std::shared_ptr<crypto::Signature> dev::crypto::SDFSM2Sign(
     // Get Z
     unsigned char zValue[SM3_DIGEST_LENGTH];
     size_t zValueLen = SM3_DIGEST_LENGTH;
+
+    CRYPTO_LOG(DEBUG) << "[HSMSignature::pubHex] _keyPair = " << _keyPair.pub().hex();
     std::string pubHex = toHex(_keyPair.pub().ref().data(), _keyPair.pub().ref().data() + 64, "04");
     bool getZ = SM2::sm2GetZFromPublicKey(pubHex, zValue, zValueLen);
     if (!getZ)
     {
-        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of compute z" << LOG_KV("pubKey", pubHex);
+        CRYPTO_LOG(ERROR) << "[HSMSignature::sign] ERROR of compute z" << LOG_KV("pubKey", pubHex);
         return nullptr;
     }
 
@@ -72,7 +84,9 @@ std::shared_ptr<crypto::Signature> dev::crypto::SDFSM2Sign(
         SM3_DIGEST_LENGTH, (unsigned char*)hashResult, &uiHashResultLen);
     if (code != SDR_OK)
     {
-        throw provider.GetErrorMessage(code);
+        CRYPTO_LOG(ERROR) << "[HSMSignature::sign] ERROR of compute H(M')"
+                          << LOG_KV("error", provider.GetErrorMessage(code));
+        return nullptr;
     }
 
     // step 3 : signature = Sign(e)
@@ -81,7 +95,9 @@ std::shared_ptr<crypto::Signature> dev::crypto::SDFSM2Sign(
         key, hsm::SM2, (const unsigned char*)hashResult, 32, signature.data(), &signLen);
     if (code != SDR_OK)
     {
-        throw provider.GetErrorMessage(code);
+        CRYPTO_LOG(ERROR) << "[HSMSignature::sign] ERROR of sign"
+                          << LOG_KV("error", provider.GetErrorMessage(code));
+        return nullptr;
     }
     h256 r((byte const*)signature.data(),
         FixedHash<32>::ConstructFromPointerType::ConstructFromPointer);
@@ -110,7 +126,7 @@ bool dev::crypto::SDFSM2Verify(
     bool getZ = SM2::sm2GetZFromPublicKey(pubHex, zValue, zValueLen);
     if (!getZ)
     {
-        CRYPTO_LOG(ERROR) << "[SM2::veify] ERROR of compute z" << LOG_KV("pubKey", pubHex);
+        CRYPTO_LOG(ERROR) << "[HSMSignature::veify] ERROR of compute z" << LOG_KV("pubKey", pubHex);
         return false;
     }
 
