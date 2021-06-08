@@ -217,7 +217,8 @@ public:
         std::shared_ptr<BlockChainImp> _blockChain =
             std::dynamic_pointer_cast<BlockChainImp>(blockChain);
 
-        blockVerifier->setNumberHash(boost::bind(&BlockChainImp::numberHash, _blockChain, _1));
+        blockVerifier->setNumberHash(
+            boost::bind(&BlockChainImp::numberHash, _blockChain, boost::placeholders::_1));
 
         auto number = blockChain->number();
         auto parentBlock = blockChain->getBlockByNumber(number);
