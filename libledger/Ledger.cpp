@@ -254,7 +254,8 @@ bool Ledger::initBlockVerifier()
     blockVerifier->setExecutiveContextFactory(m_dbInitializer->executiveContextFactory());
     std::shared_ptr<BlockChainImp> blockChain =
         std::dynamic_pointer_cast<BlockChainImp>(m_blockChain);
-    blockVerifier->setNumberHash(boost::bind(&BlockChainImp::numberHash, blockChain, _1));
+    blockVerifier->setNumberHash(
+        boost::bind(&BlockChainImp::numberHash, blockChain, boost::placeholders::_1));
     blockVerifier->setEvmFlags(m_param->mutableGenesisParam().evmFlags);
 
     m_blockVerifier = blockVerifier;

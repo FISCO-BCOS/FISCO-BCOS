@@ -77,11 +77,13 @@ public:
         setName(threadName);
 
         /// register checkSealerList to blockSync for check SealerList
-        m_blockSync->registerConsensusVerifyHandler(boost::bind(&PBFTEngine::checkBlock, this, _1));
+        m_blockSync->registerConsensusVerifyHandler(
+            boost::bind(&PBFTEngine::checkBlock, this, boost::placeholders::_1));
 
         m_threadPool =
             std::make_shared<dev::ThreadPool>("pbftPool-" + std::to_string(m_groupId), 1);
-        m_broacastTargetsFilter = boost::bind(&PBFTEngine::getIndexBySealer, this, _1);
+        m_broacastTargetsFilter =
+            boost::bind(&PBFTEngine::getIndexBySealer, this, boost::placeholders::_1);
 
         m_consensusSet = std::make_shared<std::set<dev::h512>>();
 

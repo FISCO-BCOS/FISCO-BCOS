@@ -95,7 +95,7 @@ PrecompiledExecResult::Ptr CryptoPrecompiled::call(
             break;
         }
         // no defined function
-        callResult->setExecResult(abi.abiIn("", u256(CODE_UNKNOW_FUNCTION_CALL)));
+        callResult->setExecResult(abi.abiIn("", u256((uint32_t)CODE_UNKNOW_FUNCTION_CALL)));
     } while (0);
     return callResult;
 }

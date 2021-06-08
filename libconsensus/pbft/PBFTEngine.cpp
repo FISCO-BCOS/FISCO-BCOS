@@ -49,11 +49,11 @@ void PBFTEngine::start()
     createPBFTReqCache();
     assert(m_reqCache);
     // set checkSignCallback for reqCache
-    m_reqCache->setCheckSignCallback(boost::bind(&PBFTEngine::checkSign, this, _1));
+    m_reqCache->setCheckSignCallback(boost::bind(&PBFTEngine::checkSign, this, boost::placeholders::_1));
 
     // register P2P callback after create PBFTMsgFactory
     m_service->registerHandlerByProtoclID(
-        m_protocolId, boost::bind(&PBFTEngine::handleP2PMessage, this, _1, _2, _3));
+        m_protocolId, boost::bind(&PBFTEngine::handleP2PMessage, this, boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3));
     registerDisconnectHandler();
     ConsensusEngineBase::start();
     initPBFTEnv(3 * getEmptyBlockGenTime());

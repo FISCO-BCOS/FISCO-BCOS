@@ -112,7 +112,7 @@ public:
             m_blockStatusGossipThread =
                 std::make_shared<GossipBlockStatus>(_protocolId, _gossipInterval, _gossipPeers);
             m_blockStatusGossipThread->registerGossipHandler(
-                boost::bind(&SyncMaster::sendBlockStatus, this, _1));
+                boost::bind(&SyncMaster::sendBlockStatus, this, boost::placeholders::_1));
         }
         m_msgEngine = std::make_shared<SyncMsgEngine>(_service, _txPool, _blockChain, m_syncStatus,
             m_txQueue, _protocolId, _nodeId, _genesisHash);

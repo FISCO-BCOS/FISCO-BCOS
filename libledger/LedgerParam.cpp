@@ -27,7 +27,7 @@
 #include <libconfig/GlobalConfigure.h>
 #include <libeventfilter/EventLogFilterManager.h>
 #include <boost/algorithm/string.hpp>
-#include <boost/bind.hpp>
+#include <boost/bind/bind.hpp>
 #include <boost/function_output_iterator.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 

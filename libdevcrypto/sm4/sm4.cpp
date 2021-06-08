@@ -22,8 +22,8 @@
  */
 
 #include "sm4.h"
-#include <cstring>
 #include <stdlib.h>
+#include <cstring>
 
 int SM4::setKey(const unsigned char* userKey, size_t length)
 {
