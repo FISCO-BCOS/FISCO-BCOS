@@ -118,6 +118,15 @@ bytes ContractABI::serialise(const string32& _in)
     return ret;
 }
 
+bytes ContractABI::serialise(const bytes& _in)
+{
+    bytes ret;
+    ret = h256(u256(_in.size())).asBytes();
+    ret.resize(ret.size() + (_in.size() + 31) / MAX_BYTE_LENGTH * MAX_BYTE_LENGTH);
+    bytesConstRef(&_in).populate(bytesRef(&ret).cropped(32));
+    return ret;
+}
+
 // dynamic sized unicode string assumed to be UTF-8 encoded.
 bytes ContractABI::serialise(const std::string& _in)
 {
@@ -183,4 +192,13 @@ void ContractABI::deserialise(std::string& _out, std::size_t _offset)
     validOffset(_offset + MAX_BYTE_LENGTH + (std::size_t)len - 1);
     auto result = data.cropped(_offset + MAX_BYTE_LENGTH, static_cast<size_t>(len));
     _out.assign((const char*)result.data(), result.size());
+}
+
+void ContractABI::deserialise(bytes& _out, std::size_t _offset)
+{
+    validOffset(_offset + MAX_BYTE_LENGTH - 1);
+
+    u256 len = fromBigEndian<u256>(data.cropped(_offset, MAX_BYTE_LENGTH));
+    validOffset(_offset + MAX_BYTE_LENGTH + (std::size_t)len - 1);
+    _out = data.cropped(_offset + MAX_BYTE_LENGTH, static_cast<size_t>(len)).toBytes();
 }

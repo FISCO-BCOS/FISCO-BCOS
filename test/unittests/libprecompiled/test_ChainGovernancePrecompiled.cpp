@@ -220,8 +220,7 @@ BOOST_AUTO_TEST_CASE(grant_revoke_CM)
     BOOST_TEST(reader.parse(votes, retJson) == true);
     BOOST_TEST(retJson["revoke"].size() == 1);
     BOOST_TEST(retJson["revoke"][(Json::ArrayIndex)0]["block_limit"].asString() == "10000");
-    BOOST_TEST(
-        retJson["revoke"][(Json::ArrayIndex)0]["voter"].asString() == member1.hexPrefixed());
+    BOOST_TEST(retJson["revoke"][(Json::ArrayIndex)0]["voter"].asString() == member1.hexPrefixed());
     BOOST_TEST(retJson["grant"].size() == 0);
     BOOST_TEST(retJson["update_weight"].size() == 0);
 
@@ -267,8 +266,7 @@ BOOST_AUTO_TEST_CASE(grant_revoke_CM)
     BOOST_TEST(reader.parse(votes, retJson) == true);
     BOOST_TEST(retJson["revoke"].size() == 1);
     BOOST_TEST(retJson["revoke"][(Json::ArrayIndex)0]["block_limit"].asString() == "10000");
-    BOOST_TEST(
-        retJson["revoke"][(Json::ArrayIndex)0]["voter"].asString() == member1.hexPrefixed());
+    BOOST_TEST(retJson["revoke"][(Json::ArrayIndex)0]["voter"].asString() == member1.hexPrefixed());
     BOOST_TEST(retJson["grant"].size() == 0);
     BOOST_TEST(retJson["update_weight"].size() == 0);
 
@@ -361,8 +359,8 @@ BOOST_AUTO_TEST_CASE(updateCommitteeMemberWeight)
     BOOST_TEST(retJson["grant"].size() == 0);
     BOOST_TEST(retJson["update_weight"].size() == 1);
     BOOST_TEST(retJson["update_weight"][(Json::ArrayIndex)0]["block_limit"].asString() == "10000");
-    BOOST_TEST(retJson["update_weight"][(Json::ArrayIndex)0]["voter"].asString() ==
-               member1.hexPrefixed());
+    BOOST_TEST(
+        retJson["update_weight"][(Json::ArrayIndex)0]["voter"].asString() == member1.hexPrefixed());
 
     out = chainGovernancePrecompiled->call(context, bytesConstRef(&in), member2);
     ret = 0;

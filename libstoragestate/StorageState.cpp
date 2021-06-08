@@ -331,7 +331,14 @@ h256 StorageState::codeHash(Address const& _address) const
         auto entries = table->select(ACCOUNT_CODE_HASH, table->newCondition());
         if (entries->size() != 0u)
         {
-            return h256(fromHex(entries->get(0)->getField(STORAGE_VALUE)));
+            if (g_BCOSConfig.version() >= V2_8_0)
+            {
+                return h256(entries->get(0)->getFieldBytes(STORAGE_VALUE));
+            }
+            else
+            {
+                return h256(fromHex(entries->get(0)->getField(STORAGE_VALUE)));
+            }
         }
     }
     return EmptyHash;

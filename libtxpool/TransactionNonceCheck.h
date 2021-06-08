@@ -24,7 +24,7 @@
 #pragma once
 #include "CommonTransactionNonceCheck.h"
 #include <libblockchain/BlockChainInterface.h>
-#include <boost/timer.hpp>
+#include <boost/timer/timer.hpp>
 #include <thread>
 
 using namespace dev::eth;

@@ -1,9 +1,16 @@
 include(ExternalProject)
 
+if (APPLE)
+    set(SED_CMMAND sed -i .bkp)
+else()
+    set(SED_CMMAND sed -i)
+endif()
+
 ExternalProject_Add(mysqlclient
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NAME mysql-connector-c-6.1.11-src.tar.gz
     DOWNLOAD_NO_PROGRESS 1
+    PATCH_COMMAND ${SED_CMMAND} "366d" cmake/install_macros.cmake COMMAND ${SED_CMMAND} "336,364d" cmake/install_macros.cmake
     BUILD_IN_SOURCE 1
     LOG_CONFIGURE 1
     LOG_BUILD 1
@@ -33,7 +40,7 @@ ExternalProject_Add(libzdb DEPENDS mysqlclient
     LOG_CONFIGURE 1
     LOG_BUILD 1
     LOG_INSTALL 1
-    CONFIGURE_COMMAND ${ZDB_CONFIGURE_COMMAND} 
+    CONFIGURE_COMMAND ${ZDB_CONFIGURE_COMMAND}
     BUILD_COMMAND make
     INSTALL_COMMAND ""
     BUILD_BYPRODUCTS <SOURCE_DIR>/.libs/libzdb.a

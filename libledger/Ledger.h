@@ -222,15 +222,15 @@ private:
 
     bool inline normalrPBFTEnabled()
     {
-        return (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "rpbft") ==
-                   0) &&
+        return (dev::stringCmpIgnoreCase(
+                    m_param->mutableConsensusParam().consensusType, RPBFT_CONSENSUS_TYPE) == 0) &&
                (g_BCOSConfig.version() < V2_6_0);
     }
 
     bool inline vrfBasedrPBFTEnabled()
     {
-        return (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "rpbft") ==
-                   0) &&
+        return (dev::stringCmpIgnoreCase(
+                    m_param->mutableConsensusParam().consensusType, RPBFT_CONSENSUS_TYPE) == 0) &&
                (g_BCOSConfig.version() >= V2_6_0);
     }
 

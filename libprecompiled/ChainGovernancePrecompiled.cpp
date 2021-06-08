@@ -258,7 +258,7 @@ PrecompiledExecResult::Ptr ChainGovernancePrecompiled::call(
                 CHAIN_GOVERNANCE_LOG(INFO)
                     << LOG_DESC("query member not exist") << LOG_KV("member", member);
                 callResult->setExecResult(
-                    abi.abiIn("", false, s256(CODE_COMMITTEE_MEMBER_NOT_EXIST)));
+                    abi.abiIn("", false, s256((int32_t)CODE_COMMITTEE_MEMBER_NOT_EXIST)));
                 break;
             }
             auto entry = entries->get(0);

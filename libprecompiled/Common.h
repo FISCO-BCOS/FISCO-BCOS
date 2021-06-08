@@ -36,7 +36,8 @@ class ExecutiveContext;
 namespace storage
 {
 class Table;
-}
+class Storage;
+}  // namespace storage
 
 namespace precompiled
 {
@@ -135,6 +136,27 @@ enum ContractStatus
     Count
 };
 
+inline bool operator==(const u256& _value, PrecompiledError _precompiledError)
+{
+    return _value == u256(static_cast<int>(_precompiledError));
+}
+
+inline bool operator==(const s256& _value, PrecompiledError _precompiledError)
+{
+    int precompiledErrorValue = static_cast<int>(_precompiledError);
+    return _value.convert_to<int>() == precompiledErrorValue;
+}
+
+inline bool operator==(PrecompiledError _precompiledError, const u256& _value)
+{
+    return _value == u256(static_cast<int>(_precompiledError));
+}
+
+inline bool operator==(PrecompiledError _precompiledError, const s256& _value)
+{
+    int precompiledErrorValue = static_cast<int>(_precompiledError);
+    return _value.convert_to<int>() == precompiledErrorValue;
+}
 class PrecompiledException : public dev::Exception
 {
 public:
@@ -159,6 +181,10 @@ bytesConstRef getParamData(bytesConstRef _param);
 
 dev::h512s getNodeListByType(std::shared_ptr<dev::storage::Table> _consTable, int64_t _blockNumber,
     std::string const& _type);
+
+std::shared_ptr<std::pair<std::string, int64_t>> getSysteConfigByKey(
+    std::shared_ptr<dev::storage::Storage> _stateStorage, std::string const& _key,
+    int64_t const& _num);
 
 std::shared_ptr<std::pair<std::string, int64_t>> getSysteConfigByKey(
     std::shared_ptr<dev::storage::Table> _sysConfigTable, std::string const& _key,
@@ -192,6 +218,13 @@ const Address CONTRACT_LIFECYCLE_ADDRESS = Address(0x1007);
 const Address CHAINGOVERNANCE_ADDRESS = Address(0x1008);
 const Address KVTABLE_FACTORY_ADDRESS = Address(0x1010);
 const Address WORKING_SEALER_MGR_ADDRESS = Address(0x1011);
+
+// crypto/extension precompiled contract address
+const Address DAG_TRANSFER_ADDRESS = Address(0x5002);
+const Address PAILLIER_ADDRESS = Address(0x5003);
+const Address GROUP_SIG_ADDRESS = Address(0x5004);
+const Address RING_SIG_ADDRESS = Address(0x5005);
+const Address CRYPTO_ADDRESS = Address(0x5006);
 
 /// \brief Sign of the sealer is valid or not
 const char* const NODE_TYPE = "type";

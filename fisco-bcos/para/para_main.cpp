@@ -173,7 +173,8 @@ static void startExecute(int _totalUser, int _totalTxs)
     blockVerifier->setExecutiveContextFactory(dbInitializer->executiveContextFactory());
     std::shared_ptr<BlockChainImp> _blockChain =
         std::dynamic_pointer_cast<BlockChainImp>(blockChain);
-    blockVerifier->setNumberHash(boost::bind(&BlockChainImp::numberHash, _blockChain, _1));
+    blockVerifier->setNumberHash(
+        boost::bind(&BlockChainImp::numberHash, _blockChain, boost::placeholders::_1));
 
     auto height = blockChain->number();
     auto parentBlock = blockChain->getBlockByNumber(height);

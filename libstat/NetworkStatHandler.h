@@ -48,7 +48,7 @@ public:
     void setConsensusMsgType(std::string const& _type)
     {
         int32_t consType = dev::eth::ProtocolID::PBFT;
-        if (dev::stringCmpIgnoreCase(_type, "raft") == 0)
+        if (dev::stringCmpIgnoreCase(_type, RAFT_CONSENSUS_TYPE) == 0)
         {
             consType = dev::eth::ProtocolID::Raft;
         }

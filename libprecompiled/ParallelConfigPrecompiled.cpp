@@ -174,7 +174,7 @@ void ParallelConfigPrecompiled::registerParallelFunction(
             table->update(PARA_KEY, entry, cond, make_shared<AccessOptions>(origin));
         }
 
-        out = abi.abiIn("", u256(CODE_SUCCESS));
+        out = abi.abiIn("", u256(uint32_t(CODE_SUCCESS)));
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("PARA") << LOG_DESC("registerParallelFunction success")
                                << LOG_KV(PARA_SELECTOR, to_string(selector))
                                << LOG_KV(PARA_FUNC_NAME, functionName)
@@ -202,7 +202,7 @@ void ParallelConfigPrecompiled::unregisterParallelFunction(
         cond->EQ(PARA_SELECTOR, to_string(selector));
         table->remove(PARA_KEY, cond, make_shared<AccessOptions>(origin));
     }
-    out = abi.abiIn("", u256(CODE_SUCCESS));
+    out = abi.abiIn("", u256(uint32_t(CODE_SUCCESS)));
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("PARA") << LOG_DESC("unregisterParallelFunction success")
                            << LOG_KV(PARA_SELECTOR, to_string(selector));
 }

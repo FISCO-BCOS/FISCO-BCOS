@@ -65,7 +65,7 @@ public:
         std::shared_ptr<dev::network::SessionFace> session);
     virtual void onDisconnect(dev::network::NetworkException e, P2PSession::Ptr p2pSession);
     virtual void onMessage(dev::network::NetworkException e, dev::network::SessionFace::Ptr session,
-        dev::network::Message::Ptr message, P2PSession::Ptr p2pSession);
+        dev::network::Message::Ptr message, std::weak_ptr<P2PSession> p2pSessionWeakPtr);
 
     void onLocalAMOPMessage(
         P2PMessage::Ptr message, CallbackFuncWithSession callback, dev::network::Options options);

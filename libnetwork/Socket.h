@@ -47,8 +47,7 @@ public:
         try
         {
             m_wsSocket =
-                std::make_shared<boost::beast::websocket::stream<ba::ssl::stream<bi::tcp::socket>>>(
-                    _ioService, _sslContext);
+                std::make_shared<ba::ssl::stream<bi::tcp::socket>>(_ioService, _sslContext);
         }
         catch (Exception const& _e)
         {
@@ -86,12 +85,8 @@ public:
         return m_wsSocket->lowest_layer().local_endpoint(ec);
     }
 
-    virtual bi::tcp::socket& ref() override { return m_wsSocket->next_layer().next_layer(); }
-    virtual ba::ssl::stream<bi::tcp::socket>& sslref() override { return m_wsSocket->next_layer(); }
-    virtual boost::beast::websocket::stream<ba::ssl::stream<bi::tcp::socket>>& wsref() override
-    {
-        return *m_wsSocket;
-    }
+    virtual bi::tcp::socket& ref() override { return m_wsSocket->next_layer(); }
+    virtual ba::ssl::stream<bi::tcp::socket>& sslref() override { return *m_wsSocket; }
 
     virtual const NodeIPEndpoint& nodeIPEndpoint() const override { return m_nodeIPEndpoint; }
     virtual void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint) override
@@ -101,7 +96,7 @@ public:
 
 protected:
     NodeIPEndpoint m_nodeIPEndpoint;
-    std::shared_ptr<boost::beast::websocket::stream<ba::ssl::stream<bi::tcp::socket>>> m_wsSocket;
+    std::shared_ptr<ba::ssl::stream<bi::tcp::socket>> m_wsSocket;
 };
 
 }  // namespace network

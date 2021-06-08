@@ -28,7 +28,7 @@
 #include <libdevcore/TrieHash.h>
 #include <libsecurity/EncryptedLevelDB.h>
 #include <boost/filesystem.hpp>
-#include <boost/timer.hpp>
+#include <boost/timer/timer.hpp>
 
 using namespace std;
 using namespace dev;

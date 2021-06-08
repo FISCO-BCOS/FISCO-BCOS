@@ -131,7 +131,7 @@ static void createTx(std::shared_ptr<LedgerManager> ledgerManager, float txSpeed
             /// set default RPC callback
             if (count % u256(50) == u256(0))
             {
-                tx->setRpcCallback(boost::bind(rpcCallbackTest, _1));
+                tx->setRpcCallback(boost::bind(rpcCallbackTest, boost::placeholders::_1));
             }
             try
             {

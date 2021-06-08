@@ -308,7 +308,62 @@ dev::h512s dev::precompiled::getNodeListByType(
     return list;
 }
 
-// Get the configuration value of the given key from the system configuration table
+//
+/**
+ * @brief Get the configuration value of the given key from the storage
+ *        this function get the configuration value of the last block
+ * @param _stateStorage: the storageState
+ * @param _key: the key required to obtain value
+ * @param _num: the current block number
+ * @return: {value, enableNumber}
+ */
+std::shared_ptr<std::pair<std::string, int64_t>> dev::precompiled::getSysteConfigByKey(
+    dev::storage::Storage::Ptr _stateStorage, std::string const& _key, int64_t const& _num)
+{
+    std::shared_ptr<std::pair<std::string, int64_t>> result =
+        std::make_shared<std::pair<std::string, int64_t>>();
+    *result = std::make_pair("", -1);
+
+    auto tableInfo = std::make_shared<storage::TableInfo>();
+    tableInfo->name = storage::SYS_CONFIG;
+    tableInfo->key = storage::SYS_KEY;
+    tableInfo->fields = std::vector<std::string>{SYSTEM_CONFIG_VALUE};
+    auto condition = std::make_shared<dev::storage::Condition>();
+    condition->EQ("key", _key);
+    auto values = _stateStorage->select(_num, tableInfo, _key, condition);
+    if (!values || values->size() != 1)
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_DESC("[#getSystemConfigByKey]Select error")
+                               << LOG_KV("key", _key);
+        // FIXME: throw exception here, or fatal error
+        return result;
+    }
+    auto value = values->get(0);
+    if (!value)
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_DESC("[#getSystemConfigByKey]Null pointer")
+                               << LOG_KV("key", _key);
+        // FIXME: throw exception here, or fatal error
+        return result;
+    }
+    auto enableNumber = boost::lexical_cast<int64_t>(value->getField(SYSTEM_CONFIG_ENABLENUM));
+    if (enableNumber <= _num)
+    {
+        result->first = value->getField(SYSTEM_CONFIG_VALUE);
+        result->second = enableNumber;
+    }
+    return result;
+}
+
+/**
+ * @brief Get the configuration value of the given key from the system configuration table
+ * @Note: if call this function when executing the transaction changing the key, will return empty
+ * string so we don't recommend to call this function
+ * @param _sysConfigTable: the sysConfig
+ * @param _key: the key
+ * @param _num: current blockNumber
+ * @return: {value, enableNumber}
+ */
 std::shared_ptr<std::pair<std::string, int64_t>> dev::precompiled::getSysteConfigByKey(
     dev::storage::Table::Ptr _sysConfigTable, std::string const& _key, int64_t const& _num)
 {

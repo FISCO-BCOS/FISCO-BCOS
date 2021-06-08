@@ -149,7 +149,22 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
         g_BCOSConfig.setUseSMCrypto(useSMCrypto);
         if (useSMCrypto)
         {
-            crypto::initSMCrypto();
+            string crypto_provider = _pt.get<string>("crypto_provider.type", "ssm");
+
+            if (dev::stringCmpIgnoreCase(crypto_provider, "hsm") == 0)
+            {
+#ifdef FISCO_SDF
+                INITIALIZER_LOG(INFO) << "Use hardware secure module "<<endl;
+                crypto::initHsmSMCrypto();
+#else
+                INITIALIZER_LOG(INFO) << "Use software secure module "<<endl;
+                crypto::initSMCrypto();
+#endif
+            }
+            else
+            {
+                crypto::initSMCrypto();
+            }
         }
     }
     else
@@ -158,7 +173,21 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
         if (boost::filesystem::exists(gmNodeKeyPath))
         {
             g_BCOSConfig.setUseSMCrypto(true);
-            crypto::initSMCrypto();
+            string crypto_provider = _pt.get<string>("crypto_provider.type", "ssm");
+            if (dev::stringCmpIgnoreCase(crypto_provider, "hsm") == 0)
+            {
+#ifdef FISCO_SDF
+                INITIALIZER_LOG(INFO) << "Use hardware secure module "<<endl;
+                crypto::initHsmSMCrypto();
+#else
+                INITIALIZER_LOG(INFO) << "Use software secure module "<<endl;
+                crypto::initSMCrypto();
+#endif
+            }
+            else
+            {
+                crypto::initSMCrypto();
+            }
         }
         else
         {
