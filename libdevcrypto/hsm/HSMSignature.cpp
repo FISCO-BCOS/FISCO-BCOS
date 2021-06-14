@@ -64,24 +64,14 @@ std::shared_ptr<crypto::Signature> dev::crypto::SDFSM2Sign(
     // step 3 : signature = Sign(e)
     // get provider
 
-    // Get Z
-    unsigned char zValue[SM3_DIGEST_LENGTH];
-    size_t zValueLen = SM3_DIGEST_LENGTH;
-
-    CRYPTO_LOG(DEBUG) << "[HSMSignature::pubHex] _keyPair = " << _keyPair.pub().hex();
-    std::string pubHex = toHex(_keyPair.pub().ref().data(), _keyPair.pub().ref().data() + 64, "04");
-    bool getZ = SM2::sm2GetZFromPublicKey(pubHex, zValue, zValueLen);
-    if (!getZ)
-    {
-        CRYPTO_LOG(ERROR) << "[HSMSignature::sign] ERROR of compute z" << LOG_KV("pubKey", pubHex);
-        return nullptr;
-    }
-
+    std::shared_ptr<const vector<byte>> pubKey = std::make_shared<const std::vector<byte>>(
+        (byte*)_keyPair.pub().data(), (byte*)_keyPair.pub().data() + 64);
+    key.setPublicKey(pubKey);
     // step 2 : e = H(M')
     unsigned char hashResult[SM3_DIGEST_LENGTH];
     unsigned int uiHashResultLen;
-    unsigned int code = provider.HashWithZ(nullptr, hsm::SM3, zValue, zValueLen, _hash.data(),
-        SM3_DIGEST_LENGTH, (unsigned char*)hashResult, &uiHashResultLen);
+    unsigned int code = provider.Hash(&key, hsm::SM3, _hash.data(),
+         SM3_DIGEST_LENGTH, (unsigned char*)hashResult, &uiHashResultLen);
     if (code != SDR_OK)
     {
         CRYPTO_LOG(ERROR) << "[HSMSignature::sign] ERROR of compute H(M')"
@@ -121,20 +111,10 @@ bool dev::crypto::SDFSM2Verify(
     bool verifyResult = false;
 
     // Get Z
-    unsigned char zValue[SM3_DIGEST_LENGTH];
-    size_t zValueLen = SM3_DIGEST_LENGTH;
-    std::string pubHex = toHex(_pubKey.data(), _pubKey.data() + 64, "04");
-    bool getZ = SM2::sm2GetZFromPublicKey(pubHex, zValue, zValueLen);
-    if (!getZ)
-    {
-        CRYPTO_LOG(ERROR) << "[HSMSignature::veify] ERROR of compute z" << LOG_KV("pubKey", pubHex);
-        return false;
-    }
-
     vector<byte> hashResult(SM3_DIGEST_LENGTH);
     unsigned int uiHashResultLen;
-    unsigned int code = provider.HashWithZ(nullptr, hsm::SM3, zValue, zValueLen, _hash.data(),
-        SM3_DIGEST_LENGTH, (unsigned char*)hashResult.data(), &uiHashResultLen);
+    unsigned int code = provider.Hash(&key, hsm::SM3, _hash.data(),
+         SM3_DIGEST_LENGTH, (unsigned char*)hashResult.data(), &uiHashResultLen);
     if (code != SDR_OK)
     {
         throw provider.GetErrorMessage(code);
