@@ -13,15 +13,14 @@ agency_array=
 agency_key_type_array=
 agency_key_index_array=
 hsm_config_array=
-node_num=1
 ip_file=
 ip_param=
 use_ip_param=
 node_agency_array=
 group_array=
-node_key_type_array[n]=
-sign_key_array[n]=
-enc_key_array[n]=
+node_key_type_array=
+sign_key_array=
+enc_key_array=
 ports_array=
 ip_array=
 output_dir=nodes
@@ -350,7 +349,7 @@ gen_chain_cert_gm() {
     export OPENSSL_CONF="${HOME}"/.fisco/swssl/ssl/swssl.cnf
     export LD_LIBRARY_PATH="${HOME}"/.fisco/swssl/lib
     if [ "${ca_key_type}" == "internalKey" ]; then
-        $SWSSL_CMD req -engine sdf -new -x509 -batch -sm3 -days "${days}" -key "sm2_${ca_key_index}" -keyform engine -out "$chaindir/gmca.crt" -subj "/CN=${name}/O=fisco-bcos/OU=chain" 2> /dev/null
+        $SWSSL_CMD req -config gmcert.cnf -engine sdf -new -x509 -batch -sm3 -days "${days}" -key "sm2_${ca_key_index}" -keyform engine -extensions v3_ca -out "$chaindir/gmca.crt" -subj "/CN=${name}/O=fisco-bcos/OU=chain" 2> /dev/null
     else
         $SWSSL_CMD genpkey -paramfile gmsm2.param -out "$chaindir/gmca.key" 2> /dev/null
         touch "${HOME}"/.rnd
@@ -378,7 +377,7 @@ gen_agency_cert_gm() {
         $SWSSL_CMD req -new -subj "/CN=${name}/O=fisco-bcos/OU=agency" -key "$agencydir/gmagency.key" -config "$chain/gmcert.cnf" -out "$agencydir/gmagency.csr" 2> /dev/null
     fi
     if [ "${ca_key_type}" == "internalKey" ]; then
-        $SWSSL_CMD x509 -engine sdf -req -CAcreateserial -extfile "${HOME}"/.fisco/swssl/ssl/swssl.cnf  -extensions v3_req -days 3650 -in "$agencydir/gmagency.csr" -out "$agencydir/gmagency.crt" -CA "$chain/gmca.crt" -CAkey "sm2_${ca_key_index}" -CAkeyform engine 2> /dev/null
+        $SWSSL_CMD x509 -engine sdf -req -CAcreateserial -extfile "$chain/gmcert.cnf"  -extensions v3_agency_root -days 3650 -in "$agencydir/gmagency.csr" -out "$agencydir/gmagency.crt" -CA "$chain/gmca.crt" -CAkey "sm2_${ca_key_index}" -CAkeyform engine 2> /dev/null
     else
         file_must_exists "$chain/gmca.key"
         $SWSSL_CMD x509 -sm3 -req -CA "$chain/gmca.crt" -CAkey "$chain/gmca.key" -days 3650 -CAcreateserial -in "$agencydir/gmagency.csr" -out "$agencydir/gmagency.crt" -extfile "$chain/gmcert.cnf" -extensions v3_agency_root 2> /dev/null

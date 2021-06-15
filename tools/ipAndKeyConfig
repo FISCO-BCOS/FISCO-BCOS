@@ -1,7 +1,7 @@
 [CA]
-CA externalKey
+CA internalKey 1
 [agency]
-agencyA externalKey
+agencyA internalKey 21
 [node]
 127.0.0.1 agencyA 1 internalKey 31 32
 127.0.0.1 agencyA 1 externalKey 
