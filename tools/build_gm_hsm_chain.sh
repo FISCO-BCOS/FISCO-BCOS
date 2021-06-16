@@ -50,7 +50,6 @@ auto_flush="true"
 enable_statistic="false"
 enable_free_storage="false"
 deploy_mode=
-root_crt=
 gmroot_crt=
 copy_cert=
 no_agency=
@@ -119,8 +118,9 @@ get_value()
     local var_name="${1}"
     var_name="${var_name//./}"
     var_name="var_${var_name//-/}"
-    local res=$(eval echo '$'"${var_name}")
-    echo ${res}
+    local res
+    res=$(eval echo '$'"${var_name}")
+    echo "${res}"
 }
 
 set_value()
@@ -217,6 +217,7 @@ while getopts "f:l:o:p:e:t:v:s:C:c:k:K:H:X:izhgGTNFSdEDZ6q" option;do
         if [ "$(uname)" == "Darwin" ];then LOG_WARN "Docker desktop of macOS can't support docker mode of FISCO BCOS!" && exit 1;fi
     ;;
     h) help;;
+    *) help;;
     esac
 done
 if [ "${storage_type}" == "scalable" ]; then
@@ -291,7 +292,7 @@ if [ -n "${guomi_mode}" ]; then
         export OPENSSL_CONF="${HOME}"/.fisco/swssl/ssl/swssl.cnf
         export LD_LIBRARY_PATH="${HOME}"/.fisco/swssl/lib
     fi
-    if [ -n ${hsm_config_array} ];then
+    if [[ -n ${hsm_config_array} ]];then
         generate_swssl_ini "${HOME}/.fisco/swssl/bin/swsds.ini"
         generate_swssl_ini "./swsds.ini"
     fi
@@ -412,7 +413,7 @@ gen_node_cert_with_extensions_gm() {
     rm -f $certpath/gm${type}.csr
 }
 
-gen_node_cert_with_index_and_extentions_gm(){
+gen_node_cert_with_index_and_extensions_gm(){
     capath="$1"
     agKeyId="$2"
     certpath="$3"
@@ -462,8 +463,8 @@ gen_node_cert_gm() {
         gen_node_cert_with_extensions_gm "$agpath" "$ndpath" "$node" node v3_req "${node_key_type_array[${nodeIndex}]}" "${sign_key_array[${nodeIndex}]}"
         gen_node_cert_with_extensions_gm "$agpath" "$ndpath" "$node" ennode v3enc_req "${node_key_type_array[${nodeIndex}]}" "${enc_key_array[${nodeIndex}]}"
     else
-        gen_node_cert_with_index_and_extentions_gm "$agpath" "${agency_key_index_array[${agIndex}]}" "$ndpath" "$node" node v3_req "${node_key_type_array[${nodeIndex}]}" "${sign_key_array[${nodeIndex}]}"
-        gen_node_cert_with_index_and_extentions_gm "$agpath" "${agency_key_index_array[${agIndex}]}" "$ndpath" "$node" ennode v3enc_req "${node_key_type_array[${nodeIndex}]}" "${enc_key_array[${nodeIndex}]}"
+        gen_node_cert_with_index_and_extensions_gm "$agpath" "${agency_key_index_array[${agIndex}]}" "$ndpath" "$node" node v3_req "${node_key_type_array[${nodeIndex}]}" "${sign_key_array[${nodeIndex}]}"
+        gen_node_cert_with_index_and_extensions_gm "$agpath" "${agency_key_index_array[${agIndex}]}" "$ndpath" "$node" ennode v3enc_req "${node_key_type_array[${nodeIndex}]}" "${enc_key_array[${nodeIndex}]}"
     fi
     if [ "${node_key_type_array[${nodeIndex}]}" = "internalKey" ];then
         cp ../swsds.ini ./
@@ -1711,7 +1712,7 @@ prepare_ca(){
         fi
         # todo
         if [ "${use_ip_param}" == "false" ];then
-            for agency_id in ${!agency_array[@]};do
+            for agency_id in "${!agency_array[@]}";do
                 if [ ! -d "${output_dir}/gmcert/${agency_array[${agency_id}]}-gm" ];then
                     gen_agency_cert_gm "${output_dir}/gmcert" "${output_dir}/gmcert/${agency_array[${agency_id}]}-gm" ${agency_key_type_array[${agency_id}]} ${agency_key_index_array[${agency_id}]} >"${logfile}" 2>&1
                 fi
@@ -1793,17 +1794,16 @@ for line in ${ip_array[*]};do
     #create sdk cert
     sdk_path="${output_dir}/${ip}/sdk"
     local agency_gm_path="${output_dir}/gmcert/${node_agency_array[${the_node_index}]}-gm"
-    local agency_index=
-    for index in ${agency_name[@]};do
-        if [ "${agency_name[${index}]}" == "${node_agency_array[${the_node_index}]}" ];then
-            ${agency_index}=${index}
-            break;
-        fi
-    done
-    if [ ! -n ${agency_index} ];then
-        LOG_WARN "Unknown agency name ${node_agency_array[${the_node_index}]}, please check your config file."
-        exit;
-    fi
+    local ag_array=(${str//\,/ })
+    
+    # for index in "${!ag_array[@]}";do
+    #     for ar in "${agency_array[@]}";do
+    #         if [ "${ar]}" == "${ag_array[${index}]}" ];then
+    #             break;
+    #         fi
+    #         LOG_WARN "Unknown agency name ${ag_array[${index}]}, please check your config file."
+    #     done
+    # done
     if [ ! -d "${sdk_path}" ];then
         #gen_cert "${output_dir}/cert/${agency_array[${server_count}]}" "${sdk_path}" "sdk"
         #mv node.nodeid sdk.publickey
@@ -1817,10 +1817,10 @@ for line in ${ip_array[*]};do
                 gen_node_cert_with_extensions_gm "${agency_gm_path}" "${sdk_path}/gm" "sdk" ensdk v3enc_req "externalKey"
                 $SWSSL_CMD ec -in "$sdk_path/gm/gmsdk.key" -text -noout 2> /dev/null | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}'  | cat > "${sdk_path}/gm/gmsdk.publickey"
             else
-                gen_node_cert_with_index_and_extentions_gm "${agency_gm_path}" "${agency_key_index_array[${agency_index}]}" "${sdk_path}/gm" "sdk" sdk v3_req "externalKey"
+                gen_node_cert_with_index_and_extensions_gm "${agency_gm_path}" "${agency_key_index_array[${agency_index}]}" "${sdk_path}/gm" "sdk" sdk v3_req "externalKey"
                 cp "${output_dir}/gmcert/gmca.crt" "${sdk_path}/gm/"
                 if [ -z "${no_agency}" ];then cat "${agency_gm_path}/gmagency.crt" >> "${sdk_path}/gm/gmca.crt";fi
-                gen_node_cert_with_index_and_extentions_gm "${agency_gm_path}" "${agency_key_index_array[${agency_index}]}" "${sdk_path}/gm" "sdk" ensdk v3enc_req "externalKey"
+                gen_node_cert_with_index_and_extensions_gm "${agency_gm_path}" "${agency_key_index_array[${agency_index}]}" "${sdk_path}/gm" "sdk" ensdk v3enc_req "externalKey"
                 $SWSSL_CMD x509 -outform PEM -in "${agency_gm_path}/gmagency.crt" -pubkey -out "${sdk_path}/gm/gmsdk.publickey"
                 # TODO check this
                 $SWSSL_CMD ec -engine sdf -in "${agency_key_index_array[${agency_index}]}" -text -noout 2> /dev/null | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}'  | cat > "${sdk_path}/gm/gmsdk.publickey"
@@ -1960,7 +1960,7 @@ fi
 }
 
 check_env
-parse_params $@
+parse_params "$@"
 check_and_install_swssl
 main
 print_result
