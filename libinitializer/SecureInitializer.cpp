@@ -451,6 +451,7 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
     if (!handle)
     {
         BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_new error"));
+        openssl_debug_message("SSL_CTX_new error");
     }
 
     std::shared_ptr<boost::asio::ssl::context> sslContext =
@@ -795,6 +796,12 @@ void SecureInitializer::initConfigWithSMCrypto(const boost::property_tree::ptree
 {
     try
     {
+        #ifdef FISCO_SDF
+            bool use_hsm_key = pt.get<bool>("chain.sm_crypto_hsm_key", false);
+            if (use_hsm_key){
+                try_load_engine("sdf");
+            }
+        #endif
         ConfigResult gmConfig = initGmConfig(pt);
         m_key = gmConfig.keyPair;
         m_sslContexts[Usage::Default] = gmConfig.sslContext;
@@ -840,9 +847,6 @@ std::shared_ptr<bas::context> SecureInitializer::SSLContextWithSMCrypto(Usage _u
 
 void SecureInitializer::initConfig(const boost::property_tree::ptree& pt)
 {
-#ifdef FISCO_SDF
-    try_load_engine("sdf");
-#endif
 
     if (g_BCOSConfig.SMCrypto())
     {
