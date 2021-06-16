@@ -149,7 +149,7 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
         g_BCOSConfig.setUseSMCrypto(useSMCrypto);
         if (useSMCrypto)
         {
-            string crypto_provider = _pt.get<string>("crypto_provider.type", "ssm");
+            string crypto_provider = _pt.get<string>("network_security.crypto_provider", "ssm");
 
             if (dev::stringCmpIgnoreCase(crypto_provider, "hsm") == 0)
             {
@@ -157,8 +157,16 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
                 INITIALIZER_LOG(INFO) << "Use hardware secure module "<<endl;
                 crypto::initHsmSMCrypto();
 #else
-                INITIALIZER_LOG(INFO) << "Use software secure module "<<endl;
-                crypto::initSMCrypto();
+                INITIALIZER_LOG(ERROR)
+                    << LOG_BADGE("SecureInitializerGM")
+                    << LOG_DESC(
+                           "You are trying to use hardware secure module, while your "
+                           "fisco-bcos binary is not support. Please recompile your "
+                           "FISCO-BCOS code with option -DUSE_HSM_SDF=on");
+                throw std::invalid_argument(
+                    "You are trying to use hardware secure module, while your fisco-bcos binary is "
+                    "not "
+                    "support. Please recompile your FISCO-BCOS code with option -DUSE_HSM_SDF=on");
 #endif
             }
             else
@@ -173,7 +181,7 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
         if (boost::filesystem::exists(gmNodeKeyPath))
         {
             g_BCOSConfig.setUseSMCrypto(true);
-            string crypto_provider = _pt.get<string>("crypto_provider.type", "ssm");
+            string crypto_provider = _pt.get<string>("network_security.crypto_provider", "ssm");
             if (dev::stringCmpIgnoreCase(crypto_provider, "hsm") == 0)
             {
 #ifdef FISCO_SDF
@@ -229,6 +237,9 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
 void dev::version()
 {
     std::cout << "FISCO-BCOS Version : " << FISCO_BCOS_PROJECT_VERSION
+#ifdef FISCO_SDF
+              << " HSM"
+#endif
               << (g_BCOSConfig.SMCrypto() ? " gm" : "") << std::endl;
     std::cout << "Build Time         : " << FISCO_BCOS_BUILD_TIME << std::endl;
     std::cout << "Build Type         : " << FISCO_BCOS_BUILD_PLATFORM << "/"
