@@ -91,6 +91,38 @@ static ENGINE* try_load_engine(const char* engine = "sdf")
 
     return e;
 }
+
+static void use_engine_key(ENGINE* e,std::shared_ptr<boost::asio::ssl::context> sslContext,boost::asio::const_buffer keyBuffer, std::string keyName){
+    char key_id[32] = {0};
+    memcpy(key_id, keyBuffer.data(), keyBuffer.size());
+
+    std::shared_ptr<EVP_PKEY> evpPKey(
+        ::ENGINE_load_private_key(e, key_id, NULL, NULL), [](EVP_PKEY* p) {
+            if (p)
+            {
+                ::EVP_PKEY_free(p);
+            }
+        });
+
+    if (!evpPKey)
+    {
+        INITIALIZER_LOG(ERROR)
+            << LOG_BADGE("SecureInitializerGM") << LOG_DESC("ENGINE_load_private_key error")
+            << LOG_KV("keyName", keyName);
+        BOOST_THROW_EXCEPTION(std::runtime_error("ENGINE_load_private_key error"));
+    }
+
+    auto ret = ::SSL_CTX_use_PrivateKey(sslContext->native_handle(), evpPKey.get());
+    INITIALIZER_LOG(INFO) << LOG_BADGE("SSL_CTX_use_PrivateKey")
+                            << LOG_KV("keyName", keyName) << LOG_KV("ret", ret);
+    if (ret <= 0)
+    {
+        BOOST_THROW_EXCEPTION(
+            std::runtime_error("SSL_CTX_use_PrivateKey ret: " + std::to_string(ret)));
+    }
+        
+}
+
 #endif
 
 void SecureInitializer::initConfigWithCrypto(const boost::property_tree::ptree& pt)
@@ -440,226 +472,36 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
     std::string caCert = dataPath + "/" + pt.get<std::string>(sectionName + ".ca_cert", "gmca.crt");
     std::string caPath = dataPath + "/" + pt.get<std::string>(sectionName + ".ca_path", "");
     std::string enKey = dataPath + pt.get<std::string>(sectionName + ".en_key", "gmennode.key");
-    std::string enCert = dataPath + pt.get<std::string>(sectionName + ".en_cert", "gmennode.crt");
-#ifdef FISCO_SDF
+    std::string enCert = dataPath + pt.get<std::string>(sectionName + ".en_cert", "gmennode.crt");  
     bool use_hsm_key = pt.get<bool>("chain.sm_crypto_hsm_key", false);
-    std::string keyId = pt.get<std::string>(sectionName + ".key_id", "");
-    std::string enckeyId = pt.get<std::string>(sectionName + ".enckey_id", "");
 
-    // create SSL_CTX* first then use it as params to construct context
+    // init ssl context
+#ifdef FISCO_SDF
     auto handle = ::SSL_CTX_new(::GMTLS_method());
     if (!handle)
     {
         BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_new error"));
         openssl_debug_message("SSL_CTX_new error");
     }
-
     std::shared_ptr<boost::asio::ssl::context> sslContext =
         std::make_shared<boost::asio::ssl::context>(handle);
-
-    KeyPair keyPair;
-    keyPair.set_pub(cert);
-    if (use_hsm_key)
-    {
-        std::string keyName = "sm2_" + keyId;
-        std::string encKeyName = "sm2_" + enckeyId;
-        boost::asio::const_buffer keyBuffer(keyName.c_str(), keyName.length());
-        boost::asio::const_buffer keyBufferEnc(encKeyName.c_str(), encKeyName.length());
-        INITIALIZER_LOG(INFO) << LOG_BADGE("SecureInitializerGM use_hsm_key")
-                              << LOG_KV("keyId", keyId) << LOG_KV("enckeyId", enckeyId);
-
-        keyPair.setKeyIndex(std::stoi(keyId.c_str()));
-        INITIALIZER_LOG(INFO) << LOG_BADGE("SecureInitializerGM")
-                              << LOG_KV("keyPair.keyId", keyPair.keyIndex());
-
-        ENGINE* e = ::ENGINE_get_pkey_meth_engine(EVP_PKEY_SM2);
-        if (!e)
-        {
-            BOOST_THROW_EXCEPTION(std::runtime_error("ENGINE_get_pkey_meth_engine error"));
-        }
-
-        {
-            char key_id[32] = {0};
-            memcpy(key_id, keyBuffer.data(), keyBuffer.size());
-
-            std::shared_ptr<EVP_PKEY> evpPKey(
-                ::ENGINE_load_private_key(e, key_id, NULL, NULL), [](EVP_PKEY* p) {
-                    if (p)
-                    {
-                        ::EVP_PKEY_free(p);
-                    }
-                });
-
-            if (!evpPKey)
-            {
-                INITIALIZER_LOG(ERROR)
-                    << LOG_BADGE("SecureInitializerGM") << LOG_DESC("ENGINE_load_private_key error")
-                    << LOG_KV("keyName", keyName);
-
-                BOOST_THROW_EXCEPTION(std::runtime_error("ENGINE_load_private_key error"));
-            }
-
-            auto ret = ::SSL_CTX_use_PrivateKey(sslContext->native_handle(), evpPKey.get());
-            INITIALIZER_LOG(INFO) << LOG_BADGE("SSL_CTX_use_PrivateKey")
-                                  << LOG_KV("keyName", keyName) << LOG_KV("ret", ret);
-            if (ret <= 0)
-            {
-                BOOST_THROW_EXCEPTION(
-                    std::runtime_error("SSL_CTX_use_PrivateKey ret: " + std::to_string(ret)));
-            }
-        }
-
-        {
-            char key_id[32] = {0};
-            memcpy(key_id, keyBufferEnc.data(), keyBufferEnc.size());
-
-            std::shared_ptr<EVP_PKEY> evpPKey(
-                ::ENGINE_load_private_key(e, key_id, NULL, NULL), [](EVP_PKEY* p) {
-                    if (p)
-                    {
-                        ::EVP_PKEY_free(p);
-                    }
-                });
-
-            if (!evpPKey)
-            {
-                INITIALIZER_LOG(ERROR)
-                    << LOG_BADGE("SecureInitializerGM") << LOG_DESC("ENGINE_load_private_key error")
-                    << LOG_KV("encKeyName", encKeyName);
-                BOOST_THROW_EXCEPTION(std::runtime_error("ENGINE_load_private_key error"));
-            }
-
-
-            auto ret = ::SSL_CTX_use_PrivateKey(sslContext->native_handle(), evpPKey.get());
-            INITIALIZER_LOG(INFO) << LOG_BADGE("SSL_CTX_use_PrivateKey")
-                                  << LOG_KV("encKeyName", encKeyName) << LOG_KV("ret", ret);
-            if (ret <= 0)
-            {
-                INITIALIZER_LOG(ERROR)
-                    << LOG_BADGE("SecureInitializerGM") << LOG_DESC("SSL_CTX_use_PrivateKey error")
-                    << LOG_KV("encKeyName", encKeyName) << LOG_KV("ret", ret);
-                BOOST_THROW_EXCEPTION(std::runtime_error("SSL_CTX_use_PrivateKey error"));
-            }
-        }
-    }
-    else
-    {
-        bytes keyContent, keyContentEnc;
-        // Load gmnode.key
-        if (!key.empty())
-        {
-            try
-            {
-                if (g_BCOSConfig.diskEncryption.enable)
-                {
-                    keyContent = EncryptedFile::decryptContents(key);
-                    keyContentEnc = EncryptedFile::decryptContents(key);
-                }
-                else
-                {
-                    keyContent = contents(key);
-                    keyContentEnc = contents(enKey);
-                }
-            }
-            catch (std::exception& e)
-            {
-                INITIALIZER_LOG(ERROR) << LOG_BADGE("SecureInitializerGM")
-                                       << LOG_DESC("open privateKey failed") << LOG_KV("file", key);
-                BOOST_THROW_EXCEPTION(PrivateKeyError());
-            }
-        }
-        boost::asio::const_buffer keyBuffer(keyContent.data(), keyContent.size());
-        boost::asio::const_buffer keyBufferEnc(keyContentEnc.data(), keyContentEnc.size());
-        sslContext->use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
-        sslContext->use_private_key(keyBufferEnc, boost::asio::ssl::context::file_format::pem);
-        std::shared_ptr<EC_KEY> ecKey;
-        if (!keyContent.empty())
-        {
-            try
-            {
-                INITIALIZER_LOG(DEBUG)
-                    << LOG_BADGE("SecureInitializerGM") << LOG_DESC("loading privateKey");
-                std::shared_ptr<BIO> bioMem(BIO_new(BIO_s_mem()), [&](BIO* p) { BIO_free(p); });
-                BIO_write(bioMem.get(), keyContent.data(), keyContent.size());
-
-                std::shared_ptr<EVP_PKEY> evpPKey(
-                    PEM_read_bio_PrivateKey(bioMem.get(), NULL, NULL, NULL),
-                    [](EVP_PKEY* p) { EVP_PKEY_free(p); });
-
-                if (!evpPKey)
-                {
-                    BOOST_THROW_EXCEPTION(PrivateKeyError());
-                }
-
-                ecKey.reset(EVP_PKEY_get1_EC_KEY(evpPKey.get()), [](EC_KEY* p) { EC_KEY_free(p); });
-            }
-            catch (dev::Exception& e)
-            {
-                INITIALIZER_LOG(ERROR)
-                    << LOG_BADGE("SecureInitializerGM") << LOG_DESC("parse privateKey failed")
-                    << LOG_KV("EINFO", boost::diagnostic_information(e));
-                BOOST_THROW_EXCEPTION(e);
-            }
-        }
-        else
-        {
-            INITIALIZER_LOG(ERROR)
-                << LOG_BADGE("SecureInitializerGM") << LOG_DESC("privateKey doesn't exist!");
-            BOOST_THROW_EXCEPTION(PrivateKeyNotExists());
-        }
-
-        std::shared_ptr<const BIGNUM> ecPrivateKey(
-            EC_KEY_get0_private_key(ecKey.get()), [](const BIGNUM*) {});
-
-        std::shared_ptr<char> privateKeyData(
-            BN_bn2hex(ecPrivateKey.get()), [](char* p) { OPENSSL_free(p); });
-
-        std::string keyHex(privateKeyData.get());
-        if (keyHex.size() != 64u)
-        {
-            throw std::invalid_argument("Private Key file error! Missing bytes!");
-        }
-
-        keyPair = KeyPair(Secret(keyHex));
-        INITIALIZER_LOG(INFO) << LOG_BADGE("SecureInitializerGM") << LOG_DESC("get pub of node")
-                              << LOG_KV("nodeID", keyPair.pub().hex());
-    }
-    if (!cert.empty() && !contents(cert).empty() && !enCert.empty() && !contents(enCert).empty())
-    {
-        INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializerGM")
-                               << LOG_DESC("use user certificate") << LOG_KV("file", cert);
-        INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializerGM")
-                               << LOG_DESC("use user enc certificate") << LOG_KV("file", enCert);
-        sslContext->use_certificate_file(cert, boost::asio::ssl::context::file_format::pem);
-        sslContext->use_certificate_file(enCert, boost::asio::ssl::context::file_format::pem);
-        if (!SSL_CTX_get0_certificate(sslContext->native_handle()))
-        {
-            INITIALIZER_LOG(ERROR)
-                << LOG_BADGE("SecureInitializer")
-                << LOG_DESC("certificate load failed, please check") << LOG_KV("file", cert)
-                << LOG_DESC("certificate load failed, please check") << LOG_KV("file", enCert);
-            ERROR_OUTPUT << LOG_BADGE("SecureInitializer")
-                         << LOG_DESC("certificate load failed, please check")
-                         << LOG_KV("file", cert) << LOG_KV("file", enCert) << std::endl;
-            exit(1);
-        }
-    }
-    else
-    {
-        INITIALIZER_LOG(ERROR) << LOG_BADGE("SecureInitializerGM")
-                               << LOG_DESC("certificate doesn't exist!");
-        BOOST_THROW_EXCEPTION(CertificateNotExists());
-    }
 #else
+    std::shared_ptr<boost::asio::ssl::context> sslContext =
+        std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv12);
+#endif
+    // get key
+    // try decrypt node key if diskEncryption is on
     bytes keyContent;
     if (!key.empty())
     {
         try
         {
-            if (g_BCOSConfig.diskEncryption.enable)
+            if (g_BCOSConfig.diskEncryption.enable){
                 keyContent = EncryptedFile::decryptContents(key);
-            else
+            } 
+            else if (!use_hsm_key){
                 keyContent = contents(key);
+            } 
         }
         catch (std::exception& e)
         {
@@ -668,8 +510,10 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
             BOOST_THROW_EXCEPTION(PrivateKeyError());
         }
     }
+    
+    // construct ecKey
     std::shared_ptr<EC_KEY> ecKey;
-    if (!keyContent.empty())
+    if (!keyContent.empty() && !use_hsm_key)
     {
         try
         {
@@ -697,36 +541,107 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
             BOOST_THROW_EXCEPTION(e);
         }
     }
-    else
+    else if(keyContent.empty() && !use_hsm_key)
     {
         INITIALIZER_LOG(ERROR) << LOG_BADGE("SecureInitializerGM")
                                << LOG_DESC("privateKey doesn't exist!");
         BOOST_THROW_EXCEPTION(PrivateKeyNotExists());
     }
 
-    std::shared_ptr<const BIGNUM> ecPrivateKey(
-        EC_KEY_get0_private_key(ecKey.get()), [](const BIGNUM*) {});
-
-    std::shared_ptr<char> privateKeyData(
-        BN_bn2hex(ecPrivateKey.get()), [](char* p) { OPENSSL_free(p); });
-
-    std::string keyHex(privateKeyData.get());
-    if (keyHex.size() != 64u)
+    // load key
+    // When use hsm key
+    KeyPair keyPair;
+    if (use_hsm_key)
     {
-        throw std::invalid_argument("Private Key file error! Missing bytes!");
+#ifdef FISCO_SDF
+        std::string keyId = pt.get<std::string>(sectionName + ".key_id", "");
+        std::string enckeyId = pt.get<std::string>(sectionName + ".enckey_id", "");
+        keyPair.set_pub(cert);
+        std::string keyName = "sm2_" + keyId;
+        std::string encKeyName = "sm2_" + enckeyId;
+        boost::asio::const_buffer keyBuffer(keyName.c_str(), keyName.length());
+        boost::asio::const_buffer keyBufferEnc(encKeyName.c_str(), encKeyName.length());
+        INITIALIZER_LOG(INFO) << LOG_BADGE("SecureInitializerGM use_hsm_key")
+                                << LOG_KV("keyId", keyId) << LOG_KV("enckeyId", enckeyId);
+
+        keyPair.setKeyIndex(std::stoi(keyId.c_str()));
+        INITIALIZER_LOG(INFO) << LOG_BADGE("SecureInitializerGM")
+                                << LOG_KV("keyPair.keyId", keyPair.keyIndex());
+        ENGINE* e = ::ENGINE_get_pkey_meth_engine(EVP_PKEY_SM2);
+        if (!e)
+        {
+            BOOST_THROW_EXCEPTION(std::runtime_error("ENGINE_get_pkey_meth_engine error"));
+        }
+        use_engine_key(e,sslContext,keyBuffer,keyName);
+        use_engine_key(e,sslContext,keyBufferEnc,encKeyName);
+#else
+        INITIALIZER_LOG(ERROR) << LOG_BADGE("SecureInitializerGM")
+                               << LOG_DESC("You are trying to use hardware secure module, while your fisco-bcos binary not support. Please recompile your FISCO-BCOS code and with option -DUSE_HSM_SDF=on") ;
+        exit(0);
+#endif
+    }else{
+        std::shared_ptr<const BIGNUM> ecPrivateKey(
+        EC_KEY_get0_private_key(ecKey.get()), [](const BIGNUM*) {});
+        std::shared_ptr<char> privateKeyData(
+            BN_bn2hex(ecPrivateKey.get()), [](char* p) { OPENSSL_free(p); });
+
+        std::string keyHex(privateKeyData.get());
+        if (keyHex.size() != 64u)
+        {
+            throw std::invalid_argument("Private Key file error! Missing bytes!");
+        }
+
+        keyPair = KeyPair(Secret(keyHex));
+    
+        // load sign key
+        INITIALIZER_LOG(INFO) << LOG_BADGE("SecureInitializerGM") << LOG_DESC("get pub of node")
+                            << LOG_KV("nodeID", keyPair.pub().hex());
+        boost::asio::const_buffer keyBuffer(keyContent.data(), keyContent.size());
+        sslContext->use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
+    
+        // load encrypt key
+#ifdef FISCO_SDF
+        bytes keyContentEnc = contents(enKey);
+        boost::asio::const_buffer keyBufferEnc(keyContentEnc.data(), keyContentEnc.size());
+        sslContext->use_private_key(keyBufferEnc, boost::asio::ssl::context::file_format::pem);
+#else
+        sslContext->use_certificate_file(enCert, boost::asio::ssl::context::file_format::pem);
+        if (SSL_CTX_use_enc_PrivateKey_file(
+                sslContext->native_handle(), enKey.c_str(), SSL_FILETYPE_PEM) > 0)
+        {
+            INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializerGM")
+                                << LOG_DESC("use GM enc ca certificate") << LOG_KV("file", enKey);
+        }
+        else
+        {
+            INITIALIZER_LOG(ERROR) << LOG_BADGE("SecureInitializerGM")
+                                << LOG_DESC("GM enc ca certificate not exists!");
+            BOOST_THROW_EXCEPTION(CertificateNotExists());
+        }
+#endif
     }
 
-    KeyPair keyPair = KeyPair(Secret(keyHex));
+    // load certificate
+#ifdef FISCO_SDF
+    if(!cert.empty() && !contents(cert).empty() && !enCert.empty() && !contents(enCert).empty()){
 
-    std::shared_ptr<boost::asio::ssl::context> sslContext =
-        std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv12);
-
-    INITIALIZER_LOG(INFO) << LOG_BADGE("SecureInitializerGM") << LOG_DESC("get pub of node")
-                          << LOG_KV("nodeID", keyPair.pub().hex());
-
-    boost::asio::const_buffer keyBuffer(keyContent.data(), keyContent.size());
-    sslContext->use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
-
+        INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializerGM")
+                               << LOG_DESC("use user certificate") << LOG_KV("file", cert)
+                               << LOG_DESC("use user enc certificate") << LOG_KV("file", enCert);
+        sslContext->use_certificate_file(cert, boost::asio::ssl::context::file_format::pem);
+        sslContext->use_certificate_file(enCert, boost::asio::ssl::context::file_format::pem);
+        if (!SSL_CTX_get0_certificate(sslContext->native_handle()))
+        {
+            INITIALIZER_LOG(ERROR)
+                << LOG_BADGE("SecureInitializer")
+                << LOG_DESC("certificate load failed, please check") << LOG_KV("file", cert)
+                << LOG_DESC("certificate load failed, please check") << LOG_KV("file", enCert);
+            ERROR_OUTPUT << LOG_BADGE("SecureInitializer")
+                         << LOG_DESC("certificate load failed, please check")
+                         << LOG_KV("file", cert) << LOG_KV("file", enCert) << std::endl;
+            exit(1);
+        }
+#else
     if (!cert.empty() && !contents(cert).empty())
     {
         INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializerGM")
@@ -742,6 +657,7 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
                          << LOG_KV("file", cert) << std::endl;
             exit(1);
         }
+#endif
     }
     else
     {
@@ -749,21 +665,6 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
                                << LOG_DESC("certificate doesn't exist!");
         BOOST_THROW_EXCEPTION(CertificateNotExists());
     }
-    // encrypt certificate should set after connect certificate
-    sslContext->use_certificate_file(enCert, boost::asio::ssl::context::file_format::pem);
-    if (SSL_CTX_use_enc_PrivateKey_file(
-            sslContext->native_handle(), enKey.c_str(), SSL_FILETYPE_PEM) > 0)
-    {
-        INITIALIZER_LOG(DEBUG) << LOG_BADGE("SecureInitializerGM")
-                               << LOG_DESC("use GM enc ca certificate") << LOG_KV("file", enKey);
-    }
-    else
-    {
-        INITIALIZER_LOG(ERROR) << LOG_BADGE("SecureInitializerGM")
-                               << LOG_DESC("GM enc ca certificate not exists!");
-        BOOST_THROW_EXCEPTION(CertificateNotExists());
-    }
-#endif
 
     auto caCertContent = contents(caCert);
     if (!caCert.empty() && !caCertContent.empty())
@@ -789,19 +690,24 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
     }
     sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_peer |
                                 boost::asio::ssl::verify_fail_if_no_peer_cert);
-    return ConfigResult{keyPair, sslContext};
+    return ConfigResult{keyPair, sslContext}; 
 }
 
 void SecureInitializer::initConfigWithSMCrypto(const boost::property_tree::ptree& pt)
 {
     try
     {
-        #ifdef FISCO_SDF
-            bool use_hsm_key = pt.get<bool>("chain.sm_crypto_hsm_key", false);
-            if (use_hsm_key){
-                try_load_engine("sdf");
-            }
-        #endif
+        
+        bool use_hsm_key = pt.get<bool>("chain.sm_crypto_hsm_key", false);
+        if (use_hsm_key){
+#ifdef FISCO_SDF
+            try_load_engine("sdf");
+#else
+            INITIALIZER_LOG(ERROR) << LOG_BADGE("SecureInitializerGM")
+                               << LOG_DESC("You are trying to use hardware secure module, while your fisco-bcos binary is not support. Please recompile your FISCO-BCOS code and with option -DUSE_HSM_SDF=on") ;
+            exit(0);
+#endif
+        }
         ConfigResult gmConfig = initGmConfig(pt);
         m_key = gmConfig.keyPair;
         m_sslContexts[Usage::Default] = gmConfig.sslContext;

@@ -1796,14 +1796,14 @@ for line in ${ip_array[*]};do
     local agency_gm_path="${output_dir}/gmcert/${node_agency_array[${the_node_index}]}-gm"
     local ag_array=(${str//\,/ })
     
-    # for index in "${!ag_array[@]}";do
-    #     for ar in "${agency_array[@]}";do
-    #         if [ "${ar]}" == "${ag_array[${index}]}" ];then
-    #             break;
-    #         fi
-    #         LOG_WARN "Unknown agency name ${ag_array[${index}]}, please check your config file."
-    #     done
-    # done
+    for index in "${!ag_array[@]}";do
+        for ar in "${agency_array[@]}";do
+            if [ "${ar]}" == "${ag_array[${index}]}" ];then
+                break;
+            fi
+            LOG_WARN "Unknown agency name ${ag_array[${index}]}, please check your config file."
+        done
+    done
     if [ ! -d "${sdk_path}" ];then
         #gen_cert "${output_dir}/cert/${agency_array[${server_count}]}" "${sdk_path}" "sdk"
         #mv node.nodeid sdk.publickey
@@ -1853,7 +1853,7 @@ for line in ${ip_array[*]};do
         nodeid="$(cat ${node_dir}/${gm_conf_path}/gmnode.nodeid)"
         mv ${node_dir}/${gm_conf_path} ${node_dir}/${conf_path}
         local node_groups=(${group_array[${the_node_index}]//,/ })
-        for j in ${node_groups[@]};do
+        for j in "${node_groups[@]}";do
             if [ -z "${groups_count[${j}]}" ];then groups_count[${j}]=0;fi
             groups[${j}]=$"${groups[${j}]}node.${groups_count[${j}]}=${nodeid}
     "
@@ -1911,7 +1911,7 @@ for line in ${ip_array[*]};do
         generate_config_ini "${node_dir}/config.ini" "${ip}" "${group_array[the_node_index]}" "${ports_array[the_node_index]}" ${i} ${the_node_index}
         if [ "${use_ip_param}" == "false" ];then
             node_groups=(${group_array[${the_node_index}]//,/ })
-            for j in ${node_groups[@]};do
+            for j in "${node_groups[@]}";do
                 generate_group_genesis "$node_dir/${conf_path}/group.${j}.genesis" "${j}" "${groups[${j}]}" "${groups_count[${j}]}"
                 generate_group_ini "$node_dir/${conf_path}/group.${j}.ini"
             done
@@ -1920,7 +1920,7 @@ for line in ${ip_array[*]};do
             generate_group_ini "$node_dir/${conf_path}/group.1.ini"
         fi
         
-        if [ ${node_key_type_array[${the_node_index}]} == "internalKey" ];then
+        if [ "${node_key_type_array[${the_node_index}]}" == "internalKey" ];then
             generate_swssl_ini "${node_dir}/swsds.ini"
             generate_swssl_sdf_conf "${node_dir}/swssl.cnf"
         else
