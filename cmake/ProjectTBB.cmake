@@ -10,6 +10,7 @@ ExternalProject_Add(tbb
     DOWNLOAD_NO_PROGRESS 1
     DOWNLOAD_NAME oneTBB-2020.3.tar.gz
     URL https://codeload.github.com/oneapi-src/oneTBB/tar.gz/v2020.3
+        https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/FISCO-BCOS/deps/oneTBB-2020.3.tar.gz
         https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/oneTBB-2020.3.tar.gz
     URL_HASH SHA256=ebc4f6aa47972daed1f7bf71d100ae5bf6931c2e3144cf299c8cc7d041dca2f3
     BUILD_IN_SOURCE 1
