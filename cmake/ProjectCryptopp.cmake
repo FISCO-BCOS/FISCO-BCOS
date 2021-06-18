@@ -32,6 +32,7 @@ ExternalProject_Add(cryptopp
     DOWNLOAD_NAME cryptopp_bccc6443.tar.gz
     DOWNLOAD_NO_PROGRESS 1
     URL https://github.com/weidai11/cryptopp/archive/bccc6443c4d4d611066c2de4c17109380cf97704.tar.gz
+        https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/FISCO-BCOS/deps/cryptopp_bccc6443.tar.gz
         https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/cryptopp_bccc6443.tar.gz
     URL_HASH SHA256=f1fddacadd2a0873f795d5614a85fecd5b6ff1d1c6e21dedc251703c54ce63aa
     PATCH_COMMAND ${CMAKE_COMMAND} -E remove

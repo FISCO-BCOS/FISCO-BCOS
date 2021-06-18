@@ -6,6 +6,7 @@ ExternalProject_Add(evmc
         DOWNLOAD_NO_PROGRESS 1
         DOWNLOAD_NAME evmc-4ce1c3b3.tar.gz
 	URL https://github.com/FISCO-BCOS/evmc/archive/4ce1c3b35346db162443a6975ac8801910533138.tar.gz
+            https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/FISCO-BCOS/deps/evmc-4ce1c3b3.tar.gz
         URL_HASH SHA256=bc75110885ac5524dcbe8af0d3670add5b414697d8154ec2e885b1d6806f9332
         # GIT_REPOSITORY https://github.com/FISCO-BCOS/evmc.git
         # GIT_TAG e0bd9d5dc68ec3a00fe9a3c5e81c98946449a20d
