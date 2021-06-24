@@ -6,6 +6,7 @@ ExternalProject_Add(GroupSigLib
     DOWNLOAD_NAME group_sig_lib-868ec9ba.tar.gz
     DOWNLOAD_NO_PROGRESS 1
     URL https://github.com/FISCO-BCOS/group-signature-lib/archive/868ec9bad9facc8bb6059216e913194c08a62cfb.tar.gz
+        https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/FISCO-BCOS/deps/group_sig_lib-868ec9ba.tar.gz
     URL_HASH SHA256=a038561bd3f956e38fa4a49114a7386f47950c03d81ddb0ac9fb479889aa13f4
     CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
     -DCMAKE_POSITION_INDEPENDENT_CODE=ON

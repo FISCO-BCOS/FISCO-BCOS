@@ -6,6 +6,7 @@ ExternalProject_Add(evmone
         DOWNLOAD_NO_PROGRESS 1
         DOWNLOAD_NAME evmone-b004a8f2.tar.gz
         URL https://github.com/FISCO-BCOS/evmone/archive/b004a8f2057bb2b91fabaa3b13449c62241bcaa8.tar.gz
+            https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/FISCO-BCOS/deps/evmone-b004a8f2.tar.gz
         URL_HASH SHA256=17fa57d444420f128af315b88e35b55747bb19b6bc1ef63ea01360d3e381a261
         CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
                    -DBUILD_SHARED_LIBS=off
