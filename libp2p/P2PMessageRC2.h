@@ -33,7 +33,6 @@ public:
     /// m_length(4bytes) + m_version(2bytes) + m_protocolID(2bytes) + m_groupID(2bytes) +
     /// m_packetType(2bytes) + m_seq(4bytes)
     const static size_t HEADER_LENGTH = 16;
-    const static size_t MAX_LENGTH = 1024 * 1024;  ///< The maximum length of data is 1M.
 
     P2PMessageRC2()
     {

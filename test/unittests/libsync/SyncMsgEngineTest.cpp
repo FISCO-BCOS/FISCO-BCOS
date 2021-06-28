@@ -278,7 +278,7 @@ BOOST_AUTO_TEST_CASE(SyncReqBlockPacketTest)
 BOOST_AUTO_TEST_CASE(BatchSendTest)
 {
     size_t maxPayloadSize =
-        dev::p2p::P2PMessage::MAX_LENGTH - 2048;  // should be the same as syncMsgEngine.cpp
+        dev::p2p::P2PMessage::MAX_MESSAGE_LENGTH - 2048;  // should be the same as syncMsgEngine.cpp
     size_t quarterPayloadSize = maxPayloadSize / 4;
 
     FakeServiceForDownloadBlocksContainer::Ptr service =
