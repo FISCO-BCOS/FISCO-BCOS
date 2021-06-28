@@ -29,7 +29,7 @@ using namespace dev::p2p;
 using namespace dev::blockchain;
 using namespace dev::txpool;
 
-static size_t const c_maxPayload = dev::p2p::P2PMessage::MAX_LENGTH - 2048;
+static size_t const c_maxPayload = dev::p2p::P2PMessage::MAX_MESSAGE_LENGTH - 2048;
 
 void SyncMsgEngine::messageHandler(
     NetworkException, std::shared_ptr<dev::p2p::P2PSession> _session, P2PMessage::Ptr _msg)
