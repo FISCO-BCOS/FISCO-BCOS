@@ -523,9 +523,7 @@ generate_config_ini()
     local key_config=
     local sm_crypto_hsm_key=
     if [ "${node_key_type_array[${node_id}]}" == "internalKey" ]; then
-        hsm_config="[crypto_provider]
-    type=hsm"
-        sm_crypto_hsm_key="sm_crypto_hsm_key=true"
+        hsm_config="crypto_provider=hsm"
         key_config="key_id=${sign_key_array[${node_id}]}
     enckey_id=${enc_key_array[${node_id}]}"
     fi
@@ -562,6 +560,7 @@ generate_config_ini()
     cert=${prefix}node.crt
     ; the ca certificate file
     ca_cert=${prefix}ca.crt
+    ${hsm_config} 
     ${key_config} 
 
 [storage_security]
@@ -570,14 +569,11 @@ generate_config_ini()
     key_manager_port=
     cipher_data_key=
 
-${hsm_config} 
-
 [chain]
     id=${chain_id}
     ; use SM crypto or not, should nerver be changed
     sm_crypto=${sm_crypto}
     sm_crypto_channel=${sm_crypto_channel}
-    ${sm_crypto_hsm_key} 
 
 [compatibility]
     ; supported_version should nerver be changed

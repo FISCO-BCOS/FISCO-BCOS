@@ -67,5 +67,32 @@ private:
     std::shared_ptr<bas::context> SSLContextWithSMCrypto(Usage _usage);
 };
 
+class SslInitializer
+{
+public:
+    std::shared_ptr<boost::asio::ssl::context> initSslContext();
+    KeyPair loadKeyPair(bytes keyContent);
+    bytes decryptKey(std::string key, bool diskEncryptionEnable, bool useHsm);
+    void setCaCert(std::shared_ptr<boost::asio::ssl::context> sslContext, std::string caCert,
+        std::string caPath);
+#ifdef FISCO_SDF
+    KeyPair loadKeyPairById(std::string cert, std::string keyId, std::string encKeyId);
+    void useSwKey(
+        std::shared_ptr<boost::asio::ssl::context> sslContext, std::string enKey, bytes keyContent);
+    ENGINE* tryLoadEngine(const char* engine = "sdf");
+    void useEngineKey(std::shared_ptr<boost::asio::ssl::context> sslContext, std::string keyId,
+        std::string encKeyId);
+#else
+    void useKey(std::shared_ptr<boost::asio::ssl::context> sslContext, std::string enKey,
+        std::string enCert, bytes keyContent);
+#endif
+#ifdef FISCO_SDF
+private:
+    void opensslDebugMessage(const std::string& _method);
+    void useOpensslEngineKey(ENGINE* e, std::shared_ptr<boost::asio::ssl::context> sslContext,
+        boost::asio::const_buffer keyBuffer, std::string keyName);
+#endif
+};
+
 }  // namespace initializer
 }  // namespace dev
