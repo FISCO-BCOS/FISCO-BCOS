@@ -405,7 +405,6 @@ Json::Value Rpc::getClientVersion()
     {
         RPC_LOG(INFO) << LOG_BADGE("getClientVersion") << LOG_DESC("request");
         Json::Value version;
-
         version["FISCO-BCOS Version"] = g_BCOSConfig.binaryInfo.version;
         version["Supported Version"] = g_BCOSConfig.supportedVersion();
         version["Chain Id"] = toString(g_BCOSConfig.chainId());

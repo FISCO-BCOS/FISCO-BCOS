@@ -223,6 +223,9 @@ void dev::initializer::initGlobalConfig(const boost::property_tree::ptree& _pt)
     }
     bool enableStat = _pt.get<bool>("log.enable_statistic", false);
     g_BCOSConfig.setEnableStat(enableStat);
+#ifdef FISCO_SDF
+    g_BCOSConfig.binaryInfo.version += "-hsm";
+#endif
     g_BCOSConfig.binaryInfo.version += g_BCOSConfig.SMCrypto() ? " gm" : "";
 
     INITIALIZER_LOG(INFO) << LOG_BADGE("initGlobalConfig")
@@ -238,7 +241,7 @@ void dev::version()
 {
     std::cout << "FISCO-BCOS Version : " << FISCO_BCOS_PROJECT_VERSION
 #ifdef FISCO_SDF
-              << " HSM"
+              << "-hsm"
 #endif
               << (g_BCOSConfig.SMCrypto() ? " gm" : "") << std::endl;
     std::cout << "Build Time         : " << FISCO_BCOS_BUILD_TIME << std::endl;
