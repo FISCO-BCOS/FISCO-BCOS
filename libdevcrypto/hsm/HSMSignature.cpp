@@ -20,7 +20,6 @@
  */
 #include "HSMSignature.h"
 #include "CryptoProvider.h"
-#include "csmsds.h"
 #include "libdevcore/Common.h"
 #include "libdevcore/FixedHash.h"
 #include "libdevcrypto/Common.h"
@@ -37,6 +36,9 @@ using namespace dev::crypto;
 #if FISCO_SDF
 using namespace hsm;
 using namespace hsm::sdf;
+#define SDR_OK 0x0
+#define SDR_BASE 0x01000000
+#define SDR_VERIFYERR (SDR_BASE + 0x0000000E)
 #endif
 
 std::shared_ptr<crypto::Signature> dev::crypto::SDFSM2Sign(
