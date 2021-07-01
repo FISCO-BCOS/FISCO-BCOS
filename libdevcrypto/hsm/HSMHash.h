@@ -21,7 +21,6 @@
 
 #pragma once
 #include "CryptoProvider.h"
-#include "csmsds.h"
 #include "sdf/SDFCryptoProvider.h"
 #include <libdevcore/FixedHash.h>
 #include <libdevcore/vector_ref.h>
@@ -29,6 +28,7 @@
 #if FISCO_SDF
 using namespace hsm;
 using namespace hsm::sdf;
+#define SDR_OK 0x0
 #endif
 
 namespace dev
