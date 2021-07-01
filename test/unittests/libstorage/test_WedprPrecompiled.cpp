@@ -204,170 +204,170 @@ BOOST_AUTO_TEST_CASE(confidentialPaymentVerifyTransferredCredit)
     BOOST_CHECK_THROW(wedprPrecompiled->call(context, bytesConstRef(&param)), boost::exception);
 }
 
-BOOST_AUTO_TEST_CASE(confidentialPaymentVerifySplitCredit)
-{
-    dev::eth::ContractABI abi;
-    std::string splitRequest =
-        "CqkCCogBCixBcEJybWswUEh4UHA0RWx2bmhsbXdFaUFrbFZkRGJYK01pY3FNTDU5MWVDMhJYSEM3L1NKbVFxc0krcl"
-        "BxZEY5cGJNejU5TTYrVTl0NmI3aEVvSEJ6ZXgzbllXZ3N4ZndFYWtBN0JvMWRodzY1a01lNVN1ZTRIdzVzTHRRNHBF"
-        "QmhQaXJBPRIINWViMzZiODUaSAosQWxvRzQ4WWZXTFZXS0U0MnJKUzdSWU5oc25NTEdFemhTeXpiekVWQldHMD0SGD"
-        "dGNDcvOHZuVHhTWWplMUd3R2Z0WWc9PSJICixBbG9HNDhZZldMVldLRTQyckpTN1JZTmhzbk1MR0V6aFN5emJ6RVZC"
-        "V0cwPRIYN0Y0Ny84dm5UeFNZamUxR3dHZnRZZz09EqkCCogBCixBcEJybWswUEh4UHA0RWx2bmhsbXdFaUFrbFZkRG"
-        "JYK01pY3FNTDU5MWVDMhJYSEM3L1NKbVFxc0krclBxZEY5cGJNejU5TTYrVTl0NmI3aEVvSEJ6ZXgzbllXZ3N4ZndF"
-        "YWtBN0JvMWRodzY1a01lNVN1ZTRIdzVzTHRRNHBFQmhQaXJBPRIINWViMzZiODUaSAosMVBDOWRycjdXNk54U3k2K2"
-        "5zbGRmQzlUUFRNdStyS2I1K2lLQk5ubndnRT0SGGFWZ2pPcEdiUVYyYnhFSkR3MklmU1E9PSJICixBbG9HNDhZZldM"
-        "VldLRTQyckpTN1JZTmhzbk1MR0V6aFN5emJ6RVZCV0cwPRIYN0Y0Ny84dm5UeFNZamUxR3dHZnRZZz09EqkCCogBCi"
-        "xBcEJybWswUEh4UHA0RWx2bmhsbXdFaUFrbFZkRGJYK01pY3FNTDU5MWVDMhJYSEM3L1NKbVFxc0krclBxZEY5cGJN"
-        "ejU5TTYrVTl0NmI3aEVvSEJ6ZXgzbllXZ3N4ZndFYWtBN0JvMWRodzY1a01lNVN1ZTRIdzVzTHRRNHBFQmhQaXJBPR"
-        "IINWViMzZiODUaSAosNUVaRWQwUDI4cEM2U2xjNWdpekNvbUljdU81WENFVnEyc25xb1cxdkFGVT0SGE0wY2RicERU"
-        "UjlhbVZQTDlRbkhvTEE9PSJICixBbG9HNDhZZldMVldLRTQyckpTN1JZTmhzbk1MR0V6aFN5emJ6RVZCV0cwPRIYN0"
-        "Y0Ny84dm5UeFNZamUxR3dHZnRZZz09Go8QCvcHCix5bnkyc0FrWmg0Mzdvajl2djZDQjBIUm9qUkhKYUIyR2tzY1d4"
-        "TVNWU3hnPRIsU2dENkg2Y1BvUk03ZzB1STJiZE9yc0hhMFU2Q3NtYnBGNjQ0MWE0cmRnRT0iLDJyRS9NNW9lUUJ2RU"
-        "tnVStGUkRNeWlleVhHUFF5cUJzZHlybzY0UExQUUU9MtgFZ0c3K0I1Z1V0VWtLbEJ3N3NuVk9DRlU1cVdWN2dtNXJw"
-        "QUtqOHppVUlSejBTcmY5bXg5RWxwQ21HVGZudFJQUUVPWnFORUVDSmpyd3VUY3BGRjlpS0lEVE9PZmhlRzBYcG9FS0"
-        "pTclEzcWxXekNUbUlab2tZcGxxL2tHcWdyZGlUc1p1djR5ZGxacFhGR1BacjNVVk0vZjVJOU8yeTA0dm9xT2lKdzNp"
-        "NUd5UEozUDY4emViZzBaWU8raG1oRkNVdFJVZlg4eWhnSmNsbTAzdTNUbkpES0NRM3NYU1RJS0VYWHVxeG9wYnlDM2"
-        "c1d2NnTitYTy9GMWVIUjVCQzlBRDhHd044UWduZFVTdWZoekJSUGRjcUdNaWNVbVhCNzdlVkdaRUEvcHJNUXU0SUhl"
-        "czRxWUFsYy9ZeU5oRnljamlJRjU1NDJ0OFAxYTdzWkI4bkVJd05pelRidy9uNDRpMnk3b3UyUVJJV3FzOWlqcm93cm"
-        "R4NUpRSlltcUZuaWdVaWdNaXd4eTZqY3RQWXI5RkdMYUdZcHRNU2dqY2FLYmR1L2tlVkI2dytFRGVMSjhzTjZzdmJu"
-        "MVgxb3cwQlprZmZMYkhxZDE1bkRLczZnNWJvdnl3SmlKeGFnUXEvWW9xNmR1aExNKzJ2WFl0NGVaZStBUExNMFVpUG"
-        "RHTDB6VnI5QkhvUDlxWWN4UW9Sdi9hNzNsdUphSEhsMkhQYUx4Uk9uTmV0ZmNNVnh6bVlpYjBmVEJBT0p0RUJZTGxB"
-        "VW5CdDU2YS9kSnV1dU5uL0Uvb0NBaWZiL0N1RFNtZmdzWUh3SnRzc1JJRDFVUmZwOFpzL3JCQ2ptYTlpTUVOaGVrRV"
-        "VyL1ZOY1JNQWlraUYrbm4vVzNVOUhuTGpyM1dCQlhXelZ2Y3pHV3I3QTliM0k0YU1BWnRINm85WmY5NVhqQjdWeWRI"
-        "cStlMmpGWlZ4RTJDTEV4YkRnPT06jwE0dmlnNkR6bnJ2ZHFIUWtHb1VZQ0tQcHp5MC94MVcxQUFNemF4WEtvZXdNPX"
-        "xLTWhPZ2ZkY3g1YU45bTArbnBQQUd5cjl5NDU2L09GZnlPKzRlU2lQNlFzPXx2aVloU29ZajNNYW14eXh6ZnA2eGtR"
-        "MXY3ZXlSWGkwWTRUc3VkNGhqNncwPXw1ZWIzNmI4NRKLCAoscnJJaTE3b0NYNzJEcW9TeUFWWkpoSnNtVDNxSjRiZi"
-        "9GUlRmaklXQzdtQT0SLGdEZlRsbTZ1dVNBY2Q0Z0ZGUVM0bTFhc1BJbFdxL0tTeVVXYWhMcjI5RkU9GixFbUxMcmJH"
-        "MHpoMEswalNSNitGdU5lMW1JdzRabTdyczYyc1B1eWg0ZmdBPSIsOWVqVkcrNFVyUTRSUkpXbFVxRnZ4Rmtja2VRYn"
-        "JvMzRTRitEWVphWTdBND0qLGRtTExyYkcwemgwSzBqU1I2K0Z1TmUxbUl3NFptN3JzNjJzUHV5aDRmZ0E9MtgFbHRL"
-        "a1VpU1pzMEFncnhBNUc1WmtQOVRiSkFKV2hlcFYyNGcralJtVHNuUXczM0hRMWRzM2l6bmdEV2piNlBpM2pLZWQ5M1"
-        "pWTFhRbjkxcXJxUzYzYkVybjBhTG8yY3RUWThjRlpGOCsyS21mQmVnTDZKWEJBUjZyMW5Bc2ZKczE4clFKQTlKS1hU"
-        "S0JUUmkyZ01RRi9FV3FHVjlFLzlmTG1LOUpOQXFkWVc3TGZNUkgwZ29INTUxNk1iaHR1dWlmeXdrWTVZUFhtM1NHTH"
-        "hPTUhKMFdBdjN2NTZLbjZjTVNSd2JMaVBYdFgzek9Xc0lZK2h2MklMRmY4UUR1bjZRSE5jYmZrdjdUWTBuOWxJT2d6"
-        "RG9zMG5UWDlBN2dKdHorZ0VJc3pmR2tUQVB3aERGNVEvb0E4a3pxRDBLQndJZlpOa3pJL3R6Y2ZKY2ZiNlluWis1Vk"
-        "cwenN1LzlCeDRjSEIxaXlJajM0eHJnOW8rYVNFeUxxNEFPZmsvTFBidEJvbnZFY0c2ZXpDVis3QUdhZHQ3KzRDTThs"
-        "WUlsamZRSVlLcG55NHY2QytSejg2R29pcmlVZEFNTmxsZmdKSUVFSnlvYjRMTFVveXIzTUx4ang1cjZtWFBSQ3pCUj"
-        "JDN1lQUFB2TWxTU1pHY0FHWUM0SkdqZUZaak1pOTc3ZUh6bDdzcHY5OHNLZVpCUnFPbENUeGJOQjQ2cjN0VXVjZjU3"
-        "ZjRtMzBFdVZCMTFsU3oxelRrc21aNXVrTnZuRFNWYW8rcS9NQXFPbGhUZE03VEhBL2MrU2pmVGJjdWZTRGNtanhYWH"
-        "F0TldmTEQ1S0NsaWxTSDhWaW5XSmtZWS9TZmhNVXBtWWo4TWhhbUF0V1dLK3dpZk54ai9yNFBjcTRuV2g0TEFFc1ZY"
-        "cWloZzEzUm5sUjRZd0ZjYnJTKzR2VGptZEgrOXp5QnBIdlZmcVBmaGFLYngvZEJ3PT1CSAosMVBDOWRycjdXNk54U3"
-        "k2K25zbGRmQzlUUFRNdStyS2I1K2lLQk5ubndnRT0SGGFWZ2pPcEdiUVYyYnhFSkR3MklmU1E9PRoFc3BsaXQ=";
-    bytes param = abi.abiIn(API_CONFIDENTIAL_PAYMENT_VERIFY_SPLIT_CREDIT, splitRequest);
-    // confidentialPaymentVerifySplitCredit(string splitRequest)
-    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param))->execResult();
+// BOOST_AUTO_TEST_CASE(confidentialPaymentVerifySplitCredit)
+// {
+//     dev::eth::ContractABI abi;
+//     std::string splitRequest =
+//         "CqkCCogBCixBcEJybWswUEh4UHA0RWx2bmhsbXdFaUFrbFZkRGJYK01pY3FNTDU5MWVDMhJYSEM3L1NKbVFxc0krcl"
+//         "BxZEY5cGJNejU5TTYrVTl0NmI3aEVvSEJ6ZXgzbllXZ3N4ZndFYWtBN0JvMWRodzY1a01lNVN1ZTRIdzVzTHRRNHBF"
+//         "QmhQaXJBPRIINWViMzZiODUaSAosQWxvRzQ4WWZXTFZXS0U0MnJKUzdSWU5oc25NTEdFemhTeXpiekVWQldHMD0SGD"
+//         "dGNDcvOHZuVHhTWWplMUd3R2Z0WWc9PSJICixBbG9HNDhZZldMVldLRTQyckpTN1JZTmhzbk1MR0V6aFN5emJ6RVZC"
+//         "V0cwPRIYN0Y0Ny84dm5UeFNZamUxR3dHZnRZZz09EqkCCogBCixBcEJybWswUEh4UHA0RWx2bmhsbXdFaUFrbFZkRG"
+//         "JYK01pY3FNTDU5MWVDMhJYSEM3L1NKbVFxc0krclBxZEY5cGJNejU5TTYrVTl0NmI3aEVvSEJ6ZXgzbllXZ3N4ZndF"
+//         "YWtBN0JvMWRodzY1a01lNVN1ZTRIdzVzTHRRNHBFQmhQaXJBPRIINWViMzZiODUaSAosMVBDOWRycjdXNk54U3k2K2"
+//         "5zbGRmQzlUUFRNdStyS2I1K2lLQk5ubndnRT0SGGFWZ2pPcEdiUVYyYnhFSkR3MklmU1E9PSJICixBbG9HNDhZZldM"
+//         "VldLRTQyckpTN1JZTmhzbk1MR0V6aFN5emJ6RVZCV0cwPRIYN0Y0Ny84dm5UeFNZamUxR3dHZnRZZz09EqkCCogBCi"
+//         "xBcEJybWswUEh4UHA0RWx2bmhsbXdFaUFrbFZkRGJYK01pY3FNTDU5MWVDMhJYSEM3L1NKbVFxc0krclBxZEY5cGJN"
+//         "ejU5TTYrVTl0NmI3aEVvSEJ6ZXgzbllXZ3N4ZndFYWtBN0JvMWRodzY1a01lNVN1ZTRIdzVzTHRRNHBFQmhQaXJBPR"
+//         "IINWViMzZiODUaSAosNUVaRWQwUDI4cEM2U2xjNWdpekNvbUljdU81WENFVnEyc25xb1cxdkFGVT0SGE0wY2RicERU"
+//         "UjlhbVZQTDlRbkhvTEE9PSJICixBbG9HNDhZZldMVldLRTQyckpTN1JZTmhzbk1MR0V6aFN5emJ6RVZCV0cwPRIYN0"
+//         "Y0Ny84dm5UeFNZamUxR3dHZnRZZz09Go8QCvcHCix5bnkyc0FrWmg0Mzdvajl2djZDQjBIUm9qUkhKYUIyR2tzY1d4"
+//         "TVNWU3hnPRIsU2dENkg2Y1BvUk03ZzB1STJiZE9yc0hhMFU2Q3NtYnBGNjQ0MWE0cmRnRT0iLDJyRS9NNW9lUUJ2RU"
+//         "tnVStGUkRNeWlleVhHUFF5cUJzZHlybzY0UExQUUU9MtgFZ0c3K0I1Z1V0VWtLbEJ3N3NuVk9DRlU1cVdWN2dtNXJw"
+//         "QUtqOHppVUlSejBTcmY5bXg5RWxwQ21HVGZudFJQUUVPWnFORUVDSmpyd3VUY3BGRjlpS0lEVE9PZmhlRzBYcG9FS0"
+//         "pTclEzcWxXekNUbUlab2tZcGxxL2tHcWdyZGlUc1p1djR5ZGxacFhGR1BacjNVVk0vZjVJOU8yeTA0dm9xT2lKdzNp"
+//         "NUd5UEozUDY4emViZzBaWU8raG1oRkNVdFJVZlg4eWhnSmNsbTAzdTNUbkpES0NRM3NYU1RJS0VYWHVxeG9wYnlDM2"
+//         "c1d2NnTitYTy9GMWVIUjVCQzlBRDhHd044UWduZFVTdWZoekJSUGRjcUdNaWNVbVhCNzdlVkdaRUEvcHJNUXU0SUhl"
+//         "czRxWUFsYy9ZeU5oRnljamlJRjU1NDJ0OFAxYTdzWkI4bkVJd05pelRidy9uNDRpMnk3b3UyUVJJV3FzOWlqcm93cm"
+//         "R4NUpRSlltcUZuaWdVaWdNaXd4eTZqY3RQWXI5RkdMYUdZcHRNU2dqY2FLYmR1L2tlVkI2dytFRGVMSjhzTjZzdmJu"
+//         "MVgxb3cwQlprZmZMYkhxZDE1bkRLczZnNWJvdnl3SmlKeGFnUXEvWW9xNmR1aExNKzJ2WFl0NGVaZStBUExNMFVpUG"
+//         "RHTDB6VnI5QkhvUDlxWWN4UW9Sdi9hNzNsdUphSEhsMkhQYUx4Uk9uTmV0ZmNNVnh6bVlpYjBmVEJBT0p0RUJZTGxB"
+//         "VW5CdDU2YS9kSnV1dU5uL0Uvb0NBaWZiL0N1RFNtZmdzWUh3SnRzc1JJRDFVUmZwOFpzL3JCQ2ptYTlpTUVOaGVrRV"
+//         "VyL1ZOY1JNQWlraUYrbm4vVzNVOUhuTGpyM1dCQlhXelZ2Y3pHV3I3QTliM0k0YU1BWnRINm85WmY5NVhqQjdWeWRI"
+//         "cStlMmpGWlZ4RTJDTEV4YkRnPT06jwE0dmlnNkR6bnJ2ZHFIUWtHb1VZQ0tQcHp5MC94MVcxQUFNemF4WEtvZXdNPX"
+//         "xLTWhPZ2ZkY3g1YU45bTArbnBQQUd5cjl5NDU2L09GZnlPKzRlU2lQNlFzPXx2aVloU29ZajNNYW14eXh6ZnA2eGtR"
+//         "MXY3ZXlSWGkwWTRUc3VkNGhqNncwPXw1ZWIzNmI4NRKLCAoscnJJaTE3b0NYNzJEcW9TeUFWWkpoSnNtVDNxSjRiZi"
+//         "9GUlRmaklXQzdtQT0SLGdEZlRsbTZ1dVNBY2Q0Z0ZGUVM0bTFhc1BJbFdxL0tTeVVXYWhMcjI5RkU9GixFbUxMcmJH"
+//         "MHpoMEswalNSNitGdU5lMW1JdzRabTdyczYyc1B1eWg0ZmdBPSIsOWVqVkcrNFVyUTRSUkpXbFVxRnZ4Rmtja2VRYn"
+//         "JvMzRTRitEWVphWTdBND0qLGRtTExyYkcwemgwSzBqU1I2K0Z1TmUxbUl3NFptN3JzNjJzUHV5aDRmZ0E9MtgFbHRL"
+//         "a1VpU1pzMEFncnhBNUc1WmtQOVRiSkFKV2hlcFYyNGcralJtVHNuUXczM0hRMWRzM2l6bmdEV2piNlBpM2pLZWQ5M1"
+//         "pWTFhRbjkxcXJxUzYzYkVybjBhTG8yY3RUWThjRlpGOCsyS21mQmVnTDZKWEJBUjZyMW5Bc2ZKczE4clFKQTlKS1hU"
+//         "S0JUUmkyZ01RRi9FV3FHVjlFLzlmTG1LOUpOQXFkWVc3TGZNUkgwZ29INTUxNk1iaHR1dWlmeXdrWTVZUFhtM1NHTH"
+//         "hPTUhKMFdBdjN2NTZLbjZjTVNSd2JMaVBYdFgzek9Xc0lZK2h2MklMRmY4UUR1bjZRSE5jYmZrdjdUWTBuOWxJT2d6"
+//         "RG9zMG5UWDlBN2dKdHorZ0VJc3pmR2tUQVB3aERGNVEvb0E4a3pxRDBLQndJZlpOa3pJL3R6Y2ZKY2ZiNlluWis1Vk"
+//         "cwenN1LzlCeDRjSEIxaXlJajM0eHJnOW8rYVNFeUxxNEFPZmsvTFBidEJvbnZFY0c2ZXpDVis3QUdhZHQ3KzRDTThs"
+//         "WUlsamZRSVlLcG55NHY2QytSejg2R29pcmlVZEFNTmxsZmdKSUVFSnlvYjRMTFVveXIzTUx4ang1cjZtWFBSQ3pCUj"
+//         "JDN1lQUFB2TWxTU1pHY0FHWUM0SkdqZUZaak1pOTc3ZUh6bDdzcHY5OHNLZVpCUnFPbENUeGJOQjQ2cjN0VXVjZjU3"
+//         "ZjRtMzBFdVZCMTFsU3oxelRrc21aNXVrTnZuRFNWYW8rcS9NQXFPbGhUZE03VEhBL2MrU2pmVGJjdWZTRGNtanhYWH"
+//         "F0TldmTEQ1S0NsaWxTSDhWaW5XSmtZWS9TZmhNVXBtWWo4TWhhbUF0V1dLK3dpZk54ai9yNFBjcTRuV2g0TEFFc1ZY"
+//         "cWloZzEzUm5sUjRZd0ZjYnJTKzR2VGptZEgrOXp5QnBIdlZmcVBmaGFLYngvZEJ3PT1CSAosMVBDOWRycjdXNk54U3"
+//         "k2K25zbGRmQzlUUFRNdStyS2I1K2lLQk5ubndnRT0SGGFWZ2pPcEdiUVYyYnhFSkR3MklmU1E9PRoFc3BsaXQ=";
+//     bytes param = abi.abiIn(API_CONFIDENTIAL_PAYMENT_VERIFY_SPLIT_CREDIT, splitRequest);
+//     // confidentialPaymentVerifySplitCredit(string splitRequest)
+//     bytes out = wedprPrecompiled->call(context, bytesConstRef(&param))->execResult();
 
-    std::string spentCurrentCredit;
-    std::string spentCreditStorage;
-    std::string newCurrentCredit1;
-    std::string newCreditStorage1;
-    std::string newCurrentCredit2;
-    std::string newCreditStorage2;
+//     std::string spentCurrentCredit;
+//     std::string spentCreditStorage;
+//     std::string newCurrentCredit1;
+//     std::string newCreditStorage1;
+//     std::string newCurrentCredit2;
+//     std::string newCreditStorage2;
 
-    abi.abiOut(&out, spentCurrentCredit, spentCreditStorage, newCurrentCredit1, newCreditStorage1,
-        newCurrentCredit2, newCreditStorage2);
-    BOOST_TEST(spentCurrentCredit ==
-               "CixBbG9HNDhZZldMVldLRTQyckpTN1JZTmhzbk1MR0V6aFN5emJ6RVZCV0cwPRIYN0Y0Ny84dm5UeFNZamU"
-               "xR3dHZnRZZz09");
-    BOOST_TEST(spentCreditStorage ==
-               "CogBCixBcEJybWswUEh4UHA0RWx2bmhsbXdFaUFrbFZkRGJYK01pY3FNTDU5MWVDMhJYSEM3L1NKbVFxc0k"
-               "rclBxZEY5cGJNejU5TTYrVTl0NmI3aEVvSEJ6ZXgzbllXZ3N4ZndFYWtBN0JvMWRodzY1a01lNVN1ZTRIdz"
-               "VzTHRRNHBFQmhQaXJBPRIINWViMzZiODUaSAosQWxvRzQ4WWZXTFZXS0U0MnJKUzdSWU5oc25NTEdFemhTe"
-               "XpiekVWQldHMD0SGDdGNDcvOHZuVHhTWWplMUd3R2Z0WWc9PSJICixBbG9HNDhZZldMVldLRTQyckpTN1JZ"
-               "Tmhzbk1MR0V6aFN5emJ6RVZCV0cwPRIYN0Y0Ny84dm5UeFNZamUxR3dHZnRZZz09");
-    BOOST_TEST(newCurrentCredit1 ==
-               "CiwxUEM5ZHJyN1c2TnhTeTYrbnNsZGZDOVRQVE11K3JLYjUraUtCTm5ud2dFPRIYYVZnak9wR2JRVjJieEV"
-               "KRHcySWZTUT09");
-    BOOST_TEST(newCreditStorage1 ==
-               "CogBCixBcEJybWswUEh4UHA0RWx2bmhsbXdFaUFrbFZkRGJYK01pY3FNTDU5MWVDMhJYSEM3L1NKbVFxc0k"
-               "rclBxZEY5cGJNejU5TTYrVTl0NmI3aEVvSEJ6ZXgzbllXZ3N4ZndFYWtBN0JvMWRodzY1a01lNVN1ZTRIdz"
-               "VzTHRRNHBFQmhQaXJBPRIINWViMzZiODUaSAosMVBDOWRycjdXNk54U3k2K25zbGRmQzlUUFRNdStyS2I1K"
-               "2lLQk5ubndnRT0SGGFWZ2pPcEdiUVYyYnhFSkR3MklmU1E9PSJICixBbG9HNDhZZldMVldLRTQyckpTN1JZ"
-               "Tmhzbk1MR0V6aFN5emJ6RVZCV0cwPRIYN0Y0Ny84dm5UeFNZamUxR3dHZnRZZz09");
-    BOOST_TEST(newCurrentCredit2 ==
-               "Ciw1RVpFZDBQMjhwQzZTbGM1Z2l6Q29tSWN1TzVYQ0VWcTJzbnFvVzF2QUZVPRIYTTBjZGJwRFRSOWFtVlB"
-               "MOVFuSG9MQT09");
-    BOOST_TEST(newCreditStorage2 ==
-               "CogBCixBcEJybWswUEh4UHA0RWx2bmhsbXdFaUFrbFZkRGJYK01pY3FNTDU5MWVDMhJYSEM3L1NKbVFxc0k"
-               "rclBxZEY5cGJNejU5TTYrVTl0NmI3aEVvSEJ6ZXgzbllXZ3N4ZndFYWtBN0JvMWRodzY1a01lNVN1ZTRIdz"
-               "VzTHRRNHBFQmhQaXJBPRIINWViMzZiODUaSAosNUVaRWQwUDI4cEM2U2xjNWdpekNvbUljdU81WENFVnEyc"
-               "25xb1cxdkFGVT0SGE0wY2RicERUUjlhbVZQTDlRbkhvTEE9PSJICixBbG9HNDhZZldMVldLRTQyckpTN1JZ"
-               "Tmhzbk1MR0V6aFN5emJ6RVZCV0cwPRIYN0Y0Ny84dm5UeFNZamUxR3dHZnRZZz09");
+//     abi.abiOut(&out, spentCurrentCredit, spentCreditStorage, newCurrentCredit1, newCreditStorage1,
+//         newCurrentCredit2, newCreditStorage2);
+//     BOOST_TEST(spentCurrentCredit ==
+//                "CixBbG9HNDhZZldMVldLRTQyckpTN1JZTmhzbk1MR0V6aFN5emJ6RVZCV0cwPRIYN0Y0Ny84dm5UeFNZamU"
+//                "xR3dHZnRZZz09");
+//     BOOST_TEST(spentCreditStorage ==
+//                "CogBCixBcEJybWswUEh4UHA0RWx2bmhsbXdFaUFrbFZkRGJYK01pY3FNTDU5MWVDMhJYSEM3L1NKbVFxc0k"
+//                "rclBxZEY5cGJNejU5TTYrVTl0NmI3aEVvSEJ6ZXgzbllXZ3N4ZndFYWtBN0JvMWRodzY1a01lNVN1ZTRIdz"
+//                "VzTHRRNHBFQmhQaXJBPRIINWViMzZiODUaSAosQWxvRzQ4WWZXTFZXS0U0MnJKUzdSWU5oc25NTEdFemhTe"
+//                "XpiekVWQldHMD0SGDdGNDcvOHZuVHhTWWplMUd3R2Z0WWc9PSJICixBbG9HNDhZZldMVldLRTQyckpTN1JZ"
+//                "Tmhzbk1MR0V6aFN5emJ6RVZCV0cwPRIYN0Y0Ny84dm5UeFNZamUxR3dHZnRZZz09");
+//     BOOST_TEST(newCurrentCredit1 ==
+//                "CiwxUEM5ZHJyN1c2TnhTeTYrbnNsZGZDOVRQVE11K3JLYjUraUtCTm5ud2dFPRIYYVZnak9wR2JRVjJieEV"
+//                "KRHcySWZTUT09");
+//     BOOST_TEST(newCreditStorage1 ==
+//                "CogBCixBcEJybWswUEh4UHA0RWx2bmhsbXdFaUFrbFZkRGJYK01pY3FNTDU5MWVDMhJYSEM3L1NKbVFxc0k"
+//                "rclBxZEY5cGJNejU5TTYrVTl0NmI3aEVvSEJ6ZXgzbllXZ3N4ZndFYWtBN0JvMWRodzY1a01lNVN1ZTRIdz"
+//                "VzTHRRNHBFQmhQaXJBPRIINWViMzZiODUaSAosMVBDOWRycjdXNk54U3k2K25zbGRmQzlUUFRNdStyS2I1K"
+//                "2lLQk5ubndnRT0SGGFWZ2pPcEdiUVYyYnhFSkR3MklmU1E9PSJICixBbG9HNDhZZldMVldLRTQyckpTN1JZ"
+//                "Tmhzbk1MR0V6aFN5emJ6RVZCV0cwPRIYN0Y0Ny84dm5UeFNZamUxR3dHZnRZZz09");
+//     BOOST_TEST(newCurrentCredit2 ==
+//                "Ciw1RVpFZDBQMjhwQzZTbGM1Z2l6Q29tSWN1TzVYQ0VWcTJzbnFvVzF2QUZVPRIYTTBjZGJwRFRSOWFtVlB"
+//                "MOVFuSG9MQT09");
+//     BOOST_TEST(newCreditStorage2 ==
+//                "CogBCixBcEJybWswUEh4UHA0RWx2bmhsbXdFaUFrbFZkRGJYK01pY3FNTDU5MWVDMhJYSEM3L1NKbVFxc0k"
+//                "rclBxZEY5cGJNejU5TTYrVTl0NmI3aEVvSEJ6ZXgzbllXZ3N4ZndFYWtBN0JvMWRodzY1a01lNVN1ZTRIdz"
+//                "VzTHRRNHBFQmhQaXJBPRIINWViMzZiODUaSAosNUVaRWQwUDI4cEM2U2xjNWdpekNvbUljdU81WENFVnEyc"
+//                "25xb1cxdkFGVT0SGE0wY2RicERUUjlhbVZQTDlRbkhvTEE9PSJICixBbG9HNDhZZldMVldLRTQyckpTN1JZ"
+//                "Tmhzbk1MR0V6aFN5emJ6RVZCV0cwPRIYN0Y0Ny84dm5UeFNZamUxR3dHZnRZZz09");
 
-    std::string errorSplitRequest = "123";
-    param = abi.abiIn(API_CONFIDENTIAL_PAYMENT_VERIFY_SPLIT_CREDIT, errorSplitRequest);
-    BOOST_CHECK_THROW(wedprPrecompiled->call(context, bytesConstRef(&param)), boost::exception);
-}
+//     std::string errorSplitRequest = "123";
+//     param = abi.abiIn(API_CONFIDENTIAL_PAYMENT_VERIFY_SPLIT_CREDIT, errorSplitRequest);
+//     BOOST_CHECK_THROW(wedprPrecompiled->call(context, bytesConstRef(&param)), boost::exception);
+// }
 
-BOOST_AUTO_TEST_CASE(anonymousVotingVerifyBoundedVoteRequest)
-{
-    dev::eth::ContractABI abi;
-    std::string systemParameters =
-        "CixDRlU2Z1V0UjRxSUhpWHBzcTc2VTZOOWFhNm1TMjNPcmtEWGllMXovRXdvPRIGS2l0dGVuEgREb2dlEgVCdW5ueQ"
-        "==";
-    std::string voteRequest =
-        "Cs4ECogBClhIRnBxZ091MEZ1dlEyVmd5Z1VrZk1yZHJVNTkxYnAreUVYeThlVkhzZjhsK2ZLV2dSclVCWTBJRzRaND"
-        "FpVkhIcTJJTStoNnRsMGxSNndTU2pHMm0rTGc9EixBcEJybWswUEh4UHA0RWx2bmhsbXdFaUFrbFZkRGJYK01pY3FN"
-        "TDU5MWVDMhJcCixGc0JQY0FOMkZJelgwNkROUHN6akNZU2xQc2Z4a2xaNUswT0lhSjBnR0NzPRIsWURGZThjVnNscF"
-        "h4aXlzZHpxdUxUY1VGY3Z5NCtQRUF2a25POW5BY1VsYz0aLgosWmdoZ3k4cmFzZTBjbUtEYVhBVWdUTEZhUlB0dlpv"
-        "dEhDNEhCdHlEa3h6bz0iZgoGS2l0dGVuElwKLGNsY2NCcm5hZjVGV05MNkRKOHdVNmpPTkhLOFY2VDB2MVlKSm95dT"
-        "RJa0E9EixFaXNGdGJzT2g2RC9ISE9JcFpBb2RvQUV4VzcrWWQ3alRNbFZVcGVRN3k0PSJkCgREb2dlElwKLDRuYlYv"
-        "TGpFcUpDVG1zZ0lEWEFUY0M3RUZEdGx1M2k2cllYK3Zyd3NibVU9Eix6RmticWV4bnpFdkEveFJKZmMrWlhzUWlQaX"
-        "R0c0dXN0g0Skk0N3dhamdvPSJlCgVCdW5ueRJcCiw4aUpmZHJYSXJFZEM0ODBaNHUya0VzeGhvUGFzTkY1MG02UEEv"
-        "c1liQ3pBPRIsc05Da0F1YWVkUEZVTXJQS1N6ano1OXg4YTQreDB0SEJkRkV4VDJwMTBCOD0SmAEKBktpdHRlbhKNAQ"
-        "qKAQosQ3NGUGM2MU5MemtwcEZHWS9IKzB5dzBhNHBseGJnMGlvelVsSHlGcytBVT0SLFJwaGVDRWJSckwzaFRFK1Vq"
-        "c2VJZ25Ld28rS3UxaEE2ZUNiaEJtVVRWZ2M9Giw0Z28zQ1lnb1F4TkMyQlh0Y0c3SENLci8rSk9RR3hMMElLendZWF"
-        "A1RmdjPRKWAQoERG9nZRKNAQqKAQosUFNWZEQ1V0xUdVc4NWw4TWwvRGtrY2RXYlhSbmNoOTZmKzZtUGV0dVhRTT0S"
-        "LEF6TklORW4wWDNXbmR6SkM4ZXZzaGRkSUM2MlpYeDhlVUVobFlyUGZUQXM9GixrL01qUk9lVklSa2JtU3laT2lyNG"
-        "dNbWdoVEY2clJKa0l4OC93U3lncmcwPRKXAQoFQnVubnkSjQEKigEKLDUxQ1QydEd5bGh4MHV6TlpueVlPNDRlZGVN"
-        "NkxBZmI1K05yKyt2MU5od009Eiw2d3htenY3bjNYeTloR1pmU3MzRFVoY251ckcySmc1b2xZK0RzNDNnaWdZPRosU1"
-        "hUcTZBS0NWSUZ1K3hQbVcrZnM3Ui9PWEFVaGRwbnpVVGk2NERWbEV3bz0agAdyTmc2SkpKVStjZjJHZGU3N0xzc2gv"
-        "cmZwUlZXcEdCd1pkS1IrRkdhQldvR1pmeGJpeXdWTmRXQ0dRUzRhclZZUHlVVEZWbkxYdVU2SGZqeVU3ZWZmZG9HMF"
-        "pFZDNPOGxFaE9vSzNjUGVTcjNJV3FleUFuV3dFd0dEd3d4ME9GSEdNKzlybXJ4WFZwTEFWM1N2V0szOFFxVnlReDEz"
-        "SlBpeFNBWWY0SWp4UkFUSitEaGlrZmw4dTZxVGRYYjlidUNkZ2t2STJsNzNrWURxbmlhS202REFPblpEbk5FL29kZ2"
-        "h0UDdPY280THNxSFlDVGk2a1JOVzZqbFpCK2JyR1VDQWxtZlBVajg0cThEU20vMFRCSWVWblR4QlV1LzNlYXFMTHls"
-        "QVVNald3KzJkbm8vL3hHWmgrZEtHd2JMU280cFhSVW1maGlhZm1Nekx5ZEY2THpvTXRaRmEyQ25tdnVQQWZ4TFNBRE"
-        "RtSzQxd05qOXg1QmdDeEJkdmNVQ0Z4MVBlaW05UmhwZXAwL0laaXg0enRlbVQvV1REUG1WSWxEaFhpeko2V3F4NVhx"
-        "WXpNYXRUMk55WDZTYXVCcEhuU0p6OTVETnBMOE9EU29JZkxSR08xSFFRZ2dCY0ovUGRkWFlzY29Fbjc0YXFiU242dD"
-        "V3NTJFMU92eWM4eFgzSDk1UnBJMzlxSGp0TXhvM2FxcmFTZWFKSU9tVDdKY0cvUWZteEg5T3JmbGxybEJRN1pIQkMx"
-        "c0Z1RW1kQnRlbDV2ZGoyRm1ldy9GdE5Ka0FBdy9yUHZST05mSk5wOFFKb0N3OWxBTnVrZFNIcnNaMXQxcWNxbGhIUW"
-        "Yzb1gyVXNOSDRjMERnT1JOLzJOMmsvTFhmWWQxSkdzY3Qvc2ZtS0tRUmF3WThaUVFJSnlXTThvZFBydEwvSFRCaTZq"
-        "Nms1S0NlMmV3ZW1KYnErMXBhRmNuQXNpMmFZUzl3N2Z0QzNJMXFTMERNb1Zvd3VpaFd0NkQraDR3cWJXRnAwMFZYRX"
-        "VJMVpRR1NCQnpCWjFpTENBUEpXWTFUZGp5QjRMV0tMdTBPTnp6aTlmYjcrYjAreUVWMHdJRnJZMjlOelZybW1KalFJ"
-        "cmNDZFVnWDFRVkdTSjNIbDJUaGdBUnVxYUVOem0vMUVpZEJwQVJpOW4wWVJUS1VFdjRUK2sxTVAzSlY3bDZnTCKUAg"
-        "osV2NFT0RuMU8rSnZzRko1RDNjNmYwNTJOV0JobGxNUmFBQTZNVnMxalNBUT0SLHNBRHM5VWVJYnByZ3lrMWpnSXRo"
-        "SC9TckVPQmlXcFlsV0tWVzREYXQ0UVE9Gix3R2JnOUk3c0xXeWRDbnRiUlR5UmtPN2YwUVRlSldYTUsycmtUR1orYk"
-        "FZPSIsVTJxZ1lYbFF5d2p6U2V4RTBod00yakM0aGxSVHByTFE0QXkvVm9DaTlnbz0qLFlxYWRTZmJ6N2F2dUErTEU4"
-        "NTBsb2E0UlFXNm1RSXZrOW43dDVXQk10dzA9MixLd1lHUHV1eWtWb25sY0NHdVp1Wjc0UmF3QTR6M2o1TEVUMGVGTE"
-        "VXVndJPQ==";
-    bytes param =
-        abi.abiIn(API_ANONYMOUS_VOTING_BOUNDED_VERIFY_VOTE_REQUEST, systemParameters, voteRequest);
-    // anonymousVotingVerifyBoundedVoteRequest(string systemParameters, string voteRequest)
-    bytes out = wedprPrecompiled->call(context, bytesConstRef(&param))->execResult();
+// BOOST_AUTO_TEST_CASE(anonymousVotingVerifyBoundedVoteRequest)
+// {
+//     dev::eth::ContractABI abi;
+//     std::string systemParameters =
+//         "CixDRlU2Z1V0UjRxSUhpWHBzcTc2VTZOOWFhNm1TMjNPcmtEWGllMXovRXdvPRIGS2l0dGVuEgREb2dlEgVCdW5ueQ"
+//         "==";
+//     std::string voteRequest =
+//         "Cs4ECogBClhIRnBxZ091MEZ1dlEyVmd5Z1VrZk1yZHJVNTkxYnAreUVYeThlVkhzZjhsK2ZLV2dSclVCWTBJRzRaND"
+//         "FpVkhIcTJJTStoNnRsMGxSNndTU2pHMm0rTGc9EixBcEJybWswUEh4UHA0RWx2bmhsbXdFaUFrbFZkRGJYK01pY3FN"
+//         "TDU5MWVDMhJcCixGc0JQY0FOMkZJelgwNkROUHN6akNZU2xQc2Z4a2xaNUswT0lhSjBnR0NzPRIsWURGZThjVnNscF"
+//         "h4aXlzZHpxdUxUY1VGY3Z5NCtQRUF2a25POW5BY1VsYz0aLgosWmdoZ3k4cmFzZTBjbUtEYVhBVWdUTEZhUlB0dlpv"
+//         "dEhDNEhCdHlEa3h6bz0iZgoGS2l0dGVuElwKLGNsY2NCcm5hZjVGV05MNkRKOHdVNmpPTkhLOFY2VDB2MVlKSm95dT"
+//         "RJa0E9EixFaXNGdGJzT2g2RC9ISE9JcFpBb2RvQUV4VzcrWWQ3alRNbFZVcGVRN3k0PSJkCgREb2dlElwKLDRuYlYv"
+//         "TGpFcUpDVG1zZ0lEWEFUY0M3RUZEdGx1M2k2cllYK3Zyd3NibVU9Eix6RmticWV4bnpFdkEveFJKZmMrWlhzUWlQaX"
+//         "R0c0dXN0g0Skk0N3dhamdvPSJlCgVCdW5ueRJcCiw4aUpmZHJYSXJFZEM0ODBaNHUya0VzeGhvUGFzTkY1MG02UEEv"
+//         "c1liQ3pBPRIsc05Da0F1YWVkUEZVTXJQS1N6ano1OXg4YTQreDB0SEJkRkV4VDJwMTBCOD0SmAEKBktpdHRlbhKNAQ"
+//         "qKAQosQ3NGUGM2MU5MemtwcEZHWS9IKzB5dzBhNHBseGJnMGlvelVsSHlGcytBVT0SLFJwaGVDRWJSckwzaFRFK1Vq"
+//         "c2VJZ25Ld28rS3UxaEE2ZUNiaEJtVVRWZ2M9Giw0Z28zQ1lnb1F4TkMyQlh0Y0c3SENLci8rSk9RR3hMMElLendZWF"
+//         "A1RmdjPRKWAQoERG9nZRKNAQqKAQosUFNWZEQ1V0xUdVc4NWw4TWwvRGtrY2RXYlhSbmNoOTZmKzZtUGV0dVhRTT0S"
+//         "LEF6TklORW4wWDNXbmR6SkM4ZXZzaGRkSUM2MlpYeDhlVUVobFlyUGZUQXM9GixrL01qUk9lVklSa2JtU3laT2lyNG"
+//         "dNbWdoVEY2clJKa0l4OC93U3lncmcwPRKXAQoFQnVubnkSjQEKigEKLDUxQ1QydEd5bGh4MHV6TlpueVlPNDRlZGVN"
+//         "NkxBZmI1K05yKyt2MU5od009Eiw2d3htenY3bjNYeTloR1pmU3MzRFVoY251ckcySmc1b2xZK0RzNDNnaWdZPRosU1"
+//         "hUcTZBS0NWSUZ1K3hQbVcrZnM3Ui9PWEFVaGRwbnpVVGk2NERWbEV3bz0agAdyTmc2SkpKVStjZjJHZGU3N0xzc2gv"
+//         "cmZwUlZXcEdCd1pkS1IrRkdhQldvR1pmeGJpeXdWTmRXQ0dRUzRhclZZUHlVVEZWbkxYdVU2SGZqeVU3ZWZmZG9HMF"
+//         "pFZDNPOGxFaE9vSzNjUGVTcjNJV3FleUFuV3dFd0dEd3d4ME9GSEdNKzlybXJ4WFZwTEFWM1N2V0szOFFxVnlReDEz"
+//         "SlBpeFNBWWY0SWp4UkFUSitEaGlrZmw4dTZxVGRYYjlidUNkZ2t2STJsNzNrWURxbmlhS202REFPblpEbk5FL29kZ2"
+//         "h0UDdPY280THNxSFlDVGk2a1JOVzZqbFpCK2JyR1VDQWxtZlBVajg0cThEU20vMFRCSWVWblR4QlV1LzNlYXFMTHls"
+//         "QVVNald3KzJkbm8vL3hHWmgrZEtHd2JMU280cFhSVW1maGlhZm1Nekx5ZEY2THpvTXRaRmEyQ25tdnVQQWZ4TFNBRE"
+//         "RtSzQxd05qOXg1QmdDeEJkdmNVQ0Z4MVBlaW05UmhwZXAwL0laaXg0enRlbVQvV1REUG1WSWxEaFhpeko2V3F4NVhx"
+//         "WXpNYXRUMk55WDZTYXVCcEhuU0p6OTVETnBMOE9EU29JZkxSR08xSFFRZ2dCY0ovUGRkWFlzY29Fbjc0YXFiU242dD"
+//         "V3NTJFMU92eWM4eFgzSDk1UnBJMzlxSGp0TXhvM2FxcmFTZWFKSU9tVDdKY0cvUWZteEg5T3JmbGxybEJRN1pIQkMx"
+//         "c0Z1RW1kQnRlbDV2ZGoyRm1ldy9GdE5Ka0FBdy9yUHZST05mSk5wOFFKb0N3OWxBTnVrZFNIcnNaMXQxcWNxbGhIUW"
+//         "Yzb1gyVXNOSDRjMERnT1JOLzJOMmsvTFhmWWQxSkdzY3Qvc2ZtS0tRUmF3WThaUVFJSnlXTThvZFBydEwvSFRCaTZq"
+//         "Nms1S0NlMmV3ZW1KYnErMXBhRmNuQXNpMmFZUzl3N2Z0QzNJMXFTMERNb1Zvd3VpaFd0NkQraDR3cWJXRnAwMFZYRX"
+//         "VJMVpRR1NCQnpCWjFpTENBUEpXWTFUZGp5QjRMV0tMdTBPTnp6aTlmYjcrYjAreUVWMHdJRnJZMjlOelZybW1KalFJ"
+//         "cmNDZFVnWDFRVkdTSjNIbDJUaGdBUnVxYUVOem0vMUVpZEJwQVJpOW4wWVJUS1VFdjRUK2sxTVAzSlY3bDZnTCKUAg"
+//         "osV2NFT0RuMU8rSnZzRko1RDNjNmYwNTJOV0JobGxNUmFBQTZNVnMxalNBUT0SLHNBRHM5VWVJYnByZ3lrMWpnSXRo"
+//         "SC9TckVPQmlXcFlsV0tWVzREYXQ0UVE9Gix3R2JnOUk3c0xXeWRDbnRiUlR5UmtPN2YwUVRlSldYTUsycmtUR1orYk"
+//         "FZPSIsVTJxZ1lYbFF5d2p6U2V4RTBod00yakM0aGxSVHByTFE0QXkvVm9DaTlnbz0qLFlxYWRTZmJ6N2F2dUErTEU4"
+//         "NTBsb2E0UlFXNm1RSXZrOW43dDVXQk10dzA9MixLd1lHUHV1eWtWb25sY0NHdVp1Wjc0UmF3QTR6M2o1TEVUMGVGTE"
+//         "VXVndJPQ==";
+//     bytes param =
+//         abi.abiIn(API_ANONYMOUS_VOTING_BOUNDED_VERIFY_VOTE_REQUEST, systemParameters, voteRequest);
+//     // anonymousVotingVerifyBoundedVoteRequest(string systemParameters, string voteRequest)
+//     bytes out = wedprPrecompiled->call(context, bytesConstRef(&param))->execResult();
 
-    std::string blankBallot;
-    std::string voteStoragePart;
-    abi.abiOut(&out, blankBallot, voteStoragePart);
-    BOOST_TEST(blankBallot ==
-               "CixGc0JQY0FOMkZJelgwNkROUHN6akNZU2xQc2Z4a2xaNUswT0lhSjBnR0NzPRIsWURGZThjVnNscFh4aXl"
-               "zZHpxdUxUY1VGY3Z5NCtQRUF2a25POW5BY1VsYz0=");
-    BOOST_TEST(
-        voteStoragePart ==
-        "CogBClhIRnBxZ091MEZ1dlEyVmd5Z1VrZk1yZHJVNTkxYnAreUVYeThlVkhzZjhsK2ZLV2dSclVCWTBJRzRaNDFpVk"
-        "hIcTJJTStoNnRsMGxSNndTU2pHMm0rTGc9EixBcEJybWswUEh4UHA0RWx2bmhsbXdFaUFrbFZkRGJYK01pY3FNTDU5"
-        "MWVDMhJcCixGc0JQY0FOMkZJelgwNkROUHN6akNZU2xQc2Z4a2xaNUswT0lhSjBnR0NzPRIsWURGZThjVnNscFh4aX"
-        "lzZHpxdUxUY1VGY3Z5NCtQRUF2a25POW5BY1VsYz0aLgosWmdoZ3k4cmFzZTBjbUtEYVhBVWdUTEZhUlB0dlpvdEhD"
-        "NEhCdHlEa3h6bz0iZgoGS2l0dGVuElwKLGNsY2NCcm5hZjVGV05MNkRKOHdVNmpPTkhLOFY2VDB2MVlKSm95dTRJa0"
-        "E9EixFaXNGdGJzT2g2RC9ISE9JcFpBb2RvQUV4VzcrWWQ3alRNbFZVcGVRN3k0PSJkCgREb2dlElwKLDRuYlYvTGpF"
-        "cUpDVG1zZ0lEWEFUY0M3RUZEdGx1M2k2cllYK3Zyd3NibVU9Eix6RmticWV4bnpFdkEveFJKZmMrWlhzUWlQaXR0c0"
-        "dXN0g0Skk0N3dhamdvPSJlCgVCdW5ueRJcCiw4aUpmZHJYSXJFZEM0ODBaNHUya0VzeGhvUGFzTkY1MG02UEEvc1li"
-        "Q3pBPRIsc05Da0F1YWVkUEZVTXJQS1N6ano1OXg4YTQreDB0SEJkRkV4VDJwMTBCOD0=");
+//     std::string blankBallot;
+//     std::string voteStoragePart;
+//     abi.abiOut(&out, blankBallot, voteStoragePart);
+//     BOOST_TEST(blankBallot ==
+//                "CixGc0JQY0FOMkZJelgwNkROUHN6akNZU2xQc2Z4a2xaNUswT0lhSjBnR0NzPRIsWURGZThjVnNscFh4aXl"
+//                "zZHpxdUxUY1VGY3Z5NCtQRUF2a25POW5BY1VsYz0=");
+//     BOOST_TEST(
+//         voteStoragePart ==
+//         "CogBClhIRnBxZ091MEZ1dlEyVmd5Z1VrZk1yZHJVNTkxYnAreUVYeThlVkhzZjhsK2ZLV2dSclVCWTBJRzRaNDFpVk"
+//         "hIcTJJTStoNnRsMGxSNndTU2pHMm0rTGc9EixBcEJybWswUEh4UHA0RWx2bmhsbXdFaUFrbFZkRGJYK01pY3FNTDU5"
+//         "MWVDMhJcCixGc0JQY0FOMkZJelgwNkROUHN6akNZU2xQc2Z4a2xaNUswT0lhSjBnR0NzPRIsWURGZThjVnNscFh4aX"
+//         "lzZHpxdUxUY1VGY3Z5NCtQRUF2a25POW5BY1VsYz0aLgosWmdoZ3k4cmFzZTBjbUtEYVhBVWdUTEZhUlB0dlpvdEhD"
+//         "NEhCdHlEa3h6bz0iZgoGS2l0dGVuElwKLGNsY2NCcm5hZjVGV05MNkRKOHdVNmpPTkhLOFY2VDB2MVlKSm95dTRJa0"
+//         "E9EixFaXNGdGJzT2g2RC9ISE9JcFpBb2RvQUV4VzcrWWQ3alRNbFZVcGVRN3k0PSJkCgREb2dlElwKLDRuYlYvTGpF"
+//         "cUpDVG1zZ0lEWEFUY0M3RUZEdGx1M2k2cllYK3Zyd3NibVU9Eix6RmticWV4bnpFdkEveFJKZmMrWlhzUWlQaXR0c0"
+//         "dXN0g0Skk0N3dhamdvPSJlCgVCdW5ueRJcCiw4aUpmZHJYSXJFZEM0ODBaNHUya0VzeGhvUGFzTkY1MG02UEEvc1li"
+//         "Q3pBPRIsc05Da0F1YWVkUEZVTXJQS1N6ano1OXg4YTQreDB0SEJkRkV4VDJwMTBCOD0=");
 
-    std::string errorSystemParameters = "123";
-    std::string errorVoteRequest = "123";
-    param = abi.abiIn(
-        API_ANONYMOUS_VOTING_BOUNDED_VERIFY_VOTE_REQUEST, errorSystemParameters, errorVoteRequest);
-    BOOST_CHECK_THROW(wedprPrecompiled->call(context, bytesConstRef(&param)), boost::exception);
-}
+//     std::string errorSystemParameters = "123";
+//     std::string errorVoteRequest = "123";
+//     param = abi.abiIn(
+//         API_ANONYMOUS_VOTING_BOUNDED_VERIFY_VOTE_REQUEST, errorSystemParameters, errorVoteRequest);
+//     BOOST_CHECK_THROW(wedprPrecompiled->call(context, bytesConstRef(&param)), boost::exception);
+// }
 
 BOOST_AUTO_TEST_CASE(anonymousVotingVerifyUnboundedVoteRequest)
 {
