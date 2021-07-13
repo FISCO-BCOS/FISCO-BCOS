@@ -27,12 +27,18 @@ else()
     message(FATAL "HSM  SDF only support Linux, the ${CMAKE_HOST_SYSTEM_NAME} ${ARCHITECTURE} is not supported.")
 endif()
 
+EXECUTE_PROCESS(COMMAND uname -m COMMAND tr -d '\n' OUTPUT_VARIABLE ARCHITECTURE)
+set(SDF_LIB_NAME "libsdf-crypto_arm.a")
+if("${ARCHITECTURE}" MATCHES "x86_64")
+    set(SDF_LIB_NAME "libsdf-crypto_x86.a")
+endif()
+
 ExternalProject_Add(libsdf
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NAME sdf.zip
     DOWNLOAD_NO_PROGRESS 1
     URL https://github.com/WeBankBlockchain/hsm-crypto/archive/refs/heads/GMT0018.zip
-    URL_HASH SHA256=273fe9bd7a92555ca2ea38c4eef96d21f84aa5668c65e9eeba6132e0328b7149
+    URL_HASH SHA256=7002be7639be810e2ff585013f1b41160113199e1bcf3d143f3b5ee40f4f98bd
     BUILD_IN_SOURCE 1
     LOG_CONFIGURE 1
     LOG_BUILD 1
@@ -49,7 +55,7 @@ set(HSM_INCLUDE_DIR ${SOURCE_DIR}/include)
 set(SDF_INCLUDE_DIR ${SOURCE_DIR}/include/sdf)
 file(MAKE_DIRECTORY ${SDF_INCLUDE_DIR})  # Must exist.
 
-set(SDF_LIB "${SOURCE_DIR}/lib/libsdf-crypto_arm.a")
+set(SDF_LIB "${SOURCE_DIR}/lib/${SDF_LIB_NAME}")
 find_library(SWSDS swsds /usr/lib)
 if(NOT SWSDS)
     message(FATAL " Can not find library libswsds.so under /usr/lib, please make sure you have a crypto PCI card on your machine, as well as the the driver and libraries are installed.")
