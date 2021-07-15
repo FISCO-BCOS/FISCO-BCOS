@@ -49,9 +49,9 @@ Usage:
     -H <HSM module config>      [Optional] if use remote HSM, and internal key, please configure the ip,port,password of HSM
     -h Help
 e.g
-    $0 -g nodes/gmcert/agency -o newNode_GM      #generate gm node certificate, both agency and node use external key.
+    $0 -g nodes/gmcert/agency -o newNode_GM   #generate gm node certificate, both agency and node use external key.
     $0 -g nodes/gmcert/agency -t internalKey -a 21 -o newNode_GM -k internalKey -i 31,32 -H 192.168.10.12,10000,XXXXX          #generate gm node certificate, both agency and node use internal key.
-    $0 -g nodes/gmcert/agency 21 -o newNode_GM -k internalKey -i 31,32        #generate gm node certificate, agency use external key and node use internal key.
+    $0 -g nodes/gmcert/agency -o newNode_GM -k internalKey -i 31,32        #generate gm node certificate, agency use external key and node use internal key.
     $0 -g nodes/gmcert/agency -t internalKey -a 21 -o newSDK_GM -H 192.168.10.12,10000,XXXXX -s      #generate gm sdk certificate, agency use internal key, sdk use external key.
 EOF
 exit 0
@@ -609,8 +609,42 @@ fi
 EOF
 }
 
+generate_script_template()
+{
+    local filepath=$1
+    mkdir -p $(dirname $filepath)
+    cat << EOF > "${filepath}"
+#!/bin/bash
+SHELL_FOLDER=\$(cd \$(dirname \$0);pwd)
 
+LOG_ERROR() {
+    content=\${1}
+    echo -e "\033[31m[ERROR] \${content}\033[0m"
+}
 
+LOG_INFO() {
+    content=\${1}
+    echo -e "\033[32m[INFO] \${content}\033[0m"
+}
+
+EOF
+    chmod +x ${filepath}
+}
+
+generate_swssl_sdf_conf(){
+    local output=${1}
+    cat << EOF > "${output}"
+openssl_conf=openssl_init
+[openssl_init]
+engines=engine_section
+[engine_section]
+sdf=sdf_section
+[sdf_section]
+init=1
+engine_id=sdf
+default_algorithms=ALL
+EOF
+}
 
 main(){
     if [ ! -z "$(openssl version | grep reSSL)" ];then
@@ -630,7 +664,7 @@ main(){
                 rm -rf ${node_dir}
                 echo "continue gm because of length=${len} head=$head2" >>"${logfile}"
                 continue;
-            fi 
+            fi
         fi
         break;
     done
@@ -645,7 +679,11 @@ main(){
         mv "${output_dir}/${conf_path}/gmennode.crt" "${output_dir}/${conf_path}/gmensdk.crt"
         mv "${output_dir}/${conf_path}/gmnode.nodeid" "${output_dir}/${conf_path}/gmsdk.publickey"
         mv "${output_dir}/${conf_path}" "${output_dir}/gm"
+    else
+        generate_node_scripts "${output_dir}" 
     fi
+    generate_swssl_ini "${output_dir}/swsds.ini"
+    generate_swssl_sdf_conf "${output_dir}/swssl.cnf"
     if [ -f "${logfile}" ];then rm "${logfile}";fi
 }
 
