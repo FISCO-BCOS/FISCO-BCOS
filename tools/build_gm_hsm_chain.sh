@@ -289,9 +289,9 @@ if [ -n "${guomi_mode}" ]; then
         chmod u+x swssl
         mkdir -p "${HOME}"/.fisco
         mv swssl "${HOME}"/.fisco/
-        export OPENSSL_CONF="${HOME}"/.fisco/swssl/ssl/swssl.cnf
-        export LD_LIBRARY_PATH="${HOME}"/.fisco/swssl/lib
     fi
+    export OPENSSL_CONF="${HOME}"/.fisco/swssl/ssl/swssl.cnf
+    export LD_LIBRARY_PATH="${HOME}"/.fisco/swssl/lib
     if [[ -n ${hsm_config_array} ]];then
         generate_swssl_ini "${HOME}/.fisco/swssl/bin/swsds.ini"
         generate_swssl_ini "./swsds.ini"
@@ -424,6 +424,7 @@ gen_node_cert_with_index_and_extensions_gm(){
     keyIndex="$8"
     # add key index support
     if [ "${keyType}" == "internalKey" ];then
+        
         cp ../swsds.ini ./
         touch ${HOME}/.rnd
         $SWSSL_CMD req -engine sdf -batch -sm3 -new -subj "/CN=$name/O=fisco-bcos/OU=${type}" -key "sm2_${keyIndex}" -keyform engine -config "$capath/gmcert.cnf" -out "$certpath/gm${type}.csr"  2> /dev/null
@@ -501,7 +502,7 @@ generate_config_ini()
 {
     local output=${1}
     local ip=${2}
-    local offset="${5}"
+    local offset="${6}"
     #offset=$(get_value "${ip//[\.:]/_}_port_offset")
     local node_groups=(${3//,/ })
     local port_array=
@@ -510,7 +511,7 @@ generate_config_ini()
     local node_id="${6}"
     if [[ -n "${4}" ]];then
         read -r -a port_array <<< "${4//,/ }"
-        [ "${node_index}" == "0" ] && { offset=0 && set_value "${ip//[\.:]/_}_port_offset" 0; }
+        [ "${node_id}" == "0" ] && { offset=0 && set_value "${ip//[\.:]/_}_port_offset" 0; }
     fi
 
     sm_crypto="false"
