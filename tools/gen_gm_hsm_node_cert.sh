@@ -3,13 +3,9 @@
 set -e
 
 # SHELL_FOLDER=$(cd $(dirname $0);pwd)
-current_dir=$(pwd)
-
-gmkey_path=""
 output_dir="newNode"
 logfile="build.log"
-
-
+bcos_bin_name=fisco-bcos
 conf_path="conf"
 gm_conf_path="gmconf"
 days=36500 # 100 years
@@ -109,7 +105,6 @@ print_result()
 {
 echo "=============================================================="
 LOG_INFO "Agency Cert Path   : $agency_key_path"
-[ ! -z "${guomi_mode}" ] && LOG_INFO "GM Cert Path: $gmkey_path"
 LOG_INFO "Output Dir  : $output_dir"
 echo "=============================================================="
 LOG_INFO "All completed. Files in $output_dir"

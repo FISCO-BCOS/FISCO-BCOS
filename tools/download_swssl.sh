@@ -2,14 +2,9 @@
 
 set -e
 
-# SHELL_FOLDER=$(cd $(dirname $0);pwd)
-current_dir=$(pwd)
-key_path=""
 gmkey_path=""
 output_dir="newNode"
 logfile="build.log"
-conf_path="conf"
-gm_conf_path="gmconf/"
 SWSSL_CMD="${HOME}"/.fisco/swssl/bin/swssl
 hsm_config_array=
 guomi_mode=
