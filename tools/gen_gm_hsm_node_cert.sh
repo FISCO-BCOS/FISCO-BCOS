@@ -302,6 +302,9 @@ generate_node_scripts()
     generate_script_template "$output/start.sh"
     local ps_cmd="\$(ps aux|grep \${fisco_bcos}|grep -v grep|awk '{print \$2}')"
     local start_cmd="OPENSSL_CONF=./swssl.cnf nohup \${fisco_bcos} -c config.ini >>nohup.out 2>&1 &"
+    if [ ${node_key_type} == "externalKey" ];then
+        start_cmd="nohup \${fisco_bcos} -c config.ini >>nohup.out 2>&1 &"
+    fi
     local stop_cmd="kill \${node_pid}"
     local pid="pid"
     local log_cmd="tail -n20  nohup.out"
@@ -316,6 +319,7 @@ generate_node_scripts()
         log_cmd="tail -n20 \$(docker inspect --format='{{.LogPath}}' \${SHELL_FOLDER//\//})"
         check_success="success"
     fi
+    
     cat << EOF >> "$output/start.sh"
 fisco_bcos=\${SHELL_FOLDER}/${fisco_bin_path}
 cd \${SHELL_FOLDER}
@@ -677,8 +681,10 @@ main(){
     else
         generate_node_scripts "${output_dir}" 
     fi
-    generate_swssl_ini "${output_dir}/swsds.ini"
-    generate_swssl_sdf_conf "${output_dir}/swssl.cnf"
+    if [ ${node_key_type} == "internalKey" ];then
+        generate_swssl_ini "${output_dir}/swsds.ini"
+        generate_swssl_sdf_conf "${output_dir}/swssl.cnf"
+    fi
     if [ -f "${logfile}" ];then rm "${logfile}";fi
 }
 

@@ -2,13 +2,10 @@
 
 set -e
 
-gmkey_path=""
-output_dir="newNode"
+output_dir="swconf"
 logfile="build.log"
 SWSSL_CMD="${HOME}"/.fisco/swssl/bin/swssl
 hsm_config_array=
-guomi_mode=
-sdk_cert=
 
 LOG_WARN()
 {
@@ -25,17 +22,11 @@ LOG_INFO()
 help() {
     cat << EOF
 Usage:
-    -c <cert path>              [Required] cert key path
-    -g <gm cert path>           gmcert key path, if generate gm node cert
-    -s                          If set -s, generate certificate for sdk
     -o <Output Dir>             Default ${output_dir}
     -H <HSM swssl config>       Ip,port,password to connect hardware secure module
     -h Help
 e.g
-//    $0 -c nodes/cert/agency -o newNode                                #generate node certificate
-//    $0 -c nodes/cert/agency -o newSDK -s                              #generate sdk certificate
-    $0 -c nodes/cert/agency -g nodes/gmcert/agency -o newNode_GM      #generate gm node certificate
-    $0 -c nodes/cert/agency -g nodes/gmcert/agency -o newSDK_GM -s    #generate gm sdk certificate
+    $0 -H 192.168.10.12,10000,XXXXX -o swconf      #download swssl and generate config files
 EOF
 
 exit 0
@@ -62,28 +53,23 @@ if [ ! -f "${SWSSL_CMD}" ];then
     mv swssl "${HOME}"/.fisco/
     export OPENSSL_CONF="${HOME}"/.fisco/swssl/ssl/swssl.cnf
     export LD_LIBRARY_PATH="${HOME}"/.fisco/swssl/lib
-    echo $LD_LIBRARY_PATH
+    echo ${LD_LIBRARY_PATH}
 fi
 if [[ -n ${hsm_config_array} ]];then
     generate_swssl_ini "${HOME}/.fisco/swssl/bin/swsds.ini"
-    generate_swssl_ini "swsds.ini"
+    generate_swssl_ini "${output_dir}/swsds.ini"
 fi
 }
 
 parse_params()
 {
-while getopts "c:o:g:H:hs" option;do
+while getopts "o:g:H:hs" option;do
     case $option in
-    c) [ ! -z $OPTARG ] && key_path=$OPTARG
-    ;;
-    o) [ ! -z $OPTARG ] && output_dir=$OPTARG
-    ;;
-    g) guomi_mode="yes" && gmkey_path=$OPTARG
-        check_and_install_tassl
+    o) [ -n $OPTARG ] && output_dir=$OPTARG
     ;;
     H) hsm_config_array=(${OPTARG//,/ });;
-    s) sdk_cert="true";;
     h) help;;
+    *) help;;
     esac
 done
 }

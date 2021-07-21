@@ -95,7 +95,7 @@ Usage:
     -H <HSM module config>              [Optional] if use hsm, please configure this
     -h Help
 e.g
-    $0 -l "127.0.0.1:4"
+    $0 -e ../build/bin/fisco-bcos -f ipAndKeyConfig -H 192.168.10.12,8008,11111111
 EOF
 
 exit 0
