@@ -18,6 +18,7 @@ node_key_type="externalKey"
 node_key_index=
 hsm_config_array=
 output_dir="newNode"
+compatibility_version="2.8.0"
 
 LOG_WARN()
 {
@@ -68,6 +69,7 @@ while getopts "t:g:a:k:i:o:H:X:hs" option;do
     H) hsm_config_array=(${OPTARG//,/ });;
     s) sdk_cert="true";;
     h) help;;
+    *) help;;
     esac
 done
 }
@@ -94,8 +96,7 @@ if [ ! -f "${SWSSL_CMD}" ];then
 fi
 export OPENSSL_CONF="${HOME}"/.fisco/swssl/ssl/swssl.cnf
 export LD_LIBRARY_PATH="${HOME}"/.fisco/swssl/lib
-echo $LD_LIBRARY_PATH
-if [[ -n ${hsm_config_array} ]];then
+if [[ -n "${hsm_config_array}" ]];then
     generate_swssl_ini "${HOME}/.fisco/swssl/bin/swsds.ini"
     generate_swssl_ini "swsds.ini"
 fi
@@ -127,7 +128,7 @@ check_name() {
     local value="$2"
     [[ "$value" =~ ^[a-zA-Z0-9._-]+$ ]] || {
         echo "$name name [$value] invalid, it should match regex: ^[a-zA-Z0-9._-]+\$"
-        exit $EXIT_CODE
+        exit "$EXIT_CODE"
     }
 }
 
@@ -172,19 +173,19 @@ gen_node_cert_with_extensions_gm() {
     # add key index support
     if [ "${keyType}" == "internalKey" ];then
         generate_swssl_ini "swsds.ini"
-        $SWSSL_CMD req -engine sdf -batch -sm3 -new -subj "/CN=$name/O=fisco-bcos/OU=${type}" -key "sm2_${keyIndex}" -keyform engine -config "$capath/gmcert.cnf" -out "$certpath/gm${type}.csr" 2> /dev/null
+        $SWSSL_CMD req -engine sdf -batch -sm3 -new -subj "/CN=${name}/O=fisco-bcos/OU=${type}" -key "sm2_${keyIndex}" -keyform engine -config "${capath}/gmcert.cnf" -out "${certpath}/gm${type}.csr" 2> /dev/null
         rm swsds.ini
     else
-        $SWSSL_CMD genpkey -paramfile "$capath/gmsm2.param" -out "$certpath/gm${type}.key" 2> /dev/null
-        $SWSSL_CMD req -new -subj "/CN=$name/O=fisco-bcos/OU=${type}" -key "$certpath/gm${type}.key" -config "$capath/gmcert.cnf" -out "$certpath/gm${type}.csr" 2> /dev/null
+        $SWSSL_CMD genpkey -paramfile "${capath}/gmsm2.param" -out "$certpath/gm${type}.key" 2> /dev/null
+        $SWSSL_CMD req -new -subj "/CN=${name}/O=fisco-bcos/OU=${type}" -key "${certpath}/gm${type}.key" -config "${capath}/gmcert.cnf" -out "${certpath}/gm${type}.csr" 2> /dev/null
     fi
     if [ -n "${no_agency}" ];then
-        echo "not use $(basename $capath) to sign $(basename $certpath) ${type}" >>"${logfile}"
-        $SWSSL_CMD x509 -sm3 -req -CA "$capath/../gmca.crt" -CAkey "$capath/../gmca.key" -days "${days}" -CAcreateserial -in "$certpath/gm${type}.csr" -out "$certpath/gm${type}.crt" -extfile "$capath/gmcert.cnf" -extensions "$extensions" 2> /dev/null
+        echo "not use $(basename ${capath}) to sign $(basename ${certpath}) ${type}" >>"${logfile}"
+        $SWSSL_CMD x509 -sm3 -req -CA "${capath}/../gmca.crt" -CAkey "$capath/../gmca.key" -days "${days}" -CAcreateserial -in "$certpath/gm${type}.csr" -out "${certpath}/gm${type}.crt" -extfile "$capath/gmcert.cnf" -extensions "${extensions}" 2> /dev/null
     else
         $SWSSL_CMD x509 -sm3 -req -CA "$capath/gmagency.crt" -CAkey "$capath/gmagency.key" -days "${days}" -CAcreateserial -in "$certpath/gm${type}.csr" -out "$certpath/gm${type}.crt" -extfile "$capath/gmcert.cnf" -extensions "$extensions" 2> /dev/null
     fi
-    rm -f $certpath/gm${type}.csr
+    rm -f "${certpath}/gm${type}.csr"
 }
 
 gen_node_cert_with_index_and_extensions_gm(){
@@ -203,37 +204,37 @@ gen_node_cert_with_index_and_extensions_gm(){
     # add key index support
     if [ "${keyType}" == "internalKey" ];then
         generate_swssl_ini "swsds.ini"
-        touch ${HOME}/.rnd
-        $SWSSL_CMD req -engine sdf -batch -sm3 -new -subj "/CN=$name/O=fisco-bcos/OU=${type}" -key "sm2_${keyIndex}" -keyform engine -config "$capath/gmcert.cnf" -out "$certpath/gm${type}.csr"  2> /dev/null
+        touch "${HOME}"/.rnd
+        $SWSSL_CMD req -engine sdf -batch -sm3 -new -subj "/CN=${name}/O=fisco-bcos/OU=${type}" -key "sm2_${keyIndex}" -keyform engine -config "${capath}/gmcert.cnf" -out "${certpath}/gm${type}.csr"  2> /dev/null
         rm swsds.ini
     else
-        $SWSSL_CMD genpkey -paramfile "$capath/gmsm2.param" -out "$certpath/gm${type}.key" 2> /dev/null
-        $SWSSL_CMD req -new -subj "/CN=$name/O=fisco-bcos/OU=${type}" -key "$certpath/gm${type}.key" -config "$capath/gmcert.cnf" -out "$certpath/gm${type}.csr" 2> /dev/null
+        $SWSSL_CMD genpkey -paramfile "${capath}/gmsm2.param" -out "${certpath}/gm${type}.key" 2> /dev/null
+        $SWSSL_CMD req -new -subj "/CN=${name}/O=fisco-bcos/OU=${type}" -key "${certpath}/gm${type}.key" -config "${capath}/gmcert.cnf" -out "${certpath}/gm${type}.csr" 2> /dev/null
     fi
     if [ -n "${no_agency}" ];then
-        echo "not use $(basename $capath) to sign $(basename $certpath) ${type}" >>"${logfile}"
-        $SWSSL_CMD x509 -sm3 -req -CA "$capath/../gmca.crt" -CAkey "$capath/../gmca.key" -days "${days}" -CAcreateserial -in "$certpath/gm${type}.csr" -out "$certpath/gm${type}.crt" -extfile "$capath/gmcert.cnf" -extensions "$extensions" 2> /dev/null
+        echo "not use $(basename ${capath}) to sign $(basename ${certpath}) ${type}" >>"${logfile}"
+        $SWSSL_CMD x509 -sm3 -req -CA "${capath}/../gmca.crt" -CAkey "${capath}/../gmca.key" -days "${days}" -CAcreateserial -in "$certpath/gm${type}.csr" -out "$certpath/gm${type}.crt" -extfile "${capath}/gmcert.cnf" -extensions "${extensions}" 2> /dev/null
     else
         generate_swssl_ini "swsds.ini"
         #$SWSSL_CMD x509 -sm3 -req -CA "$capath/gmagency.crt" -CAkey "$capath/gmagency.key" -days "${days}" -CAcreateserial -in "$certpath/gm${type}.csr" -out "$certpath/gm${type}.crt" -extfile "$capath/gmcert.cnf" -extensions "$extensions" 2> /dev/null
-        $SWSSL_CMD x509 -engine sdf -req -CA "$capath/gmagency.crt" -CAkey "sm2_${agKeyId}" -CAkeyform engine -days "${days}" -CAcreateserial -in "$certpath/gm${type}.csr" -out "$certpath/gm${type}.crt" -extfile "$capath/gmcert.cnf" -extensions "$extensions" 2> /dev/null
+        $SWSSL_CMD x509 -engine sdf -req -CA "${capath}/gmagency.crt" -CAkey "sm2_${agKeyId}" -CAkeyform engine -days "${days}" -CAcreateserial -in "${certpath}/gm${type}.csr" -out "$certpath/gm${type}.crt" -extfile "${capath}/gmcert.cnf" -extensions "${extensions}" 2> /dev/null
         rm swsds.ini
     fi
-    rm -f $certpath/gm${type}.csr
+    rm -f "${certpath}/gm${type}.csr"
 }
 
 gen_node_cert_gm() {
     agpath="${1}"
-    agency=$(basename "$agpath")
+    agency=$(basename "${agpath}")
     ndpath="${2}"
     node=$(basename "$ndpath")
-    dir_must_exists "$agpath"
+    dir_must_exists "${agpath}"
     #file_must_exists "$agpath/gmagency.key"
-    check_name agency "$agency"
-    mkdir -p $ndpath
-    dir_must_exists "$ndpath"
-    check_name node "$node"
-    mkdir -p $ndpath
+    check_name agency "${agency}"
+    mkdir -p "${ndpath}"
+    dir_must_exists "${ndpath}"
+    check_name node "${node}"
+    mkdir -p "${ndpath}"
 
     final=${agpath: -1}
     if [ "${final}" == "/" ];then
@@ -241,11 +242,11 @@ gen_node_cert_gm() {
     fi
     
     if [ -n "${no_agency}" ] || [ "${agency_key_type}" != "internalKey" ];then
-        gen_node_cert_with_extensions_gm "$agpath" "$ndpath" "$node" node v3_req "${node_key_type}" "${node_key_index[0]}"
-        gen_node_cert_with_extensions_gm "$agpath" "$ndpath" "$node" ennode v3enc_req "${node_key_type}" "${node_key_index[1]}"
+        gen_node_cert_with_extensions_gm "${agpath}" "${ndpath}" "${node}" node v3_req "${node_key_type}" "${node_key_index[0]}"
+        gen_node_cert_with_extensions_gm "${agpath}" "${ndpath}" "${node}" ennode v3enc_req "${node_key_type}" "${node_key_index[1]}"
     else
-        gen_node_cert_with_index_and_extensions_gm "$agpath" "${agency_key_index}" "$ndpath" "$node" node v3_req "${node_key_type}" "${node_key_index[0]}"
-        gen_node_cert_with_index_and_extensions_gm "$agpath" "${agency_key_index}" "$ndpath" "$node" ennode v3enc_req "${node_key_type}" "${node_key_index[1]}"
+        gen_node_cert_with_index_and_extensions_gm "${agpath}" "${agency_key_index}" "${ndpath}" "${node}" node v3_req "${node_key_type}" "${node_key_index[0]}"
+        gen_node_cert_with_index_and_extensions_gm "${agpath}" "${agency_key_index}" "${ndpath}" "${node}" ennode v3enc_req "${node_key_type}" "${node_key_index[1]}"
     fi
     if [ "${node_key_type}" = "internalKey" ];then
         generate_swssl_ini "swsds.ini"
@@ -253,7 +254,7 @@ gen_node_cert_gm() {
         $SWSSL_CMD engine sdf -t -post "GET_SM2_PUB:${node_key_index[0]}"  2>&1 | sed '9,$d'|  sed '/|/d'| sed 's/$//;s/ *//g;/^$/d' | sed ':a;N;s/\n//g;ta' | sed 's/000100000000000000000000000000000000000000000000000000000000000000000000//g' | sed 's/0000000000000000000000000000000000000000000000000000000000000000//g'| cat > "$ndpath/gmnode.nodeid"
         rm swsds.ini
     else
-        $SWSSL_CMD ec -in "$ndpath/gmnode.key" -text -noout 2> /dev/null | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}'  | cat > "$ndpath/gmnode.nodeid"
+        $SWSSL_CMD ec -in "${ndpath}/gmnode.key" -text -noout 2> /dev/null | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}'  | cat > "${ndpath}/gmnode.nodeid"
     fi
     #if [ -z "${no_agency}" ];then cat "${agpath}/gmagency.crt" >> "$ndpath/gmnode.crt";fi
     #cat "${agpath}/../gmca.crt" >> "$ndpath/gmnode.crt"
@@ -261,14 +262,14 @@ gen_node_cert_gm() {
     #serial
     if [ "" != "$($SWSSL_CMD version 2> /dev/null | grep 1.1.1i)" ];
     then
-        $SWSSL_CMD x509 -text -in "$ndpath/gmnode.crt" 2> /dev/null | sed -n '5p' |  sed 's/://g' | tr "\n" " " | sed 's/ //g' | sed 's/[a-z]/\u&/g' | cat > "$ndpath/gmnode.serial"
+        $SWSSL_CMD x509 -text -in "${ndpath}/gmnode.crt" 2> /dev/null | sed -n '5p' |  sed 's/://g' | tr "\n" " " | sed 's/ //g' | sed 's/[a-z]/\u&/g' | cat > "${ndpath}/gmnode.serial"
     else
-        $SWSSL_CMD x509 -text -in "$ndpath/gmnode.crt" 2> /dev/null | sed -n '4p' |  sed 's/ //g' | sed 's/.*(0x//g' | sed 's/)//g' |sed 's/[a-z]/\u&/g' | cat > "$ndpath/gmnode.serial"
+        $SWSSL_CMD x509 -text -in "${ndpath}/gmnode.crt" 2> /dev/null | sed -n '4p' |  sed 's/ //g' | sed 's/.*(0x//g' | sed 's/)//g' |sed 's/[a-z]/\u&/g' | cat > "${ndpath}/gmnode.serial"
     fi
-    cp "$agpath/gmca.crt" "$ndpath"
+    cp "${agpath}/gmca.crt" "${ndpath}"
     mkdir -p "${ndpath}/${gm_conf_path}/"
     mv "${ndpath}"/*.* "${ndpath}/${gm_conf_path}/"
-    cat "$agpath/gmagency.crt" >> "${ndpath}/${gm_conf_path}/gmca.crt"
+    cat "${agpath}/gmagency.crt" >> "${ndpath}/${gm_conf_path}/gmca.crt"
 }
 
 generate_swssl_ini()
@@ -292,7 +293,6 @@ service=60
 [ConnectionPool]
 poolsize=2
 EOF
-    printf "  [%d] p2p:%-5d  channel:%-5d  jsonrpc:%-5d\n" "${node_index}" $(( offset + port_array[0] )) $(( offset + port_array[1] )) $(( offset + port_array[2] )) >>"${logfile}"
 }
 
 generate_node_scripts()
@@ -302,7 +302,7 @@ generate_node_scripts()
     generate_script_template "$output/start.sh"
     local ps_cmd="\$(ps aux|grep \${fisco_bcos}|grep -v grep|awk '{print \$2}')"
     local start_cmd="OPENSSL_CONF=./swssl.cnf nohup \${fisco_bcos} -c config.ini >>nohup.out 2>&1 &"
-    if [ ${node_key_type} == "externalKey" ];then
+    if [ "${node_key_type}" == "externalKey" ];then
         start_cmd="nohup \${fisco_bcos} -c config.ini >>nohup.out 2>&1 &"
     fi
     local stop_cmd="kill \${node_pid}"
@@ -611,7 +611,7 @@ EOF
 generate_script_template()
 {
     local filepath=$1
-    mkdir -p $(dirname $filepath)
+    mkdir -p "$(dirname $filepath)"
     cat << EOF > "${filepath}"
 #!/bin/bash
 SHELL_FOLDER=\$(cd \$(dirname \$0);pwd)
@@ -627,7 +627,7 @@ LOG_INFO() {
 }
 
 EOF
-    chmod +x ${filepath}
+    chmod +x "${filepath}"
 }
 
 generate_swssl_sdf_conf(){
@@ -649,28 +649,29 @@ main(){
     if [ ! -z "$(openssl version | grep reSSL)" ];then
         export PATH="/usr/local/opt/openssl/bin:$PATH"
     fi
-    mkdir ${output_dir}
+    mkdir "${output_dir}"
     while :
     do
         gen_node_cert_gm "${agency_key_path}" "${output_dir}" 
-        if [ ${node_key_type} == "externalKey" ];then
+        if [ "${node_key_type}" == "externalKey" ];then
             privateKey=$($SWSSL_CMD ec -in "${output_dir}/${gm_conf_path}/gmnode.key" -text 2> /dev/null| sed -n '3,5p' | sed 's/://g'| tr "\n" " "|sed 's/ //g')
-            echo ${privateKey}
+            echo "${privateKey}"
             len=${#privateKey}
             head2=${privateKey:0:2}
             # private key should not start with 00
             if [ "64" != "${len}" ] || [ "00" == "$head2" ];then
-                rm -rf ${node_dir}
+                rm -rf "${output_dir}"
                 echo "continue gm because of length=${len} head=$head2" >>"${logfile}"
+                mkdir "${output_dir}"
                 continue;
             fi
         fi
         break;
     done
-    mv ${output_dir}/${gm_conf_path} ${output_dir}/${conf_path}
+    mv "${output_dir}"/"${gm_conf_path}" "${output_dir}"/"${conf_path}"
     # generate_node_scripts "${output_dir}"
     if [[ -n "${sdk_cert}" ]]; then
-        if [ ${node_key_type} == "externalKey" ];then
+        if [ "${node_key_type}" == "externalKey" ];then
             mv "${output_dir}/${conf_path}/gmnode.key" "${output_dir}/${conf_path}/gmsdk.key"
             mv "${output_dir}/${conf_path}/gmennode.key" "${output_dir}/${conf_path}/gmensdk.key"
         fi
@@ -688,6 +689,6 @@ main(){
     if [ -f "${logfile}" ];then rm "${logfile}";fi
 }
 
-parse_params $@
+parse_params "$@"
 main
 print_result

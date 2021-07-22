@@ -3,7 +3,6 @@
 set -e
 
 output_dir="swconf"
-logfile="build.log"
 SWSSL_CMD="${HOME}"/.fisco/swssl/bin/swssl
 hsm_config_array=
 
@@ -53,9 +52,8 @@ if [ ! -f "${SWSSL_CMD}" ];then
     mv swssl "${HOME}"/.fisco/
     export OPENSSL_CONF="${HOME}"/.fisco/swssl/ssl/swssl.cnf
     export LD_LIBRARY_PATH="${HOME}"/.fisco/swssl/lib
-    echo ${LD_LIBRARY_PATH}
 fi
-if [[ -n ${hsm_config_array} ]];then
+if [[ -n "${hsm_config_array}" ]];then
     generate_swssl_ini "${HOME}/.fisco/swssl/bin/swsds.ini"
     generate_swssl_ini "${output_dir}/swsds.ini"
 fi
@@ -65,7 +63,7 @@ parse_params()
 {
 while getopts "o:g:H:hs" option;do
     case $option in
-    o) [ -n $OPTARG ] && output_dir=$OPTARG
+    o) [ -n "$OPTARG" ] && output_dir="$OPTARG"
     ;;
     H) hsm_config_array=(${OPTARG//,/ });;
     h) help;;
@@ -82,7 +80,7 @@ if [[ -n ${hsm_config_array} ]];then
     LOG_INFO "SWSSL Config Dir  : ${PWD}/swsds.ini"
 fi
 echo "=============================================================="
-if [[ -n ${hsm_config_array} ]];then
+if [[ -n "${hsm_config_array[0]}" ]];then
     LOG_INFO "Please move ${PWD}/swsds.ini to /etc/swsds.ini to make the config available."
     LOG_INFO "Example command: sudo mv ${PWD}/swsds.ini /etc/swsds.ini"
 fi
@@ -129,9 +127,8 @@ service=60
 [ConnectionPool]
 poolsize=2
 EOF
-    printf "  [%d] p2p:%-5d  channel:%-5d  jsonrpc:%-5d\n" "${node_index}" $(( offset + port_array[0] )) $(( offset + port_array[1] )) $(( offset + port_array[2] )) >>"${logfile}"
 }
 
-parse_params $@
+parse_params "$@"
 check_and_install_swssl
 print_result
