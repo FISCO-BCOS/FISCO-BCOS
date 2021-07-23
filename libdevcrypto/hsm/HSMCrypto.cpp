@@ -22,6 +22,7 @@
 #include "CryptoProvider.h"
 #include "libdevcore/Common.h"
 #include "sdf/SDFCryptoProvider.h"
+#include <libdevcore/CommonData.h>
 
 using namespace std;
 using namespace dev;
@@ -42,31 +43,39 @@ std::string dev::crypto::SDFSM4Encrypt(const unsigned char* _plainData, size_t _
     bytes inDataV(inDataVLen);
     memcpy(inDataV.data(), _plainData, _plainDataSize);
     memset(inDataV.data() + _plainDataSize, nSize, nSize);
+   
     // Encrypt
     Key key = Key();
     std::shared_ptr<const std::vector<byte>> pbKeyValue =
-        std::make_shared<const std::vector<byte>>(_key, _key + 32);
+        std::make_shared<const std::vector<byte>>(_key, _key + 16);
     key.setSymmetricKey(pbKeyValue);
     CryptoProvider& provider = SDFCryptoProvider::GetInstance();
     unsigned int size;
+    //bytes enData(inDataVLen/16);
     string enData;
     enData.resize(inDataVLen);
-    provider.Encrypt(key, SM4_CBC, (unsigned char*)_ivData, _plainData, _plainDataSize,
+    bytes iv(16);
+    memcpy(iv.data(), _ivData, 16);
+    provider.Encrypt(key, SM4_CBC, (unsigned char*)iv.data(), (unsigned char*)inDataV.data(), inDataVLen,
         (unsigned char*)enData.data(), &size);
     return enData;
 }
 std::string dev::crypto::SDFSM4Decrypt(const unsigned char* _cypherData, size_t _cypherDataSize,
     const unsigned char* _key, size_t, const unsigned char* _ivData)
 {
+    
     string deData;
     deData.resize(_cypherDataSize);
     Key key = Key();
     std::shared_ptr<const std::vector<byte>> pbKeyValue =
-        std::make_shared<const std::vector<byte>>(_key, _key + 32);
+        std::make_shared<const std::vector<byte>>(_key, _key + 16);
     key.setSymmetricKey(pbKeyValue);
     CryptoProvider& provider = SDFCryptoProvider::GetInstance();
+
     unsigned int size;
-    provider.Decrypt(key, SM4_CBC, (unsigned char*)_ivData, _cypherData, _cypherDataSize,
+    bytes iv(16);
+    memcpy(iv.data(), _ivData, 16);
+    provider.Decrypt(key, SM4_CBC, (unsigned char*)iv.data(), _cypherData, _cypherDataSize,
         (unsigned char*)deData.data(), &size);
     int padding = deData.at(_cypherDataSize - 1);
     int deLen = _cypherDataSize - padding;

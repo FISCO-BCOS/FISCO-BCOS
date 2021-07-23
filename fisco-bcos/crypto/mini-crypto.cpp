@@ -32,6 +32,18 @@
 #include <libdevcrypto/hsm/HSMSignature.h>
 using namespace dev::crypto;
 using namespace dev;
+constexpr char hexmap[] = {'0', '1', '2', '3', '4', '5', '6', '7',
+                           '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
+std::string hexStr(unsigned char *data, int len)
+{
+  std::string s(len * 2, ' ');
+  for (int i = 0; i < len; ++i) {
+    s[2 * i]     = hexmap[(data[i] & 0xF0) >> 4];
+    s[2 * i + 1] = hexmap[data[i] & 0x0F];
+  }
+  return s;
+}
+
 int main(int, const char* argv[])
 {
     std::cout << "#### begin hsm test" << std::endl;
@@ -57,43 +69,61 @@ int main(int, const char* argv[])
     bool result3 = SDFSM2Verify(kp.pub(), sdfResult, h);
     cout << "*** hardware sign, hardware verify: " << result3 << endl;
     bool result4 = SDFSM2Verify(kp.pub(), swResult, h);
-    cout << "*** soft sign, hardware verify: " << result4 << endl;
+    cout << "*** soft sign, hardware verify: " << result4 << endl<< endl;
 
-
+    cout << "*** soft sm4 enc, hardware decrypt: " << endl;
     const std::string key = "0B780F0F13CE7F3F1383053CAC817ABF";
+    //const std::string key = "0c9c5d0f151fe701be2a5d5bfc947a5f118ff4d31dc11850dda5a6e923d5c8a50c9c5d0f151fe701be2a5d5bfc947a5f118ff4d31dc11850dda5a6e923d5c8a50c9c5d0f151fe701be2a5d5bfc947a5f118ff4d31dc11850dda5a6e923d5c8a50c9c5d0f151fe701be2a5d5bfc947a5f118ff4d31dc11850dda5a6e923d5c8a5";
     const std::string plainData =
         "1E59A21C02EBE011A33A36F497A0D5927EE96088EF3232DA09AD25BE3B1F1C9EF24D357E25B4A15472C41682BE"
         "ACE94E";
     const std::string iv = "B47B07085D258F6EE60790A786C7DFBD";
+    cout << "plain text: " << hexStr((unsigned char*)plainData.data(),plainData.size()) << endl;
+    cout << "plain text len:" << plainData.size() <<endl;
     const std::string endata = sm4Encrypt((const unsigned char*)plainData.data(), plainData.size(),
-        (const unsigned char*)key.data(), key.size(), (const unsigned char*)iv.data());
-
+        (const unsigned char*)key.data(), key.size(), (const unsigned char*)key.data());
+    cout << "soft encrypted text: " << hexStr((unsigned char*)endata.data(),endata.size()) << endl;
+    cout << "soft encrypted text len:" << endata.size() <<endl;
     const std::string dedata = SDFSM4Decrypt((const unsigned char*)endata.data(), endata.size(),
-        (const unsigned char*)key.data(), key.size(), (const unsigned char*)iv.data());
-    int softHardSM4 = plainData.compare(dedata);
-    cout << "*** soft sm4 enc, hardware decrypt: " << softHardSM4 << endl;
+        (const unsigned char*)key.data(), key.size(), (const unsigned char*)key.data());
+    cout << "hardware decrypt text: " << hexStr((unsigned char*)dedata.data(),dedata.size()) << endl;
+    cout << "hardware decrypt text len:" << dedata.size() <<endl<< endl;
+
+    cout << "*** soft sm4 enc, software sm4 decrypt: " << endl;
+    cout << "plain text: " << hexStr((unsigned char*)plainData.data(),plainData.size()) << endl;
+    cout << "plain text len:" << plainData.size() <<endl;
+    const std::string sssendata = sm4Encrypt((const unsigned char*)plainData.data(), plainData.size(),
+        (const unsigned char*)key.data(), key.size(), (const unsigned char*)key.data());
+    cout << "soft encrypted text: " << hexStr((unsigned char*)sssendata.data(),sssendata.size()) << endl;
+    cout << "soft encrypted text len:" << sssendata.size() <<endl;
+    const std::string sssdedata = sm4Decrypt((const unsigned char*)sssendata.data(), sssendata.size(),
+        (const unsigned char*)key.data(), key.size(), (const unsigned char*)key.data());
+    cout << "hardware decrypt text: " << hexStr((unsigned char*)sssdedata.data(),sssdedata.size()) << endl;
+    cout << "hardware decrypt text len:" << sssdedata.size() <<endl<< endl;
 
 
+    cout << "*** hardware sm4 enc, hardware decrypt: " << endl;
+    cout << "plain text: " << hexStr((unsigned char*)plainData.data(),plainData.size()) << endl;
+    cout << "plain text len:" << plainData.size() <<endl;
+    const std::string hhendata = SDFSM4Encrypt((const unsigned char*)plainData.data(), plainData.size(),
+        (const unsigned char*)key.data(), key.size(), (const unsigned char*)key.data());
+    cout << "hardware encrypted text: " << hexStr((unsigned char*)hhendata.data(),hhendata.size()) << endl;
+    cout << "hardware encrypted text len:" << hhendata.size() <<endl;
+    const std::string hhdedata = SDFSM4Decrypt((const unsigned char*)hhendata.data(), hhendata.size(),
+        (const unsigned char*)key.data(), key.size(), (const unsigned char*)key.data());
+    cout << "hardware decrypt text: " << hexStr((unsigned char*)hhdedata.data(),hhdedata.size()) << endl;
+    cout << "hardware decrypt text len:" << hhdedata.size() <<endl<< endl;
+    
+    cout << "*** hardware sm4 enc, software decrypt " << endl;
+    const std::string sdfendata = SDFSM4Encrypt((const unsigned char*)plainData.data(), plainData.size(),
+        (const unsigned char*)key.data(), key.size(), (const unsigned char*)key.data());
+    const std::string softdedata = sm4Decrypt((const unsigned char*)sdfendata.data(), sdfendata.size(),
+        (const unsigned char*)key.data(), key.size(), (const unsigned char*)key.data());
+    cout << "plain text: " << hexStr((unsigned char*)plainData.data(),plainData.size()) << endl;
+    cout << "soft encrypted text: " << hexStr((unsigned char*)sdfendata.data(),sdfendata.size()) << endl;
+    cout << "hardware decrypt text: " << hexStr((unsigned char*)softdedata.data(),softdedata.size()) << endl<< endl;
 
-    // const std::string dedata = sm4Decrypt((const unsigned char*)endata.data(),
-    // endata.size(),(const unsigned char*)key.data(), key.size(), (const unsigned char*)iv.data());
-    // BOOST_CHECK_EQUAL(plainData, dedata);
 
-    const std::string keyWithoutIv = "00000000000000000000000000000000";
-    const std::string plainDataWithoutIv =
-        "5942D6DA31CD0A93E46CF382468710888F4393C6D734B3C6C6C44B1F6F34B08AEE0386B91831A268C4E9815BB6"
-        "1375F4CDA913BA80C37CE6F4971977319CCD7D23502328A45130D0FDF5B63A77EA601F806733FBCADF969B08AA"
-        "9AA56A8B509FAA7E95FC3706E3482EF1532A91DB2EB3EDF234D1E2E57F75B5EACC81A391";
-    const std::string endataWithoutIv = sm4Encrypt((const unsigned char*)plainDataWithoutIv.data(),
-        plainDataWithoutIv.size(), (const unsigned char*)keyWithoutIv.data(), keyWithoutIv.size(),
-        (const unsigned char*)keyWithoutIv.data());
-    const std::string dedataWithoutIv = SDFSM4Decrypt((const unsigned char*)endataWithoutIv.data(),
-        endataWithoutIv.size(), (const unsigned char*)keyWithoutIv.data(), endataWithoutIv.size(),
-        (const unsigned char*)keyWithoutIv.data());
-
-    int softHardSM4WithoutIv = plainDataWithoutIv.compare(dedataWithoutIv);
-
-    cout << "*** soft sm4 enc, hardware decrypt without iv: " << softHardSM4WithoutIv << endl;
 
     std::cout << "*** internal key sign and verify" << std::endl;
     KeyPair keyPair2 = KeyPair::create();
