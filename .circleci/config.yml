@@ -29,7 +29,7 @@ commands:
     steps:
       - run:
           name: Compile
-          no_output_timeout: 30m
+          no_output_timeout: 40m
           command: |
             mkdir -p build && cd build
             << parameters.compiler >> cmake << parameters.options >> ..
@@ -131,6 +131,7 @@ jobs:
             - deps-v2-{{ .Environment.CIRCLE_JOB }}-
       - run:
           name: Compile
+          no_output_timeout: 40m
           command: |
             source /opt/rh/devtoolset-7/enable
             yum list devtoolset-7\*
