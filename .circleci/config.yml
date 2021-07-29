@@ -29,6 +29,7 @@ commands:
     steps:
       - run:
           name: Compile
+          no_output_timeout: 30m
           command: |
             mkdir -p build && cd build
             << parameters.compiler >> cmake << parameters.options >> ..
