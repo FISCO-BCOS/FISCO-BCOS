@@ -123,8 +123,6 @@ int main(int, const char* argv[])
     cout << "soft encrypted text: " << hexStr((unsigned char*)sdfendata.data(),sdfendata.size()) << endl;
     cout << "hardware decrypt text: " << hexStr((unsigned char*)softdedata.data(),softdedata.size()) << endl<< endl;
 
-
-
     std::cout << "*** internal key sign and verify" << std::endl;
     KeyPair keyPair2 = KeyPair::create();
     keyPair2.setKeyIndex(1);
@@ -132,91 +130,75 @@ int main(int, const char* argv[])
     std::cout << "*** internal sign result: r = " << sdfInternalSignResult->r.hex()
               << " s = " << sdfInternalSignResult->s.hex() << std::endl;
 
-    getchar();
+  
     std::cout << "#### begin performance test" << std::endl;
 
     // calculate hash
     std::cout << "### test sm3" << std::endl;
-    clock_t start = clock();
     std::string input = "test_sm3";
+    auto startT = utcTimeUs();
     for (size_t i = 0; i < loopRound; i++)
     {
         sm3(input);
     }
-    clock_t end = clock();
-    std::cout << "Number of calculate round: " << loopRound
-              << ",  duration(s) : " << (double)(end - start) / CLOCKS_PER_SEC << endl;
-    std::cout << "Times per second: " << loopRound / ((double)(end - start) / CLOCKS_PER_SEC)
-              << endl
-              << endl;
+    auto endT = utcTimeUs();
+    double totalCost = endT - startT;
+    std::cout << "#####sm3 totalTimecost:" << totalCost << ", time per sign:" << totalCost/(double)(loopRound) << ", tps:"<< (double)(loopRound)/(totalCost/1000000)<< std::endl << endl;
 
 
     std::cout << "### test SDF sm3" << std::endl;
-    start = clock();
+    startT = utcTimeUs();
     for (size_t i = 0; i < loopRound; i++)
     {
         SDFSM3(input);
     }
-    end = clock();
-    std::cout << "Number of calculate round: " << loopRound
-              << ",  duration(s) : " << (double)(end - start) / CLOCKS_PER_SEC << endl;
-    std::cout << "Times per second: " << loopRound / ((double)(end - start) / CLOCKS_PER_SEC)
-              << endl
-              << endl;
+    endT = utcTimeUs();
+    totalCost = endT - startT;
+    std::cout << "##### SDF SM3 totalTimecost:" << totalCost << ", time per sign:" << totalCost/(double)(loopRound) << ", tps:"<< (double)(loopRound)/(totalCost/1000000)<< std::endl << endl;
+
 
     std::cout << "### test sm2 sign" << std::endl;
     auto hash = sm3(input);
-    start = clock();
+    startT = utcTimeUs();
     for (size_t i = 0; i < loopRound; i++)
     {
         sm2Sign(keyPair, hash);
     }
-    end = clock();
-    std::cout << "Number of calculate round: " << loopRound
-              << ",  duration(s) : " << (double)(end - start) / CLOCKS_PER_SEC << endl;
-    std::cout << "Times per second: " << loopRound / ((double)(end - start) / CLOCKS_PER_SEC)
-              << endl
-              << endl;
+    endT = utcTimeUs();
+    totalCost = endT - startT;
+    std::cout << "##### sign totalTimecost:" << totalCost << ", time per sign:" << totalCost/(double)(loopRound) << ", tps:"<< (double)(loopRound)/(totalCost/1000000)<< std::endl << endl;
+
 
     std::cout << "### test SDF sm2 sign" << std::endl;
-    start = clock();
+    startT = utcTimeUs();
     for (size_t i = 0; i < loopRound; i++)
     {
-        SDFSM2Sign(keyPair, hash);
+        SDFSM2Sign(keyPair2, hash);
     }
-    end = clock();
-    std::cout << "Number of calculate round: " << loopRound
-              << ",  duration(s) : " << (double)(end - start) / CLOCKS_PER_SEC << endl;
-    std::cout << "Times per second: " << loopRound / ((double)(end - start) / CLOCKS_PER_SEC)
-              << endl
-              << endl;
+    endT = utcTimeUs();
+    totalCost = endT - startT;
+    std::cout << "##### SDF sign totalTimecost:" << totalCost << ", time per sign:" << totalCost/(double)(loopRound) << ", tps:"<< (double)(loopRound)/(totalCost/1000000)<< std::endl << endl;
 
     auto signatureResult = sm2Sign(keyPair, hash);
     std::cout << "### test sm2 verify" << std::endl;
-    start = clock();
+    startT = utcTimeUs();
     for (size_t i = 0; i < loopRound; i++)
     {
         sm2Verify(keyPair.pub(), signatureResult, hash);
     }
-    end = clock();
-    std::cout << "Number of calculate round: " << loopRound
-              << ",  duration(s) : " << (double)(end - start) / CLOCKS_PER_SEC << endl;
-    std::cout << "Times per second: " << loopRound / ((double)(end - start) / CLOCKS_PER_SEC)
-              << endl
-              << endl;
+    endT = utcTimeUs();
+    totalCost = endT-startT;
+    std::cout << "##### sm verify totalTimecost:" << totalCost << ", time per verify:" << totalCost/(double)(loopRound) << ", tps:"<< (double)(loopRound)/(totalCost/1000000)<< std::endl << endl;
 
     std::cout << "### test SDF sm2 verify" << std::endl;
-    start = clock();
+    startT = utcTimeUs();
     for (size_t i = 0; i < loopRound; i++)
     {
         SDFSM2Verify(keyPair.pub(), signatureResult, hash);
     }
-    end = clock();
-    std::cout << "Number of calculate round: " << loopRound
-              << ",  duration(s) : " << (double)(end - start) / CLOCKS_PER_SEC << endl;
-    std::cout << "Times per second: " << loopRound / ((double)(end - start) / CLOCKS_PER_SEC)
-              << endl
-              << endl;
+    endT = utcTimeUs();
+    totalCost = endT - startT;
+    std::cout << "##### sdf verfiy totalTimecost:" << totalCost << ", time per verify:" << totalCost/(double)(loopRound) << ", tps:"<< (double)(loopRound)/(totalCost/1000000)<< std::endl << endl;
     std::cout << "#### test end" << std::endl;
-    getchar();
+  
 }
