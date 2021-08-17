@@ -397,9 +397,13 @@ gen_node_cert_with_extensions_gm() {
     keyIndex="$7"
     # add key index support
     if [ "${keyType}" == "internalKey" ];then
-        cp ../swsds.ini ./
+        if [[ -n ${hsm_config_array} ]];then
+	    cp ../swsds.ini ./
+	fi
         $SWSSL_CMD req -engine sdf -batch -sm3 -new -subj "/CN=$name/O=fisco-bcos/OU=${type}" -key "sm2_${keyIndex}" -keyform engine -config "$capath/gmcert.cnf" -out "$certpath/gm${type}.csr" 2> /dev/null
-        rm swsds.ini
+        if [[ -n ${hsm_config_array} ]];then
+	  rm swsds.ini
+	fi
     else
         $SWSSL_CMD genpkey -paramfile "$capath/gmsm2.param" -out "$certpath/gm${type}.key" 2> /dev/null
         $SWSSL_CMD req -new -subj "/CN=$name/O=fisco-bcos/OU=${type}" -key "$certpath/gm${type}.key" -config "$capath/gmcert.cnf" -out "$certpath/gm${type}.csr" 2> /dev/null
@@ -424,11 +428,14 @@ gen_node_cert_with_index_and_extensions_gm(){
     keyIndex="$8"
     # add key index support
     if [ "${keyType}" == "internalKey" ];then
-        
+        if [[ -n ${hsm_config_array} ]];then
         cp ../swsds.ini ./
+	fi
         touch ${HOME}/.rnd
         $SWSSL_CMD req -engine sdf -batch -sm3 -new -subj "/CN=$name/O=fisco-bcos/OU=${type}" -key "sm2_${keyIndex}" -keyform engine -config "$capath/gmcert.cnf" -out "$certpath/gm${type}.csr"  2> /dev/null
-        rm swsds.ini
+        if [[ -n ${hsm_config_array} ]];then
+	rm swsds.ini
+	fi
     else
         $SWSSL_CMD genpkey -paramfile "$capath/gmsm2.param" -out "$certpath/gm${type}.key" 2> /dev/null
         $SWSSL_CMD req -new -subj "/CN=$name/O=fisco-bcos/OU=${type}" -key "$certpath/gm${type}.key" -config "$capath/gmcert.cnf" -out "$certpath/gm${type}.csr" 2> /dev/null
@@ -437,10 +444,14 @@ gen_node_cert_with_index_and_extensions_gm(){
         echo "not use $(basename $capath) to sign $(basename $certpath) ${type}" >>"${logfile}"
         $SWSSL_CMD x509 -sm3 -req -CA "$capath/../gmca.crt" -CAkey "$capath/../gmca.key" -days "${days}" -CAcreateserial -in "$certpath/gm${type}.csr" -out "$certpath/gm${type}.crt" -extfile "$capath/gmcert.cnf" -extensions "$extensions" 2> /dev/null
     else
+	if [[ -n ${hsm_config_array} ]];then
         cp ../swsds.ini ./
+	fi
         #$SWSSL_CMD x509 -sm3 -req -CA "$capath/gmagency.crt" -CAkey "$capath/gmagency.key" -days "${days}" -CAcreateserial -in "$certpath/gm${type}.csr" -out "$certpath/gm${type}.crt" -extfile "$capath/gmcert.cnf" -extensions "$extensions" 2> /dev/null
         $SWSSL_CMD x509 -engine sdf -req -CA "$capath/gmagency.crt" -CAkey "sm2_${agKeyId}" -CAkeyform engine -days "${days}" -CAcreateserial -in "$certpath/gm${type}.csr" -out "$certpath/gm${type}.crt" -extfile "$capath/gmcert.cnf" -extensions "$extensions" 2> /dev/null
-        rm swsds.ini
+        if [[ -n ${hsm_config_array} ]];then
+	rm swsds.ini
+	fi
     fi
     rm -f $certpath/gm${type}.csr
 }
@@ -468,10 +479,14 @@ gen_node_cert_gm() {
         gen_node_cert_with_index_and_extensions_gm "$agpath" "${agency_key_index_array[${agIndex}]}" "$ndpath" "$node" ennode v3enc_req "${node_key_type_array[${nodeIndex}]}" "${enc_key_array[${nodeIndex}]}"
     fi
     if [ "${node_key_type_array[${nodeIndex}]}" = "internalKey" ];then
-        cp ../swsds.ini ./
+        if [[ -n ${hsm_config_array} ]];then
+	    cp ../swsds.ini ./
+	fi
         # $SWSSL_CMD engine sdf -t -post "GET_SM2_PUB:${sign_key_array[${nodeIndex}]}"  2>&1 
         $SWSSL_CMD engine sdf -t -post "GET_SM2_PUB:${sign_key_array[${nodeIndex}]}"  2>&1 | sed '9,$d'|  sed '/|/d'| sed 's/$//;s/ *//g;/^$/d' | sed ':a;N;s/\n//g;ta' | sed 's/000100000000000000000000000000000000000000000000000000000000000000000000//g' | sed 's/0000000000000000000000000000000000000000000000000000000000000000//g'| cat > "$ndpath/gmnode.nodeid"
-        rm swsds.ini
+        if [[ -n ${hsm_config_array} ]];then
+	rm swsds.ini
+	fi
     else
         $SWSSL_CMD ec -in "$ndpath/gmnode.key" -text -noout 2> /dev/null | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}'  | cat > "$ndpath/gmnode.nodeid"
     fi
@@ -1918,8 +1933,10 @@ for line in ${ip_array[*]};do
         fi
         
         if [ ${node_key_type_array[${the_node_index}]} == "internalKey" ];then
-            generate_swssl_ini "${node_dir}/swsds.ini"
+        if [[ -n ${hsm_config_array} ]];then    
+	    generate_swssl_ini "${node_dir}/swsds.ini"
             generate_swssl_sdf_conf "${node_dir}/swssl.cnf"
+    	fi
         else
             cp ${HOME}/.fisco/swssl/ssl/swssl.cnf "${node_dir}/swssl.cnf"
         fi
