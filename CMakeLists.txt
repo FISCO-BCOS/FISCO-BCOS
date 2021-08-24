@@ -61,12 +61,10 @@ include(ProjectGroupSig)
 include(ProjectEVMC)
 include(ProjectVRF)
 include(ProjectEVMONE)
+include(ProjectTASSL)
 
 if(USE_HSM_SDF)
   include(ProjectSDF)
-  include(ProjectSWSSL)
-else()
-  include(ProjectTASSL)
 endif()
 
 include_directories("${CMAKE_SOURCE_DIR}")

@@ -102,12 +102,6 @@ public:
         m_keyIndex = keyIndex;
         m_isInternalKey = true;
     }
-
-    /// Set pub by cert file
-#ifdef FISCO_SDF
-    void set_pub(const std::string& certfile);
-#endif
-
     bool operator==(KeyPair const& _c) const { return m_public == _c.m_public; }
     bool operator!=(KeyPair const& _c) const { return m_public != _c.m_public; }
 
