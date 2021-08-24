@@ -254,7 +254,8 @@ bool Ledger::initBlockVerifier()
     blockVerifier->setExecutiveContextFactory(m_dbInitializer->executiveContextFactory());
     std::shared_ptr<BlockChainImp> blockChain =
         std::dynamic_pointer_cast<BlockChainImp>(m_blockChain);
-    blockVerifier->setNumberHash(boost::bind(&BlockChainImp::numberHash, blockChain, _1));
+    blockVerifier->setNumberHash(
+        boost::bind(&BlockChainImp::numberHash, blockChain, boost::placeholders::_1));
     blockVerifier->setEvmFlags(m_param->mutableGenesisParam().evmFlags);
 
     m_blockVerifier = blockVerifier;
@@ -323,7 +324,8 @@ bool Ledger::initBlockChain()
 
 ConsensusInterface::Ptr Ledger::createConsensusEngine(dev::PROTOCOL_ID const& _protocolId)
 {
-    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0)
+    if (dev::stringCmpIgnoreCase(
+            m_param->mutableConsensusParam().consensusType, PBFT_CONSENSUS_TYPE) == 0)
     {
         Ledger_LOG(INFO) << LOG_DESC("createConsensusEngine: create PBFTEngine");
         return std::make_shared<PBFTEngine>(m_service, m_txPool, m_blockChain, m_sync,
@@ -421,7 +423,8 @@ dev::eth::BlockFactory::Ptr Ledger::createBlockFactory()
         return std::make_shared<dev::eth::BlockFactory>();
     }
     // only create PartiallyBlockFactory when using pbft or rpbft
-    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") == 0 ||
+    if (dev::stringCmpIgnoreCase(
+            m_param->mutableConsensusParam().consensusType, PBFT_CONSENSUS_TYPE) == 0 ||
         normalrPBFTEnabled() || vrfBasedrPBFTEnabled())
     {
         return std::make_shared<dev::eth::PartiallyBlockFactory>();
@@ -495,13 +498,14 @@ bool Ledger::consensusInitFactory()
 {
     Ledger_LOG(INFO) << LOG_BADGE("initLedger") << LOG_BADGE("consensusInitFactory");
     // create RaftSealer
-    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "raft") == 0)
+    if (dev::stringCmpIgnoreCase(
+            m_param->mutableConsensusParam().consensusType, RAFT_CONSENSUS_TYPE) == 0)
     {
         m_sealer = createRaftSealer();
     }
     // create PBFTSealer
-    else if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "pbft") ==
-                 0 ||
+    else if (dev::stringCmpIgnoreCase(
+                 m_param->mutableConsensusParam().consensusType, PBFT_CONSENSUS_TYPE) == 0 ||
              normalrPBFTEnabled() || vrfBasedrPBFTEnabled())
     {
         m_sealer = createPBFTSealer();
@@ -542,7 +546,8 @@ bool Ledger::initSync()
     // raft disable enableSendBlockStatusByTree
     bool enableSendBlockStatusByTree = m_param->mutableSyncParam().enableSendBlockStatusByTree;
     bool enableSendTxsByTree = m_param->mutableSyncParam().enableSendTxsByTree;
-    if (dev::stringCmpIgnoreCase(m_param->mutableConsensusParam().consensusType, "raft") == 0)
+    if (dev::stringCmpIgnoreCase(
+            m_param->mutableConsensusParam().consensusType, RAFT_CONSENSUS_TYPE) == 0)
     {
         Ledger_LOG(INFO) << LOG_DESC("initLedger: disable send_by_tree when use raft");
         enableSendBlockStatusByTree = false;

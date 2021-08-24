@@ -1,15 +1,23 @@
 include(ExternalProject)
 
+if (APPLE)
+    set(SED_CMMAND sed -i .bkp)
+else()
+    set(SED_CMMAND sed -i)
+endif()
+
 ExternalProject_Add(mysqlclient
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NAME mysql-connector-c-6.1.11-src.tar.gz
     DOWNLOAD_NO_PROGRESS 1
+    PATCH_COMMAND ${SED_CMMAND} "366d" cmake/install_macros.cmake COMMAND ${SED_CMMAND} "336,364d" cmake/install_macros.cmake
     BUILD_IN_SOURCE 1
     LOG_CONFIGURE 1
     LOG_BUILD 1
     LOG_INSTALL 1
     URL https://cdn.mysql.com/archives/mysql-connector-c/mysql-connector-c-6.1.11-src.tar.gz
         https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/mysql-connector-c-6.1.11-src.tar.gz
+        https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/FISCO-BCOS/deps/mysql-connector-c-6.1.11-src.tar.gz
     URL_HASH SHA256=c8664851487200162b38b6f3c8db69850bd4f0e4c5ff5a6d161dbfb5cb76b6c4
     #please make sure MYSQL_TCP_PORT is set and not equal to 3306
     CMAKE_ARGS  -DMYSQL_TCP_PORT=3305 -DCMAKE_INSTALL_PREFIX=${CMAKE_SOURCE_DIR}/deps/
@@ -33,7 +41,7 @@ ExternalProject_Add(libzdb DEPENDS mysqlclient
     LOG_CONFIGURE 1
     LOG_BUILD 1
     LOG_INSTALL 1
-    CONFIGURE_COMMAND ${ZDB_CONFIGURE_COMMAND} 
+    CONFIGURE_COMMAND ${ZDB_CONFIGURE_COMMAND}
     BUILD_COMMAND make
     INSTALL_COMMAND ""
     BUILD_BYPRODUCTS <SOURCE_DIR>/.libs/libzdb.a

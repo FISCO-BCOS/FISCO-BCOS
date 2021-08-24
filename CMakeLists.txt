@@ -19,12 +19,13 @@
 # (c) 2016-2018 fisco-dev contributors.
 #------------------------------------------------------------------------------
 
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.12)
 set(FISCO_BCOS_CMAKE_DIR "${CMAKE_CURRENT_LIST_DIR}/cmake" CACHE PATH "The path to the cmake directory")
 list(APPEND CMAKE_MODULE_PATH ${FISCO_BCOS_CMAKE_DIR})
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum OS X deployment version")
 
-project(FISCO-BCOS VERSION "2.7.2")
+
+project(FISCO-BCOS VERSION "2.8.0")
 # Suffix like "-rc1" e.t.c. to append to versions wherever needed.
 set(VERSION_SUFFIX "")
 
@@ -51,7 +52,6 @@ include(ProjectCryptopp)
 include(ProjectSecp256k1)
 include(ProjectJsonCpp)
 include(ProjectJsonRpcCpp)
-include(ProjectTASSL)
 include(ProjectBoost)
 include(ProjectLibzdb)
 include(ProjectTCMalloc)
@@ -61,6 +61,11 @@ include(ProjectGroupSig)
 include(ProjectEVMC)
 include(ProjectVRF)
 include(ProjectEVMONE)
+include(ProjectTASSL)
+
+if(USE_HSM_SDF)
+  include(ProjectSDF)
+endif()
 
 include_directories("${CMAKE_SOURCE_DIR}")
 

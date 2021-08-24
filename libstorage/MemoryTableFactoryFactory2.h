@@ -36,7 +36,7 @@ public:
     TableFactory::Ptr newTableFactory(const dev::h256& hash, int64_t number) override
     {
         MemoryTableFactory2::Ptr tableFactory = std::make_shared<MemoryTableFactory2>();
-        tableFactory->setStateStorage(m_stroage);
+        tableFactory->setStateStorage(m_storage);
         tableFactory->setBlockHash(hash);
         tableFactory->setBlockNum(number);
         // TODO: check if need handle exception
@@ -45,10 +45,10 @@ public:
         return tableFactory;
     }
 
-    void setStorage(dev::storage::Storage::Ptr storage) { m_stroage = storage; }
+    void setStorage(dev::storage::Storage::Ptr storage) { m_storage = storage; }
 
 private:
-    dev::storage::Storage::Ptr m_stroage;
+    dev::storage::Storage::Ptr m_storage;
 };
 
 }  // namespace storage

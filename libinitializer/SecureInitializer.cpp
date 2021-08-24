@@ -381,6 +381,10 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
     std::string caPath = dataPath + "/" + pt.get<std::string>(sectionName + ".ca_path", "");
     std::string enKey = dataPath + pt.get<std::string>(sectionName + ".en_key", "gmennode.key");
     std::string enCert = dataPath + pt.get<std::string>(sectionName + ".en_cert", "gmennode.crt");
+    std::string crypto_provider = pt.get<string>(sectionName + ".crypto_provider", "ssm");
+    std::string keyId = pt.get<std::string>(sectionName + ".key_id", "");
+    std::string encKeyId = pt.get<std::string>(sectionName + ".enckey_id", "");
+    bool use_hsm = dev::stringCmpIgnoreCase(crypto_provider, "hsm") == 0;
     bytes keyContent;
     if (!key.empty())
     {
@@ -448,6 +452,26 @@ ConfigResult initGmConfig(const boost::property_tree::ptree& pt)
     }
 
     KeyPair keyPair = KeyPair(Secret(keyHex));
+    if (use_hsm)
+    {
+        if (dev::stringCmpIgnoreCase(keyId, "") == 0 || dev::stringCmpIgnoreCase(encKeyId, "") == 0)
+        {
+            INITIALIZER_LOG(ERROR) << LOG_BADGE("SecureInitializerGM")
+                                   << LOG_DESC(
+                                          " hsm module is used but key id is not configured. "
+                                          "Please make sure network_security.key_id and "
+                                          "network_security.enckey_id index is configured.");
+            throw std::invalid_argument(
+                "hsm module is used but key id is not configured. Please make sure "
+                "network_security.key_id and network_security.enckey_id index is configured.");
+        }
+        else
+        {
+#ifdef FISCO_SDF
+            keyPair.setKeyIndex(std::stoi(keyId.c_str()));
+#endif
+        }
+    }
 
     std::shared_ptr<boost::asio::ssl::context> sslContext =
         std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv12);

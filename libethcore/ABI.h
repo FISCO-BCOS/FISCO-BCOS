@@ -266,6 +266,8 @@ public:
     // binary type of 32 bytes
     bytes serialise(const string32& _in);
 
+    bytes serialise(const bytes& _in);
+
     // dynamic sized unicode string assumed to be UTF-8 encoded.
     bytes serialise(const std::string& _in);
 
@@ -295,6 +297,7 @@ public:
     void deserialise(string32& _out, std::size_t _offset);
 
     void deserialise(std::string& _out, std::size_t _offset);
+    void deserialise(bytes& _out, std::size_t _offset);
 
     // static array
     template <class T, std::size_t N>
@@ -408,7 +411,7 @@ bytes ContractABI::serialise(const std::array<T, N>& _in)
         content += out;
         if (ABIDynamicType<T>::value)
         {  // dynamic
-            offset_bytes += serialise(static_cast<u256>(length));
+            offset_bytes += serialise(u256(length));
             length += out.size();
         }
     }
@@ -425,14 +428,14 @@ bytes ContractABI::serialise(const std::vector<T>& _in)
 
     auto length = _in.size() * MAX_BYTE_LENGTH;
 
-    offset_bytes += serialise(static_cast<u256>(_in.size()));
+    offset_bytes += serialise(u256(_in.size()));
     for (const auto& t : _in)
     {
         bytes out = serialise(t);
         content += out;
         if (ABIDynamicType<T>::value)
         {  // dynamic
-            offset_bytes += serialise(static_cast<u256>(length));
+            offset_bytes += serialise(u256(length));
             length += out.size();
         }
     }
@@ -502,5 +505,24 @@ inline string32 toString32(std::string const& _s)
     return ret;
 }
 
+inline string32 toString32(dev::h256 const& _hashData)
+{
+    string32 ret;
+    for (unsigned i = 0; i < 32; i++)
+    {
+        ret[i] = _hashData[i];
+    }
+    return ret;
+}
+
+inline dev::h256 fromString32(string32 const& _str)
+{
+    dev::h256 hashData;
+    for (unsigned i = 0; i < 32; i++)
+    {
+        hashData[i] = _str[i];
+    }
+    return hashData;
+}
 }  // namespace eth
 }  // namespace dev

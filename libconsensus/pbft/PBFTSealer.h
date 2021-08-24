@@ -96,7 +96,7 @@ protected:
 
         /// called by the next leader to reset block when it receives the prepare block
         m_pbftEngine->onNotifyNextLeaderReset(
-            boost::bind(&PBFTSealer::resetBlockForNextLeader, this, _1));
+            boost::bind(&PBFTSealer::resetBlockForNextLeader, this, boost::placeholders::_1));
 
         // resetConfig to update m_sealersNum
         m_pbftEngine->resetConfig();
