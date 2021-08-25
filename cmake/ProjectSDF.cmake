@@ -37,8 +37,8 @@ ExternalProject_Add(libsdf
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NAME sdf.zip
     DOWNLOAD_NO_PROGRESS 1
-    URL https://github.com/WeBankBlockchain/hsm-crypto/archive/refs/tags/release-1.0.0.tar.gz
-    URL_HASH SHA256=47c3e024e2b581d2db41f049780576ce3a3ec7c25a5d643176b09e9e69226112
+    URL https://github.com/WeBankBlockchain/hsm-crypto/archive/refs/tags/GMT0018.tar.gz
+    URL_HASH SHA256=f69484f4225c14be4eb85f507f6c699638e5fb43e46ccde31778a7df337c5fd2
     BUILD_IN_SOURCE 1
     LOG_CONFIGURE 1
     LOG_BUILD 1
@@ -56,9 +56,9 @@ set(SDF_INCLUDE_DIR ${SOURCE_DIR}/include/sdf)
 file(MAKE_DIRECTORY ${SDF_INCLUDE_DIR})  # Must exist.
 
 set(SDF_LIB "${SOURCE_DIR}/lib/${SDF_LIB_NAME}")
-find_library(SWSDS swsds /usr/lib)
-if(NOT SWSDS)
-    message(FATAL " Can not find library libswsds.so under /usr/lib, please make sure you have a crypto PCI card on your machine, as well as the the driver and libraries are installed.")
+find_library(GMT0018 gmt0018)
+if(NOT GMT0018)
+    message(FATAL " Can not find library libgmt0018.so under default library path, please make sure you have a crypto PCI card on your machine, as well as the the driver and libraries are installed.")
 endif()
 
 set_property(TARGET SDF PROPERTY IMPORTED_LOCATION ${SDF_LIB})
