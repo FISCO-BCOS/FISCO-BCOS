@@ -8,10 +8,6 @@
     - 支持使用密码卡/密码机进行共识签名、交易验签、落盘加密。
 - 新增哈希计算、签名验证、VRF proof验证相关的Precompiled合约，包括`sm3`, `keccak256Hash`, `sm2Verify`, `curve25519VRFVerify`。
 
-**升级**
-
-- 升级boost版本到1.76
-
 **修复**
 - 修复[issue 1951](https://github.com/FISCO-BCOS/FISCO-BCOS/issues/1951)，解决节点接收非法P2P消息包异常崩溃的问题。
 - 修复在极端异常情况下，共识模块死锁的问题。
