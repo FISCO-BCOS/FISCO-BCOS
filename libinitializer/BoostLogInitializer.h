@@ -81,7 +81,6 @@ public:
 
 using sink_t = boost::log::sinks::asynchronous_sink<Sink>;
 using console_sink_t = boost::log::sinks::asynchronous_sink<ConsoleSink>;
-;
 class LogInitializer
 {
 public:
