@@ -585,7 +585,10 @@ generate_config_ini()
 
 [log]
     enable=true
+    ; the log path, default path is ./log
     log_path=./log
+	; print the log to std::cout or not, default print to the log files
+    console = false
     ; enable/disable the statistics function
     enable_statistic=${enable_statistic}
     ; network statistics interval, unit is second, default is 60s
