@@ -210,12 +210,6 @@ int StashSQLBasicAccess::SelectTableDataByNum(int64_t num, TableInfo::Ptr tableI
         +  " group by _id_ order by _id_ limit " + to_string(counts)
         + ") b on a._id_=b._id_ and a._num_=b.num";
 
-    std::cout << "SelectTableDataByNum sql:" << sql << std::endl;
-//        "select * from " + tableName +
-//        " where (_id_, _num_) in ( select _id_, num from (select _id_, max(_num_) as num from  " +
-//        tableName + " where _id_ > " + to_string(start) + " and _num_ <= " + to_string(num) +
-//        " group by _id_ order by _id_ limit " + to_string(counts) + ") as tmp)";
-
     Connection_T conn = m_connPool->GetConnection();
     uint32_t retryCnt = 0;
     uint32_t retryMax = 10;
