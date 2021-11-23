@@ -1,6 +1,0 @@
-function(eth_apply TARGET REQUIRED)
-set(OPENSSL_INCLUDE_DIRS ${TASSL_INCLUDE_DIRS})
-target_include_directories(${TARGET} SYSTEM PUBLIC ${TASSL_INCLUDE_DIRS})
-target_link_libraries(${TARGET} PUBLIC ${TASSL_LIBRARIES})
-set_property(TARGET ${TARGET} PROPERTY INTERFACE_LINK_LIBRARIES ${TASSL_LIBRARIES})
-endfunction()
