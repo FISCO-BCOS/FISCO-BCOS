@@ -1,11 +1,6 @@
 name: FISCO-BCOS GitHub Actions
 on:
   push:
-    branches-ignore:
-      - "**-1.3"
-      - "**-1.5"
-    tags-ignore:
-      - v1.*
     paths-ignore:
       - "docs/**"
       - "Changelog.md"
@@ -21,52 +16,69 @@ env:
   CCACHE_DIR: ${{ github.workspace }}/ccache
 
 jobs:
-  build:
-    name: build
+  build_with_clang:
+    name: build_with_clang
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-18.04, macos-latest]
+        os: [macos-latest]
     steps:
       - uses: actions/checkout@v2
         with:
           fetch-depth: 5
-      - name: check commit
-        if: ${{ runner.os == 'Linux' && github.base_ref != 'master' && github.event_name == 'pull_request' }}
-        run: bash tools/ci/check-commit.sh
+      - name: install rust language
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2021-06-17
+          override: true
       - uses: actions/cache@v2
         id: cache
         with:
-          path: deps/src
-          key: deps-v8-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          path: |
+            /home/runner/.hunter
+            /Users/runner/.hunter/
+            deps/src
+            ccache
+          key: hunter-clang-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            deps-v8-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            deps-v8-${{ runner.temp }}-${{ github.base_ref }}-
-            deps-v8-${{ runner.temp }}-
-      - uses: actions/cache@v2
-        id: ccache
-        with:
-          path: ccache
-          key: ccache-v3-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-          restore-keys: |
-            ccache-v3-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            ccache-v3-${{ runner.temp }}-${{ github.base_ref }}-
-            ccache-v3-${{ runner.temp }}-
+            hunter-clang-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            hunter-clang-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            hunter-clang-v8-notest-${{ runner.temp }}-
       - name: install macOS dependencies
         if: runner.os == 'macOS'
-        run: brew install openssl@1.1 ccache gmp cmake
+        run: brew install ccache
       - name: install Ubuntu dependencies
         if: runner.os == 'Linux'
-        run: sudo apt install -y git curl build-essential clang cmake libssl-dev zlib1g-dev ccache libgmp-dev flex bison patch
+        run: sudo apt install -y git curl build-essential clang cmake ccache libzstd-dev
       - name: configure
-        run: CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DTESTS=ON .
+        if: runner.os == 'macOS'
+        run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DTEST=ON -DBUILD_STATIC=ON
       - name: compile
-        run: make -j2
-      - name: run uint tests
-        run: CTEST_OUTPUT_ON_FAILURE=TRUE make test
-  macOS_integration_test:
-    name: build_integration_test
-    runs-on: macos-latest
+        run: make -j4 && make tar
+      - name: tar fisco-bcos for MacOS
+        run: mv fisco-bcos/ bin/ && cp tools/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh
+      - uses: actions/upload-artifact@v2
+        with:
+          name: fisco-bcos-MacOS.zip
+          path: bin/fisco-bcos.tar.gz
+      - uses: actions/upload-artifact@v2
+        with:
+          name: BcosRpcService-MacOS.zip
+          path: BcosRpcService.tgz
+      - uses: actions/upload-artifact@v2
+        with:
+          name: BcosGatewayService-MacOS.zip
+          path: BcosGatewayService.tgz
+      - uses: actions/upload-artifact@v2
+        with:
+          name: BcosNodeService-MacOS.zip
+          path: BcosNodeService.tgz
+  build_with_gcc:
+    name: build_with_gcc
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-20.04]
     steps:
       - uses: actions/checkout@v2
         with:
@@ -74,109 +86,116 @@ jobs:
       - uses: actions/cache@v2
         id: cache
         with:
-          path: deps/src
-          key: deps-v5-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          path: |
+            /home/runner/.hunter
+            /Users/runner/.hunter/
+            deps/src
+            ccache
+          key: hunter-gcc-v7-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            deps-v5-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            deps-v5-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            deps-v5-notest-${{ runner.temp }}-
-            deps-v5-${{ runner.temp }}-
-      - uses: actions/cache@v2
-        id: ccache
+            hunter-gcc-v7-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            hunter-gcc-v7-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            hunter-gcc-v7-notest-${{ runner.temp }}-
+      - name: install rust language
+        uses: actions-rs/toolchain@v1
         with:
-          path: ccache
-          key: ccache-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-          restore-keys: |
-            ccache-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            ccache-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            ccache-v2-notest-${{ runner.temp }}-
-      - name: install macOS dependencies
-        run: brew install openssl@1.1 ccache cmake
+          toolchain: nightly-2021-06-17
+          override: true
+      - name: install Ubuntu dependencies
+        run: sudo apt install -y libzstd-dev git curl build-essential cmake ccache
       - name: configure
-        run: cmake .
+        run: cmake . -DTEST=ON
       - name: compile
-        run: make -j2
-      - name: run integration testing
-        run: cd tools && bash ci/ci_check.sh
-      - name: tar fisco-bcos for macOS
-        run: cp tools/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -zcf fisco-bcos.tar.gz fisco-bcos build_chain.sh
-      - uses: actions/upload-artifact@v2
-        with:
-          name: fisco-bcos-macOS.tar.gz
-          path: bin/fisco-bcos.tar.gz
-
-  # ubuntu16_integration_test:
-  #   name: ubuntu16_integration_test
-  #   runs-on: ubuntu-16.04
-  #   steps:
-  #     - uses: actions/checkout@v2
-  #       with:
-  #         fetch-depth: 5
-  #     - uses: actions/cache@v2
-  #       id: cache
-  #       with:
-  #         path: deps/src
-  #         key: deps-v4-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-  #         restore-keys: |
-  #           deps-v4-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-  #           deps-v4-notest-${{ runner.temp }}-${{ github.base_ref }}-
-  #           deps-v4-notest-${{ runner.temp }}-
-  #           deps-v4-${{ runner.temp }}-
-  #     - uses: actions/cache@v2
-  #       id: ccache
-  #       with:
-  #         path: ccache
-  #         key: ccache-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-  #         restore-keys: |
-  #           ccache-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-  #           ccache-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-
-  #           ccache-v2-notest-${{ runner.temp }}-
-  #     - name: install ubuntu dependencies
-  #       run: sudo apt install -y git curl build-essential clang cmake openssl libssl-dev zlib1g-dev ccache libgmp-dev flex bison
-  #     - name: configure
-  #       run: CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake .
-  #     - name: compile
-  #       run: make -j2
-  #     - name: run integration testing
-  #       run: cd tools && bash ci/ci_check.sh
-
-  ubuntu20_integration_test:
-    name: ubuntu20_test
-    runs-on: ubuntu-20.04
+        run: make -j4
+  ubuntu18_04_build_with_gcc:
+    name: ubuntu18_04_build_with_gcc
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-18.04]
     steps:
       - uses: actions/checkout@v2
         with:
           fetch-depth: 5
+      - name: install rust language
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2021-06-17
+          override: true
       - uses: actions/cache@v2
         id: cache
         with:
-          path: deps/src
-          key: deps-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          path: |
+            /home/runner/.hunter
+            /Users/runner/.hunter/
+            deps/src
+            ccache
+          key: hunter-ubuntu-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            deps-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            deps-v3-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            deps-v3-notest-${{ runner.temp }}-
-            deps-v3-${{ runner.temp }}-
-      - uses: actions/cache@v2
-        id: ccache
-        with:
-          path: ccache
-          key: ccache-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-          restore-keys: |
-            ccache-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            ccache-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            ccache-v2-notest-${{ runner.temp }}-
-      - name: install ubuntu dependencies
-        run: sudo apt install -y git curl build-essential clang cmake openssl libssl-dev zlib1g-dev ccache libgmp-dev flex bison
+            hunter-ubuntu-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            hunter-ubuntu-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            hunter-ubuntu-v8-notest-${{ runner.temp }}-
+      - name: install Ubuntu dependencies
+        run: sudo apt-get install -y git curl build-essential cmake ccache lcov libzstd-dev
       - name: configure
-        run: /usr/bin/cmake . -DBUILD_STATIC=ON
+        run: cmake . -DTEST=ON -DTESTS=OFF
       - name: compile
-        run: make -j2
-      - name: run integration testing
-        run: cd tools && bash ci/ci_check.sh
-      - name: tar fisco-bcos for Linux
-        run: cp tools/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -zcf fisco-bcos.tar.gz fisco-bcos build_chain.sh
+        run: make -j4
+  build_with_centos:
+    name: build_with_centos
+    runs-on: ubuntu-latest
+    container:
+      image: docker.io/centos:7
+      volumes:
+        - /github/home/.hunter:/github/home/.hunter
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 5
+      - name: install rust language
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2021-06-17
+          override: true
+      - uses: actions/cache@v2
+        id: cache
+        with:
+          path: |
+            /home/runner/.hunter
+            /github/home/.hunter
+            deps/src
+            ccache
+          key: hunter-centos-v7-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          restore-keys: |
+            hunter-centos-v7-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            hunter-centos-v7-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            hunter-centos-v7-notest-${{ runner.temp }}-
+      - name: install CentOS dependencies
+        run: |
+          yum install -y epel-release centos-release-scl
+          yum install -y git make gcc gcc-c++ glibc-static glibc-devel cmake3 ccache devtoolset-7 libzstd-devel zlib-devel flex bison python-devel python3-devel && source /opt/rh/devtoolset-7/enable
+          alias cmake='cmake3'
+      - name: configure and compile
+        run: |
+          source /opt/rh/devtoolset-7/enable
+          cmake3 . -DBUILD_STATIC=ON -DTEST=ON
+          make -j4
+          make tar
+      - name: tar fisco-bcos for CentOS
+        run: mv fisco-bcos bin && cp tools/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh
       - uses: actions/upload-artifact@v2
         with:
-          name: fisco-bcos.tar.gz
+          name: fisco-bcos-linux.zip
           path: bin/fisco-bcos.tar.gz
+      - uses: actions/upload-artifact@v2
+        with:
+          name: BcosRpcService.zip
+          path: BcosRpcService.tgz
+      - uses: actions/upload-artifact@v2
+        with:
+          name: BcosGatewayService.zip
+          path: BcosGatewayService.tgz
+      - uses: actions/upload-artifact@v2
+        with:
+          name: BcosNodeService.zip
+          path: BcosNodeService.tgz
