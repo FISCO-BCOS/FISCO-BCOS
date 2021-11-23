@@ -43,3 +43,16 @@ bcostars::Error SchedulerServiceServer::call(
         });
     return bcostars::Error();
 }
+
+bcostars::Error SchedulerServiceServer::getCode(
+    const std::string& contract, vector<tars::Char>& code, tars::TarsCurrentPtr current)
+{
+    current->setResponse(false);
+    m_scheduler->getCode(contract, [current](bcos::Error::Ptr error, bcos::bytes code) {
+        vector<tars::Char> outCode(code.begin(), code.end());
+
+        async_response_getCode(current, toTarsError(error), outCode);
+    });
+
+    return bcostars::Error();
+}

@@ -43,6 +43,9 @@ public:
     bcostars::Error call(const bcostars::Transaction& _tx, bcostars::TransactionReceipt& _receipt,
         tars::TarsCurrentPtr current) override;
 
+    bcostars::Error getCode(const std::string& contract, vector<tars::Char>& code,
+        tars::TarsCurrentPtr current) override;
+
 private:
     bcos::scheduler::SchedulerInterface::Ptr m_scheduler;
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;

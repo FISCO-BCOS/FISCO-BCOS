@@ -97,6 +97,13 @@ public:
         m_taskGroup.run(
             [this, callback = std::move(callback)] { m_executor->reset(std::move(callback)); });
     }
+    void getCode(std::string_view contract,
+        std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) override
+    {
+        m_taskGroup.run([this, contract = std::string(contract), callback = std::move(callback)] {
+            m_executor->getCode(contract, std::move(callback));
+        });
+    }
 
 private:
     tbb::task_group m_taskGroup;
