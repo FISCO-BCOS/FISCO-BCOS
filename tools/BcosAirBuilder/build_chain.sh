@@ -29,7 +29,7 @@ command="deploy"
 ca_dir=""
 config_path=""
 docker_mode=
-default_version="v3.1.0"
+default_version="v3.0.0-rc1"
 compatibility_version=${default_version}
 auth_mode="false"
 auth_admin_account=
@@ -384,7 +384,7 @@ help() {
     cat <<EOF
 Usage:
     -C <Command>                        [Optional] the command, support 'deploy' and 'expand' now, default is deploy
-    -v <FISCO-BCOS binary version>      Default is the latest v${default_version}
+    -v <FISCO-BCOS binary version>      Default is the latest ${default_version}
     -l <IP list>                        [Required] "ip1:nodeNum1,ip2:nodeNum2" e.g:"192.168.0.1:2,192.168.0.2:3"
     -o <output dir>                     [Optional] output directory, default ./nodes
     -e <fisco-bcos exec>                [Required] fisco-bcos binary exec
@@ -397,11 +397,13 @@ Usage:
     -a <Auth account>                   [Optional when Auth mode] Specify the admin account address.
     -h Help
 
-e.g
+deploy nodes e.g
     bash $0 -p 30300,20200 -l 127.0.0.1:4 -o nodes -e ./fisco-bcos
     bash $0 -p 30300,20200 -l 127.0.0.1:4 -o nodes -e ./fisco-bcos -s
+expand node e.g
+    bash $0 -C expand -c config -d config/ca -o nodes/127.0.0.1/node5 -e ./fisco-bcos
+    bash $0 -C expand -c config -d config/ca -o nodes/127.0.0.1/node5 -e ./fisco-bcos -s
 EOF
-
     exit 0
 }
 
@@ -933,7 +935,6 @@ expand_node()
     file_must_exists "${config_path}/nodes.json"
     # check binary
     parent_path=$(dirname ${node_dir})
-    binary_path="${parent_path}/${binary_name}"
     if [ -z "${docker_mode}" ];then
         if [ ! -f ${binary_path} ];then
             if [ ! -f "${config_path}/${binary_name}" ];then
