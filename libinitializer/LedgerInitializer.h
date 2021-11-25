@@ -34,8 +34,7 @@ public:
         bcos::protocol::BlockFactory::Ptr _blockFactory,
         bcos::storage::StorageInterface::Ptr _storage, bcos::tool::NodeConfig::Ptr _nodeConfig)
     {
-        auto ledger = std::make_shared<bcos::ledger::Ledger>(
-            _blockFactory, _storage, _nodeConfig->isAuthCheck());
+        auto ledger = std::make_shared<bcos::ledger::Ledger>(_blockFactory, _storage);
         // build genesis block
         ledger->buildGenesisBlock(
             _nodeConfig->ledgerConfig(), _nodeConfig->txGasLimit(), _nodeConfig->genesisData());
