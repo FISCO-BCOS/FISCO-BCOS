@@ -1,0 +1,39 @@
+[chain]
+    ; use SM crypto or not, should nerver be changed
+    sm_crypto=false
+    ; the group id, should nerver be changed
+    group_id=group0
+    ; the chain id, should nerver be changed
+    chain_id=chain0
+[service]
+    rpc=chain0
+    gateway=chain0
+
+[security]
+    private_key_path=conf/node.pem
+
+[consensus]
+    ; min block generation time(ms)
+    min_seal_time=500
+
+[executor]
+    ; use the wasm virtual machine or not
+    is_wasm=false
+
+[storage]
+    data_path=data
+
+[txpool]
+    limit=15000
+    notify_worker_num=2
+    verify_worker_num=2
+[log]
+    enable=true
+    log_path=./log
+    ; network statistics interval, unit is second, default is 60s
+    stat_flush_interval=60
+    ; info debug trace
+    level=DEBUG
+    ; MB
+    max_log_file_size=200
+
