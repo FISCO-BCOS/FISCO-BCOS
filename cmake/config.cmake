@@ -26,14 +26,14 @@ hunter_config(bcos-tars-protocol
 )
 
 hunter_config(bcos-txpool VERSION 3.0.0-local-beda0a00
-    URL  https://${URL_BASE}/FISCO-BCOS/bcos-txpool/archive/aed7970087cb5f96cf2dee1c176b1bc61e7f0de8.tar.gz
-    SHA1 c02eb237c0abfd6103ea40d17779023444fffd14
+    URL  https://${URL_BASE}/FISCO-BCOS/bcos-txpool/archive/073b46bb0c44b048c450416c4dc2b1fb1826e59a.tar.gz
+    SHA1 2250efb98fb2957d6e4dc65e9a6f7d244989bb52
     CMAKE_ARGS URL_BASE=${URL_BASE}  HUNTER_KEEP_PACKAGE_SOURCES=ON
 )
 
 hunter_config(bcos-pbft VERSION 3.0.0-local-a2a9f7d2
-    URL  https://${URL_BASE}/FISCO-BCOS/bcos-pbft/archive/82b16b4a32fa4c77fa3f62f25e2bd303cbea995d.tar.gz
-    SHA1 284d30e389e38fc157ea5f4b0ad7adc2036d46fc
+    URL  https://${URL_BASE}/FISCO-BCOS/bcos-pbft/archive/8de1af448295e560aa4e69273c7a22171d7e9e13.tar.gz
+    SHA1 b9413ac5f9c77b94939d307c2d1abe6db41a849c
     CMAKE_ARGS URL_BASE=${URL_BASE}  HUNTER_KEEP_PACKAGE_SOURCES=ON
 )
 
@@ -82,8 +82,8 @@ hunter_config(bcos-scheduler VERSION 3.0.0-local-b1c450b95b6f83e6a0cf3bd2f385c2d
 )
 
 hunter_config(bcos-rpc VERSION 3.0.0-local
-	URL  https://${URL_BASE}/FISCO-BCOS/bcos-rpc/archive/b186cb7efed8925f77bc1365b0c4f29abbb466da.tar.gz
-    SHA1 87d1186dfce36c4bc5711cf54fa9399ad406db29
+	URL  https://${URL_BASE}/FISCO-BCOS/bcos-rpc/archive/be658f3311f1a40b0351459d7bc24482c056e0e1.tar.gz
+    SHA1 83b949389f1c3148c9d4333bf3dbb12af483098e
     CMAKE_ARGS URL_BASE=${URL_BASE} HUNTER_KEEP_PACKAGE_SOURCES=ON
 )
 
