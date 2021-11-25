@@ -58,6 +58,8 @@ public:
         //        uint8 winRate)                    = 0
         std::vector<Address> initGovernors({Address(_nodeConfig->authAdminAddress())});
         std::vector<string32> weights({bcos::codec::toString32(h256(0))});
+        INITIALIZER_LOG(DEBUG) << LOG_BADGE("AuthInitializer")
+                               << LOG_KV("authAdminAddress", _nodeConfig->authAdminAddress());
 
         // bytes code + abi encode constructor params
         codec::abi::ContractABICodec abi(_protocol->cryptoSuite()->hashImpl());
@@ -68,8 +70,6 @@ public:
             precompiled::AUTH_COMMITTEE_ADDRESS, input, u256(_number), 500, _nodeConfig->chainId(),
             _nodeConfig->groupId(), utcTime());
         block->appendTransaction(tx);
-        INITIALIZER_LOG(DEBUG) << LOG_BADGE("AuthInitializer")
-                               << LOG_KV("initTxHash", tx->hash().hex());
 
         std::promise<bcos::protocol::BlockHeader::Ptr> executedHeader;
         _scheduler->executeBlock(block, false,
@@ -100,7 +100,7 @@ public:
                 committedConfig.set_value(_config);
             });
         auto newConfig = committedConfig.get_future().get();
-        if (newConfig->blockNumber() != _number + 1)
+        if (newConfig->blockNumber() != _number)
         {
             INITIALIZER_LOG(ERROR) << LOG_BADGE("AuthInitializer") << LOG_DESC("");
             BOOST_THROW_EXCEPTION(

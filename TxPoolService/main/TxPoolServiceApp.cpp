@@ -68,8 +68,8 @@ void TxPoolServiceApp::initService()
     // create the ledger
     // TODO: modify ledger to LedgerServiceClient and implement the ledger client interfaces with
     // tars protocol
-    auto ledger = std::make_shared<bcos::ledger::Ledger>(
-        protocolInitializer->blockFactory(), nullptr, nodeConfig->isAuthCheck());
+    auto ledger =
+        std::make_shared<bcos::ledger::Ledger>(protocolInitializer->blockFactory(), nullptr);
 
     // create txpoolInitializer
     m_txpoolInitializer =

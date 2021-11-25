@@ -122,7 +122,7 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
         m_scheduler =
             SchedulerInitializer::build(executorManager, ledger, storage, executionMessageFactory,
                 m_protocolInitializer->blockFactory(), m_protocolInitializer->txResultFactory(),
-                m_protocolInitializer->cryptoSuite()->hashImpl());
+                m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isAuthCheck());
 
         // init the txpool
         m_txpoolInitializer = std::make_shared<TxPoolInitializer>(
@@ -171,15 +171,14 @@ void Initializer::initSysContract()
         m_ledger->asyncGetBlockNumber([&](Error::Ptr _error, protocol::BlockNumber _number) {
             getNumberPromise.set_value(std::make_tuple(std::move(_error), _number));
         });
-        protocol::BlockNumber _number = 1;
         auto getNumberTuple = getNumberPromise.get_future().get();
-        if (std::get<0>(getNumberTuple) != nullptr || std::get<1>(getNumberTuple) > _number)
+        if (std::get<0>(getNumberTuple) != nullptr || std::get<1>(getNumberTuple) > 0)
         {
             return;
         }
 
         // add auth deploy func here
-        AuthInitializer::init(_number++, m_protocolInitializer, m_nodeConfig, m_scheduler);
+        AuthInitializer::init(0, m_protocolInitializer, m_nodeConfig, m_scheduler);
     }
 }
 
