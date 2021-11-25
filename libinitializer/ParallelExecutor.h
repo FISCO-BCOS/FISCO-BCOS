@@ -13,7 +13,7 @@ class ParallelExecutor : public executor::ParallelTransactionExecutorInterface
 {
 public:
     ParallelExecutor(bcos::executor::TransactionExecutor::Ptr executor)
-      : m_pool("executor", std::thread::hardware_concurrency()), m_executor(std::move(executor))
+      : m_pool("exec", std::thread::hardware_concurrency()), m_executor(std::move(executor))
     {}
     ~ParallelExecutor() noexcept override {}
 
