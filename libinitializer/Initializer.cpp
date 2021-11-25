@@ -30,6 +30,7 @@
 #include "ParallelExecutor.h"
 #include "SchedulerInitializer.h"
 #include "StorageInitializer.h"
+#include "AuthInitializer.h"
 #include "interfaces/crypto/CommonType.h"
 #include "interfaces/executor/ParallelTransactionExecutorInterface.h"
 #include "interfaces/protocol/ProtocolTypeDef.h"
@@ -42,6 +43,7 @@
 #include <bcos-framework/libtool/NodeConfig.h>
 #include <bcos-scheduler/ExecutorManager.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
+
 
 using namespace bcos;
 using namespace bcos::tool;
@@ -150,11 +152,34 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
             m_nodeConfig->isWasm(), m_nodeConfig->isAuthCheck());
         auto parallelExecutor = std::make_shared<bcos::initializer::ParallelExecutor>(executor);
         executorManager->addExecutor("default", parallelExecutor);
+
+        initSysContract();
     }
     catch (std::exception const& e)
     {
         std::cout << "init bcos-node failed for " << boost::diagnostic_information(e);
         exit(-1);
+    }
+}
+
+void Initializer::initSysContract()
+{
+    if (!m_nodeConfig->isWasm() && m_nodeConfig->isAuthCheck())
+    {
+        // check is it deploy first time
+        std::promise<std::tuple<Error::Ptr, protocol::BlockNumber>> getNumberPromise;
+        m_ledger->asyncGetBlockNumber([&](Error::Ptr _error, protocol::BlockNumber _number) {
+            getNumberPromise.set_value(std::make_tuple(std::move(_error), _number));
+        });
+        protocol::BlockNumber _number = 1;
+        auto getNumberTuple = getNumberPromise.get_future().get();
+        if (std::get<0>(getNumberTuple) != nullptr || std::get<1>(getNumberTuple) > _number)
+        {
+            return;
+        }
+
+        // add auth deploy func here
+        AuthInitializer::init(_number++, m_protocolInitializer, m_nodeConfig, m_scheduler);
     }
 }
 

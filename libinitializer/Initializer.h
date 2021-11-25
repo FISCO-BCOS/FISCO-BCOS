@@ -72,6 +72,8 @@ protected:
     virtual void initConfig(std::string const& _configFilePath, std::string const& _genesisFile,
         std::string const& _privateKeyPath, bool _localMode);
 
+    void initSysContract();
+
 private:
     bcos::tool::NodeConfig::Ptr m_nodeConfig;
     ProtocolInitializer::Ptr m_protocolInitializer;
