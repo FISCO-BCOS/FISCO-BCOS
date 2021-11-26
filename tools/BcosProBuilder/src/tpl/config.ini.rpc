@@ -1,0 +1,33 @@
+[rpc]
+    listen_ip=0.0.0.0
+    listen_port=20200
+    thread_count=4
+    sm_ssl=false
+    ; ssl connection switch, if disable the ssl connection, default: false
+    ;disable_ssl=true
+
+[service]
+    ;gateway=chain0
+
+[chain]
+    chain_id=chain0
+
+[cert]
+    ; directory the certificates located in
+    ca_path=./conf
+    ; the ca certificate file
+    ca_cert=ca.crt
+    ; the node private key file
+    node_key=ssl.key
+    ; the node certificate file
+    node_cert=ssl.crt
+
+[log]
+    enable=true
+    log_path=./log
+    ; network statistics interval, unit is second, default is 60s
+    stat_flush_interval=60
+    ; info debug trace
+    level=DEBUG
+    ; MB
+    max_log_file_size=200
