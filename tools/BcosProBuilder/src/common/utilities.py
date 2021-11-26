@@ -64,7 +64,8 @@ class CommandInfo:
     expand = "expand"
     network_create_subnet = "create-subnet"
     network_add_vxlan = "add-vxlan"
-    command_list = [gen_config, upload, deploy, upgrade, undeploy, start, stop]
+    command_list = [gen_config, upload, deploy,
+                    upgrade, undeploy, expand, start, stop]
     service_command_list_str = ', '.join(command_list)
     chain_sub_parser_name = "chain"
     node_command_to_impl = {gen_config: "gen_node_config", upload: "upload_nodes", deploy: "deploy_nodes",

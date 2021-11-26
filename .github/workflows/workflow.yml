@@ -148,6 +148,7 @@ jobs:
       image: docker.io/centos:7
       volumes:
         - /github/home/.hunter:/github/home/.hunter
+        - /__w/FISCO-BCOS:/__w/FISCO-BCOS
     steps:
       - uses: actions/checkout@v2
         with:
