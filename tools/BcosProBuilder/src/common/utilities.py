@@ -54,7 +54,7 @@ class ConfigInfo:
 
 
 class CommandInfo:
-    gen_config = "gen_config"
+    gen_config = "gen-config"
     upload = "upload"
     deploy = "deploy"
     upgrade = "upgrade"
@@ -62,7 +62,11 @@ class CommandInfo:
     start = "start"
     stop = "stop"
     expand = "expand"
+    network_create_subnet = "create-subnet"
+    network_add_vxlan = "add-vxlan"
     command_list = [gen_config, upload, deploy, upgrade, undeploy, start, stop]
+    service_command_list_str = ', '.join(command_list)
+    chain_sub_parser_name = "chain"
     node_command_to_impl = {gen_config: "gen_node_config", upload: "upload_nodes", deploy: "deploy_nodes",
                             upgrade: "upgrade_nodes", undeploy: "undeploy_nodes", start: "start_all", stop: "stop_all", expand: "expand_nodes"}
     service_command_impl = {gen_config: "gen_service_config", upload: "upload_service", deploy: "deploy_service",
@@ -75,6 +79,10 @@ def log_error(error_msg):
 
 def log_info(error_msg):
     logging.info("\033[32m%s \033[0m" % error_msg)
+
+
+def format_info(info):
+    return ("\033[32m%s \033[0m" % info)
 
 
 def log_debug(error_msg):
@@ -97,13 +105,18 @@ def get_value(config, section, key, default_value, must_exist):
     return default_value
 
 
-def execute_command(command):
+def execute_command_and_getoutput(command):
     status, output = subprocess.getstatusoutput(command)
     if status != 0:
         log_error(
             "execute command %s failed, error message: %s" % (command, output))
-        return False
-    return True
+        return (False, output)
+    return (True, output)
+
+
+def execute_command(command):
+    (ret, result) = execute_command_and_getoutput(command)
+    return ret
 
 
 def mkdir(path):
