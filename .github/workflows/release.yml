@@ -1,0 +1,153 @@
+name: FISCO-BCOS release Actions
+on:
+  push:
+    tags-ignore:
+      - v1.*
+    branches-ignore:
+      - "**"
+  release:
+    types: [published, created, edited]
+
+jobs:
+  compile_macOS_release:
+    name: upload standard binary of macOS
+    runs-on: macos-latest
+    # if: startsWith(github.ref,'v2')
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 5
+      - name: install rust language
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2021-06-17
+          override: true
+      - uses: actions/cache@v2
+        id: cache
+        with:
+          path: |
+            /home/runner/.hunter
+            /Users/runner/.hunter/
+            deps/src
+            ccache
+          key: hunter-clang-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          restore-keys: |
+            hunter-clang-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            hunter-clang-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            hunter-clang-v1-notest-${{ runner.temp }}-
+      - name: install macOS dependencies
+        run: brew install ccache
+      - name: configure
+        run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DTEST=ON -DBUILD_STATIC=ON
+      - name: compile
+        run: make -j2 && make tar
+      - name: tar fisco-bcos for macOS
+        run: mv fisco-bcos/ bin/ && cp tools/BcosAirBuilder/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh
+      - name: Upload fisco-bcos binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: bin/fisco-bcos.tar.gz
+          asset_name: fisco-bcos-macOS-x86_64.tar.gz
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload BcosNativeNodeService binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: BcosNativeNodeService.tgz
+          asset_name: BcosNativeNodeService-macOS-x86_64.tgz
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload BcosRpcService binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: BcosRpcService.tgz
+          asset_name: BcosRpcService-macOS-x86_64.tgz
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload BcosGatewayService binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: BcosGatewayService.tgz
+          asset_name: BcosGatewayService-macOS-x86_64.tgz
+          tag: ${{ github.ref }}
+          overwrite: true
+
+  compile_centos_release:
+    name: upload standard binary of linux
+    runs-on: ubuntu-latest
+    container:
+      image: docker.io/centos:7
+      volumes:
+        - /github/home/.hunter:/github/home/.hunter
+        - /__w/FISCO-BCOS:/__w/FISCO-BCOS
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 5
+      - name: install rust language
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2021-06-17
+          override: true
+      - uses: actions/cache@v2
+        id: cache
+        with:
+          path: |
+            /home/runner/.hunter
+            /github/home/.hunter
+            deps/src
+            ccache
+          key: hunter-centos-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          restore-keys: |
+            hunter-centos-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            hunter-centos-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            hunter-centos-v1-notest-${{ runner.temp }}-
+      - name: install CentOS dependencies
+        run: |
+          yum install -y epel-release centos-release-scl
+          yum install -y git make gcc gcc-c++ glibc-static glibc-devel cmake3 ccache devtoolset-7 libzstd-devel zlib-devel flex bison python-devel python3-devel && source /opt/rh/devtoolset-7/enable
+          alias cmake='cmake3'
+      - name: configure and compile
+        run: |
+          source /opt/rh/devtoolset-7/enable
+          cmake3 . -DBUILD_STATIC=ON -DTEST=OFF
+          make -j4
+          make tar
+      - name: tar fisco-bcos for CentOS
+        run: mv fisco-bcos bin && cp tools/BcosAirBuilder/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh
+      - name: Upload fisco-bcos binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: bin/fisco-bcos.tar.gz
+          asset_name: fisco-bcos-macOS-linux-x86_64.tar.gz
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload BcosNativeNodeService binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: BcosNativeNodeService.tgz
+          asset_name: BcosNativeNodeService-linux-x86_64.tgz
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload BcosRpcService binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: BcosRpcService.tgz
+          asset_name: BcosRpcService-linux-x86_64.tgz
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload BcosGatewayService binaries to release
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: BcosGatewayService.tgz
+          asset_name: BcosGatewayService-linux-x86_64.tgz
+          tag: ${{ github.ref }}
+          overwrite: true
