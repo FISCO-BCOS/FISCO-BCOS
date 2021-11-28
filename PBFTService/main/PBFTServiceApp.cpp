@@ -72,7 +72,7 @@ void PBFTServiceApp::initService()
         std::make_shared<bcostars::FrontServiceClient>(frontServiceProxy, keyFactory);
 
     // create the ledger: TODO: create tikv storage
-    auto ledger = std::make_shared<bcos::ledger::Ledger>(blockFactory, nullptr, nodeConfig->isAuthCheck());
+    auto ledger = std::make_shared<bcos::ledger::Ledger>(blockFactory, nullptr);
 
     // create txpool
     auto txpoolProxy = Application::getCommunicator()->stringToProxy<bcostars::TxPoolServicePrx>(
