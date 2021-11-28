@@ -127,24 +127,71 @@ class NodeConfigGenerator:
             config_file_path.write(config_content)
         return True
 
+    def reload_node_config_for_expanded_node(self, node_config, ini_config_content, node_name):
+        """
+        reload node_config after fetch iniConfig
+        """
+        ini_config = configparser.ConfigParser()
+        ini_config.read_string(ini_config_content)
+        chain_section = "chain"
+        node_config.group_id = ini_config[chain_section]["group_id"]
+        self.config.group_id = node_config.group_id
+
+        node_config.chain_id = ini_config[chain_section]["chain_id"]
+        self.config.chain_id = node_config.chain_id
+
+        self.config.group_config.group_id = node_config.group_id
+        self.config.group_config.chain_id = node_config.chain_id
+
+        sm_crypto = ini_config[chain_section]["sm_crypto"]
+        self.config.group_config.sm_crypto = False
+        node_config.generate_service_name_list()
+        node_config.generate_service_config_info()
+        if sm_crypto == "true":
+            self.config.group_config.sm_crypto = True
+        # reset the node_name for the ini config
+        ini_config["service"]["node_name"] = node_name
+        return ini_config
+
     def generate_expand_node_config(self, node_config):
         tars_service = TarsService(self.config.tars_config.tars_url,
                                    self.config.tars_config.tars_token, self.config.chain_id, "")
         # fetch the ini config
         (ret, ini_config_content) = tars_service.fetch_server_config_file(
             self.ini_config_file, node_config.expanded_service)
+        if ret is False:
+            utilities.log_error(
+                "* expand node failed for fetch ini config from %s failed" % node_config.expanded_service)
+            return False
         # fetch the genesis config
         (ret, genesis_config_content) = tars_service.fetch_server_config_file(
             self.genesis_config_file, node_config.expanded_service)
+        if ret is False:
+            utilities.log_error(
+                "* expand node failed for fetch genesis config from %s failed" % node_config.expanded_service)
+            return False
+        # load group_id and crypto_type from the config
+        # reload the config
+        utilities.log_info("* reload node config")
         for node_name in node_config.node_service_config_info.keys():
+            updated_ini_config = self.reload_node_config_for_expanded_node(
+                node_config, ini_config_content, node_name)
+            # Note: obtain updated service_list after reload node_config
             service_list = node_config.nodes_service_name_list[node_name]
             for service in service_list:
                 ini_config_path = self.get_node_config_path(
                     node_config, service, self.ini_config_tmp_file)
                 utilities.log_info(
                     "* generate ini config, service: %s, path: %s" % (service, ini_config_path))
-                if self.write_config_to_path(ini_config_content, ini_config_path) is False:
+                # if self.write_config_to_path(ini_config_content, ini_config_path) is False:
+                #    return False
+                if os.path.exists(ini_config_path):
+                    utilities.log_error(
+                        "* generate ini config for %s failed for the config %s already exists." % (service, ini_config_path))
                     return False
+                utilities.mkfiledir(ini_config_path)
+                with open(ini_config_path, 'w') as configfile:
+                    updated_ini_config.write(configfile)
                 utilities.log_info(
                     "* generate ini config for service: %s success" % service)
                 # generate genesis config
@@ -213,7 +260,7 @@ class NodeConfigGenerator:
             for service in single_node_service:
                 dst_path = self.get_node_pem_path(node_config, service)
                 utilities.log_info(
-                    "* generate pem file for %s\n\t- pem_path: %s\n\t- node_id_path: %s" % (service, dst_path, node_id_path))
+                    "* generate pem file for %s\n\t- pem_path: %s\n\t- node_id_path: %s\n\t- sm_crypto: %d" % (service, dst_path, node_id_path, self.config.group_config.sm_crypto))
                 # copy the generated file to all services path
                 utilities.mkdir(dst_path)
                 shutil.copy(pem_path, dst_path)
