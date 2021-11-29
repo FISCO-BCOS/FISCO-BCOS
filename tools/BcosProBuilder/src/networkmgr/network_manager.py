@@ -56,7 +56,8 @@ class NetworkManager:
             utilities.log_error("%s" % basic_error_info)
             return False
         # add bridge
-        bridge_add_command = "brctl addif br-%s" % network_id
+        bridge_add_command = "brctl addif br-%s %s" % (
+            network_id, docker_vxlan_name)
         if utilities.execute_command(bridge_add_command) is False:
             utilities.log_error("%s" % basic_error_info)
             return False
