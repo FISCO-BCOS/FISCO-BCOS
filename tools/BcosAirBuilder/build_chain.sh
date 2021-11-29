@@ -74,12 +74,12 @@ check_env() {
         export PATH="/usr/local/opt/openssl/bin:$PATH"
         macOS="macOS"
     fi
-    [ ! -z "$(openssl version | grep 1.0.2)" ] || [ ! -z "$(openssl version | grep 1.1)" ] || {
-        echo "please install openssl!"
-        #echo "download openssl from https://www.openssl.org."
-        echo "use \"openssl version\" command to check."
-        exit 1
-    }
+    # [ ! -z "$(openssl version | grep 1.0.2)" ] || [ ! -z "$(openssl version | grep 1.1)" ] || {
+    #     echo "please install openssl!"
+    #     #echo "download openssl from https://www.openssl.org."
+    #     echo "use \"openssl version\" command to check."
+    #     exit 1
+    # }
 
     if [ "$(uname -m)" != "x86_64" ];then
         x86_64_arch="false"
@@ -96,7 +96,7 @@ check_name() {
 
 generate_sm_sm2_param() {
     local output=$1
-    cat << EOF > ${output} 
+    cat << EOF > ${output}
 -----BEGIN EC PARAMETERS-----
 BggqgRzPVQGCLQ==
 -----END EC PARAMETERS-----
@@ -288,7 +288,7 @@ gen_chain_cert() {
 gen_rsa_node_cert() {
     local capath="${1}"
     local ndpath="${2}"
-    local type="${3}"    
+    local type="${3}"
 
     file_must_exists "$capath/ca.key"
     file_must_exists "$capath/ca.crt"
@@ -546,7 +546,7 @@ node_pid=${ps_cmd}
 if [ ! -z \${node_pid} ];then
     echo " \${node} is running, ${pid} is \$node_pid."
     exit 0
-else 
+else
     ${start_cmd}
     sleep 1.5
 fi
@@ -986,7 +986,7 @@ expand_node()
     fi
     LOG_INFO "sdk dir         : ${sdk_path}"
     LOG_INFO "SM Model         : ${sm_mode}"
-    
+
     LOG_INFO "output dir         : ${output_dir}"
     LOG_INFO "All completed. Files in ${output_dir}"
 }
@@ -1021,7 +1021,7 @@ deploy_nodes()
     # Note: must generate the node account firstly
     ca_dir="${output_dir}"/ca
     generate_chain_cert "${sm_mode}" "${ca_dir}"
-    
+
     for line in ${ip_array[*]}; do
         ip=${line%:*}
         num=${line#*:}

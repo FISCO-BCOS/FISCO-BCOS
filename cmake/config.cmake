@@ -25,7 +25,7 @@ hunter_config(bcos-tars-protocol
     CMAKE_ARGS HUNTER_PACKAGE_LOG_BUILD=ON HUNTER_PACKAGE_LOG_INSTALL=ON URL_BASE=${URL_BASE}
 )
 
-hunter_config(bcos-txpool VERSION 3.0.0-local-beda0a00
+hunter_config(bcos-txpool VERSION 3.0.0-local-a4ac144c
     URL  https://${URL_BASE}/FISCO-BCOS/bcos-txpool/archive/a4ac144c4a0423892ed063536dfb8260854efceb.tar.gz
     SHA1 f3b228f8b39001890acc6feb6c9bb56382971678
     CMAKE_ARGS URL_BASE=${URL_BASE}  HUNTER_KEEP_PACKAGE_SOURCES=ON
@@ -76,8 +76,8 @@ hunter_config(bcos-gateway VERSION 3.0.0-local-1fb592e4
 )
 
 hunter_config(bcos-scheduler VERSION 3.0.0-local-b1c450b95b6f83e6a0cf3bd2f385c2ddef4921b4
-    URL  https://${URL_BASE}/FISCO-BCOS/bcos-scheduler/archive/155dca5b4429be003596967ae8c5597c49ae7db8.tar.gz
-    SHA1 e3a778fd5cc130d58f26ee3650872b4effe0134b
+    URL  https://${URL_BASE}/FISCO-BCOS/bcos-scheduler/archive/5d224039da733d3b8c749727386ddf6ea426e41d.tar.gz
+    SHA1 7118ec1cc30e24672a2f380e5e4b2ec1a43edecf
     CMAKE_ARGS URL_BASE=${URL_BASE} HUNTER_KEEP_PACKAGE_SOURCES=ON
 )
 
@@ -111,11 +111,11 @@ hunter_config(evmone VERSION 0.4.1-b726a1e1
 
 hunter_config(
     Boost VERSION "1.76.0-local"
-    URL 
+    URL
     "https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/FISCO-BCOS/deps/boost_1_76_0.tar.bz2
-    https://downloads.sourceforge.net/project/boost/boost/1.76.0/source/boost_1_76_0.tar.bz2 
+    https://downloads.sourceforge.net/project/boost/boost/1.76.0/source/boost_1_76_0.tar.bz2
     https://nchc.dl.sourceforge.net/project/boost/boost/1.76.0/boost_1_76_0.tar.bz2"
-    SHA1 
+    SHA1
     8064156508312dde1d834fec3dca9b11006555b6
     CMAKE_ARGS
     CONFIG_MACRO=BOOST_UUID_RANDOM_PROVIDER_FORCE_POSIX
@@ -126,7 +126,7 @@ hunter_config(
     URL
     "https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/deps/protobuf/v3.14.0-4a09d77-p0.tar.gz
     https://github.com/cpp-pm/protobuf/archive/v3.14.0-4a09d77-p0.tar.gz"
-    SHA1 
+    SHA1
     3553ff3bfd7d0c4c1413b1552064b3dca6fa213e
 )
 
@@ -135,7 +135,7 @@ hunter_config(
     URL
     "https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/deps/Microsoft.GSL/v2.0.0-p0.tar.gz
     https://github.com/hunter-packages/Microsoft.GSL/archive/v2.0.0-p0.tar.gz"
-    SHA1 
+    SHA1
     a94c9c1e41edf787a1c080b7cab8f2f4217dbc4b
 )
 
@@ -144,7 +144,7 @@ hunter_config(
     URL
     "https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/deps/tassl/tassl_1.1.1b_v1.4-fe885b93.tar.gz
     https://codeload.github.com/jntass/TASSL-1.1.1b/zip/fe885b939c13c715633e4c05df8811a1ea7ca079"
-    SHA1 
+    SHA1
     3f207bbd209bec67a5aca27c0ffafe9c57ad1884
 )
 
@@ -153,7 +153,7 @@ hunter_config(
     URL
     "https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/deps/jsoncpp/1.8.0.tar.gz
     https://github.com/open-source-parsers/jsoncpp/archive/1.8.0.tar.gz"
-    SHA1 
+    SHA1
     40f7f34551012f68e822664a0b179e7e6cac5a97
 )
 
