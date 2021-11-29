@@ -10,7 +10,7 @@ class NetworkManager:
         """
         utilities.log_info("* create docker subnet %s, name: %s" %
                            (subnet, docker_network_name))
-        command = "docker network create -d bridge --subnet=%s %s" % (
+        command = "docker network create -d bridge --subnet=%s %s --opt com.docker.network.driver.mtu=1400" % (
             subnet, docker_network_name)
         if utilities.execute_command(command) is False:
             utilities.log_error("create the docker subnet failed")
