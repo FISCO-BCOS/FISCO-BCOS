@@ -55,7 +55,7 @@ public:
             _nodeConfig->smCryptoType() ? committeeSmBin : committeeBin, std::back_inserter(code));
 
         // constructor (address[] initGovernors,    = [authAdminAddress]
-        //        uint32[] memory weights,          = [0]
+        //        uint32[] memory weights,          = [1]
         //        uint8 participatesRate,           = 0
         //        uint8 winRate)                    = 0
         std::vector<Address> initGovernors({Address(_nodeConfig->authAdminAddress())});
@@ -84,7 +84,8 @@ public:
                         BCOS_ERROR(-1, "AuthInitializer: scheduler executeBlock error"));
                 }
                 INITIALIZER_LOG(DEBUG)
-                    << LOG_BADGE("AuthInitializer") << LOG_DESC("scheduler execute block success!");
+                    << LOG_BADGE("AuthInitializer") << LOG_DESC("scheduler execute block success!")
+                    << LOG_KV("blockHash", block->blockHeader()->hash().hex());
                 executedHeader.set_value(std::move(_header));
             });
         auto header = executedHeader.get_future().get();
