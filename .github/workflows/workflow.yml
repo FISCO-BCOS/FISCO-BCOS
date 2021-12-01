@@ -52,9 +52,9 @@ jobs:
         run: sudo apt install -y git curl build-essential clang cmake ccache libzstd-dev
       - name: configure
         if: runner.os == 'macOS'
-        run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DTEST=ON -DBUILD_STATIC=ON
+        run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DTEST=ON -DBUILD_STATIC=ON -DHUNTER_CONFIGURATION_TYPES=Debug
       - name: compile
-        run: make -j4 && make tar
+        run: make -j3 && make tar
       - name: tar fisco-bcos for MacOS
         run: mv fisco-bcos/ bin/ && cp tools/BcosAirBuilder/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh
       - uses: actions/upload-artifact@v2
@@ -104,9 +104,9 @@ jobs:
       - name: install Ubuntu dependencies
         run: sudo apt install -y libzstd-dev git curl build-essential cmake ccache
       - name: configure
-        run: cmake . -DTEST=ON
+        run: cmake . -DTEST=ON -DHUNTER_CONFIGURATION_TYPES=Debug
       - name: compile
-        run: make -j4
+        run: make -j3
   ubuntu18_04_build_with_gcc:
     name: ubuntu18_04_build_with_gcc
     runs-on: ${{ matrix.os }}
@@ -138,9 +138,9 @@ jobs:
       - name: install Ubuntu dependencies
         run: sudo apt-get install -y git curl build-essential cmake ccache lcov libzstd-dev
       - name: configure
-        run: cmake . -DTEST=ON -DTESTS=OFF
+        run: cmake . -DTEST=ON -DTESTS=OFF -DHUNTER_CONFIGURATION_TYPES=Debug
       - name: compile
-        run: make -j4
+        run: make -j3
   build_with_centos:
     name: build_with_centos
     runs-on: ubuntu-latest
@@ -179,8 +179,8 @@ jobs:
       - name: configure and compile
         run: |
           source /opt/rh/devtoolset-7/enable
-          cmake3 . -DBUILD_STATIC=ON -DTEST=ON
-          make -j4
+          cmake3 . -DBUILD_STATIC=ON -DTEST=ON -DHUNTER_CONFIGURATION_TYPES=Debug
+          make -j3
           make tar
       - name: tar fisco-bcos for CentOS
         run: mv fisco-bcos bin && cp tools/BcosAirBuilder/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh

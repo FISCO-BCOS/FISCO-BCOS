@@ -38,7 +38,7 @@ jobs:
       - name: install macOS dependencies
         run: brew install ccache
       - name: configure
-        run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DTEST=ON -DBUILD_STATIC=ON
+        run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DTEST=ON -DBUILD_STATIC=ON -DHUNTER_CONFIGURATION_TYPES=Release
       - name: compile
         run: make -j2 && make tar
       - name: tar fisco-bcos for macOS
@@ -114,7 +114,7 @@ jobs:
       - name: configure and compile
         run: |
           source /opt/rh/devtoolset-7/enable
-          cmake3 . -DBUILD_STATIC=ON -DTEST=OFF
+          cmake3 . -DBUILD_STATIC=ON -DTEST=OFF -DHUNTER_CONFIGURATION_TYPES=Release
           make -j4
           make tar
       - name: tar fisco-bcos for CentOS
