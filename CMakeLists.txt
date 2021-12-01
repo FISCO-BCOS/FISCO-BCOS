@@ -29,6 +29,7 @@ project(FISCO-BCOS VERSION "3.0.0")
 set(VERSION_SUFFIX "-rc1")
 
 # import dependencies
+include(ProjectTCMalloc)
 include(InstallBcosFrameworkDependencies)
 include(InstallBcosCryptoDependencies)
 include(InstallBcosTarsProtocolDependencies)

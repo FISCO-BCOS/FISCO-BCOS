@@ -8,4 +8,4 @@ list(APPEND InitLibs ${INIT_LIB} bcos-rpc::rpc bcos-gateway::bcos-gateway tarscp
 
 target_compile_options(${BINARY_NAME} PRIVATE -Wno-error -Wno-unused-parameter -Wno-variadic-macros -Wno-return-type -Wno-pedantic)
 
-target_link_libraries(${BINARY_NAME} PUBLIC ${InitLibs})
+target_link_libraries(${BINARY_NAME} PUBLIC ${InitLibs} TCMalloc)

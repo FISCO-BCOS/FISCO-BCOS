@@ -451,6 +451,9 @@ print_result() {
         LOG_INFO "docker tag      : ${compatibility_version}"
     fi
     LOG_INFO "Auth Mode           : ${auth_mode}"
+    if ${auth_mode} ; then
+        LOG_INFO "Auth init account   : ${auth_admin_account}"
+    fi
     LOG_INFO "Start Port          : ${port_start[*]}"
     LOG_INFO "Server IP           : ${ip_array[*]}"
     LOG_INFO "SM Model            : ${sm_mode}"
@@ -1084,7 +1087,7 @@ deploy_nodes()
 
 check_auth_account()
 {
-  if [ -n "${auth_mode}" ]; then
+  if ${auth_mode} ; then
       if [ -z "${auth_admin_account}" ]; then
         # get account string to auth_admin_account
         generate_auth_account
@@ -1094,21 +1097,17 @@ check_auth_account()
 
 generate_auth_account()
 {
+  local account_script="get_account.sh"
   if ${sm_mode}; then
-    if [ ! -f "get_gm_account.sh" ]; then
-      local get_gm_account_link="${cdn_link_header}/FISCO-BCOS/tools/get_gm_account.sh"
-      LOG_INFO "Downloading get_gm_account.sh from ${get_gm_account_link}..."
-      curl -#LO "${get_gm_account_link}"
-    fi
-      auth_admin_account=$(bash get_gm_account.sh | grep Address | sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g" | awk '{print $5}')
-  else
-    if [ ! -f "get_account.sh" ]; then
-      local get_account_link="${cdn_link_header}/FISCO-BCOS/tools/get_account.sh"
-      LOG_INFO "Downloading get_account.sh from ${get_account_link}..."
-      curl -#LO "${get_account_link}"
-    fi
-      auth_admin_account=$(bash get_account.sh | grep Address | sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g" | awk '{print $5}')
+    account_script="get_gm_account.sh"
   fi
+
+  if [ ! -f ${account_script} ]; then
+        local get_account_link="${cdn_link_header}/FISCO-BCOS/tools/${account_script}"
+        LOG_INFO "Downloading ${account_script} from ${get_account_link}..."
+        curl -#LO "${get_account_link}"
+  fi
+  auth_admin_account=$(bash ${account_script} | grep Address | sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g" | awk '{print $5}')
   mv accounts* "${ca_dir}"
 }
 
