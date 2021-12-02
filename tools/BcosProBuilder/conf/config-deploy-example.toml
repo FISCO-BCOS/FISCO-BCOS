@@ -55,14 +55,14 @@ consensus_type = "pbft"
 gas_limit = "300000000"
 
 [[group.deploy_info]]
-# node_name = node0
+# node_name = "node0"
 deploy_ip = "172.25.0.3"
 node_count=1
 rpc_service_name = "agencyABcosRpcService"
 gateway_service_name = "agencyABcosGatewayService"
 
 [[group.deploy_info]]
-# node_name = node1
+# node_name = "node1"
 deploy_ip = "172.25.0.3"
 node_count=1
 rpc_service_name = "agencyBBcosRpcService"
