@@ -1,15 +1,9 @@
 # Note: hunter_config takes effect globally, it is not recommended to set it in bcos-node, otherwise it will affect all projects that rely on bcos-framework
 hunter_config(bcos-framework VERSION 3.0.0-local
-	URL https://${URL_BASE}/FISCO-BCOS/bcos-framework/archive/82b31adad9696dad7ed43dcfd119a2995d96f4ab.tar.gz
-	SHA1 3443297ab9d421f7f44666ba87e368615e662a39
+	URL https://${URL_BASE}/FISCO-BCOS/bcos-framework/archive/1f366fe57a47ec7ee27569b07d3a0cc6be2ea7c2.tar.gz
+	SHA1 f2908bf61ab51cdd4ed5752781a35d391e1221c2
 	CMAKE_ARGS HUNTER_PACKAGE_LOG_BUILD=ON HUNTER_PACKAGE_LOG_INSTALL=ON
 )
-
-# hunter_config(wedpr-crypto VERSION 1.2.0-995589bd
-# 	URL https://${URL_BASE}/WeBankBlockchain/WeDPR-Lab-Crypto/archive/995589bd768d6d70c200c29541fca6714199f8b0.tar.gz
-# 	SHA1 f33b763c1b023965a9d199e288bf503a30293b8c
-# 	CMAKE_ARGS HUNTER_PACKAGE_LOG_BUILD=OFF HUNTER_PACKAGE_LOG_INSTALL=ON
-# )
 
 hunter_config(bcos-boostssl
 	VERSION 3.0.0-local
@@ -75,8 +69,8 @@ hunter_config(bcos-gateway VERSION 3.0.0-local
 )
 
 hunter_config(bcos-scheduler VERSION 3.0.0-local
-    URL  https://${URL_BASE}/FISCO-BCOS/bcos-scheduler/archive/d73f54bf95e20338f478aeb8c3193ad3ec971974.tar.gz
-    SHA1 5b4995afa4f0d96f67dfc9d57bdebc50da011cb7
+    URL  https://${URL_BASE}/FISCO-BCOS/bcos-scheduler/archive/038f4f4292648e33ce3e92945e17c8cd239fe0ee.tar.gz
+    SHA1 8319e614465d871e1ec9469ea95519c4f11b3819
     CMAKE_ARGS URL_BASE=${URL_BASE} HUNTER_KEEP_PACKAGE_SOURCES=ON
 )
 
