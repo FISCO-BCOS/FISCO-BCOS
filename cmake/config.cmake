@@ -1,7 +1,7 @@
 # Note: hunter_config takes effect globally, it is not recommended to set it in bcos-node, otherwise it will affect all projects that rely on bcos-framework
 hunter_config(bcos-framework VERSION 3.0.0-local
-	URL https://${URL_BASE}/FISCO-BCOS/bcos-framework/archive/1f366fe57a47ec7ee27569b07d3a0cc6be2ea7c2.tar.gz
-	SHA1 f2908bf61ab51cdd4ed5752781a35d391e1221c2
+	URL https://${URL_BASE}/FISCO-BCOS/bcos-framework/archive/bfddefcaca1ea94110debfe535c11a71efde0e4a.tar.gz
+	SHA1 508307f58c0b386c29d3032d3213995458cce688
 	CMAKE_ARGS HUNTER_PACKAGE_LOG_BUILD=ON HUNTER_PACKAGE_LOG_INSTALL=ON
 )
 
@@ -44,15 +44,15 @@ hunter_config(rocksdb VERSION 6.20.3
 )
 
 hunter_config(bcos-storage VERSION 3.0.0-local
-    URL  https://${URL_BASE}/FISCO-BCOS/bcos-storage/archive/4403b863a255b2ed811e209d6abe4cf72493304e.tar.gz
-    SHA1 7af2c3cdb8d2ebc109c35015325f706e29d4875c
+    URL  https://${URL_BASE}/FISCO-BCOS/bcos-storage/archive/b24db24b8dae2f0b3e4390252113f83a28f331a9.tar.gz
+    SHA1 545597b8e14f3962c64713695007f7ce7f4bbfcb
     CMAKE_ARGS URL_BASE=${URL_BASE} HUNTER_KEEP_PACKAGE_SOURCES=ON
 )
 
 hunter_config(bcos-ledger
     VERSION 3.0.0-local-1956c515f
-    URL  https://${URL_BASE}/FISCO-BCOS/bcos-ledger/archive/aec70db87f821dcf6becf8d8ead046addd49def7.tar.gz
-    SHA1 c49d403ebb73e45b2aa8bb35916a5b43e60fe38e
+    URL  https://${URL_BASE}/FISCO-BCOS/bcos-ledger/archive/a6f071fef503754af0d8227a311230c6236795e7.tar.gz
+    SHA1 b1fcaa7e4df7d650d5b44772c938077a4bd9c8c4
     CMAKE_ARGS URL_BASE=${URL_BASE} HUNTER_KEEP_PACKAGE_SOURCES=ONqg
 )
 
@@ -69,8 +69,8 @@ hunter_config(bcos-gateway VERSION 3.0.0-local
 )
 
 hunter_config(bcos-scheduler VERSION 3.0.0-local
-    URL  https://${URL_BASE}/FISCO-BCOS/bcos-scheduler/archive/038f4f4292648e33ce3e92945e17c8cd239fe0ee.tar.gz
-    SHA1 8319e614465d871e1ec9469ea95519c4f11b3819
+    URL  https://${URL_BASE}/FISCO-BCOS/bcos-scheduler/archive/08f2eb4849148e3f5133be3853a25f21a59215cb.tar.gz
+    SHA1 7f98964b906f00072d47499014ad5ad3e2aeb05b
     CMAKE_ARGS URL_BASE=${URL_BASE} HUNTER_KEEP_PACKAGE_SOURCES=ON
 )
 
