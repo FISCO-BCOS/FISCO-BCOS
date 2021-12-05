@@ -1,7 +1,7 @@
 # Note: hunter_config takes effect globally, it is not recommended to set it in bcos-node, otherwise it will affect all projects that rely on bcos-framework
 hunter_config(bcos-framework VERSION 3.0.0-local
-	URL https://${URL_BASE}/FISCO-BCOS/bcos-framework/archive/1f366fe57a47ec7ee27569b07d3a0cc6be2ea7c2.tar.gz
-	SHA1 f2908bf61ab51cdd4ed5752781a35d391e1221c2
+	URL https://${URL_BASE}/FISCO-BCOS/bcos-framework/archive/2a80f7247933c4704360f98dfde6cf22df85db8b.tar.gz
+	SHA1 78e3c7f436ade386326ae3de83aeea77aa8a44a8
 	CMAKE_ARGS HUNTER_PACKAGE_LOG_BUILD=ON HUNTER_PACKAGE_LOG_INSTALL=ON
 )
 
@@ -157,7 +157,7 @@ hunter_config(
     SHA1
     40f7f34551012f68e822664a0b179e7e6cac5a97
 )
-hunter_config(tbb VERSION ${HUNTER_tbb_VERSION} CMAKE_ARGS BUILD_SHARED_LIBS=OFF)
+hunter_config(tbb VERSION 2021.3.0 CMAKE_ARGS BUILD_SHARED_LIBS=OFF)
 hunter_config(ZLIB VERSION ${HUNTER_ZLIB_VERSION} CMAKE_ARGS CMAKE_POSITION_INDEPENDENT_CODE=TRUE)
 hunter_config(c-ares VERSION 1.14.0-p0 CMAKE_ARGS CMAKE_POSITION_INDEPENDENT_CODE=TRUE CARES_BUILD_TOOLS=OFF)
 hunter_config(re2 VERSION ${HUNTER_re2_VERSION} CMAKE_ARGS CMAKE_POSITION_INDEPENDENT_CODE=TRUE RE2_BUILD_TESTING=OFF)
