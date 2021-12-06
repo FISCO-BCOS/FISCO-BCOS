@@ -5,9 +5,6 @@ services:
     network_mode: "host"
     ports:
       - "3310:3306"
-    networks:
-      tars_net:
-        ipv4_address: 172.25.0.2
     environment:
       MYSQL_ROOT_PASSWORD: ""
     restart: always
