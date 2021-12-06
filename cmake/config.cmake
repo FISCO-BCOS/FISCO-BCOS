@@ -75,8 +75,8 @@ hunter_config(bcos-scheduler VERSION 3.0.0-local
 )
 
 hunter_config(bcos-rpc VERSION 3.0.0-local
-    URL  https://${URL_BASE}/FISCO-BCOS/bcos-rpc/archive/e580119d8326af94fbd8f164c810280bd2a9744f.tar.gz
-    SHA1 3698ddcff75e917a56a0ed92fe8b9a7d7cc1abaf
+    URL  https://${URL_BASE}/FISCO-BCOS/bcos-rpc/archive/a15721c6a490ce67b3fe5188e5f938b3e8fe1a59.tar.gz
+    SHA1 23a1179b1328f705ba2aba5356abb24dbb01798d
     CMAKE_ARGS URL_BASE=${URL_BASE} HUNTER_KEEP_PACKAGE_SOURCES=ON
 )
 
