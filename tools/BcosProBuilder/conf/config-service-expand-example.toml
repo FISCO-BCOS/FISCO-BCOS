@@ -15,7 +15,7 @@ name="agencyABcosRpcService"
 deploy_ip=["172.25.0.5"]
 expanded_ip = "172.25.0.3"
 listen_ip="0.0.0.0"
-listen_port=20200
+listen_port=10200
 thread_count=4
 gateway_service_name = "agencyABcosGatewayService"
 
@@ -24,6 +24,6 @@ name="agencyABcosGatewayService"
 deploy_ip=["172.25.0.5"]
 expanded_ip = "172.25.0.3"
 listen_ip="0.0.0.0"
-listen_port=30300
-peers=["172.25.0.3:30300", "172.25.0.3:30301", "172.25.0.5:30300"]
+listen_port=40300
+peers=["172.25.0.3:30300", "172.25.0.3:30301", "172.25.0.5:40300"]
 rpc_service_name = "agencyABcosRpcService"
