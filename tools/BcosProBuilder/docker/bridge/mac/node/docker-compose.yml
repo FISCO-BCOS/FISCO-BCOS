@@ -7,6 +7,14 @@ networks:
 services:
   tars-node:
     image: tarscloud/tars-node:latest
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 5G
+        reservations:
+          cpus: '0.25'
+          memory: 512M
     networks:
       tars_net:
         ipv4_address: 172.25.0.5

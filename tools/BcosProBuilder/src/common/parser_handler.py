@@ -76,23 +76,23 @@ def parse_command():
         "-s", "--subnet", help=help_info, default=None, required=True)
 
     # network_add_vxlan
-    description = (
-        "Note: only support linux now\ne.g: python3 %s add-vxlan -n tars-network -d ${remote_ip} -v docker_vxlan") % (sys.argv[0])
-    add_vxlan_parser = sub_parsers.add_parser(description=utilities.format_info(description),
-                                              name=CommandInfo.network_add_vxlan, help="add vxlan for docker subnet", formatter_class=RawTextHelpFormatter)
+    # description = (
+    #    "Note: only support linux now\ne.g: python3 %s add-vxlan -n tars-network -d ${remote_ip} -v docker_vxlan") % (sys.argv[0])
+    # add_vxlan_parser = sub_parsers.add_parser(description=utilities.format_info(description),
+    #                                          name=CommandInfo.network_add_vxlan, help="add vxlan for docker subnet", formatter_class=RawTextHelpFormatter)
     # subnet option
-    help_info = "[optional] specified the subnet, default is tars-network\n"
-    add_vxlan_parser.add_argument(
-        "-n", "--network", help=help_info, default="tars-network")
+    #help_info = "[optional] specified the subnet, default is tars-network\n"
+    # add_vxlan_parser.add_argument(
+    #    "-n", "--network", help=help_info, default="tars-network")
     # remote ip
-    help_info = "[required] specified the dstip to create vxlan network"
-    add_vxlan_parser.add_argument(
-        "-d", "--dstip", help=help_info, default=None, required=True)
+    #help_info = "[required] specified the dstip to create vxlan network"
+    # add_vxlan_parser.add_argument(
+    #    "-d", "--dstip", help=help_info, default=None, required=True)
 
     # vxlan network name
-    help_info = "[required] specified the vxlan name to create vxlan network, e.g.: vxlan_docker"
-    add_vxlan_parser.add_argument(
-        "-v", "--vxlan", help=help_info, default=None, required=True)
+    #help_info = "[required] specified the vxlan name to create vxlan network, e.g.: vxlan_docker"
+    # add_vxlan_parser.add_argument(
+    #    "-v", "--vxlan", help=help_info, default=None, required=True)
 
     args = parser.parse_args()
     return args
