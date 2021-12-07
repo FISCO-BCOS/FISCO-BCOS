@@ -41,6 +41,8 @@ jobs:
         run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DCMAKE_BUILD_TYPE=Release -DTEST=ON -DBUILD_STATIC=ON -DHUNTER_CONFIGURATION_TYPES=Release
       - name: compile
         run: make -j2 && make tar
+      - name: tar BcosProBuilder
+        run: mv tools/BcosProBuilder . && tar -cvzf BcosProBuilder.tgz BcosProBuilder
       - name: tar fisco-bcos for macOS
         run: mv fisco-bcos/ bin/ && cp tools/BcosAirBuilder/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh
       - name: Upload fisco-bcos binaries to release
@@ -75,7 +77,23 @@ jobs:
           asset_name: BcosGatewayService-macOS-x86_64.tgz
           tag: ${{ github.ref }}
           overwrite: true
-
+      - name: Upload build_chain.sh
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: tools/BcosAirBuilder/build_chain.sh
+          asset_name: build_chain.sh
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload BcosProBuilder
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: BcosProBuilder.tgz
+          asset_name: BcosProBuilder.tgz
+          tag: ${{ github.ref }}
+          overwrite: true
+      
   compile_centos_release:
     name: upload standard binary of linux
     runs-on: ubuntu-latest
@@ -120,6 +138,8 @@ jobs:
           cmake3 . -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON -DTEST=OFF -DHUNTER_CONFIGURATION_TYPES=Release
           make -j4
           make tar
+      - name: tar BcosProBuilder
+        run: mv tools/BcosProBuilder . && tar -cvzf BcosProBuilder.tgz BcosProBuilder
       - name: tar fisco-bcos for CentOS
         run: mv fisco-bcos bin && cp tools/BcosAirBuilder/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh
       - name: Upload fisco-bcos binaries to release
@@ -152,5 +172,21 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: BcosGatewayService.tgz
           asset_name: BcosGatewayService-linux-x86_64.tgz
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload build_chain.sh
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: tools/BcosAirBuilder/build_chain.sh
+          asset_name: build_chain.sh
+          tag: ${{ github.ref }}
+          overwrite: true
+      - name: Upload BcosProBuilder
+        uses: svenstaro/upload-release-action@v1-release
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: BcosProBuilder.tgz
+          asset_name: BcosProBuilder.tgz
           tag: ${{ github.ref }}
           overwrite: true

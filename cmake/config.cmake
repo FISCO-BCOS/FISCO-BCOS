@@ -63,8 +63,8 @@ hunter_config(bcos-front VERSION 3.0.0-local-2ed687bb
 )
 
 hunter_config(bcos-gateway VERSION 3.0.0-local
-    URL  https://${URL_BASE}/FISCO-BCOS/bcos-gateway/archive/87893c2b0fa9e2c64993bf4c9b7083181bddf970.tar.gz
-    SHA1 9db50ea5141924b19633be8b54f7eb6c569f7a21
+    URL  https://${URL_BASE}/cyjseagull/bcos-gateway/archive/26b053317ba5930991dc590582fe60c180af2fe5.tar.gz
+    SHA1 38ae73f3d270035b4fa21e9cb8c00bba0512cf0f
     CMAKE_ARGS URL_BASE=${URL_BASE} HUNTER_KEEP_PACKAGE_SOURCES=ON
 )
 
