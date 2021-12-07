@@ -1,7 +1,7 @@
 # Note: hunter_config takes effect globally, it is not recommended to set it in bcos-node, otherwise it will affect all projects that rely on bcos-framework
 hunter_config(bcos-framework VERSION 3.0.0-local
-	URL https://${URL_BASE}/FISCO-BCOS/bcos-framework/archive/80345086f18586ef1e6122d7bf5eb9688e990472.tar.gz
-	SHA1 1fabfc8bb45d3793f5a4789a01f32fb35ec691e2
+	URL https://${URL_BASE}/FISCO-BCOS/bcos-framework/archive/1003d35925569d25c84483aef4402556e6c74f18.tar.gz
+	SHA1 502eb233c2ce6f7c0e7e70b8bf64e50d25545c31
 	CMAKE_ARGS HUNTER_PACKAGE_LOG_BUILD=ON HUNTER_PACKAGE_LOG_INSTALL=ON
 )
 
@@ -13,8 +13,8 @@ hunter_config(bcos-boostssl
 
 hunter_config(bcos-tars-protocol
     VERSION 3.0.0-local
-    URL https://${URL_BASE}/FISCO-BCOS/bcos-tars-protocol/archive/6bc78eee8426acca811d154ca87b213cf8ba859a.tar.gz
-    SHA1 38ca3f1606583cd25ec1a2ce6cb714a772f0f3ec
+    URL https://${URL_BASE}/FISCO-BCOS/bcos-tars-protocol/archive/78d25fca2cc23eb0e082a1d381ebece6f6bff6fc.tar.gz
+    SHA1 f2ce87c145eabd792abc8190a8f26e9424f3d517
     CMAKE_ARGS HUNTER_PACKAGE_LOG_BUILD=ON HUNTER_PACKAGE_LOG_INSTALL=ON URL_BASE=${URL_BASE}
 )
 
@@ -25,8 +25,8 @@ hunter_config(bcos-txpool VERSION 3.0.0-local
 )
 
 hunter_config(bcos-pbft VERSION 3.0.0-local-a2a9f7d2
-    URL  https://${URL_BASE}/FISCO-BCOS/bcos-pbft/archive/133da4bf20a4cf523cf84f8326757d96be59a1ef.tar.gz
-    SHA1 bd403bc4776376e7ea6ac604b7d47207b82be085
+    URL  https://${URL_BASE}/FISCO-BCOS/bcos-pbft/archive/af8323c19be8fe818055c2fb825657c17027f830.tar.gz
+    SHA1 b72c3efcfebcc6549de4dc09766a80730ca24f5b
     CMAKE_ARGS URL_BASE=${URL_BASE}  HUNTER_KEEP_PACKAGE_SOURCES=ON
 )
 
@@ -69,8 +69,8 @@ hunter_config(bcos-gateway VERSION 3.0.0-local
 )
 
 hunter_config(bcos-scheduler VERSION 3.0.0-local
-    URL  https://${URL_BASE}/FISCO-BCOS/bcos-scheduler/archive/2cd2430756162a4b059a860e2f0a4e070cf690ee.tar.gz
-    SHA1 c304d621983aee3058ac938b80d2ad106bd96e54
+    URL  https://${URL_BASE}/FISCO-BCOS/bcos-scheduler/archive/a6e278943e135df01d39b79ec440954d27e87c73.tar.gz
+    SHA1 2bc2dd222a75b9cb0628f251fd473176ca24b1bc
     CMAKE_ARGS URL_BASE=${URL_BASE} HUNTER_KEEP_PACKAGE_SOURCES=ON
 )
 
