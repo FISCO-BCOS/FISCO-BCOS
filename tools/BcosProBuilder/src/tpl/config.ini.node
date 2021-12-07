@@ -2,12 +2,12 @@
     ; use SM crypto or not, should nerver be changed
     sm_crypto=false
     ; the group id, should nerver be changed
-    group_id=group0
+    group_id=group
     ; the chain id, should nerver be changed
-    chain_id=chain0
+    chain_id=chain
 [service]
-    rpc=chain0
-    gateway=chain0
+    rpc=chain
+    gateway=chain
 
 [security]
     private_key_path=conf/node.pem
@@ -30,8 +30,6 @@
 [log]
     enable=true
     log_path=./log
-    ; network statistics interval, unit is second, default is 60s
-    stat_flush_interval=60
     ; info debug trace
     level=DEBUG
     ; MB

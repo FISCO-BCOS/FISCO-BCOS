@@ -34,6 +34,7 @@ compatibility_version=${default_version}
 auth_mode="false"
 auth_admin_account=
 binary_path="bin/${binary_name}"
+wasm_mode="false"
 
 LOG_WARN() {
     local content=${1}
@@ -389,12 +390,13 @@ Usage:
     -o <output dir>                     [Optional] output directory, default ./nodes
     -e <fisco-bcos exec>                [Required] fisco-bcos binary exec
     -p <Start Port>                     Default 30300,20200 means p2p_port start from 30300, rpc_port from 20200
-    -s <SM model>                       [Optional] SM SSL connection or not, default no
+    -s <SM model>                       [Optional] SM SSL connection or not, default is false
     -c <Config Path>                    [Required when expand node] Specify the path of the expanded node config.ini, config.genesis and p2p connection file nodes.json
     -d <CA cert path>                   [Required when expand node] When expanding the node, specify the path where the CA certificate and private key are located
     -D <docker mode>                    Default off. If set -d, build with docker
     -A <Auth mode>                      Default off. If set -A, build chain with auth, and generate admin account.
     -a <Auth account>                   [Optional when Auth mode] Specify the admin account address.
+    -w <WASM mode>                      [Optional] Whether to use the wasm virtual machine engine, default is false
     -h Help
 
 deploy nodes e.g
@@ -408,7 +410,7 @@ EOF
 }
 
 parse_params() {
-    while getopts "l:C:c:o:e:p:d:v:DshAa:" option; do
+    while getopts "l:C:c:o:e:p:d:v:wDshAa:" option; do
         case $option in
         l)
             ip_param=$OPTARG
@@ -431,6 +433,7 @@ parse_params() {
         s) sm_mode="true" ;;
         D) docker_mode="true" ;;
         A) auth_mode="true" ;;
+        w) wasm_mode="true";;
         a)
           auth_mode="true"
           auth_admin_account="${OPTARG}"
@@ -691,7 +694,7 @@ generate_common_ini() {
 
 [executor]
     ; use the wasm virtual machine or not
-    is_wasm=false
+    is_wasm=${wasm_mode}
     is_auth_check=${auth_mode}
     auth_admin_account=${auth_admin_account}
 
@@ -705,8 +708,6 @@ generate_common_ini() {
 [log]
     enable=true
     log_path=./log
-    ; network statistics interval, unit is second, default is 60s
-    stat_flush_interval=60
     ; info debug trace
     level=DEBUG
     ; MB

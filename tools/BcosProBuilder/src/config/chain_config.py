@@ -171,7 +171,7 @@ class ChainConfig:
     def __init__(self, config):
         self.config = config
         self.chain_id = utilities.get_value(
-            self.config, "chain", "chain_id", "chain0", False)
+            self.config, "chain", "chain_id", "chain", False)
         self.rpc_ca_cert_path = utilities.get_value(
             self.config, "chain", "rpc_ca_cert_path", "", False)
         self.gateway_ca_cert_path = utilities.get_value(
