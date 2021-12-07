@@ -63,8 +63,8 @@ hunter_config(bcos-front VERSION 3.0.0-local-2ed687bb
 )
 
 hunter_config(bcos-gateway VERSION 3.0.0-local
-    URL  https://${URL_BASE}/cyjseagull/bcos-gateway/archive/26b053317ba5930991dc590582fe60c180af2fe5.tar.gz
-    SHA1 38ae73f3d270035b4fa21e9cb8c00bba0512cf0f
+    URL  https://${URL_BASE}/cyjseagull/bcos-gateway/archive/7b5eb1a5faa5dcedbcad806ceeda768a0179eb36.tar.gz
+    SHA1 d652def4d7772074af895abcaf03fc24200d4ab0
     CMAKE_ARGS URL_BASE=${URL_BASE} HUNTER_KEEP_PACKAGE_SOURCES=ON
 )
 
@@ -75,8 +75,8 @@ hunter_config(bcos-scheduler VERSION 3.0.0-local
 )
 
 hunter_config(bcos-rpc VERSION 3.0.0-local
-    URL  https://${URL_BASE}/FISCO-BCOS/bcos-rpc/archive/a15721c6a490ce67b3fe5188e5f938b3e8fe1a59.tar.gz
-    SHA1 23a1179b1328f705ba2aba5356abb24dbb01798d
+    URL  https://${URL_BASE}/cyjseagull/bcos-rpc/archive/c99f931d4407a1c197e4d3f5203a93a5b9ca40b0.tar.gz
+    SHA1 55b9ca19820fdce0b8b31593674bcbbdf4b1f5c8
     CMAKE_ARGS URL_BASE=${URL_BASE} HUNTER_KEEP_PACKAGE_SOURCES=ON
 )
 

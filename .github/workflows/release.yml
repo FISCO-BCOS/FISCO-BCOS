@@ -53,12 +53,12 @@ jobs:
           asset_name: fisco-bcos-macOS-x86_64.tar.gz
           tag: ${{ github.ref }}
           overwrite: true
-      - name: Upload BcosNativeNodeService binaries to release
+      - name: Upload BcosNodeService binaries to release
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: BcosNativeNodeService.tgz
-          asset_name: BcosNativeNodeService-macOS-x86_64.tgz
+          file: BcosNodeService.tgz
+          asset_name: BcosNodeService-macOS-x86_64.tgz
           tag: ${{ github.ref }}
           overwrite: true
       - name: Upload BcosRpcService binaries to release
@@ -150,12 +150,12 @@ jobs:
           asset_name: fisco-bcos-macOS-linux-x86_64.tar.gz
           tag: ${{ github.ref }}
           overwrite: true
-      - name: Upload BcosNativeNodeService binaries to release
+      - name: Upload BcosNodeService binaries to release
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: BcosNativeNodeService.tgz
-          asset_name: BcosNativeNodeService-linux-x86_64.tgz
+          file: BcosNodeService.tgz
+          asset_name: BcosNodeService-linux-x86_64.tgz
           tag: ${{ github.ref }}
           overwrite: true
       - name: Upload BcosRpcService binaries to release
