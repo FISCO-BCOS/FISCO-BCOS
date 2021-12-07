@@ -97,6 +97,9 @@ class NodeConfigGenerator:
         if self.config.group_config.vm_type == "wasm":
             ini_config[executor_section]["is_wasm"] = utilities.convert_bool_to_str(
                 True)
+        ini_config[executor_section]["is_auth_check"] = utilities.convert_bool_to_str(
+            self.config.group_config.auth_check)
+        ini_config[executor_section]["auth_admin_account"] = self.config.group_config.init_auth_address
         return ini_config
 
     def generate_node_ini_config(self, node_config):

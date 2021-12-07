@@ -47,6 +47,8 @@ rpc_service_name = "agencyBBcosRpcService"
 group_id="group"
 vm_type="evm"
 sm_crypto=false
+auth_check=false
+init_auth_address=""
 
 # the genesis config
 leader_period = 5
