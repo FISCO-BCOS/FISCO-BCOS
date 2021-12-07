@@ -51,8 +51,8 @@ hunter_config(bcos-storage VERSION 3.0.0-local
 
 hunter_config(bcos-ledger
     VERSION 3.0.0-local-1956c515f
-    URL  https://${URL_BASE}/FISCO-BCOS/bcos-ledger/archive/1147be7ea8b1f9de95b66e4c308a20b6d9f9ef23.tar.gz
-    SHA1 a7ff28e7835aacd9afd406a9392cc750aa644e0a
+    URL  https://${URL_BASE}/FISCO-BCOS/bcos-ledger/archive/bb48b4adfbfc737e3faa1cb9d705840ad7c71e1f.tar.gz
+    SHA1 8ebf26b4d7e20c165f74a557d6e094455a496b77
     CMAKE_ARGS URL_BASE=${URL_BASE} HUNTER_KEEP_PACKAGE_SOURCES=ONqg
 )
 
