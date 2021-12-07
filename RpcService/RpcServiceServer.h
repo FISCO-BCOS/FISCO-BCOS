@@ -24,10 +24,10 @@ public:
         const bcostars::GroupInfo& groupInfo, tars::TarsCurrentPtr current) override;
     bcos::rpc::RpcFactory::Ptr initRpcFactory(bcos::tool::NodeConfig::Ptr nodeConfig);
 
-    // TODO: implement this
     bcostars::Error asyncNotifyAMOPMessage(tars::Int32 _type, const std::string& _topic,
         const vector<tars::Char>& _requestData, vector<tars::Char>& _responseData,
         tars::TarsCurrentPtr current) override;
+    bcostars::Error asyncNotifySubscribeTopic(tars::TarsCurrentPtr current) override;
 
 private:
     RpcInitializer::Ptr m_rpcInitializer;

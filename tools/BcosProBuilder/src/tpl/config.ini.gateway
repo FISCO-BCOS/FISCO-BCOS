@@ -7,7 +7,7 @@
     nodes_file=nodes.json
 
 [service]
-    ;rpc=chain0
+    ;rpc=chain
 
 [cert]
     ; directory the certificates located in
@@ -20,13 +20,11 @@
     node_cert=ssl.crt
 
 [chain]
-    chain_id=chain0
+    chain_id=chain
 
 [log]
     enable=true
     log_path=./log
-    ; network statistics interval, unit is second, default is 60s
-    stat_flush_interval=60
     ; info debug trace
     level=DEBUG
     ; MB
