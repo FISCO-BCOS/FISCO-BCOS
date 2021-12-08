@@ -54,16 +54,8 @@ file_must_exists() {
 
 check_env() {
     if [ "$(uname)" == "Darwin" ];then
-        export PATH="/usr/local/opt/openssl/bin:$PATH"
         macOS="macOS"
     fi
-    [ ! -z "$(openssl version | grep 1.0.2)" ] || [ ! -z "$(openssl version | grep 1.1)" ] || {
-        echo "please install openssl!"
-        #echo "download openssl from https://www.openssl.org."
-        echo "use \"openssl version\" command to check."
-        exit 1
-    }
-
     if [ "$(uname -m)" != "x86_64" ];then
         x86_64_arch="false"
     fi
@@ -261,8 +253,8 @@ gen_chain_cert() {
     mkdir -p "$chaindir"
     dir_must_exists "$chaindir"
 
-    openssl genrsa -out "${chaindir}"/ca.key "${rsa_key_length}" 2> /dev/null
-    openssl req -new -x509 -days "${days}" -subj "/CN=FISCO-BCOS/O=FISCO-BCOS/OU=chain" -key "${chaindir}"/ca.key -out "${chaindir}"/ca.crt 2>/dev/null
+    ${OPENSSL_CMD} genrsa -out "${chaindir}"/ca.key "${rsa_key_length}" 2> /dev/null
+    ${OPENSSL_CMD} req -new -x509 -days "${days}" -subj "/CN=FISCO-BCOS/O=FISCO-BCOS/OU=chain" -key "${chaindir}"/ca.key -out "${chaindir}"/ca.crt 2>/dev/null
     mv "${cert_conf}" "${chaindir}"
 
     LOG_INFO "Build ca cert successfully!"
@@ -283,12 +275,12 @@ gen_rsa_node_cert() {
     mkdir -p "${ndpath}"
     dir_must_exists "${ndpath}"
 
-    openssl genrsa -out "${ndpath}"/"${type}".key "${rsa_key_length}" 2> /dev/null
-    openssl req -new -sha256 -subj "/CN=FISCO-BCOS/O=fisco-bcos/OU=agency" -key "$ndpath"/"${type}".key -config "$capath"/cert.cnf -out "$ndpath"/"${type}".csr
-    openssl x509 -req -days "${days}" -sha256 -CA "${capath}"/ca.crt -CAkey "$capath"/ca.key -CAcreateserial \
+    ${OPENSSL_CMD} genrsa -out "${ndpath}"/"${type}".key "${rsa_key_length}" 2> /dev/null
+    ${OPENSSL_CMD} req -new -sha256 -subj "/CN=FISCO-BCOS/O=fisco-bcos/OU=agency" -key "$ndpath"/"${type}".key -config "$capath"/cert.cnf -out "$ndpath"/"${type}".csr
+    ${OPENSSL_CMD} x509 -req -days "${days}" -sha256 -CA "${capath}"/ca.crt -CAkey "$capath"/ca.key -CAcreateserial \
         -in "$ndpath"/"${type}".csr -out "$ndpath"/"${type}".crt -extensions v4_req -extfile "$capath"/cert.cnf 2>/dev/null
 
-    openssl pkcs8 -topk8 -in "$ndpath"/"$type".key -out "$ndpath"/pkcs8_node.key -nocrypt
+    ${OPENSSL_CMD} pkcs8 -topk8 -in "$ndpath"/"$type".key -out "$ndpath"/pkcs8_node.key -nocrypt
     cp "$capath"/ca.crt "$capath"/cert.cnf "$ndpath"/
 
     rm -f "$ndpath"/"${type}".csr
