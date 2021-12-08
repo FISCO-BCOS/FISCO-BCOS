@@ -147,7 +147,7 @@ jobs:
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: bin/fisco-bcos.tar.gz
-          asset_name: fisco-bcos-macOS-linux-x86_64.tar.gz
+          asset_name: fisco-bcos-linux-x86_64.tar.gz
           tag: ${{ github.ref }}
           overwrite: true
       - name: Upload BcosNodeService binaries to release
