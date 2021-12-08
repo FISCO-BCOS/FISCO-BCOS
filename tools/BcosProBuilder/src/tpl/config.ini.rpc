@@ -7,10 +7,10 @@
     ;disable_ssl=true
 
 [service]
-    ;gateway=chain0
+    ;gateway=chain
 
 [chain]
-    chain_id=chain0
+    chain_id=chain
 
 [cert]
     ; directory the certificates located in
@@ -25,8 +25,6 @@
 [log]
     enable=true
     log_path=./log
-    ; network statistics interval, unit is second, default is 60s
-    stat_flush_interval=60
     ; info debug trace
     level=DEBUG
     ; MB

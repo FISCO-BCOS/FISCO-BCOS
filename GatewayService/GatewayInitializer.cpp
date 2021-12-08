@@ -44,7 +44,7 @@ void GatewayInitializer::init(std::string const& _configPath)
                              << LOG_KV("certPath", m_gatewayConfig->certPath())
                              << LOG_KV("nodePath", m_gatewayConfig->nodePath());
 
-    bcos::gateway::GatewayFactory factory(nodeConfig->chainId());
+    bcos::gateway::GatewayFactory factory(nodeConfig->chainId(), nodeConfig->rpcServiceName());
     auto gateway = factory.buildGateway(m_gatewayConfig, false);
 
     m_gateway = gateway;

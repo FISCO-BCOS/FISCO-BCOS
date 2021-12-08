@@ -43,7 +43,7 @@ void LocalNodeInitializer::init(std::string const& _configFilePath, std::string 
     nodeConfig->loadGenesisConfig(_genesisFile);
 
     // create gateway
-    GatewayFactory gatewayFactory(nodeConfig->chainId());
+    GatewayFactory gatewayFactory(nodeConfig->chainId(), "localRpc");
     auto gateway = gatewayFactory.buildGateway(_configFilePath, true);
     m_gateway = gateway;
 

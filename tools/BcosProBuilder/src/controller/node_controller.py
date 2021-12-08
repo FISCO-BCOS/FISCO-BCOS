@@ -241,9 +241,15 @@ class NodeController:
         return self.node_config_generator.generate_expand_node_config(node_config)
 
     def expand_and_deploy_all_nodes(self):
-        if self.generate_all_expand_config() is False:
-            return False
         for node_config in self.config.group_config.node_list:
+            if self.generate_expand_node_config(node_config) is False:
+                return False
+            # generate pem files
+            ret = self.node_config_generator.generate_all_nodes_pem()
+            if len(ret) == 0:
+                utilities.log_error("generate the expand config failed")
+                return False
+            # generate pem files
             if self.deploy_node_services(node_config) is False:
                 return False
         return True

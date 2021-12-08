@@ -124,7 +124,7 @@ class NodeConfig:
             node_name = self.get_node_name(i)
             for config_key in ServiceInfo.micro_node_service_config_keys.keys():
                 node_service_config_item[config_key] = node_name + \
-                    ServiceInfo.micro_node_service_config_keys[config_key]
+                                                       ServiceInfo.micro_node_service_config_keys[config_key]
             self.node_service_config_info[node_name] = node_service_config_item
 
 
@@ -153,6 +153,10 @@ class GroupConfig:
             self.config, self.section, "vm_type", "evm", False)
         self.sm_crypto = utilities.get_value(
             self.config, self.section, "sm_crypto", False, False)
+        self.auth_check = utilities.get_value(
+            self.config, self.section, "auth_check", False, False)
+        self.init_auth_address = utilities.get_value(
+            self.config, self.section, "init_auth_address", "", self.auth_check)
         self.genesis_config = GenesisConfig(self.config)
         self.parse_node_config()
 
@@ -171,7 +175,7 @@ class ChainConfig:
     def __init__(self, config):
         self.config = config
         self.chain_id = utilities.get_value(
-            self.config, "chain", "chain_id", "chain0", False)
+            self.config, "chain", "chain_id", "chain", False)
         self.rpc_ca_cert_path = utilities.get_value(
             self.config, "chain", "rpc_ca_cert_path", "", False)
         self.gateway_ca_cert_path = utilities.get_value(

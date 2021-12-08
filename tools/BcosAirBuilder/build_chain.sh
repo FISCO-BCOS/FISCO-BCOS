@@ -33,7 +33,8 @@ default_version="v3.0.0-rc1"
 compatibility_version=${default_version}
 auth_mode="false"
 auth_admin_account=
-binary_path="bin/${binary_name}"
+binary_path=""
+wasm_mode="false"
 
 LOG_WARN() {
     local content=${1}
@@ -316,6 +317,37 @@ gen_rsa_node_cert() {
     LOG_INFO "Generate ${ndpath} cert successful!"
 }
 
+download_bin()
+{
+    if [ ! -z "${binary_path}" ];then
+        LOG_INFO "Use binary ${binary_path}"
+        return
+    fi
+    if [ "${x86_64_arch}" != "true" ];then exit_with_clean "We only offer x86_64 precompiled fisco-bcos binary, your OS architecture is not x86_64. Please compile from source."; fi
+    binary_path=${output_dir}/${binary_name}
+    package_name="${binary_name}.tar.gz"
+    if [ -n "${macOS}" ];then
+        package_name="${binary_name}-macOS.tar.gz"
+    fi
+
+    Download_Link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/${compatibility_version}/${package_name}"
+    local cdn_download_link="${cdn_link_header}/FISCO-BCOS/releases/v${compatibility_version}/${package_name}"
+    LOG_INFO "Downloading fisco-bcos binary from ${Download_Link} ..."
+    if [ $(curl -IL -o /dev/null -s -w %{http_code} "${cdn_download_link}") == 200 ];then
+        curl -#LO "${Download_Link}" --speed-time 20 --speed-limit 102400 -m "${download_timeout}" || {
+            LOG_INFO "Download speed is too low, try ${cdn_download_link}"
+            curl -#LO "${cdn_download_link}"
+        }
+    else
+        curl -#LO "${Download_Link}"
+    fi
+    if [[ "$(ls -al . | grep tar.gz | awk '{print $5}')" -lt "1048576" ]];then
+        exit_with_clean "Download fisco-bcos failed, please try again. Or download and extract it manually from ${Download_Link} and use -e option."
+    fi
+    tar -zxf ${package_name} && mv fisco-bcos ${bin_path} && rm ${package_name}
+    chmod a+x ${bin_path}
+}
+
 gen_sm_chain_cert() {
     local chaindir="${1}"
     name=$(basename "$chaindir")
@@ -389,12 +421,13 @@ Usage:
     -o <output dir>                     [Optional] output directory, default ./nodes
     -e <fisco-bcos exec>                [Required] fisco-bcos binary exec
     -p <Start Port>                     Default 30300,20200 means p2p_port start from 30300, rpc_port from 20200
-    -s <SM model>                       [Optional] SM SSL connection or not, default no
+    -s <SM model>                       [Optional] SM SSL connection or not, default is false
     -c <Config Path>                    [Required when expand node] Specify the path of the expanded node config.ini, config.genesis and p2p connection file nodes.json
     -d <CA cert path>                   [Required when expand node] When expanding the node, specify the path where the CA certificate and private key are located
     -D <docker mode>                    Default off. If set -d, build with docker
     -A <Auth mode>                      Default off. If set -A, build chain with auth, and generate admin account.
     -a <Auth account>                   [Optional when Auth mode] Specify the admin account address.
+    -w <WASM mode>                      [Optional] Whether to use the wasm virtual machine engine, default is false
     -h Help
 
 deploy nodes e.g
@@ -408,7 +441,7 @@ EOF
 }
 
 parse_params() {
-    while getopts "l:C:c:o:e:p:d:v:DshAa:" option; do
+    while getopts "l:C:c:o:e:p:d:v:wDshAa:" option; do
         case $option in
         l)
             ip_param=$OPTARG
@@ -417,7 +450,10 @@ parse_params() {
         o)
             output_dir="$OPTARG"
             ;;
-        e) binary_path="$OPTARG" ;;
+        e) 
+            binary_path="$OPTARG" 
+            file_must_exists "${binary_path}"
+            ;;
         C) command="${OPTARG}"
             ;;
         d) ca_dir="${OPTARG}"
@@ -431,6 +467,7 @@ parse_params() {
         s) sm_mode="true" ;;
         D) docker_mode="true" ;;
         A) auth_mode="true" ;;
+        w) wasm_mode="true";;
         a)
           auth_mode="true"
           auth_admin_account="${OPTARG}"
@@ -691,7 +728,7 @@ generate_common_ini() {
 
 [executor]
     ; use the wasm virtual machine or not
-    is_wasm=false
+    is_wasm=${wasm_mode}
     is_auth_check=${auth_mode}
     auth_admin_account=${auth_admin_account}
 
@@ -705,8 +742,6 @@ generate_common_ini() {
 [log]
     enable=true
     log_path=./log
-    ; network statistics interval, unit is second, default is 60s
-    stat_flush_interval=60
     ; info debug trace
     level=DEBUG
     ; MB
@@ -926,6 +961,7 @@ generate_node_account()
 
 expand_node()
 {
+    download_bin
     local sm_mode="${1}"
     local ca_dir="${2}"
     local node_dir="${3}"
@@ -996,6 +1032,7 @@ expand_node()
 
 deploy_nodes()
 {
+    download_bin
     mkdir -p "$output_dir"
     dir_must_exists "${output_dir}"
     cert_conf="${output_dir}/cert.cnf"
