@@ -35,6 +35,20 @@ def parse_command():
     parser.add_argument("-h", '--help', action=_HelpAction)
 
     sub_parsers = parser.add_subparsers(dest="command")
+    subparser_name = CommandInfo.download_binary
+    help_info = "Download binary, eg: python3 build_chain.py download_binary -t cdn"
+    binary_parser = sub_parsers.add_parser(description=utilities.format_info(help_info),
+                                           name=subparser_name, help="download binary", formatter_class=RawTextHelpFormatter)
+    help_info = "[Optional] Specify the source of the download, support %s now, default type is git" % (
+        ','.join(CommandInfo.download_type))
+    binary_parser.add_argument(
+        "-t", '--type', help=help_info, default="cdn", required=False)
+    help_info = "[Optional] Specify the version of the binary, default is %s" % CommandInfo.default_binary_version
+    binary_parser.add_argument(
+        "-v", "--version", default=CommandInfo.default_binary_version, help=help_info, required=False)
+    help_info = "[Optional] Specify the path of the binary, default is binary"
+    binary_parser.add_argument(
+        "-p", "--path", default="binary", help=help_info, required=False)
 
     subparser_name = CommandInfo.chain_sub_parser_name
     deploy_nodes_command = get_description_prefix(
@@ -108,3 +122,7 @@ def is_create_subnet_command(args):
 
 def is_add_vxlan_command(args):
     return (args.command == CommandInfo.network_add_vxlan)
+
+
+def is_download_binary_command(args):
+    return (args.command == CommandInfo.download_binary)

@@ -16,7 +16,7 @@ class TarsConfig:
         self.tars_token = utilities.get_value(
             self.config, section, "tars_token", None, True)
         self.tars_pkg_dir = utilities.get_value(
-            self.config, section, "tars_pkg_dir", "../build", False)
+            self.config, section, "tars_pkg_dir", "binary", False)
         if len(self.tars_token) == 0:
             utilities.log_error("Must config 'tars.tars_token'")
             sys.exit(-1)
@@ -124,7 +124,7 @@ class NodeConfig:
             node_name = self.get_node_name(i)
             for config_key in ServiceInfo.micro_node_service_config_keys.keys():
                 node_service_config_item[config_key] = node_name + \
-                                                       ServiceInfo.micro_node_service_config_keys[config_key]
+                    ServiceInfo.micro_node_service_config_keys[config_key]
             self.node_service_config_info[node_name] = node_service_config_item
 
 
