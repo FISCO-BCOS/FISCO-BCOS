@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 dirpath="$(cd "$(dirname "$0")" && pwd)"
 listen_ip="0.0.0.0"
@@ -72,16 +73,8 @@ file_must_exists() {
 
 check_env() {
     if [ "$(uname)" == "Darwin" ];then
-        export PATH="/usr/local/opt/openssl/bin:$PATH"
         macOS="macOS"
     fi
-    # [ ! -z "$(openssl version | grep 1.0.2)" ] || [ ! -z "$(openssl version | grep 1.1)" ] || {
-    #     echo "please install openssl!"
-    #     #echo "download openssl from https://www.openssl.org."
-    #     echo "use \"openssl version\" command to check."
-    #     exit 1
-    # }
-
     if [ "$(uname -m)" != "x86_64" ];then
         x86_64_arch="false"
     fi
@@ -279,8 +272,8 @@ gen_chain_cert() {
     mkdir -p "$chaindir"
     dir_must_exists "$chaindir"
 
-    openssl genrsa -out "${chaindir}"/ca.key "${rsa_key_length}" 2>/dev/null
-    openssl req -new -x509 -days "${days}" -subj "/CN=FISCO-BCOS/O=FISCO-BCOS/OU=chain" -key "${chaindir}"/ca.key -out "${chaindir}"/ca.crt 2>/dev/null
+    ${OPENSSL_CMD} genrsa -out "${chaindir}"/ca.key "${rsa_key_length}" 2>/dev/null
+    ${OPENSSL_CMD} req -new -x509 -days "${days}" -subj "/CN=FISCO-BCOS/O=FISCO-BCOS/OU=chain" -key "${chaindir}"/ca.key -out "${chaindir}"/ca.crt 2>/dev/null
     mv "${cert_conf}" "${chaindir}"
 
     LOG_INFO "Generate ca cert successfully!"
@@ -301,12 +294,12 @@ gen_rsa_node_cert() {
     mkdir -p "${ndpath}"
     dir_must_exists "${ndpath}"
 
-    openssl genrsa -out "${ndpath}"/"${type}".key "${rsa_key_length}" 2>/dev/null
-    openssl req -new -sha256 -subj "/CN=FISCO-BCOS/O=fisco-bcos/OU=agency" -key "$ndpath"/"${type}".key -config "$capath"/cert.cnf -out "$ndpath"/"${type}".csr
-    openssl x509 -req -days "${days}" -sha256 -CA "${capath}"/ca.crt -CAkey "$capath"/ca.key -CAcreateserial \
+    ${OPENSSL_CMD} genrsa -out "${ndpath}"/"${type}".key "${rsa_key_length}" 2>/dev/null
+    ${OPENSSL_CMD} req -new -sha256 -subj "/CN=FISCO-BCOS/O=fisco-bcos/OU=agency" -key "$ndpath"/"${type}".key -config "$capath"/cert.cnf -out "$ndpath"/"${type}".csr
+    ${OPENSSL_CMD} x509 -req -days "${days}" -sha256 -CA "${capath}"/ca.crt -CAkey "$capath"/ca.key -CAcreateserial \
         -in "$ndpath"/"${type}".csr -out "$ndpath"/"${type}".crt -extensions v4_req -extfile "$capath"/cert.cnf 2>/dev/null
 
-    openssl pkcs8 -topk8 -in "$ndpath"/"${type}".key -out "$ndpath"/pkcs8_node.key -nocrypt
+    ${OPENSSL_CMD} pkcs8 -topk8 -in "$ndpath"/"${type}".key -out "$ndpath"/pkcs8_node.key -nocrypt
     cp "$capath"/ca.crt "$capath"/cert.cnf "$ndpath"/
 
     rm -f "$ndpath"/"$type".csr
@@ -324,14 +317,14 @@ download_bin()
         return
     fi
     if [ "${x86_64_arch}" != "true" ];then exit_with_clean "We only offer x86_64 precompiled fisco-bcos binary, your OS architecture is not x86_64. Please compile from source."; fi
-    binary_path=${output_dir}/${binary_name}
-    package_name="${binary_name}.tar.gz"
+    binary_path="bin/${binary_name}"
+    package_name="${binary_name}-linux-x86_64.tar.gz"
     if [ -n "${macOS}" ];then
-        package_name="${binary_name}-macOS.tar.gz"
+        package_name="${binary_name}-macOS-x86_64.tar.gz"
     fi
 
     Download_Link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/${compatibility_version}/${package_name}"
-    local cdn_download_link="${cdn_link_header}/FISCO-BCOS/releases/v${compatibility_version}/${package_name}"
+    local cdn_download_link="${cdn_link_header}/FISCO-BCOS/releases/${compatibility_version}/${package_name}"
     LOG_INFO "Downloading fisco-bcos binary from ${Download_Link} ..."
     if [ $(curl -IL -o /dev/null -s -w %{http_code} "${cdn_download_link}") == 200 ];then
         curl -#LO "${Download_Link}" --speed-time 20 --speed-limit 102400 -m "${download_timeout}" || {
@@ -344,8 +337,8 @@ download_bin()
     if [[ "$(ls -al . | grep tar.gz | awk '{print $5}')" -lt "1048576" ]];then
         exit_with_clean "Download fisco-bcos failed, please try again. Or download and extract it manually from ${Download_Link} and use -e option."
     fi
-    tar -zxf ${package_name} && mv fisco-bcos ${bin_path} && rm ${package_name}
-    chmod a+x ${bin_path}
+    mkdir -p bin && mv ${package_name} bin && cd bin && tar -zxf ${package_name} && cd ..
+    chmod a+x ${binary_path}
 }
 
 gen_sm_chain_cert() {
@@ -1149,8 +1142,6 @@ generate_auth_account()
 }
 
 main() {
-
-    # FIXME: use openssl 1.1 to generate gm certificates
     check_env
     check_and_install_tassl
     parse_params "$@"
