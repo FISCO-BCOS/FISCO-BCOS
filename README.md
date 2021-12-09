@@ -25,13 +25,13 @@ For more information, please refer to [the system design version 3.0](https://fi
 
 **For FISCO BCOS 2.0+ version technical documentation, please view [here](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/).**
 
-## 快速开始
-
-阅读[搭建第一个区块链网络](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/quick_start/air_installation.html)，了解使用FISCO BCOS所需的必要安装和配置，帮助您快速体验FISCO BCOS强大功能。
-
 ## Quick start
 
-阅读[**技术文档**](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/)，详细了解如何使用FISCO BCOS。
+Read [Build the first blockchain network](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/quick_start/air_installation.html) to understand the necessary installation and configuration required to use FISCO BCOS , To help you quickly experience the powerful functions of FISCO BCOS.
+
+## Documentation
+
+Read [**Technical Documentation**](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/) to learn more about how to use FISCO BCOS.
 
 - [Version and compatibility](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/change_log/index.html)
 
@@ -42,34 +42,31 @@ For more information, please refer to [the system design version 3.0](https://fi
 - [Java SDK](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/develop/sdk/java_sdk/index.html)
 
 - [JSON-RPC API](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/develop/api.html)
-## Landing application case
+## Featured applications
 
-There are dozens of FISCO BCOS applications, covering government affairs, finance, public welfare, medical care, education, transportation, copyright, product traceability, supply chain, recruitment, agriculture, social interaction, games and other fields, such as:
+**FISCO BCOS** has been adopted in over 10 applications in areas like government affairs, finances, charity, health care, education, transport, copyright, product tracing, supply chain, recruitment, agriculture, social communication, and entertainment.
 
-- Financial industry: inter-institutional reconciliation, supply chain finance, tourism finance, etc.
+- Finance: inter-institutional reconciliation, supply chain finance, tourism finance, etc.
+- Judicial services: arbitration chain, digital IOUs, etc.
+- Copyright: copyright registration and trading, etc.
+- Social management: real-estate registration, etc.
 
-- Judicial services: arbitration chain, electronic IOUs, etc.
-
-- Cultural copyright: copyright deposit and trading, etc.
-
-- Social management: real estate registration, etc.
-
-Here are some representative [landing application cases](https://mp.weixin.qq.com/s/cUjuWf1eGMbG3AFq60CBUA).
+Featured use cases are provided [here](http://www.fisco-bcos.org/assets/docs/FISCO%20BCOS%20-%20Featured%20Cases.pdf).
 
 ## Contributing code
 
-- We welcome and thank you very much for your contribution, please refer to [Code Contribution Process](https://mp.weixin.qq.com/s/_w_auH8X4SQQWO3lhfNrbQ) and [Code Specification](../CODING_STYLE.md).
-
-- If the project is helpful to you, welcome star support!
+- Your contributions are most welcome and appreciated. Please read the [contribution instructions](https://mp.weixin.qq.com/s/_w_auH8X4SQQWO3lhfNrbQ) and [coding code style guide](CODING_STYLE.md).
+- If this project is useful to you, please star us on GitHub project page!
 
 ## Join our community
 
-**FISCO BCOS Open Source Community** is an active open source community in China. The community has long provided various types of support and assistance to institutions and individual developers. Thousands of technology enthusiasts from various industries have been researching and using FISCO BCOS. If you are interested in FISCO BCOS open source technology and applications, welcome to join the community for more support and help.
+The FISCO BCOS community is one of the most active open-source blockchain communities in China. It provides long-term technical support for both institutional and individual developers and users of FISCO BCOS. Thousands of technical enthusiasts from numerous industry sectors have joined this community, studying and using FISCO BCOS platform. If you are also interested, you are most welcome to join us for more support and fun.
 
-![](https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/images/QR_image.png)
+![](https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/images/QR_image_en.png)
+
 
 ## License
 
 [![](https://img.shields.io/github/license/FISCO-BCOS/FISCO-BCOS.svg)](./LICENSE)
 
-The open source agreement of FISCO BCOS is Apache License 2.0, see [LICENSE](./LICENSE) for details.
+All contributions are made under the Apache License 2.0, see [LICENSE](./LICENSE) for details.
