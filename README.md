@@ -12,36 +12,31 @@ English / [中文](docs/README_CN.md)
 [![Github Actions](https://github.com/FISCO-BCOS/FISCO-BCOS/workflows/FISCO-BCOS%20GitHub%20Actions/badge.svg)](https://travis-ci.org/FISCO-BCOS/FISCO-BCOS)
 [![CircleCI](https://circleci.com/gh/FISCO-BCOS/FISCO-BCOS.svg?style=shield)](https://circleci.com/gh/FISCO-BCOS/FISCO-BCOS)
 
-FISCO BCOS is an enterprise-level financial blockchain underlying technology platform that is researched and developed by Chinese companies, open sourced to the outside world, and safe and controllable. FISCO BCOS 3.0 adopts a microservice architecture, but at the same time it also supports flexible splitting and combining of microservice modules to construct different forms of service models, including "lightweight Air version", "professional Pro version" and "large capacity Max version".
 
--**Light Air Edition**: Adopt all-in-one packaging mode, compile all modules into a binary (process), a process is a blockchain node, including all functions such as network, consensus, access, etc. Module, using local RocksDB storage. It is suitable for beginners, functional verification, POC products, etc.
+FISCO BCOS is the first safe and controllable enterprise-level financial consortium blockchain platform open source by domestic enterprises. It is jointly created by the FISCO open source working group and officially launched in December 2017.
 
-- **Professional Pro version**: It includes two access layer services, RPC and Gateway, and multiple blockchain node Node services. One Node service represents a group. The storage uses local RocksDB. All Nodes share access layer services. The two services of the layer can be extended in parallel. It is suitable for production environments with controllable capacity (within T level) and can support multi-group expansion.
+In a single-chain configuration, the performance TPS can reach 10,000. FISCO BCOS Provides many features such as group architecture, parallel computing, distributed storage, pluggable consensus mechanism, privacy protection algorithm, and support for fully supporting the OSCCA-approved cryptography algorithm. After a long period of practical testing in the production environment by multiple institutions and multiple applications, it has financial-grade high performance, high availability and high security.
 
-- **Large Capacity Max Version**: It is composed of all services of each layer, each service can be independently expanded, storage uses distributed storage TiKV, and management uses Tars-Framwork service. It is suitable for scenarios where massive transactions are on the chain and a large amount of data needs to be stored on disk.
+FISCO BCOS 3.0 is a brand new upgrade, adding multiple core features, mainly as follows:
 
+- **Microservice Architecture**: The modular design architecture of microservices supports independent and parallel expansion of computing, storage, and network.
 
-For more information, please refer to [the system design version 3.0](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/design/index.html).
+- **Deterministic multi-contract parallel algorithm**: The user-insensitive intelligent parallel scheduling engine can achieve contract-level parallelism and greatly increase transaction throughput.
 
-**For FISCO BCOS 2.0+ version technical documentation, please view [here](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/).**
+- **Pipeline PBFT consensus mechanism**: A new upgrade and revision of PBFT to realize block packaging, verification, and consensus pipeline services, which significantly improves system efficiency.
 
-## Quick start
+- **Integration of WeBankBlockchain Liquid and WASM virtual machine**: While supporting Solidity, it also supports WeBankBlockchain Liquid contract, which makes the contract more powerful
 
-Read [Build the first blockchain network](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/quick_start/air_installation.html) to understand the necessary installation and configuration required to use FISCO BCOS , To help you quickly experience the powerful functions of FISCO BCOS.
+- **Blockchain File System**: Supports the "what you see is what you get" blockchain resource management method, which is more friendly to blockchain contracts and data governance.
+
+- **Multi-scene adaptable product family**: Supports the construction of different service models, including "light Air version", "professional Pro version" and "large-capacity Max version" to meet the needs of diversified scenarios.
 
 ## Documentation
 
-Read [**Technical Documentation**](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/) to learn more about how to use FISCO BCOS.
+- **[FISCO BCOS 3.x Documentation（latest）](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/)**
 
-- [Version and compatibility](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/change_log/index.html)
+- **[FISCO BCOS 2.x Documentation（stable）](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/)**
 
-- [Installation](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/quick_start/air_installation.html)
-
-- [System Design](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/design/index.html)
-
-- [Java SDK](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/develop/sdk/java_sdk/index.html)
-
-- [JSON-RPC API](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/develop/api.html)
 ## Featured applications
 
 **FISCO BCOS** has been adopted in over 10 applications in areas like government affairs, finances, charity, health care, education, transport, copyright, product tracing, supply chain, recruitment, agriculture, social communication, and entertainment.

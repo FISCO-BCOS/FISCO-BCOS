@@ -12,32 +12,31 @@
 [![Github Actions](https://github.com/FISCO-BCOS/FISCO-BCOS/workflows/FISCO-BCOS%20GitHub%20Actions/badge.svg)](https://travis-ci.org/FISCO-BCOS/FISCO-BCOS)
 [![CircleCI](https://circleci.com/gh/FISCO-BCOS/FISCO-BCOS.svg?style=shield)](https://circleci.com/gh/FISCO-BCOS/FISCO-BCOS)
 
-**FISCO BCOS**是由中国企业主导研发、对外开源、安全可控的企业级金融区块链底层技术平台。FISCO BCOS 3.0采用微服务架构，但同时也支持灵活拆分组合微服务模块，从而构建不同形态的服务模式，包括“轻便Air版本”、“专业Pro版”和“大容量Max版”。
+FISCO BCOS是由微众牵头的金链盟主导研发、对外开源、安全可控的企业级金融区块链底层技术平台。
+单链配置下，性能TPS可达万级。提供群组架构、并行计算、分布式存储、可插拔的共识机制、隐私保护算法、支持全链路国密算法等诸多特性。
+经过多个机构、多个应用，长时间在生产环境中的实践检验，具备金融级的高性能、高可用性及高安全性。
 
-- **轻便Air版**：采用all-in-one的封装模式，将所有模块编译成一个二进制（进程），一个进程即为一个区块链节点，包括网络、共识、接入等所有功能模块，采用本地RocksDB存储。它适用于初学者入门、功能验证、POC产品等。
+FISCO BCOS 3.0全新升级，新增多个核心特性，主要如下：
 
-- **专业Pro版**：包括RPC、Gateway两个接入层的服务和多个区块链节点Node服务组成，其中一个Node服务代表一个群组，存储采用本地RocksDB，所有Node共用接入层服务，接入层的两个服务可平行扩展。它适用于容量可控（T级以内）的生产环境，能够支持多群组扩展。
+- **微服务架构**：微服务模块化设计架构，支持计算、存储、网络独立可平行扩展。
 
-- **大容量Max版**：由各个层的所有服务构成，每个服务都可独立扩展，存储采用分布式存储TiKV，管理采用Tars-Framwork服务。它适用于海量交易上链，需要支持大量数据落盘存储的场景。
+- **确定性多合约并行算法**：用户无感的智能并行调度引擎，可以实现合约级的并行，大幅提升交易吞吐量。
+
+- **流水线PBFT共识机制**：对PBFT全新升级改版，实现区块打包、验证、共识的流水线服务，显著提升系统效率。
+
+- **集成WeBankBlockchain Liquid和WASM虚拟机**：支持Solidity的同时，新增支持WeBankBlockchain Liquid合约，合约功能更强大。
+
+- **区块链文件系统**：支持“所见即所得”的区块链资源管理方式，对区块链的合约与数据治理更友好。
+
+- **多场景适配的产品家族**：支持构建不同形态的服务模式，包括“轻便Air版本”、“专业Pro版”和“大容量Max版”，满足多样化的场景需求。
 
 
-更多信息，请[参阅3.0版本系统设计](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/design/index.html)。
+## 技术文档
 
-**FISCO BCOS 2.0+版本技术文档请查看[这里](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/)。**
+- **[FISCO BCOS 3.x技术文档（rc1）](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/)**
 
-## 快速开始
+- **[FISCO BCOS 2.x 技术文档（stable）](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/)**
 
-阅读[搭建第一个区块链网络](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/quick_start/air_installation.html)，了解使用FISCO BCOS所需的必要安装和配置，帮助您快速体验FISCO BCOS强大功能。
-
-## 文档
-
-阅读[**技术文档**](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/)，详细了解如何使用FISCO BCOS。
-
-- [版本及兼容](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/change_log/index.html)
-- [安装](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/quick_start/air_installation.html)
-- [系统设计](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/design/index.html)
-- [Java SDK](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/develop/sdk/java_sdk/index.html)
-- [JSON-RPC API](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/docs/develop/api.html)
 
 ## 落地应用案例
 
