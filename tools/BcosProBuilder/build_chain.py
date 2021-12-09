@@ -9,6 +9,7 @@ from common import parser_handler
 from common.utilities import CommandInfo
 from common.utilities import ServiceInfo
 from config.chain_config import ChainConfig
+from controller.binary_controller import BinaryController
 from command.service_command_impl import ServiceCommandImpl
 from command.node_command_impl import NodeCommandImpl
 from networkmgr.network_manager import NetworkManager
@@ -69,7 +70,8 @@ def add_vxlan_operation(args):
     utilities.print_split_info()
     network = args.network
     if network is None or len(network) == 0:
-        utilities.log_error("Must set a valid non-empty network name, e.g. tars-network")
+        utilities.log_error(
+            "Must set a valid non-empty network name, e.g. tars-network")
         return
     dstip = args.dstip
     if dstip is None or len(dstip) == 0:
@@ -81,12 +83,28 @@ def add_vxlan_operation(args):
         return
     NetworkManager.create_bridge(network, vxlan_name, dstip)
     utilities.print_split_info()
-   
+
+
+def download_binary_operation(args):
+    if parser_handler.is_download_binary_command(args) is False:
+        return
+    utilities.print_split_info()
+    binary_path = args.path
+    version = args.version
+    if version.startswith("v") is False:
+        version = "v" + version
+    binary_controller = BinaryController(version, binary_path, args.type)
+    binary_controller.download_all_binary()
+    utilities.print_split_info()
+
+
 def main():
     args = parser_handler.parse_command()
     chain_operations(args)
     create_subnet_operation(args)
     add_vxlan_operation(args)
+    download_binary_operation(args)
+
 
 if __name__ == "__main__":
     main()

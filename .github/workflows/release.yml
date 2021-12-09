@@ -44,7 +44,7 @@ jobs:
       - name: tar BcosProBuilder
         run: mv tools/BcosProBuilder . && tar -cvzf BcosProBuilder.tgz BcosProBuilder
       - name: tar fisco-bcos for macOS
-        run: mv fisco-bcos/ bin/ && cp tools/BcosAirBuilder/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh
+        run: mv fisco-bcos/ bin/ && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos
       - name: Upload fisco-bcos binaries to release
         uses: svenstaro/upload-release-action@v1-release
         with:
@@ -141,13 +141,13 @@ jobs:
       - name: tar BcosProBuilder
         run: mv tools/BcosProBuilder . && tar -cvzf BcosProBuilder.tgz BcosProBuilder
       - name: tar fisco-bcos for CentOS
-        run: mv fisco-bcos bin && cp tools/BcosAirBuilder/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh
+        run: mv fisco-bcos bin && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos
       - name: Upload fisco-bcos binaries to release
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: bin/fisco-bcos.tar.gz
-          asset_name: fisco-bcos-macOS-linux-x86_64.tar.gz
+          asset_name: fisco-bcos-linux-x86_64.tar.gz
           tag: ${{ github.ref }}
           overwrite: true
       - name: Upload BcosNodeService binaries to release

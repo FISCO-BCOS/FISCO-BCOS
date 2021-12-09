@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 dirpath="$(cd "$(dirname "$0")" && pwd)"
 listen_ip="0.0.0.0"
@@ -21,7 +22,7 @@ macOS=""
 x86_64_arch="true"
 sm2_params="sm_sm2.param"
 cdn_link_header="https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS"
-OPENSSL_CMD="${HOME}/.fisco/tassl"
+OPENSSL_CMD="${HOME}/.fisco/tassl-1.1.1b"
 nodeid_list=""
 file_dir="./"
 nodes_json_file_name="nodes.json"
@@ -72,16 +73,8 @@ file_must_exists() {
 
 check_env() {
     if [ "$(uname)" == "Darwin" ];then
-        export PATH="/usr/local/opt/openssl/bin:$PATH"
         macOS="macOS"
     fi
-    # [ ! -z "$(openssl version | grep 1.0.2)" ] || [ ! -z "$(openssl version | grep 1.1)" ] || {
-    #     echo "please install openssl!"
-    #     #echo "download openssl from https://www.openssl.org."
-    #     echo "use \"openssl version\" command to check."
-    #     exit 1
-    # }
-
     if [ "$(uname -m)" != "x86_64" ];then
         x86_64_arch="false"
     fi
@@ -279,8 +272,8 @@ gen_chain_cert() {
     mkdir -p "$chaindir"
     dir_must_exists "$chaindir"
 
-    openssl genrsa -out "${chaindir}"/ca.key "${rsa_key_length}" 2>/dev/null
-    openssl req -new -x509 -days "${days}" -subj "/CN=FISCO-BCOS/O=FISCO-BCOS/OU=chain" -key "${chaindir}"/ca.key -out "${chaindir}"/ca.crt 2>/dev/null
+    ${OPENSSL_CMD} genrsa -out "${chaindir}"/ca.key "${rsa_key_length}" 2>/dev/null
+    ${OPENSSL_CMD} req -new -x509 -days "${days}" -subj "/CN=FISCO-BCOS/O=FISCO-BCOS/OU=chain" -key "${chaindir}"/ca.key -config "${cert_conf}" -out "${chaindir}"/ca.crt  2>/dev/null
     mv "${cert_conf}" "${chaindir}"
 
     LOG_INFO "Generate ca cert successfully!"
@@ -301,12 +294,12 @@ gen_rsa_node_cert() {
     mkdir -p "${ndpath}"
     dir_must_exists "${ndpath}"
 
-    openssl genrsa -out "${ndpath}"/"${type}".key "${rsa_key_length}" 2>/dev/null
-    openssl req -new -sha256 -subj "/CN=FISCO-BCOS/O=fisco-bcos/OU=agency" -key "$ndpath"/"${type}".key -config "$capath"/cert.cnf -out "$ndpath"/"${type}".csr
-    openssl x509 -req -days "${days}" -sha256 -CA "${capath}"/ca.crt -CAkey "$capath"/ca.key -CAcreateserial \
+    ${OPENSSL_CMD} genrsa -out "${ndpath}"/"${type}".key "${rsa_key_length}" 2>/dev/null
+    ${OPENSSL_CMD} req -new -sha256 -subj "/CN=FISCO-BCOS/O=fisco-bcos/OU=agency" -key "$ndpath"/"${type}".key -config "$capath"/cert.cnf -out "$ndpath"/"${type}".csr
+    ${OPENSSL_CMD} x509 -req -days "${days}" -sha256 -CA "${capath}"/ca.crt -CAkey "$capath"/ca.key -CAcreateserial \
         -in "$ndpath"/"${type}".csr -out "$ndpath"/"${type}".crt -extensions v4_req -extfile "$capath"/cert.cnf 2>/dev/null
 
-    openssl pkcs8 -topk8 -in "$ndpath"/"${type}".key -out "$ndpath"/pkcs8_node.key -nocrypt
+    ${OPENSSL_CMD} pkcs8 -topk8 -in "$ndpath"/"${type}".key -out "$ndpath"/pkcs8_node.key -nocrypt
     cp "$capath"/ca.crt "$capath"/cert.cnf "$ndpath"/
 
     rm -f "$ndpath"/"$type".csr
@@ -324,14 +317,14 @@ download_bin()
         return
     fi
     if [ "${x86_64_arch}" != "true" ];then exit_with_clean "We only offer x86_64 precompiled fisco-bcos binary, your OS architecture is not x86_64. Please compile from source."; fi
-    binary_path=${output_dir}/${binary_name}
-    package_name="${binary_name}.tar.gz"
+    binary_path="bin/${binary_name}"
+    package_name="${binary_name}-linux-x86_64.tar.gz"
     if [ -n "${macOS}" ];then
-        package_name="${binary_name}-macOS.tar.gz"
+        package_name="${binary_name}-macOS-x86_64.tar.gz"
     fi
 
     Download_Link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/${compatibility_version}/${package_name}"
-    local cdn_download_link="${cdn_link_header}/FISCO-BCOS/releases/v${compatibility_version}/${package_name}"
+    local cdn_download_link="${cdn_link_header}/FISCO-BCOS/releases/${compatibility_version}/${package_name}"
     LOG_INFO "Downloading fisco-bcos binary from ${Download_Link} ..."
     if [ $(curl -IL -o /dev/null -s -w %{http_code} "${cdn_download_link}") == 200 ];then
         curl -#LO "${Download_Link}" --speed-time 20 --speed-limit 102400 -m "${download_timeout}" || {
@@ -341,11 +334,11 @@ download_bin()
     else
         curl -#LO "${Download_Link}"
     fi
-    if [[ "$(ls -al . | grep tar.gz | awk '{print $5}')" -lt "1048576" ]];then
+    if [[ "$(ls -al . | grep "fisco-bcos.*tar.gz" | awk '{print $5}')" -lt "1048576" ]];then
         exit_with_clean "Download fisco-bcos failed, please try again. Or download and extract it manually from ${Download_Link} and use -e option."
     fi
-    tar -zxf ${package_name} && mv fisco-bcos ${bin_path} && rm ${package_name}
-    chmod a+x ${bin_path}
+    mkdir -p bin && mv ${package_name} bin && cd bin && tar -zxf ${package_name} && cd ..
+    chmod a+x ${binary_path}
 }
 
 gen_sm_chain_cert() {
@@ -921,30 +914,37 @@ exit_with_clean() {
 }
 
 check_and_install_tassl(){
-if [ -n "${sm_mode}" ]; then
-    if [ ! -f "${OPENSSL_CMD}" ];then
-        local tassl_link_prefix="${cdn_link_header}/FISCO-BCOS/tools/tassl-1.0.2"
-        LOG_INFO "Downloading tassl binary from ${tassl_link_prefix}..."
-        if [[ -n "${macOS}" ]];then
-            curl -#LO "${tassl_link_prefix}/tassl_mac.tar.gz"
-            mv tassl_mac.tar.gz tassl.tar.gz
-        else
-            if [[ "$(uname -p)" == "aarch64" ]];then
-                curl -#LO "${tassl_link_prefix}/tassl-aarch64.tar.gz"
-                mv tassl-aarch64.tar.gz tassl.tar.gz
-            elif [[ "$(uname -p)" == "x86_64" ]];then
-                curl -#LO "${tassl_link_prefix}/tassl.tar.gz"
-            else
-                LOG_FATAL "Unsupported platform"
-                exit 1
-            fi
-        fi
-        tar zxvf tassl.tar.gz && rm tassl.tar.gz
-        chmod u+x tassl
-        mkdir -p "${HOME}"/.fisco
-        mv tassl "${HOME}"/.fisco/tassl
+    if [ -f "${OPENSSL_CMD}" ];then
+        return
     fi
-fi
+    local x86_64_name="x86_64"
+    local arm_name="aarch64"
+    local tassl_mid_name="linux"
+    if [[ -n "${macOS}" ]];then
+        x86_64_name="i386"
+        arm_name="arm"
+        tassl_mid_name="macOS"
+    fi
+    
+    local tassl_post_fix="x86_64"
+    local platform="$(uname -p)"
+    if [[ "${platform}" == "${arm_name}" ]];then
+        tassl_post_fix="aarch64"
+    elif [[ "${platform}" == "${x86_64_name}" ]];then
+        tassl_post_fix="x86_64"
+    else
+        LOG_FATAL "Unsupported platform ${platform} for ${tassl_mid_name}"
+        exit 1
+    fi
+    local tassl_package_name="tassl-1.1.1b-${tassl_mid_name}-${tassl_post_fix}"
+    local tassl_tgz_name="${tassl_package_name}.tar.gz"
+    local tassl_link_prefix="${cdn_link_header}/FISCO-BCOS/tools/tassl-1.1.1b/${tassl_tgz_name}"
+    LOG_INFO "Downloading tassl binary from ${tassl_link_prefix}..."
+    curl -#LO "${tassl_link_prefix}"
+    tar zxvf ${tassl_tgz_name} && rm ${tassl_tgz_name}
+    chmod u+x ${tassl_package_name}
+    mkdir -p "${HOME}"/.fisco
+    mv ${tassl_package_name} "${HOME}"/.fisco/tassl-1.1.1b
 }
 
 generate_node_account()
@@ -961,7 +961,6 @@ generate_node_account()
 
 expand_node()
 {
-    download_bin
     local sm_mode="${1}"
     local ca_dir="${2}"
     local node_dir="${3}"
@@ -972,6 +971,7 @@ expand_node()
     file_must_exists "${config_path}/config.ini"
     file_must_exists "${config_path}/config.genesis"
     file_must_exists "${config_path}/nodes.json"
+    download_bin
     # check binary
     parent_path=$(dirname ${node_dir})
     if [ -z "${docker_mode}" ];then
@@ -1032,7 +1032,6 @@ expand_node()
 
 deploy_nodes()
 {
-    download_bin
     mkdir -p "$output_dir"
     dir_must_exists "${output_dir}"
     cert_conf="${output_dir}/cert.cnf"
@@ -1048,6 +1047,7 @@ deploy_nodes()
     else
         help
     fi
+    download_bin
     # check the binary
     if [ -z "${docker_mode}" ];then
         if [[ ! -f "$binary_path" ]]; then
@@ -1149,8 +1149,6 @@ generate_auth_account()
 }
 
 main() {
-
-    # FIXME: use openssl 1.1 to generate gm certificates
     check_env
     check_and_install_tassl
     parse_params "$@"
