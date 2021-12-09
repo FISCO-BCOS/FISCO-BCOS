@@ -1,0 +1,5 @@
+hunter_add_package(bcos-txpool)
+find_package(bcos-framework CONFIG REQUIRED)
+find_package(bcos-txpool CONFIG REQUIRED)
+get_target_property(BCOS_TXPOOL_INCLUDE bcos-txpool::bcos-txpool INTERFACE_INCLUDE_DIRECTORIES)
+include_directories(${BCOS_TXPOOL_INCLUDE}/bcos-txpool)
