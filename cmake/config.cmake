@@ -19,8 +19,8 @@ hunter_config(bcos-tars-protocol
 )
 
 hunter_config(bcos-txpool VERSION 3.0.0-local
-    URL  https://${URL_BASE}/FISCO-BCOS/bcos-txpool/archive/7a4c3b70c2e95b19d4987299e2eb4ecdccc01817.tar.gz
-    SHA1 e60afe2cdacdc36e037b471f25cea675449f1c2b
+    URL  https://${URL_BASE}/FISCO-BCOS/bcos-txpool/archive/ee2f6c2834d4852d7c53c9f84697df23d7d5b5a6.tar.gz
+    SHA1 1a6eda3f650388f7ece898e5313dc8db7c36c314
     CMAKE_ARGS URL_BASE=${URL_BASE}  HUNTER_KEEP_PACKAGE_SOURCES=ON
 )
 
@@ -31,8 +31,8 @@ hunter_config(bcos-pbft VERSION 3.0.0-local-a2a9f7d2
 )
 
 hunter_config(bcos-sync VERSION 3.0.0-local-50e0e264
-    URL  https://${URL_BASE}/FISCO-BCOS/bcos-sync/archive/580db8bbd03c4d29501531f9aa86cab46df01764.tar.gz
-    SHA1 4a8da33b85723d34be3876a6596dbc885429a46a
+    URL  https://${URL_BASE}/FISCO-BCOS/bcos-sync/archive/f6c509ddf0fe256f6b1c7433a6b8df8811367742.tar.gz
+    SHA1 1a115881ce7765f9a5904b3f48f207615f702dcc
     CMAKE_ARGS URL_BASE=${URL_BASE}  HUNTER_KEEP_PACKAGE_SOURCES=ON
 )
 
@@ -57,8 +57,8 @@ hunter_config(bcos-ledger
 )
 
 hunter_config(bcos-front VERSION 3.0.0-local-2ed687bb
-    URL  https://${URL_BASE}/FISCO-BCOS/bcos-front/archive/22b64b094919ba7f0641a6c6bb0e49fedecfef5b.tar.gz
-    SHA1 3747bc61d48d38257f69b5df111d12c403b20790
+    URL  https://${URL_BASE}/FISCO-BCOS/bcos-front/archive/b27ac074af4ccbc2f8afaa943ce21be00145567b.tar.gz
+    SHA1 0ae389934ebf0a2fe9f533f7cc40500164776825
     CMAKE_ARGS URL_BASE=${URL_BASE} HUNTER_KEEP_PACKAGE_SOURCES=ON
 )
 
@@ -107,9 +107,9 @@ hunter_config(tarscpp VERSION 3.0.3-7299ad23
 	SHA1 9667c0d775bbbc6400a47034bee86003888db978
 )
 
-hunter_config(bcos-crypto VERSION 3.0.1-local
-	URL https://${URL_BASE}/FISCO-BCOS/bcos-crypto/archive/4c2c1fd9529d2d9cbae4823a62d4fcac353759b7.tar.gz
-	SHA1 d0c85b25f0acc869400495c72c340947629a51f9
+hunter_config(bcos-crypto VERSION 3.0.0-local
+	URL https://${URL_BASE}/FISCO-BCOS/bcos-crypto/archive/d91d770edda01502ed5ee0c8fe1efdd35b06d308.tar.gz
+	SHA1 d5390f09ce5ffc590dcc80a27b10f1e0c1242087
 	CMAKE_ARGS HUNTER_PACKAGE_LOG_BUILD=OFF HUNTER_PACKAGE_LOG_INSTALL=ON
 )
 
