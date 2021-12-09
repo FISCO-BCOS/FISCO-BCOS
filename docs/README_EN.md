@@ -54,4 +54,4 @@ The FISCO BCOS community is one of the most active open-source blockchain commun
 
 ## License
 
-All contributions are made under the Apache License 2.0, see [LICENSE](./LICENSE) for details.
+All contributions are made under the Apache License 2.0, see [LICENSE](../LICENSE) for details.
