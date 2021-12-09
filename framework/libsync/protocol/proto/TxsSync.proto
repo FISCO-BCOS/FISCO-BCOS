@@ -1,0 +1,9 @@
+syntax = "proto3";
+package bcos.sync;
+message TxsSyncMessage
+{
+    int32 version = 1;
+    int32 type = 2;
+    bytes txsData = 3;
+    repeated bytes txsHash = 4;
+}
