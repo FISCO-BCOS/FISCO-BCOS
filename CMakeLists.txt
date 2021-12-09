@@ -1,118 +1,103 @@
-#------------------------------------------------------------------------------
-# Top-level CMake file for FISCO-BCOS.
-# ------------------------------------------------------------------------------
-# This file is part of FISCO-BCOS.
-#
-# FISCO-BCOS is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# FISCO-BCOS is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with FISCO-BCOS.  If not, see <http://www.gnu.org/licenses/>
-#
-# (c) 2016-2018 fisco-dev contributors.
-#------------------------------------------------------------------------------
+cmake_minimum_required(VERSION 3.15)
+if (NOT DEFINED URL_BASE)
+    set(URL_BASE "github.com")
+    # set(URL_BASE "github.com.cnpmjs.org")
+endif()
+set (DEPENDENCIES_DIR ${CMAKE_CURRENT_SOURCE_DIR}/deps/src)
 
-cmake_minimum_required(VERSION 3.12)
-set(FISCO_BCOS_CMAKE_DIR "${CMAKE_CURRENT_LIST_DIR}/cmake" CACHE PATH "The path to the cmake directory")
-list(APPEND CMAKE_MODULE_PATH ${FISCO_BCOS_CMAKE_DIR})
-set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum OS X deployment version")
+set(BCOS_TARS_CMAKE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cmake" CACHE PATH "The cmake path for the library")
+set(BCOS_CMAKE_SCRIPTS_DIR ${CMAKE_CURRENT_BINARY_DIR}/bcos-cmake-scripts)
+include(FetchContent)
+FetchContent_Declare(bcos-cmake-scripts
+    GIT_REPOSITORY https://${URL_BASE}/FISCO-BCOS/bcos-cmake-scripts.git
+    GIT_TAG 2d25e8957323ffa86a55528c22348088ba99e9c6
+    SOURCE_DIR ${BCOS_CMAKE_SCRIPTS_DIR}
+)
+FetchContent_MakeAvailable(bcos-cmake-scripts)
+list(APPEND CMAKE_MODULE_PATH ${BCOS_CMAKE_SCRIPTS_DIR})
+list(APPEND CMAKE_MODULE_PATH ${BCOS_TARS_CMAKE_DIR})
 
+include(HunterGate)
+HunterGate(
+    URL "https://${URL_BASE}/FISCO-BCOS/hunter/archive/203039fdd0826330facd9c3841082dbf35d0c808.tar.gz"
+    SHA1 "26ca1840eb26da410913469f2f278569c8d383ae"
+    FILEPATH "${BCOS_TARS_CMAKE_DIR}/config.cmake"
+)
 
-project(FISCO-BCOS VERSION "2.8.0")
+project(FISCO-BCOS VERSION "3.0.0")
 # Suffix like "-rc1" e.t.c. to append to versions wherever needed.
-set(VERSION_SUFFIX "")
+set(VERSION_SUFFIX "-rc1")
 
-find_package(Git QUIET)
-if(NOT GIT_FOUND)
-  message(FATAL_ERROR "Please install git")
-endif()
-
-set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY ON)
-
-# basic setting
-include(Options)
-configure_project()
-include(CompilerSettings)
-include(Dependencies)
-
-# install dependencies
-include(ProjectTBB)
-include(ProjectSnappy)
-include(ProjectLevelDB)
-include(ProjectRocksDB)
-include(ProjectMHD)
-include(ProjectCryptopp)
-include(ProjectSecp256k1)
-include(ProjectJsonCpp)
-include(ProjectJsonRpcCpp)
-include(ProjectBoost)
-include(ProjectLibzdb)
+# import dependencies
 include(ProjectTCMalloc)
-include(ProjectLibFF)
-include(ProjectPaillier)
-include(ProjectGroupSig)
-include(ProjectEVMC)
-include(ProjectVRF)
-include(ProjectEVMONE)
-include(ProjectTASSL)
+include(InstallBcosFrameworkDependencies)
+include(InstallBcosCryptoDependencies)
+include(InstallBcosTarsProtocolDependencies)
+include(InstallBoostSSL)
 
-if(USE_HSM_SDF)
-  include(ProjectSDF)
-endif()
+include(InstallBcosGateWayDependencies)
+include(InstallBcosRpcDependencies)
 
-include_directories("${CMAKE_SOURCE_DIR}")
+include(InstallBcosTxPoolDependencies)
+include(InstallBcosPBFTDependencies)
+include(InstallBcosStorageDependencies)
+include(InstallBcosLedgerDependencies)
+include(InstallBcosSyncDependencies)
+include(InstallBcosFrontDependencies)
+include(InstallBcosScheduler)
+include(ProjectBCOSExecutor)
 
-add_subdirectory(libchannelserver)
-add_subdirectory(libdevcore)
-add_subdirectory(libdevcrypto)
-add_subdirectory(libethcore)
-# add_subdirectory(libinterpreter)
-add_subdirectory(libstat)
-add_subdirectory(libflowlimit)
-add_subdirectory(libtxpool)
-add_subdirectory(libstorage)
-add_subdirectory(libprecompiled)
-add_subdirectory(libnetwork)
-add_subdirectory(libp2p)
-add_subdirectory(libexecutive)
-add_subdirectory(libmptstate)
-add_subdirectory(libblockverifier)
-add_subdirectory(libstoragestate)
-add_subdirectory(libblockchain)
-add_subdirectory(libsync)
-add_subdirectory(libconsensus)
-add_subdirectory(libledger)
-add_subdirectory(librpc)
+# copy .clang-format into the project path
+include(CopyClangFormat)
+
+include_directories(${CMAKE_INSTALL_INCLUDEDIR})
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+include_directories(${CMAKE_CURRENT_BINARY_DIR})
+
+include(CompilerSettings)
+
+set(INIT_LIB initializer)
+set(PROTOCOL_INIT_LIB protocolInitializer)
+set(PBFT_INIT_LIB pbftInitializer)
+set(TXPOOL_INIT_LIB txPoolInitializer)
+set(FRONTSERVICE_INIT_LIB frontInitializer)
+
+set(LEDGER_SERVICE_LIB ledgerServiceLib)
+set(SCHEDULER_SERVICE_LIB schedulerServiceLib)
+
 add_subdirectory(libinitializer)
-add_subdirectory(libsecurity)
-add_subdirectory(libeventfilter)
-# generate executable binary fisco-bcos
+
+include(BuildInfoGenerator)
+# import services
+#list(APPEND SERVICE_LIST FrontService GatewayService RpcService TxPoolService PBFTService NodeService)
+list(APPEND SERVICE_LIST GatewayService RpcService NodeService)
+# TODO:
+# SchedulerService, ExecutorService
+
+foreach(SERVICE ${SERVICE_LIST})
+    add_subdirectory(${SERVICE}/main)
+    set(BINARY_NAME Bcos${SERVICE})
+
+    add_custom_command(OUTPUT ${BINARY_NAME}.tgz
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/${SERVICE}/main/${BINARY_NAME} ${CMAKE_BINARY_DIR}/${BINARY_NAME}/${BINARY_NAME}
+    COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR} tar czfv ${BINARY_NAME}.tgz ${BINARY_NAME}/${BINARY_NAME}
+    COMMENT "Compressing ${BINARY_NAME}...")
+
+    add_custom_target(${BINARY_NAME}-tar DEPENDS ${BINARY_NAME}.tgz ${BINARY_NAME})
+    list(APPEND SERVICE_TAR_LIST ${BINARY_NAME}-tar)
+endforeach()
+
 add_subdirectory(fisco-bcos)
+add_custom_target(tar DEPENDS ${SERVICE_TAR_LIST})
 
-
-if (TESTS)
+if(TEST)
     enable_testing()
-    set(CTEST_OUTPUT_ON_FAILURE TRUE)
-    add_subdirectory(test)
+    add_subdirectory(tests)
 endif()
 
-find_package(Doxygen QUIET)
-if(DOXYGEN_FOUND)
-# Requirements: doxygen graphviz
-  set(doxyfile_in ${CMAKE_CURRENT_SOURCE_DIR}/.Doxyfile.in)
-  set(doxyfile ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile)
-  configure_file(${doxyfile_in} ${doxyfile} @ONLY)
-# Add doc target
-add_custom_target(doc COMMAND ${DOXYGEN_EXECUTABLE} ${doxyfile}
-                       WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-                       COMMENT "Generating documentation with Doxygen..." VERBATIM)
-elseif()
-  message(WARNING "Doxygen is needed to build the documentation. Please install doxygen and graphviz")
-endif()
+# for code coverage
+if (COVERAGE)
+    include(Coverage)
+    config_coverage("tars-cov" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_CURRENT_SOURCE_DIR}/test/bcos-test*'")
+endif ()
