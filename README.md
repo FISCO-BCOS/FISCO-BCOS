@@ -2,18 +2,13 @@
 
 ![](./docs/FISCO_BCOS_Logo.svg)
 
-FISCO BCOS是由微众牵头的金链盟主导研发、对外开源、安全可控的企业级金融区块链底层技术平台。
-单链配置下，性能TPS可达万级。提供群组架构、并行计算、分布式存储、可插拔的共识机制、隐私保护算法、支持全链路国密算法等诸多特性。
-经过多个机构、多个应用，长时间在生产环境中的实践检验，具备金融级的高性能、高可用性及高安全性。
-
 [![codecov](https://codecov.io/gh/FISCO-BCOS/FISCO-BCOS/branch/master/graph/badge.svg)](https://codecov.io/gh/FISCO-BCOS/FISCO-BCOS)
 [![CodeFactor](https://www.codefactor.io/repository/github/fisco-bcos/FISCO-BCOS/badge)](https://www.codefactor.io/repository/github/fisco-bcos/FISCO-BCOS)
 [![GitHub All Releases](https://img.shields.io/github/downloads/FISCO-BCOS/FISCO-BCOS/total.svg)](https://github.com/FISCO-BCOS/FISCO-BCOS)
-[![Code Lines](https://tokei.rs/b1/github/FISCO-BCOS/FISCO-BCOS?category=code)](https://github.com/FISCO-BCOS/FISCO-BCOS)
- [![version](https://img.shields.io/github/tag/FISCO-BCOS/FISCO-BCOS.svg)](https://github.com/FISCO-BCOS/FISCO-BCOS/releases/latest)
 
-[![Github Actions](https://github.com/FISCO-BCOS/FISCO-BCOS/workflows/FISCO-BCOS%20GitHub%20Actions/badge.svg)](https://travis-ci.org/FISCO-BCOS/FISCO-BCOS)
-[![CircleCI](https://circleci.com/gh/FISCO-BCOS/FISCO-BCOS.svg?style=shield)](https://circleci.com/gh/FISCO-BCOS/FISCO-BCOS)
+FISCO BCOS是由微众牵头的金链盟主导研发、对外开源、安全可控的企业级金融区块链底层技术平台。
+单链配置下，性能TPS可达万级。提供群组架构、并行计算、分布式存储、可插拔的共识机制、隐私保护算法、支持全链路国密算法等诸多特性。
+经过多个机构、多个应用，长时间在生产环境中的实践检验，具备金融级的高性能、高可用性及高安全性。
 
 FISCO BCOS 3.0全新升级，新增多个核心特性，主要如下：
 
@@ -29,7 +24,6 @@ FISCO BCOS 3.0全新升级，新增多个核心特性，主要如下：
 
 - **多场景适配的产品家族**：支持构建不同形态的服务模式，包括“轻便Air版本”、“专业Pro版”和“大容量Max版”，满足多样化的场景需求。
 
-
 ## 技术文档
 
 - **[FISCO BCOS 3.x技术文档（rc1）](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/)**
@@ -39,19 +33,18 @@ FISCO BCOS 3.0全新升级，新增多个核心特性，主要如下：
 
 ## 落地应用案例
 
-FISCO BCOS已落地应用达数十个，场景覆盖政务、金融、公益、医疗、教育、交通、版权、商品溯源、供应链、招聘、农业、社交、游戏等多个领域，如：
+FISCO BCOS已落地应用达数百个，场景覆盖政务、金融、公益、医疗、教育、交通、版权、商品溯源、供应链、招聘、农业、社交、游戏等多个领域，如：
 
 - 金融业：机构间对账、供应链金融、旅游金融等。
 - 司法服务：仲裁链、电子借据等。
 - 文化版权：版权存证与交易等。
 - 社会管理：不动产登记等。
 
-此处提供一些具有代表性的[落地应用案例](https://mp.weixin.qq.com/s/cUjuWf1eGMbG3AFq60CBUA)。
-
+此处提供一些具有代表性的[落地应用案例](https://mp.weixin.qq.com/s/RJwRMChWt6mhJrysyBLAmA)。
 
 ## 贡献代码
 
-- 我们欢迎并非常感谢您的贡献，请参阅[代码贡献流程](https://mp.weixin.qq.com/s/_w_auH8X4SQQWO3lhfNrbQ)和[代码规范](../CODING_STYLE.md)。
+- 我们欢迎并非常感谢您的贡献，请参阅[代码贡献流程](https://mp.weixin.qq.com/s/_w_auH8X4SQQWO3lhfNrbQ)。
 
 - 如项目对您有帮助，欢迎star支持！
 
