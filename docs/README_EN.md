@@ -1,7 +1,6 @@
 [中文](../README.md) / English
 
-![](./images/FISCO_BCOS_Logo.svg)
-
+![](./FISCO_BCOS_Logo.svg)
 
 [![codecov](https://codecov.io/gh/FISCO-BCOS/FISCO-BCOS/branch/master/graph/badge.svg)](https://codecov.io/gh/FISCO-BCOS/FISCO-BCOS)
 [![CodeFactor](https://www.codefactor.io/repository/github/fisco-bcos/FISCO-BCOS/badge)](https://www.codefactor.io/repository/github/fisco-bcos/FISCO-BCOS)
