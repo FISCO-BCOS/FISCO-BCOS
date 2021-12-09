@@ -56,4 +56,4 @@ FISCO BCOS已落地应用达数百个，场景覆盖政务、金融、公益、�
 
 ## License
 
-FISCO BCOS的开源协议为Apache License 2.0, 详情参见[LICENSE](../LICENSE)。
+FISCO BCOS的开源协议为Apache License 2.0, 详情参见[LICENSE](LICENSE)。
