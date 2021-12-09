@@ -253,8 +253,8 @@ gen_chain_cert() {
     mkdir -p "$chaindir"
     dir_must_exists "$chaindir"
 
-    ${OPENSSL_CMD} genrsa -out "${chaindir}"/ca.key "${rsa_key_length}" 2> /dev/null
-    ${OPENSSL_CMD} req -new -x509 -days "${days}" -subj "/CN=FISCO-BCOS/O=FISCO-BCOS/OU=chain" -key "${chaindir}"/ca.key -out "${chaindir}"/ca.crt 2>/dev/null
+    ${OPENSSL_CMD} genrsa -out "${chaindir}"/ca.key "${rsa_key_length}"
+    ${OPENSSL_CMD} req -new -x509 -days "${days}" -subj "/CN=FISCO-BCOS/O=FISCO-BCOS/OU=chain" -key "${chaindir}"/ca.key -config "${cert_conf}" -out "${chaindir}"/ca.crt
     mv "${cert_conf}" "${chaindir}"
 
     LOG_INFO "Build ca cert successfully!"
