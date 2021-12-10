@@ -24,6 +24,8 @@ hunter_add_package(jsoncpp)
 
 # import dependencies
 include(CompilerSettings)
+include(ProjectHera)
+include(ProjectWABT)
 
 # import services
 #list(APPEND SERVICE_LIST FrontService GatewayService RpcService TxPoolService PBFTService NodeService)
@@ -48,6 +50,7 @@ include(CompilerSettings)
 add_subdirectory(bcos-crypto)
 add_subdirectory(bcos-framework)
 add_subdirectory(bcos-scheduler)
+add_subdirectory(bcos-executor)
 # add_subdirectory(libinitializer)
 # add_subdirectory(fisco-bcos)
 
