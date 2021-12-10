@@ -85,13 +85,13 @@ add_library(framework ${SRCS} ${MESSAGES_SRCS})
 target_link_libraries(framework PUBLIC Boost::log Boost::chrono Boost::iostreams Boost::filesystem Boost::thread protobuf::libprotobuf TBB::tbb)
 
 # test releated
-if (TESTS)
-    hunter_add_package(jsoncpp)
-    find_package(jsoncpp CONFIG REQUIRED)
-    enable_testing()
-    set(CTEST_OUTPUT_ON_FAILURE True)
-    add_subdirectory(test)
-endif()
+# if (TESTS)
+#     hunter_add_package(jsoncpp)
+#     find_package(jsoncpp CONFIG REQUIRED)
+#     enable_testing()
+#     set(CTEST_OUTPUT_ON_FAILURE True)
+#     add_subdirectory(test)
+# endif()
 
 # for code coverage
 if (COVERAGE)

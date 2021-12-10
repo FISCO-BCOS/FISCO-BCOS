@@ -1,5 +1,0 @@
-hunter_add_package(bcos-ledger)
-find_package(bcos-framework CONFIG REQUIRED)
-find_package(bcos-ledger CONFIG REQUIRED)
-get_target_property(BCOS_LEDGER_INCLUDE bcos-ledger::bcos-ledger INTERFACE_INCLUDE_DIRECTORIES)
-include_directories(${BCOS_LEDGER_INCLUDE}/bcos-ledger)
