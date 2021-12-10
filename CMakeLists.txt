@@ -2,16 +2,14 @@ cmake_minimum_required(VERSION 3.15)
 if (NOT DEFINED URL_BASE)
     set(URL_BASE "github.com")
 endif()
-set (DEPENDENCIES_DIR ${CMAKE_CURRENT_SOURCE_DIR}/deps/src)
 
-list(APPEND CMAKE_MODULE_PATH scripts)
-list(APPEND CMAKE_MODULE_PATH ${BCOS_TARS_CMAKE_DIR})
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts)
 
 include(HunterGate)
 HunterGate(
     URL "https://${URL_BASE}/FISCO-BCOS/hunter/archive/203039fdd0826330facd9c3841082dbf35d0c808.tar.gz"
     SHA1 "26ca1840eb26da410913469f2f278569c8d383ae"
-    FILEPATH "${BCOS_TARS_CMAKE_DIR}/config.cmake"
+    FILEPATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.cmake"
 )
 
 project(FISCO-BCOS VERSION "3.0.0")
@@ -21,7 +19,6 @@ set(VERSION_SUFFIX "-rc1")
 include(InstallBoostSSL)
 include(CompilerSettings)
 
-include(BuildInfoGenerator)
 # import services
 #list(APPEND SERVICE_LIST FrontService GatewayService RpcService TxPoolService PBFTService NodeService)
 list(APPEND SERVICE_LIST GatewayService RpcService NodeService)

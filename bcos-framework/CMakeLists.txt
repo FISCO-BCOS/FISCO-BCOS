@@ -19,30 +19,6 @@
 cmake_minimum_required(VERSION 3.12)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment version")
 
-if (NOT DEFINED URL_BASE)
-    set(URL_BASE "github.com")
-    # set(URL_BASE "github.com.cnpmjs.org")
-endif()
-include(FetchContent)
-
-# fetch bcos-cmake-scripts
-set(BCOS_CMAKE_SCRIPTS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cmake/scripts")
-FetchContent_Declare(bcos-cmake-scripts
-    GIT_REPOSITORY https://${URL_BASE}/FISCO-BCOS/bcos-cmake-scripts.git
-    GIT_TAG 9b2ac5b979cbc97f640b2285feb2c74a18cfb935
-    SOURCE_DIR ${BCOS_CMAKE_SCRIPTS_DIR}
-    CONFIGURE_COMMAND ""
-    BUILD_COMMAND ""
-    INSTALL_COMMAND ""
-)
-
-set(HUNTER_PACKAGE_LOG_BUILD ON CACHE STRING "Hunter output build info to log")
-set(HUNTER_PACKAGE_LOG_INSTALL ON CACHE STRING "Hunter output install info to log")
-set(HUNTER_STATUS_DEBUG OFF CACHE STRING "Hunter debug output")
-set(HUNTER_USE_CACHE_SERVERS NO CACHE STRING "Download cache from cache server" FORCE)
-# set(HUNTER_STATUS_PRINT OFF CACHE STRING "Hunter status output")
-# set(HUNTER_CONFIGURATION_TYPES Release CACHE STRING "Build type of Hunter packages")
-
 # fetch bcos-proto
 set(BCOS_PROTO_NAME bcos-proto)
 set(BCOS_PROTO_PATH ${CMAKE_CURRENT_SOURCE_DIR}/libprotocol/${BCOS_PROTO_NAME})
@@ -56,55 +32,9 @@ FetchContent_Declare(${BCOS_PROTO_NAME}
 )
 FetchContent_MakeAvailable(bcos-cmake-scripts ${BCOS_PROTO_NAME})
 
-# cmake settings
-set(BCOS_FRAMEWORK_CMAKE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cmake" CACHE PATH "The cmake path for the library")
-list(APPEND CMAKE_MODULE_PATH ${BCOS_CMAKE_SCRIPTS_DIR})
-list(APPEND CMAKE_MODULE_PATH ${BCOS_FRAMEWORK_CMAKE_DIR})
-
-# init hunter
-include(HunterGate)
-HunterGate(
-    URL "https://${URL_BASE}/FISCO-BCOS/hunter/archive/203039fdd0826330facd9c3841082dbf35d0c808.tar.gz"
-    SHA1 "26ca1840eb26da410913469f2f278569c8d383ae"
-    FILEPATH "${BCOS_FRAMEWORK_CMAKE_DIR}/config.cmake"
-)
-# set CMP0074 to NEW to suppress warnning, https://cmake.org/cmake/help/latest/policy/CMP0074.html
-cmake_policy(VERSION 3.12)
-cmake_policy(SET CMP0074 NEW)
-
 project(bcos-framework VERSION "3.0.0")
 # Suffix like "-rc1" e.t.c. to append to versions wherever needed.
 set(VERSION_SUFFIX "-rc1")
-
-# basic setting
-include(Options)
-configure_project()
-include(CompilerSettings)
-
-# install dependencies
-# install boost dependency
-hunter_add_package(Boost COMPONENTS all)
-# install protobuf dependency
-hunter_add_package(Protobuf)
-# install gsl dependency
-hunter_add_package(Microsoft.GSL)
-find_package(Microsoft.GSL CONFIG REQUIRED)
-# install tbb dependency
-hunter_add_package(tbb)
-
-include_directories(${CMAKE_CURRENT_BINARY_DIR})
-include_directories(${CMAKE_INSTALL_INCLUDEDIR})
-include_directories(${CMAKE_INSTALL_INCLUDEDIR}/include)
-
-# set library target name
-set(UTILITIES_TARGET "utilities")
-set(STORAGE_TARGET "storage")
-set(CODEC_TARGET "codec")
-set(PROTOCOL_TARGET "protocol")
-set(PBPROTOCOL_TARGET "protocol-pb")
-set(SYNC_TARGET "sync")
-set(SEALER_TARGET "sealer")
-set(TOOL_TARGET "tool")
 
 # define the generated proto file path
 set(PROTO_GENERATE_DIR ${CMAKE_CURRENT_BINARY_DIR}/libprotocol/${BCOS_PROTO_NAME})
@@ -116,14 +46,16 @@ set(SYNC_PROTO_SUB_DIR "libsync/protocol/proto")
 set(SYNC_PROTO_GENERATE_DIR ${SYNC_PROTO_GENERATE_BASE_DIR}/${SYNC_PROTO_SUB_DIR})
 
 # add subdirectories to build the libraries
-add_subdirectory(libutilities)
-add_subdirectory(libcodec)
-add_subdirectory(libstorage)
-add_subdirectory(libprotocol)
-add_subdirectory(libprotocol/protobuf)
-add_subdirectory(libsync)
-add_subdirectory(libsealer)
-add_subdirectory(libtool)
+aux_source_directory(libutilities SRCS)
+aux_source_directory(libcodec SRCS)
+aux_source_directory(libstorage SRCS)
+aux_source_directory(libprotocol SRCS)
+aux_source_directory(libprotocol/protobuf SRCS)
+aux_source_directory(libsync SRCS)
+aux_source_directory(libsealer SRCS)
+aux_source_directory(libtool SRCS)
+
+add_library(framework SRCS)
 
 # test releated
 if (TESTS)
@@ -133,84 +65,6 @@ if (TESTS)
     set(CTEST_OUTPUT_ON_FAILURE True)
     add_subdirectory(test)
 endif()
-
-include(InstallConfig)
-install(
-    TARGETS ${UTILITIES_TARGET}
-    EXPORT "${TARGETS_EXPORT_NAME}"
-    LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-    ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
-    INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-)
-
-install(
-    TARGETS ${CODEC_TARGET}
-    EXPORT "${TARGETS_EXPORT_NAME}"
-    LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-    ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
-    INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-)
-
-install(
-    TARGETS ${PROTOCOL_TARGET}
-    EXPORT "${TARGETS_EXPORT_NAME}"
-    LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-    ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
-    INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-)
-
-install(
-    TARGETS ${PBPROTOCOL_TARGET}
-    EXPORT "${TARGETS_EXPORT_NAME}"
-    LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-    ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
-    INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-)
-
-install(
-    TARGETS ${STORAGE_TARGET}
-    EXPORT "${TARGETS_EXPORT_NAME}"
-    LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-    ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
-    INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-)
-
-install(
-    TARGETS ${SYNC_TARGET}
-    EXPORT "${TARGETS_EXPORT_NAME}"
-    LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-    ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
-    INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-)
-
-install(
-    TARGETS ${SEALER_TARGET}
-    EXPORT "${TARGETS_EXPORT_NAME}"
-    LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-    ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
-    INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-)
-
-install(
-    TARGETS ${TOOL_TARGET}
-    EXPORT "${TARGETS_EXPORT_NAME}"
-    LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-    ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
-    INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-)
-
-include(InstallInclude)
-# for doxygen
-include(BuildDocs)
-buildDoc(bcos-framework-doc)
 
 # for code coverage
 if (COVERAGE)

@@ -19,51 +19,14 @@
 cmake_minimum_required(VERSION 3.10)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum OS X deployment version")
 
-if (NOT DEFINED URL_BASE)
-    set(URL_BASE "github.com")
-    # set(URL_BASE "github.com.cnpmjs.org")
-endif()
-
-include(FetchContent)
-set(BCOS_CMAKE_SCRIPTS_DIR ${CMAKE_CURRENT_BINARY_DIR}/bcos-cmake-scripts)
-FetchContent_Declare(bcos-cmake-scripts
-    GIT_REPOSITORY https://${URL_BASE}/FISCO-BCOS/bcos-cmake-scripts.git
-    GIT_TAG 9b2ac5b979cbc97f640b2285feb2c74a18cfb935
-    SOURCE_DIR ${BCOS_CMAKE_SCRIPTS_DIR}
-)
-FetchContent_MakeAvailable(bcos-cmake-scripts)
-
-set(BCOS_CRYPTO_CMAKE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cmake" CACHE PATH "The cmake path for the library")
-list(APPEND CMAKE_MODULE_PATH ${BCOS_CMAKE_SCRIPTS_DIR})
-list(APPEND CMAKE_MODULE_PATH ${BCOS_CRYPTO_CMAKE_DIR})
-#init hunter
-include(HunterGate)
-HunterGate(
-    URL "https://${URL_BASE}/FISCO-BCOS/hunter/archive/203039fdd0826330facd9c3841082dbf35d0c808.tar.gz"
-    SHA1 "26ca1840eb26da410913469f2f278569c8d383ae"
-    FILEPATH "${BCOS_CRYPTO_CMAKE_DIR}/config.cmake"
-)
 project(bcos-crypto VERSION "3.0.0")
 set(VERSION_SUFFIX "-rc1")
 
-# basic settings
-include(Options)
-configure_project()
-include(CompilerSettings)
+aux_source_directory(encrypt SRCS)
+aux_source_directory(hash SRCS)
+aux_source_directory(signature SRCS)
 
-include_directories(${CMAKE_INSTALL_INCLUDEDIR})
-include_directories(${CMAKE_CURRENT_BINARY_DIR})
-
-# install dependencies
-include(InstallBcosFrameworkDependencies)
-hunter_add_package(wedpr-crypto)
-find_package(wedpr-crypto CONFIG REQUIRED)
-
-# add source directory
-include(Sources)
-
-set(BCOS_CRYPTO_TARGET bcos-crypto)
-add_library(${BCOS_CRYPTO_TARGET} ${SRC_LIST} ${HEADERS})
+add_library(crypto ${SRC_LIST} ${HEADERS})
 target_link_libraries(${BCOS_CRYPTO_TARGET} PUBLIC bcos-framework::utilities wedpr-crypto::crypto)
 
 option(DEMO "compile demo or not" OFF)
@@ -77,23 +40,6 @@ if (TESTS)
     set(CTEST_OUTPUT_ON_FAILURE TRUE)
     add_subdirectory(test)
 endif()
-
-include(InstallConfig)
-# install crypto target
-install(
-    TARGETS ${BCOS_CRYPTO_TARGET}
-    EXPORT "${TARGETS_EXPORT_NAME}"
-    LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-    ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
-    INCLUDES DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-)
-# install the include files for hash
-include(InstallInclude)
-
-# for doxygen
-include(BuildDocs)
-buildDoc(bcos-crypto-doc)
 
 # for code coverage
 if (COVERAGE)
