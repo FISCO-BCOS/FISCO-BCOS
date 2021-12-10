@@ -8,8 +8,16 @@ aux_source_directory(src SRCS)
 include_directories(${CMAKE_SOURCE_DIR})
 include_directories(${CMAKE_SOURCE_DIR}/bcos-framework)
 
+find_package(TBB CONFIG REQUIRED)
+find_package(Threads REQUIRED)
+
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+
+include(ProjectHera)
+include(ProjectWABT)
+
 add_library(executor ${SRCS})
-target_link_libraries(executor framework TBB::tbb)
+target_link_libraries(executor framework TBB::tbb evmone hera hera-buildinfo evmc wabt)
 
 # if (TOOLS)
 #     add_subdirectory(tools)

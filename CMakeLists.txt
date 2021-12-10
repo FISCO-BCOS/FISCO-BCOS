@@ -3,7 +3,7 @@ if (NOT DEFINED URL_BASE)
     set(URL_BASE "github.com")
 endif()
 
-list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts)
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/bcos-cmake-scripts)
 
 include(HunterGate)
 HunterGate(
@@ -24,8 +24,6 @@ hunter_add_package(jsoncpp)
 
 # import dependencies
 include(CompilerSettings)
-include(ProjectHera)
-include(ProjectWABT)
 
 # import services
 #list(APPEND SERVICE_LIST FrontService GatewayService RpcService TxPoolService PBFTService NodeService)
