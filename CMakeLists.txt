@@ -49,6 +49,7 @@ add_subdirectory(bcos-crypto)
 add_subdirectory(bcos-framework)
 add_subdirectory(bcos-scheduler)
 add_subdirectory(bcos-executor)
+add_subdirectory(bcos-storage)
 # add_subdirectory(libinitializer)
 # add_subdirectory(fisco-bcos)
 
