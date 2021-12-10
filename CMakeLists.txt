@@ -5,18 +5,18 @@ endif()
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts)
 
-include(HunterGate)
-HunterGate(
-    URL "https://${URL_BASE}/FISCO-BCOS/hunter/archive/203039fdd0826330facd9c3841082dbf35d0c808.tar.gz"
-    SHA1 "26ca1840eb26da410913469f2f278569c8d383ae"
-    FILEPATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.cmake"
-)
+# include(HunterGate)
+# HunterGate(
+#     URL "https://${URL_BASE}/FISCO-BCOS/hunter/archive/203039fdd0826330facd9c3841082dbf35d0c808.tar.gz"
+#     SHA1 "26ca1840eb26da410913469f2f278569c8d383ae"
+#     FILEPATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.cmake"
+# )
 
 project(FISCO-BCOS VERSION "3.0.0")
 set(VERSION_SUFFIX "-rc1")
 
 # import dependencies
-include(InstallBoostSSL)
+# include(InstallBoostSSL)
 include(CompilerSettings)
 
 # import services
@@ -46,7 +46,7 @@ add_subdirectory(bcos-framework)
 
 # add_custom_target(tar DEPENDS ${SERVICE_TAR_LIST})
 
-# if(TEST)
+# if(TESTS)
 #     enable_testing()
 #     add_subdirectory(tests)
 # endif()

@@ -38,13 +38,34 @@ project(bcos-framework VERSION "3.0.0")
 set(VERSION_SUFFIX "-rc1")
 
 # define the generated proto file path
-set(PROTO_GENERATE_DIR ${CMAKE_CURRENT_BINARY_DIR}/libprotocol/${BCOS_PROTO_NAME})
+set(PROTO_GENERATE_DIR ${BCOS_PROTO_PATH})
 set(PROTO_PATH ${PROJECT_SOURCE_DIR})
 
 # generate sync protobuf files
 set(SYNC_PROTO_GENERATE_BASE_DIR ${CMAKE_CURRENT_BINARY_DIR})
 set(SYNC_PROTO_SUB_DIR "libsync/protocol/proto")
 set(SYNC_PROTO_GENERATE_DIR ${SYNC_PROTO_GENERATE_BASE_DIR}/${SYNC_PROTO_SUB_DIR})
+
+set(MESSAGES_PROTOS Transaction.proto TransactionReceipt.proto BlockHeader.proto Block.proto)
+
+foreach(proto_file ${MESSAGES_PROTOS})
+  get_filename_component(bcos_proto_abs "${BCOS_PROTO_PATH}" ABSOLUTE)
+  set(proto_file_abs ${bcos_proto_abs}/${proto_file})
+  get_filename_component(basename ${proto_file} NAME_WE)
+  set(generated_files ${PROTO_GENERATE_DIR}/${basename}.pb.cc ${PROTO_GENERATE_DIR}/${basename}.pb.h)
+
+  list(APPEND MESSAGES_SRCS ${PROTO_GENERATE_DIR}/${basename}.pb.cc)
+  list(APPEND MESSAGES_HDRS ${PROTO_GENERATE_DIR}/${basename}.pb.h)
+
+  add_custom_command(
+      OUTPUT ${generated_files}
+      COMMAND protobuf::protoc --cpp_out ${PROTO_GENERATE_DIR} -I ${bcos_proto_abs} ${proto_file_abs}
+      COMMENT "Generating ${generated_files} from ${proto_file_abs}"
+      VERBATIM
+  )
+endforeach()
+
+include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 # add subdirectories to build the libraries
 aux_source_directory(libutilities SRCS)
@@ -56,11 +77,11 @@ aux_source_directory(libsync SRCS)
 aux_source_directory(libsealer SRCS)
 aux_source_directory(libtool SRCS)
 
-find_package(TBB CONFIG QUIET REQUIRED)
-find_package(Boost CONFIG QUIET REQUIRED log chrono system filesystem iostreams thread)
-find_package(Protobuf CONFIG REQUIRED)
+find_package(TBB CONFIG REQUIRED)
+find_package(Boost CONFIG REQUIRED log chrono system filesystem iostreams thread)
+find_package(Protobuf REQUIRED)
 
-add_library(framework ${SRCS})
+add_library(framework ${SRCS} ${MESSAGES_SRCS})
 target_link_libraries(framework PUBLIC Boost::log Boost::chrono Boost::iostreams Boost::filesystem Boost::thread protobuf::libprotobuf TBB::tbb)
 
 # test releated
