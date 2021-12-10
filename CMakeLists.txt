@@ -51,6 +51,7 @@ add_subdirectory(bcos-scheduler)
 add_subdirectory(bcos-executor)
 add_subdirectory(bcos-storage)
 add_subdirectory(bcos-ledger)
+add_subdirectory(bcos-tars-protocol)
 # add_subdirectory(libinitializer)
 # add_subdirectory(fisco-bcos)
 

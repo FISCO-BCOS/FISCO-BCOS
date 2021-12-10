@@ -1,0 +1,23 @@
+#include "Block.tars"
+#include "TransactionReceipt.tars"
+#include "LedgerConfig.tars"
+#include "CommonProtocol.tars"
+
+module bcostars {
+    struct MerkleProofItem
+    {
+        1 require vector<string> left;
+        2 require vector<string> right;
+    };
+    interface LedgerService{
+        Error asyncGetBlockDataByNumber(long _blockNumber, long _blockFlag, out Block _block);
+        Error asyncGetBlockNumber(out long _blockNumber);
+        Error asyncGetBlockHashByNumber(long _blockNumber, out vector<byte> _blockHash);
+        Error asyncGetBlockNumberByHash(vector<byte> _blockHash, out long _blockNumber);
+        Error asyncGetBatchTxsByHashList(vector<vector<byte>> _txsHashList, bool _withProof, out vector<Transaction> _transactions, out map<string, vector<MerkleProofItem>> _merkleProofList);
+        Error asyncGetTransactionReceiptByHash(vector<byte> _txHash, bool _withProof, out TransactionReceipt _receipt, out vector<MerkleProofItem> _proof);
+        Error asyncGetTotalTransactionCount(out long _totalTxCount, out long _failedTxCount, out long _latestBlockNumber);
+        Error asyncGetSystemConfigByKey(string _key, out string _value, out long _blockNumber);
+        Error asyncGetNodeListByType(string _type, out vector<ConsensusNode> _nodeList);
+    };
+};
