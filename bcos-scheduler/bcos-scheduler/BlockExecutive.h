@@ -8,12 +8,11 @@
 #include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/libprotocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-framework/libutilities/Error.h"
-#include "bcos-scheduler/ExecutorManager.h"
-#include "interfaces/crypto/CommonType.h"
-#include "interfaces/executor/ParallelTransactionExecutorInterface.h"
-#include "interfaces/protocol/BlockHeaderFactory.h"
-#include "interfaces/protocol/TransactionMetaData.h"
-#include "interfaces/protocol/TransactionReceiptFactory.h"
+#include "bcos-framework/interfaces/crypto/CommonType.h"
+#include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
+#include "bcos-framework/interfaces/protocol/BlockHeaderFactory.h"
+#include "bcos-framework/interfaces/protocol/TransactionMetaData.h"
+#include "bcos-framework/interfaces/protocol/TransactionReceiptFactory.h"
 #include <bcos-framework/interfaces/protocol/BlockFactory.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <boost/iterator/iterator_categories.hpp>

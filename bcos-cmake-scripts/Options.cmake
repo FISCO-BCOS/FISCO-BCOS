@@ -53,7 +53,7 @@ macro(configure_project)
     default_option(ARCH_NATIVE OFF)
 
     if(ARCH_NATIVE)
-        set(MARCH_TYPE "-march=native -mtune=generic -fvisibility=hidden -fvisibility-inlines-hidden")
+        set(MARCH_TYPE "-march=native -mtune=native -fvisibility=hidden -fvisibility-inlines-hidden")
     endif()
 
     # unit tests

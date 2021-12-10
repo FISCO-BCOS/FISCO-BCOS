@@ -20,7 +20,6 @@ cmake_minimum_required(VERSION 3.10)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum OS X deployment version")
 
 project(bcos-crypto VERSION "3.0.0")
-set(VERSION_SUFFIX "-rc1")
 
 aux_source_directory(encrypt SRCS)
 aux_source_directory(hash SRCS)
@@ -38,11 +37,11 @@ if(DEMO)
 add_subdirectory(demo)
 endif()
 
-if (TESTS)
-    enable_testing()
-    set(CTEST_OUTPUT_ON_FAILURE TRUE)
-    add_subdirectory(test)
-endif()
+# if (TESTS)
+#     enable_testing()
+#     set(CTEST_OUTPUT_ON_FAILURE TRUE)
+#     add_subdirectory(test)
+# endif()
 
 # for code coverage
 if (COVERAGE)

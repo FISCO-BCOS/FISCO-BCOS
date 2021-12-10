@@ -1,16 +1,3 @@
-# Note: hunter_config takes effect globally, it is not recommended to set it in bcos-node, otherwise it will affect all projects that rely on bcos-framework
-hunter_config(bcos-framework VERSION 3.0.0-local
-    URL https://${URL_BASE}/FISCO-BCOS/bcos-framework/archive/ea82f8130badd53427d2015a7fb6cf031d41c888.tar.gz
-    SHA1 0277fd505d6a4767bd9a4ab8c4323ea29b7bcf3e
-	CMAKE_ARGS HUNTER_PACKAGE_LOG_BUILD=ON HUNTER_PACKAGE_LOG_INSTALL=ON
-)
-
-hunter_config(bcos-boostssl
-	VERSION 3.0.0-local
-	URL https://${URL_BASE}/FISCO-BCOS/bcos-boostssl/archive/05d550979fb00b68eeaef79c205c7882aeeeaafa.tar.gz
-	SHA1 583bc9a047dd0fcadbc94af8139c0237a90a7004
-)
-
 hunter_config(rocksdb VERSION 6.20.3
 	URL  https://${URL_BASE}/facebook/rocksdb/archive/refs/tags/v6.20.3.tar.gz
     SHA1 64e4e6031820026c051d6e2072c0197e3bce1643

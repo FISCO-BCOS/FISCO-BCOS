@@ -15,8 +15,10 @@ HunterGate(
 project(FISCO-BCOS VERSION "3.0.0")
 set(VERSION_SUFFIX "-rc1")
 
+hunter_add_package(Boost COMPONENTS all)
+hunter_add_package(tbb)
+
 # import dependencies
-include(InstallBoostSSL)
 include(CompilerSettings)
 
 # import services
