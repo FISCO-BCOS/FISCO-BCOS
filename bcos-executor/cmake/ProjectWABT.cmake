@@ -7,7 +7,7 @@ else()
 endif()
 
 ExternalProject_Add(wabt_project
-    PREFIX ${CMAKE_SOURCE_DIR}/deps
+    PREFIX ${CMAKE_CURRENT_BINARY_DIR}/deps
     DOWNLOAD_NAME wabt_1.0.23.tar.gz
     DOWNLOAD_NO_PROGRESS 1
     URL https://codeload.github.com/WebAssembly/wabt/tar.gz/1.0.23

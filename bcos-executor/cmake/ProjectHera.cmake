@@ -21,9 +21,9 @@ STRING(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" RUSTC_VERSION ${RUSTC_VERSION_INFO
 if(NOT RUSTC_VERSION_REQUIRED)
     set(RUSTC_VERSION_REQUIRED "nightly-2021-06-17")
 endif()
-message(STATUS "set rustc to ${RUSTC_VERSION_REQUIRED} of path ${CMAKE_SOURCE_DIR}/deps/src/")
-file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/deps/src/)
-execute_process(COMMAND rustup override set ${RUSTC_VERSION_REQUIRED} --path ${CMAKE_SOURCE_DIR}/deps/src/ OUTPUT_QUIET ERROR_QUIET)
+message(STATUS "set rustc to ${RUSTC_VERSION_REQUIRED} of path ${CMAKE_CURRENT_BINARY_DIR}/deps/src/")
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/deps/src/)
+execute_process(COMMAND rustup override set ${RUSTC_VERSION_REQUIRED} --path ${CMAKE_CURRENT_BINARY_DIR}/deps/src/ OUTPUT_QUIET ERROR_QUIET)
 
 set(USE_WASMER OFF)
 if(USE_WASMER)
@@ -35,7 +35,7 @@ else()
 endif()
 
 ExternalProject_Add(hera_project
-        PREFIX ${CMAKE_SOURCE_DIR}/deps
+        PREFIX ${CMAKE_CURRENT_BINARY_DIR}/deps
         DOWNLOAD_NO_PROGRESS 1
         GIT_REPOSITORY https://${URL_BASE}/FISCO-BCOS/hera.git
         GIT_SHALLOW false
