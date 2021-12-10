@@ -77,10 +77,11 @@ aux_source_directory(libtool SRCS)
 
 find_package(TBB CONFIG REQUIRED)
 find_package(Boost CONFIG REQUIRED log chrono system filesystem iostreams thread)
-find_package(Protobuf REQUIRED)
+find_package(Protobuf CONFIG REQUIRED)
+find_package(jsoncpp CONFIG REQUIRED)
 
 add_library(framework ${SRCS} ${MESSAGES_SRCS})
-target_link_libraries(framework PUBLIC Boost::log Boost::chrono Boost::iostreams Boost::filesystem Boost::thread protobuf::libprotobuf TBB::tbb)
+target_link_libraries(framework PUBLIC Boost::log Boost::chrono Boost::iostreams Boost::filesystem Boost::thread protobuf::libprotobuf TBB::tbb jsoncpp)
 
 # test releated
 # if (TESTS)

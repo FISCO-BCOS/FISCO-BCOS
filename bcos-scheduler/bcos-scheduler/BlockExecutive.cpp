@@ -3,7 +3,7 @@
 #include "SchedulerImpl.h"
 #include "bcos-framework/interfaces/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/libstorage/StateStorage.h"
-#include "bcos-scheduler/Common.h"
+#include "Common.h"
 #include "interfaces/executor/ExecutionMessage.h"
 #include "interfaces/executor/ParallelTransactionExecutorInterface.h"
 #include "interfaces/protocol/Transaction.h"

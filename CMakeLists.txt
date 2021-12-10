@@ -17,6 +17,10 @@ set(VERSION_SUFFIX "-rc1")
 
 hunter_add_package(Boost COMPONENTS all)
 hunter_add_package(tbb)
+hunter_add_package(Protobuf)
+hunter_add_package(Microsoft.GSL)
+hunter_add_package(wedpr-crypto)
+hunter_add_package(jsoncpp)
 
 # import dependencies
 include(CompilerSettings)

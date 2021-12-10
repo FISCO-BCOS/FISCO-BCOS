@@ -28,6 +28,9 @@ aux_source_directory(signature SRCS)
 hunter_add_package(wedpr-crypto)
 find_package(wedpr-crypto CONFIG REQUIRED)
 
+include_directories(${CMAKE_SOURCE_DIR})
+include_directories(${CMAKE_SOURCE_DIR}/bcos-framework)
+
 add_library(crypto ${SRCS})
 target_link_libraries(crypto PUBLIC framework wedpr-crypto)
 
