@@ -25,9 +25,12 @@ include_directories(${CMAKE_SOURCE_DIR}/bcos-framework)
 include_directories(${CMAKE_SOURCE_DIR}/bcos-tars-protocol)
 include_directories(${CMAKE_BINARY_DIR}/bcos-tars-protocol)
 
+hunter_add_package(tarscpp)
+find_package(tarscpp CONFIG REQUIRED)
+
 aux_source_directory(./protocol SRC_LIST)
 aux_source_directory(./client SRC_LIST)
 
 add_library(${BCOS_TARS_PROTOCOL_TARGET} ${SRC_LIST} ${OUT_TARS_H_LIST})
 target_compile_options(${BCOS_TARS_PROTOCOL_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
-target_link_libraries(${BCOS_TARS_PROTOCOL_TARGET} PUBLIC bcos-framework tarscpp::tarsutil tarscpp::tarsparse tarscpp::tarsservant )
+target_link_libraries(${BCOS_TARS_PROTOCOL_TARGET} PUBLIC bcos-framework tarscpp::tarsutil tarscpp::tarsparse tarscpp::tarsservant)
