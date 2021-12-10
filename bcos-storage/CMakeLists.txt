@@ -6,6 +6,9 @@ set(VERSION_SUFFIX "-rc1")
 
 option(USE_TiKV "build tikv storage or not" OFF)
 
+include_directories(${CMAKE_SOURCE_DIR})
+include_directories(${CMAKE_SOURCE_DIR}/bcos-framework)
+
 set(SRC_LIST bcos-storage/Common.cpp)
 if(USE_TiKV)
     list(APPEND SRC_LIST bcos-storage/TiKVStorage.cpp)
@@ -20,6 +23,7 @@ find_package(RocksDB CONFIG REQUIRED)
 
 find_package(Boost CONFIG QUIET REQUIRED serialization thread context)
 find_package(Threads REQUIRED)
+find_package(TBB CONFIG REQUIRED)
 
 add_library(storage ${SRC_LIST})
 target_link_libraries(storage PUBLIC TBB::tbb Boost::serialization zstd::libzstd_static Threads::Threads framework)
