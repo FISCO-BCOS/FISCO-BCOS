@@ -26,8 +26,8 @@ aux_source_directory(encrypt SRCS)
 aux_source_directory(hash SRCS)
 aux_source_directory(signature SRCS)
 
-add_library(crypto ${SRC_LIST} ${HEADERS})
-target_link_libraries(${BCOS_CRYPTO_TARGET} PUBLIC bcos-framework::utilities wedpr-crypto::crypto)
+add_library(crypto ${SRCS})
+target_link_libraries(crypto PUBLIC framework)
 
 option(DEMO "compile demo or not" OFF)
 

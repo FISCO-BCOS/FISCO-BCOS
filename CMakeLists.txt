@@ -21,35 +21,35 @@ include(CompilerSettings)
 
 # import services
 #list(APPEND SERVICE_LIST FrontService GatewayService RpcService TxPoolService PBFTService NodeService)
-list(APPEND SERVICE_LIST GatewayService RpcService NodeService)
+# list(APPEND SERVICE_LIST GatewayService RpcService NodeService)
 # TODO:
 # SchedulerService, ExecutorService
 
-foreach(SERVICE ${SERVICE_LIST})
-    add_subdirectory(Pro/${SERVICE}/main)
-    set(BINARY_NAME Bcos${SERVICE})
+# foreach(SERVICE ${SERVICE_LIST})
+#     add_subdirectory(Pro/${SERVICE}/main)
+#     set(BINARY_NAME Bcos${SERVICE})
 
-    add_custom_command(OUTPUT ${BINARY_NAME}.tgz
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/${SERVICE}/main/${BINARY_NAME} ${CMAKE_BINARY_DIR}/${BINARY_NAME}/${BINARY_NAME}
-    COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR} tar czfv ${BINARY_NAME}.tgz ${BINARY_NAME}/${BINARY_NAME}
-    COMMENT "Compressing ${BINARY_NAME}...")
+#     add_custom_command(OUTPUT ${BINARY_NAME}.tgz
+#     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+#     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/${SERVICE}/main/${BINARY_NAME} ${CMAKE_BINARY_DIR}/${BINARY_NAME}/${BINARY_NAME}
+#     COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR} tar czfv ${BINARY_NAME}.tgz ${BINARY_NAME}/${BINARY_NAME}
+#     COMMENT "Compressing ${BINARY_NAME}...")
 
-    add_custom_target(${BINARY_NAME}-tar DEPENDS ${BINARY_NAME}.tgz ${BINARY_NAME})
-    list(APPEND SERVICE_TAR_LIST ${BINARY_NAME}-tar)
-endforeach()
+#     add_custom_target(${BINARY_NAME}-tar DEPENDS ${BINARY_NAME}.tgz ${BINARY_NAME})
+#     list(APPEND SERVICE_TAR_LIST ${BINARY_NAME}-tar)
+# endforeach()
 
 add_subdirectory(bcos-crypto)
 add_subdirectory(bcos-framework)
-add_subdirectory(libinitializer)
-add_subdirectory(fisco-bcos)
+# add_subdirectory(libinitializer)
+# add_subdirectory(fisco-bcos)
 
-add_custom_target(tar DEPENDS ${SERVICE_TAR_LIST})
+# add_custom_target(tar DEPENDS ${SERVICE_TAR_LIST})
 
-if(TEST)
-    enable_testing()
-    add_subdirectory(tests)
-endif()
+# if(TEST)
+#     enable_testing()
+#     add_subdirectory(tests)
+# endif()
 
 # for code coverage
 if (COVERAGE)

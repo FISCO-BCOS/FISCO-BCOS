@@ -21,7 +21,8 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment ver
 
 # fetch bcos-proto
 set(BCOS_PROTO_NAME bcos-proto)
-set(BCOS_PROTO_PATH ${CMAKE_CURRENT_SOURCE_DIR}/libprotocol/${BCOS_PROTO_NAME})
+set(BCOS_PROTO_PATH ${CMAKE_CURRENT_BINARY_DIR}/libprotocol/${BCOS_PROTO_NAME})
+include(FetchContent)
 FetchContent_Declare(${BCOS_PROTO_NAME}
     GIT_REPOSITORY https://${URL_BASE}/FISCO-BCOS/bcos-proto.git
     GIT_TAG 28e5620d348bd82dff649ae37ca25120d5a6223e
@@ -30,7 +31,7 @@ FetchContent_Declare(${BCOS_PROTO_NAME}
                -DHUNTER_PACKAGE_LOG_INSTALL=${HUNTER_PACKAGE_LOG_INSTALL}
                -DHUNTER_STATUS_DEBUG=${HUNTER_STATUS_DEBUG}
 )
-FetchContent_MakeAvailable(bcos-cmake-scripts ${BCOS_PROTO_NAME})
+FetchContent_MakeAvailable(${BCOS_PROTO_NAME})
 
 project(bcos-framework VERSION "3.0.0")
 # Suffix like "-rc1" e.t.c. to append to versions wherever needed.
@@ -55,7 +56,12 @@ aux_source_directory(libsync SRCS)
 aux_source_directory(libsealer SRCS)
 aux_source_directory(libtool SRCS)
 
-add_library(framework SRCS)
+find_package(TBB CONFIG QUIET REQUIRED)
+find_package(Boost CONFIG QUIET REQUIRED log chrono system filesystem iostreams thread)
+find_package(Protobuf CONFIG REQUIRED)
+
+add_library(framework ${SRCS})
+target_link_libraries(framework PUBLIC Boost::log Boost::chrono Boost::iostreams Boost::filesystem Boost::thread protobuf::libprotobuf TBB::tbb)
 
 # test releated
 if (TESTS)
