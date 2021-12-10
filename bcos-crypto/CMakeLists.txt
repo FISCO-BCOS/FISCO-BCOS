@@ -26,8 +26,11 @@ aux_source_directory(encrypt SRCS)
 aux_source_directory(hash SRCS)
 aux_source_directory(signature SRCS)
 
+hunter_add_package(wedpr-crypto)
+find_package(wedpr-crypto CONFIG REQUIRED)
+
 add_library(crypto ${SRCS})
-target_link_libraries(crypto PUBLIC framework)
+target_link_libraries(crypto PUBLIC framework wedpr-crypto)
 
 option(DEMO "compile demo or not" OFF)
 

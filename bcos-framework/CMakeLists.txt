@@ -34,8 +34,6 @@ FetchContent_Declare(${BCOS_PROTO_NAME}
 FetchContent_MakeAvailable(${BCOS_PROTO_NAME})
 
 project(bcos-framework VERSION "3.0.0")
-# Suffix like "-rc1" e.t.c. to append to versions wherever needed.
-set(VERSION_SUFFIX "-rc1")
 
 # define the generated proto file path
 set(PROTO_GENERATE_DIR ${BCOS_PROTO_PATH})

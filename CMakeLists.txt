@@ -41,6 +41,7 @@ include(CompilerSettings)
 
 add_subdirectory(bcos-crypto)
 add_subdirectory(bcos-framework)
+add_subdirectory(bcos-scheduler)
 # add_subdirectory(libinitializer)
 # add_subdirectory(fisco-bcos)
 
