@@ -19,16 +19,7 @@ set(VERSION_SUFFIX "-rc1")
 
 # import dependencies
 include(InstallBoostSSL)
-
 include(CompilerSettings)
-
-set(INIT_LIB initializer)
-set(PROTOCOL_INIT_LIB protocolInitializer)
-set(PBFT_INIT_LIB pbftInitializer)
-set(TXPOOL_INIT_LIB txPoolInitializer)
-set(FRONTSERVICE_INIT_LIB frontInitializer)
-
-add_subdirectory(libinitializer)
 
 include(BuildInfoGenerator)
 # import services
@@ -51,8 +42,8 @@ foreach(SERVICE ${SERVICE_LIST})
     list(APPEND SERVICE_TAR_LIST ${BINARY_NAME}-tar)
 endforeach()
 
-add_subdirectory(libcrypto)
-add_subdirectory(libframework)
+add_subdirectory(bcos-crypto)
+add_subdirectory(bcos-framework)
 add_subdirectory(libinitializer)
 add_subdirectory(fisco-bcos)
 
