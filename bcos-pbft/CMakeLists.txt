@@ -32,9 +32,9 @@ foreach(proto_file ${MESSAGES_PROTOS})
     set(proto_file_abs ${bcos_proto_abs}/${proto_file})
     get_filename_component(rel_dir ${proto_file} DIRECTORY)
     get_filename_component(basename ${proto_file} NAME_WE)
-    set(generated_files ${PROTO_OUTPUT_PATH}/${basename}.pb.cc ${PROTO_OUTPUT_PATH}/${basename}.pb.h)
+    set(generated_files ${PROTO_OUTPUT_PATH}/${rel_dir}/${basename}.pb.cc)
 
-    list(APPEND MESSAGES_SRCS ${PROTO_OUTPUT_PATH}/${rel_dir}/${basename}.pb.cc)
+    list(APPEND MESSAGES_SRCS ${generated_files})
 
     message("Command: protoc --cpp_out ${PROTO_OUTPUT_PATH} -I ${PROTO_INPUT_PATH} ${proto_file}")
     add_custom_command(
