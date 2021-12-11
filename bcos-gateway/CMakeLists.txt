@@ -24,6 +24,7 @@ find_package(tarscpp CONFIG REQUIRED)
 
 include_directories(${CMAKE_SOURCE_DIR})
 include_directories(${CMAKE_SOURCE_DIR}/bcos-gateway)
+include_directories(${CMAKE_BINARY_DIR})
 include_directories(${CMAKE_SOURCE_DIR}/bcos-framework)
 
 aux_source_directory(bcos-gateway SRC_LIST)
