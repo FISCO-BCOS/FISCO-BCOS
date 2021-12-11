@@ -55,6 +55,7 @@ add_subdirectory(bcos-ledger)
 add_subdirectory(bcos-tars-protocol)
 add_subdirectory(bcos-boostssl)
 add_subdirectory(bcos-rpc)
+add_subdirectory(bcos-gateway)
 # add_subdirectory(libinitializer)
 # add_subdirectory(fisco-bcos)
 
