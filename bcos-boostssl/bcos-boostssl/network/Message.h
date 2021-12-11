@@ -20,7 +20,7 @@
 
 #pragma once
 
-#include <bcos-boostssl/network/Common.h>
+#include "Common.h"
 #include <set>
 #include <string>
 #include <vector>

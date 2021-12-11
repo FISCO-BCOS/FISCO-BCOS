@@ -6,7 +6,7 @@
  */
 
 #pragma once
-#include <bcos-boostssl/network/Common.h>
+#include "Common.h"
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/beast.hpp>
 

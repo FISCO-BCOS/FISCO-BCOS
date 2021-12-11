@@ -5,8 +5,9 @@
  */
 
 #pragma once
-#include <bcos-boostssl/network/Common.h>
-#include <bcos-boostssl/network/SocketFace.h>
+#include "../utilities/BoostLog.h"
+#include "Common.h"
+#include "SocketFace.h"
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
 #include <boost/beast.hpp>

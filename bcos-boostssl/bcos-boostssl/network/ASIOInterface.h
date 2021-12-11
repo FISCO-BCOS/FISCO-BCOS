@@ -6,7 +6,7 @@
  * @date 2018-09-13
  */
 #pragma once
-#include <bcos-boostssl/network/Socket.h>
+#include "Socket.h"
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/ssl.hpp>
 

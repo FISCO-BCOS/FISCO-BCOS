@@ -26,9 +26,9 @@
 #include <boost/log/sources/severity_channel_logger.hpp>
 #include <boost/log/trivial.hpp>
 
-#ifdef ERROR
-#undef ERROR
-#endif
+// #ifdef ERROR
+// #undef ERROR
+// #endif
 
 // BCOS log format
 #define LOG_BADGE(_NAME) "[" << (_NAME) << "]"

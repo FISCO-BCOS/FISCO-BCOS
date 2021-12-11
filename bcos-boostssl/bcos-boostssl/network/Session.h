@@ -137,7 +137,7 @@ private:
 
     // topicSeq
     std::atomic<uint64_t> m_msgSeq{0};
-    boost::heap::priority_queue<std::pair<std::shared_ptr<utilities::bytes>, uint64_t>,
+    boost::heap::priority_queue<std::pair<std::shared_ptr<bcos::boostssl::utilities::bytes>, uint64_t>,
         boost::heap::compare<QueueCompare>, boost::heap::stable<true>>
         m_writeQueue;
     std::atomic_bool m_writing = {false};

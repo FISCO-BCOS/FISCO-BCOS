@@ -17,7 +17,6 @@
 
 using namespace boostssl;
 using namespace boostssl::net;
-using namespace boostssl::utility;
 
 Session::Session(size_t _bufferSize) : bufferSize(_bufferSize)
 {
@@ -171,7 +170,7 @@ void Session::write()
         m_writing = true;
 
         std::pair<std::shared_ptr<bytes>, uint64_t> task;
-        uint64_t enter_time = 0;
+        // uint64_t enter_time = 0;
 
         if (m_writeQueue.empty())
         {
@@ -182,7 +181,7 @@ void Session::write()
         task = m_writeQueue.top();
         m_writeQueue.pop();
 
-        enter_time = task.second;
+        // uint64_t enter_time = task.second;
         auto session = shared_from_this();
         auto buffer = task.first;
 

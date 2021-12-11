@@ -4,9 +4,9 @@
  */
 #pragma once
 
-#include <bcos-boostssl/network/Common.h>   // for  NodeIP...
-#include <bcos-boostssl/network/Message.h>  // for Message
-#include <bcos-boostssl/network/ThreadPool.h>
+#include "../utilities/ThreadPool.h"
+#include "Common.h"   // for  NodeIP...
+#include "Message.h"  // for Message
 #include <openssl/x509.h>
 #include <boost/asio/deadline_timer.hpp>  // for deadline_timer
 #include <boost/system/error_code.hpp>    // for error_code
@@ -90,11 +90,11 @@ public:
         m_sslContextPubHandler = _sslContextPubHandler;
     }
 
-    virtual std::shared_ptr<boostssl::utility::ThreadPool> threadPool() const
+    virtual std::shared_ptr<bcos::boostssl::utilities::ThreadPool> threadPool() const
     {
         return m_threadPool;
     }
-    virtual void setThreadPool(std::shared_ptr<boostssl::utility::ThreadPool> threadPool)
+    virtual void setThreadPool(std::shared_ptr<bcos::boostssl::utilities::ThreadPool> threadPool)
     {
         m_threadPool = threadPool;
     }
@@ -165,7 +165,7 @@ private:
             m_pendingConns.insert(_nodeIPEndpoint);
     }
 
-    std::shared_ptr<boostssl::utility::ThreadPool> m_threadPool;
+    std::shared_ptr<bcos::boostssl::utilities::ThreadPool> m_threadPool;
 
     /// representing to the network state
     std::shared_ptr<ASIOInterface> m_asioInterface;

@@ -21,6 +21,7 @@ hunter_add_package(Protobuf)
 hunter_add_package(Microsoft.GSL)
 hunter_add_package(wedpr-crypto)
 hunter_add_package(jsoncpp)
+hunter_add_package(OpenSSL)
 
 # import dependencies
 include(CompilerSettings)
@@ -52,6 +53,7 @@ add_subdirectory(bcos-executor)
 add_subdirectory(bcos-storage)
 add_subdirectory(bcos-ledger)
 add_subdirectory(bcos-tars-protocol)
+add_subdirectory(bcos-boostssl)
 # add_subdirectory(libinitializer)
 # add_subdirectory(fisco-bcos)
 
