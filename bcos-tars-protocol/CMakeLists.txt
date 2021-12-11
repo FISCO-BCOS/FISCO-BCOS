@@ -28,8 +28,6 @@ find_package(tarscpp CONFIG REQUIRED)
 # for tars generator
 set(TARS_HEADER_DIR ${CMAKE_BINARY_DIR}/bcos-tars-protocol/tars)
 
-set(BCOS_TARS_PROTOCOL_TARGET "protocol-tars")
-
 file(GLOB_RECURSE TARS_INPUT "*.tars")
 # generate tars
 if (TARS_INPUT)
@@ -57,9 +55,9 @@ include_directories(${TARSCPP_ROOT}/include)
 aux_source_directory(./protocol SRC_LIST)
 aux_source_directory(./client SRC_LIST)
 
-add_library(${BCOS_TARS_PROTOCOL_TARGET} ${SRC_LIST} ${OUT_TARS_H_LIST})
-target_compile_options(${BCOS_TARS_PROTOCOL_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
-target_link_libraries(${BCOS_TARS_PROTOCOL_TARGET} PUBLIC bcos-framework tarscpp::tarsutil tarscpp::tarsparse tarscpp::tarsservant)
+add_library(protocol-tars ${SRC_LIST} ${OUT_TARS_H_LIST})
+target_compile_options(protocol-tars PRIVATE -Wno-error -Wno-unused-variable)
+target_link_libraries(protocol-tars PUBLIC bcos-framework tarscpp::tarsutil tarscpp::tarsparse tarscpp::tarsservant)
 
 # if (TESTS)
 #     # fetch bcos-test

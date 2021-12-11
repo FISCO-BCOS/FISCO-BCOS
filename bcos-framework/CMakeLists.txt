@@ -65,7 +65,6 @@ endforeach()
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
-# add subdirectories to build the libraries
 aux_source_directory(libutilities SRCS)
 aux_source_directory(libcodec SRCS)
 aux_source_directory(libstorage SRCS)
