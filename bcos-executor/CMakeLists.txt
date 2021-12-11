@@ -16,8 +16,17 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 include(ProjectHera)
 include(ProjectWABT)
 
+hunter_add_package(evmc)
+find_package(evmc CONFIG REQUIRED)
+hunter_add_package(intx)
+find_package(intx CONFIG REQUIRED)
+hunter_add_package(ethash)
+find_package(ethash CONFIG REQUIRED)
+hunter_add_package(evmone)
+find_package(evmone CONFIG REQUIRED)
+
 add_library(executor ${SRCS})
-target_link_libraries(executor framework TBB::tbb evmone hera hera-buildinfo evmc wabt)
+target_link_libraries(executor framework TBB::tbb evmone hera hera-buildinfo evmc wabt intx ethash)
 
 # if (TOOLS)
 #     add_subdirectory(tools)
