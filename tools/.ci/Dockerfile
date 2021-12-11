@@ -5,18 +5,21 @@ WORKDIR /
 
 ARG SOURCE_BRANCH
 ENV DEBIAN_FRONTEND=noninteractive \
-    SOURCE=${SOURCE_BRANCH:-release-3.1.0}
-# TODO: modify release-3.1.0 to master
+    SOURCE=${SOURCE_BRANCH:-master}
 RUN apt-get -q update && apt-get install -qy --no-install-recommends \
-    git clang make build-essential cmake libssl-dev zlib1g-dev ca-certificates \
+    curl git clang make build-essential cmake libssl-dev zlib1g-dev ca-certificates \
     libgmp-dev flex bison patch libzstd-dev\
     && ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
     && apt-get install -qy --no-install-recommends tzdata \
     && dpkg-reconfigure --frontend noninteractive tzdata \
     && rm -rf /var/lib/apt/lists/* 
 
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-ENV PATH="${HOME}/.cargo/bin:${PATH}"
+RUN curl https://sh.rustup.rs -sSf | bash -s -- -y
+
+RUN echo 'source $HOME/.cargo/env' >> $HOME/.bashrc
+
+# Check cargo is visible
+RUN cargo --help
 
 RUN git clone https://github.com/FISCO-BCOS/FISCO-BCOS.git && cd FISCO-BCOS \
     && git checkout ${SOURCE} && cmake . && make -j2 && strip fisco-bcos/fisco-bcos
