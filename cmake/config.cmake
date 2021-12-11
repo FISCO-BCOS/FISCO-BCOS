@@ -27,10 +27,7 @@ hunter_config(evmone VERSION 0.4.1-b726a1e1
 	CMAKE_ARGS CMAKE_CXX_FLAGS=-std=c++17 BUILD_SHARED_LIBS=OFF
 )
 
-hunter_config(tarscpp VERSION 3.0.3-7299ad23
-	URL https://${URL_BASE}/FISCO-BCOS/TarsCpp/archive/7299ad23830b50ca6284e11bb0374f2670f23cdf.tar.gz
-	SHA1 9667c0d775bbbc6400a47034bee86003888db978
-)
+hunter_config(tarscpp VERSION 3.0.3-7299ad23)
 
 hunter_config(
     Boost VERSION "1.76.0-local"
