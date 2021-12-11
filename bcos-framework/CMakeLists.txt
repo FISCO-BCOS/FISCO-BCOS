@@ -53,7 +53,6 @@ foreach(proto_file ${MESSAGES_PROTOS})
   set(generated_files ${PROTO_GENERATE_DIR}/${basename}.pb.cc ${PROTO_GENERATE_DIR}/${basename}.pb.h)
 
   list(APPEND MESSAGES_SRCS ${PROTO_GENERATE_DIR}/${basename}.pb.cc)
-  list(APPEND MESSAGES_HDRS ${PROTO_GENERATE_DIR}/${basename}.pb.h)
 
   add_custom_command(
       OUTPUT ${generated_files}

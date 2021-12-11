@@ -23,19 +23,30 @@ project(bcos-pbft VERSION "3.0.0")
 set(VERSION_SUFFIX "-rc1")
 
 # proto generation
-set(PROTO_INPUT_PATH ${CMAKE_SOURCE_DIR}/bcos-pbft/bcos-pbft)
-set(PROTO_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bcos-pbft/proto/)
-set(CONSENSUS_PROTO_SUB_DIR "consensus/")
-set(PBFT_PROTO_SUB_DIR "pbft/")
+set(PROTO_INPUT_PATH ${CMAKE_SOURCE_DIR}/bcos-pbft)
+set(PROTO_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR}/)
 
-include(GenerateSources)
-set(CONSENSUS_PROTO_GENERATE_DIR ${PROTO_OUTPUT_PATH}/${CONSENSUS_PROTO_SUB_DIR})
-protobuf_generate_cpp(CONSENSUS_PROTO_SRCS CONSENSUS_PROTO_HDRS "Consensus.proto" ${PROTO_INPUT_PATH} "core/proto" ${PROTO_OUTPUT_PATH} ${CONSENSUS_PROTO_GENERATE_DIR})
+set(MESSAGES_PROTOS bcos-pbft/core/proto/Consensus.proto bcos-pbft/pbft/protocol/proto/PBFT.proto)
+foreach(proto_file ${MESSAGES_PROTOS})
+    get_filename_component(bcos_proto_abs "${PROTO_INPUT_PATH}" ABSOLUTE)
+    set(proto_file_abs ${bcos_proto_abs}/${proto_file})
+    get_filename_component(dir ${proto_file_abs} DIRECTORY)
+    get_filename_component(basename ${proto_file} NAME_WE)
+    set(generated_files ${PROTO_OUTPUT_PATH}/${basename}.pb.cc ${PROTO_OUTPUT_PATH}/${basename}.pb.h)
 
-set(PBFT_PROTO_GENERATE_DIR ${PROTO_OUTPUT_PATH}/${PBFT_PROTO_SUB_DIR})
-protobuf_generate_cpp(PBFT_PROTO_SRCS PBFT_PROTO_HDRS "PBFT.proto" ${PROTO_INPUT_PATH} "pbft/protocol/proto" ${PROTO_OUTPUT_PATH} ${PBFT_PROTO_GENERATE_DIR})
+    list(APPEND MESSAGES_SRCS ${PROTO_OUTPUT_PATH}/${basename}.pb.cc)
+
+    message("Command: protoc --cpp_out ${PROTO_OUTPUT_PATH} -I ${PROTO_INPUT_PATH} ${proto_file}")
+    add_custom_command(
+        OUTPUT ${generated_files}
+        COMMAND protobuf::protoc --cpp_out ${PROTO_OUTPUT_PATH} -I ${PROTO_INPUT_PATH} ${proto_file}
+        COMMENT "Generating ${generated_files} from ${proto_file_abs}"
+        VERBATIM
+    )
+endforeach()
 
 include_directories(${CMAKE_SOURCE_DIR}/bcos-pbft)
+include_directories(${PROTO_OUTPUT_PATH})
 include_directories(${CMAKE_SOURCE_DIR}/)
 
 aux_source_directory(bcos-pbft/core SRCS)
@@ -49,7 +60,7 @@ aux_source_directory(bcos-pbft/pbft/storage SRC_LIST)
 
 find_package(Protobuf CONFIG REQUIRED)
 
-add_library(pbft ${SRCS} ${CONSENSUS_PROTO_SRCS} ${PBFT_PROTO_SRCS})
+add_library(pbft ${SRCS} ${MESSAGES_SRCS})
 # target_compile_options(pbft PRIVATE -Wno-error -Wno-unused-variable)
 target_link_libraries(pbft PUBLIC framework)
 
