@@ -249,7 +249,7 @@ void AMOPClient::sendMessageToClient(std::string const& _topic,
     std::function<void(Error::Ptr&&, bytesPointer)> _callback)
 {
     _selectSession->asyncSendMessage(_msg, Options(30000),
-        [_msg, _topic, _callback](bcos::Error::Ptr _error, std::shared_ptr<WsMessage> _responseMsg,
+        [_msg, _topic, _callback](auto _error, std::shared_ptr<WsMessage> _responseMsg,
             std::shared_ptr<WsSession> _session) {
             auto seq = std::string(_msg->seq()->begin(), _msg->seq()->end());
             if (_error && _error->errorCode() != bcos::protocol::CommonError::SUCCESS)
@@ -273,7 +273,17 @@ void AMOPClient::sendMessageToClient(std::string const& _topic,
                 _responseMsg->encode(*buffer);
             }
 
-            _callback(std::move(_error), buffer);
+
+            if (!_error)
+            {
+                _callback(nullptr, buffer);
+            }
+            else
+            {
+                _callback(
+                    std::make_shared<bcos::Error>(_error->errorCode(), _error->errorMessage()),
+                    buffer);
+            }
         });
 }
 

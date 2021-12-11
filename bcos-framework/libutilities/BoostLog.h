@@ -27,10 +27,21 @@
 #include <boost/log/trivial.hpp>
 
 // BCOS log format
+#ifndef LOG_BADGE
 #define LOG_BADGE(_NAME) "[" << (_NAME) << "]"
+#endif
+
+#ifndef LOG_TYPE
 #define LOG_TYPE(_TYPE) (_TYPE) << "|"
+#endif
+
+#ifndef LOG_DESC
 #define LOG_DESC(_DESCRIPTION) (_DESCRIPTION)
+#endif
+
+#ifndef LOG_KV
 #define LOG_KV(_K, _V) "," << (_K) << "=" << (_V)
+#endif
 
 namespace bcos
 {
@@ -62,13 +73,17 @@ extern LogLevel c_statLogLevel;
 void setFileLogLevel(LogLevel const& _level);
 void setStatLogLevel(LogLevel const& _level);
 
+#ifndef BCOS_LOG
 #define BCOS_LOG(level)                                \
     if (bcos::LogLevel::level >= bcos::c_fileLogLevel) \
     BOOST_LOG_SEV(bcos::FileLoggerHandler,             \
         (boost::log::v2s_mt_posix::trivial::severity_level)(bcos::LogLevel::level))
+#endif
 
+#ifndef BCOS_STAT_LOG
 #define BCOS_STAT_LOG(level)                           \
     if (bcos::LogLevel::level >= bcos::c_statLogLevel) \
     BOOST_LOG_SEV(bcos::StatFileLoggerHandler,         \
         (boost::log::v2s_mt_posix::trivial::severity_level)(bcos::LogLevel::level))
 }  // namespace bcos
+#endif

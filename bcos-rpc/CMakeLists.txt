@@ -22,8 +22,15 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment ver
 project(bcos-rpc VERSION "3.0.0")
 set(VERSION_SUFFIX "-rc1")
 
-hunter_add_package(jsoncpp)
 find_package(jsoncpp CONFIG REQUIRED)
+find_package(tarscpp CONFIG REQUIRED)
+find_package(OpenSSL REQUIRED)
+
+include_directories(${CMAKE_SOURCE_DIR})
+include_directories(${CMAKE_BINARY_DIR}/)
+include_directories(${CMAKE_SOURCE_DIR}/bcos-rpc)
+include_directories(${CMAKE_SOURCE_DIR}/bcos-framework)
+include_directories(${CMAKE_SOURCE_DIR}/bcos-boostssl)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSTATICLIB")
 
@@ -35,6 +42,7 @@ aux_source_directory(bcos-rpc/ws SRC_LIST)
 aux_source_directory(bcos-rpc/amop SRC_LIST)
 
 add_library(rpc ${SRC_LIST} ${HEADERS})
+target_compile_options(rpc PRIVATE -Wno-error -Wno-unused-variable)
 target_link_libraries(rpc PUBLIC jsoncpp_lib_static framework tarscpp::tarsservant boostssl OpenSSL::SSL OpenSSL::Crypto tars-protocol crypto)
 
 # if (TESTS)

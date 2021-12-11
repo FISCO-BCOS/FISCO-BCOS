@@ -31,10 +31,21 @@
 // #endif
 
 // BCOS log format
+#ifndef LOG_BADGE
 #define LOG_BADGE(_NAME) "[" << (_NAME) << "]"
+#endif
+
+#ifndef LOG_TYPE
 #define LOG_TYPE(_TYPE) (_TYPE) << "|"
+#endif
+
+#ifndef LOG_DESC
 #define LOG_DESC(_DESCRIPTION) (_DESCRIPTION)
+#endif
+
+#ifndef LOG_KV
 #define LOG_KV(_K, _V) "," << (_K) << "=" << (_V)
+#endif
 
 namespace bcos
 {
@@ -71,20 +82,28 @@ void setFileLogLevel(LogLevel const& _level);
 void setStatLogLevel(LogLevel const& _level);
 
 #if defined(WIN32) || defined(WIN64) || defined(_WIN32) || defined(_WIN32_)
+#ifndef BCOS_LOG
 #define BCOS_LOG(level)                                                                          \
     if (bcos::boostssl::utilities::LogLevel::level >= bcos::boostssl::utilities::c_fileLogLevel) \
     BOOST_LOG_SEV(bcos::boostssl::utilities::FileLoggerHandler,                                  \
         (boost::log::v2s_mt_nt6::trivial::severity_level)(bcos::boostssl::utilities::LogLevel::  \
                 level))
+#endif
 #else
+
+#ifndef BCOS_LOG
 #define BCOS_LOG(level)                                                                           \
     if (bcos::boostssl::utilities::LogLevel::level >= bcos::boostssl::utilities::c_fileLogLevel)  \
     BOOST_LOG_SEV(bcos::boostssl::utilities::FileLoggerHandler,                                   \
         (boost::log::v2s_mt_posix::trivial::severity_level)(bcos::boostssl::utilities::LogLevel:: \
                 level))
 #endif
+#endif
+
+#ifndef CompareLevel
 #define CompareLevel(level) \
     (bcos::boostssl::utilities::LogLevel::level >= bcos::boostssl::utilities::c_fileLogLevel)
+#endif
 
 }  // namespace utilities
 }  // namespace boostssl
