@@ -2,13 +2,11 @@ name: Build and Publish Docker Image
 
 on:
   push:
-    branches:
-      - master
     tags:
       - 'v3.*.*'
 
 env:
-  DOCKER_REPOSITORY: fiscobcos
+  DOCKER_REPOSITORY: fiscoorg/fiscobcos
 
 
 jobs:
@@ -33,7 +31,7 @@ jobs:
         id: set_docker_tag
         run: |
           [[ ${{github.ref}} == */tags/* ]] && DOCKER_TAG="${GIT_TAG_NAME}" || DOCKER_TAG="${BRANCH_NAME}"
-          DOCKER_TAG="${{ secrets.DOCKER_FISCOPRO_USER }}/${DOCKER_REPOSITORY}:${DOCKER_TAG}"
+          DOCKER_TAG="fiscoorg/${DOCKER_REPOSITORY}:${DOCKER_TAG}"
 
           echo "New docker tag is ${DOCKER_TAG}"
           echo "::set-output name=docker_tag::$(echo ${DOCKER_TAG})"
@@ -47,8 +45,8 @@ jobs:
       - name: Login to DockerHub
         uses: docker/login-action@v1
         with:
-          username: ${{ secrets.DOCKER_FISCOPRO_USER }}
-          password: ${{ secrets.DOCKER_FISCOPRO_TOKEN }}
+          username: ${{ secrets.DOCKER_FISCOPR_USER }}
+          password: ${{ secrets.DOCKER_FISCOPR_TOKEN }}
 
       - name: Build and push
         id: docker_build
