@@ -16,7 +16,7 @@ RUN apt-get -q update && apt-get install -qy --no-install-recommends \
 
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y
 
-RUN echo 'source $HOME/.cargo/env' >> $HOME/.bashrc
+ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Check cargo is visible
 RUN cargo --help
