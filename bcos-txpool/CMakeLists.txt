@@ -31,7 +31,7 @@ aux_source_directory(bcos-txpool/sync SRC_LIST)
 include_directories(${CMAKE_SOURCE_DIR})
 include_directories(${CMAKE_SOURCE_DIR}/bcos-txpool)
 include_directories(${CMAKE_SOURCE_DIR}/bcos-framework)
-include_directories(${CMAKE_BINARY_DIR}/bcos-framework) #FIXME
+include_directories(${CMAKE_BINARY_DIR}/bcos-framework)
 
 add_library(txpool ${SRC_LIST})
 target_compile_options(txpool PRIVATE -Wno-error -Wno-unused-variable)

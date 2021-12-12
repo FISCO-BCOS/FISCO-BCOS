@@ -1,0 +1,18 @@
+syntax = "proto3";
+package bcos.sync;
+
+message BlockSyncMessage
+{
+    // the basic fields
+    int32 version = 1;
+    int32 packetType = 2;
+    int64 number = 3;
+
+    // for sync status
+    bytes hash = 4;
+    bytes genesisHash = 5;
+    
+    // for blocks sync
+    int64 size = 6;
+    repeated bytes blocksData = 7;
+}
