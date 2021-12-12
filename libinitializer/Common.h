@@ -24,7 +24,7 @@
 #include <bcos-framework/libutilities/Exceptions.h>
 #include <bcos-framework/libutilities/FileUtility.h>
 #include <bcos-framework/libutilities/Log.h>
-// #include <include/BuildInfo.h>
+#include <include/BuildInfo.h>
 #include <openssl/engine.h>
 #include <openssl/rsa.h>
 #include <boost/filesystem.hpp>
