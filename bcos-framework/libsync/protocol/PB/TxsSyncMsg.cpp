@@ -19,7 +19,8 @@
  * @date 2021-05-11
  */
 #include "TxsSyncMsg.h"
-#include "../../libprotocol/Common.h"
+#include "../../../libprotocol/Common.h"
+
 using namespace bcos;
 using namespace bcos::sync;
 using namespace bcos::crypto;

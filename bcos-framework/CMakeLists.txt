@@ -71,14 +71,21 @@ add_custom_command(
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
-aux_source_directory(libutilities SRCS)
-aux_source_directory(libcodec SRCS)
-aux_source_directory(libstorage SRCS)
-aux_source_directory(libprotocol SRCS)
-aux_source_directory(libprotocol/protobuf SRCS)
-aux_source_directory(libsync SRCS)
-aux_source_directory(libsealer SRCS)
-aux_source_directory(libtool SRCS)
+file(GLOB_RECURSE SRCS libcodec/*.cpp libexecutor/*.cpp libprotocol/*.cpp libsealer/*.cpp
+libstorage/*.cpp libsync/*.cpp libtoo/*.cpp libutilities/*.cpp)
+# aux_source_directory(libutilities SRCS)
+# aux_source_directory(libcodec/abi SRCS)
+# aux_source_directory(libcodec/scale SRCS)
+# aux_source_directory(libstorage SRCS)
+# aux_source_directory(libprotocol SRCS)
+# aux_source_directory(libprotocol/amop SRCS)
+# aux_source_directory(libprotocol/protobuf SRCS)
+# aux_source_directory(libsync/protocol/PB SRCS)
+# aux_source_directory(libsealer SRCS)
+# aux_source_directory(libtool SRCS)
+# aux_source_directory(libutilities SRCS)
+
+message("all sources: ${SRCS}")
 
 find_package(TBB CONFIG REQUIRED)
 find_package(Boost CONFIG REQUIRED log chrono system filesystem iostreams thread)
@@ -86,16 +93,14 @@ find_package(Protobuf CONFIG REQUIRED)
 find_package(jsoncpp CONFIG REQUIRED)
 
 add_library(framework ${SRCS} ${MESSAGES_SRCS} ${TXS_SYNC_MSG})
-target_link_libraries(framework PUBLIC Boost::log Boost::chrono Boost::iostreams Boost::filesystem Boost::thread protobuf::libprotobuf TBB::tbb jsoncpp)
+target_link_libraries(framework PUBLIC Boost::log Boost::chrono Boost::iostreams Boost::filesystem Boost::thread Boost::thread protobuf::libprotobuf TBB::tbb jsoncpp_lib_static)
 
-# test releated
-# if (TESTS)
-#     hunter_add_package(jsoncpp)
-#     find_package(jsoncpp CONFIG REQUIRED)
-#     enable_testing()
-#     set(CTEST_OUTPUT_ON_FAILURE True)
-#     add_subdirectory(test)
-# endif()
+if (TESTS)
+    find_package(jsoncpp CONFIG REQUIRED)
+    enable_testing()
+    set(CTEST_OUTPUT_ON_FAILURE True)
+    add_subdirectory(test)
+endif()
 
 # for code coverage
 if (COVERAGE)

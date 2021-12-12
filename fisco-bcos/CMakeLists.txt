@@ -17,9 +17,14 @@ include_directories(${CMAKE_SOURCE_DIR}/bcos-rpc)
 include_directories(${CMAKE_SOURCE_DIR}/bcos-boostssl)
 include_directories(${CMAKE_BINARY_DIR})
 
+find_package(evmc CONFIG REQUIRED)
+find_package(intx CONFIG REQUIRED)
+find_package(ethash CONFIG REQUIRED)
+find_package(evmone CONFIG REQUIRED)
+find_package(wedpr-crypto CONFIG REQUIRED)
+
 set(BINARY_NAME fisco-bcos)
 add_executable(${BINARY_NAME} ${SRC_LIST})
-list(APPEND InitLibs protocol_init executor crypto framework pbft
-front_init pbft_init txpool_init init rpc gateway tarscpp::tarsservant tarscpp::tarsutil)
 target_compile_options(${BINARY_NAME} PRIVATE -Wno-error -Wno-unused-parameter -Wno-variadic-macros -Wno-return-type -Wno-pedantic)
-target_link_libraries(${BINARY_NAME} PUBLIC ${InitLibs})
+target_link_libraries(${BINARY_NAME} PUBLIC init
+front_init pbft_init txpool_init  protocol_init rpc gateway framework tarscpp::tarsservant tarscpp::tarsutil)

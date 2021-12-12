@@ -17,6 +17,8 @@
 # ------------------------------------------------------------------------------
 file(GLOB_RECURSE SOURCES "*.cpp" "*.h" "*.sol")
 
+include_directories(${CMAKE_SOURCE_DIR}/bcos-framework)
+
 # cmake settings
 include(SearchTestCases)
 set(TEST_BINARY_NAME test-bcos-framework)
@@ -25,8 +27,7 @@ config_test_cases("" "${SOURCES}" bin/${TEST_BINARY_NAME} "")
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR} ${BCOS_TEST_DIR})
 
-hunter_add_package(wedpr-crypto)
 find_package(wedpr-crypto CONFIG QUIET REQUIRED)
 find_package(Boost CONFIG QUIET REQUIRED serialization unit_test_framework)
 
-target_link_libraries(${TEST_BINARY_NAME} ${UTILITIES_TARGET} ${CODEC_TARGET} ${PROTOCOL_TARGET} ${PBPROTOCOL_TARGET} ${STORAGE_TARGET} ${SYNC_TARGET} jsoncpp_lib_static wedpr-crypto::crypto Boost::serialization Boost::unit_test_framework)
+target_link_libraries(${TEST_BINARY_NAME} framework wedpr-crypto::crypto Boost::serialization Boost::unit_test_framework)

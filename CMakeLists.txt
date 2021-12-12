@@ -23,6 +23,10 @@ hunter_add_package(Microsoft.GSL)
 hunter_add_package(wedpr-crypto)
 hunter_add_package(jsoncpp)
 hunter_add_package(OpenSSL)
+hunter_add_package(evmc)
+hunter_add_package(intx)
+hunter_add_package(ethash)
+hunter_add_package(evmone)
 
 # import dependencies
 include(CompilerSettings)

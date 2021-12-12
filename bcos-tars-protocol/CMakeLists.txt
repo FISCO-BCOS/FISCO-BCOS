@@ -57,14 +57,14 @@ aux_source_directory(./client SRC_LIST)
 
 add_library(protocol-tars ${SRC_LIST} ${OUT_TARS_H_LIST})
 target_compile_options(protocol-tars PRIVATE -Wno-error -Wno-unused-variable)
-target_link_libraries(protocol-tars PUBLIC bcos-framework tarscpp::tarsutil tarscpp::tarsparse tarscpp::tarsservant)
+target_link_libraries(protocol-tars PUBLIC framework tarscpp::tarsutil tarscpp::tarsparse tarscpp::tarsservant)
 
-# if (TESTS)
-#     # fetch bcos-test
-#     enable_testing()
-#     set(CTEST_OUTPUT_ON_FAILURE TRUE)
-#     add_subdirectory(test)
-# endif()
+if (TESTS)
+    # fetch bcos-test
+    enable_testing()
+    set(CTEST_OUTPUT_ON_FAILURE TRUE)
+    add_subdirectory(test)
+endif()
 
 # # for doxygen
 # include(BuildDocs)

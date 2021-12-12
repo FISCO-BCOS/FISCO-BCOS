@@ -15,19 +15,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ------------------------------------------------------------------------------
-file(GLOB_RECURSE SOURCES "*.cpp" "*.h" "*.sol")
+file(GLOB_RECURSE SOURCES "*.cpp")
 
 # cmake settings
 include(SearchTestCases)
 set(TEST_BINARY_NAME test-bcos-tars-protocol)
 config_test_cases("" "${SOURCES}" bin/${TEST_BINARY_NAME} "")
 
+include_directories(${CMAKE_SOURCE_DIR}/bcos-tars-protocol)
+
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR} ${BCOS_TEST_DIR})
 
-hunter_add_package(wedpr-crypto)
 find_package(wedpr-crypto CONFIG QUIET REQUIRED)
 find_package(Boost CONFIG QUIET REQUIRED unit_test_framework)
 
 target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-error -Wno-unused-variable)
-target_link_libraries(${TEST_BINARY_NAME} ${BCOS_TARS_PROTOCOL_TARGET} wedpr-crypto::crypto Boost::unit_test_framework tarscpp::tarsservant)
+target_link_libraries(${TEST_BINARY_NAME} protocol-tars wedpr-crypto::crypto Boost::unit_test_framework tarscpp::tarsservant)
