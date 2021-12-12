@@ -21,9 +21,7 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum OS X deployment ve
 
 project(bcos-crypto VERSION "3.0.0")
 
-aux_source_directory(encrypt SRCS)
-aux_source_directory(hash SRCS)
-aux_source_directory(signature SRCS)
+file(GLOB_RECURSE SRCS encrypt/*.cpp hash/*.cpp signature/*.cpp)
 
 hunter_add_package(wedpr-crypto)
 find_package(wedpr-crypto CONFIG REQUIRED)
@@ -32,7 +30,7 @@ include_directories(${CMAKE_SOURCE_DIR})
 include_directories(${CMAKE_SOURCE_DIR}/bcos-framework)
 
 add_library(crypto ${SRCS})
-target_link_libraries(crypto PUBLIC framework wedpr-crypto)
+target_link_libraries(crypto PUBLIC framework wedpr-crypto::crypto)
 
 option(DEMO "compile demo or not" OFF)
 
@@ -40,11 +38,11 @@ if(DEMO)
 add_subdirectory(demo)
 endif()
 
-# if (TESTS)
-#     enable_testing()
-#     set(CTEST_OUTPUT_ON_FAILURE TRUE)
-#     add_subdirectory(test)
-# endif()
+if (TESTS)
+    enable_testing()
+    set(CTEST_OUTPUT_ON_FAILURE TRUE)
+    add_subdirectory(test)
+endif()
 
 # for code coverage
 if (COVERAGE)
