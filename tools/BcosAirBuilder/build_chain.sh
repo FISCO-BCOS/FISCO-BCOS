@@ -463,7 +463,11 @@ parse_params() {
             if [ ${#port_start[@]} -ne 2 ]; then LOG_WARN "p2p start port error. e.g: 30300" && exit 1; fi
             ;;
         s) sm_mode="true" ;;
-        D) docker_mode="true" ;;
+        D) docker_mode="true"
+           if [ -n "${macOS}" ];then
+                LOG_FATAL "Not support docker mode for macOS now"
+           fi
+        ;;
         A) auth_mode="true" ;;
         w) wasm_mode="true";;
         a)
