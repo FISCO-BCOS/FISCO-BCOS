@@ -43,7 +43,7 @@ aux_source_directory(bcos-rpc/amop SRC_LIST)
 
 add_library(rpc ${SRC_LIST} ${HEADERS})
 target_compile_options(rpc PRIVATE -Wno-error -Wno-unused-variable)
-target_link_libraries(rpc PUBLIC jsoncpp_lib_static framework tarscpp::tarsservant boostssl OpenSSL::SSL OpenSSL::Crypto tars-protocol crypto)
+target_link_libraries(rpc PUBLIC framework jsoncpp_lib_static tarscpp::tarsservant boostssl OpenSSL::SSL OpenSSL::Crypto tars-protocol crypto)
 
 # if (TESTS)
 #     enable_testing()

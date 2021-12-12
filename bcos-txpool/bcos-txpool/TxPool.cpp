@@ -19,8 +19,8 @@
  * @date 2021-05-10
  */
 #include "TxPool.h"
-#include "bcos-txpool/txpool/validator/TxValidator.h"
-#include "validator/LedgerNonceChecker.h"
+#include "txpool/validator/TxValidator.h"
+#include "txpool/validator/LedgerNonceChecker.h"
 #include <bcos-framework/interfaces/protocol/CommonError.h>
 #include <bcos-framework/libtool/LedgerConfigFetcher.h>
 #include <tbb/parallel_for.h>

@@ -43,7 +43,6 @@ set(PROTO_PATH ${PROJECT_SOURCE_DIR})
 set(SYNC_PROTO_GENERATE_BASE_DIR ${CMAKE_CURRENT_BINARY_DIR})
 set(SYNC_PROTO_SUB_DIR "libsync/protocol/proto")
 set(SYNC_PROTO_GENERATE_DIR ${SYNC_PROTO_GENERATE_BASE_DIR}/${SYNC_PROTO_SUB_DIR})
-
 set(MESSAGES_PROTOS Transaction.proto TransactionReceipt.proto BlockHeader.proto Block.proto)
 
 foreach(proto_file ${MESSAGES_PROTOS})
@@ -62,6 +61,14 @@ foreach(proto_file ${MESSAGES_PROTOS})
   )
 endforeach()
 
+set(TXS_SYNC_MSG ${PROTO_GENERATE_DIR}/TxsSync.pb.cc)
+add_custom_command(
+      OUTPUT ${TXS_SYNC_MSG}
+      COMMAND protobuf::protoc --cpp_out ${PROTO_GENERATE_DIR} -I ${PROJECT_SOURCE_DIR}/libsync/protocol/proto/ "TxsSync.proto"
+      COMMENT "Generating ${TXS_SYNC_MSG} from ${PROJECT_SOURCE_DIR}/libsync/protocol/proto/TxsSync.proto"
+      VERBATIM
+)
+
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 aux_source_directory(libutilities SRCS)
@@ -78,7 +85,7 @@ find_package(Boost CONFIG REQUIRED log chrono system filesystem iostreams thread
 find_package(Protobuf CONFIG REQUIRED)
 find_package(jsoncpp CONFIG REQUIRED)
 
-add_library(framework ${SRCS} ${MESSAGES_SRCS})
+add_library(framework ${SRCS} ${MESSAGES_SRCS} ${TXS_SYNC_MSG})
 target_link_libraries(framework PUBLIC Boost::log Boost::chrono Boost::iostreams Boost::filesystem Boost::thread protobuf::libprotobuf TBB::tbb jsoncpp)
 
 # test releated

@@ -20,7 +20,8 @@
  */
 #pragma once
 #include "../../interfaces/TxsSyncMsgInterface.h"
-#include "libsync/protocol/proto/TxsSync.pb.h"
+#include "libprotocol/bcos-proto/TxsSync.pb.h"
+
 namespace bcos
 {
 namespace sync

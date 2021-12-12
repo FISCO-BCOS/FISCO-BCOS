@@ -61,7 +61,6 @@ aux_source_directory(bcos-pbft/pbft/storage SRC_LIST)
 find_package(Protobuf CONFIG REQUIRED)
 
 add_library(pbft ${SRCS} ${MESSAGES_SRCS})
-# target_compile_options(pbft PRIVATE -Wno-error -Wno-unused-variable)
 target_link_libraries(pbft PUBLIC framework)
 
 # if (TESTS)

@@ -21,8 +21,8 @@
 #include "TxPoolFactory.h"
 #include "bcos-txpool/sync/TransactionSync.h"
 #include "bcos-txpool/txpool/validator/TxValidator.h"
-#include "storage/MemoryStorage.h"
-#include "validator/TxPoolNonceChecker.h"
+#include "txpool/storage/MemoryStorage.h"
+#include "txpool/validator/TxPoolNonceChecker.h"
 #include <bcos-framework/libsync/protocol/PB/TxsSyncMsgFactoryImpl.h>
 #include <bcos-framework/libtool/LedgerConfigFetcher.h>
 

@@ -22,11 +22,9 @@ hunter_add_package(rocksdb)
 find_package(RocksDB CONFIG REQUIRED)
 
 find_package(Boost CONFIG QUIET REQUIRED serialization thread context)
-find_package(Threads REQUIRED)
-find_package(TBB CONFIG REQUIRED)
 
 add_library(storage ${SRC_LIST})
-target_link_libraries(storage PUBLIC TBB::tbb Boost::serialization zstd::libzstd_static Threads::Threads framework)
+target_link_libraries(storage PUBLIC framework Boost::serialization zstd::libzstd_static Threads::Threads)
 if(USE_TiKV)
     target_link_libraries(storage PUBLIC kv_client)
 else()
