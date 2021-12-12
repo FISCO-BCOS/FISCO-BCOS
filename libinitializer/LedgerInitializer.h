@@ -23,7 +23,7 @@
 #include <bcos-framework/interfaces/protocol/BlockFactory.h>
 #include <bcos-framework/interfaces/storage/StorageInterface.h>
 #include <bcos-framework/libtool/NodeConfig.h>
-#include <bcos-ledger/libledger/Ledger.h>
+#include <bcos-ledger/src/libledger/Ledger.h>
 
 namespace bcos::initializer
 {

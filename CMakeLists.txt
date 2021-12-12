@@ -4,6 +4,7 @@ if (NOT DEFINED URL_BASE)
 endif()
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/bcos-cmake-scripts)
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 
 include(HunterGate)
 HunterGate(
@@ -25,6 +26,7 @@ hunter_add_package(OpenSSL)
 
 # import dependencies
 include(CompilerSettings)
+include(BuildInfoGenerator)
 
 # import services
 #list(APPEND SERVICE_LIST FrontService GatewayService RpcService TxPoolService PBFTService NodeService)

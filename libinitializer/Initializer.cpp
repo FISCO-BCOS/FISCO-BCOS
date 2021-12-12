@@ -39,7 +39,7 @@
 #include "libprotocol/TransactionSubmitResultFactoryImpl.h"
 #include "libprotocol/TransactionSubmitResultImpl.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-executor/LRUStorage.h>
+#include "include/bcos-executor/LRUStorage.h"
 #include <bcos-framework/libtool/NodeConfig.h>
 #include <bcos-scheduler/ExecutorManager.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
