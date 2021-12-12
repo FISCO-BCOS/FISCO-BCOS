@@ -4,9 +4,9 @@ file(GLOB HEADERS "*.h")
 #add_library(initializer ${SRC_LIST} ${HEADERS})
 
 add_library(${PROTOCOL_INIT_LIB} ProtocolInitializer.cpp)
-target_compile_options(${PROTOCOL_INIT_LIB} PRIVATE -Wno-error -Wno-unused-parameter -Wno-variadic-macros -Wno-return-type -Wno-pedantic)
+# target_compile_options(${PROTOCOL_INIT_LIB} PRIVATE -Wno-error -Wno-unused-parameter -Wno-variadic-macros -Wno-return-type -Wno-pedantic)
 target_link_libraries(${PROTOCOL_INIT_LIB} Boost::program_options OpenSSL::SSL OpenSSL::Crypto 
-                     bcos-crypto::bcos-crypto bcos-tars-protocol::protocol-tars tarscpp::tarsservant tarscpp::tarsutil)
+                     crypto protocol-tars tarscpp::tarsservant tarscpp::tarsutil)
 
 add_library(${FRONTSERVICE_INIT_LIB} FrontServiceInitializer.cpp)
 target_compile_options(${FRONTSERVICE_INIT_LIB} PRIVATE -Wno-error -Wno-unused-parameter -Wno-variadic-macros -Wno-return-type -Wno-pedantic)
