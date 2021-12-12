@@ -24,10 +24,6 @@ include(SearchTestCases)
 set(TEST_BINARY_NAME test-bcos-executor)
 config_test_cases("" "${SOURCES}" bin/${TEST_BINARY_NAME} "")
 
-find_package(evmc CONFIG REQUIRED)
-find_package(intx CONFIG REQUIRED)
-find_package(ethash CONFIG REQUIRED)
-
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE ./ ../../src ../../include ${CMAKE_BINARY_DIR}/bcos-framework)
 
@@ -35,7 +31,7 @@ find_package(Boost CONFIG QUIET REQUIRED unit_test_framework)
 find_package(TBB CONFIG QUIET REQUIRED)
 find_package(wedpr-crypto CONFIG REQUIRED)
 
-target_link_libraries(${TEST_BINARY_NAME} executor framework wedpr-crypto Boost::serialization)
+target_link_libraries(${TEST_BINARY_NAME} executor framework Boost::serialization)
 # config_test_cases("" "${SOURCES}" bin/${TEST_BINARY_NAME} "")
 
 # target_link_options(${TEST_BINARY_NAME} PUBLIC "LINKER:-z,muldefs")

@@ -27,11 +27,10 @@ find_package(evmone CONFIG REQUIRED)
 find_package(intx CONFIG REQUIRED)
 find_package(ethash CONFIG REQUIRED)
 find_package(Boost CONFIG QUIET REQUIRED serialization program_options context)
-find_package(wedpr-crypto CONFIG REQUIRED)
 
 add_library(executor ${SRCS})
-target_link_libraries(executor PUBLIC framework crypto wedpr-crypto jsoncpp_lib_static Boost::context TBB::tbb evmone hera hera-buildinfo
-wabt intx ethash ${WASM_ENGINE_LIBRARY} evmc::loader evmc::instructions wabt)
+target_link_libraries(executor PUBLIC framework crypto Boost::context TBB::tbb evmone hera hera-buildinfo
+${WASM_ENGINE_LIBRARY} evmc::loader evmc::instructions wabt)
 
 if (TOOLS)
     add_subdirectory(tools)

@@ -30,7 +30,7 @@ include_directories(${CMAKE_SOURCE_DIR})
 include_directories(${CMAKE_SOURCE_DIR}/bcos-framework)
 
 add_library(crypto ${SRCS})
-target_link_libraries(crypto PUBLIC framework wedpr-crypto::crypto)
+target_link_libraries(crypto PUBLIC framework wedpr-crypto::crypto wedpr-crypto::extend-crypto)
 
 option(DEMO "compile demo or not" OFF)
 
