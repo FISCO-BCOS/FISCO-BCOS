@@ -59,6 +59,7 @@ add_subdirectory(bcos-gateway)
 add_subdirectory(bcos-pbft)
 add_subdirectory(bcos-txpool)
 add_subdirectory(bcos-sync)
+add_subdirectory(bcos-front)
 # add_subdirectory(libinitializer)
 # add_subdirectory(fisco-bcos)
 
