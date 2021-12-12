@@ -26,15 +26,15 @@ set(VERSION_SUFFIX "-rc1")
 set(PROTO_INPUT_PATH ${CMAKE_SOURCE_DIR}/bcos-sync)
 set(PROTO_OUTPUT_PATH ${CMAKE_CURRENT_BINARY_DIR}/)
 
-set(MESSAGES_PROTOS bcos-sync/protocol/proto/BlockSync.proto)
-foreach(proto_file ${MESSAGES_PROTOS})
+set(SYNC_PROTOS bcos-sync/protocol/proto/BlockSync.proto)
+foreach(proto_file ${SYNC_PROTOS})
     get_filename_component(bcos_proto_abs "${PROTO_INPUT_PATH}" ABSOLUTE)
     set(proto_file_abs ${bcos_proto_abs}/${proto_file})
     get_filename_component(rel_dir ${proto_file} DIRECTORY)
     get_filename_component(basename ${proto_file} NAME_WE)
     set(generated_files ${PROTO_OUTPUT_PATH}/${rel_dir}/${basename}.pb.cc)
 
-    list(APPEND MESSAGES_SRCS ${generated_files})
+    list(APPEND SYNC_SRCS ${generated_files})
 
     message("Command: protoc --cpp_out ${PROTO_OUTPUT_PATH} -I ${PROTO_INPUT_PATH} ${proto_file}")
     add_custom_command(
@@ -44,6 +44,22 @@ foreach(proto_file ${MESSAGES_PROTOS})
         VERBATIM
     )
 endforeach()
+
+find_package(Protobuf CONFIG REQUIRED)
+
+include_directories(${CMAKE_SOURCE_DIR}/bcos-sync)
+include_directories(${PROTO_OUTPUT_PATH})
+include_directories(${CMAKE_BINARY_DIR}/)
+include_directories(${CMAKE_SOURCE_DIR}/)
+
+aux_source_directory(bcos-sync SRC_LIST)
+aux_source_directory(bcos-sync/protocol/PB SRC_LIST)
+aux_source_directory(bcos-sync/state SRC_LIST)
+
+add_library(sync ${SRC_LIST} ${SYNC_SRCS})
+target_compile_options(sync PRIVATE -Wno-error -Wno-unused-variable)
+target_link_libraries(sync PUBLIC jsoncpp_lib_static framework)
+
 
 # if (TESTS)
 #     enable_testing()
