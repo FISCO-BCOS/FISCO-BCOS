@@ -72,18 +72,7 @@ add_custom_command(
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 file(GLOB_RECURSE SRCS libcodec/*.cpp libexecutor/*.cpp libprotocol/*.cpp libsealer/*.cpp
-libstorage/*.cpp libsync/*.cpp libtoo/*.cpp libutilities/*.cpp)
-# aux_source_directory(libutilities SRCS)
-# aux_source_directory(libcodec/abi SRCS)
-# aux_source_directory(libcodec/scale SRCS)
-# aux_source_directory(libstorage SRCS)
-# aux_source_directory(libprotocol SRCS)
-# aux_source_directory(libprotocol/amop SRCS)
-# aux_source_directory(libprotocol/protobuf SRCS)
-# aux_source_directory(libsync/protocol/PB SRCS)
-# aux_source_directory(libsealer SRCS)
-# aux_source_directory(libtool SRCS)
-# aux_source_directory(libutilities SRCS)
+libstorage/*.cpp libsync/*.cpp libtool/*.cpp libutilities/*.cpp)
 
 message("all sources: ${SRCS}")
 

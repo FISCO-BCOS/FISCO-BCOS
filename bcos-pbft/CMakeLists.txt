@@ -49,33 +49,26 @@ include_directories(${CMAKE_SOURCE_DIR}/bcos-pbft)
 include_directories(${PROTO_OUTPUT_PATH})
 include_directories(${CMAKE_SOURCE_DIR}/)
 
-aux_source_directory(bcos-pbft/core SRCS)
-aux_source_directory(bcos-pbft/pbft SRCS)
-aux_source_directory(bcos-pbft/pbft/config SRC_LIST)
-aux_source_directory("bcos-pbft/pbft/cache" SRC_LIST)
-aux_source_directory(bcos-pbft/pbft/engine SRC_LIST)
-aux_source_directory(bcos-pbft/pbft/protocol SRC_LIST)
-aux_source_directory(bcos-pbft/pbft/protocol/PB SRC_LIST)
-aux_source_directory(bcos-pbft/pbft/storage SRC_LIST)
+file(GLOB_RECURSE SRCS bcos-pbft/*.cpp)
 
 find_package(Protobuf CONFIG REQUIRED)
 
 add_library(pbft ${SRCS} ${MESSAGES_SRCS})
 target_link_libraries(pbft PUBLIC framework)
 
-# if (TESTS)
-#     # fetch bcos-test    
-#     enable_testing()
-#     set(CTEST_OUTPUT_ON_FAILURE TRUE)
-#     add_subdirectory(test)
-# endif()
+if (TESTS)
+    # fetch bcos-test    
+    enable_testing()
+    set(CTEST_OUTPUT_ON_FAILURE TRUE)
+    add_subdirectory(test)
+endif()
 
-# # for doxygen
-# include(BuildDocs)
-# buildDoc(bcos-pbft-doc)
+# for doxygen
+include(BuildDocs)
+buildDoc(bcos-pbft-doc)
 
 # for code coverage
-# if (COVERAGE)
-#     include(Coverage)
-#     config_coverage("pbft-cov" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_CURRENT_SOURCE_DIR}/test/bcos-test*'")
-# endif ()
+if (COVERAGE)
+    include(Coverage)
+    config_coverage("pbft-cov" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_CURRENT_SOURCE_DIR}/test/bcos-test*'")
+endif ()

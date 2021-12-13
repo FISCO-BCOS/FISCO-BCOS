@@ -34,25 +34,20 @@ include_directories(${CMAKE_SOURCE_DIR}/bcos-boostssl)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSTATICLIB")
 
-aux_source_directory(. SRC_LIST)
-aux_source_directory(bcos-rpc/event SRC_LIST)
-aux_source_directory(bcos-rpc/jsonrpc SRC_LIST)
-aux_source_directory(bcos-rpc/jsonrpc/groupmgr SRC_LIST)
-aux_source_directory(bcos-rpc/ws SRC_LIST)
-aux_source_directory(bcos-rpc/amop SRC_LIST)
+file(GLOB_RECURSE SRCS bcos-rpc/*.cpp)
 
-add_library(rpc ${SRC_LIST} ${HEADERS})
+add_library(rpc ${SRCS} ${HEADERS})
 target_compile_options(rpc PRIVATE -Wno-error -Wno-unused-variable)
-target_link_libraries(rpc PUBLIC framework jsoncpp_lib_static tarscpp::tarsservant boostssl OpenSSL::SSL OpenSSL::Crypto tars-protocol crypto)
+target_link_libraries(rpc PUBLIC framework tarscpp::tarsservant boostssl OpenSSL::SSL OpenSSL::Crypto protocol-tars jsoncpp_lib_static crypto)
 
-# if (TESTS)
-#     enable_testing()
-#     set(CTEST_OUTPUT_ON_FAILURE TRUE)
-#     add_subdirectory(test)
-# endif()
+if (TESTS)
+    enable_testing()
+    set(CTEST_OUTPUT_ON_FAILURE TRUE)
+    add_subdirectory(test)
+endif()
 
-# # for code coverage
-# if (COVERAGE)
-#     include(Coverage)
-#     config_coverage("rpc-coverage" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_SOURCE_DIR}/test/mock**' '${CMAKE_SOURCE_DIR}/test/main**'")
-# endif ()
+# for code coverage
+if (COVERAGE)
+    include(Coverage)
+    config_coverage("rpc-coverage" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_SOURCE_DIR}/test/mock**' '${CMAKE_SOURCE_DIR}/test/main**'")
+endif ()

@@ -22,11 +22,13 @@ include(SearchTestCases)
 set(TEST_BINARY_NAME test-bcos-pbft)
 config_test_cases("" "${SOURCES}" bin/${TEST_BINARY_NAME} "")
 
+include_directories(${CMAKE_SOURCE_DIR}/bcos-framework)
+include_directories(${CMAKE_BINARY_DIR}/bcos-framework)
+
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR})
 
 find_package(Boost CONFIG REQUIRED unit_test_framework)
-find_package(bcos-framework)
-hunter_add_package(wedpr-crypto)
 find_package(wedpr-crypto CONFIG REQUIRED)
-target_link_libraries(${TEST_BINARY_NAME} bcos-framework::storage bcos-framework::protocol-pb ${BCOS_CONSENSUS_CORE_TARGET} ${BCOS_PBFT_TARGET} Boost::unit_test_framework wedpr-crypto::crypto)
+
+target_link_libraries(${TEST_BINARY_NAME} pbft framework Boost::unit_test_framework wedpr-crypto::crypto)

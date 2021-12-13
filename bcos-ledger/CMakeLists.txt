@@ -34,17 +34,17 @@ add_library(ledger ${SRCS})
 target_link_libraries(ledger PUBLIC framework Boost::serialization)
 
 # test related
-# if (TESTS)
-#     hunter_add_package(Boost COMPONENTS test)
-#     set(BCOS_TEST_DIR ${CMAKE_CURRENT_SOURCE_DIR}/test/bcos-test)
+if (TESTS)
+    hunter_add_package(Boost COMPONENTS test)
+    set(BCOS_TEST_DIR ${CMAKE_CURRENT_SOURCE_DIR}/test/bcos-test)
 
-#     enable_testing()
-#     set(CTEST_OUTPUT_ON_FAILURE TRUE)
-#     add_subdirectory(test)
-# endif()
+    enable_testing()
+    set(CTEST_OUTPUT_ON_FAILURE TRUE)
+    add_subdirectory(test)
+endif()
 
 # for code coverage
-# if (COVERAGE)
-#     include(Coverage)
-#     config_coverage("ledger-coverage" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_SOURCE_DIR}/test/mock**' '${CMAKE_SOURCE_DIR}/test/main**'")
-# endif ()
+if (COVERAGE)
+    include(Coverage)
+    config_coverage("ledger-coverage" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_SOURCE_DIR}/test/mock**' '${CMAKE_SOURCE_DIR}/test/main**'")
+endif ()
