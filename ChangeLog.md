@@ -37,6 +37,6 @@
 | Java SDK        | 3.0.0-rc1           | 3.0.0-rc1     |     |
 | CPP SDK        | 3.0.0-rc1           | 3.0.0-rc1     |     |
 | Console        | 3.0.0-rc1           | 3.0.0-rc1     |     |
-| WeBASE     | 2.0.0-rc1                   | 2.0.0-rc1 |                        |
+| WeBASE     | lab-rc1                   | lab-rc1 |                        |
 | Solidity   | 最高支持 solidity 0.6.10 | 0.6.00    |                        |
 | Liquid     | 1.0.0-rc2               | 1.0.0-rc2  |                      |
