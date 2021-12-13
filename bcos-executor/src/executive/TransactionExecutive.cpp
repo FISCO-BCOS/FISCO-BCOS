@@ -179,8 +179,6 @@ void TransactionExecutive::externalAcquireKeyLocks(std::string acquireKeyLock)
 
 CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePtr callParameters)
 {
-    assert(!m_finished);
-
     m_storageWrapper->setRecoder(m_recoder);
 
     std::unique_ptr<HostContext> hostContext;
