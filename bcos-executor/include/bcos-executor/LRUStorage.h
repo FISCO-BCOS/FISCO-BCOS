@@ -72,8 +72,5 @@ private:
 
     std::unique_ptr<std::thread> m_worker;
     std::atomic_bool m_running = false;
-
-    std::atomic<uint64_t> m_hitTimes;
-    std::atomic<uint64_t> m_queryTimes;
 };
 }  // namespace bcos::executor
