@@ -36,6 +36,7 @@ auth_mode="false"
 auth_admin_account=
 binary_path=""
 wasm_mode="false"
+download_timeout=240
 
 LOG_WARN() {
     local content=${1}
@@ -55,6 +56,12 @@ LOG_FATAL() {
 
 dir_must_exists() {
     if [ ! -d "$1" ]; then
+        LOG_FATAL "$1 DIR does not exist, please check!"
+    fi
+}
+
+dir_must_not_exists() {
+    if [  -d "$1" ]; then
         LOG_FATAL "$1 DIR does not exist, please check!"
     fi
 }
@@ -323,16 +330,16 @@ download_bin()
         package_name="${binary_name}-macOS-x86_64.tar.gz"
     fi
 
-    Download_Link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/${compatibility_version}/${package_name}"
-    local cdn_download_link="${cdn_link_header}/FISCO-BCOS/releases/${compatibility_version}/${package_name}"
-    LOG_INFO "Downloading fisco-bcos binary from ${Download_Link} ..."
-    if [ $(curl -IL -o /dev/null -s -w %{http_code} "${cdn_download_link}") == 200 ];then
-        curl -#LO "${Download_Link}" --speed-time 20 --speed-limit 102400 -m "${download_timeout}" || {
-            LOG_INFO "Download speed is too low, try ${cdn_download_link}"
-            curl -#LO "${cdn_download_link}"
-        }
-    else
+    local Download_Link="${cdn_link_header}/FISCO-BCOS/releases/${compatibility_version}/${package_name}"
+    local github_link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/${compatibility_version}/${package_name}"
+    # the binary can obtained from the cos
+    if [ $(curl -IL -o /dev/null -s -w %{http_code} "${Download_Link}") == 200 ];then
+        # try cdn_link
+        LOG_INFO "Downloading fisco-bcos binary from ${Download_Link} ..."
         curl -#LO "${Download_Link}"
+    else
+        LOG_INFO "Downloading fisco-bcos binary from ${github_link} ..."
+        curl -#LO "${github_link}"
     fi
     if [[ "$(ls -al . | grep "fisco-bcos.*tar.gz" | awk '{print $5}')" -lt "1048576" ]];then
         exit_with_clean "Download fisco-bcos failed, please try again. Or download and extract it manually from ${Download_Link} and use -e option."
@@ -347,9 +354,7 @@ gen_sm_chain_cert() {
     check_name chain "$name"
 
     if [ ! -f "${sm_cert_conf}" ]; then
-        generate_sm_cert_conf 'sm_cert.cnf'
-    else
-        cp -f "${sm_cert_conf}" .
+        generate_sm_cert_conf ${sm_cert_conf}
     fi
 
     generate_sm_sm2_param "${sm2_params}"
@@ -458,7 +463,11 @@ parse_params() {
             if [ ${#port_start[@]} -ne 2 ]; then LOG_WARN "p2p start port error. e.g: 30300" && exit 1; fi
             ;;
         s) sm_mode="true" ;;
-        D) docker_mode="true" ;;
+        D) docker_mode="true"
+           if [ -n "${macOS}" ];then
+                LOG_FATAL "Not support docker mode for macOS now"
+           fi
+        ;;
         A) auth_mode="true" ;;
         w) wasm_mode="true";;
         a)
@@ -971,14 +980,12 @@ expand_node()
     file_must_exists "${config_path}/config.ini"
     file_must_exists "${config_path}/config.genesis"
     file_must_exists "${config_path}/nodes.json"
-    download_bin
     # check binary
     parent_path=$(dirname ${node_dir})
     if [ -z "${docker_mode}" ];then
+        download_bin
         if [ ! -f ${binary_path} ];then
-            if [ ! -f "${config_path}/${binary_name}" ];then
-                LOG_FATAL "Must copy binary file {binary_path} to ${config_path}/${binary_name} since directory ${parent_path}/ has no ready-made ${binary_name}"
-            fi
+            LOG_FATAL "fisco bcos binary exec ${binary_path} not exist, please input the correct path."
         fi
     fi
     mkdir -p "${node_dir}"
@@ -1010,11 +1017,6 @@ expand_node()
     cp "${config_path}/config.ini" "${node_dir}"
     cp "${config_path}/config.genesis" "${node_dir}"
     cp "${config_path}/nodes.json" "${node_dir}"
-    if [ -z "${docker_mode}" ];then
-        if [ ! -f "$binary_path" ];then
-            cp "${config_path}/${binary_name}" "${binary_path}"
-        fi
-    fi
     LOG_INFO "copy configurations success..."
     echo "=============================================================="
     if [ -z "${docker_mode}" ];then
@@ -1032,6 +1034,7 @@ expand_node()
 
 deploy_nodes()
 {
+    dir_must_not_exists "${output_dir}"
     mkdir -p "$output_dir"
     dir_must_exists "${output_dir}"
     cert_conf="${output_dir}/cert.cnf"
@@ -1047,11 +1050,11 @@ deploy_nodes()
     else
         help
     fi
-    download_bin
     # check the binary
     if [ -z "${docker_mode}" ];then
+        download_bin
         if [[ ! -f "$binary_path" ]]; then
-            LOG_FATAL "fisco bcos binary exec ${binary_path} not exist, please input the correct path."
+            LOG_FATAL "fisco bcos binary exec ${binary_path} not exist, Must copy binary file ${binary_name} to ${binary_path}"
         fi
     fi
     local i=0
@@ -1075,7 +1078,9 @@ deploy_nodes()
         nodes_dir="${output_dir}/${ip}"
         # start_all.sh and stop_all.sh
         generate_all_node_scripts "${nodes_dir}"
-        cp "${binary_path}" "${nodes_dir}"
+        if [ -z "${docker_mode}" ];then
+            cp "${binary_path}" "${nodes_dir}"
+        fi
         ca_cert_dir="${nodes_dir}"/ca
         mkdir -p ${ca_cert_dir}
         cp -r ${ca_dir}/* ${ca_cert_dir}
