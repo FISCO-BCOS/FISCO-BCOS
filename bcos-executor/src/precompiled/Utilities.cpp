@@ -286,6 +286,8 @@ bcos::precompiled::ContractStatus bcos::precompiled::getContractStatus(
     }
     PRECOMPILED_LOG(ERROR) << LOG_DESC("getContractStatus error")
                            << LOG_KV("table name", _tableName);
+
+    return ContractStatus::Available;
 }
 
 void Condition::EQ(const std::string& key, const std::string& value)
