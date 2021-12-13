@@ -22,6 +22,7 @@
 
 #include "ClockCache.h"
 #include <atomic>
+#include <boost/core/ignore_unused.hpp>
 #include <cassert>
 #include <cstddef>
 #include <mutex>
@@ -203,6 +204,9 @@ bool CacheShard::tryEvict(CacheItem* item)
     {
         auto erased = m_table.erase(item->hash);
         assert(erased);
+        boost::ignore_unused(erased);
+        boost::ignore_unused(flags);
+
         recycleItem(item);
         return true;
     }
