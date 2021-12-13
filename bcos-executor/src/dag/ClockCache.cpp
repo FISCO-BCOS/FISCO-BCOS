@@ -219,6 +219,8 @@ void CacheShard::recycleItem(CacheItem* item)
     assert(!m_mutex.try_lock());
     auto& flags = item->flags;
     assert(!inCache(flags) && refCounts(flags) == 0);
+    boost::ignore_unused(flags);
+
     m_deleter(item->value);
     m_recycle.push_back(item);
     m_usage.fetch_sub(1, std::memory_order_relaxed);

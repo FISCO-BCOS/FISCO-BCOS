@@ -27,6 +27,7 @@
 #include "../Common.h"
 #include "HostContext.h"
 #include "libutilities/Common.h"
+#include <boost/core/ignore_unused.hpp>
 #include <evmc/evmc.h>
 #include <boost/algorithm/hex.hpp>
 #include <exception>
@@ -55,8 +56,9 @@ bool accountExists(evmc_host_context* _context, const evmc_address* _addr) noexc
 evmc_bytes32 getStorage(
     evmc_host_context* _context, const evmc_address* _addr, const evmc_bytes32* _key)
 {
+    boost::ignore_unused(_addr);
     auto& hostContext = static_cast<HostContext&>(*_context);
-
+    
     // programming assert for debug
     assert(fromEvmC(*_addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
 
@@ -66,6 +68,7 @@ evmc_bytes32 getStorage(
 evmc_storage_status setStorage(evmc_host_context* _context, const evmc_address* _addr,
     const evmc_bytes32* _key, const evmc_bytes32* _value)
 {
+    boost::ignore_unused(_addr);
     auto& hostContext = static_cast<HostContext&>(*_context);
 
     assert(fromEvmC(*_addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
@@ -260,6 +263,7 @@ bool wasmAccountExists(
 int32_t get(evmc_host_context* _context, const uint8_t* _addr, int32_t _addressLength,
     const uint8_t* _key, int32_t _keyLength, uint8_t* _value, int32_t _valueLength)
 {
+    boost::ignore_unused(_addr, _addressLength);
     auto& hostContext = static_cast<HostContext&>(*_context);
 
     // programming assert for debug
@@ -276,6 +280,7 @@ int32_t get(evmc_host_context* _context, const uint8_t* _addr, int32_t _addressL
 evmc_storage_status set(evmc_host_context* _context, const uint8_t* _addr, int32_t _addressLength,
     const uint8_t* _key, int32_t _keyLength, const uint8_t* _value, int32_t _valueLength)
 {
+    boost::ignore_unused(_addr, _addressLength);
     auto& hostContext = static_cast<HostContext&>(*_context);
 
     // IF (!HOSTCONTEXT.ISPERMITTED())
@@ -341,6 +346,8 @@ void wasmLog(evmc_host_context* _context, const uint8_t* _addr, int32_t _address
     uint8_t const* _data, size_t _dataSize, const evmc_bytes32 _topics[],
     size_t _numTopics) noexcept
 {
+    boost::ignore_unused(_addr, _addressLength);
+    
     auto& hostContext = static_cast<HostContext&>(*_context);
     assert(string_view((char*)_addr, _addressLength) == hostContext.myAddress());
     h256 const* pTopics = reinterpret_cast<h256 const*>(_topics);
