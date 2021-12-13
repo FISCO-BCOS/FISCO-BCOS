@@ -32,6 +32,7 @@ hunter_add_package(evmone)
 include(CompilerSettings)
 include(BuildInfoGenerator)
 
+# FIXME: should move to fisco-bcos-pro or fisco-bcos-max
 # import services
 #list(APPEND SERVICE_LIST FrontService GatewayService RpcService TxPoolService PBFTService NodeService)
 # list(APPEND SERVICE_LIST GatewayService RpcService NodeService)

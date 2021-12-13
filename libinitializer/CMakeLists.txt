@@ -4,6 +4,7 @@ file(GLOB HEADERS "*.h")
 find_package(Boost CONFIG REQUIRED program_options)
 find_package(OpenSSL REQUIRED)
 find_package(tarscpp CONFIG REQUIRED)
+find_package(jsoncpp CONFIG REQUIRED)
 
 set(PROTOCOL_INIT_LIB protocol_init)
 set(FRONTSERVICE_INIT_LIB front_init)

@@ -52,27 +52,25 @@ include_directories(${PROTO_OUTPUT_PATH})
 include_directories(${CMAKE_BINARY_DIR}/)
 include_directories(${CMAKE_SOURCE_DIR}/)
 
-aux_source_directory(bcos-sync SRC_LIST)
-aux_source_directory(bcos-sync/protocol/PB SRC_LIST)
-aux_source_directory(bcos-sync/state SRC_LIST)
+file(GLOB_RECURSE SRCS bcos-sync/*.cpp)
 
-add_library(sync ${SRC_LIST} ${SYNC_SRCS})
+add_library(sync ${SRCS} ${SYNC_SRCS})
 target_compile_options(sync PRIVATE -Wno-error -Wno-unused-variable)
-target_link_libraries(sync PUBLIC jsoncpp_lib_static framework)
+target_link_libraries(sync PUBLIC framework)
 
 
-# if (TESTS)
-#     enable_testing()
-#     set(CTEST_OUTPUT_ON_FAILURE TRUE)
-#     add_subdirectory(test)
-# endif()
+if (TESTS)
+    enable_testing()
+    set(CTEST_OUTPUT_ON_FAILURE TRUE)
+    add_subdirectory(test)
+endif()
 
 # for doxygen
 # include(BuildDocs)
 # buildDoc(bcos-sync-doc)
 
 # for code coverage
-# if (COVERAGE)
-#     include(Coverage)
-#     config_coverage("sync-cov" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_CURRENT_SOURCE_DIR}/test/bcos-test*'")
-# endif ()
+if (COVERAGE)
+    include(Coverage)
+    config_coverage("sync-cov" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_CURRENT_SOURCE_DIR}/test/bcos-test*'")
+endif ()

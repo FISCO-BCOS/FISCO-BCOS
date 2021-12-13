@@ -24,41 +24,34 @@ set(VERSION_SUFFIX "-rc1")
 
 find_package(OpenSSL REQUIRED)
 find_package(tarscpp CONFIG REQUIRED)
+find_package(jsoncpp CONFIG REQUIRED)
 
 include_directories(${CMAKE_SOURCE_DIR})
 include_directories(${CMAKE_SOURCE_DIR}/bcos-gateway)
 include_directories(${CMAKE_BINARY_DIR})
 include_directories(${CMAKE_SOURCE_DIR}/bcos-framework)
 
-aux_source_directory(bcos-gateway SRC_LIST)
-aux_source_directory(bcos-gateway/libnetwork SRC_LIST)
-aux_source_directory(bcos-gateway/libp2p SRC_LIST)
-aux_source_directory(bcos-gateway/libamop SRC_LIST)
+file(GLOB_RECURSE SRCS bcos-gateway/*.cpp)
 
-add_library(gateway ${SRC_LIST} ${HEADERS})
+add_library(gateway ${SRCS})
 target_link_libraries(gateway PUBLIC framework jsoncpp_lib_static OpenSSL::SSL OpenSSL::Crypto protocol-tars tarscpp::tarsservant)
-
 target_compile_options(gateway PRIVATE -Wno-error -Wno-unused-variable)
 if (APPLE)
 target_compile_options(gateway PRIVATE -faligned-allocation)
 endif()
 
-
 # ut
-# if (TESTS)
-#     hunter_add_package(bcos-front)
-#     find_package(bcos-front CONFIG REQUIRED)
-
-#     enable_testing()
-#     set(CTEST_OUTPUT_ON_FAILURE TRUE)
-#     add_subdirectory(test)
-# endif()
+if (TESTS)
+    enable_testing()
+    set(CTEST_OUTPUT_ON_FAILURE TRUE)
+    add_subdirectory(test)
+endif()
 
 # for doxygen
 # include(BuildDocs)
 
 # for code coverage
-# if (COVERAGE)
-#     include(Coverage)
-#     config_coverage("gateway-coverage" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_SOURCE_DIR}/test/mock**' '${CMAKE_SOURCE_DIR}/test/main**'")
-# endif ()
+if (COVERAGE)
+    include(Coverage)
+    config_coverage("gateway-coverage" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_SOURCE_DIR}/test/mock**' '${CMAKE_SOURCE_DIR}/test/main**'")
+endif ()

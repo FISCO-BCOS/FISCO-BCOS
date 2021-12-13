@@ -30,11 +30,14 @@ if (BUILD_TEST_EXEC)
     add_subdirectory(main)
 endif()
 
+include_directories(${CMAKE_SOURCE_DIR}/bcos-front)
+
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE .)
+
+target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-error -Wno-unused-variable)
 find_package(Boost CONFIG REQUIRED unit_test_framework)
-find_package(bcos-framework)
 if (APPLE)
 target_compile_options(${TEST_BINARY_NAME} PRIVATE -faligned-allocation)
 endif()
-target_link_libraries(${TEST_BINARY_NAME} ${BCOS_GATEWAY_TARGET} Boost::unit_test_framework bcos-front::bcos-front tarscpp::tarsservant)
+target_link_libraries(${TEST_BINARY_NAME} gateway Boost::unit_test_framework front tarscpp::tarsservant)
