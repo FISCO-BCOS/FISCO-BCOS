@@ -246,7 +246,6 @@ private:
     std::unique_ptr<SyncStorageWrapper> m_storageWrapper;
     std::shared_ptr<SyncStorageWrapper> m_lastStorageWrapper;
     CallParameters::UniquePtr m_exchangeMessage = nullptr;
-    bool m_finished = false;
 
     std::optional<Coroutine::pull_type> m_pullMessage;
     std::optional<Coroutine::push_type> m_pushMessage;
