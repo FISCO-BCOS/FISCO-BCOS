@@ -72,10 +72,10 @@ add_subdirectory(fisco-bcos)
 
 # add_custom_target(tar DEPENDS ${SERVICE_TAR_LIST})
 
-# if(TESTS)
-#     enable_testing()
-#     add_subdirectory(tests)
-# endif()
+if(TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
 
 # for code coverage
 if (COVERAGE)

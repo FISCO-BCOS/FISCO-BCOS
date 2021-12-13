@@ -100,8 +100,7 @@ TransactionExecutor::TransactionExecutor(txpool::TxPoolInterface::Ptr txpool,
     m_executionMessageFactory(std::move(executionMessageFactory)),
     m_hashImpl(std::move(hashImpl)),
     m_isWasm(isWasm),
-    m_isAuthCheck(isAuthCheck),
-    m_version(Version_3_0_0)  // current executor version, will set as new block's version
+    m_isAuthCheck(isAuthCheck)
 {
     assert(m_backendStorage);
 

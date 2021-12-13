@@ -199,7 +199,6 @@ private:
     crypto::Hash::Ptr m_hashImpl;
     bool m_isWasm = false;
     bool m_isAuthCheck = false;
-    const ExecutorVersion m_version;
     std::shared_ptr<ClockCache<bcos::bytes, FunctionAbi>> m_abiCache;
 
     struct State
