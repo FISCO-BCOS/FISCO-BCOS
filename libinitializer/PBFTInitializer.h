@@ -27,7 +27,7 @@
 #include <bcos-framework/interfaces/rpc/RPCInterface.h>
 #include <bcos-framework/libsealer/SealerFactory.h>
 #include <bcos-framework/libutilities/Timer.h>
-#include <bcos-ledger/libledger/Ledger.h>
+#include <bcos-ledger/src/libledger/Ledger.h>
 #include <bcos-pbft/pbft/PBFTFactory.h>
 #include <bcos-sync/BlockSyncFactory.h>
 #include <bcos-tars-protocol/client/RpcServiceClient.h>

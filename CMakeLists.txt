@@ -1,97 +1,58 @@
 cmake_minimum_required(VERSION 3.15)
 if (NOT DEFINED URL_BASE)
     set(URL_BASE "github.com")
-    # set(URL_BASE "github.com.cnpmjs.org")
 endif()
-set (DEPENDENCIES_DIR ${CMAKE_CURRENT_SOURCE_DIR}/deps/src)
 
-set(BCOS_TARS_CMAKE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cmake" CACHE PATH "The cmake path for the library")
-set(BCOS_CMAKE_SCRIPTS_DIR ${CMAKE_CURRENT_BINARY_DIR}/bcos-cmake-scripts)
-include(FetchContent)
-FetchContent_Declare(bcos-cmake-scripts
-    GIT_REPOSITORY https://${URL_BASE}/FISCO-BCOS/bcos-cmake-scripts.git
-    GIT_TAG 2d25e8957323ffa86a55528c22348088ba99e9c6
-    SOURCE_DIR ${BCOS_CMAKE_SCRIPTS_DIR}
-)
-FetchContent_MakeAvailable(bcos-cmake-scripts)
-list(APPEND CMAKE_MODULE_PATH ${BCOS_CMAKE_SCRIPTS_DIR})
-list(APPEND CMAKE_MODULE_PATH ${BCOS_TARS_CMAKE_DIR})
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/bcos-cmake-scripts)
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 
 include(HunterGate)
 HunterGate(
-    URL "https://${URL_BASE}/FISCO-BCOS/hunter/archive/203039fdd0826330facd9c3841082dbf35d0c808.tar.gz"
-    SHA1 "26ca1840eb26da410913469f2f278569c8d383ae"
-    FILEPATH "${BCOS_TARS_CMAKE_DIR}/config.cmake"
+    URL "https://${URL_BASE}/FISCO-BCOS/hunter/archive/bc4754a926acd8ef3b96630c457c75ea4cd55a5d.tar.gz"
+    SHA1 "b895385e7ea8312da8db6b1545aa89f11d18345d"
+    FILEPATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.cmake"
 )
 
 project(FISCO-BCOS VERSION "3.0.0")
-# Suffix like "-rc1" e.t.c. to append to versions wherever needed.
 set(VERSION_SUFFIX "-rc1")
 
+hunter_add_package(Boost COMPONENTS all)
+hunter_add_package(tbb)
+hunter_add_package(Protobuf)
+hunter_add_package(Microsoft.GSL)
+hunter_add_package(wedpr-crypto)
+hunter_add_package(jsoncpp)
+hunter_add_package(OpenSSL)
+hunter_add_package(evmc)
+hunter_add_package(intx)
+hunter_add_package(ethash)
+hunter_add_package(evmone)
+
 # import dependencies
-include(ProjectTCMalloc)
-include(InstallBcosFrameworkDependencies)
-include(InstallBcosCryptoDependencies)
-include(InstallBcosTarsProtocolDependencies)
-include(InstallBoostSSL)
-
-include(InstallBcosGateWayDependencies)
-include(InstallBcosRpcDependencies)
-
-include(InstallBcosTxPoolDependencies)
-include(InstallBcosPBFTDependencies)
-include(InstallBcosStorageDependencies)
-include(InstallBcosLedgerDependencies)
-include(InstallBcosSyncDependencies)
-include(InstallBcosFrontDependencies)
-include(InstallBcosScheduler)
-include(ProjectBCOSExecutor)
-
-# copy .clang-format into the project path
-include(CopyClangFormat)
-
-include_directories(${CMAKE_INSTALL_INCLUDEDIR})
-include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-include_directories(${CMAKE_CURRENT_BINARY_DIR})
-
 include(CompilerSettings)
-
-set(INIT_LIB initializer)
-set(PROTOCOL_INIT_LIB protocolInitializer)
-set(PBFT_INIT_LIB pbftInitializer)
-set(TXPOOL_INIT_LIB txPoolInitializer)
-set(FRONTSERVICE_INIT_LIB frontInitializer)
-
-set(LEDGER_SERVICE_LIB ledgerServiceLib)
-set(SCHEDULER_SERVICE_LIB schedulerServiceLib)
-
-add_subdirectory(libinitializer)
-
 include(BuildInfoGenerator)
-# import services
-#list(APPEND SERVICE_LIST FrontService GatewayService RpcService TxPoolService PBFTService NodeService)
-list(APPEND SERVICE_LIST GatewayService RpcService NodeService)
-# TODO:
-# SchedulerService, ExecutorService
 
-foreach(SERVICE ${SERVICE_LIST})
-    add_subdirectory(${SERVICE}/main)
-    set(BINARY_NAME Bcos${SERVICE})
-
-    add_custom_command(OUTPUT ${BINARY_NAME}.tgz
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/${SERVICE}/main/${BINARY_NAME} ${CMAKE_BINARY_DIR}/${BINARY_NAME}/${BINARY_NAME}
-    COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR} tar czfv ${BINARY_NAME}.tgz ${BINARY_NAME}/${BINARY_NAME}
-    COMMENT "Compressing ${BINARY_NAME}...")
-
-    add_custom_target(${BINARY_NAME}-tar DEPENDS ${BINARY_NAME}.tgz ${BINARY_NAME})
-    list(APPEND SERVICE_TAR_LIST ${BINARY_NAME}-tar)
-endforeach()
-
+add_subdirectory(bcos-crypto)
+add_subdirectory(bcos-framework)
+add_subdirectory(bcos-scheduler)
+add_subdirectory(bcos-executor)
+add_subdirectory(bcos-storage)
+add_subdirectory(bcos-ledger)
+add_subdirectory(bcos-tars-protocol)
+add_subdirectory(bcos-boostssl)
+add_subdirectory(bcos-rpc)
+add_subdirectory(bcos-gateway)
+add_subdirectory(bcos-pbft)
+add_subdirectory(bcos-txpool)
+add_subdirectory(bcos-sync)
+add_subdirectory(bcos-front)
+add_subdirectory(libinitializer)
 add_subdirectory(fisco-bcos)
-add_custom_target(tar DEPENDS ${SERVICE_TAR_LIST})
+add_subdirectory(fisco-bcos-pro)
 
-if(TEST)
+# add_custom_target(tar DEPENDS ${SERVICE_TAR_LIST})
+
+if(TESTS)
     enable_testing()
     add_subdirectory(tests)
 endif()

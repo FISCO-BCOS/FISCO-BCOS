@@ -1,0 +1,19 @@
+#include "CommonProtocol.tars"
+#include "Block.tars"
+#include "LedgerConfig.tars"
+
+module bcostars {
+    interface PBFTService {
+        Error asyncNotifyConsensusMessage(string _uuid, vector<byte> _nodeId, vector<byte> _data);
+        Error asyncSubmitProposal(bool _containSysTxs, vector<byte> _proposalData, long _proposalIndex, vector<byte> _proposalHash);
+        Error asyncGetPBFTView(out long _view);
+        Error asyncCheckBlock(Block _block, out bool _verifyResult);
+        Error asyncNotifyNewBlock(LedgerConfig _ledgerConfig);
+        Error asyncNotifyBlockSyncMessage(string _uuid, vector<byte> _nodeId, vector<byte> _data);
+        Error asyncNoteUnSealedTxsSize(long _unsealedTxsSize);
+        
+        Error asyncGetSyncInfo(out string _syncInfo);
+        Error asyncGetConsensusStatus(out string _consensusStatus);
+        Error asyncNotifyConnectedNodes(vector<vector<byte>> connectedNodes);
+    };
+};

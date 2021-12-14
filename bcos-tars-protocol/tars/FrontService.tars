@@ -1,0 +1,22 @@
+#include "CommonProtocol.tars"
+
+module bcostars {
+    interface FrontService {
+        Error asyncGetNodeIDs(out vector<vector<byte>> nodeIDs);
+
+        Error onReceivedNodeIDs(string groupID, vector<vector<byte>> nodeIDs);
+
+        Error onReceiveMessage(string groupID, vector<byte> nodeID, vector<byte> data);
+
+        Error onReceiveBroadcastMessage(string groupID, vector<byte> nodeID, vector<byte> data);
+
+        Error asyncSendMessageByNodeID(int moduleID, vector<byte> nodeID, vector<byte> data, unsigned int timeout, bool requireRespCallback, 
+            out vector<byte> responseNodeID, out vector<byte> responseData, out string seq);
+
+        Error asyncSendResponse(string id, int moduleID, vector<byte> nodeID, vector<byte> data);
+
+        void asyncSendMessageByNodeIDs(int moduleID, vector<vector<byte>> nodeIDs, vector<byte> data);
+
+        void asyncSendBroadcastMessage(int moduleID, vector<byte> data);
+    };
+};

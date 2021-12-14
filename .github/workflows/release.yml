@@ -57,7 +57,7 @@ jobs:
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: BcosNodeService.tgz
+          file: fisco-bcos-pro/BcosNodeService.tgz
           asset_name: BcosNodeService-macOS-x86_64.tgz
           tag: ${{ github.ref }}
           overwrite: true
@@ -65,7 +65,7 @@ jobs:
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: BcosRpcService.tgz
+          file: fisco-bcos-pro/BcosRpcService.tgz
           asset_name: BcosRpcService-macOS-x86_64.tgz
           tag: ${{ github.ref }}
           overwrite: true
@@ -73,7 +73,7 @@ jobs:
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: BcosGatewayService.tgz
+          file: fisco-bcos-pro/BcosGatewayService.tgz
           asset_name: BcosGatewayService-macOS-x86_64.tgz
           tag: ${{ github.ref }}
           overwrite: true
@@ -154,7 +154,7 @@ jobs:
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: BcosNodeService.tgz
+          file: fisco-bcos-pro/BcosNodeService.tgz
           asset_name: BcosNodeService-linux-x86_64.tgz
           tag: ${{ github.ref }}
           overwrite: true
@@ -162,7 +162,7 @@ jobs:
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: BcosRpcService.tgz
+          file: fisco-bcos-pro/BcosRpcService.tgz
           asset_name: BcosRpcService-linux-x86_64.tgz
           tag: ${{ github.ref }}
           overwrite: true
@@ -170,7 +170,7 @@ jobs:
         uses: svenstaro/upload-release-action@v1-release
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: BcosGatewayService.tgz
+          file: fisco-bcos-pro/BcosGatewayService.tgz
           asset_name: BcosGatewayService-linux-x86_64.tgz
           tag: ${{ github.ref }}
           overwrite: true

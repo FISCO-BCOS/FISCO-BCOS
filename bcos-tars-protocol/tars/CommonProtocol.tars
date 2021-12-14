@@ -1,0 +1,6 @@
+module bcostars {
+    struct Error {
+        1 optional int errorCode;
+        2 optional string errorMessage;
+    };
+};
