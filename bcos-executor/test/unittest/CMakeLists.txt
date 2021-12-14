@@ -20,9 +20,9 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/libvm/WasmPath.h.in ${CMAKE_CURRENT_S
 file(GLOB_RECURSE SOURCES "*.cpp" "*.h")
 # cmake settings
 
-include(SearchTestCases)
+# include(SearchTestCases)
 set(TEST_BINARY_NAME test-bcos-executor)
-config_test_cases("" "${SOURCES}" bin/${TEST_BINARY_NAME} "")
+# config_test_cases("" "${SOURCES}" bin/${TEST_BINARY_NAME} "")
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE ./ ../../src ../../include ${CMAKE_BINARY_DIR}/bcos-framework)
@@ -32,12 +32,8 @@ find_package(TBB CONFIG QUIET REQUIRED)
 find_package(wedpr-crypto CONFIG REQUIRED)
 
 target_link_libraries(${TEST_BINARY_NAME} executor framework Boost::serialization)
-# config_test_cases("" "${SOURCES}" bin/${TEST_BINARY_NAME} "")
-
-# target_link_options(${TEST_BINARY_NAME} PUBLIC "LINKER:-z,muldefs")
-# target_link_options(${TEST_BINARY_NAME} PUBLIC "LINKER:SHELL:-z muldefs")
-# target_link_options(${TEST_BINARY_NAME} PUBLIC "--allow-multiple-definition")
 target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-error -fno-var-tracking -Wno-unused-parameter)
+add_test(NAME test-executor WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
 
 # for code coverage
 if (COVERAGE)

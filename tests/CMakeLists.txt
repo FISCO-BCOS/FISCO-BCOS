@@ -9,6 +9,4 @@ target_compile_options(fisco-bcos-test PRIVATE -Wno-error -Wno-unused-parameter 
 find_package(Boost CONFIG QUIET REQUIRED unit_test_framework program_options)
 target_link_libraries(fisco-bcos-test framework crypto protocol-tars Boost::program_options Boost::unit_test_framework)
 
-add_test(NAME tars-test WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND fisco-bcos-test; test-bcos-executor; test-bcos-pbft)
-# add_test(NAME test-executor WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND test-bcos-executor)
-# add_test(NAME test-pbft WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND test-bcos-pbft)
+add_test(NAME tars-test WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND fisco-bcos-test)

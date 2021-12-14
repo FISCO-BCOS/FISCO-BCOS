@@ -18,9 +18,9 @@
 file(GLOB_RECURSE SOURCES "*.cpp" "*.h" "*.sol")
 
 # cmake settings
-include(SearchTestCases)
+# include(SearchTestCases)
 set(TEST_BINARY_NAME test-bcos-pbft)
-config_test_cases("" "${SOURCES}" bin/${TEST_BINARY_NAME} "")
+# config_test_cases("" "${SOURCES}" bin/${TEST_BINARY_NAME} "")
 
 include_directories(${CMAKE_SOURCE_DIR}/bcos-framework)
 include_directories(${CMAKE_BINARY_DIR}/bcos-framework)
@@ -32,3 +32,4 @@ find_package(Boost CONFIG REQUIRED unit_test_framework)
 find_package(wedpr-crypto CONFIG REQUIRED)
 
 target_link_libraries(${TEST_BINARY_NAME} pbft framework Boost::unit_test_framework wedpr-crypto::crypto)
+# add_test(NAME test-pbft WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

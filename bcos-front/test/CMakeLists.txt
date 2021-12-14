@@ -18,12 +18,15 @@
 file(GLOB_RECURSE SOURCES "*.cpp" "*.h" "*.sol")
 
 # cmake settings
-include(SearchTestCases)
+# include(SearchTestCases)
 set(TEST_BINARY_NAME test-bcos-front)
-config_test_cases("" "${SOURCES}" bin/${TEST_BINARY_NAME} "")
+# config_test_cases("" "${SOURCES}" bin/${TEST_BINARY_NAME} "")
+
+include_directories(${CMAKE_SOURCE_DIR}/bcos-framework)
+include_directories(${CMAKE_SOURCE_DIR}/bcos-front)
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE .)
 find_package(Boost CONFIG REQUIRED unit_test_framework)
-find_package(bcos-framework)
-target_link_libraries(${TEST_BINARY_NAME} ${BCOS_FRONT_TARGET} Boost::unit_test_framework)
+target_link_libraries(${TEST_BINARY_NAME} front Boost::unit_test_framework)
+add_test(NAME test-front WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

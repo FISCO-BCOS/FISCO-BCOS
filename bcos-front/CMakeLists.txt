@@ -27,19 +27,17 @@ include_directories(${CMAKE_SOURCE_DIR}/bcos-front)
 add_library(front ${SRCS})
 target_link_libraries(front PUBLIC framework)
 
-
-# if (TESTS)
-#     include(InstallBcosCryptoDependencies)
-#     enable_testing()
-#     set(CTEST_OUTPUT_ON_FAILURE TRUE)
-#     add_subdirectory(test)
-# endif()
+if (TESTS)
+    enable_testing()
+    set(CTEST_OUTPUT_ON_FAILURE TRUE)
+    add_subdirectory(test)
+endif()
 
 # for doxygen
 # include(BuildDocs)
 
 # for code coverage
-# if (COVERAGE)
-#     include(Coverage)
-#     config_coverage("front-coverage" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_SOURCE_DIR}/test/mock**' '${CMAKE_SOURCE_DIR}/test/main**'")
-# endif ()
+if (COVERAGE)
+    include(Coverage)
+    config_coverage("front-coverage" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_SOURCE_DIR}/test/mock**' '${CMAKE_SOURCE_DIR}/test/main**'")
+endif ()
