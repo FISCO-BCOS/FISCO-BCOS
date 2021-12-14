@@ -41,7 +41,7 @@
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include "include/bcos-executor/LRUStorage.h"
 #include <bcos-framework/libtool/NodeConfig.h>
-#include <bcos-scheduler/ExecutorManager.h>
+#include <bcos-scheduler/src/ExecutorManager.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 
 

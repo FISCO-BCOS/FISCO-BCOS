@@ -1,8 +1,8 @@
 #pragma once
-#include "bcos-scheduler/Common.h"
-#include "interfaces/executor/ExecutionMessage.h"
-#include "interfaces/executor/ParallelTransactionExecutorInterface.h"
-#include "interfaces/protocol/ProtocolTypeDef.h"
+#include "Common.h"
+#include "bcos-framework/interfaces/executor/ExecutionMessage.h"
+#include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
+#include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
 #include <boost/core/ignore_unused.hpp>
 #include <boost/test/unit_test.hpp>
 

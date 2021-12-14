@@ -1,5 +1,5 @@
-#include "bcos-scheduler/ExecutorManager.h"
-#include "bcos-scheduler/SchedulerImpl.h"
+#include "ExecutorManager.h"
+#include "SchedulerImpl.h"
 #include "interfaces/crypto/CryptoSuite.h"
 #include "interfaces/crypto/KeyPairInterface.h"
 #include "interfaces/executor/ExecutionMessage.h"

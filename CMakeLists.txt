@@ -32,6 +32,8 @@ hunter_add_package(evmone)
 include(CompilerSettings)
 include(BuildInfoGenerator)
 
+include_directories(${CMAKE_SOURCE_DIR})
+
 add_subdirectory(bcos-crypto)
 add_subdirectory(bcos-framework)
 add_subdirectory(bcos-scheduler)
@@ -49,8 +51,6 @@ add_subdirectory(bcos-front)
 add_subdirectory(libinitializer)
 add_subdirectory(fisco-bcos)
 add_subdirectory(fisco-bcos-pro)
-
-# add_custom_target(tar DEPENDS ${SERVICE_TAR_LIST})
 
 if(TESTS)
     enable_testing()
