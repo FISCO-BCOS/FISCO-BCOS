@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../bcos-scheduler/Common.h"
+#include "Common.h"
 #include "MockExecutor.h"
-#include "interfaces/executor/ExecutionMessage.h"
+#include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include <boost/lexical_cast.hpp>
 #include <tuple>
 

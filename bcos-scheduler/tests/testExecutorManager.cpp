@@ -1,6 +1,6 @@
-#include "../bcos-scheduler/ExecutorManager.h"
-#include "interfaces/executor/ParallelTransactionExecutorInterface.h"
-#include "libutilities/Common.h"
+#include "ExecutorManager.h"
+#include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
+#include "bcos-framework/libutilities/Common.h"
 #include "mock/MockExecutor.h"
 #include <boost/test/unit_test.hpp>
 #include <memory>

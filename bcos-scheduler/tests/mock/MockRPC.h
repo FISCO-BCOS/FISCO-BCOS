@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../bcos-scheduler/Common.h"
+#include "Common.h"
 #include <bcos-framework/interfaces/rpc/RPCInterface.h>
 #include <boost/test/unit_test.hpp>
 #include <boost/thread/latch.hpp>

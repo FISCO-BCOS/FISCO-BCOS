@@ -1,4 +1,4 @@
-#include "../bcos-scheduler/GraphKeyLocks.h"
+#include "GraphKeyLocks.h"
 #include "libutilities/Common.h"
 #include "mock/MockExecutor.h"
 #include <boost/lexical_cast.hpp>
