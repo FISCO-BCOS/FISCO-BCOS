@@ -69,6 +69,7 @@ add_subdirectory(bcos-sync)
 add_subdirectory(bcos-front)
 add_subdirectory(libinitializer)
 add_subdirectory(fisco-bcos)
+add_subdirectory(fisco-bcos-pro)
 
 # add_custom_target(tar DEPENDS ${SERVICE_TAR_LIST})
 

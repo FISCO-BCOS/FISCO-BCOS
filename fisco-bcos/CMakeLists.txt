@@ -15,6 +15,7 @@ include_directories(${CMAKE_SOURCE_DIR}/bcos-scheduler)
 include_directories(${CMAKE_SOURCE_DIR}/bcos-storage)
 include_directories(${CMAKE_SOURCE_DIR}/bcos-rpc)
 include_directories(${CMAKE_SOURCE_DIR}/bcos-boostssl)
+include_directories(${CMAKE_SOURCE_DIR}/fisco-bcos-pro)
 include_directories(${CMAKE_BINARY_DIR})
 
 set(BINARY_NAME fisco-bcos)

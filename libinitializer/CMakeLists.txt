@@ -1,5 +1,4 @@
 file(GLOB SRC_LIST "*.cpp")
-file(GLOB HEADERS "*.h")
 
 find_package(Boost CONFIG REQUIRED program_options)
 find_package(OpenSSL REQUIRED)
@@ -24,6 +23,7 @@ include_directories(${CMAKE_SOURCE_DIR}/bcos-ledger)
 include_directories(${CMAKE_SOURCE_DIR}/bcos-scheduler)
 include_directories(${CMAKE_SOURCE_DIR}/bcos-storage)
 include_directories(${CMAKE_SOURCE_DIR}/bcos-rpc)
+include_directories(${CMAKE_SOURCE_DIR}/fisco-bcos-pro)
 include_directories(${CMAKE_BINARY_DIR})
 
 add_library(${PROTOCOL_INIT_LIB} ProtocolInitializer.cpp)
@@ -43,7 +43,7 @@ add_library(${TXPOOL_INIT_LIB} TxPoolInitializer.cpp)
 # target_compile_options(${TXPOOL_INIT_LIB} PRIVATE -Wno-error -Wno-unused-parameter -Wno-variadic-macros -Wno-return-type -Wno-pedantic)
 target_link_libraries(${TXPOOL_INIT_LIB} PUBLIC ${PROTOCOL_INIT_LIB} txpool)
 
-add_library(${INIT_LIB} ${SRC_LIST} ${HEADERS})
+add_library(${INIT_LIB} ${SRC_LIST})
 target_compile_options(${INIT_LIB} PRIVATE -Wno-error -Wno-unused-parameter -Wno-variadic-macros -Wno-return-type -Wno-pedantic)
 target_link_libraries(${INIT_LIB} PUBLIC ${PROTOCOL_INIT_LIB}
 ${FRONTSERVICE_INIT_LIB} ${PBFT_INIT_LIB} ${TXPOOL_INIT_LIB} storage ledger scheduler executor)
