@@ -249,8 +249,8 @@ void AMOPClient::sendMessageToClient(std::string const& _topic,
     std::function<void(Error::Ptr&&, bytesPointer)> _callback)
 {
     _selectSession->asyncSendMessage(_msg, Options(30000),
-        [_msg, _topic, _callback](bcos::Error::Ptr _error, std::shared_ptr<WsMessage> _responseMsg,
-            std::shared_ptr<WsSession> _session) {
+        [_msg, _topic, _callback](bcos::boostssl::utilities::Error::Ptr _error,
+            std::shared_ptr<WsMessage> _responseMsg, std::shared_ptr<WsSession> _session) {
             auto seq = std::string(_msg->seq()->begin(), _msg->seq()->end());
             if (_error && _error->errorCode() != bcos::protocol::CommonError::SUCCESS)
             {
@@ -273,7 +273,16 @@ void AMOPClient::sendMessageToClient(std::string const& _topic,
                 _responseMsg->encode(*buffer);
             }
 
-            _callback(std::move(_error), buffer);
+            if (_error)
+            {
+                _callback(
+                    std::make_shared<bcos::Error>(_error->errorCode(), _error->errorMessage()),
+                    std::move(buffer));
+            }
+            else
+            {
+                _callback(nullptr, std::move(buffer));
+            }
         });
 }
 
