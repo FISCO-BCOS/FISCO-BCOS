@@ -161,6 +161,8 @@ public:
             auto rpcClient = std::make_shared<bcostars::RpcServiceClient>(servicePrx);
             UpgradeGuard ul(l);
             m_clientInfo[_clientID] = rpcClient;
+            TOPIC_LOG(INFO) << LOG_DESC("createAndGetServiceByClient")
+                            << LOG_KV("clientID", _clientID);
             return rpcClient;
         }
         catch (std::exception const& e)
