@@ -25,7 +25,7 @@ namespace bcos
 {
 namespace rpc
 {
-class GroupManager
+class GroupManager : public std::enable_shared_from_this<GroupManager>
 {
 public:
     using Ptr = std::shared_ptr<GroupManager>;
@@ -143,6 +143,12 @@ public:
         m_groupInfoNotifier = _callback;
     }
 
+    void registerBlockNumberNotifier(
+        std::function<void(std::string const&, std::string const&, bcos::protocol::BlockNumber)>
+            _blockNumberNotifier)
+    {
+        m_blockNumberNotifier = _blockNumberNotifier;
+    }
     virtual bcos::protocol::BlockNumber getBlockNumberByGroup(const std::string& _groupID);
 
 protected:
@@ -164,6 +170,9 @@ protected:
         std::map<std::string, std::set<std::string>> const& _unreachableNodes);
     virtual std::map<std::string, std::set<std::string>> checkNodeStatus();
 
+    virtual void initNodeInfo(
+        std::string const& _groupID, std::string const& _nodeName, NodeService::Ptr _nodeService);
+
 protected:
     std::string m_chainID;
     NodeServiceFactory::Ptr m_nodeServiceFactory;
@@ -182,6 +191,8 @@ protected:
     std::shared_ptr<Timer> m_groupStatusUpdater;
     std::function<void(bcos::group::GroupInfo::Ptr)> m_groupInfoNotifier;
 
+    std::function<void(std::string const&, std::string const&, bcos::protocol::BlockNumber)>
+        m_blockNumberNotifier;
     uint64_t c_tarsAdminRefreshInitTime = 120 * 1000;
     uint64_t m_startTime = 0;
 };

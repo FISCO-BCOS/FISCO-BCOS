@@ -59,6 +59,7 @@ void GroupManager::updateNodeServiceWithoutLock(
     {
         return;
     }
+    initNodeInfo(_groupID, _nodeInfo->nodeName(), nodeService);
     m_nodeServiceList[_groupID][nodeAppName] = nodeService;
     auto groupInfo = m_groupInfos[_groupID];
     groupInfo->appendNodeInfo(_nodeInfo);
@@ -254,4 +255,45 @@ void GroupManager::removeGroupBlockInfo(
             m_nodesWithLatestBlockNumber.erase(group);
         }
     }
+}
+
+void GroupManager::initNodeInfo(
+    std::string const& _groupID, std::string const& _nodeName, NodeService::Ptr _nodeService)
+{
+    GROUP_LOG(INFO) << LOG_DESC("initNodeInfo") << LOG_KV("group", _groupID)
+                    << LOG_KV("nodeName", _nodeName);
+    auto ledger = _nodeService->ledger();
+    auto self = std::weak_ptr<GroupManager>(shared_from_this());
+    ledger->asyncGetBlockNumber(
+        [self, _groupID, _nodeName](Error::Ptr _error, BlockNumber _blockNumber) {
+            if (_error)
+            {
+                GROUP_LOG(WARNING)
+                    << LOG_DESC("initNodeInfo error") << LOG_KV("code", _error->errorCode())
+                    << LOG_KV("msg", _error->errorMessage()) << LOG_KV("groupID", _groupID)
+                    << LOG_KV("nodeName", _nodeName);
+                return;
+            }
+            try
+            {
+                auto groupMgr = self.lock();
+                if (!groupMgr)
+                {
+                    return;
+                }
+                groupMgr->updateGroupBlockInfo(_groupID, _nodeName, _blockNumber);
+                if (groupMgr->m_blockNumberNotifier)
+                {
+                    groupMgr->m_blockNumberNotifier(_groupID, _nodeName, _blockNumber);
+                }
+                GROUP_LOG(INFO) << LOG_DESC("initNodeInfo success") << LOG_KV("group", _groupID)
+                                << LOG_KV("nodeName", _nodeName) << LOG_KV("number", _blockNumber);
+            }
+            catch (std::exception const& e)
+            {
+                GROUP_LOG(WARNING) << LOG_DESC("initNodeInfo exception")
+                                   << LOG_KV("group", _groupID) << LOG_KV("nodeName", _nodeName)
+                                   << LOG_KV("error", boost::diagnostic_information(e));
+            }
+        });
 }
