@@ -62,13 +62,3 @@ if (TESTS)
     set(CTEST_OUTPUT_ON_FAILURE TRUE)
     add_subdirectory(test)
 endif()
-
-# for doxygen
-include(BuildDocs)
-buildDoc(bcos-pbft-doc)
-
-# for code coverage
-if (COVERAGE)
-    include(Coverage)
-    config_coverage("pbft-cov" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_CURRENT_SOURCE_DIR}/test/bcos-test*'")
-endif ()
