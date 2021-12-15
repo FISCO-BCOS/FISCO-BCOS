@@ -39,7 +39,7 @@ def parse_command():
     help_info = "Download binary, eg: python3 build_chain.py download_binary -t cdn"
     binary_parser = sub_parsers.add_parser(description=utilities.format_info(help_info),
                                            name=subparser_name, help="download binary", formatter_class=RawTextHelpFormatter)
-    help_info = "[Optional] Specify the source of the download, support %s now, default type is git" % (
+    help_info = "[Optional] Specify the source of the download, support %s now, default type is cdn" % (
         ','.join(CommandInfo.download_type))
     binary_parser.add_argument(
         "-t", '--type', help=help_info, default="cdn", required=False)
