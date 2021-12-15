@@ -51,11 +51,8 @@ public:
 
     void decode(bytesConstRef _data) override;
     void encode(bytes& _encodeData) const override;
-    bcos::crypto::HashType hash() const override
-    {
-        encodeHashFields();
-        return m_cryptoSuite->hash(m_blockHeader->hashfieldsdata());
-    }
+    bytesConstRef encode(bool _onlyHashFieldsData = false) const;
+    virtual bcos::crypto::HashType hash() const override;
     void clear() override;
 
     // the version of the blockHeader
@@ -212,8 +209,8 @@ private:
 
     SignatureList m_signatureList;
     WeightList m_consensusWeights;
-    bcos::SharedMutex x_hash;
-    bcos::crypto::HashType m_hash;
+    mutable bcos::SharedMutex x_hash;
+    mutable bcos::crypto::HashType m_hash;
 };
 }  // namespace protocol
 }  // namespace bcos
