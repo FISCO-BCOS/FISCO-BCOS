@@ -20,6 +20,7 @@
  */
 #include "PBBlockHeader.h"
 #include "../../libcodec/scale/Scale.h"
+#include "../../libutilities/Common.h"
 #include "../Common.h"
 #include <gsl/span>
 
@@ -48,6 +49,34 @@ void PBBlockHeader::decode(bytesConstRef _data)
         sig.signature = bytes(signatureData.begin(), signatureData.end());
         m_signatureList.emplace_back(sig);
     }
+}
+
+bytesConstRef PBBlockHeader::encode(bool _onlyHashFieldsData) const
+{
+    if (_onlyHashFieldsData)
+    {
+        encodeHashFields();
+        return bytesConstRef((byte const*)m_blockHeader->hashfieldsdata().data(),
+            m_blockHeader->hashfieldsdata().size());
+    }
+    if (m_dataCache->size() == 0)
+    {
+        encode(*m_dataCache);
+    }
+    return bytesConstRef((byte const*)m_dataCache->data(), m_dataCache->size());
+}
+
+bcos::crypto::HashType PBBlockHeader::hash() const
+{
+    bcos::UpgradableGuard l(x_hash);
+    if (m_hash != bcos::crypto::HashType())
+    {
+        return m_hash;
+    }
+    bcos::UpgradeGuard ul(l);
+    auto hashFieldsData = encode(true);
+    m_hash = m_cryptoSuite->hash(hashFieldsData);
+    return m_hash;
 }
 
 void PBBlockHeader::encodeHashFields() const
