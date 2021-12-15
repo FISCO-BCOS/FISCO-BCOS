@@ -180,6 +180,11 @@ public:
         return m_executingProposals;
     }
 
+    bool proposalCommitted(bcos::protocol::BlockNumber _index)
+    {
+        return m_committedProposalList.count(_index);
+    }
+
 protected:
     virtual void loadAndVerifyProposal(bcos::crypto::NodeIDPtr _fromNode,
         PBFTProposalInterface::Ptr _proposal, size_t _retryTime = 0);

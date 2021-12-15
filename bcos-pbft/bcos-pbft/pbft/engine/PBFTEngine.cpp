@@ -580,7 +580,8 @@ CheckResult PBFTEngine::checkPBFTMsgState(PBFTMessageInterface::Ptr _pbftReq) co
     if (_pbftReq->index() < m_config->lowWaterMark() ||
         _pbftReq->index() < m_config->expectedCheckPoint() ||
         _pbftReq->index() >= m_config->highWaterMark() ||
-        _pbftReq->index() <= m_config->syncingHighestNumber())
+        _pbftReq->index() <= m_config->syncingHighestNumber() ||
+        m_cacheProcessor->proposalCommitted(_pbftReq->index()))
     {
         PBFT_LOG(DEBUG) << LOG_DESC("checkPBFTMsgState: invalid pbftMsg for invalid index")
                         << LOG_KV("highWaterMark", m_config->highWaterMark())
