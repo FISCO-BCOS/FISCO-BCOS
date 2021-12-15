@@ -425,16 +425,19 @@ void TopicManager::checkClientConnection()
     std::vector<std::string> clientsToRemove;
     {
         std::unique_lock lock(x_clientInfo);
-        vector<tars::EndpointInfo> activeEndPoints;
-        vector<tars::EndpointInfo> nactiveEndPoints;
         for (auto it = m_clientInfo.begin(); it != m_clientInfo.end();)
         {
-            auto rpcClient = std::dynamic_pointer_cast<bcostars::RpcServiceClient>(it->second);
-            rpcClient->prx()->tars_endpointsAll(activeEndPoints, nactiveEndPoints);
-            if (activeEndPoints.size() > 0)
+            try
             {
+                auto rpcClient = std::dynamic_pointer_cast<bcostars::RpcServiceClient>(it->second);
+                rpcClient->prx()->tars_ping();
                 it++;
                 continue;
+            }
+            catch (std::exception const& e)
+            {
+                TOPIC_LOG(INFO) << LOG_DESC("checkClientConnection exception")
+                                << LOG_KV("error", boost::diagnostic_information(e));
             }
             {
                 TOPIC_LOG(INFO) << LOG_DESC("checkClientConnection: remove disconnected client")

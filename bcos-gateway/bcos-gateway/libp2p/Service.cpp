@@ -523,13 +523,11 @@ void Service::asyncSendMessageByNodeID(
         }
         else
         {
-            // TODO: uncomment here(Must check all related interface handle the nullptr)
-            /*
-            if(callback)
+            if (callback)
             {
                 NetworkException e(-1, "send message failed for no network established");
                 callback(e, nullptr, nullptr);
-            }*/
+            }
             SERVICE_LOG(WARNING) << "Node inactived" << LOG_KV("nodeid", nodeID);
         }
     }

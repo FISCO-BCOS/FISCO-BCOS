@@ -50,6 +50,19 @@ public:
     {
         m_jsonRpcImpl->groupManager()->registerGroupInfoNotifier(
             [this](bcos::group::GroupInfo::Ptr _groupInfo) { notifyGroupInfo(_groupInfo); });
+
+        m_jsonRpcImpl->groupManager()->registerBlockNumberNotifier(
+            [this](std::string const& _groupID, std::string const& _nodeName,
+                bcos::protocol::BlockNumber _blockNumber) {
+                asyncNotifyBlockNumber(_groupID, _nodeName, _blockNumber, [](Error::Ptr _error) {
+                    if (_error)
+                    {
+                        BCOS_LOG(ERROR) << LOG_DESC("asyncNotifyBlockNumber error")
+                                        << LOG_KV("code", _error->errorCode())
+                                        << LOG_KV("msg", _error->errorMessage());
+                    }
+                });
+            });
     }
 
     virtual ~Rpc() { stop(); }

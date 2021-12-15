@@ -49,6 +49,3 @@ deps/**
 
 # macOS
 .DS_Store
-
-# others
-.clang-format
