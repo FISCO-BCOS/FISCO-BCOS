@@ -64,15 +64,15 @@ jobs:
       - uses: actions/upload-artifact@v2
         with:
           name: BcosRpcService-MacOS.zip
-          path: BcosRpcService.tgz
+          path: fisco-bcos-pro/BcosRpcService.tgz
       - uses: actions/upload-artifact@v2
         with:
           name: BcosGatewayService-MacOS.zip
-          path: BcosGatewayService.tgz
+          path: fisco-bcos-pro/BcosGatewayService.tgz
       - uses: actions/upload-artifact@v2
         with:
           name: BcosNodeService-MacOS.zip
-          path: BcosNodeService.tgz
+          path: fisco-bcos-pro/BcosNodeService.tgz
   build_with_gcc:
     name: build_with_gcc
     runs-on: ${{ matrix.os }}
@@ -194,12 +194,12 @@ jobs:
       - uses: actions/upload-artifact@v2
         with:
           name: BcosRpcService.zip
-          path: BcosRpcService.tgz
+          path: fisco-bcos-pro/BcosRpcService.tgz
       - uses: actions/upload-artifact@v2
         with:
           name: BcosGatewayService.zip
-          path: BcosGatewayService.tgz
+          path: fisco-bcos-pro/BcosGatewayService.tgz
       - uses: actions/upload-artifact@v2
         with:
           name: BcosNodeService.zip
-          path: BcosNodeService.tgz
+          path: fisco-bcos-pro/BcosNodeService.tgz
