@@ -30,7 +30,6 @@ include_directories(${CMAKE_SOURCE_DIR}/bcos-framework)
 include_directories(${CMAKE_BINARY_DIR}/bcos-framework)
 
 add_library(txpool ${SRCS})
-set_target_properties(txpool PROPERTIES UNITY_BUILD ON)
 target_compile_options(txpool PRIVATE -Wno-error -Wno-unused-variable)
 target_link_libraries(txpool PUBLIC framework)
 

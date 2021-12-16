@@ -26,7 +26,6 @@ include_directories(${CMAKE_SOURCE_DIR}/bcos-framework)
 include_directories(${CMAKE_BINARY_DIR}/bcos-framework)
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
-set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD ON)
 target_include_directories(${TEST_BINARY_NAME} PRIVATE . ../src ${CMAKE_SOURCE_DIR})
 
 find_package(Boost CONFIG REQUIRED unit_test_framework)

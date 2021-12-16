@@ -8,7 +8,6 @@ set(TEST_BINARY_NAME bcos-dispatcher-test)
 include_directories(${CMAKE_SOURCE_DIR}/bcos-scheduler)
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
-set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD ON)
 target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR}/bcos-scheduler/src)
 target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-error -Wno-unused-variable)
 
