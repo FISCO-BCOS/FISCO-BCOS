@@ -33,7 +33,7 @@
 namespace bcos
 {
 template <class Binary, class Out = std::string>
-Out toHex(const Binary& binary, const std::string_view& prefix = std::string_view())
+Out toHex(const Binary& binary, std::string_view prefix = std::string_view())
 {
     Out out;
 
@@ -54,7 +54,7 @@ Out toHex(const Binary& binary, const std::string_view& prefix = std::string_vie
 }
 
 template <class Hex, class Out = bytes>
-Out fromHex(const Hex& hex, const std::string_view& prefix = std::string_view())
+Out fromHex(const Hex& hex, std::string_view prefix = std::string_view())
 {
     if (hex.empty())
     {
