@@ -30,7 +30,7 @@ macro(default_option O DEF)
 endmacro()
 
 # common settings
-set(MARCH_TYPE "-march=x86-64 -mtune=generic -fvisibility=hidden -fvisibility-inlines-hidden")
+set(MARCH_TYPE "-march=native -mtune=generic -fvisibility=hidden -fvisibility-inlines-hidden")
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
 if("${CMAKE_SIZEOF_VOID_P}" STREQUAL "4")
     message(FATAL "The ${PROJECT_NAME} does not support compiling on 32-bit systems")
@@ -50,9 +50,9 @@ macro(configure_project)
     default_option(BUILD_STATIC OFF)
 
     #ARCH TYPE
-    default_option(ARCH_NATIVE OFF)
+    default_option(NATIVE OFF)
 
-    if(ARCH_NATIVE)
+    if(NATIVE)
         set(MARCH_TYPE "-march=native -mtune=native -fvisibility=hidden -fvisibility-inlines-hidden")
     endif()
 
@@ -86,7 +86,7 @@ macro(print_config NAME)
     message("-- BUILD_STATIC       Build static                 ${BUILD_STATIC}")
     message("-- COVERAGE           Build code coverage          ${COVERAGE}")
     message("-- TESTS              Build tests                  ${TESTS}")
-    message("-- ARCH_NATIVE        Enable native code           ${ARCH_NATIVE}")
+    message("-- NATIVE             Build native binary          ${NATIVE}")
     message("-- DEBUG                                           ${DEBUG}")
     message("------------------------------------------------------------------------")
     message("")
