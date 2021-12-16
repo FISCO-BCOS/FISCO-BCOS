@@ -42,53 +42,6 @@ static const std::string USER_TABLE_PREFIX = "/tables/";
 static const std::string USER_APPS_PREFIX = "/apps/";
 static const std::string USER_SYS_PREFIX = "/sys/";
 
-enum class Comparator : int
-{
-    EQ,
-    NE,
-    GT,
-    GE,
-    LT,
-    LE,
-};
-struct CompareTriple
-{
-    using Ptr = std::shared_ptr<Comparator>;
-    CompareTriple(std::string _left, std::string _right, Comparator _cmp)
-      : left(std::move(_left)), right(std::move(_right)), cmp(_cmp){};
-
-    std::string left;
-    std::string right;
-    Comparator cmp;
-};
-struct Condition : public std::enable_shared_from_this<Condition>
-{
-    using Ptr = std::shared_ptr<Condition>;
-    Condition() = default;
-    void EQ(const std::string& key, const std::string& value);
-    void NE(const std::string& key, const std::string& value);
-
-    void GT(const std::string& key, const std::string& value);
-    void GE(const std::string& key, const std::string& value);
-
-    void LT(const std::string& key, const std::string& value);
-    void LE(const std::string& key, const std::string& value);
-
-    void limit(size_t count);
-    void limit(size_t start, size_t end);
-
-    bool filter(std::optional<storage::Entry> entry);
-    std::vector<CompareTriple> m_conditions;
-    std::pair<size_t, size_t> m_limit;
-};
-
-void addCondition(const std::string& key, const std::string& value,
-    std::vector<CompareTriple>& _cond, Comparator _cmp);
-
-void transferKeyCond(
-    Comparator& _cmp, const std::string& _value, std::shared_ptr<storage::Condition>& _keyCond);
-
-// bool transferEntry(const EntryTuple& _entryTuple, storage::Entry& _storageEntry);
 
 inline void getErrorCodeOut(bytes& out, int const& result, const PrecompiledCodec& _codec)
 {

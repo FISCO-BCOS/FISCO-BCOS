@@ -17,6 +17,8 @@
 # Function: Common cmake file for setting compilation environment variables
 # ------------------------------------------------------------------------------
 
+add_definitions(-Wno-unused-value -Wunused-parameter)
+
 if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang"))
     find_program(CCACHE_PROGRAM ccache)
     if(CCACHE_PROGRAM)

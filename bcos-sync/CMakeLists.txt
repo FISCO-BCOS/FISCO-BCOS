@@ -55,6 +55,7 @@ include_directories(${CMAKE_SOURCE_DIR}/)
 file(GLOB_RECURSE SRCS bcos-sync/*.cpp)
 
 add_library(sync ${SRCS} ${SYNC_SRCS})
+set_target_properties(sync PROPERTIES UNITY_BUILD ON)
 target_compile_options(sync PRIVATE -Wno-error -Wno-unused-variable)
 target_link_libraries(sync PUBLIC framework)
 

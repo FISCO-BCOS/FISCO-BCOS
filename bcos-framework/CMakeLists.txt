@@ -74,8 +74,6 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 file(GLOB_RECURSE SRCS libcodec/*.cpp libexecutor/*.cpp libprotocol/*.cpp libsealer/*.cpp
 libstorage/*.cpp libsync/*.cpp libtool/*.cpp libutilities/*.cpp)
 
-message("all sources: ${SRCS}")
-
 find_package(TBB CONFIG REQUIRED)
 find_package(Boost CONFIG REQUIRED log chrono system filesystem iostreams thread)
 find_package(Protobuf CONFIG REQUIRED)

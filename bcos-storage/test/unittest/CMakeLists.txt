@@ -30,6 +30,7 @@ endif()
 # config_test_cases("" "${SOURCES}" bin/${TEST_BINARY_NAME} "${EXCLUDE_SUITES}")
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
+set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD ON)
 target_include_directories(${TEST_BINARY_NAME} PRIVATE . ../../bcos-storage)
 
 find_package(Boost CONFIG QUIET REQUIRED unit_test_framework)
