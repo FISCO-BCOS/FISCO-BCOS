@@ -33,11 +33,15 @@ class TxPool : public TxPoolInterface, public std::enable_shared_from_this<TxPoo
 public:
     using Ptr = std::shared_ptr<TxPool>;
     TxPool(TxPoolConfig::Ptr _config, TxPoolStorageInterface::Ptr _txpoolStorage,
-        bcos::sync::TransactionSyncInterface::Ptr _transactionSync)
+        bcos::sync::TransactionSyncInterface::Ptr _transactionSync, size_t _verifierWorkerNum = 1)
       : m_config(_config), m_txpoolStorage(_txpoolStorage), m_transactionSync(_transactionSync)
     {
-        m_worker = std::make_shared<ThreadPool>("submitter", _config->verifyWorkerNum());
+        // threadpool for submit txs
+        m_worker = std::make_shared<ThreadPool>("submitter", _verifierWorkerNum);
+        // threadpool for verify block
         m_verifier = std::make_shared<ThreadPool>("verifier", 4);
+        TXPOOL_LOG(INFO) << LOG_DESC("create TxPool")
+                         << LOG_KV("submitterWorkerNum", _verifierWorkerNum);
     }
 
     ~TxPool() override { stop(); }

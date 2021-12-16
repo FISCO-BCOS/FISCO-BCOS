@@ -39,7 +39,7 @@ public:
         std::string const& _chainId, int64_t _blockLimit);
 
     virtual ~TxPoolFactory() {}
-    TxPool::Ptr createTxPool();
+    TxPool::Ptr createTxPool(size_t _notifyWorkerNum = 2, size_t _verifierWorkerNum = 1);
 
 private:
     bcos::crypto::NodeIDPtr m_nodeId;
