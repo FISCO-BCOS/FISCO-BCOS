@@ -25,7 +25,7 @@
 #pragma once
 #include "boost/filesystem.hpp"
 #include <bcos-framework/interfaces/storage/StorageInterface.h>
-#include <bcos-storage/RocksDBStorage.h>
+#include <bcos-storage/src/RocksDBStorage.h>
 #include <rocksdb/write_batch.h>
 
 namespace bcos::initializer
