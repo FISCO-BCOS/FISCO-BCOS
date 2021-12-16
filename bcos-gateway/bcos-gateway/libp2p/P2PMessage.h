@@ -100,7 +100,8 @@ public:
 
     /// length(4) + version(2) + packetType(2) + seq(4) + ext(2)
     const static size_t MESSAGE_HEADER_LENGTH = 14;
-
+    const static size_t MAX_MESSAGE_LENGTH =
+        100 * 1024 * 1024;  ///< The maximum length of data is 100M.
 public:
     P2PMessage()
     {

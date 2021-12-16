@@ -28,11 +28,13 @@ using namespace bcos::txpool;
 using namespace bcos::crypto;
 using namespace bcos::protocol;
 
-MemoryStorage::MemoryStorage(TxPoolConfig::Ptr _config) : m_config(_config)
+MemoryStorage::MemoryStorage(TxPoolConfig::Ptr _config, size_t _notifyWorkerNum) : m_config(_config)
 {
-    m_notifier = std::make_shared<ThreadPool>("txNotifier", m_config->notifierWorkerNum());
+    m_notifier = std::make_shared<ThreadPool>("txNotifier", _notifyWorkerNum);
     m_worker = std::make_shared<ThreadPool>("txpoolWorker", 1);
     m_blockNumberUpdatedTime = utcTime();
+    TXPOOL_LOG(INFO) << LOG_DESC("init MemoryStorage of txpool")
+                     << LOG_KV("txNotifierWorkerNum", _notifyWorkerNum);
 }
 
 void MemoryStorage::stop()

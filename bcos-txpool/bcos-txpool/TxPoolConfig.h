@@ -49,19 +49,6 @@ public:
     {}
 
     virtual ~TxPoolConfig() {}
-
-    virtual void setNotifierWorkerNum(size_t _notifierWorkerNum)
-    {
-        m_notifierWorkerNum = _notifierWorkerNum;
-    }
-    virtual size_t notifierWorkerNum() const { return m_notifierWorkerNum; }
-
-    virtual void setVerifyWorkerNum(size_t _verifyWorkerNum)
-    {
-        m_verifyWorkerNum = _verifyWorkerNum;
-    }
-    virtual size_t verifyWorkerNum() const { return m_verifyWorkerNum; }
-
     virtual void setPoolLimit(size_t _poolLimit) { m_poolLimit = _poolLimit; }
     virtual size_t poolLimit() const { return m_poolLimit; }
 
@@ -93,8 +80,6 @@ private:
     std::shared_ptr<bcos::ledger::LedgerInterface> m_ledger;
     NonceCheckerInterface::Ptr m_txPoolNonceChecker;
     size_t m_poolLimit = 15000;
-    size_t m_notifierWorkerNum = 1;
-    size_t m_verifyWorkerNum = 1;
     int64_t m_blockLimit = 1000;
 };
 }  // namespace txpool

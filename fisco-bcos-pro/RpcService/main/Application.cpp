@@ -50,7 +50,13 @@ public:
         BCOS_LOG(INFO) << LOG_DESC("begin init rpc") << LOG_KV("rpcID", clientID);
         param.rpcInitializer->setClientID(clientID);
     }
-    void destroyApp() override {}
+    void destroyApp() override
+    {
+        // terminate the network threads
+        Application::terminate();
+        // stop the nodeService
+        m_rpcInitializer->stop();
+    }
 
 protected:
     virtual void initService(std::string const& _configDir)
