@@ -46,7 +46,7 @@ class MemoryStorage : public TxPoolStorageInterface,
                       public std::enable_shared_from_this<MemoryStorage>
 {
 public:
-    explicit MemoryStorage(TxPoolConfig::Ptr _config);
+    explicit MemoryStorage(TxPoolConfig::Ptr _config, size_t _notifyWorkerNum = 2);
     ~MemoryStorage() override {}
 
     bcos::protocol::TransactionStatus submitTransaction(bytesPointer _txData,
