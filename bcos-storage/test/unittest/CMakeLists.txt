@@ -30,13 +30,12 @@ endif()
 # config_test_cases("" "${SOURCES}" bin/${TEST_BINARY_NAME} "${EXCLUDE_SUITES}")
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
-target_include_directories(${TEST_BINARY_NAME} PRIVATE . ../../bcos-storage)
+set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD ON)
+target_include_directories(${TEST_BINARY_NAME} PRIVATE . ../../src)
 
 find_package(Boost CONFIG QUIET REQUIRED unit_test_framework)
 
-target_link_libraries(${TEST_BINARY_NAME} Boost::unit_test_framework bcos-framework::utilities
-                        bcos-framework::protocol bcos-framework::protocol-pb bcos-framework::codec
-                        bcos-framework::storage ${STORAGE_TARGET})
+target_link_libraries(${TEST_BINARY_NAME} Boost::unit_test_framework framework ${STORAGE_TARGET})
 add_test(NAME test-storage WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
 
 # for code coverage

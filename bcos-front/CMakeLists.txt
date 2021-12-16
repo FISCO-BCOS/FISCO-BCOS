@@ -25,6 +25,7 @@ include_directories(${CMAKE_SOURCE_DIR})
 include_directories(${CMAKE_SOURCE_DIR}/bcos-front)
 
 add_library(front ${SRCS})
+set_target_properties(front PROPERTIES UNITY_BUILD ON)
 target_link_libraries(front PUBLIC framework)
 
 if (TESTS)

@@ -18,6 +18,7 @@
  * @date 2021-05-30
  */
 
+#if 0
 #include "TableFactoryPrecompiled.h"
 #include "Common.h"
 #include "PrecompiledResult.h"
@@ -28,7 +29,6 @@
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/throw_exception.hpp>
-
 
 using namespace bcos;
 using namespace bcos::executor;
@@ -468,3 +468,4 @@ void TableFactoryPrecompiled::desc(
     gasPricer->appendOperation(InterfaceOpcode::OpenTable);
     callResult->setExecResult(codec->encode(keyField, valueFields));
 }
+#endif
