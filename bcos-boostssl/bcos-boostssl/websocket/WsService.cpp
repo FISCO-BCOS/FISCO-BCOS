@@ -75,8 +75,8 @@ void WsService::waitForConnectionEstablish()
         {
             stop();
             WEBSOCKET_SERVICE(WARNING) << LOG_BADGE("waitForConnectionEstablish")
-                                     << LOG_DESC("the connection to the server timed out")
-                                     << LOG_KV("timeout", m_waitConnectFinishTimeout);
+                                       << LOG_DESC("the connection to the server timed out")
+                                       << LOG_KV("timeout", m_waitConnectFinishTimeout);
 
             BOOST_THROW_EXCEPTION(std::runtime_error("The connection to the server timed out"));
             return;
@@ -151,6 +151,16 @@ void WsService::stop()
     if (m_heartbeat)
     {
         m_heartbeat->cancel();
+    }
+    // stop m_iocThread
+    if (m_iocThread->get_id() != std::this_thread::get_id())
+    {
+        m_iocThread->join();
+        m_iocThread.reset();
+    }
+    else
+    {
+        m_iocThread->detach();
     }
 
     WEBSOCKET_SERVICE(INFO) << LOG_BADGE("stop") << LOG_DESC("stop websocket service successfully");
@@ -469,12 +479,11 @@ void WsService::onRecvMessage(std::shared_ptr<WsMessage> _msg, std::shared_ptr<W
     }
     else
     {
-        WEBSOCKET_SERVICE(WARNING) << LOG_BADGE("onRecvMessage")
-                                 << LOG_DESC("unrecognized message type")
-                                 << LOG_KV("type", _msg->type())
-                                 << LOG_KV("endpoint", _session->endPoint()) << LOG_KV("seq", seq)
-                                 << LOG_KV("data size", _msg->data()->size())
-                                 << LOG_KV("use_count", _session.use_count());
+        WEBSOCKET_SERVICE(WARNING)
+            << LOG_BADGE("onRecvMessage") << LOG_DESC("unrecognized message type")
+            << LOG_KV("type", _msg->type()) << LOG_KV("endpoint", _session->endPoint())
+            << LOG_KV("seq", seq) << LOG_KV("data size", _msg->data()->size())
+            << LOG_KV("use_count", _session.use_count());
     }
 }
 
