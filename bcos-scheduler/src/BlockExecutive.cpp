@@ -379,6 +379,7 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
     if (requests.empty())
     {
         callback(nullptr);
+        return;
     }
 
     auto totalCount = std::make_shared<std::atomic_size_t>(requests.size());
