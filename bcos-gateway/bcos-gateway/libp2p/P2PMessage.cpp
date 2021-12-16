@@ -240,7 +240,12 @@ ssize_t P2PMessage::decode(bytesConstRef _buffer)
     {
         return MessageDecodeStatus::MESSAGE_INCOMPLETE;
     }
-
+    if (m_length > P2PMessage::MAX_MESSAGE_LENGTH)
+    {
+        P2PMSG_LOG(WARNING) << LOG_DESC("Illegal p2p message packet") << LOG_KV("length", m_length)
+                            << LOG_KV("maxLen", P2PMessage::MAX_MESSAGE_LENGTH);
+        return MessageDecodeStatus::MESSAGE_ERROR;
+    }
     if (hasOptions())
     {
         // encode options
