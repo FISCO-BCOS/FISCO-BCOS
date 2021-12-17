@@ -22,6 +22,7 @@
 
 [storage]
     data_path=data
+    enable_cache=true
 
 [txpool]
     limit=15000

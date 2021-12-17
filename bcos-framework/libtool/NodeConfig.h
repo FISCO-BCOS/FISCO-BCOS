@@ -166,6 +166,8 @@ public:
     const std::string& enSmNodeKey() const { return m_enSmNodeKey; }
     void setEnSmNodeKey(const std::string& _enSmNodeKey) { m_enSmNodeKey = _enSmNodeKey; }
 
+    bool enableLRUCacheStorage() const { return m_enableLRUCacheStorage; }
+
 protected:
     virtual void loadChainConfig(boost::property_tree::ptree const& _pt);
     virtual void loadRpcConfig(boost::property_tree::ptree const& _pt);
@@ -269,6 +271,7 @@ private:
     std::string m_smNodeKey;
     std::string m_enSmNodeCert;
     std::string m_enSmNodeKey;
+    bool m_enableLRUCacheStorage = true;
 };
 }  // namespace tool
 }  // namespace bcos
