@@ -25,12 +25,13 @@
  */
 
 #include "Initializer.h"
+#include "AuthInitializer.h"
 #include "ExecutorInitializer.h"
 #include "LedgerInitializer.h"
 #include "ParallelExecutor.h"
 #include "SchedulerInitializer.h"
 #include "StorageInitializer.h"
-#include "AuthInitializer.h"
+#include "include/bcos-executor/LRUStorage.h"
 #include "interfaces/crypto/CommonType.h"
 #include "interfaces/executor/ParallelTransactionExecutorInterface.h"
 #include "interfaces/protocol/ProtocolTypeDef.h"
@@ -39,7 +40,6 @@
 #include "libprotocol/TransactionSubmitResultFactoryImpl.h"
 #include "libprotocol/TransactionSubmitResultImpl.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include "include/bcos-executor/LRUStorage.h"
 #include <bcos-framework/libtool/NodeConfig.h>
 #include <bcos-scheduler/src/ExecutorManager.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
@@ -144,9 +144,17 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
         m_frontServiceInitializer->init(m_pbftInitializer->pbft(), m_pbftInitializer->blockSync(),
             m_txpoolInitializer->txpool());
 
-        auto cache = std::make_shared<bcos::executor::LRUStorage>(storage);
-        cache->start();
-
+        std::shared_ptr<bcos::executor::LRUStorage> cache = nullptr;
+        if (m_nodeConfig->enableLRUCacheStorage())
+        {
+            cache = std::make_shared<bcos::executor::LRUStorage>(storage);
+            cache->start();
+            BCOS_LOG(INFO) << LOG_DESC("initNode: enableLRUCacheStorage");
+        }
+        else
+        {
+            BCOS_LOG(INFO) << LOG_DESC("initNode: disableLRUCacheStorage");
+        }
         auto executor = ExecutorInitializer::build(m_txpoolInitializer->txpool(), cache, storage,
             executionMessageFactory, m_protocolInitializer->cryptoSuite()->hashImpl(),
             m_nodeConfig->isWasm(), m_nodeConfig->isAuthCheck());

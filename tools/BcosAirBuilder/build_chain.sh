@@ -736,6 +736,7 @@ generate_common_ini() {
 
 [storage]
     data_path=data
+    enable_cache=true
 
 [txpool]
     limit=15000
