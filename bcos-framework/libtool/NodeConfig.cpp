@@ -348,7 +348,9 @@ void NodeConfig::loadSealerConfig(boost::property_tree::ptree const& _pt)
 void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
 {
     m_storagePath = _pt.get<std::string>("storage.data_path", "data/" + m_groupId);
-    NodeConfig_LOG(INFO) << LOG_DESC("loadStorageConfig") << LOG_KV("storagePath", m_storagePath);
+    m_enableLRUCacheStorage = _pt.get<bool>("storage.enable_cache", true);
+    NodeConfig_LOG(INFO) << LOG_DESC("loadStorageConfig") << LOG_KV("storagePath", m_storagePath)
+                         << LOG_KV("enableLRUCacheStorage", m_enableLRUCacheStorage);
 }
 
 void NodeConfig::loadConsensusConfig(boost::property_tree::ptree const& _pt)
@@ -484,7 +486,8 @@ void NodeConfig::loadExecutorConfig(boost::property_tree::ptree const& _pt)
     m_authAdminAddress = _pt.get<std::string>("executor.auth_admin_account", "");
     NodeConfig_LOG(INFO) << LOG_DESC("loadExecutorConfig") << LOG_KV("isWasm", m_isWasm);
     NodeConfig_LOG(INFO) << LOG_DESC("loadExecutorConfig") << LOG_KV("isAuthCheck", m_isAuthCheck);
-    NodeConfig_LOG(INFO) << LOG_DESC("loadExecutorConfig") << LOG_KV("authAdminAccount", m_authAdminAddress);
+    NodeConfig_LOG(INFO) << LOG_DESC("loadExecutorConfig")
+                         << LOG_KV("authAdminAccount", m_authAdminAddress);
 }
 
 // Note: make sure the consensus param checker is consistent with the precompiled param checker
