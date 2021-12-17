@@ -81,7 +81,15 @@ public:
     Callback callback() const { return m_callback; }
 
     bool work() { return m_work.load(); }
-    void setWork(bool _work) { m_work.store(_work); }
+
+    bool tryWork()
+    {
+        bool trueValue = true;
+        bool falseValue = false;
+        return m_work.compare_exchange_strong(falseValue, trueValue);
+    }
+
+    bool freeWork() { m_work.store(false); }
 
     bool isCompleted()
     {

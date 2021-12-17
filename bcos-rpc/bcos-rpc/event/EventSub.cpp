@@ -353,6 +353,7 @@ int64_t EventSub::executeEventSubTask(EventSubTask::Ptr _task, int64_t _blockNum
 
     if (_blockNumber < currentBlockNumber)
     {
+        _task->freeWork();
         // waiting for block to be sealed
         return 0;
     }
@@ -377,7 +378,6 @@ int64_t EventSub::executeEventSubTask(EventSubTask::Ptr _task, int64_t _blockNum
     blockCanProcess =
         (blockCanProcess > maxBlockProcessPerLoop ? maxBlockProcessPerLoop : blockCanProcess);
 
-    _task->setWork(true);
     class RecursiveProcess : public std::enable_shared_from_this<RecursiveProcess>
     {
     public:
@@ -385,7 +385,7 @@ int64_t EventSub::executeEventSubTask(EventSubTask::Ptr _task, int64_t _blockNum
         {
             if (_blockNumber > m_endBlockNumber)
             {  // all block has been proccessed
-                m_task->setWork(false);
+                m_task->freeWork();
                 return;
             }
 
@@ -402,7 +402,8 @@ int64_t EventSub::executeEventSubTask(EventSubTask::Ptr _task, int64_t _blockNum
                 _blockNumber, task, [task, _blockNumber, p](Error::Ptr _error) {
                     if (_error && _error->errorCode() != bcos::protocol::CommonError::SUCCESS)
                     {
-                        task->setWork(false);
+                        // error occur, wait for the next loop ???
+                        task->freeWork();
                         return;
                     }
                     // next block
@@ -444,8 +445,11 @@ int64_t EventSub::executeEventSubTask(EventSubTask::Ptr _task)
     }
 
     // task is working, waiting for done
-    if (_task->work())
+    if (!_task->tryWork())
     {
+        EVENT_SUB(DEBUG) << LOG_BADGE("executeEventSubTask")
+                         << LOG_DESC("tryWork false, the previous is still going on")
+                         << LOG_KV("id", _task->id()) << LOG_KV("group", _task->group());
         return 0;
     }
 
@@ -473,7 +477,8 @@ int64_t EventSub::executeEventSubTask(EventSubTask::Ptr _task)
                                  << LOG_KV("errorCode", _error->errorCode())
                                  << LOG_KV("errorMessage", _error->errorMessage());
 
-                // error should be occur
+                // error occur, wait for the next loop ???
+                _task->freeWork();
                 return;
             }
 
