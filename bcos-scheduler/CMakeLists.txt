@@ -9,7 +9,6 @@ find_package(Threads REQUIRED)
 
 add_library(scheduler ${SRCS})
 target_link_libraries(scheduler PUBLIC framework TBB::tbb)
-set_target_properties(scheduler PROPERTIES UNITY_BUILD ON)
 target_include_directories(scheduler PUBLIC ${CMAKE_SOURCE_DIR}/bcos-framework)
 
 if(TESTS)

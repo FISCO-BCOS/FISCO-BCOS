@@ -16,6 +16,15 @@ HunterGate(
 project(FISCO-BCOS VERSION "3.0.0")
 set(VERSION_SUFFIX "-rc1")
 
+include(Options)
+configure_project()
+
+include(CompilerSettings)
+include(BuildInfoGenerator)
+
+
+
+# import dependencies
 hunter_add_package(Boost COMPONENTS all)
 hunter_add_package(tbb)
 hunter_add_package(Protobuf)
@@ -27,10 +36,6 @@ hunter_add_package(evmc)
 hunter_add_package(intx)
 hunter_add_package(ethash)
 hunter_add_package(evmone)
-
-# import dependencies
-include(CompilerSettings)
-include(BuildInfoGenerator)
 
 include_directories(${CMAKE_SOURCE_DIR})
 

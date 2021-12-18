@@ -37,7 +37,6 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSTATICLIB")
 file(GLOB_RECURSE SRCS bcos-rpc/*.cpp)
 
 add_library(rpc ${SRCS} ${HEADERS})
-set_target_properties(rpc PROPERTIES UNITY_BUILD ON)
 target_compile_options(rpc PRIVATE -Wno-error -Wno-unused-variable)
 target_link_libraries(rpc PUBLIC framework tarscpp::tarsservant boostssl OpenSSL::SSL OpenSSL::Crypto protocol-tars jsoncpp_lib_static crypto)
 

@@ -25,7 +25,6 @@ set(TEST_BINARY_NAME test-bcos-executor)
 # config_test_cases("" "${SOURCES}" bin/${TEST_BINARY_NAME} "")
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
-set_target_properties(${TEST_BINARY_NAME} PROPERTIES UNITY_BUILD ON)
 target_include_directories(${TEST_BINARY_NAME} PRIVATE ./ ../../src ../../include ${CMAKE_BINARY_DIR}/bcos-framework)
 
 find_package(Boost CONFIG QUIET REQUIRED unit_test_framework)
