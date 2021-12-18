@@ -52,7 +52,7 @@ jobs:
         run: sudo apt install -y git curl build-essential clang cmake ccache libzstd-dev
       - name: configure
         if: runner.os == 'macOS'
-        run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DCMAKE_BUILD_TYPE=Release -DTESTS=ON -DBUILD_STATIC=ON -DHUNTER_CONFIGURATION_TYPES=Debug
+        run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON -DHUNTER_CONFIGURATION_TYPES=Release
       - name: compile
         run: make -j3 && make tar
       - name: tar fisco-bcos for MacOS
@@ -107,6 +107,8 @@ jobs:
         run: cmake . -DTESTS=ON -DHUNTER_CONFIGURATION_TYPES=Debug
       - name: compile
         run: make -j3
+      - name: test
+        run: make test
   ubuntu18_04_build_with_gcc:
     name: ubuntu18_04_build_with_gcc
     runs-on: ${{ matrix.os }}
@@ -138,7 +140,7 @@ jobs:
       - name: install Ubuntu dependencies
         run: sudo apt-get install -y git curl build-essential cmake ccache lcov libzstd-dev
       - name: configure
-        run: cmake . -DTESTS=ON -DHUNTER_CONFIGURATION_TYPES=Debug
+        run: cmake . -DTESTS=OFF -DHUNTER_CONFIGURATION_TYPES=Debug
       - name: compile
         run: make
   build_with_centos:
@@ -182,7 +184,7 @@ jobs:
       - name: configure and compile
         run: |
           source /opt/rh/devtoolset-7/enable
-          cmake3 . -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON -DTESTS=ON -DHUNTER_CONFIGURATION_TYPES=Debug
+          cmake3 . -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON -DHUNTER_CONFIGURATION_TYPES=Release
           make -j3
           make tar
       - name: tar fisco-bcos for CentOS
