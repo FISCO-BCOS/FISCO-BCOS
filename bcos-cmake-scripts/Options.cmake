@@ -50,9 +50,14 @@ macro(configure_project)
 
     #ARCH TYPE
     default_option(NATIVE OFF)
-
     if(NATIVE)
         set(MARCH_TYPE "-march=native -mtune=native -fvisibility=hidden -fvisibility-inlines-hidden")
+    endif()
+
+    #LTO
+    default_option(IPO OFF)
+    if(IPO)
+        set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
     endif()
 
     # unit tests
@@ -86,7 +91,8 @@ macro(print_config NAME)
     message("-- COVERAGE           Build code coverage          ${COVERAGE}")
     message("-- TESTS              Build tests                  ${TESTS}")
     message("-- NATIVE             Build native binary          ${NATIVE}")
-    message("-- DEBUG                                           ${DEBUG}")
+    message("-- IPO                Enable IPO optimization      ${IPO}")
+    message("-- DEBUG              Enable debug                 ${DEBUG}")
     message("------------------------------------------------------------------------")
     message("")
 endmacro()
