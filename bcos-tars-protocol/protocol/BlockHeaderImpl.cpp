@@ -140,6 +140,10 @@ void BlockHeaderImpl::setSealerList(gsl::span<const bcos::bytes> const& _sealerL
 void BlockHeaderImpl::setSignatureList(
     gsl::span<const bcos::protocol::Signature> const& _signatureList)
 {
+    // Note: must clear the old signatureList when set the new signatureList
+    // in case of the consensus module get the cached-sync-blockHeader with signatureList which will
+    // cause redundant signature lists to be stored
+    m_inner()->signatureList.clear();
     for (auto& it : _signatureList)
     {
         Signature signature;
