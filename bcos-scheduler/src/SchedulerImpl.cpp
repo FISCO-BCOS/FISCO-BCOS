@@ -33,7 +33,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
     }
 
     std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
-
+    // Note: if hit the cache, may return synced blockHeader with signatureList in some cases
     if (!m_blocks.empty())
     {
         auto requestNumber = block->blockHeaderConst()->number();
