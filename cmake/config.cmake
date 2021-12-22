@@ -22,8 +22,8 @@ hunter_config(ethash VERSION 0.7.0 URL https://${URL_BASE}/chfast/ethash/archive
 )
 
 hunter_config(evmone VERSION 8.2.0-dd2fc86d
-	URL https://${URL_BASE}/xueying4402/evmone/archive/dbd282f7ab7940625c4d8b6157105d95c08f4147.tar.gz
-	SHA1 a0f5c33d377b6782872cc2506de419be8a1154b0
+	URL https://${URL_BASE}/FISCO-BCOS/evmone/archive/53ff1c54a2ee5ebcc499586da62ac6e1bb8735cd.tar.gz
+	SHA1 e6c1a8f1acd908c770426bb5015d45b3f9138179
 	CMAKE_ARGS CMAKE_CXX_FLAGS=-std=c++17 BUILD_SHARED_LIBS=OFF
 )
 
