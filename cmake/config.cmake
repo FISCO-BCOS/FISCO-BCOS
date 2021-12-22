@@ -16,7 +16,7 @@ hunter_config(intx VERSION 0.6.0 URL https://${URL_BASE}/chfast/intx/archive/v0.
 	CMAKE_ARGS CMAKE_CXX_FLAGS=-std=c++17
 )
 
-hunter_config(ethash VERSION 0.7.0-4576af36 URL https://${URL_BASE}/chfast/ethash/archive/v0.7.0.tar.gz
+hunter_config(ethash VERSION 0.7.0 URL https://${URL_BASE}/chfast/ethash/archive/v0.7.0.tar.gz
 	SHA1 83768c203c98dff1829f038fde98a7226e1edd98
 	CMAKE_ARGS CMAKE_CXX_FLAGS=-std=c++17
 )
