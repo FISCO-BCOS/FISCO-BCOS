@@ -5,25 +5,25 @@ hunter_config(rocksdb VERSION 6.20.3
     WITH_TOOLS=OFF PORTABLE=ON FAIL_ON_WARNINGS=OFF WITH_ZSTD=ON BUILD_SHARED_LIBS=OFF
 )
 
-hunter_config(evmc VERSION 7.3.0-c7feb13f
-	URL  https://${URL_BASE}/FISCO-BCOS/evmc/archive/c7feb13f582919242da9f4f898ed4578785c9ecc.tar.gz
-	SHA1 28ab1c74dd3340efe101418fd5faf19d34c9f7a9
+hunter_config(evmc VERSION 9.0.0-2e8bc3a6
+	URL  https://${URL_BASE}/FISCO-BCOS/evmc/archive/2e8bc3a6fc9c3cdbf5440b329dcdf0753faee43c.tar.gz
+	SHA1 51104be45aa5d87363700c2cfde132a1c0691043
     CMAKE_ARGS URL_BASE=${URL_BASE}
 )
 
-hunter_config(intx VERSION 0.4.1 URL https://${URL_BASE}/chfast/intx/archive/v0.4.0.tar.gz
-    SHA1  8a2a0b0efa64899db972166a9b3568a6984c61bc
+hunter_config(intx VERSION 0.6.0 URL https://${URL_BASE}/chfast/intx/archive/v0.6.0.tar.gz
+    SHA1  507827495de07412863349bc8c2a8704c7b0e5d4
 	CMAKE_ARGS CMAKE_CXX_FLAGS=-std=c++17
 )
 
-hunter_config(ethash VERSION 0.7.0-4576af36 URL https://${URL_BASE}/chfast/ethash/archive/4576af36f8ebb9bee2d5f04be692f295c64a7211.tar.gz
-	SHA1 2001a265177c722b4cbe91c4160f3f582e0c9938
+hunter_config(ethash VERSION 0.7.0-4576af36 URL https://${URL_BASE}/chfast/ethash/archive/v0.7.0.tar.gz
+	SHA1 83768c203c98dff1829f038fde98a7226e1edd98
 	CMAKE_ARGS CMAKE_CXX_FLAGS=-std=c++17
 )
 
-hunter_config(evmone VERSION 0.4.1-b726a1e1
-	URL https://${URL_BASE}/FISCO-BCOS/evmone/archive/b726a1e1722109291ac18bc7c5fad5aac9d2e8c5.tar.gz
-	SHA1 e41fe0514a7a49a9a5e7eeb1b42cf2c3ced67f5d
+hunter_config(evmone VERSION 8.2.0-c0550900
+	URL https://${URL_BASE}/xueying4402/evmone/archive/c055090050bed65f5aea1e5aff7027a6dd25f922.tar.gz
+	SHA1 c372376a37ed3f9ac862db4e7656162e3b705fe8
 	CMAKE_ARGS CMAKE_CXX_FLAGS=-std=c++17 BUILD_SHARED_LIBS=OFF
 )
 
