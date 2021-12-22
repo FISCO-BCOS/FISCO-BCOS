@@ -274,6 +274,26 @@ void PBFTInitializer::registerHandlers()
         }
     });
 
+    m_pbft->registerFaultyDiscriminator([weakedSync](bcos::crypto::NodeIDPtr _nodeID) -> bool {
+        try
+        {
+            auto sync = weakedSync.lock();
+            if (!sync)
+            {
+                return false;
+            }
+            return sync->faultyNode(_nodeID);
+        }
+        catch (std::exception const& e)
+        {
+            INITIALIZER_LOG(WARNING)
+                << LOG_DESC("determine the node is faulty or not through the sync module exception")
+                << LOG_KV("node", _nodeID->shortHex())
+                << LOG_KV("error", boost::diagnostic_information(e));
+        }
+        return false;
+    });
+
     m_pbft->registerCommittedProposalNotifier(
         [weakedSync](bcos::protocol::BlockNumber _committedProposal,
             std::function<void(Error::Ptr)> _onRecv) {
