@@ -90,6 +90,12 @@ public:
         m_pbftEngine->pbftConfig()->registerNewBlockNotifier(_newBlockNotifier);
     }
 
+    void registerFaultyDiscriminator(
+        std::function<bool(bcos::crypto::NodeIDPtr)> _faultyDiscriminator)
+    {
+        m_pbftEngine->pbftConfig()->registerFaultyDiscriminator(_faultyDiscriminator);
+    }
+
     // handler to notify the consensusing proposal index to the sync module
     void registerCommittedProposalNotifier(
         std::function<void(bcos::protocol::BlockNumber, std::function<void(Error::Ptr)>)>
@@ -127,7 +133,6 @@ protected:
     PBFTEngine::Ptr m_pbftEngine;
     BlockValidator::Ptr m_blockValidator;
     bcos::tool::LedgerConfigFetcher::Ptr m_ledgerFetcher;
-
     std::atomic_bool m_running = {false};
 };
 }  // namespace consensus
