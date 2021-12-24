@@ -272,6 +272,12 @@ public:
         m_sealerResetNotifier = _sealerResetNotifier;
     }
 
+    void registerFaultyDiscriminator(
+        std::function<bool(bcos::crypto::NodeIDPtr)> _faultyDiscriminator)
+    {
+        m_faultyDiscriminator = _faultyDiscriminator;
+    }
+
     virtual void notifyResetSealing(bcos::protocol::BlockNumber _consIndex)
     {
         notifyResetSealing([this, _consIndex]() {
@@ -351,6 +357,7 @@ protected:
     virtual void asyncNotifySealProposal(size_t _proposalIndex, size_t _proposalEndIndex,
         size_t _maxTxsToSeal, size_t _retryTime = 0);
 
+
 protected:
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
     // Factory for creating PBFT message package
@@ -409,6 +416,8 @@ protected:
     std::function<void()> m_fastViewChangeHandler;
 
     std::atomic_bool m_startRecovered = {false};
+
+    std::function<bool(bcos::crypto::NodeIDPtr)> m_faultyDiscriminator;
 };
 }  // namespace consensus
 }  // namespace bcos

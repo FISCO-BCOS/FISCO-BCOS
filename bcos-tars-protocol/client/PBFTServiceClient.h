@@ -128,25 +128,28 @@ public:
     // client interface
     void notifyHighestSyncingNumber(bcos::protocol::BlockNumber _number) override
     {
-        throw std::runtime_error("notifyHighestSyncingNumber: unimplemented interface!");
+        throw std::runtime_error(
+            "PBFTServiceClient: notifyHighestSyncingNumber: unimplemented interface!");
     }
     void asyncNotifySealProposal(
         size_t, size_t, size_t, std::function<void(bcos::Error::Ptr)>) override
     {
-        throw std::runtime_error("asyncNotifySealProposal: unimplemented interface!");
+        throw std::runtime_error(
+            "PBFTServiceClient: asyncNotifySealProposal: unimplemented interface!");
     }
     // for the consensus module to notify the latest blockNumber to the sealer module
     // Note: since the sealer module is integrated with the PBFT module, no need to implement the
     // client interface
     void asyncNoteLatestBlockNumber(int64_t) override
     {
-        throw std::runtime_error("asyncNoteLatestBlockNumber: unimplemented interface!");
+        throw std::runtime_error(
+            "PBFTServiceClient: asyncNoteLatestBlockNumber: unimplemented interface!");
     }
 
     // the consensus module notify the sealer to reset sealing when viewchange
     void asyncResetSealing(std::function<void(bcos::Error::Ptr)> _onRecvResponse) override
     {
-        throw std::runtime_error("asyncResetSealing: unimplemented interface!");
+        throw std::runtime_error("PBFTServiceClient: asyncResetSealing: unimplemented interface!");
     }
 
     void asyncGetConsensusStatus(
@@ -170,12 +173,23 @@ public:
     // called by the consensus module when commit a new block
     void asyncNotifyNewBlock(
         bcos::ledger::LedgerConfig::Ptr, std::function<void(bcos::Error::Ptr)>) override
-    {}
+    {
+        throw std::runtime_error(
+            "BlockSyncServiceClient: asyncNotifyNewBlock: unimplemented interface!");
+    }
 
     // called by the consensus module to notify the consensusing block number
     void asyncNotifyCommittedIndex(
         bcos::protocol::BlockNumber, std::function<void(bcos::Error::Ptr _error)>) override
-    {}
+    {
+        throw std::runtime_error(
+            "BlockSyncServiceClient: asyncNotifyCommittedIndex: unimplemented interface!");
+    }
+
+    bool faultyNode(bcos::crypto::NodeIDPtr _nodeID) override
+    {
+        throw std::runtime_error("BlockSyncServiceClient: faultyNode: unimplemented interface!");
+    }
 
     // called by the RPC to get the sync status
     void asyncGetSyncInfo(

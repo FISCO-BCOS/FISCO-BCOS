@@ -70,6 +70,10 @@ public:
         m_config->notifyConnectedNodes(_connectedNodes, _onResponse);
     }
 
+    // determine the specified node is faulty or not
+    // used to optimize consensus
+    bool faultyNode(bcos::crypto::NodeIDPtr _nodeID) override;
+
 protected:
     virtual void asyncNotifyBlockSyncMessage(Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
         bytesConstRef _data, std::function<void(bytesConstRef _respData)> _sendResponse,
@@ -128,6 +132,7 @@ protected:
     boost::condition_variable m_signalled;
     boost::mutex x_signalled;
     bcos::protocol::BlockNumber m_waterMark = 10;
+    bcos::protocol::BlockNumber c_FaultyNodeBlockDelta = 5;
 };
 }  // namespace sync
 }  // namespace bcos

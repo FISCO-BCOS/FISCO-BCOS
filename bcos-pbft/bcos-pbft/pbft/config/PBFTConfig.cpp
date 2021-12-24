@@ -224,7 +224,9 @@ bool PBFTConfig::tryTriggerFastViewChange(IndexType _leaderIndex)
     {
         return false;
     }
-    if (nodeList.count(leaderNodeInfo->nodeID()))
+    // Note: must register m_faultyDiscriminator before start the PBFTEngine
+    if (nodeList.count(leaderNodeInfo->nodeID()) &&
+        !m_faultyDiscriminator(leaderNodeInfo->nodeID()))
     {
         return false;
     }
