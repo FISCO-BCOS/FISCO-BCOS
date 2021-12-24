@@ -54,6 +54,9 @@ macro(configure_project)
         set(MARCH_TYPE "-march=native -mtune=native -fvisibility=hidden -fvisibility-inlines-hidden")
     endif()
 
+    #SANITIZE
+    default_option(SANITIZE OFF)
+
     #LTO
     default_option(IPO OFF)
     if(IPO)
@@ -92,6 +95,7 @@ macro(print_config NAME)
     message("-- TESTS              Build tests                  ${TESTS}")
     message("-- NATIVE             Build native binary          ${NATIVE}")
     message("-- IPO                Enable IPO optimization      ${IPO}")
+    message("-- SANITIZE           Enable sanitize              ${SANITIZE}")
     message("-- DEBUG              Enable debug                 ${DEBUG}")
     message("------------------------------------------------------------------------")
     message("")

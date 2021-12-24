@@ -111,8 +111,8 @@ void LRUStorage::updateMRU(EntryKeyWrapper entryKey)
 
     if (storage::StateStorage::capacity() > m_maxCapacity)
     {
-        STORAGE_LOG(DEBUG) << "Current capacity: " << storage::StateStorage::capacity()
-                           << " greater than " << m_maxCapacity << ", start clear";
+        STORAGE_LOG(INFO) << "Current capacity: " << storage::StateStorage::capacity()
+                          << " greater than " << m_maxCapacity << ", start clear";
         checkAndClear();
     }
 }
@@ -121,7 +121,7 @@ void LRUStorage::checkAndClear()
 {
     size_t clearedCount = 0;
     size_t clearedCapacity = 0;
-    while ((storage::StateStorage::capacity() > ((m_maxCapacity * 2) / 3)) && !m_mru.empty())
+    while ((storage::StateStorage::capacity() > m_maxCapacity) && !m_mru.empty())
     {
         auto currentCapacity = storage::StateStorage::capacity();
         auto& item = m_mru.front();
@@ -138,5 +138,5 @@ void LRUStorage::checkAndClear()
 
         m_mru.pop_front();
     }
-    STORAGE_LOG(DEBUG) << "LRUStorage cleared: " << clearedCapacity << " bytes";
+    STORAGE_LOG(INFO) << "LRUStorage cleared: " << clearedCapacity << " bytes";
 }
