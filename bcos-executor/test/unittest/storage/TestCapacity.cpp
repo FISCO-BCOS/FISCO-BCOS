@@ -1,4 +1,4 @@
-#include "bcos-executor/LRUStorage.h"
+#include "storage/LRUStorage.h"
 #include <bcos-framework/testutils/TestPromptFixture.h>
 #include <bcos-framework/testutils/crypto/HashImpl.h>
 #include <boost/lexical_cast.hpp>
@@ -43,13 +43,12 @@ public:
         memoryStorage = std::make_shared<storage::StateStorage>(nullptr);
         BOOST_TEST(memoryStorage != nullptr);
         tableFactory = std::make_shared<executor::LRUStorage>(memoryStorage);
-        tableFactory->start();
         hashImpl = std::make_shared<Keccak256Hash>();
 
         BOOST_TEST(tableFactory != nullptr);
     }
 
-    ~LRUStorageFixture() { tableFactory->stop(); }
+    ~LRUStorageFixture() {}
 
     std::shared_ptr<crypto::Hash> hashImpl;
     std::shared_ptr<storage::StateStorage> memoryStorage;
@@ -76,7 +75,6 @@ BOOST_AUTO_TEST_CASE(capacity)
             "table", key, std::move(data), [](Error::UniquePtr error) { BOOST_CHECK(!error); });
     }
 
-    sleep(1);
     BOOST_CHECK_LT(tableFactory->capacity(), 100);
 }
 

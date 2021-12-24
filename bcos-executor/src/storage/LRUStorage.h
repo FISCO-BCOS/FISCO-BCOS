@@ -2,6 +2,7 @@
 
 #include <bcos-framework/interfaces/storage/StorageInterface.h>
 #include <bcos-framework/libstorage/StateStorage.h>
+#include <oneapi/tbb/spin_mutex.h>
 #include <tbb/concurrent_queue.h>
 #include <tbb/task_group.h>
 #include <boost/multi_index/hashed_index.hpp>
@@ -17,7 +18,7 @@ class LRUStorage : public virtual bcos::storage::StateStorage,
 {
 public:
     using StateStorage::StateStorage;
-    ~LRUStorage() noexcept override { stop(); }
+    ~LRUStorage() noexcept override {}
 
     void asyncGetPrimaryKeys(std::string_view table,
         const std::optional<bcos::storage::Condition const>& _condition,
@@ -38,14 +39,9 @@ public:
 
     void merge(bool onlyDirty, const TraverseStorageInterface& source) override;
 
-    void start();
-    void stop();
-
     void setMaxCapacity(size_t capacity) { m_maxCapacity = capacity; }
 
 private:
-    void startLoop();
-
     struct EntryKeyWrapper : public EntryKey
     {
         using EntryKey::tuple;
@@ -55,22 +51,18 @@ private:
             return std::make_tuple(
                 std::string_view(std::get<0>(*this)), std::string_view(std::get<1>(*this)));
         }
-
-        bool isStop() const { return std::get<0>(*this).empty() && std::get<1>(*this).empty(); }
     };
 
     void updateMRU(EntryKeyWrapper entryKey);
+    void checkAndClear();
 
     boost::multi_index_container<EntryKeyWrapper,
         boost::multi_index::indexed_by<boost::multi_index::sequenced<>,
             boost::multi_index::hashed_unique<boost::multi_index::const_mem_fun<EntryKeyWrapper,
                 std::tuple<std::string_view, std::string_view>, &EntryKeyWrapper::tableKeyView>>>>
         m_mru;
-    tbb::concurrent_queue<EntryKeyWrapper> m_mruQueue;
+    std::mutex m_mruMutex;
 
     size_t m_maxCapacity = 32 * 1024 * 1024;  // default 32 for cache
-
-    std::unique_ptr<std::thread> m_worker;
-    std::atomic_bool m_running = false;
 };
 }  // namespace bcos::executor

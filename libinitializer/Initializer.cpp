@@ -31,7 +31,7 @@
 #include "ParallelExecutor.h"
 #include "SchedulerInitializer.h"
 #include "StorageInitializer.h"
-#include "include/bcos-executor/LRUStorage.h"
+#include "bcos-executor/src/storage/LRUStorage.h"
 #include "interfaces/crypto/CommonType.h"
 #include "interfaces/executor/ParallelTransactionExecutorInterface.h"
 #include "interfaces/protocol/ProtocolTypeDef.h"
@@ -148,7 +148,6 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
         if (m_nodeConfig->enableLRUCacheStorage())
         {
             cache = std::make_shared<bcos::executor::LRUStorage>(storage);
-            cache->start();
             BCOS_LOG(INFO) << LOG_DESC("initNode: enableLRUCacheStorage");
         }
         else

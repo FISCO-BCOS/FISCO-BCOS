@@ -7,7 +7,6 @@ file(GLOB_RECURSE SRCS src/*.cpp)
 
 include_directories(${CMAKE_SOURCE_DIR})
 include_directories(${CMAKE_SOURCE_DIR}/bcos-framework)
-include_directories(${CMAKE_SOURCE_DIR}/bcos-executor/include)
 
 find_package(TBB CONFIG REQUIRED)
 find_package(Threads REQUIRED)
