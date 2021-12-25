@@ -257,7 +257,7 @@ void EventSub::reportEventSubTasks()
     //
     if (elapsedMs > 10 * 1000)
     {
-        EVENT_SUB(INFO) << LOG_BADGE("reportEventSubTasks")
+        EVENT_SUB(INFO) << LOG_BADGE("eventSubTasks")
                         << LOG_DESC("all event sub tasks subscribed by client")
                         << LOG_KV("count", m_tasks.size());
         start = std::chrono::high_resolution_clock::now();

@@ -22,10 +22,10 @@
 #pragma once
 
 #include "../Common.h"
+#include "../executor/TransactionExecutor.h"
 #include "../precompiled/PrecompiledResult.h"
 #include "BlockContext.h"
 #include "SyncStorageWrapper.h"
-#include "bcos-executor/TransactionExecutor.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/protocol/BlockHeader.h"
 #include "bcos-framework/interfaces/protocol/Transaction.h"

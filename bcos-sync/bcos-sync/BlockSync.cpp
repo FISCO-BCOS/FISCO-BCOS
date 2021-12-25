@@ -791,6 +791,20 @@ void BlockSync::broadcastSyncStatus()
     }
 }
 
+bool BlockSync::faultyNode(bcos::crypto::NodeIDPtr _nodeID)
+{
+    if (!m_syncStatus->hasPeer(_nodeID))
+    {
+        return true;
+    }
+    auto nodeStatus = m_syncStatus->peerStatus(_nodeID);
+    if ((nodeStatus->number() + c_FaultyNodeBlockDelta) < m_config->blockNumber())
+    {
+        return true;
+    }
+    return false;
+}
+
 void BlockSync::asyncGetSyncInfo(std::function<void(Error::Ptr, std::string)> _onGetSyncInfo)
 {
     Json::Value syncInfo;

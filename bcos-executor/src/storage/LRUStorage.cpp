@@ -1,6 +1,7 @@
-#include "bcos-executor/LRUStorage.h"
+#include "LRUStorage.h"
 #include "../Common.h"
 #include "libstorage/StateStorage.h"
+#include <oneapi/tbb/spin_mutex.h>
 #include <boost/format.hpp>
 #include <boost/iterator/zip_iterator.hpp>
 #include <algorithm>
@@ -72,8 +73,8 @@ void LRUStorage::asyncGetRows(std::string_view table,
 void LRUStorage::asyncSetRow(std::string_view table, std::string_view key,
     bcos::storage::Entry entry, std::function<void(Error::UniquePtr)> callback)
 {
-    updateMRU(EntryKeyWrapper(std::string(table), std::string(key)));
     storage::StateStorage::asyncSetRow(table, key, std::move(entry), std::move(callback));
+    updateMRU(EntryKeyWrapper(std::string(table), std::string(key)));
 }
 
 void LRUStorage::merge(bool onlyDirty, const TraverseStorageInterface& source)
@@ -96,82 +97,46 @@ void LRUStorage::merge(bool onlyDirty, const TraverseStorageInterface& source)
     EXECUTOR_LOG(INFO) << "Successfull merged " << count << " records";
 }
 
-void LRUStorage::start()
-{
-    EXECUTOR_LOG(TRACE) << "Starting lru cleaner thread";
-    m_running = true;
-    m_worker = std::make_unique<std::thread>([self = shared_from_this()]() { self->startLoop(); });
-}
-
-void LRUStorage::stop()
-{
-    if (m_running)
-    {
-        EXECUTOR_LOG(TRACE) << "Stoping thread";
-        m_running = false;
-
-        m_mruQueue.emplace(EntryKeyWrapper());
-        m_worker->join();
-    }
-}
-
-void LRUStorage::startLoop()
-{
-    while (true)
-    {
-        EntryKeyWrapper entryKey;
-        if (m_mruQueue.try_pop(entryKey))
-        {
-            // Check if stopped
-            if (entryKey.isStop())
-            {
-                break;
-            }
-
-            // Push item to mru
-            auto result = m_mru.emplace_back(std::move(entryKey));
-            if (!result.second)
-            {
-                m_mru.relocate(m_mru.end(), result.first);
-            }
-
-            if (storage::StateStorage::capacity() > m_maxCapacity)
-            {
-                size_t clearedCount = 0;
-                size_t clearedCapacity = 0;
-                // Clear the out date items
-                while ((storage::StateStorage::capacity() > ((m_maxCapacity * 2) / 3)) &&
-                       !m_mru.empty())
-                {
-                    auto currentCapacity = storage::StateStorage::capacity();
-                    auto& item = m_mru.front();
-
-                    bcos::storage::Entry entry;
-                    entry.setStatus(bcos::storage::Entry::PURGED);
-
-                    auto [tableViw, keyView] = item.tableKeyView();
-                    storage::StateStorage::asyncSetRow(
-                        tableViw, keyView, std::move(entry), [](Error::UniquePtr) {});
-
-                    ++clearedCount;
-                    clearedCapacity += (currentCapacity - storage::StateStorage::capacity());
-
-                    m_mru.pop_front();
-                }
-
-                STORAGE_LOG(DEBUG) << boost::format("LRUStorage clear %lu keys, %lu bytes") %
-                                          clearedCount % clearedCapacity;
-            }
-        }
-        else
-        {
-            using namespace std::chrono_literals;
-            std::this_thread::sleep_for(200ms);  // TODO: 200ms is enough?
-        }
-    }
-}
 
 void LRUStorage::updateMRU(EntryKeyWrapper entryKey)
 {
-    m_mruQueue.push(std::move(entryKey));
+    std::scoped_lock<std::mutex> lock(m_mruMutex);
+
+    // Push item to mru
+    auto result = m_mru.emplace_back(std::move(entryKey));
+    if (!result.second)
+    {
+        m_mru.relocate(m_mru.end(), result.first);
+    }
+
+    if (storage::StateStorage::capacity() > m_maxCapacity)
+    {
+        STORAGE_LOG(INFO) << "Current capacity: " << storage::StateStorage::capacity()
+                          << " greater than " << m_maxCapacity << ", start clear";
+        checkAndClear();
+    }
+}
+
+void LRUStorage::checkAndClear()
+{
+    size_t clearedCount = 0;
+    size_t clearedCapacity = 0;
+    while ((storage::StateStorage::capacity() > m_maxCapacity) && !m_mru.empty())
+    {
+        auto currentCapacity = storage::StateStorage::capacity();
+        auto& item = m_mru.front();
+
+        bcos::storage::Entry entry;
+        entry.setStatus(bcos::storage::Entry::PURGED);
+
+        auto [tableViw, keyView] = item.tableKeyView();
+        storage::StateStorage::asyncSetRow(
+            tableViw, keyView, std::move(entry), [](Error::UniquePtr) {});
+
+        ++clearedCount;
+        clearedCapacity += (currentCapacity - storage::StateStorage::capacity());
+
+        m_mru.pop_front();
+    }
+    STORAGE_LOG(INFO) << "LRUStorage cleared: " << clearedCapacity << " bytes";
 }

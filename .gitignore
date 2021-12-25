@@ -49,3 +49,7 @@ deps/**
 
 # macOS
 .DS_Store
+
+# generated test
+tools/BcosAirBuilder/nodes**
+tools/BcosProBuilder/generated**
