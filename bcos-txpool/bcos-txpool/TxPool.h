@@ -113,6 +113,13 @@ public:
         std::function<void(Error::Ptr)> _onResponse) override
     {
         m_transactionSync->config()->notifyConnectedNodes(_connectedNodes, _onResponse);
+        if (m_txpoolStorage->size() > 0)
+        {
+            return;
+        }
+        // try to broadcast empty txsStatus and request txs from the connected nodes when the txpool
+        // is empty
+        m_transactionSync->onEmptyTxs();
     }
 
     // for UT

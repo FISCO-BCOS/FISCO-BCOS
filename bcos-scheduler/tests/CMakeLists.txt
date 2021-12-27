@@ -15,7 +15,6 @@ hunter_add_package(wedpr-crypto)
 
 find_package(wedpr-crypto CONFIG QUIET REQUIRED)
 find_package(Boost CONFIG QUIET REQUIRED unit_test_framework serialization)
-find_package(tarscpp CONFIG QUIET REQUIRED)
 
 target_link_libraries(${TEST_BINARY_NAME} scheduler wedpr-crypto::crypto
 Boost::unit_test_framework protocol-tars)
