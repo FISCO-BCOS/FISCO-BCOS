@@ -82,6 +82,7 @@ public:
     bcos::crypto::HashListPtr filterUnknownTxs(
         bcos::crypto::HashList const& _txsHashList, bcos::crypto::NodeIDPtr _peer) override;
 
+    bcos::crypto::HashListPtr getAllTxsHash() override;
     void batchMarkTxs(bcos::crypto::HashList const& _txsHashList,
         bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
         bool _sealFlag) override;
