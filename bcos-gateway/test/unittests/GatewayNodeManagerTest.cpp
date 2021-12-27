@@ -62,6 +62,7 @@ public:
         return GatewayNodeManager::updateNodeInfo(_p2pID, _nodeIDsJson);
     }
 
+    void setStatusSeq(std::string const& _nodeID, uint32_t _seq) { m_p2pID2Seq[_nodeID] = _seq; }
     void start() override {}
     void stop() override {}
 };
@@ -265,10 +266,15 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_onReceiveNodeIDs)
     bool changed = false;
 
     changed = gatewayNodeManager->statusChanged(p2pID, 110);
-    BOOST_CHECK(!changed);
+    BOOST_CHECK(changed);
+    gatewayNodeManager->setStatusSeq(p2pID, 110);
 
     changed = gatewayNodeManager->statusChanged(p2pID, 1);
     BOOST_CHECK(changed);
+    gatewayNodeManager->setStatusSeq(p2pID, 1);
+
+    changed = gatewayNodeManager->statusChanged(p2pID, 1);
+    BOOST_CHECK(!changed);
 }
 
 BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_query)
