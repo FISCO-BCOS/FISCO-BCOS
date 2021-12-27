@@ -344,34 +344,7 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::P
         }
         break;
         case MessageType::Heartbeat:
-        {
-            uint32_t statusSeq = boost::asio::detail::socket_ops::network_to_host_long(
-                *((uint32_t*)bytesConstRefPayload.data()));
-            bool statusSeqChanged = false;
-            gateway->gatewayNodeManager()->onReceiveStatusSeq(p2pID, statusSeq, statusSeqChanged);
-            if (statusSeqChanged)
-            {
-                sendMessageBySession(MessageType::RequestNodeIDs, bytesConstRef(), p2pSession);
-            }
-        }
-        break;
-        case MessageType::RequestNodeIDs:
-        {
-            std::string json;
-            gateway->gatewayNodeManager()->onRequestNodeIDs(json);
-            if (!json.empty())
-            {
-                sendMessageBySession(MessageType::ResponseNodeIDs,
-                    bytesConstRef((byte*)json.data(), json.size()), p2pSession);
-            }
-        }
-        break;
-        case MessageType::ResponseNodeIDs:
-        {
-            gateway->gatewayNodeManager()->onReceiveNodeIDs(
-                p2pID, std::string(bytesConstRefPayload.begin(), bytesConstRefPayload.end()));
-        }
-        break;
+            break;
         case MessageType::PeerToPeerMessage:
         {
             bcos::crypto::NodeIDPtr srcNodeIDPtr = m_keyFactory->createKey(*srcNodeID.get());
@@ -407,7 +380,6 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::P
             gateway->onReceiveBroadcastMessage(groupID, srcNodeIDPtr, bytesConstRefPayload);
         }
         break;
-            break;
         default:
         {
             SERVICE_LOG(ERROR) << LOG_DESC("Unrecognized message type")
@@ -598,17 +570,6 @@ bool Service::isConnected(P2pID const& nodeID) const
         return true;
     }
     return false;
-}
-
-uint32_t Service::statusSeq()
-{
-    auto gateway = m_gateway.lock();
-    if (gateway)
-    {
-        return gateway->gatewayNodeManager()->statusSeq();
-    }
-
-    return 0;
 }
 
 std::shared_ptr<P2PMessage> Service::newP2PMessage(int16_t _type, bytesConstRef _payload)

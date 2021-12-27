@@ -22,8 +22,11 @@
 #include <bcos-framework/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/interfaces/front/FrontServiceInterface.h>
 #include <bcos-framework/interfaces/gateway/GatewayInterface.h>
+#include <bcos-framework/libutilities/Timer.h>
 #include <bcos-gateway/Common.h>
 #include <bcos-gateway/libnetwork/Common.h>
+#include <bcos-gateway/libp2p/P2PInterface.h>
+#include <bcos-gateway/libp2p/P2PSession.h>
 #include <bcos-tars-protocol/client/FrontServiceClient.h>
 namespace bcos
 {
@@ -37,8 +40,6 @@ public:
         bcostars::FrontServicePrx _frontServicePrx)
       : m_frontService(_frontService), m_frontServicePrx(_frontServicePrx)
     {}
-
-
     bcos::front::FrontServiceInterface::Ptr frontService() { return m_frontService; }
     bcostars::FrontServicePrx frontServicePrx() { return m_frontServicePrx; }
 
@@ -63,30 +64,16 @@ class GatewayNodeManager
 {
 public:
     using Ptr = std::shared_ptr<GatewayNodeManager>;
-    GatewayNodeManager(P2pID const& _nodeID, std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory)
-      : m_p2pNodeID(_nodeID), m_keyFactory(_keyFactory)
-    {}
-
-    virtual void start() {}
+    GatewayNodeManager(P2pID const& _nodeID, std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory,
+        P2PInterface::Ptr _p2pInterface);
+    virtual void start() { m_timer->start(); }
     virtual void stop() {}
 
     virtual ~GatewayNodeManager() {}
 
-    uint32_t statusSeq() { return m_statusSeq; }
-    uint32_t increaseSeq()
-    {
-        uint32_t statusSeq = ++m_statusSeq;
-        return statusSeq;
-    }
-
-    bool parseReceivedJson(const std::string& _json, uint32_t& statusSeq,
-        std::unordered_map<std::string, std::set<std::string>>& nodeIDsMap);
     void updateNodeIDs(const P2pID& _p2pID, uint32_t _seq,
         const std::unordered_map<std::string, std::set<std::string>>& _nodeIDsMap);
 
-    void onReceiveStatusSeq(const P2pID& _p2pID, uint32_t _statusSeq, bool& _statusSeqChanged);
-    void onReceiveNodeIDs(const P2pID& _p2pID, const std::string& _nodeIDsJson);
-    void onRequestNodeIDs(std::string& _nodeIDsJson);
     void onRemoveNodeIDs(const P2pID& _p2pID);
     void removeNodeIDsByP2PID(const std::string& _p2pID);
 
@@ -139,6 +126,29 @@ public:
     void queryLocalNodeIDsByGroup(const std::string& _groupID, bcos::crypto::NodeIDs& _nodeIDs);
 
 protected:
+    uint32_t increaseSeq()
+    {
+        uint32_t statusSeq = ++m_statusSeq;
+        return statusSeq;
+    }
+    bool statusChanged(std::string const& _p2pNodeID, uint32_t _seq);
+    uint32_t statusSeq() { return m_statusSeq; }
+    // Note: must broadcast the status seq periodically ensure that the seq can be synced to
+    // restarted or re-connected nodes
+    virtual void broadcastStatusSeq();
+
+    virtual void onReceiveStatusSeq(
+        NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg);
+    virtual void onRequestNodeIDs(
+        NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg);
+    virtual void onResponseNodeIDs(
+        NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg);
+    virtual bool generateNodeInfo(std::string& _nodeInfo);
+    bool parseReceivedJson(const std::string& _json, uint32_t& statusSeq,
+        std::unordered_map<std::string, std::set<std::string>>& nodeIDsMap);
+
+    virtual void updateNodeInfo(const P2pID& _p2pID, const std::string& _nodeIDsJson);
+
     void updateNodeIDInfo(std::string const& _p2pNodeID,
         std::unordered_map<std::string, std::set<std::string>> const& _nodeIDList);
     void removeNodeIDInfo(std::string const& _p2pNodeID);
@@ -165,6 +175,11 @@ protected:
     // p2pNodeID->groupID->nodeIDList
     std::map<std::string, std::unordered_map<std::string, std::set<std::string>>> m_nodeIDInfo;
     SharedMutex x_nodeIDInfo;
+
+    P2PInterface::Ptr m_p2pInterface;
+
+    unsigned const SEQ_SYNC_PERIOD = 3000;
+    std::shared_ptr<Timer> m_timer;
 };
 }  // namespace gateway
 }  // namespace bcos

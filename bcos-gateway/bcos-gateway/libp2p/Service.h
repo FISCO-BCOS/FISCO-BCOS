@@ -49,7 +49,8 @@ public:
 
     std::shared_ptr<P2PMessage> sendMessageByNodeID(
         P2pID nodeID, std::shared_ptr<P2PMessage> message) override;
-    void sendMessageBySession(int _packetType, bytesConstRef _payload, P2PSession::Ptr _p2pSession);
+    void sendMessageBySession(
+        int _packetType, bytesConstRef _payload, P2PSession::Ptr _p2pSession) override;
     void sendRespMessageBySession(
         bytesConstRef _payload, P2PMessage::Ptr _p2pMessage, P2PSession::Ptr _p2pSession);
     void asyncSendMessageByNodeID(P2pID nodeID, std::shared_ptr<P2PMessage> message,
@@ -112,8 +113,6 @@ public:
         }
         return nullptr;
     }
-
-    uint32_t statusSeq();
 
     void asyncSendMessageByP2PNodeID(int16_t _type, P2pID _dstNodeID, bytesConstRef _payload,
         Options options, P2PResponseCallback _callback) override;

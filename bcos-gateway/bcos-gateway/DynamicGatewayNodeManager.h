@@ -27,16 +27,20 @@ namespace gateway
 class DynamicGatewayNodeManager : public GatewayNodeManager
 {
 public:
-    DynamicGatewayNodeManager(
-        P2pID const& _nodeID, std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory)
-      : GatewayNodeManager(_nodeID, _keyFactory)
+    DynamicGatewayNodeManager(P2pID const& _nodeID,
+        std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface)
+      : GatewayNodeManager(_nodeID, _keyFactory, _p2pInterface)
     {
         m_frontServiceInfoUpdater = std::make_shared<Timer>(1000, "frontServiceUpdater");
         m_frontServiceInfoUpdater->registerTimeoutHandler([this]() { updateFrontServiceInfo(); });
         m_startT = utcTime();
     }
 
-    void start() override { m_frontServiceInfoUpdater->start(); }
+    void start() override
+    {
+        DynamicGatewayNodeManager::start();
+        m_frontServiceInfoUpdater->start();
+    }
     void stop() override { m_frontServiceInfoUpdater->stop(); }
     void updateFrontServiceInfo(bcos::group::GroupInfo::Ptr _groupInfo) override;
 

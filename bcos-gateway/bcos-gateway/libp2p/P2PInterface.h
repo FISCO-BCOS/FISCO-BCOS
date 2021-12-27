@@ -93,6 +93,8 @@ public:
     virtual void registerHandlerByMsgType(int16_t _type, MessageHandler const& _msgHandler) = 0;
 
     virtual bool connected(std::string const& _nodeID) = 0;
+    virtual void sendMessageBySession(
+        int _packetType, bytesConstRef _payload, std::shared_ptr<P2PSession> _p2pSession) = 0;
 };
 
 }  // namespace gateway
