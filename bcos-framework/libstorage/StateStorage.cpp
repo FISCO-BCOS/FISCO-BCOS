@@ -136,10 +136,8 @@ void StateStorage::asyncGetRow(std::string_view tableView, std::string_view keyV
     if (prev)
     {
         prev->asyncGetRow(tableView, keyView,
-            [this, prev, table = std::string(tableView),
-                key = std::string(keyView),
-                _callback](Error::UniquePtr error, std::optional<Entry> entry) {
-
+            [this, prev, table = std::string(tableView), key = std::string(keyView), _callback](
+                Error::UniquePtr error, std::optional<Entry> entry) {
                 if (error)
                 {
                     _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
@@ -258,7 +256,7 @@ void StateStorage::asyncSetRow(std::string_view tableNameView, std::string_view 
         return;
     }
 
-    auto updatedCapacity = entry.size();
+    ssize_t updatedCapacity = entry.size();
     std::optional<Entry> entryOld;
 
     decltype(m_data)::accessor entryIt;
@@ -303,10 +301,6 @@ void StateStorage::asyncSetRow(std::string_view tableNameView, std::string_view 
                                .str();
             STORAGE_LOG(WARNING) << message;
             STORAGE_REPORT_SET(tableNameView, keyView, std::nullopt, "FAIL EXISTS");
-
-            // lock.release();
-            // callback(BCOS_ERROR_UNIQUE_PTR(StorageError::WriteError, message));
-            // return;
         }
     }
 
@@ -439,9 +433,11 @@ void StateStorage::rollback(const Recoder& recoder)
 
     for (auto& change : recoder)
     {
+        ssize_t updateCapacity = 0;
         if (change.entry)
         {
             decltype(m_data)::accessor entryIt;
+
             if (m_data.find(entryIt,
                     std::make_tuple(std::string_view(change.table), std::string_view(change.key))))
             {
@@ -450,6 +446,7 @@ void StateStorage::rollback(const Recoder& recoder)
                     STORAGE_LOG(TRACE) << "Revert exists: " << change.table << " | "
                                        << toHex(change.key) << " | " << toHex(change.entry->get());
                 }
+                updateCapacity = change.entry->size() - entryIt->second.size();
                 entryIt->second = std::move(*(change.entry));
             }
             else
@@ -459,6 +456,7 @@ void StateStorage::rollback(const Recoder& recoder)
                     STORAGE_LOG(TRACE) << "Revert deleted: " << change.table << " | "
                                        << toHex(change.key) << " | " << toHex(change.entry->get());
                 }
+                updateCapacity = change.entry->size();
                 m_data.emplace(std::make_tuple(std::string(change.table), std::string(change.key)),
                     std::move(*(change.entry)));
             }
@@ -474,6 +472,8 @@ void StateStorage::rollback(const Recoder& recoder)
                     STORAGE_LOG(TRACE)
                         << "Revert insert: " << change.table << " | " << toHex(change.key);
                 }
+
+                updateCapacity = 0 - entryIt->second.size();
                 m_data.erase(entryIt);
             }
             else
@@ -485,6 +485,8 @@ void StateStorage::rollback(const Recoder& recoder)
                 BOOST_THROW_EXCEPTION(BCOS_ERROR(StorageError::UnknownError, message));
             }
         }
+
+        m_capacity += updateCapacity;
     }
 }
 
@@ -497,6 +499,7 @@ Entry StateStorage::importExistingEntry(std::string_view table, std::string_view
 
     entry.setDirty(false);
 
+    auto updateCapacity = entry.size();
     decltype(m_data)::const_accessor entryIt;
     if (!m_data.emplace(entryIt, EntryKey(std::string(table), std::string(key)), std::move(entry)))
     {
@@ -509,6 +512,7 @@ Entry StateStorage::importExistingEntry(std::string_view table, std::string_view
     {
         STORAGE_REPORT_SET(
             std::get<0>(entryIt->first), key, std::make_optional(entryIt->second), "IMPORT");
+        m_capacity += updateCapacity;
     }
 
     assert(!entryIt.empty());

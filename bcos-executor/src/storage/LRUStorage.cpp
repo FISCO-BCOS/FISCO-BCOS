@@ -112,7 +112,8 @@ void LRUStorage::updateMRU(EntryKeyWrapper entryKey)
     if (storage::StateStorage::capacity() > m_maxCapacity)
     {
         STORAGE_LOG(INFO) << "Current capacity: " << storage::StateStorage::capacity()
-                          << " greater than " << m_maxCapacity << ", start clear";
+                          << " greater than " << m_maxCapacity
+                          << ", start clear size: " << storage::StateStorage::size();
         checkAndClear();
     }
 }
@@ -129,7 +130,7 @@ void LRUStorage::checkAndClear()
         bcos::storage::Entry entry;
         entry.setStatus(bcos::storage::Entry::PURGED);
 
-        auto [tableViw, keyView] = item.tableKeyView();
+        auto [tableViw, keyView] = item.view();
         storage::StateStorage::asyncSetRow(
             tableViw, keyView, std::move(entry), [](Error::UniquePtr) {});
 
@@ -138,5 +139,6 @@ void LRUStorage::checkAndClear()
 
         m_mru.pop_front();
     }
-    STORAGE_LOG(INFO) << "LRUStorage cleared: " << clearedCapacity << " bytes";
+    STORAGE_LOG(INFO) << "LRUStorage cleared: " << clearedCapacity
+                      << " bytes, current size: " << storage::StateStorage::size();
 }

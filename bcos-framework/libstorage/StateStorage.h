@@ -86,7 +86,9 @@ public:
 
     crypto::HashType hash(const bcos::crypto::Hash::Ptr& hashImpl);
 
-    size_t capacity() const { return m_capacity; }
+    ssize_t capacity() const { return m_capacity; }
+
+    size_t size() const { return m_data.size(); }
 
     void setPrev(std::shared_ptr<StorageInterface> prev)
     {
@@ -177,7 +179,7 @@ private:
     std::shared_ptr<StorageInterface> m_prev;
     std::shared_mutex m_prevMutex;
 
-    size_t m_capacity = 0;
+    std::atomic<ssize_t> m_capacity = 0;
     bool m_enableTraverse = false;
     bool m_readOnly = false;
 

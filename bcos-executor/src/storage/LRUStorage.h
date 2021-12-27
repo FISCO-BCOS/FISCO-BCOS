@@ -39,14 +39,14 @@ public:
 
     void merge(bool onlyDirty, const TraverseStorageInterface& source) override;
 
-    void setMaxCapacity(size_t capacity) { m_maxCapacity = capacity; }
+    void setMaxCapacity(ssize_t capacity) { m_maxCapacity = capacity; }
 
 private:
     struct EntryKeyWrapper : public EntryKey
     {
         using EntryKey::tuple;
 
-        std::tuple<std::string_view, std::string_view> tableKeyView() const
+        std::tuple<std::string_view, std::string_view> view() const
         {
             return std::make_tuple(
                 std::string_view(std::get<0>(*this)), std::string_view(std::get<1>(*this)));
@@ -59,10 +59,10 @@ private:
     boost::multi_index_container<EntryKeyWrapper,
         boost::multi_index::indexed_by<boost::multi_index::sequenced<>,
             boost::multi_index::hashed_unique<boost::multi_index::const_mem_fun<EntryKeyWrapper,
-                std::tuple<std::string_view, std::string_view>, &EntryKeyWrapper::tableKeyView>>>>
+                std::tuple<std::string_view, std::string_view>, &EntryKeyWrapper::view>>>>
         m_mru;
     std::mutex m_mruMutex;
 
-    size_t m_maxCapacity = 32 * 1024 * 1024;  // default 32 for cache
+    ssize_t m_maxCapacity = 32 * 1024 * 1024;  // default 32 MB for cache
 };
 }  // namespace bcos::executor
