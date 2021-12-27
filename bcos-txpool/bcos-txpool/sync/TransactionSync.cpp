@@ -608,6 +608,10 @@ void TransactionSync::forwardTxsFromP2P(bcos::crypto::NodeIDSet const& _connecte
     {
         auto peer = it.first;
         auto txsHash = it.second;
+        if (txsHash->size() == 0)
+        {
+            continue;
+        }
         auto txsStatus =
             m_config->msgFactory()->createTxsSyncMsg(TxsSyncPacketType::TxsStatusPacket, *txsHash);
         auto packetData = txsStatus->encode();
@@ -707,6 +711,7 @@ void TransactionSync::onPeerTxsStatus(NodeIDPtr _fromNode, TxsSyncMsgInterface::
     }
     if (_txsStatus->txsHash().size() == 0)
     {
+        responseTxsStatus(_fromNode);
         return;
     }
     auto requestTxs = m_config->txpoolStorage()->filterUnknownTxs(_txsStatus->txsHash(), _fromNode);
@@ -718,4 +723,43 @@ void TransactionSync::onPeerTxsStatus(NodeIDPtr _fromNode, TxsSyncMsgInterface::
     SYNC_LOG(DEBUG) << LOG_DESC("onPeerTxsStatus") << LOG_KV("reqSize", requestTxs->size())
                     << LOG_KV("peerTxsSize", _txsStatus->txsHash().size())
                     << LOG_KV("peer", _fromNode->shortHex());
+}
+
+void TransactionSync::responseTxsStatus(NodeIDPtr _fromNode)
+{
+    auto txsHash = m_config->txpoolStorage()->getAllTxsHash();
+    if (txsHash->size() == 0)
+    {
+        return;
+    }
+    auto txsStatus =
+        m_config->msgFactory()->createTxsSyncMsg(TxsSyncPacketType::TxsStatusPacket, *txsHash);
+    auto packetData = txsStatus->encode();
+    m_config->frontService()->asyncSendMessageByNodeID(
+        ModuleID::TxsSync, _fromNode, ref(*packetData), 0, nullptr);
+    SYNC_LOG(DEBUG) << LOG_DESC("onPeerTxsStatus: receive empty txsStatus and responseTxsStatus")
+                    << LOG_KV("to", _fromNode->shortHex()) << LOG_KV("txsSize", txsHash->size())
+                    << LOG_KV("packetSize", packetData->size());
+}
+
+void TransactionSync::onEmptyTxs()
+{
+    if (m_config->txpoolStorage()->size() > 0)
+    {
+        return;
+    }
+    SYNC_LOG(DEBUG) << LOG_DESC("onEmptyTxs: broadcast txs status to all consensus node list");
+    auto txsStatus =
+        m_config->msgFactory()->createTxsSyncMsg(TxsSyncPacketType::TxsStatusPacket, HashList());
+    auto packetData = txsStatus->encode();
+    auto consensusNodeList = m_config->consensusNodeList();
+    for (auto const& it : consensusNodeList)
+    {
+        if (it->nodeID()->data() == m_config->nodeID()->data())
+        {
+            continue;
+        }
+        m_config->frontService()->asyncSendMessageByNodeID(
+            ModuleID::TxsSync, it->nodeID(), ref(*packetData), 0, nullptr);
+    }
 }

@@ -63,8 +63,10 @@ public:
 
     virtual void maintainTransactions();
     virtual void maintainDownloadingTransactions();
+    void onEmptyTxs() override;
 
 protected:
+    virtual void responseTxsStatus(bcos::crypto::NodeIDPtr _fromNode);
     void executeWorker() override;
 
     virtual void broadcastTxsFromRpc(bcos::crypto::NodeIDSet const& _connectedPeers,

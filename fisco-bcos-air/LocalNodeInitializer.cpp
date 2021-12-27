@@ -73,7 +73,8 @@ void LocalNodeInitializer::init(std::string const& _configFilePath, std::string 
     schedulerImpl->registerBlockNumberReceiver(
         [rpc = m_rpc, nodeConfig](bcos::protocol::BlockNumber number) {
             BCOS_LOG(INFO) << "Notify blocknumber: " << number;
-            rpc->asyncNotifyBlockNumber(nodeConfig->groupId(), {}, number, [](bcos::Error::Ptr) {});
+            rpc->asyncNotifyBlockNumber(
+                nodeConfig->groupId(), nodeConfig->nodeName(), number, [](bcos::Error::Ptr) {});
         });
 
     auto txpool = m_nodeInitializer->txPoolInitializer()->txpool();
