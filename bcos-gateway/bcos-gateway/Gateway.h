@@ -41,7 +41,15 @@ public:
         m_p2pInterface(_p2pInterface),
         m_gatewayNodeManager(_gatewayNodeManager),
         m_amop(_amop)
-    {}
+    {
+        m_p2pInterface->registerHandlerByMsgType(MessageType::PeerToPeerMessage,
+            boost::bind(&Gateway::onReceiveP2PMessage, this, boost::placeholders::_1,
+                boost::placeholders::_2, boost::placeholders::_3));
+
+        m_p2pInterface->registerHandlerByMsgType(MessageType::BroadcastMessage,
+            boost::bind(&Gateway::onReceiveBroadcastMessage, this, boost::placeholders::_1,
+                boost::placeholders::_2, boost::placeholders::_3));
+    }
     virtual ~Gateway() { stop(); }
 
     void start() override;
@@ -135,15 +143,6 @@ public:
         bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
         bytesConstRef _payload, ErrorRespFunc _errorRespFunc = ErrorRespFunc());
 
-    /**
-     * @brief: receive group broadcast message
-     * @param _groupID: groupID
-     * @param _srcNodeID: the sender nodeID
-     * @param _payload: message content
-     * @return void
-     */
-    virtual void onReceiveBroadcastMessage(
-        const std::string& _groupID, bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload);
 
     P2PInterface::Ptr p2pInterface() const { return m_p2pInterface; }
     GatewayNodeManager::Ptr gatewayNodeManager() { return m_gatewayNodeManager; }
@@ -182,9 +181,27 @@ public:
     bcos::amop::AMOPImpl::Ptr amop() { return m_amop; }
 
 protected:
+    // for UT
+    Gateway() {}
+
     bool trySendLocalMessage(const std::string& _groupID, bcos::crypto::NodeIDPtr _srcNodeID,
         bcos::crypto::NodeIDPtr _dstNodeID, bytesConstRef _payload, ErrorRespFunc _errorRespFunc);
     bool asyncBroadcastMessageToLocalNodes(
+        const std::string& _groupID, bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload);
+
+    virtual void onReceiveP2PMessage(
+        NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg);
+
+    virtual void onReceiveBroadcastMessage(
+        NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg);
+    /**
+     * @brief: receive group broadcast message
+     * @param _groupID: groupID
+     * @param _srcNodeID: the sender nodeID
+     * @param _payload: message content
+     * @return void
+     */
+    virtual void receiveBroadcastMessage(
         const std::string& _groupID, bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload);
 
 private:

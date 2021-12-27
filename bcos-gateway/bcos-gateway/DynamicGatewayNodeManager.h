@@ -41,7 +41,11 @@ public:
         DynamicGatewayNodeManager::start();
         m_frontServiceInfoUpdater->start();
     }
-    void stop() override { m_frontServiceInfoUpdater->stop(); }
+    void stop() override
+    {
+        DynamicGatewayNodeManager::stop();
+        m_frontServiceInfoUpdater->stop();
+    }
     void updateFrontServiceInfo(bcos::group::GroupInfo::Ptr _groupInfo) override;
 
 private:

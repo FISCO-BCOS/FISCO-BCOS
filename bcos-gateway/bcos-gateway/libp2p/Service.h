@@ -52,7 +52,7 @@ public:
     void sendMessageBySession(
         int _packetType, bytesConstRef _payload, P2PSession::Ptr _p2pSession) override;
     void sendRespMessageBySession(
-        bytesConstRef _payload, P2PMessage::Ptr _p2pMessage, P2PSession::Ptr _p2pSession);
+        bytesConstRef _payload, P2PMessage::Ptr _p2pMessage, P2PSession::Ptr _p2pSession) override;
     void asyncSendMessageByNodeID(P2pID nodeID, std::shared_ptr<P2PMessage> message,
         CallbackFuncWithSession callback, Options options = Options()) override;
 
@@ -91,11 +91,6 @@ public:
     {
         m_keyFactory = _keyFactory;
     }
-
-    std::weak_ptr<Gateway> gateway() { return m_gateway; }
-
-    void setGateway(std::weak_ptr<Gateway> _gateway) { m_gateway = _gateway; }
-
     void updateStaticNodes(std::shared_ptr<SocketFace> const& _s, P2pID const& nodeId);
 
     void registerDisconnectHandler(std::function<void(NetworkException, P2PSession::Ptr)> _handler)
@@ -144,6 +139,16 @@ public:
         return nullptr;
     }
 
+    void eraseHandlerByMsgType(int16_t _type) override
+    {
+        UpgradableGuard l(x_msgHandlers);
+        if (!m_msgHandlers.count(_type))
+        {
+            return;
+        }
+        UpgradeGuard ul(l);
+        m_msgHandlers.erase(_type);
+    }
     bool connected(std::string const& _nodeID) override;
 
 private:
@@ -153,8 +158,6 @@ private:
     std::vector<std::function<void(NetworkException, P2PSession::Ptr)>> m_disconnectionHandlers;
 
     std::shared_ptr<bcos::crypto::KeyFactory> m_keyFactory;
-
-    std::weak_ptr<Gateway> m_gateway;
 
     std::map<NodeIPEndpoint, P2pID> m_staticNodes;
     bcos::RecursiveMutex x_nodes;

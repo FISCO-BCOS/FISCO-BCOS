@@ -73,8 +73,11 @@ void Gateway::start()
 
 void Gateway::stop()
 {
+    // erase the registered handler
     if (m_p2pInterface)
     {
+        m_p2pInterface->eraseHandlerByMsgType(MessageType::PeerToPeerMessage);
+        m_p2pInterface->eraseHandlerByMsgType(MessageType::BroadcastMessage);
         m_p2pInterface->stop();
     }
     if (m_amop)
@@ -492,7 +495,7 @@ void Gateway::onReceiveP2PMessage(const std::string& _groupID, bcos::crypto::Nod
  * @param _payload: message payload
  * @return void
  */
-void Gateway::onReceiveBroadcastMessage(
+void Gateway::receiveBroadcastMessage(
     const std::string& _groupID, bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload)
 {
     auto frontServiceInterfaces =
@@ -518,4 +521,62 @@ void Gateway::asyncNotifyGroupInfo(
     {
         _callback(nullptr);
     }
+}
+
+void Gateway::onReceiveP2PMessage(
+    NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg)
+{
+    if (_e.errorCode())
+    {
+        GATEWAY_LOG(WARNING) << LOG_DESC("onReceiveP2PMessage error")
+                             << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
+        return;
+    }
+
+    auto options = _msg->options();
+    auto groupID = options->groupID();
+    auto srcNodeID = options->srcNodeID();
+    const auto& dstNodeIDs = options->dstNodeIDs();
+    auto payload = _msg->payload();
+    auto bytesConstRefPayload = bytesConstRef(payload->data(), payload->size());
+    auto srcNodeIDPtr = m_gatewayNodeManager->keyFactory()->createKey(*srcNodeID.get());
+    auto dstNodeIDPtr = m_gatewayNodeManager->keyFactory()->createKey(*dstNodeIDs[0].get());
+    auto gateway = std::weak_ptr<Gateway>(shared_from_this());
+    onReceiveP2PMessage(groupID, srcNodeIDPtr, dstNodeIDPtr, bytesConstRefPayload,
+        [groupID, srcNodeIDPtr, dstNodeIDPtr, _session, _msg, gateway](Error::Ptr _error) {
+            auto gatewayPtr = gateway.lock();
+            if (!gatewayPtr)
+            {
+                return;
+            }
+
+            auto errorCode =
+                std::to_string(_error ? _error->errorCode() : (int)protocol::CommonError::SUCCESS);
+            if (_error)
+            {
+                GATEWAY_LOG(DEBUG)
+                    << "onReceiveP2PMessage callback" << LOG_KV("code", _error->errorCode())
+                    << LOG_KV("msg", _error->errorMessage()) << LOG_KV("group", groupID)
+                    << LOG_KV("src", srcNodeIDPtr->shortHex())
+                    << LOG_KV("dst", dstNodeIDPtr->shortHex());
+            }
+            gatewayPtr->m_p2pInterface->sendRespMessageBySession(
+                bytesConstRef((byte*)errorCode.data(), errorCode.size()), _msg, _session);
+        });
+}
+
+void Gateway::onReceiveBroadcastMessage(
+    NetworkException const& _e, P2PSession::Ptr, std::shared_ptr<P2PMessage> _msg)
+{
+    if (!_e.errorCode())
+    {
+        GATEWAY_LOG(WARNING) << LOG_DESC("onReceiveBroadcastMessage error")
+                             << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
+        return;
+    }
+    auto options = _msg->options();
+    auto srcNodeID = options->srcNodeID();
+    auto srcNodeIDPtr = m_gatewayNodeManager->keyFactory()->createKey(*srcNodeID.get());
+    receiveBroadcastMessage(options->groupID(), srcNodeIDPtr,
+        bytesConstRef(_msg->payload()->data(), _msg->payload()->size()));
 }

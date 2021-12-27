@@ -35,9 +35,8 @@ BOOST_FIXTURE_TEST_SUITE(GatewayNodeManagerTest, TestPromptFixture)
 class FakeGatewayNodeManager : public GatewayNodeManager
 {
 public:
-    FakeGatewayNodeManager(P2pID const& _nodeID,
-        std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface)
-      : GatewayNodeManager(_nodeID, _keyFactory, _p2pInterface)
+    FakeGatewayNodeManager(std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory)
+      : GatewayNodeManager(_keyFactory)
     {}
     ~FakeGatewayNodeManager() override {}
     // public for ut
@@ -62,11 +61,24 @@ public:
     {
         return GatewayNodeManager::updateNodeInfo(_p2pID, _nodeIDsJson);
     }
+
+    void start() override {}
+    void stop() override {}
+};
+
+class FakeGateway : public Gateway
+{
+public:
+    FakeGateway() : Gateway() {}
+    ~FakeGateway() override {}
+
+    void start() override {}
+    void stop() override {}
 };
 
 BOOST_AUTO_TEST_CASE(test_P2PMessage_statusSeqChanged)
 {
-    auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>("", nullptr, nullptr);
+    auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>(nullptr);
     std::string p2pID = "1";
     bool changed = false;
     changed = gatewayNodeManager->statusChanged(p2pID, 1);
@@ -75,7 +87,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_statusSeqChanged)
 
 BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService)
 {
-    auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>("", nullptr, nullptr);
+    auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>(nullptr);
     std::string groupID = "group";
     std::string strNodeID = "nodeID";
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
@@ -84,8 +96,7 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService)
         keyFactory->createKey(bytesConstRef((bcos::byte*)strNodeID.data(), strNodeID.size()));
 
     auto frontServiceFactory = std::make_shared<bcos::front::FrontServiceFactory>();
-    frontServiceFactory->setGatewayInterface(
-        std::make_shared<bcos::gateway::Gateway>("", nullptr, nullptr, nullptr));
+    frontServiceFactory->setGatewayInterface(std::make_shared<FakeGateway>());
 
     auto frontService = frontServiceFactory->buildFrontService(groupID, nodeID);
 
@@ -129,7 +140,7 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService)
 
 BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService_loop)
 {
-    auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>("", nullptr, nullptr);
+    auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>(nullptr);
     size_t loopCount = 100;
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
 
@@ -169,7 +180,7 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService_loop)
 
 BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_onRequestNodeIDs)
 {
-    auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>("", nullptr, nullptr);
+    auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>(nullptr);
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
 
     for (size_t i = 0; i < 100; i++)
@@ -200,7 +211,7 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_onRequestNodeIDs)
 
 BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_jsonJarser)
 {
-    auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>("", nullptr, nullptr);
+    auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>(nullptr);
 
     uint32_t statusSeq;
     std::unordered_map<std::string, std::set<std::string>> nodeIDsMap;
@@ -241,7 +252,7 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_jsonJarser)
 
 BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_onReceiveNodeIDs)
 {
-    auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>("", nullptr, nullptr);
+    auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>(nullptr);
 
     const std::string json =
         "{\"statusSeq\":110,\"nodeInfoList\":[{\"groupID\":\"group1\","
@@ -263,7 +274,7 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_onReceiveNodeIDs)
 BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_query)
 {
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
-    auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>("", keyFactory, nullptr);
+    auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>(keyFactory);
 
     const std::string json =
         "{\"statusSeq\":110,\"nodeInfoList\":[{\"groupID\":\"group1\","
@@ -357,7 +368,7 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_query)
 BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_remove)
 {
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
-    auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>("", keyFactory, nullptr);
+    auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>(nullptr);
 
     const std::string json =
         "{\"statusSeq\":110,\"nodeInfoList\":[{\"groupID\":\"group1\","

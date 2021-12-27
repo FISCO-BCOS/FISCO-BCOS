@@ -67,7 +67,19 @@ public:
     GatewayNodeManager(P2pID const& _nodeID, std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory,
         P2PInterface::Ptr _p2pInterface);
     virtual void start() { m_timer->start(); }
-    virtual void stop() {}
+    virtual void stop()
+    {
+        if (m_p2pInterface)
+        {
+            m_p2pInterface->eraseHandlerByMsgType(MessageType::SyncNodeSeq);
+            m_p2pInterface->eraseHandlerByMsgType(MessageType::RequestNodeIDs);
+            m_p2pInterface->eraseHandlerByMsgType(MessageType::ResponseNodeIDs);
+        }
+        if (m_timer)
+        {
+            m_timer->stop();
+        }
+    }
 
     virtual ~GatewayNodeManager() {}
 
@@ -126,6 +138,11 @@ public:
     void queryLocalNodeIDsByGroup(const std::string& _groupID, bcos::crypto::NodeIDs& _nodeIDs);
 
 protected:
+    // for ut
+    GatewayNodeManager(std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory)
+      : m_keyFactory(_keyFactory)
+    {}
+
     uint32_t increaseSeq()
     {
         uint32_t statusSeq = ++m_statusSeq;

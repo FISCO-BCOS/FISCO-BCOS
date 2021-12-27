@@ -308,7 +308,6 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         // init Gateway
         auto gateway = std::make_shared<Gateway>(m_chainID, service, gatewayNodeManager, amop);
         auto weakptrGatewayNodeManager = std::weak_ptr<GatewayNodeManager>(gatewayNodeManager);
-        service->setGateway(std::weak_ptr<Gateway>(gateway));
         // register disconnect handler
         service->registerDisconnectHandler(
             [weakptrGatewayNodeManager](NetworkException e, P2PSession::Ptr p2pSession) {

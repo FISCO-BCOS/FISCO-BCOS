@@ -32,7 +32,7 @@ enum MessageType : int16_t
 {
     Heartbeat = 0x1,
     Handshake = 0x2,
-    RequestNodeIDs = 0x3,  // for gateway sync nodeinfo
+    RequestNodeIDs = 0x3,  // for request the gateway nodeinfo
     ResponseNodeIDs = 0x4,
     PeerToPeerMessage = 0x5,
     BroadcastMessage = 0x6,
