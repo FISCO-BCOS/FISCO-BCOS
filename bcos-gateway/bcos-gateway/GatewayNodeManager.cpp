@@ -30,6 +30,26 @@ using namespace gateway;
 using namespace bcos::protocol;
 using namespace bcos::group;
 
+GatewayNodeManager::GatewayNodeManager(P2pID const& _nodeID,
+    std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface)
+  : m_p2pNodeID(_nodeID), m_keyFactory(_keyFactory), m_p2pInterface(_p2pInterface)
+{
+    // SyncNodeSeq
+    m_p2pInterface->registerHandlerByMsgType(MessageType::SyncNodeSeq,
+        boost::bind(&GatewayNodeManager::onReceiveStatusSeq, this, boost::placeholders::_1,
+            boost::placeholders::_2, boost::placeholders::_3));
+    // RequestNodeIDs
+    m_p2pInterface->registerHandlerByMsgType(MessageType::RequestNodeIDs,
+        boost::bind(&GatewayNodeManager::onRequestNodeIDs, this, boost::placeholders::_1,
+            boost::placeholders::_2, boost::placeholders::_3));
+    // ResponseNodeIDs
+    m_p2pInterface->registerHandlerByMsgType(MessageType::ResponseNodeIDs,
+        boost::bind(&GatewayNodeManager::onResponseNodeIDs, this, boost::placeholders::_1,
+            boost::placeholders::_2, boost::placeholders::_3));
+    m_timer = std::make_shared<Timer>(SEQ_SYNC_PERIOD, "seqSync");
+    // broadcast seq periodically
+    m_timer->registerTimeoutHandler([this]() { broadcastStatusSeq(); });
+}
 /**
  * @brief: register FrontService
  * @param _groupID: groupID
@@ -179,31 +199,39 @@ GatewayNodeManager::queryFrontServiceInterfaceByGroupID(const std::string& _grou
 }
 
 void GatewayNodeManager::onReceiveStatusSeq(
-    const P2pID& _p2pID, uint32_t _statusSeq, bool& _statusSeqChanged)
+    NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg)
 {
-    _statusSeqChanged = true;
+    if (_e.errorCode())
+    {
+        NODE_MANAGER_LOG(WARNING) << LOG_DESC("onReceiveStatusSeq error")
+                                  << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
+        return;
+    }
+    auto statusSeq = boost::asio::detail::socket_ops::network_to_host_long(
+        *((uint32_t*)_msg->payload()->data()));
+    auto statusSeqChanged = statusChanged(_session->p2pID(), statusSeq);
+    NODE_MANAGER_LOG(DEBUG) << LOG_DESC("onReceiveStatusSeq") << LOG_KV("p2pid", _session->p2pID())
+                            << LOG_KV("statusSeq", statusSeq)
+                            << LOG_KV("seqChanged", statusSeqChanged);
+    if (!statusSeqChanged)
+    {
+        return;
+    }
+    m_p2pInterface->sendMessageBySession(MessageType::RequestNodeIDs, bytesConstRef(), _session);
+}
+
+bool GatewayNodeManager::statusChanged(std::string const& _p2pNodeID, uint32_t _seq)
+{
+    bool ret = true;
     {
         std::lock_guard<std::mutex> l(x_peerGatewayNodes);
-
-        auto it = m_p2pID2Seq.find(_p2pID);
+        auto it = m_p2pID2Seq.find(_p2pNodeID);
         if (it != m_p2pID2Seq.end())
         {
-            _statusSeqChanged = (_statusSeq != it->second);
+            ret = (statusSeq() != it->second);
         }
     }
-
-    if (_statusSeqChanged)
-    {
-        NODE_MANAGER_LOG(INFO) << LOG_DESC("onReceiveStatusSeq") << LOG_KV("p2pid", _p2pID)
-                               << LOG_KV("statusSeq", _statusSeq)
-                               << LOG_KV("seqChanged", _statusSeqChanged);
-    }
-    else
-    {
-        NODE_MANAGER_LOG(DEBUG) << LOG_DESC("onReceiveStatusSeq") << LOG_KV("p2pid", _p2pID)
-                                << LOG_KV("statusSeq", _statusSeq)
-                                << LOG_KV("seqChanged", _statusSeqChanged);
-    }
+    return ret;
 }
 
 void GatewayNodeManager::notifyNodeIDs2FrontService()
@@ -388,7 +416,7 @@ bool GatewayNodeManager::parseReceivedJson(const std::string& _json, uint32_t& s
     }
 }
 
-void GatewayNodeManager::onReceiveNodeIDs(const P2pID& _p2pID, const std::string& _nodeIDsJson)
+void GatewayNodeManager::updateNodeInfo(const P2pID& _p2pID, const std::string& _nodeIDsJson)
 {
     // parser info json first
     uint32_t statusSeq;
@@ -399,7 +427,45 @@ void GatewayNodeManager::onReceiveNodeIDs(const P2pID& _p2pID, const std::string
     }
 }
 
-void GatewayNodeManager::onRequestNodeIDs(std::string& _nodeIDsJson)
+void GatewayNodeManager::onResponseNodeIDs(
+    NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg)
+{
+    if (_e.errorCode())
+    {
+        NODE_MANAGER_LOG(WARNING) << LOG_DESC("onResponseNodeIDs error")
+                                  << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
+        return;
+    }
+    updateNodeInfo(
+        _session->p2pID(), std::string(_msg->payload()->begin(), _msg->payload()->end()));
+}
+
+
+void GatewayNodeManager::onRequestNodeIDs(
+    NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg)
+{
+    if (_e.errorCode())
+    {
+        NODE_MANAGER_LOG(WARNING) << LOG_DESC("onRequestNodeIDs network error")
+                                  << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
+        return;
+    }
+    std::string nodeInfo;
+    if (!generateNodeInfo(nodeInfo))
+    {
+        NODE_MANAGER_LOG(WARNING) << LOG_DESC("onRequestNodeIDs: generate nodeInfo error")
+                                  << LOG_KV("peer", _session->p2pID());
+        return;
+    }
+    if (nodeInfo.size() == 0)
+    {
+        return;
+    }
+    m_p2pInterface->sendMessageBySession(MessageType::ResponseNodeIDs,
+        bytesConstRef((byte*)nodeInfo.data(), nodeInfo.size()), _session);
+}
+
+bool GatewayNodeManager::generateNodeInfo(std::string& _nodeIDsJson)
 {
     // groupID => nodeIDs list
     std::unordered_map<std::string, std::set<std::string>> localGroup2NodeIDs;
@@ -416,8 +482,6 @@ void GatewayNodeManager::onRequestNodeIDs(std::string& _nodeIDsJson)
             }
         }
     }
-
-    // generator json first
     try
     {
         Json::Value jArray = Json::Value(Json::arrayValue);
@@ -440,14 +504,16 @@ void GatewayNodeManager::onRequestNodeIDs(std::string& _nodeIDsJson)
         Json::FastWriter writer;
         _nodeIDsJson = writer.write(jResp);
 
-        NODE_MANAGER_LOG(INFO) << LOG_DESC("onRequestNodeIDs ") << LOG_KV("seq", seq)
+        NODE_MANAGER_LOG(INFO) << LOG_DESC("generateNodeInfo ") << LOG_KV("seq", seq)
                                << LOG_KV("json", _nodeIDsJson);
+        return true;
     }
     catch (const std::exception& e)
     {
         NODE_MANAGER_LOG(ERROR) << LOG_DESC(
-            "onRequestNodeIDs error: " + boost::diagnostic_information(e));
+            "generateNodeInfo error: " + boost::diagnostic_information(e));
     }
+    return false;
 }
 
 void GatewayNodeManager::onRemoveNodeIDs(const P2pID& _p2pID)
@@ -619,4 +685,18 @@ std::unordered_map<std::string, std::set<std::string>> GatewayNodeManager::nodeI
         return m_nodeIDInfo[_p2pNodeID];
     }
     return std::unordered_map<std::string, std::set<std::string>>();
+}
+
+void GatewayNodeManager::broadcastStatusSeq()
+{
+    m_timer->restart();
+    auto message =
+        std::static_pointer_cast<P2PMessage>(m_p2pInterface->messageFactory()->buildMessage());
+    message->setPacketType(MessageType::SyncNodeSeq);
+    auto seq = statusSeq();
+    auto statusSeq = boost::asio::detail::socket_ops::host_to_network_long(seq);
+    auto payload = std::make_shared<bytes>((byte*)&statusSeq, (byte*)&statusSeq + 4);
+    message->setPayload(payload);
+    NODE_MANAGER_LOG(DEBUG) << LOG_DESC("broadcastStatusSeq") << LOG_KV("seq", seq);
+    m_p2pInterface->asyncBroadcastMessage(message, Options());
 }

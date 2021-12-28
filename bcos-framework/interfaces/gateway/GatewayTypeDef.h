@@ -32,12 +32,13 @@ enum MessageType : int16_t
 {
     Heartbeat = 0x1,
     Handshake = 0x2,
-    RequestNodeIDs = 0x3,
+    RequestNodeIDs = 0x3,  // for request the gateway nodeinfo
     ResponseNodeIDs = 0x4,
     PeerToPeerMessage = 0x5,
     BroadcastMessage = 0x6,
     AMOPMessageType = 0x7,
     WSMessageType = 0x8,
+    SyncNodeSeq = 0x9,
 };
 /**
  * @brief client end endpoint. Node will connect to NodeIPEndpoint.
