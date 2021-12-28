@@ -76,7 +76,7 @@ evmc_bytes32 evm_hash_fn(const uint8_t* data, size_t size)
 }
 }  // namespace
 
-EVMSchedule HostContext::m_evmSchedule = FiscoBcosScheduleV3;
+EVMSchedule HostContext::m_evmSchedule = FiscoBcosScheduleV4;
 // crypto::Hash::Ptr g_hashImpl = nullptr;
 
 HostContext::HostContext(CallParameters::UniquePtr callParameters,
