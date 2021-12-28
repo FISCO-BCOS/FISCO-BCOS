@@ -144,6 +144,7 @@ struct EVMSchedule
     bool haveCreate2 = true;
     bool haveExtcodehash = false;
     bool enableIstanbul = false;
+    bool enableLondon = false;
     /// gas cost for specified calculation
     /// exp gas cost
     unsigned expGas = 10;
@@ -261,8 +262,14 @@ static const EVMSchedule FiscoBcosScheduleV3 = [] {
     return schedule;
 }();
 
-static const EVMSchedule EWASMSchedule = [] {
+static const EVMSchedule FiscoBcosScheduleV4 = [] {
     EVMSchedule schedule = FiscoBcosScheduleV3;
+    schedule.enableLondon = true;
+    return schedule;
+}();
+
+static const EVMSchedule EWASMSchedule = [] {
+    EVMSchedule schedule = FiscoBcosScheduleV4;
     schedule.maxCodeSize = std::numeric_limits<unsigned>::max();
     // Ensure that zero bytes are not subsidised and are charged the same as
     // non-zero bytes.
@@ -270,7 +277,7 @@ static const EVMSchedule EWASMSchedule = [] {
     return schedule;
 }();
 
-static const EVMSchedule DefaultSchedule = FiscoBcosScheduleV3;
+static const EVMSchedule DefaultSchedule = FiscoBcosScheduleV4;
 
 struct ImportRequirements
 {
