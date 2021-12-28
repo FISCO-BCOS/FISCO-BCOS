@@ -66,8 +66,8 @@ void VMInstance::enableDebugOutput()
 
 evmc_revision toRevision(EVMSchedule const& _schedule)
 {
-    if (_schedule.enableIstanbul)
-        return EVMC_ISTANBUL;
+    if (_schedule.enableLondon)
+        return EVMC_LONDON;
     if (_schedule.haveCreate2)
         return EVMC_CONSTANTINOPLE;
     if (_schedule.haveRevert)

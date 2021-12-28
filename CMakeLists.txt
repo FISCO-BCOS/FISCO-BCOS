@@ -36,6 +36,7 @@ hunter_add_package(evmc)
 hunter_add_package(intx)
 hunter_add_package(ethash)
 hunter_add_package(evmone)
+hunter_add_package(tarscpp)
 
 include_directories(${CMAKE_SOURCE_DIR})
 

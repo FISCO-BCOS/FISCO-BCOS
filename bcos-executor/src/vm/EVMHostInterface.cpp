@@ -176,6 +176,22 @@ void log(evmc_host_context* _context, const evmc_address* _addr, uint8_t const* 
     hostContext.log(h256s{pTopics, pTopics + _numTopics}, bytesConstRef{_data, _dataSize});
 }
 
+evmc_access_status access_account(evmc_host_context* _context, const evmc_address* _addr)
+{
+    std::ignore = _context;
+    std::ignore = _addr;
+    return EVMC_ACCESS_COLD;
+}
+
+
+evmc_access_status access_storage(evmc_host_context* _context, const evmc_address* _addr, const evmc_bytes32* _key)
+{
+    std::ignore = _context;
+    std::ignore = _addr;
+    std::ignore = _key;
+    return EVMC_ACCESS_COLD;
+}
+
 evmc_tx_context getTxContext(evmc_host_context* _context) noexcept
 {
     auto& hostContext = static_cast<HostContext&>(*_context);
@@ -248,6 +264,8 @@ evmc_host_interface const fnTable = {
     getTxContext,
     getBlockHash,
     log,
+    access_account,
+    access_storage,
 };
 // clang-format on
 
