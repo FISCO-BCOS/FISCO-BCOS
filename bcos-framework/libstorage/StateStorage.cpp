@@ -368,7 +368,7 @@ crypto::HashType StateStorage::hash(const bcos::crypto::Hash::Ptr& hashImpl)
     bcos::crypto::HashType totalHash;
 
 #pragma omp parallel
-#pragma omp single
+#pragma omp master
     for (auto& it : m_data)
     {
         auto& entry = it.second;
@@ -505,4 +505,14 @@ Entry StateStorage::importExistingEntry(std::string_view table, std::string_view
     assert(!entryIt.empty());
 
     return entryIt->second;
+}
+
+std::tuple<StateStorage::Bucket*, std::unique_lock<std::mutex>> StateStorage::getBucket(
+    std::string_view table, std::string_view key)
+{
+    auto hash = std::hash<std::string_view>{}(table));
+    auto index = hash % m_buckets.size();
+
+    auto& bucket = m_buckets[index];
+    return std::make_tuple(bucket.container, std::unique_lock<std::mutex>(bucket.mutex));
 }

@@ -31,6 +31,8 @@
 #include "tbb/enumerable_thread_specific.h"
 #include "tbb/parallel_for.h"
 #include "tbb/parallel_sort.h"
+#include <boost/multi_index/identity.hpp>
+#include <boost/property_map/property_map.hpp>
 
 #define __TBB_PREVIEW_CONCURRENT_HASH_MAP_EXTENSIONS true
 #include <tbb/concurrent_hash_map.h>
@@ -40,6 +42,12 @@
 #include <memory>
 #include <optional>
 #include <shared_mutex>
+
+#include <boost/multi_index/hashed_index.hpp>
+#include <boost/multi_index/key.hpp>
+#include <boost/multi_index/mem_fun.hpp>
+#include <boost/multi_index/sequenced_index.hpp>
+#include <boost/multi_index_container.hpp>
 
 namespace bcos::storage
 {
@@ -87,8 +95,6 @@ public:
     crypto::HashType hash(const bcos::crypto::Hash::Ptr& hashImpl);
 
     ssize_t capacity() const { return m_capacity; }
-
-    size_t size() const { return m_data.size(); }
 
     void setPrev(std::shared_ptr<StorageInterface> prev)
     {
@@ -172,8 +178,6 @@ private:
         return prev;
     }
 
-    tbb::concurrent_hash_map<EntryKey, Entry, EntryKeyHasher> m_data;
-
     tbb::enumerable_thread_specific<Recoder::Ptr> m_recoder;
 
     std::shared_ptr<StorageInterface> m_prev;
@@ -182,6 +186,34 @@ private:
     std::atomic<ssize_t> m_capacity = 0;
     bool m_enableTraverse = false;
     bool m_readOnly = false;
+
+    // new code ----------------------------------------------
+    struct Data
+    {
+        std::string table;
+        std::string key;
+        Entry entry;
+
+        std::tuple<std::string_view, std::string_view> view() const
+        {
+            return std::make_tuple(std::string_view(table), std::string_view(key));
+        }
+    };
+
+    using Container = boost::multi_index_container<Data,
+        boost::multi_index::indexed_by<
+            boost::multi_index::hashed_unique<boost::multi_index::const_mem_fun<Data,
+                std::tuple<std::string_view, std::string_view>, &Data::view>>,
+            boost::multi_index::sequenced<>>>;
+
+    struct Bucket
+    {
+        Container container;
+        std::mutex mutex;
+    };
+    std::vector<Bucket> m_buckets;
+
+    std::tuple<Bucket*, std::unique_lock<std::mutex>> getBucket(std::string_view table, std::string_view key);
 
 #define STORAGE_REPORT_GET(table, key, entry, desc) \
     if (c_fileLogLevel >= bcos::LogLevel::TRACE)    \

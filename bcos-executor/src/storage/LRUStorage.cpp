@@ -1,6 +1,7 @@
 #include "LRUStorage.h"
 #include "../Common.h"
 #include "libstorage/StateStorage.h"
+#include <omp.h>
 #include <oneapi/tbb/spin_mutex.h>
 #include <boost/format.hpp>
 #include <boost/iterator/zip_iterator.hpp>
@@ -8,6 +9,10 @@
 #include <thread>
 
 using namespace bcos::executor;
+
+LRUStorage::LRUStorage(std::shared_ptr<StorageInterface> prev)
+  : storage::StateStorage(std::move(prev)), m_mruBuckets(std::thread::hardware_concurrency())
+{}
 
 void LRUStorage::asyncGetPrimaryKeys(std::string_view table,
     const std::optional<bcos::storage::Condition const>& _condition,
@@ -100,13 +105,17 @@ void LRUStorage::merge(bool onlyDirty, const TraverseStorageInterface& source)
 
 void LRUStorage::updateMRU(EntryKeyWrapper entryKey)
 {
-    std::scoped_lock<std::mutex> lock(m_mruMutex);
+    auto threadID = std::hash<std::thread::id>{}(std::this_thread::get_id());
+    auto index = threadID % m_mruBuckets.size();
+
+    auto& bucket = m_mruBuckets[index];
+    std::unique_lock<std::mutex> lock(bucket.mutex);
 
     // Push item to mru
-    auto result = m_mru.emplace_back(std::move(entryKey));
+    auto result = bucket.mru.emplace_back(std::move(entryKey));
     if (!result.second)
     {
-        m_mru.relocate(m_mru.end(), result.first);
+        bucket.mru.relocate(bucket.mru.end(), result.first);
     }
 
     if (storage::StateStorage::capacity() > m_maxCapacity)
@@ -114,18 +123,15 @@ void LRUStorage::updateMRU(EntryKeyWrapper entryKey)
         STORAGE_LOG(INFO) << "Current capacity: " << storage::StateStorage::capacity()
                           << " greater than " << m_maxCapacity
                           << ", start clear size: " << storage::StateStorage::size();
-        checkAndClear();
+        checkAndClear(bucket);
     }
 }
 
-void LRUStorage::checkAndClear()
+void LRUStorage::checkAndClear(MRUBucket& bucket)
 {
-    size_t clearedCount = 0;
-    size_t clearedCapacity = 0;
-    while ((storage::StateStorage::capacity() > m_maxCapacity) && !m_mru.empty())
+    while (storage::StateStorage::capacity() > m_maxCapacity && !bucket.mru.empty())
     {
-        auto currentCapacity = storage::StateStorage::capacity();
-        auto& item = m_mru.front();
+        auto& item = bucket.mru.front();
 
         bcos::storage::Entry entry;
         entry.setStatus(bcos::storage::Entry::PURGED);
@@ -134,11 +140,8 @@ void LRUStorage::checkAndClear()
         storage::StateStorage::asyncSetRow(
             tableViw, keyView, std::move(entry), [](Error::UniquePtr) {});
 
-        ++clearedCount;
-        clearedCapacity += (currentCapacity - storage::StateStorage::capacity());
-
-        m_mru.pop_front();
+        bucket.mru.pop_front();
     }
-    STORAGE_LOG(INFO) << "LRUStorage cleared: " << clearedCapacity
-                      << " bytes, current size: " << storage::StateStorage::size();
+
+    STORAGE_LOG(INFO) << "LRUStorage cleared, current size: " << storage::StateStorage::size();
 }
