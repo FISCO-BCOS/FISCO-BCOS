@@ -32,7 +32,7 @@ class VMInstance;
 enum class VMKind
 {
     evmone,
-    Hera,
+    BcosWasm,
     DLL
 };
 

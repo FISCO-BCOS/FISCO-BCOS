@@ -155,7 +155,8 @@ jobs:
       - name: install CentOS dependencies
         run: |
           yum install -y epel-release centos-release-scl
-          yum install -y git make gcc gcc-c++ glibc-static glibc-devel cmake3 ccache devtoolset-7 libzstd-devel zlib-devel flex bison python-devel python3-devel && source /opt/rh/devtoolset-7/enable
+          yum install -y git make gcc gcc-c++ glibc-static glibc-devel cmake3 ccache llvm-toolset-7 devtoolset-7 libzstd-devel zlib-devel flex bison python-devel python3-devel
+          source /opt/rh/devtoolset-7/enable
           alias cmake='cmake3'
           yum install -y https://repo.ius.io/ius-release-el7.rpm https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
           yum swap -y git git224-core
@@ -184,6 +185,8 @@ jobs:
       - name: configure and compile
         run: |
           source /opt/rh/devtoolset-7/enable
+          export LIBCLANG_PATH=/opt/rh/llvm-toolset-7/root/lib64/
+          source /opt/rh/llvm-toolset-7/enable
           cmake3 . -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON -DHUNTER_CONFIGURATION_TYPES=Release
           make -j3
           make tar

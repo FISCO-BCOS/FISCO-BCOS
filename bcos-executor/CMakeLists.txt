@@ -14,7 +14,6 @@ find_package(Threads REQUIRED)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
-include(ProjectHera)
 include(ProjectWABT)
 
 hunter_add_package(evmc)
@@ -27,10 +26,10 @@ find_package(evmone CONFIG REQUIRED)
 find_package(intx CONFIG REQUIRED)
 find_package(ethash CONFIG REQUIRED)
 find_package(Boost CONFIG QUIET REQUIRED serialization program_options context)
+include(ProjectBCOSWASM)
 
 add_library(executor ${SRCS})
-target_link_libraries(executor PUBLIC framework crypto Boost::context TBB::tbb evmone hera hera-buildinfo
-${WASM_ENGINE_LIBRARY} evmc::loader evmc::instructions wabt)
+target_link_libraries(executor PUBLIC framework crypto Boost::context TBB::tbb evmone fbwasm evmc::loader evmc::instructions wabt)
 
 if (TOOLS)
     add_subdirectory(tools)

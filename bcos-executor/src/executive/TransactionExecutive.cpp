@@ -485,7 +485,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
 
             if (blockContext->isWasm())
             {
-                vmKind = VMKind::Hera;
+                vmKind = VMKind::BcosWasm;
             }
 
             auto vm = VMFactory::create(vmKind);
@@ -586,7 +586,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
             auto vmKind = VMKind::evmone;
             if (hasWasmPreamble(code))
             {
-                vmKind = VMKind::Hera;
+                vmKind = VMKind::BcosWasm;
             }
             auto vm = VMFactory::create(vmKind);
 
