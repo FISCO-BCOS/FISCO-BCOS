@@ -1,5 +1,6 @@
 #include "StateStorage.h"
 #include "../libutilities/Error.h"
+#include "bcos-framework/libutilities/BoostLog.h"
 #include <oneapi/tbb/parallel_for_each.h>
 #include <tbb/parallel_sort.h>
 #include <tbb/queuing_rw_mutex.h>
@@ -366,59 +367,45 @@ crypto::HashType StateStorage::hash(const bcos::crypto::Hash::Ptr& hashImpl)
 {
     bcos::crypto::HashType totalHash;
 
-    if (c_fileLogLevel >= bcos::LogLevel::TRACE)
+#pragma omp parallel
+#pragma omp single
+    for (auto& it : m_data)
     {
-        for (auto& it : m_data)
+        auto& entry = it.second;
+        if (entry.dirty())
         {
-            auto& entry = it.second;
-            if (entry.dirty())
+#pragma omp task
             {
+                auto& key = it.first;
+                auto hash = hashImpl->hash(std::get<0>(key));
+                hash ^= hashImpl->hash(std::get<1>(key));
+
                 if (entry.status() != Entry::DELETED)
                 {
                     auto value = entry.getField(0);
-                    STORAGE_LOG(TRACE)
-                        << "Calc hash, dirty entry: " << std::get<0>(it.first) << " | "
-                        << toHex(std::get<1>(it.first)) << " | " << toHex(value);
+                    if (c_fileLogLevel >= TRACE)
+                    {
+                        STORAGE_LOG(TRACE)
+                            << "Calc hash, dirty entry: " << std::get<0>(it.first) << " | "
+                            << toHex(std::get<1>(it.first)) << " | " << toHex(value);
+                    }
                     bcos::bytesConstRef ref((const bcos::byte*)value.data(), value.size());
-                    auto hash = hashImpl->hash(ref);
-
-                    totalHash ^= hash;
+                    hash ^= hashImpl->hash(ref);
                 }
                 else
                 {
-                    STORAGE_LOG(TRACE) << "Calc hash, deleted entry: " << std::get<0>(it.first)
-                                       << " | " << toHex(std::get<1>(it.first));
-                    totalHash ^= bcos::crypto::HashType(0x1);
+                    if (c_fileLogLevel >= TRACE)
+                    {
+                        STORAGE_LOG(TRACE) << "Calc hash, deleted entry: " << std::get<0>(it.first)
+                                           << " | " << toHex(std::get<1>(it.first));
+                    }
+                    hash ^= bcos::crypto::HashType(0x1);
                 }
+
+#pragma omp critical
+                totalHash ^= hash;
             }
         }
-    }
-    else
-    {
-        tbb::spin_mutex hashMutex;
-        tbb::parallel_for(m_data.range(),
-            [&hashImpl, &hashMutex, &totalHash](decltype(m_data)::range_type& range) {
-                for (auto& it : range)
-                {
-                    auto& entry = it.second;
-                    if (entry.dirty())
-                    {
-                        if (entry.status() != Entry::DELETED)
-                        {
-                            auto value = entry.getField(0);
-                            bcos::bytesConstRef ref((const bcos::byte*)value.data(), value.size());
-                            auto hash = hashImpl->hash(ref);
-
-                            tbb::spin_mutex::scoped_lock lock(hashMutex);
-                            totalHash ^= hash;
-                        }
-                        else
-                        {
-                            totalHash ^= bcos::crypto::HashType(0x1);
-                        }
-                    }
-                }
-            });
     }
 
     return totalHash;

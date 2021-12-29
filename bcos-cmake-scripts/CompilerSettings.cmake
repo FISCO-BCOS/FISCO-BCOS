@@ -51,6 +51,8 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
     add_compile_options(-DBOOST_SPIRIT_THREADSAFE)
     # for tbb, TODO: https://software.intel.com/sites/default/files/managed/b2/d2/TBBRevamp.pdf
     add_compile_options(-DTBB_SUPPRESS_DEPRECATED_MESSAGES=1)
+    add_compile_options(-fopenmp)
+    add_link_options(-fopenmp)
     # build deps lib Release
     set(_only_release_configuration "-DCMAKE_BUILD_TYPE=Release")
 

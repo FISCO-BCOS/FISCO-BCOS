@@ -22,8 +22,6 @@ configure_project()
 include(CompilerSettings)
 include(BuildInfoGenerator)
 
-
-
 # import dependencies
 hunter_add_package(Boost COMPONENTS all)
 hunter_add_package(tbb)
