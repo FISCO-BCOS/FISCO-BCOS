@@ -148,7 +148,9 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
         if (m_nodeConfig->enableLRUCacheStorage())
         {
             cache = std::make_shared<bcos::executor::LRUStorage>(storage);
-            BCOS_LOG(INFO) << LOG_DESC("initNode: enableLRUCacheStorage");
+            cache->setMaxCapacity(m_nodeConfig->cacheSize());
+            BCOS_LOG(INFO) << "initNode: enableLRUCacheStorage, size: "
+                           << m_nodeConfig->cacheSize();
         }
         else
         {

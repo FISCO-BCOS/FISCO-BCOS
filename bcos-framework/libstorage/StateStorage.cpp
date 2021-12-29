@@ -1,5 +1,6 @@
 #include "StateStorage.h"
 #include "../libutilities/Error.h"
+#include "bcos-framework/libutilities/BoostLog.h"
 #include <oneapi/tbb/parallel_for_each.h>
 #include <tbb/parallel_sort.h>
 #include <tbb/queuing_rw_mutex.h>
@@ -136,10 +137,8 @@ void StateStorage::asyncGetRow(std::string_view tableView, std::string_view keyV
     if (prev)
     {
         prev->asyncGetRow(tableView, keyView,
-            [this, prev, table = std::string(tableView),
-                key = std::string(keyView),
-                _callback](Error::UniquePtr error, std::optional<Entry> entry) {
-
+            [this, prev, table = std::string(tableView), key = std::string(keyView), _callback](
+                Error::UniquePtr error, std::optional<Entry> entry) {
                 if (error)
                 {
                     _callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
@@ -258,7 +257,7 @@ void StateStorage::asyncSetRow(std::string_view tableNameView, std::string_view 
         return;
     }
 
-    auto updatedCapacity = entry.size();
+    ssize_t updatedCapacity = entry.size();
     std::optional<Entry> entryOld;
 
     decltype(m_data)::accessor entryIt;
@@ -303,10 +302,6 @@ void StateStorage::asyncSetRow(std::string_view tableNameView, std::string_view 
                                .str();
             STORAGE_LOG(WARNING) << message;
             STORAGE_REPORT_SET(tableNameView, keyView, std::nullopt, "FAIL EXISTS");
-
-            // lock.release();
-            // callback(BCOS_ERROR_UNIQUE_PTR(StorageError::WriteError, message));
-            // return;
         }
     }
 
@@ -372,59 +367,45 @@ crypto::HashType StateStorage::hash(const bcos::crypto::Hash::Ptr& hashImpl)
 {
     bcos::crypto::HashType totalHash;
 
-    if (c_fileLogLevel >= bcos::LogLevel::TRACE)
+#pragma omp parallel
+#pragma omp master
+    for (auto& it : m_data)
     {
-        for (auto& it : m_data)
+        auto& entry = it.second;
+        if (entry.dirty())
         {
-            auto& entry = it.second;
-            if (entry.dirty())
+#pragma omp task
             {
+                auto& key = it.first;
+                auto hash = hashImpl->hash(std::get<0>(key));
+                hash ^= hashImpl->hash(std::get<1>(key));
+
                 if (entry.status() != Entry::DELETED)
                 {
                     auto value = entry.getField(0);
-                    STORAGE_LOG(TRACE)
-                        << "Calc hash, dirty entry: " << std::get<0>(it.first) << " | "
-                        << toHex(std::get<1>(it.first)) << " | " << toHex(value);
+                    if (c_fileLogLevel >= TRACE)
+                    {
+                        STORAGE_LOG(TRACE)
+                            << "Calc hash, dirty entry: " << std::get<0>(it.first) << " | "
+                            << toHex(std::get<1>(it.first)) << " | " << toHex(value);
+                    }
                     bcos::bytesConstRef ref((const bcos::byte*)value.data(), value.size());
-                    auto hash = hashImpl->hash(ref);
-
-                    totalHash ^= hash;
+                    hash ^= hashImpl->hash(ref);
                 }
                 else
                 {
-                    STORAGE_LOG(TRACE) << "Calc hash, deleted entry: " << std::get<0>(it.first)
-                                       << " | " << toHex(std::get<1>(it.first));
-                    totalHash ^= bcos::crypto::HashType(0x1);
+                    if (c_fileLogLevel >= TRACE)
+                    {
+                        STORAGE_LOG(TRACE) << "Calc hash, deleted entry: " << std::get<0>(it.first)
+                                           << " | " << toHex(std::get<1>(it.first));
+                    }
+                    hash ^= bcos::crypto::HashType(0x1);
                 }
+
+#pragma omp critical
+                totalHash ^= hash;
             }
         }
-    }
-    else
-    {
-        tbb::spin_mutex hashMutex;
-        tbb::parallel_for(m_data.range(),
-            [&hashImpl, &hashMutex, &totalHash](decltype(m_data)::range_type& range) {
-                for (auto& it : range)
-                {
-                    auto& entry = it.second;
-                    if (entry.dirty())
-                    {
-                        if (entry.status() != Entry::DELETED)
-                        {
-                            auto value = entry.getField(0);
-                            bcos::bytesConstRef ref((const bcos::byte*)value.data(), value.size());
-                            auto hash = hashImpl->hash(ref);
-
-                            tbb::spin_mutex::scoped_lock lock(hashMutex);
-                            totalHash ^= hash;
-                        }
-                        else
-                        {
-                            totalHash ^= bcos::crypto::HashType(0x1);
-                        }
-                    }
-                }
-            });
     }
 
     return totalHash;
@@ -439,9 +420,11 @@ void StateStorage::rollback(const Recoder& recoder)
 
     for (auto& change : recoder)
     {
+        ssize_t updateCapacity = 0;
         if (change.entry)
         {
             decltype(m_data)::accessor entryIt;
+
             if (m_data.find(entryIt,
                     std::make_tuple(std::string_view(change.table), std::string_view(change.key))))
             {
@@ -450,6 +433,7 @@ void StateStorage::rollback(const Recoder& recoder)
                     STORAGE_LOG(TRACE) << "Revert exists: " << change.table << " | "
                                        << toHex(change.key) << " | " << toHex(change.entry->get());
                 }
+                updateCapacity = change.entry->size() - entryIt->second.size();
                 entryIt->second = std::move(*(change.entry));
             }
             else
@@ -459,6 +443,7 @@ void StateStorage::rollback(const Recoder& recoder)
                     STORAGE_LOG(TRACE) << "Revert deleted: " << change.table << " | "
                                        << toHex(change.key) << " | " << toHex(change.entry->get());
                 }
+                updateCapacity = change.entry->size();
                 m_data.emplace(std::make_tuple(std::string(change.table), std::string(change.key)),
                     std::move(*(change.entry)));
             }
@@ -474,6 +459,8 @@ void StateStorage::rollback(const Recoder& recoder)
                     STORAGE_LOG(TRACE)
                         << "Revert insert: " << change.table << " | " << toHex(change.key);
                 }
+
+                updateCapacity = 0 - entryIt->second.size();
                 m_data.erase(entryIt);
             }
             else
@@ -485,6 +472,8 @@ void StateStorage::rollback(const Recoder& recoder)
                 BOOST_THROW_EXCEPTION(BCOS_ERROR(StorageError::UnknownError, message));
             }
         }
+
+        m_capacity += updateCapacity;
     }
 }
 
@@ -497,6 +486,7 @@ Entry StateStorage::importExistingEntry(std::string_view table, std::string_view
 
     entry.setDirty(false);
 
+    auto updateCapacity = entry.size();
     decltype(m_data)::const_accessor entryIt;
     if (!m_data.emplace(entryIt, EntryKey(std::string(table), std::string(key)), std::move(entry)))
     {
@@ -509,9 +499,20 @@ Entry StateStorage::importExistingEntry(std::string_view table, std::string_view
     {
         STORAGE_REPORT_SET(
             std::get<0>(entryIt->first), key, std::make_optional(entryIt->second), "IMPORT");
+        m_capacity += updateCapacity;
     }
 
     assert(!entryIt.empty());
 
     return entryIt->second;
+}
+
+std::tuple<StateStorage::Bucket*, std::unique_lock<std::mutex>> StateStorage::getBucket(
+    std::string_view table, std::string_view key)
+{
+    auto hash = std::hash<std::string_view>{}(table));
+    auto index = hash % m_buckets.size();
+
+    auto& bucket = m_buckets[index];
+    return std::make_tuple(bucket.container, std::unique_lock<std::mutex>(bucket.mutex));
 }
