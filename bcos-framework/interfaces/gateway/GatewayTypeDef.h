@@ -113,7 +113,7 @@ class GatewayInfo
 public:
     using Ptr = std::shared_ptr<GatewayInfo>;
     // groupID=>nodeList
-    using NodeIDInfoType = std::unordered_map<std::string, std::set<std::string>>;
+    using NodeIDInfoType = std::map<std::string, std::set<std::string>>;
     GatewayInfo()
       : m_p2pInfo(std::make_shared<P2PInfo>()), m_nodeIDInfo(std::make_shared<NodeIDInfoType>())
     {}

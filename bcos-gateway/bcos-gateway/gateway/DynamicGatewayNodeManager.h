@@ -27,32 +27,33 @@ namespace gateway
 class DynamicGatewayNodeManager : public GatewayNodeManager
 {
 public:
+    using Ptr = std::shared_ptr<DynamicGatewayNodeManager>;
     DynamicGatewayNodeManager(P2pID const& _nodeID,
         std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface)
       : GatewayNodeManager(_nodeID, _keyFactory, _p2pInterface)
     {
-        m_frontServiceInfoUpdater = std::make_shared<Timer>(1000, "frontServiceUpdater");
-        m_frontServiceInfoUpdater->registerTimeoutHandler([this]() { updateFrontServiceInfo(); });
+        m_nodeAliveDetector = std::make_shared<Timer>(1000, "nodeUpdater");
+        m_nodeAliveDetector->registerTimeoutHandler([this]() { DetectNodeAlive(); });
         m_startT = utcTime();
     }
 
     void start() override
     {
-        DynamicGatewayNodeManager::start();
-        m_frontServiceInfoUpdater->start();
+        GatewayNodeManager::start();
+        m_nodeAliveDetector->start();
     }
     void stop() override
     {
-        DynamicGatewayNodeManager::stop();
-        m_frontServiceInfoUpdater->stop();
+        GatewayNodeManager::stop();
+        m_nodeAliveDetector->stop();
     }
     void updateFrontServiceInfo(bcos::group::GroupInfo::Ptr _groupInfo) override;
 
 private:
-    virtual void updateFrontServiceInfo();
+    virtual void DetectNodeAlive();
 
 private:
-    std::shared_ptr<Timer> m_frontServiceInfoUpdater;
+    std::shared_ptr<Timer> m_nodeAliveDetector;
     uint64_t m_startT;
     uint64_t c_tarsAdminRefreshInitTime = 120 * 1000;
 };

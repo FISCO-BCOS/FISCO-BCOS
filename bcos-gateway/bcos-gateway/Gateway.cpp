@@ -48,24 +48,6 @@ void Gateway::start()
     {
         m_gatewayNodeManager->start();
     }
-
-    const auto& frontServiceInfos = m_gatewayNodeManager->frontServiceInfos();
-    if (frontServiceInfos.empty())
-    {
-        GATEWAY_LOG(WARNING) << LOG_DESC("gateway has no registered front service");
-    }
-    else
-    {
-        for (const auto& group : frontServiceInfos)
-        {
-            for (const auto& node : group.second)
-            {
-                GATEWAY_LOG(INFO) << LOG_DESC("start") << LOG_KV("groupID", group.first)
-                                  << LOG_KV("nodeID", node.first);
-            }
-        }
-    }
-
     GATEWAY_LOG(INFO) << LOG_DESC("start end.");
 
     return;
@@ -141,7 +123,7 @@ void Gateway::asyncGetPeers(
     }
     auto localP2pInfo = m_p2pInterface->localP2pInfo();
     auto localGatewayInfo = std::make_shared<GatewayInfo>(localP2pInfo);
-    auto loaclNodeIDInfo = m_gatewayNodeManager->getLocalNodeIDInfo();
+    auto loaclNodeIDInfo = m_gatewayNodeManager->localRouterTable()->nodeListInfo();
     localGatewayInfo->setNodeIDInfo(std::move(loaclNodeIDInfo));
     _onGetPeers(nullptr, localGatewayInfo, peerGatewayInfos);
 }
@@ -159,36 +141,12 @@ void Gateway::asyncGetNodeIDs(const std::string& _groupID, GetNodeIDsFunc _getNo
     _getNodeIDsFunc(nullptr, nodeIDs);
 }
 
-/**
- * @brief: register FrontService
- * @param _groupID: groupID
- * @param _nodeID: nodeID
- * @param _frontServiceInterface: FrontService
- * @return bool
- */
-bool Gateway::registerFrontService(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
-    bcos::front::FrontServiceInterface::Ptr _frontServiceInterface)
-{
-    return m_gatewayNodeManager->registerFrontService(_groupID, _nodeID, _frontServiceInterface);
-}
-
-/**
- * @brief: unregister FrontService
- * @param _groupID: groupID
- * @param _nodeID: nodeID
- * @return bool
- */
-bool Gateway::unregisterFrontService(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID)
-{
-    return m_gatewayNodeManager->unregisterFrontService(_groupID, _nodeID);
-}
-
-
 // send message to the local nodes
 bool Gateway::trySendLocalMessage(const std::string& _groupID, bcos::crypto::NodeIDPtr _srcNodeID,
     bcos::crypto::NodeIDPtr _dstNodeID, bytesConstRef _payload, ErrorRespFunc _errorRespFunc)
 {
-    auto frontServiceInfo = m_gatewayNodeManager->queryLocalNodes(_groupID, _dstNodeID->hex());
+    auto frontServiceInfo =
+        m_gatewayNodeManager->localRouterTable()->getFrontService(_groupID, _dstNodeID);
     if (!frontServiceInfo)
     {
         return false;
@@ -382,15 +340,16 @@ void Gateway::asyncSendMessageByNodeIDs(const std::string& _groupID,
 bool Gateway::asyncBroadcastMessageToLocalNodes(
     const std::string& _groupID, bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload)
 {
-    auto frontServiceInfos = m_gatewayNodeManager->groupFrontServices(_groupID);
-    if (frontServiceInfos.size() == 0)
+    auto frontServiceList =
+        m_gatewayNodeManager->localRouterTable()->getGroupFrontServiceList(_groupID);
+    if (frontServiceList.size() == 0)
     {
         return false;
     }
-    for (auto const& it : frontServiceInfos)
+    for (auto const& it : frontServiceList)
     {
-        auto frontService = it.second->frontService();
-        auto dstNodeID = it.first;
+        auto frontService = it->frontService();
+        auto dstNodeID = it->nodeID();
         frontService->onReceiveMessage(
             _groupID, _srcNodeID, _payload, [_srcNodeID, dstNodeID](Error::Ptr _error) {
                 if (_error)
@@ -451,9 +410,9 @@ void Gateway::asyncSendBroadcastMessage(
 void Gateway::onReceiveP2PMessage(const std::string& _groupID, bcos::crypto::NodeIDPtr _srcNodeID,
     bcos::crypto::NodeIDPtr _dstNodeID, bytesConstRef _payload, ErrorRespFunc _errorRespFunc)
 {
-    bcos::front::FrontServiceInterface::Ptr frontServiceInterface =
-        m_gatewayNodeManager->queryFrontServiceInterfaceByGroupIDAndNodeID(_groupID, _dstNodeID);
-    if (!frontServiceInterface)
+    auto frontService =
+        m_gatewayNodeManager->localRouterTable()->getFrontService(_groupID, _dstNodeID);
+    if (!frontService)
     {
         GATEWAY_LOG(ERROR) << LOG_DESC(
                                   "onReceiveP2PMessage unable to find front "
@@ -473,7 +432,7 @@ void Gateway::onReceiveP2PMessage(const std::string& _groupID, bcos::crypto::Nod
         return;
     }
 
-    frontServiceInterface->onReceiveMessage(_groupID, _srcNodeID, _payload,
+    frontService->frontService()->onReceiveMessage(_groupID, _srcNodeID, _payload,
         [_groupID, _srcNodeID, _dstNodeID, _errorRespFunc](Error::Ptr _error) {
             if (_errorRespFunc)
             {
@@ -498,11 +457,11 @@ void Gateway::onReceiveP2PMessage(const std::string& _groupID, bcos::crypto::Nod
 void Gateway::receiveBroadcastMessage(
     const std::string& _groupID, bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload)
 {
-    auto frontServiceInterfaces =
-        m_gatewayNodeManager->queryFrontServiceInterfaceByGroupID(_groupID);
-    for (const auto& frontServiceInterface : frontServiceInterfaces)
+    auto localNodeList =
+        m_gatewayNodeManager->localRouterTable()->getGroupFrontServiceList(_groupID);
+    for (const auto& service : localNodeList)
     {
-        frontServiceInterface->onReceiveMessage(
+        service->frontService()->onReceiveMessage(
             _groupID, _srcNodeID, _payload, [_groupID, _srcNodeID](Error::Ptr _error) {
                 GATEWAY_LOG(TRACE)
                     << LOG_DESC("onReceiveBroadcastMessage callback") << LOG_KV("groupID", _groupID)

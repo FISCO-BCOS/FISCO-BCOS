@@ -7,9 +7,9 @@
 #include <bcos-framework/interfaces/rpc/RPCInterface.h>
 #include <bcos-framework/libutilities/DataConvertUtility.h>
 #include <bcos-framework/libutilities/FileUtility.h>
-#include <bcos-gateway/DynamicGatewayNodeManager.h>
 #include <bcos-gateway/GatewayFactory.h>
-#include <bcos-gateway/GatewayNodeManager.h>
+#include <bcos-gateway/gateway/DynamicGatewayNodeManager.h>
+#include <bcos-gateway/gateway/GatewayNodeManager.h>
 #include <bcos-gateway/libamop/LocalTopicManager.h>
 #include <bcos-gateway/libnetwork/ASIOInterface.h>
 #include <bcos-gateway/libnetwork/Common.h>

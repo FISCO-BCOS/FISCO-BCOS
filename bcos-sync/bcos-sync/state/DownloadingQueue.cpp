@@ -281,7 +281,7 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
                 {
                     // reset the executed number
                     BLKSYNC_LOG(WARNING)
-                        << LOG_DESC("applyBlock: executing the downloaded block failed and retry")
+                        << LOG_DESC("applyBlock: executing the downloaded block failed")
                         << LOG_KV("number", orgBlockHeader->number())
                         << LOG_KV("hash", orgBlockHeader->hash().abridged())
                         << LOG_KV("errorCode", _error->errorCode())

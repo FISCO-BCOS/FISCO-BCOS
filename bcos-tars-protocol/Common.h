@@ -305,7 +305,7 @@ inline bcos::gateway::GatewayInfo::Ptr fromTarsGatewayInfo(bcostars::GatewayInfo
 {
     auto bcosGatewayInfo = std::make_shared<bcos::gateway::GatewayInfo>();
     auto p2pInfo = toBcosP2PNodeInfo(_tarsGatewayInfo.p2pInfo);
-    std::unordered_map<std::string, std::set<std::string>> nodeIDInfos;
+    std::map<std::string, std::set<std::string>> nodeIDInfos;
     for (auto const& it : _tarsGatewayInfo.nodeIDInfo)
     {
         auto const& nodeIDListInfo = it.nodeIDList;
