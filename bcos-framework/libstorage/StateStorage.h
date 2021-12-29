@@ -27,27 +27,19 @@
 #include "../interfaces/storage/StorageInterface.h"
 #include "../interfaces/storage/Table.h"
 #include "../libutilities/Error.h"
-#include "tbb/concurrent_unordered_map.h"
 #include "tbb/enumerable_thread_specific.h"
-#include "tbb/parallel_for.h"
-#include "tbb/parallel_sort.h"
+#include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/identity.hpp>
+#include <boost/multi_index/key.hpp>
+#include <boost/multi_index/mem_fun.hpp>
+#include <boost/multi_index/sequenced_index.hpp>
+#include <boost/multi_index_container.hpp>
 #include <boost/property_map/property_map.hpp>
-
-#define __TBB_PREVIEW_CONCURRENT_HASH_MAP_EXTENSIONS true
-#include <tbb/concurrent_hash_map.h>
-#include <tbb/queuing_rw_mutex.h>
 #include <boost/throw_exception.hpp>
 #include <future>
 #include <memory>
 #include <optional>
 #include <shared_mutex>
-
-#include <boost/multi_index/hashed_index.hpp>
-#include <boost/multi_index/key.hpp>
-#include <boost/multi_index/mem_fun.hpp>
-#include <boost/multi_index/sequenced_index.hpp>
-#include <boost/multi_index_container.hpp>
 
 namespace bcos::storage
 {
@@ -57,7 +49,9 @@ public:
     using Ptr = std::shared_ptr<StateStorage>;
 
     explicit StateStorage(std::shared_ptr<StorageInterface> prev)
-      : storage::TraverseStorageInterface(), m_prev(std::move(prev))
+      : storage::TraverseStorageInterface(),
+        m_prev(std::move(prev)),
+        m_buckets(std::thread::hardware_concurrency())
     {}
 
     StateStorage(const StateStorage&) = delete;
@@ -92,9 +86,7 @@ public:
 
     std::optional<Table> createTable(std::string _tableName, std::string _valueFields);
 
-    crypto::HashType hash(const bcos::crypto::Hash::Ptr& hashImpl);
-
-    ssize_t capacity() const { return m_capacity; }
+    crypto::HashType hash(const bcos::crypto::Hash::Ptr& hashImpl) const;
 
     void setPrev(std::shared_ptr<StorageInterface> prev)
     {
@@ -139,35 +131,6 @@ public:
     void setEnableTraverse(bool enableTraverse) { m_enableTraverse = enableTraverse; }
     void setReadOnly(bool readOnly) { m_readOnly = readOnly; }
 
-protected:
-    struct EntryKeyHasher
-    {
-        using is_transparent = void;
-
-        template <typename T>
-        size_t hash(const std::tuple<T, T>& dataKey) const
-        {
-            size_t seed = hashString(std::get<0>(dataKey));
-            boost::hash_combine(seed, hashString(std::get<1>(dataKey)));
-
-            return seed;
-        }
-
-        template <typename T1, typename T2>
-        bool equal(const std::tuple<T1, T1>& lhs, const std::tuple<T2, T2>& rhs) const
-        {
-            auto lhsView = std::make_tuple(
-                std::string_view(std::get<0>(lhs)), std::string_view(std::get<1>(lhs)));
-            auto rhsView = std::make_tuple(
-                std::string_view(std::get<0>(rhs)), std::string_view(std::get<1>(rhs)));
-            return lhsView == rhsView;
-        }
-
-        std::hash<std::string_view> hashString;
-    };
-
-    using EntryKey = std::tuple<std::string, std::string>;
-
 private:
     Entry importExistingEntry(std::string_view table, std::string_view key, Entry entry);
 
@@ -183,11 +146,9 @@ private:
     std::shared_ptr<StorageInterface> m_prev;
     std::shared_mutex m_prevMutex;
 
-    std::atomic<ssize_t> m_capacity = 0;
     bool m_enableTraverse = false;
     bool m_readOnly = false;
 
-    // new code ----------------------------------------------
     struct Data
     {
         std::string table;
@@ -210,10 +171,12 @@ private:
     {
         Container container;
         std::mutex mutex;
+        size_t capacity = 0;
     };
     std::vector<Bucket> m_buckets;
 
-    std::tuple<Bucket*, std::unique_lock<std::mutex>> getBucket(std::string_view table, std::string_view key);
+    std::tuple<Bucket*, std::unique_lock<std::mutex>> getBucket(
+        std::string_view table, std::string_view key);
 
 #define STORAGE_REPORT_GET(table, key, entry, desc) \
     if (c_fileLogLevel >= bcos::LogLevel::TRACE)    \
@@ -250,4 +213,6 @@ private:
         }
     }
 };
+
+
 }  // namespace bcos::storage

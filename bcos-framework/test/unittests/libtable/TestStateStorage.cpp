@@ -227,8 +227,6 @@ BOOST_AUTO_TEST_CASE(rollback2)
     auto savePoint = tableFactory->newRecoder();
     tableFactory->setRecoder(savePoint);
 
-    BOOST_CHECK_GT(tableFactory->capacity(), 0);
-
     entry = table->newEntry();
     // entry->setField("key", "id");
     entry->setField(0, "12345");
@@ -929,21 +927,15 @@ BOOST_AUTO_TEST_CASE(purge)
     storage->asyncSetRow(
         "table", "key2", std::move(entry2), [](Error::UniquePtr error) { BOOST_CHECK(!error); });
 
-    BOOST_CHECK_EQUAL(storage->capacity(), 17);  // 12 value + 7 table name
-
     Entry entry3;
     entry3.setStatus(Entry::PURGED);
     storage->asyncSetRow(
         "table", "key2", std::move(entry3), [](Error::UniquePtr error) { BOOST_CHECK(!error); });
 
-    BOOST_CHECK_EQUAL(storage->capacity(), 11);
-
     Entry entry4;
     entry4.setStatus(Entry::DELETED);
     storage->asyncSetRow(
         "table", "key1", std::move(entry4), [](Error::UniquePtr error) { BOOST_CHECK(!error); });
-
-    BOOST_CHECK_EQUAL(storage->capacity(), 5);
 
     std::vector<std::tuple<std::string_view, std::string_view, Entry>> all;
     storage->parallelTraverse(false,

@@ -6,6 +6,7 @@
 #include <tbb/queuing_rw_mutex.h>
 #include <tbb/spin_mutex.h>
 #include <boost/algorithm/hex.hpp>
+#include <boost/container_hash/hash_fwd.hpp>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/crc.hpp>
 #include <boost/format.hpp>
@@ -29,16 +30,23 @@ void StateStorage::asyncGetPrimaryKeys(std::string_view table,
 
     if (m_enableTraverse)
     {
-        for (auto& it : m_data)
+#pragma omp parallel for
+        for (size_t i = 0; i < m_buckets.size(); ++i)
         {
-            auto& [entryTable, entryKey] = it.first;
-            if (entryTable == table)
+            auto& bucket = m_buckets[i];
+            std::unique_lock<std::mutex> lock(bucket.mutex);
+
+            decltype(localKeys) bucketKeys;
+            for (auto& it : bucket.container)
             {
-                if (!_condition || _condition->isValid(entryKey))
+                if (it.table == table && (!_condition || _condition->isValid(it.key)))
                 {
-                    localKeys.emplace(entryKey, it.second.status());
+                    bucketKeys.emplace(it.key, it.entry.status());
                 }
             }
+
+#pragma omp critical
+            localKeys.merge(std::move(bucketKeys));
         }
     }
 
@@ -106,14 +114,16 @@ void StateStorage::asyncGetPrimaryKeys(std::string_view table,
 void StateStorage::asyncGetRow(std::string_view tableView, std::string_view keyView,
     std::function<void(Error::UniquePtr, std::optional<Entry>)> _callback)
 {
-    decltype(m_data)::const_accessor entryIt;
-    if (m_data.find(entryIt, std::make_tuple(tableView, keyView)))
+    auto [bucket, lock] = getBucket(tableView, keyView);
+
+    auto it = bucket->container.get<0>().find(std::make_tuple(tableView, keyView));
+    if (it != bucket->container.get<0>().end())
     {
-        auto& entry = entryIt->second;
+        auto& entry = it->entry;
 
         if (entry.status() != Entry::NORMAL)
         {
-            entryIt.release();
+            lock.unlock();
 
             STORAGE_REPORT_GET(tableView, keyView, std::nullopt, "DELETED");
             _callback(nullptr, std::nullopt);
@@ -121,7 +131,7 @@ void StateStorage::asyncGetRow(std::string_view tableView, std::string_view keyV
         else
         {
             auto optionalEntry = std::make_optional(entry);
-            entryIt.release();
+            lock.unlock();
 
             STORAGE_REPORT_GET(tableView, keyView, optionalEntry, "FOUND");
             _callback(nullptr, std::move(optionalEntry));
@@ -132,6 +142,7 @@ void StateStorage::asyncGetRow(std::string_view tableView, std::string_view keyV
     {
         STORAGE_REPORT_GET(tableView, keyView, std::nullopt, "NO ENTRY");
     }
+    lock.unlock();
 
     auto prev = getPrev();
     if (prev)
@@ -179,16 +190,18 @@ void StateStorage::asyncGetRows(std::string_view tableView,
             auto missinges = std::tuple<std::vector<std::string_view>,
                 std::vector<std::tuple<std::string, size_t>>>();
 
-            long existsCount = 0;
+            std::atomic_long existsCount = 0;
 
-            size_t i = 0;
-            for (auto& key : _keys)
+#pragma omp parallel for
+            for (gsl::index i = 0; i < _keys.size(); ++i)
             {
-                decltype(m_data)::const_accessor entryIt;
-                std::string_view keyView(key);
-                if (m_data.find(entryIt, EntryKey(tableView, keyView)))
+                auto [bucket, lock] = getBucket(tableView, _keys[i]);
+
+                auto it =
+                    bucket->container.find(std::make_tuple(tableView, std::string_view(_keys[i])));
+                if (it != bucket->container.end())
                 {
-                    auto& entry = entryIt->second;
+                    auto& entry = it->entry;
                     if (entry.status() == Entry::NORMAL)
                     {
                         results[i].emplace(entry);
@@ -201,11 +214,12 @@ void StateStorage::asyncGetRows(std::string_view tableView,
                 }
                 else
                 {
-                    std::get<1>(missinges).emplace_back(std::string(key), i);
-                    std::get<0>(missinges).emplace_back(key);
+#pragma omp critical
+                    {
+                        std::get<1>(missinges).emplace_back(std::string(_keys[i]), i);
+                        std::get<0>(missinges).emplace_back(_keys[i]);
+                    }
                 }
-
-                ++i;
             }
 
             auto prev = getPrev();
@@ -260,24 +274,26 @@ void StateStorage::asyncSetRow(std::string_view tableNameView, std::string_view 
     ssize_t updatedCapacity = entry.size();
     std::optional<Entry> entryOld;
 
-    decltype(m_data)::accessor entryIt;
-    if (m_data.find(entryIt, EntryKey(tableNameView, keyView)))
+    auto [bucket, lock] = getBucket(tableNameView, keyView);
+
+    auto it = bucket->container.find(std::make_tuple(tableNameView, keyView));
+    if (it != bucket->container.end())
     {
-        auto& existsEntry = entryIt->second;
+        auto& existsEntry = it->entry;
         entryOld.emplace(std::move(existsEntry));
 
         updatedCapacity -= entryOld->size();
 
         if (entry.status() == Entry::PURGED)
         {
-            m_data.erase(entryIt);
+            bucket->container.erase(it);
             STORAGE_REPORT_SET(tableNameView, keyView, std::nullopt, "PURGED");
         }
         else
         {
             STORAGE_REPORT_SET(tableNameView, keyView, entry, "UPDATE");
-            entryIt->second = std::move(entry);
-            entryIt.release();
+            bucket->container.modify(
+                it, [&entry](Data& data) { data.entry = std::move(entry); });
         }
     }
     else
@@ -286,23 +302,15 @@ void StateStorage::asyncSetRow(std::string_view tableNameView, std::string_view 
         {
             STORAGE_REPORT_SET(tableNameView, keyView, std::nullopt, "PURGED NOT EXISTS");
 
+            lock.unlock();
             callback(nullptr);
             return;
         }
 
-        if (m_data.emplace(
-                EntryKey(std::string(tableNameView), std::string(keyView)), std::move(entry)))
-        {
-            STORAGE_REPORT_SET(tableNameView, keyView, std::nullopt, "INSERT");
-        }
-        else
-        {
-            auto message = (boost::format("Set row failed because row exists: %s | %s") %
-                            tableNameView % keyView)
-                               .str();
-            STORAGE_LOG(WARNING) << message;
-            STORAGE_REPORT_SET(tableNameView, keyView, std::nullopt, "FAIL EXISTS");
-        }
+        bucket->container.emplace(
+            Data{std::string(tableNameView), std::string(keyView), std::move(entry)});
+
+        STORAGE_REPORT_SET(tableNameView, keyView, std::nullopt, "INSERT");
     }
 
     if (m_recoder.local())
@@ -311,8 +319,9 @@ void StateStorage::asyncSetRow(std::string_view tableNameView, std::string_view 
             Recoder::Change(std::string(tableNameView), std::string(keyView), std::move(entryOld)));
     }
 
-    m_capacity += updatedCapacity;
+    bucket->capacity += updatedCapacity;
 
+    lock.unlock();
     callback(nullptr);
 }
 
@@ -321,14 +330,20 @@ void StateStorage::parallelTraverse(bool onlyDirty,
         const std::string_view& table, const std::string_view& key, const Entry& entry)>
         callback) const
 {
-    oneapi::tbb::parallel_for_each(
-        m_data.begin(), m_data.end(), [&](const std::pair<const EntryKey, Entry>& it) {
-            auto& entry = it.second;
+#pragma omp parallel for
+    for (size_t i = 0; i < m_buckets.size(); ++i)
+    {
+        auto& bucket = m_buckets[i];
+
+        for (auto& it : bucket.container)
+        {
+            auto& entry = it.entry;
             if (!onlyDirty || entry.dirty())
             {
-                callback(std::get<0>(it.first), std::get<1>(it.first), entry);
+                callback(it.table, it.key, entry);
             }
-        });
+        }
+    }
 }
 
 std::optional<Table> StateStorage::openTable(const std::string_view& tableName)
@@ -363,31 +378,31 @@ std::optional<Table> StateStorage::createTable(std::string _tableName, std::stri
     return table;
 }
 
-crypto::HashType StateStorage::hash(const bcos::crypto::Hash::Ptr& hashImpl)
+crypto::HashType StateStorage::hash(const bcos::crypto::Hash::Ptr& hashImpl) const
 {
     bcos::crypto::HashType totalHash;
 
-#pragma omp parallel
-#pragma omp master
-    for (auto& it : m_data)
+#pragma omp parallel for
+    for (size_t i = 0; i < m_buckets.size(); ++i)
     {
-        auto& entry = it.second;
-        if (entry.dirty())
+        auto& bucket = m_buckets[i];
+        bcos::crypto::HashType bucketHash;
+
+        for (auto& it : bucket.container)
         {
-#pragma omp task
+            auto& entry = it.entry;
+            if (entry.dirty())
             {
-                auto& key = it.first;
-                auto hash = hashImpl->hash(std::get<0>(key));
-                hash ^= hashImpl->hash(std::get<1>(key));
+                auto hash = hashImpl->hash(it.table);
+                hash ^= hashImpl->hash(it.key);
 
                 if (entry.status() != Entry::DELETED)
                 {
                     auto value = entry.getField(0);
                     if (c_fileLogLevel >= TRACE)
                     {
-                        STORAGE_LOG(TRACE)
-                            << "Calc hash, dirty entry: " << std::get<0>(it.first) << " | "
-                            << toHex(std::get<1>(it.first)) << " | " << toHex(value);
+                        STORAGE_LOG(TRACE) << "Calc hash, dirty entry: " << it.table << " | "
+                                           << toHex(it.key) << " | " << toHex(value);
                     }
                     bcos::bytesConstRef ref((const bcos::byte*)value.data(), value.size());
                     hash ^= hashImpl->hash(ref);
@@ -396,16 +411,16 @@ crypto::HashType StateStorage::hash(const bcos::crypto::Hash::Ptr& hashImpl)
                 {
                     if (c_fileLogLevel >= TRACE)
                     {
-                        STORAGE_LOG(TRACE) << "Calc hash, deleted entry: " << std::get<0>(it.first)
-                                           << " | " << toHex(std::get<1>(it.first));
+                        STORAGE_LOG(TRACE) << "Calc hash, deleted entry: " << it.table << " | "
+                                           << toHex(toHex(it.key));
                     }
                     hash ^= bcos::crypto::HashType(0x1);
                 }
-
-#pragma omp critical
-                totalHash ^= hash;
+                bucketHash ^= hash;
             }
         }
+#pragma omp critical
+        totalHash ^= bucketHash;
     }
 
     return totalHash;
@@ -421,20 +436,24 @@ void StateStorage::rollback(const Recoder& recoder)
     for (auto& change : recoder)
     {
         ssize_t updateCapacity = 0;
+        auto [bucket, lock] = getBucket(change.table, change.key);
+        auto it = bucket->container.find(
+            std::make_tuple(std::string_view(change.table), std::string_view(change.key)));
         if (change.entry)
         {
-            decltype(m_data)::accessor entryIt;
-
-            if (m_data.find(entryIt,
-                    std::make_tuple(std::string_view(change.table), std::string_view(change.key))))
+            if (it != bucket->container.end())
             {
                 if (c_fileLogLevel >= bcos::LogLevel::TRACE)
                 {
                     STORAGE_LOG(TRACE) << "Revert exists: " << change.table << " | "
                                        << toHex(change.key) << " | " << toHex(change.entry->get());
                 }
-                updateCapacity = change.entry->size() - entryIt->second.size();
-                entryIt->second = std::move(*(change.entry));
+
+                updateCapacity = change.entry->size() - it->entry.size();
+
+                auto& rollbackEntry = change.entry;
+                bucket->container.modify(it,
+                    [&rollbackEntry](Data& data) { data.entry = std::move(*rollbackEntry); });
             }
             else
             {
@@ -444,15 +463,13 @@ void StateStorage::rollback(const Recoder& recoder)
                                        << toHex(change.key) << " | " << toHex(change.entry->get());
                 }
                 updateCapacity = change.entry->size();
-                m_data.emplace(std::make_tuple(std::string(change.table), std::string(change.key)),
-                    std::move(*(change.entry)));
+                bucket->container.emplace(
+                    Data{change.table, change.key, std::move(*(change.entry))});
             }
         }
         else
         {  // nullopt means the key is not exist in m_cache
-            decltype(m_data)::const_accessor entryIt;
-            if (m_data.find(entryIt,
-                    EntryKey(std::string_view(change.table), std::string_view(change.key))))
+            if (it != bucket->container.end())
             {
                 if (c_fileLogLevel >= bcos::LogLevel::TRACE)
                 {
@@ -460,8 +477,8 @@ void StateStorage::rollback(const Recoder& recoder)
                         << "Revert insert: " << change.table << " | " << toHex(change.key);
                 }
 
-                updateCapacity = 0 - entryIt->second.size();
-                m_data.erase(entryIt);
+                updateCapacity = 0 - it->entry.size();
+                bucket->container.erase(it);
             }
             else
             {
@@ -473,7 +490,7 @@ void StateStorage::rollback(const Recoder& recoder)
             }
         }
 
-        m_capacity += updateCapacity;
+        bucket->capacity += updateCapacity;
     }
 }
 
@@ -487,32 +504,38 @@ Entry StateStorage::importExistingEntry(std::string_view table, std::string_view
     entry.setDirty(false);
 
     auto updateCapacity = entry.size();
-    decltype(m_data)::const_accessor entryIt;
-    if (!m_data.emplace(entryIt, EntryKey(std::string(table), std::string(key)), std::move(entry)))
+
+    auto [bucket, lock] = getBucket(table, key);
+    auto it = bucket->container.find(std::make_tuple(table, key));
+
+    if (it == bucket->container.get<0>().end())
+    {
+        STORAGE_REPORT_SET(
+            std::get<0>(entryIt->first), key, std::make_optional(entryIt->second), "IMPORT");
+        it = bucket->container
+                 .emplace(Data{std::string(table), std::string(key), std::move(entry)})
+                 .first;
+
+        bucket->capacity += updateCapacity;
+    }
+    else
     {
         STORAGE_REPORT_SET(
             std::get<0>(entryIt->first), key, entryIt->second, "IMPORT EXISTS FAILED");
 
         STORAGE_LOG(WARNING) << "Fail import existsing entry, " << table << " | " << toHex(key);
     }
-    else
-    {
-        STORAGE_REPORT_SET(
-            std::get<0>(entryIt->first), key, std::make_optional(entryIt->second), "IMPORT");
-        m_capacity += updateCapacity;
-    }
 
-    assert(!entryIt.empty());
-
-    return entryIt->second;
+    return it->entry;
 }
 
 std::tuple<StateStorage::Bucket*, std::unique_lock<std::mutex>> StateStorage::getBucket(
     std::string_view table, std::string_view key)
 {
-    auto hash = std::hash<std::string_view>{}(table));
+    auto hash = std::hash<std::string_view>{}(table);
+    boost::hash_combine(hash, std::hash<std::string_view>{}(key));
     auto index = hash % m_buckets.size();
 
     auto& bucket = m_buckets[index];
-    return std::make_tuple(bucket.container, std::unique_lock<std::mutex>(bucket.mutex));
+    return std::make_tuple(&bucket, std::unique_lock<std::mutex>(bucket.mutex));
 }
