@@ -117,14 +117,14 @@ void Gateway::asyncGetPeers(
     for (auto const& info : sessionInfos)
     {
         auto gatewayInfo = std::make_shared<GatewayInfo>(info);
-        auto nodeIDInfo = m_gatewayNodeManager->nodeIDInfo(info.p2pID);
-        gatewayInfo->setNodeIDInfo(std::move(nodeIDInfo));
+        auto nodeInfo = m_gatewayNodeManager->peersNodeInfo(info.p2pID);
+        gatewayInfo->setNodeIDInfo(std::move(nodeInfo));
         peerGatewayInfos->emplace_back(gatewayInfo);
     }
     auto localP2pInfo = m_p2pInterface->localP2pInfo();
     auto localGatewayInfo = std::make_shared<GatewayInfo>(localP2pInfo);
-    auto loaclNodeIDInfo = m_gatewayNodeManager->localRouterTable()->nodeListInfo();
-    localGatewayInfo->setNodeIDInfo(std::move(loaclNodeIDInfo));
+    auto localNodeInfo = m_gatewayNodeManager->localRouterTable()->nodeListInfo();
+    localGatewayInfo->setNodeIDInfo(std::move(localNodeInfo));
     _onGetPeers(nullptr, localGatewayInfo, peerGatewayInfos);
 }
 
@@ -136,8 +136,7 @@ void Gateway::asyncGetPeers(
  */
 void Gateway::asyncGetNodeIDs(const std::string& _groupID, GetNodeIDsFunc _getNodeIDsFunc)
 {
-    std::shared_ptr<crypto::NodeIDs> nodeIDs = std::make_shared<crypto::NodeIDs>();
-    m_gatewayNodeManager->queryNodeIDsByGroupID(_groupID, *nodeIDs);
+    auto nodeIDs = m_gatewayNodeManager->getGroupNodeIDList(_groupID);
     _getNodeIDsFunc(nullptr, nodeIDs);
 }
 
@@ -174,8 +173,9 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID,
     bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID, bytesConstRef _payload,
     ErrorRespFunc _errorRespFunc)
 {
-    std::set<P2pID> p2pIDs;
-    if (!m_gatewayNodeManager->queryP2pIDs(_groupID, _dstNodeID->hex(), p2pIDs))
+    auto p2pIDs =
+        m_gatewayNodeManager->peersRouterTable()->queryP2pIDs(_groupID, _dstNodeID->hex());
+    if (p2pIDs.empty())
     {
         if (trySendLocalMessage(_groupID, _srcNodeID, _dstNodeID, _payload, _errorRespFunc))
         {
@@ -374,9 +374,9 @@ bool Gateway::asyncBroadcastMessageToLocalNodes(
 void Gateway::asyncSendBroadcastMessage(
     const std::string& _groupID, bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload)
 {
-    std::set<P2pID> p2pIDs;
     auto ret = asyncBroadcastMessageToLocalNodes(_groupID, _srcNodeID, _payload);
-    if (!m_gatewayNodeManager->queryP2pIDsByGroupID(_groupID, p2pIDs))
+    auto p2pIDs = m_gatewayNodeManager->peersRouterTable()->queryP2pIDsByGroupID(_groupID);
+    if (p2pIDs.empty())
     {
         if (!ret)
         {

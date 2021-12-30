@@ -227,13 +227,13 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
  * @return void
  */
 std::shared_ptr<Gateway> GatewayFactory::buildGateway(
-    const std::string& _configPath, bool _localMode)
+    const std::string& _configPath, bool _airVersion)
 {
     auto config = std::make_shared<GatewayConfig>();
     // load config
     config->initConfig(_configPath);
     config->loadP2pConnectedNodes();
-    return buildGateway(config, _localMode);
+    return buildGateway(config, _airVersion);
 }
 
 /**
@@ -241,7 +241,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(
  * @param _config: config parameter object
  * @return void
  */
-std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config, bool _localMode)
+std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config, bool _airVersion)
 {
     try
     {
@@ -294,7 +294,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         // init GatewayNodeManager
         GatewayNodeManager::Ptr gatewayNodeManager;
         AMOPImpl::Ptr amop;
-        if (_localMode)
+        if (_airVersion)
         {
             gatewayNodeManager = std::make_shared<GatewayNodeManager>(pubHex, keyFactory, service);
             amop = buildLocalAMOP(service, pubHex);

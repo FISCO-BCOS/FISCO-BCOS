@@ -27,18 +27,18 @@ using namespace bcos::front;
 using namespace bcos::crypto;
 
 FrontServiceInfo::Ptr LocalRouterTable::getFrontService(
-    const std::string& _groupID, NodeIDPtr _nodeID)
+    const std::string& _groupID, NodeIDPtr _nodeID) const
 {
     ReadGuard l(x_nodeList);
-    if (!m_nodeList.count(_groupID) || !m_nodeList[_groupID].count(_nodeID->hex()))
+    if (!m_nodeList.count(_groupID) || !m_nodeList.at(_groupID).count(_nodeID->hex()))
     {
         return nullptr;
     }
-    return m_nodeList[_groupID][_nodeID->hex()];
+    return m_nodeList.at(_groupID).at(_nodeID->hex());
 }
 
 std::vector<FrontServiceInfo::Ptr> LocalRouterTable::getGroupFrontServiceList(
-    const std::string& _groupID)
+    const std::string& _groupID) const
 {
     std::vector<FrontServiceInfo::Ptr> nodeServiceList;
     ReadGuard l(x_nodeList);
@@ -53,21 +53,23 @@ std::vector<FrontServiceInfo::Ptr> LocalRouterTable::getGroupFrontServiceList(
     return nodeServiceList;
 }
 
-void LocalRouterTable::getGroupNodeIDList(const std::string& _groupID, NodeIDs& _nodeIDList)
+NodeIDs LocalRouterTable::getGroupNodeIDList(const std::string& _groupID) const
 {
+    NodeIDs nodeIDList;
     ReadGuard l(x_nodeList);
     if (!m_nodeList.count(_groupID))
     {
-        return;
+        return nodeIDList;
     }
-    for (auto const& item : m_nodeList[_groupID])
+    for (auto const& item : m_nodeList.at(_groupID))
     {
         auto bytes = bcos::fromHexString(item.first);
-        _nodeIDList.emplace_back(m_keyFactory->createKey(*bytes.get()));
+        nodeIDList.emplace_back(m_keyFactory->createKey(*bytes.get()));
     }
+    return nodeIDList;
 }
 
-std::map<std::string, std::set<std::string>> LocalRouterTable::nodeListInfo()
+std::map<std::string, std::set<std::string>> LocalRouterTable::nodeListInfo() const
 {
     std::map<std::string, std::set<std::string>> nodeList;
     ReadGuard l(x_nodeList);

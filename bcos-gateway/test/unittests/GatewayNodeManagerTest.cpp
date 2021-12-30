@@ -329,45 +329,31 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_query)
 
     gatewayNodeManager->updateNodeInfo(p2pID1, json);
 
-    std::set<P2pID> p2pIDs1;
-    auto r = gatewayNodeManager->queryP2pIDsByGroupID(group1, p2pIDs1);
-    BOOST_CHECK(r);
+    auto p2pIDs1 = gatewayNodeManager->peersRouterTable()->queryP2pIDsByGroupID(group1);
     BOOST_CHECK_EQUAL(p2pIDs1.size(), 1);
     BOOST_CHECK_EQUAL(*p2pIDs1.begin(), p2pID1);
 
-    bcos::crypto::NodeIDs nodeIDs;
-    gatewayNodeManager->queryNodeIDsByGroupID(group1, nodeIDs);
-    BOOST_CHECK(r);
-    BOOST_CHECK_EQUAL(nodeIDs.size(), 3);
+    auto nodeIDs = gatewayNodeManager->getGroupNodeIDList(group1);
+    BOOST_CHECK_EQUAL(nodeIDs->size(), 3);
 
-    std::set<P2pID> p2pIDs2;
-    r = gatewayNodeManager->queryP2pIDs(group1, "a0", p2pIDs2);
-    BOOST_CHECK(r);
+    auto p2pIDs2 = gatewayNodeManager->peersRouterTable()->queryP2pIDs(group1, "a0");
     BOOST_CHECK_EQUAL(p2pIDs2.size(), 1);
     BOOST_CHECK_EQUAL(*p2pIDs2.begin(), p2pID1);
 
     gatewayNodeManager->updateNodeInfo(p2pID2, json);
 
-    std::set<P2pID> p2pIDs3;
-    r = gatewayNodeManager->queryP2pIDsByGroupID(group2, p2pIDs3);
-    BOOST_CHECK(r);
+    auto p2pIDs3 = gatewayNodeManager->peersRouterTable()->queryP2pIDsByGroupID(group2);
     BOOST_CHECK_EQUAL(p2pIDs3.size(), 2);
 
-    std::set<P2pID> p2pIDs4;
-    r = gatewayNodeManager->queryP2pIDs(group2, "a1", p2pIDs4);
-    BOOST_CHECK(r);
+    auto p2pIDs4 = gatewayNodeManager->peersRouterTable()->queryP2pIDs(group2, "a1");
     BOOST_CHECK_EQUAL(p2pIDs4.size(), 2);
 
     gatewayNodeManager->updateNodeInfo(p2pID3, json);
 
-    std::set<P2pID> p2pIDs5;
-    r = gatewayNodeManager->queryP2pIDsByGroupID(group3, p2pIDs5);
-    BOOST_CHECK(r);
+    auto p2pIDs5 = gatewayNodeManager->peersRouterTable()->queryP2pIDsByGroupID(group3);
     BOOST_CHECK_EQUAL(p2pIDs5.size(), 3);
 
-    std::set<P2pID> p2pIDs6;
-    r = gatewayNodeManager->queryP2pIDs(group3, "a2", p2pIDs6);
-    BOOST_CHECK(r);
+    auto p2pIDs6 = gatewayNodeManager->peersRouterTable()->queryP2pIDs(group3, "a2");
     BOOST_CHECK_EQUAL(p2pIDs6.size(), 3);
 }
 
@@ -396,17 +382,13 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_remove)
     gatewayNodeManager->updateNodeInfo(p2pID3, json);
 
     {
-        std::set<P2pID> p2pIDs1;
-        auto r = gatewayNodeManager->queryP2pIDsByGroupID(group1, p2pIDs1);
-        BOOST_CHECK(r);
+        auto p2pIDs1 = gatewayNodeManager->peersRouterTable()->queryP2pIDsByGroupID(group1);
         BOOST_CHECK_EQUAL(p2pIDs1.size(), 3);
         BOOST_CHECK(p2pIDs1.find(p2pID2) != p2pIDs1.end());
         BOOST_CHECK(p2pIDs1.find(p2pID3) != p2pIDs1.end());
         BOOST_CHECK(p2pIDs1.find(p2pID1) != p2pIDs1.end());
 
-        std::set<P2pID> p2pIDs2;
-        r = gatewayNodeManager->queryP2pIDs(group1, "a0", p2pIDs2);
-        BOOST_CHECK(r);
+        auto p2pIDs2 = gatewayNodeManager->peersRouterTable()->queryP2pIDs(group1, "a0");
         BOOST_CHECK_EQUAL(p2pIDs2.size(), 3);
         BOOST_CHECK(p2pIDs2.find(p2pID2) != p2pIDs2.end());
         BOOST_CHECK(p2pIDs2.find(p2pID3) != p2pIDs2.end());
@@ -415,16 +397,12 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_remove)
 
     gatewayNodeManager->onRemoveNodeIDs(p2pID1);
     {
-        std::set<P2pID> p2pIDs1;
-        auto r = gatewayNodeManager->queryP2pIDsByGroupID(group1, p2pIDs1);
-        BOOST_CHECK(r);
+        auto p2pIDs1 = gatewayNodeManager->peersRouterTable()->queryP2pIDsByGroupID(group1);
         BOOST_CHECK_EQUAL(p2pIDs1.size(), 2);
         BOOST_CHECK(p2pIDs1.find(p2pID2) != p2pIDs1.end());
         BOOST_CHECK(p2pIDs1.find(p2pID3) != p2pIDs1.end());
 
-        std::set<P2pID> p2pIDs2;
-        r = gatewayNodeManager->queryP2pIDs(group1, "a0", p2pIDs2);
-        BOOST_CHECK(r);
+        auto p2pIDs2 = gatewayNodeManager->peersRouterTable()->queryP2pIDs(group1, "a0");
         BOOST_CHECK_EQUAL(p2pIDs2.size(), 2);
         BOOST_CHECK(p2pIDs2.find(p2pID2) != p2pIDs2.end());
         BOOST_CHECK(p2pIDs2.find(p2pID3) != p2pIDs2.end());
@@ -432,28 +410,22 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_remove)
 
     gatewayNodeManager->onRemoveNodeIDs(p2pID2);
     {
-        std::set<P2pID> p2pIDs1;
-        auto r = gatewayNodeManager->queryP2pIDsByGroupID(group1, p2pIDs1);
-        BOOST_CHECK(r);
+        auto p2pIDs1 = gatewayNodeManager->peersRouterTable()->queryP2pIDsByGroupID(group1);
         BOOST_CHECK_EQUAL(p2pIDs1.size(), 1);
         BOOST_CHECK(p2pIDs1.find(p2pID3) != p2pIDs1.end());
 
-        std::set<P2pID> p2pIDs2;
-        r = gatewayNodeManager->queryP2pIDs(group1, "a0", p2pIDs2);
-        BOOST_CHECK(r);
+        auto p2pIDs2 = gatewayNodeManager->peersRouterTable()->queryP2pIDs(group1, "a0");
         BOOST_CHECK_EQUAL(p2pIDs2.size(), 1);
         BOOST_CHECK(p2pIDs2.find(p2pID3) != p2pIDs2.end());
     }
 
     gatewayNodeManager->onRemoveNodeIDs(p2pID3);
     {
-        std::set<P2pID> p2pIDs1;
-        auto r = gatewayNodeManager->queryP2pIDsByGroupID(group1, p2pIDs1);
-        BOOST_CHECK(!r);
+        auto p2pIDs1 = gatewayNodeManager->peersRouterTable()->queryP2pIDsByGroupID(group1);
+        BOOST_CHECK(p2pIDs1.empty());
 
-        std::set<P2pID> p2pIDs2;
-        r = gatewayNodeManager->queryP2pIDs(group1, "a0", p2pIDs2);
-        BOOST_CHECK(!r);
+        auto p2pIDs2 = gatewayNodeManager->peersRouterTable()->queryP2pIDs(group1, "a0");
+        BOOST_CHECK(p2pIDs2.empty());
     }
 }
 
