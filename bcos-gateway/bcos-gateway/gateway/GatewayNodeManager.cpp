@@ -41,13 +41,13 @@ GatewayNodeManager::GatewayNodeManager(P2pID const& _nodeID,
     m_p2pInterface->registerHandlerByMsgType(MessageType::SyncNodeSeq,
         boost::bind(&GatewayNodeManager::onReceiveStatusSeq, this, boost::placeholders::_1,
             boost::placeholders::_2, boost::placeholders::_3));
-    // RequestNodeIDs
-    m_p2pInterface->registerHandlerByMsgType(MessageType::RequestNodeIDs,
-        boost::bind(&GatewayNodeManager::onRequestNodeIDs, this, boost::placeholders::_1,
+    // RequestNodeStatus
+    m_p2pInterface->registerHandlerByMsgType(MessageType::RequestNodeStatus,
+        boost::bind(&GatewayNodeManager::onRequestNodeStatus, this, boost::placeholders::_1,
             boost::placeholders::_2, boost::placeholders::_3));
-    // ResponseNodeIDs
-    m_p2pInterface->registerHandlerByMsgType(MessageType::ResponseNodeIDs,
-        boost::bind(&GatewayNodeManager::onResponseNodeIDs, this, boost::placeholders::_1,
+    // ResponseNodeStatus
+    m_p2pInterface->registerHandlerByMsgType(MessageType::ResponseNodeStatus,
+        boost::bind(&GatewayNodeManager::onResponseNodeStatus, this, boost::placeholders::_1,
             boost::placeholders::_2, boost::placeholders::_3));
     m_timer = std::make_shared<Timer>(SEQ_SYNC_PERIOD, "seqSync");
     // broadcast seq periodically
@@ -59,8 +59,8 @@ void GatewayNodeManager::stop()
     if (m_p2pInterface)
     {
         m_p2pInterface->eraseHandlerByMsgType(MessageType::SyncNodeSeq);
-        m_p2pInterface->eraseHandlerByMsgType(MessageType::RequestNodeIDs);
-        m_p2pInterface->eraseHandlerByMsgType(MessageType::ResponseNodeIDs);
+        m_p2pInterface->eraseHandlerByMsgType(MessageType::RequestNodeStatus);
+        m_p2pInterface->eraseHandlerByMsgType(MessageType::ResponseNodeStatus);
     }
     if (m_timer)
     {
@@ -109,7 +109,7 @@ void GatewayNodeManager::onReceiveStatusSeq(
     {
         return;
     }
-    m_p2pInterface->sendMessageBySession(MessageType::RequestNodeIDs, bytesConstRef(), _session);
+    m_p2pInterface->sendMessageBySession(MessageType::RequestNodeStatus, bytesConstRef(), _session);
 }
 
 bool GatewayNodeManager::statusChanged(std::string const& _p2pNodeID, uint32_t _seq)
@@ -203,12 +203,12 @@ void GatewayNodeManager::updateNodeInfo(const P2pID& _p2pID, const std::string& 
     }
 }
 
-void GatewayNodeManager::onResponseNodeIDs(
+void GatewayNodeManager::onResponseNodeStatus(
     NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg)
 {
     if (_e.errorCode())
     {
-        NODE_MANAGER_LOG(WARNING) << LOG_DESC("onResponseNodeIDs error")
+        NODE_MANAGER_LOG(WARNING) << LOG_DESC("onResponseNodeStatus error")
                                   << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
         return;
     }
@@ -217,19 +217,19 @@ void GatewayNodeManager::onResponseNodeIDs(
 }
 
 
-void GatewayNodeManager::onRequestNodeIDs(
+void GatewayNodeManager::onRequestNodeStatus(
     NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg)
 {
     if (_e.errorCode())
     {
-        NODE_MANAGER_LOG(WARNING) << LOG_DESC("onRequestNodeIDs network error")
+        NODE_MANAGER_LOG(WARNING) << LOG_DESC("onRequestNodeStatus network error")
                                   << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
         return;
     }
     std::string nodeInfo;
     if (!generateNodeInfo(nodeInfo))
     {
-        NODE_MANAGER_LOG(WARNING) << LOG_DESC("onRequestNodeIDs: generate nodeInfo error")
+        NODE_MANAGER_LOG(WARNING) << LOG_DESC("onRequestNodeStatus: generate nodeInfo error")
                                   << LOG_KV("peer", _session->p2pID());
         return;
     }
@@ -237,7 +237,7 @@ void GatewayNodeManager::onRequestNodeIDs(
     {
         return;
     }
-    m_p2pInterface->sendMessageBySession(MessageType::ResponseNodeIDs,
+    m_p2pInterface->sendMessageBySession(MessageType::ResponseNodeStatus,
         bytesConstRef((byte*)nodeInfo.data(), nodeInfo.size()), _session);
 }
 
@@ -286,6 +286,7 @@ void GatewayNodeManager::onRemoveNodeIDs(const P2pID& _p2pID)
         m_p2pID2Seq.erase(_p2pID);
     }
     m_peersRouterTable->removeP2PID(_p2pID);
+    m_peersRouterTable->removePeer(_p2pID);
     // notify nodeIDs to front service
     syncLatestNodeIDList();
 }

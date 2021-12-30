@@ -78,9 +78,9 @@ protected:
 
     virtual void onReceiveStatusSeq(
         NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg);
-    virtual void onRequestNodeIDs(
+    virtual void onRequestNodeStatus(
         NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg);
-    virtual void onResponseNodeIDs(
+    virtual void onResponseNodeStatus(
         NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg);
     virtual bool generateNodeInfo(std::string& _nodeInfo);
 

@@ -179,7 +179,7 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService_loop)
     }
 }
 
-BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_onRequestNodeIDs)
+BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_onRequestNodeStatus)
 {
     auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>(nullptr);
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
