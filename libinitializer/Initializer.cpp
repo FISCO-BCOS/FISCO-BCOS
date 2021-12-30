@@ -62,7 +62,7 @@ void Initializer::initMicroServiceNode(std::string const& _configFilePath,
         false);
 }
 void Initializer::initConfig(std::string const& _configFilePath, std::string const& _genesisFile,
-    std::string const& _privateKeyPath, bool _localMode)
+    std::string const& _privateKeyPath, bool _airVersion)
 {
     // loadConfig
     m_nodeConfig = std::make_shared<NodeConfig>(std::make_shared<bcos::crypto::KeyFactoryImpl>());
@@ -73,7 +73,7 @@ void Initializer::initConfig(std::string const& _configFilePath, std::string con
     m_protocolInitializer = std::make_shared<ProtocolInitializer>();
     m_protocolInitializer->init(m_nodeConfig);
     auto privateKeyPath = m_nodeConfig->privateKeyPath();
-    if (!_localMode)
+    if (!_airVersion)
     {
         privateKeyPath = _privateKeyPath;
     }
@@ -81,7 +81,7 @@ void Initializer::initConfig(std::string const& _configFilePath, std::string con
     boost::property_tree::ptree pt;
     boost::property_tree::read_ini(_configFilePath, pt);
     m_nodeConfig->loadNodeServiceConfig(m_protocolInitializer->keyPair()->publicKey()->hex(), pt);
-    if (!_localMode)
+    if (!_airVersion)
     {
         // load the service config
         m_nodeConfig->loadServiceConfig(pt);
@@ -90,7 +90,7 @@ void Initializer::initConfig(std::string const& _configFilePath, std::string con
 
 void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
     std::string const& _configFilePath, std::string const& _genesisFile,
-    bcos::gateway::GatewayInterface::Ptr _gateway, bool _localMode)
+    bcos::gateway::GatewayInterface::Ptr _gateway, bool _airVersion)
 {
     try
     {
@@ -100,7 +100,7 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
 
         // build the storage
         auto storagePath = m_nodeConfig->storagePath();
-        if (!_localMode)
+        if (!_airVersion)
         {
             storagePath = ServerConfig::BasePath + "../" + m_nodeConfig->groupId() + "/" +
                           m_nodeConfig->storagePath();

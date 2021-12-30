@@ -67,10 +67,10 @@ public:
 protected:
     virtual void init(bcos::initializer::NodeArchitectureType _nodeArchType,
         std::string const& _configFilePath, std::string const& _genesisFile,
-        bcos::gateway::GatewayInterface::Ptr _gateway, bool _localMode);
+        bcos::gateway::GatewayInterface::Ptr _gateway, bool _airVersion);
 
     virtual void initConfig(std::string const& _configFilePath, std::string const& _genesisFile,
-        std::string const& _privateKeyPath, bool _localMode);
+        std::string const& _privateKeyPath, bool _airVersion);
 
     void initSysContract();
 

@@ -50,7 +50,7 @@ std::set<P2pID> PeersRouterTable::queryP2pIDs(
     ReadGuard l(x_groupNodeList);
     if (!m_groupNodeList.count(_groupID) || !m_groupNodeList.at(_groupID).count(_nodeID))
     {
-        return std::set<P2pID>;
+        return std::set<P2pID>();
     }
     return m_groupNodeList.at(_groupID).at(_nodeID);
 }

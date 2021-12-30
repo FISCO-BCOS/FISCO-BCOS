@@ -59,7 +59,7 @@ private:
     // the nodeIDList infos of the peers
     // p2pNodeID => groupID => nodeIDList
     std::map<P2pID, std::map<std::string, std::set<std::string>>> m_peersNodeList;
-    SharedMutex x_peersNodeList;
+    mutable SharedMutex x_peersNodeList;
 };
 }  // namespace gateway
 }  // namespace bcos
