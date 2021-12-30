@@ -35,15 +35,15 @@ public:
     virtual ~LocalRouterTable() {}
 
     FrontServiceInfo::Ptr getFrontService(
-        const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID);
+        const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID) const;
 
-    std::vector<FrontServiceInfo::Ptr> getGroupFrontServiceList(const std::string& _groupID);
-    void getGroupNodeIDList(const std::string& _groupID, bcos::crypto::NodeIDs& _nodeIDList);
+    std::vector<FrontServiceInfo::Ptr> getGroupFrontServiceList(const std::string& _groupID) const;
+    bcos::crypto::NodeIDs getGroupNodeIDList(const std::string& _groupID) const;
     bool insertNode(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
         bcos::front::FrontServiceInterface::Ptr _frontService);
     bool removeNode(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID);
 
-    std::map<std::string, std::set<std::string>> nodeListInfo();
+    std::map<std::string, std::set<std::string>> nodeListInfo() const;
 
     bool updateGroupNodeInfos(bcos::group::GroupInfo::Ptr _groupInfo);
     bool eraseUnreachableNodes();

@@ -20,6 +20,7 @@
 
 #pragma once
 #include "LocalRouterTable.h"
+#include "PeersRouterTable.h"
 #include <bcos-framework/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/libutilities/Timer.h>
 #include <bcos-gateway/Common.h>
@@ -36,69 +37,32 @@ public:
     using Ptr = std::shared_ptr<GatewayNodeManager>;
     GatewayNodeManager(P2pID const& _nodeID, std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory,
         P2PInterface::Ptr _p2pInterface);
-    virtual void start() { m_timer->start(); }
-    virtual void stop()
-    {
-        if (m_p2pInterface)
-        {
-            m_p2pInterface->eraseHandlerByMsgType(MessageType::SyncNodeSeq);
-            m_p2pInterface->eraseHandlerByMsgType(MessageType::RequestNodeIDs);
-            m_p2pInterface->eraseHandlerByMsgType(MessageType::ResponseNodeIDs);
-        }
-        if (m_timer)
-        {
-            m_timer->stop();
-        }
-    }
-
     virtual ~GatewayNodeManager() {}
 
-    void updateNodeIDs(const P2pID& _p2pID, uint32_t _seq,
-        const std::map<std::string, std::set<std::string>>& _nodeIDsMap);
+    virtual void start() { m_timer->start(); }
+    virtual void stop();
 
     void onRemoveNodeIDs(const P2pID& _p2pID);
-    void removeNodeIDsByP2PID(const std::string& _p2pID);
 
-    bool queryP2pIDs(
-        const std::string& _groupID, const std::string& _nodeID, std::set<P2pID>& _p2pIDs);
-    bool queryP2pIDsByGroupID(const std::string& _groupID, std::set<P2pID>& _p2pIDs);
-    bool queryNodeIDsByGroupID(const std::string& _groupID, bcos::crypto::NodeIDs& _nodeIDs);
-
-    std::shared_ptr<bcos::crypto::KeyFactory> keyFactory() { return m_keyFactory; }
-
-    // Note: copy for thread-safe
-    std::map<std::string, std::set<std::string>> nodeIDInfo(std::string const& _p2pNodeID);
+    bcos::crypto::NodeIDListPtr getGroupNodeIDList(const std::string& _groupID);
 
     virtual bool registerNode(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
-        bcos::front::FrontServiceInterface::Ptr _frontService)
-    {
-        auto ret = m_localRouterTable->insertNode(_groupID, _nodeID, _frontService);
-        if (ret)
-        {
-            increaseSeq();
-        }
-        return ret;
-    }
-
-    virtual bool unregisterNode(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID)
-    {
-        auto ret = m_localRouterTable->removeNode(_groupID, _nodeID);
-        if (ret)
-        {
-            increaseSeq();
-        }
-        return ret;
-    }
-
+        bcos::front::FrontServiceInterface::Ptr _frontService);
+    virtual bool unregisterNode(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID);
     // for multi-group support
     virtual void updateFrontServiceInfo(bcos::group::GroupInfo::Ptr) {}
     LocalRouterTable::Ptr localRouterTable() { return m_localRouterTable; }
+    PeersRouterTable::Ptr peersRouterTable() { return m_peersRouterTable; }
+    std::shared_ptr<bcos::crypto::KeyFactory> keyFactory() { return m_keyFactory; }
+
+    std::map<std::string, std::set<std::string>> peersNodeInfo(std::string const& _p2pNodeID);
 
 protected:
     // for ut
     GatewayNodeManager(std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory)
       : m_keyFactory(_keyFactory),
-        m_localRouterTable(std::make_shared<LocalRouterTable>(_keyFactory))
+        m_localRouterTable(std::make_shared<LocalRouterTable>(_keyFactory)),
+        m_peersRouterTable(std::make_shared<PeersRouterTable>(_keyFactory))
     {}
 
     uint32_t increaseSeq()
@@ -125,11 +89,9 @@ protected:
 
     virtual void updateNodeInfo(const P2pID& _p2pID, const std::string& _nodeIDsJson);
 
-    void updateNodeIDInfo(std::string const& _p2pNodeID,
-        std::map<std::string, std::set<std::string>> const& _nodeIDList);
-    void removeNodeIDInfo(std::string const& _p2pNodeID);
-
     virtual void syncLatestNodeIDList();
+    virtual void updateNodeIDs(const P2pID& _p2pID, uint32_t _seq,
+        const std::map<std::string, std::set<std::string>>& _nodeIDsMap);
 
 protected:
     P2pID m_p2pNodeID;
@@ -137,20 +99,12 @@ protected:
     P2PInterface::Ptr m_p2pInterface;
     // statusSeq
     std::atomic<uint32_t> m_statusSeq{1};
-
-    LocalRouterTable::Ptr m_localRouterTable;
-
-    // lock m_peerGatewayNodes
-    mutable std::mutex x_peerGatewayNodes;
-    // groupID => NodeID => set<P2pID>
-    std::map<std::string, std::map<std::string, std::set<P2pID>>> m_peerGatewayNodes;
     // P2pID => statusSeq
     std::map<std::string, uint32_t> m_p2pID2Seq;
+    mutable SharedMutex x_p2pID2Seq;
 
-    // the nodeIDList infos of the peers
-    // p2pNodeID->groupID->nodeIDList
-    std::map<std::string, std::map<std::string, std::set<std::string>>> m_nodeIDInfo;
-    SharedMutex x_nodeIDInfo;
+    LocalRouterTable::Ptr m_localRouterTable;
+    PeersRouterTable::Ptr m_peersRouterTable;
 
     unsigned const SEQ_SYNC_PERIOD = 3000;
     std::shared_ptr<Timer> m_timer;

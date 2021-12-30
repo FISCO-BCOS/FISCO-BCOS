@@ -29,6 +29,7 @@ using namespace bcos;
 using namespace gateway;
 using namespace bcos::protocol;
 using namespace bcos::group;
+using namespace bcos::crypto;
 
 GatewayNodeManager::GatewayNodeManager(P2pID const& _nodeID,
     std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface)
@@ -53,6 +54,41 @@ GatewayNodeManager::GatewayNodeManager(P2pID const& _nodeID,
     m_timer->registerTimeoutHandler([this]() { broadcastStatusSeq(); });
 }
 
+void GatewayNodeManager::stop()
+{
+    if (m_p2pInterface)
+    {
+        m_p2pInterface->eraseHandlerByMsgType(MessageType::SyncNodeSeq);
+        m_p2pInterface->eraseHandlerByMsgType(MessageType::RequestNodeIDs);
+        m_p2pInterface->eraseHandlerByMsgType(MessageType::ResponseNodeIDs);
+    }
+    if (m_timer)
+    {
+        m_timer->stop();
+    }
+}
+
+bool GatewayNodeManager::registerNode(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
+    bcos::front::FrontServiceInterface::Ptr _frontService)
+{
+    auto ret = m_localRouterTable->insertNode(_groupID, _nodeID, _frontService);
+    if (ret)
+    {
+        increaseSeq();
+    }
+    return ret;
+}
+
+bool GatewayNodeManager::unregisterNode(
+    const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID)
+{
+    auto ret = m_localRouterTable->removeNode(_groupID, _nodeID);
+    if (ret)
+    {
+        increaseSeq();
+    }
+    return ret;
+}
 
 void GatewayNodeManager::onReceiveStatusSeq(
     NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg)
@@ -79,13 +115,11 @@ void GatewayNodeManager::onReceiveStatusSeq(
 bool GatewayNodeManager::statusChanged(std::string const& _p2pNodeID, uint32_t _seq)
 {
     bool ret = true;
+    ReadGuard l(x_p2pID2Seq);
+    auto it = m_p2pID2Seq.find(_p2pNodeID);
+    if (it != m_p2pID2Seq.end())
     {
-        std::lock_guard<std::mutex> l(x_peerGatewayNodes);
-        auto it = m_p2pID2Seq.find(_p2pNodeID);
-        if (it != m_p2pID2Seq.end())
-        {
-            ret = (statusSeq() != it->second);
-        }
+        ret = (statusSeq() != it->second);
     }
     return ret;
 }
@@ -95,67 +129,24 @@ void GatewayNodeManager::updateNodeIDs(const P2pID& _p2pID, uint32_t _seq,
 {
     NODE_MANAGER_LOG(INFO) << LOG_DESC("updateNodeIDs") << LOG_KV("p2pid", _p2pID)
                            << LOG_KV("statusSeq", _seq);
-
     {
-        std::lock_guard<std::mutex> l(x_peerGatewayNodes);
-        // remove peer nodeIDs info first
-        removeNodeIDsByP2PID(_p2pID);
-        // insert current nodeIDs info
-        for (const auto& nodeIDs : _nodeIDsMap)
+        UpgradableGuard l(x_p2pID2Seq);
+        if (m_p2pID2Seq.count(_p2pID) && (m_p2pID2Seq.at(_p2pID) <= _seq))
         {
-            for (const auto& nodeID : nodeIDs.second)
-            {
-                m_peerGatewayNodes[nodeIDs.first][nodeID].insert(_p2pID);
-            }
+            return;
         }
-        // update seq
+        UpgradeGuard ul(l);
         m_p2pID2Seq[_p2pID] = _seq;
     }
-    updateNodeIDInfo(_p2pID, _nodeIDsMap);
+    // remove peers info
+    m_peersRouterTable->removeP2PID(_p2pID);
+    // insert the latest peers info
+    m_peersRouterTable->batchInsertNodeList(_p2pID, _nodeIDsMap);
+    m_peersRouterTable->updatePeerNodeList(_p2pID, _nodeIDsMap);
     // notify nodeIDs to front service
     syncLatestNodeIDList();
 }
 
-void GatewayNodeManager::removeNodeIDsByP2PID(const std::string& _p2pID)
-{
-    // remove all nodeIDs info belong to p2pID
-    for (auto it = m_peerGatewayNodes.begin(); it != m_peerGatewayNodes.end();)
-    {
-        for (auto innerIt = it->second.begin(); innerIt != it->second.end();)
-        {
-            for (auto innerIt2 = innerIt->second.begin(); innerIt2 != innerIt->second.end();)
-            {
-                if (*innerIt2 == _p2pID)
-                {
-                    innerIt2 = innerIt->second.erase(innerIt2);
-                }
-                else
-                {
-                    ++innerIt2;
-                }
-            }  // for (auto innerIt2
-
-            if (innerIt->second.empty())
-            {
-                innerIt = it->second.erase(innerIt);
-            }
-            else
-            {
-                ++innerIt;
-            }
-        }  // for (auto innerIt
-
-        if (it->second.empty())
-        {
-            it = m_peerGatewayNodes.erase(it);
-        }
-        else
-        {
-            ++it;
-        }
-    }
-    removeNodeIDInfo(_p2pID);
-}
 
 bool GatewayNodeManager::parseReceivedJson(const std::string& _json, uint32_t& statusSeq,
     std::map<std::string, std::set<std::string>>& nodeIDsMap)
@@ -289,117 +280,16 @@ bool GatewayNodeManager::generateNodeInfo(std::string& _nodeStatusStr)
 void GatewayNodeManager::onRemoveNodeIDs(const P2pID& _p2pID)
 {
     NODE_MANAGER_LOG(INFO) << LOG_DESC("onRemoveNodeIDs") << LOG_KV("p2pid", _p2pID);
-
     {
-        std::lock_guard<std::mutex> l(x_peerGatewayNodes);
         // remove statusSeq info
-        removeNodeIDsByP2PID(_p2pID);
+        WriteGuard l(x_p2pID2Seq);
         m_p2pID2Seq.erase(_p2pID);
     }
+    m_peersRouterTable->removeP2PID(_p2pID);
     // notify nodeIDs to front service
     syncLatestNodeIDList();
 }
 
-bool GatewayNodeManager::queryP2pIDs(
-    const std::string& _groupID, const std::string& _nodeID, std::set<P2pID>& _p2pIDs)
-{
-    std::lock_guard<std::mutex> l(x_peerGatewayNodes);
-
-    auto it = m_peerGatewayNodes.find(_groupID);
-    if (it == m_peerGatewayNodes.end())
-    {
-        return false;
-    }
-
-    auto innerIt = it->second.find(_nodeID);
-    if (innerIt == it->second.end())
-    {
-        return false;
-    }
-
-    _p2pIDs.insert(innerIt->second.begin(), innerIt->second.end());
-
-    return true;
-}
-
-bool GatewayNodeManager::queryP2pIDsByGroupID(const std::string& _groupID, std::set<P2pID>& _p2pIDs)
-{
-    std::lock_guard<std::mutex> l(x_peerGatewayNodes);
-
-    auto it = m_peerGatewayNodes.find(_groupID);
-    if (it == m_peerGatewayNodes.end())
-    {
-        return false;
-    }
-
-    for (const auto& nodeMap : it->second)
-    {
-        _p2pIDs.insert(nodeMap.second.begin(), nodeMap.second.end());
-    }
-
-    return true;
-}
-
-
-bool GatewayNodeManager::queryNodeIDsByGroupID(
-    const std::string& _groupID, bcos::crypto::NodeIDs& _nodeIDs)
-{
-    m_localRouterTable->getGroupNodeIDList(_groupID, _nodeIDs);
-
-    std::lock_guard<std::mutex> l(x_peerGatewayNodes);
-
-    auto it = m_peerGatewayNodes.find(_groupID);
-    if (it == m_peerGatewayNodes.end())
-    {
-        return false;
-    }
-
-    for (const auto& nodeEntry : it->second)
-    {
-        auto bytes = bcos::fromHexString(nodeEntry.first);
-        if (bytes)
-        {
-            auto nodeID = m_keyFactory->createKey(*bytes.get());
-            _nodeIDs.push_back(nodeID);
-        }
-    }
-    return true;
-}
-
-
-void GatewayNodeManager::updateNodeIDInfo(
-    std::string const& _p2pNodeID, std::map<std::string, std::set<std::string>> const& _nodeIDList)
-{
-    WriteGuard l(x_nodeIDInfo);
-    m_nodeIDInfo[_p2pNodeID] = _nodeIDList;
-}
-
-void GatewayNodeManager::removeNodeIDInfo(std::string const& _p2pNodeID)
-{
-    UpgradableGuard l(x_nodeIDInfo);
-    if (m_nodeIDInfo.count(_p2pNodeID))
-    {
-        UpgradeGuard ul(l);
-        m_nodeIDInfo.erase(_p2pNodeID);
-    }
-}
-
-
-std::map<std::string, std::set<std::string>> GatewayNodeManager::nodeIDInfo(
-    std::string const& _p2pNodeID)
-{
-    // the local nodeID info
-    if (_p2pNodeID == m_p2pNodeID)
-    {
-        return m_localRouterTable->nodeListInfo();
-    }
-    ReadGuard l(x_nodeIDInfo);
-    if (m_nodeIDInfo.count(_p2pNodeID))
-    {
-        return m_nodeIDInfo[_p2pNodeID];
-    }
-    return std::map<std::string, std::set<std::string>>();
-}
 
 void GatewayNodeManager::broadcastStatusSeq()
 {
@@ -418,12 +308,11 @@ void GatewayNodeManager::broadcastStatusSeq()
 void GatewayNodeManager::syncLatestNodeIDList()
 {
     auto nodeList = m_localRouterTable->nodeList();
-    auto knowNodeIDs = std::make_shared<crypto::NodeIDs>();
     for (auto const& it : nodeList)
     {
         auto groupID = it.first;
         auto const& groupNodeInfos = it.second;
-        queryNodeIDsByGroupID(groupID, *knowNodeIDs);
+        auto knowNodeIDs = getGroupNodeIDList(groupID);
         NODE_MANAGER_LOG(INFO) << LOG_DESC("syncLatestNodeIDList") << LOG_KV("groupID", groupID)
                                << LOG_KV("nodeCount", knowNodeIDs->size());
         for (const auto& entry : groupNodeInfos)
@@ -441,4 +330,25 @@ void GatewayNodeManager::syncLatestNodeIDList()
                 });
         }
     }
+}
+
+NodeIDListPtr GatewayNodeManager::getGroupNodeIDList(const std::string& _groupID)
+{
+    auto nodeIDList = std::make_shared<NodeIDs>();
+    auto localNodeIDList = m_localRouterTable->getGroupNodeIDList(_groupID);
+    *nodeIDList = std::move(localNodeIDList);
+
+    auto peersNodeIDList = m_peersRouterTable->getGroupNodeIDList(_groupID);
+    nodeIDList->insert(nodeIDList->begin(), peersNodeIDList.begin(), peersNodeIDList.end());
+    return nodeIDList;
+}
+
+std::map<std::string, std::set<std::string>> GatewayNodeManager::peersNodeInfo(
+    std::string const& _p2pNodeID)
+{
+    if (_p2pNodeID == m_p2pNodeID)
+    {
+        return m_localRouterTable->nodeListInfo();
+    }
+    return m_peersRouterTable->peersNodeInfo(_p2pNodeID);
 }
