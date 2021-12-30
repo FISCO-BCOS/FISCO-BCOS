@@ -759,10 +759,6 @@ void MemoryStorage::notifyUnsealedTxsSize(size_t _retryTime)
         return;
     }
     auto unsealedTxsSize = unSealedTxsSizeWithoutLock();
-    // TODO: remove this log
-    TXPOOL_LOG(TRACE) << LOG_DESC("notifyUnsealedTxsSize")
-                      << LOG_KV("unsealedTxsSize", unsealedTxsSize)
-                      << LOG_KV("pendingTxs", m_txsTable.size());
     m_unsealedTxsNotifier(unsealedTxsSize, [_retryTime, this](Error::Ptr _error) {
         if (_error == nullptr)
         {
@@ -809,4 +805,15 @@ bool MemoryStorage::batchVerifyProposal(std::shared_ptr<HashList> _txsHashList)
         }
     }
     return true;
+}
+
+HashListPtr MemoryStorage::getAllTxsHash()
+{
+    auto txsHash = std::make_shared<HashList>();
+    ReadGuard l(x_txpoolMutex);
+    for (auto const& it : m_txsTable)
+    {
+        txsHash->emplace_back(it.first);
+    }
+    return txsHash;
 }

@@ -46,6 +46,7 @@ public:
         bytesConstRef _data, std::function<void(bytesConstRef _response)> _sendResponse) = 0;
 
     virtual TransactionSyncConfig::Ptr config() { return m_config; }
+    virtual void onEmptyTxs() = 0;
 
 protected:
     TransactionSyncConfig::Ptr m_config;
