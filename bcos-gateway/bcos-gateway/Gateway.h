@@ -23,7 +23,7 @@
 #include <bcos-framework/interfaces/front/FrontServiceInterface.h>
 #include <bcos-framework/interfaces/gateway/GatewayInterface.h>
 #include <bcos-gateway/Common.h>
-#include <bcos-gateway/GatewayNodeManager.h>
+#include <bcos-gateway/gateway/GatewayNodeManager.h>
 #include <bcos-gateway/libamop/AMOPImpl.h>
 #include <bcos-gateway/libp2p/Service.h>
 
@@ -78,24 +78,6 @@ public:
     std::shared_ptr<P2PMessage> newP2PMessage(
         const std::string& _groupID, bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload);
 
-    /**
-     * @brief: register FrontService
-     * @param _groupID: groupID
-     * @param _nodeID: nodeID
-     * @param _frontServiceInterface: FrontService
-     * @return bool
-     */
-    virtual bool registerFrontService(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
-        bcos::front::FrontServiceInterface::Ptr _frontServiceInterface);
-
-    /**
-     * @brief: unregister FrontService
-     * @param _groupID: groupID
-     * @param _nodeID: nodeID
-     * @return bool
-     */
-    virtual bool unregisterFrontService(
-        const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID);
     /**
      * @brief: send message
      * @param _groupID: groupID

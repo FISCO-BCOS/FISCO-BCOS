@@ -23,7 +23,7 @@
 #include <bcos-framework/testutils/TestPromptFixture.h>
 #include <bcos-front/FrontServiceFactory.h>
 #include <bcos-gateway/Gateway.h>
-#include <bcos-gateway/GatewayNodeManager.h>
+#include <bcos-gateway/gateway/GatewayNodeManager.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -53,7 +53,7 @@ public:
     }
     // public for ut
     bool parseReceivedJson(const std::string& _json, uint32_t& statusSeq,
-        std::unordered_map<std::string, std::set<std::string>>& nodeIDsMap)
+        std::map<std::string, std::set<std::string>>& nodeIDsMap)
     {
         return GatewayNodeManager::parseReceivedJson(_json, statusSeq, nodeIDsMap);
     }
@@ -103,39 +103,39 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService)
 
     bool r = false;
     auto seq = gatewayNodeManager->statusSeq();
-    r = gatewayNodeManager->registerFrontService(groupID, nodeID, frontService);
+    r = gatewayNodeManager->registerNode(groupID, nodeID, frontService);
     BOOST_CHECK_EQUAL(r, true);
     BOOST_CHECK_EQUAL(seq + 1, gatewayNodeManager->statusSeq());
 
-    auto s = gatewayNodeManager->queryFrontServiceInterfaceByGroupID(groupID);
+    auto s = gatewayNodeManager->localRouterTable()->getGroupFrontServiceList(groupID);
     BOOST_CHECK(!s.empty());
 
     seq = gatewayNodeManager->statusSeq();
-    r = gatewayNodeManager->registerFrontService(groupID, nodeID, nullptr);
+    r = gatewayNodeManager->registerNode(groupID, nodeID, nullptr);
     BOOST_CHECK_EQUAL(r, false);
     BOOST_CHECK_EQUAL(seq, gatewayNodeManager->statusSeq());
 
     seq = gatewayNodeManager->statusSeq();
-    r = gatewayNodeManager->unregisterFrontService(groupID, nodeID);
+    r = gatewayNodeManager->unregisterNode(groupID, nodeID);
     BOOST_CHECK_EQUAL(r, true);
     BOOST_CHECK_EQUAL(seq + 1, gatewayNodeManager->statusSeq());
 
-    s = gatewayNodeManager->queryFrontServiceInterfaceByGroupID(groupID);
+    s = gatewayNodeManager->localRouterTable()->getGroupFrontServiceList(groupID);
     BOOST_CHECK(s.empty());
 
     seq = gatewayNodeManager->statusSeq();
-    r = gatewayNodeManager->registerFrontService(groupID, nodeID, nullptr);
+    r = gatewayNodeManager->registerNode(groupID, nodeID, nullptr);
     BOOST_CHECK_EQUAL(r, true);
     BOOST_CHECK_EQUAL(seq + 1, gatewayNodeManager->statusSeq());
 
-    s = gatewayNodeManager->queryFrontServiceInterfaceByGroupID(groupID);
+    s = gatewayNodeManager->localRouterTable()->getGroupFrontServiceList(groupID);
     BOOST_CHECK(!s.empty());
 
     seq = gatewayNodeManager->statusSeq();
-    r = gatewayNodeManager->registerFrontService(groupID, nodeID, nullptr);
+    r = gatewayNodeManager->registerNode(groupID, nodeID, nullptr);
     BOOST_CHECK_EQUAL(r, false);
     BOOST_CHECK_EQUAL(seq, gatewayNodeManager->statusSeq());
-    s = gatewayNodeManager->queryFrontServiceInterfaceByGroupID(groupID);
+    s = gatewayNodeManager->localRouterTable()->getGroupFrontServiceList(groupID);
     BOOST_CHECK(!s.empty());
 }
 
@@ -154,12 +154,12 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService_loop)
             keyFactory->createKey(bytesConstRef((bcos::byte*)strNodeID.data(), strNodeID.size()));
 
         auto seq = gatewayNodeManager->statusSeq();
-        bool r = gatewayNodeManager->registerFrontService(groupID, nodeID, nullptr);
+        bool r = gatewayNodeManager->registerNode(groupID, nodeID, nullptr);
         BOOST_CHECK_EQUAL(r, true);
         BOOST_CHECK_EQUAL(seq + 1, gatewayNodeManager->statusSeq());
 
         seq = gatewayNodeManager->statusSeq();
-        r = gatewayNodeManager->registerFrontService(groupID, nodeID, nullptr);
+        r = gatewayNodeManager->registerNode(groupID, nodeID, nullptr);
         BOOST_CHECK_EQUAL(r, false);
         BOOST_CHECK_EQUAL(seq, gatewayNodeManager->statusSeq());
 
@@ -168,12 +168,12 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService_loop)
         BOOST_CHECK(!jsonValue.empty());
 
         seq = gatewayNodeManager->statusSeq();
-        r = gatewayNodeManager->unregisterFrontService(groupID, nodeID);
+        r = gatewayNodeManager->unregisterNode(groupID, nodeID);
         BOOST_CHECK_EQUAL(r, true);
         BOOST_CHECK_EQUAL(seq + 1, gatewayNodeManager->statusSeq());
 
         seq = gatewayNodeManager->statusSeq();
-        r = gatewayNodeManager->unregisterFrontService(groupID, nodeID);
+        r = gatewayNodeManager->unregisterNode(groupID, nodeID);
         BOOST_CHECK_EQUAL(r, false);
         BOOST_CHECK_EQUAL(seq, gatewayNodeManager->statusSeq());
     }
@@ -194,7 +194,7 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_onRequestNodeIDs)
 
         bool r = false;
         auto seq = gatewayNodeManager->statusSeq();
-        r = gatewayNodeManager->registerFrontService(groupID, nodeID, nullptr);
+        r = gatewayNodeManager->registerNode(groupID, nodeID, nullptr);
         BOOST_CHECK(r);
         BOOST_CHECK_EQUAL(seq + 1, gatewayNodeManager->statusSeq());
 
@@ -203,7 +203,7 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_onRequestNodeIDs)
         BOOST_CHECK(!jsonValue.empty());
 
         uint32_t statusSeq;
-        std::unordered_map<std::string, std::set<std::string>> nodeIDsMap;
+        std::map<std::string, std::set<std::string>> nodeIDsMap;
         r = gatewayNodeManager->parseReceivedJson(jsonValue, statusSeq, nodeIDsMap);
         BOOST_CHECK(r);
         BOOST_CHECK_EQUAL(seq + 1, statusSeq);
@@ -215,7 +215,7 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_jsonJarser)
     auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>(nullptr);
 
     uint32_t statusSeq;
-    std::unordered_map<std::string, std::set<std::string>> nodeIDsMap;
+    std::map<std::string, std::set<std::string>> nodeIDsMap;
     const std::string json =
         "{\"statusSeq\":110,\"nodeInfoList\":[{\"groupID\":\"group1\","
         "\"nodeIDs\":["
