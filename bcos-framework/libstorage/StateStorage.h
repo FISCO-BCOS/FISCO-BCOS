@@ -475,7 +475,7 @@ public:
                 return true;
             });
 
-        STORAGE_LOG(INFO) << "Successfull merged " << count << " records";
+        STORAGE_LOG(INFO) << "Successful merged " << count << " records";
     }
 
     std::optional<Table> openTable(const std::string_view& tableView)
