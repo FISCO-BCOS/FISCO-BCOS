@@ -27,7 +27,6 @@ namespace bcos
 struct Exception;
 namespace protocol
 {
-// TODO: redefine the status value when everything ready
 enum class TransactionStatus : int32_t
 {
     None = 0,

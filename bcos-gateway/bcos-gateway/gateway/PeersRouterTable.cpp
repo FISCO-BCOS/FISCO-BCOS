@@ -70,14 +70,22 @@ std::set<P2pID> PeersRouterTable::queryP2pIDsByGroupID(const std::string& _group
     return p2pNodeIDList;
 }
 
+void PeersRouterTable::updatePeerStatus(
+    std::string const& _p2pID, GatewayNodeStatus::Ptr _gatewayNodeStatus)
+{
+    batchInsertNodeList(_p2pID, _gatewayNodeStatus->groupNodeInfos());
+    updatePeerNodeList(_p2pID, _gatewayNodeStatus);
+}
+
 void PeersRouterTable::batchInsertNodeList(
-    std::string const& _p2pNodeID, std::map<std::string, std::set<std::string>> const& _nodeList)
+    std::string const& _p2pNodeID, std::vector<GroupNodeInfo::Ptr> const& _nodeList)
 {
     WriteGuard l(x_groupNodeList);
     for (auto const& it : _nodeList)
     {
-        auto groupID = it.first;
-        for (auto const& nodeID : it.second)
+        auto groupID = it->groupID();
+        auto const& nodeIDList = it->nodeIDList();
+        for (auto const& nodeID : nodeIDList)
         {
             if (!m_groupNodeList.count(groupID) || !m_groupNodeList.at(groupID).count(nodeID))
             {
@@ -130,30 +138,38 @@ void PeersRouterTable::removeP2PID(const std::string& _p2pID)
     removePeer(_p2pID);
 }
 
+void PeersRouterTable::updatePeerNodeList(
+    std::string const& _p2pNodeID, GatewayNodeStatus::Ptr _status)
+{
+    WriteGuard l(x_peersStatus);
+    m_peersStatus[_p2pNodeID] = _status;
+}
+
 void PeersRouterTable::removePeer(std::string const& _p2pNodeID)
 {
-    UpgradableGuard l(x_peersNodeList);
-    if (m_peersNodeList.count(_p2pNodeID))
+    UpgradableGuard l(x_peersStatus);
+    if (m_peersStatus.count(_p2pNodeID))
     {
         UpgradeGuard ul(l);
-        m_peersNodeList.erase(_p2pNodeID);
+        m_peersStatus.erase(_p2pNodeID);
     }
 }
 
-void PeersRouterTable::updatePeerNodeList(
-    std::string const& _p2pNodeID, std::map<std::string, std::set<std::string>> const& _nodeIDList)
-{
-    WriteGuard l(x_peersNodeList);
-    m_peersNodeList[_p2pNodeID] = _nodeIDList;
-}
-
-std::map<std::string, std::set<std::string>> PeersRouterTable::peersNodeInfo(
+PeersRouterTable::Group2NodeIDListType PeersRouterTable::peersNodeIDList(
     std::string const& _p2pNodeID) const
 {
-    ReadGuard l(x_peersNodeList);
-    if (m_peersNodeList.count(_p2pNodeID))
+    ReadGuard l(x_peersStatus);
+    PeersRouterTable::Group2NodeIDListType nodeIDList;
+    if (!m_peersStatus.count(_p2pNodeID))
     {
-        return m_peersNodeList.at(_p2pNodeID);
+        return nodeIDList;
     }
-    return std::map<std::string, std::set<std::string>>();
+    auto const& groupNodeInfos = m_peersStatus.at(_p2pNodeID)->groupNodeInfos();
+    for (auto const& it : groupNodeInfos)
+    {
+        auto const& groupNodeIDList = it->nodeIDList();
+        nodeIDList[it->groupID()] =
+            std::set<std::string>(groupNodeIDList.begin(), groupNodeIDList.end());
+    }
+    return nodeIDList;
 }

@@ -115,10 +115,10 @@ void PBFTInitializer::initChainNodeInfo(
 {
     m_groupInfo = std::make_shared<GroupInfo>(_nodeConfig->chainId(), _nodeConfig->groupId());
     m_groupInfo->setGenesisConfig(generateGenesisConfig(_nodeConfig));
-    int32_t nodeType = bcos::group::NodeType::NON_SM_NODE;
+    int32_t nodeType = bcos::group::NodeCryptoType::NON_SM_NODE;
     if (_nodeConfig->smCryptoType())
     {
-        nodeType = bcos::group::NodeType::SM_NODE;
+        nodeType = bcos::group::NodeCryptoType::SM_NODE;
     }
     bool microServiceMode = true;
     if (_nodeArchType == bcos::initializer::NodeArchitectureType::AIR)

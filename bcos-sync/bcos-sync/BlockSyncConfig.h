@@ -112,6 +112,8 @@ public:
         return m_committedProposalNumber;
     }
 
+    bcos::protocol::NodeType nodeType() const { return m_nodeType; }
+
 protected:
     void setHash(bcos::crypto::HashType const& _hash);
 
@@ -146,6 +148,9 @@ private:
     std::atomic<size_t> m_maxShardPerPeer = {2};
 
     std::atomic<bcos::protocol::BlockNumber> m_committedProposalNumber = {0};
+
+    // TODO: ensure thread-safe
+    bcos::protocol::NodeType m_nodeType;
 };
 }  // namespace sync
 }  // namespace bcos

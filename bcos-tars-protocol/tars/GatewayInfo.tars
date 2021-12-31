@@ -13,10 +13,18 @@ struct GroupNodeIDInfo
 {
     1 require string groupID;
     2 optional vector<string> nodeIDList;
+    3 require int type;
 };
 struct GatewayInfo
 {
     1 require P2PInfo p2pInfo;
     2 require vector<GroupNodeIDInfo> nodeIDInfo;
+};
+
+struct GatewayNodeStatus
+{
+    1 require string uuid;
+    2 require int seq;
+    3 optional vector<GroupNodeIDInfo> nodeList;
 };
 };

@@ -24,6 +24,7 @@
 #include <bcos-front/FrontServiceFactory.h>
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/gateway/GatewayNodeManager.h>
+#include <bcos-gateway/protocol/GatewayNodeStatus.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -39,33 +40,40 @@ public:
       : GatewayNodeManager(_keyFactory)
     {}
     ~FakeGatewayNodeManager() override {}
-    // public for ut
+
     bool statusChanged(std::string const& _p2pNodeID, uint32_t _seq)
     {
         return GatewayNodeManager::statusChanged(_p2pNodeID, _seq);
     }
-    // public for ut
     uint32_t statusSeq() { return GatewayNodeManager::statusSeq(); }
-    // public for ut
-    bool generateNodeInfo(std::string& _nodeInfo) override
-    {
-        return GatewayNodeManager::generateNodeInfo(_nodeInfo);
-    }
-    // public for ut
-    bool parseReceivedJson(const std::string& _json, uint32_t& statusSeq,
-        std::map<std::string, std::set<std::string>>& nodeIDsMap)
-    {
-        return GatewayNodeManager::parseReceivedJson(_json, statusSeq, nodeIDsMap);
-    }
-    void updateNodeInfo(const P2pID& _p2pID, const std::string& _nodeIDsJson) override
-    {
-        return GatewayNodeManager::updateNodeInfo(_p2pID, _nodeIDsJson);
-    }
 
+    bytesPointer generateNodeStatus() override { return GatewayNodeManager::generateNodeStatus(); }
+    void updatePeerStatus(std::string const& _p2pID, GatewayNodeStatus::Ptr _status) override
+    {
+        return GatewayNodeManager::updatePeerStatus(_p2pID, _status);
+    }
     void setStatusSeq(std::string const& _nodeID, uint32_t _seq) { m_p2pID2Seq[_nodeID] = _seq; }
     void start() override {}
     void stop() override {}
 };
+
+inline GatewayNodeStatus::Ptr createGatewayNodeStatus(
+    int32_t _seq, std::string const& _uuid, std::vector<GroupNodeInfo::Ptr> _groupInfos)
+{
+    auto gatewayNodeStatus = std::make_shared<GatewayNodeStatus>();
+    gatewayNodeStatus->setSeq(_seq);
+    gatewayNodeStatus->setUUID(_uuid);
+    gatewayNodeStatus->setGroupNodeInfos(std::move(_groupInfos));
+    return gatewayNodeStatus;
+}
+
+inline GroupNodeInfo::Ptr createGroupNodeInfo(
+    std::string const& _groupID, std::vector<std::string> _nodeIDList)
+{
+    auto groupNodeInfo = std::make_shared<GroupNodeInfo>(_groupID);
+    groupNodeInfo->setNodeIDList(std::move(_nodeIDList));
+    return groupNodeInfo;
+}
 
 class FakeGateway : public Gateway
 {
@@ -163,9 +171,8 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService_loop)
         BOOST_CHECK_EQUAL(r, false);
         BOOST_CHECK_EQUAL(seq, gatewayNodeManager->statusSeq());
 
-        std::string jsonValue;
-        gatewayNodeManager->generateNodeInfo(jsonValue);
-        BOOST_CHECK(!jsonValue.empty());
+        auto statusData = gatewayNodeManager->generateNodeStatus();
+        BOOST_CHECK(!statusData->empty());
 
         seq = gatewayNodeManager->statusSeq();
         r = gatewayNodeManager->unregisterNode(groupID, nodeID);
@@ -198,71 +205,82 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_onRequestNodeStatus)
         BOOST_CHECK(r);
         BOOST_CHECK_EQUAL(seq + 1, gatewayNodeManager->statusSeq());
 
-        std::string jsonValue;
-        gatewayNodeManager->generateNodeInfo(jsonValue);
-        BOOST_CHECK(!jsonValue.empty());
+        auto nodeStatusData = gatewayNodeManager->generateNodeStatus();
+        BOOST_CHECK(!nodeStatusData->empty());
 
         uint32_t statusSeq;
-        std::map<std::string, std::set<std::string>> nodeIDsMap;
-        r = gatewayNodeManager->parseReceivedJson(jsonValue, statusSeq, nodeIDsMap);
-        BOOST_CHECK(r);
-        BOOST_CHECK_EQUAL(seq + 1, statusSeq);
+        auto gatewayStatus = std::make_shared<GatewayNodeStatus>();
+        gatewayStatus->decode(bytesConstRef(nodeStatusData->data(), nodeStatusData->size()));
+        BOOST_CHECK_EQUAL(seq + 1, gatewayStatus->seq());
     }
 }
 
-BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_jsonJarser)
+BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_statusEncodeDecode)
 {
     auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>(nullptr);
+    auto gatewayNodeStatus = std::make_shared<GatewayNodeStatus>();
+    gatewayNodeStatus->setSeq(110);
+    gatewayNodeStatus->setUUID("testuuid");
+    std::vector<GroupNodeInfo::Ptr> groupNodeInfos;
+    // group1
+    auto group1Info = std::make_shared<GroupNodeInfo>("group1");
+    std::vector<std::string> nodeIDList = {"a0", "b0", "c0"};
+    group1Info->setNodeIDList(std::move(nodeIDList));
+    groupNodeInfos.emplace_back(group1Info);
 
-    uint32_t statusSeq;
-    std::map<std::string, std::set<std::string>> nodeIDsMap;
-    const std::string json =
-        "{\"statusSeq\":110,\"nodeInfoList\":[{\"groupID\":\"group1\","
-        "\"nodeIDs\":["
-        "\"a0\",\"b0\",\"c0\"]},{\"groupID\":\"group2\",\"nodeIDs\":[\"a1\","
-        "\"b1\",\"c1\"]},{\"groupID\":\"group3\",\"nodeIDs\":[\"a2\",\"b2\","
-        "\"c2\"]}]}";
+    // group2
+    auto group2Info = std::make_shared<GroupNodeInfo>("group2");
+    std::vector<std::string> nodeIDList2 = {"a1", "b1", "c1"};
+    group2Info->setNodeIDList(std::move(nodeIDList2));
+    groupNodeInfos.emplace_back(group2Info);
 
-    auto r = gatewayNodeManager->parseReceivedJson(json, statusSeq, nodeIDsMap);
-    BOOST_CHECK_EQUAL(r, true);
-    BOOST_CHECK_EQUAL(statusSeq, 110);
-    BOOST_CHECK_EQUAL(nodeIDsMap.size(), 3);
+    // group3
+    auto group3Info = std::make_shared<GroupNodeInfo>("group3");
+    std::vector<std::string> nodeIDList3 = {"a2", "b2", "c2"};
+    group3Info->setNodeIDList(std::move(nodeIDList3));
+    groupNodeInfos.emplace_back(group3Info);
 
-    BOOST_CHECK(nodeIDsMap.find("group1") != nodeIDsMap.end());
-    BOOST_CHECK(nodeIDsMap.find("group2") != nodeIDsMap.end());
-    BOOST_CHECK(nodeIDsMap.find("group3") != nodeIDsMap.end());
+    gatewayNodeStatus->setGroupNodeInfos(std::move(groupNodeInfos));
 
-    const auto& group1 = nodeIDsMap["group1"];
-    BOOST_CHECK_EQUAL(group1.size(), 3);
-    BOOST_CHECK(group1.find("a0") != group1.end());
-    BOOST_CHECK(group1.find("b0") != group1.end());
-    BOOST_CHECK(group1.find("c0") != group1.end());
+    // encode
+    auto encodeData = gatewayNodeStatus->encode();
 
-    const auto& group2 = nodeIDsMap["group2"];
-    BOOST_CHECK_EQUAL(group2.size(), 3);
-    BOOST_CHECK(group2.find("a1") != group2.end());
-    BOOST_CHECK(group2.find("b1") != group2.end());
-    BOOST_CHECK(group2.find("c1") != group2.end());
+    // decode
+    auto decodedStatus = std::make_shared<GatewayNodeStatus>();
+    decodedStatus->decode(bytesConstRef(encodeData->data(), encodeData->size()));
 
-    const auto& group3 = nodeIDsMap["group3"];
-    BOOST_CHECK_EQUAL(group3.size(), 3);
-    BOOST_CHECK(group3.find("a2") != group3.end());
-    BOOST_CHECK(group3.find("b2") != group3.end());
-    BOOST_CHECK(group3.find("c2") != group3.end());
+    // check
+    BOOST_CHECK_EQUAL(decodedStatus->seq(), 110);
+    BOOST_CHECK_EQUAL(decodedStatus->uuid(), "testuuid");
+    auto const& groupInfos = decodedStatus->groupNodeInfos();
+    BOOST_CHECK(groupInfos.size() == 3);
+    BOOST_CHECK(groupInfos[0]->groupID() == "group1");
+    BOOST_CHECK(groupInfos[0]->nodeIDList().size() == 3);
+    BOOST_CHECK(groupInfos[0]->nodeIDList()[0] == "a0");
+    BOOST_CHECK(groupInfos[0]->nodeIDList()[1] == "b0");
+    BOOST_CHECK(groupInfos[0]->nodeIDList()[2] == "c0");
+
+    BOOST_CHECK(groupInfos[1]->groupID() == "group2");
+    BOOST_CHECK(groupInfos[1]->nodeIDList().size() == 3);
+    BOOST_CHECK(groupInfos[1]->nodeIDList()[0] == "a1");
+    BOOST_CHECK(groupInfos[1]->nodeIDList()[1] == "b1");
+    BOOST_CHECK(groupInfos[1]->nodeIDList()[2] == "c1");
+
+    BOOST_CHECK(groupInfos[2]->groupID() == "group3");
+    BOOST_CHECK(groupInfos[2]->nodeIDList().size() == 3);
+    BOOST_CHECK(groupInfos[2]->nodeIDList()[0] == "a2");
+    BOOST_CHECK(groupInfos[2]->nodeIDList()[1] == "b2");
+    BOOST_CHECK(groupInfos[2]->nodeIDList()[2] == "c2");
 }
 
 BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_onReceiveNodeIDs)
 {
     auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>(nullptr);
-
-    const std::string json =
-        "{\"statusSeq\":110,\"nodeInfoList\":[{\"groupID\":\"group1\","
-        "\"nodeIDs\":["
-        "\"a0\",\"b0\",\"c0\"]},{\"groupID\":\"group2\",\"nodeIDs\":[\"a1\","
-        "\"b1\",\"c1\"]},{\"groupID\":\"group3\",\"nodeIDs\":[\"a2\",\"b2\","
-        "\"c2\"]}]}";
+    auto gatewayNodeStatus =
+        createGatewayNodeStatus(110, "testUUID", std::vector<GroupNodeInfo::Ptr>());
     std::string p2pID = "xxxxxxxxxxxxxxxxxxxxx";
-    gatewayNodeManager->updateNodeInfo(p2pID, json);
+
+    gatewayNodeManager->updatePeerStatus(p2pID, gatewayNodeStatus);
     bool changed = false;
 
     changed = gatewayNodeManager->statusChanged(p2pID, 110);
@@ -277,57 +295,31 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_onReceiveNodeIDs)
     BOOST_CHECK(!changed);
 }
 
+
 BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_query)
 {
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>(keyFactory);
-
-    const std::string json =
-        "{\"statusSeq\":110,\"nodeInfoList\":[{\"groupID\":\"group1\","
-        "\"nodeIDs\":["
-        "\"a0\",\"b0\",\"c0\"]},{\"groupID\":\"group2\",\"nodeIDs\":[\"a1\","
-        "\"b1\",\"c1\"]},{\"groupID\":\"group3\",\"nodeIDs\":[\"a2\",\"b2\","
-        "\"c2\"]}]}";
-    /*
-    {
-    "statusSeq": 1,
-    "nodeInfoList": [
-    {
-    "groupID": "group1",
-    "nodeIDs": [
-      "a0",
-      "b0",
-      "c0"
-    ]
-    },
-    {
-    "groupID": "group2",
-    "nodeIDs": [
-      "a1",
-      "b1",
-      "c1"
-    ]
-    },
-    {
-    "groupID": "group3",
-    "nodeIDs": [
-      "a2",
-      "b2",
-      "c2"
-    ]
-    }
-    ]
-    }*/
-
+    std::vector<GroupNodeInfo::Ptr> groupInfos;
     std::string group1 = "group1";
+    auto group1Info = createGroupNodeInfo(group1, {"a0", "b0", "c0"});
+    groupInfos.emplace_back(group1Info);
+
     std::string group2 = "group2";
+    auto group2Info = createGroupNodeInfo(group2, {"a1", "b1", "c1"});
+    groupInfos.emplace_back(group2Info);
+
     std::string group3 = "group3";
+    auto group3Info = createGroupNodeInfo(group3, {"a2", "b2", "c2"});
+    groupInfos.emplace_back(group3Info);
+
+    auto status = createGatewayNodeStatus(110, "testUUID", groupInfos);
 
     std::string p2pID1 = "xxxxx";
     std::string p2pID2 = "yyyyy";
     std::string p2pID3 = "zzzzz";
 
-    gatewayNodeManager->updateNodeInfo(p2pID1, json);
+    gatewayNodeManager->updatePeerStatus(p2pID1, status);
 
     auto p2pIDs1 = gatewayNodeManager->peersRouterTable()->queryP2pIDsByGroupID(group1);
     BOOST_CHECK_EQUAL(p2pIDs1.size(), 1);
@@ -340,7 +332,7 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_query)
     BOOST_CHECK_EQUAL(p2pIDs2.size(), 1);
     BOOST_CHECK_EQUAL(*p2pIDs2.begin(), p2pID1);
 
-    gatewayNodeManager->updateNodeInfo(p2pID2, json);
+    gatewayNodeManager->updatePeerStatus(p2pID2, status);
 
     auto p2pIDs3 = gatewayNodeManager->peersRouterTable()->queryP2pIDsByGroupID(group2);
     BOOST_CHECK_EQUAL(p2pIDs3.size(), 2);
@@ -348,7 +340,7 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_query)
     auto p2pIDs4 = gatewayNodeManager->peersRouterTable()->queryP2pIDs(group2, "a1");
     BOOST_CHECK_EQUAL(p2pIDs4.size(), 2);
 
-    gatewayNodeManager->updateNodeInfo(p2pID3, json);
+    gatewayNodeManager->updatePeerStatus(p2pID3, status);
 
     auto p2pIDs5 = gatewayNodeManager->peersRouterTable()->queryP2pIDsByGroupID(group3);
     BOOST_CHECK_EQUAL(p2pIDs5.size(), 3);
@@ -357,29 +349,34 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_query)
     BOOST_CHECK_EQUAL(p2pIDs6.size(), 3);
 }
 
+
 BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_remove)
 {
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>(nullptr);
 
-    const std::string json =
-        "{\"statusSeq\":110,\"nodeInfoList\":[{\"groupID\":\"group1\","
-        "\"nodeIDs\":["
-        "\"a0\",\"b0\",\"c0\"]},{\"groupID\":\"group2\",\"nodeIDs\":[\"a1\","
-        "\"b1\",\"c1\"]},{\"groupID\":\"group3\",\"nodeIDs\":[\"a2\",\"b2\","
-        "\"c2\"]}]}";
-
+    std::vector<GroupNodeInfo::Ptr> groupInfos;
     std::string group1 = "group1";
+    auto group1Info = createGroupNodeInfo(group1, {"a0", "b0", "c0"});
+    groupInfos.emplace_back(group1Info);
+
     std::string group2 = "group2";
+    auto group2Info = createGroupNodeInfo(group2, {"a1", "b1", "c1"});
+    groupInfos.emplace_back(group2Info);
+
     std::string group3 = "group3";
+    auto group3Info = createGroupNodeInfo(group3, {"a2", "b2", "c2"});
+    groupInfos.emplace_back(group3Info);
+
+    auto status = createGatewayNodeStatus(110, "testUUID", groupInfos);
 
     std::string p2pID1 = "xxxxx";
     std::string p2pID2 = "yyyyy";
     std::string p2pID3 = "zzzzz";
 
-    gatewayNodeManager->updateNodeInfo(p2pID1, json);
-    gatewayNodeManager->updateNodeInfo(p2pID2, json);
-    gatewayNodeManager->updateNodeInfo(p2pID3, json);
+    gatewayNodeManager->updatePeerStatus(p2pID1, status);
+    gatewayNodeManager->updatePeerStatus(p2pID2, status);
+    gatewayNodeManager->updatePeerStatus(p2pID3, status);
 
     {
         auto p2pIDs1 = gatewayNodeManager->peersRouterTable()->queryP2pIDsByGroupID(group1);

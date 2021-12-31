@@ -28,11 +28,12 @@ namespace bcos
 {
 namespace group
 {
-enum NodeType : uint32_t
+enum NodeCryptoType : uint32_t
 {
     NON_SM_NODE = 0,
     SM_NODE = 1,
 };
+
 class ChainNodeInfo
 {
 public:
@@ -41,13 +42,13 @@ public:
     using ServicesInfo = std::map<bcos::protocol::ServiceType, std::string>;
     ChainNodeInfo() = default;
     ChainNodeInfo(std::string const& _nodeName, int32_t _type)
-      : m_nodeName(_nodeName), m_nodeType((NodeType)_type)
+      : m_nodeName(_nodeName), m_nodeCryptoType((NodeCryptoType)_type)
     {}
     explicit ChainNodeInfo(std::string const& _jsonGroupInfoStr) { deserialize(_jsonGroupInfoStr); }
     virtual ~ChainNodeInfo() {}
 
     virtual std::string const& nodeName() const { return m_nodeName; }
-    virtual NodeType const& nodeType() const { return m_nodeType; }
+    virtual NodeCryptoType const& nodeCryptoType() const { return m_nodeCryptoType; }
     virtual std::string const& serviceName(bcos::protocol::ServiceType _type) const
     {
         if (!m_servicesInfo.count(_type))
@@ -58,7 +59,10 @@ public:
     }
 
     virtual void setNodeName(std::string const& _nodeName) { m_nodeName = _nodeName; }
-    virtual void setNodeType(NodeType const& _nodeType) { m_nodeType = _nodeType; }
+    virtual void setNodeCryptoType(NodeCryptoType const& _nodeType)
+    {
+        m_nodeCryptoType = _nodeType;
+    }
     virtual void appendServiceInfo(
         bcos::protocol::ServiceType _type, std::string const& _serviceName)
     {
@@ -103,8 +107,8 @@ public:
             BOOST_THROW_EXCEPTION(InvalidChainNodeInfo() << errinfo_comment(
                                       "The chain node information must set the chain node type."));
         }
-        NodeType type = (NodeType)(value["type"].asUInt());
-        setNodeType(type);
+        NodeCryptoType type = (NodeCryptoType)(value["type"].asUInt());
+        setNodeCryptoType(type);
 
         // required: parse iniConfig
         if (!value.isMember("iniConfig"))
@@ -159,7 +163,7 @@ public:
     {
         Json::Value jResp;
         jResp["name"] = nodeName();
-        jResp["type"] = nodeType();
+        jResp["type"] = nodeCryptoType();
         jResp["iniConfig"] = iniConfig();
         // set deployInfo
         jResp["serviceInfo"] = Json::Value(Json::arrayValue);
@@ -180,7 +184,7 @@ private:
     bool m_microService = false;
     // the node name
     std::string m_nodeName;
-    NodeType m_nodeType;
+    NodeCryptoType m_nodeCryptoType;
     // the nodeID
     std::string m_nodeID;
 
@@ -198,7 +202,7 @@ inline std::string printNodeInfo(ChainNodeInfo::Ptr _nodeInfo)
     }
     std::stringstream oss;
     oss << LOG_KV("name", _nodeInfo->nodeName())
-        << LOG_KV("type", std::to_string((int32_t)_nodeInfo->nodeType()));
+        << LOG_KV("type", std::to_string((int32_t)_nodeInfo->nodeCryptoType()));
     return oss.str();
 }
 }  // namespace group

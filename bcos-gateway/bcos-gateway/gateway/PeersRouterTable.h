@@ -22,6 +22,7 @@
 #include <bcos-framework/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/interfaces/crypto/KeyInterface.h>
 #include <bcos-gateway/Common.h>
+#include <bcos-gateway/protocol/GatewayNodeStatus.h>
 #include <memory>
 
 namespace bcos
@@ -40,17 +41,20 @@ public:
     std::set<P2pID> queryP2pIDsByGroupID(const std::string& _groupID) const;
     void removeP2PID(const std::string& _p2pID);
 
-    void batchInsertNodeList(std::string const& _p2pNodeID,
-        std::map<std::string, std::set<std::string>> const& _nodeList);
+    void updatePeerStatus(std::string const& _p2pID, GatewayNodeStatus::Ptr _gatewayNodeStatus);
 
     void removePeer(std::string const& _p2pNodeID);
-    void updatePeerNodeList(std::string const& _p2pNodeID,
-        std::map<std::string, std::set<std::string>> const& _nodeIDList);
-    std::map<std::string, std::set<std::string>> peersNodeInfo(std::string const& _p2pNodeID) const;
+
+    using Group2NodeIDListType = std::map<std::string, std::set<std::string>>;
+    Group2NodeIDListType peersNodeIDList(std::string const& _p2pNodeID) const;
+
+protected:
+    void batchInsertNodeList(
+        std::string const& _p2pNodeID, std::vector<GroupNodeInfo::Ptr> const& _nodeList);
+    void updatePeerNodeList(std::string const& _p2pNodeID, GatewayNodeStatus::Ptr _status);
 
 private:
     bcos::crypto::KeyFactory::Ptr m_keyFactory;
-
     // used for peer-to-peer router
     // groupID => NodeID => set<P2pID>
     std::map<std::string, std::map<std::string, std::set<P2pID>>> m_groupNodeList;
@@ -58,8 +62,8 @@ private:
 
     // the nodeIDList infos of the peers
     // p2pNodeID => groupID => nodeIDList
-    std::map<P2pID, std::map<std::string, std::set<std::string>>> m_peersNodeList;
-    mutable SharedMutex x_peersNodeList;
+    std::map<P2pID, GatewayNodeStatus::Ptr> m_peersStatus;
+    mutable SharedMutex x_peersStatus;
 };
 }  // namespace gateway
 }  // namespace bcos
