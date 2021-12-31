@@ -28,6 +28,7 @@
 #include "../interfaces/storage/Table.h"
 #include "../libutilities/Error.h"
 #include "tbb/enumerable_thread_specific.h"
+#include <boost/core/ignore_unused.hpp>
 #include <boost/format.hpp>
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/identity.hpp>
@@ -225,6 +226,7 @@ public:
         std::function<void(Error::UniquePtr, std::optional<Entry>)> _callback) override
     {
         auto [bucket, lock] = getBucket(tableView, keyView);
+        boost::ignore_unused(lock);
 
         auto it = bucket->container.template get<0>().find(std::make_tuple(tableView, keyView));
         if (it != bucket->container.template get<0>().end())
@@ -311,6 +313,7 @@ public:
                 for (gsl::index i = 0; i < _keys.size(); ++i)
                 {
                     auto [bucket, lock] = getBucket(tableView, _keys[i]);
+                    boost::ignore_unused(lock);
 
                     auto it = bucket->container.find(
                         std::make_tuple(tableView, std::string_view(_keys[i])));
@@ -397,6 +400,7 @@ public:
         std::optional<Entry> entryOld;
 
         auto [bucket, lock] = getBucket(tableView, keyView);
+        boost::ignore_unused(lock);
 
         auto it = bucket->container.find(std::make_tuple(tableView, keyView));
         if (it != bucket->container.end())
@@ -573,6 +577,8 @@ public:
         {
             ssize_t updateCapacity = 0;
             auto [bucket, lock] = getBucket(change.table, change.key);
+            boost::ignore_unused(lock);
+            
             auto it = bucket->container.find(
                 std::make_tuple(std::string_view(change.table), std::string_view(change.key)));
             if (change.entry)
@@ -649,6 +655,7 @@ private:
         auto updateCapacity = entry.size();
 
         auto [bucket, lock] = getBucket(table, key);
+        boost::ignore_unused(lock);
         auto it = bucket->container.find(std::make_tuple(table, key));
 
         if (it == bucket->container.end())
@@ -730,21 +737,28 @@ private:
         return std::make_tuple(&bucket, std::unique_lock<std::mutex>(bucket.mutex));
     }
 
-    void updateMRUAndCheck(Bucket& bucket, typename Container::template nth_index<0>::type::iterator it)
+    void updateMRUAndCheck(
+        Bucket& bucket, typename Container::template nth_index<0>::type::iterator it)
     {
         auto seqIt = bucket.container.template get<1>().iterator_to(*it);
         bucket.container.template get<1>().relocate(
             bucket.container.template get<1>().end(), seqIt);
 
+        size_t clearCount = 0;
         while (bucket.capacity > m_maxCapacity && !bucket.container.empty())
         {
             auto& item = bucket.container.template get<1>().front();
             bucket.capacity -= item.entry.size();
 
             bucket.container.template get<1>().pop_front();
+            ++clearCount;
         }
 
-        STORAGE_LOG(TRACE) << "LRUStorage cleared, current size: " << bucket.container.size();
+        if (clearCount > 0)
+        {
+            STORAGE_LOG(TRACE) << "LRUStorage cleared:" << clearCount
+                               << ", current size: " << bucket.container.size();
+        }
     }
 };
 
