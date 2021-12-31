@@ -744,7 +744,7 @@ private:
             bucket.container.template get<1>().pop_front();
         }
 
-        STORAGE_LOG(INFO) << "LRUStorage cleared, current size: " << bucket.container.size();
+        STORAGE_LOG(TRACE) << "LRUStorage cleared, current size: " << bucket.container.size();
     }
 };
 
