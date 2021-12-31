@@ -22,7 +22,6 @@
 #include "../mock/MockTransactionalStorage.h"
 #include "../mock/MockTxPool.h"
 #include "Common.h"
-#include "storage/LRUStorage.h"
 #include "executor/TransactionExecutor.h"
 #include "interfaces/crypto/CommonType.h"
 #include "interfaces/crypto/CryptoSuite.h"
@@ -73,7 +72,7 @@ struct TransactionExecutorFixture
         backend = std::make_shared<MockTransactionalStorage>(hashImpl);
         auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
 
-        auto lruStorage = std::make_shared<bcos::executor::LRUStorage>(backend);
+        auto lruStorage = std::make_shared<bcos::storage::LRUStateStorage>(backend);
 
         executor = std::make_shared<TransactionExecutor>(
             txpool, lruStorage, backend, executionResultFactory, hashImpl, false, false);

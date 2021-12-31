@@ -51,8 +51,6 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
     add_compile_options(-DBOOST_SPIRIT_THREADSAFE)
     # for tbb, TODO: https://software.intel.com/sites/default/files/managed/b2/d2/TBBRevamp.pdf
     add_compile_options(-DTBB_SUPPRESS_DEPRECATED_MESSAGES=1)
-    add_compile_options(-fopenmp)
-    add_link_options(-fopenmp)
     # build deps lib Release
     set(_only_release_configuration "-DCMAKE_BUILD_TYPE=Release")
 
@@ -107,10 +105,8 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
 		# Strong stack protection was only added in GCC 4.9.
 		# Use it if we have the option to do so.
 		# See https://lwn.net/Articles/584225/
-        if (GCC_VERSION VERSION_GREATER 4.9 OR GCC_VERSION VERSION_EQUAL 4.9)
-            add_compile_options(-fstack-protector-strong)
-            add_compile_options(-fstack-protector)
-        endif()
+        add_compile_options(-fstack-protector-strong)
+        add_compile_options(-fstack-protector)
     # Additional Clang-specific compiler settings.
     elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
         if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 4.0)
@@ -155,7 +151,11 @@ endif()
 # rust static library linking requirements for macos
 if(APPLE)
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -framework Security")
+    add_compile_options(-Xpreprocessor -fopenmp)
+    add_link_options(-lomp)
 else()
    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -ldl")
+   add_compile_options(-fopenmp)
+   add_link_options(-fopenmp)
 endif()
 set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY ON)
