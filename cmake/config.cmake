@@ -66,11 +66,12 @@ hunter_config(
 # )
 
 hunter_config(
-    jsoncpp VERSION "1.8.4-local"
+    jsoncpp VERSION "1.8.0-local"
     URL
-    "https://github.com/open-source-parsers/jsoncpp/archive/1.8.4.tar.gz"
+    "https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/deps/jsoncpp/1.8.0.tar.gz
+    https://github.com/open-source-parsers/jsoncpp/archive/1.8.0.tar.gz"
     SHA1
-    98a56dba0cc6378c91668b6e1c120a657820c45e
+    40f7f34551012f68e822664a0b179e7e6cac5a97
 )
 hunter_config(tbb VERSION 2021.3.0 CMAKE_ARGS BUILD_SHARED_LIBS=OFF)
 hunter_config(ZLIB VERSION ${HUNTER_ZLIB_VERSION} CMAKE_ARGS CMAKE_POSITION_INDEPENDENT_CODE=TRUE)
