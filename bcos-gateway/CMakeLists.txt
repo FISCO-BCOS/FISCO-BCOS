@@ -36,8 +36,9 @@ file(GLOB_RECURSE SRCS bcos-gateway/*.cpp)
 add_library(gateway ${SRCS})
 target_link_libraries(gateway PUBLIC framework jsoncpp_lib_static OpenSSL::SSL OpenSSL::Crypto protocol-tars tarscpp::tarsservant)
 target_compile_options(gateway PRIVATE -Wno-error -Wno-unused-variable)
+
 if (APPLE)
-target_compile_options(gateway PRIVATE -faligned-allocation)
+# target_compile_options(gateway PRIVATE -faligned-allocation)
 endif()
 
 # ut
