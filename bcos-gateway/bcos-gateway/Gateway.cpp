@@ -117,8 +117,8 @@ void Gateway::asyncGetPeers(
     for (auto const& info : sessionInfos)
     {
         auto gatewayInfo = std::make_shared<GatewayInfo>(info);
-        auto nodeInfo = m_gatewayNodeManager->peersNodeInfo(info.p2pID);
-        gatewayInfo->setNodeIDInfo(std::move(nodeInfo));
+        auto nodeIDList = m_gatewayNodeManager->peersNodeIDList(info.p2pID);
+        gatewayInfo->setNodeIDInfo(std::move(nodeIDList));
         peerGatewayInfos->emplace_back(gatewayInfo);
     }
     auto localP2pInfo = m_p2pInterface->localP2pInfo();

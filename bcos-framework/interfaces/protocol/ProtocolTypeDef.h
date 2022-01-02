@@ -102,5 +102,31 @@ struct Session
     bcos::protocol::BlockNumber endNumber;    // )
 };
 
+enum class NodeType : uint32_t
+{
+    CONSENSUS_NODE = 0,
+    OBSERVER_NODE = 1,
+    NODE_OUTSIDE_GROUP = 2,
+};
+
+inline std::ostream& operator<<(std::ostream& _out, NodeType const& _nodeType)
+{
+    switch (_nodeType)
+    {
+    case NodeType::CONSENSUS_NODE:
+        _out << "consensus";
+        break;
+    case NodeType::OBSERVER_NODE:
+        _out << "observer";
+        break;
+    case NodeType::NODE_OUTSIDE_GROUP:
+        _out << "nodeOutsideGroup";
+        break;
+    default:
+        _out << "Unknown";
+        break;
+    }
+    return _out;
+}
 }  // namespace protocol
 }  // namespace bcos

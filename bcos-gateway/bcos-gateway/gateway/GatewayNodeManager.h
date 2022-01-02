@@ -27,6 +27,7 @@
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libp2p/P2PInterface.h>
 #include <bcos-gateway/libp2p/P2PSession.h>
+#include <bcos-gateway/protocol/GatewayNodeStatus.h>
 namespace bcos
 {
 namespace gateway
@@ -55,7 +56,7 @@ public:
     PeersRouterTable::Ptr peersRouterTable() { return m_peersRouterTable; }
     std::shared_ptr<bcos::crypto::KeyFactory> keyFactory() { return m_keyFactory; }
 
-    std::map<std::string, std::set<std::string>> peersNodeInfo(std::string const& _p2pNodeID);
+    std::map<std::string, std::set<std::string>> peersNodeIDList(std::string const& _p2pNodeID);
 
 protected:
     // for ut
@@ -78,23 +79,18 @@ protected:
 
     virtual void onReceiveStatusSeq(
         NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg);
-    virtual void onRequestNodeIDs(
+    virtual void onRequestNodeStatus(
         NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg);
-    virtual void onResponseNodeIDs(
+    virtual void onReceiveNodeStatus(
         NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg);
-    virtual bool generateNodeInfo(std::string& _nodeInfo);
-
-    bool parseReceivedJson(const std::string& _json, uint32_t& statusSeq,
-        std::map<std::string, std::set<std::string>>& nodeIDsMap);
-
-    virtual void updateNodeInfo(const P2pID& _p2pID, const std::string& _nodeIDsJson);
-
+    virtual bytesPointer generateNodeStatus();
     virtual void syncLatestNodeIDList();
-    virtual void updateNodeIDs(const P2pID& _p2pID, uint32_t _seq,
-        const std::map<std::string, std::set<std::string>>& _nodeIDsMap);
+
+    virtual void updatePeerStatus(std::string const& _p2pID, GatewayNodeStatus::Ptr _status);
 
 protected:
     P2pID m_p2pNodeID;
+    std::string m_uuid;
     std::shared_ptr<bcos::crypto::KeyFactory> m_keyFactory;
     P2PInterface::Ptr m_p2pInterface;
     // statusSeq

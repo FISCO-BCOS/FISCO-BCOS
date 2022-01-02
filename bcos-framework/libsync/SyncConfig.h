@@ -21,6 +21,7 @@
 #pragma once
 #include <bcos-framework/interfaces/consensus/ConsensusNodeInterface.h>
 #include <bcos-framework/interfaces/crypto/KeyInterface.h>
+#include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
 namespace bcos
 {
 namespace sync
@@ -39,7 +40,7 @@ public:
     virtual ~SyncConfig() {}
 
     bcos::crypto::NodeIDPtr nodeID() { return m_nodeId; }
-    // Note: copy here to remove multithreading issues
+    // Note: copy here to ensure thread-safe
     virtual bcos::consensus::ConsensusNodeList consensusNodeList()
     {
         ReadGuard l(x_consensusNodeList);
@@ -133,6 +134,20 @@ public:
         _onRecvResponse(nullptr);
     }
 
+    // Note: this only be called after block on-chain successfully
+    bcos::protocol::NodeType nodeType()
+    {
+        if (existNode(m_consensusNodeList, x_consensusNodeList, m_nodeId))
+        {
+            return bcos::protocol::NodeType::CONSENSUS_NODE;
+        }
+        if (existNode(m_observerNodeList, x_observerNodeList, m_nodeId))
+        {
+            return bcos::protocol::NodeType::CONSENSUS_NODE;
+        }
+        return bcos::protocol::NodeType::NODE_OUTSIDE_GROUP;
+    }
+
 private:
     void updateNodeList()
     {
@@ -145,19 +160,33 @@ private:
         }
     }
 
+    bool existNode(bcos::consensus::ConsensusNodeListPtr const& _nodeList, SharedMutex& _lock,
+        bcos::crypto::NodeIDPtr _nodeID)
+    {
+        ReadGuard l(_lock);
+        for (auto const& it : *_nodeList)
+        {
+            if (it->nodeID()->data() == _nodeID->data())
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
 protected:
     bcos::crypto::NodeIDPtr m_nodeId;
     bcos::consensus::ConsensusNodeListPtr m_consensusNodeList;
-    SharedMutex x_consensusNodeList;
+    mutable SharedMutex x_consensusNodeList;
 
     bcos::consensus::ConsensusNodeListPtr m_observerNodeList;
     SharedMutex x_observerNodeList;
 
     bcos::crypto::NodeIDSetPtr m_nodeList;
-    SharedMutex x_nodeList;
+    mutable SharedMutex x_nodeList;
 
     bcos::crypto::NodeIDSetPtr m_connectedNodeList;
-    SharedMutex x_connectedNodeList;
+    mutable SharedMutex x_connectedNodeList;
 };
 }  // namespace sync
 }  // namespace bcos

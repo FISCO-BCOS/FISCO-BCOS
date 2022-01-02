@@ -20,6 +20,7 @@
 #pragma once
 #include <bcos-framework/interfaces/front/FrontServiceInterface.h>
 #include <bcos-framework/interfaces/multigroup/ChainNodeInfo.h>
+#include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
 #include <bcos-tars-protocol/client/FrontServiceClient.h>
 namespace bcos
 {
@@ -50,8 +51,12 @@ public:
 
     std::string const& nodeID() const { return m_nodeID; }
 
+    bcos::protocol::NodeType nodeType() const { return m_nodeType; }
+    void setNodeType(bcos::protocol::NodeType _nodeType) { m_nodeType = _nodeType; }
+
 private:
     std::string m_nodeID;
+    bcos::protocol::NodeType m_nodeType;
     bcos::front::FrontServiceInterface::Ptr m_frontService;
     bcostars::FrontServicePrx m_frontServicePrx;
 };

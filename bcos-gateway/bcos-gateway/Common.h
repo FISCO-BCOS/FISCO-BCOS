@@ -33,6 +33,16 @@ namespace bcos
 {
 namespace gateway
 {
+enum GroupType
+{
+    // group with at-least one consensus node
+    GROUP_WITH_CONSENSUS_NODE = 0,
+    // group without consensus node
+    GROUP_WITHOUT_CONSENSUS_NODE = 1,
+    // group without consensus node and observer node
+    OUTSIDE_GROUP = 2,
+};
+
 template <typename T, typename S, typename... Args>
 std::pair<std::shared_ptr<T>, S> createServiceClient(
     std::string const& _serviceName, std::string const& _servantName, const Args&... _args)

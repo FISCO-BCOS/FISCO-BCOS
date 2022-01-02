@@ -38,9 +38,9 @@ NodeService::Ptr NodeServiceFactory::buildNodeService(
 {
     auto appName = _nodeInfo->nodeName();
     // create cryptoSuite
-    auto const& type = _nodeInfo->nodeType();
+    auto const& type = _nodeInfo->nodeCryptoType();
     CryptoSuite::Ptr cryptoSuite = nullptr;
-    if (type == NodeType::SM_NODE)
+    if (type == NodeCryptoType::SM_NODE)
     {
         cryptoSuite = createSMCryptoSuite();
     }

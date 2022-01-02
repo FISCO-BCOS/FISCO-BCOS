@@ -55,9 +55,12 @@ void BlockSyncConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig)
     resetBlockInfo(_ledgerConfig->blockNumber(), _ledgerConfig->hash());
     setConsensusNodeList(_ledgerConfig->consensusNodeList());
     setObserverList(_ledgerConfig->observerNodeList());
-    BLKSYNC_LOG(INFO) << LOG_DESC("BlockSyncConfig resetConfig") << LOG_KV("number", m_blockNumber)
+    m_nodeType = nodeType();
+    BLKSYNC_LOG(INFO) << LOG_DESC("#### BlockSyncConfig resetConfig")
+                      << LOG_KV("number", m_blockNumber)
                       << LOG_KV("consNodeSize", consensusNodeList().size())
-                      << LOG_KV("observerNodeSize", observerNodeList().size());
+                      << LOG_KV("observerNodeSize", observerNodeList().size())
+                      << LOG_KV("type", m_nodeType);
 }
 
 void BlockSyncConfig::setGenesisHash(HashType const& _hash)

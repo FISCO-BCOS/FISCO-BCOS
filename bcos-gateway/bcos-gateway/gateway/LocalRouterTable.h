@@ -31,6 +31,7 @@ class LocalRouterTable
 {
 public:
     using Ptr = std::shared_ptr<LocalRouterTable>;
+    using GroupNodeListType = std::map<std::string, std::map<std::string, FrontServiceInfo::Ptr>>;
     LocalRouterTable(bcos::crypto::KeyFactory::Ptr _keyFactory) : m_keyFactory(_keyFactory) {}
     virtual ~LocalRouterTable() {}
 
@@ -49,7 +50,8 @@ public:
     bool eraseUnreachableNodes();
 
     // Note: copy to ensure thread-safe
-    std::map<std::string, std::map<std::string, FrontServiceInfo::Ptr>> nodeList() const
+    // groupID => nodeID => FrontServiceInfo
+    GroupNodeListType nodeList() const
     {
         ReadGuard l(x_nodeList);
         return m_nodeList;
@@ -58,7 +60,7 @@ public:
 private:
     bcos::crypto::KeyFactory::Ptr m_keyFactory;
     // groupID => nodeID => FrontServiceInfo
-    std::map<std::string, std::map<std::string, FrontServiceInfo::Ptr>> m_nodeList;
+    GroupNodeListType m_nodeList;
     mutable SharedMutex x_nodeList;
 };
 }  // namespace gateway
