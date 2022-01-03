@@ -4,11 +4,11 @@ project(bcos-scheduler VERSION "3.0.0")
 
 aux_source_directory(src SRCS)
 
-find_package(TBB CONFIG REQUIRED)
-find_package(Threads REQUIRED)
+# find_package(TBB CONFIG REQUIRED)
+# find_package(Threads REQUIRED)
 
 add_library(scheduler ${SRCS})
-target_link_libraries(scheduler PUBLIC framework TBB::tbb)
+target_link_libraries(scheduler PUBLIC framework)
 target_include_directories(scheduler PUBLIC ${CMAKE_SOURCE_DIR}/bcos-framework)
 
 if(TESTS)
