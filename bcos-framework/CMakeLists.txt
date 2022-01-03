@@ -85,7 +85,6 @@ target_link_libraries(framework PUBLIC Boost::log Boost::chrono Boost::iostreams
 Boost::filesystem Boost::thread protobuf::libprotobuf TBB::tbb jsoncpp_lib_static OpenMP::OpenMP_CXX)
 
 if (TESTS)
-    find_package(jsoncpp CONFIG REQUIRED)
     enable_testing()
     set(CTEST_OUTPUT_ON_FAILURE True)
     add_subdirectory(test)
