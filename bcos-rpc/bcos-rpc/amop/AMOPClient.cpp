@@ -421,7 +421,8 @@ void AMOPClient::subscribeTopicToAllNodes()
         auto endPointStr = endPointToString(m_gatewayServiceName, endPoint.getEndpoint());
         auto servicePrx =
             Application::getCommunicator()->stringToProxy<GatewayServicePrx>(endPointStr);
-        auto serviceClient = std::make_shared<GatewayServiceClient>(servicePrx);
+        auto serviceClient =
+            std::make_shared<GatewayServiceClient>(servicePrx, m_gatewayServiceName);
         serviceClient->asyncSubscribeTopic(
             m_clientID, topicInfo, [endPointStr](Error::Ptr&& _error) {
                 if (_error)
@@ -442,7 +443,8 @@ void AMOPClient::removeTopicFromAllNodes(std::vector<std::string> const& topicsT
         auto endPointStr = endPointToString(m_gatewayServiceName, endPoint.getEndpoint());
         auto servicePrx =
             Application::getCommunicator()->stringToProxy<GatewayServicePrx>(endPointStr);
-        auto serviceClient = std::make_shared<GatewayServiceClient>(servicePrx);
+        auto serviceClient =
+            std::make_shared<GatewayServiceClient>(servicePrx, m_gatewayServiceName);
         serviceClient->asyncRemoveTopic(
             m_clientID, topicsToRemove, [topicsToRemove, endPointStr](Error::Ptr&& _error) {
                 AMOP_CLIENT_LOG(INFO)

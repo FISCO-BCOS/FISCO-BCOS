@@ -158,7 +158,8 @@ public:
             }
             auto servicePrx =
                 Application::getCommunicator()->stringToProxy<bcostars::RpcServicePrx>(_clientID);
-            auto rpcClient = std::make_shared<bcostars::RpcServiceClient>(servicePrx);
+            auto rpcClient =
+                std::make_shared<bcostars::RpcServiceClient>(servicePrx, m_rpcServiceName);
             UpgradeGuard ul(l);
             m_clientInfo[_clientID] = rpcClient;
             TOPIC_LOG(INFO) << LOG_DESC("createAndGetServiceByClient")

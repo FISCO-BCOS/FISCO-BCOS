@@ -54,7 +54,7 @@ int main(int argc, const char* argv[])
     }
     catch (std::exception const& e)
     {
-        std::cerr << "Init failed!!!" << std::endl;
+        std::cerr << "Init failed, error:" << boost::diagnostic_information(e) << std::endl;
         return -1;
     }
     bcos::initializer::printVersion();

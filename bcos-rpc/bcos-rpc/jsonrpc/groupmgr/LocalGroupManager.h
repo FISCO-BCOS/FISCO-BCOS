@@ -35,7 +35,7 @@ public:
     {}
 
     ~LocalGroupManager() override {}
-
+    virtual void init() { initNodeInfo(m_groupInfo->groupID(), "localNode", m_nodeService); }
     NodeService::Ptr getNodeService(std::string const& _groupID, std::string const&) const override
     {
         if (_groupID.size() > 0 && _groupID != m_groupInfo->groupID())
@@ -68,10 +68,6 @@ public:
         }
         return m_groupInfo->nodeInfo(_nodeName);
     }
-
-    void updateGroupBlockInfo(
-        std::string const&, std::string const&, bcos::protocol::BlockNumber) override
-    {}
 
     std::vector<bcos::group::GroupInfo::Ptr> groupInfoList() override
     {

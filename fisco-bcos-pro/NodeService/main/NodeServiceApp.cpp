@@ -117,13 +117,14 @@ void NodeServiceApp::notifyBlockNumberToAllRpcNodes(bcostars::RpcServicePrx _rpc
                         << LOG_KV("number", _blockNumber);
         return;
     }
+    auto rpcServiceName = m_nodeInitializer->nodeConfig()->rpcServiceName();
     for (auto const& endPoint : activeEndPoints)
     {
-        auto endPointStr = endPointToString(
-            m_nodeInitializer->nodeConfig()->rpcServiceName(), endPoint.getEndpoint());
+        auto endPointStr = endPointToString(rpcServiceName, endPoint.getEndpoint());
         auto servicePrx =
             Application::getCommunicator()->stringToProxy<bcostars::RpcServicePrx>(endPointStr);
-        auto serviceClient = std::make_shared<bcostars::RpcServiceClient>(servicePrx);
+        auto serviceClient =
+            std::make_shared<bcostars::RpcServiceClient>(servicePrx, rpcServiceName);
         serviceClient->asyncNotifyBlockNumber(m_nodeInitializer->nodeConfig()->groupId(),
             m_nodeInitializer->nodeConfig()->nodeName(), _blockNumber, _callback);
     }
