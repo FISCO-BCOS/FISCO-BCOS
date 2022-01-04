@@ -282,7 +282,10 @@ Rpc::Ptr RpcFactory::buildLocalRpc(
     auto wsService = buildWsService(config);
     auto groupManager = buildLocalGroupManager(_groupInfo, _nodeService);
     auto amopClient = buildLocalAMOPClient(wsService);
-    return buildRpc(wsService, groupManager, amopClient);
+    auto rpc = buildRpc(wsService, groupManager, amopClient);
+    // Note: init groupManager after create rpc and register the handlers
+    groupManager->init();
+    return rpc;
 }
 
 /**
@@ -307,7 +310,7 @@ GroupManager::Ptr RpcFactory::buildGroupManager()
     return std::make_shared<GroupManager>(m_chainID, nodeServiceFactory);
 }
 
-GroupManager::Ptr RpcFactory::buildLocalGroupManager(
+LocalGroupManager::Ptr RpcFactory::buildLocalGroupManager(
     GroupInfo::Ptr _groupInfo, NodeService::Ptr _nodeService)
 {
     return std::make_shared<LocalGroupManager>(m_chainID, _groupInfo, _nodeService);

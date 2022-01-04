@@ -56,7 +56,8 @@ void Initializer::initMicroServiceNode(std::string const& _configFilePath,
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     auto gatewayPrx = Application::getCommunicator()->stringToProxy<bcostars::GatewayServicePrx>(
         m_nodeConfig->gatewayServiceName());
-    auto gateWay = std::make_shared<bcostars::GatewayServiceClient>(gatewayPrx, keyFactory);
+    auto gateWay = std::make_shared<bcostars::GatewayServiceClient>(
+        gatewayPrx, m_nodeConfig->gatewayServiceName(), keyFactory);
     init(bcos::initializer::NodeArchitectureType::PRO, _configFilePath, _genesisFile, gateWay,
         false);
 }

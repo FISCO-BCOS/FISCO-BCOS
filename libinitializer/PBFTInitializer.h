@@ -98,7 +98,7 @@ protected:
         {
             auto endPointStr = bcostars::endPointToString(_serviceName, endPoint.getEndpoint());
             auto servicePrx = Application::getCommunicator()->stringToProxy<T>(endPointStr);
-            auto serviceClient = std::make_shared<S>(servicePrx);
+            auto serviceClient = std::make_shared<S>(servicePrx, _serviceName);
             serviceClient->asyncNotifyGroupInfo(
                 _groupInfo, [endPointStr, _groupInfo](Error::Ptr&& _error) {
                     // TODO: retry when notify failed

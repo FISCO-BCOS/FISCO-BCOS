@@ -33,7 +33,9 @@ namespace bcostars
 class RpcServiceClient : public bcos::rpc::RPCInterface
 {
 public:
-    RpcServiceClient(bcostars::RpcServicePrx _proxy) : m_proxy(_proxy) {}
+    RpcServiceClient(bcostars::RpcServicePrx _prx, std::string const& _rpcServiceName)
+      : m_prx(_prx), m_rpcServiceName(_rpcServiceName)
+    {}
     ~RpcServiceClient() override {}
 
     class Callback : public RpcServicePrxCallback
@@ -62,7 +64,7 @@ public:
         std::function<void(bcos::Error::Ptr)> _callback) override
     {
         auto ret = checkConnection(
-            c_moduleName, "asyncNotifyBlockNumber", m_proxy, [_callback](bcos::Error::Ptr _error) {
+            c_moduleName, "asyncNotifyBlockNumber", m_prx, [_callback](bcos::Error::Ptr _error) {
                 if (_callback)
                 {
                     _callback(_error);
@@ -72,8 +74,18 @@ public:
         {
             return;
         }
-        m_proxy->async_asyncNotifyBlockNumber(
-            new Callback(_callback), _groupID, _nodeName, _blockNumber);
+        vector<EndpointInfo> activeEndPoints;
+        vector<EndpointInfo> nactiveEndPoints;
+        m_prx->tars_endpointsAll(activeEndPoints, nactiveEndPoints);
+        for (auto const& endPoint : activeEndPoints)
+        {
+            auto endPointStr = m_rpcServiceName + "@tcp -h " + endPoint.getEndpoint().getHost() +
+                               " -p " +
+                               boost::lexical_cast<std::string>(endPoint.getEndpoint().getPort());
+            auto prx = Application::getCommunicator()->stringToProxy<RpcServicePrx>(endPointStr);
+            prx->async_asyncNotifyBlockNumber(
+                new Callback(_callback), _groupID, _nodeName, _blockNumber);
+        }
     }
     void asyncNotifyGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo,
         std::function<void(bcos::Error::Ptr&&)> _callback) override
@@ -96,7 +108,7 @@ public:
             std::function<void(bcos::Error::Ptr&&)> m_callback;
         };
         auto ret = checkConnection(
-            c_moduleName, "asyncNotifyGroupInfo", m_proxy, [_callback](bcos::Error::Ptr _error) {
+            c_moduleName, "asyncNotifyGroupInfo", m_prx, [_callback](bcos::Error::Ptr _error) {
                 if (_callback)
                 {
                     _callback(std::move(_error));
@@ -107,7 +119,7 @@ public:
             return;
         }
         auto tarsGroupInfo = toTarsGroupInfo(_groupInfo);
-        m_proxy->async_asyncNotifyGroupInfo(new Callback(_callback), tarsGroupInfo);
+        m_prx->async_asyncNotifyGroupInfo(new Callback(_callback), tarsGroupInfo);
     }
 
     void asyncNotifyAMOPMessage(int16_t _type, std::string const& _topic, bcos::bytesConstRef _data,
@@ -137,7 +149,7 @@ public:
             std::function<void(bcos::Error::Ptr&&, bcos::bytesPointer)> m_callback;
         };
         auto ret = checkConnection(
-            c_moduleName, "asyncNotifyAMOPMessage", m_proxy, [_callback](bcos::Error::Ptr _error) {
+            c_moduleName, "asyncNotifyAMOPMessage", m_prx, [_callback](bcos::Error::Ptr _error) {
                 if (_callback)
                 {
                     _callback(std::move(_error), nullptr);
@@ -148,7 +160,7 @@ public:
             return;
         }
         vector<tars::Char> request(_data.begin(), _data.end());
-        m_proxy->tars_set_timeout(c_amopTimeout)
+        m_prx->tars_set_timeout(c_amopTimeout)
             ->async_asyncNotifyAMOPMessage(new Callback(_callback), _type, _topic, request);
     }
 
@@ -172,8 +184,8 @@ public:
         private:
             std::function<void(bcos::Error::Ptr&&)> m_callback;
         };
-        auto ret = checkConnection(c_moduleName, "asyncNotifySubscribeTopic", m_proxy,
-            [_callback](bcos::Error::Ptr _error) {
+        auto ret = checkConnection(
+            c_moduleName, "asyncNotifySubscribeTopic", m_prx, [_callback](bcos::Error::Ptr _error) {
                 if (_callback)
                 {
                     _callback(std::move(_error));
@@ -183,17 +195,18 @@ public:
         {
             return;
         }
-        m_proxy->async_asyncNotifySubscribeTopic(new Callback(_callback));
+        m_prx->async_asyncNotifySubscribeTopic(new Callback(_callback));
     }
 
-    bcostars::RpcServicePrx prx() { return m_proxy; }
+    bcostars::RpcServicePrx prx() { return m_prx; }
 
 protected:
     void start() override {}
     void stop() override {}
 
 private:
-    bcostars::RpcServicePrx m_proxy;
+    bcostars::RpcServicePrx m_prx;
+    std::string m_rpcServiceName;
     std::string const c_moduleName = "RpcServiceClient";
     // AMOP timeout 40s
     const int c_amopTimeout = 40000;
