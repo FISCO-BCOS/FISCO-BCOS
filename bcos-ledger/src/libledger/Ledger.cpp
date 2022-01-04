@@ -493,7 +493,7 @@ void Ledger::asyncGetBlockNumberByHash(const crypto::HashType& _blockHash,
                     LEDGER_LOG(ERROR)
                         << "GetBlockNumberByHash error " << boost::diagnostic_information(*error);
                     callback(BCOS_ERROR_WITH_PREV_PTR(LedgerError::GetStorageError,
-                                 "GetBlockHashByNumber error", *error),
+                                 "GetBlockNumberByHash error ", *error),
                         -1);
                     return;
                 }
