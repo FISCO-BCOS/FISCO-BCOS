@@ -18,9 +18,9 @@
  * @date: 2021-05-14
  */
 #pragma once
-#include "../interfaces/sealer/SealerInterface.h"
 #include "SealerConfig.h"
 #include "SealingManager.h"
+#include "bcos-framework/interfaces/sealer/SealerInterface.h"
 #include "bcos-utilities/Worker.h"
 
 namespace bcos

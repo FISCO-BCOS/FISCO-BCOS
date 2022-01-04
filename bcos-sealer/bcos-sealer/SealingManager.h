@@ -18,10 +18,10 @@
  * @date: 2021-05-14
  */
 #pragma once
-#include "../interfaces/protocol/BlockFactory.h"
-#include "../interfaces/protocol/TransactionMetaData.h"
 #include "Common.h"
 #include "SealerConfig.h"
+#include "bcos-framework/interfaces/protocol/BlockFactory.h"
+#include "bcos-framework/interfaces/protocol/TransactionMetaData.h"
 #include "bcos-utilities/CallbackCollectionHandler.h"
 #include "bcos-utilities/ThreadPool.h"
 namespace bcos

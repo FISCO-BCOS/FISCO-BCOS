@@ -72,7 +72,7 @@ add_custom_command(
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
-file(GLOB_RECURSE SRCS libexecutor/*.cpp libprotocol/*.cpp libsealer/*.cpp libstorage/*.cpp libsync/*.cpp libtool/*.cpp)
+file(GLOB_RECURSE SRCS libexecutor/*.cpp libprotocol/*.cpp libstorage/*.cpp libsync/*.cpp libtool/*.cpp)
 
 find_package(TBB CONFIG REQUIRED)
 find_package(Boost CONFIG REQUIRED log chrono system filesystem iostreams thread)

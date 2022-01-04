@@ -31,7 +31,7 @@ include_directories(${CMAKE_SOURCE_DIR}/bcos-framework)
 find_package(Boost CONFIG REQUIRED serialization)
 
 add_library(ledger ${SRCS})
-target_link_libraries(ledger PUBLIC framework Boost::serialization)
+target_link_libraries(ledger PUBLIC framework codec Boost::serialization)
 
 # test related
 if (TESTS)

@@ -28,7 +28,7 @@ find_package(ethash CONFIG REQUIRED)
 find_package(Boost CONFIG QUIET REQUIRED serialization program_options context)
 
 add_library(executor ${SRCS})
-target_link_libraries(executor PUBLIC framework crypto Boost::context evmone hera hera-buildinfo
+target_link_libraries(executor PUBLIC framework codec crypto Boost::context evmone hera hera-buildinfo
 ${WASM_ENGINE_LIBRARY} evmc::loader evmc::instructions wabt)
 
 if (TOOLS)
