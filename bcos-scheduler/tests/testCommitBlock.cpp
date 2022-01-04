@@ -20,8 +20,8 @@
 #include <bcos-tars-protocol/TransactionMetaDataImpl.h>
 #include <bcos-tars-protocol/TransactionReceiptFactoryImpl.h>
 #include <boost/test/unit_test.hpp>
-#include <future>
 #include <filesystem>
+#include <future>
 
 using namespace bcos::storage;
 using namespace bcos::ledger;
@@ -57,8 +57,8 @@ struct BlockExecutiveFixture
         blockFactory = std::make_shared<bcostars::protocol::BlockFactoryImpl>(
             suite, blockHeaderFactory, transactionFactory, transactionReceiptFactory);
 
-        scheduler = std::make_shared<scheduler::SchedulerImpl>(executorManager, ledger, storage,
-            executionMessageFactory, blockFactory, hashImpl);
+        scheduler = std::make_shared<scheduler::SchedulerImpl>(
+            executorManager, ledger, storage, executionMessageFactory, blockFactory, hashImpl);
 
         std::promise<std::optional<Table>> createTablePromise;
         storage->asyncCreateTable(SYS_CURRENT_STATE, "value",
@@ -160,10 +160,7 @@ BOOST_AUTO_TEST_CASE(commitBlock)
     BOOST_CHECK_EQUAL(blockNumber, "100");
 }
 
-BOOST_AUTO_TEST_CASE(rollback)
-{
-
-}
+BOOST_AUTO_TEST_CASE(rollback) {}
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

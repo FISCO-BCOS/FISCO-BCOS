@@ -28,8 +28,8 @@
 #include "CallParameters.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/protocol/BlockHeader.h"
-#include "bcos-framework/libprotocol/LogEntry.h"
-#include "bcos-framework/libprotocol/TransactionStatus.h"
+#include "bcos-protocol/LogEntry.h"
+#include "bcos-protocol/TransactionStatus.h"
 #include "bcos-utilities/Exceptions.h"
 #include <evmc/instructions.h>
 #include <boost/algorithm/string/case_conv.hpp>

@@ -16,9 +16,6 @@
 # limitations under the License.
 # ------------------------------------------------------------------------------
 file(GLOB_RECURSE SOURCES "*.cpp" "*.h" "*.sol")
-
-include_directories(${CMAKE_SOURCE_DIR}/bcos-codec)
-
 # cmake settings
 include(SearchTestCases)
 set(TEST_BINARY_NAME test-bcos-codec)
@@ -30,4 +27,4 @@ target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR} ${B
 find_package(Boost CONFIG QUIET REQUIRED unit_test_framework)
 find_package(wedpr-crypto CONFIG QUIET REQUIRED)
 
-target_link_libraries(${TEST_BINARY_NAME} codec wedpr-crypto::crypto Boost::unit_test_framework)
+target_link_libraries(${TEST_BINARY_NAME} ${CODEC_TARGET} wedpr-crypto::crypto Boost::unit_test_framework)

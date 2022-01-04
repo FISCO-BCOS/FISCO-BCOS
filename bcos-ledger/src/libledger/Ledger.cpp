@@ -33,7 +33,7 @@
 #include <bcos-framework/interfaces/protocol/CommonError.h>
 #include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/interfaces/storage/Table.h>
-#include <bcos-framework/libprotocol/ParallelMerkleProof.h>
+#include <bcos-protocol/ParallelMerkleProof.h>
 #include <bcos-framework/libtool/ConsensusNode.h>
 #include <tbb/parallel_for.h>
 #include <boost/exception/diagnostic_information.hpp>

@@ -22,8 +22,8 @@
 #include "../../interfaces/ledger/LedgerConfig.h"
 #include "../../interfaces/ledger/LedgerInterface.h"
 #include "../../interfaces/protocol/Block.h"
-#include "../../testutils/protocol/FakeBlock.h"
-#include "../../testutils/protocol/FakeBlockHeader.h"
+#include "bcos-protocol/testutils/protocol/FakeBlock.h"
+#include "bcos-protocol/testutils/protocol/FakeBlockHeader.h"
 #include "bcos-utilities/ThreadPool.h"
 
 using namespace bcos;

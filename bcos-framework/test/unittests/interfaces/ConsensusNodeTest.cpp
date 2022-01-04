@@ -16,9 +16,9 @@
  * @brief Unit tests for the ConsensusNode
  * @file ConsensusNodeTest.cpp
  */
-#include "interfaces/consensus/ConsensusNode.h"
+#include "bcos-framework/interfaces/consensus/ConsensusNode.h"
+#include "bcos-framework/interfaces/consensus/ConsensusNodeInterface.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
-#include "interfaces/consensus/ConsensusNodeInterface.h"
 #include "testutils/crypto/SignatureImpl.h"
 #include <boost/test/unit_test.hpp>
 using namespace bcos;

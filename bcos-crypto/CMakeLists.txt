@@ -19,18 +19,15 @@
 cmake_minimum_required(VERSION 3.10)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum OS X deployment version")
 
-project(bcos-crypto VERSION "3.0.0")
+project(bcos-crypto VERSION ${VERSION})
 
 file(GLOB_RECURSE SRCS encrypt/*.cpp hash/*.cpp signature/*.cpp)
 
 hunter_add_package(wedpr-crypto)
 find_package(wedpr-crypto CONFIG REQUIRED)
 
-include_directories(${CMAKE_SOURCE_DIR})
-# include_directories(${CMAKE_SOURCE_DIR}/bcos-framework)
-
-add_library(crypto ${SRCS})
-target_link_libraries(crypto PUBLIC framework wedpr-crypto::crypto wedpr-crypto::extend-crypto)
+add_library(${CRYPTO_TARGET} ${SRCS})
+target_link_libraries(${CRYPTO_TARGET} PUBLIC framework wedpr-crypto::crypto wedpr-crypto::extend-crypto)
 
 option(DEMO "compile demo or not" OFF)
 

@@ -18,21 +18,19 @@
 
 cmake_minimum_required(VERSION 3.12)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment version")
-project(bcos-codec VERSION "3.0.0")
-set(VERSION_SUFFIX "-rc2")
+include(Version)
+project(bcos-codec VERSION ${VERSION})
 
 file(GLOB SRC_LIST "*.cpp")
 file(GLOB HEADERS "*.h")
-
-include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 aux_source_directory(./abi SRC_LIST)
 include_directories(./abi)
 aux_source_directory(./scale SRC_LIST)
 include_directories(./scale)
 
-add_library(codec ${SRC_LIST} ${HEADERS})
-target_link_libraries(codec PUBLIC bcos-utilities::bcos-utilities)
+add_library(${CODEC_TARGET} ${SRC_LIST} ${HEADERS})
+target_link_libraries(${CODEC_TARGET} PUBLIC ${UTILITIES_TARGET})
 
 if (TESTS)
     enable_testing()

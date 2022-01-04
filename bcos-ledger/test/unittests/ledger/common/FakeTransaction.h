@@ -19,7 +19,7 @@
  */
 
 #pragma once
-#include "bcos-framework/libprotocol/protobuf/PBTransactionFactory.h"
+#include "bcos-protocol/protobuf/PBTransactionFactory.h"
 #include "bcos-utilities/Common.h"
 #include <bcos-framework/testutils/crypto/HashImpl.h>
 #include <bcos-framework/testutils/crypto/SignatureImpl.h>

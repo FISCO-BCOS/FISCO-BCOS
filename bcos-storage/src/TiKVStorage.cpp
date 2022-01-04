@@ -20,9 +20,9 @@
  */
 #include "TiKVStorage.h"
 #include "Common.h"
+#include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/interfaces/storage/Table.h"
 #include "bcos-utilities/Error.h"
-#include "interfaces/protocol/ProtocolTypeDef.h"
 #include "pingcap/kv/BCOS2PC.h"
 #include "pingcap/kv/Cluster.h"
 #include "pingcap/kv/Scanner.h"

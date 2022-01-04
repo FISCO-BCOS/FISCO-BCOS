@@ -1,6 +1,6 @@
+#include "ChecksumAddress.h"
 #include "ExecutorManager.h"
 #include "SchedulerImpl.h"
-#include "ChecksumAddress.h"
 #include "bcos-framework/interfaces/crypto/CryptoSuite.h"
 #include "bcos-framework/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
@@ -12,7 +12,7 @@
 #include "bcos-framework/interfaces/protocol/TransactionReceiptFactory.h"
 #include "bcos-framework/interfaces/protocol/TransactionSubmitResult.h"
 #include "bcos-framework/interfaces/storage/StorageInterface.h"
-#include "bcos-framework/libprotocol/TransactionSubmitResultFactoryImpl.h"
+#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "mock/MockExecutor.h"
 #include "mock/MockExecutor3.h"
 #include "mock/MockExecutorForCall.h"
@@ -42,10 +42,7 @@ namespace bcos::test
 {
 struct ChecksumFixture
 {
-    ChecksumFixture()
-    {
-        hashImpl = std::make_shared<Keccak256Hash>();
-    }
+    ChecksumFixture() { hashImpl = std::make_shared<Keccak256Hash>(); }
 
     bcos::crypto::Hash::Ptr hashImpl;
 
@@ -55,7 +52,6 @@ struct ChecksumFixture
         toChecksumAddress(ret, hashImpl);
         BOOST_CHECK_EQUAL(addr, ret);
     }
-
 };
 
 BOOST_FIXTURE_TEST_SUITE(utils, ChecksumFixture)

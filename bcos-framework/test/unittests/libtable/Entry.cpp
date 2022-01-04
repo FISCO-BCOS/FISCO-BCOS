@@ -17,9 +17,9 @@
  * @file Entry.cpp
  */
 
+#include "bcos-framework/interfaces/storage/Table.h"
 #include "bcos-utilities/Error.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
-#include "interfaces/storage/Table.h"
 #include "libstorage/StateStorage.h"
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>

@@ -8,8 +8,8 @@
  */
 
 #include "../bcos-storage/RocksDBStorage.h"
+#include "bcos-framework/interfaces/storage/StorageInterface.h"
 #include "boost/filesystem.hpp"
-#include "interfaces/storage/StorageInterface.h"
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"

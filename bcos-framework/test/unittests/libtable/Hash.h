@@ -17,7 +17,7 @@
  * @file Header256Hash.h
  */
 
-#include "interfaces/crypto/Hash.h"
+#include "bcos-framework/interfaces/crypto/Hash.h"
 #include <functional>
 
 namespace bcos

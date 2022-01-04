@@ -19,12 +19,12 @@
  * @date 2021-07-15
  */
 
-#include "interfaces/gateway/GatewayTypeDef.h"
+#include "bcos-framework/interfaces/gateway/GatewayTypeDef.h"
 #include <bcos-boostssl/context/ContextBuilder.h>
 #include <bcos-boostssl/websocket/WsInitializer.h>
 #include <bcos-boostssl/websocket/WsMessage.h>
 #include <bcos-boostssl/websocket/WsService.h>
-#include <bcos-framework/libprotocol/amop/AMOPRequest.h>
+#include <bcos-protocol/amop/AMOPRequest.h>
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-rpc/event/EventSubMatcher.h>
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>

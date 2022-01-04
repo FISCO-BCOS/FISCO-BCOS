@@ -25,11 +25,11 @@
 #include "bcos-pbft/pbft/PBFTImpl.h"
 #include "bcos-pbft/pbft/storage/LedgerStorage.h"
 #include <bcos-framework/interfaces/consensus/ConsensusNode.h>
-#include <bcos-framework/libprotocol/TransactionSubmitResultFactoryImpl.h>
-#include <bcos-framework/libprotocol/protobuf/PBBlockFactory.h>
-#include <bcos-framework/libprotocol/protobuf/PBBlockHeaderFactory.h>
-#include <bcos-framework/libprotocol/protobuf/PBTransactionFactory.h>
-#include <bcos-framework/libprotocol/protobuf/PBTransactionReceiptFactory.h>
+#include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
+#include <bcos-protocol/protobuf/PBBlockFactory.h>
+#include <bcos-protocol/protobuf/PBBlockHeaderFactory.h>
+#include <bcos-protocol/protobuf/PBTransactionFactory.h>
+#include <bcos-protocol/protobuf/PBTransactionReceiptFactory.h>
 #include <bcos-framework/libstorage/StateStorage.h>
 #include <bcos-framework/testutils/faker/FakeFrontService.h>
 #include <bcos-framework/testutils/faker/FakeLedger.h>

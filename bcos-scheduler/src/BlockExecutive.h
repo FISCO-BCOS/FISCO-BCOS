@@ -11,7 +11,7 @@
 #include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/interfaces/protocol/TransactionMetaData.h"
 #include "bcos-framework/interfaces/protocol/TransactionReceiptFactory.h"
-#include "bcos-framework/libprotocol/TransactionSubmitResultFactoryImpl.h"
+#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-utilities/Error.h"
 #include <bcos-framework/interfaces/protocol/BlockFactory.h>
 #include <tbb/concurrent_unordered_map.h>

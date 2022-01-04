@@ -21,7 +21,7 @@
 #pragma once
 #include "ProtocolInitializer.h"
 #include "bcos-framework/interfaces/protocol/BlockFactory.h"
-#include "bcos-framework/libprotocol/TransactionSubmitResultFactoryImpl.h"
+#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include <bcos-framework/interfaces/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/interfaces/executor/ExecutionMessage.h>
 #include <bcos-framework/interfaces/ledger/LedgerInterface.h>

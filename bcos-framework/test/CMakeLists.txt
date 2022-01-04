@@ -17,8 +17,6 @@
 # ------------------------------------------------------------------------------
 file(GLOB_RECURSE SOURCES "*.cpp" "*.h" "*.sol")
 
-include_directories(${CMAKE_SOURCE_DIR}/bcos-framework)
-
 # cmake settings
 # include(SearchTestCases)
 set(TEST_BINARY_NAME test-bcos-framework)

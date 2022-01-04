@@ -19,14 +19,14 @@
 
 #include "state/State.h"
 #include "MemoryStorage.h"
-#include "bcos-framework/libprotocol/protobuf/PBBlock.h"
-#include "bcos-framework/libprotocol/protobuf/PBBlockFactory.h"
-#include "bcos-framework/libprotocol/protobuf/PBBlockHeaderFactory.h"
-#include "bcos-framework/libprotocol/protobuf/PBTransactionFactory.h"
-#include "bcos-framework/libprotocol/protobuf/PBTransactionReceiptFactory.h"
 #include "bcos-framework/libtable/StateStorage.h"
 #include "bcos-framework/testutils/crypto/HashImpl.h"
 #include "bcos-framework/testutils/crypto/SignatureImpl.h"
+#include "bcos-protocol/protobuf/PBBlock.h"
+#include "bcos-protocol/protobuf/PBBlockFactory.h"
+#include "bcos-protocol/protobuf/PBBlockHeaderFactory.h"
+#include "bcos-protocol/protobuf/PBTransactionFactory.h"
+#include "bcos-protocol/protobuf/PBTransactionReceiptFactory.h"
 #include <boost/test/unit_test.hpp>
 
 using namespace std;

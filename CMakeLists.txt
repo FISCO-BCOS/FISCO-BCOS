@@ -13,8 +13,9 @@ HunterGate(
     FILEPATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.cmake"
 )
 
-project(FISCO-BCOS VERSION "3.0.0")
-set(VERSION_SUFFIX "-rc2")
+include(cmake/Version.cmake)
+project(PROJECT_NAME VERSION ${VERSION})
+
 
 include(Options)
 configure_project()
@@ -36,8 +37,10 @@ hunter_add_package(evmone)
 
 # install dependencies
 include(InstallBcosUtilities)
+include(IncludeDirectories)
 
-include_directories(${CMAKE_SOURCE_DIR})
+# define targets name
+include(TargetSettings)
 
 add_subdirectory(bcos-crypto)
 add_subdirectory(bcos-codec)
@@ -47,6 +50,7 @@ add_subdirectory(bcos-scheduler)
 add_subdirectory(bcos-executor)
 add_subdirectory(bcos-storage)
 add_subdirectory(bcos-ledger)
+add_subdirectory(bcos-protocol)
 add_subdirectory(bcos-tars-protocol)
 add_subdirectory(bcos-boostssl)
 add_subdirectory(bcos-rpc)

@@ -22,12 +22,12 @@
 #include "bcos-framework/interfaces/ledger/LedgerTypeDef.h"
 #include "bcos-framework/interfaces/protocol/BlockFactory.h"
 #include "bcos-framework/interfaces/protocol/BlockHeaderFactory.h"
+#include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/interfaces/storage/Common.h"
 #include "bcos-framework/interfaces/storage/StorageInterface.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/ThreadPool.h"
-#include "interfaces/protocol/ProtocolTypeDef.h"
 #include "utilities/Common.h"
 #include "utilities/MerkleProofUtility.h"
 #include <utility>

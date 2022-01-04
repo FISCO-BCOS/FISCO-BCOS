@@ -20,8 +20,8 @@
  */
 #include "PBFTInitializer.h"
 #include "bcos-framework/interfaces/storage/KVStorageHelper.h"
-#include <bcos-utilities/FileUtility.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
+#include <bcos-utilities/FileUtility.h>
 #include <include/BuildInfo.h>
 #include <json/json.h>
 

@@ -22,7 +22,7 @@
 #include <bcos-framework/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/testutils/crypto/HashImpl.h>
 #include <bcos-framework/testutils/crypto/SignatureImpl.h>
-#include <bcos-framework/testutils/protocol/FakeTransaction.h>
+#include <bcos-protocol/testutils/protocol/FakeTransaction.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 

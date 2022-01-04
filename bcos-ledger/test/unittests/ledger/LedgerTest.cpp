@@ -23,10 +23,10 @@
 
 #include "bcos-ledger/src/libledger/Ledger.h"
 #include "../../mock/MockKeyFactor.h"
+#include "bcos-framework/interfaces/crypto/CommonType.h"
+#include "bcos-framework/interfaces/ledger/LedgerTypeDef.h"
 #include "bcos-ledger/src/libledger/utilities/Common.h"
 #include "common/FakeBlock.h"
-#include "interfaces/crypto/CommonType.h"
-#include "interfaces/ledger/LedgerTypeDef.h"
 #include "libtool/ConsensusNode.h"
 #include <bcos-codec/scale/Scale.h>
 #include <bcos-framework/interfaces/consensus/ConsensusNode.h>

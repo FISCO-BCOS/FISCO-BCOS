@@ -24,17 +24,17 @@
  */
 #pragma once
 
+#include "bcos-framework/interfaces/crypto/Hash.h"
+#include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
 #include "bcos-framework/interfaces/protocol/Block.h"
 #include "bcos-framework/interfaces/protocol/BlockFactory.h"
+#include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/interfaces/protocol/Transaction.h"
 #include "bcos-framework/interfaces/protocol/TransactionReceipt.h"
 #include "bcos-framework/interfaces/storage/StorageInterface.h"
 #include "bcos-framework/interfaces/txpool/TxPoolInterface.h"
 #include "bcos-framework/libstorage/StateStorage.h"
-#include "interfaces/crypto/Hash.h"
-#include "interfaces/executor/ExecutionMessage.h"
-#include "interfaces/protocol/ProtocolTypeDef.h"
 #include "tbb/concurrent_unordered_map.h"
 #include <tbb/concurrent_hash_map.h>
 #include <tbb/spin_mutex.h>

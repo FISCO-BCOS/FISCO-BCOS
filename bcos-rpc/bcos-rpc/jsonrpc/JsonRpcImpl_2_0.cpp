@@ -21,8 +21,8 @@
 #include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-framework/interfaces/protocol/Transaction.h>
 #include <bcos-framework/interfaces/protocol/TransactionReceipt.h>
-#include <bcos-framework/libprotocol/LogEntry.h>
-#include <bcos-framework/libprotocol/TransactionStatus.h>
+#include <bcos-protocol/LogEntry.h>
+#include <bcos-protocol/TransactionStatus.h>
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>
 #include <bcos-utilities/Base64.h>

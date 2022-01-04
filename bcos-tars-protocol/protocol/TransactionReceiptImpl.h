@@ -26,7 +26,7 @@
 #include <bcos-framework/interfaces/crypto/Hash.h>
 #include <bcos-framework/interfaces/protocol/Block.h>
 #include <bcos-framework/interfaces/protocol/TransactionReceipt.h>
-#include <bcos-framework/libprotocol/LogEntry.h>
+#include <bcos-protocol/LogEntry.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FixedBytes.h>

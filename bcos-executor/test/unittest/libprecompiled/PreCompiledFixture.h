@@ -20,8 +20,8 @@
 
 #pragma once
 #include "bcos-framework/interfaces/ledger/LedgerTypeDef.h"
-#include "bcos-framework/testutils/protocol/FakeBlock.h"
-#include "bcos-framework/testutils/protocol/FakeBlockHeader.h"
+#include "bcos-protocol/testutils/protocol/FakeBlock.h"
+#include "bcos-protocol/testutils/protocol/FakeBlockHeader.h"
 #include "executive/BlockContext.h"
 #include "executive/TransactionExecutive.h"
 #include "executor/TransactionExecutor.h"

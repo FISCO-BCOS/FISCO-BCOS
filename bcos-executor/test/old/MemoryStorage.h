@@ -17,9 +17,9 @@
  * @file MemoryStorage.h
  */
 #pragma once
-#include "interfaces/storage/StorageInterface.h"
-#include "libtable/Table.h"
+#include "bcos-framework/interfaces/storage/StorageInterface.h"
 #include "libtable/StateStorage.h"
+#include "libtable/Table.h"
 #include <mutex>
 #include <string>
 
@@ -164,8 +164,8 @@ public:
     void asyncGet(const std::string_view&, const std::string_view&,
         std::function<void(const Error::Ptr&, const std::string& value)>) override
     {}
-    void asyncRemove(
-        const std::string_view&, const std::string_view&, std::function<void(const Error::Ptr&)>) override
+    void asyncRemove(const std::string_view&, const std::string_view&,
+        std::function<void(const Error::Ptr&)>) override
     {}
     void asyncGetBatch(const std::string_view&, const std::shared_ptr<std::vector<std::string>>&,
         std::function<void(const Error::Ptr&, const std::shared_ptr<std::vector<std::string>>&)>)

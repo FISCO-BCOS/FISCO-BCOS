@@ -19,14 +19,11 @@
 cmake_minimum_required(VERSION 3.10)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment version")
 
-project(bcos-sealer VERSION "3.0.0")
-set(VERSION_SUFFIX "-rc2")
-
-include_directories(${CMAKE_SOURCE_DIR}/bcos-sealer)
-include_directories(${CMAKE_SOURCE_DIR}/)
+include(Version)
+project(bcos-sealer VERSION ${VERSION})
 
 aux_source_directory(./bcos-sealer SRC_LIST)
 include_directories(./bcos-sealer)
-add_library(sealer ${SRC_LIST})
+add_library(${SEALER_TARGET} ${SRC_LIST})
 
-target_link_libraries(sealer PUBLIC bcos-utilities::bcos-utilities)
+target_link_libraries(${SEALER_TARGET} PUBLIC ${UTILITIES_TARGET})

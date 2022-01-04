@@ -1,6 +1,6 @@
 #pragma once
 
-#include <interfaces/storage/StorageInterface.h>
+#include <bcos-framework/interfaces/storage/StorageInterface.h>
 #include <libstorage/StateStorage.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/core/ignore_unused.hpp>

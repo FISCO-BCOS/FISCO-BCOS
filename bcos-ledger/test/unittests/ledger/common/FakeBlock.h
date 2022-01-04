@@ -22,9 +22,9 @@
 #include "FakeBlockHeader.h"
 #include "FakeReceipt.h"
 #include "FakeTransaction.h"
-#include "interfaces/protocol/TransactionMetaData.h"
-#include "libprotocol/protobuf/PBBlock.h"
-#include "libprotocol/protobuf/PBBlockFactory.h"
+#include "bcos-framework/interfaces/protocol/TransactionMetaData.h"
+#include "bcos-protocol/protobuf/PBBlock.h"
+#include "bcos-protocol/protobuf/PBBlockFactory.h"
 #include <bcos-framework/testutils/crypto/HashImpl.h>
 #include <boost/test/unit_test.hpp>
 using namespace bcos;

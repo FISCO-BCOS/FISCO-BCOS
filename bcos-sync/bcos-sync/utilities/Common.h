@@ -20,6 +20,7 @@
  */
 #pragma once
 #include <bcos-utilities/Log.h>
+#include <tbb/parallel_for.h>
 
 #define BLKSYNC_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("BLOCK SYNC")
 namespace bcos

@@ -20,7 +20,7 @@
 #pragma once
 #include "Common.h"
 #include <bcos-framework/interfaces/crypto/KeyFactory.h>
-#include <bcos-framework/libprotocol/amop/AMOPRequest.h>
+#include <bcos-protocol/amop/AMOPRequest.h>
 #include <bcos-gateway/libamop/AMOPMessage.h>
 #include <bcos-gateway/libamop/TopicManager.h>
 #include <bcos-gateway/libp2p/P2PInterface.h>

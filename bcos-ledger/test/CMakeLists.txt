@@ -31,7 +31,7 @@ hunter_add_package(wedpr-crypto)
 find_package(wedpr-crypto CONFIG QUIET REQUIRED)
 find_package(Boost CONFIG REQUIRED unit_test_framework)
 
-target_link_libraries(${TEST_BINARY_NAME} ledger
+target_link_libraries(${TEST_BINARY_NAME} ${LEDGER_TARGET}
         framework
         Boost::unit_test_framework wedpr-crypto::crypto)
 target_compile_definitions(${TEST_BINARY_NAME} PUBLIC _TESTS_)
