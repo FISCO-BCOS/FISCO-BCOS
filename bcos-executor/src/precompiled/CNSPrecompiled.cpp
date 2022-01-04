@@ -198,11 +198,15 @@ void CNSPrecompiled::insert(const std::shared_ptr<executor::TransactionExecutive
     auto entry = table->getRow(contractName);
     if (entry)
     {
-        // decode map, check version
-        CNSInfoMap cnsInfo;
+        // decode vector, check version
+        CNSInfoVec cnsInfoVec;
         auto&& out = asBytes(std::string(entry->getField(SYS_VALUE)));
-        codec::scale::decode(cnsInfo, gsl::make_span(out));
-        if (cnsInfo.find(contractVersion) != cnsInfo.end())
+        codec::scale::decode(cnsInfoVec, gsl::make_span(out));
+        bool versionExist = std::any_of(cnsInfoVec.begin(), cnsInfoVec.end(),
+            [&](const std::tuple<std::string, std::string, std::string>& item) {
+                return std::get<0>(item) == contractVersion;
+            });
+        if (versionExist)
         {
             PRECOMPILED_LOG(ERROR)
                 << LOG_BADGE("CNSPrecompiled") << LOG_DESC("address and version exist")
@@ -213,19 +217,17 @@ void CNSPrecompiled::insert(const std::shared_ptr<executor::TransactionExecutive
                 callResult->mutableExecResult(), CODE_ADDRESS_AND_VERSION_EXIST, *codec);
             return;
         }
-        cnsInfo.insert(
-            std::make_pair(contractVersion, std::make_pair(contractAddress, contractAbi)));
-        entry->setField(SYS_VALUE, asString(codec::scale::encode(cnsInfo)));
+        cnsInfoVec.emplace_back(std::make_tuple(contractVersion, contractAddress, contractAbi));
+        entry->setField(SYS_VALUE, asString(codec::scale::encode(cnsInfoVec)));
         table->setRow(contractName, entry.value());
     }
     else
     {
-        // first insert, make new map to encode
-        CNSInfoMap cnsInfo = {};
-        cnsInfo.insert(
-            std::make_pair(contractVersion, std::make_pair(contractAddress, contractAbi)));
+        // first insert, make new vector to encode
+        CNSInfoVec cnsInfoVec = {};
+        cnsInfoVec.emplace_back(std::make_tuple(contractVersion, contractAddress, contractAbi));
         auto newEntry = table->newEntry();
-        newEntry.importFields({asString(codec::scale::encode(cnsInfo))});
+        newEntry.importFields({asString(codec::scale::encode(cnsInfoVec))});
         table->setRow(contractName, std::move(newEntry));
     }
     gasPricer->updateMemUsed(1);
@@ -257,17 +259,17 @@ void CNSPrecompiled::selectByName(const std::shared_ptr<executor::TransactionExe
     auto entry = table->getRow(contractName);
     if (entry)
     {
-        CNSInfoMap cnsInfoMap;
+        CNSInfoVec cnsInfoVec;
         auto&& out = asBytes(std::string(entry->getField(SYS_VALUE)));
-        codec::scale::decode(cnsInfoMap, gsl::make_span(out));
-        gasPricer->appendOperation(InterfaceOpcode::Select, cnsInfoMap.size());
-        for (const auto& cnsInfo : cnsInfoMap)
+        codec::scale::decode(cnsInfoVec, gsl::make_span(out));
+        gasPricer->appendOperation(InterfaceOpcode::Select, cnsInfoVec.size());
+        for (const auto& cnsInfo : cnsInfoVec)
         {
             Json::Value CNSInfo;
             CNSInfo[SYS_CNS_FIELD_NAME] = contractName;
-            CNSInfo[SYS_CNS_FIELD_VERSION] = cnsInfo.first;
-            CNSInfo[SYS_CNS_FIELD_ADDRESS] = cnsInfo.second.first;
-            CNSInfo[SYS_CNS_FIELD_ABI] = cnsInfo.second.second;
+            CNSInfo[SYS_CNS_FIELD_VERSION] = std::get<0>(cnsInfo);
+            CNSInfo[SYS_CNS_FIELD_ADDRESS] = std::get<1>(cnsInfo);
+            CNSInfo[SYS_CNS_FIELD_ABI] = std::get<2>(cnsInfo);
             CNSInfos.append(CNSInfo);
         }
     }
@@ -320,17 +322,29 @@ void CNSPrecompiled::selectByNameAndVersion(
         notFindReturn();
         return;
     }
-    CNSInfoMap cnsInfoMap;
+    CNSInfoVec cnsInfoVec;
     auto&& out = asBytes(std::string(entry->getField(SYS_VALUE)));
-    codec::scale::decode(cnsInfoMap, gsl::make_span(out));
-    if (cnsInfoMap.find(contractVersion) == cnsInfoMap.end())
+    codec::scale::decode(cnsInfoVec, gsl::make_span(out));
+    bool versionExist = false;
+    std::string contractAddress;
+    std::string abi;
+    for (const auto& cnsInfo : cnsInfoVec)
+    {
+        if (std::get<0>(cnsInfo) == contractVersion)
+        {
+            versionExist = true;
+            contractAddress = std::get<1>(cnsInfo);
+            abi = std::get<2>(cnsInfo);
+            break;
+        }
+    }
+    if (!versionExist)
     {
         notFindReturn();
         return;
     }
-    gasPricer->appendOperation(InterfaceOpcode::Select, cnsInfoMap.size());
-    std::string contractAddress = cnsInfoMap.at(contractVersion).first;
-    std::string abi = cnsInfoMap.at(contractVersion).second;
+    gasPricer->appendOperation(InterfaceOpcode::Select, cnsInfoVec.size());
+
     if (blockContext->isWasm())
     {
         callResult->setExecResult(codec->encode(contractAddress, abi));
@@ -385,16 +399,26 @@ void CNSPrecompiled::getContractAddress(
         notFindReturn();
         return;
     }
-    CNSInfoMap cnsInfoMap;
+    CNSInfoVec cnsInfoVec;
     auto&& out = asBytes(std::string(entry->getField(SYS_VALUE)));
-    codec::scale::decode(cnsInfoMap, gsl::make_span(out));
-    if (cnsInfoMap.find(contractVersion) == cnsInfoMap.end())
+    codec::scale::decode(cnsInfoVec, gsl::make_span(out));
+    bool versionExist = false;
+    std::string contractAddress;
+    for (const auto& cnsInfo : cnsInfoVec)
+    {
+        if (std::get<0>(cnsInfo) == contractVersion)
+        {
+            versionExist = true;
+            contractAddress = std::get<1>(cnsInfo);
+            break;
+        }
+    }
+    if (!versionExist)
     {
         notFindReturn();
         return;
     }
-    gasPricer->appendOperation(InterfaceOpcode::Select, cnsInfoMap.size());
-    std::string contractAddress = cnsInfoMap.at(contractVersion).first;
+    gasPricer->appendOperation(InterfaceOpcode::Select, cnsInfoVec.size());
     if (blockContext->isWasm())
     {
         callResult->setExecResult(codec->encode(contractAddress));

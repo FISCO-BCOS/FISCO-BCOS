@@ -630,12 +630,17 @@ BOOST_AUTO_TEST_CASE(insertTest)
             });
         auto entry = tablePromise.get_future().get().getRow(contractName);
         BOOST_CHECK(entry.has_value());
-        CNSInfoMap cnsInfoMap;
+        CNSInfoVec cnsInfoVec;
 
         auto&& out = asBytes(std::string(entry->getField(SYS_VALUE)));
-        codec::scale::decode(cnsInfoMap, gsl::make_span(out));
-        BOOST_CHECK_EQUAL(
-            cnsInfoMap.at(contractVersion).first, "420f853b49838bd3e9466c85a4cc3428c960dde2");
+        codec::scale::decode(cnsInfoVec, gsl::make_span(out));
+        for (const auto& cnsInfo : cnsInfoVec)
+        {
+            if (std::get<0>(cnsInfo) == contractVersion)
+            {
+                BOOST_CHECK_EQUAL(std::get<1>(cnsInfo), "420f853b49838bd3e9466c85a4cc3428c960dde2");
+            }
+        }
     }
 
     // insert again with same item
@@ -783,10 +788,11 @@ BOOST_AUTO_TEST_CASE(insertTest)
         auto table2 = memoryTableFactory->openTable(SYS_CNS);
         auto entry2 = table2->getRow(contractName);
         BOOST_TEST(entry2.has_value());
-        CNSInfoMap cnsInfoMap;
+        CNSInfoVec cnsInfoVec;
         auto&& out = asBytes(std::string(entry2->getField(SYS_VALUE)));
-        codec::scale::decode(cnsInfoMap, gsl::make_span(out));
-        BOOST_CHECK(cnsInfoMap.find(contractVersion) != cnsInfoMap.end());
+        codec::scale::decode(cnsInfoVec, gsl::make_span(out));
+        BOOST_CHECK(std::any_of(cnsInfoVec.begin(), cnsInfoVec.end(),
+            [&](const auto& item) { return std::get<0>(item) == contractVersion; }));
     }
 }
 
