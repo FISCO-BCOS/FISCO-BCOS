@@ -31,7 +31,6 @@
 #include "ParallelExecutor.h"
 #include "SchedulerInitializer.h"
 #include "StorageInitializer.h"
-#include "include/bcos-executor/LRUStorage.h"
 #include "interfaces/crypto/CommonType.h"
 #include "interfaces/executor/ParallelTransactionExecutorInterface.h"
 #include "interfaces/protocol/ProtocolTypeDef.h"
@@ -144,12 +143,13 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
         m_frontServiceInitializer->init(m_pbftInitializer->pbft(), m_pbftInitializer->blockSync(),
             m_txpoolInitializer->txpool());
 
-        std::shared_ptr<bcos::executor::LRUStorage> cache = nullptr;
+        std::shared_ptr<bcos::storage::LRUStateStorage> cache = nullptr;
         if (m_nodeConfig->enableLRUCacheStorage())
         {
-            cache = std::make_shared<bcos::executor::LRUStorage>(storage);
-            cache->start();
-            BCOS_LOG(INFO) << LOG_DESC("initNode: enableLRUCacheStorage");
+            cache = std::make_shared<bcos::storage::LRUStateStorage>(storage);
+            cache->setMaxCapacity(m_nodeConfig->cacheSize());
+            BCOS_LOG(INFO) << "initNode: enableLRUCacheStorage, size: "
+                           << m_nodeConfig->cacheSize();
         }
         else
         {

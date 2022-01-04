@@ -25,7 +25,7 @@
 #include "../mock/MockTransactionalStorage.h"
 #include "../mock/MockTxPool.h"
 #include "Common.h"
-#include "bcos-executor/TransactionExecutor.h"
+#include "executor/TransactionExecutor.h"
 #include "interfaces/crypto/CommonType.h"
 #include "interfaces/crypto/CryptoSuite.h"
 #include "interfaces/crypto/Hash.h"

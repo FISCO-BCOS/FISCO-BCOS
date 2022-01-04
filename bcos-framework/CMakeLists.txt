@@ -78,12 +78,13 @@ find_package(TBB CONFIG REQUIRED)
 find_package(Boost CONFIG REQUIRED log chrono system filesystem iostreams thread)
 find_package(Protobuf CONFIG REQUIRED)
 find_package(jsoncpp CONFIG REQUIRED)
+find_package(OpenMP 4.5 REQUIRED)
 
 add_library(framework ${SRCS} ${MESSAGES_SRCS} ${TXS_SYNC_MSG})
-target_link_libraries(framework PUBLIC Boost::log Boost::chrono Boost::iostreams Boost::filesystem Boost::thread Boost::thread protobuf::libprotobuf TBB::tbb jsoncpp_lib_static)
+target_link_libraries(framework PUBLIC Boost::log Boost::chrono Boost::iostreams
+Boost::filesystem Boost::thread protobuf::libprotobuf TBB::tbb jsoncpp_lib_static OpenMP::OpenMP_CXX)
 
 if (TESTS)
-    find_package(jsoncpp CONFIG REQUIRED)
     enable_testing()
     set(CTEST_OUTPUT_ON_FAILURE True)
     add_subdirectory(test)

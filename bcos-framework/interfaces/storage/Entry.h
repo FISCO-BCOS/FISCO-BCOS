@@ -23,8 +23,7 @@ public:
     enum Status : int8_t
     {
         NORMAL = 0,
-        DELETED,
-        PURGED,
+        DELETED
     };
 
     constexpr static int32_t SMALL_SIZE = 32;

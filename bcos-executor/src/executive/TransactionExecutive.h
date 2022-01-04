@@ -22,10 +22,10 @@
 #pragma once
 
 #include "../Common.h"
+#include "../executor/TransactionExecutor.h"
 #include "../precompiled/PrecompiledResult.h"
 #include "BlockContext.h"
 #include "SyncStorageWrapper.h"
-#include "bcos-executor/TransactionExecutor.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/protocol/BlockHeader.h"
 #include "bcos-framework/interfaces/protocol/Transaction.h"
@@ -39,10 +39,6 @@
 
 namespace bcos
 {
-namespace storage
-{
-class StateStorage;
-}
 
 namespace executor
 {
@@ -242,7 +238,7 @@ private:
 
     std::shared_ptr<wasm::GasInjector> m_gasInjector = nullptr;
 
-    bcos::storage::StateStorage::Recoder::Ptr m_recoder;
+    bcos::storage::Recoder::Ptr m_recoder;
     std::unique_ptr<SyncStorageWrapper> m_storageWrapper;
     std::shared_ptr<SyncStorageWrapper> m_lastStorageWrapper;
     CallParameters::UniquePtr m_exchangeMessage = nullptr;

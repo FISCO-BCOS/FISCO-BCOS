@@ -34,6 +34,8 @@ namespace tool
 class NodeConfig
 {
 public:
+    constexpr static ssize_t DEFAULT_CACHE_SIZE = 32 * 1024 * 1024;
+
     using Ptr = std::shared_ptr<NodeConfig>;
     NodeConfig() : m_ledgerConfig(std::make_shared<bcos::ledger::LedgerConfig>()) {}
 
@@ -167,6 +169,7 @@ public:
     void setEnSmNodeKey(const std::string& _enSmNodeKey) { m_enSmNodeKey = _enSmNodeKey; }
 
     bool enableLRUCacheStorage() const { return m_enableLRUCacheStorage; }
+    ssize_t cacheSize() const { return m_cacheSize; }
 
 protected:
     virtual void loadChainConfig(boost::property_tree::ptree const& _pt);
@@ -271,7 +274,9 @@ private:
     std::string m_smNodeKey;
     std::string m_enSmNodeCert;
     std::string m_enSmNodeKey;
+
     bool m_enableLRUCacheStorage = true;
+    ssize_t m_cacheSize = DEFAULT_CACHE_SIZE;  // 32MB for default
 };
 }  // namespace tool
 }  // namespace bcos

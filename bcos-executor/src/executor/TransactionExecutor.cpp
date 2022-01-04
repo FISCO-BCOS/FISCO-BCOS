@@ -19,7 +19,7 @@
  * @date: 2021-09-01
  */
 
-#include "bcos-executor/TransactionExecutor.h"
+#include "TransactionExecutor.h"
 #include "../Common.h"
 #include "../dag/Abi.h"
 #include "../dag/ClockCache.h"

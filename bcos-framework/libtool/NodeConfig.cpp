@@ -349,6 +349,7 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
 {
     m_storagePath = _pt.get<std::string>("storage.data_path", "data/" + m_groupId);
     m_enableLRUCacheStorage = _pt.get<bool>("storage.enable_cache", true);
+    m_cacheSize = _pt.get<ssize_t>("storage.cache_size", DEFAULT_CACHE_SIZE);
     NodeConfig_LOG(INFO) << LOG_DESC("loadStorageConfig") << LOG_KV("storagePath", m_storagePath)
                          << LOG_KV("enableLRUCacheStorage", m_enableLRUCacheStorage);
 }

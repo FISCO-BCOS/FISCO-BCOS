@@ -19,7 +19,7 @@
  */
 
 #pragma once
-#include "bcos-executor/TransactionExecutor.h"
+#include "executor/TransactionExecutor.h"
 #include "bcos-framework/interfaces/ledger/LedgerTypeDef.h"
 #include "bcos-framework/testutils/protocol/FakeBlock.h"
 #include "bcos-framework/testutils/protocol/FakeBlockHeader.h"
