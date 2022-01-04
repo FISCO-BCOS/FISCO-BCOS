@@ -14,7 +14,7 @@ HunterGate(
 )
 
 project(FISCO-BCOS VERSION "3.0.0")
-set(VERSION_SUFFIX "-rc1")
+set(VERSION_SUFFIX "-rc2")
 
 include(Options)
 configure_project()

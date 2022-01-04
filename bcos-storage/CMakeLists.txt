@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.14)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "Minimum OS X deployment version")
 
 project(bcos-storage VERSION "3.0.0")
-set(VERSION_SUFFIX "-rc1")
+set(VERSION_SUFFIX "-r2")
 
 option(USE_TiKV "build tikv storage or not" OFF)
 

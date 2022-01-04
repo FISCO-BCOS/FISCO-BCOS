@@ -20,7 +20,7 @@ cmake_minimum_required(VERSION 3.10)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.1" CACHE STRING "Minimum OS X deployment version")
 
 project(bcos-ledger VERSION "3.0")
-set(VERSION_SUFFIX "-rc1")
+set(VERSION_SUFFIX "-rc2")
 
 aux_source_directory(src/libledger SRCS)
 aux_source_directory(src/libledger/utilities SRCS)

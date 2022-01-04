@@ -20,7 +20,7 @@ cmake_minimum_required(VERSION 3.10)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum OS X deployment version")
 
 project(bcos-boostssl VERSION "3.0.0")
-set(VERSION_SUFFIX "-rc1")
+set(VERSION_SUFFIX "-rc2")
 
 find_package(Boost CONFIG REQUIRED log chrono system filesystem thread iostreams)
 find_package(OpenSSL REQUIRED)

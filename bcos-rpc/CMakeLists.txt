@@ -20,7 +20,7 @@ cmake_minimum_required(VERSION 3.10)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment version")
 
 project(bcos-rpc VERSION "3.0.0")
-set(VERSION_SUFFIX "-rc1")
+set(VERSION_SUFFIX "-rc2")
 
 find_package(jsoncpp CONFIG REQUIRED)
 find_package(tarscpp CONFIG REQUIRED)

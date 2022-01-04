@@ -20,7 +20,7 @@ cmake_minimum_required(VERSION 3.10)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum OS X deployment version")
 
 project(bcos-gateway VERSION "3.0.0")
-set(VERSION_SUFFIX "-rc1")
+set(VERSION_SUFFIX "-rc2")
 
 find_package(OpenSSL REQUIRED)
 find_package(tarscpp CONFIG REQUIRED)

@@ -20,7 +20,7 @@ cmake_minimum_required(VERSION 3.10)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment version")
 
 project(bcos-sync VERSION "3.0.0")
-set(VERSION_SUFFIX "-rc1")
+set(VERSION_SUFFIX "-rc2")
 
 # proto generation
 set(PROTO_INPUT_PATH ${CMAKE_SOURCE_DIR}/bcos-sync)
