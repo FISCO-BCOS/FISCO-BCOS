@@ -19,6 +19,7 @@
  * @date 2021-05-28
  */
 #pragma once
+#include "bcos-framework/interfaces/storage/KVStorageHelper.h"
 #include "bcos-pbft/core/StateMachine.h"
 #include "bcos-pbft/pbft/PBFTFactory.h"
 #include "bcos-pbft/pbft/PBFTImpl.h"
@@ -30,7 +31,6 @@
 #include <bcos-framework/libprotocol/protobuf/PBTransactionFactory.h>
 #include <bcos-framework/libprotocol/protobuf/PBTransactionReceiptFactory.h>
 #include <bcos-framework/libstorage/StateStorage.h>
-#include <bcos-framework/libutilities/KVStorageHelper.h>
 #include <bcos-framework/testutils/faker/FakeFrontService.h>
 #include <bcos-framework/testutils/faker/FakeLedger.h>
 #include <bcos-framework/testutils/faker/FakeScheduler.h>

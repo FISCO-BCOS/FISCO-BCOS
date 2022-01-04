@@ -22,7 +22,7 @@
 #pragma once
 
 #include "../interfaces/crypto/CryptoSuite.h"
-#include "../libutilities/FixedBytes.h"
+#include "bcos-utilities/FixedBytes.h"
 #include <vector>
 
 namespace bcos

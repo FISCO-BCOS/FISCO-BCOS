@@ -20,10 +20,10 @@
 #include "interfaces/storage/Table.h"
 #include "../../../testutils/TestPromptFixture.h"
 #include "Hash.h"
+#include "bcos-utilities/ThreadPool.h"
 #include "interfaces/crypto/CommonType.h"
 #include "interfaces/storage/StorageInterface.h"
 #include "libstorage/StateStorage.h"
-#include "libutilities/ThreadPool.h"
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <iostream>

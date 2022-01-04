@@ -24,9 +24,9 @@
 #include "bcos-framework/interfaces/protocol/BlockHeaderFactory.h"
 #include "bcos-framework/interfaces/storage/Common.h"
 #include "bcos-framework/interfaces/storage/StorageInterface.h"
-#include "bcos-framework/libutilities/Common.h"
-#include "bcos-framework/libutilities/Exceptions.h"
-#include "bcos-framework/libutilities/ThreadPool.h"
+#include "bcos-utilities/Common.h"
+#include "bcos-utilities/Exceptions.h"
+#include "bcos-utilities/ThreadPool.h"
 #include "interfaces/protocol/ProtocolTypeDef.h"
 #include "utilities/Common.h"
 #include "utilities/MerkleProofUtility.h"
@@ -131,7 +131,8 @@ private:
     void buildDir(const std::string& _absoluteDir);
 
     // only for /sys/
-    inline std::string getSysBaseName(const std::string& _s) {
+    inline std::string getSysBaseName(const std::string& _s)
+    {
         return _s.substr(_s.find_last_of('/') + 1);
     }
 

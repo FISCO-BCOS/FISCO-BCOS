@@ -10,9 +10,9 @@
 #include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/interfaces/protocol/Transaction.h>
 #include <bcos-framework/libprotocol/LogEntry.h>
-#include <bcos-framework/libutilities/DataConvertUtility.h>
 #include <bcos-framework/testutils/crypto/HashImpl.h>
 #include <bcos-framework/testutils/crypto/SignatureImpl.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <tbb/parallel_for.h>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>

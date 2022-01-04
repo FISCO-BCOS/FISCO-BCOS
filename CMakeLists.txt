@@ -8,8 +8,8 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 
 include(HunterGate)
 HunterGate(
-    URL "https://${URL_BASE}/FISCO-BCOS/hunter/archive/bc4754a926acd8ef3b96630c457c75ea4cd55a5d.tar.gz"
-    SHA1 "b895385e7ea8312da8db6b1545aa89f11d18345d"
+    URL "https://${URL_BASE}/FISCO-BCOS/hunter/archive/9bb4c2aa139cfa53af5779105cd0d5570c31fbf5.tar.gz"
+    SHA1 "02165406cd653bedfe88538926453ede8eca84ba"
     FILEPATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.cmake"
 )
 
@@ -23,7 +23,6 @@ include(CompilerSettings)
 include(BuildInfoGenerator)
 
 # import dependencies
-hunter_add_package(Boost COMPONENTS all)
 hunter_add_package(tbb)
 hunter_add_package(Protobuf)
 hunter_add_package(Microsoft.GSL)
@@ -34,6 +33,9 @@ hunter_add_package(evmc)
 hunter_add_package(intx)
 hunter_add_package(ethash)
 hunter_add_package(evmone)
+
+# install dependencies
+include(InstallBcosUtilities)
 
 include_directories(${CMAKE_SOURCE_DIR})
 

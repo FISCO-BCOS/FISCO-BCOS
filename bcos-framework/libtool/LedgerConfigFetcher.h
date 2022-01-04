@@ -21,7 +21,7 @@
 #pragma once
 #include "../interfaces/ledger/LedgerConfig.h"
 #include "../interfaces/ledger/LedgerInterface.h"
-#include "../libutilities/Log.h"
+#include "bcos-utilities/Log.h"
 
 #define TOOL_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("TOOL")
 

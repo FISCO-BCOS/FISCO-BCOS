@@ -3,8 +3,8 @@
  *  @date 2021-05-19
  */
 
-#include <bcos-framework/libutilities/FileUtility.h>
 #include <bcos-gateway/GatewayConfig.h>
+#include <bcos-utilities/FileUtility.h>
 #include <json/json.h>
 #include <boost/throw_exception.hpp>
 

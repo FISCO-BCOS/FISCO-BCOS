@@ -21,7 +21,7 @@
 #pragma once
 
 #include "bcos-framework/interfaces/crypto/Hash.h"
-#include "bcos-framework/libutilities/DataConvertUtility.h"
+#include "bcos-utilities/DataConvertUtility.h"
 #include <boost/algorithm/string.hpp>
 #include <string>
 

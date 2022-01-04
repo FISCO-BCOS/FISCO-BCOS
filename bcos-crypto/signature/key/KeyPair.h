@@ -21,7 +21,7 @@
 #pragma once
 #include "KeyImpl.h"
 #include <bcos-framework/interfaces/crypto/KeyPairInterface.h>
-#include <bcos-framework/libutilities/FixedBytes.h>
+#include <bcos-utilities/FixedBytes.h>
 
 namespace bcos
 {

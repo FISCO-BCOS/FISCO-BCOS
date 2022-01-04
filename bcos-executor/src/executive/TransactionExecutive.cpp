@@ -30,9 +30,9 @@
 #include "BlockContext.h"
 #include "bcos-framework/interfaces/protocol/Exceptions.h"
 #include "bcos-framework/libcodec/abi/ContractABICodec.h"
+#include "bcos-utilities/Common.h"
 #include "interfaces/executor/ExecutionMessage.h"
 #include "libprotocol/TransactionStatus.h"
-#include "libutilities/Common.h"
 #include <boost/algorithm/hex.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>

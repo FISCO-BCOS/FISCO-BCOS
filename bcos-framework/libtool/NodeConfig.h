@@ -22,8 +22,8 @@
 #include "../interfaces/consensus/ConsensusNodeInterface.h"
 #include "../interfaces/crypto/KeyFactory.h"
 #include "../interfaces/ledger/LedgerConfig.h"
-#include "../libutilities/Log.h"
 #include "Exceptions.h"
+#include "bcos-utilities/Log.h"
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 #define NodeConfig_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("NodeConfig")

@@ -20,8 +20,8 @@
  */
 
 #include "../src/dag/Abi.h"
-#include "bcos-framework/libutilities/DataConvertUtility.h"
 #include "bcos-framework/testutils/crypto/HashImpl.h"
+#include "bcos-utilities/DataConvertUtility.h"
 #include <boost/test/unit_test.hpp>
 #include <string>
 

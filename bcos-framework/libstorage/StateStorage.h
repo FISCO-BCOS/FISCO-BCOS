@@ -26,7 +26,7 @@
 
 #include "../interfaces/storage/StorageInterface.h"
 #include "../interfaces/storage/Table.h"
-#include "../libutilities/Error.h"
+#include "bcos-utilities/Error.h"
 #include "tbb/enumerable_thread_specific.h"
 #include <boost/core/ignore_unused.hpp>
 #include <boost/format.hpp>
@@ -578,7 +578,7 @@ public:
             ssize_t updateCapacity = 0;
             auto [bucket, lock] = getBucket(change.table, change.key);
             boost::ignore_unused(lock);
-            
+
             auto it = bucket->container.find(
                 std::make_tuple(std::string_view(change.table), std::string_view(change.key)));
             if (change.entry)

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../interfaces/storage/StorageInterface.h"
+#include "StorageInterface.h"
 
 namespace bcos::storage
 {

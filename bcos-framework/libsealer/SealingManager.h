@@ -20,10 +20,10 @@
 #pragma once
 #include "../interfaces/protocol/BlockFactory.h"
 #include "../interfaces/protocol/TransactionMetaData.h"
-#include "../libutilities/CallbackCollectionHandler.h"
-#include "../libutilities/ThreadPool.h"
 #include "Common.h"
 #include "SealerConfig.h"
+#include "bcos-utilities/CallbackCollectionHandler.h"
+#include "bcos-utilities/ThreadPool.h"
 namespace bcos
 {
 namespace sealer

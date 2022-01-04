@@ -20,9 +20,9 @@
 #include "../../interfaces/crypto/CryptoSuite.h"
 #include "../../interfaces/crypto/Hash.h"
 #include "../../interfaces/crypto/KeyInterface.h"
-#include "../../libutilities/Common.h"
-#include "../../libutilities/Error.h"
 #include "TransactionSubmitResult.h"
+#include "bcos-utilities/Common.h"
+#include "bcos-utilities/Error.h"
 #include <shared_mutex>
 namespace bcos
 {

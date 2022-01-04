@@ -26,7 +26,7 @@
 #include "../signature/ed25519/Ed25519Crypto.h"
 #include "../signature/secp256k1/Secp256k1Crypto.h"
 #include "../signature/sm2/SM2Crypto.h"
-#include <bcos-framework/libutilities/Common.h>
+#include <bcos-utilities/Common.h>
 
 using namespace bcos;
 using namespace bcos::crypto;

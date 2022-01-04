@@ -20,8 +20,8 @@
  */
 #include "PBBlockHeader.h"
 #include "../../libcodec/scale/Scale.h"
-#include "../../libutilities/Common.h"
 #include "../Common.h"
+#include "bcos-utilities/Common.h"
 #include <gsl/span>
 
 using namespace bcos;

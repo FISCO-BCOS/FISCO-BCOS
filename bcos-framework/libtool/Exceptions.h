@@ -19,7 +19,7 @@
  * @date: 2021-03-16
  */
 #pragma once
-#include "../libutilities/Exceptions.h"
+#include "bcos-utilities/Exceptions.h"
 namespace bcos
 {
 namespace tool

@@ -18,15 +18,15 @@
  * @author: octopus
  * @date: 2021-07-09
  */
-#include "libutilities/DataConvertUtility.h"
+#include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-framework/interfaces/protocol/Transaction.h>
 #include <bcos-framework/interfaces/protocol/TransactionReceipt.h>
 #include <bcos-framework/libprotocol/LogEntry.h>
 #include <bcos-framework/libprotocol/TransactionStatus.h>
-#include <bcos-framework/libutilities/Base64.h>
-#include <bcos-framework/libutilities/Log.h>
 #include <bcos-rpc/jsonrpc/Common.h>
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>
+#include <bcos-utilities/Base64.h>
+#include <bcos-utilities/Log.h>
 #include <boost/archive/iterators/base64_from_binary.hpp>
 #include <boost/archive/iterators/binary_from_base64.hpp>
 #include <boost/archive/iterators/transform_width.hpp>
@@ -571,8 +571,8 @@ void JsonRpcImpl_2_0::sendTransaction(std::string const& _groupID, std::string c
                     (int32_t)bcos::protocol::TransactionStatus::None)
                 {
                     std::stringstream errorMsg;
-                    errorMsg
-                        << (bcos::protocol::TransactionStatus)(_transactionSubmitResult->status());
+                    errorMsg << (bcos::protocol::TransactionStatus)(
+                        _transactionSubmitResult->status());
                     jResp["errorMessage"] = errorMsg.str();
                 }
                 toJsonResp(jResp, hexPreTxHash, _transactionSubmitResult->transactionReceipt());

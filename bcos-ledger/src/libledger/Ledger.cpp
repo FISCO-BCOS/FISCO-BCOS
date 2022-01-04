@@ -22,9 +22,9 @@
  */
 
 #include "Ledger.h"
-#include "libutilities/BoostLog.h"
-#include "libutilities/Common.h"
-#include "libutilities/DataConvertUtility.h"
+#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/Common.h"
+#include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-framework/interfaces/consensus/ConsensusNode.h>
 #include <bcos-framework/interfaces/crypto/CommonType.h>
 #include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>

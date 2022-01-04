@@ -19,8 +19,8 @@
  * @date 2021-06-21
  */
 #pragma once
-#include "bcos-framework/interfaces/protocol/BlockFactory.h"
 #include "ProtocolInitializer.h"
+#include "bcos-framework/interfaces/protocol/BlockFactory.h"
 #include "bcos-framework/libprotocol/TransactionSubmitResultFactoryImpl.h"
 #include <bcos-framework/interfaces/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/interfaces/executor/ExecutionMessage.h>

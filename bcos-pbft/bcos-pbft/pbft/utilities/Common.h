@@ -18,8 +18,8 @@
  * @date 2021-04-12
  */
 #pragma once
-#include <bcos-framework/libutilities/Exceptions.h>
-#include <bcos-framework/libutilities/Log.h>
+#include <bcos-utilities/Exceptions.h>
+#include <bcos-utilities/Log.h>
 #include <stdint.h>
 
 #define PBFT_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("PBFT")

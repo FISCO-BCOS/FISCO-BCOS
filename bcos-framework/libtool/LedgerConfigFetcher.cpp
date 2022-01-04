@@ -20,8 +20,8 @@
  */
 #include "LedgerConfigFetcher.h"
 #include "../interfaces/ledger/LedgerTypeDef.h"
-#include "../libutilities/Common.h"
 #include "Exceptions.h"
+#include "bcos-utilities/Common.h"
 using namespace bcos::protocol;
 using namespace bcos::crypto;
 using namespace bcos::consensus;

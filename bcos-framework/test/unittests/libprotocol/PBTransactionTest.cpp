@@ -20,8 +20,8 @@
  */
 #include "libprotocol/protobuf/PBTransaction.h"
 #include "../../../testutils/TestPromptFixture.h"
+#include "bcos-utilities/DataConvertUtility.h"
 #include "libprotocol/Common.h"
-#include "libutilities/DataConvertUtility.h"
 #include "testutils/protocol/FakeTransaction.h"
 #include <boost/test/tools/old/interface.hpp>
 

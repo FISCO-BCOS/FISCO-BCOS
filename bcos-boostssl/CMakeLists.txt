@@ -38,7 +38,7 @@ aux_source_directory(bcos-boostssl/utilities SRCS)
 aux_source_directory(bcos-boostssl/websocket SRCS)
 
 add_library(boostssl ${SRCS})
-target_link_libraries(boostssl Boost::system Boost::filesystem Boost::system
+target_link_libraries(boostssl bcos-utilities::bcos-utilities Boost::system Boost::filesystem Boost::system
 Boost::log Boost::chrono Boost::iostreams Boost::thread OpenSSL::SSL OpenSSL::Crypto)
 
 # TODO: remove ut temp for remove bcos-framework deps

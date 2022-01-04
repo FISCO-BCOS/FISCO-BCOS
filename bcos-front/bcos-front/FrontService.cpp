@@ -29,8 +29,8 @@
 #include <boost/uuid/uuid_io.hpp>
 
 #include <bcos-framework/interfaces/protocol/CommonError.h>
-#include <bcos-framework/libutilities/Common.h>
-#include <bcos-framework/libutilities/Exceptions.h>
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/Exceptions.h>
 
 using namespace bcos;
 using namespace front;

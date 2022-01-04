@@ -20,8 +20,8 @@
 
 #pragma once
 #include "../../interfaces/crypto/Hash.h"
-#include "../../libutilities/Common.h"
-#include "../../libutilities/DataConvertUtility.h"
+#include "bcos-utilities/Common.h"
+#include "bcos-utilities/DataConvertUtility.h"
 #include <boost/algorithm/string.hpp>
 #include <utility>
 #include <vector>

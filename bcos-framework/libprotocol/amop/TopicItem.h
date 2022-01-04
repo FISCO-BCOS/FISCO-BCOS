@@ -18,7 +18,7 @@
  * @date 2021-06-21
  */
 #pragma once
-#include <bcos-framework/libutilities/Log.h>
+#include <bcos-utilities/Log.h>
 #include <json/json.h>
 #include <memory>
 #include <set>

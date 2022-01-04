@@ -21,7 +21,7 @@
 
 #include "../../interfaces/multigroup/GroupInfo.h"
 #include "../../interfaces/protocol/ProtocolTypeDef.h"
-#include "../../libutilities/Error.h"
+#include "bcos-utilities/Error.h"
 #include "interfaces/crypto/CommonType.h"
 #include "libprotocol/TransactionSubmitResultImpl.h"
 

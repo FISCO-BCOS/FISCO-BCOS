@@ -21,7 +21,7 @@
 #include "RocksDBStorage.h"
 #include "Common.h"
 #include "bcos-framework/interfaces/storage/Table.h"
-#include "bcos-framework/libutilities/Error.h"
+#include "bcos-utilities/Error.h"
 #include "interfaces/protocol/ProtocolTypeDef.h"
 #include <rocksdb/cleanable.h>
 #include <rocksdb/options.h>

@@ -22,7 +22,7 @@
 #include "../cache/PBFTCacheProcessor.h"
 #include "../config/PBFTConfig.h"
 #include <bcos-framework/interfaces/crypto/KeyInterface.h>
-#include <bcos-framework/libutilities/ThreadPool.h>
+#include <bcos-utilities/ThreadPool.h>
 namespace bcos
 {
 namespace consensus

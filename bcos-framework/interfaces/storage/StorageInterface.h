@@ -26,9 +26,9 @@
 #pragma once
 #include "../../interfaces/protocol/Block.h"
 #include "../../interfaces/protocol/ProtocolTypeDef.h"
-#include "../../libutilities/Error.h"
 #include "Common.h"
 #include "Entry.h"
+#include "bcos-utilities/Error.h"
 #include <boost/range.hpp>
 #include <boost/range/iterator.hpp>
 #include <map>

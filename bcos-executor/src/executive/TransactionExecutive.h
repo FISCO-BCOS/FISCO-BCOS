@@ -39,7 +39,6 @@
 
 namespace bcos
 {
-
 namespace executor
 {
 class Result;

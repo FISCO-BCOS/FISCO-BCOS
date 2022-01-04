@@ -21,7 +21,7 @@
 #include "bcos-tars-protocol/tars/LedgerService.h"
 #include <bcos-framework/interfaces/ledger/LedgerInterface.h>
 #include <bcos-framework/interfaces/protocol/BlockFactory.h>
-#include <bcos-framework/libutilities/Common.h>
+#include <bcos-utilities/Common.h>
 namespace bcostars
 {
 class LedgerServiceClient : public bcos::ledger::LedgerInterface

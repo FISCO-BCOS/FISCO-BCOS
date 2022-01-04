@@ -17,8 +17,8 @@
  * @file ScaleEncoderStream.cpp
  */
 #pragma once
-#include "../../libutilities/FixedBytes.h"
 #include "FixedWidthIntegerCodec.h"
+#include "bcos-utilities/FixedBytes.h"
 #include <boost/optional.hpp>
 #include <boost/variant.hpp>
 #include <deque>

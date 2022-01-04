@@ -19,9 +19,9 @@
  * @date 2021-09-08
  */
 #pragma once
-#include "../../libutilities/Common.h"
 #include "../protocol/ServiceDesc.h"
 #include "GroupTypeDef.h"
+#include "bcos-utilities/Common.h"
 #include <json/json.h>
 #include <memory>
 namespace bcos

@@ -18,11 +18,11 @@
  * @date 2021-06-21
  */
 
-#include <bcos-framework/libutilities/DataConvertUtility.h>
-#include <bcos-framework/libutilities/Error.h>
-#include <bcos-framework/libutilities/Log.h>
 #include <bcos-gateway/libamop/AMOPMessage.h>
 #include <bcos-gateway/libamop/Common.h>
+#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/Error.h>
+#include <bcos-utilities/Log.h>
 #include <boost/asio.hpp>
 
 using namespace bcos;

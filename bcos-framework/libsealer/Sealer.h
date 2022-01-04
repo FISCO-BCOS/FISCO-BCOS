@@ -19,9 +19,9 @@
  */
 #pragma once
 #include "../interfaces/sealer/SealerInterface.h"
-#include "../libutilities/Worker.h"
 #include "SealerConfig.h"
 #include "SealingManager.h"
+#include "bcos-utilities/Worker.h"
 
 namespace bcos
 {

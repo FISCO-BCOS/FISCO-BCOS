@@ -23,9 +23,9 @@
 #include "bcos-sync/state/DownloadingQueue.h"
 #include "bcos-sync/state/SyncPeerStatus.h"
 #include <bcos-framework/interfaces/sync/BlockSyncInterface.h>
-#include <bcos-framework/libutilities/ThreadPool.h>
-#include <bcos-framework/libutilities/Timer.h>
-#include <bcos-framework/libutilities/Worker.h>
+#include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/Timer.h>
+#include <bcos-utilities/Worker.h>
 namespace bcos
 {
 namespace sync

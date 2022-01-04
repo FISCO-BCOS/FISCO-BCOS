@@ -1,8 +1,8 @@
 #include "SchedulerImpl.h"
 #include "Common.h"
+#include "bcos-utilities/Error.h"
 #include "interfaces/ledger/LedgerConfig.h"
 #include "interfaces/protocol/ProtocolTypeDef.h"
-#include "libutilities/Error.h"
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/format.hpp>
 #include <boost/lexical_cast.hpp>

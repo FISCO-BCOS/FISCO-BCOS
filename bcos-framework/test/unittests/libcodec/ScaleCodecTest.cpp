@@ -14,11 +14,11 @@
  *  limitations under the License.
  */
 #include "../../../testutils/TestPromptFixture.h"
+#include "bcos-utilities/Common.h"
+#include "bcos-utilities/DataConvertUtility.h"
 #include "libcodec/scale/Scale.h"
 #include "libcodec/scale/ScaleDecoderStream.h"
 #include "libcodec/scale/ScaleEncoderStream.h"
-#include "libutilities/Common.h"
-#include "libutilities/DataConvertUtility.h"
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;

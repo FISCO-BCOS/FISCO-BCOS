@@ -22,9 +22,9 @@
 #include "PBFTImpl.h"
 #include "config/PBFTConfig.h"
 #include <bcos-framework/interfaces/dispatcher/SchedulerInterface.h>
+#include <bcos-framework/interfaces/storage/KVStorageHelper.h>
 #include <bcos-framework/interfaces/sync/BlockSyncInterface.h>
 #include <bcos-framework/libtool/LedgerConfigFetcher.h>
-#include <bcos-framework/libutilities/KVStorageHelper.h>
 
 namespace bcos
 {

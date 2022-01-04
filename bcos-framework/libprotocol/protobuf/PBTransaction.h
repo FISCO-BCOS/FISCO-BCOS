@@ -21,9 +21,9 @@
 #pragma once
 #include "../../interfaces/crypto/CryptoSuite.h"
 #include "../../interfaces/protocol/Transaction.h"
-#include "../../libutilities/Common.h"
-#include "../../libutilities/FixedBytes.h"
-#include "../../libutilities/RefDataContainer.h"
+#include "bcos-utilities/Common.h"
+#include "bcos-utilities/FixedBytes.h"
+#include "bcos-utilities/RefDataContainer.h"
 #include "libprotocol/bcos-proto/Transaction.pb.h"
 
 namespace bcos

@@ -20,7 +20,7 @@
  */
 #pragma once
 #include "../../interfaces/crypto/KeyInterface.h"
-#include "../../libutilities/Log.h"
+#include "bcos-utilities/Log.h"
 namespace bcos
 {
 namespace consensus

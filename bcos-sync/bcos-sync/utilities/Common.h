@@ -19,7 +19,7 @@
  * @date 2021-05-23
  */
 #pragma once
-#include <bcos-framework/libutilities/Log.h>
+#include <bcos-utilities/Log.h>
 
 #define BLKSYNC_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("BLOCK SYNC")
 namespace bcos

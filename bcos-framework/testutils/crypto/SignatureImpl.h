@@ -21,8 +21,8 @@
 #include "../../interfaces/crypto/KeyInterface.h"
 #include "../../interfaces/crypto/KeyPairInterface.h"
 #include "../../interfaces/crypto/Signature.h"
-#include "../../libutilities/DataConvertUtility.h"
-#include "../../libutilities/Exceptions.h"
+#include "bcos-utilities/DataConvertUtility.h"
+#include "bcos-utilities/Exceptions.h"
 #include <wedpr-crypto/WedprCrypto.h>
 namespace bcos
 {

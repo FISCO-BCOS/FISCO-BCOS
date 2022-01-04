@@ -19,8 +19,8 @@
  */
 
 #pragma once
+#include "bcos-utilities/Common.h"
 #include "libprotocol/protobuf/PBTransactionReceiptFactory.h"
-#include "libutilities/Common.h"
 #include <bcos-framework/testutils/crypto/HashImpl.h>
 #include <bcos-framework/testutils/crypto/SignatureImpl.h>
 #include <boost/test/unit_test.hpp>

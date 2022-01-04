@@ -25,7 +25,7 @@
 #include "PrecompiledCodec.h"
 #include <bcos-framework/interfaces/storage/Table.h>
 #include <bcos-framework/libcodec/abi/ContractABICodec.h>
-#include <bcos-framework/libutilities/Common.h>
+#include <bcos-utilities/Common.h>
 #include <boost/archive/text_iarchive.hpp>
 #include <boost/archive/text_oarchive.hpp>
 #include <boost/serialization/string.hpp>

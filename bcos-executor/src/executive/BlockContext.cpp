@@ -28,7 +28,7 @@
 #include "bcos-framework/interfaces/storage/StorageInterface.h"
 #include "bcos-framework/interfaces/storage/Table.h"
 #include "bcos-framework/libcodec/abi/ContractABICodec.h"
-#include "bcos-framework/libutilities/Error.h"
+#include "bcos-utilities/Error.h"
 #include <boost/core/ignore_unused.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>

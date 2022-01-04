@@ -20,9 +20,9 @@
 #include "../../../testutils/TestPromptFixture.h"
 #include "../libstorage/StateStorage.h"
 #include "Hash.h"
+#include "bcos-utilities/Error.h"
+#include "bcos-utilities/ThreadPool.h"
 #include "interfaces/storage/StorageInterface.h"
-#include "libutilities/Error.h"
-#include "libutilities/ThreadPool.h"
 #include <tbb/concurrent_hash_map.h>
 #include <tbb/concurrent_vector.h>
 #include <boost/exception/diagnostic_information.hpp>

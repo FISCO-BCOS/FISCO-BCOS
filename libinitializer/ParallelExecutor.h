@@ -1,10 +1,9 @@
 #pragma once
 
 #include "bcos-executor/src/executor/TransactionExecutor.h"
+#include "bcos-utilities/ThreadPool.h"
 #include "interfaces/executor/ExecutionMessage.h"
-#include "libutilities/ThreadPool.h"
 #include <bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h>
-#include <bcos-framework/libutilities/ThreadPool.h>
 #include <thread>
 
 namespace bcos::initializer

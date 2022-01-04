@@ -21,7 +21,7 @@
 #pragma once
 #include "../../interfaces/protocol/CommonError.h"
 #include "../../interfaces/txpool/TxPoolInterface.h"
-#include "../../libutilities/ThreadPool.h"
+#include "bcos-utilities/ThreadPool.h"
 
 using namespace bcos;
 using namespace bcos::txpool;

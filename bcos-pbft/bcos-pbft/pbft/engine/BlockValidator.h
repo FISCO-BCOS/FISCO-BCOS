@@ -21,7 +21,7 @@
 #pragma once
 #include "../config/PBFTConfig.h"
 #include <bcos-framework/interfaces/protocol/Block.h>
-#include <bcos-framework/libutilities/ThreadPool.h>
+#include <bcos-utilities/ThreadPool.h>
 namespace bcos
 {
 namespace consensus

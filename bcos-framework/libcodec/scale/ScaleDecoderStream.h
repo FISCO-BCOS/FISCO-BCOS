@@ -17,11 +17,11 @@
  * @file ScaleDecoderStream.cpp
  */
 #pragma once
-#include "../../libutilities/Common.h"
-#include "../../libutilities/DataConvertUtility.h"
-#include "../../libutilities/FixedBytes.h"
 #include "Common.h"
 #include "FixedWidthIntegerCodec.h"
+#include "bcos-utilities/Common.h"
+#include "bcos-utilities/DataConvertUtility.h"
+#include "bcos-utilities/FixedBytes.h"
 #include <boost/multiprecision/cpp_int.hpp>
 #include <boost/optional.hpp>
 #include <boost/variant.hpp>

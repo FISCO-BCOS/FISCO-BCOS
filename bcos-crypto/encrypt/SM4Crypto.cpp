@@ -20,7 +20,7 @@
  */
 #include "SM4Crypto.h"
 #include "Exceptions.h"
-#include <bcos-framework/libutilities/FixedBytes.h>
+#include <bcos-utilities/FixedBytes.h>
 #include <wedpr-crypto/WedprCrypto.h>
 using namespace bcos;
 using namespace bcos::crypto;

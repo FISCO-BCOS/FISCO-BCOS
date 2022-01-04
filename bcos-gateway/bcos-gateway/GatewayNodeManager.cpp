@@ -20,8 +20,8 @@
  */
 #include <bcos-framework/interfaces/protocol/CommonError.h>
 #include <bcos-framework/interfaces/protocol/ServiceDesc.h>
-#include <bcos-framework/libutilities/DataConvertUtility.h>
 #include <bcos-gateway/GatewayNodeManager.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <json/json.h>
 
 using namespace std;

@@ -18,7 +18,7 @@
  */
 
 #pragma once
-#include "../libutilities/Common.h"
+#include "bcos-utilities/Common.h"
 #include <boost/filesystem.hpp>
 #include <boost/test/unit_test.hpp>
 

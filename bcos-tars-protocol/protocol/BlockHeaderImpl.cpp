@@ -19,7 +19,7 @@
  * @date 2021-04-20
  */
 #include "BlockHeaderImpl.h"
-#include "libutilities/Common.h"
+#include "bcos-utilities/Common.h"
 #include <tup/Tars.h>
 
 using namespace bcostars;

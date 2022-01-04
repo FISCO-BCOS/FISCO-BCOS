@@ -72,7 +72,7 @@ add_custom_command(
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 file(GLOB_RECURSE SRCS libcodec/*.cpp libexecutor/*.cpp libprotocol/*.cpp libsealer/*.cpp
-libstorage/*.cpp libsync/*.cpp libtool/*.cpp libutilities/*.cpp)
+libstorage/*.cpp libsync/*.cpp libtool/*.cpp)
 
 find_package(TBB CONFIG REQUIRED)
 find_package(Boost CONFIG REQUIRED log chrono system filesystem iostreams thread)
@@ -81,8 +81,7 @@ find_package(jsoncpp CONFIG REQUIRED)
 find_package(OpenMP 4.5 REQUIRED)
 
 add_library(framework ${SRCS} ${MESSAGES_SRCS} ${TXS_SYNC_MSG})
-target_link_libraries(framework PUBLIC Boost::log Boost::chrono Boost::iostreams
-Boost::filesystem Boost::thread protobuf::libprotobuf TBB::tbb jsoncpp_lib_static OpenMP::OpenMP_CXX)
+target_link_libraries(framework PUBLIC bcos-utilities::bcos-utilities protobuf::libprotobuf TBB::tbb jsoncpp_lib_static OpenMP::OpenMP_CXX)
 
 if (TESTS)
     enable_testing()
