@@ -20,9 +20,9 @@
  */
 #include "FakePBFTMessage.h"
 #include <bcos-framework/interfaces/crypto/CryptoSuite.h>
-#include <bcos-framework/testutils/TestPromptFixture.h>
 #include <bcos-framework/testutils/crypto/HashImpl.h>
 #include <bcos-framework/testutils/crypto/SignatureImpl.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 using namespace bcos;
 using namespace bcos::protocol;
 using namespace bcos::crypto;

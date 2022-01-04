@@ -1,3 +1,9 @@
+hunter_config(bcos-utilities VERSION 3.0.0-rc2-local
+    URL https://${URL_BASE}/FISCO-BCOS/bcos-utilities/archive/44239520cfabce00488192bcdb0d8dbf9c4020ea.tar.gz
+    SHA1 1297c980e39de248b141da3f7e57f7a81eeab5f2
+    CMAKE_ARGS HUNTER_PACKAGE_LOG_BUILD=ON HUNTER_PACKAGE_LOG_INSTALL=ON
+)
+
 hunter_config(rocksdb VERSION 6.20.3
 	URL  https://${URL_BASE}/facebook/rocksdb/archive/refs/tags/v6.20.3.tar.gz
     SHA1 64e4e6031820026c051d6e2072c0197e3bce1643

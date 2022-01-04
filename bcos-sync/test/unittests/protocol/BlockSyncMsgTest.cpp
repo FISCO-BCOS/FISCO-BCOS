@@ -19,8 +19,8 @@
  * @date 2021-06-08
  */
 #include "bcos-sync/protocol/PB/BlockSyncMsgFactoryImpl.h"
-#include <bcos-framework/testutils/TestPromptFixture.h>
 #include <bcos-framework/testutils/crypto/HashImpl.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;

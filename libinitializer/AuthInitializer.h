@@ -21,8 +21,8 @@
 #pragma once
 #include "libinitializer/ProtocolInitializer.h"
 #include "libinitializer/StorageInitializer.h"
+#include <bcos-codec/abi/ContractABICodec.h>
 #include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>
-#include <bcos-framework/libcodec/abi/ContractABICodec.h>
 #include <bcos-framework/libtool/NodeConfig.h>
 #include <bcos-ledger/src/libledger/Ledger.h>
 #include <bcos-utilities/Common.h>

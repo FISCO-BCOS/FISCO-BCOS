@@ -19,8 +19,8 @@
  * @date: 2021-03-16
  */
 #include "libprotocol/protobuf/PBTransaction.h"
-#include "../../../testutils/TestPromptFixture.h"
 #include "bcos-utilities/DataConvertUtility.h"
+#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include "libprotocol/Common.h"
 #include "testutils/protocol/FakeTransaction.h"
 #include <boost/test/tools/old/interface.hpp>

@@ -16,7 +16,7 @@
  * @brief unit test for TxsSyncMsg
  * @file TxsSyncMsgTest.h
  */
-#include "testutils/TestPromptFixture.h"
+#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include "testutils/crypto/HashImpl.h"
 #include "testutils/sync/FakeTxsSyncMsg.h"
 #include <boost/test/unit_test.hpp>

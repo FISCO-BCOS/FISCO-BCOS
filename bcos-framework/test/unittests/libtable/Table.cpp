@@ -18,9 +18,9 @@
  */
 
 #include "interfaces/storage/Table.h"
-#include "../../../testutils/TestPromptFixture.h"
 #include "Hash.h"
 #include "bcos-utilities/ThreadPool.h"
+#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include "interfaces/crypto/CommonType.h"
 #include "interfaces/storage/StorageInterface.h"
 #include "libstorage/StateStorage.h"

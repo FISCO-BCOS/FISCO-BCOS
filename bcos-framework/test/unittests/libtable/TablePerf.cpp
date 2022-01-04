@@ -1,6 +1,6 @@
-#include "../../../testutils/TestPromptFixture.h"
 #include "Hash.h"
 #include "bcos-utilities/Common.h"
+#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include "libstorage/StateStorage.h"
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>

@@ -1,4 +1,4 @@
-/**
+/*
  *  Copyright (C) 2021 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,30 +13,12 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief the Header256Hash return first 32 byte as hash result
- * @file Header256Hash.h
+ * @file main.cpp
+ * @author: yujiechen, jimmyshi
+ * @date 2021-02-24
  */
+#define BOOST_TEST_MODULE FISCO_BCOS_Tests
+#define BOOST_TEST_MAIN
 
-#include "interfaces/crypto/Hash.h"
-#include <functional>
-
-namespace bcos
-{
-namespace crypto
-{
-class Header256Hash : public Hash
-{
-public:
-    typedef std::shared_ptr<Header256Hash> Ptr;
-    Header256Hash() = default;
-    virtual ~Header256Hash(){};
-    HashType hash(bytesConstRef _data) override
-    {
-        std::hash<std::string_view> hash;
-        return HashType(hash(std::string_view((const char*)_data.data(), _data.size())));
-    }
-};
-
-}  // namespace crypto
-
-}  // namespace bcos
+#include <boost/test/included/unit_test.hpp>
+#include <boost/test/unit_test.hpp>

@@ -19,8 +19,8 @@
  * @date: 2021-03-22
  */
 #include "PBBlockHeader.h"
-#include "../../libcodec/scale/Scale.h"
 #include "../Common.h"
+#include "bcos-codec/scale/Scale.h"
 #include "bcos-utilities/Common.h"
 #include <gsl/span>
 

@@ -19,7 +19,7 @@
 #include "../../../interfaces/executor/PrecompiledTypeDef.h"
 #include "../../../interfaces/multigroup/ChainNodeInfo.h"
 #include "../../../interfaces/multigroup/GroupInfo.h"
-#include "../../../testutils/TestPromptFixture.h"
+#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <testutils/faker/FakeFrontService.h>
 #include <testutils/faker/FakeKVStorage.h>
 #include <testutils/faker/FakeLedger.h>

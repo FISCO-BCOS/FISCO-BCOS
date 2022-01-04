@@ -24,10 +24,10 @@
 #include "../precompiled/Utilities.h"
 #include "../vm/Precompiled.h"
 #include "TransactionExecutive.h"
+#include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-framework/interfaces/protocol/Exceptions.h"
 #include "bcos-framework/interfaces/storage/StorageInterface.h"
 #include "bcos-framework/interfaces/storage/Table.h"
-#include "bcos-framework/libcodec/abi/ContractABICodec.h"
 #include "bcos-utilities/Error.h"
 #include <boost/core/ignore_unused.hpp>
 #include <boost/lexical_cast.hpp>

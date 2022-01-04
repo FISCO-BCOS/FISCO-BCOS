@@ -40,6 +40,7 @@ include(InstallBcosUtilities)
 include_directories(${CMAKE_SOURCE_DIR})
 
 add_subdirectory(bcos-crypto)
+add_subdirectory(bcos-codec)
 add_subdirectory(bcos-framework)
 add_subdirectory(bcos-scheduler)
 add_subdirectory(bcos-executor)

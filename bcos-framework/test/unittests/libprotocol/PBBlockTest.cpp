@@ -18,7 +18,7 @@
  * @author: yujiechen
  * @date: 2021-03-23
  */
-#include "../../../testutils/TestPromptFixture.h"
+#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include "libprotocol/TransactionSubmitResultFactoryImpl.h"
 #include "libprotocol/TransactionSubmitResultImpl.h"
 #include "testutils/protocol/FakeBlock.h"

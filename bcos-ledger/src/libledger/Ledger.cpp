@@ -25,6 +25,7 @@
 #include "bcos-utilities/BoostLog.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/DataConvertUtility.h"
+#include <bcos-codec/scale/Scale.h>
 #include <bcos-framework/interfaces/consensus/ConsensusNode.h>
 #include <bcos-framework/interfaces/crypto/CommonType.h>
 #include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>
@@ -32,7 +33,6 @@
 #include <bcos-framework/interfaces/protocol/CommonError.h>
 #include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/interfaces/storage/Table.h>
-#include <bcos-framework/libcodec/scale/Scale.h>
 #include <bcos-framework/libprotocol/ParallelMerkleProof.h>
 #include <bcos-framework/libtool/ConsensusNode.h>
 #include <tbb/parallel_for.h>

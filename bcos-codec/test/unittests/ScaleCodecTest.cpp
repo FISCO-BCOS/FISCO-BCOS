@@ -13,12 +13,12 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
-#include "../../../testutils/TestPromptFixture.h"
+#include "bcos-codec/scale/Scale.h"
+#include "bcos-codec/scale/ScaleDecoderStream.h"
+#include "bcos-codec/scale/ScaleEncoderStream.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/DataConvertUtility.h"
-#include "libcodec/scale/Scale.h"
-#include "libcodec/scale/ScaleDecoderStream.h"
-#include "libcodec/scale/ScaleEncoderStream.h"
+#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;

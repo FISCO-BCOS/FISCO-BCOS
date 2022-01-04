@@ -17,8 +17,8 @@
  * @file Entry.cpp
  */
 
-#include "../../../testutils/TestPromptFixture.h"
 #include "bcos-utilities/Error.h"
+#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include "interfaces/storage/Table.h"
 #include "libstorage/StateStorage.h"
 #include <boost/archive/binary_iarchive.hpp>

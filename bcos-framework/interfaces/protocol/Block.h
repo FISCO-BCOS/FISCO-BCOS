@@ -19,7 +19,6 @@
  * @date: 2021-03-23
  */
 #pragma once
-#include "../../libcodec/scale/ScaleEncoderStream.h"
 #include "../../libprotocol/ParallelMerkleProof.h"
 #include "BlockHeader.h"
 #include "Transaction.h"
@@ -27,6 +26,7 @@
 #include "TransactionMetaData.h"
 #include "TransactionReceipt.h"
 #include "TransactionReceiptFactory.h"
+#include "bcos-codec/scale/ScaleEncoderStream.h"
 #include <tbb/parallel_for.h>
 
 namespace bcos

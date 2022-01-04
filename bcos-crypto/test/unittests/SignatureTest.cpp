@@ -30,7 +30,7 @@
 #include "../../signature/secp256k1/Secp256k1KeyPair.h"
 #include "../../signature/sm2/SM2Crypto.h"
 #include "../../signature/sm2/SM2KeyPair.h"
-#include <bcos-framework/testutils/TestPromptFixture.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 #include <string>
 using namespace bcos;

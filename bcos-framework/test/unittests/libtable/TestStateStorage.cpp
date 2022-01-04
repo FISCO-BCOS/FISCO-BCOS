@@ -17,11 +17,11 @@
  * @file Table.cpp
  */
 
-#include "../../../testutils/TestPromptFixture.h"
 #include "../libstorage/StateStorage.h"
 #include "Hash.h"
 #include "bcos-utilities/Error.h"
 #include "bcos-utilities/ThreadPool.h"
+#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include "interfaces/storage/StorageInterface.h"
 #include <tbb/concurrent_hash_map.h>
 #include <tbb/concurrent_vector.h>

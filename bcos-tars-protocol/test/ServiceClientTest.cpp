@@ -24,7 +24,7 @@
 #include "bcos-tars-protocol/client/RpcServiceClient.h"
 #include "bcos-tars-protocol/client/SchedulerServiceClient.h"
 #include "bcos-tars-protocol/client/TxPoolServiceClient.h"
-#include <bcos-framework/testutils/TestPromptFixture.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 

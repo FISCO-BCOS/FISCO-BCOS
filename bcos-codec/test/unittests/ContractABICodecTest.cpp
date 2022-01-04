@@ -17,10 +17,10 @@
  * @author: octopuswang
  * @date: 2019-04-01
  */
-#include "libcodec/abi/ContractABICodec.h"
-#include "libcodec/abi/ContractABIType.h"
-#include "testutils/TestPromptFixture.h"
-#include "testutils/crypto/HashImpl.h"
+#include "bcos-codec/abi/ContractABICodec.h"
+#include "bcos-codec/abi/ContractABIType.h"
+#include "bcos-framework/testutils/crypto/HashImpl.h"
+#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>
 
 using namespace std;

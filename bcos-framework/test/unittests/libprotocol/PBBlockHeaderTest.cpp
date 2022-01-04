@@ -18,7 +18,7 @@
  * @author: yujiechen
  * @date: 2021-03-16
  */
-#include "../../../testutils/TestPromptFixture.h"
+#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include "testutils/protocol/FakeBlockHeader.h"
 
 using namespace bcos;
