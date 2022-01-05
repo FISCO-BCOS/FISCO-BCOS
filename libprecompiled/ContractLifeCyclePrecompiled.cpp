@@ -76,19 +76,24 @@ ContractLifeCyclePrecompiled::ContractLifeCyclePrecompiled()
 bool ContractLifeCyclePrecompiled::checkPermission(
     ExecutiveContext::Ptr context, std::string const& tableName, Address const& origin)
 {
-    Table::Ptr table = openTable(context, tableName);
-    if (table)
+    // the contract owner can freeze/unfreeze/grantManager/revokeManager when supported version
+    // <= 2.8.0
+    if (g_BCOSConfig.version() < V2_9_0)
     {
-        auto entries = table->select(storagestate::ACCOUNT_AUTHORITY, table->newCondition());
-        if (entries->size() > 0)
+        Table::Ptr table = openTable(context, tableName);
+        if (table)
         {
-            // the key of authority would be set when support version >= 2.3.0
-            for (size_t i = 0; i < entries->size(); i++)
+            auto entries = table->select(storagestate::ACCOUNT_AUTHORITY, table->newCondition());
+            if (entries->size() > 0)
             {
-                std::string authority = entries->get(i)->getField(storagestate::STORAGE_VALUE);
-                if (origin.hex() == authority)
+                // the key of authority would be set when support version >= 2.3.0
+                for (size_t i = 0; i < entries->size(); i++)
                 {
-                    return true;
+                    std::string authority = entries->get(i)->getField(storagestate::STORAGE_VALUE);
+                    if (origin.hex() == authority)
+                    {
+                        return true;
+                    }
                 }
             }
         }
@@ -221,7 +226,7 @@ bool ContractLifeCyclePrecompiled::checkContractManager(std::string const& _tabl
     Address const& _origin, int& _result)
 {
     bool ret = true;
-    // existence check > permission check > status check
+    // existence check  > status check > permission check
     ContractStatus status = getContractStatus(_context, _tableName);
     if (ContractStatus::AddressNonExistent == status)
     {
