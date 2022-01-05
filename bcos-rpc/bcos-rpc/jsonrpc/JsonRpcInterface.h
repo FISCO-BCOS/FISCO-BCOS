@@ -23,8 +23,8 @@
 
 #include <bcos-framework/interfaces/multigroup/GroupInfo.h>
 #include <bcos-framework/interfaces/protocol/CommonError.h>
-#include <bcos-framework/libutilities/Error.h>
 #include <bcos-rpc/jsonrpc/Common.h>
+#include <bcos-utilities/Error.h>
 #include <json/json.h>
 #include <functional>
 

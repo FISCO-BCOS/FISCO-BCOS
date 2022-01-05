@@ -1,7 +1,7 @@
 #pragma once
 
-#include "bcos-framework/libprotocol/LogEntry.h"
-#include "bcos-framework/libutilities/Common.h"
+#include "bcos-protocol/LogEntry.h"
+#include "bcos-utilities/Common.h"
 #include <memory>
 #include <string>
 

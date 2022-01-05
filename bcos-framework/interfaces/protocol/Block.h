@@ -19,15 +19,12 @@
  * @date: 2021-03-23
  */
 #pragma once
-#include "../../libcodec/scale/ScaleEncoderStream.h"
-#include "../../libprotocol/ParallelMerkleProof.h"
 #include "BlockHeader.h"
 #include "Transaction.h"
 #include "TransactionFactory.h"
 #include "TransactionMetaData.h"
 #include "TransactionReceipt.h"
 #include "TransactionReceiptFactory.h"
-#include <tbb/parallel_for.h>
 
 namespace bcos
 {
@@ -61,46 +58,8 @@ public:
     virtual void decode(bytesConstRef _data, bool _calculateHash, bool _checkSig) = 0;
     virtual void encode(bytes& _encodeData) const = 0;
 
-    virtual bcos::crypto::HashType calculateTransactionRoot() const
-    {
-        auto txsRoot = bcos::crypto::HashType();
-        // with no transactions
-        if (transactionsSize() == 0 && transactionsMetaDataSize() == 0)
-        {
-            return txsRoot;
-        }
-
-        std::vector<bytes> transactionsList;
-        if (transactionsSize() > 0)
-        {
-            transactionsList = encodeToCalculateRoot(
-                transactionsSize(), [this](size_t _index) { return transaction(_index)->hash(); });
-        }
-        else if (transactionsMetaDataSize() > 0)
-        {
-            transactionsList = encodeToCalculateRoot(transactionsHashSize(),
-                [this](size_t _index) { return transactionMetaData(_index)->hash(); });
-        }
-
-        txsRoot = calculateMerkleProofRoot(m_transactionFactory->cryptoSuite(), transactionsList);
-        return txsRoot;
-    }
-
-    virtual bcos::crypto::HashType calculateReceiptRoot() const
-    {
-        auto receiptsRoot = bcos::crypto::HashType();
-        // with no receipts
-        if (receiptsSize() == 0)
-        {
-            return receiptsRoot;
-        }
-
-        auto receiptsList = encodeToCalculateRoot(
-            receiptsSize(), [this](size_t _index) { return receipt(_index)->hash(); });
-        receiptsRoot = calculateMerkleProofRoot(m_receiptFactory->cryptoSuite(), receiptsList);
-
-        return receiptsRoot;
-    }
+    virtual bcos::crypto::HashType calculateTransactionRoot() const = 0;
+    virtual bcos::crypto::HashType calculateReceiptRoot() const = 0;
 
     virtual int32_t version() const = 0;
     virtual void setVersion(int32_t _version) = 0;
@@ -163,27 +122,7 @@ public:
     virtual void setNonceList(NonceList const& _nonceList) = 0;
     virtual void setNonceList(NonceList&& _nonceList) = 0;
     virtual NonceList const& nonceList() const = 0;
-
-private:
-    std::vector<bytes> encodeToCalculateRoot(
-        size_t _listSize, std::function<bcos::crypto::HashType(size_t _index)> _hashFunc) const
-    {
-        std::vector<bytes> encodedList(_listSize);
-        tbb::parallel_for(
-            tbb::blocked_range<size_t>(0, _listSize), [&](const tbb::blocked_range<size_t>& _r) {
-                for (auto i = _r.begin(); i < _r.end(); ++i)
-                {
-                    bcos::codec::scale::ScaleEncoderStream stream;
-                    stream << i;
-                    bytes encodedData = stream.data();
-                    auto hash = _hashFunc(i);
-                    encodedData.insert(encodedData.end(), hash.begin(), hash.end());
-                    encodedList[i] = std::move(encodedData);
-                }
-            });
-        return encodedList;
-    }
-
+    
 protected:
     TransactionFactory::Ptr m_transactionFactory;
     TransactionReceiptFactory::Ptr m_receiptFactory;

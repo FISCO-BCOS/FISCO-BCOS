@@ -24,10 +24,10 @@
 #include "../Common.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/protocol/Block.h"
+#include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/interfaces/protocol/Transaction.h"
 #include "bcos-framework/interfaces/storage/Table.h"
 #include "bcos-framework/libstorage/StateStorage.h"
-#include "interfaces/protocol/ProtocolTypeDef.h"
 #include <tbb/concurrent_unordered_map.h>
 #include <atomic>
 #include <functional>

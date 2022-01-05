@@ -21,7 +21,7 @@
 
 #pragma once
 #include "../Exceptions.h"
-#include <bcos-framework/libutilities/FixedBytes.h>
+#include <bcos-utilities/FixedBytes.h>
 namespace bcos
 {
 namespace crypto

@@ -18,8 +18,8 @@
  * @date 2021-10-26
  */
 
-#include <bcos-framework/libutilities/Log.h>
 #include <bcos-rpc/ws/ProtocolVersion.h>
+#include <bcos-utilities/Log.h>
 #include <json/json.h>
 
 using namespace bcos;

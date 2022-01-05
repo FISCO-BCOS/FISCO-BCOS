@@ -22,7 +22,7 @@
 #include "bcos-pbft/core/proto/Consensus.pb.h"
 #include "bcos-pbft/framework/ProposalInterface.h"
 #include <bcos-framework/interfaces/protocol/BlockHeader.h>
-#include <bcos-framework/libprotocol/Common.h>
+#include <bcos-protocol/Common.h>
 
 namespace bcos
 {

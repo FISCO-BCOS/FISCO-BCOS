@@ -25,13 +25,10 @@ set(VERSION_SUFFIX "-rc2")
 aux_source_directory(src/libledger SRCS)
 aux_source_directory(src/libledger/utilities SRCS)
 
-include_directories(${CMAKE_SOURCE_DIR})
-include_directories(${CMAKE_SOURCE_DIR}/bcos-framework)
-
 find_package(Boost CONFIG REQUIRED serialization)
 
-add_library(ledger ${SRCS})
-target_link_libraries(ledger PUBLIC framework Boost::serialization)
+add_library(${LEDGER_TARGET} ${SRCS})
+target_link_libraries(${LEDGER_TARGET} PUBLIC framework ${CODEC_TARGET} Boost::serialization)
 
 # test related
 if (TESTS)

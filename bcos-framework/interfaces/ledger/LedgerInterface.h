@@ -27,9 +27,9 @@
 #include "../../interfaces/protocol/Transaction.h"
 #include "../../interfaces/protocol/TransactionReceipt.h"
 #include "../../interfaces/storage/StorageInterface.h"
-#include "../../libutilities/Error.h"
 #include "LedgerConfig.h"
 #include "LedgerTypeDef.h"
+#include "bcos-utilities/Error.h"
 #include <gsl/span>
 #include <map>
 

@@ -19,7 +19,7 @@
  * @date 2021-05-24
  */
 #include "bcos-sync/BlockSync.h"
-#include <bcos-framework/libtool/LedgerConfigFetcher.h>
+#include <bcos-tool/LedgerConfigFetcher.h>
 #include <json/json.h>
 #include <boost/bind/bind.hpp>
 
@@ -308,7 +308,7 @@ void BlockSync::asyncNotifyBlockSyncMessage(Error::Ptr _error, std::string const
                 }
                 sync->m_sendResponseHandler(_uuid, ModuleID::BlockSync, _nodeID, _respData);
             }
-            catch (std::exception e)
+            catch (std::exception const& e)
             {
                 BLKSYNC_LOG(WARNING) << LOG_DESC("asyncNotifyBlockSyncMessage sendResponse failed")
                                      << LOG_KV("error", boost::diagnostic_information(e))

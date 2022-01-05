@@ -19,10 +19,10 @@
  */
 
 #include <bcos-framework/interfaces/protocol/CommonError.h>
-#include <bcos-framework/libutilities/Common.h>
-#include <bcos-framework/libutilities/Exceptions.h>
 #include <bcos-gateway/Common.h>
 #include <bcos-gateway/Gateway.h>
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/Exceptions.h>
 #include <json/json.h>
 #include <boost/core/ignore_unused.hpp>
 #include <algorithm>

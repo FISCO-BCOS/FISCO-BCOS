@@ -21,7 +21,7 @@
 #include "libprecompiled/PreCompiledFixture.h"
 #include "precompiled/extension/ContractAuthPrecompiled.h"
 #include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>
-#include <bcos-framework/testutils/TestPromptFixture.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 
 using namespace bcos;
 using namespace bcos::precompiled;
@@ -886,8 +886,9 @@ BOOST_AUTO_TEST_CASE(testResetAdmin)
 
         // reset admin in error contract address
         {
-            auto result = resetAdmin(_number++, 1000, Address("0x1234567890123456789012345678901234567890"),
-                Address("0x1234567890123456789012345678901234567890"));
+            auto result =
+                resetAdmin(_number++, 1000, Address("0x1234567890123456789012345678901234567890"),
+                    Address("0x1234567890123456789012345678901234567890"));
             BOOST_CHECK(result->status() == (int32_t)TransactionStatus::PrecompiledError);
             BOOST_CHECK(result->type() == ExecutionMessage::REVERT);
         }

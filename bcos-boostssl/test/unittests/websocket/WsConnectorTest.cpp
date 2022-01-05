@@ -20,7 +20,7 @@
  */
 
 #include <bcos-boostssl/websocket/WsConnector.h>
-#include <bcos-framework/testutils/TestPromptFixture.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 #include <memory>
 #include <string>

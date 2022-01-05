@@ -4,13 +4,13 @@
 #include "libinitializer/ProtocolInitializer.h"
 #include "libinitializer/TxPoolInitializer.h"
 #include <bcos-framework/interfaces/consensus/ConsensusNode.h>
-#include <bcos-framework/libutilities/Common.h>
-#include <bcos-framework/libutilities/FixedBytes.h>
 #include <bcos-tars-protocol/ErrorConverter.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionSubmitResultImpl.h>
 #include <bcos-tars-protocol/tars/CommonProtocol.h>
 #include <bcos-tars-protocol/tars/TxPoolService.h>
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/FixedBytes.h>
 #include <tarscpp/servant/Servant.h>
 #include <memory>
 

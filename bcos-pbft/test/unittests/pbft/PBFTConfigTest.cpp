@@ -18,12 +18,13 @@
  * @author: yujiechen
  * @date 2021-05-28
  */
+#include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/hash/SM3.h"
 #include "test/unittests/pbft/PBFTFixture.h"
 #include "test/unittests/protocol/FakePBFTMessage.h"
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/interfaces/crypto/CryptoSuite.h>
-#include <bcos-framework/testutils/TestPromptFixture.h>
-#include <bcos-framework/testutils/crypto/HashImpl.h>
-#include <bcos-framework/testutils/crypto/SignatureImpl.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -37,8 +38,8 @@ namespace test
 BOOST_FIXTURE_TEST_SUITE(PBFTConfigTest, TestPromptFixture)
 BOOST_AUTO_TEST_CASE(testPBFTInit)
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
-    auto signatureImpl = std::make_shared<Secp256k1SignatureImpl>();
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
     auto keyPair = signatureImpl->generateKeyPair();
     auto gateWay = std::make_shared<FakeGateWay>();

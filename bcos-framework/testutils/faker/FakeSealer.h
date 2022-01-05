@@ -19,7 +19,7 @@
  * @date 2021-05-26
  */
 #pragma once
-#include "../../interfaces/sealer/SealerInterface.h"
+#include "bcos-framework/interfaces/sealer/SealerInterface.h"
 #include <atomic>
 #include <memory>
 

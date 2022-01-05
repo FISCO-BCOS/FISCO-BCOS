@@ -19,11 +19,11 @@
  * @date 2021-06-10
  */
 #pragma once
-#include <bcos-framework/libtool/Exceptions.h>
-#include <bcos-framework/libutilities/DataConvertUtility.h>
-#include <bcos-framework/libutilities/Exceptions.h>
-#include <bcos-framework/libutilities/FileUtility.h>
-#include <bcos-framework/libutilities/Log.h>
+#include <bcos-tool/Exceptions.h>
+#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/Exceptions.h>
+#include <bcos-utilities/FileUtility.h>
+#include <bcos-utilities/Log.h>
 #include <include/BuildInfo.h>
 #include <openssl/engine.h>
 #include <openssl/rsa.h>

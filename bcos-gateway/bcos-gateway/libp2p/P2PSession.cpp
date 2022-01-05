@@ -10,7 +10,7 @@
 #include <bcos-gateway/libp2p/P2PSession.h>
 #include <bcos-gateway/libp2p/Service.h>
 
-#include <bcos-framework/libutilities/Common.h>
+#include <bcos-utilities/Common.h>
 #include <boost/algorithm/string.hpp>
 
 using namespace bcos;

@@ -26,10 +26,10 @@
 #include <bcos-framework/interfaces/crypto/Hash.h>
 #include <bcos-framework/interfaces/protocol/Block.h>
 #include <bcos-framework/interfaces/protocol/TransactionReceipt.h>
-#include <bcos-framework/libprotocol/LogEntry.h>
-#include <bcos-framework/libutilities/Common.h>
-#include <bcos-framework/libutilities/DataConvertUtility.h>
-#include <bcos-framework/libutilities/FixedBytes.h>
+#include <bcos-protocol/LogEntry.h>
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/FixedBytes.h>
 #include <variant>
 
 namespace bcostars

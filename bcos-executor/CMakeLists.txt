@@ -1,12 +1,9 @@
 cmake_minimum_required(VERSION 3.14)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "Minimum OS X deployment version")
 
-project(bcos-executor VERSION "3.0.0")
+include(Version)
+project(bcos-executor VERSION ${VERSION})
 
-file(GLOB_RECURSE SRCS src/*.cpp)
-
-include_directories(${CMAKE_SOURCE_DIR})
-include_directories(${CMAKE_SOURCE_DIR}/bcos-framework)
 
 find_package(TBB CONFIG REQUIRED)
 # find_package(Threads REQUIRED)
@@ -27,9 +24,9 @@ find_package(intx CONFIG REQUIRED)
 find_package(ethash CONFIG REQUIRED)
 find_package(Boost CONFIG QUIET REQUIRED serialization program_options context)
 
-add_library(executor ${SRCS})
-target_link_libraries(executor PUBLIC framework crypto Boost::context evmone hera hera-buildinfo
-${WASM_ENGINE_LIBRARY} evmc::loader evmc::instructions wabt)
+file(GLOB_RECURSE SRCS src/*.cpp)
+add_library(${EXECUTOR_TARGET} ${SRCS})
+target_link_libraries(${EXECUTOR_TARGET} PUBLIC framework ${CODEC_TARGET} ${CRYPTO_TARGET} Boost::context evmone hera hera-buildinfo ${WASM_ENGINE_LIBRARY} evmc::loader evmc::instructions wabt)
 
 if (TOOLS)
     add_subdirectory(tools)

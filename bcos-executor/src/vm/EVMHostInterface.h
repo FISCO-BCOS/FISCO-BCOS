@@ -23,7 +23,7 @@
 
 #include "../Common.h"
 #include "bcos-framework/interfaces/protocol/BlockHeader.h"
-#include "bcos-framework/libprotocol/LogEntry.h"
+#include "bcos-protocol/LogEntry.h"
 #include "evmc/evmc.h"
 #include "evmc/instructions.h"
 #include <boost/optional.hpp>

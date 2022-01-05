@@ -24,7 +24,7 @@
 #include "bcos-tars-protocol/protocol/TransactionSubmitResultImpl.h"
 #include "bcos-tars-protocol/tars/RpcService.h"
 #include <bcos-framework/interfaces/rpc/RPCInterface.h>
-#include <bcos-framework/libutilities/Common.h>
+#include <bcos-utilities/Common.h>
 #include <tarscpp/servant/Application.h>
 #include <boost/core/ignore_unused.hpp>
 

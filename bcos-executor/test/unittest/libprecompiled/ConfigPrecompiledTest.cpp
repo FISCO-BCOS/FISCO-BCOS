@@ -22,7 +22,7 @@
 #include "precompiled/ConsensusPrecompiled.h"
 #include "precompiled/ParallelConfigPrecompiled.h"
 #include "precompiled/SystemConfigPrecompiled.h"
-#include <bcos-framework/testutils/TestPromptFixture.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 
 using namespace bcos;
 using namespace bcos::precompiled;

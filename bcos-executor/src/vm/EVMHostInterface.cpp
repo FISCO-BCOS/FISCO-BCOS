@@ -26,10 +26,10 @@
 #include "EVMHostInterface.h"
 #include "../Common.h"
 #include "HostContext.h"
-#include "libutilities/Common.h"
-#include <boost/core/ignore_unused.hpp>
+#include "bcos-utilities/Common.h"
 #include <evmc/evmc.h>
 #include <boost/algorithm/hex.hpp>
+#include <boost/core/ignore_unused.hpp>
 #include <exception>
 #include <optional>
 
@@ -58,7 +58,7 @@ evmc_bytes32 getStorage(
 {
     boost::ignore_unused(_addr);
     auto& hostContext = static_cast<HostContext&>(*_context);
-    
+
     // programming assert for debug
     assert(fromEvmC(*_addr) == boost::algorithm::unhex(std::string(hostContext.myAddress())));
 
@@ -347,7 +347,7 @@ void wasmLog(evmc_host_context* _context, const uint8_t* _addr, int32_t _address
     size_t _numTopics) noexcept
 {
     boost::ignore_unused(_addr, _addressLength);
-    
+
     auto& hostContext = static_cast<HostContext&>(*_context);
     assert(string_view((char*)_addr, _addressLength) == hostContext.myAddress());
     h256 const* pTopics = reinterpret_cast<h256 const*>(_topics);

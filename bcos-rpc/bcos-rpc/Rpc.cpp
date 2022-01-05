@@ -20,9 +20,9 @@
  */
 
 #include <bcos-boostssl/websocket/WsService.h>
-#include <bcos-framework/libutilities/Log.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/Rpc.h>
+#include <bcos-utilities/Log.h>
 using namespace bcos;
 using namespace bcos::rpc;
 using namespace bcos::group;

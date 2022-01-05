@@ -22,7 +22,7 @@
 #pragma once
 
 #include "bcos-framework/interfaces/crypto/Hash.h"
-#include "bcos-framework/libutilities/Common.h"
+#include "bcos-utilities/Common.h"
 #include <cstdint>
 #include <iostream>
 #include <memory>

@@ -23,9 +23,9 @@
 #include "bcos-txpool/txpool/interfaces/NonceCheckerInterface.h"
 #include "bcos-txpool/txpool/interfaces/TxPoolStorageInterface.h"
 #include "bcos-txpool/txpool/interfaces/TxValidatorInterface.h"
-#include "interfaces/protocol/TransactionMetaData.h"
 #include <bcos-framework/interfaces/ledger/LedgerInterface.h>
 #include <bcos-framework/interfaces/protocol/BlockFactory.h>
+#include <bcos-framework/interfaces/protocol/TransactionMetaData.h>
 #include <bcos-framework/interfaces/protocol/TransactionSubmitResultFactory.h>
 namespace bcos
 {

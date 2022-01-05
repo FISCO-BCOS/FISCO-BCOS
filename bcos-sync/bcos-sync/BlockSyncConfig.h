@@ -27,8 +27,8 @@
 #include <bcos-framework/interfaces/ledger/LedgerInterface.h>
 #include <bcos-framework/interfaces/protocol/BlockFactory.h>
 #include <bcos-framework/interfaces/protocol/TransactionSubmitResultFactory.h>
+#include <bcos-framework/interfaces/sync/SyncConfig.h>
 #include <bcos-framework/interfaces/txpool/TxPoolInterface.h>
-#include <bcos-framework/libsync/SyncConfig.h>
 namespace bcos
 {
 namespace sync

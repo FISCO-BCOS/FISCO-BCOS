@@ -39,7 +39,7 @@ const std::string SYS_CNS_FIELD_ADDRESS = "address";
 const std::string SYS_CNS_FIELD_ABI = "abi";
 
 // version => <address, abi>
-//using CNSInfoMap = std::map<std::string, std::pair<std::string, std::string>>;
+// using CNSInfoMap = std::map<std::string, std::pair<std::string, std::string>>;
 // <version, address, abi>
 using CNSInfoVec = std::vector<std::tuple<std::string, std::string, std::string>>;
 

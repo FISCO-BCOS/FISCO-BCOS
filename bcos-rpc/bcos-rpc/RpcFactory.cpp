@@ -19,20 +19,20 @@
  * @date 2021-07-15
  */
 
-#include "interfaces/gateway/GatewayTypeDef.h"
+#include "bcos-framework/interfaces/gateway/GatewayTypeDef.h"
 #include <bcos-boostssl/context/ContextBuilder.h>
 #include <bcos-boostssl/websocket/WsInitializer.h>
 #include <bcos-boostssl/websocket/WsMessage.h>
 #include <bcos-boostssl/websocket/WsService.h>
-#include <bcos-framework/libprotocol/amop/AMOPRequest.h>
-#include <bcos-framework/libutilities/Exceptions.h>
-#include <bcos-framework/libutilities/FileUtility.h>
-#include <bcos-framework/libutilities/Log.h>
-#include <bcos-framework/libutilities/ThreadPool.h>
+#include <bcos-protocol/amop/AMOPRequest.h>
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-rpc/event/EventSubMatcher.h>
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>
 #include <bcos-rpc/ws/ProtocolVersion.h>
+#include <bcos-utilities/Exceptions.h>
+#include <bcos-utilities/FileUtility.h>
+#include <bcos-utilities/Log.h>
+#include <bcos-utilities/ThreadPool.h>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>

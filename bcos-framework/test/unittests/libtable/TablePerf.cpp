@@ -1,7 +1,7 @@
-#include "../../../testutils/TestPromptFixture.h"
 #include "Hash.h"
-#include "libstorage/StateStorage.h"
-#include "libutilities/Common.h"
+#include "bcos-framework/libstorage/StateStorage.h"
+#include "bcos-utilities/Common.h"
+#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 #include <future>

@@ -21,7 +21,7 @@
 #include "AMOPClient.h"
 #include <bcos-framework/interfaces/gateway/GatewayTypeDef.h>
 #include <bcos-framework/interfaces/protocol/CommonError.h>
-#include <bcos-framework/libprotocol/amop/TopicItem.h>
+#include <bcos-protocol/amop/TopicItem.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 using namespace bcos;

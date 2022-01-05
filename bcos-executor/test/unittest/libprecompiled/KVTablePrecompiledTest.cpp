@@ -20,7 +20,7 @@
 
 #include "libprecompiled/PreCompiledFixture.h"
 #include "precompiled/TableFactoryPrecompiled.h"
-#include <bcos-framework/testutils/TestPromptFixture.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 
 using namespace bcos;
 using namespace bcos::precompiled;

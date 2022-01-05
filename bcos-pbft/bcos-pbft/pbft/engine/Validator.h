@@ -24,7 +24,7 @@
 #include "bcos-framework/interfaces/txpool/TxPoolInterface.h"
 #include <bcos-framework/interfaces/protocol/BlockFactory.h>
 #include <bcos-framework/interfaces/protocol/TransactionSubmitResultFactory.h>
-#include <bcos-framework/libutilities/ThreadPool.h>
+#include <bcos-utilities/ThreadPool.h>
 
 namespace bcos
 {

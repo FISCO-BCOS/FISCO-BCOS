@@ -23,8 +23,8 @@
 #include "../interfaces/PBFTStorage.h"
 #include <bcos-framework/interfaces/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/interfaces/protocol/BlockFactory.h>
-#include <bcos-framework/libutilities/KVStorageHelper.h>
-#include <bcos-framework/libutilities/ThreadPool.h>
+#include <bcos-framework/interfaces/storage/KVStorageHelper.h>
+#include <bcos-utilities/ThreadPool.h>
 
 namespace bcos
 {

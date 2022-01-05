@@ -28,7 +28,7 @@
 #include "TxPoolInitializer.h"
 #include <bcos-framework/interfaces/gateway/GatewayInterface.h>
 #include <bcos-framework/interfaces/rpc/RPCInterface.h>
-#include <bcos-framework/libutilities/BoostLogInitializer.h>
+#include <bcos-utilities/BoostLogInitializer.h>
 #include <memory>
 
 namespace bcos::initializer

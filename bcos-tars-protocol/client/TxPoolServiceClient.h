@@ -9,7 +9,7 @@
 #include "bcos-tars-protocol/tars/TxPoolService.h"
 #include <bcos-framework/interfaces/protocol/BlockFactory.h>
 #include <bcos-framework/interfaces/txpool/TxPoolInterface.h>
-#include <bcos-framework/libutilities/Common.h>
+#include <bcos-utilities/Common.h>
 #include <memory>
 
 namespace bcostars

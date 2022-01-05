@@ -18,8 +18,8 @@
  * @author: octopus
  * @date 2021-06-21
  */
-#include <bcos-framework/testutils/TestPromptFixture.h>
 #include <bcos-gateway/libamop/TopicManager.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;

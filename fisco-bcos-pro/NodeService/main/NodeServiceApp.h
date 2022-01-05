@@ -26,8 +26,8 @@
 #include "SchedulerService/SchedulerServiceServer.h"
 #include "TxPoolService/TxPoolServiceServer.h"
 #include "libinitializer/Initializer.h"
-#include <bcos-framework/libtool/NodeConfig.h>
-#include <bcos-framework/libutilities/BoostLogInitializer.h>
+#include <bcos-tool/NodeConfig.h>
+#include <bcos-utilities/BoostLogInitializer.h>
 #include <tarscpp/servant/Application.h>
 
 namespace bcostars

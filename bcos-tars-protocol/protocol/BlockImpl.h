@@ -23,12 +23,15 @@
 #include "TransactionImpl.h"
 #include "TransactionMetaDataImpl.h"
 #include "TransactionReceiptImpl.h"
+#include "bcos-codec/scale/ScaleEncoderStream.h"
+#include "bcos-framework/interfaces/protocol/Transaction.h"
 #include "bcos-tars-protocol/Common.h"
 #include "bcos-tars-protocol/tars/Block.h"
-#include "interfaces/protocol/Transaction.h"
 #include <bcos-framework/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/interfaces/protocol/Block.h>
 #include <bcos-framework/interfaces/protocol/BlockHeader.h>
+#include <bcos-protocol/Common.h>
+#include <bcos-protocol/ParallelMerkleProof.h>
 #include <gsl/span>
 #include <memory>
 
@@ -104,6 +107,47 @@ public:
     const bcostars::Block& inner() const { return *m_inner; }
     void setInner(const bcostars::Block& inner) { *m_inner = inner; }
     void setInner(bcostars::Block&& inner) { *m_inner = std::move(inner); }
+
+    bcos::crypto::HashType calculateTransactionRoot() const override
+    {
+        auto txsRoot = bcos::crypto::HashType();
+        // with no transactions
+        if (transactionsSize() == 0 && transactionsMetaDataSize() == 0)
+        {
+            return txsRoot;
+        }
+
+        std::vector<bcos::bytes> transactionsList;
+        if (transactionsSize() > 0)
+        {
+            transactionsList = bcos::protocol::encodeToCalculateRoot(
+                transactionsSize(), [this](size_t _index) { return transaction(_index)->hash(); });
+        }
+        else if (transactionsMetaDataSize() > 0)
+        {
+            transactionsList = bcos::protocol::encodeToCalculateRoot(transactionsHashSize(),
+                [this](size_t _index) { return transactionMetaData(_index)->hash(); });
+        }
+
+        txsRoot = bcos::protocol::calculateMerkleProofRoot(
+            m_transactionFactory->cryptoSuite(), transactionsList);
+        return txsRoot;
+    }
+
+    bcos::crypto::HashType calculateReceiptRoot() const override
+    {
+        auto receiptsRoot = bcos::crypto::HashType();
+        // with no receipts
+        if (receiptsSize() == 0)
+        {
+            return receiptsRoot;
+        }
+        auto receiptsList = bcos::protocol::encodeToCalculateRoot(
+            receiptsSize(), [this](size_t _index) { return receipt(_index)->hash(); });
+        receiptsRoot =
+            bcos::protocol::calculateMerkleProofRoot(m_receiptFactory->cryptoSuite(), receiptsList);
+        return receiptsRoot;
+    }
 
 private:
     std::shared_ptr<bcostars::Block> m_inner;

@@ -19,7 +19,7 @@
  * @author yujiechen
  */
 #pragma once
-#include <bcos-framework/libutilities/Exceptions.h>
+#include <bcos-utilities/Exceptions.h>
 
 namespace bcos
 {

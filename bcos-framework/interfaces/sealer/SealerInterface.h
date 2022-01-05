@@ -19,7 +19,7 @@
  * @date 2021-05-14
  */
 #pragma once
-#include "../../libutilities/Error.h"
+#include "bcos-utilities/Error.h"
 #include <functional>
 
 namespace bcos

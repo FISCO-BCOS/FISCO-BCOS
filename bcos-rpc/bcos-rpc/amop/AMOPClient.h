@@ -22,8 +22,8 @@
 #include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-framework/interfaces/gateway/GatewayInterface.h>
 #include <bcos-framework/interfaces/rpc/RPCInterface.h>
-#include <bcos-framework/libprotocol/amop/AMOPRequest.h>
-#include <bcos-framework/libutilities/Timer.h>
+#include <bcos-protocol/amop/AMOPRequest.h>
+#include <bcos-utilities/Timer.h>
 #include <tarscpp/servant/Application.h>
 
 #define AMOP_CLIENT_LOG(level) BCOS_LOG(level) << LOG_BADGE("AMOPClient")

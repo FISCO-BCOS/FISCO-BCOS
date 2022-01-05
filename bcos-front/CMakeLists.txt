@@ -21,11 +21,8 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum OS X deployment ve
 
 aux_source_directory(bcos-front SRCS)
 
-include_directories(${CMAKE_SOURCE_DIR})
-include_directories(${CMAKE_SOURCE_DIR}/bcos-front)
-
-add_library(front ${SRCS})
-target_link_libraries(front PUBLIC framework)
+add_library(${FRONT_TARGET} ${SRCS})
+target_link_libraries(${FRONT_TARGET} PUBLIC framework)
 
 if (TESTS)
     enable_testing()

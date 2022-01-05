@@ -19,9 +19,9 @@
  * @date 2021-06-10
  */
 #include "PBFTInitializer.h"
-#include "libutilities/KVStorageHelper.h"
-#include <bcos-framework/libutilities/FileUtility.h>
+#include "bcos-framework/interfaces/storage/KVStorageHelper.h"
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
+#include <bcos-utilities/FileUtility.h>
 #include <include/BuildInfo.h>
 #include <json/json.h>
 
