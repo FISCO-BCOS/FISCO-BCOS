@@ -54,13 +54,12 @@ class BlockVerifier : public BlockVerifierInterface,
 public:
     typedef std::shared_ptr<BlockVerifier> Ptr;
     typedef boost::function<dev::h256(int64_t x)> NumberHashCallBackFunction;
-    BlockVerifier(bool _enableParallel = false) : m_enableParallel(_enableParallel)
-    {
-        if (_enableParallel)
-        {
-            m_threadNum = std::max(std::thread::hardware_concurrency(), (unsigned int)1);
-        }
-    }
+    BlockVerifier(bool _enableParallel = false, unsigned int threadNum = 0)
+      : m_enableParallel(_enableParallel),
+        m_threadNum(
+            threadNum ? threadNum : std::max(std::thread::hardware_concurrency(), (unsigned int)1)),
+        m_threadPool("exec", m_threadNum)
+    {}
 
     virtual ~BlockVerifier() {}
 
@@ -101,6 +100,7 @@ private:
 
     std::mutex m_executingMutex;
     std::atomic<int64_t> m_executingNumber = {0};
+    ThreadPool m_threadPool;
 
     VMFlagType m_evmFlags = 0;
 };

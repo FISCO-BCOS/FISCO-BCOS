@@ -197,13 +197,16 @@ void LedgerParam::initTxExecuteConfig(ptree const& pt)
         {
             mutableTxParam().enableParallel = pt.get<bool>("tx_execute.enable_parallel", true);
         }
+
+        mutableTxParam().threadCount = pt.get<unsigned int>("tx_execute.threadNum", 64);
     }
     else
     {
         mutableTxParam().enableParallel = false;
     }
     LedgerParam_LOG(INFO) << LOG_BADGE("InitTxExecuteConfig")
-                          << LOG_KV("enableParallel", mutableTxParam().enableParallel);
+                          << LOG_KV("enableParallel", mutableTxParam().enableParallel)
+                          << LOG_KV("threadNum", mutableTxParam().threadCount);
 }
 
 void LedgerParam::initTxPoolConfig(ptree const& pt)

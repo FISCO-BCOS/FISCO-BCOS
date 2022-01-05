@@ -28,6 +28,7 @@
 #include <libethcore/TransactionReceipt.h>
 #include <libstorage/Table.h>
 #include <tbb/parallel_for.h>
+#include <boost/thread/latch.hpp>
 #include <exception>
 #include <thread>
 
@@ -269,9 +270,12 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
     try
     {
         tbb::atomic<bool> isWarnedTimeout(false);
-        tbb::parallel_for(tbb::blocked_range<unsigned int>(0, m_threadNum),
-            [&](const tbb::blocked_range<unsigned int>& _r) {
-                (void)_r;
+
+        boost::latch latch(m_threadNum);
+        for (unsigned int i = 0; i < m_threadNum; ++i)
+        {
+            m_threadPool.enqueue([this, &block, &executiveContext, &txDag, &isWarnedTimeout,
+                                     &parallelTimeOut, &latch]() {
                 EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
                 envInfo.setPrecompiledEngine(executiveContext);
                 auto executive = createAndInitExecutive(executiveContext->getState(), envInfo);
@@ -289,7 +293,35 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
 
                     txDag->executeUnit(executive);
                 }
+
+                latch.count_down();
             });
+        }
+
+        latch.wait();
+
+        // tbb::parallel_for(tbb::blocked_range<unsigned int>(0, m_threadNum),
+        //     [&](const tbb::blocked_range<unsigned int>& _r) {
+        //         (void)_r;
+        //         EnvInfo envInfo(block.blockHeader(), m_pNumberHash, 0);
+        //         envInfo.setPrecompiledEngine(executiveContext);
+        //         auto executive = createAndInitExecutive(executiveContext->getState(), envInfo);
+
+        //         while (!txDag->hasFinished())
+        //         {
+        //             if (!isWarnedTimeout.load() && utcSteadyTime() >= parallelTimeOut)
+        //             {
+        //                 isWarnedTimeout.store(true);
+        //                 BLOCKVERIFIER_LOG(WARNING)
+        //                     << LOG_BADGE("executeBlock") << LOG_DESC("Para execute block
+        //                     timeout")
+        //                     << LOG_KV("txNum", block.transactions()->size())
+        //                     << LOG_KV("blockNumber", block.blockHeader().number());
+        //             }
+
+        //             txDag->executeUnit(executive);
+        //         }
+        //     });
     }
     catch (exception& e)
     {

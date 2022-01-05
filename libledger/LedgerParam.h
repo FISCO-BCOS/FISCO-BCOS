@@ -166,6 +166,7 @@ struct TxParam
 {
     int64_t txGasLimit;
     bool enableParallel = false;
+    unsigned int threadCount = 0;
 };
 
 struct FlowControlParam
