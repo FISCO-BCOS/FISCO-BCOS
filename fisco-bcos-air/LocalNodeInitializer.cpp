@@ -37,6 +37,7 @@ void LocalNodeInitializer::init(std::string const& _configFilePath, std::string 
     m_logInitializer->initLog(pt);
 
     // load nodeConfig
+    // Note: this NodeConfig is used to create Gateway which not init the nodeName
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     auto nodeConfig = std::make_shared<NodeConfig>(keyFactory);
     nodeConfig->loadConfig(_configFilePath);
@@ -68,13 +69,13 @@ void LocalNodeInitializer::init(std::string const& _configFilePath, std::string 
     topicManager->setLocalClient(m_rpc);
 
     // init handlers
+    auto nodeName = m_nodeInitializer->nodeConfig()->nodeName();
+    auto groupID = m_nodeInitializer->nodeConfig()->groupId();
     auto schedulerImpl =
         std::dynamic_pointer_cast<scheduler::SchedulerImpl>(m_nodeInitializer->scheduler());
     schedulerImpl->registerBlockNumberReceiver(
-        [rpc = m_rpc, nodeConfig](bcos::protocol::BlockNumber number) {
-            BCOS_LOG(INFO) << "Notify blocknumber: " << number;
-            rpc->asyncNotifyBlockNumber(
-                nodeConfig->groupId(), nodeConfig->nodeName(), number, [](bcos::Error::Ptr) {});
+        [rpc = m_rpc, groupID, nodeName](bcos::protocol::BlockNumber number) {
+            rpc->asyncNotifyBlockNumber(groupID, nodeName, number, [](bcos::Error::Ptr) {});
         });
 
     auto txpool = m_nodeInitializer->txPoolInitializer()->txpool();
