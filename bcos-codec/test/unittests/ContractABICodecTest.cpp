@@ -19,7 +19,8 @@
  */
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-codec/abi/ContractABIType.h"
-#include "bcos-framework/testutils/crypto/HashImpl.h"
+#include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/hash/SM3.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/test/unit_test.hpp>
 
@@ -27,6 +28,7 @@ using namespace std;
 using namespace bcos;
 using namespace bcos::codec::abi;
 using namespace bcos::codec;
+using namespace bcos::crypto;
 namespace bcos
 {
 namespace test
@@ -35,7 +37,7 @@ BOOST_FIXTURE_TEST_SUITE(ABITest, TestPromptFixture)
 
 BOOST_AUTO_TEST_CASE(ContractABIType_func0)
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
+    auto hashImpl = std::make_shared<Keccak256>();
     ContractABICodec ct(hashImpl);
     u256 a("0x123");
     std::vector<u256> b;
@@ -75,7 +77,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_func0)
 
 BOOST_AUTO_TEST_CASE(ContractABIType_func1)
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
+    auto hashImpl = std::make_shared<Keccak256>();
     ContractABICodec ct(hashImpl);
     std::string a("dave");
     bool b(true);
@@ -106,7 +108,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_func1)
 
 BOOST_AUTO_TEST_CASE(ContractABIType_func2)
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
+    auto hashImpl = std::make_shared<Keccak256>();
     ContractABICodec ct(hashImpl);
     std::string a("daslfjaklfdaskl");
     u256 b = 1111;
@@ -138,7 +140,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_func2)
 
 BOOST_AUTO_TEST_CASE(ContractABIType_func3)
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
+    auto hashImpl = std::make_shared<Keccak256>();
     ContractABICodec ct(hashImpl);
     std::string a("aaafadsfsfadsfdasf");
     Address b("0x35ef07393b57464e93deb59175ff72e6499450cf");
@@ -172,7 +174,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_func3)
 
 BOOST_AUTO_TEST_CASE(ContractABIType_func4)
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
+    auto hashImpl = std::make_shared<Keccak256>();
     ContractABICodec ct(hashImpl);
     std::string a;
     u256 b;
@@ -203,7 +205,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_func4)
 
 BOOST_AUTO_TEST_CASE(ContractABIType_u256)
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
+    auto hashImpl = std::make_shared<Keccak256>();
     ContractABICodec ct(hashImpl);
 
     u256 x = 0;
@@ -225,7 +227,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_u256)
 
 BOOST_AUTO_TEST_CASE(ContractABIType_s256)
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
+    auto hashImpl = std::make_shared<Keccak256>();
     ContractABICodec ct(hashImpl);
 
     s256 x = 0;
@@ -247,7 +249,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_s256)
 
 BOOST_AUTO_TEST_CASE(ContractABIType_bool)
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
+    auto hashImpl = std::make_shared<Keccak256>();
     ContractABICodec ct(hashImpl);
 
     bool x = true;
@@ -262,7 +264,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_bool)
 
 BOOST_AUTO_TEST_CASE(ContractABIType_addr)
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
+    auto hashImpl = std::make_shared<Keccak256>();
     ContractABICodec ct(hashImpl);
 
     Address x;
@@ -277,7 +279,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_addr)
 
 BOOST_AUTO_TEST_CASE(ContractABIType_string)
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
+    auto hashImpl = std::make_shared<Keccak256>();
     ContractABICodec ct(hashImpl);
 
     std::string x("Hello, world!");
@@ -294,7 +296,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_string)
 
 BOOST_AUTO_TEST_CASE(ContractABIType_array_uint256)
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
+    auto hashImpl = std::make_shared<Keccak256>();
     ContractABICodec ct(hashImpl);
 
     std::array<u256, 3> x{1, 2, 3};
@@ -319,7 +321,7 @@ BOOST_AUTO_TEST_CASE(ContractABIType_array_uint256)
 
 BOOST_AUTO_TEST_CASE(ContractABITest0)
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
+    auto hashImpl = std::make_shared<Keccak256>();
     ContractABICodec ct(hashImpl);
 
     u256 a = 12345;
@@ -372,7 +374,7 @@ BOOST_AUTO_TEST_CASE(ContractABITest1)
         "000000000000000000000000000000000000000000000000000000000000000000000361626300000000000000"
         "00000000000000000000000000000000000000000000";
 
-    auto hashImpl = std::make_shared<Keccak256Hash>();
+    auto hashImpl = std::make_shared<Keccak256>();
     ContractABICodec ct(hashImpl);
     auto rb = ct.abiIn("", a, b, c, d, e);
     auto r = *toHexString(rb);
@@ -411,7 +413,7 @@ BOOST_AUTO_TEST_CASE(ContractABITest2)
         "000000000000000000000000000000000000000000000005000000000000000000000000000000000000000000"
         "0000000000000000000006";
 
-    auto hashImpl = std::make_shared<Keccak256Hash>();
+    auto hashImpl = std::make_shared<Keccak256>();
     ContractABICodec ct(hashImpl);
     auto rb = ct.abiIn("", a);
     auto r = *toHexString(rb);
@@ -427,7 +429,7 @@ BOOST_AUTO_TEST_CASE(ContractABITest2)
 
 BOOST_AUTO_TEST_CASE(ContractABITest3)
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
+    auto hashImpl = std::make_shared<Keccak256>();
     ContractABICodec ct(hashImpl);
     u256 a = 123;
     Address b("0x692a70d2e424a56d2c6c27aa97d1a86395877b3a");
@@ -629,7 +631,7 @@ BOOST_AUTO_TEST_CASE(ContractABI_AbiOutString0)
 {
     u256 u = 111111111;
     std::string s = "test string";
-    auto hashImpl = std::make_shared<Keccak256Hash>();
+    auto hashImpl = std::make_shared<Keccak256>();
     ContractABICodec ct(hashImpl);
     auto in = ct.abiIn("", u, s);
 
@@ -655,7 +657,7 @@ BOOST_AUTO_TEST_CASE(ContractABI_AbiOutString1)
     u256 u = 111111111;
     s256 i = -11111111;
     std::string s = "aaaaaaa";
-    auto hashImpl = std::make_shared<Keccak256Hash>();
+    auto hashImpl = std::make_shared<Keccak256>();
     ContractABICodec ct(hashImpl);
     auto in = ct.abiIn("", s, u, i);
 
@@ -695,7 +697,7 @@ BOOST_AUTO_TEST_CASE(testABIOutBytes)
     BOOST_CHECK(allTypes[1] == "bytes");
     BOOST_CHECK(allTypes[2] == "bytes32");
 
-    auto hashImpl = std::make_shared<Keccak256Hash>();
+    auto hashImpl = std::make_shared<Keccak256>();
     ContractABICodec abi(hashImpl);
     auto paramData = abi.abiIn("", toString32(hashData), plainBytes, toString32(hashData));
     string32 decodedParam1;
@@ -721,7 +723,7 @@ BOOST_AUTO_TEST_CASE(testABIOutBytes)
 
 BOOST_AUTO_TEST_CASE(testABITuple)
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
+    auto hashImpl = std::make_shared<Keccak256>();
     ContractABICodec abi(hashImpl);
     // tuple(vector(tuple(u256,string,string,u256)))
     {

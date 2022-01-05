@@ -21,9 +21,9 @@
 #include "Hash.h"
 #include "bcos-framework/interfaces/crypto/CommonType.h"
 #include "bcos-framework/interfaces/storage/StorageInterface.h"
+#include "bcos-framework/libstorage/StateStorage.h"
 #include "bcos-utilities/ThreadPool.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
-#include "libstorage/StateStorage.h"
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <iostream>

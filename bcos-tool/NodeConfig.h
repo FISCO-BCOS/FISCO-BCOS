@@ -19,9 +19,9 @@
  * @date 2021-06-10
  */
 #pragma once
-#include "../interfaces/consensus/ConsensusNodeInterface.h"
-#include "../interfaces/crypto/KeyFactory.h"
-#include "../interfaces/ledger/LedgerConfig.h"
+#include "bcos-framework/interfaces/consensus/ConsensusNodeInterface.h"
+#include "bcos-framework/interfaces/crypto/KeyFactory.h"
+#include "bcos-framework/interfaces/ledger/LedgerConfig.h"
 #include "Exceptions.h"
 #include "bcos-utilities/Log.h"
 #include <boost/property_tree/ini_parser.hpp>

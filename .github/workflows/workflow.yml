@@ -91,11 +91,11 @@ jobs:
             /Users/runner/.hunter/
             deps/src
             ccache
-          key: hunter-gcc-v7-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: hunter-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            hunter-gcc-v7-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            hunter-gcc-v7-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            hunter-gcc-v7-notest-${{ runner.temp }}-
+            hunter-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            hunter-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            hunter-gcc-v8-notest-${{ runner.temp }}-
       - name: install rust language
         uses: actions-rs/toolchain@v1
         with:
@@ -104,7 +104,7 @@ jobs:
       - name: install Ubuntu dependencies
         run: sudo apt install -y libzstd-dev git curl build-essential cmake ccache
       - name: configure
-        run: cmake . -DTESTS=ON -DHUNTER_CONFIGURATION_TYPES=Debug
+        run: cmake . -DTESTS=ON -DTOOLS=ON -DHUNTER_CONFIGURATION_TYPES=Debug
       - name: compile
         run: make -j3
       - name: test

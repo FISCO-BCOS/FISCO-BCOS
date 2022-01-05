@@ -20,7 +20,8 @@
  */
 
 #include "../src/dag/Abi.h"
-#include "bcos-framework/testutils/crypto/HashImpl.h"
+#include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/hash/SM3.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include <boost/test/unit_test.hpp>
 #include <string>
@@ -28,6 +29,7 @@
 using namespace std;
 using namespace bcos;
 using namespace bcos::executor;
+using namespace bcos::crypto;
 
 namespace bcos
 {
@@ -35,7 +37,7 @@ namespace test
 {
 struct AbiReaderFixture
 {
-    AbiReaderFixture() { hashImpl = std::make_shared<Keccak256Hash>(); }
+    AbiReaderFixture() { hashImpl = std::make_shared<Keccak256>(); }
 
     Hash::Ptr hashImpl;
 };

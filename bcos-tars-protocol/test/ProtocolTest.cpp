@@ -1,3 +1,5 @@
+#include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/hash/SM3.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
@@ -5,12 +7,12 @@
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionSubmitResultImpl.h"
 #include "bcos-tars-protocol/tars/Block.h"
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <bcos-crypto/signature/sm2/SM2Crypto.h>
 #include <bcos-framework/interfaces/crypto/CommonType.h>
 #include <bcos-framework/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/interfaces/protocol/Transaction.h>
-#include <bcos-framework/testutils/crypto/HashImpl.h>
-#include <bcos-framework/testutils/crypto/SignatureImpl.h>
 #include <bcos-protocol/LogEntry.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <tbb/parallel_for.h>
@@ -28,8 +30,8 @@ struct Fixture
     Fixture()
     {
         cryptoSuite =
-            std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::test::Sm3Hash>(),
-                std::make_shared<bcos::test::SM2SignatureImpl>(), nullptr);
+            std::make_shared<bcos::crypto::CryptoSuite>(std::make_shared<bcos::crypto::SM3>(),
+                std::make_shared<bcos::crypto::SM2Crypto>(), nullptr);
 
         blockHeaderFactory =
             std::make_shared<bcostars::protocol::BlockHeaderFactoryImpl>(cryptoSuite);
@@ -50,10 +52,11 @@ struct Fixture
 
 BOOST_FIXTURE_TEST_SUITE(TestProtocol, Fixture)
 
-inline std::vector<bytes> fakeSealerList(
-    std::vector<KeyPairInterface::Ptr>& _keyPairVec, SignatureCrypto::Ptr _signImpl, size_t size)
+inline std::vector<bcos::bytes> fakeSealerList(
+    std::vector<bcos::crypto::KeyPairInterface::Ptr>& _keyPairVec,
+    bcos::crypto::SignatureCrypto::Ptr _signImpl, size_t size)
 {
-    std::vector<bytes> sealerList;
+    std::vector<bcos::bytes> sealerList;
     for (size_t i = 0; i < size; i++)
     {
         auto keyPair = _signImpl->generateKeyPair();
@@ -100,8 +103,8 @@ BOOST_AUTO_TEST_CASE(transaction)
 
 BOOST_AUTO_TEST_CASE(transactionMetaData)
 {
-    bcos::h256 hash(
-        "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9", HashType::FromHex);
+    bcos::h256 hash("5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
+        bcos::crypto::HashType::FromHex);
 
     bcostars::protocol::TransactionMetaDataImpl metaData(
         [inner = bcostars::TransactionMetaData()]() mutable { return &inner; });
@@ -110,7 +113,7 @@ BOOST_AUTO_TEST_CASE(transactionMetaData)
 
     tars::TarsOutputStream<bcostars::protocol::BufferWriterByteVector> output;
     metaData.inner().writeTo(output);
-    bytes buffer;
+    bcos::bytes buffer;
     output.swap(buffer);
 
     bcostars::protocol::TransactionMetaDataImpl metaData2(
@@ -195,7 +198,7 @@ BOOST_AUTO_TEST_CASE(block)
     std::string contractAddress("contract Address!");
 
     // set the blockHeader
-    std::vector<KeyPairInterface::Ptr> keyPairVec;
+    std::vector<bcos::crypto::KeyPairInterface::Ptr> keyPairVec;
     auto sealerList = fakeSealerList(keyPairVec, cryptoSuite->signatureImpl(), 4);
 
     auto header = block->blockHeader();
@@ -204,7 +207,7 @@ BOOST_AUTO_TEST_CASE(block)
     header->setStateRoot(bcos::crypto::HashType("62384386743874"));
     header->setTimestamp(500);
 
-    header->setSealerList(gsl::span<const bytes>(sealerList));
+    header->setSealerList(gsl::span<const bcos::bytes>(sealerList));
     BOOST_CHECK(header->sealerList().size() == 4);
 
     auto signatureList = std::make_shared<std::vector<bcos::protocol::Signature>>();
@@ -436,7 +439,7 @@ BOOST_AUTO_TEST_CASE(blockHeader)
 
     header->setParentInfo(std::move(parentInfoList));
 
-    bytes buffer;
+    bcos::bytes buffer;
     header->encode(buffer);
 
     auto decodedHeader = blockHeaderFactory->createBlockHeader(buffer);

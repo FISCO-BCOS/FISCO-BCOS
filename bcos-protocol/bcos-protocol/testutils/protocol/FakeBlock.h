@@ -19,12 +19,15 @@
  * @date: 2021-03-23
  */
 #pragma once
+#include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/hash/SM3.h"
 #include "bcos-protocol/protobuf/PBBlock.h"
 #include "bcos-protocol/protobuf/PBBlockFactory.h"
 #include "bcos-protocol/testutils/protocol/FakeBlockHeader.h"
 #include "bcos-protocol/testutils/protocol/FakeTransaction.h"
 #include "bcos-protocol/testutils/protocol/FakeTransactionReceipt.h"
-#include "testutils/crypto/HashImpl.h"
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <bcos-crypto/signature/sm2/SM2Crypto.h>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/test/unit_test.hpp>
 using namespace bcos;
@@ -37,15 +40,15 @@ namespace test
 {
 inline CryptoSuite::Ptr createNormalCryptoSuite()
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
-    auto signImpl = std::make_shared<Secp256k1SignatureImpl>();
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signImpl = std::make_shared<Secp256k1Crypto>();
     return std::make_shared<CryptoSuite>(hashImpl, signImpl, nullptr);
 }
 
 inline CryptoSuite::Ptr createSMCryptoSuite()
 {
-    auto hashImpl = std::make_shared<Sm3Hash>();
-    auto signImpl = std::make_shared<SM2SignatureImpl>();
+    auto hashImpl = std::make_shared<SM3>();
+    auto signImpl = std::make_shared<SM2Crypto>();
     return std::make_shared<CryptoSuite>(hashImpl, signImpl, nullptr);
 }
 

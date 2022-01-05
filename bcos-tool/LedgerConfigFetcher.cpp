@@ -19,7 +19,7 @@
  * @date 2021-05-19
  */
 #include "LedgerConfigFetcher.h"
-#include "../interfaces/ledger/LedgerTypeDef.h"
+#include "bcos-framework/interfaces/ledger/LedgerTypeDef.h"
 #include "Exceptions.h"
 #include "bcos-utilities/Common.h"
 using namespace bcos::protocol;

@@ -22,10 +22,11 @@
 #include "FakeBlockHeader.h"
 #include "FakeReceipt.h"
 #include "FakeTransaction.h"
+#include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/hash/SM3.h"
 #include "bcos-framework/interfaces/protocol/TransactionMetaData.h"
 #include "bcos-protocol/protobuf/PBBlock.h"
 #include "bcos-protocol/protobuf/PBBlockFactory.h"
-#include <bcos-framework/testutils/crypto/HashImpl.h>
 #include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::protocol;
@@ -37,8 +38,8 @@ namespace test
 {
 inline CryptoSuite::Ptr createCryptoSuite()
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
-    auto signImpl = std::make_shared<Secp256k1SignatureImpl>();
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signImpl = std::make_shared<Secp256k1Crypto>();
     return std::make_shared<CryptoSuite>(hashImpl, signImpl, nullptr);
 }
 

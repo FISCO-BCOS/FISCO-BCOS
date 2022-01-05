@@ -39,9 +39,9 @@
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "bcos-protocol/TransactionSubmitResultImpl.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-framework/libtool/NodeConfig.h>
 #include <bcos-scheduler/src/ExecutorManager.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
+#include <bcos-tool/NodeConfig.h>
 
 
 using namespace bcos;

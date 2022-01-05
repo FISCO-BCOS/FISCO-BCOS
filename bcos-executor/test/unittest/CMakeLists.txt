@@ -31,7 +31,7 @@ find_package(Boost CONFIG QUIET REQUIRED unit_test_framework)
 find_package(TBB CONFIG QUIET REQUIRED)
 find_package(wedpr-crypto CONFIG REQUIRED)
 
-target_link_libraries(${TEST_BINARY_NAME} executor framework Boost::serialization)
+target_link_libraries(${TEST_BINARY_NAME} ${EXECUTOR_TARGET} ${CRYPTO_TARGET} ${PBPROTOCOL_TARGET} Boost::serialization)
 target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-error -fno-var-tracking -Wno-unused-parameter)
 add_test(NAME test-executor WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
 

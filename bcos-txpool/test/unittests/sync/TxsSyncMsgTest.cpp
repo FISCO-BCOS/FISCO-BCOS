@@ -17,8 +17,9 @@
  * @file TxsSyncMsgTest.h
  */
 #include "FakeTxsSyncMsg.h"
+#include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/hash/SM3.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
-#include "testutils/crypto/HashImpl.h"
 #include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::sync;
@@ -34,7 +35,7 @@ BOOST_AUTO_TEST_CASE(testTxsSyncMsg)
     int32_t type = 100;
     int32_t version = 1000;
     HashList hashList;
-    auto hashImpl = std::make_shared<Keccak256Hash>();
+    auto hashImpl = std::make_shared<Keccak256>();
     for (int i = 0; i < 10; i++)
     {
         hashList.emplace_back(hashImpl->hash(std::to_string(i)));

@@ -19,10 +19,10 @@
  * @date 2021-10-28
  */
 #include "LocalNodeInitializer.h"
-#include <bcos-framework/libtool/NodeConfig.h>
 #include <bcos-gateway/GatewayFactory.h>
 #include <bcos-gateway/libamop/LocalTopicManager.h>
 #include <bcos-rpc/RpcFactory.h>
+#include <bcos-tool/NodeConfig.h>
 using namespace bcos::node;
 using namespace bcos::initializer;
 using namespace bcos::gateway;

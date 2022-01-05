@@ -19,7 +19,8 @@
 #include "bcos-framework/interfaces/consensus/ConsensusNode.h"
 #include "bcos-framework/interfaces/consensus/ConsensusNodeInterface.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
-#include "testutils/crypto/SignatureImpl.h"
+#include <bcos-crypto/signature/key/KeyImpl.h>
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::consensus;
@@ -34,14 +35,14 @@ BOOST_AUTO_TEST_CASE(testConsensusNode)
     // test operator
     std::string node1 = "123";
     uint64_t weight = 1;
-    auto nodeId = std::make_shared<CommonKeyImpl>(bytes(node1.begin(), node1.end()));
+    auto nodeId = std::make_shared<KeyImpl>(bytes(node1.begin(), node1.end()));
     auto consensusNode1 = std::make_shared<ConsensusNode>(nodeId, weight);
 
     std::string node2 = "1234";
-    auto nodeId2 = std::make_shared<CommonKeyImpl>(bytes(node2.begin(), node2.end()));
+    auto nodeId2 = std::make_shared<KeyImpl>(bytes(node2.begin(), node2.end()));
     auto consensusNode2 = std::make_shared<ConsensusNode>(nodeId2, weight);
 
-    auto nodeId3 = std::make_shared<CommonKeyImpl>(bytes(node1.begin(), node1.end()));
+    auto nodeId3 = std::make_shared<KeyImpl>(bytes(node1.begin(), node1.end()));
     auto consensusNode3 = std::make_shared<ConsensusNode>(nodeId3, weight);
 
     // test set

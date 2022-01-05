@@ -29,5 +29,5 @@ find_package(wedpr-crypto CONFIG QUIET REQUIRED)
 find_package(Boost CONFIG QUIET REQUIRED unit_test_framework)
 
 target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-error -Wno-unused-variable)
-target_link_libraries(${TEST_BINARY_NAME} ${TARS_PROTOCOL_TARGET} wedpr-crypto::crypto Boost::unit_test_framework tarscpp::tarsservant)
+target_link_libraries(${TEST_BINARY_NAME} ${TARS_PROTOCOL_TARGET} ${CRYPTO_TARGET} Boost::unit_test_framework tarscpp::tarsservant)
 add_test(NAME test-tars-protocol WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

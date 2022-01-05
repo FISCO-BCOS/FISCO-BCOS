@@ -27,4 +27,4 @@ target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR} ${B
 find_package(wedpr-crypto CONFIG QUIET REQUIRED)
 find_package(Boost CONFIG QUIET REQUIRED unit_test_framework)
 
-target_link_libraries(${TEST_BINARY_NAME} ${PROTOCOL_TARGET} ${PBPROTOCOL_TARGET} ${UTILITIES_TARGET} wedpr-crypto::crypto Boost::unit_test_framework)
+target_link_libraries(${TEST_BINARY_NAME} ${PROTOCOL_TARGET} ${PBPROTOCOL_TARGET} ${UTILITIES_TARGET} ${CRYPTO_TARGET} Boost::unit_test_framework)

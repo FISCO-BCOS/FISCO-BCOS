@@ -29,9 +29,9 @@ find_package(wedpr-crypto CONFIG REQUIRED)
 add_library(${CRYPTO_TARGET} ${SRCS})
 target_link_libraries(${CRYPTO_TARGET} PUBLIC framework wedpr-crypto::crypto wedpr-crypto::extend-crypto)
 
-option(DEMO "compile demo or not" OFF)
+option(TOOLS "compile demo or not" OFF)
 
-if(DEMO)
+if(TOOLS)
 add_subdirectory(demo)
 endif()
 

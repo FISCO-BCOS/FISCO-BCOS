@@ -34,7 +34,7 @@
 #include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/interfaces/storage/Table.h>
 #include <bcos-protocol/ParallelMerkleProof.h>
-#include <bcos-framework/libtool/ConsensusNode.h>
+#include <bcos-tool/ConsensusNode.h>
 #include <tbb/parallel_for.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>

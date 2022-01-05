@@ -24,7 +24,7 @@
 #include "Common.h"
 #include <bcos-framework/interfaces/storage/Common.h>
 #include <bcos-framework/interfaces/storage/Table.h>
-#include <bcos-framework/libtool/ConsensusNode.h>
+#include <bcos-tool/ConsensusNode.h>
 #include <boost/core/ignore_unused.hpp>
 
 namespace bcos

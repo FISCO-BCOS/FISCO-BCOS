@@ -18,16 +18,19 @@
  * @author: yujiechen
  * @date 2021-05-26
  */
+#include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/hash/SM3.h"
 #include "test/unittests/txpool/TxPoolFixture.h"
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <bcos-crypto/signature/sm2/SM2Crypto.h>
 #include <bcos-framework/interfaces/crypto/CryptoSuite.h>
-#include <bcos-framework/testutils/crypto/HashImpl.h>
-#include <bcos-framework/testutils/crypto/SignatureImpl.h>
 #include <bcos-protocol/testutils/protocol/FakeTransaction.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos::txpool;
 using namespace bcos::sync;
+using namespace bcos::crypto;
 
 namespace bcos
 {
@@ -58,8 +61,8 @@ void importTransactions(size_t _txsNum, CryptoSuite::Ptr _cryptoSuite, TxPoolFix
 
 void testTransactionSync(bool _onlyTxsStatus = false)
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
-    auto signatureImpl = std::make_shared<Secp256k1SignatureImpl>();
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
     auto keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
     std::string groupId = "test-group";

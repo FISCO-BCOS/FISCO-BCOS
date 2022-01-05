@@ -19,10 +19,11 @@
  */
 
 #pragma once
-#include "bcos-utilities/Common.h"
+#include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/hash/SM3.h"
 #include "bcos-protocol/protobuf/PBTransactionReceiptFactory.h"
-#include <bcos-framework/testutils/crypto/HashImpl.h>
-#include <bcos-framework/testutils/crypto/SignatureImpl.h>
+#include "bcos-utilities/Common.h"
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -71,8 +72,8 @@ inline TransactionReceipt::Ptr testPBTransactionReceipt(
 
 inline ReceiptsPtr fakeReceipts(int _size)
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
-    auto signatureImpl = std::make_shared<Secp256k1SignatureImpl>();
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
 
     ReceiptsPtr receipts = std::make_shared<Receipts>();

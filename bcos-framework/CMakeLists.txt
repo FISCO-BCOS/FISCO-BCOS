@@ -24,7 +24,7 @@ project(bcos-framework VERSION ${VERSION})
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
-file(GLOB_RECURSE SRCS libexecutor/*.cpp libstorage/*.cpp libtool/*.cpp)
+file(GLOB_RECURSE SRCS libexecutor/*.cpp libstorage/*.cpp)
 
 find_package(TBB CONFIG REQUIRED)
 find_package(Boost CONFIG REQUIRED log chrono system filesystem iostreams thread)

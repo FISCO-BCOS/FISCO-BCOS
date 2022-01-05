@@ -23,6 +23,10 @@
 #include "bcos-protocol/testutils/protocol/FakeTransaction.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/hash/SM3.h>
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <bcos-crypto/signature/sm2/SM2Crypto.h>
 #include <boost/test/tools/old/interface.hpp>
 
 using namespace bcos;
@@ -36,8 +40,8 @@ namespace test
 BOOST_FIXTURE_TEST_SUITE(PBTransactionTest, TestPromptFixture)
 BOOST_AUTO_TEST_CASE(testNormalTransaction)
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
-    auto signatureImpl = std::make_shared<Secp256k1SignatureImpl>();
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
     auto keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
     auto to = cryptoSuite->calculateAddress(keyPair->publicKey());
@@ -53,8 +57,8 @@ BOOST_AUTO_TEST_CASE(testNormalTransaction)
 }
 BOOST_AUTO_TEST_CASE(testSMTransaction)
 {
-    auto hashImpl = std::make_shared<Sm3Hash>();
-    auto signatureImpl = std::make_shared<SM2SignatureImpl>();
+    auto hashImpl = std::make_shared<SM3>();
+    auto signatureImpl = std::make_shared<SM2Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
     auto keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
     auto to = Address();
@@ -103,8 +107,8 @@ void testBlock(CryptoSuite::Ptr cryptoSuite)
 
 BOOST_AUTO_TEST_CASE(testTransactionWithRawData)
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
-    auto signatureImpl = std::make_shared<Secp256k1SignatureImpl>();
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
 
     testBlock(cryptoSuite);
@@ -137,8 +141,8 @@ BOOST_AUTO_TEST_CASE(testTransactionWithRawData)
 
 BOOST_AUTO_TEST_CASE(testSMTransactionWithRawData)
 {
-    auto hashImpl = std::make_shared<Sm3Hash>();
-    auto signatureImpl = std::make_shared<SM2SignatureImpl>();
+    auto hashImpl = std::make_shared<SM3>();
+    auto signatureImpl = std::make_shared<SM2Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
 
     testBlock(cryptoSuite);

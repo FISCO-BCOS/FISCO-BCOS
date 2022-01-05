@@ -18,9 +18,10 @@
  * @date 2021-04-12
  */
 #pragma once
+#include "bcos-codec/scale/ScaleEncoderStream.h"
 #include "bcos-utilities/DataConvertUtility.h"
 #include "bcos-utilities/Exceptions.h"
-#include "bcos-codec/scale/ScaleEncoderStream.h"
+#include <bcos-framework/interfaces/crypto/CommonType.h>
 #include <tbb/parallel_for.h>
 
 namespace bcos
@@ -65,22 +66,23 @@ void decodePBObject(T _pbObject, bytesConstRef _data)
     }
 }
 
-inline std::vector<bcos::bytes> encodeToCalculateRoot(size_t _listSize, std::function<bcos::crypto::HashType(size_t _index)> _hashFunc)
-    {
-        std::vector<bytes> encodedList(_listSize);
-        tbb::parallel_for(
-            tbb::blocked_range<size_t>(0, _listSize), [&](const tbb::blocked_range<size_t>& _r) {
-                for (auto i = _r.begin(); i < _r.end(); ++i)
-                {
-                    bcos::codec::scale::ScaleEncoderStream stream;
-                    stream << i;
-                    bytes encodedData = stream.data();
-                    auto hash = _hashFunc(i);
-                    encodedData.insert(encodedData.end(), hash.begin(), hash.end());
-                    encodedList[i] = std::move(encodedData);
-                }
-            });
-        return encodedList;
-    }
+inline std::vector<bcos::bytes> encodeToCalculateRoot(
+    size_t _listSize, std::function<bcos::crypto::HashType(size_t _index)> _hashFunc)
+{
+    std::vector<bytes> encodedList(_listSize);
+    tbb::parallel_for(
+        tbb::blocked_range<size_t>(0, _listSize), [&](const tbb::blocked_range<size_t>& _r) {
+            for (auto i = _r.begin(); i < _r.end(); ++i)
+            {
+                bcos::codec::scale::ScaleEncoderStream stream;
+                stream << i;
+                bytes encodedData = stream.data();
+                auto hash = _hashFunc(i);
+                encodedData.insert(encodedData.end(), hash.begin(), hash.end());
+                encodedList[i] = std::move(encodedData);
+            }
+        });
+    return encodedList;
+}
 }  // namespace protocol
 }  // namespace bcos

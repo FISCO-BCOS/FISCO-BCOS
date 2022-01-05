@@ -21,6 +21,10 @@
 #include "bcos-protocol/Common.h"
 #include "bcos-protocol/testutils/protocol/FakeTransactionReceipt.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/hash/SM3.h>
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <bcos-crypto/signature/sm2/SM2Crypto.h>
 
 using namespace bcos;
 using namespace bcos::protocol;
@@ -33,13 +37,13 @@ namespace test
 BOOST_FIXTURE_TEST_SUITE(PBTransationReceiptTest, TestPromptFixture)
 BOOST_AUTO_TEST_CASE(testNormalPBransactionReceipt)
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
+    auto hashImpl = std::make_shared<Keccak256>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, nullptr, nullptr);
     testPBTransactionReceipt(cryptoSuite);
 }
 BOOST_AUTO_TEST_CASE(testSMPBTransactionReceipt)
 {
-    auto hashImpl = std::make_shared<Sm3Hash>();
+    auto hashImpl = std::make_shared<SM3>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, nullptr, nullptr);
     testPBTransactionReceipt(cryptoSuite);
 }
@@ -47,7 +51,7 @@ BOOST_AUTO_TEST_CASE(testSMPBTransactionReceipt)
 BOOST_AUTO_TEST_CASE(testNormalPBTransactionRecept)
 {
     std::cout << "###### testNormalPBTransactionRecept" << std::endl;
-    auto hashImpl = std::make_shared<Keccak256Hash>();
+    auto hashImpl = std::make_shared<Keccak256>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, nullptr, nullptr);
 #if 0
 // FIXME: correct this test when the receipt is fixed
@@ -100,7 +104,7 @@ BOOST_AUTO_TEST_CASE(testNormalPBTransactionRecept)
 BOOST_AUTO_TEST_CASE(testSMPBTransactionRecept)
 {
     std::cout << "###### testSMPBTransactionRecept" << std::endl;
-    auto hashImpl = std::make_shared<Sm3Hash>();
+    auto hashImpl = std::make_shared<SM3>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, nullptr, nullptr);
 #if 0
 // FIXME: correct this test when the receipt is fixed

@@ -18,9 +18,10 @@
  * @date: 2021-03-16
  */
 #pragma once
+#include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/hash/SM3.h"
 #include "bcos-protocol/protobuf/PBTransactionReceiptFactory.h"
 #include "bcos-utilities/Common.h"
-#include "testutils/crypto/HashImpl.h"
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;

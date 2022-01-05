@@ -21,8 +21,6 @@
 #include "bcos-protocol/Common.h"
 #include "bcos-protocol/protobuf/PBBlockHeaderFactory.h"
 #include "bcos-utilities/Common.h"
-#include "testutils/crypto/HashImpl.h"
-#include "testutils/crypto/SignatureImpl.h"
 #include <bcos-framework/interfaces/protocol/Exceptions.h>
 #include <tbb/parallel_invoke.h>
 #include <boost/test/unit_test.hpp>

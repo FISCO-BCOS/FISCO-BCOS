@@ -20,8 +20,6 @@
 #pragma once
 #include "bcos-protocol/protobuf/PBTransactionFactory.h"
 #include "bcos-utilities/Common.h"
-#include "testutils/crypto/HashImpl.h"
-#include "testutils/crypto/SignatureImpl.h"
 #include <bcos-framework/interfaces/protocol/Exceptions.h>
 #include <boost/test/unit_test.hpp>
 

@@ -7,12 +7,12 @@
  * @date 2021-11-05
  */
 
-#include "../bcos-storage/RocksDBStorage.h"
 #include "bcos-framework/interfaces/storage/StorageInterface.h"
 #include "boost/filesystem.hpp"
 #include "rocksdb/db.h"
 #include "rocksdb/options.h"
 #include "rocksdb/slice.h"
+#include <bcos-storage/src/RocksDBStorage.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>

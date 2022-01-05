@@ -27,8 +27,8 @@
 #include <bcos-framework/interfaces/ledger/LedgerInterface.h>
 #include <bcos-framework/interfaces/storage/StorageInterface.h>
 #include <bcos-framework/libexecutor/NativeExecutionMessage.h>
-#include <bcos-framework/libtool/NodeConfig.h>
 #include <bcos-scheduler/src/SchedulerImpl.h>
+#include <bcos-tool/NodeConfig.h>
 
 namespace bcos::initializer
 {

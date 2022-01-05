@@ -24,8 +24,8 @@
 #include <bcos-codec/abi/ContractABICodec.h>
 #include <bcos-framework/interfaces/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>
-#include <bcos-framework/libtool/NodeConfig.h>
 #include <bcos-ledger/src/libledger/Ledger.h>
+#include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/Common.h>
 
 using namespace bcos;

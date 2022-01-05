@@ -25,8 +25,8 @@
 #include <bcos-framework/interfaces/gateway/GatewayInterface.h>
 #include <bcos-framework/interfaces/sync/BlockSyncInterface.h>
 #include <bcos-framework/interfaces/txpool/TxPoolInterface.h>
-#include <bcos-framework/libtool/NodeConfig.h>
 #include <bcos-front/FrontServiceFactory.h>
+#include <bcos-tool/NodeConfig.h>
 
 namespace bcos
 {

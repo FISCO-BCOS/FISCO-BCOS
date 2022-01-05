@@ -19,8 +19,8 @@
  * @date 2021-05-19
  */
 #pragma once
-#include "../interfaces/ledger/LedgerConfig.h"
-#include "../interfaces/ledger/LedgerInterface.h"
+#include "bcos-framework/interfaces/ledger/LedgerConfig.h"
+#include "bcos-framework/interfaces/ledger/LedgerInterface.h"
 #include "bcos-utilities/Log.h"
 
 #define TOOL_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("TOOL")

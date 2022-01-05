@@ -22,18 +22,19 @@
 #include "../mock/MockTransactionalStorage.h"
 #include "../mock/MockTxPool.h"
 #include "Common.h"
+#include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/hash/SM3.h"
 #include "bcos-framework/interfaces/crypto/CommonType.h"
 #include "bcos-framework/interfaces/crypto/CryptoSuite.h"
 #include "bcos-framework/interfaces/crypto/Hash.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/protocol/Transaction.h"
+#include "bcos-framework/libstorage/StateStorage.h"
 #include "bcos-protocol/protobuf/PBBlockHeader.h"
 #include "executor/TransactionExecutor.h"
-#include "libstorage/StateStorage.h"
 #include "precompiled/PrecompiledCodec.h"
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/libexecutor/NativeExecutionMessage.h>
-#include <bcos-framework/testutils/crypto/HashImpl.h>
-#include <bcos-framework/testutils/crypto/SignatureImpl.h>
 #include <bcos-protocol/testutils/protocol/FakeBlockHeader.h>
 #include <bcos-protocol/testutils/protocol/FakeTransaction.h>
 #include <tbb/task_group.h>
@@ -53,6 +54,7 @@ using namespace std;
 using namespace bcos;
 using namespace bcos::executor;
 using namespace bcos::storage;
+using namespace bcos::crypto;
 
 namespace bcos
 {
@@ -62,9 +64,9 @@ struct TransactionExecutorFixture
 {
     TransactionExecutorFixture()
     {
-        hashImpl = std::make_shared<Keccak256Hash>();
+        hashImpl = std::make_shared<Keccak256>();
         assert(hashImpl);
-        auto signatureImpl = std::make_shared<Secp256k1SignatureImpl>();
+        auto signatureImpl = std::make_shared<Secp256k1Crypto>();
         assert(signatureImpl);
         cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
 
@@ -96,7 +98,7 @@ struct TransactionExecutorFixture
     CryptoSuite::Ptr cryptoSuite;
     std::shared_ptr<MockTxPool> txpool;
     std::shared_ptr<MockTransactionalStorage> backend;
-    std::shared_ptr<Keccak256Hash> hashImpl;
+    std::shared_ptr<Keccak256> hashImpl;
 
     KeyPairInterface::Ptr keyPair;
     int64_t gas = 3000000;

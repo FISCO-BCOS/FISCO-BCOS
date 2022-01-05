@@ -29,5 +29,5 @@ if (TESTS)
     # fetch bcos-test    
     enable_testing()
     set(CTEST_OUTPUT_ON_FAILURE TRUE)
-    #add_subdirectory(test)
+    add_subdirectory(test)
 endif()

@@ -1,6 +1,8 @@
 #include "BlockExecutive.h"
 #include "ExecutorManager.h"
 #include "SchedulerImpl.h"
+#include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/hash/SM3.h"
 #include "bcos-framework/interfaces/crypto/CryptoSuite.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/ledger/LedgerInterface.h"
@@ -10,10 +12,9 @@
 #include "mock/MockExecutor.h"
 #include "mock/MockExecutor3.h"
 #include "mock/MockLedger2.h"
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/interfaces/storage/Table.h>
 #include <bcos-framework/libexecutor/NativeExecutionMessage.h>
-#include <bcos-framework/testutils/crypto/HashImpl.h>
-#include <bcos-framework/testutils/crypto/SignatureImpl.h>
 #include <bcos-tars-protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/BlockHeaderFactoryImpl.h>
 #include <bcos-tars-protocol/TransactionFactoryImpl.h>
@@ -33,8 +34,8 @@ struct BlockExecutiveFixture
 {
     BlockExecutiveFixture()
     {
-        hashImpl = std::make_shared<Keccak256Hash>();
-        signature = std::make_shared<Secp256k1SignatureImpl>();
+        hashImpl = std::make_shared<Keccak256>();
+        signature = std::make_shared<Secp256k1Crypto>();
         suite = std::make_shared<bcos::crypto::CryptoSuite>(hashImpl, signature, nullptr);
 
         ledger = std::make_shared<MockLedger2>();

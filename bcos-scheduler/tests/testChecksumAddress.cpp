@@ -1,6 +1,8 @@
 #include "ChecksumAddress.h"
 #include "ExecutorManager.h"
 #include "SchedulerImpl.h"
+#include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/hash/SM3.h"
 #include "bcos-framework/interfaces/crypto/CryptoSuite.h"
 #include "bcos-framework/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
@@ -24,8 +26,6 @@
 #include "mock/MockTransactionalStorage.h"
 #include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/libexecutor/NativeExecutionMessage.h>
-#include <bcos-framework/testutils/crypto/HashImpl.h>
-#include <bcos-framework/testutils/crypto/SignatureImpl.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
@@ -38,11 +38,14 @@
 #include <future>
 #include <memory>
 
+using namespace bcos;
+using namespace bcos::crypto;
+
 namespace bcos::test
 {
 struct ChecksumFixture
 {
-    ChecksumFixture() { hashImpl = std::make_shared<Keccak256Hash>(); }
+    ChecksumFixture() { hashImpl = std::make_shared<Keccak256>(); }
 
     bcos::crypto::Hash::Ptr hashImpl;
 

@@ -1,7 +1,7 @@
 #------------------------------------------------------------------------------
-# Top-level CMake file for bcos-rpc
+# Top-level CMake file for bcos-tool
 # ------------------------------------------------------------------------------
-# Copyright (C) 2021 bcos-rpc
+# Copyright (C) 2021 bcos-tool
 # SPDX-License-Identifier: Apache-2.0
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,28 +20,19 @@ cmake_minimum_required(VERSION 3.10)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment version")
 
 include(Version)
-project(bcos-rpc VERSION ${VERSION})
+project(bcos-tool VERSION ${VERSION})
 
-find_package(jsoncpp CONFIG REQUIRED)
-find_package(tarscpp CONFIG REQUIRED)
-find_package(OpenSSL REQUIRED)
+file(GLOB_RECURSE SRCS *.cpp)
+add_library(${TOOL_TARGET} ${SRCS})
+target_compile_options(${TOOL_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
+target_link_libraries(${TOOL_TARGET} PUBLIC ${UTILITIES_TARGET})
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSTATICLIB")
-
-file(GLOB_RECURSE SRCS bcos-rpc/*.cpp)
-
-add_library(${RPC_TARGET} ${SRCS} ${HEADERS})
-target_compile_options(${RPC_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
-target_link_libraries(${RPC_TARGET} PUBLIC framework ${PROTOCOL_TARGET} tarscpp::tarsservant tarscpp::tarsutil ${BOOSTSSL_TARGET} OpenSSL::SSL OpenSSL::Crypto ${TARS_PROTOCOL_TARGET} jsoncpp_lib_static ${CRYPTO_TARGET})
-
-if (TESTS)
-    enable_testing()
-    set(CTEST_OUTPUT_ON_FAILURE TRUE)
-    add_subdirectory(test)
-endif()
+# for doxygen
+# include(BuildDocs)
+# buildDoc(bcos-tool-doc)
 
 # for code coverage
 if (COVERAGE)
     include(Coverage)
-    config_coverage("rpc-coverage" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_SOURCE_DIR}/test/mock**' '${CMAKE_SOURCE_DIR}/test/main**'")
+    config_coverage("tool-cov" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_CURRENT_SOURCE_DIR}/test/bcos-test*'")
 endif ()

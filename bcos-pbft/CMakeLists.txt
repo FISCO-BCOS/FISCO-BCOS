@@ -52,7 +52,7 @@ file(GLOB_RECURSE SRCS bcos-pbft/*.cpp)
 find_package(Protobuf CONFIG REQUIRED)
 
 add_library(${PBFT_TARGET} ${SRCS} ${MESSAGES_SRCS})
-target_link_libraries(${PBFT_TARGET} PUBLIC framework)
+target_link_libraries(${PBFT_TARGET} PUBLIC ${UTILITIES_TARGET} ${TOOL_TARGET})
 
 if (TESTS)
     # fetch bcos-test    

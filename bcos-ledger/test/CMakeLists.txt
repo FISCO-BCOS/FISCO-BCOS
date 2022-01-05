@@ -31,8 +31,6 @@ hunter_add_package(wedpr-crypto)
 find_package(wedpr-crypto CONFIG QUIET REQUIRED)
 find_package(Boost CONFIG REQUIRED unit_test_framework)
 
-target_link_libraries(${TEST_BINARY_NAME} ${LEDGER_TARGET}
-        framework
-        Boost::unit_test_framework wedpr-crypto::crypto)
+target_link_libraries(${TEST_BINARY_NAME} ${LEDGER_TARGET} ${CRYPTO_TARGET} ${PBPROTOCOL_TARGET} Boost::unit_test_framework)
 target_compile_definitions(${TEST_BINARY_NAME} PUBLIC _TESTS_)
 add_test(NAME test-ledger WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

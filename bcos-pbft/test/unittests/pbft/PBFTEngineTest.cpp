@@ -18,11 +18,12 @@
  * @author: yujiechen
  * @date 2021-05-31
  */
+#include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/hash/SM3.h"
 #include "test/unittests/pbft/PBFTFixture.h"
 #include "test/unittests/protocol/FakePBFTMessage.h"
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/interfaces/crypto/CryptoSuite.h>
-#include <bcos-framework/testutils/crypto/HashImpl.h>
-#include <bcos-framework/testutils/crypto/SignatureImpl.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 
@@ -50,8 +51,8 @@ inline bool shouldExit(std::map<IndexType, PBFTFixture::Ptr>& _consensusNodes,
 
 void testPBFTEngineWithFaulty(size_t _consensusNodes, size_t _connectedNodes)
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
-    auto signatureImpl = std::make_shared<Secp256k1SignatureImpl>();
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
 
     BlockNumber currentBlockNumber = 19;
@@ -141,8 +142,8 @@ BOOST_AUTO_TEST_CASE(testPBFTEngineWithAllNonFaulty)
 
 BOOST_AUTO_TEST_CASE(testHandlePrePrepareMsg)
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
-    auto signatureImpl = std::make_shared<Secp256k1SignatureImpl>();
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
 
     size_t consensusNodeSize = 2;

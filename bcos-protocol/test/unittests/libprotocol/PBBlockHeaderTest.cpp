@@ -20,7 +20,10 @@
  */
 #include "bcos-protocol/testutils/protocol/FakeBlockHeader.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
-
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/hash/SM3.h>
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <bcos-crypto/signature/sm2/SM2Crypto.h>
 using namespace bcos;
 using namespace bcos::protocol;
 using namespace bcos::crypto;
@@ -32,24 +35,24 @@ namespace test
 BOOST_FIXTURE_TEST_SUITE(PBBlockHeaderTest, TestPromptFixture)
 BOOST_AUTO_TEST_CASE(testNormalPBBlockHeader)
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
-    auto signImpl = std::make_shared<Secp256k1SignatureImpl>();
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signImpl = std::make_shared<Secp256k1Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signImpl, nullptr);
     testPBBlockHeader(cryptoSuite);
 }
 
 BOOST_AUTO_TEST_CASE(testSMPBBlockHeader)
 {
-    auto hashImpl = std::make_shared<Sm3Hash>();
-    auto signImpl = std::make_shared<SM2SignatureImpl>();
+    auto hashImpl = std::make_shared<SM3>();
+    auto signImpl = std::make_shared<SM2Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signImpl, nullptr);
     testPBBlockHeader(cryptoSuite);
 }
 
 BOOST_AUTO_TEST_CASE(testRawPBBlockHeader)
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
-    auto signImpl = std::make_shared<Secp256k1SignatureImpl>();
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signImpl = std::make_shared<Secp256k1Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signImpl, nullptr);
 // FIXME: correct this test when the blockHeader is fixed
 #if 0
@@ -124,8 +127,8 @@ BOOST_AUTO_TEST_CASE(testRawPBBlockHeader)
 }
 BOOST_AUTO_TEST_CASE(testRawSMPBBlockHeader)
 {
-    auto hashImpl = std::make_shared<Sm3Hash>();
-    auto signImpl = std::make_shared<SM2SignatureImpl>();
+    auto hashImpl = std::make_shared<SM3>();
+    auto signImpl = std::make_shared<SM2Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signImpl, nullptr);
     // FIXME: correct this test when the blockHeader is fixed
 #if 0

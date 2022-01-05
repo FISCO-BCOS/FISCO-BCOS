@@ -19,7 +19,7 @@
  * @date 2021-06-10
  */
 #pragma once
-#include <bcos-framework/libtool/Exceptions.h>
+#include <bcos-tool/Exceptions.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/FileUtility.h>

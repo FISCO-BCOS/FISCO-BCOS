@@ -28,5 +28,5 @@ target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR})
 find_package(Boost CONFIG REQUIRED unit_test_framework)
 find_package(wedpr-crypto CONFIG REQUIRED)
 
-target_link_libraries(${TEST_BINARY_NAME} ${PBFT_TARGET} framework Boost::unit_test_framework wedpr-crypto::crypto)
+target_link_libraries(${TEST_BINARY_NAME} ${PBFT_TARGET} framework ${CRYPTO_TARGET} ${PBPROTOCOL_TARGET} Boost::unit_test_framework)
 # add_test(NAME test-pbft WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

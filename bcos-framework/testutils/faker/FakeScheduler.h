@@ -19,8 +19,8 @@
  * @date 2021-09-07
  */
 #pragma once
-#include "../../interfaces/dispatcher/SchedulerInterface.h"
-#include "../../testutils/faker/FakeLedger.h"
+#include "bcos-framework//testutils/faker/FakeLedger.h"
+#include "bcos-framework/interfaces/dispatcher/SchedulerInterface.h"
 
 using namespace bcos;
 using namespace bcos::scheduler;

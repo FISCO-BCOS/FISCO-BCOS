@@ -19,9 +19,9 @@
  * @date 2021-06-10
  */
 #include "NodeConfig.h"
-#include "../interfaces/consensus/ConsensusNode.h"
-#include "../interfaces/ledger/LedgerTypeDef.h"
-#include "../interfaces/protocol/ServiceDesc.h"
+#include "bcos-framework/interfaces/consensus/ConsensusNode.h"
+#include "bcos-framework/interfaces/ledger/LedgerTypeDef.h"
+#include "bcos-framework/interfaces/protocol/ServiceDesc.h"
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>

@@ -26,7 +26,7 @@ endif()
 set(TEST_BINARY_NAME test-bcos-gateway)
 # config_test_cases("" "${SOURCES}" bin/${TEST_BINARY_NAME} "")
 
-if (BUILD_TEST_EXEC)
+if (TOOLS)
     add_subdirectory(main)
 endif()
 
@@ -40,5 +40,5 @@ if (APPLE)
 # target_compile_options(${TEST_BINARY_NAME} PRIVATE -faligned-allocation)
 endif()
 
-target_link_libraries(${TEST_BINARY_NAME} gateway Boost::unit_test_framework ${FRONT_TARGET} tarscpp::tarsservant)
+target_link_libraries(${TEST_BINARY_NAME} ${GATEWAY_TARGET} Boost::unit_test_framework ${FRONT_TARGET} tarscpp::tarsservant)
 # add_test(NAME test-gateway WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

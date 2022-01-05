@@ -50,4 +50,6 @@ set(RPC_TARGET "rpc")
 # bcos-boostssl
 set(BOOSTSSL_TARGET "boostssl")
 
+# bcos-tool
+set(TOOL_TARGET "tool")
 
