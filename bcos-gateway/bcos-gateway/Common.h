@@ -20,7 +20,7 @@
 #pragma once
 #include "libnetwork/Common.h"
 #include <bcos-framework/interfaces/protocol/ServiceDesc.h>
-#include <bcos-framework/libutilities/Exceptions.h>
+#include <bcos-utilities/Exceptions.h>
 #include <tarscpp/servant/Application.h>
 
 #define GATEWAY_LOG(LEVEL) BCOS_LOG(LEVEL) << "[Gateway][Gateway]"

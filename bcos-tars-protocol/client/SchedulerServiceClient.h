@@ -21,7 +21,7 @@
 #include "bcos-tars-protocol/tars/SchedulerService.h"
 #include <bcos-framework/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/interfaces/dispatcher/SchedulerInterface.h>
-#include <bcos-framework/libutilities/Common.h>
+#include <bcos-utilities/Common.h>
 namespace bcostars
 {
 class SchedulerServiceClient : public bcos::scheduler::SchedulerInterface

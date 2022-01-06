@@ -31,18 +31,17 @@
 #include "ParallelExecutor.h"
 #include "SchedulerInitializer.h"
 #include "StorageInitializer.h"
-#include "include/bcos-executor/LRUStorage.h"
-#include "interfaces/crypto/CommonType.h"
-#include "interfaces/executor/ParallelTransactionExecutorInterface.h"
-#include "interfaces/protocol/ProtocolTypeDef.h"
-#include "interfaces/rpc/RPCInterface.h"
-#include "libexecutor/NativeExecutionMessage.h"
-#include "libprotocol/TransactionSubmitResultFactoryImpl.h"
-#include "libprotocol/TransactionSubmitResultImpl.h"
+#include "bcos-framework/interfaces/crypto/CommonType.h"
+#include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
+#include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
+#include "bcos-framework/interfaces/rpc/RPCInterface.h"
+#include "bcos-framework/libexecutor/NativeExecutionMessage.h"
+#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
+#include "bcos-protocol/TransactionSubmitResultImpl.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-framework/libtool/NodeConfig.h>
 #include <bcos-scheduler/src/ExecutorManager.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
+#include <bcos-tool/NodeConfig.h>
 
 
 using namespace bcos;
@@ -57,7 +56,8 @@ void Initializer::initMicroServiceNode(std::string const& _configFilePath,
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     auto gatewayPrx = Application::getCommunicator()->stringToProxy<bcostars::GatewayServicePrx>(
         m_nodeConfig->gatewayServiceName());
-    auto gateWay = std::make_shared<bcostars::GatewayServiceClient>(gatewayPrx, keyFactory);
+    auto gateWay = std::make_shared<bcostars::GatewayServiceClient>(
+        gatewayPrx, m_nodeConfig->gatewayServiceName(), keyFactory);
     init(bcos::initializer::NodeArchitectureType::PRO, _configFilePath, _genesisFile, gateWay,
         false);
 }
@@ -144,12 +144,13 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
         m_frontServiceInitializer->init(m_pbftInitializer->pbft(), m_pbftInitializer->blockSync(),
             m_txpoolInitializer->txpool());
 
-        std::shared_ptr<bcos::executor::LRUStorage> cache = nullptr;
+        std::shared_ptr<bcos::storage::LRUStateStorage> cache = nullptr;
         if (m_nodeConfig->enableLRUCacheStorage())
         {
-            cache = std::make_shared<bcos::executor::LRUStorage>(storage);
-            cache->start();
-            BCOS_LOG(INFO) << LOG_DESC("initNode: enableLRUCacheStorage");
+            cache = std::make_shared<bcos::storage::LRUStateStorage>(storage);
+            cache->setMaxCapacity(m_nodeConfig->cacheSize());
+            BCOS_LOG(INFO) << "initNode: enableLRUCacheStorage, size: "
+                           << m_nodeConfig->cacheSize();
         }
         else
         {

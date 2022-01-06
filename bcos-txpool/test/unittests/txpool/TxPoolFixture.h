@@ -19,21 +19,21 @@
  * @date 2021-05-25
  */
 #pragma once
+#include "bcos-protocol/protobuf/PBTransactionMetaData.h"
 #include "bcos-txpool/TxPoolConfig.h"
 #include "bcos-txpool/TxPoolFactory.h"
 #include "bcos-txpool/sync/TransactionSync.h"
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
 #include "bcos-txpool/txpool/validator/TxValidator.h"
-#include "libprotocol/protobuf/PBTransactionMetaData.h"
 #include <bcos-framework/interfaces/consensus/ConsensusNode.h>
-#include <bcos-framework/libprotocol/TransactionSubmitResultFactoryImpl.h>
-#include <bcos-framework/libprotocol/protobuf/PBBlockFactory.h>
-#include <bcos-framework/libprotocol/protobuf/PBBlockHeaderFactory.h>
-#include <bcos-framework/libprotocol/protobuf/PBTransactionFactory.h>
-#include <bcos-framework/libprotocol/protobuf/PBTransactionReceiptFactory.h>
 #include <bcos-framework/testutils/faker/FakeFrontService.h>
 #include <bcos-framework/testutils/faker/FakeLedger.h>
 #include <bcos-framework/testutils/faker/FakeSealer.h>
+#include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
+#include <bcos-protocol/protobuf/PBBlockFactory.h>
+#include <bcos-protocol/protobuf/PBBlockHeaderFactory.h>
+#include <bcos-protocol/protobuf/PBTransactionFactory.h>
+#include <bcos-protocol/protobuf/PBTransactionReceiptFactory.h>
 #include <boost/test/unit_test.hpp>
 #include <chrono>
 #include <thread>

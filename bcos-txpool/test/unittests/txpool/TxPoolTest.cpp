@@ -18,18 +18,20 @@
  * @author: yujiechen
  * @date 2021-05-26
  */
+#include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/hash/SM3.h"
 #include "test/unittests/txpool/TxPoolFixture.h"
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/interfaces/protocol/CommonError.h>
-#include <bcos-framework/testutils/TestPromptFixture.h>
-#include <bcos-framework/testutils/crypto/HashImpl.h>
-#include <bcos-framework/testutils/crypto/SignatureImpl.h>
-#include <bcos-framework/testutils/protocol/FakeTransaction.h>
+#include <bcos-protocol/testutils/protocol/FakeTransaction.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::txpool;
 using namespace bcos::protocol;
+using namespace bcos::crypto;
 
 namespace bcos
 {
@@ -455,24 +457,24 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
 
 BOOST_AUTO_TEST_CASE(testTxPoolInitAndSubmitTransaction)
 {
-    auto hashImpl = std::make_shared<Keccak256Hash>();
-    auto signatureImpl = std::make_shared<Secp256k1SignatureImpl>();
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto signatureImpl = std::make_shared<Secp256k1Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
     txPoolInitAndSubmitTransactionTest(false, cryptoSuite);
 }
 
 BOOST_AUTO_TEST_CASE(testSMTxPoolInitAndSubmitTransaction)
 {
-    auto hashImpl = std::make_shared<Sm3Hash>();
-    auto signatureImpl = std::make_shared<SM2SignatureImpl>();
+    auto hashImpl = std::make_shared<SM3>();
+    auto signatureImpl = std::make_shared<SM2Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
     txPoolInitAndSubmitTransactionTest(true, cryptoSuite);
 }
 
 BOOST_AUTO_TEST_CASE(fillWithSubmit)
 {
-    // auto hashImpl = std::make_shared<Sm3Hash>();
-    // auto signatureImpl = std::make_shared<SM2SignatureImpl>();
+    // auto hashImpl = std::make_shared<SM3>();
+    // auto signatureImpl = std::make_shared<SM2Crypto>();
     // auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
 
     // auto keyPair = signatureImpl->generateKeyPair();

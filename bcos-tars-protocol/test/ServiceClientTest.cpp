@@ -24,7 +24,7 @@
 #include "bcos-tars-protocol/client/RpcServiceClient.h"
 #include "bcos-tars-protocol/client/SchedulerServiceClient.h"
 #include "bcos-tars-protocol/client/TxPoolServiceClient.h"
-#include <bcos-framework/testutils/TestPromptFixture.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 
@@ -38,7 +38,7 @@ BOOST_FIXTURE_TEST_SUITE(testServiceClient, TestPromptFixture)
 BOOST_AUTO_TEST_CASE(testGatewayService)
 {
     bcostars::GatewayServicePrx proxy;
-    std::make_shared<GatewayServiceClient>(proxy, nullptr);
+    std::make_shared<GatewayServiceClient>(proxy, "", nullptr);
 }
 
 BOOST_AUTO_TEST_CASE(testPBFTService)
@@ -50,7 +50,7 @@ BOOST_AUTO_TEST_CASE(testPBFTService)
 BOOST_AUTO_TEST_CASE(testRpcService)
 {
     bcostars::RpcServicePrx proxy;
-    std::make_shared<RpcServiceClient>(proxy);
+    std::make_shared<RpcServiceClient>(proxy, "");
 }
 
 BOOST_AUTO_TEST_CASE(testTxPoolService)

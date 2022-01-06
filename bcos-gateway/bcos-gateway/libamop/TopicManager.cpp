@@ -389,7 +389,7 @@ void TopicManager::notifyRpcToSubscribeTopics()
     {
         auto servicePrx = Application::getCommunicator()->stringToProxy<bcostars::RpcServicePrx>(
             m_rpcServiceName);
-        auto rpcClient = std::make_shared<bcostars::RpcServiceClient>(servicePrx);
+        auto rpcClient = std::make_shared<bcostars::RpcServiceClient>(servicePrx, m_rpcServiceName);
         vector<EndpointInfo> activeEndPoints;
         vector<EndpointInfo> nactiveEndPoints;
         TOPIC_LOG(INFO) << LOG_DESC("notifyRpcToSubscribeTopics")
@@ -403,7 +403,8 @@ void TopicManager::notifyRpcToSubscribeTopics()
                                boost::lexical_cast<std::string>(endPoint.getEndpoint().getPort());
             auto servicePrx =
                 Application::getCommunicator()->stringToProxy<bcostars::RpcServicePrx>(endPointStr);
-            auto serviceClient = std::make_shared<bcostars::RpcServiceClient>(servicePrx);
+            auto serviceClient =
+                std::make_shared<bcostars::RpcServiceClient>(servicePrx, m_rpcServiceName);
             serviceClient->asyncNotifySubscribeTopic([endPointStr](Error::Ptr _error) {
                 TOPIC_LOG(INFO) << LOG_DESC("asyncNotifySubscribeTopic")
                                 << LOG_KV("endPoint", endPointStr)

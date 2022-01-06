@@ -22,7 +22,7 @@
 #include "txpool/validator/LedgerNonceChecker.h"
 #include "txpool/validator/TxValidator.h"
 #include <bcos-framework/interfaces/protocol/CommonError.h>
-#include <bcos-framework/libtool/LedgerConfigFetcher.h>
+#include <bcos-tool/LedgerConfigFetcher.h>
 #include <tbb/parallel_for.h>
 using namespace bcos;
 using namespace bcos::txpool;

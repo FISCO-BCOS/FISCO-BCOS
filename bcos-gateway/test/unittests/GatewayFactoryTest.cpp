@@ -19,9 +19,9 @@
  * @date 2021-05-17
  */
 
-#include <bcos-framework/testutils/TestPromptFixture.h>
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-gateway/GatewayFactory.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/test/unit_test.hpp>

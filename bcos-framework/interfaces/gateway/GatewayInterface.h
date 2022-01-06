@@ -21,9 +21,9 @@
 #pragma once
 #include "../../interfaces/crypto/KeyInterface.h"
 #include "../../interfaces/multigroup/GroupInfo.h"
-#include "../../libutilities/Common.h"
-#include "../../libutilities/Error.h"
 #include "GatewayTypeDef.h"
+#include "bcos-utilities/Common.h"
+#include "bcos-utilities/Error.h"
 
 namespace bcos
 {

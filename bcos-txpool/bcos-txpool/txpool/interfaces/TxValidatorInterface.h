@@ -21,7 +21,7 @@
 #pragma once
 #include "bcos-txpool/txpool/interfaces/NonceCheckerInterface.h"
 #include <bcos-framework/interfaces/protocol/Transaction.h>
-#include <bcos-framework/libprotocol/TransactionStatus.h>
+#include <bcos-protocol/TransactionStatus.h>
 namespace bcos
 {
 namespace txpool

@@ -19,9 +19,9 @@
  * @date 2021-03-03
  */
 #pragma once
-#include "../../libutilities/FixedBytes.h"
 #include "CommonType.h"
 #include "KeyInterface.h"
+#include "bcos-utilities/FixedBytes.h"
 #include <memory>
 namespace bcos
 {

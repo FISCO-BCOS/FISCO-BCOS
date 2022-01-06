@@ -21,7 +21,7 @@
 #pragma once
 
 #include "../../interfaces/protocol/ProtocolTypeDef.h"
-#include "../../libutilities/Error.h"
+#include "bcos-utilities/Error.h"
 #include "boost/algorithm/string.hpp"
 #include "tbb/spin_mutex.h"
 #include "tbb/spin_rw_mutex.h"

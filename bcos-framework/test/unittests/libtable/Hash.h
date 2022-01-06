@@ -17,7 +17,7 @@
  * @file Header256Hash.h
  */
 
-#include "interfaces/crypto/Hash.h"
+#include "bcos-framework/interfaces/crypto/Hash.h"
 #include <functional>
 
 namespace bcos
@@ -33,8 +33,7 @@ public:
     HashType hash(bytesConstRef _data) override
     {
         std::hash<std::string_view> hash;
-        return HashType(
-            hash(std::string_view((const char*)_data.data(), _data.size())));
+        return HashType(hash(std::string_view((const char*)_data.data(), _data.size())));
     }
 };
 

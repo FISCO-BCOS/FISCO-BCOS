@@ -25,53 +25,50 @@
 
 #include <bcos-framework/interfaces/storage/StorageInterface.h>
 #include <rocksdb/db.h>
+#include <tbb/parallel_for.h>
 
-namespace rocksdb {
+namespace rocksdb
+{
 class WriteBatch;
 }
 
-namespace bcos::storage {
-class RocksDBStorage : public TransactionalStorageInterface {
+namespace bcos::storage
+{
+class RocksDBStorage : public TransactionalStorageInterface
+{
 public:
-  using Ptr = std::shared_ptr<RocksDBStorage>;
-  explicit RocksDBStorage(std::unique_ptr<rocksdb::DB> &&db);
+    using Ptr = std::shared_ptr<RocksDBStorage>;
+    explicit RocksDBStorage(std::unique_ptr<rocksdb::DB>&& db);
 
-  ~RocksDBStorage() {}
+    ~RocksDBStorage() {}
 
-  void asyncGetPrimaryKeys(
-      std::string_view _table, const std::optional<Condition const> &_condition,
-      std::function<void(Error::UniquePtr, std::vector<std::string>)>
-          _callback) override;
+    void asyncGetPrimaryKeys(std::string_view _table,
+        const std::optional<Condition const>& _condition,
+        std::function<void(Error::UniquePtr, std::vector<std::string>)> _callback) override;
 
-  void asyncGetRow(std::string_view table, std::string_view _key,
-                   std::function<void(Error::UniquePtr, std::optional<Entry>)>
-                       _callback) override;
+    void asyncGetRow(std::string_view table, std::string_view _key,
+        std::function<void(Error::UniquePtr, std::optional<Entry>)> _callback) override;
 
-  void asyncGetRows(
-      std::string_view table,
-      const std::variant<const gsl::span<std::string_view const>,
-                         const gsl::span<std::string const>> &_keys,
-      std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)>
-          _callback) override;
+    void asyncGetRows(std::string_view table,
+        const std::variant<const gsl::span<std::string_view const>,
+            const gsl::span<std::string const>>& _keys,
+        std::function<void(Error::UniquePtr, std::vector<std::optional<Entry>>)> _callback)
+        override;
 
-  void
-  asyncSetRow(std::string_view table, std::string_view key, Entry entry,
-              std::function<void(Error::UniquePtr)> callback) override;
+    void asyncSetRow(std::string_view table, std::string_view key, Entry entry,
+        std::function<void(Error::UniquePtr)> callback) override;
 
-  void asyncPrepare(
-      const TwoPCParams &params, const TraverseStorageInterface &storage,
-      std::function<void(Error::Ptr, uint64_t)> callback) override;
+    void asyncPrepare(const TwoPCParams& params, const TraverseStorageInterface& storage,
+        std::function<void(Error::Ptr, uint64_t)> callback) override;
 
-  void asyncCommit(const TwoPCParams &params,
-                   std::function<void(Error::Ptr)> callback) override;
+    void asyncCommit(const TwoPCParams& params, std::function<void(Error::Ptr)> callback) override;
 
-  void
-  asyncRollback(const TwoPCParams &params,
-                std::function<void(Error::Ptr)> callback) override;
+    void asyncRollback(
+        const TwoPCParams& params, std::function<void(Error::Ptr)> callback) override;
 
 private:
-  std::shared_ptr<rocksdb::WriteBatch> m_writeBatch = nullptr;
-  tbb::spin_mutex m_writeBatchMutex;
-  std::unique_ptr<rocksdb::DB> m_db;
+    std::shared_ptr<rocksdb::WriteBatch> m_writeBatch = nullptr;
+    tbb::spin_mutex m_writeBatchMutex;
+    std::unique_ptr<rocksdb::DB> m_db;
 };
-} // namespace bcos::storage
+}  // namespace bcos::storage

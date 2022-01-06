@@ -17,8 +17,6 @@
 # ------------------------------------------------------------------------------
 file(GLOB_RECURSE SOURCES "*.cpp" "*.h" "*.sol")
 
-include_directories(${CMAKE_SOURCE_DIR}/bcos-framework)
-
 # cmake settings
 # include(SearchTestCases)
 set(TEST_BINARY_NAME test-bcos-framework)
@@ -30,5 +28,5 @@ target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR} ${B
 find_package(wedpr-crypto CONFIG QUIET REQUIRED)
 find_package(Boost CONFIG QUIET REQUIRED serialization unit_test_framework)
 
-target_link_libraries(${TEST_BINARY_NAME} framework wedpr-crypto::crypto Boost::serialization Boost::unit_test_framework)
+target_link_libraries(${TEST_BINARY_NAME} framework Boost::serialization Boost::unit_test_framework)
 add_test(NAME test-framework WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

@@ -20,7 +20,7 @@
  */
 #pragma once
 #include "bcos-txpool/TxPoolConfig.h"
-#include <bcos-framework/libutilities/ThreadPool.h>
+#include <bcos-utilities/ThreadPool.h>
 #include <tbb/concurrent_unordered_map.h>
 #define TBB_PREVIEW_CONCURRENT_ORDERED_CONTAINERS 1
 #include <tbb/concurrent_set.h>

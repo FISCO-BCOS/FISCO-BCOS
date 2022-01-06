@@ -20,8 +20,8 @@
 
 #pragma once
 
-#include <bcos-framework/libcodec/abi/ContractABICodec.h>
-#include <bcos-framework/libcodec/scale/Scale.h>
+#include <bcos-codec/abi/ContractABICodec.h>
+#include <bcos-codec/scale/Scale.h>
 
 namespace bcos
 {

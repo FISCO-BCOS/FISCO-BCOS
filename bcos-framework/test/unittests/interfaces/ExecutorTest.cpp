@@ -17,7 +17,7 @@
  * @file ExecutorTest.cpp
  */
 
-#include "interfaces/executor/ParallelTransactionExecutorInterface.h"
+#include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
 #include <boost/test/unit_test.hpp>
 #include <string>
 

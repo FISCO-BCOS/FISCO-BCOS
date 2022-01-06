@@ -21,7 +21,7 @@
 #include <bcos-framework/interfaces/protocol/Block.h>
 #include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/interfaces/protocol/TransactionReceipt.h>
-#include <bcos-framework/libprotocol/LogEntry.h>
+#include <bcos-protocol/LogEntry.h>
 #include <bcos-rpc/event/EventSubParams.h>
 #include <json/json.h>
 

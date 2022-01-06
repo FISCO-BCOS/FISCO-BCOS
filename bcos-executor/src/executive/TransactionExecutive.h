@@ -22,15 +22,15 @@
 #pragma once
 
 #include "../Common.h"
+#include "../executor/TransactionExecutor.h"
 #include "../precompiled/PrecompiledResult.h"
 #include "BlockContext.h"
 #include "SyncStorageWrapper.h"
-#include "bcos-executor/TransactionExecutor.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/protocol/BlockHeader.h"
 #include "bcos-framework/interfaces/protocol/Transaction.h"
-#include "bcos-framework/libprotocol/TransactionStatus.h"
-#include <bcos-framework/libcodec/abi/ContractABICodec.h>
+#include "bcos-protocol/TransactionStatus.h"
+#include <bcos-codec/abi/ContractABICodec.h>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <boost/coroutine2/all.hpp>
 #include <boost/coroutine2/coroutine.hpp>
@@ -39,11 +39,6 @@
 
 namespace bcos
 {
-namespace storage
-{
-class StateStorage;
-}
-
 namespace executor
 {
 class Result;
@@ -242,7 +237,7 @@ private:
 
     std::shared_ptr<wasm::GasInjector> m_gasInjector = nullptr;
 
-    bcos::storage::StateStorage::Recoder::Ptr m_recoder;
+    bcos::storage::Recoder::Ptr m_recoder;
     std::unique_ptr<SyncStorageWrapper> m_storageWrapper;
     std::shared_ptr<SyncStorageWrapper> m_lastStorageWrapper;
     CallParameters::UniquePtr m_exchangeMessage = nullptr;

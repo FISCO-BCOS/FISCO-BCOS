@@ -17,12 +17,13 @@
  * @file Table.cpp
  */
 
-#include "../../../testutils/TestPromptFixture.h"
-#include "../libstorage/StateStorage.h"
 #include "Hash.h"
-#include "interfaces/storage/StorageInterface.h"
-#include "libutilities/Error.h"
-#include "libutilities/ThreadPool.h"
+#include "bcos-framework/interfaces/storage/StorageInterface.h"
+#include "bcos-framework/libstorage/StateStorage.h"
+#include "bcos-utilities/Error.h"
+#include "bcos-utilities/ThreadPool.h"
+#include "bcos-utilities/testutils/TestPromptFixture.h"
+#include <tbb/concurrent_hash_map.h>
 #include <tbb/concurrent_vector.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
@@ -226,8 +227,6 @@ BOOST_AUTO_TEST_CASE(rollback2)
     // auto savePoint = tableFactory->savepoint();
     auto savePoint = tableFactory->newRecoder();
     tableFactory->setRecoder(savePoint);
-
-    BOOST_CHECK_GT(tableFactory->capacity(), 0);
 
     entry = table->newEntry();
     // entry->setField("key", "id");
@@ -909,58 +908,6 @@ BOOST_AUTO_TEST_CASE(rollbackAndGetRows)
         });
 }
 
-BOOST_AUTO_TEST_CASE(purge)
-{
-    StateStorage::Ptr storage = std::make_shared<StateStorage>(nullptr);
-
-    storage->asyncCreateTable(
-        "table", "value", [](Error::UniquePtr error, std::optional<Table> table) {
-            BOOST_CHECK(!error);
-            BOOST_CHECK(table);
-        });
-
-    Entry entry1;
-    entry1.importFields({"value1"});
-    storage->asyncSetRow(
-        "table", "key1", std::move(entry1), [](Error::UniquePtr error) { BOOST_CHECK(!error); });
-
-    Entry entry2;
-    entry2.importFields({"value2"});
-    storage->asyncSetRow(
-        "table", "key2", std::move(entry2), [](Error::UniquePtr error) { BOOST_CHECK(!error); });
-
-    BOOST_CHECK_EQUAL(storage->capacity(), 17);  // 12 value + 7 table name
-
-    Entry entry3;
-    entry3.setStatus(Entry::PURGED);
-    storage->asyncSetRow(
-        "table", "key2", std::move(entry3), [](Error::UniquePtr error) { BOOST_CHECK(!error); });
-
-    BOOST_CHECK_EQUAL(storage->capacity(), 11);
-
-    Entry entry4;
-    entry4.setStatus(Entry::DELETED);
-    storage->asyncSetRow(
-        "table", "key1", std::move(entry4), [](Error::UniquePtr error) { BOOST_CHECK(!error); });
-
-    BOOST_CHECK_EQUAL(storage->capacity(), 5);
-
-    std::vector<std::tuple<std::string_view, std::string_view, Entry>> all;
-    storage->parallelTraverse(false,
-        [&all](const std::string_view& table, const std::string_view& key, const Entry& entry) {
-            if (key == "table")
-            {
-                return true;
-            }
-            all.emplace_back(std::make_tuple(table, key, entry));
-            return true;
-        });
-
-    BOOST_CHECK_EQUAL(all.size(), 1);
-    auto& entry = std::get<2>(all[0]);
-    BOOST_CHECK_EQUAL(entry.status(), Entry::DELETED);
-}
-
 BOOST_AUTO_TEST_CASE(randomRWHash)
 {
     std::vector<std::tuple<bool, std::string, std::string, std::string>> rwSet;
@@ -1118,28 +1065,6 @@ BOOST_AUTO_TEST_CASE(hash_map)
 
     decltype(data)::const_accessor findIt;
     BOOST_CHECK(data.find(findIt, EntryKey("table", std::string_view("key"))));
-}
-
-BOOST_AUTO_TEST_CASE(purgeNonExistsEntry)
-{
-    auto storage1 = std::make_shared<StateStorage>(nullptr);
-    auto storage2 = std::make_shared<StateStorage>(storage1);
-
-    Entry entry1;
-    entry1.importFields({"hello world!"});
-    storage1->asyncSetRow(
-        "table", "key1", std::move(entry1), [](Error::UniquePtr error) { BOOST_CHECK(!error); });
-
-    Entry purgeEntry;
-    purgeEntry.setStatus(Entry::PURGED);
-    storage2->asyncSetRow("table", "key1", std::move(purgeEntry),
-        [](Error::UniquePtr error) { BOOST_CHECK(!error); });
-
-    storage2->asyncGetRow("table", "key1", [](Error::UniquePtr error, std::optional<Entry> entry) {
-        BOOST_CHECK(!error);
-        BOOST_CHECK(entry);
-        BOOST_CHECK_EQUAL(entry->getField(0), "hello world!");
-    });
 }
 
 BOOST_AUTO_TEST_CASE(importPrev) {}

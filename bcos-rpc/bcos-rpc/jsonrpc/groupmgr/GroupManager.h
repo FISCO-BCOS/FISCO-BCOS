@@ -20,7 +20,7 @@
  */
 #pragma once
 #include "NodeService.h"
-#include <bcos-framework/libutilities/Timer.h>
+#include <bcos-utilities/Timer.h>
 namespace bcos
 {
 namespace rpc

@@ -22,12 +22,12 @@
 #include "LocalRouterTable.h"
 #include "PeersRouterTable.h"
 #include <bcos-framework/interfaces/crypto/KeyFactory.h>
-#include <bcos-framework/libutilities/Timer.h>
 #include <bcos-gateway/Common.h>
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libp2p/P2PInterface.h>
 #include <bcos-gateway/libp2p/P2PSession.h>
 #include <bcos-gateway/protocol/GatewayNodeStatus.h>
+#include <bcos-utilities/Timer.h>
 namespace bcos
 {
 namespace gateway

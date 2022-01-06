@@ -6,7 +6,7 @@
 
 #pragma once
 
-#include <bcos-framework/libutilities/Log.h>
+#include <bcos-utilities/Log.h>
 
 // The largest number of topic in one event log
 #define EVENT_LOG_TOPICS_MAX_INDEX (4)

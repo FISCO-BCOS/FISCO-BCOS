@@ -4,10 +4,10 @@
  */
 #pragma once
 
-#include <bcos-framework/libutilities/Common.h>  // for Guard, Mutex
-#include <bcos-framework/libutilities/ThreadPool.h>
 #include <bcos-gateway/libnetwork/Common.h>   // for  NodeIP...
 #include <bcos-gateway/libnetwork/Message.h>  // for Message
+#include <bcos-utilities/Common.h>            // for Guard, Mutex
+#include <bcos-utilities/ThreadPool.h>
 #include <openssl/x509.h>
 #include <boost/asio/deadline_timer.hpp>  // for deadline_timer
 #include <boost/system/error_code.hpp>    // for error_code

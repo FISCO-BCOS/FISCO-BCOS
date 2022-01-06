@@ -5,8 +5,8 @@
 #include "bcos-tars-protocol/tars/FrontService.h"
 #include <bcos-framework/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/interfaces/front/FrontServiceInterface.h>
-#include <bcos-framework/libutilities/Common.h>
-#include <bcos-framework/libutilities/RefDataContainer.h>
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/RefDataContainer.h>
 
 namespace bcostars
 {

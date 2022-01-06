@@ -1,6 +1,8 @@
 #include "BlockExecutive.h"
 #include "ExecutorManager.h"
 #include "SchedulerImpl.h"
+#include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/hash/SM3.h"
 #include "bcos-framework/interfaces/crypto/CryptoSuite.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/ledger/LedgerInterface.h"
@@ -10,18 +12,17 @@
 #include "mock/MockExecutor.h"
 #include "mock/MockExecutor3.h"
 #include "mock/MockLedger2.h"
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/interfaces/storage/Table.h>
 #include <bcos-framework/libexecutor/NativeExecutionMessage.h>
-#include <bcos-framework/testutils/crypto/HashImpl.h>
-#include <bcos-framework/testutils/crypto/SignatureImpl.h>
 #include <bcos-tars-protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/BlockHeaderFactoryImpl.h>
 #include <bcos-tars-protocol/TransactionFactoryImpl.h>
 #include <bcos-tars-protocol/TransactionMetaDataImpl.h>
 #include <bcos-tars-protocol/TransactionReceiptFactoryImpl.h>
 #include <boost/test/unit_test.hpp>
-#include <future>
 #include <filesystem>
+#include <future>
 
 using namespace bcos::storage;
 using namespace bcos::ledger;
@@ -33,8 +34,8 @@ struct BlockExecutiveFixture
 {
     BlockExecutiveFixture()
     {
-        hashImpl = std::make_shared<Keccak256Hash>();
-        signature = std::make_shared<Secp256k1SignatureImpl>();
+        hashImpl = std::make_shared<Keccak256>();
+        signature = std::make_shared<Secp256k1Crypto>();
         suite = std::make_shared<bcos::crypto::CryptoSuite>(hashImpl, signature, nullptr);
 
         ledger = std::make_shared<MockLedger2>();
@@ -57,8 +58,8 @@ struct BlockExecutiveFixture
         blockFactory = std::make_shared<bcostars::protocol::BlockFactoryImpl>(
             suite, blockHeaderFactory, transactionFactory, transactionReceiptFactory);
 
-        scheduler = std::make_shared<scheduler::SchedulerImpl>(executorManager, ledger, storage,
-            executionMessageFactory, blockFactory, hashImpl);
+        scheduler = std::make_shared<scheduler::SchedulerImpl>(
+            executorManager, ledger, storage, executionMessageFactory, blockFactory, hashImpl);
 
         std::promise<std::optional<Table>> createTablePromise;
         storage->asyncCreateTable(SYS_CURRENT_STATE, "value",
@@ -160,10 +161,7 @@ BOOST_AUTO_TEST_CASE(commitBlock)
     BOOST_CHECK_EQUAL(blockNumber, "100");
 }
 
-BOOST_AUTO_TEST_CASE(rollback)
-{
-
-}
+BOOST_AUTO_TEST_CASE(rollback) {}
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test

@@ -22,7 +22,7 @@
 #include "Common/TarsUtils.h"
 #include "PBFTService/PBFTServiceServer.h"
 #include "libinitializer/PBFTInitializer.h"
-#include <bcos-framework/libutilities/BoostLogInitializer.h>
+#include <bcos-utilities/BoostLogInitializer.h>
 #include <tarscpp/servant/Application.h>
 
 namespace bcostars

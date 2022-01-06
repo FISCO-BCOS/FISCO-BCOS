@@ -20,9 +20,9 @@
  */
 
 #include <bcos-boostssl/websocket/WsService.h>
-#include <bcos-framework/libutilities/Log.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/Rpc.h>
+#include <bcos-utilities/Log.h>
 using namespace bcos;
 using namespace bcos::rpc;
 using namespace bcos::group;
@@ -93,8 +93,9 @@ void Rpc::asyncNotifyBlockNumber(std::string const& _groupID, std::string const&
         _callback(nullptr);
     }
     m_jsonRpcImpl->groupManager()->updateGroupBlockInfo(_groupID, _nodeName, _blockNumber);
-    WEBSOCKET_SERVICE(TRACE) << LOG_BADGE("asyncNotifyBlockNumber")
-                             << LOG_KV("blockNumber", _blockNumber) << LOG_KV("ss size", ss.size());
+    WEBSOCKET_SERVICE(TRACE) << LOG_BADGE("asyncNotifyBlockNumber") << LOG_KV("group", _groupID)
+                             << LOG_KV("blockNumber", _blockNumber)
+                             << LOG_KV("sessions", ss.size());
 }
 
 void Rpc::asyncNotifyGroupInfo(

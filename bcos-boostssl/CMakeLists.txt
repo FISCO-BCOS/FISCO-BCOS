@@ -19,17 +19,14 @@
 cmake_minimum_required(VERSION 3.10)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum OS X deployment version")
 
-project(bcos-boostssl VERSION "3.0.0")
-set(VERSION_SUFFIX "-rc1")
+include(Version)
+project(bcos-boostssl VERSION ${VERSION})
 
 find_package(Boost CONFIG REQUIRED log chrono system filesystem thread iostreams)
 find_package(OpenSSL REQUIRED)
 find_package(jsoncpp CONFIG REQUIRED)
 
-# include_directories(${CMAKE_SOURCE_DIR})
-include_directories(${CMAKE_SOURCE_DIR}/bcos-boostssl)
-
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSTATICLIB")
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSTATICLIB")
 
 aux_source_directory(bcos-boostssl/context SRCS)
 aux_source_directory(bcos-boostssl/httpserver SRCS)
@@ -37,8 +34,8 @@ aux_source_directory(bcos-boostssl/network SRCS)
 aux_source_directory(bcos-boostssl/utilities SRCS)
 aux_source_directory(bcos-boostssl/websocket SRCS)
 
-add_library(boostssl ${SRCS})
-target_link_libraries(boostssl Boost::system Boost::filesystem Boost::system
+add_library(${BOOSTSSL_TARGET} ${SRCS})
+target_link_libraries(${BOOSTSSL_TARGET} ${UTILITIES_TARGET} Boost::system Boost::filesystem Boost::system
 Boost::log Boost::chrono Boost::iostreams Boost::thread OpenSSL::SSL OpenSSL::Crypto)
 
 # TODO: remove ut temp for remove bcos-framework deps

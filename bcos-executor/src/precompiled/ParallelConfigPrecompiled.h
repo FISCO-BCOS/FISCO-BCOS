@@ -22,8 +22,8 @@
 #include "../executive/BlockContext.h"
 #include "../vm/Precompiled.h"
 #include "Common.h"
+#include <bcos-codec/abi/ContractABICodec.h>
 #include <bcos-framework/interfaces/storage/Table.h>
-#include <bcos-framework/libcodec/abi/ContractABICodec.h>
 
 namespace bcos
 {

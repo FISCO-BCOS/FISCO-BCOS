@@ -46,13 +46,13 @@ jobs:
             hunter-clang-v8-notest-${{ runner.temp }}-
       - name: install macOS dependencies
         if: runner.os == 'macOS'
-        run: brew install ccache
+        run: brew install ccache libomp
       - name: install Ubuntu dependencies
         if: runner.os == 'Linux'
         run: sudo apt install -y git curl build-essential clang cmake ccache libzstd-dev
       - name: configure
         if: runner.os == 'macOS'
-        run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON -DHUNTER_CONFIGURATION_TYPES=Release
+        run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && cmake . -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON -DHUNTER_CONFIGURATION_TYPES=Release
       - name: compile
         run: make -j3 && make tar
       - name: tar fisco-bcos for MacOS
@@ -91,11 +91,11 @@ jobs:
             /Users/runner/.hunter/
             deps/src
             ccache
-          key: hunter-gcc-v7-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: hunter-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            hunter-gcc-v7-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            hunter-gcc-v7-notest-${{ runner.temp }}-${{ github.base_ref }}-
-            hunter-gcc-v7-notest-${{ runner.temp }}-
+            hunter-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            hunter-gcc-v8-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            hunter-gcc-v8-notest-${{ runner.temp }}-
       - name: install rust language
         uses: actions-rs/toolchain@v1
         with:
@@ -104,7 +104,7 @@ jobs:
       - name: install Ubuntu dependencies
         run: sudo apt install -y libzstd-dev git curl build-essential cmake ccache
       - name: configure
-        run: cmake . -DTESTS=ON -DHUNTER_CONFIGURATION_TYPES=Debug
+        run: cmake . -DTESTS=ON -DTOOLS=ON -DHUNTER_CONFIGURATION_TYPES=Debug
       - name: compile
         run: make -j3
       - name: test

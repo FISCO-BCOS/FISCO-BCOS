@@ -19,7 +19,7 @@
  */
 #pragma once
 #include "PrecompiledGas.h"
-#include <bcos-framework/libutilities/Common.h>
+#include <bcos-utilities/Common.h>
 
 namespace bcos
 {

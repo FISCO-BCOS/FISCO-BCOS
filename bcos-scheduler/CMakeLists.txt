@@ -1,15 +1,12 @@
 cmake_minimum_required(VERSION 3.15)
 
-project(bcos-scheduler VERSION "3.0.0")
+include(Version)
+project(bcos-scheduler VERSION ${VERSION})
 
 aux_source_directory(src SRCS)
 
-find_package(TBB CONFIG REQUIRED)
-find_package(Threads REQUIRED)
-
-add_library(scheduler ${SRCS})
-target_link_libraries(scheduler PUBLIC framework TBB::tbb)
-target_include_directories(scheduler PUBLIC ${CMAKE_SOURCE_DIR}/bcos-framework)
+add_library(${SCHEDULER_TARGET} ${SRCS})
+target_link_libraries(${SCHEDULER_TARGET} PUBLIC framework)
 
 if(TESTS)
     enable_testing()

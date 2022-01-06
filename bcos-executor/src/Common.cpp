@@ -20,7 +20,7 @@
  */
 
 #include "Common.h"
-#include "libutilities/Common.h"
+#include "bcos-utilities/Common.h"
 
 using namespace bcos::protocol;
 

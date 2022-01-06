@@ -1,17 +1,19 @@
 #include "ExecutorManager.h"
 #include "SchedulerImpl.h"
-#include "interfaces/crypto/CryptoSuite.h"
-#include "interfaces/crypto/KeyPairInterface.h"
-#include "interfaces/executor/ExecutionMessage.h"
-#include "interfaces/ledger/LedgerInterface.h"
-#include "interfaces/protocol/BlockHeaderFactory.h"
-#include "interfaces/protocol/ProtocolTypeDef.h"
-#include "interfaces/protocol/Transaction.h"
-#include "interfaces/protocol/TransactionReceipt.h"
-#include "interfaces/protocol/TransactionReceiptFactory.h"
-#include "interfaces/protocol/TransactionSubmitResult.h"
-#include "interfaces/storage/StorageInterface.h"
-#include "libprotocol/TransactionSubmitResultFactoryImpl.h"
+#include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/hash/SM3.h"
+#include "bcos-framework/interfaces/crypto/CryptoSuite.h"
+#include "bcos-framework/interfaces/crypto/KeyPairInterface.h"
+#include "bcos-framework/interfaces/executor/ExecutionMessage.h"
+#include "bcos-framework/interfaces/ledger/LedgerInterface.h"
+#include "bcos-framework/interfaces/protocol/BlockHeaderFactory.h"
+#include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
+#include "bcos-framework/interfaces/protocol/Transaction.h"
+#include "bcos-framework/interfaces/protocol/TransactionReceipt.h"
+#include "bcos-framework/interfaces/protocol/TransactionReceiptFactory.h"
+#include "bcos-framework/interfaces/protocol/TransactionSubmitResult.h"
+#include "bcos-framework/interfaces/storage/StorageInterface.h"
+#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include "mock/MockDeadLockExecutor.h"
 #include "mock/MockExecutor.h"
 #include "mock/MockExecutor3.h"
@@ -22,10 +24,9 @@
 #include "mock/MockMultiParallelExecutor.h"
 #include "mock/MockRPC.h"
 #include "mock/MockTransactionalStorage.h"
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/libexecutor/NativeExecutionMessage.h>
-#include <bcos-framework/testutils/crypto/HashImpl.h>
-#include <bcos-framework/testutils/crypto/SignatureImpl.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>
@@ -37,6 +38,8 @@
 #include <boost/thread/latch.hpp>
 #include <future>
 #include <memory>
+using namespace bcos;
+using namespace bcos::crypto;
 
 namespace bcos::test
 {
@@ -44,8 +47,8 @@ struct SchedulerFixture
 {
     SchedulerFixture()
     {
-        hashImpl = std::make_shared<Keccak256Hash>();
-        signature = std::make_shared<Secp256k1SignatureImpl>();
+        hashImpl = std::make_shared<Keccak256>();
+        signature = std::make_shared<Secp256k1Crypto>();
         suite = std::make_shared<bcos::crypto::CryptoSuite>(hashImpl, signature, nullptr);
 
         ledger = std::make_shared<MockLedger>();

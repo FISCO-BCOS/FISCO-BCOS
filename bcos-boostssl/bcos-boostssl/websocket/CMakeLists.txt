@@ -1,11 +1,11 @@
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSTATICLIB")
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSTATICLIB")
 
 file(GLOB SRC_LIST "*.cpp")
 file(GLOB HEADERS "*.h")
 
 add_library(${BOOSTSSL_WEBSOCKET_TARGET} ${SRC_LIST} ${HEADERS})
-target_link_libraries(${BOOSTSSL_WEBSOCKET_TARGET} PUBLIC  OpenSSL::SSL OpenSSL::Crypto ${BOOSTSSL_UTILITIES_TARGET})
+target_link_libraries(${BOOSTSSL_WEBSOCKET_TARGET} PUBLIC ${UTILITIES_TARGET} OpenSSL::SSL OpenSSL::Crypto)
 
 # install websocket target
 install(

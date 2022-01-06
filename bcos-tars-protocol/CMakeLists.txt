@@ -19,8 +19,8 @@
 cmake_minimum_required(VERSION 3.10)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment version")
 
-project(bcos-tars-protocol VERSION "3.0.0")
-set(VERSION_SUFFIX "-rc1")
+include(Version)
+project(bcos-tars-protocol VERSION ${VERSION})
 
 find_package(tarscpp CONFIG REQUIRED)
 
@@ -45,18 +45,14 @@ if (TARS_INPUT)
 endif()
 
 set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES "${OUT_TARS_H_LIST}")
-
-include_directories(${CMAKE_SOURCE_DIR})
-include_directories(${CMAKE_SOURCE_DIR}/bcos-framework)
-include_directories(${CMAKE_BINARY_DIR}/)
 include_directories(${TARSCPP_ROOT}/include)
 
 aux_source_directory(./protocol SRC_LIST)
 aux_source_directory(./client SRC_LIST)
 
-add_library(protocol-tars ${SRC_LIST} ${OUT_TARS_H_LIST})
-target_compile_options(protocol-tars PRIVATE -Wno-error -Wno-unused-variable)
-target_link_libraries(protocol-tars PUBLIC framework tarscpp::tarsutil tarscpp::tarsparse tarscpp::tarsservant)
+add_library(${TARS_PROTOCOL_TARGET} ${SRC_LIST} ${OUT_TARS_H_LIST})
+target_compile_options(${TARS_PROTOCOL_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
+target_link_libraries(${TARS_PROTOCOL_TARGET} PUBLIC ${PROTOCOL_TARGET} tarscpp::tarsutil tarscpp::tarsparse tarscpp::tarsservant)
 
 if (TESTS)
     # fetch bcos-test

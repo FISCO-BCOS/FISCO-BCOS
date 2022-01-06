@@ -20,9 +20,9 @@
  */
 #pragma once
 #include "../../interfaces/crypto/CryptoSuite.h"
-#include "../../libutilities/DataConvertUtility.h"
 #include "Exceptions.h"
 #include "ProtocolTypeDef.h"
+#include "bcos-utilities/DataConvertUtility.h"
 #include <gsl/span>
 
 namespace bcos

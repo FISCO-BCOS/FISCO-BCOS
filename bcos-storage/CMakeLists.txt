@@ -1,13 +1,10 @@
 cmake_minimum_required(VERSION 3.14)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "Minimum OS X deployment version")
 
-project(bcos-storage VERSION "3.0.0")
-set(VERSION_SUFFIX "-rc1")
+include(Version)
+project(bcos-storage VERSION ${VERSION})
 
 option(USE_TiKV "build tikv storage or not" OFF)
-
-include_directories(${CMAKE_SOURCE_DIR})
-include_directories(${CMAKE_SOURCE_DIR}/bcos-framework)
 
 set(SRC_LIST src/Common.cpp)
 if(USE_TiKV)
@@ -23,12 +20,12 @@ find_package(RocksDB CONFIG REQUIRED)
 
 find_package(Boost CONFIG QUIET REQUIRED serialization thread context)
 
-add_library(storage ${SRC_LIST})
-target_link_libraries(storage PUBLIC framework Boost::serialization zstd::libzstd_static Threads::Threads)
+add_library(${STORAGE_TARGET} ${SRC_LIST})
+target_link_libraries(${STORAGE_TARGET} PUBLIC framework Boost::serialization zstd::libzstd_static)
 if(USE_TiKV)
-    target_link_libraries(storage PUBLIC kv_client)
+    target_link_libraries(${STORAGE_TARGET} PUBLIC kv_client)
 else()
-target_link_libraries(storage PUBLIC RocksDB::rocksdb)
+target_link_libraries(${STORAGE_TARGET} PUBLIC RocksDB::rocksdb)
 endif()
 
 if (TESTS)

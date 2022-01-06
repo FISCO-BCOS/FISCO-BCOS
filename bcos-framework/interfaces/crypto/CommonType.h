@@ -19,7 +19,7 @@
  * @date 2021-04-01
  */
 #pragma once
-#include "../../libutilities/FixedBytes.h"
+#include "bcos-utilities/FixedBytes.h"
 namespace bcos
 {
 namespace crypto

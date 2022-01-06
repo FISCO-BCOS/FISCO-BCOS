@@ -22,7 +22,7 @@
 #include "Common/TarsUtils.h"
 #include "FrontService/FrontServiceServer.h"
 #include "libinitializer/FrontServiceInitializer.h"
-#include <bcos-framework/libutilities/BoostLogInitializer.h>
+#include <bcos-utilities/BoostLogInitializer.h>
 #include <tarscpp/servant/Application.h>
 
 namespace bcostars

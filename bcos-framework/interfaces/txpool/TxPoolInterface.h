@@ -22,8 +22,8 @@
 #include "../../interfaces/protocol/Block.h"
 #include "../../interfaces/protocol/Transaction.h"
 #include "../../interfaces/protocol/TransactionSubmitResult.h"
-#include "../../libutilities/Error.h"
 #include "TxPoolTypeDef.h"
+#include "bcos-utilities/Error.h"
 namespace bcos
 {
 namespace txpool

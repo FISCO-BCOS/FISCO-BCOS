@@ -21,8 +21,8 @@
 #pragma once
 #include "PBFTLogSync.h"
 #include "bcos-pbft/core/ConsensusEngine.h"
-#include <bcos-framework/libutilities/ConcurrentQueue.h>
-#include <bcos-framework/libutilities/Error.h>
+#include <bcos-utilities/ConcurrentQueue.h>
+#include <bcos-utilities/Error.h>
 
 namespace bcos
 {

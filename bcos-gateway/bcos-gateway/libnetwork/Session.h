@@ -6,7 +6,7 @@
 
 #pragma once
 
-#include <bcos-framework/libutilities/Common.h>
+#include <bcos-utilities/Common.h>
 #include <boost/heap/priority_queue.hpp>
 #include <array>
 #include <deque>

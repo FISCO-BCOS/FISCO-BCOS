@@ -20,12 +20,12 @@
 
 #include <bcos-framework/interfaces/protocol/CommonError.h>
 #include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
-#include <bcos-framework/libutilities/Log.h>
 #include <bcos-rpc/event/EventSub.h>
 #include <bcos-rpc/event/EventSubMatcher.h>
 #include <bcos-rpc/event/EventSubRequest.h>
 #include <bcos-rpc/event/EventSubResponse.h>
 #include <bcos-rpc/event/EventSubTask.h>
+#include <bcos-utilities/Log.h>
 #include <chrono>
 #include <cstddef>
 #include <memory>

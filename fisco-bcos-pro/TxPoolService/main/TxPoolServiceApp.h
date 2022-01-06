@@ -22,8 +22,8 @@
 #include "Common/TarsUtils.h"
 #include "TxPoolService/TxPoolServiceServer.h"
 #include "libinitializer/TxPoolInitializer.h"
-#include <bcos-framework/libtool/NodeConfig.h>
-#include <bcos-framework/libutilities/BoostLogInitializer.h>
+#include <bcos-tool/NodeConfig.h>
+#include <bcos-utilities/BoostLogInitializer.h>
 #include <tarscpp/servant/Application.h>
 
 namespace bcostars

@@ -21,13 +21,13 @@
 
 #pragma once
 #include "TransactionReceiptImpl.h"
+#include "bcos-framework/interfaces/crypto/CommonType.h"
 #include "bcos-tars-protocol/Common.h"
 #include "bcos-tars-protocol/tars/TransactionReceipt.h"
 #include "bcos-tars-protocol/tars/TransactionSubmitResult.h"
-#include "interfaces/crypto/CommonType.h"
 #include <bcos-framework/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/interfaces/protocol/TransactionSubmitResult.h>
-#include <bcos-framework/libutilities/Common.h>
+#include <bcos-utilities/Common.h>
 #include <boost/lexical_cast.hpp>
 #include <memory>
 

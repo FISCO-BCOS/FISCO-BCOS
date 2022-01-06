@@ -18,7 +18,7 @@
  * @date 2021-06-02
  */
 
-#include "bcos-framework/libutilities/DataConvertUtility.h"
+#include "bcosutilities/DataConvertUtility.h"
 #include "vm/Precompiled.h"
 #include "wedpr-crypto/WedprCrypto.h"
 #include <boost/test/unit_test.hpp>
