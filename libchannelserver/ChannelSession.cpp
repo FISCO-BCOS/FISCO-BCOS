@@ -32,7 +32,6 @@ using namespace dev::channel;
 
 ChannelSession::ChannelSession() : m_topics(std::make_shared<std::set<std::string>>()) {}
 
-// jy 数据发送
 Message::Ptr ChannelSession::sendMessage(Message::Ptr request, size_t timeout)
 {
     try

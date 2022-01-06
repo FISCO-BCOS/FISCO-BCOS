@@ -121,34 +121,6 @@ protected:
 
     const static size_t HEADER_LENGTH = 4 + 2 + 32 + 4;
     const static size_t MAX_LENGTH = 100 * 1024 * 1024;  // max 100MB
-    // static std::map<std::string, bool>& GolbalUUIDDealMap()
-    // {
-    //     static std::map<std::string, bool> UUIDDealMap;
-    //     return UUIDDealMap;
-    // }
-    // // jy 添加的相关内容
-    // static std::map<std::string, bool> UUIDDealMap;
-    // static bool resetUUIdMap()
-    // {
-    //     GolbalUUIDDealMap().clear();
-    //     return true;
-    // }
-    // static int checkUid(const std::string& uuid)
-    // {
-    //     return GolbalUUIDDealMap().find(uuid) != GolbalUUIDDealMap().end();
-    // }
-    // static std::string generateUUID(const std::string& name)
-    // {
-    //     std::string uuid = name;
-    //     return uuid;
-    // }
-    // static int insertMessageUUId(const std::string& name)  //提供相关消息
-    // {
-    //     int ret = 0;
-    //     // std::string uuid = generateUUID(name);
-    //     GolbalUUIDDealMap()[name] = true;
-    //     return ret;
-    // }
 };
 
 class ChannelMessageFactory : public MessageFactory
@@ -172,8 +144,6 @@ public:
         m_seq = message->seq();
         m_result = message->result();
         m_data = std::make_shared<bytes>(message->data(), message->data() + message->dataSize());
-        //   m_uuid = dev::channel::ChannelMessage::generateUUID(message->seq());
-        //   dev::channel::ChannelMessage::insertMessageUUId(m_uuid);
     }
 
     virtual ~TopicChannelMessage() {}

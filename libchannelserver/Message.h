@@ -69,21 +69,23 @@ public:
 
     virtual std::string uuid() { return m_uuid; }
 
+    /**
+     * @brief Determines whether the message is processed
+     *
+     * @param message
+     * @return int
+     */
     static int checkUid(dev::channel::Message::Ptr message)
     {
         int ret = 0;
         static int index = 0;
         static std::map<std::string, bool> currUuid[2];
         static std::map<std::string, bool>* messageUuid = &currUuid[0];
-        // static std::shared_ptr<std::map<std::string, bool>> messageUuid =
-        //     std::make_shared<std::map<std::string, bool>>();
-        // std::string messageUUidKey = message->uuid();
         std::string messageUUidKey = message->m_seq;
-        //判断message是否处理过
-        CHANNEL_LOG(WARNING) << "jy uuid " << LOG_KV("uuid", messageUUidKey);
         if ((*messageUuid)[messageUUidKey] == true)
         {
             ret = 1;
+            CHANNEL_LOG(DEBUG) << "message is processed." << LOG_KV("uuid", messageUUidKey);
         }
         else
         {
@@ -104,7 +106,6 @@ public:
         m_uuid = m_seq;
         return ret;
     }
-    // for network statistic
     virtual void setGroupID(GROUP_ID const& _groupId) { m_groupId = _groupId; }
     GROUP_ID const& groupID() const { return m_groupId; }
 
@@ -115,7 +116,6 @@ protected:
     int m_result = 0;
     dev::GROUP_ID m_groupId = -1;
     std::shared_ptr<bytes> m_data;
-    // jy
     std::string m_uuid = std::string(32, '0');
 };
 

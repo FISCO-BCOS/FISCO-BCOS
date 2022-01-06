@@ -99,7 +99,6 @@ void P2PSession::heartBeat()
     }
 }
 
-// jy target deal topicMessage
 void P2PSession::onTopicMessage(P2PMessage::Ptr message)
 {
     auto service = m_service.lock();
@@ -108,8 +107,6 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
     {
         try
         {
-            // if(session处理过该数据)
-            // target 根据type进行处理  维护topic表格，进行心跳同步
             switch (message->packetType())
             {
             case AMOPPacketType::SendTopicSeq:
@@ -152,7 +149,6 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
                                 auto session = self.lock();
                                 if (session)
                                 {
-                                    // jy 接收到了topic请求，进行处理
                                     SESSION_LOG(INFO) << "Received topic: [" << s << "] from "
                                                       << session->nodeID().hex();
                                     boost::split(topics, s, boost::is_any_of("\t"));
@@ -224,8 +220,6 @@ void P2PSession::onTopicMessage(P2PMessage::Ptr message)
     }
 }
 
-
-//jy这里会进行验证处理
 void P2PSession::requestCertTopic(
     const std::set<dev::TopicItem>& topicList, const std::vector<std::string>& topics)
 {
@@ -304,7 +298,6 @@ void P2PSession::parseTopicList(const std::vector<std::string>& topics,
     }
 }
 
-// target topic
 std::string P2PSession::getTopicForCertRoute(
     const std::string& topic, const std::vector<std::string>& topics)
 {
@@ -320,7 +313,7 @@ std::string P2PSession::getTopicForCertRoute(
     }
     return std::string();
 }
-// target topic
+
 void P2PSession::updateTopicStatus(const std::string& topic, dev::TopicStatus topicStatus)
 {
     std::lock_guard<std::mutex> lock(x_topic);

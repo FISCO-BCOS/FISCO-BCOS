@@ -55,7 +55,6 @@ Service::Service()
                                          dev::p2p::CallbackFuncWithSession>>>())
 {}
 
-// jy start the p2p service
 void Service::start()
 {
     if (!m_run)
@@ -478,7 +477,6 @@ P2PMessage::Ptr Service::sendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr mess
     return P2PMessage::Ptr();
 }
 
-// jy onLocalAmopMessage
 void Service::onLocalAMOPMessage(
     P2PMessage::Ptr message, CallbackFuncWithSession callback, dev::network::Options options)
 {
@@ -555,22 +553,13 @@ void Service::onLocalAMOPMessage(
     }
 }
 
-//这里会无限发相同的消息，调用该方法的广播需要进行去重处理
 void Service::asyncSendMessageByNodeID(NodeID nodeID, P2PMessage::Ptr message,
     CallbackFuncWithSession callback, dev::network::Options options)
 {
     try
     {
-        // SERVICE_LOG(ERROR) << "jy asyncSendMessageByNodeID" << LOG_KV("nodeID",
-        // nodeID.abridged());
-
         bool isAMOPMessage =
             (abs(message->protocolID()) == dev::eth::ProtocolID::AMOP ? true : false);
-
-        if (isAMOPMessage)
-        {
-            SERVICE_LOG(ERROR) << "jy asyncSendMessageByNodeID";
-        }
 
         if (nodeID == id())
         {
@@ -697,7 +686,6 @@ P2PMessage::Ptr Service::sendMessageByTopic(std::string topic, P2PMessage::Ptr m
     return P2PMessage::Ptr();
 }
 
-// jy 20211125广播 channel 调用该方法进行消息的转发处理,
 void Service::asyncSendMessageByTopic(std::string topic, P2PMessage::Ptr message,
     CallbackFuncWithSession callback, dev::network::Options options)
 {
@@ -708,51 +696,9 @@ void Service::asyncSendMessageByTopic(std::string topic, P2PMessage::Ptr message
     }
     if (nodeIDsToSend.size() == 0)
     {
-        // auto s = std::weak_ptr<Service>(shared_from_this()).lock();
-        // if (s)
-        // {
         auto self = shared_from_this();
+        // When no directly connected node subscribes to the topic request, get all connected nodes.
         nodeIDsToSend = getAllPeers(topic);
-        // }
-    }
-    if (nodeIDsToSend.size() == 0)
-    {
-        //缺少相关的发送目标，添加广播场景
-        nodeIDsToSend = getAllPeers(topic);
-        if (nodeIDsToSend.size() == 0)
-        {
-            SERVICE_LOG(WARNING) << LOG_DESC("asyncSendMessageByTopic no topic to be sent");
-            if (callback)
-            {
-                m_host->threadPool()->enqueue([callback]() {
-                    dev::network::NetworkException e(TOPIC_NOT_FOUND, "No topic to be sent");
-                    callback(
-                        e, std::shared_ptr<dev::p2p::P2PSession>(), dev::p2p::P2PMessage::Ptr());
-                });
-            }
-            return;
-        }
-        else
-        {
-            SERVICE_LOG(WARNING) << LOG_DESC("jyNoDirectPathBrocastToipcasyncSendMessageByTopic")
-                                 << LOG_KV("size", nodeIDsToSend.size());
-            //这里需要添加callback相关信息
-            // sdk -> 节点,返回一个结果
-            asyncMulticastMessageByNodeIDList(nodeIDsToSend, message);
-            // jy
-            // 聚合
-            if (callback)
-            {
-                //聚合=====================修改error相关内容
-                // dev::network::NetworkException e(0, "No topic to be sent");
-                //  callback(e, P2PSession::Ptr(), message);
-                m_host->threadPool()->enqueue([callback]() {
-                    dev::network::NetworkException e(TOPIC_NOT_FOUND, "No topic to be sent");
-                    callback(
-                        e, std::shared_ptr<dev::p2p::P2PSession>(), dev::p2p::P2PMessage::Ptr());
-                });
-            }
-        }
     }
 
     class TopicStatus : public std::enable_shared_from_this<TopicStatus>
@@ -765,7 +711,6 @@ void Service::asyncSendMessageByTopic(std::string topic, P2PMessage::Ptr message
             {
                 if (e.errorCode() != 0)
                 {
-                    // update
                     auto s = m_service.lock();
                     if (s)
                     {
@@ -788,13 +733,12 @@ void Service::asyncSendMessageByTopic(std::string topic, P2PMessage::Ptr message
                     return;
                 }
 
-                // jy 聚合===============添加v
                 boost::mt19937 rng(static_cast<unsigned>(std::time(0)));
                 boost::uniform_int<int> index(0, m_nodeIDs.size() - 1);
 
                 auto ri = index(rng);
 
-                // jy 聚合================优先从已经有的缓存进行查找
+                // Aggregate request processing priority cache
                 if (m_topicEmpty)
                     ri = 0;
                 m_current = m_nodeIDs[ri];
@@ -804,14 +748,10 @@ void Service::asyncSendMessageByTopic(std::string topic, P2PMessage::Ptr message
                 if (s)
                 {
                     auto self = shared_from_this();
-                    // for (long unsigned int i = 0; i < m_nodeIDs.size(); i++)
-                    // {
                     s->asyncSendMessageByNodeID(m_current, m_message,
-                        // s->asyncSendMessageByNodeID(m_nodeIDs[i], m_message,
                         std::bind(&TopicStatus::onResponse, shared_from_this(),
                             std::placeholders::_1, std::placeholders::_2, std::placeholders::_3),
                         m_options);
-                    //  }
                 }
             }
             else
@@ -822,9 +762,8 @@ void Service::asyncSendMessageByTopic(std::string topic, P2PMessage::Ptr message
                     if (s)
                     {
                         auto self = shared_from_this();
-                        //需要解析msg中的内容才可以知道到低符不符合要求，这里只会判断网络是不是通的
+                        // Parsing message processing aggregation results
                         dev::channel::ChannelMessage message;
-                        //手动解析
                         message.decode(msg->buffer()->data(), msg->buffer()->size());
                         if (message.result() == 0)
                         {
@@ -847,11 +786,8 @@ void Service::asyncSendMessageByTopic(std::string topic, P2PMessage::Ptr message
         std::weak_ptr<Service> m_service;
         dev::network::Options m_options;
         std::string m_topic;
-        bool m_topicEmpty = false;
+        bool m_topicEmpty = false;  // Indirect transmission identifier
     };
-
-    //存在通道则进行传输管理
-
 
     auto topicStatus = std::make_shared<TopicStatus>();
     topicStatus->m_nodeIDs = nodeIDsToSend;
@@ -864,7 +800,6 @@ void Service::asyncSendMessageByTopic(std::string topic, P2PMessage::Ptr message
     {
         topicStatus->m_topicEmpty = true;
     }
-    // topicStatus设置 topic相关信息
 
     topicStatus->onResponse(dev::network::NetworkException(), P2PSession::Ptr(), message);
 }
@@ -1073,18 +1008,24 @@ P2PSessionInfos Service::sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const
     return infos;
 }
 
+/**
+ * @brief Indirect transmission node processing AMOP request result processing.
+ * @param topic
+ * @param flag success flag
+ * @param node
+ */
 void Service::updateTopicNodes(const std::string topic, bool flag, NodeID node)
 {
     NodeIDs nodeIds;
-    SERVICE_LOG(WARNING) << LOG_DESC("jy 聚合记忆化更新路由表") << LOG_KV("topic", topic)
-                         << LOG_KV("ture/false", flag);
+    SERVICE_LOG(DEBUG) << LOG_DESC("Indirect transfer cache update") << LOG_KV("topic", topic)
+                       << LOG_KV("success", flag);
     auto self = std::weak_ptr<Service>(shared_from_this());
     auto service = self.lock();
     if (service)
     {
         if (m_topicNodes.find(topic) != m_topicNodes.end())
         {
-            // jy 考虑到并发问题 不采用引用，牺牲一定的性能NodeIDs& nodeIds = m_topicNodes[topic];
+            // Avoid iterator failure caused by concurrent read and write, redundant data.
             nodeIds = m_topicNodes[topic];
             if (flag == false)
             {
@@ -1111,6 +1052,13 @@ void Service::updateTopicNodes(const std::string topic, bool flag, NodeID node)
     }
 }
 
+/**
+ * @brief Get nodes from the cache that can transmit amop topic messages
+ *
+ * @param topic
+ * @param nodeList
+ * @return int
+ */
 int Service::getInDirectNodeIdByTopic(const std::string topic, NodeIDs& nodeList)
 {
     int ret = 0;
@@ -1122,29 +1070,35 @@ int Service::getInDirectNodeIdByTopic(const std::string topic, NodeIDs& nodeList
         {
             NodeIDs& topicnodeIds = m_topicNodes[topic];
             nodeList.insert(nodeList.begin(), topicnodeIds.begin(), topicnodeIds.end());
-            SERVICE_LOG(WARNING) << LOG_DESC("jy 聚合记忆化 找到对应的topic节点")
+            SERVICE_LOG(WARNING) << LOG_DESC("Find nodes from the cache")
                                  << LOG_KV("number", topicnodeIds.size()) << LOG_KV("topic", topic);
         }
         else
         {
-            SERVICE_LOG(WARNING) << LOG_DESC("jy 聚合记忆化 没有找到对应的topic节点")
-                                 << LOG_KV("topic", topic);
+            SERVICE_LOG(DEBUG)
+                << LOG_DESC("There are no nodes in the cache that can transmit amop topic messages")
+                << LOG_KV("topic", topic);
         }
     }
 
     return ret;
 }
 
-// jy getAllNodes
+/**
+ * @brief Obtain all direct connected nodes according to the successful transmission priority of
+ * amop topic
+ *
+ * @param topic
+ * @return NodeIDs
+ */
 NodeIDs Service::getAllPeers(std::string const& topic)
 {
     NodeIDs nodeList, tmpNodeList, resultNode;
-    // return nodeList;
     try
     {
         RecursiveGuard l(x_sessions);
         auto s = m_sessions;
-        // jy 记忆化搜索
+        // Get nodes from the cache that can transmit amop topic messages
         getInDirectNodeIdByTopic(topic, nodeList);
         for (auto const& it : s)
         {
@@ -1154,7 +1108,7 @@ NodeIDs Service::getAllPeers(std::string const& topic)
                 nodeList.push_back(it.first);
             }
         }
-        // jy 求交集
+        // Remove abnormal connections
         for (NodeIDs::iterator it_pos = tmpNodeList.begin(); it_pos != tmpNodeList.end(); it_pos++)
         {
             if (std::find(tmpNodeList.begin(), tmpNodeList.end(), *it_pos) == tmpNodeList.end())
@@ -1198,18 +1152,6 @@ NodeIDs Service::getPeersByTopic(std::string const& topic)
         {
             nodeList.push_back(id());
         }
-
-        //缺少相关连接对象，则进行广播,返回所有会话信息
-        // if (nodeList.size() == 0)
-        // {
-        //     SERVICE_LOG(WARNING) << LOG_DESC("No direct connection");
-        //     for (auto const& it : s)
-        //     {
-        //         nodeList.push_back(it.first);
-        //     }
-        //     SERVICE_LOG(WARNING) << LOG_DESC("No direct connection")
-        //                          << LOG_KV("brocastNumber", nodeList.size());
-        // }
     }
     catch (std::exception& e)
     {

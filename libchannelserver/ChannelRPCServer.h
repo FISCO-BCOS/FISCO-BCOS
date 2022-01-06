@@ -204,7 +204,7 @@ public:
     void removeSDKAllowListByGroupId(dev::GROUP_ID const& _groupId);
 
     //广播一下
-    void brocastNodeTopicMessage(dev::channel::Message::Ptr message,
+    void broadcastNodeTopicMessage(dev::channel::Message::Ptr message,
         std::function<void(dev::channel::ChannelException, dev::channel::Message::Ptr)> callback);
 
 private:
