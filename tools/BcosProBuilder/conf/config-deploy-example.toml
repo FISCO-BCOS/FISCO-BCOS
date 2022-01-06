@@ -44,7 +44,7 @@ rpc_service_name = "agencyBBcosRpcService"
 
 
 [group]
-group_id="group"
+group_id="group0"
 vm_type="evm"
 sm_crypto=false
 auth_check=false

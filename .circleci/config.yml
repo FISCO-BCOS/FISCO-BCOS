@@ -13,7 +13,7 @@ commands:
           command: |
             apt-get update
             ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
-            apt-get install -y git snapd curl build-essential clang cmake libssl-dev zlib1g-dev openssh-client << parameters.packages >>
+            apt-get install -y cmake g++ git curl build-essential autoconf texinfo cmake flex bison libzstd-dev zlib1g-dev libpython3-dev python-dev << parameters.packages >>
             echo 'export CCACHE_DIR=/ccache' >> $BASH_ENV
             curl https://sh.rustup.rs -sSf | bash -s -- -y
             source $HOME/.cargo/env
@@ -33,7 +33,7 @@ commands:
           command: |
             source $HOME/.cargo/env
             mkdir -p build && cd build
-            << parameters.compiler >> cmake -DHUNTER_JOBS_NUMBER=2 << parameters.options >> ..
+            << parameters.compiler >> cmake -DCMAKE_BUILD_TYPE=debug -DHUNTER_JOBS_NUMBER=2 << parameters.options >> ..
             make -j2
 executors:
   ubuntu-bionic:
@@ -53,13 +53,13 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - deps-cache-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
-            - deps-cache-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
+            - deps-cache-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Environment.CIRCLE_BRANCH }}-{{ checksum ".circleci/config.yml" }}
+            - deps-cache-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Environment.CIRCLE_BRANCH }}-
             - deps-cache-v1-{{ .Environment.CIRCLE_JOB }}-
       - compile:
           options: "-DTESTS=ON -DCOVERAGE=ON -DCMAKE_BUILD_TYPE=Debug"
       - save_cache:
-          key: deps-cache-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+          key: deps-cache-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Environment.CIRCLE_BRANCH }}-{{ checksum ".circleci/config.yml" }}
           paths:
             - deps
             - /ccache
@@ -108,8 +108,8 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - deps-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
-            - deps-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
+            - deps-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Environment.CIRCLE_BRANCH }}-{{ checksum ".circleci/config.yml" }}
+            - deps-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Environment.CIRCLE_BRANCH }}-
             - deps-v1-{{ .Environment.CIRCLE_JOB }}-
       - run:
           name: Compile
@@ -119,10 +119,10 @@ jobs:
             source $HOME/.cargo/env
             yum list devtoolset-7\*
             mkdir -p build && cd build
-            cmake3 -DTESTS=ON -DHUNTER_JOBS_NUMBER=2 ..
+            cmake3 -DCMAKE_BUILD_TYPE=debug -DTESTS=ON -DHUNTER_JOBS_NUMBER=2 ..
             make -j2
       - save_cache:
-          key: deps-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+          key: deps-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Environment.CIRCLE_BRANCH }}-{{ checksum ".circleci/config.yml" }}
           paths:
             - deps
             - /ccache
