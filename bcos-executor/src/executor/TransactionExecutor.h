@@ -34,7 +34,7 @@
 #include "bcos-framework/interfaces/protocol/TransactionReceipt.h"
 #include "bcos-framework/interfaces/storage/StorageInterface.h"
 #include "bcos-framework/interfaces/txpool/TxPoolInterface.h"
-#include "bcos-framework/libstorage/StateStorage.h"
+#include "bcos-table/StateStorage.h"
 #include "tbb/concurrent_unordered_map.h"
 #include <tbb/concurrent_hash_map.h>
 #include <tbb/spin_mutex.h>

@@ -31,14 +31,14 @@
 #include "bcos-framework/interfaces/crypto/Hash.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/protocol/Transaction.h"
-#include "bcos-framework/libstorage/StateStorage.h"
 #include "bcos-protocol/protobuf/PBBlockHeader.h"
+#include "bcos-table/StateStorage.h"
 #include "executor/TransactionExecutor.h"
 #include "precompiled/ParallelConfigPrecompiled.h"
 #include "precompiled/PrecompiledCodec.h"
 #include "precompiled/Utilities.h"
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-framework/libexecutor/NativeExecutionMessage.h>
+#include <bcos-framework/interfaces/executor/NativeExecutionMessage.h>
 #include <bcos-protocol/testutils/protocol/FakeBlockHeader.h>
 #include <bcos-protocol/testutils/protocol/FakeTransaction.h>
 #include <unistd.h>

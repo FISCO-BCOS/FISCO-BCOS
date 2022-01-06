@@ -1,5 +1,5 @@
 #------------------------------------------------------------------------------
-# Top-level CMake file for ut of bcos-framework
+# Top-level CMake file for ut of libtable
 # ------------------------------------------------------------------------------
 # Copyright (C) 2021 FISCO BCOS.
 # SPDX-License-Identifier: Apache-2.0
@@ -19,14 +19,14 @@ file(GLOB_RECURSE SOURCES "*.cpp" "*.h" "*.sol")
 
 # cmake settings
 # include(SearchTestCases)
-set(TEST_BINARY_NAME test-bcos-pbft)
+set(TEST_BINARY_NAME test-table)
 # config_test_cases("" "${SOURCES}" bin/${TEST_BINARY_NAME} "")
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
-target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR})
+target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR} ${BCOS_TEST_DIR})
 
-find_package(Boost CONFIG REQUIRED unit_test_framework)
-find_package(wedpr-crypto CONFIG REQUIRED)
+find_package(wedpr-crypto CONFIG QUIET REQUIRED)
+find_package(Boost CONFIG QUIET REQUIRED  unit_test_framework)
 
-target_link_libraries(${TEST_BINARY_NAME} ${PBFT_TARGET} ${TABLE_TARGET} ${CRYPTO_TARGET} ${PBPROTOCOL_TARGET} Boost::unit_test_framework)
-# add_test(NAME test-pbft WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
+target_link_libraries(${TEST_BINARY_NAME} ${TABLE_TARGET} Boost::unit_test_framework)
+add_test(NAME test-framework WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

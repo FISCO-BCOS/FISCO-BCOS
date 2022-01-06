@@ -27,7 +27,7 @@
 #include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/interfaces/protocol/Transaction.h"
 #include "bcos-framework/interfaces/storage/Table.h"
-#include "bcos-framework/libstorage/StateStorage.h"
+#include "bcos-table/StateStorage.h"
 #include <tbb/concurrent_unordered_map.h>
 #include <atomic>
 #include <functional>

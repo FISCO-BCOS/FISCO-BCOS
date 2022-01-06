@@ -35,7 +35,7 @@
 #include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/interfaces/storage/StorageInterface.h>
 #include <bcos-framework/interfaces/storage/Table.h>
-#include <bcos-framework/libstorage/StateStorage.h>
+#include <bcos-table/StateStorage.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/lexical_cast.hpp>

@@ -21,7 +21,7 @@ find_package(RocksDB CONFIG REQUIRED)
 find_package(Boost CONFIG QUIET REQUIRED serialization thread context)
 
 add_library(${STORAGE_TARGET} ${SRC_LIST})
-target_link_libraries(${STORAGE_TARGET} PUBLIC framework Boost::serialization zstd::libzstd_static)
+target_link_libraries(${STORAGE_TARGET} PUBLIC ${TABLE_TARGET} Boost::serialization zstd::libzstd_static)
 if(USE_TiKV)
     target_link_libraries(${STORAGE_TARGET} PUBLIC kv_client)
 else()

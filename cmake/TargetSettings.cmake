@@ -1,6 +1,9 @@
 # bcos-utilities
 set(UTILITIES_TARGET "bcos-utilities::bcos-utilities")
 
+# bcos-table
+set(TABLE_TARGET "table")
+
 # bcos-crypto
 set(CRYPTO_TARGET "crypto")
 

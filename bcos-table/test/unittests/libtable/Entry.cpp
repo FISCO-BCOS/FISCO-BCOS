@@ -18,7 +18,7 @@
  */
 
 #include "bcos-framework/interfaces/storage/Table.h"
-#include "bcos-framework/libstorage/StateStorage.h"
+#include "bcos-table/StateStorage.h"
 #include "bcos-utilities/Error.h"
 #include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <boost/archive/binary_iarchive.hpp>

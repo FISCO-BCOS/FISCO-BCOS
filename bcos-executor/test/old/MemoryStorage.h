@@ -18,8 +18,8 @@
  */
 #pragma once
 #include "bcos-framework/interfaces/storage/StorageInterface.h"
-#include "libtable/StateStorage.h"
-#include "libtable/Table.h"
+#include "bcos-framework/interfaces/storage/Table.h"
+#include "bcos-table/StateStorage.h"
 #include <mutex>
 #include <string>
 
