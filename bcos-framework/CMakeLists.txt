@@ -24,6 +24,13 @@ project(bcos-framework VERSION ${VERSION})
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework)
+
+if (TESTS)
+    enable_testing()
+    set(CTEST_OUTPUT_ON_FAILURE TRUE)
+    add_subdirectory(test)
+endif()
+
 # for code coverage
 if (COVERAGE)
     include(Coverage)

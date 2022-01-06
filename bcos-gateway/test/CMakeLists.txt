@@ -22,9 +22,7 @@ else()
 endif()
 
 # cmake settings
-# include(SearchTestCases)
 set(TEST_BINARY_NAME test-bcos-gateway)
-# config_test_cases("" "${SOURCES}" bin/${TEST_BINARY_NAME} "")
 
 if (TOOLS)
     add_subdirectory(main)
@@ -41,4 +39,4 @@ if (APPLE)
 endif()
 
 target_link_libraries(${TEST_BINARY_NAME} ${GATEWAY_TARGET} Boost::unit_test_framework ${FRONT_TARGET} tarscpp::tarsservant)
-# add_test(NAME test-gateway WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
+add_test(NAME test-gateway WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

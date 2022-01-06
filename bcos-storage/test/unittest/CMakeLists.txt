@@ -17,8 +17,6 @@
 # ------------------------------------------------------------------------------
 list(APPEND SOURCES "TestRocksDBStorage.cpp" "main.cpp")
 # cmake settings
-
-# include(SearchTestCases)
 set(TEST_BINARY_NAME test-bcos-storage)
 
 if(USE_TiKV)

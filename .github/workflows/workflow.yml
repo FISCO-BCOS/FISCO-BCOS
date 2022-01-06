@@ -52,9 +52,11 @@ jobs:
         run: sudo apt install -y git curl build-essential clang cmake ccache libzstd-dev
       - name: configure
         if: runner.os == 'macOS'
-        run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && cmake . -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON -DHUNTER_CONFIGURATION_TYPES=Release
+        run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && cmake . -DTESTS=ON -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON -DHUNTER_CONFIGURATION_TYPES=Release
       - name: compile
         run: make -j3 && make tar
+      - name: run test
+        run: make test
       - name: tar fisco-bcos for MacOS
         run: mv fisco-bcos-air/ bin/ && cp tools/BcosAirBuilder/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh
       - uses: actions/upload-artifact@v2
@@ -184,8 +186,9 @@ jobs:
       - name: configure and compile
         run: |
           source /opt/rh/devtoolset-7/enable
-          cmake3 . -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON -DHUNTER_CONFIGURATION_TYPES=Release
+          cmake3 . -DTESTS=ON -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON -DHUNTER_CONFIGURATION_TYPES=Release
           make -j3
+          make test
           make tar
       - name: tar fisco-bcos for CentOS
         run: mv fisco-bcos-air bin && cp tools/BcosAirBuilder/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh
