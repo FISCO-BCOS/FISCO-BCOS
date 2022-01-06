@@ -3,7 +3,7 @@
 #include "../Common.h"
 #include "bcos-framework/interfaces/storage/StorageInterface.h"
 #include "bcos-framework/interfaces/storage/Table.h"
-#include "bcos-table/StateStorage.h"
+#include "bcos-table/src/StateStorage.h"
 #include <boost/iterator/iterator_categories.hpp>
 #include <boost/throw_exception.hpp>
 #include <optional>

@@ -30,7 +30,7 @@
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/protocol/Transaction.h"
 #include "bcos-protocol/protobuf/PBBlockHeader.h"
-#include "bcos-table/StateStorage.h"
+#include "bcos-table/src/StateStorage.h"
 #include "executor/TransactionExecutor.h"
 #include "precompiled/PrecompiledCodec.h"
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>

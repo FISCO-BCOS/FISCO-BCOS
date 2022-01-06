@@ -21,7 +21,7 @@ file(GLOB_RECURSE SOURCES "*.cpp" "*.h" "*.sol")
 set(TEST_BINARY_NAME test-bcos-framework)
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
-target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR} ${BCOS_TEST_DIR})
+target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR})
 
 find_package(wedpr-crypto CONFIG QUIET REQUIRED)
 find_package(Boost CONFIG QUIET REQUIRED serialization unit_test_framework)

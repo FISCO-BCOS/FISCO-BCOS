@@ -27,7 +27,7 @@ hunter_add_package(wedpr-crypto)
 find_package(wedpr-crypto CONFIG REQUIRED)
 
 add_library(${CRYPTO_TARGET} ${SRCS})
-target_link_libraries(${CRYPTO_TARGET} PUBLIC ${UTILITIES_TARGET} wedpr-crypto::crypto wedpr-crypto::extend-crypto)
+target_link_libraries(${CRYPTO_TARGET} PUBLIC wedpr-crypto::crypto wedpr-crypto::extend-crypto ${UTILITIES_TARGET} pthread dl)
 
 option(TOOLS "compile demo or not" OFF)
 

@@ -19,7 +19,7 @@
 #pragma once
 #include "bcos-framework/interfaces/storage/StorageInterface.h"
 #include "bcos-framework/interfaces/storage/Table.h"
-#include "bcos-table/StateStorage.h"
+#include "bcos-table/src/StateStorage.h"
 #include <mutex>
 #include <string>
 

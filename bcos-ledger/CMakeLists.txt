@@ -32,9 +32,6 @@ target_link_libraries(${LEDGER_TARGET} PUBLIC ${CODEC_TARGET} ${TABLE_TARGET} Bo
 
 # test related
 if (TESTS)
-    hunter_add_package(Boost COMPONENTS test)
-    set(BCOS_TEST_DIR ${CMAKE_CURRENT_SOURCE_DIR}/test/bcos-test)
-
     enable_testing()
     set(CTEST_OUTPUT_ON_FAILURE TRUE)
     add_subdirectory(test)

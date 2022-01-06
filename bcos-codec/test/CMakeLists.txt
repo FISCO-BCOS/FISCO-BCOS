@@ -20,7 +20,7 @@ file(GLOB_RECURSE SOURCES "*.cpp" "*.h" "*.sol")
 set(TEST_BINARY_NAME test-bcos-codec)
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
-target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR} ${BCOS_TEST_DIR})
+target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR})
 
 find_package(Boost CONFIG QUIET REQUIRED unit_test_framework)
 

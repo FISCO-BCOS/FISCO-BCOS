@@ -32,7 +32,7 @@
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/protocol/Transaction.h"
 #include "bcos-protocol/protobuf/PBBlockHeader.h"
-#include "bcos-table/StateStorage.h"
+#include "bcos-table/src/StateStorage.h"
 #include "executor/TransactionExecutor.h"
 #include "precompiled/ParallelConfigPrecompiled.h"
 #include "precompiled/PrecompiledCodec.h"

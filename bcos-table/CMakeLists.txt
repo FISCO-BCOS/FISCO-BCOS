@@ -21,12 +21,14 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum OS X deployment ve
 
 project(bcos-table VERSION ${VERSION})
 
-file(GLOB_RECURSE SRCS *.cpp)
+file(GLOB_RECURSE SRCS src/*.cpp)
 
 find_package(Boost CONFIG QUIET REQUIRED serialization)
 find_package(TBB)
+find_package(OpenMP 4.5 REQUIRED)
+
 add_library(${TABLE_TARGET} ${SRCS})
-target_link_libraries(${TABLE_TARGET} PUBLIC ${UTILITIES_TARGET} Boost::serialization TBB::tbb)
+target_link_libraries(${TABLE_TARGET} PUBLIC ${UTILITIES_TARGET} Boost::serialization TBB::tbb OpenMP::OpenMP_CXX)
 
 if (TESTS)
     enable_testing()

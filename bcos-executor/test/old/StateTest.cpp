@@ -26,7 +26,7 @@
 #include "bcos-protocol/protobuf/PBBlockHeaderFactory.h"
 #include "bcos-protocol/protobuf/PBTransactionFactory.h"
 #include "bcos-protocol/protobuf/PBTransactionReceiptFactory.h"
-#include "bcos-table/StateStorage.h"
+#include "bcos-table/src/StateStorage.h"
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <boost/test/unit_test.hpp>
 
