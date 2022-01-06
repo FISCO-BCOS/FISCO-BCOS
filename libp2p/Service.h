@@ -198,10 +198,17 @@ public:
         m_channelNetworkStatHandler = _channelNetworkStatHandler;
     }
 
+    // jy聚合=============记忆化过程
+    void updateTopicNodes(const std::string topic, bool flag, NodeID node);
+
+    int getInDirectNodeIdByTopic(const std::string topic, NodeIDs& nodeList);
+
 private:
     void callDisconnectHandlers(dev::network::NetworkException _e, P2PSession::Ptr _p2pSession);
 
     NodeIDs getPeersByTopic(std::string const& topic);
+    // jy获取到所有的节点
+    NodeIDs getAllPeers(std::string const& topic);
     void checkWhitelistAndClearSession();
 
     template <typename T>
@@ -222,6 +229,8 @@ private:
 
 private:
     std::map<dev::network::NodeIPEndpoint, NodeID> m_staticNodes;
+    // jy消息聚合
+    std::map<std::string, NodeIDs> m_topicNodes;
     RecursiveMutex x_nodes;
 
     std::shared_ptr<dev::network::Host> m_host;
@@ -230,7 +239,7 @@ private:
     mutable RecursiveMutex x_sessions;
 
     std::atomic<uint32_t> m_topicSeq = {0};
-    std::shared_ptr<std::set<std::string>> m_topics;
+    std::shared_ptr<std::set<std::string>> m_topics;  // jy topic
     RecursiveMutex x_topics;
 
     ///< key is the group that the node joins

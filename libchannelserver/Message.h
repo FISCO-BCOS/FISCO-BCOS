@@ -67,6 +67,43 @@ public:
 
     virtual void clearData() { m_data->clear(); }
 
+    virtual std::string uuid() { return m_uuid; }
+
+    static int checkUid(dev::channel::Message::Ptr message)
+    {
+        int ret = 0;
+        static int index = 0;
+        static std::map<std::string, bool> currUuid[2];
+        static std::map<std::string, bool>* messageUuid = &currUuid[0];
+        // static std::shared_ptr<std::map<std::string, bool>> messageUuid =
+        //     std::make_shared<std::map<std::string, bool>>();
+        // std::string messageUUidKey = message->uuid();
+        std::string messageUUidKey = message->m_seq;
+        //判断message是否处理过
+        CHANNEL_LOG(WARNING) << "jy uuid " << LOG_KV("uuid", messageUUidKey);
+        if ((*messageUuid)[messageUUidKey] == true)
+        {
+            ret = 1;
+        }
+        else
+        {
+            (*messageUuid)[messageUUidKey] = true;
+        }
+        if ((*messageUuid).size() > 1000)
+        {
+            messageUuid = &currUuid[(index + 1) % 2];
+            currUuid[index].clear();
+            index = (index + 1) % 2;
+        }
+        return ret;
+    }
+
+    virtual int generateUuid()
+    {
+        int ret = 0;
+        m_uuid = m_seq;
+        return ret;
+    }
     // for network statistic
     virtual void setGroupID(GROUP_ID const& _groupId) { m_groupId = _groupId; }
     GROUP_ID const& groupID() const { return m_groupId; }
@@ -77,8 +114,9 @@ protected:
     std::string m_seq = std::string(32, '0');
     int m_result = 0;
     dev::GROUP_ID m_groupId = -1;
-
     std::shared_ptr<bytes> m_data;
+    // jy
+    std::string m_uuid = std::string(32, '0');
 };
 
 class MessageFactory : public std::enable_shared_from_this<MessageFactory>

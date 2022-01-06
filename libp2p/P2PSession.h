@@ -34,6 +34,7 @@ namespace p2p
 class P2PMessage;
 class Service;
 
+// target the p2psession location
 class P2PSession : public std::enable_shared_from_this<P2PSession>
 {
 public:
@@ -97,6 +98,8 @@ private:
     std::mutex x_topic;
     uint32_t m_topicSeq = 0;
     std::shared_ptr<std::set<dev::TopicItem>> m_topics;
+    //设置会话传输过的相关ID,会话去重
+    std::shared_ptr<std::set<std::string>> m_tx_set;
     std::weak_ptr<Service> m_service;
     std::shared_ptr<boost::asio::deadline_timer> m_timer;
     bool m_run = false;

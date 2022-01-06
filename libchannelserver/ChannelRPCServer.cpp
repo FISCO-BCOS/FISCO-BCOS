@@ -159,6 +159,7 @@ void dev::ChannelRPCServer::removeSession(int sessionID)
     }
 }
 
+// jy build the connection
 void ChannelRPCServer::onConnect(
     dev::channel::ChannelException e, dev::channel::ChannelSession::Ptr session)
 {
@@ -228,10 +229,12 @@ void ChannelRPCServer::onDisconnect(
 void dev::ChannelRPCServer::blockNotify(int16_t _groupID, int64_t _blockNumber)
 {
     std::string topic = "_block_notify_" + std::to_string(_groupID);
+    //判断没有相关sessionByTopic逻辑时应当怎么处理
     std::vector<dev::channel::ChannelSession::Ptr> activedSessions = getSessionByTopic(topic);
     if (activedSessions.empty())
     {
-        CHANNEL_LOG(TRACE) << "no session use topic" << LOG_KV("topic", topic);
+        //寻找所有的topic准备广播
+        CHANNEL_LOG(TRACE) << " topic" << LOG_KV("topic", topic);
         return;
     }
     std::shared_ptr<dev::channel::TopicChannelMessage> message =
@@ -296,6 +299,7 @@ void dev::ChannelRPCServer::onClientRequest(dev::channel::ChannelSession::Ptr se
         case CLIENT_UNREGISTER_EVENT_LOG:
             onClientUnregisterEventLogRequest(session, message);
             break;
+        // jy deal amop message
         case AMOP_REQUEST:
         case AMOP_RESPONSE:
         case AMOP_MULBROADCAST:
@@ -679,6 +683,7 @@ void dev::ChannelRPCServer::onClientHeartbeat(
     }
 }
 
+// jy 从node接受到了相关请求
 void dev::ChannelRPCServer::asyncPushChannelMessageHandler(
     const std::string& toTopic, const std::string& content)
 {
@@ -689,6 +694,10 @@ void dev::ChannelRPCServer::asyncPushChannelMessageHandler(
 
         if (getSessionByTopic(toTopic).empty())
         {
+            // jy 测试一下
+            CHANNEL_LOG(WARNING) << LOG_DESC("jy receive node request no SDK follow topic")
+                                 << LOG_KV("topic", toTopic) << LOG_KV("content", content);
+
             CHANNEL_LOG(DEBUG) << LOG_DESC("no SDK follow topic") << LOG_KV("topic", toTopic)
                                << LOG_DESC("just return");
             return;
@@ -733,6 +742,7 @@ void dev::ChannelRPCServer::asyncPushChannelMessageHandler(
 }
 
 // Note: No restrictions on AMOP traffic between nodes
+// jy 从node接收消息，那就可以生成id,接收到了节点的消息，进行处理
 void dev::ChannelRPCServer::onNodeChannelRequest(
     dev::network::NetworkException, std::shared_ptr<p2p::P2PSession> s, p2p::P2PMessage::Ptr msg)
 {
@@ -749,6 +759,8 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
 
     auto channelMessage = _server->messageFactory()->buildMessage();
     ssize_t result = channelMessage->decode(msg->buffer()->data(), msg->buffer()->size());
+    //后期根据m_seq去重
+    channelMessage->generateUuid();
 
     if (result <= 0)
     {
@@ -781,21 +793,38 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
             {
                 auto p2pMessage = msg;
                 auto service = m_service;
+
+                // jy node接收到了amop的请求，上发给sdk等待回传的相关请求
                 asyncPushChannelMessage(topic, channelMessage,
                     [nodeID, channelMessage, service, p2pMessage](dev::channel::ChannelException e,
                         dev::channel::Message::Ptr response, dev::channel::ChannelSession::Ptr) {
                         if (e.errorCode())
                         {
+                            auto buffer = std::make_shared<bytes>();
+                            auto p2pResponse = std::dynamic_pointer_cast<dev::p2p::P2PMessage>(
+                                service->p2pMessageFactory()->buildMessage());
+                            // // jy 消息聚合=====================
+                            // CHANNEL_LOG(WARNING) << "jy 消息聚合";
+                            // channelMessage->setResult(0);
+                            // channelMessage->setType(AMOP_RESPONSE);
+                            // channelMessage->encode(*buffer);
+                            // p2pResponse->setProtocolID(-dev::eth::ProtocolID::AMOP);
+                            // p2pResponse->setPacketType(0u);
+                            // p2pResponse->setSeq(p2pMessage->seq());
+                            // service->asyncSendMessageByNodeID(nodeID, p2pResponse,
+                            //     CallbackFuncWithSession(), dev::network::Options());
+                            // return;
+                            //=====================
+
                             CHANNEL_LOG(ERROR) << "Push channel message failed"
-                                               << LOG_KV("what", boost::diagnostic_information(e));
+                                               << LOG_KV("what", boost::diagnostic_information(e))
+                                               << LOG_KV("error code", e.errorCode());
 
                             channelMessage->setResult(e.errorCode());
                             channelMessage->setType(AMOP_RESPONSE);
 
-                            auto buffer = std::make_shared<bytes>();
+                            //生成uuid channelMessage->generateUuid();
                             channelMessage->encode(*buffer);
-                            auto p2pResponse = std::dynamic_pointer_cast<dev::p2p::P2PMessage>(
-                                service->p2pMessageFactory()->buildMessage());
                             p2pResponse->setBuffer(buffer);
                             p2pResponse->setProtocolID(-dev::eth::ProtocolID::AMOP);
                             p2pResponse->setPacketType(0u);
@@ -807,6 +836,8 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
                         }
                         CHANNEL_LOG(TRACE)
                             << "Receive sdk response" << LOG_KV("seq", response->seq());
+                        CHANNEL_LOG(WARNING)
+                            << "jy Receive sdk response" << LOG_KV("seq", response->seq());
                         auto buffer = std::make_shared<bytes>();
                         response->encode(*buffer);
                         auto p2pResponse = std::dynamic_pointer_cast<dev::p2p::P2PMessage>(
@@ -858,6 +889,89 @@ void dev::ChannelRPCServer::onNodeChannelRequest(
     }
 }
 
+// jy node层进行广播topic
+void dev::ChannelRPCServer::brocastNodeTopicMessage(dev::channel::Message::Ptr message,
+    std::function<void(dev::channel::ChannelException, dev::channel::Message::Ptr)> callback)
+{
+    std::string body(message->data(), message->data() + message->dataSize());
+    //设置去重处理
+    // jy 去重处理，如果发生了消息重复 则进行消息去重
+    if (dev::channel::Message::checkUid(message))
+    {
+        CHANNEL_LOG(WARNING) << "jy it is redeal message"
+                             << LOG_KV("seq", message->seq().substr(0, c_seqAbridgedLen))
+                             << LOG_KV("message", body);
+        //设置超时回复 104
+        dev::channel::ChannelException ce =
+            dev::channel::ChannelException(104, "jy no network sub the session");
+        message->setType(AMOP_RESPONSE);
+        message->setResult(REMOTE_PEER_UNAVAILABLE);
+        message->clearData();
+        if (callback)
+        {
+            callback(ce, message);
+        }
+        return;
+    }
+
+    if (message->dataSize() < 1)
+    {
+        CHANNEL_LOG(ERROR) << "invalid channel2 message too short";
+        return;
+    }
+
+    uint8_t topicLen = *((uint8_t*)message->data());
+    std::string topic((char*)message->data() + 1, topicLen - 1);
+    CHANNEL_LOG(DEBUG) << "channel2 request"
+                       << LOG_KV("seq", message->seq().substr(0, c_seqAbridgedLen));
+
+    auto buffer = std::make_shared<bytes>();
+    message->encode(*buffer);
+
+    auto p2pMessage =
+        std::dynamic_pointer_cast<p2p::P2PMessage>(m_service->p2pMessageFactory()->buildMessage());
+    p2pMessage->setBuffer(buffer);
+    p2pMessage->setProtocolID(dev::eth::ProtocolID::AMOP);
+    p2pMessage->setPacketType(0u);
+
+    // Exceed the bandwidth-limit, return REJECT_AMOP_REQ_FOR_OVER_BANDWIDTHLIMIT AMOP
+    // response
+    dev::network::Options options;
+    options.timeout = 30 * 1000;  // 30 seconds
+    // jy send topic，m_service p2p层进行消息转发，回调函数向SDK转发内容
+    // jy 聚合==============================
+    m_service->asyncSendMessageByTopic(
+        topic, p2pMessage,
+        [callback, message](dev::network::NetworkException e, std::shared_ptr<dev::p2p::P2PSession>,
+            dev::p2p::P2PMessage::Ptr response) {
+            dev::channel::ChannelException ce =
+                dev::channel::ChannelException(e.errorCode(), e.what());
+            if (e.errorCode())
+            {
+                CHANNEL_LOG(WARNING)
+                    << "jy ChannelMessage failed" << LOG_KV("errorCode", e.errorCode())
+                    << LOG_KV("what", boost::diagnostic_information(e));
+
+                message->setType(AMOP_RESPONSE);
+                message->setResult(REMOTE_PEER_UNAVAILABLE);
+                message->clearData();
+
+                if (callback)
+                {
+                    callback(ce, message);
+                }
+                CHANNEL_LOG(DEBUG) << " response";
+                return;
+            }
+
+            message->decode(response->buffer()->data(), response->buffer()->size());
+            CHANNEL_LOG(WARNING) << "jy get the response";
+            callback(ce, message);
+        },
+        options);
+}
+
+// jy subTopic ？ pub 也会进行处理
 void dev::ChannelRPCServer::onClientTopicRequest(
     dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message)
 {
@@ -869,6 +983,11 @@ void dev::ChannelRPCServer::onClientTopicRequest(
     CHANNEL_LOG(DEBUG) << "SDK topic message"
                        << LOG_KV("seq", message->seq().substr(0, c_seqAbridgedLen))
                        << LOG_KV("message", body);
+
+    // jy
+    CHANNEL_LOG(WARNING) << "jy SDK topic message"
+                         << LOG_KV("seq", message->seq().substr(0, c_seqAbridgedLen))
+                         << LOG_KV("message", body);
 
     try
     {
@@ -936,6 +1055,7 @@ void dev::ChannelRPCServer::sendRejectAMOPResponse(
     _session->asyncSendMessage(response, dev::channel::ChannelSession::CallbackType(), 0);
 }
 
+// jy 消息聚合 接收到AMOP_REQUEST请求
 void dev::ChannelRPCServer::onClientChannelRequest(
     dev::channel::ChannelSession::Ptr session, dev::channel::Message::Ptr message)
 {
@@ -953,6 +1073,7 @@ void dev::ChannelRPCServer::onClientChannelRequest(
 
     CHANNEL_LOG(DEBUG) << "target topic:" << topic;
 
+    // jy Note amop request deal
     if (message->type() == AMOP_REQUEST)
     {
         try
@@ -978,6 +1099,8 @@ void dev::ChannelRPCServer::onClientChannelRequest(
             dev::network::Options options;
             options.timeout = 30 * 1000;  // 30 seconds
 
+            // jy 聚合 send topic，m_service
+            // p2p层进行消息转发，回调函数向SDK转发内容,这里的回调时处理收到的错误码
             m_service->asyncSendMessageByTopic(
                 topic, p2pMessage,
                 [session, message](dev::network::NetworkException e,
@@ -985,7 +1108,7 @@ void dev::ChannelRPCServer::onClientChannelRequest(
                     if (e.errorCode())
                     {
                         CHANNEL_LOG(WARNING)
-                            << "ChannelMessage failed" << LOG_KV("errorCode", e.errorCode())
+                            << "jy ChannelMessage failed" << LOG_KV("errorCode", e.errorCode())
                             << LOG_KV("what", boost::diagnostic_information(e));
                         message->setType(AMOP_RESPONSE);
                         message->setResult(REMOTE_PEER_UNAVAILABLE);
@@ -1001,7 +1124,9 @@ void dev::ChannelRPCServer::onClientChannelRequest(
                     }
 
                     message->decode(response->buffer()->data(), response->buffer()->size());
-
+                    CHANNEL_LOG(WARNING) << "jy get the" << LOG_KV("errorCode", e.errorCode())
+                                         << LOG_KV("what", boost::diagnostic_information(e));
+                    // jy 返回消息到下游
                     session->asyncSendMessage(
                         message, dev::channel::ChannelSession::CallbackType(), 0);
                 },
@@ -1095,6 +1220,7 @@ void ChannelRPCServer::setChannelServer(std::shared_ptr<dev::channel::ChannelSer
     _server = server;
 }
 
+// jy callback回调
 void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
     dev::channel::Message::Ptr message,
     std::function<void(dev::channel::ChannelException, dev::channel::Message::Ptr,
@@ -1115,6 +1241,7 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
                     callback)
               : m_topic(topic), m_message(message), m_server(server), m_callback(callback){};
 
+            // jy sdk -> node 的onResponse ， 这里可以设置静态变量进行消息聚合
             void onResponse(dev::channel::ChannelException e, dev::channel::Message::Ptr message)
             {
                 try
@@ -1168,16 +1295,87 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
                 }
             }
 
+            void onResponseBroad(
+                dev::channel::ChannelException e, dev::channel::Message::Ptr message)
+            {
+                CHANNEL_LOG(WARNING)
+                    << "jy 聚合 onResponse error" << LOG_KV("errorCode", e.errorCode())
+                    << LOG_KV("what", boost::diagnostic_information(e));
+                try
+                {
+                    if (e.errorCode() != 0)
+                    {
+                        throw dev::channel::ChannelException(
+                            104, "jy no session use topic:" + m_topic);
+                    }
+                }
+                catch (dev::channel::ChannelException& ex)
+                {
+                    CHANNEL_LOG(WARNING)
+                        << "jy onResponse error" << LOG_KV("errorCode", ex.errorCode())
+                        << LOG_KV("what", ex.what());
+
+                    try
+                    {
+                        if (m_callback)
+                        {
+                            m_callback(ex, dev::channel::Message::Ptr(), m_currentSession);
+                        }
+                    }
+                    catch (exception& e)
+                    {
+                        CHANNEL_LOG(WARNING) << "onResponse error"
+                                             << LOG_KV("what", boost::diagnostic_information(e));
+                    }
+
+                    return;
+                }
+
+                try
+                {
+                    if (m_callback)
+                    {
+                        CHANNEL_LOG(WARNING)
+                            << "jy 聚合 回复消息" << LOG_KV("what", message->dataSize());
+                        m_callback(e, message, m_currentSession);
+                    }
+                }
+                catch (exception& e)
+                {
+                    CHANNEL_LOG(WARNING)
+                        << "onResponse error" << LOG_KV("what", boost::diagnostic_information(e));
+                }
+            }
+
+            // jy
             void sendMessage()
             {
                 std::vector<dev::channel::ChannelSession::Ptr> activedSessions =
                     m_server->getSessionByTopic(m_topic);
-
                 if (activedSessions.empty())
                 {
-                    CHANNEL_LOG(ERROR)
-                        << "sendMessage failed: no session use topic" << LOG_KV("topic", m_topic);
-                    throw dev::channel::ChannelException(104, "no session use topic:" + m_topic);
+                    CHANNEL_LOG(ERROR) << "sendMessage failed: no session use topic brocast"
+                                       << LOG_KV("topic", m_topic);
+
+                    // jy status设置相关状态，根据状态进行处理
+                    activedSessions = m_server->getSessionBrocast();
+                    // 转发 m_service -> brocastTopic();
+
+                    //这里要进行回调广播后的回调处理，这里会广播到节点处,在此处需要得到节点返回的message
+                    //需要有一个callback e.code()==0时，call back来处理该逻辑,只需要用到message
+                    // m_callback(e,message,m_currentSession)
+                    std::function<void(dev::channel::ChannelException, dev::channel::Message::Ptr)>
+                        fp = std::bind(&Callback::onResponseBroad, shared_from_this(),
+                            std::placeholders::_1, std::placeholders::_2);
+                    m_server->brocastNodeTopicMessage(m_message, fp);
+                    // jy node -> node 的onResponse
+                    // ，通过m_callback进行聚合回复结果，再TopicMessage当中需要设置topic的相关回调
+
+                    CHANNEL_LOG(WARNING)
+                        << LOG_DESC(" jy sessionIsNullAndUseBrocast") << LOG_KV("topic", m_topic)
+                        << LOG_KV("size", activedSessions.size());
+                    return;
+                    // throw dev::channel::ChannelException(104, "no session use topic:" + m_topic);
                 }
 
                 for (auto sessionIt = activedSessions.begin(); sessionIt != activedSessions.end();)
@@ -1205,6 +1403,9 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
                 auto ri = index(rng);
                 CHANNEL_LOG(TRACE)
                     << "random node" << ri << " active session size:" << activedSessions.size();
+
+                CHANNEL_LOG(WARNING)
+                    << "jy random node" << ri << " active session size:" << activedSessions.size();
 
                 auto session = activedSessions[ri];
 
@@ -1236,6 +1437,7 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
     }
     catch (dev::channel::ChannelException& ex)
     {
+        // jy 捕捉没有连接时的异常
         callback(ex, dev::channel::Message::Ptr(), dev::channel::ChannelSession::Ptr());
     }
     catch (exception& e)
@@ -1245,6 +1447,11 @@ void ChannelRPCServer::asyncPushChannelMessage(std::string topic,
     }
 }
 
+// void ChannelRPCServer::asyncBroadcastChannelMessageWhenNoPath(
+//     std::string topic, dev::channel::Message::Ptr message)
+// {
+// }
+
 void ChannelRPCServer::asyncBroadcastChannelMessage(
     std::string topic, dev::channel::Message::Ptr message)
 {
@@ -1252,6 +1459,7 @@ void ChannelRPCServer::asyncBroadcastChannelMessage(
     if (activedSessions.empty())
     {
         CHANNEL_LOG(TRACE) << "no session use topic" << LOG_KV("topic", topic);
+        // jy 下发message
         return;
     }
     stringstream ss;
@@ -1313,6 +1521,7 @@ dev::channel::TopicChannelMessage::Ptr ChannelRPCServer::pushChannelMessage(
     return dev::channel::TopicChannelMessage::Ptr();
 }
 
+// jy update host Topics
 void ChannelRPCServer::updateHostTopics()
 {
     auto allTopics = std::make_shared<std::set<std::string> >();
@@ -1328,6 +1537,7 @@ void ChannelRPCServer::updateHostTopics()
     m_service->setTopics(allTopics);
 }
 
+// jy node -> node 之间的传输
 std::vector<dev::channel::ChannelSession::Ptr> ChannelRPCServer::getSessionByTopic(
     const std::string& topic)
 {
@@ -1349,8 +1559,32 @@ std::vector<dev::channel::ChannelSession::Ptr> ChannelRPCServer::getSessionByTop
         }
     }
 
+    // jy note when is null add the
+    // if (activedSessions.empty() == true)
+    // {
+    //     // status设置相关状态，根据状态进行处理
+    //     activedSessions = ChannelRPCServer::getSessionBrocast();
+    //     CHANNEL_LOG(WARNING) << LOG_DESC(" jy sessionIsNullAndUseBrocast") << LOG_KV("topic",
+    //     topic)
+    //                          << LOG_KV("size", activedSessions.size());
+    // }
+
     return activedSessions;
 }
+
+std::vector<dev::channel::ChannelSession::Ptr> ChannelRPCServer::getSessionBrocast()
+{
+    std::vector<dev::channel::ChannelSession::Ptr> activedSessions;
+
+    std::lock_guard<std::mutex> lock(_sessionMutex);
+    for (auto& it : _sessions)
+    {
+        activedSessions.push_back(it.second);
+    }
+
+    return activedSessions;
+}
+
 
 void ChannelRPCServer::registerSDKAllowListByGroupId(
     dev::GROUP_ID const& _groupId, dev::PeerWhitelist::Ptr _allowList)
