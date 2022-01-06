@@ -1117,8 +1117,8 @@ NodeIDs Service::getAllPeers(std::string const& topic)
             }
         }
         nodeList.push_back(id());
-        SERVICE_LOG(WARNING) << LOG_DESC("jygetAllPeers") << LOG_KV("number", nodeList.size())
-                             << LOG_KV("m_sessions", s.size()) << LOG_KV("topic :", topic);
+        SERVICE_LOG(DEBUG) << LOG_DESC("getAllPeers") << LOG_KV("number", nodeList.size())
+                           << LOG_KV("m_sessions", s.size()) << LOG_KV("topic :", topic);
     }
     catch (std::exception& e)
     {
