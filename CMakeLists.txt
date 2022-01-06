@@ -35,6 +35,14 @@ hunter_add_package(intx)
 hunter_add_package(ethash)
 hunter_add_package(evmone)
 
+# bcos-boostssl
+hunter_add_package(bcos-boostssl)
+find_package(bcos-boostssl CONFIG REQUIRED)
+
+# find OpenSSL
+hunter_add_package(OpenSSL)
+find_package(OpenSSL REQUIRED)
+
 # install dependencies
 include(InstallBcosUtilities)
 include(IncludeDirectories)
@@ -53,7 +61,6 @@ add_subdirectory(bcos-storage)
 add_subdirectory(bcos-ledger)
 add_subdirectory(bcos-protocol)
 add_subdirectory(bcos-tars-protocol)
-add_subdirectory(bcos-boostssl)
 add_subdirectory(bcos-rpc)
 add_subdirectory(bcos-gateway)
 add_subdirectory(bcos-pbft)
