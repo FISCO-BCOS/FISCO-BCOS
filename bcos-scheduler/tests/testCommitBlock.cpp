@@ -13,8 +13,8 @@
 #include "mock/MockExecutor3.h"
 #include "mock/MockLedger2.h"
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <bcos-framework/interfaces/executor/NativeExecutionMessage.h>
 #include <bcos-framework/interfaces/storage/Table.h>
-#include <bcos-framework/libexecutor/NativeExecutionMessage.h>
 #include <bcos-tars-protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/BlockHeaderFactoryImpl.h>
 #include <bcos-tars-protocol/TransactionFactoryImpl.h>

@@ -18,9 +18,7 @@
 file(GLOB_RECURSE SOURCES "unittests/*.cpp" "unittests/*.h" "unittests/*.sol")
 
 # cmake settings
-# include(SearchTestCases)
 set(TEST_BINARY_NAME test-bcos-rpc)
-# config_test_cases("" "${SOURCES}" bin/${TEST_BINARY_NAME} "")
 
 find_package(Boost CONFIG REQUIRED unit_test_framework)
 

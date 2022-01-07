@@ -52,11 +52,13 @@ jobs:
         run: sudo apt install -y git curl build-essential clang cmake ccache libzstd-dev
       - name: configure
         if: runner.os == 'macOS'
-        run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && cmake . -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON -DHUNTER_CONFIGURATION_TYPES=Release
+        run: mkdir build && cd build && export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && cmake .. -DTESTS=ON -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON -DHUNTER_CONFIGURATION_TYPES=Release
       - name: compile
-        run: make -j3 && make tar
+        run: cd build && make -j3 && make tar
+      - name: run test
+        run: cd build && CTEST_OUTPUT_ON_FAILURE=TRUE make test
       - name: tar fisco-bcos for MacOS
-        run: mv fisco-bcos-air/ bin/ && cp tools/BcosAirBuilder/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh
+        run: cd build && mv fisco-bcos-air/ bin/ && cp ../tools/BcosAirBuilder/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh
       - uses: actions/upload-artifact@v2
         with:
           name: fisco-bcos-MacOS.zip
@@ -104,11 +106,10 @@ jobs:
       - name: install Ubuntu dependencies
         run: sudo apt install -y libzstd-dev git curl build-essential cmake ccache
       - name: configure
-        run: cmake . -DTESTS=ON -DTOOLS=ON -DHUNTER_CONFIGURATION_TYPES=Debug
+        # Note: must run test inner build directory, otherwise the gateway ut maybe failed
+        run: mkdir -p build && cd build && cmake .. -DTESTS=OFF -DTOOLS=ON -DHUNTER_CONFIGURATION_TYPES=Debug
       - name: compile
-        run: make -j3
-      - name: test
-        run: make test
+        run: cd build && make -j3
   ubuntu18_04_build_with_gcc:
     name: ubuntu18_04_build_with_gcc
     runs-on: ${{ matrix.os }}
@@ -140,9 +141,9 @@ jobs:
       - name: install Ubuntu dependencies
         run: sudo apt-get install -y git curl build-essential cmake ccache lcov libzstd-dev
       - name: configure
-        run: cmake . -DTESTS=OFF -DHUNTER_CONFIGURATION_TYPES=Debug
+        run: mkdir build && cd build && cmake .. -DTESTS=OFF -DHUNTER_CONFIGURATION_TYPES=Debug
       - name: compile
-        run: make
+        run: cd build && make -j3
   build_with_centos:
     name: build_with_centos
     runs-on: ubuntu-latest
@@ -184,11 +185,12 @@ jobs:
       - name: configure and compile
         run: |
           source /opt/rh/devtoolset-7/enable
-          cmake3 . -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON -DHUNTER_CONFIGURATION_TYPES=Release
+          mkdir build && cd build && cmake3 .. -DTESTS=ON -DCMAKE_BUILD_TYPE=Release -DBUILD_STATIC=ON -DHUNTER_CONFIGURATION_TYPES=Release
           make -j3
+          CTEST_OUTPUT_ON_FAILURE=TRUE make test
           make tar
       - name: tar fisco-bcos for CentOS
-        run: mv fisco-bcos-air bin && cp tools/BcosAirBuilder/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh
+        run: cd build && mv fisco-bcos-air bin && cp ../tools/BcosAirBuilder/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh
       - uses: actions/upload-artifact@v2
         with:
           name: fisco-bcos-linux.zip

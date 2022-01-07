@@ -23,10 +23,11 @@ find_package(evmone CONFIG REQUIRED)
 find_package(intx CONFIG REQUIRED)
 find_package(ethash CONFIG REQUIRED)
 find_package(Boost CONFIG QUIET REQUIRED serialization program_options context)
+find_package(jsoncpp CONFIG REQUIRED)
 
 file(GLOB_RECURSE SRCS src/*.cpp)
 add_library(${EXECUTOR_TARGET} ${SRCS})
-target_link_libraries(${EXECUTOR_TARGET} PUBLIC framework ${CODEC_TARGET} ${CRYPTO_TARGET} Boost::context evmone hera hera-buildinfo ${WASM_ENGINE_LIBRARY} evmc::loader evmc::instructions wabt)
+target_link_libraries(${EXECUTOR_TARGET} PUBLIC jsoncpp_lib_static ${CODEC_TARGET} ${CRYPTO_TARGET} ${TABLE_TARGET} Boost::context evmone hera hera-buildinfo ${WASM_ENGINE_LIBRARY} evmc::loader evmc::instructions wabt)
 
 if (TOOLS)
     add_subdirectory(tools)

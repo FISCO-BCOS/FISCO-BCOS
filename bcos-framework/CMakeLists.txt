@@ -23,23 +23,11 @@ include(Version)
 project(bcos-framework VERSION ${VERSION})
 
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
-
-file(GLOB_RECURSE SRCS libexecutor/*.cpp libstorage/*.cpp)
-
-find_package(TBB CONFIG REQUIRED)
-find_package(Boost CONFIG REQUIRED log chrono system filesystem iostreams thread)
-find_package(Protobuf CONFIG REQUIRED)
-find_package(jsoncpp CONFIG REQUIRED)
-find_package(OpenMP 4.5 REQUIRED)
-
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework)
-
-add_library(framework ${SRCS} ${MESSAGES_SRCS} ${TXS_SYNC_MSG})
-target_link_libraries(framework PUBLIC ${UTILITIES_TARGET} protobuf::libprotobuf TBB::tbb jsoncpp_lib_static OpenMP::OpenMP_CXX)
 
 if (TESTS)
     enable_testing()
-    set(CTEST_OUTPUT_ON_FAILURE True)
+    set(CTEST_OUTPUT_ON_FAILURE TRUE)
     add_subdirectory(test)
 endif()
 

@@ -17,13 +17,12 @@
 # ------------------------------------------------------------------------------
 file(GLOB_RECURSE SOURCES "*.cpp" "*.h" "*.sol")
 # cmake settings
-include(SearchTestCases)
 set(TEST_BINARY_NAME test-bcos-codec)
-# config_test_cases("" "${SOURCES}" bin/${TEST_BINARY_NAME} "")
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
-target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR} ${BCOS_TEST_DIR})
+target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR})
 
 find_package(Boost CONFIG QUIET REQUIRED unit_test_framework)
 
 target_link_libraries(${TEST_BINARY_NAME} ${CODEC_TARGET} ${CRYPTO_TARGET} Boost::unit_test_framework)
+add_test(NAME test-codec WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

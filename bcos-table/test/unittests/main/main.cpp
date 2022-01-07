@@ -14,12 +14,11 @@
  *  limitations under the License.
  *
  * @file main.cpp
- * @author: xingqiangbai
- * @date 2021-05-17
+ * @author: yujiechen, jimmyshi
+ * @date 2021-02-24
  */
 #define BOOST_TEST_MODULE FISCO_BCOS_Tests
 #define BOOST_TEST_MAIN
-#define BOOST_TEST_STATIC_LINK
 
 #include <boost/test/included/unit_test.hpp>
 #include <boost/test/unit_test.hpp>

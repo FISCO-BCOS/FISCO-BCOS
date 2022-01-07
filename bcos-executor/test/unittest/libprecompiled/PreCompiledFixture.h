@@ -32,8 +32,8 @@
 #include "precompiled/Utilities.h"
 #include "precompiled/extension/UserPrecompiled.h"
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <bcos-framework/interfaces/executor/NativeExecutionMessage.h>
 #include <bcos-framework/interfaces/storage/Table.h>
-#include <bcos-framework/libexecutor/NativeExecutionMessage.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>

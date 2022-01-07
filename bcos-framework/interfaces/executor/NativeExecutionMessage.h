@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../interfaces/executor/ExecutionMessage.h"
+#include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include <boost/iterator/transform_iterator.hpp>
 #include <boost/multi_index/detail/modify_key_adaptor.hpp>
 #include <boost/range/adaptor/transformed.hpp>

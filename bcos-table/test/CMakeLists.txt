@@ -1,5 +1,5 @@
 #------------------------------------------------------------------------------
-# Top-level CMake file for ut of bcos-framework
+# Top-level CMake file for ut of libtable
 # ------------------------------------------------------------------------------
 # Copyright (C) 2021 FISCO BCOS.
 # SPDX-License-Identifier: Apache-2.0
@@ -15,28 +15,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ------------------------------------------------------------------------------
-list(APPEND SOURCES "TestRocksDBStorage.cpp" "main.cpp")
+file(GLOB_RECURSE SOURCES "*.cpp" "*.h" "*.sol")
+
 # cmake settings
-set(TEST_BINARY_NAME test-bcos-storage)
-
-if(USE_TiKV)
-    list(APPEND SOURCES "TestTiKVStorage.cpp")
-else()
-    set(EXCLUDE_SUITES "TestTiKVStorage")
-endif()
-
-# config_test_cases("" "${SOURCES}" bin/${TEST_BINARY_NAME} "${EXCLUDE_SUITES}")
+set(TEST_BINARY_NAME test-table)
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
-target_include_directories(${TEST_BINARY_NAME} PRIVATE . ../../src)
+target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR})
 
-find_package(Boost CONFIG QUIET REQUIRED unit_test_framework)
+find_package(wedpr-crypto CONFIG QUIET REQUIRED)
+find_package(Boost CONFIG QUIET REQUIRED  unit_test_framework)
 
-target_link_libraries(${TEST_BINARY_NAME} Boost::unit_test_framework ${STORAGE_TARGET})
-add_test(NAME test-storage WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
-
-# for code coverage
-if (COVERAGE)
-    include(Coverage)
-    config_coverage("coverage" "'/usr*' 'boost/**'")
-endif ()
+target_link_libraries(${TEST_BINARY_NAME} ${TABLE_TARGET} Boost::unit_test_framework)
+add_test(NAME test-framework WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
