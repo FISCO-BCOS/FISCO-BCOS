@@ -36,11 +36,11 @@ namespace gateway
 enum GroupType
 {
     // group with at-least one consensus node
-    GROUP_WITH_CONSENSUS_NODE = 0,
+    GROUP_WITH_CONSENSUS_NODE = 0x1,
     // group without consensus node
-    GROUP_WITHOUT_CONSENSUS_NODE = 1,
+    GROUP_WITHOUT_CONSENSUS_NODE = 0x10,
     // group without consensus node and observer node
-    OUTSIDE_GROUP = 2,
+    OUTSIDE_GROUP = 0x100,
 };
 
 template <typename T, typename S, typename... Args>

@@ -54,6 +54,7 @@ class GatewayNodeStatus
 {
 public:
     using Ptr = std::shared_ptr<GatewayNodeStatus>;
+    using ConstPtr = std::shared_ptr<GatewayNodeStatus const>;
     GatewayNodeStatus();
     virtual ~GatewayNodeStatus() {}
 

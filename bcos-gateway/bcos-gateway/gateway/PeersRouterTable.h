@@ -19,6 +19,7 @@
  */
 #pragma once
 #include "FrontServiceInfo.h"
+#include "GatewayStatus.h"
 #include <bcos-framework/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/interfaces/crypto/KeyInterface.h>
 #include <bcos-gateway/Common.h>
@@ -33,25 +34,32 @@ class PeersRouterTable
 {
 public:
     using Ptr = std::shared_ptr<PeersRouterTable>;
-    PeersRouterTable(bcos::crypto::KeyFactory::Ptr _keyFactory) : m_keyFactory(_keyFactory) {}
+    PeersRouterTable(bcos::crypto::KeyFactory::Ptr _keyFactory)
+      : m_keyFactory(_keyFactory), m_gatewayStatusFactory(std::make_shared<GatewayStatusFactory>())
+    {}
     virtual ~PeersRouterTable() {}
 
     bcos::crypto::NodeIDs getGroupNodeIDList(const std::string& _groupID) const;
     std::set<P2pID> queryP2pIDs(const std::string& _groupID, const std::string& _nodeID) const;
     std::set<P2pID> queryP2pIDsByGroupID(const std::string& _groupID) const;
-    void removeP2PID(const std::string& _p2pID);
+    void removeP2PID(const P2pID& _p2pID);
 
-    void updatePeerStatus(std::string const& _p2pID, GatewayNodeStatus::Ptr _gatewayNodeStatus);
-
-    void removePeer(std::string const& _p2pNodeID);
+    void updatePeerStatus(P2pID const& _p2pID, GatewayNodeStatus::Ptr _gatewayNodeStatus);
 
     using Group2NodeIDListType = std::map<std::string, std::set<std::string>>;
-    Group2NodeIDListType peersNodeIDList(std::string const& _p2pNodeID) const;
+    Group2NodeIDListType peersNodeIDList(P2pID const& _p2pNodeID) const;
 
 protected:
     void batchInsertNodeList(
-        std::string const& _p2pNodeID, std::vector<GroupNodeInfo::Ptr> const& _nodeList);
-    void updatePeerNodeList(std::string const& _p2pNodeID, GatewayNodeStatus::Ptr _status);
+        P2pID const& _p2pNodeID, std::vector<GroupNodeInfo::Ptr> const& _nodeList);
+    void updatePeerNodeList(P2pID const& _p2pNodeID, GatewayNodeStatus::Ptr _status);
+
+    void removeP2PIDFromGroupNodeList(P2pID const& _p2pID);
+    void removePeerStatus(P2pID const& _p2pNodeID);
+
+    void updateGatewayInfo(P2pID const& _p2pNodeID, GatewayNodeStatus::Ptr _status);
+    void removeNodeFromGatewayInfo(P2pID const& _p2pID);
+    GatewayStatus::Ptr gatewayInfo(std::string const& _uuid);
 
 private:
     bcos::crypto::KeyFactory::Ptr m_keyFactory;
@@ -64,6 +72,11 @@ private:
     // p2pNodeID => groupID => nodeIDList
     std::map<P2pID, GatewayNodeStatus::Ptr> m_peersStatus;
     mutable SharedMutex x_peersStatus;
+
+    GatewayStatusFactory::Ptr m_gatewayStatusFactory;
+    // uuid => gatewayInfo
+    std::map<std::string, GatewayStatus::Ptr> m_gatewayInfos;
+    mutable SharedMutex x_gatewayInfos;
 };
 }  // namespace gateway
 }  // namespace bcos

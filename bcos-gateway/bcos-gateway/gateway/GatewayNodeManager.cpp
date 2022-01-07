@@ -153,7 +153,7 @@ void GatewayNodeManager::updatePeerStatus(std::string const& _p2pID, GatewayNode
         m_p2pID2Seq[_p2pID] = seq;
     }
     // remove peers info
-    m_peersRouterTable->removeP2PID(_p2pID);
+    // m_peersRouterTable->removeP2PID(_p2pID);
     // insert the latest peers info
     m_peersRouterTable->updatePeerStatus(_p2pID, _status);
     // notify nodeIDs to front service
@@ -227,7 +227,6 @@ void GatewayNodeManager::onRemoveNodeIDs(const P2pID& _p2pID)
         m_p2pID2Seq.erase(_p2pID);
     }
     m_peersRouterTable->removeP2PID(_p2pID);
-    m_peersRouterTable->removePeer(_p2pID);
     // notify nodeIDs to front service
     syncLatestNodeIDList();
 }
