@@ -24,7 +24,7 @@
 #include "VMInstance.h"
 #include <evmc/loader.h>
 #include <evmone/evmone.h>
-#include <hera/hera.h>
+#include <BCOS_WASM.h>
 #include <boost/program_options.hpp>
 
 namespace po = boost::program_options;
@@ -56,7 +56,7 @@ struct VMKindTableEntry
 /// The table of available VM implementations.
 
 #if 0
-VMKindTableEntry vmKindsTable[] = {{VMKind::Hera, "hera"}, {VMKind::evmone, "evmone"}};
+VMKindTableEntry vmKindsTable[] = {{VMKind::BcosWasm, "bcos wasm"}, {VMKind::evmone, "evmone"}};
 void setVMKind(const std::string& _name)
 {
     for (auto& entry : vmKindsTable)
@@ -100,8 +100,8 @@ VMInstance VMFactory::create(VMKind _kind)
 {
     switch (_kind)
     {
-    case VMKind::Hera:
-        return VMInstance{evmc_create_hera()};
+    case VMKind::BcosWasm:
+        return VMInstance{evmc_create_bcoswasm()};
     case VMKind::evmone:
         return VMInstance{evmc_create_evmone()};
     case VMKind::DLL:
