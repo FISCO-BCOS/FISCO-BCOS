@@ -21,9 +21,9 @@
 
 #pragma once
 #include "bcos-rpc/amop/AMOPClient.h"
-#include "bcos-rpc/amop/LocalAMOPClient.h"
+#include "bcos-rpc/amop/AirAMOPClient.h"
+#include "bcos-rpc/jsonrpc/groupmgr/AirGroupManager.h"
 #include "bcos-rpc/jsonrpc/groupmgr/GroupManager.h"
-#include "bcos-rpc/jsonrpc/groupmgr/LocalGroupManager.h"
 #include <bcos-boostssl/websocket/WsConfig.h>
 #include <bcos-framework/interfaces/consensus/ConsensusInterface.h>
 #include <bcos-framework/interfaces/crypto/KeyFactory.h>
@@ -76,13 +76,13 @@ public:
 protected:
     // for groupManager builder
     GroupManager::Ptr buildGroupManager();
-    LocalGroupManager::Ptr buildLocalGroupManager(
+    AirGroupManager::Ptr buildAirGroupManager(
         bcos::group::GroupInfo::Ptr _groupInfo, NodeService::Ptr _nodeService);
 
     // for AMOP builder
     AMOPClient::Ptr buildAMOPClient(std::shared_ptr<boostssl::ws::WsService> _wsService,
         std::string const& _gatewayServiceName);
-    AMOPClient::Ptr buildLocalAMOPClient(std::shared_ptr<boostssl::ws::WsService> _wsService);
+    AMOPClient::Ptr buildAirAMOPClient(std::shared_ptr<boostssl::ws::WsService> _wsService);
 
 
     bcos::rpc::JsonRpcImpl_2_0::Ptr buildJsonRpc(

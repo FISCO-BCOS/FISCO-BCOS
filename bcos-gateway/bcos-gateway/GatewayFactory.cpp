@@ -6,9 +6,9 @@
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/interfaces/rpc/RPCInterface.h>
 #include <bcos-gateway/GatewayFactory.h>
-#include <bcos-gateway/gateway/DynamicGatewayNodeManager.h>
 #include <bcos-gateway/gateway/GatewayNodeManager.h>
-#include <bcos-gateway/libamop/LocalTopicManager.h>
+#include <bcos-gateway/gateway/ProGatewayNodeManager.h>
+#include <bcos-gateway/libamop/AirTopicManager.h>
 #include <bcos-gateway/libnetwork/ASIOInterface.h>
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/Host.h>
@@ -302,7 +302,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         else
         {
             gatewayNodeManager =
-                std::make_shared<DynamicGatewayNodeManager>(pubHex, keyFactory, service);
+                std::make_shared<ProGatewayNodeManager>(pubHex, keyFactory, service);
             amop = buildAMOP(service, pubHex);
         }
         // init Gateway

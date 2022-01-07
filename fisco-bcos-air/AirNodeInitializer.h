@@ -27,11 +27,11 @@ namespace bcos
 {
 namespace node
 {
-class LocalNodeInitializer
+class AirNodeInitializer
 {
 public:
-    LocalNodeInitializer() = default;
-    virtual ~LocalNodeInitializer() { stop(); }
+    AirNodeInitializer() = default;
+    virtual ~AirNodeInitializer() { stop(); }
 
     virtual void init(std::string const& _configFilePath, std::string const& _genesisFile);
     virtual void start();

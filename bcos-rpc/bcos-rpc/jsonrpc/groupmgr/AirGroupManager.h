@@ -13,8 +13,8 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief LocalGroupManager.h
- * @file LocalGroupManager.h
+ * @brief AirGroupManager.h
+ * @file AirGroupManager.h
  * @author: yujiechen
  * @date 2021-10-11
  */
@@ -25,16 +25,16 @@ namespace bcos
 {
 namespace rpc
 {
-class LocalGroupManager : public GroupManager
+class AirGroupManager : public GroupManager
 {
 public:
-    using Ptr = std::shared_ptr<LocalGroupManager>;
-    LocalGroupManager(std::string const& _chainID, bcos::group::GroupInfo::Ptr _groupInfo,
+    using Ptr = std::shared_ptr<AirGroupManager>;
+    AirGroupManager(std::string const& _chainID, bcos::group::GroupInfo::Ptr _groupInfo,
         NodeService::Ptr _nodeService)
       : GroupManager(_chainID), m_nodeService(_nodeService), m_groupInfo(_groupInfo)
     {}
 
-    ~LocalGroupManager() override {}
+    ~AirGroupManager() override {}
     virtual void init() { initNodeInfo(m_groupInfo->groupID(), "localNode", m_nodeService); }
     NodeService::Ptr getNodeService(std::string const& _groupID, std::string const&) const override
     {

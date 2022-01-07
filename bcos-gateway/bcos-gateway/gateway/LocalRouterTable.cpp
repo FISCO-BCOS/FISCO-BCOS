@@ -209,3 +209,49 @@ bool LocalRouterTable::eraseUnreachableNodes()
     }
     return updated;
 }
+
+bool LocalRouterTable::asyncBroadcastMsg(
+    const std::string& _groupID, NodeIDPtr _srcNodeID, bytesConstRef _payload)
+{
+    auto frontServiceList = getGroupFrontServiceList(_groupID);
+    if (frontServiceList.size() == 0)
+    {
+        return false;
+    }
+    for (auto const& it : frontServiceList)
+    {
+        auto frontService = it->frontService();
+        auto dstNodeID = it->nodeID();
+        frontService->onReceiveMessage(
+            _groupID, _srcNodeID, _payload, [_srcNodeID, dstNodeID](Error::Ptr _error) {
+                if (_error)
+                {
+                    GATEWAY_LOG(ERROR)
+                        << LOG_DESC("ROUTER_LOG error") << LOG_KV("src", _srcNodeID->hex())
+                        << LOG_KV("dst", dstNodeID) << LOG_KV("code", _error->errorCode())
+                        << LOG_KV("msg", _error->errorMessage());
+                }
+            });
+    }
+    return true;
+}
+
+
+// send message to the local nodes
+bool LocalRouterTable::sendMessage(const std::string& _groupID, NodeIDPtr _srcNodeID,
+    NodeIDPtr _dstNodeID, bytesConstRef _payload, ErrorRespFunc _errorRespFunc)
+{
+    auto frontServiceInfo = getFrontService(_groupID, _dstNodeID);
+    if (!frontServiceInfo)
+    {
+        return false;
+    }
+    frontServiceInfo->frontService()->onReceiveMessage(
+        _groupID, _srcNodeID, _payload, [_errorRespFunc](Error::Ptr _error) {
+            if (_errorRespFunc)
+            {
+                _errorRespFunc(_error);
+            }
+        });
+    return true;
+}

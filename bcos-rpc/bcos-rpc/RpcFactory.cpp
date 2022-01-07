@@ -280,8 +280,8 @@ Rpc::Ptr RpcFactory::buildLocalRpc(
 {
     auto config = initConfig(m_nodeConfig);
     auto wsService = buildWsService(config);
-    auto groupManager = buildLocalGroupManager(_groupInfo, _nodeService);
-    auto amopClient = buildLocalAMOPClient(wsService);
+    auto groupManager = buildAirGroupManager(_groupInfo, _nodeService);
+    auto amopClient = buildAirAMOPClient(wsService);
     auto rpc = buildRpc(wsService, groupManager, amopClient);
     // Note: init groupManager after create rpc and register the handlers
     groupManager->init();
@@ -310,10 +310,10 @@ GroupManager::Ptr RpcFactory::buildGroupManager()
     return std::make_shared<GroupManager>(m_chainID, nodeServiceFactory);
 }
 
-LocalGroupManager::Ptr RpcFactory::buildLocalGroupManager(
+AirGroupManager::Ptr RpcFactory::buildAirGroupManager(
     GroupInfo::Ptr _groupInfo, NodeService::Ptr _nodeService)
 {
-    return std::make_shared<LocalGroupManager>(m_chainID, _groupInfo, _nodeService);
+    return std::make_shared<AirGroupManager>(m_chainID, _groupInfo, _nodeService);
 }
 
 AMOPClient::Ptr RpcFactory::buildAMOPClient(
@@ -325,10 +325,9 @@ AMOPClient::Ptr RpcFactory::buildAMOPClient(
         _wsService, wsFactory, requestFactory, m_gateway, _gatewayServiceName);
 }
 
-AMOPClient::Ptr RpcFactory::buildLocalAMOPClient(
-    std::shared_ptr<boostssl::ws::WsService> _wsService)
+AMOPClient::Ptr RpcFactory::buildAirAMOPClient(std::shared_ptr<boostssl::ws::WsService> _wsService)
 {
     auto wsFactory = std::make_shared<WsMessageFactory>();
     auto requestFactory = std::make_shared<AMOPRequestFactory>();
-    return std::make_shared<LocalAMOPClient>(_wsService, wsFactory, requestFactory, m_gateway);
+    return std::make_shared<AirAMOPClient>(_wsService, wsFactory, requestFactory, m_gateway);
 }

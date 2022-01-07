@@ -13,7 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file DynamicGatewayNodeManager.h
+ * @file ProGatewayNodeManager.h
  * @author: yujiechen
  * @date 2021-10-28
  */
@@ -24,11 +24,11 @@ namespace bcos
 {
 namespace gateway
 {
-class DynamicGatewayNodeManager : public GatewayNodeManager
+class ProGatewayNodeManager : public GatewayNodeManager
 {
 public:
-    using Ptr = std::shared_ptr<DynamicGatewayNodeManager>;
-    DynamicGatewayNodeManager(P2pID const& _nodeID,
+    using Ptr = std::shared_ptr<ProGatewayNodeManager>;
+    ProGatewayNodeManager(P2pID const& _nodeID,
         std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface)
       : GatewayNodeManager(_nodeID, _keyFactory, _p2pInterface)
     {
