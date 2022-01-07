@@ -19,11 +19,12 @@
  */
 
 #pragma once
-#include "libprotocol/Common.h"
-#include "libprotocol/protobuf/PBBlockHeaderFactory.h"
-#include "libutilities/Common.h"
-#include <bcos-framework/testutils/crypto/HashImpl.h>
-#include <bcos-framework/testutils/crypto/SignatureImpl.h>
+#include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/hash/SM3.h"
+#include "bcos-protocol/Common.h"
+#include "bcos-protocol/protobuf/PBBlockHeaderFactory.h"
+#include "bcos-utilities/Common.h"
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::protocol;

@@ -20,14 +20,14 @@
  */
 
 #pragma once
+#include "../executive/TransactionExecutive.h"
 #include "../precompiled/PrecompiledCodec.h"
 #include "../precompiled/PrecompiledGas.h"
-#include "../executive/TransactionExecutive.h"
 #include "bcos-framework/interfaces/storage/Table.h"
-#include "bcos-framework/libutilities/Common.h"
-#include "bcos-framework/libutilities/Exceptions.h"
-#include "bcos-framework/libutilities/FixedBytes.h"
-#include "bcos-framework/libstorage/StateStorage.h"
+#include "bcos-table/src/StateStorage.h"
+#include "bcos-utilities/Common.h"
+#include "bcos-utilities/Exceptions.h"
+#include "bcos-utilities/FixedBytes.h"
 #include <functional>
 #include <unordered_map>
 
@@ -152,10 +152,7 @@ public:
         const std::string& _origin, const std::string& _sender) = 0;
 
     virtual bool isParallelPrecompiled() { return false; }
-    virtual std::vector<std::string> getParallelTag(bytesConstRef,bool)
-    {
-        return {};
-    }
+    virtual std::vector<std::string> getParallelTag(bytesConstRef, bool) { return {}; }
 
 protected:
     std::map<std::string, uint32_t> name2Selector;

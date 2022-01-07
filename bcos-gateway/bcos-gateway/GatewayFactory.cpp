@@ -5,8 +5,6 @@
 
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/interfaces/rpc/RPCInterface.h>
-#include <bcos-framework/libutilities/DataConvertUtility.h>
-#include <bcos-framework/libutilities/FileUtility.h>
 #include <bcos-gateway/GatewayFactory.h>
 #include <bcos-gateway/gateway/DynamicGatewayNodeManager.h>
 #include <bcos-gateway/gateway/GatewayNodeManager.h>
@@ -16,6 +14,8 @@
 #include <bcos-gateway/libnetwork/Host.h>
 #include <bcos-gateway/libnetwork/Session.h>
 #include <bcos-gateway/libp2p/Service.h>
+#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/FileUtility.h>
 
 using namespace bcos::rpc;
 using namespace bcos;

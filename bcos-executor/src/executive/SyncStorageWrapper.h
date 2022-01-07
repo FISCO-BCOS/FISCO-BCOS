@@ -3,7 +3,7 @@
 #include "../Common.h"
 #include "bcos-framework/interfaces/storage/StorageInterface.h"
 #include "bcos-framework/interfaces/storage/Table.h"
-#include "bcos-framework/libstorage/StateStorage.h"
+#include "bcos-table/src/StateStorage.h"
 #include <boost/iterator/iterator_categories.hpp>
 #include <boost/throw_exception.hpp>
 #include <optional>
@@ -25,7 +25,7 @@ class SyncStorageWrapper
 public:
     SyncStorageWrapper(storage::StateStorage::Ptr storage,
         std::function<void(std::string)> externalAcquireKeyLocks,
-        bcos::storage::StateStorage::Recoder::Ptr recoder)
+        bcos::storage::Recoder::Ptr recoder)
       : m_storage(std::move(storage)),
         m_externalAcquireKeyLocks(std::move(externalAcquireKeyLocks)),
         m_recoder(recoder)
@@ -161,10 +161,7 @@ public:
         return std::move(table);
     }
 
-    void setRecoder(storage::StateStorage::Recoder::Ptr recoder)
-    {
-        m_storage->setRecoder(std::move(recoder));
-    }
+    void setRecoder(storage::Recoder::Ptr recoder) { m_storage->setRecoder(std::move(recoder)); }
 
     void importExistsKeyLocks(gsl::span<std::string> keyLocks)
     {
@@ -207,7 +204,7 @@ private:
 
     storage::StateStorage::Ptr m_storage;
     std::function<void(std::string)> m_externalAcquireKeyLocks;
-    bcos::storage::StateStorage::Recoder::Ptr m_recoder;
+    bcos::storage::Recoder::Ptr m_recoder;
 
     std::set<std::string, std::less<>> m_existsKeyLocks;
     std::set<std::string, std::less<>> m_myKeyLocks;

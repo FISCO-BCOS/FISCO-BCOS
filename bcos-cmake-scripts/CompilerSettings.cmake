@@ -30,7 +30,6 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
     # Use ISO C++17 standard language.
     set(CMAKE_CXX_STANDARD 17)
     set(CMAKE_CXX_FLAGS "-std=c++17 -pthread -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -fexceptions")
-    set(CMAKE_FIND_LIBRARY_SUFFIXES .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
     set(CMAKE_CXX_VISIBILITY_PRESET hidden)
     # Enables all the warnings about constructions that some users consider questionable,
     # and that are easy to avoid.  Also enable some extra warning flags that are not
@@ -105,10 +104,8 @@ if (("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU") OR ("${CMAKE_CXX_COMPILER_ID}" MA
 		# Strong stack protection was only added in GCC 4.9.
 		# Use it if we have the option to do so.
 		# See https://lwn.net/Articles/584225/
-        if (GCC_VERSION VERSION_GREATER 4.9 OR GCC_VERSION VERSION_EQUAL 4.9)
-            add_compile_options(-fstack-protector-strong)
-            add_compile_options(-fstack-protector)
-        endif()
+        add_compile_options(-fstack-protector-strong)
+        add_compile_options(-fstack-protector)
     # Additional Clang-specific compiler settings.
     elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
         if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS 4.0)
@@ -144,7 +141,7 @@ else ()
 endif ()
 
 if (SANITIZE)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-omit-frame-pointer -fsanitize=${SANITIZE}")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-omit-frame-pointer -fsanitize=address -fsanitize=leak -fsanitize-recover=all")
     if (${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")
         set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -fsanitize-blacklist=${CMAKE_SOURCE_DIR}/sanitizer-blacklist.txt")
     endif()
@@ -154,6 +151,6 @@ endif()
 if(APPLE)
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -framework Security")
 else()
-   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -ldl")
+   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,--no-as-needed -ldl")
 endif()
 set(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY ON)

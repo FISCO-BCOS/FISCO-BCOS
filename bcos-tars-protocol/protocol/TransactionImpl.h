@@ -24,8 +24,8 @@
 #include "bcos-tars-protocol/tars/Transaction.h"
 #include <bcos-framework/interfaces/crypto/CommonType.h>
 #include <bcos-framework/interfaces/protocol/Transaction.h>
-#include <bcos-framework/libutilities/Common.h>
-#include <bcos-framework/libutilities/DataConvertUtility.h>
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <memory>
 
 namespace bcostars

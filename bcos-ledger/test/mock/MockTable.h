@@ -20,8 +20,7 @@
 #pragma once
 
 #include "bcos-framework/interfaces/storage/Common.h"
-#include "bcos-framework/libtable/Table.h"
-#include "bcos-framework/libtable/TableStorage.h"
+#include "bcos-framework/interfaces/storage/Table.h"
 #include "bcos-ledger/libledger/utilities/Common.h"
 #include <tbb/concurrent_unordered_map.h>
 

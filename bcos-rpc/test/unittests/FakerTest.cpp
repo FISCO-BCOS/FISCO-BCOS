@@ -18,9 +18,9 @@
  * @author: yujiechen
  * @date 2021-09-15
  */
-#include <bcos-framework/testutils/TestPromptFixture.h>
 #include <bcos-rpc/jsonrpc/groupmgr/GroupManager.h>
 #include <bcos-rpc/jsonrpc/groupmgr/LocalGroupManager.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 #include <chrono>
 #include <thread>

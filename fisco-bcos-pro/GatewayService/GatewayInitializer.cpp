@@ -18,10 +18,10 @@
  * @author: yujiechen
  * @date 2021-10-15
  */
-#include <bcos-framework/libtool/NodeConfig.h>
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-gateway/GatewayFactory.h>
+#include <bcos-tool/NodeConfig.h>
 
 #include "GatewayInitializer.h"
 

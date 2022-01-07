@@ -22,21 +22,22 @@
  */
 
 #include "bcos-ledger/src/libledger/Ledger.h"
-#include "bcos-ledger/src/libledger/utilities/Common.h"
-#include "common/FakeBlock.h"
-#include "interfaces/crypto/CommonType.h"
-#include "interfaces/ledger/LedgerTypeDef.h"
-#include "libtool/ConsensusNode.h"
 #include "../../mock/MockKeyFactor.h"
+#include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/hash/SM3.h"
+#include "bcos-framework/interfaces/crypto/CommonType.h"
+#include "bcos-framework/interfaces/ledger/LedgerTypeDef.h"
+#include "bcos-ledger/src/libledger/utilities/Common.h"
+#include "bcos-tool/ConsensusNode.h"
+#include "common/FakeBlock.h"
+#include <bcos-codec/scale/Scale.h>
 #include <bcos-framework/interfaces/consensus/ConsensusNode.h>
 #include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/interfaces/storage/StorageInterface.h>
 #include <bcos-framework/interfaces/storage/Table.h>
-#include <bcos-framework/libcodec/scale/Scale.h>
-#include <bcos-framework/libstorage/StateStorage.h>
-#include <bcos-framework/libutilities/DataConvertUtility.h>
-#include <bcos-framework/testutils/TestPromptFixture.h>
-#include <bcos-framework/testutils/crypto/HashImpl.h>
+#include <bcos-table/src/StateStorage.h>
+#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
 #include <memory>
@@ -88,7 +89,7 @@ public:
 
     inline void initStorage()
     {
-        auto hashImpl = std::make_shared<Keccak256Hash>();
+        auto hashImpl = std::make_shared<Keccak256>();
         auto memoryStorage = std::make_shared<StateStorage>(nullptr);
         memoryStorage->setEnableTraverse(true);
         auto storage = std::make_shared<StateStorage>(memoryStorage);
@@ -118,7 +119,7 @@ public:
         m_param->setHash(HashType(""));
         m_param->setBlockTxCountLimit(1000);
 
-        auto signImpl = std::make_shared<Secp256k1SignatureImpl>();
+        auto signImpl = std::make_shared<Secp256k1Crypto>();
         consensus::ConsensusNodeList consensusNodeList;
         consensus::ConsensusNodeList observerNodeList;
         for (int i = 0; i < 4; ++i)

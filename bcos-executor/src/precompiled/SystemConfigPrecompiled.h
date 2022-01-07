@@ -21,7 +21,7 @@
 #pragma once
 #include "../vm/Precompiled.h"
 #include "Common.h"
-#include "interfaces/protocol/ProtocolTypeDef.h"
+#include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
 namespace bcos
 {
 namespace precompiled

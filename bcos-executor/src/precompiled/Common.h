@@ -24,7 +24,7 @@
 #include <bcos-framework/interfaces/protocol/Exceptions.h>
 #include <bcos-framework/interfaces/storage/Common.h>
 #include <bcos-framework/interfaces/storage/Entry.h>
-#include <bcos-framework/libutilities/Log.h>
+#include <bcos-utilities/Log.h>
 #include <memory>
 #include <string>
 

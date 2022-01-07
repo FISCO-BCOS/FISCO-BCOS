@@ -19,8 +19,8 @@
 cmake_minimum_required(VERSION 3.10)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment version")
 
-project(bcos-sync VERSION "3.0.0")
-set(VERSION_SUFFIX "-rc1")
+include(Version)
+project(bcos-sync VERSION ${VERSION})
 
 # proto generation
 set(PROTO_INPUT_PATH ${CMAKE_SOURCE_DIR}/bcos-sync)
@@ -46,17 +46,14 @@ foreach(proto_file ${SYNC_PROTOS})
 endforeach()
 
 find_package(Protobuf CONFIG REQUIRED)
+find_package(jsoncpp CONFIG REQUIRED)
 
-include_directories(${CMAKE_SOURCE_DIR}/bcos-sync)
 include_directories(${PROTO_OUTPUT_PATH})
-include_directories(${CMAKE_BINARY_DIR}/)
-include_directories(${CMAKE_SOURCE_DIR}/)
 
 file(GLOB_RECURSE SRCS bcos-sync/*.cpp)
-
-add_library(sync ${SRCS} ${SYNC_SRCS})
-target_compile_options(sync PRIVATE -Wno-error -Wno-unused-variable)
-target_link_libraries(sync PUBLIC framework)
+add_library(${SYNC_TARGET} ${SRCS} ${SYNC_SRCS})
+target_compile_options(${SYNC_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
+target_link_libraries(${SYNC_TARGET} PUBLIC jsoncpp_lib_static ${UTILITIES_TARGET} ${TOOL_TARGET})
 
 
 if (TESTS)

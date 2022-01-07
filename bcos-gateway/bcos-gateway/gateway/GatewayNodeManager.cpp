@@ -21,7 +21,7 @@
 #include "GatewayNodeManager.h"
 #include <bcos-framework/interfaces/protocol/CommonError.h>
 #include <bcos-framework/interfaces/protocol/ServiceDesc.h>
-#include <bcos-framework/libutilities/DataConvertUtility.h>
+#include <bcos-utilities/DataConvertUtility.h>
 
 using namespace std;
 using namespace bcos;

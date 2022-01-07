@@ -19,8 +19,8 @@
  */
 #pragma once
 #include <bcos-framework/interfaces/consensus/ConsensusTypeDef.h>
-#include <bcos-framework/libutilities/Exceptions.h>
-#include <bcos-framework/libutilities/Log.h>
+#include <bcos-utilities/Exceptions.h>
+#include <bcos-utilities/Log.h>
 
 #define CONSENSUS_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("Core")
 namespace bcos

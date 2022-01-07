@@ -19,8 +19,8 @@
  */
 
 #pragma once
-#include "../../libutilities/Common.h"
 #include "../protocol/ProtocolTypeDef.h"
+#include "bcos-utilities/Common.h"
 
 namespace bcos
 {

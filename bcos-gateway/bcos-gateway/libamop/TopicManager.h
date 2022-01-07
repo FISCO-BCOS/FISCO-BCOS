@@ -21,11 +21,11 @@
 
 #include <bcos-framework/interfaces/crypto/KeyInterface.h>
 #include <bcos-framework/interfaces/rpc/RPCInterface.h>
-#include <bcos-framework/libutilities/Common.h>
-#include <bcos-framework/libutilities/Timer.h>
 #include <bcos-gateway/libamop/Common.h>
 #include <bcos-gateway/libp2p/P2PInterface.h>
 #include <bcos-tars-protocol/client/RpcServiceClient.h>
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/Timer.h>
 #include <tarscpp/servant/Application.h>
 #include <algorithm>
 #include <shared_mutex>
@@ -158,7 +158,8 @@ public:
             }
             auto servicePrx =
                 Application::getCommunicator()->stringToProxy<bcostars::RpcServicePrx>(_clientID);
-            auto rpcClient = std::make_shared<bcostars::RpcServiceClient>(servicePrx);
+            auto rpcClient =
+                std::make_shared<bcostars::RpcServiceClient>(servicePrx, m_rpcServiceName);
             UpgradeGuard ul(l);
             m_clientInfo[_clientID] = rpcClient;
             TOPIC_LOG(INFO) << LOG_DESC("createAndGetServiceByClient")

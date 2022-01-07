@@ -17,9 +17,9 @@
 
 #include <bcos-framework/interfaces/crypto/KeyInterface.h>
 #include <bcos-framework/interfaces/gateway/GatewayTypeDef.h>
-#include <bcos-framework/libutilities/Common.h>
-#include <bcos-framework/libutilities/Error.h>
-#include <bcos-framework/libutilities/Exceptions.h>
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/Error.h>
+#include <bcos-utilities/Exceptions.h>
 namespace ba = boost::asio;
 namespace bi = boost::asio::ip;
 #define HOST_LOG(LEVEL) BCOS_LOG(LEVEL) << "[NETWORK][Host]"

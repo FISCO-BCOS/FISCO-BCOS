@@ -19,9 +19,9 @@
  * @date 2021-05-17
  */
 
-#include <bcos-framework/testutils/TestPromptFixture.h>
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-gateway/GatewayFactory.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/filesystem.hpp>
 #include <boost/test/unit_test.hpp>
 
@@ -120,7 +120,7 @@ BOOST_AUTO_TEST_CASE(test_nodesJsonParser)
 BOOST_AUTO_TEST_CASE(test_initConfig)
 {
     {
-        std::string configIni("../../bcos-gateway/test/unittests/data/config/config_ipv4.ini");
+        std::string configIni("../../../bcos-gateway/test/unittests/data/config/config_ipv4.ini");
         auto config = std::make_shared<GatewayConfig>();
         config->initConfig(configIni);
         config->loadP2pConnectedNodes();
@@ -140,7 +140,7 @@ BOOST_AUTO_TEST_CASE(test_initConfig)
 BOOST_AUTO_TEST_CASE(test_initSMConfig)
 {
     {
-        std::string configIni("../../bcos-gateway/test/unittests/data/config/config_ipv6.ini");
+        std::string configIni("../../../bcos-gateway/test/unittests/data/config/config_ipv6.ini");
 
         auto config = std::make_shared<GatewayConfig>();
         config->initConfig(configIni);

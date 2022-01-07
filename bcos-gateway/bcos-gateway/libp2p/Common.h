@@ -6,9 +6,9 @@
 
 #pragma once
 
-#include <bcos-framework/libutilities/Common.h>
-#include <bcos-framework/libutilities/Exceptions.h>
 #include <bcos-gateway/libnetwork/Common.h>
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/Exceptions.h>
 
 namespace bcos
 {

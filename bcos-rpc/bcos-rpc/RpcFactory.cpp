@@ -19,20 +19,20 @@
  * @date 2021-07-15
  */
 
-#include "interfaces/gateway/GatewayTypeDef.h"
+#include "bcos-framework/interfaces/gateway/GatewayTypeDef.h"
 #include <bcos-boostssl/context/ContextBuilder.h>
 #include <bcos-boostssl/websocket/WsInitializer.h>
 #include <bcos-boostssl/websocket/WsMessage.h>
 #include <bcos-boostssl/websocket/WsService.h>
-#include <bcos-framework/libprotocol/amop/AMOPRequest.h>
-#include <bcos-framework/libutilities/Exceptions.h>
-#include <bcos-framework/libutilities/FileUtility.h>
-#include <bcos-framework/libutilities/Log.h>
-#include <bcos-framework/libutilities/ThreadPool.h>
+#include <bcos-protocol/amop/AMOPRequest.h>
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-rpc/event/EventSubMatcher.h>
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>
 #include <bcos-rpc/ws/ProtocolVersion.h>
+#include <bcos-utilities/Exceptions.h>
+#include <bcos-utilities/FileUtility.h>
+#include <bcos-utilities/Log.h>
+#include <bcos-utilities/ThreadPool.h>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
@@ -282,7 +282,10 @@ Rpc::Ptr RpcFactory::buildLocalRpc(
     auto wsService = buildWsService(config);
     auto groupManager = buildLocalGroupManager(_groupInfo, _nodeService);
     auto amopClient = buildLocalAMOPClient(wsService);
-    return buildRpc(wsService, groupManager, amopClient);
+    auto rpc = buildRpc(wsService, groupManager, amopClient);
+    // Note: init groupManager after create rpc and register the handlers
+    groupManager->init();
+    return rpc;
 }
 
 /**
@@ -307,7 +310,7 @@ GroupManager::Ptr RpcFactory::buildGroupManager()
     return std::make_shared<GroupManager>(m_chainID, nodeServiceFactory);
 }
 
-GroupManager::Ptr RpcFactory::buildLocalGroupManager(
+LocalGroupManager::Ptr RpcFactory::buildLocalGroupManager(
     GroupInfo::Ptr _groupInfo, NodeService::Ptr _nodeService)
 {
     return std::make_shared<LocalGroupManager>(m_chainID, _groupInfo, _nodeService);

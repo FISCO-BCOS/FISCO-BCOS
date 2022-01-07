@@ -19,12 +19,12 @@
  * @date 2021-05-25
  */
 #pragma once
-#include "../../interfaces/ledger/LedgerConfig.h"
-#include "../../interfaces/ledger/LedgerInterface.h"
-#include "../../interfaces/protocol/Block.h"
-#include "../../libutilities/ThreadPool.h"
-#include "../../testutils/protocol/FakeBlock.h"
-#include "../../testutils/protocol/FakeBlockHeader.h"
+#include "bcos-framework/interfaces/ledger/LedgerConfig.h"
+#include "bcos-framework/interfaces/ledger/LedgerInterface.h"
+#include "bcos-framework/interfaces/protocol/Block.h"
+#include "bcos-protocol/testutils/protocol/FakeBlock.h"
+#include "bcos-protocol/testutils/protocol/FakeBlockHeader.h"
+#include "bcos-utilities/ThreadPool.h"
 
 using namespace bcos;
 using namespace bcos::ledger;

@@ -1,0 +1,13 @@
+syntax = "proto3";
+package bcos.protocol;
+message PBSignatureList
+{
+    int64 sealerIndex = 1;
+    bytes signatureData = 2;
+}
+message PBRawBlockHeader{
+    int32 version = 1;
+    bytes hashFieldsData = 2;
+    bytes hashFieldsHash = 4;
+    repeated PBSignatureList signatureList = 3;
+}

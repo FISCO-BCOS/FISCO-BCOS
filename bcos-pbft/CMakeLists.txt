@@ -19,8 +19,8 @@
 cmake_minimum_required(VERSION 3.10)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment version")
 
-project(bcos-pbft VERSION "3.0.0")
-set(VERSION_SUFFIX "-rc1")
+include(Version)
+project(bcos-pbft VERSION ${VERSION})
 
 # proto generation
 set(PROTO_INPUT_PATH ${CMAKE_SOURCE_DIR}/bcos-pbft)
@@ -45,16 +45,14 @@ foreach(proto_file ${MESSAGES_PROTOS})
     )
 endforeach()
 
-include_directories(${CMAKE_SOURCE_DIR}/bcos-pbft)
 include_directories(${PROTO_OUTPUT_PATH})
-include_directories(${CMAKE_SOURCE_DIR}/)
-
-file(GLOB_RECURSE SRCS bcos-pbft/*.cpp)
 
 find_package(Protobuf CONFIG REQUIRED)
+find_package(jsoncpp CONFIG REQUIRED)
 
-add_library(pbft ${SRCS} ${MESSAGES_SRCS})
-target_link_libraries(pbft PUBLIC framework)
+file(GLOB_RECURSE SRCS bcos-pbft/*.cpp)
+add_library(${PBFT_TARGET} ${SRCS} ${MESSAGES_SRCS})
+target_link_libraries(${PBFT_TARGET} PUBLIC jsoncpp_lib_static ${UTILITIES_TARGET} ${TOOL_TARGET})
 
 if (TESTS)
     # fetch bcos-test    

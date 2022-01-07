@@ -24,11 +24,11 @@
 #include <bcos-framework/interfaces/front/FrontServiceInterface.h>
 #include <bcos-framework/interfaces/ledger/LedgerInterface.h>
 #include <bcos-framework/interfaces/sealer/SealerInterface.h>
-#include <bcos-framework/libtool/NodeConfig.h>
-#include <bcos-framework/libutilities/Common.h>
-#include <bcos-framework/libutilities/FixedBytes.h>
+#include <bcos-tool/NodeConfig.h>
 #include <bcos-txpool/TxPool.h>
 #include <bcos-txpool/TxPoolFactory.h>
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/FixedBytes.h>
 
 namespace bcos
 {

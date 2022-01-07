@@ -19,21 +19,22 @@
  */
 
 #pragma once
-#include "bcos-executor/TransactionExecutor.h"
+#include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/hash/SM3.h"
 #include "bcos-framework/interfaces/ledger/LedgerTypeDef.h"
-#include "bcos-framework/testutils/protocol/FakeBlock.h"
-#include "bcos-framework/testutils/protocol/FakeBlockHeader.h"
+#include "bcos-protocol/testutils/protocol/FakeBlock.h"
+#include "bcos-protocol/testutils/protocol/FakeBlockHeader.h"
 #include "executive/BlockContext.h"
 #include "executive/TransactionExecutive.h"
+#include "executor/TransactionExecutor.h"
 #include "mock/MockTransactionalStorage.h"
 #include "mock/MockTxPool.h"
 #include "precompiled/Utilities.h"
 #include "precompiled/extension/UserPrecompiled.h"
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <bcos-framework/interfaces/executor/NativeExecutionMessage.h>
 #include <bcos-framework/interfaces/storage/Table.h>
-#include <bcos-framework/libexecutor/NativeExecutionMessage.h>
-#include <bcos-framework/testutils/TestPromptFixture.h>
-#include <bcos-framework/testutils/crypto/HashImpl.h>
-#include <bcos-framework/testutils/crypto/SignatureImpl.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 #include <string>
@@ -43,6 +44,7 @@ using namespace bcos::precompiled;
 using namespace bcos::executor;
 using namespace bcos::storage;
 using namespace bcos::ledger;
+using namespace bcos::crypto;
 
 namespace bcos::test
 {
@@ -51,11 +53,11 @@ class PrecompiledFixture : public TestPromptFixture
 public:
     PrecompiledFixture()
     {
-        hashImpl = std::make_shared<Keccak256Hash>();
+        hashImpl = std::make_shared<Keccak256>();
         assert(hashImpl);
-        smHashImpl = std::make_shared<Sm3Hash>();
-        auto signatureImpl = std::make_shared<Secp256k1SignatureImpl>();
-        auto sm2Sign = std::make_shared<SM2SignatureImpl>();
+        smHashImpl = std::make_shared<SM3>();
+        auto signatureImpl = std::make_shared<Secp256k1Crypto>();
+        auto sm2Sign = std::make_shared<SM2Crypto>();
         assert(signatureImpl);
         cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
         assert(cryptoSuite);

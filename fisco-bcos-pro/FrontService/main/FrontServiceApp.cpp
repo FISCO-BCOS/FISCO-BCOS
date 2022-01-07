@@ -62,8 +62,8 @@ void FrontServiceApp::initService()
     // get gateway client
     auto gatewayPrx = Application::getCommunicator()->stringToProxy<bcostars::GatewayServicePrx>(
         nodeConfig->gatewayServiceName());
-    auto gateWay = std::make_shared<bcostars::GatewayServiceClient>(
-        gatewayPrx, protocolInitializer->cryptoSuite()->keyFactory());
+    auto gateWay = std::make_shared<bcostars::GatewayServiceClient>(gatewayPrx,
+        nodeConfig->gatewayServiceName(), protocolInitializer->cryptoSuite()->keyFactory());
 
     m_frontServiceInitializer =
         std::make_shared<FrontServiceInitializer>(nodeConfig, protocolInitializer, gateWay);

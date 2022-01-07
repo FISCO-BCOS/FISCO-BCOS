@@ -21,12 +21,12 @@
 #include "CryptoPrecompiled.h"
 #include "PrecompiledResult.h"
 #include "Utilities.h"
+#include <bcos-codec/abi/ContractABICodec.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/signature/ed25519/Ed25519Crypto.h>
 #include <bcos-crypto/signature/sm2/SM2Crypto.h>
 #include <bcos-framework/interfaces/crypto/Signature.h>
-#include <bcos-framework/libcodec/abi/ContractABICodec.h>
 
 using namespace bcos;
 using namespace bcos::codec;

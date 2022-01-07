@@ -24,9 +24,9 @@
 #include "../executive/TransactionExecutive.h"
 #include "EVMHostInterface.h"
 #include "bcos-framework/interfaces/storage/Table.h"
-#include "bcos-framework/libstorage/StateStorage.h"
+#include "bcos-table/src/StateStorage.h"
+#include "bcos-utilities/Common.h"
 #include "evmc/evmc.hpp"
-#include "libutilities/Common.h"
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
 #include <boost/algorithm/hex.hpp>

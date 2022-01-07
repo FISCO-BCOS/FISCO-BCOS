@@ -8,13 +8,14 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 
 include(HunterGate)
 HunterGate(
-    URL "https://${URL_BASE}/FISCO-BCOS/hunter/archive/bc4754a926acd8ef3b96630c457c75ea4cd55a5d.tar.gz"
-    SHA1 "b895385e7ea8312da8db6b1545aa89f11d18345d"
+    URL "https://${URL_BASE}/FISCO-BCOS/hunter/archive/9bb4c2aa139cfa53af5779105cd0d5570c31fbf5.tar.gz"
+    SHA1 "02165406cd653bedfe88538926453ede8eca84ba"
     FILEPATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.cmake"
 )
 
-project(FISCO-BCOS VERSION "3.0.0")
-set(VERSION_SUFFIX "-rc1")
+include(cmake/Version.cmake)
+project(PROJECT_NAME VERSION ${VERSION})
+
 
 include(Options)
 configure_project()
@@ -22,10 +23,7 @@ configure_project()
 include(CompilerSettings)
 include(BuildInfoGenerator)
 
-
-
 # import dependencies
-hunter_add_package(Boost COMPONENTS all)
 hunter_add_package(tbb)
 hunter_add_package(Protobuf)
 hunter_add_package(Microsoft.GSL)
@@ -38,16 +36,33 @@ hunter_add_package(ethash)
 hunter_add_package(evmone)
 hunter_add_package(tarscpp)
 
-include_directories(${CMAKE_SOURCE_DIR})
+# bcos-boostssl
+hunter_add_package(bcos-boostssl)
+find_package(bcos-boostssl CONFIG REQUIRED)
+
+# find OpenSSL
+hunter_add_package(OpenSSL)
+find_package(OpenSSL REQUIRED)
+
+# install dependencies
+include(InstallBcosUtilities)
+include(IncludeDirectories)
+
+# define targets name
+include(TargetSettings)
 
 add_subdirectory(bcos-crypto)
+add_subdirectory(bcos-codec)
+add_subdirectory(bcos-sealer)
+add_subdirectory(bcos-tool)
+add_subdirectory(bcos-table)
 add_subdirectory(bcos-framework)
 add_subdirectory(bcos-scheduler)
 add_subdirectory(bcos-executor)
 add_subdirectory(bcos-storage)
 add_subdirectory(bcos-ledger)
+add_subdirectory(bcos-protocol)
 add_subdirectory(bcos-tars-protocol)
-add_subdirectory(bcos-boostssl)
 add_subdirectory(bcos-rpc)
 add_subdirectory(bcos-gateway)
 add_subdirectory(bcos-pbft)

@@ -20,8 +20,8 @@
  */
 
 #pragma once
-#include <string>
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace bcos

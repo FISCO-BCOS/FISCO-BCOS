@@ -34,11 +34,15 @@ namespace bcostars
 class GatewayServiceClient : public bcos::gateway::GatewayInterface
 {
 public:
-    GatewayServiceClient(
-        bcostars::GatewayServicePrx _proxy, bcos::crypto::KeyFactory::Ptr keyFactory)
-      : m_proxy(_proxy), m_keyFactory(keyFactory)
+    GatewayServiceClient(bcostars::GatewayServicePrx _prx, std::string const& _serviceName,
+        bcos::crypto::KeyFactory::Ptr _keyFactory)
+      : GatewayServiceClient(_prx, _serviceName)
+    {
+        m_keyFactory = _keyFactory;
+    }
+    GatewayServiceClient(bcostars::GatewayServicePrx _proxy, std::string const& _serviceName)
+      : m_proxy(_proxy), m_gatewayServiceName(_serviceName)
     {}
-    GatewayServiceClient(bcostars::GatewayServicePrx _proxy) : m_proxy(_proxy) {}
     virtual ~GatewayServiceClient() {}
 
     void setKeyFactory(bcos::crypto::KeyFactory::Ptr keyFactory) { m_keyFactory = keyFactory; }
@@ -374,6 +378,8 @@ protected:
 
 private:
     bcostars::GatewayServicePrx m_proxy;
+    std::string m_gatewayServiceName;
+    // Note: only useful for asyncGetNodeIDs
     bcos::crypto::KeyFactory::Ptr m_keyFactory;
     std::string const c_moduleName = "GatewayServiceClient";
     // AMOP timeout 40s

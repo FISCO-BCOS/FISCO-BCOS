@@ -20,11 +20,11 @@
  */
 
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-framework/testutils/TestPromptFixture.h>
 #include <bcos-front/FrontServiceFactory.h>
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/gateway/GatewayNodeManager.h>
 #include <bcos-gateway/protocol/GatewayNodeStatus.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;

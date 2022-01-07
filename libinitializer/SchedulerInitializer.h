@@ -19,16 +19,16 @@
  * @date 2021-06-21
  */
 #pragma once
-#include "bcos-framework/interfaces/protocol/BlockFactory.h"
 #include "ProtocolInitializer.h"
-#include "bcos-framework/libprotocol/TransactionSubmitResultFactoryImpl.h"
+#include "bcos-framework/interfaces/protocol/BlockFactory.h"
+#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
 #include <bcos-framework/interfaces/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/interfaces/executor/ExecutionMessage.h>
+#include <bcos-framework/interfaces/executor/NativeExecutionMessage.h>
 #include <bcos-framework/interfaces/ledger/LedgerInterface.h>
 #include <bcos-framework/interfaces/storage/StorageInterface.h>
-#include <bcos-framework/libexecutor/NativeExecutionMessage.h>
-#include <bcos-framework/libtool/NodeConfig.h>
 #include <bcos-scheduler/src/SchedulerImpl.h>
+#include <bcos-tool/NodeConfig.h>
 
 namespace bcos::initializer
 {

@@ -1,16 +1,12 @@
 cmake_minimum_required(VERSION 3.14)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "12.0" CACHE STRING "Minimum OS X deployment version")
 
-project(bcos-executor VERSION "3.0.0")
+include(Version)
+project(bcos-executor VERSION ${VERSION})
 
-file(GLOB_RECURSE SRCS src/*.cpp)
-
-include_directories(${CMAKE_SOURCE_DIR})
-include_directories(${CMAKE_SOURCE_DIR}/bcos-framework)
-include_directories(${CMAKE_SOURCE_DIR}/bcos-executor/include)
 
 find_package(TBB CONFIG REQUIRED)
-find_package(Threads REQUIRED)
+# find_package(Threads REQUIRED)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
@@ -26,10 +22,12 @@ find_package(evmone CONFIG REQUIRED)
 find_package(intx CONFIG REQUIRED)
 find_package(ethash CONFIG REQUIRED)
 find_package(Boost CONFIG QUIET REQUIRED serialization program_options context)
-include(ProjectBCOSWASM)
+find_package(jsoncpp CONFIG REQUIRED)
 
-add_library(executor ${SRCS})
-target_link_libraries(executor PUBLIC framework crypto Boost::context TBB::tbb evmone fbwasm evmc::loader evmc::instructions wabt)
+file(GLOB_RECURSE SRCS src/*.cpp)
+include(ProjectBCOSWASM)
+add_library(${EXECUTOR_TARGET} ${SRCS})
+target_link_libraries(${EXECUTOR_TARGET} PUBLIC jsoncpp_lib_static ${CODEC_TARGET} ${CRYPTO_TARGET} ${TABLE_TARGET} Boost::context evmone fbwasm evmc::loader evmc::instructions wabt)
 
 if (TOOLS)
     add_subdirectory(tools)

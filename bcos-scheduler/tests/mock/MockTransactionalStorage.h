@@ -2,7 +2,7 @@
 
 #include "bcos-framework/interfaces/ledger/LedgerInterface.h"
 #include "bcos-framework/interfaces/storage/StorageInterface.h"
-#include "bcos-framework/libstorage/StateStorage.h"
+#include "bcos-table/src/StateStorage.h"
 
 namespace bcos::test
 {

@@ -20,7 +20,7 @@
 #include "../../encrypt/AESCrypto.h"
 #include "../../encrypt/Exceptions.h"
 #include "../../encrypt/SM4Crypto.h"
-#include <bcos-framework/testutils/TestPromptFixture.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;

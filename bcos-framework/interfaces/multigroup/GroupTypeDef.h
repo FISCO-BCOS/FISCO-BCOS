@@ -19,8 +19,8 @@
  * @date 2021-09-16
  */
 #pragma once
-#include "../../libutilities/Exceptions.h"
-#include "../../libutilities/Log.h"
+#include "bcos-utilities/Exceptions.h"
+#include "bcos-utilities/Log.h"
 #include <memory>
 
 #define GROUP_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("GROUP")

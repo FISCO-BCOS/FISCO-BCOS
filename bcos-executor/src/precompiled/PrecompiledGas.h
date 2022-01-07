@@ -19,7 +19,7 @@
  */
 
 #pragma once
-#include <bcos-framework/libutilities/Common.h>
+#include <bcos-utilities/Common.h>
 
 namespace bcos
 {

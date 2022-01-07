@@ -21,11 +21,11 @@
 
 #define BOOST_TEST_MAIN
 
-#include <bcos-framework/testutils/TestPromptFixture.h>
 #include <bcos-gateway/Common.h>
 #include <bcos-gateway/libp2p/P2PInterface.h>
 #include <bcos-gateway/libp2p/P2PMessage.h>
 #include <bcos-gateway/libp2p/Service.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;

@@ -23,11 +23,11 @@
 #include "bcos-sync/BlockSync.h"
 #include "bcos-sync/BlockSyncFactory.h"
 #include <bcos-framework/interfaces/consensus/ConsensusNode.h>
-#include <bcos-framework/libprotocol/TransactionSubmitResultFactoryImpl.h>
 #include <bcos-framework/testutils/faker/FakeFrontService.h>
 #include <bcos-framework/testutils/faker/FakeLedger.h>
 #include <bcos-framework/testutils/faker/FakeScheduler.h>
 #include <bcos-framework/testutils/faker/FakeTxPool.h>
+#include <bcos-protocol/TransactionSubmitResultFactoryImpl.h>
 
 using namespace bcos;
 using namespace bcos::sync;

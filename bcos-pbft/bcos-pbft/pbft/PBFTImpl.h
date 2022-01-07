@@ -22,7 +22,7 @@
 #include "engine/BlockValidator.h"
 #include "engine/PBFTEngine.h"
 #include <bcos-framework/interfaces/consensus/ConsensusInterface.h>
-#include <bcos-framework/libtool/LedgerConfigFetcher.h>
+#include <bcos-tool/LedgerConfigFetcher.h>
 namespace bcos
 {
 namespace consensus

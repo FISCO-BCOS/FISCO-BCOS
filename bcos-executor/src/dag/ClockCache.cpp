@@ -21,8 +21,8 @@
  */
 
 #include "ClockCache.h"
-#include <atomic>
 #include <boost/core/ignore_unused.hpp>
+#include <atomic>
 #include <cassert>
 #include <cstddef>
 #include <mutex>

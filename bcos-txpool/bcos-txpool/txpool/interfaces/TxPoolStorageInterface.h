@@ -22,8 +22,8 @@
 #include <bcos-framework/interfaces/protocol/Block.h>
 #include <bcos-framework/interfaces/protocol/Transaction.h>
 #include <bcos-framework/interfaces/txpool/TxPoolTypeDef.h>
-#include <bcos-framework/libprotocol/TransactionStatus.h>
-#include <bcos-framework/libutilities/CallbackCollectionHandler.h>
+#include <bcos-protocol/TransactionStatus.h>
+#include <bcos-utilities/CallbackCollectionHandler.h>
 
 namespace bcos
 {

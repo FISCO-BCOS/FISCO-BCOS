@@ -22,9 +22,10 @@
  */
 
 #include "Ledger.h"
-#include "libutilities/BoostLog.h"
-#include "libutilities/Common.h"
-#include "libutilities/DataConvertUtility.h"
+#include "bcos-utilities/BoostLog.h"
+#include "bcos-utilities/Common.h"
+#include "bcos-utilities/DataConvertUtility.h"
+#include <bcos-codec/scale/Scale.h>
 #include <bcos-framework/interfaces/consensus/ConsensusNode.h>
 #include <bcos-framework/interfaces/crypto/CommonType.h>
 #include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>
@@ -32,9 +33,8 @@
 #include <bcos-framework/interfaces/protocol/CommonError.h>
 #include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/interfaces/storage/Table.h>
-#include <bcos-framework/libcodec/scale/Scale.h>
-#include <bcos-framework/libprotocol/ParallelMerkleProof.h>
-#include <bcos-framework/libtool/ConsensusNode.h>
+#include <bcos-protocol/ParallelMerkleProof.h>
+#include <bcos-tool/ConsensusNode.h>
 #include <tbb/parallel_for.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
@@ -493,7 +493,7 @@ void Ledger::asyncGetBlockNumberByHash(const crypto::HashType& _blockHash,
                     LEDGER_LOG(ERROR)
                         << "GetBlockNumberByHash error " << boost::diagnostic_information(*error);
                     callback(BCOS_ERROR_WITH_PREV_PTR(LedgerError::GetStorageError,
-                                 "GetBlockHashByNumber error", *error),
+                                 "GetBlockNumberByHash error ", *error),
                         -1);
                     return;
                 }

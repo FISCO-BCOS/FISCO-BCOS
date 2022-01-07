@@ -19,26 +19,20 @@
 cmake_minimum_required(VERSION 3.10)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment version")
 
-project(bcos-rpc VERSION "3.0.0")
-set(VERSION_SUFFIX "-rc1")
+include(Version)
+project(bcos-rpc VERSION ${VERSION})
 
 find_package(jsoncpp CONFIG REQUIRED)
 find_package(tarscpp CONFIG REQUIRED)
 find_package(OpenSSL REQUIRED)
 
-include_directories(${CMAKE_SOURCE_DIR})
-include_directories(${CMAKE_BINARY_DIR}/)
-include_directories(${CMAKE_SOURCE_DIR}/bcos-rpc)
-include_directories(${CMAKE_SOURCE_DIR}/bcos-framework)
-include_directories(${CMAKE_SOURCE_DIR}/bcos-boostssl)
-
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DSTATICLIB")
 
 file(GLOB_RECURSE SRCS bcos-rpc/*.cpp)
 
-add_library(rpc ${SRCS} ${HEADERS})
-target_compile_options(rpc PRIVATE -Wno-error -Wno-unused-variable)
-target_link_libraries(rpc PUBLIC framework tarscpp::tarsservant boostssl OpenSSL::SSL OpenSSL::Crypto protocol-tars jsoncpp_lib_static crypto)
+add_library(${RPC_TARGET} ${SRCS} ${HEADERS})
+target_compile_options(${RPC_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
+target_link_libraries(${RPC_TARGET} PUBLIC bcos-boostssl::bcos-boostssl OpenSSL::SSL OpenSSL::Crypto ${UTILITIES_TARGET} ${TARS_PROTOCOL_TARGET} jsoncpp_lib_static ${CRYPTO_TARGET})
 
 if (TESTS)
     enable_testing()

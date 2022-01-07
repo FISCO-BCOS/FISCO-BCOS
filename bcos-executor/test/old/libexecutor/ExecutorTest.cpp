@@ -23,14 +23,15 @@
 #include "../MemoryStorage.h"
 #include "../mock/MockDispatcher.h"
 #include "../mock/MockLedger.h"
+#include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/hash/SM3.h"
 #include "bcos-framework/interfaces/ledger/LedgerTypeDef.h"
-#include "bcos-framework/testutils/crypto/HashImpl.h"
-#include "bcos-framework/testutils/crypto/SignatureImpl.h"
-#include "bcos-framework/testutils/protocol/FakeBlock.h"
-#include "bcos-framework/testutils/protocol/FakeBlockHeader.h"
+#include "bcos-protocol/testutils/protocol/FakeBlock.h"
+#include "bcos-protocol/testutils/protocol/FakeBlockHeader.h"
 #include "libprecompiled/Common.h"
 #include "vm/BlockContext.h"
 #include "vm/TransactionExecutive.h"
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <boost/test/unit_test.hpp>
 #include <iostream>
 #include <set>
@@ -40,6 +41,7 @@ using namespace bcos;
 using namespace bcos::executor;
 using namespace bcos::storage;
 using namespace bcos::precompiled;
+using namespace bcos::crypto;
 
 namespace bcos
 {
@@ -49,9 +51,9 @@ struct ExecutorFixture
 {
     ExecutorFixture()
     {
-        auto hashImpl = std::make_shared<Keccak256Hash>();
+        auto hashImpl = std::make_shared<Keccak256>();
         assert(hashImpl);
-        auto signatureImpl = std::make_shared<Secp256k1SignatureImpl>();
+        auto signatureImpl = std::make_shared<Secp256k1Crypto>();
         assert(signatureImpl);
         cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
         assert(cryptoSuite);

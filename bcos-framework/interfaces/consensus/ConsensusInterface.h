@@ -24,8 +24,8 @@
 #include "../../interfaces/ledger/LedgerConfig.h"
 #include "../../interfaces/protocol/Block.h"
 #include "../../interfaces/protocol/ProtocolTypeDef.h"
-#include "../../libutilities/Error.h"
 #include "ConsensusTypeDef.h"
+#include "bcos-utilities/Error.h"
 
 namespace bcos
 {

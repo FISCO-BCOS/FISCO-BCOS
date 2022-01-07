@@ -21,7 +21,7 @@
 #pragma once
 #include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/interfaces/protocol/Transaction.h>
-#include <bcos-framework/libprotocol/TransactionStatus.h>
+#include <bcos-protocol/TransactionStatus.h>
 #define TBB_PREVIEW_CONCURRENT_ORDERED_CONTAINERS 1
 #include <tbb/concurrent_set.h>
 

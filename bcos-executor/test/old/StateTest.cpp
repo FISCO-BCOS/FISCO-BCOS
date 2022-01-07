@@ -19,14 +19,15 @@
 
 #include "state/State.h"
 #include "MemoryStorage.h"
-#include "bcos-framework/libprotocol/protobuf/PBBlock.h"
-#include "bcos-framework/libprotocol/protobuf/PBBlockFactory.h"
-#include "bcos-framework/libprotocol/protobuf/PBBlockHeaderFactory.h"
-#include "bcos-framework/libprotocol/protobuf/PBTransactionFactory.h"
-#include "bcos-framework/libprotocol/protobuf/PBTransactionReceiptFactory.h"
-#include "bcos-framework/libtable/StateStorage.h"
-#include "bcos-framework/testutils/crypto/HashImpl.h"
-#include "bcos-framework/testutils/crypto/SignatureImpl.h"
+#include "bcos-crypto/hash/Keccak256.h"
+#include "bcos-crypto/hash/SM3.h"
+#include "bcos-protocol/protobuf/PBBlock.h"
+#include "bcos-protocol/protobuf/PBBlockFactory.h"
+#include "bcos-protocol/protobuf/PBBlockHeaderFactory.h"
+#include "bcos-protocol/protobuf/PBTransactionFactory.h"
+#include "bcos-protocol/protobuf/PBTransactionReceiptFactory.h"
+#include "bcos-table/src/StateStorage.h"
+#include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace std;
@@ -46,7 +47,7 @@ struct StorageStateFixture
 {
     StorageStateFixture()
     {
-        hashImpl = std::make_shared<Sm3Hash>();
+        hashImpl = std::make_shared<SM3>();
         memoryStorage = make_shared<MemoryStorage>();
         tableFactory = make_shared<StateStorage>(memoryStorage, hashImpl, m_blockNumber);
         state = make_shared<State>(tableFactory, hashImpl, false);

@@ -21,12 +21,12 @@
 #pragma once
 #include "libinitializer/ProtocolInitializer.h"
 #include "libinitializer/StorageInitializer.h"
+#include <bcos-codec/abi/ContractABICodec.h>
+#include <bcos-framework/interfaces/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>
-#include <bcos-framework/libcodec/abi/ContractABICodec.h>
-#include <bcos-framework/libtool/NodeConfig.h>
-#include <bcos-framework/libutilities/Common.h>
 #include <bcos-ledger/src/libledger/Ledger.h>
-#include <interfaces/dispatcher/SchedulerInterface.h>
+#include <bcos-tool/NodeConfig.h>
+#include <bcos-utilities/Common.h>
 
 using namespace bcos;
 using namespace bcos::tool;
@@ -106,8 +106,7 @@ public:
         if (newConfig->blockNumber() != _number)
         {
             INITIALIZER_LOG(ERROR) << LOG_BADGE("AuthInitializer") << LOG_DESC("");
-            BOOST_THROW_EXCEPTION(
-                BCOS_ERROR(-1, "AuthInitializer: blockNumber mismatch"));
+            BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "AuthInitializer: blockNumber mismatch"));
         }
     }
 };
