@@ -19,10 +19,7 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/libvm/WasmPath.h.in ${CMAKE_CURRENT_S
 
 file(GLOB_RECURSE SOURCES "*.cpp" "*.h")
 # cmake settings
-
-# include(SearchTestCases)
 set(TEST_BINARY_NAME test-bcos-executor)
-# config_test_cases("" "${SOURCES}" bin/${TEST_BINARY_NAME} "")
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE ./ ../../src ../../include ${CMAKE_BINARY_DIR}/bcos-framework)
