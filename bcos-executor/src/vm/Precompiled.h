@@ -24,7 +24,7 @@
 #include "../precompiled/PrecompiledCodec.h"
 #include "../precompiled/PrecompiledGas.h"
 #include "bcos-framework/interfaces/storage/Table.h"
-#include "bcos-framework/libstorage/StateStorage.h"
+#include "bcos-table/src/StateStorage.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/Exceptions.h"
 #include "bcos-utilities/FixedBytes.h"

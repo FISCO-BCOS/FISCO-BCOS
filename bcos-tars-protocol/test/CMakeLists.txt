@@ -18,16 +18,14 @@
 file(GLOB_RECURSE SOURCES "*.cpp")
 
 # cmake settings
-# include(SearchTestCases)
 set(TEST_BINARY_NAME test-bcos-tars-protocol)
-# config_test_cases("" "${SOURCES}" bin/${TEST_BINARY_NAME} "")
 
 add_executable(${TEST_BINARY_NAME} ${SOURCES})
-target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR} ${BCOS_TEST_DIR})
+target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR})
 
 find_package(wedpr-crypto CONFIG QUIET REQUIRED)
 find_package(Boost CONFIG QUIET REQUIRED unit_test_framework)
 
 target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-error -Wno-unused-variable)
-target_link_libraries(${TEST_BINARY_NAME} ${TARS_PROTOCOL_TARGET} ${CRYPTO_TARGET} Boost::unit_test_framework tarscpp::tarsservant)
+target_link_libraries(${TEST_BINARY_NAME} ${TARS_PROTOCOL_TARGET} ${CRYPTO_TARGET} Boost::unit_test_framework)
 add_test(NAME test-tars-protocol WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

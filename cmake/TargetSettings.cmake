@@ -1,6 +1,9 @@
 # bcos-utilities
 set(UTILITIES_TARGET "bcos-utilities::bcos-utilities")
 
+# bcos-table
+set(TABLE_TARGET "table")
+
 # bcos-crypto
 set(CRYPTO_TARGET "crypto")
 
@@ -46,9 +49,6 @@ set(GATEWAY_TARGET "gateway")
 
 # bcos-rcp
 set(RPC_TARGET "rpc")
-
-# bcos-boostssl
-set(BOOSTSSL_TARGET "boostssl")
 
 # bcos-tool
 set(TOOL_TARGET "tool")

@@ -24,8 +24,8 @@
 #include "mock/MockMultiParallelExecutor.h"
 #include "mock/MockRPC.h"
 #include "mock/MockTransactionalStorage.h"
+#include <bcos-framework/interfaces/executor/NativeExecutionMessage.h>
 #include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>
-#include <bcos-framework/libexecutor/NativeExecutionMessage.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/TransactionFactoryImpl.h>

@@ -46,13 +46,14 @@ foreach(proto_file ${SYNC_PROTOS})
 endforeach()
 
 find_package(Protobuf CONFIG REQUIRED)
+find_package(jsoncpp CONFIG REQUIRED)
 
 include_directories(${PROTO_OUTPUT_PATH})
 
 file(GLOB_RECURSE SRCS bcos-sync/*.cpp)
 add_library(${SYNC_TARGET} ${SRCS} ${SYNC_SRCS})
 target_compile_options(${SYNC_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
-target_link_libraries(${SYNC_TARGET} PUBLIC ${UTILITIES_TARGET} ${TOOL_TARGET})
+target_link_libraries(${SYNC_TARGET} PUBLIC jsoncpp_lib_static ${UTILITIES_TARGET} ${TOOL_TARGET})
 
 
 if (TESTS)

@@ -53,7 +53,7 @@ aux_source_directory(./client SRC_LIST)
 
 add_library(${TARS_PROTOCOL_TARGET} ${SRC_LIST} ${OUT_TARS_H_LIST})
 target_compile_options(${TARS_PROTOCOL_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
-target_link_libraries(${TARS_PROTOCOL_TARGET} PUBLIC ${PROTOCOL_TARGET} tarscpp::tarsutil tarscpp::tarsparse tarscpp::tarsservant)
+target_link_libraries(${TARS_PROTOCOL_TARGET} PUBLIC ${PROTOCOL_TARGET} tarscpp::tarsservant tarscpp::tarsutil tarscpp::tarsparse)
 
 if (TESTS)
     # fetch bcos-test

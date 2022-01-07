@@ -25,7 +25,6 @@
 #include "bcos-pbft/pbft/PBFTImpl.h"
 #include "bcos-pbft/pbft/storage/LedgerStorage.h"
 #include <bcos-framework/interfaces/consensus/ConsensusNode.h>
-#include <bcos-framework/libstorage/StateStorage.h>
 #include <bcos-framework/testutils/faker/FakeFrontService.h>
 #include <bcos-framework/testutils/faker/FakeLedger.h>
 #include <bcos-framework/testutils/faker/FakeScheduler.h>
@@ -36,6 +35,7 @@
 #include <bcos-protocol/protobuf/PBBlockHeaderFactory.h>
 #include <bcos-protocol/protobuf/PBTransactionFactory.h>
 #include <bcos-protocol/protobuf/PBTransactionReceiptFactory.h>
+#include <bcos-table/src/StateStorage.h>
 #include <boost/bind/bind.hpp>
 #include <boost/test/unit_test.hpp>
 #include <chrono>
@@ -262,6 +262,7 @@ public:
             m_storage, m_ledger, m_scheduler, m_txpool, m_blockFactory, txResultFactory);
         m_pbft = pbftFactory->createPBFT();
         m_pbftEngine = std::dynamic_pointer_cast<FakePBFTEngine>(m_pbft->pbftEngine());
+        m_pbft->registerFaultyDiscriminator([](bcos::crypto::NodeIDPtr) { return false; });
     }
 
     virtual ~PBFTFixture() {}
