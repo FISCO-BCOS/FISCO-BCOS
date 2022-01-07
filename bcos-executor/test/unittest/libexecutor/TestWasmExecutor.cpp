@@ -448,7 +448,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall_100)
 
     BOOST_CHECK(result->message().empty());
     BOOST_CHECK(!result->newEVMContractAddress().empty());
-    BOOST_CHECK_EQUAL(result->gasAvailable(), 2999552602);
+    BOOST_CHECK_EQUAL(result->gasAvailable(), 2999552552);
 
     auto address = result->newEVMContractAddress();
     BOOST_CHECK_EQUAL(result->newEVMContractAddress(), selfAddress);
@@ -566,10 +566,10 @@ BOOST_AUTO_TEST_CASE(deployAndCall_100)
         BOOST_CHECK_EQUAL(output, "fisco bcos");
         return result3->gasAvailable();
     };
-    int64_t getGas = 2999991316;
-    int64_t setGas = 2999982946;
+    int64_t getGas = 2999989808;
+    int64_t setGas = 2999982821;
     size_t id = 101;
-    BOOST_CHECK_EQUAL(helloSet(id++), 2999983215);
+    BOOST_CHECK_EQUAL(helloSet(id++), 2999983105);
     BOOST_CHECK_EQUAL(helloSet(id++), setGas);
     BOOST_CHECK_EQUAL(helloGet(id++), getGas);
     BOOST_CHECK_EQUAL(helloSet(id++), setGas);
@@ -590,7 +590,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall_100)
             BOOST_CHECK_EQUAL(helloSet(i), setGas);
         }
     }
-    BOOST_CHECK_EQUAL(helloGet(id++), 2999991316);
+    BOOST_CHECK_EQUAL(helloGet(id++), getGas);
 }
 
 BOOST_AUTO_TEST_CASE(externalCall)
@@ -903,7 +903,7 @@ BOOST_AUTO_TEST_CASE(performance)
     }
 
     std::cout << "Execute elapsed: "
-              << (std::chrono::system_clock::now() - now).count() / 1000 / 1000 << std::endl;
+              << std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now() - now).count() << std::endl;
 
     {
         bytes queryBytes;
