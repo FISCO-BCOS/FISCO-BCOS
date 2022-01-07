@@ -33,7 +33,7 @@ commands:
           command: |
             source $HOME/.cargo/env
             mkdir -p build && cd build
-            << parameters.compiler >> cmake -DCMAKE_BUILD_TYPE=debug -DHUNTER_JOBS_NUMBER=2 << parameters.options >> ..
+            << parameters.compiler >> cmake -DCMAKE_BUILD_TYPE=debug -DHUNTER_JOBS_NUMBER=1 << parameters.options >> ..
             make -j2
 executors:
   ubuntu-bionic:
@@ -119,7 +119,7 @@ jobs:
             source $HOME/.cargo/env
             yum list devtoolset-7\*
             mkdir -p build && cd build
-            cmake3 -DCMAKE_BUILD_TYPE=debug -DTESTS=ON -DHUNTER_JOBS_NUMBER=2 ..
+            cmake3 -DCMAKE_BUILD_TYPE=debug -DTESTS=ON -DHUNTER_JOBS_NUMBER=1 ..
             make -j2
       - save_cache:
           key: deps-v1-{{ .Environment.CIRCLE_JOB }}-{{ .Environment.CIRCLE_BRANCH }}-{{ checksum ".circleci/config.yml" }}
