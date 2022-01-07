@@ -717,7 +717,7 @@ generate_common_ini() {
     ; use SM crypto or not, should nerver be changed
     sm_crypto=${sm_mode}
     ; the group id, should nerver be changed
-    group_id=group
+    group_id=group0
     ; the chain id, should nerver be changed
     chain_id=chain
 
