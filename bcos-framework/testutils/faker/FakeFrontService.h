@@ -156,7 +156,7 @@ public:
     }
 
     // useless for sync/pbft/txpool
-    void asyncSendBroadcastMessage(int, bytesConstRef) override {}
+    void asyncSendBroadcastMessage(bcos::protocol::NodeType, int, bytesConstRef) override {}
     // useless for sync/pbft/txpool
     void onReceiveBroadcastMessage(
         const std::string&, NodeIDPtr, bytesConstRef, ReceiveMsgFunc) override

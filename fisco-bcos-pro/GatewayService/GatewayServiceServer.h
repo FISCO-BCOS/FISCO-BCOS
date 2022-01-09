@@ -27,14 +27,15 @@ public:
     void initialize() override {}
     void destroy() override {}
 
-    bcostars::Error asyncSendBroadcastMessage(const std::string& groupID,
+    bcostars::Error asyncSendBroadcastMessage(tars::Int32 _type, const std::string& groupID,
         const vector<tars::Char>& srcNodeID, const vector<tars::Char>& payload,
         tars::TarsCurrentPtr current) override
     {
         current->setResponse(false);
         auto bcosNodeID = m_gatewayInitializer->keyFactory()->createKey(
             bcos::bytesConstRef((const bcos::byte*)srcNodeID.data(), srcNodeID.size()));
-        m_gatewayInitializer->gateway()->asyncSendBroadcastMessage(groupID, bcosNodeID,
+        m_gatewayInitializer->gateway()->asyncSendBroadcastMessage((bcos::protocol::NodeType)_type,
+            groupID, bcosNodeID,
             bcos::bytesConstRef((const bcos::byte*)payload.data(), payload.size()));
 
         async_response_asyncSendBroadcastMessage(current, toTarsError(nullptr));

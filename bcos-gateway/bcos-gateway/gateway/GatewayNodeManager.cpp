@@ -32,7 +32,7 @@ using namespace bcos::crypto;
 
 GatewayNodeManager::GatewayNodeManager(P2pID const& _nodeID,
     std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface)
-  : GatewayNodeManager(_keyFactory)
+  : GatewayNodeManager(_keyFactory, _p2pInterface)
 {
     m_p2pNodeID = _nodeID;
     m_p2pInterface = _p2pInterface;
@@ -192,7 +192,7 @@ bytesPointer GatewayNodeManager::generateNodeStatus()
         auto groupNodeInfo = std::make_shared<GroupNodeInfo>(it.first);
         // get nodeID and type
         std::vector<std::string> nodeList;
-        GroupType groupType = GroupType::OUTSIDE_GROUP;
+        auto groupType = GroupType::OUTSIDE_GROUP;
         bool hasObserverNode = false;
         for (auto const& pNodeInfo : it.second)
         {

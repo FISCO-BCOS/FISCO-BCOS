@@ -21,6 +21,7 @@
 
 using namespace bcos;
 using namespace bcos::gateway;
+using namespace bcos::protocol;
 
 void GatewayStatus::update(std::string const& _p2pNodeID, GatewayNodeStatus::ConstPtr _nodeStatus)
 {
@@ -55,19 +56,19 @@ bool GatewayStatus::randomChooseP2PNode(
     std::string& _p2pNodeID, uint32_t _type, std::string const& _groupID) const
 {
     // If need to send a message to a consensus node, select the consensus node first
-    if ((_type & GroupType::GROUP_WITH_CONSENSUS_NODE) &&
+    if ((_type & NodeType::CONSENSUS_NODE) &&
         randomChooseNode(_p2pNodeID, GroupType::GROUP_WITH_CONSENSUS_NODE, _groupID))
     {
         return true;
     }
     // select the observer node
-    if ((_type & GroupType::GROUP_WITHOUT_CONSENSUS_NODE) &&
+    if ((_type & NodeType::OBSERVER_NODE) &&
         randomChooseNode(_p2pNodeID, GroupType::GROUP_WITHOUT_CONSENSUS_NODE, _groupID))
     {
         return true;
     }
     // select the OUTSIDE_GROUP(AMOP message needed)
-    if ((_type & GroupType::OUTSIDE_GROUP) &&
+    if ((_type & NodeType::NODE_OUTSIDE_GROUP) &&
         randomChooseNode(_p2pNodeID, GroupType::OUTSIDE_GROUP, _groupID))
     {
         return true;

@@ -20,8 +20,8 @@
  */
 
 #pragma once
-#include "bcos-protocol/LogEntry.h"
 #include "../protocol/ProtocolTypeDef.h"
+#include "bcos-protocol/LogEntry.h"
 #include <boost/iterator/iterator_categories.hpp>
 #include <boost/range/any_range.hpp>
 #include <memory>

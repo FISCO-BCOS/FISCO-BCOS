@@ -75,37 +75,6 @@ void Gateway::stop()
     return;
 }
 
-std::shared_ptr<P2PMessage> Gateway::newP2PMessage(
-    const std::string& _groupID, NodeIDPtr _srcNodeID, NodeIDPtr _dstNodeID, bytesConstRef _payload)
-{
-    auto message =
-        std::static_pointer_cast<P2PMessage>(m_p2pInterface->messageFactory()->buildMessage());
-
-    message->setPacketType(MessageType::PeerToPeerMessage);
-    message->setSeq(m_p2pInterface->messageFactory()->newSeq());
-    message->options()->setGroupID(_groupID);
-    message->options()->setSrcNodeID(_srcNodeID->encode());
-    message->options()->dstNodeIDs().push_back(_dstNodeID->encode());
-    message->setPayload(std::make_shared<bytes>(_payload.begin(), _payload.end()));
-
-    return message;
-}
-
-std::shared_ptr<P2PMessage> Gateway::newP2PMessage(
-    const std::string& _groupID, NodeIDPtr _srcNodeID, bytesConstRef _payload)
-{
-    auto message =
-        std::static_pointer_cast<P2PMessage>(m_p2pInterface->messageFactory()->buildMessage());
-
-    message->setPacketType(MessageType::BroadcastMessage);
-    message->setSeq(m_p2pInterface->messageFactory()->newSeq());
-    message->options()->setGroupID(_groupID);
-    message->options()->setSrcNodeID(_srcNodeID->encode());
-    message->setPayload(std::make_shared<bytes>(_payload.begin(), _payload.end()));
-
-    return message;
-}
-
 void Gateway::asyncGetPeers(
     std::function<void(Error::Ptr, GatewayInfo::Ptr, GatewayInfosPtr)> _onGetPeers)
 {
@@ -281,7 +250,17 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, NodeIDPtr _s
     };
 
     auto retry = std::make_shared<Retry>();
-    retry->m_p2pMessage = newP2PMessage(_groupID, _srcNodeID, _dstNodeID, _payload);
+    auto message =
+        std::static_pointer_cast<P2PMessage>(m_p2pInterface->messageFactory()->buildMessage());
+
+    message->setPacketType(MessageType::PeerToPeerMessage);
+    message->setSeq(m_p2pInterface->messageFactory()->newSeq());
+    message->options()->setGroupID(_groupID);
+    message->options()->setSrcNodeID(_srcNodeID->encode());
+    message->options()->dstNodeIDs().push_back(_dstNodeID->encode());
+    message->setPayload(std::make_shared<bytes>(_payload.begin(), _payload.end()));
+
+    retry->m_p2pMessage = message;
     retry->m_p2pIDs.insert(retry->m_p2pIDs.begin(), p2pIDs.begin(), p2pIDs.end());
     retry->m_respFunc = _errorRespFunc;
     retry->m_srcNodeID = _srcNodeID;
@@ -324,31 +303,20 @@ void Gateway::asyncSendMessageByNodeIDs(const std::string& _groupID, NodeIDPtr _
  * @param _payload: message content
  * @return void
  */
-void Gateway::asyncSendBroadcastMessage(
-    const std::string& _groupID, NodeIDPtr _srcNodeID, bytesConstRef _payload)
+void Gateway::asyncSendBroadcastMessage(bcos::protocol::NodeType _type, const std::string& _groupID,
+    NodeIDPtr _srcNodeID, bytesConstRef _payload)
 {
-    auto ret =
-        m_gatewayNodeManager->localRouterTable()->asyncBroadcastMsg(_groupID, _srcNodeID, _payload);
-    auto p2pIDs = m_gatewayNodeManager->peersRouterTable()->queryP2pIDsByGroupID(_groupID);
-    if (p2pIDs.empty())
-    {
-        if (!ret)
-        {
-            GATEWAY_LOG(ERROR) << LOG_DESC(
-                                      "could not find a gateway "
-                                      "to send this broadcast message")
-                               << LOG_KV("groupID", _groupID)
-                               << LOG_KV("srcNodeID", _srcNodeID->hex());
-        }
-        return;
-    }
-
-    auto p2pMessage = newP2PMessage(_groupID, _srcNodeID, _payload);
-    for (const P2pID& p2pID : p2pIDs)
-    {
-        m_p2pInterface->asyncSendMessageByNodeID(p2pID, p2pMessage, CallbackFuncWithSession());
-    }
-
+    auto ret = m_gatewayNodeManager->localRouterTable()->asyncBroadcastMsg(
+        _type, _groupID, _srcNodeID, _payload);
+    auto message =
+        std::static_pointer_cast<P2PMessage>(m_p2pInterface->messageFactory()->buildMessage());
+    message->setPacketType(MessageType::BroadcastMessage);
+    message->setExt(_type);
+    message->setSeq(m_p2pInterface->messageFactory()->newSeq());
+    message->options()->setGroupID(_groupID);
+    message->options()->setSrcNodeID(_srcNodeID->encode());
+    message->setPayload(std::make_shared<bytes>(_payload.begin(), _payload.end()));
+    m_gatewayNodeManager->peersRouterTable()->asyncBroadcastMsg(_type, _groupID, message);
     GATEWAY_LOG(TRACE) << "asyncSendBroadcastMessage send message" << LOG_KV("groupID", _groupID);
 }
 
@@ -454,7 +422,7 @@ void Gateway::onReceiveP2PMessage(
 }
 
 void Gateway::onReceiveBroadcastMessage(
-    NetworkException const& _e, P2PSession::Ptr, std::shared_ptr<P2PMessage> _msg)
+    NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg)
 {
     if (!_e.errorCode())
     {
@@ -462,34 +430,10 @@ void Gateway::onReceiveBroadcastMessage(
                              << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
         return;
     }
-    auto options = _msg->options();
-    auto srcNodeID = options->srcNodeID();
-    auto srcNodeIDPtr = m_gatewayNodeManager->keyFactory()->createKey(*srcNodeID.get());
-    receiveBroadcastMessage(options->groupID(), srcNodeIDPtr,
+    auto srcNodeIDPtr =
+        m_gatewayNodeManager->keyFactory()->createKey(*(_msg->options()->srcNodeID()));
+    auto groupID = _msg->options()->groupID();
+    auto type = _msg->ext();
+    m_gatewayNodeManager->localRouterTable()->asyncBroadcastMsg(type, groupID, srcNodeIDPtr,
         bytesConstRef(_msg->payload()->data(), _msg->payload()->size()));
-}
-
-/**
- * @brief: receive group broadcast message
- * @param _groupID: groupID
- * @param _srcNodeID: the sender nodeID
- * @param _payload: message payload
- * @return void
- */
-void Gateway::receiveBroadcastMessage(
-    const std::string& _groupID, NodeIDPtr _srcNodeID, bytesConstRef _payload)
-{
-    auto localNodeList =
-        m_gatewayNodeManager->localRouterTable()->getGroupFrontServiceList(_groupID);
-    for (const auto& service : localNodeList)
-    {
-        service->frontService()->onReceiveMessage(
-            _groupID, _srcNodeID, _payload, [_groupID, _srcNodeID](Error::Ptr _error) {
-                GATEWAY_LOG(TRACE)
-                    << LOG_DESC("onReceiveBroadcastMessage callback") << LOG_KV("groupID", _groupID)
-                    << LOG_KV("srcNodeID", _srcNodeID->hex())
-                    << LOG_KV("code", (_error ? _error->errorCode() : 0))
-                    << LOG_KV("msg", (_error ? _error->errorMessage() : ""));
-            });
-    }
 }

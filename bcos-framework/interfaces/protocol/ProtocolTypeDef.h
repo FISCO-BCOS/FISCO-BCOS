@@ -101,14 +101,6 @@ struct Session
     bcos::protocol::BlockNumber beginNumber;  // [
     bcos::protocol::BlockNumber endNumber;    // )
 };
-
-enum class NodeType : uint32_t
-{
-    CONSENSUS_NODE = 0,
-    OBSERVER_NODE = 1,
-    NODE_OUTSIDE_GROUP = 2,
-};
-
 inline std::ostream& operator<<(std::ostream& _out, NodeType const& _nodeType)
 {
     switch (_nodeType)

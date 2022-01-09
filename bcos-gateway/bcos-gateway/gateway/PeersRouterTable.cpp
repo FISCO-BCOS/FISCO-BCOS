@@ -20,6 +20,7 @@
 #include "PeersRouterTable.h"
 
 using namespace bcos;
+using namespace bcos::protocol;
 using namespace bcos::gateway;
 using namespace bcos::crypto;
 
@@ -221,5 +222,27 @@ void PeersRouterTable::removeNodeFromGatewayInfo(P2pID const& _p2pID)
     for (auto const& it : m_gatewayInfos)
     {
         it.second->removeP2PNode(_p2pID);
+    }
+}
+
+// broadcast message to given group
+void PeersRouterTable::asyncBroadcastMsg(
+    NodeType _type, std::string const& _groupID, P2PMessage::Ptr _msg)
+{
+    std::vector<std::string> selectedPeers;
+    {
+        ReadGuard l(x_gatewayInfos);
+        for (auto const& it : m_gatewayInfos)
+        {
+            std::string p2pNodeID;
+            if (it.second->randomChooseP2PNode(p2pNodeID, _type, _groupID))
+            {
+                selectedPeers.emplace_back(p2pNodeID);
+            }
+        }
+    }
+    for (auto const& peer : selectedPeers)
+    {
+        m_p2pInterface->asyncSendMessageByNodeID(peer, _msg, CallbackFuncWithSession());
     }
 }

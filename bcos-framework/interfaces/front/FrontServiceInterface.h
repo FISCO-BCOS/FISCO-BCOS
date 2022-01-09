@@ -19,7 +19,8 @@
  * @date 2021-04-19
  */
 #pragma once
-#include "../../interfaces/crypto/KeyInterface.h"
+#include "bcos-framework/interfaces/crypto/KeyInterface.h"
+#include "bcos-framework/interfaces/protocol/Protocol.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/Error.h"
 
@@ -128,7 +129,8 @@ public:
      * @param _data:  message
      * @return void
      */
-    virtual void asyncSendBroadcastMessage(int _moduleID, bytesConstRef _data) = 0;
+    virtual void asyncSendBroadcastMessage(
+        bcos::protocol::NodeType _type, int _moduleID, bytesConstRef _data) = 0;
 };
 
 }  // namespace front

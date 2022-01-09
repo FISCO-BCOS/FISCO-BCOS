@@ -18,6 +18,7 @@
  * @date 2021-12-31
  */
 #pragma once
+#include <bcos-framework/interfaces/protocol/Protocol.h>
 #include <bcos-gateway/Common.h>
 #include <bcos-tars-protocol/tars/GatewayInfo.h>
 #include <memory>

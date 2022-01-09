@@ -19,10 +19,17 @@
  * @date 2021-04-21
  */
 #pragma once
+#include <memory>
 namespace bcos
 {
 namespace protocol
 {
+enum NodeType : uint16_t
+{
+    CONSENSUS_NODE = 0x1,
+    OBSERVER_NODE = 0x10,
+    NODE_OUTSIDE_GROUP = 0x100,
+};
 enum ModuleID
 {
     PBFT = 1000,
@@ -31,5 +38,5 @@ enum ModuleID
     TxsSync = 2001,
     AMOP = 3000,
 };
-}
+}  // namespace protocol
 }  // namespace bcos

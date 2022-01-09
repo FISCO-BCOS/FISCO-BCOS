@@ -98,7 +98,8 @@ public:
      * @param _data: send message data
      * @return void
      */
-    void asyncSendBroadcastMessage(int _moduleID, bytesConstRef _data) override;
+    void asyncSendBroadcastMessage(
+        bcos::protocol::NodeType _type, int _moduleID, bytesConstRef _data) override;
 
     /**
      * @brief: receive nodeIDs from gateway

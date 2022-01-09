@@ -70,15 +70,6 @@ public:
      */
     void asyncGetNodeIDs(const std::string& _groupID, GetNodeIDsFunc _getNodeIDsFunc) override;
     /**
-     * @brief: construct Message object
-     */
-    std::shared_ptr<P2PMessage> newP2PMessage(const std::string& _groupID,
-        bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
-        bytesConstRef _payload);
-    std::shared_ptr<P2PMessage> newP2PMessage(
-        const std::string& _groupID, bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload);
-
-    /**
      * @brief: send message
      * @param _groupID: groupID
      * @param _srcNodeID: the sender nodeID
@@ -109,8 +100,8 @@ public:
      * @param _payload: message payload
      * @return void
      */
-    void asyncSendBroadcastMessage(const std::string& _groupID, bcos::crypto::NodeIDPtr _srcNodeID,
-        bytesConstRef _payload) override;
+    void asyncSendBroadcastMessage(bcos::protocol::NodeType _type, const std::string& _groupID,
+        bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload) override;
 
     /**
      * @brief: receive p2p message
@@ -168,8 +159,6 @@ protected:
     virtual void onReceiveP2PMessage(
         NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg);
 
-    virtual void onReceiveBroadcastMessage(
-        NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg);
     /**
      * @brief: receive group broadcast message
      * @param _groupID: groupID
@@ -177,8 +166,8 @@ protected:
      * @param _payload: message content
      * @return void
      */
-    virtual void receiveBroadcastMessage(
-        const std::string& _groupID, bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload);
+    virtual void onReceiveBroadcastMessage(
+        NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg);
 
 private:
     std::string m_chainID;

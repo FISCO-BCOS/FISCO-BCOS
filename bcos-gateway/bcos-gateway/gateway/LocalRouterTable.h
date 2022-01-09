@@ -19,6 +19,7 @@
  */
 #pragma once
 #include "FrontServiceInfo.h"
+#include "bcos-gateway/libp2p/P2PSession.h"
 #include <bcos-framework/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/interfaces/crypto/KeyInterface.h>
 #include <bcos-framework/interfaces/gateway/GatewayInterface.h>
@@ -58,8 +59,8 @@ public:
         return m_nodeList;
     }
 
-    bool asyncBroadcastMsg(
-        const std::string& _groupID, bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload);
+    bool asyncBroadcastMsg(int16_t _nodeType, const std::string& _groupID,
+        bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload);
 
     bool sendMessage(const std::string& _groupID, bcos::crypto::NodeIDPtr _srcNodeID,
         bcos::crypto::NodeIDPtr _dstNodeID, bytesConstRef _payload, ErrorRespFunc _errorRespFunc);

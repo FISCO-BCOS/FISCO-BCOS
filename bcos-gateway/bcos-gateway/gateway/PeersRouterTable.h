@@ -23,6 +23,7 @@
 #include <bcos-framework/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/interfaces/crypto/KeyInterface.h>
 #include <bcos-gateway/Common.h>
+#include <bcos-gateway/libp2p/P2PInterface.h>
 #include <bcos-gateway/protocol/GatewayNodeStatus.h>
 #include <memory>
 
@@ -34,8 +35,10 @@ class PeersRouterTable
 {
 public:
     using Ptr = std::shared_ptr<PeersRouterTable>;
-    PeersRouterTable(bcos::crypto::KeyFactory::Ptr _keyFactory)
-      : m_keyFactory(_keyFactory), m_gatewayStatusFactory(std::make_shared<GatewayStatusFactory>())
+    PeersRouterTable(bcos::crypto::KeyFactory::Ptr _keyFactory, P2PInterface::Ptr _p2pInterface)
+      : m_keyFactory(_keyFactory),
+        m_p2pInterface(_p2pInterface),
+        m_gatewayStatusFactory(std::make_shared<GatewayStatusFactory>())
     {}
     virtual ~PeersRouterTable() {}
 
@@ -48,6 +51,9 @@ public:
 
     using Group2NodeIDListType = std::map<std::string, std::set<std::string>>;
     Group2NodeIDListType peersNodeIDList(P2pID const& _p2pNodeID) const;
+
+    void asyncBroadcastMsg(
+        bcos::protocol::NodeType _type, std::string const& _group, P2PMessage::Ptr _msg);
 
 protected:
     void batchInsertNodeList(
@@ -63,6 +69,7 @@ protected:
 
 private:
     bcos::crypto::KeyFactory::Ptr m_keyFactory;
+    P2PInterface::Ptr m_p2pInterface;
     // used for peer-to-peer router
     // groupID => NodeID => set<P2pID>
     std::map<std::string, std::map<std::string, std::set<P2pID>>> m_groupNodeList;

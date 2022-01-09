@@ -33,14 +33,14 @@ namespace bcos
 {
 namespace gateway
 {
-enum GroupType
+enum GroupType : uint16_t
 {
     // group with at-least one consensus node
-    GROUP_WITH_CONSENSUS_NODE = 0x1,
+    GROUP_WITH_CONSENSUS_NODE = 0x0,
     // group without consensus node
-    GROUP_WITHOUT_CONSENSUS_NODE = 0x10,
+    GROUP_WITHOUT_CONSENSUS_NODE = 0x1,
     // group without consensus node and observer node
-    OUTSIDE_GROUP = 0x100,
+    OUTSIDE_GROUP = 0x2,
 };
 
 template <typename T, typename S, typename... Args>

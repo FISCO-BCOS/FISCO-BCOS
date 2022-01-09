@@ -19,9 +19,10 @@
  * @date 2021-04-19
  */
 #pragma once
-#include "../../interfaces/crypto/KeyInterface.h"
-#include "../../interfaces/multigroup/GroupInfo.h"
 #include "GatewayTypeDef.h"
+#include "bcos-framework/interfaces/crypto/KeyInterface.h"
+#include "bcos-framework/interfaces/multigroup/GroupInfo.h"
+#include "bcos-framework/interfaces/protocol/Protocol.h"
 #include "bcos-utilities/Common.h"
 #include "bcos-utilities/Error.h"
 
@@ -97,8 +98,9 @@ public:
      * @param _payload: message content
      * @return void
      */
-    virtual void asyncSendBroadcastMessage(const std::string& _groupID,
-        bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload) = 0;
+    virtual void asyncSendBroadcastMessage(bcos::protocol::NodeType _type,
+        const std::string& _groupID, bcos::crypto::NodeIDPtr _srcNodeID,
+        bytesConstRef _payload) = 0;
 
     /// multi-group related interfaces
 

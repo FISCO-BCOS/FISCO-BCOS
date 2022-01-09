@@ -211,7 +211,7 @@ bool LocalRouterTable::eraseUnreachableNodes()
 }
 
 bool LocalRouterTable::asyncBroadcastMsg(
-    const std::string& _groupID, NodeIDPtr _srcNodeID, bytesConstRef _payload)
+    int16_t _nodeType, const std::string& _groupID, NodeIDPtr _srcNodeID, bytesConstRef _payload)
 {
     auto frontServiceList = getGroupFrontServiceList(_groupID);
     if (frontServiceList.size() == 0)
@@ -220,6 +220,15 @@ bool LocalRouterTable::asyncBroadcastMsg(
     }
     for (auto const& it : frontServiceList)
     {
+        if (it->nodeID() == _srcNodeID->hex())
+        {
+            continue;
+        }
+        // not expected to send message to the type of node
+        if ((_nodeType & it->nodeType()) == 0)
+        {
+            continue;
+        }
         auto frontService = it->frontService();
         auto dstNodeID = it->nodeID();
         frontService->onReceiveMessage(
