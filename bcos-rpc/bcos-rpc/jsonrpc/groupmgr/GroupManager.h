@@ -124,6 +124,10 @@ public:
         {
             m_nodesWithLatestBlockNumber[_groupID] = std::set<std::string>();
         }
+        if (!m_groupBlockInfos.count(_groupID))
+        {
+            m_groupBlockInfos[_groupID] = _blockNumber;
+        }
         // nodes with newer highest block
         if (oldBlockNumber < _blockNumber)
         {

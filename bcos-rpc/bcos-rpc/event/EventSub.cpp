@@ -454,40 +454,18 @@ int64_t EventSub::executeEventSubTask(EventSubTask::Ptr _task)
     }
 
     std::string group = _task->group();
-    auto nodeService = m_groupManager->getNodeService(group, "");
-    if (!nodeService)
-    {
-        // group not exist???
-        EVENT_SUB(ERROR) << LOG_BADGE("executeEventSubTask")
-                         << LOG_DESC("cannot get node service maybe the group has been removed")
-                         << LOG_KV("id", _task->id()) << LOG_KV("group", _task->group());
+    auto blockNumber = m_groupManager->getBlockNumberByGroup(group);
+    if (blockNumber < 0)
+    {  // group not exist ???
+        EVENT_SUB(ERROR)
+            << LOG_BADGE("executeEventSubTask")
+            << LOG_DESC("Cannot getBlockNumber from groupManager, maybe the group has been removed")
+            << LOG_KV("group", group);
         unsubscribeEventSub(_task->id());
         return -1;
     }
 
-    // TODO: optimize getBlockNumberByGroup instead of asyncGetBlockNumber
-    auto self = std::weak_ptr<EventSub>(shared_from_this());
-    auto ledger = nodeService->ledger();
-    ledger->asyncGetBlockNumber(
-        [group, self, _task](Error::Ptr _error, protocol::BlockNumber _blockNumber) {
-            if (_error && _error->errorCode() != bcos::protocol::CommonError::SUCCESS)
-            {
-                EVENT_SUB(ERROR) << LOG_BADGE("executeEventSubTask")
-                                 << LOG_DESC("asyncGetBlockNumber error") << LOG_KV("group", group)
-                                 << LOG_KV("errorCode", _error->errorCode())
-                                 << LOG_KV("errorMessage", _error->errorMessage());
-
-                // error occur, wait for the next loop ???
-                _task->freeWork();
-                return;
-            }
-
-            auto eventSub = self.lock();
-            if (eventSub)
-            {
-                eventSub->executeEventSubTask(_task, _blockNumber);
-            }
-        });
+    executeEventSubTask(_task, blockNumber);
 
     return 0;
 }
