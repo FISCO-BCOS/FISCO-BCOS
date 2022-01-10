@@ -284,10 +284,6 @@ bcos::precompiled::ContractStatus bcos::precompiled::getContractStatus(
     {
         return ContractStatus::Available;
     }
-    PRECOMPILED_LOG(ERROR) << LOG_DESC("getContractStatus error")
-                           << LOG_KV("table name", _tableName);
-
-    return ContractStatus::Available;
 }
 
 uint64_t precompiled::getEntriesCapacity(precompiled::EntriesPtr _entries)

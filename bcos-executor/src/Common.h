@@ -88,10 +88,13 @@ static const char* const FS_ACL_TYPE = "acl_type";
 static const char* const FS_ACL_WHITE = "acl_white";
 static const char* const FS_ACL_BLACK = "acl_black";
 static const char* const FS_KEY_EXTRA = "extra";
+static const char* const FS_LINK_ADDRESS = "link_address";
+static const char* const FS_LINK_ABI = "link_abi";
 
 /// FileSystem file type
 static const char* const FS_TYPE_DIR = "directory";
 static const char* const FS_TYPE_CONTRACT = "contract";
+static const char* const FS_TYPE_LINK = "link";
 
 #define EXECUTIVE_LOG(LEVEL) BCOS_LOG(LEVEL) << "[EXECUTOR]"
 
