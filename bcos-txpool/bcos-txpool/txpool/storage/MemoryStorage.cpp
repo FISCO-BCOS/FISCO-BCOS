@@ -136,6 +136,7 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
         WriteGuard l(x_missedTxs);
         m_missedTxs.unsafe_erase(_tx->hash());
     }
+    // TODO: notifyUnsealedTxs()
     return TransactionStatus::None;
 }
 
@@ -699,6 +700,7 @@ void MemoryStorage::batchMarkTxs(
     TXPOOL_LOG(DEBUG) << LOG_DESC("batchMarkTxs ") << LOG_KV("txsSize", _txsHashList.size())
                       << LOG_KV("batchId", _batchId) << LOG_KV("hash", _batchHash.abridged())
                       << LOG_KV("flag", _sealFlag) << LOG_KV("succ", successCount);
+    notifyUnsealedTxsSize();
 }
 
 void MemoryStorage::batchMarkAllTxs(bool _sealFlag)
