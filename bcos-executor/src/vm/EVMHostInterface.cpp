@@ -308,15 +308,9 @@ evmc_storage_status set(evmc_host_context* _context, const uint8_t* _addr, int32
     assert(string_view((char*)_addr, _addressLength) == hostContext.myAddress());
     string key((char*)_key, _keyLength);
     string value((char*)_value, _valueLength);
-    auto oldValue = hostContext.get(string((char*)_key, _keyLength));
-
-    if (value == oldValue)
-        return EVMC_STORAGE_UNCHANGED;
 
     auto status = EVMC_STORAGE_MODIFIED;
-    if (oldValue.size() == 0)
-        status = EVMC_STORAGE_ADDED;
-    else if (value.size() == 0)
+    if (value.size() == 0)
     {
         status = EVMC_STORAGE_DELETED;
         hostContext.sub().refunds += hostContext.evmSchedule().sstoreRefundGas;

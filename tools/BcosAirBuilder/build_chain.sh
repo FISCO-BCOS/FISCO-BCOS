@@ -448,8 +448,8 @@ parse_params() {
         o)
             output_dir="$OPTARG"
             ;;
-        e) 
-            binary_path="$OPTARG" 
+        e)
+            binary_path="$OPTARG"
             file_must_exists "${binary_path}"
             ;;
         C) command="${OPTARG}"
@@ -582,6 +582,7 @@ generate_node_scripts() {
     generate_script_template "$output/start.sh"
     cat <<EOF >> "${output}/start.sh"
 fisco_bcos=\${SHELL_FOLDER}/../${binary_name}
+export RUST_LOG=bcos_wasm=error
 cd \${SHELL_FOLDER}
 node=\$(basename \${SHELL_FOLDER})
 node_pid=${ps_cmd}
@@ -935,7 +936,7 @@ check_and_install_tassl(){
         arm_name="arm"
         tassl_mid_name="macOS"
     fi
-    
+
     local tassl_post_fix="x86_64"
     local platform="$(uname -p)"
     if [[ "${platform}" == "${arm_name}" ]];then
