@@ -157,7 +157,7 @@ public:
             std::vector<char>(_payload.begin(), _payload.end()));
     }
 
-    void asyncSendBroadcastMessage(bcos::protocol::NodeType _type, const std::string& _groupID,
+    void asyncSendBroadcastMessage(uint16_t _type, const std::string& _groupID,
         bcos::crypto::NodeIDPtr _srcNodeID, bcos::bytesConstRef _payload) override
     {
         auto ret = checkConnection(c_moduleName, "asyncSendBroadcastMessage", m_proxy, nullptr);

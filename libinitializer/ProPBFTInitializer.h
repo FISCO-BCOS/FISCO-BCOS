@@ -22,10 +22,6 @@
 #include "Common/TarsUtils.h"
 #include "libinitializer/PBFTInitializer.h"
 #include <bcos-framework/interfaces/front/FrontServiceInterface.h>
-#include <bcos-framework/interfaces/gateway/GatewayInterface.h>
-#include <bcos-framework/interfaces/multigroup/GroupInfo.h>
-#include <bcos-framework/interfaces/rpc/RPCInterface.h>
-#include <bcos-tars-protocol/client/RpcServiceClient.h>
 #include <bcos-utilities/Timer.h>
 
 namespace bcos

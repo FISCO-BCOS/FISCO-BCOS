@@ -32,8 +32,7 @@ void FrontServiceServer::asyncSendBroadcastMessage(tars::Int32 _nodeType, tars::
     const vector<tars::Char>& data, tars::TarsCurrentPtr)
 {
     m_frontServiceInitializer->front()->asyncSendBroadcastMessage(
-        (bcos::protocol::NodeType)_nodeType, moduleID,
-        bcos::bytesConstRef((bcos::byte*)data.data(), data.size()));
+        _nodeType, moduleID, bcos::bytesConstRef((bcos::byte*)data.data(), data.size()));
 }
 
 bcostars::Error FrontServiceServer::asyncSendMessageByNodeID(tars::Int32 moduleID,

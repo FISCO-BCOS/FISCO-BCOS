@@ -100,7 +100,7 @@ public:
      * @param _payload: message payload
      * @return void
      */
-    void asyncSendBroadcastMessage(bcos::protocol::NodeType _type, const std::string& _groupID,
+    void asyncSendBroadcastMessage(uint16_t _type, const std::string& _groupID,
         bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload) override;
 
     /**

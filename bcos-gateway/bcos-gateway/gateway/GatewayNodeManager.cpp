@@ -37,7 +37,7 @@ GatewayNodeManager::GatewayNodeManager(std::string const& _uuid, P2pID const& _n
     m_uuid = _uuid;
     if (_uuid.size() == 0)
     {
-        m_uuid = m_p2pNodeID;
+        m_uuid = _nodeID;
     }
     m_p2pNodeID = _nodeID;
     m_p2pInterface = _p2pInterface;
@@ -106,7 +106,7 @@ void GatewayNodeManager::onReceiveStatusSeq(
     auto statusSeq = boost::asio::detail::socket_ops::network_to_host_long(
         *((uint32_t*)_msg->payload()->data()));
     auto statusSeqChanged = statusChanged(_session->p2pID(), statusSeq);
-    NODE_MANAGER_LOG(DEBUG) << LOG_DESC("onReceiveStatusSeq") << LOG_KV("p2pid", _session->p2pID())
+    NODE_MANAGER_LOG(TRACE) << LOG_DESC("onReceiveStatusSeq") << LOG_KV("p2pid", _session->p2pID())
                             << LOG_KV("statusSeq", statusSeq)
                             << LOG_KV("seqChanged", statusSeqChanged);
     if (!statusSeqChanged)
@@ -123,7 +123,7 @@ bool GatewayNodeManager::statusChanged(std::string const& _p2pNodeID, uint32_t _
     auto it = m_p2pID2Seq.find(_p2pNodeID);
     if (it != m_p2pID2Seq.end())
     {
-        ret = (statusSeq() != it->second);
+        ret = (_seq > it->second);
     }
     return ret;
 }
@@ -150,7 +150,7 @@ void GatewayNodeManager::updatePeerStatus(std::string const& _p2pID, GatewayNode
     auto seq = _status->seq();
     {
         UpgradableGuard l(x_p2pID2Seq);
-        if (m_p2pID2Seq.count(_p2pID) && (m_p2pID2Seq.at(_p2pID) <= seq))
+        if (m_p2pID2Seq.count(_p2pID) && (m_p2pID2Seq.at(_p2pID) >= seq))
         {
             return;
         }
@@ -158,7 +158,6 @@ void GatewayNodeManager::updatePeerStatus(std::string const& _p2pID, GatewayNode
         m_p2pID2Seq[_p2pID] = seq;
     }
     // remove peers info
-    // m_peersRouterTable->removeP2PID(_p2pID);
     // insert the latest peers info
     m_peersRouterTable->updatePeerStatus(_p2pID, _status);
     // notify nodeIDs to front service
@@ -196,12 +195,12 @@ bytesPointer GatewayNodeManager::generateNodeStatus()
     {
         auto groupNodeInfo = std::make_shared<GroupNodeInfo>(it.first);
         // get nodeID and type
-        std::vector<std::string> nodeList;
+        std::vector<std::string> nodeIDList;
         auto groupType = GroupType::OUTSIDE_GROUP;
         bool hasObserverNode = false;
         for (auto const& pNodeInfo : it.second)
         {
-            nodeList.emplace_back(pNodeInfo.first);
+            nodeIDList.emplace_back(pNodeInfo.first);
             if ((NodeType)(pNodeInfo.second->nodeType()) == NodeType::CONSENSUS_NODE)
             {
                 groupType = GroupType::GROUP_WITH_CONSENSUS_NODE;
@@ -216,8 +215,12 @@ bytesPointer GatewayNodeManager::generateNodeStatus()
             groupType = GroupType::GROUP_WITHOUT_CONSENSUS_NODE;
         }
         groupNodeInfo->setType(groupType);
-        groupNodeInfo->setNodeIDList(std::move(nodeList));
+        groupNodeInfo->setNodeIDList(std::move(nodeIDList));
         groupNodeInfos.emplace_back(groupNodeInfo);
+        NODE_MANAGER_LOG(INFO) << LOG_DESC("generateNodeStatus") << LOG_KV("groupType", groupType)
+                               << LOG_KV("groupID", it.first)
+                               << LOG_KV("nodeListSize", groupNodeInfo->nodeIDList().size())
+                               << LOG_KV("seq", statusSeq());
     }
     nodeStatus->setGroupNodeInfos(std::move(groupNodeInfos));
     return nodeStatus->encode();

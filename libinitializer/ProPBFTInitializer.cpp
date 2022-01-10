@@ -19,11 +19,8 @@
  * @date 2021-06-10
  */
 #include "ProPBFTInitializer.h"
-#include "bcos-framework/interfaces/storage/KVStorageHelper.h"
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
-#include <bcos-utilities/FileUtility.h>
-#include <include/BuildInfo.h>
-#include <json/json.h>
+#include <bcos-tars-protocol/client/RpcServiceClient.h>
 
 using namespace bcos;
 using namespace bcos::tool;
@@ -37,7 +34,8 @@ ProPBFTInitializer::ProPBFTInitializer(bcos::initializer::NodeArchitectureType _
     bcos::scheduler::SchedulerInterface::Ptr _scheduler,
     bcos::storage::StorageInterface::Ptr _storage,
     std::shared_ptr<bcos::front::FrontServiceInterface> _frontService)
-  : PBFTInitializer(_nodeArchType, _nodeConfig, _protocolInitializer, _txpool, _ledger, _scheduler, _storage, _frontService)
+  : PBFTInitializer(_nodeArchType, _nodeConfig, _protocolInitializer, _txpool, _ledger, _scheduler,
+        _storage, _frontService)
 {
     m_timer = std::make_shared<Timer>(m_timerSchedulerInterval, "node info report");
 }
@@ -76,16 +74,15 @@ void ProPBFTInitializer::init()
 {
     PBFTInitializer::init();
     m_timer->registerTimeoutHandler(boost::bind(&ProPBFTInitializer::reportNodeInfo, this));
-    m_blockSync->config()->registerOnNodeTypeChanged([this](bcos::protocol::NodeType _type)
-    {
-       auto nodeInfo = m_groupInfo->nodeInfo(m_nodeConfig->nodeName());
-       if(!nodeInfo)
-       {
-           INITIALIZER_LOG(WARNING) << LOG_DESC("failed to find the given node information")
-           << LOG_KV("node", m_nodeConfig->nodeName());
-           return;
-       }
-       nodeInfo->setNodeType(_type);
-       reportNodeInfo();
+    m_blockSync->config()->registerOnNodeTypeChanged([this](bcos::protocol::NodeType _type) {
+        auto nodeInfo = m_groupInfo->nodeInfo(m_nodeConfig->nodeName());
+        if (!nodeInfo)
+        {
+            INITIALIZER_LOG(WARNING) << LOG_DESC("failed to find the given node information")
+                                     << LOG_KV("node", m_nodeConfig->nodeName());
+            return;
+        }
+        nodeInfo->setNodeType(_type);
+        reportNodeInfo();
     });
 }

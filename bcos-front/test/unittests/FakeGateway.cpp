@@ -71,7 +71,7 @@ void FakeGateway::asyncSendMessageByNodeIDs(const std::string& _groupID,
  * @param _payload: message content
  * @return void
  */
-void FakeGateway::asyncSendBroadcastMessage(bcos::protocol::NodeType, const std::string& _groupID,
+void FakeGateway::asyncSendBroadcastMessage(uint16_t, const std::string& _groupID,
     bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload)
 {
     m_frontService->onReceiveBroadcastMessage(_groupID, _srcNodeID, _payload, ErrorRespFunc());

@@ -34,8 +34,7 @@ public:
         current->setResponse(false);
         auto bcosNodeID = m_gatewayInitializer->keyFactory()->createKey(
             bcos::bytesConstRef((const bcos::byte*)srcNodeID.data(), srcNodeID.size()));
-        m_gatewayInitializer->gateway()->asyncSendBroadcastMessage((bcos::protocol::NodeType)_type,
-            groupID, bcosNodeID,
+        m_gatewayInitializer->gateway()->asyncSendBroadcastMessage(_type, groupID, bcosNodeID,
             bcos::bytesConstRef((const bcos::byte*)payload.data(), payload.size()));
 
         async_response_asyncSendBroadcastMessage(current, toTarsError(nullptr));

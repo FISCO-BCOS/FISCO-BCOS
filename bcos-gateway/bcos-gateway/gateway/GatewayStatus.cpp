@@ -41,6 +41,8 @@ void GatewayStatus::update(std::string const& _p2pNodeID, GatewayNodeStatus::Con
             continue;
         }
         UpgradeGuard ul(l);
+        // remove the _p2pNodeID from the cache
+        removeP2PIDWithoutLock(groupID, _p2pNodeID);
         // insert the new p2pNodeID
         if (!m_groupP2PNodeList.count(groupID) || !m_groupP2PNodeList[groupID].count(type))
         {
@@ -53,7 +55,7 @@ void GatewayStatus::update(std::string const& _p2pNodeID, GatewayNodeStatus::Con
 }
 
 bool GatewayStatus::randomChooseP2PNode(
-    std::string& _p2pNodeID, uint32_t _type, std::string const& _groupID) const
+    std::string& _p2pNodeID, uint16_t _type, std::string const& _groupID) const
 {
     // If need to send a message to a consensus node, select the consensus node first
     if ((_type & NodeType::CONSENSUS_NODE) &&
@@ -103,25 +105,36 @@ bool GatewayStatus::randomChooseNode(
     return true;
 }
 
+void GatewayStatus::removeP2PIDWithoutLock(
+    std::string const& _groupID, std::string const& _p2pNodeID)
+{
+    if (!m_groupP2PNodeList.count(_groupID))
+    {
+        return;
+    }
+    auto& p2pNodeList = m_groupP2PNodeList[_groupID];
+    for (auto it = p2pNodeList.begin(); it != p2pNodeList.end();)
+    {
+        if (it->second.count(_p2pNodeID))
+        {
+            it->second.erase(_p2pNodeID);
+        }
+        if (it->second.size() == 0)
+        {
+            it = p2pNodeList.erase(it);
+            continue;
+        }
+        it++;
+    }
+}
+
 void GatewayStatus::removeP2PNode(std::string const& _p2pNodeID)
 {
     WriteGuard l(x_groupP2PNodeList);
     for (auto pGroupInfo = m_groupP2PNodeList.begin(); pGroupInfo != m_groupP2PNodeList.end();)
     {
-        auto& p2pNodeList = pGroupInfo->second;
-        for (auto it = p2pNodeList.begin(); it != p2pNodeList.end();)
-        {
-            if (it->second.count(_p2pNodeID))
-            {
-                it->second.erase(_p2pNodeID);
-            }
-            if (it->second.size() == 0)
-            {
-                it = p2pNodeList.erase(it);
-                continue;
-            }
-            it++;
-        }
+        auto& p2pNodeList = m_groupP2PNodeList[pGroupInfo->first];
+        removeP2PIDWithoutLock(pGroupInfo->first, _p2pNodeID);
         if (p2pNodeList.size() == 0)
         {
             pGroupInfo = m_groupP2PNodeList.erase(pGroupInfo);

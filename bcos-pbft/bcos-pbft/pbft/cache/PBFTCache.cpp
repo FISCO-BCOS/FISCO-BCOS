@@ -73,8 +73,9 @@ void PBFTCache::onCheckPointTimeout()
         m_config->pbftMsgDefaultVersion(), m_config->view(), utcTime(), m_config->nodeIndex(),
         m_checkpointProposal, m_config->cryptoSuite(), m_config->keyPair(), true);
     auto encodedData = m_config->codec()->encode(checkPointMsg);
-    m_config->frontService()->asyncSendMessageByNodeIDs(
-        ModuleID::PBFT, m_config->consensusNodeIDList(), ref(*encodedData));
+    // only broadcast message to consensus node
+    m_config->frontService()->asyncSendBroadcastMessage(
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*encodedData));
     m_timer->restart();
 }
 
@@ -255,8 +256,9 @@ bool PBFTCache::checkAndPreCommit()
                    << LOG_KV("hash", commitReq->hash().abridged())
                    << LOG_KV("index", commitReq->index());
     auto encodedData = m_config->codec()->encode(commitReq, m_config->pbftMsgDefaultVersion());
-    m_config->frontService()->asyncSendMessageByNodeIDs(
-        bcos::protocol::ModuleID::PBFT, m_config->consensusNodeIDList(), ref(*encodedData));
+    // only broadcast message to consensus nodes
+    m_config->frontService()->asyncSendBroadcastMessage(
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*encodedData));
     m_precommitted = true;
     // collect the commitReq and try to commit
     return checkAndCommit();

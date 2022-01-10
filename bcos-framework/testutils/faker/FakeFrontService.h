@@ -156,7 +156,18 @@ public:
     }
 
     // useless for sync/pbft/txpool
-    void asyncSendBroadcastMessage(bcos::protocol::NodeType, int, bytesConstRef) override {}
+    void asyncSendBroadcastMessage(uint16_t, int _moduleId, bytesConstRef _data) override
+    {
+        for (auto node : m_nodeIDList)
+        {
+            if (node->data() == m_nodeId->data())
+            {
+                continue;
+            }
+            asyncSendMessageByNodeID(_moduleId, node, _data, 0, nullptr);
+        }
+    }
+
     // useless for sync/pbft/txpool
     void onReceiveBroadcastMessage(
         const std::string&, NodeIDPtr, bytesConstRef, ReceiveMsgFunc) override
@@ -198,11 +209,14 @@ public:
     size_t totalSendMsgSize() { return m_totalSendMsgSize; }
     FakeGateWay::Ptr gateWay() { return m_fakeGateWay; }
 
+    void setNodeIDList(bcos::crypto::NodeIDSet const& _nodeIDList) { m_nodeIDList = _nodeIDList; }
+
 private:
     NodeIDPtr m_nodeId;
     std::map<NodeIDPtr, size_t, KeyCompare> m_nodeId2AsyncSendSize;
     size_t m_totalSendMsgSize = 0;
     FakeGateWay::Ptr m_fakeGateWay;
+    bcos::crypto::NodeIDSet m_nodeIDList;
 };
 }  // namespace test
 }  // namespace bcos

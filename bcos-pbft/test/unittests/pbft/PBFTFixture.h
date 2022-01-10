@@ -278,7 +278,8 @@ public:
         {
             connectedNodeList.insert(node->nodeID());
         }
-        pbftConfig()->setConnectedNodeList(std::move(connectedNodeList));
+        pbftConfig()->setConnectedNodeList(connectedNodeList);
+        m_frontService->setNodeIDList(connectedNodeList);
     }
 
     void appendConsensusNode(PublicPtr _nodeId)

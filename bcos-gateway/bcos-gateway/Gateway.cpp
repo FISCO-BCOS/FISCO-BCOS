@@ -303,9 +303,10 @@ void Gateway::asyncSendMessageByNodeIDs(const std::string& _groupID, NodeIDPtr _
  * @param _payload: message content
  * @return void
  */
-void Gateway::asyncSendBroadcastMessage(bcos::protocol::NodeType _type, const std::string& _groupID,
-    NodeIDPtr _srcNodeID, bytesConstRef _payload)
+void Gateway::asyncSendBroadcastMessage(
+    uint16_t _type, const std::string& _groupID, NodeIDPtr _srcNodeID, bytesConstRef _payload)
 {
+    // broadcast message to the local nodes
     auto ret = m_gatewayNodeManager->localRouterTable()->asyncBroadcastMsg(
         _type, _groupID, _srcNodeID, _payload);
     auto message =
@@ -316,8 +317,8 @@ void Gateway::asyncSendBroadcastMessage(bcos::protocol::NodeType _type, const st
     message->options()->setGroupID(_groupID);
     message->options()->setSrcNodeID(_srcNodeID->encode());
     message->setPayload(std::make_shared<bytes>(_payload.begin(), _payload.end()));
+    // broadcast message to the peers
     m_gatewayNodeManager->peersRouterTable()->asyncBroadcastMsg(_type, _groupID, message);
-    GATEWAY_LOG(TRACE) << "asyncSendBroadcastMessage send message" << LOG_KV("groupID", _groupID);
 }
 
 /**
@@ -424,7 +425,7 @@ void Gateway::onReceiveP2PMessage(
 void Gateway::onReceiveBroadcastMessage(
     NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg)
 {
-    if (!_e.errorCode())
+    if (_e.errorCode() != 0)
     {
         GATEWAY_LOG(WARNING) << LOG_DESC("onReceiveBroadcastMessage error")
                              << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());

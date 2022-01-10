@@ -338,7 +338,7 @@ void FrontService::asyncSendMessageByNodeIDs(
  * @param _data: send message data
  * @return void
  */
-void FrontService::asyncSendBroadcastMessage(NodeType _type, int _moduleID, bytesConstRef _data)
+void FrontService::asyncSendBroadcastMessage(uint16_t _type, int _moduleID, bytesConstRef _data)
 {
     auto message = messageFactory()->buildMessage();
     message->setModuleID(_moduleID);

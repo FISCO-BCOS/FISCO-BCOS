@@ -116,7 +116,7 @@ bool LocalRouterTable::insertNode(const std::string& _groupID, NodeIDPtr _nodeID
     UpgradeGuard ul(l);
     m_nodeList[_groupID][nodeIDStr] = frontServiceInfo;
     ROUTER_LOG(INFO) << LOG_DESC("insertNode") << LOG_KV("groupID", _groupID)
-                     << LOG_KV("nodeID", nodeIDStr);
+                     << LOG_KV("nodeID", nodeIDStr) << LOG_KV("nodeType", _type);
     return true;
 }
 
@@ -221,7 +221,7 @@ bool LocalRouterTable::eraseUnreachableNodes()
 }
 
 bool LocalRouterTable::asyncBroadcastMsg(
-    int16_t _nodeType, const std::string& _groupID, NodeIDPtr _srcNodeID, bytesConstRef _payload)
+    uint16_t _nodeType, const std::string& _groupID, NodeIDPtr _srcNodeID, bytesConstRef _payload)
 {
     auto frontServiceList = getGroupFrontServiceList(_groupID);
     if (frontServiceList.size() == 0)

@@ -181,6 +181,7 @@ private:
         }
         m_txpool->transactionSync()->config()->setConnectedNodeList(nodeIdSet);
         m_txpool->transactionSync()->config()->notifyConnectedNodes(nodeIdSet, nullptr);
+        m_frontService->setNodeIDList(nodeIdSet);
     }
 
 private:

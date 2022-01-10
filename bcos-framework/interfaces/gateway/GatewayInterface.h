@@ -99,9 +99,8 @@ public:
      * @param _payload: message content
      * @return void
      */
-    virtual void asyncSendBroadcastMessage(bcos::protocol::NodeType _type,
-        const std::string& _groupID, bcos::crypto::NodeIDPtr _srcNodeID,
-        bytesConstRef _payload) = 0;
+    virtual void asyncSendBroadcastMessage(uint16_t _type, const std::string& _groupID,
+        bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload) = 0;
 
     /// multi-group related interfaces
 

@@ -227,7 +227,7 @@ void PeersRouterTable::removeNodeFromGatewayInfo(P2pID const& _p2pID)
 
 // broadcast message to given group
 void PeersRouterTable::asyncBroadcastMsg(
-    NodeType _type, std::string const& _groupID, P2PMessage::Ptr _msg)
+    uint16_t _type, std::string const& _groupID, P2PMessage::Ptr _msg)
 {
     std::vector<std::string> selectedPeers;
     {

@@ -26,6 +26,7 @@
 #include "SchedulerService/SchedulerServiceServer.h"
 #include "TxPoolService/TxPoolServiceServer.h"
 #include "libinitializer/Initializer.h"
+#include <bcos-tars-protocol/client/RpcServiceClient.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <tarscpp/servant/Application.h>

@@ -292,14 +292,13 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_onReceiveNodeIDs)
     bool changed = false;
 
     changed = gatewayNodeManager->statusChanged(p2pID, 110);
-    BOOST_CHECK(changed);
+    BOOST_CHECK(!changed);
     gatewayNodeManager->setStatusSeq(p2pID, 110);
 
-    changed = gatewayNodeManager->statusChanged(p2pID, 1);
+    changed = gatewayNodeManager->statusChanged(p2pID, 111);
     BOOST_CHECK(changed);
-    gatewayNodeManager->setStatusSeq(p2pID, 1);
 
-    changed = gatewayNodeManager->statusChanged(p2pID, 1);
+    changed = gatewayNodeManager->statusChanged(p2pID, 109);
     BOOST_CHECK(!changed);
 }
 
