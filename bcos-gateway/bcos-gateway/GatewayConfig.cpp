@@ -117,13 +117,13 @@ void GatewayConfig::parseConnectedJson(
  * @param _configPath: config.ini path
  * @return void
  */
-void GatewayConfig::initConfig(std::string const& _configPath)
+void GatewayConfig::initConfig(std::string const& _configPath, bool _uuidRequired)
 {
     try
     {
         boost::property_tree::ptree pt;
         boost::property_tree::ini_parser::read_ini(_configPath, pt);
-        initP2PConfig(pt);
+        initP2PConfig(pt, _uuidRequired);
         if (m_smSSL)
         {
             initSMCertConfig(pt);
@@ -153,10 +153,12 @@ void GatewayConfig::initConfig(std::string const& _configPath)
 }
 
 /// loads p2p configuration items from the configuration file
-void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt)
+void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _uuidRequired)
 {
     /*
     [p2p]
+      ; uuid
+      uuid =
       ; ssl or sm ssl
       sm_ssl=true
       listen_ip=0.0.0.0
@@ -164,6 +166,12 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt)
       nodes_path=./
       nodes_file=nodes.json
       */
+    m_uuid = _pt.get<std::string>("p2p.uuid", "");
+    if (_uuidRequired && m_uuid.size() == 0)
+    {
+        BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                  "initP2PConfig: invalid uuid! Must be non-empty!"));
+    }
     bool smSSL = _pt.get<bool>("p2p.sm_ssl", false);
     std::string listenIP = _pt.get<std::string>("p2p.listen_ip", "0.0.0.0");
     int listenPort = _pt.get<int>("p2p.listen_port", 30300);

@@ -169,6 +169,7 @@ void PBFTEngine::onProposalApplySuccess(
         _executedProposal, m_config->cryptoSuite(), m_config->keyPair(), true);
 
     auto encodedData = m_config->codec()->encode(checkPointMsg);
+
     m_config->frontService()->asyncSendMessageByNodeIDs(
         ModuleID::PBFT, m_config->consensusNodeIDList(), ref(*encodedData));
     // Note: must lock here to ensure thread safe

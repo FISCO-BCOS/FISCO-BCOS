@@ -28,9 +28,9 @@ class ProGatewayNodeManager : public GatewayNodeManager
 {
 public:
     using Ptr = std::shared_ptr<ProGatewayNodeManager>;
-    ProGatewayNodeManager(P2pID const& _nodeID,
+    ProGatewayNodeManager(std::string const& _uuid, P2pID const& _nodeID,
         std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface)
-      : GatewayNodeManager(_nodeID, _keyFactory, _p2pInterface)
+      : GatewayNodeManager(_uuid, _nodeID, _keyFactory, _p2pInterface)
     {
         m_nodeAliveDetector = std::make_shared<Timer>(1000, "nodeUpdater");
         m_nodeAliveDetector->registerTimeoutHandler([this]() { DetectNodeAlive(); });

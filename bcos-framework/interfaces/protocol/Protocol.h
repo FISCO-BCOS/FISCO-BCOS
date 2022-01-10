@@ -26,6 +26,7 @@ namespace protocol
 {
 enum NodeType : uint16_t
 {
+    None = 0x0,
     CONSENSUS_NODE = 0x1,
     OBSERVER_NODE = 0x10,
     NODE_OUTSIDE_GROUP = 0x100,

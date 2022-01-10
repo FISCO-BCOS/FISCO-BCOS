@@ -112,7 +112,8 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService)
 
     bool r = false;
     auto seq = gatewayNodeManager->statusSeq();
-    r = gatewayNodeManager->registerNode(groupID, nodeID, frontService);
+    r = gatewayNodeManager->registerNode(
+        groupID, nodeID, bcos::protocol::NodeType::CONSENSUS_NODE, frontService);
     BOOST_CHECK_EQUAL(r, true);
     BOOST_CHECK_EQUAL(seq + 1, gatewayNodeManager->statusSeq());
 
@@ -120,7 +121,8 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService)
     BOOST_CHECK(!s.empty());
 
     seq = gatewayNodeManager->statusSeq();
-    r = gatewayNodeManager->registerNode(groupID, nodeID, nullptr);
+    r = gatewayNodeManager->registerNode(
+        groupID, nodeID, bcos::protocol::NodeType::CONSENSUS_NODE, nullptr);
     BOOST_CHECK_EQUAL(r, false);
     BOOST_CHECK_EQUAL(seq, gatewayNodeManager->statusSeq());
 
@@ -133,7 +135,8 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService)
     BOOST_CHECK(s.empty());
 
     seq = gatewayNodeManager->statusSeq();
-    r = gatewayNodeManager->registerNode(groupID, nodeID, nullptr);
+    r = gatewayNodeManager->registerNode(
+        groupID, nodeID, bcos::protocol::NodeType::CONSENSUS_NODE, nullptr);
     BOOST_CHECK_EQUAL(r, true);
     BOOST_CHECK_EQUAL(seq + 1, gatewayNodeManager->statusSeq());
 
@@ -141,7 +144,8 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService)
     BOOST_CHECK(!s.empty());
 
     seq = gatewayNodeManager->statusSeq();
-    r = gatewayNodeManager->registerNode(groupID, nodeID, nullptr);
+    r = gatewayNodeManager->registerNode(
+        groupID, nodeID, bcos::protocol::NodeType::CONSENSUS_NODE, nullptr);
     BOOST_CHECK_EQUAL(r, false);
     BOOST_CHECK_EQUAL(seq, gatewayNodeManager->statusSeq());
     s = gatewayNodeManager->localRouterTable()->getGroupFrontServiceList(groupID);
@@ -163,12 +167,14 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_registerFrontService_loop)
             keyFactory->createKey(bytesConstRef((bcos::byte*)strNodeID.data(), strNodeID.size()));
 
         auto seq = gatewayNodeManager->statusSeq();
-        bool r = gatewayNodeManager->registerNode(groupID, nodeID, nullptr);
+        bool r = gatewayNodeManager->registerNode(
+            groupID, nodeID, bcos::protocol::NodeType::CONSENSUS_NODE, nullptr);
         BOOST_CHECK_EQUAL(r, true);
         BOOST_CHECK_EQUAL(seq + 1, gatewayNodeManager->statusSeq());
 
         seq = gatewayNodeManager->statusSeq();
-        r = gatewayNodeManager->registerNode(groupID, nodeID, nullptr);
+        r = gatewayNodeManager->registerNode(
+            groupID, nodeID, bcos::protocol::NodeType::CONSENSUS_NODE, nullptr);
         BOOST_CHECK_EQUAL(r, false);
         BOOST_CHECK_EQUAL(seq, gatewayNodeManager->statusSeq());
 
@@ -202,7 +208,8 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_onRequestNodeStatus)
 
         bool r = false;
         auto seq = gatewayNodeManager->statusSeq();
-        r = gatewayNodeManager->registerNode(groupID, nodeID, nullptr);
+        r = gatewayNodeManager->registerNode(
+            groupID, nodeID, bcos::protocol::NodeType::CONSENSUS_NODE, nullptr);
         BOOST_CHECK(r);
         BOOST_CHECK_EQUAL(seq + 1, gatewayNodeManager->statusSeq());
 

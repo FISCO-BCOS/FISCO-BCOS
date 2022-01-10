@@ -49,11 +49,7 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     m_gateway = gateway;
 
     // create the node
-    initLocalNode(_configFilePath, _genesisFile, m_gateway);
-    auto nodeID = m_nodeInitializer->protocolInitializer()->keyPair()->publicKey();
-    gateway->gatewayNodeManager()->registerNode(
-        nodeConfig->groupId(), nodeID, m_nodeInitializer->frontService()->front());
-
+    initAirNode(_configFilePath, _genesisFile, m_gateway);
     auto pbftInitializer = m_nodeInitializer->pbftInitializer();
     auto groupInfo = m_nodeInitializer->pbftInitializer()->groupInfo();
     auto nodeService =

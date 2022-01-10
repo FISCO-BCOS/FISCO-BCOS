@@ -231,7 +231,16 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(
 {
     auto config = std::make_shared<GatewayConfig>();
     // load config
-    config->initConfig(_configPath);
+    if (_airVersion)
+    {
+        // the air mode not require the uuid(use p2pID as uuid by default)
+        config->initConfig(_configPath, false);
+    }
+    else
+    {
+        // the pro mode require the uuid
+        config->initConfig(_configPath, true);
+    }
     config->loadP2pConnectedNodes();
     return buildGateway(config, _airVersion);
 }
@@ -296,13 +305,14 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         AMOPImpl::Ptr amop;
         if (_airVersion)
         {
-            gatewayNodeManager = std::make_shared<GatewayNodeManager>(pubHex, keyFactory, service);
+            gatewayNodeManager =
+                std::make_shared<GatewayNodeManager>(_config->uuid(), pubHex, keyFactory, service);
             amop = buildLocalAMOP(service, pubHex);
         }
         else
         {
-            gatewayNodeManager =
-                std::make_shared<ProGatewayNodeManager>(pubHex, keyFactory, service);
+            gatewayNodeManager = std::make_shared<ProGatewayNodeManager>(
+                _config->uuid(), pubHex, keyFactory, service);
             amop = buildAMOP(service, pubHex);
         }
         // init Gateway

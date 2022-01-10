@@ -19,8 +19,8 @@
  * @date: 2021-04-9
  */
 #pragma once
-#include "../crypto/CommonType.h"
 #include "Protocol.h"
+#include "bcos-framework/interfaces/crypto/CommonType.h"
 namespace bcos
 {
 namespace protocol
@@ -101,10 +101,14 @@ struct Session
     bcos::protocol::BlockNumber beginNumber;  // [
     bcos::protocol::BlockNumber endNumber;    // )
 };
+
 inline std::ostream& operator<<(std::ostream& _out, NodeType const& _nodeType)
 {
     switch (_nodeType)
     {
+    case NodeType::None:
+        _out << "None";
+        break;
     case NodeType::CONSENSUS_NODE:
         _out << "consensus";
         break;

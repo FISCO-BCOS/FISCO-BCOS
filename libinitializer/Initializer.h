@@ -22,6 +22,7 @@
 #include "FrontServiceInitializer.h"
 #include "LedgerInitializer.h"
 #include "PBFTInitializer.h"
+#include "ProPBFTInitializer.h"
 #include "ProtocolInitializer.h"
 #include "SchedulerInitializer.h"
 #include "StorageInitializer.h"
@@ -54,7 +55,7 @@ public:
 
     FrontServiceInitializer::Ptr frontService() { return m_frontServiceInitializer; }
 
-    void initLocalNode(std::string const& _configFilePath, std::string const& _genesisFile,
+    void initAirNode(std::string const& _configFilePath, std::string const& _genesisFile,
         bcos::gateway::GatewayInterface::Ptr _gateway)
     {
         initConfig(_configFilePath, _genesisFile, "", true);

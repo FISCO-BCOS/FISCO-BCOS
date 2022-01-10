@@ -19,8 +19,9 @@
  * @date 2021-09-08
  */
 #pragma once
-#include "../protocol/ServiceDesc.h"
 #include "GroupTypeDef.h"
+#include "bcos-framework/interfaces/protocol/Protocol.h"
+#include "bcos-framework/interfaces/protocol/ServiceDesc.h"
 #include "bcos-utilities/Common.h"
 #include <json/json.h>
 #include <memory>
@@ -180,11 +181,16 @@ public:
         return jResp;
     }
 
+    void setNodeType(bcos::protocol::NodeType _type) { m_nodeType = _type; }
+    bcos::protocol::NodeType nodeType() const { return m_nodeType; }
+
 private:
     bool m_microService = false;
     // the node name
     std::string m_nodeName;
     NodeCryptoType m_nodeCryptoType;
+    // the nodeType
+    bcos::protocol::NodeType m_nodeType;
     // the nodeID
     std::string m_nodeID;
 

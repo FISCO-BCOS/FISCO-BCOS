@@ -30,10 +30,15 @@ using namespace bcos::protocol;
 using namespace bcos::group;
 using namespace bcos::crypto;
 
-GatewayNodeManager::GatewayNodeManager(P2pID const& _nodeID,
+GatewayNodeManager::GatewayNodeManager(std::string const& _uuid, P2pID const& _nodeID,
     std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface)
   : GatewayNodeManager(_keyFactory, _p2pInterface)
 {
+    m_uuid = _uuid;
+    if (_uuid.size() == 0)
+    {
+        m_uuid = m_p2pNodeID;
+    }
     m_p2pNodeID = _nodeID;
     m_p2pInterface = _p2pInterface;
     // SyncNodeSeq
@@ -68,9 +73,9 @@ void GatewayNodeManager::stop()
 }
 
 bool GatewayNodeManager::registerNode(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
-    bcos::front::FrontServiceInterface::Ptr _frontService)
+    bcos::protocol::NodeType _nodeType, bcos::front::FrontServiceInterface::Ptr _frontService)
 {
-    auto ret = m_localRouterTable->insertNode(_groupID, _nodeID, _frontService);
+    auto ret = m_localRouterTable->insertNode(_groupID, _nodeID, _nodeType, _frontService);
     if (ret)
     {
         increaseSeq();

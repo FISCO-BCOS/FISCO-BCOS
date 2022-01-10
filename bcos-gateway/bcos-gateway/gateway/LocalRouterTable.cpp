@@ -95,18 +95,24 @@ std::map<std::string, std::set<std::string>> LocalRouterTable::nodeListInfo() co
  * @param _nodeID: nodeID
  * @param _frontService: FrontService
  */
-bool LocalRouterTable::insertNode(
-    const std::string& _groupID, NodeIDPtr _nodeID, FrontServiceInterface::Ptr _frontService)
+bool LocalRouterTable::insertNode(const std::string& _groupID, NodeIDPtr _nodeID,
+    bcos::protocol::NodeType _type, FrontServiceInterface::Ptr _frontService)
 {
     auto nodeIDStr = _nodeID->hex();
     UpgradableGuard l(x_nodeList);
     if (m_nodeList.count(_groupID) && m_nodeList[_groupID].count(nodeIDStr))
     {
-        ROUTER_LOG(INFO) << LOG_DESC("insertNode: the node has already existed")
-                         << LOG_KV("groupID", _groupID) << LOG_KV("nodeID", nodeIDStr);
-        return false;
+        auto nodeType = (m_nodeList.at(_groupID).at(nodeIDStr))->nodeType();
+        if (_type == nodeType)
+        {
+            ROUTER_LOG(INFO) << LOG_DESC("insertNode: the node has already existed")
+                             << LOG_KV("groupID", _groupID) << LOG_KV("nodeID", nodeIDStr)
+                             << LOG_KV("nodeType", _type);
+            return false;
+        }
     }
-    auto frontServiceInfo = std::make_shared<FrontServiceInfo>(nodeIDStr, _frontService, nullptr);
+    auto frontServiceInfo =
+        std::make_shared<FrontServiceInfo>(nodeIDStr, _frontService, _type, nullptr);
     UpgradeGuard ul(l);
     m_nodeList[_groupID][nodeIDStr] = frontServiceInfo;
     ROUTER_LOG(INFO) << LOG_DESC("insertNode") << LOG_KV("groupID", _groupID)
@@ -154,7 +160,11 @@ bool LocalRouterTable::updateGroupNodeInfos(bcos::group::GroupInfo::Ptr _groupIn
         // the node is registered
         if (m_nodeList.count(groupID) && m_nodeList[groupID].count(nodeID))
         {
-            continue;
+            auto nodeType = (m_nodeList.at(groupID).at(nodeID))->nodeType();
+            if (nodeType == nodeInfo->nodeType())
+            {
+                continue;
+            }
         }
         // insert the new node
         auto serviceName = nodeInfo->serviceName(bcos::protocol::FRONT);
@@ -167,7 +177,7 @@ bool LocalRouterTable::updateGroupNodeInfos(bcos::group::GroupInfo::Ptr _groupIn
                 serviceName, FRONT_SERVANT_NAME, m_keyFactory);
         UpgradeGuard ul(l);
         auto frontServiceInfo = std::make_shared<FrontServiceInfo>(
-            nodeInfo->nodeID(), frontService.first, frontService.second);
+            nodeInfo->nodeID(), frontService.first, nodeInfo->nodeType(), frontService.second);
         m_nodeList[groupID][nodeID] = frontServiceInfo;
         ROUTER_LOG(INFO) << LOG_DESC("updateGroupNodeInfos: insert frontService for the node")
                          << LOG_KV("nodeID", nodeInfo->nodeID())
