@@ -338,7 +338,7 @@ void FrontService::asyncSendMessageByNodeIDs(
  * @param _data: send message data
  * @return void
  */
-void FrontService::asyncSendBroadcastMessage(int _moduleID, bytesConstRef _data)
+void FrontService::asyncSendBroadcastMessage(uint16_t _type, int _moduleID, bytesConstRef _data)
 {
     auto message = messageFactory()->buildMessage();
     message->setModuleID(_moduleID);
@@ -348,7 +348,7 @@ void FrontService::asyncSendBroadcastMessage(int _moduleID, bytesConstRef _data)
     message->encode(*buffer.get());
 
     m_gatewayInterface->asyncSendBroadcastMessage(
-        m_groupID, m_nodeID, bytesConstRef(buffer->data(), buffer->size()));
+        _type, m_groupID, m_nodeID, bytesConstRef(buffer->data(), buffer->size()));
 }
 
 /**

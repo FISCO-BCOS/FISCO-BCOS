@@ -60,7 +60,7 @@ struct Params
     float txSpeed;
 };
 
-Params initLocalNodeCommandLine(int argc, const char* argv[], bool _autoSendTx)
+Params initAirNodeCommandLine(int argc, const char* argv[], bool _autoSendTx)
 {
     boost::program_options::options_description main_options("Usage of FISCO-BCOS");
     main_options.add_options()("help,h", "print help information")(

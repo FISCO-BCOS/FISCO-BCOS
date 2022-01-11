@@ -31,8 +31,11 @@ class FrontServiceInfo
 public:
     using Ptr = std::shared_ptr<FrontServiceInfo>;
     FrontServiceInfo(std::string _nodeID, bcos::front::FrontServiceInterface::Ptr _frontService,
-        bcostars::FrontServicePrx _frontServicePrx)
-      : m_nodeID(_nodeID), m_frontService(_frontService), m_frontServicePrx(_frontServicePrx)
+        bcos::protocol::NodeType _type, bcostars::FrontServicePrx _frontServicePrx)
+      : m_nodeID(_nodeID),
+        m_nodeType(_type),
+        m_frontService(_frontService),
+        m_frontServicePrx(_frontServicePrx)
     {}
     bcos::front::FrontServiceInterface::Ptr frontService() { return m_frontService; }
     bcostars::FrontServicePrx frontServicePrx() { return m_frontServicePrx; }
@@ -52,7 +55,6 @@ public:
     std::string const& nodeID() const { return m_nodeID; }
 
     bcos::protocol::NodeType nodeType() const { return m_nodeType; }
-    void setNodeType(bcos::protocol::NodeType _nodeType) { m_nodeType = _nodeType; }
 
 private:
     std::string m_nodeID;

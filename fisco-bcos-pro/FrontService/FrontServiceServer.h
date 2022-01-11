@@ -30,8 +30,8 @@ public:
     bcostars::Error asyncGetNodeIDs(
         vector<vector<tars::Char>>& nodeIDs, tars::TarsCurrentPtr current) override;
 
-    void asyncSendBroadcastMessage(tars::Int32 moduleID, const vector<tars::Char>& data,
-        tars::TarsCurrentPtr current) override;
+    void asyncSendBroadcastMessage(tars::Int32 _nodeType, tars::Int32 moduleID,
+        const vector<tars::Char>& data, tars::TarsCurrentPtr current) override;
 
     bcostars::Error asyncSendMessageByNodeID(tars::Int32 moduleID, const vector<tars::Char>& nodeID,
         const vector<tars::Char>& data, tars::UInt32 timeout, tars::Bool requireRespCallback,

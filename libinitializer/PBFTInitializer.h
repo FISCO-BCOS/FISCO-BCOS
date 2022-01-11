@@ -22,16 +22,12 @@
 #include "Common/TarsUtils.h"
 #include "libinitializer/ProtocolInitializer.h"
 #include <bcos-framework/interfaces/front/FrontServiceInterface.h>
-#include <bcos-framework/interfaces/gateway/GatewayInterface.h>
 #include <bcos-framework/interfaces/multigroup/GroupInfo.h>
-#include <bcos-framework/interfaces/rpc/RPCInterface.h>
 #include <bcos-ledger/src/libledger/Ledger.h>
 #include <bcos-pbft/pbft/PBFTFactory.h>
 #include <bcos-sealer/SealerFactory.h>
 #include <bcos-sync/BlockSyncFactory.h>
-#include <bcos-tars-protocol/client/RpcServiceClient.h>
 #include <bcos-txpool/TxPoolFactory.h>
-#include <bcos-utilities/Timer.h>
 
 namespace bcos
 {
@@ -55,8 +51,6 @@ public:
     virtual void start();
     virtual void stop();
 
-    virtual void startReport();
-
     bcos::txpool::TxPoolInterface::Ptr txpool() { return m_txpool; }
     bcos::sync::BlockSync::Ptr blockSync() { return m_blockSync; }
     bcos::consensus::PBFTImpl::Ptr pbft() { return m_pbft; }
@@ -77,47 +71,11 @@ protected:
     virtual void createPBFT();
     virtual void createSync();
     virtual void registerHandlers();
-
-    virtual void reportNodeInfo();
-
-    template <typename T, typename S>
-    void asyncNotifyGroupInfo(
-        std::string const& _serviceName, bcos::group::GroupInfo::Ptr _groupInfo)
-    {
-        auto servicePrx = Application::getCommunicator()->stringToProxy<T>(_serviceName);
-        vector<EndpointInfo> activeEndPoints;
-        vector<EndpointInfo> nactiveEndPoints;
-        servicePrx->tars_endpointsAll(activeEndPoints, nactiveEndPoints);
-        if (activeEndPoints.size() == 0)
-        {
-            BCOS_LOG(TRACE) << LOG_DESC("asyncNotifyGroupInfo error for empty connection")
-                            << bcos::group::printGroupInfo(_groupInfo);
-            return;
-        }
-        for (auto const& endPoint : activeEndPoints)
-        {
-            auto endPointStr = bcostars::endPointToString(_serviceName, endPoint.getEndpoint());
-            auto servicePrx = Application::getCommunicator()->stringToProxy<T>(endPointStr);
-            auto serviceClient = std::make_shared<S>(servicePrx, _serviceName);
-            serviceClient->asyncNotifyGroupInfo(
-                _groupInfo, [endPointStr, _groupInfo](Error::Ptr&& _error) {
-                    // TODO: retry when notify failed
-                    if (_error)
-                    {
-                        BCOS_LOG(ERROR) << LOG_DESC("asyncNotifyGroupInfo error")
-                                        << LOG_KV("endPoint", endPointStr)
-                                        << LOG_KV("code", _error->errorCode())
-                                        << LOG_KV("msg", _error->errorMessage());
-                        return;
-                    }
-                });
-        }
-    }
-
     std::string generateGenesisConfig(bcos::tool::NodeConfig::Ptr _nodeConfig);
     std::string generateIniConfig(bcos::tool::NodeConfig::Ptr _nodeConfig);
 
-private:
+protected:
+    bcos::initializer::NodeArchitectureType m_nodeArchType;
     bcos::tool::NodeConfig::Ptr m_nodeConfig;
     ProtocolInitializer::Ptr m_protocolInitializer;
 
@@ -131,9 +89,6 @@ private:
     bcos::sealer::Sealer::Ptr m_sealer;
     bcos::sync::BlockSync::Ptr m_blockSync;
     bcos::consensus::PBFTImpl::Ptr m_pbft;
-
-    std::shared_ptr<bcos::Timer> m_timer;
-    uint64_t m_timerSchedulerInterval = 3000;
 
     bcos::group::GroupInfo::Ptr m_groupInfo;
 };

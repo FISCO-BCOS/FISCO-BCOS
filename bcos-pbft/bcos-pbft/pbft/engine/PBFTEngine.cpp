@@ -169,8 +169,9 @@ void PBFTEngine::onProposalApplySuccess(
         _executedProposal, m_config->cryptoSuite(), m_config->keyPair(), true);
 
     auto encodedData = m_config->codec()->encode(checkPointMsg);
-    m_config->frontService()->asyncSendMessageByNodeIDs(
-        ModuleID::PBFT, m_config->consensusNodeIDList(), ref(*encodedData));
+    // only broadcast message to the consensus nodes
+    m_config->frontService()->asyncSendBroadcastMessage(
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*encodedData));
     // Note: must lock here to ensure thread safe
     RecursiveGuard l(m_mutex);
     // restart the timer when proposal execute finished to in case of timeout
@@ -305,8 +306,9 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, bytesConstRef _proposalData
     {
         // broadcast the pre-prepare packet
         auto encodedData = m_config->codec()->encode(pbftMessage);
-        m_config->frontService()->asyncSendMessageByNodeIDs(
-            ModuleID::PBFT, m_config->consensusNodeIDList(), ref(*encodedData));
+        // only broadcast pbft message to the consensus nodes
+        m_config->frontService()->asyncSendBroadcastMessage(
+            bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*encodedData));
     }
     else
     {
@@ -827,8 +829,8 @@ void PBFTEngine::broadcastPrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg)
 
     auto encodedData = m_config->codec()->encode(prepareMsg, m_config->pbftMsgDefaultVersion());
     // only broadcast to the consensus nodes
-    m_config->frontService()->asyncSendMessageByNodeIDs(
-        ModuleID::PBFT, m_config->consensusNodeIDList(), ref(*encodedData));
+    m_config->frontService()->asyncSendBroadcastMessage(
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*encodedData));
     // try to precommit the message
     m_cacheProcessor->checkAndPreCommit();
 }
@@ -997,8 +999,8 @@ void PBFTEngine::broadcastViewChangeReq()
     // encode and broadcast the viewchangeReq
     auto encodedData = m_config->codec()->encode(viewChangeReq);
     // only broadcast to the consensus nodes
-    m_config->frontService()->asyncSendMessageByNodeIDs(
-        ModuleID::PBFT, m_config->consensusNodeIDList(), ref(*encodedData));
+    m_config->frontService()->asyncSendBroadcastMessage(
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*encodedData));
     PBFT_LOG(INFO) << LOG_DESC("broadcastViewChangeReq") << printPBFTMsgInfo(viewChangeReq);
     // collect the viewchangeReq
     m_cacheProcessor->addViewChangeReq(viewChangeReq);

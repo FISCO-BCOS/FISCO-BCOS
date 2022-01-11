@@ -20,7 +20,6 @@
  */
 #include "PBFTInitializer.h"
 #include "bcos-framework/interfaces/storage/KVStorageHelper.h"
-#include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-utilities/FileUtility.h>
 #include <include/BuildInfo.h>
 #include <json/json.h>
@@ -45,7 +44,8 @@ PBFTInitializer::PBFTInitializer(bcos::initializer::NodeArchitectureType _nodeAr
     bcos::scheduler::SchedulerInterface::Ptr _scheduler,
     bcos::storage::StorageInterface::Ptr _storage,
     std::shared_ptr<bcos::front::FrontServiceInterface> _frontService)
-  : m_nodeConfig(_nodeConfig),
+  : m_nodeArchType(_nodeArchType),
+    m_nodeConfig(_nodeConfig),
     m_protocolInitializer(_protocolInitializer),
     m_txpool(_txpool),
     m_ledger(_ledger),
@@ -57,10 +57,6 @@ PBFTInitializer::PBFTInitializer(bcos::initializer::NodeArchitectureType _nodeAr
     createPBFT();
     createSync();
     registerHandlers();
-    initChainNodeInfo(_nodeArchType, _nodeConfig);
-    m_timer = std::make_shared<Timer>(m_timerSchedulerInterval, "node info report");
-
-    m_timer->registerTimeoutHandler(boost::bind(&PBFTInitializer::reportNodeInfo, this));
 }
 
 std::string PBFTInitializer::generateGenesisConfig(bcos::tool::NodeConfig::Ptr _nodeConfig)
@@ -149,15 +145,6 @@ void PBFTInitializer::initChainNodeInfo(
     m_groupInfo->appendNodeInfo(chainNodeInfo);
 }
 
-void PBFTInitializer::reportNodeInfo()
-{
-    asyncNotifyGroupInfo<bcostars::RpcServicePrx, bcostars::RpcServiceClient>(
-        m_nodeConfig->rpcServiceName(), m_groupInfo);
-    asyncNotifyGroupInfo<bcostars::GatewayServicePrx, bcostars::GatewayServiceClient>(
-        m_nodeConfig->gatewayServiceName(), m_groupInfo);
-    m_timer->restart();
-}
-
 void PBFTInitializer::start()
 {
     m_sealer->start();
@@ -165,20 +152,8 @@ void PBFTInitializer::start()
     m_pbft->start();
 }
 
-void PBFTInitializer::startReport()
-{
-    if (m_timer)
-    {
-        m_timer->start();
-    }
-}
-
 void PBFTInitializer::stop()
 {
-    if (m_timer)
-    {
-        m_timer->stop();
-    }
     m_sealer->stop();
     m_blockSync->stop();
     m_pbft->stop();
@@ -189,6 +164,7 @@ void PBFTInitializer::init()
     m_sealer->init(m_pbft);
     m_blockSync->init();
     m_pbft->init();
+    initChainNodeInfo(m_nodeArchType, m_nodeConfig);
 }
 
 void PBFTInitializer::registerHandlers()

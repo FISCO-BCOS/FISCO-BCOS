@@ -18,9 +18,9 @@
  * @author: yujiechen
  * @date 2021-10-28
  */
-#include "LocalNodeInitializer.h"
+#include "AirNodeInitializer.h"
 #include <bcos-gateway/GatewayFactory.h>
-#include <bcos-gateway/libamop/LocalTopicManager.h>
+#include <bcos-gateway/libamop/AirTopicManager.h>
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-tool/NodeConfig.h>
 using namespace bcos::node;
@@ -29,7 +29,7 @@ using namespace bcos::gateway;
 using namespace bcos::rpc;
 using namespace bcos::tool;
 
-void LocalNodeInitializer::init(std::string const& _configFilePath, std::string const& _genesisFile)
+void AirNodeInitializer::init(std::string const& _configFilePath, std::string const& _genesisFile)
 {
     boost::property_tree::ptree pt;
     boost::property_tree::read_ini(_configFilePath, pt);
@@ -49,11 +49,7 @@ void LocalNodeInitializer::init(std::string const& _configFilePath, std::string 
     m_gateway = gateway;
 
     // create the node
-    initLocalNode(_configFilePath, _genesisFile, m_gateway);
-    auto nodeID = m_nodeInitializer->protocolInitializer()->keyPair()->publicKey();
-    gateway->gatewayNodeManager()->registerNode(
-        nodeConfig->groupId(), nodeID, m_nodeInitializer->frontService()->front());
-
+    initAirNode(_configFilePath, _genesisFile, m_gateway);
     auto pbftInitializer = m_nodeInitializer->pbftInitializer();
     auto groupInfo = m_nodeInitializer->pbftInitializer()->groupInfo();
     auto nodeService =
@@ -87,7 +83,7 @@ void LocalNodeInitializer::init(std::string const& _configFilePath, std::string 
         });
 }
 
-void LocalNodeInitializer::start()
+void AirNodeInitializer::start()
 {
     try
     {
@@ -113,7 +109,7 @@ void LocalNodeInitializer::start()
     }
 }
 
-void LocalNodeInitializer::stop()
+void AirNodeInitializer::stop()
 {
     try
     {

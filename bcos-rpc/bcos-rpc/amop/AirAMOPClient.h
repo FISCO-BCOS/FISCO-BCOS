@@ -14,7 +14,7 @@
  *  limitations under the License.
  *
  * @brief AMOP client
- * @file LocalAMOPClient.h
+ * @file AirAMOPClient.h
  * @author: yujiechen
  * @date 2021-10-28
  */
@@ -25,11 +25,11 @@ namespace bcos
 {
 namespace rpc
 {
-class LocalAMOPClient : public AMOPClient
+class AirAMOPClient : public AMOPClient
 {
 public:
-    using Ptr = std::shared_ptr<LocalAMOPClient>;
-    LocalAMOPClient(std::shared_ptr<boostssl::ws::WsService> _wsService,
+    using Ptr = std::shared_ptr<AirAMOPClient>;
+    AirAMOPClient(std::shared_ptr<boostssl::ws::WsService> _wsService,
         std::shared_ptr<bcos::boostssl::ws::WsMessageFactory> _wsMessageFactory,
         std::shared_ptr<bcos::protocol::AMOPRequestFactory> _requestFactory,
         bcos::gateway::GatewayInterface::Ptr _gateway)

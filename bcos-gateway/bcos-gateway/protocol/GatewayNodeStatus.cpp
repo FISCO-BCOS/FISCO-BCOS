@@ -19,7 +19,9 @@
  */
 #include "GatewayNodeStatus.h"
 #include <bcos-tars-protocol/Common.h>
+
 using namespace bcos;
+using namespace bcos::protocol;
 using namespace bcos::gateway;
 
 GatewayNodeStatus::GatewayNodeStatus()

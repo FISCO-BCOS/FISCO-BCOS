@@ -36,8 +36,8 @@ class GatewayNodeManager
 {
 public:
     using Ptr = std::shared_ptr<GatewayNodeManager>;
-    GatewayNodeManager(P2pID const& _nodeID, std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory,
-        P2PInterface::Ptr _p2pInterface);
+    GatewayNodeManager(std::string const& _uuid, P2pID const& _nodeID,
+        std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface);
     virtual ~GatewayNodeManager() {}
 
     virtual void start() { m_timer->start(); }
@@ -48,10 +48,11 @@ public:
     bcos::crypto::NodeIDListPtr getGroupNodeIDList(const std::string& _groupID);
 
     virtual bool registerNode(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
-        bcos::front::FrontServiceInterface::Ptr _frontService);
+        bcos::protocol::NodeType _nodeType, bcos::front::FrontServiceInterface::Ptr _frontService);
     virtual bool unregisterNode(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID);
     // for multi-group support
     virtual void updateFrontServiceInfo(bcos::group::GroupInfo::Ptr) {}
+
     LocalRouterTable::Ptr localRouterTable() { return m_localRouterTable; }
     PeersRouterTable::Ptr peersRouterTable() { return m_peersRouterTable; }
     std::shared_ptr<bcos::crypto::KeyFactory> keyFactory() { return m_keyFactory; }
@@ -60,10 +61,11 @@ public:
 
 protected:
     // for ut
-    GatewayNodeManager(std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory)
+    GatewayNodeManager(
+        std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface)
       : m_keyFactory(_keyFactory),
         m_localRouterTable(std::make_shared<LocalRouterTable>(_keyFactory)),
-        m_peersRouterTable(std::make_shared<PeersRouterTable>(_keyFactory))
+        m_peersRouterTable(std::make_shared<PeersRouterTable>(_keyFactory, _p2pInterface))
     {}
 
     uint32_t increaseSeq()

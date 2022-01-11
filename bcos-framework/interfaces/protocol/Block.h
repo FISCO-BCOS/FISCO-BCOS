@@ -122,7 +122,7 @@ public:
     virtual void setNonceList(NonceList const& _nonceList) = 0;
     virtual void setNonceList(NonceList&& _nonceList) = 0;
     virtual NonceList const& nonceList() const = 0;
-    
+
 protected:
     TransactionFactory::Ptr m_transactionFactory;
     TransactionReceiptFactory::Ptr m_receiptFactory;

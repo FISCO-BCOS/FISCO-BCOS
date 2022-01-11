@@ -19,8 +19,10 @@
  */
 #pragma once
 #include "FrontServiceInfo.h"
+#include "bcos-gateway/libp2p/P2PSession.h"
 #include <bcos-framework/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/interfaces/crypto/KeyInterface.h>
+#include <bcos-framework/interfaces/gateway/GatewayInterface.h>
 #include <bcos-framework/interfaces/multigroup/GroupInfo.h>
 #include <memory>
 namespace bcos
@@ -41,7 +43,7 @@ public:
     std::vector<FrontServiceInfo::Ptr> getGroupFrontServiceList(const std::string& _groupID) const;
     bcos::crypto::NodeIDs getGroupNodeIDList(const std::string& _groupID) const;
     bool insertNode(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
-        bcos::front::FrontServiceInterface::Ptr _frontService);
+        bcos::protocol::NodeType _type, bcos::front::FrontServiceInterface::Ptr _frontService);
     bool removeNode(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID);
 
     std::map<std::string, std::set<std::string>> nodeListInfo() const;
@@ -56,6 +58,12 @@ public:
         ReadGuard l(x_nodeList);
         return m_nodeList;
     }
+
+    bool asyncBroadcastMsg(uint16_t _nodeType, const std::string& _groupID,
+        bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload);
+
+    bool sendMessage(const std::string& _groupID, bcos::crypto::NodeIDPtr _srcNodeID,
+        bcos::crypto::NodeIDPtr _dstNodeID, bytesConstRef _payload, ErrorRespFunc _errorRespFunc);
 
 private:
     bcos::crypto::KeyFactory::Ptr m_keyFactory;

@@ -20,12 +20,12 @@
 #pragma once
 #include "Common.h"
 #include <bcos-framework/interfaces/crypto/KeyFactory.h>
-#include <bcos-protocol/amop/AMOPRequest.h>
 #include <bcos-gateway/libamop/AMOPMessage.h>
 #include <bcos-gateway/libamop/TopicManager.h>
 #include <bcos-gateway/libp2p/P2PInterface.h>
 #include <bcos-gateway/libp2p/P2PMessage.h>
 #include <bcos-gateway/libp2p/P2PSession.h>
+#include <bcos-protocol/amop/AMOPRequest.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <bcos-utilities/Timer.h>
 #include <boost/asio.hpp>

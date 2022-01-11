@@ -18,8 +18,8 @@
  * @author: yujiechen
  * @date 2021-09-15
  */
+#include <bcos-rpc/jsonrpc/groupmgr/AirGroupManager.h>
 #include <bcos-rpc/jsonrpc/groupmgr/GroupManager.h>
-#include <bcos-rpc/jsonrpc/groupmgr/LocalGroupManager.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 #include <chrono>
@@ -36,7 +36,7 @@ BOOST_FIXTURE_TEST_SUITE(FakersTest, TestPromptFixture)
 BOOST_AUTO_TEST_CASE(testCreate)
 {
     std::make_shared<GroupManager>("", nullptr);
-    std::make_shared<LocalGroupManager>("", nullptr, nullptr);
+    std::make_shared<AirGroupManager>("", nullptr, nullptr);
 }
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace test

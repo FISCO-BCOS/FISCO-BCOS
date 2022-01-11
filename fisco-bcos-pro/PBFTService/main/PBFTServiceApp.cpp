@@ -90,8 +90,8 @@ void PBFTServiceApp::initService()
 
     // TODO: create tikv storage
     m_pbftInitializer =
-        std::make_shared<PBFTInitializer>(bcos::initializer::NodeArchitectureType::MAX, nodeConfig,
-            protocolInitializer, txpool, ledger, scheduler, nullptr, frontService);
+        std::make_shared<ProPBFTInitializer>(bcos::initializer::NodeArchitectureType::MAX,
+            nodeConfig, protocolInitializer, txpool, ledger, scheduler, nullptr, frontService);
     m_pbftInitializer->init();
     m_pbftInitializer->start();
 }

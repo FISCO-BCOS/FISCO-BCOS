@@ -17,6 +17,6 @@ module bcostars {
 
         void asyncSendMessageByNodeIDs(int moduleID, vector<vector<byte>> nodeIDs, vector<byte> data);
 
-        void asyncSendBroadcastMessage(int moduleID, vector<byte> data);
+        void asyncSendBroadcastMessage(int _nodeType, int moduleID, vector<byte> data);
     };
 };

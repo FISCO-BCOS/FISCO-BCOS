@@ -764,31 +764,16 @@ void BlockSync::maintainPeersConnection()
 
 void BlockSync::broadcastSyncStatus()
 {
-    // broadcast sync status for all connected nodes that belongs to the group
-    auto nodeList = m_config->groupNodeList();
-    for (auto node : nodeList)
-    {
-        // the node self
-        if (node->data() == m_config->nodeID()->data())
-        {
-            continue;
-        }
-        // not connected
-        if (!m_config->connected(node))
-        {
-            continue;
-        }
-        auto statusMsg = m_config->msgFactory()->createBlockSyncStatusMsg(
-            m_config->blockNumber(), m_config->hash(), m_config->genesisHash());
-        auto encodedData = statusMsg->encode();
-        BLKSYNC_LOG(TRACE) << LOG_BADGE("Status") << LOG_DESC("Send current status")
-                           << LOG_KV("number", statusMsg->number())
-                           << LOG_KV("genesisHash", statusMsg->genesisHash().abridged())
-                           << LOG_KV("currentHash", statusMsg->hash().abridged())
-                           << LOG_KV("peer", node->shortHex());
-        m_config->frontService()->asyncSendMessageByNodeID(
-            ModuleID::BlockSync, node, ref(*encodedData), 0, nullptr);
-    }
+    auto statusMsg = m_config->msgFactory()->createBlockSyncStatusMsg(
+        m_config->blockNumber(), m_config->hash(), m_config->genesisHash());
+    auto encodedData = statusMsg->encode();
+    BLKSYNC_LOG(TRACE) << LOG_BADGE("BlockSync") << LOG_DESC("broadcastSyncStatus")
+                       << LOG_KV("number", statusMsg->number())
+                       << LOG_KV("genesisHash", statusMsg->genesisHash().abridged())
+                       << LOG_KV("currentHash", statusMsg->hash().abridged());
+    m_config->frontService()->asyncSendBroadcastMessage(
+        bcos::protocol::NodeType::CONSENSUS_NODE | bcos::protocol::NodeType::OBSERVER_NODE,
+        ModuleID::BlockSync, ref(*encodedData));
 }
 
 bool BlockSync::faultyNode(bcos::crypto::NodeIDPtr _nodeID)

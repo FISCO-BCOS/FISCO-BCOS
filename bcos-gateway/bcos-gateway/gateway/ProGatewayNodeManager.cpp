@@ -13,17 +13,17 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file DynamicGatewayNodeManager.cpp
+ * @file ProGatewayNodeManager.cpp
  * @author: yujiechen
  * @date 2021-10-28
  */
-#include "DynamicGatewayNodeManager.h"
+#include "ProGatewayNodeManager.h"
 
 using namespace bcos;
 using namespace bcos::gateway;
 using namespace bcos::protocol;
 
-void DynamicGatewayNodeManager::DetectNodeAlive()
+void ProGatewayNodeManager::DetectNodeAlive()
 {
     m_nodeAliveDetector->restart();
     if (utcTime() - m_startT < c_tarsAdminRefreshInitTime)
@@ -39,7 +39,7 @@ void DynamicGatewayNodeManager::DetectNodeAlive()
     syncLatestNodeIDList();
 }
 
-void DynamicGatewayNodeManager::updateFrontServiceInfo(bcos::group::GroupInfo::Ptr _groupInfo)
+void ProGatewayNodeManager::updateFrontServiceInfo(bcos::group::GroupInfo::Ptr _groupInfo)
 {
     auto updated = m_localRouterTable->updateGroupNodeInfos(_groupInfo);
     if (!updated)

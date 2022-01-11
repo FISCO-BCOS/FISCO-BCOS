@@ -270,11 +270,12 @@ public:
             nullptr, _moduleID, tarsNodeIDs, std::vector<char>(_data.begin(), _data.end()));
     }
 
-    void asyncSendBroadcastMessage(int _moduleID, bcos::bytesConstRef _data) override
+    void asyncSendBroadcastMessage(
+        uint16_t _type, int _moduleID, bcos::bytesConstRef _data) override
     {
         auto data = _data.toBytes();
         m_proxy->async_asyncSendBroadcastMessage(
-            nullptr, _moduleID, std::vector<char>(data.begin(), data.end()));
+            nullptr, _type, _moduleID, std::vector<char>(data.begin(), data.end()));
     }
 
 private:

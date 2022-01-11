@@ -124,12 +124,17 @@ public:
         {
             m_nodesWithLatestBlockNumber[_groupID] = std::set<std::string>();
         }
+        if (!m_groupBlockInfos.count(_groupID))
+        {
+            m_groupBlockInfos[_groupID] = _blockNumber;
+        }
         // nodes with newer highest block
         if (oldBlockNumber < _blockNumber)
         {
             m_groupBlockInfos[_groupID] = _blockNumber;
             m_nodesWithLatestBlockNumber[_groupID].clear();
         }
+
         // nodes with the same highest block
         (m_nodesWithLatestBlockNumber[_groupID]).insert(_nodeName);
         BCOS_LOG(DEBUG) << LOG_DESC("updateGroupBlockInfo for receive block notify")

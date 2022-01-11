@@ -22,8 +22,8 @@
  * @author: ancelmo
  * @date 2021-10-14
  */
+#include "AirNodeInitializer.h"
 #include "Common.h"
-#include "LocalNodeInitializer.h"
 #include "libinitializer/Common.h"
 #include <thread>
 
@@ -45,10 +45,10 @@ int main(int argc, const char* argv[])
     signal(SIGABRT, &ExitHandler::exitHandler);
     signal(SIGINT, &ExitHandler::exitHandler);
     // Note: the initializer must exist in the life time of the whole program
-    auto initializer = std::make_shared<LocalNodeInitializer>();
+    auto initializer = std::make_shared<AirNodeInitializer>();
     try
     {
-        auto param = initLocalNodeCommandLine(argc, argv, false);
+        auto param = initAirNodeCommandLine(argc, argv, false);
         initializer->init(param.configFilePath, param.genesisFilePath);
         initializer->start();
     }

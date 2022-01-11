@@ -134,20 +134,6 @@ public:
         _onRecvResponse(nullptr);
     }
 
-    // Note: this only be called after block on-chain successfully
-    bcos::protocol::NodeType nodeType()
-    {
-        if (existNode(m_consensusNodeList, x_consensusNodeList, m_nodeId))
-        {
-            return bcos::protocol::NodeType::CONSENSUS_NODE;
-        }
-        if (existNode(m_observerNodeList, x_observerNodeList, m_nodeId))
-        {
-            return bcos::protocol::NodeType::CONSENSUS_NODE;
-        }
-        return bcos::protocol::NodeType::NODE_OUTSIDE_GROUP;
-    }
-
 private:
     void updateNodeList()
     {
@@ -158,20 +144,6 @@ private:
         {
             m_nodeList->insert(node->nodeID());
         }
-    }
-
-    bool existNode(bcos::consensus::ConsensusNodeListPtr const& _nodeList, SharedMutex& _lock,
-        bcos::crypto::NodeIDPtr _nodeID)
-    {
-        ReadGuard l(_lock);
-        for (auto const& it : *_nodeList)
-        {
-            if (it->nodeID()->data() == _nodeID->data())
-            {
-                return true;
-            }
-        }
-        return false;
     }
 
 protected:

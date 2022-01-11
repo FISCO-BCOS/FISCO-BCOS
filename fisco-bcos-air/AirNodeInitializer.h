@@ -27,22 +27,22 @@ namespace bcos
 {
 namespace node
 {
-class LocalNodeInitializer
+class AirNodeInitializer
 {
 public:
-    LocalNodeInitializer() = default;
-    virtual ~LocalNodeInitializer() { stop(); }
+    AirNodeInitializer() = default;
+    virtual ~AirNodeInitializer() { stop(); }
 
     virtual void init(std::string const& _configFilePath, std::string const& _genesisFile);
     virtual void start();
     virtual void stop();
 
 protected:
-    virtual void initLocalNode(std::string const& _configFilePath, std::string const& _genesisFile,
+    virtual void initAirNode(std::string const& _configFilePath, std::string const& _genesisFile,
         bcos::gateway::GatewayInterface::Ptr _gateway)
     {
         m_nodeInitializer = std::make_shared<bcos::initializer::Initializer>();
-        m_nodeInitializer->initLocalNode(_configFilePath, _genesisFile, _gateway);
+        m_nodeInitializer->initAirNode(_configFilePath, _genesisFile, _gateway);
     }
 
 private:
