@@ -206,11 +206,12 @@ void FileSystemPrecompiled::listDir(
         std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
     codec->decode(data, absolutePath);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("FileSystemPrecompiled") << LOG_KV("ls", absolutePath);
+    std::vector<BfsTuple> files;
     if (!checkPathValid(absolutePath))
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("FileSystemPrecompiled") << LOG_DESC("invalid path")
                                << LOG_KV("path", absolutePath);
-        callResult->setExecResult(codec->encode(s256((int)CODE_FILE_INVALID_PATH)));
+        callResult->setExecResult(codec->encode(s256((int)CODE_FILE_INVALID_PATH), files));
         return;
     }
     auto table = _executive->storage().openTable(absolutePath);
@@ -218,49 +219,49 @@ void FileSystemPrecompiled::listDir(
 
     if (table)
     {
+        auto parentDirAndBaseName = getParentDirAndBaseName(absolutePath);
+        auto baseName = parentDirAndBaseName.second;
         // file exists, try to get type
         auto typeEntry = table->getRow(FS_KEY_TYPE);
         if (typeEntry)
         {
-            // get type success, this is dir
-            auto subEntry = table->getRow(FS_KEY_SUB);
-            Json::Value subdirectory(Json::arrayValue);
-            std::map<std::string, std::string> bfsInfo;
-            auto&& out = asBytes(std::string(subEntry->getField(0)));
-            codec::scale::decode(bfsInfo, gsl::make_span(out));
-            for (const auto& bfs : bfsInfo)
+            // get type success, this is dir or link
+            // if dir
+            if (typeEntry->getField(0) == FS_TYPE_DIR)
             {
-                Json::Value file;
-                file[FS_KEY_NAME] = bfs.first;
-                file[FS_KEY_TYPE] = bfs.second;
-                subdirectory.append(file);
+                auto subEntry = table->getRow(FS_KEY_SUB);
+                std::map<std::string, std::string> bfsInfo;
+                auto&& out = asBytes(std::string(subEntry->getField(0)));
+                codec::scale::decode(bfsInfo, gsl::make_span(out));
+                for (const auto& bfs : bfsInfo)
+                {
+                    BfsTuple file = std::make_tuple(bfs.first, bfs.second, "");
+                    files.emplace_back(std::move(file));
+                }
             }
-            Json::FastWriter fastWriter;
-            std::string str = fastWriter.write(subdirectory);
-            PRECOMPILED_LOG(TRACE)
-                << LOG_BADGE("FileSystemPrecompiled") << LOG_DESC("ls dir, return subdirectories")
-                << LOG_KV("str", str);
-            callResult->setExecResult(codec->encode(str));
-            return;
+            else if (typeEntry->getField(0) == FS_TYPE_LINK)
+            {
+                auto addressEntry = table->getRow(FS_LINK_ADDRESS);
+                BfsTuple link =
+                    std::make_tuple(baseName, FS_TYPE_LINK, std::string(addressEntry->getField(0)));
+                files.emplace_back(std::move(link));
+            }
         }
-        // fail to get type, this is contract
-        auto parentDirAndBaseName = getParentDirAndBaseName(absolutePath);
-        auto baseName = parentDirAndBaseName.second;
-        Json::Value fileList(Json::arrayValue);
-        Json::Value file;
-        file[FS_KEY_NAME] = baseName;
-        file[FS_KEY_TYPE] = FS_TYPE_CONTRACT;
-        fileList.append(file);
-        Json::FastWriter fastWriter;
-        std::string str = fastWriter.write(fileList);
-        callResult->setExecResult(codec->encode(str));
+        else
+        {
+            // fail to get type, this is contract
+            BfsTuple file = std::make_tuple(baseName, FS_TYPE_CONTRACT, "");
+            files.emplace_back(std::move(file));
+        }
+
+        callResult->setExecResult(codec->encode(s256((int)CODE_SUCCESS), files));
     }
     else
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("FileSystemPrecompiled")
                                << LOG_DESC("can't open table of file path")
                                << LOG_KV("path", absolutePath);
-        getErrorCodeOut(callResult->mutableExecResult(), CODE_FILE_NOT_EXIST, *codec);
+        callResult->setExecResult(codec->encode(s256((int)CODE_FILE_NOT_EXIST), files));
     }
 }
 
@@ -288,8 +289,8 @@ void FileSystemPrecompiled::link(const std::shared_ptr<executor::TransactionExec
         getErrorCodeOut(callResult->mutableExecResult(), CODE_ADDRESS_OR_VERSION_ERROR, *codec);
         return;
     }
-    auto tableName = USER_APPS_PREFIX + contractName + '/' + contractVersion;
-    auto table = _executive->storage().openTable(tableName);
+    auto linkTableName = USER_APPS_PREFIX + contractName + '/' + contractVersion;
+    auto table = _executive->storage().openTable(linkTableName);
     if (table)
     {
         // table exist, check this resource is a link
@@ -304,18 +305,19 @@ void FileSystemPrecompiled::link(const std::shared_ptr<executor::TransactionExec
             abiEntry.importFields({contractAbi});
             table->setRow(FS_LINK_ABI, std::move(abiEntry));
             PRECOMPILED_LOG(DEBUG)
-                << LOG_BADGE("FileSystemPrecompiled") << LOG_DESC("overwrite link successfully");
+                << LOG_BADGE("FileSystemPrecompiled") << LOG_DESC("overwrite link successfully")
+                << LOG_KV("contractName", contractName)
+                << LOG_KV("contractVersion", contractVersion)
+                << LOG_KV("contractAddress", contractAddress);
             callResult->setExecResult(codec->encode((s256)((int)CODE_SUCCESS)));
             return;
         }
-        else
-        {
-            PRECOMPILED_LOG(ERROR)
-                << LOG_BADGE("FileSystemPrecompiled") << LOG_DESC("File already exists.")
-                << LOG_KV("contractName", contractName) << LOG_KV("version", contractVersion);
-            getErrorCodeOut(callResult->mutableExecResult(), CODE_FILE_ALREADY_EXIST, *codec);
-            return;
-        }
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("FileSystemPrecompiled")
+                               << LOG_DESC("File already exists.")
+                               << LOG_KV("contractName", contractName)
+                               << LOG_KV("version", contractVersion);
+        getErrorCodeOut(callResult->mutableExecResult(), CODE_FILE_ALREADY_EXIST, *codec);
+        return;
     }
     // table not exist, mkdir -p /apps/contractName first
     auto parentTableName = USER_APPS_PREFIX + contractName;
@@ -328,7 +330,7 @@ void FileSystemPrecompiled::link(const std::shared_ptr<executor::TransactionExec
         getErrorCodeOut(callResult->mutableExecResult(), CODE_FILE_BUILD_DIR_FAILED, *codec);
         return;
     }
-    auto linkTable = _executive->storage().createTable(tableName, SYS_VALUE_FIELDS);
+    auto linkTable = _executive->storage().createTable(linkTableName, SYS_VALUE_FIELDS);
 
     // set meta data in parent table
     auto parentTable = _executive->storage().openTable(parentTableName);
@@ -341,6 +343,12 @@ void FileSystemPrecompiled::link(const std::shared_ptr<executor::TransactionExec
     parentTable->setRow(FS_KEY_SUB, std::move(stubEntry.value()));
 
     // set link info to link table
+    auto typeEntry = linkTable->newEntry();
+    typeEntry.importFields({FS_TYPE_LINK});
+    linkTable->setRow(FS_KEY_TYPE, std::move(typeEntry));
+    auto nameEntry = linkTable->newEntry();
+    nameEntry.importFields({contractVersion});
+    linkTable->setRow(FS_KEY_NAME, std::move(nameEntry));
     auto addressEntry = linkTable->newEntry();
     addressEntry.importFields({contractAddress});
     linkTable->setRow(FS_LINK_ADDRESS, std::move(addressEntry));
