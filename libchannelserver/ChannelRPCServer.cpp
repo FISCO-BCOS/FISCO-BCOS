@@ -228,11 +228,9 @@ void ChannelRPCServer::onDisconnect(
 void dev::ChannelRPCServer::blockNotify(int16_t _groupID, int64_t _blockNumber)
 {
     std::string topic = "_block_notify_" + std::to_string(_groupID);
-    //判断没有相关sessionByTopic逻辑时应当怎么处理
     std::vector<dev::channel::ChannelSession::Ptr> activedSessions = getSessionByTopic(topic);
     if (activedSessions.empty())
     {
-        //寻找所有的topic准备广播
         CHANNEL_LOG(TRACE) << " topic" << LOG_KV("topic", topic);
         return;
     }
