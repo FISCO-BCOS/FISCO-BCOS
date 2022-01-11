@@ -1213,7 +1213,7 @@ void JsonRpcImpl_2_0::getGroupInfoList(RespFunc _respFunc)
 
 void JsonRpcImpl_2_0::getGroupBlockNumber(RespFunc _respFunc)
 {
-    Json::Value response;
+    Json::Value response(Json::arrayValue);
     auto groupInfoList = m_groupManager->groupInfoList();
     for (auto groupInfo : groupInfoList)
     {
@@ -1226,7 +1226,9 @@ void JsonRpcImpl_2_0::getGroupBlockNumber(RespFunc _respFunc)
             continue;
         }
 
-        response[groupInfo->groupID()] = blockNumber;
+        Json::Value jValue;
+        jValue[groupInfo->groupID()] = blockNumber;
+        response.append(jValue);
     }
 
     _respFunc(nullptr, response);
