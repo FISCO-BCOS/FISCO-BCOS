@@ -21,6 +21,7 @@
 
 #include "bcos-framework/interfaces/gateway/GatewayTypeDef.h"
 #include <bcos-boostssl/context/ContextBuilder.h>
+#include <bcos-boostssl/websocket/WsError.h>
 #include <bcos-boostssl/websocket/WsInitializer.h>
 #include <bcos-boostssl/websocket/WsMessage.h>
 #include <bcos-boostssl/websocket/WsService.h>
@@ -143,11 +144,9 @@ void RpcFactory::registerHandlers(std::shared_ptr<boostssl::ws::WsService> _wsSe
         [_jsonRpcInterface](std::shared_ptr<boostssl::ws::WsMessage> _msg,
             std::shared_ptr<boostssl::ws::WsSession> _session) {
             auto seq = std::string(_msg->data()->begin(), _msg->data()->end());
-            auto version = ws::EnumPV::CurrentVersion;
-            _session->setVersion(version);
 
             _jsonRpcInterface->getGroupInfoList(
-                [_msg, _session, version, seq](
+                [_msg, _session, seq, _jsonRpcInterface](
                     bcos::Error::Ptr _error, Json::Value& _jGroupInfoList) {
                     if (_error && _error->errorCode() != bcos::protocol::CommonError::SUCCESS)
                     {
@@ -157,25 +156,34 @@ void RpcFactory::registerHandlers(std::shared_ptr<boostssl::ws::WsService> _wsSe
                             << LOG_KV("endpoint", _session ? _session->endPoint() : std::string(""))
                             << LOG_KV("errorCode", _error->errorCode())
                             << LOG_KV("errorMessage", _error->errorMessage());
+
                         return;
                     }
 
-                    auto pv = std::make_shared<ws::ProtocolVersion>();
-                    pv->setProtocolVersion(version);
-                    auto jResult = pv->toJson();
-                    jResult["groupInfoList"] = _jGroupInfoList;
+                    _jsonRpcInterface->getGroupBlockNumber([_jGroupInfoList, _session, _msg, seq](
+                                                               bcos::Error::Ptr,
+                                                               Json::Value& _jBlockNumberInfo) {
+                        auto version = ws::EnumPV::CurrentVersion;
+                        _session->setVersion(ws::EnumPV::CurrentVersion);
+                        auto pv = std::make_shared<ws::ProtocolVersion>();
+                        pv->setProtocolVersion(version);
 
-                    Json::FastWriter writer;
-                    std::string result = writer.write(jResult);
+                        auto jResult = pv->toJson();
+                        jResult["groupInfoList"] = _jGroupInfoList;
+                        jResult["groupBlockNumber"] = _jBlockNumberInfo;
 
-                    _msg->setData(std::make_shared<bcos::bytes>(result.begin(), result.end()));
-                    _session->asyncSendMessage(_msg);
+                        Json::FastWriter writer;
+                        std::string result = writer.write(jResult);
 
-                    BCOS_LOG(INFO)
-                        << LOG_BADGE("HANDSHAKE") << LOG_DESC("handshake response")
-                        << LOG_KV("version", version) << LOG_KV("seq", seq)
-                        << LOG_KV("endpoint", _session ? _session->endPoint() : std::string(""))
-                        << LOG_KV("result", result);
+                        _msg->setData(std::make_shared<bcos::bytes>(result.begin(), result.end()));
+                        _session->asyncSendMessage(_msg);
+
+                        BCOS_LOG(INFO)
+                            << LOG_BADGE("HANDSHAKE") << LOG_DESC("handshake response")
+                            << LOG_KV("version", version) << LOG_KV("seq", seq)
+                            << LOG_KV("endpoint", _session ? _session->endPoint() : std::string(""))
+                            << LOG_KV("result", result);
+                    });
                 });
         });
 
