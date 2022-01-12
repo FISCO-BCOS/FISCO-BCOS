@@ -534,7 +534,7 @@ bool TransactionSync::importDownloadedTxs(
         // Note: when the transaction is used to reach a consensus, the transaction must be imported
         // into the txpool even if the txpool is full
         auto result = txpool->submitTransaction(
-            std::const_pointer_cast<Transaction>(tx), nullptr, enforceImport);
+            std::const_pointer_cast<Transaction>(tx), nullptr, enforceImport, false);
         if (result != TransactionStatus::None)
         {
             if (enforceImport)
