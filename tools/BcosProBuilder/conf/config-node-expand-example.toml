@@ -4,7 +4,7 @@ tars_token = ""
 tars_pkg_dir = "binary/"
 
 [chain]
-chain_id="chain"
+chain_id="chain0"
 
 [[group.deploy_info]]
 node_name = "node2"

@@ -52,8 +52,8 @@ public:
     bcos::protocol::TransactionStatus submitTransaction(bytesPointer _txData,
         bcos::protocol::TxSubmitCallback _txSubmitCallback = nullptr) override;
     bcos::protocol::TransactionStatus submitTransaction(bcos::protocol::Transaction::Ptr _tx,
-        bcos::protocol::TxSubmitCallback _txSubmitCallback = nullptr,
-        bool _enforceImport = false) override;
+        bcos::protocol::TxSubmitCallback _txSubmitCallback = nullptr, bool _enforceImport = false,
+        bool _checkPoolLimit = true) override;
 
     bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::ConstPtr _tx) override;
     void batchInsert(bcos::protocol::Transactions const& _txs) override;
@@ -116,7 +116,8 @@ protected:
     bcos::protocol::TransactionStatus enforceSubmitTransaction(
         bcos::protocol::Transaction::Ptr _tx);
     bcos::protocol::TransactionStatus verifyAndSubmitTransaction(
-        bcos::protocol::Transaction::Ptr _tx, bcos::protocol::TxSubmitCallback _txSubmitCallback);
+        bcos::protocol::Transaction::Ptr _tx, bcos::protocol::TxSubmitCallback _txSubmitCallback,
+        bool _checkPoolLimit);
     size_t unSealedTxsSizeWithoutLock();
     bcos::protocol::TransactionStatus txpoolStorageCheck(bcos::protocol::Transaction::ConstPtr _tx);
 
