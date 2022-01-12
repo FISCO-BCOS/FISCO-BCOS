@@ -139,6 +139,10 @@ bool TopicManager::queryTopicItemsByClient(const std::string& _client, TopicItem
 void TopicManager::removeTopics(
     const std::string& _client, std::vector<std::string> const& _topicList)
 {
+    if (_topicList.size() == 0)
+    {
+        return;
+    }
     {
         std::unique_lock lock(x_clientTopics);
         if (!m_client2TopicItems.count(_client))
@@ -160,6 +164,10 @@ void TopicManager::removeTopics(
 
 void TopicManager::removeTopicsByClients(const std::vector<std::string>& _clients)
 {
+    if (_clients.size() == 0)
+    {
+        return;
+    }
     std::unique_lock lock(x_clientTopics);
     for (auto const& client : _clients)
     {
@@ -447,6 +455,9 @@ void TopicManager::checkClientConnection()
                 it = m_clientInfo.erase(it);
             }
         }
-        removeTopicsByClients(clientsToRemove);
+        if (clientsToRemove.size() > 0)
+        {
+            removeTopicsByClients(clientsToRemove);
+        }
     }
 }
