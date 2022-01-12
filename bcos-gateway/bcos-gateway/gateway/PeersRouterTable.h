@@ -35,8 +35,10 @@ class PeersRouterTable
 {
 public:
     using Ptr = std::shared_ptr<PeersRouterTable>;
-    PeersRouterTable(bcos::crypto::KeyFactory::Ptr _keyFactory, P2PInterface::Ptr _p2pInterface)
-      : m_keyFactory(_keyFactory),
+    PeersRouterTable(std::string _uuid, bcos::crypto::KeyFactory::Ptr _keyFactory,
+        P2PInterface::Ptr _p2pInterface)
+      : m_uuid(_uuid),
+        m_keyFactory(_keyFactory),
         m_p2pInterface(_p2pInterface),
         m_gatewayStatusFactory(std::make_shared<GatewayStatusFactory>())
     {}
@@ -67,6 +69,7 @@ protected:
     GatewayStatus::Ptr gatewayInfo(std::string const& _uuid);
 
 private:
+    std::string m_uuid;
     bcos::crypto::KeyFactory::Ptr m_keyFactory;
     P2PInterface::Ptr m_p2pInterface;
     // used for peer-to-peer router

@@ -113,10 +113,11 @@ inline bcos::group::ChainNodeInfo::Ptr toBcosChainNodeInfo(
 {
     auto nodeInfo = _factory->createNodeInfo();
     nodeInfo->setNodeName(_tarsNodeInfo.nodeName);
-    nodeInfo->setNodeCryptoType((bcos::group::NodeCryptoType)_tarsNodeInfo.nodeType);
+    nodeInfo->setNodeCryptoType((bcos::group::NodeCryptoType)_tarsNodeInfo.nodeCryptoType);
     nodeInfo->setNodeID(_tarsNodeInfo.nodeID);
     nodeInfo->setIniConfig(_tarsNodeInfo.iniConfig);
     nodeInfo->setMicroService(_tarsNodeInfo.microService);
+    nodeInfo->setNodeType((bcos::protocol::NodeType)_tarsNodeInfo.nodeType);
     for (auto const& it : _tarsNodeInfo.serviceInfo)
     {
         nodeInfo->appendServiceInfo((bcos::protocol::ServiceType)it.first, it.second);
@@ -148,7 +149,8 @@ inline bcostars::ChainNodeInfo toTarsChainNodeInfo(bcos::group::ChainNodeInfo::P
         return tarsNodeInfo;
     }
     tarsNodeInfo.nodeName = _nodeInfo->nodeName();
-    tarsNodeInfo.nodeType = _nodeInfo->nodeCryptoType();
+    tarsNodeInfo.nodeCryptoType = _nodeInfo->nodeCryptoType();
+    tarsNodeInfo.nodeType = _nodeInfo->nodeType();
     auto const& info = _nodeInfo->serviceInfo();
     for (auto const& it : info)
     {

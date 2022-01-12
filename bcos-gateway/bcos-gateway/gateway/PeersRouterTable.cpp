@@ -234,6 +234,11 @@ void PeersRouterTable::asyncBroadcastMsg(
         ReadGuard l(x_gatewayInfos);
         for (auto const& it : m_gatewayInfos)
         {
+            // not broadcast message to the gateway-self
+            if (it.first == m_uuid)
+            {
+                continue;
+            }
             std::string p2pNodeID;
             if (it.second->randomChooseP2PNode(p2pNodeID, _type, _groupID))
             {
@@ -241,6 +246,8 @@ void PeersRouterTable::asyncBroadcastMsg(
             }
         }
     }
+    ROUTER_LOG(TRACE) << LOG_DESC("asyncBroadcastMsg: randomChooseP2PNode")
+                      << LOG_KV("size", selectedPeers.size());
     for (auto const& peer : selectedPeers)
     {
         m_p2pInterface->asyncSendMessageByNodeID(peer, _msg, CallbackFuncWithSession());

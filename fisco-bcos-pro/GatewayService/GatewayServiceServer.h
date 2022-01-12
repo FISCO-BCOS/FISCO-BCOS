@@ -44,7 +44,7 @@ public:
     bcostars::Error asyncGetPeers(bcostars::GatewayInfo&, std::vector<bcostars::GatewayInfo>&,
         tars::TarsCurrentPtr current) override
     {
-        GATEWAYSERVICE_LOG(DEBUG) << LOG_DESC("asyncGetPeers") << LOG_DESC("request");
+        GATEWAYSERVICE_LOG(DEBUG) << LOG_DESC("asyncGetPeers: request");
         current->setResponse(false);
         m_gatewayInitializer->gateway()->asyncGetPeers(
             [current](const bcos::Error::Ptr _error, bcos::gateway::GatewayInfo::Ptr _localP2pInfo,
