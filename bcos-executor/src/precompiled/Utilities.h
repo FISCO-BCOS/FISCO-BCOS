@@ -37,6 +37,7 @@ namespace precompiled
 {
 using ConditionTuple = std::tuple<std::vector<std::tuple<std::string, std::string, u256>>>;
 using EntryTuple = std::tuple<std::vector<std::tuple<std::string, std::string>>>;
+using BfsTuple = std::tuple<std::string, std::string, std::string>;
 
 static const std::string USER_TABLE_PREFIX = "/tables/";
 static const std::string USER_APPS_PREFIX = "/apps/";

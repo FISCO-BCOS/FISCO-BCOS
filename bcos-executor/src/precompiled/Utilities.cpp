@@ -21,9 +21,9 @@
 #include "Utilities.h"
 #include "Common.h"
 #include <bcos-framework/interfaces/crypto/Hash.h>
-#include <json/json.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <boost/core/ignore_unused.hpp>
+#include <regex>
 
 using namespace bcos;
 using namespace bcos::executor;
@@ -284,10 +284,6 @@ bcos::precompiled::ContractStatus bcos::precompiled::getContractStatus(
     {
         return ContractStatus::Available;
     }
-    PRECOMPILED_LOG(ERROR) << LOG_DESC("getContractStatus error")
-                           << LOG_KV("table name", _tableName);
-
-    return ContractStatus::Available;
 }
 
 uint64_t precompiled::getEntriesCapacity(precompiled::EntriesPtr _entries)
@@ -330,31 +326,26 @@ bool precompiled::checkPathValid(std::string const& _path)
                                << LOG_KV("path", _path);
         return false;
     }
-    // FIXME: adapt Chinese
-    std::vector<char> allowChar = {'_'};
-    auto checkFieldNameValidate = [&allowChar](const std::string& fieldName) -> bool {
-        if (fieldName.empty() || fieldName[0] == '_')
+    // TODO: adapt Chinese
+    std::regex reg(R"(^[0-9a-zA-Z][^\>\<\*\?\/\=\+\(\)\$\"\']+$)");
+    auto checkFieldNameValidate = [&reg](const std::string& fieldName) -> bool {
+        if (fieldName.empty())
         {
             std::stringstream errorMessage;
             errorMessage << "Invalid field \"" + fieldName
-                         << "\", the size of the field must be larger than 0 and "
-                            "the field can't start with \"_\"";
+                         << "\", the size of the field must be larger than 0";
             PRECOMPILED_LOG(ERROR)
                 << LOG_DESC(errorMessage.str()) << LOG_KV("field name", fieldName);
             return false;
         }
-        for (size_t i = 0; i < fieldName.size(); i++)
+        if (!std::regex_match(fieldName, reg))
         {
-            if (!isalnum(fieldName[i]) &&
-                (allowChar.end() == find(allowChar.begin(), allowChar.end(), fieldName[i])))
-            {
-                std::stringstream errorMessage;
-                errorMessage << "Invalid field \"" << fieldName
-                             << "\", the field name must be letters or numbers.";
-                PRECOMPILED_LOG(ERROR)
-                    << LOG_DESC(errorMessage.str()) << LOG_KV("field name", fieldName);
-                return false;
-            }
+            std::stringstream errorMessage;
+            errorMessage << "Invalid field \"" << fieldName << "\", the field name must be in reg: "
+                         << R"(^[0-9a-zA-Z\u4e00-\u9fa5][^\>\<\*\?\/\=\+\(\)\$\"\']+$)";
+            PRECOMPILED_LOG(ERROR)
+                << LOG_DESC(errorMessage.str()) << LOG_KV("field name", fieldName);
+            return false;
         }
         return true;
     };
