@@ -7,10 +7,10 @@
     ;disable_ssl=true
 
 [service]
-    ;gateway=chain
+    ;gateway=chain0
 
 [chain]
-    chain_id=chain
+    chain_id=chain0
 
 [cert]
     ; directory the certificates located in

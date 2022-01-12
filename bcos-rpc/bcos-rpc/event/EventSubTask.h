@@ -89,7 +89,7 @@ public:
         return m_work.compare_exchange_strong(falseValue, trueValue);
     }
 
-    bool freeWork() { m_work.store(false); }
+    void freeWork() { m_work.store(false); }
 
     bool isCompleted()
     {

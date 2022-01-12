@@ -571,8 +571,8 @@ void JsonRpcImpl_2_0::sendTransaction(std::string const& _groupID, std::string c
                     (int32_t)bcos::protocol::TransactionStatus::None)
                 {
                     std::stringstream errorMsg;
-                    errorMsg << (bcos::protocol::TransactionStatus)(
-                        _transactionSubmitResult->status());
+                    errorMsg
+                        << (bcos::protocol::TransactionStatus)(_transactionSubmitResult->status());
                     jResp["errorMessage"] = errorMsg.str();
                 }
                 toJsonResp(jResp, hexPreTxHash, _transactionSubmitResult->transactionReceipt());
@@ -1208,6 +1208,29 @@ void JsonRpcImpl_2_0::getGroupInfoList(RespFunc _respFunc)
     auto groupInfoList = m_groupManager->groupInfoList();
     Json::Value response(Json::arrayValue);
     groupInfoListToJson(response, groupInfoList);
+    _respFunc(nullptr, response);
+}
+
+void JsonRpcImpl_2_0::getGroupBlockNumber(RespFunc _respFunc)
+{
+    Json::Value response(Json::arrayValue);
+    auto groupInfoList = m_groupManager->groupInfoList();
+    for (auto groupInfo : groupInfoList)
+    {
+        auto blockNumber = m_groupManager->getBlockNumberByGroup(groupInfo->groupID());
+        if (blockNumber < 0)
+        {
+            RPC_IMPL_LOG(WARNING) << LOG_BADGE("getGroupBlockNumber")
+                                  << LOG_DESC("getBlockNumberByGroup failed")
+                                  << LOG_KV("groupID", groupInfo->groupID());
+            continue;
+        }
+
+        Json::Value jValue;
+        jValue[groupInfo->groupID()] = blockNumber;
+        response.append(jValue);
+    }
+
     _respFunc(nullptr, response);
 }
 
