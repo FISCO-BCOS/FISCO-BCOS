@@ -7,7 +7,7 @@
     nodes_file=nodes.json
 
 [service]
-    ;rpc=chain
+    ;rpc=chain0
 
 [cert]
     ; directory the certificates located in
@@ -20,7 +20,7 @@
     node_cert=ssl.crt
 
 [chain]
-    chain_id=chain
+    chain_id=chain0
 
 [log]
     enable=true
