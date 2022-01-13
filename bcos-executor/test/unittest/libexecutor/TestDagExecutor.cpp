@@ -29,6 +29,7 @@
 #include "bcos-protocol/protobuf/PBBlockHeader.h"
 #include "bcos-table/src/StateStorage.h"
 #include "executor/TransactionExecutor.h"
+#include "executor/TransactionExecutorFactory.h"
 #include "precompiled/ParallelConfigPrecompiled.h"
 #include "precompiled/PrecompiledCodec.h"
 #include "precompiled/Utilities.h"
@@ -187,7 +188,7 @@ BOOST_FIXTURE_TEST_SUITE(TestDagExecutor, DagExecutorFixture)
 BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
 {
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
-    auto executor = std::make_shared<TransactionExecutor>(
+    auto executor = bcos::executor::TransactionExecutorFactory::build(
         txpool, nullptr, backend, executionResultFactory, hashImpl, true, false);
     auto codec = std::make_unique<bcos::precompiled::PrecompiledCodec>(hashImpl, true);
 
@@ -200,7 +201,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
     input.insert(input.end(), transferBin.begin(), transferBin.end());
     input.push_back(0);
 
-    string transferAddress = "/usr/alice/transfer";
+    string transferAddress = "usr/alice/transfer";
 
     input.insert(input.end(), transferAbi.begin(), transferAbi.end());
 
@@ -274,7 +275,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
         commitPromise.set_value();
     });
     commitPromise.get_future().get();
-    auto tableName = std::string("/apps") + string(address);
+    auto tableName = std::string("/apps/") + string(address);
 
     EXECUTOR_LOG(TRACE) << "Checking table: " << tableName;
     std::promise<Table> tablePromise;
@@ -398,7 +399,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
 BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
 {
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
-    auto executor = std::make_shared<TransactionExecutor>(
+    auto executor = bcos::executor::TransactionExecutorFactory::build(
         txpool, nullptr, backend, executionResultFactory, hashImpl, true, false);
     auto codec = std::make_unique<bcos::precompiled::PrecompiledCodec>(hashImpl, true);
 
@@ -414,7 +415,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
     constructorParam = codec->encode(constructorParam);
     input.insert(input.end(), constructorParam.begin(), constructorParam.end());
 
-    string helloWorldAddress = "/usr/alice/hello_world";
+    string helloWorldAddress = "usr/alice/hello_world";
 
     input.insert(input.end(), helloWorldAbi.begin(), helloWorldAbi.end());
 
@@ -488,7 +489,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
         commitPromise.set_value();
     });
     commitPromise.get_future().get();
-    auto tableName = std::string("/apps") + string(address);
+    auto tableName = std::string("/apps/") + string(address);
 
     EXECUTOR_LOG(TRACE) << "Checking table: " << tableName;
     std::promise<Table> tablePromise;
@@ -600,7 +601,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
 {
     size_t count = 100;
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
-    auto executor = std::make_shared<TransactionExecutor>(
+    auto executor = bcos::executor::TransactionExecutorFactory::build(
         txpool, nullptr, backend, executionResultFactory, hashImpl, false, false);
     auto codec = std::make_unique<bcos::precompiled::PrecompiledCodec>(hashImpl, false);
 
@@ -836,7 +837,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
 {
     size_t count = 100;
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
-    auto executor = std::make_shared<TransactionExecutor>(
+    auto executor = bcos::executor::TransactionExecutorFactory::build(
         txpool, nullptr, backend, executionResultFactory, hashImpl, false, false);
     auto codec = std::make_unique<bcos::precompiled::PrecompiledCodec>(hashImpl, false);
 

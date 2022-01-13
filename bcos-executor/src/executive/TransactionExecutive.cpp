@@ -217,7 +217,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
     {
         return callPrecompiled(std::move(callParameters));
     }
-    auto tableName = getContractTableName(callParameters->codeAddress);
+    auto tableName = getContractTableName(callParameters->codeAddress, blockContext->isWasm());
     // check permission first
     if (blockContext->isAuthCheck() && !blockContext->isWasm() && !checkAuth(callParameters, false))
     {
@@ -351,7 +351,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
     }
 
     // Create the table first
-    auto tableName = getContractTableName(newAddress);
+    auto tableName = getContractTableName(newAddress, blockContext->isWasm());
     try
     {
         m_storageWrapper->createTable(tableName, STORAGE_VALUE);
