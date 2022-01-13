@@ -48,7 +48,7 @@ int main(int argc, const char* argv[])
     auto initializer = std::make_shared<AirNodeInitializer>();
     try
     {
-        auto param = bcos::initializer::initLocalNodeCommandLine(argc, argv, false);
+        auto param = bcos::initializer::initAirNodeCommandLine(argc, argv, false);
         initializer->init(param.configFilePath, param.genesisFilePath);
         initializer->start();
     }
