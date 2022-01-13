@@ -24,6 +24,7 @@
  */
 #include "Common.h"
 #include "LocalNodeInitializer.h"
+#include "libinitializer/CommandHelper.h"
 #include "libinitializer/Common.h"
 #include <thread>
 
@@ -48,7 +49,7 @@ int main(int argc, const char* argv[])
     auto initializer = std::make_shared<LocalNodeInitializer>();
     try
     {
-        auto param = initLocalNodeCommandLine(argc, argv, false);
+        auto param = bcos::initializer::initLocalNodeCommandLine(argc, argv, false);
         initializer->init(param.configFilePath, param.genesisFilePath);
         initializer->start();
     }

@@ -1,4 +1,5 @@
 #include "FrontServiceApp.h"
+#include "libinitializer/CommandHelper.h"
 
 using namespace bcostars;
 int main(int argc, char* argv[])

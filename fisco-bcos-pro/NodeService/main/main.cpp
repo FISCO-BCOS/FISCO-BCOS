@@ -23,6 +23,7 @@
  * @date 2021-10-14
  */
 #include "NodeServiceApp.h"
+#include "libinitializer/CommandHelper.h"
 #include "libinitializer/Common.h"
 #include <bcos-utilities/Common.h>
 #include <chrono>
