@@ -27,7 +27,6 @@
 #include "../dag/TxDAG.h"
 #include "../executive/BlockContext.h"
 #include "../executive/TransactionExecutive.h"
-#include "../precompiled/CNSPrecompiled.h"
 #include "../precompiled/Common.h"
 #include "../precompiled/ConsensusPrecompiled.h"
 #include "../precompiled/CryptoPrecompiled.h"
@@ -1459,7 +1458,6 @@ void TransactionExecutor::initPrecompiled()
     auto parallelConfigPrecompiled =
         std::make_shared<precompiled::ParallelConfigPrecompiled>(m_hashImpl);
     auto consensusPrecompiled = std::make_shared<precompiled::ConsensusPrecompiled>(m_hashImpl);
-    auto cnsPrecompiled = std::make_shared<precompiled::CNSPrecompiled>(m_hashImpl);
     // FIXME: not support crud now
     // auto tableFactoryPrecompiled =
     // std::make_shared<precompiled::TableFactoryPrecompiled>(m_hashImpl);
@@ -1470,7 +1468,6 @@ void TransactionExecutor::initPrecompiled()
     {
         m_constantPrecompiled.insert({SYS_CONFIG_NAME, sysConfig});
         m_constantPrecompiled.insert({CONSENSUS_NAME, consensusPrecompiled});
-        m_constantPrecompiled.insert({CNS_NAME, cnsPrecompiled});
         m_constantPrecompiled.insert({PARALLEL_CONFIG_NAME, parallelConfigPrecompiled});
         // FIXME: not support crud now
         // m_constantPrecompiled.insert({TABLE_NAME, tableFactoryPrecompiled});
@@ -1491,7 +1488,6 @@ void TransactionExecutor::initPrecompiled()
     {
         m_constantPrecompiled.insert({SYS_CONFIG_ADDRESS, sysConfig});
         m_constantPrecompiled.insert({CONSENSUS_ADDRESS, consensusPrecompiled});
-        m_constantPrecompiled.insert({CNS_ADDRESS, cnsPrecompiled});
         m_constantPrecompiled.insert({PARALLEL_CONFIG_ADDRESS, parallelConfigPrecompiled});
         // FIXME: not support crud now
         // m_constantPrecompiled.insert({TABLE_ADDRESS, tableFactoryPrecompiled});

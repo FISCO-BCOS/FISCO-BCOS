@@ -5,7 +5,7 @@ pragma experimental ABIEncoderV2;
     struct BfsInfo{
         string file_name;
         string file_type;
-        string ext;
+        string[] ext;
     }
 
 contract BfsPrecompiled {
