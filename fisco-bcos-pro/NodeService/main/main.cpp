@@ -24,7 +24,6 @@
  */
 #include "NodeServiceApp.h"
 #include "libinitializer/CommandHelper.h"
-#include "libinitializer/Common.h"
 #include <bcos-utilities/Common.h>
 #include <chrono>
 #include <ctime>

@@ -19,7 +19,10 @@
  * @date 2021-06-10
  */
 #include "TxPoolInitializer.h"
+#include "Common.h"
+#include "Common/TarsUtils.h"
 #include <bcos-txpool/TxPoolFactory.h>
+
 using namespace bcos;
 using namespace bcos::txpool;
 using namespace bcos::initializer;
@@ -86,4 +89,9 @@ void TxPoolInitializer::stop()
     INITIALIZER_LOG(INFO) << LOG_DESC("Stop the txpool");
     m_running = false;
     m_txpool->stop();
+}
+
+bcos::txpool::TxPoolInterface::Ptr TxPoolInitializer::txpool()
+{
+    return m_txpool;
 }

@@ -19,6 +19,13 @@
  * @date 2021-06-10
  */
 #include "FrontServiceInitializer.h"
+#include "Common/TarsUtils.h"
+#include "libinitializer/ProtocolInitializer.h"
+#include <bcos-framework/interfaces/consensus/ConsensusInterface.h>
+#include <bcos-framework/interfaces/gateway/GatewayInterface.h>
+#include <bcos-framework/interfaces/sync/BlockSyncInterface.h>
+#include <bcos-framework/interfaces/txpool/TxPoolInterface.h>
+#include <bcos-front/FrontServiceFactory.h>
 
 using namespace bcos;
 using namespace bcos::initializer;
@@ -158,4 +165,13 @@ void FrontServiceInitializer::initMsgHandlers(bcos::consensus::ConsensusInterfac
             FRONTSERVICE_LOG(DEBUG) << LOG_DESC("PBFT: notifyConnectedNodes")
                                     << LOG_KV("connectedNodeSize", nodeIdSet.size());
         });
+}
+
+bcos::crypto::KeyFactory::Ptr FrontServiceInitializer::keyFactory()
+{
+    return m_protocolInitializer->keyFactory();
+}
+bcos::front::FrontServiceInterface::Ptr FrontServiceInitializer::front()
+{
+    return m_front;
 }

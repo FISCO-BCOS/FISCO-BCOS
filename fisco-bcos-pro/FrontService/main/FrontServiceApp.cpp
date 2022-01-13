@@ -19,6 +19,7 @@
  * @date 2021-10-17
  */
 #include "FrontServiceApp.h"
+#include "Common/TarsUtils.h"
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tars-protocol/client/PBFTServiceClient.h>
 #include <bcos-tars-protocol/client/TxPoolServiceClient.h>

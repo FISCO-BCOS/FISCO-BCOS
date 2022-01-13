@@ -25,7 +25,6 @@
 #include "Common.h"
 #include "LocalNodeInitializer.h"
 #include "libinitializer/CommandHelper.h"
-#include "libinitializer/Common.h"
 #include <thread>
 
 using namespace bcos::node;

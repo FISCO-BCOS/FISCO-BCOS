@@ -2,7 +2,7 @@
 #include "RpcService/RpcInitializer.h"
 #include "RpcService/RpcServiceServer.h"
 #include "libinitializer/CommandHelper.h"
-#include "libinitializer/Common.h"
+#include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <tarscpp/servant/Application.h>
 

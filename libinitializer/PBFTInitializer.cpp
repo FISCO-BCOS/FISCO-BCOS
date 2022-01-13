@@ -20,7 +20,12 @@
  */
 #include "PBFTInitializer.h"
 #include "bcos-framework/interfaces/storage/KVStorageHelper.h"
+#include <bcos-pbft/pbft/PBFTFactory.h>
+#include <bcos-sealer/SealerFactory.h>
+#include <bcos-sync/BlockSyncFactory.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
+#include <bcos-tars-protocol/client/RpcServiceClient.h>
+#include <bcos-txpool/TxPoolFactory.h>
 #include <bcos-utilities/FileUtility.h>
 #include <include/BuildInfo.h>
 #include <json/json.h>
@@ -346,4 +351,21 @@ void PBFTInitializer::createSync()
         m_protocolInitializer->blockFactory(), m_protocolInitializer->txResultFactory(), m_ledger,
         m_txpool, m_frontService, m_scheduler, m_pbft);
     m_blockSync = blockSyncFactory->createBlockSync();
+}
+
+std::shared_ptr<bcos::txpool::TxPoolInterface> PBFTInitializer::txpool()
+{
+    return m_txpool;
+}
+std::shared_ptr<bcos::sync::BlockSyncInterface> PBFTInitializer::blockSync()
+{
+    return m_blockSync;
+}
+std::shared_ptr<bcos::consensus::ConsensusInterface> PBFTInitializer::pbft()
+{
+    return m_pbft;
+}
+std::shared_ptr<bcos::sealer::SealerInterface> PBFTInitializer::sealer()
+{
+    return m_sealer;
 }

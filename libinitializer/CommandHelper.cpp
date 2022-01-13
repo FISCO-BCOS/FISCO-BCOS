@@ -19,6 +19,7 @@
  */
 #include "CommandHelper.h"
 #include <include/BuildInfo.h>
+#include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
 
 void bcos::initializer::printVersion()

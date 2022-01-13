@@ -48,6 +48,13 @@ using namespace bcos;
 using namespace bcos::tool;
 using namespace bcos::initializer;
 
+void Initializer::initLocalNode(std::string const& _configFilePath, std::string const& _genesisFile,
+    bcos::gateway::GatewayInterface::Ptr _gateway)
+{
+    initConfig(_configFilePath, _genesisFile, "", true);
+    init(bcos::initializer::NodeArchitectureType::AIR, _configFilePath, _genesisFile, _gateway,
+        true);
+}
 void Initializer::initMicroServiceNode(std::string const& _configFilePath,
     std::string const& _genesisFile, std::string const& _privateKeyPath)
 {

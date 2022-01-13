@@ -19,17 +19,15 @@
  * @date 2021-10-18
  */
 #pragma once
-#include "Common/TarsUtils.h"
-#include "FrontService/FrontServiceServer.h"
-#include "LedgerService/LedgerServiceServer.h"
-#include "PBFTService/PBFTServiceServer.h"
-#include "SchedulerService/SchedulerServiceServer.h"
-#include "TxPoolService/TxPoolServiceServer.h"
-#include "libinitializer/Initializer.h"
+#include "bcos-tars-protocol/tars/RpcService.h"
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <tarscpp/servant/Application.h>
 
+namespace bcos::initializer
+{
+class Initializer;
+}
 namespace bcostars
 {
 class NodeServiceApp : public Application
@@ -39,13 +37,7 @@ public:
     ~NodeServiceApp() override {}
 
     void initialize() override;
-    void destroyApp() override
-    {
-        // terminate the network threads
-        Application::terminate();
-        // stop the nodeService
-        m_nodeInitializer->stop();
-    }
+    void destroyApp() override;
 
 protected:
     virtual void initConfig()
@@ -69,6 +61,6 @@ private:
     std::string m_iniConfigPath;
     std::string m_genesisConfigPath;
     std::string m_privateKeyPath;
-    bcos::initializer::Initializer::Ptr m_nodeInitializer;
+    std::shared_ptr<bcos::initializer::Initializer> m_nodeInitializer;
 };
 }  // namespace bcostars
