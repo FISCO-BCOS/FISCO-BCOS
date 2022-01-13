@@ -24,7 +24,6 @@
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/FileUtility.h>
 #include <bcos-utilities/Log.h>
-#include <include/BuildInfo.h>
 #include <openssl/engine.h>
 #include <openssl/rsa.h>
 #include <boost/filesystem.hpp>
@@ -92,15 +91,7 @@ inline std::shared_ptr<bytes> loadPrivateKey(
     return fromHexString(keyHex);
 }
 
-inline void printVersion()
-{
-    std::cout << "FISCO BCOS Version : " << FISCO_BCOS_PROJECT_VERSION << std::endl;
-    std::cout << "Build Time         : " << FISCO_BCOS_BUILD_TIME << std::endl;
-    std::cout << "Build Type         : " << FISCO_BCOS_BUILD_PLATFORM << "/"
-              << FISCO_BCOS_BUILD_TYPE << std::endl;
-    std::cout << "Git Branch         : " << FISCO_BCOS_BUILD_BRANCH << std::endl;
-    std::cout << "Git Commit         : " << FISCO_BCOS_COMMIT_HASH << std::endl;
-}
+void printVersion();
 
 inline void initCommandLine(int argc, char* argv[])
 {
