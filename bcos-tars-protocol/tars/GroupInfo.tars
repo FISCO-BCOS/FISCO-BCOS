@@ -3,11 +3,12 @@ module bcostars
 struct ChainNodeInfo
 {
     1 require string nodeName;
-    2 require int nodeType;
+    2 require int nodeCryptoType;
     3 optional string iniConfig;
     4 optional map<int, string> serviceInfo;
     5 optional string nodeID;
     6 require bool microService;
+    7 optional int nodeType;
 };
 struct GroupInfo
 {

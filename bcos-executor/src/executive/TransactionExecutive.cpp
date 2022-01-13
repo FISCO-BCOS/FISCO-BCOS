@@ -217,27 +217,21 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
     {
         return callPrecompiled(std::move(callParameters));
     }
-    else
+    auto tableName = getContractTableName(callParameters->codeAddress);
+    // check permission first
+    if (blockContext->isAuthCheck() && !blockContext->isWasm() && !checkAuth(callParameters, false))
     {
-        auto tableName = getContractTableName(callParameters->codeAddress);
-        // check permission first
-        if (blockContext->isAuthCheck() && !blockContext->isWasm())
-        {
-            if (!checkAuth(callParameters, false))
-            {
-                revert();
-                callParameters->status = (int32_t)TransactionStatus::PermissionDenied;
-                callParameters->type = CallParameters::REVERT;
-                callParameters->message = "Call permission denied";
-                EXECUTIVE_LOG(ERROR) << callParameters->message << LOG_KV("tableName", tableName)
-                                     << LOG_KV("origin", callParameters->origin);
-                return {nullptr, std::move(callParameters)};
-            }
-        }
-        auto hostContext = make_unique<HostContext>(
-            std::move(callParameters), shared_from_this(), std::move(tableName));
-        return {std::move(hostContext), nullptr};
+        revert();
+        callParameters->status = (int32_t)TransactionStatus::PermissionDenied;
+        callParameters->type = CallParameters::REVERT;
+        callParameters->message = "Call permission denied";
+        EXECUTIVE_LOG(ERROR) << callParameters->message << LOG_KV("tableName", tableName)
+                             << LOG_KV("origin", callParameters->origin);
+        return {nullptr, std::move(callParameters)};
     }
+    auto hostContext = make_unique<HostContext>(
+        std::move(callParameters), shared_from_this(), std::move(tableName));
+    return {std::move(hostContext), nullptr};
 }
 
 std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr>

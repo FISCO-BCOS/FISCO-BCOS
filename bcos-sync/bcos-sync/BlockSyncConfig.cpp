@@ -56,10 +56,13 @@ void BlockSyncConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig)
     setConsensusNodeList(_ledgerConfig->consensusNodeList());
     setObserverList(_ledgerConfig->observerNodeList());
     auto type = determineNodeType();
-    if (m_nodeTypeChanged && type != m_nodeType)
+    if (type != m_nodeType)
     {
         m_nodeType = type;
-        m_nodeTypeChanged(type);
+        if (m_nodeTypeChanged)
+        {
+            m_nodeTypeChanged(type);
+        }
     }
     BLKSYNC_LOG(INFO) << LOG_DESC("#### BlockSyncConfig resetConfig")
                       << LOG_KV("number", m_blockNumber)

@@ -78,6 +78,8 @@ void ProPBFTInitializer::init()
     PBFTInitializer::init();
     m_timer->registerTimeoutHandler(boost::bind(&ProPBFTInitializer::reportNodeInfo, this));
     m_blockSync->config()->registerOnNodeTypeChanged([this](bcos::protocol::NodeType _type) {
+        INITIALIZER_LOG(INFO) << LOG_DESC("OnNodeTypeChange") << LOG_KV("type", _type)
+                              << LOG_KV("nodeName", m_nodeConfig->nodeName());
         auto nodeInfo = m_groupInfo->nodeInfo(m_nodeConfig->nodeName());
         if (!nodeInfo)
         {

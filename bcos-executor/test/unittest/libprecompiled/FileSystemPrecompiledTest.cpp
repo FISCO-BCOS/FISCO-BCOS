@@ -456,7 +456,8 @@ BOOST_AUTO_TEST_CASE(linkTest)
         BOOST_CHECK(ls2.size() == 1);
         BOOST_CHECK(std::get<0>(ls2.at(0)) == contractVersion);
         BOOST_CHECK(std::get<1>(ls2.at(0)) == FS_TYPE_LINK);
-        BOOST_CHECK(std::get<2>(ls2.at(0)) == addressString);
+        BOOST_CHECK(std::get<2>(ls2.at(0)).at(0) == addressString);
+        BOOST_CHECK(std::get<2>(ls2.at(0)).at(1) == contractAbi);
     }
 
     // overwrite link
@@ -475,7 +476,8 @@ BOOST_AUTO_TEST_CASE(linkTest)
         std::vector<BfsTuple> ls2;
         codec->decode(result2->data(), code, ls2);
         BOOST_CHECK(ls2.size() == 1);
-        BOOST_CHECK(std::get<2>(ls2.at(0)) == addressString);
+        BOOST_CHECK(std::get<2>(ls2.at(0)).at(0) == addressString);
+        BOOST_CHECK(std::get<2>(ls2.at(0)).at(1) == contractAbi);
 
         auto newAddress = "420f853b49838bd3e9466c85a4cc3428c960dde2";
         deployHelloContract(number++, newAddress);
@@ -484,7 +486,8 @@ BOOST_AUTO_TEST_CASE(linkTest)
         std::vector<BfsTuple> ls3;
         codec->decode(result3->data(), code, ls3);
         BOOST_CHECK(ls3.size() == 1);
-        BOOST_CHECK(std::get<2>(ls3.at(0)) == newAddress);
+        BOOST_CHECK(std::get<2>(ls3.at(0)).at(0) == newAddress);
+        BOOST_CHECK(std::get<2>(ls3.at(0)).at(1) == contractAbi);
     }
 
     // overflow version

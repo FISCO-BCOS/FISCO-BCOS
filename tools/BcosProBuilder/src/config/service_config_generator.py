@@ -119,7 +119,7 @@ class ServiceConfigGenerator:
         # generate uuid according to chain_id and gateway_service_name
         uuid_name = ini_config["service"]['gateway']
         # TODO: Differentiate between different agency
-        ini_config["p2p"]['uuid'] = str(
+        ini_config[self.section]['uuid'] = str(
             uuid.uuid3(uuid.NAMESPACE_URL, uuid_name))
         utilities.mkfiledir(generated_file_path)
         with open(generated_file_path, 'w') as configfile:
