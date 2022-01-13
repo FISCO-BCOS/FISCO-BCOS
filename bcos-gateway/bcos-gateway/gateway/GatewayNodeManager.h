@@ -61,11 +61,12 @@ public:
 
 protected:
     // for ut
-    GatewayNodeManager(
+    GatewayNodeManager(std::string const& _uuid,
         std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface)
-      : m_keyFactory(_keyFactory),
+      : m_uuid(_uuid),
+        m_keyFactory(_keyFactory),
         m_localRouterTable(std::make_shared<LocalRouterTable>(_keyFactory)),
-        m_peersRouterTable(std::make_shared<PeersRouterTable>(_keyFactory, _p2pInterface))
+        m_peersRouterTable(std::make_shared<PeersRouterTable>(_uuid, _keyFactory, _p2pInterface))
     {}
 
     uint32_t increaseSeq()

@@ -126,6 +126,9 @@ void PBFTInitializer::initChainNodeInfo(
 
     chainNodeInfo->setIniConfig(generateIniConfig(_nodeConfig));
     chainNodeInfo->setMicroService(microServiceMode);
+    chainNodeInfo->setNodeType(m_blockSync->config()->nodeType());
+    chainNodeInfo->setNodeCryptoType(
+        (_nodeConfig->smCryptoType() ? NodeCryptoType::SM_NODE : NON_SM_NODE));
 
     bool useConfigServiceName = false;
     if (_nodeArchType == bcos::initializer::NodeArchitectureType::MAX)
@@ -143,6 +146,10 @@ void PBFTInitializer::initChainNodeInfo(
     chainNodeInfo->appendServiceInfo(
         TXPOOL, useConfigServiceName ? m_nodeConfig->txpoolServiceName() : localNodeServiceName);
     m_groupInfo->appendNodeInfo(chainNodeInfo);
+    INITIALIZER_LOG(INFO) << LOG_DESC("PBFTInitializer::initChainNodeInfo")
+                          << LOG_KV("nodeType", chainNodeInfo->nodeType())
+                          << LOG_KV("nodeCryptoType", chainNodeInfo->nodeCryptoType())
+                          << LOG_KV("nodeName", _nodeConfig->nodeName());
 }
 
 void PBFTInitializer::start()

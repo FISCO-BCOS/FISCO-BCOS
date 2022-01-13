@@ -38,7 +38,7 @@ class FakeGatewayNodeManager : public GatewayNodeManager
 public:
     FakeGatewayNodeManager(
         std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface)
-      : GatewayNodeManager(_keyFactory, _p2pInterface)
+      : GatewayNodeManager("", _keyFactory, _p2pInterface)
     {}
     ~FakeGatewayNodeManager() override {}
 

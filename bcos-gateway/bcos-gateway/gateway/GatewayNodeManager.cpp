@@ -32,7 +32,7 @@ using namespace bcos::crypto;
 
 GatewayNodeManager::GatewayNodeManager(std::string const& _uuid, P2pID const& _nodeID,
     std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface)
-  : GatewayNodeManager(_keyFactory, _p2pInterface)
+  : GatewayNodeManager(_uuid, _keyFactory, _p2pInterface)
 {
     m_uuid = _uuid;
     if (_uuid.size() == 0)
@@ -141,7 +141,8 @@ void GatewayNodeManager::onReceiveNodeStatus(
     gatewayNodeStatus->decode(bytesConstRef(_msg->payload()->data(), _msg->payload()->size()));
     auto p2pID = _session->p2pID();
     NODE_MANAGER_LOG(INFO) << LOG_DESC("onReceiveNodeStatus") << LOG_KV("p2pid", p2pID)
-                           << LOG_KV("seq", gatewayNodeStatus->seq());
+                           << LOG_KV("seq", gatewayNodeStatus->seq())
+                           << LOG_KV("uuid", gatewayNodeStatus->uuid());
     updatePeerStatus(p2pID, gatewayNodeStatus);
 }
 
@@ -250,7 +251,7 @@ void GatewayNodeManager::broadcastStatusSeq()
     auto statusSeq = boost::asio::detail::socket_ops::host_to_network_long(seq);
     auto payload = std::make_shared<bytes>((byte*)&statusSeq, (byte*)&statusSeq + 4);
     message->setPayload(payload);
-    NODE_MANAGER_LOG(DEBUG) << LOG_DESC("broadcastStatusSeq") << LOG_KV("seq", seq);
+    NODE_MANAGER_LOG(TRACE) << LOG_DESC("broadcastStatusSeq") << LOG_KV("seq", seq);
     m_p2pInterface->asyncBroadcastMessage(message, Options());
 }
 
