@@ -140,20 +140,22 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
     return TransactionStatus::None;
 }
 
-TransactionStatus MemoryStorage::submitTransaction(
-    Transaction::Ptr _tx, TxSubmitCallback _txSubmitCallback, bool _enforceImport)
+TransactionStatus MemoryStorage::submitTransaction(Transaction::Ptr _tx,
+    TxSubmitCallback _txSubmitCallback, bool _enforceImport, bool _checkPoolLimit)
 {
     if (!_enforceImport)
     {
-        return verifyAndSubmitTransaction(_tx, _txSubmitCallback);
+        return verifyAndSubmitTransaction(_tx, _txSubmitCallback, _checkPoolLimit);
     }
     return enforceSubmitTransaction(_tx);
 }
 
 TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
-    Transaction::Ptr _tx, TxSubmitCallback _txSubmitCallback)
+    Transaction::Ptr _tx, TxSubmitCallback _txSubmitCallback, bool _checkPoolLimit)
 {
-    if (size() >= m_config->poolLimit())
+    // Note: In order to ensure that transactions can reach all nodes, transactions from P2P are not
+    // restricted
+    if (_checkPoolLimit && size() >= m_config->poolLimit())
     {
         return TransactionStatus::TxPoolIsFull;
     }
