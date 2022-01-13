@@ -4,7 +4,7 @@ tars_token = ""
 tars_pkg_dir = "binary/"
 
 [chain]
-chain_id="chain"
+chain_id="chain0"
 rpc_sm_ssl=false
 gateway_sm_ssl=false
 #rpc_ca_cert_path=""

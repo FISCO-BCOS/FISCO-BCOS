@@ -40,8 +40,8 @@ public:
         bytesPointer _txData, bcos::protocol::TxSubmitCallback _txSubmitCallback = nullptr) = 0;
     virtual bcos::protocol::TransactionStatus submitTransaction(
         bcos::protocol::Transaction::Ptr _tx,
-        bcos::protocol::TxSubmitCallback _txSubmitCallback = nullptr,
-        bool _enforceImport = false) = 0;
+        bcos::protocol::TxSubmitCallback _txSubmitCallback = nullptr, bool _enforceImport = false,
+        bool _checkPoolLimit = false) = 0;
 
     virtual bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::ConstPtr _tx) = 0;
     virtual void batchInsert(bcos::protocol::Transactions const& _txs) = 0;
