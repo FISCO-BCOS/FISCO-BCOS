@@ -19,7 +19,6 @@
  * @date 2021-10-15
  */
 #pragma once
-#include "Common/TarsUtils.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/interfaces/crypto/KeyInterface.h>
 #include <bcos-framework/interfaces/gateway/GatewayInterface.h>

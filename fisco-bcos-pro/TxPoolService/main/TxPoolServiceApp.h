@@ -19,7 +19,6 @@
  * @date 2021-10-17
  */
 #pragma once
-#include "Common/TarsUtils.h"
 #include "TxPoolService/TxPoolServiceServer.h"
 #include "libinitializer/TxPoolInitializer.h"
 #include <bcos-tool/NodeConfig.h>

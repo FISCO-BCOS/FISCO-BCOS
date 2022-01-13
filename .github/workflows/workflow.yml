@@ -143,7 +143,7 @@ jobs:
       - name: configure
         run: mkdir build && cd build && cmake .. -DTESTS=OFF -DHUNTER_CONFIGURATION_TYPES=Debug
       - name: compile
-        run: cd build && make -j3
+        run: cd build && make -j2
   build_with_centos:
     name: build_with_centos
     runs-on: ubuntu-latest

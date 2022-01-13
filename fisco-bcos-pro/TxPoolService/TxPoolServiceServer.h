@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Common/TarsUtils.h"
 #include "libinitializer/ProtocolInitializer.h"
 #include "libinitializer/TxPoolInitializer.h"
 #include <bcos-framework/interfaces/consensus/ConsensusNode.h>

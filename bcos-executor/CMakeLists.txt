@@ -10,9 +10,6 @@ find_package(TBB CONFIG REQUIRED)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
-include(ProjectHera)
-include(ProjectWABT)
-
 hunter_add_package(evmc)
 hunter_add_package(evmone)
 hunter_add_package(intx)

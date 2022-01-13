@@ -24,6 +24,10 @@ include(CompilerSettings)
 include(BuildInfoGenerator)
 
 # import dependencies
+include(ProjectTCMalloc)
+include(ProjectHera)
+include(ProjectWABT)
+
 hunter_add_package(tbb)
 hunter_add_package(Protobuf)
 hunter_add_package(Microsoft.GSL)
