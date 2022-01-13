@@ -10,8 +10,6 @@ find_package(TBB CONFIG REQUIRED)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
-include(ProjectWABT)
-
 hunter_add_package(evmc)
 hunter_add_package(evmone)
 hunter_add_package(intx)
@@ -25,7 +23,6 @@ find_package(Boost CONFIG QUIET REQUIRED serialization program_options context)
 find_package(jsoncpp CONFIG REQUIRED)
 
 file(GLOB_RECURSE SRCS src/*.cpp)
-include(ProjectBCOSWASM)
 add_library(${EXECUTOR_TARGET} ${SRCS})
 target_link_libraries(${EXECUTOR_TARGET} PUBLIC jsoncpp_lib_static ${CODEC_TARGET} ${CRYPTO_TARGET} ${TABLE_TARGET} Boost::context evmone fbwasm evmc::loader evmc::instructions wabt)
 

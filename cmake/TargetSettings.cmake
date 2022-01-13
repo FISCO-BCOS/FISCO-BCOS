@@ -53,3 +53,10 @@ set(RPC_TARGET "rpc")
 # bcos-tool
 set(TOOL_TARGET "tool")
 
+# libinitializer
+set(PROTOCOL_INIT_LIB protocol_init)
+set(FRONTSERVICE_INIT_LIB front_init)
+set(PBFT_INIT_LIB pbft_init)
+set(TXPOOL_INIT_LIB txpool_init)
+set(COMMAND_HELPER_LIB command)
+set(INIT_LIB init)

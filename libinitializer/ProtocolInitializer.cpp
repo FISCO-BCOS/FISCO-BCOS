@@ -19,10 +19,12 @@
  * @date 2021-06-10
  */
 #include "libinitializer/ProtocolInitializer.h"
+#include "libinitializer/Common.h"
 #include <bcos-crypto/encrypt/AESCrypto.h>
 #include <bcos-crypto/encrypt/SM4Crypto.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
+#include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-crypto/signature/sm2/SM2Crypto.h>
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
@@ -37,6 +39,9 @@ using namespace bcos::initializer;
 using namespace bcos::crypto;
 using namespace bcos::tool;
 
+ProtocolInitializer::ProtocolInitializer()
+  : m_keyFactory(std::make_shared<bcos::crypto::KeyFactoryImpl>())
+{}
 void ProtocolInitializer::init(NodeConfig::Ptr _nodeConfig)
 {
     // TODO: hsm/ed25519

@@ -13,41 +13,26 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file Common.h
+ * @file CommandHelper.h
  * @author: yujiechen
- * @date 2021-06-11
+ * @date 2021-06-10
  */
-
 #pragma once
-#include <atomic>
-#include <chrono>
-#include <ctime>
 #include <iostream>
 #include <memory>
-
 namespace bcos
 {
-namespace node
+namespace initializer
 {
-class ExitHandler
-{
-public:
-    void exit() { exitHandler(0); }
-    static void exitHandler(int) { ExitHandler::c_shouldExit.store(true); }
-    bool shouldExit() const { return ExitHandler::c_shouldExit.load(); }
+void printVersion();
+void initCommandLine(int argc, char* argv[]);
 
-    static std::atomic_bool c_shouldExit;
+struct Params
+{
+    std::string configFilePath;
+    std::string genesisFilePath;
+    float txSpeed;
 };
-std::atomic_bool ExitHandler::c_shouldExit = {false};
-
-void setDefaultOrCLocale()
-{
-#if __unix__
-    if (!std::setlocale(LC_ALL, ""))
-    {
-        setenv("LC_ALL", "C", 1);
-    }
-#endif
-}
-}  // namespace node
+Params initLocalNodeCommandLine(int argc, const char* argv[], bool _autoSendTx);
+}  // namespace initializer
 }  // namespace bcos

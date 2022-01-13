@@ -19,10 +19,28 @@
  * @date 2021-10-18
  */
 #include "NodeServiceApp.h"
+#include "Common/TarsUtils.h"
+#include "FrontService/FrontServiceServer.h"
+#include "LedgerService/LedgerServiceServer.h"
+#include "PBFTService/PBFTServiceServer.h"
+#include "SchedulerService/SchedulerServiceServer.h"
+#include "TxPoolService/TxPoolServiceServer.h"
+#include "libinitializer/Initializer.h"
+#include <bcos-scheduler/src/SchedulerImpl.h>
+#include <bcos-tars-protocol/client/RpcServiceClient.h>
+
 using namespace bcostars;
 using namespace bcos;
 using namespace bcos::initializer;
 using namespace bcos::protocol;
+
+void NodeServiceApp::destroyApp()
+{
+    // terminate the network threads
+    Application::terminate();
+    // stop the nodeService
+    m_nodeInitializer->stop();
+}
 
 void NodeServiceApp::initialize()
 {

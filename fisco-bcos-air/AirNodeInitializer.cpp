@@ -19,9 +19,11 @@
  * @date 2021-10-28
  */
 #include "AirNodeInitializer.h"
+#include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-gateway/GatewayFactory.h>
 #include <bcos-gateway/libamop/AirTopicManager.h>
 #include <bcos-rpc/RpcFactory.h>
+#include <bcos-scheduler/src/SchedulerImpl.h>
 #include <bcos-tool/NodeConfig.h>
 using namespace bcos::node;
 using namespace bcos::initializer;

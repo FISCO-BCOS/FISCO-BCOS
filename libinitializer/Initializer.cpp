@@ -40,6 +40,7 @@
 #include "bcos-protocol/TransactionSubmitResultImpl.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-scheduler/src/ExecutorManager.h>
+#include <bcos-sync/BlockSync.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tool/NodeConfig.h>
 
@@ -48,6 +49,13 @@ using namespace bcos;
 using namespace bcos::tool;
 using namespace bcos::initializer;
 
+void Initializer::initAirNode(std::string const& _configFilePath, std::string const& _genesisFile,
+    bcos::gateway::GatewayInterface::Ptr _gateway)
+{
+    initConfig(_configFilePath, _genesisFile, "", true);
+    init(bcos::initializer::NodeArchitectureType::AIR, _configFilePath, _genesisFile, _gateway,
+        true);
+}
 void Initializer::initMicroServiceNode(std::string const& _configFilePath,
     std::string const& _genesisFile, std::string const& _privateKeyPath)
 {
@@ -138,7 +146,9 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
             auto nodeID = m_protocolInitializer->keyPair()->publicKey();
             auto frontService = m_frontServiceInitializer->front();
             auto groupID = m_nodeConfig->groupId();
-            m_pbftInitializer->blockSync()->config()->registerOnNodeTypeChanged(
+            auto blockSync =
+                std::dynamic_pointer_cast<bcos::sync::BlockSync>(m_pbftInitializer->blockSync());
+            blockSync->config()->registerOnNodeTypeChanged(
                 [_gateway, groupID, nodeID, frontService](bcos::protocol::NodeType _type) {
                     _gateway->registerNode(groupID, nodeID, _type, frontService);
                     BCOS_LOG(INFO) << LOG_DESC("registerNode") << LOG_KV("group", groupID)
