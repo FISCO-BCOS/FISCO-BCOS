@@ -22,7 +22,6 @@
 #include "Common.h"
 #include "PrecompiledResult.h"
 #include "Utilities.h"
-#include <json/json.h>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
@@ -123,7 +122,7 @@ int FileSystemPrecompiled::checkLinkParam(TransactionExecutive::Ptr _executive,
                               << LOG_KV("contractAddress", _contractAddress)
                               << LOG_KV("contractName", _contractName);
     }
-    if (_contractVersion.size() > CNS_VERSION_MAX_LENGTH)
+    if (_contractVersion.size() > LINK_VERSION_MAX_LENGTH)
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("FileSystemPrecompiled")
                                << LOG_DESC("version length overflow 128")
@@ -143,7 +142,7 @@ int FileSystemPrecompiled::checkLinkParam(TransactionExecutive::Ptr _executive,
     }
     // check the length of the key
     checkLengthValidate(
-        _contractName, CNS_CONTRACT_NAME_MAX_LENGTH, CODE_TABLE_KEY_VALUE_LENGTH_OVERFLOW);
+        _contractName, LINK_CONTRACT_NAME_MAX_LENGTH, CODE_TABLE_KEY_VALUE_LENGTH_OVERFLOW);
     // check the length of the field value
     checkLengthValidate(
         _contractAbi, USER_TABLE_FIELD_VALUE_MAX_LENGTH, CODE_TABLE_FIELD_VALUE_LENGTH_OVERFLOW);
@@ -235,22 +234,28 @@ void FileSystemPrecompiled::listDir(
                 codec::scale::decode(bfsInfo, gsl::make_span(out));
                 for (const auto& bfs : bfsInfo)
                 {
-                    BfsTuple file = std::make_tuple(bfs.first, bfs.second, "");
+                    BfsTuple file =
+                        std::make_tuple(bfs.first, bfs.second, std::vector<std::string>({}));
                     files.emplace_back(std::move(file));
                 }
             }
             else if (typeEntry->getField(0) == FS_TYPE_LINK)
             {
+                // if link
                 auto addressEntry = table->getRow(FS_LINK_ADDRESS);
-                BfsTuple link =
-                    std::make_tuple(baseName, FS_TYPE_LINK, std::string(addressEntry->getField(0)));
+                auto abiEntry = table->getRow(FS_LINK_ABI);
+                std::vector<std::string> ext;
+                ext.emplace_back(addressEntry->getField(0));
+                ext.emplace_back(abiEntry->getField(0));
+                BfsTuple link = std::make_tuple(baseName, FS_TYPE_LINK, std::move(ext));
                 files.emplace_back(std::move(link));
             }
         }
         else
         {
             // fail to get type, this is contract
-            BfsTuple file = std::make_tuple(baseName, FS_TYPE_CONTRACT, "");
+            BfsTuple file =
+                std::make_tuple(baseName, FS_TYPE_CONTRACT, std::vector<std::string>({}));
             files.emplace_back(std::move(file));
         }
 

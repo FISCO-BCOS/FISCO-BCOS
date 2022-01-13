@@ -21,17 +21,8 @@
 #pragma once
 #include "../vm/Precompiled.h"
 
-namespace bcos
+namespace bcos::precompiled
 {
-namespace precompiled
-{
-#if 0
-contract FileSystemPrecompiled
-{
-	function list(string absoluteDir) public returns(string); // json string
-	function mkdir(string absoluteDir) public returns(bool);
-}
-#endif
 class FileSystemPrecompiled : public bcos::precompiled::Precompiled
 {
 public:
@@ -55,5 +46,4 @@ private:
         std::string const& _contractAddress, std::string& _contractName,
         std::string& _contractVersion, std::string const& _contractAbi);
 };
-}  // namespace precompiled
-}  // namespace bcos
+}  // namespace bcos::precompiled

@@ -263,7 +263,7 @@ bcos::precompiled::ContractStatus bcos::precompiled::getContractStatus(
     auto codeHashEntry = table->getRow(executor::ACCOUNT_CODE_HASH);
     if (!codeHashEntry)
     {
-        // this may happen when register cns in contract constructor
+        // this may happen when register link in contract constructor
         return ContractStatus::Available;
     }
     auto codeHashStr = std::string(codeHashEntry->getField(0));
