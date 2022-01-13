@@ -197,13 +197,17 @@ private:
         output = std::move(codecOutput);
     }
 
-    inline std::string getContractTableName(const std::string_view& _address)
+    inline std::string getContractTableName(const std::string_view& _address, bool isWasm = false)
     {
         auto blockContext = m_blockContext.lock();
-        std::string addressLower(_address);
-        boost::algorithm::to_lower(addressLower);
+        std::string formatAddress(_address);
+        if (!isWasm)
+        {
+            // evm address needs to be lower
+            boost::algorithm::to_lower(formatAddress);
+        }
 
-        std::string address = (_address[0] == '/') ? addressLower.substr(1) : addressLower;
+        std::string address = (_address[0] == '/') ? formatAddress.substr(1) : formatAddress;
 
         if (blockContext->isAuthCheck())
         {

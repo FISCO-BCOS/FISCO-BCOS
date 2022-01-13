@@ -30,6 +30,7 @@
 #include "bcos-protocol/protobuf/PBBlockHeader.h"
 #include "bcos-table/src/StateStorage.h"
 #include "executor/TransactionExecutor.h"
+#include "executor/TransactionExecutorFactory.h"
 #include "precompiled/PrecompiledCodec.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
@@ -78,7 +79,7 @@ struct WasmExecutorFixture
         backend = std::make_shared<MockTransactionalStorage>(hashImpl);
         auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
 
-        executor = std::make_shared<TransactionExecutor>(
+        executor = bcos::executor::TransactionExecutorFactory::build(
             txpool, nullptr, backend, executionResultFactory, hashImpl, true, false);
 
         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
@@ -225,7 +226,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
     constructorParam = codec->encode(constructorParam);
     input.insert(input.end(), constructorParam.begin(), constructorParam.end());
 
-    string selfAddress = "/usr/alice/hello_world";
+    string selfAddress = "usr/alice/hello_world";
 
     input.insert(input.end(), helloWorldAbi.begin(), helloWorldAbi.end());
 
@@ -294,7 +295,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
         commitPromise.set_value();
     });
     commitPromise.get_future().get();
-    auto tableName = std::string("/apps") + std::string(result->newEVMContractAddress());
+    auto tableName = std::string("/apps/") + std::string(result->newEVMContractAddress());
 
     EXECUTOR_LOG(TRACE) << "Checking table: " << tableName;
     std::promise<Table> tablePromise;
@@ -401,7 +402,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall_100)
     constructorParam = codec->encode(constructorParam);
     input.insert(input.end(), constructorParam.begin(), constructorParam.end());
 
-    string selfAddress = "/usr/alice/hello_world";
+    string selfAddress = "usr/alice/hello_world";
 
     input.insert(input.end(), helloWorldAbi.begin(), helloWorldAbi.end());
 
@@ -470,7 +471,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall_100)
         commitPromise.set_value();
     });
     commitPromise.get_future().get();
-    auto tableName = std::string("/apps") + std::string(result->newEVMContractAddress());
+    auto tableName = std::string("/apps/") + std::string(result->newEVMContractAddress());
 
     EXECUTOR_LOG(TRACE) << "Checking table: " << tableName;
     std::promise<Table> tablePromise;
@@ -597,7 +598,7 @@ BOOST_AUTO_TEST_CASE(deployAndCall_100)
 
 BOOST_AUTO_TEST_CASE(externalCall)
 {
-    string aliceAddress = "/usr/alice/hello_world";
+    string aliceAddress = "usr/alice/hello_world";
     string bobAddress = "/usr/bob/hello_world_caller";
     string sender;
     // --------------------------------
@@ -807,7 +808,7 @@ BOOST_AUTO_TEST_CASE(performance)
 
     input.push_back(0);
 
-    string transferAddress = "/usr/alice/transfer";
+    string transferAddress = "usr/alice/transfer";
 
     input.insert(input.end(), transferAbi.begin(), transferAbi.end());
 

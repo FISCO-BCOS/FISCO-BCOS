@@ -24,52 +24,32 @@
 #include "../Common.h"
 #include "../executive/BlockContext.h"
 #include "../executive/TransactionExecutive.h"
-#include "../executor/TransactionExecutor.h"
 #include "DAG.h"
+#include "../executor/TransactionExecutor.h"
 #include "bcos-framework/interfaces/protocol/Block.h"
 #include "bcos-framework/interfaces/protocol/Transaction.h"
 #include <map>
 #include <memory>
 #include <queue>
 #include <vector>
+#include "./TxDAGInterface.h"
 
 namespace bcos
 {
 namespace executor
 {
 class TransactionExecutive;
-using ExecuteTxFunc = std::function<void(bcos::executor::TransactionExecutive::Ptr,
-    bcos::executor::CallParameters::UniquePtr, gsl::index)>;
 
-enum ConflictFieldKind : std::uint8_t
-{
-    All = 0,
-    Len,
-    Env,
-    Var,
-    Const,
-};
-
-enum EnvKind : std::uint8_t
-{
-    Caller = 0,
-    Origin,
-    Now,
-    BlockNumber,
-    Addr,
-};
-
-class TxDAG
+class TxDAG : public virtual TxDAGInterface
 {
 public:
     TxDAG() : m_dag() {}
     virtual ~TxDAG() {}
 
     // Generate DAG according with given transactions
-    void init(size_t count, const std::vector<std::vector<std::string>>& _txsCriticals);
+    void init(critical::CriticalFieldsInterface::Ptr _txsCriticals, ExecuteTxFunc const& _f) override;
 
-    // Set transaction execution function
-    void setTxExecuteFunc(ExecuteTxFunc const& _f);
+    void run(unsigned int threadNum) override;
 
     // Called by thread
     // Has the DAG reach the end?
@@ -81,9 +61,7 @@ public:
     // Called by thread
     // Execute a unit in DAG
     // This function can be parallel
-    int executeUnit(const std::vector<TransactionExecutive::Ptr>& allExecutives,
-        std::vector<std::unique_ptr<CallParameters>>& allCallParameters,
-        const std::vector<gsl::index>& allIndex);
+    int executeUnit();
 
     ID paraTxsNumber() { return m_totalParaTxs; }
 
@@ -100,46 +78,6 @@ private:
 
     mutable std::mutex x_exeCnt;
     std::atomic_bool m_stop = {false};
-};
-
-template <typename T>
-class CriticalField
-{
-public:
-    ID get(T const& _c)
-    {
-        auto it = m_criticals.find(_c);
-        if (it == m_criticals.end())
-        {
-            if (m_criticalAll != INVALID_ID)
-                return m_criticalAll;
-            return INVALID_ID;
-        }
-        return it->second;
-    }
-
-    void update(T const& _c, ID _txId) { m_criticals[_c] = _txId; }
-
-    void foreachField(std::function<void(ID)> _f)
-    {
-        for (auto const& _fieldAndId : m_criticals)
-        {
-            _f(_fieldAndId.second);
-        }
-
-        if (m_criticalAll != INVALID_ID)
-            _f(m_criticalAll);
-    }
-
-    void setCriticalAll(ID _id)
-    {
-        m_criticalAll = _id;
-        m_criticals.clear();
-    }
-
-private:
-    std::map<T, ID> m_criticals;
-    ID m_criticalAll = INVALID_ID;
 };
 
 }  // namespace executor
