@@ -16,5 +16,4 @@ aux_source_directory(../../PBFTService SRC_LIST)
 add_executable(${BINARY_NAME} ${SRC_LIST} ${HEADERS})
 
 target_compile_options(${BINARY_NAME} PRIVATE -Wno-error -Wno-unused-parameter -Wno-variadic-macros -Wno-return-type -Wno-pedantic)
-target_link_libraries(${BINARY_NAME} PUBLIC init ${TARS_PROTOCOL_TARGET} Boost::program_options 
-OpenSSL::SSL OpenSSL::Crypto)
+target_link_libraries(${BINARY_NAME} PUBLIC ${INIT_LIB} ${PBFT_INIT_LIB} ${TARS_PROTOCOL_TARGET} ${COMMAND_HELPER_LIB} OpenSSL::SSL OpenSSL::Crypto)

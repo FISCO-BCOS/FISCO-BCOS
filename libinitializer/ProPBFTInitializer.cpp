@@ -19,6 +19,9 @@
  * @date 2021-06-10
  */
 #include "ProPBFTInitializer.h"
+#include <bcos-pbft/pbft/PBFTImpl.h>
+#include <bcos-sealer/Sealer.h>
+#include <bcos-sync/BlockSync.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tars-protocol/client/RpcServiceClient.h>
 

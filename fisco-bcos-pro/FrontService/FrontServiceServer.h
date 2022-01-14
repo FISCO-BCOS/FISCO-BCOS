@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Common/TarsUtils.h"
 #include "libinitializer/FrontServiceInitializer.h"
 #include "libinitializer/ProtocolInitializer.h"
 #include <bcos-framework/interfaces/protocol/Protocol.h>

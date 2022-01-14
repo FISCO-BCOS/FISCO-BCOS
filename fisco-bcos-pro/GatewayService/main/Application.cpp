@@ -1,9 +1,11 @@
 #include "Common/TarsUtils.h"
 #include "GatewayService/GatewayInitializer.h"
 #include "GatewayService/GatewayServiceServer.h"
+#include "libinitializer/CommandHelper.h"
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <tarscpp/servant/Application.h>
+
 using namespace bcostars;
 
 class GatewayServiceApp : public Application

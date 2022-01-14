@@ -19,7 +19,6 @@
  * @date 2021-10-15
  */
 #pragma once
-#include "Common/TarsUtils.h"
 #include "PBFTService/PBFTServiceServer.h"
 #include "libinitializer/ProPBFTInitializer.h"
 #include <bcos-utilities/BoostLogInitializer.h>

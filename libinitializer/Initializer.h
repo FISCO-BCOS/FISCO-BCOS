@@ -20,19 +20,24 @@
  */
 #pragma once
 #include "FrontServiceInitializer.h"
-#include "LedgerInitializer.h"
 #include "PBFTInitializer.h"
 #include "ProPBFTInitializer.h"
 #include "ProtocolInitializer.h"
-#include "SchedulerInitializer.h"
-#include "StorageInitializer.h"
 #include "TxPoolInitializer.h"
-#include <bcos-framework/interfaces/gateway/GatewayInterface.h>
-#include <bcos-framework/interfaces/rpc/RPCInterface.h>
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <memory>
 
-namespace bcos::initializer
+namespace bcos
+{
+namespace gateway
+{
+class GatewayInterface;
+}
+namespace scheduler
+{
+class SchedulerInterface;
+}
+namespace initializer
 {
 class Initializer
 {
@@ -40,7 +45,6 @@ public:
     using Ptr = std::shared_ptr<Initializer>;
     Initializer() = default;
     virtual ~Initializer() { stop(); }
-
 
     virtual void start();
     virtual void stop();
@@ -51,24 +55,19 @@ public:
     TxPoolInitializer::Ptr txPoolInitializer() { return m_txpoolInitializer; }
 
     bcos::ledger::LedgerInterface::Ptr ledger() { return m_ledger; }
-    bcos::scheduler::SchedulerInterface::Ptr scheduler() { return m_scheduler; }
+    std::shared_ptr<bcos::scheduler::SchedulerInterface> scheduler() { return m_scheduler; }
 
     FrontServiceInitializer::Ptr frontService() { return m_frontServiceInitializer; }
 
     void initAirNode(std::string const& _configFilePath, std::string const& _genesisFile,
-        bcos::gateway::GatewayInterface::Ptr _gateway)
-    {
-        initConfig(_configFilePath, _genesisFile, "", true);
-        init(bcos::initializer::NodeArchitectureType::AIR, _configFilePath, _genesisFile, _gateway,
-            true);
-    }
+        std::shared_ptr<bcos::gateway::GatewayInterface> _gateway);
     void initMicroServiceNode(std::string const& _configFilePath, std::string const& _genesisFile,
         std::string const& _privateKeyPath);
 
 protected:
     virtual void init(bcos::initializer::NodeArchitectureType _nodeArchType,
         std::string const& _configFilePath, std::string const& _genesisFile,
-        bcos::gateway::GatewayInterface::Ptr _gateway, bool _airVersion);
+        std::shared_ptr<bcos::gateway::GatewayInterface> _gateway, bool _airVersion);
 
     virtual void initConfig(std::string const& _configFilePath, std::string const& _genesisFile,
         std::string const& _privateKeyPath, bool _airVersion);
@@ -80,10 +79,9 @@ private:
     ProtocolInitializer::Ptr m_protocolInitializer;
     FrontServiceInitializer::Ptr m_frontServiceInitializer;
     TxPoolInitializer::Ptr m_txpoolInitializer;
-
     PBFTInitializer::Ptr m_pbftInitializer;
-
     bcos::ledger::LedgerInterface::Ptr m_ledger;
-    bcos::scheduler::SchedulerInterface::Ptr m_scheduler;
+    std::shared_ptr<bcos::scheduler::SchedulerInterface> m_scheduler;
 };
-}  // namespace bcos::initializer
+}  // namespace initializer
+}  // namespace bcos

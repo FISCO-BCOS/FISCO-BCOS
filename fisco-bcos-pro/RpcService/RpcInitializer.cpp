@@ -19,7 +19,10 @@
  * @date 2021-10-15
  */
 #include "RpcInitializer.h"
+#include "Common/TarsUtils.h"
 #include "libinitializer/ProtocolInitializer.h"
+#include <bcos-crypto/signature/key/KeyFactoryImpl.h>
+#include <bcos-rpc/RpcFactory.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 using namespace bcos::group;
 using namespace bcostars;
@@ -50,6 +53,16 @@ void RpcInitializer::init(std::string const& _configDir)
     RPCSERVICE_LOG(INFO) << LOG_DESC("init rpc factory success");
     auto rpc = factory->buildRpc(m_nodeConfig->gatewayServiceName());
     m_rpc = rpc;
+}
+
+void RpcInitializer::setClientID(std::string const& _clientID)
+{
+    m_rpc->setClientID(_clientID);
+}
+
+bcos::rpc::RPCInterface::Ptr RpcInitializer::rpc()
+{
+    return m_rpc;
 }
 
 bcos::rpc::RpcFactory::Ptr RpcInitializer::initRpcFactory(bcos::tool::NodeConfig::Ptr _nodeConfig)

@@ -18,6 +18,7 @@
  * @author: yujiechen
  * @date 2021-10-15
  */
+#include "Common/TarsUtils.h"
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-gateway/GatewayFactory.h>

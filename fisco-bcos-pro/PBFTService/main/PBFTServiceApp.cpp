@@ -19,6 +19,7 @@
  * @date 2021-10-15
  */
 #include "PBFTServiceApp.h"
+#include "Common/TarsUtils.h"
 #include <bcos-ledger/libledger/Ledger.h>
 #include <bcos-tars-protocol/client/FrontServiceClient.h>
 #include <bcos-tars-protocol/client/SchedulerServiceClient.h>

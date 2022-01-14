@@ -19,18 +19,34 @@
  * @date 2021-06-10
  */
 #pragma once
+#include "Common.h"
 #include "Common/TarsUtils.h"
 #include "libinitializer/ProtocolInitializer.h"
+#include <bcos-framework/interfaces/consensus/ConsensusInterface.h>
+#include <bcos-framework/interfaces/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/interfaces/front/FrontServiceInterface.h>
 #include <bcos-framework/interfaces/multigroup/GroupInfo.h>
+#include <bcos-framework/interfaces/sealer/SealerInterface.h>
+#include <bcos-framework/interfaces/storage/StorageInterface.h>
+#include <bcos-framework/interfaces/sync/BlockSyncInterface.h>
+#include <bcos-framework/interfaces/txpool/TxPoolInterface.h>
 #include <bcos-ledger/src/libledger/Ledger.h>
-#include <bcos-pbft/pbft/PBFTFactory.h>
-#include <bcos-sealer/SealerFactory.h>
-#include <bcos-sync/BlockSyncFactory.h>
-#include <bcos-txpool/TxPoolFactory.h>
 
 namespace bcos
 {
+namespace sealer
+{
+class Sealer;
+}
+namespace sync
+{
+class BlockSync;
+}
+namespace consensus
+{
+class PBFTImpl;
+}
+
 namespace initializer
 {
 class PBFTInitializer
@@ -42,7 +58,7 @@ public:
         bcos::txpool::TxPoolInterface::Ptr _txpool, std::shared_ptr<bcos::ledger::Ledger> _ledger,
         bcos::scheduler::SchedulerInterface::Ptr _scheduler,
         bcos::storage::StorageInterface::Ptr _storage,
-        std::shared_ptr<bcos::front::FrontServiceInterface> _frontService);
+        bcos::front::FrontServiceInterface::Ptr _frontService);
 
     virtual ~PBFTInitializer() { stop(); }
 
@@ -51,10 +67,10 @@ public:
     virtual void start();
     virtual void stop();
 
-    bcos::txpool::TxPoolInterface::Ptr txpool() { return m_txpool; }
-    bcos::sync::BlockSync::Ptr blockSync() { return m_blockSync; }
-    bcos::consensus::PBFTImpl::Ptr pbft() { return m_pbft; }
-    bcos::sealer::Sealer::Ptr sealer() { return m_sealer; }
+    bcos::txpool::TxPoolInterface::Ptr txpool();
+    bcos::sync::BlockSyncInterface::Ptr blockSync();
+    bcos::consensus::ConsensusInterface::Ptr pbft();
+    bcos::sealer::SealerInterface::Ptr sealer();
 
     bcos::protocol::BlockFactory::Ptr blockFactory()
     {
@@ -84,11 +100,11 @@ protected:
     std::shared_ptr<bcos::ledger::Ledger> m_ledger;
     bcos::scheduler::SchedulerInterface::Ptr m_scheduler;
     bcos::storage::StorageInterface::Ptr m_storage;
-    std::shared_ptr<bcos::front::FrontServiceInterface> m_frontService;
+    bcos::front::FrontServiceInterface::Ptr m_frontService;
 
-    bcos::sealer::Sealer::Ptr m_sealer;
-    bcos::sync::BlockSync::Ptr m_blockSync;
-    bcos::consensus::PBFTImpl::Ptr m_pbft;
+    std::shared_ptr<bcos::sealer::Sealer> m_sealer;
+    std::shared_ptr<bcos::sync::BlockSync> m_blockSync;
+    std::shared_ptr<bcos::consensus::PBFTImpl> m_pbft;
 
     bcos::group::GroupInfo::Ptr m_groupInfo;
 };

@@ -24,7 +24,7 @@
  */
 #include "AirNodeInitializer.h"
 #include "Common.h"
-#include "libinitializer/Common.h"
+#include "libinitializer/CommandHelper.h"
 #include <thread>
 
 using namespace bcos::node;
@@ -48,7 +48,7 @@ int main(int argc, const char* argv[])
     auto initializer = std::make_shared<AirNodeInitializer>();
     try
     {
-        auto param = initAirNodeCommandLine(argc, argv, false);
+        auto param = bcos::initializer::initAirNodeCommandLine(argc, argv, false);
         initializer->init(param.configFilePath, param.genesisFilePath);
         initializer->start();
     }

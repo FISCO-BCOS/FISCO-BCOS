@@ -1,5 +1,4 @@
 #pragma once
-#include "Common/TarsUtils.h"
 #include "RpcService/RpcInitializer.h"
 #include <bcos-tars-protocol/tars/RpcService.h>
 namespace bcostars
@@ -22,7 +21,6 @@ public:
         tars::TarsCurrentPtr current) override;
     bcostars::Error asyncNotifyGroupInfo(
         const bcostars::GroupInfo& groupInfo, tars::TarsCurrentPtr current) override;
-    bcos::rpc::RpcFactory::Ptr initRpcFactory(bcos::tool::NodeConfig::Ptr nodeConfig);
 
     bcostars::Error asyncNotifyAMOPMessage(tars::Int32 _type, const std::string& _topic,
         const vector<tars::Char>& _requestData, vector<tars::Char>& _responseData,

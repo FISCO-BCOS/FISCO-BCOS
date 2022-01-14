@@ -19,13 +19,18 @@
  * @date 2021-10-15
  */
 #pragma once
-#include "Common/TarsUtils.h"
-#include <bcos-crypto/signature/key/KeyFactoryImpl.h>
+#include <bcos-framework/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/interfaces/multigroup/GroupInfoFactory.h>
-#include <bcos-rpc/RpcFactory.h>
+#include <bcos-framework/interfaces/rpc/RPCInterface.h>
 #include <bcos-tool/NodeConfig.h>
 #include <memory>
 #include <utility>
+
+namespace bcos::rpc
+{
+class RpcFactory;
+class Rpc;
+}  // namespace bcos::rpc
 namespace bcostars
 {
 class RpcInitializer
@@ -45,18 +50,18 @@ public:
     virtual void start();
     virtual void stop();
 
-    void setClientID(std::string const& _clientID) { m_rpc->setClientID(_clientID); }
-    bcos::rpc::Rpc::Ptr rpc() { return m_rpc; }
+    void setClientID(std::string const& _clientID);
+    bcos::rpc::RPCInterface::Ptr rpc();
     bcos::crypto::KeyFactory::Ptr keyFactory() { return m_keyFactory; }
     bcos::group::GroupInfoFactory::Ptr groupInfoFactory() { return m_groupInfoFactory; }
     bcos::group::ChainNodeInfoFactory::Ptr chainNodeInfoFactory() { return m_chainNodeInfoFactory; }
 
 protected:
     virtual void init(std::string const& _configPath);
-    bcos::rpc::RpcFactory::Ptr initRpcFactory(bcos::tool::NodeConfig::Ptr _nodeConfig);
+    std::shared_ptr<bcos::rpc::RpcFactory> initRpcFactory(bcos::tool::NodeConfig::Ptr _nodeConfig);
 
 private:
-    bcos::rpc::Rpc::Ptr m_rpc;
+    std::shared_ptr<bcos::rpc::Rpc> m_rpc;
     bcos::tool::NodeConfig::Ptr m_nodeConfig;
     bcos::crypto::KeyFactory::Ptr m_keyFactory;
     bcos::group::GroupInfoFactory::Ptr m_groupInfoFactory;
