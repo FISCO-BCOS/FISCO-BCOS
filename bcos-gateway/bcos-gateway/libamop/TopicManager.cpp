@@ -155,11 +155,11 @@ void TopicManager::removeTopics(
             {
                 m_client2TopicItems[_client].erase(topic);
             }
+            TOPIC_LOG(INFO) << LOG_BADGE("removeTopics") << LOG_KV("client", _client)
+                            << LOG_KV("topicSeq", topicSeq()) << LOG_KV("topic", topic);
         }
         incTopicSeq();
     }
-    TOPIC_LOG(INFO) << LOG_BADGE("removeTopics") << LOG_KV("client", _client)
-                    << LOG_KV("topicSeq", topicSeq());
 }
 
 void TopicManager::removeTopicsByClients(const std::vector<std::string>& _clients)

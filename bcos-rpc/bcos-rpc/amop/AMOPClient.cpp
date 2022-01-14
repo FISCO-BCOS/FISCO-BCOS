@@ -63,14 +63,6 @@ bool AMOPClient::updateTopicInfos(
             m_topicToSessions[item.topicName()][_session->endPoint()] = _session;
         }
     }
-    {
-        if (topicItems.size() > 0)
-        {
-            // record the topicInfo for re-subscribe to the gateway upon it become activate again
-            auto item = *(topicItems.begin());
-            m_topicInfos[item.topicName()] = _topicInfo;
-        }
-    }
     return true;
 }
 /**
@@ -340,10 +332,10 @@ void AMOPClient::broadcastAMOPMessage(std::string const& _topic, std::shared_ptr
 }
 std::shared_ptr<WsSession> AMOPClient::randomChooseSession(std::string const& _topic)
 {
+    ReadGuard l(x_topicToSessions);
     AMOP_CLIENT_LOG(DEBUG) << LOG_DESC("randomChooseSession:")
                            << LOG_KV("sessionSize", m_topicToSessions.size())
                            << LOG_KV("topic", _topic);
-    ReadGuard l(x_topicToSessions);
     if (!m_topicToSessions.count(_topic))
     {
         return nullptr;
@@ -387,8 +379,6 @@ void AMOPClient::onClientDisconnect(std::shared_ptr<WsSession> _session)
             if (sessions.size() == 0)
             {
                 topicsToRemove.emplace_back(it->first);
-                // remove the topicInfo
-                removeTopicInfo(it->first);
                 it = m_topicToSessions.erase(it);
                 continue;
             }
@@ -451,7 +441,7 @@ void AMOPClient::removeTopicFromAllNodes(std::vector<std::string> const& topicsT
                     << LOG_DESC("asyncRemoveTopic") << LOG_KV("gateway", endPointStr)
                     << LOG_KV("removedSize", topicsToRemove.size())
                     << LOG_KV("code", _error ? _error->errorCode() : 0)
-                    << LOG_KV("msg", _error ? _error->errorMessage() : "");
+                    << LOG_KV("msg", _error ? _error->errorMessage() : "success");
             });
     }
 }
@@ -523,10 +513,19 @@ std::string AMOPClient::generateTopicInfo()
 {
     Json::Value topicInfo;
     Json::Value topicItems(Json::arrayValue);
-    ReadGuard l(x_topicInfos);
-    for (auto const& it : m_topicInfos)
+    std::set<std::string> topicList;
+    ReadGuard l(x_topicToSessions);
+    for (auto const& it : m_topicToSessions)
     {
-        topicItems.append(it.first);
+        if (topicList.count(it.first))
+        {
+            continue;
+        }
+        topicList.insert(it.first);
+    }
+    for (auto const& topicName : topicList)
+    {
+        topicItems.append(topicName);
     }
     topicInfo["topics"] = topicItems;
     return topicInfo.toStyledString();
