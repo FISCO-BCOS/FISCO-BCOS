@@ -101,14 +101,9 @@ void JsonRpcImpl_2_0::initMethod()
     RPC_IMPL_LOG(INFO) << LOG_BADGE("initMethod") << LOG_KV("size", m_methodToFunc.size());
 }
 
-std::string JsonRpcImpl_2_0::encodeData(bcos::bytesConstRef _data)
-{
-    return base64Encode(_data);
-}
-
 std::shared_ptr<bcos::bytes> JsonRpcImpl_2_0::decodeData(const std::string& _data)
 {
-    return base64DecodeBytes(_data);
+    return fromHexString(_data);
 }
 
 void JsonRpcImpl_2_0::parseRpcRequestJson(
