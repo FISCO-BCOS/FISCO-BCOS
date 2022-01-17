@@ -20,7 +20,7 @@
  */
 #pragma once
 #include "PBFTBaseMessageInterface.h"
-#include <bcos-framework/interfaces/crypto/KeyInterface.h>
+#include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-utilities/Common.h>
 namespace bcos
 {

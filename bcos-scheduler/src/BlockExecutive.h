@@ -2,7 +2,6 @@
 
 #include "ExecutorManager.h"
 #include "GraphKeyLocks.h"
-#include "bcos-framework/interfaces/crypto/CommonType.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
 #include "bcos-framework/interfaces/protocol/Block.h"
@@ -12,8 +11,9 @@
 #include "bcos-framework/interfaces/protocol/TransactionMetaData.h"
 #include "bcos-framework/interfaces/protocol/TransactionReceiptFactory.h"
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
-#include "bcos-utilities/Error.h"
+#include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/interfaces/protocol/BlockFactory.h>
+#include <bcos-utilities/Error.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <boost/iterator/iterator_categories.hpp>
 #include <boost/range/any_range.hpp>

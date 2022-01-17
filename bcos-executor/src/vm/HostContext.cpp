@@ -25,8 +25,8 @@
 #include "EVMHostInterface.h"
 #include "bcos-framework/interfaces/storage/Table.h"
 #include "bcos-table/src/StateStorage.h"
-#include "bcos-utilities/Common.h"
 #include "evmc/evmc.hpp"
+#include <bcos-utilities/Common.h>
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
 #include <boost/algorithm/hex.hpp>

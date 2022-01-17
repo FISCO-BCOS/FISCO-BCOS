@@ -19,7 +19,7 @@
  * @date 2021-04-09
  */
 #pragma once
-#include "../../interfaces/crypto/KeyInterface.h"
+#include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 namespace bcos
 {
 namespace consensus

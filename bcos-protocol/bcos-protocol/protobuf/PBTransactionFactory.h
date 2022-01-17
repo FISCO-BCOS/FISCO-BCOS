@@ -20,7 +20,7 @@
  */
 #pragma once
 #include "PBTransaction.h"
-#include <bcos-framework/interfaces/crypto/CryptoSuite.h>
+#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/interfaces/protocol/TransactionFactory.h>
 #include <memory>
 

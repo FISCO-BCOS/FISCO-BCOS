@@ -19,7 +19,7 @@
  */
 
 #include "GasInjector.h"
-#include "bcos-utilities/Log.h"
+#include <bcos-utilities/Log.h>
 #include "src/binary-reader-ir.h"
 #include "src/binary-reader.h"
 #include "src/binary-writer.h"

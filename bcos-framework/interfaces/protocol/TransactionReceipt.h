@@ -18,9 +18,9 @@
  */
 #pragma once
 
-#include "../crypto/CryptoSuite.h"
 #include "ProtocolTypeDef.h"
-#include "bcos-utilities/FixedBytes.h"
+#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
+#include <bcos-utilities/FixedBytes.h>
 #include <gsl/span>
 
 namespace bcos

@@ -22,7 +22,7 @@
 #include "../../interfaces/protocol/CommonError.h"
 #include "../../interfaces/storage/StorageInterface.h"
 #include "bcos-framework/interfaces/storage/KVStorageHelper.h"
-#include "bcos-utilities/Error.h"
+#include <bcos-utilities/Error.h>
 #include <atomic>
 #include <memory>
 

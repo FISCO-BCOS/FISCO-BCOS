@@ -20,8 +20,8 @@
 #pragma once
 #include "FrontServiceInfo.h"
 #include "bcos-gateway/libp2p/P2PSession.h"
-#include <bcos-framework/interfaces/crypto/KeyFactory.h>
-#include <bcos-framework/interfaces/crypto/KeyInterface.h>
+#include <bcos-crypto/interfaces/crypto/KeyFactory.h>
+#include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-framework/interfaces/gateway/GatewayInterface.h>
 #include <bcos-framework/interfaces/multigroup/GroupInfo.h>
 #include <memory>

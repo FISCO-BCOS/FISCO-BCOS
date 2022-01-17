@@ -19,8 +19,6 @@
  */
 
 #pragma once
-#include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-crypto/hash/SM3.h"
 #include "bcos-framework/interfaces/ledger/LedgerTypeDef.h"
 #include "bcos-protocol/testutils/protocol/FakeBlock.h"
 #include "bcos-protocol/testutils/protocol/FakeBlockHeader.h"
@@ -31,6 +29,8 @@
 #include "mock/MockTxPool.h"
 #include "precompiled/Utilities.h"
 #include "precompiled/extension/UserPrecompiled.h"
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/interfaces/executor/NativeExecutionMessage.h>
 #include <bcos-framework/interfaces/storage/Table.h>

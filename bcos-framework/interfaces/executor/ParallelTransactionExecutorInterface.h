@@ -21,14 +21,14 @@
 
 #pragma once
 
-#include "../crypto/CommonType.h"
 #include "../protocol/BlockHeader.h"
 #include "../protocol/ProtocolTypeDef.h"
 #include "../protocol/Transaction.h"
 #include "../protocol/TransactionReceipt.h"
 #include "ExecutionMessage.h"
-#include "bcos-utilities/Common.h"
-#include "bcos-utilities/FixedBytes.h"
+#include <bcos-crypto/interfaces/crypto/CommonType.h>
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/FixedBytes.h>
 #include <boost/iterator/iterator_categories.hpp>
 #include <boost/range/any_range.hpp>
 #include <memory>

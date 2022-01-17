@@ -30,7 +30,7 @@
 #include "bcos-framework/interfaces/protocol/BlockHeader.h"
 #include "bcos-protocol/LogEntry.h"
 #include "bcos-protocol/TransactionStatus.h"
-#include "bcos-utilities/Exceptions.h"
+#include <bcos-utilities/Exceptions.h>
 #include <evmc/instructions.h>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <functional>

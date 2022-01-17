@@ -20,8 +20,8 @@
  */
 
 #pragma once
-#include "../../interfaces/crypto/KeyInterface.h"
 #include "../../interfaces/ledger/LedgerConfig.h"
+#include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <memory>
 namespace bcos
 {

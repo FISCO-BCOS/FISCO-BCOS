@@ -17,9 +17,9 @@
  * @file TxsSyncMsgTest.h
  */
 #include "FakeTxsSyncMsg.h"
-#include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-crypto/hash/SM3.h"
-#include "bcos-utilities/testutils/TestPromptFixture.h"
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/hash/SM3.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::sync;

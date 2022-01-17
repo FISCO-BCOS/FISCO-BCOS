@@ -22,7 +22,7 @@
 
 #pragma once
 #include "../Common.h"
-#include "bcos-utilities/Common.h"
+#include <bcos-utilities/Common.h>
 #include <tbb/concurrent_queue.h>
 #include <condition_variable>
 #include <cstdint>

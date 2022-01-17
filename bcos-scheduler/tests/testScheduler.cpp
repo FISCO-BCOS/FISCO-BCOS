@@ -1,9 +1,5 @@
 #include "ExecutorManager.h"
 #include "SchedulerImpl.h"
-#include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-crypto/hash/SM3.h"
-#include "bcos-framework/interfaces/crypto/CryptoSuite.h"
-#include "bcos-framework/interfaces/crypto/KeyPairInterface.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/ledger/LedgerInterface.h"
 #include "bcos-framework/interfaces/protocol/BlockHeaderFactory.h"
@@ -24,6 +20,10 @@
 #include "mock/MockMultiParallelExecutor.h"
 #include "mock/MockRPC.h"
 #include "mock/MockTransactionalStorage.h"
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/hash/SM3.h>
+#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
+#include <bcos-crypto/interfaces/crypto/KeyPairInterface.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/interfaces/executor/NativeExecutionMessage.h>
 #include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>

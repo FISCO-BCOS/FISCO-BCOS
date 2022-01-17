@@ -22,8 +22,8 @@
 #pragma once
 #include "bcos-tars-protocol/Common.h"
 #include "bcos-tars-protocol/tars/TransactionReceipt.h"
-#include <bcos-framework/interfaces/crypto/CryptoSuite.h>
-#include <bcos-framework/interfaces/crypto/Hash.h>
+#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
+#include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-framework/interfaces/protocol/Block.h>
 #include <bcos-framework/interfaces/protocol/TransactionReceipt.h>
 #include <bcos-protocol/LogEntry.h>

@@ -19,7 +19,7 @@
  * @date 2021-04-19
  */
 #pragma once
-#include "bcos-utilities/Common.h"
+#include <bcos-utilities/Common.h>
 #include <boost/asio/ip/tcp.hpp>
 #include <iostream>
 #include <memory>

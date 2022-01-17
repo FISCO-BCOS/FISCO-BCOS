@@ -23,7 +23,7 @@
 #include "../../interfaces/protocol/Transaction.h"
 #include "../../interfaces/protocol/TransactionSubmitResult.h"
 #include "TxPoolTypeDef.h"
-#include "bcos-utilities/Error.h"
+#include <bcos-utilities/Error.h>
 namespace bcos
 {
 namespace txpool

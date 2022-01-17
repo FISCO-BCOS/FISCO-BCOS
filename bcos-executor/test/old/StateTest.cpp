@@ -19,14 +19,14 @@
 
 #include "state/State.h"
 #include "MemoryStorage.h"
-#include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-crypto/hash/SM3.h"
 #include "bcos-protocol/protobuf/PBBlock.h"
 #include "bcos-protocol/protobuf/PBBlockFactory.h"
 #include "bcos-protocol/protobuf/PBBlockHeaderFactory.h"
 #include "bcos-protocol/protobuf/PBTransactionFactory.h"
 #include "bcos-protocol/protobuf/PBTransactionReceiptFactory.h"
 #include "bcos-table/src/StateStorage.h"
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <boost/test/unit_test.hpp>
 

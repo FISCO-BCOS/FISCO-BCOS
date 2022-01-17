@@ -2,11 +2,11 @@
 
 #include "BlockExecutive.h"
 #include "ExecutorManager.h"
-#include "bcos-framework/interfaces/crypto/CommonType.h"
 #include "bcos-framework/interfaces/dispatcher/SchedulerInterface.h"
 #include "bcos-framework/interfaces/ledger/LedgerInterface.h"
 #include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
+#include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h>
 #include <bcos-framework/interfaces/protocol/BlockFactory.h>
 #include <bcos-framework/interfaces/rpc/RPCInterface.h>

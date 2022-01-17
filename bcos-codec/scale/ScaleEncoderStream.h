@@ -18,7 +18,7 @@
  */
 #pragma once
 #include "FixedWidthIntegerCodec.h"
-#include "bcos-utilities/FixedBytes.h"
+#include <bcos-utilities/FixedBytes.h>
 #include <boost/optional.hpp>
 #include <boost/variant.hpp>
 #include <deque>

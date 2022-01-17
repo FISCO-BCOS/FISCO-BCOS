@@ -24,7 +24,7 @@
 #include "PBFTProposalInterface.h"
 #include "PBFTRequestInterface.h"
 #include "ViewChangeMsgInterface.h"
-#include <bcos-framework/interfaces/crypto/CryptoSuite.h>
+#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
 namespace bcos
 {

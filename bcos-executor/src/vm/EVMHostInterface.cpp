@@ -26,7 +26,7 @@
 #include "EVMHostInterface.h"
 #include "../Common.h"
 #include "HostContext.h"
-#include "bcos-utilities/Common.h"
+#include <bcos-utilities/Common.h>
 #include <evmc/evmc.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/core/ignore_unused.hpp>
@@ -184,7 +184,8 @@ evmc_access_status access_account(evmc_host_context* _context, const evmc_addres
 }
 
 
-evmc_access_status access_storage(evmc_host_context* _context, const evmc_address* _addr, const evmc_bytes32* _key)
+evmc_access_status access_storage(
+    evmc_host_context* _context, const evmc_address* _addr, const evmc_bytes32* _key)
 {
     std::ignore = _context;
     std::ignore = _addr;

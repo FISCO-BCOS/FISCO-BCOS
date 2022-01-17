@@ -24,7 +24,7 @@
 #include "../vm/Precompiled.h"
 #include "Common.h"
 #include "Utilities.h"
-#include <bcos-framework/interfaces/crypto/CommonType.h>
+#include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/interfaces/storage/Table.h>
 
 namespace bcos::precompiled

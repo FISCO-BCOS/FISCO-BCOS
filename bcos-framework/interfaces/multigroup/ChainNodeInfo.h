@@ -22,7 +22,7 @@
 #include "GroupTypeDef.h"
 #include "bcos-framework/interfaces/protocol/Protocol.h"
 #include "bcos-framework/interfaces/protocol/ServiceDesc.h"
-#include "bcos-utilities/Common.h"
+#include <bcos-utilities/Common.h>
 #include <json/json.h>
 #include <memory>
 namespace bcos

@@ -19,10 +19,10 @@
  * @date 2021-04-19
  */
 #pragma once
-#include "bcos-framework/interfaces/crypto/KeyInterface.h"
 #include "bcos-framework/interfaces/protocol/Protocol.h"
-#include "bcos-utilities/Common.h"
-#include "bcos-utilities/Error.h"
+#include <bcos-crypto/interfaces/crypto/KeyInterface.h>
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/Error.h>
 
 namespace bcos
 {

@@ -21,7 +21,7 @@
 
 #pragma once
 #include "../Common.h"
-#include "bcos-utilities/Common.h"
+#include <bcos-utilities/Common.h>
 #include <evmc/evmc.h>
 
 namespace bcos

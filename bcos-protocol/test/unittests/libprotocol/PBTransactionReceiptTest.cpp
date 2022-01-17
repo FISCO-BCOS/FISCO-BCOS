@@ -20,11 +20,11 @@
  */
 #include "bcos-protocol/Common.h"
 #include "bcos-protocol/testutils/protocol/FakeTransactionReceipt.h"
-#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-crypto/signature/sm2/SM2Crypto.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 
 using namespace bcos;
 using namespace bcos::protocol;
