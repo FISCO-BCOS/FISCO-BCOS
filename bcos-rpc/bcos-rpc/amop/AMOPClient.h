@@ -171,16 +171,6 @@ protected:
 
     virtual void pingGatewayAndNotifyTopics();
 
-    virtual void removeTopicInfo(std::string const& _topicName)
-    {
-        UpgradableGuard l(x_topicInfos);
-        if (m_topicInfos.count(_topicName))
-        {
-            UpgradeGuard ul(l);
-            m_topicInfos.erase(_topicName);
-        }
-    }
-
     virtual bool onGatewayInactivated(std::shared_ptr<boostssl::ws::WsMessage> _msg,
         std::shared_ptr<boostssl::ws::WsSession> _session);
     std::string generateTopicInfo();
@@ -198,11 +188,6 @@ protected:
     std::map<std::string, std::map<std::string, std::shared_ptr<boostssl::ws::WsSession>>>
         m_topicToSessions;
     mutable SharedMutex x_topicToSessions;
-
-    // for re-subscribe topics
-    // [topicName, topicInfos]
-    std::map<std::string, std::string> m_topicInfos;
-    mutable SharedMutex x_topicInfos;
 
     std::shared_ptr<Timer> m_gatewayStatusDetector;
     std::atomic_bool m_gatewayActivated = {true};

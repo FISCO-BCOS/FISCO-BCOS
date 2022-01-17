@@ -49,7 +49,6 @@ public:
     void setClientID(std::string const& _clientID) { m_clientID = _clientID; }
 
 public:
-    static std::string encodeData(bcos::bytesConstRef _data);
     static std::shared_ptr<bcos::bytes> decodeData(const std::string& _data);
     static void parseRpcRequestJson(const std::string& _requestBody, JsonRequest& _jsonRequest);
     static void parseRpcResponseJson(const std::string& _responseBody, JsonResponse& _jsonResponse);
