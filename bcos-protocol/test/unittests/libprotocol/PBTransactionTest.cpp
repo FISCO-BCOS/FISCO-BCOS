@@ -21,12 +21,12 @@
 #include "bcos-protocol/protobuf/PBTransaction.h"
 #include "bcos-protocol/Common.h"
 #include "bcos-protocol/testutils/protocol/FakeTransaction.h"
-#include "bcos-utilities/DataConvertUtility.h"
-#include "bcos-utilities/testutils/TestPromptFixture.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-crypto/signature/sm2/SM2Crypto.h>
+#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/tools/old/interface.hpp>
 
 using namespace bcos;

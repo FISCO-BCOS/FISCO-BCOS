@@ -20,8 +20,8 @@
  */
 #pragma once
 #include "bcos-sync/interfaces/BlockSyncMsgFactory.h"
+#include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-framework/interfaces/consensus/ConsensusInterface.h>
-#include <bcos-framework/interfaces/crypto/KeyInterface.h>
 #include <bcos-framework/interfaces/dispatcher/SchedulerInterface.h>
 #include <bcos-framework/interfaces/front/FrontServiceInterface.h>
 #include <bcos-framework/interfaces/ledger/LedgerInterface.h>

@@ -23,9 +23,9 @@
 #include "../../interfaces/executor/ParallelTransactionExecutorInterface.h"
 #include "../../interfaces/ledger/LedgerConfig.h"
 #include "../../interfaces/protocol/ProtocolTypeDef.h"
-#include "../crypto/CommonType.h"
 #include "../protocol/Block.h"
-#include "bcos-utilities/Error.h"
+#include <bcos-crypto/interfaces/crypto/CommonType.h>
+#include <bcos-utilities/Error.h>
 #include <functional>
 #include <memory>
 #include <string_view>

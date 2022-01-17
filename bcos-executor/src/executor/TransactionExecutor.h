@@ -24,7 +24,6 @@
  */
 #pragma once
 
-#include "bcos-framework/interfaces/crypto/Hash.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
 #include "bcos-framework/interfaces/protocol/Block.h"
@@ -36,6 +35,7 @@
 #include "bcos-framework/interfaces/txpool/TxPoolInterface.h"
 #include "bcos-table/src/StateStorage.h"
 #include "tbb/concurrent_unordered_map.h"
+#include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <tbb/concurrent_hash_map.h>
 #include <tbb/spin_mutex.h>
 #include <boost/function.hpp>

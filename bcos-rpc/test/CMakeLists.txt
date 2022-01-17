@@ -26,5 +26,5 @@ add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE .)
 target_compile_options(${TEST_BINARY_NAME} PRIVATE -Wno-error -Wno-unused-variable)
 
-target_link_libraries(${TEST_BINARY_NAME} ${RPC_TARGET} bcos-boostssl::bcos-boostssl Boost::unit_test_framework)
+target_link_libraries(${TEST_BINARY_NAME} ${RPC_TARGET} Boost::unit_test_framework)
 add_test(NAME test-rpc WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

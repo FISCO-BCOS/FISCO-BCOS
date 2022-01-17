@@ -21,8 +21,8 @@
 
 #pragma once
 
-#include "bcos-framework/interfaces/crypto/Hash.h"
-#include "bcos-utilities/Common.h"
+#include <bcos-crypto/interfaces/crypto/Hash.h>
+#include <bcos-utilities/Common.h>
 #include <cstdint>
 #include <iostream>
 #include <memory>

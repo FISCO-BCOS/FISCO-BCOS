@@ -3,7 +3,7 @@
 #include "bcos-tars-protocol/Common.h"
 #include "bcos-tars-protocol/ErrorConverter.h"
 #include "bcos-tars-protocol/tars/FrontService.h"
-#include <bcos-framework/interfaces/crypto/KeyFactory.h>
+#include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/interfaces/front/FrontServiceInterface.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/RefDataContainer.h>

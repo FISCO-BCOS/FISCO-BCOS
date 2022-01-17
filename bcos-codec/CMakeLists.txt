@@ -30,7 +30,7 @@ aux_source_directory(./scale SRC_LIST)
 include_directories(./scale)
 
 add_library(${CODEC_TARGET} ${SRC_LIST} ${HEADERS})
-target_link_libraries(${CODEC_TARGET} PUBLIC ${UTILITIES_TARGET})
+target_link_libraries(${CODEC_TARGET} PUBLIC ${CRYPTO_TARGET})
 
 if (TESTS)
     enable_testing()

@@ -19,8 +19,8 @@
  * @date 2021-10-15
  */
 #pragma once
+#include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-framework/interfaces/crypto/KeyInterface.h>
 #include <bcos-framework/interfaces/gateway/GatewayInterface.h>
 #include <bcos-framework/interfaces/multigroup/ChainNodeInfoFactory.h>
 #include <bcos-framework/interfaces/multigroup/GroupInfoFactory.h>

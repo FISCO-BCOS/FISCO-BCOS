@@ -2,7 +2,7 @@
 #include "Common.h"
 #include "bcos-framework/interfaces/ledger/LedgerConfig.h"
 #include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
-#include "bcos-utilities/Error.h"
+#include <bcos-utilities/Error.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/format.hpp>
 #include <boost/lexical_cast.hpp>

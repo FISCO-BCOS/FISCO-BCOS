@@ -22,7 +22,7 @@
 #include "../LogEntry.h"
 #include "../TransactionStatus.h"
 #include "bcos-protocol/protobuf/proto/TransactionReceipt.pb.h"
-#include <bcos-framework/interfaces/crypto/CryptoSuite.h>
+#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/interfaces/protocol/TransactionReceipt.h>
 namespace bcos
 {

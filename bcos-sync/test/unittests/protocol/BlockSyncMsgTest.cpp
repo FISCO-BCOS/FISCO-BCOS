@@ -18,9 +18,9 @@
  * @author: yujiechen
  * @date 2021-06-08
  */
-#include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-crypto/hash/SM3.h"
 #include "bcos-sync/protocol/PB/BlockSyncMsgFactoryImpl.h"
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/hash/SM3.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 

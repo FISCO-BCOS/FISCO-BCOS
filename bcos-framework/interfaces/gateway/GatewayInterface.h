@@ -20,12 +20,12 @@
  */
 #pragma once
 #include "GatewayTypeDef.h"
-#include "bcos-framework/interfaces/crypto/KeyInterface.h"
 #include "bcos-framework/interfaces/front/FrontServiceInterface.h"
 #include "bcos-framework/interfaces/multigroup/GroupInfo.h"
 #include "bcos-framework/interfaces/protocol/Protocol.h"
-#include "bcos-utilities/Common.h"
-#include "bcos-utilities/Error.h"
+#include <bcos-crypto/interfaces/crypto/KeyInterface.h>
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/Error.h>
 
 namespace bcos
 {

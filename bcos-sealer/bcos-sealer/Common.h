@@ -18,5 +18,5 @@
  * @date: 2021-05-14
  */
 #pragma once
-#include "bcos-utilities/Log.h"
+#include <bcos-utilities/Log.h>
 #define SEAL_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("CONSENSUS") << LOG_BADGE("SEALER")

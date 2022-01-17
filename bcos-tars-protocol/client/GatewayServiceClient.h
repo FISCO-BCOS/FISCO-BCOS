@@ -23,7 +23,7 @@
 #include "bcos-tars-protocol/Common.h"
 #include "bcos-tars-protocol/ErrorConverter.h"
 #include "bcos-tars-protocol/tars/GatewayService.h"
-#include <bcos-framework/interfaces/crypto/KeyFactory.h>
+#include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/interfaces/gateway/GatewayInterface.h>
 #include <string>
 

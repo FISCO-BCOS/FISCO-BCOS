@@ -19,8 +19,8 @@
  * @date 2021-06-10
  */
 #pragma once
-#include <bcos-framework/interfaces/crypto/CryptoSuite.h>
-#include <bcos-framework/interfaces/crypto/KeyFactory.h>
+#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
+#include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/interfaces/protocol/BlockFactory.h>
 #include <bcos-framework/interfaces/protocol/TransactionSubmitResultFactory.h>
 #include <bcos-tool/NodeConfig.h>

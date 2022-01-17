@@ -19,13 +19,13 @@
  * @date: 2021-03-23
  */
 #pragma once
-#include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-crypto/hash/SM3.h"
 #include "bcos-protocol/protobuf/PBBlock.h"
 #include "bcos-protocol/protobuf/PBBlockFactory.h"
 #include "bcos-protocol/testutils/protocol/FakeBlockHeader.h"
 #include "bcos-protocol/testutils/protocol/FakeTransaction.h"
 #include "bcos-protocol/testutils/protocol/FakeTransactionReceipt.h"
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-crypto/signature/sm2/SM2Crypto.h>
 #include <boost/core/ignore_unused.hpp>

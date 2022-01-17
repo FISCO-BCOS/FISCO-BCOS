@@ -43,6 +43,7 @@ hunter_add_package(tarscpp)
 # bcos-boostssl
 hunter_add_package(bcos-boostssl)
 find_package(bcos-boostssl CONFIG REQUIRED)
+find_package(wedpr-crypto CONFIG REQUIRED)
 
 # find OpenSSL
 hunter_add_package(OpenSSL)
@@ -50,12 +51,12 @@ find_package(OpenSSL REQUIRED)
 
 # install dependencies
 include(InstallBcosUtilities)
+include(InstallBcosCrypto)
 include(IncludeDirectories)
 
 # define targets name
 include(TargetSettings)
 
-add_subdirectory(bcos-crypto)
 add_subdirectory(bcos-codec)
 add_subdirectory(bcos-sealer)
 add_subdirectory(bcos-tool)

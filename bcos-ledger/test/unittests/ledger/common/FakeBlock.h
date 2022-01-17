@@ -22,11 +22,11 @@
 #include "FakeBlockHeader.h"
 #include "FakeReceipt.h"
 #include "FakeTransaction.h"
-#include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-crypto/hash/SM3.h"
 #include "bcos-framework/interfaces/protocol/TransactionMetaData.h"
 #include "bcos-protocol/protobuf/PBBlock.h"
 #include "bcos-protocol/protobuf/PBBlockFactory.h"
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/hash/SM3.h>
 #include <boost/test/unit_test.hpp>
 using namespace bcos;
 using namespace bcos::protocol;

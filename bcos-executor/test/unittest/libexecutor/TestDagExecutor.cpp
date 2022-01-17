@@ -24,11 +24,6 @@
 #include "../mock/MockTransactionalStorage.h"
 #include "../mock/MockTxPool.h"
 #include "Common.h"
-#include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-crypto/hash/SM3.h"
-#include "bcos-framework/interfaces/crypto/CommonType.h"
-#include "bcos-framework/interfaces/crypto/CryptoSuite.h"
-#include "bcos-framework/interfaces/crypto/Hash.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/protocol/Transaction.h"
 #include "bcos-protocol/protobuf/PBBlockHeader.h"
@@ -37,6 +32,11 @@
 #include "precompiled/ParallelConfigPrecompiled.h"
 #include "precompiled/PrecompiledCodec.h"
 #include "precompiled/Utilities.h"
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/hash/SM3.h>
+#include <bcos-crypto/interfaces/crypto/CommonType.h>
+#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
+#include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-framework/interfaces/executor/NativeExecutionMessage.h>
 #include <bcos-protocol/testutils/protocol/FakeBlockHeader.h>

@@ -17,12 +17,12 @@
  * @file Transaction.h
  */
 #pragma once
-#include "../../interfaces/crypto/CryptoSuite.h"
-#include "../../interfaces/crypto/Hash.h"
-#include "../../interfaces/crypto/KeyInterface.h"
 #include "TransactionSubmitResult.h"
-#include "bcos-utilities/Common.h"
-#include "bcos-utilities/Error.h"
+#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
+#include <bcos-crypto/interfaces/crypto/Hash.h>
+#include <bcos-crypto/interfaces/crypto/KeyInterface.h>
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/Error.h>
 #include <shared_mutex>
 namespace bcos
 {

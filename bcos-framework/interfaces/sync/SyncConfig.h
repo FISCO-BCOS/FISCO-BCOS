@@ -19,8 +19,8 @@
  * @date 2021-05-25
  */
 #pragma once
+#include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-framework/interfaces/consensus/ConsensusNodeInterface.h>
-#include <bcos-framework/interfaces/crypto/KeyInterface.h>
 #include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
 namespace bcos
 {

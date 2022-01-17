@@ -20,8 +20,8 @@
 #pragma once
 #include "FrontServiceInfo.h"
 #include "GatewayStatus.h"
-#include <bcos-framework/interfaces/crypto/KeyFactory.h>
-#include <bcos-framework/interfaces/crypto/KeyInterface.h>
+#include <bcos-crypto/interfaces/crypto/KeyFactory.h>
+#include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-gateway/Common.h>
 #include <bcos-gateway/libp2p/P2PInterface.h>
 #include <bcos-gateway/protocol/GatewayNodeStatus.h>

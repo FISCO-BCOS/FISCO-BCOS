@@ -20,11 +20,11 @@
  */
 #pragma once
 #include "bcos-protocol/protobuf/proto/Transaction.pb.h"
-#include "bcos-utilities/Common.h"
-#include "bcos-utilities/FixedBytes.h"
-#include "bcos-utilities/RefDataContainer.h"
-#include <bcos-framework/interfaces/crypto/CryptoSuite.h>
+#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/interfaces/protocol/Transaction.h>
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/FixedBytes.h>
+#include <bcos-utilities/RefDataContainer.h>
 
 namespace bcos
 {

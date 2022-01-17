@@ -21,7 +21,7 @@
 #include "PBBlockHeader.h"
 #include "../Common.h"
 #include "bcos-codec/scale/Scale.h"
-#include "bcos-utilities/Common.h"
+#include <bcos-utilities/Common.h>
 #include <gsl/span>
 
 using namespace bcos;

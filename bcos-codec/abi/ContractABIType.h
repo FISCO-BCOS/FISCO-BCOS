@@ -19,8 +19,8 @@
  */
 
 #pragma once
-#include "bcos-utilities/Common.h"
-#include "bcos-utilities/DataConvertUtility.h"
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <boost/algorithm/string.hpp>
 
 namespace bcos

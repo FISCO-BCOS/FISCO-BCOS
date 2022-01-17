@@ -25,8 +25,8 @@
 #include "bcos-rpc/jsonrpc/groupmgr/AirGroupManager.h"
 #include "bcos-rpc/jsonrpc/groupmgr/GroupManager.h"
 #include <bcos-boostssl/websocket/WsConfig.h>
+#include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/interfaces/consensus/ConsensusInterface.h>
-#include <bcos-framework/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/interfaces/gateway/GatewayInterface.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/Rpc.h>

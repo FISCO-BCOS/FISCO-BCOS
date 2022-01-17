@@ -20,7 +20,7 @@
  */
 #pragma once
 #include "bcos-txpool/sync/TransactionSyncConfig.h"
-#include <bcos-framework/interfaces/crypto/CommonType.h>
+#include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/interfaces/protocol/Block.h>
 
 namespace bcos

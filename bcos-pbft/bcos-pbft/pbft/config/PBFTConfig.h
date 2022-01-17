@@ -27,7 +27,7 @@
 #include "bcos-pbft/pbft/interfaces/PBFTMessageFactory.h"
 #include "bcos-pbft/pbft/interfaces/PBFTStorage.h"
 #include "bcos-pbft/pbft/utilities/Common.h"
-#include <bcos-framework/interfaces/crypto/CryptoSuite.h>
+#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/interfaces/front/FrontServiceInterface.h>
 #include <bcos-framework/interfaces/sync/BlockSyncInterface.h>
 

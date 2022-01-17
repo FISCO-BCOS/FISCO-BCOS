@@ -8,7 +8,7 @@
  */
 
 #pragma once
-#include <bcos-framework/interfaces/crypto/KeyFactory.h>
+#include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/libp2p/P2PInterface.h>
 #include <bcos-gateway/libp2p/P2PSession.h>

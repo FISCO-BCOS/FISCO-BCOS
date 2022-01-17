@@ -20,7 +20,7 @@
 
 #include "Utilities.h"
 #include "Common.h"
-#include <bcos-framework/interfaces/crypto/Hash.h>
+#include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <boost/core/ignore_unused.hpp>
 #include <regex>

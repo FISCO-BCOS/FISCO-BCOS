@@ -19,7 +19,7 @@
  * @date 2021-10-18
  */
 #pragma once
-#include <bcos-framework/interfaces/crypto/CryptoSuite.h>
+#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/interfaces/dispatcher/SchedulerInterface.h>
 #include <bcos-tars-protocol/tars/SchedulerService.h>
 namespace bcostars

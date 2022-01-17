@@ -20,10 +20,10 @@
  */
 #pragma once
 #include "../utilities/Common.h"
+#include <bcos-crypto/interfaces/crypto/CommonType.h>
+#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
+#include <bcos-crypto/interfaces/crypto/KeyPairInterface.h>
 #include <bcos-framework/interfaces/consensus/ConsensusTypeDef.h>
-#include <bcos-framework/interfaces/crypto/CommonType.h>
-#include <bcos-framework/interfaces/crypto/CryptoSuite.h>
-#include <bcos-framework/interfaces/crypto/KeyPairInterface.h>
 #include <stdint.h>
 #include <memory>
 namespace bcos

@@ -21,7 +21,7 @@
 
 #pragma once
 #include "TransactionSubmitResultImpl.h"
-#include <bcos-framework/interfaces/crypto/CryptoSuite.h>
+#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/interfaces/protocol/TransactionSubmitResultFactory.h>
 namespace bcostars
 {

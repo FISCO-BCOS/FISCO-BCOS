@@ -21,7 +21,7 @@
 #pragma once
 #include "LocalRouterTable.h"
 #include "PeersRouterTable.h"
-#include <bcos-framework/interfaces/crypto/KeyFactory.h>
+#include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-gateway/Common.h>
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libp2p/P2PInterface.h>

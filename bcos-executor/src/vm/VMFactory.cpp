@@ -22,9 +22,9 @@
 
 #include "VMFactory.h"
 #include "VMInstance.h"
+#include <BCOS_WASM.h>
 #include <evmc/loader.h>
 #include <evmone/evmone.h>
-#include <BCOS_WASM.h>
 #include <boost/program_options.hpp>
 
 namespace po = boost::program_options;
