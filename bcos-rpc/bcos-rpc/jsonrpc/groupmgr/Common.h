@@ -23,8 +23,8 @@
 #include <bcos-crypto/encrypt/SM4Crypto.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
+#include <bcos-crypto/signature/fastsm2/FastSM2Crypto.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
-#include <bcos-crypto/signature/sm2/SM2Crypto.h>
 
 #include <bcos-tars-protocol/protocol/BlockFactoryImpl.h>
 #include <bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h>
@@ -45,7 +45,7 @@ inline bcos::crypto::CryptoSuite::Ptr createCryptoSuite()
 inline bcos::crypto::CryptoSuite::Ptr createSMCryptoSuite()
 {
     auto hashImpl = std::make_shared<bcos::crypto::SM3>();
-    auto signatureImpl = std::make_shared<bcos::crypto::SM2Crypto>();
+    auto signatureImpl = std::make_shared<bcos::crypto::FastSM2Crypto>();
     auto encryptImpl = std::make_shared<bcos::crypto::SM4Crypto>();
     return std::make_shared<bcos::crypto::CryptoSuite>(hashImpl, signatureImpl, encryptImpl);
 }

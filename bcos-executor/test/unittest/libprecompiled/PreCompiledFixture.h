@@ -32,6 +32,7 @@
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <bcos-crypto/signature/sm2.h>
 #include <bcos-framework/interfaces/executor/NativeExecutionMessage.h>
 #include <bcos-framework/interfaces/storage/Table.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>

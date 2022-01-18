@@ -1,13 +1,18 @@
 hunter_config(bcos-utilities VERSION 3.0.0-rc2-local
-    URL https://${URL_BASE}/FISCO-BCOS/bcos-utilities/archive/b94375d933cc65c348b5c219f2ed821a5f66d9b1.tar.gz
-	SHA1 2ae9c579e924ccb67f07c9626d4d748bc60c9cef
+    URL https://${URL_BASE}/FISCO-BCOS/bcos-utilities/archive/6ba8a95e0c6c3208c618bb0562d724decb2b7aab.tar.gz
+	SHA1 9368c9807c93fd265ed4369c4dea2023cee8a336
     CMAKE_ARGS HUNTER_PACKAGE_LOG_BUILD=ON HUNTER_PACKAGE_LOG_INSTALL=ON
 )
 
+hunter_config(OpenSSL VERSION tassl_1.1.1b_v1.4-local
+    URL https://${URL_BASE}/FISCO-BCOS/TASSL-1.1.1b/archive/6a0fddd0eb33433c190c796e5b6d80db4db52810.tar.gz
+    SHA1 14f7590e09b54bb71926ad5853343f20893ee536
+)
+
 hunter_config(bcos-crypto VERSION 3.0.0-rc3-local
-    URL https://${URL_BASE}/FISCO-BCOS/bcos-crypto/archive/32acfebaac7f5657aab3f9d950e99c66ddcb7675.tar.gz
-	SHA1 ecabb3155b68006df2f02e6d7ee8ff3425728734
-    CMAKE_ARGS HUNTER_PACKAGE_LOG_BUILD=ON HUNTER_PACKAGE_LOG_INSTALL=ON
+    URL https://${URL_BASE}/FISCO-BCOS/bcos-crypto/archive/2d23aa9e96b02a72c48c7423396f8db6943e9011.tar.gz
+	SHA1 463673dfd705c579e5dbb304ba71a23777ef0ec1
+    CMAKE_ARGS HUNTER_PACKAGE_LOG_BUILD=ON HUNTER_PACKAGE_LOG_INSTALL=ON SM2_OPTIMIZE=ON
 )
 
 hunter_config(bcos-boostssl
