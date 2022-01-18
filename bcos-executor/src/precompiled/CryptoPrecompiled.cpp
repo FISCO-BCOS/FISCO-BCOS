@@ -26,7 +26,7 @@
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/interfaces/crypto/Signature.h>
 #include <bcos-crypto/signature/ed25519/Ed25519Crypto.h>
-#include <bcos-crypto/signature/sm2/SM2Crypto.h>
+#include <bcos-crypto/signature/sm2.h>
 
 using namespace bcos;
 using namespace bcos::codec;
