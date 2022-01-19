@@ -110,8 +110,8 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
         auto storagePath = m_nodeConfig->storagePath();
         if (!_airVersion)
         {
-            storagePath = ServerConfig::BasePath + "../" + m_nodeConfig->groupId() + "/" +
-                          m_nodeConfig->storagePath();
+            storagePath = ServerConfig::BasePath + ".." + c_fileSeparator +
+                          m_nodeConfig->groupId() + c_fileSeparator + m_nodeConfig->storagePath();
         }
         BCOS_LOG(INFO) << LOG_DESC("initNode") << LOG_KV("storagePath", storagePath);
         auto storage = StorageInitializer::build(storagePath);
@@ -136,12 +136,22 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
         m_txpoolInitializer = std::make_shared<TxPoolInitializer>(
             m_nodeConfig, m_protocolInitializer, m_frontServiceInitializer->front(), ledger);
 
+        auto consensusStoragePath =
+            m_nodeConfig->storagePath() + c_fileSeparator + c_consensusStorageDBName;
+        if (!_airVersion)
+        {
+            consensusStoragePath = ServerConfig::BasePath + ".." + c_fileSeparator +
+                                   m_nodeConfig->groupId() + c_fileSeparator + consensusStoragePath;
+        }
+        BCOS_LOG(INFO) << LOG_DESC("initNode: init storage for consensus")
+                       << LOG_KV("consensusStoragePath", consensusStoragePath);
+        auto consensusStorage = StorageInitializer::build(consensusStoragePath);
         // build and init the pbft related modules
         if (_nodeArchType == NodeArchitectureType::AIR)
         {
             m_pbftInitializer = std::make_shared<PBFTInitializer>(_nodeArchType, m_nodeConfig,
-                m_protocolInitializer, m_txpoolInitializer->txpool(), ledger, m_scheduler, storage,
-                m_frontServiceInitializer->front());
+                m_protocolInitializer, m_txpoolInitializer->txpool(), ledger, m_scheduler,
+                consensusStorage, m_frontServiceInitializer->front());
             // registerOnNodeTypeChanged
             auto nodeID = m_protocolInitializer->keyPair()->publicKey();
             auto frontService = m_frontServiceInitializer->front();
@@ -158,8 +168,8 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
         else
         {
             m_pbftInitializer = std::make_shared<ProPBFTInitializer>(_nodeArchType, m_nodeConfig,
-                m_protocolInitializer, m_txpoolInitializer->txpool(), ledger, m_scheduler, storage,
-                m_frontServiceInitializer->front());
+                m_protocolInitializer, m_txpoolInitializer->txpool(), ledger, m_scheduler,
+                consensusStorage, m_frontServiceInitializer->front());
         }
 
         // init the txpool

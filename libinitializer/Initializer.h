@@ -82,6 +82,8 @@ private:
     PBFTInitializer::Ptr m_pbftInitializer;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
     std::shared_ptr<bcos::scheduler::SchedulerInterface> m_scheduler;
+    std::string const c_consensusStorageDBName = "consensus_log";
+    std::string const c_fileSeparator = "/";
 };
 }  // namespace initializer
 }  // namespace bcos
