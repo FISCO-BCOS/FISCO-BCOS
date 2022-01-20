@@ -75,6 +75,7 @@ public:
     using CriticalFieldPtr = std::shared_ptr<CriticalField>;
 
     CriticalFields(size_t _size) : m_criticals(std::vector<CriticalFieldPtr>(_size)) {}
+    virtual ~CriticalFields() {}
 
     size_t size() override { return m_criticals.size(); }
     bool contains(size_t id) override { return id < size() && get(id) != nullptr; };
