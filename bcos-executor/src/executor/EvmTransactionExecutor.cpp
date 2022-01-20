@@ -29,7 +29,6 @@
 #include "../dag/TxDAG2.h"
 #include "../executive/BlockContext.h"
 #include "../executive/TransactionExecutive.h"
-#include "../precompiled/CNSPrecompiled.h"
 #include "../precompiled/Common.h"
 #include "../precompiled/ConsensusPrecompiled.h"
 #include "../precompiled/CryptoPrecompiled.h"

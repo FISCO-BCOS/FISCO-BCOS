@@ -27,7 +27,6 @@
 #include "../dag/ScaleUtils.h"
 #include "../dag/TxDAG.h"
 #include "../dag/TxDAG2.h"
-#include "../precompiled/CNSPrecompiled.h"
 #include "../precompiled/ConsensusPrecompiled.h"
 #include "../precompiled/CryptoPrecompiled.h"
 #include "../precompiled/FileSystemPrecompiled.h"
