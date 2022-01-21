@@ -387,10 +387,10 @@ void JsonRpcImpl_2_0::toJsonResp(Json::Value& jResp, const std::string& _txHash,
     {
         Json::Value jLog;
         jLog["address"] = std::string(logEntry.address());
-        jLog["topic"] = Json::Value(Json::arrayValue);
+        jLog["topics"] = Json::Value(Json::arrayValue);
         for (const auto& topic : logEntry.topics())
         {
-            jLog["topic"].append(topic.hexPrefixed());
+            jLog["topics"].append(topic.hexPrefixed());
         }
         jLog["data"] = toHexStringWithPrefix(logEntry.data());
         jResp["logEntries"].append(jLog);
