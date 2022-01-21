@@ -145,7 +145,8 @@ void RpcFactory::registerHandlers(std::shared_ptr<boostssl::ws::WsService> _wsSe
             std::shared_ptr<boostssl::ws::WsSession> _session) {
             auto seq = std::string(_msg->data()->begin(), _msg->data()->end());
             // Note: Clean up request data to prevent taking up too much memory
-            _msg->data()->clear();
+            bytes emptyBuffer;
+            _msg->data()->swap(emptyBuffer);
             _jsonRpcInterface->getGroupInfoList(
                 [_msg, _session, seq, _jsonRpcInterface](
                     bcos::Error::Ptr _error, Json::Value& _jGroupInfoList) {
@@ -197,7 +198,8 @@ void RpcFactory::registerHandlers(std::shared_ptr<boostssl::ws::WsService> _wsSe
             }
             std::string req = std::string(_msg->data()->begin(), _msg->data()->end());
             // Note: Clean up request data to prevent taking up too much memory
-            _msg->data()->clear();
+            bytes emptyBuffer;
+            _msg->data()->swap(emptyBuffer);
             _jsonRpcInterface->onRPCRequest(req, [req, _msg, _session](const std::string& _resp) {
                 if (_session && _session->isConnected())
                 {
@@ -208,6 +210,8 @@ void RpcFactory::registerHandlers(std::shared_ptr<boostssl::ws::WsService> _wsSe
                 else
                 {
                     auto seq = std::string(_msg->seq()->begin(), _msg->seq()->end());
+                    // remove the callback
+                    _session->getAndRemoveRespCallback(seq);
                     BCOS_LOG(WARNING)
                         << LOG_DESC("[RPC][FACTORY][buildJsonRpc]")
                         << LOG_DESC("unable to send response for session has been inactive")
