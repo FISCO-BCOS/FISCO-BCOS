@@ -85,9 +85,7 @@ bool checkPathValid(std::string const& _absolutePath);
 
 std::pair<std::string, std::string> getParentDirAndBaseName(const std::string& _absolutePath);
 
-std::string getParentDir(const std::string& _absolutePath);
-
-std::string getDirBaseName(const std::string& _absolutePath);
+std::pair<std::string, std::string> getLinkNameAndVersion(const std::string& _absolutePath);
 
 bool recursiveBuildDir(const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const std::string& _absoluteDir);

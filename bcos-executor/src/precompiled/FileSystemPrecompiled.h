@@ -42,6 +42,8 @@ private:
         const PrecompiledGas::Ptr& gasPricer);
     void link(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         bytesConstRef& data, std::shared_ptr<PrecompiledExecResult> callResult);
+    void readLink(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        bytesConstRef& data, std::shared_ptr<PrecompiledExecResult> callResult);
     int checkLinkParam(std::shared_ptr<executor::TransactionExecutive> _executive,
         std::string const& _contractAddress, std::string& _contractName,
         std::string& _contractVersion, std::string const& _contractAbi);

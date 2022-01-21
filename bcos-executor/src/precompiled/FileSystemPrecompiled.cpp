@@ -36,12 +36,17 @@ using namespace bcos::protocol;
 const char* const FILE_SYSTEM_METHOD_LIST = "list(string)";
 const char* const FILE_SYSTEM_METHOD_MKDIR = "mkdir(string)";
 const char* const FILE_SYSTEM_METHOD_LINK = "link(string,string,string,string)";
+const char* const FILE_SYSTEM_METHOD_LINK_EVM = "link(string,string,address,string)";
+const char* const FILE_SYSTEM_METHOD_RLINK = "readlink(string)";
 
 FileSystemPrecompiled::FileSystemPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
 {
     name2Selector[FILE_SYSTEM_METHOD_LIST] = getFuncSelector(FILE_SYSTEM_METHOD_LIST, _hashImpl);
     name2Selector[FILE_SYSTEM_METHOD_MKDIR] = getFuncSelector(FILE_SYSTEM_METHOD_MKDIR, _hashImpl);
     name2Selector[FILE_SYSTEM_METHOD_LINK] = getFuncSelector(FILE_SYSTEM_METHOD_LINK, _hashImpl);
+    name2Selector[FILE_SYSTEM_METHOD_LINK_EVM] =
+        getFuncSelector(FILE_SYSTEM_METHOD_LINK_EVM, _hashImpl);
+    name2Selector[FILE_SYSTEM_METHOD_RLINK] = getFuncSelector(FILE_SYSTEM_METHOD_RLINK, _hashImpl);
 }
 
 std::shared_ptr<PrecompiledExecResult> FileSystemPrecompiled::call(
@@ -67,10 +72,15 @@ std::shared_ptr<PrecompiledExecResult> FileSystemPrecompiled::call(
         // mkdir(string)
         makeDir(_executive, data, callResult, gasPricer);
     }
-    else if (func == name2Selector[FILE_SYSTEM_METHOD_LINK])
+    else if (func == name2Selector[FILE_SYSTEM_METHOD_LINK] ||
+             func == name2Selector[FILE_SYSTEM_METHOD_LINK_EVM])
     {
         // link(string name, string version, address, abi)
         link(_executive, data, callResult);
+    }
+    else if (func == name2Selector[FILE_SYSTEM_METHOD_RLINK])
+    {
+        readLink(_executive, data, callResult);
     }
     else
     {
@@ -277,7 +287,16 @@ void FileSystemPrecompiled::link(const std::shared_ptr<executor::TransactionExec
     auto blockContext = _executive->blockContext().lock();
     auto codec =
         std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
-    codec->decode(data, contractName, contractVersion, contractAddress, contractAbi);
+    if (blockContext->isWasm())
+    {
+        codec->decode(data, contractName, contractVersion, contractAddress, contractAbi);
+    }
+    else
+    {
+        Address contract;
+        codec->decode(data, contractName, contractVersion, contract, contractAbi);
+        contractAddress = contract.hex();
+    }
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("FileSystemPrecompiled") << LOG_DESC("link")
                            << LOG_KV("contractName", contractName)
                            << LOG_KV("contractVersion", contractVersion)
@@ -360,4 +379,60 @@ void FileSystemPrecompiled::link(const std::shared_ptr<executor::TransactionExec
     auto abiEntry = linkTable->newEntry();
     abiEntry.importFields({contractAbi});
     linkTable->setRow(FS_LINK_ABI, std::move(abiEntry));
+}
+
+void FileSystemPrecompiled::readLink(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
+    std::shared_ptr<PrecompiledExecResult> callResult)
+{
+    // readlink(string)
+    std::string absolutePath;
+    auto blockContext = _executive->blockContext().lock();
+    auto codec =
+        std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
+    codec->decode(data, absolutePath);
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("FileSystemPrecompiled")
+                           << LOG_KV("readlink", absolutePath);
+    bytes emptyResult =
+        blockContext->isWasm() ? codec->encode(std::string("")) : codec->encode(Address());
+    if (!checkPathValid(absolutePath))
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("FileSystemPrecompiled") << LOG_DESC("invalid link")
+                               << LOG_KV("path", absolutePath);
+        callResult->setExecResult(emptyResult);
+        return;
+    }
+    std::string name, version;
+    std::tie(name, version) = getLinkNameAndVersion(absolutePath);
+    if (name.empty() || version.empty())
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("FileSystemPrecompiled") << LOG_DESC("invalid link")
+                               << LOG_KV("path", absolutePath);
+        callResult->setExecResult(emptyResult);
+        return;
+    }
+    auto table = _executive->storage().openTable(absolutePath);
+
+    if (table)
+    {
+        // file exists, try to get type
+        auto typeEntry = table->getRow(FS_KEY_TYPE);
+        if (typeEntry && typeEntry->getField(0) == FS_TYPE_LINK)
+        {
+            // if link
+            auto addressEntry = table->getRow(FS_LINK_ADDRESS);
+            auto contractAddress = std::string(addressEntry->getField(0));
+            auto codecAddress = blockContext->isWasm() ? codec->encode(contractAddress) :
+                                                         codec->encode(Address(contractAddress));
+            callResult->setExecResult(codecAddress);
+            return;
+        }
+
+        callResult->setExecResult(emptyResult);
+        return;
+    }
+    PRECOMPILED_LOG(ERROR) << LOG_BADGE("FileSystemPrecompiled")
+                           << LOG_DESC("can't open table of file path")
+                           << LOG_KV("path", absolutePath);
+    callResult->setExecResult(emptyResult);
 }

@@ -9,7 +9,8 @@ pragma experimental ABIEncoderV2;
     }
 
 contract BfsPrecompiled {
-    function list(string memory absolutPath) public returns (int256,BfsInfo[] memory){}
-    function mkdir(string memory absolutPath) public returns (int256){}
+    function list(string memory absolutePath) public view returns (int256,BfsInfo[] memory){}
+    function mkdir(string memory absolutePath) public returns (int256){}
     function link(string memory name, string memory version, address _address, string memory _abi) public returns (int256){}
+    function readlink(string memory absolutePath) public view returns (address) {}
 }
