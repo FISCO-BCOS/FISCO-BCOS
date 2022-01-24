@@ -140,7 +140,18 @@ public:
         m_fakeGateWay->addTxPool(_nodeId, m_txpool);
         m_frontService->setGateWay(m_fakeGateWay);
     }
-    virtual ~TxPoolFixture() {}
+    virtual ~TxPoolFixture()
+    {
+        std::cout << "#### TxPoolFixture de-constructor" << std::endl;
+        if (m_txpool)
+        {
+            m_txpool->stop();
+        }
+        if (m_sync)
+        {
+            m_sync->stop();
+        }
+    }
 
     BlockFactory::Ptr blockFactory() { return m_blockFactory; }
     TxPool::Ptr txpool() { return m_txpool; }

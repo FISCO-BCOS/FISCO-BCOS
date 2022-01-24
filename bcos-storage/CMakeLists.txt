@@ -31,6 +31,7 @@ endif()
 if (TESTS)
     enable_testing()
     set(ENV{CTEST_OUTPUT_ON_FAILURE} True)
+    add_subdirectory(test)
 endif()
 
 if(USE_TiKV)

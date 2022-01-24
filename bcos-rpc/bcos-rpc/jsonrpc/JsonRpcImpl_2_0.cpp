@@ -529,8 +529,8 @@ void JsonRpcImpl_2_0::sendTransaction(std::string const& _groupID, std::string c
     RPC_IMPL_LOG(TRACE) << LOG_DESC("sendTransaction") << LOG_KV("group", _groupID)
                         << LOG_KV("node", _nodeName) << LOG_KV("hash", txHash.abridged());
     auto submitCallback =
-        [_groupID, _requireProof, tx, transactionDataPtr, respFunc = std::move(_respFunc), txHash,
-            self](Error::Ptr _error,
+        [_groupID, _requireProof, tx, respFunc = std::move(_respFunc), txHash, self](
+            Error::Ptr _error,
             bcos::protocol::TransactionSubmitResult::Ptr _transactionSubmitResult) {
             auto rpc = self.lock();
             if (!rpc)
@@ -566,8 +566,8 @@ void JsonRpcImpl_2_0::sendTransaction(std::string const& _groupID, std::string c
                     (int32_t)bcos::protocol::TransactionStatus::None)
                 {
                     std::stringstream errorMsg;
-                    errorMsg
-                        << (bcos::protocol::TransactionStatus)(_transactionSubmitResult->status());
+                    errorMsg << (bcos::protocol::TransactionStatus)(
+                        _transactionSubmitResult->status());
                     jResp["errorMessage"] = errorMsg.str();
                 }
                 toJsonResp(jResp, hexPreTxHash, _transactionSubmitResult->transactionReceipt());

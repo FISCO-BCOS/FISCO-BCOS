@@ -19,6 +19,7 @@
  * @date 2021-05-07
  */
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
+#include "gperftools/malloc_extension.h"
 #include <tbb/parallel_invoke.h>
 #include <memory>
 #include <tuple>
@@ -343,8 +344,10 @@ void MemoryStorage::notifyTxResult(
     auto txSubmitCallback = _tx->submitCallback();
     // notify the transaction result to RPC
     auto self = std::weak_ptr<MemoryStorage>(shared_from_this());
-
-    m_notifier->enqueue([self, _tx, _txSubmitResult, txSubmitCallback]() {
+    auto txHash = _tx->hash();
+    // Note: Due to tx->setTransactionCallback(), _tx cannot be passed into lamba expression to
+    // avoid shared_ptr circular reference
+    m_notifier->enqueue([self, txHash, _txSubmitResult, txSubmitCallback]() {
         try
         {
             auto memoryStorage = self.lock();
@@ -357,7 +360,7 @@ void MemoryStorage::notifyTxResult(
         catch (std::exception const& e)
         {
             TXPOOL_LOG(WARNING) << LOG_DESC("notifyTxResult failed")
-                                << LOG_KV("tx", _tx->hash().abridged())
+                                << LOG_KV("tx", txHash.abridged())
                                 << LOG_KV("errorInfo", boost::diagnostic_information(e));
         }
     });
@@ -416,6 +419,11 @@ void MemoryStorage::batchRemove(BlockNumber _batchId, TransactionSubmitResults c
         if (_batchId > m_blockNumber)
         {
             m_blockNumber = _batchId;
+        }
+        if (m_txsTable.size() == 0)
+        {
+            m_txsTable.clear();
+            MallocExtension::instance()->ReleaseFreeMemory();
         }
     }
     notifyUnsealedTxsSize();

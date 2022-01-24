@@ -76,6 +76,7 @@ void testSubmitAndRemoveTransaction(bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
     std::cout << "### remove submitted txs, size:" << txpool->txpoolStorage()->size() << std::endl;
     // remove the txs
     txpool->asyncNotifyBlockResult(ledger->blockNumber() + 1, txsResult, [](Error::Ptr) {});
+    faker.reset();
 }
 
 void Usage(std::string const& _appName)

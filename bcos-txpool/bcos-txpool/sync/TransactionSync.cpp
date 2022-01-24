@@ -76,7 +76,7 @@ void TransactionSync::executeWorker()
     {
         maintainTransactions();
     }
-    if (!m_newTransactions && downloadTxsBufferEmpty())
+    if (!m_config->existsInGroup() || (!m_newTransactions && downloadTxsBufferEmpty()))
     {
         boost::unique_lock<boost::mutex> l(x_signalled);
         m_signalled.wait_for(l, boost::chrono::milliseconds(10));
@@ -639,6 +639,7 @@ NodeIDListPtr TransactionSync::selectPeers(Transaction::ConstPtr _tx,
         // the node self or not
         if (nodeId->data() == m_config->nodeID()->data())
         {
+            _tx->appendKnownNode(m_config->nodeID());
             continue;
         }
         // check tx existence
@@ -646,8 +647,8 @@ NodeIDListPtr TransactionSync::selectPeers(Transaction::ConstPtr _tx,
         {
             continue;
         }
-        selectedPeers->emplace_back(nodeId);
         _tx->appendKnownNode(nodeId);
+        selectedPeers->emplace_back(nodeId);
         if (selectedPeers->size() >= _expectedSize)
         {
             break;
