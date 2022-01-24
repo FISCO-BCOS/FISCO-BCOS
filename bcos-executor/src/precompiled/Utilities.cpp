@@ -376,6 +376,35 @@ std::pair<std::string, std::string> precompiled::getParentDirAndBaseName(
     return {parentDir, baseName};
 }
 
+std::pair<std::string, std::string> precompiled::getLinkNameAndVersion(
+    const std::string& _absolutePath)
+{
+    // transfer /usr/local/bin => ["usr", "local", "bin"]
+    if (_absolutePath == "/")
+        return {"", ""};
+    std::vector<std::string> dirList;
+    std::string absoluteDir = _absolutePath;
+    if (absoluteDir[0] == '/')
+    {
+        absoluteDir = absoluteDir.substr(1);
+    }
+    if (absoluteDir.at(absoluteDir.size() - 1) == '/')
+    {
+        absoluteDir = absoluteDir.substr(0, absoluteDir.size() - 1);
+    }
+    boost::split(dirList, absoluteDir, boost::is_any_of("/"), boost::token_compress_on);
+    if (dirList.size() != 3)
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("getLinkNameAndVersion")
+                               << LOG_DESC("link path level not equal 3")
+                               << LOG_KV("absolutePath", _absolutePath);
+        return {};
+    }
+    std::string name = dirList.at(1);
+    std::string version = dirList.at(2);
+    return {name, version};
+}
+
 bool precompiled::recursiveBuildDir(
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const std::string& _absoluteDir)
