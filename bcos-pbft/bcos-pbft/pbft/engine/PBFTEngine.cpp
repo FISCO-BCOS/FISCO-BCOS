@@ -344,10 +344,6 @@ void PBFTEngine::asyncNotifyNewBlock(
 void PBFTEngine::onReceivePBFTMessage(
     bcos::Error::Ptr _error, std::string const& _id, NodeIDPtr _nodeID, bytesConstRef _data)
 {
-    if (_nodeID && _nodeID->data() == m_config->nodeID()->data())
-    {
-        return;
-    }
     auto self = std::weak_ptr<PBFTEngine>(shared_from_this());
     onReceivePBFTMessage(_error, _nodeID, _data, [_id, _nodeID, self](bytesConstRef _respData) {
         try

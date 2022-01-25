@@ -523,14 +523,19 @@ void JsonRpcImpl_2_0::sendTransaction(std::string const& _groupID, std::string c
     auto nodeService = getNodeService(_groupID, _nodeName, "sendTransaction");
     auto txpool = nodeService->txpool();
     checkService(txpool, "txpool");
-    auto tx =
-        nodeService->blockFactory()->transactionFactory()->createTransaction(*transactionDataPtr);
-    auto txHash = tx->hash();  // FIXME: try pass tx to backend?
+
+    // Note: avoid call tx->sender() or tx->verify() here in case of verify the same transaction
+    // more than once
+    auto tx = nodeService->blockFactory()->transactionFactory()->createTransaction(
+        *transactionDataPtr, false);
+    auto jResp = std::make_shared<Json::Value>();
+    (*jResp)["input"] = toHexStringWithPrefix(tx->input());
     RPC_IMPL_LOG(TRACE) << LOG_DESC("sendTransaction") << LOG_KV("group", _groupID)
-                        << LOG_KV("node", _nodeName) << LOG_KV("hash", txHash.abridged());
+                        << LOG_KV("node", _nodeName);
+    // Note: In order to avoid taking up too much memory at runtime, it is not recommended to pass
+    // tx to lamba expressions for the tx will only be released when submitCallback is called
     auto submitCallback =
-        [_groupID, _requireProof, tx, respFunc = std::move(_respFunc), txHash, self](
-            Error::Ptr _error,
+        [_groupID, jResp, _requireProof, respFunc = std::move(_respFunc), self](Error::Ptr _error,
             bcos::protocol::TransactionSubmitResult::Ptr _transactionSubmitResult) {
             auto rpc = self.lock();
             if (!rpc)
@@ -542,10 +547,11 @@ void JsonRpcImpl_2_0::sendTransaction(std::string const& _groupID, std::string c
             {
                 RPC_IMPL_LOG(ERROR)
                     << LOG_BADGE("sendTransaction") << LOG_KV("requireProof", _requireProof)
-                    << LOG_KV("hash", txHash.abridged()) << LOG_KV("code", _error->errorCode())
+                    << LOG_KV("hash", _transactionSubmitResult->txHash().abridged())
+                    << LOG_KV("code", _error->errorCode())
                     << LOG_KV("message", _error->errorMessage());
-                Json::Value jResp;
-                respFunc(_error, jResp);
+
+                respFunc(_error, *jResp);
 
                 return;
             }
@@ -560,22 +566,19 @@ void JsonRpcImpl_2_0::sendTransaction(std::string const& _groupID, std::string c
                     << LOG_BADGE("sendTransaction") << LOG_DESC("getTransactionReceipt")
                     << LOG_KV("hexPreTxHash", hexPreTxHash)
                     << LOG_KV("requireProof", _requireProof);
-
-                Json::Value jResp;
                 if (_transactionSubmitResult->status() !=
                     (int32_t)bcos::protocol::TransactionStatus::None)
                 {
                     std::stringstream errorMsg;
                     errorMsg << (bcos::protocol::TransactionStatus)(
                         _transactionSubmitResult->status());
-                    jResp["errorMessage"] = errorMsg.str();
+                    (*jResp)["errorMessage"] = errorMsg.str();
                 }
-                toJsonResp(jResp, hexPreTxHash, _transactionSubmitResult->transactionReceipt());
-                jResp["input"] = toHexStringWithPrefix(tx->input());
-                jResp["to"] = string(tx->to());
-                jResp["from"] = toHexStringWithPrefix(tx->sender());
+                toJsonResp(*jResp, hexPreTxHash, _transactionSubmitResult->transactionReceipt());
+                (*jResp)["to"] = string(_transactionSubmitResult->to());
+                (*jResp)["from"] = toHexStringWithPrefix(_transactionSubmitResult->sender());
                 // TODO: notify transactionProof
-                respFunc(nullptr, jResp);
+                respFunc(nullptr, (*jResp));
             }
         };
     txpool->asyncSubmit(transactionDataPtr, submitCallback);

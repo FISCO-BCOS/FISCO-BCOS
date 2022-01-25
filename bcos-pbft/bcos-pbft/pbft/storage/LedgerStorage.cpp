@@ -335,9 +335,8 @@ void LedgerStorage::onStableCheckPointCommitted(
     {
         m_finalizeHandler(_ledgerConfig, false);
     }
-    // remove the proposal committed into the ledger
-    // don't remove the latest stabled checkpoint to response checkpoint msg to the
-    // requester
+    // remove the proposal committed into the ledger,
+    // don't remove the latest stabled checkpoint for checkpoint msg response consideration
     if (_blockHeader->number() > c_reservedCheckPointSize)
     {
         asyncRemoveStabledCheckPoint(_blockHeader->number() - c_reservedCheckPointSize);
@@ -366,11 +365,14 @@ void LedgerStorage::commitStableCheckPoint(BlockHeader::Ptr _blockHeader, Block:
             {
                 return;
             }
-            PBFT_STORAGE_LOG(INFO) << LOG_DESC("commitStableCheckPoint success")
-                                   << LOG_KV("index", _blockHeader->number())
-                                   << LOG_KV("hash", _ledgerConfig->hash().abridged())
-                                   << LOG_KV("txs", _blockInfo->transactionsHashSize())
-                                   << LOG_KV("timeCost", utcTime() - startT);
+            auto commitPerTx =
+                (double)(utcTime() - startT) / (double)(_blockInfo->transactionsHashSize());
+            PBFT_STORAGE_LOG(INFO)
+                << LOG_DESC("commitStableCheckPoint success")
+                << LOG_KV("index", _blockHeader->number())
+                << LOG_KV("hash", _ledgerConfig->hash().abridged())
+                << LOG_KV("txs", _blockInfo->transactionsHashSize())
+                << LOG_KV("timeCost", utcTime() - startT) << LOG_KV("commitPerTx", commitPerTx);
             auto txsSize = _blockInfo->transactionsHashSize();
             // Note:Here the thread pool is used to asynchronize the operation of PBFT finalize to
             // prevent the commitBlock from calling the callback synchronously and affecting the

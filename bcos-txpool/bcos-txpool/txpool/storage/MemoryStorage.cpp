@@ -19,7 +19,6 @@
  * @date 2021-05-07
  */
 #include "bcos-txpool/txpool/storage/MemoryStorage.h"
-#include "gperftools/malloc_extension.h"
 #include <tbb/parallel_invoke.h>
 #include <memory>
 #include <tuple>
@@ -345,6 +344,8 @@ void MemoryStorage::notifyTxResult(
     // notify the transaction result to RPC
     auto self = std::weak_ptr<MemoryStorage>(shared_from_this());
     auto txHash = _tx->hash();
+    _txSubmitResult->setSender(std::string(_tx->sender()));
+    _txSubmitResult->setTo(std::string(_tx->to()));
     // Note: Due to tx->setTransactionCallback(), _tx cannot be passed into lamba expression to
     // avoid shared_ptr circular reference
     m_notifier->enqueue([self, txHash, _txSubmitResult, txSubmitCallback]() {
@@ -419,11 +420,6 @@ void MemoryStorage::batchRemove(BlockNumber _batchId, TransactionSubmitResults c
         if (_batchId > m_blockNumber)
         {
             m_blockNumber = _batchId;
-        }
-        if (m_txsTable.size() == 0)
-        {
-            m_txsTable.clear();
-            MallocExtension::instance()->ReleaseFreeMemory();
         }
     }
     notifyUnsealedTxsSize();

@@ -29,4 +29,4 @@ target_compile_options(${TXPOOL_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
 
 find_package(TBB CONFIG REQUIRED)
 find_package(Protobuf CONFIG REQUIRED)
-target_link_libraries(${TXPOOL_TARGET} PUBLIC TBB::tbb protobuf::libprotobuf ${UTILITIES_TARGET} ${TOOL_TARGET} TCMalloc)
+target_link_libraries(${TXPOOL_TARGET} PUBLIC TBB::tbb protobuf::libprotobuf ${UTILITIES_TARGET} ${TOOL_TARGET})
