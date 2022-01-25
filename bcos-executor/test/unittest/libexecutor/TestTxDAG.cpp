@@ -145,8 +145,8 @@ void runDagTest(shared_ptr<TxDAGInterface> _txDag, int _total,
 
 void txDagTest(shared_ptr<TxDAGInterface> txDag)
 {
-    int total = 10000;
-    ID criticalNum = 10;
+    int total = 3000;
+    ID criticalNum = 3;
     vector<int> runnings(criticalNum, -1);
 
     auto id2CriticalFun = [&](ID id) -> vector<vector<ID>> { return {{id % criticalNum}}; };
@@ -168,9 +168,9 @@ void txDagTest(shared_ptr<TxDAGInterface> txDag)
 
 void txDagDeepTreeTest(shared_ptr<TxDAGInterface> txDag)
 {
-    int total = 10000;
-    ID slotNum = 5;
-    ID valueNum = 5;  // values num under a slot
+    int total = 3000;
+    ID slotNum = 3;
+    ID valueNum = 3;  // values num under a slot
     map<int, ID> runnings;
 
     auto id2CriticalFun = [&](ID id) -> vector<vector<ID>> {
