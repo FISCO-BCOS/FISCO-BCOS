@@ -35,6 +35,7 @@
 #include "bcos-framework/interfaces/txpool/TxPoolInterface.h"
 #include "bcos-table/src/StateStorage.h"
 #include "tbb/concurrent_unordered_map.h"
+#include "../dag/CriticalFields.h"
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <tbb/concurrent_hash_map.h>
 #include <tbb/spin_mutex.h>
@@ -130,6 +131,7 @@ public:
         std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) override;
 
 protected:
+
     virtual void initPrecompiled() = 0;
 
     virtual std::shared_ptr<BlockContext> createBlockContext(
@@ -167,6 +169,9 @@ protected:
             bcos::Error::UniquePtr&&, bcos::protocol::ExecutionMessage::UniquePtr&&)>& callback);
 
     void removeCommittedState();
+
+    // execute transactions with criticals and return in executionResults
+    void executeTransactionsWithCriticals(critical::CriticalFieldsInterface::Ptr criticals, gsl::span<std::unique_ptr<CallParameters>> inputs, std::vector<protocol::ExecutionMessage::UniquePtr>& executionResults);
 
     txpool::TxPoolInterface::Ptr m_txpool;
     storage::MergeableStorageInterface::Ptr m_cachedStorage;

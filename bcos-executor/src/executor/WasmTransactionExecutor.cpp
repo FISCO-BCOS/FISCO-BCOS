@@ -443,31 +443,9 @@ void WasmTransactionExecutor::dagExecuteTransactionsInternal(
 
 
     // DAG run
-    shared_ptr<TxDAGInterface> txDag = make_shared<TxDAG2>();
-    txDag->init(txsCriticals, [this, &inputs, &executionResults](ID id) {
-        auto& input = inputs[id];
-        auto executive =
-            createExecutive(m_blockContext, input->codeAddress, input->contextID, input->seq);
-
-        EXECUTOR_LOG(TRACE) << LOG_BADGE("dagExecuteTransactionsForWasm")
-                            << LOG_DESC("Start transaction")
-                            << LOG_KV("to", inputs[id]->receiveAddress) << LOG_KV("contextID", id)
-                            << LOG_KV("seq", 0);
-        try
-        {
-            auto output = executive->start(std::move(inputs[id]));
-            executionResults[id] = toExecutionResult(*executive, std::move(output));
-        }
-        catch (std::exception& e)
-        {
-            EXECUTOR_LOG(ERROR) << "Execute error: " << boost::diagnostic_information(e);
-            executionResults[id]->setType(ExecutionMessage::REVERT);
-        }
-    });
-
     try
     {
-        txDag->run(m_DAGThreadNum);
+        executeTransactionsWithCriticals(txsCriticals, inputs, executionResults);
     }
     catch (exception& e)
     {

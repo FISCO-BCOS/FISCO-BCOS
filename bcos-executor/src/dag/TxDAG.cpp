@@ -44,9 +44,7 @@ void TxDAG::init(critical::CriticalFieldsInterface::Ptr _txsCriticals, ExecuteTx
     m_dag.init(txsSize);
 
     // define conflict handler
-    auto onConflictHandler = [&](ID pId, ID id) {
-        m_dag.addEdge(pId, id);
-    };
+    auto onConflictHandler = [&](ID pId, ID id) { m_dag.addEdge(pId, id); };
     auto onFirstConflictHandler = [&](ID id) {
         // do nothing
         (void)id;
@@ -62,11 +60,8 @@ void TxDAG::init(critical::CriticalFieldsInterface::Ptr _txsCriticals, ExecuteTx
     };
 
     // parse criticals
-    _txsCriticals->parse(
-        onConflictHandler,
-        onFirstConflictHandler,
-        onEmptyConflictHandler,
-        onAllConflictHandler);
+    _txsCriticals->traverseDag(
+        onConflictHandler, onFirstConflictHandler, onEmptyConflictHandler, onAllConflictHandler);
 
     // Generate DAG
     m_dag.generate();
@@ -74,7 +69,8 @@ void TxDAG::init(critical::CriticalFieldsInterface::Ptr _txsCriticals, ExecuteTx
     DAG_LOG(TRACE) << LOG_DESC("End init transaction DAG");
 }
 
-void TxDAG::run(unsigned int threadNum) {
+void TxDAG::run(unsigned int threadNum)
+{
     auto parallelTimeOut = utcSteadyTime() + 30000;  // 30 timeout
 
     std::atomic<bool> isWarnedTimeout(false);
@@ -87,9 +83,9 @@ void TxDAG::run(unsigned int threadNum) {
                 if (!isWarnedTimeout.load() && utcSteadyTime() >= parallelTimeOut)
                 {
                     isWarnedTimeout.store(true);
-                    EXECUTOR_LOG(WARNING) << LOG_BADGE("executeBlock")
-                                          << LOG_DESC("Para execute block timeout")
-                                          << LOG_KV("txNum", m_totalParaTxs);
+                    EXECUTOR_LOG(WARNING)
+                        << LOG_BADGE("executeBlock") << LOG_DESC("Para execute block timeout")
+                        << LOG_KV("txNum", m_totalParaTxs);
                 }
                 executeUnit();
             }

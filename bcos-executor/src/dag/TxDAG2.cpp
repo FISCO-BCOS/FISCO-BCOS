@@ -74,12 +74,12 @@ void TxDAG2::init(critical::CriticalFieldsInterface::Ptr _txsCriticals, ExecuteT
     };
     auto onAllConflictHandler = [&](ID id) {
         // do nothing
-        // ignore normal tx, only handle DAG tx, normal tx has been sent back to be executed by DMT
+        // ignore normal tx, only handle DAG tx, normal tx has been sent back to be executed by DMC
         (void)id;
     };
 
     // parse criticals
-    _txsCriticals->parse(
+    _txsCriticals->traverseDag(
         onConflictHandler, onFirstConflictHandler, onEmptyConflictHandler, onAllConflictHandler);
 
     DAG_LOG(TRACE) << LOG_DESC("End init transaction DAG");

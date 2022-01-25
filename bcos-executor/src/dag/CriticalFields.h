@@ -48,7 +48,7 @@ public:
 
     virtual bool contains(size_t id) = 0;
 
-    virtual void parse(OnConflictHandler const& _onConflict,
+    virtual void traverseDag(OnConflictHandler const& _onConflict,
         OnFirstConflictHandler const& _onFirstConflict,
         OnEmptyConflictHandler const& _onEmptyConflict,
         OnAllConflictHandler const& _onAllConflict) = 0;
@@ -82,7 +82,8 @@ public:
     void put(size_t _id, CriticalFieldPtr _criticalField) { m_criticals[_id] = _criticalField; }
     CriticalFieldPtr get(size_t _id) { return m_criticals[_id]; }
 
-    void parse(OnConflictHandler const& _onConflict, OnFirstConflictHandler const& _onFirstConflict,
+    void traverseDag(OnConflictHandler const& _onConflict,
+        OnFirstConflictHandler const& _onFirstConflict,
         OnEmptyConflictHandler const& _onEmptyConflict,
         OnAllConflictHandler const& _onAllConflict) override
     {

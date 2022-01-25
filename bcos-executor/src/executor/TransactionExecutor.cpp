@@ -922,3 +922,32 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
 
     return callParameters;
 }
+
+void TransactionExecutor::executeTransactionsWithCriticals(critical::CriticalFieldsInterface::Ptr criticals,
+    gsl::span<std::unique_ptr<CallParameters>> inputs,
+    vector<protocol::ExecutionMessage::UniquePtr>& executionResults)
+{
+    // DAG run
+    shared_ptr<TxDAGInterface> txDag = make_shared<TxDAG2>();
+    txDag->init(criticals, [this, &inputs, &executionResults](ID id) {
+        auto& input = inputs[id];
+        auto executive =
+            createExecutive(m_blockContext, input->codeAddress, input->contextID, input->seq);
+
+        EXECUTOR_LOG(DEBUG) << LOG_BADGE("dagExecuteTransactionsForEvm")
+                            << LOG_DESC("Start transaction") << LOG_KV("to", input->receiveAddress)
+                            << LOG_KV("data", toHexStringWithPrefix(input->data));
+        try
+        {
+            auto output = executive->start(std::move(input));
+
+            executionResults[id] = toExecutionResult(*executive, std::move(output));
+        }
+        catch (std::exception& e)
+        {
+            EXECUTOR_LOG(ERROR) << "Execute error: " << boost::diagnostic_information(e);
+        }
+    });
+
+    txDag->run(m_DAGThreadNum);
+}
