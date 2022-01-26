@@ -67,7 +67,7 @@ void TxPoolNonceChecker::remove(NonceType const& _nonce)
 {
     if (m_nonceCache.count(_nonce))
     {
-        m_nonceCache.unsafe_erase(_nonce);
+        m_nonceCache.erase(_nonce);
     }
 }
 
