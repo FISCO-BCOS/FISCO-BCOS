@@ -135,8 +135,7 @@ protected:
 
     virtual void removeInvalidTxs();
 
-    virtual void preCommitTransaction(
-        bcos::protocol::Transaction::ConstPtr _tx, size_t _retryTime = 0);
+    virtual void preCommitTransaction(bcos::protocol::Transaction::ConstPtr _tx);
 
     virtual void notifyUnsealedTxsSize(size_t _retryTime = 0);
 
