@@ -279,11 +279,11 @@ Transaction::ConstPtr MemoryStorage::removeWithoutLock(HashType const& _txHash)
         return nullptr;
     }
     auto tx = m_txsTable[_txHash];
-    m_txsTable.unsafe_erase(_txHash);
     if (tx && tx->sealed())
     {
         m_sealedTxsSize--;
     }
+    m_txsTable.unsafe_erase(_txHash);
 #if FISCO_DEBUG
     // TODO: remove this, now just for bug tracing
     TXPOOL_LOG(DEBUG) << LOG_DESC("remove tx: ") << tx->hash().abridged()
@@ -336,20 +336,14 @@ void MemoryStorage::notifyTxResult(
     }
     auto txSubmitCallback = _tx->submitCallback();
     // notify the transaction result to RPC
-    auto self = std::weak_ptr<MemoryStorage>(shared_from_this());
     auto txHash = _tx->hash();
     _txSubmitResult->setSender(std::string(_tx->sender()));
     _txSubmitResult->setTo(std::string(_tx->to()));
     // Note: Due to tx->setTransactionCallback(), _tx cannot be passed into lamba expression to
     // avoid shared_ptr circular reference
-    m_notifier->enqueue([self, txHash, _txSubmitResult, txSubmitCallback]() {
+    m_notifier->enqueue([txHash, _txSubmitResult, txSubmitCallback]() {
         try
         {
-            auto memoryStorage = self.lock();
-            if (!memoryStorage)
-            {
-                return;
-            }
             txSubmitCallback(nullptr, _txSubmitResult);
         }
         catch (std::exception const& e)

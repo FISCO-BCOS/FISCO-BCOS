@@ -153,6 +153,7 @@ private:
     std::shared_ptr<bcostars::Block> m_inner;
     mutable bcos::protocol::NonceList m_nonceList;
     std::shared_ptr<std::mutex> x_mutex;
+    mutable bcos::SharedMutex x_blockHeader;
 };
 }  // namespace protocol
 }  // namespace bcostars

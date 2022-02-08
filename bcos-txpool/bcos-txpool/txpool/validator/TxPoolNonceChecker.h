@@ -20,7 +20,6 @@
  */
 #pragma once
 #include "bcos-txpool/txpool/interfaces/NonceCheckerInterface.h"
-#include <tbb/concurrent_unordered_set.h>
 
 namespace bcos
 {
@@ -42,7 +41,7 @@ protected:
     void insert(bcos::protocol::NonceType const& _nonce) override;
     void remove(bcos::protocol::NonceType const& _nonce) override;
 
-    tbb::concurrent_unordered_set<bcos::protocol::NonceType> m_nonceCache;
+    std::unordered_set<bcos::protocol::NonceType> m_nonceCache;
     mutable SharedMutex x_nonceCache;
 };
 }  // namespace txpool
