@@ -552,7 +552,6 @@ void BlockExecutive::batchNextBlock(std::function<void(Error::UniquePtr)> callba
 
     for (auto& it : *(m_scheduler->m_executorManager))
     {
-        SCHEDULER_LOG(TRACE) << "NextBlock for executor: " << it.get();
         auto blockHeader = m_block->blockHeaderConst();
         it->nextBlockHeader(blockHeader, [status](bcos::Error::Ptr&& error) {
             if (error)
