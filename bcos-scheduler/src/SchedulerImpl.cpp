@@ -267,8 +267,8 @@ void SchedulerImpl::call(protocol::Transaction::Ptr tx,
     auto blockExecutive = std::make_shared<BlockExecutive>(std::move(block), this,
         m_calledContextID++, m_transactionSubmitResultFactory, true, m_blockFactory, false);
 
-    blockExecutive->asyncExecute([executive = blockExecutive, callback = std::move(callback)](
-                                     Error::UniquePtr&& error, protocol::BlockHeader::Ptr) {
+    blockExecutive->asyncCall([callback = std::move(callback)](Error::UniquePtr&& error,
+                                  protocol::TransactionReceipt::Ptr&& receipt) {
         if (error)
         {
             SCHEDULER_LOG(ERROR) << "Unknown error, " << boost::diagnostic_information(*error);
@@ -278,9 +278,6 @@ void SchedulerImpl::call(protocol::Transaction::Ptr tx,
             return;
         }
         SCHEDULER_LOG(INFO) << "Call success";
-
-        auto receipt =
-            std::const_pointer_cast<protocol::TransactionReceipt>(executive->block()->receipt(0));
         callback(nullptr, std::move(receipt));
     });
 }

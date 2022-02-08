@@ -27,6 +27,24 @@
 
 using namespace bcos::scheduler;
 using namespace bcos::ledger;
+void BlockExecutive::asyncCall(
+    std::function<void(Error::UniquePtr&&, protocol::TransactionReceipt::Ptr&&)> callback)
+{
+    auto self = std::weak_ptr<BlockExecutive>(shared_from_this());
+    asyncExecute([self, callback](Error::UniquePtr&& _error, protocol::BlockHeader::Ptr) {
+        auto executive = self.lock();
+        if (!executive)
+        {
+            callback(
+                BCOS_ERROR_UNIQUE_PTR(SchedulerError::UnknownError, "get block executive failed"),
+                nullptr);
+            return;
+        }
+        auto receipt =
+            std::const_pointer_cast<protocol::TransactionReceipt>(executive->block()->receipt(0));
+        callback(std::move(_error), std::move(receipt));
+    });
+}
 
 void BlockExecutive::asyncExecute(
     std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback)
@@ -452,78 +470,69 @@ void BlockExecutive::DMTExecute(
     std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback)
 {
     startBatch([this, callback = std::move(callback)](Error::UniquePtr&& error) {
-        auto recursionCallback = std::make_shared<std::function<void(Error::UniquePtr)>>();
+        if (error)
+        {
+            callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
+                         SchedulerError::DMTError, "Execute with errors", *error),
+                nullptr);
+            return;
+        }
+        if (!m_executiveStates.empty())
+        {
+            SCHEDULER_LOG(TRACE) << "Non empty states, continue startBatch";
+            DMTExecute(callback);
+        }
+        else
+        {
+            SCHEDULER_LOG(TRACE) << "Empty states, end";
+            auto now = std::chrono::system_clock::now();
+            m_executeElapsed =
+                std::chrono::duration_cast<std::chrono::milliseconds>(now - m_currentTimePoint);
+            m_currentTimePoint = now;
 
-        *recursionCallback = [this, recursionCallback, callback = std::move(callback)](
-                                 Error::UniquePtr error) {
-            if (error)
+            if (m_staticCall)
             {
-                callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
-                             SchedulerError::DMTError, "Execute with errors", *error),
-                    nullptr);
-                return;
-            }
-
-            if (!m_executiveStates.empty())
-            {
-                SCHEDULER_LOG(TRACE) << "Non empty states, continue startBatch";
-
-                startBatch(*recursionCallback);
+                // Set result to m_block
+                for (auto& it : m_executiveResults)
+                {
+                    m_block->appendReceipt(it.receipt);
+                }
+                callback(nullptr, nullptr);
             }
             else
             {
-                SCHEDULER_LOG(TRACE) << "Empty states, end";
-                auto now = std::chrono::system_clock::now();
-                m_executeElapsed =
-                    std::chrono::duration_cast<std::chrono::milliseconds>(now - m_currentTimePoint);
-                m_currentTimePoint = now;
+                // All Transaction finished, get hash
+                batchGetHashes([this, callback = std::move(callback)](
+                                   Error::UniquePtr error, crypto::HashType hash) {
+                    if (error)
+                    {
+                        callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
+                                     SchedulerError::UnknownError, "Unknown error", *error),
+                            nullptr);
+                        return;
+                    }
 
-                if (m_staticCall)
-                {
+                    m_hashElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::system_clock::now() - m_currentTimePoint);
+
                     // Set result to m_block
                     for (auto& it : m_executiveResults)
                     {
                         m_block->appendReceipt(it.receipt);
                     }
-                    callback(nullptr, nullptr);
-                }
-                else
-                {
-                    // All Transaction finished, get hash
-                    batchGetHashes([this, callback = std::move(callback)](
-                                       Error::UniquePtr error, crypto::HashType hash) {
-                        if (error)
-                        {
-                            callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
-                                         SchedulerError::UnknownError, "Unknown error", *error),
-                                nullptr);
-                            return;
-                        }
+                    auto executedBlockHeader =
+                        m_blockFactory->blockHeaderFactory()->populateBlockHeader(
+                            m_block->blockHeader());
+                    executedBlockHeader->setStateRoot(hash);
+                    executedBlockHeader->setGasUsed(m_gasUsed);
+                    executedBlockHeader->setTxsRoot(m_block->calculateTransactionRoot());
+                    executedBlockHeader->setReceiptsRoot(m_block->calculateReceiptRoot());
 
-                        m_hashElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                            std::chrono::system_clock::now() - m_currentTimePoint);
-
-                        // Set result to m_block
-                        for (auto& it : m_executiveResults)
-                        {
-                            m_block->appendReceipt(it.receipt);
-                        }
-                        auto executedBlockHeader =
-                            m_blockFactory->blockHeaderFactory()->populateBlockHeader(
-                                m_block->blockHeader());
-                        executedBlockHeader->setStateRoot(hash);
-                        executedBlockHeader->setGasUsed(m_gasUsed);
-                        executedBlockHeader->setTxsRoot(m_block->calculateTransactionRoot());
-                        executedBlockHeader->setReceiptsRoot(m_block->calculateReceiptRoot());
-
-                        m_result = executedBlockHeader;
-                        callback(nullptr, m_result);
-                    });
-                }
+                    m_result = executedBlockHeader;
+                    callback(nullptr, m_result);
+                });
             }
-        };
-
-        (*recursionCallback)(std::move(error));
+        }
     });
 }
 
