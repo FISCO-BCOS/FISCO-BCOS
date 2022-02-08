@@ -257,6 +257,8 @@ public:
 protected:
     virtual void handleCallback(bcos::Error::Ptr _error, bytesConstRef _payLoad,
         std::string const& _uuid, int _moduleID, bcos::crypto::NodeIDPtr _nodeID);
+    void notifyNodeIDs(
+        const std::string& _groupID, std::shared_ptr<const crypto::NodeIDs> _nodeIDs);
 
 private:
     // thread pool
@@ -284,8 +286,10 @@ private:
     bcos::crypto::NodeIDPtr m_nodeID;
     // GroupID
     std::string m_groupID;
-    // lock m_callback
+    // lock m_nodeID
     mutable bcos::Mutex x_nodeIDs;
+    // lock notifyNodeIDs
+    mutable bcos::Mutex x_notifierLock;
     // nodeIDs pushed by the gateway
     std::shared_ptr<const bcos::crypto::NodeIDs> m_nodeIDs;
 };
