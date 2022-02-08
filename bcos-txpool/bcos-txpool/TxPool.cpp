@@ -65,7 +65,29 @@ void TxPool::stop()
 
 void TxPool::asyncSubmit(bytesPointer _txData, TxSubmitCallback _txSubmitCallback)
 {
-    asyncSubmitTransaction(_txData, _txSubmitCallback);
+    // verify and try to submit the valid transaction
+    auto self = std::weak_ptr<TxPool>(shared_from_this());
+    m_worker->enqueue([self, _txData, _txSubmitCallback]() {
+        try
+        {
+            auto txpool = self.lock();
+            if (!txpool)
+            {
+                return;
+            }
+            auto txpoolStorage = txpool->m_txpoolStorage;
+            if (!txpool->checkExistsInGroup(_txSubmitCallback))
+            {
+                return;
+            }
+            txpoolStorage->submitTransaction(_txData, _txSubmitCallback);
+        }
+        catch (std::exception const& e)
+        {
+            TXPOOL_LOG(WARNING) << LOG_DESC("asyncSubmit exception")
+                                << LOG_KV("errorInfo", boost::diagnostic_information(e));
+        }
+    });
 }
 
 bool TxPool::checkExistsInGroup(TxSubmitCallback _txSubmitCallback)

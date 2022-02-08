@@ -99,6 +99,12 @@ public:
 
     bcostars::TransactionSubmitResult const& inner() { return *m_inner(); }
 
+    std::string const& sender() const override { return m_inner()->sender; }
+    void setSender(std::string const& _sender) override { m_inner()->sender = _sender; }
+
+    std::string const& to() const override { return m_inner()->to; }
+    void setTo(std::string const& _to) override { m_inner()->to = _to; }
+
 private:
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
     std::function<bcostars::TransactionSubmitResult*()> m_inner;
