@@ -9,5 +9,7 @@ module bcostars {
         4 optional long transactionIndex;
         5 optional string nonce = "-1";
         6 optional TransactionReceipt transactionReceipt;
+        7 optional string sender;
+        8 optional string to;
     };
 };

@@ -159,11 +159,6 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
     {
         return TransactionStatus::TxPoolIsFull;
     }
-    if (_txSubmitCallback)
-    {
-        _tx->setSubmitCallback(_txSubmitCallback);
-    }
-
     auto result = txpoolStorageCheck(_tx);
     if (result != TransactionStatus::None)
     {
@@ -174,6 +169,10 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
     if (result == TransactionStatus::None)
     {
         _tx->setImportTime(utcTime());
+        if (_txSubmitCallback)
+        {
+            _tx->setSubmitCallback(_txSubmitCallback);
+        }
         result = insert(_tx);
         {
             WriteGuard l(x_missedTxs);
@@ -221,14 +220,10 @@ TransactionStatus MemoryStorage::insert(Transaction::ConstPtr _tx)
     return TransactionStatus::None;
 }
 
-void MemoryStorage::preCommitTransaction(Transaction::ConstPtr _tx, size_t _retryTime)
+void MemoryStorage::preCommitTransaction(Transaction::ConstPtr _tx)
 {
-    if (_retryTime > 3)
-    {
-        return;
-    }
     auto self = std::weak_ptr<MemoryStorage>(shared_from_this());
-    m_worker->enqueue([self, _tx, _retryTime]() {
+    m_worker->enqueue([self, _tx]() {
         try
         {
             auto txpoolStorage = self.lock();
@@ -241,19 +236,18 @@ void MemoryStorage::preCommitTransaction(Transaction::ConstPtr _tx, size_t _retr
             txsToStore->emplace_back(
                 std::make_shared<bytes>(encodedData.begin(), encodedData.end()));
             auto txsHash = std::make_shared<HashList>();
-            txsHash->emplace_back(_tx->hash());
+            auto txHash = _tx->hash();
+            txsHash->emplace_back(txHash);
             txpoolStorage->m_config->ledger()->asyncStoreTransactions(
-                txsToStore, txsHash, [txpoolStorage, _tx, _retryTime](Error::Ptr _error) {
+                txsToStore, txsHash, [txHash](Error::Ptr _error) {
                     if (_error == nullptr)
                     {
                         return;
                     }
-                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                    txpoolStorage->preCommitTransaction(_tx, (_retryTime + 1));
                     TXPOOL_LOG(WARNING) << LOG_DESC("asyncPreStoreTransaction failed")
                                         << LOG_KV("errorCode", _error->errorCode())
                                         << LOG_KV("errorMsg", _error->errorMessage())
-                                        << LOG_KV("tx", _tx->hash().abridged());
+                                        << LOG_KV("tx", txHash.abridged());
                 });
         }
         catch (std::exception const& e)
@@ -285,11 +279,11 @@ Transaction::ConstPtr MemoryStorage::removeWithoutLock(HashType const& _txHash)
         return nullptr;
     }
     auto tx = m_txsTable[_txHash];
-    m_txsTable.unsafe_erase(_txHash);
     if (tx && tx->sealed())
     {
         m_sealedTxsSize--;
     }
+    m_txsTable.unsafe_erase(_txHash);
 #if FISCO_DEBUG
     // TODO: remove this, now just for bug tracing
     TXPOOL_LOG(DEBUG) << LOG_DESC("remove tx: ") << tx->hash().abridged()
@@ -342,22 +336,20 @@ void MemoryStorage::notifyTxResult(
     }
     auto txSubmitCallback = _tx->submitCallback();
     // notify the transaction result to RPC
-    auto self = std::weak_ptr<MemoryStorage>(shared_from_this());
-
-    m_notifier->enqueue([self, _tx, _txSubmitResult, txSubmitCallback]() {
+    auto txHash = _tx->hash();
+    _txSubmitResult->setSender(std::string(_tx->sender()));
+    _txSubmitResult->setTo(std::string(_tx->to()));
+    // Note: Due to tx->setTransactionCallback(), _tx cannot be passed into lamba expression to
+    // avoid shared_ptr circular reference
+    m_notifier->enqueue([txHash, _txSubmitResult, txSubmitCallback]() {
         try
         {
-            auto memoryStorage = self.lock();
-            if (!memoryStorage)
-            {
-                return;
-            }
             txSubmitCallback(nullptr, _txSubmitResult);
         }
         catch (std::exception const& e)
         {
             TXPOOL_LOG(WARNING) << LOG_DESC("notifyTxResult failed")
-                                << LOG_KV("tx", _tx->hash().abridged())
+                                << LOG_KV("tx", txHash.abridged())
                                 << LOG_KV("errorInfo", boost::diagnostic_information(e));
         }
     });

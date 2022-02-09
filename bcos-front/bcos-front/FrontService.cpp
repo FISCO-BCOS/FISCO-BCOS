@@ -365,10 +365,37 @@ void FrontService::onReceiveNodeIDs(const std::string& _groupID,
         Guard l(x_nodeIDs);
         m_nodeIDs = _nodeIDs;
     }
-
+    // To be considered: How to ensure orderly notifications in the pro/max mode
     FRONT_LOG(INFO) << LOG_DESC("onReceiveNodeIDs") << LOG_KV("groupID", _groupID)
                     << LOG_KV("nodeIDs.size()", (_nodeIDs ? _nodeIDs->size() : 0));
 
+    if (m_threadPool)
+    {
+        auto self = std::weak_ptr<FrontService>(shared_from_this());
+        m_threadPool->enqueue([self, _groupID, _nodeIDs]() {
+            auto front = self.lock();
+            if (!front)
+            {
+                return;
+            }
+            front->notifyNodeIDs(_groupID, _nodeIDs);
+        });
+    }
+    else
+    {
+        notifyNodeIDs(_groupID, _nodeIDs);
+    }
+
+    if (_receiveMsgCallback)
+    {
+        _receiveMsgCallback(nullptr);
+    }
+}
+
+void FrontService::notifyNodeIDs(
+    const std::string& _groupID, std::shared_ptr<const crypto::NodeIDs> _nodeIDs)
+{
+    Guard l(x_notifierLock);
     for (const auto& entry : m_moduleID2NodeIDsDispatcher)
     {
         auto moduleID = entry.first;
@@ -379,18 +406,6 @@ void FrontService::onReceiveNodeIDs(const std::string& _groupID,
                                  << LOG_KV("groupID", _groupID) << LOG_KV("moduleID", moduleID);
             }
         });
-    }
-
-    if (_receiveMsgCallback)
-    {
-        if (m_threadPool)
-        {
-            m_threadPool->enqueue([_receiveMsgCallback]() { _receiveMsgCallback(nullptr); });
-        }
-        else
-        {
-            _receiveMsgCallback(nullptr);
-        }
     }
 }
 

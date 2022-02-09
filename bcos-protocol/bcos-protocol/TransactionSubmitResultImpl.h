@@ -57,6 +57,12 @@ public:
         m_receipt = std::move(transactionReceipt);
     }
 
+    std::string const& sender() const override { return m_sender; }
+    void setSender(std::string const& _sender) override { m_sender = _sender; }
+
+    std::string const& to() const override { return m_to; }
+    void setTo(std::string const& _to) override { m_to = _to; }
+
 private:
     uint32_t m_status = (uint32_t)TransactionStatus::None;
     bcos::crypto::HashType m_txHash;
@@ -64,6 +70,8 @@ private:
     int64_t m_transactionIndex;
     NonceType m_nonce = -1;
     TransactionReceipt::Ptr m_receipt;
+    std::string m_sender;
+    std::string m_to;
 };
 }  // namespace protocol
 }  // namespace bcos

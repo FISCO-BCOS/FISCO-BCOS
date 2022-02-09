@@ -885,7 +885,7 @@ void TransactionExecutor::commit(
                 return;
             }
 
-            EXECUTOR_LOG(DEBUG) << "Commit success";
+            EXECUTOR_LOG(DEBUG) << "Commit success" << LOG_KV("number", blockNumber);
 
             m_lastCommittedBlockNumber = blockNumber;
 
@@ -1547,9 +1547,10 @@ void TransactionExecutor::removeCommittedState()
         std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
         auto it = m_stateStorages.begin();
         m_lastStateStorage = m_stateStorages.back().storage;
-        EXECUTOR_LOG(DEBUG) << "LatestStateStorage"
-                            << LOG_KV("storageNumber", m_stateStorages.back().number)
-                            << LOG_KV("commitNumber", number);
+        EXECUTOR_LOG(DEBUG) << LOG_DESC("removeCommittedState")
+                            << LOG_KV("LatestStateStorage", m_stateStorages.back().number)
+                            << LOG_KV("commitNumber", number) << LOG_KV("erasedStorage", it->number)
+                            << LOG_KV("stateStorageSize", m_stateStorages.size());
         it = m_stateStorages.erase(it);
         if (it != m_stateStorages.end())
         {

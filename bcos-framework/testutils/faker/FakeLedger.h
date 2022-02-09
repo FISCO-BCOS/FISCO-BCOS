@@ -49,6 +49,20 @@ public:
         init(_blockNumber, _txsSize, 0);
         m_worker = std::make_shared<ThreadPool>("worker", 1);
     }
+    ~FakeLedger() override
+    {
+        if (m_worker)
+        {
+            m_worker->stop();
+        }
+        m_hash2Block.clear();
+        std::map<HashType, BlockNumber> emptyHash2Block;
+        m_hash2Block.swap(emptyHash2Block);
+
+        m_txsHashToData.clear();
+        std::map<HashType, bytesConstPtr> emptyTxsData;
+        m_txsHashToData.swap(emptyTxsData);
+    }
 
     FakeLedger(
         BlockFactory::Ptr _blockFactory, size_t _blockNumber, size_t _txsSize, size_t _receiptsSize)

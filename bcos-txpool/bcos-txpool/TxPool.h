@@ -141,34 +141,6 @@ protected:
 
     void initSendResponseHandler();
 
-    template <typename T>
-    void asyncSubmitTransaction(T _txData, bcos::protocol::TxSubmitCallback _txSubmitCallback)
-    {
-        // verify and try to submit the valid transaction
-        auto self = std::weak_ptr<TxPool>(shared_from_this());
-        m_worker->enqueue([self, _txData, _txSubmitCallback]() {
-            try
-            {
-                auto txpool = self.lock();
-                if (!txpool)
-                {
-                    return;
-                }
-                if (!txpool->checkExistsInGroup(_txSubmitCallback))
-                {
-                    return;
-                }
-                auto txpoolStorage = txpool->m_txpoolStorage;
-                txpoolStorage->submitTransaction(_txData, _txSubmitCallback);
-            }
-            catch (std::exception const& e)
-            {
-                TXPOOL_LOG(WARNING) << LOG_DESC("asyncSubmit exception")
-                                    << LOG_KV("errorInfo", boost::diagnostic_information(e));
-            }
-        });
-    }
-
 private:
     TxPoolConfig::Ptr m_config;
     TxPoolStorageInterface::Ptr m_txpoolStorage;
