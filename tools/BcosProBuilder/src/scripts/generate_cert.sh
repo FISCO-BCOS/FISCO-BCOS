@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 dirpath="$(cd "$(dirname "$0")" && pwd)"
 listen_ip="0.0.0.0"

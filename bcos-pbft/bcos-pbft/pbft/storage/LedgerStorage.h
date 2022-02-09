@@ -77,6 +77,10 @@ protected:
         bcos::protocol::BlockHeader::Ptr _blockHeader, bcos::protocol::Block::Ptr _blockInfo);
     virtual void asyncGetLatestCommittedProposalIndex();
 
+    virtual void onStableCheckPointCommitted(size_t _txsSize,
+        bcos::protocol::BlockHeader::Ptr _blockHeader,
+        bcos::ledger::LedgerConfig::Ptr _ledgerConfig);
+
 protected:
     bcos::scheduler::SchedulerInterface::Ptr m_scheduler;
     std::shared_ptr<bcos::storage::KVStorageHelper> m_storage;

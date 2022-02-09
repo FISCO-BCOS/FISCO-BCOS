@@ -22,9 +22,9 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
                         << LOG_KV("verify", verify) << LOG_KV("signatureSize", signature.size())
                         << LOG_KV("tx count", block->transactionsSize())
                         << LOG_KV("meta tx count", block->transactionsMetaDataSize());
-
-    std::unique_lock<std::mutex> executeLock(m_executeMutex, std::try_to_lock);
-    if (!executeLock.owns_lock())
+    auto executeLock =
+        std::make_shared<std::unique_lock<std::mutex>>(m_executeMutex, std::try_to_lock);
+    if (!executeLock->owns_lock())
     {
         auto message = "Another block is executing!";
         SCHEDULER_LOG(ERROR) << "ExecuteBlock error, " << message;
@@ -59,7 +59,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
             auto blockHeader = it->result();
 
             blocksLock.unlock();
-            executeLock.unlock();
+            executeLock->unlock();
             callback(nullptr, std::move(blockHeader));
             return;
         }
@@ -73,7 +73,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
             SCHEDULER_LOG(ERROR) << "ExecuteBlock error, " << message;
 
             blocksLock.unlock();
-            executeLock.unlock();
+            executeLock->unlock();
             callback(
                 BCOS_ERROR_PTR(SchedulerError::InvalidBlockNumber, std::move(message)), nullptr);
 
@@ -94,16 +94,12 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
             return;
         }
     }
-
     m_blocks.emplace_back(
         std::move(block), this, 0, m_transactionSubmitResultFactory, false, m_blockFactory, verify);
-
-    auto executeLockPtr = std::make_shared<decltype(executeLock)>(std::move(executeLock));
     auto& blockExecutive = m_blocks.back();
 
     blocksLock.unlock();
-    blockExecutive.asyncExecute([this, callback = std::move(callback),
-                                    executeLock = std::move(executeLockPtr)](
+    blockExecutive.asyncExecute([this, callback = std::move(callback), executeLock](
                                     Error::UniquePtr error, protocol::BlockHeader::Ptr header) {
         if (error)
         {
@@ -130,8 +126,9 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
 {
     SCHEDULER_LOG(INFO) << "CommitBlock request" << LOG_KV("block number", header->number());
 
-    std::unique_lock<std::mutex> commitLock(m_commitMutex, std::try_to_lock);
-    if (!commitLock.owns_lock())
+    auto commitLock =
+        std::make_shared<std::unique_lock<std::mutex>>(m_commitMutex, std::try_to_lock);
+    if (!commitLock->owns_lock())
     {
         std::string message;
         assert(!m_blocks.empty());
@@ -151,7 +148,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
         auto message = "No uncommitted block";
         SCHEDULER_LOG(ERROR) << "CommitBlock error, " << message;
 
-        commitLock.unlock();
+        commitLock->unlock();
         callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidBlocks, message), nullptr);
         return;
     }
@@ -162,7 +159,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
         auto message = "Block is executing";
         SCHEDULER_LOG(ERROR) << "CommitBlock error, " << message;
 
-        commitLock.unlock();
+        commitLock->unlock();
         callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidStatus, message), nullptr);
         return;
     }
@@ -173,17 +170,13 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                        boost::lexical_cast<std::string>(frontBlock.number());
         SCHEDULER_LOG(ERROR) << "CommitBlock error, " << message;
 
-        commitLock.unlock();
+        commitLock->unlock();
         callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidBlockNumber, message), nullptr);
         return;
     }
-
-    auto commitLockPtr = std::make_shared<decltype(commitLock)>(
-        std::move(commitLock));  // std::function need copyable
-
     frontBlock.block()->setBlockHeader(std::move(header));
     frontBlock.asyncCommit([this, callback = std::move(callback), block = frontBlock.block(),
-                               commitLock = std::move(commitLockPtr)](Error::UniquePtr&& error) {
+                               commitLock](Error::UniquePtr&& error) {
         if (error)
         {
             SCHEDULER_LOG(ERROR) << "CommitBlock error, " << boost::diagnostic_information(*error);
@@ -274,8 +267,8 @@ void SchedulerImpl::call(protocol::Transaction::Ptr tx,
     auto blockExecutive = std::make_shared<BlockExecutive>(std::move(block), this,
         m_calledContextID++, m_transactionSubmitResultFactory, true, m_blockFactory, false);
 
-    blockExecutive->asyncExecute([executive = blockExecutive, callback = std::move(callback)](
-                                     Error::UniquePtr&& error, protocol::BlockHeader::Ptr) {
+    blockExecutive->asyncCall([callback = std::move(callback)](Error::UniquePtr&& error,
+                                  protocol::TransactionReceipt::Ptr&& receipt) {
         if (error)
         {
             SCHEDULER_LOG(ERROR) << "Unknown error, " << boost::diagnostic_information(*error);
@@ -285,9 +278,6 @@ void SchedulerImpl::call(protocol::Transaction::Ptr tx,
             return;
         }
         SCHEDULER_LOG(INFO) << "Call success";
-
-        auto receipt =
-            std::const_pointer_cast<protocol::TransactionReceipt>(executive->block()->receipt(0));
         callback(nullptr, std::move(receipt));
     });
 }
