@@ -28,7 +28,7 @@ namespace bcos::scheduler
 {
 class SchedulerImpl;
 
-class BlockExecutive
+class BlockExecutive : public std::enable_shared_from_this<BlockExecutive>
 {
 public:
     using UniquePtr = std::unique_ptr<BlockExecutive>;
@@ -61,7 +61,8 @@ public:
     BlockExecutive& operator=(BlockExecutive&&) = delete;
 
     void asyncExecute(std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback);
-
+    void asyncCall(
+        std::function<void(Error::UniquePtr&&, protocol::TransactionReceipt::Ptr&&)> callback);
     void asyncCommit(std::function<void(Error::UniquePtr)> callback);
 
     void asyncNotify(

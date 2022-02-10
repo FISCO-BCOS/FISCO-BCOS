@@ -21,7 +21,6 @@
 #pragma once
 #include "bcos-txpool/txpool/interfaces/NonceCheckerInterface.h"
 #include <tbb/concurrent_unordered_set.h>
-
 namespace bcos
 {
 namespace txpool

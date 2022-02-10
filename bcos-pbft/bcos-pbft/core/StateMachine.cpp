@@ -128,6 +128,8 @@ void StateMachine::apply(ssize_t, ProposalInterface::ConstPtr _lastAppliedPropos
             _executedProposal->setData(std::move(blockHeaderBuffer));
             // the transactions hash list
             _executedProposal->setExtraData(_proposal->data());
+            // The _onExecuteFinished callback itself does the asynchronous logic, so there is no
+            // need to use m_worker to re-synchronize it here.
             _onExecuteFinished(true);
         });
     return;

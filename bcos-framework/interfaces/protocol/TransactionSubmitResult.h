@@ -47,6 +47,12 @@ public:
 
     virtual TransactionReceipt::Ptr transactionReceipt() const = 0;
     virtual void setTransactionReceipt(TransactionReceipt::Ptr transactionReceipt) = 0;
+
+    virtual std::string const& sender() const = 0;
+    virtual void setSender(std::string const& _sender) = 0;
+
+    virtual std::string const& to() const = 0;
+    virtual void setTo(std::string const& _to) = 0;
 };
 
 using TransactionSubmitResults = std::vector<TransactionSubmitResult::Ptr>;
