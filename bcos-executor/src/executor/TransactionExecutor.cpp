@@ -417,7 +417,7 @@ void TransactionExecutor::dagExecuteTransactionsForWasm(
                 optional<ConflictFields> conflictFields = nullopt;
                 if (!cacheHandle.isValid())
                 {
-                    EXECUTOR_LOG(DEBUG) << LOG_BADGE("dagExecuteTransactionsForWasm")
+                    EXECUTOR_LOG(TRACE) << LOG_BADGE("dagExecuteTransactionsForWasm")
                                         << LOG_DESC("No ABI found in cache, try to load")
                                         << LOG_KV("abiKey", toHexStringWithPrefix(abiKey));
 
@@ -426,7 +426,7 @@ void TransactionExecutor::dagExecuteTransactionsForWasm(
                     cacheHandle = m_abiCache->lookup(abiKey);
                     if (cacheHandle.isValid())
                     {
-                        EXECUTOR_LOG(DEBUG) << LOG_BADGE("dagExecuteTransactionsForWasm")
+                        EXECUTOR_LOG(TRACE) << LOG_BADGE("dagExecuteTransactionsForWasm")
                                             << LOG_DESC("ABI had beed loaded by other workers")
                                             << LOG_KV("abiKey", toHexStringWithPrefix(abiKey));
                         auto& functionAbi = cacheHandle.value();
@@ -442,7 +442,7 @@ void TransactionExecutor::dagExecuteTransactionsForWasm(
                         auto entry = table->getRow(ACCOUNT_ABI);
                         auto abiStr = entry->getField(0);
 
-                        EXECUTOR_LOG(DEBUG) << LOG_BADGE("dagExecuteTransactionsForWasm")
+                        EXECUTOR_LOG(TRACE) << LOG_BADGE("dagExecuteTransactionsForWasm")
                                             << LOG_DESC("ABI loaded") << LOG_KV("ABI", abiStr);
 
                         auto functionAbi =
@@ -473,7 +473,7 @@ void TransactionExecutor::dagExecuteTransactionsForWasm(
                 }
                 else
                 {
-                    EXECUTOR_LOG(DEBUG) << LOG_BADGE("dagExecuteTransactionsForWasm")
+                    EXECUTOR_LOG(TRACE) << LOG_BADGE("dagExecuteTransactionsForWasm")
                                         << LOG_DESC("Found ABI in cache")
                                         << LOG_KV("abiKey", toHexStringWithPrefix(abiKey));
                     auto& functionAbi = cacheHandle.value();
@@ -482,7 +482,7 @@ void TransactionExecutor::dagExecuteTransactionsForWasm(
 
                 if (!conflictFields.has_value())
                 {
-                    EXECUTOR_LOG(DEBUG)
+                    EXECUTOR_LOG(TRACE)
                         << LOG_BADGE("dagExecuteTransactionsForWasm")
                         << LOG_DESC("The transaction can't be executed concurrently")
                         << LOG_KV("abiKey", toHexStringWithPrefix(abiKey));
@@ -621,7 +621,7 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
     std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
         callback)
 {
-    EXECUTOR_LOG(DEBUG) << "Call request" << LOG_KV("ContextID", input->contextID())
+    EXECUTOR_LOG(TRACE) << "Call request" << LOG_KV("ContextID", input->contextID())
                         << LOG_KV("seq", input->seq()) << LOG_KV("Message type", input->type())
                         << LOG_KV("To", input->to()) << LOG_KV("Create", input->create());
 
@@ -724,7 +724,7 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
                 }
             }
 
-            EXECUTOR_LOG(DEBUG) << "Call success";
+            EXECUTOR_LOG(TRACE) << "Call success";
             callback(std::move(error), std::move(result));
         });
 }
@@ -847,7 +847,7 @@ void TransactionExecutor::prepare(
 void TransactionExecutor::commit(
     const TwoPCParams& params, std::function<void(bcos::Error::Ptr)> callback)
 {
-    EXECUTOR_LOG(DEBUG) << "Commit request" << LOG_KV("number", params.number);
+    EXECUTOR_LOG(TRACE) << "Commit request" << LOG_KV("number", params.number);
 
     auto first = m_stateStorages.begin();
     if (first == m_stateStorages.end())

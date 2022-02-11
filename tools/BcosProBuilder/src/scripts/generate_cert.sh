@@ -18,6 +18,7 @@ OPENSSL_CMD="${HOME}/.fisco/tassl-1.1.1b"
 file_dir="./"
 command=""
 ca_cert_path=""
+logfile="build.log"
 
 LOG_WARN() {
     local content=${1}
@@ -83,8 +84,6 @@ EOF
 generate_sm_cert_conf() {
     local output=$1
     cat <<EOF >"${output}"
-HOME			= .
-RANDFILE		= $ENV::HOME/.rnd
 oid_section		= new_oids
 
 [ new_oids ]
@@ -297,9 +296,9 @@ gen_sm_chain_cert() {
     name=$(basename "$chaindir")
     check_name chain "$name"
 
-    if [ ! -f "${sm_cert_conf}" ]; then
+    if [ ! -f "${sm_cert_conf}" ];then
         generate_sm_cert_conf 'sm_cert.cnf'
-    else
+    elif [ ! -f "sm_cert.cnf" ];then
         cp -f "${sm_cert_conf}" .
     fi
 
@@ -310,8 +309,12 @@ gen_sm_chain_cert() {
 
     "$OPENSSL_CMD" genpkey -paramfile "${sm2_params}" -out "$chaindir/sm_ca.key"
     "$OPENSSL_CMD" req -config sm_cert.cnf -x509 -days "${days}" -subj "/CN=FISCO-BCOS/O=FISCO-BCOS/OU=chain" -key "$chaindir/sm_ca.key" -extensions v3_ca -out "$chaindir/sm_ca.crt"
-    cp "${sm_cert_conf}" "${chaindir}"
-    cp "${sm2_params}" "${chaindir}"
+    if [ ! -f "${chaindir}/${sm_cert_conf}" ];then
+        cp "${sm_cert_conf}" "${chaindir}"
+    fi
+    if [ ! -f "${chaindir}/${sm2_params}" ];then
+        cp "${sm2_params}" "${chaindir}"
+    fi
 }
 
 gen_sm_node_cert_with_ext() {
@@ -329,7 +332,7 @@ gen_sm_node_cert_with_ext() {
     "$OPENSSL_CMD" genpkey -paramfile "$capath/${sm2_params}" -out "$certpath/sm_${type}.key"
     "$OPENSSL_CMD" req -new -subj "/CN=FISCO-BCOS/O=fisco-bcos/OU=${type}" -key "$certpath/sm_${type}.key" -config "$capath/sm_cert.cnf" -out "$certpath/sm_${type}.csr"
 
-    echo "not use $(basename "$capath") to sign $(basename $certpath) ${type}" >>"${logfile}"
+    echo "use $(basename "$capath") to sign $(basename $certpath) ${type}" >>"${logfile}"
     "$OPENSSL_CMD" x509 -sm3 -req -CA "$capath/sm_ca.crt" -CAkey "$capath/sm_ca.key" -days "${days}" -CAcreateserial -in "$certpath/sm_${type}.csr" -out "$certpath/sm_${type}.crt" -extfile "$capath/sm_cert.cnf" -extensions "$extensions"
 
     rm -f "$certpath/sm_${type}.csr"
