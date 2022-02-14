@@ -547,7 +547,9 @@ void JsonRpcImpl_2_0::sendTransaction(std::string const& _groupID, std::string c
             {
                 RPC_IMPL_LOG(ERROR)
                     << LOG_BADGE("sendTransaction") << LOG_KV("requireProof", _requireProof)
-                    << LOG_KV("hash", _transactionSubmitResult->txHash().abridged())
+                    << LOG_KV("hash", _transactionSubmitResult ?
+                                          _transactionSubmitResult->txHash().abridged() :
+                                          "unknown")
                     << LOG_KV("code", _error->errorCode())
                     << LOG_KV("message", _error->errorMessage());
 
