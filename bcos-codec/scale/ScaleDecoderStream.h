@@ -209,16 +209,10 @@ public:
     template <unsigned N>
     ScaleDecoderStream& operator>>(FixedBytes<N>& fixedData)
     {
-        bytes decodedData;
-        *this >> decodedData;
-        if (decodedData.size() < FixedBytes<N>::size)
+        for (unsigned i = 0; i < N; ++i)
         {
-            BOOST_THROW_EXCEPTION(ScaleDecodeException() << errinfo_comment(
-                                      "exception for invalid FixedBytes, expected size:" +
-                                      std::to_string(FixedBytes<N>::size) +
-                                      ", decoded data size:" + std::to_string(decodedData.size())));
+            *this >> fixedData[i];
         }
-        fixedData = FixedBytes<N>(decodedData.data(), FixedBytes<N>::ConstructorType::FromPointer);
         return *this;
     }
     /**
