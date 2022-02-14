@@ -212,6 +212,79 @@ BOOST_AUTO_TEST_CASE(testString)
     s3 >> v;
     BOOST_CHECK(v == "asdadad");
 }
+
+
+BOOST_AUTO_TEST_CASE(testBytes1)
+{
+    std::string v = "0x1";
+    FixedBytes<1> fb1(v);
+    ScaleEncoderStream s{};
+    s << fb1;
+    bytes data = {1};
+    BOOST_CHECK(s.data() == data);
+    FixedBytes<1> fb2;
+    ScaleDecoderStream sd((data));
+    sd >> fb2;
+    BOOST_CHECK(fb1 == fb2);
+}
+
+BOOST_AUTO_TEST_CASE(testBytes2)
+{
+    std::string v = "0x0102";
+    FixedBytes<2> fb2_i(v);
+    ScaleEncoderStream s{};
+    s << fb2_i;
+    bytes data = {1, 2};
+    BOOST_CHECK(s.data() == data);
+    FixedBytes<2> fb2_o;
+    ScaleDecoderStream sd((data));
+    sd >> fb2_o;
+    BOOST_CHECK(fb2_i == fb2_o);
+}
+
+BOOST_AUTO_TEST_CASE(testBytes16)
+{
+    std::string v = "0x000102030405060708090a0b0c0d0e0f";
+    FixedBytes<16> fb2_i(v);
+    ScaleEncoderStream s{};
+    s << fb2_i;
+    bytes data = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15};
+    BOOST_CHECK(s.data() == data);
+    FixedBytes<16> fb2_o;
+    ScaleDecoderStream sd((data));
+    sd >> fb2_o;
+    BOOST_CHECK(fb2_i == fb2_o);
+}
+
+BOOST_AUTO_TEST_CASE(testBytes22)
+{
+    std::string v = "0x000102030405060708090a0b0c0d0e0f10111213141516";
+    FixedBytes<22> fb2_i(v);
+    ScaleEncoderStream s{};
+    s << fb2_i;
+    bytes data = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21};
+    BOOST_CHECK(s.data() == data);
+    FixedBytes<22> fb2_o;
+    ScaleDecoderStream sd((data));
+    sd >> fb2_o;
+    BOOST_CHECK(fb2_i == fb2_o);
+}
+
+BOOST_AUTO_TEST_CASE(testBytes32)
+{
+    std::string v = "0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+    FixedBytes<32> fb2_i(v);
+    ScaleEncoderStream s{};
+    s << fb2_i;
+    bytes data = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+        23, 24, 25, 26, 27, 28, 29, 30, 31};
+    BOOST_CHECK(s.data() == data);
+    FixedBytes<32> fb2_o;
+    ScaleDecoderStream sd((data));
+    sd >> fb2_o;
+    BOOST_CHECK(fb2_i == fb2_o);
+}
+
 BOOST_AUTO_TEST_CASE(testTuple)
 {
     {
