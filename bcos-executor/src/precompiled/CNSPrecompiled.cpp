@@ -220,6 +220,9 @@ void CNSPrecompiled::insert(const std::shared_ptr<executor::TransactionExecutive
         cnsInfoVec.emplace_back(std::make_tuple(contractVersion, contractAddress, contractAbi));
         entry->setField(SYS_VALUE, asString(codec::scale::encode(cnsInfoVec)));
         table->setRow(contractName, entry.value());
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("CNSPrecompiled")
+                               << LOG_DESC("insert cns to existed entry successfully")
+                               << LOG_KV("cnsInfoSize", cnsInfoVec.size());
     }
     else
     {
@@ -229,10 +232,11 @@ void CNSPrecompiled::insert(const std::shared_ptr<executor::TransactionExecutive
         auto newEntry = table->newEntry();
         newEntry.importFields({asString(codec::scale::encode(cnsInfoVec))});
         table->setRow(contractName, std::move(newEntry));
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("CNSPrecompiled") << LOG_DESC("insert successfully")
+                               << LOG_KV("cnsInfoSize", cnsInfoVec.size());
     }
     gasPricer->updateMemUsed(1);
     gasPricer->appendOperation(InterfaceOpcode::Insert, 1);
-    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("CNSPrecompiled") << LOG_DESC("insert successfully");
     getErrorCodeOut(callResult->mutableExecResult(), CODE_SUCCESS, *codec);
 }
 
