@@ -65,6 +65,7 @@ public:
     std::string_view groupId() const override { return m_transactionHashFields->groupid(); }
     int64_t blockLimit() const override { return m_transactionHashFields->blocklimit(); }
     std::string_view to() const override { return m_transactionHashFields->to(); }
+    std::string_view abi() const override { return m_transactionHashFields->abi(); }
 
     bytesConstRef input() const override;
     int64_t importTime() const override { return m_transaction->import_time(); }

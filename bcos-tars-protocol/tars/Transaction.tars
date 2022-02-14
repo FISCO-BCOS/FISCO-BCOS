@@ -7,6 +7,7 @@ module bcostars {
         5 require string nonce;
         6 optional string to;
         7 require vector<byte> input;
+        8 optional string abi;
     };
 
     struct Transaction {

@@ -90,6 +90,7 @@ public:
     virtual int64_t blockLimit() const = 0;
     virtual u256 nonce() const = 0;
     virtual std::string_view to() const = 0;
+    virtual std::string_view abi() const = 0;
     virtual std::string_view source() const = 0;
     virtual void setSource(std::string const& _source) = 0;
 
