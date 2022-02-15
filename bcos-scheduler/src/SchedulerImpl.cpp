@@ -112,7 +112,11 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
             return;
         }
         SCHEDULER_LOG(INFO) << "ExecuteBlock success" << LOG_KV("block number", header->number())
-                            << LOG_KV("state root", header->stateRoot().hex());
+                            << LOG_KV("hash", header->hash().abridged())
+                            << LOG_KV("state root", header->stateRoot().hex())
+                            << LOG_KV("receiptRoot", header->receiptsRoot().hex())
+                            << LOG_KV("txsRoot", header->txsRoot().abridged())
+                            << LOG_KV("gasUsed", header->gasUsed());
 
         m_lastExecutedBlockNumber.store(header->number());
 
