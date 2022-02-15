@@ -104,7 +104,10 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         if (error)
         {
             SCHEDULER_LOG(ERROR) << "Unknown error, " << boost::diagnostic_information(*error);
-
+            {
+                std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
+                m_blocks.pop_front();
+            }
             executeLock->unlock();
             callback(
                 BCOS_ERROR_WITH_PREV_PTR(SchedulerError::UnknownError, "Unknown error", *error),
