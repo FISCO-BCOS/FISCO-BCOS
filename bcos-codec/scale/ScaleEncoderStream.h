@@ -256,16 +256,24 @@ public:
         if constexpr (sizeof(T) == 1u)
         {
 // to avoid infinite recursion
+#if __GNUC__ >= 10
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
             return putByte(static_cast<uint8_t>(v));
+#if __GNUC__ >= 10
 #pragma GCC diagnostic pop
+#endif
         }
 // encode any other integer
+#if __GNUC__ >= 10
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
         encodeInteger<I>(v, *this);
+#if __GNUC__ >= 10
 #pragma GCC diagnostic pop
+#endif
         return *this;
     }
 
