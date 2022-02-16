@@ -130,7 +130,7 @@ void BlockExecutive::asyncExecute(
             auto message = m_scheduler->m_executionMessageFactory->createExecutionMessage();
             message->setType(protocol::ExecutionMessage::MESSAGE);
             message->setContextID(i + m_startContextID);
-
+            message->setTransactionHash(tx->hash());
             message->setOrigin(toHex(tx->sender()));
             message->setFrom(std::string(message->origin()));
 
@@ -889,7 +889,7 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
         case protocol::ExecutionMessage::SEND_BACK:
         {
             SCHEDULER_LOG(TRACE) << "Send back, " << contextID << " | " << seq << " | "
-                                 << message->transactionHash();
+                                 << message->transactionHash() << LOG_KV("to", message->to());
 
             if (message->transactionHash() != h256(0))
             {

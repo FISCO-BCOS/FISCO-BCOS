@@ -116,6 +116,10 @@ void PBFTCache::addCache(CollectionCacheType& _cachedReq, QuorumRecoderType& _we
 
 bool PBFTCache::conflictWithProcessedReq(PBFTMessageInterface::Ptr _msg)
 {
+    if (m_submitted || m_stableCommitted)
+    {
+        return true;
+    }
     if (_msg->view() < m_config->view())
     {
         return true;
