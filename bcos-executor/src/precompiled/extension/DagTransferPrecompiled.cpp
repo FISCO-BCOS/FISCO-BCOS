@@ -23,11 +23,14 @@
 #include "../PrecompiledResult.h"
 #include "../TableFactoryPrecompiled.h"
 #include "../Utilities.h"
+#include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
+#include <bcos-framework/interfaces/storage/Common.h>
 
 using namespace bcos;
 using namespace bcos::executor;
 using namespace bcos::storage;
 using namespace bcos::precompiled;
+using namespace bcos::ledger;
 
 // interface of DagTransferPrecompiled
 /*
@@ -39,7 +42,6 @@ contract DagTransfer{
     function userTransfer(string user_a, string user_b, uint256 amount) public returns(uint256);
 }
 */
-const char* const DAG_TRANSFER = "dag_transfer";
 const char* const DAG_TRANSFER_METHOD_ADD_STR_UINT = "userAdd(string,uint256)";
 const char* const DAG_TRANSFER_METHOD_SAV_STR_UINT = "userSave(string,uint256)";
 const char* const DAG_TRANSFER_METHOD_DRAW_STR_UINT = "userDraw(string,uint256)";
@@ -133,31 +135,6 @@ std::string DagTransferPrecompiled::toString()
     return "DagTransfer";
 }
 
-std::optional<storage::Table> DagTransferPrecompiled::openTable(
-    std::shared_ptr<executor::TransactionExecutive> _executive)
-{
-    std::string dagTableName = precompiled::getTableName(DAG_TRANSFER);
-    auto table = _executive->storage().openTable(dagTableName);
-    if (!table)
-    {
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled")
-                               << LOG_DESC("openTable: ready to create table")
-                               << LOG_KV("tableName", dagTableName);
-        //__dag_transfer__ is not exist, then create it first.
-        table = _executive->storage().createTable(dagTableName, "balance");
-        // table already exists
-        if (!table)
-        {
-            PRECOMPILED_LOG(DEBUG)
-                << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("table already exist")
-                << LOG_KV("tableName", dagTableName);
-            // try to openTable and get the table again
-            table = _executive->storage().openTable(dagTableName);
-        }
-    }
-    return table;
-}
-
 std::shared_ptr<PrecompiledExecResult> DagTransferPrecompiled::call(
     std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
     const std::string& _origin, const std::string&)
@@ -220,7 +197,7 @@ void DagTransferPrecompiled::userAddCall(std::shared_ptr<executor::TransactionEx
             ret = CODE_INVALID_USER_NAME;
             break;
         }
-        auto table = openTable(_executive);
+        auto table = _executive->storage().openTable(DAG_TRANSFER);
         if (!table)
         {
             strErrorMsg = "openTable failed.";
@@ -281,7 +258,7 @@ void DagTransferPrecompiled::userSaveCall(
             break;
         }
 
-        auto table = openTable(_executive);
+        auto table = _executive->storage().openTable(DAG_TRANSFER);
         if (!table)
         {
             strErrorMsg = "openTable failed.";
@@ -354,7 +331,7 @@ void DagTransferPrecompiled::userDrawCall(
             ret = CODE_INVALID_AMOUNT;
             break;
         }
-        auto table = openTable(_executive);
+        auto table = _executive->storage().openTable(DAG_TRANSFER);
         if (!table)
         {
             strErrorMsg = "openTable failed.";
@@ -415,7 +392,7 @@ void DagTransferPrecompiled::userBalanceCall(
             break;
         }
 
-        auto table = openTable(_executive);
+        auto table = _executive->storage().openTable(DAG_TRANSFER);
         if (!table)
         {
             strErrorMsg = "openTable failed.";
@@ -480,7 +457,7 @@ void DagTransferPrecompiled::userTransferCall(
             ret = 0;
             break;
         }
-        auto table = openTable(_executive);
+        auto table = _executive->storage().openTable(DAG_TRANSFER);
         if (!table)
         {
             strErrorMsg = "openTable failed.";

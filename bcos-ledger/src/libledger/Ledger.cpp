@@ -1316,7 +1316,7 @@ bool Ledger::buildGenesisBlock(
     // clang-format off
     std::string_view tables[] = {
         SYS_CONFIG, "value,enable_number",
-        SYS_CONSENSUS, "value",
+        SYS_CONSENSUS, SYS_VALUE,
         SYS_CURRENT_STATE, SYS_VALUE,
         SYS_HASH_2_TX, SYS_VALUE,
         SYS_HASH_2_NUMBER, SYS_VALUE,
@@ -1324,7 +1324,9 @@ bool Ledger::buildGenesisBlock(
         SYS_NUMBER_2_BLOCK_HEADER, SYS_VALUE,
         SYS_NUMBER_2_TXS, SYS_VALUE,
         SYS_HASH_2_RECEIPT, SYS_VALUE,
-        SYS_BLOCK_NUMBER_2_NONCES, SYS_VALUE
+        SYS_BLOCK_NUMBER_2_NONCES, SYS_VALUE,
+        SYS_CNS, SYS_VALUE,
+        DAG_TRANSFER, "balance"
     };
     // clang-format on
     size_t total = sizeof(tables) / sizeof(std::string_view);
