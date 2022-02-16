@@ -343,9 +343,9 @@ public:
     ScaleDecoderStream& operator>>(std::array<T, size>& a)
     {
         using mutableT = std::remove_const_t<T>;
-        for (size_t i = 0u; i < size; ++i)
+        for(auto it = a.begin(); it != a.end(); ++it)
         {
-            *this >> const_cast<mutableT&>(a[i]);  // NOLINT
+            *this >> const_cast<mutableT&>(*it);  // NOLINT
         }
         return *this;
     }

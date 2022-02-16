@@ -255,11 +255,17 @@ public:
         // put byte
         if constexpr (sizeof(T) == 1u)
         {
-            // to avoid infinite recursion
+// to avoid infinite recursion
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
             return putByte(static_cast<uint8_t>(v));
+#pragma GCC diagnostic pop
         }
-        // encode any other integer
+// encode any other integer
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
         encodeInteger<I>(v, *this);
+#pragma GCC diagnostic pop
         return *this;
     }
 
