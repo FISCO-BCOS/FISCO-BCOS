@@ -104,7 +104,10 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         if (error)
         {
             SCHEDULER_LOG(ERROR) << "Unknown error, " << boost::diagnostic_information(*error);
-
+            {
+                std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
+                m_blocks.pop_front();
+            }
             executeLock->unlock();
             callback(
                 BCOS_ERROR_WITH_PREV_PTR(SchedulerError::UnknownError, "Unknown error", *error),
@@ -112,7 +115,11 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
             return;
         }
         SCHEDULER_LOG(INFO) << "ExecuteBlock success" << LOG_KV("block number", header->number())
-                            << LOG_KV("state root", header->stateRoot().hex());
+                            << LOG_KV("hash", header->hash().abridged())
+                            << LOG_KV("state root", header->stateRoot().hex())
+                            << LOG_KV("receiptRoot", header->receiptsRoot().hex())
+                            << LOG_KV("txsRoot", header->txsRoot().abridged())
+                            << LOG_KV("gasUsed", header->gasUsed());
 
         m_lastExecutedBlockNumber.store(header->number());
 

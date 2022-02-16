@@ -23,6 +23,7 @@
 #include "../PrecompiledResult.h"
 #include "../TableFactoryPrecompiled.h"
 #include "../Utilities.h"
+#include <bcos-framework/interfaces/storage/Common.h>
 
 using namespace bcos;
 using namespace bcos::executor;
@@ -137,16 +138,21 @@ std::optional<storage::Table> DagTransferPrecompiled::openTable(
     std::shared_ptr<executor::TransactionExecutive> _executive)
 {
     std::string dagTableName = precompiled::getTableName(DAG_TRANSFER);
-    auto table = _executive->storage().openTable(dagTableName);
-    if (!table)
+    auto ret = _executive->storage().openTableWithoutException(dagTableName);
+    auto table = std::get<1>(ret);
+    auto error = std::move(std::get<0>(ret));
+    // table not exists, create the table
+    if ((error && error->errorCode() == bcos::storage::StorageError::TableNotExists) || !table)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("DagTransferPrecompiled")
                                << LOG_DESC("openTable: ready to create table")
                                << LOG_KV("tableName", dagTableName);
         //__dag_transfer__ is not exist, then create it first.
-        table = _executive->storage().createTable(dagTableName, "balance");
+        auto tableRet = _executive->storage().createTableWithoutException(dagTableName, "balance");
+        table = std::get<1>(tableRet);
+        error = std::move(std::get<0>(tableRet));
         // table already exists
-        if (!table)
+        if ((error && error->errorCode() == bcos::storage::StorageError::TableExists) || !table)
         {
             PRECOMPILED_LOG(DEBUG)
                 << LOG_BADGE("DagTransferPrecompiled") << LOG_DESC("table already exist")

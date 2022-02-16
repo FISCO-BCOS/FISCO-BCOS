@@ -119,7 +119,11 @@ public:
     template <unsigned N>
     ScaleEncoderStream& operator<<(const FixedBytes<N>& fixedData)
     {
-        return encodeCollection((size_t)FixedBytes<N>::size, fixedData.begin(), fixedData.end());
+        for (auto it = fixedData.begin(); it != fixedData.end(); ++it)
+        {
+            *this << *it;
+        }
+        return *this;
     }
 
     /**
@@ -251,11 +255,25 @@ public:
         // put byte
         if constexpr (sizeof(T) == 1u)
         {
-            // to avoid infinite recursion
+// to avoid infinite recursion
+#if __GNUC__ >= 10
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
             return putByte(static_cast<uint8_t>(v));
+#if __GNUC__ >= 10
+#pragma GCC diagnostic pop
+#endif
         }
-        // encode any other integer
+// encode any other integer
+#if __GNUC__ >= 10
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
         encodeInteger<I>(v, *this);
+#if __GNUC__ >= 10
+#pragma GCC diagnostic pop
+#endif
         return *this;
     }
 

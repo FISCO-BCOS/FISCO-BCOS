@@ -172,7 +172,7 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
     std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
         callback)
 {
-    EXECUTOR_LOG(DEBUG) << "Call request" << LOG_KV("ContextID", input->contextID())
+    EXECUTOR_LOG(TRACE) << "Call request" << LOG_KV("ContextID", input->contextID())
                         << LOG_KV("seq", input->seq()) << LOG_KV("Message type", input->type())
                         << LOG_KV("To", input->to()) << LOG_KV("Create", input->create());
 
@@ -275,7 +275,7 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
                 }
             }
 
-            EXECUTOR_LOG(DEBUG) << "Call success";
+            EXECUTOR_LOG(TRACE) << "Call success";
             callback(std::move(error), std::move(result));
         });
 }
@@ -398,7 +398,7 @@ void TransactionExecutor::prepare(
 void TransactionExecutor::commit(
     const TwoPCParams& params, std::function<void(bcos::Error::Ptr)> callback)
 {
-    EXECUTOR_LOG(DEBUG) << "Commit request" << LOG_KV("number", params.number);
+    EXECUTOR_LOG(TRACE) << "Commit request" << LOG_KV("number", params.number);
 
     auto first = m_stateStorages.begin();
     if (first == m_stateStorages.end())
@@ -924,7 +924,8 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     return callParameters;
 }
 
-void TransactionExecutor::executeTransactionsWithCriticals(critical::CriticalFieldsInterface::Ptr criticals,
+void TransactionExecutor::executeTransactionsWithCriticals(
+    critical::CriticalFieldsInterface::Ptr criticals,
     gsl::span<std::unique_ptr<CallParameters>> inputs,
     vector<protocol::ExecutionMessage::UniquePtr>& executionResults)
 {
