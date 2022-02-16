@@ -21,6 +21,7 @@
 #include "CNSPrecompiled.h"
 #include "PrecompiledResult.h"
 #include "Utilities.h"
+#include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
 #include <json/json.h>
 #include <boost/algorithm/string/trim.hpp>
 
@@ -29,6 +30,7 @@ using namespace bcos::executor;
 using namespace bcos::storage;
 using namespace bcos::precompiled;
 using namespace bcos::protocol;
+using namespace bcos::ledger;
 
 const char* const CNS_METHOD_INS_STR4 = "insert(string,string,address,string)";
 const char* const CNS_METHOD_SLT_STR = "selectByName(string)";
@@ -189,11 +191,8 @@ void CNSPrecompiled::insert(const std::shared_ptr<executor::TransactionExecutive
         getErrorCodeOut(callResult->mutableExecResult(), CODE_VERSION_LENGTH_OVERFLOW, *codec);
         return;
     }
+    // SYS_CNS must exist
     auto table = _executive->storage().openTable(SYS_CNS);
-    if (!table)
-    {
-        table = _executive->storage().createTable(SYS_CNS, SYS_VALUE_FIELDS);
-    }
     gasPricer->appendOperation(InterfaceOpcode::OpenTable);
     auto entry = table->getRow(contractName);
     if (entry)
@@ -258,12 +257,9 @@ void CNSPrecompiled::selectByName(const std::shared_ptr<executor::TransactionExe
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("CNSPrecompiled") << LOG_DESC("selectByName")
                            << LOG_KV("contractName", contractName);
 
+    // SYS_CNS must exist
     auto table = _executive->storage().openTable(SYS_CNS);
     gasPricer->appendOperation(InterfaceOpcode::OpenTable);
-    if (!table)
-    {
-        table = _executive->storage().createTable(SYS_CNS, SYS_VALUE_FIELDS);
-    }
     Json::Value CNSInfos(Json::arrayValue);
     auto entry = table->getRow(contractName);
     if (entry)
@@ -303,12 +299,9 @@ void CNSPrecompiled::selectByNameAndVersion(
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("CNSPrecompiled") << LOG_DESC("selectByNameAndVersion")
                            << LOG_KV("contractName", contractName)
                            << LOG_KV("contractVersion", contractVersion);
+    // SYS_CNS must exist
     auto table = _executive->storage().openTable(SYS_CNS);
     gasPricer->appendOperation(InterfaceOpcode::OpenTable);
-    if (!table)
-    {
-        table = _executive->storage().createTable(SYS_CNS, SYS_VALUE_FIELDS);
-    }
     boost::trim(contractName);
     boost::trim(contractVersion);
     auto entry = table->getRow(contractName);
@@ -380,12 +373,9 @@ void CNSPrecompiled::getContractAddress(
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("CNSPrecompiled") << LOG_DESC("getContractAddress")
                            << LOG_KV("contractName", contractName)
                            << LOG_KV("contractVersion", contractVersion);
+    // SYS_CNS must exist
     auto table = _executive->storage().openTable(SYS_CNS);
     gasPricer->appendOperation(InterfaceOpcode::OpenTable);
-    if (!table)
-    {
-        table = _executive->storage().createTable(SYS_CNS, SYS_VALUE_FIELDS);
-    }
     boost::trim(contractName);
     boost::trim(contractVersion);
     auto entry = table->getRow(contractName);

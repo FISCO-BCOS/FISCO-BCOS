@@ -45,10 +45,6 @@ public:
     virtual bool isParallelPrecompiled() override { return true; }
     virtual std::vector<std::string> getParallelTag(bytesConstRef param, bool _isWasm) override;
 
-protected:
-    std::optional<storage::Table> openTable(
-        std::shared_ptr<executor::TransactionExecutive> _executive);
-
 public:
     void userAddCall(std::shared_ptr<executor::TransactionExecutive> _executive,
         bytesConstRef _data, std::string const& _origin, bytes& _out);

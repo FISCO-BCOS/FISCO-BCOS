@@ -38,9 +38,6 @@ namespace precompiled
 using Entries = std::vector<storage::Entry>;
 using EntriesPtr = std::shared_ptr<Entries>;
 
-/// SYS_CNS table
-const char* const SYS_CNS = "s_cns";
-
 /// SYS_CONFIG table fields
 static constexpr size_t SYS_VALUE = 0;
 static constexpr const char* SYS_VALUE_FIELDS = "value";
