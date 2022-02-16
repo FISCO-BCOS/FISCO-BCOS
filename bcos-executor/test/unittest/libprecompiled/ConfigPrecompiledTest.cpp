@@ -367,7 +367,7 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
     {
         nextBlock(3);
         bytes in =
-            codec->encodeWithSig("getValueByKeyTest(string)", ledger::SYSTEM_KEY_TX_GAS_LIMIT);
+            codec->encodeWithSig("getValueByKeyTest(string)", std::string(ledger::SYSTEM_KEY_TX_GAS_LIMIT));
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
