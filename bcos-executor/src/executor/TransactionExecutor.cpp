@@ -180,7 +180,7 @@ void TransactionExecutor::dagExecuteTransactions(
 {
     // for fill block
     auto txHashes = make_shared<HashList>();
-    std::vector<size_t> indexes;
+    std::vector<decltype(inputs)::index_type> indexes;
     auto fillInputs = std::make_shared<std::vector<bcos::protocol::ExecutionMessage::UniquePtr>>();
 
     // final result
@@ -235,6 +235,7 @@ void TransactionExecutor::dagExecuteTransactions(
                     return;
                 }
 
+#pragma omp parallel for
                 for (size_t i = 0; i < transactions->size(); ++i)
                 {
                     callParametersList->at(indexes[i]) =
@@ -267,7 +268,8 @@ void TransactionExecutor::dagExecuteTransactions(
 }
 
 void TransactionExecutor::dagExecuteTransactionsForEvm(gsl::span<CallParameters::UniquePtr> inputs,
-    const bcos::crypto::HashList& txHashList, const std::vector<size_t>& indexes,
+    const bcos::crypto::HashList& txHashList,
+    const std::vector<decltype(inputs)::index_type>& indexes,
     std::function<void(
         bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
         callback)
@@ -276,7 +278,7 @@ void TransactionExecutor::dagExecuteTransactionsForEvm(gsl::span<CallParameters:
     vector<ExecutionMessage::UniquePtr> executionResults(transactionsNum);
 
     // get criticals
-    std::vector<std::vector<std::string>> txsCriticals{(size_t)transactionsNum};
+    std::vector<std::vector<std::string>> txsCriticals(transactionsNum);
 
 #pragma omp parallel for
     for (decltype(transactionsNum) i = 0; i < transactionsNum; i++)
@@ -287,8 +289,8 @@ void TransactionExecutor::dagExecuteTransactionsForEvm(gsl::span<CallParameters:
             executionResults[i] = toExecutionResult(std::move(inputs[i]));
             executionResults[i]->setType(ExecutionMessage::SEND_BACK);
 
-            auto it = std::lower_bound(indexes.begin(), indexes.end(), (size_t)i);
-            if (it == indexes.end() || *it != (size_t)i)
+            auto it = std::lower_bound(indexes.begin(), indexes.end(), i);
+            if (it == indexes.end() || *it != i)
             {
                 BOOST_THROW_EXCEPTION(BCOS_ERROR(
                     -1, "Unexpect not found index! " + boost::lexical_cast<std::string>(i)));

@@ -181,7 +181,7 @@ private:
     void removeCommittedState();
 
     void dagExecuteTransactionsForEvm(gsl::span<std::unique_ptr<CallParameters>> inputs,
-        const bcos::crypto::HashList& txHashList, const std::vector<size_t>& indexes,
+        const bcos::crypto::HashList& txHashList, const std::vector<decltype(inputs)::index_type>& indexes,
         std::function<void(
             bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
             callback);
