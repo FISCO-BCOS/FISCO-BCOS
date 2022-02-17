@@ -67,6 +67,7 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/thread/latch.hpp>
 #include <boost/throw_exception.hpp>
+#include <algorithm>
 #include <cassert>
 #include <exception>
 #include <functional>
@@ -178,48 +179,45 @@ void TransactionExecutor::dagExecuteTransactions(
         callback)
 {
     // for fill block
-    tbb::spin_mutex txHashesMutex;
     auto txHashes = make_shared<HashList>();
-    std::vector<size_t> indexes;
+    std::vector<decltype(inputs)::index_type> indexes;
     auto fillInputs = std::make_shared<std::vector<bcos::protocol::ExecutionMessage::UniquePtr>>();
 
     // final result
     auto callParametersList =
         std::make_shared<std::vector<CallParameters::UniquePtr>>(inputs.size());
 
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, inputs.size()),
-        [this, &inputs, &callParametersList, &txHashes, &txHashesMutex, &indexes, &fillInputs](
-            const tbb::blocked_range<size_t>& range) {
-            for (size_t i = range.begin(); i != range.end(); ++i)
+#pragma omp parallel for
+    for (decltype(inputs)::index_type i = 0; i < inputs.size(); ++i)
+    {
+        auto& params = inputs[i];
+        switch (params->type())
+        {
+        case ExecutionMessage::TXHASH:
+        {
+#pragma omp critical
             {
-                auto& params = inputs[i];
-                switch (params->type())
-                {
-                case ExecutionMessage::TXHASH:
-                {
-                    tbb::spin_mutex::scoped_lock lock(txHashesMutex);
-                    txHashes->emplace_back(params->transactionHash());
-                    indexes.emplace_back(i);
-                    fillInputs->emplace_back(std::move(params));
-
-                    break;
-                }
-                case ExecutionMessage::MESSAGE:
-                {
-                    callParametersList->at(i) = createCallParameters(*params, false);
-                    break;
-                }
-                default:
-                {
-                    auto message =
-                        (boost::format("Unsupported message type: %d") % params->type()).str();
-                    EXECUTOR_LOG(ERROR) << "DAG Execute error, " << message;
-                    // callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::DAG_ERROR, message), {});
-                    break;
-                }
-                }
+                txHashes->emplace_back(params->transactionHash());
+                indexes.emplace_back(i);
+                fillInputs->emplace_back(std::move(params));
             }
-        });
+
+            break;
+        }
+        case ExecutionMessage::MESSAGE:
+        {
+            callParametersList->at(i) = createCallParameters(*params, false);
+            break;
+        }
+        default:
+        {
+            auto message = (boost::format("Unsupported message type: %d") % params->type()).str();
+            EXECUTOR_LOG(ERROR) << "DAG Execute error, " << message;
+            // callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::DAG_ERROR, message), {});
+            break;
+        }
+        }
+    }
 
     if (!txHashes->empty())
     {
@@ -237,8 +235,10 @@ void TransactionExecutor::dagExecuteTransactions(
                     return;
                 }
 
+#pragma omp parallel for
                 for (size_t i = 0; i < transactions->size(); ++i)
                 {
+                    assert(transactions->at(i));
                     callParametersList->at(indexes[i]) =
                         createCallParameters(*fillInputs->at(i), *transactions->at(i));
                 }
@@ -249,8 +249,7 @@ void TransactionExecutor::dagExecuteTransactions(
                 }
                 else
                 {
-                    dagExecuteTransactionsForEvm(
-                        *callParametersList, *txHashes, std::move(callback));
+                    dagExecuteTransactionsForEvm(*callParametersList, std::move(callback));
                 }
             });
     }
@@ -262,13 +261,12 @@ void TransactionExecutor::dagExecuteTransactions(
         }
         else
         {
-            dagExecuteTransactionsForEvm(*callParametersList, *txHashes, std::move(callback));
+            dagExecuteTransactionsForEvm(*callParametersList, std::move(callback));
         }
     }
 }
 
 void TransactionExecutor::dagExecuteTransactionsForEvm(gsl::span<CallParameters::UniquePtr> inputs,
-    const bcos::crypto::HashList& txHashList,
     std::function<void(
         bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
         callback)
@@ -277,26 +275,18 @@ void TransactionExecutor::dagExecuteTransactionsForEvm(gsl::span<CallParameters:
     vector<ExecutionMessage::UniquePtr> executionResults(transactionsNum);
 
     // get criticals
-    std::vector<std::vector<std::string>> txsCriticals;
-    txsCriticals.resize(transactionsNum);
-    size_t serialTransactionsNum = 0;
-    tbb::parallel_for(tbb::blocked_range<uint64_t>(0, transactionsNum),
-        [&](const tbb::blocked_range<uint64_t>& range) {
-            for (uint64_t i = range.begin(); i < range.end(); i++)
-            {
-                txsCriticals[i] = getTxCriticals(*inputs[i]);
-                if (txsCriticals[i].empty())
-                {
-                    serialTransactionsNum++;
-                    executionResults[i] = toExecutionResult(std::move(inputs[i]));
-                    executionResults[i]->setType(ExecutionMessage::SEND_BACK);
-                    if (txHashList.size() > i)
-                    {
-                        executionResults[i]->setTransactionHash(txHashList[i]);
-                    }
-                }
-            }
-        });
+    std::vector<std::vector<std::string>> txsCriticals(transactionsNum);
+
+#pragma omp parallel for
+    for (decltype(transactionsNum) i = 0; i < transactionsNum; i++)
+    {
+        txsCriticals[i] = getTxCriticals(*inputs[i]);
+        if (txsCriticals[i].empty())
+        {
+            executionResults[i] = toExecutionResult(std::move(inputs[i]));
+            executionResults[i]->setType(ExecutionMessage::SEND_BACK);
+        }
+    }
 
     shared_ptr<TxDAG> txDag = make_shared<TxDAG>();
     txDag->init(transactionsNum, txsCriticals);
@@ -305,6 +295,7 @@ void TransactionExecutor::dagExecuteTransactionsForEvm(gsl::span<CallParameters:
     vector<std::unique_ptr<CallParameters>> allCallParameters(transactionsNum);
     std::vector<gsl::index> allIndex(transactionsNum);
 
+#pragma omp parallel for
     for (gsl::index i = 0; i < transactionsNum; ++i)
     {
         if (txsCriticals[i].empty())
@@ -318,6 +309,7 @@ void TransactionExecutor::dagExecuteTransactionsForEvm(gsl::span<CallParameters:
 
         auto executive = createExecutive(m_blockContext, input->codeAddress, contextID, seq);
 
+#pragma omp critical
         m_blockContext->insertExecutive(contextID, seq, {executive});
 
         allExecutives[i].swap(executive);
@@ -437,7 +429,12 @@ void TransactionExecutor::dagExecuteTransactionsForWasm(
                         auto storage = m_blockContext->storage();
                         auto tableName = "/apps" + string(to);
                         auto table = storage->openTable(tableName);
-                        assert(table.has_value());
+
+                        if (!table)
+                        {
+                            BOOST_THROW_EXCEPTION(BCOS_ERROR(ExecuteError::TABLE_NOT_FOUND,
+                                (boost::format("Table apps/%s not found!") % tableName).str()));
+                        }
 
                         auto entry = table->getRow(ACCOUNT_ABI);
                         auto abiStr = entry->getField(0);
