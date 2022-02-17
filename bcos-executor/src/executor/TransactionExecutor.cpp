@@ -238,6 +238,7 @@ void TransactionExecutor::dagExecuteTransactions(
 #pragma omp parallel for
                 for (size_t i = 0; i < transactions->size(); ++i)
                 {
+                    assert(transactions->at(i));
                     callParametersList->at(indexes[i]) =
                         createCallParameters(*fillInputs->at(i), *transactions->at(i));
                 }
@@ -294,6 +295,7 @@ void TransactionExecutor::dagExecuteTransactionsForEvm(gsl::span<CallParameters:
     vector<std::unique_ptr<CallParameters>> allCallParameters(transactionsNum);
     std::vector<gsl::index> allIndex(transactionsNum);
 
+#pragma omp parallel for
     for (gsl::index i = 0; i < transactionsNum; ++i)
     {
         if (txsCriticals[i].empty())
@@ -307,6 +309,7 @@ void TransactionExecutor::dagExecuteTransactionsForEvm(gsl::span<CallParameters:
 
         auto executive = createExecutive(m_blockContext, input->codeAddress, contextID, seq);
 
+#pragma omp critical
         m_blockContext->insertExecutive(contextID, seq, {executive});
 
         allExecutives[i].swap(executive);
