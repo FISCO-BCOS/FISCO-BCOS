@@ -50,6 +50,12 @@ deps/**
 # macOS
 .DS_Store
 
+# log
+*.log
+
+# clangd file
+compile_commands.json
+
 # generated test
 tools/BcosAirBuilder/nodes**
 tools/BcosProBuilder/generated**
