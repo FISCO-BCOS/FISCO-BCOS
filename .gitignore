@@ -55,6 +55,7 @@ deps/**
 
 # clangd file
 compile_commands.json
+.cache
 
 # generated test
 tools/BcosAirBuilder/nodes**

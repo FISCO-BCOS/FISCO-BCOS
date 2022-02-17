@@ -426,7 +426,12 @@ void TransactionExecutor::dagExecuteTransactionsForWasm(
                         auto storage = m_blockContext->storage();
                         auto tableName = "/apps" + string(to);
                         auto table = storage->openTable(tableName);
-                        assert(table.has_value());
+
+                        if (!table)
+                        {
+                            BOOST_THROW_EXCEPTION(BCOS_ERROR(ExecuteError::TABLE_NOT_FOUND,
+                                (boost::format("Table apps/%s not found!") % tableName).str()));
+                        }
 
                         auto entry = table->getRow(ACCOUNT_ABI);
                         auto abiStr = entry->getField(0);

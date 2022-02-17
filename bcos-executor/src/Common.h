@@ -62,6 +62,7 @@ enum ExecuteError : int32_t
     ROLLBACK_ERROR,
     DAG_ERROR,
     DEAD_LOCK,
+    TABLE_NOT_FOUND,
 };
 
 static const char* const STORAGE_VALUE = "value";
