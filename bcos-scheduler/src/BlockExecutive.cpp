@@ -55,6 +55,12 @@ void BlockExecutive::asyncExecute(
         return;
     }
 
+    if (m_scheduler->executorManager()->size() == 0)
+    {
+        callback(BCOS_ERROR_UNIQUE_PTR(
+                     SchedulerError::ExecutorNotEstablishedError, "The executor has not started!"),
+            nullptr);
+    }
     m_currentTimePoint = std::chrono::system_clock::now();
 
     bool withDAG = false;

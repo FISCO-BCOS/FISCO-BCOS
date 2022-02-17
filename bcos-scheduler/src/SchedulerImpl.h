@@ -74,6 +74,8 @@ public:
             bcos::protocol::TransactionSubmitResultsPtr, std::function<void(Error::Ptr)>)>
             txNotifier);
 
+    ExecutorManager::Ptr executorManager() { return m_executorManager; }
+
 private:
     void asyncGetLedgerConfig(
         std::function<void(Error::Ptr, ledger::LedgerConfig::Ptr ledgerConfig)> callback);
