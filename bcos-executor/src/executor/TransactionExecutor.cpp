@@ -187,7 +187,7 @@ void TransactionExecutor::dagExecuteTransactions(
     auto callParametersList =
         std::make_shared<std::vector<CallParameters::UniquePtr>>(inputs.size());
 
-#pragma omp parallel for ordered
+#pragma omp parallel for
     for (decltype(inputs)::index_type i = 0; i < inputs.size(); ++i)
     {
         auto& params = inputs[i];
@@ -195,7 +195,7 @@ void TransactionExecutor::dagExecuteTransactions(
         {
         case ExecutionMessage::TXHASH:
         {
-#pragma omp ordered
+#pragma omp critical
             {
                 txHashes->emplace_back(params->transactionHash());
                 indexes.emplace_back(i);
@@ -248,8 +248,7 @@ void TransactionExecutor::dagExecuteTransactions(
                 }
                 else
                 {
-                    dagExecuteTransactionsForEvm(
-                        *callParametersList, *txHashes, indexes, std::move(callback));
+                    dagExecuteTransactionsForEvm(*callParametersList, std::move(callback));
                 }
             });
     }
@@ -261,15 +260,12 @@ void TransactionExecutor::dagExecuteTransactions(
         }
         else
         {
-            dagExecuteTransactionsForEvm(
-                *callParametersList, *txHashes, indexes, std::move(callback));
+            dagExecuteTransactionsForEvm(*callParametersList, std::move(callback));
         }
     }
 }
 
 void TransactionExecutor::dagExecuteTransactionsForEvm(gsl::span<CallParameters::UniquePtr> inputs,
-    const bcos::crypto::HashList& txHashList,
-    const std::vector<decltype(inputs)::index_type>& indexes,
     std::function<void(
         bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
         callback)
@@ -288,15 +284,6 @@ void TransactionExecutor::dagExecuteTransactionsForEvm(gsl::span<CallParameters:
         {
             executionResults[i] = toExecutionResult(std::move(inputs[i]));
             executionResults[i]->setType(ExecutionMessage::SEND_BACK);
-
-            auto it = std::lower_bound(indexes.begin(), indexes.end(), i);
-            if (it == indexes.end() || *it != i)
-            {
-                BOOST_THROW_EXCEPTION(BCOS_ERROR(
-                    -1, "Unexpect not found index! " + boost::lexical_cast<std::string>(i)));
-            }
-            auto txHashIndex = it - indexes.begin();
-            executionResults[i]->setTransactionHash(txHashList[txHashIndex]);
         }
     }
 
