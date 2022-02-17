@@ -920,11 +920,12 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->create = input.create();
     callParameters->data = tx.input().toBytes();
     callParameters->keyLocks = input.takeKeyLocks();
-
+    callParameters->abi = tx.abi();
     return callParameters;
 }
 
-void TransactionExecutor::executeTransactionsWithCriticals(critical::CriticalFieldsInterface::Ptr criticals,
+void TransactionExecutor::executeTransactionsWithCriticals(
+    critical::CriticalFieldsInterface::Ptr criticals,
     gsl::span<std::unique_ptr<CallParameters>> inputs,
     vector<protocol::ExecutionMessage::UniquePtr>& executionResults)
 {
@@ -935,7 +936,7 @@ void TransactionExecutor::executeTransactionsWithCriticals(critical::CriticalFie
         auto executive =
             createExecutive(m_blockContext, input->codeAddress, input->contextID, input->seq);
 
-        EXECUTOR_LOG(DEBUG) << LOG_BADGE("dagExecuteTransactionsForEvm")
+        EXECUTOR_LOG(DEBUG) << LOG_BADGE("executeTransactionsWithCriticals")
                             << LOG_DESC("Start transaction") << LOG_KV("to", input->receiveAddress)
                             << LOG_KV("data", toHexStringWithPrefix(input->data));
         try

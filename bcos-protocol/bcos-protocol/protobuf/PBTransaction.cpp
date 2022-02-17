@@ -28,7 +28,8 @@ using namespace bcos::crypto;
 
 PBTransaction::PBTransaction(bcos::crypto::CryptoSuite::Ptr _cryptoSuite, int32_t _version,
     const std::string_view& _to, bytes const& _input, u256 const& _nonce, int64_t _blockLimit,
-    std::string const& _chainId, std::string const& _groupId, int64_t _importTime)
+    std::string const& _chainId, std::string const& _groupId, int64_t _importTime,
+    std::string const& _abi)
   : PBTransaction(_cryptoSuite)
 {
     m_transactionHashFields->set_version(_version);
@@ -49,6 +50,8 @@ PBTransaction::PBTransaction(bcos::crypto::CryptoSuite::Ptr _cryptoSuite, int32_
     m_transactionHashFields->set_chainid(_chainId);
     // set groupId
     m_transactionHashFields->set_groupid(_groupId);
+    m_transactionHashFields->set_abi(_abi);
+
     // encode hashFields
     auto encodedHashFieldsData = encodePBObject(m_transactionHashFields);
     m_transaction->set_hashfieldsdata(encodedHashFieldsData->data(), encodedHashFieldsData->size());

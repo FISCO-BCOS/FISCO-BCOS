@@ -36,7 +36,8 @@ public:
     using Ptr = std::shared_ptr<PBTransaction>;
     PBTransaction(bcos::crypto::CryptoSuite::Ptr _cryptoSuite, int32_t _version,
         const std::string_view& _to, bytes const& _input, u256 const& _nonce, int64_t _blockLimit,
-        std::string const& _chainId, std::string const& _groupId, int64_t _importTime);
+        std::string const& _chainId, std::string const& _groupId, int64_t _importTime,
+        std::string const& _abi = "");
 
     explicit PBTransaction(
         bcos::crypto::CryptoSuite::Ptr _cryptoSuite, bytesConstRef _txData, bool _checkSig);

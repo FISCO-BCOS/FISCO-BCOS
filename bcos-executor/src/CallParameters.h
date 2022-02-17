@@ -36,8 +36,9 @@ struct CallParameters
     std::string receiveAddress;  // common field, readable format
     std::string origin;          // common field, readable format
 
-    int64_t gas = 0;   // common field
-    bcos::bytes data;  // common field, transaction data, binary format
+    int64_t gas = 0;             // common field
+    bcos::bytes data;            // common field, transaction data, binary format
+    std::string abi;             // common field, contract abi, json format
 
     std::vector<std::string> keyLocks;  // common field
     std::string acquireKeyLock;         // by response
