@@ -138,13 +138,26 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
     if (!commitLock->owns_lock())
     {
         std::string message;
-        assert(!m_blocks.empty());
-
-        auto& frontBlock = m_blocks.front();
-
-        message = (boost::format("Another block is committing! Block number: %ld") %
-                   frontBlock.block()->blockHeaderConst()->number())
-                      .str();
+        {
+            std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
+            if (m_blocks.empty())
+            {
+                message = (boost::format("commitBlock: empty block queue, maybe the block has been "
+                                         "committed! Block number: %ld, hash: %s") %
+                           header->number() % header->hash().abridged())
+                              .str();
+            }
+            else
+            {
+                auto& frontBlock = m_blocks.front();
+                message =
+                    (boost::format(
+                         "commitBlock: Another block is committing! Block number: %ld, hash: %s") %
+                        frontBlock.block()->blockHeaderConst()->number() %
+                        frontBlock.block()->blockHeaderConst()->hash().abridged())
+                        .str();
+            }
+        }
         SCHEDULER_LOG(ERROR) << "CommitBlock error, " << message;
         callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidStatus, message), nullptr);
         return;
