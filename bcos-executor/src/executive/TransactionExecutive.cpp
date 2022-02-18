@@ -219,7 +219,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
     }
     else
     {
-        auto tableName = getContractTableName(callParameters->codeAddress);
+        auto tableName = getContractTableName(callParameters->codeAddress, blockContext->isWasm());
         // check permission first
         if (blockContext->isAuthCheck() && !blockContext->isWasm())
         {
@@ -357,7 +357,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
     }
 
     // Create the table first
-    auto tableName = getContractTableName(newAddress);
+    auto tableName = getContractTableName(newAddress, blockContext->isWasm());
     try
     {
         m_storageWrapper->createTable(tableName, STORAGE_VALUE);
@@ -947,7 +947,8 @@ void TransactionExecutive::creatAuthTable(
 {
     // Create the access table
     //  /sys/ not create
-    if (_tableName.substr(0, 5) == "/sys/" || getContractTableName(_sender).substr(0, 5) == "/sys/")
+    if (_tableName.substr(0, 5) == "/sys/" ||
+        getContractTableName(_sender, false).substr(0, 5) == "/sys/")
     {
         return;
     }
@@ -956,7 +957,7 @@ void TransactionExecutive::creatAuthTable(
     std::string_view admin;
     if (_sender != _origin)
     {
-        auto senderAuthTable = getContractTableName(_sender).append(CONTRACT_SUFFIX);
+        auto senderAuthTable = getContractTableName(_sender, false).append(CONTRACT_SUFFIX);
         auto entry = m_storageWrapper->getRow(std::move(senderAuthTable), ADMIN_FIELD);
         admin = entry->getField(0);
     }
