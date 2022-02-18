@@ -358,12 +358,15 @@ inline bytes toBytes(const std::string_view& _addr)
     return {(char*)_addr.data(), (char*)(_addr.data() + _addr.size())};
 }
 
-inline std::string getContractTableName(const std::string_view& _address)
+inline std::string getContractTableName(const std::string_view& _address, bool _isWasm)
 {
-    std::string addressLower(_address);
-    boost::algorithm::to_lower(addressLower);
+    std::string formatAddress(_address);
+    if (!_isWasm)
+    {
+        boost::algorithm::to_lower(formatAddress);
+    }
 
-    std::string address = (_address[0] == '/') ? addressLower.substr(1) : addressLower;
+    std::string address = (_address[0] == '/') ? formatAddress.substr(1) : formatAddress;
 
     return std::string("/apps/").append(address);
 }
