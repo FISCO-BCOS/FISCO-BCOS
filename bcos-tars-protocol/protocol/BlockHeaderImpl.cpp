@@ -63,6 +63,7 @@ void BlockHeaderImpl::clear()
 
 gsl::span<const bcos::protocol::ParentInfo> BlockHeaderImpl::parentInfo() const
 {
+    bcos::ReadGuard l(x_inner);
     if (m_parentInfo.empty())
     {
         for (auto const& it : m_inner()->data.parentInfo)
@@ -117,6 +118,7 @@ bcos::u256 BlockHeaderImpl::gasUsed() const
 
 void BlockHeaderImpl::setParentInfo(gsl::span<const bcos::protocol::ParentInfo> const& _parentInfo)
 {
+    bcos::WriteGuard l(x_inner);
     m_parentInfo.clear();
     m_inner()->data.parentInfo.clear();
     for (auto& it : _parentInfo)
@@ -140,6 +142,7 @@ void BlockHeaderImpl::setSealerList(gsl::span<const bcos::bytes> const& _sealerL
 void BlockHeaderImpl::setSignatureList(
     gsl::span<const bcos::protocol::Signature> const& _signatureList)
 {
+    bcos::WriteGuard l(x_inner);
     // Note: must clear the old signatureList when set the new signatureList
     // in case of the consensus module get the cached-sync-blockHeader with signatureList which will
     // cause redundant signature lists to be stored
