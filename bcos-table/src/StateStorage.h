@@ -400,7 +400,6 @@ public:
         std::optional<Entry> entryOld;
 
         auto [bucket, lock] = getBucket(tableView, keyView);
-        boost::ignore_unused(lock);
 
         auto it = bucket->container.find(std::make_tuple(tableView, keyView));
         if (it != bucket->container.end())
@@ -445,9 +444,9 @@ public:
 #pragma omp parallel for
         for (size_t i = 0; i < m_buckets.size(); ++i)
         {
-            auto& bucket = m_buckets[i];
+            auto [bucket, lock] = getBucket(i);
 
-            for (auto& it : bucket.container)
+            for (auto& it : bucket->container)
             {
                 auto& entry = it.entry;
                 if (!onlyDirty || entry.dirty())
@@ -517,10 +516,10 @@ public:
 #pragma omp parallel for
         for (size_t i = 0; i < m_buckets.size(); ++i)
         {
-            auto& bucket = m_buckets[i];
+            auto [bucket, lock] = getBucket(i);
             bcos::crypto::HashType bucketHash;
 
-            for (auto& it : bucket.container)
+            for (auto& it : bucket->container)
             {
                 auto& entry = it.entry;
                 if (entry.dirty())
@@ -725,7 +724,7 @@ private:
     struct Bucket
     {
         Container container;
-        std::mutex mutex;
+        mutable std::mutex mutex;
         ssize_t capacity = 0;
     };
     std::vector<Bucket> m_buckets;
@@ -737,6 +736,12 @@ private:
         boost::hash_combine(hash, std::hash<std::string_view>{}(key));
         auto index = hash % m_buckets.size();
 
+        auto& bucket = m_buckets[index];
+        return std::make_tuple(&bucket, std::unique_lock<std::mutex>(bucket.mutex));
+    }
+
+    std::tuple<const Bucket*, std::unique_lock<std::mutex>> getBucket(size_t index) const
+    {
         auto& bucket = m_buckets[index];
         return std::make_tuple(&bucket, std::unique_lock<std::mutex>(bucket.mutex));
     }

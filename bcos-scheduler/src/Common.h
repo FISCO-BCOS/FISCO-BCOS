@@ -24,6 +24,7 @@ enum SchedulerError
     DMTError,
     DAGError,
     ExecutorNotEstablishedError,
+    TERMINATED,
 };
 
 inline const uint64_t TRANSACTION_GAS = 30000000000;

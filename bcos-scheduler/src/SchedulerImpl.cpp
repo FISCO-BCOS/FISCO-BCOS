@@ -41,22 +41,22 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         auto& backBlock = m_blocks.back();
 
         // Block already executed
-        if (requestNumber >= frontBlock.number() && requestNumber <= backBlock.number())
+        if (requestNumber >= frontBlock->number() && requestNumber <= backBlock->number())
         {
             SCHEDULER_LOG(INFO) << "ExecuteBlock success, return executed block"
                                 << LOG_KV("block number", block->blockHeaderConst()->number())
                                 << LOG_KV("verify", verify);
 
             auto it = m_blocks.begin();
-            while (it->number() != requestNumber)
+            while ((*it)->number() != requestNumber)
             {
                 ++it;
             }
 
             SCHEDULER_LOG(TRACE) << "BlockHeader stateRoot: " << std::hex
-                                 << it->result()->stateRoot();
+                                 << (*it)->result()->stateRoot();
 
-            auto blockHeader = it->result();
+            auto blockHeader = (*it)->result();
 
             blocksLock.unlock();
             executeLock->unlock();
@@ -64,12 +64,12 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
             return;
         }
 
-        if (requestNumber - backBlock.number() != 1)
+        if (requestNumber - backBlock->number() != 1)
         {
             auto message =
                 "Invalid block number: " +
                 boost::lexical_cast<std::string>(block->blockHeaderConst()->number()) +
-                " current last number: " + boost::lexical_cast<std::string>(backBlock.number());
+                " current last number: " + boost::lexical_cast<std::string>(backBlock->number());
             SCHEDULER_LOG(ERROR) << "ExecuteBlock error, " << message;
 
             blocksLock.unlock();
@@ -94,13 +94,13 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
             return;
         }
     }
-    m_blocks.emplace_back(
-        std::move(block), this, 0, m_transactionSubmitResultFactory, false, m_blockFactory, verify);
+    m_blocks.emplace_back(std::make_shared<BlockExecutive>(std::move(block), this, 0,
+        m_transactionSubmitResultFactory, false, m_blockFactory, verify));
     auto& blockExecutive = m_blocks.back();
 
     blocksLock.unlock();
-    blockExecutive.asyncExecute([this, callback = std::move(callback), executeLock](
-                                    Error::UniquePtr error, protocol::BlockHeader::Ptr header) {
+    blockExecutive->asyncExecute([this, callback = std::move(callback), executeLock](
+                                     Error::UniquePtr error, protocol::BlockHeader::Ptr header) {
         if (error)
         {
             SCHEDULER_LOG(ERROR) << "Unknown error, " << boost::diagnostic_information(*error);
@@ -153,8 +153,8 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                 message =
                     (boost::format(
                          "commitBlock: Another block is committing! Block number: %ld, hash: %s") %
-                        frontBlock.block()->blockHeaderConst()->number() %
-                        frontBlock.block()->blockHeaderConst()->hash().abridged())
+                        frontBlock->block()->blockHeaderConst()->number() %
+                        frontBlock->block()->blockHeaderConst()->hash().abridged())
                         .str();
             }
         }
@@ -174,7 +174,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
     }
 
     auto& frontBlock = m_blocks.front();
-    if (!frontBlock.result())
+    if (!frontBlock->result())
     {
         auto message = "Block is executing";
         SCHEDULER_LOG(ERROR) << "CommitBlock error, " << message;
@@ -184,19 +184,19 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
         return;
     }
 
-    if (header->number() != frontBlock.number())
+    if (header->number() != frontBlock->number())
     {
         auto message = "Invalid block number, available block number: " +
-                       boost::lexical_cast<std::string>(frontBlock.number());
+                       boost::lexical_cast<std::string>(frontBlock->number());
         SCHEDULER_LOG(ERROR) << "CommitBlock error, " << message;
 
         commitLock->unlock();
         callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidBlockNumber, message), nullptr);
         return;
     }
-    frontBlock.block()->setBlockHeader(std::move(header));
-    frontBlock.asyncCommit([this, callback = std::move(callback), block = frontBlock.block(),
-                               commitLock](Error::UniquePtr&& error) {
+    frontBlock->block()->setBlockHeader(std::move(header));
+    frontBlock->asyncCommit([this, callback = std::move(callback), block = frontBlock->block(),
+                                commitLock](Error::UniquePtr&& error) {
         if (error)
         {
             SCHEDULER_LOG(ERROR) << "CommitBlock error, " << boost::diagnostic_information(*error);
@@ -232,7 +232,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
             if (m_txNotifier)
             {
                 SCHEDULER_LOG(INFO) << "Start notify block result: " << blockNumber;
-                frontBlock.asyncNotify(m_txNotifier,
+                frontBlock->asyncNotify(m_txNotifier,
                     [this, blockNumber, callback = std::move(callback),
                         ledgerConfig = std::move(ledgerConfig),
                         commitLock = std::move(commitLock)](Error::Ptr _error) mutable {

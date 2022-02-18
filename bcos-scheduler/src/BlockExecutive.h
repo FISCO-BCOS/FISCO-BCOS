@@ -31,8 +31,6 @@ class SchedulerImpl;
 class BlockExecutive : public std::enable_shared_from_this<BlockExecutive>
 {
 public:
-    using UniquePtr = std::unique_ptr<BlockExecutive>;
-
     BlockExecutive(bcos::protocol::Block::Ptr block, SchedulerImpl* scheduler,
         size_t startContextID,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,

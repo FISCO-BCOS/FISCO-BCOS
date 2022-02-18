@@ -477,7 +477,8 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
 void BlockExecutive::DMTExecute(
     std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback)
 {
-    startBatch([this, callback = std::move(callback)](Error::UniquePtr&& error) {
+    startBatch([selfWeak = std::weak_ptr(shared_from_this()), callback = std::move(callback)](
+                   Error::UniquePtr&& error) {
         if (error)
         {
             callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
@@ -485,33 +486,42 @@ void BlockExecutive::DMTExecute(
                 nullptr);
             return;
         }
-        if (!m_executiveStates.empty())
+
+        auto self = selfWeak.lock();
+        if (!self)
+        {
+            callback(
+                BCOS_ERROR_UNIQUE_PTR(SchedulerError::TERMINATED, "Execute Terminated"), nullptr);
+            return;
+        }
+
+        if (!self->m_executiveStates.empty())
         {
             SCHEDULER_LOG(TRACE) << "Non empty states, continue startBatch";
-            DMTExecute(callback);
+            self->DMTExecute(callback);
         }
         else
         {
             SCHEDULER_LOG(TRACE) << "Empty states, end";
             auto now = std::chrono::system_clock::now();
-            m_executeElapsed =
-                std::chrono::duration_cast<std::chrono::milliseconds>(now - m_currentTimePoint);
-            m_currentTimePoint = now;
+            self->m_executeElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                now - self->m_currentTimePoint);
+            self->m_currentTimePoint = now;
 
-            if (m_staticCall)
+            if (self->m_staticCall)
             {
                 // Set result to m_block
-                for (auto& it : m_executiveResults)
+                for (auto& it : self->m_executiveResults)
                 {
-                    m_block->appendReceipt(it.receipt);
+                    self->m_block->appendReceipt(it.receipt);
                 }
                 callback(nullptr, nullptr);
             }
             else
             {
                 // All Transaction finished, get hash
-                batchGetHashes([this, callback = std::move(callback)](
-                                   Error::UniquePtr error, crypto::HashType hash) {
+                self->batchGetHashes([selfWeak, callback = std::move(callback)](
+                                         Error::UniquePtr error, crypto::HashType hash) {
                     if (error)
                     {
                         callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
@@ -520,24 +530,33 @@ void BlockExecutive::DMTExecute(
                         return;
                     }
 
-                    m_hashElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::system_clock::now() - m_currentTimePoint);
+                    auto self = selfWeak.lock();
+                    if (!self)
+                    {
+                        callback(
+                            BCOS_ERROR_UNIQUE_PTR(SchedulerError::TERMINATED, "Execute Terminated"),
+                            nullptr);
+                        return;
+                    }
+
+                    self->m_hashElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::system_clock::now() - self->m_currentTimePoint);
 
                     // Set result to m_block
-                    for (auto& it : m_executiveResults)
+                    for (auto& it : self->m_executiveResults)
                     {
-                        m_block->appendReceipt(it.receipt);
+                        self->m_block->appendReceipt(it.receipt);
                     }
                     auto executedBlockHeader =
-                        m_blockFactory->blockHeaderFactory()->populateBlockHeader(
-                            m_block->blockHeader());
+                        self->m_blockFactory->blockHeaderFactory()->populateBlockHeader(
+                            self->m_block->blockHeader());
                     executedBlockHeader->setStateRoot(hash);
-                    executedBlockHeader->setGasUsed(m_gasUsed);
-                    executedBlockHeader->setTxsRoot(m_block->calculateTransactionRoot());
-                    executedBlockHeader->setReceiptsRoot(m_block->calculateReceiptRoot());
+                    executedBlockHeader->setGasUsed(self->m_gasUsed);
+                    executedBlockHeader->setTxsRoot(self->m_block->calculateTransactionRoot());
+                    executedBlockHeader->setReceiptsRoot(self->m_block->calculateReceiptRoot());
 
-                    m_result = executedBlockHeader;
-                    callback(nullptr, m_result);
+                    self->m_result = executedBlockHeader;
+                    callback(nullptr, self->m_result);
                 });
             }
         }
@@ -548,15 +567,23 @@ void BlockExecutive::batchNextBlock(std::function<void(Error::UniquePtr)> callba
 {
     auto status = std::make_shared<CommitStatus>();
     status->total = m_scheduler->m_executorManager->size();
-    status->checkAndCommit = [this, callback = std::move(callback)](const CommitStatus& status) {
+    status->checkAndCommit = [selfWeak = std::weak_ptr<BlockExecutive>(shared_from_this()),
+                                 callback = std::move(callback)](const CommitStatus& status) {
         if (status.success + status.failed < status.total)
         {
             return;
         }
 
+        auto self = selfWeak.lock();
+        if (!self)
+        {
+            callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::TERMINATED, "Execute Terminated"));
+            return;
+        }
+
         if (status.failed > 0)
         {
-            auto message = "Next block:" + boost::lexical_cast<std::string>(number()) +
+            auto message = "Next block:" + boost::lexical_cast<std::string>(self->number()) +
                            " with errors! " + boost::lexical_cast<std::string>(status.failed);
             SCHEDULER_LOG(ERROR) << message;
 
@@ -595,16 +622,24 @@ void BlockExecutive::batchGetHashes(
 
     auto status = std::make_shared<CommitStatus>();
     status->total = m_scheduler->m_executorManager->size();  // all executors
-    status->checkAndCommit = [this, totalHash, callback = std::move(callback)](
-                                 const CommitStatus& status) {
+    status->checkAndCommit = [selfWeak = std::weak_ptr<BlockExecutive>(shared_from_this()),
+                                 totalHash,
+                                 callback = std::move(callback)](const CommitStatus& status) {
         if (status.success + status.failed < status.total)
         {
             return;
         }
 
+        auto self = selfWeak.lock();
+        if (!self)
+        {
+            callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::TERMINATED, "Execute Terminated"), {});
+            return;
+        }
+
         if (status.failed > 0)
         {
-            auto message = "Commit block:" + boost::lexical_cast<std::string>(number()) +
+            auto message = "Commit block:" + boost::lexical_cast<std::string>(self->number()) +
                            " with errors! " + boost::lexical_cast<std::string>(status.failed);
             SCHEDULER_LOG(WARNING) << message;
 
@@ -644,15 +679,23 @@ void BlockExecutive::batchBlockCommit(std::function<void(Error::UniquePtr)> call
 {
     auto status = std::make_shared<CommitStatus>();
     status->total = 1 + m_scheduler->m_executorManager->size();  // self + all executors
-    status->checkAndCommit = [this, callback = std::move(callback)](const CommitStatus& status) {
+    status->checkAndCommit = [selfWeak = std::weak_ptr<BlockExecutive>(shared_from_this()),
+                                 callback = std::move(callback)](const CommitStatus& status) {
         if (status.success + status.failed < status.total)
         {
             return;
         }
 
+        auto self = selfWeak.lock();
+        if (!self)
+        {
+            callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::TERMINATED, "Execute Terminated"));
+            return;
+        }
+
         if (status.failed > 0)
         {
-            auto message = "Commit block:" + boost::lexical_cast<std::string>(number()) +
+            auto message = "Commit block:" + boost::lexical_cast<std::string>(self->number()) +
                            " with errors! " + boost::lexical_cast<std::string>(status.failed);
             SCHEDULER_LOG(WARNING) << message;
 
@@ -665,55 +708,69 @@ void BlockExecutive::batchBlockCommit(std::function<void(Error::UniquePtr)> call
 
     storage::TransactionalStorageInterface::TwoPCParams params;
     params.number = number();
-    m_scheduler->m_storage->asyncCommit(params, [status, this](Error::Ptr&& error) {
-        if (error)
-        {
-            SCHEDULER_LOG(ERROR) << "Commit storage error!"
-                                 << boost::diagnostic_information(*error);
+    m_scheduler->m_storage->asyncCommit(params,
+        [status, selfWeak = std::weak_ptr<BlockExecutive>(shared_from_this())](Error::Ptr&& error) {
+            if (error)
+            {
+                SCHEDULER_LOG(ERROR)
+                    << "Commit storage error!" << boost::diagnostic_information(*error);
 
-            ++status->failed;
-        }
-        else
-        {
-            ++status->success;
-        }
+                ++status->failed;
+            }
+            else
+            {
+                ++status->success;
+            }
 
-        executor::ParallelTransactionExecutorInterface::TwoPCParams executorParams;
-        executorParams.number = number();
-        tbb::parallel_for_each(m_scheduler->m_executorManager->begin(),
-            m_scheduler->m_executorManager->end(), [&](auto const& executorIt) {
-                executorIt->commit(executorParams, [status](bcos::Error::Ptr&& error) {
-                    if (error)
-                    {
-                        SCHEDULER_LOG(ERROR)
-                            << "Commit executor error!" << boost::diagnostic_information(*error);
-                        ++status->failed;
-                    }
-                    else
-                    {
-                        ++status->success;
-                        SCHEDULER_LOG(DEBUG)
-                            << "Commit executor success, success: " << status->success;
-                    }
-                    status->checkAndCommit(*status);
+            auto self = selfWeak.lock();
+            if (!self)
+            {
+                return;
+            }
+
+            executor::ParallelTransactionExecutorInterface::TwoPCParams executorParams;
+            executorParams.number = self->number();
+            tbb::parallel_for_each(self->m_scheduler->m_executorManager->begin(),
+                self->m_scheduler->m_executorManager->end(), [&](auto const& executorIt) {
+                    executorIt->commit(executorParams, [status](bcos::Error::Ptr&& error) {
+                        if (error)
+                        {
+                            SCHEDULER_LOG(ERROR) << "Commit executor error!"
+                                                 << boost::diagnostic_information(*error);
+                            ++status->failed;
+                        }
+                        else
+                        {
+                            ++status->success;
+                            SCHEDULER_LOG(DEBUG)
+                                << "Commit executor success, success: " << status->success;
+                        }
+                        status->checkAndCommit(*status);
+                    });
                 });
-            });
-    });
+        });
 }
 
 void BlockExecutive::batchBlockRollback(std::function<void(Error::UniquePtr)> callback)
 {
     auto status = std::make_shared<CommitStatus>();
     status->total = 1 + m_scheduler->m_executorManager->size();  // self + all executors
-    status->checkAndCommit = [this, callback = std::move(callback)](const CommitStatus& status) {
+    status->checkAndCommit = [selfWeak = std::weak_ptr<BlockExecutive>(shared_from_this()),
+                                 callback = std::move(callback)](const CommitStatus& status) {
         if (status.success + status.failed < status.total)
         {
             return;
         }
 
+        auto self = selfWeak.lock();
+        if (!self)
+        {
+            callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::TERMINATED, "Execute Terminated"));
+        }
+
         if (status.failed > 0)
         {
-            auto message = "Rollback block:" + boost::lexical_cast<std::string>(number()) +
+            auto message = "Rollback block:" + boost::lexical_cast<std::string>(self->number()) +
                            " with errors! " + boost::lexical_cast<std::string>(status.failed);
             SCHEDULER_LOG(WARNING) << message;
 
@@ -767,8 +824,15 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
     auto batchStatus = std::make_shared<BatchStatus>();
     batchStatus->callback = std::move(callback);
 
-    traverseExecutive([this, &batchStatus, calledContract = std::set<std::string, std::less<>>()](
+    traverseExecutive([selfWeak = std::weak_ptr<BlockExecutive>(shared_from_this()), &batchStatus,
+                          calledContract = std::set<std::string, std::less<>>()](
                           ExecutiveState& executiveState) mutable {
+        auto self = selfWeak.lock();
+        if (!self)
+        {
+            return END;
+        }
+
         if (executiveState.error)
         {
             batchStatus->allSended = true;
@@ -810,12 +874,12 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
             {
                 if (message->createSalt())
                 {
-                    message->setTo(
-                        newEVMAddress(message->from(), message->data(), *(message->createSalt())));
+                    message->setTo(self->newEVMAddress(
+                        message->from(), message->data(), *(message->createSalt())));
                 }
                 else
                 {
-                    message->setTo(newEVMAddress(number(), contextID, newSeq));
+                    message->setTo(self->newEVMAddress(self->number(), contextID, newSeq));
                 }
             }
             executiveState.callStack.push(newSeq);
@@ -836,16 +900,16 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
             // Empty stack, execution is finished
             if (executiveState.callStack.empty())
             {
-                m_executiveResults[executiveState.contextID].receipt =
-                    m_scheduler->m_blockFactory->receiptFactory()->createReceipt(
+                self->m_executiveResults[executiveState.contextID].receipt =
+                    self->m_scheduler->m_blockFactory->receiptFactory()->createReceipt(
                         message->gasAvailable(), message->newEVMContractAddress(),
                         std::make_shared<std::vector<bcos::protocol::LogEntry>>(
                             message->takeLogEntries()),
                         message->status(), message->takeData(),
-                        m_block->blockHeaderConst()->number());
+                        self->m_block->blockHeaderConst()->number());
 
                 // Calc the gas
-                m_gasUsed += (TRANSACTION_GAS - message->gasAvailable());
+                self->m_gasUsed += (TRANSACTION_GAS - message->gasAvailable());
 
                 // Remove executive state and continue
                 SCHEDULER_LOG(TRACE)
@@ -879,7 +943,7 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
         case protocol::ExecutionMessage::KEY_LOCK:
         {
             // Try acquire key lock
-            if (!m_keyLocks.acquireKeyLock(
+            if (!self->m_keyLocks.acquireKeyLock(
                     message->from(), message->keyLockAcquired(), contextID, seq))
             {
                 SCHEDULER_LOG(TRACE)
@@ -912,12 +976,12 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
             {
                 if (message->createSalt())
                 {
-                    message->setTo(
-                        newEVMAddress(message->from(), message->data(), *(message->createSalt())));
+                    message->setTo(self->newEVMAddress(
+                        message->from(), message->data(), *(message->createSalt())));
                 }
                 else
                 {
-                    message->setTo(newEVMAddress(number(), contextID, seq));
+                    message->setTo(self->newEVMAddress(self->number(), contextID, seq));
                 }
             }
 
@@ -928,7 +992,7 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
         calledContract.emplace_hint(contractIt, message->to());
 
         // Set current key lock into message
-        auto keyLocks = m_keyLocks.getKeyLocksNotHoldingByContext(message->to(), contextID);
+        auto keyLocks = self->m_keyLocks.getKeyLocksNotHoldingByContext(message->to(), contextID);
         message->setKeyLocks(std::move(keyLocks));
 
         if (c_fileLogLevel >= bcos::LogLevel::TRACE)
@@ -945,9 +1009,9 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
         }
 
         ++batchStatus->total;
-        auto executor = m_scheduler->m_executorManager->dispatchExecutor(message->to());
+        auto executor = self->m_scheduler->m_executorManager->dispatchExecutor(message->to());
 
-        auto executeCallback = [this, &executiveState, batchStatus](bcos::Error::UniquePtr error,
+        auto executeCallback = [self, &executiveState, batchStatus](bcos::Error::UniquePtr error,
                                    bcos::protocol::ExecutionMessage::UniquePtr response) {
             if (error)
             {
@@ -974,7 +1038,7 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
             SCHEDULER_LOG(TRACE) << "Execute is finished!";
 
             ++batchStatus->received;
-            checkBatch(*batchStatus);
+            self->checkBatch(*batchStatus);
         };
 
         if (executiveState.message->staticCall())

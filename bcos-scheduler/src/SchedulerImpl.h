@@ -80,7 +80,7 @@ private:
     void asyncGetLedgerConfig(
         std::function<void(Error::Ptr, ledger::LedgerConfig::Ptr ledgerConfig)> callback);
 
-    std::list<BlockExecutive> m_blocks;
+    std::list<std::shared_ptr<BlockExecutive>> m_blocks;
     std::mutex m_blocksMutex;
 
     std::mutex m_executeMutex;
