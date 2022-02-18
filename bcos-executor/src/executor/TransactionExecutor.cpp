@@ -544,15 +544,15 @@ void TransactionExecutor::dagExecuteTransactionsForWasm(
             assert(conflictField.size() >= sizeof(size_t));
 
             auto slot = *(size_t*)conflictField.data();
-            auto iter = slotUsage.find(slot);
-            if (iter != slotUsage.end() && iter->second != index)
+            auto slotIter = slotUsage.find(slot);
+            if (slotIter != slotUsage.end() && slotIter->second != index)
             {
                 noDeps = false;
-                make_edge(tasks[iter->second], tasks[index]);
+                make_edge(tasks[slotIter->second], tasks[index]);
 
                 EXECUTOR_LOG(DEBUG) << LOG_BADGE("dagExecuteTransactionsForWasm")
                                     << LOG_DESC("Make dependency for slot")
-                                    << LOG_KV("from", iter->second) << LOG_KV("to", index);
+                                    << LOG_KV("from", slotIter->second) << LOG_KV("to", index);
             }
 
             if (conflictField.size() != sizeof(size_t))
@@ -950,8 +950,6 @@ void TransactionExecutor::getCode(
 {
     EXECUTOR_LOG(INFO) << "Get code request" << LOG_KV("Contract", contract);
 
-    BlockContext::Ptr blockContext;
-
     storage::StorageInterface::Ptr storage;
 
     if (m_cachedStorage)
@@ -963,7 +961,7 @@ void TransactionExecutor::getCode(
         storage = m_backendStorage;
     }
 
-    auto tableName = getContractTableName(contract);
+    auto tableName = getContractTableName(contract, m_isWasm);
     storage->asyncGetRow(tableName, "code",
         [callback = std::move(callback)](Error::UniquePtr error, std::optional<Entry> entry) {
             if (error)
