@@ -39,12 +39,13 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         auto requestNumber = block->blockHeaderConst()->number();
         auto& frontBlock = m_blocks.front();
         auto& backBlock = m_blocks.back();
-
+        auto signature = block->blockHeaderConst()->signatureList();
         // Block already executed
         if (requestNumber >= frontBlock.number() && requestNumber <= backBlock.number())
         {
             SCHEDULER_LOG(INFO) << "ExecuteBlock success, return executed block"
                                 << LOG_KV("block number", block->blockHeaderConst()->number())
+                                << LOG_KV("signatureSize", signature.size())
                                 << LOG_KV("verify", verify);
 
             auto it = m_blocks.begin();
@@ -114,12 +115,14 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
                 nullptr);
             return;
         }
+        auto signature = header->signatureList();
         SCHEDULER_LOG(INFO) << "ExecuteBlock success" << LOG_KV("block number", header->number())
                             << LOG_KV("hash", header->hash().abridged())
                             << LOG_KV("state root", header->stateRoot().hex())
                             << LOG_KV("receiptRoot", header->receiptsRoot().hex())
                             << LOG_KV("txsRoot", header->txsRoot().abridged())
-                            << LOG_KV("gasUsed", header->gasUsed());
+                            << LOG_KV("gasUsed", header->gasUsed())
+                            << LOG_KV("signatureSize", signature.size());
 
         m_lastExecutedBlockNumber.store(header->number());
 
@@ -194,7 +197,15 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
         callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidBlockNumber, message), nullptr);
         return;
     }
-    frontBlock.block()->setBlockHeader(std::move(header));
+    // Note: only when the signatureList is empty need to reset the header
+    // in case of the signatureList of the header is accessing by the sync module while frontBlock
+    // is setting newBlockHeader, which will cause the signatureList ilegal
+    auto executedHeader = frontBlock.block()->blockHeader();
+    auto signature = executedHeader->signatureList();
+    if (signature.size() == 0)
+    {
+        frontBlock.block()->setBlockHeader(std::move(header));
+    }
     frontBlock.asyncCommit([this, callback = std::move(callback), block = frontBlock.block(),
                                commitLock](Error::UniquePtr&& error) {
         if (error)

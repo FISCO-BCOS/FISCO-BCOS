@@ -152,7 +152,7 @@ public:
         m_txPool->notifyConsensusNodeList(_consensusNodeList, [](Error::Ptr _error) {
             if (_error == nullptr)
             {
-                PBFT_LOG(INFO) << LOG_DESC("notify to update consensusNodeList config success");
+                PBFT_LOG(DEBUG) << LOG_DESC("notify to update consensusNodeList config success");
                 return;
             }
             PBFT_LOG(WARNING) << LOG_DESC("notify to update consensusNodeList config failed")
@@ -163,7 +163,7 @@ public:
         m_txPool->notifyObserverNodeList(_observerNodeList, [](Error::Ptr _error) {
             if (_error == nullptr)
             {
-                PBFT_LOG(INFO) << LOG_DESC("notify to update observerNodeList config success");
+                PBFT_LOG(DEBUG) << LOG_DESC("notify to update observerNodeList config success");
                 return;
             }
             PBFT_LOG(WARNING) << LOG_DESC("notify to update observerNodeList config failed")
