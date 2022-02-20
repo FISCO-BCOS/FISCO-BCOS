@@ -241,6 +241,10 @@ bool PBFTCache::checkAndPreCommit()
     {
         return false;
     }
+    if (m_prePrepare && m_prePrepare->view() != m_config->view())
+    {
+        return false;
+    }
     if (!collectEnoughPrepareReq())
     {
         return false;
@@ -275,6 +279,10 @@ bool PBFTCache::checkAndCommit()
     // collect enough commit message before intoPrecommit
     // can only into commit status when precommitted
     if (!m_precommit)
+    {
+        return false;
+    }
+    if (m_precommit->view() != m_config->view())
     {
         return false;
     }

@@ -168,6 +168,7 @@ public:
     {
         m_toView.store(m_view);
         m_timer->resetChangeCycle();
+        m_timeoutState.store(false);
     }
 
     uint64_t maxFaultyQuorum() const { return m_maxFaultyQuorum; }

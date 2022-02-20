@@ -150,8 +150,17 @@ bool BlockValidator::checkSignatureList(Block::Ptr _block)
     {
         auto nodeIndex = sign.index;
         auto nodeInfo = m_config->getConsensusNodeByIndex(nodeIndex);
+        auto signatureData = ref(sign.signature);
+        if (!signatureData.data())
+        {
+            PBFT_LOG(FATAL) << LOG_DESC("BlockValidator checkSignatureList: invalid signature")
+                            << LOG_KV("signatureSize", signatureList.size())
+                            << LOG_KV("nodeIndex", nodeIndex)
+                            << LOG_KV("number", blockHeader->number())
+                            << LOG_KV("hash", blockHeader->hash().abridged());
+        }
         if (!nodeInfo || !m_config->cryptoSuite()->signatureImpl()->verify(
-                             nodeInfo->nodeID(), blockHeader->hash(), ref(sign.signature)))
+                             nodeInfo->nodeID(), blockHeader->hash(), signatureData))
         {
             PBFT_LOG(ERROR) << LOG_DESC("checkBlock for sync module: checkSign failed")
                             << LOG_KV("sealerIdx", nodeIndex)
