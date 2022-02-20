@@ -290,6 +290,13 @@ void SchedulerImpl::status(
 void SchedulerImpl::call(protocol::Transaction::Ptr tx,
     std::function<void(Error::Ptr&&, protocol::TransactionReceipt::Ptr&&)> callback)
 {
+    // call but to is empty,
+    // it will cause tx message be marked as 'create' falsely when asyncExecute tx
+    if (tx->to().empty())
+    {
+        callback(BCOS_ERROR_PTR(SchedulerError::UnknownError, "Call address is empty"), nullptr);
+        return;
+    }
     // Create temp block
     auto block = m_blockFactory->createBlock();
     block->appendTransaction(std::move(tx));
