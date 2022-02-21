@@ -103,13 +103,13 @@ std::shared_ptr<Table> ParallelConfigPrecompiled::openTable(
     auto table = blockContext->storage()->openTable(tableName);
 
     if (!table && _needCreate)
-    {  //__dat_transfer__ is not exist, then create it first.
+    {  // cp_contractName is not exist, then create it first.
+        PRECOMPILED_LOG(DEBUG)
+            << LOG_BADGE("ParallelConfigPrecompiled") << LOG_DESC("create table")
+            << LOG_DESC(" create parallel config table. ") << LOG_KV("tableName", tableName);
         auto ret = _executive->storage().createTable(tableName, PARA_VALUE_NAMES);
         if (ret)
         {
-            PRECOMPILED_LOG(DEBUG)
-                << LOG_BADGE("ParallelConfigPrecompiled") << LOG_DESC("open table")
-                << LOG_DESC(" create parallel config table. ") << LOG_KV("tableName", tableName);
             table = _executive->storage().openTable(tableName);
         }
         else

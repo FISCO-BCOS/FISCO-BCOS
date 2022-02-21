@@ -156,9 +156,41 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
         executorManager->addExecutor("default", parallelExecutor);
 
         // build and init the pbft related modules
-        m_pbftInitializer = std::make_shared<PBFTInitializer>(_nodeArchType, m_nodeConfig,
-            m_protocolInitializer, m_txpoolInitializer->txpool(), ledger, m_scheduler, storage,
-            m_frontServiceInitializer->front());
+        auto consensusStoragePath =
+            m_nodeConfig->storagePath() + c_fileSeparator + c_consensusStorageDBName;
+        if (!_airVersion)
+        {
+            consensusStoragePath = ServerConfig::BasePath + ".." + c_fileSeparator +
+                                   m_nodeConfig->groupId() + c_fileSeparator + consensusStoragePath;
+        }
+        BCOS_LOG(INFO) << LOG_DESC("initNode: init storage for consensus")
+                       << LOG_KV("consensusStoragePath", consensusStoragePath);
+        auto consensusStorage = StorageInitializer::build(consensusStoragePath);
+        // build and init the pbft related modules
+        if (_nodeArchType == NodeArchitectureType::AIR)
+        {
+            m_pbftInitializer = std::make_shared<PBFTInitializer>(_nodeArchType, m_nodeConfig,
+                m_protocolInitializer, m_txpoolInitializer->txpool(), ledger, m_scheduler,
+                consensusStorage, m_frontServiceInitializer->front());
+            // registerOnNodeTypeChanged
+            auto nodeID = m_protocolInitializer->keyPair()->publicKey();
+            auto frontService = m_frontServiceInitializer->front();
+            auto groupID = m_nodeConfig->groupId();
+            auto blockSync =
+                std::dynamic_pointer_cast<bcos::sync::BlockSync>(m_pbftInitializer->blockSync());
+            blockSync->config()->registerOnNodeTypeChanged(
+                [_gateway, groupID, nodeID, frontService](bcos::protocol::NodeType _type) {
+                    _gateway->registerNode(groupID, nodeID, _type, frontService);
+                    BCOS_LOG(INFO) << LOG_DESC("registerNode") << LOG_KV("group", groupID)
+                                   << LOG_KV("node", nodeID->hex()) << LOG_KV("type", _type);
+                });
+        }
+        else
+        {
+            m_pbftInitializer = std::make_shared<ProPBFTInitializer>(_nodeArchType, m_nodeConfig,
+                m_protocolInitializer, m_txpoolInitializer->txpool(), ledger, m_scheduler,
+                consensusStorage, m_frontServiceInitializer->front());
+        }
 
         // init the txpool
         m_txpoolInitializer->init(m_pbftInitializer->sealer());

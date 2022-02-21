@@ -352,11 +352,7 @@ void ConsensusPrecompiled::showConsensusTable(
     const std::shared_ptr<executor::TransactionExecutive>& _executive)
 {
     auto& storage = _executive->storage();
-    if (!storage.openTable(SYS_CONSENSUS))
-    {
-        storage.createTable(SYS_CONSENSUS, SYS_VALUE_FIELDS);
-    }
-
+    // SYS_CONSENSUS must exist
     auto entry = storage.getRow(SYS_CONSENSUS, "key");
 
     if (!entry)
