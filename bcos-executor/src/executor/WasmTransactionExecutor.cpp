@@ -240,49 +240,45 @@ void WasmTransactionExecutor::dagExecuteTransactions(
         callback)
 {
     // for fill block
-    tbb::spin_mutex txHashesMutex;
     auto txHashes = make_shared<HashList>();
-    std::vector<size_t> indexes;
+    std::vector<decltype(inputs)::index_type> indexes;
     auto fillInputs = std::make_shared<std::vector<bcos::protocol::ExecutionMessage::UniquePtr>>();
 
     // final result
     auto callParametersList =
         std::make_shared<std::vector<CallParameters::UniquePtr>>(inputs.size());
 
-    tbb::parallel_for(tbb::blocked_range<size_t>(0, inputs.size()),
-        [this, &inputs, &callParametersList, &txHashes, &txHashesMutex, &indexes, &fillInputs](
-            const tbb::blocked_range<size_t>& range) {
-            for (size_t i = range.begin(); i != range.end(); ++i)
+#pragma omp parallel for
+    for (decltype(inputs)::index_type i = 0; i < inputs.size(); ++i)
+    {
+        auto& params = inputs[i];
+        switch (params->type())
+        {
+        case ExecutionMessage::TXHASH:
+        {
+#pragma omp critical
             {
-                auto& params = inputs[i];
-                switch (params->type())
-                {
-                case ExecutionMessage::TXHASH:
-                {
-                    tbb::spin_mutex::scoped_lock lock(txHashesMutex);
-                    txHashes->emplace_back(params->transactionHash());
-                    indexes.emplace_back(i);
-                    fillInputs->emplace_back(std::move(params));
-
-                    break;
-                }
-                case ExecutionMessage::MESSAGE:
-                {
-                    callParametersList->at(i) = createCallParameters(*params, false);
-                    break;
-                }
-                default:
-                {
-                    auto message =
-                        (boost::format("Unsupported message type: %d") % params->type()).str();
-                    EXECUTOR_LOG(ERROR) << "DAG Execute error, " << message;
-                    // callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::DAG_ERROR, message), {});
-                    break;
-                }
-                }
+                txHashes->emplace_back(params->transactionHash());
+                indexes.emplace_back(i);
+                fillInputs->emplace_back(std::move(params));
             }
-        });
 
+            break;
+        }
+        case ExecutionMessage::MESSAGE:
+        {
+            callParametersList->at(i) = createCallParameters(*params, false);
+            break;
+        }
+        default:
+        {
+            auto message = (boost::format("Unsupported message type: %d") % params->type()).str();
+            EXECUTOR_LOG(ERROR) << "DAG Execute error, " << message;
+            // callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::DAG_ERROR, message), {});
+            break;
+        }
+        }
+    }
     if (!txHashes->empty())
     {
         m_txpool->asyncFillBlock(txHashes,
@@ -299,8 +295,10 @@ void WasmTransactionExecutor::dagExecuteTransactions(
                     return;
                 }
 
+#pragma omp parallel for
                 for (size_t i = 0; i < transactions->size(); ++i)
                 {
+                    assert(transactions->at(i));
                     callParametersList->at(indexes[i]) =
                         createCallParameters(*fillInputs->at(i), *transactions->at(i));
                 }

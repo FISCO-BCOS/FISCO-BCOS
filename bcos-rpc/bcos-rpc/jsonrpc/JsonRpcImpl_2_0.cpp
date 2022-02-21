@@ -486,7 +486,7 @@ void JsonRpcImpl_2_0::call(std::string const& _groupID, std::string const& _node
     const std::string& _to, const std::string& _data, RespFunc _respFunc)
 {
     RPC_IMPL_LOG(TRACE) << LOG_DESC("call") << LOG_KV("to", _to) << LOG_KV("group", _groupID)
-                        << LOG_KV("node", _nodeName);
+                        << LOG_KV("node", _nodeName) << LOG_KV("data", _data);
 
     auto nodeService = getNodeService(_groupID, _nodeName, "call");
     auto transactionFactory = nodeService->blockFactory()->transactionFactory();

@@ -68,6 +68,7 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/thread/latch.hpp>
 #include <boost/throw_exception.hpp>
+#include <algorithm>
 #include <cassert>
 #include <exception>
 #include <functional>
@@ -101,7 +102,8 @@ TransactionExecutor::TransactionExecutor(txpool::TxPoolInterface::Ptr txpool,
     m_backendStorage(std::move(backendStorage)),
     m_executionMessageFactory(std::move(executionMessageFactory)),
     m_hashImpl(std::move(hashImpl)),
-    m_isAuthCheck(isAuthCheck)
+    m_isAuthCheck(isAuthCheck),
+    m_isWasm(false)
 {
     assert(m_backendStorage);
 
@@ -504,8 +506,6 @@ void TransactionExecutor::getCode(
 {
     EXECUTOR_LOG(INFO) << "Get code request" << LOG_KV("Contract", contract);
 
-    BlockContext::Ptr blockContext;
-
     storage::StorageInterface::Ptr storage;
 
     if (m_cachedStorage)
@@ -517,7 +517,7 @@ void TransactionExecutor::getCode(
         storage = m_backendStorage;
     }
 
-    auto tableName = getContractTableName(contract);
+    auto tableName = getContractTableName(contract, m_isWasm);
     storage->asyncGetRow(tableName, "code",
         [callback = std::move(callback)](Error::UniquePtr error, std::optional<Entry> entry) {
             if (error)

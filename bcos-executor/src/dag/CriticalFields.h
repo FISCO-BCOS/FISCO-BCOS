@@ -24,6 +24,7 @@
 #include "TrieSet.h"
 #include <functional>
 #include <map>
+#include <set>
 
 namespace bcos
 {

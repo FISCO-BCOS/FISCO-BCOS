@@ -26,7 +26,6 @@ namespace bcos
 {
 namespace executor
 {
-
 class EvmTransactionExecutor : public TransactionExecutor
 {
 public:
@@ -67,7 +66,6 @@ private:
         storage::StateStorage::Ptr tableFactory) override;
 
     void dagExecuteTransactionsInternal(gsl::span<std::unique_ptr<CallParameters>> inputs,
-        const bcos::crypto::HashList& txHashList,
         std::function<void(
             bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
             callback);

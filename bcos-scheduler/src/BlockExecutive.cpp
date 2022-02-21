@@ -55,6 +55,12 @@ void BlockExecutive::asyncExecute(
         return;
     }
 
+    if (m_scheduler->executorManager()->size() == 0)
+    {
+        callback(BCOS_ERROR_UNIQUE_PTR(
+                     SchedulerError::ExecutorNotEstablishedError, "The executor has not started!"),
+            nullptr);
+    }
     m_currentTimePoint = std::chrono::system_clock::now();
 
     bool withDAG = false;
@@ -413,25 +419,23 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
         auto range = requests.equal_range(it->first);
 
         auto messages = std::make_shared<std::vector<protocol::ExecutionMessage::UniquePtr>>(count);
-        auto iterators =
-            std::make_shared<std::vector<decltype(m_executiveStates)::iterator>>(count);
+        auto iterators = std::vector<decltype(m_executiveStates)::iterator>(count);
         size_t i = 0;
         for (auto messageIt = range.first; messageIt != range.second; ++messageIt)
         {
-            SCHEDULER_LOG(TRACE) << "message: " << messageIt->second->second.message.get()
+            SCHEDULER_LOG(TRACE) << "DAG message: " << messageIt->second->second.message.get()
                                  << " to: " << messageIt->first;
             messageIt->second->second.callStack.push(messageIt->second->second.currentSeq++);
             messages->at(i) = std::move(messageIt->second->second.message);
-            iterators->at(i) = messageIt->second;
+            iterators[i] = messageIt->second;
 
             ++i;
         }
 
         executor->dagExecuteTransactions(*messages,
-            [messages, iterators, totalCount, failed, callbackPtr](bcos::Error::UniquePtr error,
+            [messages, iterators = std::move(iterators), totalCount, failed, callbackPtr](
+                bcos::Error::UniquePtr error,
                 std::vector<bcos::protocol::ExecutionMessage::UniquePtr> responseMessages) {
-                *totalCount -= responseMessages.size();
-
                 if (error)
                 {
                     ++(*failed);
@@ -445,12 +449,16 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
                 }
                 else
                 {
+#pragma omp parallel for
                     for (size_t i = 0; i < responseMessages.size(); ++i)
                     {
-                        (*iterators)[i]->second.message = std::move(responseMessages[i]);
+                        assert(responseMessages[i]);
+                        iterators[i]->second.message = std::move(responseMessages[i]);
                     }
                 }
 
+                totalCount->fetch_sub(responseMessages.size());
+                // TODO: must wait more response
                 if (*totalCount == 0)
                 {
                     if (*failed > 0)

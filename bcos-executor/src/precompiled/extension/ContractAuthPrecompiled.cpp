@@ -182,8 +182,12 @@ void ContractAuthPrecompiled::getAdmin(
         codec->decode(data, contractAddress);
         path = contractAddress.hex();
     }
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthPrecompiled") << LOG_DESC("getAdmin")
+                           << LOG_KV("path", path);
     path = getAuthTableName(path);
     std::string adminStr = getContractAdmin(_executive, path);
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthPrecompiled") << LOG_DESC("getAdmin success")
+                           << LOG_KV("admin", adminStr);
     if (adminStr.empty())
     {
         callResult->setExecResult(codec->encode(Address()));
@@ -214,10 +218,13 @@ void ContractAuthPrecompiled::resetAdmin(
     {
         codec->decode(data, path, admin);
     }
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthPrecompiled") << LOG_DESC("resetAdmin")
+                           << LOG_KV("path", path) << LOG_KV("admin", admin);
     if (!checkSender(_sender))
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthPrecompiled")
-                               << LOG_DESC("sender is not from sys") << LOG_KV("path", path);
+                               << LOG_DESC("sender is not from sys") << LOG_KV("path", path)
+                               << LOG_KV("sender", _sender);
         getErrorCodeOut(callResult->mutableExecResult(), CODE_NO_AUTHORIZED, *codec);
         return;
     }
@@ -225,8 +232,8 @@ void ContractAuthPrecompiled::resetAdmin(
     auto table = _executive->storage().openTable(path);
     if (!table || !table->getRow(ADMIN_FIELD))
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthPrecompiled") << LOG_DESC("path not found")
-                               << LOG_KV("path", path);
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthPrecompiled")
+                               << LOG_DESC("resetAdmin: path not found") << LOG_KV("path", path);
         BOOST_THROW_EXCEPTION(
             protocol::PrecompiledError() << errinfo_comment("Contract address not found."));
     }
@@ -359,8 +366,9 @@ bool ContractAuthPrecompiled::checkMethodAuth(
         (lastStorage) ? lastStorage->openTable(path) : _executive->storage().openTable(path);
     if (!table)
     {
+        // only precompiled contract in /sys/, or pre-built-in contract
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthPrecompiled")
-                               << LOG_DESC("path not found, maybe a callback message.")
+                               << LOG_DESC("auth table not found, auth pass through by default.")
                                << LOG_KV("path", path);
         return true;
     }
@@ -386,8 +394,9 @@ bool ContractAuthPrecompiled::checkMethodAuth(
     auto entry = table->getRow(getTypeStr);
     if (!entry || entry->getField(SYS_VALUE).empty())
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthPrecompiled")
-                               << LOG_DESC("auth row not found") << LOG_KV("path", path);
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthPrecompiled")
+                               << LOG_DESC("auth row not found, no method set acl")
+                               << LOG_KV("path", path) << LOG_KV("authType", getTypeStr);
         // if entry still empty
         //      if white list mode, return false
         //      if black list mode， return true
@@ -438,14 +447,15 @@ void ContractAuthPrecompiled::setMethodAuth(
         codec->decode(data, path, _func, account);
     }
     bytes func = codec::fromString32(_func).ref().getCroppedData(0, 4).toBytes();
-    PRECOMPILED_LOG(INFO) << LOG_BADGE("ContractAuthPrecompiled") << LOG_DESC("setAuth")
-                          << LOG_KV("path", path) << LOG_KV("func", toHexStringWithPrefix(func))
-                          << LOG_KV("account", account.hex());
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthPrecompiled") << LOG_DESC("setAuth")
+                           << LOG_KV("path", path) << LOG_KV("func", toHexStringWithPrefix(func))
+                           << LOG_KV("account", account.hex());
     path = getAuthTableName(path);
     auto table = _executive->storage().openTable(path);
     if (!table)
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthPrecompiled") << LOG_DESC("path not found")
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthPrecompiled")
+                               << LOG_DESC("auth table not found, should not set acl")
                                << LOG_KV("path", path);
         getErrorCodeOut(callResult->mutableExecResult(), CODE_TABLE_NOT_EXIST, *codec);
         return;
@@ -540,8 +550,9 @@ s256 ContractAuthPrecompiled::getMethodAuthType(
     auto entry = table->getRow(METHOD_AUTH_TYPE);
     if (!entry || entry->getField(SYS_VALUE).empty())
     {
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthPrecompiled")
-                               << LOG_DESC("should set the method access auth type firstly");
+        PRECOMPILED_LOG(DEBUG)
+            << LOG_BADGE("ContractAuthPrecompiled")
+            << LOG_DESC("no acl strategy exist, should set the method access auth type firstly");
         return (int)CODE_TABLE_AUTH_TYPE_NOT_EXIST;
     }
     std::string authTypeStr = std::string(entry->getField(SYS_VALUE));
@@ -592,6 +603,8 @@ u256 ContractAuthPrecompiled::getDeployAuthType(
     const std::shared_ptr<executor::TransactionExecutive>& _executive)
 {
     auto lastStorage = _executive->lastStorage();
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("getDeployAuthType") << (lastStorage) ? "use lastStorage" :
+                                                                                "use latestStorage";
     auto table =
         (lastStorage) ? lastStorage->openTable("/apps") : _executive->storage().openTable("/apps");
     // table must exist
@@ -606,6 +619,7 @@ u256 ContractAuthPrecompiled::getDeployAuthType(
     {
         return 0;
     }
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("getDeployAuthType") << LOG_KV("type", type);
     return type;
 }
 
@@ -744,8 +758,9 @@ bool ContractAuthPrecompiled::checkDeployAuth(
     auto entry = table->getRow(getAclType);
     if (entry->getField(0).empty())
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthPrecompiled")
-                               << LOG_DESC("deploy auth row not found");
+        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthPrecompiled")
+                               << LOG_DESC("not deploy acl exist, return by default")
+                               << LOG_KV("aclType", type);
         // if entry still empty
         //      if white list mode, return false
         //      if black list mode， return true

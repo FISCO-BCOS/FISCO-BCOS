@@ -136,53 +136,6 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
         m_txpoolInitializer = std::make_shared<TxPoolInitializer>(
             m_nodeConfig, m_protocolInitializer, m_frontServiceInitializer->front(), ledger);
 
-        auto consensusStoragePath =
-            m_nodeConfig->storagePath() + c_fileSeparator + c_consensusStorageDBName;
-        if (!_airVersion)
-        {
-            consensusStoragePath = ServerConfig::BasePath + ".." + c_fileSeparator +
-                                   m_nodeConfig->groupId() + c_fileSeparator + consensusStoragePath;
-        }
-        BCOS_LOG(INFO) << LOG_DESC("initNode: init storage for consensus")
-                       << LOG_KV("consensusStoragePath", consensusStoragePath);
-        auto consensusStorage = StorageInitializer::build(consensusStoragePath);
-        // build and init the pbft related modules
-        if (_nodeArchType == NodeArchitectureType::AIR)
-        {
-            m_pbftInitializer = std::make_shared<PBFTInitializer>(_nodeArchType, m_nodeConfig,
-                m_protocolInitializer, m_txpoolInitializer->txpool(), ledger, m_scheduler,
-                consensusStorage, m_frontServiceInitializer->front());
-            // registerOnNodeTypeChanged
-            auto nodeID = m_protocolInitializer->keyPair()->publicKey();
-            auto frontService = m_frontServiceInitializer->front();
-            auto groupID = m_nodeConfig->groupId();
-            auto blockSync =
-                std::dynamic_pointer_cast<bcos::sync::BlockSync>(m_pbftInitializer->blockSync());
-            blockSync->config()->registerOnNodeTypeChanged(
-                [_gateway, groupID, nodeID, frontService](bcos::protocol::NodeType _type) {
-                    _gateway->registerNode(groupID, nodeID, _type, frontService);
-                    BCOS_LOG(INFO) << LOG_DESC("registerNode") << LOG_KV("group", groupID)
-                                   << LOG_KV("node", nodeID->hex()) << LOG_KV("type", _type);
-                });
-        }
-        else
-        {
-            m_pbftInitializer = std::make_shared<ProPBFTInitializer>(_nodeArchType, m_nodeConfig,
-                m_protocolInitializer, m_txpoolInitializer->txpool(), ledger, m_scheduler,
-                consensusStorage, m_frontServiceInitializer->front());
-        }
-
-        // init the txpool
-        m_txpoolInitializer->init(m_pbftInitializer->sealer());
-
-        // Note: must init PBFT after txpool, in case of pbft calls txpool to verifyBlock before
-        // txpool init finished
-        m_pbftInitializer->init();
-
-        // init the frontService
-        m_frontServiceInitializer->init(m_pbftInitializer->pbft(), m_pbftInitializer->blockSync(),
-            m_txpoolInitializer->txpool());
-
         std::shared_ptr<bcos::storage::LRUStateStorage> cache = nullptr;
         if (m_nodeConfig->enableLRUCacheStorage())
         {
@@ -195,12 +148,28 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
         {
             BCOS_LOG(INFO) << LOG_DESC("initNode: disableLRUCacheStorage");
         }
+        // Note: ensure that there has at least one executor before pbft/sync execute block
         auto executor = ExecutorInitializer::build(m_txpoolInitializer->txpool(), cache, storage,
             executionMessageFactory, m_protocolInitializer->cryptoSuite()->hashImpl(),
             m_nodeConfig->isWasm(), m_nodeConfig->isAuthCheck());
         auto parallelExecutor = std::make_shared<bcos::initializer::ParallelExecutor>(executor);
         executorManager->addExecutor("default", parallelExecutor);
 
+        // build and init the pbft related modules
+        m_pbftInitializer = std::make_shared<PBFTInitializer>(_nodeArchType, m_nodeConfig,
+            m_protocolInitializer, m_txpoolInitializer->txpool(), ledger, m_scheduler, storage,
+            m_frontServiceInitializer->front());
+
+        // init the txpool
+        m_txpoolInitializer->init(m_pbftInitializer->sealer());
+
+        // Note: must init PBFT after txpool, in case of pbft calls txpool to verifyBlock before
+        // txpool init finished
+        m_pbftInitializer->init();
+
+        // init the frontService
+        m_frontServiceInitializer->init(m_pbftInitializer->pbft(), m_pbftInitializer->blockSync(),
+            m_txpoolInitializer->txpool());
         initSysContract();
     }
     catch (std::exception const& e)

@@ -26,7 +26,6 @@ namespace bcos
 {
 namespace executor
 {
-
 class WasmTransactionExecutor : public TransactionExecutor
 {
 public:
@@ -45,6 +44,7 @@ public:
         assert(m_precompiledContract);
         assert(m_constantPrecompiled.size() > 0);
         assert(m_builtInPrecompiled);
+        m_isWasm = true;
     }
 
     virtual ~WasmTransactionExecutor() {}
