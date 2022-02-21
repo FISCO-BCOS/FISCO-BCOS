@@ -161,7 +161,7 @@ inline std::vector<bytes> fakeSealerList(
     std::vector<bytes> sealerList;
     for (size_t i = 0; i < size; i++)
     {
-        auto keyPair = _signImpl->generateKeyPair();
+        KeyPairInterface::Ptr keyPair = _signImpl->generateKeyPair();
         _keyPairVec.emplace_back(keyPair);
         sealerList.emplace_back(*(keyPair->publicKey()->encode()));
     }
@@ -175,7 +175,7 @@ inline SignatureList fakeSignatureList(SignatureCrypto::Ptr _signImpl,
     SignatureList signatureList;
     for (auto keyPair : _keyPairVec)
     {
-        auto signature = _signImpl->sign(keyPair, _hash);
+        auto signature = _signImpl->sign(*keyPair, _hash);
         Signature sig;
         sig.index = sealerIndex++;
         sig.signature = *signature;

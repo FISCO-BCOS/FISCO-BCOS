@@ -295,7 +295,7 @@ BOOST_AUTO_TEST_CASE(testSM2Verify)
 
     auto keyPair = std::make_shared<SM2KeyPair>(sec1);
     HashType hash = HashType("82ec580fe6d36ae4f81cae3c73f4a5b3b5a09c943172dc9053c69fd8e18dca1e");
-    auto signature = sm2Sign(keyPair, hash, true);
+    auto signature = sm2Sign(*keyPair, hash, true);
     h256 mismatchHash = h256("c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470");
     // verify the signature
     bytes encodedData = codec->encodeWithSig("sm2Verify(bytes,bytes)", hash.asBytes(), *signature);

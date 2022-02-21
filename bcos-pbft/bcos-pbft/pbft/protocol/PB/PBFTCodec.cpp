@@ -44,7 +44,7 @@ bytesPointer PBFTCodec::encode(PBFTBaseMessageInterface::Ptr _pbftMessage, int32
         // get hash of the payLoad
         auto hash = m_cryptoSuite->hashImpl()->hash(*payLoad);
         // sign for the payload
-        auto signatureData = m_cryptoSuite->signatureImpl()->sign(m_keyPair, hash, false);
+        auto signatureData = m_cryptoSuite->signatureImpl()->sign(*m_keyPair, hash, false);
         pbMessage->set_signaturedata(signatureData->data(), signatureData->size());
         _pbftMessage->setSignatureDataHash(hash);
         _pbftMessage->setSignatureData(*signatureData);

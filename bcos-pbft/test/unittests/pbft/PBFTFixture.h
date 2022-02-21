@@ -24,6 +24,7 @@
 #include "bcos-pbft/pbft/PBFTFactory.h"
 #include "bcos-pbft/pbft/PBFTImpl.h"
 #include "bcos-pbft/pbft/storage/LedgerStorage.h"
+#include "interfaces/crypto/KeyPairInterface.h"
 #include <bcos-framework/interfaces/consensus/ConsensusNode.h>
 #include <bcos-framework/testutils/faker/FakeFrontService.h>
 #include <bcos-framework/testutils/faker/FakeLedger.h>
@@ -330,7 +331,7 @@ using PBFTFixtureList = std::vector<PBFTFixture::Ptr>;
 inline PBFTFixture::Ptr createPBFTFixture(
     CryptoSuite::Ptr _cryptoSuite, FakeLedger::Ptr _ledger = nullptr, size_t _txCountLimit = 1000)
 {
-    auto keyPair = _cryptoSuite->signatureImpl()->generateKeyPair();
+    bcos::crypto::KeyPairInterface::Ptr keyPair = _cryptoSuite->signatureImpl()->generateKeyPair();
     return std::make_shared<PBFTFixture>(_cryptoSuite, keyPair, _ledger, _txCountLimit);
 }
 

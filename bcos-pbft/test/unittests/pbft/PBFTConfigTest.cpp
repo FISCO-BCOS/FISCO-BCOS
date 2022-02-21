@@ -18,6 +18,7 @@
  * @author: yujiechen
  * @date 2021-05-28
  */
+#include "interfaces/crypto/KeyPairInterface.h"
 #include "test/unittests/pbft/PBFTFixture.h"
 #include "test/unittests/protocol/FakePBFTMessage.h"
 #include <bcos-crypto/hash/Keccak256.h>
@@ -41,7 +42,7 @@ BOOST_AUTO_TEST_CASE(testPBFTInit)
     auto hashImpl = std::make_shared<Keccak256>();
     auto signatureImpl = std::make_shared<Secp256k1Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
-    auto keyPair = signatureImpl->generateKeyPair();
+    bcos::crypto::KeyPairInterface::Ptr keyPair = signatureImpl->generateKeyPair();
     auto gateWay = std::make_shared<FakeGateWay>();
 
     size_t consensusTimeout = 4;

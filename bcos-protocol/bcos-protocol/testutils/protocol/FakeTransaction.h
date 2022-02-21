@@ -39,7 +39,7 @@ inline PBTransaction::Ptr fakeTransaction(CryptoSuite::Ptr _cryptoSuite,
     auto pbTransaction = std::make_shared<PBTransaction>(
         _cryptoSuite, 1, _to, _input, _nonce, _blockLimit, _chainId, _groupId, utcTime());
     // set signature
-    auto signData = _cryptoSuite->signatureImpl()->sign(_keyPair, pbTransaction->hash(), true);
+    auto signData = _cryptoSuite->signatureImpl()->sign(*_keyPair, pbTransaction->hash(), true);
     pbTransaction->updateSignature(bytesConstRef(signData->data(), signData->size()),
         _keyPair->address(_cryptoSuite->hashImpl()).asBytes());
     return pbTransaction;
@@ -101,7 +101,7 @@ inline Transaction::Ptr fakeTransaction(CryptoSuite::Ptr _cryptoSuite, u256 nonc
     int64_t blockLimit = 1000023, std::string chainId = "chainId", std::string groupId = "groupId",
     bytes _to = bytes())
 {
-    auto keyPair = _cryptoSuite->signatureImpl()->generateKeyPair();
+    KeyPairInterface::Ptr keyPair = _cryptoSuite->signatureImpl()->generateKeyPair();
     auto to = keyPair->address(_cryptoSuite->hashImpl()).asBytes();
     if (_to != bytes())
     {
