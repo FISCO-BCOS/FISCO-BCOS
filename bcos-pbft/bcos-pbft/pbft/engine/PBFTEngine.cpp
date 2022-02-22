@@ -1157,6 +1157,9 @@ void PBFTEngine::reachNewView(ViewType _view)
     m_config->resetNewViewState(_view);
     m_cacheProcessor->resetCacheAfterViewChange(
         m_config->view(), m_config->committedProposal()->index());
+    // try to preCommit/commit after no-timeout
+    m_cacheProcessor->checkAndPreCommit();
+    m_cacheProcessor->checkAndCommit();
     PBFT_LOG(INFO) << LOG_DESC("reachNewView") << m_config->printCurrentState();
 }
 
