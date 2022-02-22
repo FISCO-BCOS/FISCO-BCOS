@@ -88,7 +88,8 @@ using namespace bcos::protocol;
 using namespace bcos::storage;
 using namespace bcos::precompiled;
 
-CriticalFields<string>::CriticalFieldPtr getTxCriticals(const CallParameters& _params,
+#if 0
+CriticalFields::CriticalFieldPtr getTxCriticals(const CallParameters& _params,
     // temp code params
     crypto::Hash::Ptr _hashImpl, TransactionExecutive::Ptr _executive, bool _isWasm)
 {
@@ -184,85 +185,6 @@ CriticalFields<string>::CriticalFieldPtr getTxCriticals(const CallParameters& _p
     return make_shared<vector<vector<string>>>(std::move(ret));
 }
 
-void EvmTransactionExecutor::dagExecuteTransactions(
-    gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
-    std::function<void(
-        bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
-        callback)
-{
-    // for fill block
-    auto txHashes = make_shared<HashList>();
-    std::vector<decltype(inputs)::index_type> indexes;
-    auto fillInputs = std::make_shared<std::vector<bcos::protocol::ExecutionMessage::UniquePtr>>();
-
-    // final result
-    auto callParametersList =
-        std::make_shared<std::vector<CallParameters::UniquePtr>>(inputs.size());
-
-#pragma omp parallel for
-    for (decltype(inputs)::index_type i = 0; i < inputs.size(); ++i)
-    {
-        auto& params = inputs[i];
-        switch (params->type())
-        {
-        case ExecutionMessage::TXHASH:
-        {
-#pragma omp critical
-            {
-                txHashes->emplace_back(params->transactionHash());
-                indexes.emplace_back(i);
-                fillInputs->emplace_back(std::move(params));
-            }
-
-            break;
-        }
-        case ExecutionMessage::MESSAGE:
-        {
-            callParametersList->at(i) = createCallParameters(*params, false);
-            break;
-        }
-        default:
-        {
-            auto message = (boost::format("Unsupported message type: %d") % params->type()).str();
-            EXECUTOR_LOG(ERROR) << "DAG Execute error, " << message;
-            // callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::DAG_ERROR, message), {});
-            break;
-        }
-        }
-    }
-    if (!txHashes->empty())
-    {
-        m_txpool->asyncFillBlock(txHashes,
-            [this, indexes = std::move(indexes), fillInputs = std::move(fillInputs),
-                callParametersList = std::move(callParametersList), callback = std::move(callback),
-                txHashes](Error::Ptr error, protocol::TransactionsPtr transactions) mutable {
-                if (error)
-                {
-                    auto errorMessage = "asyncFillBlock failed";
-                    EXECUTOR_LOG(ERROR) << errorMessage << boost::diagnostic_information(*error);
-                    callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
-                                 ExecuteError::DAG_ERROR, errorMessage, *error),
-                        {});
-                    return;
-                }
-
-#pragma omp parallel for
-                for (size_t i = 0; i < transactions->size(); ++i)
-                {
-                    assert(transactions->at(i));
-                    callParametersList->at(indexes[i]) =
-                        createCallParameters(*fillInputs->at(i), *transactions->at(i));
-                }
-
-                dagExecuteTransactionsInternal(*callParametersList, std::move(callback));
-            });
-    }
-    else
-    {
-        dagExecuteTransactionsInternal(*callParametersList, std::move(callback));
-    }
-}
-
 void EvmTransactionExecutor::dagExecuteTransactionsInternal(
     gsl::span<std::unique_ptr<CallParameters>> inputs,
     std::function<void(
@@ -309,6 +231,7 @@ void EvmTransactionExecutor::dagExecuteTransactionsInternal(
 
     callback(nullptr, std::move(executionResults));
 }
+#endif
 
 BlockContext::Ptr EvmTransactionExecutor::createBlockContext(
     const protocol::BlockHeader::ConstPtr& currentHeader, storage::StateStorage::Ptr storage,

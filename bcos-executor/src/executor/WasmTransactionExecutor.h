@@ -49,12 +49,8 @@ public:
 
     virtual ~WasmTransactionExecutor() {}
 
-    void dagExecuteTransactions(gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
-        std::function<void(
-            bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
-            callback) override;
-
 private:
+
     void initPrecompiled() override;
 
     std::shared_ptr<BlockContext> createBlockContext(
@@ -66,10 +62,6 @@ private:
         h256 blockHash, uint64_t timestamp, int32_t blockVersion,
         storage::StateStorage::Ptr tableFactory) override;
 
-    void dagExecuteTransactionsInternal(gsl::span<std::unique_ptr<CallParameters>> inputs,
-        std::function<void(
-            bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
-            callback);
 };
 
 }  // namespace executor

@@ -39,20 +39,19 @@ namespace test
 {
 BOOST_AUTO_TEST_SUITE(TestTxDAG)
 
-using Critical = vector<vector<string>>;
-
 CriticalFieldsInterface::Ptr makeCriticalsString(int _totalTx)
 {
-    Critical originMap = {{"111"}, {"222"}, {"333"}, {"444"}, {"555"}, {"666"}, {"777"}, {"888"},
-        {"999"}, {"101"}, {"102"}, {"103"}, {"104"}, {"105"}, {"106"}, {"107"}, {"108"}, {"109"},
-        {"120"}, {"121"}, {"122"}, {"123"}, {"124"}, {"125"}};
-    CriticalFields<string>::Ptr criticals = make_shared<CriticalFields<string>>(_totalTx);
+    vector<bytes> originMap = {bytes{111}, bytes{222}, bytes{33, 3}, bytes{44, 4}, bytes{55, 5},
+        bytes{66, 6}, bytes{77, 7}, bytes{88, 8}, bytes{99, 9}, bytes{101}, bytes{102}, bytes{103},
+        bytes{104}, bytes{105}, bytes{106}, bytes{107}, bytes{108}, bytes{109}, bytes{120},
+        bytes{121}, bytes{122}, bytes{123}, bytes{124}, bytes{125}};
+    CriticalFields::Ptr criticals = make_shared<CriticalFields>(_totalTx);
     for (int i = 0; i < _totalTx; i++)
     {
         int rand1 = random() % originMap.size();
         int rand2 = random() % originMap.size();
-        vector<vector<string>> critical = {{originMap[rand1]}, {originMap[rand2]}};
-        criticals->put(i, make_shared<CriticalFields<string>::CriticalField>(std::move(critical)));
+        vector<bytes> critical = {originMap[rand1], originMap[rand2]};
+        criticals->put(i, make_shared<CriticalFields::CriticalField>(std::move(critical)));
         /*
         stringstream ss;
         ss << i;
@@ -64,28 +63,27 @@ CriticalFieldsInterface::Ptr makeCriticalsString(int _totalTx)
 
 CriticalFieldsInterface::Ptr makeFixedCriticals(int _totalTx, int _criticalNum)
 {
-    CriticalFields<int>::Ptr criticals = make_shared<CriticalFields<int>>(_totalTx);
+    CriticalFields::Ptr criticals = make_shared<CriticalFields>(_totalTx);
     for (int i = 0; i < _totalTx; i++)
     {
-        vector<vector<int>> critical = {{i % _criticalNum}};
-        criticals->put(i, make_shared<CriticalFields<int>::CriticalField>(std::move(critical)));
-        /*
-        stringstream ss;
-        ss << i;
-        res.push_back({string(ss.str())});
-         */
-    }
+        vector<bytes> critical = {bytes{(uint8_t)(i % _criticalNum % 256)}};
+        criticals->put(i, make_shared<CriticalFields::CriticalField>(std::move(critical)));
+    };
+    /*
+    stringstream ss;
+    ss << i;
+    res.push_back({string(ss.str())});
+     */
     return criticals;
 }
 
 CriticalFieldsInterface::Ptr makeCriticals(
-    int _totalTx, std::function<vector<vector<ID>>(ID)> _id2CriticalFunc)
+    int _totalTx, std::function<vector<bytes>(ID)> _id2CriticalFunc)
 {
-    CriticalFields<ID>::Ptr criticals = make_shared<CriticalFields<ID>>(_totalTx);
+    CriticalFields::Ptr criticals = make_shared<CriticalFields>(_totalTx);
     for (int i = 0; i < _totalTx; i++)
     {
-        vector<vector<ID>> critical = _id2CriticalFunc(i);
-        criticals->put(i, make_shared<CriticalFields<ID>::CriticalField>(std::move(critical)));
+        criticals->put(i, make_shared<CriticalFields::CriticalField>(_id2CriticalFunc(i)));
     }
     return criticals;
 }
@@ -118,7 +116,7 @@ void testTxDAG(
 
 
 void runDagTest(shared_ptr<TxDAGInterface> _txDag, int _total,
-    std::function<vector<vector<ID>>(ID)> _id2CriticalFunc, std::function<void(ID)> _beforeRunCheck,
+    std::function<vector<bytes>(ID)> _id2CriticalFunc, std::function<void(ID)> _beforeRunCheck,
     std::function<void(ID)> _afterRunCheck)
 {
     // ./test-bcos-executor --run_test=TestTxDAG/TestRun
@@ -149,7 +147,9 @@ void txDagTest(shared_ptr<TxDAGInterface> txDag)
     ID criticalNum = 2;
     vector<int> runnings(criticalNum, -1);
 
-    auto id2CriticalFun = [&](ID id) -> vector<vector<ID>> { return {{id % criticalNum}}; };
+    auto id2CriticalFun = [&](ID id) -> vector<bytes> {
+        return {{static_cast<uint8_t>(id % criticalNum % 256)}};
+    };
     auto beforeRunCheck = [&](ID id) {
         BOOST_CHECK_MESSAGE(runnings[id % criticalNum] == -1,
             "conflict at beginning: " << id << "-" << id % criticalNum << "-"
@@ -173,18 +173,18 @@ void txDagDeepTreeTest(shared_ptr<TxDAGInterface> txDag)
     ID valueNum = 3;  // values num under a slot
     map<int, ID> runnings;
 
-    auto id2CriticalFun = [&](ID id) -> vector<vector<ID>> {
+    auto id2CriticalFun = [&](ID id) -> vector<bytes> {
         ID slot = id % slotNum;
         ID value = id % (slotNum * valueNum);
 
         if (value / slotNum == 0)
         {
             // return only slot
-            return {{slot}};
+            return {{static_cast<uint8_t>(slot % 256)}};
         }
         else
         {
-            return {{slot, value}};
+            return {{static_cast<uint8_t>(slot % 256), static_cast<uint8_t>(value % 256)}};
         }
     };
 

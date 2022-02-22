@@ -21,10 +21,12 @@
 
 
 #pragma once
-#include "TrieSet.h"
 #include <functional>
 #include <map>
+#include <unordered_map>
 #include <set>
+#include <vector>
+#include <boost/container_hash/hash.hpp>
 
 namespace bcos
 {
@@ -55,24 +57,11 @@ public:
         OnAllConflictHandler const& _onAllConflict) = 0;
 };
 
-template <typename T>
-class LatestCriticalFields
-{
-public:
-    std::vector<ID> get(std::vector<T> const& _c) { return m_trie.get(_c); }
-
-    void update(std::vector<T> const& _c, ID _txId) { m_trie.set(_c, _txId); }
-
-private:
-    TrieSet<T, ID> m_trie;
-};
-
-template <typename T>
 class CriticalFields : public virtual CriticalFieldsInterface
 {
 public:
     using Ptr = std::shared_ptr<CriticalFields>;
-    using CriticalField = std::vector<std::vector<T>>;
+    using CriticalField = std::vector<std::vector<uint8_t>>;
     using CriticalFieldPtr = std::shared_ptr<CriticalField>;
 
     CriticalFields(size_t _size) : m_criticals(std::vector<CriticalFieldPtr>(_size)) {}
@@ -88,7 +77,7 @@ public:
         OnEmptyConflictHandler const& _onEmptyConflict,
         OnAllConflictHandler const& _onAllConflict) override
     {
-        LatestCriticalFields<T> latestCriticals;
+        auto dependencies = std::unordered_map<std::vector<uint8_t>, std::vector<size_t>, boost::hash<std::vector<uint8_t>>>();
 
         for (ID id = 0; id < m_criticals.size(); ++id)
         {
@@ -108,10 +97,12 @@ public:
                 std::set<ID> pIds;
                 for (auto const& c : *criticals)
                 {
-                    for (auto pId : latestCriticals.get(c))
+                    auto& ids = dependencies[c];
+                    for (auto pId : ids)
                     {
                         pIds.insert(pId);
                     }
+                    ids.push_back(id);
                 }
 
                 if (pIds.empty())
@@ -125,11 +116,6 @@ public:
                         _onConflict(pId, id);
                     }
                 }
-
-                for (auto const& c : *criticals)
-                {
-                    latestCriticals.update(c, id);
-                }
             }
             else
             {
@@ -137,7 +123,6 @@ public:
             }
         }
     };
-
 
 private:
     std::vector<CriticalFieldPtr> m_criticals;
