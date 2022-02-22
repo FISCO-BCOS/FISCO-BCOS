@@ -18,6 +18,7 @@
  * @author: yujiechen
  * @date 2021-05-26
  */
+#include "interfaces/crypto/KeyPairInterface.h"
 #include "test/unittests/txpool/TxPoolFixture.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
@@ -361,9 +362,9 @@ void txPoolInitAndSubmitTransactionTest(bool _sm, CryptoSuite::Ptr _cryptoSuite)
         faker->chainId(), faker->groupId());
 
     auto pbTx = std::dynamic_pointer_cast<PBTransaction>(tx);
-    auto invalidKeyPair = signatureImpl->generateKeyPair();
+    bcos::crypto::KeyPairInterface::Ptr invalidKeyPair = signatureImpl->generateKeyPair();
     auto invalidHash = hashImpl->hash(std::string("test"));
-    auto signatureData = signatureImpl->sign(invalidKeyPair, invalidHash, true);
+    auto signatureData = signatureImpl->sign(*invalidKeyPair, invalidHash, true);
     pbTx->updateSignature(ref(*signatureData), bytes());
     size_t importedTxNum = 0;
     if (!_sm)

@@ -367,6 +367,8 @@ void JsonRpcImpl_2_0::toJsonResp(
     jResp["chainID"] = std::string(_transactionPtr->chainId());
     // the groupID
     jResp["groupID"] = std::string(_transactionPtr->groupId());
+    // the abi
+    jResp["abi"] = std::string(_transactionPtr->abi());
     // the signature
     jResp["signature"] = toHexStringWithPrefix(_transactionPtr->signatureData());
 }

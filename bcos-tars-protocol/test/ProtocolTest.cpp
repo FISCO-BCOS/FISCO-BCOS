@@ -59,7 +59,7 @@ inline std::vector<bcos::bytes> fakeSealerList(
     std::vector<bcos::bytes> sealerList;
     for (size_t i = 0; i < size; i++)
     {
-        auto keyPair = _signImpl->generateKeyPair();
+        bcos::crypto::KeyPairInterface::Ptr keyPair = _signImpl->generateKeyPair();
         _keyPairVec.emplace_back(keyPair);
         sealerList.emplace_back(*(keyPair->publicKey()->encode()));
     }

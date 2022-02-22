@@ -98,19 +98,19 @@ struct WasmExecutorFixture
 
         helloWorldBin.assign(hello_world_wasm, hello_world_wasm + hello_world_wasm_len);
         helloWorldBin = codec->encode(helloWorldBin);
-        helloWorldAbi = codec->encode(string(
-            R"([{"inputs":[{"internalType":"string","name":"name","type":"string"}],"type":"constructor"},{"conflictFields":[{"kind":0,"path":[],"read_only":false,"slot":0}],"constant":false,"inputs":[{"internalType":"string","name":"name","type":"string"}],"name":"set","outputs":[],"type":"function"},{"constant":true,"inputs":[],"name":"get","outputs":[{"internalType":"string","type":"string"}],"type":"function"}])"));
+        helloWorldAbi = string(
+            R"([{"inputs":[{"internalType":"string","name":"name","type":"string"}],"type":"constructor"},{"conflictFields":[{"kind":0,"path":[],"read_only":false,"slot":0}],"constant":false,"inputs":[{"internalType":"string","name":"name","type":"string"}],"name":"set","outputs":[],"type":"function"},{"constant":true,"inputs":[],"name":"get","outputs":[{"internalType":"string","type":"string"}],"type":"function"}])");
 
         helloWorldCallerBin.assign(
             hello_world_caller_wasm, hello_world_caller_wasm + hello_world_caller_wasm_len);
         helloWorldCallerBin = codec->encode(helloWorldCallerBin);
-        helloWorldCallerAbi = codec->encode(string(
-            R"([{"inputs":[{"internalType":"string","name":"addr","type":"string"}],"type":"constructor"},{"constant":false,"inputs":[{"internalType":"string","name":"name","type":"string"}],"name":"set","outputs":[],"type":"function"},{"constant":true,"inputs":[],"name":"get","outputs":[{"internalType":"string","type":"string"}],"type":"function"}])"));
+        helloWorldCallerAbi = string(
+            R"([{"inputs":[{"internalType":"string","name":"addr","type":"string"}],"type":"constructor"},{"constant":false,"inputs":[{"internalType":"string","name":"name","type":"string"}],"name":"set","outputs":[],"type":"function"},{"constant":true,"inputs":[],"name":"get","outputs":[{"internalType":"string","type":"string"}],"type":"function"}])");
 
         transferBin.assign(transfer_wasm, transfer_wasm + transfer_wasm_len);
         transferBin = codec->encode(transferBin);
-        transferAbi = codec->encode(string(
-            R"([{"inputs":[],"type":"constructor"},{"conflictFields":[{"kind":3,"path":[0],"read_only":false,"slot":0},{"kind":3,"path":[1],"read_only":false,"slot":0}],"constant":false,"inputs":[{"internalType":"string","name":"from","type":"string"},{"internalType":"string","name":"to","type":"string"},{"internalType":"uint32","name":"amount","type":"uint32"}],"name":"transfer","outputs":[{"internalType":"bool","type":"bool"}],"type":"function"},{"constant":true,"inputs":[{"internalType":"string","name":"name","type":"string"}],"name":"query","outputs":[{"internalType":"uint32","type":"uint32"}],"type":"function"}])"));
+        transferAbi = string(
+            R"([{"inputs":[],"type":"constructor"},{"conflictFields":[{"kind":3,"path":[0],"read_only":false,"slot":0},{"kind":3,"path":[1],"read_only":false,"slot":0}],"constant":false,"inputs":[{"internalType":"string","name":"from","type":"string"},{"internalType":"string","name":"to","type":"string"},{"internalType":"uint32","name":"amount","type":"uint32"}],"name":"transfer","outputs":[{"internalType":"bool","type":"bool"}],"type":"function"},{"constant":true,"inputs":[{"internalType":"string","name":"name","type":"string"}],"name":"query","outputs":[{"internalType":"uint32","type":"uint32"}],"type":"function"}])");
         createSysTable();
     }
 
@@ -206,13 +206,13 @@ struct WasmExecutorFixture
     std::unique_ptr<bcos::precompiled::PrecompiledCodec> codec;
 
     bytes helloWorldBin;
-    bytes helloWorldAbi;
+    std::string helloWorldAbi;
 
     bytes helloWorldCallerBin;
-    bytes helloWorldCallerAbi;
+    std::string helloWorldCallerAbi;
 
     bytes transferBin;
-    bytes transferAbi;
+    std::string transferAbi;
 };
 BOOST_FIXTURE_TEST_SUITE(TestWasmExecutor, WasmExecutorFixture)
 
@@ -228,9 +228,8 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
 
     string selfAddress = "usr/alice/hello_world";
 
-    input.insert(input.end(), helloWorldAbi.begin(), helloWorldAbi.end());
-
-    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1");
+    auto tx =
+        fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1", helloWorldAbi);
     auto sender = *toHexString(string_view((char*)tx->sender().data(), tx->sender().size()));
 
     auto hash = tx->hash();
@@ -404,9 +403,8 @@ BOOST_AUTO_TEST_CASE(deployAndCall_100)
 
     string selfAddress = "usr/alice/hello_world";
 
-    input.insert(input.end(), helloWorldAbi.begin(), helloWorldAbi.end());
-
-    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1");
+    auto tx =
+        fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1", helloWorldAbi);
     auto sender = *toHexString(string_view((char*)tx->sender().data(), tx->sender().size()));
 
     auto hash = tx->hash();
@@ -613,9 +611,8 @@ BOOST_AUTO_TEST_CASE(externalCall)
         constructorParam = codec->encode(constructorParam);
         input.insert(input.end(), constructorParam.begin(), constructorParam.end());
 
-        input.insert(input.end(), helloWorldAbi.begin(), helloWorldAbi.end());
-
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1");
+        auto tx =
+            fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1", helloWorldAbi);
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
         auto hash = tx->hash();
@@ -672,9 +669,8 @@ BOOST_AUTO_TEST_CASE(externalCall)
         constructorParam = codec->encode(constructorParam);
         input.insert(input.end(), constructorParam.begin(), constructorParam.end());
 
-        input.insert(input.end(), helloWorldCallerAbi.begin(), helloWorldCallerAbi.end());
-
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 102, 100001, "1", "1");
+        auto tx = fakeTransaction(
+            cryptoSuite, keyPair, "", input, 102, 100001, "1", "1", helloWorldCallerAbi);
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
         auto hash = tx->hash();
@@ -810,9 +806,7 @@ BOOST_AUTO_TEST_CASE(performance)
 
     string transferAddress = "usr/alice/transfer";
 
-    input.insert(input.end(), transferAbi.begin(), transferAbi.end());
-
-    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1");
+    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1", transferAbi);
     auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
     auto hash = tx->hash();
