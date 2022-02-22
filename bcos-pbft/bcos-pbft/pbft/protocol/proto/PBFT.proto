@@ -1,0 +1,69 @@
+syntax = "proto3";
+import "bcos-pbft/core/proto/Consensus.proto";
+package bcos.consensus;
+
+message BaseMessage
+{
+  int32 version = 1;
+  int64 index = 2;
+  // the hash of the proposals or the committed proposal
+  bytes hash = 3;
+  int64 view = 4;
+  int64 timestamp = 5;
+  // the index of the node that generated the request
+  int64 generatedFrom = 6;
+  bytes signatureHash = 7;
+  bytes signatureData = 8;
+}
+
+message PBFTRawProposal
+{
+  RawProposal proposal = 1;
+  // proof for the prepared proposal
+  repeated int64 nodeList = 2;
+  repeated bytes signatureList = 3;
+}
+
+message PBFTRawMessage
+{
+  bytes hashFieldsData = 1;
+  // for proposal consensus
+  PBFTRawProposal consensusProposal = 2;
+  // for fetch proposals
+  repeated PBFTRawProposal proposals = 3;
+  bytes signatureData = 4;
+}
+
+message RawViewChangeMessage
+{
+  BaseMessage message = 1;
+  // used to verify the validity of the latest committed proposal
+  PBFTRawProposal committedProposal = 2;
+  // prepared but not commit proposals
+  // (no need to include the proposalsData, can obtain the missed proposal from other nodes)
+  repeated PBFTRawMessage preparedProposals = 3;
+}
+
+message RawNewViewMessage
+{
+  BaseMessage message = 1;
+  // 2*f+1 view change message packets collected by the leader corresponding to toView
+  repeated RawViewChangeMessage viewChangeMsgList = 2;
+  repeated PBFTRawMessage prePrepareList = 3;
+}
+
+message ProposalRequest
+{
+    BaseMessage message = 1;
+    int64 size = 2;
+}
+
+message RawMessage
+{
+  int32 version = 1;
+  int32 type = 2;
+  // used to verify proposal-irrelevant request
+  // eg. ViewChange, NewView requests
+  bytes signatureData = 3;
+  bytes payLoad = 4;
+}

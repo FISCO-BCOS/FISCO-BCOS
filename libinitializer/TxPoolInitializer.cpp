@@ -19,7 +19,10 @@
  * @date 2021-06-10
  */
 #include "TxPoolInitializer.h"
+#include "Common.h"
+#include "Common/TarsUtils.h"
 #include <bcos-txpool/TxPoolFactory.h>
+
 using namespace bcos;
 using namespace bcos::txpool;
 using namespace bcos::initializer;
@@ -40,11 +43,10 @@ TxPoolInitializer::TxPoolInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
         m_frontService, m_ledger, m_nodeConfig->groupId(), m_nodeConfig->chainId(),
         m_nodeConfig->blockLimit());
     // init the txpool
-    m_txpool = txpoolFactory->createTxPool();
+    m_txpool = txpoolFactory->createTxPool(
+        m_nodeConfig->notifyWorkerNum(), m_nodeConfig->verifierWorkerNum());
     auto txpoolConfig = m_txpool->txpoolConfig();
     txpoolConfig->setPoolLimit(m_nodeConfig->txpoolLimit());
-    txpoolConfig->setNotifierWorkerNum(m_nodeConfig->notifyWorkerNum());
-    txpoolConfig->setVerifyWorkerNum(m_nodeConfig->verifierWorkerNum());
 }
 
 void TxPoolInitializer::init(bcos::sealer::SealerInterface::Ptr _sealer)
@@ -87,4 +89,9 @@ void TxPoolInitializer::stop()
     INITIALIZER_LOG(INFO) << LOG_DESC("Stop the txpool");
     m_running = false;
     m_txpool->stop();
+}
+
+bcos::txpool::TxPoolInterface::Ptr TxPoolInitializer::txpool()
+{
+    return m_txpool;
 }

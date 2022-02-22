@@ -19,19 +19,23 @@
  * @date 2021-06-10
  */
 #pragma once
-#include "Common/TarsUtils.h"
 #include "libinitializer/ProtocolInitializer.h"
 #include <bcos-framework/interfaces/front/FrontServiceInterface.h>
 #include <bcos-framework/interfaces/ledger/LedgerInterface.h>
 #include <bcos-framework/interfaces/sealer/SealerInterface.h>
-#include <bcos-framework/libtool/NodeConfig.h>
-#include <bcos-framework/libutilities/Common.h>
-#include <bcos-framework/libutilities/FixedBytes.h>
-#include <bcos-txpool/TxPool.h>
-#include <bcos-txpool/TxPoolFactory.h>
+#include <bcos-framework/interfaces/txpool/TxPoolInterface.h>
+#include <bcos-tool/NodeConfig.h>
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/FixedBytes.h>
+#include <memory>
 
 namespace bcos
 {
+namespace txpool
+{
+class TxPool;
+}
+
 namespace initializer
 {
 class TxPoolInitializer
@@ -48,7 +52,7 @@ public:
     virtual void start();
     virtual void stop();
 
-    bcos::txpool::TxPool::Ptr txpool() { return m_txpool; }
+    std::shared_ptr<bcos::txpool::TxPoolInterface> txpool();
     bcos::crypto::CryptoSuite::Ptr cryptoSuite() { return m_protocolInitializer->cryptoSuite(); }
 
 private:
@@ -57,7 +61,7 @@ private:
     bcos::front::FrontServiceInterface::Ptr m_frontService;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
 
-    bcos::txpool::TxPool::Ptr m_txpool;
+    std::shared_ptr<bcos::txpool::TxPool> m_txpool;
     std::atomic_bool m_running = {false};
 };
 }  // namespace initializer

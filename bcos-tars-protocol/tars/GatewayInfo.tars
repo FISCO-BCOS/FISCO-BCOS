@@ -1,0 +1,22 @@
+module bcostars
+{
+struct P2PInfo
+{
+    1 require string p2pID;
+    2 optional string agencyName;
+    3 optional string nodeName;
+    4 optional string host;
+    5 optional int port;
+};
+
+struct GroupNodeIDInfo
+{
+    1 require string groupID;
+    2 optional vector<string> nodeIDList;
+};
+struct GatewayInfo
+{
+    1 require P2PInfo p2pInfo;
+    2 require vector<GroupNodeIDInfo> nodeIDInfo;
+};
+};

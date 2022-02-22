@@ -25,30 +25,36 @@
  */
 
 #include "Initializer.h"
+#include "AuthInitializer.h"
 #include "ExecutorInitializer.h"
 #include "LedgerInitializer.h"
 #include "ParallelExecutor.h"
 #include "SchedulerInitializer.h"
 #include "StorageInitializer.h"
-#include "AuthInitializer.h"
-#include "interfaces/crypto/CommonType.h"
-#include "interfaces/executor/ParallelTransactionExecutorInterface.h"
-#include "interfaces/protocol/ProtocolTypeDef.h"
-#include "interfaces/rpc/RPCInterface.h"
-#include "libexecutor/NativeExecutionMessage.h"
-#include "libprotocol/TransactionSubmitResultFactoryImpl.h"
-#include "libprotocol/TransactionSubmitResultImpl.h"
+#include "bcos-framework/interfaces/crypto/CommonType.h"
+#include "bcos-framework/interfaces/executor/NativeExecutionMessage.h"
+#include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
+#include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
+#include "bcos-framework/interfaces/rpc/RPCInterface.h"
+#include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
+#include "bcos-protocol/TransactionSubmitResultImpl.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
-#include <bcos-executor/LRUStorage.h>
-#include <bcos-framework/libtool/NodeConfig.h>
-#include <bcos-scheduler/ExecutorManager.h>
+#include <bcos-scheduler/src/ExecutorManager.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
+#include <bcos-tool/NodeConfig.h>
 
 
 using namespace bcos;
 using namespace bcos::tool;
 using namespace bcos::initializer;
 
+void Initializer::initLocalNode(std::string const& _configFilePath, std::string const& _genesisFile,
+    bcos::gateway::GatewayInterface::Ptr _gateway)
+{
+    initConfig(_configFilePath, _genesisFile, "", true);
+    init(bcos::initializer::NodeArchitectureType::AIR, _configFilePath, _genesisFile, _gateway,
+        true);
+}
 void Initializer::initMicroServiceNode(std::string const& _configFilePath,
     std::string const& _genesisFile, std::string const& _privateKeyPath)
 {
@@ -57,7 +63,8 @@ void Initializer::initMicroServiceNode(std::string const& _configFilePath,
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
     auto gatewayPrx = Application::getCommunicator()->stringToProxy<bcostars::GatewayServicePrx>(
         m_nodeConfig->gatewayServiceName());
-    auto gateWay = std::make_shared<bcostars::GatewayServiceClient>(gatewayPrx, keyFactory);
+    auto gateWay = std::make_shared<bcostars::GatewayServiceClient>(
+        gatewayPrx, m_nodeConfig->gatewayServiceName(), keyFactory);
     init(bcos::initializer::NodeArchitectureType::PRO, _configFilePath, _genesisFile, gateWay,
         false);
 }
@@ -128,6 +135,25 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
         m_txpoolInitializer = std::make_shared<TxPoolInitializer>(
             m_nodeConfig, m_protocolInitializer, m_frontServiceInitializer->front(), ledger);
 
+        std::shared_ptr<bcos::storage::LRUStateStorage> cache = nullptr;
+        if (m_nodeConfig->enableLRUCacheStorage())
+        {
+            cache = std::make_shared<bcos::storage::LRUStateStorage>(storage);
+            cache->setMaxCapacity(m_nodeConfig->cacheSize());
+            BCOS_LOG(INFO) << "initNode: enableLRUCacheStorage, size: "
+                           << m_nodeConfig->cacheSize();
+        }
+        else
+        {
+            BCOS_LOG(INFO) << LOG_DESC("initNode: disableLRUCacheStorage");
+        }
+        // Note: ensure that there has at least one executor before pbft/sync execute block
+        auto executor = ExecutorInitializer::build(m_txpoolInitializer->txpool(), cache, storage,
+            executionMessageFactory, m_protocolInitializer->cryptoSuite()->hashImpl(),
+            m_nodeConfig->isWasm(), m_nodeConfig->isAuthCheck());
+        auto parallelExecutor = std::make_shared<bcos::initializer::ParallelExecutor>(executor);
+        executorManager->addExecutor("default", parallelExecutor);
+
         // build and init the pbft related modules
         m_pbftInitializer = std::make_shared<PBFTInitializer>(_nodeArchType, m_nodeConfig,
             m_protocolInitializer, m_txpoolInitializer->txpool(), ledger, m_scheduler, storage,
@@ -143,16 +169,6 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
         // init the frontService
         m_frontServiceInitializer->init(m_pbftInitializer->pbft(), m_pbftInitializer->blockSync(),
             m_txpoolInitializer->txpool());
-
-        auto cache = std::make_shared<bcos::executor::LRUStorage>(storage);
-        cache->start();
-
-        auto executor = ExecutorInitializer::build(m_txpoolInitializer->txpool(), cache, storage,
-            executionMessageFactory, m_protocolInitializer->cryptoSuite()->hashImpl(),
-            m_nodeConfig->isWasm(), m_nodeConfig->isAuthCheck());
-        auto parallelExecutor = std::make_shared<bcos::initializer::ParallelExecutor>(executor);
-        executorManager->addExecutor("default", parallelExecutor);
-
         initSysContract();
     }
     catch (std::exception const& e)

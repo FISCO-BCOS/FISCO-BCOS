@@ -7,6 +7,7 @@ networks:
 services:
   tars-node:
     image: tarscloud/tars-node:latest
+    platform: "linux/x86_64"
     deploy:
       resources:
         limits:

@@ -1,10 +1,9 @@
 #pragma once
 
-#include "bcos-executor/TransactionExecutor.h"
-#include "interfaces/executor/ExecutionMessage.h"
-#include "libutilities/ThreadPool.h"
+#include "bcos-executor/src/executor/TransactionExecutor.h"
+#include "bcos-framework/interfaces/executor/ExecutionMessage.h"
+#include "bcos-utilities/ThreadPool.h"
 #include <bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h>
-#include <bcos-framework/libutilities/ThreadPool.h>
 #include <thread>
 
 namespace bcos::initializer
@@ -50,10 +49,10 @@ public:
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             callback) override
     {
-        m_pool.enqueue([this, inputRaw = input.release(), callback = std::move(callback)] {
-            m_executor->call(
-                bcos::protocol::ExecutionMessage::UniquePtr(inputRaw), std::move(callback));
-        });
+        // Note: In order to ensure that the call is in the context of the life cycle of
+        // BlockExecutive, the executor call cannot be put into m_pool
+        m_executor->call(
+            bcos::protocol::ExecutionMessage::UniquePtr(input.release()), std::move(callback));
     }
 
     void getHash(bcos::protocol::BlockNumber number,
