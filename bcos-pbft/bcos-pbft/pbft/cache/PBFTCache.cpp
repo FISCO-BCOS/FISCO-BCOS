@@ -237,6 +237,11 @@ bool PBFTCache::checkAndPreCommit()
     {
         return false;
     }
+    // avoid to intoPrecommit when in timeout state
+    if (m_config->timeout())
+    {
+        return false;
+    }
     if (m_precommit && m_precommit->view() >= m_prePrepare->view())
     {
         return false;
@@ -272,6 +277,11 @@ bool PBFTCache::checkAndPreCommit()
 
 bool PBFTCache::checkAndCommit()
 {
+    // avoid to intoPrecommit when in timeout state
+    if (m_config->timeout())
+    {
+        return false;
+    }
     if (m_submitted)
     {
         return false;
