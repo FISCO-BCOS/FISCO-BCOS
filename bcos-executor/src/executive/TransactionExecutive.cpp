@@ -290,17 +290,15 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
 
     auto code = bytes();
     auto params = bytes();
-    auto abi = string();
 
     if (blockContext->isWasm())
     {
         auto data = ref(callParameters->data);
-
-        auto input = std::make_pair(std::make_pair(code, params), abi);
+        auto input = std::make_pair(code, params);
         auto codec = std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), true);
         codec->decode(data, input);
 
-        std::tie(code, params) = std::get<0>(input);
+        std::tie(code, params) = input;
         if (!hasWasmPreamble(code))
         {
             revert();
@@ -329,7 +327,6 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
             return {nullptr, std::move(callResults)};
         }
 
-        abi = std::get<1>(input);
         callParameters->data.swap(code);
     }
 
@@ -371,6 +368,8 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
         EXECUTIVE_LOG(ERROR) << callParameters->message << LOG_KV("tableName", tableName);
         return {nullptr, std::move(callParameters)};
     }
+    auto extraData = std::make_unique<CallParameters>(CallParameters::MESSAGE);
+    extraData->abi = std::move(callParameters->abi);
 
     if (blockContext->isWasm())
     {
@@ -385,9 +384,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
             EXECUTIVE_LOG(ERROR) << callResults->message << LOG_KV("tableName", tableName);
             return {nullptr, std::move(callResults)};
         }
-        auto extraData = std::make_unique<CallParameters>(CallParameters::MESSAGE);
-        extraData->data = params;
-        extraData->origin = abi;
+        extraData->data = std::move(params);
         auto hostContext =
             std::make_unique<HostContext>(std::move(callParameters), shared_from_this(), tableName);
         return {std::move(hostContext), std::move(extraData)};
@@ -396,7 +393,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
     {
         auto hostContext =
             std::make_unique<HostContext>(std::move(callParameters), shared_from_this(), tableName);
-        return {std::move(hostContext), nullptr};
+        return {std::move(hostContext), std::move(extraData)};
     }
 }
 
@@ -531,19 +528,16 @@ CallParameters::UniquePtr TransactionExecutive::go(
                 }
             }
 
-            if (blockContext->isWasm())
-            {
-                assert(extraData != nullptr);
-                hostContext.setCodeAndAbi(outputRef.toBytes(), extraData->origin);
-            }
-            else
+            assert(extraData != nullptr);
+            hostContext.setCodeAndAbi(outputRef.toBytes(), extraData->abi);
+            if (!blockContext->isWasm())
             {
                 if (outputRef.empty())
                 {
-                    EXECUTOR_LOG(ERROR) << "Create contract with empty code, wrong code input.";
                     callResults->type = CallParameters::REVERT;
                     callResults->status = (int32_t)TransactionStatus::Unknown;
                     callResults->message = "Create contract with empty code, wrong code input.";
+                    EXECUTOR_LOG(ERROR) << callResults->message;
                     // Clear the creation flag
                     callResults->create = false;
                     // Clear the data

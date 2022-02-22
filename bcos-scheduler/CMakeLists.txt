@@ -10,7 +10,7 @@ target_link_libraries(${SCHEDULER_TARGET} PUBLIC ${TABLE_TARGET})
 
 if(TESTS)
     enable_testing()
-    add_subdirectory(tests)
+    add_subdirectory(test)
 endif()
 
 if (COVERAGE)

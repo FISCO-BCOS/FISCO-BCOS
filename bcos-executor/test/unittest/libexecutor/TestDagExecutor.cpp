@@ -194,8 +194,8 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
 
     bytes transferBin(transfer_wasm, transfer_wasm + transfer_wasm_len);
     transferBin = codec->encode(transferBin);
-    auto transferAbi = codec->encode(string(
-        R"([{"inputs":[],"type":"constructor"},{"conflictFields":[{"kind":3,"path":[0],"read_only":false,"slot":0},{"kind":3,"path":[1],"read_only":false,"slot":0}],"constant":false,"inputs":[{"internalType":"string","name":"from","type":"string"},{"internalType":"string","name":"to","type":"string"},{"internalType":"uint32","name":"amount","type":"uint32"}],"name":"transfer","outputs":[{"internalType":"bool","type":"bool"}],"type":"function"},{"constant":true,"inputs":[{"internalType":"string","name":"name","type":"string"}],"name":"query","outputs":[{"internalType":"uint32","type":"uint32"}],"type":"function"}])"));
+    auto transferAbi = string(
+        R"([{"inputs":[],"type":"constructor"},{"conflictFields":[{"kind":3,"path":[0],"read_only":false,"slot":0},{"kind":3,"path":[1],"read_only":false,"slot":0}],"constant":false,"inputs":[{"internalType":"string","name":"from","type":"string"},{"internalType":"string","name":"to","type":"string"},{"internalType":"uint32","name":"amount","type":"uint32"}],"name":"transfer","outputs":[{"internalType":"bool","type":"bool"}],"type":"function"},{"constant":true,"inputs":[{"internalType":"string","name":"name","type":"string"}],"name":"query","outputs":[{"internalType":"uint32","type":"uint32"}],"type":"function"}])");
 
     bytes input;
     input.insert(input.end(), transferBin.begin(), transferBin.end());
@@ -203,9 +203,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
 
     string transferAddress = "usr/alice/transfer";
 
-    input.insert(input.end(), transferAbi.begin(), transferAbi.end());
-
-    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1");
+    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1", transferAbi);
     auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
     auto hash = tx->hash();
@@ -405,8 +403,8 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
 
     bytes helloWorldBin(hello_world_wasm, hello_world_wasm + hello_world_wasm_len);
     helloWorldBin = codec->encode(helloWorldBin);
-    auto helloWorldAbi = codec->encode(string(
-        R"([{"inputs":[{"internalType":"string","name":"name","type":"string"}],"type":"constructor"},{"conflictFields":[{"kind":0,"path":[],"read_only":false,"slot":0}],"constant":false,"inputs":[{"internalType":"string","name":"name","type":"string"}],"name":"set","outputs":[],"type":"function"},{"constant":true,"inputs":[],"name":"get","outputs":[{"internalType":"string","type":"string"}],"type":"function"}])"));
+    auto helloWorldAbi = string(
+        R"([{"inputs":[{"internalType":"string","name":"name","type":"string"}],"type":"constructor"},{"conflictFields":[{"kind":0,"path":[],"read_only":false,"slot":0}],"constant":false,"inputs":[{"internalType":"string","name":"name","type":"string"}],"name":"set","outputs":[],"type":"function"},{"constant":true,"inputs":[],"name":"get","outputs":[{"internalType":"string","type":"string"}],"type":"function"}])");
 
     bytes input;
     input.insert(input.end(), helloWorldBin.begin(), helloWorldBin.end());
@@ -417,9 +415,8 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
 
     string helloWorldAddress = "usr/alice/hello_world";
 
-    input.insert(input.end(), helloWorldAbi.begin(), helloWorldAbi.end());
-
-    auto tx = fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1");
+    auto tx =
+        fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1", helloWorldAbi);
     auto sender = boost::algorithm::hex_lower(std::string(tx->sender()));
 
     auto hash = tx->hash();

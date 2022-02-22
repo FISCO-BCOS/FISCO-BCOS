@@ -34,10 +34,10 @@ namespace test
 inline PBTransaction::Ptr fakeTransaction(CryptoSuite::Ptr _cryptoSuite,
     KeyPairInterface::Ptr _keyPair, const std::string_view& _to, bytes const& _input,
     u256 const& _nonce, int64_t _blockLimit, std::string const& _chainId,
-    std::string const& _groupId)
+    std::string const& _groupId, std::string const& _abi = "")
 {
     auto pbTransaction = std::make_shared<PBTransaction>(
-        _cryptoSuite, 1, _to, _input, _nonce, _blockLimit, _chainId, _groupId, utcTime());
+        _cryptoSuite, 1, _to, _input, _nonce, _blockLimit, _chainId, _groupId, utcTime(), _abi);
     // set signature
     auto signData = _cryptoSuite->signatureImpl()->sign(*_keyPair, pbTransaction->hash(), true);
     pbTransaction->updateSignature(bytesConstRef(signData->data(), signData->size()),
