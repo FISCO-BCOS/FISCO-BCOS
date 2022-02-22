@@ -1072,6 +1072,9 @@ bool PBFTCacheProcessor::checkAndTryToRecover()
     // clear the recoverReqCache
     m_recoverReqCache.clear();
     m_recoverCacheWeight.clear();
+    // try to preCommit/commit after no-timeout
+    checkAndPreCommit();
+    checkAndCommit();
     PBFT_LOG(INFO) << LOG_DESC("checkAndTryToRecoverView: reachNewView")
                    << LOG_KV("recoveredView", recoveredView) << m_config->printCurrentState();
     return true;
