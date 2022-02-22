@@ -8,8 +8,8 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 
 include(HunterGate)
 HunterGate(
-    URL "https://${URL_BASE}/FISCO-BCOS/hunter/archive/9bb4c2aa139cfa53af5779105cd0d5570c31fbf5.tar.gz"
-    SHA1 "02165406cd653bedfe88538926453ede8eca84ba"
+    URL "https://${URL_BASE}/FISCO-BCOS/hunter/archive/41051088cf9eb0abd0e33b4f1641727cbea57aff.tar.gz"
+    SHA1 "8330e7840f53aaba6ef8b6996f5b1fd82f29d0b4"
     FILEPATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.cmake"
 )
 
