@@ -101,7 +101,7 @@ void PBFTMessage::generateAndSetSignatureData(
     CryptoSuite::Ptr _cryptoSuite, KeyPairInterface::Ptr _keyPair) const
 {
     m_signatureDataHash = getHashFieldsDataHash(_cryptoSuite);
-    auto signature = _cryptoSuite->signatureImpl()->sign(_keyPair, m_signatureDataHash, false);
+    auto signature = _cryptoSuite->signatureImpl()->sign(*_keyPair, m_signatureDataHash, false);
     // set the signature data
     m_pbftRawMessage->set_signaturedata(signature->data(), signature->size());
 }

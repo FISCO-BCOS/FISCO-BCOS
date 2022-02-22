@@ -378,7 +378,8 @@ BOOST_AUTO_TEST_CASE(dagByMessage)
     auto block = blockFactory->createBlock();
     block->blockHeader()->setNumber(100);
 
-    auto keyPair = blockFactory->cryptoSuite()->signatureImpl()->generateKeyPair();
+    bcos::crypto::KeyPairInterface::Ptr keyPair =
+        blockFactory->cryptoSuite()->signatureImpl()->generateKeyPair();
     for (size_t i = 0; i < 1000; ++i)
     {
         bytes input;
