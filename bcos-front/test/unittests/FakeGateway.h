@@ -75,9 +75,9 @@ public:
      * @param _payload: message content
      * @return void
      */
-    virtual void asyncSendMessageByNodeID(const std::string& _groupID,
-        bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
-        bytesConstRef _payload, bcos::gateway::ErrorRespFunc _errorRespFunc) override;
+    void asyncSendMessageByNodeID(const std::string& _groupID, bcos::crypto::NodeIDPtr _srcNodeID,
+        bcos::crypto::NodeIDPtr _dstNodeID, bytesConstRef _payload,
+        bcos::gateway::ErrorRespFunc _errorRespFunc) override;
 
     /**
      * @brief: send message to multiple nodes
@@ -87,9 +87,8 @@ public:
      * @param _payload: message content
      * @return void
      */
-    virtual void asyncSendMessageByNodeIDs(const std::string& _groupID,
-        bcos::crypto::NodeIDPtr _srcNodeID, const bcos::crypto::NodeIDs& _dstNodeIDs,
-        bytesConstRef _payload) override;
+    void asyncSendMessageByNodeIDs(const std::string& _groupID, bcos::crypto::NodeIDPtr _srcNodeID,
+        const bcos::crypto::NodeIDs& _dstNodeIDs, bytesConstRef _payload) override;
 
     /**
      * @brief: send message to all nodes

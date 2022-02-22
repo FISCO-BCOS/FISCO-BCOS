@@ -52,7 +52,7 @@ public:
     void decode(bytesConstRef _data) override;
     void encode(bytes& _encodeData) const override;
     bytesConstRef encode(bool _onlyHashFieldsData = false) const;
-    virtual bcos::crypto::HashType hash() const override;
+    bcos::crypto::HashType hash() const override;
     void clear() override;
 
     // the version of the blockHeader

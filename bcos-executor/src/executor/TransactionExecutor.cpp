@@ -577,7 +577,7 @@ void TransactionExecutor::dagExecuteTransactionsForWasm(
             else
             {
                 // `slotUsage` is used when some a conflict key equals to `All` or `Len`. In such
-                // cases, if there are 2 transations and one of them uses all of slot 0  meanwhile
+                // cases, if there are 2 transactions and one of them uses all of slot 0  meanwhile
                 // another use a key to visit slot 0, then their conflict keys may looks very
                 // different, and they can't be captured by `dependencies` only.
                 for (auto& slotIndices : dependencies)

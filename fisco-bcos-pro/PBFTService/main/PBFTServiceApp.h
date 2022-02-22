@@ -30,7 +30,7 @@ class PBFTServiceApp : public Application
 {
 public:
     PBFTServiceApp() {}
-    virtual ~PBFTServiceApp() override{};
+    ~PBFTServiceApp() override{};
 
     void initialize() override;
     void destroyApp() override {}

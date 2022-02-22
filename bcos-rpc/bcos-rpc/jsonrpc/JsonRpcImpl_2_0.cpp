@@ -169,7 +169,6 @@ void JsonRpcImpl_2_0::parseRpcRequestJson(
 
             // success return
             return;
-
         } while (0);
     }
     catch (const std::exception& e)

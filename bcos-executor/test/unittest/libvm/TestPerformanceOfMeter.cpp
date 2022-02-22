@@ -774,7 +774,7 @@ BOOST_AUTO_TEST_CASE(globalGas_infinit_loop)
             wasm_byte_vec_t error_message;
             wasmtime_error_message(error, &error_message);
             cout << string(error_message.data, error_message.size) << endl;
-            printf("Exhausted fuel infinit loop(%d)\n", n);
+            printf("Exhausted fuel infinite loop(%d)\n", n);
             break;
         }
         if (trap != NULL)
@@ -783,7 +783,7 @@ BOOST_AUTO_TEST_CASE(globalGas_infinit_loop)
             wasm_trap_message(trap, &error_message);
             wasm_trap_delete(trap);
             cout << string(error_message.data, error_message.size) << endl;
-            printf("Exhausted fuel infinit loop(%d)\n", n);
+            printf("Exhausted fuel infinite loop(%d)\n", n);
             break;
         }
     }
@@ -791,7 +791,7 @@ BOOST_AUTO_TEST_CASE(globalGas_infinit_loop)
     wasmtime_val_t finalValue;
     wasmtime_global_get(context, &globalGas, &finalValue);
     BOOST_TEST(finalValue.kind, WASMTIME_I64);
-    cout << "globalGas call infinit loop function,time used(us)="
+    cout << "globalGas call infinite loop function,time used(us)="
          << chrono::duration_cast<chrono::microseconds>(end - start).count()
          << ", left=" << finalValue.of.i64 << ", setStorage called = " << setStorateCalledCount
          << endl;
@@ -883,7 +883,7 @@ BOOST_AUTO_TEST_CASE(useGas_infinit_loop)
             wasm_byte_vec_t error_message;
             wasmtime_error_message(error, &error_message);
             cout << string(error_message.data, error_message.size) << endl;
-            printf("Exhausted fuel infinit loop(%d)\n", n);
+            printf("Exhausted fuel infinite loop(%d)\n", n);
             break;
         }
         if (trap != NULL)
@@ -892,12 +892,12 @@ BOOST_AUTO_TEST_CASE(useGas_infinit_loop)
             wasm_trap_message(trap, &error_message);
             wasm_trap_delete(trap);
             cout << string(error_message.data, error_message.size) << endl;
-            printf("Exhausted fuel infinit loop(%d)\n", n);
+            printf("Exhausted fuel infinite loop(%d)\n", n);
             break;
         }
     }
     auto end = chrono::system_clock::now();
-    cout << "useGas call infinit loop function"
+    cout << "useGas call infinite loop function"
          << ", time used(us)=" << chrono::duration_cast<chrono::microseconds>(end - start).count()
          << ", setStorage called = " << setStorateCalledCount << endl;
 
