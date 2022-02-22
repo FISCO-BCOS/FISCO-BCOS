@@ -74,6 +74,7 @@ public:
     }
     gsl::span<const bcos::protocol::Signature> signatureList() const override
     {
+        bcos::ReadGuard l(x_inner);
         return gsl::span(
             reinterpret_cast<const bcos::protocol::Signature*>(m_inner()->signatureList.data()),
             m_inner()->signatureList.size());
@@ -148,14 +149,27 @@ public:
         setSignatureList(gsl::span(_signatureList.data(), _signatureList.size()));
     }
 
-    const bcostars::BlockHeader& inner() const { return *m_inner(); }
+    const bcostars::BlockHeader& inner() const
+    {
+        bcos::ReadGuard l(x_inner);
+        return *m_inner();
+    }
 
-    void setInner(const bcostars::BlockHeader& blockHeader) { *m_inner() = blockHeader; }
-    void setInner(bcostars::BlockHeader&& blockHeader) { *m_inner() = std::move(blockHeader); }
+    void setInner(const bcostars::BlockHeader& blockHeader)
+    {
+        bcos::WriteGuard l(x_inner);
+        *m_inner() = blockHeader;
+    }
+    void setInner(bcostars::BlockHeader&& blockHeader)
+    {
+        bcos::WriteGuard l(x_inner);
+        *m_inner() = std::move(blockHeader);
+    }
 
 private:
     std::function<bcostars::BlockHeader*()> m_inner;
     mutable std::vector<bcos::protocol::ParentInfo> m_parentInfo;
+    mutable bcos::SharedMutex x_inner;
 };
 }  // namespace protocol
 }  // namespace bcostars

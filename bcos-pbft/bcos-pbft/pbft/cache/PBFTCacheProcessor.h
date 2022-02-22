@@ -185,6 +185,8 @@ public:
         return m_committedProposalList.count(_index);
     }
 
+    virtual uint64_t getViewChangeWeight(ViewType _view) { return m_viewChangeWeight.at(_view); }
+
 protected:
     virtual void loadAndVerifyProposal(bcos::crypto::NodeIDPtr _fromNode,
         PBFTProposalInterface::Ptr _proposal, size_t _retryTime = 0);

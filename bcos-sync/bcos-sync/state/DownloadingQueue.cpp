@@ -332,6 +332,13 @@ bool DownloadingQueue::checkAndCommitBlock(bcos::protocol::Block::Ptr _block)
         m_config->setExecutedBlock(m_config->blockNumber());
         return false;
     }
+    auto signature = blockHeader->signatureList();
+    BLKSYNC_LOG(INFO) << LOG_BADGE("Download") << LOG_BADGE("checkAndCommitBlock")
+                      << LOG_KV("number", blockHeader->number())
+                      << LOG_KV("signatureSize", signature.size())
+                      << LOG_KV("currentNumber", m_config->blockNumber())
+                      << LOG_KV("hash", blockHeader->hash().abridged());
+
     auto self = std::weak_ptr<DownloadingQueue>(shared_from_this());
     m_config->consensus()->asyncCheckBlock(
         _block, [self, _block, blockHeader](Error::Ptr _error, bool _ret) {

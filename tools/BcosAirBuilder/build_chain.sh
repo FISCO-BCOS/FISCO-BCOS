@@ -108,8 +108,6 @@ EOF
 generate_sm_cert_conf() {
     local output=$1
     cat <<EOF >"${output}"
-HOME			= .
-RANDFILE		= $ENV::HOME/.rnd
 oid_section		= new_oids
 
 [ new_oids ]
@@ -364,8 +362,12 @@ gen_sm_chain_cert() {
 
     "$OPENSSL_CMD" genpkey -paramfile "${sm2_params}" -out "$chaindir/sm_ca.key" 2>/dev/null
     "$OPENSSL_CMD" req -config sm_cert.cnf -x509 -days "${days}" -subj "/CN=FISCO-BCOS/O=FISCO-BCOS/OU=chain" -key "$chaindir/sm_ca.key" -extensions v3_ca -out "$chaindir/sm_ca.crt" 2>/dev/null
-    cp "${sm_cert_conf}" "${chaindir}"
-    cp "${sm2_params}" "${chaindir}"
+    if [ ! -f "${chaindir}/${sm_cert_conf}" ];then
+        cp "${sm_cert_conf}" "${chaindir}"
+    fi
+    if [ ! -f "${chaindir}/${sm2_params}" ];then
+        cp "${sm2_params}" "${chaindir}"
+    fi
 }
 
 gen_sm_node_cert_with_ext() {
@@ -383,7 +385,6 @@ gen_sm_node_cert_with_ext() {
     "$OPENSSL_CMD" genpkey -paramfile "$capath/${sm2_params}" -out "$certpath/sm_${type}.key" 2> /dev/null
     "$OPENSSL_CMD" req -new -subj "/CN=FISCO-BCOS/O=fisco-bcos/OU=${type}" -key "$certpath/sm_${type}.key" -config "$capath/sm_cert.cnf" -out "$certpath/sm_${type}.csr" 2> /dev/null
 
-    # echo "not use $(basename "$capath") to sign $(basename $certpath) ${type}" >>"${logfile}"
     "$OPENSSL_CMD" x509 -sm3 -req -CA "$capath/sm_ca.crt" -CAkey "$capath/sm_ca.key" -days "${days}" -CAcreateserial -in "$certpath/sm_${type}.csr" -out "$certpath/sm_${type}.crt" -extfile "$capath/sm_cert.cnf" -extensions "$extensions" 2> /dev/null
 
     rm -f "$certpath/sm_${type}.csr"
@@ -720,7 +721,7 @@ generate_common_ini() {
     ; the group id, should nerver be changed
     group_id=group0
     ; the chain id, should nerver be changed
-    chain_id=chain
+    chain_id=chain0
 
 [security]
     private_key_path=conf/node.pem

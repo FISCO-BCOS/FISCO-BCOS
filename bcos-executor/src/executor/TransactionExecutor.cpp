@@ -68,6 +68,7 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/thread/latch.hpp>
 #include <boost/throw_exception.hpp>
+#include <algorithm>
 #include <cassert>
 #include <exception>
 #include <functional>
@@ -101,7 +102,8 @@ TransactionExecutor::TransactionExecutor(txpool::TxPoolInterface::Ptr txpool,
     m_backendStorage(std::move(backendStorage)),
     m_executionMessageFactory(std::move(executionMessageFactory)),
     m_hashImpl(std::move(hashImpl)),
-    m_isAuthCheck(isAuthCheck)
+    m_isAuthCheck(isAuthCheck),
+    m_isWasm(false)
 {
     assert(m_backendStorage);
 
@@ -172,7 +174,7 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
     std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
         callback)
 {
-    EXECUTOR_LOG(DEBUG) << "Call request" << LOG_KV("ContextID", input->contextID())
+    EXECUTOR_LOG(TRACE) << "Call request" << LOG_KV("ContextID", input->contextID())
                         << LOG_KV("seq", input->seq()) << LOG_KV("Message type", input->type())
                         << LOG_KV("To", input->to()) << LOG_KV("Create", input->create());
 
@@ -275,7 +277,7 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
                 }
             }
 
-            EXECUTOR_LOG(DEBUG) << "Call success";
+            EXECUTOR_LOG(TRACE) << "Call success";
             callback(std::move(error), std::move(result));
         });
 }
@@ -398,7 +400,7 @@ void TransactionExecutor::prepare(
 void TransactionExecutor::commit(
     const TwoPCParams& params, std::function<void(bcos::Error::Ptr)> callback)
 {
-    EXECUTOR_LOG(DEBUG) << "Commit request" << LOG_KV("number", params.number);
+    EXECUTOR_LOG(TRACE) << "Commit request" << LOG_KV("number", params.number);
 
     auto first = m_stateStorages.begin();
     if (first == m_stateStorages.end())
@@ -504,8 +506,6 @@ void TransactionExecutor::getCode(
 {
     EXECUTOR_LOG(INFO) << "Get code request" << LOG_KV("Contract", contract);
 
-    BlockContext::Ptr blockContext;
-
     storage::StorageInterface::Ptr storage;
 
     if (m_cachedStorage)
@@ -517,7 +517,7 @@ void TransactionExecutor::getCode(
         storage = m_backendStorage;
     }
 
-    auto tableName = getContractTableName(contract);
+    auto tableName = getContractTableName(contract, m_isWasm);
     storage->asyncGetRow(tableName, "code",
         [callback = std::move(callback)](Error::UniquePtr error, std::optional<Entry> entry) {
             if (error)

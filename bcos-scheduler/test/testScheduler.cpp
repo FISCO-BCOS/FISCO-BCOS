@@ -277,23 +277,39 @@ BOOST_AUTO_TEST_CASE(call)
     auto tx = blockFactory->transactionFactory()->createTransaction(0, "address_to",
         bytes(inputStr.begin(), inputStr.end()), 200, 300, "chain", "group", 500, keyPair);
 
-    bcos::protocol::TransactionReceipt::Ptr receipt;
+    auto empty_to = blockFactory->transactionFactory()->createTransaction(
+        0, "", bytes(inputStr.begin(), inputStr.end()), 200, 300, "chain", "group", 500, keyPair);
 
-    scheduler->call(
-        tx, [&](bcos::Error::Ptr error, bcos::protocol::TransactionReceipt::Ptr receiptResponse) {
-            BOOST_CHECK(!error);
-            BOOST_CHECK(receiptResponse);
+    // call
+    {
+        bcos::protocol::TransactionReceipt::Ptr receipt;
 
-            receipt = std::move(receiptResponse);
-        });
+        scheduler->call(tx,
+            [&](bcos::Error::Ptr error, bcos::protocol::TransactionReceipt::Ptr receiptResponse) {
+                BOOST_CHECK(!error);
+                BOOST_CHECK(receiptResponse);
 
-    BOOST_CHECK_EQUAL(receipt->blockNumber(), 0);
-    BOOST_CHECK_EQUAL(receipt->status(), 0);
-    BOOST_CHECK_GT(receipt->gasUsed(), 0);
-    auto output = receipt->output();
+                receipt = std::move(receiptResponse);
+            });
 
-    std::string outputStr((char*)output.data(), output.size());
-    BOOST_CHECK_EQUAL(outputStr, "Hello world! response");
+        BOOST_CHECK_EQUAL(receipt->blockNumber(), 0);
+        BOOST_CHECK_EQUAL(receipt->status(), 0);
+        BOOST_CHECK_GT(receipt->gasUsed(), 0);
+        auto output = receipt->output();
+
+        std::string outputStr((char*)output.data(), output.size());
+        BOOST_CHECK_EQUAL(outputStr, "Hello world! response");
+    }
+
+    // call empty to
+    {
+        scheduler->call(empty_to,
+            [&](bcos::Error::Ptr error, bcos::protocol::TransactionReceipt::Ptr receiptResponse) {
+                BOOST_CHECK(error);
+                BOOST_CHECK(error->errorMessage() == "Call address is empty");
+                BOOST_CHECK(receiptResponse == nullptr);
+            });
+    }
 }
 
 BOOST_AUTO_TEST_CASE(registerExecutor)

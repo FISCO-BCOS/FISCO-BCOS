@@ -136,6 +136,26 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
         m_txpoolInitializer = std::make_shared<TxPoolInitializer>(
             m_nodeConfig, m_protocolInitializer, m_frontServiceInitializer->front(), ledger);
 
+        std::shared_ptr<bcos::storage::LRUStateStorage> cache = nullptr;
+        if (m_nodeConfig->enableLRUCacheStorage())
+        {
+            cache = std::make_shared<bcos::storage::LRUStateStorage>(storage);
+            cache->setMaxCapacity(m_nodeConfig->cacheSize());
+            BCOS_LOG(INFO) << "initNode: enableLRUCacheStorage, size: "
+                           << m_nodeConfig->cacheSize();
+        }
+        else
+        {
+            BCOS_LOG(INFO) << LOG_DESC("initNode: disableLRUCacheStorage");
+        }
+        // Note: ensure that there has at least one executor before pbft/sync execute block
+        auto executor = ExecutorInitializer::build(m_txpoolInitializer->txpool(), cache, storage,
+            executionMessageFactory, m_protocolInitializer->cryptoSuite()->hashImpl(),
+            m_nodeConfig->isWasm(), m_nodeConfig->isAuthCheck());
+        auto parallelExecutor = std::make_shared<bcos::initializer::ParallelExecutor>(executor);
+        executorManager->addExecutor("default", parallelExecutor);
+
+        // build and init the pbft related modules
         auto consensusStoragePath =
             m_nodeConfig->storagePath() + c_fileSeparator + c_consensusStorageDBName;
         if (!_airVersion)
@@ -182,25 +202,6 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
         // init the frontService
         m_frontServiceInitializer->init(m_pbftInitializer->pbft(), m_pbftInitializer->blockSync(),
             m_txpoolInitializer->txpool());
-
-        std::shared_ptr<bcos::storage::LRUStateStorage> cache = nullptr;
-        if (m_nodeConfig->enableLRUCacheStorage())
-        {
-            cache = std::make_shared<bcos::storage::LRUStateStorage>(storage);
-            cache->setMaxCapacity(m_nodeConfig->cacheSize());
-            BCOS_LOG(INFO) << "initNode: enableLRUCacheStorage, size: "
-                           << m_nodeConfig->cacheSize();
-        }
-        else
-        {
-            BCOS_LOG(INFO) << LOG_DESC("initNode: disableLRUCacheStorage");
-        }
-        auto executor = ExecutorInitializer::build(m_txpoolInitializer->txpool(), cache, storage,
-            executionMessageFactory, m_protocolInitializer->cryptoSuite()->hashImpl(),
-            m_nodeConfig->isWasm(), m_nodeConfig->isAuthCheck());
-        auto parallelExecutor = std::make_shared<bcos::initializer::ParallelExecutor>(executor);
-        executorManager->addExecutor("default", parallelExecutor);
-
         initSysContract();
     }
     catch (std::exception const& e)

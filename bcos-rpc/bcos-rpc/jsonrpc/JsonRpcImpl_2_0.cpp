@@ -488,7 +488,7 @@ void JsonRpcImpl_2_0::call(std::string const& _groupID, std::string const& _node
     const std::string& _to, const std::string& _data, RespFunc _respFunc)
 {
     RPC_IMPL_LOG(TRACE) << LOG_DESC("call") << LOG_KV("to", _to) << LOG_KV("group", _groupID)
-                        << LOG_KV("node", _nodeName);
+                        << LOG_KV("node", _nodeName) << LOG_KV("data", _data);
 
     auto nodeService = getNodeService(_groupID, _nodeName, "call");
     auto transactionFactory = nodeService->blockFactory()->transactionFactory();
@@ -549,7 +549,9 @@ void JsonRpcImpl_2_0::sendTransaction(std::string const& _groupID, std::string c
             {
                 RPC_IMPL_LOG(ERROR)
                     << LOG_BADGE("sendTransaction") << LOG_KV("requireProof", _requireProof)
-                    << LOG_KV("hash", _transactionSubmitResult->txHash().abridged())
+                    << LOG_KV("hash", _transactionSubmitResult ?
+                                          _transactionSubmitResult->txHash().abridged() :
+                                          "unknown")
                     << LOG_KV("code", _error->errorCode())
                     << LOG_KV("message", _error->errorMessage());
 

@@ -126,39 +126,47 @@ public:
 
     std::optional<storage::Table> createTable(std::string _tableName, std::string _valueFields)
     {
-        OpenTableResponse value;
-
-        m_storage->asyncCreateTable(std::move(_tableName), std::move(_valueFields),
-            [&value](Error::UniquePtr&& error, auto&& table) mutable {
-                value = {std::move(error), std::move(table)};
-            });
-
-        auto& [error, table] = value;
-
-        if (error)
+        auto ret = createTableWithoutException(_tableName, _valueFields);
+        if (std::get<0>(ret))
         {
-            BOOST_THROW_EXCEPTION(*error);
+            BOOST_THROW_EXCEPTION(*(std::get<0>(ret)));
         }
 
-        return std::move(table);
+        return std::get<1>(ret);
+    }
+
+    std::tuple<Error::UniquePtr, std::optional<storage::Table>> createTableWithoutException(
+        std::string _tableName, std::string _valueFields)
+    {
+        std::promise<OpenTableResponse> createPromise;
+        m_storage->asyncCreateTable(std::move(_tableName), std::move(_valueFields),
+            [&](Error::UniquePtr&& error, auto&& table) mutable {
+                createPromise.set_value({std::move(error), std::move(table)});
+            });
+        auto value = createPromise.get_future().get();
+        return value;
     }
 
     std::optional<storage::Table> openTable(std::string_view tableName)
     {
-        OpenTableResponse value;
-
-        m_storage->asyncOpenTable(tableName, [&value](auto&& error, auto&& table) mutable {
-            value = {std::move(error), std::move(table)};
-        });
-
-        auto& [error, table] = value;
-
-        if (error)
+        auto ret = openTableWithoutException(tableName);
+        if (std::get<0>(ret))
         {
-            BOOST_THROW_EXCEPTION(*error);
+            BOOST_THROW_EXCEPTION(*(std::get<0>(ret)));
         }
 
-        return std::move(table);
+        return std::get<1>(ret);
+    }
+
+    std::tuple<Error::UniquePtr, std::optional<storage::Table>> openTableWithoutException(
+        std::string_view tableName)
+    {
+        std::promise<OpenTableResponse> openPromise;
+        m_storage->asyncOpenTable(tableName, [&](auto&& error, auto&& table) mutable {
+            openPromise.set_value({std::move(error), std::move(table)});
+        });
+        auto value = openPromise.get_future().get();
+        return value;
     }
 
     void setRecoder(storage::Recoder::Ptr recoder) { m_storage->setRecoder(std::move(recoder)); }

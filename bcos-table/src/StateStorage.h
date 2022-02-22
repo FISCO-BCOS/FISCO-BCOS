@@ -531,22 +531,26 @@ public:
                     if (entry.status() != Entry::DELETED)
                     {
                         auto value = entry.getField(0);
+                        bcos::bytesConstRef ref((const bcos::byte*)value.data(), value.size());
+                        auto entryHash = hashImpl->hash(ref);
                         if (c_fileLogLevel >= TRACE)
                         {
-                            STORAGE_LOG(TRACE) << "Calc hash, dirty entry: " << it.table << " | "
-                                               << toHex(it.key) << " | " << toHex(value);
+                            STORAGE_LOG(TRACE)
+                                << "Calc hash, dirty entry: " << it.table << " | " << toHex(it.key)
+                                << " | " << toHex(value) << LOG_KV("hash", entryHash.abridged());
                         }
-                        bcos::bytesConstRef ref((const bcos::byte*)value.data(), value.size());
-                        hash ^= hashImpl->hash(ref);
+                        hash ^= entryHash;
                     }
                     else
                     {
+                        auto entryHash = bcos::crypto::HashType(0x1);
                         if (c_fileLogLevel >= TRACE)
                         {
-                            STORAGE_LOG(TRACE) << "Calc hash, deleted entry: " << it.table << " | "
-                                               << toHex(toHex(it.key));
+                            STORAGE_LOG(TRACE)
+                                << "Calc hash, deleted entry: " << it.table << " | "
+                                << toHex(toHex(it.key)) << LOG_KV("hash", entryHash.abridged());
                         }
-                        hash ^= bcos::crypto::HashType(0x1);
+                        hash ^= entryHash;
                     }
                     bucketHash ^= hash;
                 }

@@ -130,6 +130,7 @@ void PBFTEngine::onLoadAndVerifyProposalSucc(PBFTProposalInterface::Ptr _proposa
     // must add lock here to ensure thread-safe
     RecursiveGuard l(m_mutex);
     m_cacheProcessor->updateCommitQueue(_proposal);
+    m_config->timer()->restart();
 }
 
 void PBFTEngine::onProposalApplyFailed(PBFTProposalInterface::Ptr _proposal)
@@ -465,25 +466,6 @@ void PBFTEngine::executeWorker()
     {
         auto pbftMsg = messageResult.second;
         auto packetType = pbftMsg->packetType();
-        if (m_config->timeout() == true)
-        {
-            // Pre-prepare, prepare and commit type message packets are not allowed to
-            // be processed in the timeout state
-            if (c_timeoutAllowedPacket.count(packetType))
-            {
-                handleMsg(pbftMsg);
-            }
-            // Re-insert unqualified messages into the queue
-            else if (pbftMsg->index() > m_config->committedProposal()->index())
-            {
-                m_msgQueue->push(pbftMsg);
-                if (empty)
-                {
-                    waitSignal();
-                }
-            }
-            return;
-        }
         // can't handle the future consensus messages when handling the system
         // proposal
         if ((c_consensusPacket.count(packetType)) && !m_config->canHandleNewProposal(pbftMsg))
@@ -587,6 +569,7 @@ CheckResult PBFTEngine::checkPBFTMsgState(PBFTMessageInterface::Ptr _pbftReq) co
     {
         PBFT_LOG(DEBUG) << LOG_DESC("checkPBFTMsgState: invalid pbftMsg for invalid index")
                         << LOG_KV("highWaterMark", m_config->highWaterMark())
+                        << LOG_KV("lowWaterMark", m_config->lowWaterMark())
                         << printPBFTMsgInfo(_pbftReq) << m_config->printCurrentState()
                         << LOG_KV("syncingNumber", m_config->syncingHighestNumber());
         return CheckResult::INVALID;
@@ -1094,7 +1077,9 @@ bool PBFTEngine::handleViewChangeMsg(ViewChangeMsgInterface::Ptr _viewChangeMsg)
     // not expired
     auto leaderIndex =
         m_config->leaderIndexInNewViewPeriod(_viewChangeMsg->index() + 1, _viewChangeMsg->index());
-    if (_viewChangeMsg->generatedFrom() == leaderIndex)
+    if (_viewChangeMsg->generatedFrom() == leaderIndex ||
+        (m_cacheProcessor->getViewChangeWeight(_viewChangeMsg->view()) >
+            m_config->maxFaultyQuorum()))
     {
         auto view = m_cacheProcessor->tryToTriggerFastViewChange();
         if (view > 0)
@@ -1114,18 +1099,6 @@ bool PBFTEngine::handleViewChangeMsg(ViewChangeMsgInterface::Ptr _viewChangeMsg)
 
 bool PBFTEngine::isValidNewViewMsg(std::shared_ptr<NewViewMsgInterface> _newViewMsg)
 {
-    // check the newViewMsg
-    auto progressedIndex = _newViewMsg->index() + 1;
-    auto expectedLeader =
-        m_config->leaderIndexInNewViewPeriod(progressedIndex, _newViewMsg->view());
-    if (expectedLeader != _newViewMsg->generatedFrom())
-    {
-        PBFT_LOG(WARNING) << LOG_DESC("InvalidNewViewMsg for invalid nextLeader")
-                          << LOG_KV("expectedLeader", expectedLeader)
-                          << LOG_KV("recvIdx", _newViewMsg->generatedFrom())
-                          << m_config->printCurrentState();
-        return false;
-    }
     if (_newViewMsg->view() <= m_config->view())
     {
         PBFT_LOG(INFO) << LOG_DESC("InvalidNewViewMsg for invalid view")
@@ -1198,10 +1171,6 @@ void PBFTEngine::reHandlePrePrepareProposals(NewViewMsgInterface::Ptr _newViewRe
     auto maxProposalIndex = m_config->committedProposal()->index();
     for (auto prePrepare : prePrepareList)
     {
-        if (prePrepare->index() > maxProposalIndex)
-        {
-            maxProposalIndex = prePrepare->index();
-        }
         // empty block proposal
         if (prePrepare->consensusProposal()->data().size() > 0)
         {
@@ -1209,6 +1178,10 @@ void PBFTEngine::reHandlePrePrepareProposals(NewViewMsgInterface::Ptr _newViewRe
                            << printPBFTMsgInfo(prePrepare) << m_config->printCurrentState();
             handlePrePrepareMsg(prePrepare, true, true, false);
             continue;
+        }
+        if (prePrepare->index() > maxProposalIndex)
+        {
+            maxProposalIndex = prePrepare->index();
         }
         // hit the cache
         if (m_cacheProcessor->tryToFillProposal(prePrepare))

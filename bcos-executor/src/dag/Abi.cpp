@@ -134,7 +134,7 @@ unique_ptr<FunctionAbi> FunctionAbi::deserialize(
 
         auto selector = hashImpl->hash(signature).asBytes();
         selector.resize(4);
-        BCOS_LOG(DEBUG) << LOG_BADGE("EXECUTOR") << LOG_DESC("found selector")
+        BCOS_LOG(TRACE) << LOG_BADGE("EXECUTOR") << LOG_DESC("found selector")
                         << LOG_KV("selector", toHexStringWithPrefix(selector))
                         << LOG_KV("signature", signature);
 

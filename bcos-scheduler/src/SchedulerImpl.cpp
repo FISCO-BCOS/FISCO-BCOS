@@ -39,12 +39,13 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         auto requestNumber = block->blockHeaderConst()->number();
         auto& frontBlock = m_blocks.front();
         auto& backBlock = m_blocks.back();
-
+        auto signature = block->blockHeaderConst()->signatureList();
         // Block already executed
         if (requestNumber >= frontBlock.number() && requestNumber <= backBlock.number())
         {
             SCHEDULER_LOG(INFO) << "ExecuteBlock success, return executed block"
                                 << LOG_KV("block number", block->blockHeaderConst()->number())
+                                << LOG_KV("signatureSize", signature.size())
                                 << LOG_KV("verify", verify);
 
             auto it = m_blocks.begin();
@@ -104,15 +105,24 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         if (error)
         {
             SCHEDULER_LOG(ERROR) << "Unknown error, " << boost::diagnostic_information(*error);
-
+            {
+                std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
+                m_blocks.pop_front();
+            }
             executeLock->unlock();
             callback(
                 BCOS_ERROR_WITH_PREV_PTR(SchedulerError::UnknownError, "Unknown error", *error),
                 nullptr);
             return;
         }
+        auto signature = header->signatureList();
         SCHEDULER_LOG(INFO) << "ExecuteBlock success" << LOG_KV("block number", header->number())
-                            << LOG_KV("state root", header->stateRoot().hex());
+                            << LOG_KV("hash", header->hash().abridged())
+                            << LOG_KV("state root", header->stateRoot().hex())
+                            << LOG_KV("receiptRoot", header->receiptsRoot().hex())
+                            << LOG_KV("txsRoot", header->txsRoot().abridged())
+                            << LOG_KV("gasUsed", header->gasUsed())
+                            << LOG_KV("signatureSize", signature.size());
 
         m_lastExecutedBlockNumber.store(header->number());
 
@@ -131,13 +141,26 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
     if (!commitLock->owns_lock())
     {
         std::string message;
-        assert(!m_blocks.empty());
-
-        auto& frontBlock = m_blocks.front();
-
-        message = (boost::format("Another block is committing! Block number: %ld") %
-                   frontBlock.block()->blockHeaderConst()->number())
-                      .str();
+        {
+            std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
+            if (m_blocks.empty())
+            {
+                message = (boost::format("commitBlock: empty block queue, maybe the block has been "
+                                         "committed! Block number: %ld, hash: %s") %
+                           header->number() % header->hash().abridged())
+                              .str();
+            }
+            else
+            {
+                auto& frontBlock = m_blocks.front();
+                message =
+                    (boost::format(
+                         "commitBlock: Another block is committing! Block number: %ld, hash: %s") %
+                        frontBlock.block()->blockHeaderConst()->number() %
+                        frontBlock.block()->blockHeaderConst()->hash().abridged())
+                        .str();
+            }
+        }
         SCHEDULER_LOG(ERROR) << "CommitBlock error, " << message;
         callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidStatus, message), nullptr);
         return;
@@ -174,7 +197,15 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
         callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidBlockNumber, message), nullptr);
         return;
     }
-    frontBlock.block()->setBlockHeader(std::move(header));
+    // Note: only when the signatureList is empty need to reset the header
+    // in case of the signatureList of the header is accessing by the sync module while frontBlock
+    // is setting newBlockHeader, which will cause the signatureList ilegal
+    auto executedHeader = frontBlock.block()->blockHeader();
+    auto signature = executedHeader->signatureList();
+    if (signature.size() == 0)
+    {
+        frontBlock.block()->setBlockHeader(std::move(header));
+    }
     frontBlock.asyncCommit([this, callback = std::move(callback), block = frontBlock.block(),
                                commitLock](Error::UniquePtr&& error) {
         if (error)
@@ -259,6 +290,13 @@ void SchedulerImpl::status(
 void SchedulerImpl::call(protocol::Transaction::Ptr tx,
     std::function<void(Error::Ptr&&, protocol::TransactionReceipt::Ptr&&)> callback)
 {
+    // call but to is empty,
+    // it will cause tx message be marked as 'create' falsely when asyncExecute tx
+    if (tx->to().empty())
+    {
+        callback(BCOS_ERROR_PTR(SchedulerError::UnknownError, "Call address is empty"), nullptr);
+        return;
+    }
     // Create temp block
     auto block = m_blockFactory->createBlock();
     block->appendTransaction(std::move(tx));
