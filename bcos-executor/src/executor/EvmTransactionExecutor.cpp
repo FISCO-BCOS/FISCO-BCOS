@@ -41,6 +41,7 @@
 #include "../precompiled/Utilities.h"
 #include "../precompiled/extension/ContractAuthPrecompiled.h"
 #include "../precompiled/extension/DagTransferPrecompiled.h"
+#include "../precompiled/extension/UserPrecompiled.h"
 #include "../vm/Precompiled.h"
 #include "../vm/gas_meter/GasInjector.h"
 #include "bcos-codec/abi/ContractABIType.h"
@@ -389,6 +390,7 @@ void EvmTransactionExecutor::initPrecompiled()
         {BFS_ADDRESS, std::make_shared<precompiled::FileSystemPrecompiled>(m_hashImpl)});
     m_constantPrecompiled.insert({CONTRACT_AUTH_ADDRESS,
         std::make_shared<precompiled::ContractAuthPrecompiled>(m_hashImpl)});
+    CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
     set<string> builtIn = {CRYPTO_ADDRESS};
     m_builtInPrecompiled = make_shared<set<string>>(builtIn);
 }
