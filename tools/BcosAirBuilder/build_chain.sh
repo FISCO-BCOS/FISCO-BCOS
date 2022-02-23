@@ -30,7 +30,7 @@ command="deploy"
 ca_dir=""
 config_path=""
 docker_mode=
-default_version="v3.0.0-rc1"
+default_version="v3.0.0-rc2"
 compatibility_version=${default_version}
 auth_mode="false"
 auth_admin_account=
@@ -279,7 +279,9 @@ gen_chain_cert() {
 
     ${OPENSSL_CMD} genrsa -out "${chaindir}"/ca.key "${rsa_key_length}" 2>/dev/null
     ${OPENSSL_CMD} req -new -x509 -days "${days}" -subj "/CN=FISCO-BCOS/O=FISCO-BCOS/OU=chain" -key "${chaindir}"/ca.key -config "${cert_conf}" -out "${chaindir}"/ca.crt  2>/dev/null
-    mv "${cert_conf}" "${chaindir}"
+    if [ ! -f "${chaindir}/cert.cnf" ];then
+        mv "${cert_conf}" "${chaindir}"
+    fi
 
     LOG_INFO "Generate ca cert successfully!"
 }
@@ -334,7 +336,7 @@ download_bin()
     if [ $(curl -IL -o /dev/null -s -w %{http_code} "${Download_Link}") == 200 ];then
         # try cdn_link
         LOG_INFO "Downloading fisco-bcos binary from ${Download_Link} ..."
-        curl -#LO "${Download_Link}"
+        curl -#LO --insecure "${Download_Link}"
     else
         LOG_INFO "Downloading fisco-bcos binary from ${github_link} ..."
         curl -#LO "${github_link}"
@@ -951,7 +953,7 @@ check_and_install_tassl(){
     local tassl_tgz_name="${tassl_package_name}.tar.gz"
     local tassl_link_prefix="${cdn_link_header}/FISCO-BCOS/tools/tassl-1.1.1b/${tassl_tgz_name}"
     LOG_INFO "Downloading tassl binary from ${tassl_link_prefix}..."
-    curl -#LO "${tassl_link_prefix}"
+    curl -#LO --insecure "${tassl_link_prefix}"
     tar zxvf ${tassl_tgz_name} && rm ${tassl_tgz_name}
     chmod u+x ${tassl_package_name}
     mkdir -p "${HOME}"/.fisco
@@ -1149,7 +1151,7 @@ generate_auth_account()
   if [ ! -f ${account_script} ]; then
         local get_account_link="${cdn_link_header}/FISCO-BCOS/tools/${account_script}"
         LOG_INFO "Downloading ${account_script} from ${get_account_link}..."
-        curl -#LO "${get_account_link}"
+        curl -#LO --insecure "${get_account_link}"
   fi
   auth_admin_account=$(bash ${account_script} | grep Address | sed -r "s/\x1B\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g" | awk '{print $5}')
   mv accounts* "${ca_dir}"
