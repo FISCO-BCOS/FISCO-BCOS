@@ -14,8 +14,8 @@
  *  limitations under the License.
  *
  * @file CpuHeavyPrecompiled.cpp
- * @author: kyonRay
- * @date 2021-05-30
+ * @author: jimmyshi
+ * @date 2021-02-23
  */
 
 #include "CpuHeavyPrecompiled.h"
@@ -36,19 +36,17 @@ contract HelloWorld {
 */
 
 // set interface
-const char* const METHOD_SORT = "sort(uint256,uint256)";
+const char *const METHOD_SORT = "sort(uint256,uint256)";
 
-CpuHeavyPrecompiled::CpuHeavyPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
-{
+CpuHeavyPrecompiled::CpuHeavyPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl) {
     name2Selector[METHOD_SORT] = getFuncSelector(METHOD_SORT, _hashImpl);
 }
 
-std::string CpuHeavyPrecompiled::toString()
-{
+std::string CpuHeavyPrecompiled::toString() {
     return "CpuHeavy";
 }
 
-void quickSort(std::vector<unsigned int>& arr, int left, int right) {
+void quickSort(std::vector<unsigned int> &arr, int left, int right) {
     int i = left;
     int j = right;
     if (i == j) return;
@@ -78,9 +76,8 @@ void sort(int size) {
 
 
 std::shared_ptr<PrecompiledExecResult> CpuHeavyPrecompiled::call(
-    std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
-    const std::string&, const std::string&)
-{
+        std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
+        const std::string &, const std::string &) {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("CpuHeavyPrecompiled") << LOG_DESC("call")
                            << LOG_KV("param", toHexString(_param));
 
@@ -89,7 +86,7 @@ std::shared_ptr<PrecompiledExecResult> CpuHeavyPrecompiled::call(
     bytesConstRef data = getParamData(_param);
     auto blockContext = _executive->blockContext().lock();
     auto codec =
-        std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
+            std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
 
     u256 size, signature;
     codec->decode(data, size, signature);
