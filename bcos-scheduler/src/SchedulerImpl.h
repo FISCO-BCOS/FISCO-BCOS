@@ -25,7 +25,7 @@ public:
         bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
         bcos::protocol::BlockFactory::Ptr blockFactory,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
-        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck)
+        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm)
       : m_executorManager(std::move(executorManager)),
         m_ledger(std::move(ledger)),
         m_storage(std::move(storage)),
@@ -33,7 +33,8 @@ public:
         m_transactionSubmitResultFactory(std::move(transactionSubmitResultFactory)),
         m_blockFactory(std::move(blockFactory)),
         m_hashImpl(std::move(hashImpl)),
-        m_isAuthCheck(isAuthCheck)
+        m_isAuthCheck(isAuthCheck),
+        m_isWasm(isWasm)
     {}
 
     SchedulerImpl(const SchedulerImpl&) = delete;
@@ -98,6 +99,7 @@ private:
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bcos::crypto::Hash::Ptr m_hashImpl;
     bool m_isAuthCheck = false;
+    bool m_isWasm = false;
 
     std::function<void(protocol::BlockNumber blockNumber)> m_blockNumberReceiver;
     std::function<void(bcos::protocol::BlockNumber, bcos::protocol::TransactionSubmitResultsPtr,

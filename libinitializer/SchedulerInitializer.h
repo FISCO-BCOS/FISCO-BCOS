@@ -42,12 +42,12 @@ public:
         bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
         bcos::protocol::BlockFactory::Ptr blockFactory,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
-        crypto::Hash::Ptr hashImpl, bool isAuthCheck)
+        crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm)
     {
         return std::make_shared<scheduler::SchedulerImpl>(std::move(executorManager),
             std::move(_ledger), std::move(storage), executionMessageFactory,
             std::move(blockFactory), std::move(transactionSubmitResultFactory), std::move(hashImpl),
-            isAuthCheck);
+            isAuthCheck, isWasm);
     }
 };
 }  // namespace bcos::initializer
