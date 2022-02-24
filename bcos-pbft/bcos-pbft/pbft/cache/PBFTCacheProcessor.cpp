@@ -249,6 +249,13 @@ void PBFTCacheProcessor::updateCommitQueue(PBFTProposalInterface::Ptr _committed
     PBFT_LOG(INFO) << LOG_DESC("######## CommitProposal") << printPBFTProposal(_committedProposal)
                    << LOG_KV("sys", _committedProposal->systemProposal())
                    << m_config->printCurrentState();
+    if (_committedProposal->systemProposal())
+    {
+        m_config->setWaitSealUntil(_committedProposal->index());
+        PBFT_LOG(INFO) << LOG_DESC(
+                              "Receive valid system prePrepare proposal, stop to notify sealing")
+                       << LOG_KV("waitSealUntil", _committedProposal->index());
+    }
     tryToApplyCommitQueue();
 }
 
@@ -340,13 +347,6 @@ void PBFTCacheProcessor::notifyToSealNextBlock(PBFTProposalInterface::Ptr _check
             << LOG_DESC(
                    "Receive valid non-system prePrepare proposal, notify to seal next proposal")
             << LOG_KV("nextProposalIndex", nextProposalIndex);
-    }
-    if (_checkpointProposal->systemProposal())
-    {
-        m_config->setWaitSealUntil(_checkpointProposal->index());
-        PBFT_LOG(INFO) << LOG_DESC(
-                              "Receive valid system prePrepare proposal, stop to notify sealing")
-                       << LOG_KV("waitSealUntil", _checkpointProposal->index());
     }
 }
 
