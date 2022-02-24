@@ -468,11 +468,11 @@ void PBFTEngine::executeWorker()
         // proposal
         if ((c_consensusPacket.count(packetType)) && !m_config->canHandleNewProposal(pbftMsg))
         {
-            PBFT_LOG(INFO) << LOG_DESC(
-                                  "receive consensus packet, re-push it to the msgQueue for "
-                                  "canHandleNewProposal")
-                           << LOG_KV("index", pbftMsg->index()) << LOG_KV("type", packetType)
-                           << m_config->printCurrentState();
+            PBFT_LOG(TRACE) << LOG_DESC(
+                                   "receive consensus packet, re-push it to the msgQueue for "
+                                   "canHandleNewProposal")
+                            << LOG_KV("index", pbftMsg->index()) << LOG_KV("type", packetType)
+                            << m_config->printCurrentState();
             m_msgQueue->push(pbftMsg);
             if (empty)
             {
@@ -1044,6 +1044,7 @@ bool PBFTEngine::isValidViewChangeMsg(bcos::crypto::NodeIDPtr _fromNode,
         if (!m_cacheProcessor->checkPrecommitMsg(precommitMsg))
         {
             PBFT_LOG(INFO) << LOG_DESC("InvalidViewChangeReq for invalid proposal")
+                           << LOG_KV("viewChangeFrom", _viewChangeMsg->generatedFrom())
                            << printPBFTMsgInfo(precommitMsg) << m_config->printCurrentState();
             return false;
         }

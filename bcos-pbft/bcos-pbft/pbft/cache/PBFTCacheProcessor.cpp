@@ -687,7 +687,28 @@ bool PBFTCacheProcessor::checkPrecommitMsg(PBFTMessageInterface::Ptr _precommitM
     {
         return false;
     }
-    return checkPrecommitWeight(_precommitMsg);
+    auto ret = checkPrecommitWeight(_precommitMsg);
+    if (ret == true)
+    {
+        return ret;
+    }
+    // avoid the failure to verify proposalWeight due to the modification of consensus node list and
+    // consensus weight
+    if (!m_caches.count(_precommitMsg->index()))
+    {
+        return ret;
+    }
+    auto precommit = (m_caches.at(_precommitMsg->index()))->preCommitCache();
+    if (!precommit)
+    {
+        return ret;
+    }
+    // erase the cache
+    if (precommit->hash() == _precommitMsg->hash())
+    {
+        m_caches.erase(precommit->index());
+    }
+    return ret;
 }
 
 bool PBFTCacheProcessor::checkPrecommitWeight(PBFTMessageInterface::Ptr _precommitMsg)
