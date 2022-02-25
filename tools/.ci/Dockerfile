@@ -22,7 +22,7 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 RUN cargo --help
 
 RUN git clone https://github.com/FISCO-BCOS/FISCO-BCOS.git && cd FISCO-BCOS \
-    && git checkout ${SOURCE} && cmake . && make -j2 && strip fisco-bcos/fisco-bcos
+    && git checkout ${SOURCE} && cmake . && make -j2 && strip fisco-bcos-air/fisco-bcos
 
 FROM ubuntu:20.04
 LABEL maintainer service@fisco.com.cn
@@ -33,7 +33,7 @@ RUN apt-get -q update && apt-get install -qy --no-install-recommends libssl-dev 
     && dpkg-reconfigure --frontend noninteractive tzdata \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /FISCO-BCOS/fisco-bcos/fisco-bcos /usr/local/bin/
+COPY --from=builder /FISCO-BCOS/fisco-bcos-air/fisco-bcos /usr/local/bin/
 
 EXPOSE 30300 20200
 
