@@ -111,7 +111,6 @@ std::shared_ptr<PrecompiledExecResult> HelloWorldPrecompiled::call(
     }
     else if (func == name2Selector[HELLO_WORLD_METHOD_SET])
     {  // set(string) function call
-
         std::string strValue;
         codec->decode(data, strValue);
         auto entry = table->getRow(HELLO_WORLD_KEY_FIELD_NAME);

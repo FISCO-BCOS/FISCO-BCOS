@@ -53,6 +53,5 @@ public:
 private:
     int m_protocolVersion;
 };
-
 }  // namespace ws
 }  // namespace bcos

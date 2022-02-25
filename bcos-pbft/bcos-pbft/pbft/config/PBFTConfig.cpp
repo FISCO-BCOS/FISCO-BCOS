@@ -166,6 +166,7 @@ void PBFTConfig::reNotifySealer(bcos::protocol::BlockNumber _index)
 
 bool PBFTConfig::canHandleNewProposal()
 {
+    ReadGuard l(x_committedProposal);
     bcos::protocol::BlockNumber committedIndex = 0;
     if (m_committedProposal)
     {
@@ -188,6 +189,7 @@ bool PBFTConfig::canHandleNewProposal(PBFTBaseMessageInterface::Ptr _msg)
     {
         return true;
     }
+    ReadGuard l(x_committedProposal);
     auto committedIndex = m_committedProposal->index();
     if (_msg->index() <= committedIndex || _msg->index() <= m_waitSealUntil ||
         _msg->index() <= m_waitResealUntil)

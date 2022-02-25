@@ -34,8 +34,8 @@ public:
 
     ~TxPoolServiceApp() override{};
 
-    virtual void initialize() override;
-    virtual void destroyApp() override {}
+    void initialize() override;
+    void destroyApp() override {}
 
 protected:
     virtual void initService();

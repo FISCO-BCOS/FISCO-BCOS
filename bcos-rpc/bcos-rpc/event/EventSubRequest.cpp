@@ -89,7 +89,6 @@ bool EventSubUnsubRequest::fromJson(const std::string& _request)
                                 << LOG_KV("group", m_group) << LOG_KV("id", m_id);
 
             return true;
-
         } while (0);
 
         EVENT_REQUEST(ERROR) << LOG_BADGE("fromJson") << LOG_DESC("invalid event sub request")
@@ -280,7 +279,6 @@ bool EventSubRequest::fromJson(const std::string& _request)
                                 << LOG_KV("group", group) << LOG_KV("id", id);
 
             return true;
-
         } while (0);
 
         EVENT_REQUEST(ERROR) << LOG_BADGE("fromJson") << LOG_DESC("invalid event sub request")

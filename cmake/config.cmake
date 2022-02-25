@@ -1,14 +1,4 @@
-hunter_config(bcos-utilities VERSION 3.0.0-rc2-local
-    URL https://${URL_BASE}/FISCO-BCOS/bcos-utilities/archive/d479456ad45c906ad127c1325ebf6e0567e69088.tar.gz
-	SHA1 657b739e74629f99a5c33f659f9183683c4ff5b8
-    CMAKE_ARGS HUNTER_PACKAGE_LOG_BUILD=ON HUNTER_PACKAGE_LOG_INSTALL=ON
-)
-
-hunter_config(OpenSSL VERSION tassl_1.1.1b_v1.4-local
-    URL https://${URL_BASE}/FISCO-BCOS/TASSL-1.1.1b/archive/6a0fddd0eb33433c190c796e5b6d80db4db52810.tar.gz
-    SHA1 14f7590e09b54bb71926ad5853343f20893ee536
-)
-
+hunter_config(bcos-utilities VERSION 1.0.0-rc1-f12788a1 CMAKE_ARGS HUNTER_PACKAGE_LOG_BUILD=ON HUNTER_PACKAGE_LOG_INSTALL=ON)
 hunter_config(bcos-crypto VERSION 3.0.0-rc3-local
     URL https://${URL_BASE}/FISCO-BCOS/bcos-crypto/archive/eb042091bb6aef907aecfe84dfe365da006b2952.tar.gz
 	SHA1 dbfe8d9f79311fd62c8f69e0f870b1150077f4ed
@@ -16,9 +6,9 @@ hunter_config(bcos-crypto VERSION 3.0.0-rc3-local
 )
 
 hunter_config(bcos-boostssl
-    VERSION 3.0.0-rc3-local
-    URL https://${URL_BASE}/FISCO-BCOS/bcos-boostssl/archive/f133fbf006b6dfa4205a0bb9fda2ea0b67c5420b.tar.gz
-	SHA1 536724943cf0d8bf317bf396cc0e3a1bd7f05423
+    VERSION 1.0.0-rc3-local
+    URL https://${URL_BASE}/FISCO-BCOS/bcos-boostssl/archive/c8e2abcf44453c7f4731282d91289f8d317bd3fc.tar.gz
+    SHA1 aa883da55f948de2ab04e818e6046532d4764ac9
     CMAKE_ARGS HUNTER_PACKAGE_LOG_BUILD=ON HUNTER_PACKAGE_LOG_INSTALL=ON URL_BASE=${URL_BASE}
 )
 
@@ -83,12 +73,6 @@ hunter_config(
     a94c9c1e41edf787a1c080b7cab8f2f4217dbc4b
 )
 
-# hunter_config(
-#     OpenSSL VERSION "tassl_1.1.1b_v1.4-63b60292"
-#     URL https://codeload.github.com/FISCO-BCOS/TASSL-1.1.1b/zip/63b602923f924b432774f6b6a2b22c708d5231c8
-#     SHA1 d4ffbdc5b29cf437f5f6711cc3d4b35f04b06965
-# )
-
 hunter_config(
     jsoncpp VERSION "1.8.0-local"
     URL
@@ -103,3 +87,5 @@ hunter_config(c-ares VERSION 1.14.0-p0 CMAKE_ARGS CMAKE_POSITION_INDEPENDENT_COD
 hunter_config(re2 VERSION ${HUNTER_re2_VERSION} CMAKE_ARGS CMAKE_POSITION_INDEPENDENT_CODE=TRUE RE2_BUILD_TESTING=OFF)
 hunter_config(abseil VERSION ${HUNTER_abseil_VERSION} CMAKE_ARGS CMAKE_CXX_FLAGS=-std=c++11 CMAKE_POSITION_INDEPENDENT_CODE=TRUE ABSL_ENABLE_INSTALL=ON ABSL_RUN_TESTS=OFF)
 hunter_config(gRPC VERSION ${HUNTER_gRPC_VERSION} CMAKE_ARGS CMAKE_CXX_FLAGS=-std=c++17 CMAKE_POSITION_INDEPENDENT_CODE=TRUE)
+
+hunter_config(OpenSSL VERSION tassl_1.1.1b_v1.4-63b60292)

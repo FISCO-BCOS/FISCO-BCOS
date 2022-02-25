@@ -49,8 +49,7 @@ public:
 
         return blockHeader;
     }
-    virtual bcos::protocol::BlockHeader::Ptr createBlockHeader(
-        bcos::protocol::BlockNumber _number) override
+    bcos::protocol::BlockHeader::Ptr createBlockHeader(bcos::protocol::BlockNumber _number) override
     {
         auto blockHeader = createBlockHeader();
         blockHeader->setNumber(_number);

@@ -91,7 +91,6 @@ bool EventSubResponse::fromJson(const std::string& _response)
                                   << LOG_KV("id", m_id) << LOG_KV("status", m_status);
 
             return true;
-
         } while (0);
 
         EVENT_RESPONSE(ERROR) << LOG_BADGE("fromJson") << LOG_DESC("invalid event sub response")
