@@ -283,7 +283,6 @@ void FrontService::asyncSendMessageByNodeID(int _moduleID, bcos::crypto::NodeIDP
                              << LOG_KV("moduleID", _moduleID) << LOG_KV("uuid", uuid)
                              << LOG_KV("nodeID", _nodeID->hex())
                              << LOG_KV("data.size()", _data.size()) << LOG_KV("timeout", _timeout);
-
         }  // if (_callback)
 
         sendMessage(_moduleID, _nodeID, uuid, _data, false,

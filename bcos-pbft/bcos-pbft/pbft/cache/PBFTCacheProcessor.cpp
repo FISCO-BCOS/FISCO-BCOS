@@ -249,6 +249,13 @@ void PBFTCacheProcessor::updateCommitQueue(PBFTProposalInterface::Ptr _committed
     PBFT_LOG(INFO) << LOG_DESC("######## CommitProposal") << printPBFTProposal(_committedProposal)
                    << LOG_KV("sys", _committedProposal->systemProposal())
                    << m_config->printCurrentState();
+    if (_committedProposal->systemProposal())
+    {
+        m_config->setWaitSealUntil(_committedProposal->index());
+        PBFT_LOG(INFO) << LOG_DESC(
+                              "Receive valid system prePrepare proposal, stop to notify sealing")
+                       << LOG_KV("waitSealUntil", _committedProposal->index());
+    }
     tryToApplyCommitQueue();
 }
 
@@ -340,13 +347,6 @@ void PBFTCacheProcessor::notifyToSealNextBlock(PBFTProposalInterface::Ptr _check
             << LOG_DESC(
                    "Receive valid non-system prePrepare proposal, notify to seal next proposal")
             << LOG_KV("nextProposalIndex", nextProposalIndex);
-    }
-    if (_checkpointProposal->systemProposal())
-    {
-        m_config->setWaitSealUntil(_checkpointProposal->index());
-        PBFT_LOG(INFO) << LOG_DESC(
-                              "Receive valid system prePrepare proposal, stop to notify sealing")
-                       << LOG_KV("waitSealUntil", _checkpointProposal->index());
     }
 }
 
@@ -688,7 +688,28 @@ bool PBFTCacheProcessor::checkPrecommitMsg(PBFTMessageInterface::Ptr _precommitM
     {
         return false;
     }
-    return checkPrecommitWeight(_precommitMsg);
+    auto ret = checkPrecommitWeight(_precommitMsg);
+    if (ret == true)
+    {
+        return ret;
+    }
+    // avoid the failure to verify proposalWeight due to the modification of consensus node list and
+    // consensus weight
+    if (!m_caches.count(_precommitMsg->index()))
+    {
+        return ret;
+    }
+    auto precommit = (m_caches.at(_precommitMsg->index()))->preCommitCache();
+    if (!precommit)
+    {
+        return ret;
+    }
+    // erase the cache
+    if (precommit->hash() == _precommitMsg->hash())
+    {
+        m_caches.erase(precommit->index());
+    }
+    return ret;
 }
 
 bool PBFTCacheProcessor::checkPrecommitWeight(PBFTMessageInterface::Ptr _precommitMsg)
@@ -757,8 +778,6 @@ void PBFTCacheProcessor::removeConsensusedCache(ViewType _view, BlockNumber _con
         pcache++;
     }
     removeInvalidViewChange(_view, _consensusedNumber);
-    m_maxPrecommitIndex.clear();
-    m_maxCommittedIndex.clear();
     m_newViewGenerated = false;
 }
 
@@ -818,12 +837,13 @@ void PBFTCacheProcessor::removeInvalidViewChange(
         }
         it++;
     }
-    // recalculate m_viewChangeWeight
     reCalculateViewChangeWeight();
 }
 
 void PBFTCacheProcessor::reCalculateViewChangeWeight()
 {
+    m_maxPrecommitIndex.clear();
+    m_maxCommittedIndex.clear();
     for (auto const& it : m_viewChangeCache)
     {
         auto view = it.first;
@@ -838,6 +858,21 @@ void PBFTCacheProcessor::reCalculateViewChangeWeight()
                 continue;
             }
             m_viewChangeWeight[view] += nodeInfo->weight();
+            auto viewChangeReq = cache.second;
+            auto committedIndex = viewChangeReq->committedProposal()->index();
+            if (!m_maxCommittedIndex.count(view) || m_maxCommittedIndex[view] < committedIndex)
+            {
+                m_maxCommittedIndex[view] = committedIndex;
+            }
+            // get the max precommitIndex
+            for (auto precommit : viewChangeReq->preparedProposals())
+            {
+                auto precommitIndex = precommit->index();
+                if (!m_maxPrecommitIndex.count(view) || m_maxPrecommitIndex[view] < precommitIndex)
+                {
+                    m_maxPrecommitIndex[view] = precommitIndex;
+                }
+            }
         }
     }
 }
@@ -1073,6 +1108,9 @@ bool PBFTCacheProcessor::checkAndTryToRecover()
     // clear the recoverReqCache
     m_recoverReqCache.clear();
     m_recoverCacheWeight.clear();
+    // try to preCommit/commit after no-timeout
+    checkAndPreCommit();
+    checkAndCommit();
     PBFT_LOG(INFO) << LOG_DESC("checkAndTryToRecoverView: reachNewView")
                    << LOG_KV("recoveredView", recoveredView) << m_config->printCurrentState();
     return true;
