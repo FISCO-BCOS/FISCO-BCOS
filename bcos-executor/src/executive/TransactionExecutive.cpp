@@ -649,8 +649,6 @@ CallParameters::UniquePtr TransactionExecutive::go(
     {
         auto callResults = hostContext.takeCallParameters();
         callResults->type = CallParameters::REVERT;
-        using errinfo_evmcStatusCode =
-            boost::error_info<struct tag_evmcStatusCode, evmc_status_code>;
         EXECUTIVE_LOG(WARNING) << "Internal VM Error ("
                                << *boost::get_error_info<errinfo_evmcStatusCode>(_e) << ")\n"
                                << diagnostic_information(_e);

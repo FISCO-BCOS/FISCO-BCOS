@@ -450,10 +450,10 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
                 else
                 {
 #pragma omp parallel for
-                    for (size_t i = 0; i < responseMessages.size(); ++i)
+                    for (size_t j = 0; j < responseMessages.size(); ++j)
                     {
-                        assert(responseMessages[i]);
-                        iterators[i]->second.message = std::move(responseMessages[i]);
+                        assert(responseMessages[j]);
+                        iterators[j]->second.message = std::move(responseMessages[j]);
                     }
                 }
 
@@ -836,16 +836,16 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
             // Empty stack, execution is finished
             if (executiveState.callStack.empty())
             {
+                // Calc the gas
+                m_gasUsed += (TRANSACTION_GAS - message->gasAvailable());
+
                 m_executiveResults[executiveState.contextID].receipt =
                     m_scheduler->m_blockFactory->receiptFactory()->createReceipt(
-                        message->gasAvailable(), message->newEVMContractAddress(),
+                        m_gasUsed, message->newEVMContractAddress(),
                         std::make_shared<std::vector<bcos::protocol::LogEntry>>(
                             message->takeLogEntries()),
                         message->status(), message->takeData(),
                         m_block->blockHeaderConst()->number());
-
-                // Calc the gas
-                m_gasUsed += (TRANSACTION_GAS - message->gasAvailable());
 
                 // Remove executive state and continue
                 SCHEDULER_LOG(TRACE)
