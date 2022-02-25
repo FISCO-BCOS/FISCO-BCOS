@@ -6,7 +6,7 @@ on:
     branches-ignore:
       - "**"
   release:
-    types: [published, created, edited]
+    types: [published, created]
 
 jobs:
   compile_macOS_release:
