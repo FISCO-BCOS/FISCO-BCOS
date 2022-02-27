@@ -52,33 +52,33 @@ ParameterAbi parseParameter(const Json::Value& input)
     return parameterAbi;
 }
 
-string canonizeParamter(const ParameterAbi& param)
-{
+vector<string> flattenStaticParamter(const ParameterAbi& param)
+{  // TODO: return vector<std::pair<string, vector<uint8>>>, pair is type and access path
     const auto TUPLE_STR = "tuple";
-    auto type = string();
+    auto flatTypes = vector<string>();
     if (boost::starts_with(param.type, TUPLE_STR))
     {
-        type += "(";
         for (auto i = (size_t)0; i < param.components.size(); i++)
         {
-            type += canonizeParamter(param.components[i]);
-            if (i != param.components.size() - 1)
-            {
-                type += ",";
-            }
+            auto types = flattenStaticParamter(param.components[i]);
+            flatTypes.insert(flatTypes.end(), types.begin(), types.end());
         }
-        type += ")";
-        type.append(param.type.substr(strlen(TUPLE_STR)));
+    }
+    else if (boost::algorithm::contains(param.type, "[") &&
+             !boost::algorithm::contains(param.type, "[]"))
+    {
+        auto type = param.type.substr(0, param.type.find("["));
+        size_t len = std::stoi(param.type.substr(param.type.find("["), param.type.find("]")));
+        flatTypes.insert(flatTypes.end(), len, type);
     }
     else
     {
-        type = param.type;
+        flatTypes.push_back(param.type);
     }
-    return type;
+    return flatTypes;
 }
 
-unique_ptr<FunctionAbi> FunctionAbi::deserialize(
-    string_view abiStr, const bytes& expected, crypto::Hash::Ptr hashImpl)
+unique_ptr<FunctionAbi> FunctionAbi::deserialize(string_view abiStr, const bytes& expected)
 {
     assert(expected.size() == 4);
 
@@ -88,14 +88,14 @@ unique_ptr<FunctionAbi> FunctionAbi::deserialize(
     {
         BCOS_LOG(ERROR) << LOG_BADGE("EXECUTOR") << LOG_DESC("unable to parse contract ABI")
                         << LOG_KV("abiStr", abiStr);
-        return unique_ptr<FunctionAbi>();
+        return nullptr;
     }
 
     if (!root.isArray())
     {
         BCOS_LOG(ERROR) << LOG_BADGE("EXECUTOR") << LOG_DESC("contract ABI is not an array")
                         << LOG_KV("abiStr", abiStr);
-        return unique_ptr<FunctionAbi>();
+        return nullptr;
     }
 
     for (auto& function : root)
@@ -106,41 +106,57 @@ unique_ptr<FunctionAbi> FunctionAbi::deserialize(
             continue;
         }
 
-        auto& constant = function["constant"];
-        if (constant.isNull() || constant.asBool())
+        if (!function["constant"].isNull())
+        {  // liquid
+            if (function["constant"].asBool())
+            {
+                continue;
+            }
+        }
+        else if (!function["stateMutability"].isNull())
+        {  // solidity
+            if (function["stateMutability"].asString() == "view" ||
+                function["stateMutability"].asString() == "pure")
+            {
+                continue;
+            }
+        }
+        else
         {
             continue;
         }
-
         auto& functionName = function["name"];
         assert(!functionName.isNull());
-        auto signature = functionName.asString() + "(";
+        uint32_t selector = 0;
+        if (!function["selector"].isNull())
+        {
+            selector = (uint32_t)function["selector"].asUInt();
+        }
 
+        auto expectedSelector = *((uint32_t*)expected.data());
+        expectedSelector = ((expectedSelector & 0xff) << 24) | ((expectedSelector & 0xff00) << 8) |
+                           ((expectedSelector & 0xff0000) >> 8) |
+                           ((expectedSelector & 0xff000000) >> 24);
+
+        if (expectedSelector != selector)
+        {
+            BCOS_LOG(DEBUG) << LOG_BADGE("EXECUTOR") << LOG_DESC("selector mismatch")
+                            << LOG_KV("name", functionName)
+                            << LOG_KV("expected selector", expectedSelector)
+                            << LOG_KV("selector", selector);
+            continue;
+        }
         auto& functionInputs = function["inputs"];
         assert(!functionInputs.isNull());
         auto inputs = vector<ParameterAbi>();
         inputs.reserve(functionInputs.size());
+        auto flatInputs = vector<string>();
         for (auto i = (Json::ArrayIndex)0; i < functionInputs.size(); ++i)
         {
             auto param = parseParameter(functionInputs[i]);
-            signature += canonizeParamter(param);
-            if (i < functionInputs.size() - 1)
-            {
-                signature += ",";
-            }
+            auto flatTypes = flattenStaticParamter(param);
+            flatInputs.insert(flatInputs.end(), flatTypes.begin(), flatTypes.end());
             inputs.emplace_back(std::move(param));
-        }
-        signature += ")";
-
-        auto selector = hashImpl->hash(signature).asBytes();
-        selector.resize(4);
-        BCOS_LOG(TRACE) << LOG_BADGE("EXECUTOR") << LOG_DESC("found selector")
-                        << LOG_KV("selector", toHexStringWithPrefix(selector))
-                        << LOG_KV("signature", signature);
-
-        if (!std::equal(selector.begin(), selector.end(), expected.begin()))
-        {
-            continue;
         }
 
         auto& functionConflictFields = function["conflictFields"];
@@ -150,25 +166,30 @@ unique_ptr<FunctionAbi> FunctionAbi::deserialize(
         {
             for (auto& conflictField : functionConflictFields)
             {
-                auto accessPath = vector<uint8_t>();
-                accessPath.reserve(conflictField["path"].size());
-                for (auto& pathItem : conflictField["path"])
+                auto value = vector<uint8_t>();
+                if (!conflictField["value"].isNull())
                 {
-                    accessPath.emplace_back(static_cast<uint8_t>(pathItem.asUInt()));
+                    value.reserve(conflictField["value"].size());
+                    for (auto& pathItem : conflictField["value"])
+                    {
+                        value.emplace_back(static_cast<uint8_t>(pathItem.asUInt()));
+                    }
                 }
-
-                conflictFields.emplace_back(
-                    ConflictField{static_cast<uint8_t>(conflictField["kind"].asUInt()), accessPath,
-                        conflictField["read_only"].asBool(),
-                        static_cast<uint8_t>(conflictField["slot"].asUInt())});
+                std::optional<uint8_t> slot = std::nullopt;
+                if (!conflictField["slot"].isNull())
+                {
+                    slot = std::optional<uint8_t>(conflictField["slot"].asInt());
+                }
+                conflictFields.emplace_back(ConflictField{
+                    static_cast<uint8_t>(conflictField["kind"].asUInt()), value, slot});
             }
         }
 
         return unique_ptr<FunctionAbi>(
-            new FunctionAbi{functionName.asString(), inputs, conflictFields});
+            new FunctionAbi{functionName.asString(), inputs, selector, conflictFields, flatInputs});
     }
 
     BCOS_LOG(ERROR) << LOG_BADGE("EXECUTOR") << LOG_DESC("expected selector not found")
                     << LOG_KV("selector", toHexStringWithPrefix(expected));
-    return unique_ptr<FunctionAbi>();
+    return nullptr;
 }
