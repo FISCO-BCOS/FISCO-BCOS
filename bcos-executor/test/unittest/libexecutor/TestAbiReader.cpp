@@ -79,7 +79,7 @@ BOOST_AUTO_TEST_CASE(NormalCase)
             "conflictFields":[
                 {
                     "kind":0,
-                    "path":[
+                    "value":[
 
                     ],
                     "read_only":true,
@@ -87,7 +87,7 @@ BOOST_AUTO_TEST_CASE(NormalCase)
                 },
                 {
                     "kind":4,
-                    "path":[
+                    "value":[
                         0, 1, 2
                     ],
                     "read_only":false,
@@ -119,6 +119,7 @@ BOOST_AUTO_TEST_CASE(NormalCase)
                     "type":"tuple[]"
                 }
             ],
+            "selector": 352741043,
             "name":"add_prod_batch",
             "outputs":[
 
@@ -137,6 +138,7 @@ BOOST_AUTO_TEST_CASE(NormalCase)
                     "type":"string"
                 }
             ],
+            "selector": 352741043,
             "type":"function"
         }
     ]
@@ -184,7 +186,7 @@ BOOST_AUTO_TEST_CASE(InvalidSelector)
             "conflictFields":[
                 {
                     "kind":0,
-                    "path":[
+                    "value":[
 
                     ],
                     "read_only":false,
@@ -203,6 +205,7 @@ BOOST_AUTO_TEST_CASE(InvalidSelector)
             "outputs":[
 
             ],
+            "selector": 1322485854,
             "type":"function"
         }
     ]
@@ -229,6 +232,7 @@ BOOST_AUTO_TEST_CASE(EmptyConflictFields)
             "outputs":[
 
             ],
+            "selector": 1322485854,
             "type":"function"
         }
     ]

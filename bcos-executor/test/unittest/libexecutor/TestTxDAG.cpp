@@ -19,7 +19,7 @@
  * @date: 2022-01-19
  */
 
-
+#if 0
 #include "../../../src/dag/TxDAG.h"
 #include "../../../src/dag/TxDAG2.h"
 #include "bcos-utilities/Common.h"
@@ -66,9 +66,12 @@ CriticalFieldsInterface::Ptr makeFixedCriticals(int _totalTx, int _criticalNum)
     CriticalFields::Ptr criticals = make_shared<CriticalFields>(_totalTx);
     for (int i = 0; i < _totalTx; i++)
     {
-        vector<bytes> critical = {bytes{(uint8_t)(i % _criticalNum % 256)}};
+        uint32_t c = i % _criticalNum;
+        vector<bytes> critical = {bytes{static_cast<uint8_t>(c & 0xff),
+            static_cast<uint8_t>(c & 0xff00 >> 8), static_cast<uint8_t>(c & 0xff0000 >> 16),
+            static_cast<uint8_t>(c & 0xff000000 >> 24)}};
         criticals->put(i, make_shared<CriticalFields::CriticalField>(std::move(critical)));
-    };
+    }
     /*
     stringstream ss;
     ss << i;
@@ -148,7 +151,9 @@ void txDagTest(shared_ptr<TxDAGInterface> txDag)
     vector<int> runnings(criticalNum, -1);
 
     auto id2CriticalFun = [&](ID id) -> vector<bytes> {
-        return {{static_cast<uint8_t>(id % criticalNum % 256)}};
+        uint32_t c = id % criticalNum;
+        return {bytes{static_cast<uint8_t>(c & 0xff), static_cast<uint8_t>(c & 0xff00 >> 8),
+            static_cast<uint8_t>(c & 0xff0000 >> 16), static_cast<uint8_t>(c & 0xff000000 >> 24)}};
     };
     auto beforeRunCheck = [&](ID id) {
         BOOST_CHECK_MESSAGE(runnings[id % criticalNum] == -1,
@@ -180,11 +185,20 @@ void txDagDeepTreeTest(shared_ptr<TxDAGInterface> txDag)
         if (value / slotNum == 0)
         {
             // return only slot
-            return {{static_cast<uint8_t>(slot % 256)}};
+            return {
+                bytes{static_cast<uint8_t>(slot & 0xff), static_cast<uint8_t>(slot & 0xff00 >> 8),
+                    static_cast<uint8_t>(slot & 0xff0000 >> 16),
+                    static_cast<uint8_t>(slot & 0xff000000 >> 24)}};
         }
         else
         {
-            return {{static_cast<uint8_t>(slot % 256), static_cast<uint8_t>(value % 256)}};
+            return {
+                bytes{static_cast<uint8_t>(slot & 0xff), static_cast<uint8_t>(slot & 0xff00 >> 8),
+                    static_cast<uint8_t>(slot & 0xff0000 >> 16),
+                    static_cast<uint8_t>(slot & 0xff000000 >> 24),
+                    static_cast<uint8_t>(value & 0xff), static_cast<uint8_t>(value & 0xff00 >> 8),
+                    static_cast<uint8_t>(value & 0xff0000 >> 16),
+                    static_cast<uint8_t>(value & 0xff000000 >> 24)}};
         }
     };
 
@@ -284,7 +298,7 @@ BOOST_AUTO_TEST_CASE(TestRun4)
     shared_ptr<TxDAGInterface> txDag = make_shared<TxDAG2>();
     txDagDeepTreeTest(txDag);
 }
-
 }
 }  // namespace test
 }  // namespace bcos
+#endif

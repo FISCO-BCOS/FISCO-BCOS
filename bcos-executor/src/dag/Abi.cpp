@@ -127,14 +127,23 @@ unique_ptr<FunctionAbi> FunctionAbi::deserialize(string_view abiStr, const bytes
         }
         auto& functionName = function["name"];
         assert(!functionName.isNull());
+        uint32_t selector = 0;
+        if (!function["selector"].isNull())
+        {
+            selector = (uint32_t)function["selector"].asUInt();
+        }
 
-        auto selector = (uint32_t)function["selector"].asInt();
         auto expectedSelector = *((uint32_t*)expected.data());
-        BCOS_LOG(DEBUG) << LOG_BADGE("EXECUTOR") << LOG_DESC("found selector")
-                        << LOG_KV("selector", selector)
-                        << LOG_KV("expected selector", expectedSelector);
+        expectedSelector = ((expectedSelector & 0xff) << 24) | ((expectedSelector & 0xff00) << 8) |
+                           ((expectedSelector & 0xff0000) >> 8) |
+                           ((expectedSelector & 0xff000000) >> 24);
+
         if (expectedSelector != selector)
         {
+            BCOS_LOG(DEBUG) << LOG_BADGE("EXECUTOR") << LOG_DESC("selector mismatch")
+                            << LOG_KV("name", functionName)
+                            << LOG_KV("expected selector", expectedSelector)
+                            << LOG_KV("selector", selector);
             continue;
         }
         auto& functionInputs = function["inputs"];
