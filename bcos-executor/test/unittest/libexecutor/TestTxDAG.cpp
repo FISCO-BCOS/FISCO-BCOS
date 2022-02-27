@@ -19,7 +19,6 @@
  * @date: 2022-01-19
  */
 
-#if 0
 #include "../../../src/dag/TxDAG.h"
 #include "../../../src/dag/TxDAG2.h"
 #include "bcos-utilities/Common.h"
@@ -286,7 +285,7 @@ BOOST_AUTO_TEST_CASE(TestRun2)
     shared_ptr<TxDAGInterface> txDag = make_shared<TxDAG2>();
     txDagTest(txDag);
 }
-
+#if 0
 BOOST_AUTO_TEST_CASE(TestRun3)
 {
     shared_ptr<TxDAGInterface> txDag = make_shared<TxDAG>();
@@ -298,7 +297,7 @@ BOOST_AUTO_TEST_CASE(TestRun4)
     shared_ptr<TxDAGInterface> txDag = make_shared<TxDAG2>();
     txDagDeepTreeTest(txDag);
 }
+#endif
 }
 }  // namespace test
 }  // namespace bcos
-#endif

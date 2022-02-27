@@ -436,8 +436,8 @@ bytes getComponentBytes(size_t index, const std::string& typeName, const bytesCo
         u256 u = fromBigEndian<u256>(header);
         auto offset = static_cast<std::size_t>(u);
         auto rawData = data.getCroppedData(offset);
-        auto len =
-            static_cast<std::size_t>(fromBigEndian<u256>(bytes(rawData.begin(), rawData.begin() + 32)));
+        auto len = static_cast<std::size_t>(
+            fromBigEndian<u256>(bytes(rawData.begin(), rawData.begin() + 32)));
         return bytes(rawData.begin() + 32, rawData.begin() + 32 + static_cast<std::size_t>(len));
     }
     return header;
@@ -662,89 +662,116 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                     executionResults[i]->setType(ExecutionMessage::SEND_BACK);
                     continue;
                 }
-                // FIXME: if precompiled
-
+                CriticalFields::CriticalFieldPtr conflictFields = nullptr;
                 auto selector = ref(input).getCroppedData(0, 4);
                 auto abiKey = bytes(to.cbegin(), to.cend());
                 abiKey.insert(abiKey.end(), selector.begin(), selector.end());
-
-                auto cacheHandle = m_abiCache->lookup(abiKey);
-                CriticalFields::CriticalFieldPtr conflictFields = nullptr;
-                if (!cacheHandle.isValid())
+                // if precompiled
+                auto executive = createExecutive(
+                    m_blockContext, params->codeAddress, params->contextID, params->seq);
+                auto p = executive->getPrecompiled(params->receiveAddress);
+                if (p)
                 {
+                    // Precompile transaction
+                    if (p->isParallelPrecompiled())
+                    {
+                        auto criticals =
+                            vector<string>(p->getParallelTag(ref(params->data), m_isWasm));
+                        conflictFields = make_shared<vector<bytes>>();
+                        for (string& critical : criticals)
+                        {
+                            critical += params->receiveAddress;
+                            conflictFields->push_back(
+                                bytes((uint8_t*)critical.data(), (uint8_t*)critical.data() + critical.size()));
+                        }
+                    }
                     EXECUTOR_LOG(DEBUG) << LOG_BADGE("dagExecuteTransactionsForWasm")
-                                        << LOG_DESC("No ABI found in cache, try to load")
-                                        << LOG_KV("abiKey", toHexStringWithPrefix(abiKey));
+                                        << LOG_DESC("the precompiled can't be parallel")
+                                        << LOG_KV("adddress", params->receiveAddress);
+                    continue;
+                }
+                else
+                {
+                    auto cacheHandle = m_abiCache->lookup(abiKey);
 
-                    std::lock_guard guard(tableMutex);
-
-                    cacheHandle = m_abiCache->lookup(abiKey);
-                    if (cacheHandle.isValid())
+                    if (!cacheHandle.isValid())
                     {
                         EXECUTOR_LOG(DEBUG) << LOG_BADGE("dagExecuteTransactionsForWasm")
-                                            << LOG_DESC("ABI had beed loaded by other workers")
+                                            << LOG_DESC("No ABI found in cache, try to load")
+                                            << LOG_KV("abiKey", toHexStringWithPrefix(abiKey));
+
+                        std::lock_guard guard(tableMutex);
+
+                        cacheHandle = m_abiCache->lookup(abiKey);
+                        if (cacheHandle.isValid())
+                        {
+                            EXECUTOR_LOG(DEBUG) << LOG_BADGE("dagExecuteTransactionsForWasm")
+                                                << LOG_DESC("ABI had beed loaded by other workers")
+                                                << LOG_KV("abiKey", toHexStringWithPrefix(abiKey));
+                            auto& functionAbi = cacheHandle.value();
+                            conflictFields =
+                                extractConflictFields(functionAbi, *params, m_blockContext);
+                        }
+                        else
+                        {
+                            auto storage = m_blockContext->storage();
+
+                            auto tableName = "/apps/" + string(to);
+
+                            auto table = storage->openTable(tableName);
+                            if (!table.has_value())
+                            {
+                                executionResults[i] = toExecutionResult(std::move(inputs[i]));
+                                executionResults[i]->setType(ExecutionMessage::REVERT);
+                                EXECUTOR_LOG(WARNING)
+                                    << LOG_BADGE("dagExecuteTransactionsForWasm")
+                                    << LOG_DESC("No ABI found, please deploy first")
+                                    << LOG_KV("tableName", tableName);
+                                continue;
+                            }
+
+                            auto entry = table->getRow(ACCOUNT_ABI);
+                            auto abiStr = entry->getField(0);
+
+                            EXECUTOR_LOG(DEBUG) << LOG_BADGE("dagExecuteTransactionsForWasm")
+                                                << LOG_DESC("ABI loaded") << LOG_KV("ABI", abiStr);
+
+                            auto functionAbi = FunctionAbi::deserialize(abiStr, selector.toBytes());
+                            if (!functionAbi)
+                            {
+                                executionResults[i] = toExecutionResult(std::move(inputs[i]));
+                                executionResults[i]->setType(ExecutionMessage::SEND_BACK);
+                                // If abi is not valid, we don't impact the cache. In such a
+                                // situation, if the caller invokes this method over and over
+                                // again, executor will read the contract table repeatedly,
+                                // which may cause performance loss. But we think occurrence
+                                // of invalid abi is impossible in actual situations.
+                                continue;
+                            }
+
+                            auto abiPtr = functionAbi.get();
+                            if (m_abiCache->insert(abiKey, abiPtr, &cacheHandle))
+                            {
+                                // If abi object had been inserted into the cache successfully,
+                                // the cache will take charge of life time management of the
+                                // object. After this object being eliminated, the cache will
+                                // delete its memory storage.
+                                std::ignore = functionAbi.release();
+                            }
+                            conflictFields =
+                                extractConflictFields(*abiPtr, *params, m_blockContext);
+                        }
+                    }
+                    else
+                    {
+                        EXECUTOR_LOG(DEBUG) << LOG_BADGE("dagExecuteTransactionsForWasm")
+                                            << LOG_DESC("Found ABI in cache")
                                             << LOG_KV("abiKey", toHexStringWithPrefix(abiKey));
                         auto& functionAbi = cacheHandle.value();
                         conflictFields =
                             extractConflictFields(functionAbi, *params, m_blockContext);
                     }
-                    else
-                    {
-                        auto storage = m_blockContext->storage();
-
-                        auto tableName = "/apps/" + string(to);
-
-                        auto table = storage->openTable(tableName);
-                        if (!table.has_value())
-                        {
-                            executionResults[i] = toExecutionResult(std::move(inputs[i]));
-                            executionResults[i]->setType(ExecutionMessage::REVERT);
-                            EXECUTOR_LOG(WARNING) << LOG_BADGE("dagExecuteTransactionsForWasm")
-                                                  << LOG_DESC("No ABI found, please deploy first")
-                                                  << LOG_KV("tableName", tableName);
-                            continue;
-                        }
-
-                        auto entry = table->getRow(ACCOUNT_ABI);
-                        auto abiStr = entry->getField(0);
-
-                        EXECUTOR_LOG(DEBUG) << LOG_BADGE("dagExecuteTransactionsForWasm")
-                                            << LOG_DESC("ABI loaded") << LOG_KV("ABI", abiStr);
-
-                        auto functionAbi = FunctionAbi::deserialize(abiStr, selector.toBytes());
-                        if (!functionAbi)
-                        {
-                            executionResults[i] = toExecutionResult(std::move(inputs[i]));
-                            executionResults[i]->setType(ExecutionMessage::SEND_BACK);
-                            // If abi is not valid, we don't impact the cache. In such a
-                            // situation, if the caller invokes this method over and over
-                            // again, executor will read the contract table repeatedly,
-                            // which may cause performance loss. But we think occurrence
-                            // of invalid abi is impossible in actual situations.
-                            continue;
-                        }
-
-                        auto abiPtr = functionAbi.get();
-                        if (m_abiCache->insert(abiKey, abiPtr, &cacheHandle))
-                        {
-                            // If abi object had been inserted into the cache successfully,
-                            // the cache will take charge of life time management of the
-                            // object. After this object being eliminated, the cache will
-                            // delete its memory storage.
-                            std::ignore = functionAbi.release();
-                        }
-                        conflictFields = extractConflictFields(*abiPtr, *params, m_blockContext);
-                    }
                 }
-                else
-                {
-                    EXECUTOR_LOG(DEBUG) << LOG_BADGE("dagExecuteTransactionsForWasm")
-                                        << LOG_DESC("Found ABI in cache")
-                                        << LOG_KV("abiKey", toHexStringWithPrefix(abiKey));
-                    auto& functionAbi = cacheHandle.value();
-                    conflictFields = extractConflictFields(functionAbi, *params, m_blockContext);
-                }
-
                 if (conflictFields == nullptr)
                 {
                     EXECUTOR_LOG(DEBUG)
