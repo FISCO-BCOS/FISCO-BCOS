@@ -116,7 +116,7 @@ class TarsService:
             config_file_name, server_name)
         if ret is False:
             utilities.log_error("fetch server config file failed, please check the existence of specified service, service: %s, config: %s" %
-                                server_name, config_file_name)
+                                (server_name, config_file_name))
             return (False, "")
         param = {"ticket": self.tars_token, "id": config_id}
         response = requests.get(self.fetch_config_url, params=param)
