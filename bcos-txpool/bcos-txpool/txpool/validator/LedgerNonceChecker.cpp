@@ -45,8 +45,10 @@ TransactionStatus LedgerNonceChecker::checkNonce(Transaction::ConstPtr _tx, bool
     return checkBlockLimit(_tx);
 }
 
-TransactionStatus LedgerNonceChecker::checkBlockLimit(bcos::protocol::Transaction::ConstPtr _tx)
+TransactionStatus LedgerNonceChecker::checkBlockLimit(bcos::protocol::Transaction::ConstPtr)
 {
+// remove blockLimit check
+#if 0
     auto blockNumber = m_blockNumber.load();
     if (blockNumber >= _tx->blockLimit() || (blockNumber + m_blockLimit) < _tx->blockLimit())
     {
@@ -57,6 +59,7 @@ TransactionStatus LedgerNonceChecker::checkBlockLimit(bcos::protocol::Transactio
                                   << LOG_KV("tx", _tx->hash().abridged());
         return TransactionStatus::BlockLimitCheckFail;
     }
+#endif
     return TransactionStatus::None;
 }
 
