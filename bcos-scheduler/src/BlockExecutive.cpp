@@ -836,12 +836,13 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
             // Empty stack, execution is finished
             if (executiveState.callStack.empty())
             {
-                // Calc the gas
-                m_gasUsed += (TRANSACTION_GAS - message->gasAvailable());
+                auto txGasUsed = TRANSACTION_GAS - message->gasAvailable();
+                // Calc the gas set to header
+                m_gasUsed += txGasUsed;
 
                 m_executiveResults[executiveState.contextID].receipt =
                     m_scheduler->m_blockFactory->receiptFactory()->createReceipt(
-                        m_gasUsed, message->newEVMContractAddress(),
+                        txGasUsed, message->newEVMContractAddress(),
                         std::make_shared<std::vector<bcos::protocol::LogEntry>>(
                             message->takeLogEntries()),
                         message->status(), message->takeData(),
