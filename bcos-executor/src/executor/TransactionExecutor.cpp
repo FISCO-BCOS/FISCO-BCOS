@@ -134,7 +134,12 @@ void TransactionExecutor::nextBlockHeader(const bcos::protocol::BlockHeader::Con
                 {
                     stateStorage = std::make_shared<bcos::storage::StateStorage>(m_backendStorage);
                 }
-                lastStateStorage = m_lastStateStorage;
+                lastStateStorage =
+                    m_lastStateStorage ?
+                        m_lastStateStorage :
+                        (m_cachedStorage ?
+                                std::make_shared<bcos::storage::StateStorage>(m_cachedStorage) :
+                                std::make_shared<bcos::storage::StateStorage>(m_backendStorage));
             }
             else
             {

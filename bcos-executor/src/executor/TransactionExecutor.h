@@ -93,7 +93,7 @@ public:
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
         bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck);
 
-    virtual ~TransactionExecutor() {}
+    ~TransactionExecutor() override = default;
 
     void nextBlockHeader(const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
         std::function<void(bcos::Error::UniquePtr)> callback) override;
@@ -143,7 +143,6 @@ protected:
     virtual std::shared_ptr<std::vector<bytes>> extractConflictFields(
         const FunctionAbi& functionAbi, const CallParameters& params,
         std::shared_ptr<BlockContext> _blockContext);
-    virtual void initPrecompiled() = 0;
 
     virtual std::shared_ptr<BlockContext> createBlockContext(
         const protocol::BlockHeader::ConstPtr& currentHeader,

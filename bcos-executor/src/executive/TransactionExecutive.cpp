@@ -649,8 +649,6 @@ CallParameters::UniquePtr TransactionExecutive::go(
     {
         auto callResults = hostContext.takeCallParameters();
         callResults->type = CallParameters::REVERT;
-        using errinfo_evmcStatusCode =
-            boost::error_info<struct tag_evmcStatusCode, evmc_status_code>;
         EXECUTIVE_LOG(WARNING) << "Internal VM Error ("
                                << *boost::get_error_info<errinfo_evmcStatusCode>(_e) << ")\n"
                                << diagnostic_information(_e);
@@ -747,8 +745,8 @@ bool TransactionExecutive::isBuiltInPrecompiled(const std::string& _a) const
 bool TransactionExecutive::isEthereumPrecompiled(const string& _a) const
 {
     std::stringstream prefix;
-    prefix << std::setfill('0') << std::setw(39);
-    if (_a.find(prefix.str()) != 0)
+    prefix << std::setfill('0') << std::setw(39) << "0";
+    if (!m_evmPrecompiled || _a.find(prefix.str()) != 0)
         return false;
     return m_evmPrecompiled->find(_a) != m_evmPrecompiled->end();
 }
