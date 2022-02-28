@@ -3,9 +3,9 @@
 #include "Common.h"
 #include "MockExecutor.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
+#include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>
 #include <boost/lexical_cast.hpp>
 #include <tuple>
-#include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>
 
 namespace bcos::test
 {
@@ -35,9 +35,9 @@ public:
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             callback) override
     {
-        if (input->to() == precompiled::AUTH_COMMITTEE_ADDRESS )
+        if (input->to() == precompiled::AUTH_COMMITTEE_ADDRESS)
         {
-            if(input->create())
+            if (input->create())
             {
                 callback(BCOS_ERROR_UNIQUE_PTR(-1, "deploy sys contract!"), nullptr);
                 return;
@@ -46,6 +46,7 @@ public:
             std::string data = "Hello world! response";
             input->setData(bcos::bytes(data.begin(), data.end()));
             input->setStatus(0);
+            input->setGasAvailable(123456);
             callback(nullptr, std::move(input));
             return;
         }
@@ -64,7 +65,7 @@ public:
         std::string data = "Hello world! response";
         input->setData(bcos::bytes(data.begin(), data.end()));
         input->setStatus(0);
-
+        input->setGasAvailable(123456);
         callback(nullptr, std::move(input));
     }
 
