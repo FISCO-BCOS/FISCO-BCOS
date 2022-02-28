@@ -686,14 +686,19 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                         for (string& critical : criticals)
                         {
                             critical += params->receiveAddress;
-                            conflictFields->push_back(
-                                bytes((uint8_t*)critical.data(), (uint8_t*)critical.data() + critical.size()));
+                            conflictFields->push_back(bytes((uint8_t*)critical.data(),
+                                (uint8_t*)critical.data() + critical.size()));
                         }
                     }
-                    EXECUTOR_LOG(DEBUG) << LOG_BADGE("dagExecuteTransactionsForWasm")
-                                        << LOG_DESC("the precompiled can't be parallel")
-                                        << LOG_KV("adddress", params->receiveAddress);
-                    continue;
+                    else
+                    {
+                        EXECUTOR_LOG(DEBUG) << LOG_BADGE("dagExecuteTransactionsForWasm")
+                                            << LOG_DESC("the precompiled can't be parallel")
+                                            << LOG_KV("adddress", params->receiveAddress);
+                        executionResults[i] = toExecutionResult(std::move(inputs[i]));
+                        executionResults[i]->setType(ExecutionMessage::SEND_BACK);
+                        continue;
+                    }
                 }
                 else
                 {
@@ -737,11 +742,15 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
 
                             auto entry = table->getRow(ACCOUNT_ABI);
                             auto abiStr = entry->getField(0);
-
+                            bool isSmCrypto = false;
+                            if (m_hashImpl->getHashImplType() == crypto::HashImplType::Sm3Hash)
+                            {
+                                isSmCrypto = true;
+                            }
                             EXECUTOR_LOG(DEBUG) << LOG_BADGE("dagExecuteTransactionsForWasm")
                                                 << LOG_DESC("ABI loaded") << LOG_KV("ABI", abiStr);
 
-                            auto functionAbi = FunctionAbi::deserialize(abiStr, selector.toBytes());
+                            auto functionAbi = FunctionAbi::deserialize(abiStr, selector.toBytes(), isSmCrypto);
                             if (!functionAbi)
                             {
                                 executionResults[i] = toExecutionResult(std::move(inputs[i]));

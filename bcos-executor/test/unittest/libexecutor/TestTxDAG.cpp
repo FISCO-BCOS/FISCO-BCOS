@@ -38,47 +38,6 @@ namespace test
 {
 BOOST_AUTO_TEST_SUITE(TestTxDAG)
 
-CriticalFieldsInterface::Ptr makeCriticalsString(int _totalTx)
-{
-    vector<bytes> originMap = {bytes{111}, bytes{222}, bytes{33, 3}, bytes{44, 4}, bytes{55, 5},
-        bytes{66, 6}, bytes{77, 7}, bytes{88, 8}, bytes{99, 9}, bytes{101}, bytes{102}, bytes{103},
-        bytes{104}, bytes{105}, bytes{106}, bytes{107}, bytes{108}, bytes{109}, bytes{120},
-        bytes{121}, bytes{122}, bytes{123}, bytes{124}, bytes{125}};
-    CriticalFields::Ptr criticals = make_shared<CriticalFields>(_totalTx);
-    for (int i = 0; i < _totalTx; i++)
-    {
-        int rand1 = random() % originMap.size();
-        int rand2 = random() % originMap.size();
-        vector<bytes> critical = {originMap[rand1], originMap[rand2]};
-        criticals->put(i, make_shared<CriticalFields::CriticalField>(std::move(critical)));
-        /*
-        stringstream ss;
-        ss << i;
-        res.push_back({string(ss.str())});
-         */
-    }
-    return criticals;
-}
-
-CriticalFieldsInterface::Ptr makeFixedCriticals(int _totalTx, int _criticalNum)
-{
-    CriticalFields::Ptr criticals = make_shared<CriticalFields>(_totalTx);
-    for (int i = 0; i < _totalTx; i++)
-    {
-        uint32_t c = i % _criticalNum;
-        vector<bytes> critical = {bytes{static_cast<uint8_t>(c & 0xff),
-            static_cast<uint8_t>(c & 0xff00 >> 8), static_cast<uint8_t>(c & 0xff0000 >> 16),
-            static_cast<uint8_t>(c & 0xff000000 >> 24)}};
-        criticals->put(i, make_shared<CriticalFields::CriticalField>(std::move(critical)));
-    }
-    /*
-    stringstream ss;
-    ss << i;
-    res.push_back({string(ss.str())});
-     */
-    return criticals;
-}
-
 CriticalFieldsInterface::Ptr makeCriticals(
     int _totalTx, std::function<vector<bytes>(ID)> _id2CriticalFunc)
 {
@@ -150,9 +109,7 @@ void txDagTest(shared_ptr<TxDAGInterface> txDag)
     vector<int> runnings(criticalNum, -1);
 
     auto id2CriticalFun = [&](ID id) -> vector<bytes> {
-        uint32_t c = id % criticalNum;
-        return {bytes{static_cast<uint8_t>(c & 0xff), static_cast<uint8_t>(c & 0xff00 >> 8),
-            static_cast<uint8_t>(c & 0xff0000 >> 16), static_cast<uint8_t>(c & 0xff000000 >> 24)}};
+        return {bytes{static_cast<uint8_t>(id % criticalNum)}};
     };
     auto beforeRunCheck = [&](ID id) {
         BOOST_CHECK_MESSAGE(runnings[id % criticalNum] == -1,
@@ -184,20 +141,11 @@ void txDagDeepTreeTest(shared_ptr<TxDAGInterface> txDag)
         if (value / slotNum == 0)
         {
             // return only slot
-            return {
-                bytes{static_cast<uint8_t>(slot & 0xff), static_cast<uint8_t>(slot & 0xff00 >> 8),
-                    static_cast<uint8_t>(slot & 0xff0000 >> 16),
-                    static_cast<uint8_t>(slot & 0xff000000 >> 24)}};
+            return {bytes{static_cast<uint8_t>(slot)}};
         }
         else
         {
-            return {
-                bytes{static_cast<uint8_t>(slot & 0xff), static_cast<uint8_t>(slot & 0xff00 >> 8),
-                    static_cast<uint8_t>(slot & 0xff0000 >> 16),
-                    static_cast<uint8_t>(slot & 0xff000000 >> 24),
-                    static_cast<uint8_t>(value & 0xff), static_cast<uint8_t>(value & 0xff00 >> 8),
-                    static_cast<uint8_t>(value & 0xff0000 >> 16),
-                    static_cast<uint8_t>(value & 0xff000000 >> 24)}};
+            return {bytes{static_cast<uint8_t>(slot), static_cast<uint8_t>(value)}};
         }
     };
 
