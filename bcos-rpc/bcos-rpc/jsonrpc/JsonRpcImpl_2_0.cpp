@@ -34,6 +34,7 @@
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
+#include <fstream>
 #include <string>
 
 using namespace std;
@@ -94,6 +95,9 @@ void JsonRpcImpl_2_0::initMethod()
     m_methodToFunc["getGroupNodeInfo"] = std::bind(
         &JsonRpcImpl_2_0::getGroupNodeInfoI, this, std::placeholders::_1, std::placeholders::_2);
 
+    m_methodToFunc["loadAndHandleTransaction"] =
+        std::bind(&JsonRpcImpl_2_0::loadAndHandleTransactionI, this, std::placeholders::_1,
+            std::placeholders::_2);
     for (const auto& method : m_methodToFunc)
     {
         RPC_IMPL_LOG(INFO) << LOG_BADGE("initMethod") << LOG_KV("method", method.first);
@@ -169,6 +173,7 @@ void JsonRpcImpl_2_0::parseRpcRequestJson(
 
             // success return
             return;
+
         } while (0);
     }
     catch (const std::exception& e)
@@ -1338,4 +1343,98 @@ void JsonRpcImpl_2_0::getGroupPeers(std::string const& _groupID, RespFunc _respF
         getGroupPeers(jResp, _groupID, _localP2pInfo, _peersInfo);
         _respFunc(_error, jResp);
     });
+}
+
+void JsonRpcImpl_2_0::loadAndHandleTransaction(std::string const& _groupID,
+    std::string const& _nodeName, std::string const& _txsFilePath, int64_t _qps, RespFunc _respFunc)
+{
+    auto nodeService = getNodeService(_groupID, _nodeName, "loadAndHandleTransaction");
+    Error::Ptr error = nullptr;
+    Json::Value response;
+    std::ifstream in;
+    in.open(_txsFilePath.c_str(), ios::in);
+    if (!in.is_open())
+    {
+        std::stringstream ss;
+        ss << LOG_DESC("loadAndHandleTransaction failed, please check the file exists!")
+           << LOG_KV("txsFilePath", _txsFilePath) << LOG_KV("qps", _qps);
+        error = std::make_shared<Error>(-1, ss.str());
+        RPC_IMPL_LOG(WARNING) << ss.str();
+        _respFunc(error, response);
+        return;
+    }
+    _respFunc(error, response);
+    std::string hexTxData = "";
+    // load txs from file
+    std::vector<bcos::bytesPointer> txsData;
+    RPC_IMPL_LOG(INFO) << LOG_DESC("Load txsData") << LOG_KV("txsFilePath", _txsFilePath)
+                       << LOG_KV("qps", _qps);
+    while (getline(in, hexTxData))
+    {
+        if (hexTxData.size() == 0)
+        {
+            continue;
+        }
+        txsData.emplace_back(fromHexString(hexTxData));
+    }
+    in.close();
+    RPC_IMPL_LOG(INFO) << LOG_DESC("Load txsData success") << LOG_KV("txsFilePath", _txsFilePath)
+                       << LOG_KV("txsSize", txsData.size());
+    auto txpool = nodeService->txpool();
+    uint64_t totalTxsCount = txsData.size();
+    auto startT = utcTime();
+    m_receivedTxs.store(0);
+    m_errorTxs.store(0);
+    m_totalLatency.store(0);
+    m_perfRound += 1;
+    auto self = std::weak_ptr<JsonRpcImpl_2_0>(shared_from_this());
+    bcos::protocol::TxSubmitCallback callback =
+        [startT, self, totalTxsCount](
+            Error::Ptr _error, bcos::protocol::TransactionSubmitResult::Ptr _result) {
+            auto rpc = self.lock();
+            if (!rpc)
+            {
+                return;
+            }
+            (rpc->m_receivedTxs)++;
+            rpc->m_totalLatency += (utcTime() - startT);
+            if (rpc->m_receivedTxs == totalTxsCount)
+            {
+                auto tps = (int64_t)((1000.0 * totalTxsCount) / (float)(utcTime() - startT));
+                std::cout << "====== Handle txs finished for Round " << rpc->m_perfRound
+                          << "======" << std::endl;
+                std::cout << "* timecost(ms):\t" << (utcTime() - startT) << std::endl;
+                std::cout << "* totalTxs:\t" << totalTxsCount << std::endl;
+                std::cout << "* errorTxs:\t" << rpc->m_errorTxs << std::endl;
+                std::cout << "* tps:\t" << tps << std::endl;
+                std::cout << "* average latency:\t" << (rpc->m_totalLatency / totalTxsCount)
+                          << std::endl;
+                std::cout << "====== Handle txs finished for Round " << rpc->m_perfRound
+                          << "======" << std::endl;
+                return;
+            }
+            if (_error)
+            {
+                (rpc->m_errorTxs)++;
+                RPC_IMPL_LOG(WARNING)
+                    << LOG_DESC("submitTransaction failed") << LOG_KV("error", _error->errorCode())
+                    << LOG_KV("msg", _error->errorMessage());
+                return;
+            }
+        };
+    try
+    {
+        auto rateLimiter = std::make_shared<RateLimiter>(_qps);
+        for (size_t i = 0; i < txsData.size(); i++)
+        {
+            rateLimiter->acquire();
+            auto binTxData = txsData.at(i);
+            // submit the tx
+            nodeService->txpool()->asyncSubmit(binTxData, callback);
+        }
+    }
+    catch (std::exception const& e)
+    {
+        RPC_IMPL_LOG(WARNING) << LOG_DESC("submitTransaction exception");
+    }
 }

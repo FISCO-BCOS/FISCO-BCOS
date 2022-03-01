@@ -108,6 +108,9 @@ public:
         std::string const& _groupID, std::string const& _nodeName, RespFunc _respFunc) = 0;
 
     virtual void getGroupBlockNumber(RespFunc _respFunc) = 0;
+    // load txs from file and submit the txs to txpool
+    virtual void loadAndHandleTransaction(std::string const& _groupID, std::string const& _nodeName,
+        std::string const& _txsFilePath, int64_t _qps, RespFunc _respFunc) = 0;
 };
 
 }  // namespace rpc

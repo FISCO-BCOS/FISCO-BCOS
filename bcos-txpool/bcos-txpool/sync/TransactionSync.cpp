@@ -562,14 +562,22 @@ bool TransactionSync::importDownloadedTxs(
 
 void TransactionSync::maintainTransactions()
 {
+    auto consensusNodeList = m_config->consensusNodeList();
+    auto connectedNodeList = m_config->connectedNodeList();
+    if (consensusNodeList.size() == 0)
+    {
+        return;
+    }
+    if (consensusNodeList.size() == 1 && consensusNodeList[0]->nodeID() == m_config->nodeID())
+    {
+        return;
+    }
     auto txs = m_config->txpoolStorage()->fetchNewTxs(c_maxSendTransactions);
     if (txs->size() == 0)
     {
         m_newTransactions = false;
         return;
     }
-    auto consensusNodeList = m_config->consensusNodeList();
-    auto connectedNodeList = m_config->connectedNodeList();
     broadcastTxsFromRpc(connectedNodeList, consensusNodeList, txs);
     forwardTxsFromP2P(connectedNodeList, consensusNodeList, txs);
 }

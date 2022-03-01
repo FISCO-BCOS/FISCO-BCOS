@@ -23,6 +23,7 @@
 #include "groupmgr/GroupManager.h"
 #include <bcos-framework/interfaces/gateway/GatewayInterface.h>
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
+#include <bcos-rpc/utilities/RateLimiter.h>
 #include <json/json.h>
 #include <tbb/concurrent_hash_map.h>
 #include <boost/core/ignore_unused.hpp>
@@ -132,9 +133,17 @@ public:
     void getGroupNodeInfo(
         std::string const& _groupID, std::string const& _nodeName, RespFunc _respFunc) override;
 
-    void getGroupBlockNumber(RespFunc _respFunc) override;
+    virtual void getGroupBlockNumber(RespFunc _respFunc) override;
+
+    void loadAndHandleTransaction(std::string const& _groupID, std::string const& _nodeName,
+        std::string const& _txsFilePath, int64_t _qps, RespFunc _respFunc) override;
 
 public:
+    void loadAndHandleTransactionI(const Json::Value& req, RespFunc _respFunc)
+    {
+        loadAndHandleTransaction(req[0u].asString(), req[1u].asString(), req[2u].asString(),
+            req[3u].asInt64(), _respFunc);
+    }
     void callI(const Json::Value& req, RespFunc _respFunc)
     {
         call(req[0u].asString(), req[1u].asString(), req[2u].asString(), req[3u].asString(),
@@ -329,6 +338,10 @@ private:
 
         std::hash<bcos::crypto::HashType> hasher;
     };
+    std::atomic<uint64_t> m_receivedTxs = {0};
+    std::atomic<uint64_t> m_errorTxs = {0};
+    std::atomic<uint64_t> m_totalLatency = {0};
+    std::atomic<uint64_t> m_perfRound = {0};
 };
 
 }  // namespace rpc
