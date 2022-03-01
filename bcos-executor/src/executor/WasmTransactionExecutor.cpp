@@ -35,6 +35,7 @@
 #include "../precompiled/SystemConfigPrecompiled.h"
 #include "../precompiled/extension/ContractAuthPrecompiled.h"
 #include "../precompiled/extension/DagTransferPrecompiled.h"
+#include "../precompiled/extension/UserPrecompiled.h"
 #include "../vm/gas_meter/GasInjector.h"
 #include "bcos-codec/abi/ContractABIType.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
@@ -148,7 +149,7 @@ void WasmTransactionExecutor::initPrecompiled()
         {BFS_NAME, std::make_shared<precompiled::FileSystemPrecompiled>(m_hashImpl)});
     m_constantPrecompiled.insert(
         {CONTRACT_AUTH_NAME, std::make_shared<precompiled::ContractAuthPrecompiled>(m_hashImpl)});
-
+    CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
     set<string> builtIn = {CRYPTO_NAME};
     m_builtInPrecompiled = make_shared<set<string>>(builtIn);
 }
