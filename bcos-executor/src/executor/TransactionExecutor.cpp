@@ -134,7 +134,12 @@ void TransactionExecutor::nextBlockHeader(const bcos::protocol::BlockHeader::Con
                 {
                     stateStorage = std::make_shared<bcos::storage::StateStorage>(m_backendStorage);
                 }
-                lastStateStorage = m_lastStateStorage;
+                lastStateStorage =
+                    m_lastStateStorage ?
+                        m_lastStateStorage :
+                        (m_cachedStorage ?
+                                std::make_shared<bcos::storage::StateStorage>(m_cachedStorage) :
+                                std::make_shared<bcos::storage::StateStorage>(m_backendStorage));
             }
             else
             {
@@ -681,14 +686,19 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                         for (string& critical : criticals)
                         {
                             critical += params->receiveAddress;
-                            conflictFields->push_back(
-                                bytes((uint8_t*)critical.data(), (uint8_t*)critical.data() + critical.size()));
+                            conflictFields->push_back(bytes((uint8_t*)critical.data(),
+                                (uint8_t*)critical.data() + critical.size()));
                         }
                     }
-                    EXECUTOR_LOG(DEBUG) << LOG_BADGE("dagExecuteTransactionsForWasm")
-                                        << LOG_DESC("the precompiled can't be parallel")
-                                        << LOG_KV("adddress", params->receiveAddress);
-                    continue;
+                    else
+                    {
+                        EXECUTOR_LOG(DEBUG) << LOG_BADGE("dagExecuteTransactionsInternal")
+                                            << LOG_DESC("the precompiled can't be parallel")
+                                            << LOG_KV("adddress", params->receiveAddress);
+                        executionResults[i] = toExecutionResult(std::move(inputs[i]));
+                        executionResults[i]->setType(ExecutionMessage::SEND_BACK);
+                        continue;
+                    }
                 }
                 else
                 {
@@ -696,7 +706,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
 
                     if (!cacheHandle.isValid())
                     {
-                        EXECUTOR_LOG(DEBUG) << LOG_BADGE("dagExecuteTransactionsForWasm")
+                        EXECUTOR_LOG(TRACE) << LOG_BADGE("dagExecuteTransactionsInternal")
                                             << LOG_DESC("No ABI found in cache, try to load")
                                             << LOG_KV("abiKey", toHexStringWithPrefix(abiKey));
 
@@ -705,7 +715,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                         cacheHandle = m_abiCache->lookup(abiKey);
                         if (cacheHandle.isValid())
                         {
-                            EXECUTOR_LOG(DEBUG) << LOG_BADGE("dagExecuteTransactionsForWasm")
+                            EXECUTOR_LOG(TRACE) << LOG_BADGE("dagExecuteTransactionsInternal")
                                                 << LOG_DESC("ABI had beed loaded by other workers")
                                                 << LOG_KV("abiKey", toHexStringWithPrefix(abiKey));
                             auto& functionAbi = cacheHandle.value();
@@ -724,7 +734,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                                 executionResults[i] = toExecutionResult(std::move(inputs[i]));
                                 executionResults[i]->setType(ExecutionMessage::REVERT);
                                 EXECUTOR_LOG(WARNING)
-                                    << LOG_BADGE("dagExecuteTransactionsForWasm")
+                                    << LOG_BADGE("dagExecuteTransactionsInternal")
                                     << LOG_DESC("No ABI found, please deploy first")
                                     << LOG_KV("tableName", tableName);
                                 continue;
@@ -732,11 +742,16 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
 
                             auto entry = table->getRow(ACCOUNT_ABI);
                             auto abiStr = entry->getField(0);
-
-                            EXECUTOR_LOG(DEBUG) << LOG_BADGE("dagExecuteTransactionsForWasm")
+                            bool isSmCrypto = false;
+                            if (m_hashImpl->getHashImplType() == crypto::HashImplType::Sm3Hash)
+                            {
+                                isSmCrypto = true;
+                            }
+                            EXECUTOR_LOG(DEBUG) << LOG_BADGE("dagExecuteTransactionsInternal")
                                                 << LOG_DESC("ABI loaded") << LOG_KV("ABI", abiStr);
 
-                            auto functionAbi = FunctionAbi::deserialize(abiStr, selector.toBytes());
+                            auto functionAbi =
+                                FunctionAbi::deserialize(abiStr, selector.toBytes(), isSmCrypto);
                             if (!functionAbi)
                             {
                                 executionResults[i] = toExecutionResult(std::move(inputs[i]));
@@ -764,7 +779,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                     }
                     else
                     {
-                        EXECUTOR_LOG(DEBUG) << LOG_BADGE("dagExecuteTransactionsForWasm")
+                        EXECUTOR_LOG(DEBUG) << LOG_BADGE("dagExecuteTransactionsInternal")
                                             << LOG_DESC("Found ABI in cache")
                                             << LOG_KV("abiKey", toHexStringWithPrefix(abiKey));
                         auto& functionAbi = cacheHandle.value();
@@ -775,7 +790,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                 if (conflictFields == nullptr)
                 {
                     EXECUTOR_LOG(DEBUG)
-                        << LOG_BADGE("dagExecuteTransactionsForWasm")
+                        << LOG_BADGE("dagExecuteTransactionsInternal")
                         << LOG_DESC("The transaction can't be executed concurrently")
                         << LOG_KV("abiKey", toHexStringWithPrefix(abiKey));
                     executionResults[i]->setType(ExecutionMessage::SEND_BACK);
@@ -1391,7 +1406,7 @@ void TransactionExecutor::executeTransactionsWithCriticals(
         auto executive =
             createExecutive(m_blockContext, input->codeAddress, input->contextID, input->seq);
 
-        EXECUTOR_LOG(DEBUG) << LOG_BADGE("executeTransactionsWithCriticals")
+        EXECUTOR_LOG(TRACE) << LOG_BADGE("executeTransactionsWithCriticals")
                             << LOG_DESC("Start transaction") << LOG_KV("to", input->receiveAddress)
                             << LOG_KV("data", toHexStringWithPrefix(input->data));
         try

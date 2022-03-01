@@ -78,7 +78,8 @@ vector<string> flattenStaticParamter(const ParameterAbi& param)
     return flatTypes;
 }
 
-unique_ptr<FunctionAbi> FunctionAbi::deserialize(string_view abiStr, const bytes& expected)
+unique_ptr<FunctionAbi> FunctionAbi::deserialize(
+    string_view abiStr, const bytes& expected, bool isSMCrypto)
 {
     assert(expected.size() == 4);
 
@@ -128,9 +129,16 @@ unique_ptr<FunctionAbi> FunctionAbi::deserialize(string_view abiStr, const bytes
         auto& functionName = function["name"];
         assert(!functionName.isNull());
         uint32_t selector = 0;
-        if (!function["selector"].isNull())
+        if (!function["selector"].isNull() && function["selector"].isArray())
         {
-            selector = (uint32_t)function["selector"].asUInt();
+            if (isSMCrypto)
+            {
+                selector = (uint32_t)function["selector"][1].asUInt();
+            }
+            else
+            {
+                selector = (uint32_t)function["selector"][0].asUInt();
+            }
         }
 
         auto expectedSelector = *((uint32_t*)expected.data());

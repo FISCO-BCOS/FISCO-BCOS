@@ -119,7 +119,7 @@ BOOST_AUTO_TEST_CASE(NormalCase)
                     "type":"tuple[]"
                 }
             ],
-            "selector": 352741043,
+            "selector": [352741043,0],
             "name":"add_prod_batch",
             "outputs":[
 
@@ -138,13 +138,13 @@ BOOST_AUTO_TEST_CASE(NormalCase)
                     "type":"string"
                 }
             ],
-            "selector": 352741043,
+            "selector": [352741043,0],
             "type":"function"
         }
     ]
     )"sv;
 
-    auto result = FunctionAbi::deserialize(abiStr, *fromHexString("150666b3"));
+    auto result = FunctionAbi::deserialize(abiStr, *fromHexString("150666b3"), false);
     BOOST_CHECK(result.get() != nullptr);
     BOOST_CHECK_EQUAL(result->inputs.size(), 1);
 
@@ -174,7 +174,7 @@ BOOST_AUTO_TEST_CASE(NormalCase)
 BOOST_AUTO_TEST_CASE(InvalidAbi)
 {
     auto abiStr = "vita"sv;
-    auto result = FunctionAbi::deserialize(abiStr, *fromHexString("150666b3"));
+    auto result = FunctionAbi::deserialize(abiStr, *fromHexString("150666b3"), false);
     BOOST_CHECK(!result);
 }
 
@@ -205,13 +205,13 @@ BOOST_AUTO_TEST_CASE(InvalidSelector)
             "outputs":[
 
             ],
-            "selector": 1322485854,
+            "selector": [1322485854,0],
             "type":"function"
         }
     ]
     )"sv;
 
-    auto result = FunctionAbi::deserialize(abiStr, *fromHexString("150666b3"));
+    auto result = FunctionAbi::deserialize(abiStr, *fromHexString("150666b3"), false);
     BOOST_CHECK(!result);
 }
 
@@ -232,13 +232,13 @@ BOOST_AUTO_TEST_CASE(EmptyConflictFields)
             "outputs":[
 
             ],
-            "selector": 1322485854,
+            "selector": [1322485854,0],
             "type":"function"
         }
     ]
     )"sv;
 
-    auto result = FunctionAbi::deserialize(abiStr, *fromHexString("4ed3885e"));
+    auto result = FunctionAbi::deserialize(abiStr, *fromHexString("4ed3885e"), false);
     BOOST_CHECK(result.get() != nullptr);
     BOOST_CHECK(result->conflictFields.empty());
 }

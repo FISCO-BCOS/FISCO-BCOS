@@ -92,38 +92,7 @@ std::shared_ptr<BlockContext> WasmTransactionExecutor::createBlockContext(
 
 void WasmTransactionExecutor::initPrecompiled()
 {
-    auto fillZero = [](int _num) -> std::string {
-        std::stringstream stream;
-        stream << std::setfill('0') << std::setw(40) << std::hex << _num;
-        return stream.str();
-    };
-    m_precompiledContract =
-        std::make_shared<std::map<std::string, std::shared_ptr<PrecompiledContract>>>();
     m_builtInPrecompiled = std::make_shared<std::set<std::string>>();
-
-    m_precompiledContract->insert(std::make_pair(fillZero(1),
-        make_shared<PrecompiledContract>(3000, 0, PrecompiledRegistrar::executor("ecrecover"))));
-    m_precompiledContract->insert(std::make_pair(fillZero(2),
-        make_shared<PrecompiledContract>(60, 12, PrecompiledRegistrar::executor("sha256"))));
-    m_precompiledContract->insert(std::make_pair(fillZero(3),
-        make_shared<PrecompiledContract>(600, 120, PrecompiledRegistrar::executor("ripemd160"))));
-    m_precompiledContract->insert(std::make_pair(fillZero(4),
-        make_shared<PrecompiledContract>(15, 3, PrecompiledRegistrar::executor("identity"))));
-    m_precompiledContract->insert(
-        {fillZero(5), make_shared<PrecompiledContract>(PrecompiledRegistrar::pricer("modexp"),
-                          PrecompiledRegistrar::executor("modexp"))});
-    m_precompiledContract->insert(
-        {fillZero(6), make_shared<PrecompiledContract>(
-                          150, 0, PrecompiledRegistrar::executor("alt_bn128_G1_add"))});
-    m_precompiledContract->insert(
-        {fillZero(7), make_shared<PrecompiledContract>(
-                          6000, 0, PrecompiledRegistrar::executor("alt_bn128_G1_mul"))});
-    m_precompiledContract->insert({fillZero(8),
-        make_shared<PrecompiledContract>(PrecompiledRegistrar::pricer("alt_bn128_pairing_product"),
-            PrecompiledRegistrar::executor("alt_bn128_pairing_product"))});
-    m_precompiledContract->insert({fillZero(9),
-        make_shared<PrecompiledContract>(PrecompiledRegistrar::pricer("blake2_compression"),
-            PrecompiledRegistrar::executor("blake2_compression"))});
 
     auto sysConfig = std::make_shared<precompiled::SystemConfigPrecompiled>(m_hashImpl);
     auto parallelConfigPrecompiled =

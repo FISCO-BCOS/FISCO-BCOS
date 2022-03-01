@@ -36,6 +36,11 @@ if("${CMAKE_SIZEOF_VOID_P}" STREQUAL "4")
 endif()
 
 EXECUTE_PROCESS(COMMAND uname -m COMMAND tr -d '\n' OUTPUT_VARIABLE ARCHITECTURE)
+# for boost-ssl enable/disable native
+set(ARCH_NATIVE OFF)
+if ("${ARCHITECTURE}" MATCHES "aarch64")
+    set(ARCH_NATIVE ON)
+endif()
 
 macro(configure_project)
      set(NAME ${PROJECT_NAME})
@@ -50,10 +55,12 @@ macro(configure_project)
 
     #ARCH TYPE
     default_option(NATIVE OFF)
+    if ("${ARCHITECTURE}" MATCHES "aarch64")
+        default_option(NATIVE ON)
+    endif()
     if(NATIVE)
         set(MARCH_TYPE "-march=native -mtune=native -fvisibility=hidden -fvisibility-inlines-hidden")
     endif()
-
     #SANITIZE
     default_option(SANITIZE OFF)
 

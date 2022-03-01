@@ -77,7 +77,7 @@ struct FunctionAbi
     std::vector<std::string> flatInputs;
 
     static std::unique_ptr<FunctionAbi> deserialize(
-        std::string_view abiStr, const bcos::bytes& expected);
+        std::string_view abiStr, const bcos::bytes& expected, bool isSMCrypto);
 };
 }  // namespace executor
 }  // namespace bcos

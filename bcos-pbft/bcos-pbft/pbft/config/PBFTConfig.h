@@ -353,6 +353,8 @@ public:
 
     virtual bool startRecovered() const { return m_startRecovered; }
 
+    bcos::protocol::BlockNumber waitSealUntil() { return m_waitSealUntil; }
+
 protected:
     void updateQuorum() override;
     virtual void asyncNotifySealProposal(size_t _proposalIndex, size_t _proposalEndIndex,
