@@ -705,7 +705,7 @@ bool PBFTCacheProcessor::checkPrecommitMsg(PBFTMessageInterface::Ptr _precommitM
         return ret;
     }
     // erase the cache
-    if (precommit->hash() == _precommitMsg->hash())
+    if (precommit->hash() == _precommitMsg->hash() && !checkPrecommitWeight(precommit))
     {
         m_caches.erase(precommit->index());
     }
