@@ -109,6 +109,11 @@ public:
     void getHash(bcos::protocol::BlockNumber number,
         std::function<void(bcos::Error::UniquePtr, crypto::HashType)> callback) override;
 
+    void dagExecuteTransactions(gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
+        std::function<void(
+            bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
+            callback) override;
+
     /* ----- XA Transaction interface Start ----- */
 
     // Write data to storage uncommitted
@@ -131,6 +136,13 @@ public:
         std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) override;
 
 protected:
+    virtual void dagExecuteTransactionsInternal(gsl::span<std::unique_ptr<CallParameters>> inputs,
+        std::function<void(
+            bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
+            callback);
+    virtual std::shared_ptr<std::vector<bytes>> extractConflictFields(
+        const FunctionAbi& functionAbi, const CallParameters& params,
+        std::shared_ptr<BlockContext> _blockContext);
     virtual void initPrecompiled() = 0;
 
     virtual std::shared_ptr<BlockContext> createBlockContext(

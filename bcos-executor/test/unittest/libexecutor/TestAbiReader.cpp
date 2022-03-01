@@ -79,7 +79,7 @@ BOOST_AUTO_TEST_CASE(NormalCase)
             "conflictFields":[
                 {
                     "kind":0,
-                    "path":[
+                    "value":[
 
                     ],
                     "read_only":true,
@@ -87,7 +87,7 @@ BOOST_AUTO_TEST_CASE(NormalCase)
                 },
                 {
                     "kind":4,
-                    "path":[
+                    "value":[
                         0, 1, 2
                     ],
                     "read_only":false,
@@ -119,6 +119,7 @@ BOOST_AUTO_TEST_CASE(NormalCase)
                     "type":"tuple[]"
                 }
             ],
+            "selector": 352741043,
             "name":"add_prod_batch",
             "outputs":[
 
@@ -137,12 +138,13 @@ BOOST_AUTO_TEST_CASE(NormalCase)
                     "type":"string"
                 }
             ],
+            "selector": 352741043,
             "type":"function"
         }
     ]
     )"sv;
 
-    auto result = FunctionAbi::deserialize(abiStr, *fromHexString("150666b3"), hashImpl);
+    auto result = FunctionAbi::deserialize(abiStr, *fromHexString("150666b3"));
     BOOST_CHECK(result.get() != nullptr);
     BOOST_CHECK_EQUAL(result->inputs.size(), 1);
 
@@ -159,22 +161,20 @@ BOOST_AUTO_TEST_CASE(NormalCase)
 
     auto accessPath = vector<uint8_t>{};
     BOOST_CHECK(
-        std::equal(accessPath.begin(), accessPath.end(), conflictFields[0].accessPath.begin()));
-    BOOST_CHECK_EQUAL(conflictFields[0].readOnly, true);
-    BOOST_CHECK_EQUAL(conflictFields[0].slot, 0);
+        std::equal(accessPath.begin(), accessPath.end(), conflictFields[0].value.begin()));
+    BOOST_CHECK_EQUAL(conflictFields[0].slot.value(), 0);
 
     accessPath = vector<uint8_t>{0, 1, 2};
-    cout << conflictFields[1].accessPath.size() << endl;
+    cout << conflictFields[1].value.size() << endl;
     BOOST_CHECK(
-        std::equal(accessPath.begin(), accessPath.end(), conflictFields[1].accessPath.begin()));
-    BOOST_CHECK_EQUAL(conflictFields[1].readOnly, false);
-    BOOST_CHECK_EQUAL(conflictFields[1].slot, 1);
+        std::equal(accessPath.begin(), accessPath.end(), conflictFields[1].value.begin()));
+    BOOST_CHECK_EQUAL(conflictFields[1].slot.value(), 1);
 }
 
 BOOST_AUTO_TEST_CASE(InvalidAbi)
 {
     auto abiStr = "vita"sv;
-    auto result = FunctionAbi::deserialize(abiStr, *fromHexString("150666b3"), hashImpl);
+    auto result = FunctionAbi::deserialize(abiStr, *fromHexString("150666b3"));
     BOOST_CHECK(!result);
 }
 
@@ -186,7 +186,7 @@ BOOST_AUTO_TEST_CASE(InvalidSelector)
             "conflictFields":[
                 {
                     "kind":0,
-                    "path":[
+                    "value":[
 
                     ],
                     "read_only":false,
@@ -205,12 +205,13 @@ BOOST_AUTO_TEST_CASE(InvalidSelector)
             "outputs":[
 
             ],
+            "selector": 1322485854,
             "type":"function"
         }
     ]
     )"sv;
 
-    auto result = FunctionAbi::deserialize(abiStr, *fromHexString("150666b3"), hashImpl);
+    auto result = FunctionAbi::deserialize(abiStr, *fromHexString("150666b3"));
     BOOST_CHECK(!result);
 }
 
@@ -231,12 +232,13 @@ BOOST_AUTO_TEST_CASE(EmptyConflictFields)
             "outputs":[
 
             ],
+            "selector": 1322485854,
             "type":"function"
         }
     ]
     )"sv;
 
-    auto result = FunctionAbi::deserialize(abiStr, *fromHexString("4ed3885e"), hashImpl);
+    auto result = FunctionAbi::deserialize(abiStr, *fromHexString("4ed3885e"));
     BOOST_CHECK(result.get() != nullptr);
     BOOST_CHECK(result->conflictFields.empty());
 }

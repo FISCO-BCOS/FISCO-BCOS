@@ -46,6 +46,7 @@ enum ConflictFieldKind : std::uint8_t
     Env,
     Var,
     Const,
+    None,
 };
 
 enum EnvKind : std::uint8_t

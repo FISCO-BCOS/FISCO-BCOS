@@ -30,10 +30,10 @@ class FrontServiceApp : public Application
 {
 public:
     FrontServiceApp() {}
-    virtual ~FrontServiceApp() override{};
+    ~FrontServiceApp() override{};
 
-    virtual void initialize() override;
-    virtual void destroyApp() override {}
+    void initialize() override;
+    void destroyApp() override {}
 
 protected:
     virtual void initService();

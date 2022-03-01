@@ -297,6 +297,9 @@ void SchedulerImpl::call(protocol::Transaction::Ptr tx,
         callback(BCOS_ERROR_PTR(SchedulerError::UnknownError, "Call address is empty"), nullptr);
         return;
     }
+    // set attribute before call
+    tx->setAttribute(m_isWasm ? bcos::protocol::Transaction::Attribute::LIQUID_SCALE_CODEC :
+                                bcos::protocol::Transaction::Attribute::EVM_ABI_CODEC);
     // Create temp block
     auto block = m_blockFactory->createBlock();
     block->appendTransaction(std::move(tx));

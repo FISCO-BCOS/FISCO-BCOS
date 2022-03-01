@@ -130,7 +130,7 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
         m_scheduler =
             SchedulerInitializer::build(executorManager, ledger, storage, executionMessageFactory,
                 m_protocolInitializer->blockFactory(), m_protocolInitializer->txResultFactory(),
-                m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isAuthCheck());
+                m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isAuthCheck(), m_nodeConfig->isWasm());
 
         // init the txpool
         m_txpoolInitializer = std::make_shared<TxPoolInitializer>(

@@ -255,8 +255,9 @@ gen_chain_cert() {
 
     ${OPENSSL_CMD} genrsa -out "${chaindir}"/ca.key "${rsa_key_length}"
     ${OPENSSL_CMD} req -new -x509 -days "${days}" -subj "/CN=FISCO-BCOS/O=FISCO-BCOS/OU=chain" -key "${chaindir}"/ca.key -config "${cert_conf}" -out "${chaindir}"/ca.crt
-    mv "${cert_conf}" "${chaindir}"
-
+    if [ ! -f "${chaindir}/cert.cnf" ];then
+        mv "${cert_conf}" "${chaindir}"
+    fi
     LOG_INFO "Build ca cert successfully!"
 }
 
@@ -448,7 +449,7 @@ check_and_install_tassl(){
     local tassl_tgz_name="${tassl_package_name}.tar.gz"
     local tassl_link_prefix="${cdn_link_header}/FISCO-BCOS/tools/tassl-1.1.1b/${tassl_tgz_name}"
     LOG_INFO "Downloading tassl binary from ${tassl_link_prefix}..."
-    curl -#LO "${tassl_link_prefix}"
+    curl -#LO --insecure "${tassl_link_prefix}"
     tar zxvf ${tassl_tgz_name} && rm ${tassl_tgz_name}
     chmod u+x ${tassl_package_name}
     mkdir -p "${HOME}"/.fisco

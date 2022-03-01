@@ -53,7 +53,6 @@ bool ProtocolVersion::fromJson(const std::string& _json)
                            << LOG_KV("protocolVersion", protocolVersion);
 
             return true;
-
         } while (0);
 
         BCOS_LOG(ERROR) << LOG_BADGE("fromJson") << LOG_DESC("invalid protocol version json string")

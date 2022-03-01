@@ -132,7 +132,7 @@ public:
     void getGroupNodeInfo(
         std::string const& _groupID, std::string const& _nodeName, RespFunc _respFunc) override;
 
-    virtual void getGroupBlockNumber(RespFunc _respFunc) override;
+    void getGroupBlockNumber(RespFunc _respFunc) override;
 
 public:
     void callI(const Json::Value& req, RespFunc _respFunc)

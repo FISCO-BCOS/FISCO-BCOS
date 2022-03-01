@@ -48,11 +48,6 @@ public:
 
     virtual ~EvmTransactionExecutor() {}
 
-    void dagExecuteTransactions(gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
-        std::function<void(
-            bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
-            callback) override;
-
 private:
     void initPrecompiled() override;
 
@@ -64,11 +59,15 @@ private:
     std::shared_ptr<BlockContext> createBlockContext(bcos::protocol::BlockNumber blockNumber,
         h256 blockHash, uint64_t timestamp, int32_t blockVersion,
         storage::StateStorage::Ptr tableFactory) override;
+#if 0
+    std::shared_ptr<std::vector<bytes>> extractConflictFields(const FunctionAbi& functionAbi,
+        const CallParameters& params, std::shared_ptr<BlockContext> _blockContext) override;
 
     void dagExecuteTransactionsInternal(gsl::span<std::unique_ptr<CallParameters>> inputs,
         std::function<void(
             bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
-            callback);
+            callback) override;
+#endif
 };
 
 }  // namespace executor
