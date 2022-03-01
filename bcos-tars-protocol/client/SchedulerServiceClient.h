@@ -81,6 +81,9 @@ public:
     void getCode(std::string_view contract,
         std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) override;
 
+    void getABI(std::string_view contract,
+        std::function<void(bcos::Error::Ptr, std::string)> callback) override;
+
 private:
     SchedulerServicePrx m_prx;
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;

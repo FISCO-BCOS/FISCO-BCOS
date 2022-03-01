@@ -72,5 +72,8 @@ public:
 
     virtual void getCode(
         std::string_view contract, std::function<void(Error::Ptr, bcos::bytes)> callback) = 0;
+
+    virtual void getABI(
+        std::string_view contract, std::function<void(Error::Ptr, std::string)> callback) = 0;
 };
 }  // namespace bcos::scheduler
