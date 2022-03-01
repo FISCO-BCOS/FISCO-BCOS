@@ -566,11 +566,13 @@ void TransactionSync::maintainTransactions()
     auto connectedNodeList = m_config->connectedNodeList();
     if (connectedNodeList.size() == 0)
     {
+        m_newTransactions = false;
         return;
     }
     if (consensusNodeList.size() == 1 &&
         consensusNodeList[0]->nodeID()->data() == m_config->nodeID()->data())
     {
+        m_newTransactions = false;
         return;
     }
     auto txs = m_config->txpoolStorage()->fetchNewTxs(c_maxSendTransactions);

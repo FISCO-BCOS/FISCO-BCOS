@@ -63,6 +63,7 @@ void BlockExecutive::asyncExecute(
     }
     m_currentTimePoint = std::chrono::system_clock::now();
 
+    auto startT = utcTime();
     bool withDAG = false;
     if (m_block->transactionsMetaDataSize() > 0)
     {
@@ -185,11 +186,13 @@ void BlockExecutive::asyncExecute(
                 std::make_tuple(std::move(to), i), ExecutiveState(i, std::move(message), withDAG));
         }
     }
-
+    auto createMsgT = utcTime() - startT;
+    startT = utcTime();
     if (!m_staticCall)
     {
         // Execute nextBlock
-        batchNextBlock([this, withDAG, callback = std::move(callback)](Error::UniquePtr error) {
+        batchNextBlock([this, withDAG, createMsgT, startT, callback = std::move(callback)](
+                           Error::UniquePtr error) {
             if (error)
             {
                 SCHEDULER_LOG(ERROR)
@@ -202,7 +205,8 @@ void BlockExecutive::asyncExecute(
 
             if (withDAG)
             {
-                DAGExecute([this, callback = std::move(callback)](Error::UniquePtr error) {
+                DAGExecute([this, createMsgT, startT, callback = std::move(callback)](
+                               Error::UniquePtr error) {
                     if (error)
                     {
                         SCHEDULER_LOG(ERROR) << "DAG execute block with error!"
@@ -212,7 +216,12 @@ void BlockExecutive::asyncExecute(
                             nullptr);
                         return;
                     }
-
+                    auto blockHeader = m_block->blockHeader();
+                    SCHEDULER_LOG(INFO)
+                        << LOG_DESC("DAGExecute success") << LOG_KV("createMsgT", createMsgT)
+                        << LOG_KV("dagExecuteT", (utcTime() - startT))
+                        << LOG_KV("hash", blockHeader->hash().abridged())
+                        << LOG_KV("number", blockHeader->number());
                     DMTExecute(std::move(callback));
                 });
             }
@@ -413,6 +422,7 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
     for (auto it = requests.begin(); it != requests.end(); it = requests.upper_bound(it->first))
     {
         SCHEDULER_LOG(TRACE) << "DAG contract: " << it->first;
+        auto startT = utcTime();
 
         auto executor = m_scheduler->m_executorManager->dispatchExecutor(it->first);
         auto count = requests.count(it->first);
@@ -431,10 +441,11 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
 
             ++i;
         }
-
+        auto prepareT = utcTime() - startT;
+        startT = utcTime();
         executor->dagExecuteTransactions(*messages,
-            [messages, iterators = std::move(iterators), totalCount, failed, callbackPtr](
-                bcos::Error::UniquePtr error,
+            [messages, startT, prepareT, iterators = std::move(iterators), totalCount, failed,
+                callbackPtr](bcos::Error::UniquePtr error,
                 std::vector<bcos::protocol::ExecutionMessage::UniquePtr> responseMessages) {
                 if (error)
                 {
@@ -467,7 +478,9 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
                             SchedulerError::DAGError, "Execute dag with errors"));
                         return;
                     }
-
+                    SCHEDULER_LOG(INFO)
+                        << LOG_DESC("DAGExecute finish") << LOG_KV("prepareT", prepareT)
+                        << LOG_KV("execT", (utcTime() - startT));
                     (*callbackPtr)(nullptr);
                 }
             });
@@ -841,8 +854,8 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
                 m_gasUsed += txGasUsed;
 
                 m_executiveResults[executiveState.contextID].receipt =
-                    m_scheduler->m_blockFactory->receiptFactory()->createReceipt(
-                        txGasUsed, message->newEVMContractAddress(),
+                    m_scheduler->m_blockFactory->receiptFactory()->createReceipt(txGasUsed,
+                        message->newEVMContractAddress(),
                         std::make_shared<std::vector<bcos::protocol::LogEntry>>(
                             message->takeLogEntries()),
                         message->status(), message->takeData(),

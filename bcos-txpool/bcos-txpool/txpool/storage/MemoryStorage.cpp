@@ -472,10 +472,8 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
     auto startT = utcTime();
     ReadGuard l(x_txpoolMutex);
     auto lockT = utcTime() - startT;
-    uint64_t generateTxMetaDataT = 0;
-    uint64_t checkT = 0;
-    uint64_t setTxT = 0;
-    uint64_t hashT = 0;
+    startT = utcTime();
+
     for (auto const& it : m_txsTable)
     {
         auto const& tx = it.second;
@@ -485,10 +483,17 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         {
             continue;
         }
-        startT = utcTime();
         auto txHash = it.first;
-        hashT += (utcTime() - startT);
         if (m_invalidTxs.count(txHash))
+        {
+            continue;
+        }
+        if (_avoidTxs && _avoidTxs->count(txHash))
+        {
+            continue;
+        }
+        // the transaction has already been sealed for newer proposal
+        if (_avoidDuplicate && tx->sealed())
         {
             continue;
         }
@@ -496,9 +501,7 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         // since the invalid nonce has already been checked before the txs import into the
         // txPool the txs with duplicated nonce here are already-committed, but have not been
         // dropped
-        startT = utcTime();
         auto result = m_config->txValidator()->submittedToChain(tx);
-        checkT += (utcTime() - startT);
         if (result == TransactionStatus::NonceCheckFail)
         {
             // in case of the same tx notified more than once
@@ -516,19 +519,8 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
             m_invalidNonces.insert(tx->nonce());
             continue;
         }
-        if (_avoidTxs && _avoidTxs->count(txHash))
-        {
-            continue;
-        }
-        // the transaction has already been sealed for newer proposal
-        if (_avoidDuplicate && tx->sealed())
-        {
-            continue;
-        }
-        startT = utcTime();
         auto txMetaData = m_config->blockFactory()->createTransactionMetaData();
-
-        txMetaData->setHash(txHash);
+        txMetaData->setHash(tx->hash());
         txMetaData->setTo(std::string(tx->to()));
         txMetaData->setAttribute(tx->attribute());
         if (tx->systemTx())
@@ -539,8 +531,6 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         {
             _txsList->appendTransactionMetaData(txMetaData);
         }
-        generateTxMetaDataT += (utcTime() - startT);
-        startT = utcTime();
         if (!tx->sealed())
         {
             m_sealedTxsSize++;
@@ -555,28 +545,20 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         tx->setSealed(true);
         tx->setBatchId(-1);
         tx->setBatchHash(HashType());
-        setTxT += (utcTime() - startT);
         if ((_txsList->transactionsMetaDataSize() + _sysTxsList->transactionsMetaDataSize()) >=
             _txsLimit)
         {
             break;
         }
     }
-    startT = utcTime();
+    auto fetchTxsT = utcTime() - startT;
     notifyUnsealedTxsSize();
-    auto notifyUnsealedTxsT = utcTime() - startT;
-    startT = utcTime();
     removeInvalidTxs();
-    auto removeInvalidTxsT = (utcTime() - startT);
     TXPOOL_LOG(INFO) << LOG_DESC("batchFetchTxs") << LOG_KV("timecost", (utcTime() - recordT))
                      << LOG_KV("txsSize", _txsList->transactionsMetaDataSize())
                      << LOG_KV("sysTxsSize", _sysTxsList->transactionsMetaDataSize())
-                     << LOG_KV("limit", _txsLimit)
-                     << LOG_KV("generateTxMetaDataT", generateTxMetaDataT)
-                     << LOG_KV("checkT", checkT) << LOG_KV("lockT", lockT)
-                     << LOG_KV("notifyUnsealedTxsT", notifyUnsealedTxsT)
-                     << LOG_KV("removeInvalidTxsT", removeInvalidTxsT) << LOG_KV("setTxT", setTxT)
-                     << LOG_KV("hashT", hashT);
+                     << LOG_KV("txsSize", m_txsTable.size()) << LOG_KV("limit", _txsLimit)
+                     << LOG_KV("fetchTxsT", fetchTxsT) << LOG_KV("lockT", lockT);
 }
 
 void MemoryStorage::removeInvalidTxs()
