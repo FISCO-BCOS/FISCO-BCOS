@@ -468,18 +468,26 @@ ConstTransactionsPtr MemoryStorage::fetchNewTxs(size_t _txsLimit)
 void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, size_t _txsLimit,
     TxsHashSetPtr _avoidTxs, bool _avoidDuplicate)
 {
-    auto blockFactory = m_config->blockFactory();
+    auto recordT = utcTime();
+    auto startT = utcTime();
     ReadGuard l(x_txpoolMutex);
-    for (auto it : m_txsTable)
+    auto lockT = utcTime() - startT;
+    uint64_t generateTxMetaDataT = 0;
+    uint64_t checkT = 0;
+    uint64_t setTxT = 0;
+    uint64_t hashT = 0;
+    for (auto const& it : m_txsTable)
     {
-        auto tx = it.second;
+        auto const& tx = it.second;
         // Note: When inserting data into tbb::concurrent_unordered_map while traversing,
         // it.second will occasionally be a null pointer.
         if (!tx)
         {
             continue;
         }
-        auto txHash = tx->hash();
+        startT = utcTime();
+        auto txHash = it.first;
+        hashT += (utcTime() - startT);
         if (m_invalidTxs.count(txHash))
         {
             continue;
@@ -488,7 +496,9 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         // since the invalid nonce has already been checked before the txs import into the
         // txPool the txs with duplicated nonce here are already-committed, but have not been
         // dropped
+        startT = utcTime();
         auto result = m_config->txValidator()->submittedToChain(tx);
+        checkT += (utcTime() - startT);
         if (result == TransactionStatus::NonceCheckFail)
         {
             // in case of the same tx notified more than once
@@ -515,9 +525,10 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         {
             continue;
         }
+        startT = utcTime();
         auto txMetaData = m_config->blockFactory()->createTransactionMetaData();
 
-        txMetaData->setHash(tx->hash());
+        txMetaData->setHash(txHash);
         txMetaData->setTo(std::string(tx->to()));
         txMetaData->setAttribute(tx->attribute());
         if (tx->systemTx())
@@ -528,13 +539,15 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         {
             _txsList->appendTransactionMetaData(txMetaData);
         }
+        generateTxMetaDataT += (utcTime() - startT);
+        startT = utcTime();
         if (!tx->sealed())
         {
             m_sealedTxsSize++;
         }
 #if FISCO_DEBUG
         // TODO: remove this, now just for bug tracing
-        TXPOOL_LOG(INFO) << LOG_DESC("fetch ") << tx->hash().abridged()
+        TXPOOL_LOG(INFO) << LOG_DESC("fetch ") << txHash.abridged()
                          << LOG_KV("sealed", tx->sealed()) << LOG_KV("batchId", tx->batchId())
                          << LOG_KV("batchHash", tx->batchHash().abridged())
                          << LOG_KV("txPointer", tx);
@@ -542,14 +555,28 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         tx->setSealed(true);
         tx->setBatchId(-1);
         tx->setBatchHash(HashType());
+        setTxT += (utcTime() - startT);
         if ((_txsList->transactionsMetaDataSize() + _sysTxsList->transactionsMetaDataSize()) >=
             _txsLimit)
         {
             break;
         }
     }
+    startT = utcTime();
     notifyUnsealedTxsSize();
+    auto notifyUnsealedTxsT = utcTime() - startT;
+    startT = utcTime();
     removeInvalidTxs();
+    auto removeInvalidTxsT = (utcTime() - startT);
+    TXPOOL_LOG(INFO) << LOG_DESC("batchFetchTxs") << LOG_KV("timecost", (utcTime() - recordT))
+                     << LOG_KV("txsSize", _txsList->transactionsMetaDataSize())
+                     << LOG_KV("sysTxsSize", _sysTxsList->transactionsMetaDataSize())
+                     << LOG_KV("limit", _txsLimit)
+                     << LOG_KV("generateTxMetaDataT", generateTxMetaDataT)
+                     << LOG_KV("checkT", checkT) << LOG_KV("lockT", lockT)
+                     << LOG_KV("notifyUnsealedTxsT", notifyUnsealedTxsT)
+                     << LOG_KV("removeInvalidTxsT", removeInvalidTxsT) << LOG_KV("setTxT", setTxT)
+                     << LOG_KV("hashT", hashT);
 }
 
 void MemoryStorage::removeInvalidTxs()

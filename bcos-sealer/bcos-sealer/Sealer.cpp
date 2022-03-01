@@ -118,6 +118,7 @@ void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _blo
         m_sealingManager->notifyResetProposal(_block);
         return;
     }
+    auto recordT = utcTime();
     // supplement the header info: set sealerList and weightList
     std::vector<bytes> sealerList;
     std::vector<uint64_t> weightList;
@@ -130,14 +131,17 @@ void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _blo
     _block->blockHeader()->setSealerList(std::move(sealerList));
     _block->blockHeader()->setConsensusWeights(std::move(weightList));
     _block->blockHeader()->setSealer(m_sealerConfig->consensus()->nodeIndex());
+    auto startT = utcTime();
     auto encodedData = std::make_shared<bytes>();
     _block->encode(*encodedData);
+    auto encodeT = (utcTime() - startT);
     SEAL_LOG(INFO) << LOG_DESC("++++++++++++++++ Generate proposal")
                    << LOG_KV("index", _block->blockHeader()->number())
                    << LOG_KV("curNum", m_sealingManager->currentNumber())
                    << LOG_KV("hash", _block->blockHeader()->hash().abridged())
                    << LOG_KV("sysTxs", _containSysTxs)
-                   << LOG_KV("txsSize", _block->transactionsHashSize());
+                   << LOG_KV("txsSize", _block->transactionsHashSize())
+                   << LOG_KV("encodeT", encodeT) << LOG_KV("cost", (utcTime() - recordT));
     m_sealerConfig->consensus()->asyncSubmitProposal(_containSysTxs, ref(*encodedData),
         _block->blockHeader()->number(), _block->blockHeader()->hash(),
         [_block](Error::Ptr _error) {

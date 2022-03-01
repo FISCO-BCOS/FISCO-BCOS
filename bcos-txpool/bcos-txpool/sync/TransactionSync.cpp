@@ -564,11 +564,12 @@ void TransactionSync::maintainTransactions()
 {
     auto consensusNodeList = m_config->consensusNodeList();
     auto connectedNodeList = m_config->connectedNodeList();
-    if (consensusNodeList.size() == 0)
+    if (connectedNodeList.size() == 0)
     {
         return;
     }
-    if (consensusNodeList.size() == 1 && consensusNodeList[0]->nodeID() == m_config->nodeID())
+    if (consensusNodeList.size() == 1 &&
+        consensusNodeList[0]->nodeID()->data() == m_config->nodeID()->data())
     {
         return;
     }
