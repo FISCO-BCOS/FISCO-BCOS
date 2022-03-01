@@ -93,7 +93,7 @@ void Sealer::executeWorker()
 {
     if (!m_sealingManager->shouldGenerateProposal() && !m_sealingManager->shouldFetchTransaction())
     {
-        ///< 10 milliseconds to next loop
+        ///< 1 milliseconds to next loop
         boost::unique_lock<boost::mutex> l(x_signalled);
         m_signalled.wait_for(l, boost::chrono::milliseconds(1));
     }

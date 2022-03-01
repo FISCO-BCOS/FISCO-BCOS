@@ -88,6 +88,7 @@ public:
         }
         m_endSealingNumber = _endSealingNumber;
         m_maxTxsPerBlock = _maxTxsPerBlock;
+        m_onReady();
         SEAL_LOG(INFO) << LOG_DESC("resetSealingInfo") << LOG_KV("start", m_startSealingNumber)
                        << LOG_KV("end", m_endSealingNumber)
                        << LOG_KV("sealingNumber", m_sealingNumber);
