@@ -370,7 +370,25 @@ bool PBFTCache::collectEnoughCheckpoint()
 
 bool PBFTCache::checkAndCommitStableCheckPoint()
 {
-    if (m_stableCommitted || !collectEnoughCheckpoint())
+    if (m_stableCommitted)
+    {
+        return false;
+    }
+    // Before this proposal reach checkPoint consensus,
+    // it must be ensured that the dependent system transactions
+    // (such as transactions including dynamically addSealer/removeNode, setConsensusWeight, etc.)
+    // have been committed
+    auto committedIndex = m_config->committedProposal()->index();
+    auto dependsProposal = std::min((m_index - 1), m_config->waitSealUntil());
+    if (committedIndex < dependsProposal)
+    {
+        return false;
+    }
+    if (committedIndex == dependsProposal)
+    {
+        recalculateQuorum(m_checkpointCacheWeight, m_checkpointCacheList);
+    }
+    if (!collectEnoughCheckpoint())
     {
         return false;
     }

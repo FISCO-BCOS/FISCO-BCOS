@@ -24,7 +24,7 @@ add_executable(${TEST_BINARY_NAME} ${SOURCES})
 target_include_directories(${TEST_BINARY_NAME} PRIVATE . ${CMAKE_SOURCE_DIR})
 
 find_package(wedpr-crypto CONFIG QUIET REQUIRED)
-find_package(Boost CONFIG QUIET REQUIRED  unit_test_framework)
+find_package(Boost CONFIG QUIET REQUIRED unit_test_framework)
 
 target_link_libraries(${TEST_BINARY_NAME} ${TABLE_TARGET} Boost::unit_test_framework)
-add_test(NAME test-framework WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})
+add_test(NAME test-table WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} COMMAND ${TEST_BINARY_NAME})

@@ -39,7 +39,6 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         auto requestNumber = block->blockHeaderConst()->number();
         auto& frontBlock = m_blocks.front();
         auto& backBlock = m_blocks.back();
-        auto signature = block->blockHeaderConst()->signatureList();
         // Block already executed
         if (requestNumber >= frontBlock.number() && requestNumber <= backBlock.number())
         {

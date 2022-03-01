@@ -22,6 +22,8 @@
 
 #include "TransactionExecutor.h"
 
+#include <utility>
+
 namespace bcos
 {
 namespace executor
@@ -37,21 +39,19 @@ public:
         storage::TransactionalStorageInterface::Ptr backendStorage,
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
         bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck)
-      : TransactionExecutor(
-            txpool, cachedStorage, backendStorage, executionMessageFactory, hashImpl, isAuthCheck)
+      : TransactionExecutor(std::move(txpool), std::move(cachedStorage), std::move(backendStorage),
+            std::move(executionMessageFactory), std::move(hashImpl), isAuthCheck)
     {
         initPrecompiled();
-        assert(m_precompiledContract);
-        assert(m_constantPrecompiled.size() > 0);
+        assert(!m_constantPrecompiled.empty());
         assert(m_builtInPrecompiled);
         m_isWasm = true;
     }
 
-    virtual ~WasmTransactionExecutor() {}
+    ~WasmTransactionExecutor() override = default;
 
 private:
-
-    void initPrecompiled() override;
+    void initPrecompiled();
 
     std::shared_ptr<BlockContext> createBlockContext(
         const protocol::BlockHeader::ConstPtr& currentHeader,
@@ -61,7 +61,6 @@ private:
     std::shared_ptr<BlockContext> createBlockContext(bcos::protocol::BlockNumber blockNumber,
         h256 blockHash, uint64_t timestamp, int32_t blockVersion,
         storage::StateStorage::Ptr tableFactory) override;
-
 };
 
 }  // namespace executor

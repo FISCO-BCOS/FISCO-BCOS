@@ -1,11 +1,12 @@
 cmake_minimum_required(VERSION 3.16)
 if (NOT DEFINED URL_BASE)
     set(URL_BASE "github.com")
-endif()
+endif ()
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/bcos-cmake-scripts)
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 
+include(Options)
 include(HunterGate)
 HunterGate(
         URL "https://${URL_BASE}/FISCO-BCOS/hunter/archive/a97876640bdca736c23a48dc0ad0f168fd3d695c.tar.gz"
@@ -16,8 +17,6 @@ HunterGate(
 include(cmake/Version.cmake)
 project(PROJECT_NAME VERSION ${VERSION})
 
-
-include(Options)
 configure_project()
 
 include(CompilerSettings)
@@ -78,10 +77,10 @@ add_subdirectory(libinitializer)
 add_subdirectory(fisco-bcos-air)
 add_subdirectory(fisco-bcos-pro)
 
-if(TESTS)
+if (TESTS)
     enable_testing()
     add_subdirectory(tests)
-endif()
+endif ()
 
 # for code coverage
 if (COVERAGE)
