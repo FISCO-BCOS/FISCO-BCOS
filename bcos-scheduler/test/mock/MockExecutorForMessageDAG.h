@@ -104,7 +104,11 @@ public:
     {
         callback(nullptr, {});
     }
-
+    void getABI(std::string_view contract,
+        std::function<void(bcos::Error::Ptr, std::string)> callback) override
+    {
+        callback(nullptr, {});
+    }
     void clear() { m_dagHashes.clear(); }
 
     std::string m_name;

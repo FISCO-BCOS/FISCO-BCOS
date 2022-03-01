@@ -120,7 +120,11 @@ public:
     {
         callback(nullptr, {});
     }
-
+    void getABI(std::string_view contract,
+        std::function<void(bcos::Error::Ptr, std::string)> callback) override
+    {
+        callback(nullptr, {});
+    }
     void reset(std::function<void(bcos::Error::Ptr)> callback) override {}
 
     void clear() { m_dagHashes.clear(); }

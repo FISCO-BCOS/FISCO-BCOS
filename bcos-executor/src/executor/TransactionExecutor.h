@@ -134,6 +134,8 @@ public:
 
     void getCode(std::string_view contract,
         std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) override;
+    void getABI(
+        std::string_view contract, std::function<void(bcos::Error::Ptr, std::string)> callback) override;
 
 protected:
     virtual void dagExecuteTransactionsInternal(gsl::span<std::unique_ptr<CallParameters>> inputs,

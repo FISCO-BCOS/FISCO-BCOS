@@ -71,6 +71,9 @@ public:
     void getCode(
         std::string_view contract, std::function<void(Error::Ptr, bcos::bytes)> callback) override;
 
+    void getABI(
+        std::string_view contract, std::function<void(Error::Ptr, std::string)> callback) override;
+
     void registerTransactionNotifier(std::function<void(bcos::protocol::BlockNumber,
             bcos::protocol::TransactionSubmitResultsPtr, std::function<void(Error::Ptr)>)>
             txNotifier);

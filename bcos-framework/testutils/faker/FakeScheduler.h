@@ -84,6 +84,7 @@ public:
     {}
 
     void getCode(std::string_view, std::function<void(Error::Ptr, bcos::bytes)>) override {}
+    void getABI(std::string_view, std::function<void(Error::Ptr, std::string)>) override {}
 
 private:
     FakeLedger::Ptr m_ledger;

@@ -46,6 +46,9 @@ public:
     bcostars::Error getCode(const std::string& contract, vector<tars::Char>& code,
         tars::TarsCurrentPtr current) override;
 
+    bcostars::Error getABI(
+        const std::string& contract, std::string& code, tars::TarsCurrentPtr current) override;
+
 private:
     bcos::scheduler::SchedulerInterface::Ptr m_scheduler;
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;

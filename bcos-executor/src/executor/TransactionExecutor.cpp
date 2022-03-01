@@ -749,7 +749,6 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                             }
                             EXECUTOR_LOG(DEBUG) << LOG_BADGE("dagExecuteTransactionsInternal")
                                                 << LOG_DESC("ABI loaded") << LOG_KV("ABI", abiStr);
-
                             auto functionAbi =
                                 FunctionAbi::deserialize(abiStr, selector.toBytes(), isSmCrypto);
                             if (!functionAbi)
@@ -1011,6 +1010,47 @@ void TransactionExecutor::getCode(
 
             auto codeBytes = bcos::bytes(code.begin(), code.end());
             callback(nullptr, std::move(codeBytes));
+        });
+}
+
+void TransactionExecutor::getABI(
+    std::string_view contract, std::function<void(bcos::Error::Ptr, std::string)> callback)
+{
+    EXECUTOR_LOG(INFO) << "Get ABI request" << LOG_KV("Contract", contract);
+
+    storage::StorageInterface::Ptr storage;
+
+    if (m_cachedStorage)
+    {
+        storage = m_cachedStorage;
+    }
+    else
+    {
+        storage = m_backendStorage;
+    }
+
+    auto tableName = getContractTableName(contract, m_isWasm);
+    storage->asyncGetRow(tableName, ACCOUNT_ABI,
+        [callback = std::move(callback)](Error::UniquePtr error, std::optional<Entry> entry) {
+            if (error)
+            {
+                EXECUTOR_LOG(ERROR) << "Get ABI error: " << boost::diagnostic_information(*error);
+
+                callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "Get ABI error", *error), {});
+                return;
+            }
+
+            if (!entry)
+            {
+                EXECUTOR_LOG(WARNING) << "Get ABI success, empty ABI";
+
+                callback(nullptr, std::string());
+                return;
+            }
+
+            auto abi = entry->getField(0);
+            EXECUTOR_LOG(INFO) << "Get ABI success" << LOG_KV("ABI size", abi.size());
+            callback(nullptr, std::string(abi));
         });
 }
 

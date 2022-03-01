@@ -370,7 +370,8 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
     }
     auto extraData = std::make_unique<CallParameters>(CallParameters::MESSAGE);
     extraData->abi = std::move(callParameters->abi);
-
+    EXECUTIVE_LOG(DEBUG) << LOG_DESC("deploy") << LOG_KV("tableName", tableName)
+                         << LOG_KV("abi len", extraData->abi.size());
     if (blockContext->isWasm())
     {
         // BFS recursive build parent dir and write metadata in parent table

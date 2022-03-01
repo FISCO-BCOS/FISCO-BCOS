@@ -367,6 +367,13 @@ void SchedulerImpl::getCode(
     executor->getCode(contract, std::move(callback));
 }
 
+void SchedulerImpl::getABI(
+    std::string_view contract, std::function<void(Error::Ptr, std::string)> callback)
+{
+    auto executor = m_executorManager->dispatchExecutor(contract);
+    executor->getABI(contract, std::move(callback));
+}
+
 void SchedulerImpl::registerTransactionNotifier(std::function<void(bcos::protocol::BlockNumber,
         bcos::protocol::TransactionSubmitResultsPtr, std::function<void(Error::Ptr)>)>
         txNotifier)
