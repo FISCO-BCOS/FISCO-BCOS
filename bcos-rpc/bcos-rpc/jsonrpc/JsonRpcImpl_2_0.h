@@ -23,6 +23,7 @@
 #include "groupmgr/GroupManager.h"
 #include <bcos-framework/interfaces/gateway/GatewayInterface.h>
 #include <bcos-rpc/jsonrpc/JsonRpcInterface.h>
+#include <bcos-rpc/utilities/RateLimiter.h>
 #include <json/json.h>
 #include <tbb/concurrent_hash_map.h>
 #include <boost/core/ignore_unused.hpp>
@@ -339,6 +340,8 @@ private:
     };
     std::atomic<uint64_t> m_receivedTxs = {0};
     std::atomic<uint64_t> m_errorTxs = {0};
+    std::atomic<uint64_t> m_totalLatency = {0};
+    std::atomic<uint64_t> m_perfRound = {0};
 };
 
 }  // namespace rpc

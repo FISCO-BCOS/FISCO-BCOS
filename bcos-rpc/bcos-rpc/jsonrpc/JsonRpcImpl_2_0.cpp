@@ -1381,11 +1381,12 @@ void JsonRpcImpl_2_0::loadAndHandleTransaction(std::string const& _groupID,
     RPC_IMPL_LOG(INFO) << LOG_DESC("Load txsData success") << LOG_KV("txsFilePath", _txsFilePath)
                        << LOG_KV("txsSize", txsData.size());
     auto txpool = nodeService->txpool();
-    auto sleepInterval = (uint16_t)(1000000.0 / _qps);
     uint64_t totalTxsCount = txsData.size();
     auto startT = utcTime();
     m_receivedTxs.store(0);
     m_errorTxs.store(0);
+    m_totalLatency.store(0);
+    m_perfRound += 1;
     auto self = std::weak_ptr<JsonRpcImpl_2_0>(shared_from_this());
     bcos::protocol::TxSubmitCallback callback =
         [startT, self, totalTxsCount](
@@ -1396,14 +1397,20 @@ void JsonRpcImpl_2_0::loadAndHandleTransaction(std::string const& _groupID,
                 return;
             }
             (rpc->m_receivedTxs)++;
+            rpc->m_totalLatency += (utcTime() - startT);
             if (rpc->m_receivedTxs == totalTxsCount)
             {
                 auto tps = (int64_t)((1000.0 * totalTxsCount) / (float)(utcTime() - startT));
-                RPC_IMPL_LOG(WARNING)
-                    << LOG_DESC("* Handle txs finished") << LOG_KV("timecost", (utcTime() - startT))
-                    << LOG_KV("totalTxs", totalTxsCount) << LOG_KV("errorTxs", rpc->m_errorTxs)
-                    << LOG_KV("tps", tps)
-                    << LOG_KV("average latency", ((utcTime() - startT) / totalTxsCount));
+                std::cout << "====== Handle txs finished for Round " << rpc->m_perfRound
+                          << "======" << std::endl;
+                std::cout << "* timecost(ms):\t" << (utcTime() - startT) << std::endl;
+                std::cout << "* totalTxs:\t" << totalTxsCount << std::endl;
+                std::cout << "* errorTxs:\t" << rpc->m_errorTxs << std::endl;
+                std::cout << "* tps:\t" << tps << std::endl;
+                std::cout << "* average latency:\t" << (rpc->m_totalLatency / totalTxsCount)
+                          << std::endl;
+                std::cout << "====== Handle txs finished for Round " << rpc->m_perfRound
+                          << "======" << std::endl;
                 return;
             }
             if (_error)
@@ -1417,12 +1424,13 @@ void JsonRpcImpl_2_0::loadAndHandleTransaction(std::string const& _groupID,
         };
     try
     {
+        auto rateLimiter = std::make_shared<RateLimiter>(_qps);
         for (size_t i = 0; i < txsData.size(); i++)
         {
+            rateLimiter->acquire();
             auto binTxData = txsData.at(i);
             // submit the tx
             nodeService->txpool()->asyncSubmit(binTxData, callback);
-            std::this_thread::sleep_for(std::chrono::microseconds(sleepInterval));
         }
     }
     catch (std::exception const& e)
