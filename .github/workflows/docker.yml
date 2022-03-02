@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v3.*.*'
+  release:
+    types: [published, created]
 
 env:
   DOCKER_REPOSITORY: fiscobcos
