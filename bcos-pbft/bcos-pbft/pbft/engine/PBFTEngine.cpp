@@ -1086,7 +1086,7 @@ bool PBFTEngine::handleViewChangeMsg(ViewChangeMsgInterface::Ptr _viewChangeMsg)
         if (view > 0)
         {
             // trigger timeout to reach fast view change
-            triggerTimeout();
+            triggerTimeout(false);
         }
     }
     auto newViewMsg = m_cacheProcessor->checkAndTryIntoNewView();
