@@ -603,6 +603,7 @@ void BlockExecutive::batchNextBlock(std::function<void(Error::UniquePtr)> callba
 void BlockExecutive::batchGetHashes(
     std::function<void(bcos::Error::UniquePtr, bcos::crypto::HashType)> callback)
 {
+    auto startT = utcTime();
     auto mutex = std::make_shared<std::mutex>();
     auto totalHash = std::make_shared<h256>();
 
@@ -631,25 +632,26 @@ void BlockExecutive::batchGetHashes(
 
     for (auto& it : *(m_scheduler->m_executorManager))
     {
-        it->getHash(number(), [status, mutex, totalHash](
-                                  bcos::Error::Ptr&& error, crypto::HashType&& hash) {
-            if (error)
-            {
-                SCHEDULER_LOG(ERROR)
-                    << "Commit executor error!" << boost::diagnostic_information(*error);
-                ++status->failed;
-            }
-            else
-            {
-                ++status->success;
-                SCHEDULER_LOG(DEBUG) << "GetHash executor success, success: " << status->success;
+        it->getHash(number(),
+            [startT, status, mutex, totalHash](bcos::Error::Ptr&& error, crypto::HashType&& hash) {
+                if (error)
+                {
+                    SCHEDULER_LOG(ERROR)
+                        << "Commit executor error!" << boost::diagnostic_information(*error);
+                    ++status->failed;
+                }
+                else
+                {
+                    ++status->success;
+                    SCHEDULER_LOG(DEBUG) << "GetHash executor success, success: " << status->success
+                                         << LOG_KV("timecost", (utcTime() - startT));
 
-                std::unique_lock<std::mutex> lock(*mutex);
-                *totalHash ^= hash;
-            }
+                    std::unique_lock<std::mutex> lock(*mutex);
+                    *totalHash ^= hash;
+                }
 
-            status->checkAndCommit(*status);
-        });
+                status->checkAndCommit(*status);
+            });
     }
 }
 
