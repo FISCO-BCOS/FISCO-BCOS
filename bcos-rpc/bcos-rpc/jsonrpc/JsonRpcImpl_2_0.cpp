@@ -1382,55 +1382,56 @@ void JsonRpcImpl_2_0::loadAndHandleTransaction(std::string const& _groupID,
                        << LOG_KV("txsSize", txsData.size());
     auto txpool = nodeService->txpool();
     uint64_t totalTxsCount = txsData.size();
-    auto startT = utcTime();
     m_receivedTxs.store(0);
     m_errorTxs.store(0);
     m_totalLatency.store(0);
     m_perfRound += 1;
     auto self = std::weak_ptr<JsonRpcImpl_2_0>(shared_from_this());
-    bcos::protocol::TxSubmitCallback callback =
-        [startT, self, totalTxsCount](
-            Error::Ptr _error, bcos::protocol::TransactionSubmitResult::Ptr _result) {
-            auto rpc = self.lock();
-            if (!rpc)
-            {
-                return;
-            }
-            (rpc->m_receivedTxs)++;
-            rpc->m_totalLatency += (utcTime() - startT);
-            if (rpc->m_receivedTxs == totalTxsCount)
-            {
-                auto tps = (int64_t)((1000.0 * totalTxsCount) / (float)(utcTime() - startT));
-                std::cout << "====== Handle txs finished for Round " << rpc->m_perfRound
-                          << "======" << std::endl;
-                std::cout << "* timecost(ms):\t" << (utcTime() - startT) << std::endl;
-                std::cout << "* totalTxs:\t" << totalTxsCount << std::endl;
-                std::cout << "* errorTxs:\t" << rpc->m_errorTxs << std::endl;
-                std::cout << "* tps:\t" << tps << std::endl;
-                std::cout << "* average latency:\t" << (rpc->m_totalLatency / totalTxsCount)
-                          << std::endl;
-                std::cout << "====== Handle txs finished for Round " << rpc->m_perfRound
-                          << "======" << std::endl;
-                return;
-            }
-            if (_error)
-            {
-                (rpc->m_errorTxs)++;
-                RPC_IMPL_LOG(WARNING)
-                    << LOG_DESC("submitTransaction failed") << LOG_KV("error", _error->errorCode())
-                    << LOG_KV("msg", _error->errorMessage());
-                return;
-            }
-        };
+    auto recordT = utcTime();
     try
     {
         auto rateLimiter = std::make_shared<RateLimiter>(_qps);
         for (size_t i = 0; i < txsData.size(); i++)
         {
-            rateLimiter->acquire();
+            rateLimiter->acquire(1, true, false);
             auto binTxData = txsData.at(i);
             // submit the tx
-            nodeService->txpool()->asyncSubmit(binTxData, callback);
+            auto startT = utcTime();
+            nodeService->txpool()->asyncSubmit(
+                binTxData, [startT, recordT, self, totalTxsCount](Error::Ptr _error,
+                               bcos::protocol::TransactionSubmitResult::Ptr _result) {
+                    auto rpc = self.lock();
+                    if (!rpc)
+                    {
+                        return;
+                    }
+                    (rpc->m_receivedTxs)++;
+                    rpc->m_totalLatency += (utcTime() - startT);
+                    if (rpc->m_receivedTxs == totalTxsCount)
+                    {
+                        auto tps =
+                            (int64_t)((1000.0 * totalTxsCount) / (float)(utcTime() - recordT));
+                        std::cout << "====== Handle txs finished for Round " << rpc->m_perfRound
+                                  << "======" << std::endl;
+                        std::cout << "* timecost(ms):\t" << (utcTime() - recordT) << std::endl;
+                        std::cout << "* totalTxs:\t" << totalTxsCount << std::endl;
+                        std::cout << "* errorTxs:\t" << rpc->m_errorTxs << std::endl;
+                        std::cout << "* tps:\t" << tps << std::endl;
+                        std::cout << "* average latency(ms):\t"
+                                  << (rpc->m_totalLatency / totalTxsCount) << std::endl;
+                        std::cout << "====== Handle txs finished for Round " << rpc->m_perfRound
+                                  << "======" << std::endl;
+                        return;
+                    }
+                    if (_error)
+                    {
+                        (rpc->m_errorTxs)++;
+                        RPC_IMPL_LOG(WARNING) << LOG_DESC("submitTransaction failed")
+                                              << LOG_KV("error", _error->errorCode())
+                                              << LOG_KV("msg", _error->errorMessage());
+                        return;
+                    }
+                });
         }
     }
     catch (std::exception const& e)

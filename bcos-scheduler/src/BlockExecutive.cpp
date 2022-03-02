@@ -71,7 +71,8 @@ void BlockExecutive::asyncExecute(
                              << LOG_KV("meta tx count", m_block->transactionsMetaDataSize());
 
         m_executiveResults.resize(m_block->transactionsMetaDataSize());
-        for (size_t i = 0; i < m_block->transactionsMetaDataSize(); ++i)
+#pragma omp parallel for
+        for (size_t i = 0; i < m_block->transactionsMetaDataSize(); i++)
         {
             auto metaData = m_block->transactionMetaData(i);
 
@@ -112,6 +113,7 @@ void BlockExecutive::asyncExecute(
             }
 
             auto to = message->to();
+#pragma omp critical
             m_executiveStates.emplace(
                 std::make_tuple(std::move(to), i), ExecutiveState(i, std::move(message), withDAG));
 
@@ -128,6 +130,7 @@ void BlockExecutive::asyncExecute(
                              << LOG_KV("tx count", m_block->transactionsSize());
 
         m_executiveResults.resize(m_block->transactionsSize());
+#pragma omp parallel for
         for (size_t i = 0; i < m_block->transactionsSize(); ++i)
         {
             auto tx = m_block->transaction(i);
@@ -182,6 +185,7 @@ void BlockExecutive::asyncExecute(
             }
 
             auto to = std::string(message->to());
+#pragma omp critical
             m_executiveStates.emplace(
                 std::make_tuple(std::move(to), i), ExecutiveState(i, std::move(message), withDAG));
         }
