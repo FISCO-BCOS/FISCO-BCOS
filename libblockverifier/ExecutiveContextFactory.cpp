@@ -34,6 +34,7 @@
 #include <libprecompiled/SystemConfigPrecompiled.h>
 #include <libprecompiled/TableFactoryPrecompiled.h>
 #include <libprecompiled/WorkingSealerManagerPrecompiled.h>
+#include <libprecompiled/extension/CryptoPrecompiled.h>
 #include <libprecompiled/extension/DagTransferPrecompiled.h>
 #include <libstorage/MemoryTableFactory.h>
 

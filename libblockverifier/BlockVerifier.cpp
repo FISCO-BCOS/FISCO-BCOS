@@ -273,7 +273,7 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
 
     try
     {
-        tbb::atomic<bool> isWarnedTimeout(false);
+        std::atomic<bool> isWarnedTimeout(false);
         tbb::parallel_for(tbb::blocked_range<unsigned int>(0, m_threadNum),
             [&](const tbb::blocked_range<unsigned int>& _r) {
                 (void)_r;

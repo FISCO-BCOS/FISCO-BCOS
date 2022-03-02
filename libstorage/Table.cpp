@@ -350,7 +350,8 @@ void Entry::copyFrom(Entry::ConstPtr entry)
             }
             else
             {
-                tbb::this_tbb_thread::yield();
+                std::this_thread::yield();
+                continue;
             }
         }
         else

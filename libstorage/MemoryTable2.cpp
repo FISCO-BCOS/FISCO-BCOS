@@ -28,13 +28,16 @@
 #include <libdevcore/FixedHash.h>
 #include <libdevcrypto/CryptoInterface.h>
 #include <libprecompiled/Common.h>
+#include <oneapi/tbb/parallel_for_each.h>
 #include <tbb/parallel_invoke.h>
 #include <tbb/parallel_sort.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
 #include <algorithm>
+#include <atomic>
 #include <csignal>
 #include <thread>
+#include <utility>
 #include <vector>
 
 using namespace std;
@@ -358,35 +361,29 @@ dev::storage::TableData::Ptr MemoryTable2::dumpWithoutOptimize()
 
         auto tempEntries = tbb::concurrent_vector<Entry::Ptr>();
 
-        tbb::parallel_for(m_dirty.range(),
-            [&](tbb::concurrent_unordered_map<uint64_t, Entry::Ptr>::range_type& range) {
-                for (auto it = range.begin(); it != range.end(); ++it)
+        tbb::parallel_for_each(
+            m_dirty.begin(), m_dirty.end(), [&](const std::pair<const uint64_t, Entry::Ptr>& _p) {
+                if (!_p.second->deleted())
                 {
-                    if (!it->second->deleted())
-                    {
-                        m_tableData->dirtyEntries->addEntry(it->second);
-                        tempEntries.push_back(it->second);
-                    }
+                    m_tableData->dirtyEntries->addEntry(_p.second);
+                    tempEntries.push_back(_p.second);
                 }
             });
 
         m_tableData->newEntries = std::make_shared<Entries>();
-        tbb::parallel_for(m_newEntries.range(),
-            [&](tbb::concurrent_unordered_map<std::string, Entries::Ptr>::range_type& range) {
-                for (auto it = range.begin(); it != range.end(); ++it)
-                {
-                    tbb::parallel_for(tbb::blocked_range<size_t>(0, it->second->size(), 1000),
-                        [&](tbb::blocked_range<size_t>& rangeIndex) {
-                            for (auto i = rangeIndex.begin(); i < rangeIndex.end(); ++i)
+        tbb::parallel_for_each(m_newEntries.begin(), m_newEntries.end(),
+            [&](const std::pair<const std::string, Entries::Ptr>& _p) {
+                tbb::parallel_for(tbb::blocked_range<size_t>(0, _p.second->size(), 1000),
+                    [&](tbb::blocked_range<size_t>& rangeIndex) {
+                        for (auto i = rangeIndex.begin(); i < rangeIndex.end(); ++i)
+                        {
+                            if (!_p.second->get(i)->deleted())
                             {
-                                if (!it->second->get(i)->deleted())
-                                {
-                                    m_tableData->newEntries->addEntry(it->second->get(i));
-                                    tempEntries.push_back(it->second->get(i));
-                                }
+                                m_tableData->newEntries->addEntry(_p.second->get(i));
+                                tempEntries.push_back(_p.second->get(i));
                             }
-                        });
-                }
+                        }
+                    });
             });
 
         TIME_RECORD("Sort data");
@@ -494,42 +491,36 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
     TIME_RECORD("MemoryTable2 Dump-" + m_tableInfo->name);
     if (m_hashDirty)
     {
-        tbb::atomic<size_t> allSize = 0;
+        std::atomic<size_t> allSize = 0;
 
         m_tableData = std::make_shared<dev::storage::TableData>();
         m_tableData->info = m_tableInfo;
         m_tableData->dirtyEntries = std::make_shared<Entries>();
 
-        tbb::parallel_for(m_dirty.range(),
-            [&](tbb::concurrent_unordered_map<uint64_t, Entry::Ptr>::range_type& range) {
-                for (auto it = range.begin(); it != range.end(); ++it)
+        tbb::parallel_for_each(
+            m_dirty.begin(), m_dirty.end(), [&](const std::pair<const uint64_t, Entry::Ptr>& _p) {
+                if (!_p.second->deleted())
                 {
-                    if (!it->second->deleted())
-                    {
-                        m_tableData->dirtyEntries->addEntry(it->second);
-                        allSize += (it->second->capacityOfHashField() + 1);  // 1 for status field
-                    }
+                    m_tableData->dirtyEntries->addEntry(_p.second);
+                    allSize += (_p.second->capacityOfHashField() + 1);  // 1 for status field
                 }
             });
 
         m_tableData->newEntries = std::make_shared<Entries>();
-        tbb::parallel_for(m_newEntries.range(),
-            [&](tbb::concurrent_unordered_map<std::string, Entries::Ptr>::range_type& range) {
-                for (auto it = range.begin(); it != range.end(); ++it)
-                {
-                    tbb::parallel_for(tbb::blocked_range<size_t>(0, it->second->size(), 1000),
-                        [&](tbb::blocked_range<size_t>& rangeIndex) {
-                            for (auto i = rangeIndex.begin(); i < rangeIndex.end(); ++i)
+        tbb::parallel_for_each(m_newEntries.begin(), m_newEntries.end(),
+            [&](const std::pair<const std::string, Entries::Ptr>& _p) {
+                tbb::parallel_for(tbb::blocked_range<size_t>(0, _p.second->size(), 1000),
+                    [&](tbb::blocked_range<size_t>& rangeIndex) {
+                        for (auto i = rangeIndex.begin(); i < rangeIndex.end(); ++i)
+                        {
+                            if (!_p.second->get(i)->deleted())
                             {
-                                if (!it->second->get(i)->deleted())
-                                {
-                                    m_tableData->newEntries->addEntry(it->second->get(i));
-                                    // 1 for status field
-                                    allSize += (it->second->get(i)->capacityOfHashField() + 1);
-                                }
+                                m_tableData->newEntries->addEntry(_p.second->get(i));
+                                // 1 for status field
+                                allSize += (_p.second->get(i)->capacityOfHashField() + 1);
                             }
-                        });
-                }
+                        }
+                    });
             });
 
         if (m_tableInfo->enableConsensus)
@@ -606,8 +597,8 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
                 {
                     // in previous version(<= 2.4.0), we use sha256(...) to calculate hash of the
                     // data, for now, to keep consistent with transction's implementation, we decide
-                    // to use keccak256(...) to calculate hash of the data. This `else` branch is just
-                    // for compatibility.
+                    // to use keccak256(...) to calculate hash of the data. This `else` branch is
+                    // just for compatibility.
                     m_hash = dev::sha256(bR);
                 }
             }

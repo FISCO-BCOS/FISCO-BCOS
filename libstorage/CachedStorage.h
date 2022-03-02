@@ -34,6 +34,7 @@
 #include <boost/multi_index/identity.hpp>
 #include <boost/multi_index/sequenced_index.hpp>
 #include <boost/multi_index_container.hpp>
+#include <atomic>
 #include <mutex>
 
 namespace dev
@@ -73,7 +74,7 @@ private:
     std::string m_key;
     Entries::Ptr m_entries;
     // int64_t m_num;
-    tbb::atomic<uint64_t> m_num;
+    std::atomic<uint64_t> m_num;
 };
 
 class Task
@@ -163,9 +164,9 @@ private:
     Storage::Ptr m_backend;
 
 
-    tbb::atomic<uint64_t> m_syncNum;
-    tbb::atomic<uint64_t> m_commitNum;
-    tbb::atomic<int64_t> m_capacity;
+    std::atomic<uint64_t> m_syncNum;
+    std::atomic<uint64_t> m_commitNum;
+    sdt::atomic<int64_t> m_capacity;
 
     // config
     uint64_t m_maxForwardBlock = 10;
@@ -176,10 +177,10 @@ private:
     dev::ThreadPool::Ptr m_asyncThreadPool;
     std::shared_ptr<std::thread> m_clearThread;
 
-    tbb::atomic<uint64_t> m_hitTimes;
-    tbb::atomic<uint64_t> m_queryTimes;
+    std::atomic<uint64_t> m_hitTimes;
+    std::atomic<uint64_t> m_queryTimes;
 
-    std::shared_ptr<tbb::atomic<bool>> m_running;
+    std::shared_ptr<std::atomic<bool>> m_running;
 };
 
 }  // namespace storage
