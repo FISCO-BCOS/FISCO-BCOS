@@ -265,11 +265,8 @@ public:
         std::string const& name, std::string const& version, std::string const& address,
         std::string const& abi, int _errorCode = 0)
     {
-        Address address1 = Address(address);
-        bytes in = _isWasm ? codec->encodeWithSig(
-                                 "link(string,string,string,string)", name, version, address, abi) :
-                             codec->encodeWithSig("link(string,string,address,string)", name,
-                                 version, address1, abi);
+        bytes in =
+            codec->encodeWithSig("link(string,string,string,string)", name, version, address, abi);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
