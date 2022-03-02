@@ -9,11 +9,11 @@ chain_id="chain0"
 [[group.deploy_info]]
 node_name = "node2"
 deploy_ip = "172.25.0.5"
-expanded_service = "groupnode00BcosNodeService"
+expanded_service = "group0node00BcosNodeService"
 node_count=1
 
 [[group.deploy_info]]
 node_name = "node3"
 deploy_ip = "172.25.0.5"
-expanded_service = "groupnode00BcosNodeService"
+expanded_service = "group0node00BcosNodeService"
 node_count=1

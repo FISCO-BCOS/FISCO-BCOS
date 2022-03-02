@@ -6,7 +6,7 @@ on:
     branches-ignore:
       - "**"
   release:
-    types: [published, created, edited]
+    types: [published, created]
 
 jobs:
   compile_macOS_release:
@@ -36,7 +36,7 @@ jobs:
             hunter-clang-v1-notest-${{ runner.temp }}-${{ github.base_ref }}-
             hunter-clang-v1-notest-${{ runner.temp }}-
       - name: install macOS dependencies
-        run: brew install ccache
+        run: brew install ccache libomp
       - name: configure
         run: export SDKROOT=$(xcrun --sdk macosx --show-sdk-path) && CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake . -DCMAKE_BUILD_TYPE=Release -DTEST=ON -DBUILD_STATIC=ON -DHUNTER_CONFIGURATION_TYPES=Release
       - name: compile
@@ -44,7 +44,7 @@ jobs:
       - name: tar BcosProBuilder
         run: mv tools/BcosProBuilder . && tar -cvzf BcosProBuilder.tgz BcosProBuilder
       - name: tar fisco-bcos for macOS
-        run: mv fisco-bcos/ bin/ && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos
+        run:  mv fisco-bcos-air/ bin/ && cp tools/BcosAirBuilder/build_chain.sh bin/ && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos build_chain.sh
       - name: Upload fisco-bcos binaries to release
         uses: svenstaro/upload-release-action@v1-release
         with:
@@ -141,7 +141,7 @@ jobs:
       - name: tar BcosProBuilder
         run: mv tools/BcosProBuilder . && tar -cvzf BcosProBuilder.tgz BcosProBuilder
       - name: tar fisco-bcos for CentOS
-        run: mv fisco-bcos bin && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos
+        run:  mkdir bin && mv fisco-bcos-air/fisco-bcos bin && cd bin && strip fisco-bcos && tar -cvzf fisco-bcos.tar.gz fisco-bcos
       - name: Upload fisco-bcos binaries to release
         uses: svenstaro/upload-release-action@v1-release
         with:
