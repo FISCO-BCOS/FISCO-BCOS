@@ -17,9 +17,8 @@ ExternalProject_Add(tbb
     LOG_BUILD 1
     LOG_INSTALL 1
     CMAKE_COMMAND ${CMAKE_COMMAND}
-    CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
+    CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> -DBUILD_SHARED_LIBS=OFF
     #CONFIGURE_COMMAND ""
-    #COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/deps/lib/" "${CMAKE_SOURCE_DIR}/deps/include/"
     BUILD_COMMAND make extra_inc=big_iron.inc ${ENABLE_STD_LIB}
     #INSTALL_COMMAND bash -c "/bin/cp -f ./build/*_release/libtbb.${TBB_LIB_SUFFIX}* ${CMAKE_SOURCE_DIR}/deps/lib/"
     BUILD_BYPRODUCTS ${CMAKE_SOURCE_DIR}/deps/lib/libtbb.${TBB_LIB_SUFFIX}

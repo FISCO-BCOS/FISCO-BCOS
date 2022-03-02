@@ -223,7 +223,7 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
 {
     CACHED_STORAGE_LOG(INFO) << "commit: " << datas.size() << " num: " << num;
 
-    std::atomic<size_t> total = 0;
+    std::atomic<size_t> total = {0};
 
     TIME_RECORD("Process dirty entries");
     std::shared_ptr<std::vector<TableData::Ptr>> commitDatas =
@@ -963,7 +963,8 @@ void CachedStorage::checkAndClear()
 
 void CachedStorage::updateCapacity(ssize_t capacity)
 {
-    m_capacity.fetch_and_add(capacity);
+    // TODO: right or not ???
+    m_capacity.fetch_add(capacity);
 }
 
 std::string CachedStorage::readableCapacity(size_t num)

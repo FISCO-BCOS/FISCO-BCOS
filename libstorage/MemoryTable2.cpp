@@ -491,7 +491,7 @@ dev::storage::TableData::Ptr MemoryTable2::dump()
     TIME_RECORD("MemoryTable2 Dump-" + m_tableInfo->name);
     if (m_hashDirty)
     {
-        std::atomic<size_t> allSize = 0;
+        std::atomic<size_t> allSize = {0};
 
         m_tableData = std::make_shared<dev::storage::TableData>();
         m_tableData->info = m_tableInfo;

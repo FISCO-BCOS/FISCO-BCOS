@@ -166,7 +166,7 @@ private:
 
     std::atomic<uint64_t> m_syncNum;
     std::atomic<uint64_t> m_commitNum;
-    sdt::atomic<int64_t> m_capacity;
+    std::atomic<int64_t> m_capacity;
 
     // config
     uint64_t m_maxForwardBlock = 10;
