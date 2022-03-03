@@ -59,6 +59,15 @@ inline std::string getTableName(const std::string& _tableName)
     return USER_TABLE_PREFIX + tableName;
 }
 
+inline std::string trimHexPrefix(const std::string& _hex)
+{
+    if (_hex.size() >= 2 && _hex[1] == 'x' && _hex[0] == '0')
+    {
+        return _hex.substr(2);
+    }
+    return _hex;
+}
+
 void checkNameValidate(std::string_view tableName, std::vector<std::string>& keyFieldList,
     std::vector<std::string>& valueFieldList);
 int checkLengthValidate(std::string_view field_value, int32_t max_length, int32_t errorCode);

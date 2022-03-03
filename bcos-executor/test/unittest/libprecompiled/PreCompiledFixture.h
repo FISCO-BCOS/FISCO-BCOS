@@ -145,17 +145,6 @@ public:
             table->setRow(SYSTEM_KEY_TX_GAS_LIMIT, std::move(entry));
         }
 
-        // create cns table
-        {
-            std::promise<std::optional<Table>> promise1;
-            storage->asyncCreateTable(ledger::SYS_CNS, "value",
-                [&](Error::UniquePtr&& _error, std::optional<Table>&& _table) {
-                    BOOST_CHECK(!_error);
-                    promise1.set_value(std::move(_table));
-                });
-            auto table = promise1.get_future().get();
-        }
-
         // create / table
         {
             std::promise<std::optional<Table>> promise2;

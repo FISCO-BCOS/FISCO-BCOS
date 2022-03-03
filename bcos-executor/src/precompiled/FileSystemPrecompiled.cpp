@@ -131,6 +131,7 @@ int FileSystemPrecompiled::checkLinkParam(TransactionExecutive::Ptr _executive,
         PRECOMPILED_LOG(INFO) << LOG_BADGE("FileSystemPrecompiled") << LOG_DESC(errorMessage.str())
                               << LOG_KV("contractAddress", _contractAddress)
                               << LOG_KV("contractName", _contractName);
+        return CODE_ADDRESS_OR_VERSION_ERROR;
     }
     if (_contractVersion.size() > LINK_VERSION_MAX_LENGTH)
     {
@@ -287,16 +288,12 @@ void FileSystemPrecompiled::link(const std::shared_ptr<executor::TransactionExec
     auto blockContext = _executive->blockContext().lock();
     auto codec =
         std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
-    if (blockContext->isWasm())
+    codec->decode(data, contractName, contractVersion, contractAddress, contractAbi);
+    if (!blockContext->isWasm())
     {
-        codec->decode(data, contractName, contractVersion, contractAddress, contractAbi);
+        contractAddress = boost::algorithm::to_lower_copy(trimHexPrefix(contractAddress));
     }
-    else
-    {
-        Address contract;
-        codec->decode(data, contractName, contractVersion, contract, contractAbi);
-        contractAddress = contract.hex();
-    }
+
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("FileSystemPrecompiled") << LOG_DESC("link")
                            << LOG_KV("contractName", contractName)
                            << LOG_KV("contractVersion", contractVersion)
