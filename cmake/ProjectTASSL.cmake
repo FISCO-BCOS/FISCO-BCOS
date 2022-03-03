@@ -1,20 +1,25 @@
 include(ExternalProject)
 include(GNUInstallDirs)
 
-if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
-    set(TASSL_CONFIG_COMMAND sh ./Configure darwin64-x86_64-cc)
-else()
-    set(TASSL_CONFIG_COMMAND bash config -DOPENSSL_PIC no-shared)
-endif ()
+#if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
+#    if (ARCH_NATIVE)
+#        set(TASSL_CONFIG_COMMAND bash config -DOPENSSL_PIC no-shared)
+#    else()
+#        set(TASSL_CONFIG_COMMAND sh ./Configure darwin64-x86_64-cc)
+#    endif()
+# else()
+#    set(TASSL_CONFIG_COMMAND bash config -DOPENSSL_PIC no-shared)
+# endif ()
+
+set(TASSL_CONFIG_COMMAND bash config -DOPENSSL_PIC no-shared)
 
 set(TASSL_BUILD_COMMAND make)
 ExternalProject_Add(tassl
         PREFIX ${CMAKE_SOURCE_DIR}/deps
-        DOWNLOAD_NAME tassl_1.0.2o-ccdfc64c.tar.gz
+        DOWNLOAD_NAME tassl_1.0.2o-5d2100b3.tar.gz
         DOWNLOAD_NO_PROGRESS 1
-        URL https://github.com/jntass/TASSL/archive/ccdfc64c5f56988f76abc0390a12ed9865bc49e9.tar.gz
-            https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/FISCO-BCOS/deps/tassl_1.0.2o-ccdfc64c.tar.gz
-        URL_HASH SHA256=534c3ba12a75e6eb87aef4b86967c55a8845edd9e22be95ded27d1abd853f160
+        URL https://github.com/FISCO-BCOS/TASSL/archive/5d2100b378063bc9ffce0bb703784ab6053848ce.tar.gz
+        URL_HASH SHA1=34579b368b286f57efe041912d735be33e4f5975
         # GIT_REPOSITORY https://github.com/jntass/TASSL.git
         # GIT_TAG ccdfc64c5f56988f76abc0390a12ed9865bc49e9
         # GIT_SHALLOW true
