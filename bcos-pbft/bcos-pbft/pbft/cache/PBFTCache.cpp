@@ -302,9 +302,13 @@ bool PBFTCache::checkAndCommit()
     {
         return false;
     }
-    PBFT_LOG(INFO) << LOG_DESC("checkAndCommit")
-                   << printPBFTProposal(m_precommit->consensusProposal())
-                   << m_config->printCurrentState();
+    if (m_consStartTime > 0)
+    {
+        PBFT_LOG(INFO) << LOG_DESC("checkAndCommit success")
+                       << LOG_KV("consTime", (utcTime() - m_consStartTime))
+                       << printPBFTProposal(m_precommit->consensusProposal())
+                       << m_config->printCurrentState();
+    }
     m_submitted.store(true);
     return true;
 }

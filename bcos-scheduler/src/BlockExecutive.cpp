@@ -113,15 +113,14 @@ void BlockExecutive::asyncExecute(
             }
 
             auto to = message->to();
-#pragma omp critical
-            m_executiveStates.emplace(
-                std::make_tuple(std::move(to), i), ExecutiveState(i, std::move(message), withDAG));
-
             if (metaData)
             {
                 m_executiveResults[i].transactionHash = metaData->hash();
                 m_executiveResults[i].source = metaData->source();
             }
+            ExecutiveState state(i, std::move(message), withDAG);
+#pragma omp critical
+            m_executiveStates.emplace(std::make_tuple(std::move(to), i), std::move(state));
         }
     }
     else if (m_block->transactionsSize() > 0)
