@@ -1390,10 +1390,11 @@ void JsonRpcImpl_2_0::loadAndHandleTransaction(std::string const& _groupID,
     auto recordT = utcTime();
     try
     {
+        auto qpsStartT = utcTime();
         auto rateLimiter = std::make_shared<RateLimiter>(_qps);
         for (size_t i = 0; i < txsData.size(); i++)
         {
-            rateLimiter->acquire(1, true, false);
+            rateLimiter->acquire(1, true, true);
             auto binTxData = txsData.at(i);
             // submit the tx
             auto startT = utcTime();
@@ -1433,6 +1434,9 @@ void JsonRpcImpl_2_0::loadAndHandleTransaction(std::string const& _groupID,
                     }
                 });
         }
+        std::cout << "====== Handle txs ============" << std::endl;
+        auto qps = (int64_t)((1000.0 * totalTxsCount) / (float)(utcTime() - qpsStartT));
+        std::cout << "* qps:\t" << qps << std::endl;
     }
     catch (std::exception const& e)
     {
