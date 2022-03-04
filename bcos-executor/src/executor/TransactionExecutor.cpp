@@ -359,6 +359,8 @@ void TransactionExecutor::dagExecuteTransactions(
         bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
         callback)
 {
+    auto recoredT = utcTime();
+    auto startT = utcTime();
     // for fill block
     auto txHashes = make_shared<HashList>();
     std::vector<decltype(inputs)::index_type> indexes;
@@ -399,6 +401,8 @@ void TransactionExecutor::dagExecuteTransactions(
         }
         }
     }
+    auto prepareT = utcTime() - startT;
+    startT = utcTime();
     if (!txHashes->empty())
     {
         m_txpool->asyncFillBlock(txHashes,
@@ -414,7 +418,7 @@ void TransactionExecutor::dagExecuteTransactions(
                         {});
                     return;
                 }
-
+                auto startT = utcTime();
 #pragma omp parallel for
                 for (size_t i = 0; i < transactions->size(); ++i)
                 {
@@ -422,14 +426,21 @@ void TransactionExecutor::dagExecuteTransactions(
                     callParametersList->at(indexes[i]) =
                         createCallParameters(*fillInputs->at(i), *transactions->at(i));
                 }
-
+                auto prepareT = utcTime() - startT;
+                startT = utcTime();
                 dagExecuteTransactionsInternal(*callParametersList, std::move(callback));
+                EXECUTOR_LOG(INFO)
+                    << LOG_DESC("dagExecuteTransactionsInternal after fillblock")
+                    << LOG_KV("prepareT", prepareT) << LOG_KV("dagT", (utcTime() - startT));
             });
     }
     else
     {
         dagExecuteTransactionsInternal(*callParametersList, std::move(callback));
     }
+    EXECUTOR_LOG(INFO) << LOG_DESC("dagExecuteTransactions") << LOG_KV("prepareT", prepareT)
+                       << LOG_KV("fillBlockT", (utcTime() - startT))
+                       << LOG_KV("total", (utcTime() - recoredT));
 }
 
 bytes getComponentBytes(size_t index, const std::string& typeName, const bytesConstRef& data)
@@ -643,6 +654,9 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
         bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
         callback)
 {
+    auto recordT = utcTime();
+    auto startT = utcTime();
+
     auto transactionsNum = inputs.size();
     auto executionResults = vector<ExecutionMessage::UniquePtr>(transactionsNum);
 
@@ -797,7 +811,8 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                 txsCriticals->put(i, std::move(conflictFields));
             }
         });
-
+    auto dagInitT = utcTime() - startT;
+    startT = utcTime();
     // DAG run
     try
     {
@@ -812,7 +827,9 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
             vector<ExecutionMessage::UniquePtr>{});
         return;
     }
-
+    EXECUTOR_LOG(INFO) << LOG_DESC("dagExecuteTransactionsInternal") << LOG_KV("dagInitT", dagInitT)
+                       << LOG_KV("dagRunT", (utcTime() - startT))
+                       << LOG_KV("totalCost", (utcTime() - recordT));
     callback(nullptr, std::move(executionResults));
 }
 

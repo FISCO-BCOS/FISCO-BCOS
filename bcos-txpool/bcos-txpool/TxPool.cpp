@@ -337,7 +337,7 @@ void TxPool::fillBlock(HashListPtr _txsHash,
         }
         return;
     }
-    _onBlockFilled(nullptr, txs);
+    m_filler->enqueue([_onBlockFilled, txs]() { _onBlockFilled(nullptr, txs); });
 }
 
 
