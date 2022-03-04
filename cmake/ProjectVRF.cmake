@@ -26,18 +26,21 @@ if("${CMAKE_HOST_SYSTEM_NAME}" MATCHES "Linux")
         set(VRF_LIB_NAME libffi_vrf_generic64.a)
     endif()
 elseif(APPLE)
-    set(VRF_LIB_NAME libffi_vrf_mac.a)
+    if("${ARCHITECTURE}" MATCHES "aarch64|arm64")
+        set(VRF_LIB_NAME libffi_vrf_mac_aarch64.a)
+    else()
+        set(VRF_LIB_NAME libffi_vrf_mac.a)
+    endif()
 else()
     message(FATAL "unsupported platform")
 endif()
 
 ExternalProject_Add(libvrf
     PREFIX ${CMAKE_SOURCE_DIR}/deps
-    DOWNLOAD_NAME libvrf-rust1.47.tar.gz
+    DOWNLOAD_NAME libvrf-rust1.47_0303.tar.gz
     DOWNLOAD_NO_PROGRESS 1
-    URL https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/libvrf-rust1.47.tar.gz
-        https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/FISCO-BCOS/deps/libvrf-rust1.47.tar.gz
-    URL_HASH SHA256=9a626bda04824f85575e28c72081f14ed5f1531e6247fff2edfb03cbef858570
+    URL https://raw.githubusercontent.com/ywy2090/LargeFiles/master/libs/libvrf-rust1.47_0303.tar.gz
+    URL_HASH SHA1=cf714d9d93ff0f452ea0d58cf0d89ccaabcf46bd
     BUILD_IN_SOURCE 1
     LOG_CONFIGURE 1
     LOG_BUILD 1
