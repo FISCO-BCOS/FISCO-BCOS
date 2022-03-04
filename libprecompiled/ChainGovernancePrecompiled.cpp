@@ -444,7 +444,7 @@ int ChainGovernancePrecompiled::grantOperator(
                                  " can't grantOperator operator " + _userAddress));
         return result;
     }
-    CHAIN_GOVERNANCE_LOG(INFO) << LOG_DESC("revokeCommitteeMember")
+    CHAIN_GOVERNANCE_LOG(INFO) << LOG_DESC("grantOperator")
                                << LOG_KV("origin", _origin.hexPrefixed())
                                << LOG_KV("operator", _userAddress) << LOG_KV("return", result);
     return result;
