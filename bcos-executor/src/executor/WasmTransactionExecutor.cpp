@@ -31,7 +31,6 @@
 #include "../precompiled/CryptoPrecompiled.h"
 #include "../precompiled/FileSystemPrecompiled.h"
 #include "../precompiled/KVTableFactoryPrecompiled.h"
-#include "../precompiled/ParallelConfigPrecompiled.h"
 #include "../precompiled/SystemConfigPrecompiled.h"
 #include "../precompiled/extension/ContractAuthPrecompiled.h"
 #include "../precompiled/extension/DagTransferPrecompiled.h"
@@ -94,8 +93,6 @@ void WasmTransactionExecutor::initPrecompiled()
     m_builtInPrecompiled = std::make_shared<std::set<std::string>>();
 
     auto sysConfig = std::make_shared<precompiled::SystemConfigPrecompiled>(m_hashImpl);
-    auto parallelConfigPrecompiled =
-        std::make_shared<precompiled::ParallelConfigPrecompiled>(m_hashImpl);
     auto consensusPrecompiled = std::make_shared<precompiled::ConsensusPrecompiled>(m_hashImpl);
     // FIXME: not support crud now
     // auto tableFactoryPrecompiled =
@@ -106,7 +103,6 @@ void WasmTransactionExecutor::initPrecompiled()
     // in WASM
     m_constantPrecompiled.insert({SYS_CONFIG_NAME, sysConfig});
     m_constantPrecompiled.insert({CONSENSUS_NAME, consensusPrecompiled});
-    m_constantPrecompiled.insert({PARALLEL_CONFIG_NAME, parallelConfigPrecompiled});
     // FIXME: not support crud now
     // m_constantPrecompiled.insert({TABLE_NAME, tableFactoryPrecompiled});
     m_constantPrecompiled.insert({KV_TABLE_NAME, kvTableFactoryPrecompiled});

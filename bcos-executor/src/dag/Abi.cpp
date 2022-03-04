@@ -154,18 +154,6 @@ unique_ptr<FunctionAbi> FunctionAbi::deserialize(
                             << LOG_KV("selector", selector);
             continue;
         }
-        auto& functionInputs = function["inputs"];
-        assert(!functionInputs.isNull());
-        auto inputs = vector<ParameterAbi>();
-        inputs.reserve(functionInputs.size());
-        auto flatInputs = vector<string>();
-        for (auto i = (Json::ArrayIndex)0; i < functionInputs.size(); ++i)
-        {
-            auto param = parseParameter(functionInputs[i]);
-            auto flatTypes = flattenStaticParamter(param);
-            flatInputs.insert(flatInputs.end(), flatTypes.begin(), flatTypes.end());
-            inputs.emplace_back(std::move(param));
-        }
 
         auto& functionConflictFields = function["conflictFields"];
         auto conflictFields = vector<ConflictField>();
@@ -191,6 +179,19 @@ unique_ptr<FunctionAbi> FunctionAbi::deserialize(
                 conflictFields.emplace_back(ConflictField{
                     static_cast<uint8_t>(conflictField["kind"].asUInt()), value, slot});
             }
+        }
+
+        auto& functionInputs = function["inputs"];
+        assert(!functionInputs.isNull());
+        auto inputs = vector<ParameterAbi>();
+        inputs.reserve(functionInputs.size());
+        auto flatInputs = vector<string>();
+        for (auto i = (Json::ArrayIndex)0; i < functionInputs.size(); ++i)
+        {
+            auto param = parseParameter(functionInputs[i]);
+            auto flatTypes = flattenStaticParamter(param);
+            flatInputs.insert(flatInputs.end(), flatTypes.begin(), flatTypes.end());
+            inputs.emplace_back(std::move(param));
         }
 
         return unique_ptr<FunctionAbi>(

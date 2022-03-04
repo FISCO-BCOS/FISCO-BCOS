@@ -34,7 +34,6 @@
 #include "../precompiled/CryptoPrecompiled.h"
 #include "../precompiled/FileSystemPrecompiled.h"
 #include "../precompiled/KVTableFactoryPrecompiled.h"
-#include "../precompiled/ParallelConfigPrecompiled.h"
 #include "../precompiled/PrecompiledResult.h"
 #include "../precompiled/SystemConfigPrecompiled.h"
 #include "../precompiled/TableFactoryPrecompiled.h"
@@ -454,6 +453,10 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
 {
     if (functionAbi.conflictFields.empty())
     {
+        EXECUTOR_LOG(DEBUG) << LOG_BADGE("extractConflictFields")
+                            << LOG_DESC("conflictFields is empty")
+                            << LOG_KV("address", params.senderAddress)
+                            << LOG_KV("functionName", functionAbi.name);
         return nullptr;
     }
 
@@ -553,7 +556,7 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
             }
             break;
         }
-        case Var:
+        case Params:
         {
             assert(!conflictField.value.empty());
             const ParameterAbi* paramAbi = nullptr;
@@ -649,6 +652,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
     CriticalFields::Ptr txsCriticals = make_shared<CriticalFields>(transactionsNum);
 
     mutex tableMutex;
+    // parallel to extract critical fields
     tbb::parallel_for(tbb::blocked_range<uint64_t>(0, transactionsNum),
         [&](const tbb::blocked_range<uint64_t>& range) {
             for (auto i = range.begin(); i != range.end(); ++i)
@@ -665,6 +669,9 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                 {
                     executionResults[i] = toExecutionResult(std::move(inputs[i]));
                     executionResults[i]->setType(ExecutionMessage::SEND_BACK);
+                    EXECUTOR_LOG(DEBUG)
+                        << LOG_BADGE("dagExecuteTransactionsInternal")
+                        << LOG_DESC("create contract can't be parallel") << LOG_KV("adddress", to);
                     continue;
                 }
                 CriticalFields::CriticalFieldPtr conflictFields = nullptr;
@@ -694,7 +701,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                     {
                         EXECUTOR_LOG(DEBUG) << LOG_BADGE("dagExecuteTransactionsInternal")
                                             << LOG_DESC("the precompiled can't be parallel")
-                                            << LOG_KV("adddress", params->receiveAddress);
+                                            << LOG_KV("adddress", to);
                         executionResults[i] = toExecutionResult(std::move(inputs[i]));
                         executionResults[i]->setType(ExecutionMessage::SEND_BACK);
                         continue;
@@ -703,7 +710,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                 else
                 {
                     auto cacheHandle = m_abiCache->lookup(abiKey);
-
+                    // find FunctionAbi in cache first
                     if (!cacheHandle.isValid())
                     {
                         EXECUTOR_LOG(TRACE) << LOG_BADGE("dagExecuteTransactionsInternal")
@@ -739,7 +746,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                                     << LOG_KV("tableName", tableName);
                                 continue;
                             }
-
+                            // get abi json
                             auto entry = table->getRow(ACCOUNT_ABI);
                             auto abiStr = entry->getField(0);
                             bool isSmCrypto = false;
@@ -747,12 +754,18 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                             {
                                 isSmCrypto = true;
                             }
-                            EXECUTOR_LOG(DEBUG) << LOG_BADGE("dagExecuteTransactionsInternal")
-                                                << LOG_DESC("ABI loaded") << LOG_KV("ABI", abiStr);
+                            EXECUTOR_LOG(TRACE) << LOG_BADGE("dagExecuteTransactionsInternal")
+                                                << LOG_DESC("ABI loaded") << LOG_KV("adddress", to)
+                                                << LOG_KV("selector", toHexString(selector))
+                                                << LOG_KV("ABI", abiStr);
                             auto functionAbi =
                                 FunctionAbi::deserialize(abiStr, selector.toBytes(), isSmCrypto);
                             if (!functionAbi)
                             {
+                                EXECUTOR_LOG(DEBUG)
+                                    << LOG_BADGE("dagExecuteTransactionsInternal")
+                                    << LOG_DESC("ABI deserialize failed") << LOG_KV("adddress", to)
+                                    << LOG_KV("ABI", abiStr);
                                 executionResults[i] = toExecutionResult(std::move(inputs[i]));
                                 executionResults[i]->setType(ExecutionMessage::SEND_BACK);
                                 // If abi is not valid, we don't impact the cache. In such a
@@ -791,6 +804,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                     EXECUTOR_LOG(DEBUG)
                         << LOG_BADGE("dagExecuteTransactionsInternal")
                         << LOG_DESC("The transaction can't be executed concurrently")
+                        << LOG_KV("adddress", to)
                         << LOG_KV("abiKey", toHexStringWithPrefix(abiKey));
                     executionResults[i]->setType(ExecutionMessage::SEND_BACK);
                     continue;

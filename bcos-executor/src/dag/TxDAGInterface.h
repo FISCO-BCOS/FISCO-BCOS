@@ -44,7 +44,7 @@ enum ConflictFieldKind : std::uint8_t
     All = 0,
     Len,
     Env,
-    Var,
+    Params,
     Const,
     None,
 };

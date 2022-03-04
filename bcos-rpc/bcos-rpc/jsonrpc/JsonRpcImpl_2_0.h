@@ -96,6 +96,9 @@ public:
     void getCode(std::string const& _groupID, std::string const& _nodeName,
         const std::string _contractAddress, RespFunc _respFunc) override;
 
+    void getABI(std::string const& _groupID, std::string const& _nodeName,
+        const std::string _contractAddress, RespFunc _respFunc) override;
+
     void getSealerList(
         std::string const& _groupID, std::string const& _nodeName, RespFunc _respFunc) override;
 
@@ -187,6 +190,11 @@ public:
     void getCodeI(const Json::Value& req, RespFunc _respFunc)
     {
         getCode(req[0u].asString(), req[1u].asString(), req[2u].asString(), _respFunc);
+    }
+
+    void getABII(const Json::Value& req, RespFunc _respFunc)
+    {
+        getABI(req[0u].asString(), req[1u].asString(), req[2u].asString(), _respFunc);
     }
 
     void getSealerListI(const Json::Value& req, RespFunc _respFunc)
