@@ -72,6 +72,9 @@ public:
     virtual void getCode(std::string const& _groupID, std::string const& _nodeName,
         const std::string _contractAddress, RespFunc _respFunc) = 0;
 
+    virtual void getABI(std::string const& _groupID, std::string const& _nodeName,
+        const std::string _contractAddress, RespFunc _respFunc) = 0;
+
     virtual void getSealerList(
         std::string const& _groupID, std::string const& _nodeName, RespFunc _respFunc) = 0;
 

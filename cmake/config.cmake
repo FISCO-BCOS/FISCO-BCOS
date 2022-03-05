@@ -90,5 +90,5 @@ hunter_config(gRPC VERSION ${HUNTER_gRPC_VERSION} CMAKE_ARGS CMAKE_CXX_FLAGS=-st
 
 hunter_config(OpenSSL VERSION tassl_1.1.1b_v1.4-local
     URL https://${URL_BASE}/FISCO-BCOS/TASSL-1.1.1b/archive/6a0fddd0eb33433c190c796e5b6d80db4db52810.tar.gz
-    SHA1 14f7590e09b54bb71926ad5853343f20893ee536
+    SHA1 802c7c8dfb02aa9c58bb9073bca6085a80165801
 )

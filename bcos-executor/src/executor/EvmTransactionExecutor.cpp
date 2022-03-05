@@ -34,7 +34,6 @@
 #include "../precompiled/CryptoPrecompiled.h"
 #include "../precompiled/FileSystemPrecompiled.h"
 #include "../precompiled/KVTableFactoryPrecompiled.h"
-#include "../precompiled/ParallelConfigPrecompiled.h"
 #include "../precompiled/PrecompiledResult.h"
 #include "../precompiled/SystemConfigPrecompiled.h"
 #include "../precompiled/TableFactoryPrecompiled.h"
@@ -144,8 +143,6 @@ void EvmTransactionExecutor::initPrecompiled()
             PrecompiledRegistrar::executor("blake2_compression"))});
 
     auto sysConfig = std::make_shared<precompiled::SystemConfigPrecompiled>(m_hashImpl);
-    auto parallelConfigPrecompiled =
-        std::make_shared<precompiled::ParallelConfigPrecompiled>(m_hashImpl);
     auto consensusPrecompiled = std::make_shared<precompiled::ConsensusPrecompiled>(m_hashImpl);
     // FIXME: not support crud now
     // auto tableFactoryPrecompiled =
@@ -156,7 +153,6 @@ void EvmTransactionExecutor::initPrecompiled()
     // in EVM
     m_constantPrecompiled.insert({SYS_CONFIG_ADDRESS, sysConfig});
     m_constantPrecompiled.insert({CONSENSUS_ADDRESS, consensusPrecompiled});
-    m_constantPrecompiled.insert({PARALLEL_CONFIG_ADDRESS, parallelConfigPrecompiled});
     // FIXME: not support crud now
     // m_constantPrecompiled.insert({TABLE_ADDRESS, tableFactoryPrecompiled});
     m_constantPrecompiled.insert({KV_TABLE_ADDRESS, kvTableFactoryPrecompiled});

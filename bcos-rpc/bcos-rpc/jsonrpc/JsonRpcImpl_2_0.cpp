@@ -63,6 +63,8 @@ void JsonRpcImpl_2_0::initMethod()
         &JsonRpcImpl_2_0::getBlockNumberI, this, std::placeholders::_1, std::placeholders::_2);
     m_methodToFunc["getCode"] =
         std::bind(&JsonRpcImpl_2_0::getCodeI, this, std::placeholders::_1, std::placeholders::_2);
+    m_methodToFunc["getABI"] =
+        std::bind(&JsonRpcImpl_2_0::getABII, this, std::placeholders::_1, std::placeholders::_2);
     m_methodToFunc["getSealerList"] = std::bind(
         &JsonRpcImpl_2_0::getSealerListI, this, std::placeholders::_1, std::placeholders::_2);
     m_methodToFunc["getObserverList"] = std::bind(
@@ -893,6 +895,29 @@ void JsonRpcImpl_2_0::getCode(std::string const& _groupID, std::string const& _n
             }
 
             Json::Value jResp = code;
+            callback(_error, jResp);
+        });
+}
+
+void JsonRpcImpl_2_0::getABI(std::string const& _groupID, std::string const& _nodeName,
+    const std::string _contractAddress, RespFunc _callback)
+{
+    RPC_IMPL_LOG(TRACE) << LOG_BADGE("getABI") << LOG_KV("contractAddress", _contractAddress)
+                        << LOG_KV("group", _groupID) << LOG_KV("node", _nodeName);
+
+    auto nodeService = getNodeService(_groupID, _nodeName, "getABI");
+
+    auto scheduler = nodeService->scheduler();
+    scheduler->getABI(std::string_view(_contractAddress),
+        [_contractAddress, callback = std::move(_callback)](Error::Ptr _error, std::string _abi) {
+            if (_error)
+            {
+                RPC_IMPL_LOG(ERROR)
+                    << LOG_BADGE("getABI") << LOG_KV("errorCode", _error ? _error->errorCode() : 0)
+                    << LOG_KV("errorMessage", _error ? _error->errorMessage() : "success")
+                    << LOG_KV("contractAddress", _contractAddress);
+            }
+            Json::Value jResp = _abi;
             callback(_error, jResp);
         });
 }

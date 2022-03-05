@@ -30,7 +30,6 @@
 #include "bcos-table/src/StateStorage.h"
 #include "executor/TransactionExecutor.h"
 #include "executor/TransactionExecutorFactory.h"
-#include "precompiled/ParallelConfigPrecompiled.h"
 #include "precompiled/PrecompiledCodec.h"
 #include "precompiled/Utilities.h"
 #include <bcos-crypto/hash/Keccak256.h>
@@ -762,8 +761,8 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
     }
 
     std::promise<std::optional<Table>> tablePromise;
-    backend->asyncCreateTable("cp_ff6f30856ad3bae00b1169808488502786a13e3c", PARA_VALUE_NAMES,
-        [&](Error::UniquePtr&& error, std::optional<Table>&& table) {
+    backend->asyncCreateTable("cp_ff6f30856ad3bae00b1169808488502786a13e3c",
+        "functionName,criticalSize", [&](Error::UniquePtr&& error, std::optional<Table>&& table) {
             BOOST_CHECK(!error);
             BOOST_CHECK(table);
             tablePromise.set_value(std::move(*table));
@@ -771,7 +770,6 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
     auto table = tablePromise.get_future().get();
 
     Entry entry = table->newEntry();
-    entry.setObject(ParallelConfig{"transfer(string,string,uint256)", 2});
     auto selector = getFuncSelector("transfer(string,string,uint256)", hashImpl);
     table->setRow(to_string(selector), entry);
 
@@ -992,8 +990,8 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
     }
 
     std::promise<std::optional<Table>> tablePromise;
-    backend->asyncCreateTable("cp_ff6f30856ad3bae00b1169808488502786a13e3c", PARA_VALUE_NAMES,
-        [&](Error::UniquePtr&& error, std::optional<Table>&& table) {
+    backend->asyncCreateTable("cp_ff6f30856ad3bae00b1169808488502786a13e3c",
+        "functionName,criticalSize", [&](Error::UniquePtr&& error, std::optional<Table>&& table) {
             BOOST_CHECK(!error);
             BOOST_CHECK(table);
             tablePromise.set_value(std::move(*table));
@@ -1001,7 +999,6 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
     auto table = tablePromise.get_future().get();
 
     Entry entry = table->newEntry();
-    entry.setObject(ParallelConfig{"transfer(string,string,uint256)", 2});
     auto selector = getFuncSelector("transfer(string,string,uint256)", hashImpl);
     table->setRow(to_string(selector), entry);
 
