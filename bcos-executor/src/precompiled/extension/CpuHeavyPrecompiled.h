@@ -23,48 +23,56 @@
 #include "../../vm/Precompiled.h"
 #include "../Common.h"
 
-namespace bcos {
-    namespace precompiled {
-        class CpuHeavyPrecompiled : public bcos::precompiled::Precompiled {
-        public:
-            using Ptr = std::shared_ptr<CpuHeavyPrecompiled>;
+namespace bcos
+{
+namespace precompiled
+{
+class CpuHeavyPrecompiled : public bcos::precompiled::Precompiled
+{
+public:
+    using Ptr = std::shared_ptr<CpuHeavyPrecompiled>;
 
-            CpuHeavyPrecompiled(crypto::Hash::Ptr _hashImpl);
+    CpuHeavyPrecompiled(crypto::Hash::Ptr _hashImpl);
 
-            virtual ~CpuHeavyPrecompiled() {};
+    virtual ~CpuHeavyPrecompiled(){};
 
-            std::string toString() override;
+    std::string toString() override;
 
-            std::shared_ptr<PrecompiledExecResult> call(
-                    std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
-                    const std::string &_origin, const std::string &_sender) override;
+    std::shared_ptr<PrecompiledExecResult> call(
+        std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
+        const std::string& _origin, const std::string& _sender) override;
 
-            // is this precompiled need parallel processing, default false.
-            virtual bool isParallelPrecompiled() override { return true; }
+    // is this precompiled need parallel processing, default false.
+    virtual bool isParallelPrecompiled() override { return true; }
 
-            virtual std::vector<std::string> getParallelTag(bytesConstRef param, bool _isWasm) override {
-                (void) param;
-                (void) _isWasm;
-                return std::vector<std::string>();
-            };
+    virtual std::vector<std::string> getParallelTag(bytesConstRef param, bool _isWasm) override
+    {
+        (void)param;
+        (void)_isWasm;
+        return std::vector<std::string>();
+    };
 
-            static std::string getAddress(unsigned int id) {
-                u160 address = u160("5200");
-                address += id;
-                return std::string("00000000000000000000000000000000000") + address.str(16);
-            }
+    static std::string getAddress(unsigned int id)
+    {
+        u160 address = u160("0x5200");
+        address += id;
+        h160 addressBytes = h160(address);
+        return addressBytes.hex();
+    }
 
-            static void registerPrecompiled(
-                    std::map<std::string, std::shared_ptr<precompiled::Precompiled>> &registeredMap,
-                    crypto::Hash::Ptr _hashImpl) {
-                for (int id = 0; id < 128; id++) {
-                    std::string address = getAddress(id);
-                    BCOS_LOG(INFO) << LOG_BADGE("CpuHeavy") << "Register CpuHeavyPrecompiled "
-                                   << LOG_KV("address", address);
-                    registeredMap.insert(
-                            {std::move(address), std::make_shared<precompiled::CpuHeavyPrecompiled>(_hashImpl)});
-                }
-            }
-        };
-    }  // namespace precompiled
+    static void registerPrecompiled(
+        std::map<std::string, std::shared_ptr<precompiled::Precompiled>>& registeredMap,
+        crypto::Hash::Ptr _hashImpl)
+    {
+        for (int id = 0; id < 128; id++)
+        {
+            std::string address = getAddress(id);
+            BCOS_LOG(INFO) << LOG_BADGE("CpuHeavy") << "Register CpuHeavyPrecompiled "
+                           << LOG_KV("address", address);
+            registeredMap.insert({std::move(address),
+                std::make_shared<precompiled::CpuHeavyPrecompiled>(_hashImpl)});
+        }
+    }
+};
+}  // namespace precompiled
 }  // namespace bcos
