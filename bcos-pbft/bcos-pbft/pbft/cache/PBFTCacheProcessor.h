@@ -144,6 +144,8 @@ public:
     {
         m_committedProposalNotifier = _committedProposalNotifier;
     }
+
+    bool tryToPreApplyProposal(ProposalInterface::Ptr _proposal);
     bool tryToApplyCommitQueue();
 
     void removeFutureProposals();

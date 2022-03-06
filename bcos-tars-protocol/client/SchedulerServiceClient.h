@@ -81,6 +81,14 @@ public:
     void getCode(std::string_view contract,
         std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) override;
 
+    // for performance, do the things before executing block in executor.
+    void preExecuteBlock(bcos::protocol::Block::Ptr block, bool verify) override
+    {
+        (void)block;
+        (void)verify;
+        BCOS_LOG(ERROR) << LOG_DESC("unimplemented method registerBlockNumberReceiver");
+    }
+
 private:
     SchedulerServicePrx m_prx;
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
