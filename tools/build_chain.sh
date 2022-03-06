@@ -48,7 +48,7 @@ days=36500 # 100 years
 timestamp=$(($(date '+%s')*1000))
 chain_id=1
 compatibility_version=""
-default_version="2.8.0"
+default_version="2.9.0"
 macOS=""
 x86_64_arch="true"
 download_timeout=240
@@ -241,12 +241,14 @@ check_env() {
         export PATH="/usr/local/opt/openssl/bin:$PATH"
         macOS="macOS"
     fi
-    [ ! -z "$(openssl version | grep 1.0.2)" ] || [ ! -z "$(openssl version | grep 1.1)" ] || {
-        echo "please install openssl!"
-        #echo "download openssl from https://www.openssl.org."
-        echo "use \"openssl version\" command to check."
-        exit 1
-    }
+
+    # TODO: 
+    # [ ! -z "$(openssl version | grep 1.0.2)" ] || [ ! -z "$(openssl version | grep 1.1)" ] || {
+    #    echo "please install openssl!"
+    #    #echo "download openssl from https://www.openssl.org."
+    #    echo "use \"openssl version\" command to check."
+    #    exit 1
+    # }
 
     if [ "$(uname -m)" != "x86_64" ];then
         x86_64_arch="false"
