@@ -63,6 +63,7 @@ void BlockExecutive::asyncExecute(
     }
     m_currentTimePoint = std::chrono::system_clock::now();
 
+    auto startT = utcTime();
     bool withDAG = false;
     if (m_block->transactionsMetaDataSize() > 0)
     {
@@ -70,7 +71,8 @@ void BlockExecutive::asyncExecute(
                              << LOG_KV("meta tx count", m_block->transactionsMetaDataSize());
 
         m_executiveResults.resize(m_block->transactionsMetaDataSize());
-        for (size_t i = 0; i < m_block->transactionsMetaDataSize(); ++i)
+#pragma omp parallel for
+        for (size_t i = 0; i < m_block->transactionsMetaDataSize(); i++)
         {
             auto metaData = m_block->transactionMetaData(i);
 
@@ -111,14 +113,14 @@ void BlockExecutive::asyncExecute(
             }
 
             auto to = message->to();
-            m_executiveStates.emplace(
-                std::make_tuple(std::move(to), i), ExecutiveState(i, std::move(message), withDAG));
-
             if (metaData)
             {
                 m_executiveResults[i].transactionHash = metaData->hash();
                 m_executiveResults[i].source = metaData->source();
             }
+            ExecutiveState state(i, std::move(message), withDAG);
+#pragma omp critical
+            m_executiveStates.emplace(std::make_tuple(std::move(to), i), std::move(state));
         }
     }
     else if (m_block->transactionsSize() > 0)
@@ -127,6 +129,7 @@ void BlockExecutive::asyncExecute(
                              << LOG_KV("tx count", m_block->transactionsSize());
 
         m_executiveResults.resize(m_block->transactionsSize());
+#pragma omp parallel for
         for (size_t i = 0; i < m_block->transactionsSize(); ++i)
         {
             auto tx = m_block->transaction(i);
@@ -181,15 +184,18 @@ void BlockExecutive::asyncExecute(
             }
 
             auto to = std::string(message->to());
+#pragma omp critical
             m_executiveStates.emplace(
                 std::make_tuple(std::move(to), i), ExecutiveState(i, std::move(message), withDAG));
         }
     }
-
+    auto createMsgT = utcTime() - startT;
+    startT = utcTime();
     if (!m_staticCall)
     {
         // Execute nextBlock
-        batchNextBlock([this, withDAG, callback = std::move(callback)](Error::UniquePtr error) {
+        batchNextBlock([this, withDAG, createMsgT, startT, callback = std::move(callback)](
+                           Error::UniquePtr error) {
             if (error)
             {
                 SCHEDULER_LOG(ERROR)
@@ -202,7 +208,8 @@ void BlockExecutive::asyncExecute(
 
             if (withDAG)
             {
-                DAGExecute([this, callback = std::move(callback)](Error::UniquePtr error) {
+                DAGExecute([this, createMsgT, startT, callback = std::move(callback)](
+                               Error::UniquePtr error) {
                     if (error)
                     {
                         SCHEDULER_LOG(ERROR) << "DAG execute block with error!"
@@ -212,7 +219,12 @@ void BlockExecutive::asyncExecute(
                             nullptr);
                         return;
                     }
-
+                    auto blockHeader = m_block->blockHeader();
+                    SCHEDULER_LOG(INFO)
+                        << LOG_DESC("DAGExecute success") << LOG_KV("createMsgT", createMsgT)
+                        << LOG_KV("dagExecuteT", (utcTime() - startT))
+                        << LOG_KV("hash", blockHeader->hash().abridged())
+                        << LOG_KV("number", blockHeader->number());
                     DMTExecute(std::move(callback));
                 });
             }
@@ -413,6 +425,7 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
     for (auto it = requests.begin(); it != requests.end(); it = requests.upper_bound(it->first))
     {
         SCHEDULER_LOG(TRACE) << "DAG contract: " << it->first;
+        auto startT = utcTime();
 
         auto executor = m_scheduler->m_executorManager->dispatchExecutor(it->first);
         auto count = requests.count(it->first);
@@ -431,10 +444,11 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
 
             ++i;
         }
-
+        auto prepareT = utcTime() - startT;
+        startT = utcTime();
         executor->dagExecuteTransactions(*messages,
-            [messages, iterators = std::move(iterators), totalCount, failed, callbackPtr](
-                bcos::Error::UniquePtr error,
+            [messages, startT, prepareT, iterators = std::move(iterators), totalCount, failed,
+                callbackPtr](bcos::Error::UniquePtr error,
                 std::vector<bcos::protocol::ExecutionMessage::UniquePtr> responseMessages) {
                 if (error)
                 {
@@ -467,7 +481,9 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
                             SchedulerError::DAGError, "Execute dag with errors"));
                         return;
                     }
-
+                    SCHEDULER_LOG(INFO)
+                        << LOG_DESC("DAGExecute finish") << LOG_KV("prepareT", prepareT)
+                        << LOG_KV("execT", (utcTime() - startT));
                     (*callbackPtr)(nullptr);
                 }
             });
@@ -590,6 +606,7 @@ void BlockExecutive::batchNextBlock(std::function<void(Error::UniquePtr)> callba
 void BlockExecutive::batchGetHashes(
     std::function<void(bcos::Error::UniquePtr, bcos::crypto::HashType)> callback)
 {
+    auto startT = utcTime();
     auto mutex = std::make_shared<std::mutex>();
     auto totalHash = std::make_shared<h256>();
 
@@ -618,25 +635,26 @@ void BlockExecutive::batchGetHashes(
 
     for (auto& it : *(m_scheduler->m_executorManager))
     {
-        it->getHash(number(), [status, mutex, totalHash](
-                                  bcos::Error::Ptr&& error, crypto::HashType&& hash) {
-            if (error)
-            {
-                SCHEDULER_LOG(ERROR)
-                    << "Commit executor error!" << boost::diagnostic_information(*error);
-                ++status->failed;
-            }
-            else
-            {
-                ++status->success;
-                SCHEDULER_LOG(DEBUG) << "GetHash executor success, success: " << status->success;
+        it->getHash(number(),
+            [startT, status, mutex, totalHash](bcos::Error::Ptr&& error, crypto::HashType&& hash) {
+                if (error)
+                {
+                    SCHEDULER_LOG(ERROR)
+                        << "Commit executor error!" << boost::diagnostic_information(*error);
+                    ++status->failed;
+                }
+                else
+                {
+                    ++status->success;
+                    SCHEDULER_LOG(DEBUG) << "GetHash executor success, success: " << status->success
+                                         << LOG_KV("timecost", (utcTime() - startT));
 
-                std::unique_lock<std::mutex> lock(*mutex);
-                *totalHash ^= hash;
-            }
+                    std::unique_lock<std::mutex> lock(*mutex);
+                    *totalHash ^= hash;
+                }
 
-            status->checkAndCommit(*status);
-        });
+                status->checkAndCommit(*status);
+            });
     }
 }
 
@@ -841,8 +859,8 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
                 m_gasUsed += txGasUsed;
 
                 m_executiveResults[executiveState.contextID].receipt =
-                    m_scheduler->m_blockFactory->receiptFactory()->createReceipt(
-                        txGasUsed, message->newEVMContractAddress(),
+                    m_scheduler->m_blockFactory->receiptFactory()->createReceipt(txGasUsed,
+                        message->newEVMContractAddress(),
                         std::make_shared<std::vector<bcos::protocol::LogEntry>>(
                             message->takeLogEntries()),
                         message->status(), message->takeData(),

@@ -217,8 +217,9 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                 nullptr);
             return;
         }
-
-        asyncGetLedgerConfig([this, commitLock = std::move(commitLock),
+        auto blockNumber = block->blockHeader()->number();
+        auto hash = block->blockHeader()->hash();
+        asyncGetLedgerConfig([this, blockNumber, hash, commitLock = std::move(commitLock),
                                  callback = std::move(callback)](
                                  Error::Ptr error, ledger::LedgerConfig::Ptr ledgerConfig) {
             if (error)
@@ -232,7 +233,8 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                     nullptr);
                 return;
             }
-
+            ledgerConfig->setBlockNumber(blockNumber);
+            ledgerConfig->setHash(hash);
             SCHEDULER_LOG(INFO) << "CommitBlock success"
                                 << LOG_KV("block number", ledgerConfig->blockNumber());
 
@@ -389,7 +391,7 @@ void SchedulerImpl::asyncGetLedgerConfig(
     auto ledgerConfig = std::make_shared<ledger::LedgerConfig>();
     auto callbackPtr = std::make_shared<decltype(callback)>(std::move(callback));
     auto summary =
-        std::make_shared<std::tuple<size_t, std::atomic_size_t, std::atomic_size_t>>(6, 0, 0);
+        std::make_shared<std::tuple<size_t, std::atomic_size_t, std::atomic_size_t>>(4, 0, 0);
 
     auto collecter = [summary = std::move(summary), ledgerConfig = std::move(ledgerConfig),
                          callback = std::move(callbackPtr)](Error::Ptr error,
@@ -479,13 +481,5 @@ void SchedulerImpl::asyncGetLedgerConfig(
     m_ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_CONSENSUS_LEADER_PERIOD,
         [collecter](Error::Ptr error, std::string config, protocol::BlockNumber) mutable {
             collecter(std::move(error), std::tuple{1, std::move(config)});
-        });
-    m_ledger->asyncGetBlockNumber(
-        [collecter, ledger = m_ledger](Error::Ptr error, protocol::BlockNumber number) mutable {
-            ledger->asyncGetBlockHashByNumber(
-                number, [collecter](Error::Ptr error, const crypto::HashType& hash) mutable {
-                    collecter(std::move(error), std::move(hash));
-                });
-            collecter(std::move(error), std::move(number));
         });
 }

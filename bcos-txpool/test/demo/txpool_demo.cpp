@@ -73,6 +73,16 @@ void testSubmitAndRemoveTransaction(bcos::crypto::CryptoSuite::Ptr _cryptoSuite,
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
+    std::cout << "### test batchFetchTxs" << std::endl;
+    for (auto i = 0; i < 10; i++)
+    {
+        auto sysTxsList = txpool->txpoolConfig()->blockFactory()->createBlock();
+        auto txsList = txpool->txpoolConfig()->blockFactory()->createBlock();
+        auto startT = utcTime();
+        txpool->txpoolStorage()->batchFetchTxs(txsList, sysTxsList, 30000, nullptr);
+        std::cout << "### test batchFetchTxs, timecost:" << (utcTime() - startT)
+                  << ", txsList:" << txsList->transactionsMetaDataSize() << std::endl;
+    }
     std::cout << "### remove submitted txs, size:" << txpool->txpoolStorage()->size() << std::endl;
     // remove the txs
     txpool->asyncNotifyBlockResult(ledger->blockNumber() + 1, txsResult, [](Error::Ptr) {});

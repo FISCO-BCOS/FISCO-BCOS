@@ -294,6 +294,7 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, bytesConstRef _proposalData
     auto pbftMessage =
         m_config->pbftMessageFactory()->populateFrom(PacketType::PrePreparePacket, pbftProposal,
             m_config->pbftMsgDefaultVersion(), m_config->view(), utcTime(), m_config->nodeIndex());
+    pbftMessage->setConsStartTime(utcTime());
     PBFT_LOG(INFO) << LOG_DESC("++++++++++++++++ Generating seal on")
                    << LOG_KV("index", pbftMessage->index()) << LOG_KV("Idx", m_config->nodeIndex())
                    << LOG_KV("hash", pbftMessage->hash().abridged())

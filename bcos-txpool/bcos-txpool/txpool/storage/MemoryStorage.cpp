@@ -468,19 +468,32 @@ ConstTransactionsPtr MemoryStorage::fetchNewTxs(size_t _txsLimit)
 void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, size_t _txsLimit,
     TxsHashSetPtr _avoidTxs, bool _avoidDuplicate)
 {
-    auto blockFactory = m_config->blockFactory();
+    auto recordT = utcTime();
+    auto startT = utcTime();
     ReadGuard l(x_txpoolMutex);
-    for (auto it : m_txsTable)
+    auto lockT = utcTime() - startT;
+    startT = utcTime();
+
+    for (auto const& it : m_txsTable)
     {
-        auto tx = it.second;
+        auto const& tx = it.second;
         // Note: When inserting data into tbb::concurrent_unordered_map while traversing,
         // it.second will occasionally be a null pointer.
         if (!tx)
         {
             continue;
         }
-        auto txHash = tx->hash();
+        auto txHash = it.first;
         if (m_invalidTxs.count(txHash))
+        {
+            continue;
+        }
+        if (_avoidTxs && _avoidTxs->count(txHash))
+        {
+            continue;
+        }
+        // the transaction has already been sealed for newer proposal
+        if (_avoidDuplicate && tx->sealed())
         {
             continue;
         }
@@ -506,17 +519,7 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
             m_invalidNonces.insert(tx->nonce());
             continue;
         }
-        if (_avoidTxs && _avoidTxs->count(txHash))
-        {
-            continue;
-        }
-        // the transaction has already been sealed for newer proposal
-        if (_avoidDuplicate && tx->sealed())
-        {
-            continue;
-        }
         auto txMetaData = m_config->blockFactory()->createTransactionMetaData();
-
         txMetaData->setHash(tx->hash());
         txMetaData->setTo(std::string(tx->to()));
         txMetaData->setAttribute(tx->attribute());
@@ -534,7 +537,7 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
         }
 #if FISCO_DEBUG
         // TODO: remove this, now just for bug tracing
-        TXPOOL_LOG(INFO) << LOG_DESC("fetch ") << tx->hash().abridged()
+        TXPOOL_LOG(INFO) << LOG_DESC("fetch ") << txHash.abridged()
                          << LOG_KV("sealed", tx->sealed()) << LOG_KV("batchId", tx->batchId())
                          << LOG_KV("batchHash", tx->batchHash().abridged())
                          << LOG_KV("txPointer", tx);
@@ -548,8 +551,14 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
             break;
         }
     }
+    auto fetchTxsT = utcTime() - startT;
     notifyUnsealedTxsSize();
     removeInvalidTxs();
+    TXPOOL_LOG(INFO) << LOG_DESC("batchFetchTxs") << LOG_KV("timecost", (utcTime() - recordT))
+                     << LOG_KV("txsSize", _txsList->transactionsMetaDataSize())
+                     << LOG_KV("sysTxsSize", _sysTxsList->transactionsMetaDataSize())
+                     << LOG_KV("txsSize", m_txsTable.size()) << LOG_KV("limit", _txsLimit)
+                     << LOG_KV("fetchTxsT", fetchTxsT) << LOG_KV("lockT", lockT);
 }
 
 void MemoryStorage::removeInvalidTxs()
