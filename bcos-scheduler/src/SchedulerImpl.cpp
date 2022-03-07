@@ -432,6 +432,9 @@ void SchedulerImpl::removeAllOldPreparedBlock(bcos::protocol::BlockNumber oldBlo
     {
         if (itr->first <= oldBlockNumber)
         {
+            SCHEDULER_LOG(DEBUG) << LOG_BADGE("prepareBlockExecutive")
+                                 << LOG_DESC("removeAllOldPreparedBlock")
+                                 << LOG_KV("block number", itr->first);
             itr = m_preparedBlocks.erase(itr);
         }
         else
