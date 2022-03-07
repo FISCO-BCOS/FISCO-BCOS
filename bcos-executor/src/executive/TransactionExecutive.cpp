@@ -198,7 +198,7 @@ CallParameters::UniquePtr TransactionExecutive::execute(CallParameters::UniquePt
 
         // TODO: check if needed
         hostContext->sub().refunds +=
-            hostContext->evmSchedule().suicideRefundGas * hostContext->sub().suicides.size();
+            hostContext->vmSchedule().suicideRefundGas * hostContext->sub().suicides.size();
     }
 
     return callResults;
@@ -469,7 +469,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
 
         if (hostContext.isCreate())
         {
-            auto mode = toRevision(hostContext.evmSchedule());
+            auto mode = toRevision(hostContext.vmSchedule());
             auto evmcMessage = getEVMCMessage(*blockContext, hostContext);
 
             auto code = hostContext.data();
@@ -504,22 +504,22 @@ CallParameters::UniquePtr TransactionExecutive::go(
             }
 
             auto outputRef = ret.output();
-            if (outputRef.size() > hostContext.evmSchedule().maxCodeSize)
+            if (outputRef.size() > hostContext.vmSchedule().maxCodeSize)
             {
                 callResults->type = CallParameters::REVERT;
                 callResults->status = (int32_t)TransactionStatus::OutOfGas;
                 callResults->message =
                     "Code is too large: " + boost::lexical_cast<std::string>(outputRef.size()) +
                     " limit: " +
-                    boost::lexical_cast<std::string>(hostContext.evmSchedule().maxCodeSize);
+                    boost::lexical_cast<std::string>(hostContext.vmSchedule().maxCodeSize);
                 EXECUTIVE_LOG(ERROR) << callResults->message;
                 return callResults;
             }
 
-            if ((int64_t)(outputRef.size() * hostContext.evmSchedule().createDataGas) >
+            if ((int64_t)(outputRef.size() * hostContext.vmSchedule().createDataGas) >
                 callResults->gas)
             {
-                if (hostContext.evmSchedule().exceptionalFailedCodeDeposit)
+                if (hostContext.vmSchedule().exceptionalFailedCodeDeposit)
                 {
                     callResults->type = CallParameters::REVERT;
                     callResults->status = (int32_t)TransactionStatus::OutOfGas;
@@ -549,7 +549,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
                 hostContext.setCode(outputRef.toBytes());
             }
 
-            callResults->gas -= outputRef.size() * hostContext.evmSchedule().createDataGas;
+            callResults->gas -= outputRef.size() * hostContext.vmSchedule().createDataGas;
             callResults->newEVMContractAddress = callResults->codeAddress;
 
             // Clear the creation flag
@@ -579,7 +579,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
             }
             auto vm = VMFactory::create(vmKind);
 
-            auto mode = toRevision(hostContext.evmSchedule());
+            auto mode = toRevision(hostContext.vmSchedule());
             auto evmcMessage = getEVMCMessage(*blockContext, hostContext);
             auto ret = vm.exec(hostContext, mode, &evmcMessage, code.data(), code.size());
 

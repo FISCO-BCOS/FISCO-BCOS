@@ -64,7 +64,7 @@ void VMInstance::enableDebugOutput()
     // m_instance->set_option(m_instance, "histogram", "1");
 }
 
-evmc_revision toRevision(EVMSchedule const& _schedule)
+evmc_revision toRevision(VMSchedule const& _schedule)
 {
     if (_schedule.enableLondon)
         return EVMC_LONDON;

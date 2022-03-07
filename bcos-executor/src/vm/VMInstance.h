@@ -56,8 +56,8 @@ public:
 /// Returns the EVM-C options parsed from command line.
 std::vector<std::pair<std::string, std::string>>& evmcOptions() noexcept;
 
-/// Translate the EVMSchedule to VMInstance-C revision.
-evmc_revision toRevision(EVMSchedule const& _schedule);
+/// Translate the VMSchedule to VMInstance-C revision.
+evmc_revision toRevision(VMSchedule const& _schedule);
 
 /// The RAII wrapper for an VMInstance-C instance.
 class VMInstance
