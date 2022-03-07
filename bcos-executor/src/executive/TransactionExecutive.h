@@ -170,6 +170,7 @@ public:
 
         return dispatcher();
     }
+    VMSchedule const& vmSchedule() const { return m_blockContext.lock()->vmSchedule(); }
 
 private:
     CallParameters::UniquePtr dispatcher();

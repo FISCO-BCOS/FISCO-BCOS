@@ -86,7 +86,7 @@ evmc_storage_status setStorage(evmc_host_context* _context, const evmc_address* 
     else if (value == 0)
     {
         status = EVMC_STORAGE_DELETED;
-        hostContext.sub().refunds += hostContext.evmSchedule().sstoreRefundGas;
+        hostContext.sub().refunds += hostContext.vmSchedule().sstoreRefundGas;
     }
     hostContext.setStore(index, value);  // Interface uses native endianness
     return status;
@@ -314,7 +314,7 @@ evmc_storage_status set(evmc_host_context* _context, const uint8_t* _addr, int32
     if (value.size() == 0)
     {
         status = EVMC_STORAGE_DELETED;
-        hostContext.sub().refunds += hostContext.evmSchedule().sstoreRefundGas;
+        hostContext.sub().refunds += hostContext.vmSchedule().sstoreRefundGas;
     }
     hostContext.set(key, value);  // Interface uses native endianness
     return status;
