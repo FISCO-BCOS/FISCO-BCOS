@@ -32,6 +32,7 @@ class BlockExecutive : public std::enable_shared_from_this<BlockExecutive>
 {
 public:
     using UniquePtr = std::unique_ptr<BlockExecutive>;
+    using Ptr = std::shared_ptr<BlockExecutive>;
 
     BlockExecutive(bcos::protocol::Block::Ptr block, SchedulerImpl* scheduler,
         size_t startContextID,
@@ -60,6 +61,7 @@ public:
     BlockExecutive& operator=(const BlockExecutive&) = delete;
     BlockExecutive& operator=(BlockExecutive&&) = delete;
 
+    void prepare();
     void asyncExecute(std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback);
     void asyncCall(
         std::function<void(Error::UniquePtr&&, protocol::TransactionReceipt::Ptr&&)> callback);
@@ -166,6 +168,9 @@ private:
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bool m_staticCall = false;
     bool m_syncBlock = false;
+    bool m_hasPrepared = false;
+    bool m_withDAG = false;
+    mutable SharedMutex x_prepareLock;
 };
 
 }  // namespace bcos::scheduler

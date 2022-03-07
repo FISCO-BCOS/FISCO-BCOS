@@ -75,15 +75,20 @@ public:
             bcos::protocol::TransactionSubmitResultsPtr, std::function<void(Error::Ptr)>)>
             txNotifier);
 
+    void preExecuteBlock(bcos::protocol::Block::Ptr block, bool verify) override;
+
     ExecutorManager::Ptr executorManager() { return m_executorManager; }
 
 private:
     void asyncGetLedgerConfig(
         std::function<void(Error::Ptr, ledger::LedgerConfig::Ptr ledgerConfig)> callback);
 
-    std::list<BlockExecutive> m_blocks;
-    std::mutex m_blocksMutex;
+    std::list<BlockExecutive::Ptr> m_blocks;
+    std::map<bcos::protocol::BlockNumber, std::map<int64_t, BlockExecutive::Ptr>>
+        m_preparedBlocks;  // blockNumber -> <timestamp -> BlockExecutive>
 
+    mutable SharedMutex x_preparedBlockMutex;
+    std::mutex m_blocksMutex;
     std::mutex m_executeMutex;
     std::mutex m_commitMutex;
 
@@ -105,5 +110,14 @@ private:
     std::function<void(bcos::protocol::BlockNumber, bcos::protocol::TransactionSubmitResultsPtr,
         std::function<void(Error::Ptr)>)>
         m_txNotifier;
+
+    BlockExecutive::Ptr getPreparedBlock(
+        bcos::protocol::BlockNumber blockNumber, int64_t timestamp);
+
+    void setPreparedBlock(bcos::protocol::BlockNumber blockNumber, int64_t timestamp,
+        BlockExecutive::Ptr blockExecutive);
+
+    // remove prepared all block <= oldBlockNumber
+    void removeAllOldPreparedBlock(bcos::protocol::BlockNumber oldBlockNumber);
 };
 }  // namespace bcos::scheduler

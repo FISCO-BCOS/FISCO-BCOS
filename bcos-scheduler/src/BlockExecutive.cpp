@@ -27,6 +27,150 @@
 
 using namespace bcos::scheduler;
 using namespace bcos::ledger;
+
+void BlockExecutive::prepare() {
+    if(m_hasPrepared) {
+        return;
+    }
+
+    {
+        bcos::WriteGuard lock(x_prepareLock);
+
+        auto startT = utcTime();
+
+        if (m_block->transactionsMetaDataSize() > 0)
+        {
+            SCHEDULER_LOG(DEBUG) << LOG_KV("block number", m_block->blockHeaderConst()->number())
+                                 << LOG_KV("meta tx count", m_block->transactionsMetaDataSize());
+
+            m_executiveResults.resize(m_block->transactionsMetaDataSize());
+#pragma omp parallel for
+            for (size_t i = 0; i < m_block->transactionsMetaDataSize(); i++)
+            {
+                auto metaData = m_block->transactionMetaData(i);
+
+                auto message = m_scheduler->m_executionMessageFactory->createExecutionMessage();
+                message->setContextID(i + m_startContextID);
+                message->setType(protocol::ExecutionMessage::TXHASH);
+                message->setTransactionHash(metaData->hash());
+
+                if (metaData->attribute() & bcos::protocol::Transaction::Attribute::LIQUID_SCALE_CODEC)
+                {
+                    // LIQUID
+                    if (metaData->attribute() & bcos::protocol::Transaction::Attribute::LIQUID_CREATE)
+                    {
+                        message->setCreate(true);
+                    }
+                    message->setTo(std::string(metaData->to()));
+                }
+                else
+                {
+                    // SOLIDITY
+                    if (metaData->to().empty())
+                    {
+                        message->setCreate(true);
+                    }
+                    else
+                    {
+                        message->setTo(preprocessAddress(metaData->to()));
+                    }
+                }
+
+                message->setDepth(0);
+                message->setGasAvailable(TRANSACTION_GAS);
+                message->setStaticCall(false);
+
+                if (metaData->attribute() & bcos::protocol::Transaction::Attribute::DAG)
+                {
+                    m_withDAG = true;
+                }
+
+                auto to = message->to();
+                if (metaData)
+                {
+                    m_executiveResults[i].transactionHash = metaData->hash();
+                    m_executiveResults[i].source = metaData->source();
+                }
+                ExecutiveState state(i, std::move(message), m_withDAG);
+#pragma omp critical
+                m_executiveStates.emplace(std::make_tuple(std::move(to), i), std::move(state));
+            }
+        }
+        else if (m_block->transactionsSize() > 0)
+        {
+            SCHEDULER_LOG(DEBUG) << LOG_KV("block number", m_block->blockHeaderConst()->number())
+                                 << LOG_KV("tx count", m_block->transactionsSize());
+
+            m_executiveResults.resize(m_block->transactionsSize());
+#pragma omp parallel for
+            for (size_t i = 0; i < m_block->transactionsSize(); ++i)
+            {
+                auto tx = m_block->transaction(i);
+                m_executiveResults[i].transactionHash = tx->hash();
+                m_executiveResults[i].source = tx->source();
+
+                auto message = m_scheduler->m_executionMessageFactory->createExecutionMessage();
+                message->setType(protocol::ExecutionMessage::MESSAGE);
+                message->setContextID(i + m_startContextID);
+                message->setTransactionHash(tx->hash());
+                message->setOrigin(toHex(tx->sender()));
+                message->setFrom(std::string(message->origin()));
+
+
+                if (tx->attribute() & bcos::protocol::Transaction::Attribute::LIQUID_SCALE_CODEC)
+                {
+                    // LIQUID
+                    if (tx->attribute() & bcos::protocol::Transaction::Attribute::LIQUID_CREATE)
+                    {
+                        message->setCreate(true);
+                    }
+                    message->setTo(std::string(tx->to()));
+                }
+                else
+                {
+                    // SOLIDITY
+                    if (tx->to().empty())
+                    {
+                        message->setCreate(true);
+                    }
+                    else
+                    {
+                        if (m_scheduler->m_isAuthCheck && !m_staticCall &&
+                            m_block->blockHeaderConst()->number() == 0 &&
+                            tx->to() == precompiled::AUTH_COMMITTEE_ADDRESS)
+                        {
+                            // if enable auth check, and first deploy auth contract
+                            message->setCreate(true);
+                        }
+                        message->setTo(preprocessAddress(tx->to()));
+                    }
+                }
+
+                message->setDepth(0);
+                message->setGasAvailable(TRANSACTION_GAS);
+                message->setData(tx->input().toBytes());
+                message->setStaticCall(m_staticCall);
+
+                if (tx->attribute() & bcos::protocol::Transaction::Attribute::DAG)
+                {
+                    m_withDAG = true;
+                }
+
+                auto to = std::string(message->to());
+#pragma omp critical
+                m_executiveStates.emplace(
+                    std::make_tuple(std::move(to), i), ExecutiveState(i, std::move(message), m_withDAG));
+            }
+        }
+
+        SCHEDULER_LOG(DEBUG) << LOG_BADGE("prepareBlockExecutive") << LOG_KV("block number", m_block->blockHeaderConst()->number())
+                             << LOG_KV("blockHeader.timestamp", m_block->blockHeaderConst()->timestamp())
+                             << LOG_KV("meta tx count", m_block->transactionsMetaDataSize()) << LOG_KV("timeCost", (utcTime() - startT));
+        m_hasPrepared = true;
+    }
+
+}
+
 void BlockExecutive::asyncCall(
     std::function<void(Error::UniquePtr&&, protocol::TransactionReceipt::Ptr&&)> callback)
 {
@@ -64,136 +208,14 @@ void BlockExecutive::asyncExecute(
     m_currentTimePoint = std::chrono::system_clock::now();
 
     auto startT = utcTime();
-    bool withDAG = false;
-    if (m_block->transactionsMetaDataSize() > 0)
-    {
-        SCHEDULER_LOG(DEBUG) << LOG_KV("block number", m_block->blockHeaderConst()->number())
-                             << LOG_KV("meta tx count", m_block->transactionsMetaDataSize());
+    prepare();
 
-        m_executiveResults.resize(m_block->transactionsMetaDataSize());
-#pragma omp parallel for
-        for (size_t i = 0; i < m_block->transactionsMetaDataSize(); i++)
-        {
-            auto metaData = m_block->transactionMetaData(i);
-
-            auto message = m_scheduler->m_executionMessageFactory->createExecutionMessage();
-            message->setContextID(i + m_startContextID);
-            message->setType(protocol::ExecutionMessage::TXHASH);
-            message->setTransactionHash(metaData->hash());
-
-            if (metaData->attribute() & bcos::protocol::Transaction::Attribute::LIQUID_SCALE_CODEC)
-            {
-                // LIQUID
-                if (metaData->attribute() & bcos::protocol::Transaction::Attribute::LIQUID_CREATE)
-                {
-                    message->setCreate(true);
-                }
-                message->setTo(std::string(metaData->to()));
-            }
-            else
-            {
-                // SOLIDITY
-                if (metaData->to().empty())
-                {
-                    message->setCreate(true);
-                }
-                else
-                {
-                    message->setTo(preprocessAddress(metaData->to()));
-                }
-            }
-
-            message->setDepth(0);
-            message->setGasAvailable(TRANSACTION_GAS);
-            message->setStaticCall(false);
-
-            if (metaData->attribute() & bcos::protocol::Transaction::Attribute::DAG)
-            {
-                withDAG = true;
-            }
-
-            auto to = message->to();
-            if (metaData)
-            {
-                m_executiveResults[i].transactionHash = metaData->hash();
-                m_executiveResults[i].source = metaData->source();
-            }
-            ExecutiveState state(i, std::move(message), withDAG);
-#pragma omp critical
-            m_executiveStates.emplace(std::make_tuple(std::move(to), i), std::move(state));
-        }
-    }
-    else if (m_block->transactionsSize() > 0)
-    {
-        SCHEDULER_LOG(DEBUG) << LOG_KV("block number", m_block->blockHeaderConst()->number())
-                             << LOG_KV("tx count", m_block->transactionsSize());
-
-        m_executiveResults.resize(m_block->transactionsSize());
-#pragma omp parallel for
-        for (size_t i = 0; i < m_block->transactionsSize(); ++i)
-        {
-            auto tx = m_block->transaction(i);
-            m_executiveResults[i].transactionHash = tx->hash();
-            m_executiveResults[i].source = tx->source();
-
-            auto message = m_scheduler->m_executionMessageFactory->createExecutionMessage();
-            message->setType(protocol::ExecutionMessage::MESSAGE);
-            message->setContextID(i + m_startContextID);
-            message->setTransactionHash(tx->hash());
-            message->setOrigin(toHex(tx->sender()));
-            message->setFrom(std::string(message->origin()));
-
-
-            if (tx->attribute() & bcos::protocol::Transaction::Attribute::LIQUID_SCALE_CODEC)
-            {
-                // LIQUID
-                if (tx->attribute() & bcos::protocol::Transaction::Attribute::LIQUID_CREATE)
-                {
-                    message->setCreate(true);
-                }
-                message->setTo(std::string(tx->to()));
-            }
-            else
-            {
-                // SOLIDITY
-                if (tx->to().empty())
-                {
-                    message->setCreate(true);
-                }
-                else
-                {
-                    if (m_scheduler->m_isAuthCheck && !m_staticCall &&
-                        m_block->blockHeaderConst()->number() == 0 &&
-                        tx->to() == precompiled::AUTH_COMMITTEE_ADDRESS)
-                    {
-                        // if enable auth check, and first deploy auth contract
-                        message->setCreate(true);
-                    }
-                    message->setTo(preprocessAddress(tx->to()));
-                }
-            }
-
-            message->setDepth(0);
-            message->setGasAvailable(TRANSACTION_GAS);
-            message->setData(tx->input().toBytes());
-            message->setStaticCall(m_staticCall);
-
-            if (tx->attribute() & bcos::protocol::Transaction::Attribute::DAG)
-            {
-                withDAG = true;
-            }
-
-            auto to = std::string(message->to());
-#pragma omp critical
-            m_executiveStates.emplace(
-                std::make_tuple(std::move(to), i), ExecutiveState(i, std::move(message), withDAG));
-        }
-    }
     auto createMsgT = utcTime() - startT;
     startT = utcTime();
     if (!m_staticCall)
     {
         // Execute nextBlock
+        bool withDAG = m_withDAG;
         batchNextBlock([this, withDAG, createMsgT, startT, callback = std::move(callback)](
                            Error::UniquePtr error) {
             if (error)

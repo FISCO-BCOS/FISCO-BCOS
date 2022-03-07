@@ -256,6 +256,7 @@ void PBFTCacheProcessor::updateCommitQueue(PBFTProposalInterface::Ptr _committed
                               "Receive valid system prePrepare proposal, stop to notify sealing")
                        << LOG_KV("waitSealUntil", _committedProposal->index());
     }
+    tryToPreApplyProposal(_committedProposal);
     tryToApplyCommitQueue();
 }
 
@@ -292,6 +293,13 @@ ProposalInterface::ConstPtr PBFTCacheProcessor::getAppliedCheckPointProposal(
         return nullptr;
     }
     return (m_caches[_index])->checkPointProposal();
+}
+
+bool PBFTCacheProcessor::tryToPreApplyProposal(ProposalInterface::Ptr _proposal)
+{
+    m_config->stateMachine()->asyncPreApply(_proposal, [](bool success) { (void)success; });
+
+    return true;
 }
 
 bool PBFTCacheProcessor::tryToApplyCommitQueue()
@@ -331,6 +339,7 @@ bool PBFTCacheProcessor::tryToApplyCommitQueue()
         // in case of the same block execute more than once
         m_executingProposals[proposal->hash()] = proposal->index();
         applyStateMachine(lastAppliedProposal, proposal);
+
         return true;
     }
     return false;
