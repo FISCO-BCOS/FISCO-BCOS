@@ -33,13 +33,17 @@ public:
     ProtocolInfo() = default;
     ProtocolInfo(
         ProtocolModuleID _moduleID, ProtocolVersion _minVersion, ProtocolVersion _maxVersion)
-      : m_protocolModuleID(_moduleID), m_minVersion(_minVersion), m_maxVersion(_maxVersion)
+      : m_protocolModuleID(_moduleID),
+        m_minVersion(_minVersion),
+        m_maxVersion(_maxVersion),
+        m_version(m_minVersion)
     {}
     virtual ~ProtocolInfo() {}
-
     virtual void setProtocolModuleID(ProtocolModuleID _moduleID) { m_protocolModuleID = _moduleID; }
     virtual void setMinVersion(ProtocolVersion _minVersion) { m_minVersion = _minVersion; }
     virtual void setMaxVersion(ProtocolVersion _maxVersion) { m_maxVersion = _maxVersion; }
+    // set the negotiated version
+    virtual void setVersion(ProtocolVersion _version) { m_version = _version; }
 
     // the moduleID
     virtual ProtocolModuleID protocolModuleID() const { return m_protocolModuleID; }
@@ -48,10 +52,14 @@ public:
     // the maximum supported version number
     virtual ProtocolVersion maxVersion() const { return m_maxVersion; }
 
+    // the negotiated version
+    virtual ProtocolVersion version() const { return m_version; }
+
 protected:
     ProtocolModuleID m_protocolModuleID;
     ProtocolVersion m_minVersion;
     ProtocolVersion m_maxVersion;
+    ProtocolVersion m_version;
 };
 }  // namespace protocol
 }  // namespace bcos

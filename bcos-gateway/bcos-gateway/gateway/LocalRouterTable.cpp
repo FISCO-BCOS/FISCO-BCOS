@@ -96,7 +96,8 @@ std::map<std::string, std::set<std::string>> LocalRouterTable::nodeListInfo() co
  * @param _frontService: FrontService
  */
 bool LocalRouterTable::insertNode(const std::string& _groupID, NodeIDPtr _nodeID,
-    bcos::protocol::NodeType _type, FrontServiceInterface::Ptr _frontService)
+    bcos::protocol::NodeType _type, FrontServiceInterface::Ptr _frontService,
+    bcos::protocol::ProtocolInfo::ConstPtr _protocolInfo)
 {
     auto nodeIDStr = _nodeID->hex();
     UpgradableGuard l(x_nodeList);
@@ -113,9 +114,12 @@ bool LocalRouterTable::insertNode(const std::string& _groupID, NodeIDPtr _nodeID
     }
     auto frontServiceInfo =
         std::make_shared<FrontServiceInfo>(nodeIDStr, _frontService, _type, nullptr);
+    frontServiceInfo->setProtocolInfo(_protocolInfo);
     UpgradeGuard ul(l);
     m_nodeList[_groupID][nodeIDStr] = frontServiceInfo;
     ROUTER_LOG(INFO) << LOG_DESC("insertNode") << LOG_KV("groupID", _groupID)
+                     << LOG_KV("minVersion", _protocolInfo->minVersion())
+                     << LOG_KV("maxVersion", _protocolInfo->maxVersion())
                      << LOG_KV("nodeID", nodeIDStr) << LOG_KV("nodeType", _type);
     return true;
 }
@@ -178,9 +182,12 @@ bool LocalRouterTable::updateGroupNodeInfos(bcos::group::GroupInfo::Ptr _groupIn
         UpgradeGuard ul(l);
         auto frontServiceInfo = std::make_shared<FrontServiceInfo>(
             nodeInfo->nodeID(), frontService.first, nodeInfo->nodeType(), frontService.second);
+        frontServiceInfo->setProtocolInfo(nodeInfo->nodeProtocol());
         m_nodeList[groupID][nodeID] = frontServiceInfo;
         ROUTER_LOG(INFO) << LOG_DESC("updateGroupNodeInfos: insert frontService for the node")
                          << LOG_KV("nodeID", nodeInfo->nodeID())
+                         << LOG_KV("minVersion", nodeInfo->nodeProtocol()->minVersion())
+                         << LOG_KV("maxVersion", nodeInfo->nodeProtocol()->maxVersion())
                          << LOG_KV("serviceName", serviceName) << printNodeInfo(nodeInfo);
         frontServiceUpdated = true;
     }

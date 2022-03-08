@@ -154,10 +154,11 @@ public:
     bcos::amop::AMOPImpl::Ptr amop() { return m_amop; }
 
     bool registerNode(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
-        bcos::protocol::NodeType _nodeType,
-        bcos::front::FrontServiceInterface::Ptr _frontService) override
+        bcos::protocol::NodeType _nodeType, bcos::front::FrontServiceInterface::Ptr _frontService,
+        bcos::protocol::ProtocolInfo::ConstPtr _protocolInfo) override
     {
-        return m_gatewayNodeManager->registerNode(_groupID, _nodeID, _nodeType, _frontService);
+        return m_gatewayNodeManager->registerNode(
+            _groupID, _nodeID, _nodeType, _frontService, _protocolInfo);
     }
 
 protected:

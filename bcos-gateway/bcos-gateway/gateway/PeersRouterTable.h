@@ -79,7 +79,7 @@ private:
     mutable SharedMutex x_groupNodeList;
 
     // the nodeIDList infos of the peers
-    // p2pNodeID => groupID => nodeIDList
+    // p2pNodeID => GatewayNodeStatus
     std::map<P2pID, GatewayNodeStatus::Ptr> m_peersStatus;
     mutable SharedMutex x_peersStatus;
 

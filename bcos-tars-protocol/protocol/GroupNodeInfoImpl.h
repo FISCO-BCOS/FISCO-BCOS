@@ -23,7 +23,10 @@
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
 #include <bcos-framework/interfaces/gateway/GroupNodeInfo.h>
+#include <bcos-framework/interfaces/protocol/ProtocolInfo.h>
 #include <bcos-tars-protocol/tars/GatewayInfo.h>
+#include <bcos-tars-protocol/tars/ProtocolInfo.h>
+
 namespace bcostars
 {
 namespace protocol
@@ -34,7 +37,18 @@ public:
     GroupNodeInfoImpl()
       : m_inner(
             [m_groupNodeInfo = bcostars::GroupNodeInfo()]() mutable { return &m_groupNodeInfo; })
-    {}
+    {
+        // recover m_protocolList
+        auto const& tarsProtocols = m_inner()->protocolList;
+        for (auto const& protocol : tarsProtocols)
+        {
+            auto protocolInfo = std::make_shared<bcos::protocol::ProtocolInfo>(
+                (bcos::protocol::ProtocolModuleID)protocol.moduleID,
+                (bcos::protocol::ProtocolVersion)protocol.minVersion,
+                (bcos::protocol::ProtocolVersion)protocol.maxVersion);
+            m_protocolList.emplace_back(protocolInfo);
+        }
+    }
     explicit GroupNodeInfoImpl(std::function<bcostars::GroupNodeInfo*()> inner) : m_inner(inner) {}
     ~GroupNodeInfoImpl() override {}
 
@@ -54,8 +68,29 @@ public:
     int type() const override { return m_inner()->type; }
     const bcostars::GroupNodeInfo& inner() const { return *m_inner(); }
 
+    void setNodeProtocolList(
+        std::vector<bcos::protocol::ProtocolInfo::ConstPtr>&& _protocolList) override
+    {
+        m_protocolList = std::move(_protocolList);
+        // encode protocolList into m_inner()
+        bcostars::ProtocolInfo tarsProtocol;
+        for (auto const& protocol : _protocolList)
+        {
+            tarsProtocol.moduleID = protocol->protocolModuleID();
+            tarsProtocol.minVersion = protocol->minVersion();
+            tarsProtocol.maxVersion = protocol->maxVersion();
+        }
+        m_inner()->protocolList.emplace_back(std::move(tarsProtocol));
+    }
+
+    std::vector<bcos::protocol::ProtocolInfo::ConstPtr> const& nodeProtocolList() const override
+    {
+        return m_protocolList;
+    }
+
 private:
     std::function<bcostars::GroupNodeInfo*()> m_inner;
+    std::vector<bcos::protocol::ProtocolInfo::ConstPtr> m_protocolList;
 };
 }  // namespace protocol
 }  // namespace bcostars

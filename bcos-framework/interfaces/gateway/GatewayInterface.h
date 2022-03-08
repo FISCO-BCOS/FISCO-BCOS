@@ -23,6 +23,7 @@
 #include "bcos-framework/interfaces/front/FrontServiceInterface.h"
 #include "bcos-framework/interfaces/multigroup/GroupInfo.h"
 #include "bcos-framework/interfaces/protocol/Protocol.h"
+#include "bcos-framework/interfaces/protocol/ProtocolInfo.h"
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
@@ -124,8 +125,9 @@ public:
         std::vector<std::string> const& _topicList,
         std::function<void(Error::Ptr&&)> _callback) = 0;
 
+    // for the air-mode node
     virtual bool registerNode(const std::string&, bcos::crypto::NodeIDPtr, bcos::protocol::NodeType,
-        bcos::front::FrontServiceInterface::Ptr)
+        bcos::front::FrontServiceInterface::Ptr, bcos::protocol::ProtocolInfo::ConstPtr)
     {
         return true;
     }

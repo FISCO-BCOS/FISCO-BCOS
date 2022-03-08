@@ -51,7 +51,7 @@ inline std::shared_ptr<bcos::front::FrontService> buildFrontService(
     auto frontService = frontServiceFactory->buildFrontService(_groupID, nodeIDPtr);
     // register front service to gateway
     gateway->gatewayNodeManager()->registerNode(
-        _groupID, nodeIDPtr, bcos::protocol::NodeType::CONSENSUS_NODE, frontService);
+        _groupID, nodeIDPtr, bcos::protocol::NodeType::CONSENSUS_NODE, frontService, nullptr);
     // front service
     frontService->start();
     // start gateway

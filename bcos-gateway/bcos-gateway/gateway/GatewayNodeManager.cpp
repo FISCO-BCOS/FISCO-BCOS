@@ -73,9 +73,11 @@ void GatewayNodeManager::stop()
 }
 
 bool GatewayNodeManager::registerNode(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
-    bcos::protocol::NodeType _nodeType, bcos::front::FrontServiceInterface::Ptr _frontService)
+    bcos::protocol::NodeType _nodeType, bcos::front::FrontServiceInterface::Ptr _frontService,
+    bcos::protocol::ProtocolInfo::ConstPtr _protocolInfo)
 {
-    auto ret = m_localRouterTable->insertNode(_groupID, _nodeID, _nodeType, _frontService);
+    auto ret =
+        m_localRouterTable->insertNode(_groupID, _nodeID, _nodeType, _frontService, _protocolInfo);
     if (ret)
     {
         increaseSeq();
@@ -198,11 +200,14 @@ bytesPointer GatewayNodeManager::generateNodeStatus()
         groupNodeInfo->setGroupID(it.first);
         // get nodeID and type
         std::vector<std::string> nodeIDList;
+        std::vector<ProtocolInfo::ConstPtr> protocolList;
+
         auto groupType = GroupType::OUTSIDE_GROUP;
         bool hasObserverNode = false;
         for (auto const& pNodeInfo : it.second)
         {
             nodeIDList.emplace_back(pNodeInfo.first);
+            protocolList.emplace_back(pNodeInfo.second->protocolInfo());
             if ((NodeType)(pNodeInfo.second->nodeType()) == NodeType::CONSENSUS_NODE)
             {
                 groupType = GroupType::GROUP_WITH_CONSENSUS_NODE;
@@ -218,6 +223,7 @@ bytesPointer GatewayNodeManager::generateNodeStatus()
         }
         groupNodeInfo->setType(groupType);
         groupNodeInfo->setNodeIDList(std::move(nodeIDList));
+        groupNodeInfo->setNodeProtocolList(std::move(protocolList));
         groupNodeInfos.emplace_back(groupNodeInfo);
         NODE_MANAGER_LOG(INFO) << LOG_DESC("generateNodeStatus") << LOG_KV("groupType", groupType)
                                << LOG_KV("groupID", it.first)

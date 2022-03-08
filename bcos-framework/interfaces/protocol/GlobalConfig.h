@@ -21,6 +21,8 @@
 #pragma once
 #include "Protocol.h"
 #include "ProtocolInfo.h"
+#include <map>
+#include <memory>
 
 namespace bcos
 {

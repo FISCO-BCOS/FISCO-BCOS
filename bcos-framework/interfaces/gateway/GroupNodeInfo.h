@@ -19,6 +19,7 @@
  */
 #pragma once
 #include <bcos-framework/interfaces/protocol/Protocol.h>
+#include <bcos-framework/interfaces/protocol/ProtocolInfo.h>
 #include <memory>
 #include <vector>
 namespace bcos
@@ -42,6 +43,10 @@ public:
     // Note: externally ensure thread safety
     virtual std::vector<std::string> const& nodeIDList() const = 0;
     virtual int type() const = 0;
+
+    virtual void setNodeProtocolList(
+        std::vector<bcos::protocol::ProtocolInfo::ConstPtr>&& _protocolList) = 0;
+    virtual std::vector<bcos::protocol::ProtocolInfo::ConstPtr> const& nodeProtocolList() const = 0;
 };
 }  // namespace gateway
 }  // namespace bcos
