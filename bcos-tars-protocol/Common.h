@@ -19,6 +19,8 @@
  */
 
 #pragma once
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 
 #include "bcos-tars-protocol/tars/GatewayInfo.h"
 #include "bcos-tars-protocol/tars/GroupInfo.h"

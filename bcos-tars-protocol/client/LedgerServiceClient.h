@@ -18,6 +18,10 @@
  * @date 2021-10-17
  */
 #pragma once
+
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+
 #include "bcos-tars-protocol/tars/LedgerService.h"
 #include <bcos-framework/interfaces/ledger/LedgerInterface.h>
 #include <bcos-framework/interfaces/protocol/BlockFactory.h>

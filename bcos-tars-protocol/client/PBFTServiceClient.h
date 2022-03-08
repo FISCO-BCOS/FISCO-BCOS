@@ -21,6 +21,9 @@
 
 #pragma once
 
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+
 #include "bcos-framework/interfaces/sealer/SealerInterface.h"
 #include "bcos-tars-protocol/ErrorConverter.h"
 #include "bcos-tars-protocol/tars/PBFTService.h"
@@ -207,7 +210,7 @@ public:
     }
 
     void notifyConnectedNodes(bcos::crypto::NodeIDSet const& _connectedNodes,
-        std::function<void(bcos::Error::Ptr)> _onRecvResponse);
+        std::function<void(bcos::Error::Ptr)> _onRecvResponse) override;
 
 protected:
     void start() override {}

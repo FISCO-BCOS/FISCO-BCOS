@@ -20,6 +20,9 @@
  */
 
 #pragma once
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+
 #include "TransactionSubmitResultImpl.h"
 #include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/interfaces/protocol/TransactionSubmitResultFactory.h>
