@@ -478,7 +478,7 @@ std::shared_ptr<std::vector<bytes>> TransactionExecutor::extractConflictFields(
         criticalKey.insert(criticalKey.end(), (uint8_t*)&slot, (uint8_t*)&slot + sizeof(slot));
         EXECUTOR_LOG(DEBUG) << LOG_BADGE("extractConflictFields") << LOG_KV("to", to)
                             << LOG_KV("functionName", functionAbi.name)
-                            << LOG_KV("slot", (int)conflictField.slot.value());
+                            << LOG_KV("addressHash", toHash) << LOG_KV("slot", slot);
 
         switch (conflictField.kind)
         {
