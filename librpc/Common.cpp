@@ -25,13 +25,16 @@
 #include <boost/archive/iterators/binary_from_base64.hpp>
 #include <boost/archive/iterators/transform_width.hpp>
 #include <boost/iostreams/copy.hpp>
+#if !defined(__APPLE__)
 #include <boost/iostreams/filter/zlib.hpp>
 #include <boost/iostreams/filtering_streambuf.hpp>
+#endif
 #include <iostream>
 #include <sstream>
 
 using namespace std;
 
+#if !defined(__APPLE__)
 // from https://stackoverflow.com/questions/4538586/how-to-compress-a-buffer-with-zlib
 std::string dev::compress(const std::string& _data)
 {
@@ -56,6 +59,7 @@ std::string dev::decompress(const std::string& _data)
     boost::iostreams::copy(input_stream, unpacked_text);
     return unpacked_text.str();
 }
+#endif
 
 // https://stackoverflow.com/questions/7053538/how-do-i-encode-a-string-to-base64-using-only-boost
 std::string dev::base64Encode(const std::string& _data)
