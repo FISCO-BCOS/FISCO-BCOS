@@ -110,10 +110,19 @@ bool TxPool::checkExistsInGroup(TxSubmitCallback _txSubmitCallback)
 void TxPool::asyncSealTxs(size_t _txsLimit, TxsHashSetPtr _avoidTxs,
     std::function<void(Error::Ptr, Block::Ptr, Block::Ptr)> _sealCallback)
 {
-    auto fetchedTxs = m_config->blockFactory()->createBlock();
-    auto sysTxs = m_config->blockFactory()->createBlock();
-    m_txpoolStorage->batchFetchTxs(fetchedTxs, sysTxs, _txsLimit, _avoidTxs, true);
-    _sealCallback(nullptr, fetchedTxs, sysTxs);
+    // Note: not block seal new block here
+    auto self = std::weak_ptr<TxPool>(shared_from_this());
+    m_sealer->enqueue([self, _txsLimit, _avoidTxs, _sealCallback]() {
+        auto txpool = self.lock();
+        if (!txpool)
+        {
+            return;
+        }
+        auto fetchedTxs = txpool->m_config->blockFactory()->createBlock();
+        auto sysTxs = txpool->m_config->blockFactory()->createBlock();
+        txpool->m_txpoolStorage->batchFetchTxs(fetchedTxs, sysTxs, _txsLimit, _avoidTxs, true);
+        _sealCallback(nullptr, fetchedTxs, sysTxs);
+    });
 }
 
 void TxPool::asyncNotifyBlockResult(BlockNumber _blockNumber,
@@ -302,7 +311,7 @@ void TxPool::getTxsFromLocalLedger(HashListPtr _txsHash, HashListPtr _missedTxs,
 void TxPool::asyncFillBlock(
     HashListPtr _txsHash, std::function<void(Error::Ptr, TransactionsPtr)> _onBlockFilled)
 {
-    fillBlock(_txsHash, _onBlockFilled, true);
+    m_filler->enqueue([_onBlockFilled, txs]() { _onBlockFilled(nullptr, txs); });
 }
 
 void TxPool::fillBlock(HashListPtr _txsHash,
