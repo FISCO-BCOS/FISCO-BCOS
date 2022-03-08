@@ -19,6 +19,10 @@
  * @date 2021-04-20
  */
 #pragma once
+
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+
 #include "TransactionReceiptImpl.h"
 #include <bcos-framework/interfaces/protocol/TransactionReceiptFactory.h>
 
