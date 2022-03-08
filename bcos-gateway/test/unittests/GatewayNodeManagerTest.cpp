@@ -71,7 +71,8 @@ inline GatewayNodeStatus::Ptr createGatewayNodeStatus(
 inline GroupNodeInfo::Ptr createGroupNodeInfo(
     std::string const& _groupID, std::vector<std::string> _nodeIDList)
 {
-    auto groupNodeInfo = std::make_shared<GroupNodeInfo>(_groupID);
+    auto groupNodeInfo = std::make_shared<bcostars::protocol::GroupNodeInfoImpl>();
+    groupNodeInfo->setGroupID(_groupID);
     groupNodeInfo->setNodeIDList(std::move(_nodeIDList));
     return groupNodeInfo;
 }
@@ -231,19 +232,22 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_statusEncodeDecode)
     gatewayNodeStatus->setUUID("testuuid");
     std::vector<GroupNodeInfo::Ptr> groupNodeInfos;
     // group1
-    auto group1Info = std::make_shared<GroupNodeInfo>("group1");
+    auto group1Info = std::make_shared<bcostars::protocol::GroupNodeInfoImpl>();
+    group1Info->setGroupID("group1");
     std::vector<std::string> nodeIDList = {"a0", "b0", "c0"};
     group1Info->setNodeIDList(std::move(nodeIDList));
     groupNodeInfos.emplace_back(group1Info);
 
     // group2
-    auto group2Info = std::make_shared<GroupNodeInfo>("group2");
+    auto group2Info = std::make_shared<bcostars::protocol::GroupNodeInfoImpl>();
+    group2Info->setGroupID("group2");
     std::vector<std::string> nodeIDList2 = {"a1", "b1", "c1"};
     group2Info->setNodeIDList(std::move(nodeIDList2));
     groupNodeInfos.emplace_back(group2Info);
 
     // group3
-    auto group3Info = std::make_shared<GroupNodeInfo>("group3");
+    auto group3Info = std::make_shared<bcostars::protocol::GroupNodeInfoImpl>();
+    group3Info->setGroupID("group3");
     std::vector<std::string> nodeIDList3 = {"a2", "b2", "c2"};
     group3Info->setNodeIDList(std::move(nodeIDList3));
     groupNodeInfos.emplace_back(group3Info);
@@ -432,5 +436,4 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_remove)
         BOOST_CHECK(p2pIDs2.empty());
     }
 }
-
 BOOST_AUTO_TEST_SUITE_END()

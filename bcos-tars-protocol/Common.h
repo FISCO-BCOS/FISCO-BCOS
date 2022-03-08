@@ -268,10 +268,10 @@ inline bcostars::P2PInfo toTarsP2PInfo(bcos::gateway::P2PInfo const& _p2pInfo)
     return tarsP2PInfo;
 }
 
-inline bcostars::GroupNodeIDInfo toTarsNodeIDInfo(
+inline bcostars::GroupNodeInfo toTarsNodeIDInfo(
     std::string const& _groupID, std::set<std::string> const& _nodeIDList)
 {
-    GroupNodeIDInfo groupNodeIDInfo;
+    GroupNodeInfo groupNodeIDInfo;
     groupNodeIDInfo.groupID = _groupID;
     groupNodeIDInfo.nodeIDList = std::vector<std::string>(_nodeIDList.begin(), _nodeIDList.end());
     return groupNodeIDInfo;
@@ -285,7 +285,7 @@ inline bcostars::GatewayInfo toTarsGatewayInfo(bcos::gateway::GatewayInfo::Ptr _
     }
     tarsGatewayInfo.p2pInfo = toTarsP2PInfo(_bcosGatewayInfo->p2pInfo());
     auto nodeIDList = _bcosGatewayInfo->nodeIDInfo();
-    std::vector<GroupNodeIDInfo> tarsNodeIDInfos;
+    std::vector<GroupNodeInfo> tarsNodeIDInfos;
     for (auto const& it : nodeIDList)
     {
         tarsNodeIDInfos.emplace_back(toTarsNodeIDInfo(it.first, it.second));
