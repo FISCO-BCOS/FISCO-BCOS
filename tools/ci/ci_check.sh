@@ -12,6 +12,10 @@ LOG_INFO() {
 }
 
 init() {
+
+    echo " ==> fisco-bcos version: "
+    ../bin/fisco-bcos -v
+    
     cat >ipconf <<EOF
 127.0.0.1:2 agencyA 1,2
 127.0.0.1:2 agencyB 1

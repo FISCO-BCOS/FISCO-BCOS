@@ -57,7 +57,7 @@ jobs:
         run: brew install openssl@1.1 ccache gmp cmake
       - name: install Ubuntu dependencies
         if: runner.os == 'Linux'
-        run: sudo apt install -y git curl build-essential clang cmake libssl-dev zlib1g-dev ccache libgmp-dev flex bison patch
+        run: sudo apt install -y g++ libssl-dev openssl cmake git build-essential autoconf texinfo flex patch bison libgmp-dev zlib1g-dev automake libtool
       - name: configure
         run: CC=/usr/bin/clang CXX=/usr/bin/clang++ cmake -DTESTS=ON .
       - name: compile
@@ -167,7 +167,7 @@ jobs:
             ccache-v2-notest-${{ runner.temp }}-${{ github.base_ref }}-
             ccache-v2-notest-${{ runner.temp }}-
       - name: install ubuntu dependencies
-        run: sudo apt install -y git curl build-essential clang cmake openssl libssl-dev zlib1g-dev ccache libgmp-dev flex bison
+        run: sudo apt install -y g++ libssl-dev openssl cmake git build-essential autoconf texinfo flex patch bison libgmp-dev zlib1g-dev automake libtool
       - name: configure
         run: /usr/bin/cmake . -DBUILD_STATIC=ON
       - name: compile
