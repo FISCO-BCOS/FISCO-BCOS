@@ -17,7 +17,6 @@
  * @author: octopus
  * @date 2021-05-25
  */
-
 #include <clocale>
 #include <iostream>
 #include <thread>
