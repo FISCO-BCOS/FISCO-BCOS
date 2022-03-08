@@ -243,6 +243,7 @@ bool PBFTConfig::tryTriggerFastViewChange(IndexType _leaderIndex)
 
 void PBFTConfig::notifySealer(BlockNumber _progressedIndex, bool _enforce)
 {
+    RecursiveGuard l(m_mutex);
     auto currentLeader = leaderIndex(_progressedIndex);
     if (currentLeader != nodeIndex())
     {
@@ -286,6 +287,11 @@ void PBFTConfig::notifySealer(BlockNumber _progressedIndex, bool _enforce)
                        << LOG_KV("expectedEndIndex", endProposalIndex) << printCurrentState();
         return;
     }
+    // already notified
+    if (m_sealEndIndex >= endProposalIndex && m_sealStartIndex <= startSealIndex)
+    {
+        return;
+    }
     auto committedIndex = m_committedProposal->index();
     if (m_validator->resettingProposalSize() > 0 && (startSealIndex > (committedIndex + 1)))
     {
@@ -294,6 +300,16 @@ void PBFTConfig::notifySealer(BlockNumber _progressedIndex, bool _enforce)
                               "been resetted success")
                        << LOG_KV("resettingProposalSize", m_validator->resettingProposalSize())
                        << LOG_KV("startSealIndex", startSealIndex) << printCurrentState();
+        // notify the leader to seal when all txs of all proposals have been resetted
+        auto self = std::weak_ptr<PBFTConfig>(shared_from_this());
+        m_validator->setVerifyCompletedHook([self, _progressedIndex, _enforce]() {
+            auto config = self.lock();
+            if (!config)
+            {
+                return;
+            }
+            config->notifySealer(_progressedIndex, _enforce);
+        });
         return;
     }
     asyncNotifySealProposal(startSealIndex, endProposalIndex, blockTxCountLimit());
