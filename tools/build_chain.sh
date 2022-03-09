@@ -48,7 +48,7 @@ days=36500 # 100 years
 timestamp=$(($(date '+%s')*1000))
 chain_id=1
 compatibility_version=""
-default_version="2.8.0"
+default_version="2.9.0"
 macOS=""
 x86_64_arch="true"
 download_timeout=240
@@ -1241,17 +1241,16 @@ while getopts "v:V:f" option;do
         package_name="console-\${solc_suffix}.tar.gz"
         if [ "\${solc_suffix}" == "0.4" ]; then package_name="console.tar.gz";fi
     ;;
-    V) version="\$OPTARG";;
+    V) download_version="\$OPTARG";;
     f) config="true";;
     esac
 done
 
-if [[ -z "\${version}" ]];then
-    version=\$(curl -s https://api.github.com/repos/FISCO-BCOS/console/releases | grep "tag_name" | cut -d \" -f 4 | sort -V | tail -n 1 | sed "s/^[vV]//")
-fi
+default_version=2.9.0
+download_version=${default_version}
 sm_crypto=\$(cat "\${SHELL_FOLDER}"/node*/config.ini | grep sm_crypto_channel= | cut -d = -f 2 | head -n 1)
-download_link=https://github.com/FISCO-BCOS/console/releases/download/v\${version}/\${package_name}
-cos_download_link=${cdn_link_header}/console/releases/v\${version}/\${package_name}
+download_link=https://github.com/FISCO-BCOS/console/releases/download/v\${download_version}/\${package_name}
+cos_download_link=${cdn_link_header}/console/releases/v\${download_version}/\${package_name}
 echo "Downloading console \${version} from \${download_link}"
 if [ \$(curl -IL -o /dev/null -s -w %{http_code}  \${cos_download_link}) == 200 ];then
     curl -#LO \${download_link} --speed-time 30 --speed-limit 102400 -m 450 || {
