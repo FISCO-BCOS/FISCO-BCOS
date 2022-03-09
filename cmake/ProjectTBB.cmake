@@ -10,8 +10,8 @@ ExternalProject_Add(tbb
     DOWNLOAD_NO_PROGRESS 1
     DOWNLOAD_NAME v2021.4.0
     # TODO: add wb cdn link
-    URL https://codeload.github.com/oneapi-src/oneTBB/tar.gz/refs/tags/v2021.4.0
-    URL_HASH SHA1=2641f9a1ead4621a8660ee07a1664627fa0eb477
+    URL https://codeload.github.com/oneapi-src/oneTBB/tar.gz/refs/tags/v2021.6.0-rc1
+    URL_HASH SHA1=7653c3db34db9e132286e69f1f69da1a6b39df9f
     BUILD_IN_SOURCE 1
     LOG_CONFIGURE 1
     LOG_BUILD 1
@@ -19,7 +19,8 @@ ExternalProject_Add(tbb
     CMAKE_COMMAND ${CMAKE_COMMAND}
     CMAKE_ARGS 
         -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR> 
-        -DBUILD_SHARED_LIBS=OFF 
+        -DBUILD_SHARED_LIBS=OFF
+        -DTBB_ENABLE_IPO=OFF
         -DTBB_TEST=OFF 
         -DTBB_EXAMPLES=OFF 
         -DTBB_BENCH=OFF
