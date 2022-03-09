@@ -1438,6 +1438,10 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->newEVMContractAddress = input.newEVMContractAddress();
     callParameters->status = input.status();
     callParameters->keyLocks = input.takeKeyLocks();
+    if (input.create())
+    {
+        callParameters->abi = input.abi();
+    }
 
     return callParameters;
 }
