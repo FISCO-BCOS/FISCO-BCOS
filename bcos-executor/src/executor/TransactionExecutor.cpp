@@ -1085,8 +1085,10 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
     std::function<void(bcos::Error::UniquePtr&&, bcos::protocol::ExecutionMessage::UniquePtr&&)>
         callback)
 {
-    EXECUTOR_LOG(TRACE) << "Import key locks size: " << input->keyLocks().size();
-
+    EXECUTOR_LOG(TRACE) << LOG_DESC("asyncExecute")
+                        << LOG_KV("keyLockSize", input->keyLocks().size())
+                        << LOG_KV("contextID", input->contextID()) << LOG_KV("seq", input->seq())
+                        << LOG_KV("type", std::to_string(input->type()));
     switch (input->type())
     {
     case bcos::protocol::ExecutionMessage::TXHASH:
@@ -1165,15 +1167,15 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
             auto& [executive] = *it;
 
             // Call callback
-            EXECUTOR_LOG(TRACE) << "Entering responseFunc";
+            EXECUTOR_LOG(TRACE) << "Entering responseFunc" << LOG_KV("contextID", contextID)
+                                << LOG_KV("seq", seq);
             executive->setExchangeMessage(std::move(callParameters));
             auto output = executive->resume();
             auto message = toExecutionResult(*executive, std::move(output));
 
             callback(nullptr, std::move(message));
-            return;
-
             EXECUTOR_LOG(TRACE) << "Exiting responseFunc";
+            return;
         }
         else
         {
