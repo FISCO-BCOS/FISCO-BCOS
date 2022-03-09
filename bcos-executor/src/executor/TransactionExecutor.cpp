@@ -811,6 +811,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                             << LOG_DESC("The transaction can't be executed concurrently")
                             << LOG_KV("adddress", to)
                             << LOG_KV("abiKey", toHexStringWithPrefix(abiKey));
+                        executionResults[i] = toExecutionResult(std::move(inputs[i]));
                         executionResults[i]->setType(ExecutionMessage::SEND_BACK);
                         continue;
                     }
