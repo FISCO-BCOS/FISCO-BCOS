@@ -421,6 +421,8 @@ protected:
     std::atomic_bool m_startRecovered = {false};
 
     std::function<bool(bcos::crypto::NodeIDPtr)> m_faultyDiscriminator;
+
+    mutable RecursiveMutex m_mutex;
 };
 }  // namespace consensus
 }  // namespace bcos

@@ -19,7 +19,7 @@
  */
 #include "GatewayNodeStatus.h"
 #include <bcos-tars-protocol/Common.h>
-
+#include <bcos-tars-protocol/protocol/GroupNodeInfoImpl.h>
 using namespace bcos;
 using namespace bcos::protocol;
 using namespace bcos::gateway;
@@ -34,11 +34,9 @@ bytesPointer GatewayNodeStatus::encode()
     m_tarsStatus->nodeList.clear();
     for (auto const& it : m_groupNodeInfos)
     {
-        bcostars::GroupNodeIDInfo groupNodeInfo;
-        groupNodeInfo.groupID = it->groupID();
-        groupNodeInfo.nodeIDList = it->nodeIDList();
-        groupNodeInfo.type = it->type();
-        m_tarsStatus->nodeList.emplace_back(groupNodeInfo);
+        auto groupNodeInfoImpl =
+            std::dynamic_pointer_cast<bcostars::protocol::GroupNodeInfoImpl>(it);
+        m_tarsStatus->nodeList.emplace_back(groupNodeInfoImpl->inner());
     }
     auto encodeData = std::make_shared<bytes>();
     tars::TarsOutputStream<bcostars::protocol::BufferWriterByteVector> output;
@@ -56,9 +54,8 @@ void GatewayNodeStatus::decode(bytesConstRef _data)
     m_groupNodeInfos.clear();
     for (auto& it : m_tarsStatus->nodeList)
     {
-        auto groupNodeInfo = std::make_shared<GroupNodeInfo>(it.groupID);
-        groupNodeInfo->setNodeIDList(std::move(it.nodeIDList));
-        groupNodeInfo->setType((GroupType)(it.type));
+        auto groupNodeInfo = std::make_shared<bcostars::protocol::GroupNodeInfoImpl>(
+            [m_groupNodeInfo = it]() mutable { return &m_groupNodeInfo; });
         m_groupNodeInfos.emplace_back(groupNodeInfo);
     }
 }

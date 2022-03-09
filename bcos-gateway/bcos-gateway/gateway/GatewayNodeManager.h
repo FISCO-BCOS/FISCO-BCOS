@@ -66,7 +66,8 @@ protected:
       : m_uuid(_uuid),
         m_keyFactory(_keyFactory),
         m_localRouterTable(std::make_shared<LocalRouterTable>(_keyFactory)),
-        m_peersRouterTable(std::make_shared<PeersRouterTable>(_uuid, _keyFactory, _p2pInterface))
+        m_peersRouterTable(std::make_shared<PeersRouterTable>(_uuid, _keyFactory, _p2pInterface)),
+        m_gatewayNodeStatusFactory(std::make_shared<GatewayNodeStatusFactory>())
     {}
 
     uint32_t increaseSeq()
@@ -107,6 +108,8 @@ protected:
 
     unsigned const SEQ_SYNC_PERIOD = 3000;
     std::shared_ptr<Timer> m_timer;
+
+    GatewayNodeStatusFactory::Ptr m_gatewayNodeStatusFactory;
 };
 }  // namespace gateway
 }  // namespace bcos

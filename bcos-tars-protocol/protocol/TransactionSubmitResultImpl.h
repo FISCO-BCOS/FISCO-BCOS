@@ -20,6 +20,9 @@
  */
 
 #pragma once
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+
 #include "TransactionReceiptImpl.h"
 #include "bcos-tars-protocol/Common.h"
 #include "bcos-tars-protocol/tars/TransactionReceipt.h"
