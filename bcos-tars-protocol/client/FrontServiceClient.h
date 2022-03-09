@@ -1,5 +1,8 @@
 #pragma once
 
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+
 #include "bcos-tars-protocol/Common.h"
 #include "bcos-tars-protocol/ErrorConverter.h"
 #include "bcos-tars-protocol/tars/FrontService.h"

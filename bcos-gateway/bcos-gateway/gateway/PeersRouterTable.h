@@ -22,6 +22,7 @@
 #include "GatewayStatus.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
+#include <bcos-framework/interfaces/gateway/GroupNodeInfo.h>
 #include <bcos-gateway/Common.h>
 #include <bcos-gateway/libp2p/P2PInterface.h>
 #include <bcos-gateway/protocol/GatewayNodeStatus.h>
