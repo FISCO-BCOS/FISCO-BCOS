@@ -137,7 +137,7 @@ void GatewayNodeManager::onReceiveNodeStatus(
                                   << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
         return;
     }
-    auto gatewayNodeStatus = std::make_shared<GatewayNodeStatus>();
+    auto gatewayNodeStatus = m_gatewayNodeStatusFactory->createGatewayNodeStatus();
     gatewayNodeStatus->decode(bytesConstRef(_msg->payload()->data(), _msg->payload()->size()));
     auto p2pID = _session->p2pID();
     NODE_MANAGER_LOG(INFO) << LOG_DESC("onReceiveNodeStatus") << LOG_KV("p2pid", p2pID)
@@ -187,14 +187,15 @@ void GatewayNodeManager::onRequestNodeStatus(
 
 bytesPointer GatewayNodeManager::generateNodeStatus()
 {
-    auto nodeStatus = std::make_shared<GatewayNodeStatus>();
+    auto nodeStatus = m_gatewayNodeStatusFactory->createGatewayNodeStatus();
     nodeStatus->setUUID(m_uuid);
     nodeStatus->setSeq(statusSeq());
     auto nodeList = m_localRouterTable->nodeList();
     std::vector<GroupNodeInfo::Ptr> groupNodeInfos;
     for (auto const& it : nodeList)
     {
-        auto groupNodeInfo = std::make_shared<GroupNodeInfo>(it.first);
+        auto groupNodeInfo = m_gatewayNodeStatusFactory->createGroupNodeInfo();
+        groupNodeInfo->setGroupID(it.first);
         // get nodeID and type
         std::vector<std::string> nodeIDList;
         auto groupType = GroupType::OUTSIDE_GROUP;

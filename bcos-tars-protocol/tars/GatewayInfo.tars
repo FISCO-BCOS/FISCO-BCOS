@@ -9,7 +9,7 @@ struct P2PInfo
     5 optional int port;
 };
 
-struct GroupNodeIDInfo
+struct GroupNodeInfo
 {
     1 require string groupID;
     2 optional vector<string> nodeIDList;
@@ -18,13 +18,13 @@ struct GroupNodeIDInfo
 struct GatewayInfo
 {
     1 require P2PInfo p2pInfo;
-    2 require vector<GroupNodeIDInfo> nodeIDInfo;
+    2 require vector<GroupNodeInfo> nodeIDInfo;
 };
 
 struct GatewayNodeStatus
 {
     1 require string uuid;
     2 require int seq;
-    3 optional vector<GroupNodeIDInfo> nodeList;
+    3 optional vector<GroupNodeInfo> nodeList;
 };
 };
