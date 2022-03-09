@@ -63,7 +63,8 @@ public:
         m_genesisHash(_genesisHash)
     {
         m_service->registerHandlerByProtoclID(
-            m_protocolId, boost::bind(&SyncMsgEngine::messageHandler, this, _1, _2, _3));
+            m_protocolId, boost::bind(&SyncMsgEngine::messageHandler, this, boost::placeholders::_1,
+                              boost::placeholders::_2, boost::placeholders::_3));
         m_txsWorker = std::make_shared<dev::ThreadPool>("SyncMsgE-" + std::to_string(m_groupId), 1);
         m_txsSender =
             std::make_shared<dev::ThreadPool>("TxsSender-" + std::to_string(m_groupId), 1);

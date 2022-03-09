@@ -6,6 +6,7 @@ ExternalProject_Add(snappy
     DOWNLOAD_NAME snappy-1.1.7.tar.gz
     DOWNLOAD_NO_PROGRESS 1
     URL https://codeload.github.com/google/snappy/tar.gz/1.1.7
+        https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/FISCO-BCOS/deps/snappy-1.1.7.tar.gz
         https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/snappy-1.1.7.tar.gz
     URL_HASH SHA256=3dfa02e873ff51a11ee02b9ca391807f0c8ea0529a4924afa645fbf97163f9d4
     CMAKE_COMMAND ${CMAKE_COMMAND}

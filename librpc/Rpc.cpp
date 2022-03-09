@@ -201,8 +201,8 @@ std::string Rpc::getPbftView(int _groupID)
         auto ledgerParam = ledgerManager()->getParamByGroupId(_groupID);
         auto consensusParam = ledgerParam->mutableConsensusParam();
         std::string consensusType = consensusParam.consensusType;
-        if (stringCmpIgnoreCase(consensusType, "pbft") != 0 &&
-            stringCmpIgnoreCase(consensusType, "rpbft") != 0)
+        if (stringCmpIgnoreCase(consensusType, PBFT_CONSENSUS_TYPE) != 0 &&
+            stringCmpIgnoreCase(consensusType, RPBFT_CONSENSUS_TYPE) != 0)
         {
             BOOST_THROW_EXCEPTION(
                 JsonRpcException(RPCExceptionType::NoView, RPCMsg[RPCExceptionType::NoView]));
@@ -267,7 +267,7 @@ Json::Value Rpc::getEpochSealersList(int _groupID)
         checkRequest(_groupID);
 
         auto consensusType = ledgerParam->mutableConsensusParam().consensusType;
-        if (stringCmpIgnoreCase(consensusType, "rpbft") != 0)
+        if (stringCmpIgnoreCase(consensusType, RPBFT_CONSENSUS_TYPE) != 0)
         {
             RPC_LOG(ERROR) << LOG_DESC("Only support getEpochSealersList when rpbft is used")
                            << LOG_KV("consensusType", consensusType) << LOG_KV("groupID", _groupID);
@@ -407,7 +407,6 @@ Json::Value Rpc::getClientVersion()
     {
         RPC_LOG(INFO) << LOG_BADGE("getClientVersion") << LOG_DESC("request");
         Json::Value version;
-
         version["FISCO-BCOS Version"] = g_BCOSConfig.binaryInfo.version;
         version["Supported Version"] = g_BCOSConfig.supportedVersion();
         version["Chain Id"] = toString(g_BCOSConfig.chainId());
@@ -1236,14 +1235,16 @@ void Rpc::addProofToResponse(std::shared_ptr<Json::Value> _response, std::string
 // send transactions and notify receipts with receipt, transactionProof, receiptProof
 std::string Rpc::sendRawTransactionAndGetProof(int _groupID, const std::string& _rlp)
 {
-    return sendRawTransaction(
-        _groupID, _rlp, boost::bind(&Rpc::notifyReceiptWithProof, this, _1, _2, _3, _4));
+    return sendRawTransaction(_groupID, _rlp,
+        boost::bind(&Rpc::notifyReceiptWithProof, this, boost::placeholders::_1,
+            boost::placeholders::_2, boost::placeholders::_3, boost::placeholders::_4));
 }
 
 std::string Rpc::sendRawTransaction(int _groupID, const std::string& _rlp)
 {
-    return sendRawTransaction(
-        _groupID, _rlp, boost::bind(&Rpc::notifyReceipt, this, _1, _2, _3, _4));
+    return sendRawTransaction(_groupID, _rlp,
+        boost::bind(&Rpc::notifyReceipt, this, boost::placeholders::_1, boost::placeholders::_2,
+            boost::placeholders::_3, boost::placeholders::_4));
 }
 
 

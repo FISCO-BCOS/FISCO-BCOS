@@ -59,9 +59,8 @@ public:
 class SMCryptoPrecompiledFixture : public CryptoPrecompiledFixture
 {
 public:
-    SMCryptoPrecompiledFixture()
+    SMCryptoPrecompiledFixture() : smCrypto(g_BCOSConfig.SMCrypto())
     {
-        smCrypto = g_BCOSConfig.SMCrypto();
         g_BCOSConfig.setUseSMCrypto(true);
         if (!smCrypto)
         {
@@ -172,7 +171,7 @@ void testVRFVerify(
     BOOST_CHECK(verifySucc == false);
     BOOST_CHECK(randomValue == 0);
 }
-BOOST_FIXTURE_TEST_SUITE(CryptoPrecompiledTest, CryptoPrecompiledFixture)
+BOOST_FIXTURE_TEST_SUITE(CryptoPrecompiled, CryptoPrecompiledFixture)
 BOOST_AUTO_TEST_CASE(testSM3AndKeccak256)
 {
     testHash(cryptoPrecompiled, precompiledContext);

@@ -33,7 +33,7 @@ endif()
 
 ExternalProject_Add(libvrf
     PREFIX ${CMAKE_SOURCE_DIR}/deps
-    DOWNLOAD_NAME libvrf.tar.gz
+    DOWNLOAD_NAME libvrf-rust1.47.tar.gz
     DOWNLOAD_NO_PROGRESS 1
     URL https://raw.githubusercontent.com/FISCO-BCOS/LargeFiles/master/libs/libvrf-rust1.47.tar.gz
         https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/FISCO-BCOS/deps/libvrf-rust1.47.tar.gz

@@ -292,7 +292,7 @@ void ConsensusEngineBase::statGasUsed(dev::eth::Block const& _block)
     {
         auto receipt = (*receipts)[receiptIndex];
         u256 gasUsed = receipt->gasUsed();
-        if (g_BCOSConfig.version() < V2_8_0)
+        if (g_BCOSConfig.version() < V2_9_0)
         {
             gasUsed = receipt->gasUsed() - prevGasUsed;
         }
@@ -317,8 +317,8 @@ void ConsensusEngineBase::updateMaxBlockTransactions()
 
 void ConsensusEngineBase::updateGasChargeManageSwitch()
 {
-    // only support GasChargeManage when supported_version >= 2.8.0
-    if (g_BCOSConfig.version() < V2_8_0)
+    // only support GasChargeManage when supported_version >= 2.9.0
+    if (g_BCOSConfig.version() < V2_9_0)
     {
         return;
     }

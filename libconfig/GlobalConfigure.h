@@ -41,6 +41,7 @@ enum VERSION : uint32_t
     V2_6_0 = 0x02060000,
     V2_7_0 = 0x02070000,
     V2_8_0 = 0x02080000,
+    V2_9_0 = 0x02090000,
 };
 
 enum ProtocolVersion : uint32_t
@@ -142,4 +143,7 @@ private:
 
 #define g_BCOSConfig GlobalConfigure::instance()
 
+std::string const PBFT_CONSENSUS_TYPE = "pbft";
+std::string const RPBFT_CONSENSUS_TYPE = "rpbft";
+std::string const RAFT_CONSENSUS_TYPE = "raft";
 }  // namespace dev

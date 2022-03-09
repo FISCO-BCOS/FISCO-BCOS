@@ -105,7 +105,7 @@ std::shared_ptr<std::set<Address>> GasChargeManagePrecompiled::getChargerList(
     std::shared_ptr<ExecutiveContext> _context)
 {
     // get charger list from the _sys_config_ table
-    auto result = dev::precompiled::getSystemConfigByKey(
+    auto result = dev::precompiled::getSysConfigByKey(
         _context->stateStorage(), SYSTEM_KEY_CHARGER_LIST, _context->blockInfo().number);
 
     PRECOMPILED_LOG(DEBUG) << LOG_DESC("getChargerList") << LOG_KV("chargerList", result->first);

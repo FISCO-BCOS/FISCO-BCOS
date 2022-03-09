@@ -102,7 +102,7 @@ void ExecutiveContextFactory::initExecutiveContext(
         context->setAddress2Precompiled(WORKING_SEALER_MGR_ADDRESS,
             std::make_shared<dev::precompiled::WorkingSealerManagerPrecompiled>());
     }
-    if (g_BCOSConfig.version() >= V2_8_0)
+    if (g_BCOSConfig.version() >= V2_9_0)
     {
         context->setAddress2Precompiled(CRYPTO_ADDRESS, std::make_shared<CryptoPrecompiled>());
         context->setAddress2Precompiled(
@@ -128,7 +128,7 @@ void ExecutiveContextFactory::setTxGasLimitToContext(ExecutiveContext::Ptr conte
     {
         std::string key = "tx_gas_limit";
         BlockInfo blockInfo = context->blockInfo();
-        auto configRet = getSystemConfigByKey(m_stateStorage, key, blockInfo.number);
+        auto configRet = getSysConfigByKey(m_stateStorage, key, blockInfo.number);
         auto ret = configRet->first;
         if (ret != "")
         {

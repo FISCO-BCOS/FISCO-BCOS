@@ -13,6 +13,7 @@ ExternalProject_Add(rocksdb
     DOWNLOAD_NAME rocksdb_6.0.2.tar.gz
     DOWNLOAD_NO_PROGRESS 1
     URL https://codeload.github.com/facebook/rocksdb/tar.gz/v6.0.2
+        https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/FISCO-BCOS/deps/rocksdb_6.0.2.tar.gz
     URL_HASH SHA256=89e0832f1fb00ac240a9438d4bbdae37dd3e52f7c15c3f646dc26887da16f342
     # remove dynamic lib and gtest. NOTE: sed line number should update once RocksDB upgrade
     PATCH_COMMAND ${SED_CMMAND} "s#-march=native#${MARCH_TYPE} ${COMPILER_FLAGS} #g" CMakeLists.txt COMMAND ${SED_CMMAND} "464d" CMakeLists.txt COMMAND ${SED_CMMAND} "739,749d" CMakeLists.txt COMMAND ${SED_CMMAND} "805,813d" CMakeLists.txt COMMAND ${SED_CMMAND} "s#-Werror##g" CMakeLists.txt
@@ -28,8 +29,8 @@ ExternalProject_Add(rocksdb
     -DWITH_TOOLS=OFF
     -DBUILD_SHARED_LIBS=OFF
     -DUSE_RTTI=ON
-    -DCMAKE_C_FLAGS=${CMAKE_C_FLAGS} ${MARCH_TYPE}
-    -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS} ${MARCH_TYPE}
+    -DCMAKE_C_FLAGS='${MARCH_TYPE}'
+    -DCMAKE_CXX_FLAGS='${MARCH_TYPE}'
     -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
     -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
     INSTALL_COMMAND ""

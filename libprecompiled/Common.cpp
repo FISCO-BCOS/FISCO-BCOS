@@ -274,7 +274,7 @@ dev::h512s dev::precompiled::getNodeListByType(
  * @param _num: the current block number
  * @return: {value, enableNumber}
  */
-std::shared_ptr<std::pair<std::string, int64_t>> dev::precompiled::getSystemConfigByKey(
+std::shared_ptr<std::pair<std::string, int64_t>> dev::precompiled::getSysConfigByKey(
     dev::storage::Storage::Ptr _stateStorage, std::string const& _key, int64_t const& _num)
 {
     std::shared_ptr<std::pair<std::string, int64_t>> result =
@@ -290,6 +290,8 @@ std::shared_ptr<std::pair<std::string, int64_t>> dev::precompiled::getSystemConf
     auto values = _stateStorage->select(_num, tableInfo, _key, condition);
     if (!values || values->size() != 1)
     {
+        PRECOMPILED_LOG(ERROR) << LOG_DESC("[#getSystemConfigByKey]Select error")
+                               << LOG_KV("key", _key);
         // FIXME: throw exception here, or fatal error
         return result;
     }
@@ -319,7 +321,7 @@ std::shared_ptr<std::pair<std::string, int64_t>> dev::precompiled::getSystemConf
  * @param _num: current blockNumber
  * @return: {value, enableNumber}
  */
-std::shared_ptr<std::pair<std::string, int64_t>> dev::precompiled::getSystemConfigByKey(
+std::shared_ptr<std::pair<std::string, int64_t>> dev::precompiled::getSysConfigByKey(
     dev::storage::Table::Ptr _sysConfigTable, std::string const& _key, int64_t const& _num)
 {
     std::shared_ptr<std::pair<std::string, int64_t>> result =

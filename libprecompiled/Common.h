@@ -138,6 +138,27 @@ enum PrecompiledError : int
     CODE_SUCCESS = 0
 };
 
+inline bool operator==(const u256& _value, PrecompiledError _precompiledError)
+{
+    return _value == u256(static_cast<int>(_precompiledError));
+}
+
+inline bool operator==(const s256& _value, PrecompiledError _precompiledError)
+{
+    int precompiledErrorValue = static_cast<int>(_precompiledError);
+    return _value.convert_to<int>() == precompiledErrorValue;
+}
+
+inline bool operator==(PrecompiledError _precompiledError, const u256& _value)
+{
+    return _value == u256(static_cast<int>(_precompiledError));
+}
+
+inline bool operator==(PrecompiledError _precompiledError, const s256& _value)
+{
+    int precompiledErrorValue = static_cast<int>(_precompiledError);
+    return _value.convert_to<int>() == precompiledErrorValue;
+}
 class PrecompiledException : public dev::Exception
 {
 public:
@@ -163,11 +184,11 @@ bytesConstRef getParamData(bytesConstRef _param);
 dev::h512s getNodeListByType(std::shared_ptr<dev::storage::Table> _consTable, int64_t _blockNumber,
     std::string const& _type);
 
-std::shared_ptr<std::pair<std::string, int64_t>> getSystemConfigByKey(
+std::shared_ptr<std::pair<std::string, int64_t>> getSysConfigByKey(
     std::shared_ptr<dev::storage::Storage> _stateStorage, std::string const& _key,
     int64_t const& _num);
 
-std::shared_ptr<std::pair<std::string, int64_t>> getSystemConfigByKey(
+std::shared_ptr<std::pair<std::string, int64_t>> getSysConfigByKey(
     std::shared_ptr<dev::storage::Table> _sysConfigTable, std::string const& _key,
     int64_t const& _num);
 

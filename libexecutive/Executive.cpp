@@ -29,7 +29,7 @@
 #include <libstorage/MemoryTableFactory.h>
 #include <libstorage/StorageException.h>
 #include <limits.h>
-#include <boost/timer.hpp>
+#include <boost/timer/timer.hpp>
 #include <numeric>
 
 using namespace std;

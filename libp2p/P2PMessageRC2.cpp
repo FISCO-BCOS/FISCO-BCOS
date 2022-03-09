@@ -105,6 +105,12 @@ ssize_t P2PMessageRC2::decode(const byte* buffer, size_t size)
 
     int32_t offset = 0;
     m_length = ntohl(*((uint32_t*)&buffer[offset]));
+    if (m_length > P2PMessage::MAX_MESSAGE_LENGTH)
+    {
+        SESSION_LOG(WARNING) << LOG_DESC("Illegal p2p message packet") << LOG_KV("length", m_length)
+                             << LOG_KV("maxLen", P2PMessage::MAX_MESSAGE_LENGTH);
+        return dev::network::PACKET_ERROR;
+    }
 
     if (size < m_length)
     {

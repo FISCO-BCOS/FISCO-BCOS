@@ -63,7 +63,7 @@ macro(configure_project)
     eth_default_option(ARCH_NATIVE OFF)
 
     if(ARCH_NATIVE)
-        set(MARCH_TYPE "-march=native -mtune=native -fvisibility=hidden -fvisibility-inlines-hidden")
+        set(MARCH_TYPE "-march=native -mtune=generic -fvisibility=hidden -fvisibility-inlines-hidden")
     endif()
 
     # unit tests
@@ -74,12 +74,23 @@ macro(configure_project)
     eth_default_option(TOOL OFF)
     # code coverage
     eth_default_option(COVERAGE OFF)
+    # hardware crypto sdf interface
+    eth_default_option(USE_HSM_SDF OFF)
+    if(USE_HSM_SDF)
+        if(NOT "${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
+            message(FATAL "${CMAKE_SYSTEM_NAME} ${ARCHITECTURE} does not support by hardware secure module")
+        endif()
+        add_definitions(-DFISCO_SDF)
+    endif()
+    
 
     #debug
     eth_default_option(DEBUG OFF)
     if (DEBUG)
         add_definitions(-DFISCO_DEBUG)
     endif()
+
+    
 
     #perf
     eth_default_option(PROF OFF)
@@ -122,6 +133,7 @@ macro(print_config NAME)
     message("-- CMAKE_BUILD_TYPE   Build type                   ${CMAKE_BUILD_TYPE}")
     message("-- TARGET_PLATFORM    Target platform              ${CMAKE_SYSTEM_NAME} ${ARCHITECTURE}")
     message("-- BUILD_STATIC       Build static                 ${BUILD_STATIC}")
+    message("-- USE_HSM_SDF        Build SDF HSM                ${USE_HSM_SDF}")
     message("-- DEMO               Build demos                  ${DEMO}")
     message("-- TOOL               Build tools                  ${TOOL}")
     message("-- COVERAGE           Build code coverage          ${COVERAGE}")

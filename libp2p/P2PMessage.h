@@ -38,7 +38,8 @@ public:
     /// packetType: 2bytes
     /// seq: 4 bytes
     const static size_t HEADER_LENGTH = 12;
-    const static size_t MAX_LENGTH = 1024 * 1024;  ///< The maximum length of data is 1M.
+    const static size_t MAX_MESSAGE_LENGTH =
+        100 * 1024 * 1024;  ///< The maximum length of data is 100M.
 
     P2PMessage() { m_buffer = std::make_shared<bytes>(); }
 

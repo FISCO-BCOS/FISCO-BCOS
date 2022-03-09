@@ -57,7 +57,7 @@ TransactionReceipt::TransactionReceipt(TransactionReceipt const& _other)
 
 void TransactionReceipt::streamRLP(RLPStream& _s) const
 {
-    if (g_BCOSConfig.version() >= V2_8_0)
+    if (g_BCOSConfig.version() >= V2_9_0)
     {
         _s.appendList(8) << m_stateRoot << m_gasUsed << m_contractAddress << m_bloom
                          << static_cast<u256>(m_status) << m_outputBytes << m_remainGas;
@@ -102,7 +102,7 @@ void TransactionReceipt::decode(RLP const& r)
         {
             m_outputBytes = r[5].toBytes();
         }
-        if (g_BCOSConfig.version() >= V2_8_0)
+        if (g_BCOSConfig.version() >= V2_9_0)
         {
             m_remainGas = (u256)r[6];
             decodeLog(7, r);

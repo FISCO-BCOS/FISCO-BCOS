@@ -179,7 +179,7 @@ PrecompiledExecResult::Ptr CNSPrecompiled::call(
         if (contractVersion.size() > CNS_VERSION_MAX_LENGTH)
         {
             PRECOMPILED_LOG(ERROR)
-                << LOG_BADGE("CNS") << LOG_DESC("version length overflow 128")
+                << LOG_BADGE("CNSPrecompiled") << LOG_DESC("version length overflow 128")
                 << LOG_KV("contractName", contractName) << LOG_KV("address", contractAddress)
                 << LOG_KV("version", contractVersion);
             result = CODE_VERSION_LENGTH_OVERFLOW;

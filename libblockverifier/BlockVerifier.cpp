@@ -159,8 +159,8 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
         // enable_parallel=true can't be run with enable_parallel=false
         block.setStateRootToAllReceipt(stateRoot);
     }
-    // supported_version >= 2.8.0, no accumulative calculation of gas
-    if (g_BCOSConfig.version() < V2_8_0)
+    // supported_version >= 2.9.0, no accumulative calculation of gas
+    if (g_BCOSConfig.version() < V2_9_0)
     {
         block.updateSequenceReceiptGas();
     }
@@ -319,8 +319,8 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
 
     // set stateRoot in receipts
     block.setStateRootToAllReceipt(stateRoot);
-    // supported_version >= 2.8.0, no accumulative calculation of gas
-    if (g_BCOSConfig.version() < V2_8_0)
+    // supported_version >= 2.9.0, no accumulative calculation of gas
+    if (g_BCOSConfig.version() < V2_9_0)
     {
         block.updateSequenceReceiptGas();
     }

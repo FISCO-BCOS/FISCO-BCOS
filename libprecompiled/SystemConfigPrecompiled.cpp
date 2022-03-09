@@ -123,7 +123,7 @@ bool SystemConfigPrecompiled::checkValueValid(
     // switch for gasChargeManager
     if (SYSTEM_KEY_CHARGE_MANAGE_SWITCH == key)
     {
-        if (g_BCOSConfig.version() < V2_8_0)
+        if (g_BCOSConfig.version() < V2_9_0)
         {
             return false;
         }
