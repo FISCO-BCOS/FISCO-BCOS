@@ -36,6 +36,9 @@ public:
     std::string_view to() const override { return m_to; }
     void setTo(std::string to) override { m_to = std::move(to); }
 
+    std::string_view abi() const override { return m_abi; }
+    void setABI(std::string abi) override { m_abi = std::move(abi); }
+
     int32_t depth() const override { return m_depth; }
     void setDepth(int32_t depth) override { m_depth = depth; }
 
@@ -101,6 +104,7 @@ public:
     std::string m_origin;
     std::string m_from;
     std::string m_to;
+    std::string m_abi;
 
     int64_t m_gasAvailable = 0;
     bcos::bytes m_data;

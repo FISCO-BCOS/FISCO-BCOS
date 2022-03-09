@@ -169,7 +169,10 @@ void BlockExecutive::asyncExecute(
                     message->setTo(preprocessAddress(tx->to()));
                 }
             }
-
+            if (message->create())
+            {
+                message->setABI(std::string(tx->abi()));
+            }
             message->setDepth(0);
             message->setGasAvailable(TRANSACTION_GAS);
             message->setData(tx->input().toBytes());
@@ -841,8 +844,8 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
                 m_gasUsed += txGasUsed;
 
                 m_executiveResults[executiveState.contextID].receipt =
-                    m_scheduler->m_blockFactory->receiptFactory()->createReceipt(
-                        txGasUsed, message->newEVMContractAddress(),
+                    m_scheduler->m_blockFactory->receiptFactory()->createReceipt(txGasUsed,
+                        message->newEVMContractAddress(),
                         std::make_shared<std::vector<bcos::protocol::LogEntry>>(
                             message->takeLogEntries()),
                         message->status(), message->takeData(),
