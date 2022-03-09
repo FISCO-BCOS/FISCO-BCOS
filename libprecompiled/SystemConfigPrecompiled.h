@@ -43,8 +43,13 @@ public:
         bytesConstRef param, Address const& origin = Address(),
         Address const& _sender = Address()) override;
 
+    int static setSystemConfigByKey(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
+        std::string const& _configKey, std::string const& _configValue,
+        std::shared_ptr<dev::storage::AccessOptions> _accessOption);
+
 private:
-    bool checkValueValid(std::string const& key, std::string const& value);
+    bool checkValueValid(std::shared_ptr<dev::blockverifier::ExecutiveContext> _context,
+        std::string const& key, std::string const& value);
 };
 
 }  // namespace precompiled

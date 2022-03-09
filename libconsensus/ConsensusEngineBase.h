@@ -60,7 +60,8 @@ public:
         m_consensusBlockNumber(0),
         m_protocolId(_protocolId),
         m_keyPair(_keyPair),
-        m_sealerList(_sealerList)
+        m_sealerList(_sealerList),
+        m_gasFreeAccounts(std::make_shared<std::set<Address>>())
     {
         assert(m_service && m_txPool && m_blockChain && m_blockSync && m_blockVerifier);
         if (m_protocolId == 0)
@@ -276,22 +277,17 @@ protected:
     virtual void updateConsensusNodeList();
 
     /// set the max number of transactions in a block
-    virtual void updateMaxBlockTransactions()
-    {
-        /// update m_maxBlockTransactions stored in sealer when reporting a new block
-        std::string ret = m_blockChain->getSystemConfigByKey("tx_count_limit");
-        {
-            m_maxBlockTransactions = boost::lexical_cast<uint64_t>(ret);
-        }
-        ENGINE_LOG(DEBUG) << LOG_DESC("resetConfig: updateMaxBlockTransactions")
-                          << LOG_KV("txCountLimit", m_maxBlockTransactions);
-    }
+    virtual void updateMaxBlockTransactions();
+    virtual void updateGasChargeManageSwitch();
+    virtual void updateGasFreeAccounts();
 
     dev::h512s consensusList() const override
     {
         ReadGuard l(m_sealerListMutex);
         return m_sealerList;
     }
+
+    void statGasUsed(dev::eth::Block const& _block);
 
 protected:
     std::atomic<uint64_t> m_maxBlockTransactions = {1000};
@@ -349,6 +345,11 @@ protected:
     dev::sync::NodeTimeMaintenance::Ptr m_nodeTimeMaintenance;
 
     int64_t m_maxBlockTimeOffset = 30 * 60 * 1000;
+
+    std::atomic_bool m_enableGasCharge = {false};
+    // accounts that use the gas for free
+    mutable SharedMutex x_gasFreeAccounts;
+    std::shared_ptr<std::set<Address>> m_gasFreeAccounts;
 };
 }  // namespace consensus
 }  // namespace dev

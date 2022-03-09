@@ -29,13 +29,7 @@ using namespace dev::eth;
 TransactionReceipt::TransactionReceipt(bytesConstRef _rlp)
 {
     RLP r(_rlp);
-    m_status = static_cast<eth::TransactionException>((uint32_t)r[4]);
-    m_stateRoot = (h256)r[0];
-    m_gasUsed = (u256)r[1];
-    m_contractAddress = (Address)r[2];
-    m_bloom = (LogBloom)r[3];
-    m_outputBytes = (bytes)r[5];
-    decodeLog(r);
+    decode(r);
 }
 
 TransactionReceipt::TransactionReceipt(h256 const& _root, u256 const& _gasUsed,
@@ -54,6 +48,7 @@ TransactionReceipt::TransactionReceipt(TransactionReceipt const& _other)
   : m_status(_other.status()),
     m_stateRoot(_other.stateRoot()),
     m_gasUsed(_other.gasUsed()),
+    m_remainGas(_other.remainGas()),
     m_contractAddress(_other.contractAddress()),
     m_bloom(_other.bloom()),
     m_outputBytes(_other.outputBytes()),
@@ -62,8 +57,16 @@ TransactionReceipt::TransactionReceipt(TransactionReceipt const& _other)
 
 void TransactionReceipt::streamRLP(RLPStream& _s) const
 {
-    _s.appendList(7) << m_stateRoot << m_gasUsed << m_contractAddress << m_bloom
-                     << u256((uint32_t)m_status) << m_outputBytes;
+    if (g_BCOSConfig.version() >= V2_9_0)
+    {
+        _s.appendList(8) << m_stateRoot << m_gasUsed << m_contractAddress << m_bloom
+                         << static_cast<u256>(m_status) << m_outputBytes << m_remainGas;
+    }
+    else
+    {
+        _s.appendList(7) << m_stateRoot << m_gasUsed << m_contractAddress << m_bloom
+                         << static_cast<u256>(m_status) << m_outputBytes;
+    }
     _s.appendList(m_log.size());
     for (LogEntry const& l : m_log)
         l.streamRLP(_s);
@@ -75,9 +78,9 @@ void TransactionReceipt::decode(bytesConstRef receiptsBytes)
     decode(rlp);
 }
 
-void TransactionReceipt::decodeLog(RLP const& _r)
+void TransactionReceipt::decodeLog(size_t _fromIndex, RLP const& _r)
 {
-    for (auto it = _r[6].begin(); it != _r[6].end(); it++)
+    for (auto it = _r[_fromIndex].begin(); it != _r[_fromIndex].end(); it++)
     {
         m_log.emplace_back(*it);
     }
@@ -99,7 +102,15 @@ void TransactionReceipt::decode(RLP const& r)
         {
             m_outputBytes = r[5].toBytes();
         }
-        decodeLog(r);
+        if (g_BCOSConfig.version() >= V2_9_0)
+        {
+            m_remainGas = (u256)r[6];
+            decodeLog(7, r);
+        }
+        else
+        {
+            decodeLog(6, r);
+        }
     }
     catch (Exception& _e)
     {

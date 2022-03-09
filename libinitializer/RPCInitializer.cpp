@@ -51,8 +51,7 @@ void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt
     if (!isValidPort(listenPort) || !isValidPort(httpListenPort))
     {
         ERROR_OUTPUT << LOG_BADGE("RPCInitializer")
-                     << LOG_DESC(
-                            "initChannelRPCServer failed! Invalid ListenPort for RPC!")
+                     << LOG_DESC("initChannelRPCServer failed! Invalid ListenPort for RPC!")
                      << std::endl;
         exit(1);
     }
@@ -89,7 +88,9 @@ void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt
     m_channelRPCServer->setChannelServer(server);
 
     // start channelServer before initialize ledger, because amdb-proxy depends on channel
+    bool disableDynamicGroup = _pt.get<bool>("rpc.disable_dynamic_group", true);
     auto rpcEntity = new rpc::Rpc(nullptr, nullptr);
+    rpcEntity->setDisableDynamicGroup(disableDynamicGroup);
 
     auto modularServer = new ModularServer<rpc::Rpc>(rpcEntity);
     auto qpsLimiter = createQPSLimiter(_pt);
@@ -125,8 +126,8 @@ void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt
     {
         m_networkStatHandler->start();
     }
-    INITIALIZER_LOG(INFO) << LOG_BADGE("RPCInitializer")
-                          << LOG_DESC("ChannelRPCHttpServer started.");
+    INITIALIZER_LOG(INFO) << LOG_BADGE("RPCInitializer: ChannelRPCHttpServer started.")
+                          << LOG_KV("disableDynamicGroup", disableDynamicGroup);
     m_channelRPCServer->setCallbackSetter(std::bind(&rpc::Rpc::setCurrentTransactionCallback,
         rpcEntity, std::placeholders::_1, std::placeholders::_2));
 }
@@ -184,7 +185,7 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
         // unregister event log filter callback
         m_channelRPCServer->setEventCancelFilterCallback(
             [this](const std::string& _json, uint32_t _version,
-            std::function<bool(GROUP_ID _groupId)> _permissionChecker) -> int32_t {
+                std::function<bool(GROUP_ID _groupId)> _permissionChecker) -> int32_t {
                 auto params =
                     dev::event::EventLogFilterParams::buildEventLogFilterParamsObject(_json);
                 if (!params)
@@ -201,7 +202,8 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
                 {
                     return dev::event::ResponseCode::SDK_PERMISSION_DENIED;
                 }
-                return ledger->getEventLogFilterManager()->cancelEventLogFilterByRequest(params, _version);
+                return ledger->getEventLogFilterManager()->cancelEventLogFilterByRequest(
+                    params, _version);
             });
 
         auto channelRPCServerWeak = std::weak_ptr<dev::ChannelRPCServer>(m_channelRPCServer);
@@ -215,7 +217,9 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
             });
 
         // Don't to set destructor, the ModularServer will destruct.
+        bool disableDynamicGroup = _pt.get<bool>("rpc.disable_dynamic_group", true);
         auto rpcEntity = new rpc::Rpc(m_ledgerInitializer, m_p2pService);
+        rpcEntity->setDisableDynamicGroup(disableDynamicGroup);
         auto ipAddress = boost::asio::ip::make_address(listenIP);
         m_safeHttpServer.reset(new SafeHttpServer(listenIP, httpListenPort, ipAddress.is_v6()),
             [](SafeHttpServer* p) { (void)p; });
@@ -234,13 +238,13 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
         INITIALIZER_LOG(INFO) << LOG_BADGE("RPCInitializer JsonrpcHttpServer started")
                               << LOG_KV("jsonrpc_IP", listenIP)
                               << LOG_KV("jsonrpc_listen_port", httpListenPort)
-                              << LOG_KV("ipv6", ipAddress.is_v6());
+                              << LOG_KV("ipv6", ipAddress.is_v6())
+                              << LOG_KV("disableDynamicGroup", disableDynamicGroup);
     }
     catch (std::exception& e)
     {
         // TODO: catch in Initializer::init, delete this catch
-        INITIALIZER_LOG(ERROR) << LOG_BADGE("RPCInitializer")
-                               << LOG_DESC("init RPC failed")
+        INITIALIZER_LOG(ERROR) << LOG_BADGE("RPCInitializer") << LOG_DESC("init RPC failed")
                                << LOG_KV("check jsonrpc_listen_port", httpListenPort)
                                << LOG_KV("check jsonrpc_IP", listenIP)
                                << LOG_KV("EINFO", boost::diagnostic_information(e));

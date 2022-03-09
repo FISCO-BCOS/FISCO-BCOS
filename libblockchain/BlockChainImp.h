@@ -134,6 +134,7 @@ public:
     dev::h512s pendingSealerList() override;
 
     std::string getSystemConfigByKey(std::string const& key, int64_t num = -1) override;
+    std::shared_ptr<std::set<Address>> getCommitteeMembers() override;
 
     std::shared_ptr<std::vector<dev::eth::NonceKeyType>> getNonces(int64_t _blockNumber) override;
 
@@ -254,6 +255,8 @@ private:
     int64_t m_cacheNumBySealer = -1;
     int64_t m_cacheNumByObserver = -1;
 
+    mutable SharedMutex x_committeeCacheToBlockNumber;
+    std::pair<std::shared_ptr<std::set<Address>>, int64_t> m_committeeCacheToBlockNumber;
 
     struct SystemConfigRecord
     {

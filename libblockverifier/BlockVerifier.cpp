@@ -159,7 +159,12 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
         // enable_parallel=true can't be run with enable_parallel=false
         block.setStateRootToAllReceipt(stateRoot);
     }
-    block.updateSequenceReceiptGas();
+    // supported_version >= 2.9.0, no accumulative calculation of gas
+    if (g_BCOSConfig.version() < V2_9_0)
+    {
+        block.updateSequenceReceiptGas();
+    }
+
     block.calReceiptRoot();
     block.header().setStateRoot(stateRoot);
     if (dynamic_pointer_cast<storagestate::StorageState>(executiveContext->getState()))
@@ -314,7 +319,11 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
 
     // set stateRoot in receipts
     block.setStateRootToAllReceipt(stateRoot);
-    block.updateSequenceReceiptGas();
+    // supported_version >= 2.9.0, no accumulative calculation of gas
+    if (g_BCOSConfig.version() < V2_9_0)
+    {
+        block.updateSequenceReceiptGas();
+    }
     auto setAllReceipt_time_cost = utcTime() - record_time;
     record_time = utcTime();
 
@@ -415,7 +424,7 @@ dev::eth::TransactionReceipt::Ptr BlockVerifier::execute(dev::eth::Transaction::
     // Create and initialize the executive. This will throw fairly cheaply and quickly if the
     // transaction is bad in any way.
     executive->reset();
-
+    bool executeSuccess = false;
     // OK - transaction looks valid - execute.
     try
     {
@@ -423,6 +432,13 @@ dev::eth::TransactionReceipt::Ptr BlockVerifier::execute(dev::eth::Transaction::
         if (!executive->execute())
             executive->go();
         executive->finalize();
+        executeSuccess = true;
+    }
+    catch (NotEnoughRemainGas const& _e)
+    {
+        // use DEBUG level in case of frequent log output
+        BLOCKVERIFIER_LOG(DEBUG) << LOG_DESC("NotEnoughRemainGas")
+                                 << LOG_KV("errorMessage", boost::diagnostic_information(_e));
     }
     catch (StorageException const& e)
     {
@@ -438,15 +454,26 @@ dev::eth::TransactionReceipt::Ptr BlockVerifier::execute(dev::eth::Transaction::
     {
         BLOCKVERIFIER_LOG(ERROR) << _e.what();
     }
-
+    // The exception case
+    if (!executeSuccess)
+    {
+        executive->deductRuntimeGas(_t, 0);
+    }
     executive->loggingException();
-    return std::make_shared<TransactionReceipt>(executiveContext->getState()->rootHash(false),
-        executive->gasUsed(), executive->logs(), executive->status(),
-        executive->takeOutput().takeBytes(), executive->newAddress());
+    auto receipt = std::make_shared<TransactionReceipt>(
+        executiveContext->getState()->rootHash(false), executive->gasUsed(), executive->logs(),
+        executive->status(), executive->takeOutput().takeBytes(), executive->newAddress());
+    receipt->setRemainGas(executive->remainGas(_t->from()));
+    return receipt;
 }
 
 dev::executive::Executive::Ptr BlockVerifier::createAndInitExecutive(
     std::shared_ptr<StateFace> _s, dev::executive::EnvInfo const& _envInfo)
 {
-    return std::make_shared<Executive>(_s, _envInfo, m_evmFlags & EVMFlags::FreeStorageGas);
+    auto executive =
+        std::make_shared<Executive>(_s, _envInfo, m_evmFlags & EVMFlags::FreeStorageGas, 0);
+    ReadGuard l(x_gasFreeAccounts);
+    executive->setEnableGasCharge(m_enableGasCharge);
+    executive->setGasFreeAccounts(m_gasFreeAccounts);
+    return executive;
 }

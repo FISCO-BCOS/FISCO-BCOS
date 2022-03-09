@@ -61,7 +61,9 @@ std::map<int, std::string> dev::rpc::RPCMsg{{RPCExceptionType::Success, "Success
         "Don't send request to this node who doesn't belong to the group"},
     {RPCExceptionType::IncompleteInitialization, "RPC module initialization is incomplete"},
     {RPCExceptionType::OverQPSLimit, "Over QPS limit"},
-    {RPCExceptionType::PermissionDenied, "The SDK is not allowed to access this group"}};
+    {RPCExceptionType::PermissionDenied, "The SDK is not allowed to access this group"},
+    {RPCExceptionType::DynamicGroupDisabled,
+        "Dynamic group related interfaces are forbidden to access"}};
 
 Rpc::Rpc(
     LedgerInitializer::Ptr _ledgerInitializer, std::shared_ptr<dev::p2p::P2PInterface> _service)
@@ -1472,6 +1474,11 @@ Json::Value Rpc::getTransactionReceiptByHashWithProof(
 
 Json::Value Rpc::generateGroup(int _groupID, const Json::Value& _params)
 {
+    if (m_disableDynamicGroup)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::DynamicGroupDisabled,
+            RPCMsg[RPCExceptionType::DynamicGroupDisabled]));
+    }
     RPC_LOG(INFO) << LOG_BADGE("generateGroup") << LOG_DESC("request")
                   << LOG_KV("groupID", _groupID) << LOG_KV("params", _params);
 
@@ -1533,6 +1540,11 @@ Json::Value Rpc::generateGroup(int _groupID, const Json::Value& _params)
 
 Json::Value Rpc::startGroup(int _groupID)
 {
+    if (m_disableDynamicGroup)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::DynamicGroupDisabled,
+            RPCMsg[RPCExceptionType::DynamicGroupDisabled]));
+    }
     RPC_LOG(INFO) << LOG_BADGE("startGroup") << LOG_DESC("request") << LOG_KV("groupID", _groupID);
 
     checkNodeVersionForGroupMgr("startGroup");
@@ -1600,6 +1612,11 @@ Json::Value Rpc::startGroup(int _groupID)
 
 Json::Value Rpc::stopGroup(int _groupID)
 {
+    if (m_disableDynamicGroup)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::DynamicGroupDisabled,
+            RPCMsg[RPCExceptionType::DynamicGroupDisabled]));
+    }
     RPC_LOG(INFO) << LOG_BADGE("stopGroup") << LOG_DESC("request") << LOG_KV("groupID", _groupID);
 
     checkNodeVersionForGroupMgr("stopGroup");
@@ -1647,6 +1664,11 @@ Json::Value Rpc::stopGroup(int _groupID)
 
 Json::Value Rpc::removeGroup(int _groupID)
 {
+    if (m_disableDynamicGroup)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::DynamicGroupDisabled,
+            RPCMsg[RPCExceptionType::DynamicGroupDisabled]));
+    }
     RPC_LOG(INFO) << LOG_BADGE("removeGroup") << LOG_DESC("request") << LOG_KV("groupID", _groupID);
 
     checkNodeVersionForGroupMgr("generateGroup");
@@ -1694,6 +1716,11 @@ Json::Value Rpc::removeGroup(int _groupID)
 
 Json::Value Rpc::recoverGroup(int _groupID)
 {
+    if (m_disableDynamicGroup)
+    {
+        BOOST_THROW_EXCEPTION(JsonRpcException(RPCExceptionType::DynamicGroupDisabled,
+            RPCMsg[RPCExceptionType::DynamicGroupDisabled]));
+    }
     RPC_LOG(INFO) << LOG_BADGE("recoverGroup") << LOG_DESC("request")
                   << LOG_KV("groupID", _groupID);
 
@@ -1996,6 +2023,7 @@ void Rpc::parseReceiptIntoResponse(Json::Value& _response, dev::bytesConstRef _i
     // transaction
     _response["root"] = toJS(_receipt->stateRoot());
     _response["gasUsed"] = toJS(_receipt->gasUsed());
+    _response["remainGas"] = toJS(_receipt->remainGas());
     _response["contractAddress"] = toJS(_receipt->contractAddress());
     _response["logsBloom"] = toJS(_receipt->bloom());
     _response["status"] = toJS(_receipt->status());

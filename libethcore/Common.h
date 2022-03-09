@@ -56,8 +56,6 @@ extern const unsigned c_minorProtocolVersion;
 /// Current database version.
 extern const unsigned c_databaseVersion;
 extern const unsigned c_BlockFieldSize;
-/// Convert the given string into an address.
-Address toAddress(std::string const& _s);
 
 /// The log bloom's size (2048-bit).
 using LogBloom = h2048;

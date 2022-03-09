@@ -19,8 +19,8 @@
  *  @date 20190324
  */
 #pragma once
+#include "AccountInfoUtility.h"
 #include "Common.h"
-
 namespace dev
 {
 namespace storage
@@ -30,16 +30,6 @@ class Table;
 
 namespace precompiled
 {
-enum AccountStatus
-{
-    AccInvalid = 0,
-    AccAvailable,
-    AccFrozen,
-    AccAddressNonExistent,
-    InvalidAccountAddress,
-    AccCount
-};
-
 class ChainGovernancePrecompiled : public dev::precompiled::Precompiled
 {
 public:

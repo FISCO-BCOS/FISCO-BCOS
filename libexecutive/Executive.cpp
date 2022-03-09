@@ -46,6 +46,11 @@ u256 Executive::gasUsed() const
     return m_envInfo.precompiledEngine()->txGasLimit() - m_gas;
 }
 
+u256 Executive::remainGas(Address const& _account)
+{
+    return m_s->remainGas(_account).second;
+}
+
 void Executive::accrueSubState(SubState& _parentContext)
 {
     if (m_ext)
@@ -84,18 +89,69 @@ void Executive::verifyTransaction(
     uint64_t txGasLimit = m_envInfo.precompiledEngine()->txGasLimit();
     // The gas limit is dynamic, not fixed.
     // Pre calculate the gas needed for execution
-    if ((_ir & ImportRequirements::TransactionBasic) &&
-        _t->baseGasRequired(schedule) > (bigint)txGasLimit)
+    if (_ir & ImportRequirements::TransactionBasic)
     {
-        m_excepted = TransactionException::OutOfGasIntrinsic;
-        m_exceptionReason << LOG_KV("reason",
-                                 "The gas required by deploying/accessing this contract is more "
-                                 "than tx_gas_limit")
-                          << LOG_KV("limit", txGasLimit)
-                          << LOG_KV("require", _t->baseGasRequired(schedule));
-        BOOST_THROW_EXCEPTION(OutOfGasIntrinsic() << RequirementError(
-                                  (bigint)(_t->baseGasRequired(schedule)), (bigint)txGasLimit));
+        auto requiredGas = _t->baseGasRequired(schedule);
+        if (requiredGas > (bigint)txGasLimit)
+        {
+            m_excepted = TransactionException::OutOfGasIntrinsic;
+            m_exceptionReason
+                << LOG_KV("reason",
+                       "The gas required by deploying/accessing this contract is more "
+                       "than tx_gas_limit")
+                << LOG_KV("limit", txGasLimit) << LOG_KV("require", requiredGas);
+            BOOST_THROW_EXCEPTION(
+                OutOfGasIntrinsic() << RequirementError((bigint)(requiredGas), (bigint)txGasLimit));
+        }
+        // check the account remain gas
+        checkAccountRemainGas(_t, requiredGas);
     }
+}
+bool Executive::adminChargerTx(dev::eth::Transaction::Ptr _tx)
+{
+    return (_tx->receiveAddress() == Address(0x1008) || m_gasFreeAccounts.count(_tx->sender()));
+}
+
+bool Executive::shouldCheckAccountGas(Transaction::Ptr _tx)
+{
+    // The following situation does not check account gas
+    // 1. enableGasCharge has been disabled
+    // 2. the constant call transaction(the signature is empty)
+    // 3. the chainGovernance transactions
+    // 4. the transaction comes from the gasFreeAccount
+    if (!m_enableGasCharge || !_tx->hasSignature() || adminChargerTx(_tx))
+    {
+        return false;
+    }
+    return true;
+}
+
+void Executive::checkAccountRemainGas(Transaction::Ptr _tx, int64_t const& _requiredGas)
+{
+    auto sender = _tx->sender();
+    if (!shouldCheckAccountGas(_tx))
+    {
+        return;
+    }
+    bool accountGasEnough = true;
+    // compare the account gas with the requiredGas
+    auto result = m_s->remainGas(sender);
+    if (!result.first || result.second < _requiredGas)
+    {
+        accountGasEnough = false;
+    }
+    if (accountGasEnough)
+    {
+        return;
+    }
+    m_excepted = TransactionException::NotEnoughRemainGas;
+    // reset gasUsed to zero when NotEnoughRemainGas
+    m_gas = m_envInfo.precompiledEngine()->txGasLimit();
+    std::stringstream exceptionReason;
+    exceptionReason << LOG_KV("reason",
+                           "The remain gas of the account is less than the base required gas")
+                    << LOG_KV("account", sender.hex()) << LOG_KV("baseRequiredGas", _requiredGas);
+    BOOST_THROW_EXCEPTION(NotEnoughRemainGas() << errinfo_comment(exceptionReason.str()));
 }
 
 bool Executive::execute()
@@ -116,6 +172,7 @@ bool Executive::execute()
                 OutOfGasBase() << errinfo_comment(
                     "Not enough gas, base gas required:" + std::to_string(m_baseGasRequired)));
         }
+        checkAccountRemainGas(m_t, m_baseGasRequired);
     }
     else
     {
@@ -698,6 +755,53 @@ bool Executive::go()
     return true;
 }
 
+void Executive::deductRuntimeGas(dev::eth::Transaction::Ptr _tx, u256 const& _refundedGas)
+{
+    if (!m_enableGasCharge)
+    {
+        m_gas += _refundedGas;
+        return;
+    }
+    auto txGasLimit = m_envInfo.precompiledEngine()->txGasLimit();
+    if (!shouldCheckAccountGas(_tx))
+    {
+        if (adminChargerTx(_tx))
+        {
+            m_gas = txGasLimit;
+        }
+        return;
+    }
+    auto accountAddress = _tx->sender();
+    // the remainGas of the account is zero
+    auto result = m_s->remainGas(accountAddress);
+    if (!result.first || result.second == 0)
+    {
+        return;
+    }
+
+    if (m_gas == 0)
+    {
+        m_gas = txGasLimit - m_baseGasRequired;
+    }
+    else
+    {
+        m_gas += _refundedGas;
+    }
+    if (txGasLimit < m_gas)
+    {
+        m_gas = txGasLimit;
+    }
+    auto gasUsed = txGasLimit - m_gas;
+    auto accountRemainGas = (result.second <= gasUsed) ? 0 : (result.second - gasUsed);
+    // the case that the remainGas is less than the consumed Gas, should reset the m_gas to ensure
+    // balance
+    if (result.second < gasUsed)
+    {
+        m_gas = txGasLimit - result.second;
+    }
+    m_s->updateRemainGas(accountAddress, accountRemainGas, _tx->sender());
+}
+
 bool Executive::finalize()
 {
     // Accumulate refunds for suicides.
@@ -708,7 +812,7 @@ bool Executive::finalize()
     // SSTORE refunds...
     // must be done before the sealer gets the fees.
     m_refunded = m_ext ? min((m_t->gas() - m_gas) / 2, m_ext->sub().refunds) : 0;
-    m_gas += m_refunded;
+    deductRuntimeGas(m_t, m_refunded);
 
     // Suicides...
     if (m_ext)
@@ -835,10 +939,24 @@ void Executive::loggingException()
 {
     if (m_excepted != TransactionException::None)
     {
-        EXECUTIVE_LOG(ERROR) << LOG_BADGE("TxExeError") << LOG_DESC("Transaction execution error")
-                             << LOG_KV("TransactionExceptionID", (uint32_t)m_excepted)
-                             << LOG_KV("hash", (m_t->hasSignature()) ? toHex(m_t->hash()) : "call")
-                             << m_exceptionReason.str();
+        if (m_excepted == TransactionException::NotEnoughRemainGas)
+        {
+            EXECUTIVE_LOG(DEBUG) << LOG_BADGE("TxExeError")
+                                 << LOG_DESC("Transaction execution error")
+                                 << LOG_KV("TransactionExceptionID", (uint32_t)m_excepted)
+                                 << LOG_KV(
+                                        "hash", (m_t->hasSignature()) ? toHex(m_t->hash()) : "call")
+                                 << m_exceptionReason.str();
+        }
+        else
+        {
+            EXECUTIVE_LOG(ERROR) << LOG_BADGE("TxExeError")
+                                 << LOG_DESC("Transaction execution error")
+                                 << LOG_KV("TransactionExceptionID", (uint32_t)m_excepted)
+                                 << LOG_KV(
+                                        "hash", (m_t->hasSignature()) ? toHex(m_t->hash()) : "call")
+                                 << m_exceptionReason.str();
+        }
     }
 }
 

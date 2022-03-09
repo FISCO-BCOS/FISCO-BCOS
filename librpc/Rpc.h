@@ -172,6 +172,11 @@ public:
     }
     void setService(std::shared_ptr<dev::p2p::P2PInterface> _service) { m_service = _service; }
 
+    virtual void setDisableDynamicGroup(bool _disableDynamicGroup)
+    {
+        m_disableDynamicGroup = _disableDynamicGroup;
+    }
+
 protected:
     std::shared_ptr<dev::ledger::LedgerManager> ledgerManager();
     std::shared_ptr<dev::p2p::P2PInterface> service();
@@ -205,12 +210,14 @@ protected:
     dev::initializer::LedgerInitializer::Ptr m_ledgerInitializer;
 
     std::shared_ptr<dev::p2p::P2PInterface> m_service;
+    bool m_disableDynamicGroup;
 
     const std::set<std::string> c_supportedSystemConfigKeys = {
         dev::precompiled::SYSTEM_KEY_TX_COUNT_LIMIT, dev::precompiled::SYSTEM_KEY_TX_GAS_LIMIT,
         dev::precompiled::SYSTEM_KEY_RPBFT_EPOCH_BLOCK_NUM,
         dev::precompiled::SYSTEM_KEY_RPBFT_EPOCH_SEALER_NUM,
-        dev::precompiled::SYSTEM_KEY_CONSENSUS_TIMEOUT};
+        dev::precompiled::SYSTEM_KEY_CONSENSUS_TIMEOUT,
+        dev::precompiled::SYSTEM_KEY_CHARGE_MANAGE_SWITCH};
 
 private:
     bool isValidNodeId(dev::bytes const& precompileData,
