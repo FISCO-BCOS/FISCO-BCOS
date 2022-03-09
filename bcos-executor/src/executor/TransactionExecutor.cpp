@@ -666,16 +666,13 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
 
                     const auto& params = inputs[i];
 
-                    const auto& to = params->receiveAddress;
+                    auto to = params->receiveAddress;
                     const auto& input = params->data;
 
                     if (params->create)
                     {
                         executionResults[i] = toExecutionResult(std::move(inputs[i]));
                         executionResults[i]->setType(ExecutionMessage::SEND_BACK);
-                        EXECUTOR_LOG(DEBUG) << LOG_BADGE("dagExecuteTransactionsInternal")
-                                            << LOG_DESC("create contract can't be parallel")
-                                            << LOG_KV("adddress", to);
                         continue;
                     }
                     CriticalFields::CriticalFieldPtr conflictFields = nullptr;
@@ -703,6 +700,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                         }
                         else
                         {
+                            // Note: must be sure that the log accessed data should be valid always
                             EXECUTOR_LOG(DEBUG) << LOG_BADGE("dagExecuteTransactionsInternal")
                                                 << LOG_DESC("the precompiled can't be parallel")
                                                 << LOG_KV("adddress", to);
