@@ -28,7 +28,7 @@
 #include <libdevcore/FixedHash.h>
 #include <libdevcrypto/CryptoInterface.h>
 #include <libprecompiled/Common.h>
-#include <oneapi/tbb/parallel_for_each.h>
+#include <tbb/parallel_for_each.h>
 #include <tbb/parallel_invoke.h>
 #include <tbb/parallel_sort.h>
 #include <boost/exception/diagnostic_information.hpp>

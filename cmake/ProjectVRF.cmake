@@ -40,7 +40,7 @@ ExternalProject_Add(libvrf
     DOWNLOAD_NAME libvrf-rust1.47_0303.tar.gz
     DOWNLOAD_NO_PROGRESS 1
     URL https://raw.githubusercontent.com/ywy2090/LargeFiles/master/libs/libvrf-rust1.47_0303.tar.gz
-    URL_HASH SHA1=cf714d9d93ff0f452ea0d58cf0d89ccaabcf46bd
+    URL_HASH SHA256=afcd18e52b57516f92f7a7901c0bdedcc488e43dd8401d0e06cf0963db15bd07
     BUILD_IN_SOURCE 1
     LOG_CONFIGURE 1
     LOG_BUILD 1

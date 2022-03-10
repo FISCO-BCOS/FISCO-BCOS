@@ -19,7 +19,7 @@ ExternalProject_Add(tassl
         DOWNLOAD_NAME tassl_1.0.2o-5d2100b3.tar.gz
         DOWNLOAD_NO_PROGRESS 1
         URL https://github.com/FISCO-BCOS/TASSL/archive/5d2100b378063bc9ffce0bb703784ab6053848ce.tar.gz
-        URL_HASH SHA1=34579b368b286f57efe041912d735be33e4f5975
+        URL_HASH SHA256=aab236c3da193192c6754dc86130bb5bb307aa2e4865fc01797a1c868c9b1971
         # GIT_REPOSITORY https://github.com/jntass/TASSL.git
         # GIT_TAG ccdfc64c5f56988f76abc0390a12ed9865bc49e9
         # GIT_SHALLOW true

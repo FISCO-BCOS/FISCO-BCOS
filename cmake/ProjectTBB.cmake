@@ -8,7 +8,7 @@ endif()
 ExternalProject_Add(tbb
     PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NO_PROGRESS 1
-    DOWNLOAD_NAME v2021.4.0
+    DOWNLOAD_NAME v2021.6.0-rc1
     # TODO: add wb cdn link
     URL https://codeload.github.com/oneapi-src/oneTBB/tar.gz/refs/tags/v2021.6.0-rc1
     URL_HASH SHA1=7653c3db34db9e132286e69f1f69da1a6b39df9f
