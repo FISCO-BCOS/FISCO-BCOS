@@ -41,8 +41,8 @@ BOOST_FIXTURE_TEST_SUITE(TestRocksDB, TestOutputHelperFixture)
 void openTable(std::shared_ptr<BasicRocksDB> basicRocksDB, std::string const& dbName)
 {
     rocksdb::Options options;
-    options.IncreaseParallelism(std::max(1, (int)std::thread::hardware_concurrency()));
-    options.OptimizeLevelStyleCompaction();
+    // options.IncreaseParallelism(std::max(1, (int)std::thread::hardware_concurrency()));
+    // options.OptimizeLevelStyleCompaction();
     options.create_if_missing = true;
     options.max_open_files = 1000;
     options.compression = rocksdb::kSnappyCompression;

@@ -121,7 +121,7 @@ CachedStorage::CachedStorage(dev::GROUP_ID const& _groupID) : m_groupID(_groupID
     m_hitTimes.store(0);
     m_queryTimes.store(0);
 
-    m_running = std::make_shared<tbb::atomic<bool>>();
+    m_running = std::make_shared<std::atomic<bool>>();
     m_running->store(true);
 }
 
@@ -222,7 +222,7 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
 {
     CACHED_STORAGE_LOG(INFO) << "commit: " << datas.size() << " num: " << num;
 
-    tbb::atomic<size_t> total = 0;
+    std::atomic<size_t> total = {0};
 
     TIME_RECORD("Process dirty entries");
     std::shared_ptr<std::vector<TableData::Ptr>> commitDatas =
@@ -320,8 +320,8 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
                                         }
                                         (*entryIt)->setStatus(entry->getStatus());
 
-                                        change = (ssize_t)(
-                                            (ssize_t)(*entryIt)->capacity() - (ssize_t)oldSize);
+                                        change = (ssize_t)((ssize_t)(*entryIt)->capacity() -
+                                                           (ssize_t)oldSize);
 
                                         (*entryIt)->setNum(num);
 
@@ -521,8 +521,8 @@ size_t CachedStorage::commit(int64_t num, const std::vector<TableData::Ptr>& dat
                 }
             });
 
-            CACHED_STORAGE_LOG(INFO) << "Submited block task: " << num
-                              << ", current syncd block: " << m_syncNum;
+            CACHED_STORAGE_LOG(INFO)
+                << "Submited block task: " << num << ", current syncd block: " << m_syncNum;
 
             uint64_t waitCount = 0;
             while (((size_t)(m_commitNum - m_syncNum) > m_maxForwardBlock) && m_running->load())
@@ -575,15 +575,21 @@ void CachedStorage::sortCaches(std::shared_ptr<std::vector<TableData::Ptr>> _com
                 auto commitData = (*_commitDatas)[i];
                 auto processedKey = (*_processedKeys)[i];
                 // get caches and parallel sort the caches
-                tbb::parallel_for(processedKey.range(),
-                    [&](tbb::concurrent_unordered_set<std::string>::range_type& range) {
-                        for (auto it = range.begin(); it != range.end(); ++it)
-                        {
-                            auto result = touchCache(commitData->info, *it, true);
-                            auto caches = std::get<1>(result);
-                            tbb::parallel_sort(caches->entries()->begin(), caches->entries()->end(),
-                                EntryLessNoLock(commitData->info));
-                        }
+
+                tbb::parallel_for_each(
+                    processedKey.begin(), processedKey.end(), [&](const std::string& _str) {
+                        auto result = touchCache(commitData->info, _str, true);
+                        auto caches = std::get<1>(result);
+                        tbb::parallel_sort(caches->entries()->begin(), caches->entries()->end(),
+                            EntryLessNoLock(commitData->info));
+                    });
+
+                tbb::parallel_for_each(
+                    processedKey.begin(), processedKey.end(), [&](const std::string& _str) {
+                        auto result = touchCache(commitData->info, _str, true);
+                        auto caches = std::get<1>(result);
+                        tbb::parallel_sort(caches->entries()->begin(), caches->entries()->end(),
+                            EntryLessNoLock(commitData->info));
                     });
             }
         });
@@ -806,8 +812,7 @@ bool CachedStorage::commitBackend(Task::Ptr task)
 {
     auto now = std::chrono::steady_clock::now();
 
-    CACHED_STORAGE_LOG(INFO) << "Start commit block: " << task->num
-                      << " to backend storage";
+    CACHED_STORAGE_LOG(INFO) << "Start commit block: " << task->num << " to backend storage";
     try
     {
         m_backend->commit(task->num, *(task->datas));
@@ -957,7 +962,8 @@ void CachedStorage::checkAndClear()
 
 void CachedStorage::updateCapacity(ssize_t capacity)
 {
-    m_capacity.fetch_and_add(capacity);
+    // TODO: right or not ???
+    m_capacity.fetch_add(capacity);
 }
 
 std::string CachedStorage::readableCapacity(size_t num)

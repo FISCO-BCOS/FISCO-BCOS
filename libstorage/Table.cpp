@@ -31,8 +31,6 @@
 #include "Table.h"
 #include "libconfig/GlobalConfigure.h"
 #include <libdevcore/Common.h>
-#include <tbb/pipeline.h>
-#include <tbb/tbb_thread.h>
 #include <boost/lexical_cast.hpp>
 
 using namespace dev::storage;
@@ -350,7 +348,8 @@ void Entry::copyFrom(Entry::ConstPtr entry)
             }
             else
             {
-                tbb::this_tbb_thread::yield();
+                std::this_thread::yield();
+                continue;
             }
         }
         else

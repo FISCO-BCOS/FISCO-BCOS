@@ -2207,6 +2207,11 @@ void Rpc::getBatchReceipts(Json::Value& _response, dev::eth::Block::Ptr _block,
     {
         return;
     }
+
+#if !defined(__APPLE__)
     Json::FastWriter fastWriter;
     _response = base64Encode(compress(fastWriter.write(_response)));
+#else
+    BOOST_THROW_EXCEPTION(JsonRpcException(-40099, "zip compress not support on mac os"));
+#endif
 }
