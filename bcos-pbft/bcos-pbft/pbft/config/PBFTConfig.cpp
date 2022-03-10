@@ -56,7 +56,7 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
     // set leader_period
     setLeaderSwitchPeriod(_ledgerConfig->leaderSwitchPeriod());
     // reset the timer
-    resetTimer();
+    freshTimer();
 
     if (_ledgerConfig->sealerId() == -1)
     {

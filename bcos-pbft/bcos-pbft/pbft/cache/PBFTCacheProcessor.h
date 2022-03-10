@@ -91,13 +91,22 @@ public:
     PBFTMessageList preCommitCachesWithoutData()
     {
         PBFTMessageList precommitCacheList;
-        for (auto const& it : m_caches)
+        auto waitSealUntil = m_config->waitSealUntil();
+        auto committedIndex = m_config->committedProposal()->index();
+        for (auto it = m_caches.begin(); it != m_caches.end();)
         {
-            auto precommitCache = it.second->preCommitWithoutData();
+            auto precommitCache = it->second->preCommitWithoutData();
             if (precommitCache != nullptr)
             {
+                // should not handle the proposal future than the system proposal
+                if (waitSealUntil > committedIndex && precommitCache->index() > waitSealUntil)
+                {
+                    it = m_caches.erase(it);
+                    continue;
+                }
                 precommitCacheList.push_back(precommitCache);
             }
+            it++;
         }
         return precommitCacheList;
     }

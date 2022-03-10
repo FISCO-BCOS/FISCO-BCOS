@@ -491,7 +491,8 @@ PBFTMessageList PBFTCacheProcessor::generatePrePrepareMsg(
     std::map<IndexType, ViewChangeMsgInterface::Ptr> _viewChangeCache)
 {
     auto toView = m_config->toView();
-    auto maxCommittedIndex = m_config->committedProposal()->index();
+    auto committedIndex = m_config->committedProposal()->index();
+    auto maxCommittedIndex = committedIndex;
     if (m_maxCommittedIndex.count(toView))
     {
         maxCommittedIndex = m_maxCommittedIndex[toView];
@@ -500,6 +501,11 @@ PBFTMessageList PBFTCacheProcessor::generatePrePrepareMsg(
     if (m_maxPrecommitIndex.count(toView))
     {
         maxPrecommitIndex = m_maxPrecommitIndex[toView];
+    }
+    // should not handle the proposal future than the system proposal
+    if (m_config->waitSealUntil() > committedIndex)
+    {
+        maxPrecommitIndex = std::min(m_config->waitSealUntil(), maxPrecommitIndex);
     }
     std::map<BlockNumber, PBFTMessageInterface::Ptr> preparedProposals;
     for (auto it : _viewChangeCache)
