@@ -77,6 +77,7 @@ void BlockExecutive::asyncExecute(
             auto message = m_scheduler->m_executionMessageFactory->createExecutionMessage();
             message->setContextID(i + m_startContextID);
             message->setType(protocol::ExecutionMessage::TXHASH);
+            // Note: set here for fetching txs when send_back
             message->setTransactionHash(metaData->hash());
 
             if (metaData->attribute() & bcos::protocol::Transaction::Attribute::LIQUID_SCALE_CODEC)
@@ -136,7 +137,6 @@ void BlockExecutive::asyncExecute(
             auto message = m_scheduler->m_executionMessageFactory->createExecutionMessage();
             message->setType(protocol::ExecutionMessage::MESSAGE);
             message->setContextID(i + m_startContextID);
-            message->setTransactionHash(tx->hash());
             message->setOrigin(toHex(tx->sender()));
             message->setFrom(std::string(message->origin()));
 
@@ -169,7 +169,10 @@ void BlockExecutive::asyncExecute(
                     message->setTo(preprocessAddress(tx->to()));
                 }
             }
-
+            if (message->create())
+            {
+                message->setABI(std::string(tx->abi()));
+            }
             message->setDepth(0);
             message->setGasAvailable(TRANSACTION_GAS);
             message->setData(tx->input().toBytes());
@@ -841,8 +844,8 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
                 m_gasUsed += txGasUsed;
 
                 m_executiveResults[executiveState.contextID].receipt =
-                    m_scheduler->m_blockFactory->receiptFactory()->createReceipt(
-                        txGasUsed, message->newEVMContractAddress(),
+                    m_scheduler->m_blockFactory->receiptFactory()->createReceipt(txGasUsed,
+                        message->newEVMContractAddress(),
                         std::make_shared<std::vector<bcos::protocol::LogEntry>>(
                             message->takeLogEntries()),
                         message->status(), message->takeData(),
@@ -900,6 +903,8 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
             SCHEDULER_LOG(TRACE) << "Send back, " << contextID << " | " << seq << " | "
                                  << message->transactionHash() << LOG_KV("to", message->to());
 
+            // Note: the executiveMessage for synced block should not setTransactionHash to avoid of
+            // duplicated txs-fetching
             if (message->transactionHash() != h256(0))
             {
                 message->setType(protocol::ExecutionMessage::TXHASH);
