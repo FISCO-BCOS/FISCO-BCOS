@@ -9,6 +9,7 @@ agency=
 root_crt=
 gmroot_crt=
 TASSL_CMD="${HOME}"/.fisco/tassl
+days=36500
 
 LOG_WARN()
 {
@@ -71,6 +72,7 @@ Usage:
     -c <ca path>           [Required]
     -a <agency name>       [Required]
     -g <gm ca path>        gmcert ca key path, if generate gm node cert
+    -X <Certificate expiration time>    Default 36500 days
     -h Help
 e.g:
     bash $0 -c nodes/cert -a newAgency
@@ -81,7 +83,7 @@ exit 0
 
 parse_params()
 {
-    while getopts "c:a:g:h" option;do
+    while getopts "c:a:g:hX:" option;do
         case $option in
         c) ca_path="${OPTARG}"
             if [ ! -f "$ca_path/ca.key" ]; then LOG_WARN "$ca_path/ca.key not exist" && exit 1; fi
@@ -96,6 +98,7 @@ parse_params()
             if [ ! -f "$gmca_path/gmca.crt" ]; then LOG_WARN "$gmca_path/gmca.crt not exist" && exit 1; fi
             if [ -f "$gmca_path/gmroot.crt" ]; then gmroot_crt="${gmca_path}/gmroot.crt"; fi
         ;;
+        X) days="$OPTARG";;
         h) help;;
         *) LOG_WARN "invalid option $option";;
         esac
@@ -154,7 +157,7 @@ gen_agency_cert() {
     openssl ecparam -out "$agencydir/secp256k1.param" -name secp256k1 2> /dev/null
     openssl genpkey -paramfile "$agencydir/secp256k1.param" -out "$agencydir/agency.key" 2> /dev/null
     openssl req -new -sha256 -subj "/CN=$name/O=fisco-bcos/OU=agency" -key "$agencydir/agency.key" -out "$agencydir/agency.csr" 2> /dev/null
-    openssl x509 -req -days 3650 -sha256 -CA "$chain/ca.crt" -CAkey "$chain/ca.key" -CAcreateserial\
+    openssl x509 -req -days ${days} -sha256 -CA "$chain/ca.crt" -CAkey "$chain/ca.key" -CAcreateserial\
         -in "$agencydir/agency.csr" -out "$agencydir/agency.crt"  -extensions v4_req -extfile "$chain/cert.cnf" 2> /dev/null
 
     cp "$chain/ca.crt" "$chain/cert.cnf" "$agencydir/"
@@ -335,7 +338,7 @@ gen_agency_cert_gm() {
 
     $TASSL_CMD genpkey -paramfile "$chain/gmsm2.param" -out "$agencydir/gmagency.key" >> "${logfile}" 2>&1
     $TASSL_CMD req -new -subj "/CN=$name/O=fisco-bcos/OU=agency" -key "$agencydir/gmagency.key" -config "$chain/gmcert.cnf" -out "$agencydir/gmagency.csr" >> "${logfile}" 2>&1
-    $TASSL_CMD x509 -req -CA "$chain/gmca.crt" -CAkey "$chain/gmca.key" -days 3650 -CAcreateserial -in "$agencydir/gmagency.csr" -out "$agencydir/gmagency.crt" -extfile "$chain/gmcert.cnf" -extensions v3_agency_root 2> /dev/null
+    $TASSL_CMD x509 -req -CA "$chain/gmca.crt" -CAkey "$chain/gmca.key" -days "${days}" -CAcreateserial -in "$agencydir/gmagency.csr" -out "$agencydir/gmagency.crt" -extfile "$chain/gmcert.cnf" -extensions v3_agency_root 2> /dev/null
 
     if [[ -n "${gmroot_crt}" ]];then
         echo "Use user specified gmroot cert as gmca.crt, $agencydir" >>"${logfile}"

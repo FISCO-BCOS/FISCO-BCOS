@@ -13,6 +13,7 @@ gm_conf_path="gmconf/"
 TASSL_CMD="${HOME}"/.fisco/tassl
 guomi_mode=
 sdk_cert=
+days=36500
 
 LOG_WARN()
 {
@@ -62,7 +63,7 @@ check_and_install_tassl(){
 
 parse_params()
 {
-while getopts "c:o:g:hs" option;do
+while getopts "c:o:g:hsX:" option;do
     case $option in
     c) [ ! -z $OPTARG ] && key_path=$OPTARG
     ;;
@@ -72,6 +73,7 @@ while getopts "c:o:g:hs" option;do
         check_and_install_tassl
     ;;
     s) sdk_cert="true";;
+    X) days="$OPTARG";;
     h) help;;
     esac
 done
@@ -146,7 +148,7 @@ gen_cert_secp256k1() {
     openssl genpkey -paramfile "$certpath/${type}.param" -out "$certpath/${type}.key" 2> /dev/null
     openssl pkey -in "$certpath/${type}.key" -pubout -out "$certpath/${type}.pubkey" 2> /dev/null
     openssl req -new -sha256 -subj "/CN=${name}/O=fisco-bcos/OU=${type}" -key "$certpath/${type}.key" -out "$certpath/${type}.csr"
-    openssl x509 -req -days 3650 -sha256 -in "$certpath/${type}.csr" -CAkey "$capath/agency.key" -CA "$capath/agency.crt" \
+    openssl x509 -req -days ${days} -sha256 -in "$certpath/${type}.csr" -CAkey "$capath/agency.key" -CA "$capath/agency.crt" \
         -force_pubkey "$certpath/${type}.pubkey" -out "$certpath/${type}.crt" -CAcreateserial -extensions v3_req -extfile "$capath/cert.cnf" 2> /dev/null
     openssl ec -in "$certpath/${type}.key" -outform DER 2> /dev/null | tail -c +8 | head -c 32 | xxd -p -c 32 | cat >"$certpath/${type}.private"
     rm -f $certpath/${type}.csr
@@ -183,7 +185,7 @@ gen_node_cert_with_extensions_gm() {
 
     $TASSL_CMD genpkey -paramfile $capath/gmsm2.param -out $certpath/gm${type}.key
     $TASSL_CMD req -new -subj "/CN=$name/O=fiscobcos/OU=agency" -config "$capath/gmcert.cnf" -key "$certpath/gm${type}.key" -out "$certpath/gm${type}.csr"
-    $TASSL_CMD x509 -req -CA $capath/gmagency.crt -CAkey $capath/gmagency.key -days 3650 -CAcreateserial -in $certpath/gm${type}.csr -out $certpath/gm${type}.crt -extfile $capath/gmcert.cnf -extensions $extensions
+    $TASSL_CMD x509 -req -CA $capath/gmagency.crt -CAkey $capath/gmagency.key -days ${days} -CAcreateserial -in $certpath/gm${type}.csr -out $certpath/gm${type}.crt -extfile $capath/gmcert.cnf -extensions $extensions
 
     rm -f $certpath/gm${type}.csr
 }

@@ -23,6 +23,7 @@ bin_path=
 make_tar=
 binary_log="false"
 sm_crypto_channel="false"
+rsa_crypto_channel="true"
 log_level="info"
 logfile=${PWD}/build.log
 listen_ip="127.0.0.1"
@@ -49,6 +50,7 @@ timestamp=$(($(date '+%s')*1000))
 chain_id=1
 compatibility_version=""
 default_version="2.9.0"
+rsa_key_length=2048
 macOS=""
 x86_64_arch="true"
 download_timeout=240
@@ -69,6 +71,7 @@ Usage:
     -d <docker mode>                    Default off. If set -d, build with docker
     -c <Consensus Algorithm>            Default PBFT. Options can be pbft / raft /rpbft, pbft is recommended
     -C <Chain id>                       Default 1. Can set uint.
+    -R <Disable channel ssl use rsa cert>   Default yes
     -g <Generate guomi nodes>           Default no
     -z <Generate tar packet>            Default no
     -t <Cert config file>               Default auto generate
@@ -84,7 +87,7 @@ Usage:
     -E <Enable free_storage_evm>        Default off. If set -E, enable free_storage_evm
     -h Help
 e.g
-    $0 -l "127.0.0.1:4"
+    bash $0 -l "127.0.0.1:4"
 EOF
 
 exit 0
@@ -132,7 +135,7 @@ exit_with_clean()
 
 parse_params()
 {
-while getopts "f:l:o:p:e:t:v:s:C:c:k:K:X:izhgGTNFSdEDZ6q" option;do
+while getopts "f:l:o:p:e:t:v:s:C:c:k:K:X:izhgGTNFRSdEDZ6q" option;do
     case $option in
     f) ip_file=$OPTARG
        use_ip_param="false"
@@ -192,6 +195,7 @@ while getopts "f:l:o:p:e:t:v:s:C:c:k:K:X:izhgGTNFSdEDZ6q" option;do
     T) log_level="debug";;
     F) auto_flush="false";;
     N) no_agency="true";;
+    R) rsa_crypto_channel="false";;
     S) enable_statistic="true";;
     E) enable_free_storage="true";;
     D) deploy_mode="true" && make_tar="true";;
@@ -297,6 +301,12 @@ file_must_exists() {
     fi
 }
 
+file_must_not_exists() {
+    if [ -f "$1" ]; then
+        exit_with_clean "$1 file exists, please check!"
+    fi
+}
+
 dir_must_exists() {
     if [ ! -d "$1" ]; then
         exit_with_clean "$1 DIR does not exist, please check!"
@@ -308,6 +318,55 @@ dir_must_not_exists() {
         LOG_WARN "$1 DIR exists, please clean old DIR!"
         exit 1
     fi
+}
+
+gen_rsa_chain_cert() {
+    local chaindir="${1}"
+
+    mkdir -p "${chaindir}"
+
+    file_must_not_exists "${chaindir}"/ca.key
+    file_must_not_exists "${chaindir}"/ca.crt
+    # file_must_exists "${cert_conf}"
+
+    mkdir -p "$chaindir"
+    dir_must_exists "$chaindir"
+
+    openssl genrsa -out "${chaindir}"/ca.key "${rsa_key_length}" 2>/dev/null
+    openssl req -new -x509 -days "${days}" -subj "/CN=FISCO-BCOS/O=fisco-bcos/OU=chain" -key "${chaindir}"/ca.key -out "${chaindir}"/ca.crt  2>/dev/null
+
+    LOG_INFO "Generate ca cert successfully!"
+}
+
+gen_rsa_node_cert() {
+    local capath="${1}"
+    local ndpath="${2}"
+    local type="${3}"
+
+    file_must_exists "$capath/ca.key"
+    file_must_exists "$capath/ca.crt"
+    # check_name node "$node"
+
+    file_must_not_exists "$ndpath"/"${type}".key
+    file_must_not_exists "$ndpath"/"${type}".crt
+
+    mkdir -p "${ndpath}"
+    dir_must_exists "${ndpath}"
+
+    openssl genrsa -out "${ndpath}"/"${type}".key "${rsa_key_length}" 2>/dev/null
+    openssl req -new -sha256 -subj "/CN=FISCO-BCOS/O=fisco-bcos/OU=agency" -key "$ndpath"/"${type}".key -out "$ndpath"/"${type}".csr
+    openssl x509 -req -days "${days}" -sha256 -CA "${capath}"/ca.crt -CAkey "$capath"/ca.key -CAcreateserial \
+        -in "$ndpath"/"${type}".csr -out "$ndpath"/"${type}".crt -extensions v4_req 2>/dev/null
+
+    openssl pkcs8 -topk8 -in "$ndpath"/"${type}".key -out "$ndpath"/pkcs8_node.key -nocrypt
+
+    rm -f "$ndpath"/"$type".csr
+    rm -f "$ndpath"/"$type".key
+
+    mv "$ndpath"/pkcs8_node.key "$ndpath"/"$type".key
+    cp "$capath/ca.crt" "$ndpath"
+
+    # LOG_INFO "Generate ${ndpath} node rsa cert successful!"
 }
 
 gen_chain_cert() {
@@ -342,7 +401,7 @@ gen_agency_cert() {
     openssl ecparam -out "$agencydir/secp256k1.param" -name secp256k1 2> /dev/null
     openssl genpkey -paramfile "$agencydir/secp256k1.param" -out "$agencydir/agency.key" 2> /dev/null
     openssl req -new -sha256 -subj "/CN=$name/O=fisco-bcos/OU=agency" -key "$agencydir/agency.key" -out "$agencydir/agency.csr" 2> /dev/null
-    openssl x509 -req -days 3650 -sha256 -CA "$chain/ca.crt" -CAkey "$chain/ca.key" -CAcreateserial\
+    openssl x509 -req -days "${days}" -sha256 -CA "$chain/ca.crt" -CAkey "$chain/ca.key" -CAcreateserial\
         -in "$agencydir/agency.csr" -out "$agencydir/agency.crt"  -extensions v4_req -extfile "$chain/cert.cnf" 2> /dev/null
     # cat "$chain/ca.crt" >> "$agencydir/agency.crt"
     cp $chain/ca.crt $chain/cert.cnf $agencydir/
@@ -449,7 +508,7 @@ gen_agency_cert_gm() {
 
     $TASSL_CMD genpkey -paramfile "$chain/gmsm2.param" -out "$agencydir/gmagency.key" 2> /dev/null
     $TASSL_CMD req -new -subj "/CN=${name}/O=fisco-bcos/OU=agency" -key "$agencydir/gmagency.key" -config "$chain/gmcert.cnf" -out "$agencydir/gmagency.csr" 2> /dev/null
-    $TASSL_CMD x509 -sm3 -req -CA "$chain/gmca.crt" -CAkey "$chain/gmca.key" -days 3650 -CAcreateserial -in "$agencydir/gmagency.csr" -out "$agencydir/gmagency.crt" -extfile "$chain/gmcert.cnf" -extensions v3_agency_root 2> /dev/null
+    $TASSL_CMD x509 -sm3 -req -CA "$chain/gmca.crt" -CAkey "$chain/gmca.key" -days "${days}" -CAcreateserial -in "$agencydir/gmagency.csr" -out "$agencydir/gmagency.crt" -extfile "$chain/gmcert.cnf" -extensions v3_agency_root 2> /dev/null
     # cat "$chain/gmca.crt" >> "$agencydir/gmagency.crt"
     cp "$chain/gmca.crt" "$chain/gmcert.cnf" "$chain/gmsm2.param" "$agencydir/"
     rm -f "$agencydir/gmagency.csr"
@@ -582,6 +641,7 @@ generate_config_ini()
     ; use SM crypto or not, should nerver be changed
     sm_crypto=${sm_crypto}
     sm_crypto_channel=${sm_crypto_channel}
+    rsa_crypto_channel=${rsa_crypto_channel}
 
 [compatibility]
     ; supported_version should nerver be changed
@@ -1237,7 +1297,7 @@ while getopts "v:V:f" option;do
     case \$option in
     v) solc_suffix="\${OPTARG//[vV]/}"
         if ! echo "\${supported_solc_versions[*]}" | grep -i "\${solc_suffix}" &>/dev/null; then
-            LOG_WARN "\${solc_suffix} is not supported. Please set one of \${supported_solc_versions[*]}"
+            LOG_ERROR "\${solc_suffix} is not supported. Please set one of \${supported_solc_versions[*]}"
             exit 1;
         fi
         package_name="console-\${solc_suffix}.tar.gz"
@@ -1609,10 +1669,12 @@ prepare_ca(){
         for agency_name in ${agency_array[*]};do
             if [ ! -d "${output_dir}/cert/${agency_name}" ];then
                 gen_agency_cert "${output_dir}/cert" "${output_dir}/cert/${agency_name}" >>"${logfile}" 2>&1
+                gen_rsa_chain_cert "${output_dir}/cert/${agency_name}-cert" >>"${logfile}" 2>&1
             fi
         done
     else
         gen_agency_cert "${output_dir}/cert" "${output_dir}/cert/agency" >"${logfile}" 2>&1
+        gen_rsa_chain_cert "${output_dir}/cert/agency-channel" >>"${logfile}" 2>&1
     fi
 
     if [[ -n "${guomi_mode}" ]];then
@@ -1712,13 +1774,20 @@ for line in ${ip_array[*]};do
         LOG_WARN "Please check IP address: ${ip}, if you use domain name please ignore this."
     fi
     [ "$num" == "$ip" ] || [ -z "${num}" ] && num=${node_num}
-    echo "Processing IP=${ip} Total=${num} Agency=${agency_array[${server_count}]} Groups=${group_array[server_count]}"
+    local agency=${agency_array[${server_count}]}
+    echo "Processing IP=${ip} Total=${num} Agency=${agency} Groups=${group_array[server_count]}"
     [ -z "$(get_value "${ip//[\.:]/_}_count")" ] && set_value "${ip//[\.:]/_}_count" 0
     sdk_path="${output_dir}/${ip}/sdk"
-    local agency_gm_path="${output_dir}/gmcert/${agency_array[${server_count}]}-gm"
+    local agency_gm_path="${output_dir}/gmcert/${agency}-gm"
     if [ ! -d "${sdk_path}" ];then
-        gen_cert "${output_dir}/cert/${agency_array[${server_count}]}" "${sdk_path}" "sdk"
-        mv node.nodeid sdk.publickey
+        # TODO: generate rsa cert
+        if [ "${rsa_crypto_channel}" == "false" ];then
+            gen_cert "${output_dir}/cert/${agency}" "${sdk_path}" "sdk"
+             mv node.nodeid sdk.publickey
+        else
+            gen_rsa_node_cert "${output_dir}/cert/${agency}-channel" "${sdk_path}" "sdk"
+        fi
+        
         cd "${output_dir}"
         if [ -n "${guomi_mode}" ];then
             mkdir -p "${sdk_path}/gm"
@@ -1727,7 +1796,7 @@ for line in ${ip_array[*]};do
             cat "${agency_gm_path}/../gmca.crt" >> "${sdk_path}/gm/gmsdk.crt"
             gen_node_cert_with_extensions_gm "${agency_gm_path}" "${sdk_path}/gm" "sdk" ensdk v3enc_req
             cp "${output_dir}/gmcert/gmca.crt" "${sdk_path}/gm/"
-            $TASSL_CMD ec -in "$sdk_path/gm/gmsdk.key" -text -noout 2> /dev/null | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}'  | cat > "$ndpath/gmsdk.publickey"
+            $TASSL_CMD ec -in "$sdk_path/gm/gmsdk.key" -text -noout 2> /dev/null | sed -n '7,11p' | sed 's/://g' | tr "\n" " " | sed 's/ //g' | awk '{print substr($0,3);}'  | cat > "$sdk_path/gmsdk.publickey"
             mv "$sdk_path/gmsdk.publickey" "$sdk_path/gm"
         fi
     fi
@@ -1771,9 +1840,17 @@ for line in ${ip_array[*]};do
             nodeid="$(cat ${node_dir}/${gm_conf_path}/gmnode.nodeid)"
             #remove original cert files
             mv ${node_dir}/${gm_conf_path} ${node_dir}/${conf_path}
+
         else
             nodeid="$(cat ${node_dir}/${conf_path}/node.nodeid)"
         fi
+
+        local agency="${agency_array[${server_count}]}"
+        local agency_rsa_ca="${output_dir}/cert/${agency}-channel"
+        local node_channel_ca="${node_dir}/${conf_path}/channel_cert"
+        gen_rsa_node_cert "${agency_rsa_ca}" "${node_channel_ca}" "node"
+        # LOG_INFO " generate node channel rsa ca, i: ${i} ,node_count: ${node_count} ,agency: ${agency}, conf dir: ${conf_path}, node dir: ${node_dir}"
+
         if [ -n "${copy_cert}" ];then cp -r "${sdk_path}" "${node_dir}/" ; fi
         if [ "${use_ip_param}" == "false" ];then
             node_groups=(${group_array[server_count]//,/ })

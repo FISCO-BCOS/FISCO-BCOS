@@ -962,7 +962,6 @@ void CachedStorage::checkAndClear()
 
 void CachedStorage::updateCapacity(ssize_t capacity)
 {
-    // TODO: right or not ???
     m_capacity.fetch_add(capacity);
 }
 
