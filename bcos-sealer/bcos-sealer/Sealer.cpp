@@ -113,6 +113,11 @@ void Sealer::executeWorker()
 
 void Sealer::submitProposal(bool _containSysTxs, bcos::protocol::Block::Ptr _block)
 {
+    // Note: the block maybe empty
+    if (!_block)
+    {
+        return;
+    }
     if (_block->blockHeader()->number() <= m_sealingManager->currentNumber())
     {
         m_sealingManager->notifyResetProposal(_block);
