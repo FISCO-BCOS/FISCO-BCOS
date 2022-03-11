@@ -100,13 +100,19 @@ public:
     void registerHandlerByTopic(std::string topic, CallbackFuncWithSession handler) override;
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> deal with the problem of file input and output
     virtual std::map<dev::network::NodeIPEndpoint, NodeID> staticNodes() override
     {
         return m_staticNodes;
     }
+<<<<<<< HEAD
 =======
     virtual std::map<dev::network::NodeIPEndpoint, NodeID> staticNodes() override { return m_staticNodes; }
 >>>>>>> develop the feature of p2p Operation
+=======
+>>>>>>> deal with the problem of file input and output
     virtual void setStaticNodes(std::map<dev::network::NodeIPEndpoint, NodeID> staticNodes) override
     {
         m_staticNodes = staticNodes;
