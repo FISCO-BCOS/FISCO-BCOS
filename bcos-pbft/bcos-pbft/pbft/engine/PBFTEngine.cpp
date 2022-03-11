@@ -130,6 +130,12 @@ void PBFTEngine::onLoadAndVerifyProposalSucc(PBFTProposalInterface::Ptr _proposa
     // must add lock here to ensure thread-safe
     RecursiveGuard l(m_mutex);
     m_cacheProcessor->updateCommitQueue(_proposal);
+    // Note:  The node that obtains the consensus proposal by request
+    //        proposal from othe nodes  will also broadcast the checkPoint message packet,
+    //        Therefore, the node may also be requested by other nodes.
+    //        Therefore, it must be ensured that the obtained proposal is updated to the
+    //        preCommitCache.
+    m_cacheProcessor->updatePrecommit(_proposal);
     m_config->timer()->restart();
 }
 
