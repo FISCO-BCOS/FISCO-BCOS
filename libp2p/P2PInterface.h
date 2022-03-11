@@ -126,7 +126,11 @@ public:
     virtual void removeGroupBandwidthLimiter(GROUP_ID const&) {}
     virtual void setChannelNetworkStatHandler(std::shared_ptr<dev::stat::ChannelNetworkStatHandler>)
     {}
-    virtual std::map<dev::network::NodeIPEndpoint, NodeID> staticNodes() = 0;
+    virtual std::map<dev::network::NodeIPEndpoint, NodeID> staticNodes()
+    {
+        std::map<dev::network::NodeIPEndpoint, NodeID> tmp;
+        return tmp;
+    };
     virtual void setStaticNodes(std::map<dev::network::NodeIPEndpoint, NodeID>){};
 };
 
