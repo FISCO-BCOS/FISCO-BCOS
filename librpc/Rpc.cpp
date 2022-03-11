@@ -2213,9 +2213,12 @@ void Rpc::getBatchReceipts(Json::Value& _response, dev::eth::Block::Ptr _block,
 #if !defined(__APPLE__)
     Json::FastWriter fastWriter;
     _response = base64Encode(compress(fastWriter.write(_response)));
+<<<<<<< HEAD
 #else
     BOOST_THROW_EXCEPTION(JsonRpcException(-40099, "zip compress not support on mac os"));
 #endif
+=======
+>>>>>>> develop the feature of p2p Operation
 }
 
 Json::Value Rpc::addPeer(Json::Value _hostPorts)
@@ -2280,6 +2283,7 @@ Json::Value Rpc::addPeer(Json::Value _hostPorts)
 
         // update the nodes to staticnodes
         service()->setStaticNodes(nodes);
+<<<<<<< HEAD
         std::string tmpdata = "";
         int _count = 0;
         for (auto it = nodes.begin(); it != nodes.end(); it++)
@@ -2310,6 +2314,34 @@ Json::Value Rpc::addPeer(Json::Value _hostPorts)
             }
 
             auto pos1 = fileData.find("p2p");
+=======
+        std::string tmpdata = "\n";
+        int _count = 0;
+        for (auto it = nodes.begin(); it != nodes.end(); it++)
+        {
+            tmpdata += "    node." + std::to_string(_count) + (it->first.m_ipv6 ? "=[" : "=") +
+                       it->first.m_host + (it->first.m_ipv6 ? "]:" : ":") +
+                       std::to_string(it->first.m_port) + "\n";
+            _count++;
+        }
+
+        // output the nodes to the file "config.ini",this part would be optimized when replacing the
+        // context
+        auto confdir = g_BCOSConfig.confDir();
+        if (boost::filesystem::exists(confdir))
+        {
+            boost::filesystem::ifstream in(confdir);
+            std::string fileData = "";
+            char tmpLineData[1024]{};
+            while (in.getline(tmpLineData, sizeof(tmpLineData)))
+            {
+                fileData += tmpLineData;
+                fileData += "\n";
+            }
+            in.close();
+
+            auto pos1 = fileData.find("[p2p]");
+>>>>>>> develop the feature of p2p Operation
             if (pos1 == fileData.npos)
             {
                 response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
@@ -2317,21 +2349,36 @@ Json::Value Rpc::addPeer(Json::Value _hostPorts)
                 return response;
             }
             auto pos2 = fileData.find("node.0=", pos1);
+<<<<<<< HEAD
             auto pos3 = fileData.find("certificate_blacklist");
+=======
+            auto pos3 = fileData.find("[certificate_blacklist]");
+>>>>>>> develop the feature of p2p Operation
             if (pos2 == fileData.npos || pos3 == fileData.npos || pos2 >= pos3)
             {
                 response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
                 response["message"] = "p2p not found in config.ini successfully";
                 return response;
             }
+<<<<<<< HEAD
             fileData.replace(pos2, pos3 - pos2 - 1, tmpdata);
 
             std::ofstream out(confdir, std::ios::out);
+=======
+            fileData.replace(pos2, pos3 - pos2, tmpdata);
+
+            boost::filesystem::ofstream out(confdir);
+            out.flush();
+>>>>>>> develop the feature of p2p Operation
             out << fileData;
             out.close();
 
             response["code"] = LedgerManagementStatusCode::SUCCESS;
+<<<<<<< HEAD
             response["message"] = "add peer(s) successfully";
+=======
+            response["message"] = " add peer(s) successfully";
+>>>>>>> develop the feature of p2p Operation
             return response;
         }
         else
@@ -2433,6 +2480,7 @@ Json::Value Rpc::erasePeer(Json::Value _hostPorts)
 
         // update the nodes to staticnodes
         service()->setStaticNodes(nodes);
+<<<<<<< HEAD
         std::string tmpdata = "";
         int _count = 0;
         for (auto it = nodes.begin(); it != nodes.end(); it++)
@@ -2462,6 +2510,33 @@ Json::Value Rpc::erasePeer(Json::Value _hostPorts)
             }
 
             auto pos1 = fileData.find("p2p");
+=======
+        std::string tmpdata = "\n";
+        int _count = 0;
+        for (auto it = nodes.begin(); it != nodes.end(); it++)
+        {
+            tmpdata += "    node." + std::to_string(_count) + (it->first.m_ipv6 ? "=[" : "=") +
+                       it->first.m_host + (it->first.m_ipv6 ? "]:" : ":") +
+                       std::to_string(it->first.m_port) + "\n";
+            _count++;
+        }
+
+        // output the nodes to the file "config.ini"
+        auto confdir = g_BCOSConfig.confDir();
+        if (boost::filesystem::exists(confdir))
+        {
+            boost::filesystem::ifstream in(confdir);
+            std::string fileData = "";
+            char tmpLineData[1024]{};
+            while (in.getline(tmpLineData, sizeof(tmpLineData)))
+            {
+                fileData += tmpLineData;
+                fileData += "\n";
+            }
+            in.close();
+
+            auto pos1 = fileData.find("[p2p]");
+>>>>>>> develop the feature of p2p Operation
             if (pos1 == fileData.npos)
             {
                 response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
@@ -2469,13 +2544,18 @@ Json::Value Rpc::erasePeer(Json::Value _hostPorts)
                 return response;
             }
             auto pos2 = fileData.find("node.0=", pos1);
+<<<<<<< HEAD
             auto pos3 = fileData.find("certificate_blacklist");
+=======
+            auto pos3 = fileData.find("[certificate_blacklist]");
+>>>>>>> develop the feature of p2p Operation
             if (pos2 == fileData.npos || pos3 == fileData.npos || pos2 >= pos3)
             {
                 response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
                 response["message"] = "p2p not found in config.ini successfully";
                 return response;
             }
+<<<<<<< HEAD
             fileData.replace(pos2, pos3 - pos2 - 1, tmpdata);
 
             std::ofstream out(confdir, std::ios::out);
@@ -2483,6 +2563,17 @@ Json::Value Rpc::erasePeer(Json::Value _hostPorts)
             out.close();
             response["code"] = LedgerManagementStatusCode::SUCCESS;
             response["message"] = " erase peer(s) successfully";
+=======
+            fileData.replace(pos2, pos3 - pos2, tmpdata);
+
+            boost::filesystem::ofstream out(confdir);
+            out.flush();
+            out << fileData;
+            out.close();
+
+            response["code"] = LedgerManagementStatusCode::SUCCESS;
+            response["message"] = " add peer(s) successfully";
+>>>>>>> develop the feature of p2p Operation
             return response;
         }
         else

@@ -99,10 +99,14 @@ public:
 
     void registerHandlerByTopic(std::string topic, CallbackFuncWithSession handler) override;
 
+<<<<<<< HEAD
     virtual std::map<dev::network::NodeIPEndpoint, NodeID> staticNodes() override
     {
         return m_staticNodes;
     }
+=======
+    virtual std::map<dev::network::NodeIPEndpoint, NodeID> staticNodes() override { return m_staticNodes; }
+>>>>>>> develop the feature of p2p Operation
     virtual void setStaticNodes(std::map<dev::network::NodeIPEndpoint, NodeID> staticNodes) override
     {
         m_staticNodes = staticNodes;
