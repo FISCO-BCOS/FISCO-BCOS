@@ -126,15 +126,12 @@ public:
     virtual void removeGroupBandwidthLimiter(GROUP_ID const&) {}
     virtual void setChannelNetworkStatHandler(std::shared_ptr<dev::stat::ChannelNetworkStatHandler>)
     {}
-<<<<<<< HEAD
     virtual std::map<dev::network::NodeIPEndpoint, NodeID> staticNodes()
     {
         std::map<dev::network::NodeIPEndpoint, NodeID> tmp;
         return tmp;
     };
-=======
-    virtual std::map<dev::network::NodeIPEndpoint, NodeID> staticNodes() = 0;
->>>>>>> develop the feature of p2p Operation
+
     virtual void setStaticNodes(std::map<dev::network::NodeIPEndpoint, NodeID>){};
 };
 
