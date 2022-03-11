@@ -883,7 +883,10 @@ void PBFTEngine::onTimeout()
         m_config->timer()->restart();
         return;
     }
+    auto startT = utcTime();
+    auto recordT = utcTime();
     RecursiveGuard l(m_mutex);
+    auto lockT = utcTime() - startT;
     if (m_cacheProcessor->tryToApplyCommitQueue())
     {
         PBFT_LOG(INFO) << LOG_DESC("onTimeout: apply proposal to state-machine, restart the timer")
@@ -903,7 +906,8 @@ void PBFTEngine::onTimeout()
         return;
     }
     triggerTimeout(true);
-    PBFT_LOG(WARNING) << LOG_DESC("onTimeout") << m_config->printCurrentState();
+    PBFT_LOG(WARNING) << LOG_DESC("After onTimeout") << m_config->printCurrentState()
+                      << LOG_KV("lockT", lockT) << LOG_KV("timecost", (utcTime() - recordT));
 }
 
 void PBFTEngine::triggerTimeout(bool _incTimeout)

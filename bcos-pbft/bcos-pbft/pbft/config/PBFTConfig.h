@@ -213,7 +213,8 @@ public:
             m_startRecovered.store(true);
         }
         // reset the timer when reach a new-view
-        resetTimer();
+        m_timeoutState.store(false);
+        freshTimer();
         // update the changeCycle
         timer()->resetChangeCycle();
         setView(_view);
@@ -227,13 +228,6 @@ public:
         {
             m_timer->start();
         }
-    }
-
-    virtual void resetTimer()
-    {
-        // reset the timeout state to false
-        m_timeoutState.store(false);
-        freshTimer();
     }
 
     virtual void freshTimer()
