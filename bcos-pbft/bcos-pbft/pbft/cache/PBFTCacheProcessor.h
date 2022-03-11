@@ -122,6 +122,7 @@ public:
         bcos::protocol::BlockNumber _index, bcos::crypto::HashType const& _hash);
 
     virtual PBFTProposalInterface::Ptr fetchPrecommitProposal(bcos::protocol::BlockNumber _index);
+    virtual void updatePrecommit(PBFTProposalInterface::Ptr _proposal);
 
     virtual bool checkPrecommitMsg(PBFTMessageInterface::Ptr _precommitMsg);
 

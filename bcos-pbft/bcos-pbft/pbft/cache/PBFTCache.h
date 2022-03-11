@@ -73,6 +73,12 @@ public:
     bcos::protocol::BlockNumber index() const { return m_index; }
 
     virtual PBFTMessageInterface::Ptr preCommitCache() { return m_precommit; }
+    // Note: only called when receive checkPoint-triggered-proposal response
+    virtual void setPrecommitCache(PBFTMessageInterface::Ptr _precommit)
+    {
+        m_precommit = _precommit;
+        m_precommitWithoutData = _precommit;
+    }
     virtual PBFTMessageInterface::Ptr preCommitWithoutData() { return m_precommitWithoutData; }
     virtual bool checkAndPreCommit();
     virtual bool checkAndCommit();

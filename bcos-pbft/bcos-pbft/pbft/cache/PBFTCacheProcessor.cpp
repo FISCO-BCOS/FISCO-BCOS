@@ -1140,3 +1140,15 @@ PBFTProposalInterface::Ptr PBFTCacheProcessor::fetchPrecommitProposal(
     }
     return cache->preCommitCache()->consensusProposal();
 }
+
+void PBFTCacheProcessor::updatePrecommit(PBFTProposalInterface::Ptr _proposal)
+{
+    auto pbftMessage = m_config->pbftMessageFactory()->createPBFTMsg();
+    pbftMessage->setConsensusProposal(_proposal);
+    pbftMessage->setIndex(_proposal->index());
+    pbftMessage->setHash(_proposal->hash());
+    addCache(
+        m_caches, pbftMessage, [](PBFTCache::Ptr _pbftCache, PBFTMessageInterface::Ptr _precommit) {
+            _pbftCache->setPrecommitCache(_precommit);
+        });
+}
