@@ -34,7 +34,10 @@
 #include <libledger/LedgerManager.h>
 #include <libprecompiled/Common.h>
 #include <boost/thread/tss.hpp>  // for thread_specific_ptr
-#include <string>                // for string
+#include <fstream>
+#include <iostream>
+#include <string>  // for string
+#include <vector>  // for vector
 
 namespace dev
 {
