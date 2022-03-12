@@ -34,11 +34,8 @@
         std::make_shared<dev::precompiled::DagTransferPrecompiled>());
     context->setAddress2Precompiled(Address(dev::precompiled::PAILLIER_ADDRESS),
         std::make_shared<dev::precompiled::PaillierPrecompiled>());
-
-#if !defined(__APPLE__)
     context->setAddress2Precompiled(Address(dev::precompiled::GROUP_SIG_ADDRESS),
         std::make_shared<dev::precompiled::GroupSigPrecompiled>());
     context->setAddress2Precompiled(Address(dev::precompiled::RING_SIG_ADDRESS),
         std::make_shared<dev::precompiled::RingSigPrecompiled>());
-#endif
 }

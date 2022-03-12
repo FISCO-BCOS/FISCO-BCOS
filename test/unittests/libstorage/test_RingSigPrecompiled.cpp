@@ -22,10 +22,9 @@
 #include "Common.h"
 #include <libblockverifier/ExecutiveContextFactory.h>
 #include <libethcore/ABI.h>
+#include <libprecompiled/extension/RingSigPrecompiled.h>
 #include <boost/lexical_cast.hpp>
 #include <boost/test/unit_test.hpp>
-#if !defined(__APPLE__)
-#include <libprecompiled/extension/group_ring_sig/RingSigPrecompiled.h>
 
 using namespace dev;
 using namespace dev::blockverifier;
@@ -193,5 +192,3 @@ BOOST_AUTO_TEST_CASE(InvalidInputs)
 BOOST_AUTO_TEST_SUITE_END()
 
 }  // namespace test_RingSigPrecompiled
-
-#endif

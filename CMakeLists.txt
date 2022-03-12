@@ -60,10 +60,7 @@ include(ProjectEVMC)
 include(ProjectVRF)
 include(ProjectEVMONE)
 include(ProjectTASSL)
-
-if(NOT APPLE)
-  include(ProjectGroupSig)
-endif()
+include(ProjectGroupSig)
 
 if(USE_HSM_SDF)
   include(ProjectSDF)
