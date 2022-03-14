@@ -1174,6 +1174,8 @@ void PBFTEngine::reachNewView(ViewType _view)
     m_cacheProcessor->checkAndPreCommit();
     m_cacheProcessor->checkAndCommit();
     PBFT_LOG(INFO) << LOG_DESC("reachNewView") << m_config->printCurrentState();
+    m_cacheProcessor->tryToApplyCommitQueue();
+    m_cacheProcessor->tryToCommitStableCheckPoint();
 }
 
 void PBFTEngine::reHandlePrePrepareProposals(NewViewMsgInterface::Ptr _newViewReq)
