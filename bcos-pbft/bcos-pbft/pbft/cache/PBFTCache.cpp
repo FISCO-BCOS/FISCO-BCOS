@@ -238,6 +238,10 @@ bool PBFTCache::checkAndPreCommit()
     {
         return false;
     }
+    if (!m_prePrepare)
+    {
+        return false;
+    }
     // avoid to intoPrecommit when in timeout state
     if (m_config->timeout())
     {
