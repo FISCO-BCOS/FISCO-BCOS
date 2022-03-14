@@ -5,6 +5,7 @@
 #include "libinitializer/ProtocolInitializer.h"
 #include <bcos-tars-protocol/Common.h>
 #include <bcos-tars-protocol/ErrorConverter.h>
+#include <bcos-tars-protocol/protocol/GroupNodeInfoImpl.h>
 #include <bcos-tars-protocol/tars/GatewayService.h>
 #include <chrono>
 #include <mutex>
@@ -106,28 +107,26 @@ public:
         return bcostars::Error();
     }
 
-    bcostars::Error asyncGetNodeIDs(const std::string& groupID, vector<vector<tars::Char>>& nodeIDs,
-        tars::TarsCurrentPtr current) override
+    bcostars::Error asyncGetGroupNodeInfo(
+        const std::string& groupID, GroupNodeInfo&, tars::TarsCurrentPtr current) override
     {
         current->setResponse(false);
 
-        m_gatewayInitializer->gateway()->asyncGetNodeIDs(
+        m_gatewayInitializer->gateway()->asyncGetGroupNodeInfo(
             groupID, [current](bcos::Error::Ptr _error,
-                         std::shared_ptr<const bcos::crypto::NodeIDs> _nodeIDs) {
+                         bcos::gateway::GroupNodeInfo::Ptr _bcosGroupNodeInfo) {
                 // Note: the nodeIDs maybe null if no connections
-                std::vector<std::vector<char>> tarsNodeIDs;
-                if (!_nodeIDs)
+                if (!_bcosGroupNodeInfo || _bcosGroupNodeInfo->nodeIDList().empty())
                 {
-                    async_response_asyncGetNodeIDs(current, toTarsError(_error), tarsNodeIDs);
+                    async_response_asyncGetGroupNodeInfo(
+                        current, toTarsError(_error), bcostars::GroupNodeInfo());
                     return;
                 }
-                tarsNodeIDs.reserve(_nodeIDs->size());
-                for (auto const& it : *_nodeIDs)
-                {
-                    auto nodeIDData = it->data();
-                    tarsNodeIDs.emplace_back(nodeIDData.begin(), nodeIDData.end());
-                }
-                async_response_asyncGetNodeIDs(current, toTarsError(_error), tarsNodeIDs);
+                auto groupInfoImpl =
+                    std::dynamic_pointer_cast<bcostars::protocol::GroupNodeInfoImpl>(
+                        _bcosGroupNodeInfo);
+                async_response_asyncGetGroupNodeInfo(
+                    current, toTarsError(_error), groupInfoImpl->inner());
             });
 
         return bcostars::Error();

@@ -53,20 +53,19 @@ std::vector<FrontServiceInfo::Ptr> LocalRouterTable::getGroupFrontServiceList(
     return nodeServiceList;
 }
 
-NodeIDs LocalRouterTable::getGroupNodeIDList(const std::string& _groupID) const
+void LocalRouterTable::getGroupNodeInfoList(
+    GroupNodeInfo::Ptr _groupNodeInfo, const std::string& _groupID) const
 {
-    NodeIDs nodeIDList;
     ReadGuard l(x_nodeList);
     if (!m_nodeList.count(_groupID))
     {
-        return nodeIDList;
+        return;
     }
     for (auto const& item : m_nodeList.at(_groupID))
     {
-        auto bytes = bcos::fromHexString(item.first);
-        nodeIDList.emplace_back(m_keyFactory->createKey(*bytes.get()));
+        _groupNodeInfo->appendNodeID(item.first);
+        _groupNodeInfo->appendProtocol(item.second->protocolInfo());
     }
-    return nodeIDList;
 }
 
 std::map<std::string, std::set<std::string>> LocalRouterTable::nodeListInfo() const

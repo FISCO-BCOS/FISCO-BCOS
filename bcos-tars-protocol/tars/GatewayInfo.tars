@@ -12,7 +12,7 @@ struct P2PInfo
 
 struct GroupNodeInfo
 {
-    1 require string groupID;
+    1 optional string groupID;
     2 optional vector<string> nodeIDList;
     3 optional int type;
     4 optional vector<ProtocolInfo> protocolList;

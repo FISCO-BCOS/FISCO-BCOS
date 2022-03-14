@@ -28,6 +28,7 @@
 #include "bcos-tars-protocol/tars/GatewayService.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/interfaces/gateway/GatewayInterface.h>
+#include <bcos-tars-protocol/protocol/GroupNodeInfoImpl.h>
 #include <string>
 
 #define GATEWAYCLIENT_LOG(LEVEL) BCOS_LOG(LEVEL) << "[GATEWAYCLIENT][INITIALIZER]"
@@ -174,49 +175,45 @@ public:
             std::vector<char>(_payload.begin(), _payload.end()));
     }
 
-    void asyncGetNodeIDs(
-        const std::string& _groupID, bcos::gateway::GetNodeIDsFunc _getNodeIDsFunc) override
+    void asyncGetGroupNodeInfo(const std::string& _groupID,
+        bcos::gateway::GetGroupNodeInfoFunc _onGetGroupNodeInfo) override
     {
         class Callback : public GatewayServicePrxCallback
         {
         public:
-            Callback(
-                bcos::gateway::GetNodeIDsFunc callback, bcos::crypto::KeyFactory::Ptr keyFactory)
+            Callback(bcos::gateway::GetGroupNodeInfoFunc callback,
+                bcos::crypto::KeyFactory::Ptr keyFactory)
               : m_callback(callback), m_keyFactory(keyFactory)
             {}
-            void callback_asyncGetNodeIDs(
-                const bcostars::Error& ret, const vector<vector<tars::Char>>& nodeIDs) override
+            void callback_asyncGetGroupNodeInfo(
+                const bcostars::Error& ret, const GroupNodeInfo& groupNodeInfo) override
             {
-                auto bcosNodeIDs = std::make_shared<std::vector<bcos::crypto::NodeIDPtr>>();
-                bcosNodeIDs->reserve(nodeIDs.size());
-                for (auto const& it : nodeIDs)
-                {
-                    bcosNodeIDs->push_back(m_keyFactory->createKey(
-                        bcos::bytesConstRef((bcos::byte*)it.data(), it.size())));
-                }
-                m_callback(toBcosError(ret), bcosNodeIDs);
+                auto bcosGroupNodeInfo = std::make_shared<bcostars::protocol::GroupNodeInfoImpl>(
+                    [m_groupNodeInfo = groupNodeInfo]() mutable { return &m_groupNodeInfo; });
+                m_callback(toBcosError(ret), bcosGroupNodeInfo);
             }
-            void callback_asyncGetNodeIDs_exception(tars::Int32 ret) override
+            void callback_asyncGetGroupNodeInfo_exception(tars::Int32 ret) override
             {
                 m_callback(toBcosError(ret), nullptr);
             }
 
         private:
-            bcos::gateway::GetNodeIDsFunc m_callback;
+            bcos::gateway::GetGroupNodeInfoFunc m_callback;
             bcos::crypto::KeyFactory::Ptr m_keyFactory;
         };
-        auto ret = checkConnection(
-            c_moduleName, "asyncGetNodeIDs", m_proxy, [_getNodeIDsFunc](bcos::Error::Ptr _error) {
-                if (_getNodeIDsFunc)
+        auto ret = checkConnection(c_moduleName, "asyncGetGroupNodeInfo", m_proxy,
+            [_onGetGroupNodeInfo](bcos::Error::Ptr _error) {
+                if (_onGetGroupNodeInfo)
                 {
-                    _getNodeIDsFunc(_error, nullptr);
+                    _onGetGroupNodeInfo(_error, nullptr);
                 }
             });
         if (!ret)
         {
             return;
         }
-        m_proxy->async_asyncGetNodeIDs(new Callback(_getNodeIDsFunc, m_keyFactory), _groupID);
+        m_proxy->async_asyncGetGroupNodeInfo(
+            new Callback(_onGetGroupNodeInfo, m_keyFactory), _groupID);
     }
 
     void asyncNotifyGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo,
@@ -382,7 +379,7 @@ protected:
 private:
     bcostars::GatewayServicePrx m_proxy;
     std::string m_gatewayServiceName;
-    // Note: only useful for asyncGetNodeIDs
+    // Note: only useful for asyncGetGroupNodeInfo
     bcos::crypto::KeyFactory::Ptr m_keyFactory;
     std::string const c_moduleName = "GatewayServiceClient";
     // AMOP timeout 40s

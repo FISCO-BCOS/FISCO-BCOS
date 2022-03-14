@@ -38,18 +38,12 @@ public:
       : m_inner(
             [m_groupNodeInfo = bcostars::GroupNodeInfo()]() mutable { return &m_groupNodeInfo; })
     {
-        // recover m_protocolList
-        auto const& tarsProtocols = m_inner()->protocolList;
-        for (auto const& protocol : tarsProtocols)
-        {
-            auto protocolInfo = std::make_shared<bcos::protocol::ProtocolInfo>(
-                (bcos::protocol::ProtocolModuleID)protocol.moduleID,
-                (bcos::protocol::ProtocolVersion)protocol.minVersion,
-                (bcos::protocol::ProtocolVersion)protocol.maxVersion);
-            m_protocolList.emplace_back(protocolInfo);
-        }
+        decodeInner();
     }
-    explicit GroupNodeInfoImpl(std::function<bcostars::GroupNodeInfo*()> inner) : m_inner(inner) {}
+    explicit GroupNodeInfoImpl(std::function<bcostars::GroupNodeInfo*()> inner) : m_inner(inner)
+    {
+        decodeInner();
+    }
     ~GroupNodeInfoImpl() override {}
 
     // the groupID
@@ -66,26 +60,63 @@ public:
     // Note: externally ensure thread safety
     std::vector<std::string> const& nodeIDList() const override { return m_inner()->nodeIDList; }
     int type() const override { return m_inner()->type; }
-    const bcostars::GroupNodeInfo& inner() const { return *m_inner(); }
-
     void setNodeProtocolList(
         std::vector<bcos::protocol::ProtocolInfo::ConstPtr>&& _protocolList) override
     {
-        m_protocolList = std::move(_protocolList);
         // encode protocolList into m_inner()
-        bcostars::ProtocolInfo tarsProtocol;
         for (auto const& protocol : _protocolList)
         {
-            tarsProtocol.moduleID = protocol->protocolModuleID();
-            tarsProtocol.minVersion = protocol->minVersion();
-            tarsProtocol.maxVersion = protocol->maxVersion();
+            appendInnerProtocol(protocol);
         }
-        m_inner()->protocolList.emplace_back(std::move(tarsProtocol));
+        m_protocolList = std::move(_protocolList);
     }
 
     std::vector<bcos::protocol::ProtocolInfo::ConstPtr> const& nodeProtocolList() const override
     {
         return m_protocolList;
+    }
+    void appendNodeID(std::string const& _nodeID) override
+    {
+        m_inner()->nodeIDList.emplace_back(_nodeID);
+    }
+
+    void appendProtocol(bcos::protocol::ProtocolInfo::ConstPtr _protocol) override
+    {
+        m_protocolList.emplace_back(_protocol);
+        appendInnerProtocol(_protocol);
+    }
+    bcos::protocol::ProtocolInfo::ConstPtr protocol(size_t _index) const override
+    {
+        if (m_protocolList.size() <= _index)
+        {
+            return nullptr;
+        }
+        return m_protocolList.at(_index);
+    }
+    const bcostars::GroupNodeInfo& inner() const { return *m_inner(); }
+
+protected:
+    virtual void appendInnerProtocol(bcos::protocol::ProtocolInfo::ConstPtr _protocol)
+    {
+        bcostars::ProtocolInfo tarsProtocol;
+        tarsProtocol.moduleID = _protocol->protocolModuleID();
+        tarsProtocol.minVersion = _protocol->minVersion();
+        tarsProtocol.maxVersion = _protocol->maxVersion();
+        m_inner()->protocolList.emplace_back(std::move(tarsProtocol));
+    }
+
+    virtual void decodeInner()
+    {
+        // recover m_protocolList
+        auto const& tarsProtocols = m_inner()->protocolList;
+        for (auto const& protocol : tarsProtocols)
+        {
+            auto protocolInfo = std::make_shared<bcos::protocol::ProtocolInfo>(
+                (bcos::protocol::ProtocolModuleID)protocol.moduleID,
+                (bcos::protocol::ProtocolVersion)protocol.minVersion,
+                (bcos::protocol::ProtocolVersion)protocol.maxVersion);
+            m_protocolList.emplace_back(protocolInfo);
+        }
     }
 
 private:

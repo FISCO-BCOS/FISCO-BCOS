@@ -74,18 +74,18 @@ void BlockSync::init()
     m_config->setGenesisHash(genesisHash);
     m_config->resetConfig(fetcher->ledgerConfig());
     auto self = std::weak_ptr<BlockSync>(shared_from_this());
-    m_config->frontService()->asyncGetNodeIDs(
-        [self](Error::Ptr _error, std::shared_ptr<const crypto::NodeIDs> _nodeIDs) {
+    m_config->frontService()->asyncGetGroupNodeInfo(
+        [self](Error::Ptr _error, bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo) {
             if (_error != nullptr)
             {
                 BLKSYNC_LOG(WARNING)
-                    << LOG_DESC("asyncGetNodeIDs failed") << LOG_KV("code", _error->errorCode())
-                    << LOG_KV("msg", _error->errorMessage());
+                    << LOG_DESC("asyncGetGroupNodeInfo failed")
+                    << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
                 return;
             }
             try
             {
-                if (!_nodeIDs || _nodeIDs->size() == 0)
+                if (!_groupNodeInfo || _groupNodeInfo->nodeIDList().size() == 0)
                 {
                     return;
                 }
@@ -94,14 +94,22 @@ void BlockSync::init()
                 {
                     return;
                 }
-                NodeIDSet nodeIdSet(_nodeIDs->begin(), _nodeIDs->end());
+                NodeIDSet nodeIdSet;
+                auto const& nodeIDList = _groupNodeInfo->nodeIDList();
+                for (auto const& nodeIDStr : nodeIDList)
+                {
+                    auto nodeID =
+                        sync->m_config->blockFactory()->cryptoSuite()->keyFactory()->createKey(
+                            fromHex(nodeIDStr));
+                    nodeIdSet.insert(nodeID);
+                }
                 sync->config()->setConnectedNodeList(std::move(nodeIdSet));
-                BLKSYNC_LOG(INFO) << LOG_DESC("asyncGetNodeIDs")
-                                  << LOG_KV("connectedSize", _nodeIDs->size());
+                BLKSYNC_LOG(INFO) << LOG_DESC("asyncGetGroupNodeInfo")
+                                  << LOG_KV("connectedSize", nodeIdSet.size());
             }
             catch (std::exception const& e)
             {
-                BLKSYNC_LOG(WARNING) << LOG_DESC("asyncGetNodeIDs exception")
+                BLKSYNC_LOG(WARNING) << LOG_DESC("asyncGetGroupNodeInfo exception")
                                      << LOG_KV("error", boost::diagnostic_information(e));
             }
         });

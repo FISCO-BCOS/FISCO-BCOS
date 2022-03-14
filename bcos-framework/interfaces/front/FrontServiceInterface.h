@@ -19,8 +19,9 @@
  * @date 2021-04-19
  */
 #pragma once
-#include "bcos-framework/interfaces/protocol/Protocol.h"
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
+#include <bcos-framework/interfaces/gateway/GroupNodeInfo.h>
+#include <bcos-framework/interfaces/protocol/Protocol.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
 
@@ -28,8 +29,8 @@ namespace bcos
 {
 namespace front
 {
-using GetNodeIDsFunc =
-    std::function<void(Error::Ptr _error, std::shared_ptr<const crypto::NodeIDs> _nodeIDs)>;
+using GetGroupNodeInfoFunc =
+    std::function<void(Error::Ptr _error, bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo)>;
 using ReceiveMsgFunc = std::function<void(Error::Ptr _error)>;
 using ResponseFunc = std::function<void(bytesConstRef _respData)>;
 using CallbackFunc = std::function<void(Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
@@ -54,19 +55,19 @@ public:
 
 public:
     /**
-     * @brief: get nodeIDs from gateway
-     * @param _getNodeIDsFunc: get nodeIDs callback
+     * @brief: get groupNodeInfo from the gateway
+     * @param _getGroupNodeInfoFunc: get groupNodeInfo callback
      * @return void
      */
-    virtual void asyncGetNodeIDs(GetNodeIDsFunc _getNodeIDsFunc) = 0;
+    virtual void asyncGetGroupNodeInfo(GetGroupNodeInfoFunc _onGetGroupNodeInfo) = 0;
     /**
      * @brief: receive nodeIDs from gateway, call by gateway
      * @param _groupID: groupID
-     * @param _nodeIDs: received nodeIDs
+     * @param _groupNodeInfo: the groupNodeInfo
      * @return void
      */
-    virtual void onReceiveNodeIDs(const std::string& _groupID,
-        std::shared_ptr<const crypto::NodeIDs> _nodeIDs, ReceiveMsgFunc _receiveMsgCallback) = 0;
+    virtual void onReceiveGroupNodeInfo(const std::string& _groupID,
+        bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo, ReceiveMsgFunc _receiveMsgCallback) = 0;
 
     /**
      * @brief: receive message from gateway, call by gateway

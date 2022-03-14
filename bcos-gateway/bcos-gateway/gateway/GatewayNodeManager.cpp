@@ -268,20 +268,20 @@ void GatewayNodeManager::syncLatestNodeIDList()
     for (auto const& it : nodeList)
     {
         auto groupID = it.first;
-        auto const& groupNodeInfos = it.second;
-        auto knowNodeIDs = getGroupNodeIDList(groupID);
+        auto const& localNodeEntryPoints = it.second;
+        auto groupNodeInfos = getGroupNodeInfoList(groupID);
         NODE_MANAGER_LOG(INFO) << LOG_DESC("syncLatestNodeIDList") << LOG_KV("groupID", groupID)
-                               << LOG_KV("nodeCount", knowNodeIDs->size());
-        for (const auto& entry : groupNodeInfos)
+                               << LOG_KV("nodeCount", groupNodeInfos->nodeIDList().size());
+        for (const auto& entry : localNodeEntryPoints)
         {
-            entry.second->frontService()->onReceiveNodeIDs(
-                groupID, knowNodeIDs, [](Error::Ptr _error) {
+            entry.second->frontService()->onReceiveGroupNodeInfo(
+                groupID, groupNodeInfos, [](Error::Ptr _error) {
                     if (!_error)
                     {
                         return;
                     }
                     NODE_MANAGER_LOG(WARNING)
-                        << LOG_DESC("syncLatestNodeIDList onReceiveNodeIDs callback")
+                        << LOG_DESC("syncLatestNodeIDList onReceiveGroupNodeInfo callback")
                         << LOG_KV("codeCode", _error->errorCode())
                         << LOG_KV("codeMessage", _error->errorMessage());
                 });
@@ -289,15 +289,14 @@ void GatewayNodeManager::syncLatestNodeIDList()
     }
 }
 
-NodeIDListPtr GatewayNodeManager::getGroupNodeIDList(const std::string& _groupID)
+GroupNodeInfo::Ptr GatewayNodeManager::getGroupNodeInfoList(const std::string& _groupID)
 {
-    auto nodeIDList = std::make_shared<NodeIDs>();
-    auto localNodeIDList = m_localRouterTable->getGroupNodeIDList(_groupID);
-    *nodeIDList = std::move(localNodeIDList);
+    auto groupNodeInfo = m_gatewayNodeStatusFactory->createGroupNodeInfo();
+    groupNodeInfo->setGroupID(_groupID);
 
-    auto peersNodeIDList = m_peersRouterTable->getGroupNodeIDList(_groupID);
-    nodeIDList->insert(nodeIDList->begin(), peersNodeIDList.begin(), peersNodeIDList.end());
-    return nodeIDList;
+    m_localRouterTable->getGroupNodeInfoList(groupNodeInfo, _groupID);
+    m_peersRouterTable->getGroupNodeInfoList(groupNodeInfo, _groupID);
+    return groupNodeInfo;
 }
 
 std::map<std::string, std::set<std::string>> GatewayNodeManager::peersNodeIDList(

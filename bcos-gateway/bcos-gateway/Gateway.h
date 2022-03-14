@@ -65,10 +65,11 @@ public:
     /**
      * @brief: get nodeIDs from gateway
      * @param _groupID:
-     * @param _getNodeIDsFunc: get nodeIDs callback
+     * @param _onGetGroupNodeInfo: get nodeIDs callback
      * @return void
      */
-    void asyncGetNodeIDs(const std::string& _groupID, GetNodeIDsFunc _getNodeIDsFunc) override;
+    void asyncGetGroupNodeInfo(
+        const std::string& _groupID, GetGroupNodeInfoFunc _onGetGroupNodeInfo) override;
     /**
      * @brief: send message
      * @param _groupID: groupID

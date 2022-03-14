@@ -36,6 +36,8 @@ public:
     virtual void setGroupID(std::string const& _groupID) = 0;
     // the nodeIDList
     virtual void setNodeIDList(std::vector<std::string>&& _nodeIDList) = 0;
+    virtual void appendNodeID(std::string const& _nodeID) = 0;
+    virtual void appendProtocol(bcos::protocol::ProtocolInfo::ConstPtr _protocol) = 0;
     // the groupType
     virtual void setType(uint16_t _type) = 0;
 
@@ -47,6 +49,7 @@ public:
     virtual void setNodeProtocolList(
         std::vector<bcos::protocol::ProtocolInfo::ConstPtr>&& _protocolList) = 0;
     virtual std::vector<bcos::protocol::ProtocolInfo::ConstPtr> const& nodeProtocolList() const = 0;
+    virtual bcos::protocol::ProtocolInfo::ConstPtr protocol(size_t _index) const = 0;
 };
 }  // namespace gateway
 }  // namespace bcos

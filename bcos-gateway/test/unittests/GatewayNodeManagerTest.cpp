@@ -20,6 +20,7 @@
  */
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/interfaces/protocol/GlobalConfig.h>
+#include <bcos-framework/interfaces/protocol/ProtocolInfo.h>
 #include <bcos-front/FrontServiceFactory.h>
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/gateway/GatewayNodeManager.h>
@@ -74,6 +75,12 @@ inline GroupNodeInfo::Ptr createGroupNodeInfo(
 {
     auto groupNodeInfo = std::make_shared<bcostars::protocol::GroupNodeInfoImpl>();
     groupNodeInfo->setGroupID(_groupID);
+    for (auto const& nodeID : _nodeIDList)
+    {
+        auto protocolInfo = std::make_shared<ProtocolInfo>(
+            ProtocolModuleID::NodeService, ProtocolVersion::V1, ProtocolVersion::V1);
+        groupNodeInfo->appendProtocol(protocolInfo);
+    }
     groupNodeInfo->setNodeIDList(std::move(_nodeIDList));
     return groupNodeInfo;
 }
@@ -289,7 +296,7 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_statusEncodeDecode)
     BOOST_CHECK(groupInfos[2]->nodeIDList()[2] == "c2");
 }
 
-BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_onReceiveNodeIDs)
+BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_onReceiveGroupNodeInfo)
 {
     auto gatewayNodeManager = std::make_shared<FakeGatewayNodeManager>(nullptr, nullptr);
     auto gatewayNodeStatus =
@@ -340,8 +347,9 @@ BOOST_AUTO_TEST_CASE(test_GatewayNodeManager_query)
     BOOST_CHECK_EQUAL(p2pIDs1.size(), 1);
     BOOST_CHECK_EQUAL(*p2pIDs1.begin(), p2pID1);
 
-    auto nodeIDs = gatewayNodeManager->getGroupNodeIDList(group1);
-    BOOST_CHECK_EQUAL(nodeIDs->size(), 3);
+    auto groupInfo = gatewayNodeManager->getGroupNodeInfoList(group1);
+    auto const& nodeIDList = groupInfo->nodeIDList();
+    BOOST_CHECK_EQUAL(nodeIDList.size(), 3);
 
     auto p2pIDs2 = gatewayNodeManager->peersRouterTable()->queryP2pIDs(group1, "a0");
     BOOST_CHECK_EQUAL(p2pIDs2.size(), 1);
