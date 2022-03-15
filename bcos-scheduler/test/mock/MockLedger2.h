@@ -17,8 +17,8 @@ public:
         auto blockNumberStr = boost::lexical_cast<std::string>(header->number());
         storage::Entry numberEntry;
         numberEntry.importFields({blockNumberStr});
-        storage->asyncSetRow(
-            ledger::SYS_CURRENT_STATE, ledger::SYS_KEY_CURRENT_NUMBER, std::move(numberEntry), [callback = std::move(callback)](auto&& error) {
+        storage->asyncSetRow(ledger::SYS_CURRENT_STATE, ledger::SYS_KEY_CURRENT_NUMBER,
+            std::move(numberEntry), [callback = std::move(callback)](auto&& error) {
                 if (error)
                 {
                     BOOST_FAIL("asyncSetRow failed" + error->errorMessage());

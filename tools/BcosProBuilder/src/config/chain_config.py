@@ -139,7 +139,7 @@ class GenesisConfig:
         self.consensus_type = utilities.get_value(
             self.config, section, "consensus_type", "pbft", False)
         self.gas_limit = utilities.get_value(
-            self.config, section, "gas_limit", "300000000", False)
+            self.config, section, "gas_limit", "3000000000", False)
 
 
 class GroupConfig:
