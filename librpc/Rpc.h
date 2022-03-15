@@ -34,10 +34,8 @@
 #include <libledger/LedgerManager.h>
 #include <libprecompiled/Common.h>
 #include <boost/thread/tss.hpp>  // for thread_specific_ptr
-#include <fstream>
-#include <iostream>
-#include <string>  // for string
-#include <vector>  // for vector
+#include <string>                // for string
+#include <vector>                // for vector
 
 namespace dev
 {
@@ -108,8 +106,8 @@ public:
     Json::Value getGroupPeers(int _groupID) override;
     Json::Value getGroupList() override;
     Json::Value getNodeIDList(int _groupID) override;
-    Json::Value addPeer(Json::Value _hostposts) override;
-    Json::Value erasePeer(Json::Value _hostPorts) override;
+    Json::Value addPeers(const Json::Value& _hostposts) override;
+    Json::Value erasePeers(const Json::Value& _hostPorts) override;
 
     // block part
     Json::Value getBlockByHash(
@@ -258,6 +256,8 @@ private:
     bool checkSealerID(const std::string& _sealer);
     bool checkTimestamp(const std::string& _timestamp);
     bool checkConnection(const std::set<std::string>& _sealerList, Json::Value& _response);
+    bool checkParamsForPeers(const Json::Value& _params,
+        std::vector<dev::network::NodeIPEndpoint>& _endpoints, Json::Value& _response);
 
     void parseTransactionIntoResponse(Json::Value& _response, dev::h256 const& _blockHash,
         int64_t _blockNumber, int64_t _txIndex, Transaction::Ptr _tx, bool onChain = true);

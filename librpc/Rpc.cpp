@@ -36,7 +36,6 @@
 #include <libtxpool/TxPoolInterface.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/algorithm/string.hpp>
-#include <boost/filesystem.hpp>
 #include <csignal>
 #include <sstream>
 
@@ -2218,126 +2217,28 @@ void Rpc::getBatchReceipts(Json::Value& _response, dev::eth::Block::Ptr _block,
 #endif
 }
 
-Json::Value Rpc::addPeer(Json::Value _hostPorts)
+Json::Value Rpc::addPeers(const Json::Value& _hostPorts)
 {
     try
     {
         Json::Value response;
-        RPC_LOG(INFO) << LOG_BADGE("addPeer") << LOG_DESC("request");
-
-        // std::map<dev::network::NodeIPEndpoint, NodeID> used to store the nodes
-        auto nodes = service()->staticNodes();
-
-        // then deal with the param
-        if (!_hostPorts.isMember("p2p") || !_hostPorts["p2p"].isArray())
+        RPC_LOG(INFO) << LOG_BADGE("addPeers") << LOG_DESC("request");
+        std::vector<dev::network::NodeIPEndpoint> endpoints;
+        // deal with the param
+        if (!checkParamsForPeers(_hostPorts, endpoints, response))
         {
-            response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
-            response["message"] = "invalid `p2p` field";
             return response;
         }
-
-        if (_hostPorts["p2p"].size() == 0)
+        if (service()->addPeers(endpoints))
         {
-            response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
-            response["message"] = "addPeer failed for empty p2p list, expect at least one peer";
-            return response;
-        }
-        int pos = 1;
-        for (auto _peer : _hostPorts["p2p"])
-        {
-            if (!_peer.isString())
-            {
-                response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
-                response["message"] = "invalid peer at position " + std::to_string(pos);
-                return response;
-            }
-            std::vector<std::string> s;
-            auto peer = _peer.asString();
-            boost::split(s, peer, boost::is_any_of("]"), boost::token_compress_on);
-            if (s.size() == 2)
-            {  // ipv6
-                boost::asio::ip::address ip_address =
-                    boost::asio::ip::make_address(s[0].data() + 1);
-                uint16_t port = boost::lexical_cast<uint16_t>(s[1].data() + 1);
-                nodes.insert(std::make_pair(NodeIPEndpoint{ip_address, port}, NodeID()));
-            }
-            else if (s.size() == 1)
-            {  // ipv4 and ipv4 host
-                std::vector<std::string> ipv4Endpoint;
-                boost::split(ipv4Endpoint, peer, boost::is_any_of(":"), boost::token_compress_on);
-                uint16_t port = boost::lexical_cast<uint16_t>(ipv4Endpoint[1]);
-                nodes.insert(std::make_pair(NodeIPEndpoint{ipv4Endpoint[0], port}, NodeID()));
-            }
-            else
-            {
-                // err param
-                response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
-                response["message"] = "invalid peer at position " + std::to_string(pos);
-                return response;
-            }
-            pos++;
-        }
-
-        // update the nodes to staticnodes
-        service()->setStaticNodes(nodes);
-        std::string tmpdata = "";
-        int _count = 0;
-        for (auto it = nodes.begin(); it != nodes.end(); it++)
-        {
-            tmpdata += (_count ? "    node." : "node.") + std::to_string(_count) +
-                       (it->first.m_ipv6 ? "=[" : "=") + it->first.m_host +
-                       (it->first.m_ipv6 ? "]:" : ":") + std::to_string(it->first.m_port) + "\n";
-            _count++;
-        }
-        tmpdata += "\n";
-
-        // output the nodes to the file "config.ini",this part would be optimized when replacing the
-        // context
-        auto confdir = "./config.ini";
-
-        std::ifstream configFile(confdir);
-        if (true == configFile.is_open())
-        {
-            std::string fileData;
-            while (false == configFile.eof())
-            {
-                std::string line;
-                std::getline(configFile, line);
-                if (true == line.empty())
-                    continue;
-                fileData += line;
-                fileData += "\n";
-            }
-
-            auto pos1 = fileData.find("p2p");
-            if (pos1 == fileData.npos)
-            {
-                response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
-                response["message"] = "p2p not found in config.ini successfully";
-                return response;
-            }
-            auto pos2 = fileData.find("node.0=", pos1);
-            auto pos3 = fileData.find("certificate_blacklist");
-            if (pos2 == fileData.npos || pos3 == fileData.npos || pos2 >= pos3)
-            {
-                response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
-                response["message"] = "p2p not found in config.ini successfully";
-                return response;
-            }
-            fileData.replace(pos2, pos3 - pos2 - 1, tmpdata);
-
-            std::ofstream out(confdir, std::ios::out);
-            out << fileData;
-            out.close();
-
             response["code"] = LedgerManagementStatusCode::SUCCESS;
-            response["message"] = "add peer(s) successfully";
+            response["message"] = " add peers successfully";
             return response;
         }
         else
         {
-            response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
-            response["message"] = " config's path not found";
+            response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
+            response["message"] = " add peers faild during outputing to configfile";
             return response;
         }
     }
@@ -2352,143 +2253,28 @@ Json::Value Rpc::addPeer(Json::Value _hostPorts)
     }
 }
 
-Json::Value Rpc::erasePeer(Json::Value _hostPorts)
+Json::Value Rpc::erasePeers(const Json::Value& _hostPorts)
 {
     try
     {
         Json::Value response;
-        RPC_LOG(INFO) << LOG_BADGE("erasePeer") << LOG_DESC("request");
-
-        // std::map<dev::network::NodeIPEndpoint, NodeID> used to store the nodes
-        auto nodes = service()->staticNodes();
-
-        // then deal with the param
-        if (!_hostPorts.isMember("p2p") || !_hostPorts["p2p"].isArray())
+        RPC_LOG(INFO) << LOG_BADGE("erasePeers") << LOG_DESC("request");
+        std::vector<dev::network::NodeIPEndpoint> endpoints;
+        // deal with the param
+        if (!checkParamsForPeers(_hostPorts, endpoints, response))
         {
-            response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
-            response["message"] = "invalid `p2p` field";
             return response;
         }
-
-        if (_hostPorts["p2p"].size() == 0)
+        if (service()->erasePeers(endpoints))
         {
-            response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
-            response["message"] = "erasePeer failed for empty p2p list, expect at least one peer";
-            return response;
-        }
-        int pos = 1;
-        for (auto _peer : _hostPorts["p2p"])
-        {
-            if (!_peer.isString())
-            {
-                response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
-                response["message"] = "invalid peer at position " + std::to_string(pos);
-                return response;
-            }
-
-            std::vector<std::string> s;
-            auto peer = _peer.asString();
-            boost::split(s, peer, boost::is_any_of("]"), boost::token_compress_on);
-            if (s.size() == 2)
-            {  // ipv6
-                boost::asio::ip::address ip_address =
-                    boost::asio::ip::make_address(s[0].data() + 1);
-                uint16_t port = boost::lexical_cast<uint16_t>(s[1].data() + 1);
-                auto it = nodes.find(NodeIPEndpoint{ip_address, port});
-                if (it == nodes.end())
-                {
-                    RPC_LOG(INFO) << LOG_KV("ip", ip_address) << LOG_KV("port", port)
-                                  << "not found";
-                }
-                else
-                {
-                    nodes.erase(it);
-                }
-            }
-            else if (s.size() == 1)
-            {  // ipv4 and ipv4 host
-                std::vector<std::string> ipv4Endpoint;
-                boost::split(ipv4Endpoint, peer, boost::is_any_of(":"), boost::token_compress_on);
-                uint16_t port = boost::lexical_cast<uint16_t>(ipv4Endpoint[1]);
-                auto it = nodes.find(NodeIPEndpoint{ipv4Endpoint[0], port});
-                if (it == nodes.end())
-                {
-                    RPC_LOG(INFO) << LOG_KV("ip", ipv4Endpoint[0]) << LOG_KV("port", port)
-                                  << "not found";
-                }
-                else
-                {
-                    nodes.erase(it);
-                }
-            }
-            else
-            {
-                // err param
-                response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
-                response["message"] = "invalid peer at position " + std::to_string(pos);
-                return response;
-            }
-            pos++;
-        }
-
-        // update the nodes to staticnodes
-        service()->setStaticNodes(nodes);
-        std::string tmpdata = "";
-        int _count = 0;
-        for (auto it = nodes.begin(); it != nodes.end(); it++)
-        {
-            tmpdata += (_count ? "    node." : "node.") + std::to_string(_count) +
-                       (it->first.m_ipv6 ? "=[" : "=") + it->first.m_host +
-                       (it->first.m_ipv6 ? "]:" : ":") + std::to_string(it->first.m_port) + "\n";
-            _count++;
-        }
-        tmpdata += "\n";
-
-        // output the nodes to the file "config.ini"
-        auto confdir = "./config.ini";
-
-        std::ifstream configFile(confdir);
-        if (true == configFile.is_open())
-        {
-            std::string fileData;
-            while (false == configFile.eof())
-            {
-                std::string line;
-                std::getline(configFile, line);
-                if (true == line.empty())
-                    continue;
-                fileData += line;
-                fileData += "\n";
-            }
-
-            auto pos1 = fileData.find("p2p");
-            if (pos1 == fileData.npos)
-            {
-                response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
-                response["message"] = "p2p not found in config.ini successfully";
-                return response;
-            }
-            auto pos2 = fileData.find("node.0=", pos1);
-            auto pos3 = fileData.find("certificate_blacklist");
-            if (pos2 == fileData.npos || pos3 == fileData.npos || pos2 >= pos3)
-            {
-                response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
-                response["message"] = "p2p not found in config.ini successfully";
-                return response;
-            }
-            fileData.replace(pos2, pos3 - pos2 - 1, tmpdata);
-
-            std::ofstream out(confdir, std::ios::out);
-            out << fileData;
-            out.close();
             response["code"] = LedgerManagementStatusCode::SUCCESS;
-            response["message"] = " erase peer(s) successfully";
+            response["message"] = " erase peers successfully";
             return response;
         }
         else
         {
-            response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
-            response["message"] = " config's path not found";
+            response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
+            response["message"] = " erase peers faild during outputing to configfile";
             return response;
         }
     }
@@ -2501,4 +2287,58 @@ Json::Value Rpc::erasePeer(Json::Value _hostPorts)
         BOOST_THROW_EXCEPTION(
             JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
     }
+}
+
+bool Rpc::checkParamsForPeers(const Json::Value& _params,
+    std::vector<dev::network::NodeIPEndpoint>& _endpoints, Json::Value& _response)
+{
+    if (!_params.isMember("p2p") || !_params["p2p"].isArray())
+    {
+        _response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
+        _response["message"] = "invalid `p2p` field";
+        return false;
+    }
+
+    if (_params["p2p"].size() == 0)
+    {
+        _response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
+        _response["message"] = "erasePeer failed for empty p2p list, expect at least one peer";
+        return false;
+    }
+    int pos = 1;
+    for (auto _peer : _params["p2p"])
+    {
+        if (!_peer.isString())
+        {
+            _response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
+            _response["message"] = "invalid peer at position " + std::to_string(pos);
+            return false;
+        }
+
+        std::vector<std::string> s;
+        auto peer = _peer.asString();
+        boost::split(s, peer, boost::is_any_of("]"), boost::token_compress_on);
+        if (s.size() == 2)
+        {  // ipv6
+            boost::asio::ip::address ip_address = boost::asio::ip::make_address(s[0].data() + 1);
+            uint16_t port = boost::lexical_cast<uint16_t>(s[1].data() + 1);
+            _endpoints.push_back(NodeIPEndpoint{ip_address, port});
+        }
+        else if (s.size() == 1)
+        {  // ipv4 and ipv4 host
+            std::vector<std::string> ipv4Endpoint;
+            boost::split(ipv4Endpoint, peer, boost::is_any_of(":"), boost::token_compress_on);
+            uint16_t port = boost::lexical_cast<uint16_t>(ipv4Endpoint[1]);
+            _endpoints.push_back(NodeIPEndpoint{ipv4Endpoint[0], port});
+        }
+        else
+        {
+            // err param
+            _response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
+            _response["message"] = "invalid peer at position " + std::to_string(pos);
+            return false;
+        }
+        pos++;
+    }
+    return true;
 }

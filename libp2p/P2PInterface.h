@@ -126,12 +126,8 @@ public:
     virtual void removeGroupBandwidthLimiter(GROUP_ID const&) {}
     virtual void setChannelNetworkStatHandler(std::shared_ptr<dev::stat::ChannelNetworkStatHandler>)
     {}
-    virtual std::map<dev::network::NodeIPEndpoint, NodeID> staticNodes()
-    {
-        std::map<dev::network::NodeIPEndpoint, NodeID> tmp;
-        return tmp;
-    };
-    virtual void setStaticNodes(std::map<dev::network::NodeIPEndpoint, NodeID>){};
+    virtual bool addPeers(std::vector<dev::network::NodeIPEndpoint> const&) { return false; }
+    virtual bool erasePeers(std::vector<dev::network::NodeIPEndpoint> const&) { return false; }
 };
 
 }  // namespace p2p

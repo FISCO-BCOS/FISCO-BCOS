@@ -84,6 +84,8 @@ public:
     const std::string& confDir() { return m_confDir; }
     void setDataDir(std::string _dataDir) { m_dataDir = _dataDir; }
     const std::string& dataDir() { return m_dataDir; }
+    void setiniDir(std::string _iniDir) { m_iniDir = _iniDir; }
+    const std::string& iniDir() { return m_iniDir; }
 
     void setEnableStat(bool _enableStat) { m_enableStat = _enableStat; }
 
@@ -137,6 +139,7 @@ private:
     dev::eth::EVMSchedule m_evmSchedule = dev::eth::DefaultSchedule;
     std::string m_confDir;
     std::string m_dataDir;
+    std::string m_iniDir;
     bool m_enableStat;
     bool m_useSMCrypto;
 };
