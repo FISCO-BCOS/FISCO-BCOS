@@ -36,15 +36,7 @@ public:
         m_hashImpl(std::move(hashImpl)),
         m_isAuthCheck(isAuthCheck),
         m_isWasm(isWasm)
-    {
-        std::promise<std::tuple<Error::Ptr, std::string>> p;
-        m_ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_TX_GAS_LIMIT,
-            [&p](Error::Ptr _e, std::string _value, protocol::BlockNumber) {
-                p.set_value(std::make_tuple(std::move(_e), std::move(_value)));
-            });
-        auto [e, value] = p.get_future().get();
-        m_gasLimit = e ? TRANSACTION_GAS : boost::lexical_cast<uint64_t>(value);
-    }
+    {}
 
     SchedulerImpl(const SchedulerImpl&) = delete;
     SchedulerImpl(SchedulerImpl&&) = delete;
@@ -88,6 +80,16 @@ public:
             txNotifier);
 
     ExecutorManager::Ptr executorManager() { return m_executorManager; }
+
+    void initGasLimit() {
+        std::promise<std::tuple<Error::Ptr, std::string>> p;
+        m_ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_TX_GAS_LIMIT,
+            [&p](Error::Ptr _e, std::string _value, protocol::BlockNumber) {
+                p.set_value(std::make_tuple(std::move(_e), std::move(_value)));
+            });
+        auto [e, value] = p.get_future().get();
+        m_gasLimit = e ? TRANSACTION_GAS : boost::lexical_cast<uint64_t>(value);
+    }
 
 private:
     void asyncGetLedgerConfig(
