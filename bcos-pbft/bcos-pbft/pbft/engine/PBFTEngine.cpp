@@ -471,7 +471,7 @@ void PBFTEngine::executeWorker()
         // proposal
         if ((c_consensusPacket.count(packetType)) && !m_config->canHandleNewProposal(pbftMsg))
         {
-            PBFT_LOG(TRACE) << LOG_DESC(
+            PBFT_LOG(DEBUG) << LOG_DESC(
                                    "receive consensus packet, re-push it to the msgQueue for "
                                    "canHandleNewProposal")
                             << LOG_KV("index", pbftMsg->index()) << LOG_KV("type", packetType)

@@ -233,7 +233,7 @@ void PBFTCacheProcessor::resetTimer()
     }
     // reset the timer when has no proposals in consensus
     m_config->freshTimer();
-    m_config->tryTriggerFastViewChange(m_config->getLeader());
+    // m_config->tryTriggerFastViewChange(m_config->getLeader());
 }
 
 void PBFTCacheProcessor::updateCommitQueue(PBFTProposalInterface::Ptr _committedProposal)
@@ -639,6 +639,7 @@ ViewType PBFTCacheProcessor::tryToTriggerFastViewChange()
 {
     uint64_t greaterViewWeight = 0;
     ViewType viewToReach = 0;
+    bool findViewToReach = false;
     for (auto const& it : m_viewChangeCache)
     {
         auto view = it.first;
@@ -646,28 +647,30 @@ ViewType PBFTCacheProcessor::tryToTriggerFastViewChange()
         {
             continue;
         }
-        if (viewToReach == 0)
+        if (viewToReach > view || (viewToReach == 0))
         {
-            viewToReach = view;
-        }
-        if (viewToReach > view)
-        {
-            viewToReach = view;
-        }
-        // check the quorum
-        auto viewChangeCache = it.second;
-        for (auto const& cache : viewChangeCache)
-        {
-            auto fromIdx = cache.first;
-            auto nodeInfo = m_config->getConsensusNodeByIndex(fromIdx);
-            if (!nodeInfo)
+            // check the quorum
+            auto viewChangeCache = it.second;
+            greaterViewWeight = 0;
+            for (auto const& cache : viewChangeCache)
             {
-                continue;
+                auto fromIdx = cache.first;
+                auto nodeInfo = m_config->getConsensusNodeByIndex(fromIdx);
+                if (!nodeInfo)
+                {
+                    continue;
+                }
+                greaterViewWeight += nodeInfo->weight();
             }
-            greaterViewWeight += nodeInfo->weight();
+            // must ensure at least (f+1) nodes at the same view can trigger fast-viewchange
+            if (greaterViewWeight >= (m_config->maxFaultyQuorum() + 1))
+            {
+                findViewToReach = true;
+                viewToReach = view;
+            }
         }
     }
-    if (greaterViewWeight < (m_config->maxFaultyQuorum() + 1))
+    if (!findViewToReach)
     {
         return 0;
     }
