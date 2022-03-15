@@ -103,7 +103,7 @@ void BlockExecutive::asyncExecute(
             }
 
             message->setDepth(0);
-            message->setGasAvailable(TRANSACTION_GAS);
+            message->setGasAvailable(m_gasLimit);
             message->setStaticCall(false);
 
             if (metaData->attribute() & bcos::protocol::Transaction::Attribute::DAG)
@@ -174,7 +174,7 @@ void BlockExecutive::asyncExecute(
                 message->setABI(std::string(tx->abi()));
             }
             message->setDepth(0);
-            message->setGasAvailable(TRANSACTION_GAS);
+            message->setGasAvailable(m_gasLimit);
             message->setData(tx->input().toBytes());
             message->setStaticCall(m_staticCall);
 
@@ -839,7 +839,7 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
             // Empty stack, execution is finished
             if (executiveState.callStack.empty())
             {
-                auto txGasUsed = TRANSACTION_GAS - message->gasAvailable();
+                auto txGasUsed = m_gasLimit - message->gasAvailable();
                 // Calc the gas set to header
                 m_gasUsed += txGasUsed;
 

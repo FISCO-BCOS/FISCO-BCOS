@@ -48,11 +48,13 @@ public:
     BlockExecutive(bcos::protocol::Block::Ptr block, SchedulerImpl* scheduler,
         size_t startContextID,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
-        bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory, bool _syncBlock)
+        bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory, uint64_t _gasLimit,
+        bool _syncBlock)
       : BlockExecutive(block, scheduler, startContextID, transactionSubmitResultFactory, staticCall,
             _blockFactory)
     {
         m_syncBlock = _syncBlock;
+        m_gasLimit = _gasLimit;
     }
 
     BlockExecutive(const BlockExecutive&) = delete;
@@ -166,6 +168,7 @@ private:
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bool m_staticCall = false;
     bool m_syncBlock = false;
+    size_t m_gasLimit = TRANSACTION_GAS;
 };
 
 }  // namespace bcos::scheduler

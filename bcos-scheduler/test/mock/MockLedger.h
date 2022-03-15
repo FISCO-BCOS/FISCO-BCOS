@@ -69,6 +69,10 @@ public:
         {
             _onGetConfig(nullptr, "300", 100);
         }
+        else if (_key == ledger::SYSTEM_KEY_TX_GAS_LIMIT)
+        {
+            _onGetConfig(nullptr, "300000000", 100);
+        }
         else
         {
             BOOST_FAIL("Unknown query key");

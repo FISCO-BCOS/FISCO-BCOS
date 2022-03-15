@@ -33,7 +33,7 @@ public:
         BOOST_CHECK(input);
         BOOST_CHECK(!input->to().empty());
         BOOST_CHECK_EQUAL(input->depth(), 0);
-        BOOST_CHECK_EQUAL(input->gasAvailable(), scheduler::TRANSACTION_GAS);
+        BOOST_CHECK_EQUAL(input->gasAvailable(), gasLimit);
 
         input->setType(bcos::protocol::ExecutionMessage::FINISHED);
         input->setStatus(0);
@@ -111,6 +111,7 @@ public:
     std::map<std::string, std::function<void()>> batchContracts;
     std::set<bcos::h256> txHashes;
     std::set<int64_t> contextIDs;
+    size_t gasLimit = 300000000;
 };
 #pragma GCC diagnostic pop
 }  // namespace bcos::test
