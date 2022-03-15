@@ -243,6 +243,7 @@ bool PBFTConfig::tryTriggerFastViewChange(IndexType _leaderIndex)
 
 void PBFTConfig::notifySealer(BlockNumber _progressedIndex, bool _enforce)
 {
+    RecursiveGuard l(m_mutex);
     auto currentLeader = leaderIndex(_progressedIndex);
     if (currentLeader != nodeIndex())
     {
@@ -284,6 +285,10 @@ void PBFTConfig::notifySealer(BlockNumber _progressedIndex, bool _enforce)
         PBFT_LOG(INFO) << LOG_DESC("notifySealer return for invalid seal range")
                        << LOG_KV("expectedStartIndex", startSealIndex)
                        << LOG_KV("expectedEndIndex", endProposalIndex) << printCurrentState();
+        return;
+    }
+    if (m_sealStartIndex <= startSealIndex && m_sealEndIndex >= endProposalIndex)
+    {
         return;
     }
     auto committedIndex = m_committedProposal->index();

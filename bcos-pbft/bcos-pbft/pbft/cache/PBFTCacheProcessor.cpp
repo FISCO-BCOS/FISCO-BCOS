@@ -782,11 +782,6 @@ void PBFTCacheProcessor::removeConsensusedCache(ViewType _view, BlockNumber _con
             pcache = m_caches.erase(pcache);
             continue;
         }
-        if (pcache->second->stableCommitted())
-        {
-            pcache = m_caches.erase(pcache);
-            continue;
-        }
         pcache++;
     }
     removeInvalidViewChange(_view, _consensusedNumber);
