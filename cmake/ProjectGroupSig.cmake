@@ -3,10 +3,10 @@ include(GNUInstallDirs)
 
 ExternalProject_Add(GroupSigLib
     PREFIX ${CMAKE_SOURCE_DIR}/deps
-    DOWNLOAD_NAME group_sig_lib-a3023458.tar.gz
+    DOWNLOAD_NAME group_sig_lib-b8b9164.tar.gz
     DOWNLOAD_NO_PROGRESS 1
-    URL https://github.com/FISCO-BCOS/group-signature-lib/archive/1c827e7463f8d1524b7b769a42ee7c9ea2e2443c.tar.gz
-    URL_HASH SHA256=50ba19bb3138e98de19c76c2e68a1db5f9cbc0a0dd4603dd85696e836ee446af
+    URL https://github.com/FISCO-BCOS/group-signature-lib/archive/b8b916400d31491b46db9f9cb5ee78e9ba76514a.tar.gz
+    URL_HASH SHA256=42325f4f5ec9a8c94dff59305a2c5fabee46eb6a01dfc435557f3302edeaeff2
     CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
     -DCMAKE_POSITION_INDEPENDENT_CODE=ON
     -DCRYPTOPP_ROOT=<INSTALL_DIR>

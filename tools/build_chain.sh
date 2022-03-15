@@ -128,7 +128,7 @@ exit_with_clean()
     local content=${1}
     echo -e "\033[31m[ERROR] ${content}\033[0m"
     if [ -d "${output_dir}" ];then
-        rm -rf ${output_dir}
+       rm -rf ${output_dir}
     fi
     exit 1
 }
@@ -325,6 +325,8 @@ gen_rsa_chain_cert() {
 
     mkdir -p "${chaindir}"
 
+    LOG_INFO "chaindir: ${chaindir}"
+
     file_must_not_exists "${chaindir}"/ca.key
     file_must_not_exists "${chaindir}"/ca.crt
     # file_must_exists "${cert_conf}"
@@ -335,7 +337,7 @@ gen_rsa_chain_cert() {
     openssl genrsa -out "${chaindir}"/ca.key "${rsa_key_length}" 2>/dev/null
     openssl req -new -x509 -days "${days}" -subj "/CN=FISCO-BCOS/O=fisco-bcos/OU=chain" -key "${chaindir}"/ca.key -out "${chaindir}"/ca.crt  2>/dev/null
 
-    LOG_INFO "Generate ca cert successfully!"
+    LOG_INFO "Generate rsa ca cert successfully!"
 }
 
 gen_rsa_node_cert() {
@@ -1669,7 +1671,7 @@ prepare_ca(){
         for agency_name in ${agency_array[*]};do
             if [ ! -d "${output_dir}/cert/${agency_name}" ];then
                 gen_agency_cert "${output_dir}/cert" "${output_dir}/cert/${agency_name}" >>"${logfile}" 2>&1
-                gen_rsa_chain_cert "${output_dir}/cert/${agency_name}-cert" >>"${logfile}" 2>&1
+                gen_rsa_chain_cert "${output_dir}/cert/${agency_name}-channel" >>"${logfile}" 2>&1
             fi
         done
     else
@@ -1780,7 +1782,6 @@ for line in ${ip_array[*]};do
     sdk_path="${output_dir}/${ip}/sdk"
     local agency_gm_path="${output_dir}/gmcert/${agency}-gm"
     if [ ! -d "${sdk_path}" ];then
-        # TODO: generate rsa cert
         if [ "${rsa_crypto_channel}" == "false" ];then
             gen_cert "${output_dir}/cert/${agency}" "${sdk_path}" "sdk"
              mv node.nodeid sdk.publickey
