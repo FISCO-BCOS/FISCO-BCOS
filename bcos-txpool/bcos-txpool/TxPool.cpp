@@ -210,7 +210,7 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, bytesConstRef const& _
                               << LOG_KV("consNum", blockHeader ? blockHeader->number() : -1)
                               << LOG_KV("totalTxs", block->transactionsHashSize())
                               << LOG_KV("missedTxs", missedTxs->size());
-            txpool->m_transactionSync->requestMissedTxs(
+            txpool->m_transactionSync->requestMissedTxsFromPeer(
                 _generatedNodeID, missedTxs, block, onVerifyFinishedWrapper);
         }
         catch (std::exception const& e)

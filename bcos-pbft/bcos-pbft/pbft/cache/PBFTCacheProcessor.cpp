@@ -257,7 +257,6 @@ void PBFTCacheProcessor::updateCommitQueue(PBFTProposalInterface::Ptr _committed
                               "Receive valid system prePrepare proposal, stop to notify sealing")
                        << LOG_KV("waitSealUntil", proposalIndex);
     }
-    notifyToSealNextBlock(_committedProposal);
     tryToPreApplyProposal(_committedProposal);
     tryToApplyCommitQueue();
 }
@@ -351,10 +350,8 @@ void PBFTCacheProcessor::notifyToSealNextBlock(PBFTProposalInterface::Ptr _check
 {
     // notify the leader to seal next block
     auto nextProposalIndex = _checkpointProposal->index() + 1;
-    if (m_maxSealIndex < nextProposalIndex && !_checkpointProposal->systemProposal() &&
-        nextProposalIndex < m_config->highWaterMark())
+    if (!_checkpointProposal->systemProposal() && nextProposalIndex < m_config->highWaterMark())
     {
-        m_maxSealIndex = nextProposalIndex;
         m_config->notifySealer(nextProposalIndex);
         PBFT_LOG(INFO)
             << LOG_DESC(
@@ -367,6 +364,7 @@ void PBFTCacheProcessor::notifyToSealNextBlock(PBFTProposalInterface::Ptr _check
 void PBFTCacheProcessor::applyStateMachine(
     ProposalInterface::ConstPtr _lastAppliedProposal, PBFTProposalInterface::Ptr _proposal)
 {
+    notifyToSealNextBlock(_proposal);
     PBFT_LOG(INFO) << LOG_DESC("applyStateMachine") << LOG_KV("index", _proposal->index())
                    << LOG_KV("hash", _proposal->hash().abridged()) << m_config->printCurrentState();
     auto executedProposal = m_config->pbftMessageFactory()->createPBFTProposal();

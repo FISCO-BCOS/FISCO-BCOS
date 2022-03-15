@@ -723,7 +723,7 @@ void TransactionSync::onPeerTxsStatus(NodeIDPtr _fromNode, TxsSyncMsgInterface::
     {
         return;
     }
-    requestMissedTxs(_fromNode, requestTxs, nullptr, nullptr);
+    requestMissedTxsFromPeer(_fromNode, requestTxs, nullptr, nullptr);
     SYNC_LOG(DEBUG) << LOG_DESC("onPeerTxsStatus") << LOG_KV("reqSize", requestTxs->size())
                     << LOG_KV("peerTxsSize", _txsStatus->txsHash().size())
                     << LOG_KV("peer", _fromNode->shortHex());

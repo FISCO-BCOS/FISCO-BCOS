@@ -255,7 +255,6 @@ protected:
     std::map<ViewType, uint64_t> m_recoverCacheWeight;
 
     bcos::protocol::BlockNumber m_maxNotifyIndex = 0;
-    bcos::protocol::BlockNumber m_maxSealIndex = 0;
 };
 }  // namespace consensus
 }  // namespace bcos
