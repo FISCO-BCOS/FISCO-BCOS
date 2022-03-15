@@ -888,7 +888,7 @@ generate_genesis_config() {
 
 [tx]
     ; transaction gas limit
-    gas_limit=300000000
+    gas_limit=3000000000
 EOF
 }
 
