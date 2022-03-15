@@ -39,7 +39,7 @@ public:
         // threadpool for submit txs
         m_worker = std::make_shared<ThreadPool>("submitter", _verifierWorkerNum);
         // threadpool for verify block
-        m_verifier = std::make_shared<ThreadPool>("verifier", 4);
+        m_verifier = std::make_shared<ThreadPool>("verifier", 8);
         m_sealer = std::make_shared<ThreadPool>("txsSeal", 1);
         m_filler = std::make_shared<ThreadPool>("txsFiller", 4);
         TXPOOL_LOG(INFO) << LOG_DESC("create TxPool")

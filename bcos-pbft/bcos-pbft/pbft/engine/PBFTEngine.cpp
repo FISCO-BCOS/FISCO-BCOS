@@ -506,6 +506,7 @@ void PBFTEngine::handleMsg(std::shared_ptr<PBFTBaseMessageInterface> _msg)
     case PacketType::PreparePacket:
     {
         auto prepareMsg = std::dynamic_pointer_cast<PBFTMessageInterface>(_msg);
+        prepareMsg->setConsStartTime(utcTime());
         handlePrepareMsg(prepareMsg);
         break;
     }
@@ -564,7 +565,6 @@ CheckResult PBFTEngine::checkPBFTMsgState(PBFTMessageInterface::Ptr _pbftReq) co
     }
     if (_pbftReq->index() < m_config->lowWaterMark() ||
         _pbftReq->index() < m_config->expectedCheckPoint() ||
-        _pbftReq->index() >= m_config->highWaterMark() ||
         _pbftReq->index() <= m_config->syncingHighestNumber() ||
         m_cacheProcessor->proposalCommitted(_pbftReq->index()))
     {
