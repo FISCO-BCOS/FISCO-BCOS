@@ -96,7 +96,7 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
         // use writeGuard here in case of the transaction status will be modified by other
         // interfaces
         UpgradableGuard l(x_txpoolMutex);
-        if (m_txsTable.count(txHash))
+        if (m_txsTable.count(txHash) && m_txsTable[txHash])
         {
             auto tx = m_txsTable[txHash];
             if (!tx->sealed() || tx->batchHash() == HashType())

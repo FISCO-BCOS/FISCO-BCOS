@@ -406,6 +406,8 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
             false);
         return;
     }
+    auto importT = utcTime() - startT;
+    startT = utcTime();
     // check the transaction hash
     for (size_t i = 0; i < _missedTxs->size(); i++)
     {
@@ -422,7 +424,8 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
                     << LOG_KV(
                            "hash", (proposalHeader) ? proposalHeader->hash().abridged() : "unknown")
                     << LOG_KV("consNum", (proposalHeader) ? proposalHeader->number() : -1)
-                    << LOG_KV("decodeT", decodeT) << LOG_KV("importT", (utcTime() - startT))
+                    << LOG_KV("decodeT", decodeT) << LOG_KV("importT", importT)
+                    << LOG_KV("checkT", (utcTime() - startT))
                     << LOG_KV("timecost", (utcTime() - recordT));
 }
 
