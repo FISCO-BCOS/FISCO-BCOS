@@ -381,7 +381,7 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
     }
     m_ledgerConfig->setBlockTxCountLimit(blockTxCountLimit);
     // txGasLimit
-    auto txGasLimit = checkAndGetValue(_genesisConfig, "tx.gas_limit", "300000000");
+    auto txGasLimit = checkAndGetValue(_genesisConfig, "tx.gas_limit", "3000000000");
     if (txGasLimit <= TX_GAS_LIMIT_MIN)
     {
         BOOST_THROW_EXCEPTION(

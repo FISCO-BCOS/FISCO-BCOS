@@ -1325,7 +1325,6 @@ bool Ledger::buildGenesisBlock(
         SYS_NUMBER_2_TXS, SYS_VALUE,
         SYS_HASH_2_RECEIPT, SYS_VALUE,
         SYS_BLOCK_NUMBER_2_NONCES, SYS_VALUE,
-        SYS_CNS, SYS_VALUE,
         DAG_TRANSFER, "balance"
     };
     // clang-format on

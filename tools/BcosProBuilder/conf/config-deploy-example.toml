@@ -54,7 +54,7 @@ init_auth_address=""
 leader_period = 5
 block_tx_count_limit = 1000
 consensus_type = "pbft"
-gas_limit = "300000000"
+gas_limit = "3000000000"
 
 [[group.deploy_info]]
 # node_name = "node0"
