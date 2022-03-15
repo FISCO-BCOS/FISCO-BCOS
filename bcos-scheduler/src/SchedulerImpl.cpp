@@ -149,6 +149,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
 void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
     std::function<void(bcos::Error::Ptr&&, bcos::ledger::LedgerConfig::Ptr&&)> callback)
 {
+    auto startT = utcTime();
     SCHEDULER_LOG(INFO) << "CommitBlock request" << LOG_KV("block number", header->number());
 
     auto commitLock =
@@ -221,8 +222,8 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
     {
         frontBlock->block()->setBlockHeader(std::move(header));
     }
-    frontBlock->asyncCommit([this, callback = std::move(callback), block = frontBlock->block(),
-                                commitLock](Error::UniquePtr&& error) {
+    frontBlock->asyncCommit([this, startT, callback = std::move(callback),
+                                block = frontBlock->block(), commitLock](Error::UniquePtr&& error) {
         if (error)
         {
             SCHEDULER_LOG(ERROR) << "CommitBlock error, " << boost::diagnostic_information(*error);
@@ -235,7 +236,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
         }
         auto blockNumber = block->blockHeader()->number();
         auto hash = block->blockHeader()->hash();
-        asyncGetLedgerConfig([this, blockNumber, hash, commitLock = std::move(commitLock),
+        asyncGetLedgerConfig([this, startT, blockNumber, hash, commitLock = std::move(commitLock),
                                  callback = std::move(callback)](
                                  Error::Ptr error, ledger::LedgerConfig::Ptr ledgerConfig) {
             if (error)
@@ -251,33 +252,32 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
             }
             ledgerConfig->setBlockNumber(blockNumber);
             ledgerConfig->setHash(hash);
-            SCHEDULER_LOG(INFO) << "CommitBlock success"
-                                << LOG_KV("block number", ledgerConfig->blockNumber());
-
             auto& frontBlock = m_blocks.front();
             auto currentBlockNumber = ledgerConfig->blockNumber();
-
             if (m_txNotifier)
             {
                 SCHEDULER_LOG(INFO) << "Start notify block result: " << currentBlockNumber;
+                auto notifyStartT = utcTime();
                 frontBlock->asyncNotify(m_txNotifier,
-                    [this, currentBlockNumber, callback = std::move(callback),
+                    [notifyStartT, startT, this, currentBlockNumber, callback = std::move(callback),
                         ledgerConfig = std::move(ledgerConfig),
                         commitLock = std::move(commitLock)](Error::Ptr _error) mutable {
                         if (m_blockNumberReceiver)
                         {
                             m_blockNumberReceiver(currentBlockNumber);
                         }
-
-                        SCHEDULER_LOG(INFO) << "End notify block result: " << currentBlockNumber;
-
+                        auto recordT = utcTime();
                         {
                             std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
                             bcos::protocol::BlockNumber number = m_blocks.front()->number();
                             removeAllOldPreparedBlock(number);
                             m_blocks.pop_front();
                             SCHEDULER_LOG(DEBUG)
-                                << "Remove committed block: " << currentBlockNumber << " success";
+                                << LOG_DESC("CommitBlock and notify block result success")
+                                << LOG_KV("num", currentBlockNumber)
+                                << LOG_KV("eraseCacheT", (utcTime() - recordT))
+                                << LOG_KV("notifyT", (utcTime() - notifyStartT))
+                                << LOG_KV("timecost", (utcTime() - startT));
                         }
 
                         commitLock->unlock();
@@ -296,9 +296,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                     SCHEDULER_LOG(DEBUG)
                         << "Remove committed block: " << currentBlockNumber << " success";
                 }
-
                 commitLock->unlock();
-                callback(nullptr, std::move(ledgerConfig));
             }
         });
     });

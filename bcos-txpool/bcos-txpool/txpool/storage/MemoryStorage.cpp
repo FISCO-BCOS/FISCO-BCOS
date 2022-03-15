@@ -384,6 +384,7 @@ void MemoryStorage::printPendingTxs()
 }
 void MemoryStorage::batchRemove(BlockNumber _batchId, TransactionSubmitResults const& _txsResult)
 {
+    auto startT = utcTime();
     m_blockNumberUpdatedTime = utcTime();
     size_t succCount = 0;
     NonceListPtr nonceList = std::make_shared<NonceList>();
@@ -411,13 +412,20 @@ void MemoryStorage::batchRemove(BlockNumber _batchId, TransactionSubmitResults c
         }
     }
     notifyUnsealedTxsSize();
-    TXPOOL_LOG(INFO) << LOG_DESC("batchRemove txs success")
-                     << LOG_KV("expectedSize", _txsResult.size()) << LOG_KV("succCount", succCount)
-                     << LOG_KV("batchId", _batchId);
+    auto removeT = utcTime() - startT;
+    startT = utcTime();
     // update the ledger nonce
     m_config->txValidator()->ledgerNonceChecker()->batchInsert(_batchId, nonceList);
+    auto updateNonceT = utcTime() - startT;
+    startT = utcTime();
     // update the txpool nonce
     m_config->txPoolNonceChecker()->batchRemove(*nonceList);
+    auto removeNonceT = utcTime() - startT;
+    TXPOOL_LOG(INFO) << LOG_DESC("batchRemove txs success")
+                     << LOG_KV("expectedSize", _txsResult.size()) << LOG_KV("succCount", succCount)
+                     << LOG_KV("batchId", _batchId) << LOG_KV("removeTxsT", removeT)
+                     << LOG_KV("updateNonceT", updateNonceT)
+                     << LOG_KV("removeNonceT", removeNonceT);
 }
 
 TransactionsPtr MemoryStorage::fetchTxs(HashList& _missedTxs, HashList const& _txs)
