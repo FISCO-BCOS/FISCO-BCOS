@@ -11,6 +11,7 @@
 #include <bcos-framework/interfaces/protocol/BlockFactory.h>
 #include <bcos-framework/interfaces/rpc/RPCInterface.h>
 #include <tbb/concurrent_hash_map.h>
+#include <future>
 #include <list>
 
 namespace bcos::scheduler
@@ -35,7 +36,15 @@ public:
         m_hashImpl(std::move(hashImpl)),
         m_isAuthCheck(isAuthCheck),
         m_isWasm(isWasm)
-    {}
+    {
+        std::promise<std::tuple<Error::Ptr, std::string>> p;
+        m_ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_TX_GAS_LIMIT,
+            [&p](Error::Ptr _e, std::string _value, protocol::BlockNumber) {
+                p.set_value(std::make_tuple(std::move(_e), std::move(_value)));
+            });
+        auto [e, value] = p.get_future().get();
+        m_gasLimit = e ? TRANSACTION_GAS : boost::lexical_cast<uint64_t>(value);
+    }
 
     SchedulerImpl(const SchedulerImpl&) = delete;
     SchedulerImpl(SchedulerImpl&&) = delete;
@@ -93,6 +102,7 @@ private:
     std::atomic_int64_t m_calledContextID = 0;
 
     std::atomic<bcos::protocol::BlockNumber> m_lastExecutedBlockNumber = 0;
+    uint64_t m_gasLimit = TRANSACTION_GAS;
 
     ExecutorManager::Ptr m_executorManager;
     bcos::ledger::LedgerInterface::Ptr m_ledger;

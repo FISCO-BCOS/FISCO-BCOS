@@ -81,6 +81,9 @@ public:
         m_leaderSwitchPeriod = _leaderSwitchPeriod;
     }
 
+    uint64_t gasLimit() const { return m_gasLimit; }
+    void setGasLimit(uint64_t mGasLimit) { m_gasLimit = mGasLimit; }
+
     // Not enforce to set this field, in memory data
     void setSealerId(int64_t _sealerId) { m_sealerId = _sealerId; }
     int64_t sealerId() const { return m_sealerId; }
@@ -96,6 +99,7 @@ protected:
     bcos::protocol::BlockNumber m_blockNumber;
     uint64_t m_blockTxCountLimit;
     uint64_t m_leaderSwitchPeriod = 1;
+    uint64_t m_gasLimit = 300000000;
     // no need to store, in memory data
     int64_t m_sealerId = -1;
     int64_t m_txsSize = -1;
