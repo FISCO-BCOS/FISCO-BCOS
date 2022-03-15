@@ -29,6 +29,7 @@
 #include <boost/uuid/uuid_io.hpp>
 
 #include <bcos-framework/interfaces/protocol/CommonError.h>
+#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>
 
@@ -38,7 +39,10 @@ using namespace protocol;
 
 FrontService::FrontService()
 {
-    FRONT_LOG(INFO) << LOG_DESC("FrontService") << LOG_KV("this", this);
+    m_localProtocol = g_BCOSConfig.protocolInfo(ProtocolModuleID::NodeService);
+    FRONT_LOG(INFO) << LOG_DESC("FrontService") << LOG_KV("this", this)
+                    << LOG_KV("minVersion", m_localProtocol->minVersion())
+                    << LOG_KV("maxVersion", m_localProtocol->maxVersion());
 }
 
 FrontService::~FrontService()
@@ -365,6 +369,7 @@ void FrontService::onReceiveGroupNodeInfo(const std::string& _groupID,
     bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo, ReceiveMsgFunc _receiveMsgCallback)
 {
     {
+        protocolNegotiate(_groupNodeInfo);
         Guard l(x_groupNodeInfo);
         m_groupNodeInfo = _groupNodeInfo;
     }
@@ -393,6 +398,36 @@ void FrontService::onReceiveGroupNodeInfo(const std::string& _groupID,
     if (_receiveMsgCallback)
     {
         _receiveMsgCallback(nullptr);
+    }
+}
+
+void FrontService::protocolNegotiate(bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo)
+{
+    auto const& protocolList = _groupNodeInfo->nodeProtocolList();
+    auto const& nodeIDList = _groupNodeInfo->nodeIDList();
+    size_t i = 0;
+    for (auto const& protocol : protocolList)
+    {
+        auto mutableProtocol = std::const_pointer_cast<ProtocolInfo>(protocol);
+        // negotiate failed: can't happen unless the code has a bug
+        if (mutableProtocol->minVersion() > m_localProtocol->maxVersion() ||
+            mutableProtocol->maxVersion() < m_localProtocol->minVersion())
+        {
+            FRONT_LOG(ERROR) << LOG_DESC("protocolNegotiate failed")
+                             << LOG_KV("nodeID", nodeIDList.at(i))
+                             << LOG_KV("groupID", _groupNodeInfo->groupID());
+            mutableProtocol->setVersion(ProtocolVersion::INVALID);
+            i++;
+            continue;
+        }
+        // set the negotiated version
+        auto version = std::min(m_localProtocol->maxVersion(), mutableProtocol->maxVersion());
+        mutableProtocol->setVersion((ProtocolVersion)version);
+        FRONT_LOG(ERROR) << LOG_DESC("protocolNegotiate success")
+                         << LOG_KV("nodeID", nodeIDList.at(i))
+                         << LOG_KV("groupID", _groupNodeInfo->groupID())
+                         << LOG_KV("version", version);
+        i++;
     }
 }
 

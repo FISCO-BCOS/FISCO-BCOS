@@ -73,7 +73,7 @@ public:
     }
 
     Version version() const { return m_version; }
-    Version setVersion(Version _version) { m_version = _version; }
+    void setVersion(Version _version) { m_version = _version; }
 
 private:
     std::map<ProtocolModuleID, ProtocolInfo::Ptr> c_supportedProtocols;

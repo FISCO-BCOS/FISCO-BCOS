@@ -94,6 +94,11 @@ public:
         *m_nodeProtocol = std::move(_protocol);
     }
 
+    void setNodeProtocol(bcos::protocol::ProtocolInfo const& _protocol)
+    {
+        *m_nodeProtocol = _protocol;
+    }
+
 private:
     bool m_microService = false;
     // the node name

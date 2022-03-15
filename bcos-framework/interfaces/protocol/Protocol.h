@@ -48,6 +48,7 @@ enum ProtocolModuleID : uint32_t
 };
 enum ProtocolVersion : uint32_t
 {
+    INVALID = 0,  // Negotiation failed
     V1 = 1,
 };
 enum Version

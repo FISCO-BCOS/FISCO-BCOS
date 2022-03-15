@@ -261,6 +261,8 @@ protected:
     void notifyGroupNodeInfo(
         const std::string& _groupID, bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo);
 
+    virtual void protocolNegotiate(bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo);
+
 private:
     // thread pool
     bcos::ThreadPool::Ptr m_threadPool;
@@ -294,6 +296,10 @@ private:
     bcos::gateway::GroupNodeInfo::Ptr m_groupNodeInfo = nullptr;
     // lock m_nodeID
     mutable bcos::Mutex x_groupNodeInfo;
+
+    // the local protocolInfo
+    // Note: frontService is responsible for version negotiation of blockchain nodes
+    bcos::protocol::ProtocolInfo::ConstPtr m_localProtocol;
 };
 }  // namespace front
 }  // namespace bcos
