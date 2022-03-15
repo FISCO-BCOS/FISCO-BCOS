@@ -96,9 +96,9 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
         // use writeGuard here in case of the transaction status will be modified by other
         // interfaces
         UpgradableGuard l(x_txpoolMutex);
-        if (m_txsTable.count(txHash))
+        if (m_txsTable.count(txHash) && m_txsTable.at(txHash))
         {
-            auto tx = m_txsTable[txHash];
+            auto tx = m_txsTable.at(txHash);
             if (!tx->sealed() || tx->batchHash() == HashType())
             {
                 UpgradeGuard ul(l);
@@ -278,7 +278,7 @@ Transaction::ConstPtr MemoryStorage::removeWithoutLock(HashType const& _txHash)
     {
         return nullptr;
     }
-    auto tx = m_txsTable[_txHash];
+    auto tx = m_txsTable.at(_txHash);
     if (tx && tx->sealed())
     {
         m_sealedTxsSize--;
@@ -375,6 +375,10 @@ void MemoryStorage::printPendingTxs()
     for (auto item : m_txsTable)
     {
         auto tx = item.second;
+        if (!tx)
+        {
+            continue;
+        }
         TXPOOL_LOG(DEBUG) << LOG_KV("hash", tx->hash().abridged()) << LOG_KV("id", tx->batchId())
                           << LOG_KV("hash", tx->batchHash().abridged())
                           << LOG_KV("seal", tx->sealed());
@@ -809,6 +813,11 @@ HashListPtr MemoryStorage::getAllTxsHash()
     ReadGuard l(x_txpoolMutex);
     for (auto const& it : m_txsTable)
     {
+        auto tx = it.second;
+        if (!tx)
+        {
+            continue;
+        }
         txsHash->emplace_back(it.first);
     }
     return txsHash;
