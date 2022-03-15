@@ -243,19 +243,21 @@ void PBFTCacheProcessor::updateCommitQueue(PBFTProposalInterface::Ptr _committed
     {
         return;
     }
-    notifyMaxProposalIndex(_committedProposal->index());
+    auto proposalIndex = _committedProposal->index();
+    notifyMaxProposalIndex(proposalIndex);
     m_committedQueue.push(_committedProposal);
-    m_committedProposalList.insert(_committedProposal->index());
+    m_committedProposalList.insert(proposalIndex);
     PBFT_LOG(INFO) << LOG_DESC("######## CommitProposal") << printPBFTProposal(_committedProposal)
                    << LOG_KV("sys", _committedProposal->systemProposal())
                    << m_config->printCurrentState();
     if (_committedProposal->systemProposal())
     {
-        m_config->setWaitSealUntil(_committedProposal->index());
+        m_config->setWaitSealUntil(proposalIndex);
         PBFT_LOG(INFO) << LOG_DESC(
                               "Receive valid system prePrepare proposal, stop to notify sealing")
-                       << LOG_KV("waitSealUntil", _committedProposal->index());
+                       << LOG_KV("waitSealUntil", proposalIndex);
     }
+    notifyToSealNextBlock(_committedProposal);
     tryToPreApplyProposal(_committedProposal);
     tryToApplyCommitQueue();
 }
@@ -349,8 +351,10 @@ void PBFTCacheProcessor::notifyToSealNextBlock(PBFTProposalInterface::Ptr _check
 {
     // notify the leader to seal next block
     auto nextProposalIndex = _checkpointProposal->index() + 1;
-    if (!_checkpointProposal->systemProposal() && nextProposalIndex < m_config->highWaterMark())
+    if (m_maxSealIndex < nextProposalIndex && !_checkpointProposal->systemProposal() &&
+        nextProposalIndex < m_config->highWaterMark())
     {
+        m_maxSealIndex = nextProposalIndex;
         m_config->notifySealer(nextProposalIndex);
         PBFT_LOG(INFO)
             << LOG_DESC(
@@ -363,7 +367,6 @@ void PBFTCacheProcessor::notifyToSealNextBlock(PBFTProposalInterface::Ptr _check
 void PBFTCacheProcessor::applyStateMachine(
     ProposalInterface::ConstPtr _lastAppliedProposal, PBFTProposalInterface::Ptr _proposal)
 {
-    notifyToSealNextBlock(_proposal);
     PBFT_LOG(INFO) << LOG_DESC("applyStateMachine") << LOG_KV("index", _proposal->index())
                    << LOG_KV("hash", _proposal->hash().abridged()) << m_config->printCurrentState();
     auto executedProposal = m_config->pbftMessageFactory()->createPBFTProposal();
