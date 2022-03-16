@@ -236,13 +236,14 @@ protected:
     std::priority_queue<PBFTProposalInterface::Ptr, std::vector<PBFTProposalInterface::Ptr>,
         PBFTProposalCmp>
         m_committedQueue;
-    std::set<bcos::protocol::BlockNumber, std::less<bcos::protocol::BlockNumber>>
-        m_committedProposals;
 
     std::map<bcos::crypto::HashType, bcos::protocol::BlockNumber> m_executingProposals;
 
     std::set<bcos::protocol::BlockNumber, std::less<bcos::protocol::BlockNumber>>
         m_committedProposalList;
+
+    std::set<bcos::protocol::BlockNumber, std::less<bcos::protocol::BlockNumber>>
+        m_committedQueueIndexList;
 
     std::priority_queue<PBFTProposalInterface::Ptr, std::vector<PBFTProposalInterface::Ptr>,
         PBFTProposalCmp>

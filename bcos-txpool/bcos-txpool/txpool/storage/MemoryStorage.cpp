@@ -55,7 +55,7 @@ TransactionStatus MemoryStorage::submitTransaction(
     try
     {
         auto tx = m_config->txFactory()->createTransaction(ref(*_txData), false);
-        auto result = submitTransaction(tx, _txSubmitCallback);
+        auto result = verifyAndSubmitTransaction(tx, _txSubmitCallback, true);
         if (result != TransactionStatus::None)
         {
             notifyInvalidReceipt(tx->hash(), result, _txSubmitCallback);
@@ -84,45 +84,52 @@ TransactionStatus MemoryStorage::txpoolStorageCheck(Transaction::ConstPtr _tx)
 // Note: the signature of the tx has already been verified
 TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
 {
+    auto txHash = _tx->hash();
     // the transaction has already onChain, reject it
     auto result = m_config->txValidator()->submittedToChain(_tx);
     if (result == TransactionStatus::NonceCheckFail)
     {
+        if (m_txsTable.count(txHash))
+        {
+            auto tx = m_txsTable.at(txHash);
+            TXPOOL_LOG(WARNING) << LOG_DESC("enforce to seal failed for nonce check failed: ")
+                                << tx->hash().abridged() << LOG_KV("batchId", tx->batchId())
+                                << LOG_KV("batchHash", tx->batchHash().abridged())
+                                << LOG_KV("importBatchId", _tx->batchId())
+                                << LOG_KV("importBatchHash", _tx->batchHash().abridged());
+        }
         return TransactionStatus::NonceCheckFail;
     }
-
+    if (m_txsTable.count(txHash) && m_txsTable[txHash])
     {
-        auto txHash = _tx->hash();
-        // use writeGuard here in case of the transaction status will be modified by other
-        // interfaces
-        WriteGuard l(x_txpoolMutex);
-        if (m_txsTable.count(txHash) && m_txsTable[txHash])
+        auto tx = m_txsTable[txHash];
+        if (!tx->sealed() || tx->batchHash() == HashType())
         {
-            auto tx = m_txsTable[txHash];
-            if (!tx->sealed() || tx->batchHash() == HashType())
+            if (!tx->sealed())
             {
-                if (!tx->sealed())
-                {
-                    m_sealedTxsSize++;
-                    tx->setSealed(true);
-                }
-                tx->setBatchId(_tx->batchId());
-                tx->setBatchHash(_tx->batchHash());
-                TXPOOL_LOG(TRACE) << LOG_DESC("enforce to seal:") << tx->hash().abridged()
-                                  << LOG_KV("num", tx->batchId())
-                                  << LOG_KV("hash", tx->batchHash().abridged());
-                return TransactionStatus::None;
+                m_sealedTxsSize++;
+                tx->setSealed(true);
             }
-            // sealed for the same proposal
-            if (tx->batchId() == _tx->batchId() && tx->batchHash() == _tx->batchHash())
-            {
-                return TransactionStatus::None;
-            }
-            // The transaction has already been sealed by another node
-            return TransactionStatus::AlreadyInTxPool;
+            tx->setBatchId(_tx->batchId());
+            tx->setBatchHash(_tx->batchHash());
+            TXPOOL_LOG(TRACE) << LOG_DESC("enforce to seal:") << tx->hash().abridged()
+                              << LOG_KV("num", tx->batchId())
+                              << LOG_KV("hash", tx->batchHash().abridged());
+            return TransactionStatus::None;
         }
+        // sealed for the same proposal
+        if (tx->batchId() == _tx->batchId() && tx->batchHash() == _tx->batchHash())
+        {
+            return TransactionStatus::None;
+        }
+        TXPOOL_LOG(WARNING) << LOG_DESC("enforce to seal failed: ") << tx->hash().abridged()
+                            << LOG_KV("batchId", tx->batchId())
+                            << LOG_KV("batchHash", tx->batchHash().abridged())
+                            << LOG_KV("importBatchId", _tx->batchId())
+                            << LOG_KV("importBatchHash", _tx->batchHash().abridged());
+        // The transaction has already been sealed by another node
+        return TransactionStatus::AlreadyInTxPool;
     }
-
     // enforce import the transaction with duplicated nonce(for the consensus proposal)
     if (!_tx->sealed())
     {
@@ -130,24 +137,67 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
         // avoid the sealed txs be sealed again
         _tx->setSealed(true);
     }
-    insert(_tx);
-    {
-        // WriteGuard l(x_missedTxs);
-        // m_missedTxs.unsafe_erase(_tx->hash());
-    }
+    insertWithoutLock(_tx);
     // TODO: notifyUnsealedTxs()
     return TransactionStatus::None;
 }
 
-TransactionStatus MemoryStorage::submitTransaction(Transaction::Ptr _tx,
-    TxSubmitCallback _txSubmitCallback, bool _enforceImport, bool _checkPoolLimit)
+bool MemoryStorage::batchVerifyAndSubmitTransaction(
+    bcos::protocol::BlockHeader::Ptr _header, TransactionsPtr _txs)
 {
-    if (!_enforceImport)
+    auto recordT = utcTime();
+    // use writeGuard here in case of the transaction status will be modified by other
+    // interfaces
+    WriteGuard l(x_txpoolMutex);
+    auto lockT = utcTime() - recordT;
+    recordT = utcTime();
+    for (auto const& tx : *_txs)
     {
-        return verifyAndSubmitTransaction(_tx, _txSubmitCallback, _checkPoolLimit);
+        if (!tx || tx->invalid())
+        {
+            continue;
+        }
+        auto result = enforceSubmitTransaction(tx);
+        if (result != TransactionStatus::None)
+        {
+            TXPOOL_LOG(WARNING) << LOG_BADGE("batchSubmitTransaction: verify proposal failed")
+                                << LOG_KV("tx", tx->hash().abridged()) << LOG_KV("result", result)
+                                << LOG_KV("txBatchID", tx->batchId())
+                                << LOG_KV("txBatchHash", tx->batchHash().abridged())
+                                << LOG_KV("consIndex", _header->number())
+                                << LOG_KV("propHash", _header->hash().abridged());
+            ;
+            return false;
+        }
     }
-    return enforceSubmitTransaction(_tx);
+    TXPOOL_LOG(DEBUG) << LOG_DESC("batchVerifyAndSubmitTransaction success")
+                      << LOG_KV("totalTxs", _txs->size()) << LOG_KV("lockT", lockT)
+                      << LOG_KV("submitT", (utcTime() - recordT));
+    return true;
 }
+
+void MemoryStorage::batchImportTxs(TransactionsPtr _txs)
+{
+    auto recordT = utcTime();
+    size_t successCount = 0;
+    for (auto const& tx : *_txs)
+    {
+        if (!tx || tx->invalid())
+        {
+            continue;
+        }
+        auto ret = verifyAndSubmitTransaction(tx, nullptr, false);
+        if (ret != TransactionStatus::None)
+        {
+            continue;
+        }
+        successCount++;
+    }
+    TXPOOL_LOG(DEBUG) << LOG_DESC("batchImportTxs success") << LOG_KV("importTxs", successCount)
+                      << LOG_KV("totalTxs", _txs->size())
+                      << LOG_KV("timecost", (utcTime() - recordT));
+}
+
 
 TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
     Transaction::Ptr _tx, TxSubmitCallback _txSubmitCallback, bool _checkPoolLimit)
@@ -173,10 +223,6 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
             _tx->setSubmitCallback(_txSubmitCallback);
         }
         result = insert(_tx);
-        {
-            // WriteGuard l(x_missedTxs);
-            // m_missedTxs.unsafe_erase(_tx->hash());
-        }
     }
     return result;
 }
@@ -202,6 +248,11 @@ void MemoryStorage::notifyInvalidReceipt(
 TransactionStatus MemoryStorage::insert(Transaction::ConstPtr _tx)
 {
     ReadGuard l(x_txpoolMutex);
+    return insertWithoutLock(_tx);
+}
+
+TransactionStatus MemoryStorage::insertWithoutLock(Transaction::ConstPtr _tx)
+{
     // check again to ensure the same transaction not be imported many times
     if (m_txsTable.count(_tx->hash()))
     {
@@ -260,14 +311,19 @@ void MemoryStorage::preCommitTransaction(Transaction::ConstPtr _tx)
 
 void MemoryStorage::batchInsert(Transactions const& _txs)
 {
-    for (auto tx : _txs)
     {
-        insert(tx);
+        ReadGuard l(x_txpoolMutex);
+        for (auto tx : _txs)
+        {
+            insertWithoutLock(tx);
+        }
     }
-    WriteGuard l(x_missedTxs);
-    for (auto tx : _txs)
     {
-        m_missedTxs.unsafe_erase(tx->hash());
+        WriteGuard l(x_missedTxs);
+        for (auto tx : _txs)
+        {
+            m_missedTxs.unsafe_erase(tx->hash());
+        }
     }
 }
 
@@ -375,7 +431,7 @@ void MemoryStorage::printPendingTxs()
     {
         auto tx = item.second;
         TXPOOL_LOG(DEBUG) << LOG_KV("hash", tx->hash().abridged()) << LOG_KV("id", tx->batchId())
-                          << LOG_KV("hash", tx->batchHash().abridged())
+                          << LOG_KV("batchHash", tx->batchHash().abridged())
                           << LOG_KV("seal", tx->sealed());
     }
     TXPOOL_LOG(DEBUG) << LOG_DESC("printPendingTxs for some txs unhandle finish");
@@ -496,11 +552,13 @@ ConstTransactionsPtr MemoryStorage::fetchNewTxs(size_t _txsLimit)
 void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, size_t _txsLimit,
     TxsHashSetPtr _avoidTxs, bool _avoidDuplicate)
 {
+    TXPOOL_LOG(INFO) << LOG_DESC("begin batchFetchTxs") << LOG_KV("pendingTxs", m_txsTable.size())
+                     << LOG_KV("limit", _txsLimit);
     auto recordT = utcTime();
     auto startT = utcTime();
+    ReadGuard l(x_txpoolMutex);
     auto lockT = utcTime() - startT;
     startT = utcTime();
-
     for (auto const& it : m_txsTable)
     {
         auto const& tx = it.second;
@@ -584,7 +642,7 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
     TXPOOL_LOG(INFO) << LOG_DESC("batchFetchTxs") << LOG_KV("timecost", (utcTime() - recordT))
                      << LOG_KV("txsSize", _txsList->transactionsMetaDataSize())
                      << LOG_KV("sysTxsSize", _sysTxsList->transactionsMetaDataSize())
-                     << LOG_KV("txsSize", m_txsTable.size()) << LOG_KV("limit", _txsLimit)
+                     << LOG_KV("pendingTxs", m_txsTable.size()) << LOG_KV("limit", _txsLimit)
                      << LOG_KV("fetchTxsT", fetchTxsT) << LOG_KV("lockT", lockT);
 }
 
@@ -685,7 +743,10 @@ void MemoryStorage::batchMarkTxs(
     HashList const& _txsHashList, BlockNumber _batchId, HashType const& _batchHash, bool _sealFlag)
 {
     ssize_t successCount = 0;
+    auto startT = utcTime();
     ReadGuard l(x_txpoolMutex);
+    auto lockT = utcTime() - startT;
+    startT = utcTime();
     for (auto txHash : _txsHashList)
     {
         if (!m_txsTable.count(txHash))
@@ -728,8 +789,9 @@ void MemoryStorage::batchMarkTxs(
 #endif
     }
     TXPOOL_LOG(DEBUG) << LOG_DESC("batchMarkTxs ") << LOG_KV("txsSize", _txsHashList.size())
-                      << LOG_KV("batchId", _batchId) << LOG_KV("hash", _batchHash.abridged())
-                      << LOG_KV("flag", _sealFlag) << LOG_KV("succ", successCount);
+                      << LOG_KV("consNum", _batchId) << LOG_KV("hash", _batchHash.abridged())
+                      << LOG_KV("flag", _sealFlag) << LOG_KV("succ", successCount)
+                      << LOG_KV("lockT", lockT) << LOG_KV("markT", (utcTime() - startT));
     notifyUnsealedTxsSize();
 }
 
@@ -824,8 +886,22 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::Ptr _block)
         if (!(m_txsTable.count(txHash)))
         {
             missedTxs->emplace_back(txHash);
+            continue;
         }
+        auto tx = m_txsTable.at(txHash);
+        if (!tx)
+        {
+            continue;
+        }
+        if (!tx->sealed())
+        {
+            m_sealedTxsSize++;
+        }
+        tx->setSealed(true);
+        tx->setBatchId(_block->blockHeader()->number());
+        tx->setBatchHash(_block->blockHeader()->hash());
     }
+    notifyUnsealedTxsSize();
     TXPOOL_LOG(INFO) << LOG_DESC("batchVerifyProposal")
                      << LOG_KV("consNum", _block->blockHeader()->number())
                      << LOG_KV("hash", _block->blockHeader()->hash().abridged())

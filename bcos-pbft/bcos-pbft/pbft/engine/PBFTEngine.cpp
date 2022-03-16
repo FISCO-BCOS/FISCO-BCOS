@@ -730,7 +730,11 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
         // Note: must reset the txs to be sealed no matter verify success or failed
         // because some nodes may verify failed for timeout, while other nodes may
         // verify success
-        m_config->validator()->asyncResetTxsFlag(_prePrepareMsg->consensusProposal()->data(), true);
+        if (_prePrepareMsg->generatedFrom() == m_config->nodeIndex())
+        {
+            m_config->validator()->asyncResetTxsFlag(
+                _prePrepareMsg->consensusProposal()->data(), true);
+        }
         // add the pre-prepare packet into the cache
         m_cacheProcessor->addPrePrepareCache(_prePrepareMsg);
         m_config->timer()->restart();
@@ -766,8 +770,8 @@ bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
                 // Note: must reset the txs to be sealed no matter verify success or
                 // failed because some nodes may verify failed for timeout,  while
                 // other nodes may verify success
-                pbftEngine->m_config->validator()->asyncResetTxsFlag(
-                    _prePrepareMsg->consensusProposal()->data(), true);
+                // pbftEngine->m_config->validator()->asyncResetTxsFlag(
+                //    _prePrepareMsg->consensusProposal()->data(), true);
 
                 // verify exceptioned
                 if (_error != nullptr)

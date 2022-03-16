@@ -246,6 +246,7 @@ void PBFTCacheProcessor::updateCommitQueue(PBFTProposalInterface::Ptr _committed
     auto proposalIndex = _committedProposal->index();
     notifyMaxProposalIndex(proposalIndex);
     m_committedQueue.push(_committedProposal);
+    m_committedQueueIndexList.insert(proposalIndex);
     m_committedProposalList.insert(proposalIndex);
     notifyToSealNextBlock();
     PBFT_LOG(INFO) << LOG_DESC("######## CommitProposal") << printPBFTProposal(_committedProposal)
@@ -315,6 +316,7 @@ bool PBFTCacheProcessor::tryToApplyCommitQueue()
                        << LOG_KV("expectedIndex", m_config->expectedCheckPoint())
                        << m_config->printCurrentState();
         m_committedQueue.pop();
+        m_committedQueueIndexList.erase(index);
     }
     // try to execute the proposal
     if (!m_committedQueue.empty() &&
@@ -339,6 +341,7 @@ bool PBFTCacheProcessor::tryToApplyCommitQueue()
         }
         // commit the proposal
         m_committedQueue.pop();
+        m_committedQueueIndexList.erase(proposal->index());
         // in case of the same block execute more than once
         m_executingProposals[proposal->hash()] = proposal->index();
         applyStateMachine(lastAppliedProposal, proposal);
@@ -351,7 +354,7 @@ bool PBFTCacheProcessor::tryToApplyCommitQueue()
 void PBFTCacheProcessor::notifyToSealNextBlock()
 {
     bcos::protocol::BlockNumber lastIndex = -1;
-    for (auto const& it : m_committedProposalList)
+    for (auto const& it : m_committedQueueIndexList)
     {
         if (lastIndex == -1)
         {

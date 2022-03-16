@@ -51,9 +51,10 @@ public:
 
     bcos::protocol::TransactionStatus submitTransaction(bytesPointer _txData,
         bcos::protocol::TxSubmitCallback _txSubmitCallback = nullptr) override;
-    bcos::protocol::TransactionStatus submitTransaction(bcos::protocol::Transaction::Ptr _tx,
-        bcos::protocol::TxSubmitCallback _txSubmitCallback = nullptr, bool _enforceImport = false,
-        bool _checkPoolLimit = true) override;
+
+    bool batchVerifyAndSubmitTransaction(
+        bcos::protocol::BlockHeader::Ptr _header, bcos::protocol::TransactionsPtr _txs) override;
+    void batchImportTxs(bcos::protocol::TransactionsPtr _txs) override;
 
     bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::ConstPtr _tx) override;
     void batchInsert(bcos::protocol::Transactions const& _txs) override;
@@ -103,6 +104,8 @@ public:
     bool batchVerifyProposal(std::shared_ptr<bcos::crypto::HashList> _txsHashList) override;
 
 protected:
+    virtual bcos::protocol::TransactionStatus insertWithoutLock(
+        bcos::protocol::Transaction::ConstPtr _tx);
     virtual bool shouldNotifyTx(bcos::protocol::Transaction::ConstPtr _tx,
         bcos::protocol::TransactionSubmitResult::Ptr _txSubmitResult)
     {

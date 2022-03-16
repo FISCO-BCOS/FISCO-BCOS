@@ -133,7 +133,7 @@ void TxPool::asyncNotifyBlockResult(BlockNumber _blockNumber,
         return;
     }
     _onNotifyFinished(nullptr);
-    m_verifier->enqueue([this, _blockNumber, _txsResult]() {
+    m_remover->enqueue([this, _blockNumber, _txsResult]() {
         m_txpoolStorage->batchRemove(_blockNumber, *_txsResult);
     });
 }
