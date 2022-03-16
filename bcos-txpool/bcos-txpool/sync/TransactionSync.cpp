@@ -159,6 +159,7 @@ void TransactionSync::onRecvSyncMessage(
 void TransactionSync::onReceiveTxsRequest(TxsSyncMsgInterface::Ptr _txsRequest,
     SendResponseCallback _sendResponse, bcos::crypto::PublicPtr _peer)
 {
+    auto startT = utcTime();
     auto const& txsHash = _txsRequest->txsHash();
     HashList missedTxs;
     auto txs = m_config->txpoolStorage()->fetchTxs(missedTxs, txsHash);
@@ -192,7 +193,7 @@ void TransactionSync::onReceiveTxsRequest(TxsSyncMsgInterface::Ptr _txsRequest,
     _sendResponse(ref(*packetData));
     SYNC_LOG(INFO) << LOG_DESC("onReceiveTxsRequest: response txs")
                    << LOG_KV("peer", _peer ? _peer->shortHex() : "unknown")
-                   << LOG_KV("txsSize", txs->size());
+                   << LOG_KV("txsSize", txs->size()) << LOG_KV("timecost", (utcTime() - startT));
 }
 
 void TransactionSync::requestMissedTxs(PublicPtr _generatedNodeID, HashListPtr _missedTxs,

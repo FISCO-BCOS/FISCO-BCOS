@@ -95,13 +95,12 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
         auto txHash = _tx->hash();
         // use writeGuard here in case of the transaction status will be modified by other
         // interfaces
-        UpgradableGuard l(x_txpoolMutex);
+        ReadGuard l(x_txpoolMutex);
         if (m_txsTable.count(txHash) && m_txsTable[txHash])
         {
             auto tx = m_txsTable[txHash];
             if (!tx->sealed() || tx->batchHash() == HashType())
             {
-                UpgradeGuard ul(l);
                 if (!tx->sealed())
                 {
                     m_sealedTxsSize++;
@@ -133,8 +132,8 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
     }
     insert(_tx);
     {
-        WriteGuard l(x_missedTxs);
-        m_missedTxs.unsafe_erase(_tx->hash());
+        // WriteGuard l(x_missedTxs);
+        // m_missedTxs.unsafe_erase(_tx->hash());
     }
     // TODO: notifyUnsealedTxs()
     return TransactionStatus::None;
@@ -175,8 +174,8 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
         }
         result = insert(_tx);
         {
-            WriteGuard l(x_missedTxs);
-            m_missedTxs.unsafe_erase(_tx->hash());
+            // WriteGuard l(x_missedTxs);
+            // m_missedTxs.unsafe_erase(_tx->hash());
         }
     }
     return result;
@@ -430,7 +429,6 @@ void MemoryStorage::batchRemove(BlockNumber _batchId, TransactionSubmitResults c
 
 TransactionsPtr MemoryStorage::fetchTxs(HashList& _missedTxs, HashList const& _txs)
 {
-    ReadGuard l(x_txpoolMutex);
     auto fetchedTxs = std::make_shared<Transactions>();
     _missedTxs.clear();
     for (auto const& hash : _txs)
@@ -441,6 +439,10 @@ TransactionsPtr MemoryStorage::fetchTxs(HashList& _missedTxs, HashList const& _t
             continue;
         }
         auto tx = m_txsTable[hash];
+        if (!tx)
+        {
+            continue;
+        }
         fetchedTxs->emplace_back(std::const_pointer_cast<Transaction>(tx));
     }
     return fetchedTxs;
@@ -796,7 +798,9 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::Ptr _block)
     {
         return missedTxs;
     }
-    ReadGuard l(x_txpoolMutex);
+    auto startT = utcTime();
+    auto lockT = utcTime() - startT;
+    startT = utcTime();
     for (size_t i = 0; i < txsSize; i++)
     {
         auto txHash = _block->transactionHash(i);
@@ -805,6 +809,11 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::Ptr _block)
             missedTxs->emplace_back(txHash);
         }
     }
+    TXPOOL_LOG(INFO) << LOG_DESC("batchVerifyProposal")
+                     << LOG_KV("consNum", _block->blockHeader()->number())
+                     << LOG_KV("hash", _block->blockHeader()->hash().abridged())
+                     << LOG_KV("txsSize", txsSize) << LOG_KV("lockT", lockT)
+                     << LOG_KV("verifyT", (utcTime() - startT));
     return missedTxs;
 }
 bool MemoryStorage::batchVerifyProposal(std::shared_ptr<HashList> _txsHashList)
