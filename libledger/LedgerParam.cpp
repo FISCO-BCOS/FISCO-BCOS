@@ -427,6 +427,13 @@ void LedgerParam::initConsensusConfig(ptree const& pt)
     // if the consensus node id is invalid, throw InvalidConfiguration exception
     parsePublicKeyListOfSection(mutableConsensusParam().sealerList, pt, "consensus", "node.");
     std::stringstream nodeListMark;
+    //sort the sealerList
+    if(g_BCOSConfig.version() >= V2_9_0)
+    {
+        const auto lessThan = [](const h512 &a, const h512 &b) -> bool { return (a < b) ? true : false; };
+        std::sort(mutableConsensusParam().sealerList.begin(), mutableConsensusParam().sealerList.end(), lessThan);
+    }
+
     // init nodeListMark
     for (auto const& node : mutableConsensusParam().sealerList)
     {
