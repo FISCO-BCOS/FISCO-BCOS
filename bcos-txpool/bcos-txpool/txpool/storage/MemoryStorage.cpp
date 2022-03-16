@@ -74,7 +74,7 @@ TransactionStatus MemoryStorage::submitTransaction(
 TransactionStatus MemoryStorage::txpoolStorageCheck(Transaction::ConstPtr _tx)
 {
     auto txHash = _tx->hash();
-    if (exist(txHash))
+    if (m_txsTable.count(txHash))
     {
         return TransactionStatus::AlreadyInTxPool;
     }
@@ -179,6 +179,7 @@ bool MemoryStorage::batchVerifyAndSubmitTransaction(
 void MemoryStorage::batchImportTxs(TransactionsPtr _txs)
 {
     auto recordT = utcTime();
+    ReadGuard l(x_txpoolMutex);
     size_t successCount = 0;
     for (auto const& tx : *_txs)
     {
@@ -186,7 +187,7 @@ void MemoryStorage::batchImportTxs(TransactionsPtr _txs)
         {
             continue;
         }
-        auto ret = verifyAndSubmitTransaction(tx, nullptr, false);
+        auto ret = verifyAndSubmitTransaction(tx, nullptr, false, false);
         if (ret != TransactionStatus::None)
         {
             continue;
@@ -200,7 +201,7 @@ void MemoryStorage::batchImportTxs(TransactionsPtr _txs)
 
 
 TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
-    Transaction::Ptr _tx, TxSubmitCallback _txSubmitCallback, bool _checkPoolLimit)
+    Transaction::Ptr _tx, TxSubmitCallback _txSubmitCallback, bool _checkPoolLimit, bool _lock)
 {
     // Note: In order to ensure that transactions can reach all nodes, transactions from P2P are not
     // restricted
@@ -222,7 +223,14 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
         {
             _tx->setSubmitCallback(_txSubmitCallback);
         }
-        result = insert(_tx);
+        if (_lock)
+        {
+            result = insert(_tx);
+        }
+        else
+        {
+            result = insertWithoutLock(_tx);
+        }
     }
     return result;
 }
@@ -880,35 +888,22 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::Ptr _block)
     auto startT = utcTime();
     auto lockT = utcTime() - startT;
     startT = utcTime();
+    auto batchId = _block->blockHeader()->number();
+    auto batchHash = _block->blockHeader()->hash();
     for (size_t i = 0; i < txsSize; i++)
     {
         auto txHash = _block->transactionHash(i);
         if (!(m_txsTable.count(txHash)))
         {
             missedTxs->emplace_back(txHash);
-            continue;
         }
-        auto tx = m_txsTable.at(txHash);
-        if (!tx)
-        {
-            continue;
-        }
-        if (!tx->sealed())
-        {
-            m_sealedTxsSize++;
-        }
-        tx->setSealed(true);
-        tx->setBatchId(_block->blockHeader()->number());
-        tx->setBatchHash(_block->blockHeader()->hash());
     }
-    notifyUnsealedTxsSize();
-    TXPOOL_LOG(INFO) << LOG_DESC("batchVerifyProposal")
-                     << LOG_KV("consNum", _block->blockHeader()->number())
-                     << LOG_KV("hash", _block->blockHeader()->hash().abridged())
-                     << LOG_KV("txsSize", txsSize) << LOG_KV("lockT", lockT)
-                     << LOG_KV("verifyT", (utcTime() - startT));
+    TXPOOL_LOG(INFO) << LOG_DESC("batchVerifyProposal") << LOG_KV("consNum", batchId)
+                     << LOG_KV("hash", batchHash.abridged()) << LOG_KV("txsSize", txsSize)
+                     << LOG_KV("lockT", lockT) << LOG_KV("verifyT", (utcTime() - startT));
     return missedTxs;
 }
+
 bool MemoryStorage::batchVerifyProposal(std::shared_ptr<HashList> _txsHashList)
 {
     ReadGuard l(x_txpoolMutex);

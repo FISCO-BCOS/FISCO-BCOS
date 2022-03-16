@@ -184,6 +184,10 @@ public:
 
     bool proposalCommitted(bcos::protocol::BlockNumber _index)
     {
+        if (!m_caches.count(_index))
+        {
+            return false;
+        }
         return m_committedProposalList.count(_index);
     }
 
