@@ -59,8 +59,6 @@ bool LedgerInitializer::initLedgerByGroupID(dev::GROUP_ID const& _groupId)
         BOOST_THROW_EXCEPTION(GenesisConfNotFound());
     }
 
-    LOG(INFO)<<" genesisConfFilePath: "<< genesisConfFilePath.c_str() <<std::endl;
-
     fs::path groupConfFilePath(
         m_groupConfigPath + fs::path::separator + "group." + to_string(_groupId) + ".ini");
     if (!fs::exists(groupConfFilePath.string()))
