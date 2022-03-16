@@ -127,6 +127,7 @@ void TxPool::asyncSealTxs(size_t _txsLimit, TxsHashSetPtr _avoidTxs,
 void TxPool::asyncNotifyBlockResult(BlockNumber _blockNumber,
     TransactionSubmitResultsPtr _txsResult, std::function<void(Error::Ptr)> _onNotifyFinished)
 {
+    m_txpoolStorage->batchUpdateLedgerNonce(_blockNumber, *_txsResult);
     if (!_onNotifyFinished)
     {
         return;

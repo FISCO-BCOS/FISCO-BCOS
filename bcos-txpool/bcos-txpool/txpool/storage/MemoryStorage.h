@@ -61,6 +61,9 @@ public:
     bcos::protocol::Transaction::ConstPtr remove(bcos::crypto::HashType const& _txHash) override;
     void batchRemove(bcos::protocol::BlockNumber _batchId,
         bcos::protocol::TransactionSubmitResults const& _txsResult) override;
+    void batchUpdateLedgerNonce(bcos::protocol::BlockNumber _batchId,
+        bcos::protocol::TransactionSubmitResults const& _txsResult) override;
+
     bcos::protocol::Transaction::ConstPtr removeSubmittedTx(
         bcos::protocol::TransactionSubmitResult::Ptr _txSubmitResult) override;
 

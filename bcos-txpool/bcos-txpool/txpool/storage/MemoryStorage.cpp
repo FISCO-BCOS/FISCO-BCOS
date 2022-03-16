@@ -95,7 +95,7 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
         auto txHash = _tx->hash();
         // use writeGuard here in case of the transaction status will be modified by other
         // interfaces
-        ReadGuard l(x_txpoolMutex);
+        WriteGuard l(x_txpoolMutex);
         if (m_txsTable.count(txHash) && m_txsTable[txHash])
         {
             auto tx = m_txsTable[txHash];
@@ -381,24 +381,39 @@ void MemoryStorage::printPendingTxs()
     TXPOOL_LOG(DEBUG) << LOG_DESC("printPendingTxs for some txs unhandle finish");
     m_printed = true;
 }
+
+void MemoryStorage::batchUpdateLedgerNonce(
+    BlockNumber _batchId, TransactionSubmitResults const& _txsResult)
+{
+    NonceListPtr nonceList = std::make_shared<NonceList>();
+    for (auto const& txResult : _txsResult)
+    {
+        if (txResult->nonce() != NonceType(-1))
+        {
+            nonceList->emplace_back(txResult->nonce());
+        }
+    }
+    if (nonceList->size() > 0)
+    {
+        // update the ledger nonce
+        m_config->txValidator()->ledgerNonceChecker()->batchInsert(_batchId, nonceList);
+        m_config->txPoolNonceChecker()->batchRemove(*nonceList);
+    }
+}
+
 void MemoryStorage::batchRemove(BlockNumber _batchId, TransactionSubmitResults const& _txsResult)
 {
-    auto startT = utcTime();
     m_blockNumberUpdatedTime = utcTime();
     size_t succCount = 0;
     NonceListPtr nonceList = std::make_shared<NonceList>();
+    auto startT = utcTime();
     {
         // batch remove
         WriteGuard l(x_txpoolMutex);
-        for (auto txResult : _txsResult)
+        for (auto const& txResult : _txsResult)
         {
             auto tx = removeSubmittedTxWithoutLock(txResult);
-
-            if (!tx && txResult->nonce() != NonceType(-1))
-            {
-                nonceList->emplace_back(txResult->nonce());
-            }
-            else if (tx)
+            if (tx)
             {
                 succCount++;
                 nonceList->emplace_back(tx->nonce());
@@ -414,7 +429,10 @@ void MemoryStorage::batchRemove(BlockNumber _batchId, TransactionSubmitResults c
     auto removeT = utcTime() - startT;
     startT = utcTime();
     // update the ledger nonce
-    m_config->txValidator()->ledgerNonceChecker()->batchInsert(_batchId, nonceList);
+    if (nonceList->size() > 0)
+    {
+        m_config->txValidator()->ledgerNonceChecker()->batchInsert(_batchId, nonceList);
+    }
     auto updateNonceT = utcTime() - startT;
     startT = utcTime();
     // update the txpool nonce
@@ -480,7 +498,6 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
 {
     auto recordT = utcTime();
     auto startT = utcTime();
-    ReadGuard l(x_txpoolMutex);
     auto lockT = utcTime() - startT;
     startT = utcTime();
 
@@ -667,8 +684,8 @@ HashListPtr MemoryStorage::filterUnknownTxs(HashList const& _txsHashList, NodeID
 void MemoryStorage::batchMarkTxs(
     HashList const& _txsHashList, BlockNumber _batchId, HashType const& _batchHash, bool _sealFlag)
 {
-    ReadGuard l(x_txpoolMutex);
     ssize_t successCount = 0;
+    ReadGuard l(x_txpoolMutex);
     for (auto txHash : _txsHashList)
     {
         if (!m_txsTable.count(txHash))
