@@ -43,10 +43,7 @@ public:
     void startMoreLedger();
     void reloadSDKAllowList();
 
-    std::shared_ptr<ledger::LedgerManager> ledgerManager() 
-    { 
-        return m_ledgerManager; 
-    }
+    std::shared_ptr<ledger::LedgerManager> ledgerManager() { return m_ledgerManager; }
 
     void setLedgerManager(std::shared_ptr<ledger::LedgerManager> _ledgerManager)
     {
@@ -61,15 +58,9 @@ public:
     {
         m_channelRPCServer = _channelRPCServer;
     }
-    void setKeyPair(KeyPair const& _keyPair) 
-    {
-        m_keyPair = _keyPair; 
-    }
+    void setKeyPair(KeyPair const& _keyPair) { m_keyPair = _keyPair; }
 
-    ~LedgerInitializer() 
-    { 
-        stopAll(); 
-    }
+    ~LedgerInitializer() { stopAll(); }
 
     void startAll()
     {
