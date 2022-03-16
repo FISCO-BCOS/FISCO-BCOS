@@ -119,6 +119,16 @@ BOOST_AUTO_TEST_CASE(SM_testP2pPart)
 
     response = rpc->getGroupList();
     BOOST_CHECK(response.size() == 0);
+
+    Json::Value peers;
+    peers["p2p"].append("127.0.0.1:30299");
+    peers["p2p"].append("[::1]:30298");
+
+    response = rpc->addPeers(peers);
+    BOOST_CHECK(response.size() == 1);
+
+    response = rpc->erasePeers(peers);
+    BOOST_CHECK(response.size() == 1);
 }
 
 BOOST_AUTO_TEST_CASE(SM_testGetBlockByHash)
