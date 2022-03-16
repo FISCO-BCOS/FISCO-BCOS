@@ -92,6 +92,12 @@ public:
     void setUseSMCrypto(bool _useSMCrypto) { m_useSMCrypto = _useSMCrypto; }
     bool SMCrypto() const { return m_useSMCrypto; }
 
+    bool enableRSACertForChannel() const { return m_enableRSACertForChannel; }
+    void setEnableRsaCertForChannel(bool _enableRSACertForChannel)
+    {
+        m_enableRSACertForChannel = _enableRSACertForChannel;
+    }
+
     struct DiskEncryption
     {
         bool enable = false;
@@ -139,6 +145,11 @@ private:
     std::string m_dataDir;
     bool m_enableStat;
     bool m_useSMCrypto;
+
+    // the switch for using rsa certificate to channel protocol, defalt: true
+    // if you already have an old java-sdk environment(java-sdk < 2.9.0) with certificates
+    // you can turn off this switch for channel ssl connection
+    bool m_enableRSACertForChannel{true};
 };
 
 #define g_BCOSConfig GlobalConfigure::instance()
