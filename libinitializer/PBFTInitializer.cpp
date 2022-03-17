@@ -20,6 +20,7 @@
  */
 #include "PBFTInitializer.h"
 #include "bcos-framework/interfaces/storage/KVStorageHelper.h"
+#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
 #include <bcos-pbft/pbft/PBFTFactory.h>
 #include <bcos-sealer/SealerFactory.h>
 #include <bcos-sync/BlockSyncFactory.h>
@@ -151,6 +152,9 @@ void PBFTInitializer::initChainNodeInfo(
     chainNodeInfo->appendServiceInfo(CONSENSUS, localNodeServiceName);
     chainNodeInfo->appendServiceInfo(
         TXPOOL, useConfigServiceName ? m_nodeConfig->txpoolServiceName() : localNodeServiceName);
+    // set protocolInfo
+    auto nodeProtocolInfo = g_BCOSConfig.protocolInfo(ProtocolModuleID::NodeService);
+    chainNodeInfo->setNodeProtocol(*nodeProtocolInfo);
     m_groupInfo->appendNodeInfo(chainNodeInfo);
     INITIALIZER_LOG(INFO) << LOG_DESC("PBFTInitializer::initChainNodeInfo")
                           << LOG_KV("nodeType", chainNodeInfo->nodeType())

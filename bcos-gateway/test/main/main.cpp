@@ -66,21 +66,23 @@ int main(int argc, const char** argv)
                         _id, bcos::protocol::ModuleID::AMOP, _nodeID, _data, [](Error::Ptr) {});
                 }
             });
-
+        auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
         while (true)
         {
             std::this_thread::sleep_for(std::chrono::seconds(1));
 
-            frontService->asyncGetNodeIDs(
-                [frontService](Error::Ptr _error, std::shared_ptr<const crypto::NodeIDs> _nodeIDs) {
+            frontService->asyncGetGroupNodeInfo(
+                [frontService](
+                    Error::Ptr _error, bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo) {
                     (void)_error;
-                    if (!_nodeIDs || _nodeIDs->empty())
+                    if (!_groupNodeInfo || _groupNodeInfo->nodeIDList().empty())
                     {
                         return;
                     }
-
-                    for (const auto& nodeID : *_nodeIDs)
+                    auto const& nodeIDs = _groupNodeInfo->nodeIDList();
+                    for (const auto& nodeIDStr : nodeIDs)
                     {
+                        auto nodeID = keyFactory->createKey(fromHex(nodeIDStr));
                         std::string randStr =
                             boost::uuids::to_string(boost::uuids::random_generator()());
                         GATEWAY_MAIN_LOG(INFO) << LOG_DESC("request") << LOG_KV("to", nodeID->hex())

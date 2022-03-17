@@ -1,10 +1,10 @@
 #include "CommonProtocol.tars"
-
+#include "GatewayInfo.tars"
 module bcostars {
     interface FrontService {
-        Error asyncGetNodeIDs(out vector<vector<byte>> nodeIDs);
+        Error asyncGetGroupNodeInfo(out GroupNodeInfo groupNodeInfo);
 
-        Error onReceivedNodeIDs(string groupID, vector<vector<byte>> nodeIDs);
+        Error onReceiveGroupNodeInfo(string groupID, GroupNodeInfo groupNodeInfo);
 
         Error onReceiveMessage(string groupID, vector<byte> nodeID, vector<byte> data);
 
