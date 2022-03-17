@@ -148,7 +148,7 @@ bool MemoryStorage::batchVerifyAndSubmitTransaction(
     auto recordT = utcTime();
     // use writeGuard here in case of the transaction status will be modified by other
     // interfaces
-    WriteGuard l(x_txpoolMutex);
+    RWMutexScoped l(x_txpoolMutex, true);
     auto lockT = utcTime() - recordT;
     recordT = utcTime();
     for (auto const& tx : *_txs)
@@ -179,7 +179,6 @@ bool MemoryStorage::batchVerifyAndSubmitTransaction(
 void MemoryStorage::batchImportTxs(TransactionsPtr _txs)
 {
     auto recordT = utcTime();
-    ReadGuard l(x_txpoolMutex);
     size_t successCount = 0;
     for (auto const& tx : *_txs)
     {
@@ -187,7 +186,7 @@ void MemoryStorage::batchImportTxs(TransactionsPtr _txs)
         {
             continue;
         }
-        auto ret = verifyAndSubmitTransaction(tx, nullptr, false, false);
+        auto ret = verifyAndSubmitTransaction(tx, nullptr, false);
         if (ret != TransactionStatus::None)
         {
             continue;
@@ -201,7 +200,7 @@ void MemoryStorage::batchImportTxs(TransactionsPtr _txs)
 
 
 TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
-    Transaction::Ptr _tx, TxSubmitCallback _txSubmitCallback, bool _checkPoolLimit, bool _lock)
+    Transaction::Ptr _tx, TxSubmitCallback _txSubmitCallback, bool _checkPoolLimit)
 {
     // Note: In order to ensure that transactions can reach all nodes, transactions from P2P are not
     // restricted
@@ -223,14 +222,7 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
         {
             _tx->setSubmitCallback(_txSubmitCallback);
         }
-        if (_lock)
-        {
-            result = insert(_tx);
-        }
-        else
-        {
-            result = insertWithoutLock(_tx);
-        }
+        result = insert(_tx);
     }
     return result;
 }
@@ -255,10 +247,9 @@ void MemoryStorage::notifyInvalidReceipt(
 
 TransactionStatus MemoryStorage::insert(Transaction::ConstPtr _tx)
 {
-    ReadGuard l(x_txpoolMutex);
+    RWMutexScoped l(x_txpoolMutex, false);
     return insertWithoutLock(_tx);
 }
-
 TransactionStatus MemoryStorage::insertWithoutLock(Transaction::ConstPtr _tx)
 {
     // check again to ensure the same transaction not be imported many times
@@ -320,10 +311,9 @@ void MemoryStorage::preCommitTransaction(Transaction::ConstPtr _tx)
 void MemoryStorage::batchInsert(Transactions const& _txs)
 {
     {
-        ReadGuard l(x_txpoolMutex);
         for (auto tx : _txs)
         {
-            insertWithoutLock(tx);
+            insert(tx);
         }
     }
     {
@@ -358,7 +348,7 @@ Transaction::ConstPtr MemoryStorage::removeWithoutLock(HashType const& _txHash)
 
 Transaction::ConstPtr MemoryStorage::remove(HashType const& _txHash)
 {
-    WriteGuard l(x_txpoolMutex);
+    RWMutexScoped l(x_txpoolMutex, true);
     auto tx = removeWithoutLock(_txHash);
     notifyUnsealedTxsSize();
     return tx;
@@ -473,7 +463,7 @@ void MemoryStorage::batchRemove(BlockNumber _batchId, TransactionSubmitResults c
     auto startT = utcTime();
     {
         // batch remove
-        WriteGuard l(x_txpoolMutex);
+        RWMutexScoped l(x_txpoolMutex, true);
         for (auto const& txResult : _txsResult)
         {
             auto tx = removeSubmittedTxWithoutLock(txResult);
@@ -532,7 +522,7 @@ TransactionsPtr MemoryStorage::fetchTxs(HashList& _missedTxs, HashList const& _t
 
 ConstTransactionsPtr MemoryStorage::fetchNewTxs(size_t _txsLimit)
 {
-    ReadGuard l(x_txpoolMutex);
+    RWMutexScoped l(x_txpoolMutex, false);
     auto fetchedTxs = std::make_shared<ConstTransactions>();
     for (auto const& it : m_txsTable)
     {
@@ -564,7 +554,7 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
                      << LOG_KV("limit", _txsLimit);
     auto recordT = utcTime();
     auto startT = utcTime();
-    ReadGuard l(x_txpoolMutex);
+    RWMutexScoped l(x_txpoolMutex, false);
     auto lockT = utcTime() - startT;
     startT = utcTime();
     for (auto const& it : m_txsTable)
@@ -669,7 +659,7 @@ void MemoryStorage::removeInvalidTxs()
             {
                 return;
             }
-            WriteGuard l(memoryStorage->x_txpoolMutex);
+            RWMutexScoped l(memoryStorage->x_txpoolMutex, true);
             tbb::parallel_invoke(
                 [memoryStorage]() {
                     // remove invalid txs
@@ -704,13 +694,13 @@ void MemoryStorage::removeInvalidTxs()
 
 void MemoryStorage::clear()
 {
-    WriteGuard l(x_txpoolMutex);
+    RWMutexScoped l(x_txpoolMutex, true);
     m_txsTable.clear();
 }
 
 HashListPtr MemoryStorage::filterUnknownTxs(HashList const& _txsHashList, NodeIDPtr _peer)
 {
-    ReadGuard l(x_txpoolMutex);
+    RWMutexScoped l(x_txpoolMutex, false);
     for (auto txHash : _txsHashList)
     {
         if (!m_txsTable.count(txHash))
@@ -752,7 +742,7 @@ void MemoryStorage::batchMarkTxs(
 {
     ssize_t successCount = 0;
     auto startT = utcTime();
-    ReadGuard l(x_txpoolMutex);
+    RWMutexScoped l(x_txpoolMutex, false);
     auto lockT = utcTime() - startT;
     startT = utcTime();
     for (auto txHash : _txsHashList)
@@ -805,7 +795,7 @@ void MemoryStorage::batchMarkTxs(
 
 void MemoryStorage::batchMarkAllTxs(bool _sealFlag)
 {
-    ReadGuard l(x_txpoolMutex);
+    RWMutexScoped l(x_txpoolMutex, false);
     for (auto item : m_txsTable)
     {
         auto tx = item.second;
@@ -833,13 +823,13 @@ void MemoryStorage::batchMarkAllTxs(bool _sealFlag)
 
 size_t MemoryStorage::size() const
 {
-    ReadGuard l(x_txpoolMutex);
+    RWMutexScoped l(x_txpoolMutex, false);
     return m_txsTable.size();
 }
 
 size_t MemoryStorage::unSealedTxsSize()
 {
-    ReadGuard l(x_txpoolMutex);
+    RWMutexScoped l(x_txpoolMutex, false);
     return unSealedTxsSizeWithoutLock();
 }
 
@@ -906,7 +896,7 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::Ptr _block)
 
 bool MemoryStorage::batchVerifyProposal(std::shared_ptr<HashList> _txsHashList)
 {
-    ReadGuard l(x_txpoolMutex);
+    RWMutexScoped l(x_txpoolMutex, false);
     for (auto const& txHash : *_txsHashList)
     {
         if (!(m_txsTable.count(txHash)))
@@ -920,7 +910,7 @@ bool MemoryStorage::batchVerifyProposal(std::shared_ptr<HashList> _txsHashList)
 HashListPtr MemoryStorage::getAllTxsHash()
 {
     auto txsHash = std::make_shared<HashList>();
-    ReadGuard l(x_txpoolMutex);
+    RWMutexScoped l(x_txpoolMutex, false);
     for (auto const& it : m_txsTable)
     {
         txsHash->emplace_back(it.first);
