@@ -32,6 +32,8 @@
 #include "libp2p/P2PSession.h"         // for P2PSession
 #include <libstat/NetworkStatHandler.h>
 #include <boost/random.hpp>
+#include <fstream>
+#include <iostream>
 #include <unordered_map>
 
 using namespace dev;
@@ -1129,4 +1131,81 @@ void Service::removeGroupBandwidthLimiter(GROUP_ID const& _groupID)
     m_group2BandwidthLimiter->erase(_groupID);
     SERVICE_LOG(INFO) << LOG_DESC("removeGroupBandwidthLimiter")
                       << LOG_KV("group", std::to_string(_groupID));
+}
+
+bool Service::addPeers(std::vector<dev::network::NodeIPEndpoint> const& endpoints)
+{
+    auto nodes = staticNodes();
+    for (auto& endppint : endpoints)
+    {
+        nodes.insert(std::make_pair(endppint, NodeID()));
+    }
+    setStaticNodes(nodes);
+    return updatePeersToIni(nodes);
+}
+
+bool Service::erasePeers(std::vector<dev::network::NodeIPEndpoint> const& endpoints)
+{
+    auto nodes = staticNodes();
+    for (auto& endppint : endpoints)
+    {
+        auto it = nodes.find(endppint);
+        if (nodes.end() != it)
+        {
+            nodes.erase(it);
+        }
+    }
+    setStaticNodes(nodes);
+    return updatePeersToIni(nodes);
+}
+
+bool Service::updatePeersToIni(std::map<dev::network::NodeIPEndpoint, NodeID> const& nodes)
+{
+    std::string tmpdata = "";
+    int _count = 0;
+    for (auto it = nodes.begin(); it != nodes.end(); it++)
+    {
+        tmpdata += (_count ? "    node." : "node.") + std::to_string(_count) +
+                   (it->first.m_ipv6 ? "=[" : "=") + it->first.m_host +
+                   (it->first.m_ipv6 ? "]:" : ":") + std::to_string(it->first.m_port) + "\n";
+        _count++;
+    }
+    tmpdata += "\n";
+
+    // output the nodes to the file "config.ini"
+    auto confdir = g_BCOSConfig.iniDir();
+
+    std::ifstream configFile(confdir, std::ios::in);
+    if (true != configFile.is_open())
+    {
+        return false;
+    }
+    else
+    {
+        std::string fileData;
+        configFile.seekg(0, std::ios::end);
+        int siz = configFile.tellg();
+        fileData.resize(siz);
+        configFile.seekg(0, std::ios::beg);
+        configFile.read(const_cast<char*>(fileData.data()), siz);
+        configFile.close();
+
+        auto pos1 = fileData.find("p2p");
+        if (pos1 == fileData.npos)
+        {
+            return false;
+        }
+        auto pos2 = fileData.find("node.0=", pos1);
+        auto pos3 = fileData.find("certificate_blacklist");
+        if (pos2 == fileData.npos || pos3 == fileData.npos || pos2 >= pos3)
+        {
+            return false;
+        }
+        fileData.replace(pos2, pos3 - pos2 - 1, tmpdata);
+
+        std::ofstream out(confdir, std::ios::out);
+        out << fileData;
+        out.close();
+        return true;
+    }
 }
