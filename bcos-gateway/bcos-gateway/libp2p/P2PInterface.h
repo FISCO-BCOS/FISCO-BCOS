@@ -47,9 +47,9 @@ public:
         P2pID nodeID, std::shared_ptr<bcos::boostssl::MessageFace> message) = 0;
 
     virtual void asyncSendMessageByNodeID(P2pID nodeID, std::shared_ptr<bcos::boostssl::MessageFace> message,
-        CallbackFuncWithSession callback, Options options = Options()) = 0;
+        CallbackFuncWithSession callback, boostssl::ws::Options options = boostssl::ws::Options()) = 0;
 
-    virtual void asyncBroadcastMessage(std::shared_ptr<bcos::boostssl::MessageFace> message, Options options) = 0;
+    virtual void asyncBroadcastMessage(std::shared_ptr<bcos::boostssl::MessageFace> message, boostssl::ws::Options options) = 0;
 
     virtual boostssl::NodeInfos sessionInfos() = 0;
     virtual boostssl::NodeInfo localP2pInfo() = 0;
@@ -71,7 +71,7 @@ public:
      * @param _callback called when receive response
      */
     virtual void asyncSendMessageByP2PNodeID(int16_t _type, P2pID _dstNodeID,
-        bytesConstRef _payload, Options options, P2PResponseCallback _callback) = 0;
+        bytesConstRef _payload, boostssl::ws::Options options, P2PResponseCallback _callback) = 0;
 
     /**
      * @brief broadcast message to all p2p nodes
@@ -80,17 +80,17 @@ public:
      * @param _payload the payload
      */
     virtual void asyncBroadcastMessageToP2PNodes(
-        int16_t _type, bytesConstRef _payload, Options _options) = 0;
+        int16_t _type, bytesConstRef _payload, boostssl::ws::Options _options) = 0;
 
     /**
      * @brief send message to the given nodeIDs
      */
     virtual void asyncSendMessageByP2PNodeIDs(int16_t _type, const std::vector<P2pID>& _nodeIDs,
-        bytesConstRef _payload, Options _options) = 0;
+        bytesConstRef _payload, boostssl::ws::Options _options) = 0;
 
     using MessageHandler =
         std::function<void(std::shared_ptr<boostssl::MessageFace>, std::shared_ptr<boostssl::ws::WsSession>)>;
-    virtual void registerHandlerByMsgType(uint32_t _type, MessageHandler const& _msgHandler) = 0;
+    virtual void registerHandlerByMsgType(uint32_t _type, MessageHandler _msgHandler) = 0;
     virtual void eraseHandlerByMsgType(uint32_t _type) = 0;
 
     virtual bool connected(std::string const& _nodeID) = 0;

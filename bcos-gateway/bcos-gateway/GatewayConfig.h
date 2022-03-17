@@ -61,8 +61,8 @@ public:
 
     // check if the port valid
     bool isValidPort(int port);
-    void hostAndPort2Endpoint(const std::string& _host, boostssl::ws::EndPoint& _endpoint);
-    void parseConnectedJson(const std::string& _json, std::vector<boostssl::ws::EndPoint>& _nodeIPEndpointSet);
+    void hostAndPort2Endpoint(const std::string& _host, boostssl::NodeIPEndpoint& _endpoint);
+    void parseConnectedJson(const std::string& _json, std::set<boostssl::NodeIPEndpoint>& _nodeIPEndpointSet);
     // loads p2p configuration items from the configuration file
     void initP2PConfig(const boost::property_tree::ptree& _pt, bool _uuidRequired);
     // loads ca configuration items from the configuration file
@@ -73,6 +73,7 @@ public:
     void checkFileExist(const std::string& _path);
     // load p2p connected peers
     void loadP2pConnectedNodes();
+    boostssl::ws::EndPointsPtr obtainPeersForWsService(const std::set<boostssl::NodeIPEndpoint>& _nodeIPEndpointSet);
 
     std::string listenIP() const { return m_listenIP; }
     uint16_t listenPort() const { return m_listenPort; }
@@ -81,7 +82,7 @@ public:
 
     CertConfig certConfig() const { return m_certConfig; }
     SMCertConfig smCertConfig() const { return m_smCertConfig; }
-    const std::vector<boostssl::ws::EndPoint>& connectedNodes() const { return m_connectedNodes; }
+    const std::set<boostssl::NodeIPEndpoint>& connectedNodes() const { return m_connectedNodes; }
 
     std::string const& uuid() const { return m_uuid; }
     void setUUID(std::string const& _uuid) { m_uuid = _uuid; }
@@ -97,7 +98,7 @@ private:
     // threadPool size
     uint32_t m_threadPoolSize{16};
     // p2p connected nodes host list
-    std::vector<boostssl::ws::EndPoint> m_connectedNodes;
+    std::set<boostssl::NodeIPEndpoint> m_connectedNodes;
     // cert config for ssl connection
     CertConfig m_certConfig;
     SMCertConfig m_smCertConfig;

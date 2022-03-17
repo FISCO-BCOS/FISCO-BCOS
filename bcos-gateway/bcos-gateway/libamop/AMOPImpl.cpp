@@ -84,7 +84,7 @@ void AMOPImpl::onReceiveTopicSeqMessage(P2pID const& _nodeID, AMOPMessage::Ptr _
                        << LOG_KV("nodeID", _nodeID) << LOG_KV("topicSeq", topicSeq);
 
         auto buffer = buildAndEncodeMessage(AMOPMessage::Type::RequestTopic, bytesConstRef());
-        Options option(0);
+        boostssl::ws::Options option(0);
         m_network->asyncSendMessageByP2PNodeID(GatewayMessageType::AMOPMessageType, _nodeID,
             bytesConstRef(buffer->data(), buffer->size()), option,
             [_nodeID](Error::Ptr&& _error, int16_t, bytesPointer) {
@@ -364,7 +364,7 @@ void AMOPImpl::asyncSendMessageByTopic(const std::string& _topic, bcos::bytesCon
             // erase in case of select the same node when retry
             m_nodeIDs.erase(m_nodeIDs.begin());
             // try to send message to node
-            bcos::gateway::Options option(0);
+            boostssl::ws::Options option(0);
             auto self = shared_from_this();
             m_network->asyncSendMessageByP2PNodeID(GatewayMessageType::AMOPMessageType,
                 choosedNodeID, bytesConstRef(m_buffer->data(), m_buffer->size()), option,
@@ -468,7 +468,7 @@ void AMOPImpl::asyncSendBroadbastMessageByTopic(
     }
     auto buffer = buildAndEncodeMessage(AMOPMessage::Type::AMOPBroadcast, _data);
     m_network->asyncSendMessageByP2PNodeIDs(GatewayMessageType::AMOPMessageType, nodeIDs,
-        bytesConstRef(buffer->data(), buffer->size()), Options(0));
+        bytesConstRef(buffer->data(), buffer->size()), boostssl::ws::Options(0));
     AMOP_LOG(DEBUG) << LOG_BADGE("asyncSendBroadbastMessage") << LOG_DESC("send broadcast message")
                     << LOG_KV("topic", _topic) << LOG_KV("data size", _data.size());
 }

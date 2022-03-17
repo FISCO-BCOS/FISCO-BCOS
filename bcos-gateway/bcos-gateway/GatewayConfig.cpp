@@ -20,7 +20,7 @@ bool GatewayConfig::isValidPort(int port)
     return true;
 }
 
-void GatewayConfig::hostAndPort2Endpoint(const std::string& _host, boostssl::ws::EndPoint& _endpoint)
+void GatewayConfig::hostAndPort2Endpoint(const std::string& _host, boostssl::NodeIPEndpoint& _endpoint)
 {
     std::string ip;
     uint16_t port;
@@ -65,12 +65,11 @@ void GatewayConfig::hostAndPort2Endpoint(const std::string& _host, boostssl::ws:
                 "GatewayConfig: the host is invalid make_address error, host=" + _host));
     }
 
-    _endpoint.host = boost::lexical_cast<std::string>(ip_address);
-    _endpoint.port = port;
+    _endpoint = NodeIPEndpoint{ip_address, port};
 }
 
 void GatewayConfig::parseConnectedJson(
-    const std::string& _json, std::vector<boostssl::ws::EndPoint>& _nodeIPEndpointSet)
+    const std::string& _json, std::set<boostssl::NodeIPEndpoint>& _nodeIPEndpointSet)
 {
     /*
     {"nodes":["127.0.0.1:30355","127.0.0.1:30356"}]}
@@ -98,9 +97,9 @@ void GatewayConfig::parseConnectedJson(
             {
                 std::string host = jNodes[i].asString();
 
-                boostssl::ws::EndPoint endpoint;
+                boostssl::NodeIPEndpoint endpoint;
                 hostAndPort2Endpoint(host, endpoint);
-                _nodeIPEndpointSet.push_back(endpoint);
+                _nodeIPEndpointSet.insert(endpoint);
 
                 GATEWAY_CONFIG_LOG(INFO)
                     << LOG_DESC("add one connected node") << LOG_KV("host", host);
@@ -208,7 +207,7 @@ void GatewayConfig::loadP2pConnectedNodes()
 {
     std::string nodeFilePath = m_nodePath + "/" + m_nodeFileName;
     // load p2p connected nodes
-    std::vector<boostssl::ws::EndPoint> nodes;
+    std::set<boostssl::NodeIPEndpoint> nodes;
     auto jsonContent = readContentsToString(boost::filesystem::path(nodeFilePath));
     if (!jsonContent || jsonContent->empty())
     {
@@ -224,6 +223,19 @@ void GatewayConfig::loadP2pConnectedNodes()
                              << LOG_KV("nodePath", m_nodePath)
                              << LOG_KV("nodeFileName", m_nodeFileName)
                              << LOG_KV("nodes", nodes.size());
+}
+
+boostssl::ws::EndPointsPtr GatewayConfig::obtainPeersForWsService(const std::set<boostssl::NodeIPEndpoint>& _nodeIPEndpointSet)
+{
+    auto peers = std::make_shared<boostssl::ws::EndPoints>();
+    for(auto const& it : _nodeIPEndpointSet)
+    { 
+        boostssl::ws::EndPoint endPoint;
+        endPoint.host = it.address(); 
+        endPoint.port = it.port();
+        peers->push_back(endPoint);
+    }
+    return peers;
 }
 
 /// loads ca configuration items from the configuration file

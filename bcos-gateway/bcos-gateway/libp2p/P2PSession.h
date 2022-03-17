@@ -37,7 +37,7 @@ public:
     virtual boostssl::ws::WsSession::Ptr session() { return m_session; }
     virtual void setSession(std::shared_ptr<boostssl::ws::WsSession> session) { m_session = session; }
 
-    virtual P2pID p2pID() { return m_p2pInfo->nodeID; }
+    virtual boostssl::nodeID p2pID() { return m_p2pInfo->nodeID; }
     // Note: the p2pInfo must be setted after session setted
     virtual void setP2PInfo(boostssl::NodeInfo const& p2pInfo)
     {

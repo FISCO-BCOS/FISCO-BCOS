@@ -245,7 +245,7 @@ void GatewayNodeManager::broadcastStatusSeq()
     auto payload = std::make_shared<bytes>((byte*)&statusSeq, (byte*)&statusSeq + 4);
     message->setPayload(payload);
     NODE_MANAGER_LOG(TRACE) << LOG_DESC("broadcastStatusSeq") << LOG_KV("seq", seq);
-    m_p2pInterface->asyncBroadcastMessage(message, Options());
+    m_p2pInterface->asyncBroadcastMessage(message, boostssl::ws::Options());
 }
 
 void GatewayNodeManager::syncLatestNodeIDList()

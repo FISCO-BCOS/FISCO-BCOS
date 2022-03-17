@@ -289,13 +289,15 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         
       	// Mixed = server + client
       	wsConfig->setModel(boostssl::ws::WsModel::Mixed);
-
         wsConfig->setListenIP(_config->listenIP());
         wsConfig->setListenPort(_config->listenPort());
         wsConfig->setThreadPoolSize(_config->threadPoolSize());
-        wsConfig->setDisableSsl(0 == _config->smSSL());
+        wsConfig->setDisableSsl(false);
+
+        auto endPointPeers = _config->obtainPeersForWsService(_config->connectedNodes());
+        wsConfig->setConnectedPeers(endPointPeers);
         
-        // 初始化wsservice
+        // init wsservice
         auto wsService = std::make_shared<ws::WsService>();
         wsService->setHostPort(_config->listenIP(), _config->listenPort());
         auto wsInitializer = std::make_shared<WsInitializer>();

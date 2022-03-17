@@ -247,7 +247,7 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, NodeIDPtr _s
                 }
             };
 
-            m_p2pInterface->asyncSendMessageByNodeID(p2pID, m_p2pMessage, callback, Options(10000));
+            m_p2pInterface->asyncSendMessageByNodeID(p2pID, m_p2pMessage, callback, boostssl::ws::Options(10000));
         }
 
     public:

@@ -53,7 +53,7 @@ void P2PSession::stop(DisconnectReason reason)
 void P2PSession::heartBeat()
 {
     auto service = m_service.lock();
-    if (service && service->isConnected())
+    if (service)
     {
         if (m_session && m_session->isConnected())
         {
@@ -61,14 +61,16 @@ void P2PSession::heartBeat()
                 std::dynamic_pointer_cast<P2PMessage>(service->messageFactory()->buildMessage());
             message->setPacketType(GatewayMessageType::Heartbeat);
             P2PSESSION_LOG(DEBUG) << LOG_DESC("P2PSession onHeartBeat")
-                                  << LOG_KV("p2pid", m_p2pInfo->p2pID)
+                                  << LOG_KV("p2pid", m_p2pInfo->nodeID)
                                   << LOG_KV("endpoint", m_session->endPoint());
 
             m_session->asyncSendMessage(message);
         }
 
         auto self = std::weak_ptr<P2PSession>(shared_from_this());
-        m_timer = service->host()->asioInterface()->newTimer(HEARTBEAT_INTERVEL);
+        auto ioService = std::make_shared<ba::io_service>();
+        m_timer = std::make_shared<boost::asio::deadline_timer>(
+            *ioService, boost::posix_time::milliseconds(HEARTBEAT_INTERVEL));
         m_timer->async_wait([self](boost::system::error_code e) {
             if (e)
             {
