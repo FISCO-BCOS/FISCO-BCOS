@@ -260,15 +260,20 @@ void SealingManager::fetchTransactions()
                     sealingMgr->m_fetchingTxs = false;
                     return;
                 }
-                sealingMgr->appendTransactions(sealingMgr->m_pendingTxs, _txsHashList);
-                sealingMgr->appendTransactions(sealingMgr->m_pendingSysTxs, _sysTxsList);
-                sealingMgr->m_fetchingTxs = false;
-                sealingMgr->m_onReady();
+                if ((sealingMgr->m_sealingNumber >= startSealingNumber) &&
+                    (sealingMgr->m_sealingNumber <= endSealingNumber))
+                {
+                    sealingMgr->appendTransactions(sealingMgr->m_pendingTxs, _txsHashList);
+                    sealingMgr->appendTransactions(sealingMgr->m_pendingSysTxs, _sysTxsList);
+                    sealingMgr->m_fetchingTxs = false;
+                    sealingMgr->m_onReady();
+                }
                 SEAL_LOG(DEBUG) << LOG_DESC("fetchTransactions finish")
                                 << LOG_KV("txsSize", _txsHashList->transactionsMetaDataSize())
                                 << LOG_KV("sysTxsSize", _sysTxsList->transactionsMetaDataSize())
                                 << LOG_KV("startSealing", startSealingNumber)
-                                << LOG_KV("endSealing", endSealingNumber);
+                                << LOG_KV("endSealing", endSealingNumber)
+                                << LOG_KV("sealingNumber", sealingMgr->m_sealingNumber);
             }
             catch (std::exception const& e)
             {

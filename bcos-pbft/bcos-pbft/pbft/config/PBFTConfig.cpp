@@ -425,11 +425,10 @@ std::string PBFTConfig::printCurrentState()
         return stringstream.str();
     }
     stringstream << LOG_KV("committedIndex", committedProposal()->index())
-                 << LOG_KV("consNum", progressedIndex())
+                 << LOG_KV("toExec", m_expectedCheckPoint)
                  << LOG_KV("committedHash", committedProposal()->hash().abridged())
                  << LOG_KV("view", view()) << LOG_KV("toView", toView())
-                 << LOG_KV("changeCycle", m_timer->changeCycle())
-                 << LOG_KV("expectedCheckPoint", m_expectedCheckPoint) << LOG_KV("Idx", nodeIndex())
+                 << LOG_KV("changeCycle", m_timer->changeCycle()) << LOG_KV("Idx", nodeIndex())
                  << LOG_KV("unsealedTxs", m_unsealedTxsSize.load())
                  << LOG_KV("sealUntil", m_waitSealUntil)
                  << LOG_KV("waitResealUntil", m_waitResealUntil)

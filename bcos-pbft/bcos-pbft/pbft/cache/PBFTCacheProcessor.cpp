@@ -356,15 +356,11 @@ bool PBFTCacheProcessor::tryToApplyCommitQueue()
 
 void PBFTCacheProcessor::notifyToSealNextBlock()
 {
-    bcos::protocol::BlockNumber lastIndex = -1;
+    auto committedIndex = m_config->committedProposal()->index();
+    bcos::protocol::BlockNumber lastIndex = committedIndex;
     for (auto const& it : m_committedQueueIndexList)
     {
-        if (lastIndex == -1)
-        {
-            lastIndex = it;
-            continue;
-        }
-        if (lastIndex + 1 != it)
+        if (lastIndex + 1 < it)
         {
             break;
         }
@@ -791,6 +787,7 @@ ViewChangeMsgInterface::Ptr PBFTCacheProcessor::fetchPrecommitData(
 
 void PBFTCacheProcessor::removeConsensusedCache(ViewType _view, BlockNumber _consensusedNumber)
 {
+    m_committedQueueIndexList.erase(_consensusedNumber);
     for (auto pcache = m_caches.begin(); pcache != m_caches.end();)
     {
         if (pcache->first <= _consensusedNumber)
@@ -941,7 +938,6 @@ void PBFTCacheProcessor::tryToCommitStableCheckPoint()
                        << LOG_KV("index", m_stableCheckPointQueue.top()->index())
                        << LOG_KV("committedIndex", m_config->committedProposal()->index());
         m_committedProposalList.erase(m_stableCheckPointQueue.top()->index());
-        m_committedQueueIndexList.erase(m_stableCheckPointQueue.top()->index());
         m_stableCheckPointQueue.pop();
     }
     // submit stable-checkpoint to ledger in ordeer
@@ -953,7 +949,6 @@ void PBFTCacheProcessor::tryToCommitStableCheckPoint()
                        << LOG_KV("committedIndex", m_config->committedProposal()->index());
         auto stableCheckPoint = m_stableCheckPointQueue.top();
         m_committedProposalList.erase(stableCheckPoint->index());
-        m_committedQueueIndexList.erase(stableCheckPoint->index());
         m_stableCheckPointQueue.pop();
         m_config->storage()->asyncCommitStableCheckPoint(stableCheckPoint);
     }
