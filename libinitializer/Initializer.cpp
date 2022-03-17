@@ -33,6 +33,8 @@
 #include "StorageInitializer.h"
 #include "bcos-framework/interfaces/executor/NativeExecutionMessage.h"
 #include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
+#include "bcos-framework/interfaces/protocol/GlobalConfig.h"
+#include "bcos-framework/interfaces/protocol/Protocol.h"
 #include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/interfaces/rpc/RPCInterface.h"
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
@@ -48,6 +50,7 @@
 using namespace bcos;
 using namespace bcos::tool;
 using namespace bcos::initializer;
+using namespace bcos::protocol;
 
 void Initializer::initAirNode(std::string const& _configFilePath, std::string const& _genesisFile,
     bcos::gateway::GatewayInterface::Ptr _gateway)
@@ -125,12 +128,13 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
         auto executorManager = std::make_shared<bcos::scheduler::ExecutorManager>();
 
         auto transactionSubmitResultFactory =
-            std::make_shared<bcos::protocol::TransactionSubmitResultFactoryImpl>();
+            std::make_shared<TransactionSubmitResultFactoryImpl>();
 
         m_scheduler =
             SchedulerInitializer::build(executorManager, ledger, storage, executionMessageFactory,
                 m_protocolInitializer->blockFactory(), m_protocolInitializer->txResultFactory(),
-                m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isAuthCheck(), m_nodeConfig->isWasm());
+                m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isAuthCheck(),
+                m_nodeConfig->isWasm());
 
         // init the txpool
         m_txpoolInitializer = std::make_shared<TxPoolInitializer>(
@@ -178,9 +182,11 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
             auto groupID = m_nodeConfig->groupId();
             auto blockSync =
                 std::dynamic_pointer_cast<bcos::sync::BlockSync>(m_pbftInitializer->blockSync());
+
+            auto nodeProtocolInfo = g_BCOSConfig.protocolInfo(ProtocolModuleID::NodeService);
             blockSync->config()->registerOnNodeTypeChanged(
-                [_gateway, groupID, nodeID, frontService](bcos::protocol::NodeType _type) {
-                    _gateway->registerNode(groupID, nodeID, _type, frontService);
+                [_gateway, groupID, nodeID, frontService, nodeProtocolInfo](NodeType _type) {
+                    _gateway->registerNode(groupID, nodeID, _type, frontService, nodeProtocolInfo);
                     BCOS_LOG(INFO) << LOG_DESC("registerNode") << LOG_KV("group", groupID)
                                    << LOG_KV("node", nodeID->hex()) << LOG_KV("type", _type);
                 });

@@ -32,6 +32,7 @@
 #include <bcos-framework/interfaces/ledger/LedgerConfig.h>
 #include <bcos-framework/interfaces/multigroup/ChainNodeInfoFactory.h>
 #include <bcos-framework/interfaces/multigroup/GroupInfoFactory.h>
+#include <bcos-framework/interfaces/protocol/ProtocolInfo.h>
 #include <bcos-utilities/Common.h>
 #include <tarscpp/servant/Application.h>
 #include <tarscpp/tup/Tars.h>
@@ -124,6 +125,13 @@ inline bcos::group::ChainNodeInfo::Ptr toBcosChainNodeInfo(
     {
         nodeInfo->appendServiceInfo((bcos::protocol::ServiceType)it.first, it.second);
     }
+    // recover the nodeProtocolVersion
+    auto& protocolInfo = _tarsNodeInfo.protocolInfo;
+    auto bcosProtocolInfo = std::make_shared<bcos::protocol::ProtocolInfo>(
+        (bcos::protocol::ProtocolModuleID)protocolInfo.moduleID,
+        (bcos::protocol::ProtocolVersion)protocolInfo.minVersion,
+        (bcos::protocol::ProtocolVersion)protocolInfo.maxVersion);
+    nodeInfo->setNodeProtocol(std::move(*bcosProtocolInfo));
     return nodeInfo;
 }
 
@@ -161,6 +169,11 @@ inline bcostars::ChainNodeInfo toTarsChainNodeInfo(bcos::group::ChainNodeInfo::P
     tarsNodeInfo.nodeID = _nodeInfo->nodeID();
     tarsNodeInfo.microService = _nodeInfo->microService();
     tarsNodeInfo.iniConfig = _nodeInfo->iniConfig();
+    // set the nodeProtocolVersion
+    auto const& protocol = _nodeInfo->nodeProtocol();
+    tarsNodeInfo.protocolInfo.moduleID = protocol->protocolModuleID();
+    tarsNodeInfo.protocolInfo.minVersion = protocol->minVersion();
+    tarsNodeInfo.protocolInfo.maxVersion = protocol->maxVersion();
     return tarsNodeInfo;
 }
 

@@ -23,6 +23,7 @@
 #include "bcos-framework/interfaces/front/FrontServiceInterface.h"
 #include "bcos-framework/interfaces/multigroup/GroupInfo.h"
 #include "bcos-framework/interfaces/protocol/Protocol.h"
+#include "bcos-framework/interfaces/protocol/ProtocolInfo.h"
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
@@ -33,8 +34,8 @@ namespace gateway
 {
 using ErrorRespFunc = std::function<void(Error::Ptr)>;
 using PeerRespFunc = std::function<void(Error::Ptr, const std::string&)>;
-using GetNodeIDsFunc =
-    std::function<void(Error::Ptr _error, std::shared_ptr<const crypto::NodeIDs> _nodeIDs)>;
+using GetGroupNodeInfoFunc =
+    std::function<void(Error::Ptr _error, bcos::gateway::GroupNodeInfo::Ptr _nodeIDs)>;
 
 /**
  * @brief: A list of interfaces provided by the gateway which are called by the front service.
@@ -56,10 +57,11 @@ public:
     /**
      * @brief: get nodeIDs from gateway
      * @param: _groupID
-     * @param _getNodeIDsFunc: get nodeIDs callback
+     * @param _getGroupNodeInfoFunc: get nodeIDs callback
      * @return void
      */
-    virtual void asyncGetNodeIDs(const std::string& _groupID, GetNodeIDsFunc _getNodeIDsFunc) = 0;
+    virtual void asyncGetGroupNodeInfo(
+        const std::string& _groupID, GetGroupNodeInfoFunc _getGroupNodeInfoFunc) = 0;
     /**
      * @brief: get connected peers
      * @param _callback:
@@ -124,8 +126,9 @@ public:
         std::vector<std::string> const& _topicList,
         std::function<void(Error::Ptr&&)> _callback) = 0;
 
+    // for the air-mode node
     virtual bool registerNode(const std::string&, bcos::crypto::NodeIDPtr, bcos::protocol::NodeType,
-        bcos::front::FrontServiceInterface::Ptr)
+        bcos::front::FrontServiceInterface::Ptr, bcos::protocol::ProtocolInfo::ConstPtr)
     {
         return true;
     }

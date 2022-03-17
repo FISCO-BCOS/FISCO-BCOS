@@ -24,25 +24,23 @@ using namespace bcos::protocol;
 using namespace bcos::gateway;
 using namespace bcos::crypto;
 
-bcos::crypto::NodeIDs PeersRouterTable::getGroupNodeIDList(const std::string& _groupID) const
+void PeersRouterTable::getGroupNodeInfoList(
+    GroupNodeInfo::Ptr _groupInfo, const std::string& _groupID) const
 {
-    NodeIDs nodeIDList;
     ReadGuard l(x_groupNodeList);
     if (!m_groupNodeList.count(_groupID))
     {
-        return nodeIDList;
+        return;
     }
     for (auto const& it : m_groupNodeList.at(_groupID))
     {
-        auto nodeID = bcos::fromHexString(it.first);
-        if (!nodeID)
+        auto nodeID = it.first;
+        _groupInfo->appendNodeID(nodeID);
+        if (m_nodeProtocolInfo.count(nodeID))
         {
-            continue;
+            _groupInfo->appendProtocol(m_nodeProtocolInfo.at(nodeID));
         }
-        auto nodeIDPtr = m_keyFactory->createKey(*nodeID.get());
-        nodeIDList.emplace_back(nodeIDPtr);
     }
-    return nodeIDList;
 }
 
 std::set<P2pID> PeersRouterTable::queryP2pIDs(
@@ -92,6 +90,7 @@ void PeersRouterTable::batchInsertNodeList(
     {
         auto groupID = it->groupID();
         auto const& nodeIDList = it->nodeIDList();
+        int64_t i = 0;
         for (auto const& nodeID : nodeIDList)
         {
             if (!m_groupNodeList.count(groupID) || !m_groupNodeList.at(groupID).count(nodeID))
@@ -99,7 +98,15 @@ void PeersRouterTable::batchInsertNodeList(
                 m_groupNodeList[groupID][nodeID] = std::set<P2pID>();
             }
             m_groupNodeList[groupID][nodeID].insert(_p2pNodeID);
+            if (it->protocol(i))
+            {
+                m_nodeProtocolInfo[nodeID] = it->protocol(i);
+            }
+            i++;
         }
+        ROUTER_LOG(INFO) << LOG_DESC("batchInsertNodeList") << LOG_KV("group", it->groupID())
+                         << LOG_KV("nodeIDs", it->nodeIDList().size())
+                         << LOG_KV("protocols", it->nodeProtocolList().size());
     }
 }
 

@@ -28,6 +28,7 @@
 #include <bcos-front/FrontMessage.h>
 #include <bcos-front/FrontService.h>
 #include <bcos-front/FrontServiceFactory.h>
+#include <bcos-tars-protocol/protocol/GroupNodeInfoImpl.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/unit_test.hpp>
 
@@ -44,7 +45,8 @@ const static std::string g_dstNodeID_1 = "front.dst.nodeid.1";
 bcos::crypto::NodeIDPtr createKey(const std::string& _strNodeID)
 {
     auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
-    auto nodeID = keyFactory->createKey(bytesConstRef((byte*)_strNodeID.data(), _strNodeID.size()));
+    auto nodeID =
+        keyFactory->createKey(bytesConstRef((bcos::byte*)_strNodeID.data(), _strNodeID.size()));
     return nodeID;
 }
 
@@ -114,16 +116,16 @@ BOOST_AUTO_TEST_CASE(testFrontService_onRecieveNodeIDsAnd)
     int moduleID = 1000;
     std::promise<bool> p;
     auto f = p.get_future();
-    auto dstNodeID = createKey(g_dstNodeID_0);
-    std::shared_ptr<crypto::NodeIDs> nodeIDs = std::make_shared<crypto::NodeIDs>();
-    nodeIDs->push_back(dstNodeID);
-    nodeIDs->push_back(dstNodeID);
+    std::vector<std::string> expectedNodeIDList;
+    expectedNodeIDList.emplace_back(g_dstNodeID_0);
+    expectedNodeIDList.emplace_back(g_dstNodeID_0);
+    auto orgExpectedNodeIDList = expectedNodeIDList;
 
-    std::shared_ptr<const crypto::NodeIDs> nodeIDs0;
-    frontService->registerModuleNodeIDsDispatcher(
-        moduleID, [&p, &nodeIDs0](std::shared_ptr<const crypto::NodeIDs> _nodeIDs,
+    std::vector<std::string> nodeIDs0;
+    frontService->registerGroupNodeInfoNotification(
+        moduleID, [&p, &nodeIDs0](bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo,
                       ReceiveMsgFunc _receiveMsgCallback) {
-            nodeIDs0 = _nodeIDs;
+            nodeIDs0 = _groupNodeInfo->nodeIDList();
             p.set_value(true);
             if (_receiveMsgCallback)
             {
@@ -131,16 +133,18 @@ BOOST_AUTO_TEST_CASE(testFrontService_onRecieveNodeIDsAnd)
             }
         });
 
-    BOOST_CHECK(frontService->moduleID2NodeIDsDispatcher().find(moduleID) !=
-                frontService->moduleID2NodeIDsDispatcher().end());
-    BOOST_CHECK(frontService->moduleID2NodeIDsDispatcher().find(moduleID + 1) ==
-                frontService->moduleID2NodeIDsDispatcher().end());
+    BOOST_CHECK(frontService->module2GroupNodeInfoNotifier().find(moduleID) !=
+                frontService->module2GroupNodeInfoNotifier().end());
+    BOOST_CHECK(frontService->module2GroupNodeInfoNotifier().find(moduleID + 1) ==
+                frontService->module2GroupNodeInfoNotifier().end());
 
-    frontService->onReceiveNodeIDs(
-        "1", nodeIDs, [](Error::Ptr _error) { BOOST_CHECK(_error == nullptr); });
+    auto groupNodeInfo = std::make_shared<bcostars::protocol::GroupNodeInfoImpl>();
+    groupNodeInfo->setNodeIDList(std::move(expectedNodeIDList));
+    frontService->onReceiveGroupNodeInfo(
+        "1", groupNodeInfo, [](Error::Ptr _error) { BOOST_CHECK(_error == nullptr); });
 
     f.get();
-    BOOST_CHECK(nodeIDs0->size() == nodeIDs->size());
+    BOOST_CHECK(nodeIDs0.size() == orgExpectedNodeIDList.size());
 }
 
 BOOST_AUTO_TEST_CASE(testFrontService_asyncSendMessageByNodeID_callback)

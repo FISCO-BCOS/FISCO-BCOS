@@ -31,10 +31,6 @@ public:
     ChainNodeInfoFactory() = default;
     virtual ~ChainNodeInfoFactory() {}
     virtual ChainNodeInfo::Ptr createNodeInfo() { return std::make_shared<ChainNodeInfo>(); }
-    virtual ChainNodeInfo::Ptr createNodeInfo(std::string const& _nodeInfoJson)
-    {
-        return std::make_shared<ChainNodeInfo>(_nodeInfoJson);
-    }
     virtual ChainNodeInfo::Ptr createNodeInfo(std::string const& _nodeName, int32_t _type)
     {
         return std::make_shared<ChainNodeInfo>(_nodeName, _type);

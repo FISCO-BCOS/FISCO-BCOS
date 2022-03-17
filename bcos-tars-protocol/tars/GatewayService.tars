@@ -15,7 +15,7 @@ module bcostars
             int _nodeType, string groupID, vector<byte> srcNodeID, vector<byte> payload);
         Error asyncGetPeers(out GatewayInfo localInfo, out vector<GatewayInfo> peers);
 
-        Error asyncGetNodeIDs(string groupID, out vector<vector<byte>> nodeIDs);
+        Error asyncGetGroupNodeInfo(string groupID, out GroupNodeInfo groupNodeInfo);
 
         Error asyncNotifyGroupInfo(GroupInfo groupInfo);
 

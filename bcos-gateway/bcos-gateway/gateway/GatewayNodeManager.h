@@ -45,10 +45,11 @@ public:
 
     void onRemoveNodeIDs(const P2pID& _p2pID);
 
-    bcos::crypto::NodeIDListPtr getGroupNodeIDList(const std::string& _groupID);
+    GroupNodeInfo::Ptr getGroupNodeInfoList(const std::string& _groupID);
 
     virtual bool registerNode(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
-        bcos::protocol::NodeType _nodeType, bcos::front::FrontServiceInterface::Ptr _frontService);
+        bcos::protocol::NodeType _nodeType, bcos::front::FrontServiceInterface::Ptr _frontService,
+        bcos::protocol::ProtocolInfo::ConstPtr _protocolInfo);
     virtual bool unregisterNode(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID);
     // for multi-group support
     virtual void updateFrontServiceInfo(bcos::group::GroupInfo::Ptr) {}

@@ -26,8 +26,8 @@ public:
     void initialize() override {}
     void destroy() override {}
 
-    bcostars::Error asyncGetNodeIDs(
-        vector<vector<tars::Char>>& nodeIDs, tars::TarsCurrentPtr current) override;
+    bcostars::Error asyncGetGroupNodeInfo(
+        GroupNodeInfo& groupNodeInfo, tars::TarsCurrentPtr current) override;
 
     void asyncSendBroadcastMessage(tars::Int32 _nodeType, tars::Int32 moduleID,
         const vector<tars::Char>& data, tars::TarsCurrentPtr current) override;
@@ -50,8 +50,8 @@ public:
     bcostars::Error onReceiveMessage(const std::string& groupID, const vector<tars::Char>& nodeID,
         const vector<tars::Char>& data, tars::TarsCurrentPtr current) override;
 
-    bcostars::Error onReceivedNodeIDs(const std::string& groupID,
-        const vector<vector<tars::Char>>& nodeIDs, tars::TarsCurrentPtr current) override;
+    bcostars::Error onReceiveGroupNodeInfo(const std::string& groupID,
+        const bcostars::GroupNodeInfo& groupNodeInfo, tars::TarsCurrentPtr current) override;
 
 private:
     bcos::initializer::FrontServiceInitializer::Ptr m_frontServiceInitializer;

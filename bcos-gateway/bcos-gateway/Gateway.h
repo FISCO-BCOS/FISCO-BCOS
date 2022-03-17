@@ -65,10 +65,11 @@ public:
     /**
      * @brief: get nodeIDs from gateway
      * @param _groupID:
-     * @param _getNodeIDsFunc: get nodeIDs callback
+     * @param _onGetGroupNodeInfo: get nodeIDs callback
      * @return void
      */
-    void asyncGetNodeIDs(const std::string& _groupID, GetNodeIDsFunc _getNodeIDsFunc) override;
+    void asyncGetGroupNodeInfo(
+        const std::string& _groupID, GetGroupNodeInfoFunc _onGetGroupNodeInfo) override;
     /**
      * @brief: send message
      * @param _groupID: groupID
@@ -154,10 +155,11 @@ public:
     bcos::amop::AMOPImpl::Ptr amop() { return m_amop; }
 
     bool registerNode(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
-        bcos::protocol::NodeType _nodeType,
-        bcos::front::FrontServiceInterface::Ptr _frontService) override
+        bcos::protocol::NodeType _nodeType, bcos::front::FrontServiceInterface::Ptr _frontService,
+        bcos::protocol::ProtocolInfo::ConstPtr _protocolInfo) override
     {
-        return m_gatewayNodeManager->registerNode(_groupID, _nodeID, _nodeType, _frontService);
+        return m_gatewayNodeManager->registerNode(
+            _groupID, _nodeID, _nodeType, _frontService, _protocolInfo);
     }
 
 protected:

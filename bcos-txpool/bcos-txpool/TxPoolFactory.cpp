@@ -59,6 +59,7 @@ TxPool::Ptr TxPoolFactory::createTxPool(size_t _notifyWorkerNum, size_t _verifie
     TXPOOL_LOG(INFO) << LOG_DESC("create transaction config");
     auto txpoolConfig = std::make_shared<TxPoolConfig>(
         validator, m_txResultFactory, m_blockFactory, m_ledger, txpoolNonceChecker, m_blockLimit);
+
     TXPOOL_LOG(INFO) << LOG_DESC("create transaction storage");
     auto txpoolStorage = std::make_shared<MemoryStorage>(txpoolConfig, _notifyWorkerNum);
 

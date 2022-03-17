@@ -23,6 +23,7 @@
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-framework/interfaces/gateway/GroupNodeInfo.h>
+#include <bcos-framework/interfaces/protocol/ProtocolInfo.h>
 #include <bcos-gateway/Common.h>
 #include <bcos-gateway/libp2p/P2PInterface.h>
 #include <bcos-gateway/protocol/GatewayNodeStatus.h>
@@ -45,7 +46,7 @@ public:
     {}
     virtual ~PeersRouterTable() {}
 
-    bcos::crypto::NodeIDs getGroupNodeIDList(const std::string& _groupID) const;
+    void getGroupNodeInfoList(GroupNodeInfo::Ptr _groupInfo, const std::string& _groupID) const;
     std::set<P2pID> queryP2pIDs(const std::string& _groupID, const std::string& _nodeID) const;
     std::set<P2pID> queryP2pIDsByGroupID(const std::string& _groupID) const;
     void removeP2PID(const P2pID& _p2pID);
@@ -76,10 +77,11 @@ private:
     // used for peer-to-peer router
     // groupID => NodeID => set<P2pID>
     std::map<std::string, std::map<std::string, std::set<P2pID>>> m_groupNodeList;
+    std::map<std::string, bcos::protocol::ProtocolInfo::ConstPtr> m_nodeProtocolInfo;
     mutable SharedMutex x_groupNodeList;
 
     // the nodeIDList infos of the peers
-    // p2pNodeID => groupID => nodeIDList
+    // p2pNodeID => GatewayNodeStatus
     std::map<P2pID, GatewayNodeStatus::Ptr> m_peersStatus;
     mutable SharedMutex x_peersStatus;
 
