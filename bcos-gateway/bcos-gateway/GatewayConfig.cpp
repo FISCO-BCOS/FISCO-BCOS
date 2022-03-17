@@ -10,6 +10,8 @@
 
 using namespace bcos;
 using namespace gateway;
+using namespace bcos::boostssl;
+using namespace bcos::boostssl::ws;
 
 bool GatewayConfig::isValidPort(int port)
 {
@@ -18,7 +20,7 @@ bool GatewayConfig::isValidPort(int port)
     return true;
 }
 
-void GatewayConfig::hostAndPort2Endpoint(const std::string& _host, NodeIPEndpoint& _endpoint)
+void GatewayConfig::hostAndPort2Endpoint(const std::string& _host, boostssl::ws::EndPoint& _endpoint)
 {
     std::string ip;
     uint16_t port;
@@ -63,11 +65,12 @@ void GatewayConfig::hostAndPort2Endpoint(const std::string& _host, NodeIPEndpoin
                 "GatewayConfig: the host is invalid make_address error, host=" + _host));
     }
 
-    _endpoint = NodeIPEndpoint{ip_address, port};
+    _endpoint.host = boost::lexical_cast<std::string>(ip_address);
+    _endpoint.port = port;
 }
 
 void GatewayConfig::parseConnectedJson(
-    const std::string& _json, std::set<NodeIPEndpoint>& _nodeIPEndpointSet)
+    const std::string& _json, std::vector<boostssl::ws::EndPoint>& _nodeIPEndpointSet)
 {
     /*
     {"nodes":["127.0.0.1:30355","127.0.0.1:30356"}]}
@@ -86,7 +89,7 @@ void GatewayConfig::parseConnectedJson(
                                                       "connected nodes json"));
         }
 
-        std::set<NodeIPEndpoint> nodeIPEndpointSet;
+        // std::set<boostssl::ws::EndPoint> nodeIPEndpointSet;
         Json::Value jNodes = root["nodes"];
         if (jNodes.isArray())
         {
@@ -95,9 +98,9 @@ void GatewayConfig::parseConnectedJson(
             {
                 std::string host = jNodes[i].asString();
 
-                NodeIPEndpoint endpoint;
+                boostssl::ws::EndPoint endpoint;
                 hostAndPort2Endpoint(host, endpoint);
-                _nodeIPEndpointSet.insert(endpoint);
+                _nodeIPEndpointSet.push_back(endpoint);
 
                 GATEWAY_CONFIG_LOG(INFO)
                     << LOG_DESC("add one connected node") << LOG_KV("host", host);
@@ -205,7 +208,7 @@ void GatewayConfig::loadP2pConnectedNodes()
 {
     std::string nodeFilePath = m_nodePath + "/" + m_nodeFileName;
     // load p2p connected nodes
-    std::set<NodeIPEndpoint> nodes;
+    std::vector<boostssl::ws::EndPoint> nodes;
     auto jsonContent = readContentsToString(boost::filesystem::path(nodeFilePath));
     if (!jsonContent || jsonContent->empty())
     {

@@ -7,6 +7,7 @@
  */
 #pragma once
 #include <bcos-gateway/libnetwork/Socket.h>
+#include <bcos-boostssl/interfaces/NodeInfo.h>
 #include <boost/asio.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/ssl.hpp>
@@ -56,7 +57,7 @@ public:
             *m_ioService, boost::posix_time::milliseconds(timeout));
     }
 
-    virtual std::shared_ptr<SocketFace> newSocket(NodeIPEndpoint nodeIPEndpoint = NodeIPEndpoint())
+    virtual std::shared_ptr<SocketFace> newSocket(boostssl::NodeIPEndpoint nodeIPEndpoint = boostssl::NodeIPEndpoint())
     {
         std::shared_ptr<SocketFace> m_socket =
             std::make_shared<Socket>(*m_ioService, *m_sslContext, nodeIPEndpoint);

@@ -8,6 +8,7 @@
 
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/SocketFace.h>
+#include <bcos-boostssl/interfaces/NodeInfo.h>
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
 #include <boost/beast.hpp>
@@ -21,7 +22,7 @@ class Socket : public SocketFace, public std::enable_shared_from_this<Socket>
 {
 public:
     Socket(
-        ba::io_service& _ioService, ba::ssl::context& _sslContext, NodeIPEndpoint _nodeIPEndpoint)
+        ba::io_service& _ioService, ba::ssl::context& _sslContext, boostssl::NodeIPEndpoint _nodeIPEndpoint)
       : m_nodeIPEndpoint(_nodeIPEndpoint)
     {
         try
@@ -68,14 +69,14 @@ public:
     bi::tcp::socket& ref() override { return m_sslSocket->next_layer(); }
     ba::ssl::stream<bi::tcp::socket>& sslref() override { return *m_sslSocket; }
 
-    const NodeIPEndpoint& nodeIPEndpoint() const override { return m_nodeIPEndpoint; }
-    void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint) override
+    const boostssl::NodeIPEndpoint& nodeIPEndpoint() const override { return m_nodeIPEndpoint; }
+    void setNodeIPEndpoint(boostssl::NodeIPEndpoint _nodeIPEndpoint) override
     {
         m_nodeIPEndpoint = _nodeIPEndpoint;
     }
 
 protected:
-    NodeIPEndpoint m_nodeIPEndpoint;
+    boostssl::NodeIPEndpoint m_nodeIPEndpoint;
     std::shared_ptr<ba::ssl::stream<bi::tcp::socket>> m_sslSocket;
 };
 

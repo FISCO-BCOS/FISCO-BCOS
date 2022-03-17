@@ -39,6 +39,7 @@ enum CommonError : int32_t
     NotFoundClientByTopicDispatchMsg = 3002,
     AMOPSendMsgFailed = 3003,
     UnSupportedPacketType = 3004,
+    DuplicatePeer = 9999  //todo: 具体错误码待确定
 };
 
 }  // namespace protocol

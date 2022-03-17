@@ -17,6 +17,8 @@
 
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/SessionFace.h>
+#include <bcos-boostssl/interfaces/MessageFace.h>
+#include <bcos-boostssl/interfaces/NodeInfo.h>
 
 namespace bcos
 {
@@ -37,9 +39,9 @@ public:
     void disconnect(DisconnectReason _reason) override;
 
     void asyncSendMessage(
-        Message::Ptr, Options = Options(), SessionCallbackFunc = SessionCallbackFunc()) override;
+        boostssl::MessageFace::Ptr, Options = Options(), SessionCallbackFunc = SessionCallbackFunc()) override;
 
-    NodeIPEndpoint nodeIPEndpoint() const override;
+    boostssl::NodeIPEndpoint nodeIPEndpoint() const override;
 
     bool actived() const override;
 
@@ -49,29 +51,29 @@ public:
     std::shared_ptr<SocketFace> socket() override { return m_socket; }
     virtual void setSocket(std::shared_ptr<SocketFace> socket) { m_socket = socket; }
 
-    virtual MessageFactory::Ptr messageFactory() const { return m_messageFactory; }
-    virtual void setMessageFactory(MessageFactory::Ptr _messageFactory)
+    virtual boostssl::MessageFaceFactory::Ptr messageFactory() const { return m_messageFactory; }
+    virtual void setMessageFactory(boostssl::MessageFaceFactory::Ptr _messageFactory)
     {
         m_messageFactory = _messageFactory;
     }
 
-    virtual std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> messageHandler()
+    virtual std::function<void(NetworkException, SessionFace::Ptr, boostssl::MessageFace::Ptr)> messageHandler()
     {
         return m_messageHandler;
     }
     void setMessageHandler(
-        std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> messageHandler)
+        std::function<void(NetworkException, SessionFace::Ptr, boostssl::MessageFace::Ptr)> messageHandler)
         override
     {
         m_messageHandler = messageHandler;
     }
 
-    virtual void addSeqCallback(uint32_t seq, ResponseCallback::Ptr callback)
+    virtual void addSeqCallback(std::string seq, ResponseCallback::Ptr callback)
     {
         RecursiveGuard l(x_seq2Callback);
         m_seq2Callback->insert(std::make_pair(seq, callback));
     }
-    virtual void removeSeqCallback(uint32_t seq)
+    virtual void removeSeqCallback(std::string seq)
     {
         RecursiveGuard l(x_seq2Callback);
         m_seq2Callback->erase(seq);
@@ -82,7 +84,7 @@ public:
         m_seq2Callback->clear();
     }
 
-    ResponseCallback::Ptr getCallbackBySeq(uint32_t seq)
+    ResponseCallback::Ptr getCallbackBySeq(std::string seq)
     {
         RecursiveGuard l(x_seq2Callback);
         auto it = m_seq2Callback->find(seq);
@@ -110,7 +112,7 @@ private:
     /// Check error code after reading and drop peer if error code.
     bool checkRead(boost::system::error_code _ec);
 
-    void onTimeout(const boost::system::error_code& error, uint32_t seq);
+    void onTimeout(const boost::system::error_code& error, std::string seq);
     void updateIdleTimer(std::shared_ptr<boost::asio::deadline_timer> _idleTimer);
     void onIdle(const boost::system::error_code& error);
 
@@ -120,12 +122,12 @@ private:
     void write();
 
     /// call by doRead() to deal with mesage
-    void onMessage(NetworkException const& e, Message::Ptr message);
+    void onMessage(NetworkException const& e, boostssl::MessageFace::Ptr message);
 
     std::weak_ptr<Host> m_server;          ///< The host that owns us. Never null.
     std::shared_ptr<SocketFace> m_socket;  ///< Socket of peer's connection.
 
-    MessageFactory::Ptr m_messageFactory;
+    boostssl::MessageFaceFactory::Ptr m_messageFactory;
 
     class QueueCompare
     {
@@ -149,9 +151,9 @@ private:
 
     ///< A call B, the function to call after the response is received by A.
     mutable bcos::RecursiveMutex x_seq2Callback;
-    std::shared_ptr<std::unordered_map<uint32_t, ResponseCallback::Ptr>> m_seq2Callback;
+    std::shared_ptr<std::unordered_map<std::string, ResponseCallback::Ptr>> m_seq2Callback;
 
-    std::function<void(NetworkException, SessionFace::Ptr, Message::Ptr)> m_messageHandler;
+    std::function<void(NetworkException, SessionFace::Ptr, boostssl::MessageFace::Ptr)> m_messageHandler;
     uint64_t m_shutDownTimeThres = 50000;
     // 1min
     uint64_t m_idleTimeInterval = 60;
@@ -167,7 +169,7 @@ public:
     virtual ~SessionFactory(){};
 
     virtual std::shared_ptr<SessionFace> create_session(std::weak_ptr<Host> _server,
-        std::shared_ptr<SocketFace> const& _socket, MessageFactory::Ptr _messageFactory)
+        std::shared_ptr<SocketFace> const& _socket, boostssl::MessageFaceFactory::Ptr _messageFactory)
     {
         std::shared_ptr<Session> session = std::make_shared<Session>();
         session->setHost(_server);

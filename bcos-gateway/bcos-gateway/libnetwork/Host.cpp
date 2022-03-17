@@ -34,6 +34,7 @@
 using namespace std;
 using namespace bcos;
 using namespace bcos::gateway;
+using namespace bcos::boostssl;
 
 /**
  * @brief: accept connection requests, maily include procedures:
@@ -134,6 +135,12 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             int crit = 0;
             BASIC_CONSTRAINTS* basic =
                 (BASIC_CONSTRAINTS*)X509_get_ext_d2i(cert, NID_basic_constraints, &crit, NULL);
+           
+             HOST_LOG(INFO) << LOG_DESC("========== cert ==========")
+                             << LOG_KV("nodeIDOut", nodeIDOut)
+                             << LOG_KV("cert", cert)
+                             << LOG_KV("basic", basic);
+
             if (!basic)
             {
                 HOST_LOG(ERROR) << LOG_DESC("Get ca basic failed");
@@ -166,6 +173,11 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             nodeIDOut->append(certName);
             OPENSSL_free((void*)certName);
             OPENSSL_free((void*)issuerName);
+            
+            HOST_LOG(INFO) << LOG_DESC("========== SSL cert info ==========")
+                             << LOG_KV("nodeIDOut", nodeIDOut)
+                             << LOG_KV("issuerName", issuerName) << LOG_KV("certName", certName);
+            
             return preverified;
         }
         catch (std::exception& e)
@@ -176,11 +188,11 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
     };
 }
 
-P2PInfo Host::p2pInfo()
+NodeInfo Host::p2pInfo()
 {
     try
     {
-        if (m_p2pInfo.p2pID.empty())
+        if (m_p2pInfo.nodeID.empty())
         {
             /// get certificate
             auto sslContext = m_asioInterface->sslContext()->native_handle();
@@ -198,9 +210,9 @@ P2PInfo Host::p2pInfo()
             std::string nodeIDOut;
             if (m_sslContextPubHandler(cert, nodeIDOut))
             {
-                m_p2pInfo.p2pID = boost::to_upper_copy(nodeIDOut);
+                m_p2pInfo.nodeID = boost::to_upper_copy(nodeIDOut);
                 HOST_LOG(INFO) << LOG_DESC("Get node information from cert")
-                               << LOG_KV("p2pid", m_p2pInfo.p2pID);
+                               << LOG_KV("p2pid", m_p2pInfo.nodeID);
             }
 
             /// fill in the node informations
@@ -252,13 +264,13 @@ std::string Host::obtainCommonNameFromSubject(std::string const& subject)
 }
 
 /// obtain p2pInfo from given vector
-void Host::obtainNodeInfo(P2PInfo& info, std::string const& node_info)
+void Host::obtainNodeInfo(NodeInfo& info, std::string const& node_info)
 {
     std::vector<std::string> node_info_vec;
     boost::split(node_info_vec, node_info, boost::is_any_of("#"), boost::token_compress_on);
     if (!node_info_vec.empty())
     {
-        info.p2pID = node_info_vec[0];
+        info.nodeID = node_info_vec[0];
     }
     if (node_info_vec.size() > 1)
     {
@@ -270,7 +282,7 @@ void Host::obtainNodeInfo(P2PInfo& info, std::string const& node_info)
     }
 
     HOST_LOG(INFO) << "obtainP2pInfo " << LOG_KV("node_info", node_info)
-                   << LOG_KV("p2pid", info.p2pID);
+                   << LOG_KV("p2pid", info.nodeID);
 }
 
 /**
@@ -306,11 +318,11 @@ void Host::handshakeServer(const boost::system::error_code& error,
         /// node info splitted with #
         /// format: {nodeId}{#}{agencyName}{#}{nodeName}
         std::string node_info(*endpointPublicKey);
-        P2PInfo info;
+        NodeInfo info;
         obtainNodeInfo(info, node_info);
         HOST_LOG(INFO) << LOG_DESC("handshakeServer succ")
                        << LOG_KV("remote endpoint", socket->remoteEndpoint())
-                       << LOG_KV("nodeid", info.p2pID);
+                       << LOG_KV("nodeid", info.nodeID);
         startPeerSession(info, socket, m_connectionHandler);
     }
 }
@@ -329,8 +341,8 @@ void Host::handshakeServer(const boost::system::error_code& error,
  * @param _s : connected socket(used to init session object)
  */
 // TODO: asyncConnect pass handle to startPeerSession, make use of it
-void Host::startPeerSession(P2PInfo const& p2pInfo, std::shared_ptr<SocketFace> const& socket,
-    std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)>)
+void Host::startPeerSession(NodeInfo const& p2pInfo, std::shared_ptr<SocketFace> const& socket,
+    std::function<void(NetworkException, NodeInfo const&, std::shared_ptr<SessionFace>)>)
 {
     auto weakHost = std::weak_ptr<Host>(shared_from_this());
     std::shared_ptr<SessionFace> ps =
@@ -349,7 +361,7 @@ void Host::startPeerSession(P2PInfo const& p2pInfo, std::shared_ptr<SocketFace> 
     });
     HOST_LOG(INFO) << LOG_DESC("startPeerSession, Remote=") << socket->remoteEndpoint()
                    << LOG_KV("local endpoint", socket->localEndpoint())
-                   << LOG_KV("p2pid", p2pInfo.p2pID);
+                   << LOG_KV("p2pid", p2pInfo.nodeID);
 }
 
 /**
@@ -395,7 +407,7 @@ void Host::start()
  * @param _nodeIPEndpoint : the endpoint of the connected server
  */
 void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
-    std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)> callback)
+    std::function<void(NetworkException, NodeInfo const&, std::shared_ptr<SessionFace>)> callback)
 {
     if (!m_run)
     {
@@ -448,7 +460,7 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
             socket->close();
 
             m_threadPool->enqueue([callback, _nodeIPEndpoint]() {
-                callback(NetworkException(ConnectError, "Connect failed"), P2PInfo(),
+                callback(NetworkException(ConnectError, "Connect failed"), NodeInfo(),
                     std::shared_ptr<SessionFace>());
             });
             return;
@@ -477,7 +489,7 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
  */
 void Host::handshakeClient(const boost::system::error_code& error,
     std::shared_ptr<SocketFace> socket, std::shared_ptr<std::string> endpointPublicKey,
-    std::function<void(NetworkException, P2PInfo const&, std::shared_ptr<SessionFace>)> callback,
+    std::function<void(NetworkException, NodeInfo const&, std::shared_ptr<SessionFace>)> callback,
     NodeIPEndpoint _nodeIPEndpoint, std::shared_ptr<boost::asio::deadline_timer> timerPtr)
 {
     timerPtr->cancel();
@@ -506,7 +518,7 @@ void Host::handshakeClient(const boost::system::error_code& error,
     if (m_run)
     {
         std::string node_info(*endpointPublicKey);
-        P2PInfo info;
+        NodeInfo info;
         obtainNodeInfo(info, node_info);
         HOST_LOG(INFO) << LOG_DESC("handshakeClient succ")
                        << LOG_KV("local endpoint", socket->localEndpoint());

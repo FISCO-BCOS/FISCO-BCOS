@@ -27,6 +27,7 @@
 #include <bcos-gateway/libp2p/P2PInterface.h>
 #include <bcos-gateway/libp2p/P2PSession.h>
 #include <bcos-gateway/protocol/GatewayNodeStatus.h>
+#include <bcos-boostssl/websocket/WsSession.h>
 #include <bcos-utilities/Timer.h>
 namespace bcos
 {
@@ -83,11 +84,11 @@ protected:
     virtual void broadcastStatusSeq();
 
     virtual void onReceiveStatusSeq(
-        NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg);
+        std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<boostssl::ws::WsSession> _session);
     virtual void onRequestNodeStatus(
-        NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg);
+        std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<boostssl::ws::WsSession> _session);
     virtual void onReceiveNodeStatus(
-        NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg);
+        std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<boostssl::ws::WsSession> _session);
     virtual bytesPointer generateNodeStatus();
     virtual void syncLatestNodeIDList();
 

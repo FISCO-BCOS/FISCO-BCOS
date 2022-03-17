@@ -28,6 +28,7 @@
 #include <bcos-gateway/libp2p/P2PSession.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <bcos-utilities/Timer.h>
+#include <bcos-boostssl/websocket/WsSession.h>
 #include <boost/asio.hpp>
 namespace bcos
 {
@@ -68,16 +69,14 @@ public:
     virtual void asyncSendBroadbastMessageByTopic(
         const std::string& _topic, bcos::bytesConstRef _data);
 
-    virtual void onAMOPMessage(bcos::gateway::NetworkException const& _e,
-        bcos::gateway::P2PSession::Ptr _session,
-        std::shared_ptr<bcos::gateway::P2PMessage> _message);
+    virtual void onAMOPMessage(
+        std::shared_ptr<boostssl::MessageFace> _message, std::shared_ptr<boostssl::ws::WsSession> _session);
 
     virtual TopicManager::Ptr topicManager() { return m_topicManager; }
 
 protected:
-    virtual void dispatcherAMOPMessage(bcos::gateway::NetworkException const& _e,
-        bcos::gateway::P2PSession::Ptr _session,
-        std::shared_ptr<bcos::gateway::P2PMessage> _message);
+    virtual void dispatcherAMOPMessage(
+        boostssl::ws::WsSession::Ptr _session, std::shared_ptr<boostssl::MessageFace> _message);
     /**
      * @brief: periodically send topicSeq to all other nodes
      * @return void

@@ -14,6 +14,8 @@
 #pragma once
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/Message.h>
+#include <bcos-boostssl/interfaces/MessageFace.h>
+#include <bcos-boostssl/interfaces/NodeInfo.h>
 #include <memory>
 
 #include <boost/asio.hpp>
@@ -24,7 +26,7 @@ namespace gateway
 {
 class SocketFace;
 
-using SessionCallbackFunc = std::function<void(NetworkException, Message::Ptr)>;
+using SessionCallbackFunc = std::function<void(NetworkException, bcos::boostssl::MessageFace::Ptr)>;
 struct ResponseCallback : public std::enable_shared_from_this<ResponseCallback>
 {
     using Ptr = std::shared_ptr<ResponseCallback>;
@@ -45,15 +47,15 @@ public:
     virtual void disconnect(DisconnectReason) = 0;
 
     virtual void asyncSendMessage(
-        Message::Ptr, Options = Options(), SessionCallbackFunc = SessionCallbackFunc()) = 0;
+        boostssl::MessageFace::Ptr, Options = Options(), SessionCallbackFunc = SessionCallbackFunc()) = 0;
 
     virtual std::shared_ptr<SocketFace> socket() = 0;
 
     virtual void setMessageHandler(
-        std::function<void(NetworkException, std::shared_ptr<SessionFace>, Message::Ptr)>
+        std::function<void(NetworkException, std::shared_ptr<SessionFace>, boostssl::MessageFace::Ptr)>
             messageHandler) = 0;
 
-    virtual NodeIPEndpoint nodeIPEndpoint() const = 0;
+    virtual boostssl::NodeIPEndpoint nodeIPEndpoint() const = 0;
 
     virtual bool actived() const = 0;
 };

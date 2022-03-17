@@ -20,6 +20,8 @@
 
 #pragma once
 
+#include <bcos-boostssl/interfaces/MessageFace.h>
+#include <bcos-boostssl/websocket/WsMessage.h>
 #include <bcos-framework/interfaces/protocol/Protocol.h>
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/Message.h>
@@ -57,7 +59,7 @@ public:
     const static size_t MAX_DST_NODEID_COUNT = 255;
 
     bool encode(bytes& _buffer);
-    ssize_t decode(bytesConstRef _buffer);
+    int64_t decode(bytesConstRef _buffer);
 
 public:
     std::string groupID() const { return m_groupID; }
@@ -94,13 +96,13 @@ protected:
 ///       src nodeID count  :1 bytes
 ///       dst nodeIDs       : bytes
 ///   payload           :X bytes
-class P2PMessage : public Message
+class P2PMessage : public bcos::boostssl::MessageFace
 {
 public:
     using Ptr = std::shared_ptr<P2PMessage>;
 
-    /// length(4) + version(2) + packetType(2) + seq(4) + ext(2)
-    const static size_t MESSAGE_HEADER_LENGTH = 14;
+    /// length(4) + version(2) + packetType(2) + ext(2) + seqLength(2)
+    const static size_t MESSAGE_HEADER_LENGTH = 12;
     const static size_t MAX_MESSAGE_LENGTH =
         100 * 1024 * 1024;  ///< The maximum length of data is 100M.
 public:
@@ -113,26 +115,29 @@ public:
     virtual ~P2PMessage() {}
 
 public:
-    uint32_t length() const override { return m_length; }
+    uint32_t length() const { return m_length; }
     virtual void setLength(uint32_t length) { m_length = length; }
 
-    uint16_t version() const override { return m_version; }
+    uint16_t version() const { return m_version; }
     virtual void setVersion(uint16_t version) { m_version = version; }
 
     uint16_t packetType() const override { return m_packetType; }
-    virtual void setPacketType(uint16_t packetType) { m_packetType = packetType; }
+    virtual void setPacketType(uint16_t packetType) override { m_packetType = packetType; }
 
-    uint32_t seq() const override { return m_seq; }
-    virtual void setSeq(uint32_t seq) { m_seq = seq; }
+    std::string seq() const override { return m_seq; }
+    virtual void setSeq(std::string seq) override { m_seq = seq; }
+
+    // uint32_t seqLength() const { return m_seqLength; }
+    // virtual void setSeqLength(uint32_t _seqLength) { m_seqLength = _seqLength; }
 
     uint16_t ext() const override { return m_ext; }
-    virtual void setExt(uint16_t _ext) { m_ext = _ext; }
+    virtual void setExt(uint16_t _ext) override { m_ext = _ext; }
 
     P2PMessageOptions::Ptr options() const { return m_options; }
     void setOptions(P2PMessageOptions::Ptr _options) { m_options = _options; }
 
-    std::shared_ptr<bytes> payload() const { return m_payload; }
-    void setPayload(std::shared_ptr<bytes> _payload) { m_payload = _payload; }
+    std::shared_ptr<bytes> payload() const override { return m_payload; }
+    void setPayload(std::shared_ptr<bytes> _payload) override { m_payload = _payload; }
 
 public:
     ssize_t decodeHeader(bytesConstRef _buffer);
@@ -144,32 +149,30 @@ public:
     }
 
     bool encode(bytes& _buffer) override;
-    ssize_t decode(bytesConstRef _buffer) override;
-    bool isRespPacket() const override
-    {
-        return (m_ext & bcos::protocol::MessageExtFieldFlag::Response) != 0;
-    }
+    int64_t decode(bytesConstRef _buffer) override;
+    bool isRespPacket() const { return (m_ext & MessageExtFieldFlag::Response) != 0; }
 
 protected:
     uint32_t m_length = 0;
     uint16_t m_version = 0;
     uint16_t m_packetType = 0;
-    uint32_t m_seq = 0;
+    std::string m_seq;
     uint16_t m_ext = 0;
+    // uint8_t m_seqLength = 0;
 
     P2PMessageOptions::Ptr m_options;  ///< options fields
 
     std::shared_ptr<bytes> m_payload;  ///< payload data
 };
 
-class P2PMessageFactory : public MessageFactory
+class P2PMessageFactory : public bcos::boostssl::MessageFaceFactory
 {
 public:
     using Ptr = std::shared_ptr<P2PMessageFactory>;
     virtual ~P2PMessageFactory() {}
 
 public:
-    virtual Message::Ptr buildMessage()
+    virtual bcos::boostssl::MessageFace::Ptr buildMessage() override
     {
         auto message = std::make_shared<P2PMessage>();
         return message;

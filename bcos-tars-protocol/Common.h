@@ -274,10 +274,10 @@ inline bcostars::LedgerConfig toTarsLedgerConfig(bcos::ledger::LedgerConfig::Ptr
     return ledgerConfig;
 }
 
-inline bcostars::P2PInfo toTarsP2PInfo(bcos::gateway::P2PInfo const& _p2pInfo)
+inline bcostars::P2PInfo toTarsP2PInfo(bcos::boostssl::NodeInfo const& _p2pInfo)
 {
     bcostars::P2PInfo tarsP2PInfo;
-    tarsP2PInfo.p2pID = _p2pInfo.p2pID;
+    tarsP2PInfo.p2pID = _p2pInfo.nodeID;
     tarsP2PInfo.agencyName = _p2pInfo.agencyName;
     tarsP2PInfo.nodeName = _p2pInfo.nodeName;
     tarsP2PInfo.host = _p2pInfo.nodeIPEndpoint.address();
@@ -312,13 +312,13 @@ inline bcostars::GatewayInfo toTarsGatewayInfo(bcos::gateway::GatewayInfo::Ptr _
 }
 
 // Note: use struct here maybe Inconvenient to override
-inline bcos::gateway::P2PInfo toBcosP2PNodeInfo(bcostars::P2PInfo const& _tarsP2pInfo)
+inline bcos::boostssl::NodeInfo toBcosP2PNodeInfo(bcostars::P2PInfo const& _tarsP2pInfo)
 {
-    bcos::gateway::P2PInfo p2pInfo;
-    p2pInfo.p2pID = _tarsP2pInfo.p2pID;
+    bcos::boostssl::NodeInfo p2pInfo;
+    p2pInfo.nodeID = _tarsP2pInfo.p2pID;
     p2pInfo.agencyName = _tarsP2pInfo.agencyName;
     p2pInfo.nodeName = _tarsP2pInfo.nodeName;
-    p2pInfo.nodeIPEndpoint = bcos::gateway::NodeIPEndpoint(_tarsP2pInfo.host, _tarsP2pInfo.port);
+    p2pInfo.nodeIPEndpoint = bcos::boostssl::NodeIPEndpoint(_tarsP2pInfo.host, _tarsP2pInfo.port);
     return p2pInfo;
 }
 

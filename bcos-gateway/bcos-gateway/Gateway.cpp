@@ -34,6 +34,7 @@ using namespace bcos::gateway;
 using namespace bcos::group;
 using namespace bcos::amop;
 using namespace bcos::crypto;
+using namespace bcos::boostssl::ws;
 
 void Gateway::start()
 {
@@ -87,7 +88,7 @@ void Gateway::asyncGetPeers(
     for (auto const& info : sessionInfos)
     {
         auto gatewayInfo = std::make_shared<GatewayInfo>(info);
-        auto nodeIDList = m_gatewayNodeManager->peersNodeIDList(info.p2pID);
+        auto nodeIDList = m_gatewayNodeManager->peersNodeIDList(info.nodeID);
         gatewayInfo->setNodeIDInfo(std::move(nodeIDList));
         peerGatewayInfos->emplace_back(gatewayInfo);
     }
@@ -177,7 +178,7 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, NodeIDPtr _s
                     << LOG_DESC("[Gateway::Retry]") << LOG_DESC("unable to send the message")
                     << LOG_KV("srcNodeID", m_srcNodeID->hex())
                     << LOG_KV("dstNodeID", m_dstNodeID->hex())
-                    << LOG_KV("seq", std::to_string(m_p2pMessage->seq()));
+                    << LOG_KV("seq", m_p2pMessage->seq());
 
                 if (m_respFunc)
                 {
@@ -190,7 +191,7 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, NodeIDPtr _s
             auto p2pID = randomChooseP2pID();
             auto self = shared_from_this();
             auto callback = [self, p2pID](NetworkException e, std::shared_ptr<P2PSession> session,
-                                std::shared_ptr<P2PMessage> message) {
+                                std::shared_ptr<bcos::boostssl::MessageFace> message) {
                 boost::ignore_unused(session);
                 // network error
                 if (e.errorCode() != P2PExceptionType::Success)
@@ -261,6 +262,7 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, NodeIDPtr _s
     auto retry = std::make_shared<Retry>();
     auto message =
         std::static_pointer_cast<P2PMessage>(m_p2pInterface->messageFactory()->buildMessage());
+    auto seq = boost::lexical_cast<std::string>(m_p2pInterface->newSeq());
 
     message->setPacketType(GatewayMessageType::PeerToPeerMessage);
     message->setSeq(m_p2pInterface->messageFactory()->newSeq());
@@ -322,7 +324,8 @@ void Gateway::asyncSendBroadcastMessage(
         std::static_pointer_cast<P2PMessage>(m_p2pInterface->messageFactory()->buildMessage());
     message->setPacketType(GatewayMessageType::BroadcastMessage);
     message->setExt(_type);
-    message->setSeq(m_p2pInterface->messageFactory()->newSeq());
+    message->setSeq(seq);
+    // messages->setSeqLength(seq.size());
     message->options()->setGroupID(_groupID);
     message->options()->setSrcNodeID(_srcNodeID->encode());
     message->setPayload(std::make_shared<bytes>(_payload.begin(), _payload.end()));
@@ -390,26 +393,20 @@ void Gateway::asyncNotifyGroupInfo(
 }
 
 void Gateway::onReceiveP2PMessage(
-    NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg)
+    std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<WsSession> _session)
 {
-    if (_e.errorCode())
-    {
-        GATEWAY_LOG(WARNING) << LOG_DESC("onReceiveP2PMessage error")
-                             << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
-        return;
-    }
-
-    auto options = _msg->options();
+    auto p2pMessage = std::dynamic_pointer_cast<P2PMessage>(_msg);
+    auto options = p2pMessage->options();
     auto groupID = options->groupID();
     auto srcNodeID = options->srcNodeID();
     const auto& dstNodeIDs = options->dstNodeIDs();
-    auto payload = _msg->payload();
+    auto payload = p2pMessage->payload();
     auto bytesConstRefPayload = bytesConstRef(payload->data(), payload->size());
     auto srcNodeIDPtr = m_gatewayNodeManager->keyFactory()->createKey(*srcNodeID.get());
     auto dstNodeIDPtr = m_gatewayNodeManager->keyFactory()->createKey(*dstNodeIDs[0].get());
     auto gateway = std::weak_ptr<Gateway>(shared_from_this());
     onReceiveP2PMessage(groupID, srcNodeIDPtr, dstNodeIDPtr, bytesConstRefPayload,
-        [groupID, srcNodeIDPtr, dstNodeIDPtr, _session, _msg, gateway](Error::Ptr _error) {
+        [groupID, srcNodeIDPtr, dstNodeIDPtr, _session, p2pMessage, gateway](Error::Ptr _error) {
             auto gatewayPtr = gateway.lock();
             if (!gatewayPtr)
             {
@@ -427,23 +424,18 @@ void Gateway::onReceiveP2PMessage(
                     << LOG_KV("dst", dstNodeIDPtr->shortHex());
             }
             gatewayPtr->m_p2pInterface->sendRespMessageBySession(
-                bytesConstRef((byte*)errorCode.data(), errorCode.size()), _msg, _session);
+                bytesConstRef((byte*)errorCode.data(), errorCode.size()), p2pMessage, _session);
         });
 }
 
 void Gateway::onReceiveBroadcastMessage(
-    NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg)
+    std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<WsSession> _session)
 {
-    if (_e.errorCode() != 0)
-    {
-        GATEWAY_LOG(WARNING) << LOG_DESC("onReceiveBroadcastMessage error")
-                             << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
-        return;
-    }
+    auto p2pMessage = std::dynamic_pointer_cast<P2PMessage>(_msg);
     auto srcNodeIDPtr =
-        m_gatewayNodeManager->keyFactory()->createKey(*(_msg->options()->srcNodeID()));
-    auto groupID = _msg->options()->groupID();
-    auto type = _msg->ext();
+        m_gatewayNodeManager->keyFactory()->createKey(*(p2pMessage->options()->srcNodeID()));
+    auto groupID = p2pMessage->options()->groupID();
+    auto type = p2pMessage->ext();
     m_gatewayNodeManager->localRouterTable()->asyncBroadcastMsg(type, groupID, srcNodeIDPtr,
-        bytesConstRef(_msg->payload()->data(), _msg->payload()->size()));
+        bytesConstRef(p2pMessage->payload()->data(), p2pMessage->payload()->size()));
 }

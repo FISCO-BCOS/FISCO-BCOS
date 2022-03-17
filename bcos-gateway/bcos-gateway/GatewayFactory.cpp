@@ -14,6 +14,8 @@
 #include <bcos-gateway/libnetwork/Host.h>
 #include <bcos-gateway/libnetwork/Session.h>
 #include <bcos-gateway/libp2p/Service.h>
+#include <bcos-boostssl/websocket/WsConfig.h>
+#include <bcos-boostssl/websocket/WsInitializer.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FileUtility.h>
 
@@ -22,6 +24,8 @@ using namespace bcos;
 using namespace gateway;
 using namespace bcos::amop;
 using namespace bcos::protocol;
+using namespace bcos::boostssl;
+using namespace bcos::boostssl::ws;
 
 // register the function fetch pub hex from the cert
 void GatewayFactory::initCert2PubHexHandler()
@@ -267,11 +271,11 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
             (_config->smSSL() ? buildSSLContext(_config->smCertConfig()) :
                                 buildSSLContext(_config->certConfig()));
 
-        // init ASIOInterface
-        auto asioInterface = std::make_shared<ASIOInterface>();
-        asioInterface->setIOService(std::make_shared<ba::io_service>());
-        asioInterface->setSSLContext(sslContext);
-        asioInterface->setType(ASIOInterface::ASIO_TYPE::SSL);
+        // // init ASIOInterface
+        // auto asioInterface = std::make_shared<ASIOInterface>();
+        // asioInterface->setIOService(std::make_shared<ba::io_service>());
+        // asioInterface->setSSLContext(sslContext);
+        // asioInterface->setType(ASIOInterface::ASIO_TYPE::SSL);
 
         // Message Factory
         auto messageFactory = std::make_shared<P2PMessageFactory>();
@@ -280,16 +284,27 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         // KeyFactory
         auto keyFactory = std::make_shared<bcos::crypto::KeyFactoryImpl>();
 
-        // init Host
-        auto host = std::make_shared<Host>(asioInterface, sessionFactory, messageFactory);
+        // init wsConfig
+        auto wsConfig = std::make_shared<WsConfig>();
+        
+      	// Mixed = server + client
+      	wsConfig->setModel(boostssl::ws::WsModel::Mixed);
 
-        host->setHostPort(_config->listenIP(), _config->listenPort());
-        host->setThreadPool(std::make_shared<ThreadPool>("P2P", _config->threadPoolSize()));
-        host->setSSLContextPubHandler(m_sslContextPubHandler);
+        wsConfig->setListenIP(_config->listenIP());
+        wsConfig->setListenPort(_config->listenPort());
+        wsConfig->setThreadPoolSize(_config->threadPoolSize());
+        wsConfig->setDisableSsl(0 == _config->smSSL());
+        
+        // 初始化wsservice
+        auto wsService = std::make_shared<ws::WsService>();
+        wsService->setHostPort(_config->listenIP(), _config->listenPort());
+        auto wsInitializer = std::make_shared<WsInitializer>();
+        wsInitializer->setConfig(wsConfig);
+        wsInitializer->initWsService(wsService);
 
         // init Service
         auto service = std::make_shared<Service>();
-        service->setHost(host);
+        service->setWsService(wsService);
         service->setStaticNodes(_config->connectedNodes());
 
         GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("GatewayFactory::init")

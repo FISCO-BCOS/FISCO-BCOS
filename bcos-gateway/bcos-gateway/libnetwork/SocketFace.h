@@ -30,8 +30,8 @@ public:
     virtual bi::tcp::socket& ref() = 0;
     virtual ba::ssl::stream<bi::tcp::socket>& sslref() = 0;
 
-    virtual const NodeIPEndpoint& nodeIPEndpoint() const = 0;
-    virtual void setNodeIPEndpoint(NodeIPEndpoint _nodeIPEndpoint) = 0;
+    virtual const boostssl::NodeIPEndpoint& nodeIPEndpoint() const = 0;
+    virtual void setNodeIPEndpoint(boostssl::NodeIPEndpoint _nodeIPEndpoint) = 0;
 };
 }  // namespace gateway
 }  // namespace bcos

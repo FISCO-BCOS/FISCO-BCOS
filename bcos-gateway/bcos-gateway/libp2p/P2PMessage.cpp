@@ -102,7 +102,7 @@ bool P2PMessageOptions::encode(bytes& _buffer)
 ///       src nodeID        : bytes
 ///       src nodeID count  :1 bytes
 ///       dst nodeIDs       : bytes
-ssize_t P2PMessageOptions::decode(bytesConstRef _buffer)
+int64_t P2PMessageOptions::decode(bytesConstRef _buffer)
 {
     size_t offset = 0;
     size_t length = _buffer.size();
@@ -170,13 +170,17 @@ bool P2PMessage::encode(bytes& _buffer)
     uint32_t length = 0;
     uint16_t version = boost::asio::detail::socket_ops::host_to_network_short(m_version);
     uint16_t packetType = boost::asio::detail::socket_ops::host_to_network_short(m_packetType);
-    uint32_t seq = boost::asio::detail::socket_ops::host_to_network_long(m_seq);
     uint16_t ext = boost::asio::detail::socket_ops::host_to_network_short(m_ext);
+    uint16_t seqLength = boost::asio::detail::socket_ops::host_to_network_short(m_seq.size());
+    // uint16_t seqLength = m_seq.size();
+    // auto seq_size = m_seq.size();
+    // std::cout << "seqlength type: " << typeid(seq_size).name() << endl;
 
     _buffer.insert(_buffer.end(), (byte*)&length, (byte*)&length + 4);
     _buffer.insert(_buffer.end(), (byte*)&version, (byte*)&version + 2);
     _buffer.insert(_buffer.end(), (byte*)&packetType, (byte*)&packetType + 2);
-    _buffer.insert(_buffer.end(), (byte*)&seq, (byte*)&seq + 4);
+    _buffer.insert(_buffer.end(), (byte*)&seqLength, (byte*)&seqLength + 2);
+    _buffer.insert(_buffer.end(), m_seq.begin(), m_seq.end());
     _buffer.insert(_buffer.end(), (byte*)&ext, (byte*)&ext + 2);
 
     // encode options
@@ -198,35 +202,57 @@ bool P2PMessage::encode(bytes& _buffer)
 
 ssize_t P2PMessage::decodeHeader(bytesConstRef _buffer)
 {
+    std::size_t size = _buffer.size();
     int32_t offset = 0;
 
+    m_seq.clear();
+    auto p = _buffer.data();
+
     // length field
-    m_length =
-        boost::asio::detail::socket_ops::network_to_host_long(*((uint32_t*)&_buffer[offset]));
+    m_length = boost::asio::detail::socket_ops::network_to_host_long(*((uint32_t*)p));
+    p += 4;
     offset += 4;
 
     // version
-    m_version =
-        boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)&_buffer[offset]));
+    m_version = boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)p));
+    p += 2;
     offset += 2;
 
     // packetType
-    m_packetType =
-        boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)&_buffer[offset]));
+    m_packetType = boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)p));
+    p += 2;
+    offset += 2;
+
+    // seqLength
+    uint16_t seqLength = boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)p));
+    // uint16_t seqLength = *((uint16_t*)&p);
+    p += 2;
     offset += 2;
 
     // seq
-    m_seq = boost::asio::detail::socket_ops::network_to_host_long(*((uint32_t*)&_buffer[offset]));
-    offset += 4;
+    m_seq.insert(m_seq.begin(), p, p + seqLength);
+    offset += seqLength;
+    p += seqLength;
 
     // ext
-    m_ext = boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)&_buffer[offset]));
+    m_ext = boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)p));
     offset += 2;
+
+    std::cout << "--------- P2PMessage::decodeHeader begin ------------" << endl;
+    std::cout << "_buffer.data(): " << _buffer.data() << endl;
+    std::cout << "m_length: " << m_length << endl;
+    std::cout << "m_version: " << m_version << endl;
+    std::cout << "m_packetType: " << m_packetType << endl;
+    std::cout << "seqLength: " << seqLength << endl;
+    std::cout << "m_seq: " << m_seq << endl;
+    std::cout << "m_ext: " << m_ext << endl;
+    std::cout << "offset: " << offset << endl;
+    std::cout << "---------- P2PMessage::decodeHeader end --------------" << endl;
 
     return offset;
 }
 
-ssize_t P2PMessage::decode(bytesConstRef _buffer)
+int64_t P2PMessage::decode(bytesConstRef _buffer)
 {
     // check if packet header fully received
     if (_buffer.size() < P2PMessage::MESSAGE_HEADER_LENGTH)
@@ -261,6 +287,13 @@ ssize_t P2PMessage::decode(bytesConstRef _buffer)
     auto data = _buffer.getCroppedData(offset, m_length - offset);
     // payload
     m_payload = std::make_shared<bytes>(data.begin(), data.end());
+
+    std::cout << "--------- P2PMessage::decode begin ------------" << endl;
+    std::cout << "_buffer.size: " << _buffer.size() << endl;
+    std::cout << "m_length: " << m_length << endl;
+    std::cout << "m_payload size: " << m_payload->size() << endl;
+    std::cout << "m_payload: " << std::string(m_payload->begin(), m_payload->end()) << endl;
+    std::cout << "---------- P2PMessage::decode end --------------" << endl;
 
     return m_length;
 }

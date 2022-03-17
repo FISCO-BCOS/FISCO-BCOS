@@ -29,6 +29,7 @@ using namespace gateway;
 using namespace bcos::protocol;
 using namespace bcos::group;
 using namespace bcos::crypto;
+using namespace bcos::boostssl::ws;
 
 GatewayNodeManager::GatewayNodeManager(std::string const& _uuid, P2pID const& _nodeID,
     std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface)
@@ -44,15 +45,15 @@ GatewayNodeManager::GatewayNodeManager(std::string const& _uuid, P2pID const& _n
     // SyncNodeSeq
     m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::SyncNodeSeq,
         boost::bind(&GatewayNodeManager::onReceiveStatusSeq, this, boost::placeholders::_1,
-            boost::placeholders::_2, boost::placeholders::_3));
+            boost::placeholders::_2));
     // RequestNodeStatus
     m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::RequestNodeStatus,
         boost::bind(&GatewayNodeManager::onRequestNodeStatus, this, boost::placeholders::_1,
-            boost::placeholders::_2, boost::placeholders::_3));
+            boost::placeholders::_2));
     // ResponseNodeStatus
     m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::ResponseNodeStatus,
         boost::bind(&GatewayNodeManager::onReceiveNodeStatus, this, boost::placeholders::_1,
-            boost::placeholders::_2, boost::placeholders::_3));
+            boost::placeholders::_2));
     m_timer = std::make_shared<Timer>(SEQ_SYNC_PERIOD, "seqSync");
     // broadcast seq periodically
     m_timer->registerTimeoutHandler([this]() { broadcastStatusSeq(); });
@@ -97,18 +98,12 @@ bool GatewayNodeManager::unregisterNode(
 }
 
 void GatewayNodeManager::onReceiveStatusSeq(
-    NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg)
+    std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<WsSession> _session)
 {
-    if (_e.errorCode())
-    {
-        NODE_MANAGER_LOG(WARNING) << LOG_DESC("onReceiveStatusSeq error")
-                                  << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
-        return;
-    }
     auto statusSeq = boost::asio::detail::socket_ops::network_to_host_long(
         *((uint32_t*)_msg->payload()->data()));
-    auto statusSeqChanged = statusChanged(_session->p2pID(), statusSeq);
-    NODE_MANAGER_LOG(TRACE) << LOG_DESC("onReceiveStatusSeq") << LOG_KV("p2pid", _session->p2pID())
+    auto statusSeqChanged = statusChanged(_session->nodeID(), statusSeq);
+    NODE_MANAGER_LOG(TRACE) << LOG_DESC("onReceiveStatusSeq") << LOG_KV("p2pid", _session->nodeID())
                             << LOG_KV("statusSeq", statusSeq)
                             << LOG_KV("seqChanged", statusSeqChanged);
     if (!statusSeqChanged)
@@ -132,17 +127,11 @@ bool GatewayNodeManager::statusChanged(std::string const& _p2pNodeID, uint32_t _
 }
 
 void GatewayNodeManager::onReceiveNodeStatus(
-    NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg)
+    std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<WsSession> _session)
 {
-    if (_e.errorCode())
-    {
-        NODE_MANAGER_LOG(WARNING) << LOG_DESC("onReceiveNodeStatus error")
-                                  << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
-        return;
-    }
     auto gatewayNodeStatus = m_gatewayNodeStatusFactory->createGatewayNodeStatus();
     gatewayNodeStatus->decode(bytesConstRef(_msg->payload()->data(), _msg->payload()->size()));
-    auto p2pID = _session->p2pID();
+    auto p2pID = _session->nodeID();
     NODE_MANAGER_LOG(INFO) << LOG_DESC("onReceiveNodeStatus") << LOG_KV("p2pid", p2pID)
                            << LOG_KV("seq", gatewayNodeStatus->seq())
                            << LOG_KV("uuid", gatewayNodeStatus->uuid());
@@ -151,7 +140,7 @@ void GatewayNodeManager::onReceiveNodeStatus(
 
 void GatewayNodeManager::updatePeerStatus(std::string const& _p2pID, GatewayNodeStatus::Ptr _status)
 {
-    auto seq = _status->seq();
+    auto seq = boost::lexical_cast<uint32_t>(_status->seq());
     {
         UpgradableGuard l(x_p2pID2Seq);
         if (m_p2pID2Seq.count(_p2pID) && (m_p2pID2Seq.at(_p2pID) >= seq))
@@ -169,19 +158,13 @@ void GatewayNodeManager::updatePeerStatus(std::string const& _p2pID, GatewayNode
 }
 
 void GatewayNodeManager::onRequestNodeStatus(
-    NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg)
+    std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<WsSession> _session)
 {
-    if (_e.errorCode())
-    {
-        NODE_MANAGER_LOG(WARNING) << LOG_DESC("onRequestNodeStatus network error")
-                                  << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what());
-        return;
-    }
     auto nodeStatusData = generateNodeStatus();
     if (!nodeStatusData)
     {
         NODE_MANAGER_LOG(WARNING) << LOG_DESC("onRequestNodeStatus: generate nodeInfo error")
-                                  << LOG_KV("peer", _session->p2pID());
+                                  << LOG_KV("peer", _session->nodeID());
         return;
     }
     m_p2pInterface->sendMessageBySession(GatewayMessageType::ResponseNodeStatus,

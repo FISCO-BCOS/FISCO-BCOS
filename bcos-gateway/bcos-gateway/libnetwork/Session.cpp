@@ -13,16 +13,18 @@
 #include <bcos-gateway/libnetwork/Session.h>
 #include <bcos-gateway/libnetwork/SessionFace.h>  // for Respon...
 #include <bcos-gateway/libnetwork/SocketFace.h>   // for Socket...
+#include <bcos-gateway/libp2p/P2PMessage.h>
 #include <chrono>
 
 using namespace bcos;
 using namespace bcos::gateway;
+using namespace bcos::boostssl;
 
 Session::Session(size_t _bufferSize) : bufferSize(_bufferSize)
 {
     SESSION_LOG(INFO) << "[Session::Session] this=" << this;
     m_recvBuffer.resize(bufferSize);
-    m_seq2Callback = std::make_shared<std::unordered_map<uint32_t, ResponseCallback::Ptr>>();
+    m_seq2Callback = std::make_shared<std::unordered_map<std::string, ResponseCallback::Ptr>>();
 }
 
 Session::~Session()
@@ -56,7 +58,7 @@ bool Session::actived() const
     return m_actived && server && server->haveNetwork() && m_socket && m_socket->isConnected();
 }
 
-void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCallbackFunc callback)
+void Session::asyncSendMessage(bcos::boostssl::MessageFace::Ptr message, Options options, SessionCallbackFunc callback)
 {
     auto server = m_server.lock();
     if (!actived())
@@ -65,7 +67,7 @@ void Session::asyncSendMessage(Message::Ptr message, Options options, SessionCal
         if (callback)
         {
             server->threadPool()->enqueue([callback] {
-                callback(NetworkException(-1, "Session inactived"), Message::Ptr());
+                callback(NetworkException(-1, "Session inactived"), bcos::boostssl::MessageFace::Ptr());
             });
         }
         return;
@@ -275,7 +277,7 @@ void Session::drop(DisconnectReason _reason)
             {
                 auto callback = it.second;
                 server->threadPool()->enqueue([callback, errorCode, errorMsg]() {
-                    callback->callback(NetworkException(errorCode, errorMsg), Message::Ptr());
+                    callback->callback(NetworkException(errorCode, errorMsg), MessageFace::Ptr());
                 });
             }
         }
@@ -287,7 +289,7 @@ void Session::drop(DisconnectReason _reason)
         auto handler = m_messageHandler;
         auto self = shared_from_this();
         server->threadPool()->enqueue([handler, self, errorCode, errorMsg]() {
-            handler(NetworkException(errorCode, errorMsg), self, Message::Ptr());
+            handler(NetworkException(errorCode, errorMsg), self, MessageFace::Ptr());
         });
     }
 
@@ -415,8 +417,8 @@ void Session::doRead()
 
                 while (true)
                 {
-                    Message::Ptr message = s->m_messageFactory->buildMessage();
-                    ssize_t result =
+                    MessageFace::Ptr message = s->m_messageFactory->buildMessage();
+                    int64_t result =
                         message->decode(bytesConstRef(s->m_data.data(), s->m_data.size()));
                     if (result > 0)
                     {
@@ -477,13 +479,14 @@ bool Session::checkRead(boost::system::error_code _ec)
     return true;
 }
 
-void Session::onMessage(NetworkException const& e, Message::Ptr message)
+void Session::onMessage(NetworkException const& e, bcos::boostssl::MessageFace::Ptr message)
 {
     auto server = m_server.lock();
     if (m_actived && server && server->haveNetwork())
     {
         ResponseCallback::Ptr callbackPtr = getCallbackBySeq(message->seq());
-        if (callbackPtr && message->isRespPacket())
+        auto p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
+        if (callbackPtr && p2pMessage->isRespPacket())
         {
             /// SESSION_LOG(TRACE) << "Found callbackPtr: " << message->seq();
 
@@ -498,13 +501,13 @@ void Session::onMessage(NetworkException const& e, Message::Ptr message)
                 if (callback)
                 {
                     auto self = std::weak_ptr<Session>(shared_from_this());
-                    server->threadPool()->enqueue([e, callback, self, message]() {
-                        callback(e, message);
+                    server->threadPool()->enqueue([e, callback, self, p2pMessage]() {
+                        callback(e, p2pMessage);
 
                         auto s = self.lock();
                         if (s)
                         {
-                            s->removeSeqCallback(message->seq());
+                            s->removeSeqCallback(p2pMessage->seq());
                         }
                     });
                 }
@@ -515,12 +518,12 @@ void Session::onMessage(NetworkException const& e, Message::Ptr message)
             if (m_messageHandler)
             {
                 SESSION_LOG(TRACE) << "onMessage can't find callback, call default messageHandler"
-                                   << LOG_KV("message.seq", message->seq());
+                                   << LOG_KV("p2pMessage.seq", p2pMessage->seq());
                 auto session = shared_from_this();
                 auto handler = m_messageHandler;
 
                 server->threadPool()->enqueue(
-                    [session, handler, e, message]() { handler(e, session, message); });
+                    [session, handler, e, p2pMessage]() { handler(e, session, p2pMessage); });
             }
             else
             {
@@ -530,7 +533,7 @@ void Session::onMessage(NetworkException const& e, Message::Ptr message)
     }
 }
 
-void Session::onTimeout(const boost::system::error_code& error, uint32_t seq)
+void Session::onTimeout(const boost::system::error_code& error, std::string seq)
 {
     if (error)
     {
@@ -546,7 +549,7 @@ void Session::onTimeout(const boost::system::error_code& error, uint32_t seq)
         return;
     server->threadPool()->enqueue([=]() {
         NetworkException e(P2PExceptionType::NetworkTimeout, "NetworkTimeout");
-        callbackPtr->callback(e, Message::Ptr());
+        callbackPtr->callback(e, MessageFace::Ptr());
         removeSeqCallback(seq);
     });
 }

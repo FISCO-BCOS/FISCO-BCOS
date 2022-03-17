@@ -7,9 +7,10 @@
 
 #include <bcos-framework/interfaces/protocol/ProtocolInfo.h>
 #include <bcos-gateway/libnetwork/Common.h>
-#include <bcos-gateway/libnetwork/SessionFace.h>
 #include <bcos-gateway/libp2p/Common.h>
 #include <bcos-gateway/libp2p/P2PMessage.h>
+#include <bcos-boostssl/interfaces/NodeInfo.h>
+#include <bcos-boostssl/websocket/WsSession.h>
 #include <memory>
 
 namespace bcos
@@ -33,18 +34,20 @@ public:
     virtual bool actived() { return m_run; }
     virtual void heartBeat();
 
-    virtual SessionFace::Ptr session() { return m_session; }
-    virtual void setSession(std::shared_ptr<SessionFace> session) { m_session = session; }
+    virtual boostssl::ws::WsSession::Ptr session() { return m_session; }
+    virtual void setSession(std::shared_ptr<boostssl::ws::WsSession> session) { m_session = session; }
 
-    virtual P2pID p2pID() { return m_p2pInfo->p2pID; }
+    virtual P2pID p2pID() { return m_p2pInfo->nodeID; }
     // Note: the p2pInfo must be setted after session setted
-    virtual void setP2PInfo(P2PInfo const& p2pInfo)
+    virtual void setP2PInfo(boostssl::NodeInfo const& p2pInfo)
     {
         *m_p2pInfo = p2pInfo;
-        m_p2pInfo->nodeIPEndpoint = m_session->nodeIPEndpoint();
+        auto& stream = m_session->wsStreamDelegate()->tcpStream();
+        auto endpoint = stream.socket().remote_endpoint();
+        m_p2pInfo->nodeIPEndpoint = boostssl::NodeIPEndpoint(endpoint);
     }
-    virtual P2PInfo const& p2pInfo() const& { return *m_p2pInfo; }
-    virtual std::shared_ptr<P2PInfo> mutableP2pInfo() { return m_p2pInfo; }
+    virtual boostssl::NodeInfo const& p2pInfo() const& { return *m_p2pInfo; }
+    virtual std::shared_ptr<boostssl::NodeInfo> mutableP2pInfo() { return m_p2pInfo; }
 
     virtual std::weak_ptr<Service> service() { return m_service; }
     virtual void setService(std::weak_ptr<Service> service) { m_service = service; }
@@ -62,9 +65,9 @@ public:
     }
 
 private:
-    SessionFace::Ptr m_session;
+    boostssl::ws::WsSession::Ptr m_session;
     /// gateway p2p info
-    std::shared_ptr<P2PInfo> m_p2pInfo;
+    std::shared_ptr<boostssl::NodeInfo> m_p2pInfo;
     std::weak_ptr<Service> m_service;
     std::shared_ptr<boost::asio::deadline_timer> m_timer;
     bool m_run = false;
