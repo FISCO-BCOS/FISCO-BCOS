@@ -430,11 +430,8 @@ void LedgerParam::initConsensusConfig(ptree const& pt)
     // sort the sealerList
     if (g_BCOSConfig.version() >= V2_9_0)
     {
-        const auto lessThan = [](const h512& a, const h512& b) -> bool {
-            return (a < b) ? true : false;
-        };
         std::sort(mutableConsensusParam().sealerList.begin(),
-            mutableConsensusParam().sealerList.end(), lessThan);
+            mutableConsensusParam().sealerList.end());
     }
 
     // init nodeListMark
