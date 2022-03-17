@@ -1642,6 +1642,12 @@ check_bin()
         exit_with_clean "${bin_version} is less than ${compatibility_version}. Please correct it and try again."
     fi
     echo "Binary check passed."
+    
+    if version_gt "2.9.0" "${compatibility_version}";then
+        echo " ${compatibility_version} less than 2.9.0, does not use rsa ssl"
+        rsa_crypto_channel="false"
+        LOG_INFO "compatibility_version: ${compatibility_version}, do not use rsa crypto channel" 
+    fi
 }
 
 prepare_ca(){
