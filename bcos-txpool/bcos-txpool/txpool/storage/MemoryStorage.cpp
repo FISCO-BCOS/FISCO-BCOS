@@ -55,7 +55,7 @@ TransactionStatus MemoryStorage::submitTransaction(
     try
     {
         auto tx = m_config->txFactory()->createTransaction(ref(*_txData), false);
-        auto result = verifyAndSubmitTransaction(tx, _txSubmitCallback, true);
+        auto result = verifyAndSubmitTransaction(tx, _txSubmitCallback, true, true);
         if (result != TransactionStatus::None)
         {
             notifyInvalidReceipt(tx->hash(), result, _txSubmitCallback);
@@ -190,6 +190,7 @@ bool MemoryStorage::batchVerifyAndSubmitTransaction(
 void MemoryStorage::batchImportTxs(TransactionsPtr _txs)
 {
     auto recordT = utcTime();
+    RWMutexScoped l(x_txpoolMutex, false);
     size_t successCount = 0;
     for (auto const& tx : *_txs)
     {
@@ -197,7 +198,7 @@ void MemoryStorage::batchImportTxs(TransactionsPtr _txs)
         {
             continue;
         }
-        auto ret = verifyAndSubmitTransaction(tx, nullptr, false);
+        auto ret = verifyAndSubmitTransaction(tx, nullptr, false, false);
         if (ret != TransactionStatus::None)
         {
             continue;
@@ -211,7 +212,7 @@ void MemoryStorage::batchImportTxs(TransactionsPtr _txs)
 
 
 TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
-    Transaction::Ptr _tx, TxSubmitCallback _txSubmitCallback, bool _checkPoolLimit)
+    Transaction::Ptr _tx, TxSubmitCallback _txSubmitCallback, bool _checkPoolLimit, bool _lock)
 {
     // Note: In order to ensure that transactions can reach all nodes, transactions from P2P are not
     // restricted
@@ -233,7 +234,14 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
         {
             _tx->setSubmitCallback(_txSubmitCallback);
         }
-        result = insert(_tx);
+        if (_lock)
+        {
+            result = insert(_tx);
+        }
+        else
+        {
+            result = insertWithoutLock(_tx);
+        }
     }
     return result;
 }
