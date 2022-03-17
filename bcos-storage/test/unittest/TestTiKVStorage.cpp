@@ -5,6 +5,7 @@
 #include <bcos-utilities/DataConvertUtility.h>
 #include <rocksdb/write_batch.h>
 #include <tbb/concurrent_vector.h>
+#include <tbb/parallel_for.h>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/iostreams/device/back_inserter.hpp>
@@ -132,7 +133,9 @@ struct TestTiKVStorageFixture
                         BOOST_CHECK_EQUAL(entries.size(), tableEntries);
                         for (size_t i = 0; i < tableEntries; ++i)
                         {
-                            BOOST_CHECK_EQUAL(entries[i]->getField(0), std::string("value3"));
+                            // BOOST_CHECK_EQUAL(entries[i]->getField(0), std::string("value3"));
+                            BOOST_CHECK_EQUAL(
+                                entries[i]->getField(0), std::string("value_") + keys[i].substr(3));
                         }
                     });
             });
@@ -310,7 +313,7 @@ BOOST_AUTO_TEST_CASE(asyncGetPrimaryKeys)
     storage->asyncGetRow(tableInfo->name(), "newkey" + boost::lexical_cast<std::string>(1050),
         [&](Error::UniquePtr error, std::optional<Entry> entry) {
             BOOST_CHECK(!error.get());
-            BOOST_CHECK(entry);
+            BOOST_CHECK(entry.has_value());
         });
 
     // clean new data
@@ -360,12 +363,11 @@ BOOST_AUTO_TEST_CASE(asyncGetRows)
                 auto& entry = entries[i];
                 if (i < total)
                 {
-                    BOOST_CHECK_NE(entry.has_value(), false);
+                    BOOST_CHECK_EQUAL(entry.has_value(), true);
 
                     auto data = entry->get();
-                    auto fields = std::string("value_" + boost::lexical_cast<std::string>(i));
-
-                    BOOST_CHECK_EQUAL(data, fields);
+                    BOOST_CHECK_EQUAL(
+                        data, std::string("value_" + boost::lexical_cast<std::string>(i)));
 
                     // BOOST_CHECK_EQUAL_COLLECTIONS(
                     //     data.begin(), data.end(), fields.begin(), fields.end());
@@ -867,7 +869,7 @@ BOOST_AUTO_TEST_CASE(multiStorageScondaryCrash)
             BOOST_CHECK_EQUAL(keys.size(), 0);
         });
 
-    // recommit prewrite
+    // recall prewrite
     params1.startTS = 0;
     storage->asyncPrepare(params1, *stateStorage, [&](Error::Ptr error, uint64_t ts) {
         BOOST_CHECK_EQUAL(error.get(), nullptr);
@@ -936,13 +938,15 @@ BOOST_AUTO_TEST_CASE(multiStorageScondaryCrash)
         [&](Error::UniquePtr error, std::vector<std::string> keys) {
             BOOST_CHECK_EQUAL(error.get(), nullptr);
             BOOST_CHECK_EQUAL(keys.size(), total);
+            std::sort(keys.begin(), keys.end());
             storage->asyncGetRows(testTableName, keys,
                 [&](Error::UniquePtr error, std::vector<std::optional<Entry>> entries) {
                     BOOST_CHECK_EQUAL(error.get(), nullptr);
                     BOOST_CHECK_EQUAL(entries.size(), total);
                     for (size_t i = 0; i < total; ++i)
                     {
-                        BOOST_CHECK_EQUAL(entries[i]->getField(0), std::string("value3"));
+                        auto value = "value_" + keys[i].substr(3);
+                        BOOST_CHECK_EQUAL(entries[i]->getField(0), value);
                     }
                 });
         });
@@ -957,7 +961,7 @@ BOOST_AUTO_TEST_CASE(multiStorageScondaryCrash)
     storage->asyncSetRow(storage::StateStorage::SYS_TABLES, table2Name, entry2,
         [](Error::UniquePtr error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
 
-    for (size_t i = 0; i < total; ++i)
+    for (size_t i = 0; i < tableEntries; ++i)
     {
         auto entry1 = table1->newEntry();
         auto key1 = "key" + boost::lexical_cast<std::string>(i);
@@ -1138,7 +1142,8 @@ BOOST_AUTO_TEST_CASE(multiStoragePrimaryCrash)
                     BOOST_CHECK_EQUAL(entries.size(), total);
                     for (size_t i = 0; i < total; ++i)
                     {
-                        BOOST_CHECK_EQUAL(entries[i]->getField(0), std::string("value3"));
+                        auto value = "value_" + keys[i].substr(3);
+                        BOOST_CHECK_EQUAL(entries[i]->getField(0), value);
                     }
                 });
         });
@@ -1148,12 +1153,22 @@ BOOST_AUTO_TEST_CASE(multiStoragePrimaryCrash)
     entry1.setStatus(Entry::DELETED);
     storage->asyncSetRow(storage::StateStorage::SYS_TABLES, table1Name, entry1,
         [](Error::UniquePtr error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
+    storage->asyncGetRow(storage::StateStorage::SYS_TABLES, table1Name,
+        [](Error::UniquePtr error, std::optional<Entry> entry) {
+            BOOST_CHECK_EQUAL(error.get(), nullptr);
+            BOOST_CHECK_EQUAL(entry.has_value(), false);
+        });
+
     auto entry2 = Entry();
     entry2.setStatus(Entry::DELETED);
     storage->asyncSetRow(storage::StateStorage::SYS_TABLES, table2Name, entry2,
         [](Error::UniquePtr error) { BOOST_CHECK_EQUAL(error.get(), nullptr); });
-
-    for (size_t i = 0; i < total; ++i)
+    storage->asyncGetRow(storage::StateStorage::SYS_TABLES, table2Name,
+        [](Error::UniquePtr error, std::optional<Entry> entry) {
+            BOOST_CHECK_EQUAL(error.get(), nullptr);
+            BOOST_CHECK_EQUAL(entry.has_value(), false);
+        });
+    for (size_t i = 0; i < tableEntries; ++i)
     {
         auto entry1 = table1->newEntry();
         auto key1 = "key" + boost::lexical_cast<std::string>(i);
@@ -1169,9 +1184,19 @@ BOOST_AUTO_TEST_CASE(multiStoragePrimaryCrash)
     }
     // check if the data is deleted
     storage->asyncGetPrimaryKeys(table1Name, std::optional<storage::Condition const>(),
-        [](Error::UniquePtr error, std::vector<std::string> keys) {
+        [&](Error::UniquePtr error, std::vector<std::string> keys) {
             BOOST_CHECK_EQUAL(error.get(), nullptr);
-            BOOST_CHECK_EQUAL(keys.size(), 0);
+            // BOOST_CHECK_EQUAL(keys.size(), 0);
+            storage->asyncGetRows(table1Name, keys,
+                [&](Error::UniquePtr error, std::vector<std::optional<Entry>> entries) {
+                    BOOST_CHECK_EQUAL(error.get(), nullptr);
+                    BOOST_CHECK_EQUAL(entries.size(), 0);
+                    // for (size_t i = 0; i < tableEntries; ++i)
+                    // {
+                    //     BOOST_CHECK_EQUAL(keys[i], "");
+                    //     BOOST_CHECK_EQUAL(entries[i]->getField(0), "");
+                    // }
+                });
         });
     // check if the data is deleted
     storage->asyncGetPrimaryKeys(table2Name, std::optional<storage::Condition const>(),

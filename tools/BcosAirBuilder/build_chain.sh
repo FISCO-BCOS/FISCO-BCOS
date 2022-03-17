@@ -741,6 +741,8 @@ generate_common_ini() {
 [storage]
     data_path=data
     enable_cache=true
+    type=RocksDB
+    pd_addrs=
 
 [txpool]
     limit=15000

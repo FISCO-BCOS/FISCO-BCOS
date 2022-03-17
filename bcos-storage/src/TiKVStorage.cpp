@@ -29,6 +29,7 @@
 #include "pingcap/kv/Txn.h"
 #include <bcos-utilities/Error.h>
 #include <tbb/concurrent_vector.h>
+#include <tbb/parallel_for.h>
 #include <tbb/spin_mutex.h>
 #include <exception>
 
@@ -72,11 +73,11 @@ void TiKVStorage::asyncGetPrimaryKeys(std::string_view _table,
         }
     }
     auto end = utcTime();
-    _callback(nullptr, std::move(result));
     STORAGE_TIKV_LOG(DEBUG) << LOG_DESC("asyncGetPrimaryKeys") << LOG_KV("table", _table)
                             << LOG_KV("count", result.size())
                             << LOG_KV("read time(ms)", end - start)
                             << LOG_KV("callback time(ms)", utcTime() - end);
+    _callback(nullptr, std::move(result));
 }
 
 void TiKVStorage::asyncGetRow(std::string_view _table, std::string_view _key,
@@ -86,8 +87,9 @@ void TiKVStorage::asyncGetRow(std::string_view _table, std::string_view _key,
     {
         if (!isValid(_table, _key))
         {
-            STORAGE_TIKV_LOG(WARNING) << LOG_DESC("asyncGetRow empty tableName or key")
-                                      << LOG_KV("table", _table) << LOG_KV("key", _key);
+            STORAGE_TIKV_LOG(WARNING)
+                << LOG_DESC("asyncGetRow empty tableName or key") << LOG_KV("table", _table)
+                << LOG_KV("key", *toHexString(_key));
             _callback(BCOS_ERROR_UNIQUE_PTR(TableNotExists, "empty tableName or key"), {});
             return;
         }
@@ -99,7 +101,7 @@ void TiKVStorage::asyncGetRow(std::string_view _table, std::string_view _key,
         if (value.empty())
         {
             STORAGE_TIKV_LOG(TRACE) << LOG_DESC("asyncGetRow empty") << LOG_KV("table", _table)
-                                    << LOG_KV("key", _key) << LOG_KV("dbKey", dbKey);
+                                    << LOG_KV("key", *toHexString(_key)) << LOG_KV("dbKey", dbKey);
             _callback(nullptr, {});
             return;
         }
@@ -108,7 +110,8 @@ void TiKVStorage::asyncGetRow(std::string_view _table, std::string_view _key,
         entry->set(value);
         _callback(nullptr, std::move(entry));
         STORAGE_TIKV_LOG(DEBUG) << LOG_DESC("asyncGetRow") << LOG_KV("table", _table)
-                                << LOG_KV("key", _key) << LOG_KV("read time(ms)", end - start)
+                                << LOG_KV("key", *toHexString(_key))
+                                << LOG_KV("read time(ms)", end - start)
                                 << LOG_KV("callback time(ms)", utcTime() - end);
     }
     catch (const std::exception& e)
@@ -155,18 +158,22 @@ void TiKVStorage::asyncGetRows(std::string_view _table,
                             auto value = result[realKeys[i]];
                             if (!value.empty())
                             {
-                                entries[i].emplace(Entry());
+                                entries[i] = std::make_optional(Entry());
                                 entries[i]->set(value);
+                            }
+                            else
+                            {
+                                STORAGE_LOG(TRACE) << "Multi get rows, not found key: " << keys[i];
                             }
                         }
                     });
                 auto decode = utcTime();
-                _callback(nullptr, std::move(entries));
                 STORAGE_TIKV_LOG(DEBUG)
                     << LOG_DESC("asyncGetRows") << LOG_KV("table", _table)
                     << LOG_KV("count", entries.size()) << LOG_KV("read time(ms)", end - start)
                     << LOG_KV("decode time(ms)", decode - end)
                     << LOG_KV("callback time(ms)", utcTime() - decode);
+                _callback(nullptr, std::move(entries));
             },
             _keys);
     }
@@ -196,8 +203,8 @@ void TiKVStorage::asyncSetRow(std::string_view _table, std::string_view _key, En
 
         if (_entry.status() == Entry::DELETED)
         {
-            STORAGE_TIKV_LOG(DEBUG)
-                << LOG_DESC("asyncSetRow delete") << LOG_KV("table", _table) << LOG_KV("key", _key);
+            STORAGE_TIKV_LOG(DEBUG) << LOG_DESC("asyncSetRow delete") << LOG_KV("table", _table)
+                                    << LOG_KV("key", _key) << LOG_KV("dbKey", dbKey);
             txn.set(dbKey, "");
         }
         else
@@ -250,7 +257,7 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorageIn
         auto encode = utcTime();
         if (mutations.empty() && param.startTS == 0)
         {
-            STORAGE_TIKV_LOG(ERROR)
+            STORAGE_TIKV_LOG(WARNING)
                 << LOG_DESC("asyncPrepare empty storage") << LOG_KV("number", param.number);
             callback(BCOS_ERROR_UNIQUE_PTR(EmptyStorage, "commit storage is empty"), 0);
             return;
@@ -264,25 +271,25 @@ void TiKVStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorageIn
             auto result = m_committer->prewriteKeys();
             auto write = utcTime();
             callback(nullptr, result.start_ts);
-            STORAGE_LOG(INFO) << "asyncPrepare primary" << LOG_KV("blockNumber", param.number)
-                              << LOG_KV("size", size) << LOG_KV("primaryLock", primaryLock)
-                              << LOG_KV("startTS", result.start_ts)
-                              << LOG_KV("encode time(ms)", encode - start)
-                              << LOG_KV("prewrite time(ms)", write - encode)
-                              << LOG_KV("callback time(ms)", utcTime() - write);
+            STORAGE_TIKV_LOG(INFO)
+                << "asyncPrepare primary" << LOG_KV("blockNumber", param.number)
+                << LOG_KV("size", size) << LOG_KV("primaryLock", primaryLock)
+                << LOG_KV("startTS", result.start_ts) << LOG_KV("encode time(ms)", encode - start)
+                << LOG_KV("prewrite time(ms)", write - encode)
+                << LOG_KV("callback time(ms)", utcTime() - write);
         }
         else
         {
             m_committer->prewriteKeys(param.startTS);
             auto write = utcTime();
             m_committer = nullptr;
+            STORAGE_TIKV_LOG(INFO)
+                << "asyncPrepare secondary" << LOG_KV("blockNumber", param.number)
+                << LOG_KV("size", size) << LOG_KV("primaryLock", primaryLock)
+                << LOG_KV("startTS", param.startTS) << LOG_KV("encode time(ms)", encode - start)
+                << LOG_KV("prewrite time(ms)", write - encode)
+                << LOG_KV("callback time(ms)", utcTime() - write);
             callback(nullptr, 0);
-            STORAGE_LOG(INFO) << "asyncPrepare secondary" << LOG_KV("blockNumber", param.number)
-                              << LOG_KV("size", size) << LOG_KV("primaryLock", primaryLock)
-                              << LOG_KV("startTS", param.startTS)
-                              << LOG_KV("encode time(ms)", encode - start)
-                              << LOG_KV("prewrite time(ms)", write - encode)
-                              << LOG_KV("callback time(ms)", utcTime() - write);
         }
     }
     catch (const std::exception& e)

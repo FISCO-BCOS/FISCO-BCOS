@@ -149,7 +149,7 @@ jobs:
         run: mkdir build && cd build && cmake .. -DTESTS=OFF -DHUNTER_CONFIGURATION_TYPES=Debug
       - name: compile
         run: cd build && make -j2
-        
+
   build_with_arm_linux:
     name: build_with_arm_linux
     runs-on: ubuntu-20.04
@@ -203,6 +203,60 @@ jobs:
             export PATH=/root/.cargo/bin:${PATH}
             mkdir -p build && cd build && cmake .. -DTESTS=OFF
             cd build && make -j2
+  build_centos_with_TiKV:
+    name: build_centos_with_TiKV
+    runs-on: ubuntu-latest
+    container:
+      image: docker.io/centos:7
+      volumes:
+        - /github/home/.hunter:/github/home/.hunter
+        - /__w/FISCO-BCOS:/__w/FISCO-BCOS
+    steps:
+      - name: install CentOS dependencies
+        run: |
+          yum install -y epel-release centos-release-scl
+          yum install -y git make gcc gcc-c++ glibc-static glibc-devel cmake3 ccache llvm-toolset-7 devtoolset-7 libzstd-devel zlib-devel flex bison python-devel python3-devel
+          source /opt/rh/devtoolset-7/enable
+          alias cmake='cmake3'
+          yum install -y https://repo.ius.io/ius-release-el7.rpm https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+          yum swap -y git git224-core
+          git --version
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 5
+      - name: install rust language
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2021-06-17
+          override: true
+      - uses: actions/cache@v2
+        id: cache
+        with:
+          path: |
+            /home/runner/.hunter
+            /github/home/.hunter
+            deps/src
+            ccache
+          key: hunter-centos-v7-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          restore-keys: |
+            hunter-centos-v7-notest-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            hunter-centos-v7-notest-${{ runner.temp }}-${{ github.base_ref }}-
+            hunter-centos-v7-notest-${{ runner.temp }}-
+      - name: configure and compile
+        run: |
+          source /opt/rh/devtoolset-7/enable
+          export LIBCLANG_PATH=/opt/rh/llvm-toolset-7/root/lib64/
+          source /opt/rh/llvm-toolset-7/enable
+          mkdir build && cd build && cmake3 .. -DTESTS=ON -DUSE_TiKV=ON
+          make -j3
+          mkdir -p /root/.tiup/bin/
+          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+          source /github/home/.profile
+          tiup update --self && tiup update playground
+          tiup clean --all
+          tiup playground v5.4.0 --mode tikv-slim &
+          sleep 10
+          CTEST_OUTPUT_ON_FAILURE=TRUE make test
 
   build_with_centos:
     name: build_with_centos
