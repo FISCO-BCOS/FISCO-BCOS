@@ -88,7 +88,7 @@ void RPCInitializer::initChannelRPCServer(boost::property_tree::ptree const& _pt
     m_channelRPCServer->setChannelServer(server);
 
     // start channelServer before initialize ledger, because amdb-proxy depends on channel
-    bool disableDynamicGroup = _pt.get<bool>("rpc.disable_dynamic_group", true);
+    bool disableDynamicGroup = _pt.get<bool>("rpc.disable_dynamic_group", false);
     auto rpcEntity = new rpc::Rpc(nullptr, nullptr);
     rpcEntity->setDisableDynamicGroup(disableDynamicGroup);
 
@@ -217,7 +217,7 @@ void RPCInitializer::initConfig(boost::property_tree::ptree const& _pt)
             });
 
         // Don't to set destructor, the ModularServer will destruct.
-        bool disableDynamicGroup = _pt.get<bool>("rpc.disable_dynamic_group", true);
+        bool disableDynamicGroup = _pt.get<bool>("rpc.disable_dynamic_group", false);
         auto rpcEntity = new rpc::Rpc(m_ledgerInitializer, m_p2pService);
         rpcEntity->setDisableDynamicGroup(disableDynamicGroup);
         auto ipAddress = boost::asio::ip::make_address(listenIP);
