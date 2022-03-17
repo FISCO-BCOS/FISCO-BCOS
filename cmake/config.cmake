@@ -41,7 +41,7 @@ hunter_config(evmone VERSION 8.2.0-53ff1c54
 	CMAKE_ARGS CMAKE_CXX_FLAGS=-std=c++17 BUILD_SHARED_LIBS=OFF
 )
 
-hunter_config(tarscpp VERSION 3.0.3-7299ad23)
+hunter_config(tarscpp VERSION 3.0.3-3b65a48a)
 
 hunter_config(
     Boost VERSION "1.76.0-local"
