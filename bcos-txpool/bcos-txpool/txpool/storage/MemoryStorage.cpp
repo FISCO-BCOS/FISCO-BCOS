@@ -130,15 +130,25 @@ TransactionStatus MemoryStorage::enforceSubmitTransaction(Transaction::Ptr _tx)
         // The transaction has already been sealed by another node
         return TransactionStatus::AlreadyInTxPool;
     }
-    // enforce import the transaction with duplicated nonce(for the consensus proposal)
-    if (!_tx->sealed())
+    auto status = insertWithoutLock(_tx);
+    if (status != TransactionStatus::None)
     {
-        m_sealedTxsSize++;
+        auto tx = m_txsTable.at(_tx->hash());
+        TXPOOL_LOG(WARNING) << LOG_DESC("insertWithoutLock failed for already has the tx")
+                            << LOG_KV("hash", tx->hash().abridged())
+                            << LOG_KV("status", tx->sealed());
+        if (!tx->sealed())
+        {
+            tx->setSealed(true);
+            m_sealedTxsSize++;
+        }
+    }
+    else
+    {
         // avoid the sealed txs be sealed again
         _tx->setSealed(true);
+        m_sealedTxsSize++;
     }
-    insertWithoutLock(_tx);
-    // TODO: notifyUnsealedTxs()
     return TransactionStatus::None;
 }
 
@@ -170,6 +180,7 @@ bool MemoryStorage::batchVerifyAndSubmitTransaction(
             return false;
         }
     }
+    notifyUnsealedTxsSize();
     TXPOOL_LOG(DEBUG) << LOG_DESC("batchVerifyAndSubmitTransaction success")
                       << LOG_KV("totalTxs", _txs->size()) << LOG_KV("lockT", lockT)
                       << LOG_KV("submitT", (utcTime() - recordT));
@@ -242,7 +253,8 @@ void MemoryStorage::notifyInvalidReceipt(
     errorMsg << _status;
     _txSubmitCallback(std::make_shared<Error>((int32_t)_status, errorMsg.str()), txResult);
     TXPOOL_LOG(WARNING) << LOG_DESC("notifyReceipt: reject invalid tx")
-                        << LOG_KV("tx", _txHash.abridged()) << LOG_KV("exception", _status);
+                        << LOG_KV("tx", _txHash.abridged())
+                        << LOG_KV("txpoolSize", m_txsTable.size()) << LOG_KV("exception", _status);
 }
 
 TransactionStatus MemoryStorage::insert(Transaction::ConstPtr _tx)
