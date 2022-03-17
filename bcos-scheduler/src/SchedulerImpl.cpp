@@ -201,7 +201,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
     // is setting newBlockHeader, which will cause the signatureList ilegal
     auto executedHeader = frontBlock.block()->blockHeader();
     auto signature = executedHeader->signatureList();
-    if (signature.size() == 0)
+    if (signature.empty())
     {
         frontBlock.block()->setBlockHeader(std::move(header));
     }
@@ -234,11 +234,16 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
             }
 
             SCHEDULER_LOG(INFO) << "CommitBlock success"
-                                << LOG_KV("block number", ledgerConfig->blockNumber());
+                                << LOG_KV("block number", ledgerConfig->blockNumber())
+                                << LOG_KV("gas limit", std::get<1>(ledgerConfig->gasLimit()));
 
             auto& frontBlock = m_blocks.front();
             auto blockNumber = ledgerConfig->blockNumber();
-            m_gasLimit = ledgerConfig->gasLimit();
+            auto gasLimit = ledgerConfig->gasLimit();
+            if (std::get<1>(gasLimit) <= blockNumber)
+            {
+                m_gasLimit = std::get<0>(gasLimit);
+            }
 
             if (m_txNotifier)
             {
@@ -403,8 +408,9 @@ void SchedulerImpl::asyncGetLedgerConfig(
     auto collector = [summary = std::move(summary), ledgerConfig = std::move(ledgerConfig),
                          callback = std::move(callbackPtr)](Error::Ptr error,
                          std::variant<std::tuple<bool, consensus::ConsensusNodeListPtr>,
-                             std::tuple<int, std::string>, bcos::protocol::BlockNumber,
-                             bcos::crypto::HashType>&& result) mutable {
+                             std::tuple<int, std::string, bcos::protocol::BlockNumber>,
+                             bcos::protocol::BlockNumber, bcos::crypto::HashType>&&
+                             result) mutable {
         auto& [total, success, failed] = *summary;
 
         if (error)
@@ -429,8 +435,8 @@ void SchedulerImpl::asyncGetLedgerConfig(
                             ledgerConfig->setObserverNodeList(*list);
                         }
                     },
-                    [&ledgerConfig](std::tuple<int, std::string> config) {
-                        auto& [type, value] = config;
+                    [&ledgerConfig](std::tuple<int, std::string, protocol::BlockNumber> config) {
+                        auto& [type, value, blockNumber] = config;
                         switch (type)
                         {
                         case 0:
@@ -442,7 +448,8 @@ void SchedulerImpl::asyncGetLedgerConfig(
                                 boost::lexical_cast<uint64_t>(value));
                             break;
                         case 2:
-                            ledgerConfig->setGasLimit(boost::lexical_cast<uint64_t>(value));
+                            ledgerConfig->setGasLimit(
+                                std::make_tuple(boost::lexical_cast<uint64_t>(value), blockNumber));
                             break;
                         default:
                             BOOST_THROW_EXCEPTION(BCOS_ERROR(SchedulerError::UnknownError,
@@ -485,16 +492,16 @@ void SchedulerImpl::asyncGetLedgerConfig(
             collector(std::move(error), std::tuple{false, std::move(list)});
         });
     m_ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_TX_COUNT_LIMIT,
-        [collector](Error::Ptr error, std::string config, protocol::BlockNumber) mutable {
-            collector(std::move(error), std::tuple{0, std::move(config)});
+        [collector](Error::Ptr error, std::string config, protocol::BlockNumber _number) mutable {
+            collector(std::move(error), std::tuple{0, std::move(config), _number});
         });
     m_ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_CONSENSUS_LEADER_PERIOD,
-        [collector](Error::Ptr error, std::string config, protocol::BlockNumber) mutable {
-            collector(std::move(error), std::tuple{1, std::move(config)});
+        [collector](Error::Ptr error, std::string config, protocol::BlockNumber _number) mutable {
+            collector(std::move(error), std::tuple{1, std::move(config), _number});
         });
     m_ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_TX_GAS_LIMIT,
-        [collector](Error::Ptr error, std::string config, protocol::BlockNumber) mutable {
-            collector(std::move(error), std::tuple{2, std::move(config)});
+        [collector](Error::Ptr error, std::string config, protocol::BlockNumber _number) mutable {
+            collector(std::move(error), std::tuple{2, std::move(config), _number});
         });
     m_ledger->asyncGetBlockNumber(
         [collector, ledger = m_ledger](Error::Ptr error, protocol::BlockNumber number) mutable {
