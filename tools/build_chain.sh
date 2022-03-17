@@ -603,7 +603,7 @@ generate_config_ini()
     channel_listen_port=$(( offset + port_array[1] ))
     jsonrpc_listen_ip=${listen_ip}
     jsonrpc_listen_port=$(( offset + port_array[2] ))
-    disable_dynamic_group=true
+    disable_dynamic_group=false
 [p2p]
     listen_ip=${default_listen_ip}
     listen_port=$(( offset + port_array[0] ))
