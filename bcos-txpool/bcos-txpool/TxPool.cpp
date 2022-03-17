@@ -419,18 +419,18 @@ void TxPool::init()
     TXPOOL_LOG(INFO) << LOG_DESC("init sync config success");
 
     auto self = std::weak_ptr<TxPool>(shared_from_this());
-    txsSyncConfig->frontService()->asyncGetNodeIDs(
-        [self](Error::Ptr _error, std::shared_ptr<const crypto::NodeIDs> _nodeIDs) {
+    txsSyncConfig->frontService()->asyncGetGroupNodeInfo(
+        [self](Error::Ptr _error, bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo) {
             if (_error != nullptr)
             {
                 TXPOOL_LOG(WARNING)
-                    << LOG_DESC("asyncGetNodeIDs failed") << LOG_KV("code", _error->errorCode())
-                    << LOG_KV("msg", _error->errorMessage());
+                    << LOG_DESC("asyncGetGroupNodeInfo failed")
+                    << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
                 return;
             }
             try
             {
-                if (!_nodeIDs || _nodeIDs->size() == 0)
+                if (!_groupNodeInfo || _groupNodeInfo->nodeIDList().size() == 0)
                 {
                     return;
                 }
@@ -439,14 +439,22 @@ void TxPool::init()
                 {
                     return;
                 }
-                NodeIDSet nodeIdSet(_nodeIDs->begin(), _nodeIDs->end());
+                NodeIDSet nodeIdSet;
+                auto const& nodeIDList = _groupNodeInfo->nodeIDList();
+                for (auto const& nodeIDStr : nodeIDList)
+                {
+                    auto nodeID =
+                        txpool->m_config->blockFactory()->cryptoSuite()->keyFactory()->createKey(
+                            fromHex(nodeIDStr));
+                    nodeIdSet.insert(nodeID);
+                }
                 txpool->m_transactionSync->config()->setConnectedNodeList(std::move(nodeIdSet));
-                TXPOOL_LOG(INFO) << LOG_DESC("asyncGetNodeIDs")
-                                 << LOG_KV("connectedSize", _nodeIDs->size());
+                TXPOOL_LOG(INFO) << LOG_DESC("asyncGetGroupNodeInfo")
+                                 << LOG_KV("connectedSize", nodeIdSet.size());
             }
             catch (std::exception const& e)
             {
-                TXPOOL_LOG(WARNING) << LOG_DESC("asyncGetNodeIDs exception")
+                TXPOOL_LOG(WARNING) << LOG_DESC("asyncGetGroupNodeInfo exception")
                                     << LOG_KV("error", boost::diagnostic_information(e));
             }
         });

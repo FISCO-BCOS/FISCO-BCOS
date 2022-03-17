@@ -44,5 +44,21 @@ enum ModuleID
     TxsSync = 2001,
     AMOP = 3000,
 };
+enum ProtocolModuleID : uint32_t
+{
+    NodeService = 0x0,
+    GatewayService = 0x1,
+    RpcService = 0x2,
+    ExecutorService = 0x3,
+};
+enum ProtocolVersion : uint32_t
+{
+    INVALID = 0,  // Negotiation failed
+    V1 = 1,
+};
+enum Version
+{
+    RC4_VERSION = 4,
+};
 }  // namespace protocol
 }  // namespace bcos

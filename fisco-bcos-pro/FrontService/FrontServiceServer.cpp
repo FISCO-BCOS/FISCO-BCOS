@@ -1,29 +1,28 @@
 #include "FrontServiceServer.h"
 #include "Common/TarsUtils.h"
+#include <bcos-tars-protocol/protocol/GroupNodeInfoImpl.h>
 
 using namespace bcostars;
 
-bcostars::Error FrontServiceServer::asyncGetNodeIDs(
-    vector<vector<tars::Char>>& nodeIDs, tars::TarsCurrentPtr current)
+bcostars::Error FrontServiceServer::asyncGetGroupNodeInfo(
+    GroupNodeInfo&, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
 
-    m_frontServiceInitializer->front()->asyncGetNodeIDs(
-        [current](bcos::Error::Ptr _error, std::shared_ptr<const bcos::crypto::NodeIDs> _nodeIDs) {
+    m_frontServiceInitializer->front()->asyncGetGroupNodeInfo(
+        [current](bcos::Error::Ptr _error, bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo) {
             // Note: the nodeIDs maybe null if no connections
             std::vector<std::vector<char>> tarsNodeIDs;
-            if (!_nodeIDs)
+            if (!_groupNodeInfo)
             {
-                async_response_asyncGetNodeIDs(current, toTarsError(_error), tarsNodeIDs);
+                async_response_asyncGetGroupNodeInfo(
+                    current, toTarsError(_error), bcostars::GroupNodeInfo());
                 return;
             }
-            tarsNodeIDs.reserve(_nodeIDs->size());
-            for (auto const& it : *_nodeIDs)
-            {
-                auto nodeIDData = it->data();
-                tarsNodeIDs.emplace_back(nodeIDData.begin(), nodeIDData.end());
-            }
-            async_response_asyncGetNodeIDs(current, toTarsError(_error), tarsNodeIDs);
+            auto groupInfoImpl =
+                std::dynamic_pointer_cast<bcostars::protocol::GroupNodeInfoImpl>(_groupNodeInfo);
+            async_response_asyncGetGroupNodeInfo(
+                current, toTarsError(_error), groupInfoImpl->inner());
         });
 
     return bcostars::Error();
@@ -137,24 +136,15 @@ bcostars::Error FrontServiceServer::onReceiveMessage(const std::string& groupID,
     return bcostars::Error();
 }
 
-bcostars::Error FrontServiceServer::onReceivedNodeIDs(const std::string& groupID,
-    const vector<vector<tars::Char>>& nodeIDs, tars::TarsCurrentPtr current)
+bcostars::Error FrontServiceServer::onReceiveGroupNodeInfo(const std::string& groupID,
+    const bcostars::GroupNodeInfo& _groupNodeInfo, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
-
-    auto bcosNodeIDs = std::make_shared<std::vector<bcos::crypto::NodeIDPtr>>();
-    bcosNodeIDs->reserve(nodeIDs.size());
-
-    for (auto const& it : nodeIDs)
-    {
-        bcosNodeIDs->push_back(m_frontServiceInitializer->keyFactory()->createKey(
-            bcos::bytesConstRef((bcos::byte*)it.data(), it.size())));
-    }
-
-    m_frontServiceInitializer->front()->onReceiveNodeIDs(
-        groupID, bcosNodeIDs, [current](bcos::Error::Ptr error) {
-            async_response_onReceivedNodeIDs(current, toTarsError(error));
+    auto bcosGroupNodeInfo = std::make_shared<bcostars::protocol::GroupNodeInfoImpl>(
+        [m_groupNodeInfo = _groupNodeInfo]() mutable { return &m_groupNodeInfo; });
+    m_frontServiceInitializer->front()->onReceiveGroupNodeInfo(
+        groupID, bcosGroupNodeInfo, [current](bcos::Error::Ptr error) {
+            async_response_onReceiveGroupNodeInfo(current, toTarsError(error));
         });
-
     return bcostars::Error();
 }

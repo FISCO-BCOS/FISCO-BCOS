@@ -1,0 +1,9 @@
+module bcostars
+{
+struct ProtocolInfo
+{
+    1 require int moduleID;
+    2 require int minVersion;
+    3 require int maxVersion;
+};
+};

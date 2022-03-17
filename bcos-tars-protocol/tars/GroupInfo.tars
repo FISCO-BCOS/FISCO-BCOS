@@ -1,3 +1,4 @@
+#include "ProtocolInfo.tars"
 module bcostars
 {
 struct ChainNodeInfo
@@ -9,6 +10,7 @@ struct ChainNodeInfo
     5 optional string nodeID;
     6 require bool microService;
     7 optional int nodeType;
+    8 optional ProtocolInfo protocolInfo;
 };
 struct GroupInfo
 {

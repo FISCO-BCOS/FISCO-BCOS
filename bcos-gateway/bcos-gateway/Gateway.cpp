@@ -101,13 +101,14 @@ void Gateway::asyncGetPeers(
 /**
  * @brief: get nodeIDs from gateway
  * @param _groupID:
- * @param _getNodeIDsFunc: get nodeIDs callback
+ * @param _onGetGroupNodeInfo: get nodeIDs callback
  * @return void
  */
-void Gateway::asyncGetNodeIDs(const std::string& _groupID, GetNodeIDsFunc _getNodeIDsFunc)
+void Gateway::asyncGetGroupNodeInfo(
+    const std::string& _groupID, GetGroupNodeInfoFunc _onGetGroupNodeInfo)
 {
-    auto nodeIDs = m_gatewayNodeManager->getGroupNodeIDList(_groupID);
-    _getNodeIDsFunc(nullptr, nodeIDs);
+    auto groupNodeInfo = m_gatewayNodeManager->getGroupNodeInfoList(_groupID);
+    _onGetGroupNodeInfo(nullptr, groupNodeInfo);
 }
 
 

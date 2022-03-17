@@ -21,7 +21,6 @@
 #pragma once
 #include "ChainNodeInfoFactory.h"
 #include "GroupTypeDef.h"
-#include <json/json.h>
 namespace bcos
 {
 namespace group
@@ -100,77 +99,6 @@ public:
     {
         ReadGuard l(x_nodeInfos);
         return m_nodeInfos.size();
-    }
-
-    virtual void deserialize(const std::string& _json)
-    {
-        Json::Value root;
-        Json::Reader jsonReader;
-
-        if (!jsonReader.parse(_json, root))
-        {
-            BOOST_THROW_EXCEPTION(InvalidGroupInfo() << errinfo_comment(
-                                      "The group information must be valid json string."));
-        }
-
-        if (!root.isMember("chainID"))
-        {
-            BOOST_THROW_EXCEPTION(InvalidGroupInfo()
-                                  << errinfo_comment("The group information must contain chainID"));
-        }
-        setChainID(root["chainID"].asString());
-
-        if (!root.isMember("groupID"))
-        {
-            BOOST_THROW_EXCEPTION(InvalidGroupInfo()
-                                  << errinfo_comment("The group information must contain groupID"));
-        }
-        setGroupID(root["groupID"].asString());
-
-        if (root.isMember("genesisConfig"))
-        {
-            setGenesisConfig(root["genesisConfig"].asString());
-        }
-
-
-        if (!root.isMember("iniConfig"))
-        {
-            BOOST_THROW_EXCEPTION(InvalidGroupInfo() << errinfo_comment(
-                                      "The group information must contain iniConfig"));
-        }
-        setIniConfig(root["iniConfig"].asString());
-
-        // nodeList
-        if (!root.isMember("nodeList") || !root["nodeList"].isArray())
-        {
-            BOOST_THROW_EXCEPTION(InvalidGroupInfo() << errinfo_comment(
-                                      "The group information must contain nodeList"));
-        }
-
-        for (Json::ArrayIndex i = 0; i < root["nodeList"].size(); ++i)
-        {
-            auto& nodeInfo = root["nodeList"][i];
-            Json::FastWriter writer;
-            std::string nodeStr = writer.write(nodeInfo);
-            appendNodeInfo(m_chainNodeInfoFactory->createNodeInfo(nodeStr));
-        }
-    }
-
-    virtual Json::Value serialize()
-    {
-        Json::Value jResp;
-        jResp["chainID"] = chainID();
-        jResp["groupID"] = groupID();
-        jResp["genesisConfig"] = genesisConfig();
-        jResp["iniConfig"] = iniConfig();
-        jResp["nodeList"] = Json::Value(Json::arrayValue);
-        const auto& nodes = nodeInfos();
-        for (auto const& it : nodes)
-        {
-            jResp["nodeList"].append(it.second->serialize());
-        }
-
-        return jResp;
     }
 
     // return copied nodeInfos to ensure thread-safe
