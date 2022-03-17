@@ -33,6 +33,7 @@
 #include "StorageInitializer.h"
 #include "bcos-framework/interfaces/executor/NativeExecutionMessage.h"
 #include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
+#include "bcos-framework/interfaces/protocol/GlobalConfig.h"
 #include "bcos-framework/interfaces/protocol/Protocol.h"
 #include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/interfaces/rpc/RPCInterface.h"
@@ -145,11 +146,11 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
         auto transactionSubmitResultFactory =
             std::make_shared<TransactionSubmitResultFactoryImpl>();
 
-        m_scheduler =
-            SchedulerInitializer::build(executorManager, ledger, schedulerStorage, executionMessageFactory,
-                m_protocolInitializer->blockFactory(), m_protocolInitializer->txResultFactory(),
-                m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isAuthCheck(),
-                m_nodeConfig->isWasm());
+        m_scheduler = SchedulerInitializer::build(executorManager, ledger, schedulerStorage,
+            executionMessageFactory, m_protocolInitializer->blockFactory(),
+            m_protocolInitializer->txResultFactory(),
+            m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isAuthCheck(),
+            m_nodeConfig->isWasm());
 
         // init the txpool
         m_txpoolInitializer = std::make_shared<TxPoolInitializer>(
