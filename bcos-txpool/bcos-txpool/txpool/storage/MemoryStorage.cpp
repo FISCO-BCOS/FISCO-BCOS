@@ -257,7 +257,11 @@ TransactionStatus MemoryStorage::insertWithoutLock(Transaction::ConstPtr _tx)
     {
         return TransactionStatus::AlreadyInTxPool;
     }
-    m_txsTable[_tx->hash()] = _tx;
+    auto result = m_txsTable.insert(std::make_pair(_tx->hash(), _tx));
+    if (!result.second)
+    {
+        return TransactionStatus::AlreadyInTxPool;
+    }
     m_onReady();
     preCommitTransaction(_tx);
     notifyUnsealedTxsSize();

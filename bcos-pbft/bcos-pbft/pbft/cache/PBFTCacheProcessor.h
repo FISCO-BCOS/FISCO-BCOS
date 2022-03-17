@@ -188,7 +188,7 @@ public:
         {
             return false;
         }
-        return m_committedProposalList.count(_index);
+        return m_committedQueueIndexList.count(_index);
     }
 
     virtual uint64_t getViewChangeWeight(ViewType _view) { return m_viewChangeWeight.at(_view); }

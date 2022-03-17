@@ -33,7 +33,8 @@ void PBFTCacheProcessor::initState(PBFTProposalList const& _proposals, NodeIDPtr
     for (auto proposal : _proposals)
     {
         // the proposal has already been committed
-        if (proposal->index() <= m_config->committedProposal()->index())
+        if (proposal->index() <= m_config->committedProposal()->index() ||
+            m_committedQueueIndexList.count(proposal->index()))
         {
             continue;
         }
@@ -197,7 +198,11 @@ void PBFTCacheProcessor::checkAndPreCommit()
             continue;
         }
         updateCommitQueue(it.second->preCommitCache()->consensusProposal());
+        // refresh the timer when commit success
+        m_config->timer()->restart();
+        m_config->resetToView();
     }
+    resetTimer();
 }
 
 void PBFTCacheProcessor::checkAndCommit()
@@ -316,7 +321,6 @@ bool PBFTCacheProcessor::tryToApplyCommitQueue()
                        << LOG_KV("expectedIndex", m_config->expectedCheckPoint())
                        << m_config->printCurrentState();
         m_committedQueue.pop();
-        m_committedQueueIndexList.erase(index);
     }
     // try to execute the proposal
     if (!m_committedQueue.empty() &&
@@ -341,7 +345,6 @@ bool PBFTCacheProcessor::tryToApplyCommitQueue()
         }
         // commit the proposal
         m_committedQueue.pop();
-        m_committedQueueIndexList.erase(proposal->index());
         // in case of the same block execute more than once
         m_executingProposals[proposal->hash()] = proposal->index();
         applyStateMachine(lastAppliedProposal, proposal);
@@ -938,6 +941,7 @@ void PBFTCacheProcessor::tryToCommitStableCheckPoint()
                        << LOG_KV("index", m_stableCheckPointQueue.top()->index())
                        << LOG_KV("committedIndex", m_config->committedProposal()->index());
         m_committedProposalList.erase(m_stableCheckPointQueue.top()->index());
+        m_committedQueueIndexList.erase(m_stableCheckPointQueue.top()->index());
         m_stableCheckPointQueue.pop();
     }
     // submit stable-checkpoint to ledger in ordeer
@@ -949,6 +953,7 @@ void PBFTCacheProcessor::tryToCommitStableCheckPoint()
                        << LOG_KV("committedIndex", m_config->committedProposal()->index());
         auto stableCheckPoint = m_stableCheckPointQueue.top();
         m_committedProposalList.erase(stableCheckPoint->index());
+        m_committedQueueIndexList.erase(stableCheckPoint->index());
         m_stableCheckPointQueue.pop();
         m_config->storage()->asyncCommitStableCheckPoint(stableCheckPoint);
     }

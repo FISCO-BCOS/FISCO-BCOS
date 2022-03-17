@@ -241,10 +241,12 @@ public:
         if (m_unsealedTxsSize > 0)
         {
             m_timer->restart();
+            PBFT_LOG(INFO) << LOG_DESC("freshTimer: restart");
         }
         else
         {
             m_timer->stop();
+            PBFT_LOG(INFO) << LOG_DESC("freshTimer: stop");
         }
     }
 

@@ -500,13 +500,13 @@ void PBFTEngine::handleMsg(std::shared_ptr<PBFTBaseMessageInterface> _msg)
     case PacketType::PrePreparePacket:
     {
         auto prePrepareMsg = std::dynamic_pointer_cast<PBFTMessageInterface>(_msg);
+        prePrepareMsg->setConsStartTime(utcTime());
         handlePrePrepareMsg(prePrepareMsg, true);
         break;
     }
     case PacketType::PreparePacket:
     {
         auto prepareMsg = std::dynamic_pointer_cast<PBFTMessageInterface>(_msg);
-        prepareMsg->setConsStartTime(utcTime());
         handlePrepareMsg(prepareMsg);
         break;
     }
@@ -1240,11 +1240,6 @@ void PBFTEngine::finalizeConsensus(LedgerConfig::Ptr _ledgerConfig, bool _synced
     m_cacheProcessor->removeConsensusedCache(m_config->view(), _ledgerConfig->blockNumber());
     m_cacheProcessor->tryToCommitStableCheckPoint();
     m_cacheProcessor->resetTimer();
-    if (_syncedBlock)
-    {
-        // Note: should reNotifySealer or not?
-        m_cacheProcessor->removeFutureProposals();
-    }
 }
 
 bool PBFTEngine::handleCheckPointMsg(std::shared_ptr<PBFTMessageInterface> _checkPointMsg)
