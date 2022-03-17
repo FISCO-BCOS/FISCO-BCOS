@@ -746,7 +746,7 @@ void MemoryStorage::batchMarkTxs(
 {
     ssize_t successCount = 0;
     auto startT = utcTime();
-    RWMutexScoped l(x_txpoolMutex, false);
+    // RWMutexScoped l(x_txpoolMutex, false);
     auto lockT = utcTime() - startT;
     startT = utcTime();
     for (auto txHash : _txsHashList)
@@ -769,13 +769,14 @@ void MemoryStorage::batchMarkTxs(
         }
         if (_sealFlag && !tx->sealed())
         {
+            tx->setSealed(true);
             m_sealedTxsSize++;
         }
         if (!_sealFlag && tx->sealed())
         {
+            tx->setSealed(false);
             m_sealedTxsSize--;
         }
-        tx->setSealed(_sealFlag);
         successCount += 1;
         // set the block information for the transaction
         if (_sealFlag)

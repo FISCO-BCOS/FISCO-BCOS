@@ -40,9 +40,9 @@ public:
       : TransactionSyncInterface(_config),
         Worker("txsSync", 0),
         m_downloadTxsBuffer(std::make_shared<TxsSyncMsgList>()),
-        m_worker(std::make_shared<ThreadPool>("txsSyncWorker", 1)),
-        m_txsRequester(std::make_shared<ThreadPool>("txsRequester", 1)),
-        m_forwardWorker(std::make_shared<ThreadPool>("txsForward", 1))
+        m_worker(std::make_shared<ThreadPool>("txsSyncWorker", 16)),
+        m_txsRequester(std::make_shared<ThreadPool>("txsRequester", 16)),
+        m_forwardWorker(std::make_shared<ThreadPool>("txsForward", 16))
     {
         m_txsSubmitted = m_config->txpoolStorage()->onReady([&]() { this->noteNewTransactions(); });
     }
