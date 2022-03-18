@@ -232,7 +232,10 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, NodeIDPtr _s
                 }
                 catch (const std::exception& e)
                 {
-                    GATEWAY_LOG(ERROR) << LOG_BADGE("Retry") << LOG_KV("error", e.what());
+                    GATEWAY_LOG(ERROR) << LOG_BADGE("Retry")
+                                       << LOG_KV("payload", std::string(message->payload()->begin(),
+                                                                message->payload()->end()))
+                                       << LOG_KV("error", e.what());
                     self->trySendMessage();
                 }
             };

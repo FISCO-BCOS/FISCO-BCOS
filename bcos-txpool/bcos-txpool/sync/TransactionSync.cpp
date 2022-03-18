@@ -686,23 +686,8 @@ void TransactionSync::broadcastTxsFromRpc(NodeIDSet const& _connectedPeers,
     auto txsPacket = m_config->msgFactory()->createTxsSyncMsg(
         TxsSyncPacketType::TxsPacket, std::move(*encodedData));
     auto packetData = txsPacket->encode();
-#if 0
     m_config->frontService()->asyncSendBroadcastMessage(
         bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::TxsSync, ref(*packetData));
-#endif
-    for (auto const& consensusNode : _consensusNodeList)
-    {
-        if (consensusNode->nodeID()->data() == m_config->nodeID()->data())
-        {
-            continue;
-        }
-        m_config->frontService()->asyncSendMessageByNodeID(
-            ModuleID::TxsSync, consensusNode->nodeID(), ref(*packetData), 0, nullptr);
-        SYNC_LOG(DEBUG) << LOG_DESC("broadcastTxsFromRpc")
-                        << LOG_KV("toNodeId", consensusNode->nodeID()->shortHex())
-                        << LOG_KV("txsNum", block->transactionsSize())
-                        << LOG_KV("messageSize(B)", packetData->size());
-    }
     SYNC_LOG(DEBUG) << LOG_DESC("broadcastTxsFromRpc")
                     << LOG_KV("txsNum", block->transactionsSize())
                     << LOG_KV("messageSize(B)", packetData->size());
