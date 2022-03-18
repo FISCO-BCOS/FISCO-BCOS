@@ -92,7 +92,8 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
 
         PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled")
                               << LOG_DESC("set system config") << LOG_KV("configKey", configKey)
-                              << LOG_KV("configValue", configValue);
+                              << LOG_KV("configValue", configValue)
+                              << LOG_KV("enableNum", blockContext->number() + 1);
         result = 0;
         getErrorCodeOut(callResult->mutableExecResult(), result, *codec);
     }

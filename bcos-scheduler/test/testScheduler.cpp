@@ -100,7 +100,7 @@ struct SchedulerFixture
         std::dynamic_pointer_cast<scheduler::SchedulerImpl>(scheduler)->registerTransactionNotifier(
             std::move(notifier));
 
-        std::dynamic_pointer_cast<scheduler::SchedulerImpl>(scheduler)->initGasLimit();
+        std::dynamic_pointer_cast<scheduler::SchedulerImpl>(scheduler)->fetchGasLimit();
 
         keyPair = suite->signatureImpl()->generateKeyPair();
     }

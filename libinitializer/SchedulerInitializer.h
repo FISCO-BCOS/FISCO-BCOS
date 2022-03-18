@@ -48,7 +48,7 @@ public:
             std::move(_ledger), std::move(storage), executionMessageFactory,
             std::move(blockFactory), std::move(transactionSubmitResultFactory), std::move(hashImpl),
             isAuthCheck, isWasm);
-        scheduler->initGasLimit();
+        scheduler->fetchGasLimit();
         return scheduler;
     }
 };
