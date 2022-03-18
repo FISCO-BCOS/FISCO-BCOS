@@ -106,6 +106,7 @@ public:
     Json::Value getGroupPeers(int _groupID) override;
     Json::Value getGroupList() override;
     Json::Value getNodeIDList(int _groupID) override;
+    Json::Value queryPeers() override;
     Json::Value addPeers(const Json::Value& _hostposts) override;
     Json::Value erasePeers(const Json::Value& _hostPorts) override;
 

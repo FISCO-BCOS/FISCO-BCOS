@@ -21,7 +21,9 @@
 
 #include "Rpc.h"
 #include "JsonHelper.h"
+#include "libdevcore/Log.h"
 #include "libnetwork/ASIOInterface.h"
+#include <json/value.h>
 #include <jsonrpccpp/common/exception.h>
 #include <jsonrpccpp/server.h>
 #include <libconfig/GlobalConfigure.h>
@@ -2222,7 +2224,7 @@ Json::Value Rpc::addPeers(const Json::Value& _hostPorts)
     try
     {
         Json::Value response;
-        RPC_LOG(INFO) << LOG_BADGE("addPeers") << LOG_DESC("request");
+        RPC_LOG(INFO) << LOG_BADGE("addPeers") << LOG_KV("request", _hostPorts);
         std::vector<dev::network::NodeIPEndpoint> endpoints;
         // deal with the param
         if (!checkParamsForPeers(_hostPorts, endpoints, response))
@@ -2238,9 +2240,34 @@ Json::Value Rpc::addPeers(const Json::Value& _hostPorts)
         else
         {
             response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
-            response["message"] = " add peers faild during outputing to configfile";
+            response["message"] = " add peers failed during outputing to configfile";
             return response;
         }
+    }
+    catch (JsonRpcException& e)
+    {
+        throw e;
+    }
+    catch (std::exception& e)
+    {
+        BOOST_THROW_EXCEPTION(
+            JsonRpcException(Errors::ERROR_RPC_INTERNAL_ERROR, boost::diagnostic_information(e)));
+    }
+}
+
+Json::Value Rpc::queryPeers()
+{
+    RPC_LOG(TRACE) << LOG_BADGE("queryPeers");
+    try
+    {
+        Json::Value response = Json::arrayValue;
+        auto staticNodes = service()->staticNodes();
+        for (const auto& node : staticNodes)
+        {
+            response.append(Json::Value(node.first.toString()));
+        }
+
+        return response;
     }
     catch (JsonRpcException& e)
     {
@@ -2258,7 +2285,8 @@ Json::Value Rpc::erasePeers(const Json::Value& _hostPorts)
     try
     {
         Json::Value response;
-        RPC_LOG(INFO) << LOG_BADGE("erasePeers") << LOG_DESC("request");
+        RPC_LOG(INFO) << LOG_BADGE("erasePeers") << LOG_KV("request", _hostPorts);
+
         std::vector<dev::network::NodeIPEndpoint> endpoints;
         // deal with the param
         if (!checkParamsForPeers(_hostPorts, endpoints, response))
@@ -2274,7 +2302,7 @@ Json::Value Rpc::erasePeers(const Json::Value& _hostPorts)
         else
         {
             response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
-            response["message"] = " erase peers faild during outputing to configfile";
+            response["message"] = " erase peers fails during outputing to configfile";
             return response;
         }
     }
@@ -2292,21 +2320,22 @@ Json::Value Rpc::erasePeers(const Json::Value& _hostPorts)
 bool Rpc::checkParamsForPeers(const Json::Value& _params,
     std::vector<dev::network::NodeIPEndpoint>& _endpoints, Json::Value& _response)
 {
-    if (!_params.isMember("p2p") || !_params["p2p"].isArray())
+    if (!_params.isArray())
     {
         _response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
-        _response["message"] = "invalid `p2p` field";
+        _response["message"] = "invalid params field, not array format json";
         return false;
     }
 
-    if (_params["p2p"].size() == 0)
+    if (_params.empty())
     {
         _response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
-        _response["message"] = "erasePeer failed for empty p2p list, expect at least one peer";
+        _response["message"] = "erasePeer failed for empty host list, expect at least one peer";
         return false;
     }
+
     int pos = 1;
-    for (auto _peer : _params["p2p"])
+    for (auto _peer : _params)
     {
         if (!_peer.isString())
         {

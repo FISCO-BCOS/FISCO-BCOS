@@ -99,7 +99,7 @@ public:
 
     void registerHandlerByTopic(std::string topic, CallbackFuncWithSession handler) override;
 
-    virtual std::map<dev::network::NodeIPEndpoint, NodeID> staticNodes()
+    virtual std::map<dev::network::NodeIPEndpoint, NodeID> staticNodes() override
     {
         RecursiveGuard l(x_nodes);
         return m_staticNodes;
