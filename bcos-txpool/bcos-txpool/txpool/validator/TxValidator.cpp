@@ -39,7 +39,13 @@ TransactionStatus TxValidator::verify(bcos::protocol::Transaction::ConstPtr _tx)
     {
         return TransactionStatus::InvalidChainId;
     }
-    auto status = submittedToChain(_tx);
+    // compare with nonces cached in memory
+    auto status = m_txPoolNonceChecker->checkNonce(_tx, false);
+    if (status != TransactionStatus::None)
+    {
+        return status;
+    }
+    status = submittedToChain(_tx);
     if (status != TransactionStatus::None)
     {
         return status;
@@ -53,17 +59,12 @@ TransactionStatus TxValidator::verify(bcos::protocol::Transaction::ConstPtr _tx)
     {
         return TransactionStatus::InvalidSignature;
     }
-    // compare with nonces cached in memory
-    // Note: this must be the last check for updating the txPoolNonceChecker
-    status = m_txPoolNonceChecker->checkNonce(_tx, true);
-    if (status != TransactionStatus::None)
-    {
-        return status;
-    }
+
     if (isSystemTransaction(_tx))
     {
         _tx->setSystemTx(true);
     }
+    m_txPoolNonceChecker->insert(_tx->nonce());
     return TransactionStatus::None;
 }
 

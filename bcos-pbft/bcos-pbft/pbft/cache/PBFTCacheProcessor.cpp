@@ -197,7 +197,11 @@ void PBFTCacheProcessor::checkAndPreCommit()
             continue;
         }
         updateCommitQueue(it.second->preCommitCache()->consensusProposal());
+        // refresh the timer when commit success
+        m_config->timer()->restart();
+        m_config->resetToView();
     }
+    resetTimer();
 }
 
 void PBFTCacheProcessor::checkAndCommit()
@@ -774,12 +778,9 @@ void PBFTCacheProcessor::removeConsensusedCache(ViewType _view, BlockNumber _con
 {
     for (auto pcache = m_caches.begin(); pcache != m_caches.end();)
     {
+        // Note: can't remove stabledCommitted cache here for need to fetch
+        // lastAppliedProposalCheckPoint when apply the next proposal
         if (pcache->first <= _consensusedNumber)
-        {
-            pcache = m_caches.erase(pcache);
-            continue;
-        }
-        if (pcache->second->stableCommitted())
         {
             pcache = m_caches.erase(pcache);
             continue;

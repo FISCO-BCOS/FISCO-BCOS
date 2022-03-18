@@ -664,7 +664,7 @@ bool PBFTEngine::isSyncingHigher()
 {
     auto committedIndex = m_config->committedProposal()->index();
     auto syncNumber = m_config->syncingHighestNumber();
-    if (syncNumber < (committedIndex + m_config->warterMarkLimit()))
+    if (syncNumber < (committedIndex + m_config->waterMarkLimit()))
     {
         return false;
     }

@@ -206,6 +206,11 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, NodeIDPtr _s
                 try
                 {
                     auto payload = message->payload();
+                    GATEWAY_LOG(TRACE)
+                        << LOG_BADGE("Retry") << LOG_KV("p2pid", p2pID)
+                        << LOG_KV("srcNodeID", self->m_srcNodeID->hex())
+                        << LOG_KV("dstNodeID", self->m_dstNodeID->hex())
+                        << LOG_KV("payLoad", std::string(payload->begin(), payload->end()));
                     int respCode =
                         boost::lexical_cast<int>(std::string(payload->begin(), payload->end()));
                     // the peer gateway not response not ok ,it means the gateway not dispatch the
@@ -219,10 +224,6 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, NodeIDPtr _s
                         self->trySendMessage();
                         return;
                     }
-
-                    GATEWAY_LOG(TRACE) << LOG_BADGE("Retry") << LOG_KV("p2pid", p2pID)
-                                       << LOG_KV("srcNodeID", self->m_srcNodeID->hex())
-                                       << LOG_KV("dstNodeID", self->m_dstNodeID->hex());
                     // send message successfully
                     if (self->m_respFunc)
                     {
