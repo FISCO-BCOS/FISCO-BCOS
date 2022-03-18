@@ -24,12 +24,17 @@ namespace bcos
 {
 namespace protocol
 {
-enum NodeType : uint16_t
+// Note: both MessageExtFieldFlag and NodeType occupy the ext fields
+enum MessageExtFieldFlag : uint32_t
+{
+    Response = 0x0001,
+};
+enum NodeType : uint32_t
 {
     None = 0x0,
-    CONSENSUS_NODE = 0x1,
-    OBSERVER_NODE = 0x10,
-    NODE_OUTSIDE_GROUP = 0x100,
+    CONSENSUS_NODE = 0x0010,
+    OBSERVER_NODE = 0x0100,
+    NODE_OUTSIDE_GROUP = 0x1000,
 };
 enum ModuleID
 {
