@@ -17,8 +17,9 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
     std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&)> callback)
 {
     auto signature = block->blockHeaderConst()->signatureList();
+    fetchGasLimit(block->blockHeaderConst()->number());
     SCHEDULER_LOG(INFO) << "ExecuteBlock request"
-                        << LOG_KV("block number", block->blockHeaderConst()->number())
+                        << LOG_KV("block number", block->blockHeaderConst()->number()) << LOG_KV("gasLimit", m_gasLimit)
                         << LOG_KV("verify", verify) << LOG_KV("signatureSize", signature.size())
                         << LOG_KV("tx count", block->transactionsSize())
                         << LOG_KV("meta tx count", block->transactionsMetaDataSize());
@@ -233,17 +234,17 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                 return;
             }
 
-            SCHEDULER_LOG(INFO) << "CommitBlock success"
-                                << LOG_KV("block number", ledgerConfig->blockNumber())
-                                << LOG_KV("gas limit", std::get<1>(ledgerConfig->gasLimit()));
-
             auto& frontBlock = m_blocks.front();
             auto blockNumber = ledgerConfig->blockNumber();
-            auto gasLimit = ledgerConfig->gasLimit();
-            if (std::get<1>(gasLimit) <= blockNumber)
+            auto gasNumber = ledgerConfig->gasLimit();
+            if (std::get<1>(gasNumber) <= blockNumber)
             {
-                m_gasLimit = std::get<0>(gasLimit);
+                m_gasLimit = std::get<0>(gasNumber);
             }
+
+            SCHEDULER_LOG(INFO) << "CommitBlock success"
+                                << LOG_KV("block number", blockNumber)
+                                << LOG_KV("gas limit", m_gasLimit);
 
             if (m_txNotifier)
             {
