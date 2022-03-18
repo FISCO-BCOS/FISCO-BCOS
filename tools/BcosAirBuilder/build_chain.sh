@@ -731,6 +731,7 @@ generate_common_ini() {
 [consensus]
     ; min block generation time(ms)
     min_seal_time=500
+    water_mark=100
 
 [executor]
     ; use the wasm virtual machine or not
