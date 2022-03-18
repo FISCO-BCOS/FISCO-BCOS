@@ -736,7 +736,7 @@ CheckResult PBFTEngine::isValidPrepare(PrepareReq const& req, std::ostringstream
     }
     if (!req.isEmpty && !isHashSavedAfterCommit(req))
     {
-        PBFTENGINE_LOG(DEBUG) << LOG_DESC("InvalidPrepare: not saved after commit")
+        PBFTENGINE_LOG(INFO) << LOG_DESC("InvalidPrepare: not saved after commit")
                               << LOG_KV("EINFO", oss.str());
         return CheckResult::INVALID;
     }
