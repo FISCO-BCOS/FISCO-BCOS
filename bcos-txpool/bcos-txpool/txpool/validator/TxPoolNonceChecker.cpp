@@ -51,6 +51,7 @@ TransactionStatus TxPoolNonceChecker::checkNonce(Transaction::ConstPtr _tx, bool
 
 void TxPoolNonceChecker::insert(NonceType const& _nonce)
 {
+    ReadGuard l(x_nonceCache);
     m_nonceCache.insert(_nonce);
 }
 
@@ -59,7 +60,7 @@ void TxPoolNonceChecker::batchInsert(BlockNumber, NonceListPtr _nonceList)
     ReadGuard l(x_nonceCache);
     for (auto const& nonce : *_nonceList)
     {
-        insert(nonce);
+        m_nonceCache.insert(nonce);
     }
 }
 
