@@ -239,9 +239,12 @@ void SealingManager::fetchTransactions()
     }
     // try to fetch transactions
     m_fetchingTxs = true;
+    ssize_t startSealingNumber = m_startSealingNumber;
+    ssize_t endSealingNumber = m_endSealingNumber;
     auto self = std::weak_ptr<SealingManager>(shared_from_this());
     m_config->txpool()->asyncSealTxs(txsToFetch, nullptr,
-        [self](Error::Ptr _error, Block::Ptr _txsHashList, Block::Ptr _sysTxsList) {
+        [self, startSealingNumber, endSealingNumber](
+            Error::Ptr _error, Block::Ptr _txsHashList, Block::Ptr _sysTxsList) {
             try
             {
                 auto sealingMgr = self.lock();
@@ -257,13 +260,23 @@ void SealingManager::fetchTransactions()
                     sealingMgr->m_fetchingTxs = false;
                     return;
                 }
-                sealingMgr->appendTransactions(sealingMgr->m_pendingTxs, _txsHashList);
-                sealingMgr->appendTransactions(sealingMgr->m_pendingSysTxs, _sysTxsList);
-                sealingMgr->m_fetchingTxs = false;
-                sealingMgr->m_onReady();
+                bool abort = true;
+                if ((sealingMgr->m_sealingNumber >= startSealingNumber) &&
+                    (sealingMgr->m_sealingNumber <= endSealingNumber))
+                {
+                    sealingMgr->appendTransactions(sealingMgr->m_pendingTxs, _txsHashList);
+                    sealingMgr->appendTransactions(sealingMgr->m_pendingSysTxs, _sysTxsList);
+                    sealingMgr->m_fetchingTxs = false;
+                    sealingMgr->m_onReady();
+                    abort = false;
+                }
                 SEAL_LOG(DEBUG) << LOG_DESC("fetchTransactions finish")
                                 << LOG_KV("txsSize", _txsHashList->transactionsMetaDataSize())
-                                << LOG_KV("sysTxsSize", _sysTxsList->transactionsMetaDataSize());
+                                << LOG_KV("sysTxsSize", _sysTxsList->transactionsMetaDataSize())
+                                << LOG_KV("startSealingNumber", startSealingNumber)
+                                << LOG_KV("endSealingNumber", endSealingNumber)
+                                << LOG_KV("sealingNumber", sealingMgr->m_sealingNumber)
+                                << LOG_KV("abort", abort);
             }
             catch (std::exception const& e)
             {

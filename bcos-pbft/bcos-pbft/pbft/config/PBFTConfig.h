@@ -117,7 +117,7 @@ public:
     PBFTStorage::Ptr storage() { return m_storage; }
 
     std::string printCurrentState();
-    int64_t highWaterMark() { return m_progressedIndex + m_warterMarkLimit; }
+    int64_t highWaterMark() { return m_progressedIndex + m_waterMarkLimit; }
     int64_t lowWaterMark() { return m_lowWaterMark; }
     void setLowWaterMark(bcos::protocol::BlockNumber _index) { m_lowWaterMark = _index; }
 
@@ -155,8 +155,8 @@ public:
 
     StateMachineInterface::Ptr stateMachine() { return m_stateMachine; }
 
-    int64_t warterMarkLimit() const { return m_warterMarkLimit; }
-    void setWarterMarkLimit(int64_t _warterMarkLimit) { m_warterMarkLimit = _warterMarkLimit; }
+    int64_t waterMarkLimit() const { return m_waterMarkLimit; }
+    void setWaterMarkLimit(int64_t _waterMarkLimit) { m_waterMarkLimit = _waterMarkLimit; }
 
     int64_t checkPointTimeoutInterval() const { return m_checkPointTimeoutInterval; }
     void setCheckPointTimeoutInterval(int64_t _timeoutInterval)
@@ -392,7 +392,7 @@ protected:
     std::atomic<bcos::protocol::BlockNumber> m_sealStartIndex = {0};
     std::atomic<bcos::protocol::BlockNumber> m_sealEndIndex = {0};
 
-    int64_t m_warterMarkLimit = 10;
+    int64_t m_waterMarkLimit = 10;
     std::atomic<int64_t> m_checkPointTimeoutInterval = {3000};
 
     std::atomic<uint64_t> m_leaderSwitchPeriod = {1};
