@@ -168,6 +168,7 @@ void TransactionSync::onReceiveTxsRequest(TxsSyncMsgInterface::Ptr _txsRequest,
     {
         SYNC_LOG(DEBUG) << LOG_DESC("onReceiveTxsRequest: transaction missing")
                         << LOG_KV("missedTxsSize", missedTxs.size())
+                        << LOG_KV("txsSize", txs->size())
                         << LOG_KV("peer", _peer ? _peer->shortHex() : "unknown")
                         << LOG_KV("nodeId", m_config->nodeID()->shortHex());
 #if FISCO_DEBUG

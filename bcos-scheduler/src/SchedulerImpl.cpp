@@ -224,10 +224,25 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
     // is setting newBlockHeader, which will cause the signatureList ilegal
     auto executedHeader = frontBlock->block()->blockHeader();
     auto signature = executedHeader->signatureList();
+    auto currentBlockNumber = executedHeader->number();
     if (signature.size() == 0)
     {
         frontBlock->block()->setBlockHeader(std::move(header));
     }
+    SCHEDULER_LOG(INFO) << "Start notify block result: " << currentBlockNumber;
+    auto notifyStartT = utcTime();
+    frontBlock->asyncNotify(
+        m_txNotifier, [notifyStartT, startT, this, currentBlockNumber](Error::Ptr) mutable {
+            if (m_blockNumberReceiver)
+            {
+                m_blockNumberReceiver(currentBlockNumber);
+            }
+            SCHEDULER_LOG(DEBUG) << LOG_DESC("Notify block result success")
+                                 << LOG_KV("num", currentBlockNumber)
+                                 << LOG_KV("notifyT", (utcTime() - notifyStartT))
+                                 << LOG_KV("timecost", (utcTime() - startT));
+        });
+
     frontBlock->asyncCommit([this, startT, callback = std::move(callback),
                                 block = frontBlock->block(), commitLock](Error::UniquePtr&& error) {
         if (error)
@@ -258,52 +273,22 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
             }
             ledgerConfig->setBlockNumber(blockNumber);
             ledgerConfig->setHash(hash);
-            auto& frontBlock = m_blocks.front();
-            auto currentBlockNumber = ledgerConfig->blockNumber();
-            if (m_txNotifier)
+            auto recordT = utcTime();
             {
-                SCHEDULER_LOG(INFO) << "Start notify block result: " << currentBlockNumber;
-                auto notifyStartT = utcTime();
-                frontBlock->asyncNotify(m_txNotifier,
-                    [notifyStartT, startT, this, currentBlockNumber, callback = std::move(callback),
-                        ledgerConfig = std::move(ledgerConfig),
-                        commitLock = std::move(commitLock)](Error::Ptr _error) mutable {
-                        if (m_blockNumberReceiver)
-                        {
-                            m_blockNumberReceiver(currentBlockNumber);
-                        }
-                        auto recordT = utcTime();
-                        {
-                            std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
-                            bcos::protocol::BlockNumber number = m_blocks.front()->number();
-                            removeAllOldPreparedBlock(number);
-                            m_blocks.pop_front();
-                            SCHEDULER_LOG(DEBUG)
-                                << LOG_DESC("CommitBlock and notify block result success")
-                                << LOG_KV("num", currentBlockNumber)
-                                << LOG_KV("eraseCacheT", (utcTime() - recordT))
-                                << LOG_KV("notifyT", (utcTime() - notifyStartT))
-                                << LOG_KV("timecost", (utcTime() - startT));
-                        }
-
-                        commitLock->unlock();
-
-                        // Note: only after the block notify finished can call the callback
-                        callback(std::move(_error), std::move(ledgerConfig));
-                    });
+                std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
+                bcos::protocol::BlockNumber number = m_blocks.front()->number();
+                removeAllOldPreparedBlock(number);
+                m_blocks.pop_front();
+                SCHEDULER_LOG(DEBUG)
+                    << LOG_DESC("CommitBlock and notify block result success")
+                    << LOG_KV("num", blockNumber) << LOG_KV("eraseCacheT", (utcTime() - recordT))
+                    << LOG_KV("timecost", (utcTime() - startT));
             }
-            else
-            {
-                {
-                    std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
-                    bcos::protocol::BlockNumber number = m_blocks.front()->number();
-                    removeAllOldPreparedBlock(number);
-                    m_blocks.pop_front();
-                    SCHEDULER_LOG(DEBUG)
-                        << "Remove committed block: " << currentBlockNumber << " success";
-                }
-                commitLock->unlock();
-            }
+
+            commitLock->unlock();
+
+            // Note: only after the block notify finished can call the callback
+            callback(std::move(error), std::move(ledgerConfig));
         });
     });
 }

@@ -573,7 +573,6 @@ CheckResult PBFTEngine::checkPBFTMsgState(PBFTMessageInterface::Ptr _pbftReq) co
     }
     if (_pbftReq->index() < m_config->lowWaterMark() ||
         _pbftReq->index() < m_config->expectedCheckPoint() ||
-        _pbftReq->index() <= m_config->syncingHighestNumber() ||
         m_cacheProcessor->proposalCommitted(_pbftReq->index()))
     {
         PBFT_LOG(DEBUG) << LOG_DESC("checkPBFTMsgState: invalid pbftMsg for invalid index")
@@ -665,13 +664,7 @@ bool PBFTEngine::checkProposalSignature(
 
 bool PBFTEngine::isSyncingHigher()
 {
-    auto committedIndex = m_config->committedProposal()->index();
-    auto syncNumber = m_config->syncingHighestNumber();
-    if (syncNumber < (committedIndex + m_config->warterMarkLimit()))
-    {
-        return false;
-    }
-    return true;
+    return false;
 }
 
 bool PBFTEngine::handlePrePrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg,
@@ -1234,7 +1227,8 @@ void PBFTEngine::reHandlePrePrepareProposals(NewViewMsgInterface::Ptr _newViewRe
     {
         // Note: in case of the reHandled proposals have system transactions, must
         // wait to reseal until all reHandled proposal committed
-        m_config->setWaitResealUntil(maxProposalIndex);
+        // for perf test
+        // m_config->setWaitResealUntil(maxProposalIndex);
         PBFT_LOG(INFO) << LOG_DESC("reHandlePrePrepareProposals and wait to reseal new proposal")
                        << LOG_KV("waitResealUntil", maxProposalIndex)
                        << m_config->printCurrentState();
