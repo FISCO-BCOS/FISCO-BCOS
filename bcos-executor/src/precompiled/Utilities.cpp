@@ -342,7 +342,7 @@ bool precompiled::checkPathValid(std::string const& _path)
         {
             std::stringstream errorMessage;
             errorMessage << "Invalid field \"" << fieldName << "\", the field name must be in reg: "
-                         << R"(^[0-9a-zA-Z\u4e00-\u9fa5][^\>\<\*\?\/\=\+\(\)\$\"\']+$)";
+                         << R"(^[0-9a-zA-Z\u4e00-\u9fa5][^\>\<\*\?\/\=\+\(\)\$\"\']*$)";
             PRECOMPILED_LOG(ERROR)
                 << LOG_DESC(errorMessage.str()) << LOG_KV("field name", fieldName);
             return false;

@@ -610,7 +610,7 @@ BOOST_AUTO_TEST_CASE(linkTest)
     // overflow version
     {
         link(false, number++, contractName, overflowVersion130, addressString, contractAbi,
-            CODE_ADDRESS_OR_VERSION_ERROR);
+            CODE_VERSION_LENGTH_OVERFLOW);
     }
 }
 
