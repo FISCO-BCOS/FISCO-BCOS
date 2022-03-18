@@ -1136,9 +1136,9 @@ void Service::removeGroupBandwidthLimiter(GROUP_ID const& _groupID)
 bool Service::addPeers(std::vector<dev::network::NodeIPEndpoint> const& endpoints)
 {
     auto nodes = staticNodes();
-    for (auto& endppint : endpoints)
+    for (auto& endpoint : endpoints)
     {
-        nodes.insert(std::make_pair(endppint, NodeID()));
+        nodes.insert(std::make_pair(endpoint, NodeID()));
     }
     setStaticNodes(nodes);
     return updatePeersToIni(nodes);
@@ -1147,9 +1147,9 @@ bool Service::addPeers(std::vector<dev::network::NodeIPEndpoint> const& endpoint
 bool Service::erasePeers(std::vector<dev::network::NodeIPEndpoint> const& endpoints)
 {
     auto nodes = staticNodes();
-    for (auto& endppint : endpoints)
+    for (auto& endpoint : endpoints)
     {
-        auto it = nodes.find(endppint);
+        auto it = nodes.find(endpoint);
         if (nodes.end() != it)
         {
             nodes.erase(it);
@@ -1203,6 +1203,7 @@ bool Service::updatePeersToIni(std::map<dev::network::NodeIPEndpoint, NodeID> co
         }
         fileData.replace(pos2, pos3 - pos2 - 1, tmpdata);
 
+        // TODO: 写入保护
         std::ofstream out(confdir, std::ios::out);
         out << fileData;
         out.close();

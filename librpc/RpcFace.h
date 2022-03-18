@@ -21,6 +21,7 @@
 #pragma once
 
 #include "ModularServer.h"
+#include <jsonrpccpp/common/specification.h>
 #include <boost/lexical_cast.hpp>
 #include <set>
 
@@ -83,11 +84,15 @@ public:
         this->bindAndAddMethod(jsonrpc::Procedure("getNodeIDList", jsonrpc::PARAMS_BY_POSITION,
                                    jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_INTEGER, NULL),
             &dev::rpc::RpcFace::getNodeIDListI);
-        this->bindAndAddMethod(jsonrpc::Procedure("addPeers", jsonrpc::PARAMS_BY_POSITION,
-                                   jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_OBJECT, NULL),
+
+        this->bindAndAddMethod(jsonrpc::Procedure("queryPeers", jsonrpc::PARAMS_BY_POSITION,
+                                   jsonrpc::JSON_OBJECT, NULL),
+            &dev::rpc::RpcFace::queryPeersI);
+        this->bindAndAddMethod(
+            jsonrpc::Procedure("addPeers", jsonrpc::PARAMS_BY_POSITION, jsonrpc::JSON_OBJECT, NULL),
             &dev::rpc::RpcFace::addPeersI);
         this->bindAndAddMethod(jsonrpc::Procedure("erasePeers", jsonrpc::PARAMS_BY_POSITION,
-                                   jsonrpc::JSON_OBJECT, "param1", jsonrpc::JSON_OBJECT, NULL),
+                                   jsonrpc::JSON_OBJECT, NULL),
             &dev::rpc::RpcFace::erasePeersI);
 
         this->bindAndAddMethod(jsonrpc::Procedure("getBlockByHash", jsonrpc::PARAMS_BY_POSITION,
@@ -275,6 +280,11 @@ public:
     {
         response = this->getNodeIDList(boost::lexical_cast<int>(request[0u].asString()));
     }
+    inline virtual void queryPeersI(const Json::Value& request, Json::Value& response)
+    {
+        (void)request;
+        response = this->queryPeers();
+    }
     inline virtual void addPeersI(const Json::Value& request, Json::Value& response)
     {
         response = this->addPeers(request[0u]);
@@ -456,6 +466,7 @@ public:
     virtual Json::Value getNodeIDList(int param1) = 0;
     virtual Json::Value addPeers(const Json::Value& param1) = 0;
     virtual Json::Value erasePeers(const Json::Value& param1) = 0;
+    virtual Json::Value queryPeers() = 0;
 
     // block part
     virtual Json::Value getBlockByHash(int param1, const std::string& param2, bool param3) = 0;

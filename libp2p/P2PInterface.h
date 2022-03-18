@@ -92,6 +92,8 @@ public:
     virtual void removeDisconnectHandlerByProtocolID(PROTOCOL_ID const&) {}
     virtual void registerHandlerByTopic(std::string topic, CallbackFuncWithSession handler) = 0;
 
+    virtual std::map<dev::network::NodeIPEndpoint, NodeID> staticNodes() = 0;
+
     virtual P2PSessionInfos sessionInfos() = 0;
     virtual P2PSessionInfos sessionInfosByProtocolID(PROTOCOL_ID _protocolID) const = 0;
 
