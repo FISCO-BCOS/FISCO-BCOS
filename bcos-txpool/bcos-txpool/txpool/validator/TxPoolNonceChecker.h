@@ -37,8 +37,9 @@ public:
     void batchRemove(tbb::concurrent_set<bcos::protocol::NonceType> const& _nonceList) override;
     bool exists(bcos::protocol::NonceType const& _nonce) override;
 
-protected:
     void insert(bcos::protocol::NonceType const& _nonce) override;
+
+protected:
     void remove(bcos::protocol::NonceType const& _nonce) override;
 
     tbb::concurrent_unordered_set<bcos::protocol::NonceType> m_nonceCache;

@@ -45,9 +45,9 @@ public:
         bcos::protocol::BlockNumber _batchId, bcos::protocol::NonceListPtr _nonceList) = 0;
     virtual void batchRemove(bcos::protocol::NonceList const& _nonceList) = 0;
     virtual void batchRemove(tbb::concurrent_set<bcos::protocol::NonceType> const& _nonceList) = 0;
+    virtual void insert(bcos::protocol::NonceType const& _nonce) = 0;
 
 protected:
-    virtual void insert(bcos::protocol::NonceType const& _nonce) = 0;
     virtual void remove(bcos::protocol::NonceType const& _nonce) = 0;
 };
 }  // namespace txpool
