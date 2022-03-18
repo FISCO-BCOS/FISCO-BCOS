@@ -101,8 +101,7 @@ int FileSystemPrecompiled::checkLinkParam(TransactionExecutive::Ptr _executive,
     boost::trim(_contractVersion);
     // check the status of the contract(only print the error message to the log)
     std::string tableName =
-        USER_APPS_PREFIX +
-        (_contractAddress[0] == '/' ? _contractAddress.substr(1) : _contractAddress);
+        getContractTableName(_contractAddress, _executive->blockContext().lock()->isWasm());
     ContractStatus contractStatus = getContractStatus(_executive, tableName);
 
     if (contractStatus != ContractStatus::Available)
@@ -307,7 +306,7 @@ void FileSystemPrecompiled::link(const std::shared_ptr<executor::TransactionExec
                                << LOG_KV("contractName", contractName)
                                << LOG_KV("contractVersion", contractVersion)
                                << LOG_KV("contractAddress", contractAddress);
-        getErrorCodeOut(callResult->mutableExecResult(), CODE_ADDRESS_OR_VERSION_ERROR, *codec);
+        getErrorCodeOut(callResult->mutableExecResult(), validCode, *codec);
         return;
     }
     auto linkTableName = USER_APPS_PREFIX + contractName + '/' + contractVersion;

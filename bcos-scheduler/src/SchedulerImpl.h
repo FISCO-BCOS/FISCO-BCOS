@@ -81,34 +81,39 @@ public:
 
     ExecutorManager::Ptr executorManager() { return m_executorManager; }
 
-    void initGasLimit()
+    inline void fetchGasLimit(protocol::BlockNumber _number = -1)
     {
+        if (_number == -1)
+        {
+            std::promise<std::tuple<Error::Ptr, protocol::BlockNumber>> numberPromise;
+            m_ledger->asyncGetBlockNumber(
+                [&numberPromise](Error::Ptr _error, protocol::BlockNumber _number) {
+                    numberPromise.set_value(std::make_tuple(std::move(_error), _number));
+                });
+            Error::Ptr error;
+            std::tie(error, _number) = numberPromise.get_future().get();
+            if (error)
+            {
+                return;
+            }
+        }
         std::promise<std::tuple<Error::Ptr, std::string>> p;
-        m_ledger->asyncGetBlockNumber(
-            [&p, ledger = m_ledger](Error::Ptr _error, protocol::BlockNumber _number) {
-                if (_error)
+        m_ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_TX_GAS_LIMIT,
+            [&p, blockNumber = _number](
+                Error::Ptr _e, std::string _value, protocol::BlockNumber _number) {
+                if (blockNumber >= _number)
                 {
-                    p.set_value(std::make_tuple(std::move(_error), ""));
+                    p.set_value(std::make_tuple(std::move(_e), std::move(_value)));
                     return;
                 }
-                ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_TX_GAS_LIMIT,
-                    [&p, blockNumber = _number](
-                        Error::Ptr _e, std::string _value, protocol::BlockNumber _number) {
-                        if (blockNumber >= _number)
-                        {
-                            p.set_value(std::make_tuple(std::move(_e), std::move(_value)));
-                        }
-                        else
-                        {
-                            p.set_value(std::make_tuple(
-                                BCOS_ERROR_PTR(SchedulerError::UnknownError, "get gas limit error"),
-                                ""));
-                        }
-                    });
+                p.set_value(std::make_tuple(
+                    BCOS_ERROR_PTR(SchedulerError::UnknownError, "get gas limit error"), ""));
             });
-
         auto [e, value] = p.get_future().get();
-        m_gasLimit = e ? TRANSACTION_GAS : boost::lexical_cast<uint64_t>(value);
+        if (!e)
+        {
+            m_gasLimit = boost::lexical_cast<uint64_t>(value);
+        }
     }
 
 private:
