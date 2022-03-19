@@ -206,11 +206,6 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, NodeIDPtr _s
                 try
                 {
                     auto payload = message->payload();
-                    GATEWAY_LOG(TRACE)
-                        << LOG_BADGE("Retry") << LOG_KV("p2pid", p2pID)
-                        << LOG_KV("srcNodeID", self->m_srcNodeID->hex())
-                        << LOG_KV("dstNodeID", self->m_dstNodeID->hex())
-                        << LOG_KV("payLoad", std::string(payload->begin(), payload->end()));
                     int respCode =
                         boost::lexical_cast<int>(std::string(payload->begin(), payload->end()));
                     // the peer gateway not response not ok ,it means the gateway not dispatch the
@@ -224,6 +219,9 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, NodeIDPtr _s
                         self->trySendMessage();
                         return;
                     }
+                    GATEWAY_LOG(TRACE) << LOG_BADGE("Retry") << LOG_KV("p2pid", p2pID)
+                                       << LOG_KV("srcNodeID", self->m_srcNodeID->hex())
+                                       << LOG_KV("dstNodeID", self->m_dstNodeID->hex());
                     // send message successfully
                     if (self->m_respFunc)
                     {
@@ -233,7 +231,16 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, NodeIDPtr _s
                 }
                 catch (const std::exception& e)
                 {
-                    GATEWAY_LOG(ERROR) << LOG_BADGE("Retry") << LOG_KV("error", e.what());
+                    GATEWAY_LOG(ERROR)
+                        << LOG_BADGE("trySendMessage and receive response exception")
+                        << LOG_KV("payload",
+                               std::string(message->payload()->begin(), message->payload()->end()))
+                        << LOG_KV("packetType", message->packetType())
+                        << LOG_KV("src", message->options() ?
+                                             toHex(*(message->options()->srcNodeID())) :
+                                             "unknown")
+                        << LOG_KV("size", message->length()) << LOG_KV("error", e.what());
+
                     self->trySendMessage();
                 }
             };
