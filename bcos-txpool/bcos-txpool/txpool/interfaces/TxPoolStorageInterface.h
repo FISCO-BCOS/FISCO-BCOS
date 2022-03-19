@@ -38,10 +38,10 @@ public:
 
     virtual bcos::protocol::TransactionStatus submitTransaction(
         bytesPointer _txData, bcos::protocol::TxSubmitCallback _txSubmitCallback = nullptr) = 0;
-    virtual bcos::protocol::TransactionStatus submitTransaction(
-        bcos::protocol::Transaction::Ptr _tx,
-        bcos::protocol::TxSubmitCallback _txSubmitCallback = nullptr, bool _enforceImport = false,
-        bool _checkPoolLimit = false) = 0;
+
+    virtual bool batchVerifyAndSubmitTransaction(
+        bcos::protocol::BlockHeader::Ptr _header, bcos::protocol::TransactionsPtr _txs) = 0;
+    virtual void batchImportTxs(bcos::protocol::TransactionsPtr _txs) = 0;
 
     virtual bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::ConstPtr _tx) = 0;
     virtual void batchInsert(bcos::protocol::Transactions const& _txs) = 0;
@@ -51,7 +51,8 @@ public:
         bcos::protocol::TransactionSubmitResult::Ptr _txSubmitResult) = 0;
     virtual void batchRemove(bcos::protocol::BlockNumber _batchId,
         bcos::protocol::TransactionSubmitResults const& _txsResult) = 0;
-
+    virtual void batchUpdateLedgerNonce(bcos::protocol::BlockNumber _batchId,
+        bcos::protocol::TransactionSubmitResults const& _txsResult) = 0;
     // Note: the transactions may be missing from the transaction pool
     virtual bcos::protocol::TransactionsPtr fetchTxs(
         bcos::crypto::HashList& _missedTxs, bcos::crypto::HashList const& _txsList) = 0;

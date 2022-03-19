@@ -39,7 +39,7 @@ FrontServiceInitializer::FrontServiceInitializer(bcos::tool::NodeConfig::Ptr _no
     auto frontServiceFactory = std::make_shared<FrontServiceFactory>();
     frontServiceFactory->setGatewayInterface(m_gateWay);
 
-    auto threadPool = std::make_shared<ThreadPool>("frontService", 1);
+    auto threadPool = std::make_shared<ThreadPool>("frontService", 16);
     frontServiceFactory->setThreadPool(threadPool);
     m_front = frontServiceFactory->buildFrontService(
         m_nodeConfig->groupId(), m_protocolInitializer->keyPair()->publicKey());

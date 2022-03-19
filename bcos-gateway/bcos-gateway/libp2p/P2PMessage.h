@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <bcos-framework/interfaces/protocol/Protocol.h>
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/Message.h>
 #include <bcos-utilities/Common.h>
@@ -135,7 +136,7 @@ public:
 
 public:
     ssize_t decodeHeader(bytesConstRef _buffer);
-    void setRespPacket() { m_ext |= MessageExtFieldFlag::Response; }
+    void setRespPacket() { m_ext |= bcos::protocol::MessageExtFieldFlag::Response; }
     bool hasOptions() const
     {
         return (m_packetType == MessageType::PeerToPeerMessage) ||
@@ -144,7 +145,10 @@ public:
 
     bool encode(bytes& _buffer) override;
     ssize_t decode(bytesConstRef _buffer) override;
-    bool isRespPacket() const override { return (m_ext & MessageExtFieldFlag::Response) != 0; }
+    bool isRespPacket() const override
+    {
+        return (m_ext & bcos::protocol::MessageExtFieldFlag::Response) != 0;
+    }
 
 protected:
     uint32_t m_length = 0;

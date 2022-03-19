@@ -325,6 +325,7 @@ void PBFTInitializer::createPBFT()
     m_pbft = pbftFactory->createPBFT();
     auto pbftConfig = m_pbft->pbftEngine()->pbftConfig();
     pbftConfig->setCheckPointTimeoutInterval(m_nodeConfig->checkPointTimeoutInterval());
+    pbftConfig->setWaterMarkLimit(m_nodeConfig->waterMarkLimit());
 }
 
 void PBFTInitializer::createSync()

@@ -24,6 +24,8 @@
 #include <tbb/concurrent_unordered_map.h>
 #define TBB_PREVIEW_CONCURRENT_ORDERED_CONTAINERS 1
 #include <tbb/concurrent_set.h>
+#include <tbb/spin_mutex.h>
+#include <tbb/spin_rw_mutex.h>
 namespace bcos
 {
 namespace txpool
@@ -51,9 +53,10 @@ public:
 
     bcos::protocol::TransactionStatus submitTransaction(bytesPointer _txData,
         bcos::protocol::TxSubmitCallback _txSubmitCallback = nullptr) override;
-    bcos::protocol::TransactionStatus submitTransaction(bcos::protocol::Transaction::Ptr _tx,
-        bcos::protocol::TxSubmitCallback _txSubmitCallback = nullptr, bool _enforceImport = false,
-        bool _checkPoolLimit = true) override;
+
+    bool batchVerifyAndSubmitTransaction(
+        bcos::protocol::BlockHeader::Ptr _header, bcos::protocol::TransactionsPtr _txs) override;
+    void batchImportTxs(bcos::protocol::TransactionsPtr _txs) override;
 
     bcos::protocol::TransactionStatus insert(bcos::protocol::Transaction::ConstPtr _tx) override;
     void batchInsert(bcos::protocol::Transactions const& _txs) override;
@@ -61,6 +64,9 @@ public:
     bcos::protocol::Transaction::ConstPtr remove(bcos::crypto::HashType const& _txHash) override;
     void batchRemove(bcos::protocol::BlockNumber _batchId,
         bcos::protocol::TransactionSubmitResults const& _txsResult) override;
+    void batchUpdateLedgerNonce(bcos::protocol::BlockNumber _batchId,
+        bcos::protocol::TransactionSubmitResults const& _txsResult) override;
+
     bcos::protocol::Transaction::ConstPtr removeSubmittedTx(
         bcos::protocol::TransactionSubmitResult::Ptr _txSubmitResult) override;
 
@@ -73,7 +79,7 @@ public:
 
     bool exist(bcos::crypto::HashType const& _txHash) override
     {
-        ReadGuard l(x_txpoolMutex);
+        RWMutexScoped l(x_txpoolMutex, false);
         return m_txsTable.count(_txHash);
     }
     size_t size() const override;
@@ -113,11 +119,12 @@ protected:
         }
         return true;
     }
+    bcos::protocol::TransactionStatus insertWithoutLock(bcos::protocol::Transaction::ConstPtr _tx);
     bcos::protocol::TransactionStatus enforceSubmitTransaction(
         bcos::protocol::Transaction::Ptr _tx);
     bcos::protocol::TransactionStatus verifyAndSubmitTransaction(
         bcos::protocol::Transaction::Ptr _tx, bcos::protocol::TxSubmitCallback _txSubmitCallback,
-        bool _checkPoolLimit);
+        bool _checkPoolLimit, bool _lock);
     size_t unSealedTxsSizeWithoutLock();
     bcos::protocol::TransactionStatus txpoolStorageCheck(bcos::protocol::Transaction::ConstPtr _tx);
 
@@ -148,7 +155,7 @@ private:
         std::hash<bcos::crypto::HashType>>
         m_txsTable;
 
-    mutable SharedMutex x_txpoolMutex;
+    // mutable SharedMutex x_txpoolMutex;
 
     tbb::concurrent_set<bcos::crypto::HashType> m_invalidTxs;
     tbb::concurrent_set<bcos::protocol::NonceType> m_invalidNonces;
@@ -162,6 +169,11 @@ private:
     std::atomic<bcos::protocol::BlockNumber> m_blockNumber = {0};
     std::atomic_bool m_printed = {false};
     int64_t m_blockNumberUpdatedTime;
+
+    typedef tbb::spin_rw_mutex RWMutex;
+    typedef tbb::spin_rw_mutex::scoped_lock RWMutexScoped;
+
+    mutable RWMutex x_txpoolMutex;
 };
 }  // namespace txpool
 }  // namespace bcos

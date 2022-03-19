@@ -119,5 +119,7 @@ private:
 
     // remove prepared all block <= oldBlockNumber
     void removeAllOldPreparedBlock(bcos::protocol::BlockNumber oldBlockNumber);
+
+    uint64_t m_lastExecuteFinishTime = 0;
 };
 }  // namespace bcos::scheduler

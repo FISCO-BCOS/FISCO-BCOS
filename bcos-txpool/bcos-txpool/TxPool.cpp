@@ -127,12 +127,15 @@ void TxPool::asyncSealTxs(size_t _txsLimit, TxsHashSetPtr _avoidTxs,
 void TxPool::asyncNotifyBlockResult(BlockNumber _blockNumber,
     TransactionSubmitResultsPtr _txsResult, std::function<void(Error::Ptr)> _onNotifyFinished)
 {
-    m_txpoolStorage->batchRemove(_blockNumber, *_txsResult);
+    m_txpoolStorage->batchUpdateLedgerNonce(_blockNumber, *_txsResult);
     if (!_onNotifyFinished)
     {
         return;
     }
     _onNotifyFinished(nullptr);
+    m_remover->enqueue([this, _blockNumber, _txsResult]() {
+        m_txpoolStorage->batchRemove(_blockNumber, *_txsResult);
+    });
 }
 
 void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, bytesConstRef const& _block,
@@ -180,9 +183,17 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, bytesConstRef const& _
                             verifyError = nullptr;
                         }
                     }
+                    auto txsHash = std::make_shared<HashList>();
+                    for (size_t i = 0; i < block->transactionsHashSize(); i++)
+                    {
+                        txsHash->emplace_back(block->transactionHash(i));
+                    }
+                    txpoolStorage->batchMarkTxs(
+                        *txsHash, blockHeader->number(), blockHeader->hash(), true);
                     TXPOOL_LOG(INFO)
                         << LOG_DESC("asyncVerifyBlock finished")
                         << LOG_KV("consNum", blockHeader ? blockHeader->number() : -1)
+                        << LOG_KV("txsSize", block->transactionsHashSize())
                         << LOG_KV("hash", blockHeader ? blockHeader->hash().abridged() : "null")
                         << LOG_KV("code", verifyError ? verifyError->errorCode() : 0)
                         << LOG_KV("msg", verifyError ? verifyError->errorMessage() : "success")
@@ -207,7 +218,7 @@ void TxPool::asyncVerifyBlock(PublicPtr _generatedNodeID, bytesConstRef const& _
                               << LOG_KV("consNum", blockHeader ? blockHeader->number() : -1)
                               << LOG_KV("totalTxs", block->transactionsHashSize())
                               << LOG_KV("missedTxs", missedTxs->size());
-            txpool->m_transactionSync->requestMissedTxs(
+            txpool->m_transactionSync->requestMissedTxsFromPeer(
                 _generatedNodeID, missedTxs, block, onVerifyFinishedWrapper);
         }
         catch (std::exception const& e)

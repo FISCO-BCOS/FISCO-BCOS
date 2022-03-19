@@ -326,12 +326,6 @@ void PBFTCache::resetCache(ViewType _curView)
 {
     m_submitted = false;
     m_precommitted = false;
-    if (!m_precommit && m_prePrepare && m_prePrepare->consensusProposal() &&
-        m_prePrepare->view() < _curView)
-    {
-        // reset the exceptioned txs to unsealed
-        m_config->validator()->asyncResetTxsFlag(m_prePrepare->consensusProposal()->data(), false);
-    }
     // clear the expired prepare cache
     resetCacheAfterViewChange(m_prepareCacheList, _curView);
     // clear the expired commit cache

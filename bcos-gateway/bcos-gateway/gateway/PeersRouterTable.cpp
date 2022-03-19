@@ -246,10 +246,10 @@ void PeersRouterTable::asyncBroadcastMsg(
             }
         }
     }
-    ROUTER_LOG(TRACE) << LOG_DESC("asyncBroadcastMsg: randomChooseP2PNode")
+    ROUTER_LOG(DEBUG) << LOG_DESC("asyncBroadcastMsg: randomChooseP2PNode")
                       << LOG_KV("size", selectedPeers.size());
     for (auto const& peer : selectedPeers)
     {
-        m_p2pInterface->asyncSendMessageByNodeID(peer, _msg, CallbackFuncWithSession());
+        m_p2pInterface->asyncSendMessageByNodeID(peer, _msg, nullptr);
     }
 }
