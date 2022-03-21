@@ -31,6 +31,7 @@
 #include "libp2p/P2PMessageFactory.h"  // for P2PMessageFa...
 #include "libp2p/P2PSession.h"         // for P2PSession
 #include <libstat/NetworkStatHandler.h>
+#include <stdio.h>
 #include <boost/random.hpp>
 #include <fstream>
 #include <iostream>
@@ -1178,6 +1179,7 @@ bool Service::updatePeersToIni(std::map<dev::network::NodeIPEndpoint, NodeID> co
     std::ifstream configFile(confdir, std::ios::in);
     if (true != configFile.is_open())
     {
+        SERVICE_LOG(DEBUG) << LOG_DESC("fail to find config file") << LOG_KV("path", confdir);
         return false;
     }
     else
@@ -1193,20 +1195,30 @@ bool Service::updatePeersToIni(std::map<dev::network::NodeIPEndpoint, NodeID> co
         auto pos1 = fileData.find("p2p");
         if (pos1 == fileData.npos)
         {
+            SERVICE_LOG(DEBUG) << LOG_DESC("fail to locate peers' information in config file");
             return false;
         }
         auto pos2 = fileData.find("node.0=", pos1);
         auto pos3 = fileData.find("certificate_blacklist");
         if (pos2 == fileData.npos || pos3 == fileData.npos || pos2 >= pos3)
         {
+            SERVICE_LOG(DEBUG) << LOG_DESC("fail to locate peers' information in config file");
             return false;
         }
         fileData.replace(pos2, pos3 - pos2 - 1, tmpdata);
 
-        // TODO: 写入保护
-        std::ofstream out(confdir, std::ios::out);
-        out << fileData;
-        out.close();
+        auto newFileDir = confdir + ".new";
+        std::ofstream outfile(newFileDir, std::ios::out);
+        outfile.flush();
+        outfile << fileData;
+        outfile.close();
+
+        if (0 != rename(newFileDir.c_str(), confdir.c_str()))
+        {
+            SERVICE_LOG(DEBUG) << LOG_DESC("fail to update config file") << LOG_KV("path", confdir);
+            return false;
+        }
+        SERVICE_LOG(INFO) << LOG_DESC("update config file successfully") << LOG_KV("path", confdir);
         return true;
     }
 }
