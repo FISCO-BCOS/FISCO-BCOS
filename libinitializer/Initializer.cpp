@@ -69,6 +69,7 @@ void Initializer::initMicroServiceNode(std::string const& _configFilePath,
     init(bcos::initializer::NodeArchitectureType::PRO, _configFilePath, _genesisFile, gateWay,
         false);
 }
+
 void Initializer::initConfig(std::string const& _configFilePath, std::string const& _genesisFile,
     std::string const& _privateKeyPath, bool _airVersion)
 {
@@ -113,8 +114,24 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
             storagePath = ServerConfig::BasePath + ".." + c_fileSeparator +
                           m_nodeConfig->groupId() + c_fileSeparator + m_nodeConfig->storagePath();
         }
-        BCOS_LOG(INFO) << LOG_DESC("initNode") << LOG_KV("storagePath", storagePath);
-        auto storage = StorageInitializer::build(storagePath);
+        BCOS_LOG(INFO) << LOG_DESC("initNode") << LOG_KV("storagePath", storagePath)
+                       << LOG_KV("storageType", m_nodeConfig->storageType());
+        bcos::storage::TransactionalStorageInterface::Ptr storage = nullptr;
+        bcos::storage::TransactionalStorageInterface::Ptr schedulerStorage = nullptr;
+        if (boost::iequals(m_nodeConfig->storageType(), "RocksDB"))
+        {
+            storage = StorageInitializer::build(storagePath);
+            schedulerStorage = storage;
+        }
+        else if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
+        {
+            storage = StorageInitializer::build(m_nodeConfig->pdAddrs());
+            schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs());
+        }
+        else
+        {
+            throw std::runtime_error("storage type not support");
+        }
 
         // build ledger
         auto ledger =
@@ -128,9 +145,10 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
             std::make_shared<bcos::protocol::TransactionSubmitResultFactoryImpl>();
 
         m_scheduler =
-            SchedulerInitializer::build(executorManager, ledger, storage, executionMessageFactory,
+            SchedulerInitializer::build(executorManager, ledger, schedulerStorage, executionMessageFactory,
                 m_protocolInitializer->blockFactory(), m_protocolInitializer->txResultFactory(),
-                m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isAuthCheck(), m_nodeConfig->isWasm());
+                m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isAuthCheck(),
+                m_nodeConfig->isWasm());
 
         // init the txpool
         m_txpoolInitializer = std::make_shared<TxPoolInitializer>(

@@ -26,6 +26,7 @@
 #include "boost/filesystem.hpp"
 #include <bcos-framework/interfaces/storage/StorageInterface.h>
 #include <bcos-storage/src/RocksDBStorage.h>
+#include <bcos-storage/src/TiKVStorage.h>
 #include <rocksdb/write_batch.h>
 
 namespace bcos::initializer
@@ -33,7 +34,7 @@ namespace bcos::initializer
 class StorageInitializer
 {
 public:
-    static bcos::storage::TransactionalStorageInterface::Ptr build(std::string const& _storagePath)
+    static bcos::storage::TransactionalStorageInterface::Ptr build(const std::string& _storagePath)
     {
         boost::filesystem::create_directories(_storagePath);
         rocksdb::DB* db;
@@ -49,6 +50,13 @@ public:
         rocksdb::Status s = rocksdb::DB::Open(options, _storagePath, &db);
 
         return std::make_shared<bcos::storage::RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db));
+    }
+
+    static bcos::storage::TransactionalStorageInterface::Ptr build(
+        const std::vector<std::string>& _pdAddrs)
+    {
+        auto cluster = storage::newTiKVCluster(_pdAddrs);
+        return std::make_shared<bcos::storage::TiKVStorage>(cluster);
     }
 };
 }  // namespace bcos::initializer

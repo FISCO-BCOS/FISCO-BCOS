@@ -847,7 +847,7 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
 void TransactionExecutor::prepare(
     const TwoPCParams& params, std::function<void(bcos::Error::Ptr)> callback)
 {
-    EXECUTOR_LOG(INFO) << "Prepare request" << LOG_KV("params", params.number);
+    EXECUTOR_LOG(INFO) << "Prepare request" << LOG_KV("blockNumber", params.number);
 
     auto first = m_stateStorages.begin();
     if (first == m_stateStorages.end())

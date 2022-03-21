@@ -316,7 +316,12 @@ void BlockExecutive::asyncCommit(std::function<void(Error::UniquePtr)> callback)
                     {
                         ++status->success;
                     }
-
+                    SCHEDULER_LOG(INFO)
+                        << "primary prepare finished, call executor prepare"
+                        << LOG_KV("blockNumber", number())
+                        << LOG_KV("startTimeStamp", startTimeStamp)
+                        << LOG_KV("executors", m_scheduler->m_executorManager->size())
+                        << LOG_KV("success", status->success) << LOG_KV("failed", status->failed);
                     executor::ParallelTransactionExecutorInterface::TwoPCParams executorParams;
                     executorParams.number = number();
                     executorParams.primaryTableName = SYS_CURRENT_STATE;

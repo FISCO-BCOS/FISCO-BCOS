@@ -348,9 +348,13 @@ void NodeConfig::loadSealerConfig(boost::property_tree::ptree const& _pt)
 void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
 {
     m_storagePath = _pt.get<std::string>("storage.data_path", "data/" + m_groupId);
+    m_storageType = _pt.get<std::string>("storage.type", "RocksDB");
+    auto pd_addrs = _pt.get<std::string>("storage.pd_addrs", "127.0.0.1:2379");
+    boost::split(m_pd_addrs, pd_addrs, boost::is_any_of(","));
     m_enableLRUCacheStorage = _pt.get<bool>("storage.enable_cache", true);
     m_cacheSize = _pt.get<ssize_t>("storage.cache_size", DEFAULT_CACHE_SIZE);
     NodeConfig_LOG(INFO) << LOG_DESC("loadStorageConfig") << LOG_KV("storagePath", m_storagePath)
+                         << LOG_KV("storageType", m_storageType) << LOG_KV("pd_addrs", pd_addrs)
                          << LOG_KV("enableLRUCacheStorage", m_enableLRUCacheStorage);
 }
 
