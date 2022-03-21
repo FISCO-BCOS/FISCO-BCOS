@@ -266,10 +266,10 @@ void SealingManager::fetchTransactions()
                 {
                     sealingMgr->appendTransactions(sealingMgr->m_pendingTxs, _txsHashList);
                     sealingMgr->appendTransactions(sealingMgr->m_pendingSysTxs, _sysTxsList);
-                    sealingMgr->m_fetchingTxs = false;
-                    sealingMgr->m_onReady();
                     abort = false;
                 }
+                sealingMgr->m_fetchingTxs = false;
+                sealingMgr->m_onReady();
                 SEAL_LOG(DEBUG) << LOG_DESC("fetchTransactions finish")
                                 << LOG_KV("txsSize", _txsHashList->transactionsMetaDataSize())
                                 << LOG_KV("sysTxsSize", _sysTxsList->transactionsMetaDataSize())
