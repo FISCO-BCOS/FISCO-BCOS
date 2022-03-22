@@ -16,10 +16,21 @@
 
 using namespace bcos;
 using namespace bcos::gateway;
+using namespace bcos::protocol;
 
 static const uint32_t CHECK_INTERVEL = 10000;
 
-Service::Service() {}
+Service::Service()
+{
+    m_localProtocol = g_BCOSConfig.protocolInfo(ProtocolModuleID::GatewayService);
+    m_codec = g_BCOSConfig.codec();
+    // Process handshake packet logic, handshake protocol and determine
+    // the version, when handshake finished the version field of P2PMessage
+    // should be set
+    registerHandlerByMsgType(MessageType::Handshake,
+        boost::bind(&Service::onReceiveProtocol, this, boost::placeholders::_1,
+            boost::placeholders::_2, boost::placeholders::_3));
+}
 
 void Service::start()
 {
@@ -190,6 +201,7 @@ void Service::onConnect(
     p2pSession->session()->setMessageHandler(std::bind(&Service::onMessage, shared_from_this(),
         std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, p2pSessionWeakPtr));
     p2pSession->start();
+    asyncSendProtocol(p2pSession);
     updateStaticNodes(session->socket(), p2pID);
     if (it != m_sessions.end())
     {
@@ -319,13 +331,6 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::P
         }
         switch (packetType)
         {
-        case MessageType::Handshake:
-        {
-            // TODO: Process handshake packet logic, handshake protocol and determine
-            // the version, when handshake finished the version field of P2PMessage
-            // should be set
-        }
-        break;
         case MessageType::Heartbeat:
             break;
         default:
@@ -550,7 +555,7 @@ void Service::asyncSendMessageByP2PNodeID(int16_t _type, P2pID _dstNodeID, bytes
             auto packetType = _p2pMessage ? _p2pMessage->packetType() : 0;
             if (_e.errorCode() != 0)
             {
-                GATEWAY_LOG(WARNING) << LOG_DESC("asyncSendMessageByP2PNodeID error")
+                SERVICE_LOG(WARNING) << LOG_DESC("asyncSendMessageByP2PNodeID error")
                                      << LOG_KV("code", _e.errorCode()) << LOG_KV("msg", _e.what())
                                      << LOG_KV("type", packetType) << LOG_KV("dst", _dstNodeID);
                 if (_callback)
@@ -581,5 +586,70 @@ void Service::asyncSendMessageByP2PNodeIDs(
     for (auto const& nodeID : _nodeIDs)
     {
         asyncSendMessageByP2PNodeID(_type, nodeID, _payload, _options, nullptr);
+    }
+}
+
+// send the protocolInfo
+void Service::asyncSendProtocol(P2PSession::Ptr _session)
+{
+    auto payload = std::make_shared<bytes>();
+    m_codec->encode(m_localProtocol, *payload);
+    auto message = std::static_pointer_cast<P2PMessage>(messageFactory()->buildMessage());
+    message->setPacketType(MessageType::Handshake);
+    auto seq = messageFactory()->newSeq();
+    message->setSeq(seq);
+    message->setPayload(payload);
+
+    SERVICE_LOG(INFO) << LOG_DESC("asyncSendProtocol") << LOG_KV("payload", payload->size())
+                      << LOG_KV("seq", seq);
+    _session->session()->asyncSendMessage(message, Options(), nullptr);
+}
+
+// receive the protocolInfo
+void Service::onReceiveProtocol(
+    NetworkException _e, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message)
+{
+    if (_e.errorCode())
+    {
+        SERVICE_LOG(WARNING) << LOG_DESC("onReceiveProtocol error")
+                             << LOG_KV("errorCode", _e.errorCode()) << LOG_KV("errorMsg", _e.what())
+                             << LOG_KV("peer", _session ? _session->p2pID() : "unknown");
+        return;
+    }
+    try
+    {
+        auto payload = _message->payload();
+        auto protocolInfo = m_codec->decode(bytesConstRef(payload->data(), payload->size()));
+        // negotiated version
+        if (protocolInfo->minVersion() > m_localProtocol->maxVersion() ||
+            protocolInfo->maxVersion() < m_localProtocol->minVersion())
+        {
+            SERVICE_LOG(WARNING)
+                << LOG_DESC("onReceiveProtocol: protocolNegotiate failed, disconnect the session")
+                << LOG_KV("peer", _session->p2pID())
+                << LOG_KV("minVersion", protocolInfo->minVersion())
+                << LOG_KV("maxVersion", protocolInfo->maxVersion())
+                << LOG_KV("supportMinVersion", m_localProtocol->minVersion())
+                << LOG_KV("supportMaxVersion", m_localProtocol->maxVersion());
+            _session->session()->disconnect(DisconnectReason::NegotiateFailed);
+            return;
+        }
+        auto version = std::min(m_localProtocol->maxVersion(), protocolInfo->maxVersion());
+        protocolInfo->setVersion((ProtocolVersion)version);
+        _session->setProtocolInfo(protocolInfo);
+        SERVICE_LOG(WARNING) << LOG_DESC("onReceiveProtocol: protocolNegotiate success")
+                             << LOG_KV("peer", _session->p2pID())
+                             << LOG_KV("minVersion", protocolInfo->minVersion())
+                             << LOG_KV("maxVersion", protocolInfo->maxVersion())
+                             << LOG_KV("supportMinVersion", m_localProtocol->minVersion())
+                             << LOG_KV("supportMaxVersion", m_localProtocol->maxVersion())
+                             << LOG_KV("negotiatedVersion", version);
+    }
+    catch (std::exception const& e)
+    {
+        SERVICE_LOG(WARNING) << LOG_DESC("onReceiveProtocol exception")
+                             << LOG_KV("peer", _session ? _session->p2pID() : "unknown")
+                             << LOG_KV("packetType", _message->packetType())
+                             << LOG_KV("seq", _message->seq());
     }
 }

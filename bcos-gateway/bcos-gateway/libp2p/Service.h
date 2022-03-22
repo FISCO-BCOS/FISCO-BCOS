@@ -9,10 +9,11 @@
 
 #pragma once
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
+#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
+#include <bcos-framework/interfaces/protocol/ProtocolInfoCodec.h>
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/libp2p/P2PInterface.h>
 #include <bcos-gateway/libp2p/P2PSession.h>
-
 #include <map>
 #include <memory>
 #include <unordered_map>
@@ -153,6 +154,10 @@ public:
 
 private:
     std::shared_ptr<P2PMessage> newP2PMessage(int16_t _type, bytesConstRef _payload);
+    // handshake protocol
+    void asyncSendProtocol(P2PSession::Ptr _session);
+    void onReceiveProtocol(
+        NetworkException _e, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message);
 
 private:
     std::vector<std::function<void(NetworkException, P2PSession::Ptr)>> m_disconnectionHandlers;
@@ -177,6 +182,10 @@ private:
 
     std::map<int16_t, MessageHandler> m_msgHandlers;
     mutable SharedMutex x_msgHandlers;
+
+    // the local protocol
+    bcos::protocol::ProtocolInfo::ConstPtr m_localProtocol;
+    bcos::protocol::ProtocolInfoCodec::ConstPtr m_codec;
 };
 
 }  // namespace gateway

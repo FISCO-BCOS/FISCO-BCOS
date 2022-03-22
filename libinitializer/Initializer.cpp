@@ -33,7 +33,6 @@
 #include "StorageInitializer.h"
 #include "bcos-framework/interfaces/executor/NativeExecutionMessage.h"
 #include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
-#include "bcos-framework/interfaces/protocol/GlobalConfig.h"
 #include "bcos-framework/interfaces/protocol/Protocol.h"
 #include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/interfaces/rpc/RPCInterface.h"
@@ -41,17 +40,16 @@
 #include "bcos-protocol/TransactionSubmitResultImpl.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
+#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
 #include <bcos-scheduler/src/ExecutorManager.h>
 #include <bcos-sync/BlockSync.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tool/NodeConfig.h>
 
-
 using namespace bcos;
 using namespace bcos::tool;
 using namespace bcos::initializer;
 using namespace bcos::protocol;
-
 void Initializer::initAirNode(std::string const& _configFilePath, std::string const& _genesisFile,
     bcos::gateway::GatewayInterface::Ptr _gateway)
 {
