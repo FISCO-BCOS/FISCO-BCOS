@@ -11,7 +11,8 @@ ExternalProject_Add(tbb
     DOWNLOAD_NAME v2021.6.0-rc1
     # TODO: add wb cdn link
     URL https://codeload.github.com/oneapi-src/oneTBB/tar.gz/refs/tags/v2021.6.0-rc1
-    URL_HASH SHA1=7653c3db34db9e132286e69f1f69da1a6b39df9f
+        https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/FISCO-BCOS/deps/oneTBB-2021.6.0-rc1.tar.gz
+    URL_HASH SHA256=8bc2bc624fd382f5262adb62ff25cb218a6ec1a20330dc6e90f0c166f65b3b81
     BUILD_IN_SOURCE 1
     LOG_CONFIGURE 1
     LOG_BUILD 1
