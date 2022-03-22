@@ -44,8 +44,8 @@ public:
     SchedulerImpl& operator=(SchedulerImpl&&) = delete;
 
     void executeBlock(bcos::protocol::Block::Ptr block, bool verify,
-        std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&)> callback)
-        override;
+        std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool _sysBlock)>
+            callback) override;
 
     void commitBlock(bcos::protocol::BlockHeader::Ptr header,
         std::function<void(bcos::Error::Ptr&&, bcos::ledger::LedgerConfig::Ptr&&)> callback)

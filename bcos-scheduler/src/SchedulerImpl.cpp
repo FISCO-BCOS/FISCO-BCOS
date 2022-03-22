@@ -14,13 +14,14 @@
 using namespace bcos::scheduler;
 
 void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
-    std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&)> callback)
+    std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool _sysBlock)>
+        callback)
 {
     auto signature = block->blockHeaderConst()->signatureList();
-    fetchGasLimit(block->blockHeaderConst()->number());
     SCHEDULER_LOG(INFO) << "ExecuteBlock request"
-                        << LOG_KV("block number", block->blockHeaderConst()->number()) << LOG_KV("gasLimit", m_gasLimit)
-                        << LOG_KV("verify", verify) << LOG_KV("signatureSize", signature.size())
+                        << LOG_KV("block number", block->blockHeaderConst()->number())
+                        << LOG_KV("gasLimit", m_gasLimit) << LOG_KV("verify", verify)
+                        << LOG_KV("signatureSize", signature.size())
                         << LOG_KV("tx count", block->transactionsSize())
                         << LOG_KV("meta tx count", block->transactionsMetaDataSize());
     auto executeLock =
@@ -29,7 +30,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
     {
         auto message = "Another block is executing!";
         SCHEDULER_LOG(ERROR) << "ExecuteBlock error, " << message;
-        callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidStatus, message), nullptr);
+        callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidStatus, message), nullptr, false);
         return;
     }
 
@@ -61,7 +62,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
 
             blocksLock.unlock();
             executeLock->unlock();
-            callback(nullptr, std::move(blockHeader));
+            callback(nullptr, std::move(blockHeader), it->sysBlock());
             return;
         }
 
@@ -75,8 +76,8 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
 
             blocksLock.unlock();
             executeLock->unlock();
-            callback(
-                BCOS_ERROR_PTR(SchedulerError::InvalidBlockNumber, std::move(message)), nullptr);
+            callback(BCOS_ERROR_PTR(SchedulerError::InvalidBlockNumber, std::move(message)),
+                nullptr, false);
 
             return;
         }
@@ -91,7 +92,8 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
                     block->blockHeaderConst()->number() % lastExecutedNumber)
                     .str();
             SCHEDULER_LOG(ERROR) << "ExecuteBlock error, " << message;
-            callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidBlockNumber, message), nullptr);
+            callback(
+                BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidBlockNumber, message), nullptr, false);
             return;
         }
     }
@@ -101,7 +103,8 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
 
     blocksLock.unlock();
     blockExecutive.asyncExecute([this, callback = std::move(callback), executeLock](
-                                    Error::UniquePtr error, protocol::BlockHeader::Ptr header) {
+                                    Error::UniquePtr error, protocol::BlockHeader::Ptr header,
+                                    bool _sysBlock) {
         if (error)
         {
             SCHEDULER_LOG(ERROR) << "Unknown error, " << boost::diagnostic_information(*error);
@@ -112,7 +115,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
             executeLock->unlock();
             callback(
                 BCOS_ERROR_WITH_PREV_PTR(SchedulerError::UnknownError, "Unknown error", *error),
-                nullptr);
+                nullptr, _sysBlock);
             return;
         }
         auto signature = header->signatureList();
@@ -127,7 +130,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         m_lastExecutedBlockNumber.store(header->number());
 
         executeLock->unlock();
-        callback(std::move(error), std::move(header));
+        callback(std::move(error), std::move(header), _sysBlock);
     });
 }
 
@@ -237,13 +240,13 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
             auto& frontBlock = m_blocks.front();
             auto blockNumber = ledgerConfig->blockNumber();
             auto gasNumber = ledgerConfig->gasLimit();
-            if (std::get<1>(gasNumber) <= blockNumber)
+            // Note: takes effect in next block. we query the enableNumber of blockNumber + 1.
+            if (std::get<1>(gasNumber) <= (blockNumber + 1))
             {
                 m_gasLimit = std::get<0>(gasNumber);
             }
 
-            SCHEDULER_LOG(INFO) << "CommitBlock success"
-                                << LOG_KV("block number", blockNumber)
+            SCHEDULER_LOG(INFO) << "CommitBlock success" << LOG_KV("block number", blockNumber)
                                 << LOG_KV("gas limit", m_gasLimit);
 
             if (m_txNotifier)

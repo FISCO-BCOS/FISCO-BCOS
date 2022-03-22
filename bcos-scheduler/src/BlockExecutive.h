@@ -33,13 +33,11 @@ class BlockExecutive : public std::enable_shared_from_this<BlockExecutive>
 public:
     using UniquePtr = std::unique_ptr<BlockExecutive>;
 
-    BlockExecutive(bcos::protocol::Block::Ptr block, SchedulerImpl* scheduler,
-        size_t startContextID,
+    BlockExecutive(bcos::protocol::Block::Ptr block, SchedulerImpl* scheduler, size_t,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory)
       : m_block(std::move(block)),
         m_scheduler(scheduler),
-        m_startContextID(startContextID),
         m_transactionSubmitResultFactory(std::move(transactionSubmitResultFactory)),
         m_blockFactory(_blockFactory),
         m_staticCall(staticCall)
@@ -62,7 +60,8 @@ public:
     BlockExecutive& operator=(const BlockExecutive&) = delete;
     BlockExecutive& operator=(BlockExecutive&&) = delete;
 
-    void asyncExecute(std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback);
+    void asyncExecute(
+        std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback);
     void asyncCall(
         std::function<void(Error::UniquePtr&&, protocol::TransactionReceipt::Ptr&&)> callback);
     void asyncCommit(std::function<void(Error::UniquePtr)> callback);
@@ -78,10 +77,12 @@ public:
     bcos::protocol::BlockHeader::Ptr result() { return m_result; }
 
     bool isCall() { return m_staticCall; }
+    bool sysBlock() const { return m_sysBlock; }
 
 private:
     void DAGExecute(std::function<void(Error::UniquePtr)> error);
-    void DMTExecute(std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback);
+    void DMTExecute(
+        std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback);
 
     enum TraverseHint : int8_t
     {
@@ -163,12 +164,13 @@ private:
     bcos::protocol::Block::Ptr m_block;
     bcos::protocol::BlockHeader::Ptr m_result;
     SchedulerImpl* m_scheduler;
-    size_t m_startContextID;
+    // size_t m_startContextID;
     bcos::protocol::TransactionSubmitResultFactory::Ptr m_transactionSubmitResultFactory;
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bool m_staticCall = false;
     bool m_syncBlock = false;
     size_t m_gasLimit = TRANSACTION_GAS;
+    std::atomic_bool m_sysBlock = false;
 };
 
 }  // namespace bcos::scheduler

@@ -31,7 +31,7 @@ void BlockExecutive::asyncCall(
     std::function<void(Error::UniquePtr&&, protocol::TransactionReceipt::Ptr&&)> callback)
 {
     auto self = std::weak_ptr<BlockExecutive>(shared_from_this());
-    asyncExecute([self, callback](Error::UniquePtr&& _error, protocol::BlockHeader::Ptr) {
+    asyncExecute([self, callback](Error::UniquePtr&& _error, protocol::BlockHeader::Ptr, bool) {
         auto executive = self.lock();
         if (!executive)
         {
@@ -47,11 +47,12 @@ void BlockExecutive::asyncCall(
 }
 
 void BlockExecutive::asyncExecute(
-    std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback)
+    std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback)
 {
     if (m_result)
     {
-        callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidStatus, "Invalid status"), nullptr);
+        callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidStatus, "Invalid status"), nullptr,
+            m_sysBlock);
         return;
     }
 
@@ -59,7 +60,7 @@ void BlockExecutive::asyncExecute(
     {
         callback(BCOS_ERROR_UNIQUE_PTR(
                      SchedulerError::ExecutorNotEstablishedError, "The executor has not started!"),
-            nullptr);
+            nullptr, m_sysBlock);
     }
     m_currentTimePoint = std::chrono::system_clock::now();
 
@@ -132,6 +133,15 @@ void BlockExecutive::asyncExecute(
         for (size_t i = 0; i < m_block->transactionsSize(); ++i)
         {
             auto tx = m_block->transaction(i);
+            if (!m_sysBlock)
+            {
+                auto toAddress = tx->to();
+                if (bcos::precompiled::c_systemTxsAddress.count(
+                        std::string(toAddress.begin(), toAddress.end())))
+                {
+                    m_sysBlock.store(true);
+                }
+            }
             m_executiveResults[i].transactionHash = tx->hash();
             m_executiveResults[i].source = tx->source();
 
@@ -201,7 +211,7 @@ void BlockExecutive::asyncExecute(
                     << "Next block with error!" << boost::diagnostic_information(*error);
                 callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
                              SchedulerError::NextBlockError, "Next block error!", *error),
-                    nullptr);
+                    nullptr, m_sysBlock);
                 return;
             }
 
@@ -214,7 +224,7 @@ void BlockExecutive::asyncExecute(
                                              << boost::diagnostic_information(*error);
                         callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
                                      SchedulerError::DAGError, "DAG execute error!", *error),
-                            nullptr);
+                            nullptr, m_sysBlock);
                         return;
                     }
 
@@ -480,14 +490,14 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
 }
 
 void BlockExecutive::DMTExecute(
-    std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback)
+    std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback)
 {
     startBatch([this, callback = std::move(callback)](Error::UniquePtr&& error) {
         if (error)
         {
             callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
                          SchedulerError::DMTError, "Execute with errors", *error),
-                nullptr);
+                nullptr, m_sysBlock);
             return;
         }
         if (!m_executiveStates.empty())
@@ -510,7 +520,7 @@ void BlockExecutive::DMTExecute(
                 {
                     m_block->appendReceipt(it.receipt);
                 }
-                callback(nullptr, nullptr);
+                callback(nullptr, nullptr, m_sysBlock);
             }
             else
             {
@@ -521,7 +531,7 @@ void BlockExecutive::DMTExecute(
                     {
                         callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
                                      SchedulerError::UnknownError, "Unknown error", *error),
-                            nullptr);
+                            nullptr, m_sysBlock);
                         return;
                     }
 
@@ -542,7 +552,7 @@ void BlockExecutive::DMTExecute(
                     executedBlockHeader->setReceiptsRoot(m_block->calculateReceiptRoot());
 
                     m_result = executedBlockHeader;
-                    callback(nullptr, m_result);
+                    callback(nullptr, m_result, m_sysBlock);
                 });
             }
         }
