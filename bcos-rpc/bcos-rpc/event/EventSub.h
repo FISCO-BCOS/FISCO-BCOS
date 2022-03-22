@@ -124,11 +124,11 @@ public:
         m_groupManager = _groupManager;
     }
 
-    std::shared_ptr<bcos::boostssl::ws::WsMessageFactory> messageFactory() const
+    std::shared_ptr<bcos::boostssl::MessageFaceFactory> messageFactory() const
     {
         return m_messageFactory;
     }
-    void setMessageFactory(std::shared_ptr<bcos::boostssl::ws::WsMessageFactory> _messageFactory)
+    void setMessageFactory(std::shared_ptr<bcos::boostssl::MessageFaceFactory> _messageFactory)
     {
         m_messageFactory = _messageFactory;
     }
@@ -141,7 +141,7 @@ private:
     // match for event log compare
     std::shared_ptr<EventSubMatcher> m_matcher;
     // message factory
-    std::shared_ptr<bcos::boostssl::ws::WsMessageFactory> m_messageFactory;
+    std::shared_ptr<bcos::boostssl::MessageFaceFactory> m_messageFactory;
 
 private:
     std::shared_ptr<boostssl::ws::WsService> m_wsService;

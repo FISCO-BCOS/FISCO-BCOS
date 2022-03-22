@@ -88,6 +88,8 @@ class NetworkException : public std::exception
 {
 public:
     NetworkException(){};
+    NetworkException(bcos::Error::Ptr _error): m_errorCode(_error ? _error->errorCode(): 0), m_msg(_error ? _error->errorMessage() : "success")
+    {};
     NetworkException(int _errorCode, const std::string& _msg)
       : m_errorCode(_errorCode), m_msg(_msg){};
 

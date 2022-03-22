@@ -80,8 +80,8 @@ public:
     uint32_t threadPoolSize() { return m_threadPoolSize; }
     bool smSSL() const { return m_smSSL; }
 
-    CertConfig certConfig() const { return m_certConfig; }
-    SMCertConfig smCertConfig() const { return m_smCertConfig; }
+    boostssl::context::ContextConfig::CertConfig certConfig() const { return m_certConfig; }
+    boostssl::context::ContextConfig::SMCertConfig smCertConfig() const { return m_smCertConfig; }
     const std::set<boostssl::NodeIPEndpoint>& connectedNodes() const { return m_connectedNodes; }
 
     std::string const& uuid() const { return m_uuid; }
@@ -100,8 +100,8 @@ private:
     // p2p connected nodes host list
     std::set<boostssl::NodeIPEndpoint> m_connectedNodes;
     // cert config for ssl connection
-    CertConfig m_certConfig;
-    SMCertConfig m_smCertConfig;
+    boostssl::context::ContextConfig::CertConfig m_certConfig;
+    boostssl::context::ContextConfig::SMCertConfig m_smCertConfig;
 
     std::string m_certPath;
     std::string m_nodePath;

@@ -366,6 +366,8 @@ bcos::boostssl::MessageFace::Ptr Service::sendMessageByNodeID(
 {
     try
     {
+        SERVICE_LOG(INFO) << LOG_DESC("=========== enter function sendMessageByNodeID ================")
+                        << LOG_KV("message", message);  
         struct SessionCallback : public std::enable_shared_from_this<SessionCallback>
         {
         public:
@@ -398,6 +400,7 @@ bcos::boostssl::MessageFace::Ptr Service::sendMessageByNodeID(
         NetworkException error = callback->error;
         if (error.errorCode() != 0)
         {
+            SERVICE_LOG(ERROR) << LOG_DESC("=========== sendMessageByNodeID 1111111 ================");
             SERVICE_LOG(ERROR) << LOG_DESC("asyncSendMessageByNodeID error")
                                << LOG_KV("nodeid", nodeID) << LOG_KV("errorCode", error.errorCode())
                                << LOG_KV("what", error.what());
@@ -408,6 +411,7 @@ bcos::boostssl::MessageFace::Ptr Service::sendMessageByNodeID(
     }
     catch (std::exception& e)
     {
+        SERVICE_LOG(ERROR) << LOG_DESC("=========== sendMessageByNodeID 222222 ================");
         SERVICE_LOG(ERROR) << LOG_DESC("asyncSendMessageByNodeID error") << LOG_KV("nodeid", nodeID)
                            << LOG_KV("what", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(e);
@@ -426,6 +430,16 @@ bool Service::connected(std::string const& _nodeID)
 void Service::asyncSendMessageByNodeID(P2pID nodeID, bcos::boostssl::MessageFace::Ptr message,
     CallbackFuncWithSession callback, Options options)
 {
+    SERVICE_LOG(INFO) << "======= enter function asyncSendMessageByNodeID" 
+                << LOG_KV("seq", message->seq())
+                << LOG_KV("packetType", message->packetType())
+                << LOG_KV("payload", message->payload())
+                << LOG_KV("ext", message->ext());
+
+    // SERVICE_LOG(INFO) << LOG_DESC("======= enter function asyncSendMessageByNodeID")
+    //             << LOG_KV("callback", *callback);
+
+
     try
     {
         if (nodeID == id())
@@ -446,20 +460,26 @@ void Service::asyncSendMessageByNodeID(P2pID nodeID, bcos::boostssl::MessageFace
             auto session = it->second;
             if (callback)
             {
+                SERVICE_LOG(INFO) << "-------- callback --------------   "; 
                 session->session()->asyncSendMessage(message, options,
                     [session, callback](bcos::Error::Ptr error, boostssl::MessageFace::Ptr message,
                         std::shared_ptr<WsSession>) {
                         P2PMessage::Ptr p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
                         if (callback)
                         {
-                            NetworkException e(error->errorCode(), error->errorMessage());
+                            SERVICE_LOG(INFO) << LOG_KV("error", error) << LOG_KV("message", message);
+                            NetworkException e(error);
+                            // SERVICE_LOG(INFO) << LOG_KV("errorCode", error->errorCode()) << LOG_KV("errorMessage",  error->errorMessage());
                             callback(e, session, p2pMessage);
+                            SERVICE_LOG(INFO) << " ------ callback ------ exit";
                         }
                     });
             }
             else
             {
+                SERVICE_LOG(INFO) << "-------- without callback --------------   "; 
                 session->session()->asyncSendMessage(message, options, nullptr);
+                SERVICE_LOG(INFO) << "-------- without callback --- exit -----------   "; 
             }
         }
         else
@@ -474,6 +494,7 @@ void Service::asyncSendMessageByNodeID(P2pID nodeID, bcos::boostssl::MessageFace
     }
     catch (std::exception& e)
     {
+        SERVICE_LOG(ERROR) << "======= exit function asyncSendMessageByNodeID catch";
         SERVICE_LOG(ERROR) << "asyncSendMessageByNodeID" << LOG_KV("nodeid", nodeID)
                            << LOG_KV("what", boost::diagnostic_information(e));
 
@@ -505,6 +526,7 @@ void Service::asyncBroadcastMessage(
     }
     catch (std::exception& e)
     {
+        SERVICE_LOG(WARNING) << " exit asyncBroadcastMessage catch -------- ";
         SERVICE_LOG(WARNING) << LOG_DESC("asyncBroadcastMessage")
                              << LOG_KV("what", boost::diagnostic_information(e));
     }

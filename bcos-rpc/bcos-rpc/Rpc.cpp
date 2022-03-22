@@ -157,6 +157,8 @@ void Rpc::notifyGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo)
         Json::Value groupInfoJson;
         groupInfoToJson(groupInfoJson, _groupInfo);
         auto response = groupInfoJson.toStyledString();
+        auto wsMessageFactory = std::dynamic_pointer_cast<boostssl::ws::WsMessageFactory>(
+            m_wsService->messageFactory());
         auto message =
             m_wsService->messageFactory()->buildMessage(bcos::protocol::MessageType::GROUP_NOTIFY,
                 std::make_shared<bcos::bytes>(response.begin(), response.end()));

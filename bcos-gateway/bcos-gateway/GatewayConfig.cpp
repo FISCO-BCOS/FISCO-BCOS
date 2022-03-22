@@ -268,7 +268,7 @@ void GatewayConfig::initCertConfig(const boost::property_tree::ptree& _pt)
     checkFileExist(nodeCertFile);
     checkFileExist(nodeKeyFile);
 
-    CertConfig certConfig;
+    boostssl::context::ContextConfig::CertConfig certConfig;
     certConfig.caCert = caCertFile;
     certConfig.nodeCert = nodeCertFile;
     certConfig.nodeKey = nodeKeyFile;
@@ -320,7 +320,7 @@ void GatewayConfig::initSMCertConfig(const boost::property_tree::ptree& _pt)
     checkFileExist(smEnNodeCertFile);
     checkFileExist(smEnNodeKeyFile);
 
-    SMCertConfig smCertConfig;
+    boostssl::context::ContextConfig::SMCertConfig smCertConfig;
     smCertConfig.caCert = smCaCertFile;
     smCertConfig.nodeCert = smNodeCertFile;
     smCertConfig.nodeKey = smNodeKeyFile;
