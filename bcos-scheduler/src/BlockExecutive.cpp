@@ -75,7 +75,8 @@ void BlockExecutive::asyncExecute(
             auto metaData = m_block->transactionMetaData(i);
 
             auto message = m_scheduler->m_executionMessageFactory->createExecutionMessage();
-            message->setContextID(i + m_startContextID);
+            // message->setContextID(i + m_startContextID);
+            message->setContextID(i);
             message->setType(protocol::ExecutionMessage::TXHASH);
             // Note: set here for fetching txs when send_back
             message->setTransactionHash(metaData->hash());
@@ -136,7 +137,8 @@ void BlockExecutive::asyncExecute(
 
             auto message = m_scheduler->m_executionMessageFactory->createExecutionMessage();
             message->setType(protocol::ExecutionMessage::MESSAGE);
-            message->setContextID(i + m_startContextID);
+            // message->setContextID(i + m_startContextID);
+            message->setContextID(i);
             message->setOrigin(toHex(tx->sender()));
             message->setFrom(std::string(message->origin()));
 
