@@ -248,7 +248,8 @@ void PeersRouterTable::asyncBroadcastMsg(
     }
     ROUTER_LOG(TRACE) << LOG_BADGE("PeersRouterTable")
                       << LOG_DESC("asyncBroadcastMsg: randomChooseP2PNode") << LOG_KV("type", _type)
-                      << LOG_KV("size", _msg->length()) << LOG_KV("size", selectedPeers.size());
+                      << LOG_KV("msgSize", _msg->length())
+                      << LOG_KV("peersSize", selectedPeers.size());
     for (auto const& peer : selectedPeers)
     {
         ROUTER_LOG(TRACE) << LOG_BADGE("PeersRouterTable") << LOG_DESC("asyncBroadcastMsg")
