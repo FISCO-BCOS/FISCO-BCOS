@@ -13,6 +13,7 @@ ExternalProject_Add(rocksdb
     DOWNLOAD_NAME rocksdb_6.29.3.tar.gz
     DOWNLOAD_NO_PROGRESS 1
     URL https://codeload.github.com/facebook/rocksdb/tar.gz/v6.29.3
+        https://osp-1257653870.cos.ap-guangzhou.myqcloud.com/FISCO-BCOS/FISCO-BCOS/deps/rocksdb-v6.29.3.tar.gz
     URL_HASH SHA256=724e4cba2db6668ff6a21ecabcce0782cd0c8e386796e7e9a14a8260e0600abd
     # remove dynamic lib and gtest. NOTE: sed line number should update once RocksDB upgrade
     # PATCH_COMMAND ${SED_CMMAND} "s#-march=native#${MARCH_TYPE} ${COMPILER_FLAGS} #g" CMakeLists.txt COMMAND ${SED_CMMAND} "464d" CMakeLists.txt COMMAND ${SED_CMMAND} "739,749d" CMakeLists.txt COMMAND ${SED_CMMAND} "805,813d" CMakeLists.txt COMMAND ${SED_CMMAND} "s#-Werror##g" CMakeLists.txt
