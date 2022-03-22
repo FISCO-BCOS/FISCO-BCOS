@@ -75,7 +75,7 @@ using NonceKeyType = u256;
 using BlockNumber = int64_t;
 // the max blocknumber value
 static const BlockNumber MAX_BLOCK_NUMBER = INT64_MAX;
-// the max number of topic in event logd
+// the max number of topic in event log
 static const uint32_t MAX_NUM_TOPIC_EVENT_LOG = 4;
 
 enum class BlockPolarity

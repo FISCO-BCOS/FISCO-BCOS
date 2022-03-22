@@ -92,7 +92,8 @@ public:
         std::function<int(GROUP_ID _groupId)> _sessionCheckerCallback);
 
     // delete EventLogFilter in m_filters by client json request
-    int32_t cancelEventLogFilterByRequest(const EventLogFilterParams::Ptr _params, uint32_t _version);
+    int32_t cancelEventLogFilterByRequest(
+        const EventLogFilterParams::Ptr _params, uint32_t _version);
 
 public:
     bool isErrorStatus(filter_status status)
@@ -119,13 +120,13 @@ private:
     // the EventLogFilter to be add to m_filters
     EventLogFilterVector m_waitAddFilter;
     // metux for m_waitAddFilter
-    mutable std::mutex m_addMetux;
+    mutable std::mutex m_addMutex;
     // the count of EventLogFilter to be add to m_filters, reduce the range of lock
     std::atomic<uint64_t> m_waitAddCount{0};
     // the EventLogFilter to be removed in m_filters
     EventLogFilterVector m_waitCancelFilter;
     // metux for m_waitCancelFilter
-    mutable std::mutex m_cancelMetux;
+    mutable std::mutex m_cancelMutex;
     // the count of EventLogFilter to be removed in m_filters, reduce the range of lock
     std::atomic<uint64_t> m_waitCancelCount{0};
     // the blockchain of this EventLogFilterManager own to
