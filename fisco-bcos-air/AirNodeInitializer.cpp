@@ -20,11 +20,14 @@
  */
 #include "AirNodeInitializer.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
+#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
 #include <bcos-gateway/GatewayFactory.h>
 #include <bcos-gateway/libamop/AirTopicManager.h>
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-scheduler/src/SchedulerImpl.h>
+#include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
 #include <bcos-tool/NodeConfig.h>
+
 using namespace bcos::node;
 using namespace bcos::initializer;
 using namespace bcos::gateway;
@@ -33,6 +36,9 @@ using namespace bcos::tool;
 
 void AirNodeInitializer::init(std::string const& _configFilePath, std::string const& _genesisFile)
 {
+    INITIALIZER_LOG(INFO) << LOG_DESC("initGlobalConfig");
+    g_BCOSConfig.setCodec(std::make_shared<bcostars::protocol::ProtocolInfoCodecImpl>());
+
     boost::property_tree::ptree pt;
     boost::property_tree::read_ini(_configFilePath, pt);
     m_logInitializer = std::make_shared<BoostLogInitializer>();

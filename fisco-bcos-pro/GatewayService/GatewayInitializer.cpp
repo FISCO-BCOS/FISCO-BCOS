@@ -18,18 +18,22 @@
  * @author: yujiechen
  * @date 2021-10-15
  */
+#include "GatewayInitializer.h"
 #include "Common/TarsUtils.h"
+#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-gateway/GatewayFactory.h>
+#include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
 #include <bcos-tool/NodeConfig.h>
-
-#include "GatewayInitializer.h"
 
 using namespace bcostars;
 
 void GatewayInitializer::init(std::string const& _configPath)
 {
+    GATEWAYSERVICE_LOG(INFO) << LOG_DESC("initGlobalConfig");
+    g_BCOSConfig.setCodec(std::make_shared<bcostars::protocol::ProtocolInfoCodecImpl>());
+
     GATEWAYSERVICE_LOG(INFO) << LOG_DESC("initGateWayConfig") << LOG_KV("configPath", _configPath);
 
     GATEWAYSERVICE_LOG(INFO) << LOG_DESC("load nodeConfig");

@@ -26,8 +26,10 @@
 #include "SchedulerService/SchedulerServiceServer.h"
 #include "TxPoolService/TxPoolServiceServer.h"
 #include "libinitializer/Initializer.h"
+#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
 #include <bcos-scheduler/src/SchedulerImpl.h>
 #include <bcos-tars-protocol/client/RpcServiceClient.h>
+#include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
 
 using namespace bcostars;
 using namespace bcos;
@@ -44,6 +46,9 @@ void NodeServiceApp::destroyApp()
 
 void NodeServiceApp::initialize()
 {
+    BCOS_LOG(INFO) << LOG_DESC("initGlobalConfig");
+    g_BCOSConfig.setCodec(std::make_shared<bcostars::protocol::ProtocolInfoCodecImpl>());
+
     initConfig();
     initLog();
     initNodeService();
