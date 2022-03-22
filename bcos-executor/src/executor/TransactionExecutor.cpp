@@ -91,6 +91,28 @@ using namespace tbb::flow;
 
 crypto::Hash::Ptr GlobalHashImpl::g_hashImpl;
 
+
+BlockContext::Ptr TransactionExecutor::createBlockContext(
+    const protocol::BlockHeader::ConstPtr& currentHeader, storage::StateStorage::Ptr storage,
+    storage::StorageInterface::Ptr lastStorage)
+{
+    BlockContext::Ptr context = make_shared<BlockContext>(storage, lastStorage, m_hashImpl,
+        currentHeader, FiscoBcosScheduleV4, m_isWasm, m_isAuthCheck);
+
+    return context;
+}
+
+std::shared_ptr<BlockContext> TransactionExecutor::createBlockContext(
+    bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
+    int32_t blockVersion, storage::StateStorage::Ptr storage)
+{
+    BlockContext::Ptr context = make_shared<BlockContext>(storage, m_hashImpl, blockNumber,
+        blockHash, timestamp, blockVersion, FiscoBcosScheduleV4, m_isWasm, m_isAuthCheck);
+
+    return context;
+}
+
+
 TransactionExecutor::TransactionExecutor(txpool::TxPoolInterface::Ptr txpool,
     storage::MergeableStorageInterface::Ptr cachedStorage,
     storage::TransactionalStorageInterface::Ptr backendStorage,
@@ -203,6 +225,7 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
         auto storage = std::make_shared<storage::StateStorage>(std::move(prev));
 
         // Create a temp block context
+        // TODO: pass blockHash, version here
         blockContext = createBlockContext(
             number, h256(), 0, 0, std::move(storage));  // TODO: complete the block info
         auto inserted = m_calledContext.emplace(

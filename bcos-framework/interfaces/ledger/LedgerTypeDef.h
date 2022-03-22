@@ -37,6 +37,8 @@ static const int32_t RECEIPTS = 0x0002;
 static const char* const SYSTEM_KEY_TX_GAS_LIMIT = "tx_gas_limit";
 static const char* const SYSTEM_KEY_TX_COUNT_LIMIT = "tx_count_limit";
 static const char* const SYSTEM_KEY_CONSENSUS_LEADER_PERIOD = "consensus_leader_period";
+// for compatibility
+static const char* const SYSTEM_KEY_COMPATIBILITY_VERSION = "compatibility_version";
 
 // system config struct
 using SystemConfigEntry = std::tuple<std::string, bcos::protocol::BlockNumber>;

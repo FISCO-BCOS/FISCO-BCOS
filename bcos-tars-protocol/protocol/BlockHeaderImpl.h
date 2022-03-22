@@ -54,7 +54,7 @@ public:
 
     void clear() override;
 
-    int32_t version() const override { return m_inner()->data.version; }
+    uint32_t version() const override { return m_inner()->data.version; }
     gsl::span<const bcos::protocol::ParentInfo> parentInfo() const override;
 
     bcos::crypto::HashType txsRoot() const override;
@@ -90,7 +90,7 @@ public:
             m_inner()->data.consensusWeights.size());
     }
 
-    void setVersion(int32_t _version) override { m_inner()->data.version = _version; }
+    void setVersion(uint32_t _version) override { m_inner()->data.version = _version; }
 
     void setParentInfo(gsl::span<const bcos::protocol::ParentInfo> const& _parentInfo) override;
 

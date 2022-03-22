@@ -86,27 +86,6 @@ using namespace bcos::wasm;
 using namespace bcos::protocol;
 using namespace bcos::storage;
 using namespace bcos::precompiled;
-
-BlockContext::Ptr EvmTransactionExecutor::createBlockContext(
-    const protocol::BlockHeader::ConstPtr& currentHeader, storage::StateStorage::Ptr storage,
-    storage::StorageInterface::Ptr lastStorage)
-{
-    BlockContext::Ptr context = make_shared<BlockContext>(
-        storage, lastStorage, m_hashImpl, currentHeader, FiscoBcosScheduleV4, false, m_isAuthCheck);
-
-    return context;
-}
-
-std::shared_ptr<BlockContext> EvmTransactionExecutor::createBlockContext(
-    bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
-    int32_t blockVersion, storage::StateStorage::Ptr storage)
-{
-    BlockContext::Ptr context = make_shared<BlockContext>(storage, m_hashImpl, blockNumber,
-        blockHash, timestamp, blockVersion, FiscoBcosScheduleV4, false, m_isAuthCheck);
-
-    return context;
-}
-
 void EvmTransactionExecutor::initPrecompiled()
 {
     auto fillZero = [](int _num) -> std::string {

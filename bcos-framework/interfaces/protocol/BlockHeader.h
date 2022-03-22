@@ -97,7 +97,7 @@ public:
     }
 
     // version returns the version of the blockHeader
-    virtual int32_t version() const = 0;
+    virtual uint32_t version() const = 0;
     // parentInfo returns the parent information, including (parentBlockNumber, parentHash)
     virtual gsl::span<const ParentInfo> parentInfo() const = 0;
     // txsRoot returns the txsRoot of the current block
@@ -118,7 +118,7 @@ public:
     virtual gsl::span<const Signature> signatureList() const = 0;
     virtual gsl::span<const uint64_t> consensusWeights() const = 0;
 
-    virtual void setVersion(int32_t _version) = 0;
+    virtual void setVersion(uint32_t _version) = 0;
     virtual void setParentInfo(gsl::span<const ParentInfo> const& _parentInfo) = 0;
     virtual void setParentInfo(ParentInfoList&& _parentInfo) = 0;
 

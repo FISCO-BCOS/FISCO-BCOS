@@ -22,6 +22,8 @@
 #include "PrecompiledResult.h"
 #include "Utilities.h"
 #include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
+#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
+#include <bcos-tool/VersionConverter.h>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 
@@ -45,6 +47,24 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr _hashImpl)
         SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, [](int64_t _v) -> bool { return (_v >= 1); }));
     m_sysValueCmp.insert(std::make_pair(
         SYSTEM_KEY_TX_COUNT_LIMIT, [](int64_t _v) -> bool { return (_v >= TX_COUNT_LIMIT_MIN); }));
+    // for compatibility
+    m_sysValueCmp.insert(std::make_pair(SYSTEM_KEY_COMPATIBILITY_VERSION, [](int64_t _v) -> bool {
+        if (_v < g_BCOSConfig.version() || _v < g_BCOSConfig.minSupportedVersion())
+        {
+            PRECOMPILED_LOG(WARNING)
+                << LOG_DESC("SystemConfigPrecompiled: set " +
+                            std::string(SYSTEM_KEY_COMPATIBILITY_VERSION) + " failed")
+                << LOG_KV("maxSupportedVersion", g_BCOSConfig.version())
+                << LOG_KV("minSupportedVersion", g_BCOSConfig.minSupportedVersion())
+                << LOG_KV("settedValue", _v);
+            return false;
+        }
+        return true;
+    }));
+    m_valueConverter.insert(
+        std::make_pair(SYSTEM_KEY_COMPATIBILITY_VERSION, [](std::string _value) -> uint64_t {
+            return (uint64_t)(bcos::tool::toVersionNumber(_value));
+        }));
 }
 
 std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
@@ -126,7 +146,7 @@ std::string SystemConfigPrecompiled::toString()
     return "SystemConfig";
 }
 
-bool SystemConfigPrecompiled::checkValueValid(std::string_view key, std::string_view value)
+bool SystemConfigPrecompiled::checkValueValid(std::string_view _key, std::string_view value)
 {
     int64_t configuredValue;
     if (value.empty())
@@ -135,14 +155,27 @@ bool SystemConfigPrecompiled::checkValueValid(std::string_view key, std::string_
     }
     try
     {
-        configuredValue = boost::lexical_cast<int64_t>(value);
-        auto cmp = m_sysValueCmp.at(std::string(key));
-        return cmp(configuredValue);
+        std::string key = std::string(_key);
+        auto converter = m_valueConverter.at(key);
+        if (converter)
+        {
+            configuredValue = converter(std::string(value));
+        }
+        else
+        {
+            configuredValue = boost::lexical_cast<int64_t>(value);
+        }
+        auto cmp = m_sysValueCmp.at(key);
+        if (cmp)
+        {
+            return cmp(configuredValue);
+        }
+        return true;
     }
     catch (std::exception const& e)
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("SystemConfigPrecompiled")
-                               << LOG_DESC("checkValueValid failed") << LOG_KV("key", key)
+                               << LOG_DESC("checkValueValid failed") << LOG_KV("key", _key)
                                << LOG_KV("value", value)
                                << LOG_KV("errorInfo", boost::diagnostic_information(e));
         return false;

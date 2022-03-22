@@ -20,6 +20,7 @@
  */
 #pragma once
 #include <memory>
+#include <string>
 namespace bcos
 {
 namespace protocol
@@ -56,9 +57,12 @@ enum ProtocolVersion : uint32_t
     INVALID = 0,  // Negotiation failed
     V1 = 1,
 };
-enum Version
+enum Version : uint32_t
 {
     RC4_VERSION = 4,
 };
+const std::string RC4_VERSION_STR = "3.0.0-rc4";
+const uint8_t MAX_MAJOR_VERSION = std::numeric_limits<uint8_t>::max();
+const uint8_t MIN_MAJOR_VERSION = 3;
 }  // namespace protocol
 }  // namespace bcos

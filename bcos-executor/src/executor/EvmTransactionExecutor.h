@@ -42,6 +42,8 @@ public:
       : TransactionExecutor(std::move(txpool), std::move(cachedStorage), std::move(backendStorage),
             std::move(executionMessageFactory), std::move(hashImpl), isAuthCheck)
     {
+        m_isWasm = false;
+        m_schedule = FiscoBcosScheduleV4;
         initPrecompiled();
         assert(m_precompiledContract);
         assert(!m_constantPrecompiled.empty());
@@ -53,14 +55,6 @@ public:
 private:
     void initPrecompiled();
 
-    std::shared_ptr<BlockContext> createBlockContext(
-        const protocol::BlockHeader::ConstPtr& currentHeader,
-        storage::StateStorage::Ptr tableFactory,
-        storage::StorageInterface::Ptr lastStorage) override;
-
-    std::shared_ptr<BlockContext> createBlockContext(bcos::protocol::BlockNumber blockNumber,
-        h256 blockHash, uint64_t timestamp, int32_t blockVersion,
-        storage::StateStorage::Ptr tableFactory) override;
 #if 0
     std::shared_ptr<std::vector<bytes>> extractConflictFields(const FunctionAbi& functionAbi,
         const CallParameters& params, std::shared_ptr<BlockContext> _blockContext) override;
