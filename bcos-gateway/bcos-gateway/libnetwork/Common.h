@@ -56,6 +56,7 @@ enum DisconnectReason
     PingTimeout,
     UserReason = 0x10,
     IdleWaitTimeout = 0x11,
+    NegotiateFailed = 0x12,
     NoDisconnect = 0xffff
 };
 

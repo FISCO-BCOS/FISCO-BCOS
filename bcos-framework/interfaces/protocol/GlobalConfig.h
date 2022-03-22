@@ -21,6 +21,7 @@
 #pragma once
 #include "Protocol.h"
 #include "ProtocolInfo.h"
+#include "ProtocolInfoCodec.h"
 #include <map>
 #include <memory>
 
@@ -75,12 +76,17 @@ public:
     Version version() const { return m_version; }
     void setVersion(Version _version) { m_version = _version; }
 
+    // Note: must set the protocolInfo codec when init
+    virtual void setCodec(ProtocolInfoCodec::Ptr _codec) { m_codec = _codec; }
+    virtual ProtocolInfoCodec::Ptr codec() const { return m_codec; }
+
 private:
     std::map<ProtocolModuleID, ProtocolInfo::Ptr> c_supportedProtocols;
     // default version before protocol-negotiate success
     ProtocolVersion m_defaultVersion = ProtocolVersion::V1;
     // the system version, can only be upgraded manually
     Version m_version = Version::RC4_VERSION;
+    ProtocolInfoCodec::Ptr m_codec;
 };
 }  // namespace protocol
 }  // namespace bcos
