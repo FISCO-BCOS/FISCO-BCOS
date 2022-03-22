@@ -243,6 +243,7 @@ bool LocalRouterTable::asyncBroadcastMsg(
         auto dstNodeID = it->nodeID();
         ROUTER_LOG(TRACE) << LOG_BADGE(
                                  "LocalRouterTable: dispatcher broadcast-type message to node")
+                          << LOG_KV("type", _nodeType) << LOG_KV("payloadSize", _payload.size())
                           << LOG_KV("dst", dstNodeID);
         frontService->onReceiveMessage(
             _groupID, _srcNodeID, _payload, [_srcNodeID, dstNodeID](Error::Ptr _error) {
