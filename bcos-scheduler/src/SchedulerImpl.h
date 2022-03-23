@@ -99,21 +99,20 @@ public:
         }
         std::promise<std::tuple<Error::Ptr, std::string>> p;
         m_ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_TX_GAS_LIMIT,
-            [&p, blockNumber = _number](
-                Error::Ptr _e, std::string _value, protocol::BlockNumber _number) {
-                if (blockNumber >= _number)
-                {
-                    p.set_value(std::make_tuple(std::move(_e), std::move(_value)));
-                    return;
-                }
-                p.set_value(std::make_tuple(
-                    BCOS_ERROR_PTR(SchedulerError::UnknownError, "get gas limit error"), ""));
+            [&p](Error::Ptr _e, std::string _value, protocol::BlockNumber) {
+                p.set_value(std::make_tuple(std::move(_e), std::move(_value)));
+                return;
             });
         auto [e, value] = p.get_future().get();
-        if (!e)
+        if (e)
         {
-            m_gasLimit = boost::lexical_cast<uint64_t>(value);
+            SCHEDULER_LOG(WARNING)
+                << LOG_DESC("fetchGasLimit failed") << LOG_KV("code", e->errorCode())
+                << LOG_KV("message", e->errorMessage());
+            BOOST_THROW_EXCEPTION(
+                BCOS_ERROR(SchedulerError::fetchGasLimitError, e->errorMessage()));
         }
+        m_gasLimit = boost::lexical_cast<uint64_t>(value);
     }
 
 private:
