@@ -315,7 +315,7 @@ void SchedulerImpl::call(protocol::Transaction::Ptr tx,
 
     // Create temp executive
     auto blockExecutive =
-        std::make_shared<BlockExecutive>(std::move(block), this, m_calledContextID++,
+        std::make_shared<BlockExecutive>(std::move(block), this, m_calledContextID.fetch_add(1),
             m_transactionSubmitResultFactory, true, m_blockFactory, m_gasLimit, false);
 
     blockExecutive->asyncCall([callback = std::move(callback)](Error::UniquePtr&& error,

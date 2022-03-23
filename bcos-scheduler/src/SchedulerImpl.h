@@ -126,7 +126,7 @@ private:
     std::mutex m_executeMutex;
     std::mutex m_commitMutex;
 
-    std::atomic_int64_t m_calledContextID = 0;
+    std::atomic_int64_t m_calledContextID = 1;
 
     std::atomic<bcos::protocol::BlockNumber> m_lastExecutedBlockNumber = 0;
     uint64_t m_gasLimit = TRANSACTION_GAS;
