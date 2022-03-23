@@ -33,15 +33,22 @@ inline bcos::protocol::Version toVersionNumber(const std::string& _version)
 {
     auto version = _version;
     boost::to_lower(version);
+    if (version == bcos::protocol::RC3_VERSION_STR)
+    {
+        return bcos::protocol::Version::RC3_VERSION;
+    }
     if (version == bcos::protocol::RC4_VERSION_STR)
     {
         return bcos::protocol::Version::RC4_VERSION;
     }
     std::vector<std::string> versionFields;
     boost::split(versionFields, version, boost::is_any_of("."));
-    if (versionFields.size() <= 2)
+    if (versionFields.size() < 2)
     {
-        BOOST_THROW_EXCEPTION(InvalidVersion() << errinfo_comment(_version));
+        BOOST_THROW_EXCEPTION(InvalidVersion() << errinfo_comment(
+                                  "The version must be in version of major_version.middle_version, "
+                                  "and the minimum version is optional, current version is " +
+                                  _version));
     }
     try
     {

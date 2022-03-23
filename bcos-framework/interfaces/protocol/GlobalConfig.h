@@ -95,15 +95,18 @@ public:
     virtual ProtocolInfoCodec::Ptr codec() const { return m_codec; }
 
     Version minSupportedVersion() const { return m_minSupportedVersion; }
+    Version maxSupportedVersion() const { return m_maxSupportedVersion; }
 
 private:
     std::map<ProtocolModuleID, ProtocolInfo::Ptr> c_supportedProtocols;
     // default version before protocol-negotiate success
     ProtocolVersion m_defaultVersion = ProtocolVersion::V1;
     // the system version, can only be upgraded manually
-    Version m_version = Version::RC4_VERSION;
+    Version m_version = Version::RC3_VERSION;
     // the minimum supported version
-    Version m_minSupportedVersion = Version::RC4_VERSION;
+    Version m_minSupportedVersion = Version::MIN_VERSION;
+    Version m_maxSupportedVersion = Version::MAX_VERSION;
+
     ProtocolInfoCodec::Ptr m_codec;
     mutable bcos::SharedMutex x_version;
 };

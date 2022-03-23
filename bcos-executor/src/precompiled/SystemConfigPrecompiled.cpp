@@ -48,13 +48,15 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr _hashImpl)
     m_sysValueCmp.insert(std::make_pair(
         SYSTEM_KEY_TX_COUNT_LIMIT, [](int64_t _v) -> bool { return (_v >= TX_COUNT_LIMIT_MIN); }));
     // for compatibility
+    // Note: the compatibility_version is not compatibility
     m_sysValueCmp.insert(std::make_pair(SYSTEM_KEY_COMPATIBILITY_VERSION, [](int64_t _v) -> bool {
-        if (_v < g_BCOSConfig.version() || _v < g_BCOSConfig.minSupportedVersion())
+        if (_v > (uint32_t)(g_BCOSConfig.maxSupportedVersion()) ||
+            _v < (uint32_t)(g_BCOSConfig.minSupportedVersion()))
         {
             PRECOMPILED_LOG(WARNING)
                 << LOG_DESC("SystemConfigPrecompiled: set " +
                             std::string(SYSTEM_KEY_COMPATIBILITY_VERSION) + " failed")
-                << LOG_KV("maxSupportedVersion", g_BCOSConfig.version())
+                << LOG_KV("maxSupportedVersion", g_BCOSConfig.maxSupportedVersion())
                 << LOG_KV("minSupportedVersion", g_BCOSConfig.minSupportedVersion())
                 << LOG_KV("settedValue", _v);
             return false;
@@ -156,19 +158,18 @@ bool SystemConfigPrecompiled::checkValueValid(std::string_view _key, std::string
     try
     {
         std::string key = std::string(_key);
-        auto converter = m_valueConverter.at(key);
-        if (converter)
+        if (m_valueConverter.count(key))
         {
-            configuredValue = converter(std::string(value));
+            configuredValue = (m_valueConverter.at(key))(std::string(value));
         }
         else
         {
             configuredValue = boost::lexical_cast<int64_t>(value);
         }
         auto cmp = m_sysValueCmp.at(key);
-        if (cmp)
+        if (m_sysValueCmp.count(key))
         {
-            return cmp(configuredValue);
+            return (m_sysValueCmp.at(key))(configuredValue);
         }
         return true;
     }
@@ -186,27 +187,32 @@ std::pair<std::string, protocol::BlockNumber> SystemConfigPrecompiled::getSysCon
     const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const std::string& _key) const
 {
-    auto table = _executive->storage().openTable(ledger::SYS_CONFIG);
-    auto entry = table->getRow(_key);
-    if (entry)
+    try
     {
-        try
+        auto table = _executive->storage().openTable(ledger::SYS_CONFIG);
+        auto entry = table->getRow(_key);
+        if (entry)
         {
             auto [value, enableNumber] = entry->getObject<SystemConfigEntry>();
             return {value, enableNumber};
         }
-        catch (std::exception const& e)
+        else
         {
-            PRECOMPILED_LOG(ERROR)
-                << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("getSysConfigByKey failed")
-                << LOG_KV("key", _key) << LOG_KV("errorInfo", boost::diagnostic_information(e));
+            PRECOMPILED_LOG(ERROR) << LOG_BADGE("SystemConfigPrecompiled")
+                                   << LOG_DESC("get sys config error") << LOG_KV("configKey", _key);
             return {"", -1};
         }
     }
-    else
+    catch (std::exception const& e)
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("SystemConfigPrecompiled")
-                               << LOG_DESC("get sys config error") << LOG_KV("configKey", _key);
-        return {"", -1};
+        // Note: rc3 version, the compatibility_version maybe empty
+        if (_key == SYSTEM_KEY_COMPATIBILITY_VERSION)
+        {
+            return {boost::lexical_cast<std::string>(g_BCOSConfig.version()), 0};
+        }
+        auto errorMsg =
+            "getSysConfigByKey for " + _key + "failed, error:" + boost::diagnostic_information(e);
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("SystemConfigPrecompiled") << errorMsg;
+        return {errorMsg, -1};
     }
 }

@@ -20,7 +20,9 @@
  */
 #include "LedgerConfigFetcher.h"
 #include "Exceptions.h"
+#include "VersionConverter.h"
 #include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
+#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
 #include <bcos-utilities/Common.h>
 #include <future>
 using namespace bcos::protocol;
@@ -180,4 +182,16 @@ void LedgerConfigFetcher::fetchNonceList(BlockNumber _startNumber, int64_t _offs
                                   ", offset:" + boost::lexical_cast<std::string>(_offset)));
     }
     m_nonceList = ret.second;
+}
+
+void LedgerConfigFetcher::fetchAndSetCompatibilityVersion()
+{
+    TOOL_LOG(INFO) << LOG_DESC("fetchAndSetCompatibilityVersion");
+    auto versionStr = fetchSystemConfig(SYSTEM_KEY_COMPATIBILITY_VERSION);
+    auto version = toVersionNumber(versionStr);
+    g_BCOSConfig.setVersion(version);
+    TOOL_LOG(INFO) << LOG_DESC("fetchAndSetCompatibilityVersion success")
+                   << LOG_KV("version", versionStr) << LOG_KV("versionNumber", version)
+                   << LOG_KV("minSupportedVersion", g_BCOSConfig.minSupportedVersion())
+                   << LOG_KV("maxSupportedVersion", g_BCOSConfig.maxSupportedVersion());
 }

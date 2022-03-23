@@ -55,6 +55,8 @@ public:
     }
     virtual bcos::crypto::HashType const& genesisHash() const { return m_genesisHash; }
 
+    virtual void fetchAndSetCompatibilityVersion();
+
 protected:
     virtual bcos::crypto::HashType fetchBlockHash(bcos::protocol::BlockNumber _blockNumber);
     virtual std::string fetchSystemConfig(std::string const& _key);

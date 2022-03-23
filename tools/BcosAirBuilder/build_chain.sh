@@ -886,6 +886,8 @@ generate_genesis_config() {
     ; the node id of consensusers
     ${node_list}
 
+[version]
+    compatibility_version=3.0.0-rc3
 [tx]
     ; transaction gas limit
     gas_limit=3000000000

@@ -25,7 +25,8 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
                         << LOG_KV("gasLimit", m_gasLimit) << LOG_KV("verify", verify)
                         << LOG_KV("signatureSize", signature.size())
                         << LOG_KV("tx count", block->transactionsSize())
-                        << LOG_KV("meta tx count", block->transactionsMetaDataSize());
+                        << LOG_KV("meta tx count", block->transactionsMetaDataSize())
+                        << LOG_KV("version", (bcos::protocol::Version)(block->version()));
     auto executeLock =
         std::make_shared<std::unique_lock<std::mutex>>(m_executeMutex, std::try_to_lock);
     if (!executeLock->owns_lock())
@@ -457,8 +458,10 @@ void SchedulerImpl::asyncGetLedgerConfig(
                         case 3:
                             try
                             {
-                                g_BCOSConfig.setVersion(bcos::tool::toVersionNumber(value));
-                                SCHEDULER_LOG(INFO) << LOG_DESC("getVersionNumber") << value;
+                                auto version = bcos::tool::toVersionNumber(value);
+                                g_BCOSConfig.setVersion(version);
+                                SCHEDULER_LOG(INFO) << LOG_DESC("reset versionNumber")
+                                                    << LOG_KV("version", version);
                             }
                             catch (std::exception const& e)
                             {

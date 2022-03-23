@@ -23,9 +23,11 @@
 #include "bcos-framework/interfaces/consensus/ConsensusNodeInterface.h"
 #include "bcos-framework/interfaces/ledger/LedgerConfig.h"
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
+#include <bcos-framework/interfaces/protocol/Protocol.h>
 #include <bcos-utilities/Log.h>
 #include <boost/property_tree/ini_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
+
 #define NodeConfig_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("NodeConfig")
 namespace bcos
 {
@@ -173,6 +175,9 @@ public:
     bool enableLRUCacheStorage() const { return m_enableLRUCacheStorage; }
     ssize_t cacheSize() const { return m_cacheSize; }
 
+    bcos::protocol::Version compatibilityVersion() const { return m_compatibilityVersion; }
+    std::string const& version() const { return m_version; }
+
 protected:
     virtual void loadChainConfig(boost::property_tree::ptree const& _pt);
     virtual void loadRpcConfig(boost::property_tree::ptree const& _pt);
@@ -281,6 +286,8 @@ private:
 
     bool m_enableLRUCacheStorage = true;
     ssize_t m_cacheSize = DEFAULT_CACHE_SIZE;  // 32MB for default
+    bcos::protocol::Version m_compatibilityVersion;
+    std::string m_version;
 };
 }  // namespace tool
 }  // namespace bcos
