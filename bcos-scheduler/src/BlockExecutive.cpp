@@ -28,8 +28,10 @@
 using namespace bcos::scheduler;
 using namespace bcos::ledger;
 
-void BlockExecutive::prepare() {
-    if(m_hasPrepared) {
+void BlockExecutive::prepare()
+{
+    if (m_hasPrepared)
+    {
         return;
     }
 
@@ -54,10 +56,12 @@ void BlockExecutive::prepare() {
                 message->setType(protocol::ExecutionMessage::TXHASH);
                 message->setTransactionHash(metaData->hash());
 
-                if (metaData->attribute() & bcos::protocol::Transaction::Attribute::LIQUID_SCALE_CODEC)
+                if (metaData->attribute() &
+                    bcos::protocol::Transaction::Attribute::LIQUID_SCALE_CODEC)
                 {
                     // LIQUID
-                    if (metaData->attribute() & bcos::protocol::Transaction::Attribute::LIQUID_CREATE)
+                    if (metaData->attribute() &
+                        bcos::protocol::Transaction::Attribute::LIQUID_CREATE)
                     {
                         message->setCreate(true);
                     }
@@ -158,17 +162,19 @@ void BlockExecutive::prepare() {
 
                 auto to = std::string(message->to());
 #pragma omp critical
-                m_executiveStates.emplace(
-                    std::make_tuple(std::move(to), i), ExecutiveState(i, std::move(message), m_withDAG));
+                m_executiveStates.emplace(std::make_tuple(std::move(to), i),
+                    ExecutiveState(i, std::move(message), m_withDAG));
             }
         }
 
-        SCHEDULER_LOG(DEBUG) << LOG_BADGE("prepareBlockExecutive") << LOG_KV("block number", m_block->blockHeaderConst()->number())
-                             << LOG_KV("blockHeader.timestamp", m_block->blockHeaderConst()->timestamp())
-                             << LOG_KV("meta tx count", m_block->transactionsMetaDataSize()) << LOG_KV("timeCost", (utcTime() - startT));
+        SCHEDULER_LOG(DEBUG) << LOG_BADGE("prepareBlockExecutive")
+                             << LOG_KV("block number", m_block->blockHeaderConst()->number())
+                             << LOG_KV("blockHeader.timestamp",
+                                    m_block->blockHeaderConst()->timestamp())
+                             << LOG_KV("meta tx count", m_block->transactionsMetaDataSize())
+                             << LOG_KV("timeCost", (utcTime() - startT));
         m_hasPrepared = true;
     }
-
 }
 
 void BlockExecutive::asyncCall(
@@ -215,7 +221,7 @@ void BlockExecutive::asyncExecute(
     if (!m_staticCall)
     {
         // Execute nextBlock
-        bool withDAG = m_withDAG;
+        bool withDAG = false;
         batchNextBlock([this, withDAG, createMsgT, startT, callback = std::move(callback)](
                            Error::UniquePtr error) {
             if (error)
@@ -801,6 +807,291 @@ void BlockExecutive::batchBlockRollback(std::function<void(Error::UniquePtr)> ca
     }
 }
 
+BlockExecutive::TraverseHint BlockExecutive::handleExecutive(ExecutiveState& executiveState)
+{
+    auto& message = executiveState.message;
+
+    assert(message);
+    auto contextID = executiveState.contextID;
+    auto seq = message->seq();
+
+    switch (message->type())
+    {
+        // Request type, push stack
+    case protocol::ExecutionMessage::MESSAGE:
+    case protocol::ExecutionMessage::TXHASH:
+    {
+        auto newSeq = executiveState.currentSeq++;
+        if (message->to().empty())
+        {
+            if (message->createSalt())
+            {
+                message->setTo(
+                    newEVMAddress(message->from(), message->data(), *(message->createSalt())));
+            }
+            else
+            {
+                message->setTo(newEVMAddress(number(), contextID, newSeq));
+            }
+        }
+        executiveState.callStack.push(newSeq);
+        executiveState.message->setSeq(newSeq);
+
+        SCHEDULER_LOG(TRACE) << "Execute, " << message->contextID() << " | " << message->seq()
+                             << " | " << std::hex << message->transactionHash() << " | "
+                             << message->to();
+
+        break;
+    }
+        // Return type, pop stack
+    case protocol::ExecutionMessage::FINISHED:
+    case protocol::ExecutionMessage::REVERT:
+    {
+        executiveState.callStack.pop();
+
+        // Empty stack, execution is finished
+        if (executiveState.callStack.empty())
+        {
+            auto txGasUsed = TRANSACTION_GAS - message->gasAvailable();
+            // Calc the gas set to header
+            m_gasUsed += txGasUsed;
+
+            m_executiveResults[executiveState.contextID].receipt =
+                m_scheduler->m_blockFactory->receiptFactory()->createReceipt(txGasUsed,
+                    message->newEVMContractAddress(),
+                    std::make_shared<std::vector<bcos::protocol::LogEntry>>(
+                        message->takeLogEntries()),
+                    message->status(), message->takeData(), m_block->blockHeaderConst()->number());
+
+            // Remove executive state and continue
+            SCHEDULER_LOG(TRACE) << "Eraseing, " << message->contextID() << " | " << message->seq()
+                                 << " | " << std::hex << message->transactionHash() << " | "
+                                 << message->to();
+
+            return DELETE;
+        }
+
+        message->setSeq(executiveState.callStack.top());
+        message->setCreate(false);
+
+        SCHEDULER_LOG(TRACE) << "FINISHED/REVERT, " << message->contextID() << " | "
+                             << message->seq() << " | " << std::hex << message->transactionHash()
+                             << " | " << message->to();
+
+        break;
+    }
+    case protocol::ExecutionMessage::REVERT_KEY_LOCK:
+    {
+        message->setType(protocol::ExecutionMessage::REVERT);
+        message->setCreate(false);
+        message->setKeyLocks({});
+        SCHEDULER_LOG(TRACE) << "REVERT By key lock, " << message->contextID() << " | "
+                             << message->seq() << " | " << std::hex << message->transactionHash()
+                             << " | " << message->to();
+
+        break;
+    }
+        // Retry type, send again
+    case protocol::ExecutionMessage::KEY_LOCK:
+    {
+        // Try acquire key lock
+        if (!m_keyLocks.acquireKeyLock(message->from(), message->keyLockAcquired(), contextID, seq))
+        {
+            SCHEDULER_LOG(TRACE) << "Waiting key, contract: " << contextID << " | " << seq << " | "
+                                 << message->from()
+                                 << " keyLockAcquired: " << toHex(message->keyLockAcquired());
+            return PASS;
+        }
+
+        SCHEDULER_LOG(TRACE) << "Wait key lock success, " << contextID << " | " << seq << " | "
+                             << message->from()
+                             << " keyLockAcquired: " << toHex(message->keyLockAcquired());
+        break;
+    }
+        // Retry type, send again
+    case protocol::ExecutionMessage::SEND_BACK:
+    {
+        SCHEDULER_LOG(TRACE) << "Send back, " << contextID << " | " << seq << " | "
+                             << message->transactionHash() << LOG_KV("to", message->to());
+
+        if (message->transactionHash() != h256(0))
+        {
+            message->setType(protocol::ExecutionMessage::TXHASH);
+        }
+        else
+        {
+            message->setType(protocol::ExecutionMessage::MESSAGE);
+        }
+
+        if (message->to().empty())
+        {
+            if (message->createSalt())
+            {
+                message->setTo(
+                    newEVMAddress(message->from(), message->data(), *(message->createSalt())));
+            }
+            else
+            {
+                message->setTo(newEVMAddress(number(), contextID, seq));
+            }
+        }
+
+        break;
+    }
+    }
+
+
+    // Set current key lock into message
+    auto keyLocks = m_keyLocks.getKeyLocksNotHoldingByContext(message->to(), contextID);
+    message->setKeyLocks(std::move(keyLocks));
+
+    if (c_fileLogLevel >= bcos::LogLevel::TRACE)
+    {
+        for (auto& keyIt : message->keyLocks())
+        {
+            SCHEDULER_LOG(TRACE) << boost::format(
+                                        "Dispatch key lock type: %s, from: %s, to: %s, key: %s, "
+                                        "contextID: %ld, seq: %ld") %
+                                        message->type() % message->from() % message->to() %
+                                        toHex(keyIt) % contextID % message->seq();
+        }
+    }
+
+    return NOT_END;
+}
+
+void BlockExecutive::queryExecutor(
+    bcos::executor::ParallelTransactionExecutorInterface::Ptr executor,
+    ExecutiveState& executiveState, std::shared_ptr<BatchStatus> batchStatus)
+{
+    std::string contractAddress = std::string(executiveState.message->to());
+    auto contextID = executiveState.contextID;
+
+    auto executeCallback = [this, contractAddress, contextID, executor, &executiveState,
+                               batchStatus](bcos::Error::UniquePtr error,
+                               bcos::protocol::ExecutionMessage::UniquePtr response) {
+        if (error)
+        {
+            SCHEDULER_LOG(ERROR) << "Execute transaction error: "
+                                 << boost::diagnostic_information(*error);
+
+            executiveState.error = std::move(error);
+            executiveState.message.reset();
+
+            // Set error to batch
+            ++batchStatus->error;
+        }
+        else if (!response)
+        {
+            SCHEDULER_LOG(ERROR) << "Execute transaction with null response!";
+
+            ++batchStatus->error;
+        }
+        else
+        {
+            executiveState.message = std::move(response);
+        }
+
+
+        switch (executiveState.message->type())
+        {
+        case protocol::ExecutionMessage::FINISHED:
+        case protocol::ExecutionMessage::REVERT:
+        {
+            // execute success, try to get next transaction and exeute
+            auto nextExecutiveIt = m_executiveStates.upper_bound({contractAddress, contextID});
+
+            if (nextExecutiveIt != m_executiveStates.end() &&
+                std::get<0>(nextExecutiveIt->first) == contractAddress)
+            {
+                auto hint = handleExecutive(nextExecutiveIt->second);
+                if (hint == NOT_END)
+                {
+                    queryExecutor(executor, nextExecutiveIt->second, batchStatus);
+                    break;
+                }
+                // else: goto default
+            }
+            // else: goto default
+        }
+        default:
+            ++batchStatus->received;
+            checkBatch(*batchStatus);
+        }
+    };
+
+
+    if (executiveState.message->staticCall())
+    {
+        executor->call(std::move(executiveState.message), std::move(executeCallback));
+    }
+    else
+    {
+        executor->executeTransaction(std::move(executiveState.message), std::move(executeCallback));
+    }
+};
+/*
+void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
+{
+    SCHEDULER_LOG(TRACE) << "Start batch";
+    auto batchStatus = std::make_shared<BatchStatus>();
+    batchStatus->callback = std::move(callback);
+
+    traverseExecutive([this, &batchStatus, calledContract = std::set<std::string, std::less<>>()](
+                          ExecutiveState& executiveState) mutable {
+        if (executiveState.error)
+        {
+            batchStatus->allSended = true;
+            ++batchStatus->error;
+
+            SCHEDULER_LOG(TRACE) << "Detected error!";
+            return END;
+        }
+
+
+        auto& message = executiveState.message;
+
+        assert(message);
+        auto contextID = executiveState.contextID;
+        auto seq = message->seq();
+
+        // Check if another context processing same contract
+        auto contractIt = calledContract.end();
+        if (!message->to().empty())
+        {
+            contractIt = calledContract.lower_bound(message->to());
+            if (contractIt != calledContract.end() && *contractIt == message->to())
+            {
+                SCHEDULER_LOG(TRACE)
+                    << "Skip, " << contextID << " | " << seq << " | " << message->to();
+                executiveState.skip = true;
+                return SKIP;
+            }
+        }
+
+        TraverseHint hint = handleExecutive(executiveState);
+        if (hint != NOT_END)
+        {
+            return hint;
+        }
+        calledContract.emplace_hint(contractIt, message->to());
+
+        ++batchStatus->total;
+        auto executor = m_scheduler->m_executorManager->dispatchExecutor(message->to());
+
+        queryExecutor(executor, executiveState, batchStatus);
+
+        return PASS;
+    });
+
+
+    batchStatus->allSended = true;
+    checkBatch(*batchStatus);
+}
+
+/*///
+
+
 void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
 {
     SCHEDULER_LOG(TRACE) << "Start batch";
@@ -1034,7 +1325,7 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
     batchStatus->allSended = true;
     checkBatch(*batchStatus);
 }
-
+//*/
 void BlockExecutive::checkBatch(BatchStatus& status)
 {
     SCHEDULER_LOG(TRACE) << "status: " << status.allSended << " " << status.received << " "
@@ -1177,7 +1468,7 @@ std::string BlockExecutive::preprocessAddress(const std::string_view& address)
     return out;
 }
 
-void BlockExecutive::traverseExecutive(std::function<TraverseHint(ExecutiveState&)> callback)
+void BlockExecutive::traverseExecutive(std::function<TraverseHint(ExecutiveState&)> executeHandle)
 {
     std::forward_list<decltype(m_executiveStates)::node_type> updateNodes;
 
@@ -1185,7 +1476,7 @@ void BlockExecutive::traverseExecutive(std::function<TraverseHint(ExecutiveState
     {
         SCHEDULER_LOG(TRACE) << "Traverse " << std::get<0>(it->first) << " | "
                              << std::get<1>(it->first);
-        auto hint = callback(it->second);
+        auto hint = executeHandle(it->second);
         switch (hint)
         {
         case PASS:
@@ -1211,6 +1502,12 @@ void BlockExecutive::traverseExecutive(std::function<TraverseHint(ExecutiveState
         case END:
         {
             goto OUT;
+        }
+        case NOT_END:
+        {
+            SCHEDULER_LOG(ERROR) << "Illegal hint" << LOG_KV("address", it->second.message->to())
+                                 << LOG_KV("contextID", it->second.contextID);
+            assert(false);
         }
         }
     }

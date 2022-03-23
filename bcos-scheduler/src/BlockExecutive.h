@@ -90,6 +90,7 @@ private:
         SKIP,
         UPDATE,
         END,
+        NOT_END,  // not return, just continue process
     };
 
     struct CommitStatus
@@ -140,7 +141,10 @@ private:
     };
 
     std::map<std::tuple<std::string, ContextID>, ExecutiveState, std::less<>> m_executiveStates;
-    void traverseExecutive(std::function<TraverseHint(ExecutiveState&)> callback);
+    void traverseExecutive(std::function<TraverseHint(ExecutiveState&)> executeHandle);
+    TraverseHint handleExecutive(ExecutiveState& executiveState);
+    void queryExecutor(bcos::executor::ParallelTransactionExecutorInterface::Ptr executor,
+        ExecutiveState& executiveState, std::shared_ptr<BatchStatus> batchStatus);
 
     struct ExecutiveResult
     {

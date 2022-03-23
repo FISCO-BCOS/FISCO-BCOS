@@ -686,9 +686,9 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                 auto abiKey = bytes(to.cbegin(), to.cend());
                 abiKey.insert(abiKey.end(), selector.begin(), selector.end());
                 // if precompiled
-                if (m_constantPrecompiled.count(params->receiveAddress))
+                if (m_constantPrecompiled->count(params->receiveAddress))
                 {
-                    auto p = m_constantPrecompiled.at(params->receiveAddress);
+                    auto p = m_constantPrecompiled->at(params->receiveAddress);
                     // Precompile transaction
                     if (p->isParallelPrecompiled())
                     {
