@@ -71,13 +71,15 @@ void BlockExecutive::asyncExecute(
                              << LOG_KV("meta tx count", m_block->transactionsMetaDataSize());
 
         m_executiveResults.resize(m_block->transactionsMetaDataSize());
+
+#pragma omp parallel for
         for (size_t i = 0; i < m_block->transactionsMetaDataSize(); ++i)
         {
             auto metaData = m_block->transactionMetaData(i);
-
             auto message = m_scheduler->m_executionMessageFactory->createExecutionMessage();
-            // message->setContextID(i + m_startContextID);
-            message->setContextID(i);
+            auto contextID = i + m_startContextID;
+
+            message->setContextID(contextID);
             message->setType(protocol::ExecutionMessage::TXHASH);
             // Note: set here for fetching txs when send_back
             message->setTransactionHash(metaData->hash());
@@ -114,8 +116,9 @@ void BlockExecutive::asyncExecute(
             }
 
             auto to = message->to();
-            m_executiveStates.emplace(
-                std::make_tuple(std::move(to), i), ExecutiveState(i, std::move(message), withDAG));
+#pragma omp critical
+            m_executiveStates.emplace(std::make_tuple(std::move(to), contextID),
+                ExecutiveState(contextID, std::move(message), withDAG));
 
             if (metaData)
             {
@@ -123,6 +126,7 @@ void BlockExecutive::asyncExecute(
                 m_executiveResults[i].source = metaData->source();
             }
         }
+#pragma omp flush(withDAG)
     }
     else if (m_block->transactionsSize() > 0)
     {
@@ -130,6 +134,8 @@ void BlockExecutive::asyncExecute(
                              << LOG_KV("tx count", m_block->transactionsSize());
 
         m_executiveResults.resize(m_block->transactionsSize());
+
+#pragma omp parallel for
         for (size_t i = 0; i < m_block->transactionsSize(); ++i)
         {
             auto tx = m_block->transaction(i);
@@ -145,10 +151,11 @@ void BlockExecutive::asyncExecute(
             m_executiveResults[i].transactionHash = tx->hash();
             m_executiveResults[i].source = tx->source();
 
+            auto contextID = i + m_startContextID;
+
             auto message = m_scheduler->m_executionMessageFactory->createExecutionMessage();
             message->setType(protocol::ExecutionMessage::MESSAGE);
-            // message->setContextID(i + m_startContextID);
-            message->setContextID(i);
+            message->setContextID(contextID);
             message->setOrigin(toHex(tx->sender()));
             message->setFrom(std::string(message->origin()));
 
@@ -196,9 +203,11 @@ void BlockExecutive::asyncExecute(
             }
 
             auto to = std::string(message->to());
-            m_executiveStates.emplace(
-                std::make_tuple(std::move(to), i), ExecutiveState(i, std::move(message), withDAG));
+#pragma omp critical
+            m_executiveStates.emplace(std::make_tuple(std::move(to), contextID),
+                ExecutiveState(contextID, std::move(message), withDAG));
         }
+#pragma omp flush(withDAG)
     }
 
     if (!m_staticCall)
@@ -855,7 +864,7 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
                 // Calc the gas set to header
                 m_gasUsed += txGasUsed;
 
-                m_executiveResults[executiveState.contextID].receipt =
+                m_executiveResults[executiveState.contextID - m_startContextID].receipt =
                     m_scheduler->m_blockFactory->receiptFactory()->createReceipt(txGasUsed,
                         message->newEVMContractAddress(),
                         std::make_shared<std::vector<bcos::protocol::LogEntry>>(
