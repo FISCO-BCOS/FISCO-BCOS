@@ -64,7 +64,6 @@ void BlockSync::init()
     fetcher->fetchConsensusNodeList();
     fetcher->fetchObserverNodeList();
     fetcher->fetchGenesisHash();
-    fetcher->waitFetchFinished();
     // set the syncConfig
     auto genesisHash = fetcher->genesisHash();
     BLKSYNC_LOG(INFO) << LOG_DESC("fetch the ledger config for block sync module success")
