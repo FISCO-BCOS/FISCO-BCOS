@@ -327,7 +327,7 @@ bool precompiled::checkPathValid(std::string const& _path)
         return false;
     }
     // TODO: adapt Chinese
-    std::regex reg(R"(^[0-9a-zA-Z][^\>\<\*\?\/\=\+\(\)\$\"\']+$)");
+    std::regex reg(R"(^[0-9a-zA-Z][^\>\<\*\?\/\=\+\(\)\$\"\']*$)");
     auto checkFieldNameValidate = [&reg](const std::string& fieldName) -> bool {
         if (fieldName.empty())
         {

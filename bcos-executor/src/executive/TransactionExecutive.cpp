@@ -498,6 +498,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
 
             if (callResults->status != (int32_t)TransactionStatus::None)
             {
+                revert();
                 callResults->type = CallParameters::REVERT;
                 // Clear the creation flag
                 callResults->create = false;
@@ -507,6 +508,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
             auto outputRef = ret.output();
             if (outputRef.size() > hostContext.vmSchedule().maxCodeSize)
             {
+                revert();
                 callResults->type = CallParameters::REVERT;
                 callResults->status = (int32_t)TransactionStatus::OutOfGas;
                 callResults->message =
@@ -522,6 +524,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
             {
                 if (hostContext.vmSchedule().exceptionalFailedCodeDeposit)
                 {
+                    revert();
                     callResults->type = CallParameters::REVERT;
                     callResults->status = (int32_t)TransactionStatus::OutOfGas;
                     callResults->message = "exceptionalFailedCodeDeposit";
@@ -566,6 +569,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
             auto code = hostContext.code();
             if (code.empty())
             {
+                revert();
                 auto callResult = hostContext.takeCallParameters();
                 callResult->type = CallParameters::REVERT;
                 callResult->status = (int32_t)TransactionStatus::CallAddressError;
@@ -942,23 +946,26 @@ void TransactionExecutive::creatAuthTable(
     }
     auto authTableName = std::string(_tableName).append(CONTRACT_SUFFIX);
     // if contract external create contract, then inheritance admin
-    std::string_view admin;
+    std::string admin;
     if (_sender != _origin)
     {
         auto senderAuthTable = getContractTableName(_sender, false).append(CONTRACT_SUFFIX);
         auto entry = m_storageWrapper->getRow(std::move(senderAuthTable), ADMIN_FIELD);
-        admin = entry->getField(0);
+        admin = std::string(entry->getField(0));
     }
     else
     {
-        admin = _sender;
+        admin = std::string(_sender);
     }
+    EXECUTIVE_LOG(DEBUG) << "creatAuthTable in deploy" << LOG_KV("tableName", _tableName)
+                         << LOG_KV("origin", _origin) << LOG_KV("sender", _sender)
+                         << LOG_KV("admin", admin);
     auto table = m_storageWrapper->createTable(authTableName, STORAGE_VALUE);
 
     if (table)
     {
         Entry adminEntry(table->tableInfo());
-        adminEntry.importFields({std::string(admin)});
+        adminEntry.importFields({admin});
         m_storageWrapper->setRow(authTableName, ADMIN_FIELD, std::move(adminEntry));
 
         Entry emptyType;
@@ -977,6 +984,7 @@ void TransactionExecutive::creatAuthTable(
 
 bool TransactionExecutive::buildBfsPath(std::string const& _absoluteDir)
 {
+    EXECUTIVE_LOG(DEBUG) << LOG_DESC("buildBfsPath") << LOG_KV("absoluteDir", _absoluteDir);
     if (_absoluteDir.empty())
     {
         return false;

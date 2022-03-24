@@ -355,12 +355,12 @@ void FileSystemPrecompiled::link(const std::shared_ptr<executor::TransactionExec
     // set meta data in parent table
     auto parentTable = _executive->storage().openTable(parentTableName);
     std::map<std::string, std::string> bfsInfo;
-    auto stubEntry = parentTable->getRow(FS_KEY_SUB);
-    auto&& out = asBytes(std::string(stubEntry->getField(0)));
+    auto subEntry = parentTable->getRow(FS_KEY_SUB);
+    auto&& out = asBytes(std::string(subEntry->getField(0)));
     codec::scale::decode(bfsInfo, gsl::make_span(out));
     bfsInfo.insert(std::make_pair(contractVersion, FS_TYPE_LINK));
-    stubEntry->setField(0, asString(codec::scale::encode(bfsInfo)));
-    parentTable->setRow(FS_KEY_SUB, std::move(stubEntry.value()));
+    subEntry->setField(0, asString(codec::scale::encode(bfsInfo)));
+    parentTable->setRow(FS_KEY_SUB, std::move(subEntry.value()));
 
     // set link info to link table
     auto typeEntry = linkTable->newEntry();
