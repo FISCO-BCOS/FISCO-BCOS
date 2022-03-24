@@ -191,7 +191,8 @@ bool P2PMessage::encode(bytes& _buffer)
     length = boost::asio::detail::socket_ops::host_to_network_long((uint32_t)_buffer.size());
 
     std::copy((byte*)&length, (byte*)&length + 4, _buffer.data());
-
+    // set buffer size to m_length
+    m_length = _buffer.size();
     return true;
 }
 
