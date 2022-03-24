@@ -306,7 +306,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
             auto callResults = std::move(callParameters);
             callResults->type = CallParameters::REVERT;
             callResults->status = (int32_t)TransactionStatus::WASMValidationFailure;
-            callResults->message = "wasm bytecode invalid or use unsupported opcode";
+            callResults->message = "the code is not wasm bytecode";
             return {nullptr, std::move(callResults)};
         }
 
@@ -352,7 +352,8 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
     try
     {
         m_storageWrapper->createTable(tableName, STORAGE_VALUE);
-        EXECUTIVE_LOG(INFO) << "create contract table " << tableName;
+        EXECUTIVE_LOG(INFO) << "create contract table " << LOG_KV("table", tableName)
+                            << LOG_KV("sender", callParameters->senderAddress);
         if (blockContext->isAuthCheck())
         {
             // Create auth table
