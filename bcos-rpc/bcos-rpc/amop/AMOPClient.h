@@ -191,6 +191,7 @@ protected:
 
     std::shared_ptr<Timer> m_gatewayStatusDetector;
     std::atomic_bool m_gatewayActivated = {true};
+    std::atomic_bool m_notifyTopicSuccess = {true};
 };
 }  // namespace rpc
 }  // namespace bcos
