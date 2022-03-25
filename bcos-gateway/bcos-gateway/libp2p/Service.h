@@ -43,7 +43,7 @@ public:
 
     void start() override;
     void stop() override;
-    virtual void heartBeat();
+    // virtual void heartBeat();
 
     virtual bool actived() { return m_run; }
     boostssl::nodeID id() const override { return m_nodeID; }
