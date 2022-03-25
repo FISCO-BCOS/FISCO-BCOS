@@ -366,7 +366,8 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
         callParameters->status = (int32_t)TransactionStatus::ContractAddressAlreadyUsed;
         callParameters->type = CallParameters::REVERT;
         callParameters->message = e.what();
-        EXECUTIVE_LOG(ERROR) << callParameters->message << LOG_KV("tableName", tableName);
+        EXECUTIVE_LOG(ERROR) << LOG_DESC("createTable failed") << callParameters->message
+                             << LOG_KV("tableName", tableName);
         return {nullptr, std::move(callParameters)};
     }
     auto extraData = std::make_unique<CallParameters>(CallParameters::MESSAGE);
@@ -498,6 +499,9 @@ CallParameters::UniquePtr TransactionExecutive::go(
 
             if (callResults->status != (int32_t)TransactionStatus::None)
             {
+                EXECUTIVE_LOG(ERROR)
+                    << LOG_DESC("deploy failed") << LOG_KV("address", callResults->senderAddress)
+                    << LOG_KV("caller", callResults->codeAddress);
                 revert();
                 callResults->type = CallParameters::REVERT;
                 // Clear the creation flag
@@ -515,7 +519,8 @@ CallParameters::UniquePtr TransactionExecutive::go(
                     "Code is too large: " + boost::lexical_cast<std::string>(outputRef.size()) +
                     " limit: " +
                     boost::lexical_cast<std::string>(hostContext.vmSchedule().maxCodeSize);
-                EXECUTIVE_LOG(ERROR) << callResults->message;
+                EXECUTIVE_LOG(ERROR) << LOG_DESC("deploy failed code too large")
+                                     << LOG_KV("message", callResults->message);
                 return callResults;
             }
 
@@ -528,7 +533,8 @@ CallParameters::UniquePtr TransactionExecutive::go(
                     callResults->type = CallParameters::REVERT;
                     callResults->status = (int32_t)TransactionStatus::OutOfGas;
                     callResults->message = "exceptionalFailedCodeDeposit";
-                    EXECUTIVE_LOG(ERROR) << callResults->message;
+                    EXECUTIVE_LOG(ERROR) << LOG_DESC("deploy failed OutOfGas")
+                                         << LOG_KV("message", callResults->message);
                     return callResults;
                 }
             }
@@ -542,7 +548,8 @@ CallParameters::UniquePtr TransactionExecutive::go(
                     callResults->type = CallParameters::REVERT;
                     callResults->status = (int32_t)TransactionStatus::Unknown;
                     callResults->message = "Create contract with empty code, wrong code input.";
-                    EXECUTOR_LOG(ERROR) << callResults->message;
+                    EXECUTIVE_LOG(ERROR) << LOG_DESC("deploy failed code empty")
+                                         << LOG_KV("message", callResults->message);
                     // Clear the creation flag
                     callResults->create = false;
                     // Clear the data
@@ -574,6 +581,9 @@ CallParameters::UniquePtr TransactionExecutive::go(
                 callResult->type = CallParameters::REVERT;
                 callResult->status = (int32_t)TransactionStatus::CallAddressError;
                 callResult->message = "Error contract address.";
+                EXECUTIVE_LOG(ERROR)
+                    << LOG_DESC("call address error") << LOG_KV("address", hostContext.myAddress())
+                    << LOG_KV("caller", hostContext.caller());
                 return callResult;
             }
 
@@ -617,7 +627,6 @@ CallParameters::UniquePtr TransactionExecutive::go(
         callResults->type = CallParameters::REVERT;
         callResults->status = (int32_t)TransactionStatus::PrecompiledError;
         revert();
-
         return callResults;
     }
     catch (OutOfGas& _e)
