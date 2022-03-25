@@ -603,8 +603,9 @@ u256 ContractAuthPrecompiled::getDeployAuthType(
     const std::shared_ptr<executor::TransactionExecutive>& _executive)
 {
     auto lastStorage = _executive->lastStorage();
-    PRECOMPILED_LOG(TRACE) << LOG_BADGE("getDeployAuthType") << (lastStorage ? "use lastStorage" :
-                                                                                "use latestStorage");
+
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("getDeployAuthType")
+                           << ((lastStorage) ? "use lastStorage" : "use latestStorage");
     auto table =
         (lastStorage) ? lastStorage->openTable("/apps") : _executive->storage().openTable("/apps");
     // table must exist
