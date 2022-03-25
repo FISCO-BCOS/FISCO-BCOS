@@ -639,14 +639,17 @@ CallParameters::UniquePtr TransactionExecutive::go(
         callResults->status = (int32_t)TransactionStatus::RevertInstruction;
         callResults->message = e.errorMessage();
 
-        EXECUTIVE_LOG(ERROR) << "BCOS Error: " << diagnostic_information(e);
         revert();
 
         if (e.errorCode() == DEAD_LOCK)
         {
             // DEAD LOCK revert need provide sender and receiver
-            EXECUTOR_LOG(ERROR) << "Revert by dead lock, sender: " << callResults->senderAddress
+            EXECUTOR_LOG(DEBUG) << "Revert by dead lock, sender: " << callResults->senderAddress
                                 << " receiver: " << callResults->receiveAddress;
+        }
+        else
+        {
+            EXECUTIVE_LOG(ERROR) << "BCOS Error: " << diagnostic_information(e);
         }
 
         return callResults;
