@@ -7,6 +7,6 @@ module bcostars {
         Error asyncNotifyBlockNumber(string groupID, string nodeName, long blockNumber);
         Error asyncNotifyGroupInfo(GroupInfo groupInfo);
         Error asyncNotifyAMOPMessage(int _type, string _topic, vector<byte> _requestData, out vector<byte> _responseData);
-        Error asyncNotifySubscribeTopic();
+        Error asyncNotifySubscribeTopic(out string _topicInfo);
     };
 };

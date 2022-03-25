@@ -55,11 +55,13 @@ bcostars::Error RpcServiceServer::asyncNotifyAMOPMessage(tars::Int32 _type,
     return bcostars::Error();
 }
 
-bcostars::Error RpcServiceServer::asyncNotifySubscribeTopic(tars::TarsCurrentPtr current)
+bcostars::Error RpcServiceServer::asyncNotifySubscribeTopic(
+    std::string&, tars::TarsCurrentPtr current)
 {
     current->setResponse(false);
-    m_rpcInitializer->rpc()->asyncNotifySubscribeTopic([current](bcos::Error::Ptr&& _error) {
-        async_response_asyncNotifySubscribeTopic(current, toTarsError(_error));
-    });
+    m_rpcInitializer->rpc()->asyncNotifySubscribeTopic(
+        [current](bcos::Error::Ptr&& _error, std::string _topicInfo) {
+            async_response_asyncNotifySubscribeTopic(current, toTarsError(_error), _topicInfo);
+        });
     return bcostars::Error();
 }

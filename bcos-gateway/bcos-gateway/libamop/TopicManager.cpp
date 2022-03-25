@@ -413,12 +413,21 @@ void TopicManager::notifyRpcToSubscribeTopics()
                 Application::getCommunicator()->stringToProxy<bcostars::RpcServicePrx>(endPointStr);
             auto serviceClient =
                 std::make_shared<bcostars::RpcServiceClient>(servicePrx, m_rpcServiceName);
-            serviceClient->asyncNotifySubscribeTopic([endPointStr](Error::Ptr _error) {
-                TOPIC_LOG(INFO) << LOG_DESC("asyncNotifySubscribeTopic")
-                                << LOG_KV("endPoint", endPointStr)
-                                << LOG_KV("code", _error ? _error->errorCode() : 0)
-                                << LOG_KV("msg", _error ? _error->errorMessage() : "success");
-            });
+            serviceClient->asyncNotifySubscribeTopic(
+                [this, endPointStr](Error::Ptr _error, std::string _topicInfo) {
+                    if (_error)
+                    {
+                        TOPIC_LOG(INFO) << LOG_DESC("asyncNotifySubscribeTopic error")
+                                        << LOG_KV("endPoint", endPointStr)
+                                        << LOG_KV("code", _error->errorCode())
+                                        << LOG_KV("msg", _error->errorMessage());
+                        return;
+                    }
+                    TOPIC_LOG(INFO)
+                        << LOG_DESC("asyncNotifySubscribeTopic success")
+                        << LOG_KV("endPoint", endPointStr) << LOG_KV("topicInfo", _topicInfo);
+                    subTopic(endPointStr, _topicInfo);
+                });
         }
     }
     catch (std::exception const& e)
