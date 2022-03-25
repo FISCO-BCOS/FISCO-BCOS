@@ -106,7 +106,8 @@ public:
     }
 
     // the gateway notify the RPC client to subscribe topic if receive publish
-    virtual void asyncNotifySubscribeTopic();
+    virtual void asyncNotifySubscribeTopic(
+        std::function<void(Error::Ptr&& _error, std::string)> _callback);
 
 protected:
     /// for AMOP requests from SDK
