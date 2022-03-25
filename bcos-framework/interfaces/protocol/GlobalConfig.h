@@ -73,20 +73,42 @@ public:
         return c_supportedProtocols;
     }
 
-    Version version() const { return m_version; }
-    void setVersion(Version _version) { m_version = _version; }
+    Version version() const
+    {
+        ReadGuard l(x_version);
+        return m_version;
+    }
+
+    void setVersion(Version _version)
+    {
+        UpgradableGuard l(x_version);
+        if (m_version == _version)
+        {
+            return;
+        }
+        UpgradeGuard ul(l);
+        m_version = _version;
+    }
 
     // Note: must set the protocolInfo codec when init
     virtual void setCodec(ProtocolInfoCodec::Ptr _codec) { m_codec = _codec; }
     virtual ProtocolInfoCodec::Ptr codec() const { return m_codec; }
+
+    Version minSupportedVersion() const { return m_minSupportedVersion; }
+    Version maxSupportedVersion() const { return m_maxSupportedVersion; }
 
 private:
     std::map<ProtocolModuleID, ProtocolInfo::Ptr> c_supportedProtocols;
     // default version before protocol-negotiate success
     ProtocolVersion m_defaultVersion = ProtocolVersion::V1;
     // the system version, can only be upgraded manually
-    Version m_version = Version::RC4_VERSION;
+    Version m_version = Version::RC3_VERSION;
+    // the minimum supported version
+    Version m_minSupportedVersion = Version::MIN_VERSION;
+    Version m_maxSupportedVersion = Version::MAX_VERSION;
+
     ProtocolInfoCodec::Ptr m_codec;
+    mutable bcos::SharedMutex x_version;
 };
 }  // namespace protocol
 }  // namespace bcos

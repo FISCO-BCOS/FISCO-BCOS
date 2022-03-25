@@ -24,10 +24,10 @@
 #include <bcos-gateway/GatewayFactory.h>
 #include <bcos-gateway/libamop/AirTopicManager.h>
 #include <bcos-rpc/RpcFactory.h>
+#include <bcos-rpc/jsonrpc/groupmgr/NodeService.h>
 #include <bcos-scheduler/src/SchedulerImpl.h>
 #include <bcos-tars-protocol/protocol/ProtocolInfoCodecImpl.h>
 #include <bcos-tool/NodeConfig.h>
-
 using namespace bcos::node;
 using namespace bcos::initializer;
 using namespace bcos::gateway;

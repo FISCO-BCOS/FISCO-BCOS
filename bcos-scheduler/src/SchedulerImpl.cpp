@@ -1,7 +1,9 @@
 #include "SchedulerImpl.h"
 #include "Common.h"
-#include "bcos-framework/interfaces/ledger/LedgerConfig.h"
-#include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
+#include <bcos-framework/interfaces/ledger/LedgerConfig.h>
+#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
+#include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
+#include <bcos-tool/VersionConverter.h>
 #include <bcos-utilities/Error.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/format.hpp>
@@ -19,10 +21,12 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
     auto signature = block->blockHeaderConst()->signatureList();
     fetchGasLimit(block->blockHeaderConst()->number());
     SCHEDULER_LOG(INFO) << "ExecuteBlock request"
-                        << LOG_KV("block number", block->blockHeaderConst()->number()) << LOG_KV("gasLimit", m_gasLimit)
-                        << LOG_KV("verify", verify) << LOG_KV("signatureSize", signature.size())
+                        << LOG_KV("block number", block->blockHeaderConst()->number())
+                        << LOG_KV("gasLimit", m_gasLimit) << LOG_KV("verify", verify)
+                        << LOG_KV("signatureSize", signature.size())
                         << LOG_KV("tx count", block->transactionsSize())
-                        << LOG_KV("meta tx count", block->transactionsMetaDataSize());
+                        << LOG_KV("meta tx count", block->transactionsMetaDataSize())
+                        << LOG_KV("version", (bcos::protocol::Version)(block->version()));
     auto executeLock =
         std::make_shared<std::unique_lock<std::mutex>>(m_executeMutex, std::try_to_lock);
     if (!executeLock->owns_lock())
@@ -242,8 +246,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                 m_gasLimit = std::get<0>(gasNumber);
             }
 
-            SCHEDULER_LOG(INFO) << "CommitBlock success"
-                                << LOG_KV("block number", blockNumber)
+            SCHEDULER_LOG(INFO) << "CommitBlock success" << LOG_KV("block number", blockNumber)
                                 << LOG_KV("gas limit", m_gasLimit);
 
             if (m_txNotifier)
@@ -404,7 +407,7 @@ void SchedulerImpl::asyncGetLedgerConfig(
     auto ledgerConfig = std::make_shared<ledger::LedgerConfig>();
     auto callbackPtr = std::make_shared<decltype(callback)>(std::move(callback));
     auto summary =
-        std::make_shared<std::tuple<size_t, std::atomic_size_t, std::atomic_size_t>>(7, 0, 0);
+        std::make_shared<std::tuple<size_t, std::atomic_size_t, std::atomic_size_t>>(8, 0, 0);
 
     auto collector = [summary = std::move(summary), ledgerConfig = std::move(ledgerConfig),
                          callback = std::move(callbackPtr)](Error::Ptr error,
@@ -451,6 +454,19 @@ void SchedulerImpl::asyncGetLedgerConfig(
                         case 2:
                             ledgerConfig->setGasLimit(
                                 std::make_tuple(boost::lexical_cast<uint64_t>(value), blockNumber));
+                            break;
+                        case 3:
+                            try
+                            {
+                                auto version = bcos::tool::toVersionNumber(value);
+                                g_BCOSConfig.setVersion(version);
+                                SCHEDULER_LOG(INFO) << LOG_DESC("reset versionNumber")
+                                                    << LOG_KV("version", version);
+                            }
+                            catch (std::exception const& e)
+                            {
+                                SCHEDULER_LOG(WARNING) << LOG_DESC("invalidVersionNumber") << value;
+                            }
                             break;
                         default:
                             BOOST_THROW_EXCEPTION(BCOS_ERROR(SchedulerError::UnknownError,
@@ -511,5 +527,11 @@ void SchedulerImpl::asyncGetLedgerConfig(
                     collector(std::move(error), std::move(hash));
                 });
             collector(std::move(error), std::move(number));
+        });
+
+    // Note: The consensus module ensures serial execution and submit of system txs
+    m_ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_COMPATIBILITY_VERSION,
+        [collector](Error::Ptr error, std::string config, protocol::BlockNumber _number) mutable {
+            collector(std::move(error), std::tuple{3, std::move(config), _number});
         });
 }

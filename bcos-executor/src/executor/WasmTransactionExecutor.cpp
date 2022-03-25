@@ -67,27 +67,6 @@ using namespace bcos::wasm;
 using namespace bcos::protocol;
 using namespace bcos::storage;
 using namespace bcos::precompiled;
-
-BlockContext::Ptr WasmTransactionExecutor::createBlockContext(
-    const protocol::BlockHeader::ConstPtr& currentHeader, storage::StateStorage::Ptr storage,
-    storage::StorageInterface::Ptr lastStorage)
-{
-    BlockContext::Ptr context = make_shared<BlockContext>(
-        storage, lastStorage, m_hashImpl, currentHeader, BCOSWASMSchedule, true, m_isAuthCheck);
-
-    return context;
-}
-
-std::shared_ptr<BlockContext> WasmTransactionExecutor::createBlockContext(
-    bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
-    int32_t blockVersion, storage::StateStorage::Ptr storage)
-{
-    BlockContext::Ptr context = make_shared<BlockContext>(storage, m_hashImpl, blockNumber,
-        blockHash, timestamp, blockVersion, BCOSWASMSchedule, true, m_isAuthCheck);
-
-    return context;
-}
-
 void WasmTransactionExecutor::initPrecompiled()
 {
     m_builtInPrecompiled = std::make_shared<std::set<std::string>>();

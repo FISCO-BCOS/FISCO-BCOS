@@ -51,6 +51,7 @@ public:
 
 private:
     bool checkValueValid(std::string_view key, std::string_view value);
+    std::map<std::string, std::function<int64_t(std::string)>> m_valueConverter;
     std::map<std::string, std::function<bool(int64_t)>> m_sysValueCmp;
 };
 

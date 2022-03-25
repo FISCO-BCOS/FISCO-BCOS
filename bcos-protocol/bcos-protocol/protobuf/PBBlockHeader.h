@@ -56,7 +56,7 @@ public:
     void clear() override;
 
     // the version of the blockHeader
-    int32_t version() const override { return m_blockHeader->version(); }
+    uint32_t version() const override { return m_blockHeader->version(); }
     // the parent information, including (parentBlockNumber, parentHash)
     gsl::span<const ParentInfo> parentInfo() const override { return m_parentInfo; }
     // the txsRoot of the current block
@@ -78,7 +78,7 @@ public:
         return bytesConstRef(m_extraData.data(), m_extraData.size());
     }
     gsl::span<const Signature> signatureList() const override { return m_signatureList; }
-    void setVersion(int32_t _version) override { m_blockHeader->set_version(_version); }
+    void setVersion(uint32_t _version) override { m_blockHeader->set_version(_version); }
     void setParentInfo(gsl::span<const ParentInfo> const& _parentInfo) override
     {
         m_parentInfo.assign(_parentInfo.begin(), _parentInfo.end());

@@ -28,6 +28,7 @@
 #include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
 #include <bcos-framework/interfaces/protocol/CommonError.h>
+#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
 #include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/interfaces/storage/Table.h>
 #include <bcos-protocol/ParallelMerkleProof.h>
@@ -754,12 +755,20 @@ void Ledger::asyncGetSystemConfigByKey(const std::string& _key,
         }
 
         asyncGetSystemTableEntry(SYS_CONFIG, _key,
-            [blockNumber, callback = std::move(callback)](
+            [blockNumber, _key, callback = std::move(callback)](
                 Error::Ptr&& error, std::optional<bcos::storage::Entry>&& entry) {
                 try
                 {
+                    // Note: should considerate the case that the compatibility_version is not
+                    // setted
                     if (error)
                     {
+                        if (error->errorCode() == LedgerError::GetStorageError &&
+                            _key == SYSTEM_KEY_COMPATIBILITY_VERSION)
+                        {
+                            callback(nullptr, bcos::protocol::RC3_VERSION_STR, blockNumber);
+                            return;
+                        }
                         LEDGER_LOG(ERROR) << "GetSystemConfigByKey error, "
                                           << boost::diagnostic_information(*error);
                         callback(std::move(error), "", -1);
@@ -1281,8 +1290,8 @@ void Ledger::getReceiptProof(protocol::TransactionReceipt::Ptr _receipt,
 }
 
 // sync method
-bool Ledger::buildGenesisBlock(
-    LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit, const std::string& _genesisData)
+bool Ledger::buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit,
+    const std::string& _genesisData, std::string const& _compatibilityVersion)
 {
     LEDGER_LOG(INFO) << LOG_DESC("[#buildGenesisBlock]");
     if (_gasLimit < TX_GAS_LIMIT_MIN)
@@ -1347,7 +1356,12 @@ bool Ledger::buildGenesisBlock(
     createFileSystemTables();
 
     auto txLimit = _ledgerConfig->blockTxCountLimit();
-    LEDGER_LOG(INFO) << LOG_DESC("Commit the genesis block") << LOG_KV("txLimit", txLimit);
+    LEDGER_LOG(INFO) << LOG_DESC("Commit the genesis block") << LOG_KV("txLimit", txLimit)
+                     << LOG_KV("leaderSwitchPeriod", _ledgerConfig->leaderSwitchPeriod())
+                     << LOG_KV("blockTxCountLimit", _ledgerConfig->blockTxCountLimit())
+                     << LOG_KV("compatibilityVersion", _compatibilityVersion)
+                     << LOG_KV("minSupportedVersion", g_BCOSConfig.minSupportedVersion())
+                     << LOG_KV("maxSupportedVersion", g_BCOSConfig.maxSupportedVersion());
     // build a block
     auto header = m_blockFactory->blockHeaderFactory()->createBlockHeader();
     header->setNumber(0);
@@ -1401,6 +1415,17 @@ bool Ledger::buildGenesisBlock(
     leaderPeriodEntry.setObject(SystemConfigEntry{
         boost::lexical_cast<std::string>(_ledgerConfig->leaderSwitchPeriod()), 0});
     sysTable->setRow(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, std::move(leaderPeriodEntry));
+
+    if (g_BCOSConfig.version() > bcos::protocol::Version::RC3_VERSION)
+    {
+        LEDGER_LOG(INFO) << LOG_DESC("init the compatibilityVersion")
+                         << LOG_KV("version", g_BCOSConfig.version());
+        // write compatibility version
+        Entry compatibilityVersionEntry;
+        compatibilityVersionEntry.setObject(
+            SystemConfigEntry{boost::lexical_cast<std::string>(_compatibilityVersion), 0});
+        sysTable->setRow(SYSTEM_KEY_COMPATIBILITY_VERSION, std::move(compatibilityVersionEntry));
+    }
 
     // write consensus node list
     std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> consensusTablePromise;

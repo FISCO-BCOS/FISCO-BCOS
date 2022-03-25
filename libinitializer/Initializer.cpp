@@ -46,6 +46,7 @@
 #include <bcos-sync/BlockSync.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tool/NodeConfig.h>
+#include <bcos-tool/LedgerConfigFetcher.cpp>
 
 using namespace bcos;
 using namespace bcos::tool;
@@ -224,6 +225,15 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
         // init the frontService
         m_frontServiceInitializer->init(m_pbftInitializer->pbft(), m_pbftInitializer->blockSync(),
             m_txpoolInitializer->txpool());
+
+        // fetch and init the version
+        if (g_BCOSConfig.version() > bcos::protocol::Version::RC3_VERSION)
+        {
+            // init the compatibility version
+            auto ledgerConfigFetcher = std::make_shared<LedgerConfigFetcher>(m_ledger);
+            ledgerConfigFetcher->fetchAndSetCompatibilityVersion();
+        }
+
         initSysContract();
     }
     catch (std::exception const& e)

@@ -19,14 +19,15 @@
  * @date 2021-06-10
  */
 #include "NodeConfig.h"
+#include "VersionConverter.h"
 #include "bcos-framework/interfaces/consensus/ConsensusNode.h"
 #include "bcos-framework/interfaces/ledger/LedgerTypeDef.h"
 #include "bcos-framework/interfaces/protocol/ServiceDesc.h"
+#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/trim.hpp>
-
 
 #define MAX_BLOCK_LIMIT 5000
 
@@ -394,6 +395,13 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
     }
 
     m_txGasLimit = txGasLimit;
+    // the compatibility version
+    m_version = _genesisConfig.get<std::string>(
+        "version.compatibility_version", bcos::protocol::RC3_VERSION_STR);
+    // must call here to check the compatibility_version
+    m_compatibilityVersion = toVersionNumber(m_version);
+    g_BCOSConfig.setVersion(m_compatibilityVersion);
+
     // sealerList
     auto consensusNodeList = parseConsensusNodeList(_genesisConfig, "consensus", "node.");
     if (!consensusNodeList || consensusNodeList->empty())
@@ -415,7 +423,8 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
                          << LOG_KV("block_tx_count_limit", m_ledgerConfig->blockTxCountLimit())
                          << LOG_KV("gas_limit", m_txGasLimit)
                          << LOG_KV("leader_period", m_ledgerConfig->leaderSwitchPeriod())
-                         << LOG_KV("minSealTime", m_minSealTime);
+                         << LOG_KV("minSealTime", m_minSealTime)
+                         << LOG_KV("compatibilityVersion", m_compatibilityVersion);
     generateGenesisData();
 }
 
@@ -465,6 +474,11 @@ ConsensusNodeListPtr NodeConfig::parseConsensusNodeList(boost::property_tree::pt
                              << LOG_KV("weight", weight);
         nodeList->push_back(consensusNode);
     }
+    // only sort nodeList after rc3 version
+    if (g_BCOSConfig.version() > bcos::protocol::Version::RC3_VERSION)
+    {
+        std::sort(nodeList->begin(), nodeList->end(), bcos::consensus::ConsensusNodeComparator());
+    }
     NodeConfig_LOG(INFO) << LOG_BADGE("parseConsensusNodeList")
                          << LOG_KV("totalNodesSize", nodeList->size());
     return nodeList;
@@ -472,9 +486,14 @@ ConsensusNodeListPtr NodeConfig::parseConsensusNodeList(boost::property_tree::pt
 
 void NodeConfig::generateGenesisData()
 {
+    std::string versionData = "";
+    if (m_compatibilityVersion >= bcos::protocol::Version::RC4_VERSION)
+    {
+        versionData = m_version + "-";
+    }
     std::stringstream s;
     s << m_ledgerConfig->blockTxCountLimit() << "-" << m_ledgerConfig->leaderSwitchPeriod() << "-"
-      << m_txGasLimit << "-";
+      << m_txGasLimit << "-" << versionData;
     for (auto node : m_ledgerConfig->consensusNodeList())
     {
         s << *toHexString(node->nodeID()->data()) << "," << node->weight() << ";";

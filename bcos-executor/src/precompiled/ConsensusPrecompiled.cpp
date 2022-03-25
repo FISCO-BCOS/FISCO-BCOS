@@ -23,6 +23,7 @@
 #include "Utilities.h"
 #include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
 #include <bcos-framework/interfaces/protocol/CommonError.h>
+#include <bcos-framework/interfaces/protocol/Protocol.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/archive/basic_archive.hpp>
 #include <boost/archive/binary_iarchive.hpp>
@@ -273,11 +274,10 @@ int ConsensusPrecompiled::removeNode(
 
     auto sealerSize = std::count_if(consensusList.begin(), consensusList.end(),
         [](auto&& node) { return node.type == ledger::CONSENSUS_SEALER; });
-
     if (sealerSize == 0)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
-                               << LOG_DESC("addObserver failed, because last sealer");
+                               << LOG_DESC("removeNode failed, because last sealer");
         return CODE_LAST_SEALER;
     }
 

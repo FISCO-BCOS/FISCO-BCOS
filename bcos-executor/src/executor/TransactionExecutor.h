@@ -24,6 +24,7 @@
  */
 #pragma once
 
+#include "../Common.h"
 #include "../dag/CriticalFields.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
@@ -134,8 +135,8 @@ public:
 
     void getCode(std::string_view contract,
         std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) override;
-    void getABI(
-        std::string_view contract, std::function<void(bcos::Error::Ptr, std::string)> callback) override;
+    void getABI(std::string_view contract,
+        std::function<void(bcos::Error::Ptr, std::string)> callback) override;
 
 protected:
     virtual void dagExecuteTransactionsInternal(gsl::span<std::unique_ptr<CallParameters>> inputs,
@@ -148,11 +149,11 @@ protected:
 
     virtual std::shared_ptr<BlockContext> createBlockContext(
         const protocol::BlockHeader::ConstPtr& currentHeader,
-        storage::StateStorage::Ptr tableFactory, storage::StorageInterface::Ptr lastStorage) = 0;
+        storage::StateStorage::Ptr tableFactory, storage::StorageInterface::Ptr lastStorage);
 
     virtual std::shared_ptr<BlockContext> createBlockContext(
         bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
-        int32_t blockVersion, storage::StateStorage::Ptr tableFactory) = 0;
+        int32_t blockVersion, storage::StateStorage::Ptr tableFactory);
 
     std::shared_ptr<TransactionExecutive> createExecutive(
         const std::shared_ptr<BlockContext>& _blockContext, const std::string& _contractAddress,
@@ -244,6 +245,7 @@ protected:
     unsigned int m_DAGThreadNum = std::max(std::thread::hardware_concurrency(), (unsigned int)1);
     std::shared_ptr<wasm::GasInjector> m_gasInjector = nullptr;
     bool m_isWasm = false;
+    VMSchedule m_schedule = FiscoBcosScheduleV4;
 };
 
 }  // namespace executor
