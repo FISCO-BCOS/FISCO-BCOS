@@ -21,6 +21,7 @@
 
 
 #include "ExecutiveState.h"
+#include "TransactionExecutive.h"
 
 using namespace bcos;
 using namespace bcos::executor;

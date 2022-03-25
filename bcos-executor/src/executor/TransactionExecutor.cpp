@@ -324,13 +324,13 @@ void TransactionExecutor::executeTransaction(bcos::protocol::ExecutionMessage::U
 void TransactionExecutor::executeTransactions(
     gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
     std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
-        onOneTxStop,  // stop means pause or finish
+        onOneTxStop,
     std::function<void(bcos::Error::UniquePtr)> onFinish)
 {
     (void)inputs;
     (void)onOneTxStop;
     (void)onFinish;
-};
+}
 
 void TransactionExecutor::getHash(bcos::protocol::BlockNumber number,
     std::function<void(bcos::Error::UniquePtr, crypto::HashType)> callback)

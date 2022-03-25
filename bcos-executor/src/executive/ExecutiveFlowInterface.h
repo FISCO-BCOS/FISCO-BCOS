@@ -21,7 +21,7 @@
 
 #pragma once
 
-#include "TransactionExecutive.h"
+#include "../CallParameters.h"
 
 namespace bcos
 {

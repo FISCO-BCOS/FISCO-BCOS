@@ -14,13 +14,13 @@
  *  limitations under the License.
  *
  * @brief interface definition of ExecutiveFlow
- * @file ExecutiveStackFlow.cpp
+ * @file ExecutiveQueueFlow.cpp
  * @author: jimmyshi
  * @date: 2022-03-22
  */
 
 #include "ExecutiveQueueFlow.h"
-
+#include "../Common.h"
 
 using namespace bcos;
 using namespace bcos::executor;
@@ -92,7 +92,8 @@ void ExecutiveQueueFlow::run(std::function<void(CallParameters::UniquePtr)> onTx
     }
     catch (std::exception& e)
     {
-        EXECUTOR_LOG(ERROR) << "ExecutiveQueueFlow run error: " << boost::diagnostic_information(e);
+        EXECUTIVE_LOG(ERROR) << "ExecutiveQueueFlow run error: "
+                             << boost::diagnostic_information(e);
         onFinished(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "ExecutiveQueueFlow run error", e));
     }
 }

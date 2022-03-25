@@ -13,15 +13,15 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief interface definition of ExecutiveFlow
- * @file ExecutiveStackFlow.h
+ * @brief factory of executive
+ * @file ExecutiveFactory.h
  * @author: jimmyshi
  * @date: 2022-03-22
  */
 
 #pragma once
 
-#include "TransactionFlowInterface.h"
+#include "../executor/TransactionExecutor.h"
 #include <tbb/concurrent_unordered_map.h>
 #include <atomic>
 #include <stack>
@@ -30,6 +30,9 @@ namespace bcos
 {
 namespace executor
 {
+
+class BlockContext;
+class TransactionExecutive;
 
 class ExecutiveFactory
 {
@@ -50,19 +53,9 @@ public:
         m_gasInjector(gasInjector)
     {}
 
-    TransactionExecutive::Ptr build(
-        const std::string& _contractAddress, int64_t contextID, int64_t seq)
-    {
-        auto executive = std::make_shared<TransactionExecutive>(
-            m_blockContext, _contractAddress, contextID, seq, m_gasInjector);
-        executive->setConstantPrecompiled(m_constantPrecompiled);
-        executive->setEVMPrecompiled(m_precompiledContract);
-        executive->setBuiltInPrecompiled(m_builtInPrecompiled);
+    std::shared_ptr<TransactionExecutive> build(
+        const std::string& _contractAddress, int64_t contextID, int64_t seq);
 
-        // TODO: register User developed Precompiled contract
-        // registerUserPrecompiled(context);
-        return executive;
-    }
 
 private:
     std::shared_ptr<std::map<std::string, std::shared_ptr<PrecompiledContract>>>

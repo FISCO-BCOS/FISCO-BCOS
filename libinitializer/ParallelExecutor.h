@@ -35,6 +35,18 @@ public:
         });
     }
 
+    void executeTransactions(gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
+        std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
+            onOneTxStop,
+        std::function<void(bcos::Error::UniquePtr)> onFinish)
+    {
+        m_pool.enqueue([this, inputs = std::move(inputs), onOneTxStop = std::move(onOneTxStop),
+                           onFinish = std::move(onFinish)] {
+            m_executor->executeTransactions(
+                std::move(inputs), std::move(onOneTxStop), std::move(onFinish));
+        });
+    }
+
     void dagExecuteTransactions(gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
         std::function<void(
             bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>

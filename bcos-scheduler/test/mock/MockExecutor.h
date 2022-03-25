@@ -54,6 +54,16 @@ public:
         callback(nullptr, std::move(input));
     }
 
+    void executeTransactions(gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
+        std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
+            onOneTxStop,
+        std::function<void(bcos::Error::UniquePtr)> onFinish)
+    {
+        (void)inputs;
+        (void)onOneTxStop;
+        (void)onFinish;
+    }
+
     void dagExecuteTransactions(gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
         std::function<void(
             bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>

@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include "../CallParameters.h"
 #include "ExecutiveFactory.h"
 
 namespace bcos
@@ -50,7 +51,7 @@ public:
 
 private:
     CallParameters::UniquePtr m_input;
-    TransactionExecutive::Ptr m_executive;
+    std::shared_ptr<TransactionExecutive> m_executive;
     Status m_status = NEED_RUN;
     ExecutiveFactory::Ptr m_executiveFactory;
 };
