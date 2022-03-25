@@ -25,68 +25,74 @@
 using namespace bcos;
 using namespace bcos::executor;
 
-void ExecutiveQueueFlow::addTop(CallParameters::UniquePtr input)
+void ExecutiveQueueFlow::submit(CallParameters::UniquePtr txInput)
 {
-    auto contextID = input->contextID;
-    auto seq = input->seq;
-    auto executiveState = std::make_shared<ExecutiveState>(m_executiveFactory, std::move(input));
-    m_runPool.push(executiveState);
-    m_executives[{contextID, seq}] = executiveState;
-}
-
-
-void ExecutiveQueueFlow::setResumeParam(CallParameters::UniquePtr pullParam)
-{
-    auto executiveState = m_executives.find({pullParam->contextID, pullParam->seq});
+    auto contextID = txInput->contextID;
+    auto seq = txInput->seq;
+    auto executiveState = m_executives.find({contextID, seq});
     if (executiveState == m_executives.end())
     {
-        EXECUTIVE_LOG(ERROR) << LOG_BADGE("ExecutiveQueueFlow")
-                             << "setResumeParams: executive not found"
-                             << LOG_KV("codeAddress", pullParam->codeAddress)
-                             << LOG_KV("contextID", pullParam->contextID)
-                             << LOG_KV("seq", pullParam->seq);
-        return;
+        // add to top if not exists
+        auto newExecutiveState =
+            std::make_shared<ExecutiveState>(m_executiveFactory, std::move(txInput));
+        m_runPool.push(newExecutiveState);
+        m_executives[{contextID, seq}] = newExecutiveState;
     }
-
-    executiveState->second->setResumeParam(std::move(pullParam));
+    else
+    {
+        // update resume params
+        executiveState->second->setResumeParam(std::move(txInput));
+    }
 }
 
 void ExecutiveQueueFlow::asyncRun(std::function<void(CallParameters::UniquePtr)> onTxFinished,
     std::function<void(std::shared_ptr<std::vector<CallParameters::UniquePtr>>)> onPaused,
-    std::function<void(bool, std::string)> onFinished)
+    std::function<void(bcos::Error::UniquePtr)> onFinished)
 {
     run(onTxFinished, onPaused, onFinished);
 }
 
 void ExecutiveQueueFlow::run(std::function<void(CallParameters::UniquePtr)> onTxFinished,
     std::function<void(std::shared_ptr<std::vector<CallParameters::UniquePtr>>)> onPaused,
-    std::function<void(bool, std::string)> onFinished)
+    std::function<void(bcos::Error::UniquePtr)> onFinished)
 {
-    while (!m_runPool.empty())
+    try
     {
-        auto executiveState = m_runPool.top();
-        auto output = executiveState->go();
+        while (!m_runPool.empty())
+        {
+            auto executiveState = m_runPool.top();
+            auto output = executiveState->go();
 
-        switch (executiveState->getStatus())
-        {
-        case ExecutiveState::NEED_RUN:
-        {
-            onFinished(false, "Illegal executive state: NEED_RUN ");
+            switch (executiveState->getStatus())
+            {
+            case ExecutiveState::NEED_RUN:
+            {
+                onFinished(nullptr);
+            }
+            case ExecutiveState::PAUSED:
+            {  // just ignore, need to set resume params
+                break;
+            }
+            case ExecutiveState::NEED_RESUME:
+            {
+                auto outputs = std::make_shared<std::vector<CallParameters::UniquePtr>>();
+                outputs->push_back(std::move(output));
+                onPaused(outputs);
+                break;
+            }
+            case ExecutiveState::FINISHED:
+            {
+                onTxFinished(std::move(output));
+                break;
+            }
+            }
         }
-        case ExecutiveState::PAUSED:
-        {
-            auto outputs = std::make_shared<std::vector<CallParameters::UniquePtr>>();
-            outputs->push_back(std::move(output));
-            onPaused(outputs);
-            break;
-        }
-        case ExecutiveState::FINISHED:
-        {
-            onTxFinished(std::move(output));
-            break;
-        }
-        }
+
+        onFinished(nullptr);
     }
-
-    onFinished(true, "success!");
+    catch (std::exception& e)
+    {
+        EXECUTOR_LOG(ERROR) << "ExecutiveQueueFlow run error: " << boost::diagnostic_information(e);
+        onFinished(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "ExecutiveQueueFlow run error", e));
+    }
 }

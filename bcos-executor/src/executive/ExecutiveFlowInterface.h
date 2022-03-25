@@ -14,7 +14,7 @@
  *  limitations under the License.
  *
  * @brief interface definition of TransactionFlow
- * @file TransactionFlowInterface.h
+ * @file ExecutiveFlowInterface.h
  * @author: jimmyshi
  * @date: 2022-03-22
  */
@@ -28,10 +28,12 @@ namespace bcos
 namespace executor
 {
 
-class TransactionFlowInterface
+class ExecutiveFlowInterface
 {
 public:
-    virtual void addTop(CallParameters::UniquePtr input) = 0;
+    using Ptr = std::shared_ptr<ExecutiveFlowInterface>;
+
+    virtual void submit(CallParameters::UniquePtr txInput) = 0;  // add new or set resume params
 
     virtual void asyncRun(
         // onTxFinished(output)
@@ -41,9 +43,7 @@ public:
         std::function<void(std::shared_ptr<std::vector<CallParameters::UniquePtr>>)> onPaused,
 
         // onFinished(success, errorMessage)
-        std::function<void(bool, std::string)> onFinished) = 0;
-
-    virtual void setResumeParam(CallParameters::UniquePtr pullParam) = 0;
+        std::function<void(bcos::Error::UniquePtr)> onFinished) = 0;
 };
 
 }  // namespace executor

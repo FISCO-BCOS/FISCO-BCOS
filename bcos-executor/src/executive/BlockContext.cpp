@@ -23,6 +23,7 @@
 #include "../precompiled/Common.h"
 #include "../precompiled/Utilities.h"
 #include "../vm/Precompiled.h"
+#include "ExecutiveQueueFlow.h"
 #include "TransactionExecutive.h"
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-framework/interfaces/protocol/Exceptions.h"
@@ -64,27 +65,25 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorage> storage,
     m_lastStorage = std::move(_lastStorage);
 }
 
-void BlockContext::insertExecutive(int64_t contextID, int64_t seq, ExecutiveState state)
-{
-    auto it = m_executives.find(std::tuple{contextID, seq});
-    if (it != m_executives.end())
-    {
-        BOOST_THROW_EXCEPTION(
-            BCOS_ERROR(-1, "Executive exists: " + boost::lexical_cast<std::string>(contextID)));
-    }
 
-    bool success;
-    std::tie(it, success) = m_executives.emplace(std::tuple{contextID, seq}, std::move(state));
-}
-
-bcos::executor::BlockContext::ExecutiveState* BlockContext::getExecutive(
-    int64_t contextID, int64_t seq)
+ExecutiveFlowInterface::Ptr BlockContext::getExecutiveFlow(std::string codeAddress)
 {
-    auto it = m_executives.find({contextID, seq});
-    if (it == m_executives.end())
+    auto it = m_executiveFlows.find(codeAddress);
+    if (it == m_executiveFlows.end())
     {
+        /*
+        bool success;
+        std::tie(it, success) =
+            m_executiveFlows.emplace(codeAddress, std::make_shared<ExecutiveQueueFlow>());
+
+            */
         return nullptr;
     }
+    return it->second;
+}
 
-    return &it->second;
+void BlockContext::setExecutiveFlow(
+    std::string codeAddress, ExecutiveFlowInterface::Ptr executiveFlow)
+{
+    m_executiveFlows.emplace(codeAddress, executiveFlow);
 }

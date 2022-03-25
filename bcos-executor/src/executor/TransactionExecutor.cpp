@@ -28,6 +28,8 @@
 #include "../dag/TxDAG.h"
 #include "../dag/TxDAG2.h"
 #include "../executive/BlockContext.h"
+#include "../executive/ExecutiveFactory.h"
+#include "../executive/ExecutiveQueueFlow.h"
 #include "../executive/TransactionExecutive.h"
 #include "../precompiled/Common.h"
 #include "../precompiled/ConsensusPrecompiled.h"
@@ -319,6 +321,17 @@ void TransactionExecutor::executeTransaction(bcos::protocol::ExecutionMessage::U
         });
 }
 
+void TransactionExecutor::executeTransactions(
+    gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
+    std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
+        onOneTxStop,  // stop means pause or finish
+    std::function<void(bcos::Error::UniquePtr)> onFinish)
+{
+    (void)inputs;
+    (void)onOneTxStop;
+    (void)onFinish;
+};
+
 void TransactionExecutor::getHash(bcos::protocol::BlockNumber number,
     std::function<void(bcos::Error::UniquePtr, crypto::HashType)> callback)
 {
@@ -450,8 +463,8 @@ bytes getComponentBytes(size_t index, const std::string& typeName, const bytesCo
     if (typeName == "string" || typeName == "bytes")
     {
         u256 u = fromBigEndian<u256>(header);
-        auto offset = static_cast<std::size_t>(u);
-        auto rawData = data.getCroppedData(offset);
+        auto offset1 = static_cast<std::size_t>(u);
+        auto rawData = data.getCroppedData(offset1);
         auto len = static_cast<std::size_t>(
             fromBigEndian<u256>(bytes(rawData.begin(), rawData.begin() + 32)));
         return bytes(rawData.begin() + 32, rawData.begin() + 32 + static_cast<std::size_t>(len));
@@ -1029,6 +1042,136 @@ void TransactionExecutor::getCode(
         });
 }
 
+///*
+
+ExecutiveFlowInterface::Ptr TransactionExecutor::getExecutiveFlow(
+    std::shared_ptr<BlockContext> blockContext, std::string codeAddress)
+{
+    ExecutiveFlowInterface::Ptr executiveFlow = blockContext->getExecutiveFlow(codeAddress);
+    if (executiveFlow == nullptr)
+    {
+        auto executiveFactory = std::make_shared<ExecutiveFactory>(blockContext,
+            m_precompiledContract, m_constantPrecompiled, m_builtInPrecompiled, m_gasInjector);
+        executiveFlow = std::make_shared<ExecutiveQueueFlow>(executiveFactory);
+        blockContext->setExecutiveFlow(codeAddress, executiveFlow);
+    }
+    return executiveFlow;
+}
+
+
+void TransactionExecutor::asyncExecuteExecutiveFlow(ExecutiveFlowInterface::Ptr executiveFlow,
+    std::function<void(bcos::Error::UniquePtr&&, bcos::protocol::ExecutionMessage::UniquePtr&&)>
+        callback)
+{
+    executiveFlow->asyncRun(
+        // onTxFinished
+        [this, callback](CallParameters::UniquePtr output) {
+            auto message = toExecutionResult(std::move(output));
+            callback(nullptr, std::move(message));
+        },
+        // onPaused
+        [this, callback](std::shared_ptr<std::vector<CallParameters::UniquePtr>> outputs) {
+            for (auto& output : *outputs)
+            {
+                auto message = toExecutionResult(std::move(output));
+                callback(nullptr, std::move(message));
+            }
+        },
+        // onFinished
+        [callback](bcos::Error::UniquePtr error) {
+            // do nothing
+            if (error != nullptr)
+            {
+                EXECUTOR_LOG(ERROR)
+                    << "ExecutiveFlow asyncRun error: " << LOG_KV("errorCode", error->errorCode())
+                    << LOG_KV("errorMessage", error->errorMessage());
+                callback(std::move(error), nullptr);
+            }
+        });
+}
+
+void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContext,
+    bcos::protocol::ExecutionMessage::UniquePtr input, bool staticCall,
+    std::function<void(bcos::Error::UniquePtr&&, bcos::protocol::ExecutionMessage::UniquePtr&&)>
+        callback)
+{
+    EXECUTOR_LOG(TRACE) << "Import key locks size: " << input->keyLocks().size();
+
+    switch (input->type())
+    {
+    case bcos::protocol::ExecutionMessage::TXHASH:
+    {
+        // Get transaction first
+        auto txHashes = std::make_shared<bcos::crypto::HashList>(1);
+        (*txHashes)[0] = (input->transactionHash());
+
+        m_txpool->asyncFillBlock(std::move(txHashes),
+            [this, inputPtr = input.release(), blockContext = std::move(blockContext), callback](
+                Error::Ptr error, bcos::protocol::TransactionsPtr transactions) mutable {
+                auto input = std::unique_ptr<bcos::protocol::ExecutionMessage>(inputPtr);
+
+                if (error)
+                {
+                    callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(ExecuteError::EXECUTE_ERROR,
+                                 "Transaction does not exists: " + input->transactionHash().hex(),
+                                 *error),
+                        nullptr);
+                    return;
+                }
+
+                if (!transactions || transactions->empty())
+                {
+                    callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::EXECUTE_ERROR,
+                                 "Transaction does not exists: " + input->transactionHash().hex()),
+                        nullptr);
+                    return;
+                }
+
+                auto tx = (*transactions)[0];
+                if (!tx)
+                {
+                    callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::EXECUTE_ERROR,
+                                 "Transaction is null: " + input->transactionHash().hex()),
+                        nullptr);
+                    return;
+                }
+
+                // merge real tx data into input
+                auto callParameters = createCallParameters(*input, *tx);
+
+                ExecutiveFlowInterface::Ptr executiveFlow =
+                    getExecutiveFlow(blockContext, callParameters->codeAddress);
+                executiveFlow->submit(std::move(callParameters));
+                asyncExecuteExecutiveFlow(executiveFlow, callback);
+            });
+        break;
+    }
+    case bcos::protocol::ExecutionMessage::MESSAGE:
+    case bcos::protocol::ExecutionMessage::REVERT:
+    case bcos::protocol::ExecutionMessage::FINISHED:
+    case bcos::protocol::ExecutionMessage::KEY_LOCK:
+    {
+        auto callParameters = createCallParameters(*input, staticCall);
+
+        ExecutiveFlowInterface::Ptr executiveFlow =
+            getExecutiveFlow(blockContext, callParameters->codeAddress);
+        executiveFlow->submit(std::move(callParameters));
+        asyncExecuteExecutiveFlow(executiveFlow, callback);
+
+        break;
+    }
+    default:
+    {
+        EXECUTOR_LOG(ERROR) << "Unknown message type: " << input->type();
+        callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::EXECUTE_ERROR,
+                     "Unknown type" + boost::lexical_cast<std::string>(input->type())),
+            nullptr);
+        return;
+    }
+    }
+}
+/*/
+
 void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContext,
     bcos::protocol::ExecutionMessage::UniquePtr input, bool staticCall,
     std::function<void(bcos::Error::UniquePtr&&, bcos::protocol::ExecutionMessage::UniquePtr&&)>
@@ -1189,6 +1332,7 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
     }
     }
 }
+//*/
 
 std::function<void(const TransactionExecutive& executive, std::unique_ptr<CallParameters> input)>
 TransactionExecutor::createExternalFunctionCall(

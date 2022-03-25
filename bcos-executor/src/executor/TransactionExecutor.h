@@ -25,6 +25,8 @@
 #pragma once
 
 #include "../dag/CriticalFields.h"
+#include "../executive/BlockContext.h"
+#include "../executive/ExecutiveFlowInterface.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
 #include "bcos-framework/interfaces/protocol/Block.h"
@@ -101,6 +103,11 @@ public:
     void executeTransaction(bcos::protocol::ExecutionMessage::UniquePtr input,
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             callback) override;
+
+    void executeTransactions(gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
+        std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
+            onOneTxStop,  // stop means pause or finish
+        std::function<void(bcos::Error::UniquePtr)> onFinish) override;
 
     void call(bcos::protocol::ExecutionMessage::UniquePtr input,
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
@@ -184,6 +191,13 @@ protected:
     void executeTransactionsWithCriticals(critical::CriticalFieldsInterface::Ptr criticals,
         gsl::span<std::unique_ptr<CallParameters>> inputs,
         std::vector<protocol::ExecutionMessage::UniquePtr>& executionResults);
+
+    ExecutiveFlowInterface::Ptr getExecutiveFlow(
+        std::shared_ptr<BlockContext> blockContext, std::string codeAddress);
+
+    void asyncExecuteExecutiveFlow(ExecutiveFlowInterface::Ptr executiveFlow,
+        std::function<void(bcos::Error::UniquePtr&&, bcos::protocol::ExecutionMessage::UniquePtr&&)>
+            callback);
 
     txpool::TxPoolInterface::Ptr m_txpool;
     storage::MergeableStorageInterface::Ptr m_cachedStorage;

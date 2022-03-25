@@ -42,6 +42,9 @@ CallParameters::UniquePtr ExecutiveState::go()
         output = m_executive->start(std::move(m_input));
         break;
     case PAUSED:
+        // just ignore, need to set resume params
+        break;
+    case NEED_RESUME:
         m_executive->resume();
         break;
     case FINISHED:
@@ -68,5 +71,6 @@ CallParameters::UniquePtr ExecutiveState::go()
 
 void ExecutiveState::setResumeParam(CallParameters::UniquePtr pullParam)
 {
+    m_status = NEED_RESUME;
     m_executive->setExchangeMessage(std::move(pullParam));
 }

@@ -22,7 +22,6 @@
 #pragma once
 
 #include "ExecutiveFactory.h"
-#include "ExecutiveState.h"
 
 namespace bcos
 {
@@ -41,7 +40,8 @@ public:
     {
         NEED_RUN = 0,
         PAUSED = 1,
-        FINISHED = 2,
+        NEED_RESUME = 2,
+        FINISHED = 3,
     };
 
     Status getStatus() { return m_status; }

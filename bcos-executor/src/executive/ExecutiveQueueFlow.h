@@ -22,8 +22,8 @@
 #pragma once
 
 #include "ExecutiveFactory.h"
+#include "ExecutiveFlowInterface.h"
 #include "ExecutiveState.h"
-#include "TransactionFlowInterface.h"
 #include <tbb/concurrent_unordered_map.h>
 #include <atomic>
 #include <stack>
@@ -33,14 +33,16 @@ namespace bcos
 namespace executor
 {
 
-class ExecutiveQueueFlow : public virtual TransactionFlowInterface
+class ExecutiveQueueFlow : public virtual ExecutiveFlowInterface
 {
 public:
     ExecutiveQueueFlow(ExecutiveFactory::Ptr executiveFactory)
       : m_executiveFactory(executiveFactory)
     {}
 
-    void addTop(CallParameters::UniquePtr input) override;
+    virtual ~ExecutiveQueueFlow() {}
+
+    void submit(CallParameters::UniquePtr txInput) override;
 
     void asyncRun(
         // onTxFinished(output)
@@ -50,14 +52,12 @@ public:
         std::function<void(std::shared_ptr<std::vector<CallParameters::UniquePtr>>)> onPaused,
 
         // onFinished(success, errorMessage)
-        std::function<void(bool, std::string)> onFinished) override;
-
-    void setResumeParam(CallParameters::UniquePtr pullParam) override;
+        std::function<void(bcos::Error::UniquePtr)> onFinished) override;
 
 private:
     void run(std::function<void(CallParameters::UniquePtr)> onTxFinished,
         std::function<void(std::shared_ptr<std::vector<CallParameters::UniquePtr>>)> onPaused,
-        std::function<void(bool, std::string)> onFinished);
+        std::function<void(bcos::Error::UniquePtr)> onFinished);
 
     std::stack<ExecutiveState::Ptr> m_runPool;
     std::map<std::tuple<int64_t, int64_t>, ExecutiveState::Ptr> m_executives;

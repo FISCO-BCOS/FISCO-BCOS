@@ -59,6 +59,15 @@ public:
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             callback) = 0;
 
+    virtual void executeTransactions(gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
+
+        // called every time at a tx stop( pause or finish)
+        std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
+            onOneTxStop,
+
+        // called on all of tx finished
+        std::function<void(bcos::Error::UniquePtr)> onFinish) = 0;
+
     virtual void dagExecuteTransactions(
         gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
         std::function<void(
