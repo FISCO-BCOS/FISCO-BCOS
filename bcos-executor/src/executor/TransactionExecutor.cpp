@@ -796,9 +796,10 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                         }
                         else
                         {
-                            EXECUTOR_LOG(DEBUG) << LOG_BADGE("dagExecuteTransactionsInternal")
-                                                << LOG_DESC("Found ABI in cache")
-                                                << LOG_KV("abiKey", toHexStringWithPrefix(abiKey));
+                            EXECUTOR_LOG(DEBUG)
+                                << LOG_BADGE("dagExecuteTransactionsInternal")
+                                << LOG_DESC("Found ABI in cache") << LOG_KV("adddress", to)
+                                << LOG_KV("abiKey", toHexStringWithPrefix(abiKey));
                             auto& functionAbi = cacheHandle.value();
                             conflictFields =
                                 extractConflictFields(functionAbi, *params, m_blockContext);

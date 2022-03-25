@@ -203,15 +203,14 @@ void bcos::precompiled::checkCreateTableParam(
     }
 
     auto tableName = precompiled::getTableName(_tableName);
-    if (tableName.size() > (size_t)USER_TABLE_NAME_MAX_LENGTH ||
-        (tableName.size() > (size_t)USER_TABLE_NAME_MAX_LENGTH_S))
+    if (tableName.size() > (size_t)USER_TABLE_NAME_MAX_LENGTH_S)
     {
         // mysql TableName and fieldName length limit is 64
         BOOST_THROW_EXCEPTION(
             protocol::PrecompiledError()
             << errinfo_comment("errorCode: " + std::to_string(CODE_TABLE_NAME_LENGTH_OVERFLOW))
             << errinfo_comment(std::string("tableName length overflow ") +
-                               std::to_string(USER_TABLE_NAME_MAX_LENGTH)));
+                               std::to_string(USER_TABLE_NAME_MAX_LENGTH_S)));
     }
 }
 
