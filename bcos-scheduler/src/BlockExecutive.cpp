@@ -864,13 +864,13 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
                 // Calc the gas set to header
                 m_gasUsed += txGasUsed;
 
-                m_executiveResults[executiveState.contextID - m_startContextID].receipt =
-                    m_scheduler->m_blockFactory->receiptFactory()->createReceipt(txGasUsed,
-                        message->newEVMContractAddress(),
-                        std::make_shared<std::vector<bcos::protocol::LogEntry>>(
-                            message->takeLogEntries()),
-                        message->status(), message->takeData(),
-                        m_block->blockHeaderConst()->number());
+                auto receipt = m_scheduler->m_blockFactory->receiptFactory()->createReceipt(
+                    txGasUsed, message->newEVMContractAddress(),
+                    std::make_shared<std::vector<bcos::protocol::LogEntry>>(
+                        message->takeLogEntries()),
+                    message->status(), message->takeData(), m_block->blockHeaderConst()->number());
+                receipt->setMessage(std::string(message->message()));
+                m_executiveResults[executiveState.contextID - m_startContextID].receipt = receipt;
 
                 // Remove executive state and continue
                 SCHEDULER_LOG(TRACE)

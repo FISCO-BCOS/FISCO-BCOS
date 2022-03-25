@@ -4,4 +4,5 @@ message PBRawTransactionReceipt{
     int32 version = 1;
     bytes hashFieldsData = 2;
     bytes hashFieldsHash = 3;
+    string message = 4;
 }

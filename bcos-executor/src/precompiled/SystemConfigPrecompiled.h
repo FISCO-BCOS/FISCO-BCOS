@@ -22,6 +22,8 @@
 #include "../vm/Precompiled.h"
 #include "Common.h"
 #include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
+#include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
+#include <set>
 namespace bcos
 {
 namespace precompiled
@@ -50,8 +52,10 @@ public:
         const std::string& _key) const;
 
 private:
-    bool checkValueValid(std::string_view key, std::string_view value);
-    std::map<std::string, std::function<bool(int64_t)>> m_sysValueCmp;
+    void checkValueValid(std::string_view key, std::string_view value);
+    std::map<std::string, std::function<void(int64_t)>> m_sysValueCmp;
+    const std::set<std::string> c_supportedKey = {bcos::ledger::SYSTEM_KEY_TX_GAS_LIMIT,
+        bcos::ledger::SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, bcos::ledger::SYSTEM_KEY_TX_COUNT_LIMIT};
 };
 
 }  // namespace precompiled

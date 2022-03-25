@@ -116,8 +116,7 @@ std::tuple<std::string, std::string> TableFactoryPrecompiled::getTableField(
         PRECOMPILED_LOG(WARNING) << LOG_BADGE("TableFactoryPrecompiled")
                                  << LOG_DESC("Open table failed")
                                  << LOG_KV("tableName", _tableName);
-        BOOST_THROW_EXCEPTION(
-            PrecompiledError() << errinfo_comment(_tableName + " does not exist"));
+        BOOST_THROW_EXCEPTION(PrecompiledError(_tableName + " does not exist"));
     }
     auto valueKey = sysEntry->getField(0);
     auto keyField = std::string(valueKey.substr(valueKey.find_last_of(',') + 1));
@@ -127,7 +126,7 @@ std::tuple<std::string, std::string> TableFactoryPrecompiled::getTableField(
 
 bool TableFactoryPrecompiled::buildConditionCtx(const precompiled::Condition::Ptr& _condition,
     const precompiled::ConditionTuple& _tuple, std::shared_ptr<storage::Condition>& _keyCondition,
-    std::vector<std::string>& _eqKeyList, const std::string& _keyFiled)
+    std::vector<std::string>& _eqKeyList, const std::string& _keyField)
 {
     bool flag = false;
     for (const auto& compareTuple : std::get<0>(_tuple))
@@ -136,7 +135,7 @@ bool TableFactoryPrecompiled::buildConditionCtx(const precompiled::Condition::Pt
         auto v = std::get<1>(compareTuple);
         auto cmp = (Comparator)(static_cast<int>(std::get<2>(compareTuple)));
 
-        if (k == _keyFiled)
+        if (k == _keyField)
         {
             flag = true;
             if (cmp == precompiled::Comparator::EQ)
@@ -169,7 +168,7 @@ void TableFactoryPrecompiled::createTable(
 
     precompiled::checkCreateTableParam(tableName, keyField, valueField);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("StateStorage") << LOG_KV("createTable", tableName)
-                           << LOG_KV("keyField", keyField) << LOG_KV("valueFiled", valueField);
+                           << LOG_KV("keyField", keyField) << LOG_KV("valueField", valueField);
     // /tables + tableName
     auto newTableName = getTableName(tableName);
     int result = CODE_SUCCESS;

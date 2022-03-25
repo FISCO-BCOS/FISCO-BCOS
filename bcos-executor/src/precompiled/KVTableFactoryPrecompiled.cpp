@@ -110,7 +110,7 @@ void KVTableFactoryPrecompiled::createTable(
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("KVTableFactoryPrecompiled")
                                << LOG_DESC("error tableName") << LOG_KV("tableName", tableName);
-        BOOST_THROW_EXCEPTION(PrecompiledError() << errinfo_comment("Table name error."));
+        BOOST_THROW_EXCEPTION(PrecompiledError("Table name error."));
     }
 
     precompiled::checkCreateTableParam(tableName, keyField, valueField);
@@ -183,7 +183,7 @@ void KVTableFactoryPrecompiled::get(
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("KVTable") << LOG_DESC("Open table failed")
                                << LOG_KV("tableName", tableName);
-        BOOST_THROW_EXCEPTION(PrecompiledError() << errinfo_comment(tableName + " does not exist"));
+        BOOST_THROW_EXCEPTION(PrecompiledError(tableName + " does not exist"));
     }
     auto entry = table->getRow(key);
     gasPricer->appendOperation(InterfaceOpcode::Select, 1);
@@ -224,7 +224,7 @@ void KVTableFactoryPrecompiled::set(
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("KVTable") << LOG_DESC("Open table failed")
                                << LOG_KV("tableName", tableName);
-        BOOST_THROW_EXCEPTION(PrecompiledError() << errinfo_comment(tableName + " does not exist"));
+        BOOST_THROW_EXCEPTION(PrecompiledError(tableName + " does not exist"));
     }
     auto entry = table->newEntry();
     checkLengthValidate(key, USER_TABLE_KEY_VALUE_MAX_LENGTH, CODE_TABLE_KEY_VALUE_LENGTH_OVERFLOW);

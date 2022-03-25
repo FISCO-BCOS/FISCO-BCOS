@@ -255,28 +255,35 @@ TransactionExecutive::callPrecompiled(CallParameters::UniquePtr callParameters)
         callParameters->status = (int32_t)TransactionStatus::None;
         callParameters->data.swap(precompiledResult->m_execResult);
     }
-    catch (protocol::PrecompiledError& e)
+    catch (protocol::PrecompiledError const& e)
     {
-        const string* _msg = boost::get_error_info<errinfo_comment>(e);
-        writeErrInfoToOutput(_msg ? *_msg : "error occurs in precompiled, but error_info is empty",
-            callParameters->data);
+        // Note: considering the scenario where the contract calls the contract, the error message
+        // still needs to be written to the output
+        writeErrInfoToOutput(e.what(), *callParameters);
         revert();
         callParameters->type = CallParameters::REVERT;
         callParameters->status = (int32_t)TransactionStatus::PrecompiledError;
+        callParameters->message = e.what();
     }
-    catch (Exception& e)
+    catch (Exception const& e)
     {
-        writeErrInfoToOutput(e.what(), callParameters->data);
+        writeErrInfoToOutput(e.what(), *callParameters);
         revert();
         callParameters->type = CallParameters::REVERT;
         callParameters->status = (int32_t)executor::toTransactionStatus(e);
+        callParameters->message = e.what();
     }
     catch (std::exception& e)
     {
-        writeErrInfoToOutput(e.what(), callParameters->data);
+        // Note: Since the information of std::exception may be affected by the version of the c++
+        // library, in order to ensure compatibility, the information is not written to output
+        writeErrInfoToOutput("InternalPrecompiledError", *callParameters);
+        EXECUTIVE_LOG(WARNING) << LOG_DESC("callPrecompiled")
+                               << LOG_KV("error", boost::diagnostic_information(e));
         revert();
         callParameters->type = CallParameters::REVERT;
         callParameters->status = (int32_t)TransactionStatus::Unknown;
+        callParameters->message = e.what();
     }
     return {nullptr, std::move(callParameters)};
 }
@@ -610,6 +617,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
             return callResults;
         }
     }
+    // Note: won't call the catch branch
     catch (PermissionDenied const& _e)
     {
         auto callResults = hostContext.takeCallParameters();
@@ -717,19 +725,23 @@ std::shared_ptr<precompiled::PrecompiledExecResult> TransactionExecutive::execPr
             return nullptr;
         }
     }
-    catch (protocol::PrecompiledError& e)
+    catch (PrecompiledError const& e)
     {
-        const string* _msg = boost::get_error_info<errinfo_comment>(e);
         EXECUTIVE_LOG(ERROR) << "PrecompiledError" << LOG_KV("address", address)
-                             << LOG_KV("message:", _msg ? *_msg : "");
+                             << LOG_KV("error", e.what());
+        BOOST_THROW_EXCEPTION(e);
+    }
+    catch (Exception const& e)
+    {
+        EXECUTIVE_LOG(ERROR) << "Exception" << LOG_KV("address", address)
+                             << LOG_KV("error", e.what());
         BOOST_THROW_EXCEPTION(e);
     }
     catch (std::exception& e)
     {
         EXECUTIVE_LOG(ERROR) << LOG_DESC("[call]Precompiled call error")
                              << LOG_KV("EINFO", boost::diagnostic_information(e));
-
-        throw PrecompiledError();
+        BOOST_THROW_EXCEPTION(PrecompiledError("InternalPrecompiledError"));
     }
 }
 
@@ -835,6 +847,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
         // FIXME: Copy the output for now, but copyless version possible.
         callResults->gas = _result.gasLeft();
         revert();
+        // Note: both the precompiled or the application-developer may calls writeErrorInfo to the
+        // data when revert
         callResults->data.assign(outputRef.begin(), outputRef.end());
         // m_output = owning_bytes_ref(
         //     bytes(outputRef.data(), outputRef.data() + outputRef.size()), 0, outputRef.size());
