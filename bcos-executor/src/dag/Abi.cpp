@@ -87,14 +87,14 @@ unique_ptr<FunctionAbi> FunctionAbi::deserialize(
     Json::Value root;
     if (!reader.parse(abiStr.begin(), abiStr.end(), root))
     {
-        BCOS_LOG(ERROR) << LOG_BADGE("EXECUTOR") << LOG_DESC("unable to parse contract ABI")
+        BCOS_LOG(DEBUG) << LOG_BADGE("EXECUTOR") << LOG_DESC("unable to parse contract ABI")
                         << LOG_KV("abiStr", abiStr);
         return nullptr;
     }
 
     if (!root.isArray())
     {
-        BCOS_LOG(ERROR) << LOG_BADGE("EXECUTOR") << LOG_DESC("contract ABI is not an array")
+        BCOS_LOG(DEBUG) << LOG_BADGE("EXECUTOR") << LOG_DESC("contract ABI is not an array")
                         << LOG_KV("abiStr", abiStr);
         return nullptr;
     }
