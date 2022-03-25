@@ -238,7 +238,7 @@ LOG_INFO "All completed. Files in ${output_dir}"
 
 check_env() {
     [ ! -z "$(openssl version | grep 1.0.2)" ] || [ ! -z "$(openssl version | grep 1.1)" ] || [ ! -z "$(openssl version | grep reSSL)" ] || {
-        echo "please install openssl!"
+        echo "please install openssl v1.x!"
         #echo "download openssl from https://www.openssl.org."
         echo "use \"openssl version\" command to check."
         exit 1
