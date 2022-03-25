@@ -41,7 +41,7 @@ using namespace std;
 
 BlockContext::BlockContext(std::shared_ptr<storage::StateStorage> storage,
     crypto::Hash::Ptr _hashImpl, bcos::protocol::BlockNumber blockNumber, h256 blockHash,
-    uint64_t timestamp, int32_t blockVersion, const VMSchedule& _schedule, bool _isWasm,
+    uint64_t timestamp, uint32_t blockVersion, const VMSchedule& _schedule, bool _isWasm,
     bool _isAuthCheck)
   : m_blockNumber(blockNumber),
     m_blockHash(blockHash),

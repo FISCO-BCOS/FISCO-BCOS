@@ -42,6 +42,8 @@ public:
       : TransactionExecutor(std::move(txpool), std::move(cachedStorage), std::move(backendStorage),
             std::move(executionMessageFactory), std::move(hashImpl), isAuthCheck)
     {
+        m_isWasm = true;
+        m_schedule = BCOSWASMSchedule;
         initPrecompiled();
         assert(!m_constantPrecompiled.empty());
         assert(m_builtInPrecompiled);
@@ -52,15 +54,6 @@ public:
 
 private:
     void initPrecompiled();
-
-    std::shared_ptr<BlockContext> createBlockContext(
-        const protocol::BlockHeader::ConstPtr& currentHeader,
-        storage::StateStorage::Ptr tableFactory,
-        storage::StorageInterface::Ptr lastStorage) override;
-
-    std::shared_ptr<BlockContext> createBlockContext(bcos::protocol::BlockNumber blockNumber,
-        h256 blockHash, uint64_t timestamp, int32_t blockVersion,
-        storage::StateStorage::Ptr tableFactory) override;
 };
 
 }  // namespace executor

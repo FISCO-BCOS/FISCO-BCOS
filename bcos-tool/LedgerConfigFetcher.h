@@ -39,13 +39,12 @@ public:
 
     virtual ~LedgerConfigFetcher() {}
 
-    virtual void fetchBlockNumberAndHash(size_t _fetchedTime = 0);
+    virtual void fetchBlockNumberAndHash();
     virtual void fetchConsensusNodeList();
     virtual void fetchObserverNodeList();
     virtual void fetchBlockTxCountLimit();
     virtual void fetchGenesisHash();
-    virtual void fetchNonceList(
-        protocol::BlockNumber _startNumber, int64_t _offset, size_t _fetchedTime = 0);
+    virtual void fetchNonceList(protocol::BlockNumber _startNumber, int64_t _offset);
     virtual void fetchConsensusLeaderPeriod();
 
     // consensus_leader_period
@@ -55,47 +54,18 @@ public:
         return m_nonceList;
     }
     virtual bcos::crypto::HashType const& genesisHash() const { return m_genesisHash; }
-    virtual void waitFetchFinished();
+
+    virtual void fetchAndSetCompatibilityVersion();
 
 protected:
-    virtual bool fetchFinished()
-    {
-        return m_fetchBlockInfoFinished && m_fetchConsensusInfoFinished &&
-               m_fetchObserverInfoFinshed && m_fetchBlockTxCountLimitFinished &&
-               m_fetchNonceListFinished && m_fetchGenesisHashFinished &&
-               m_fetchConsensusLeaderPeriod;
-    }
-
-    virtual void fetchBlockHash(bcos::protocol::BlockNumber _blockNumber,
-        std::function<void(bcos::crypto::HashType const& _hash)> _callback,
-        size_t _fetchedTime = 0);
-    virtual void fetchSystemConfig(std::string const& _key,
-        std::function<void(std::string const&)> _onRecvValue, size_t _fetchedTime = 0);
-    virtual void fetchNodeListByNodeType(std::string const& _type,
-        bcos::consensus::ConsensusNodeListPtr _nodeList, std::function<void()> _onRecvNodeList,
-        size_t _fetchedTime = 0);
+    virtual bcos::crypto::HashType fetchBlockHash(bcos::protocol::BlockNumber _blockNumber);
+    virtual std::string fetchSystemConfig(std::string const& _key);
+    virtual bcos::consensus::ConsensusNodeListPtr fetchNodeListByNodeType(std::string const& _type);
 
     bcos::ledger::LedgerInterface::Ptr m_ledger;
     bcos::ledger::LedgerConfig::Ptr m_ledgerConfig;
     std::shared_ptr<std::map<int64_t, bcos::protocol::NonceListPtr>> m_nonceList;
     bcos::crypto::HashType m_genesisHash;
-
-    // assume this module can wait at most 10s
-    uint64_t m_timeout = 10000;
-
-private:
-    boost::condition_variable m_signalled;
-    boost::mutex x_signalled;
-
-    std::atomic_bool m_fetchBlockInfoFinished = {true};
-    std::atomic_bool m_fetchConsensusInfoFinished = {true};
-    std::atomic_bool m_fetchObserverInfoFinshed = {true};
-    std::atomic_bool m_fetchBlockTxCountLimitFinished = {true};
-    std::atomic_bool m_fetchNonceListFinished = {true};
-    std::atomic_bool m_fetchGenesisHashFinished = {true};
-    std::atomic_bool m_fetchConsensusLeaderPeriod = {true};
-
-    size_t c_maxRetryTime = 5;
 };
 }  // namespace tool
 }  // namespace bcos

@@ -49,7 +49,7 @@ public:
 
     BlockContext(std::shared_ptr<storage::StateStorage> storage, crypto::Hash::Ptr _hashImpl,
         bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
-        int32_t blockVersion, const VMSchedule& _schedule, bool _isWasm, bool _isAuthCheck);
+        uint32_t blockVersion, const VMSchedule& _schedule, bool _isWasm, bool _isAuthCheck);
 
     BlockContext(std::shared_ptr<storage::StateStorage> storage,
         storage::StorageInterface::Ptr _lastStorage, crypto::Hash::Ptr _hashImpl,
@@ -76,7 +76,7 @@ public:
     int64_t number() const { return m_blockNumber; }
     h256 hash() const { return m_blockHash; }
     uint64_t timestamp() const { return m_timeStamp; }
-    int32_t blockVersion() const { return m_blockVersion; }
+    uint32_t blockVersion() const { return m_blockVersion; }
     u256 const& gasLimit() const { return m_gasLimit; }
 
     VMSchedule const& vmSchedule() const { return m_schedule; }
@@ -112,7 +112,7 @@ private:
     bcos::protocol::BlockNumber m_blockNumber;
     h256 m_blockHash;
     uint64_t m_timeStamp;
-    int32_t m_blockVersion;
+    uint32_t m_blockVersion;
 
     VMSchedule m_schedule;
     u256 m_gasLimit;

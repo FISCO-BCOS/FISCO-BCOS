@@ -94,8 +94,8 @@ public:
         std::function<void(Error::Ptr, consensus::ConsensusNodeListPtr)> _onGetConfig) override;
 
     /****** init ledger ******/
-    bool buildGenesisBlock(
-        LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit, const std::string& _genesisData);
+    bool buildGenesisBlock(LedgerConfig::Ptr _ledgerConfig, size_t _gasLimit,
+        const std::string& _genesisData, std::string const& _compatibilityVersion);
 
 private:
     Error::Ptr checkTableValid(Error::UniquePtr&& error,

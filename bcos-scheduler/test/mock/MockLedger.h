@@ -73,6 +73,10 @@ public:
         {
             _onGetConfig(nullptr, "300000000", 100);
         }
+        else if (_key == ledger::SYSTEM_KEY_COMPATIBILITY_VERSION)
+        {
+            _onGetConfig(nullptr, bcos::protocol::RC3_VERSION_STR, 100);
+        }
         else
         {
             BOOST_FAIL("Unknown query key");

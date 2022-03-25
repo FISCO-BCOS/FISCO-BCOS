@@ -382,7 +382,6 @@ void TxPool::init()
     ledgerConfigFetcher->fetchBlockNumberAndHash();
     ledgerConfigFetcher->fetchConsensusNodeList();
     ledgerConfigFetcher->fetchObserverNodeList();
-    ledgerConfigFetcher->waitFetchFinished();
     TXPOOL_LOG(INFO) << LOG_DESC("fetch LedgerConfig success");
 
     auto blockLimit = m_config->blockLimit();
@@ -399,7 +398,6 @@ void TxPool::init()
                          << LOG_KV("fetchedSize", fetchedSize);
         ledgerConfigFetcher->fetchNonceList(startNumber, fetchedSize);
     }
-    ledgerConfigFetcher->waitFetchFinished();
     TXPOOL_LOG(INFO) << LOG_DESC("fetch history nonces success");
 
     // create LedgerNonceChecker and set it into the validator
