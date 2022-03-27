@@ -152,7 +152,7 @@ public:
             precompiledContract);
 
     void setConstantPrecompiled(
-        const std::map<std::string, std::shared_ptr<precompiled::Precompiled>>
+        std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
             _constantPrecompiled);
 
     std::shared_ptr<precompiled::PrecompiledExecResult> execPrecompiled(const std::string& address,
@@ -227,11 +227,11 @@ private:
     void creatAuthTable(
         std::string_view _tableName, std::string_view _origin, std::string_view _sender);
 
-    bool buildBfsPath(std::string const& _absoluteDir, const std::string& _origin,
-        int64_t gasLeft);
+    bool buildBfsPath(std::string const& _absoluteDir, const std::string& _origin, int64_t gasLeft);
 
     std::weak_ptr<BlockContext> m_blockContext;  ///< Information on the runtime environment.
-    std::map<std::string, std::shared_ptr<precompiled::Precompiled>> m_constantPrecompiled;
+    std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
+        m_constantPrecompiled;
     std::shared_ptr<const std::map<std::string, std::shared_ptr<PrecompiledContract>>>
         m_evmPrecompiled;
     std::shared_ptr<const std::set<std::string>> m_builtInPrecompiled;

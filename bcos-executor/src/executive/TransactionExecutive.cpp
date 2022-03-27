@@ -735,14 +735,14 @@ std::shared_ptr<precompiled::PrecompiledExecResult> TransactionExecutive::execPr
 
 bool TransactionExecutive::isPrecompiled(const std::string& address) const
 {
-    return m_constantPrecompiled.count(address) > 0;
+    return m_constantPrecompiled->count(address) > 0;
 }
 
 std::shared_ptr<Precompiled> TransactionExecutive::getPrecompiled(const std::string& address) const
 {
-    auto constantPrecompiled = m_constantPrecompiled.find(address);
+    auto constantPrecompiled = m_constantPrecompiled->find(address);
 
-    if (constantPrecompiled != m_constantPrecompiled.end())
+    if (constantPrecompiled != m_constantPrecompiled->end())
     {
         return constantPrecompiled->second;
     }
@@ -786,10 +786,11 @@ void TransactionExecutive::setEVMPrecompiled(
 void TransactionExecutive::setConstantPrecompiled(
     const string& address, std::shared_ptr<precompiled::Precompiled> precompiled)
 {
-    m_constantPrecompiled.insert(std::make_pair(address, precompiled));
+    m_constantPrecompiled->insert({address, precompiled});
 }
 void TransactionExecutive::setConstantPrecompiled(
-    std::map<std::string, std::shared_ptr<precompiled::Precompiled>> _constantPrecompiled)
+    std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
+        _constantPrecompiled)
 {
     m_constantPrecompiled = std::move(_constantPrecompiled);
 }
@@ -998,7 +999,7 @@ bool TransactionExecutive::buildBfsPath(
     EXECUTIVE_LOG(DEBUG) << LOG_DESC("buildBfsPath") << LOG_KV("absoluteDir", _absoluteDir);
     auto bfsAddress =
         m_blockContext.lock()->isWasm() ? precompiled::BFS_NAME : precompiled::BFS_ADDRESS;
-    auto fs = dynamic_pointer_cast<FileSystemPrecompiled>(m_constantPrecompiled.at(bfsAddress));
+    auto fs = dynamic_pointer_cast<FileSystemPrecompiled>(m_constantPrecompiled->at(bfsAddress));
     auto response = fs->externalTouchNewFile(shared_from_this(), _origin, bfsAddress, bfsAddress,
         _absoluteDir, FS_TYPE_CONTRACT, gasLeft);
     return response == (int)precompiled::CODE_SUCCESS;
@@ -1013,7 +1014,7 @@ bool TransactionExecutive::checkAuth(
     auto authAddress = m_blockContext.lock()->isWasm() ? precompiled::CONTRACT_AUTH_NAME :
                                                          precompiled::CONTRACT_AUTH_ADDRESS;
     auto contractAuthPrecompiled = dynamic_pointer_cast<precompiled::ContractAuthPrecompiled>(
-        m_constantPrecompiled.at(authAddress));
+        m_constantPrecompiled->at(authAddress));
     Address address(callParameters->origin);
     auto path = string(callParameters->codeAddress);
     EXECUTIVE_LOG(DEBUG) << "check auth" << LOG_KV("codeAddress", path)
