@@ -38,7 +38,7 @@ public:
 
     std::shared_ptr<PrecompiledExecResult> call(
         std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
-        const std::string& _origin, const std::string& _sender) override;
+        const std::string& _origin, const std::string& _sender, int64_t gasLeft) override;
 
 public:
     // is this precompiled need parallel processing, default false.

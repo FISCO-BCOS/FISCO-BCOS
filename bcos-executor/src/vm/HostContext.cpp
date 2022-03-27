@@ -216,7 +216,7 @@ evmc_result HostContext::callBuiltInPrecompiled(
         try
         {
             auto precompiledResponse = m_executive->execPrecompiled(_request->receiveAddress,
-                ref(_request->data), _request->origin, _request->senderAddress);
+                ref(_request->data), _request->origin, _request->senderAddress, _request->gas);
             callResults->gas = precompiledResponse->m_gas;
             resultCode = (int32_t)TransactionStatus::None;
             resultData.swap(precompiledResponse->m_execResult);

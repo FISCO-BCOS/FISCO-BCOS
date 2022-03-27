@@ -156,7 +156,7 @@ public:
             _constantPrecompiled);
 
     std::shared_ptr<precompiled::PrecompiledExecResult> execPrecompiled(const std::string& address,
-        bytesConstRef param, const std::string& origin, const std::string& sender);
+        bytesConstRef param, const std::string& origin, const std::string& sender, int64_t gasLeft);
 
     void setExchangeMessage(CallParameters::UniquePtr callParameters)
     {
@@ -227,7 +227,8 @@ private:
     void creatAuthTable(
         std::string_view _tableName, std::string_view _origin, std::string_view _sender);
 
-    bool buildBfsPath(std::string const& _absoluteDir);
+    bool buildBfsPath(std::string const& _absoluteDir, const std::string& _origin,
+        int64_t gasLeft);
 
     std::weak_ptr<BlockContext> m_blockContext;  ///< Information on the runtime environment.
     std::map<std::string, std::shared_ptr<precompiled::Precompiled>> m_constantPrecompiled;

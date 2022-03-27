@@ -87,7 +87,7 @@ ContractAuthPrecompiled::ContractAuthPrecompiled(crypto::Hash::Ptr _hashImpl)
 
 std::shared_ptr<PrecompiledExecResult> ContractAuthPrecompiled::call(
     std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
-    const std::string&, const std::string& _sender)
+    const std::string&, const std::string& _sender, int64_t)
 {
     // parse function name
     uint32_t func = getParamFunc(_param);

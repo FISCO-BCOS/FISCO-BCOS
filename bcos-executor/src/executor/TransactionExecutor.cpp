@@ -433,8 +433,8 @@ void TransactionExecutor::dagExecuteTransactions(
 
 bytes getComponentBytes(size_t index, const std::string& typeName, const bytesConstRef& data)
 {
-    size_t offset = index * 32;
-    auto header = bytes(data.begin() + offset, data.begin() + offset + 32);
+    size_t indexOffset = index * 32;
+    auto header = bytes(data.begin() + indexOffset, data.begin() + indexOffset + 32);
     if (typeName == "string" || typeName == "bytes")
     {
         u256 u = fromBigEndian<u256>(header);
