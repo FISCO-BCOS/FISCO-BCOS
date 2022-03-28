@@ -588,7 +588,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
                 callResult->message = "Error contract address.";
                 EXECUTIVE_LOG(ERROR)
                     << LOG_DESC("call address error") << LOG_KV("address", hostContext.myAddress())
-                    << LOG_KV("caller", hostContext.caller());
+                    << LOG_KV("caller", callResult->senderAddress);
                 return callResult;
             }
 
