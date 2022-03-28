@@ -64,7 +64,7 @@ void BlockExecutive::asyncExecute(
     }
     m_currentTimePoint = std::chrono::system_clock::now();
 
-    bool withDAG = false;
+    bool hasDAG = false;
     if (m_block->transactionsMetaDataSize() > 0)
     {
         SCHEDULER_LOG(DEBUG) << LOG_KV("block number", m_block->blockHeaderConst()->number())
@@ -110,23 +110,22 @@ void BlockExecutive::asyncExecute(
             message->setGasAvailable(m_gasLimit);
             message->setStaticCall(false);
 
-            if (metaData->attribute() & bcos::protocol::Transaction::Attribute::DAG)
-            {
-                withDAG = true;
-            }
+            bool enableDAG = metaData->attribute() & bcos::protocol::Transaction::Attribute::DAG;
 
             auto to = message->to();
 #pragma omp critical
             m_executiveStates.emplace(std::make_tuple(std::move(to), contextID),
-                ExecutiveState(contextID, std::move(message), withDAG));
+                ExecutiveState(contextID, std::move(message), enableDAG));
 
             if (metaData)
             {
                 m_executiveResults[i].transactionHash = metaData->hash();
                 m_executiveResults[i].source = metaData->source();
             }
+
+            hasDAG = enableDAG;
         }
-#pragma omp flush(withDAG)
+#pragma omp flush(hasDAG)
     }
     else if (m_block->transactionsSize() > 0)
     {
@@ -197,23 +196,22 @@ void BlockExecutive::asyncExecute(
             message->setData(tx->input().toBytes());
             message->setStaticCall(m_staticCall);
 
-            if (tx->attribute() & bcos::protocol::Transaction::Attribute::DAG)
-            {
-                withDAG = true;
-            }
+            bool enableDAG = tx->attribute() & bcos::protocol::Transaction::Attribute::DAG;
 
             auto to = std::string(message->to());
 #pragma omp critical
             m_executiveStates.emplace(std::make_tuple(std::move(to), contextID),
-                ExecutiveState(contextID, std::move(message), withDAG));
+                ExecutiveState(contextID, std::move(message), enableDAG));
+
+            hasDAG = enableDAG;
         }
-#pragma omp flush(withDAG)
+#pragma omp flush(hasDAG)
     }
 
     if (!m_staticCall)
     {
         // Execute nextBlock
-        batchNextBlock([this, withDAG, callback = std::move(callback)](Error::UniquePtr error) {
+        batchNextBlock([this, hasDAG, callback = std::move(callback)](Error::UniquePtr error) {
             if (error)
             {
                 SCHEDULER_LOG(ERROR)
@@ -224,7 +222,7 @@ void BlockExecutive::asyncExecute(
                 return;
             }
 
-            if (withDAG)
+            if (hasDAG)
             {
                 DAGExecute([this, callback = std::move(callback)](Error::UniquePtr error) {
                     if (error)
