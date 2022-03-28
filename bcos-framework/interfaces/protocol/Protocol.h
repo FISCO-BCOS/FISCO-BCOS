@@ -45,5 +45,11 @@ enum ModuleID
     TxsSync = 2001,
     AMOP = 3000,
 };
+enum NodeArchitectureType
+{
+    AIR = 0,
+    PRO = 1,
+    MAX = 2,
+};
 }  // namespace protocol
 }  // namespace bcos

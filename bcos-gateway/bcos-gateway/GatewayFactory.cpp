@@ -317,6 +317,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         }
         // init Gateway
         auto gateway = std::make_shared<Gateway>(m_chainID, service, gatewayNodeManager, amop);
+        gateway->setAirVersion(_airVersion);
         auto weakptrGatewayNodeManager = std::weak_ptr<GatewayNodeManager>(gatewayNodeManager);
         // register disconnect handler
         service->registerDisconnectHandler(

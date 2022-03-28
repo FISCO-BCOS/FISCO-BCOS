@@ -53,8 +53,7 @@ void Initializer::initAirNode(std::string const& _configFilePath, std::string co
     bcos::gateway::GatewayInterface::Ptr _gateway)
 {
     initConfig(_configFilePath, _genesisFile, "", true);
-    init(bcos::initializer::NodeArchitectureType::AIR, _configFilePath, _genesisFile, _gateway,
-        true);
+    init(bcos::protocol::NodeArchitectureType::AIR, _configFilePath, _genesisFile, _gateway, true);
 }
 void Initializer::initMicroServiceNode(std::string const& _configFilePath,
     std::string const& _genesisFile, std::string const& _privateKeyPath)
@@ -66,8 +65,7 @@ void Initializer::initMicroServiceNode(std::string const& _configFilePath,
         m_nodeConfig->gatewayServiceName());
     auto gateWay = std::make_shared<bcostars::GatewayServiceClient>(
         gatewayPrx, m_nodeConfig->gatewayServiceName(), keyFactory);
-    init(bcos::initializer::NodeArchitectureType::PRO, _configFilePath, _genesisFile, gateWay,
-        false);
+    init(bcos::protocol::NodeArchitectureType::PRO, _configFilePath, _genesisFile, gateWay, false);
 }
 void Initializer::initConfig(std::string const& _configFilePath, std::string const& _genesisFile,
     std::string const& _privateKeyPath, bool _airVersion)
@@ -96,7 +94,7 @@ void Initializer::initConfig(std::string const& _configFilePath, std::string con
     }
 }
 
-void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
+void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     std::string const& _configFilePath, std::string const& _genesisFile,
     bcos::gateway::GatewayInterface::Ptr _gateway, bool _airVersion)
 {
@@ -130,7 +128,8 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
         m_scheduler =
             SchedulerInitializer::build(executorManager, ledger, storage, executionMessageFactory,
                 m_protocolInitializer->blockFactory(), m_protocolInitializer->txResultFactory(),
-                m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isAuthCheck(), m_nodeConfig->isWasm());
+                m_protocolInitializer->cryptoSuite()->hashImpl(), m_nodeConfig->isAuthCheck(),
+                m_nodeConfig->isWasm());
 
         // init the txpool
         m_txpoolInitializer = std::make_shared<TxPoolInitializer>(
@@ -167,7 +166,7 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
                        << LOG_KV("consensusStoragePath", consensusStoragePath);
         auto consensusStorage = StorageInitializer::build(consensusStoragePath);
         // build and init the pbft related modules
-        if (_nodeArchType == NodeArchitectureType::AIR)
+        if (_nodeArchType == bcos::protocol::NodeArchitectureType::AIR)
         {
             m_pbftInitializer = std::make_shared<PBFTInitializer>(_nodeArchType, m_nodeConfig,
                 m_protocolInitializer, m_txpoolInitializer->txpool(), ledger, m_scheduler,

@@ -65,7 +65,7 @@ public:
         std::string const& _privateKeyPath);
 
 protected:
-    virtual void init(bcos::initializer::NodeArchitectureType _nodeArchType,
+    virtual void init(bcos::protocol::NodeArchitectureType _nodeArchType,
         std::string const& _configFilePath, std::string const& _genesisFile,
         std::shared_ptr<bcos::gateway::GatewayInterface> _gateway, bool _airVersion);
 

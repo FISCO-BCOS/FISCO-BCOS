@@ -160,6 +160,9 @@ public:
         return m_gatewayNodeManager->registerNode(_groupID, _nodeID, _nodeType, _frontService);
     }
 
+    virtual void setAirVersion(bool _airVersion) { m_airVersion = _airVersion; }
+    bool airVersion() const { return m_airVersion; }
+
 protected:
     // for UT
     Gateway() {}
@@ -183,6 +186,8 @@ private:
     // GatewayNodeManager
     GatewayNodeManager::Ptr m_gatewayNodeManager;
     bcos::amop::AMOPImpl::Ptr m_amop;
+
+    bool m_airVersion = false;
 };
 }  // namespace gateway
 }  // namespace bcos

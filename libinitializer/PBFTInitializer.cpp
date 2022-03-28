@@ -44,7 +44,7 @@ using namespace bcos::scheduler;
 using namespace bcos::initializer;
 using namespace bcos::group;
 
-PBFTInitializer::PBFTInitializer(bcos::initializer::NodeArchitectureType _nodeArchType,
+PBFTInitializer::PBFTInitializer(bcos::protocol::NodeArchitectureType _nodeArchType,
     bcos::tool::NodeConfig::Ptr _nodeConfig, ProtocolInitializer::Ptr _protocolInitializer,
     bcos::txpool::TxPoolInterface::Ptr _txpool, std::shared_ptr<bcos::ledger::Ledger> _ledger,
     bcos::scheduler::SchedulerInterface::Ptr _scheduler,
@@ -113,7 +113,7 @@ std::string PBFTInitializer::generateIniConfig(bcos::tool::NodeConfig::Ptr _node
 }
 
 void PBFTInitializer::initChainNodeInfo(
-    bcos::initializer::NodeArchitectureType _nodeArchType, bcos::tool::NodeConfig::Ptr _nodeConfig)
+    bcos::protocol::NodeArchitectureType _nodeArchType, bcos::tool::NodeConfig::Ptr _nodeConfig)
 {
     m_groupInfo = std::make_shared<GroupInfo>(_nodeConfig->chainId(), _nodeConfig->groupId());
     m_groupInfo->setGenesisConfig(generateGenesisConfig(_nodeConfig));
@@ -123,7 +123,7 @@ void PBFTInitializer::initChainNodeInfo(
         nodeType = bcos::group::NodeCryptoType::SM_NODE;
     }
     bool microServiceMode = true;
-    if (_nodeArchType == bcos::initializer::NodeArchitectureType::AIR)
+    if (_nodeArchType == bcos::protocol::NodeArchitectureType::AIR)
     {
         microServiceMode = false;
     }
@@ -137,7 +137,7 @@ void PBFTInitializer::initChainNodeInfo(
         (_nodeConfig->smCryptoType() ? NodeCryptoType::SM_NODE : NON_SM_NODE));
 
     bool useConfigServiceName = false;
-    if (_nodeArchType == bcos::initializer::NodeArchitectureType::MAX)
+    if (_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
     {
         useConfigServiceName = true;
     }

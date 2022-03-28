@@ -132,10 +132,15 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, NodeIDPtr _s
         {
             return;
         }
+        // Note: callback is not called here, and the automatic shielding strategy of tars is
+        // triggered by timeout, this gateway is marked as unavailable for a short period of time
         GATEWAY_LOG(ERROR) << LOG_DESC("could not find a gateway to send this message")
                            << LOG_KV("groupID", _groupID) << LOG_KV("srcNodeID", _srcNodeID->hex())
                            << LOG_KV("dstNodeID", _dstNodeID->hex());
-
+        if (!m_airVersion)
+        {
+            return;
+        }
         auto errorPtr = std::make_shared<Error>(CommonError::NotFoundFrontServiceSendMsg,
             "could not find a gateway to "
             "send this message, groupID:" +
