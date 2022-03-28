@@ -505,8 +505,8 @@ CallParameters::UniquePtr TransactionExecutive::go(
             if (callResults->status != (int32_t)TransactionStatus::None)
             {
                 EXECUTIVE_LOG(ERROR)
-                    << LOG_DESC("deploy failed") << LOG_KV("address", callResults->senderAddress)
-                    << LOG_KV("caller", callResults->codeAddress);
+                    << LOG_DESC("deploy failed") << LOG_KV("sender", callResults->senderAddress)
+                    << LOG_KV("address", callResults->codeAddress);
                 revert();
                 callResults->type = CallParameters::REVERT;
                 // Clear the creation flag
@@ -587,8 +587,8 @@ CallParameters::UniquePtr TransactionExecutive::go(
                 callResult->status = (int32_t)TransactionStatus::CallAddressError;
                 callResult->message = "Error contract address.";
                 EXECUTIVE_LOG(ERROR)
-                    << LOG_DESC("call address error") << LOG_KV("address", hostContext.myAddress())
-                    << LOG_KV("caller", callResult->senderAddress);
+                    << LOG_DESC("call address error") << LOG_KV("address", callResult->codeAddress)
+                    << LOG_KV("sender", callResult->senderAddress);
                 return callResult;
             }
 
@@ -844,6 +844,7 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     }
     case EVMC_REVERT:
     {
+        EXECUTIVE_LOG(WARNING) << LOG_DESC("EVMC_REVERT") << LOG_KV("gasLeft", callResults->gas);
         // FIXME: Copy the output for now, but copyless version possible.
         callResults->gas = _result.gasLeft();
         revert();
@@ -876,6 +877,7 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     case EVMC_INVALID_INSTRUCTION:  // NOTE: this could have its own exception
     case EVMC_UNDEFINED_INSTRUCTION:
     {
+        EXECUTIVE_LOG(WARNING) << LOG_DESC("EVMC_INVALID_INSTRUCTION/EVMC_INVALID_INSTRUCTION");
         // m_remainGas = 0; //TODO: why set remainGas to 0?
         callResults->status = (int32_t)TransactionStatus::BadInstruction;
         revert();
@@ -883,6 +885,7 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     }
     case EVMC_BAD_JUMP_DESTINATION:
     {
+        EXECUTIVE_LOG(WARNING) << LOG_DESC("EVMC_BAD_JUMP_DESTINATION");
         // m_remainGas = 0;
         callResults->status = (int32_t)TransactionStatus::BadJumpDestination;
         revert();
@@ -890,6 +893,7 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     }
     case EVMC_STACK_OVERFLOW:
     {
+        EXECUTIVE_LOG(WARNING) << LOG_DESC("EVMC_STACK_OVERFLOW");
         // m_remainGas = 0;
         callResults->status = (int32_t)TransactionStatus::OutOfStack;
         revert();
@@ -897,6 +901,7 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     }
     case EVMC_STACK_UNDERFLOW:
     {
+        EXECUTIVE_LOG(WARNING) << LOG_DESC("EVMC_STACK_UNDERFLOW");
         // m_remainGas = 0;
         callResults->status = (int32_t)TransactionStatus::StackUnderflow;
         revert();
@@ -943,6 +948,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
     case EVMC_INTERNAL_ERROR:
     default:
     {
+        EXECUTIVE_LOG(WARNING) << LOG_DESC("EVMC_INTERNAL_ERROR/default revert")
+                               << LOG_KV("errCode", EVMC_INTERNAL_ERROR);
         revert();
         if (_result.status() <= EVMC_INTERNAL_ERROR)
         {
