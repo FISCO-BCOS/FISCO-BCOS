@@ -211,14 +211,14 @@ void FileSystemPrecompiled::listDir(
         auto parentDirAndBaseName = getParentDirAndBaseName(absolutePath);
         auto baseName = parentDirAndBaseName.second;
         // file exists, try to get type
-        auto typeEntry = table->getRow(FS_KEY_TYPE);
+        auto typeEntry = _executive->storage().getRow(absolutePath, FS_KEY_TYPE);
         if (typeEntry)
         {
             // get type success, this is dir or link
             // if dir
             if (typeEntry->getField(0) == FS_TYPE_DIR)
             {
-                auto subEntry = table->getRow(FS_KEY_SUB);
+                auto subEntry = _executive->storage().getRow(absolutePath, FS_KEY_SUB);
                 std::map<std::string, std::string> bfsInfo;
                 auto&& out = asBytes(std::string(subEntry->getField(0)));
                 codec::scale::decode(bfsInfo, gsl::make_span(out));
@@ -232,8 +232,8 @@ void FileSystemPrecompiled::listDir(
             else if (typeEntry->getField(0) == FS_TYPE_LINK)
             {
                 // if link
-                auto addressEntry = table->getRow(FS_LINK_ADDRESS);
-                auto abiEntry = table->getRow(FS_LINK_ABI);
+                auto addressEntry = _executive->storage().getRow(absolutePath, FS_LINK_ADDRESS);
+                auto abiEntry = _executive->storage().getRow(absolutePath, FS_LINK_ABI);
                 std::vector<std::string> ext;
                 ext.emplace_back(addressEntry->getField(0));
                 ext.emplace_back(abiEntry->getField(0));
@@ -295,16 +295,16 @@ void FileSystemPrecompiled::link(const std::shared_ptr<executor::TransactionExec
     if (linkTable)
     {
         // table exist, check this resource is a link
-        auto typeEntry = linkTable->getRow(FS_KEY_TYPE);
+        auto typeEntry = _executive->storage().getRow(linkTableName, FS_KEY_TYPE);
         if (typeEntry && typeEntry->getField(0) == FS_TYPE_LINK)
         {
             // contract name and version exist, overwrite address and abi
             auto addressEntry = linkTable->newEntry();
             addressEntry.importFields({contractAddress});
-            linkTable->setRow(FS_LINK_ADDRESS, std::move(addressEntry));
             auto abiEntry = linkTable->newEntry();
             abiEntry.importFields({contractAbi});
-            linkTable->setRow(FS_LINK_ABI, std::move(abiEntry));
+            _executive->storage().setRow(linkTableName, FS_LINK_ADDRESS, std::move(addressEntry));
+            _executive->storage().setRow(linkTableName, FS_LINK_ABI, std::move(abiEntry));
             PRECOMPILED_LOG(DEBUG)
                 << LOG_BADGE("FileSystemPrecompiled") << LOG_DESC("overwrite link successfully")
                 << LOG_KV("contractName", contractName)
@@ -339,16 +339,16 @@ void FileSystemPrecompiled::link(const std::shared_ptr<executor::TransactionExec
     // set link info to link table
     auto typeEntry = linkTable->newEntry();
     typeEntry.importFields({FS_TYPE_LINK});
-    linkTable->setRow(FS_KEY_TYPE, std::move(typeEntry));
     auto nameEntry = linkTable->newEntry();
     nameEntry.importFields({contractVersion});
-    linkTable->setRow(FS_KEY_NAME, std::move(nameEntry));
     auto addressEntry = linkTable->newEntry();
     addressEntry.importFields({contractAddress});
-    linkTable->setRow(FS_LINK_ADDRESS, std::move(addressEntry));
     auto abiEntry = linkTable->newEntry();
     abiEntry.importFields({contractAbi});
-    linkTable->setRow(FS_LINK_ABI, std::move(abiEntry));
+    _executive->storage().setRow(linkTableName, FS_KEY_TYPE, std::move(typeEntry));
+    _executive->storage().setRow(linkTableName, FS_KEY_NAME, std::move(nameEntry));
+    _executive->storage().setRow(linkTableName, FS_LINK_ADDRESS, std::move(addressEntry));
+    _executive->storage().setRow(linkTableName, FS_LINK_ABI, std::move(abiEntry));
     getErrorCodeOut(callResult->mutableExecResult(), CODE_SUCCESS, *codec);
 }
 
@@ -387,11 +387,11 @@ void FileSystemPrecompiled::readLink(
     if (table)
     {
         // file exists, try to get type
-        auto typeEntry = table->getRow(FS_KEY_TYPE);
+        auto typeEntry = _executive->storage().getRow(absolutePath, FS_KEY_TYPE);
         if (typeEntry && typeEntry->getField(0) == FS_TYPE_LINK)
         {
             // if link
-            auto addressEntry = table->getRow(FS_LINK_ADDRESS);
+            auto addressEntry = _executive->storage().getRow(absolutePath, FS_LINK_ADDRESS);
             auto contractAddress = std::string(addressEntry->getField(0));
             auto codecAddress = blockContext->isWasm() ? codec->encode(contractAddress) :
                                                          codec->encode(Address(contractAddress));
@@ -465,23 +465,25 @@ void FileSystemPrecompiled::touch(const std::shared_ptr<executor::TransactionExe
                                << LOG_KV("parentDir", parentDir) << LOG_KV("baseName", baseName)
                                << LOG_KV("type", type);
         auto buildResult = recursiveBuildDir(_executive, parentDir);
+        if (!buildResult)
+        {
+            BOOST_THROW_EXCEPTION(PrecompiledError("Recursive build bfs dir error."));
+        }
         if (type == FS_TYPE_DIR)
         {
-            auto result = buildResult ? CODE_SUCCESS : CODE_FILE_BUILD_DIR_FAILED;
-            getErrorCodeOut(callResult->mutableExecResult(), result, *codec);
+            getErrorCodeOut(callResult->mutableExecResult(), CODE_SUCCESS, *codec);
             return;
         }
         _executive->storage().createTable(absolutePath, SYS_VALUE_FIELDS);
 
         // set meta data in parent table
-        auto parentTable = _executive->storage().openTable(parentDir);
         std::map<std::string, std::string> bfsInfo;
-        auto subEntry = parentTable->getRow(FS_KEY_SUB);
+        auto subEntry = _executive->storage().getRow(parentDir, FS_KEY_SUB);
         auto&& out = asBytes(std::string(subEntry->getField(0)));
         codec::scale::decode(bfsInfo, gsl::make_span(out));
         bfsInfo.insert(std::make_pair(baseName, type));
         subEntry->setField(0, asString(codec::scale::encode(bfsInfo)));
-        parentTable->setRow(FS_KEY_SUB, std::move(subEntry.value()));
+        _executive->storage().setRow(parentDir, FS_KEY_SUB, std::move(subEntry.value()));
 
         getErrorCodeOut(callResult->mutableExecResult(), CODE_SUCCESS, *codec);
     }
@@ -507,6 +509,13 @@ s256 FileSystemPrecompiled::externalTouchNewFile(
     request->gas = gasLeft;
     auto response = _executive->externalCall(std::move(request));
     s256 result;
-    codec->decode(ref(response->data), result);
+    if (response->status == (int32_t)TransactionStatus::None)
+    {
+        codec->decode(ref(response->data), result);
+    }
+    else
+    {
+        result = (int)CODE_FILE_BUILD_DIR_FAILED;
+    }
     return result;
 }

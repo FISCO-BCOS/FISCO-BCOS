@@ -427,24 +427,21 @@ bool precompiled::recursiveBuildDir(
                                  << LOG_KV("tableName", root);
             return false;
         }
-        if (root != "/")
-        {
-            root += "/";
-        }
-        auto typeEntry = table->getRow(FS_KEY_TYPE);
+        auto newTableName = ((root == "/") ? root : (root + "/")) + dir;
+        auto typeEntry = _executive->storage().getRow(root, FS_KEY_TYPE);
         if (typeEntry)
         {
             // can get type, then this type is directory
             // try open root + dir
-            auto nextDirTable = _executive->storage().openTable(root + dir);
+            auto nextDirTable = _executive->storage().openTable(newTableName);
             if (nextDirTable.has_value())
             {
                 // root + dir table exist, try to get type entry
-                auto tryGetTypeEntry = nextDirTable->getRow(FS_KEY_TYPE);
+                auto tryGetTypeEntry = _executive->storage().getRow(newTableName, FS_KEY_TYPE);
                 if (tryGetTypeEntry.has_value() && tryGetTypeEntry->getField(0) == FS_TYPE_DIR)
                 {
                     // if success and dir is directory, continue
-                    root += dir;
+                    root = newTableName;
                     continue;
                 }
                 else
@@ -459,7 +456,7 @@ bool precompiled::recursiveBuildDir(
             }
 
             // root + dir not exist, create root + dir and build bfs info in root table
-            auto subEntry = table->getRow(FS_KEY_SUB);
+            auto subEntry = _executive->storage().getRow(root, FS_KEY_SUB);
             auto&& out = asBytes(std::string(subEntry->getField(0)));
             // codec to map
             std::map<std::string, std::string> bfsInfo;
@@ -467,7 +464,7 @@ bool precompiled::recursiveBuildDir(
 
             /// create table and build bfs info
             bfsInfo.insert(std::make_pair(dir, FS_TYPE_DIR));
-            auto newTable = _executive->storage().createTable(root + dir, SYS_VALUE_FIELDS);
+            _executive->storage().createTable(newTableName, SYS_VALUE_FIELDS);
             storage::Entry tEntry, newSubEntry, aclTypeEntry, aclWEntry, aclBEntry, extraEntry;
             std::map<std::string, std::string> newSubMap;
             tEntry.importFields({FS_TYPE_DIR});
@@ -476,15 +473,17 @@ bool precompiled::recursiveBuildDir(
             aclWEntry.importFields({""});
             aclBEntry.importFields({""});
             extraEntry.importFields({""});
-            newTable->setRow(FS_KEY_TYPE, std::move(tEntry));
-            newTable->setRow(FS_KEY_SUB, std::move(newSubEntry));
-            newTable->setRow(FS_ACL_TYPE, std::move(aclTypeEntry));
-            newTable->setRow(FS_ACL_WHITE, std::move(aclWEntry));
-            newTable->setRow(FS_ACL_BLACK, std::move(aclBEntry));
-            newTable->setRow(FS_KEY_EXTRA, std::move(extraEntry));
+            _executive->storage().setRow(newTableName, FS_KEY_TYPE, std::move(tEntry));
+            _executive->storage().setRow(newTableName, FS_KEY_SUB, std::move(newSubEntry));
+            _executive->storage().setRow(newTableName, FS_ACL_TYPE, std::move(aclTypeEntry));
+            _executive->storage().setRow(newTableName, FS_ACL_WHITE, std::move(aclWEntry));
+            _executive->storage().setRow(newTableName, FS_ACL_BLACK, std::move(aclBEntry));
+            _executive->storage().setRow(newTableName, FS_KEY_EXTRA, std::move(extraEntry));
+
+            // set metadata in parent dir
             subEntry->setField(0, asString(codec::scale::encode(bfsInfo)));
-            table->setRow(FS_KEY_SUB, std::move(subEntry.value()));
-            root += dir;
+            _executive->storage().setRow(root, FS_KEY_SUB, std::move(subEntry.value()));
+            root = newTableName;
         }
         else
         {

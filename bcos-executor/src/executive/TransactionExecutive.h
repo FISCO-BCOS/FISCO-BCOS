@@ -227,7 +227,8 @@ private:
     void creatAuthTable(
         std::string_view _tableName, std::string_view _origin, std::string_view _sender);
 
-    bool buildBfsPath(std::string const& _absoluteDir, const std::string& _origin, int64_t gasLeft);
+    bool buildBfsPath(std::string const& _absoluteDir, const std::string& _origin,
+        const std::string& _sender, int64_t gasLeft);
 
     std::weak_ptr<BlockContext> m_blockContext;  ///< Information on the runtime environment.
     std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>

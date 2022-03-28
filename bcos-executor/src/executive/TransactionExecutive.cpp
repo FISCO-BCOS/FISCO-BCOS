@@ -361,17 +361,6 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
 
         callParameters->data.swap(code);
 
-        // BFS create contract table and write metadata in parent table
-        if (!buildBfsPath(tableName, callParameters->origin, callParameters->gas))
-        {
-            revert();
-            auto callResults = std::move(callParameters);
-            callResults->type = CallParameters::REVERT;
-            callResults->status = (int32_t)TransactionStatus::RevertInstruction;
-            callResults->message = "Error occurs in build BFS dir";
-            EXECUTIVE_LOG(ERROR) << callResults->message << LOG_KV("tableName", tableName);
-            return {nullptr, std::move(callResults)};
-        }
         extraData->data = std::move(params);
     }
     else
@@ -541,6 +530,24 @@ CallParameters::UniquePtr TransactionExecutive::go(
                     EXECUTIVE_LOG(ERROR) << LOG_DESC("deploy failed OutOfGas")
                                          << LOG_KV("message", callResults->message);
                     return callResults;
+                }
+            }
+
+            if (blockContext->isWasm())
+            {
+                // BFS create contract table and write metadata in parent table
+                auto tableName = getContractTableName(hostContext.myAddress(), true);
+                if (!buildBfsPath(tableName, callResults->origin, callResults->senderAddress,
+                        callResults->gas))
+                {
+                    revert();
+                    auto buildCallResults = move(callResults);
+                    buildCallResults->type = CallParameters::REVERT;
+                    buildCallResults->status = (int32_t)TransactionStatus::RevertInstruction;
+                    buildCallResults->message = "Error occurs in build BFS dir";
+                    EXECUTIVE_LOG(ERROR)
+                        << buildCallResults->message << LOG_KV("tableName", tableName);
+                    return buildCallResults;
                 }
             }
 
@@ -1014,15 +1021,15 @@ void TransactionExecutive::creatAuthTable(
     }
 }
 
-bool TransactionExecutive::buildBfsPath(
-    std::string const& _absoluteDir, const std::string& _origin, int64_t gasLeft)
+bool TransactionExecutive::buildBfsPath(std::string const& _absoluteDir, const std::string& _origin,
+    const std::string& _sender, int64_t gasLeft)
 {
     EXECUTIVE_LOG(DEBUG) << LOG_DESC("buildBfsPath") << LOG_KV("absoluteDir", _absoluteDir);
     auto bfsAddress =
         m_blockContext.lock()->isWasm() ? precompiled::BFS_NAME : precompiled::BFS_ADDRESS;
     auto fs = dynamic_pointer_cast<FileSystemPrecompiled>(m_constantPrecompiled->at(bfsAddress));
-    auto response = fs->externalTouchNewFile(shared_from_this(), _origin, bfsAddress, bfsAddress,
-        _absoluteDir, FS_TYPE_CONTRACT, gasLeft);
+    auto response = fs->externalTouchNewFile(
+        shared_from_this(), _origin, _sender, bfsAddress, _absoluteDir, FS_TYPE_CONTRACT, gasLeft);
     return response == (int)precompiled::CODE_SUCCESS;
 }
 
