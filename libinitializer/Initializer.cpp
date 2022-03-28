@@ -227,13 +227,8 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
             m_txpoolInitializer->txpool());
 
         // fetch and init the version
-        if (g_BCOSConfig.version() > bcos::protocol::Version::RC3_VERSION)
-        {
-            // init the compatibility version
-            auto ledgerConfigFetcher = std::make_shared<LedgerConfigFetcher>(m_ledger);
-            ledgerConfigFetcher->fetchAndSetCompatibilityVersion();
-        }
-
+        auto ledgerConfigFetcher = std::make_shared<LedgerConfigFetcher>(m_ledger);
+        ledgerConfigFetcher->fetchAndSetCompatibilityVersion();
         initSysContract();
     }
     catch (std::exception const& e)
