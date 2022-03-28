@@ -1486,7 +1486,13 @@ void TransactionExecutor::executeTransactionsWithCriticals(
         try
         {
             auto output = executive->start(std::move(input));
-
+            assert(output);
+            if (output->type == CallParameters::MESSAGE)
+            {
+                EXECUTOR_LOG(DEBUG) << LOG_BADGE("call/deploy in dag")
+                                    << LOG_KV("senderAddress", output->senderAddress)
+                                    << LOG_KV("codeAddress", output->codeAddress);
+            }
             executionResults[id] = toExecutionResult(*executive, std::move(output));
         }
         catch (std::exception& e)

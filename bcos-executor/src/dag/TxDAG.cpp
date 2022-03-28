@@ -29,13 +29,13 @@ using namespace bcos;
 using namespace bcos::executor;
 using namespace bcos::executor::critical;
 
-#define DAG_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("DAG")
+#define DAG_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTOR")
 
 // Generate DAG according with given transactions
 void TxDAG::init(critical::CriticalFieldsInterface::Ptr _txsCriticals, ExecuteTxFunc const& _f)
 {
     auto txsSize = _txsCriticals->size();
-    DAG_LOG(TRACE) << LOG_DESC("Begin init transaction DAG") << LOG_KV("transactionNum", txsSize);
+    DAG_LOG(DEBUG) << LOG_DESC("Begin init transaction DAG") << LOG_KV("transactionNum", txsSize);
 
     f_executeTx = _f;
     m_totalParaTxs = _txsCriticals->size();
