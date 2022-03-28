@@ -43,7 +43,7 @@ public:
             std::move(executionMessageFactory), std::move(hashImpl), isAuthCheck)
     {
         initPrecompiled();
-        assert(!m_constantPrecompiled.empty());
+        assert(!m_constantPrecompiled->empty());
         assert(m_builtInPrecompiled);
         m_isWasm = true;
     }

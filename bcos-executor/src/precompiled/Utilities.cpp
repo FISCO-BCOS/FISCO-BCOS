@@ -60,8 +60,7 @@ void bcos::precompiled::checkNameValidate(std::string_view tableName,
                 // Note: the StorageException and PrecompiledException content can't
                 // be modified at will for the information will be write to the
                 // blockchain
-                BOOST_THROW_EXCEPTION(PrecompiledError() << errinfo_comment(
-                                          "invalid table name:" + std::string(tableName)));
+                BOOST_THROW_EXCEPTION(PrecompiledError(errorMsg.str()));
             }
         }
     };
@@ -76,8 +75,7 @@ void bcos::precompiled::checkNameValidate(std::string_view tableName,
                             "the field can't start with \"_\"";
             STORAGE_LOG(ERROR) << LOG_DESC(errorMessage.str()) << LOG_KV("field name", fieldName)
                                << LOG_KV("table name", tableName);
-            BOOST_THROW_EXCEPTION(
-                PrecompiledError() << errinfo_comment("invalid field: " + std::string(fieldName)));
+            BOOST_THROW_EXCEPTION(PrecompiledError("invalid field: " + std::string(fieldName)));
         }
         size_t iSize = fieldName.size();
         for (size_t i = 0; i < iSize; i++)
@@ -94,8 +92,7 @@ void bcos::precompiled::checkNameValidate(std::string_view tableName,
                 STORAGE_LOG(ERROR)
                     << LOG_DESC(errorMessage.str()) << LOG_KV("field name", fieldName)
                     << LOG_KV("table name", tableName);
-                BOOST_THROW_EXCEPTION(PrecompiledError() << errinfo_comment(
-                                          "invalid filed: " + std::string(fieldName)));
+                BOOST_THROW_EXCEPTION(PrecompiledError("invalid field: " + std::string(fieldName)));
             }
         }
     };
@@ -109,8 +106,7 @@ void bcos::precompiled::checkNameValidate(std::string_view tableName,
         {
             PRECOMPILED_LOG(ERROR) << LOG_DESC("duplicated key") << LOG_KV("key name", keyField)
                                    << LOG_KV("table name", tableName);
-            BOOST_THROW_EXCEPTION(
-                PrecompiledError() << errinfo_comment("duplicated key: " + keyField));
+            BOOST_THROW_EXCEPTION(PrecompiledError("duplicated key: " + keyField));
         }
         checkFieldNameValidate(tableName, keyField);
     }
@@ -123,8 +119,7 @@ void bcos::precompiled::checkNameValidate(std::string_view tableName,
             PRECOMPILED_LOG(ERROR)
                 << LOG_DESC("duplicated field") << LOG_KV("field name", valueField)
                 << LOG_KV("table name", tableName);
-            BOOST_THROW_EXCEPTION(
-                PrecompiledError() << errinfo_comment("duplicated field: " + valueField));
+            BOOST_THROW_EXCEPTION(PrecompiledError("duplicated field: " + valueField));
         }
         checkFieldNameValidate(tableName, valueField);
     }
@@ -137,10 +132,9 @@ int bcos::precompiled::checkLengthValidate(
     {
         PRECOMPILED_LOG(ERROR) << "key:" << fieldValue << " value size:" << fieldValue.size()
                                << " greater than " << maxLength;
-        BOOST_THROW_EXCEPTION(PrecompiledError()
-                              << errinfo_comment(
-                                     "size of value/key greater than" + std::to_string(maxLength))
-                              << errinfo_comment(" error code: " + std::to_string(errorCode)));
+        BOOST_THROW_EXCEPTION(
+            PrecompiledError("size of value/key greater than" + std::to_string(maxLength) +
+                             " error code: " + std::to_string(errorCode)));
     }
     return 0;
 }
@@ -155,20 +149,19 @@ void bcos::precompiled::checkCreateTableParam(
 
     if (_keyField.size() > (size_t)SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)
     {  // mysql TableName and fieldName length limit is 64
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError() << errinfo_comment(
-                                  "table field name length overflow " +
-                                  std::to_string(SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)));
+        BOOST_THROW_EXCEPTION(
+            protocol::PrecompiledError("table field name length overflow " +
+                                       std::to_string(SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)));
     }
     for (auto& str : keyNameList)
     {
         boost::trim(str);
         if (str.size() > (size_t)SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)
         {  // mysql TableName and fieldName length limit is 64
-            BOOST_THROW_EXCEPTION(
-                protocol::PrecompiledError()
-                << errinfo_comment("errorCode: " + std::to_string(CODE_TABLE_FIELD_LENGTH_OVERFLOW))
-                << errinfo_comment(std::string("table key name length overflow ") +
-                                   std::to_string(SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)));
+            BOOST_THROW_EXCEPTION(protocol::PrecompiledError(
+                "errorCode: " + std::to_string(CODE_TABLE_FIELD_LENGTH_OVERFLOW) +
+                std::string("table key name length overflow ") +
+                std::to_string(SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)));
         }
     }
 
@@ -177,11 +170,10 @@ void bcos::precompiled::checkCreateTableParam(
         boost::trim(str);
         if (str.size() > (size_t)SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)
         {  // mysql TableName and fieldName length limit is 64
-            BOOST_THROW_EXCEPTION(
-                protocol::PrecompiledError()
-                << errinfo_comment("errorCode: " + std::to_string(CODE_TABLE_FIELD_LENGTH_OVERFLOW))
-                << errinfo_comment(std::string("table field name length overflow ") +
-                                   std::to_string(SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)));
+            BOOST_THROW_EXCEPTION(protocol::PrecompiledError(
+                "errorCode: " + std::to_string(CODE_TABLE_FIELD_LENGTH_OVERFLOW) +
+                std::string("table field name length overflow ") +
+                std::to_string(SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)));
         }
     }
 
@@ -191,26 +183,25 @@ void bcos::precompiled::checkCreateTableParam(
     _valueField = boost::join(fieldNameList, ",");
     if (_keyField.size() > (size_t)SYS_TABLE_KEY_FIELD_MAX_LENGTH)
     {
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError() << errinfo_comment(
-                                  std::string("total table key name length overflow ") +
-                                  std::to_string(SYS_TABLE_KEY_FIELD_MAX_LENGTH)));
+        BOOST_THROW_EXCEPTION(
+            protocol::PrecompiledError(std::string("total table key name length overflow ") +
+                                       std::to_string(SYS_TABLE_KEY_FIELD_MAX_LENGTH)));
     }
     if (_valueField.size() > (size_t)SYS_TABLE_VALUE_FIELD_MAX_LENGTH)
     {
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError() << errinfo_comment(
-                                  std::string("total table field name length overflow ") +
-                                  std::to_string(SYS_TABLE_VALUE_FIELD_MAX_LENGTH)));
+        BOOST_THROW_EXCEPTION(
+            protocol::PrecompiledError(std::string("total table field name length overflow ") +
+                                       std::to_string(SYS_TABLE_VALUE_FIELD_MAX_LENGTH)));
     }
 
     auto tableName = precompiled::getTableName(_tableName);
     if (tableName.size() > (size_t)USER_TABLE_NAME_MAX_LENGTH_S)
     {
         // mysql TableName and fieldName length limit is 64
-        BOOST_THROW_EXCEPTION(
-            protocol::PrecompiledError()
-            << errinfo_comment("errorCode: " + std::to_string(CODE_TABLE_NAME_LENGTH_OVERFLOW))
-            << errinfo_comment(std::string("tableName length overflow ") +
-                               std::to_string(USER_TABLE_NAME_MAX_LENGTH_S)));
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError(
+            "errorCode: " + std::to_string(CODE_TABLE_NAME_LENGTH_OVERFLOW) +
+            std::string(" tableName length overflow ") +
+            std::to_string(USER_TABLE_NAME_MAX_LENGTH_S)));
     }
 }
 

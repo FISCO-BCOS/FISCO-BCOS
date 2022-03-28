@@ -44,7 +44,7 @@ public:
     {
         initPrecompiled();
         assert(m_precompiledContract);
-        assert(!m_constantPrecompiled.empty());
+        assert(!m_constantPrecompiled->empty());
         assert(m_builtInPrecompiled);
     }
 

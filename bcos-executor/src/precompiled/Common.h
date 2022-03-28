@@ -75,6 +75,7 @@ enum PrecompiledErrorCode : int
     // FileSystemPrecompiled -53099 ~ -53000
     CODE_ADDRESS_OR_VERSION_ERROR = -51202,
     CODE_VERSION_LENGTH_OVERFLOW = -51201,
+    CODE_FILE_INVALID_TYPE = -53006,
     CODE_FILE_INVALID_PATH = -53005,
     CODE_FILE_BUILD_DIR_FAILED = -53003,
     CODE_FILE_ALREADY_EXIST = -53002,
@@ -119,7 +120,6 @@ enum PrecompiledErrorCode : int
     CODE_INVALID_USER_NAME = -51400,
 
     // SystemConfigPrecompiled -51399 ~ -51300
-    CODE_INVALID_CONFIGURATION_VALUES = -51300,
 
     // ConsensusPrecompiled -51199 ~ -51100
     CODE_INVALID_NODE_ID = -51100,
