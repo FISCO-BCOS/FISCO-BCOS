@@ -13,4 +13,5 @@ contract BfsPrecompiled {
     function mkdir(string memory absolutePath) public returns (int256){}
     function link(string memory name, string memory version, address _address, string memory _abi) public returns (int256){}
     function readlink(string memory absolutePath) public view returns (address) {}
+    function touch(string memory absolutePath, string memory fileType) public returns (int256){}
 }

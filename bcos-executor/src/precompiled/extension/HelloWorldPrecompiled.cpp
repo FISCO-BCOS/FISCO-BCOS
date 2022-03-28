@@ -61,7 +61,7 @@ std::string HelloWorldPrecompiled::toString()
 
 std::shared_ptr<PrecompiledExecResult> HelloWorldPrecompiled::call(
     std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
-    const std::string&, const std::string&)
+    const std::string&, const std::string&, int64_t)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("call")
                            << LOG_KV("param", toHexString(_param));

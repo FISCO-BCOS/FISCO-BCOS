@@ -252,18 +252,26 @@ public:
         auto result2 = executePromise2.get_future().get();
         // call precompiled
         result2->setSeq(1001);
+        std::promise<ExecutionMessage::UniquePtr> executePromise3;
+        executor->executeTransaction(std::move(result2),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise3.set_value(std::move(result));
+            });
+        auto result3 = executePromise3.get_future().get();
+
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_CHECK(result3->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
-        return result2;
+        return result3;
     };
 
     ExecutionMessage::UniquePtr link(bool _isWasm, protocol::BlockNumber _number,
         std::string const& name, std::string const& version, std::string const& address,
-        std::string const& abi, int _errorCode = 0)
+        std::string const& abi, int _errorCode = 0, bool _isCover = false)
     {
         bytes in =
             codec->encodeWithSig("link(string,string,string,string)", name, version, address, abi);
@@ -292,13 +300,47 @@ public:
                 executePromise2.set_value(std::move(result));
             });
         auto result2 = executePromise2.get_future().get();
+
+        // if cover write link, then
+        // no need to touch new file external call
+        if (_isCover)
+        {
+            if (_errorCode != 0)
+            {
+                BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode)));
+            }
+
+            commitBlock(_number);
+            return result2;
+        }
+
+        result2->setSeq(1001);
+
+        std::promise<ExecutionMessage::UniquePtr> executePromise3;
+        executor->executeTransaction(std::move(result2),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise3.set_value(std::move(result));
+            });
+        auto result3 = executePromise3.get_future().get();
+
+        result3->setSeq(1000);
+
+        std::promise<ExecutionMessage::UniquePtr> executePromise4;
+        executor->executeTransaction(std::move(result3),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise4.set_value(std::move(result));
+            });
+        auto result4 = executePromise4.get_future().get();
+
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_CHECK(result4->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
-        return result2;
+        return result4;
     };
 
     ExecutionMessage::UniquePtr readlink(
@@ -591,9 +633,10 @@ BOOST_AUTO_TEST_CASE(linkTest)
         codec->decode(resultR1->data(), address);
         BOOST_CHECK_EQUAL(address.hex(), addressString);
 
+        // cover write
         auto newAddress = "420f853b49838bd3e9466c85a4cc3428c960dde2";
         deployHelloContract(number++, newAddress);
-        link(false, number++, contractName, latestVersion, newAddress, contractAbi);
+        link(false, number++, contractName, latestVersion, newAddress, contractAbi, 0, true);
         auto result3 = list(number++, "/apps/Hello/latest");
         std::vector<BfsTuple> ls3;
         codec->decode(result3->data(), code, ls3);
@@ -610,7 +653,7 @@ BOOST_AUTO_TEST_CASE(linkTest)
     // overflow version
     {
         link(false, number++, contractName, overflowVersion130, addressString, contractAbi,
-            CODE_VERSION_LENGTH_OVERFLOW);
+            CODE_VERSION_LENGTH_OVERFLOW, true);
     }
 }
 

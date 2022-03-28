@@ -48,6 +48,7 @@
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
+#include <boost/log/core/core.hpp>
 #include <boost/test/tools/old/interface.hpp>
 #include <boost/test/unit_test.hpp>
 #include <cstdio>
@@ -71,6 +72,7 @@ struct DagExecutorFixture
 {
     DagExecutorFixture()
     {
+        //        boost::log::core::get()->set_logging_enabled(false);
         hashImpl = std::make_shared<Keccak256>();
         assert(hashImpl);
         auto signatureImpl = std::make_shared<Secp256k1Crypto>();
@@ -244,17 +246,37 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
         });
 
     auto result = executePromise.get_future().get();
+    result->setSeq(1001);
 
-    BOOST_CHECK_EQUAL(result->status(), 0);
-    BOOST_CHECK_EQUAL(result->origin(), sender);
-    BOOST_CHECK_EQUAL(result->from(), paramsBak.to());
-    BOOST_CHECK_EQUAL(result->to(), sender);
+    std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise2;
+    executor->executeTransaction(std::move(result),
+        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!error);
+            executePromise2.set_value(std::move(result));
+        });
 
-    BOOST_CHECK(result->message().empty());
-    BOOST_CHECK(!result->newEVMContractAddress().empty());
-    BOOST_CHECK_LT(result->gasAvailable(), gas);
+    auto result2 = executePromise2.get_future().get();
+    result2->setSeq(1000);
 
-    auto address = result->newEVMContractAddress();
+    std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise3;
+    executor->executeTransaction(std::move(result2),
+        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!error);
+            executePromise3.set_value(std::move(result));
+        });
+
+    auto result3 = executePromise3.get_future().get();
+
+    BOOST_CHECK_EQUAL(result3->status(), 0);
+    BOOST_CHECK_EQUAL(result3->origin(), sender);
+    BOOST_CHECK_EQUAL(result3->from(), paramsBak.to());
+    BOOST_CHECK_EQUAL(result3->to(), sender);
+
+    BOOST_CHECK(result3->message().empty());
+    BOOST_CHECK(!result3->newEVMContractAddress().empty());
+    BOOST_CHECK_LT(result3->gasAvailable(), gas);
+
+    auto address = result3->newEVMContractAddress();
 
     bcos::executor::TransactionExecutor::TwoPCParams commitParams;
     commitParams.number = 1;
@@ -458,16 +480,37 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
 
     auto result = executePromise.get_future().get();
 
-    BOOST_CHECK_EQUAL(result->status(), 0);
-    BOOST_CHECK_EQUAL(result->origin(), sender);
-    BOOST_CHECK_EQUAL(result->from(), paramsBak.to());
-    BOOST_CHECK_EQUAL(result->to(), sender);
+    result->setSeq(1001);
 
-    BOOST_CHECK(result->message().empty());
-    BOOST_CHECK(!result->newEVMContractAddress().empty());
-    BOOST_CHECK_LT(result->gasAvailable(), gas);
+    std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise2;
+    executor->executeTransaction(std::move(result),
+        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!error);
+            executePromise2.set_value(std::move(result));
+        });
 
-    auto address = result->newEVMContractAddress();
+    auto result2 = executePromise2.get_future().get();
+    result2->setSeq(1000);
+
+    std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise3;
+    executor->executeTransaction(std::move(result2),
+        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!error);
+            executePromise3.set_value(std::move(result));
+        });
+
+    auto result3 = executePromise3.get_future().get();
+
+    BOOST_CHECK_EQUAL(result3->status(), 0);
+    BOOST_CHECK_EQUAL(result3->origin(), sender);
+    BOOST_CHECK_EQUAL(result3->from(), paramsBak.to());
+    BOOST_CHECK_EQUAL(result3->to(), sender);
+
+    BOOST_CHECK(result3->message().empty());
+    BOOST_CHECK(!result3->newEVMContractAddress().empty());
+    BOOST_CHECK_LT(result3->gasAvailable(), gas);
+
+    auto address = result3->newEVMContractAddress();
 
     bcos::executor::TransactionExecutor::TwoPCParams commitParams;
     commitParams.number = 1;

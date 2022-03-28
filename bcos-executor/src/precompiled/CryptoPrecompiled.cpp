@@ -57,7 +57,7 @@ CryptoPrecompiled::CryptoPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(
 
 std::shared_ptr<PrecompiledExecResult> CryptoPrecompiled::call(
     std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
-    const std::string&, const std::string&)
+    const std::string&, const std::string&, int64_t)
 {
     auto funcSelector = getParamFunc(_param);
     auto paramData = getParamData(_param);
