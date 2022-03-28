@@ -24,6 +24,25 @@ using namespace bcos::consensus;
 using namespace bcos::crypto;
 using namespace bcos::protocol;
 
+void TxsValidator::verifyProposal(bcos::crypto::PublicPtr _fromNode,
+    PBFTProposalInterface::Ptr _proposal,
+    std::function<void(Error::Ptr, bool)> _verifyFinishedHandler)
+{
+    // TODO: check the sealerList here
+    auto block = m_blockFactory->createBlock(_proposal->data());
+    auto blockHeader = block->blockHeader();
+    if (blockHeader->number() != _proposal->index())
+    {
+        if (_verifyFinishedHandler)
+        {
+            auto error = std::make_shared<Error>(-1, "Invalid proposal");
+            _verifyFinishedHandler(error, false);
+        }
+        return;
+    }
+    m_txPool->asyncVerifyBlock(_fromNode, _proposal->data(), _verifyFinishedHandler);
+}
+
 void TxsValidator::asyncResetTxsFlag(bytesConstRef _data, bool _flag)
 {
     auto block = m_blockFactory->createBlock(_data);
