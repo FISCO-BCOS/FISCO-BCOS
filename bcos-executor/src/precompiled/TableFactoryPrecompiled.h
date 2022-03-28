@@ -65,6 +65,6 @@ namespace bcos::precompiled
 //     bool buildConditionCtx(const precompiled::Condition::Ptr& _condition,
 //         const precompiled::ConditionTuple& _tuple,
 //         std::shared_ptr<storage::Condition>& _keyCondition, std::vector<std::string>& _eqKeyList,
-//         const std::string& _keyFiled);
+//         const std::string& _keyField);
 // };
 }  // namespace bcos::precompiled

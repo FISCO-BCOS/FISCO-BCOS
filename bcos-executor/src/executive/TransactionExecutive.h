@@ -191,11 +191,11 @@ private:
     CallParameters::UniquePtr parseEVMCResult(
         CallParameters::UniquePtr callResults, const Result& _result);
 
-    void writeErrInfoToOutput(std::string const& errInfo, bytes& output)
+    void writeErrInfoToOutput(std::string const& errInfo, CallParameters& _callParameters)
     {
         bcos::codec::abi::ContractABICodec abi(m_hashImpl);
         auto codecOutput = abi.abiIn("Error(string)", errInfo);
-        output = std::move(codecOutput);
+        _callParameters.data = std::move(codecOutput);
     }
 
     inline std::string getContractTableName(const std::string_view& _address, bool isWasm = false)

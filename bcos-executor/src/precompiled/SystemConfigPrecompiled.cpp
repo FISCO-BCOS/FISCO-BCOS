@@ -21,7 +21,6 @@
 #include "SystemConfigPrecompiled.h"
 #include "PrecompiledResult.h"
 #include "Utilities.h"
-#include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>
 
@@ -30,6 +29,7 @@ using namespace bcos::storage;
 using namespace bcos::precompiled;
 using namespace bcos::executor;
 using namespace bcos::ledger;
+using namespace bcos::protocol;
 
 const char* const SYSCONFIG_METHOD_SET_STR = "setValueByKey(string,string)";
 const char* const SYSCONFIG_METHOD_GET_STR = "getValueByKey(string)";
@@ -39,12 +39,22 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr _hashImpl)
 {
     name2Selector[SYSCONFIG_METHOD_SET_STR] = getFuncSelector(SYSCONFIG_METHOD_SET_STR, _hashImpl);
     name2Selector[SYSCONFIG_METHOD_GET_STR] = getFuncSelector(SYSCONFIG_METHOD_GET_STR, _hashImpl);
-    m_sysValueCmp.insert(std::make_pair(
-        SYSTEM_KEY_TX_GAS_LIMIT, [](int64_t _v) -> bool { return _v > TX_GAS_LIMIT_MIN; }));
-    m_sysValueCmp.insert(std::make_pair(
-        SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, [](int64_t _v) -> bool { return (_v >= 1); }));
-    m_sysValueCmp.insert(std::make_pair(
-        SYSTEM_KEY_TX_COUNT_LIMIT, [](int64_t _v) -> bool { return (_v >= TX_COUNT_LIMIT_MIN); }));
+    auto defaultCmp = [](std::string const& _key, int64_t _value, int64_t _minValue) {
+        if (_value >= _minValue)
+        {
+            return;
+        }
+        BOOST_THROW_EXCEPTION(
+            PrecompiledError("Invalid value " + std::to_string(_value) + " ,the value for " + _key +
+                             " must be no less than " + std::to_string(_minValue)));
+    };
+    m_sysValueCmp.insert(std::make_pair(SYSTEM_KEY_TX_GAS_LIMIT,
+        [defaultCmp](int64_t _v) { defaultCmp(SYSTEM_KEY_TX_GAS_LIMIT, _v, TX_GAS_LIMIT_MIN); }));
+    m_sysValueCmp.insert(std::make_pair(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD,
+        [defaultCmp](int64_t _v) { defaultCmp(SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, _v, 1); }));
+    m_sysValueCmp.insert(std::make_pair(SYSTEM_KEY_TX_COUNT_LIMIT, [defaultCmp](int64_t _v) {
+        defaultCmp(SYSTEM_KEY_TX_COUNT_LIMIT, _v, TX_COUNT_LIMIT_MIN);
+    }));
 }
 
 std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
@@ -72,16 +82,7 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
                                << LOG_DESC("setValueByKey func") << LOG_KV("configKey", configKey)
                                << LOG_KV("configValue", configValue);
 
-        if (!checkValueValid(configKey, configValue))
-        {
-            PRECOMPILED_LOG(DEBUG)
-                << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("set invalid value")
-                << LOG_KV("configKey", configKey) << LOG_KV("configValue", configValue);
-            getErrorCodeOut(
-                callResult->mutableExecResult(), CODE_INVALID_CONFIGURATION_VALUES, *codec);
-            return callResult;
-        }
-
+        checkValueValid(configKey, configValue);
         auto table = _executive->storage().openTable(ledger::SYS_CONFIG);
 
         auto entry = table->newEntry();
@@ -126,18 +127,21 @@ std::string SystemConfigPrecompiled::toString()
     return "SystemConfig";
 }
 
-bool SystemConfigPrecompiled::checkValueValid(std::string_view key, std::string_view value)
+void SystemConfigPrecompiled::checkValueValid(std::string_view _key, std::string_view value)
 {
     int64_t configuredValue;
+    std::string key = std::string(_key);
+    if (!c_supportedKey.count(key))
+    {
+        BOOST_THROW_EXCEPTION(PrecompiledError("unsupported key " + key));
+    }
     if (value.empty())
     {
-        return false;
+        BOOST_THROW_EXCEPTION(PrecompiledError("The value for " + key + " must be non-empty."));
     }
     try
     {
         configuredValue = boost::lexical_cast<int64_t>(value);
-        auto cmp = m_sysValueCmp.at(std::string(key));
-        return cmp(configuredValue);
     }
     catch (std::exception const& e)
     {
@@ -145,7 +149,12 @@ bool SystemConfigPrecompiled::checkValueValid(std::string_view key, std::string_
                                << LOG_DESC("checkValueValid failed") << LOG_KV("key", key)
                                << LOG_KV("value", value)
                                << LOG_KV("errorInfo", boost::diagnostic_information(e));
-        return false;
+        BOOST_THROW_EXCEPTION(
+            PrecompiledError("The value for " + key + " must be a valid number."));
+    }
+    if (m_sysValueCmp.count(key))
+    {
+        (m_sysValueCmp.at(key))(configuredValue);
     }
 }
 

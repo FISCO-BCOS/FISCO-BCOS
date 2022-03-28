@@ -115,6 +115,12 @@ public:
         }
     }
 
+    std::string const& message() const override { return m_inner()->message; }
+
+    void setMessage(std::string const& _message) override { m_inner()->message = _message; }
+
+    void setMessage(std::string&& _message) override { m_inner()->message = std::move(_message); }
+
 private:
     std::function<bcostars::TransactionReceipt*()> m_inner;
     mutable std::vector<bcos::protocol::LogEntry> m_logEntries;

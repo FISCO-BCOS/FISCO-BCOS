@@ -120,7 +120,6 @@ enum PrecompiledErrorCode : int
     CODE_INVALID_USER_NAME = -51400,
 
     // SystemConfigPrecompiled -51399 ~ -51300
-    CODE_INVALID_CONFIGURATION_VALUES = -51300,
 
     // ConsensusPrecompiled -51199 ~ -51100
     CODE_INVALID_NODE_ID = -51100,
