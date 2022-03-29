@@ -1,4 +1,4 @@
-/*
+/**
  *  Copyright (C) 2021 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,28 +13,27 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief host context
- * @file EVMHostInterface.h
- * @author: xingqiangbai
- * @date: 2021-05-24
+ * @brief the information used to deploy new node
+ * @file GroupInfoCodec.h
+ * @author: yujiechen
+ * @date 2022-03-29
  */
-
 #pragma once
-
-#include "../Common.h"
-#include "bcos-framework/interfaces/protocol/BlockHeader.h"
-#include "evmc/evmc.h"
-#include "evmc/instructions.h"
-#include <bcos-framework/interfaces/protocol/LogEntry.h>
-#include <boost/optional.hpp>
-#include <functional>
-#include <set>
-
+#include "GroupInfo.h"
+#include <memory>
 namespace bcos
 {
-namespace executor
+namespace group
 {
-const evmc_host_interface* getHostInterface();
-const wasm_host_interface* getWasmHostInterface();
-}  // namespace executor
+class GroupInfoCodec
+{
+public:
+    using Ptr = std::shared_ptr<GroupInfoCodec>;
+    GroupInfoCodec() = default;
+    virtual ~GroupInfoCodec() {}
+
+    virtual GroupInfo::Ptr deserialize(const std::string& _encodedData) = 0;
+    virtual std::string serialize(GroupInfo::Ptr _groupInfo) = 0;
+};
+}  // namespace group
 }  // namespace bcos

@@ -49,7 +49,7 @@ public:
     virtual void setNodeProtocolList(
         std::vector<bcos::protocol::ProtocolInfo::ConstPtr>&& _protocolList) = 0;
     virtual std::vector<bcos::protocol::ProtocolInfo::ConstPtr> const& nodeProtocolList() const = 0;
-    virtual bcos::protocol::ProtocolInfo::ConstPtr protocol(size_t _index) const = 0;
+    virtual bcos::protocol::ProtocolInfo::ConstPtr protocol(uint64_t _index) const = 0;
 };
 }  // namespace gateway
 }  // namespace bcos

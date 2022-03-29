@@ -25,7 +25,7 @@
 #include <bcos-boostssl/websocket/WsInitializer.h>
 #include <bcos-boostssl/websocket/WsMessage.h>
 #include <bcos-boostssl/websocket/WsService.h>
-#include <bcos-protocol/amop/AMOPRequest.h>
+#include <bcos-framework/interfaces/protocol/AMOPRequest.h>
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-rpc/event/EventSubMatcher.h>
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>
@@ -188,44 +188,13 @@ void RpcFactory::registerHandlers(std::shared_ptr<boostssl::ws::WsService> _wsSe
                     });
                 });
         });
-
-    _wsService->registerMsgHandler(bcos::rpc::MessageType::RPC_REQUEST,
-        [_jsonRpcInterface](std::shared_ptr<boostssl::ws::WsMessage> _msg,
-            std::shared_ptr<boostssl::ws::WsSession> _session) {
-            if (!_jsonRpcInterface)
-            {
-                return;
-            }
-            std::string req = std::string(_msg->data()->begin(), _msg->data()->end());
-            // Note: Clean up request data to prevent taking up too much memory
-            bytes emptyBuffer;
-            _msg->data()->swap(emptyBuffer);
-            _jsonRpcInterface->onRPCRequest(req, [req, _msg, _session](const std::string& _resp) {
-                if (_session && _session->isConnected())
-                {
-                    auto buffer = std::make_shared<bcos::bytes>(_resp.begin(), _resp.end());
-                    _msg->setData(buffer);
-                    _session->asyncSendMessage(_msg);
-                }
-                else
-                {
-                    auto seq = std::string(_msg->seq()->begin(), _msg->seq()->end());
-                    // remove the callback
-                    _session->getAndRemoveRespCallback(seq);
-                    BCOS_LOG(WARNING)
-                        << LOG_DESC("[RPC][FACTORY][buildJsonRpc]")
-                        << LOG_DESC("unable to send response for session has been inactive")
-                        << LOG_KV("req", req) << LOG_KV("resp", _resp) << LOG_KV("seq", seq)
-                        << LOG_KV("endpoint", _session ? _session->endPoint() : std::string(""));
-                }
-            });
-        });
 }
 bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(
     std::shared_ptr<boostssl::ws::WsService> _wsService, GroupManager::Ptr _groupManager)
 {
     // JsonRpcImpl_2_0
-    auto jsonRpcInterface = std::make_shared<bcos::rpc::JsonRpcImpl_2_0>(_groupManager, m_gateway);
+    auto jsonRpcInterface =
+        std::make_shared<bcos::rpc::JsonRpcImpl_2_0>(_groupManager, m_gateway, _wsService);
     auto httpServer = _wsService->httpServer();
     if (httpServer)
     {
@@ -240,38 +209,14 @@ bcos::event::EventSub::Ptr RpcFactory::buildEventSub(
     std::shared_ptr<boostssl::ws::WsService> _wsService, GroupManager::Ptr _groupManager)
 {
     auto eventSubFactory = std::make_shared<event::EventSubFactory>();
-    auto eventSub = eventSubFactory->buildEventSub();
+    auto eventSub = eventSubFactory->buildEventSub(_wsService);
 
     auto matcher = std::make_shared<event::EventSubMatcher>();
     eventSub->setIoc(_wsService->ioc());
     eventSub->setGroupManager(_groupManager);
     eventSub->setMessageFactory(_wsService->messageFactory());
     eventSub->setMatcher(matcher);
-
-    auto eventSubWeakPtr = std::weak_ptr<bcos::event::EventSub>(eventSub);
-
-    // register event subscribe message
-    _wsService->registerMsgHandler(bcos::event::MessageType::EVENT_SUBSCRIBE,
-        [eventSubWeakPtr](std::shared_ptr<WsMessage> _msg, std::shared_ptr<WsSession> _session) {
-            auto eventSub = eventSubWeakPtr.lock();
-            if (eventSub)
-            {
-                eventSub->onRecvSubscribeEvent(_msg, _session);
-            }
-        });
-
-    // register event subscribe message
-    _wsService->registerMsgHandler(bcos::event::MessageType::EVENT_UNSUBSCRIBE,
-        [eventSubWeakPtr](std::shared_ptr<WsMessage> _msg, std::shared_ptr<WsSession> _session) {
-            auto eventSub = eventSubWeakPtr.lock();
-            if (eventSub)
-            {
-                eventSub->onRecvUnsubscribeEvent(_msg, _session);
-            }
-        });
-
     BCOS_LOG(INFO) << LOG_DESC("[RPC][FACTORY][buildEventSub]") << LOG_DESC("create event sub obj");
-
     return eventSub;
 }
 

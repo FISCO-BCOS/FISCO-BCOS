@@ -60,8 +60,8 @@ void Sealer::init(bcos::consensus::ConsensusInterface::Ptr _consensus)
     m_sealerConfig->setConsensusInterface(_consensus);
 }
 
-void Sealer::asyncNotifySealProposal(size_t _proposalStartIndex, size_t _proposalEndIndex,
-    size_t _maxTxsPerBlock, std::function<void(Error::Ptr)> _onRecvResponse)
+void Sealer::asyncNotifySealProposal(uint64_t _proposalStartIndex, uint64_t _proposalEndIndex,
+    uint64_t _maxTxsPerBlock, std::function<void(Error::Ptr)> _onRecvResponse)
 {
     m_sealingManager->resetSealingInfo(_proposalStartIndex, _proposalEndIndex, _maxTxsPerBlock);
     if (_onRecvResponse)
@@ -81,7 +81,7 @@ void Sealer::asyncNoteLatestBlockNumber(int64_t _blockNumber)
 }
 
 void Sealer::asyncNoteUnSealedTxsSize(
-    size_t _unsealedTxsSize, std::function<void(Error::Ptr)> _onRecvResponse)
+    uint64_t _unsealedTxsSize, std::function<void(Error::Ptr)> _onRecvResponse)
 {
     m_sealingManager->setUnsealedTxsSize(_unsealedTxsSize);
     if (_onRecvResponse)

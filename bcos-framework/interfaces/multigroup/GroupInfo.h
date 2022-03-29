@@ -95,7 +95,7 @@ public:
 
     virtual void setGroupID(std::string const& _groupID) { m_groupID = _groupID; }
     virtual void setChainID(std::string const& _chainID) { m_chainID = _chainID; }
-    virtual ssize_t nodesNum() const
+    virtual int64_t nodesNum() const
     {
         ReadGuard l(x_nodeInfos);
         return m_nodeInfos.size();
@@ -114,7 +114,15 @@ public:
         m_chainNodeInfoFactory = _chainNodeInfoFactory;
     }
 
-private:
+    bool wasm() const { return m_wasm; }
+    bool smCryptoType() const { return m_smCryptoType; }
+    virtual void setWasm(bool _wasm) { m_wasm = _wasm; }
+    virtual void setSmCryptoType(bool _smCryptoType) { m_smCryptoType = _smCryptoType; }
+
+protected:
+    bool m_wasm{false};
+    bool m_smCryptoType{false};
+
     ChainNodeInfoFactory::Ptr m_chainNodeInfoFactory;
 
     std::string m_chainID;

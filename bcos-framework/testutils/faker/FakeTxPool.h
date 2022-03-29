@@ -70,7 +70,7 @@ public:
     void notifyConnectedNodes(
         bcos::crypto::NodeIDSet const&, std::function<void(Error::Ptr)>) override
     {}
-    void asyncSealTxs(size_t, TxsHashSetPtr,
+    void asyncSealTxs(uint64_t, TxsHashSetPtr,
         std::function<void(Error::Ptr, bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr)>)
         override
     {}
@@ -98,7 +98,7 @@ public:
     void setVerifyResult(bool _verifyResult) { m_verifyResult = _verifyResult; }
     bool verifyResult() const { return m_verifyResult; }
 
-    void asyncGetPendingTransactionSize(std::function<void(Error::Ptr, size_t)>) override {}
+    void asyncGetPendingTransactionSize(std::function<void(Error::Ptr, uint64_t)>) override {}
 
 private:
     bool m_verifyResult = true;

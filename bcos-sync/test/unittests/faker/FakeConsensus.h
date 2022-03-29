@@ -76,7 +76,7 @@ public:
 
     void notifyHighestSyncingNumber(bcos::protocol::BlockNumber) override {}
 
-    void asyncNoteUnSealedTxsSize(size_t, std::function<void(Error::Ptr)>) override {}
+    void asyncNoteUnSealedTxsSize(uint64_t, std::function<void(Error::Ptr)>) override {}
 
     void asyncGetConsensusStatus(std::function<void(Error::Ptr, std::string)>) override {}
     void notifyConnectedNodes(

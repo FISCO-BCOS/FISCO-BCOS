@@ -28,7 +28,7 @@ namespace bcos
 namespace gateway
 {
 // Message type definition
-enum MessageType : int16_t
+enum GatewayMessageType : int16_t
 {
     Heartbeat = 0x1,
     Handshake = 0x2,

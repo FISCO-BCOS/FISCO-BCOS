@@ -59,8 +59,8 @@ void Gateway::stop()
     // erase the registered handler
     if (m_p2pInterface)
     {
-        m_p2pInterface->eraseHandlerByMsgType(MessageType::PeerToPeerMessage);
-        m_p2pInterface->eraseHandlerByMsgType(MessageType::BroadcastMessage);
+        m_p2pInterface->eraseHandlerByMsgType(GatewayMessageType::PeerToPeerMessage);
+        m_p2pInterface->eraseHandlerByMsgType(GatewayMessageType::BroadcastMessage);
         m_p2pInterface->stop();
     }
     if (m_amop)
@@ -262,7 +262,7 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, NodeIDPtr _s
     auto message =
         std::static_pointer_cast<P2PMessage>(m_p2pInterface->messageFactory()->buildMessage());
 
-    message->setPacketType(MessageType::PeerToPeerMessage);
+    message->setPacketType(GatewayMessageType::PeerToPeerMessage);
     message->setSeq(m_p2pInterface->messageFactory()->newSeq());
     message->options()->setGroupID(_groupID);
     message->options()->setSrcNodeID(_srcNodeID->encode());
@@ -320,7 +320,7 @@ void Gateway::asyncSendBroadcastMessage(
         _type, _groupID, _srcNodeID, _payload);
     auto message =
         std::static_pointer_cast<P2PMessage>(m_p2pInterface->messageFactory()->buildMessage());
-    message->setPacketType(MessageType::BroadcastMessage);
+    message->setPacketType(GatewayMessageType::BroadcastMessage);
     message->setExt(_type);
     message->setSeq(m_p2pInterface->messageFactory()->newSeq());
     message->options()->setGroupID(_groupID);

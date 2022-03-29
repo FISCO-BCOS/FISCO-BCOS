@@ -51,9 +51,9 @@
 #include "bcos-framework/interfaces/protocol/TransactionReceipt.h"
 #include "bcos-framework/interfaces/storage/StorageInterface.h"
 #include "bcos-framework/interfaces/storage/Table.h"
-#include "bcos-protocol/LogEntry.h"
 #include "bcos-table/src/StateStorage.h"
 #include "tbb/flow_graph.h"
+#include <bcos-framework/interfaces/protocol/LogEntry.h>
 #include <bcos-utilities/Error.h>
 #include <bcos-utilities/ThreadPool.h>
 #include <tbb/blocked_range.h>

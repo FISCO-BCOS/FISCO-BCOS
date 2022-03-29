@@ -27,7 +27,7 @@ Service::Service()
     // Process handshake packet logic, handshake protocol and determine
     // the version, when handshake finished the version field of P2PMessage
     // should be set
-    registerHandlerByMsgType(MessageType::Handshake,
+    registerHandlerByMsgType(GatewayMessageType::Handshake,
         boost::bind(&Service::onReceiveProtocol, this, boost::placeholders::_1,
             boost::placeholders::_2, boost::placeholders::_3));
 }
@@ -331,7 +331,7 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::P
         }
         switch (packetType)
         {
-        case MessageType::Heartbeat:
+        case GatewayMessageType::Heartbeat:
             break;
         default:
         {
@@ -595,7 +595,7 @@ void Service::asyncSendProtocol(P2PSession::Ptr _session)
     auto payload = std::make_shared<bytes>();
     m_codec->encode(m_localProtocol, *payload);
     auto message = std::static_pointer_cast<P2PMessage>(messageFactory()->buildMessage());
-    message->setPacketType(MessageType::Handshake);
+    message->setPacketType(GatewayMessageType::Handshake);
     auto seq = messageFactory()->newSeq();
     message->setSeq(seq);
     message->setPayload(payload);
