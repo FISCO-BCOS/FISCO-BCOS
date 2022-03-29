@@ -537,8 +537,8 @@ CallParameters::UniquePtr TransactionExecutive::go(
             {
                 // BFS create contract table and write metadata in parent table
                 auto tableName = getContractTableName(hostContext.myAddress(), true);
-                if (!buildBfsPath(tableName, callResults->origin, callResults->senderAddress,
-                        callResults->gas))
+                if (!buildBfsPath(tableName, callResults->origin,
+                        std::string(hostContext.myAddress()), callResults->gas))
                 {
                     revert();
                     auto buildCallResults = move(callResults);
