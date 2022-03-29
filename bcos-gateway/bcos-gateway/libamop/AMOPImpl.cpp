@@ -498,7 +498,7 @@ void AMOPImpl::dispatcherAMOPMessage(
     }
     auto amopMessage = m_messageFactory->buildMessage(ref(*_message->payload()));
     auto amopMsgType = amopMessage->type();
-    auto fromNodeID = _session->nodeID();
+    auto fromNodeID = _session->nodeId();
     switch (amopMsgType)
     {
     case AMOPMessage::Type::TopicSeq:

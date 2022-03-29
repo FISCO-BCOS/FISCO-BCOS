@@ -43,9 +43,9 @@ GatewayNodeManager::GatewayNodeManager(std::string const& _uuid, P2pID const& _n
     m_p2pNodeID = _nodeID;
     m_p2pInterface = _p2pInterface;
     // SyncNodeSeq
-    m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::SyncNodeSeq,
-        boost::bind(&GatewayNodeManager::onReceiveStatusSeq, this, boost::placeholders::_1,
-            boost::placeholders::_2));
+    m_p2pInterface->registerHandlerByMsgType(
+        GatewayMessageType::SyncNodeSeq, boost::bind(&GatewayNodeManager::onReceiveStatusSeq, this,
+                                             boost::placeholders::_1, boost::placeholders::_2));
     // RequestNodeStatus
     m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::RequestNodeStatus,
         boost::bind(&GatewayNodeManager::onRequestNodeStatus, this, boost::placeholders::_1,
@@ -102,8 +102,8 @@ void GatewayNodeManager::onReceiveStatusSeq(
 {
     auto statusSeq = boost::asio::detail::socket_ops::network_to_host_long(
         *((uint32_t*)_msg->payload()->data()));
-    auto statusSeqChanged = statusChanged(_session->nodeID(), statusSeq);
-    NODE_MANAGER_LOG(TRACE) << LOG_DESC("onReceiveStatusSeq") << LOG_KV("p2pid", _session->nodeID())
+    auto statusSeqChanged = statusChanged(_session->nodeId(), statusSeq);
+    NODE_MANAGER_LOG(TRACE) << LOG_DESC("onReceiveStatusSeq") << LOG_KV("p2pid", _session->nodeId())
                             << LOG_KV("statusSeq", statusSeq)
                             << LOG_KV("seqChanged", statusSeqChanged);
     if (!statusSeqChanged)
@@ -131,7 +131,7 @@ void GatewayNodeManager::onReceiveNodeStatus(
 {
     auto gatewayNodeStatus = m_gatewayNodeStatusFactory->createGatewayNodeStatus();
     gatewayNodeStatus->decode(bytesConstRef(_msg->payload()->data(), _msg->payload()->size()));
-    auto p2pID = _session->nodeID();
+    auto p2pID = _session->nodeId();
     NODE_MANAGER_LOG(INFO) << LOG_DESC("onReceiveNodeStatus") << LOG_KV("p2pid", p2pID)
                            << LOG_KV("seq", gatewayNodeStatus->seq())
                            << LOG_KV("uuid", gatewayNodeStatus->uuid());
@@ -164,7 +164,7 @@ void GatewayNodeManager::onRequestNodeStatus(
     if (!nodeStatusData)
     {
         NODE_MANAGER_LOG(WARNING) << LOG_DESC("onRequestNodeStatus: generate nodeInfo error")
-                                  << LOG_KV("peer", _session->nodeID());
+                                  << LOG_KV("peer", _session->nodeId());
         return;
     }
     m_p2pInterface->sendMessageBySession(GatewayMessageType::ResponseNodeStatus,

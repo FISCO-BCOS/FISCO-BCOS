@@ -311,9 +311,10 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         wsConfig->setContextConfig(contextConfig);
         auto endPointPeers = _config->obtainPeersForWsService(_config->connectedNodes());
         wsConfig->setConnectedPeers(endPointPeers);
+        wsConfig->setModuleNameForLog("GATEWAY");
 
         // init wsservice
-        auto wsService = std::make_shared<ws::WsService>();
+        auto wsService = std::make_shared<ws::WsService>(wsConfig->moduleNameForLog());
         wsService->setHostPort(_config->listenIP(), _config->listenPort());
         auto wsInitializer = std::make_shared<WsInitializer>();
         wsInitializer->setConfig(wsConfig);

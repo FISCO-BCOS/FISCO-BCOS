@@ -270,7 +270,7 @@ void Service::sendMessageBySession(int _packetType, bytesConstRef _payload, WsSe
     _session->asyncSendMessage(p2pMessage);
 
     SERVICE_LOG(TRACE) << "sendMessageBySession" << LOG_KV("seq", p2pMessage->seq())
-                       << LOG_KV("packetType", _packetType) << LOG_KV("p2pid", _session->nodeID())
+                       << LOG_KV("packetType", _packetType) << LOG_KV("p2pid", _session->nodeId())
                        << LOG_KV("payload.size()", _payload.size());
 }
 
@@ -286,7 +286,7 @@ void Service::sendRespMessageBySession(bytesConstRef _payload,
     _wsSession->asyncSendMessage(respMessage);
 
     SERVICE_LOG(TRACE) << "sendRespMessageBySession" << LOG_KV("seq", _p2pMessage->seq())
-                       << LOG_KV("p2pid", _wsSession->nodeID())
+                       << LOG_KV("p2pid", _wsSession->nodeId())
                        << LOG_KV("payload size", _payload.size());
 }
 

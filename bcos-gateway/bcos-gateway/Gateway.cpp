@@ -233,21 +233,23 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, NodeIDPtr _s
                 }
                 catch (const std::exception& e)
                 {
+                    auto p2pmessage = std::static_pointer_cast<P2PMessage>(message);
                     GATEWAY_LOG(ERROR)
                         << LOG_BADGE("trySendMessage and receive response exception")
-                        << LOG_KV("payload",
-                               std::string(message->payload()->begin(), message->payload()->end()))
-                        << LOG_KV("packetType", message->packetType())
-                        << LOG_KV("src", message->options() ?
-                                             toHex(*(message->options()->srcNodeID())) :
+                        << LOG_KV("payload", std::string(p2pmessage->payload()->begin(),
+                                                 p2pmessage->payload()->end()))
+                        << LOG_KV("packetType", p2pmessage->packetType())
+                        << LOG_KV("src", p2pmessage->options() ?
+                                             toHex(*(p2pmessage->options()->srcNodeID())) :
                                              "unknown")
-                        << LOG_KV("size", message->length()) << LOG_KV("error", e.what());
+                        << LOG_KV("size", p2pmessage->length()) << LOG_KV("error", e.what());
 
                     self->trySendMessage();
                 }
             };
 
-            m_p2pInterface->asyncSendMessageByNodeID(p2pID, m_p2pMessage, callback, boostssl::ws::Options(10000));
+            m_p2pInterface->asyncSendMessageByNodeID(
+                p2pID, m_p2pMessage, callback, boostssl::ws::Options(10000));
         }
 
     public:
