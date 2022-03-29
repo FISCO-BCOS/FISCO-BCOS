@@ -499,6 +499,13 @@ void PBFTEngine::executeWorker()
 
 void PBFTEngine::handleMsg(std::shared_ptr<PBFTBaseMessageInterface> _msg)
 {
+    // check the view
+    if (_msg->view() > MaxView)
+    {
+        PBFT_LOG(WARNING) << LOG_DESC("handleMsg: reject msg with invalid view")
+                          << printPBFTMsgInfo(_msg);
+        return;
+    }
     RecursiveGuard l(m_mutex);
     switch (_msg->packetType())
     {
