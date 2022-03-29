@@ -42,11 +42,11 @@ public:
         m_gatewayNodeManager(_gatewayNodeManager),
         m_amop(_amop)
     {
-        m_p2pInterface->registerHandlerByMsgType(MessageType::PeerToPeerMessage,
+        m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::PeerToPeerMessage,
             boost::bind(&Gateway::onReceiveP2PMessage, this, boost::placeholders::_1,
                 boost::placeholders::_2, boost::placeholders::_3));
 
-        m_p2pInterface->registerHandlerByMsgType(MessageType::BroadcastMessage,
+        m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::BroadcastMessage,
             boost::bind(&Gateway::onReceiveBroadcastMessage, this, boost::placeholders::_1,
                 boost::placeholders::_2, boost::placeholders::_3));
     }

@@ -55,14 +55,14 @@ bcos::protocol::BlockHeader::ConstPtr BlockImpl::blockHeaderConst() const
         [inner = this->m_inner]() { return &inner->blockHeader; });
 }
 
-bcos::protocol::Transaction::ConstPtr BlockImpl::transaction(size_t _index) const
+bcos::protocol::Transaction::ConstPtr BlockImpl::transaction(uint64_t _index) const
 {
     return std::make_shared<const bcostars::protocol::TransactionImpl>(
         m_transactionFactory->cryptoSuite(),
         [inner = m_inner, _index]() { return &(inner->transactions[_index]); });
 }
 
-bcos::protocol::TransactionReceipt::ConstPtr BlockImpl::receipt(size_t _index) const
+bcos::protocol::TransactionReceipt::ConstPtr BlockImpl::receipt(uint64_t _index) const
 {
     return std::make_shared<const bcostars::protocol::TransactionReceiptImpl>(
         m_transactionFactory->cryptoSuite(),
@@ -79,7 +79,7 @@ void BlockImpl::setBlockHeader(bcos::protocol::BlockHeader::Ptr _blockHeader)
     }
 }
 
-void BlockImpl::setReceipt(size_t _index, bcos::protocol::TransactionReceipt::Ptr _receipt)
+void BlockImpl::setReceipt(uint64_t _index, bcos::protocol::TransactionReceipt::Ptr _receipt)
 {
     if (_index >= m_inner->receipts.size())
     {
@@ -141,7 +141,7 @@ bcos::protocol::NonceList const& BlockImpl::nonceList() const
     return m_nonceList;
 }
 
-bcos::protocol::TransactionMetaData::ConstPtr BlockImpl::transactionMetaData(size_t _index) const
+bcos::protocol::TransactionMetaData::ConstPtr BlockImpl::transactionMetaData(uint64_t _index) const
 {
     if (_index >= transactionsMetaDataSize())
     {
@@ -161,7 +161,7 @@ void BlockImpl::appendTransactionMetaData(bcos::protocol::TransactionMetaData::P
     m_inner->transactionsMetaData.emplace_back(txMetaDataImpl->inner());
 }
 
-size_t BlockImpl::transactionsMetaDataSize() const
+uint64_t BlockImpl::transactionsMetaDataSize() const
 {
     return m_inner->transactionsMetaData.size();
 }

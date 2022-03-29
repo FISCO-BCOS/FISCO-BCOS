@@ -21,8 +21,8 @@
 #pragma once
 #include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-framework/interfaces/gateway/GatewayInterface.h>
+#include <bcos-framework/interfaces/protocol/AMOPRequest.h>
 #include <bcos-framework/interfaces/rpc/RPCInterface.h>
-#include <bcos-protocol/amop/AMOPRequest.h>
 #include <bcos-utilities/Timer.h>
 #include <tarscpp/servant/Application.h>
 

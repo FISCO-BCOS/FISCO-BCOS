@@ -40,17 +40,17 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_hasOptions)
 
     // default P2PMessage object
     auto msg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
-    msg->setPacketType(MessageType::Heartbeat);
+    msg->setPacketType(GatewayMessageType::Heartbeat);
     BOOST_CHECK_EQUAL(msg->hasOptions(), false);
-    msg->setPacketType(MessageType::Handshake);
+    msg->setPacketType(GatewayMessageType::Handshake);
     BOOST_CHECK_EQUAL(msg->hasOptions(), false);
-    msg->setPacketType(MessageType::RequestNodeStatus);
+    msg->setPacketType(GatewayMessageType::RequestNodeStatus);
     BOOST_CHECK_EQUAL(msg->hasOptions(), false);
-    msg->setPacketType(MessageType::ResponseNodeStatus);
+    msg->setPacketType(GatewayMessageType::ResponseNodeStatus);
     BOOST_CHECK_EQUAL(msg->hasOptions(), false);
-    msg->setPacketType(MessageType::PeerToPeerMessage);
+    msg->setPacketType(GatewayMessageType::PeerToPeerMessage);
     BOOST_CHECK_EQUAL(msg->hasOptions(), true);
-    msg->setPacketType(MessageType::BroadcastMessage);
+    msg->setPacketType(GatewayMessageType::BroadcastMessage);
     BOOST_CHECK_EQUAL(msg->hasOptions(), true);
     msg->setPacketType(0x1111);
     BOOST_CHECK_EQUAL(msg->hasOptions(), false);
@@ -88,7 +88,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage)
         auto factory = std::make_shared<P2PMessageFactory>();
         // default P2PMessage object
         auto encodeMsg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
-        encodeMsg->setPacketType(MessageType::PeerToPeerMessage);
+        encodeMsg->setPacketType(GatewayMessageType::PeerToPeerMessage);
 
         auto buffer = std::make_shared<bytes>();
         auto r = encodeMsg->encode(*buffer.get());
@@ -253,7 +253,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_codec)
 
     uint16_t version = 0x1234;
     uint32_t seq = 0x12345678;
-    uint16_t packetType = MessageType::PeerToPeerMessage;
+    uint16_t packetType = GatewayMessageType::PeerToPeerMessage;
     uint16_t ext = 0x1111;
     auto payload = std::make_shared<bytes>(10000, 'a');
 

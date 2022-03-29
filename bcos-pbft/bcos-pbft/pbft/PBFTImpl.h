@@ -60,7 +60,7 @@ public:
 
     void notifyHighestSyncingNumber(bcos::protocol::BlockNumber _blockNumber) override;
     void asyncNoteUnSealedTxsSize(
-        size_t _unsealedTxsSize, std::function<void(Error::Ptr)> _onRecvResponse) override;
+        uint64_t _unsealedTxsSize, std::function<void(Error::Ptr)> _onRecvResponse) override;
     void setLedgerFetcher(bcos::tool::LedgerConfigFetcher::Ptr _ledgerFetcher)
     {
         m_ledgerFetcher = _ledgerFetcher;

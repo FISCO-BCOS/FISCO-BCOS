@@ -28,8 +28,8 @@
 #include "CallParameters.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/protocol/BlockHeader.h"
-#include "bcos-protocol/LogEntry.h"
 #include "bcos-protocol/TransactionStatus.h"
+#include <bcos-framework/interfaces/protocol/LogEntry.h>
 #include <bcos-utilities/Exceptions.h>
 #include <evmc/instructions.h>
 #include <boost/algorithm/string/case_conv.hpp>
@@ -274,7 +274,7 @@ static const VMSchedule FiscoBcosScheduleV4 = [] {
 
 static const VMSchedule BCOSWASMSchedule = [] {
     VMSchedule schedule = FiscoBcosScheduleV4;
-    schedule.maxCodeSize = 0xF00000; // 15MB
+    schedule.maxCodeSize = 0xF00000;  // 15MB
     // Ensure that zero bytes are not subsidised and are charged the same as
     // non-zero bytes.
     schedule.txDataZeroGas = schedule.txDataNonZeroGas;

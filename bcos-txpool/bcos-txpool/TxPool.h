@@ -54,7 +54,7 @@ public:
     void asyncSubmit(
         bytesPointer _txData, bcos::protocol::TxSubmitCallback _txSubmitCallback) override;
 
-    void asyncSealTxs(size_t _txsLimit, TxsHashSetPtr _avoidTxs,
+    void asyncSealTxs(uint64_t _txsLimit, TxsHashSetPtr _avoidTxs,
         std::function<void(Error::Ptr, bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr)>
             _sealCallback) override;
 
@@ -101,7 +101,7 @@ public:
     }
 
     void asyncGetPendingTransactionSize(
-        std::function<void(Error::Ptr, size_t)> _onGetTxsSize) override
+        std::function<void(Error::Ptr, uint64_t)> _onGetTxsSize) override
     {
         if (!_onGetTxsSize)
         {

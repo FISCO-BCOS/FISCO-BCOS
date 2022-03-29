@@ -139,8 +139,8 @@ public:
     void setRespPacket() { m_ext |= bcos::protocol::MessageExtFieldFlag::Response; }
     bool hasOptions() const
     {
-        return (m_packetType == MessageType::PeerToPeerMessage) ||
-               (m_packetType == MessageType::BroadcastMessage);
+        return (m_packetType == GatewayMessageType::PeerToPeerMessage) ||
+               (m_packetType == GatewayMessageType::BroadcastMessage);
     }
 
     bool encode(bytes& _buffer) override;

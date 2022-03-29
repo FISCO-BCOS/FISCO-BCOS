@@ -231,7 +231,7 @@ bcostars::Error TxPoolServiceServer::asyncGetPendingTransactionSize(
 {
     _current->setResponse(false);
     m_txpoolInitializer->txpool()->asyncGetPendingTransactionSize(
-        [_current](bcos::Error::Ptr _error, size_t _txsSize) {
+        [_current](bcos::Error::Ptr _error, uint64_t _txsSize) {
             async_response_asyncGetPendingTransactionSize(_current, toTarsError(_error), _txsSize);
         });
     return bcostars::Error();
