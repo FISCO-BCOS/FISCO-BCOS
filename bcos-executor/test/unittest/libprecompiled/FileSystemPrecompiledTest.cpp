@@ -260,13 +260,22 @@ public:
             });
         auto result3 = executePromise3.get_future().get();
 
+        result3->setSeq(1000);
+        std::promise<ExecutionMessage::UniquePtr> executePromise4;
+        executor->executeTransaction(std::move(result3),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise4.set_value(std::move(result));
+            });
+        auto result4 = executePromise4.get_future().get();
+
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result3->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_CHECK(result4->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
-        return result3;
+        return result4;
     };
 
     ExecutionMessage::UniquePtr link(bool _isWasm, protocol::BlockNumber _number,
