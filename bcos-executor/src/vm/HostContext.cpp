@@ -98,15 +98,15 @@ HostContext::HostContext(CallParameters::UniquePtr callParameters,
     metrics = &ethMetrics;
 }
 
-std::string_view HostContext::get(const std::string_view& _key)
+std::string HostContext::get(const std::string_view& _key)
 {
     auto entry = m_executive->storage().getRow(m_tableName, _key);
     if (entry)
     {
-        return entry->getField(0);
+        return std::string(entry->getField(0));
     }
 
-    return std::string_view();
+    return std::string();
 }
 
 void HostContext::set(const std::string_view& _key, std::string _value)
