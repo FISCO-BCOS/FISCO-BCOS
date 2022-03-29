@@ -137,15 +137,6 @@ int FileSystemPrecompiled::checkLinkParam(TransactionExecutive::Ptr _executive,
                               << LOG_KV("contractName", _contractName);
         return CODE_ADDRESS_OR_VERSION_ERROR;
     }
-    if (_contractVersion.size() > LINK_VERSION_MAX_LENGTH)
-    {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("FileSystemPrecompiled")
-                               << LOG_DESC("version length overflow 128")
-                               << LOG_KV("contractName", _contractName)
-                               << LOG_KV("address", _contractAddress)
-                               << LOG_KV("version", _contractVersion);
-        return CODE_VERSION_LENGTH_OVERFLOW;
-    }
     if (_contractVersion.find('/') != std::string::npos ||
         _contractName.find('/') != std::string::npos)
     {
@@ -155,9 +146,6 @@ int FileSystemPrecompiled::checkLinkParam(TransactionExecutive::Ptr _executive,
                                << LOG_KV("version", _contractVersion);
         return CODE_ADDRESS_OR_VERSION_ERROR;
     }
-    // check the length of the key
-    checkLengthValidate(
-        _contractName, LINK_CONTRACT_NAME_MAX_LENGTH, CODE_TABLE_KEY_VALUE_LENGTH_OVERFLOW);
     // check the length of the field value
     checkLengthValidate(
         _contractAbi, USER_TABLE_FIELD_VALUE_MAX_LENGTH, CODE_TABLE_FIELD_VALUE_LENGTH_OVERFLOW);
@@ -280,17 +268,19 @@ void FileSystemPrecompiled::link(const std::shared_ptr<executor::TransactionExec
                            << LOG_KV("contractAddress", contractAddress);
     int validCode =
         checkLinkParam(_executive, contractAddress, contractName, contractVersion, contractAbi);
-    if (validCode < 0)
+    auto linkTableName = USER_APPS_PREFIX + contractName + '/' + contractVersion;
+
+    if (validCode < 0 || !checkPathValid(linkTableName))
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("FileSystemPrecompiled")
                                << LOG_DESC("link params invalid")
                                << LOG_KV("contractName", contractName)
                                << LOG_KV("contractVersion", contractVersion)
                                << LOG_KV("contractAddress", contractAddress);
-        getErrorCodeOut(callResult->mutableExecResult(), validCode, *codec);
+        getErrorCodeOut(callResult->mutableExecResult(),
+            validCode < 0 ? validCode : CODE_FILE_INVALID_PATH, *codec);
         return;
     }
-    auto linkTableName = USER_APPS_PREFIX + contractName + '/' + contractVersion;
     auto linkTable = _executive->storage().openTable(linkTableName);
     if (linkTable)
     {

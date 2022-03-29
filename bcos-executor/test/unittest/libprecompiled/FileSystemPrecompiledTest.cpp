@@ -659,10 +659,30 @@ BOOST_AUTO_TEST_CASE(linkTest)
         BOOST_CHECK_EQUAL(address2.hex(), newAddress);
     }
 
+    // wrong version
+    {
+        auto errorVersion = "ver/tion";
+        link(false, number++, contractName, errorVersion, addressString, contractAbi,
+            CODE_ADDRESS_OR_VERSION_ERROR, true);
+    }
+
+    // wrong address
+    {
+        auto wrongAddress = addressString;
+        std::reverse(wrongAddress.begin(), wrongAddress.end());
+        link(false, number++, contractName, contractVersion, wrongAddress, contractAbi,
+            CODE_ADDRESS_OR_VERSION_ERROR, true);
+    }
+
     // overflow version
     {
-        link(false, number++, contractName, overflowVersion130, addressString, contractAbi,
-            CODE_VERSION_LENGTH_OVERFLOW, true);
+        std::stringstream errorVersion;
+        for (size_t i = 0; i < FS_PATH_MAX_LENGTH - contractName.size(); ++i)
+        {
+            errorVersion << "1";
+        }
+        link(false, number++, contractName, errorVersion.str(), addressString, contractAbi,
+            CODE_FILE_INVALID_PATH, true);
     }
 }
 
