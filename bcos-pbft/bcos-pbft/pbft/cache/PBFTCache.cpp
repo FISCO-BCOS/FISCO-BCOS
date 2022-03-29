@@ -383,11 +383,12 @@ bool PBFTCache::checkAndCommitStableCheckPoint()
     // (such as transactions including dynamically addSealer/removeNode, setConsensusWeight, etc.)
     // have been committed
     auto committedIndex = m_config->committedProposal()->index();
-    auto dependsProposal = std::min((m_index - 1), m_config->waitSealUntil());
-    if (committedIndex < dependsProposal)
+    // wait for the sys-proposal committed to trigger checkAndCommitStableCheckPoint
+    if (m_index > m_config->waitSealUntil() && committedIndex < m_config->waitSealUntil())
     {
         return false;
     }
+    auto dependsProposal = std::min((m_index - 1), m_config->waitSealUntil());
     if (committedIndex == dependsProposal)
     {
         recalculateQuorum(m_checkpointCacheWeight, m_checkpointCacheList);
