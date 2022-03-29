@@ -1,6 +1,6 @@
 hunter_config(bcos-utilities VERSION 1.0.0-rc2-local
-    URL https://${URL_BASE}/FISCO-BCOS/bcos-utilities/archive/90c37c2a28867a5142a7656712c8b531ffc807f6.tar.gz
-	SHA1 18a76ad113a6f35f378bde8c3ea12db564132b85
+    URL https://${URL_BASE}/FISCO-BCOS/bcos-utilities/archive/55d6bf357719aa030e3898b060b4a3ff2476434b.tar.gz
+	SHA1 d0aeb11cf064a5e9793c50dd7bb8487e2d251f02
     CMAKE_ARGS HUNTER_PACKAGE_LOG_BUILD=ON HUNTER_PACKAGE_LOG_INSTALL=ON
 )
 
@@ -12,8 +12,8 @@ hunter_config(bcos-crypto VERSION 3.0.0-rc3-local
 
 hunter_config(bcos-boostssl
     VERSION 1.0.0-rc3-local
-    URL https://${URL_BASE}/FISCO-BCOS/bcos-boostssl/archive/4f36d2f7e947f880474b1c9850a5ba4ff63d3556.tar.gz
-    SHA1 521d74fc5aa75bcac9f405258736fce60d0f5715
+    URL https://${URL_BASE}/FISCO-BCOS/bcos-boostssl/archive/1c9cecf7ec9ed59d0bdaa9f390c618c8f4208cf2.tar.gz
+    SHA1 95774f3638b4bcb27a6708fca0a28389a7cfa9c3
     CMAKE_ARGS HUNTER_PACKAGE_LOG_BUILD=ON HUNTER_PACKAGE_LOG_INSTALL=ON ARCH_NATIVE=${ARCH_NATIVE} URL_BASE=${URL_BASE}
 )
 
@@ -94,6 +94,6 @@ hunter_config(abseil VERSION ${HUNTER_abseil_VERSION} CMAKE_ARGS CMAKE_CXX_FLAGS
 hunter_config(gRPC VERSION ${HUNTER_gRPC_VERSION} CMAKE_ARGS CMAKE_CXX_FLAGS=-std=c++17 CMAKE_POSITION_INDEPENDENT_CODE=TRUE)
 
 hunter_config(OpenSSL VERSION tassl_1.1.1b_v1.4-local
-    URL https://${URL_BASE}/FISCO-BCOS/TASSL-1.1.1b/archive/6a0fddd0eb33433c190c796e5b6d80db4db52810.tar.gz
-    SHA1 802c7c8dfb02aa9c58bb9073bca6085a80165801
+    URL https://${URL_BASE}/FISCO-BCOS/TASSL-1.1.1b/archive/f9d60fa510e5fbe24413b4abdf1ea3a48f9ee6aa.tar.gz
+    SHA1 e56121278bf07587d58d154b4615f96575957d6f
 )
