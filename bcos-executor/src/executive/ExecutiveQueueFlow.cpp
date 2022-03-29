@@ -27,6 +27,7 @@ using namespace bcos::executor;
 
 void ExecutiveQueueFlow::submit(CallParameters::UniquePtr txInput)
 {
+    WriteGuard lock(x_lock);
     auto contextID = txInput->contextID;
     auto seq = txInput->seq;
     auto executiveState = m_executives.find({contextID, seq});
@@ -49,7 +50,8 @@ void ExecutiveQueueFlow::asyncRun(std::function<void(CallParameters::UniquePtr)>
     std::function<void(std::shared_ptr<std::vector<CallParameters::UniquePtr>>)> onPaused,
     std::function<void(bcos::Error::UniquePtr)> onFinished)
 {
-    run(onTxFinished, onPaused, onFinished);
+    asyncTo([this, onTxFinished = std::move(onTxFinished), onPaused = std::move(onPaused),
+                onFinished = std::move(onFinished)]() { run(onTxFinished, onPaused, onFinished); });
 }
 
 void ExecutiveQueueFlow::run(std::function<void(CallParameters::UniquePtr)> onTxFinished,
@@ -58,6 +60,7 @@ void ExecutiveQueueFlow::run(std::function<void(CallParameters::UniquePtr)> onTx
 {
     try
     {
+        WriteGuard lock(x_lock);
         while (!m_runPool.empty())
         {
             auto executiveState = m_runPool.top();
@@ -67,7 +70,7 @@ void ExecutiveQueueFlow::run(std::function<void(CallParameters::UniquePtr)> onTx
             {
             case ExecutiveState::NEED_RUN:
             {
-                onFinished(nullptr);
+                asyncTo([onFinished = std::move(onFinished)]() { onFinished(nullptr); });
             }
             case ExecutiveState::PAUSED:
             {  // just ignore, need to set resume params
@@ -77,18 +80,24 @@ void ExecutiveQueueFlow::run(std::function<void(CallParameters::UniquePtr)> onTx
             {
                 auto outputs = std::make_shared<std::vector<CallParameters::UniquePtr>>();
                 outputs->push_back(std::move(output));
-                onPaused(outputs);
+                asyncTo([onPaused = std::move(onPaused), outputs = std::move(outputs)]() {
+                    onPaused(outputs);
+                });
                 break;
             }
             case ExecutiveState::FINISHED:
             {
-                onTxFinished(std::move(output));
+                asyncTo([onTxFinished = std::move(onTxFinished), outputPtr = output.release()]() {
+                    auto output = std::unique_ptr<CallParameters>(outputPtr);
+                    onTxFinished(std::move(output));
+                });
                 break;
             }
             }
+            m_runPool.pop();
         }
 
-        onFinished(nullptr);
+        asyncTo([onFinished = std::move(onFinished)]() { onFinished(nullptr); });
     }
     catch (std::exception& e)
     {

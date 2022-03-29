@@ -81,7 +81,7 @@ public:
 
 private:
     void DAGExecute(std::function<void(Error::UniquePtr)> error);
-    void DMTExecute(std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback);
+    void DMCExecute(std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback);
 
     enum TraverseHint : int8_t
     {
@@ -115,6 +115,8 @@ private:
         std::atomic_bool callbackExecuted = false;
         std::atomic_bool allSended = false;
     };
+
+
     void startBatch(std::function<void(Error::UniquePtr)> callback);
     void checkBatch(BatchStatus& status);
 
@@ -126,9 +128,13 @@ private:
 
     struct ExecutiveState  // Executive state per tx
     {
+        using Ptr = std::shared_ptr<ExecutiveState>;
         ExecutiveState(int64_t _contextID, bcos::protocol::ExecutionMessage::UniquePtr _message,
             bool _enableDAG)
-          : contextID(_contextID), message(std::move(_message)), enableDAG(_enableDAG)
+          : contextID(_contextID),
+            message(std::move(_message)),
+            enableDAG(_enableDAG),
+            id(_contextID)
         {}
 
         int64_t contextID;
@@ -138,13 +144,16 @@ private:
         int64_t currentSeq = 0;
         bool enableDAG;
         bool skip = false;
+        int64_t id;
     };
 
-    std::map<std::tuple<std::string, ContextID>, ExecutiveState, std::less<>> m_executiveStates;
-    void traverseExecutive(std::function<TraverseHint(ExecutiveState&)> executeHandle);
-    TraverseHint handleExecutive(ExecutiveState& executiveState);
+    std::map<std::tuple<std::string, ContextID>, ExecutiveState::Ptr, std::less<>>
+        m_executiveStates;
+    std::map<int64_t, ExecutiveState::Ptr> m_id2ExecutiveState;
+    void traverseExecutive(std::function<TraverseHint(ExecutiveState::Ptr)> executeHandle);
+    TraverseHint handleExecutive(ExecutiveState::Ptr executiveState);
     void queryExecutor(bcos::executor::ParallelTransactionExecutorInterface::Ptr executor,
-        ExecutiveState& executiveState, std::shared_ptr<BatchStatus> batchStatus);
+        ExecutiveState::Ptr executiveState, std::shared_ptr<BatchStatus> batchStatus);
 
     struct ExecutiveResult
     {

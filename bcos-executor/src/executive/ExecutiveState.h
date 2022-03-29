@@ -35,7 +35,9 @@ public:
     using Ptr = std::shared_ptr<ExecutiveState>;
 
     ExecutiveState(ExecutiveFactory::Ptr executiveFactory, CallParameters::UniquePtr input)
-      : m_input(std::move(input)), m_executiveFactory(executiveFactory){};
+      : m_id(input->executiveStateID),
+        m_input(std::move(input)),
+        m_executiveFactory(executiveFactory){};
 
     enum Status
     {
@@ -50,6 +52,7 @@ public:
     void setResumeParam(CallParameters::UniquePtr pullParam);
 
 private:
+    int64_t m_id;
     CallParameters::UniquePtr m_input;
     std::shared_ptr<TransactionExecutive> m_executive;
     Status m_status = NEED_RUN;

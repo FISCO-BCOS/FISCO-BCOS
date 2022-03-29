@@ -323,12 +323,15 @@ void TransactionExecutor::executeTransaction(bcos::protocol::ExecutionMessage::U
 
 void TransactionExecutor::executeTransactions(
     gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
-    std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
-        onOneTxStop,
+    std::function<void(
+        bcos::Error::UniquePtr, gsl::span<bcos::protocol::ExecutionMessage::UniquePtr>)>
+        onAllTxStop,
     std::function<void(bcos::Error::UniquePtr)> onFinish)
 {
+    // TODO: handle message->staticCall()
+
     (void)inputs;
-    (void)onOneTxStop;
+    (void)onAllTxStop;
     (void)onFinish;
 }
 
@@ -1353,7 +1356,6 @@ std::unique_ptr<ExecutionMessage> TransactionExecutor::toExecutionResult(
 
     message->setContextID(executive.contextID());
     message->setSeq(executive.seq());
-
     return message;
 }
 
@@ -1393,6 +1395,7 @@ std::unique_ptr<protocol::ExecutionMessage> TransactionExecutor::toExecutionResu
 
     message->setContextID(params->contextID);
     message->setSeq(params->seq);
+    message->setExecutiveStateID(params->executiveStateID);
     message->setOrigin(std::move(params->origin));
     message->setGasAvailable(params->gas);
     message->setData(std::move(params->data));

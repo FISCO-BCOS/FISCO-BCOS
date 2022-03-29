@@ -65,6 +65,9 @@ public:
     virtual int64_t seq() const = 0;
     virtual void setSeq(int64_t seq) = 0;
 
+    virtual int64_t executiveStateID() const = 0;
+    virtual void setExecutiveStateID(int64_t executiveStateID) = 0;
+
     virtual std::string_view origin() const = 0;  // readable format
     virtual void setOrigin(std::string origin) = 0;
 

@@ -46,7 +46,7 @@ CallParameters::UniquePtr ExecutiveState::go()
         // just ignore, need to set resume params
         break;
     case NEED_RESUME:
-        m_executive->resume();
+        output = m_executive->resume();
         break;
     case FINISHED:
         // do nothing
@@ -66,6 +66,7 @@ CallParameters::UniquePtr ExecutiveState::go()
         break;
     }
 
+    output->executiveStateID = m_id;
 
     return output;
 }

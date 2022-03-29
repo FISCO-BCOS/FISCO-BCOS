@@ -62,6 +62,7 @@ private:
     std::stack<ExecutiveState::Ptr> m_runPool;
     std::map<std::tuple<int64_t, int64_t>, ExecutiveState::Ptr> m_executives;
     ExecutiveFactory::Ptr m_executiveFactory;
+    SharedMutex x_lock;
 };
 
 

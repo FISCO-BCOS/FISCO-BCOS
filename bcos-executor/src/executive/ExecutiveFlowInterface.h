@@ -22,6 +22,7 @@
 #pragma once
 
 #include "../CallParameters.h"
+#include <bcos-utilities/ThreadPool.h>
 
 namespace bcos
 {
@@ -44,6 +45,19 @@ public:
 
         // onFinished(success, errorMessage)
         std::function<void(bcos::Error::UniquePtr)> onFinished) = 0;
+
+
+protected:
+    template <class F>
+    void asyncTo(F f)
+    {
+        f();  // TODO: fix enqueue bugs below
+        // m_pool.enqueue(f);
+    }
+
+private:
+    // bcos::ThreadPool m_pool =
+    //     bcos::ThreadPool("ExecutiveFlow", std::thread::hardware_concurrency());
 };
 
 }  // namespace executor

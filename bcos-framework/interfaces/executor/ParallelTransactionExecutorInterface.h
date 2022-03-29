@@ -61,9 +61,10 @@ public:
 
     virtual void executeTransactions(gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
 
-        // called every time at a tx stop( pause or finish)
-        std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
-            onOneTxStop,
+        // called every time at all tx stop( pause or finish)
+        std::function<void(
+            bcos::Error::UniquePtr, gsl::span<bcos::protocol::ExecutionMessage::UniquePtr>)>
+            onAllTxStop,
 
         // called on all of tx finished
         std::function<void(bcos::Error::UniquePtr)> onFinish) = 0;

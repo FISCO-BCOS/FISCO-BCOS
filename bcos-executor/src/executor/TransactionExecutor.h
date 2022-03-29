@@ -104,8 +104,9 @@ public:
             callback) override;
 
     void executeTransactions(gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
-        std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
-            onOneTxStop,
+        std::function<void(
+            bcos::Error::UniquePtr, gsl::span<bcos::protocol::ExecutionMessage::UniquePtr>)>
+            onAllTxStop,
         std::function<void(bcos::Error::UniquePtr)> onFinish) override;
 
     void call(bcos::protocol::ExecutionMessage::UniquePtr input,
