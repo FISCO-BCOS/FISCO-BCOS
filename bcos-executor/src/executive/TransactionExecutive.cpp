@@ -625,39 +625,13 @@ CallParameters::UniquePtr TransactionExecutive::go(
         }
     }
     // Note: won't call the catch branch
-    catch (PermissionDenied const& _e)
-    {
-        auto callResults = hostContext.takeCallParameters();
-        callResults->type = CallParameters::REVERT;
-        callResults->status = (int32_t)TransactionStatus::PermissionDenied;
-        revert();
-
-        return callResults;
-    }
-    catch (PrecompiledError const& _e)
-    {
-        auto callResults = hostContext.takeCallParameters();
-        callResults->type = CallParameters::REVERT;
-        callResults->status = (int32_t)TransactionStatus::PrecompiledError;
-        revert();
-        return callResults;
-    }
-    catch (OutOfGas& _e)
-    {
-        auto callResults = hostContext.takeCallParameters();
-        callResults->type = CallParameters::REVERT;
-        callResults->status = (int32_t)TransactionStatus::OutOfGas;
-        revert();
-        EXECUTIVE_LOG(ERROR) << "Out of gas (" << *boost::get_error_info<errinfo_evmcStatusCode>(_e)
-                             << ")\n"
-                             << diagnostic_information(_e);
-
-        return callResults;
-    }
     catch (bcos::Error& e)
     {
         auto callResults = hostContext.takeCallParameters();
-        callResults->type = CallParameters::REVERT;
+        if (!callResults)
+        {
+            callResults = std::make_unique<CallParameters>(CallParameters::REVERT);
+        }
         callResults->status = (int32_t)TransactionStatus::RevertInstruction;
         callResults->message = e.errorMessage();
 
@@ -678,8 +652,6 @@ CallParameters::UniquePtr TransactionExecutive::go(
     }
     catch (InternalVMError const& _e)
     {
-        auto callResults = hostContext.takeCallParameters();
-        callResults->type = CallParameters::REVERT;
         EXECUTIVE_LOG(WARNING) << "Internal VM Error ("
                                << *boost::get_error_info<errinfo_evmcStatusCode>(_e) << ")\n"
                                << diagnostic_information(_e);
@@ -965,7 +937,8 @@ CallParameters::UniquePtr TransactionExecutive::parseEVMCResult(
         else
         {  // These cases aren't really internal errors, just more specific
            // error codes returned by the VM. Map all of them to OOG.m_externalCallCallback
-            BOOST_THROW_EXCEPTION(OutOfGas());
+            callResults->type = CallParameters::REVERT;
+            callResults->status = (int32_t)TransactionStatus::OutOfGas;
         }
     }
     }

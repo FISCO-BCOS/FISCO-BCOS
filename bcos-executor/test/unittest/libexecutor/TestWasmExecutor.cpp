@@ -412,6 +412,187 @@ BOOST_AUTO_TEST_CASE(deployAndCall)
     BOOST_CHECK_EQUAL(output, "fisco bcos");
 }
 
+BOOST_AUTO_TEST_CASE(deployError)
+{
+    bytes input;
+
+    input.insert(input.end(), helloWorldBin.begin(), helloWorldBin.end());
+
+    bytes constructorParam = codec->encode(string("alice"));
+    constructorParam = codec->encode(constructorParam);
+    input.insert(input.end(), constructorParam.begin(), constructorParam.end());
+
+    string selfAddress = "usr/alice/hello_world";
+
+    auto tx =
+        fakeTransaction(cryptoSuite, keyPair, "", input, 101, 100001, "1", "1", helloWorldAbi);
+    auto sender = *toHexString(string_view((char*)tx->sender().data(), tx->sender().size()));
+
+    auto hash = tx->hash();
+    txpool->hash2Transaction.emplace(hash, tx);
+
+    auto params = std::make_unique<NativeExecutionMessage>();
+    params->setType(bcos::protocol::ExecutionMessage::TXHASH);
+    params->setContextID(100);
+    params->setSeq(1000);
+    params->setDepth(0);
+    params->setTo(selfAddress);
+    params->setStaticCall(false);
+    params->setGasAvailable(gas);
+    params->setType(ExecutionMessage::TXHASH);
+    params->setTransactionHash(hash);
+    params->setCreate(true);
+
+    NativeExecutionMessage paramsBak = *params;
+
+    auto blockHeader = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
+    blockHeader->setNumber(1);
+
+    std::promise<void> nextPromise;
+    executor->nextBlockHeader(blockHeader, [&](bcos::Error::Ptr&& error) {
+        BOOST_CHECK(!error);
+        nextPromise.set_value();
+    });
+    nextPromise.get_future().get();
+
+    std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise;
+    executor->executeTransaction(std::move(params),
+        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!error);
+            executePromise.set_value(std::move(result));
+        });
+
+    auto result = executePromise.get_future().get();
+    result->setSeq(1001);
+
+    std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise2;
+    executor->executeTransaction(std::move(result),
+        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!error);
+            executePromise2.set_value(std::move(result));
+        });
+
+    auto result2 = executePromise2.get_future().get();
+    result2->setSeq(1000);
+
+    std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise3;
+    executor->executeTransaction(std::move(result2),
+        [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+            BOOST_CHECK(!error);
+            executePromise3.set_value(std::move(result));
+        });
+
+    auto result3 = executePromise3.get_future().get();
+
+    BOOST_CHECK_EQUAL(result3->status(), 0);
+    BOOST_CHECK_EQUAL(result3->origin(), sender);
+    BOOST_CHECK_EQUAL(result3->from(), paramsBak.to());
+    BOOST_CHECK_EQUAL(result3->to(), sender);
+
+    BOOST_CHECK(result3->message().empty());
+    BOOST_CHECK(!result3->newEVMContractAddress().empty());
+    BOOST_CHECK_LT(result3->gasAvailable(), gas);
+
+    bcos::executor::TransactionExecutor::TwoPCParams commitParams;
+    commitParams.number = 1;
+
+    std::promise<void> preparePromise;
+    executor->prepare(commitParams, [&](bcos::Error::Ptr&& error) {
+        BOOST_CHECK(!error);
+        preparePromise.set_value();
+    });
+    preparePromise.get_future().get();
+
+    std::promise<void> commitPromise;
+    executor->commit(commitParams, [&](bcos::Error::Ptr&& error) {
+        BOOST_CHECK(!error);
+        commitPromise.set_value();
+    });
+    commitPromise.get_future().get();
+    auto tableName = std::string("/apps/") + std::string(result3->newEVMContractAddress());
+
+    EXECUTOR_LOG(TRACE) << "Checking table: " << tableName;
+    std::promise<Table> tablePromise;
+    backend->asyncOpenTable(tableName, [&](Error::UniquePtr&& error, std::optional<Table>&& table) {
+        BOOST_CHECK(!error);
+        BOOST_CHECK(table);
+        tablePromise.set_value(std::move(*table));
+    });
+    auto table = tablePromise.get_future().get();
+
+    auto entry = table.getRow("code");
+    BOOST_CHECK(entry);
+    BOOST_CHECK_GT(entry->getField(0).size(), 0);
+
+    string errorAddress = "usr/alice/hello_world/hello_world";
+
+    {
+        auto params = std::make_unique<NativeExecutionMessage>();
+        params->setType(bcos::protocol::ExecutionMessage::TXHASH);
+        params->setContextID(100);
+        params->setSeq(1000);
+        params->setDepth(0);
+        // error address
+        params->setTo(errorAddress);
+        params->setStaticCall(false);
+        params->setGasAvailable(gas);
+        params->setType(ExecutionMessage::TXHASH);
+        params->setTransactionHash(hash);
+        params->setCreate(true);
+
+        NativeExecutionMessage paramsBak = *params;
+
+        blockHeader = std::make_shared<bcos::protocol::PBBlockHeader>(cryptoSuite);
+        blockHeader->setNumber(2);
+
+        std::promise<void> p1;
+        executor->nextBlockHeader(blockHeader, [&](bcos::Error::Ptr&& error) {
+            BOOST_CHECK(!error);
+            p1.set_value();
+        });
+        p1.get_future().get();
+
+        std::promise<bcos::protocol::ExecutionMessage::UniquePtr> p2;
+        executor->executeTransaction(std::move(params),
+            [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                p2.set_value(std::move(result));
+            });
+
+        auto r2 = p2.get_future().get();
+        r2->setSeq(1001);
+
+        std::promise<bcos::protocol::ExecutionMessage::UniquePtr> p3;
+        executor->executeTransaction(std::move(r2),
+            [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                p3.set_value(std::move(result));
+            });
+
+        auto r3 = p3.get_future().get();
+        r3->setSeq(1000);
+
+        BOOST_CHECK_EQUAL(r3->status(), 15);
+
+        std::promise<bcos::protocol::ExecutionMessage::UniquePtr> p4;
+        executor->executeTransaction(std::move(r3),
+            [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                p4.set_value(std::move(result));
+            });
+
+        auto r4 = p4.get_future().get();
+
+        BOOST_CHECK_EQUAL(r4->status(), 16);
+        BOOST_CHECK_EQUAL(r4->origin(), sender);
+        BOOST_CHECK_EQUAL(r4->from(), paramsBak.to());
+        BOOST_CHECK_EQUAL(r4->to(), sender);
+
+        BOOST_CHECK(r4->message() == "Error occurs in build BFS dir");
+        BOOST_CHECK_LT(r4->gasAvailable(), gas);
+    }
+}
+
 BOOST_AUTO_TEST_CASE(deployAndCall_100)
 {
     bytes input;
