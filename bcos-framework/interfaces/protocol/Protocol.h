@@ -64,6 +64,7 @@ enum ProtocolModuleID : uint32_t
     GatewayService = 0x1,
     RpcService = 0x2,
     ExecutorService = 0x3,
+    MAX_PROTOCOL_MODULE = ExecutorService,
 };
 enum ProtocolVersion : uint32_t
 {
