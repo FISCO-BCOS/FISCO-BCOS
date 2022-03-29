@@ -51,7 +51,7 @@ public:
     HostContext(HostContext const&) = delete;
     HostContext& operator=(HostContext const&) = delete;
 
-    std::string_view get(const std::string_view& _key);
+    std::string get(const std::string_view& _key);
 
     void set(const std::string_view& _key, std::string _value);
 
