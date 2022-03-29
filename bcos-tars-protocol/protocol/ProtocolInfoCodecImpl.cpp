@@ -45,7 +45,7 @@ bcos::protocol::ProtocolInfo::Ptr ProtocolInfoCodecImpl::decode(bcos::bytesConst
 
     auto protocolInfo = std::make_shared<bcos::protocol::ProtocolInfo>();
     protocolInfo->setProtocolModuleID((bcos::protocol::ProtocolModuleID)tarsProtcolInfo.moduleID);
-    protocolInfo->setMinVersion((bcos::protocol::ProtocolVersion)tarsProtcolInfo.minVersion);
-    protocolInfo->setMaxVersion((bcos::protocol::ProtocolVersion)tarsProtcolInfo.maxVersion);
+    protocolInfo->setMinVersion(tarsProtcolInfo.minVersion);
+    protocolInfo->setMaxVersion(tarsProtcolInfo.maxVersion);
     return protocolInfo;
 }

@@ -635,15 +635,15 @@ void Service::onReceiveProtocol(
             return;
         }
         auto version = std::min(m_localProtocol->maxVersion(), protocolInfo->maxVersion());
-        protocolInfo->setVersion((ProtocolVersion)version);
+        protocolInfo->setVersion(version);
         _session->setProtocolInfo(protocolInfo);
-        SERVICE_LOG(WARNING) << LOG_DESC("onReceiveProtocol: protocolNegotiate success")
-                             << LOG_KV("peer", _session->p2pID())
-                             << LOG_KV("minVersion", protocolInfo->minVersion())
-                             << LOG_KV("maxVersion", protocolInfo->maxVersion())
-                             << LOG_KV("supportMinVersion", m_localProtocol->minVersion())
-                             << LOG_KV("supportMaxVersion", m_localProtocol->maxVersion())
-                             << LOG_KV("negotiatedVersion", version);
+        SERVICE_LOG(INFO) << LOG_DESC("onReceiveProtocol: protocolNegotiate success")
+                          << LOG_KV("peer", _session->p2pID())
+                          << LOG_KV("minVersion", protocolInfo->minVersion())
+                          << LOG_KV("maxVersion", protocolInfo->maxVersion())
+                          << LOG_KV("supportMinVersion", m_localProtocol->minVersion())
+                          << LOG_KV("supportMaxVersion", m_localProtocol->maxVersion())
+                          << LOG_KV("negotiatedVersion", version);
     }
     catch (std::exception const& e)
     {
