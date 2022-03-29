@@ -125,7 +125,7 @@ void bcos::precompiled::checkNameValidate(std::string_view tableName,
     }
 }
 
-int bcos::precompiled::checkLengthValidate(
+void bcos::precompiled::checkLengthValidate(
     std::string_view fieldValue, int32_t maxLength, int32_t errorCode)
 {
     if (fieldValue.size() > (size_t)maxLength)
@@ -136,7 +136,6 @@ int bcos::precompiled::checkLengthValidate(
             PrecompiledError("size of value/key greater than" + std::to_string(maxLength) +
                              " error code: " + std::to_string(errorCode)));
     }
-    return 0;
 }
 
 void bcos::precompiled::checkCreateTableParam(
