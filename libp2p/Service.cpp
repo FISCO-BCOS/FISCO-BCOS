@@ -31,7 +31,9 @@
 #include "libp2p/P2PMessageFactory.h"  // for P2PMessageFa...
 #include "libp2p/P2PSession.h"         // for P2PSession
 #include <libstat/NetworkStatHandler.h>
+#include <boost/filesystem.hpp>
 #include <boost/random.hpp>
+#include <boost/regex.hpp>
 #include <fstream>
 #include <iostream>
 #include <unordered_map>
@@ -1141,6 +1143,8 @@ bool Service::addPeers(std::vector<dev::network::NodeIPEndpoint> const& endpoint
         nodes.insert(std::make_pair(endpoint, NodeID()));
     }
     setStaticNodes(nodes);
+    SERVICE_LOG(INFO) << LOG_DESC("add peers to the running node successfully!");
+    SERVICE_LOG(INFO) << LOG_DESC("try to update the configfile now");
     return updatePeersToIni(nodes);
 }
 
@@ -1156,6 +1160,8 @@ bool Service::erasePeers(std::vector<dev::network::NodeIPEndpoint> const& endpoi
         }
     }
     setStaticNodes(nodes);
+    SERVICE_LOG(INFO) << LOG_DESC("erase peers to the running node successfully!");
+    SERVICE_LOG(INFO) << LOG_DESC("try to update the configfile now");
     return updatePeersToIni(nodes);
 }
 
@@ -1165,48 +1171,93 @@ bool Service::updatePeersToIni(std::map<dev::network::NodeIPEndpoint, NodeID> co
     int _count = 0;
     for (auto it = nodes.begin(); it != nodes.end(); it++)
     {
-        tmpdata += (_count ? "    node." : "node.") + std::to_string(_count) +
-                   (it->first.m_ipv6 ? "=[" : "=") + it->first.m_host +
-                   (it->first.m_ipv6 ? "]:" : ":") + std::to_string(it->first.m_port) + "\n";
+        tmpdata += "    node." + std::to_string(_count) + (it->first.m_ipv6 ? "=[" : "=") +
+                   it->first.m_host + (it->first.m_ipv6 ? "]:" : ":") +
+                   std::to_string(it->first.m_port) + "\n";
         _count++;
     }
-    tmpdata += "\n";
 
     // output the nodes to the file "config.ini"
-    auto confdir = g_BCOSConfig.iniDir();
+    auto confDir = g_BCOSConfig.iniDir();
+    auto newDir = confDir + ".new";
+    std::string fileData;
+    std::string line;
+    boost::regex expNode("node\\.([0-9])+=(\\S)+:([0-9])+");
+    boost::regex expComment("[\\s]*;.*");
+    bool tmpDataUsed{false};
+    unsigned long _behindp2p = 0;
 
-    std::ifstream configFile(confdir, std::ios::in);
-    if (true != configFile.is_open())
+    std::ifstream configFile(confDir);
+    if (!configFile.is_open())
     {
+        SERVICE_LOG(WARNING) << LOG_DESC("fail to find config file") << LOG_KV("path", confDir);
         return false;
     }
     else
     {
-        std::string fileData;
-        configFile.seekg(0, std::ios::end);
-        int siz = configFile.tellg();
-        fileData.resize(siz);
-        configFile.seekg(0, std::ios::beg);
-        configFile.read(const_cast<char*>(fileData.data()), siz);
+        while (!configFile.eof())
+        {
+            std::getline(configFile, line);
+            if (line.empty())
+            {
+                fileData += "\n";
+            }
+            else if (boost::regex_match(line, expComment) || !boost::regex_search(line, expNode))
+            {
+                fileData += line + "\n";
+                // try to locate the pos that ought to print nodes' information
+                if (line.npos != line.find("; nodes to connect"))
+                {
+                    fileData += tmpdata;
+                    tmpDataUsed = true;
+                }
+                if (line.find("[p2p]") == 0)
+                    _behindp2p = fileData.size();
+            }
+            else
+            {
+                // ignore the line that KV is about IP&port match regex expNode
+            }
+        }
         configFile.close();
-
-        auto pos1 = fileData.find("p2p");
-        if (pos1 == fileData.npos)
-        {
-            return false;
-        }
-        auto pos2 = fileData.find("node.0=", pos1);
-        auto pos3 = fileData.find("certificate_blacklist");
-        if (pos2 == fileData.npos || pos3 == fileData.npos || pos2 >= pos3)
-        {
-            return false;
-        }
-        fileData.replace(pos2, pos3 - pos2 - 1, tmpdata);
-
-        // TODO: 写入保护
-        std::ofstream out(confdir, std::ios::out);
-        out << fileData;
-        out.close();
-        return true;
     }
+    // if not find '; nodes to connect' locate the tmpdate behind '[p2p]'
+    if (!tmpDataUsed)
+    {
+        if (_behindp2p)
+        {
+            fileData.insert(_behindp2p, tmpdata);
+            SERVICE_LOG(INFO) << LOG_DESC(
+                "peers' information will be insert behind '[p2p]' section");
+        }
+        else
+        {
+            SERVICE_LOG(WARNING) << LOG_DESC("fail to insert peers' data into config file")
+                                 << LOG_KV("path", confDir);
+            return false;
+        }
+    }
+
+    std::ofstream outfile(newDir);
+    if (!outfile.is_open())
+    {
+        SERVICE_LOG(WARNING) << LOG_DESC("fail to open the config file") << LOG_KV("path", newDir);
+        return false;
+    }
+    else
+    {
+        outfile.flush();
+        outfile << fileData;
+        outfile.close();
+        SERVICE_LOG(INFO) << LOG_DESC("output data to config file successfully");
+    }
+
+    if (0 != std::rename(newDir.c_str(), confDir.c_str()))
+    {
+        SERVICE_LOG(WARNING) << LOG_DESC("fail to remove bak file") << LOG_KV("path", newDir)
+                             << LOG_KV("error", std::strerror(errno));
+        return false;
+    }
+    SERVICE_LOG(INFO) << LOG_DESC("update config file successfully") << LOG_KV("path", confDir);
+    return true;
 }

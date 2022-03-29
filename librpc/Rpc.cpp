@@ -2234,13 +2234,13 @@ Json::Value Rpc::addPeers(const Json::Value& _hostPorts)
         if (service()->addPeers(endpoints))
         {
             response["code"] = LedgerManagementStatusCode::SUCCESS;
-            response["message"] = " add peers successfully";
+            response["message"] = "add peers successfully";
             return response;
         }
         else
         {
             response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
-            response["message"] = " add peers failed during outputing to configfile";
+            response["message"] = "add peers failed during outputing to configfile";
             return response;
         }
     }
@@ -2296,13 +2296,13 @@ Json::Value Rpc::erasePeers(const Json::Value& _hostPorts)
         if (service()->erasePeers(endpoints))
         {
             response["code"] = LedgerManagementStatusCode::SUCCESS;
-            response["message"] = " erase peers successfully";
+            response["message"] = "erase peers successfully";
             return response;
         }
         else
         {
             response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
-            response["message"] = " erase peers fails during outputing to configfile";
+            response["message"] = "erase peers fails during outputing to configfile";
             return response;
         }
     }
