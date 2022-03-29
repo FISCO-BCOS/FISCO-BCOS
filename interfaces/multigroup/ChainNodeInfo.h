@@ -99,7 +99,13 @@ public:
         *m_nodeProtocol = _protocol;
     }
 
-private:
+    virtual void setWasm(bool _wasm) { m_wasm = _wasm; }
+    virtual void setSmCryptoType(bool _smCryptoType) { m_smCryptoType = _smCryptoType; }
+
+    bool wasm() const { return m_wasm; }
+    bool smCryptoType() const { return m_smCryptoType; }
+
+protected:
     bool m_microService = false;
     // the node name
     std::string m_nodeName;
@@ -117,6 +123,9 @@ private:
 
     // the node protocol
     bcos::protocol::ProtocolInfo::Ptr m_nodeProtocol;
+
+    bool m_wasm{false};
+    bool m_smCryptoType{false};
 };
 inline std::string printNodeInfo(ChainNodeInfo::Ptr _nodeInfo)
 {

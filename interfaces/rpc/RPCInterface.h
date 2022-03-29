@@ -21,8 +21,6 @@
 
 #include "bcos-framework/interfaces/multigroup/GroupInfo.h"
 #include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
-#include "bcos-protocol/TransactionSubmitResultImpl.h"
-#include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-utilities/Error.h>
 
 namespace bcos

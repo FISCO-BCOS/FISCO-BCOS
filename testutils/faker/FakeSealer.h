@@ -40,7 +40,7 @@ public:
     void start() override {}
     void stop() override {}
 
-    void asyncNotifySealProposal(size_t _startIndex, size_t _endIndex, size_t _maxTxsToSeal,
+    void asyncNotifySealProposal(uint64_t _startIndex, uint64_t _endIndex, uint64_t _maxTxsToSeal,
         std::function<void(Error::Ptr)>) override
     {
         m_proposalStartIndex = _startIndex;
@@ -49,27 +49,27 @@ public:
     }
 
     void asyncNoteUnSealedTxsSize(
-        size_t _unSealedTxsSize, std::function<void(Error::Ptr)> _onRecvResponse) override
+        uint64_t _unSealedTxsSize, std::function<void(Error::Ptr)> _onRecvResponse) override
     {
         m_unSealedTxsSize = _unSealedTxsSize;
         _onRecvResponse(nullptr);
     }
 
-    size_t unSealedTxsSize() const { return m_unSealedTxsSize; }
+    uint64_t unSealedTxsSize() const { return m_unSealedTxsSize; }
 
-    size_t proposalStartIndex() const { return m_proposalStartIndex; }
-    size_t proposalEndIndex() const { return m_proposalEndIndex; }
-    size_t maxTxsToSeal() const { return m_maxTxsToSeal; }
+    uint64_t proposalStartIndex() const { return m_proposalStartIndex; }
+    uint64_t proposalEndIndex() const { return m_proposalEndIndex; }
+    uint64_t maxTxsToSeal() const { return m_maxTxsToSeal; }
 
     void asyncNoteLatestBlockNumber(int64_t _blockNumber) override { m_blockNumber = _blockNumber; }
     int64_t blockNumber() const { return m_blockNumber; }
     void asyncResetSealing(std::function<void(Error::Ptr)>) override {}
 
 private:
-    std::atomic<size_t> m_unSealedTxsSize = {0};
-    size_t m_proposalStartIndex = 0;
-    size_t m_proposalEndIndex = 0;
-    size_t m_maxTxsToSeal = 0;
+    std::atomic<uint64_t> m_unSealedTxsSize = {0};
+    uint64_t m_proposalStartIndex = 0;
+    uint64_t m_proposalEndIndex = 0;
+    uint64_t m_maxTxsToSeal = 0;
     int64_t m_blockNumber;
 };
 }  // namespace test
