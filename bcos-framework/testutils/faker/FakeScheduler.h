@@ -78,11 +78,6 @@ public:
 
     // clear all status
     void reset(std::function<void(Error::Ptr&&)>) noexcept override {}
-
-    void registerBlockNumberReceiver(
-        std::function<void(protocol::BlockNumber blockNumber)>) override
-    {}
-
     void getCode(std::string_view, std::function<void(Error::Ptr, bcos::bytes)>) override {}
     void getABI(std::string_view, std::function<void(Error::Ptr, std::string)>) override {}
 
