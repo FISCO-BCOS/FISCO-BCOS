@@ -9,7 +9,6 @@
 
 #pragma once
 #include <bcos-boostssl/interfaces/MessageFace.h>
-#include <bcos-boostssl/interfaces/NodeInfo.h>
 #include <bcos-boostssl/websocket/Common.h>
 #include <bcos-boostssl/websocket/WsMessage.h>
 #include <bcos-boostssl/websocket/WsService.h>
@@ -43,11 +42,10 @@ public:
 
     void start() override;
     void stop() override;
-    // virtual void heartBeat();
 
     virtual bool actived() { return m_run; }
-    boostssl::nodeID id() const override { return m_nodeID; }
-    void setId(const boostssl::nodeID& _nodeID) { m_nodeID = _nodeID; }
+    nodeID id() const override { return m_nodeID; }
+    void setId(const nodeID& _nodeID) { m_nodeID = _nodeID; }
 
     virtual void onConnect(std::shared_ptr<boostssl::ws::WsSession> session);
     virtual void onDisconnect(NetworkException e, P2PSession::Ptr p2pSession);
@@ -55,7 +53,7 @@ public:
         bcos::boostssl::MessageFace::Ptr message, std::weak_ptr<P2PSession> p2pSessionWeakPtr);
 
     std::shared_ptr<bcos::boostssl::MessageFace> sendMessageByNodeID(
-        boostssl::nodeID nodeID, std::shared_ptr<bcos::boostssl::MessageFace> message) override;
+        nodeID nodeID, std::shared_ptr<bcos::boostssl::MessageFace> message) override;
     void sendMessageBySession(
         int _packetType, bytesConstRef _payload, boostssl::ws::WsSession::Ptr _p2pSession) override;
     void sendRespMessageBySession(bytesConstRef _payload,
@@ -82,19 +80,15 @@ public:
 
     void obtainHostAndPortFromString(
         std::string const& _endpointString, std::string& host, uint16_t& port);
-
     std::string obtainCommonNameFromSubject(std::string const& subject);
+    void obtainNodeInfo(NodeInfo& info, std::string const& node_info);
 
-    void obtainNodeInfo(boostssl::NodeInfo& info, std::string const& node_info);
+    NodeInfos sessionInfos() override;  ///< Only connected node
 
-    boostssl::NodeInfos sessionInfos() override;  ///< Only connected node
-    boostssl::NodeInfo localP2pInfo() override
-    {
-        auto p2pInfo = m_wsService->nodeInfo();
-        p2pInfo.nodeID = m_nodeID;
-        return p2pInfo;
-    }
-    bool isConnected(boostssl::nodeID const& nodeID) const override;
+    NodeInfo nodeInfo();
+    NodeInfo localP2pInfo() override;
+
+    bool isConnected(nodeID const& nodeID) const override;
 
     std::shared_ptr<boostssl::ws::WsService> wsService() { return m_wsService; }
     virtual void setWsService(std::shared_ptr<boostssl::ws::WsService> wsService)
@@ -120,14 +114,14 @@ public:
 
     void updateEndpointToWservice();
 
-    void updateStaticNodes(std::string const& _endPoint, boostssl::nodeID const& nodeID);
+    void updateStaticNodes(std::string const& _endPoint, nodeID const& nodeID);
 
     void registerDisconnectHandler(std::function<void(NetworkException, P2PSession::Ptr)> _handler)
     {
         m_disconnectionHandlers.push_back(_handler);
     }
 
-    std::shared_ptr<P2PSession> getP2PSessionByNodeId(boostssl::nodeID const& _nodeID) override
+    std::shared_ptr<P2PSession> getP2PSessionByNodeId(nodeID const& _nodeID) override
     {
         RecursiveGuard l(x_sessions);
         auto it = m_sessions.find(_nodeID);
@@ -145,7 +139,7 @@ public:
     void asyncBroadcastMessageToP2PNodes(
         int16_t _type, bytesConstRef _payload, boostssl::ws::Options _options) override;
 
-    void asyncSendMessageByP2PNodeIDs(int16_t _type, const std::vector<boostssl::nodeID>& _nodeIDs,
+    void asyncSendMessageByP2PNodeIDs(int16_t _type, const std::vector<nodeID>& _nodeIDs,
         bytesConstRef _payload, boostssl::ws::Options _options) override;
 
     void registerHandlerByMsgType(uint32_t _type, MessageHandler _msgHandler) override
@@ -167,8 +161,6 @@ public:
 
     bool connected(std::string const& _nodeID) override;
 
-    virtual uint32_t newSeq() override { return ++m_seq; }
-
 private:
     std::shared_ptr<P2PMessage> newP2PMessage(int16_t _type, bytesConstRef _payload);
     // handshake protocol
@@ -181,17 +173,17 @@ private:
 
     std::shared_ptr<bcos::crypto::KeyFactory> m_keyFactory;
 
-    std::map<boostssl::NodeIPEndpoint, boostssl::nodeID> m_staticNodes;
+    std::map<NodeIPEndpoint, nodeID> m_staticNodes;
     bcos::RecursiveMutex x_nodes;
 
     std::shared_ptr<boostssl::ws::WsService> m_wsService;
 
-    std::unordered_map<boostssl::nodeID, P2PSession::Ptr> m_sessions;
+    std::unordered_map<nodeID, P2PSession::Ptr> m_sessions;
     mutable bcos::RecursiveMutex x_sessions;
 
     std::shared_ptr<boostssl::MessageFaceFactory> m_messageFactory;
 
-    boostssl::nodeID m_nodeID;
+    nodeID m_nodeID;
 
     std::shared_ptr<boost::asio::deadline_timer> m_timer;
 

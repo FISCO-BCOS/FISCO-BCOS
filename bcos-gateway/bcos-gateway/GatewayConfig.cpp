@@ -20,7 +20,7 @@ bool GatewayConfig::isValidPort(int port)
     return true;
 }
 
-void GatewayConfig::hostAndPort2Endpoint(const std::string& _host, boostssl::NodeIPEndpoint& _endpoint)
+void GatewayConfig::hostAndPort2Endpoint(const std::string& _host, NodeIPEndpoint& _endpoint)
 {
     std::string ip;
     uint16_t port;
@@ -69,7 +69,7 @@ void GatewayConfig::hostAndPort2Endpoint(const std::string& _host, boostssl::Nod
 }
 
 void GatewayConfig::parseConnectedJson(
-    const std::string& _json, std::set<boostssl::NodeIPEndpoint>& _nodeIPEndpointSet)
+    const std::string& _json, std::set<NodeIPEndpoint>& _nodeIPEndpointSet)
 {
     /*
     {"nodes":["127.0.0.1:30355","127.0.0.1:30356"}]}
@@ -88,7 +88,6 @@ void GatewayConfig::parseConnectedJson(
                                                       "connected nodes json"));
         }
 
-        // std::set<boostssl::ws::EndPoint> nodeIPEndpointSet;
         Json::Value jNodes = root["nodes"];
         if (jNodes.isArray())
         {
@@ -97,7 +96,7 @@ void GatewayConfig::parseConnectedJson(
             {
                 std::string host = jNodes[i].asString();
 
-                boostssl::NodeIPEndpoint endpoint;
+                NodeIPEndpoint endpoint;
                 hostAndPort2Endpoint(host, endpoint);
                 _nodeIPEndpointSet.insert(endpoint);
 
@@ -207,7 +206,7 @@ void GatewayConfig::loadP2pConnectedNodes()
 {
     std::string nodeFilePath = m_nodePath + "/" + m_nodeFileName;
     // load p2p connected nodes
-    std::set<boostssl::NodeIPEndpoint> nodes;
+    std::set<NodeIPEndpoint> nodes;
     auto jsonContent = readContentsToString(boost::filesystem::path(nodeFilePath));
     if (!jsonContent || jsonContent->empty())
     {
@@ -225,13 +224,14 @@ void GatewayConfig::loadP2pConnectedNodes()
                              << LOG_KV("nodes", nodes.size());
 }
 
-boostssl::ws::EndPointsPtr GatewayConfig::obtainPeersForWsService(const std::set<boostssl::NodeIPEndpoint>& _nodeIPEndpointSet)
+boostssl::ws::EndPointsPtr GatewayConfig::obtainPeersForWsService(
+    const std::set<NodeIPEndpoint>& _nodeIPEndpointSet)
 {
     auto peers = std::make_shared<boostssl::ws::EndPoints>();
-    for(auto const& it : _nodeIPEndpointSet)
-    { 
+    for (auto const& it : _nodeIPEndpointSet)
+    {
         boostssl::ws::EndPoint endPoint;
-        endPoint.host = it.address(); 
+        endPoint.host = it.address();
         endPoint.port = it.port();
         peers->push_back(endPoint);
     }

@@ -48,8 +48,6 @@ void Service::start()
             }
         });
         m_wsService->start();
-
-        // heartBeat();
     }
 }
 
@@ -71,16 +69,6 @@ void Service::stop()
         m_sessions.clear();
     }
 }
-
-// void Service::heartBeat()
-// {
-//     if (!m_run)
-//     {
-//         return;
-//     }
-
-//     // m_wsService->heartbeat();
-// }
 
 void Service::obtainNodeInfo(NodeInfo& info, std::string const& node_info)
 {
@@ -126,6 +114,61 @@ std::string Service::obtainCommonNameFromSubject(std::string const& subject)
     return subject;
 }
 
+NodeInfo Service::localP2pInfo()
+{
+    try
+    {
+        if (m_nodeInfo.nodeID.empty())
+        {
+            /// get certificate
+            auto sslContext = m_wsService->ctx()->native_handle();
+            X509* cert = SSL_CTX_get0_certificate(sslContext);
+
+            /// get issuer name
+            const char* issuer = X509_NAME_oneline(X509_get_issuer_name(cert), NULL, 0);
+            std::string issuerName(issuer);
+
+            /// get subject name
+            const char* subject = X509_NAME_oneline(X509_get_subject_name(cert), NULL, 0);
+            std::string subjectName(subject);
+
+            if (!m_nodeID.empty())
+            {
+                m_nodeInfo.nodeID = m_nodeID;
+            }
+            else
+            {
+                /// get nodeID
+                std::string nodeIDOut;
+                auto sslContextPubHandler =
+                    m_wsService->connector()->sslCertInfo()->sslContextPubHandler();
+                if (sslContextPubHandler(cert, nodeIDOut))
+                {
+                    m_nodeInfo.nodeID = boost::to_upper_copy(nodeIDOut);
+                    SERVICE_LOG(INFO) << LOG_DESC("Get node information from cert")
+                                      << LOG_KV("nodeID", m_nodeInfo.nodeID);
+                }
+            }
+
+            /// fill in the node informations
+            m_nodeInfo.agencyName = obtainCommonNameFromSubject(issuerName);
+            m_nodeInfo.nodeName = obtainCommonNameFromSubject(subjectName);
+            m_nodeInfo.nodeIPEndpoint =
+                NodeIPEndpoint(m_wsService->listenHost(), m_wsService->listenPort());
+            /// free resources
+            OPENSSL_free((void*)issuer);
+            OPENSSL_free((void*)subject);
+        }
+    }
+    catch (std::exception& e)
+    {
+        SERVICE_LOG(ERROR) << LOG_DESC("Get node information from cert failed.")
+                           << boost::diagnostic_information(e);
+        return m_nodeInfo;
+    }
+    return m_nodeInfo;
+}
+
 void Service::updateEndpointToWservice()
 {
     RecursiveGuard l(x_nodes);
@@ -146,7 +189,7 @@ void Service::updateEndpointToWservice()
 }
 
 /// update the staticNodes
-void Service::updateStaticNodes(std::string const& _endPoint, boostssl::nodeID const& nodeID)
+void Service::updateStaticNodes(std::string const& _endPoint, nodeID const& nodeID)
 {
     RecursiveGuard l(x_nodes);
     std::string host;
@@ -175,7 +218,7 @@ void Service::onConnect(std::shared_ptr<WsSession> session)
     auto publicKey = session->publicKey();
     NodeInfo p2pInfo;
     obtainNodeInfo(p2pInfo, publicKey);
-    boostssl::nodeID nodeid = p2pInfo.nodeID;
+    nodeID nodeid = p2pInfo.nodeID;
 
     std::string peer = "unknown";
     if (session)
@@ -261,7 +304,7 @@ void Service::onDisconnect(NetworkException e, P2PSession::Ptr p2pSession)
 void Service::sendMessageBySession(int _packetType, bytesConstRef _payload, WsSession::Ptr _session)
 {
     auto p2pMessage = std::static_pointer_cast<P2PMessage>(messageFactory()->buildMessage());
-    auto seq = boost::lexical_cast<std::string>(newSeq());
+    auto seq = messageFactory()->newSeq();
     p2pMessage->setSeq(seq);
     // p2pMessage->setSeqLength(seq.size());
     p2pMessage->setPacketType(_packetType);
@@ -301,7 +344,7 @@ void Service::onMessage(NetworkException e, boostssl::ws::WsSession::Ptr session
 
     try
     {
-        boostssl::nodeID p2pID = id();
+        nodeID p2pID = id();
         NodeIPEndpoint nodeIPEndpoint(boost::asio::ip::address(), 0);
         if (session && p2pSession)
         {
@@ -366,9 +409,6 @@ bcos::boostssl::MessageFace::Ptr Service::sendMessageByNodeID(
 {
     try
     {
-        SERVICE_LOG(INFO) << LOG_DESC(
-                                 "=========== enter function sendMessageByNodeID ================")
-                          << LOG_KV("message", message);
         struct SessionCallback : public std::enable_shared_from_this<SessionCallback>
         {
         public:
@@ -401,8 +441,6 @@ bcos::boostssl::MessageFace::Ptr Service::sendMessageByNodeID(
         NetworkException error = callback->error;
         if (error.errorCode() != 0)
         {
-            SERVICE_LOG(ERROR) << LOG_DESC(
-                "=========== sendMessageByNodeID 1111111 ================");
             SERVICE_LOG(ERROR) << LOG_DESC("asyncSendMessageByNodeID error")
                                << LOG_KV("nodeid", nodeID) << LOG_KV("errorCode", error.errorCode())
                                << LOG_KV("what", error.what());
@@ -413,7 +451,6 @@ bcos::boostssl::MessageFace::Ptr Service::sendMessageByNodeID(
     }
     catch (std::exception& e)
     {
-        SERVICE_LOG(ERROR) << LOG_DESC("=========== sendMessageByNodeID 222222 ================");
         SERVICE_LOG(ERROR) << LOG_DESC("asyncSendMessageByNodeID error") << LOG_KV("nodeid", nodeID)
                            << LOG_KV("what", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(e);
@@ -432,15 +469,6 @@ bool Service::connected(std::string const& _nodeID)
 void Service::asyncSendMessageByNodeID(P2pID nodeID, bcos::boostssl::MessageFace::Ptr message,
     CallbackFuncWithSession callback, Options options)
 {
-    SERVICE_LOG(INFO) << "======= enter function asyncSendMessageByNodeID"
-                      << LOG_KV("seq", message->seq())
-                      << LOG_KV("packetType", message->packetType())
-                      << LOG_KV("payload", message->payload()) << LOG_KV("ext", message->ext());
-
-    // SERVICE_LOG(INFO) << LOG_DESC("======= enter function asyncSendMessageByNodeID")
-    //             << LOG_KV("callback", *callback);
-
-
     try
     {
         if (nodeID == id())
@@ -456,12 +484,11 @@ void Service::asyncSendMessageByNodeID(P2pID nodeID, bcos::boostssl::MessageFace
         {
             if (message->seq() == "0")
             {
-                message->setSeq(boost::lexical_cast<std::string>(newSeq()));
+                message->setSeq(messageFactory()->newSeq());
             }
             auto session = it->second;
             if (callback)
             {
-                SERVICE_LOG(INFO) << "-------- callback --------------   ";
                 session->session()->asyncSendMessage(message, options,
                     [session, callback](bcos::Error::Ptr error, boostssl::MessageFace::Ptr message,
                         std::shared_ptr<WsSession>) {
@@ -474,15 +501,12 @@ void Service::asyncSendMessageByNodeID(P2pID nodeID, bcos::boostssl::MessageFace
                             // SERVICE_LOG(INFO) << LOG_KV("errorCode", error->errorCode()) <<
                             // LOG_KV("errorMessage",  error->errorMessage());
                             callback(e, session, p2pMessage);
-                            SERVICE_LOG(INFO) << " ------ callback ------ exit";
                         }
                     });
             }
             else
             {
-                SERVICE_LOG(INFO) << "-------- without callback --------------   ";
                 session->session()->asyncSendMessage(message, options, nullptr);
-                SERVICE_LOG(INFO) << "-------- without callback --- exit -----------   ";
             }
         }
         else
@@ -497,7 +521,6 @@ void Service::asyncSendMessageByNodeID(P2pID nodeID, bcos::boostssl::MessageFace
     }
     catch (std::exception& e)
     {
-        SERVICE_LOG(ERROR) << "======= exit function asyncSendMessageByNodeID catch";
         SERVICE_LOG(ERROR) << "asyncSendMessageByNodeID" << LOG_KV("nodeid", nodeID)
                            << LOG_KV("what", boost::diagnostic_information(e));
 
@@ -529,7 +552,6 @@ void Service::asyncBroadcastMessage(
     }
     catch (std::exception& e)
     {
-        SERVICE_LOG(WARNING) << " exit asyncBroadcastMessage catch -------- ";
         SERVICE_LOG(WARNING) << LOG_DESC("asyncBroadcastMessage")
                              << LOG_KV("what", boost::diagnostic_information(e));
     }
@@ -572,7 +594,7 @@ std::shared_ptr<P2PMessage> Service::newP2PMessage(int16_t _type, bytesConstRef 
     auto message = std::static_pointer_cast<P2PMessage>(messageFactory()->buildMessage());
 
     message->setPacketType(_type);
-    message->setSeq(boost::lexical_cast<std::string>(newSeq()));
+    message->setSeq(messageFactory()->newSeq());
     message->setPayload(std::make_shared<bytes>(_payload.begin(), _payload.end()));
     return message;
 }

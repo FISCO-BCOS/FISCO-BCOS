@@ -264,7 +264,7 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, NodeIDPtr _s
     auto retry = std::make_shared<Retry>();
     auto message =
         std::static_pointer_cast<P2PMessage>(m_p2pInterface->messageFactory()->buildMessage());
-    auto seq = boost::lexical_cast<std::string>(m_p2pInterface->newSeq());
+    auto seq = m_p2pInterface->messageFactory()->newSeq();
 
     message->setPacketType(GatewayMessageType::PeerToPeerMessage);
     message->setSeq(m_p2pInterface->messageFactory()->newSeq());
@@ -327,7 +327,6 @@ void Gateway::asyncSendBroadcastMessage(
     message->setPacketType(GatewayMessageType::BroadcastMessage);
     message->setExt(_type);
     message->setSeq(seq);
-    // messages->setSeqLength(seq.size());
     message->options()->setGroupID(_groupID);
     message->options()->setSrcNodeID(_srcNodeID->encode());
     message->setPayload(std::make_shared<bytes>(_payload.begin(), _payload.end()));

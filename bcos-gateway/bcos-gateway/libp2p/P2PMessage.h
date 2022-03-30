@@ -177,6 +177,14 @@ public:
         auto message = std::make_shared<P2PMessage>();
         return message;
     }
+
+    virtual std::string newSeq() override
+    {
+        uint32_t seq = ++m_seq;
+        return boost::lexical_cast<std::string>(seq);
+    }
+
+    std::atomic<uint32_t> m_seq = {1};
 };
 
 inline std::ostream& operator<<(std::ostream& _out, const P2PMessage _p2pMessage)

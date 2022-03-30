@@ -272,12 +272,6 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
             (_config->smSSL() ? buildSSLContext(_config->smCertConfig()) :
                                 buildSSLContext(_config->certConfig()));
 
-        // // init ASIOInterface
-        // auto asioInterface = std::make_shared<ASIOInterface>();
-        // asioInterface->setIOService(std::make_shared<ba::io_service>());
-        // asioInterface->setSSLContext(sslContext);
-        // asioInterface->setType(ASIOInterface::ASIO_TYPE::SSL);
-
         // Message Factory
         auto messageFactory = std::make_shared<P2PMessageFactory>();
         // Session Factory

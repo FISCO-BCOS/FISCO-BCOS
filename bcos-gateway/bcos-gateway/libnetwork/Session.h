@@ -15,10 +15,9 @@
 #include <set>
 #include <utility>
 
+#include <bcos-boostssl/interfaces/MessageFace.h>
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/SessionFace.h>
-#include <bcos-boostssl/interfaces/MessageFace.h>
-#include <bcos-boostssl/interfaces/NodeInfo.h>
 
 namespace bcos
 {
@@ -38,10 +37,10 @@ public:
     void start() override;
     void disconnect(DisconnectReason _reason) override;
 
-    void asyncSendMessage(
-        boostssl::MessageFace::Ptr, Options = Options(), SessionCallbackFunc = SessionCallbackFunc()) override;
+    void asyncSendMessage(boostssl::MessageFace::Ptr, Options = Options(),
+        SessionCallbackFunc = SessionCallbackFunc()) override;
 
-    boostssl::NodeIPEndpoint nodeIPEndpoint() const override;
+    NodeIPEndpoint nodeIPEndpoint() const override;
 
     bool actived() const override;
 
@@ -57,13 +56,14 @@ public:
         m_messageFactory = _messageFactory;
     }
 
-    virtual std::function<void(NetworkException, SessionFace::Ptr, boostssl::MessageFace::Ptr)> messageHandler()
+    virtual std::function<void(NetworkException, SessionFace::Ptr, boostssl::MessageFace::Ptr)>
+    messageHandler()
     {
         return m_messageHandler;
     }
     void setMessageHandler(
-        std::function<void(NetworkException, SessionFace::Ptr, boostssl::MessageFace::Ptr)> messageHandler)
-        override
+        std::function<void(NetworkException, SessionFace::Ptr, boostssl::MessageFace::Ptr)>
+            messageHandler) override
     {
         m_messageHandler = messageHandler;
     }
@@ -153,7 +153,8 @@ private:
     mutable bcos::RecursiveMutex x_seq2Callback;
     std::shared_ptr<std::unordered_map<std::string, ResponseCallback::Ptr>> m_seq2Callback;
 
-    std::function<void(NetworkException, SessionFace::Ptr, boostssl::MessageFace::Ptr)> m_messageHandler;
+    std::function<void(NetworkException, SessionFace::Ptr, boostssl::MessageFace::Ptr)>
+        m_messageHandler;
     uint64_t m_shutDownTimeThres = 50000;
     // 1min
     uint64_t m_idleTimeInterval = 60;
@@ -169,7 +170,8 @@ public:
     virtual ~SessionFactory(){};
 
     virtual std::shared_ptr<SessionFace> create_session(std::weak_ptr<Host> _server,
-        std::shared_ptr<SocketFace> const& _socket, boostssl::MessageFaceFactory::Ptr _messageFactory)
+        std::shared_ptr<SocketFace> const& _socket,
+        boostssl::MessageFaceFactory::Ptr _messageFactory)
     {
         std::shared_ptr<Session> session = std::make_shared<Session>();
         session->setHost(_server);

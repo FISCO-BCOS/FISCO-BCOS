@@ -19,8 +19,8 @@
  * @date 2021-04-19
  */
 #pragma once
+
 #include <bcos-utilities/Common.h>
-#include <bcos-boostssl/interfaces/NodeInfo.h>
 #include <boost/asio/ip/tcp.hpp>
 #include <iostream>
 #include <memory>
@@ -42,6 +42,75 @@ enum GatewayMessageType : int16_t
     SyncNodeSeq = 0x9,
 };
 
+/**
+ * @brief client end endpoint. Node will connect to NodeIPEndpoint.
+ */
+struct NodeIPEndpoint
+{
+    using Ptr = std::shared_ptr<NodeIPEndpoint>;
+    NodeIPEndpoint() = default;
+    NodeIPEndpoint(std::string const& _host, uint16_t _port) : m_host(_host), m_port(_port) {}
+    NodeIPEndpoint(const NodeIPEndpoint& _nodeIPEndpoint) = default;
+    NodeIPEndpoint(boost::asio::ip::address _addr, uint16_t _port)
+      : m_host(_addr.to_string()), m_port(_port), m_ipv6(_addr.is_v6())
+    {}
+
+    virtual ~NodeIPEndpoint() = default;
+    NodeIPEndpoint(const boost::asio::ip::tcp::endpoint& _endpoint)
+    {
+        m_host = _endpoint.address().to_string();
+        m_port = _endpoint.port();
+        m_ipv6 = _endpoint.address().is_v6();
+    }
+    bool operator<(const NodeIPEndpoint& rhs) const
+    {
+        if (m_host + std::to_string(m_port) < rhs.m_host + std::to_string(rhs.m_port))
+        {
+            return true;
+        }
+        return false;
+    }
+    bool operator==(const NodeIPEndpoint& rhs) const
+    {
+        return (m_host + std::to_string(m_port) == rhs.m_host + std::to_string(rhs.m_port));
+    }
+    operator boost::asio::ip::tcp::endpoint() const
+    {
+        return boost::asio::ip::tcp::endpoint(boost::asio::ip::make_address(m_host), m_port);
+    }
+
+    // Get the port associated with the endpoint.
+    uint16_t port() const { return m_port; };
+
+    // Get the IP address associated with the endpoint.
+    std::string address() const { return m_host; };
+    bool isIPv6() const { return m_ipv6; }
+
+    std::string m_host;
+    uint16_t m_port;
+    bool m_ipv6 = false;
+};
+
+inline std::ostream& operator<<(std::ostream& _out, NodeIPEndpoint const& _endpoint)
+{
+    _out << _endpoint.address() << ":" << _endpoint.port();
+    return _out;
+}
+
+/// node info obtained from the certificate
+struct NodeInfo
+{
+    using Ptr = std::shared_ptr<NodeInfo>;
+    NodeInfo() = default;
+    ~NodeInfo() {}
+    std::string nodeID;
+    std::string agencyName;
+    std::string nodeName;
+    NodeIPEndpoint nodeIPEndpoint;
+};
+using NodeInfos = std::vector<NodeInfo>;
+using nodeID = std::string;
+
 class GatewayInfo
 {
 public:
@@ -49,9 +118,9 @@ public:
     // groupID=>nodeList
     using NodeIDInfoType = std::map<std::string, std::set<std::string>>;
     GatewayInfo()
-      : m_p2pInfo(std::make_shared<boostssl::NodeInfo>()), m_nodeIDInfo(std::make_shared<NodeIDInfoType>())
+      : m_p2pInfo(std::make_shared<NodeInfo>()), m_nodeIDInfo(std::make_shared<NodeIDInfoType>())
     {}
-    explicit GatewayInfo(boostssl::NodeInfo const& _p2pInfo) : GatewayInfo() { *m_p2pInfo = _p2pInfo; }
+    explicit GatewayInfo(NodeInfo const& _p2pInfo) : GatewayInfo() { *m_p2pInfo = _p2pInfo; }
 
     virtual ~GatewayInfo() {}
     void setNodeIDInfo(NodeIDInfoType&& _nodeIDInfo)
@@ -59,7 +128,7 @@ public:
         WriteGuard l(x_nodeIDInfo);
         *m_nodeIDInfo = std::move(_nodeIDInfo);
     }
-    void setP2PInfo(boostssl::NodeInfo&& _p2pInfo)
+    void setP2PInfo(NodeInfo&& _p2pInfo)
     {
         WriteGuard l(x_p2pInfo);
         *m_p2pInfo = std::move(_p2pInfo);
@@ -71,14 +140,14 @@ public:
         return *m_nodeIDInfo;
     }
     // Note: copy here to ensure thread-safe, use std::move out to ensure performance
-    boostssl::NodeInfo p2pInfo()
+    NodeInfo p2pInfo()
     {
         ReadGuard l(x_p2pInfo);
         return *m_p2pInfo;
     }
 
 private:
-    std::shared_ptr<boostssl::NodeInfo> m_p2pInfo;
+    std::shared_ptr<NodeInfo> m_p2pInfo;
     SharedMutex x_p2pInfo;
 
     std::shared_ptr<NodeIDInfoType> m_nodeIDInfo;

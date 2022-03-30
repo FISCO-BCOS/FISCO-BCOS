@@ -5,12 +5,11 @@
 
 #pragma once
 
+#include <bcos-boostssl/interfaces/MessageFace.h>
+#include <bcos-boostssl/websocket/WsSession.h>
 #include <bcos-gateway/libnetwork/Host.h>
 #include <bcos-gateway/libp2p/Common.h>
 #include <bcos-gateway/libp2p/P2PMessage.h>
-#include <bcos-boostssl/interfaces/MessageFace.h>
-#include <bcos-boostssl/interfaces/NodeInfo.h>
-#include <bcos-boostssl/websocket/WsSession.h>
 #include <memory>
 
 namespace bcos
@@ -25,8 +24,8 @@ namespace gateway
 {
 class MessageFactory;
 class P2PSession;
-using CallbackFuncWithSession =
-    std::function<void(NetworkException, std::shared_ptr<P2PSession>, std::shared_ptr<bcos::boostssl::MessageFace>)>;
+using CallbackFuncWithSession = std::function<void(
+    NetworkException, std::shared_ptr<P2PSession>, std::shared_ptr<bcos::boostssl::MessageFace>)>;
 using DisconnectCallbackFuncWithSession =
     std::function<void(NetworkException, std::shared_ptr<P2PSession>)>;
 using P2PResponseCallback =
@@ -41,18 +40,19 @@ public:
     virtual void stop() = 0;
 
     virtual P2pID id() const = 0;
-    virtual uint32_t newSeq() = 0;
 
     virtual std::shared_ptr<bcos::boostssl::MessageFace> sendMessageByNodeID(
         P2pID nodeID, std::shared_ptr<bcos::boostssl::MessageFace> message) = 0;
 
-    virtual void asyncSendMessageByNodeID(P2pID nodeID, std::shared_ptr<bcos::boostssl::MessageFace> message,
-        CallbackFuncWithSession callback, boostssl::ws::Options options = boostssl::ws::Options()) = 0;
+    virtual void asyncSendMessageByNodeID(P2pID nodeID,
+        std::shared_ptr<bcos::boostssl::MessageFace> message, CallbackFuncWithSession callback,
+        boostssl::ws::Options options = boostssl::ws::Options()) = 0;
 
-    virtual void asyncBroadcastMessage(std::shared_ptr<bcos::boostssl::MessageFace> message, boostssl::ws::Options options) = 0;
+    virtual void asyncBroadcastMessage(
+        std::shared_ptr<bcos::boostssl::MessageFace> message, boostssl::ws::Options options) = 0;
 
-    virtual boostssl::NodeInfos sessionInfos() = 0;
-    virtual boostssl::NodeInfo localP2pInfo() = 0;
+    virtual NodeInfos sessionInfos() = 0;
+    virtual NodeInfo localP2pInfo() = 0;
 
     virtual bool isConnected(P2pID const& _nodeID) const = 0;
 
@@ -88,15 +88,16 @@ public:
     virtual void asyncSendMessageByP2PNodeIDs(int16_t _type, const std::vector<P2pID>& _nodeIDs,
         bytesConstRef _payload, boostssl::ws::Options _options) = 0;
 
-    using MessageHandler =
-        std::function<void(std::shared_ptr<boostssl::MessageFace>, std::shared_ptr<boostssl::ws::WsSession>)>;
+    using MessageHandler = std::function<void(
+        std::shared_ptr<boostssl::MessageFace>, std::shared_ptr<boostssl::ws::WsSession>)>;
     virtual void registerHandlerByMsgType(uint32_t _type, MessageHandler _msgHandler) = 0;
     virtual void eraseHandlerByMsgType(uint32_t _type) = 0;
 
     virtual bool connected(std::string const& _nodeID) = 0;
-    virtual void sendMessageBySession(
-        int _packetType, bytesConstRef _payload, std::shared_ptr<boostssl::ws::WsSession> _p2pSession) = 0;
-    virtual void sendRespMessageBySession(bytesConstRef _payload, bcos::boostssl::MessageFace::Ptr _p2pMessage,
+    virtual void sendMessageBySession(int _packetType, bytesConstRef _payload,
+        std::shared_ptr<boostssl::ws::WsSession> _p2pSession) = 0;
+    virtual void sendRespMessageBySession(bytesConstRef _payload,
+        bcos::boostssl::MessageFace::Ptr _p2pMessage,
         std::shared_ptr<boostssl::ws::WsSession> _p2pSession) = 0;
 };
 

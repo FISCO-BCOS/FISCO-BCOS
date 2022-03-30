@@ -195,8 +195,6 @@ bool P2PMessage::encode(bytes& _buffer)
     length = boost::asio::detail::socket_ops::host_to_network_long((uint32_t)_buffer.size());
 
     std::copy((byte*)&length, (byte*)&length + 4, _buffer.data());
-    // set buffer size to m_length
-    m_length = _buffer.size();
     return true;
 }
 
@@ -238,17 +236,6 @@ ssize_t P2PMessage::decodeHeader(bytesConstRef _buffer)
     m_ext = boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)p));
     offset += 2;
 
-    std::cout << "--------- P2PMessage::decodeHeader begin ------------" << endl;
-    std::cout << "_buffer.data(): " << _buffer.data() << endl;
-    std::cout << "m_length: " << m_length << endl;
-    std::cout << "m_version: " << m_version << endl;
-    std::cout << "m_packetType: " << m_packetType << endl;
-    std::cout << "seqLength: " << seqLength << endl;
-    std::cout << "m_seq: " << m_seq << endl;
-    std::cout << "m_ext: " << m_ext << endl;
-    std::cout << "offset: " << offset << endl;
-    std::cout << "---------- P2PMessage::decodeHeader end --------------" << endl;
-
     return offset;
 }
 
@@ -287,13 +274,6 @@ int64_t P2PMessage::decode(bytesConstRef _buffer)
     auto data = _buffer.getCroppedData(offset, m_length - offset);
     // payload
     m_payload = std::make_shared<bytes>(data.begin(), data.end());
-
-    std::cout << "--------- P2PMessage::decode begin ------------" << endl;
-    std::cout << "_buffer.size: " << _buffer.size() << endl;
-    std::cout << "m_length: " << m_length << endl;
-    std::cout << "m_payload size: " << m_payload->size() << endl;
-    std::cout << "m_payload: " << std::string(m_payload->begin(), m_payload->end()) << endl;
-    std::cout << "---------- P2PMessage::decode end --------------" << endl;
 
     return m_length;
 }

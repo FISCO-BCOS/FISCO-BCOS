@@ -9,9 +9,8 @@
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libp2p/Common.h>
 #include <bcos-gateway/libp2p/P2PMessage.h>
-#include <bcos-boostssl/interfaces/NodeInfo.h>
-#include <bcos-boostssl/websocket/WsSession.h>
 #include <memory>
+
 
 namespace bcos
 {
@@ -35,19 +34,22 @@ public:
     virtual void heartBeat();
 
     virtual boostssl::ws::WsSession::Ptr session() { return m_session; }
-    virtual void setSession(std::shared_ptr<boostssl::ws::WsSession> session) { m_session = session; }
+    virtual void setSession(std::shared_ptr<boostssl::ws::WsSession> session)
+    {
+        m_session = session;
+    }
 
-    virtual boostssl::nodeID p2pID() { return m_p2pInfo->nodeID; }
+    virtual nodeID p2pID() { return m_p2pInfo->nodeID; }
     // Note: the p2pInfo must be setted after session setted
-    virtual void setP2PInfo(boostssl::NodeInfo const& p2pInfo)
+    virtual void setP2PInfo(NodeInfo const& p2pInfo)
     {
         *m_p2pInfo = p2pInfo;
         auto& stream = m_session->wsStreamDelegate()->tcpStream();
         auto endpoint = stream.socket().remote_endpoint();
-        m_p2pInfo->nodeIPEndpoint = boostssl::NodeIPEndpoint(endpoint);
+        m_p2pInfo->nodeIPEndpoint = NodeIPEndpoint(endpoint);
     }
-    virtual boostssl::NodeInfo const& p2pInfo() const& { return *m_p2pInfo; }
-    virtual std::shared_ptr<boostssl::NodeInfo> mutableP2pInfo() { return m_p2pInfo; }
+    virtual NodeInfo const& p2pInfo() const& { return *m_p2pInfo; }
+    virtual std::shared_ptr<NodeInfo> mutableP2pInfo() { return m_p2pInfo; }
 
     virtual std::weak_ptr<Service> service() { return m_service; }
     virtual void setService(std::weak_ptr<Service> service) { m_service = service; }
@@ -67,7 +69,7 @@ public:
 private:
     boostssl::ws::WsSession::Ptr m_session;
     /// gateway p2p info
-    std::shared_ptr<boostssl::NodeInfo> m_p2pInfo;
+    std::shared_ptr<NodeInfo> m_p2pInfo;
     std::weak_ptr<Service> m_service;
     std::shared_ptr<boost::asio::deadline_timer> m_timer;
     bool m_run = false;

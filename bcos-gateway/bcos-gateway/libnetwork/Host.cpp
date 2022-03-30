@@ -135,11 +135,6 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             int crit = 0;
             BASIC_CONSTRAINTS* basic =
                 (BASIC_CONSTRAINTS*)X509_get_ext_d2i(cert, NID_basic_constraints, &crit, NULL);
-           
-             HOST_LOG(INFO) << LOG_DESC("========== cert ==========")
-                             << LOG_KV("nodeIDOut", nodeIDOut)
-                             << LOG_KV("cert", cert)
-                             << LOG_KV("basic", basic);
 
             if (!basic)
             {
@@ -157,9 +152,6 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             }
 
             BASIC_CONSTRAINTS_free(basic);
-            // if (!hostPtr->sslContextPubHandler()(cert, *nodeIDOut.get())) {
-            //   return preverified;
-            // }
 
             /// append cert-name and issuer name after node ID
             /// get subject name
@@ -173,11 +165,7 @@ std::function<bool(bool, boost::asio::ssl::verify_context&)> Host::newVerifyCall
             nodeIDOut->append(certName);
             OPENSSL_free((void*)certName);
             OPENSSL_free((void*)issuerName);
-            
-            HOST_LOG(INFO) << LOG_DESC("========== SSL cert info ==========")
-                             << LOG_KV("nodeIDOut", nodeIDOut)
-                             << LOG_KV("issuerName", issuerName) << LOG_KV("certName", certName);
-            
+
             return preverified;
         }
         catch (std::exception& e)

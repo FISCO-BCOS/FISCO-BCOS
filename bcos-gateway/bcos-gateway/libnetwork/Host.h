@@ -4,12 +4,11 @@
  */
 #pragma once
 
+#include <bcos-boostssl/interfaces/MessageFace.h>
 #include <bcos-gateway/libnetwork/Common.h>   // for  NodeIP...
 #include <bcos-gateway/libnetwork/Message.h>  // for Message
 #include <bcos-utilities/Common.h>            // for Guard, Mutex
 #include <bcos-utilities/ThreadPool.h>
-#include <bcos-boostssl/interfaces/MessageFace.h>
-#include <bcos-boostssl/interfaces/NodeInfo.h>
 #include <openssl/x509.h>
 #include <boost/asio/deadline_timer.hpp>  // for deadline_timer
 #include <boost/system/error_code.hpp>    // for error_code
@@ -47,7 +46,8 @@ class Host : public std::enable_shared_from_this<Host>
 {
 public:
     Host(std::shared_ptr<ASIOInterface> _asioInterface,
-        std::shared_ptr<SessionFactory> _sessionFactory, boostssl::MessageFaceFactory::Ptr _messageFactory)
+        std::shared_ptr<SessionFactory> _sessionFactory,
+        boostssl::MessageFaceFactory::Ptr _messageFactory)
       : m_asioInterface(_asioInterface),
         m_sessionFactory(_sessionFactory),
         m_messageFactory(_messageFactory){};
@@ -60,8 +60,8 @@ public:
     virtual void start();
     virtual void stop();
 
-    virtual void asyncConnect(boostssl::NodeIPEndpoint const& _nodeIPEndpoint,
-        std::function<void(NetworkException, boostssl::NodeInfo const&, std::shared_ptr<SessionFace>)>
+    virtual void asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
+        std::function<void(NetworkException, NodeInfo const&, std::shared_ptr<SessionFace>)>
             callback);
 
     virtual bool haveNetwork() const { return m_run; }
@@ -73,13 +73,13 @@ public:
         m_listenPort = port;
     }
 
-    virtual std::function<void(NetworkException, boostssl::NodeInfo const&, std::shared_ptr<SessionFace>)>
+    virtual std::function<void(NetworkException, NodeInfo const&, std::shared_ptr<SessionFace>)>
     connectionHandler() const
     {
         return m_connectionHandler;
     }
     virtual void setConnectionHandler(
-        std::function<void(NetworkException, boostssl::NodeInfo const&, std::shared_ptr<SessionFace>)>
+        std::function<void(NetworkException, NodeInfo const&, std::shared_ptr<SessionFace>)>
             connectionHandler)
     {
         m_connectionHandler = connectionHandler;
@@ -105,7 +105,7 @@ public:
     virtual std::shared_ptr<ASIOInterface> asioInterface() const { return m_asioInterface; }
     virtual std::shared_ptr<SessionFactory> sessionFactory() const { return m_sessionFactory; }
     virtual boostssl::MessageFaceFactory::Ptr messageFactory() const { return m_messageFactory; }
-    virtual boostssl::NodeInfo p2pInfo();
+    virtual NodeInfo p2pInfo();
 
 private:
     /// obtain the common name from the subject:
@@ -121,7 +121,7 @@ private:
         std::shared_ptr<std::string> nodeIDOut);
 
     /// obtain nodeInfo from given vector
-    void obtainNodeInfo(boostssl::NodeInfo& info, std::string const& node_info);
+    void obtainNodeInfo(NodeInfo& info, std::string const& node_info);
 
     /// server calls handshakeServer to after handshake, mainly calls
     /// RLPxHandshake to obtain informations(client version, caps, etc),start peer
@@ -129,24 +129,24 @@ private:
     void handshakeServer(const boost::system::error_code& error,
         std::shared_ptr<std::string> endpointPublicKey, std::shared_ptr<SocketFace> socket);
 
-    void startPeerSession(boostssl::NodeInfo const& p2pInfo, std::shared_ptr<SocketFace> const& socket,
-        std::function<void(NetworkException, boostssl::NodeInfo const&, std::shared_ptr<SessionFace>)>
+    void startPeerSession(NodeInfo const& p2pInfo, std::shared_ptr<SocketFace> const& socket,
+        std::function<void(NetworkException, NodeInfo const&, std::shared_ptr<SessionFace>)>
             handler);
 
     void handshakeClient(const boost::system::error_code& error, std::shared_ptr<SocketFace> socket,
         std::shared_ptr<std::string> endpointPublicKey,
-        std::function<void(NetworkException, boostssl::NodeInfo const&, std::shared_ptr<SessionFace>)>
+        std::function<void(NetworkException, NodeInfo const&, std::shared_ptr<SessionFace>)>
             callback,
-        boostssl::NodeIPEndpoint _nodeIPEndpoint, std::shared_ptr<boost::asio::deadline_timer> timerPtr);
+        NodeIPEndpoint _nodeIPEndpoint, std::shared_ptr<boost::asio::deadline_timer> timerPtr);
 
-    void erasePendingConns(boostssl::NodeIPEndpoint const& _nodeIPEndpoint)
+    void erasePendingConns(NodeIPEndpoint const& _nodeIPEndpoint)
     {
         bcos::Guard l(x_pendingConns);
         if (m_pendingConns.count(_nodeIPEndpoint))
             m_pendingConns.erase(_nodeIPEndpoint);
     }
 
-    void insertPendingConns(boostssl::NodeIPEndpoint const& _nodeIPEndpoint)
+    void insertPendingConns(NodeIPEndpoint const& _nodeIPEndpoint)
     {
         bcos::Guard l(x_pendingConns);
         if (!m_pendingConns.count(_nodeIPEndpoint))
@@ -159,7 +159,7 @@ private:
     std::shared_ptr<ASIOInterface> m_asioInterface;
     std::shared_ptr<SessionFactory> m_sessionFactory;
     int m_connectTimeThre = 50000;
-    std::set<boostssl::NodeIPEndpoint> m_pendingConns;
+    std::set<NodeIPEndpoint> m_pendingConns;
     bcos::Mutex x_pendingConns;
 
     boostssl::MessageFaceFactory::Ptr m_messageFactory;
@@ -167,7 +167,7 @@ private:
     std::string m_listenHost = "";
     uint16_t m_listenPort = 0;
 
-    std::function<void(NetworkException, boostssl::NodeInfo const&, std::shared_ptr<SessionFace>)>
+    std::function<void(NetworkException, NodeInfo const&, std::shared_ptr<SessionFace>)>
         m_connectionHandler;
 
     // get the hex public key of the peer from the the SSL connection
@@ -177,7 +177,7 @@ private:
 
     std::shared_ptr<std::thread> m_hostThread;
 
-    boostssl::NodeInfo m_p2pInfo;
+    NodeInfo m_p2pInfo;
 };
 }  // namespace gateway
 
