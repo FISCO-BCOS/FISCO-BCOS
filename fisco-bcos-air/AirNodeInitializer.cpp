@@ -71,24 +71,7 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
     auto topicManager =
         std::dynamic_pointer_cast<bcos::amop::LocalTopicManager>(gateway->amop()->topicManager());
     topicManager->setLocalClient(m_rpc);
-
-    // init handlers
-    auto nodeName = m_nodeInitializer->nodeConfig()->nodeName();
-    auto groupID = m_nodeInitializer->nodeConfig()->groupId();
-    auto schedulerImpl =
-        std::dynamic_pointer_cast<scheduler::SchedulerImpl>(m_nodeInitializer->scheduler());
-    schedulerImpl->registerBlockNumberReceiver(
-        [rpc = m_rpc, groupID, nodeName](bcos::protocol::BlockNumber number) {
-            rpc->asyncNotifyBlockNumber(groupID, nodeName, number, [](bcos::Error::Ptr) {});
-        });
-
-    auto txpool = m_nodeInitializer->txPoolInitializer()->txpool();
-    schedulerImpl->registerTransactionNotifier(
-        [txpool](bcos::protocol::BlockNumber _blockNumber,
-            bcos::protocol::TransactionSubmitResultsPtr _result,
-            std::function<void(bcos::Error::Ptr)> _callback) {
-            txpool->asyncNotifyBlockResult(_blockNumber, _result, _callback);
-        });
+    m_nodeInitializer->initNotificationHandlers(m_rpc);
 }
 
 void AirNodeInitializer::start()

@@ -44,7 +44,7 @@ public:
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
         crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool isWasm)
     {
-        auto scheduler =  std::make_shared<scheduler::SchedulerImpl>(std::move(executorManager),
+        auto scheduler = std::make_shared<scheduler::SchedulerImpl>(std::move(executorManager),
             std::move(_ledger), std::move(storage), executionMessageFactory,
             std::move(blockFactory), std::move(transactionSubmitResultFactory), std::move(hashImpl),
             isAuthCheck, isWasm);

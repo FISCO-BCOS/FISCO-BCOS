@@ -400,7 +400,7 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
         "version.compatibility_version", bcos::protocol::RC3_VERSION_STR);
     // must call here to check the compatibility_version
     m_compatibilityVersion = toVersionNumber(m_version);
-    g_BCOSConfig.setVersion(m_compatibilityVersion);
+    g_BCOSConfig.setVersion((bcos::protocol::Version)m_compatibilityVersion);
 
     // sealerList
     auto consensusNodeList = parseConsensusNodeList(_genesisConfig, "consensus", "node.");
@@ -424,7 +424,8 @@ void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisCon
                          << LOG_KV("gas_limit", m_txGasLimit)
                          << LOG_KV("leader_period", m_ledgerConfig->leaderSwitchPeriod())
                          << LOG_KV("minSealTime", m_minSealTime)
-                         << LOG_KV("compatibilityVersion", m_compatibilityVersion);
+                         << LOG_KV("compatibilityVersion",
+                                (bcos::protocol::Version)m_compatibilityVersion);
     generateGenesisData();
 }
 
@@ -487,7 +488,7 @@ ConsensusNodeListPtr NodeConfig::parseConsensusNodeList(boost::property_tree::pt
 void NodeConfig::generateGenesisData()
 {
     std::string versionData = "";
-    if (m_compatibilityVersion >= bcos::protocol::Version::RC4_VERSION)
+    if (m_compatibilityVersion >= (uint32_t)(bcos::protocol::Version::RC4_VERSION))
     {
         versionData = m_version + "-";
     }

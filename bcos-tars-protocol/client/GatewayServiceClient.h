@@ -44,8 +44,8 @@ public:
     {
         m_keyFactory = _keyFactory;
     }
-    GatewayServiceClient(bcostars::GatewayServicePrx _proxy, std::string const& _serviceName)
-      : m_proxy(_proxy), m_gatewayServiceName(_serviceName)
+    GatewayServiceClient(bcostars::GatewayServicePrx _prx, std::string const& _serviceName)
+      : m_prx(_prx), m_gatewayServiceName(_serviceName)
     {}
     virtual ~GatewayServiceClient() {}
 
@@ -72,7 +72,7 @@ public:
         private:
             bcos::gateway::ErrorRespFunc m_callback;
         };
-        auto ret = checkConnection(c_moduleName, "asyncSendMessageByNodeID", m_proxy,
+        auto ret = checkConnection(c_moduleName, "asyncSendMessageByNodeID", m_prx,
             [_errorRespFunc](bcos::Error::Ptr _error) {
                 if (_errorRespFunc)
                 {
@@ -85,7 +85,7 @@ public:
         }
         auto srcNodeID = _srcNodeID->data();
         auto destNodeID = _dstNodeID->data();
-        m_proxy->tars_set_timeout(c_networkTimeout)
+        m_prx->tars_set_timeout(c_networkTimeout)
             ->async_asyncSendMessageByNodeID(new Callback(_errorRespFunc), _groupID,
                 std::vector<char>(srcNodeID.begin(), srcNodeID.end()),
                 std::vector<char>(destNodeID.begin(), destNodeID.end()),
@@ -128,7 +128,7 @@ public:
                 m_callback;
         };
         auto ret = checkConnection(
-            c_moduleName, "asyncGetPeers", m_proxy, [_callback](bcos::Error::Ptr _error) {
+            c_moduleName, "asyncGetPeers", m_prx, [_callback](bcos::Error::Ptr _error) {
                 if (_callback)
                 {
                     _callback(_error, nullptr, nullptr);
@@ -138,7 +138,7 @@ public:
         {
             return;
         }
-        m_proxy->async_asyncGetPeers(new Callback(_callback));
+        m_prx->async_asyncGetPeers(new Callback(_callback));
     }
 
     void asyncSendMessageByNodeIDs(const std::string& _groupID, bcos::crypto::NodeIDPtr _srcNodeID,
@@ -150,13 +150,13 @@ public:
             auto nodeID = it->data();
             tarsNodeIDs.emplace_back(nodeID.begin(), nodeID.end());
         }
-        auto ret = checkConnection(c_moduleName, "asyncSendMessageByNodeIDs", m_proxy, nullptr);
+        auto ret = checkConnection(c_moduleName, "asyncSendMessageByNodeIDs", m_prx, nullptr);
         if (!ret)
         {
             return;
         }
         auto srcNodeID = _srcNodeID->data();
-        m_proxy->async_asyncSendMessageByNodeIDs(nullptr, _groupID,
+        m_prx->async_asyncSendMessageByNodeIDs(nullptr, _groupID,
             std::vector<char>(srcNodeID.begin(), srcNodeID.end()), tarsNodeIDs,
             std::vector<char>(_payload.begin(), _payload.end()));
     }
@@ -164,13 +164,13 @@ public:
     void asyncSendBroadcastMessage(uint16_t _type, const std::string& _groupID,
         bcos::crypto::NodeIDPtr _srcNodeID, bcos::bytesConstRef _payload) override
     {
-        auto ret = checkConnection(c_moduleName, "asyncSendBroadcastMessage", m_proxy, nullptr);
+        auto ret = checkConnection(c_moduleName, "asyncSendBroadcastMessage", m_prx, nullptr);
         if (!ret)
         {
             return;
         }
         auto srcNodeID = _srcNodeID->data();
-        m_proxy->async_asyncSendBroadcastMessage(nullptr, _type, _groupID,
+        m_prx->async_asyncSendBroadcastMessage(nullptr, _type, _groupID,
             std::vector<char>(srcNodeID.begin(), srcNodeID.end()),
             std::vector<char>(_payload.begin(), _payload.end()));
     }
@@ -201,7 +201,7 @@ public:
             bcos::gateway::GetGroupNodeInfoFunc m_callback;
             bcos::crypto::KeyFactory::Ptr m_keyFactory;
         };
-        auto ret = checkConnection(c_moduleName, "asyncGetGroupNodeInfo", m_proxy,
+        auto ret = checkConnection(c_moduleName, "asyncGetGroupNodeInfo", m_prx,
             [_onGetGroupNodeInfo](bcos::Error::Ptr _error) {
                 if (_onGetGroupNodeInfo)
                 {
@@ -212,7 +212,7 @@ public:
         {
             return;
         }
-        m_proxy->async_asyncGetGroupNodeInfo(
+        m_prx->async_asyncGetGroupNodeInfo(
             new Callback(_onGetGroupNodeInfo, m_keyFactory), _groupID);
     }
 
@@ -237,7 +237,7 @@ public:
             std::function<void(bcos::Error::Ptr&&)> m_callback;
         };
         auto ret = checkConnection(
-            c_moduleName, "asyncNotifyGroupInfo", m_proxy, [_callback](bcos::Error::Ptr _error) {
+            c_moduleName, "asyncNotifyGroupInfo", m_prx, [_callback](bcos::Error::Ptr _error) {
                 if (_callback)
                 {
                     _callback(std::move(_error));
@@ -247,8 +247,24 @@ public:
         {
             return;
         }
+        vector<EndpointInfo> activeEndPoints;
+        vector<EndpointInfo> nactiveEndPoints;
+        if (activeEndPoints.size() == 0)
+        {
+            BCOS_LOG(TRACE) << LOG_DESC("Gateway: asyncNotifyGroupInfo error for empty connection")
+                            << bcos::group::printGroupInfo(_groupInfo);
+            return;
+        }
+        m_prx->tars_endpointsAll(activeEndPoints, nactiveEndPoints);
         auto tarsGroupInfo = toTarsGroupInfo(_groupInfo);
-        m_proxy->async_asyncNotifyGroupInfo(new Callback(_callback), tarsGroupInfo);
+        // notify groupInfo to all gateway nodes
+        for (auto const& endPoint : activeEndPoints)
+        {
+            auto endPointStr = endPointToString(endPoint);
+            auto prx =
+                Application::getCommunicator()->stringToProxy<GatewayServicePrx>(endPointStr);
+            prx->async_asyncNotifyGroupInfo(new Callback(_callback), tarsGroupInfo);
+        }
     }
 
     void asyncSendMessageByTopic(const std::string& _topic, bcos::bytesConstRef _data,
@@ -276,7 +292,7 @@ public:
             std::function<void(bcos::Error::Ptr&&, int16_t, bcos::bytesPointer)> m_callback;
         };
         auto ret = checkConnection(
-            c_moduleName, "asyncSendMessageByTopic", m_proxy, [_respFunc](bcos::Error::Ptr _error) {
+            c_moduleName, "asyncSendMessageByTopic", m_prx, [_respFunc](bcos::Error::Ptr _error) {
                 if (_respFunc)
                 {
                     _respFunc(std::move(_error), 0, nullptr);
@@ -287,7 +303,7 @@ public:
             return;
         }
         vector<tars::Char> tarsRequestData(_data.begin(), _data.end());
-        m_proxy->tars_set_timeout(c_amopTimeout)
+        m_prx->tars_set_timeout(c_amopTimeout)
             ->async_asyncSendMessageByTopic(new Callback(_respFunc), _topic, tarsRequestData);
     }
 
@@ -295,13 +311,13 @@ public:
         const std::string& _topic, bcos::bytesConstRef _data) override
     {
         auto ret =
-            checkConnection(c_moduleName, "asyncSendBroadbastMessageByTopic", m_proxy, nullptr);
+            checkConnection(c_moduleName, "asyncSendBroadbastMessageByTopic", m_prx, nullptr);
         if (!ret)
         {
             return;
         }
         vector<tars::Char> tarsRequestData(_data.begin(), _data.end());
-        m_proxy->async_asyncSendBroadbastMessageByTopic(nullptr, _topic, tarsRequestData);
+        m_prx->async_asyncSendBroadbastMessageByTopic(nullptr, _topic, tarsRequestData);
     }
 
     void asyncSubscribeTopic(std::string const& _clientID, std::string const& _topicInfo,
@@ -324,7 +340,7 @@ public:
             std::function<void(bcos::Error::Ptr&&)> m_callback;
         };
         auto ret = checkConnection(
-            c_moduleName, "asyncSubscribeTopic", m_proxy, [_callback](bcos::Error::Ptr _error) {
+            c_moduleName, "asyncSubscribeTopic", m_prx, [_callback](bcos::Error::Ptr _error) {
                 if (_callback)
                 {
                     _callback(std::move(_error));
@@ -334,7 +350,7 @@ public:
         {
             return;
         }
-        m_proxy->async_asyncSubscribeTopic(new Callback(_callback), _clientID, _topicInfo);
+        m_prx->async_asyncSubscribeTopic(new Callback(_callback), _clientID, _topicInfo);
     }
 
     void asyncRemoveTopic(std::string const& _clientID, std::vector<std::string> const& _topicList,
@@ -357,7 +373,7 @@ public:
             std::function<void(bcos::Error::Ptr&&)> m_callback;
         };
         auto ret = checkConnection(
-            c_moduleName, "asyncRemoveTopic", m_proxy, [_callback](bcos::Error::Ptr _error) {
+            c_moduleName, "asyncRemoveTopic", m_prx, [_callback](bcos::Error::Ptr _error) {
                 if (_callback)
                 {
                     _callback(std::move(_error));
@@ -367,17 +383,22 @@ public:
         {
             return;
         }
-        m_proxy->async_asyncRemoveTopic(new Callback(_callback), _clientID, _topicList);
+        m_prx->async_asyncRemoveTopic(new Callback(_callback), _clientID, _topicList);
     }
 
-    bcostars::GatewayServicePrx prx() { return m_proxy; }
+    bcostars::GatewayServicePrx prx() { return m_prx; }
 
 protected:
     void start() override {}
     void stop() override {}
+    std::string endPointToString(EndpointInfo _endPoint)
+    {
+        return m_gatewayServiceName + "@tcp -h " + _endPoint.getEndpoint().getHost() + " -p " +
+               boost::lexical_cast<std::string>(_endPoint.getEndpoint().getPort());
+    }
 
 private:
-    bcostars::GatewayServicePrx m_proxy;
+    bcostars::GatewayServicePrx m_prx;
     std::string m_gatewayServiceName;
     // Note: only useful for asyncGetGroupNodeInfo
     bcos::crypto::KeyFactory::Ptr m_keyFactory;

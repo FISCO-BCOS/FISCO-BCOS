@@ -189,7 +189,7 @@ void LedgerConfigFetcher::fetchAndSetCompatibilityVersion()
     TOOL_LOG(INFO) << LOG_DESC("fetchAndSetCompatibilityVersion");
     auto versionStr = fetchSystemConfig(SYSTEM_KEY_COMPATIBILITY_VERSION);
     auto version = toVersionNumber(versionStr);
-    g_BCOSConfig.setVersion(version);
+    g_BCOSConfig.setVersion((bcos::protocol::Version)version);
     TOOL_LOG(INFO) << LOG_DESC("fetchAndSetCompatibilityVersion success")
                    << LOG_KV("version", versionStr) << LOG_KV("versionNumber", version)
                    << LOG_KV("minSupportedVersion", g_BCOSConfig.minSupportedVersion())

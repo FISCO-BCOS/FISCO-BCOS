@@ -11,6 +11,7 @@ struct ChainNodeInfo
     6 require bool microService;
     7 optional int nodeType;
     8 optional ProtocolInfo protocolInfo;
+    9 optional int systemVersion;
 };
 struct GroupInfo
 {

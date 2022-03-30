@@ -21,10 +21,12 @@
 
 #include <bcos-boostssl/websocket/WsError.h>
 #include <bcos-boostssl/websocket/WsService.h>
+#include <bcos-framework/interfaces/protocol/GlobalConfig.h>
 #include <bcos-framework/interfaces/rpc/HandshakeRequest.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-rpc/Rpc.h>
 #include <bcos-utilities/Log.h>
+
 using namespace bcos;
 using namespace bcos::rpc;
 using namespace bcos::group;
@@ -39,6 +41,8 @@ Rpc::Rpc(std::shared_ptr<boostssl::ws::WsService> _wsService,
     m_eventSub(_eventSub),
     m_amopClient(_amopClient)
 {
+    // init the local protocol
+    m_localProtocol = g_BCOSConfig.protocolInfo(ProtocolModuleID::RpcService);
     // group information notification
     m_jsonRpcImpl->groupManager()->registerGroupInfoNotifier(
         [this](bcos::group::GroupInfo::Ptr _groupInfo) { notifyGroupInfo(_groupInfo); });

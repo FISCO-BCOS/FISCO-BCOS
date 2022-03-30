@@ -175,7 +175,7 @@ public:
     bool enableLRUCacheStorage() const { return m_enableLRUCacheStorage; }
     ssize_t cacheSize() const { return m_cacheSize; }
 
-    bcos::protocol::Version compatibilityVersion() const { return m_compatibilityVersion; }
+    uint32_t compatibilityVersion() const { return m_compatibilityVersion; }
     std::string const& version() const { return m_version; }
 
 protected:
@@ -286,7 +286,7 @@ private:
 
     bool m_enableLRUCacheStorage = true;
     ssize_t m_cacheSize = DEFAULT_CACHE_SIZE;  // 32MB for default
-    bcos::protocol::Version m_compatibilityVersion;
+    uint32_t m_compatibilityVersion;
     std::string m_version;
 };
 }  // namespace tool

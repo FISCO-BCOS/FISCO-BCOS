@@ -15,7 +15,7 @@ public:
         bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck)
     {
         return bcos::executor::TransactionExecutorFactory::build(
-            txpool, cache, storage, executionMessageFactory, hashImpl,isWasm, isAuthCheck);
+            txpool, cache, storage, executionMessageFactory, hashImpl, isWasm, isAuthCheck);
     }
 };
 }  // namespace bcos::initializer
