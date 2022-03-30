@@ -24,7 +24,7 @@
 #include "PBFTProposalInterface.h"
 #include "PBFTRequestInterface.h"
 #include "ViewChangeMsgInterface.h"
-#include <bcos-framework/interfaces/crypto/CryptoSuite.h>
+#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
 namespace bcos
 {
@@ -93,7 +93,7 @@ public:
         signedProposal->setSealerId(_proposal->sealerId());
         if (_needSign)
         {
-            auto signatureData = _cryptoSuite->signatureImpl()->sign(_keyPair, _proposal->hash());
+            auto signatureData = _cryptoSuite->signatureImpl()->sign(*_keyPair, _proposal->hash());
             signedProposal->setSignature(*signatureData);
         }
         pbftMessage->setConsensusProposal(signedProposal);

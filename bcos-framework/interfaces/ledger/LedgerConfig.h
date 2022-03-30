@@ -81,6 +81,12 @@ public:
         m_leaderSwitchPeriod = _leaderSwitchPeriod;
     }
 
+    std::tuple<uint64_t, protocol::BlockNumber> const& gasLimit() const { return m_gasLimit; }
+    void setGasLimit(std::tuple<uint64_t, protocol::BlockNumber> mGasLimit)
+    {
+        m_gasLimit = std::move(mGasLimit);
+    }
+
     // Not enforce to set this field, in memory data
     void setSealerId(int64_t _sealerId) { m_sealerId = _sealerId; }
     int64_t sealerId() const { return m_sealerId; }
@@ -96,6 +102,7 @@ protected:
     bcos::protocol::BlockNumber m_blockNumber;
     uint64_t m_blockTxCountLimit;
     uint64_t m_leaderSwitchPeriod = 1;
+    std::tuple<uint64_t, protocol::BlockNumber> m_gasLimit = {3000000000, 0};
     // no need to store, in memory data
     int64_t m_sealerId = -1;
     int64_t m_txsSize = -1;

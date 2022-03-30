@@ -22,7 +22,7 @@
 #include "../LogEntry.h"
 #include "../TransactionStatus.h"
 #include "bcos-protocol/protobuf/proto/TransactionReceipt.pb.h"
-#include <bcos-framework/interfaces/crypto/CryptoSuite.h>
+#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/interfaces/protocol/TransactionReceipt.h>
 namespace bcos
 {
@@ -63,6 +63,13 @@ public:
         return gsl::span<const LogEntry>(m_logEntries->data(), m_logEntries->size());
     }
     BlockNumber blockNumber() const override { return m_blockNumber; }
+
+    std::string const& message() const override { return m_receipt->message(); }
+    void setMessage(std::string const& _message) override { m_receipt->set_message(_message); }
+    void setMessage(std::string&& _message) override
+    {
+        m_receipt->set_message(std::move(_message));
+    }
 
 private:
     PBTransactionReceipt(bcos::crypto::CryptoSuite::Ptr _cryptoSuite, int32_t _version,

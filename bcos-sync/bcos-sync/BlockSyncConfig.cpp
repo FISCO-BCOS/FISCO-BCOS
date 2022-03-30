@@ -55,9 +55,20 @@ void BlockSyncConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig)
     resetBlockInfo(_ledgerConfig->blockNumber(), _ledgerConfig->hash());
     setConsensusNodeList(_ledgerConfig->consensusNodeList());
     setObserverList(_ledgerConfig->observerNodeList());
-    BLKSYNC_LOG(INFO) << LOG_DESC("BlockSyncConfig resetConfig") << LOG_KV("number", m_blockNumber)
+    auto type = determineNodeType();
+    if (type != m_nodeType)
+    {
+        m_nodeType = type;
+        if (m_nodeTypeChanged)
+        {
+            m_nodeTypeChanged(type);
+        }
+    }
+    BLKSYNC_LOG(INFO) << LOG_DESC("#### BlockSyncConfig resetConfig")
+                      << LOG_KV("number", m_blockNumber)
                       << LOG_KV("consNodeSize", consensusNodeList().size())
-                      << LOG_KV("observerNodeSize", observerNodeList().size());
+                      << LOG_KV("observerNodeSize", observerNodeList().size())
+                      << LOG_KV("type", m_nodeType);
 }
 
 void BlockSyncConfig::setGenesisHash(HashType const& _hash)
@@ -130,4 +141,31 @@ void BlockSyncConfig::setExecutedBlock(BlockNumber _executedBlock)
     {
         m_executedBlock = _executedBlock;
     }
+}
+
+bcos::protocol::NodeType BlockSyncConfig::determineNodeType()
+{
+    if (existNode(m_consensusNodeList, x_consensusNodeList, m_nodeId))
+    {
+        return bcos::protocol::NodeType::CONSENSUS_NODE;
+    }
+    if (existNode(m_observerNodeList, x_observerNodeList, m_nodeId))
+    {
+        return bcos::protocol::NodeType::OBSERVER_NODE;
+    }
+    return bcos::protocol::NodeType::NODE_OUTSIDE_GROUP;
+}
+
+bool BlockSyncConfig::existNode(bcos::consensus::ConsensusNodeListPtr const& _nodeList,
+    SharedMutex& _lock, bcos::crypto::NodeIDPtr _nodeID)
+{
+    ReadGuard l(_lock);
+    for (auto const& it : *_nodeList)
+    {
+        if (it->nodeID()->data() == _nodeID->data())
+        {
+            return true;
+        }
+    }
+    return false;
 }

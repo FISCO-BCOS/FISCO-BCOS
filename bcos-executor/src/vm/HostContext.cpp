@@ -25,8 +25,8 @@
 #include "EVMHostInterface.h"
 #include "bcos-framework/interfaces/storage/Table.h"
 #include "bcos-table/src/StateStorage.h"
-#include "bcos-utilities/Common.h"
 #include "evmc/evmc.hpp"
+#include <bcos-utilities/Common.h>
 #include <evmc/evmc.h>
 #include <evmc/helpers.h>
 #include <boost/algorithm/hex.hpp>
@@ -76,7 +76,6 @@ evmc_bytes32 evm_hash_fn(const uint8_t* data, size_t size)
 }
 }  // namespace
 
-EVMSchedule HostContext::m_evmSchedule = FiscoBcosScheduleV3;
 // crypto::Hash::Ptr g_hashImpl = nullptr;
 
 HostContext::HostContext(CallParameters::UniquePtr callParameters,
@@ -99,15 +98,15 @@ HostContext::HostContext(CallParameters::UniquePtr callParameters,
     metrics = &ethMetrics;
 }
 
-std::string_view HostContext::get(const std::string_view& _key)
+std::string HostContext::get(const std::string_view& _key)
 {
     auto entry = m_executive->storage().getRow(m_tableName, _key);
     if (entry)
     {
-        return entry->getField(0);
+        return std::string(entry->getField(0));
     }
 
-    return std::string_view();
+    return std::string();
 }
 
 void HostContext::set(const std::string_view& _key, std::string _value)
@@ -217,7 +216,7 @@ evmc_result HostContext::callBuiltInPrecompiled(
         try
         {
             auto precompiledResponse = m_executive->execPrecompiled(_request->receiveAddress,
-                ref(_request->data), _request->origin, _request->senderAddress);
+                ref(_request->data), _request->origin, _request->senderAddress, _request->gas);
             callResults->gas = precompiledResponse->m_gas;
             resultCode = (int32_t)TransactionStatus::None;
             resultData.swap(precompiledResponse->m_execResult);
@@ -299,6 +298,11 @@ h256 HostContext::codeHashAt(const std::string_view& _a)
 {
     (void)_a;
     return h256();  // TODO: ok?
+}
+
+VMSchedule const& HostContext::vmSchedule() const
+{
+    return m_executive->vmSchedule();
 }
 
 u256 HostContext::store(const u256& _n)

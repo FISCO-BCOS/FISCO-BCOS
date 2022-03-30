@@ -18,8 +18,8 @@
  * @date: 2021-05-07
  */
 #pragma once
-#include "../../interfaces/crypto/KeyInterface.h"
-#include "bcos-utilities/Log.h"
+#include <bcos-crypto/interfaces/crypto/KeyInterface.h>
+#include <bcos-utilities/Log.h>
 
 #define TXPOOL_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("TXPOOL")
 

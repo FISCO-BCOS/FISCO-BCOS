@@ -19,19 +19,20 @@
  */
 
 #pragma once
-#include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-crypto/hash/SM3.h"
 #include "bcos-framework/interfaces/ledger/LedgerTypeDef.h"
 #include "bcos-protocol/testutils/protocol/FakeBlock.h"
 #include "bcos-protocol/testutils/protocol/FakeBlockHeader.h"
 #include "executive/BlockContext.h"
 #include "executive/TransactionExecutive.h"
-#include "executor/TransactionExecutor.h"
+#include "executor/TransactionExecutorFactory.h"
 #include "mock/MockTransactionalStorage.h"
 #include "mock/MockTxPool.h"
 #include "precompiled/Utilities.h"
 #include "precompiled/extension/UserPrecompiled.h"
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
+#include <bcos-crypto/signature/sm2.h>
 #include <bcos-framework/interfaces/executor/NativeExecutionMessage.h>
 #include <bcos-framework/interfaces/storage/Table.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
@@ -80,7 +81,7 @@ public:
         header->setNumber(1);
 
         auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
-        executor = std::make_shared<TransactionExecutor>(
+        executor = bcos::executor::TransactionExecutorFactory::build(
             txpool, nullptr, storage, executionResultFactory, hashImpl, _isWasm, _isCheckAuth);
         createSysTable();
         codec = std::make_shared<PrecompiledCodec>(hashImpl, _isWasm);
@@ -108,7 +109,7 @@ public:
         header->setNumber(1);
 
         auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
-        executor = std::make_shared<TransactionExecutor>(
+        executor = bcos::executor::TransactionExecutorFactory::build(
             txpool, nullptr, storage, executionResultFactory, smHashImpl, _isWasm, false);
         createSysTable();
         codec = std::make_shared<PrecompiledCodec>(smHashImpl, _isWasm);
@@ -129,18 +130,20 @@ public:
     void createSysTable()
     {
         // create sys table
-        std::promise<std::optional<Table>> promise1;
-        storage->asyncCreateTable(ledger::SYS_CONFIG, "value",
-            [&](Error::UniquePtr&& _error, std::optional<Table>&& _table) {
-                BOOST_CHECK(!_error);
-                promise1.set_value(std::move(_table));
-            });
-        auto table = promise1.get_future().get();
-        auto entry = table->newEntry();
+        {
+            std::promise<std::optional<Table>> promise1;
+            storage->asyncCreateTable(ledger::SYS_CONFIG, "value",
+                [&](Error::UniquePtr&& _error, std::optional<Table>&& _table) {
+                    BOOST_CHECK(!_error);
+                    promise1.set_value(std::move(_table));
+                });
+            auto table = promise1.get_future().get();
+            auto entry = table->newEntry();
 
-        entry.setObject(SystemConfigEntry{"3000000", 0});
+            entry.setObject(SystemConfigEntry{"3000000", 0});
 
-        table->setRow(SYSTEM_KEY_TX_GAS_LIMIT, std::move(entry));
+            table->setRow(SYSTEM_KEY_TX_GAS_LIMIT, std::move(entry));
+        }
 
         // create / table
         {

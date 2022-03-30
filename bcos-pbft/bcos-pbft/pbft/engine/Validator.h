@@ -53,6 +53,7 @@ public:
     virtual void init() = 0;
     virtual void asyncResetTxPool() = 0;
     virtual ssize_t resettingProposalSize() const = 0;
+    virtual void setVerifyCompletedHook(std::function<void()>) = 0;
 };
 
 class TxsValidator : public ValidatorInterface, public std::enable_shared_from_this<TxsValidator>
@@ -90,10 +91,7 @@ public:
         });
     }
     void verifyProposal(bcos::crypto::PublicPtr _fromNode, PBFTProposalInterface::Ptr _proposal,
-        std::function<void(Error::Ptr, bool)> _verifyFinishedHandler) override
-    {
-        m_txPool->asyncVerifyBlock(_fromNode, _proposal->data(), _verifyFinishedHandler);
-    }
+        std::function<void(Error::Ptr, bool)> _verifyFinishedHandler) override;
 
     void asyncResetTxsFlag(bytesConstRef _data, bool _flag) override;
     ssize_t resettingProposalSize() const override
@@ -172,11 +170,50 @@ public:
         });
     }
 
+    void setVerifyCompletedHook(std::function<void()> _hook) override
+    {
+        WriteGuard l(x_verifyCompletedHook);
+        m_verifyCompletedHook = _hook;
+    }
+
 protected:
     virtual void eraseResettingProposal(bcos::crypto::HashType const& _hash)
     {
-        WriteGuard l(x_resettingProposals);
-        m_resettingProposals.erase(_hash);
+        {
+            WriteGuard l(x_resettingProposals);
+            m_resettingProposals.erase(_hash);
+            if (m_resettingProposals.size() > 0)
+            {
+                return;
+            }
+        }
+        // When all consensusing proposals are notified, call verifyCompletedHook
+        triggerVerifyCompletedHook();
+    }
+
+    void triggerVerifyCompletedHook()
+    {
+        ReadGuard l(x_verifyCompletedHook);
+        if (!m_verifyCompletedHook)
+        {
+            return;
+        }
+        auto self = std::weak_ptr<TxsValidator>(shared_from_this());
+        m_worker->enqueue([self]() {
+            auto validator = self.lock();
+            if (!validator)
+            {
+                return;
+            }
+            UpgradableGuard l(validator->x_verifyCompletedHook);
+            if (!validator->m_verifyCompletedHook)
+            {
+                return;
+            }
+            validator->m_verifyCompletedHook();
+            UpgradeGuard ul(l);
+            validator->m_verifyCompletedHook = nullptr;
+        });
     }
     virtual bool insertResettingProposal(bcos::crypto::HashType const& _hash)
     {
@@ -199,6 +236,9 @@ protected:
     ThreadPool::Ptr m_worker;
     std::set<bcos::crypto::HashType> m_resettingProposals;
     mutable SharedMutex x_resettingProposals;
+
+    std::function<void()> m_verifyCompletedHook = nullptr;
+    mutable SharedMutex x_verifyCompletedHook;
 };
 }  // namespace consensus
 }  // namespace bcos

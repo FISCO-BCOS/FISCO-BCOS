@@ -5,7 +5,7 @@
 
 #pragma once
 
-#include <bcos-framework/interfaces/crypto/KeyFactory.h>
+#include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/interfaces/front/FrontServiceInterface.h>
 #include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/GatewayConfig.h>
@@ -56,13 +56,13 @@ public:
      * @param _configPath: config.ini path
      * @return void
      */
-    Gateway::Ptr buildGateway(const std::string& _configPath, bool _localMode);
+    Gateway::Ptr buildGateway(const std::string& _configPath, bool _airVersion);
     /**
      * @brief: construct Gateway
      * @param _config: config parameter object
      * @return void
      */
-    Gateway::Ptr buildGateway(GatewayConfig::Ptr _config, bool _localMode);
+    Gateway::Ptr buildGateway(GatewayConfig::Ptr _config, bool _airVersion);
 
 protected:
     virtual bcos::amop::AMOPImpl::Ptr buildAMOP(

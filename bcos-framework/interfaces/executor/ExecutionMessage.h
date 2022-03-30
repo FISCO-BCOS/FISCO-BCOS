@@ -20,8 +20,8 @@
  */
 
 #pragma once
-#include "bcos-protocol/LogEntry.h"
 #include "../protocol/ProtocolTypeDef.h"
+#include "bcos-protocol/LogEntry.h"
 #include <boost/iterator/iterator_categories.hpp>
 #include <boost/range/any_range.hpp>
 #include <memory>
@@ -73,6 +73,9 @@ public:
 
     virtual std::string_view to() const = 0;  // readable format
     virtual void setTo(std::string to) = 0;
+
+    virtual std::string_view abi() const = 0;  // readable format
+    virtual void setABI(std::string to) = 0;
 
     virtual int32_t depth() const = 0;
     virtual void setDepth(int32_t depth) = 0;

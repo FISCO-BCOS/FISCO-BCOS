@@ -28,7 +28,7 @@
 #include "bcos-framework/interfaces/protocol/Exceptions.h"
 #include "bcos-framework/interfaces/storage/StorageInterface.h"
 #include "bcos-framework/interfaces/storage/Table.h"
-#include "bcos-utilities/Error.h"
+#include <bcos-utilities/Error.h>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/throw_exception.hpp>
@@ -41,7 +41,7 @@ using namespace std;
 
 BlockContext::BlockContext(std::shared_ptr<storage::StateStorage> storage,
     crypto::Hash::Ptr _hashImpl, bcos::protocol::BlockNumber blockNumber, h256 blockHash,
-    uint64_t timestamp, int32_t blockVersion, const EVMSchedule& _schedule, bool _isWasm,
+    uint64_t timestamp, int32_t blockVersion, const VMSchedule& _schedule, bool _isWasm,
     bool _isAuthCheck)
   : m_blockNumber(blockNumber),
     m_blockHash(blockHash),
@@ -56,7 +56,7 @@ BlockContext::BlockContext(std::shared_ptr<storage::StateStorage> storage,
 
 BlockContext::BlockContext(std::shared_ptr<storage::StateStorage> storage,
     storage::StorageInterface::Ptr _lastStorage, crypto::Hash::Ptr _hashImpl,
-    protocol::BlockHeader::ConstPtr _current, const EVMSchedule& _schedule, bool _isWasm,
+    protocol::BlockHeader::ConstPtr _current, const VMSchedule& _schedule, bool _isWasm,
     bool _isAuthCheck)
   : BlockContext(storage, _hashImpl, _current->number(), _current->hash(), _current->timestamp(),
         _current->version(), _schedule, _isWasm, _isAuthCheck)

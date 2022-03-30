@@ -20,8 +20,8 @@
  */
 #pragma once
 #include "bcos-protocol/protobuf/proto/BlockHeader.pb.h"
-#include "bcos-utilities/FixedBytes.h"
 #include <bcos-framework/interfaces/protocol/BlockHeader.h>
+#include <bcos-utilities/FixedBytes.h>
 
 namespace bcos
 {

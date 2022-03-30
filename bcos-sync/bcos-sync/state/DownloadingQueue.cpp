@@ -266,7 +266,8 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
     auto startT = utcTime();
     auto self = std::weak_ptr<DownloadingQueue>(shared_from_this());
     m_config->scheduler()->executeBlock(_block, true,
-        [self, startT, _block](Error::Ptr&& _error, protocol::BlockHeader::Ptr&& _blockHeader) {
+        [self, startT, _block](
+            Error::Ptr&& _error, protocol::BlockHeader::Ptr&& _blockHeader, bool _sysBlock) {
             auto orgBlockHeader = _block->blockHeader();
             try
             {
@@ -281,7 +282,7 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
                 {
                     // reset the executed number
                     BLKSYNC_LOG(WARNING)
-                        << LOG_DESC("applyBlock: executing the downloaded block failed and retry")
+                        << LOG_DESC("applyBlock: executing the downloaded block failed")
                         << LOG_KV("number", orgBlockHeader->number())
                         << LOG_KV("hash", orgBlockHeader->hash().abridged())
                         << LOG_KV("errorCode", _error->errorCode())
@@ -294,7 +295,11 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
                     config->setExecutedBlock(config->blockNumber());
                     return;
                 }
-                config->setExecutedBlock(orgBlockHeader->number());
+                // Note: continue to execute the next block only after sysBlock is submitted
+                if (!_sysBlock)
+                {
+                    config->setExecutedBlock(orgBlockHeader->number());
+                }
                 auto signature = orgBlockHeader->signatureList();
                 BLKSYNC_LOG(INFO) << LOG_BADGE("Download")
                                   << LOG_DESC("BlockSync: applyBlock success")
@@ -303,8 +308,11 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
                                   << LOG_KV("signatureSize", signature.size())
                                   << LOG_KV("txsSize", _block->transactionsSize())
                                   << LOG_KV("nextBlock", downloadQueue->m_config->nextBlock())
+                                  << LOG_KV(
+                                         "exectedBlock", downloadQueue->m_config->executedBlock())
                                   << LOG_KV("timeCost", (utcTime() - startT))
-                                  << LOG_KV("node", downloadQueue->m_config->nodeID()->shortHex());
+                                  << LOG_KV("node", downloadQueue->m_config->nodeID()->shortHex())
+                                  << LOG_KV("sysBlock", _sysBlock);
                 // verify and commit the block
                 downloadQueue->updateCommitQueue(_block);
             }
@@ -512,9 +520,15 @@ void DownloadingQueue::commitBlockState(bcos::protocol::Block::Ptr _block)
             // broadcast the status to all the peers
             // clear the expired cache
             downloadingQueue->finalizeBlock(_block, _ledgerConfig);
+            auto executedBlock = downloadingQueue->m_config->executedBlock();
+            if (executedBlock < blockHeader->number())
+            {
+                downloadingQueue->m_config->setExecutedBlock(blockHeader->number());
+            }
             BLKSYNC_LOG(INFO) << LOG_DESC("commitBlockState success")
                               << LOG_KV("number", blockHeader->number())
                               << LOG_KV("hash", blockHeader->hash().abridged())
+                              << LOG_KV("exectedBlock", downloadingQueue->m_config->executedBlock())
                               << LOG_KV("commitBlockTimeCost", (utcTime() - startT))
                               << LOG_KV("node", downloadingQueue->m_config->nodeID()->shortHex());
         }

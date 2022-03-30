@@ -74,7 +74,7 @@ public:
 
         std::promise<bcos::protocol::BlockHeader::Ptr> executedHeader;
         _scheduler->executeBlock(block, false,
-            [&](bcos::Error::Ptr&& _error, bcos::protocol::BlockHeader::Ptr&& _header) {
+            [&](bcos::Error::Ptr&& _error, bcos::protocol::BlockHeader::Ptr&& _header, bool) {
                 if (_error)
                 {
                     INITIALIZER_LOG(ERROR) << LOG_BADGE("AuthInitializer")

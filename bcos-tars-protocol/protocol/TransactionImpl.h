@@ -20,9 +20,13 @@
  */
 
 #pragma once
+
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+
 #include "bcos-tars-protocol/Common.h"
 #include "bcos-tars-protocol/tars/Transaction.h"
-#include <bcos-framework/interfaces/crypto/CommonType.h>
+#include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/interfaces/protocol/Transaction.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/DataConvertUtility.h>
@@ -57,6 +61,7 @@ public:
     int64_t blockLimit() const override { return m_inner()->data.blockLimit; }
     bcos::u256 nonce() const override;
     std::string_view to() const override { return m_inner()->data.to; }
+    std::string_view abi() const override { return m_inner()->data.abi; }
     bcos::bytesConstRef input() const override;
     int64_t importTime() const override { return m_inner()->importTime; }
     void setImportTime(int64_t _importTime) override { m_inner()->importTime = _importTime; }

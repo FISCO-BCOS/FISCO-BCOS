@@ -24,7 +24,7 @@
 #include "bcos-framework/interfaces/protocol/Block.h"
 #include "bcos-protocol/testutils/protocol/FakeBlock.h"
 #include "bcos-protocol/testutils/protocol/FakeBlockHeader.h"
-#include "bcos-utilities/ThreadPool.h"
+#include <bcos-utilities/ThreadPool.h>
 
 using namespace bcos;
 using namespace bcos::ledger;

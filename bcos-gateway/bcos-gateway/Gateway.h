@@ -23,7 +23,7 @@
 #include <bcos-framework/interfaces/front/FrontServiceInterface.h>
 #include <bcos-framework/interfaces/gateway/GatewayInterface.h>
 #include <bcos-gateway/Common.h>
-#include <bcos-gateway/GatewayNodeManager.h>
+#include <bcos-gateway/gateway/GatewayNodeManager.h>
 #include <bcos-gateway/libamop/AMOPImpl.h>
 #include <bcos-gateway/libp2p/Service.h>
 
@@ -41,7 +41,15 @@ public:
         m_p2pInterface(_p2pInterface),
         m_gatewayNodeManager(_gatewayNodeManager),
         m_amop(_amop)
-    {}
+    {
+        m_p2pInterface->registerHandlerByMsgType(MessageType::PeerToPeerMessage,
+            boost::bind(&Gateway::onReceiveP2PMessage, this, boost::placeholders::_1,
+                boost::placeholders::_2, boost::placeholders::_3));
+
+        m_p2pInterface->registerHandlerByMsgType(MessageType::BroadcastMessage,
+            boost::bind(&Gateway::onReceiveBroadcastMessage, this, boost::placeholders::_1,
+                boost::placeholders::_2, boost::placeholders::_3));
+    }
     virtual ~Gateway() { stop(); }
 
     void start() override;
@@ -61,33 +69,6 @@ public:
      * @return void
      */
     void asyncGetNodeIDs(const std::string& _groupID, GetNodeIDsFunc _getNodeIDsFunc) override;
-    /**
-     * @brief: construct Message object
-     */
-    std::shared_ptr<P2PMessage> newP2PMessage(const std::string& _groupID,
-        bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
-        bytesConstRef _payload);
-    std::shared_ptr<P2PMessage> newP2PMessage(
-        const std::string& _groupID, bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload);
-
-    /**
-     * @brief: register FrontService
-     * @param _groupID: groupID
-     * @param _nodeID: nodeID
-     * @param _frontServiceInterface: FrontService
-     * @return bool
-     */
-    virtual bool registerFrontService(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
-        bcos::front::FrontServiceInterface::Ptr _frontServiceInterface);
-
-    /**
-     * @brief: unregister FrontService
-     * @param _groupID: groupID
-     * @param _nodeID: nodeID
-     * @return bool
-     */
-    virtual bool unregisterFrontService(
-        const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID);
     /**
      * @brief: send message
      * @param _groupID: groupID
@@ -119,8 +100,8 @@ public:
      * @param _payload: message payload
      * @return void
      */
-    void asyncSendBroadcastMessage(const std::string& _groupID, bcos::crypto::NodeIDPtr _srcNodeID,
-        bytesConstRef _payload) override;
+    void asyncSendBroadcastMessage(uint16_t _type, const std::string& _groupID,
+        bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload) override;
 
     /**
      * @brief: receive p2p message
@@ -135,15 +116,6 @@ public:
         bcos::crypto::NodeIDPtr _srcNodeID, bcos::crypto::NodeIDPtr _dstNodeID,
         bytesConstRef _payload, ErrorRespFunc _errorRespFunc = ErrorRespFunc());
 
-    /**
-     * @brief: receive group broadcast message
-     * @param _groupID: groupID
-     * @param _srcNodeID: the sender nodeID
-     * @param _payload: message content
-     * @return void
-     */
-    virtual void onReceiveBroadcastMessage(
-        const std::string& _groupID, bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload);
 
     P2PInterface::Ptr p2pInterface() const { return m_p2pInterface; }
     GatewayNodeManager::Ptr gatewayNodeManager() { return m_gatewayNodeManager; }
@@ -181,11 +153,28 @@ public:
 
     bcos::amop::AMOPImpl::Ptr amop() { return m_amop; }
 
+    bool registerNode(const std::string& _groupID, bcos::crypto::NodeIDPtr _nodeID,
+        bcos::protocol::NodeType _nodeType,
+        bcos::front::FrontServiceInterface::Ptr _frontService) override
+    {
+        return m_gatewayNodeManager->registerNode(_groupID, _nodeID, _nodeType, _frontService);
+    }
+
 protected:
-    bool trySendLocalMessage(const std::string& _groupID, bcos::crypto::NodeIDPtr _srcNodeID,
-        bcos::crypto::NodeIDPtr _dstNodeID, bytesConstRef _payload, ErrorRespFunc _errorRespFunc);
-    bool asyncBroadcastMessageToLocalNodes(
-        const std::string& _groupID, bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload);
+    // for UT
+    Gateway() {}
+    virtual void onReceiveP2PMessage(
+        NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg);
+
+    /**
+     * @brief: receive group broadcast message
+     * @param _groupID: groupID
+     * @param _srcNodeID: the sender nodeID
+     * @param _payload: message content
+     * @return void
+     */
+    virtual void onReceiveBroadcastMessage(
+        NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg);
 
 private:
     std::string m_chainID;

@@ -19,7 +19,7 @@
  */
 #pragma once
 
-#include <bcos-framework/interfaces/crypto/KeyInterface.h>
+#include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-framework/interfaces/rpc/RPCInterface.h>
 #include <bcos-gateway/libamop/Common.h>
 #include <bcos-gateway/libp2p/P2PInterface.h>

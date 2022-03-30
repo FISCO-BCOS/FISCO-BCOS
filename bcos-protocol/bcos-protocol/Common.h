@@ -19,9 +19,9 @@
  */
 #pragma once
 #include "bcos-codec/scale/ScaleEncoderStream.h"
-#include "bcos-utilities/DataConvertUtility.h"
-#include "bcos-utilities/Exceptions.h"
-#include <bcos-framework/interfaces/crypto/CommonType.h>
+#include <bcos-crypto/interfaces/crypto/CommonType.h>
+#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/Exceptions.h>
 #include <tbb/parallel_for.h>
 
 namespace bcos

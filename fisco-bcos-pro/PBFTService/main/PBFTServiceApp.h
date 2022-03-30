@@ -20,7 +20,7 @@
  */
 #pragma once
 #include "PBFTService/PBFTServiceServer.h"
-#include "libinitializer/PBFTInitializer.h"
+#include "libinitializer/ProPBFTInitializer.h"
 #include <bcos-utilities/BoostLogInitializer.h>
 #include <tarscpp/servant/Application.h>
 

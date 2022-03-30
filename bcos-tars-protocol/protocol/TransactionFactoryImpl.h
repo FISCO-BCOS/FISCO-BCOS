@@ -80,7 +80,7 @@ public:
     {
         auto tx = createTransaction(
             _version, _to, _input, _nonce, _blockLimit, _chainId, _groupId, _importTime);
-        auto sign = m_cryptoSuite->signatureImpl()->sign(keyPair, tx->hash(), true);
+        auto sign = m_cryptoSuite->signatureImpl()->sign(*keyPair, tx->hash(), true);
 
         auto tarsTx = std::dynamic_pointer_cast<bcostars::protocol::TransactionImpl>(tx);
         auto const& inner = tarsTx->innerGetter();

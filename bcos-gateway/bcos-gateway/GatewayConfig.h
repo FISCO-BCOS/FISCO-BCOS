@@ -41,13 +41,13 @@ public:
         std::string enNodeKey;
     };
 
-public:
+
     /**
      * @brief: loads configuration items from the config.ini
      * @param _configPath: config.ini path
      * @return void
      */
-    void initConfig(std::string const& _configPath);
+    void initConfig(std::string const& _configPath, bool _uuidRequired = false);
 
     void setCertPath(std::string const& _certPath) { m_certPath = _certPath; }
     void setNodePath(std::string const& _nodePath) { m_nodePath = _nodePath; }
@@ -57,13 +57,12 @@ public:
     std::string const& nodePath() const { return m_nodePath; }
     std::string const& nodeFileName() const { return m_nodeFileName; }
 
-public:
     // check if the port valid
     bool isValidPort(int port);
     void hostAndPort2Endpoint(const std::string& _host, NodeIPEndpoint& _endpoint);
     void parseConnectedJson(const std::string& _json, std::set<NodeIPEndpoint>& _nodeIPEndpointSet);
     // loads p2p configuration items from the configuration file
-    void initP2PConfig(const boost::property_tree::ptree& _pt);
+    void initP2PConfig(const boost::property_tree::ptree& _pt, bool _uuidRequired);
     // loads ca configuration items from the configuration file
     void initCertConfig(const boost::property_tree::ptree& _pt);
     // loads sm ca configuration items from the configuration file
@@ -73,7 +72,6 @@ public:
     // load p2p connected peers
     void loadP2pConnectedNodes();
 
-public:
     std::string listenIP() const { return m_listenIP; }
     uint16_t listenPort() const { return m_listenPort; }
     uint32_t threadPoolSize() { return m_threadPoolSize; }
@@ -83,7 +81,11 @@ public:
     SMCertConfig smCertConfig() const { return m_smCertConfig; }
     const std::set<NodeIPEndpoint>& connectedNodes() const { return m_connectedNodes; }
 
+    std::string const& uuid() const { return m_uuid; }
+    void setUUID(std::string const& _uuid) { m_uuid = _uuid; }
+
 private:
+    std::string m_uuid;
     // if SM SSL connection or not
     bool m_smSSL;
     // p2p network listen IP

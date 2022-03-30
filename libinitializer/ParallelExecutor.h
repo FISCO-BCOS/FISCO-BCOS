@@ -2,8 +2,8 @@
 
 #include "bcos-executor/src/executor/TransactionExecutor.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
-#include "bcos-utilities/ThreadPool.h"
 #include <bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h>
+#include <bcos-utilities/ThreadPool.h>
 #include <thread>
 
 namespace bcos::initializer
@@ -106,6 +106,13 @@ public:
         });
     }
 
+    void getABI(std::string_view contract,
+        std::function<void(bcos::Error::Ptr, std::string)> callback) override
+    {
+        m_pool.enqueue([this, contract = std::string(contract), callback = std::move(callback)] {
+            m_executor->getABI(contract, std::move(callback));
+        });
+    }
 private:
     bcos::ThreadPool m_pool;
     bcos::executor::TransactionExecutor::Ptr m_executor;

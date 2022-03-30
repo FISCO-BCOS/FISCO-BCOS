@@ -33,6 +33,6 @@ struct Params
     std::string genesisFilePath;
     float txSpeed;
 };
-Params initLocalNodeCommandLine(int argc, const char* argv[], bool _autoSendTx);
+Params initAirNodeCommandLine(int argc, const char* argv[], bool _autoSendTx);
 }  // namespace initializer
 }  // namespace bcos

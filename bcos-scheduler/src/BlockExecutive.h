@@ -2,7 +2,6 @@
 
 #include "ExecutorManager.h"
 #include "GraphKeyLocks.h"
-#include "bcos-framework/interfaces/crypto/CommonType.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
 #include "bcos-framework/interfaces/protocol/Block.h"
@@ -12,8 +11,9 @@
 #include "bcos-framework/interfaces/protocol/TransactionMetaData.h"
 #include "bcos-framework/interfaces/protocol/TransactionReceiptFactory.h"
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
-#include "bcos-utilities/Error.h"
+#include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/interfaces/protocol/BlockFactory.h>
+#include <bcos-utilities/Error.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <boost/iterator/iterator_categories.hpp>
 #include <boost/range/any_range.hpp>
@@ -48,11 +48,13 @@ public:
     BlockExecutive(bcos::protocol::Block::Ptr block, SchedulerImpl* scheduler,
         size_t startContextID,
         bcos::protocol::TransactionSubmitResultFactory::Ptr transactionSubmitResultFactory,
-        bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory, bool _syncBlock)
+        bool staticCall, bcos::protocol::BlockFactory::Ptr _blockFactory, uint64_t _gasLimit,
+        bool _syncBlock)
       : BlockExecutive(block, scheduler, startContextID, transactionSubmitResultFactory, staticCall,
             _blockFactory)
     {
         m_syncBlock = _syncBlock;
+        m_gasLimit = _gasLimit;
     }
 
     BlockExecutive(const BlockExecutive&) = delete;
@@ -60,7 +62,8 @@ public:
     BlockExecutive& operator=(const BlockExecutive&) = delete;
     BlockExecutive& operator=(BlockExecutive&&) = delete;
 
-    void asyncExecute(std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback);
+    void asyncExecute(
+        std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback);
     void asyncCall(
         std::function<void(Error::UniquePtr&&, protocol::TransactionReceipt::Ptr&&)> callback);
     void asyncCommit(std::function<void(Error::UniquePtr)> callback);
@@ -76,10 +79,12 @@ public:
     bcos::protocol::BlockHeader::Ptr result() { return m_result; }
 
     bool isCall() { return m_staticCall; }
+    bool sysBlock() const { return m_sysBlock; }
 
 private:
     void DAGExecute(std::function<void(Error::UniquePtr)> error);
-    void DMTExecute(std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback);
+    void DMTExecute(
+        std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback);
 
     enum TraverseHint : int8_t
     {
@@ -166,6 +171,8 @@ private:
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bool m_staticCall = false;
     bool m_syncBlock = false;
+    size_t m_gasLimit = TRANSACTION_GAS;
+    std::atomic_bool m_sysBlock = false;
 };
 
 }  // namespace bcos::scheduler

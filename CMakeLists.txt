@@ -1,23 +1,22 @@
 cmake_minimum_required(VERSION 3.16)
 if (NOT DEFINED URL_BASE)
     set(URL_BASE "github.com")
-endif()
+endif ()
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/bcos-cmake-scripts)
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 
+include(Options)
 include(HunterGate)
 HunterGate(
-    URL "https://${URL_BASE}/FISCO-BCOS/hunter/archive/a97876640bdca736c23a48dc0ad0f168fd3d695c.tar.gz"
-    SHA1 "bb6f77268bfa8772ca30d5a4a62dda35840078ad"
-    FILEPATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.cmake"
+        URL "https://${URL_BASE}/FISCO-BCOS/hunter/archive/2b5b25ecffaba74393740bf0b8758c4e8d9297cf.tar.gz"
+        SHA1 "5d8365a327be260cf24d2b125a71ee7069aca28f"
+        FILEPATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.cmake"
 )
 
 include(cmake/Version.cmake)
 project(PROJECT_NAME VERSION ${VERSION})
 
-
-include(Options)
 configure_project()
 
 include(CompilerSettings)
@@ -25,8 +24,8 @@ include(BuildInfoGenerator)
 
 # import dependencies
 include(ProjectTCMalloc)
-include(ProjectHera)
 include(ProjectWABT)
+include(ProjectBCOSWASM)
 
 hunter_add_package(tbb)
 hunter_add_package(Protobuf)
@@ -38,10 +37,12 @@ hunter_add_package(evmc)
 hunter_add_package(intx)
 hunter_add_package(ethash)
 hunter_add_package(evmone)
+hunter_add_package(tarscpp)
 
 # bcos-boostssl
 hunter_add_package(bcos-boostssl)
 find_package(bcos-boostssl CONFIG REQUIRED)
+find_package(wedpr-crypto CONFIG REQUIRED)
 
 # find OpenSSL
 hunter_add_package(OpenSSL)
@@ -49,12 +50,12 @@ find_package(OpenSSL REQUIRED)
 
 # install dependencies
 include(InstallBcosUtilities)
+include(InstallBcosCrypto)
 include(IncludeDirectories)
 
 # define targets name
 include(TargetSettings)
 
-add_subdirectory(bcos-crypto)
 add_subdirectory(bcos-codec)
 add_subdirectory(bcos-sealer)
 add_subdirectory(bcos-tool)
@@ -76,10 +77,10 @@ add_subdirectory(libinitializer)
 add_subdirectory(fisco-bcos-air)
 add_subdirectory(fisco-bcos-pro)
 
-if(TESTS)
+if (TESTS)
     enable_testing()
     add_subdirectory(tests)
-endif()
+endif ()
 
 # for code coverage
 if (COVERAGE)

@@ -20,10 +20,14 @@
  */
 
 #pragma once
+
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+
 #include "bcos-tars-protocol/Common.h"
 #include "bcos-tars-protocol/tars/Block.h"
-#include <bcos-framework/interfaces/crypto/CommonType.h>
-#include <bcos-framework/interfaces/crypto/CryptoSuite.h>
+#include <bcos-crypto/interfaces/crypto/CommonType.h>
+#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/interfaces/protocol/BlockHeader.h>
 #include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
 #include <gsl/span>

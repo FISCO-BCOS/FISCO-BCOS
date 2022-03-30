@@ -1,10 +1,20 @@
-hunter_config(bcos-utilities VERSION 1.0.0-rc1-f12788a1 CMAKE_ARGS HUNTER_PACKAGE_LOG_BUILD=ON HUNTER_PACKAGE_LOG_INSTALL=ON)
+hunter_config(bcos-utilities VERSION 1.0.0-rc2-local
+    URL https://${URL_BASE}/FISCO-BCOS/bcos-utilities/archive/55d6bf357719aa030e3898b060b4a3ff2476434b.tar.gz
+	SHA1 d0aeb11cf064a5e9793c50dd7bb8487e2d251f02
+    CMAKE_ARGS HUNTER_PACKAGE_LOG_BUILD=ON HUNTER_PACKAGE_LOG_INSTALL=ON
+)
+
+hunter_config(bcos-crypto VERSION 3.0.0-rc3-local
+    URL https://${URL_BASE}/FISCO-BCOS/bcos-crypto/archive/86fdc960741bd26cea3c9f04e61f138f508c7add.tar.gz
+	SHA1 53dcac50016f5e1bd517ae8d595b586e358ad118
+    CMAKE_ARGS HUNTER_PACKAGE_LOG_BUILD=ON HUNTER_PACKAGE_LOG_INSTALL=ON SM2_OPTIMIZE=ON
+)
 
 hunter_config(bcos-boostssl
-    VERSION 1.0.0-rc2-local
-    URL https://${URL_BASE}/FISCO-BCOS/bcos-boostssl/archive/7fe9b9018914c5a1653822fd8e074b6c2a0d6488.tar.gz
-    SHA1 19f596180e5d00a03227b42fbc80e788e3933090
-    CMAKE_ARGS HUNTER_PACKAGE_LOG_BUILD=ON HUNTER_PACKAGE_LOG_INSTALL=ON URL_BASE=${URL_BASE}
+    VERSION 1.0.0-rc3-local
+    URL https://${URL_BASE}/FISCO-BCOS/bcos-boostssl/archive/1c9cecf7ec9ed59d0bdaa9f390c618c8f4208cf2.tar.gz
+    SHA1 95774f3638b4bcb27a6708fca0a28389a7cfa9c3
+    CMAKE_ARGS HUNTER_PACKAGE_LOG_BUILD=ON HUNTER_PACKAGE_LOG_INSTALL=ON ARCH_NATIVE=${ARCH_NATIVE} URL_BASE=${URL_BASE}
 )
 
 hunter_config(rocksdb VERSION 6.20.3
@@ -14,29 +24,29 @@ hunter_config(rocksdb VERSION 6.20.3
     WITH_TOOLS=OFF PORTABLE=ON FAIL_ON_WARNINGS=OFF WITH_ZSTD=ON BUILD_SHARED_LIBS=OFF
 )
 
-hunter_config(evmc VERSION 7.3.0-c7feb13f
-	URL  https://${URL_BASE}/FISCO-BCOS/evmc/archive/c7feb13f582919242da9f4f898ed4578785c9ecc.tar.gz
-	SHA1 28ab1c74dd3340efe101418fd5faf19d34c9f7a9
+hunter_config(evmc VERSION 9.0.0-2e8bc3a6
+	URL  https://${URL_BASE}/FISCO-BCOS/evmc/archive/2e8bc3a6fc9c3cdbf5440b329dcdf0753faee43c.tar.gz
+	SHA1 51104be45aa5d87363700c2cfde132a1c0691043
     CMAKE_ARGS URL_BASE=${URL_BASE}
 )
 
-hunter_config(intx VERSION 0.4.1 URL https://${URL_BASE}/chfast/intx/archive/v0.4.0.tar.gz
-    SHA1  8a2a0b0efa64899db972166a9b3568a6984c61bc
+hunter_config(intx VERSION 0.6.0 URL https://${URL_BASE}/chfast/intx/archive/v0.6.0.tar.gz
+    SHA1  507827495de07412863349bc8c2a8704c7b0e5d4
 	CMAKE_ARGS CMAKE_CXX_FLAGS=-std=c++17
 )
 
-hunter_config(ethash VERSION 0.7.0-4576af36 URL https://${URL_BASE}/chfast/ethash/archive/4576af36f8ebb9bee2d5f04be692f295c64a7211.tar.gz
-	SHA1 2001a265177c722b4cbe91c4160f3f582e0c9938
+hunter_config(ethash VERSION 0.7.0 URL https://${URL_BASE}/chfast/ethash/archive/v0.7.0.tar.gz
+	SHA1 83768c203c98dff1829f038fde98a7226e1edd98
 	CMAKE_ARGS CMAKE_CXX_FLAGS=-std=c++17
 )
 
-hunter_config(evmone VERSION 0.4.1-b726a1e1
-	URL https://${URL_BASE}/FISCO-BCOS/evmone/archive/b726a1e1722109291ac18bc7c5fad5aac9d2e8c5.tar.gz
-	SHA1 e41fe0514a7a49a9a5e7eeb1b42cf2c3ced67f5d
+hunter_config(evmone VERSION 8.2.0-53ff1c54
+	URL https://${URL_BASE}/FISCO-BCOS/evmone/archive/53ff1c54a2ee5ebcc499586da62ac6e1bb8735cd.tar.gz
+	SHA1 e6c1a8f1acd908c770426bb5015d45b3f9138179
 	CMAKE_ARGS CMAKE_CXX_FLAGS=-std=c++17 BUILD_SHARED_LIBS=OFF
 )
 
-hunter_config(tarscpp VERSION 3.0.3-7299ad23)
+hunter_config(tarscpp VERSION 3.0.3-3b65a48a)
 
 hunter_config(
     Boost VERSION "1.76.0-local"
@@ -83,4 +93,7 @@ hunter_config(re2 VERSION ${HUNTER_re2_VERSION} CMAKE_ARGS CMAKE_POSITION_INDEPE
 hunter_config(abseil VERSION ${HUNTER_abseil_VERSION} CMAKE_ARGS CMAKE_CXX_FLAGS=-std=c++11 CMAKE_POSITION_INDEPENDENT_CODE=TRUE ABSL_ENABLE_INSTALL=ON ABSL_RUN_TESTS=OFF)
 hunter_config(gRPC VERSION ${HUNTER_gRPC_VERSION} CMAKE_ARGS CMAKE_CXX_FLAGS=-std=c++17 CMAKE_POSITION_INDEPENDENT_CODE=TRUE)
 
-hunter_config(OpenSSL VERSION tassl_1.1.1b_v1.4-63b60292)
+hunter_config(OpenSSL VERSION tassl_1.1.1b_v1.4-local
+    URL https://${URL_BASE}/FISCO-BCOS/TASSL-1.1.1b/archive/f9d60fa510e5fbe24413b4abdf1ea3a48f9ee6aa.tar.gz
+    SHA1 e56121278bf07587d58d154b4615f96575957d6f
+)

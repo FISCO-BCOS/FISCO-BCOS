@@ -19,13 +19,15 @@
  */
 
 #pragma once
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 
 #include "bcos-tars-protocol/tars/GatewayInfo.h"
 #include "bcos-tars-protocol/tars/GroupInfo.h"
 #include "bcos-tars-protocol/tars/LedgerConfig.h"
+#include <bcos-crypto/interfaces/crypto/Hash.h>
+#include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/interfaces/consensus/ConsensusNode.h>
-#include <bcos-framework/interfaces/crypto/Hash.h>
-#include <bcos-framework/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/interfaces/gateway/GatewayTypeDef.h>
 #include <bcos-framework/interfaces/ledger/LedgerConfig.h>
 #include <bcos-framework/interfaces/multigroup/ChainNodeInfoFactory.h>
@@ -113,10 +115,11 @@ inline bcos::group::ChainNodeInfo::Ptr toBcosChainNodeInfo(
 {
     auto nodeInfo = _factory->createNodeInfo();
     nodeInfo->setNodeName(_tarsNodeInfo.nodeName);
-    nodeInfo->setNodeType((bcos::group::NodeType)_tarsNodeInfo.nodeType);
+    nodeInfo->setNodeCryptoType((bcos::group::NodeCryptoType)_tarsNodeInfo.nodeCryptoType);
     nodeInfo->setNodeID(_tarsNodeInfo.nodeID);
     nodeInfo->setIniConfig(_tarsNodeInfo.iniConfig);
     nodeInfo->setMicroService(_tarsNodeInfo.microService);
+    nodeInfo->setNodeType((bcos::protocol::NodeType)_tarsNodeInfo.nodeType);
     for (auto const& it : _tarsNodeInfo.serviceInfo)
     {
         nodeInfo->appendServiceInfo((bcos::protocol::ServiceType)it.first, it.second);
@@ -148,6 +151,7 @@ inline bcostars::ChainNodeInfo toTarsChainNodeInfo(bcos::group::ChainNodeInfo::P
         return tarsNodeInfo;
     }
     tarsNodeInfo.nodeName = _nodeInfo->nodeName();
+    tarsNodeInfo.nodeCryptoType = _nodeInfo->nodeCryptoType();
     tarsNodeInfo.nodeType = _nodeInfo->nodeType();
     auto const& info = _nodeInfo->serviceInfo();
     for (auto const& it : info)
@@ -264,10 +268,10 @@ inline bcostars::P2PInfo toTarsP2PInfo(bcos::gateway::P2PInfo const& _p2pInfo)
     return tarsP2PInfo;
 }
 
-inline bcostars::GroupNodeIDInfo toTarsNodeIDInfo(
+inline bcostars::GroupNodeInfo toTarsNodeIDInfo(
     std::string const& _groupID, std::set<std::string> const& _nodeIDList)
 {
-    GroupNodeIDInfo groupNodeIDInfo;
+    GroupNodeInfo groupNodeIDInfo;
     groupNodeIDInfo.groupID = _groupID;
     groupNodeIDInfo.nodeIDList = std::vector<std::string>(_nodeIDList.begin(), _nodeIDList.end());
     return groupNodeIDInfo;
@@ -281,7 +285,7 @@ inline bcostars::GatewayInfo toTarsGatewayInfo(bcos::gateway::GatewayInfo::Ptr _
     }
     tarsGatewayInfo.p2pInfo = toTarsP2PInfo(_bcosGatewayInfo->p2pInfo());
     auto nodeIDList = _bcosGatewayInfo->nodeIDInfo();
-    std::vector<GroupNodeIDInfo> tarsNodeIDInfos;
+    std::vector<GroupNodeInfo> tarsNodeIDInfos;
     for (auto const& it : nodeIDList)
     {
         tarsNodeIDInfos.emplace_back(toTarsNodeIDInfo(it.first, it.second));
@@ -305,7 +309,7 @@ inline bcos::gateway::GatewayInfo::Ptr fromTarsGatewayInfo(bcostars::GatewayInfo
 {
     auto bcosGatewayInfo = std::make_shared<bcos::gateway::GatewayInfo>();
     auto p2pInfo = toBcosP2PNodeInfo(_tarsGatewayInfo.p2pInfo);
-    std::unordered_map<std::string, std::set<std::string>> nodeIDInfos;
+    std::map<std::string, std::set<std::string>> nodeIDInfos;
     for (auto const& it : _tarsGatewayInfo.nodeIDInfo)
     {
         auto const& nodeIDListInfo = it.nodeIDList;

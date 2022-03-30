@@ -26,7 +26,7 @@
 #include "EVMHostInterface.h"
 #include "../Common.h"
 #include "HostContext.h"
-#include "bcos-utilities/Common.h"
+#include <bcos-utilities/Common.h>
 #include <evmc/evmc.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/core/ignore_unused.hpp>
@@ -86,7 +86,7 @@ evmc_storage_status setStorage(evmc_host_context* _context, const evmc_address* 
     else if (value == 0)
     {
         status = EVMC_STORAGE_DELETED;
-        hostContext.sub().refunds += hostContext.evmSchedule().sstoreRefundGas;
+        hostContext.sub().refunds += hostContext.vmSchedule().sstoreRefundGas;
     }
     hostContext.setStore(index, value);  // Interface uses native endianness
     return status;
@@ -176,6 +176,23 @@ void log(evmc_host_context* _context, const evmc_address* _addr, uint8_t const* 
     hostContext.log(h256s{pTopics, pTopics + _numTopics}, bytesConstRef{_data, _dataSize});
 }
 
+evmc_access_status access_account(evmc_host_context* _context, const evmc_address* _addr)
+{
+    std::ignore = _context;
+    std::ignore = _addr;
+    return EVMC_ACCESS_COLD;
+}
+
+
+evmc_access_status access_storage(
+    evmc_host_context* _context, const evmc_address* _addr, const evmc_bytes32* _key)
+{
+    std::ignore = _context;
+    std::ignore = _addr;
+    std::ignore = _key;
+    return EVMC_ACCESS_COLD;
+}
+
 evmc_tx_context getTxContext(evmc_host_context* _context) noexcept
 {
     auto& hostContext = static_cast<HostContext&>(*_context);
@@ -248,6 +265,8 @@ evmc_host_interface const fnTable = {
     getTxContext,
     getBlockHash,
     log,
+    access_account,
+    access_storage,
 };
 // clang-format on
 
@@ -290,18 +309,12 @@ evmc_storage_status set(evmc_host_context* _context, const uint8_t* _addr, int32
     assert(string_view((char*)_addr, _addressLength) == hostContext.myAddress());
     string key((char*)_key, _keyLength);
     string value((char*)_value, _valueLength);
-    auto oldValue = hostContext.get(string((char*)_key, _keyLength));
-
-    if (value == oldValue)
-        return EVMC_STORAGE_UNCHANGED;
 
     auto status = EVMC_STORAGE_MODIFIED;
-    if (oldValue.size() == 0)
-        status = EVMC_STORAGE_ADDED;
-    else if (value.size() == 0)
+    if (value.size() == 0)
     {
         status = EVMC_STORAGE_DELETED;
-        hostContext.sub().refunds += hostContext.evmSchedule().sstoreRefundGas;
+        hostContext.sub().refunds += hostContext.vmSchedule().sstoreRefundGas;
     }
     hostContext.set(key, value);  // Interface uses native endianness
     return status;

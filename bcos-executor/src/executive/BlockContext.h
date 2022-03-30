@@ -49,11 +49,11 @@ public:
 
     BlockContext(std::shared_ptr<storage::StateStorage> storage, crypto::Hash::Ptr _hashImpl,
         bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
-        int32_t blockVersion, const EVMSchedule& _schedule, bool _isWasm, bool _isAuthCheck);
+        int32_t blockVersion, const VMSchedule& _schedule, bool _isWasm, bool _isAuthCheck);
 
     BlockContext(std::shared_ptr<storage::StateStorage> storage,
         storage::StorageInterface::Ptr _lastStorage, crypto::Hash::Ptr _hashImpl,
-        protocol::BlockHeader::ConstPtr _current, const EVMSchedule& _schedule, bool _isWasm,
+        protocol::BlockHeader::ConstPtr _current, const VMSchedule& _schedule, bool _isWasm,
         bool _isAuthCheck);
 
     using getTxCriticalsHandler = std::function<std::shared_ptr<std::vector<std::string>>(
@@ -79,7 +79,7 @@ public:
     int32_t blockVersion() const { return m_blockVersion; }
     u256 const& gasLimit() const { return m_gasLimit; }
 
-    EVMSchedule const& evmSchedule() const { return m_schedule; }
+    VMSchedule const& vmSchedule() const { return m_schedule; }
 
     struct ExecutiveState
     {
@@ -114,7 +114,7 @@ private:
     uint64_t m_timeStamp;
     int32_t m_blockVersion;
 
-    EVMSchedule m_schedule;
+    VMSchedule m_schedule;
     u256 m_gasLimit;
     bool m_isWasm = false;
     bool m_isAuthCheck = false;

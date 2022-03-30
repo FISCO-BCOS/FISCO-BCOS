@@ -19,6 +19,10 @@
  * @date 2021-04-20
  */
 #pragma once
+
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+
 #include "BlockHeaderImpl.h"
 #include "TransactionImpl.h"
 #include "TransactionMetaDataImpl.h"
@@ -27,7 +31,7 @@
 #include "bcos-framework/interfaces/protocol/Transaction.h"
 #include "bcos-tars-protocol/Common.h"
 #include "bcos-tars-protocol/tars/Block.h"
-#include <bcos-framework/interfaces/crypto/CryptoSuite.h>
+#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/interfaces/protocol/Block.h>
 #include <bcos-framework/interfaces/protocol/BlockHeader.h>
 #include <bcos-protocol/Common.h>

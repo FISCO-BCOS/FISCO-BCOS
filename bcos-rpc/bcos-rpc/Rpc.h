@@ -99,13 +99,10 @@ public:
         m_jsonRpcImpl->setClientID(_clientID);
         m_amopClient->setClientID(_clientID);
     }
-    void asyncNotifySubscribeTopic(std::function<void(Error::Ptr&& _error)> _callback) override
+    void asyncNotifySubscribeTopic(
+        std::function<void(Error::Ptr&& _error, std::string)> _callback) override
     {
-        m_amopClient->asyncNotifySubscribeTopic();
-        if (_callback)
-        {
-            _callback(nullptr);
-        }
+        m_amopClient->asyncNotifySubscribeTopic(_callback);
     }
 
 protected:

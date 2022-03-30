@@ -20,70 +20,79 @@
  */
 
 #include "TxDAG.h"
+#include "CriticalFields.h"
 #include <tbb/parallel_for.h>
 #include <map>
 
 using namespace std;
 using namespace bcos;
 using namespace bcos::executor;
+using namespace bcos::executor::critical;
 
-#define DAG_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("DAG")
+#define DAG_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("EXECUTOR")
 
 // Generate DAG according with given transactions
-void TxDAG::init(size_t count, const std::vector<std::vector<std::string>>& _txsCriticals)
+void TxDAG::init(critical::CriticalFieldsInterface::Ptr _txsCriticals, ExecuteTxFunc const& _f)
 {
-    auto txsSize = count;
-    DAG_LOG(TRACE) << LOG_DESC("Begin init transaction DAG") << LOG_KV("transactionNum", txsSize);
+    auto txsSize = _txsCriticals->size();
+    DAG_LOG(DEBUG) << LOG_DESC("Begin init transaction DAG") << LOG_KV("transactionNum", txsSize);
+
+    f_executeTx = _f;
+    m_totalParaTxs = _txsCriticals->size();
+
+    // init DAG
     m_dag.init(txsSize);
 
-    CriticalField<string> latestCriticals;
+    // define conflict handler
+    auto onConflictHandler = [&](ID pId, ID id) { m_dag.addEdge(pId, id); };
+    auto onFirstConflictHandler = [&](ID id) {
+        // do nothing
+        (void)id;
+    };
+    auto onEmptyConflictHandler = [&](ID id) {
+        // do nothing
+        (void)id;
+    };
+    auto onAllConflictHandler = [&](ID id) {
+        // do nothing
+        // ignore normal tx, only handle DAG tx, normal tx has been sent back to be executed by DMT
+        (void)id;
+    };
 
-    for (ID id = 0; id < txsSize; ++id)
-    {
-        auto criticals = _txsCriticals[id];
-        if (!criticals.empty())
-        {
-            // DAG transaction: Conflict with certain critical fields
-            // Get critical field
-
-            // Add edge between critical transaction
-            for (string const& c : criticals)
-            {
-                ID pId = latestCriticals.get(c);
-                if (pId != INVALID_ID)
-                {
-                    m_dag.addEdge(pId, id);  // add DAG edge
-                }
-            }
-
-            for (string const& c : criticals)
-            {
-                latestCriticals.update(c, id);
-            }
-        }
-        else
-        {
-            continue;
-        }
-    }
+    // parse criticals
+    _txsCriticals->traverseDag(
+        onConflictHandler, onFirstConflictHandler, onEmptyConflictHandler, onAllConflictHandler);
 
     // Generate DAG
     m_dag.generate();
 
-    m_totalParaTxs = txsSize;
-
     DAG_LOG(TRACE) << LOG_DESC("End init transaction DAG");
 }
 
-// Set transaction execution function
-void TxDAG::setTxExecuteFunc(ExecuteTxFunc const& _f)
+void TxDAG::run(unsigned int threadNum)
 {
-    f_executeTx = _f;
+    auto parallelTimeOut = utcSteadyTime() + 30000;  // 30 timeout
+
+    std::atomic<bool> isWarnedTimeout(false);
+    tbb::parallel_for(tbb::blocked_range<unsigned int>(0, threadNum),
+        [&](const tbb::blocked_range<unsigned int>& _r) {
+            (void)_r;
+
+            while (!hasFinished())
+            {
+                if (!isWarnedTimeout.load() && utcSteadyTime() >= parallelTimeOut)
+                {
+                    isWarnedTimeout.store(true);
+                    EXECUTOR_LOG(WARNING)
+                        << LOG_BADGE("executeBlock") << LOG_DESC("Para execute block timeout")
+                        << LOG_KV("txNum", m_totalParaTxs);
+                }
+                executeUnit();
+            }
+        });
 }
 
-int TxDAG::executeUnit(const vector<TransactionExecutive::Ptr>& allExecutives,
-    vector<std::unique_ptr<CallParameters>>& allCallParameters,
-    const std::vector<gsl::index>& allIndex)
+int TxDAG::executeUnit()
 {
     int exeCnt = 0;
     ID id = m_dag.waitPop();
@@ -92,10 +101,7 @@ int TxDAG::executeUnit(const vector<TransactionExecutive::Ptr>& allExecutives,
         do
         {
             exeCnt += 1;
-            if (allExecutives[id] && allCallParameters.at(id))
-            {
-                f_executeTx(allExecutives[id], std::move(allCallParameters.at(id)), allIndex[id]);
-            }
+            f_executeTx(id);
             id = m_dag.consume(id);
         } while (id != INVALID_ID);
         id = m_dag.waitPop();

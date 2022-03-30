@@ -8,7 +8,7 @@
 #include "bcos-framework/interfaces/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/interfaces/protocol/Transaction.h"
 #include "bcos-table/src/StateStorage.h"
-#include "bcos-utilities/Error.h"
+#include <bcos-utilities/Error.h>
 #include <tbb/parallel_for_each.h>
 #include <boost/algorithm/hex.hpp>
 #include <boost/asio/defer.hpp>
@@ -31,7 +31,7 @@ void BlockExecutive::asyncCall(
     std::function<void(Error::UniquePtr&&, protocol::TransactionReceipt::Ptr&&)> callback)
 {
     auto self = std::weak_ptr<BlockExecutive>(shared_from_this());
-    asyncExecute([self, callback](Error::UniquePtr&& _error, protocol::BlockHeader::Ptr) {
+    asyncExecute([self, callback](Error::UniquePtr&& _error, protocol::BlockHeader::Ptr, bool) {
         auto executive = self.lock();
         if (!executive)
         {
@@ -47,11 +47,12 @@ void BlockExecutive::asyncCall(
 }
 
 void BlockExecutive::asyncExecute(
-    std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback)
+    std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback)
 {
     if (m_result)
     {
-        callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidStatus, "Invalid status"), nullptr);
+        callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidStatus, "Invalid status"), nullptr,
+            m_sysBlock);
         return;
     }
 
@@ -59,24 +60,28 @@ void BlockExecutive::asyncExecute(
     {
         callback(BCOS_ERROR_UNIQUE_PTR(
                      SchedulerError::ExecutorNotEstablishedError, "The executor has not started!"),
-            nullptr);
+            nullptr, m_sysBlock);
     }
     m_currentTimePoint = std::chrono::system_clock::now();
 
-    bool withDAG = false;
+    bool hasDAG = false;
     if (m_block->transactionsMetaDataSize() > 0)
     {
         SCHEDULER_LOG(DEBUG) << LOG_KV("block number", m_block->blockHeaderConst()->number())
                              << LOG_KV("meta tx count", m_block->transactionsMetaDataSize());
 
         m_executiveResults.resize(m_block->transactionsMetaDataSize());
+
+#pragma omp parallel for
         for (size_t i = 0; i < m_block->transactionsMetaDataSize(); ++i)
         {
             auto metaData = m_block->transactionMetaData(i);
-
             auto message = m_scheduler->m_executionMessageFactory->createExecutionMessage();
-            message->setContextID(i + m_startContextID);
+            auto contextID = i + m_startContextID;
+
+            message->setContextID(contextID);
             message->setType(protocol::ExecutionMessage::TXHASH);
+            // Note: set here for fetching txs when send_back
             message->setTransactionHash(metaData->hash());
 
             if (metaData->attribute() & bcos::protocol::Transaction::Attribute::LIQUID_SCALE_CODEC)
@@ -102,24 +107,25 @@ void BlockExecutive::asyncExecute(
             }
 
             message->setDepth(0);
-            message->setGasAvailable(TRANSACTION_GAS);
+            message->setGasAvailable(m_gasLimit);
             message->setStaticCall(false);
 
-            if (metaData->attribute() & bcos::protocol::Transaction::Attribute::DAG)
-            {
-                withDAG = true;
-            }
+            bool enableDAG = metaData->attribute() & bcos::protocol::Transaction::Attribute::DAG;
 
             auto to = message->to();
-            m_executiveStates.emplace(
-                std::make_tuple(std::move(to), i), ExecutiveState(i, std::move(message), withDAG));
+#pragma omp critical
+            m_executiveStates.emplace(std::make_tuple(std::move(to), contextID),
+                ExecutiveState(contextID, std::move(message), enableDAG));
 
             if (metaData)
             {
                 m_executiveResults[i].transactionHash = metaData->hash();
                 m_executiveResults[i].source = metaData->source();
             }
+
+            hasDAG = enableDAG;
         }
+#pragma omp flush(hasDAG)
     }
     else if (m_block->transactionsSize() > 0)
     {
@@ -127,16 +133,28 @@ void BlockExecutive::asyncExecute(
                              << LOG_KV("tx count", m_block->transactionsSize());
 
         m_executiveResults.resize(m_block->transactionsSize());
+
+#pragma omp parallel for
         for (size_t i = 0; i < m_block->transactionsSize(); ++i)
         {
             auto tx = m_block->transaction(i);
+            if (!m_sysBlock)
+            {
+                auto toAddress = tx->to();
+                if (bcos::precompiled::c_systemTxsAddress.count(
+                        std::string(toAddress.begin(), toAddress.end())))
+                {
+                    m_sysBlock.store(true);
+                }
+            }
             m_executiveResults[i].transactionHash = tx->hash();
             m_executiveResults[i].source = tx->source();
 
+            auto contextID = i + m_startContextID;
+
             auto message = m_scheduler->m_executionMessageFactory->createExecutionMessage();
             message->setType(protocol::ExecutionMessage::MESSAGE);
-            message->setContextID(i + m_startContextID);
-            message->setTransactionHash(tx->hash());
+            message->setContextID(contextID);
             message->setOrigin(toHex(tx->sender()));
             message->setFrom(std::string(message->origin()));
 
@@ -169,38 +187,42 @@ void BlockExecutive::asyncExecute(
                     message->setTo(preprocessAddress(tx->to()));
                 }
             }
-
+            if (message->create())
+            {
+                message->setABI(std::string(tx->abi()));
+            }
             message->setDepth(0);
-            message->setGasAvailable(TRANSACTION_GAS);
+            message->setGasAvailable(m_gasLimit);
             message->setData(tx->input().toBytes());
             message->setStaticCall(m_staticCall);
 
-            if (tx->attribute() & bcos::protocol::Transaction::Attribute::DAG)
-            {
-                withDAG = true;
-            }
+            bool enableDAG = tx->attribute() & bcos::protocol::Transaction::Attribute::DAG;
 
             auto to = std::string(message->to());
-            m_executiveStates.emplace(
-                std::make_tuple(std::move(to), i), ExecutiveState(i, std::move(message), withDAG));
+#pragma omp critical
+            m_executiveStates.emplace(std::make_tuple(std::move(to), contextID),
+                ExecutiveState(contextID, std::move(message), enableDAG));
+
+            hasDAG = enableDAG;
         }
+#pragma omp flush(hasDAG)
     }
 
     if (!m_staticCall)
     {
         // Execute nextBlock
-        batchNextBlock([this, withDAG, callback = std::move(callback)](Error::UniquePtr error) {
+        batchNextBlock([this, hasDAG, callback = std::move(callback)](Error::UniquePtr error) {
             if (error)
             {
                 SCHEDULER_LOG(ERROR)
                     << "Next block with error!" << boost::diagnostic_information(*error);
                 callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
                              SchedulerError::NextBlockError, "Next block error!", *error),
-                    nullptr);
+                    nullptr, m_sysBlock);
                 return;
             }
 
-            if (withDAG)
+            if (hasDAG)
             {
                 DAGExecute([this, callback = std::move(callback)](Error::UniquePtr error) {
                     if (error)
@@ -209,7 +231,7 @@ void BlockExecutive::asyncExecute(
                                              << boost::diagnostic_information(*error);
                         callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
                                      SchedulerError::DAGError, "DAG execute error!", *error),
-                            nullptr);
+                            nullptr, m_sysBlock);
                         return;
                     }
 
@@ -450,10 +472,10 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
                 else
                 {
 #pragma omp parallel for
-                    for (size_t i = 0; i < responseMessages.size(); ++i)
+                    for (size_t j = 0; j < responseMessages.size(); ++j)
                     {
-                        assert(responseMessages[i]);
-                        iterators[i]->second.message = std::move(responseMessages[i]);
+                        assert(responseMessages[j]);
+                        iterators[j]->second.message = std::move(responseMessages[j]);
                     }
                 }
 
@@ -475,14 +497,14 @@ void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
 }
 
 void BlockExecutive::DMTExecute(
-    std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback)
+    std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback)
 {
     startBatch([this, callback = std::move(callback)](Error::UniquePtr&& error) {
         if (error)
         {
             callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
                          SchedulerError::DMTError, "Execute with errors", *error),
-                nullptr);
+                nullptr, m_sysBlock);
             return;
         }
         if (!m_executiveStates.empty())
@@ -505,7 +527,7 @@ void BlockExecutive::DMTExecute(
                 {
                     m_block->appendReceipt(it.receipt);
                 }
-                callback(nullptr, nullptr);
+                callback(nullptr, nullptr, m_sysBlock);
             }
             else
             {
@@ -516,7 +538,7 @@ void BlockExecutive::DMTExecute(
                     {
                         callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
                                      SchedulerError::UnknownError, "Unknown error", *error),
-                            nullptr);
+                            nullptr, m_sysBlock);
                         return;
                     }
 
@@ -537,7 +559,7 @@ void BlockExecutive::DMTExecute(
                     executedBlockHeader->setReceiptsRoot(m_block->calculateReceiptRoot());
 
                     m_result = executedBlockHeader;
-                    callback(nullptr, m_result);
+                    callback(nullptr, m_result, m_sysBlock);
                 });
             }
         }
@@ -836,16 +858,17 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
             // Empty stack, execution is finished
             if (executiveState.callStack.empty())
             {
-                m_executiveResults[executiveState.contextID].receipt =
-                    m_scheduler->m_blockFactory->receiptFactory()->createReceipt(
-                        message->gasAvailable(), message->newEVMContractAddress(),
-                        std::make_shared<std::vector<bcos::protocol::LogEntry>>(
-                            message->takeLogEntries()),
-                        message->status(), message->takeData(),
-                        m_block->blockHeaderConst()->number());
+                auto txGasUsed = m_gasLimit - message->gasAvailable();
+                // Calc the gas set to header
+                m_gasUsed += txGasUsed;
 
-                // Calc the gas
-                m_gasUsed += (TRANSACTION_GAS - message->gasAvailable());
+                auto receipt = m_scheduler->m_blockFactory->receiptFactory()->createReceipt(
+                    txGasUsed, message->newEVMContractAddress(),
+                    std::make_shared<std::vector<bcos::protocol::LogEntry>>(
+                        message->takeLogEntries()),
+                    message->status(), message->takeData(), m_block->blockHeaderConst()->number());
+                receipt->setMessage(std::string(message->message()));
+                m_executiveResults[executiveState.contextID - m_startContextID].receipt = receipt;
 
                 // Remove executive state and continue
                 SCHEDULER_LOG(TRACE)
@@ -899,6 +922,8 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
             SCHEDULER_LOG(TRACE) << "Send back, " << contextID << " | " << seq << " | "
                                  << message->transactionHash() << LOG_KV("to", message->to());
 
+            // Note: the executiveMessage for synced block should not setTransactionHash to avoid of
+            // duplicated txs-fetching
             if (message->transactionHash() != h256(0))
             {
                 message->setType(protocol::ExecutionMessage::TXHASH);

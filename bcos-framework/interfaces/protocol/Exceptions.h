@@ -19,7 +19,7 @@
  * @date: 2021-03-16
  */
 #pragma once
-#include "bcos-utilities/Exceptions.h"
+#include <bcos-utilities/Exceptions.h>
 namespace bcos
 {
 namespace protocol
@@ -35,12 +35,17 @@ DERIVE_BCOS_EXCEPTION(OutOfGas);
 DERIVE_BCOS_EXCEPTION(OutOfStack);
 DERIVE_BCOS_EXCEPTION(StackUnderflow);
 DERIVE_BCOS_EXCEPTION(ContractAddressAlreadyUsed);
-DERIVE_BCOS_EXCEPTION(PrecompiledError);
 DERIVE_BCOS_EXCEPTION(RevertInstruction);
 DERIVE_BCOS_EXCEPTION(PermissionDenied);
 DERIVE_BCOS_EXCEPTION(CallAddressError);
 DERIVE_BCOS_EXCEPTION(GasOverflow);
 DERIVE_BCOS_EXCEPTION(ContractFrozen);
 DERIVE_BCOS_EXCEPTION(AccountFrozen);
+class PrecompiledError : public Exception
+{
+public:
+    PrecompiledError() : Exception() {}
+    PrecompiledError(std::string const& _msg) : Exception(_msg) {}
+};
 }  // namespace protocol
 }  // namespace bcos

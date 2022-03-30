@@ -19,13 +19,13 @@
  * @date 2021-04-09
  */
 #pragma once
-#include "../../interfaces/crypto/KeyInterface.h"
+#include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 namespace bcos
 {
 namespace consensus
 {
-using NodeType = uint64_t;
 using IndexType = uint64_t;
 using ViewType = uint64_t;
+const ViewType MaxView = std::numeric_limits<ViewType>::max() / 2;
 }  // namespace consensus
 }  // namespace bcos

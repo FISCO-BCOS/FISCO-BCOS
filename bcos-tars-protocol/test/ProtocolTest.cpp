@@ -1,5 +1,3 @@
-#include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-crypto/hash/SM3.h"
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
@@ -7,10 +5,12 @@
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionSubmitResultImpl.h"
 #include "bcos-tars-protocol/tars/Block.h"
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/hash/SM3.h>
+#include <bcos-crypto/interfaces/crypto/CommonType.h>
+#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-crypto/signature/sm2/SM2Crypto.h>
-#include <bcos-framework/interfaces/crypto/CommonType.h>
-#include <bcos-framework/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/interfaces/protocol/Transaction.h>
 #include <bcos-protocol/LogEntry.h>
@@ -59,7 +59,7 @@ inline std::vector<bcos::bytes> fakeSealerList(
     std::vector<bcos::bytes> sealerList;
     for (size_t i = 0; i < size; i++)
     {
-        auto keyPair = _signImpl->generateKeyPair();
+        bcos::crypto::KeyPairInterface::Ptr keyPair = _signImpl->generateKeyPair();
         _keyPairVec.emplace_back(keyPair);
         sealerList.emplace_back(*(keyPair->publicKey()->encode()));
     }

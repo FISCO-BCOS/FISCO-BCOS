@@ -24,8 +24,9 @@ enum SchedulerError
     DMTError,
     DAGError,
     ExecutorNotEstablishedError,
+    fetchGasLimitError,
 };
 
-inline const uint64_t TRANSACTION_GAS = 30000000000;
+inline const uint64_t TRANSACTION_GAS = 3000000000;
 
 }  // namespace bcos::scheduler

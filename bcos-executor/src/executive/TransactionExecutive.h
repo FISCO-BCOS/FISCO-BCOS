@@ -152,11 +152,11 @@ public:
             precompiledContract);
 
     void setConstantPrecompiled(
-        const std::map<std::string, std::shared_ptr<precompiled::Precompiled>>
+        std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
             _constantPrecompiled);
 
     std::shared_ptr<precompiled::PrecompiledExecResult> execPrecompiled(const std::string& address,
-        bytesConstRef param, const std::string& origin, const std::string& sender);
+        bytesConstRef param, const std::string& origin, const std::string& sender, int64_t gasLeft);
 
     void setExchangeMessage(CallParameters::UniquePtr callParameters)
     {
@@ -170,6 +170,7 @@ public:
 
         return dispatcher();
     }
+    VMSchedule const& vmSchedule() const { return m_blockContext.lock()->vmSchedule(); }
 
 private:
     CallParameters::UniquePtr dispatcher();
@@ -190,19 +191,20 @@ private:
     CallParameters::UniquePtr parseEVMCResult(
         CallParameters::UniquePtr callResults, const Result& _result);
 
-    void writeErrInfoToOutput(std::string const& errInfo, bytes& output)
+    void writeErrInfoToOutput(std::string const& errInfo, CallParameters& _callParameters)
     {
         bcos::codec::abi::ContractABICodec abi(m_hashImpl);
         auto codecOutput = abi.abiIn("Error(string)", errInfo);
-        output = std::move(codecOutput);
+        _callParameters.data = std::move(codecOutput);
     }
 
-    inline std::string getContractTableName(const std::string_view& _address, bool _isWasm)
+    inline std::string getContractTableName(const std::string_view& _address, bool isWasm = false)
     {
         auto blockContext = m_blockContext.lock();
         std::string formatAddress(_address);
-        if (!_isWasm)
+        if (!isWasm)
         {
+            // evm address needs to be lower
             boost::algorithm::to_lower(formatAddress);
         }
 
@@ -225,10 +227,12 @@ private:
     void creatAuthTable(
         std::string_view _tableName, std::string_view _origin, std::string_view _sender);
 
-    bool buildBfsPath(std::string const& _absoluteDir);
+    bool buildBfsPath(std::string const& _absoluteDir, const std::string& _origin,
+        const std::string& _sender, int64_t gasLeft);
 
     std::weak_ptr<BlockContext> m_blockContext;  ///< Information on the runtime environment.
-    std::map<std::string, std::shared_ptr<precompiled::Precompiled>> m_constantPrecompiled;
+    std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
+        m_constantPrecompiled;
     std::shared_ptr<const std::map<std::string, std::shared_ptr<PrecompiledContract>>>
         m_evmPrecompiled;
     std::shared_ptr<const std::set<std::string>> m_builtInPrecompiled;

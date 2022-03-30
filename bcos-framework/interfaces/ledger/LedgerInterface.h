@@ -21,7 +21,6 @@
 
 #pragma once
 
-#include "../../interfaces/crypto/CommonType.h"
 #include "../../interfaces/protocol/Block.h"
 #include "../../interfaces/protocol/BlockHeader.h"
 #include "../../interfaces/protocol/Transaction.h"
@@ -29,7 +28,8 @@
 #include "../../interfaces/storage/StorageInterface.h"
 #include "LedgerConfig.h"
 #include "LedgerTypeDef.h"
-#include "bcos-utilities/Error.h"
+#include <bcos-crypto/interfaces/crypto/CommonType.h>
+#include <bcos-utilities/Error.h>
 #include <gsl/span>
 #include <map>
 

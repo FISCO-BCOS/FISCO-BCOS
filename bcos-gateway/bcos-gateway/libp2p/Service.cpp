@@ -4,7 +4,6 @@
  */
 
 #include <bcos-framework/interfaces/protocol/CommonError.h>
-#include <bcos-gateway/Gateway.h>
 #include <bcos-gateway/libnetwork/ASIOInterface.h>  // for ASIOInterface
 #include <bcos-gateway/libnetwork/Common.h>         // for SocketFace
 #include <bcos-gateway/libnetwork/SocketFace.h>     // for SocketFace
@@ -303,24 +302,8 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::P
             return;
         }
 
-        auto serviceWeakPtr = std::weak_ptr<Service>(shared_from_this());
-        auto gateway = m_gateway.lock();
-        if (!gateway)
-        {
-            // gateway lock failed??? it should not happen during running
-            SERVICE_LOG(ERROR) << "gateway is no longer available, gateway weak_ptr lock failed";
-            return;
-        }
-
         /// SERVICE_LOG(TRACE) << "Service onMessage: " << message->seq();
         auto p2pMessage = std::dynamic_pointer_cast<P2PMessage>(message);
-        auto options = p2pMessage->options();
-        auto groupID = options->groupID();
-        auto srcNodeID = options->srcNodeID();
-        auto payload = p2pMessage->payload();
-        auto bytesConstRefPayload = bytesConstRef(payload->data(), payload->size());
-        const auto& dstNodeIDs = options->dstNodeIDs();
-
         SERVICE_LOG(TRACE) << LOG_DESC("onMessage receive message") << LOG_KV("p2pid", p2pID)
                            << LOG_KV("endpoint", nodeIPEndpoint) << LOG_KV("seq", p2pMessage->seq())
                            << LOG_KV("version", p2pMessage->version())
@@ -344,69 +327,6 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::P
         }
         break;
         case MessageType::Heartbeat:
-        {
-            uint32_t statusSeq = boost::asio::detail::socket_ops::network_to_host_long(
-                *((uint32_t*)bytesConstRefPayload.data()));
-            bool statusSeqChanged = false;
-            gateway->gatewayNodeManager()->onReceiveStatusSeq(p2pID, statusSeq, statusSeqChanged);
-            if (statusSeqChanged)
-            {
-                sendMessageBySession(MessageType::RequestNodeIDs, bytesConstRef(), p2pSession);
-            }
-        }
-        break;
-        case MessageType::RequestNodeIDs:
-        {
-            std::string json;
-            gateway->gatewayNodeManager()->onRequestNodeIDs(json);
-            if (!json.empty())
-            {
-                sendMessageBySession(MessageType::ResponseNodeIDs,
-                    bytesConstRef((byte*)json.data(), json.size()), p2pSession);
-            }
-        }
-        break;
-        case MessageType::ResponseNodeIDs:
-        {
-            gateway->gatewayNodeManager()->onReceiveNodeIDs(
-                p2pID, std::string(bytesConstRefPayload.begin(), bytesConstRefPayload.end()));
-        }
-        break;
-        case MessageType::PeerToPeerMessage:
-        {
-            bcos::crypto::NodeIDPtr srcNodeIDPtr = m_keyFactory->createKey(*srcNodeID.get());
-            bcos::crypto::NodeIDPtr dstNodeIDPtr = m_keyFactory->createKey(*dstNodeIDs[0].get());
-            gateway->onReceiveP2PMessage(groupID, srcNodeIDPtr, dstNodeIDPtr, bytesConstRefPayload,
-                [groupID, srcNodeIDPtr, dstNodeIDPtr, message, p2pSession, p2pMessage,
-                    serviceWeakPtr](Error::Ptr _error) {
-                    auto servicePtr = serviceWeakPtr.lock();
-                    if (!servicePtr)
-                    {
-                        return;
-                    }
-
-                    auto errorCode = std::to_string(
-                        _error ? _error->errorCode() : (int)protocol::CommonError::SUCCESS);
-                    if (_error)
-                    {
-                        SERVICE_LOG(DEBUG)
-                            << "onReceiveP2PMessage callback" << LOG_KV("code", _error->errorCode())
-                            << LOG_KV("msg", _error->errorMessage()) << LOG_KV("group", groupID)
-                            << LOG_KV("src", srcNodeIDPtr->shortHex())
-                            << LOG_KV("dst", dstNodeIDPtr->shortHex());
-                    }
-                    servicePtr->sendRespMessageBySession(
-                        bytesConstRef((byte*)errorCode.data(), errorCode.size()), p2pMessage,
-                        p2pSession);
-                });
-        }
-        break;
-        case MessageType::BroadcastMessage:
-        {
-            bcos::crypto::NodeIDPtr srcNodeIDPtr = m_keyFactory->createKey(*srcNodeID.get());
-            gateway->onReceiveBroadcastMessage(groupID, srcNodeIDPtr, bytesConstRefPayload);
-        }
-        break;
             break;
         default:
         {
@@ -414,7 +334,6 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::P
                                << LOG_KV("packetType", packetType)
                                << LOG_KV("packetSeq", message->seq());
         }
-
         break;
         };
     }
@@ -598,17 +517,6 @@ bool Service::isConnected(P2pID const& nodeID) const
         return true;
     }
     return false;
-}
-
-uint32_t Service::statusSeq()
-{
-    auto gateway = m_gateway.lock();
-    if (gateway)
-    {
-        return gateway->gatewayNodeManager()->statusSeq();
-    }
-
-    return 0;
 }
 
 std::shared_ptr<P2PMessage> Service::newP2PMessage(int16_t _type, bytesConstRef _payload)

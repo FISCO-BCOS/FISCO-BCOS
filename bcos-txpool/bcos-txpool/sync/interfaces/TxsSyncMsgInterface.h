@@ -19,8 +19,8 @@
  * @date 2021-05-11
  */
 #pragma once
-#include <bcos-framework/interfaces/crypto/CommonType.h>
-#include <bcos-framework//interfaces/crypto/KeyInterface.h>
+#include <bcos-crypto/interfaces/crypto/CommonType.h>
+#include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 namespace bcos
 {
 namespace sync

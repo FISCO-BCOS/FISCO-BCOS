@@ -56,3 +56,13 @@ bcostars::Error SchedulerServiceServer::getCode(
 
     return bcostars::Error();
 }
+
+bcostars::Error SchedulerServiceServer::getABI(const std::string& contract, std::string& abi, tars::TarsCurrentPtr current)
+{
+    current->setResponse(false);
+    m_scheduler->getABI(contract, [current](bcos::Error::Ptr error, std::string abi) {
+        async_response_getABI(current, toTarsError(error), abi);
+    });
+
+    return bcostars::Error();
+}

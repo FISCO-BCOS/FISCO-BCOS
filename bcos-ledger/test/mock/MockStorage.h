@@ -24,7 +24,7 @@
 #include "bcos-framework/interfaces/storage/StorageInterface.h"
 #include "bcos-framework/interfaces/storage/Table.h"
 #include "bcos-ledger/libledger/utilities/Common.h"
-#include "bcos-utilities/ThreadPool.h"
+#include <bcos-utilities/ThreadPool.h>
 #define SLEEP_MILLI_SECONDS 10
 
 using namespace bcos::storage;

@@ -1,9 +1,12 @@
 #pragma once
 
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+
 #include "bcos-tars-protocol/Common.h"
 #include "bcos-tars-protocol/ErrorConverter.h"
 #include "bcos-tars-protocol/tars/FrontService.h"
-#include <bcos-framework/interfaces/crypto/KeyFactory.h>
+#include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/interfaces/front/FrontServiceInterface.h>
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/RefDataContainer.h>
@@ -270,11 +273,12 @@ public:
             nullptr, _moduleID, tarsNodeIDs, std::vector<char>(_data.begin(), _data.end()));
     }
 
-    void asyncSendBroadcastMessage(int _moduleID, bcos::bytesConstRef _data) override
+    void asyncSendBroadcastMessage(
+        uint16_t _type, int _moduleID, bcos::bytesConstRef _data) override
     {
         auto data = _data.toBytes();
         m_proxy->async_asyncSendBroadcastMessage(
-            nullptr, _moduleID, std::vector<char>(data.begin(), data.end()));
+            nullptr, _type, _moduleID, std::vector<char>(data.begin(), data.end()));
     }
 
 private:

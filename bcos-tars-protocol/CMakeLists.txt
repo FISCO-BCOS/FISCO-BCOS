@@ -22,7 +22,6 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment ver
 include(Version)
 project(bcos-tars-protocol VERSION ${VERSION})
 
-hunter_add_package(tarscpp)
 find_package(tarscpp CONFIG REQUIRED)
 
 # for tars generator

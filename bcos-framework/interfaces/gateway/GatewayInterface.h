@@ -19,11 +19,13 @@
  * @date 2021-04-19
  */
 #pragma once
-#include "../../interfaces/crypto/KeyInterface.h"
-#include "../../interfaces/multigroup/GroupInfo.h"
 #include "GatewayTypeDef.h"
-#include "bcos-utilities/Common.h"
-#include "bcos-utilities/Error.h"
+#include "bcos-framework/interfaces/front/FrontServiceInterface.h"
+#include "bcos-framework/interfaces/multigroup/GroupInfo.h"
+#include "bcos-framework/interfaces/protocol/Protocol.h"
+#include <bcos-crypto/interfaces/crypto/KeyInterface.h>
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/Error.h>
 
 namespace bcos
 {
@@ -97,7 +99,7 @@ public:
      * @param _payload: message content
      * @return void
      */
-    virtual void asyncSendBroadcastMessage(const std::string& _groupID,
+    virtual void asyncSendBroadcastMessage(uint16_t _type, const std::string& _groupID,
         bcos::crypto::NodeIDPtr _srcNodeID, bytesConstRef _payload) = 0;
 
     /// multi-group related interfaces
@@ -121,6 +123,12 @@ public:
     virtual void asyncRemoveTopic(std::string const& _clientID,
         std::vector<std::string> const& _topicList,
         std::function<void(Error::Ptr&&)> _callback) = 0;
+
+    virtual bool registerNode(const std::string&, bcos::crypto::NodeIDPtr, bcos::protocol::NodeType,
+        bcos::front::FrontServiceInterface::Ptr)
+    {
+        return true;
+    }
 };
 
 }  // namespace gateway

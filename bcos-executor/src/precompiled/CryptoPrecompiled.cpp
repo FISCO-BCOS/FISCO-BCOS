@@ -24,9 +24,9 @@
 #include <bcos-codec/abi/ContractABICodec.h>
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
+#include <bcos-crypto/interfaces/crypto/Signature.h>
 #include <bcos-crypto/signature/ed25519/Ed25519Crypto.h>
-#include <bcos-crypto/signature/sm2/SM2Crypto.h>
-#include <bcos-framework/interfaces/crypto/Signature.h>
+#include <bcos-crypto/signature/sm2.h>
 
 using namespace bcos;
 using namespace bcos::codec;
@@ -57,7 +57,7 @@ CryptoPrecompiled::CryptoPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(
 
 std::shared_ptr<PrecompiledExecResult> CryptoPrecompiled::call(
     std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
-    const std::string&, const std::string&)
+    const std::string&, const std::string&, int64_t)
 {
     auto funcSelector = getParamFunc(_param);
     auto paramData = getParamData(_param);

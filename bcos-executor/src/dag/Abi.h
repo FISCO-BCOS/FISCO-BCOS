@@ -21,13 +21,14 @@
 
 #pragma once
 
-#include "bcos-framework/interfaces/crypto/Hash.h"
-#include "bcos-utilities/Common.h"
+#include <bcos-crypto/interfaces/crypto/Hash.h>
+#include <bcos-utilities/Common.h>
 #include <cstdint>
 #include <iostream>
 #include <memory>
 #include <string>
 #include <string_view>
+#include <optional>
 
 namespace bcos
 {
@@ -36,9 +37,8 @@ namespace executor
 struct ConflictField
 {
     std::uint8_t kind;
-    std::vector<std::uint8_t> accessPath;
-    bool readOnly;
-    std::uint8_t slot;
+    std::vector<std::uint8_t> value;
+    std::optional<std::uint8_t> slot;
 };
 
 struct ParameterAbi
@@ -72,10 +72,12 @@ struct FunctionAbi
 {
     std::string name;
     std::vector<ParameterAbi> inputs;
+    std::uint32_t selector;
     std::vector<ConflictField> conflictFields;
+    std::vector<std::string> flatInputs;
 
     static std::unique_ptr<FunctionAbi> deserialize(
-        std::string_view abiStr, const bcos::bytes& expected, bcos::crypto::Hash::Ptr hashImpl);
+        std::string_view abiStr, const bcos::bytes& expected, bool isSMCrypto);
 };
 }  // namespace executor
 }  // namespace bcos

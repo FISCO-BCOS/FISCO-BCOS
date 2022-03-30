@@ -56,7 +56,7 @@ ConsensusPrecompiled::ConsensusPrecompiled(crypto::Hash::Ptr _hashImpl) : Precom
 
 std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
     std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
-    const std::string&, const std::string&)
+    const std::string&, const std::string&, int64_t)
 {
     // parse function name
     uint32_t func = getParamFunc(_param);
@@ -277,7 +277,7 @@ int ConsensusPrecompiled::removeNode(
     if (sealerSize == 0)
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled")
-                               << LOG_DESC("addObserver failed, because last sealer");
+                               << LOG_DESC("removeNode failed, because last sealer");
         return CODE_LAST_SEALER;
     }
 
@@ -352,11 +352,7 @@ void ConsensusPrecompiled::showConsensusTable(
     const std::shared_ptr<executor::TransactionExecutive>& _executive)
 {
     auto& storage = _executive->storage();
-    if (!storage.openTable(SYS_CONSENSUS))
-    {
-        storage.createTable(SYS_CONSENSUS, SYS_VALUE_FIELDS);
-    }
-
+    // SYS_CONSENSUS must exist
     auto entry = storage.getRow(SYS_CONSENSUS, "key");
 
     if (!entry)

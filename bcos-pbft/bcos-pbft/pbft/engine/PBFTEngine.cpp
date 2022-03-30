@@ -130,6 +130,12 @@ void PBFTEngine::onLoadAndVerifyProposalSucc(PBFTProposalInterface::Ptr _proposa
     // must add lock here to ensure thread-safe
     RecursiveGuard l(m_mutex);
     m_cacheProcessor->updateCommitQueue(_proposal);
+    // Note:  The node that obtains the consensus proposal by request
+    //        proposal from othe nodes  will also broadcast the checkPoint message packet,
+    //        Therefore, the node may also be requested by other nodes.
+    //        Therefore, it must be ensured that the obtained proposal is updated to the
+    //        preCommitCache.
+    m_cacheProcessor->updatePrecommit(_proposal);
     m_config->timer()->restart();
 }
 
@@ -170,8 +176,9 @@ void PBFTEngine::onProposalApplySuccess(
         _executedProposal, m_config->cryptoSuite(), m_config->keyPair(), true);
 
     auto encodedData = m_config->codec()->encode(checkPointMsg);
-    m_config->frontService()->asyncSendMessageByNodeIDs(
-        ModuleID::PBFT, m_config->consensusNodeIDList(), ref(*encodedData));
+    // only broadcast message to the consensus nodes
+    m_config->frontService()->asyncSendBroadcastMessage(
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*encodedData));
     // Note: must lock here to ensure thread safe
     RecursiveGuard l(m_mutex);
     // restart the timer when proposal execute finished to in case of timeout
@@ -306,8 +313,9 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, bytesConstRef _proposalData
     {
         // broadcast the pre-prepare packet
         auto encodedData = m_config->codec()->encode(pbftMessage);
-        m_config->frontService()->asyncSendMessageByNodeIDs(
-            ModuleID::PBFT, m_config->consensusNodeIDList(), ref(*encodedData));
+        // only broadcast pbft message to the consensus nodes
+        m_config->frontService()->asyncSendBroadcastMessage(
+            bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*encodedData));
     }
     else
     {
@@ -491,6 +499,13 @@ void PBFTEngine::executeWorker()
 
 void PBFTEngine::handleMsg(std::shared_ptr<PBFTBaseMessageInterface> _msg)
 {
+    // check the view
+    if (_msg->view() > MaxView)
+    {
+        PBFT_LOG(WARNING) << LOG_DESC("handleMsg: reject msg with invalid view")
+                          << printPBFTMsgInfo(_msg);
+        return;
+    }
     RecursiveGuard l(m_mutex);
     switch (_msg->packetType())
     {
@@ -656,7 +671,7 @@ bool PBFTEngine::isSyncingHigher()
 {
     auto committedIndex = m_config->committedProposal()->index();
     auto syncNumber = m_config->syncingHighestNumber();
-    if (syncNumber < (committedIndex + m_config->warterMarkLimit()))
+    if (syncNumber < (committedIndex + m_config->waterMarkLimit()))
     {
         return false;
     }
@@ -810,8 +825,8 @@ void PBFTEngine::broadcastPrepareMsg(PBFTMessageInterface::Ptr _prePrepareMsg)
 
     auto encodedData = m_config->codec()->encode(prepareMsg, m_config->pbftMsgDefaultVersion());
     // only broadcast to the consensus nodes
-    m_config->frontService()->asyncSendMessageByNodeIDs(
-        ModuleID::PBFT, m_config->consensusNodeIDList(), ref(*encodedData));
+    m_config->frontService()->asyncSendBroadcastMessage(
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*encodedData));
     // try to precommit the message
     m_cacheProcessor->checkAndPreCommit();
 }
@@ -881,7 +896,10 @@ void PBFTEngine::onTimeout()
         m_config->timer()->restart();
         return;
     }
+    auto startT = utcTime();
+    auto recordT = utcTime();
     RecursiveGuard l(m_mutex);
+    auto lockT = utcTime() - startT;
     if (m_cacheProcessor->tryToApplyCommitQueue())
     {
         PBFT_LOG(INFO) << LOG_DESC("onTimeout: apply proposal to state-machine, restart the timer")
@@ -901,7 +919,8 @@ void PBFTEngine::onTimeout()
         return;
     }
     triggerTimeout(true);
-    PBFT_LOG(WARNING) << LOG_DESC("onTimeout") << m_config->printCurrentState();
+    PBFT_LOG(WARNING) << LOG_DESC("After onTimeout") << m_config->printCurrentState()
+                      << LOG_KV("lockT", lockT) << LOG_KV("timecost", (utcTime() - recordT));
 }
 
 void PBFTEngine::triggerTimeout(bool _incTimeout)
@@ -980,8 +999,8 @@ void PBFTEngine::broadcastViewChangeReq()
     // encode and broadcast the viewchangeReq
     auto encodedData = m_config->codec()->encode(viewChangeReq);
     // only broadcast to the consensus nodes
-    m_config->frontService()->asyncSendMessageByNodeIDs(
-        ModuleID::PBFT, m_config->consensusNodeIDList(), ref(*encodedData));
+    m_config->frontService()->asyncSendBroadcastMessage(
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*encodedData));
     PBFT_LOG(INFO) << LOG_DESC("broadcastViewChangeReq") << printPBFTMsgInfo(viewChangeReq);
     // collect the viewchangeReq
     m_cacheProcessor->addViewChangeReq(viewChangeReq);
@@ -1084,7 +1103,7 @@ bool PBFTEngine::handleViewChangeMsg(ViewChangeMsgInterface::Ptr _viewChangeMsg)
         if (view > 0)
         {
             // trigger timeout to reach fast view change
-            triggerTimeout();
+            triggerTimeout(false);
         }
     }
     auto newViewMsg = m_cacheProcessor->checkAndTryIntoNewView();
@@ -1162,6 +1181,8 @@ void PBFTEngine::reachNewView(ViewType _view)
     m_cacheProcessor->checkAndPreCommit();
     m_cacheProcessor->checkAndCommit();
     PBFT_LOG(INFO) << LOG_DESC("reachNewView") << m_config->printCurrentState();
+    m_cacheProcessor->tryToApplyCommitQueue();
+    m_cacheProcessor->tryToCommitStableCheckPoint();
 }
 
 void PBFTEngine::reHandlePrePrepareProposals(NewViewMsgInterface::Ptr _newViewReq)
@@ -1227,6 +1248,7 @@ void PBFTEngine::finalizeConsensus(LedgerConfig::Ptr _ledgerConfig, bool _synced
     RecursiveGuard l(m_mutex);
     // resetConfig after submit the block to ledger
     m_config->resetConfig(_ledgerConfig, _syncedBlock);
+    m_cacheProcessor->checkAndCommitStableCheckPoint();
     m_cacheProcessor->tryToApplyCommitQueue();
     // tried to commit the stable checkpoint
     m_cacheProcessor->removeConsensusedCache(m_config->view(), _ledgerConfig->blockNumber());

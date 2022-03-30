@@ -19,6 +19,10 @@
  * @date: 2021-09-07
  */
 #pragma once
+
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+
 #include "bcos-tars-protocol/tars/TransactionMetaData.h"
 #include <bcos-framework/interfaces/protocol/TransactionMetaData.h>
 

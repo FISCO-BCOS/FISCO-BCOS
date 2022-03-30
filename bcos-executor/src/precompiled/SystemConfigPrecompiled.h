@@ -22,6 +22,8 @@
 #include "../vm/Precompiled.h"
 #include "Common.h"
 #include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
+#include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
+#include <set>
 namespace bcos
 {
 namespace precompiled
@@ -43,15 +45,17 @@ public:
     virtual ~SystemConfigPrecompiled(){};
     std::shared_ptr<PrecompiledExecResult> call(
         std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
-        const std::string& _origin, const std::string& _sender) override;
+        const std::string& _origin, const std::string& _sender, int64_t gasLeft) override;
     std::string toString() override;
     std::pair<std::string, protocol::BlockNumber> getSysConfigByKey(
         const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const std::string& _key) const;
 
 private:
-    bool checkValueValid(std::string_view key, std::string_view value);
-    std::map<std::string, std::function<bool(int64_t)>> m_sysValueCmp;
+    void checkValueValid(std::string_view key, std::string_view value);
+    std::map<std::string, std::function<void(int64_t)>> m_sysValueCmp;
+    const std::set<std::string> c_supportedKey = {bcos::ledger::SYSTEM_KEY_TX_GAS_LIMIT,
+        bcos::ledger::SYSTEM_KEY_CONSENSUS_LEADER_PERIOD, bcos::ledger::SYSTEM_KEY_TX_COUNT_LIMIT};
 };
 
 }  // namespace precompiled

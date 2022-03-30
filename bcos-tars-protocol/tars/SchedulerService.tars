@@ -6,5 +6,6 @@ module bcostars {
     interface SchedulerService{
         Error call(Transaction _tx, out TransactionReceipt _receipt);
         Error getCode(string contract, out vector<byte> code);
+        Error getABI(string contract, out string abi);
     };
 };

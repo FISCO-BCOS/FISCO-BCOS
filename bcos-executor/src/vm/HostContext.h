@@ -51,7 +51,7 @@ public:
     HostContext(HostContext const&) = delete;
     HostContext& operator=(HostContext const&) = delete;
 
-    std::string_view get(const std::string_view& _key);
+    std::string get(const std::string_view& _key);
 
     void set(const std::string_view& _key, std::string _value);
 
@@ -96,7 +96,7 @@ public:
     bool exists(const std::string_view&) { return true; }
 
     /// Return the EVM gas-price schedule for this execution context.
-    EVMSchedule const& evmSchedule() const { return m_evmSchedule; }
+    VMSchedule const& vmSchedule() const;
 
     /// Hash of a block if within the last 256 blocks, or h256() otherwise.
     h256 blockHash() const;
@@ -144,8 +144,6 @@ private:
     SubState m_sub;  ///< Sub-band VM state (suicides, refund counter, logs).
 
     std::list<CallParameters::UniquePtr> m_responseStore;
-
-    static EVMSchedule m_evmSchedule;
 };
 
 }  // namespace executor

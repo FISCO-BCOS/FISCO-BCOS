@@ -2,7 +2,7 @@
 #include "Common.h"
 #include "bcos-framework/interfaces/ledger/LedgerConfig.h"
 #include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
-#include "bcos-utilities/Error.h"
+#include <bcos-utilities/Error.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/format.hpp>
 #include <boost/lexical_cast.hpp>
@@ -14,12 +14,14 @@
 using namespace bcos::scheduler;
 
 void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
-    std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&)> callback)
+    std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool _sysBlock)>
+        callback)
 {
     auto signature = block->blockHeaderConst()->signatureList();
     SCHEDULER_LOG(INFO) << "ExecuteBlock request"
                         << LOG_KV("block number", block->blockHeaderConst()->number())
-                        << LOG_KV("verify", verify) << LOG_KV("signatureSize", signature.size())
+                        << LOG_KV("gasLimit", m_gasLimit) << LOG_KV("verify", verify)
+                        << LOG_KV("signatureSize", signature.size())
                         << LOG_KV("tx count", block->transactionsSize())
                         << LOG_KV("meta tx count", block->transactionsMetaDataSize());
     auto executeLock =
@@ -28,7 +30,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
     {
         auto message = "Another block is executing!";
         SCHEDULER_LOG(ERROR) << "ExecuteBlock error, " << message;
-        callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidStatus, message), nullptr);
+        callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidStatus, message), nullptr, false);
         return;
     }
 
@@ -39,7 +41,6 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         auto requestNumber = block->blockHeaderConst()->number();
         auto& frontBlock = m_blocks.front();
         auto& backBlock = m_blocks.back();
-        auto signature = block->blockHeaderConst()->signatureList();
         // Block already executed
         if (requestNumber >= frontBlock.number() && requestNumber <= backBlock.number())
         {
@@ -61,7 +62,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
 
             blocksLock.unlock();
             executeLock->unlock();
-            callback(nullptr, std::move(blockHeader));
+            callback(nullptr, std::move(blockHeader), it->sysBlock());
             return;
         }
 
@@ -75,8 +76,8 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
 
             blocksLock.unlock();
             executeLock->unlock();
-            callback(
-                BCOS_ERROR_PTR(SchedulerError::InvalidBlockNumber, std::move(message)), nullptr);
+            callback(BCOS_ERROR_PTR(SchedulerError::InvalidBlockNumber, std::move(message)),
+                nullptr, false);
 
             return;
         }
@@ -91,17 +92,19 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
                     block->blockHeaderConst()->number() % lastExecutedNumber)
                     .str();
             SCHEDULER_LOG(ERROR) << "ExecuteBlock error, " << message;
-            callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidBlockNumber, message), nullptr);
+            callback(
+                BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidBlockNumber, message), nullptr, false);
             return;
         }
     }
-    m_blocks.emplace_back(
-        std::move(block), this, 0, m_transactionSubmitResultFactory, false, m_blockFactory, verify);
+    m_blocks.emplace_back(std::move(block), this, 0, m_transactionSubmitResultFactory, false,
+        m_blockFactory, m_gasLimit, verify);
     auto& blockExecutive = m_blocks.back();
 
     blocksLock.unlock();
     blockExecutive.asyncExecute([this, callback = std::move(callback), executeLock](
-                                    Error::UniquePtr error, protocol::BlockHeader::Ptr header) {
+                                    Error::UniquePtr error, protocol::BlockHeader::Ptr header,
+                                    bool _sysBlock) {
         if (error)
         {
             SCHEDULER_LOG(ERROR) << "Unknown error, " << boost::diagnostic_information(*error);
@@ -112,7 +115,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
             executeLock->unlock();
             callback(
                 BCOS_ERROR_WITH_PREV_PTR(SchedulerError::UnknownError, "Unknown error", *error),
-                nullptr);
+                nullptr, _sysBlock);
             return;
         }
         auto signature = header->signatureList();
@@ -127,7 +130,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         m_lastExecutedBlockNumber.store(header->number());
 
         executeLock->unlock();
-        callback(std::move(error), std::move(header));
+        callback(std::move(error), std::move(header), _sysBlock);
     });
 }
 
@@ -202,7 +205,7 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
     // is setting newBlockHeader, which will cause the signatureList ilegal
     auto executedHeader = frontBlock.block()->blockHeader();
     auto signature = executedHeader->signatureList();
-    if (signature.size() == 0)
+    if (signature.empty())
     {
         frontBlock.block()->setBlockHeader(std::move(header));
     }
@@ -234,11 +237,17 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
                 return;
             }
 
-            SCHEDULER_LOG(INFO) << "CommitBlock success"
-                                << LOG_KV("block number", ledgerConfig->blockNumber());
-
             auto& frontBlock = m_blocks.front();
             auto blockNumber = ledgerConfig->blockNumber();
+            auto gasNumber = ledgerConfig->gasLimit();
+            // Note: takes effect in next block. we query the enableNumber of blockNumber + 1.
+            if (std::get<1>(gasNumber) <= (blockNumber + 1))
+            {
+                m_gasLimit = std::get<0>(gasNumber);
+            }
+
+            SCHEDULER_LOG(INFO) << "CommitBlock success" << LOG_KV("block number", blockNumber)
+                                << LOG_KV("gas limit", m_gasLimit);
 
             if (m_txNotifier)
             {
@@ -305,8 +314,9 @@ void SchedulerImpl::call(protocol::Transaction::Ptr tx,
     block->appendTransaction(std::move(tx));
 
     // Create temp executive
-    auto blockExecutive = std::make_shared<BlockExecutive>(std::move(block), this,
-        m_calledContextID++, m_transactionSubmitResultFactory, true, m_blockFactory, false);
+    auto blockExecutive =
+        std::make_shared<BlockExecutive>(std::move(block), this, m_calledContextID.fetch_add(1),
+            m_transactionSubmitResultFactory, true, m_blockFactory, m_gasLimit, false);
 
     blockExecutive->asyncCall([callback = std::move(callback)](Error::UniquePtr&& error,
                                   protocol::TransactionReceipt::Ptr&& receipt) {
@@ -368,6 +378,13 @@ void SchedulerImpl::getCode(
     executor->getCode(contract, std::move(callback));
 }
 
+void SchedulerImpl::getABI(
+    std::string_view contract, std::function<void(Error::Ptr, std::string)> callback)
+{
+    auto executor = m_executorManager->dispatchExecutor(contract);
+    executor->getABI(contract, std::move(callback));
+}
+
 void SchedulerImpl::registerTransactionNotifier(std::function<void(bcos::protocol::BlockNumber,
         bcos::protocol::TransactionSubmitResultsPtr, std::function<void(Error::Ptr)>)>
         txNotifier)
@@ -390,13 +407,14 @@ void SchedulerImpl::asyncGetLedgerConfig(
     auto ledgerConfig = std::make_shared<ledger::LedgerConfig>();
     auto callbackPtr = std::make_shared<decltype(callback)>(std::move(callback));
     auto summary =
-        std::make_shared<std::tuple<size_t, std::atomic_size_t, std::atomic_size_t>>(6, 0, 0);
+        std::make_shared<std::tuple<size_t, std::atomic_size_t, std::atomic_size_t>>(7, 0, 0);
 
-    auto collecter = [summary = std::move(summary), ledgerConfig = std::move(ledgerConfig),
+    auto collector = [summary = std::move(summary), ledgerConfig = std::move(ledgerConfig),
                          callback = std::move(callbackPtr)](Error::Ptr error,
                          std::variant<std::tuple<bool, consensus::ConsensusNodeListPtr>,
-                             std::tuple<int, std::string>, bcos::protocol::BlockNumber,
-                             bcos::crypto::HashType>&& result) mutable {
+                             std::tuple<int, std::string, bcos::protocol::BlockNumber>,
+                             bcos::protocol::BlockNumber, bcos::crypto::HashType>&&
+                             result) mutable {
         auto& [total, success, failed] = *summary;
 
         if (error)
@@ -421,8 +439,8 @@ void SchedulerImpl::asyncGetLedgerConfig(
                             ledgerConfig->setObserverNodeList(*list);
                         }
                     },
-                    [&ledgerConfig](std::tuple<int, std::string> config) {
-                        auto& [type, value] = config;
+                    [&ledgerConfig](std::tuple<int, std::string, protocol::BlockNumber> config) {
+                        auto& [type, value, blockNumber] = config;
                         switch (type)
                         {
                         case 0:
@@ -432,6 +450,10 @@ void SchedulerImpl::asyncGetLedgerConfig(
                         case 1:
                             ledgerConfig->setLeaderSwitchPeriod(
                                 boost::lexical_cast<uint64_t>(value));
+                            break;
+                        case 2:
+                            ledgerConfig->setGasLimit(
+                                std::make_tuple(boost::lexical_cast<uint64_t>(value), blockNumber));
                             break;
                         default:
                             BOOST_THROW_EXCEPTION(BCOS_ERROR(SchedulerError::UnknownError,
@@ -466,27 +488,31 @@ void SchedulerImpl::asyncGetLedgerConfig(
     };
 
     m_ledger->asyncGetNodeListByType(ledger::CONSENSUS_SEALER,
-        [collecter](Error::Ptr error, consensus::ConsensusNodeListPtr list) mutable {
-            collecter(std::move(error), std::tuple{true, std::move(list)});
+        [collector](Error::Ptr error, consensus::ConsensusNodeListPtr list) mutable {
+            collector(std::move(error), std::tuple{true, std::move(list)});
         });
     m_ledger->asyncGetNodeListByType(ledger::CONSENSUS_OBSERVER,
-        [collecter](Error::Ptr error, consensus::ConsensusNodeListPtr list) mutable {
-            collecter(std::move(error), std::tuple{false, std::move(list)});
+        [collector](Error::Ptr error, consensus::ConsensusNodeListPtr list) mutable {
+            collector(std::move(error), std::tuple{false, std::move(list)});
         });
     m_ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_TX_COUNT_LIMIT,
-        [collecter](Error::Ptr error, std::string config, protocol::BlockNumber) mutable {
-            collecter(std::move(error), std::tuple{0, std::move(config)});
+        [collector](Error::Ptr error, std::string config, protocol::BlockNumber _number) mutable {
+            collector(std::move(error), std::tuple{0, std::move(config), _number});
         });
     m_ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_CONSENSUS_LEADER_PERIOD,
-        [collecter](Error::Ptr error, std::string config, protocol::BlockNumber) mutable {
-            collecter(std::move(error), std::tuple{1, std::move(config)});
+        [collector](Error::Ptr error, std::string config, protocol::BlockNumber _number) mutable {
+            collector(std::move(error), std::tuple{1, std::move(config), _number});
+        });
+    m_ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_TX_GAS_LIMIT,
+        [collector](Error::Ptr error, std::string config, protocol::BlockNumber _number) mutable {
+            collector(std::move(error), std::tuple{2, std::move(config), _number});
         });
     m_ledger->asyncGetBlockNumber(
-        [collecter, ledger = m_ledger](Error::Ptr error, protocol::BlockNumber number) mutable {
+        [collector, ledger = m_ledger](Error::Ptr error, protocol::BlockNumber number) mutable {
             ledger->asyncGetBlockHashByNumber(
-                number, [collecter](Error::Ptr error, const crypto::HashType& hash) mutable {
-                    collecter(std::move(error), std::move(hash));
+                number, [collector](Error::Ptr error, const crypto::HashType& hash) mutable {
+                    collector(std::move(error), std::move(hash));
                 });
-            collecter(std::move(error), std::move(number));
+            collector(std::move(error), std::move(number));
         });
 }

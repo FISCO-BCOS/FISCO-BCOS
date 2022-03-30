@@ -5,10 +5,10 @@
 
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/interfaces/rpc/RPCInterface.h>
-#include <bcos-gateway/DynamicGatewayNodeManager.h>
 #include <bcos-gateway/GatewayFactory.h>
-#include <bcos-gateway/GatewayNodeManager.h>
-#include <bcos-gateway/libamop/LocalTopicManager.h>
+#include <bcos-gateway/gateway/GatewayNodeManager.h>
+#include <bcos-gateway/gateway/ProGatewayNodeManager.h>
+#include <bcos-gateway/libamop/AirTopicManager.h>
 #include <bcos-gateway/libnetwork/ASIOInterface.h>
 #include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libnetwork/Host.h>
@@ -227,13 +227,22 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
  * @return void
  */
 std::shared_ptr<Gateway> GatewayFactory::buildGateway(
-    const std::string& _configPath, bool _localMode)
+    const std::string& _configPath, bool _airVersion)
 {
     auto config = std::make_shared<GatewayConfig>();
     // load config
-    config->initConfig(_configPath);
+    if (_airVersion)
+    {
+        // the air mode not require the uuid(use p2pID as uuid by default)
+        config->initConfig(_configPath, false);
+    }
+    else
+    {
+        // the pro mode require the uuid
+        config->initConfig(_configPath, true);
+    }
     config->loadP2pConnectedNodes();
-    return buildGateway(config, _localMode);
+    return buildGateway(config, _airVersion);
 }
 
 /**
@@ -241,7 +250,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(
  * @param _config: config parameter object
  * @return void
  */
-std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config, bool _localMode)
+std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config, bool _airVersion)
 {
     try
     {
@@ -294,20 +303,21 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         // init GatewayNodeManager
         GatewayNodeManager::Ptr gatewayNodeManager;
         AMOPImpl::Ptr amop;
-        if (_localMode)
+        if (_airVersion)
         {
-            gatewayNodeManager = std::make_shared<GatewayNodeManager>(pubHex, keyFactory);
+            gatewayNodeManager =
+                std::make_shared<GatewayNodeManager>(_config->uuid(), pubHex, keyFactory, service);
             amop = buildLocalAMOP(service, pubHex);
         }
         else
         {
-            gatewayNodeManager = std::make_shared<DynamicGatewayNodeManager>(pubHex, keyFactory);
+            gatewayNodeManager = std::make_shared<ProGatewayNodeManager>(
+                _config->uuid(), pubHex, keyFactory, service);
             amop = buildAMOP(service, pubHex);
         }
         // init Gateway
         auto gateway = std::make_shared<Gateway>(m_chainID, service, gatewayNodeManager, amop);
         auto weakptrGatewayNodeManager = std::weak_ptr<GatewayNodeManager>(gatewayNodeManager);
-        service->setGateway(std::weak_ptr<Gateway>(gateway));
         // register disconnect handler
         service->registerDisconnectHandler(
             [weakptrGatewayNodeManager](NetworkException e, P2PSession::Ptr p2pSession) {

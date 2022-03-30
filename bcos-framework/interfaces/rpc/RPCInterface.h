@@ -19,11 +19,11 @@
  */
 #pragma once
 
-#include "bcos-framework/interfaces/crypto/CommonType.h"
 #include "bcos-framework/interfaces/multigroup/GroupInfo.h"
 #include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
 #include "bcos-protocol/TransactionSubmitResultImpl.h"
-#include "bcos-utilities/Error.h"
+#include <bcos-crypto/interfaces/crypto/CommonType.h>
+#include <bcos-utilities/Error.h>
 
 namespace bcos
 {
@@ -76,7 +76,8 @@ public:
         std::function<void(Error::Ptr&& _error, bytesPointer _responseData)> _callback) = 0;
 
     // the gateway notify the rpc to re-subscribe the topic when the gateway set-up
-    virtual void asyncNotifySubscribeTopic(std::function<void(Error::Ptr&& _error)> _callback) = 0;
+    virtual void asyncNotifySubscribeTopic(
+        std::function<void(Error::Ptr&& _error, std::string)> _callback) = 0;
 };
 }  // namespace rpc
 }  // namespace bcos

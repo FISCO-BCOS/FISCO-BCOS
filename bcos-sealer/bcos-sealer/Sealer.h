@@ -21,7 +21,7 @@
 #include "SealerConfig.h"
 #include "SealingManager.h"
 #include "bcos-framework/interfaces/sealer/SealerInterface.h"
-#include "bcos-utilities/Worker.h"
+#include <bcos-utilities/Worker.h>
 
 namespace bcos
 {

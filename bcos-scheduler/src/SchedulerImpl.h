@@ -2,15 +2,16 @@
 
 #include "BlockExecutive.h"
 #include "ExecutorManager.h"
-#include "bcos-framework/interfaces/crypto/CommonType.h"
 #include "bcos-framework/interfaces/dispatcher/SchedulerInterface.h"
 #include "bcos-framework/interfaces/ledger/LedgerInterface.h"
 #include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
 #include "bcos-protocol/TransactionSubmitResultFactoryImpl.h"
+#include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h>
 #include <bcos-framework/interfaces/protocol/BlockFactory.h>
 #include <bcos-framework/interfaces/rpc/RPCInterface.h>
 #include <tbb/concurrent_hash_map.h>
+#include <future>
 #include <list>
 
 namespace bcos::scheduler
@@ -43,8 +44,8 @@ public:
     SchedulerImpl& operator=(SchedulerImpl&&) = delete;
 
     void executeBlock(bcos::protocol::Block::Ptr block, bool verify,
-        std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&)> callback)
-        override;
+        std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool _sysBlock)>
+            callback) override;
 
     void commitBlock(bcos::protocol::BlockHeader::Ptr header,
         std::function<void(bcos::Error::Ptr&&, bcos::ledger::LedgerConfig::Ptr&&)> callback)
@@ -71,11 +72,48 @@ public:
     void getCode(
         std::string_view contract, std::function<void(Error::Ptr, bcos::bytes)> callback) override;
 
+    void getABI(
+        std::string_view contract, std::function<void(Error::Ptr, std::string)> callback) override;
+
     void registerTransactionNotifier(std::function<void(bcos::protocol::BlockNumber,
             bcos::protocol::TransactionSubmitResultsPtr, std::function<void(Error::Ptr)>)>
             txNotifier);
 
     ExecutorManager::Ptr executorManager() { return m_executorManager; }
+
+    inline void fetchGasLimit(protocol::BlockNumber _number = -1)
+    {
+        if (_number == -1)
+        {
+            std::promise<std::tuple<Error::Ptr, protocol::BlockNumber>> numberPromise;
+            m_ledger->asyncGetBlockNumber(
+                [&numberPromise](Error::Ptr _error, protocol::BlockNumber _number) {
+                    numberPromise.set_value(std::make_tuple(std::move(_error), _number));
+                });
+            Error::Ptr error;
+            std::tie(error, _number) = numberPromise.get_future().get();
+            if (error)
+            {
+                return;
+            }
+        }
+        std::promise<std::tuple<Error::Ptr, std::string>> p;
+        m_ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_TX_GAS_LIMIT,
+            [&p](Error::Ptr _e, std::string _value, protocol::BlockNumber) {
+                p.set_value(std::make_tuple(std::move(_e), std::move(_value)));
+                return;
+            });
+        auto [e, value] = p.get_future().get();
+        if (e)
+        {
+            SCHEDULER_LOG(WARNING)
+                << LOG_DESC("fetchGasLimit failed") << LOG_KV("code", e->errorCode())
+                << LOG_KV("message", e->errorMessage());
+            BOOST_THROW_EXCEPTION(
+                BCOS_ERROR(SchedulerError::fetchGasLimitError, e->errorMessage()));
+        }
+        m_gasLimit = boost::lexical_cast<uint64_t>(value);
+    }
 
 private:
     void asyncGetLedgerConfig(
@@ -87,9 +125,10 @@ private:
     std::mutex m_executeMutex;
     std::mutex m_commitMutex;
 
-    std::atomic_int64_t m_calledContextID = 0;
+    std::atomic_int64_t m_calledContextID = 1;
 
     std::atomic<bcos::protocol::BlockNumber> m_lastExecutedBlockNumber = 0;
+    uint64_t m_gasLimit = TRANSACTION_GAS;
 
     ExecutorManager::Ptr m_executorManager;
     bcos::ledger::LedgerInterface::Ptr m_ledger;

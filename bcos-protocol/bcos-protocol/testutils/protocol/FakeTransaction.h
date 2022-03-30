@@ -19,8 +19,8 @@
  */
 #pragma once
 #include "bcos-protocol/protobuf/PBTransactionFactory.h"
-#include "bcos-utilities/Common.h"
 #include <bcos-framework/interfaces/protocol/Exceptions.h>
+#include <bcos-utilities/Common.h>
 #include <boost/test/unit_test.hpp>
 
 using namespace bcos;
@@ -34,12 +34,12 @@ namespace test
 inline PBTransaction::Ptr fakeTransaction(CryptoSuite::Ptr _cryptoSuite,
     KeyPairInterface::Ptr _keyPair, const std::string_view& _to, bytes const& _input,
     u256 const& _nonce, int64_t _blockLimit, std::string const& _chainId,
-    std::string const& _groupId)
+    std::string const& _groupId, std::string const& _abi = "")
 {
     auto pbTransaction = std::make_shared<PBTransaction>(
-        _cryptoSuite, 1, _to, _input, _nonce, _blockLimit, _chainId, _groupId, utcTime());
+        _cryptoSuite, 1, _to, _input, _nonce, _blockLimit, _chainId, _groupId, utcTime(), _abi);
     // set signature
-    auto signData = _cryptoSuite->signatureImpl()->sign(_keyPair, pbTransaction->hash(), true);
+    auto signData = _cryptoSuite->signatureImpl()->sign(*_keyPair, pbTransaction->hash(), true);
     pbTransaction->updateSignature(bytesConstRef(signData->data(), signData->size()),
         _keyPair->address(_cryptoSuite->hashImpl()).asBytes());
     return pbTransaction;
@@ -101,7 +101,7 @@ inline Transaction::Ptr fakeTransaction(CryptoSuite::Ptr _cryptoSuite, u256 nonc
     int64_t blockLimit = 1000023, std::string chainId = "chainId", std::string groupId = "groupId",
     bytes _to = bytes())
 {
-    auto keyPair = _cryptoSuite->signatureImpl()->generateKeyPair();
+    KeyPairInterface::Ptr keyPair = _cryptoSuite->signatureImpl()->generateKeyPair();
     auto to = keyPair->address(_cryptoSuite->hashImpl()).asBytes();
     if (_to != bytes())
     {

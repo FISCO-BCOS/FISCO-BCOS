@@ -19,7 +19,7 @@
  * @date 2021-04-19
  */
 #pragma once
-#include "bcos-utilities/Common.h"
+#include <bcos-utilities/Common.h>
 #include <boost/asio/ip/tcp.hpp>
 #include <iostream>
 #include <memory>
@@ -32,12 +32,13 @@ enum MessageType : int16_t
 {
     Heartbeat = 0x1,
     Handshake = 0x2,
-    RequestNodeIDs = 0x3,
-    ResponseNodeIDs = 0x4,
+    RequestNodeStatus = 0x3,  // for request the gateway nodeinfo
+    ResponseNodeStatus = 0x4,
     PeerToPeerMessage = 0x5,
     BroadcastMessage = 0x6,
     AMOPMessageType = 0x7,
     WSMessageType = 0x8,
+    SyncNodeSeq = 0x9,
 };
 /**
  * @brief client end endpoint. Node will connect to NodeIPEndpoint.
@@ -112,7 +113,7 @@ class GatewayInfo
 public:
     using Ptr = std::shared_ptr<GatewayInfo>;
     // groupID=>nodeList
-    using NodeIDInfoType = std::unordered_map<std::string, std::set<std::string>>;
+    using NodeIDInfoType = std::map<std::string, std::set<std::string>>;
     GatewayInfo()
       : m_p2pInfo(std::make_shared<P2PInfo>()), m_nodeIDInfo(std::make_shared<NodeIDInfoType>())
     {}

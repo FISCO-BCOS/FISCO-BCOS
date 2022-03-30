@@ -1,0 +1,47 @@
+/*
+ *  Copyright (C) 2021 FISCO BCOS.
+ *  SPDX-License-Identifier: Apache-2.0
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ * @file GroupNodeInfo.h
+ * @author: yujiechen
+ * @date 2022-3-8
+ */
+#pragma once
+#include <bcos-framework/interfaces/protocol/Protocol.h>
+#include <memory>
+#include <vector>
+namespace bcos
+{
+namespace gateway
+{
+class GroupNodeInfo
+{
+public:
+    using Ptr = std::shared_ptr<GroupNodeInfo>;
+    GroupNodeInfo() = default;
+    virtual ~GroupNodeInfo() {}
+    // the groupID
+    virtual void setGroupID(std::string const& _groupID) = 0;
+    // the nodeIDList
+    virtual void setNodeIDList(std::vector<std::string>&& _nodeIDList) = 0;
+    // the groupType
+    virtual void setType(uint16_t _type) = 0;
+
+    virtual std::string const& groupID() const = 0;
+    // Note: externally ensure thread safety
+    virtual std::vector<std::string> const& nodeIDList() const = 0;
+    virtual int type() const = 0;
+};
+}  // namespace gateway
+}  // namespace bcos

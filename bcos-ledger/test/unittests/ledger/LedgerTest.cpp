@@ -23,14 +23,15 @@
 
 #include "bcos-ledger/src/libledger/Ledger.h"
 #include "../../mock/MockKeyFactor.h"
-#include "bcos-crypto/hash/Keccak256.h"
-#include "bcos-crypto/hash/SM3.h"
-#include "bcos-framework/interfaces/crypto/CommonType.h"
 #include "bcos-framework/interfaces/ledger/LedgerTypeDef.h"
 #include "bcos-ledger/src/libledger/utilities/Common.h"
 #include "bcos-tool/ConsensusNode.h"
 #include "common/FakeBlock.h"
+#include "interfaces/crypto/KeyPairInterface.h"
 #include <bcos-codec/scale/Scale.h>
+#include <bcos-crypto/hash/Keccak256.h>
+#include <bcos-crypto/hash/SM3.h>
+#include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/interfaces/consensus/ConsensusNode.h>
 #include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/interfaces/storage/StorageInterface.h>
@@ -1021,7 +1022,8 @@ BOOST_AUTO_TEST_CASE(testSyncBlock)
     std::string inputStr = "hello world!";
     bytes input(inputStr.begin(), inputStr.end());
 
-    auto keyPair = m_blockFactory->cryptoSuite()->signatureImpl()->generateKeyPair();
+    bcos::crypto::KeyPairInterface::Ptr keyPair =
+        m_blockFactory->cryptoSuite()->signatureImpl()->generateKeyPair();
     auto tx = m_blockFactory->transactionFactory()->createTransaction(
         0, "to", input, 200, 300, "chainid", "groupid", 800, keyPair);
 

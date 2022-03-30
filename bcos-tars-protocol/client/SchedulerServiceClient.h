@@ -18,8 +18,11 @@
  * @date 2021-10-17
  */
 #pragma once
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+
 #include "bcos-tars-protocol/tars/SchedulerService.h"
-#include <bcos-framework/interfaces/crypto/CryptoSuite.h>
+#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/interfaces/dispatcher/SchedulerInterface.h>
 #include <bcos-utilities/Common.h>
 namespace bcostars
@@ -38,7 +41,7 @@ public:
 
     // TODO: implement other functions
     void executeBlock(bcos::protocol::Block::Ptr, bool,
-        std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&)>) override
+        std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool)>) override
     {
         BCOS_LOG(ERROR) << LOG_DESC("unimplemented method executeBlock");
     }
@@ -80,6 +83,9 @@ public:
 
     void getCode(std::string_view contract,
         std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) override;
+
+    void getABI(std::string_view contract,
+        std::function<void(bcos::Error::Ptr, std::string)> callback) override;
 
 private:
     SchedulerServicePrx m_prx;

@@ -61,7 +61,7 @@ void bcos::initializer::initCommandLine(int argc, char* argv[])
     }
 }
 
-bcos::initializer::Params bcos::initializer::initLocalNodeCommandLine(
+bcos::initializer::Params bcos::initializer::initAirNodeCommandLine(
     int argc, const char* argv[], bool _autoSendTx)
 {
     boost::program_options::options_description main_options("Usage of FISCO-BCOS");

@@ -6,6 +6,7 @@ from common.utilities import ServiceInfo
 from common.utilities import ConfigInfo
 import json
 import os
+import uuid
 
 
 class ServiceConfigGenerator:
@@ -115,6 +116,11 @@ class ServiceConfigGenerator:
         ini_config["service"]['rpc'] = self.config.chain_id + \
             "." + self.service_config.rpc_service_name
         ini_config["chain"]['chain_id'] = self.config.chain_id
+        # generate uuid according to chain_id and gateway_service_name
+        uuid_name = ini_config["service"]['gateway']
+        # TODO: Differentiate between different agency
+        ini_config[self.section]['uuid'] = str(
+            uuid.uuid3(uuid.NAMESPACE_URL, uuid_name))
         utilities.mkfiledir(generated_file_path)
         with open(generated_file_path, 'w') as configfile:
             ini_config.write(configfile)

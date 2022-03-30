@@ -19,6 +19,10 @@
  */
 
 #pragma once
+
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+
 #include "bcos-tars-protocol/Common.h"
 #include "bcos-tars-protocol/ErrorConverter.h"
 #include "bcos-tars-protocol/protocol/TransactionSubmitResultImpl.h"
@@ -165,30 +169,33 @@ public:
     }
 
     void asyncNotifySubscribeTopic(
-        std::function<void(bcos::Error::Ptr&& _error)> _callback) override
+        std::function<void(bcos::Error::Ptr&& _error, std::string)> _callback) override
     {
         class Callback : public bcostars::RpcServicePrxCallback
         {
         public:
-            Callback(std::function<void(bcos::Error::Ptr&&)> callback) : m_callback(callback) {}
+            Callback(std::function<void(bcos::Error::Ptr&&, std::string)> callback)
+              : m_callback(callback)
+            {}
 
-            void callback_asyncNotifySubscribeTopic(const bcostars::Error& ret) override
+            void callback_asyncNotifySubscribeTopic(
+                const bcostars::Error& ret, std::string const& _topicInfo) override
             {
-                m_callback(toBcosError(ret));
+                m_callback(toBcosError(ret), _topicInfo);
             }
             void callback_asyncNotifySubscribeTopic_exception(tars::Int32 ret) override
             {
-                m_callback(toBcosError(ret));
+                m_callback(toBcosError(ret), "");
             }
 
         private:
-            std::function<void(bcos::Error::Ptr&&)> m_callback;
+            std::function<void(bcos::Error::Ptr&&, std::string)> m_callback;
         };
         auto ret = checkConnection(
             c_moduleName, "asyncNotifySubscribeTopic", m_prx, [_callback](bcos::Error::Ptr _error) {
                 if (_callback)
                 {
-                    _callback(std::move(_error));
+                    _callback(std::move(_error), "");
                 }
             });
         if (!ret)

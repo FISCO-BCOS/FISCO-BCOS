@@ -21,7 +21,7 @@
 #pragma once
 #include "./PBTransactionMetaData.h"
 #include "PBBlock.h"
-#include <bcos-framework/interfaces/crypto/CryptoSuite.h>
+#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/interfaces/protocol/BlockFactory.h>
 #include <bcos-framework/interfaces/protocol/BlockHeaderFactory.h>
 #include <bcos-framework/interfaces/protocol/TransactionFactory.h>

@@ -44,9 +44,9 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_hasOptions)
     BOOST_CHECK_EQUAL(msg->hasOptions(), false);
     msg->setPacketType(MessageType::Handshake);
     BOOST_CHECK_EQUAL(msg->hasOptions(), false);
-    msg->setPacketType(MessageType::RequestNodeIDs);
+    msg->setPacketType(MessageType::RequestNodeStatus);
     BOOST_CHECK_EQUAL(msg->hasOptions(), false);
-    msg->setPacketType(MessageType::ResponseNodeIDs);
+    msg->setPacketType(MessageType::ResponseNodeStatus);
     BOOST_CHECK_EQUAL(msg->hasOptions(), false);
     msg->setPacketType(MessageType::PeerToPeerMessage);
     BOOST_CHECK_EQUAL(msg->hasOptions(), true);

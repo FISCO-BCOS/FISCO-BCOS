@@ -4,6 +4,7 @@ import sys
 import os
 import subprocess
 import logging
+import re
 
 logging.basicConfig(format='%(message)s',
                     level=logging.INFO)
@@ -230,3 +231,14 @@ def try_to_rename_tgz_package(root_path, tars_pkg_path, service_name, org_servic
         log_error("try_to_rename_tgz_package failed, service: %s" %
                   service_name)
     return (ret, generated_package_path)
+
+
+def check_service_name(tag, service_name):
+    """
+    Note: tars service name can only contain letters and numbers
+    """
+    service_name_len = len(service_name)
+    ret = re.search(r'^[A-Za-z0-9]+', service_name).span()
+    if ret is None or (ret[0] != 0 or ret[1] != service_name_len):
+        raise Exception(
+            "the %s must be letters|numbers, invalid value: %s" % (tag, service_name))

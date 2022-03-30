@@ -20,7 +20,6 @@
 
 #include "libprecompiled/PreCompiledFixture.h"
 #include "precompiled/ConsensusPrecompiled.h"
-#include "precompiled/ParallelConfigPrecompiled.h"
 #include "precompiled/SystemConfigPrecompiled.h"
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 
@@ -219,105 +218,14 @@ public:
 };
 BOOST_FIXTURE_TEST_SUITE(precompiledConfigTest, ConfigPrecompiledFixture)
 
-BOOST_AUTO_TEST_CASE(paraConfig_test)
-{
-    deployTest(paraTestBin, paraTestAddress);
-
-    // register
-    {
-        nextBlock(2);
-        bytes in = codec->encodeWithSig("registerParallelFunctionInternal(address,string,uint256)",
-            contractAddress, std::string("get()"), u256(1));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
-        sender = boost::algorithm::hex_lower(std::string(tx->sender()));
-        auto hash = tx->hash();
-        txpool->hash2Transaction.emplace(hash, tx);
-        auto params2 = std::make_unique<NativeExecutionMessage>();
-        params2->setTransactionHash(hash);
-        params2->setContextID(100);
-        params2->setSeq(1000);
-        params2->setDepth(0);
-        params2->setFrom(sender);
-        params2->setTo(paraTestAddress);
-        params2->setOrigin(sender);
-        params2->setStaticCall(false);
-        params2->setGasAvailable(gas);
-        params2->setData(std::move(in));
-        params2->setType(NativeExecutionMessage::TXHASH);
-
-        std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->executeTransaction(std::move(params2),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
-                executePromise2.set_value(std::move(result));
-            });
-        auto result2 = executePromise2.get_future().get();
-
-        // call precompiled registerParallelFunctionInternal
-        result2->setSeq(1001);
-
-        std::promise<ExecutionMessage::UniquePtr> executePromise3;
-        executor->executeTransaction(std::move(result2),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
-                executePromise3.set_value(std::move(result));
-            });
-        auto result3 = executePromise3.get_future().get();
-        BOOST_CHECK(result3->data().toBytes() == codec->encode(u256(0)));
-        commitBlock(2);
-    }
-
-    // unregister
-    {
-        nextBlock(3);
-        bytes in = codec->encodeWithSig("unregisterParallelFunctionInternal(address,string)",
-            contractAddress, std::string("get()"));
-        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
-        sender = boost::algorithm::hex_lower(std::string(tx->sender()));
-        auto hash = tx->hash();
-        txpool->hash2Transaction.emplace(hash, tx);
-        auto params2 = std::make_unique<NativeExecutionMessage>();
-        params2->setTransactionHash(hash);
-        params2->setContextID(101);
-        params2->setSeq(1000);
-        params2->setDepth(0);
-        params2->setFrom(sender);
-        params2->setTo(paraTestAddress);
-        params2->setOrigin(sender);
-        params2->setStaticCall(false);
-        params2->setGasAvailable(gas);
-        params2->setData(std::move(in));
-        params2->setType(NativeExecutionMessage::TXHASH);
-
-        std::promise<ExecutionMessage::UniquePtr> executePromise2;
-        executor->executeTransaction(std::move(params2),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
-                executePromise2.set_value(std::move(result));
-            });
-        auto result2 = executePromise2.get_future().get();
-
-        // call precompiled unregisterParallelFunctionInternal
-        result2->setSeq(1001);
-
-        std::promise<ExecutionMessage::UniquePtr> executePromise3;
-        executor->executeTransaction(std::move(result2),
-            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
-                BOOST_CHECK(!error);
-                executePromise3.set_value(std::move(result));
-            });
-        auto result3 = executePromise3.get_future().get();
-        BOOST_CHECK(result3->data().toBytes() == codec->encode(u256(0)));
-        commitBlock(3);
-    }
-}
-
 BOOST_AUTO_TEST_CASE(sysConfig_test)
 {
     deployTest(sysTestBin, sysTestAddress);
 
     auto simpleSetFunc = [&](protocol::BlockNumber _number, int _contextId, const std::string& _key,
-                             const std::string& _v, int _errorCode = 0) {
+                             const std::string& _v,
+                             bcos::protocol::TransactionStatus _errorCode =
+                                 bcos::protocol::TransactionStatus::None) {
         nextBlock(_number);
         bytes in = codec->encodeWithSig("setValueByKeyTest(string,string)", _key, _v);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
@@ -355,7 +263,8 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
                 executePromise3.set_value(std::move(result));
             });
         auto result3 = executePromise3.get_future().get();
-        BOOST_CHECK(result3->data().toBytes() == codec->encode(s256(_errorCode)));
+        // BOOST_CHECK(result3->data().toBytes() == codec->encode(s256(_errorCode)));
+        BOOST_CHECK(result3->status() == (int32_t)_errorCode);
         commitBlock(_number);
     };
     // simple set SYSTEM_KEY_TX_GAS_LIMIT
@@ -366,8 +275,8 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
     // simple get SYSTEM_KEY_TX_GAS_LIMIT
     {
         nextBlock(3);
-        bytes in =
-            codec->encodeWithSig("getValueByKeyTest(string)", ledger::SYSTEM_KEY_TX_GAS_LIMIT);
+        bytes in = codec->encodeWithSig(
+            "getValueByKeyTest(string)", std::string(ledger::SYSTEM_KEY_TX_GAS_LIMIT));
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
@@ -415,12 +324,12 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
     // set SYSTEM_KEY_TX_COUNT_LIMIT error
     {
         simpleSetFunc(5, 103, ledger::SYSTEM_KEY_TX_COUNT_LIMIT, std::string("error"),
-            CODE_INVALID_CONFIGURATION_VALUES);
+            bcos::protocol::TransactionStatus::PrecompiledError);
     }
     // set error key
     {
         simpleSetFunc(8, 106, std::string("errorKey"), std::string("1000"),
-            CODE_INVALID_CONFIGURATION_VALUES);
+            bcos::protocol::TransactionStatus::PrecompiledError);
     }
 
     // get error key

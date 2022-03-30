@@ -28,7 +28,7 @@
 #include "../../interfaces/protocol/ProtocolTypeDef.h"
 #include "Common.h"
 #include "Entry.h"
-#include "bcos-utilities/Error.h"
+#include <bcos-utilities/Error.h>
 #include <boost/range.hpp>
 #include <boost/range/iterator.hpp>
 #include <map>

@@ -23,9 +23,9 @@
 #include "../../interfaces/executor/ParallelTransactionExecutorInterface.h"
 #include "../../interfaces/ledger/LedgerConfig.h"
 #include "../../interfaces/protocol/ProtocolTypeDef.h"
-#include "../crypto/CommonType.h"
 #include "../protocol/Block.h"
-#include "bcos-utilities/Error.h"
+#include <bcos-crypto/interfaces/crypto/CommonType.h>
+#include <bcos-utilities/Error.h>
 #include <functional>
 #include <memory>
 #include <string_view>
@@ -41,7 +41,8 @@ public:
 
     // by pbft & sync
     virtual void executeBlock(bcos::protocol::Block::Ptr block, bool verify,
-        std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&)> callback) = 0;
+        std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool _sysBlock)>
+            callback) = 0;
 
     // by pbft & sync
     virtual void commitBlock(bcos::protocol::BlockHeader::Ptr header,
@@ -72,5 +73,8 @@ public:
 
     virtual void getCode(
         std::string_view contract, std::function<void(Error::Ptr, bcos::bytes)> callback) = 0;
+
+    virtual void getABI(
+        std::string_view contract, std::function<void(Error::Ptr, std::string)> callback) = 0;
 };
 }  // namespace bcos::scheduler

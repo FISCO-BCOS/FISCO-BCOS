@@ -29,11 +29,11 @@ bcostars::Error FrontServiceServer::asyncGetNodeIDs(
     return bcostars::Error();
 }
 
-void FrontServiceServer::asyncSendBroadcastMessage(
-    tars::Int32 moduleID, const vector<tars::Char>& data, tars::TarsCurrentPtr)
+void FrontServiceServer::asyncSendBroadcastMessage(tars::Int32 _nodeType, tars::Int32 moduleID,
+    const vector<tars::Char>& data, tars::TarsCurrentPtr)
 {
     m_frontServiceInitializer->front()->asyncSendBroadcastMessage(
-        moduleID, bcos::bytesConstRef((bcos::byte*)data.data(), data.size()));
+        _nodeType, moduleID, bcos::bytesConstRef((bcos::byte*)data.data(), data.size()));
 }
 
 bcostars::Error FrontServiceServer::asyncSendMessageByNodeID(tars::Int32 moduleID,

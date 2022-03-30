@@ -17,7 +17,7 @@ add_library(${FRONTSERVICE_INIT_LIB} FrontServiceInitializer.cpp)
 # target_compile_options(${FRONTSERVICE_INIT_LIB} PRIVATE -Wno-error -Wno-unused-parameter -Wno-variadic-macros -Wno-return-type -Wno-pedantic)
 target_link_libraries(${FRONTSERVICE_INIT_LIB} PUBLIC ${PROTOCOL_INIT_LIB} ${TOOL_TARGET} ${FRONT_TARGET})
 
-add_library(${PBFT_INIT_LIB} PBFTInitializer.cpp)
+add_library(${PBFT_INIT_LIB} PBFTInitializer.cpp ProPBFTInitializer.cpp)
 target_compile_options(${PBFT_INIT_LIB} PRIVATE -Wno-error -Wno-unused-parameter -Wno-variadic-macros -Wno-return-type -Wno-pedantic)
 target_link_libraries(${PBFT_INIT_LIB} PUBLIC ${PROTOCOL_INIT_LIB}  ${TOOL_TARGET} ${LEDGER_TARGET} ${SEALER_TARGET} ${PBFT_TARGET} ${SYNC_TARGET})
 

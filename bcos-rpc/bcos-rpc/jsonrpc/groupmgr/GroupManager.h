@@ -134,6 +134,7 @@ public:
             m_groupBlockInfos[_groupID] = _blockNumber;
             m_nodesWithLatestBlockNumber[_groupID].clear();
         }
+
         // nodes with the same highest block
         (m_nodesWithLatestBlockNumber[_groupID]).insert(_nodeName);
         BCOS_LOG(DEBUG) << LOG_DESC("updateGroupBlockInfo for receive block notify")

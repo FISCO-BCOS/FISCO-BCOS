@@ -1,5 +1,5 @@
 #pragma once
-#include "bcos-utilities/Common.h"
+#include <bcos-utilities/Common.h>
 #include <boost/archive/basic_archive.hpp>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/archive/binary_oarchive.hpp>

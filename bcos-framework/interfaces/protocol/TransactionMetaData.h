@@ -19,10 +19,10 @@
  * @date: 2021-08-20
  */
 #pragma once
-#include "../../interfaces/crypto/Hash.h"
-#include "../../interfaces/crypto/KeyInterface.h"
 #include "Transaction.h"
 #include "TransactionSubmitResult.h"
+#include <bcos-crypto/interfaces/crypto/Hash.h>
+#include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 
 namespace bcos
 {

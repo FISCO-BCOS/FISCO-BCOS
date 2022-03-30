@@ -20,8 +20,8 @@
 #pragma once
 #include "bcos-protocol/Common.h"
 #include "bcos-protocol/protobuf/PBBlockHeaderFactory.h"
-#include "bcos-utilities/Common.h"
 #include <bcos-framework/interfaces/protocol/Exceptions.h>
+#include <bcos-utilities/Common.h>
 #include <tbb/parallel_invoke.h>
 #include <boost/test/unit_test.hpp>
 using namespace bcos;
@@ -161,7 +161,7 @@ inline std::vector<bytes> fakeSealerList(
     std::vector<bytes> sealerList;
     for (size_t i = 0; i < size; i++)
     {
-        auto keyPair = _signImpl->generateKeyPair();
+        KeyPairInterface::Ptr keyPair = _signImpl->generateKeyPair();
         _keyPairVec.emplace_back(keyPair);
         sealerList.emplace_back(*(keyPair->publicKey()->encode()));
     }
@@ -175,7 +175,7 @@ inline SignatureList fakeSignatureList(SignatureCrypto::Ptr _signImpl,
     SignatureList signatureList;
     for (auto keyPair : _keyPairVec)
     {
-        auto signature = _signImpl->sign(keyPair, _hash);
+        auto signature = _signImpl->sign(*keyPair, _hash);
         Signature sig;
         sig.index = sealerIndex++;
         sig.signature = *signature;

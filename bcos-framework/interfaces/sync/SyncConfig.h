@@ -19,8 +19,9 @@
  * @date 2021-05-25
  */
 #pragma once
+#include <bcos-crypto/interfaces/crypto/KeyInterface.h>
 #include <bcos-framework/interfaces/consensus/ConsensusNodeInterface.h>
-#include <bcos-framework/interfaces/crypto/KeyInterface.h>
+#include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
 namespace bcos
 {
 namespace sync
@@ -39,7 +40,7 @@ public:
     virtual ~SyncConfig() {}
 
     bcos::crypto::NodeIDPtr nodeID() { return m_nodeId; }
-    // Note: copy here to remove multithreading issues
+    // Note: copy here to ensure thread-safe
     virtual bcos::consensus::ConsensusNodeList consensusNodeList()
     {
         ReadGuard l(x_consensusNodeList);
@@ -148,16 +149,16 @@ private:
 protected:
     bcos::crypto::NodeIDPtr m_nodeId;
     bcos::consensus::ConsensusNodeListPtr m_consensusNodeList;
-    SharedMutex x_consensusNodeList;
+    mutable SharedMutex x_consensusNodeList;
 
     bcos::consensus::ConsensusNodeListPtr m_observerNodeList;
     SharedMutex x_observerNodeList;
 
     bcos::crypto::NodeIDSetPtr m_nodeList;
-    SharedMutex x_nodeList;
+    mutable SharedMutex x_nodeList;
 
     bcos::crypto::NodeIDSetPtr m_connectedNodeList;
-    SharedMutex x_connectedNodeList;
+    mutable SharedMutex x_connectedNodeList;
 };
 }  // namespace sync
 }  // namespace bcos

@@ -27,6 +27,7 @@ class ServiceInfoConfig:
         self.config = config
         self.name = utilities.get_item_value(self.config,
                                              "name", chain_id, False)
+        utilities.check_service_name("service_name", self.name)
         self.deploy_ip = utilities.get_item_value(
             self.config, "deploy_ip", None, True)
         self.listen_ip = utilities.get_item_value(
@@ -46,6 +47,8 @@ class RpcServiceInfo(ServiceInfoConfig):
             self.config, "rpc_service_name", self.name, False)
         self.gateway_service_name = utilities.get_item_value(
             self.config, "gateway_service_name", None, True)
+        utilities.check_service_name(
+            "gateway_service_name", self.gateway_service_name)
         self.peers = []
 
 
@@ -56,6 +59,7 @@ class GatewayServiceInfo(ServiceInfoConfig):
             self.config, "peers", [], False)
         self.rpc_service_name = utilities.get_item_value(
             self.config, "rpc_service_name", None, True)
+        utilities.check_service_name("rpc_service_name", self.rpc_service_name)
         self.gateway_service_name = utilities.get_item_value(
             self.config, "gateway_service_name", self.name, False)
 
@@ -139,7 +143,7 @@ class GenesisConfig:
         self.consensus_type = utilities.get_value(
             self.config, section, "consensus_type", "pbft", False)
         self.gas_limit = utilities.get_value(
-            self.config, section, "gas_limit", "300000000", False)
+            self.config, section, "gas_limit", "3000000000", False)
 
 
 class GroupConfig:
@@ -149,6 +153,8 @@ class GroupConfig:
         self.section = "group"
         self.group_id = utilities.get_value(
             self.config, self.section, "group_id", "group", False)
+        # check the groupID
+        utilities.check_service_name("group_id", self.group_id)
         self.vm_type = utilities.get_value(
             self.config, self.section, "vm_type", "evm", False)
         self.sm_crypto = utilities.get_value(
@@ -176,6 +182,8 @@ class ChainConfig:
         self.config = config
         self.chain_id = utilities.get_value(
             self.config, "chain", "chain_id", "chain", False)
+        # check the chain_id
+        utilities.check_service_name("chain_id", self.chain_id)
         self.rpc_ca_cert_path = utilities.get_value(
             self.config, "chain", "rpc_ca_cert_path", "", False)
         self.gateway_ca_cert_path = utilities.get_value(

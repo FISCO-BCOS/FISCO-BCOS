@@ -22,12 +22,9 @@
  */
 
 #include "Ledger.h"
-#include "bcos-utilities/BoostLog.h"
-#include "bcos-utilities/Common.h"
-#include "bcos-utilities/DataConvertUtility.h"
 #include <bcos-codec/scale/Scale.h>
+#include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/interfaces/consensus/ConsensusNode.h>
-#include <bcos-framework/interfaces/crypto/CommonType.h>
 #include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
 #include <bcos-framework/interfaces/protocol/CommonError.h>
@@ -35,6 +32,9 @@
 #include <bcos-framework/interfaces/storage/Table.h>
 #include <bcos-protocol/ParallelMerkleProof.h>
 #include <bcos-tool/ConsensusNode.h>
+#include <bcos-utilities/BoostLog.h>
+#include <bcos-utilities/Common.h>
+#include <bcos-utilities/DataConvertUtility.h>
 #include <tbb/parallel_for.h>
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/lexical_cast.hpp>
@@ -1316,7 +1316,7 @@ bool Ledger::buildGenesisBlock(
     // clang-format off
     std::string_view tables[] = {
         SYS_CONFIG, "value,enable_number",
-        SYS_CONSENSUS, "value",
+        SYS_CONSENSUS, SYS_VALUE,
         SYS_CURRENT_STATE, SYS_VALUE,
         SYS_HASH_2_TX, SYS_VALUE,
         SYS_HASH_2_NUMBER, SYS_VALUE,
@@ -1324,7 +1324,8 @@ bool Ledger::buildGenesisBlock(
         SYS_NUMBER_2_BLOCK_HEADER, SYS_VALUE,
         SYS_NUMBER_2_TXS, SYS_VALUE,
         SYS_HASH_2_RECEIPT, SYS_VALUE,
-        SYS_BLOCK_NUMBER_2_NONCES, SYS_VALUE
+        SYS_BLOCK_NUMBER_2_NONCES, SYS_VALUE,
+        DAG_TRANSFER, "balance"
     };
     // clang-format on
     size_t total = sizeof(tables) / sizeof(std::string_view);
@@ -1545,7 +1546,6 @@ void Ledger::buildDir(const std::string& _absoluteDir)
         std::vector<std::string> sysContracts({
             getSysBaseName(precompiled::SYS_CONFIG_NAME),
             getSysBaseName(precompiled::CONSENSUS_NAME),
-            getSysBaseName(precompiled::CNS_NAME),
             getSysBaseName(precompiled::CONTRACT_AUTH_NAME),
             getSysBaseName(precompiled::PARALLEL_CONFIG_NAME),
             getSysBaseName(precompiled::KV_TABLE_NAME),

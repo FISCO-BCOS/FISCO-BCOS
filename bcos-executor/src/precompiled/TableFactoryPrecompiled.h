@@ -24,7 +24,7 @@
 #include "../vm/Precompiled.h"
 #include "Common.h"
 #include "Utilities.h"
-#include <bcos-framework/interfaces/crypto/CommonType.h>
+#include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/interfaces/storage/Table.h>
 
 namespace bcos::precompiled
@@ -65,6 +65,6 @@ namespace bcos::precompiled
 //     bool buildConditionCtx(const precompiled::Condition::Ptr& _condition,
 //         const precompiled::ConditionTuple& _tuple,
 //         std::shared_ptr<storage::Condition>& _keyCondition, std::vector<std::string>& _eqKeyList,
-//         const std::string& _keyFiled);
+//         const std::string& _keyField);
 // };
 }  // namespace bcos::precompiled

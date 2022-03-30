@@ -20,10 +20,14 @@
  */
 
 #pragma once
+
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+
 #include "bcos-tars-protocol/Common.h"
 #include "bcos-tars-protocol/tars/TransactionReceipt.h"
-#include <bcos-framework/interfaces/crypto/CryptoSuite.h>
-#include <bcos-framework/interfaces/crypto/Hash.h>
+#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
+#include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-framework/interfaces/protocol/Block.h>
 #include <bcos-framework/interfaces/protocol/TransactionReceipt.h>
 #include <bcos-protocol/LogEntry.h>
@@ -110,6 +114,12 @@ public:
             m_inner()->data.logEntries.emplace_back(logEntry);
         }
     }
+
+    std::string const& message() const override { return m_inner()->message; }
+
+    void setMessage(std::string const& _message) override { m_inner()->message = _message; }
+
+    void setMessage(std::string&& _message) override { m_inner()->message = std::move(_message); }
 
 private:
     std::function<bcostars::TransactionReceipt*()> m_inner;

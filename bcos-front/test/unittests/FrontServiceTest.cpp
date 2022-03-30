@@ -236,8 +236,8 @@ BOOST_AUTO_TEST_CASE(testFrontService_asyncSendBroadcastMessage)
     BOOST_CHECK(frontService->moduleID2MessageDispatcher().find(moduleID) !=
                 frontService->moduleID2MessageDispatcher().end());
 
-    frontService->asyncSendBroadcastMessage(
-        moduleID, bytesConstRef((unsigned char*)data.data(), data.size()));
+    frontService->asyncSendBroadcastMessage(bcos::protocol::NodeType::CONSENSUS_NODE, moduleID,
+        bytesConstRef((unsigned char*)data.data(), data.size()));
     BOOST_CHECK(frontService->callback().empty());
     f.get();
 }

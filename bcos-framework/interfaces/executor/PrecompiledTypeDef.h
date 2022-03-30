@@ -19,7 +19,7 @@
  */
 
 #pragma once
-#include "bcos-utilities/Common.h"
+#include <bcos-utilities/Common.h>
 
 namespace bcos
 {
@@ -29,7 +29,6 @@ namespace precompiled
 const char SYS_CONFIG_NAME[] = "/sys/status";
 const char TABLE_NAME[] = "/sys/table_storage";
 const char CONSENSUS_NAME[] = "/sys/consensus";
-const char CNS_NAME[] = "/sys/cns";
 const char CONTRACT_AUTH_NAME[] = "/sys/auth";
 const char PARALLEL_CONFIG_NAME[] = "/sys/parallel_config";
 const char CONTRACT_LIFECYCLE_NAME[] = "/sys/contract_mgr";
@@ -42,7 +41,6 @@ const char BFS_NAME[] = "/sys/bfs";
 const char SYS_CONFIG_ADDRESS[] = "0000000000000000000000000000000000001000";
 const char TABLE_ADDRESS[] = "0000000000000000000000000000000000001001";
 const char CONSENSUS_ADDRESS[] = "0000000000000000000000000000000000001003";
-const char CNS_ADDRESS[] = "0000000000000000000000000000000000001004";
 const char CONTRACT_AUTH_ADDRESS[] = "0000000000000000000000000000000000001005";
 const char PARALLEL_CONFIG_ADDRESS[] = "0000000000000000000000000000000000001006";
 const char CONTRACT_LIFECYCLE_ADDRESS[] = "0000000000000000000000000000000000001007";
@@ -55,5 +53,9 @@ const char BFS_ADDRESS[] = "000000000000000000000000000000000000100e";
 /// auth system contract for solidity
 const char AUTH_INTERCEPT_ADDRESS[] = "0000000000000000000000000000000000010000";
 const char AUTH_COMMITTEE_ADDRESS[] = "0000000000000000000000000000000000010001";
+
+const std::set<std::string> c_systemTxsAddress = {bcos::precompiled::SYS_CONFIG_ADDRESS,
+    bcos::precompiled::CONSENSUS_ADDRESS, bcos::precompiled::WORKING_SEALER_MGR_ADDRESS,
+    bcos::precompiled::SYS_CONFIG_NAME, bcos::precompiled::CONSENSUS_NAME};
 }  // namespace precompiled
 }  // namespace bcos

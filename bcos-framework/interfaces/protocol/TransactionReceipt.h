@@ -18,9 +18,9 @@
  */
 #pragma once
 
-#include "../crypto/CryptoSuite.h"
 #include "ProtocolTypeDef.h"
-#include "bcos-utilities/FixedBytes.h"
+#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
+#include <bcos-utilities/FixedBytes.h>
 #include <gsl/span>
 
 namespace bcos
@@ -57,7 +57,12 @@ public:
     virtual gsl::span<const LogEntry> logEntries() const = 0;
     virtual bcos::crypto::CryptoSuite::Ptr cryptoSuite() { return m_cryptoSuite; }
     virtual BlockNumber blockNumber() const = 0;
-    // TODO: add error message
+
+    // additional information on transaction execution, no need to be involved in the hash
+    // calculation
+    virtual std::string const& message() const = 0;
+    virtual void setMessage(std::string const& _message) = 0;
+    virtual void setMessage(std::string&& _message) = 0;
 
 protected:
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;

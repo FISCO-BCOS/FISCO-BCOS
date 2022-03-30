@@ -50,7 +50,8 @@ PBFTInitializer::PBFTInitializer(bcos::initializer::NodeArchitectureType _nodeAr
     bcos::scheduler::SchedulerInterface::Ptr _scheduler,
     bcos::storage::StorageInterface::Ptr _storage,
     std::shared_ptr<bcos::front::FrontServiceInterface> _frontService)
-  : m_nodeConfig(_nodeConfig),
+  : m_nodeArchType(_nodeArchType),
+    m_nodeConfig(_nodeConfig),
     m_protocolInitializer(_protocolInitializer),
     m_txpool(_txpool),
     m_ledger(_ledger),
@@ -62,10 +63,6 @@ PBFTInitializer::PBFTInitializer(bcos::initializer::NodeArchitectureType _nodeAr
     createPBFT();
     createSync();
     registerHandlers();
-    initChainNodeInfo(_nodeArchType, _nodeConfig);
-    m_timer = std::make_shared<Timer>(m_timerSchedulerInterval, "node info report");
-
-    m_timer->registerTimeoutHandler(boost::bind(&PBFTInitializer::reportNodeInfo, this));
 }
 
 std::string PBFTInitializer::generateGenesisConfig(bcos::tool::NodeConfig::Ptr _nodeConfig)
@@ -120,10 +117,10 @@ void PBFTInitializer::initChainNodeInfo(
 {
     m_groupInfo = std::make_shared<GroupInfo>(_nodeConfig->chainId(), _nodeConfig->groupId());
     m_groupInfo->setGenesisConfig(generateGenesisConfig(_nodeConfig));
-    int32_t nodeType = bcos::group::NodeType::NON_SM_NODE;
+    int32_t nodeType = bcos::group::NodeCryptoType::NON_SM_NODE;
     if (_nodeConfig->smCryptoType())
     {
-        nodeType = bcos::group::NodeType::SM_NODE;
+        nodeType = bcos::group::NodeCryptoType::SM_NODE;
     }
     bool microServiceMode = true;
     if (_nodeArchType == bcos::initializer::NodeArchitectureType::AIR)
@@ -135,6 +132,9 @@ void PBFTInitializer::initChainNodeInfo(
 
     chainNodeInfo->setIniConfig(generateIniConfig(_nodeConfig));
     chainNodeInfo->setMicroService(microServiceMode);
+    chainNodeInfo->setNodeType(m_blockSync->config()->nodeType());
+    chainNodeInfo->setNodeCryptoType(
+        (_nodeConfig->smCryptoType() ? NodeCryptoType::SM_NODE : NON_SM_NODE));
 
     bool useConfigServiceName = false;
     if (_nodeArchType == bcos::initializer::NodeArchitectureType::MAX)
@@ -152,15 +152,10 @@ void PBFTInitializer::initChainNodeInfo(
     chainNodeInfo->appendServiceInfo(
         TXPOOL, useConfigServiceName ? m_nodeConfig->txpoolServiceName() : localNodeServiceName);
     m_groupInfo->appendNodeInfo(chainNodeInfo);
-}
-
-void PBFTInitializer::reportNodeInfo()
-{
-    asyncNotifyGroupInfo<bcostars::RpcServicePrx, bcostars::RpcServiceClient>(
-        m_nodeConfig->rpcServiceName(), m_groupInfo);
-    asyncNotifyGroupInfo<bcostars::GatewayServicePrx, bcostars::GatewayServiceClient>(
-        m_nodeConfig->gatewayServiceName(), m_groupInfo);
-    m_timer->restart();
+    INITIALIZER_LOG(INFO) << LOG_DESC("PBFTInitializer::initChainNodeInfo")
+                          << LOG_KV("nodeType", chainNodeInfo->nodeType())
+                          << LOG_KV("nodeCryptoType", chainNodeInfo->nodeCryptoType())
+                          << LOG_KV("nodeName", _nodeConfig->nodeName());
 }
 
 void PBFTInitializer::start()
@@ -170,20 +165,8 @@ void PBFTInitializer::start()
     m_pbft->start();
 }
 
-void PBFTInitializer::startReport()
-{
-    if (m_timer)
-    {
-        m_timer->start();
-    }
-}
-
 void PBFTInitializer::stop()
 {
-    if (m_timer)
-    {
-        m_timer->stop();
-    }
     m_sealer->stop();
     m_blockSync->stop();
     m_pbft->stop();
@@ -194,6 +177,7 @@ void PBFTInitializer::init()
     m_sealer->init(m_pbft);
     m_blockSync->init();
     m_pbft->init();
+    initChainNodeInfo(m_nodeArchType, m_nodeConfig);
 }
 
 void PBFTInitializer::registerHandlers()

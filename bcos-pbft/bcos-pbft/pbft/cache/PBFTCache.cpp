@@ -73,8 +73,9 @@ void PBFTCache::onCheckPointTimeout()
         m_config->pbftMsgDefaultVersion(), m_config->view(), utcTime(), m_config->nodeIndex(),
         m_checkpointProposal, m_config->cryptoSuite(), m_config->keyPair(), true);
     auto encodedData = m_config->codec()->encode(checkPointMsg);
-    m_config->frontService()->asyncSendMessageByNodeIDs(
-        ModuleID::PBFT, m_config->consensusNodeIDList(), ref(*encodedData));
+    // only broadcast message to consensus node
+    m_config->frontService()->asyncSendBroadcastMessage(
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*encodedData));
     m_timer->restart();
 }
 
@@ -237,6 +238,10 @@ bool PBFTCache::checkAndPreCommit()
     {
         return false;
     }
+    if (!m_prePrepare)
+    {
+        return false;
+    }
     // avoid to intoPrecommit when in timeout state
     if (m_config->timeout())
     {
@@ -268,8 +273,9 @@ bool PBFTCache::checkAndPreCommit()
                    << LOG_KV("hash", commitReq->hash().abridged())
                    << LOG_KV("index", commitReq->index());
     auto encodedData = m_config->codec()->encode(commitReq, m_config->pbftMsgDefaultVersion());
-    m_config->frontService()->asyncSendMessageByNodeIDs(
-        bcos::protocol::ModuleID::PBFT, m_config->consensusNodeIDList(), ref(*encodedData));
+    // only broadcast message to consensus nodes
+    m_config->frontService()->asyncSendBroadcastMessage(
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*encodedData));
     m_precommitted = true;
     // collect the commitReq and try to commit
     return checkAndCommit();
@@ -368,7 +374,26 @@ bool PBFTCache::collectEnoughCheckpoint()
 
 bool PBFTCache::checkAndCommitStableCheckPoint()
 {
-    if (m_stableCommitted || !collectEnoughCheckpoint())
+    if (m_stableCommitted)
+    {
+        return false;
+    }
+    // Before this proposal reach checkPoint consensus,
+    // it must be ensured that the dependent system transactions
+    // (such as transactions including dynamically addSealer/removeNode, setConsensusWeight, etc.)
+    // have been committed
+    auto committedIndex = m_config->committedProposal()->index();
+    auto dependsProposal = std::min((m_index - 1), m_config->waitSealUntil());
+    // wait for the sys-proposal committed to trigger checkAndCommitStableCheckPoint
+    if (committedIndex < dependsProposal)
+    {
+        return false;
+    }
+    if (committedIndex == dependsProposal)
+    {
+        recalculateQuorum(m_checkpointCacheWeight, m_checkpointCacheList);
+    }
+    if (!collectEnoughCheckpoint())
     {
         return false;
     }

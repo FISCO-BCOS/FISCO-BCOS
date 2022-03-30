@@ -21,17 +21,8 @@
 #pragma once
 #include "../vm/Precompiled.h"
 
-namespace bcos
+namespace bcos::precompiled
 {
-namespace precompiled
-{
-#if 0
-contract FileSystemPrecompiled
-{
-	function list(string absoluteDir) public returns(string); // json string
-	function mkdir(string absoluteDir) public returns(bool);
-}
-#endif
 class FileSystemPrecompiled : public bcos::precompiled::Precompiled
 {
 public:
@@ -40,7 +31,10 @@ public:
     virtual ~FileSystemPrecompiled() = default;
     std::shared_ptr<PrecompiledExecResult> call(
         std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
-        const std::string& _origin, const std::string& _sender) override;
+        const std::string& _origin, const std::string& _sender, int64_t gasLeft) override;
+    s256 externalTouchNewFile(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        const std::string& _origin, const std::string& _sender, const std::string& _receiver,
+        const std::string& _filePath, const std::string& _fileType, int64_t gasLeft);
 
 private:
     void listDir(const std::shared_ptr<executor::TransactionExecutive>& _executive,
@@ -48,7 +42,17 @@ private:
         const PrecompiledGas::Ptr& gasPricer);
     void makeDir(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         bytesConstRef& data, std::shared_ptr<PrecompiledExecResult> callResult,
-        const PrecompiledGas::Ptr& gasPricer);
+        const std::string& _origin, const PrecompiledGas::Ptr& gasPricer, int64_t gasLeft);
+    void link(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        bytesConstRef& data, std::shared_ptr<PrecompiledExecResult> callResult,
+        const std::string& _origin, int64_t gasLeft);
+    void readLink(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        bytesConstRef& data, std::shared_ptr<PrecompiledExecResult> callResult);
+    void touch(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        bytesConstRef& data, std::shared_ptr<PrecompiledExecResult> callResult);
+    int checkLinkParam(std::shared_ptr<executor::TransactionExecutive> _executive,
+        std::string const& _contractAddress, std::string& _contractName,
+        std::string& _contractVersion, std::string const& _contractAbi);
+    std::set<std::string> BfsTypeSet;
 };
-}  // namespace precompiled
-}  // namespace bcos
+}  // namespace bcos::precompiled

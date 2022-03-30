@@ -88,3 +88,33 @@ void SchedulerServiceClient::getCode(
 
     m_prx->async_getCode(new Callback(std::move(callback)), std::string(contract));
 }
+
+void SchedulerServiceClient::getABI(
+    std::string_view contract, std::function<void(bcos::Error::Ptr, std::string)> callback)
+{
+    class Callback : public SchedulerServicePrxCallback
+    {
+    public:
+        Callback(std::function<void(bcos::Error::Ptr, std::string)> callback)
+          : m_callback(std::move(callback))
+        {}
+        ~Callback() override {}
+
+        void callback_getABI(const bcostars::Error& ret, const std::string& abi) override
+        {
+            std::string outCode(abi.begin(), abi.end());
+
+            m_callback(toBcosError(ret), std::move(outCode));
+        }
+
+        void callback_getABI_exception(tars::Int32 ret) override
+        {
+            m_callback(toBcosError(ret), {});
+        }
+
+    private:
+        std::function<void(bcos::Error::Ptr, std::string)> m_callback;
+    };
+
+    m_prx->async_getABI(new Callback(std::move(callback)), std::string(contract));
+}

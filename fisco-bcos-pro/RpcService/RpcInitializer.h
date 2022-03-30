@@ -19,7 +19,7 @@
  * @date 2021-10-15
  */
 #pragma once
-#include <bcos-framework/interfaces/crypto/KeyFactory.h>
+#include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/interfaces/multigroup/GroupInfoFactory.h>
 #include <bcos-framework/interfaces/rpc/RPCInterface.h>
 #include <bcos-tool/NodeConfig.h>

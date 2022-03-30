@@ -21,12 +21,13 @@
 #include "bcos-protocol/protobuf/PBTransaction.h"
 #include "bcos-protocol/Common.h"
 #include "bcos-protocol/testutils/protocol/FakeTransaction.h"
-#include "bcos-utilities/DataConvertUtility.h"
-#include "bcos-utilities/testutils/TestPromptFixture.h"
+#include "interfaces/crypto/KeyPairInterface.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/signature/secp256k1/Secp256k1Crypto.h>
 #include <bcos-crypto/signature/sm2/SM2Crypto.h>
+#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-utilities/testutils/TestPromptFixture.h>
 #include <boost/test/tools/old/interface.hpp>
 
 using namespace bcos;
@@ -43,7 +44,7 @@ BOOST_AUTO_TEST_CASE(testNormalTransaction)
     auto hashImpl = std::make_shared<Keccak256>();
     auto signatureImpl = std::make_shared<Secp256k1Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
-    auto keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
+    bcos::crypto::KeyPairInterface::Ptr keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
     auto to = cryptoSuite->calculateAddress(keyPair->publicKey());
     std::string inputStr = "testTransaction";
     bytes input = asBytes(inputStr);
@@ -60,7 +61,7 @@ BOOST_AUTO_TEST_CASE(testSMTransaction)
     auto hashImpl = std::make_shared<SM3>();
     auto signatureImpl = std::make_shared<SM2Crypto>();
     auto cryptoSuite = std::make_shared<CryptoSuite>(hashImpl, signatureImpl, nullptr);
-    auto keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
+    bcos::crypto::KeyPairInterface::Ptr keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
     auto to = Address();
     std::string inputStr = "testTransaction";
     bytes input = asBytes(inputStr);
@@ -83,7 +84,7 @@ void testBlock(CryptoSuite::Ptr cryptoSuite)
         "testGroup", 888);
 
     auto keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
-    auto sign = cryptoSuite->signatureImpl()->sign(keyPair, tx.hash());
+    auto sign = cryptoSuite->signatureImpl()->sign(*keyPair, tx.hash());
     tx.updateSignature(bcos::ref(*sign), keyPair->publicKey()->data());
 
     auto buffer = tx.encode(false);

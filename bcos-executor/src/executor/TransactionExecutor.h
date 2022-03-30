@@ -24,7 +24,7 @@
  */
 #pragma once
 
-#include "bcos-framework/interfaces/crypto/Hash.h"
+#include "../dag/CriticalFields.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
 #include "bcos-framework/interfaces/protocol/Block.h"
@@ -36,6 +36,7 @@
 #include "bcos-framework/interfaces/txpool/TxPoolInterface.h"
 #include "bcos-table/src/StateStorage.h"
 #include "tbb/concurrent_unordered_map.h"
+#include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <tbb/concurrent_hash_map.h>
 #include <tbb/spin_mutex.h>
 #include <boost/function.hpp>
@@ -79,8 +80,6 @@ struct CallParameters;
 using executionCallback = std::function<void(
     const Error::ConstPtr&, std::vector<protocol::ExecutionMessage::UniquePtr>&)>;
 
-using ConflictFields = std::vector<bytes>;
-
 class TransactionExecutor : public ParallelTransactionExecutorInterface,
                             public std::enable_shared_from_this<TransactionExecutor>
 {
@@ -92,9 +91,9 @@ public:
         storage::MergeableStorageInterface::Ptr cachedStorage,
         storage::TransactionalStorageInterface::Ptr backendStorage,
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
-        bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck);
+        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck);
 
-    virtual ~TransactionExecutor() {}
+    ~TransactionExecutor() override = default;
 
     void nextBlockHeader(const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
         std::function<void(bcos::Error::UniquePtr)> callback) override;
@@ -103,17 +102,17 @@ public:
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             callback) override;
 
-    void dagExecuteTransactions(gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
-        std::function<void(
-            bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
-            callback) override;
-
     void call(bcos::protocol::ExecutionMessage::UniquePtr input,
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             callback) override;
 
     void getHash(bcos::protocol::BlockNumber number,
         std::function<void(bcos::Error::UniquePtr, crypto::HashType)> callback) override;
+
+    void dagExecuteTransactions(gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
+        std::function<void(
+            bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
+            callback) override;
 
     /* ----- XA Transaction interface Start ----- */
 
@@ -135,17 +134,25 @@ public:
 
     void getCode(std::string_view contract,
         std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) override;
+    void getABI(
+        std::string_view contract, std::function<void(bcos::Error::Ptr, std::string)> callback) override;
 
-    std::vector<std::string> getTxCriticals(const CallParameters& params);
+protected:
+    virtual void dagExecuteTransactionsInternal(gsl::span<std::unique_ptr<CallParameters>> inputs,
+        std::function<void(
+            bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
+            callback);
+    virtual std::shared_ptr<std::vector<bytes>> extractConflictFields(
+        const FunctionAbi& functionAbi, const CallParameters& params,
+        std::shared_ptr<BlockContext> _blockContext);
 
-private:
-    std::shared_ptr<BlockContext> createBlockContext(
+    virtual std::shared_ptr<BlockContext> createBlockContext(
         const protocol::BlockHeader::ConstPtr& currentHeader,
-        storage::StateStorage::Ptr tableFactory, storage::StorageInterface::Ptr lastStorage);
+        storage::StateStorage::Ptr tableFactory, storage::StorageInterface::Ptr lastStorage) = 0;
 
-    std::shared_ptr<BlockContext> createBlockContext(bcos::protocol::BlockNumber blockNumber,
-        h256 blockHash, uint64_t timestamp, int32_t blockVersion,
-        storage::StateStorage::Ptr tableFactory);
+    virtual std::shared_ptr<BlockContext> createBlockContext(
+        bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
+        int32_t blockVersion, storage::StateStorage::Ptr tableFactory) = 0;
 
     std::shared_ptr<TransactionExecutive> createExecutive(
         const std::shared_ptr<BlockContext>& _blockContext, const std::string& _contractAddress,
@@ -168,27 +175,17 @@ private:
     std::unique_ptr<CallParameters> createCallParameters(
         bcos::protocol::ExecutionMessage& input, const bcos::protocol::Transaction& tx);
 
-    std::optional<std::vector<bcos::bytes>> decodeConflictFields(
-        const FunctionAbi& functionAbi, const CallParameters& prams);
-
     std::function<void(
         const TransactionExecutive& executive, std::unique_ptr<CallParameters> input)>
     createExternalFunctionCall(std::function<void(
             bcos::Error::UniquePtr&&, bcos::protocol::ExecutionMessage::UniquePtr&&)>& callback);
 
-    void initPrecompiled();
-
     void removeCommittedState();
 
-    void dagExecuteTransactionsForEvm(gsl::span<std::unique_ptr<CallParameters>> inputs,
-        std::function<void(
-            bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
-            callback);
-
-    void dagExecuteTransactionsForWasm(gsl::span<std::unique_ptr<CallParameters>> inputs,
-        std::function<void(
-            bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
-            callback);
+    // execute transactions with criticals and return in executionResults
+    void executeTransactionsWithCriticals(critical::CriticalFieldsInterface::Ptr criticals,
+        gsl::span<std::unique_ptr<CallParameters>> inputs,
+        std::vector<protocol::ExecutionMessage::UniquePtr>& executionResults);
 
     txpool::TxPoolInterface::Ptr m_txpool;
     storage::MergeableStorageInterface::Ptr m_cachedStorage;
@@ -196,7 +193,6 @@ private:
     protocol::ExecutionMessageFactory::Ptr m_executionMessageFactory;
     std::shared_ptr<BlockContext> m_blockContext;
     crypto::Hash::Ptr m_hashImpl;
-    bool m_isWasm = false;
     bool m_isAuthCheck = false;
     std::shared_ptr<ClockCache<bcos::bytes, FunctionAbi>> m_abiCache;
 
@@ -243,10 +239,11 @@ private:
 
     std::shared_ptr<std::map<std::string, std::shared_ptr<PrecompiledContract>>>
         m_precompiledContract;
-    std::map<std::string, std::shared_ptr<precompiled::Precompiled>> m_constantPrecompiled;
+    std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>> m_constantPrecompiled;
     std::shared_ptr<const std::set<std::string>> m_builtInPrecompiled;
     unsigned int m_DAGThreadNum = std::max(std::thread::hardware_concurrency(), (unsigned int)1);
     std::shared_ptr<wasm::GasInjector> m_gasInjector = nullptr;
+    bool m_isWasm = false;
 };
 
 }  // namespace executor

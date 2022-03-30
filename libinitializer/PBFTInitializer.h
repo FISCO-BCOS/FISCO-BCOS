@@ -31,7 +31,6 @@
 #include <bcos-framework/interfaces/sync/BlockSyncInterface.h>
 #include <bcos-framework/interfaces/txpool/TxPoolInterface.h>
 #include <bcos-ledger/src/libledger/Ledger.h>
-#include <bcos-utilities/Timer.h>
 
 namespace bcos
 {
@@ -68,8 +67,6 @@ public:
     virtual void start();
     virtual void stop();
 
-    virtual void startReport();
-
     bcos::txpool::TxPoolInterface::Ptr txpool();
     bcos::sync::BlockSyncInterface::Ptr blockSync();
     bcos::consensus::ConsensusInterface::Ptr pbft();
@@ -90,47 +87,11 @@ protected:
     virtual void createPBFT();
     virtual void createSync();
     virtual void registerHandlers();
-
-    virtual void reportNodeInfo();
-
-    template <typename T, typename S>
-    void asyncNotifyGroupInfo(
-        std::string const& _serviceName, bcos::group::GroupInfo::Ptr _groupInfo)
-    {
-        auto servicePrx = Application::getCommunicator()->stringToProxy<T>(_serviceName);
-        vector<EndpointInfo> activeEndPoints;
-        vector<EndpointInfo> nactiveEndPoints;
-        servicePrx->tars_endpointsAll(activeEndPoints, nactiveEndPoints);
-        if (activeEndPoints.size() == 0)
-        {
-            BCOS_LOG(TRACE) << LOG_DESC("asyncNotifyGroupInfo error for empty connection")
-                            << bcos::group::printGroupInfo(_groupInfo);
-            return;
-        }
-        for (auto const& endPoint : activeEndPoints)
-        {
-            auto endPointStr = bcostars::endPointToString(_serviceName, endPoint.getEndpoint());
-            auto servicePrx = Application::getCommunicator()->stringToProxy<T>(endPointStr);
-            auto serviceClient = std::make_shared<S>(servicePrx, _serviceName);
-            serviceClient->asyncNotifyGroupInfo(
-                _groupInfo, [endPointStr, _groupInfo](Error::Ptr&& _error) {
-                    // TODO: retry when notify failed
-                    if (_error)
-                    {
-                        BCOS_LOG(ERROR) << LOG_DESC("asyncNotifyGroupInfo error")
-                                        << LOG_KV("endPoint", endPointStr)
-                                        << LOG_KV("code", _error->errorCode())
-                                        << LOG_KV("msg", _error->errorMessage());
-                        return;
-                    }
-                });
-        }
-    }
-
     std::string generateGenesisConfig(bcos::tool::NodeConfig::Ptr _nodeConfig);
     std::string generateIniConfig(bcos::tool::NodeConfig::Ptr _nodeConfig);
 
-private:
+protected:
+    bcos::initializer::NodeArchitectureType m_nodeArchType;
     bcos::tool::NodeConfig::Ptr m_nodeConfig;
     ProtocolInitializer::Ptr m_protocolInitializer;
 
@@ -144,9 +105,6 @@ private:
     std::shared_ptr<bcos::sealer::Sealer> m_sealer;
     std::shared_ptr<bcos::sync::BlockSync> m_blockSync;
     std::shared_ptr<bcos::consensus::PBFTImpl> m_pbft;
-
-    std::shared_ptr<bcos::Timer> m_timer;
-    uint64_t m_timerSchedulerInterval = 3000;
 
     bcos::group::GroupInfo::Ptr m_groupInfo;
 };

@@ -19,12 +19,12 @@
  * @date: 2021-03-23
  */
 #pragma once
-#include <bcos-framework/interfaces/crypto/CryptoSuite.h>
+#include <bcos-crypto/interfaces/crypto/CryptoSuite.h>
 #include <bcos-framework/interfaces/protocol/Block.h>
 #include <bcos-framework/interfaces/protocol/BlockHeaderFactory.h>
 #include <bcos-framework/interfaces/protocol/TransactionMetaData.h>
-#include <bcos-protocol/ParallelMerkleProof.h>
 #include <bcos-protocol/Common.h>
+#include <bcos-protocol/ParallelMerkleProof.h>
 #include <bcos-protocol/protobuf/proto/Block.pb.h>
 namespace bcos
 {

@@ -37,6 +37,7 @@ namespace precompiled
 {
 using ConditionTuple = std::tuple<std::vector<std::tuple<std::string, std::string, u256>>>;
 using EntryTuple = std::tuple<std::vector<std::tuple<std::string, std::string>>>;
+using BfsTuple = std::tuple<std::string, std::string, std::vector<std::string>>;
 
 static const std::string USER_TABLE_PREFIX = "/tables/";
 static const std::string USER_APPS_PREFIX = "/apps/";
@@ -58,12 +59,21 @@ inline std::string getTableName(const std::string& _tableName)
     return USER_TABLE_PREFIX + tableName;
 }
 
+inline std::string trimHexPrefix(const std::string& _hex)
+{
+    if (_hex.size() >= 2 && _hex[1] == 'x' && _hex[0] == '0')
+    {
+        return _hex.substr(2);
+    }
+    return _hex;
+}
+
 void checkNameValidate(std::string_view tableName, std::vector<std::string>& keyFieldList,
     std::vector<std::string>& valueFieldList);
-int checkLengthValidate(std::string_view field_value, int32_t max_length, int32_t errorCode);
+void checkLengthValidate(std::string_view field_value, int32_t max_length, int32_t errorCode);
 
 void checkCreateTableParam(
-    const std::string& _tableName, std::string& _keyFiled, std::string& _valueField);
+    const std::string& _tableName, std::string& _keyField, std::string& _valueField);
 
 uint32_t getFuncSelector(std::string const& _functionName, const crypto::Hash::Ptr& _hashImpl);
 uint32_t getParamFunc(bytesConstRef _param);
@@ -84,9 +94,7 @@ bool checkPathValid(std::string const& _absolutePath);
 
 std::pair<std::string, std::string> getParentDirAndBaseName(const std::string& _absolutePath);
 
-std::string getParentDir(const std::string& _absolutePath);
-
-std::string getDirBaseName(const std::string& _absolutePath);
+std::pair<std::string, std::string> getLinkNameAndVersion(const std::string& _absolutePath);
 
 bool recursiveBuildDir(const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const std::string& _absoluteDir);

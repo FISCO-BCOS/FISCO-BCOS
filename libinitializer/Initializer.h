@@ -21,6 +21,7 @@
 #pragma once
 #include "FrontServiceInitializer.h"
 #include "PBFTInitializer.h"
+#include "ProPBFTInitializer.h"
 #include "ProtocolInitializer.h"
 #include "TxPoolInitializer.h"
 #include <bcos-utilities/BoostLogInitializer.h>
@@ -58,7 +59,7 @@ public:
 
     FrontServiceInitializer::Ptr frontService() { return m_frontServiceInitializer; }
 
-    void initLocalNode(std::string const& _configFilePath, std::string const& _genesisFile,
+    void initAirNode(std::string const& _configFilePath, std::string const& _genesisFile,
         std::shared_ptr<bcos::gateway::GatewayInterface> _gateway);
     void initMicroServiceNode(std::string const& _configFilePath, std::string const& _genesisFile,
         std::string const& _privateKeyPath);
@@ -66,10 +67,10 @@ public:
 protected:
     virtual void init(bcos::initializer::NodeArchitectureType _nodeArchType,
         std::string const& _configFilePath, std::string const& _genesisFile,
-        std::shared_ptr<bcos::gateway::GatewayInterface> _gateway, bool _localMode);
+        std::shared_ptr<bcos::gateway::GatewayInterface> _gateway, bool _airVersion);
 
     virtual void initConfig(std::string const& _configFilePath, std::string const& _genesisFile,
-        std::string const& _privateKeyPath, bool _localMode);
+        std::string const& _privateKeyPath, bool _airVersion);
 
     void initSysContract();
 
@@ -81,6 +82,8 @@ private:
     PBFTInitializer::Ptr m_pbftInitializer;
     bcos::ledger::LedgerInterface::Ptr m_ledger;
     std::shared_ptr<bcos::scheduler::SchedulerInterface> m_scheduler;
+    std::string const c_consensusStorageDBName = "consensus_log";
+    std::string const c_fileSeparator = "/";
 };
 }  // namespace initializer
 }  // namespace bcos

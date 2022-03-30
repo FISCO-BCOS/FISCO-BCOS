@@ -65,8 +65,6 @@ void NodeServiceApp::initNodeService()
     m_nodeInitializer->initMicroServiceNode(m_iniConfigPath, m_genesisConfigPath, m_privateKeyPath);
     m_nodeInitializer->start();
     initHandler();
-    // the node report its info to the rpc/gateway periodly
-    m_nodeInitializer->pbftInitializer()->startReport();
 }
 
 void NodeServiceApp::initTarsNodeService()

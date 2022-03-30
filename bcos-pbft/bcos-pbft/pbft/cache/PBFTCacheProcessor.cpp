@@ -197,7 +197,11 @@ void PBFTCacheProcessor::checkAndPreCommit()
             continue;
         }
         updateCommitQueue(it.second->preCommitCache()->consensusProposal());
+        // refresh the timer when commit success
+        m_config->timer()->restart();
+        m_config->resetToView();
     }
+    resetTimer();
 }
 
 void PBFTCacheProcessor::checkAndCommit()
@@ -309,6 +313,15 @@ bool PBFTCacheProcessor::tryToApplyCommitQueue()
     if (!m_committedQueue.empty() &&
         m_committedQueue.top()->index() == m_config->expectedCheckPoint())
     {
+        auto committedIndex = m_config->committedProposal()->index();
+        // must wait for the sys-proposal committed to execute new proposal
+        auto dependsProposal =
+            std::min((m_config->expectedCheckPoint() - 1), m_config->waitSealUntil());
+        // enforce to serial execute if the system-proposal not committed
+        if (committedIndex < dependsProposal)
+        {
+            return false;
+        }
         auto proposal = m_committedQueue.top();
         auto lastAppliedProposal = getAppliedCheckPointProposal(m_config->expectedCheckPoint() - 1);
         if (!lastAppliedProposal)
@@ -491,7 +504,8 @@ PBFTMessageList PBFTCacheProcessor::generatePrePrepareMsg(
     std::map<IndexType, ViewChangeMsgInterface::Ptr> _viewChangeCache)
 {
     auto toView = m_config->toView();
-    auto maxCommittedIndex = m_config->committedProposal()->index();
+    auto committedIndex = m_config->committedProposal()->index();
+    auto maxCommittedIndex = committedIndex;
     if (m_maxCommittedIndex.count(toView))
     {
         maxCommittedIndex = m_maxCommittedIndex[toView];
@@ -500,6 +514,11 @@ PBFTMessageList PBFTCacheProcessor::generatePrePrepareMsg(
     if (m_maxPrecommitIndex.count(toView))
     {
         maxPrecommitIndex = m_maxPrecommitIndex[toView];
+    }
+    // should not handle the proposal future than the system proposal
+    if (m_config->waitSealUntil() > committedIndex)
+    {
+        maxPrecommitIndex = std::min(m_config->waitSealUntil(), maxPrecommitIndex);
     }
     std::map<BlockNumber, PBFTMessageInterface::Ptr> preparedProposals;
     for (auto it : _viewChangeCache)
@@ -617,8 +636,9 @@ NewViewMsgInterface::Ptr PBFTCacheProcessor::checkAndTryIntoNewView()
     newViewMsg->setPrePrepareList(generatedPrePrepareList);
     // encode and broadcast the viewchangeReq
     auto encodedData = m_config->codec()->encode(newViewMsg);
-    m_config->frontService()->asyncSendMessageByNodeIDs(
-        ModuleID::PBFT, m_config->consensusNodeIDList(), ref(*encodedData));
+    // only broadcast message to the consensus nodes
+    m_config->frontService()->asyncSendBroadcastMessage(
+        bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*encodedData));
     m_newViewGenerated = true;
     PBFT_LOG(INFO) << LOG_DESC("The next leader broadcast NewView request")
                    << printPBFTMsgInfo(newViewMsg) << LOG_KV("Idx", m_config->nodeIndex());
@@ -629,6 +649,7 @@ ViewType PBFTCacheProcessor::tryToTriggerFastViewChange()
 {
     uint64_t greaterViewWeight = 0;
     ViewType viewToReach = 0;
+    bool findViewToReach = false;
     for (auto const& it : m_viewChangeCache)
     {
         auto view = it.first;
@@ -636,28 +657,30 @@ ViewType PBFTCacheProcessor::tryToTriggerFastViewChange()
         {
             continue;
         }
-        if (viewToReach == 0)
+        if (viewToReach > view || (viewToReach == 0))
         {
-            viewToReach = view;
-        }
-        if (viewToReach > view)
-        {
-            viewToReach = view;
-        }
-        // check the quorum
-        auto viewChangeCache = it.second;
-        for (auto const& cache : viewChangeCache)
-        {
-            auto fromIdx = cache.first;
-            auto nodeInfo = m_config->getConsensusNodeByIndex(fromIdx);
-            if (!nodeInfo)
+            // check the quorum
+            auto viewChangeCache = it.second;
+            greaterViewWeight = 0;
+            for (auto const& cache : viewChangeCache)
             {
-                continue;
+                auto fromIdx = cache.first;
+                auto nodeInfo = m_config->getConsensusNodeByIndex(fromIdx);
+                if (!nodeInfo)
+                {
+                    continue;
+                }
+                greaterViewWeight += nodeInfo->weight();
             }
-            greaterViewWeight += nodeInfo->weight();
+            // must ensure at least (f+1) nodes at the same view can trigger fast-viewchange
+            if (greaterViewWeight >= (m_config->maxFaultyQuorum() + 1))
+            {
+                findViewToReach = true;
+                viewToReach = view;
+            }
         }
     }
-    if (greaterViewWeight < (m_config->maxFaultyQuorum() + 1))
+    if (!findViewToReach)
     {
         return 0;
     }
@@ -704,7 +727,7 @@ bool PBFTCacheProcessor::checkPrecommitMsg(PBFTMessageInterface::Ptr _precommitM
         return ret;
     }
     // erase the cache
-    if (precommit->hash() == _precommitMsg->hash())
+    if (precommit->hash() == _precommitMsg->hash() && !checkPrecommitWeight(precommit))
     {
         m_caches.erase(precommit->index());
     }
@@ -764,12 +787,9 @@ void PBFTCacheProcessor::removeConsensusedCache(ViewType _view, BlockNumber _con
 {
     for (auto pcache = m_caches.begin(); pcache != m_caches.end();)
     {
+        // Note: can't remove stabledCommitted cache here for need to fetch
+        // lastAppliedProposalCheckPoint when apply the next proposal
         if (pcache->first <= _consensusedNumber)
-        {
-            pcache = m_caches.erase(pcache);
-            continue;
-        }
-        if (pcache->second->stableCommitted())
         {
             pcache = m_caches.erase(pcache);
             continue;
@@ -1129,4 +1149,16 @@ PBFTProposalInterface::Ptr PBFTCacheProcessor::fetchPrecommitProposal(
         return nullptr;
     }
     return cache->preCommitCache()->consensusProposal();
+}
+
+void PBFTCacheProcessor::updatePrecommit(PBFTProposalInterface::Ptr _proposal)
+{
+    auto pbftMessage = m_config->pbftMessageFactory()->createPBFTMsg();
+    pbftMessage->setConsensusProposal(_proposal);
+    pbftMessage->setIndex(_proposal->index());
+    pbftMessage->setHash(_proposal->hash());
+    addCache(
+        m_caches, pbftMessage, [](PBFTCache::Ptr _pbftCache, PBFTMessageInterface::Ptr _precommit) {
+            _pbftCache->setPrecommitCache(_precommit);
+        });
 }

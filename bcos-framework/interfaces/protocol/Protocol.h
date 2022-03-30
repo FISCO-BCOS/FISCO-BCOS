@@ -19,10 +19,24 @@
  * @date 2021-04-21
  */
 #pragma once
+#include <memory>
 namespace bcos
 {
 namespace protocol
 {
+// Note: both MessageExtFieldFlag and NodeType occupy the ext fields
+enum MessageExtFieldFlag : uint32_t
+{
+    Response = 0x0001,
+};
+enum NodeType : uint32_t
+{
+    None = 0x0,
+    CONSENSUS_NODE = 0x2,
+    OBSERVER_NODE = 0x4,
+    NODE_OUTSIDE_GROUP = 0x8,
+};
+
 enum ModuleID
 {
     PBFT = 1000,
@@ -31,5 +45,5 @@ enum ModuleID
     TxsSync = 2001,
     AMOP = 3000,
 };
-}
+}  // namespace protocol
 }  // namespace bcos

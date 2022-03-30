@@ -30,7 +30,7 @@
 #include "bcos-framework/interfaces/protocol/BlockHeader.h"
 #include "bcos-protocol/LogEntry.h"
 #include "bcos-protocol/TransactionStatus.h"
-#include "bcos-utilities/Exceptions.h"
+#include <bcos-utilities/Exceptions.h>
 #include <evmc/instructions.h>
 #include <boost/algorithm/string/case_conv.hpp>
 #include <functional>
@@ -89,10 +89,13 @@ static const char* const FS_ACL_TYPE = "acl_type";
 static const char* const FS_ACL_WHITE = "acl_white";
 static const char* const FS_ACL_BLACK = "acl_black";
 static const char* const FS_KEY_EXTRA = "extra";
+static const char* const FS_LINK_ADDRESS = "link_address";
+static const char* const FS_LINK_ABI = "link_abi";
 
 /// FileSystem file type
 static const char* const FS_TYPE_DIR = "directory";
 static const char* const FS_TYPE_CONTRACT = "contract";
+static const char* const FS_TYPE_LINK = "link";
 
 #define EXECUTIVE_LOG(LEVEL) BCOS_LOG(LEVEL) << "[EXECUTOR]"
 
@@ -123,10 +126,10 @@ struct SubState
     }
 };
 
-struct EVMSchedule
+struct VMSchedule
 {
-    EVMSchedule() : tierStepGas(std::array<unsigned, 8>{{0, 2, 3, 5, 8, 10, 20, 0}}) {}
-    EVMSchedule(bool _efcd, bool _hdc, unsigned const& _txCreateGas)
+    VMSchedule() : tierStepGas(std::array<unsigned, 8>{{0, 2, 3, 5, 8, 10, 20, 0}}) {}
+    VMSchedule(bool _efcd, bool _hdc, unsigned const& _txCreateGas)
       : tierStepGas(std::array<unsigned, 8>{{0, 2, 3, 5, 8, 10, 20, 0}}),
         exceptionalFailedCodeDeposit(_efcd),
         haveDelegateCall(_hdc),
@@ -145,6 +148,7 @@ struct EVMSchedule
     bool haveCreate2 = true;
     bool haveExtcodehash = false;
     bool enableIstanbul = false;
+    bool enableLondon = false;
     /// gas cost for specified calculation
     /// exp gas cost
     unsigned expGas = 10;
@@ -202,13 +206,13 @@ struct EVMSchedule
 /// haveDelegateCall: false
 /// tierStepGas: {0, 2, 3, 5, 8, 10, 20, 0}
 /// txCreateGas: 21000
-static const EVMSchedule FrontierSchedule = EVMSchedule(false, false, 21000);
+static const VMSchedule FrontierSchedule = VMSchedule(false, false, 21000);
 /// value of params are equal to HomesteadSchedule
-static const EVMSchedule HomesteadSchedule = EVMSchedule(true, true, 53000);
+static const VMSchedule HomesteadSchedule = VMSchedule(true, true, 53000);
 /// EIP150(refer to:
 /// https://github.com/ethereum/EIPs/blob/master/EIPS/eip-150.md)
-static const EVMSchedule EIP150Schedule = [] {
-    EVMSchedule schedule = HomesteadSchedule;
+static const VMSchedule EIP150Schedule = [] {
+    VMSchedule schedule = HomesteadSchedule;
     schedule.eip150Mode = true;
     schedule.extcodesizeGas = 700;
     schedule.extcodecopyGas = 700;
@@ -219,16 +223,16 @@ static const EVMSchedule EIP150Schedule = [] {
     return schedule;
 }();
 /// EIP158
-static const EVMSchedule EIP158Schedule = [] {
-    EVMSchedule schedule = EIP150Schedule;
+static const VMSchedule EIP158Schedule = [] {
+    VMSchedule schedule = EIP150Schedule;
     schedule.expByteGas = 50;
     schedule.eip158Mode = true;
     schedule.maxCodeSize = 0x6000;
     return schedule;
 }();
 
-static const EVMSchedule ByzantiumSchedule = [] {
-    EVMSchedule schedule = EIP158Schedule;
+static const VMSchedule ByzantiumSchedule = [] {
+    VMSchedule schedule = EIP158Schedule;
     schedule.haveRevert = true;
     schedule.haveReturnData = true;
     schedule.haveStaticCall = true;
@@ -236,8 +240,8 @@ static const EVMSchedule ByzantiumSchedule = [] {
     return schedule;
 }();
 
-static const EVMSchedule ConstantinopleSchedule = [] {
-    EVMSchedule schedule = ByzantiumSchedule;
+static const VMSchedule ConstantinopleSchedule = [] {
+    VMSchedule schedule = ByzantiumSchedule;
     schedule.blockhashGas = 800;
     schedule.haveCreate2 = true;
     schedule.haveBitwiseShifting = true;
@@ -245,33 +249,39 @@ static const EVMSchedule ConstantinopleSchedule = [] {
     return schedule;
 }();
 
-static const EVMSchedule FiscoBcosSchedule = [] {
-    EVMSchedule schedule = ConstantinopleSchedule;
+static const VMSchedule FiscoBcosSchedule = [] {
+    VMSchedule schedule = ConstantinopleSchedule;
     return schedule;
 }();
 
-static const EVMSchedule FiscoBcosScheduleV2 = [] {
-    EVMSchedule schedule = ConstantinopleSchedule;
+static const VMSchedule FiscoBcosScheduleV2 = [] {
+    VMSchedule schedule = ConstantinopleSchedule;
     schedule.maxCodeSize = 0x40000;
     return schedule;
 }();
 
-static const EVMSchedule FiscoBcosScheduleV3 = [] {
-    EVMSchedule schedule = FiscoBcosScheduleV2;
+static const VMSchedule FiscoBcosScheduleV3 = [] {
+    VMSchedule schedule = FiscoBcosScheduleV2;
     schedule.enableIstanbul = true;
     return schedule;
 }();
 
-static const EVMSchedule EWASMSchedule = [] {
-    EVMSchedule schedule = FiscoBcosScheduleV3;
-    schedule.maxCodeSize = std::numeric_limits<unsigned>::max();
+static const VMSchedule FiscoBcosScheduleV4 = [] {
+    VMSchedule schedule = FiscoBcosScheduleV3;
+    schedule.enableLondon = true;
+    return schedule;
+}();
+
+static const VMSchedule BCOSWASMSchedule = [] {
+    VMSchedule schedule = FiscoBcosScheduleV4;
+    schedule.maxCodeSize = 0xF00000; // 15MB
     // Ensure that zero bytes are not subsidised and are charged the same as
     // non-zero bytes.
     schedule.txDataZeroGas = schedule.txDataNonZeroGas;
     return schedule;
 }();
 
-static const EVMSchedule DefaultSchedule = FiscoBcosScheduleV3;
+static const VMSchedule DefaultSchedule = FiscoBcosScheduleV4;
 
 struct ImportRequirements
 {
