@@ -29,7 +29,6 @@
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-rpc/event/EventSubMatcher.h>
 #include <bcos-rpc/jsonrpc/JsonRpcImpl_2_0.h>
-#include <bcos-rpc/ws/ProtocolVersion.h>
 #include <bcos-utilities/Exceptions.h>
 #include <bcos-utilities/FileUtility.h>
 #include <bcos-utilities/Log.h>
@@ -137,58 +136,6 @@ bcos::boostssl::ws::WsService::Ptr RpcFactory::buildWsService(
     return wsService;
 }
 
-void RpcFactory::registerHandlers(std::shared_ptr<boostssl::ws::WsService> _wsService,
-    bcos::rpc::JsonRpcImpl_2_0::Ptr _jsonRpcInterface)
-{
-    _wsService->registerMsgHandler(bcos::rpc::MessageType::HANDESHAKE,
-        [_jsonRpcInterface](std::shared_ptr<boostssl::ws::WsMessage> _msg,
-            std::shared_ptr<boostssl::ws::WsSession> _session) {
-            auto seq = std::string(_msg->data()->begin(), _msg->data()->end());
-            // Note: Clean up request data to prevent taking up too much memory
-            bytes emptyBuffer;
-            _msg->data()->swap(emptyBuffer);
-            _jsonRpcInterface->getGroupInfoList(
-                [_msg, _session, seq, _jsonRpcInterface](
-                    bcos::Error::Ptr _error, Json::Value& _jGroupInfoList) {
-                    if (_error && _error->errorCode() != bcos::protocol::CommonError::SUCCESS)
-                    {
-                        BCOS_LOG(ERROR)
-                            << LOG_BADGE("HANDSHAKE") << LOG_DESC("get group info list error")
-                            << LOG_KV("seq", seq)
-                            << LOG_KV("endpoint", _session ? _session->endPoint() : std::string(""))
-                            << LOG_KV("errorCode", _error->errorCode())
-                            << LOG_KV("errorMessage", _error->errorMessage());
-
-                        return;
-                    }
-
-                    _jsonRpcInterface->getGroupBlockNumber([_jGroupInfoList, _session, _msg, seq](
-                                                               bcos::Error::Ptr,
-                                                               Json::Value& _jBlockNumberInfo) {
-                        auto version = ws::EnumPV::CurrentVersion;
-                        _session->setVersion(ws::EnumPV::CurrentVersion);
-                        auto pv = std::make_shared<ws::ProtocolVersion>();
-                        pv->setProtocolVersion(version);
-
-                        auto jResult = pv->toJson();
-                        jResult["groupInfoList"] = _jGroupInfoList;
-                        jResult["groupBlockNumber"] = _jBlockNumberInfo;
-
-                        Json::FastWriter writer;
-                        std::string result = writer.write(jResult);
-
-                        _msg->setData(std::make_shared<bcos::bytes>(result.begin(), result.end()));
-                        _session->asyncSendMessage(_msg);
-
-                        BCOS_LOG(INFO)
-                            << LOG_BADGE("HANDSHAKE") << LOG_DESC("handshake response")
-                            << LOG_KV("version", version) << LOG_KV("seq", seq)
-                            << LOG_KV("endpoint", _session ? _session->endPoint() : std::string(""))
-                            << LOG_KV("result", result);
-                    });
-                });
-        });
-}
 bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(
     std::shared_ptr<boostssl::ws::WsService> _wsService, GroupManager::Ptr _groupManager)
 {
@@ -201,7 +148,6 @@ bcos::rpc::JsonRpcImpl_2_0::Ptr RpcFactory::buildJsonRpc(
         httpServer->setHttpReqHandler(std::bind(&bcos::rpc::JsonRpcInterface::onRPCRequest,
             jsonRpcInterface, std::placeholders::_1, std::placeholders::_2));
     }
-    registerHandlers(_wsService, jsonRpcInterface);
     return jsonRpcInterface;
 }
 

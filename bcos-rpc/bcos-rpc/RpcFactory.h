@@ -91,10 +91,6 @@ protected:
         std::shared_ptr<boostssl::ws::WsService> _wsService, GroupManager::Ptr _groupManager);
 
 private:
-    void registerHandlers(std::shared_ptr<boostssl::ws::WsService> _wsService,
-        bcos::rpc::JsonRpcImpl_2_0::Ptr _jsonRpcInterface);
-
-private:
     std::string m_chainID;
     bcos::gateway::GatewayInterface::Ptr m_gateway;
     std::shared_ptr<bcos::crypto::KeyFactory> m_keyFactory;
