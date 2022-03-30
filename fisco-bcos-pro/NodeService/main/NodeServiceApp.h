@@ -52,9 +52,6 @@ protected:
     virtual void initLog();
     virtual void initNodeService();
     virtual void initTarsNodeService();
-    void initHandler();
-    void notifyBlockNumberToAllRpcNodes(bcostars::RpcServicePrx _rpcPrx,
-        bcos::protocol::BlockNumber _blockNumber, std::function<void(bcos::Error::Ptr)> _callback);
 
 private:
     bcos::BoostLogInitializer::Ptr m_logInitializer;

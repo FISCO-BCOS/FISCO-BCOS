@@ -64,6 +64,8 @@ public:
     void initMicroServiceNode(std::string const& _configFilePath, std::string const& _genesisFile,
         std::string const& _privateKeyPath);
 
+    virtual void initNotificationHandlers(bcos::rpc::RPCInterface::Ptr _rpc);
+
 protected:
     virtual void init(bcos::initializer::NodeArchitectureType _nodeArchType,
         std::string const& _configFilePath, std::string const& _genesisFile,
