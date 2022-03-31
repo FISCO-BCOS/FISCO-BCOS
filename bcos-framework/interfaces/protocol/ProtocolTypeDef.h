@@ -110,13 +110,13 @@ inline std::ostream& operator<<(std::ostream& _out, NodeType const& _nodeType)
         _out << "None";
         break;
     case NodeType::CONSENSUS_NODE:
-        _out << "consensus";
+        _out << "CONSENSUS_NODE";
         break;
     case NodeType::OBSERVER_NODE:
-        _out << "observer";
+        _out << "OBSERVER_NODE";
         break;
     case NodeType::NODE_OUTSIDE_GROUP:
-        _out << "nodeOutsideGroup";
+        _out << "NODE_OUTSIDE_GROUP";
         break;
     default:
         _out << "Unknown";

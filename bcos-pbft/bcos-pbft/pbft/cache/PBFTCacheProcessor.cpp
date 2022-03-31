@@ -313,6 +313,15 @@ bool PBFTCacheProcessor::tryToApplyCommitQueue()
     if (!m_committedQueue.empty() &&
         m_committedQueue.top()->index() == m_config->expectedCheckPoint())
     {
+        auto committedIndex = m_config->committedProposal()->index();
+        // must wait for the sys-proposal committed to execute new proposal
+        auto dependsProposal =
+            std::min((m_config->expectedCheckPoint() - 1), m_config->waitSealUntil());
+        // enforce to serial execute if the system-proposal not committed
+        if (committedIndex < dependsProposal)
+        {
+            return false;
+        }
         auto proposal = m_committedQueue.top();
         auto lastAppliedProposal = getAppliedCheckPointProposal(m_config->expectedCheckPoint() - 1);
         if (!lastAppliedProposal)

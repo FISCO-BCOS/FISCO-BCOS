@@ -1,20 +1,20 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
-import sys
 # Note: here can't be refactored by autopep
+import sys
 sys.path.append("src/")
 
-import os
-import toml
-from networkmgr.network_manager import NetworkManager
-from command.node_command_impl import NodeCommandImpl
-from command.service_command_impl import ServiceCommandImpl
-from controller.binary_controller import BinaryController
-from config.chain_config import ChainConfig
-from common.utilities import ServiceInfo
-from common.utilities import CommandInfo
-from common import parser_handler
 from common import utilities
+from common import parser_handler
+from common.utilities import CommandInfo
+from common.utilities import ServiceInfo
+from config.chain_config import ChainConfig
+from controller.binary_controller import BinaryController
+from command.service_command_impl import ServiceCommandImpl
+from command.node_command_impl import NodeCommandImpl
+from networkmgr.network_manager import NetworkManager
+import toml
+import os
 
 
 def chain_operations(args):
@@ -106,11 +106,14 @@ def download_binary_operation(args):
 
 
 def main():
-    args = parser_handler.parse_command()
-    chain_operations(args)
-    create_subnet_operation(args)
-    add_vxlan_operation(args)
-    download_binary_operation(args)
+    try:
+        args = parser_handler.parse_command()
+        chain_operations(args)
+        create_subnet_operation(args)
+        add_vxlan_operation(args)
+        download_binary_operation(args)
+    except Exception as error:
+        utilities.log_error("%s" % error)
 
 
 if __name__ == "__main__":

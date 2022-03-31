@@ -43,7 +43,7 @@ public:
 
     std::shared_ptr<PrecompiledExecResult> call(
         std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
-        const std::string& _origin, const std::string& _sender) override;
+        const std::string& _origin, const std::string& _sender, int64_t gasLeft) override;
 
     bool checkMethodAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const std::string& path, bytesRef func, const Address& account);

@@ -240,7 +240,7 @@ protected:
 
     std::shared_ptr<std::map<std::string, std::shared_ptr<PrecompiledContract>>>
         m_precompiledContract;
-    std::map<std::string, std::shared_ptr<precompiled::Precompiled>> m_constantPrecompiled;
+    std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>> m_constantPrecompiled;
     std::shared_ptr<const std::set<std::string>> m_builtInPrecompiled;
     unsigned int m_DAGThreadNum = std::max(std::thread::hardware_concurrency(), (unsigned int)1);
     std::shared_ptr<wasm::GasInjector> m_gasInjector = nullptr;

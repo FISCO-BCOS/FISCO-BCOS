@@ -70,6 +70,8 @@ using namespace bcos::precompiled;
 void WasmTransactionExecutor::initPrecompiled()
 {
     m_builtInPrecompiled = std::make_shared<std::set<std::string>>();
+    m_constantPrecompiled =
+        std::make_shared<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>();
 
     auto sysConfig = std::make_shared<precompiled::SystemConfigPrecompiled>(m_hashImpl);
     auto consensusPrecompiled = std::make_shared<precompiled::ConsensusPrecompiled>(m_hashImpl);
@@ -80,17 +82,17 @@ void WasmTransactionExecutor::initPrecompiled()
         std::make_shared<precompiled::KVTableFactoryPrecompiled>(m_hashImpl);
 
     // in WASM
-    m_constantPrecompiled.insert({SYS_CONFIG_NAME, sysConfig});
-    m_constantPrecompiled.insert({CONSENSUS_NAME, consensusPrecompiled});
+    m_constantPrecompiled->insert({SYS_CONFIG_NAME, sysConfig});
+    m_constantPrecompiled->insert({CONSENSUS_NAME, consensusPrecompiled});
     // FIXME: not support crud now
     // m_constantPrecompiled.insert({TABLE_NAME, tableFactoryPrecompiled});
-    m_constantPrecompiled.insert({KV_TABLE_NAME, kvTableFactoryPrecompiled});
-    m_constantPrecompiled.insert(
+    m_constantPrecompiled->insert({KV_TABLE_NAME, kvTableFactoryPrecompiled});
+    m_constantPrecompiled->insert(
         {DAG_TRANSFER_NAME, std::make_shared<precompiled::DagTransferPrecompiled>(m_hashImpl)});
-    m_constantPrecompiled.insert({CRYPTO_NAME, std::make_shared<CryptoPrecompiled>(m_hashImpl)});
-    m_constantPrecompiled.insert(
+    m_constantPrecompiled->insert({CRYPTO_NAME, std::make_shared<CryptoPrecompiled>(m_hashImpl)});
+    m_constantPrecompiled->insert(
         {BFS_NAME, std::make_shared<precompiled::FileSystemPrecompiled>(m_hashImpl)});
-    m_constantPrecompiled.insert(
+    m_constantPrecompiled->insert(
         {CONTRACT_AUTH_NAME, std::make_shared<precompiled::ContractAuthPrecompiled>(m_hashImpl)});
 
     set<string> builtIn = {CRYPTO_NAME};

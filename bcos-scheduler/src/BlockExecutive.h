@@ -62,7 +62,8 @@ public:
     BlockExecutive& operator=(const BlockExecutive&) = delete;
     BlockExecutive& operator=(BlockExecutive&&) = delete;
 
-    void asyncExecute(std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback);
+    void asyncExecute(
+        std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback);
     void asyncCall(
         std::function<void(Error::UniquePtr&&, protocol::TransactionReceipt::Ptr&&)> callback);
     void asyncCommit(std::function<void(Error::UniquePtr)> callback);
@@ -78,10 +79,12 @@ public:
     bcos::protocol::BlockHeader::Ptr result() { return m_result; }
 
     bool isCall() { return m_staticCall; }
+    bool sysBlock() const { return m_sysBlock; }
 
 private:
     void DAGExecute(std::function<void(Error::UniquePtr)> error);
-    void DMTExecute(std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback);
+    void DMTExecute(
+        std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr, bool)> callback);
 
     enum TraverseHint : int8_t
     {
@@ -169,6 +172,7 @@ private:
     bool m_staticCall = false;
     bool m_syncBlock = false;
     size_t m_gasLimit = TRANSACTION_GAS;
+    std::atomic_bool m_sysBlock = false;
 };
 
 }  // namespace bcos::scheduler

@@ -31,7 +31,6 @@ bool GraphKeyLocks::batchAcquireKeyLock(
                                    .str();
                 SCHEDULER_LOG(ERROR) << message;
                 BOOST_THROW_EXCEPTION(BCOS_ERROR(UnexpectedKeyLockError, message));
-                return false;
             }
         }
     }

@@ -223,7 +223,9 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
     deployTest(sysTestBin, sysTestAddress);
 
     auto simpleSetFunc = [&](protocol::BlockNumber _number, int _contextId, const std::string& _key,
-                             const std::string& _v, int _errorCode = 0) {
+                             const std::string& _v,
+                             bcos::protocol::TransactionStatus _errorCode =
+                                 bcos::protocol::TransactionStatus::None) {
         nextBlock(_number);
         bytes in = codec->encodeWithSig("setValueByKeyTest(string,string)", _key, _v);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
@@ -261,7 +263,8 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
                 executePromise3.set_value(std::move(result));
             });
         auto result3 = executePromise3.get_future().get();
-        BOOST_CHECK(result3->data().toBytes() == codec->encode(s256(_errorCode)));
+        // BOOST_CHECK(result3->data().toBytes() == codec->encode(s256(_errorCode)));
+        BOOST_CHECK(result3->status() == (int32_t)_errorCode);
         commitBlock(_number);
     };
     // simple set SYSTEM_KEY_TX_GAS_LIMIT
@@ -272,8 +275,8 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
     // simple get SYSTEM_KEY_TX_GAS_LIMIT
     {
         nextBlock(3);
-        bytes in =
-            codec->encodeWithSig("getValueByKeyTest(string)", std::string(ledger::SYSTEM_KEY_TX_GAS_LIMIT));
+        bytes in = codec->encodeWithSig(
+            "getValueByKeyTest(string)", std::string(ledger::SYSTEM_KEY_TX_GAS_LIMIT));
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
@@ -321,12 +324,12 @@ BOOST_AUTO_TEST_CASE(sysConfig_test)
     // set SYSTEM_KEY_TX_COUNT_LIMIT error
     {
         simpleSetFunc(5, 103, ledger::SYSTEM_KEY_TX_COUNT_LIMIT, std::string("error"),
-            CODE_INVALID_CONFIGURATION_VALUES);
+            bcos::protocol::TransactionStatus::PrecompiledError);
     }
     // set error key
     {
         simpleSetFunc(8, 106, std::string("errorKey"), std::string("1000"),
-            CODE_INVALID_CONFIGURATION_VALUES);
+            bcos::protocol::TransactionStatus::PrecompiledError);
     }
 
     // get error key

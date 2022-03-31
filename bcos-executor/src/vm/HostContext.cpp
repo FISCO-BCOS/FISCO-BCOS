@@ -98,15 +98,15 @@ HostContext::HostContext(CallParameters::UniquePtr callParameters,
     metrics = &ethMetrics;
 }
 
-std::string_view HostContext::get(const std::string_view& _key)
+std::string HostContext::get(const std::string_view& _key)
 {
     auto entry = m_executive->storage().getRow(m_tableName, _key);
     if (entry)
     {
-        return entry->getField(0);
+        return std::string(entry->getField(0));
     }
 
-    return std::string_view();
+    return std::string();
 }
 
 void HostContext::set(const std::string_view& _key, std::string _value)
@@ -216,7 +216,7 @@ evmc_result HostContext::callBuiltInPrecompiled(
         try
         {
             auto precompiledResponse = m_executive->execPrecompiled(_request->receiveAddress,
-                ref(_request->data), _request->origin, _request->senderAddress);
+                ref(_request->data), _request->origin, _request->senderAddress, _request->gas);
             callResults->gas = precompiledResponse->m_gas;
             resultCode = (int32_t)TransactionStatus::None;
             resultData.swap(precompiledResponse->m_execResult);
