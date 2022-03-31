@@ -172,9 +172,6 @@ bool P2PMessage::encode(bytes& _buffer)
     uint16_t packetType = boost::asio::detail::socket_ops::host_to_network_short(m_packetType);
     uint16_t ext = boost::asio::detail::socket_ops::host_to_network_short(m_ext);
     uint16_t seqLength = boost::asio::detail::socket_ops::host_to_network_short(m_seq.size());
-    // uint16_t seqLength = m_seq.size();
-    // auto seq_size = m_seq.size();
-    // std::cout << "seqlength type: " << typeid(seq_size).name() << endl;
 
     _buffer.insert(_buffer.end(), (byte*)&length, (byte*)&length + 4);
     _buffer.insert(_buffer.end(), (byte*)&version, (byte*)&version + 2);

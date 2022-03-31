@@ -54,12 +54,6 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_hasOptions)
     BOOST_CHECK_EQUAL(msg->hasOptions(), true);
     msg->setPacketType(0x1111);
     BOOST_CHECK_EQUAL(msg->hasOptions(), false);
-
-    for (int i = 0; i < 3; ++i)
-    {
-    std:
-        cout << endl;
-    }
 }
 
 BOOST_AUTO_TEST_CASE(test_P2PMessage)
@@ -76,10 +70,8 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage)
 
     // decode default
     auto decodeMsg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
-    std::cout << "000000000000000000000" << endl;
     auto ret = decodeMsg->decode(bytesConstRef(buffer->data(), buffer->size()));
     BOOST_CHECK_EQUAL(ret, 12);
-    std::cout << "11111111111111111111" << endl;
     BOOST_CHECK_EQUAL(decodeMsg->length(), 12);
     BOOST_CHECK_EQUAL(decodeMsg->version(), 0);
     BOOST_CHECK_EQUAL(decodeMsg->packetType(), 0);
@@ -101,13 +93,6 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage)
         auto buffer = std::make_shared<bytes>();
         auto r = encodeMsg->encode(*buffer.get());
         BOOST_CHECK_EQUAL(r, false);
-    }
-    std::cout << "222222222222222222222222" << endl;
-
-    for (int i = 0; i < 3; ++i)
-    {
-    std:
-        cout << endl;
     }
 }
 
@@ -144,12 +129,6 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_withoutOptions)
     BOOST_CHECK_EQUAL(decodeMsg->seq(), seq);
     BOOST_CHECK_EQUAL(decodeMsg->ext(), ext);
     BOOST_CHECK_EQUAL(decodeMsg->payload()->size(), payload->size());
-
-    for (int i = 0; i < 3; ++i)
-    {
-    std:
-        cout << endl;
-    }
 }
 
 BOOST_AUTO_TEST_CASE(test_P2PMessage_optionsCodec)
@@ -265,12 +244,6 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_optionsCodec)
                                              decodeOptions->dstNodeIDs()[i]->end()));
         }
     }
-
-    for (int i = 0; i < 3; ++i)
-    {
-    std:
-        cout << endl;
-    }
 }
 
 BOOST_AUTO_TEST_CASE(test_P2PMessage_codec)
@@ -331,12 +304,6 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_codec)
     {
         BOOST_CHECK_EQUAL(dstNodeID, std::string(decodeOptions->dstNodeIDs()[i]->begin(),
                                          decodeOptions->dstNodeIDs()[i]->end()));
-    }
-
-    for (int i = 0; i < 3; ++i)
-    {
-    std:
-        cout << endl;
     }
 }
 
