@@ -91,10 +91,7 @@ public:
         });
     }
     void verifyProposal(bcos::crypto::PublicPtr _fromNode, PBFTProposalInterface::Ptr _proposal,
-        std::function<void(Error::Ptr, bool)> _verifyFinishedHandler) override
-    {
-        m_txPool->asyncVerifyBlock(_fromNode, _proposal->data(), _verifyFinishedHandler);
-    }
+        std::function<void(Error::Ptr, bool)> _verifyFinishedHandler) override;
 
     void asyncResetTxsFlag(bytesConstRef _data, bool _flag) override;
     ssize_t resettingProposalSize() const override

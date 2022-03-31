@@ -366,7 +366,7 @@ BOOST_AUTO_TEST_CASE(createTableTest)
         creatTable(2, 101, "t_test", "id", "item_name,item_id", CODE_TABLE_NAME_ALREADY_EXIST);
     }
 
-    // createTable too long tableName, key and filed
+    // createTable too long tableName, key and field
     std::string errorStr;
     for (int i = 0; i <= SYS_TABLE_VALUE_FIELD_MAX_LENGTH; i++)
     {
@@ -381,7 +381,7 @@ BOOST_AUTO_TEST_CASE(createTableTest)
         BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
-    // createTable error key and filed
+    // createTable error key and field
     std::string errorStr2 = "/test&";
     {
         auto r1 = creatTable(2, 105, errorStr2, "id", "item_name,item_id");

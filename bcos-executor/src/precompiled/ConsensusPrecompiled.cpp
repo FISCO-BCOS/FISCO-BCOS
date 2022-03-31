@@ -57,7 +57,7 @@ ConsensusPrecompiled::ConsensusPrecompiled(crypto::Hash::Ptr _hashImpl) : Precom
 
 std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
     std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
-    const std::string&, const std::string&)
+    const std::string&, const std::string&, int64_t)
 {
     // parse function name
     uint32_t func = getParamFunc(_param);

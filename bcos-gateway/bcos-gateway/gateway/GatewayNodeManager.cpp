@@ -212,11 +212,13 @@ bytesPointer GatewayNodeManager::generateNodeStatus()
             {
                 groupType = GroupType::GROUP_WITH_CONSENSUS_NODE;
             }
+            // the group has observerNode
             if ((NodeType)(pNodeInfo.second->nodeType()) == NodeType::OBSERVER_NODE)
             {
                 hasObserverNode = true;
             }
         }
+        // the group has only observerNode
         if (groupType == GroupType::OUTSIDE_GROUP && hasObserverNode)
         {
             groupType = GroupType::GROUP_WITHOUT_CONSENSUS_NODE;

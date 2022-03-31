@@ -48,7 +48,7 @@ public:
     virtual ~PermissionPrecompiledInterface(){};
 
     std::shared_ptr<PrecompiledExecResult> call(std::shared_ptr<executor::TransactionExecutive>,
-        bytesConstRef, const std::string&, const std::string&) override
+        bytesConstRef, const std::string&, const std::string&, int64_t) override
     {
         return nullptr;
     }

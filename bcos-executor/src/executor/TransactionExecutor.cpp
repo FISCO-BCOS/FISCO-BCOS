@@ -456,8 +456,8 @@ void TransactionExecutor::dagExecuteTransactions(
 
 bytes getComponentBytes(size_t index, const std::string& typeName, const bytesConstRef& data)
 {
-    size_t offset = index * 32;
-    auto header = bytes(data.begin() + offset, data.begin() + offset + 32);
+    size_t indexOffset = index * 32;
+    auto header = bytes(data.begin() + indexOffset, data.begin() + indexOffset + 32);
     if (typeName == "string" || typeName == "bytes")
     {
         u256 u = fromBigEndian<u256>(header);
@@ -819,9 +819,10 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                         }
                         else
                         {
-                            EXECUTOR_LOG(DEBUG) << LOG_BADGE("dagExecuteTransactionsInternal")
-                                                << LOG_DESC("Found ABI in cache")
-                                                << LOG_KV("abiKey", toHexStringWithPrefix(abiKey));
+                            EXECUTOR_LOG(DEBUG)
+                                << LOG_BADGE("dagExecuteTransactionsInternal")
+                                << LOG_DESC("Found ABI in cache") << LOG_KV("adddress", to)
+                                << LOG_KV("abiKey", toHexStringWithPrefix(abiKey));
                             auto& functionAbi = cacheHandle.value();
                             conflictFields =
                                 extractConflictFields(functionAbi, *params, m_blockContext);
@@ -1508,7 +1509,13 @@ void TransactionExecutor::executeTransactionsWithCriticals(
         try
         {
             auto output = executive->start(std::move(input));
-
+            assert(output);
+            if (output->type == CallParameters::MESSAGE)
+            {
+                EXECUTOR_LOG(DEBUG) << LOG_BADGE("call/deploy in dag")
+                                    << LOG_KV("senderAddress", output->senderAddress)
+                                    << LOG_KV("codeAddress", output->codeAddress);
+            }
             executionResults[id] = toExecutionResult(*executive, std::move(output));
         }
         catch (std::exception& e)

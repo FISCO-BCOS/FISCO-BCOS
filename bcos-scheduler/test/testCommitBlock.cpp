@@ -132,8 +132,8 @@ BOOST_AUTO_TEST_CASE(commitBlock)
 
     bcos::protocol::BlockHeader::Ptr executedHeader;
 
-    scheduler->executeBlock(
-        block, false, [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header) {
+    scheduler->executeBlock(block, false,
+        [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header, bool) {
             BOOST_CHECK(!error);
             BOOST_CHECK(header);
 

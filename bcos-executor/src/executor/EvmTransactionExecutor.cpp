@@ -96,6 +96,8 @@ void EvmTransactionExecutor::initPrecompiled()
     m_precompiledContract =
         std::make_shared<std::map<std::string, std::shared_ptr<PrecompiledContract>>>();
     m_builtInPrecompiled = std::make_shared<std::set<std::string>>();
+    m_constantPrecompiled =
+        std::make_shared<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>();
 
     m_precompiledContract->insert(std::make_pair(fillZero(1),
         make_shared<PrecompiledContract>(3000, 0, PrecompiledRegistrar::executor("ecrecover"))));
@@ -130,17 +132,18 @@ void EvmTransactionExecutor::initPrecompiled()
         std::make_shared<precompiled::KVTableFactoryPrecompiled>(m_hashImpl);
 
     // in EVM
-    m_constantPrecompiled.insert({SYS_CONFIG_ADDRESS, sysConfig});
-    m_constantPrecompiled.insert({CONSENSUS_ADDRESS, consensusPrecompiled});
+    m_constantPrecompiled->insert({SYS_CONFIG_ADDRESS, sysConfig});
+    m_constantPrecompiled->insert({CONSENSUS_ADDRESS, consensusPrecompiled});
     // FIXME: not support crud now
     // m_constantPrecompiled.insert({TABLE_ADDRESS, tableFactoryPrecompiled});
-    m_constantPrecompiled.insert({KV_TABLE_ADDRESS, kvTableFactoryPrecompiled});
-    m_constantPrecompiled.insert(
+    m_constantPrecompiled->insert({KV_TABLE_ADDRESS, kvTableFactoryPrecompiled});
+    m_constantPrecompiled->insert(
         {DAG_TRANSFER_ADDRESS, std::make_shared<precompiled::DagTransferPrecompiled>(m_hashImpl)});
-    m_constantPrecompiled.insert({CRYPTO_ADDRESS, std::make_shared<CryptoPrecompiled>(m_hashImpl)});
-    m_constantPrecompiled.insert(
+    m_constantPrecompiled->insert(
+        {CRYPTO_ADDRESS, std::make_shared<CryptoPrecompiled>(m_hashImpl)});
+    m_constantPrecompiled->insert(
         {BFS_ADDRESS, std::make_shared<precompiled::FileSystemPrecompiled>(m_hashImpl)});
-    m_constantPrecompiled.insert({CONTRACT_AUTH_ADDRESS,
+    m_constantPrecompiled->insert({CONTRACT_AUTH_ADDRESS,
         std::make_shared<precompiled::ContractAuthPrecompiled>(m_hashImpl)});
     set<string> builtIn = {CRYPTO_ADDRESS};
     m_builtInPrecompiled = make_shared<set<string>>(builtIn);

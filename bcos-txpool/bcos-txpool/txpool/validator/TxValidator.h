@@ -49,7 +49,8 @@ protected:
     virtual bool isSystemTransaction(bcos::protocol::Transaction::ConstPtr _tx)
     {
         auto txAddress = _tx->to();
-        return m_systemTxsAddress.count(std::string(txAddress.begin(), txAddress.end()));
+        return bcos::precompiled::c_systemTxsAddress.count(
+            std::string(txAddress.begin(), txAddress.end()));
     }
 
 private:
@@ -57,10 +58,6 @@ private:
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;
     std::string m_groupId;
     std::string m_chainId;
-
-    const std::set<std::string> m_systemTxsAddress = {bcos::precompiled::SYS_CONFIG_ADDRESS,
-        bcos::precompiled::CONSENSUS_ADDRESS, bcos::precompiled::WORKING_SEALER_MGR_ADDRESS,
-        bcos::precompiled::SYS_CONFIG_NAME, bcos::precompiled::CONSENSUS_NAME};
 };
 }  // namespace txpool
 }  // namespace bcos
