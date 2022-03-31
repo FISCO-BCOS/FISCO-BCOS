@@ -30,35 +30,3 @@
 *.exe
 *.out
 *.app
-
-# java
-*.class
-
-
-# ignore some directory
-build**
-deps
-deps/**
-
-# vs
-*.sln
-*.vcxproj*
-.vs/
-.vscode/
-.idea/
-
-# macOS
-.DS_Store
-
-# log
-*.log
-
-# clangd file
-compile_commands.json
-.cache
-
-# generated test
-tools/BcosAirBuilder/nodes**
-tools/BcosProBuilder/generated**
-tools/BcosAirBuilder/*
-*.log

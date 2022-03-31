@@ -1,89 +1,39 @@
-cmake_minimum_required(VERSION 3.16)
-if (NOT DEFINED URL_BASE)
-    set(URL_BASE "github.com")
-endif ()
+#------------------------------------------------------------------------------
+# Top-level CMake file for bcos-framework
+# ------------------------------------------------------------------------------
+# Copyright (C) 2021 FISCO BCOS.
+# SPDX-License-Identifier: Apache-2.0
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ------------------------------------------------------------------------------
 
-list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/bcos-cmake-scripts)
-list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
+cmake_minimum_required(VERSION 3.12)
+set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment version")
 
-include(Options)
-include(HunterGate)
-HunterGate(
-        URL "https://${URL_BASE}/FISCO-BCOS/hunter/archive/2b5b25ecffaba74393740bf0b8758c4e8d9297cf.tar.gz"
-        SHA1 "5d8365a327be260cf24d2b125a71ee7069aca28f"
-        FILEPATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/config.cmake"
-)
+set(VERSION "3.0.0")
+set(VERSION_SUFFIX "-rc4")
+project(bcos-framework VERSION ${VERSION})
 
-include(cmake/Version.cmake)
-project(PROJECT_NAME VERSION ${VERSION})
-
-configure_project()
-
-include(CompilerSettings)
-include(BuildInfoGenerator)
-
-# import dependencies
-include(ProjectTCMalloc)
-include(ProjectWABT)
-include(ProjectBCOSWASM)
-
-hunter_add_package(tbb)
-hunter_add_package(Protobuf)
-hunter_add_package(Microsoft.GSL)
-hunter_add_package(wedpr-crypto)
-hunter_add_package(jsoncpp)
-hunter_add_package(OpenSSL)
-hunter_add_package(evmc)
-hunter_add_package(intx)
-hunter_add_package(ethash)
-hunter_add_package(evmone)
-hunter_add_package(tarscpp)
-
-# bcos-boostssl
-hunter_add_package(bcos-boostssl)
-find_package(bcos-boostssl CONFIG REQUIRED)
-find_package(wedpr-crypto CONFIG REQUIRED)
-
-# find OpenSSL
-hunter_add_package(OpenSSL)
-find_package(OpenSSL REQUIRED)
-
-# install dependencies
-include(InstallBcosUtilities)
-include(InstallBcosCrypto)
-include(IncludeDirectories)
-
-# define targets name
-include(TargetSettings)
-
-add_subdirectory(bcos-codec)
-add_subdirectory(bcos-sealer)
-add_subdirectory(bcos-tool)
-add_subdirectory(bcos-table)
-add_subdirectory(bcos-framework)
-add_subdirectory(bcos-scheduler)
-add_subdirectory(bcos-executor)
-add_subdirectory(bcos-storage)
-add_subdirectory(bcos-ledger)
-add_subdirectory(bcos-protocol)
-add_subdirectory(bcos-tars-protocol)
-add_subdirectory(bcos-rpc)
-add_subdirectory(bcos-gateway)
-add_subdirectory(bcos-pbft)
-add_subdirectory(bcos-txpool)
-add_subdirectory(bcos-sync)
-add_subdirectory(bcos-front)
-add_subdirectory(libinitializer)
-add_subdirectory(fisco-bcos-air)
-add_subdirectory(fisco-bcos-pro)
+include_directories(${CMAKE_CURRENT_BINARY_DIR})
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/bcos-framework)
 
 if (TESTS)
     enable_testing()
-    add_subdirectory(tests)
-endif ()
+    set(CTEST_OUTPUT_ON_FAILURE TRUE)
+    add_subdirectory(test)
+endif()
 
 # for code coverage
 if (COVERAGE)
     include(Coverage)
-    config_coverage("tars-cov" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_CURRENT_SOURCE_DIR}/test/bcos-test*'")
+    config_coverage("framework-cov" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_CURRENT_SOURCE_DIR}/test/bcos-test*'")
 endif ()
