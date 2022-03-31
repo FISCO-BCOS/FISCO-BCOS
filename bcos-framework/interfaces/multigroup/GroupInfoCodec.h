@@ -20,7 +20,9 @@
  */
 #pragma once
 #include "GroupInfo.h"
+#include <json/value.h>
 #include <memory>
+
 namespace bcos
 {
 namespace group
@@ -33,7 +35,7 @@ public:
     virtual ~GroupInfoCodec() {}
 
     virtual GroupInfo::Ptr deserialize(const std::string& _encodedData) = 0;
-    virtual std::string serialize(GroupInfo::Ptr _groupInfo) = 0;
+    virtual Json::Value serialize(GroupInfo::Ptr _groupInfo) = 0;
 };
 }  // namespace group
 }  // namespace bcos
