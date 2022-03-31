@@ -424,6 +424,7 @@ void JsonRpcImpl_2_0::toJsonResp(Json::Value& jResp, const std::string& _txHash,
     jResp["status"] = _transactionReceiptPtr->status();
     jResp["blockNumber"] = _transactionReceiptPtr->blockNumber();
     jResp["output"] = toHexStringWithPrefix(_transactionReceiptPtr->output());
+    jResp["message"] = _transactionReceiptPtr->message();
     jResp["transactionHash"] = _txHash;
     jResp["hash"] = _transactionReceiptPtr->hash().hexPrefixed();
     jResp["logEntries"] = Json::Value(Json::arrayValue);

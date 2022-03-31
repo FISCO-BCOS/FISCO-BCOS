@@ -70,10 +70,10 @@ inline std::string trimHexPrefix(const std::string& _hex)
 
 void checkNameValidate(std::string_view tableName, std::vector<std::string>& keyFieldList,
     std::vector<std::string>& valueFieldList);
-int checkLengthValidate(std::string_view field_value, int32_t max_length, int32_t errorCode);
+void checkLengthValidate(std::string_view field_value, int32_t max_length, int32_t errorCode);
 
 void checkCreateTableParam(
-    const std::string& _tableName, std::string& _keyFiled, std::string& _valueField);
+    const std::string& _tableName, std::string& _keyField, std::string& _valueField);
 
 uint32_t getFuncSelector(std::string const& _functionName, const crypto::Hash::Ptr& _hashImpl);
 uint32_t getParamFunc(bytesConstRef _param);

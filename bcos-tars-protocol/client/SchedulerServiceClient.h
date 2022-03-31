@@ -41,7 +41,7 @@ public:
 
     // TODO: implement other functions
     void executeBlock(bcos::protocol::Block::Ptr, bool,
-        std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&)>) override
+        std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool)>) override
     {
         BCOS_LOG(ERROR) << LOG_DESC("unimplemented method executeBlock");
     }

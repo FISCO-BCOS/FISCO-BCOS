@@ -86,7 +86,7 @@ void StateMachine::apply(ssize_t, ProposalInterface::ConstPtr _lastAppliedPropos
     auto startT = utcTime();
     m_scheduler->executeBlock(block, false,
         [startT, block, _onExecuteFinished, _proposal, _executedProposal](
-            Error::Ptr&& _error, BlockHeader::Ptr&& _blockHeader) {
+            Error::Ptr&& _error, BlockHeader::Ptr&& _blockHeader, bool _sysBlock) {
             if (!_onExecuteFinished)
             {
                 return;
@@ -103,6 +103,7 @@ void StateMachine::apply(ssize_t, ProposalInterface::ConstPtr _lastAppliedPropos
             }
             auto execT = (double)(utcTime() - startT) / (double)(block->transactionsHashSize());
             CONSENSUS_LOG(INFO) << LOG_DESC("asyncExecuteBlock success")
+                                << LOG_KV("sysBlock", _sysBlock)
                                 << LOG_KV("number", _blockHeader->number())
                                 << LOG_KV("result", _blockHeader->hash().abridged())
                                 << LOG_KV("txsSize", block->transactionsHashSize())

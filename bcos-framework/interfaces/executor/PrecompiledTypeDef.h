@@ -53,5 +53,9 @@ const char BFS_ADDRESS[] = "000000000000000000000000000000000000100e";
 /// auth system contract for solidity
 const char AUTH_INTERCEPT_ADDRESS[] = "0000000000000000000000000000000000010000";
 const char AUTH_COMMITTEE_ADDRESS[] = "0000000000000000000000000000000000010001";
+
+const std::set<std::string> c_systemTxsAddress = {bcos::precompiled::SYS_CONFIG_ADDRESS,
+    bcos::precompiled::CONSENSUS_ADDRESS, bcos::precompiled::WORKING_SEALER_MGR_ADDRESS,
+    bcos::precompiled::SYS_CONFIG_NAME, bcos::precompiled::CONSENSUS_NAME};
 }  // namespace precompiled
 }  // namespace bcos

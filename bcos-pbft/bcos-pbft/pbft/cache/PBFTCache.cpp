@@ -384,6 +384,7 @@ bool PBFTCache::checkAndCommitStableCheckPoint()
     // have been committed
     auto committedIndex = m_config->committedProposal()->index();
     auto dependsProposal = std::min((m_index - 1), m_config->waitSealUntil());
+    // wait for the sys-proposal committed to trigger checkAndCommitStableCheckPoint
     if (committedIndex < dependsProposal)
     {
         return false;

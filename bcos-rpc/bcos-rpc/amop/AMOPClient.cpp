@@ -405,7 +405,10 @@ void AMOPClient::subscribeTopicToAllNodes()
 {
     auto activeEndPoints = getActiveGatewayEndPoints();
     auto topicInfo = generateTopicInfo();
-    AMOP_CLIENT_LOG(INFO) << LOG_DESC("subscribeTopicToAllNodes") << LOG_KV("topicInfo", topicInfo);
+    // set the notify topic flag to true when subscribeTopicToAllNodes
+    m_notifyTopicSuccess.store(true);
+    AMOP_CLIENT_LOG(INFO) << LOG_DESC("subscribeTopicToAllNodes") << LOG_KV("topicInfo", topicInfo)
+                          << LOG_KV("activeEndPoints", activeEndPoints.size());
     for (auto const& endPoint : activeEndPoints)
     {
         auto endPointStr = endPointToString(m_gatewayServiceName, endPoint.getEndpoint());
@@ -414,14 +417,19 @@ void AMOPClient::subscribeTopicToAllNodes()
         auto serviceClient =
             std::make_shared<GatewayServiceClient>(servicePrx, m_gatewayServiceName);
         serviceClient->asyncSubscribeTopic(
-            m_clientID, topicInfo, [endPointStr](Error::Ptr&& _error) {
+            m_clientID, topicInfo, [this, endPointStr](Error::Ptr&& _error) {
                 if (_error)
                 {
                     AMOP_CLIENT_LOG(WARNING)
                         << LOG_DESC("asyncSubScribeTopic error") << LOG_KV("gateway", endPointStr)
                         << LOG_KV("code", _error->errorCode())
                         << LOG_KV("msg", _error->errorMessage());
+                    // set the notify topic flag to false when subscribeTopic failed
+                    m_notifyTopicSuccess.store(false);
+                    return;
                 }
+                AMOP_CLIENT_LOG(INFO)
+                    << LOG_DESC("asyncSubScribeTopic success") << LOG_KV("gateway", endPointStr);
             });
     }
 }
@@ -462,10 +470,11 @@ void AMOPClient::pingGatewayAndNotifyTopics()
         return;
     }
     // the gateway in active status, return directly
-    if (m_gatewayActivated.load() == true)
+    if (m_gatewayActivated.load() == true && m_notifyTopicSuccess)
     {
         return;
     }
+    // if gateway become activated or notify topic failed before, should subscribeTopicToAllNodes
     subscribeTopicToAllNodes();
 
     AMOP_CLIENT_LOG(INFO) << LOG_DESC(
@@ -531,9 +540,16 @@ std::string AMOPClient::generateTopicInfo()
     return topicInfo.toStyledString();
 }
 
-void AMOPClient::asyncNotifySubscribeTopic()
+void AMOPClient::asyncNotifySubscribeTopic(
+    std::function<void(Error::Ptr&& _error, std::string)> _callback)
 {
+    auto topicInfo = generateTopicInfo();
     AMOP_CLIENT_LOG(INFO) << LOG_DESC(
-        "Receive asyncNotifySubscribeTopic request from the gateway, re-subscribe topics now");
-    subscribeTopicToAllNodes();
+                                 "Receive asyncNotifySubscribeTopic request from the gateway, "
+                                 "re-subscribe topics now")
+                          << LOG_KV("topic", topicInfo);
+    if (_callback)
+    {
+        _callback(nullptr, topicInfo);
+    }
 }

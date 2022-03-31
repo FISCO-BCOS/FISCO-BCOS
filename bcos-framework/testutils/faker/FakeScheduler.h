@@ -37,7 +37,7 @@ public:
     {}
     ~FakeScheduler() override {}
     void executeBlock(bcos::protocol::Block::Ptr _block, bool,
-        std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&)>
+        std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool)>
             _callback) noexcept override
     {
         auto blockHeader = _block->blockHeader();
@@ -46,7 +46,7 @@ public:
             blockHeader =
                 m_blockFactory->blockHeaderFactory()->populateBlockHeader(_block->blockHeader());
         }
-        _callback(nullptr, std::move(blockHeader));
+        _callback(nullptr, std::move(blockHeader), false);
         return;
     }
 

@@ -106,7 +106,8 @@ public:
     }
 
     // the gateway notify the RPC client to subscribe topic if receive publish
-    virtual void asyncNotifySubscribeTopic();
+    virtual void asyncNotifySubscribeTopic(
+        std::function<void(Error::Ptr&& _error, std::string)> _callback);
 
 protected:
     /// for AMOP requests from SDK
@@ -191,6 +192,7 @@ protected:
 
     std::shared_ptr<Timer> m_gatewayStatusDetector;
     std::atomic_bool m_gatewayActivated = {true};
+    std::atomic_bool m_notifyTopicSuccess = {true};
 };
 }  // namespace rpc
 }  // namespace bcos

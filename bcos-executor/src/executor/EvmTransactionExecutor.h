@@ -46,7 +46,7 @@ public:
         m_schedule = FiscoBcosScheduleV4;
         initPrecompiled();
         assert(m_precompiledContract);
-        assert(!m_constantPrecompiled.empty());
+        assert(!m_constantPrecompiled->empty());
         assert(m_builtInPrecompiled);
     }
 

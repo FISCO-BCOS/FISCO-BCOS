@@ -41,7 +41,8 @@ public:
 
     // by pbft & sync
     virtual void executeBlock(bcos::protocol::Block::Ptr block, bool verify,
-        std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&)> callback) = 0;
+        std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool _sysBlock)>
+            callback) = 0;
 
     // by pbft & sync
     virtual void commitBlock(bcos::protocol::BlockHeader::Ptr header,

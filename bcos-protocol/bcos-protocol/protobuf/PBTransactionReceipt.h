@@ -64,6 +64,13 @@ public:
     }
     BlockNumber blockNumber() const override { return m_blockNumber; }
 
+    std::string const& message() const override { return m_receipt->message(); }
+    void setMessage(std::string const& _message) override { m_receipt->set_message(_message); }
+    void setMessage(std::string&& _message) override
+    {
+        m_receipt->set_message(std::move(_message));
+    }
+
 private:
     PBTransactionReceipt(bcos::crypto::CryptoSuite::Ptr _cryptoSuite, int32_t _version,
         u256 const& _gasUsed, const std::string_view& _contractAddress, LogEntriesPtr _logEntries,

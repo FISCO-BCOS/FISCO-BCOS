@@ -60,8 +60,7 @@ void bcos::precompiled::checkNameValidate(std::string_view tableName,
                 // Note: the StorageException and PrecompiledException content can't
                 // be modified at will for the information will be write to the
                 // blockchain
-                BOOST_THROW_EXCEPTION(PrecompiledError() << errinfo_comment(
-                                          "invalid table name:" + std::string(tableName)));
+                BOOST_THROW_EXCEPTION(PrecompiledError(errorMsg.str()));
             }
         }
     };
@@ -76,8 +75,7 @@ void bcos::precompiled::checkNameValidate(std::string_view tableName,
                             "the field can't start with \"_\"";
             STORAGE_LOG(ERROR) << LOG_DESC(errorMessage.str()) << LOG_KV("field name", fieldName)
                                << LOG_KV("table name", tableName);
-            BOOST_THROW_EXCEPTION(
-                PrecompiledError() << errinfo_comment("invalid field: " + std::string(fieldName)));
+            BOOST_THROW_EXCEPTION(PrecompiledError("invalid field: " + std::string(fieldName)));
         }
         size_t iSize = fieldName.size();
         for (size_t i = 0; i < iSize; i++)
@@ -94,8 +92,7 @@ void bcos::precompiled::checkNameValidate(std::string_view tableName,
                 STORAGE_LOG(ERROR)
                     << LOG_DESC(errorMessage.str()) << LOG_KV("field name", fieldName)
                     << LOG_KV("table name", tableName);
-                BOOST_THROW_EXCEPTION(PrecompiledError() << errinfo_comment(
-                                          "invalid filed: " + std::string(fieldName)));
+                BOOST_THROW_EXCEPTION(PrecompiledError("invalid field: " + std::string(fieldName)));
             }
         }
     };
@@ -109,8 +106,7 @@ void bcos::precompiled::checkNameValidate(std::string_view tableName,
         {
             PRECOMPILED_LOG(ERROR) << LOG_DESC("duplicated key") << LOG_KV("key name", keyField)
                                    << LOG_KV("table name", tableName);
-            BOOST_THROW_EXCEPTION(
-                PrecompiledError() << errinfo_comment("duplicated key: " + keyField));
+            BOOST_THROW_EXCEPTION(PrecompiledError("duplicated key: " + keyField));
         }
         checkFieldNameValidate(tableName, keyField);
     }
@@ -123,26 +119,23 @@ void bcos::precompiled::checkNameValidate(std::string_view tableName,
             PRECOMPILED_LOG(ERROR)
                 << LOG_DESC("duplicated field") << LOG_KV("field name", valueField)
                 << LOG_KV("table name", tableName);
-            BOOST_THROW_EXCEPTION(
-                PrecompiledError() << errinfo_comment("duplicated field: " + valueField));
+            BOOST_THROW_EXCEPTION(PrecompiledError("duplicated field: " + valueField));
         }
         checkFieldNameValidate(tableName, valueField);
     }
 }
 
-int bcos::precompiled::checkLengthValidate(
+void bcos::precompiled::checkLengthValidate(
     std::string_view fieldValue, int32_t maxLength, int32_t errorCode)
 {
     if (fieldValue.size() > (size_t)maxLength)
     {
         PRECOMPILED_LOG(ERROR) << "key:" << fieldValue << " value size:" << fieldValue.size()
                                << " greater than " << maxLength;
-        BOOST_THROW_EXCEPTION(PrecompiledError()
-                              << errinfo_comment(
-                                     "size of value/key greater than" + std::to_string(maxLength))
-                              << errinfo_comment(" error code: " + std::to_string(errorCode)));
+        BOOST_THROW_EXCEPTION(
+            PrecompiledError("size of value/key greater than" + std::to_string(maxLength) +
+                             " error code: " + std::to_string(errorCode)));
     }
-    return 0;
 }
 
 void bcos::precompiled::checkCreateTableParam(
@@ -155,20 +148,19 @@ void bcos::precompiled::checkCreateTableParam(
 
     if (_keyField.size() > (size_t)SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)
     {  // mysql TableName and fieldName length limit is 64
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError() << errinfo_comment(
-                                  "table field name length overflow " +
-                                  std::to_string(SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)));
+        BOOST_THROW_EXCEPTION(
+            protocol::PrecompiledError("table field name length overflow " +
+                                       std::to_string(SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)));
     }
     for (auto& str : keyNameList)
     {
         boost::trim(str);
         if (str.size() > (size_t)SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)
         {  // mysql TableName and fieldName length limit is 64
-            BOOST_THROW_EXCEPTION(
-                protocol::PrecompiledError()
-                << errinfo_comment("errorCode: " + std::to_string(CODE_TABLE_FIELD_LENGTH_OVERFLOW))
-                << errinfo_comment(std::string("table key name length overflow ") +
-                                   std::to_string(SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)));
+            BOOST_THROW_EXCEPTION(protocol::PrecompiledError(
+                "errorCode: " + std::to_string(CODE_TABLE_FIELD_LENGTH_OVERFLOW) +
+                std::string("table key name length overflow ") +
+                std::to_string(SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)));
         }
     }
 
@@ -177,11 +169,10 @@ void bcos::precompiled::checkCreateTableParam(
         boost::trim(str);
         if (str.size() > (size_t)SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)
         {  // mysql TableName and fieldName length limit is 64
-            BOOST_THROW_EXCEPTION(
-                protocol::PrecompiledError()
-                << errinfo_comment("errorCode: " + std::to_string(CODE_TABLE_FIELD_LENGTH_OVERFLOW))
-                << errinfo_comment(std::string("table field name length overflow ") +
-                                   std::to_string(SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)));
+            BOOST_THROW_EXCEPTION(protocol::PrecompiledError(
+                "errorCode: " + std::to_string(CODE_TABLE_FIELD_LENGTH_OVERFLOW) +
+                std::string("table field name length overflow ") +
+                std::to_string(SYS_TABLE_KEY_FIELD_NAME_MAX_LENGTH)));
         }
     }
 
@@ -191,27 +182,25 @@ void bcos::precompiled::checkCreateTableParam(
     _valueField = boost::join(fieldNameList, ",");
     if (_keyField.size() > (size_t)SYS_TABLE_KEY_FIELD_MAX_LENGTH)
     {
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError() << errinfo_comment(
-                                  std::string("total table key name length overflow ") +
-                                  std::to_string(SYS_TABLE_KEY_FIELD_MAX_LENGTH)));
+        BOOST_THROW_EXCEPTION(
+            protocol::PrecompiledError(std::string("total table key name length overflow ") +
+                                       std::to_string(SYS_TABLE_KEY_FIELD_MAX_LENGTH)));
     }
     if (_valueField.size() > (size_t)SYS_TABLE_VALUE_FIELD_MAX_LENGTH)
     {
-        BOOST_THROW_EXCEPTION(protocol::PrecompiledError() << errinfo_comment(
-                                  std::string("total table field name length overflow ") +
-                                  std::to_string(SYS_TABLE_VALUE_FIELD_MAX_LENGTH)));
+        BOOST_THROW_EXCEPTION(
+            protocol::PrecompiledError(std::string("total table field name length overflow ") +
+                                       std::to_string(SYS_TABLE_VALUE_FIELD_MAX_LENGTH)));
     }
 
     auto tableName = precompiled::getTableName(_tableName);
-    if (tableName.size() > (size_t)USER_TABLE_NAME_MAX_LENGTH ||
-        (tableName.size() > (size_t)USER_TABLE_NAME_MAX_LENGTH_S))
+    if (tableName.size() > (size_t)USER_TABLE_NAME_MAX_LENGTH_S)
     {
         // mysql TableName and fieldName length limit is 64
-        BOOST_THROW_EXCEPTION(
-            protocol::PrecompiledError()
-            << errinfo_comment("errorCode: " + std::to_string(CODE_TABLE_NAME_LENGTH_OVERFLOW))
-            << errinfo_comment(std::string("tableName length overflow ") +
-                               std::to_string(USER_TABLE_NAME_MAX_LENGTH)));
+        BOOST_THROW_EXCEPTION(protocol::PrecompiledError(
+            "errorCode: " + std::to_string(CODE_TABLE_NAME_LENGTH_OVERFLOW) +
+            std::string(" tableName length overflow ") +
+            std::to_string(USER_TABLE_NAME_MAX_LENGTH_S)));
     }
 }
 
@@ -327,7 +316,7 @@ bool precompiled::checkPathValid(std::string const& _path)
         return false;
     }
     // TODO: adapt Chinese
-    std::regex reg(R"(^[0-9a-zA-Z][^\>\<\*\?\/\=\+\(\)\$\"\']+$)");
+    std::regex reg(R"(^[0-9a-zA-Z][^\>\<\*\?\/\=\+\(\)\$\"\']*$)");
     auto checkFieldNameValidate = [&reg](const std::string& fieldName) -> bool {
         if (fieldName.empty())
         {
@@ -437,24 +426,21 @@ bool precompiled::recursiveBuildDir(
                                  << LOG_KV("tableName", root);
             return false;
         }
-        if (root != "/")
-        {
-            root += "/";
-        }
-        auto typeEntry = table->getRow(FS_KEY_TYPE);
+        auto newTableName = ((root == "/") ? root : (root + "/")) + dir;
+        auto typeEntry = _executive->storage().getRow(root, FS_KEY_TYPE);
         if (typeEntry)
         {
             // can get type, then this type is directory
             // try open root + dir
-            auto nextDirTable = _executive->storage().openTable(root + dir);
+            auto nextDirTable = _executive->storage().openTable(newTableName);
             if (nextDirTable.has_value())
             {
                 // root + dir table exist, try to get type entry
-                auto tryGetTypeEntry = nextDirTable->getRow(FS_KEY_TYPE);
+                auto tryGetTypeEntry = _executive->storage().getRow(newTableName, FS_KEY_TYPE);
                 if (tryGetTypeEntry.has_value() && tryGetTypeEntry->getField(0) == FS_TYPE_DIR)
                 {
                     // if success and dir is directory, continue
-                    root += dir;
+                    root = newTableName;
                     continue;
                 }
                 else
@@ -469,7 +455,7 @@ bool precompiled::recursiveBuildDir(
             }
 
             // root + dir not exist, create root + dir and build bfs info in root table
-            auto subEntry = table->getRow(FS_KEY_SUB);
+            auto subEntry = _executive->storage().getRow(root, FS_KEY_SUB);
             auto&& out = asBytes(std::string(subEntry->getField(0)));
             // codec to map
             std::map<std::string, std::string> bfsInfo;
@@ -477,7 +463,7 @@ bool precompiled::recursiveBuildDir(
 
             /// create table and build bfs info
             bfsInfo.insert(std::make_pair(dir, FS_TYPE_DIR));
-            auto newTable = _executive->storage().createTable(root + dir, SYS_VALUE_FIELDS);
+            _executive->storage().createTable(newTableName, SYS_VALUE_FIELDS);
             storage::Entry tEntry, newSubEntry, aclTypeEntry, aclWEntry, aclBEntry, extraEntry;
             std::map<std::string, std::string> newSubMap;
             tEntry.importFields({FS_TYPE_DIR});
@@ -486,15 +472,17 @@ bool precompiled::recursiveBuildDir(
             aclWEntry.importFields({""});
             aclBEntry.importFields({""});
             extraEntry.importFields({""});
-            newTable->setRow(FS_KEY_TYPE, std::move(tEntry));
-            newTable->setRow(FS_KEY_SUB, std::move(newSubEntry));
-            newTable->setRow(FS_ACL_TYPE, std::move(aclTypeEntry));
-            newTable->setRow(FS_ACL_WHITE, std::move(aclWEntry));
-            newTable->setRow(FS_ACL_BLACK, std::move(aclBEntry));
-            newTable->setRow(FS_KEY_EXTRA, std::move(extraEntry));
+            _executive->storage().setRow(newTableName, FS_KEY_TYPE, std::move(tEntry));
+            _executive->storage().setRow(newTableName, FS_KEY_SUB, std::move(newSubEntry));
+            _executive->storage().setRow(newTableName, FS_ACL_TYPE, std::move(aclTypeEntry));
+            _executive->storage().setRow(newTableName, FS_ACL_WHITE, std::move(aclWEntry));
+            _executive->storage().setRow(newTableName, FS_ACL_BLACK, std::move(aclBEntry));
+            _executive->storage().setRow(newTableName, FS_KEY_EXTRA, std::move(extraEntry));
+
+            // set metadata in parent dir
             subEntry->setField(0, asString(codec::scale::encode(bfsInfo)));
-            table->setRow(FS_KEY_SUB, std::move(subEntry.value()));
-            root += dir;
+            _executive->storage().setRow(root, FS_KEY_SUB, std::move(subEntry.value()));
+            root = newTableName;
         }
         else
         {

@@ -57,25 +57,23 @@ void GatewayStatus::update(std::string const& _p2pNodeID, GatewayNodeStatus::Con
 bool GatewayStatus::randomChooseP2PNode(
     std::string& _p2pNodeID, uint16_t _type, std::string const& _groupID) const
 {
+    auto ret = false;
     // If need to send a message to a consensus node, select the consensus node first
-    if ((_type & NodeType::CONSENSUS_NODE) &&
-        randomChooseNode(_p2pNodeID, GroupType::GROUP_WITH_CONSENSUS_NODE, _groupID))
+    if (_type & NodeType::CONSENSUS_NODE)
     {
-        return true;
+        ret = randomChooseNode(_p2pNodeID, GroupType::GROUP_WITH_CONSENSUS_NODE, _groupID);
     }
     // select the observer node
-    if ((_type & NodeType::OBSERVER_NODE) &&
-        randomChooseNode(_p2pNodeID, GroupType::GROUP_WITHOUT_CONSENSUS_NODE, _groupID))
+    if (_type & NodeType::OBSERVER_NODE)
     {
-        return true;
+        ret = randomChooseNode(_p2pNodeID, GroupType::GROUP_WITHOUT_CONSENSUS_NODE, _groupID);
     }
     // select the OUTSIDE_GROUP(AMOP message needed)
-    if ((_type & NodeType::NODE_OUTSIDE_GROUP) &&
-        randomChooseNode(_p2pNodeID, GroupType::OUTSIDE_GROUP, _groupID))
+    if (_type & NodeType::NODE_OUTSIDE_GROUP)
     {
-        return true;
+        ret = randomChooseNode(_p2pNodeID, GroupType::OUTSIDE_GROUP, _groupID);
     }
-    return false;
+    return ret;
 }
 
 bool GatewayStatus::randomChooseNode(
