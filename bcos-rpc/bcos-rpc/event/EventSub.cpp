@@ -18,6 +18,8 @@
  * @date 2021-09-07
  */
 
+#include <bcos-boostssl/websocket/WsMessage.h>
+#include <bcos-boostssl/websocket/WsService.h>
 #include <bcos-framework/interfaces/protocol/CommonError.h>
 #include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
 #include <bcos-rpc/event/EventSub.h>
@@ -33,6 +35,17 @@
 
 using namespace bcos;
 using namespace bcos::event;
+
+EventSub::EventSub(std::shared_ptr<boostssl::ws::WsService> _wsService)
+  : bcos::Worker("t_event_sub"), m_wsService(_wsService)
+{
+    m_wsService->registerMsgHandler(bcos::protocol::MessageType::EVENT_SUBSCRIBE,
+        boost::bind(&EventSub::onRecvSubscribeEvent, this, boost::placeholders::_1,
+            boost::placeholders::_2));
+    m_wsService->registerMsgHandler(bcos::protocol::MessageType::EVENT_UNSUBSCRIBE,
+        boost::bind(&EventSub::onRecvUnsubscribeEvent, this, boost::placeholders::_1,
+            boost::placeholders::_2));
+}
 
 void EventSub::start()
 {
@@ -189,7 +202,7 @@ bool EventSub::sendEvents(std::shared_ptr<bcos::boostssl::ws::WsSession> _sessio
     if (_complete)
     {
         auto msg = m_messageFactory->buildMessage();
-        msg->setType(bcos::event::MessageType::EVENT_LOG_PUSH);
+        msg->setType(bcos::protocol::MessageType::EVENT_LOG_PUSH);
         sendResponse(_session, msg, _id, EP_STATUS_CODE::PUSH_COMPLETED);
         return true;
     }
@@ -213,7 +226,7 @@ bool EventSub::sendEvents(std::shared_ptr<bcos::boostssl::ws::WsSession> _sessio
     auto data = std::make_shared<bcos::bytes>(strEventInfo.begin(), strEventInfo.end());
 
     auto msg = m_messageFactory->buildMessage();
-    msg->setType(bcos::event::MessageType::EVENT_LOG_PUSH);
+    msg->setType(bcos::protocol::MessageType::EVENT_LOG_PUSH);
     msg->setData(data);
     _session->asyncSendMessage(msg);
 

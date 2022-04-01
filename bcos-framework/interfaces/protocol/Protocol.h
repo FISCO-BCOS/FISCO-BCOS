@@ -34,10 +34,22 @@ enum MessageExtFieldFlag : uint32_t
 enum NodeType : uint32_t
 {
     None = 0x0,
-    CONSENSUS_NODE = 0x0010,
-    OBSERVER_NODE = 0x0100,
-    NODE_OUTSIDE_GROUP = 0x1000,
+    CONSENSUS_NODE = 0x2,
+    OBSERVER_NODE = 0x4,
+    NODE_OUTSIDE_GROUP = 0x8,
 };
+
+enum MessageType
+{
+    HANDESHAKE = 0x100,         // 256
+    BLOCK_NOTIFY = 0x101,       // 257
+    RPC_REQUEST = 0x102,        // 258
+    GROUP_NOTIFY = 0x103,       // 259
+    EVENT_SUBSCRIBE = 0x120,    // 288
+    EVENT_UNSUBSCRIBE = 0x121,  // 289
+    EVENT_LOG_PUSH = 0x122,     // 290
+};
+
 enum ModuleID
 {
     PBFT = 1000,
@@ -52,6 +64,7 @@ enum ProtocolModuleID : uint32_t
     GatewayService = 0x1,
     RpcService = 0x2,
     ExecutorService = 0x3,
+    MAX_PROTOCOL_MODULE = ExecutorService,
 };
 enum ProtocolVersion : uint32_t
 {

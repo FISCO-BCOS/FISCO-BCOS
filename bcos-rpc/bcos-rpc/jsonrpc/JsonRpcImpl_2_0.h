@@ -37,35 +37,13 @@ class JsonRpcImpl_2_0 : public JsonRpcInterface,
 {
 public:
     using Ptr = std::shared_ptr<JsonRpcImpl_2_0>;
-    JsonRpcImpl_2_0(
-        GroupManager::Ptr _groupManager, bcos::gateway::GatewayInterface::Ptr _gatewayInterface)
-      : m_groupManager(_groupManager), m_gatewayInterface(_gatewayInterface)
-    {
-        initMethod();
-    }
+    JsonRpcImpl_2_0(GroupManager::Ptr _groupManager,
+        bcos::gateway::GatewayInterface::Ptr _gatewayInterface,
+        std::shared_ptr<boostssl::ws::WsService> _wsService);
     ~JsonRpcImpl_2_0() {}
 
-    void initMethod();
+
     void setClientID(std::string const& _clientID) { m_clientID = _clientID; }
-
-public:
-    static std::shared_ptr<bcos::bytes> decodeData(const std::string& _data);
-    static void parseRpcRequestJson(const std::string& _requestBody, JsonRequest& _jsonRequest);
-    static void parseRpcResponseJson(const std::string& _responseBody, JsonResponse& _jsonResponse);
-    static Json::Value toJsonResponse(const JsonResponse& _jsonResponse);
-    static std::string toStringResponse(const JsonResponse& _jsonResponse);
-    static void toJsonResp(
-        Json::Value& jResp, bcos::protocol::Transaction::ConstPtr _transactionPtr);
-
-    static void toJsonResp(Json::Value& jResp, bcos::protocol::BlockHeader::Ptr _blockHeaderPtr);
-    static void toJsonResp(
-        Json::Value& jResp, bcos::protocol::Block::Ptr _blockPtr, bool _onlyTxHash);
-    static void toJsonResp(Json::Value& jResp, const std::string& _txHash,
-        bcos::protocol::TransactionReceipt::ConstPtr _transactionReceiptPtr);
-    static void addProofToResponse(
-        Json::Value& jResp, std::string const& _key, ledger::MerkleProofPtr _merkleProofPtr);
-
-    void onRPCRequest(const std::string& _requestBody, Sender _sender) override;
 
 public:
     void call(std::string const& _groupID, std::string const& _nodeName, const std::string& _to,
@@ -278,7 +256,8 @@ public:
         getGroupNodeInfo(_req[0u].asString(), _req[1u].asString(), _respFunc);
     }
 
-public:
+
+#if 0
     const std::unordered_map<std::string, std::function<void(Json::Value, RespFunc _respFunc)>>&
     methodToFunc() const
     {
@@ -290,9 +269,33 @@ public:
     {
         m_methodToFunc[_method] = _callback;
     }
+#endif
     void setNodeInfo(const NodeInfo& _nodeInfo) { m_nodeInfo = _nodeInfo; }
     NodeInfo nodeInfo() const { return m_nodeInfo; }
     GroupManager::Ptr groupManager() { return m_groupManager; }
+
+protected:
+    void initMethod();
+    static std::shared_ptr<bcos::bytes> decodeData(const std::string& _data);
+    static void parseRpcRequestJson(const std::string& _requestBody, JsonRequest& _jsonRequest);
+    static void parseRpcResponseJson(const std::string& _responseBody, JsonResponse& _jsonResponse);
+    static Json::Value toJsonResponse(const JsonResponse& _jsonResponse);
+    static std::string toStringResponse(const JsonResponse& _jsonResponse);
+    static void toJsonResp(
+        Json::Value& jResp, bcos::protocol::Transaction::ConstPtr _transactionPtr);
+
+    static void toJsonResp(Json::Value& jResp, bcos::protocol::BlockHeader::Ptr _blockHeaderPtr);
+    static void toJsonResp(
+        Json::Value& jResp, bcos::protocol::Block::Ptr _blockPtr, bool _onlyTxHash);
+    static void toJsonResp(Json::Value& jResp, const std::string& _txHash,
+        bcos::protocol::TransactionReceipt::ConstPtr _transactionReceiptPtr);
+    static void addProofToResponse(
+        Json::Value& jResp, std::string const& _key, ledger::MerkleProofPtr _merkleProofPtr);
+
+    void onRPCRequest(const std::string& _requestBody, Sender _sender) override;
+
+    virtual void handleRpcRequest(std::shared_ptr<boostssl::ws::WsMessage> _msg,
+        std::shared_ptr<boostssl::ws::WsSession> _session);
 
 private:
     // TODO: check perf influence
@@ -321,6 +324,8 @@ private:
 
     GroupManager::Ptr m_groupManager;
     bcos::gateway::GatewayInterface::Ptr m_gatewayInterface;
+    std::shared_ptr<boostssl::ws::WsService> m_wsService;
+
     NodeInfo m_nodeInfo;
     // Note: here clientID must non-empty for the rpc will set clientID as source for the tx for
     // tx-notify and the scheduler will not notify the tx-result if the tx source is empty

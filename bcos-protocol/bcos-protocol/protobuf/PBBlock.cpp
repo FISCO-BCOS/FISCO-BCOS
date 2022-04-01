@@ -181,7 +181,7 @@ void PBBlock::encodeTransactions() const
         return;
     }
     // extend transactions
-    for (size_t i = 0; i < txsNum; i++)
+    for (uint64_t i = 0; i < txsNum; i++)
     {
         m_pbRawBlock->add_transactions();
     }
@@ -207,7 +207,7 @@ void PBBlock::encodeReceipts() const
         return;
     }
     // extend transactions
-    for (size_t i = 0; i < receiptsNum; i++)
+    for (uint64_t i = 0; i < receiptsNum; i++)
     {
         m_pbRawBlock->add_receipts();
     }
@@ -245,7 +245,7 @@ void PBBlock::encodeNonceList() const
     {
         return;
     }
-    for (size_t i = 0; i < nonceNum; i++)
+    for (uint64_t i = 0; i < nonceNum; i++)
     {
         m_pbRawBlock->add_noncelist();
     }
@@ -257,7 +257,7 @@ void PBBlock::encodeNonceList() const
     }
 }
 
-Transaction::ConstPtr PBBlock::transaction(size_t _index) const
+Transaction::ConstPtr PBBlock::transaction(uint64_t _index) const
 {
     if (m_transactions->size() < _index)
     {
@@ -266,7 +266,7 @@ Transaction::ConstPtr PBBlock::transaction(size_t _index) const
     return (*m_transactions)[_index];
 }
 
-TransactionMetaData::ConstPtr PBBlock::transactionMetaData(size_t _index) const
+TransactionMetaData::ConstPtr PBBlock::transactionMetaData(uint64_t _index) const
 {
     if (m_transactionMetaDataList->size() <= _index)
     {
@@ -275,7 +275,7 @@ TransactionMetaData::ConstPtr PBBlock::transactionMetaData(size_t _index) const
     return (*m_transactionMetaDataList)[_index];
 }
 
-TransactionReceipt::ConstPtr PBBlock::receipt(size_t _index) const
+TransactionReceipt::ConstPtr PBBlock::receipt(uint64_t _index) const
 {
     if (m_receipts->size() < _index)
     {

@@ -27,7 +27,7 @@ Service::Service()
     // Process handshake packet logic, handshake protocol and determine
     // the version, when handshake finished the version field of P2PMessage
     // should be set
-    registerHandlerByMsgType(MessageType::Handshake,
+    registerHandlerByMsgType(GatewayMessageType::Handshake,
         boost::bind(&Service::onReceiveProtocol, this, boost::placeholders::_1,
             boost::placeholders::_2, boost::placeholders::_3));
 }
@@ -331,7 +331,7 @@ void Service::onMessage(NetworkException e, SessionFace::Ptr session, Message::P
         }
         switch (packetType)
         {
-        case MessageType::Heartbeat:
+        case GatewayMessageType::Heartbeat:
             break;
         default:
         {
@@ -595,7 +595,7 @@ void Service::asyncSendProtocol(P2PSession::Ptr _session)
     auto payload = std::make_shared<bytes>();
     m_codec->encode(m_localProtocol, *payload);
     auto message = std::static_pointer_cast<P2PMessage>(messageFactory()->buildMessage());
-    message->setPacketType(MessageType::Handshake);
+    message->setPacketType(GatewayMessageType::Handshake);
     auto seq = messageFactory()->newSeq();
     message->setSeq(seq);
     message->setPayload(payload);
@@ -635,15 +635,15 @@ void Service::onReceiveProtocol(
             return;
         }
         auto version = std::min(m_localProtocol->maxVersion(), protocolInfo->maxVersion());
-        protocolInfo->setVersion((ProtocolVersion)version);
+        protocolInfo->setVersion(version);
         _session->setProtocolInfo(protocolInfo);
-        SERVICE_LOG(WARNING) << LOG_DESC("onReceiveProtocol: protocolNegotiate success")
-                             << LOG_KV("peer", _session->p2pID())
-                             << LOG_KV("minVersion", protocolInfo->minVersion())
-                             << LOG_KV("maxVersion", protocolInfo->maxVersion())
-                             << LOG_KV("supportMinVersion", m_localProtocol->minVersion())
-                             << LOG_KV("supportMaxVersion", m_localProtocol->maxVersion())
-                             << LOG_KV("negotiatedVersion", version);
+        SERVICE_LOG(INFO) << LOG_DESC("onReceiveProtocol: protocolNegotiate success")
+                          << LOG_KV("peer", _session->p2pID())
+                          << LOG_KV("minVersion", protocolInfo->minVersion())
+                          << LOG_KV("maxVersion", protocolInfo->maxVersion())
+                          << LOG_KV("supportMinVersion", m_localProtocol->minVersion())
+                          << LOG_KV("supportMaxVersion", m_localProtocol->maxVersion())
+                          << LOG_KV("negotiatedVersion", version);
     }
     catch (std::exception const& e)
     {

@@ -74,13 +74,6 @@ public:
     {
         BCOS_LOG(ERROR) << LOG_DESC("unimplemented method reset");
     }
-
-    void registerBlockNumberReceiver(
-        std::function<void(bcos::protocol::BlockNumber blockNumber)>) override
-    {
-        BCOS_LOG(ERROR) << LOG_DESC("unimplemented method registerBlockNumberReceiver");
-    }
-
     void getCode(std::string_view contract,
         std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) override;
 

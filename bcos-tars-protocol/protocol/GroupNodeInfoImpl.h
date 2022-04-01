@@ -85,7 +85,7 @@ public:
         m_protocolList.emplace_back(_protocol);
         appendInnerProtocol(_protocol);
     }
-    bcos::protocol::ProtocolInfo::ConstPtr protocol(size_t _index) const override
+    bcos::protocol::ProtocolInfo::ConstPtr protocol(uint64_t _index) const override
     {
         if (m_protocolList.size() <= _index)
         {

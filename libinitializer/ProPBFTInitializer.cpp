@@ -41,14 +41,42 @@ ProPBFTInitializer::ProPBFTInitializer(bcos::initializer::NodeArchitectureType _
         _storage, _frontService)
 {
     m_timer = std::make_shared<Timer>(m_timerSchedulerInterval, "node info report");
+    // init rpc client
+    auto rpcServiceName = m_nodeConfig->rpcServiceName();
+    auto rpcServicePrx =
+        Application::getCommunicator()->stringToProxy<bcostars::RpcServicePrx>(rpcServiceName);
+    m_rpc = std::make_shared<bcostars::RpcServiceClient>(rpcServicePrx, rpcServiceName);
+
+    // init gateway client
+    auto gatewayServiceName = m_nodeConfig->gatewayServiceName();
+    auto gatewayServicePrx =
+        Application::getCommunicator()->stringToProxy<bcostars::GatewayServicePrx>(
+            gatewayServiceName);
+    m_gateway =
+        std::make_shared<bcostars::GatewayServiceClient>(gatewayServicePrx, gatewayServiceName);
 }
 
 void ProPBFTInitializer::reportNodeInfo()
 {
-    asyncNotifyGroupInfo<bcostars::RpcServicePrx, bcostars::RpcServiceClient>(
-        m_nodeConfig->rpcServiceName(), m_groupInfo);
-    asyncNotifyGroupInfo<bcostars::GatewayServicePrx, bcostars::GatewayServiceClient>(
-        m_nodeConfig->gatewayServiceName(), m_groupInfo);
+    // notify groupInfo to rpc
+    m_rpc->asyncNotifyGroupInfo(m_groupInfo, [](bcos::Error::Ptr&& _error) {
+        if (_error)
+        {
+            INITIALIZER_LOG(WARNING)
+                << LOG_DESC("reportNodeInfo to rpc error") << LOG_KV("code", _error->errorCode())
+                << LOG_KV("msg", _error->errorMessage());
+        }
+    });
+
+    // notify groupInfo to gateway
+    m_gateway->asyncNotifyGroupInfo(m_groupInfo, [](bcos::Error::Ptr&& _error) {
+        if (_error)
+        {
+            INITIALIZER_LOG(WARNING)
+                << LOG_DESC("reportNodeInfo to gateway error")
+                << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
+        }
+    });
     m_timer->restart();
 }
 

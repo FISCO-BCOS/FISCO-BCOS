@@ -49,7 +49,7 @@ class EventSub : bcos::Worker, public std::enable_shared_from_this<EventSub>
 public:
     using Ptr = std::shared_ptr<EventSub>;
     using ConstPtr = std::shared_ptr<const EventSub>;
-    EventSub() : bcos::Worker("t_event_sub") {}
+    EventSub(std::shared_ptr<boostssl::ws::WsService> _wsService);
     virtual ~EventSub() { stop(); }
 
 public:
@@ -145,6 +145,8 @@ private:
     std::shared_ptr<bcos::boostssl::ws::WsMessageFactory> m_messageFactory;
 
 private:
+    std::shared_ptr<boostssl::ws::WsService> m_wsService;
+
     std::atomic<bool> m_running{false};
 
     // lock for m_addTasks
@@ -174,9 +176,9 @@ public:
     using Ptr = std::shared_ptr<EventSubFactory>;
 
 public:
-    EventSub::Ptr buildEventSub()
+    EventSub::Ptr buildEventSub(std::shared_ptr<boostssl::ws::WsService> _wsService)
     {
-        auto es = std::make_shared<EventSub>();
+        auto es = std::make_shared<EventSub>(_wsService);
         return es;
     }
 };

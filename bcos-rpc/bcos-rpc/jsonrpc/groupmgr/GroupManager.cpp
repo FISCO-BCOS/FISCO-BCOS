@@ -51,6 +51,13 @@ void GroupManager::updateNodeServiceWithoutLock(
     // the node has already been existed
     if (m_nodeServiceList.count(_groupID) && m_nodeServiceList[_groupID].count(nodeAppName))
     {
+        auto nodeInfo = m_groupInfos.at(_groupID)->nodeInfo(nodeAppName);
+        // update the systemVersion(Note: the system version maybe updated in-runtime)
+        if (nodeInfo->systemVersion() != _nodeInfo->systemVersion())
+        {
+            GROUP_LOG(INFO) << LOG_DESC("update systemVersion to ") << _nodeInfo->systemVersion();
+            nodeInfo->setSystemVersion(_nodeInfo->systemVersion());
+        }
         return;
     }
     // a started node
@@ -59,6 +66,7 @@ void GroupManager::updateNodeServiceWithoutLock(
     {
         return;
     }
+    // fetch blockNumber to the node
     initNodeInfo(_groupID, _nodeInfo->nodeName(), nodeService);
     m_nodeServiceList[_groupID][nodeAppName] = nodeService;
     auto groupInfo = m_groupInfos[_groupID];

@@ -41,12 +41,13 @@ public:
     using Ptr = std::shared_ptr<ChainNodeInfo>;
     using ConstPtr = std::shared_ptr<const ChainNodeInfo>;
     using ServicesInfo = std::map<bcos::protocol::ServiceType, std::string>;
-    ChainNodeInfo() = default;
-    ChainNodeInfo(std::string const& _nodeName, int32_t _type)
-      : m_nodeName(_nodeName),
-        m_nodeCryptoType((NodeCryptoType)_type),
-        m_nodeProtocol(std::make_shared<bcos::protocol::ProtocolInfo>())
-    {}
+    ChainNodeInfo() : m_nodeProtocol(std::make_shared<bcos::protocol::ProtocolInfo>()) {}
+    ChainNodeInfo(std::string const& _nodeName, int32_t _type) : ChainNodeInfo()
+    {
+        m_nodeName = _nodeName;
+        m_nodeCryptoType = (NodeCryptoType)_type;
+    }
+
     virtual ~ChainNodeInfo() {}
 
     virtual std::string const& nodeName() const { return m_nodeName; }
@@ -99,7 +100,16 @@ public:
         *m_nodeProtocol = _protocol;
     }
 
-private:
+    virtual void setWasm(bool _wasm) { m_wasm = _wasm; }
+    virtual void setSmCryptoType(bool _smCryptoType) { m_smCryptoType = _smCryptoType; }
+
+    bool wasm() const { return m_wasm; }
+    bool smCryptoType() const { return m_smCryptoType; }
+
+    void setSystemVersion(uint32_t _version) { m_systemVersion = _version; }
+    uint32_t systemVersion() const { return m_systemVersion; }
+
+protected:
     bool m_microService = false;
     // the node name
     std::string m_nodeName;
@@ -117,6 +127,12 @@ private:
 
     // the node protocol
     bcos::protocol::ProtocolInfo::Ptr m_nodeProtocol;
+
+    // the system version
+    uint32_t m_systemVersion;
+
+    bool m_wasm{false};
+    bool m_smCryptoType{false};
 };
 inline std::string printNodeInfo(ChainNodeInfo::Ptr _nodeInfo)
 {

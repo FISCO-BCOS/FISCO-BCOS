@@ -64,7 +64,7 @@ public:
             std::vector<char>(_tx->begin(), _tx->end()));
     }
 
-    void asyncSealTxs(size_t _txsLimit, bcos::txpool::TxsHashSetPtr _avoidTxs,
+    void asyncSealTxs(uint64_t _txsLimit, bcos::txpool::TxsHashSetPtr _avoidTxs,
         std::function<void(
             bcos::Error::Ptr, bcos::protocol::Block::Ptr, bcos::protocol::Block::Ptr)>
             _sealCallback) override
@@ -400,12 +400,12 @@ public:
 
     // for RPC to get pending transactions
     void asyncGetPendingTransactionSize(
-        std::function<void(bcos::Error::Ptr, size_t)> _onGetTxsSize) override
+        std::function<void(bcos::Error::Ptr, uint64_t)> _onGetTxsSize) override
     {
         class Callback : public TxPoolServicePrxCallback
         {
         public:
-            explicit Callback(std::function<void(bcos::Error::Ptr, size_t)> _callback)
+            explicit Callback(std::function<void(bcos::Error::Ptr, uint64_t)> _callback)
               : TxPoolServicePrxCallback(), m_callback(_callback)
             {}
             ~Callback() override {}
@@ -421,7 +421,7 @@ public:
             }
 
         private:
-            std::function<void(bcos::Error::Ptr, size_t)> m_callback;
+            std::function<void(bcos::Error::Ptr, uint64_t)> m_callback;
         };
         m_proxy->async_asyncGetPendingTransactionSize(new Callback(_onGetTxsSize));
     }

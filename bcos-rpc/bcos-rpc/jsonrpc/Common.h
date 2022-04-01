@@ -124,6 +124,13 @@ inline void nodeInfoToJson(Json::Value& _response, bcos::group::ChainNodeInfo::P
         item["serviceName"] = it.second;
         _response["serviceInfo"].append(item);
     }
+    // set protocol info
+    auto protocol = _nodeInfo->nodeProtocol();
+    Json::Value protocolResponse;
+    protocolResponse["minVersion"] = protocol->minVersion();
+    protocolResponse["maxVersion"] = protocol->maxVersion();
+    protocolResponse["sysVersion"] = _nodeInfo->systemVersion();
+    _response["protocol"] = protocolResponse;
 }
 
 inline void groupInfoToJson(Json::Value& _response, bcos::group::GroupInfo::Ptr _groupInfo)

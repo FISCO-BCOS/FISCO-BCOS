@@ -9,7 +9,6 @@
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h>
 #include <bcos-framework/interfaces/protocol/BlockFactory.h>
-#include <bcos-framework/interfaces/rpc/RPCInterface.h>
 #include <tbb/concurrent_hash_map.h>
 #include <future>
 #include <list>
@@ -20,7 +19,7 @@ class SchedulerImpl : public SchedulerInterface, public std::enable_shared_from_
 {
 public:
     friend class BlockExecutive;
-
+    using Ptr = std::shared_ptr<SchedulerImpl>;
     SchedulerImpl(ExecutorManager::Ptr executorManager, bcos::ledger::LedgerInterface::Ptr ledger,
         bcos::storage::TransactionalStorageInterface::Ptr storage,
         bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
@@ -65,9 +64,9 @@ public:
         const std::string& name, std::function<void(Error::Ptr&&)> callback) override;
 
     void reset(std::function<void(Error::Ptr&&)> callback) override;
-
-    void registerBlockNumberReceiver(
-        std::function<void(protocol::BlockNumber blockNumber)> callback) override;
+    // register a block number receiver
+    virtual void registerBlockNumberReceiver(
+        std::function<void(protocol::BlockNumber blockNumber)> callback);
 
     void getCode(
         std::string_view contract, std::function<void(Error::Ptr, bcos::bytes)> callback) override;
@@ -115,6 +114,12 @@ public:
         m_gasLimit = boost::lexical_cast<uint64_t>(value);
     }
 
+    virtual void registerVersionInfoNotification(
+        std::function<void(uint32_t _version)> _versionNotification)
+    {
+        m_versionNotification = _versionNotification;
+    }
+
 private:
     void asyncGetLedgerConfig(
         std::function<void(Error::Ptr, ledger::LedgerConfig::Ptr ledgerConfig)> callback);
@@ -144,5 +149,6 @@ private:
     std::function<void(bcos::protocol::BlockNumber, bcos::protocol::TransactionSubmitResultsPtr,
         std::function<void(Error::Ptr)>)>
         m_txNotifier;
+    std::function<void(uint32_t _version)> m_versionNotification;
 };
 }  // namespace bcos::scheduler

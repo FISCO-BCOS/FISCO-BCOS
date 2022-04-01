@@ -47,7 +47,7 @@ public:
         c_supportedProtocols.insert({ProtocolModuleID::GatewayService,
             std::make_shared<ProtocolInfo>(
                 ProtocolModuleID::GatewayService, ProtocolVersion::V1, ProtocolVersion::V1)});
-        // rpcService
+        // rpcService && SDK
         c_supportedProtocols.insert({ProtocolModuleID::RpcService,
             std::make_shared<ProtocolInfo>(
                 ProtocolModuleID::RpcService, ProtocolVersion::V1, ProtocolVersion::V1)});
@@ -58,7 +58,6 @@ public:
     }
     virtual ~GlobalConfig() {}
 
-    ProtocolVersion defaultVersion() const { return m_defaultVersion; }
     ProtocolInfo::ConstPtr protocolInfo(ProtocolModuleID _moduleID) const
     {
         if (!c_supportedProtocols.count(_moduleID))
@@ -99,8 +98,6 @@ public:
 
 private:
     std::map<ProtocolModuleID, ProtocolInfo::Ptr> c_supportedProtocols;
-    // default version before protocol-negotiate success
-    ProtocolVersion m_defaultVersion = ProtocolVersion::V1;
     // the system version, can only be upgraded manually
     Version m_version = Version::RC3_VERSION;
     // the minimum supported version

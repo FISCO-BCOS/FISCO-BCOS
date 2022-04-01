@@ -42,15 +42,15 @@ GatewayNodeManager::GatewayNodeManager(std::string const& _uuid, P2pID const& _n
     m_p2pNodeID = _nodeID;
     m_p2pInterface = _p2pInterface;
     // SyncNodeSeq
-    m_p2pInterface->registerHandlerByMsgType(MessageType::SyncNodeSeq,
+    m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::SyncNodeSeq,
         boost::bind(&GatewayNodeManager::onReceiveStatusSeq, this, boost::placeholders::_1,
             boost::placeholders::_2, boost::placeholders::_3));
     // RequestNodeStatus
-    m_p2pInterface->registerHandlerByMsgType(MessageType::RequestNodeStatus,
+    m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::RequestNodeStatus,
         boost::bind(&GatewayNodeManager::onRequestNodeStatus, this, boost::placeholders::_1,
             boost::placeholders::_2, boost::placeholders::_3));
     // ResponseNodeStatus
-    m_p2pInterface->registerHandlerByMsgType(MessageType::ResponseNodeStatus,
+    m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::ResponseNodeStatus,
         boost::bind(&GatewayNodeManager::onReceiveNodeStatus, this, boost::placeholders::_1,
             boost::placeholders::_2, boost::placeholders::_3));
     m_timer = std::make_shared<Timer>(SEQ_SYNC_PERIOD, "seqSync");
@@ -62,9 +62,9 @@ void GatewayNodeManager::stop()
 {
     if (m_p2pInterface)
     {
-        m_p2pInterface->eraseHandlerByMsgType(MessageType::SyncNodeSeq);
-        m_p2pInterface->eraseHandlerByMsgType(MessageType::RequestNodeStatus);
-        m_p2pInterface->eraseHandlerByMsgType(MessageType::ResponseNodeStatus);
+        m_p2pInterface->eraseHandlerByMsgType(GatewayMessageType::SyncNodeSeq);
+        m_p2pInterface->eraseHandlerByMsgType(GatewayMessageType::RequestNodeStatus);
+        m_p2pInterface->eraseHandlerByMsgType(GatewayMessageType::ResponseNodeStatus);
     }
     if (m_timer)
     {
@@ -115,7 +115,8 @@ void GatewayNodeManager::onReceiveStatusSeq(
     {
         return;
     }
-    m_p2pInterface->sendMessageBySession(MessageType::RequestNodeStatus, bytesConstRef(), _session);
+    m_p2pInterface->sendMessageBySession(
+        GatewayMessageType::RequestNodeStatus, bytesConstRef(), _session);
 }
 
 bool GatewayNodeManager::statusChanged(std::string const& _p2pNodeID, uint32_t _seq)
@@ -183,7 +184,7 @@ void GatewayNodeManager::onRequestNodeStatus(
                                   << LOG_KV("peer", _session->p2pID());
         return;
     }
-    m_p2pInterface->sendMessageBySession(MessageType::ResponseNodeStatus,
+    m_p2pInterface->sendMessageBySession(GatewayMessageType::ResponseNodeStatus,
         bytesConstRef((byte*)nodeStatusData->data(), nodeStatusData->size()), _session);
 }
 
@@ -255,7 +256,7 @@ void GatewayNodeManager::broadcastStatusSeq()
     m_timer->restart();
     auto message =
         std::static_pointer_cast<P2PMessage>(m_p2pInterface->messageFactory()->buildMessage());
-    message->setPacketType(MessageType::SyncNodeSeq);
+    message->setPacketType(GatewayMessageType::SyncNodeSeq);
     auto seq = statusSeq();
     auto statusSeq = boost::asio::detail::socket_ops::host_to_network_long(seq);
     auto payload = std::make_shared<bytes>((byte*)&statusSeq, (byte*)&statusSeq + 4);

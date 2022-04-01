@@ -1,4 +1,4 @@
-/*
+/**
  *  Copyright (C) 2021 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
  *  Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,27 +13,29 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file Common.h
- * @author: octopus
- * @date 2021-07-02
+ * @brief the information used to deploy new node
+ * @file GroupInfoCodec.h
+ * @author: yujiechen
+ * @date 2022-03-29
  */
 #pragma once
-#include <bcos-utilities/Log.h>
-#include <iostream>
+#include "GroupInfo.h"
+#include <json/value.h>
 #include <memory>
-
-#define RPC_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("RPC")
 
 namespace bcos
 {
-namespace rpc
+namespace group
 {
-enum AMOPClientMessageType
+class GroupInfoCodec
 {
-    AMOP_SUBTOPIC = 0x110,   // 272
-    AMOP_REQUEST = 0x111,    // 273
-    AMOP_BROADCAST = 0x112,  // 274
-    AMOP_RESPONSE = 0x113    // 275
+public:
+    using Ptr = std::shared_ptr<GroupInfoCodec>;
+    GroupInfoCodec() = default;
+    virtual ~GroupInfoCodec() {}
+
+    virtual GroupInfo::Ptr deserialize(const std::string& _encodedData) = 0;
+    virtual Json::Value serialize(GroupInfo::Ptr _groupInfo) = 0;
 };
-}  // namespace rpc
+}  // namespace group
 }  // namespace bcos

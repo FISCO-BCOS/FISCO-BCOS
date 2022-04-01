@@ -81,16 +81,16 @@ public:
         vector<EndpointInfo> activeEndPoints;
         vector<EndpointInfo> nactiveEndPoints;
         m_prx->tars_endpointsAll(activeEndPoints, nactiveEndPoints);
+        // notify block number to all rpc nodes
         for (auto const& endPoint : activeEndPoints)
         {
-            auto endPointStr = m_rpcServiceName + "@tcp -h " + endPoint.getEndpoint().getHost() +
-                               " -p " +
-                               boost::lexical_cast<std::string>(endPoint.getEndpoint().getPort());
+            auto endPointStr = endPointToString(endPoint);
             auto prx = Application::getCommunicator()->stringToProxy<RpcServicePrx>(endPointStr);
             prx->async_asyncNotifyBlockNumber(
                 new Callback(_callback), _groupID, _nodeName, _blockNumber);
         }
     }
+
     void asyncNotifyGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo,
         std::function<void(bcos::Error::Ptr&&)> _callback) override
     {
@@ -122,8 +122,23 @@ public:
         {
             return;
         }
+        vector<EndpointInfo> activeEndPoints;
+        vector<EndpointInfo> nactiveEndPoints;
+        if (activeEndPoints.size() == 0)
+        {
+            BCOS_LOG(TRACE) << LOG_DESC("RPC: asyncNotifyGroupInfo error for empty connection")
+                            << bcos::group::printGroupInfo(_groupInfo);
+            return;
+        }
+        m_prx->tars_endpointsAll(activeEndPoints, nactiveEndPoints);
+        // notify groupInfo to all rpc nodes
         auto tarsGroupInfo = toTarsGroupInfo(_groupInfo);
-        m_prx->async_asyncNotifyGroupInfo(new Callback(_callback), tarsGroupInfo);
+        for (auto const& endPoint : activeEndPoints)
+        {
+            auto endPointStr = endPointToString(endPoint);
+            auto prx = Application::getCommunicator()->stringToProxy<RpcServicePrx>(endPointStr);
+            prx->async_asyncNotifyGroupInfo(new Callback(_callback), tarsGroupInfo);
+        }
     }
 
     void asyncNotifyAMOPMessage(int16_t _type, std::string const& _topic, bcos::bytesConstRef _data,
@@ -210,6 +225,11 @@ public:
 protected:
     void start() override {}
     void stop() override {}
+    std::string endPointToString(EndpointInfo _endPoint)
+    {
+        return m_rpcServiceName + "@tcp -h " + _endPoint.getEndpoint().getHost() + " -p " +
+               boost::lexical_cast<std::string>(_endPoint.getEndpoint().getPort());
+    }
 
 private:
     bcostars::RpcServicePrx m_prx;

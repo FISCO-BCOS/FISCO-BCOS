@@ -110,7 +110,7 @@ void PBFTServiceClient::asyncNotifyConsensusMessage(bcos::Error::Ptr, std::strin
 
 // Note: used for the txpool notify the unsealed txsSize
 void PBFTServiceClient::asyncNoteUnSealedTxsSize(
-    size_t _unsealedTxsSize, std::function<void(bcos::Error::Ptr)> _onRecv)
+    uint64_t _unsealedTxsSize, std::function<void(bcos::Error::Ptr)> _onRecv)
 {
     m_proxy->async_asyncNoteUnSealedTxsSize(
         new PBFTServiceCommonCallback(_onRecv), _unsealedTxsSize);

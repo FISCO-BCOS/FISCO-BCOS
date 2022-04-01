@@ -107,7 +107,7 @@ bool TxPool::checkExistsInGroup(TxSubmitCallback _txSubmitCallback)
     return false;
 }
 
-void TxPool::asyncSealTxs(size_t _txsLimit, TxsHashSetPtr _avoidTxs,
+void TxPool::asyncSealTxs(uint64_t _txsLimit, TxsHashSetPtr _avoidTxs,
     std::function<void(Error::Ptr, Block::Ptr, Block::Ptr)> _sealCallback)
 {
     // Note: not block seal new block here

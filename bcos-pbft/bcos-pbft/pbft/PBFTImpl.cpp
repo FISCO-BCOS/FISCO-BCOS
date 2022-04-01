@@ -98,7 +98,7 @@ void PBFTImpl::notifyHighestSyncingNumber(bcos::protocol::BlockNumber _blockNumb
 }
 
 void PBFTImpl::asyncNoteUnSealedTxsSize(
-    size_t _unsealedTxsSize, std::function<void(Error::Ptr)> _onRecvResponse)
+    uint64_t _unsealedTxsSize, std::function<void(Error::Ptr)> _onRecvResponse)
 {
     m_pbftEngine->pbftConfig()->setUnSealedTxsSize(_unsealedTxsSize);
     if (_onRecvResponse)

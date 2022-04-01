@@ -69,7 +69,11 @@ void NodeServiceApp::initNodeService()
     m_nodeInitializer = std::make_shared<Initializer>();
     m_nodeInitializer->initMicroServiceNode(m_iniConfigPath, m_genesisConfigPath, m_privateKeyPath);
     m_nodeInitializer->start();
-    initHandler();
+    auto rpcServiceName = m_nodeInitializer->nodeConfig()->rpcServiceName();
+    auto rpcServicePrx =
+        Application::getCommunicator()->stringToProxy<bcostars::RpcServicePrx>(rpcServiceName);
+    auto rpc = std::make_shared<bcostars::RpcServiceClient>(rpcServicePrx, rpcServiceName);
+    m_nodeInitializer->initNotificationHandlers(rpc);
 }
 
 void NodeServiceApp::initTarsNodeService()
@@ -104,49 +108,4 @@ void NodeServiceApp::initTarsNodeService()
     frontServiceParam.frontServiceInitializer = m_nodeInitializer->frontService();
     addServantWithParams<FrontServiceServer, FrontServiceParam>(
         getProxyDesc(FRONT_SERVANT_NAME), frontServiceParam);
-}
-
-void NodeServiceApp::initHandler()
-{
-    auto scheduler = m_nodeInitializer->scheduler();
-    auto rpcServicePrx = Application::getCommunicator()->stringToProxy<bcostars::RpcServicePrx>(
-        m_nodeInitializer->nodeConfig()->rpcServiceName());
-    scheduler->registerBlockNumberReceiver(
-        [rpcServicePrx, this](bcos::protocol::BlockNumber _blockNumber) {
-            BCOS_LOG(INFO) << "Notify blocknumber: " << _blockNumber;
-            notifyBlockNumberToAllRpcNodes(rpcServicePrx, _blockNumber, [](bcos::Error::Ptr) {});
-        });
-    auto schedulerImpl = std::dynamic_pointer_cast<scheduler::SchedulerImpl>(scheduler);
-    auto txpool = m_nodeInitializer->txPoolInitializer()->txpool();
-    schedulerImpl->registerTransactionNotifier(
-        [txpool](bcos::protocol::BlockNumber _blockNumber,
-            bcos::protocol::TransactionSubmitResultsPtr _result,
-            std::function<void(bcos::Error::Ptr)> _callback) {
-            txpool->asyncNotifyBlockResult(_blockNumber, _result, _callback);
-        });
-}
-
-void NodeServiceApp::notifyBlockNumberToAllRpcNodes(bcostars::RpcServicePrx _rpcPrx,
-    bcos::protocol::BlockNumber _blockNumber, std::function<void(bcos::Error::Ptr)> _callback)
-{
-    vector<EndpointInfo> activeEndPoints;
-    vector<EndpointInfo> nactiveEndPoints;
-    _rpcPrx->tars_endpointsAll(activeEndPoints, nactiveEndPoints);
-    if (activeEndPoints.size() == 0)
-    {
-        BCOS_LOG(TRACE) << LOG_DESC("notifyBlockNumberToAllRpcNodes error for empty connection")
-                        << LOG_KV("number", _blockNumber);
-        return;
-    }
-    auto rpcServiceName = m_nodeInitializer->nodeConfig()->rpcServiceName();
-    for (auto const& endPoint : activeEndPoints)
-    {
-        auto endPointStr = endPointToString(rpcServiceName, endPoint.getEndpoint());
-        auto servicePrx =
-            Application::getCommunicator()->stringToProxy<bcostars::RpcServicePrx>(endPointStr);
-        auto serviceClient =
-            std::make_shared<bcostars::RpcServiceClient>(servicePrx, rpcServiceName);
-        serviceClient->asyncNotifyBlockNumber(m_nodeInitializer->nodeConfig()->groupId(),
-            m_nodeInitializer->nodeConfig()->nodeName(), _blockNumber, _callback);
-    }
 }
