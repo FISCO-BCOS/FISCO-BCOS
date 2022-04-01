@@ -99,6 +99,6 @@ hunter_config(OpenSSL VERSION tassl_1.1.1b_v1.4-local
 )
 
 hunter_config(tarscpp VERSION 3.0.3-local
-    URL https://${URL_BASE}/cyjseagull/TarsCpp/archive/3c85e918e3367be66e6a056000a236f3c6416c7c.tar.gz
-	SHA1 7dabc514288cff3fffef0d2fb453c813ad41f9e5
+    URL https://${URL_BASE}/FISCO-BCOS/TarsCpp/archive/5b8982f95f9c056e664b186aecd50f376b604d04.tar.gz
+	SHA1 b1e879c9b9f0f6d7ee31753ad6bf238d8b9c137f
 )
