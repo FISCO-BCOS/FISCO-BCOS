@@ -311,15 +311,7 @@ void TxPool::getTxsFromLocalLedger(HashListPtr _txsHash, HashListPtr _missedTxs,
 void TxPool::asyncFillBlock(
     HashListPtr _txsHash, std::function<void(Error::Ptr, TransactionsPtr)> _onBlockFilled)
 {
-    auto self = std::weak_ptr<TxPool>(shared_from_this());
-    m_filler->enqueue([self, _onBlockFilled, _txsHash]() {
-        auto txpool = self.lock();
-        if (!txpool)
-        {
-            return;
-        }
-        txpool->fillBlock(_txsHash, _onBlockFilled, true);
-    });
+    fillBlock(_txsHash, _onBlockFilled, true);
 }
 
 void TxPool::fillBlock(HashListPtr _txsHash,
