@@ -132,7 +132,7 @@ protected:
     boost::condition_variable m_signalled;
     boost::mutex x_signalled;
     bcos::protocol::BlockNumber m_waterMark = 10;
-    bcos::protocol::BlockNumber c_FaultyNodeBlockDelta = 5;
+    bcos::protocol::BlockNumber c_FaultyNodeBlockDelta = 50;
 };
 }  // namespace sync
 }  // namespace bcos

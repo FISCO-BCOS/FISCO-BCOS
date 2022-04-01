@@ -1095,9 +1095,9 @@ bool PBFTEngine::handleViewChangeMsg(ViewChangeMsgInterface::Ptr _viewChangeMsg)
     // not expired
     auto leaderIndex =
         m_config->leaderIndexInNewViewPeriod(_viewChangeMsg->index() + 1, _viewChangeMsg->index());
-    if (_viewChangeMsg->generatedFrom() == leaderIndex ||
-        (m_cacheProcessor->getViewChangeWeight(_viewChangeMsg->view()) >
-            m_config->maxFaultyQuorum()))
+    if (m_config->timeout() && (_viewChangeMsg->generatedFrom() == leaderIndex ||
+                                   (m_cacheProcessor->getViewChangeWeight(_viewChangeMsg->view()) >
+                                       m_config->maxFaultyQuorum())))
     {
         auto view = m_cacheProcessor->tryToTriggerFastViewChange();
         if (view > 0)
