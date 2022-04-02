@@ -407,47 +407,6 @@ void TxPool::init()
     txsSyncConfig->setConsensusNodeList(ledgerConfig->consensusNodeList());
     txsSyncConfig->setObserverList(ledgerConfig->observerNodeList());
     TXPOOL_LOG(INFO) << LOG_DESC("init sync config success");
-
-    auto self = std::weak_ptr<TxPool>(shared_from_this());
-    txsSyncConfig->frontService()->asyncGetGroupNodeInfo(
-        [self](Error::Ptr _error, bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo) {
-            if (_error != nullptr)
-            {
-                TXPOOL_LOG(WARNING)
-                    << LOG_DESC("asyncGetGroupNodeInfo failed")
-                    << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
-                return;
-            }
-            try
-            {
-                if (!_groupNodeInfo || _groupNodeInfo->nodeIDList().size() == 0)
-                {
-                    return;
-                }
-                auto txpool = self.lock();
-                if (!txpool)
-                {
-                    return;
-                }
-                NodeIDSet nodeIdSet;
-                auto const& nodeIDList = _groupNodeInfo->nodeIDList();
-                for (auto const& nodeIDStr : nodeIDList)
-                {
-                    auto nodeID =
-                        txpool->m_config->blockFactory()->cryptoSuite()->keyFactory()->createKey(
-                            fromHex(nodeIDStr));
-                    nodeIdSet.insert(nodeID);
-                }
-                txpool->m_transactionSync->config()->setConnectedNodeList(std::move(nodeIdSet));
-                TXPOOL_LOG(INFO) << LOG_DESC("asyncGetGroupNodeInfo")
-                                 << LOG_KV("connectedSize", nodeIdSet.size());
-            }
-            catch (std::exception const& e)
-            {
-                TXPOOL_LOG(WARNING) << LOG_DESC("asyncGetGroupNodeInfo exception")
-                                    << LOG_KV("error", boost::diagnostic_information(e));
-            }
-        });
 }
 
 void TxPool::initSendResponseHandler()

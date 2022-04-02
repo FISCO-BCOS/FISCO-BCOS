@@ -49,7 +49,7 @@ class PBFTImpl;
 
 namespace initializer
 {
-class PBFTInitializer
+class PBFTInitializer : public std::enable_shared_from_this<PBFTInitializer>
 {
 public:
     using Ptr = std::shared_ptr<PBFTInitializer>;
@@ -90,6 +90,8 @@ protected:
     std::string generateGenesisConfig(bcos::tool::NodeConfig::Ptr _nodeConfig);
     std::string generateIniConfig(bcos::tool::NodeConfig::Ptr _nodeConfig);
 
+    void syncGroupNodeInfo();
+
 protected:
     bcos::initializer::NodeArchitectureType m_nodeArchType;
     bcos::tool::NodeConfig::Ptr m_nodeConfig;
@@ -107,6 +109,10 @@ protected:
     std::shared_ptr<bcos::consensus::PBFTImpl> m_pbft;
 
     bcos::group::GroupInfo::Ptr m_groupInfo;
+
+    // Note: If the groupNodeInfo fails to be pulled because the gateway is closed in pro-mode, it
+    // will periodically retry to pull the groupInfo until the information is successfully pulled.
+    std::atomic_bool m_groupNodeInfoFetched = {false};
 };
 }  // namespace initializer
 }  // namespace bcos
