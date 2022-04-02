@@ -1088,6 +1088,10 @@ bool PBFTEngine::handleViewChangeMsg(ViewChangeMsgInterface::Ptr _viewChangeMsg)
     {
         return false;
     }
+    if (!m_config->timeout() && _viewChangeMsg->from())
+    {
+        sendRecoverResponse(_viewChangeMsg->from());
+    }
     m_cacheProcessor->addViewChangeReq(_viewChangeMsg);
     // try to trigger fast view change if receive more than (f+1) valid view
     // change messages whose view is greater than the current view: sends a
@@ -1095,9 +1099,9 @@ bool PBFTEngine::handleViewChangeMsg(ViewChangeMsgInterface::Ptr _viewChangeMsg)
     // not expired
     auto leaderIndex =
         m_config->leaderIndexInNewViewPeriod(_viewChangeMsg->index() + 1, _viewChangeMsg->index());
-    if (m_config->timeout() && (_viewChangeMsg->generatedFrom() == leaderIndex ||
-                                   (m_cacheProcessor->getViewChangeWeight(_viewChangeMsg->view()) >
-                                       m_config->maxFaultyQuorum())))
+    if ((_viewChangeMsg->generatedFrom() == leaderIndex ||
+            (m_cacheProcessor->getViewChangeWeight(_viewChangeMsg->view()) >
+                m_config->maxFaultyQuorum())))
     {
         auto view = m_cacheProcessor->tryToTriggerFastViewChange();
         if (view > 0)
