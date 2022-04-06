@@ -42,7 +42,9 @@ public:
     SchedulerImpl& operator=(const SchedulerImpl&) = delete;
     SchedulerImpl& operator=(SchedulerImpl&&) = delete;
 
-    void executeBlock(bcos::protocol::Block::Ptr block, bool verify,
+    void getExecResult(bcos::protocol::BlockNumber _blockNumber,
+        std::function<void(bcos::Error::Ptr&&, bcos::protocol::Block::Ptr&&)> _callback) override;
+    void executeBlock(bcos::protocol::Block::Ptr block, bool verify, bool _reExecFlag,
         std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&)> callback)
         override;
 

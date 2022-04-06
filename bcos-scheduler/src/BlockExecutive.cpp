@@ -7,6 +7,7 @@
 #include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
 #include "bcos-framework/interfaces/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/interfaces/protocol/Transaction.h"
+#include "bcos-protocol/LogEntry.h"
 #include "bcos-table/src/StateStorage.h"
 #include <bcos-utilities/Error.h>
 #include <tbb/parallel_for_each.h>
@@ -28,8 +29,10 @@
 using namespace bcos::scheduler;
 using namespace bcos::ledger;
 
-void BlockExecutive::prepare() {
-    if(m_hasPrepared) {
+void BlockExecutive::prepare()
+{
+    if (m_hasPrepared)
+    {
         return;
     }
 
@@ -48,16 +51,27 @@ void BlockExecutive::prepare() {
             for (size_t i = 0; i < m_block->transactionsMetaDataSize(); i++)
             {
                 auto metaData = m_block->transactionMetaData(i);
-
+                if (metaData)
+                {
+                    m_executiveResults[i].transactionHash = metaData->hash();
+                    m_executiveResults[i].source = metaData->source();
+                }
+                // skip the aborted tx
+                if (metaData->abort())
+                {
+                    continue;
+                }
                 auto message = m_scheduler->m_executionMessageFactory->createExecutionMessage();
                 message->setContextID(i + m_startContextID);
                 message->setType(protocol::ExecutionMessage::TXHASH);
                 message->setTransactionHash(metaData->hash());
 
-                if (metaData->attribute() & bcos::protocol::Transaction::Attribute::LIQUID_SCALE_CODEC)
+                if (metaData->attribute() &
+                    bcos::protocol::Transaction::Attribute::LIQUID_SCALE_CODEC)
                 {
                     // LIQUID
-                    if (metaData->attribute() & bcos::protocol::Transaction::Attribute::LIQUID_CREATE)
+                    if (metaData->attribute() &
+                        bcos::protocol::Transaction::Attribute::LIQUID_CREATE)
                     {
                         message->setCreate(true);
                     }
@@ -86,11 +100,6 @@ void BlockExecutive::prepare() {
                 }
 
                 auto to = message->to();
-                if (metaData)
-                {
-                    m_executiveResults[i].transactionHash = metaData->hash();
-                    m_executiveResults[i].source = metaData->source();
-                }
                 ExecutiveState state(i, std::move(message), m_withDAG);
 #pragma omp critical
                 m_executiveStates.emplace(std::make_tuple(std::move(to), i), std::move(state));
@@ -108,7 +117,10 @@ void BlockExecutive::prepare() {
                 auto tx = m_block->transaction(i);
                 m_executiveResults[i].transactionHash = tx->hash();
                 m_executiveResults[i].source = tx->source();
-
+                if (tx->abort())
+                {
+                    continue;
+                }
                 auto message = m_scheduler->m_executionMessageFactory->createExecutionMessage();
                 message->setType(protocol::ExecutionMessage::MESSAGE);
                 message->setContextID(i + m_startContextID);
@@ -158,17 +170,19 @@ void BlockExecutive::prepare() {
 
                 auto to = std::string(message->to());
 #pragma omp critical
-                m_executiveStates.emplace(
-                    std::make_tuple(std::move(to), i), ExecutiveState(i, std::move(message), m_withDAG));
+                m_executiveStates.emplace(std::make_tuple(std::move(to), i),
+                    ExecutiveState(i, std::move(message), m_withDAG));
             }
         }
 
-        SCHEDULER_LOG(DEBUG) << LOG_BADGE("prepareBlockExecutive") << LOG_KV("block number", m_block->blockHeaderConst()->number())
-                             << LOG_KV("blockHeader.timestamp", m_block->blockHeaderConst()->timestamp())
-                             << LOG_KV("meta tx count", m_block->transactionsMetaDataSize()) << LOG_KV("timeCost", (utcTime() - startT));
+        SCHEDULER_LOG(DEBUG) << LOG_BADGE("prepareBlockExecutive")
+                             << LOG_KV("block number", m_block->blockHeaderConst()->number())
+                             << LOG_KV("blockHeader.timestamp",
+                                    m_block->blockHeaderConst()->timestamp())
+                             << LOG_KV("meta tx count", m_block->transactionsMetaDataSize())
+                             << LOG_KV("timeCost", (utcTime() - startT));
         m_hasPrepared = true;
     }
-
 }
 
 void BlockExecutive::asyncCall(
@@ -421,7 +435,25 @@ void BlockExecutive::asyncNotify(
                             << LOG_KV("msg", _error->errorMessage());
     });
 }
-
+void BlockExecutive::removeAllState()
+{
+    SCHEDULER_LOG(INFO) << LOG_DESC("removeAllState") << LOG_KV("syncedBlock", m_syncBlock);
+    auto txsSize = m_block->transactionsHashSize();
+    for (size_t i = 0; i < txsSize; i++)
+    {
+        std::string to;
+        if (m_syncBlock)
+        {
+            to = m_block->transaction(i)->to();
+        }
+        else
+        {
+            to = m_block->transactionMetaData(i)->to();
+        }
+        auto executor = m_scheduler->m_executorManager->dispatchExecutor(to);
+        executor->removeState(m_block->blockHeader()->number());
+    }
+}
 void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
 {
     std::multimap<std::string, decltype(m_executiveStates)::iterator> requests;
@@ -564,7 +596,20 @@ void BlockExecutive::DMTExecute(
                     // Set result to m_block
                     for (auto& it : m_executiveResults)
                     {
-                        m_block->appendReceipt(it.receipt);
+                        // Note: the receipt maybe empty for the tx has been aborted
+                        auto receipt = it.receipt;
+                        if (!receipt)
+                        {
+                            std::string contractAddress = "";
+                            auto logEntries =
+                                std::make_shared<std::vector<bcos::protocol::LogEntry>>();
+                            receipt =
+                                m_blockFactory->receiptFactory()->createReceipt(0, contractAddress,
+                                    logEntries, (int32_t)bcos::protocol::TransactionStatus::Abort,
+                                    bytes(), m_block->blockHeader()->number());
+                            it.receipt = receipt;
+                        }
+                        m_block->appendReceipt(receipt);
                     }
                     auto executedBlockHeader =
                         m_blockFactory->blockHeaderFactory()->populateBlockHeader(
@@ -573,6 +618,10 @@ void BlockExecutive::DMTExecute(
                     executedBlockHeader->setGasUsed(m_gasUsed);
                     executedBlockHeader->setTxsRoot(m_block->calculateTransactionRoot());
                     executedBlockHeader->setReceiptsRoot(m_block->calculateReceiptRoot());
+                    m_block->blockHeader()->setStateRoot(hash);
+                    m_block->blockHeader()->setGasUsed(m_gasUsed);
+                    m_block->blockHeader()->setTxsRoot(executedBlockHeader->txsRoot());
+                    m_block->blockHeader()->setReceiptsRoot(executedBlockHeader->receiptsRoot());
 
                     m_result = executedBlockHeader;
                     callback(nullptr, m_result);

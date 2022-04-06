@@ -13,7 +13,53 @@
 
 using namespace bcos::scheduler;
 
-void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
+// Note: this function only called when undeterministic-recovery
+void SchedulerImpl::getExecResult(bcos::protocol::BlockNumber _blockNumber,
+    std::function<void(bcos::Error::Ptr&&, bcos::protocol::Block::Ptr&&)> _callback)
+{
+    SCHEDULER_LOG(INFO) << LOG_DESC("getExecResult") << LOG_KV("index", _blockNumber);
+    auto executeLock =
+        std::make_shared<std::unique_lock<std::mutex>>(m_executeMutex, std::try_to_lock);
+    if (!executeLock->owns_lock())
+    {
+        _callback(std::make_shared<bcos::Error>(-1, "Not executed block"), nullptr);
+        return;
+    }
+    std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
+    if (m_blocks.empty())
+    {
+        _callback(std::make_shared<bcos::Error>(-1, "Not executed block"), nullptr);
+        return;
+    }
+    auto& frontBlock = m_blocks.front();
+    auto& backBlock = m_blocks.back();
+    // Block already executed
+    if (_blockNumber >= frontBlock->number() && _blockNumber <= backBlock->number())
+    {
+        SCHEDULER_LOG(INFO) << "getExecResult success, return executed block"
+                            << LOG_KV("block number", _blockNumber);
+
+        auto it = m_blocks.begin();
+        while (it->get()->number() != _blockNumber)
+        {
+            ++it;
+        }
+
+        SCHEDULER_LOG(TRACE) << "BlockHeader stateRoot: " << std::hex
+                             << it->get()->result()->stateRoot();
+
+        auto block = it->get()->block();
+        _callback(nullptr, std::move(block));
+        return;
+    }
+    else
+    {
+        _callback(std::make_shared<bcos::Error>(-1, "Not executed block"), nullptr);
+        return;
+    }
+}
+
+void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify, bool _reExecFlag,
     std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&)> callback)
 {
     uint64_t waitT = 0;
@@ -27,7 +73,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
                         << LOG_KV("verify", verify) << LOG_KV("signatureSize", signature.size())
                         << LOG_KV("tx count", block->transactionsSize())
                         << LOG_KV("meta tx count", block->transactionsMetaDataSize())
-                        << LOG_KV("waitT", waitT);
+                        << LOG_KV("reExecFlag", _reExecFlag) << LOG_KV("waitT", waitT);
     auto executeLock =
         std::make_shared<std::unique_lock<std::mutex>>(m_executeMutex, std::try_to_lock);
     if (!executeLock->owns_lock())
@@ -37,7 +83,27 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
         callback(BCOS_ERROR_UNIQUE_PTR(SchedulerError::InvalidStatus, message), nullptr);
         return;
     }
-
+    if (_reExecFlag && !m_blocks.empty())
+    {
+        std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
+        for (auto it = m_blocks.begin(); it != m_blocks.end();)
+        {
+            auto index = it->get()->block()->blockHeader()->number();
+            if (index >= block->blockHeader()->number())
+            {
+                SCHEDULER_LOG(INFO)
+                    << "ExecuteBlock: remove undeterministic block" << LOG_KV("index", index);
+                // remove the state
+                it->get()->removeAllState();
+                removeAllOldPreparedBlock(index);
+                it = m_blocks.erase(it);
+                continue;
+            }
+            it++;
+        }
+        preExecuteBlock(block, verify);
+        m_lastExecutedBlockNumber.store(block->blockHeader()->number() - 1);
+    }
     std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
     // Note: if hit the cache, may return synced blockHeader with signatureList in some cases
     if (!m_blocks.empty())

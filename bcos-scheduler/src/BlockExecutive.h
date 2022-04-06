@@ -79,6 +79,8 @@ public:
 
     bool isCall() { return m_staticCall; }
 
+    void removeAllState();
+
 private:
     void DAGExecute(std::function<void(Error::UniquePtr)> error);
     void DMTExecute(std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback);

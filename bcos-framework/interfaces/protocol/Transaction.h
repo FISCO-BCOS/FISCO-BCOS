@@ -151,6 +151,9 @@ public:
     void setBatchHash(bcos::crypto::HashType const& _hash) const { m_batchHash = _hash; }
     bcos::crypto::HashType const& batchHash() const { return m_batchHash; }
 
+    virtual void setAbort(bool _abort) = 0;
+    virtual bool abort() const = 0;
+
 protected:
     mutable bcos::bytes m_sender;
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;

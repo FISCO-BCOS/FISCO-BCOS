@@ -78,6 +78,30 @@ public:
 
     virtual PBFTMessageInterface::Ptr preCommitCache() { return m_precommit; }
     virtual PBFTMessageInterface::Ptr preCommitWithoutData() { return m_precommitWithoutData; }
+    bool resetPrecommitCache(PBFTMessageInterface::Ptr _precommit, bool _needReExec)
+    {
+        if (m_resetted)
+        {
+            return false;
+        }
+        if (!m_precommit)
+        {
+            return false;
+        }
+        if (_precommit->hash() != m_precommit->hash())
+        {
+            return false;
+        }
+        m_prePrepare = _precommit;
+        intoPrecommit();
+        m_precommit->consensusProposal()->setReExecFlag(_needReExec);
+        if (_needReExec)
+        {
+            m_reExecHandler(m_precommit->consensusProposal());
+        }
+        m_resetted = true;
+        return true;
+    }
     virtual bool checkAndPreCommit();
     virtual bool checkAndCommit();
     virtual bool shouldStopTimer();
@@ -85,7 +109,7 @@ public:
     virtual void resetCache(ViewType _curView);
 
     virtual void setCheckPointProposal(PBFTProposalInterface::Ptr _proposal);
-    PBFTProposalInterface::Ptr checkPointProposal() { return m_checkpointProposal; }
+    PBFTProposalInterface::Ptr checkPointProposal() const { return m_checkpointProposal; }
 
     virtual void addCheckPointMsg(PBFTMessageInterface::Ptr _checkPointMsg)
     {
@@ -107,6 +131,10 @@ public:
         m_committedIndexNotifier = _committedIndexNotifier;
     }
 
+    void registerReExecProposal(std::function<void(PBFTProposalInterface::Ptr)> _reExecHandler)
+    {
+        m_reExecHandler = _reExecHandler;
+    }
     uint64_t getCollectedCheckPointWeight(bcos::crypto::HashType const& _hash)
     {
         if (m_checkpointCacheWeight.count(_hash))
@@ -184,6 +212,10 @@ protected:
         }
     }
 
+    bool triggerNonDeterministic();
+    void onReceiveExecResult(
+        Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID, bytesConstRef _data);
+
 protected:
     PBFTConfig::Ptr m_config;
     // avoid submitting the same committed proposal multiple times
@@ -212,6 +244,14 @@ protected:
 
     std::function<void(bcos::protocol::BlockNumber)> m_committedIndexNotifier;
     int64_t m_consStartTime = 0;
+    std::map<bcos::crypto::PublicPtr, bool, bcos::crypto::KeyCompare>
+        m_nodesWithInconsistentCheckPoint;
+
+    std::function<void(PBFTProposalInterface::Ptr)> m_reExecHandler;
+    bcos::protocol::Block::Ptr m_localBlock = nullptr;
+    mutable RecursiveMutex m_mutex;
+
+    bool m_resetted = false;
 };
 }  // namespace consensus
 }  // namespace bcos

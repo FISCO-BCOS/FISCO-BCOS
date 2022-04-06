@@ -61,6 +61,17 @@ void PBFTCache::onCheckPointTimeout()
                           << m_config->printCurrentState();
         return;
     }
+    // try to discover non-deterministic
+    if (triggerNonDeterministic())
+    {
+        PBFT_LOG(INFO) << LOG_DESC("Discover non-deterministic proposal, into recovery process")
+                       << printPBFTProposal(m_checkpointProposal) << m_config->printCurrentState();
+        // stall the pipeline
+        m_config->setWaitSealUntil(m_index);
+        m_config->setWaitResealUntil(m_index);
+        m_config->setExpectedCheckPoint(m_index);
+        return;
+    }
     if (m_committedIndexNotifier && m_config->timer()->running() == false)
     {
         m_committedIndexNotifier(m_config->committedProposal()->index());
@@ -77,6 +88,177 @@ void PBFTCache::onCheckPointTimeout()
     m_config->frontService()->asyncSendBroadcastMessage(
         bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*encodedData));
     m_timer->restart();
+}
+
+bool PBFTCache::triggerNonDeterministic()
+{
+    std::vector<bcos::crypto::PublicPtr> nodesWithInconsistentCheckPoint;
+    uint64_t collectedCheckPointQurom = 0;
+    for (auto const& cache : m_checkpointCacheList)
+    {
+        auto const& msgList = cache.second;
+        for (auto const& msg : msgList)
+        {
+            if (msg.second->index() != m_index)
+            {
+                continue;
+            }
+            auto generatedFrom = msg.first;
+            auto nodeInfo = m_config->getConsensusNodeByIndex(generatedFrom);
+            if (!nodeInfo)
+            {
+                continue;
+            }
+            collectedCheckPointQurom += nodeInfo->weight();
+            if (msg.second->hash() != m_checkpointProposal->hash() &&
+                !m_nodesWithInconsistentCheckPoint.count(nodeInfo->nodeID()))
+            {
+                m_nodesWithInconsistentCheckPoint.insert(std::make_pair(nodeInfo->nodeID(), false));
+                nodesWithInconsistentCheckPoint.emplace_back(nodeInfo->nodeID());
+            }
+        }
+    }
+    if (collectedCheckPointQurom < m_config->minRequiredQuorum())
+    {
+        m_nodesWithInconsistentCheckPoint.clear();
+        return false;
+    }
+    // request proposalState to the nodes with inconsistent checkPoint
+    auto txsStateRequest = m_config->pbftMessageFactory()->populateFrom(
+        PacketType::StateRequest, m_index, m_checkpointProposal->hash());
+    txsStateRequest->setGeneratedFrom(m_config->nodeIndex());
+    auto encodedData = m_config->codec()->encode(txsStateRequest);
+    for (auto const& nodeID : nodesWithInconsistentCheckPoint)
+    {
+        PBFT_LOG(INFO) << LOG_DESC("request state to ") << nodeID->shortHex();
+        m_config->frontService()->asyncSendMessageByNodeID(ModuleID::PBFT, nodeID,
+            ref(*encodedData), 0,
+            [this](Error::Ptr _error, NodeIDPtr _nodeID, bytesConstRef _data, const std::string&,
+                std::function<void(bytesConstRef _respData)>) {
+                onReceiveExecResult(_error, _nodeID, _data);
+            });
+    }
+    return true;
+}
+
+void PBFTCache::onReceiveExecResult(Error::Ptr _error, NodeIDPtr _nodeID, bytesConstRef _data)
+{
+    if (_error)
+    {
+        PBFT_LOG(WARNING) << LOG_DESC("onReceiveExecResult error")
+                          << LOG_KV("code", _error->errorCode())
+                          << LOG_KV("msg", _error->errorMessage())
+                          << LOG_KV("from", _nodeID ? _nodeID->shortHex() : "unknown");
+        return;
+    }
+    try
+    {
+        RecursiveGuard l(m_mutex);
+        auto response =
+            std::dynamic_pointer_cast<PBFTMessageInterface>(m_config->codec()->decode(_data));
+        if (response->index() != m_index)
+        {
+            PBFT_LOG(WARNING) << LOG_DESC("onReceiveExecResult: receive invalid execResult")
+                              << printPBFTMsgInfo(response);
+            return;
+        }
+        PBFT_LOG(INFO) << LOG_DESC("onReceiveExecResult") << printPBFTMsgInfo(response)
+                       << LOG_KV("from", _nodeID->shortHex());
+        auto execResult = m_config->stateMachine()->blockFactory()->createBlock(
+            response->consensusProposal()->data());
+        if (!m_localBlock)
+        {
+            m_localBlock = m_config->stateMachine()->blockFactory()->createBlock(
+                m_precommit->consensusProposal()->data());
+        }
+        // Note: sync implementation here for asyncGetExecResult
+        m_config->stateMachine()->asyncGetExecResult(
+            response->index(), [execResult, _nodeID, this](
+                                   bcos::Error::Ptr&& _error, bcos::protocol::Block::Ptr&& _block) {
+                if (_error)
+                {
+                    PBFT_LOG(WARNING) << LOG_DESC("onReceiveExecResult: asyncGetExecResult error")
+                                      << LOG_KV("code", _error->errorCode())
+                                      << LOG_KV("msg", _error->errorMessage());
+                    return;
+                }
+                if (_block->receiptsSize() != execResult->receiptsSize())
+                {
+                    PBFT_LOG(WARNING) << LOG_DESC("onReceiveExecResult: invalid execResult")
+                                      << LOG_KV("localReceiptSize", _block->receiptsSize())
+                                      << LOG_KV("receiveReceiptSize", execResult->receiptsSize());
+                    return;
+                }
+                if (_block->blockHeader()->hash() == execResult->blockHeader()->hash())
+                {
+                    PBFT_LOG(WARNING)
+                        << LOG_DESC("onReceiveExecResult: receive consistent execResult")
+                        << LOG_KV("localHash", _block->blockHeader()->hash().abridged())
+                        << LOG_KV("receiveHash", execResult->blockHeader()->hash().abridged());
+                    return;
+                }
+                for (size_t i = 0; i < _block->receiptsSize(); i++)
+                {
+                    auto localResult = _block->receipt(i);
+                    auto receiveResult = execResult->receipt(i);
+                    if (localResult->hash() != receiveResult->hash())
+                    {
+                        if (m_localBlock->transactionsSize() > i)
+                        {
+                            std::const_pointer_cast<Transaction>(m_localBlock->transaction(i))
+                                ->setAbort(true);
+                        }
+                        if (m_localBlock->transactionsMetaDataSize() > i)
+                        {
+                            std::const_pointer_cast<TransactionMetaData>(
+                                m_localBlock->transactionMetaData(i))
+                                ->setAbort(true);
+                        }
+                        auto txHash = _block->transactionHash(i);
+                        PBFT_LOG(INFO) << LOG_DESC("onReceiveExecResult: detect inconsistent tx")
+                                       << LOG_KV("localReceipt", localResult->hash().abridged())
+                                       << LOG_KV("receiveReceipt", receiveResult->hash().abridged())
+                                       << LOG_KV("index", i) << LOG_KV("tx", txHash.abridged());
+                    }
+                }
+                // TODO: consensus over the droped proposal
+                m_nodesWithInconsistentCheckPoint[_nodeID] = true;
+                for (auto const& it : m_nodesWithInconsistentCheckPoint)
+                {
+                    if (!it.second)
+                    {
+                        return;
+                    }
+                }
+                PBFT_LOG(INFO) << LOG_DESC(
+                                      "onReceiveExecResult: receive all proposalState, re-execute "
+                                      "the proposal")
+                               << LOG_KV("index", _block->blockHeader()->number())
+                               << LOG_KV("hash", _block->blockHeader()->hash().abridged());
+                // remove the executed proposal
+                // re-exec block
+                auto encodedData = std::make_shared<bytes>();
+                m_localBlock->setUndeterministic(true);
+                m_localBlock->encode(*encodedData);
+                // update the proposal
+                m_precommit->consensusProposal()->setData(ref(*encodedData));
+                m_precommit->consensusProposal()->setReExecFlag(true);
+                // TODO: provid proof
+                m_precommit->setPacketType(PacketType::DeterministicState);
+                auto payLoad = m_config->codec()->encode(m_precommit);
+                m_config->frontService()->asyncSendBroadcastMessage(
+                    bcos::protocol::NodeType::CONSENSUS_NODE, ModuleID::PBFT, ref(*payLoad));
+                if (m_reExecHandler)
+                {
+                    m_reExecHandler(m_precommit->consensusProposal());
+                }
+            });
+    }
+    catch (std::exception const& e)
+    {
+        PBFT_LOG(WARNING) << LOG_DESC("onReceiveExecResult exception")
+                          << LOG_KV("error", boost::diagnostic_information(e));
+    }
 }
 
 bool PBFTCache::existPrePrepare(PBFTMessageInterface::Ptr _prePrepareMsg)

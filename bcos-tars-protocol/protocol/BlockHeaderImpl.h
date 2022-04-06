@@ -86,60 +86,83 @@ public:
             m_inner()->data.consensusWeights.size());
     }
 
-    void setVersion(int32_t _version) override { m_inner()->data.version = _version; }
+    void setVersion(int32_t _version) override
+    {
+        m_inner()->data.version = _version;
+        clearDataHash();
+    }
 
     void setParentInfo(gsl::span<const bcos::protocol::ParentInfo> const& _parentInfo) override;
 
     void setParentInfo(bcos::protocol::ParentInfoList&& _parentInfo) override
     {
         setParentInfo(gsl::span(_parentInfo.data(), _parentInfo.size()));
+        clearDataHash();
     }
 
     void setTxsRoot(bcos::crypto::HashType _txsRoot) override
     {
         m_inner()->data.txsRoot.assign(_txsRoot.begin(), _txsRoot.end());
+        clearDataHash();
     }
     void setReceiptsRoot(bcos::crypto::HashType _receiptsRoot) override
     {
         m_inner()->data.receiptRoot.assign(_receiptsRoot.begin(), _receiptsRoot.end());
+        clearDataHash();
     }
     void setStateRoot(bcos::crypto::HashType _stateRoot) override
     {
         m_inner()->data.stateRoot.assign(_stateRoot.begin(), _stateRoot.end());
+        clearDataHash();
     }
     void setNumber(bcos::protocol::BlockNumber _blockNumber) override
     {
         m_inner()->data.blockNumber = _blockNumber;
+        clearDataHash();
     }
     void setGasUsed(bcos::u256 _gasUsed) override
     {
         m_inner()->data.gasUsed = boost::lexical_cast<std::string>(_gasUsed);
+        clearDataHash();
     }
-    void setTimestamp(int64_t _timestamp) override { m_inner()->data.timestamp = _timestamp; }
-    void setSealer(int64_t _sealerId) override { m_inner()->data.sealer = _sealerId; }
+    void setTimestamp(int64_t _timestamp) override
+    {
+        m_inner()->data.timestamp = _timestamp;
+        clearDataHash();
+    }
+    void setSealer(int64_t _sealerId) override
+    {
+        m_inner()->data.sealer = _sealerId;
+        clearDataHash();
+    }
     void setSealerList(gsl::span<const bcos::bytes> const& _sealerList) override;
     void setSealerList(std::vector<bcos::bytes>&& _sealerList) override
     {
         setSealerList(gsl::span(_sealerList.data(), _sealerList.size()));
+        clearDataHash();
     }
 
     void setConsensusWeights(gsl::span<const uint64_t> const& _weightList) override
     {
         m_inner()->data.consensusWeights.assign(_weightList.begin(), _weightList.end());
+        clearDataHash();
     }
 
     void setConsensusWeights(std::vector<uint64_t>&& _weightList) override
     {
         setConsensusWeights(gsl::span(_weightList.data(), _weightList.size()));
+        clearDataHash();
     }
 
     void setExtraData(bcos::bytes const& _extraData) override
     {
         m_inner()->data.extraData.assign(_extraData.begin(), _extraData.end());
+        clearDataHash();
     }
     void setExtraData(bcos::bytes&& _extraData) override
     {
         m_inner()->data.extraData.assign(_extraData.begin(), _extraData.end());
+        clearDataHash();
     }
     void setSignatureList(
         gsl::span<const bcos::protocol::Signature> const& _signatureList) override;
@@ -165,6 +188,9 @@ public:
         bcos::WriteGuard l(x_inner);
         *m_inner() = std::move(blockHeader);
     }
+
+private:
+    void clearDataHash() { m_inner()->dataHash = std::vector<char>(); }
 
 private:
     std::function<bcostars::BlockHeader*()> m_inner;

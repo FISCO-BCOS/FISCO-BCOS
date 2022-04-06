@@ -50,6 +50,7 @@ enum class TransactionStatus : int32_t
     WASMArgumentOutOfRange = 33,
     WASMUnreachableInstruction = 34,
     WASMTrap = 35,
+    Abort = 36,
     NonceCheckFail = 10000,  /// txPool related errors
     BlockLimitCheckFail = 10001,
     TxPoolIsFull = 10002,

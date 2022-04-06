@@ -73,7 +73,7 @@ public:
         block->appendTransaction(tx);
 
         std::promise<bcos::protocol::BlockHeader::Ptr> executedHeader;
-        _scheduler->executeBlock(block, false,
+        _scheduler->executeBlock(block, false, false,
             [&](bcos::Error::Ptr&& _error, bcos::protocol::BlockHeader::Ptr&& _header) {
                 if (_error)
                 {

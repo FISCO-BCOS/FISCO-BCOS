@@ -94,7 +94,7 @@ void StateMachine::apply(ssize_t, ProposalInterface::ConstPtr _lastAppliedPropos
     }
     // calls dispatcher to execute the block
     auto startT = utcTime();
-    m_scheduler->executeBlock(block, false,
+    m_scheduler->executeBlock(block, false, _proposal->reExecFlag(),
         [startT, block, _onExecuteFinished, _proposal, _executedProposal](
             Error::Ptr&& _error, BlockHeader::Ptr&& _blockHeader) {
             if (!_onExecuteFinished)
@@ -157,4 +157,10 @@ void StateMachine::preApply(
                          << LOG_KV("blockHeader.timestamps", block->blockHeaderConst()->timestamp())
                          << LOG_KV("timeCost", (utcTime() - startT));
     _onPreApplyFinished(true);
+}
+
+void StateMachine::asyncGetExecResult(bcos::protocol::BlockNumber _number,
+    std::function<void(bcos::Error::Ptr&&, bcos::protocol::Block::Ptr&&)> _callback)
+{
+    m_scheduler->getExecResult(_number, _callback);
 }

@@ -144,10 +144,10 @@ void PBFTEngine::onProposalApplyFailed(PBFTProposalInterface::Ptr _proposal)
         _proposal->index() >= m_config->syncingHighestNumber())
     {
         m_config->timer()->restart();
-        PBFT_LOG(INFO) << LOG_DESC(
+        /*PBFT_LOG(INFO) << LOG_DESC(
                               "proposal execute failed and re-push the proposal "
                               "into the cache")
-                       << printPBFTProposal(_proposal);
+                       << printPBFTProposal(_proposal);*/
         // Note: must erase the proposal firstly for updateCommitQueue will not
         // receive the duplicated executing proposal
         m_cacheProcessor->eraseExecutedProposal(_proposal->hash());
@@ -433,6 +433,28 @@ void PBFTEngine::onReceivePBFTMessage(Error::Ptr _error, NodeIDPtr _fromNode, by
             });
             return;
         }
+        // the proposal state requester
+        if (pbftMsg->packetType() == PacketType::StateRequest)
+        {
+            auto self = std::weak_ptr<PBFTEngine>(shared_from_this());
+            m_worker->enqueue([self, pbftMsg, _sendResponseCallback]() {
+                try
+                {
+                    auto pbftEngine = self.lock();
+                    if (!pbftEngine)
+                    {
+                        return;
+                    }
+                    pbftEngine->onReceiveTxsStateRequest(pbftMsg, _sendResponseCallback);
+                }
+                catch (std::exception const& e)
+                {
+                    PBFT_LOG(WARNING) << LOG_DESC("onReceiveTxsStateRequest exception")
+                                      << LOG_KV("error", boost::diagnostic_information(e));
+                }
+            });
+            return;
+        }
         m_msgQueue->push(pbftMsg);
         m_signalled.notify_all();
     }
@@ -471,11 +493,11 @@ void PBFTEngine::executeWorker()
         // proposal
         if ((c_consensusPacket.count(packetType)) && !m_config->canHandleNewProposal(pbftMsg))
         {
-            PBFT_LOG(DEBUG) << LOG_DESC(
+            /*PBFT_LOG(DEBUG) << LOG_DESC(
                                    "receive consensus packet, re-push it to the msgQueue for "
                                    "canHandleNewProposal")
                             << LOG_KV("index", pbftMsg->index()) << LOG_KV("type", packetType)
-                            << m_config->printCurrentState();
+                            << m_config->printCurrentState();*/
             m_msgQueue->push(pbftMsg);
             if (empty)
             {
@@ -544,6 +566,12 @@ void PBFTEngine::handleMsg(std::shared_ptr<PBFTBaseMessageInterface> _msg)
     {
         auto recoverResponse = std::dynamic_pointer_cast<PBFTMessageInterface>(_msg);
         handleRecoverResponse(recoverResponse);
+        break;
+    }
+    case PacketType::DeterministicState:
+    {
+        auto response = std::dynamic_pointer_cast<PBFTMessageInterface>(_msg);
+        handleDeterministicStateResponse(response);
         break;
     }
     default:
@@ -1386,4 +1414,68 @@ void PBFTEngine::onReceivePrecommitRequest(
     PBFT_LOG(INFO) << LOG_DESC("Receive precommitRequest and send response")
                    << LOG_KV("hash", pbftRequest->hash().abridged())
                    << LOG_KV("index", pbftRequest->index());
+}
+
+void PBFTEngine::handleDeterministicStateResponse(
+    std::shared_ptr<PBFTMessageInterface> _stateResponse)
+{
+    RecursiveGuard l(m_mutex);
+    // TODO: check the stateResponse
+    if (m_config->committedProposal()->index() >= _stateResponse->index())
+    {
+        return;
+    }
+    if (!m_cacheProcessor->proposalExecuted(_stateResponse->index()))
+    {
+        return;
+    }
+    auto ret = m_cacheProcessor->resetPrecommitCache(_stateResponse, true);
+    PBFT_LOG(INFO) << LOG_DESC("handleDeterministicStateResponse")
+                   << printPBFTMsgInfo(_stateResponse) << LOG_KV("success", ret);
+}
+
+void PBFTEngine::onReceiveTxsStateRequest(
+    std::shared_ptr<PBFTBaseMessageInterface> _stateReq, SendResponseCallback _sendResponse)
+{
+    auto stateReq = std::dynamic_pointer_cast<PBFTRequestInterface>(_stateReq);
+    RecursiveGuard l(m_mutex);
+    PBFT_LOG(INFO) << LOG_DESC("onReceiveTxsStateRequest") << printPBFTMsgInfo(stateReq);
+    if (m_config->committedProposal()->index() >= _stateReq->index())
+    {
+        return;
+    }
+    if (!m_cacheProcessor->proposalExecuted(stateReq->index()))
+    {
+        PBFT_LOG(INFO) << LOG_DESC(
+                              "onReceiveTxsStateRequest: the local proposal has not been executed")
+                       << printPBFTMsgInfo(stateReq);
+        return;
+    }
+    m_config->stateMachine()->asyncGetExecResult(stateReq->index(),
+        [_sendResponse, this](bcos::Error::Ptr&& _error, bcos::protocol::Block::Ptr&& _block) {
+            if (_error)
+            {
+                PBFT_LOG(WARNING) << LOG_DESC("onReceiveTxsStateRequest: asyncGetExecResult error")
+                                  << LOG_KV("code", _error->errorCode())
+                                  << LOG_KV("msg", _error->errorMessage());
+                return;
+            }
+            auto proposal = m_config->pbftMessageFactory()->createPBFTProposal();
+            auto proposalState = std::make_shared<bytes>();
+            _block->encode(*proposalState);
+            proposal->setData(ref(*proposalState));
+            proposal->setIndex(_block->blockHeader()->number());
+            proposal->setHash(_block->blockHeader()->hash());
+            auto response = m_config->pbftMessageFactory()->createPBFTMsg();
+            response->setConsensusProposal(proposal);
+            response->setPacketType(PacketType::StateResponse);
+            response->setGeneratedFrom(m_config->nodeIndex());
+            response->setHash(_block->blockHeader()->hash());
+            response->setIndex(_block->blockHeader()->number());
+            auto encodedData = m_config->codec()->encode(response);
+            _sendResponse(ref(*encodedData));
+            PBFT_LOG(INFO) << LOG_DESC("onReceiveTxsStateRequest and send response")
+                           << LOG_KV("hash", _block->blockHeader()->hash().abridged())
+                           << LOG_KV("index", _block->blockHeader()->number());
+        });
 }

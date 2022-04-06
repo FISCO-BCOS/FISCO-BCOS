@@ -265,7 +265,7 @@ void DownloadingQueue::applyBlock(Block::Ptr _block)
     }
     auto startT = utcTime();
     auto self = std::weak_ptr<DownloadingQueue>(shared_from_this());
-    m_config->scheduler()->executeBlock(_block, true,
+    m_config->scheduler()->executeBlock(_block, true, _block->undeterministic(),
         [self, startT, _block](Error::Ptr&& _error, protocol::BlockHeader::Ptr&& _blockHeader) {
             auto orgBlockHeader = _block->blockHeader();
             try

@@ -25,7 +25,6 @@
 #include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
 #include "bcos-framework/interfaces/storage/Common.h"
 #include "bcos-framework/interfaces/storage/StorageInterface.h"
-#include "utilities/Common.h"
 #include "utilities/MerkleProofUtility.h"
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Exceptions.h>

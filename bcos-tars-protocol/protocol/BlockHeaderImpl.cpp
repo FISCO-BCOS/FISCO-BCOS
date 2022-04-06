@@ -128,6 +128,7 @@ void BlockHeaderImpl::setParentInfo(gsl::span<const bcos::protocol::ParentInfo> 
         parentInfo.blockHash.assign(it.blockHash.begin(), it.blockHash.end());
         m_inner()->data.parentInfo.emplace_back(parentInfo);
     }
+    clearDataHash();
 }
 
 void BlockHeaderImpl::setSealerList(gsl::span<const bcos::bytes> const& _sealerList)
@@ -137,6 +138,7 @@ void BlockHeaderImpl::setSealerList(gsl::span<const bcos::bytes> const& _sealerL
     {
         m_inner()->data.sealerList.push_back(std::vector<char>(it.begin(), it.end()));
     }
+    clearDataHash();
 }
 
 void BlockHeaderImpl::setSignatureList(
@@ -154,4 +156,5 @@ void BlockHeaderImpl::setSignatureList(
         signature.signature.assign(it.signature.begin(), it.signature.end());
         m_inner()->signatureList.emplace_back(signature);
     }
+    clearDataHash();
 }

@@ -22,6 +22,7 @@
  */
 
 #include "Ledger.h"
+#include "utilities/Common.h"
 #include <bcos-codec/scale/Scale.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/interfaces/consensus/ConsensusNode.h>

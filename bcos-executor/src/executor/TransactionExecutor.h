@@ -135,6 +135,8 @@ public:
     void getCode(std::string_view contract,
         std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) override;
 
+    void removeState(bcos::protocol::BlockNumber _number) override;
+
 protected:
     virtual void dagExecuteTransactionsInternal(gsl::span<std::unique_ptr<CallParameters>> inputs,
         std::function<void(

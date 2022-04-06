@@ -149,6 +149,12 @@ public:
         return receiptsRoot;
     }
 
+    void setUndeterministic(bool _undeterministic) override
+    {
+        m_inner->undeterministic = _undeterministic;
+    }
+    bool undeterministic() const override { return m_inner->undeterministic; }
+
 private:
     std::shared_ptr<bcostars::Block> m_inner;
     mutable bcos::protocol::NonceList m_nonceList;

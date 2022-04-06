@@ -36,7 +36,7 @@ public:
       : m_ledger(_ledger), m_blockFactory(_blockFactory)
     {}
     ~FakeScheduler() override {}
-    void executeBlock(bcos::protocol::Block::Ptr _block, bool,
+    void executeBlock(bcos::protocol::Block::Ptr _block, bool, bool,
         std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&)>
             _callback) noexcept override
     {

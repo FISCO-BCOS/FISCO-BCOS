@@ -193,6 +193,35 @@ public:
 
     virtual uint64_t getViewChangeWeight(ViewType _view) { return m_viewChangeWeight.at(_view); }
 
+    bool proposalExecuted(bcos::protocol::BlockNumber _index)
+    {
+        if (!m_caches.count(_index))
+        {
+            return false;
+        }
+        auto const& cache = m_caches.at(_index);
+        if (!cache->checkPointProposal())
+        {
+            return false;
+        }
+        return true;
+    }
+
+    bool resetPrecommitCache(PBFTMessageInterface::Ptr _precommit, bool _needReExec)
+    {
+        auto index = _precommit->index();
+        if (!m_caches.count(index))
+        {
+            return false;
+        }
+        auto const& cache = m_caches.at(index);
+        if (!cache->checkPointProposal())
+        {
+            return false;
+        }
+        return cache->resetPrecommitCache(_precommit, _needReExec);
+    }
+
 protected:
     virtual void loadAndVerifyProposal(bcos::crypto::NodeIDPtr _fromNode,
         PBFTProposalInterface::Ptr _proposal, size_t _retryTime = 0);

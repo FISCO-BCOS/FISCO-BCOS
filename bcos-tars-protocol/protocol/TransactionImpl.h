@@ -91,6 +91,8 @@ public:
 
     std::function<bcostars::Transaction*()> const& innerGetter() { return m_inner; }
 
+    void setAbort(bool _abort) override { m_inner()->abort = _abort; }
+    bool abort() const override { return m_inner()->abort; }
 
 private:
     std::function<bcostars::Transaction*()> m_inner;

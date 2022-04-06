@@ -181,9 +181,12 @@ void PBFTCacheProcessor::addCache(
     auto index = _pbftReq->index();
     if (!(_pbftCache.count(index)))
     {
-        _pbftCache[index] = m_cacheFactory->createPBFTCache(m_config, index,
+        auto cache = m_cacheFactory->createPBFTCache(m_config, index,
             boost::bind(
                 &PBFTCacheProcessor::notifyCommittedProposalIndex, this, boost::placeholders::_1));
+        cache->registerReExecProposal(
+            boost::bind(&PBFTCacheProcessor::updateCommitQueue, this, boost::placeholders::_1));
+        _pbftCache[index] = cache;
     }
     _handler(_pbftCache[index], _pbftReq);
 }
@@ -409,6 +412,7 @@ void PBFTCacheProcessor::applyStateMachine(
                                << LOG_KV("index", _proposal->index())
                                << LOG_KV("beforeExec", _proposal->hash().abridged())
                                << LOG_KV("afterExec", executedProposal->hash().abridged())
+                               << LOG_KV("reExec", _proposal->reExecFlag())
                                << config->printCurrentState()
                                << LOG_KV("timecost", utcTime() - startT);
             }
@@ -446,6 +450,9 @@ void PBFTCacheProcessor::setCheckPointProposal(PBFTProposalInterface::Ptr _propo
                                       << LOG_KV("errorInfo", boost::diagnostic_information(e));
                 }
             });
+        (m_caches[index])
+            ->registerReExecProposal(
+                boost::bind(&PBFTCacheProcessor::updateCommitQueue, this, boost::placeholders::_1));
     }
     (m_caches[index])->setCheckPointProposal(_proposal);
 }
