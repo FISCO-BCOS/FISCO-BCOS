@@ -35,7 +35,8 @@ public:
     using Ptr = std::shared_ptr<ExecutiveState>;
 
     ExecutiveState(ExecutiveFactory::Ptr executiveFactory, CallParameters::UniquePtr input)
-      : m_id(input->executiveStateID),
+      : m_isStaticCall(input->staticCall),
+        m_id(input->executiveStateID),
         m_input(std::move(input)),
         m_executiveFactory(executiveFactory){};
 
@@ -52,6 +53,7 @@ public:
     void setResumeParam(CallParameters::UniquePtr pullParam);
 
 private:
+    bool m_isStaticCall;
     int64_t m_id;
     CallParameters::UniquePtr m_input;
     std::shared_ptr<TransactionExecutive> m_executive;

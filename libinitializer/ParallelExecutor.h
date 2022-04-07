@@ -35,16 +35,16 @@ public:
         });
     }
 
-    void executeTransactions(gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
+    void dmcExecuteTransactions(std::string contractAddress,
+        gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
         std::function<void(
-            bcos::Error::UniquePtr, gsl::span<bcos::protocol::ExecutionMessage::UniquePtr>)>
-            onAllTxStop,
-        std::function<void(bcos::Error::UniquePtr)> onFinish)
+            bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
+            callback) override
     {
-        m_pool.enqueue([this, inputs = std::move(inputs), onAllTxStop = std::move(onAllTxStop),
-                           onFinish = std::move(onFinish)] {
-            m_executor->executeTransactions(
-                std::move(inputs), std::move(onAllTxStop), std::move(onFinish));
+        m_pool.enqueue([this, contractAddress = std::move(contractAddress),
+                           inputs = std::move(inputs), callback = std::move(callback)] {
+            m_executor->dmcExecuteTransactions(
+                contractAddress, std::move(inputs), std::move(callback));
         });
     }
 

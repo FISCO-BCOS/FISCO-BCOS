@@ -14,20 +14,19 @@
  *  limitations under the License.
  *
  * @brief interface definition of ExecutiveFlow
- * @file ExecutiveQueueFlow.cpp
+ * @file ExecutiveStackFlow.cpp
  * @author: jimmyshi
  * @date: 2022-03-22
  */
 
-#include "ExecutiveQueueFlow.h"
+#include "ExecutiveStackFlow.h"
 #include "../Common.h"
 
 using namespace bcos;
 using namespace bcos::executor;
 
-void ExecutiveQueueFlow::submit(CallParameters::UniquePtr txInput)
+void ExecutiveStackFlow::submit(CallParameters::UniquePtr txInput)
 {
-    WriteGuard lock(x_lock);
     auto contextID = txInput->contextID;
     auto seq = txInput->seq;
     auto executiveState = m_executives.find({contextID, seq});
@@ -46,7 +45,17 @@ void ExecutiveQueueFlow::submit(CallParameters::UniquePtr txInput)
     }
 }
 
-void ExecutiveQueueFlow::asyncRun(std::function<void(CallParameters::UniquePtr)> onTxFinished,
+void ExecutiveStackFlow::submit(std::shared_ptr<std::vector<CallParameters::UniquePtr>> txInputs)
+{
+    WriteGuard lock(x_lock);
+    // from back to front, push in stack, so stack's tx can be executed from top
+    for (auto i = txInputs->size(); i > 0; i--)
+    {
+        submit(std::move((*txInputs)[i - 1]));
+    }
+}
+
+void ExecutiveStackFlow::asyncRun(std::function<void(CallParameters::UniquePtr)> onTxFinished,
     std::function<void(std::shared_ptr<std::vector<CallParameters::UniquePtr>>)> onPaused,
     std::function<void(bcos::Error::UniquePtr)> onFinished)
 {
@@ -54,7 +63,7 @@ void ExecutiveQueueFlow::asyncRun(std::function<void(CallParameters::UniquePtr)>
                 onFinished = std::move(onFinished)]() { run(onTxFinished, onPaused, onFinished); });
 }
 
-void ExecutiveQueueFlow::run(std::function<void(CallParameters::UniquePtr)> onTxFinished,
+void ExecutiveStackFlow::run(std::function<void(CallParameters::UniquePtr)> onTxFinished,
     std::function<void(std::shared_ptr<std::vector<CallParameters::UniquePtr>>)> onPaused,
     std::function<void(bcos::Error::UniquePtr)> onFinished)
 {
@@ -87,10 +96,8 @@ void ExecutiveQueueFlow::run(std::function<void(CallParameters::UniquePtr)> onTx
             }
             case ExecutiveState::FINISHED:
             {
-                asyncTo([onTxFinished = std::move(onTxFinished), outputPtr = output.release()]() {
-                    auto output = std::unique_ptr<CallParameters>(outputPtr);
-                    onTxFinished(std::move(output));
-                });
+                onTxFinished(std::move(output));
+
                 break;
             }
             }
@@ -101,8 +108,8 @@ void ExecutiveQueueFlow::run(std::function<void(CallParameters::UniquePtr)> onTx
     }
     catch (std::exception& e)
     {
-        EXECUTIVE_LOG(ERROR) << "ExecutiveQueueFlow run error: "
+        EXECUTIVE_LOG(ERROR) << "ExecutiveStackFlow run error: "
                              << boost::diagnostic_information(e);
-        onFinished(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "ExecutiveQueueFlow run error", e));
+        onFinished(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "ExecutiveStackFlow run error", e));
     }
 }

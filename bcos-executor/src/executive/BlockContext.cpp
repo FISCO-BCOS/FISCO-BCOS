@@ -23,7 +23,7 @@
 #include "../precompiled/Common.h"
 #include "../precompiled/Utilities.h"
 #include "../vm/Precompiled.h"
-#include "ExecutiveQueueFlow.h"
+#include "ExecutiveStackFlow.h"
 #include "TransactionExecutive.h"
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-framework/interfaces/protocol/Exceptions.h"
@@ -74,7 +74,7 @@ ExecutiveFlowInterface::Ptr BlockContext::getExecutiveFlow(std::string codeAddre
         /*
         bool success;
         std::tie(it, success) =
-            m_executiveFlows.emplace(codeAddress, std::make_shared<ExecutiveQueueFlow>());
+            m_executiveFlows.emplace(codeAddress, std::make_shared<ExecutiveStackFlow>());
 
             */
         return nullptr;

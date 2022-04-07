@@ -14,7 +14,7 @@
  *  limitations under the License.
  *
  * @brief interface definition of ExecutiveFlow
- * @file ExecutiveQueueFlow.h
+ * @file ExecutiveStackFlow.h
  * @author: jimmyshi
  * @date: 2022-03-22
  */
@@ -33,16 +33,17 @@ namespace bcos
 namespace executor
 {
 
-class ExecutiveQueueFlow : public virtual ExecutiveFlowInterface
+class ExecutiveStackFlow : public virtual ExecutiveFlowInterface
 {
 public:
-    ExecutiveQueueFlow(ExecutiveFactory::Ptr executiveFactory)
+    ExecutiveStackFlow(ExecutiveFactory::Ptr executiveFactory)
       : m_executiveFactory(executiveFactory)
     {}
 
-    virtual ~ExecutiveQueueFlow() {}
+    virtual ~ExecutiveStackFlow() {}
 
     void submit(CallParameters::UniquePtr txInput) override;
+    void submit(std::shared_ptr<std::vector<CallParameters::UniquePtr>> txInputs) override;
 
     void asyncRun(
         // onTxFinished(output)

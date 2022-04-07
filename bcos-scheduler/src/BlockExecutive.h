@@ -1,5 +1,7 @@
 #pragma once
 
+#include "DmcExecutor.h"
+#include "Executive.h"
 #include "ExecutorManager.h"
 #include "GraphKeyLocks.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
@@ -61,9 +63,10 @@ public:
     BlockExecutive& operator=(const BlockExecutive&) = delete;
     BlockExecutive& operator=(BlockExecutive&&) = delete;
 
-    void prepare();
-    void asyncExecute(std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback);
-    void asyncCall(
+    virtual void prepare();
+    virtual void asyncExecute(
+        std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback);
+    virtual void asyncCall(
         std::function<void(Error::UniquePtr&&, protocol::TransactionReceipt::Ptr&&)> callback);
     void asyncCommit(std::function<void(Error::UniquePtr)> callback);
 
@@ -80,19 +83,6 @@ public:
     bool isCall() { return m_staticCall; }
 
 private:
-    void DAGExecute(std::function<void(Error::UniquePtr)> error);
-    void DMCExecute(std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback);
-
-    enum TraverseHint : int8_t
-    {
-        PASS = 0,
-        DELETE,
-        SKIP,
-        UPDATE,
-        END,
-        NOT_END,  // not return, just continue process
-    };
-
     struct CommitStatus
     {
         std::atomic_size_t total;
@@ -107,65 +97,32 @@ private:
 
     struct BatchStatus  // Batch state per batch
     {
+        using Ptr = std::shared_ptr<BatchStatus>;
         std::atomic_size_t total = 0;
-        std::atomic_size_t received = 0;
+        std::atomic_size_t paused = 0;
+        std::atomic_size_t finished = 0;
         std::atomic_size_t error = 0;
 
-        std::function<void(Error::UniquePtr)> callback;
         std::atomic_bool callbackExecuted = false;
-        std::atomic_bool allSended = false;
     };
 
 
-    void startBatch(std::function<void(Error::UniquePtr)> callback);
-    void checkBatch(BatchStatus& status);
-
-    std::string newEVMAddress(int64_t blockNumber, ContextID contextID, Seq seq);
-    std::string newEVMAddress(
-        const std::string_view& _sender, bytesConstRef _init, u256 const& _salt);
-
+    void DMCExecute(BatchStatus::Ptr batchStatus,
+        std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback);
+    DmcExecutor::Ptr registerAndGetDmcExecutor(std::string contractAddress);
+    void schedulerExecutive(ExecutiveState::Ptr executiveState);
+    void onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr output);
+    void onDmcExecuteFinish(
+        std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback);
+    void serialPrepareExecutor();
     std::string preprocessAddress(const std::string_view& address);
 
-    struct ExecutiveState  // Executive state per tx
-    {
-        using Ptr = std::shared_ptr<ExecutiveState>;
-        ExecutiveState(int64_t _contextID, bcos::protocol::ExecutionMessage::UniquePtr _message,
-            bool _enableDAG)
-          : contextID(_contextID),
-            message(std::move(_message)),
-            enableDAG(_enableDAG),
-            id(_contextID)
-        {}
-
-        int64_t contextID;
-        std::stack<int64_t, std::list<int64_t>> callStack;
-        bcos::protocol::ExecutionMessage::UniquePtr message;
-        bcos::Error::UniquePtr error;
-        int64_t currentSeq = 0;
-        bool enableDAG;
-        bool skip = false;
-        int64_t id;
-    };
-
-    std::map<std::tuple<std::string, ContextID>, ExecutiveState::Ptr, std::less<>>
-        m_executiveStates;
-    std::map<int64_t, ExecutiveState::Ptr> m_id2ExecutiveState;
-    void traverseExecutive(std::function<TraverseHint(ExecutiveState::Ptr)> executeHandle);
-    TraverseHint handleExecutive(ExecutiveState::Ptr executiveState);
-    void queryExecutor(bcos::executor::ParallelTransactionExecutorInterface::Ptr executor,
-        ExecutiveState::Ptr executiveState, std::shared_ptr<BatchStatus> batchStatus);
-
-    struct ExecutiveResult
-    {
-        bcos::protocol::TransactionReceipt::Ptr receipt;
-        bcos::crypto::HashType transactionHash;
-        std::string source;
-    };
+    std::map<std::string, DmcExecutor::Ptr, std::less<>> m_dmcExecutors;
     std::vector<ExecutiveResult> m_executiveResults;
 
     size_t m_gasUsed = 0;
 
-    GraphKeyLocks m_keyLocks;
+    GraphKeyLocks::Ptr m_keyLocks = std::make_shared<GraphKeyLocks>();
 
     std::chrono::system_clock::time_point m_currentTimePoint;
 

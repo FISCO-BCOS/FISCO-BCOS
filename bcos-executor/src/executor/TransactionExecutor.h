@@ -103,11 +103,11 @@ public:
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
             callback) override;
 
-    void executeTransactions(gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
+    void dmcExecuteTransactions(std::string contractAddress,
+        gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
         std::function<void(
-            bcos::Error::UniquePtr, gsl::span<bcos::protocol::ExecutionMessage::UniquePtr>)>
-            onAllTxStop,
-        std::function<void(bcos::Error::UniquePtr)> onFinish) override;
+            bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
+            callback) override;
 
     void call(bcos::protocol::ExecutionMessage::UniquePtr input,
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
@@ -141,6 +141,30 @@ public:
 
     void getCode(std::string_view contract,
         std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) override;
+
+    struct HashCombine
+    {
+        size_t hash(const std::tuple<int64_t, int64_t>& val) const
+        {
+            size_t seed = hashInt64(std::get<0>(val));
+            boost::hash_combine(seed, hashInt64(std::get<1>(val)));
+
+            return seed;
+        }
+
+        bool equal(
+            const std::tuple<int64_t, int64_t>& lhs, const std::tuple<int64_t, int64_t>& rhs) const
+        {
+            return std::get<0>(lhs) == std::get<0>(rhs) && std::get<1>(lhs) == std::get<1>(rhs);
+        }
+
+        std::hash<int64_t> hashInt64;
+    };
+
+    struct CallState
+    {
+        std::shared_ptr<BlockContext> blockContext;
+    };
 
 protected:
     virtual void dagExecuteTransactionsInternal(gsl::span<std::unique_ptr<CallParameters>> inputs,
@@ -192,12 +216,14 @@ protected:
         gsl::span<std::unique_ptr<CallParameters>> inputs,
         std::vector<protocol::ExecutionMessage::UniquePtr>& executionResults);
 
-    std::shared_ptr<ExecutiveFlowInterface> getExecutiveFlow(
-        std::shared_ptr<BlockContext> blockContext, std::string codeAddress);
+    std::shared_ptr<ExecutiveFlowInterface> getExecutiveFlow(std::string codeAddress);
 
     void asyncExecuteExecutiveFlow(std::shared_ptr<ExecutiveFlowInterface> executiveFlow,
-        std::function<void(bcos::Error::UniquePtr&&, bcos::protocol::ExecutionMessage::UniquePtr&&)>
+        std::function<void(
+            bcos::Error::UniquePtr&&, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>&&)>
             callback);
+
+    virtual std::shared_ptr<BlockContext> createBlockContextForCall(int64_t contextID, int64_t seq);
 
     txpool::TxPoolInterface::Ptr m_txpool;
     storage::MergeableStorageInterface::Ptr m_cachedStorage;
@@ -223,30 +249,9 @@ protected:
     bcos::storage::StorageInterface::Ptr m_lastStateStorage;
     bcos::protocol::BlockNumber m_lastCommittedBlockNumber = 1;
 
-    struct HashCombine
-    {
-        size_t hash(const std::tuple<int64_t, int64_t>& val) const
-        {
-            size_t seed = hashInt64(std::get<0>(val));
-            boost::hash_combine(seed, hashInt64(std::get<1>(val)));
-
-            return seed;
-        }
-
-        bool equal(
-            const std::tuple<int64_t, int64_t>& lhs, const std::tuple<int64_t, int64_t>& rhs) const
-        {
-            return std::get<0>(lhs) == std::get<0>(rhs) && std::get<1>(lhs) == std::get<1>(rhs);
-        }
-
-        std::hash<int64_t> hashInt64;
-    };
-
-    struct CallState
-    {
-        std::shared_ptr<BlockContext> blockContext;
-    };
-    tbb::concurrent_hash_map<std::tuple<int64_t, int64_t>, CallState, HashCombine> m_calledContext;
+    std::shared_ptr<tbb::concurrent_hash_map<std::tuple<int64_t, int64_t>, CallState, HashCombine>>
+        m_calledContext = std::make_shared<
+            tbb::concurrent_hash_map<std::tuple<int64_t, int64_t>, CallState, HashCombine>>();
     std::shared_mutex m_stateStoragesMutex;
 
     std::shared_ptr<std::map<std::string, std::shared_ptr<PrecompiledContract>>>

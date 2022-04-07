@@ -31,8 +31,8 @@ CallParameters::UniquePtr ExecutiveState::go()
     // init
     if (!m_executive)
     {
-        m_executive =
-            m_executiveFactory->build(m_input->codeAddress, m_input->contextID, m_input->seq);
+        m_executive = m_executiveFactory->build(
+            m_input->codeAddress, m_input->contextID, m_input->seq, m_input->staticCall);
     }
 
     // run

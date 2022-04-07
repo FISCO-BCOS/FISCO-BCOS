@@ -86,10 +86,12 @@ public:
     ExecutiveFlowInterface::Ptr getExecutiveFlow(std::string codeAddress);
     void setExecutiveFlow(std::string codeAddress, ExecutiveFlowInterface::Ptr executiveFlow);
 
+
     void clear() { m_executiveFlows.clear(); }
 
 private:
     tbb::concurrent_unordered_map<std::string, ExecutiveFlowInterface::Ptr> m_executiveFlows;
+    int64_t m_maxFinishedContextID = 0;
 
     bcos::protocol::BlockNumber m_blockNumber;
     h256 m_blockHash;

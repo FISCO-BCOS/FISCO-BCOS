@@ -54,14 +54,15 @@ public:
         callback(nullptr, std::move(input));
     }
 
-    void executeTransactions(gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
-        std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
-            onOneTxStop,
-        std::function<void(bcos::Error::UniquePtr)> onFinish)
+    void dmcExecuteTransactions(std::string contractAddress,
+        gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
+        std::function<void(
+            bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
+            callback)
     {
+        (void)contractAddress;
         (void)inputs;
-        (void)onOneTxStop;
-        (void)onFinish;
+        (void)callback;
     }
 
     void dagExecuteTransactions(gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,

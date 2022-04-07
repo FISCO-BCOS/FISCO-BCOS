@@ -34,7 +34,9 @@ class ExecutiveFlowInterface
 public:
     using Ptr = std::shared_ptr<ExecutiveFlowInterface>;
 
-    virtual void submit(CallParameters::UniquePtr txInput) = 0;  // add new or set resume params
+    virtual void submit(CallParameters::UniquePtr txInput) = 0;
+    virtual void submit(std::shared_ptr<std::vector<CallParameters::UniquePtr>> txInputs) = 0;
+
 
     virtual void asyncRun(
         // onTxFinished(output)
