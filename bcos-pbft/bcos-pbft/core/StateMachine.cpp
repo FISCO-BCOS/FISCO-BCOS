@@ -142,6 +142,7 @@ void StateMachine::apply(ssize_t, ProposalInterface::ConstPtr _lastAppliedPropos
             // need to use m_worker to re-synchronize it here.
             _onExecuteFinished(true);
         });
+    _proposal->setReExecFlag(false);
     return;
 }
 
@@ -159,7 +160,7 @@ void StateMachine::preApply(
     _onPreApplyFinished(true);
 }
 
-void StateMachine::asyncGetExecResult(bcos::protocol::BlockNumber _number,
+void StateMachine::getExecResult(bcos::protocol::BlockNumber _number,
     std::function<void(bcos::Error::Ptr&&, bcos::protocol::Block::Ptr&&)> _callback)
 {
     m_scheduler->getExecResult(_number, _callback);

@@ -32,6 +32,7 @@ module bcostars {
         1 optional BlockHeaderData data;
         2 optional vector<byte> dataHash;
         3 optional vector<Signature> signatureList;
+        4 optional bool undeterministic = false;
     };
 
     struct Block {
@@ -43,6 +44,5 @@ module bcostars {
         6 optional vector<TransactionMetaData> transactionsMetaData;
         7 optional vector<vector<byte>> receiptsHash;
         8 optional vector<string> nonceList;
-        9 optional bool undeterministic = false;
     };
 };

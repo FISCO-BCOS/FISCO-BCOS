@@ -945,7 +945,6 @@ void TransactionExecutor::rollback(
         auto errorMessage = "Rollback error: empty stateStorages";
         EXECUTOR_LOG(ERROR) << errorMessage;
         callback(BCOS_ERROR_PTR(-1, errorMessage));
-
         return;
     }
 

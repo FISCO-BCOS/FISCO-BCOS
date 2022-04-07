@@ -40,7 +40,7 @@ void BlockExecutive::prepare()
         bcos::WriteGuard lock(x_prepareLock);
 
         auto startT = utcTime();
-
+        std::atomic<uint64_t> abortedTxs = 0;
         if (m_block->transactionsMetaDataSize() > 0)
         {
             SCHEDULER_LOG(DEBUG) << LOG_KV("block number", m_block->blockHeaderConst()->number())
@@ -59,6 +59,7 @@ void BlockExecutive::prepare()
                 // skip the aborted tx
                 if (metaData->abort())
                 {
+                    abortedTxs++;
                     continue;
                 }
                 auto message = m_scheduler->m_executionMessageFactory->createExecutionMessage();
@@ -119,6 +120,7 @@ void BlockExecutive::prepare()
                 m_executiveResults[i].source = tx->source();
                 if (tx->abort())
                 {
+                    abortedTxs++;
                     continue;
                 }
                 auto message = m_scheduler->m_executionMessageFactory->createExecutionMessage();
@@ -180,6 +182,7 @@ void BlockExecutive::prepare()
                              << LOG_KV("blockHeader.timestamp",
                                     m_block->blockHeaderConst()->timestamp())
                              << LOG_KV("meta tx count", m_block->transactionsMetaDataSize())
+                             << LOG_KV("abortedTxs", abortedTxs)
                              << LOG_KV("timeCost", (utcTime() - startT));
         m_hasPrepared = true;
     }
@@ -437,7 +440,8 @@ void BlockExecutive::asyncNotify(
 }
 void BlockExecutive::removeAllState()
 {
-    SCHEDULER_LOG(INFO) << LOG_DESC("removeAllState") << LOG_KV("syncedBlock", m_syncBlock);
+    SCHEDULER_LOG(INFO) << LOG_DESC("removeAllState") << LOG_KV("syncedBlock", m_syncBlock)
+                        << LOG_KV("number", m_block->blockHeader()->number());
     auto txsSize = m_block->transactionsHashSize();
     for (size_t i = 0; i < txsSize; i++)
     {
@@ -618,6 +622,9 @@ void BlockExecutive::DMTExecute(
                     executedBlockHeader->setGasUsed(m_gasUsed);
                     executedBlockHeader->setTxsRoot(m_block->calculateTransactionRoot());
                     executedBlockHeader->setReceiptsRoot(m_block->calculateReceiptRoot());
+                    executedBlockHeader->setUndeterministic(
+                        m_block->blockHeader()->undeterministic());
+
                     m_block->blockHeader()->setStateRoot(hash);
                     m_block->blockHeader()->setGasUsed(m_gasUsed);
                     m_block->blockHeader()->setTxsRoot(executedBlockHeader->txsRoot());

@@ -41,7 +41,7 @@ public:
     virtual void asyncPreApply(
         ProposalInterface::Ptr _proposal, std::function<void(bool)> _onPreApplyFinished) = 0;
 
-    virtual void asyncGetExecResult(bcos::protocol::BlockNumber,
+    virtual void getExecResult(bcos::protocol::BlockNumber,
         std::function<void(bcos::Error::Ptr&&, bcos::protocol::Block::Ptr&&)>)
     {}
     virtual bcos::protocol::BlockFactory::Ptr blockFactory() const = 0;

@@ -214,12 +214,6 @@ public:
         return receiptsRoot;
     }
 
-    void setUndeterministic(bool _undeterministic) override
-    {
-        m_pbRawBlock->set_undeterministic(_undeterministic);
-    }
-    bool undeterministic() const override { return m_pbRawBlock->undeterministic(); }
-
 protected:
     virtual void encodeTransactionsMetaData() const;
     virtual void decodeTransactionsMetaData();

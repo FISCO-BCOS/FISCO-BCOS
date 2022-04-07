@@ -130,6 +130,7 @@ void PBFTEngine::onLoadAndVerifyProposalSucc(PBFTProposalInterface::Ptr _proposa
     // must add lock here to ensure thread-safe
     RecursiveGuard l(m_mutex);
     m_cacheProcessor->updateCommitQueue(_proposal);
+    m_cacheProcessor->updatePrecommit(_proposal);
     m_config->timer()->restart();
 }
 
@@ -1425,10 +1426,6 @@ void PBFTEngine::handleDeterministicStateResponse(
     {
         return;
     }
-    if (!m_cacheProcessor->proposalExecuted(_stateResponse->index()))
-    {
-        return;
-    }
     auto ret = m_cacheProcessor->resetPrecommitCache(_stateResponse, true);
     PBFT_LOG(INFO) << LOG_DESC("handleDeterministicStateResponse")
                    << printPBFTMsgInfo(_stateResponse) << LOG_KV("success", ret);
@@ -1451,11 +1448,12 @@ void PBFTEngine::onReceiveTxsStateRequest(
                        << printPBFTMsgInfo(stateReq);
         return;
     }
-    m_config->stateMachine()->asyncGetExecResult(stateReq->index(),
-        [_sendResponse, this](bcos::Error::Ptr&& _error, bcos::protocol::Block::Ptr&& _block) {
+    m_config->stateMachine()->getExecResult(
+        stateReq->index(), [_sendResponse, _stateReq, this](
+                               bcos::Error::Ptr&& _error, bcos::protocol::Block::Ptr&& _block) {
             if (_error)
             {
-                PBFT_LOG(WARNING) << LOG_DESC("onReceiveTxsStateRequest: asyncGetExecResult error")
+                PBFT_LOG(WARNING) << LOG_DESC("onReceiveTxsStateRequest: getExecResult error")
                                   << LOG_KV("code", _error->errorCode())
                                   << LOG_KV("msg", _error->errorMessage());
                 return;
@@ -1476,6 +1474,7 @@ void PBFTEngine::onReceiveTxsStateRequest(
             _sendResponse(ref(*encodedData));
             PBFT_LOG(INFO) << LOG_DESC("onReceiveTxsStateRequest and send response")
                            << LOG_KV("hash", _block->blockHeader()->hash().abridged())
-                           << LOG_KV("index", _block->blockHeader()->number());
+                           << LOG_KV("index", _block->blockHeader()->number())
+                           << LOG_KV("to", _stateReq->generatedFrom());
         });
 }

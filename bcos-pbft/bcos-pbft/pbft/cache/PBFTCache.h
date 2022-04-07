@@ -80,6 +80,7 @@ public:
     virtual PBFTMessageInterface::Ptr preCommitWithoutData() { return m_precommitWithoutData; }
     bool resetPrecommitCache(PBFTMessageInterface::Ptr _precommit, bool _needReExec)
     {
+        RecursiveGuard l(m_mutex);
         if (m_resetted)
         {
             return false;
@@ -93,12 +94,25 @@ public:
             return false;
         }
         m_prePrepare = _precommit;
-        intoPrecommit();
+        m_precommit = m_prePrepare;
+        m_precommit->setGeneratedFrom(m_config->nodeIndex());
         m_precommit->consensusProposal()->setReExecFlag(_needReExec);
-        if (_needReExec)
+        m_precommitWithoutData = m_precommit->populateWithoutProposal();
+        auto precommitProposalWithoutData =
+            m_config->pbftMessageFactory()->populateFrom(m_precommit->consensusProposal(), false);
+        m_precommitWithoutData->setConsensusProposal(precommitProposalWithoutData);
+        if (_needReExec && !m_reExecuted)
         {
+            m_reExecuted = true;
+            // stall the pipeline
+            m_config->setWaitSealUntil(m_index);
+            m_config->setWaitResealUntil(m_index);
+            m_config->setExpectedCheckPoint(m_index);
+            // reset the checkpoint proposal
+            m_checkpointProposal = nullptr;
             m_reExecHandler(m_precommit->consensusProposal());
         }
+        checkAndCommitStableCheckPoint();
         m_resetted = true;
         return true;
     }
@@ -144,6 +158,13 @@ public:
         return 0;
     }
     void init();
+
+    // Note: only called when receive checkPoint-triggered-proposal response
+    virtual void setPrecommitCache(PBFTMessageInterface::Ptr _precommit)
+    {
+        m_precommit = _precommit;
+        m_precommitWithoutData = _precommit;
+    }
 
 protected:
     bool checkPrePrepareProposalStatus();
@@ -252,6 +273,9 @@ protected:
     mutable RecursiveMutex m_mutex;
 
     bool m_resetted = false;
+
+    bcos::protocol::Block::Ptr m_undeterministicBlock = nullptr;
+    bool m_reExecuted = false;
 };
 }  // namespace consensus
 }  // namespace bcos

@@ -189,6 +189,12 @@ public:
         *m_inner() = std::move(blockHeader);
     }
 
+    void setUndeterministic(bool _undeterministic) override
+    {
+        m_inner()->undeterministic = _undeterministic;
+    }
+    bool undeterministic() const override { return m_inner()->undeterministic; }
+
 private:
     void clearDataHash() { m_inner()->dataHash = std::vector<char>(); }
 

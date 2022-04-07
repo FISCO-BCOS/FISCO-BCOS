@@ -46,7 +46,7 @@ public:
     void asyncPreApply(
         ProposalInterface::Ptr _proposal, std::function<void(bool)> _onPreApplyFinished) override;
 
-    void asyncGetExecResult(bcos::protocol::BlockNumber _number,
+    void getExecResult(bcos::protocol::BlockNumber _number,
         std::function<void(bcos::Error::Ptr&&, bcos::protocol::Block::Ptr&&)> _callback) override;
     bcos::protocol::BlockFactory::Ptr blockFactory() const override { return m_blockFactory; }
 

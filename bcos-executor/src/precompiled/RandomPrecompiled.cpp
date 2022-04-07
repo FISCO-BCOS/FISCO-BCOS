@@ -21,6 +21,9 @@
 #include "PrecompiledResult.h"
 #include "Utilities.h"
 #include <bcos-codec/abi/ContractABICodec.h>
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
 using namespace bcos;
 using namespace bcos::precompiled;
 
@@ -44,9 +47,8 @@ std::shared_ptr<PrecompiledExecResult> RandomPrecompiled::call(
         auto blockContext = _executive->blockContext().lock();
         auto codec =
             std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
-        srand((unsigned)utcTime());
-        auto result = rand();
-        getErrorCodeOut(callResult->mutableExecResult(), result, *codec);
+        std::string random = boost::uuids::to_string(boost::uuids::random_generator()());
+        callResult->setExecResult(codec->encode(random));
     }
     else
     {

@@ -123,9 +123,6 @@ public:
     virtual void setNonceList(NonceList&& _nonceList) = 0;
     virtual NonceList const& nonceList() const = 0;
 
-    virtual void setUndeterministic(bool _undeterministic) = 0;
-    virtual bool undeterministic() const = 0;
-
 protected:
     TransactionFactory::Ptr m_transactionFactory;
     TransactionReceiptFactory::Ptr m_receiptFactory;

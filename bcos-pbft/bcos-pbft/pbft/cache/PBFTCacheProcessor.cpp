@@ -1159,3 +1159,30 @@ PBFTProposalInterface::Ptr PBFTCacheProcessor::fetchPrecommitProposal(
     }
     return cache->preCommitCache()->consensusProposal();
 }
+
+void PBFTCacheProcessor::updatePrecommit(PBFTProposalInterface::Ptr _proposal)
+{
+    auto pbftMessage = m_config->pbftMessageFactory()->createPBFTMsg();
+    pbftMessage->setConsensusProposal(_proposal);
+    pbftMessage->setIndex(_proposal->index());
+    pbftMessage->setHash(_proposal->hash());
+    addCache(
+        m_caches, pbftMessage, [](PBFTCache::Ptr _pbftCache, PBFTMessageInterface::Ptr _precommit) {
+            _pbftCache->setPrecommitCache(_precommit);
+        });
+}
+
+bool PBFTCacheProcessor::resetPrecommitCache(PBFTMessageInterface::Ptr _precommit, bool _needReExec)
+{
+    auto index = _precommit->index();
+    if (!m_caches.count(index))
+    {
+        addCache(m_caches, _precommit,
+            [_needReExec](PBFTCache::Ptr _pbftCache, PBFTMessageInterface::Ptr _precommit) {
+                _pbftCache->resetPrecommitCache(_precommit, _needReExec);
+            });
+        return true;
+    }
+    auto const& cache = m_caches.at(index);
+    return cache->resetPrecommitCache(_precommit, _needReExec);
+}

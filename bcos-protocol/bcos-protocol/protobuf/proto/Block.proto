@@ -21,5 +21,4 @@ message PBRawBlock{
     // CompleteBlock, OnlyWithTransactionsHash
     int32 type = 7;
     repeated bytes nonceList = 8;
-    bool undeterministic = 9;
 }

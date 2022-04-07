@@ -109,6 +109,9 @@ private:
     void asyncGetBlockTransactionHashes(bcos::protocol::BlockNumber blockNumber,
         std::function<void(Error::Ptr&&, std::vector<std::string>&&)> callback);
 
+    void asyncGetBlockTransactionsMetaData(bcos::protocol::BlockNumber blockNumber,
+        std::function<void(Error::Ptr&&, bcos::protocol::Block::Ptr&&)> callback);
+
     void asyncBatchGetTransactions(std::shared_ptr<std::vector<std::string>> hashes,
         std::function<void(Error::Ptr&&, std::vector<protocol::Transaction::Ptr>&&)> callback);
 

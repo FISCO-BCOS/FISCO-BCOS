@@ -207,20 +207,8 @@ public:
         return true;
     }
 
-    bool resetPrecommitCache(PBFTMessageInterface::Ptr _precommit, bool _needReExec)
-    {
-        auto index = _precommit->index();
-        if (!m_caches.count(index))
-        {
-            return false;
-        }
-        auto const& cache = m_caches.at(index);
-        if (!cache->checkPointProposal())
-        {
-            return false;
-        }
-        return cache->resetPrecommitCache(_precommit, _needReExec);
-    }
+    bool resetPrecommitCache(PBFTMessageInterface::Ptr _precommit, bool _needReExec);
+    virtual void updatePrecommit(PBFTProposalInterface::Ptr _proposal);
 
 protected:
     virtual void loadAndVerifyProposal(bcos::crypto::NodeIDPtr _fromNode,
