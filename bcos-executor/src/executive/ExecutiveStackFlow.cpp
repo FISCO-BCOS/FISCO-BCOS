@@ -103,8 +103,10 @@ void ExecutiveStackFlow::run(std::function<void(CallParameters::UniquePtr)> onTx
             }
             m_runPool.pop();
         }
-
-        asyncTo([onFinished = std::move(onFinished)]() { onFinished(nullptr); });
+        asyncTo([onFinished = std::move(onFinished)]() {
+            // return
+            onFinished(nullptr);
+        });
     }
     catch (std::exception& e)
     {

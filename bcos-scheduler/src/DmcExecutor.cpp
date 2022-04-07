@@ -18,6 +18,7 @@ void DmcExecutor::prepare()
     }
 
     m_needPrepare.merge(m_lockingPool);  // locked executive always need to prepare
+    std::set<ContextID> needSchedulerOut;
     for (auto contextID : m_needPrepare)
     {
         auto executiveState = m_pendingPool[contextID];
@@ -30,6 +31,11 @@ void DmcExecutor::prepare()
             m_lockingPool.erase(contextID);
             break;
         }
+        case SCHEDULER_OUT:
+        {
+            needSchedulerOut.insert(contextID);
+            break;
+        }
         case LOCKED:
         {
             if (m_lockingPool.count(contextID) == 0)
@@ -40,11 +46,17 @@ void DmcExecutor::prepare()
         }
         case END:
         {
+            m_pendingPool.erase(contextID);
             m_needSendPool.erase(contextID);
             m_lockingPool.erase(contextID);
             break;
         }
         }
+    }
+
+    for (auto contextID : needSchedulerOut)
+    {
+        schedulerOut(contextID);
     }
 
     m_needPrepare.clear();
@@ -62,12 +74,25 @@ void DmcExecutor::schedulerIn(ExecutiveState::Ptr executive)
 {
     assert(executive->message->to() == m_contractAddress);  // message must belongs to this executor
     auto contextID = executive->message->contextID();
+    // bcos::WriteGuard lock(x_poolLock);
     m_pendingPool[contextID] = executive;
+    m_needPrepare.insert(contextID);
 }
 
 void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callback)
 {
-    assert(m_needPrepare.size() == 0);  // must prepare beforehand
+    if (m_needPrepare.size() > 0)
+    {
+        callback(nullptr, NEED_PREPARE);
+        return;
+    }
+
+    if (hasFinished())
+    {
+        callback(nullptr, FINISHED);
+        return;
+    }
+
     assert(f_onSchedulerOut != nullptr);
 
     auto messages = std::make_shared<std::vector<protocol::ExecutionMessage::UniquePtr>>();
@@ -117,9 +142,9 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
     case protocol::ExecutionMessage::MESSAGE:
     case protocol::ExecutionMessage::TXHASH:
     {
-        auto newSeq = executiveState->currentSeq++;
         if (message->to().empty())
         {
+            auto newSeq = executiveState->currentSeq;
             if (message->createSalt())
             {
                 message->setTo(
@@ -130,11 +155,11 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
                 message->setTo(
                     newEVMAddress(m_block->blockHeaderConst()->number(), contextID, newSeq));
             }
-            // creationContextIDs.insert(message->contextID());
+            return SCHEDULER_OUT;
         }
+        auto newSeq = executiveState->currentSeq++;
         executiveState->callStack.push(newSeq);
         executiveState->message->setSeq(newSeq);
-
         SCHEDULER_LOG(TRACE) << "Execute, " << message->contextID() << " | " << message->seq()
                              << " | " << std::hex << message->transactionHash() << " | "
                              << message->to();
@@ -252,7 +277,6 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
         }
     }
 
-    executiveState->message = std::move(message);
     return NEED_SEND;
 }
 
@@ -261,21 +285,27 @@ void DmcExecutor::handleExecutiveOutputs(
 {
     for (auto& output : outputs)
     {
-        std::string to = std::string(output->to());
+        std::string to = {output->to().data(), output->to().size()};
         auto contextID = output->contextID();
+        m_pendingPool[contextID]->message = std::move(output);
+
         if (to == m_contractAddress)
         {
-            m_pendingPool[contextID]->message = std::move(output);
             m_needPrepare.insert(contextID);
         }
         else
         {
-            auto executiveState = m_pendingPool[contextID];
-            m_pendingPool.erase(contextID);
-            m_lockingPool.erase(contextID);
-            f_onSchedulerOut(std::move(executiveState));  // scheduler out
+            schedulerOut(contextID);
         }
     }
+}
+
+void DmcExecutor::schedulerOut(ContextID contextID)
+{
+    ExecutiveState::Ptr executiveState = m_pendingPool[contextID];
+    m_lockingPool.erase(contextID);
+    m_pendingPool.erase(contextID);
+    f_onSchedulerOut(std::move(executiveState));  // scheduler out
 }
 
 inline void toChecksumAddress(std::string& _hexAddress, bcos::crypto::Hash::Ptr _hashImpl)

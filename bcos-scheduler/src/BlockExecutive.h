@@ -1,6 +1,5 @@
 #pragma once
 
-#include "DmcExecutor.h"
 #include "Executive.h"
 #include "ExecutorManager.h"
 #include "GraphKeyLocks.h"
@@ -29,6 +28,7 @@
 namespace bcos::scheduler
 {
 class SchedulerImpl;
+class DmcExecutor;
 
 class BlockExecutive : public std::enable_shared_from_this<BlockExecutive>
 {
@@ -63,10 +63,9 @@ public:
     BlockExecutive& operator=(const BlockExecutive&) = delete;
     BlockExecutive& operator=(BlockExecutive&&) = delete;
 
-    virtual void prepare();
-    virtual void asyncExecute(
-        std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback);
-    virtual void asyncCall(
+    void prepare();
+    void asyncExecute(std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback);
+    void asyncCall(
         std::function<void(Error::UniquePtr&&, protocol::TransactionReceipt::Ptr&&)> callback);
     void asyncCommit(std::function<void(Error::UniquePtr)> callback);
 
@@ -104,12 +103,13 @@ private:
         std::atomic_size_t error = 0;
 
         std::atomic_bool callbackExecuted = false;
+        mutable SharedMutex x_lock;
     };
 
 
     void DMCExecute(BatchStatus::Ptr batchStatus,
         std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback);
-    DmcExecutor::Ptr registerAndGetDmcExecutor(std::string contractAddress);
+    std::shared_ptr<DmcExecutor> registerAndGetDmcExecutor(std::string contractAddress);
     void schedulerExecutive(ExecutiveState::Ptr executiveState);
     void onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr output);
     void onDmcExecuteFinish(
@@ -117,7 +117,7 @@ private:
     void serialPrepareExecutor();
     std::string preprocessAddress(const std::string_view& address);
 
-    std::map<std::string, DmcExecutor::Ptr, std::less<>> m_dmcExecutors;
+    std::map<std::string, std::shared_ptr<DmcExecutor>, std::less<>> m_dmcExecutors;
     std::vector<ExecutiveResult> m_executiveResults;
 
     size_t m_gasUsed = 0;

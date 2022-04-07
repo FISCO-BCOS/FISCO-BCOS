@@ -1,6 +1,7 @@
 #include "BlockExecutive.h"
 #include "ChecksumAddress.h"
 #include "Common.h"
+#include "DmcExecutor.h"
 #include "SchedulerImpl.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
@@ -89,7 +90,7 @@ void BlockExecutive::prepare()
                     m_executiveResults[i].source = metaData->source();
                 }
 
-                auto to = std::string(message->to());
+                std::string to = {message->to().data(), message->to().size()};
 #pragma omp critical
                 registerAndGetDmcExecutor(to)->submit(std::move(message), m_withDAG);
             }
@@ -154,7 +155,7 @@ void BlockExecutive::prepare()
                     m_withDAG = true;
                 }
 
-                auto to = std::string(message->to());
+                std::string to = {message->to().data(), message->to().size()};
 
 #pragma omp critical
                 registerAndGetDmcExecutor(to)->submit(std::move(message), m_withDAG);
@@ -177,9 +178,9 @@ void BlockExecutive::prepare()
 void BlockExecutive::asyncCall(
     std::function<void(Error::UniquePtr&&, protocol::TransactionReceipt::Ptr&&)> callback)
 {
-    auto self = std::weak_ptr<BlockExecutive>(shared_from_this());
-    asyncExecute([self, callback](Error::UniquePtr&& _error, protocol::BlockHeader::Ptr) {
-        auto executive = self.lock();
+    asyncExecute([executive = shared_from_this(), callback](
+                     Error::UniquePtr&& _error, protocol::BlockHeader::Ptr) {
+        // auto executive = self.lock();
         if (!executive)
         {
             callback(
@@ -225,14 +226,14 @@ void BlockExecutive::asyncExecute(
                 return;
             }
 
-            auto newBatchStatus = std::shared_ptr<BatchStatus>();
+            auto newBatchStatus = std::make_shared<BatchStatus>();
             newBatchStatus->total = m_dmcExecutors.size();
             DMCExecute(newBatchStatus, std::move(callback));
         });
     }
     else
     {
-        auto newBatchStatus = std::shared_ptr<BatchStatus>();
+        auto newBatchStatus = std::make_shared<BatchStatus>();
         newBatchStatus->total = m_dmcExecutors.size();
         DMCExecute(newBatchStatus, std::move(callback));
     }
@@ -424,7 +425,8 @@ void BlockExecutive::DMCExecute(BatchStatus::Ptr batchStatus,
                     << LOG_KV("errorCode", error ? error->errorCode() : -1)
                     << LOG_KV("errorMessage", error ? error.get()->errorMessage() : "null");
             }
-            else if (status == DmcExecutor::Status::PAUSED)
+            else if (status == DmcExecutor::Status::PAUSED ||
+                     status == DmcExecutor::Status::NEED_PREPARE)
             {
                 batchStatus->paused++;
             }
@@ -445,8 +447,9 @@ void BlockExecutive::DMCExecute(BatchStatus::Ptr batchStatus,
             {
                 return;
             }
-#pragma omp critical
+
             {
+                WriteGuard lock(batchStatus->x_lock);
                 if (batchStatus->callbackExecuted)
                 {
                     return;
@@ -461,10 +464,11 @@ void BlockExecutive::DMCExecute(BatchStatus::Ptr batchStatus,
                              SchedulerError::DMTError, "Execute with errors", *error),
                     nullptr);
             }
-            else if (batchStatus->paused != 0)
+            else if (batchStatus->paused != 0                         // has paused
+                     || batchStatus->total != m_dmcExecutors.size())  // new contract
             {
                 // Start next DMC round
-                auto newBatchStatus = std::shared_ptr<BatchStatus>();
+                auto newBatchStatus = std::make_shared<BatchStatus>();
                 newBatchStatus->total = m_dmcExecutors.size();
                 DMCExecute(newBatchStatus, std::move(callback));
             }
@@ -481,7 +485,7 @@ void BlockExecutive::DMCExecute(BatchStatus::Ptr batchStatus,
         };
 
     // for each dmcExecutor
-#pragma omp parallel for
+    //#pragma omp parallel for
     for (size_t i = 0; i < contractAddress.size(); i++)
     {
         auto dmcExecutor = m_dmcExecutors[contractAddress[i]];
@@ -800,6 +804,11 @@ void BlockExecutive::schedulerExecutive(ExecutiveState::Ptr executiveState)
 
 void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr output)
 {
+    if (m_staticCall)
+    {
+        output->setContextID(0);  // there is only 1 call, force contextID to 0
+    }
+
     auto txGasUsed = TRANSACTION_GAS - output->gasAvailable();
     // Calc the gas set to header
     m_gasUsed += txGasUsed;

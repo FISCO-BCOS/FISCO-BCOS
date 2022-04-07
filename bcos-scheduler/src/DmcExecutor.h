@@ -29,7 +29,6 @@
 #include <tbb/concurrent_unordered_map.h>
 #include <string>
 
-
 namespace bcos::scheduler
 {
 class DmcExecutor
@@ -38,8 +37,9 @@ public:
     enum Status : int8_t
     {
         ERROR,
-        PAUSED = 1,
-        FINISHED = 2
+        NEED_PREPARE = 1,
+        PAUSED = 2,
+        FINISHED = 3
     };
 
     using Ptr = std::shared_ptr<DmcExecutor>;
@@ -76,6 +76,7 @@ public:
     enum MessageHint : int8_t
     {
         NEED_SEND,
+        SCHEDULER_OUT,
         LOCKED,
         END
     };
@@ -83,6 +84,7 @@ public:
 private:
     MessageHint handleExecutiveMessage(ExecutiveState::Ptr executive);
     void handleExecutiveOutputs(std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs);
+    void schedulerOut(ContextID contextID);
 
     std::string newEVMAddress(int64_t blockNumber, int64_t contextID, int64_t seq);
     std::string newEVMAddress(
@@ -94,12 +96,13 @@ private:
     bcos::executor::ParallelTransactionExecutorInterface::Ptr m_executor;
     GraphKeyLocks::Ptr m_keyLocks;
     bcos::crypto::Hash::Ptr m_hashImpl;
-    std::map<ContextID, ExecutiveState::Ptr, std::less<>> m_pendingPool;
+    std::map<ContextID, ExecutiveState::Ptr, std::less<>> m_pendingPool;  // TODO: use tbb
     std::set<ContextID, std::less<>> m_needPrepare;
     std::set<ContextID, std::less<>> m_lockingPool;
     std::set<ContextID, std::less<>> m_needSendPool;
 
     mutable SharedMutex x_prepareLock;
+    mutable SharedMutex x_poolLock;
 
 
     std::function<void(bcos::protocol::ExecutionMessage::UniquePtr)> f_onTxFinished;

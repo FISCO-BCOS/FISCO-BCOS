@@ -44,11 +44,19 @@ public:
     {
         auto results = std::vector<protocol::ExecutionMessage::UniquePtr>();
 
-        for (unsigned long i = 0; i < m_contextID2Result.size(); i++)
+        std::set<int64_t, std::less<>> contextIDs;
+
+        for (auto it = m_contextID2Result.begin(); it != m_contextID2Result.end(); it++)
         {
             // we assume that context id is in sequence increasing
-            results.push_back(std::move(m_contextID2Result.at(i)));
+            contextIDs.insert(it->first);
         }
+
+        for (auto contextID : contextIDs)
+        {
+            results.push_back(std::move(m_contextID2Result.at(contextID)));
+        }
+
         m_contextID2Result.clear();
         return results;
     }

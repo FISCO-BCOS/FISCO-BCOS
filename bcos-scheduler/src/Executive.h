@@ -1,7 +1,7 @@
 #pragma once
-#include "bcos-framework/interfaces/executor/ExecutionMessage.h"
-#include "bcos-framework/interfaces/protocol/TransactionReceiptFactory.h"
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
+#include <bcos-framework/interfaces/executor/ExecutionMessage.h>
+#include <bcos-framework/interfaces/protocol/TransactionReceiptFactory.h>
 #include <bcos-utilities/Error.h>
 #include <stack>
 
