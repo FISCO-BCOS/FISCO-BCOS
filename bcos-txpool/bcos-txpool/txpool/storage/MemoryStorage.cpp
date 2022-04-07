@@ -227,6 +227,7 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
     }
     // verify the transaction
     result = m_config->txValidator()->verify(_tx);
+    TransactionStatus ret;
     if (result == TransactionStatus::None)
     {
         _tx->setImportTime(utcTime());
@@ -236,11 +237,15 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
         }
         if (_lock)
         {
-            result = insert(_tx);
+            ret = insert(_tx);
         }
         else
         {
-            result = insertWithoutLock(_tx);
+            ret = insertWithoutLock(_tx);
+        }
+        if (ret != TransactionStatus::None)
+        {
+            result = ret;
         }
     }
     return result;

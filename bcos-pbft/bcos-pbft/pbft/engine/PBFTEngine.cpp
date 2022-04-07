@@ -246,7 +246,6 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, bytesConstRef _proposalData
                           << m_config->printCurrentState()
                           << LOG_KV("syncingHighestNumber", m_config->syncingHighestNumber());
         m_config->notifyResetSealing(consProposalIndex);
-        m_config->validator()->asyncResetTxsFlag(_proposalData, false);
         return;
     }
     if (_proposalIndex <= m_config->committedProposal()->index() ||
@@ -270,7 +269,6 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, bytesConstRef _proposalData
                           << LOG_KV("hash", _proposalHash.abridged())
                           << m_config->printCurrentState();
         m_config->notifyResetSealing(consProposalIndex);
-        m_config->validator()->asyncResetTxsFlag(_proposalData, false);
         return;
     }
     if (m_config->timeout())
@@ -279,7 +277,6 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, bytesConstRef _proposalData
                        << LOG_KV("index", _proposalIndex)
                        << LOG_KV("hash", _proposalHash.abridged()) << m_config->printCurrentState();
         m_config->notifyResetSealing();
-        m_config->validator()->asyncResetTxsFlag(_proposalData, false);
         return;
     }
     PBFT_LOG(INFO) << LOG_DESC("asyncSubmitProposal") << LOG_KV("index", _proposalIndex)
@@ -326,7 +323,6 @@ void PBFTEngine::resetSealedTxs(std::shared_ptr<PBFTMessageInterface> _prePrepar
         return;
     }
     m_config->notifyResetSealing();
-    m_config->validator()->asyncResetTxsFlag(_prePrepareMsg->consensusProposal()->data(), false);
 }
 
 // receive the new block notification from the sync module
@@ -1448,33 +1444,5 @@ void PBFTEngine::onReceiveTxsStateRequest(
                        << printPBFTMsgInfo(stateReq);
         return;
     }
-    m_config->stateMachine()->getExecResult(
-        stateReq->index(), [_sendResponse, _stateReq, this](
-                               bcos::Error::Ptr&& _error, bcos::protocol::Block::Ptr&& _block) {
-            if (_error)
-            {
-                PBFT_LOG(WARNING) << LOG_DESC("onReceiveTxsStateRequest: getExecResult error")
-                                  << LOG_KV("code", _error->errorCode())
-                                  << LOG_KV("msg", _error->errorMessage());
-                return;
-            }
-            auto proposal = m_config->pbftMessageFactory()->createPBFTProposal();
-            auto proposalState = std::make_shared<bytes>();
-            _block->encode(*proposalState);
-            proposal->setData(ref(*proposalState));
-            proposal->setIndex(_block->blockHeader()->number());
-            proposal->setHash(_block->blockHeader()->hash());
-            auto response = m_config->pbftMessageFactory()->createPBFTMsg();
-            response->setConsensusProposal(proposal);
-            response->setPacketType(PacketType::StateResponse);
-            response->setGeneratedFrom(m_config->nodeIndex());
-            response->setHash(_block->blockHeader()->hash());
-            response->setIndex(_block->blockHeader()->number());
-            auto encodedData = m_config->codec()->encode(response);
-            _sendResponse(ref(*encodedData));
-            PBFT_LOG(INFO) << LOG_DESC("onReceiveTxsStateRequest and send response")
-                           << LOG_KV("hash", _block->blockHeader()->hash().abridged())
-                           << LOG_KV("index", _block->blockHeader()->number())
-                           << LOG_KV("to", _stateReq->generatedFrom());
-        });
+    m_cacheProcessor->responseTxsState(_stateReq, _sendResponse);
 }

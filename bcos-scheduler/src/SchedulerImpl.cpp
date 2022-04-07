@@ -20,6 +20,15 @@ void SchedulerImpl::getExecResult(bcos::protocol::BlockNumber _blockNumber,
     SCHEDULER_LOG(INFO) << LOG_DESC("getExecResult") << LOG_KV("index", _blockNumber);
     std::unique_lock<std::mutex> execLock(m_executeMutex);
     std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
+    {
+        ReadGuard l(x_executedBlocks);
+        if (m_executedBlocks.count(_blockNumber))
+        {
+            auto block = m_executedBlocks.at(_blockNumber);
+            _callback(nullptr, std::move(block));
+            return;
+        }
+    }
     if (m_blocks.empty())
     {
         _callback(std::make_shared<bcos::Error>(-1, "Not executed block"), nullptr);
@@ -46,11 +55,8 @@ void SchedulerImpl::getExecResult(bcos::protocol::BlockNumber _blockNumber,
         _callback(nullptr, std::move(block));
         return;
     }
-    else
-    {
-        _callback(std::make_shared<bcos::Error>(-1, "Not executed block"), nullptr);
-        return;
-    }
+    _callback(std::make_shared<bcos::Error>(-1, "Not executed block"), nullptr);
+    return;
 }
 
 void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify, bool _clearCache,
@@ -83,13 +89,17 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify, 
         for (auto it = m_blocks.begin(); it != m_blocks.end();)
         {
             auto index = it->get()->block()->blockHeader()->number();
-            if (index == block->blockHeader()->number())
+            if (index >= block->blockHeader()->number())
             {
                 SCHEDULER_LOG(INFO)
                     << "ExecuteBlock: remove undeterministic block" << LOG_KV("index", index);
                 // remove the state
                 it->get()->removeAllState();
                 removeAllOldPreparedBlock(index);
+                {
+                    WriteGuard l(x_executedBlocks);
+                    m_executedBlocks.insert(std::make_pair(index, it->get()->block()));
+                }
                 it = m_blocks.erase(it);
                 continue;
             }
@@ -111,7 +121,9 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify, 
             SCHEDULER_LOG(INFO) << "ExecuteBlock success, return executed block"
                                 << LOG_KV("block number", block->blockHeaderConst()->number())
                                 << LOG_KV("signatureSize", signature.size())
-                                << LOG_KV("verify", verify);
+                                << LOG_KV("verify", verify)
+                                << LOG_KV(
+                                       "undeterministic", block->blockHeader()->undeterministic());
 
             auto it = m_blocks.begin();
             while (it->get()->number() != requestNumber)
@@ -217,7 +229,10 @@ void SchedulerImpl::commitBlock(bcos::protocol::BlockHeader::Ptr header,
 {
     auto startT = utcTime();
     SCHEDULER_LOG(INFO) << "CommitBlock request" << LOG_KV("block number", header->number());
-
+    {
+        WriteGuard l(x_executedBlocks);
+        m_executedBlocks.erase(header->number());
+    }
     auto commitLock =
         std::make_shared<std::unique_lock<std::mutex>>(m_commitMutex, std::try_to_lock);
     if (!commitLock->owns_lock())
@@ -502,7 +517,10 @@ void SchedulerImpl::preExecuteBlock(bcos::protocol::Block::Ptr block, bool verif
     {
         SCHEDULER_LOG(DEBUG) << LOG_BADGE("prepareBlockExecutive")
                              << "Duplicate block to prepare, dropped."
-                             << LOG_KV("blockHeader.timestamp", timestamp);
+                             << LOG_KV("blockHeader.timestamp", timestamp)
+                             << LOG_KV("index", block->blockHeader()->number())
+                             << LOG_KV("hash", block->blockHeader()->hash().abridged())
+                             << LOG_KV("undeterministic", block->blockHeader()->undeterministic());
         return;
     }
     SCHEDULER_LOG(INFO) << LOG_BADGE("preExecuteBlock")

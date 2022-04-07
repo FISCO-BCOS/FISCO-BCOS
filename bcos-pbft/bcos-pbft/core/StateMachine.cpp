@@ -141,8 +141,8 @@ void StateMachine::apply(ssize_t, ProposalInterface::ConstPtr _lastAppliedPropos
             // The _onExecuteFinished callback itself does the asynchronous logic, so there is no
             // need to use m_worker to re-synchronize it here.
             _onExecuteFinished(true);
+            _proposal->setReExecFlag(false);
         });
-    _proposal->setReExecFlag(false);
     return;
 }
 

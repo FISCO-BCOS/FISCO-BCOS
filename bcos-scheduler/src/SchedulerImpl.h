@@ -86,6 +86,10 @@ private:
         std::function<void(Error::Ptr, ledger::LedgerConfig::Ptr ledgerConfig)> callback);
 
     std::list<BlockExecutive::Ptr> m_blocks;
+
+    std::map<bcos::protocol::BlockNumber, bcos::protocol::Block::Ptr> m_executedBlocks;
+    mutable SharedMutex x_executedBlocks;
+
     std::map<bcos::protocol::BlockNumber, std::map<int64_t, BlockExecutive::Ptr>>
         m_preparedBlocks;  // blockNumber -> <timestamp -> BlockExecutive>
 

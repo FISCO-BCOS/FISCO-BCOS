@@ -89,6 +89,7 @@ void PBFTCache::onCheckPointTimeout()
 
 bool PBFTCache::triggerNonDeterministic()
 {
+    RecursiveGuard l(m_mutex);
     if (!m_checkpointProposal)
     {
         return false;
@@ -133,20 +134,46 @@ bool PBFTCache::triggerNonDeterministic()
         PacketType::StateRequest, m_index, m_checkpointProposal->hash());
     txsStateRequest->setGeneratedFrom(m_config->nodeIndex());
     auto encodedData = m_config->codec()->encode(txsStateRequest);
+    auto self = std::weak_ptr<PBFTCache>(shared_from_this());
     for (auto const& nodeID : nodesWithInconsistentCheckPoint)
     {
         PBFT_LOG(INFO) << LOG_DESC("request state to ") << nodeID->shortHex()
                        << LOG_KV("index", txsStateRequest->index());
         m_config->frontService()->asyncSendMessageByNodeID(ModuleID::PBFT, nodeID,
             ref(*encodedData), 0,
-            [this](Error::Ptr _error, NodeIDPtr _nodeID, bytesConstRef _data, const std::string&,
+            [self](Error::Ptr _error, NodeIDPtr _nodeID, bytesConstRef _data, const std::string&,
                 std::function<void(bytesConstRef _respData)>) {
-                onReceiveExecResult(_error, _nodeID, _data);
+                auto cache = self.lock();
+                if (!cache)
+                {
+                    return;
+                }
+                cache->onReceiveExecResult(_error, _nodeID, _data);
             });
     }
     return true;
 }
 
+bcos::protocol::Block::Ptr PBFTCache::undeterministicBlock()
+{
+    if (m_undeterministicBlock)
+    {
+        return m_undeterministicBlock;
+    }
+    // Note: sync interface here
+    m_config->stateMachine()->getExecResult(
+        m_index, [this](bcos::Error::Ptr&& _error, bcos::protocol::Block::Ptr&& _block) {
+            if (_error)
+            {
+                PBFT_LOG(WARNING) << LOG_DESC("onReceiveExecResult: getExecResult error")
+                                  << LOG_KV("code", _error->errorCode())
+                                  << LOG_KV("msg", _error->errorMessage());
+                return;
+            }
+            m_undeterministicBlock = std::move(_block);
+        });
+    return m_undeterministicBlock;
+}
 void PBFTCache::onReceiveExecResult(Error::Ptr _error, NodeIDPtr _nodeID, bytesConstRef _data)
 {
     if (_error)
@@ -168,6 +195,10 @@ void PBFTCache::onReceiveExecResult(Error::Ptr _error, NodeIDPtr _nodeID, bytesC
                               << printPBFTMsgInfo(response);
             return;
         }
+        if (!m_precommit)
+        {
+            return;
+        }
         PBFT_LOG(INFO) << LOG_DESC("onReceiveExecResult") << printPBFTMsgInfo(response)
                        << LOG_KV("from", _nodeID->shortHex());
         auto execResult = m_config->stateMachine()->blockFactory()->createBlock(
@@ -178,59 +209,44 @@ void PBFTCache::onReceiveExecResult(Error::Ptr _error, NodeIDPtr _nodeID, bytesC
                 m_precommit->consensusProposal()->data());
         }
         // Note: sync implementation here for getExecResult
-        if (!m_undeterministicBlock)
-        {
-            m_config->stateMachine()->getExecResult(
-                response->index(), [execResult, _nodeID, this](bcos::Error::Ptr&& _error,
-                                       bcos::protocol::Block::Ptr&& _block) {
-                    if (_error)
-                    {
-                        PBFT_LOG(WARNING) << LOG_DESC("onReceiveExecResult: getExecResult error")
-                                          << LOG_KV("code", _error->errorCode())
-                                          << LOG_KV("msg", _error->errorMessage());
-                        return;
-                    }
-                    m_undeterministicBlock = std::move(_block);
-                });
-        }
-        if (!m_undeterministicBlock)
+        auto localExecResult = undeterministicBlock();
+        if (!localExecResult)
         {
             return;
         }
-        if (m_undeterministicBlock->receiptsSize() != execResult->receiptsSize())
+        if (localExecResult->receiptsSize() != execResult->receiptsSize())
         {
             PBFT_LOG(WARNING) << LOG_DESC("onReceiveExecResult: invalid execResult")
-                              << LOG_KV("localReceiptSize", m_undeterministicBlock->receiptsSize())
+                              << LOG_KV("localReceiptSize", execResult->receiptsSize())
                               << LOG_KV("receiveReceiptSize", execResult->receiptsSize());
             return;
         }
-        if (m_undeterministicBlock->blockHeader()->hash() == execResult->blockHeader()->hash())
+        if (localExecResult->blockHeader()->hash() == execResult->blockHeader()->hash())
         {
             PBFT_LOG(WARNING) << LOG_DESC("onReceiveExecResult: receive consistent execResult")
-                              << LOG_KV("localHash",
-                                     m_undeterministicBlock->blockHeader()->hash().abridged())
+                              << LOG_KV("localHash", execResult->blockHeader()->hash().abridged())
                               << LOG_KV(
                                      "receiveHash", execResult->blockHeader()->hash().abridged());
             return;
         }
-        for (size_t i = 0; i < m_undeterministicBlock->receiptsSize(); i++)
+        for (size_t i = 0; i < localExecResult->receiptsSize(); i++)
         {
-            auto localResult = m_undeterministicBlock->receipt(i);
+            auto localResult = localExecResult->receipt(i);
             auto receiveResult = execResult->receipt(i);
             if (localResult->hash() != receiveResult->hash())
             {
                 if (m_localBlock->transactionsSize() > i)
                 {
-                    std::const_pointer_cast<Transaction>(m_localBlock->transaction(i))
-                        ->setAbort(true);
+                    auto tx = std::const_pointer_cast<Transaction>(m_localBlock->transaction(i));
+                    tx->setAbort(true);
                 }
                 if (m_localBlock->transactionsMetaDataSize() > i)
                 {
-                    std::const_pointer_cast<TransactionMetaData>(
-                        m_localBlock->transactionMetaData(i))
-                        ->setAbort(true);
+                    auto meta = std::const_pointer_cast<TransactionMetaData>(
+                        m_localBlock->transactionMetaData(i));
+                    meta->setAbort(true);
                 }
-                auto txHash = m_undeterministicBlock->transactionHash(i);
+                auto txHash = localExecResult->transactionHash(i);
                 PBFT_LOG(INFO) << LOG_DESC("onReceiveExecResult: detect inconsistent tx")
                                << LOG_KV("localReceipt", localResult->hash().abridged())
                                << LOG_KV("receiveReceipt", receiveResult->hash().abridged())
@@ -249,8 +265,8 @@ void PBFTCache::onReceiveExecResult(Error::Ptr _error, NodeIDPtr _nodeID, bytesC
         PBFT_LOG(INFO) << LOG_DESC(
                               "onReceiveExecResult: receive all proposalState, re-execute "
                               "the proposal")
-                       << LOG_KV("index", m_undeterministicBlock->blockHeader()->number())
-                       << LOG_KV("hash", m_undeterministicBlock->blockHeader()->hash().abridged());
+                       << LOG_KV("index", localExecResult->blockHeader()->number())
+                       << LOG_KV("hash", localExecResult->blockHeader()->hash().abridged());
         // remove the executed proposal
         // re-exec block
         auto encodedData = std::make_shared<bytes>();

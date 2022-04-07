@@ -101,8 +101,10 @@ public:
         auto precommitProposalWithoutData =
             m_config->pbftMessageFactory()->populateFrom(m_precommit->consensusProposal(), false);
         m_precommitWithoutData->setConsensusProposal(precommitProposalWithoutData);
-        if (_needReExec && !m_reExecuted)
+        if (_needReExec && !m_reExecuted && m_reExecHandler)
         {
+            PBFT_LOG(INFO) << LOG_DESC("resetPrecommitCache and re-exec the proposal")
+                           << printPBFTMsgInfo(m_precommit);
             m_reExecuted = true;
             // stall the pipeline
             m_config->setWaitSealUntil(m_index);
@@ -165,6 +167,8 @@ public:
         m_precommit = _precommit;
         m_precommitWithoutData = _precommit;
     }
+
+    bcos::protocol::Block::Ptr undeterministicBlock();
 
 protected:
     bool checkPrePrepareProposalStatus();

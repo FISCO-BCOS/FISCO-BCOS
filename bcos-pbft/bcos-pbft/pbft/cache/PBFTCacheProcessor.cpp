@@ -247,7 +247,7 @@ void PBFTCacheProcessor::resetTimer()
 void PBFTCacheProcessor::updateCommitQueue(PBFTProposalInterface::Ptr _committedProposal)
 {
     assert(_committedProposal);
-    if (m_executingProposals.count(_committedProposal->hash()))
+    if (!_committedProposal->reExecFlag() && m_executingProposals.count(_committedProposal->hash()))
     {
         return;
     }
@@ -1185,4 +1185,44 @@ bool PBFTCacheProcessor::resetPrecommitCache(PBFTMessageInterface::Ptr _precommi
     }
     auto const& cache = m_caches.at(index);
     return cache->resetPrecommitCache(_precommit, _needReExec);
+}
+
+void PBFTCacheProcessor::responseTxsState(std::shared_ptr<PBFTBaseMessageInterface> _stateReq,
+    std::function<void(bytesConstRef _respData)> _sendResponse)
+{
+    if (!m_caches.count(_stateReq->index()))
+    {
+        PBFT_LOG(INFO)
+            << LOG_DESC("onReceiveTxsStateRequest and send response failed for empty local cache")
+            << LOG_KV("index", _stateReq->index()) << LOG_KV("from", _stateReq->generatedFrom());
+        return;
+    }
+    auto cache = m_caches.at(_stateReq->index());
+    auto execResult = cache->undeterministicBlock();
+    if (!execResult)
+    {
+        PBFT_LOG(INFO)
+            << LOG_DESC(
+                   "onReceiveTxsStateRequest and send response failed for empty local execResult")
+            << LOG_KV("index", _stateReq->index()) << LOG_KV("from", _stateReq->generatedFrom());
+        return;
+    }
+    auto proposal = m_config->pbftMessageFactory()->createPBFTProposal();
+    auto proposalState = std::make_shared<bytes>();
+    execResult->encode(*proposalState);
+    proposal->setData(ref(*proposalState));
+    proposal->setIndex(execResult->blockHeader()->number());
+    proposal->setHash(execResult->blockHeader()->hash());
+    auto response = m_config->pbftMessageFactory()->createPBFTMsg();
+    response->setConsensusProposal(proposal);
+    response->setPacketType(PacketType::StateResponse);
+    response->setGeneratedFrom(m_config->nodeIndex());
+    response->setHash(execResult->blockHeader()->hash());
+    response->setIndex(execResult->blockHeader()->number());
+    auto encodedData = m_config->codec()->encode(response);
+    _sendResponse(ref(*encodedData));
+    PBFT_LOG(INFO) << LOG_DESC("onReceiveTxsStateRequest and send response")
+                   << LOG_KV("hash", execResult->blockHeader()->hash().abridged())
+                   << LOG_KV("index", execResult->blockHeader()->number())
+                   << LOG_KV("to", _stateReq->generatedFrom());
 }

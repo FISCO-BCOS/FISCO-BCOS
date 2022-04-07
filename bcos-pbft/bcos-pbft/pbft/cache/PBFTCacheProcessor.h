@@ -199,16 +199,14 @@ public:
         {
             return false;
         }
-        auto const& cache = m_caches.at(_index);
-        if (!cache->checkPointProposal())
-        {
-            return false;
-        }
         return true;
     }
 
     bool resetPrecommitCache(PBFTMessageInterface::Ptr _precommit, bool _needReExec);
     virtual void updatePrecommit(PBFTProposalInterface::Ptr _proposal);
+
+    void responseTxsState(std::shared_ptr<PBFTBaseMessageInterface> _stateReq,
+        std::function<void(bytesConstRef _respData)> _sendResponse);
 
 protected:
     virtual void loadAndVerifyProposal(bcos::crypto::NodeIDPtr _fromNode,
