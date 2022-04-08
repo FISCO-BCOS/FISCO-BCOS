@@ -58,6 +58,7 @@ public:
     virtual void setUnsealedTxsSize(size_t _unsealedTxsSize)
     {
         m_unsealedTxsSize = _unsealedTxsSize;
+        m_onReady();
         m_config->consensus()->asyncNoteUnSealedTxsSize(_unsealedTxsSize, [](Error::Ptr _error) {
             if (_error)
             {
