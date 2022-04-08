@@ -494,3 +494,50 @@ bool precompiled::recursiveBuildDir(
     }
     return true;
 }
+
+executor::CallParameters::UniquePtr precompiled::externalRequest(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef _param,
+    const std::string& _origin, const std::string& _sender, const std::string& _to, bool _isStatic,
+    bool _isCreate, int64_t gasLeft)
+{
+    auto blockContext = _executive->blockContext().lock();
+    auto codec =
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+    auto request = std::make_unique<executor::CallParameters>(executor::CallParameters::MESSAGE);
+
+    request->senderAddress = _sender;
+    request->receiveAddress = _to;
+    request->origin = _origin;
+    request->codeAddress = request->receiveAddress;
+    request->status = 0;
+    request->data = _param.toBytes();
+    request->create = _isCreate;
+    request->staticCall = !_isCreate && _isStatic;
+    request->gas = gasLeft;
+    return _executive->externalCall(std::move(request));
+}
+
+s256 precompiled::externalTouchNewFile(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive, const std::string& _origin,
+    const std::string& _sender, const std::string& _filePath, const std::string& _fileType,
+    int64_t gasLeft)
+{
+    auto blockContext = _executive->blockContext().lock();
+    auto codec =
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+    std::string bfsAddress = blockContext->isWasm() ? BFS_NAME : BFS_ADDRESS;
+    auto codecResult =
+        codec->encodeWithSig(precompiled::FILE_SYSTEM_METHOD_TOUCH, _filePath, _fileType);
+    auto response = externalRequest(
+        _executive, ref(codecResult), _origin, _sender, bfsAddress, false, false, gasLeft);
+    s256 result;
+    if (response->status == (int32_t)TransactionStatus::None)
+    {
+        codec->decode(ref(response->data), result);
+    }
+    else
+    {
+        result = (int)CODE_FILE_BUILD_DIR_FAILED;
+    }
+    return result;
+}

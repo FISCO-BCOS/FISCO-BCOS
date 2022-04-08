@@ -19,10 +19,10 @@
  */
 
 #include "DagTransferPrecompiled.h"
-#include "../PrecompiledCodec.h"
 #include "../PrecompiledResult.h"
 #include "../TableFactoryPrecompiled.h"
 #include "../Utilities.h"
+#include "bcos-codec/wrapper/CodecWrapper.h"
 #include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
 #include <bcos-framework/interfaces/storage/Common.h>
 
@@ -73,7 +73,7 @@ std::vector<std::string> DagTransferPrecompiled::getParallelTag(bytesConstRef _p
     bytesConstRef data = getParamData(_param);
 
     std::vector<std::string> results;
-    auto codec = std::make_shared<PrecompiledCodec>(m_hashImpl, _isWasm);
+    auto codec = std::make_shared<CodecWrapper>(m_hashImpl, _isWasm);
     // user_name user_balance 2 fields in table, the key of table is user_name field
     if (func == name2Selector[DAG_TRANSFER_METHOD_ADD_STR_UINT])
     {  // userAdd(string,uint256)
@@ -130,11 +130,6 @@ std::vector<std::string> DagTransferPrecompiled::getParallelTag(bytesConstRef _p
     return results;
 }
 
-std::string DagTransferPrecompiled::toString()
-{
-    return "DagTransfer";
-}
-
 std::shared_ptr<PrecompiledExecResult> DagTransferPrecompiled::call(
     std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
     const std::string& _origin, const std::string&, int64_t)
@@ -184,7 +179,7 @@ void DagTransferPrecompiled::userAddCall(std::shared_ptr<executor::TransactionEx
     u256 amount;
     auto blockContext = _executive->blockContext().lock();
     auto codec =
-        std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     codec->decode(_data, user, amount);
 
     int ret;
@@ -235,7 +230,7 @@ void DagTransferPrecompiled::userSaveCall(
     u256 amount;
     auto blockContext = _executive->blockContext().lock();
     auto codec =
-        std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     codec->decode(_data, user, amount);
 
     int ret;
@@ -311,7 +306,7 @@ void DagTransferPrecompiled::userDrawCall(
     u256 amount;
     auto blockContext = _executive->blockContext().lock();
     auto codec =
-        std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     codec->decode(_data, user, amount);
 
     u256 balance;
@@ -376,7 +371,7 @@ void DagTransferPrecompiled::userBalanceCall(
     std::string user;
     auto blockContext = _executive->blockContext().lock();
     auto codec =
-        std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     codec->decode(_data, user);
 
     u256 balance;
@@ -426,7 +421,7 @@ void DagTransferPrecompiled::userTransferCall(
 {
     auto blockContext = _executive->blockContext().lock();
     auto codec =
-        std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     std::string fromUser, toUser;
     u256 amount;
     codec->decode(_data, fromUser, toUser, amount);

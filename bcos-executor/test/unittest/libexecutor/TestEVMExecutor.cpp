@@ -22,12 +22,12 @@
 #include "../mock/MockTransactionalStorage.h"
 #include "../mock/MockTxPool.h"
 #include "Common.h"
+#include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/protocol/Transaction.h"
 #include "bcos-protocol/protobuf/PBBlockHeader.h"
 #include "bcos-table/src/StateStorage.h"
 #include "executor/TransactionExecutorFactory.h"
-#include "precompiled/PrecompiledCodec.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
@@ -91,7 +91,7 @@ struct TransactionExecutorFixture
                 ->data(),
             64);
 
-        codec = std::make_unique<bcos::precompiled::PrecompiledCodec>(hashImpl, false);
+        codec = std::make_unique<bcos::precompiled::CodecWrapper>(hashImpl, false);
     }
 
     TransactionExecutor::Ptr executor;
@@ -102,7 +102,7 @@ struct TransactionExecutorFixture
 
     KeyPairInterface::Ptr keyPair;
     int64_t gas = 3000000;
-    std::unique_ptr<bcos::precompiled::PrecompiledCodec> codec;
+    std::unique_ptr<bcos::precompiled::CodecWrapper> codec;
 
     string helloBin =
         "60806040526040805190810160405280600181526020017f3100000000000000000000000000000000000000"

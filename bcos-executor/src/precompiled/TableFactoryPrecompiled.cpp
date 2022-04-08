@@ -163,7 +163,7 @@ void TableFactoryPrecompiled::createTable(
     std::string valueField;
     auto blockContext = _executive->blockContext().lock();
     auto codec =
-        std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     codec->decode(data, tableName, keyField, valueField);
 
     precompiled::checkCreateTableParam(tableName, keyField, valueField);
@@ -229,7 +229,7 @@ void TableFactoryPrecompiled::select(
     precompiled::ConditionTuple conditions;
     auto blockContext = _executive->blockContext().lock();
     auto codec =
-        std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     codec->decode(data, tableName, conditions);
     tableName = getTableName(tableName);
     PRECOMPILED_LOG(DEBUG) << LOG_DESC("Table select") << LOG_KV("tableName", tableName);
@@ -282,7 +282,7 @@ void TableFactoryPrecompiled::insert(
     precompiled::EntryTuple insertEntry;
     auto blockContext = _executive->blockContext().lock();
     auto codec =
-        std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     codec->decode(data, tableName, insertEntry);
     tableName = getTableName(tableName);
     PRECOMPILED_LOG(DEBUG) << LOG_DESC("Table insert") << LOG_KV("tableName", tableName);
@@ -342,7 +342,7 @@ void TableFactoryPrecompiled::update(
     precompiled::ConditionTuple conditions;
     auto blockContext = _executive->blockContext().lock();
     auto codec =
-        std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     codec->decode(data, tableName, entry, conditions);
     tableName = getTableName(tableName);
     PRECOMPILED_LOG(DEBUG) << LOG_DESC("Table update") << LOG_KV("tableName", tableName);
@@ -409,7 +409,7 @@ void TableFactoryPrecompiled::remove(
     precompiled::ConditionTuple conditions;
     auto blockContext = _executive->blockContext().lock();
     auto codec =
-        std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     codec->decode(data, tableName, conditions);
     tableName = getTableName(tableName);
     PRECOMPILED_LOG(DEBUG) << LOG_DESC("Table remove") << LOG_KV("tableName", tableName);
@@ -455,7 +455,7 @@ void TableFactoryPrecompiled::desc(
     std::string tableName;
     auto blockContext = _executive->blockContext().lock();
     auto codec =
-        std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     codec->decode(data, tableName);
     tableName = getTableName(tableName);
     PRECOMPILED_LOG(DEBUG) << LOG_DESC("Table desc") << LOG_KV("tableName", tableName);

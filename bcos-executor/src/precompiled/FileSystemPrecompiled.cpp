@@ -38,7 +38,6 @@ const char* const FILE_SYSTEM_METHOD_LIST = "list(string)";
 const char* const FILE_SYSTEM_METHOD_MKDIR = "mkdir(string)";
 const char* const FILE_SYSTEM_METHOD_LINK = "link(string,string,string,string)";
 const char* const FILE_SYSTEM_METHOD_RLINK = "readlink(string)";
-const char* const FILE_SYSTEM_METHOD_TOUCH = "touch(string,string)";
 
 FileSystemPrecompiled::FileSystemPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
 {
@@ -161,14 +160,14 @@ void FileSystemPrecompiled::makeDir(
     std::string absolutePath;
     auto blockContext = _executive->blockContext().lock();
     auto codec =
-        std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     codec->decode(data, absolutePath);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("FileSystemPrecompiled") << LOG_KV("mkdir", absolutePath);
     gasPricer->appendOperation(InterfaceOpcode::CreateTable);
     auto bfsAddress = blockContext->isWasm() ? BFS_NAME : BFS_ADDRESS;
 
-    auto response = externalTouchNewFile(_executive, _origin, bfsAddress, bfsAddress, absolutePath,
-        FS_TYPE_DIR, gasLeft - gasPricer->calTotalGas());
+    auto response = externalTouchNewFile(_executive, _origin, bfsAddress, absolutePath, FS_TYPE_DIR,
+        gasLeft - gasPricer->calTotalGas());
     callResult->setExecResult(codec->encode(response));
 }
 
@@ -180,7 +179,7 @@ void FileSystemPrecompiled::listDir(
     std::string absolutePath;
     auto blockContext = _executive->blockContext().lock();
     auto codec =
-        std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     codec->decode(data, absolutePath);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("FileSystemPrecompiled") << LOG_KV("ls", absolutePath);
     std::vector<BfsTuple> files;
@@ -255,7 +254,7 @@ void FileSystemPrecompiled::link(const std::shared_ptr<executor::TransactionExec
     std::string contractName, contractVersion, contractAddress, contractAbi;
     auto blockContext = _executive->blockContext().lock();
     auto codec =
-        std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     codec->decode(data, contractName, contractVersion, contractAddress, contractAbi);
     if (!blockContext->isWasm())
     {
@@ -311,10 +310,10 @@ void FileSystemPrecompiled::link(const std::shared_ptr<executor::TransactionExec
         return;
     }
     // table not exist, mkdir -p /apps/contractName first
-    auto bfsAddress = blockContext->isWasm() ? BFS_NAME : BFS_ADDRESS;
+    std::string bfsAddress = blockContext->isWasm() ? BFS_NAME : BFS_ADDRESS;
 
-    auto response = externalTouchNewFile(
-        _executive, _origin, bfsAddress, bfsAddress, linkTableName, FS_TYPE_LINK, gasLeft);
+    auto response =
+        externalTouchNewFile(_executive, _origin, bfsAddress, linkTableName, FS_TYPE_LINK, gasLeft);
     if (response != 0)
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("FileSystemPrecompiled")
@@ -350,7 +349,7 @@ void FileSystemPrecompiled::readLink(
     std::string absolutePath;
     auto blockContext = _executive->blockContext().lock();
     auto codec =
-        std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     codec->decode(data, absolutePath);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("FileSystemPrecompiled")
                            << LOG_KV("readlink", absolutePath);
@@ -405,7 +404,7 @@ void FileSystemPrecompiled::touch(const std::shared_ptr<executor::TransactionExe
     std::string absolutePath, type;
     auto blockContext = _executive->blockContext().lock();
     auto codec =
-        std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     codec->decode(data, absolutePath, type);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("FileSystemPrecompiled") << LOG_DESC("touch new file")
                            << LOG_KV("absolutePath", absolutePath) << LOG_KV("type", type);
@@ -438,74 +437,42 @@ void FileSystemPrecompiled::touch(const std::shared_ptr<executor::TransactionExe
                                << LOG_DESC("file name exists, please check")
                                << LOG_KV("absolutePath", absolutePath);
         callResult->setExecResult(codec->encode(s256((int)CODE_FILE_ALREADY_EXIST)));
+        return;
+    }
+
+    std::string parentDir, baseName;
+    if (type == FS_TYPE_DIR)
+    {
+        parentDir = absolutePath;
     }
     else
     {
-        std::string parentDir, baseName;
-        if (type == FS_TYPE_DIR)
-        {
-            parentDir = absolutePath;
-        }
-        else
-        {
-            std::tie(parentDir, baseName) = getParentDirAndBaseName(absolutePath);
-        }
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("FileSystemPrecompiled")
-                               << LOG_DESC("directory not exists, recursive build dir")
-                               << LOG_KV("parentDir", parentDir) << LOG_KV("baseName", baseName)
-                               << LOG_KV("type", type);
-        auto buildResult = recursiveBuildDir(_executive, parentDir);
-        if (!buildResult)
-        {
-            BOOST_THROW_EXCEPTION(PrecompiledError("Recursive build bfs dir error."));
-        }
-        if (type == FS_TYPE_DIR)
-        {
-            getErrorCodeOut(callResult->mutableExecResult(), CODE_SUCCESS, *codec);
-            return;
-        }
-        _executive->storage().createTable(absolutePath, SYS_VALUE_FIELDS);
-
-        // set meta data in parent table
-        std::map<std::string, std::string> bfsInfo;
-        auto subEntry = _executive->storage().getRow(parentDir, FS_KEY_SUB);
-        auto&& out = asBytes(std::string(subEntry->getField(0)));
-        codec::scale::decode(bfsInfo, gsl::make_span(out));
-        bfsInfo.insert(std::make_pair(baseName, type));
-        subEntry->setField(0, asString(codec::scale::encode(bfsInfo)));
-        _executive->storage().setRow(parentDir, FS_KEY_SUB, std::move(subEntry.value()));
-
+        std::tie(parentDir, baseName) = getParentDirAndBaseName(absolutePath);
+    }
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("FileSystemPrecompiled")
+                           << LOG_DESC("directory not exists, recursive build dir")
+                           << LOG_KV("parentDir", parentDir) << LOG_KV("baseName", baseName)
+                           << LOG_KV("type", type);
+    auto buildResult = recursiveBuildDir(_executive, parentDir);
+    if (!buildResult)
+    {
+        BOOST_THROW_EXCEPTION(PrecompiledError("Recursive build bfs dir error."));
+    }
+    if (type == FS_TYPE_DIR)
+    {
         getErrorCodeOut(callResult->mutableExecResult(), CODE_SUCCESS, *codec);
+        return;
     }
-}
+    _executive->storage().createTable(absolutePath, SYS_VALUE_FIELDS);
 
-s256 FileSystemPrecompiled::externalTouchNewFile(
-    const std::shared_ptr<executor::TransactionExecutive>& _executive, const std::string& _origin,
-    const std::string& _sender, const std::string& _receiver, const std::string& _filePath,
-    const std::string& _fileType, int64_t gasLeft)
-{
-    auto blockContext = _executive->blockContext().lock();
-    auto codec =
-        std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
-    auto request = std::make_unique<CallParameters>(CallParameters::MESSAGE);
+    // set meta data in parent table
+    std::map<std::string, std::string> bfsInfo;
+    auto subEntry = _executive->storage().getRow(parentDir, FS_KEY_SUB);
+    auto&& out = asBytes(std::string(subEntry->getField(0)));
+    codec::scale::decode(bfsInfo, gsl::make_span(out));
+    bfsInfo.insert(std::make_pair(baseName, type));
+    subEntry->setField(0, asString(codec::scale::encode(bfsInfo)));
+    _executive->storage().setRow(parentDir, FS_KEY_SUB, std::move(subEntry.value()));
 
-    request->senderAddress = _sender;
-    request->receiveAddress = _receiver;
-    request->origin = _origin;
-    request->codeAddress = request->receiveAddress;
-    request->status = 0;
-    request->data = codec->encodeWithSig(FILE_SYSTEM_METHOD_TOUCH, _filePath, _fileType);
-    request->staticCall = false;
-    request->gas = gasLeft;
-    auto response = _executive->externalCall(std::move(request));
-    s256 result;
-    if (response->status == (int32_t)TransactionStatus::None)
-    {
-        codec->decode(ref(response->data), result);
-    }
-    else
-    {
-        result = (int)CODE_FILE_BUILD_DIR_FAILED;
-    }
-    return result;
+    getErrorCodeOut(callResult->mutableExecResult(), CODE_SUCCESS, *codec);
 }

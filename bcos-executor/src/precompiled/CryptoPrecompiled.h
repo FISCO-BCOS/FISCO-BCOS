@@ -47,8 +47,8 @@ public:
         const std::string& _origin, const std::string& _sender, int64_t gasLeft) override;
 
 private:
-    void sm2Verify(bytesConstRef _paramData, PrecompiledExecResult::Ptr _callResult,
-        PrecompiledCodec::Ptr _codec);
+    void sm2Verify(
+        bytesConstRef _paramData, PrecompiledExecResult::Ptr _callResult, CodecWrapper::Ptr _codec);
 };
 }  // namespace precompiled
 }  // namespace bcos

@@ -63,7 +63,7 @@ std::shared_ptr<PrecompiledExecResult> CryptoPrecompiled::call(
     auto paramData = getParamData(_param);
     auto blockContext = _executive->blockContext().lock();
     auto codec =
-        std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     auto callResult = std::make_shared<PrecompiledExecResult>();
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
     gasPricer->setMemUsed(_param.size());
@@ -105,7 +105,7 @@ std::shared_ptr<PrecompiledExecResult> CryptoPrecompiled::call(
 }
 
 void CryptoPrecompiled::sm2Verify(
-    bytesConstRef _paramData, PrecompiledExecResult::Ptr _callResult, PrecompiledCodec::Ptr _codec)
+    bytesConstRef _paramData, PrecompiledExecResult::Ptr _callResult, CodecWrapper::Ptr _codec)
 {
     try
     {

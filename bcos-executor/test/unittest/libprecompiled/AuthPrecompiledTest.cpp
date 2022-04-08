@@ -38,7 +38,7 @@ class PermissionPrecompiledFixture : public PrecompiledFixture
 public:
     PermissionPrecompiledFixture()
     {
-        codec = std::make_shared<PrecompiledCodec>(hashImpl, false);
+        codec = std::make_shared<CodecWrapper>(hashImpl, false);
         setIsWasm(false, true);
         helloAddress = Address("0x1234654b49838bd3e9466c85a4cc3428c9601234").hex();
         hello2Address = Address("0x0987654b49838bd3e9466c85a4cc3428c9601234").hex();
@@ -1425,9 +1425,8 @@ BOOST_AUTO_TEST_CASE(testDeployAdmin)
 
     // test external deploy admin
     {
-        auto result1 =
-            getAdmin(_number++, 1000, Address(hello2Address));
-        std::cout << toHexStringWithPrefix (result1->data().toBytes()) << std::endl;
+        auto result1 = getAdmin(_number++, 1000, Address(hello2Address));
+        std::cout << toHexStringWithPrefix(result1->data().toBytes()) << std::endl;
         BOOST_CHECK(result1->data().toBytes() == codec->encode(admin));
     }
 }

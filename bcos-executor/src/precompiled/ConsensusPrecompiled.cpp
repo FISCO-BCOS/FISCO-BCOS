@@ -26,14 +26,7 @@
 #include <bcos-framework/interfaces/protocol/Protocol.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/archive/basic_archive.hpp>
-#include <boost/archive/binary_iarchive.hpp>
-#include <boost/archive/binary_oarchive.hpp>
-#include <boost/core/ignore_unused.hpp>
-#include <boost/iostreams/device/back_inserter.hpp>
-#include <boost/iostreams/stream.hpp>
 #include <boost/lexical_cast.hpp>
-#include <boost/serialization/vector.hpp>
-#include <tuple>
 #include <utility>
 
 using namespace bcos;
@@ -46,6 +39,7 @@ const char* const CSS_METHOD_ADD_SEALER = "addSealer(string,uint256)";
 const char* const CSS_METHOD_ADD_SER = "addObserver(string)";
 const char* const CSS_METHOD_REMOVE = "remove(string)";
 const char* const CSS_METHOD_SET_WEIGHT = "setWeight(string,uint256)";
+const auto NODE_LENGTH = 128u;
 
 ConsensusPrecompiled::ConsensusPrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)
 {
@@ -69,7 +63,7 @@ std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
     showConsensusTable(_executive);
 
     auto blockContext = _executive->blockContext().lock();
-    auto codec = PrecompiledCodec(blockContext->hashHandler(), blockContext->isWasm());
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
 
     int result = 0;
     if (func == name2Selector[CSS_METHOD_ADD_SEALER])
@@ -106,7 +100,7 @@ std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
 
 int ConsensusPrecompiled::addSealer(
     const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& _data,
-    const PrecompiledCodec& codec)
+    const CodecWrapper& codec)
 {
     // addSealer(string, uint256)
     std::string nodeID;
@@ -118,7 +112,9 @@ int ConsensusPrecompiled::addSealer(
 
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("addSealer func")
                            << LOG_KV("nodeID", nodeID);
-    if (nodeID.size() != 128u)
+    if (nodeID.size() != NODE_LENGTH ||
+        std::count_if(nodeID.begin(), nodeID.end(),
+            [](unsigned char c) { return std::isxdigit(c); }) != NODE_LENGTH)
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
                                << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
@@ -171,7 +167,7 @@ int ConsensusPrecompiled::addSealer(
 
 int ConsensusPrecompiled::addObserver(
     const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& _data,
-    const PrecompiledCodec& codec)
+    const CodecWrapper& codec)
 {
     // addObserver(string)
     std::string nodeID;
@@ -181,7 +177,10 @@ int ConsensusPrecompiled::addObserver(
     boost::to_lower(nodeID);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("addObserver func")
                            << LOG_KV("nodeID", nodeID);
-    if (nodeID.size() != 128u)
+
+    if (nodeID.size() != NODE_LENGTH ||
+        std::count_if(nodeID.begin(), nodeID.end(),
+            [](unsigned char c) { return std::isxdigit(c); }) != NODE_LENGTH)
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
                                << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
@@ -236,7 +235,7 @@ int ConsensusPrecompiled::addObserver(
 
 int ConsensusPrecompiled::removeNode(
     const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& _data,
-    const PrecompiledCodec& codec)
+    const CodecWrapper& codec)
 {
     // remove(string)
     std::string nodeID;
@@ -246,7 +245,7 @@ int ConsensusPrecompiled::removeNode(
     boost::to_lower(nodeID);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ConsensusPrecompiled") << LOG_DESC("remove func")
                            << LOG_KV("nodeID", nodeID);
-    if (nodeID.size() != 128u)
+    if (nodeID.size() != NODE_LENGTH)
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
                                << LOG_DESC("nodeID length error") << LOG_KV("nodeID", nodeID);
@@ -291,7 +290,7 @@ int ConsensusPrecompiled::removeNode(
 
 int ConsensusPrecompiled::setWeight(
     const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& _data,
-    const PrecompiledCodec& codec)
+    const CodecWrapper& codec)
 {
     // setWeight(string,uint256)
     std::string nodeID;

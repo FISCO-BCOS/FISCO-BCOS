@@ -90,7 +90,7 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
     auto blockContext = _executive->blockContext().lock();
 
     auto codec =
-        std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     auto callResult = std::make_shared<PrecompiledExecResult>();
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
     if (func == name2Selector[SYSCONFIG_METHOD_SET_STR])
@@ -143,11 +143,6 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
     gasPricer->updateMemUsed(callResult->m_execResult.size());
     callResult->setGas(gasPricer->calTotalGas());
     return callResult;
-}
-
-std::string SystemConfigPrecompiled::toString()
-{
-    return "SystemConfig";
 }
 
 void SystemConfigPrecompiled::checkValueValid(std::string_view _key, std::string_view value)

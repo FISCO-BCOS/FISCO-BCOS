@@ -35,7 +35,7 @@ class ConfigPrecompiledFixture : public PrecompiledFixture
 public:
     ConfigPrecompiledFixture()
     {
-        codec = std::make_shared<PrecompiledCodec>(hashImpl, false);
+        codec = std::make_shared<CodecWrapper>(hashImpl, false);
         setIsWasm(false);
         consTestAddress = Address("0x420f853b49838bd3e9466c85a4cc3428c960dde2").hex();
         sysTestAddress = Address("0x420f853b41234bd3e9466c85a4cc3428c960dde2").hex();
@@ -380,13 +380,18 @@ BOOST_AUTO_TEST_CASE(consensus_test)
 {
     deployTest(consTestBin, consTestAddress);
 
+    int64_t number = 2;
+
     std::string node1;
     std::string node2;
+    std::string errorNode;
     for (int i = 0; i < 128; ++i)
     {
         node1 += "1";
         node2 += "2";
     }
+    errorNode = node1.substr(0, 127);
+    errorNode += "s";
 
     auto callFunc = [&](protocol::BlockNumber _number, int _contextId, const std::string& method,
                         const std::string& _nodeId, int _w = -1, int _errorCode = 0) {
@@ -442,54 +447,60 @@ BOOST_AUTO_TEST_CASE(consensus_test)
 
     // node id too short
     {
-        callFunc(2, 100, "addSealerTest(string,uint256)", std::string("111111"), 1,
+        callFunc(number++, 100, "addSealerTest(string,uint256)", std::string("111111"), 1,
             CODE_INVALID_NODE_ID);
 
+        callFunc(number++, 100, "addObserverTest(string)", std::string("111111"), -1,
+            CODE_INVALID_NODE_ID);
         callFunc(
-            2, 100, "addObserverTest(string)", std::string("111111"), -1, CODE_INVALID_NODE_ID);
-        callFunc(2, 100, "removeTest(string)", std::string("111111"), -1, CODE_INVALID_NODE_ID);
-        callFunc(2, 100, "setWeightTest(string,uint256)", std::string("111111"), 11,
+            number++, 100, "removeTest(string)", std::string("111111"), -1, CODE_INVALID_NODE_ID);
+        callFunc(number++, 100, "setWeightTest(string,uint256)", std::string("111111"), 11,
             CODE_INVALID_NODE_ID);
     }
 
     // add sealer node1
     {
-        callFunc(3, 101, "addSealerTest(string,uint256)", node1, 1, 0);
+        callFunc(number++, 101, "addSealerTest(string,uint256)", node1, 1, 0);
     }
 
     // add observer node2
     {
-        callFunc(4, 105, "addObserverTest(string)", node2, -1, 0);
+        callFunc(number++, 105, "addObserverTest(string)", node2, -1, 0);
+    }
+
+    // add errorNode
+    {
+        callFunc(number++, 105, "addObserverTest(string)", errorNode, -1, CODE_INVALID_NODE_ID);
     }
 
     // turn last sealer to observer
     {
-        callFunc(5, 106, "addObserverTest(string)", node1, -1, CODE_LAST_SEALER);
+        callFunc(number++, 106, "addObserverTest(string)", node1, -1, CODE_LAST_SEALER);
     }
 
     // removeTest last sealer
     {
-        callFunc(5, 107, "removeTest(string)", node1, -1, CODE_LAST_SEALER);
+        callFunc(number++, 107, "removeTest(string)", node1, -1, CODE_LAST_SEALER);
     }
 
     // set an invalid weight(0) to node
     {
-        callFunc(5, 108, "setWeightTest(string,uint256)", node1, 0, CODE_INVALID_WEIGHT);
+        callFunc(number++, 108, "setWeightTest(string,uint256)", node1, 0, CODE_INVALID_WEIGHT);
     }
 
     // set a valid weight(2) to node1
     {
-        callFunc(5, 108, "setWeightTest(string,uint256)", node1, 2);
+        callFunc(number++, 108, "setWeightTest(string,uint256)", node1, 2);
     }
 
     // removeTest observer
     {
-        callFunc(6, 108, "removeTest(string)", node2, -1, 0);
+        callFunc(number++, 108, "removeTest(string)", node2, -1, 0);
     }
 
     // set weigh to not exist node2
     {
-        callFunc(6, 109, "setWeightTest(string,uint256)", node2, 123, CODE_NODE_NOT_EXIST);
+        callFunc(number++, 109, "setWeightTest(string,uint256)", node2, 123, CODE_NODE_NOT_EXIST);
     }
 }
 

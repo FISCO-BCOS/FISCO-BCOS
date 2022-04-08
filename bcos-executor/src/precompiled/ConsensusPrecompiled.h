@@ -52,16 +52,16 @@ public:
 
 private:
     int addSealer(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& _data, const PrecompiledCodec& codec);
+        bytesConstRef& _data, const CodecWrapper& codec);
 
     int addObserver(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& _data, const PrecompiledCodec& codec);
+        bytesConstRef& _data, const CodecWrapper& codec);
 
     int removeNode(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& _data, const PrecompiledCodec& codec);
+        bytesConstRef& _data, const CodecWrapper& codec);
 
     int setWeight(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& _data, const PrecompiledCodec& codec);
+        bytesConstRef& _data, const CodecWrapper& codec);
 
 private:
     void showConsensusTable(const std::shared_ptr<executor::TransactionExecutive>& _executive);

@@ -40,7 +40,7 @@ public:
 
     void init(bool _isWasm)
     {
-        codec = std::make_shared<PrecompiledCodec>(hashImpl, _isWasm);
+        codec = std::make_shared<CodecWrapper>(hashImpl, _isWasm);
         setIsWasm(_isWasm);
         bfsAddress = _isWasm ? precompiled::BFS_NAME : BFS_ADDRESS;
         tableAddress = _isWasm ? precompiled::KV_TABLE_NAME : KV_TABLE_ADDRESS;
@@ -173,13 +173,30 @@ public:
         auto result2 = executePromise2.get_future().get();
         // call precompiled
         result2->setSeq(1001);
+        std::promise<ExecutionMessage::UniquePtr> executePromise3;
+        executor->executeTransaction(std::move(result2),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise3.set_value(std::move(result));
+            });
+        auto result3 = executePromise3.get_future().get();
+
+        result3->setSeq(1000);
+        std::promise<ExecutionMessage::UniquePtr> executePromise4;
+        executor->executeTransaction(std::move(result3),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise4.set_value(std::move(result));
+            });
+        auto result4 = executePromise4.get_future().get();
+
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_CHECK(result4->data().toBytes() == codec->encode(s256(_errorCode)));
         }
 
         commitBlock(_number);
-        return result2;
+        return result4;
     };
 
     ExecutionMessage::UniquePtr list(

@@ -34,8 +34,6 @@ public:
     HelloWorldPrecompiled(crypto::Hash::Ptr _hashImpl);
     virtual ~HelloWorldPrecompiled(){};
 
-    std::string toString() override;
-
     std::shared_ptr<PrecompiledExecResult> call(
         std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
         const std::string& _origin, const std::string& _sender, int64_t gasLeft) override;

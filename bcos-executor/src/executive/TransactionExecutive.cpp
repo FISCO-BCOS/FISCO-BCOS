@@ -327,7 +327,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
 
         auto data = ref(callParameters->data);
         auto input = std::make_pair(code, params);
-        auto codec = std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), true);
+        auto codec = std::make_shared<CodecWrapper>(blockContext->hashHandler(), true);
         codec->decode(data, input);
 
         std::tie(code, params) = input;
@@ -999,11 +999,8 @@ bool TransactionExecutive::buildBfsPath(std::string const& _absoluteDir, const s
     const std::string& _sender, int64_t gasLeft)
 {
     EXECUTIVE_LOG(DEBUG) << LOG_DESC("buildBfsPath") << LOG_KV("absoluteDir", _absoluteDir);
-    auto bfsAddress =
-        m_blockContext.lock()->isWasm() ? precompiled::BFS_NAME : precompiled::BFS_ADDRESS;
-    auto fs = dynamic_pointer_cast<FileSystemPrecompiled>(m_constantPrecompiled->at(bfsAddress));
-    auto response = fs->externalTouchNewFile(
-        shared_from_this(), _origin, _sender, bfsAddress, _absoluteDir, FS_TYPE_CONTRACT, gasLeft);
+    auto response = externalTouchNewFile(
+        shared_from_this(), _origin, _sender, _absoluteDir, FS_TYPE_CONTRACT, gasLeft);
     return response == (int)precompiled::CODE_SUCCESS;
 }
 
