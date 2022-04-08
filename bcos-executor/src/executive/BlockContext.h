@@ -22,6 +22,8 @@
 #pragma once
 
 #include "../Common.h"
+#include "ExecutiveFactory.h"
+#include "ExecutiveFlowInterface.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/protocol/Block.h"
 #include "bcos-framework/interfaces/protocol/ProtocolTypeDef.h"
@@ -81,33 +83,15 @@ public:
 
     EVMSchedule const& evmSchedule() const { return m_schedule; }
 
-    struct ExecutiveState
-    {
-        std::shared_ptr<TransactionExecutive> executive;
-    };
+    ExecutiveFlowInterface::Ptr getExecutiveFlow(std::string codeAddress);
+    void setExecutiveFlow(std::string codeAddress, ExecutiveFlowInterface::Ptr executiveFlow);
 
-    void insertExecutive(int64_t contextID, int64_t seq, ExecutiveState state);
 
-    ExecutiveState* getExecutive(int64_t contextID, int64_t seq);
-
-    void clear() { m_executives.clear(); }
+    void clear() { m_executiveFlows.clear(); }
 
 private:
-    struct HashCombine
-    {
-        size_t operator()(const std::tuple<int64_t, int64_t>& val) const
-        {
-            size_t seed = hashInt64(std::get<0>(val));
-            boost::hash_combine(seed, hashInt64(std::get<1>(val)));
-
-            return seed;
-        }
-
-        std::hash<int64_t> hashInt64;
-    };
-
-    tbb::concurrent_unordered_map<std::tuple<int64_t, int64_t>, ExecutiveState, HashCombine>
-        m_executives;
+    tbb::concurrent_unordered_map<std::string, ExecutiveFlowInterface::Ptr> m_executiveFlows;
+    int64_t m_maxFinishedContextID = 0;
 
     bcos::protocol::BlockNumber m_blockNumber;
     h256 m_blockHash;

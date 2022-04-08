@@ -61,7 +61,8 @@ public:
     }
 
     static void registerPrecompiled(
-        std::map<std::string, std::shared_ptr<precompiled::Precompiled>>& registeredMap,
+        std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
+            registeredMap,
         crypto::Hash::Ptr _hashImpl)
     {
         for (int id = 0; id < 128; id++)
@@ -69,7 +70,7 @@ public:
             std::string address = getAddress(id);
             BCOS_LOG(INFO) << LOG_BADGE("CpuHeavy") << "Register CpuHeavyPrecompiled "
                            << LOG_KV("address", address);
-            registeredMap.insert({std::move(address),
+            registeredMap->insert({std::move(address),
                 std::make_shared<precompiled::CpuHeavyPrecompiled>(_hashImpl)});
         }
     }

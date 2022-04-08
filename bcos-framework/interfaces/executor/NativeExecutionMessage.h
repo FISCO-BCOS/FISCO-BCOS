@@ -27,6 +27,12 @@ public:
     int64_t seq() const override { return m_seq; }
     void setSeq(int64_t seq) override { m_seq = seq; }
 
+    virtual int64_t executiveStateID() const override { return m_executiveStateID; };
+    virtual void setExecutiveStateID(int64_t executiveStateID) override
+    {
+        m_executiveStateID = executiveStateID;
+    };
+
     std::string_view origin() const override { return m_origin; }
     void setOrigin(std::string origin) override { m_origin = std::move(origin); }
 
@@ -97,6 +103,7 @@ public:
     bcos::crypto::HashType m_transactionHash;
     int64_t m_contextID = 0;
     int64_t m_seq = 0;
+    int64_t m_executiveStateID;
 
     std::string m_origin;
     std::string m_from;
