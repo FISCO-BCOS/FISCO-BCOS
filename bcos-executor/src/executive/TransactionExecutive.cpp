@@ -632,6 +632,7 @@ CallParameters::UniquePtr TransactionExecutive::go(
         {
             callResults = std::make_unique<CallParameters>(CallParameters::REVERT);
         }
+        callResults->type = CallParameters::REVERT;
         callResults->status = (int32_t)TransactionStatus::RevertInstruction;
         callResults->message = e.errorMessage();
 

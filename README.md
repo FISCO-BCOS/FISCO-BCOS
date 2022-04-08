@@ -26,7 +26,7 @@ FISCO BCOS 3.0全新升级，新增多个核心特性，主要如下：
 
 ## 技术文档
 
-- **[FISCO BCOS 3.x技术文档（rc1）](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/)**
+- **[FISCO BCOS 3.x技术文档](https://fisco-bcos-doc.readthedocs.io/zh_CN/latest/)**
 
 - **[FISCO BCOS 2.x 技术文档（stable）](https://fisco-bcos-documentation.readthedocs.io/zh_CN/latest/)**
 

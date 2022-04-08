@@ -1,3 +1,47 @@
+### 3.0.0-rc3
+(2022-03-31)
+
+**新增**
+
+- 支持Solidity合约并行冲突字段分析
+- 将密码学、交易编解码等相关逻辑整合到bcos-cpp-sdk中，并封装成通用的C接口
+- WASM虚拟机支持合约调用合约
+- 新增bcos-wasm替代Hera
+- `BFS`支持软链接功能
+- 支持通过`setSystemConfig`系统合约的`tx_gas_limit`关键字动态修改交易执行的gas限制
+- 部署合约存储合约ABI
+
+
+**更改**
+
+- 升级EVM虚拟机到最新，支持Solidity 0.8
+- 机构层面优化网络广播，减少机构间外网带宽占用
+- 支持国密加速库，国密签名和验签性能提升5-10倍
+- EVM节点支持`BFS`，使用`BFS`替代`CNS`
+- DAG框架统一支持Solidity和WBC-Liquid
+
+**修复**
+
+- 修复[#issue 2312](https://github.com/FISCO-BCOS/FISCO-BCOS/issues/2312)
+- 修复[#issue 2307](https://github.com/FISCO-BCOS/FISCO-BCOS/issues/2307)
+- 修复[#issue 2254](https://github.com/FISCO-BCOS/FISCO-BCOS/issues/2254)
+- 修复[#issue 2211](https://github.com/FISCO-BCOS/FISCO-BCOS/issues/2211)
+- 修复[#issue 2195](https://github.com/FISCO-BCOS/FISCO-BCOS/issues/2195)
+
+**兼容性**
+
+3.0.0-rc3版本与3.0.0-rc2版本数据和协议不兼容，Solidity/WBC-Liquid合约源码兼容。如果要从3.0.0-rc2版本升级到3.0.0-rc3版本，需要做数据迁移。
+
+|            | 推荐版本                | 最低版本  | 说明                   |
+| ---------- | ----------------------- | --------- | ---------------------- |
+| 控制台     | 3.0.0-rc3                  | 3.0.0-rc3    |                        |
+| Java SDK        | 3.0.0-rc3           | 3.0.0-rc3     |     |
+| CPP SDK        | 3.0.0-rc3           | 3.0.0-rc3     |     |
+| WeBASE     | 暂时不支持(预计lab-rc3版本支持)         | 暂时不支持(预计lab-rc2版本支持) | |
+| Solidity   | 最高支持 solidity 0.8.11.0 | 0.6.10    |                        |
+| Liquid     | 1.0.0-rc3               | 1.0.0-rc2  |                      |
+
+
 ### 3.0.0-rc2
 (2022-02-23)
 
@@ -31,7 +75,7 @@
 | Java SDK        | 3.0.0-rc2           | 3.0.0-rc2     |     |
 | CPP SDK        | 3.0.0-rc2           | 3.0.0-rc2     |     |
 | WeBASE     | 暂时不支持(预计lab-rc2版本支持)         | 暂时不支持(预计lab-rc2版本支持) | |
-| Solidity   | 最高支持 solidity 0.6.10 | 0.6.00    |                        |
+| Solidity   | 最高支持 solidity 0.6.10 | 0.6.10    |                        |
 | Liquid     | 1.0.0-rc2               | 1.0.0-rc2  |                      |
 
 ### 3.0.0-rc1
@@ -73,5 +117,5 @@
 | Java SDK        | 3.0.0-rc1           | 3.0.0-rc1     |     |
 | CPP SDK        | 3.0.0-rc1           | 3.0.0-rc1     |     |
 | WeBASE     | lab-rc1                   | lab-rc1 |                        |
-| Solidity   | 最高支持 solidity 0.6.10 | 0.6.00    |                        |
+| Solidity   | 最高支持 solidity 0.6.10 | 0.6.10    |                        |
 | Liquid     | 1.0.0-rc2               | 1.0.0-rc2  |                      |
