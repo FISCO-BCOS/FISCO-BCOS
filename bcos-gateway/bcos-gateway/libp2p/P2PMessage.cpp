@@ -21,11 +21,13 @@
 #include <bcos-gateway/Common.h>
 #include <bcos-gateway/libp2p/Common.h>
 #include <bcos-gateway/libp2p/P2PMessage.h>
+#include <bcos-gateway/utilities/SnappyCompress.h>
 #include <boost/asio/detail/socket_ops.hpp>
 
 using namespace bcos;
 using namespace bcos::gateway;
 using namespace bcos::crypto;
+using namespace bcos::compress;
 
 #define CHECK_OFFSET_WITH_THROW_EXCEPTION(offset, length)                                    \
     do                                                                                       \
@@ -185,7 +187,10 @@ bool P2PMessage::encode(bytes& _buffer)
         return false;
     }
 
-    _buffer.insert(_buffer.end(), m_payload->begin(), m_payload->end());
+    // compress
+    auto compressedData = std::make_shared<bytes>();
+    auto encodedBuffer = SnappyCompress::compress(ref(*m_payload), *compressedData);
+    _buffer.insert(_buffer.end(), compressedData->begin(), compressedData->end());
 
     // calc total length and modify the length value in the buffer
     length = boost::asio::detail::socket_ops::host_to_network_long((uint32_t)_buffer.size());
@@ -258,8 +263,7 @@ ssize_t P2PMessage::decode(bytesConstRef _buffer)
     }
 
     auto data = _buffer.getCroppedData(offset, m_length - offset);
-    // payload
-    m_payload = std::make_shared<bytes>(data.begin(), data.end());
-
+    // uncompress the payload
+    SnappyCompress::uncompress(data, *m_payload);
     return m_length;
 }

@@ -26,6 +26,7 @@ include(BuildInfoGenerator)
 include(ProjectTCMalloc)
 include(ProjectWABT)
 include(ProjectBCOSWASM)
+include(ProjectSnappy)
 
 hunter_add_package(tbb)
 hunter_add_package(Protobuf)
