@@ -24,8 +24,6 @@
 #include <tbb/concurrent_unordered_map.h>
 #define TBB_PREVIEW_CONCURRENT_ORDERED_CONTAINERS 1
 #include <tbb/concurrent_set.h>
-#include <tbb/spin_mutex.h>
-#include <tbb/spin_rw_mutex.h>
 namespace bcos
 {
 namespace txpool
@@ -79,7 +77,7 @@ public:
 
     bool exist(bcos::crypto::HashType const& _txHash) override
     {
-        RWMutexScoped l(x_txpoolMutex, false);
+        ReadGuard l(x_txpoolMutex);
         return m_txsTable.count(_txHash);
     }
     size_t size() const override;
@@ -155,7 +153,7 @@ private:
         std::hash<bcos::crypto::HashType>>
         m_txsTable;
 
-    // mutable SharedMutex x_txpoolMutex;
+    mutable SharedMutex x_txpoolMutex;
 
     tbb::concurrent_set<bcos::crypto::HashType> m_invalidTxs;
     tbb::concurrent_set<bcos::protocol::NonceType> m_invalidNonces;
@@ -169,11 +167,6 @@ private:
     std::atomic<bcos::protocol::BlockNumber> m_blockNumber = {0};
     std::atomic_bool m_printed = {false};
     int64_t m_blockNumberUpdatedTime;
-
-    typedef tbb::spin_rw_mutex RWMutex;
-    typedef tbb::spin_rw_mutex::scoped_lock RWMutexScoped;
-
-    mutable RWMutex x_txpoolMutex;
 };
 }  // namespace txpool
 }  // namespace bcos
