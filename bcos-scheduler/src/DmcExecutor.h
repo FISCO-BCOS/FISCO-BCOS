@@ -26,6 +26,7 @@
 #include "ExecutorManager.h"
 #include "GraphKeyLocks.h"
 #include <bcos-framework/interfaces/protocol/Block.h>
+#include <tbb/concurrent_set.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <string>
 
@@ -85,6 +86,7 @@ private:
     MessageHint handleExecutiveMessage(ExecutiveState::Ptr executive);
     void handleExecutiveOutputs(std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs);
     void schedulerOut(ContextID contextID);
+    void removeOutdatedStatus();
 
     std::string newEVMAddress(int64_t blockNumber, int64_t contextID, int64_t seq);
     std::string newEVMAddress(
@@ -96,14 +98,14 @@ private:
     bcos::executor::ParallelTransactionExecutorInterface::Ptr m_executor;
     GraphKeyLocks::Ptr m_keyLocks;
     bcos::crypto::Hash::Ptr m_hashImpl;
-    std::map<ContextID, ExecutiveState::Ptr, std::less<>> m_pendingPool;  // TODO: use tbb
-    std::set<ContextID, std::less<>> m_needPrepare;
-    std::set<ContextID, std::less<>> m_lockingPool;
-    std::set<ContextID, std::less<>> m_needSendPool;
+    tbb::concurrent_unordered_map<ContextID, ExecutiveState::Ptr> m_pendingPool;
+    tbb::concurrent_set<ContextID> m_needPrepare;
+    tbb::concurrent_set<ContextID> m_lockingPool;
+    tbb::concurrent_set<ContextID> m_needSendPool;
+    tbb::concurrent_set<ContextID> m_needRemove;
 
-    mutable SharedMutex x_prepareLock;
-    mutable SharedMutex x_poolLock;
 
+    mutable SharedMutex x_concurrentLock;
 
     std::function<void(bcos::protocol::ExecutionMessage::UniquePtr)> f_onTxFinished;
     std::function<void(ExecutiveState::Ptr)> f_onSchedulerOut;

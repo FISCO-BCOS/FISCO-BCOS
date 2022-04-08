@@ -216,7 +216,8 @@ protected:
         gsl::span<std::unique_ptr<CallParameters>> inputs,
         std::vector<protocol::ExecutionMessage::UniquePtr>& executionResults);
 
-    std::shared_ptr<ExecutiveFlowInterface> getExecutiveFlow(std::string codeAddress);
+    std::shared_ptr<ExecutiveFlowInterface> getExecutiveFlow(
+        std::string codeAddress, bool isStaticCall);
 
     void asyncExecuteExecutiveFlow(std::shared_ptr<ExecutiveFlowInterface> executiveFlow,
         std::function<void(

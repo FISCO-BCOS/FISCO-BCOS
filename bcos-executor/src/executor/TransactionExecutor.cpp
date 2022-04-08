@@ -330,7 +330,6 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
         bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
         callback)
 {
-    // TODO: handle message->staticCall()
     auto recoredT = utcTime();
     auto startT = utcTime();
     // for fill block
@@ -342,17 +341,12 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
     auto callParametersList =
         std::make_shared<std::vector<CallParameters::UniquePtr>>(inputs.size());
 
-    bool onlyCall = true;
+    bool isStaticCall = inputs[0]->staticCall();  // staticCall only has one element in inputs
 
 #pragma omp parallel for
     for (decltype(inputs)::index_type i = 0; i < inputs.size(); ++i)
     {
         auto& params = inputs[i];
-
-        if (!params->staticCall())
-        {
-            onlyCall = false;
-        }
 
         switch (params->type())
         {
@@ -387,7 +381,7 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
     if (!txHashes->empty())
     {
         m_txpool->asyncFillBlock(txHashes,
-            [this, contractAddress, indexes = std::move(indexes),
+            [this, isStaticCall, contractAddress, indexes = std::move(indexes),
                 fillInputs = std::move(fillInputs),
                 callParametersList = std::move(callParametersList), callback = std::move(callback),
                 txHashes](Error::Ptr error, protocol::TransactionsPtr transactions) mutable {
@@ -413,7 +407,7 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
 
                 std::shared_ptr<BlockContext> blockContext;
 
-                auto executiveFlow = getExecutiveFlow(contractAddress);
+                auto executiveFlow = getExecutiveFlow(contractAddress, isStaticCall);
                 executiveFlow->submit(callParametersList);
 
                 asyncExecuteExecutiveFlow(executiveFlow,
@@ -428,7 +422,7 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
     }
     else
     {
-        auto executiveFlow = getExecutiveFlow(contractAddress);
+        auto executiveFlow = getExecutiveFlow(contractAddress, isStaticCall);
         executiveFlow->submit(callParametersList);
 
         asyncExecuteExecutiveFlow(executiveFlow,
@@ -1154,9 +1148,10 @@ void TransactionExecutor::getCode(
 
 ///*
 
-ExecutiveFlowInterface::Ptr TransactionExecutor::getExecutiveFlow(std::string codeAddress)
+ExecutiveFlowInterface::Ptr TransactionExecutor::getExecutiveFlow(
+    std::string codeAddress, bool isStaticCall)
 {
-    if (!m_blockContext)
+    if (isStaticCall)
     {
         // is a static call and return a tmp executiveFlow
         auto executiveFactory = std::make_shared<ExecutiveFactory>(nullptr, m_precompiledContract,
@@ -1242,8 +1237,8 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
         (*txHashes)[0] = (input->transactionHash());
 
         m_txpool->asyncFillBlock(std::move(txHashes),
-            [this, inputPtr = input.release(), blockContext = std::move(blockContext), callback](
-                Error::Ptr error, bcos::protocol::TransactionsPtr transactions) mutable {
+            [this, staticCall, inputPtr = input.release(), blockContext = std::move(blockContext),
+                callback](Error::Ptr error, bcos::protocol::TransactionsPtr transactions) mutable {
                 auto input = std::unique_ptr<bcos::protocol::ExecutionMessage>(inputPtr);
 
                 if (error)
@@ -1276,7 +1271,7 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
                 auto callParameters = createCallParameters(*input, *tx);
 
                 ExecutiveFlowInterface::Ptr executiveFlow =
-                    getExecutiveFlow(callParameters->codeAddress);
+                    getExecutiveFlow(callParameters->codeAddress, staticCall);
                 executiveFlow->submit(std::move(callParameters));
 
                 asyncExecuteExecutiveFlow(executiveFlow,
@@ -1301,7 +1296,8 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
     {
         auto callParameters = createCallParameters(*input, staticCall);
 
-        ExecutiveFlowInterface::Ptr executiveFlow = getExecutiveFlow(callParameters->codeAddress);
+        ExecutiveFlowInterface::Ptr executiveFlow =
+            getExecutiveFlow(callParameters->codeAddress, staticCall);
         executiveFlow->submit(std::move(callParameters));
         asyncExecuteExecutiveFlow(executiveFlow,
             [callback = std::move(callback)](bcos::Error::UniquePtr&& error,

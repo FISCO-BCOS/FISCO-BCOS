@@ -58,8 +58,10 @@ protected:
     }
 
 private:
-    // bcos::ThreadPool m_pool =
+    // static bcos::ThreadPool m_pool =
     //     bcos::ThreadPool("ExecutiveFlow", std::thread::hardware_concurrency());
+
+    // void checkAnd
 };
 
 }  // namespace executor

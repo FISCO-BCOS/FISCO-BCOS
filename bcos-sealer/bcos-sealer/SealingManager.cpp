@@ -265,9 +265,18 @@ void SealingManager::fetchTransactions()
                 {
                     sealingMgr->appendTransactions(sealingMgr->m_pendingTxs, _txsHashList);
                     sealingMgr->appendTransactions(sealingMgr->m_pendingSysTxs, _sysTxsList);
-                    sealingMgr->m_fetchingTxs = false;
-                    sealingMgr->m_onReady();
                 }
+                else
+                {
+                    SEAL_LOG(INFO) << LOG_DESC("fetchTransactions finish: abort the expired txs")
+                                   << LOG_KV("txsSize", _txsHashList->transactionsMetaDataSize())
+                                   << LOG_KV("sysTxsSize", _sysTxsList->transactionsMetaDataSize());
+                    // Note: should reset the aborted txs
+                    sealingMgr->notifyResetProposal(_txsHashList);
+                    sealingMgr->notifyResetProposal(_sysTxsList);
+                }
+                sealingMgr->m_fetchingTxs = false;
+                sealingMgr->m_onReady();
                 SEAL_LOG(DEBUG) << LOG_DESC("fetchTransactions finish")
                                 << LOG_KV("txsSize", _txsHashList->transactionsMetaDataSize())
                                 << LOG_KV("sysTxsSize", _sysTxsList->transactionsMetaDataSize())

@@ -10,16 +10,30 @@ void DmcExecutor::prepare()
     {
         return;
     }
+    std::set<ContextID> needSchedulerOut;
 
-    bcos::WriteGuard lock(x_prepareLock);
-    if (m_needPrepare.size() == 0)  // check again after get lock
+    std::set<ContextID, std::less<>> prepareSet;
     {
-        return;
+        // dump m_needPrepare to an ordered set
+        // bcos::WriteGuard lock1(x_concurrentLock);
+
+        removeOutdatedStatus();
+
+        for (auto contextID : m_needPrepare)
+        {
+            prepareSet.insert(contextID);
+        }
+        m_needPrepare.clear();
+
+        // dump m_lockingPool to an ordered set
+        for (auto contextID : m_lockingPool)
+        {
+            prepareSet.insert(contextID);
+        }
+        m_lockingPool.clear();
     }
 
-    m_needPrepare.merge(m_lockingPool);  // locked executive always need to prepare
-    std::set<ContextID> needSchedulerOut;
-    for (auto contextID : m_needPrepare)
+    for (auto contextID : prepareSet)
     {
         auto executiveState = m_pendingPool[contextID];
         auto hint = handleExecutiveMessage(executiveState);
@@ -27,8 +41,9 @@ void DmcExecutor::prepare()
         {
         case NEED_SEND:
         {
+            // bcos::WriteGuard lock1(x_concurrentLock);
             m_needSendPool.insert(contextID);
-            m_lockingPool.erase(contextID);
+            m_lockingPool.unsafe_erase(contextID);
             break;
         }
         case SCHEDULER_OUT:
@@ -38,6 +53,7 @@ void DmcExecutor::prepare()
         }
         case LOCKED:
         {
+            // bcos::WriteGuard lock1(x_concurrentLock);
             if (m_lockingPool.count(contextID) == 0)
             {
                 m_lockingPool.insert(contextID);
@@ -46,9 +62,8 @@ void DmcExecutor::prepare()
         }
         case END:
         {
-            m_pendingPool.erase(contextID);
-            m_needSendPool.erase(contextID);
-            m_lockingPool.erase(contextID);
+            // bcos::WriteGuard lock1(x_concurrentLock);
+            m_needRemove.insert(contextID);
             break;
         }
         }
@@ -59,24 +74,46 @@ void DmcExecutor::prepare()
         schedulerOut(contextID);
     }
 
-    m_needPrepare.clear();
+    removeOutdatedStatus();
+}
+
+void DmcExecutor::removeOutdatedStatus()
+{
+    for (auto contextID : m_needRemove)
+    {
+        m_pendingPool.unsafe_erase(contextID);
+        m_lockingPool.unsafe_erase(contextID);
+        m_needPrepare.unsafe_erase(contextID);
+    }
+    m_needRemove.clear();
 }
 
 void DmcExecutor::submit(protocol::ExecutionMessage::UniquePtr message, bool withDAG)
 {
     auto contextID = message->contextID();
-    m_pendingPool[contextID] =
-        std::make_shared<ExecutiveState>(contextID, std::move(message), withDAG);
-    m_needPrepare.insert(contextID);
+    /*
+        std::cout << std::endl
+                  << " ////// " << message->contextID() << " | " << message->seq() << " | " <<
+       std::hex
+                  << message->transactionHash() << " | " << message->to();
+                  */
+    {
+        // bcos::ReadGuard lock(x_concurrentLock);
+        m_pendingPool.insert(
+            {contextID, std::make_shared<ExecutiveState>(contextID, std::move(message), withDAG)});
+        m_needPrepare.insert(contextID);
+    }
 }
 
 void DmcExecutor::schedulerIn(ExecutiveState::Ptr executive)
 {
     assert(executive->message->to() == m_contractAddress);  // message must belongs to this executor
     auto contextID = executive->message->contextID();
-    // bcos::WriteGuard lock(x_poolLock);
-    m_pendingPool[contextID] = executive;
-    m_needPrepare.insert(contextID);
+    {
+        // bcos::ReadGuard lock(x_concurrentLock);
+        m_pendingPool.insert({contextID, executive});
+        m_needPrepare.insert(contextID);
+    }
 }
 
 void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callback)
@@ -93,14 +130,38 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
         return;
     }
 
+    if (m_needSendPool.size() == 0)
+    {
+        callback(nullptr, PAUSED);
+        return;
+    }
+
     assert(f_onSchedulerOut != nullptr);
 
     auto messages = std::make_shared<std::vector<protocol::ExecutionMessage::UniquePtr>>();
 
     // dump messages
-    for (auto contextID : m_needSendPool)
     {
-        messages->push_back(std::move(m_pendingPool[contextID]->message));
+        // bcos::ReadGuard lock(x_concurrentLock);
+        std::set<ContextID, std::less<>> needSendPool;
+        for (auto contextID : m_needSendPool)
+        {
+            needSendPool.insert(contextID);
+        }
+        for (auto contextID : needSendPool)
+        {
+            auto& message = m_pendingPool[contextID]->message;
+            /*
+                        std::cout << std::endl
+                                  << " =====> " << message->contextID() << " | " << message->seq()
+               << " | "
+                                  << std::hex << message->transactionHash() << " | " <<
+               message->to();
+                                  */
+
+            messages->push_back(std::move(message));
+        }
+        m_needSendPool.clear();
     }
 
     // call executor
@@ -175,13 +236,16 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
         // Empty stack, execution is finished
         if (executiveState->callStack.empty())
         {
-            f_onTxFinished(std::move(message));
-
             // Remove executive state and continue
-            SCHEDULER_LOG(TRACE) << "Erasing, " << message->contextID() << " | " << message->seq()
-                                 << " | " << std::hex << message->transactionHash() << " | "
-                                 << message->to();
-
+            // SCHEDULER_LOG(TRACE)
+            /*
+                        std::cout << std::endl
+                                  << "Erasing " << message->contextID() << " | " << message->seq()
+               << " | "
+                                  << std::hex << message->transactionHash() << " | " <<
+               message->to();
+            */
+            f_onTxFinished(std::move(message));
             return END;
         }
 
@@ -285,12 +349,37 @@ void DmcExecutor::handleExecutiveOutputs(
 {
     for (auto& output : outputs)
     {
+        /*
+        std::cout << std::endl
+                  << " <===== " << output->contextID() << " | " << output->seq() << " | "
+                  << std::hex << output->transactionHash() << " | " << output->to();
+                  */
+
         std::string to = {output->to().data(), output->to().size()};
+        ExecutiveState::Ptr executiveState;
         auto contextID = output->contextID();
-        m_pendingPool[contextID]->message = std::move(output);
+        {
+            // bcos::ReadGuard lock(x_concurrentLock);
+            executiveState = m_pendingPool[contextID];
+            if (!executiveState)
+            {
+                std::cout << "----";
+            }
+
+            executiveState->message = std::move(output);
+        }
 
         if (to == m_contractAddress)
         {
+            // bcos::ReadGuard lock(x_concurrentLock);
+            // is my output
+            m_needPrepare.insert(contextID);
+        }
+        else if (executiveState->callStack.size() == 1 &&
+                 (executiveState->message->type() == protocol::ExecutionMessage::FINISHED ||
+                     executiveState->message->type() == protocol::ExecutionMessage::REVERT))
+        {
+            // just finished. no need to schedulerOut
             m_needPrepare.insert(contextID);
         }
         else
@@ -302,9 +391,12 @@ void DmcExecutor::handleExecutiveOutputs(
 
 void DmcExecutor::schedulerOut(ContextID contextID)
 {
-    ExecutiveState::Ptr executiveState = m_pendingPool[contextID];
-    m_lockingPool.erase(contextID);
-    m_pendingPool.erase(contextID);
+    ExecutiveState::Ptr executiveState;
+    {
+        // bcos::WriteGuard lock(x_concurrentLock);
+        executiveState = m_pendingPool[contextID];
+        m_needRemove.insert(contextID);
+    }
     f_onSchedulerOut(std::move(executiveState));  // scheduler out
 }
 
