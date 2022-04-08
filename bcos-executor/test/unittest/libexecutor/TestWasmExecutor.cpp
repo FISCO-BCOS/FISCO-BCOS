@@ -25,13 +25,13 @@
 #include "../mock/MockTransactionalStorage.h"
 #include "../mock/MockTxPool.h"
 #include "Common.h"
+#include "bcos-codec/wrapper/CodecWrapper.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
 #include "bcos-framework/interfaces/protocol/Transaction.h"
 #include "bcos-protocol/protobuf/PBBlockHeader.h"
 #include "bcos-table/src/StateStorage.h"
 #include "executor/TransactionExecutor.h"
 #include "executor/TransactionExecutorFactory.h"
-#include "precompiled/PrecompiledCodec.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
@@ -95,7 +95,7 @@ struct WasmExecutorFixture
                 ->data(),
             64);
 
-        codec = std::make_unique<bcos::precompiled::PrecompiledCodec>(hashImpl, true);
+        codec = std::make_unique<bcos::precompiled::CodecWrapper>(hashImpl, true);
 
         helloWorldBin.assign(hello_world_wasm, hello_world_wasm + hello_world_wasm_len);
         helloWorldBin = codec->encode(helloWorldBin);
@@ -204,7 +204,7 @@ struct WasmExecutorFixture
 
     KeyPairInterface::Ptr keyPair;
     int64_t gas = 3000000000;
-    std::unique_ptr<bcos::precompiled::PrecompiledCodec> codec;
+    std::unique_ptr<bcos::precompiled::CodecWrapper> codec;
 
     bytes helloWorldBin;
     std::string helloWorldAbi;
@@ -553,8 +553,9 @@ BOOST_AUTO_TEST_CASE(deployError)
         p1.get_future().get();
 
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> p2;
-        executor->executeTransaction(std::move(params),
-            [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+        executor->executeTransaction(
+            std::move(params), [&](bcos::Error::UniquePtr&& error,
+                                   bcos::protocol::ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 p2.set_value(std::move(result));
             });
@@ -563,8 +564,9 @@ BOOST_AUTO_TEST_CASE(deployError)
         r2->setSeq(1001);
 
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> p3;
-        executor->executeTransaction(std::move(r2),
-            [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+        executor->executeTransaction(
+            std::move(r2), [&](bcos::Error::UniquePtr&& error,
+                               bcos::protocol::ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 p3.set_value(std::move(result));
             });
@@ -575,8 +577,9 @@ BOOST_AUTO_TEST_CASE(deployError)
         BOOST_CHECK_EQUAL(r3->status(), 15);
 
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> p4;
-        executor->executeTransaction(std::move(r3),
-            [&](bcos::Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+        executor->executeTransaction(
+            std::move(r3), [&](bcos::Error::UniquePtr&& error,
+                               bcos::protocol::ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 p4.set_value(std::move(result));
             });

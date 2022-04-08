@@ -22,8 +22,9 @@
 
 #include "../executive/TransactionExecutive.h"
 #include "Common.h"
-#include "PrecompiledCodec.h"
+#include "bcos-codec/wrapper/CodecWrapper.h"
 #include <bcos-codec/abi/ContractABICodec.h>
+#include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/interfaces/storage/Table.h>
 #include <bcos-utilities/Common.h>
 #include <boost/archive/text_iarchive.hpp>
@@ -44,7 +45,7 @@ static const std::string USER_APPS_PREFIX = "/apps/";
 static const std::string USER_SYS_PREFIX = "/sys/";
 
 
-inline void getErrorCodeOut(bytes& out, int const& result, const PrecompiledCodec& _codec)
+inline void getErrorCodeOut(bytes& out, int const& result, const CodecWrapper& _codec)
 {
     if (result >= 0 && result < 128)
     {
@@ -98,5 +99,14 @@ std::pair<std::string, std::string> getLinkNameAndVersion(const std::string& _ab
 
 bool recursiveBuildDir(const std::shared_ptr<executor::TransactionExecutive>& _executive,
     const std::string& _absoluteDir);
+
+executor::CallParameters::UniquePtr externalRequest(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef _param,
+    const std::string& _origin, const std::string& _sender, const std::string& _to, bool _isStatic,
+    bool _isCreate, int64_t gasLeft);
+
+s256 externalTouchNewFile(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+    const std::string& _origin, const std::string& _sender, const std::string& _filePath,
+    const std::string& _fileType, int64_t gasLeft);
 }  // namespace precompiled
 }  // namespace bcos

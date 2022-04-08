@@ -84,7 +84,7 @@ public:
         executor = bcos::executor::TransactionExecutorFactory::build(
             txpool, nullptr, storage, executionResultFactory, hashImpl, _isWasm, _isCheckAuth);
         createSysTable();
-        codec = std::make_shared<PrecompiledCodec>(hashImpl, _isWasm);
+        codec = std::make_shared<CodecWrapper>(hashImpl, _isWasm);
         keyPair = cryptoSuite->signatureImpl()->generateKeyPair();
         memcpy(keyPair->secretKey()->mutableData(),
             fromHexString("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e")
@@ -112,7 +112,7 @@ public:
         executor = bcos::executor::TransactionExecutorFactory::build(
             txpool, nullptr, storage, executionResultFactory, smHashImpl, _isWasm, false);
         createSysTable();
-        codec = std::make_shared<PrecompiledCodec>(smHashImpl, _isWasm);
+        codec = std::make_shared<CodecWrapper>(smHashImpl, _isWasm);
 
         keyPair = smCryptoSuite->signatureImpl()->generateKeyPair();
         memcpy(keyPair->secretKey()->mutableData(),
@@ -270,7 +270,7 @@ protected:
     std::shared_ptr<MockTxPool> txpool;
     KeyPairInterface::Ptr keyPair;
 
-    PrecompiledCodec::Ptr codec;
+    CodecWrapper::Ptr codec;
     int64_t gas = 300000000;
     bool isWasm = false;
 };

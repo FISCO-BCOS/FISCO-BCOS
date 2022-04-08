@@ -18,8 +18,9 @@
  * @date 2021-12-01
  */
 
+#include "bcos-framework/interfaces/executor/PrecompiledTypeDef.h"
 #include "libprecompiled/PreCompiledFixture.h"
-#include "precompiled/TableFactoryPrecompiled.h"
+#include "precompiled/KVTableFactoryPrecompiled.h"
 #include <bcos-utilities/testutils/TestPromptFixture.h>
 
 using namespace bcos;
@@ -35,7 +36,7 @@ class KVTableFactoryPrecompiledFixture : public PrecompiledFixture
 public:
     KVTableFactoryPrecompiledFixture()
     {
-        codec = std::make_shared<PrecompiledCodec>(hashImpl, false);
+        codec = std::make_shared<CodecWrapper>(hashImpl, false);
         setIsWasm(false);
         tableTestAddress = Address("0x420f853b49838bd3e9466c85a4cc3428c960dde2").hex();
     }
@@ -84,7 +85,6 @@ public:
             });
 
         auto result = executePromise.get_future().get();
-        BOOST_CHECK(result);
         BOOST_CHECK_EQUAL(result->type(), ExecutionMessage::MESSAGE);
         BOOST_CHECK_EQUAL(result->contextID(), 99);
         BOOST_CHECK_EQUAL(result->seq(), 1000);
@@ -96,15 +96,54 @@ public:
 
         // to kv table
         result->setSeq(1001);
-        std::promise<ExecutionMessage::UniquePtr> executePromise4;
+        std::promise<ExecutionMessage::UniquePtr> executePromise2;
         executor->executeTransaction(
             std::move(result), [&](bcos::Error::UniquePtr&& error,
                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
+                executePromise2.set_value(std::move(result));
+            });
+        auto result2 = executePromise2.get_future().get();
+
+        BOOST_CHECK_EQUAL(result2->type(), ExecutionMessage::MESSAGE);
+        BOOST_CHECK_EQUAL(result2->contextID(), 99);
+        BOOST_CHECK_EQUAL(result2->seq(), 1001);
+        BOOST_CHECK_EQUAL(result2->origin(), sender);
+        BOOST_CHECK_EQUAL(result2->to(), precompiled::BFS_ADDRESS);
+        BOOST_CHECK_EQUAL(result2->create(), false);
+        BOOST_CHECK_EQUAL(result2->status(), 0);
+
+        // to bfs create table file
+        result2->setSeq(1002);
+        std::promise<ExecutionMessage::UniquePtr> executePromise3;
+        executor->executeTransaction(
+            std::move(result2), [&](bcos::Error::UniquePtr&& error,
+                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise3.set_value(std::move(result));
+            });
+        auto result3 = executePromise3.get_future().get();
+
+        BOOST_CHECK_EQUAL(result3->type(), ExecutionMessage::FINISHED);
+        BOOST_CHECK_EQUAL(result3->contextID(), 99);
+        BOOST_CHECK_EQUAL(result3->seq(), 1002);
+        BOOST_CHECK_EQUAL(result3->origin(), sender);
+        BOOST_CHECK_EQUAL(result3->to(), precompiled::KV_TABLE_ADDRESS);
+        BOOST_CHECK_EQUAL(result3->newEVMContractAddress(), "");
+        BOOST_CHECK_EQUAL(result3->create(), false);
+        BOOST_CHECK_EQUAL(result3->status(), 0);
+
+        // bfs touch finish callback to kv table
+        result3->setSeq(1001);
+        std::promise<ExecutionMessage::UniquePtr> executePromise4;
+        executor->executeTransaction(
+            std::move(result3), [&](bcos::Error::UniquePtr&& error,
+                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
                 executePromise4.set_value(std::move(result));
             });
         auto result4 = executePromise4.get_future().get();
-        BOOST_CHECK(result4);
+
         BOOST_CHECK_EQUAL(result4->type(), ExecutionMessage::FINISHED);
         BOOST_CHECK_EQUAL(result4->contextID(), 99);
         BOOST_CHECK_EQUAL(result4->seq(), 1001);
@@ -135,7 +174,7 @@ public:
 
     ExecutionMessage::UniquePtr creatTable(protocol::BlockNumber _number, int _contextId,
         const std::string& tableName, const std::string& key, const std::string& value,
-        int _errorCode = 0)
+        int _errorCode = 0, bool _errorInKv = false)
     {
         nextBlock(_number);
         bytes in =
@@ -165,7 +204,7 @@ public:
             });
         auto result2 = executePromise2.get_future().get();
 
-        // call precompiled
+        // call kv precompiled
         result2->setSeq(1001);
 
         std::promise<ExecutionMessage::UniquePtr> executePromise3;
@@ -175,12 +214,56 @@ public:
                 executePromise3.set_value(std::move(result));
             });
         auto result3 = executePromise3.get_future().get();
+
+        if (_errorInKv)
+        {
+            if (_errorCode != 0)
+            {
+                BOOST_CHECK(result3->data().toBytes() == codec->encode(s256(_errorCode)));
+            }
+            commitBlock(_number);
+            return result3;
+        }
+
+        result3->setSeq(1002);
+
+        // call bfs create
+        std::promise<ExecutionMessage::UniquePtr> executePromise4;
+        executor->executeTransaction(std::move(result3),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise4.set_value(std::move(result));
+            });
+        auto result4 = executePromise4.get_future().get();
+
+        result4->setSeq(1001);
+
+        // bfs create finish, callback to kv precompiled
+        std::promise<ExecutionMessage::UniquePtr> executePromise5;
+        executor->executeTransaction(std::move(result4),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise5.set_value(std::move(result));
+            });
+        auto result5 = executePromise5.get_future().get();
+
+        result5->setSeq(1000);
+
+        // callback to contract
+        std::promise<ExecutionMessage::UniquePtr> executePromise6;
+        executor->executeTransaction(std::move(result5),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise6.set_value(std::move(result));
+            });
+        auto result6 = executePromise6.get_future().get();
+
         if (_errorCode != 0)
         {
-            BOOST_CHECK(result3->data().toBytes() == codec->encode(s256(_errorCode)));
+            BOOST_CHECK(result6->data().toBytes() == codec->encode(s256(_errorCode)));
         }
         commitBlock(_number);
-        return result3;
+        return result6;
     };
 
     ExecutionMessage::UniquePtr desc(
@@ -356,39 +439,47 @@ BOOST_FIXTURE_TEST_SUITE(precompiledKVTableTest, KVTableFactoryPrecompiledFixtur
 
 BOOST_AUTO_TEST_CASE(createTableTest)
 {
+    int64_t number = 2;
     deployTest();
     {
-        creatTable(1, 100, "t_test", "id", "item_name,item_id");
+        creatTable(number++, 100, "t_test", "id", "item_name,item_id");
     }
 
     // createTable exist
     {
-        creatTable(2, 101, "t_test", "id", "item_name,item_id", CODE_TABLE_NAME_ALREADY_EXIST);
+        creatTable(number++, 101, "t_test", "id", "item_name,item_id",
+            CODE_TABLE_NAME_ALREADY_EXIST, true);
     }
 
-    // createTable too long tableName, key and field
+    // createTable build
+    {
+        creatTable(
+            number++, 101, "t_test/t_test2", "id", "item_name,item_id", CODE_FILE_BUILD_DIR_FAILED);
+    }
+
     std::string errorStr;
     for (int i = 0; i <= SYS_TABLE_VALUE_FIELD_MAX_LENGTH; i++)
     {
-        errorStr += std::to_string(9);
+        errorStr += std::to_string(0);
     }
+    // createTable too long tableName, key and field
     {
-        auto r1 = creatTable(2, 102, errorStr, "id", "item_name,item_id");
+        auto r1 = creatTable(number++, 102, errorStr, "id", "item_name,item_id", 0, true);
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
-        auto r2 = creatTable(2, 103, "t_test", errorStr, "item_name,item_id");
+        auto r2 = creatTable(number++, 103, "t_test", errorStr, "item_name,item_id", 0, true);
         BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
-        auto r3 = creatTable(2, 104, "t_test", "id", errorStr);
+        auto r3 = creatTable(number++, 104, "t_test", "id", errorStr, 0, true);
         BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // createTable error key and field
     std::string errorStr2 = "/test&";
     {
-        auto r1 = creatTable(2, 105, errorStr2, "id", "item_name,item_id");
+        auto r1 = creatTable(number++, 105, errorStr2, "id", "item_name,item_id", 0, true);
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
-        auto r2 = creatTable(2, 106, "t_test", errorStr2, "item_name,item_id");
+        auto r2 = creatTable(number++, 106, "t_test", errorStr2, "item_name,item_id", 0, true);
         BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
-        auto r3 = creatTable(2, 107, "t_test", "id", errorStr2);
+        auto r3 = creatTable(number++, 107, "t_test", "id", errorStr2, 0, true);
         BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 }

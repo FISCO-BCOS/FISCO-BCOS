@@ -46,7 +46,6 @@ public:
     std::shared_ptr<PrecompiledExecResult> call(
         std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
         const std::string& _origin, const std::string& _sender, int64_t gasLeft) override;
-    std::string toString() override;
     std::pair<std::string, protocol::BlockNumber> getSysConfigByKey(
         const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const std::string& _key) const;

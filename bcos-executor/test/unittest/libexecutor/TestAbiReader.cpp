@@ -160,14 +160,12 @@ BOOST_AUTO_TEST_CASE(NormalCase)
     BOOST_CHECK_EQUAL(conflictFields[0].kind, 0);
 
     auto accessPath = vector<uint8_t>{};
-    BOOST_CHECK(
-        std::equal(accessPath.begin(), accessPath.end(), conflictFields[0].value.begin()));
+    BOOST_CHECK(std::equal(accessPath.begin(), accessPath.end(), conflictFields[0].value.begin()));
     BOOST_CHECK_EQUAL(conflictFields[0].slot.value(), 0);
 
     accessPath = vector<uint8_t>{0, 1, 2};
     cout << conflictFields[1].value.size() << endl;
-    BOOST_CHECK(
-        std::equal(accessPath.begin(), accessPath.end(), conflictFields[1].value.begin()));
+    BOOST_CHECK(std::equal(accessPath.begin(), accessPath.end(), conflictFields[1].value.begin()));
     BOOST_CHECK_EQUAL(conflictFields[1].slot.value(), 1);
 }
 

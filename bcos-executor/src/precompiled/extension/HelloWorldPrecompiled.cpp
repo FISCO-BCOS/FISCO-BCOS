@@ -54,11 +54,6 @@ HelloWorldPrecompiled::HelloWorldPrecompiled(crypto::Hash::Ptr _hashImpl) : Prec
     name2Selector[HELLO_WORLD_METHOD_SET] = getFuncSelector(HELLO_WORLD_METHOD_SET, _hashImpl);
 }
 
-std::string HelloWorldPrecompiled::toString()
-{
-    return "HelloWorld";
-}
-
 std::shared_ptr<PrecompiledExecResult> HelloWorldPrecompiled::call(
     std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
     const std::string&, const std::string&, int64_t)
@@ -71,7 +66,7 @@ std::shared_ptr<PrecompiledExecResult> HelloWorldPrecompiled::call(
     bytesConstRef data = getParamData(_param);
     auto blockContext = _executive->blockContext().lock();
     auto codec =
-        std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     auto callResult = std::make_shared<PrecompiledExecResult>();
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
     gasPricer->setMemUsed(_param.size());

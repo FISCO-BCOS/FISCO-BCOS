@@ -22,6 +22,7 @@
 #include "Common.h"
 #include "PrecompiledResult.h"
 #include "Utilities.h"
+#include <bcos-framework/interfaces/executor/PrecompiledTypeDef.h>
 #include <bcos-framework/interfaces/protocol/Exceptions.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/classification.hpp>
@@ -52,7 +53,7 @@ KVTableFactoryPrecompiled::KVTableFactoryPrecompiled(crypto::Hash::Ptr _hashImpl
 
 std::shared_ptr<PrecompiledExecResult> KVTableFactoryPrecompiled::call(
     std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
-    const std::string&, const std::string&, int64_t)
+    const std::string& _origin, const std::string& _sender, int64_t _gasLeft)
 {
     uint32_t func = getParamFunc(_param);
     bytesConstRef data = getParamData(_param);
@@ -66,7 +67,7 @@ std::shared_ptr<PrecompiledExecResult> KVTableFactoryPrecompiled::call(
     if (func == name2Selector[KV_TABLE_METHOD_CREATE])
     {
         // createTable(string,string,string)
-        createTable(_executive, data, callResult, gasPricer);
+        createTable(_executive, data, callResult, gasPricer, _origin, _sender, _gasLeft);
     }
     else if (func == name2Selector[KV_TABLE_METHOD_SET])
     {
@@ -95,7 +96,8 @@ std::shared_ptr<PrecompiledExecResult> KVTableFactoryPrecompiled::call(
 
 void KVTableFactoryPrecompiled::createTable(
     const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
-    const std::shared_ptr<PrecompiledExecResult>& callResult, const PrecompiledGas::Ptr& gasPricer)
+    const std::shared_ptr<PrecompiledExecResult>& callResult, const PrecompiledGas::Ptr& gasPricer,
+    const std::string& _origin, const std::string& _sender, int64_t gasLeft)
 {
     // createTable(string,string,string)
     std::string tableName;
@@ -103,7 +105,7 @@ void KVTableFactoryPrecompiled::createTable(
     std::string valueField;
     auto blockContext = _executive->blockContext().lock();
     auto codec =
-        std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     codec->decode(data, tableName, keyField, valueField);
 
     if (tableName.empty())
@@ -115,55 +117,41 @@ void KVTableFactoryPrecompiled::createTable(
 
     precompiled::checkCreateTableParam(tableName, keyField, valueField);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("KVCreateTable") << LOG_KV("tableName", tableName)
-                           << LOG_KV("keyField", keyField) << LOG_KV("valueField", valueField);
+                           << LOG_KV("keyField", keyField) << LOG_KV("valueField", valueField)
+                           << LOG_KV("origin", _origin) << LOG_KV("sender", _sender);
 
     // /tables/ + tableName
     auto newTableName = getTableName(tableName);
-    int result = CODE_SUCCESS;
     auto table = _executive->storage().openTable(newTableName);
     gasPricer->appendOperation(InterfaceOpcode::OpenTable);
     if (table)
     {
         // table already exist
-        result = CODE_TABLE_NAME_ALREADY_EXIST;
-        getErrorCodeOut(callResult->mutableExecResult(), result, *codec);
+        getErrorCodeOut(callResult->mutableExecResult(), CODE_TABLE_NAME_ALREADY_EXIST, *codec);
         return;
     }
-    auto parentDirAndBaseName = getParentDirAndBaseName(newTableName);
-    auto parentDir = parentDirAndBaseName.first;
-    auto tableBaseName = parentDirAndBaseName.second;
-    if (!recursiveBuildDir(_executive, parentDir))
-    {
-        result = CODE_FILE_BUILD_DIR_FAILED;
-    }
-    else
-    {
-        auto ret = _executive->storage().createTable(newTableName, valueField);
-        auto sysTable = _executive->storage().openTable(StorageInterface::SYS_TABLES);
-        auto sysEntry = sysTable->getRow(newTableName);
-        if (!ret || !sysEntry)
-        {
-            result = CODE_TABLE_CREATE_ERROR;
-            getErrorCodeOut(callResult->mutableExecResult(), result, *codec);
-            return;
-        }
-        sysEntry->setField(0, valueField + "," + keyField);
-        sysTable->setRow(newTableName, sysEntry.value());
-        gasPricer->appendOperation(InterfaceOpcode::CreateTable);
 
-        // parentPath table must exist
-        // update parentDir
-        auto parentTable = _executive->storage().openTable(parentDir);
-        // decode sub
-        std::map<std::string, std::string> bfsInfo;
-        auto stubEntry = parentTable->getRow(FS_KEY_SUB);
-        auto&& out = asBytes(std::string(stubEntry->getField(0)));
-        codec::scale::decode(bfsInfo, gsl::make_span(out));
-        bfsInfo.insert(std::make_pair(tableBaseName, FS_TYPE_CONTRACT));
-        stubEntry->setField(0, asString(codec::scale::encode(bfsInfo)));
-        parentTable->setRow(FS_KEY_SUB, std::move(stubEntry.value()));
+    std::string kvTableAddress = blockContext->isWasm() ? KV_TABLE_NAME : KV_TABLE_ADDRESS;
+    auto response = externalTouchNewFile(_executive, _origin, kvTableAddress, newTableName,
+        FS_TYPE_CONTRACT, gasLeft - gasPricer->calTotalGas());
+    if (response != 0)
+    {
+        getErrorCodeOut(callResult->mutableExecResult(), CODE_FILE_BUILD_DIR_FAILED, *codec);
+        return;
     }
-    getErrorCodeOut(callResult->mutableExecResult(), result, *codec);
+    auto ret = _executive->storage().openTable(newTableName);
+    auto sysTable = _executive->storage().openTable(StorageInterface::SYS_TABLES);
+    auto sysEntry = sysTable->getRow(newTableName);
+    if (!ret || !sysEntry)
+    {
+        getErrorCodeOut(callResult->mutableExecResult(), CODE_TABLE_CREATE_ERROR, *codec);
+        return;
+    }
+    sysEntry->setField(0, valueField + "," + keyField);
+    sysTable->setRow(newTableName, sysEntry.value());
+    gasPricer->appendOperation(InterfaceOpcode::CreateTable);
+
+    getErrorCodeOut(callResult->mutableExecResult(), CODE_SUCCESS, *codec);
 }
 
 void KVTableFactoryPrecompiled::get(
@@ -173,7 +161,7 @@ void KVTableFactoryPrecompiled::get(
     std::string tableName, key;
     auto blockContext = _executive->blockContext().lock();
     auto codec =
-        std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     codec->decode(data, tableName, key);
     tableName = getTableName(tableName);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("KVTable") << LOG_KV("get", key)
@@ -197,11 +185,6 @@ void KVTableFactoryPrecompiled::get(
     gasPricer->updateMemUsed(entry->size());
     entryTuple = entry->getObject<EntryTuple>();
 
-    // for (const auto& fieldName : table->tableInfo()->fields())
-    // {
-    //     std::get<0>(entryTuple)
-    //         .emplace_back(std::make_tuple(fieldName, entry->getField(fieldName)));
-    // }
     callResult->setExecResult(codec->encode(true, entryTuple));
 }
 
@@ -214,7 +197,7 @@ void KVTableFactoryPrecompiled::set(
     EntryTuple entryTuple;
     auto blockContext = _executive->blockContext().lock();
     auto codec =
-        std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     codec->decode(data, tableName, key, entryTuple);
     tableName = getTableName(tableName);
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("KVTable") << LOG_KV("set", key)
@@ -248,7 +231,7 @@ void KVTableFactoryPrecompiled::desc(
     std::string tableName;
     auto blockContext = _executive->blockContext().lock();
     auto codec =
-        std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     codec->decode(data, tableName);
     tableName = getTableName(tableName);
     PRECOMPILED_LOG(DEBUG) << LOG_DESC("Table desc") << LOG_KV("tableName", tableName);

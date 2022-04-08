@@ -47,7 +47,8 @@ public:
 private:
     void createTable(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
-        const PrecompiledGas::Ptr& gasPricer);
+        const PrecompiledGas::Ptr& gasPricer, const std::string& _origin,
+        const std::string& _sender, int64_t gasLeft);
     void get(const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
         const std::shared_ptr<PrecompiledExecResult>& callResult,
         const PrecompiledGas::Ptr& gasPricer);

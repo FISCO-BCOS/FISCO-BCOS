@@ -42,6 +42,9 @@ using EntriesPtr = std::shared_ptr<Entries>;
 static constexpr size_t SYS_VALUE = 0;
 static constexpr const char* SYS_VALUE_FIELDS = "value";
 
+/// BFS touch method selector
+static constexpr const char* FILE_SYSTEM_METHOD_TOUCH = "touch(string,string)";
+
 /// FileSystem path limit
 static const size_t FS_PATH_MAX_LENGTH = 56;
 static const size_t FS_PATH_MAX_LEVEL = 6;

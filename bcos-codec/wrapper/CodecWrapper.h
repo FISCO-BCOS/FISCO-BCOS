@@ -13,15 +13,15 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file PrecompiledCodec.h
+ * @file CodecWrapper.h
  * @author: kyonRay
  * @date 2021-06-02
  */
 
 #pragma once
 
-#include <bcos-codec/abi/ContractABICodec.h>
-#include <bcos-codec/scale/Scale.h>
+#include "bcos-codec/abi/ContractABICodec.h"
+#include "bcos-codec/scale/Scale.h"
 
 namespace bcos
 {
@@ -33,14 +33,12 @@ enum VMType
     WASM,
     UNDEFINED
 };
-class PrecompiledCodec
+class CodecWrapper
 {
 public:
-    using Ptr = std::shared_ptr<PrecompiledCodec>;
-    PrecompiledCodec(crypto::Hash::Ptr _hash, bool _isWasm) : m_hash(std::move(_hash))
-    {
-        m_type = _isWasm ? VMType::WASM : VMType::EVM;
-    }
+    using Ptr = std::shared_ptr<CodecWrapper>;
+    CodecWrapper(crypto::Hash::Ptr _hash, bool _isWasm) : m_type(_isWasm ? VMType::WASM : VMType::EVM), m_hash(std::move(_hash))
+    {}
     template <typename... Args>
     bytes encode(Args&&... _args) const
     {

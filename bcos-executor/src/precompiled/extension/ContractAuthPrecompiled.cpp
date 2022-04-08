@@ -129,7 +129,7 @@ std::shared_ptr<PrecompiledExecResult> ContractAuthPrecompiled::call(
     {
         auto blockContext = _executive->blockContext().lock();
         auto codec =
-            std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
+            std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
         bool result = checkMethodAuth(_executive, data);
         callResult->setExecResult(codec->encode(result));
     }
@@ -171,7 +171,7 @@ void ContractAuthPrecompiled::getAdmin(
     Address admin;
     auto blockContext = _executive->blockContext().lock();
     auto codec =
-        std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     if (blockContext->isWasm())
     {
         codec->decode(data, path);
@@ -207,7 +207,7 @@ void ContractAuthPrecompiled::resetAdmin(
     Address admin;
     auto blockContext = _executive->blockContext().lock();
     auto codec =
-        std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     if (!blockContext->isWasm())
     {
         Address contractAddress;
@@ -255,7 +255,7 @@ void ContractAuthPrecompiled::setMethodAuthType(
     string32 _type;
     auto blockContext = _executive->blockContext().lock();
     auto codec =
-        std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     if (!blockContext->isWasm())
     {
         Address contractAddress;
@@ -340,7 +340,7 @@ bool ContractAuthPrecompiled::checkMethodAuth(
     Address account;
     auto blockContext = _executive->blockContext().lock();
     auto codec =
-        std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     if (!blockContext->isWasm())
     {
         Address contractAddress;
@@ -434,7 +434,7 @@ void ContractAuthPrecompiled::setMethodAuth(
     string32 _func;
     auto blockContext = _executive->blockContext().lock();
     auto codec =
-        std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     codec->decode(data, path, _func, account);
     if (!blockContext->isWasm())
     {
@@ -631,7 +631,7 @@ void ContractAuthPrecompiled::getDeployType(
 {
     auto blockContext = _executive->blockContext().lock();
     auto codec =
-        std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
 
     u256 type = getDeployAuthType(_executive);
     gasPricer->updateMemUsed(1);
@@ -646,7 +646,7 @@ void ContractAuthPrecompiled::setDeployType(
     string32 _type;
     auto blockContext = _executive->blockContext().lock();
     auto codec =
-        std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     codec->decode(data, _type);
     if (!checkSender(_sender))
     {
@@ -697,7 +697,7 @@ void ContractAuthPrecompiled::setDeployAuth(
     Address account;
     auto blockContext = _executive->blockContext().lock();
     auto codec =
-        std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     codec->decode(data, account);
     if (!checkSender(_sender))
     {
@@ -737,7 +737,7 @@ void ContractAuthPrecompiled::hasDeployAuth(
     Address account;
     auto blockContext = _executive->blockContext().lock();
     auto codec =
-        std::make_shared<PrecompiledCodec>(blockContext->hashHandler(), blockContext->isWasm());
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     codec->decode(data, account);
 
     callResult->setExecResult(codec->encode(checkDeployAuth(_executive, account)));
