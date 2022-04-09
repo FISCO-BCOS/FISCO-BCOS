@@ -156,24 +156,25 @@ void EvmTransactionExecutor::initPrecompiled()
         std::make_shared<precompiled::KVTableFactoryPrecompiled>(m_hashImpl);
 
     // in EVM
-    m_constantPrecompiled.insert({SYS_CONFIG_ADDRESS, sysConfig});
-    m_constantPrecompiled.insert({CONSENSUS_ADDRESS, consensusPrecompiled});
-    m_constantPrecompiled.insert({PARALLEL_CONFIG_ADDRESS, parallelConfigPrecompiled});
+    m_constantPrecompiled->insert({SYS_CONFIG_ADDRESS, sysConfig});
+    m_constantPrecompiled->insert({CONSENSUS_ADDRESS, consensusPrecompiled});
+    m_constantPrecompiled->insert({PARALLEL_CONFIG_ADDRESS, parallelConfigPrecompiled});
     // FIXME: not support crud now
     // m_constantPrecompiled.insert({TABLE_ADDRESS, tableFactoryPrecompiled});
-    m_constantPrecompiled.insert({KV_TABLE_ADDRESS, kvTableFactoryPrecompiled});
-    m_constantPrecompiled.insert(
+    m_constantPrecompiled->insert({KV_TABLE_ADDRESS, kvTableFactoryPrecompiled});
+    m_constantPrecompiled->insert(
         {DAG_TRANSFER_ADDRESS, std::make_shared<precompiled::DagTransferPrecompiled>(m_hashImpl)});
-    m_constantPrecompiled.insert({CRYPTO_ADDRESS, std::make_shared<CryptoPrecompiled>(m_hashImpl)});
-    m_constantPrecompiled.insert(
+    m_constantPrecompiled->insert(
+        {CRYPTO_ADDRESS, std::make_shared<CryptoPrecompiled>(m_hashImpl)});
+    m_constantPrecompiled->insert(
         {BFS_ADDRESS, std::make_shared<precompiled::FileSystemPrecompiled>(m_hashImpl)});
-    m_constantPrecompiled.insert({CONTRACT_AUTH_ADDRESS,
+    m_constantPrecompiled->insert({CONTRACT_AUTH_ADDRESS,
         std::make_shared<precompiled::ContractAuthPrecompiled>(m_hashImpl)});
     CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
     set<string> builtIn = {CRYPTO_ADDRESS};
     m_builtInPrecompiled = make_shared<set<string>>(builtIn);
 
     // for Non-deterministic  test
-    m_constantPrecompiled.insert(
+    m_constantPrecompiled->insert(
         {RANDOM_PRECOMPILED_ADDRESS, std::make_shared<RandomPrecompiled>(m_hashImpl)});
 }

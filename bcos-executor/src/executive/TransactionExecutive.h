@@ -131,9 +131,6 @@ public:
 
     std::shared_ptr<precompiled::Precompiled> getPrecompiled(const std::string& _address) const;
 
-    void setConstantPrecompiled(
-        const std::string& _address, std::shared_ptr<precompiled::Precompiled> precompiled);
-
     void setBuiltInPrecompiled(std::shared_ptr<const std::set<std::string>> _builtInPrecompiled)
     {
         m_builtInPrecompiled = std::move(_builtInPrecompiled);
@@ -152,7 +149,7 @@ public:
             precompiledContract);
 
     void setConstantPrecompiled(
-        const std::map<std::string, std::shared_ptr<precompiled::Precompiled>>
+        std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
             _constantPrecompiled);
 
     std::shared_ptr<precompiled::PrecompiledExecResult> execPrecompiled(const std::string& address,
@@ -229,7 +226,9 @@ private:
     bool buildBfsPath(std::string const& _absoluteDir);
 
     std::weak_ptr<BlockContext> m_blockContext;  ///< Information on the runtime environment.
-    std::map<std::string, std::shared_ptr<precompiled::Precompiled>> m_constantPrecompiled;
+
+    std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
+        m_constantPrecompiled;
     std::shared_ptr<const std::map<std::string, std::shared_ptr<PrecompiledContract>>>
         m_evmPrecompiled;
     std::shared_ptr<const std::set<std::string>> m_builtInPrecompiled;

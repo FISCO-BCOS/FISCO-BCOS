@@ -719,14 +719,14 @@ std::shared_ptr<precompiled::PrecompiledExecResult> TransactionExecutive::execPr
 
 bool TransactionExecutive::isPrecompiled(const std::string& address) const
 {
-    return m_constantPrecompiled.count(address) > 0;
+    return m_constantPrecompiled->count(address) > 0;
 }
 
 std::shared_ptr<Precompiled> TransactionExecutive::getPrecompiled(const std::string& address) const
 {
-    auto constantPrecompiled = m_constantPrecompiled.find(address);
+    auto constantPrecompiled = m_constantPrecompiled->find(address);
 
-    if (constantPrecompiled != m_constantPrecompiled.end())
+    if (constantPrecompiled != m_constantPrecompiled->end())
     {
         return constantPrecompiled->second;
     }
@@ -768,14 +768,10 @@ void TransactionExecutive::setEVMPrecompiled(
     m_evmPrecompiled = std::move(precompiledContract);
 }
 void TransactionExecutive::setConstantPrecompiled(
-    const string& address, std::shared_ptr<precompiled::Precompiled> precompiled)
+    std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
+        _constantPrecompiled)
 {
-    m_constantPrecompiled.insert(std::make_pair(address, precompiled));
-}
-void TransactionExecutive::setConstantPrecompiled(
-    std::map<std::string, std::shared_ptr<precompiled::Precompiled>> _constantPrecompiled)
-{
-    m_constantPrecompiled = std::move(_constantPrecompiled);
+    m_constantPrecompiled = _constantPrecompiled;
 }
 
 void TransactionExecutive::revert()

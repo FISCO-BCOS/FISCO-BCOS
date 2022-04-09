@@ -110,6 +110,8 @@ TransactionExecutor::TransactionExecutor(txpool::TxPoolInterface::Ptr txpool,
     GlobalHashImpl::g_hashImpl = m_hashImpl;
     m_abiCache = make_shared<ClockCache<bcos::bytes, FunctionAbi>>(32);
     m_gasInjector = std::make_shared<wasm::GasInjector>(wasm::GetInstructionTable());
+    m_constantPrecompiled =
+        std::make_shared<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>();
 }
 
 void TransactionExecutor::nextBlockHeader(const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
@@ -686,9 +688,9 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                 auto abiKey = bytes(to.cbegin(), to.cend());
                 abiKey.insert(abiKey.end(), selector.begin(), selector.end());
                 // if precompiled
-                if (m_constantPrecompiled.count(params->receiveAddress))
+                if (m_constantPrecompiled->count(params->receiveAddress))
                 {
-                    auto p = m_constantPrecompiled.at(params->receiveAddress);
+                    auto p = m_constantPrecompiled->at(params->receiveAddress);
                     // Precompile transaction
                     if (p->isParallelPrecompiled())
                     {
