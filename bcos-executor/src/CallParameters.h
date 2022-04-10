@@ -30,7 +30,6 @@ struct CallParameters
 
     int64_t contextID = 0;
     int64_t seq = 0;
-    int64_t executiveStateID = -1;  // TODO: remove this
 
     std::string senderAddress;   // common field, readable format
     std::string codeAddress;     // common field, readable format

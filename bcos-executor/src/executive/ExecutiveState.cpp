@@ -66,7 +66,9 @@ CallParameters::UniquePtr ExecutiveState::go()
         break;
     }
 
-    output->executiveStateID = m_id;  // TODO: remove this
+    // Bug: Must force set contextID here to fix bug.
+    // But why output->context here always be 0 ?????
+    output->contextID = m_contextID;
 
     return output;
 }

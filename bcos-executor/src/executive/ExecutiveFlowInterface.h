@@ -37,7 +37,6 @@ public:
     virtual void submit(CallParameters::UniquePtr txInput) = 0;
     virtual void submit(std::shared_ptr<std::vector<CallParameters::UniquePtr>> txInputs) = 0;
 
-
     virtual void asyncRun(
         // onTxFinished(output)
         std::function<void(CallParameters::UniquePtr)> onTxFinished,
@@ -50,18 +49,25 @@ public:
 
 
 protected:
-    template <class F>
-    void asyncTo(F f)
+    template <class S, class F>
+    void asyncTo(S self, F f)
     {
-        f();  // TODO: fix enqueue bugs below
-        // m_pool.enqueue(f);
+        // f();  // TODO: fix enqueue bugs below
+        getPool()->enqueue([self = std::move(self), f = std::move(f)]() { f(); });
     }
 
 private:
-    // static bcos::ThreadPool m_pool =
-    //     bcos::ThreadPool("ExecutiveFlow", std::thread::hardware_concurrency());
-
-    // void checkAnd
+    static std::shared_ptr<bcos::ThreadPool> m_pool;
+    std::shared_ptr<bcos::ThreadPool> getPool()
+    {
+        static std::shared_ptr<bcos::ThreadPool> m_pool;
+        if (!m_pool)
+        {
+            m_pool = std::make_shared<bcos::ThreadPool>(
+                "ExecutiveFlow", std::thread::hardware_concurrency());
+        }
+        return m_pool;
+    }
 };
 
 }  // namespace executor

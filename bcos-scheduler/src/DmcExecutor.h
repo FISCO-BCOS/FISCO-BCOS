@@ -56,7 +56,7 @@ public:
     {}
 
     void submit(protocol::ExecutionMessage::UniquePtr message, bool withDAG);
-    void prepare();
+    bool prepare();  // return finished(true). If others need re-prepare, return unfinished(false)
     void go(std::function<void(bcos::Error::UniquePtr, Status)> callback);
     bool hasFinished() { return m_lockingPool.empty() && m_pendingPool.empty(); }
 

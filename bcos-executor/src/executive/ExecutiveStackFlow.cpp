@@ -33,6 +33,8 @@ void ExecutiveStackFlow::submit(CallParameters::UniquePtr txInput)
     if (executiveState == m_executives.end())
     {
         // add to top if not exists
+        // std::cout << " push " << contextID << " | " << seq << " | " << txInput->type <<
+        // std::endl;
         auto newExecutiveState =
             std::make_shared<ExecutiveState>(m_executiveFactory, std::move(txInput));
         m_runPool.push(newExecutiveState);
@@ -41,6 +43,8 @@ void ExecutiveStackFlow::submit(CallParameters::UniquePtr txInput)
     else
     {
         // update resume params
+        // std::cout << " rsme " << contextID << " | " << seq << " | " << txInput->type <<
+        // std::endl;
         executiveState->second->setResumeParam(std::move(txInput));
     }
 }
@@ -69,44 +73,69 @@ void ExecutiveStackFlow::run(std::function<void(CallParameters::UniquePtr)> onTx
 {
     try
     {
-        WriteGuard lock(x_lock);
+        bcos::WriteGuard lock(x_lock);
         while (!m_runPool.empty())
         {
             auto executiveState = m_runPool.top();
-            auto output = executiveState->go();
+            CallParameters::UniquePtr output;
 
+            // try to execute this state
             switch (executiveState->getStatus())
             {
             case ExecutiveState::NEED_RUN:
-            {
-                asyncTo([onFinished = std::move(onFinished)]() { onFinished(nullptr); });
-            }
-            case ExecutiveState::PAUSED:
-            {  // just ignore, need to set resume params
-                break;
-            }
             case ExecutiveState::NEED_RESUME:
             {
-                auto outputs = std::make_shared<std::vector<CallParameters::UniquePtr>>();
-                outputs->push_back(std::move(output));
-                asyncTo([onPaused = std::move(onPaused), outputs = std::move(outputs)]() {
-                    onPaused(outputs);
-                });
+                // exec this state
+                output = executiveState->go();
+                break;
+            }
+            case ExecutiveState::PAUSED:
+            {
+                // haven't been executed since last pause step
+                output = nullptr;
                 break;
             }
             case ExecutiveState::FINISHED:
             {
-                onTxFinished(std::move(output));
+                m_runPool.pop();
+                continue;
+                break;
+            }
+            }
 
+            // check this state after exec
+            switch (executiveState->getStatus())
+            {
+            case ExecutiveState::NEED_RUN:
+            case ExecutiveState::NEED_RESUME:
+            {
+                asyncTo([onFinished = std::move(onFinished)]() { onFinished(nullptr); });
+                return;
+            }
+            case ExecutiveState::PAUSED:
+            {  // just ignore, need to set resume params
+                auto outputs = std::make_shared<std::vector<CallParameters::UniquePtr>>();
+                if (output)
+                {
+                    outputs->push_back(std::move(output));
+                }
+                asyncTo([onPaused = std::move(onPaused), outputs = std::move(outputs)]() {
+                    onPaused(outputs);
+                });
+                return;
+            }
+            case ExecutiveState::FINISHED:
+            {
+                onTxFinished(std::move(output));
                 break;
             }
             }
             m_runPool.pop();
         }
-        asyncTo([onFinished = std::move(onFinished)]() {
-            // return
-            onFinished(nullptr);
-        });
+        // asyncTo([onFinished = std::move(onFinished)]() {
+        //  return
+        onFinished(nullptr);
+        // });
     }
     catch (std::exception& e)
     {

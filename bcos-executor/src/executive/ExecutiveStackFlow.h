@@ -33,7 +33,8 @@ namespace bcos
 namespace executor
 {
 
-class ExecutiveStackFlow : public virtual ExecutiveFlowInterface
+class ExecutiveStackFlow : public virtual ExecutiveFlowInterface,
+                           public std::enable_shared_from_this<ExecutiveStackFlow>
 {
 public:
     ExecutiveStackFlow(ExecutiveFactory::Ptr executiveFactory)
@@ -60,10 +61,18 @@ private:
         std::function<void(std::shared_ptr<std::vector<CallParameters::UniquePtr>>)> onPaused,
         std::function<void(bcos::Error::UniquePtr)> onFinished);
 
+    template <class F>
+    void asyncTo(F f)
+    {
+        // call super function
+        ExecutiveFlowInterface::asyncTo<ExecutiveStackFlow::Ptr, F>(
+            shared_from_this(), std::move(f));
+    }
+
     std::stack<ExecutiveState::Ptr> m_runPool;
     std::map<std::tuple<int64_t, int64_t>, ExecutiveState::Ptr> m_executives;
     ExecutiveFactory::Ptr m_executiveFactory;
-    SharedMutex x_lock;
+    mutable SharedMutex x_lock;
 };
 
 

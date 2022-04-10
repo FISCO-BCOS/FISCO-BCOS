@@ -36,7 +36,7 @@ public:
 
     ExecutiveState(ExecutiveFactory::Ptr executiveFactory, CallParameters::UniquePtr input)
       : m_isStaticCall(input->staticCall),
-        m_id(input->executiveStateID),
+        m_contextID(input->contextID),
         m_input(std::move(input)),
         m_executiveFactory(executiveFactory){};
 
@@ -54,7 +54,7 @@ public:
 
 private:
     bool m_isStaticCall;
-    int64_t m_id;
+    int64_t m_contextID;
     CallParameters::UniquePtr m_input;
     std::shared_ptr<TransactionExecutive> m_executive;
     Status m_status = NEED_RUN;
