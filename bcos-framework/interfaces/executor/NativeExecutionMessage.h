@@ -27,12 +27,6 @@ public:
     int64_t seq() const override { return m_seq; }
     void setSeq(int64_t seq) override { m_seq = seq; }
 
-    virtual int64_t executiveStateID() const override { return m_executiveStateID; };
-    virtual void setExecutiveStateID(int64_t executiveStateID) override
-    {
-        m_executiveStateID = executiveStateID;
-    };
-
     std::string_view origin() const override { return m_origin; }
     void setOrigin(std::string origin) override { m_origin = std::move(origin); }
 

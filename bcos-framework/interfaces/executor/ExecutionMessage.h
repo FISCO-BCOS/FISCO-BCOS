@@ -50,6 +50,27 @@ public:
         REVERT_KEY_LOCK,  // Current message revert by key lock
     };
 
+    static std::string getTypeName(Type type)
+    {
+        switch (type)
+        {
+        case TXHASH:
+            return "TXHASH";
+        case MESSAGE:
+            return "MESSAGE";
+        case FINISHED:
+            return "FINISHED";
+        case KEY_LOCK:
+            return "KEY_LOCK";
+        case SEND_BACK:
+            return "SEND_BACK";
+        case REVERT:
+            return "REVERT";
+        case REVERT_KEY_LOCK:
+            return "REVERT_KEY_LOCK";
+        }
+    }
+
     // -----------------------------------------------
     // Request fields
     // -----------------------------------------------
@@ -64,9 +85,6 @@ public:
 
     virtual int64_t seq() const = 0;
     virtual void setSeq(int64_t seq) = 0;
-
-    virtual int64_t executiveStateID() const = 0;
-    virtual void setExecutiveStateID(int64_t executiveStateID) = 0;
 
     virtual std::string_view origin() const = 0;  // readable format
     virtual void setOrigin(std::string origin) = 0;

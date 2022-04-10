@@ -54,7 +54,10 @@ public:
 
         for (auto contextID : contextIDs)
         {
-            results.push_back(std::move(m_contextID2Result.at(contextID)));
+            auto& result = m_contextID2Result.at(contextID);
+            // std::cout << " dump  " << result->contextID() << " | " << result->seq() << " | "
+            //          << protocol::ExecutionMessage::getTypeName(result->type()) << std::endl;
+            results.push_back(std::move(result));
         }
 
         m_contextID2Result.clear();

@@ -430,7 +430,6 @@ void BlockExecutive::DMCExecute(BatchStatus::Ptr batchStatus,
                 batchStatus->finished++;
             }
 
-
             // check batch
             if ((batchStatus->error + batchStatus->paused + batchStatus->finished) !=
                 batchStatus->total)
@@ -468,20 +467,7 @@ void BlockExecutive::DMCExecute(BatchStatus::Ptr batchStatus,
             }
             else if (batchStatus->finished == batchStatus->total)
             {
-                // All executor return, check if there need to create new contract
-                serialPrepareExecutor();
-                if (batchStatus->total != m_dmcExecutors.size())
-                {
-                    // need to create contract
-                    // Start next DMC round
-                    auto newBatchStatus = std::make_shared<BatchStatus>();
-                    newBatchStatus->total = m_dmcExecutors.size();
-                    DMCExecute(newBatchStatus, std::move(callback));
-                }
-                else
-                {
-                    onDmcExecuteFinish(std::move(callback));
-                }
+                onDmcExecuteFinish(std::move(callback));
             }
             else
             {
@@ -826,13 +812,14 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
 void BlockExecutive::serialPrepareExecutor()
 {
     // Notice:
-    // For the same aquire lock priority
+    // For the same DMC lock priority
     // m_dmcExecutors must be prepared in contractAddress less<> serial order
     // Aquire lock happens in dmcExecutor->prepare()
 
     std::set<std::string, std::less<>> contracts;
 
-    while (contracts.size() != m_dmcExecutors.size())
+    bool unfinished = true;
+    while (unfinished)
     {
         contracts.clear();
 
@@ -841,12 +828,16 @@ void BlockExecutive::serialPrepareExecutor()
             contracts.insert(it->first);
         }
 
+        unfinished = false;
         for (auto address : contracts)
         {
-            m_dmcExecutors[address]->prepare();
+            // if there has one unfinised, reprepare all DmcExecutor
+            // std::cout << std::endl
+            //          << "---------------- " << address << " | "
+            //          << m_block->blockHeaderConst()->number() << " ----------------" <<
+            //          std::endl;
+            unfinished |= !m_dmcExecutors[address]->prepare();
         }
-
-        // if generate new dmcExecutors, we need to prepare again
     }
 }
 

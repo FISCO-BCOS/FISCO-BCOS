@@ -362,6 +362,9 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
             break;
         }
         case ExecutionMessage::MESSAGE:
+        case bcos::protocol::ExecutionMessage::REVERT:
+        case bcos::protocol::ExecutionMessage::FINISHED:
+        case bcos::protocol::ExecutionMessage::KEY_LOCK:
         {
             callParametersList->at(i) = createCallParameters(*params, params->staticCall());
             break;
@@ -1546,7 +1549,6 @@ std::unique_ptr<protocol::ExecutionMessage> TransactionExecutor::toExecutionResu
 
     message->setContextID(params->contextID);
     message->setSeq(params->seq);
-    message->setExecutiveStateID(params->executiveStateID);
     message->setOrigin(std::move(params->origin));
     message->setGasAvailable(params->gas);
     message->setData(std::move(params->data));
@@ -1672,7 +1674,6 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
 
     callParameters->contextID = input.contextID();
     callParameters->seq = input.seq();
-    callParameters->executiveStateID = input.executiveStateID();
     callParameters->origin = input.origin();
     callParameters->senderAddress = input.from();
     callParameters->receiveAddress = input.to();
@@ -1695,7 +1696,6 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
 
     callParameters->contextID = input.contextID();
     callParameters->seq = input.seq();
-    callParameters->executiveStateID = input.executiveStateID();
     callParameters->origin = toHex(tx.sender());
     callParameters->senderAddress = callParameters->origin;
     callParameters->receiveAddress = input.to();

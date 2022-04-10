@@ -4,11 +4,24 @@
 
 using namespace bcos::scheduler;
 
-void DmcExecutor::prepare()
+bool DmcExecutor::prepare()
 {
-    if (m_needPrepare.size() == 0)
+    bool othersNeedRePrepare = false;
+
+    if (!m_needRemove.empty())
     {
-        return;
+        removeOutdatedStatus();
+    }
+    /*
+        for (auto& it : m_pendingPool)
+        {
+            std::cout << " [--] " << it.second->toString() << std::endl;
+        }
+        */
+
+    if (m_needPrepare.empty())
+    {
+        return true;  // finished
     }
     std::set<ContextID> needSchedulerOut;
 
@@ -16,8 +29,6 @@ void DmcExecutor::prepare()
     {
         // dump m_needPrepare to an ordered set
         // bcos::WriteGuard lock1(x_concurrentLock);
-
-        removeOutdatedStatus();
 
         for (auto contextID : m_needPrepare)
         {
@@ -36,6 +47,7 @@ void DmcExecutor::prepare()
     for (auto contextID : prepareSet)
     {
         auto executiveState = m_pendingPool[contextID];
+        // std::cout << " ---> " << executiveState->toString() << std::endl;
         auto hint = handleExecutiveMessage(executiveState);
         switch (hint)
         {
@@ -49,6 +61,7 @@ void DmcExecutor::prepare()
         case SCHEDULER_OUT:
         {
             needSchedulerOut.insert(contextID);
+            othersNeedRePrepare = true;
             break;
         }
         case LOCKED:
@@ -75,6 +88,8 @@ void DmcExecutor::prepare()
     }
 
     removeOutdatedStatus();
+
+    return !othersNeedRePrepare;  // if othersNeedRePrepare, return unfinished(false)
 }
 
 void DmcExecutor::removeOutdatedStatus()
@@ -130,7 +145,7 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
         return;
     }
 
-    if (m_needSendPool.size() == 0)
+    if (m_needSendPool.empty())
     {
         callback(nullptr, PAUSED);
         return;
@@ -178,14 +193,7 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
             else
             {
                 handleExecutiveOutputs(std::move(outputs));
-                if (hasFinished())
-                {
-                    callback(nullptr, FINISHED);
-                }
-                else
-                {
-                    callback(nullptr, PAUSED);
-                }
+                callback(nullptr, PAUSED);
             }
         });
 }
@@ -216,6 +224,7 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
                 message->setTo(
                     newEVMAddress(m_block->blockHeaderConst()->number(), contextID, newSeq));
             }
+            // std::cout << " <--- " << executiveState->toString() << "SCHEDULER_OUT" << std::endl;
             return SCHEDULER_OUT;
         }
         auto newSeq = executiveState->currentSeq++;
@@ -246,6 +255,7 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
                message->to();
             */
             f_onTxFinished(std::move(message));
+            // std::cout << " <--- " << executiveState->toString() << "END" << std::endl;
             return END;
         }
 
@@ -281,6 +291,7 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
                                  << " keyLockAcquired: " << toHex(message->keyLockAcquired());
 
             executiveState->message = std::move(message);
+            // std::cout << " <--- " << executiveState->toString() << "LOCKED" << std::endl;
             return LOCKED;
         }
 
@@ -341,6 +352,7 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
         }
     }
 
+    // std::cout << " <--- " << executiveState->toString() << "NEED_SEND" << std::endl;
     return NEED_SEND;
 }
 
@@ -358,16 +370,16 @@ void DmcExecutor::handleExecutiveOutputs(
         std::string to = {output->to().data(), output->to().size()};
         ExecutiveState::Ptr executiveState;
         auto contextID = output->contextID();
-        {
-            // bcos::ReadGuard lock(x_concurrentLock);
-            executiveState = m_pendingPool[contextID];
-            if (!executiveState)
-            {
-                std::cout << "----";
-            }
 
-            executiveState->message = std::move(output);
+        // bcos::ReadGuard lock(x_concurrentLock);
+        executiveState = m_pendingPool[contextID];
+        if (!executiveState)
+        {
+            std::cout << "---";
+            continue;
         }
+        executiveState->message = std::move(output);
+        // std::cout << " <<<< " << executiveState->toString() << std::endl;
 
         if (to == m_contractAddress)
         {

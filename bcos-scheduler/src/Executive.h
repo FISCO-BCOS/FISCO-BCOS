@@ -3,6 +3,7 @@
 #include <bcos-framework/interfaces/executor/ExecutionMessage.h>
 #include <bcos-framework/interfaces/protocol/TransactionReceiptFactory.h>
 #include <bcos-utilities/Error.h>
+#include <sstream>
 #include <stack>
 
 namespace bcos::scheduler
@@ -24,6 +25,15 @@ struct ExecutiveState  // Executive state per tx
     bool enableDAG;
     bool skip = false;
     int64_t id;
+
+    std::string toString()
+    {
+        std::stringstream ss;
+        ss << " " << contextID << " | " << (message ? message->seq() : -1) << " | "
+           << (message ? protocol::ExecutionMessage::getTypeName(message->type()) : "null") << " | "
+           << callStack.size() << " | ";
+        return ss.str();
+    }
 };
 
 using ExecutiveStates = std::shared_ptr<std::vector<ExecutiveState::Ptr>>;
