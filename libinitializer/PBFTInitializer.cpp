@@ -26,6 +26,7 @@
 #include <bcos-sync/BlockSyncFactory.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tars-protocol/client/RpcServiceClient.h>
+#include <bcos-txpool/TxPool.h>
 #include <bcos-txpool/TxPoolFactory.h>
 #include <bcos-utilities/FileUtility.h>
 #include <include/BuildInfo.h>
@@ -356,4 +357,57 @@ std::shared_ptr<bcos::consensus::ConsensusInterface> PBFTInitializer::pbft()
 std::shared_ptr<bcos::sealer::SealerInterface> PBFTInitializer::sealer()
 {
     return m_sealer;
+}
+
+// sync groupNodeInfo from the gateway
+void PBFTInitializer::syncGroupNodeInfo()
+{
+    // Note: In air mode, the groupNodeInfo must be successful
+    auto self = std::weak_ptr<PBFTInitializer>(shared_from_this());
+    m_frontService->asyncGetGroupNodeInfo(
+        [self](Error::Ptr _error, bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo) {
+            auto pbftInit = self.lock();
+            if (!pbftInit)
+            {
+                return;
+            }
+            if (_error != nullptr)
+            {
+                INITIALIZER_LOG(WARNING)
+                    << LOG_DESC("asyncGetGroupNodeInfo failed")
+                    << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
+                pbftInit->m_groupNodeInfoFetched.store(false);
+                return;
+            }
+            try
+            {
+                if (!_groupNodeInfo || _groupNodeInfo->nodeIDList().size() == 0)
+                {
+                    return;
+                }
+                NodeIDSet nodeIdSet;
+                auto const& nodeIDList = _groupNodeInfo->nodeIDList();
+                for (auto const& nodeIDStr : nodeIDList)
+                {
+                    auto nodeID =
+                        pbftInit->m_protocolInitializer->cryptoSuite()->keyFactory()->createKey(
+                            fromHex(nodeIDStr));
+                    nodeIdSet.insert(nodeID);
+                }
+                // fetch the groupNodeInfo success
+                pbftInit->m_groupNodeInfoFetched.store(true);
+                // the blockSync module set the connected node list
+                pbftInit->m_blockSync->config()->setConnectedNodeList(std::move(nodeIdSet));
+                // the txpool module set the connected node list
+                auto txpool = std::dynamic_pointer_cast<bcos::txpool::TxPool>(pbftInit->m_txpool);
+                txpool->transactionSync()->config()->setConnectedNodeList(std::move(nodeIdSet));
+                INITIALIZER_LOG(INFO) << LOG_DESC("syncGroupNodeInfo for block sync and txpool")
+                                      << LOG_KV("connectedSize", nodeIdSet.size());
+            }
+            catch (std::exception const& e)
+            {
+                INITIALIZER_LOG(WARNING) << LOG_DESC("asyncGetGroupNodeInfo exception")
+                                         << LOG_KV("error", boost::diagnostic_information(e));
+            }
+        });
 }

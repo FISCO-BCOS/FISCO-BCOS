@@ -27,6 +27,7 @@
 #include "bcos-framework/interfaces/storage/StorageInterface.h"
 #include "bcos-framework/interfaces/storage/Table.h"
 #include "tbb/enumerable_thread_specific.h"
+#include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-utilities/Error.h>
 #include <boost/core/ignore_unused.hpp>
 #include <boost/format.hpp>

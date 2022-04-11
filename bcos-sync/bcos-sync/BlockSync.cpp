@@ -72,46 +72,6 @@ void BlockSync::init()
                       << LOG_KV("genesisHash", genesisHash);
     m_config->setGenesisHash(genesisHash);
     m_config->resetConfig(fetcher->ledgerConfig());
-    auto self = std::weak_ptr<BlockSync>(shared_from_this());
-    m_config->frontService()->asyncGetGroupNodeInfo(
-        [self](Error::Ptr _error, bcos::gateway::GroupNodeInfo::Ptr _groupNodeInfo) {
-            if (_error != nullptr)
-            {
-                BLKSYNC_LOG(WARNING)
-                    << LOG_DESC("asyncGetGroupNodeInfo failed")
-                    << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
-                return;
-            }
-            try
-            {
-                if (!_groupNodeInfo || _groupNodeInfo->nodeIDList().size() == 0)
-                {
-                    return;
-                }
-                auto sync = self.lock();
-                if (!sync)
-                {
-                    return;
-                }
-                NodeIDSet nodeIdSet;
-                auto const& nodeIDList = _groupNodeInfo->nodeIDList();
-                for (auto const& nodeIDStr : nodeIDList)
-                {
-                    auto nodeID =
-                        sync->m_config->blockFactory()->cryptoSuite()->keyFactory()->createKey(
-                            fromHex(nodeIDStr));
-                    nodeIdSet.insert(nodeID);
-                }
-                sync->config()->setConnectedNodeList(std::move(nodeIdSet));
-                BLKSYNC_LOG(INFO) << LOG_DESC("asyncGetGroupNodeInfo")
-                                  << LOG_KV("connectedSize", nodeIdSet.size());
-            }
-            catch (std::exception const& e)
-            {
-                BLKSYNC_LOG(WARNING) << LOG_DESC("asyncGetGroupNodeInfo exception")
-                                     << LOG_KV("error", boost::diagnostic_information(e));
-            }
-        });
     BLKSYNC_LOG(INFO) << LOG_DESC("init block sync success");
     initSendResponseHandler();
 }

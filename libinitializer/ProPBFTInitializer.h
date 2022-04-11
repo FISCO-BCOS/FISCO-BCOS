@@ -49,6 +49,8 @@ public:
     virtual void stop();
 
 protected:
+    // the task triggered by the timer periodically
+    virtual void scheduledTask();
     virtual void reportNodeInfo();
 
 private:

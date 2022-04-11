@@ -249,13 +249,13 @@ public:
         }
         vector<EndpointInfo> activeEndPoints;
         vector<EndpointInfo> nactiveEndPoints;
+        m_prx->tars_endpointsAll(activeEndPoints, nactiveEndPoints);
         if (activeEndPoints.size() == 0)
         {
             BCOS_LOG(TRACE) << LOG_DESC("Gateway: asyncNotifyGroupInfo error for empty connection")
                             << bcos::group::printGroupInfo(_groupInfo);
             return;
         }
-        m_prx->tars_endpointsAll(activeEndPoints, nactiveEndPoints);
         auto tarsGroupInfo = toTarsGroupInfo(_groupInfo);
         // notify groupInfo to all gateway nodes
         for (auto const& endPoint : activeEndPoints)

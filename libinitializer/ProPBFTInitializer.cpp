@@ -56,6 +56,19 @@ ProPBFTInitializer::ProPBFTInitializer(bcos::initializer::NodeArchitectureType _
         std::make_shared<bcostars::GatewayServiceClient>(gatewayServicePrx, gatewayServiceName);
 }
 
+void ProPBFTInitializer::scheduledTask()
+{
+    // reportNodeInfo to gateway and rpc for probing
+    reportNodeInfo();
+    // Note: If the groupNodeInfo fails to be pulled because the gateway is closed in pro-mode, it
+    // will periodically retry to pull the groupInfo until the information is successfully pulled.
+    if (!m_groupNodeInfoFetched)
+    {
+        syncGroupNodeInfo();
+    }
+    m_timer->restart();
+}
+
 void ProPBFTInitializer::reportNodeInfo()
 {
     // notify groupInfo to rpc
@@ -77,7 +90,6 @@ void ProPBFTInitializer::reportNodeInfo()
                 << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
         }
     });
-    m_timer->restart();
 }
 
 void ProPBFTInitializer::start()
@@ -104,7 +116,7 @@ void ProPBFTInitializer::stop()
 void ProPBFTInitializer::init()
 {
     PBFTInitializer::init();
-    m_timer->registerTimeoutHandler(boost::bind(&ProPBFTInitializer::reportNodeInfo, this));
+    m_timer->registerTimeoutHandler(boost::bind(&ProPBFTInitializer::scheduledTask, this));
     m_blockSync->config()->registerOnNodeTypeChanged([this](bcos::protocol::NodeType _type) {
         INITIALIZER_LOG(INFO) << LOG_DESC("OnNodeTypeChange") << LOG_KV("type", _type)
                               << LOG_KV("nodeName", m_nodeConfig->nodeName());

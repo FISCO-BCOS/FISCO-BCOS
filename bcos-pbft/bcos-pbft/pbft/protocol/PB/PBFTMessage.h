@@ -19,7 +19,6 @@
  * @date 2021-04-13
  */
 #pragma once
-#include "../../config/PBFTConfig.h"
 #include "../../interfaces/PBFTMessageInterface.h"
 #include "PBFTBaseMessage.h"
 #include "bcos-pbft/pbft/protocol/proto/PBFT.pb.h"
