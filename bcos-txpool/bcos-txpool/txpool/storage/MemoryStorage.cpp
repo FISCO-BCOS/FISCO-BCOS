@@ -783,7 +783,13 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::Ptr _block)
     {
         return missedTxs;
     }
+    auto batchId = (_block && _block->blockHeader()) ? _block->blockHeader()->number() : -1;
+    auto batchHash = (_block && _block->blockHeader()) ? _block->blockHeader()->hash() :
+                                                         bcos::crypto::HashType();
+    auto startT = utcTime();
     ReadGuard l(x_txpoolMutex);
+    auto lockT = utcTime() - startT;
+    startT = utcTime();
     for (size_t i = 0; i < txsSize; i++)
     {
         auto txHash = _block->transactionHash(i);
@@ -792,8 +798,12 @@ std::shared_ptr<HashList> MemoryStorage::batchVerifyProposal(Block::Ptr _block)
             missedTxs->emplace_back(txHash);
         }
     }
+    TXPOOL_LOG(INFO) << LOG_DESC("batchVerifyProposal") << LOG_KV("consNum", batchId)
+                     << LOG_KV("hash", batchHash.abridged()) << LOG_KV("txsSize", txsSize)
+                     << LOG_KV("lockT", lockT) << LOG_KV("verifyT", (utcTime() - startT));
     return missedTxs;
 }
+
 bool MemoryStorage::batchVerifyProposal(std::shared_ptr<HashList> _txsHashList)
 {
     ReadGuard l(x_txpoolMutex);

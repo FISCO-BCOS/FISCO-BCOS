@@ -30,7 +30,7 @@ using namespace bcos::txpool;
 using namespace bcos::protocol;
 using namespace bcos::ledger;
 using namespace bcos::consensus;
-static unsigned const c_maxSendTransactions = 1000;
+static unsigned const c_maxSendTransactions = 10000;
 
 void TransactionSync::start()
 {
@@ -447,7 +447,10 @@ void TransactionSync::maintainDownloadingTransactions()
         auto txsBuffer = (*localBuffer)[i];
         auto transactions =
             m_config->blockFactory()->createBlock(txsBuffer->txsData(), true, false);
-        importDownloadedTxs(txsBuffer->from(), transactions);
+        // async here to accelerate the txs process
+        m_worker->enqueue([this, txsBuffer, transactions]() {
+            importDownloadedTxs(txsBuffer->from(), transactions);
+        });
     }
 }
 

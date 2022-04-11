@@ -33,7 +33,8 @@ void PBFTCacheProcessor::initState(PBFTProposalList const& _proposals, NodeIDPtr
     for (auto proposal : _proposals)
     {
         // the proposal has already been committed
-        if (proposal->index() <= m_config->committedProposal()->index())
+        if (proposal->index() <= m_config->committedProposal()->index() ||
+            m_proposalsToStableConsensus.count(proposal->index()))
         {
             continue;
         }
@@ -247,18 +248,21 @@ void PBFTCacheProcessor::updateCommitQueue(PBFTProposalInterface::Ptr _committed
     {
         return;
     }
-    notifyMaxProposalIndex(_committedProposal->index());
+    auto proposalIndex = _committedProposal->index();
+    notifyMaxProposalIndex(proposalIndex);
     m_committedQueue.push(_committedProposal);
-    m_committedProposalList.insert(_committedProposal->index());
+    m_committedProposalList.insert(proposalIndex);
+    m_proposalsToStableConsensus.insert(proposalIndex);
+    notifyToSealNextBlock();
     PBFT_LOG(INFO) << LOG_DESC("######## CommitProposal") << printPBFTProposal(_committedProposal)
                    << LOG_KV("sys", _committedProposal->systemProposal())
                    << m_config->printCurrentState();
     if (_committedProposal->systemProposal())
     {
-        m_config->setWaitSealUntil(_committedProposal->index());
+        m_config->setWaitSealUntil(proposalIndex);
         PBFT_LOG(INFO) << LOG_DESC(
                               "Receive valid system prePrepare proposal, stop to notify sealing")
-                       << LOG_KV("waitSealUntil", _committedProposal->index());
+                       << LOG_KV("waitSealUntil", proposalIndex);
     }
     tryToApplyCommitQueue();
 }
@@ -349,25 +353,30 @@ bool PBFTCacheProcessor::tryToApplyCommitQueue()
     return false;
 }
 
-void PBFTCacheProcessor::notifyToSealNextBlock(PBFTProposalInterface::Ptr _checkpointProposal)
+void PBFTCacheProcessor::notifyToSealNextBlock()
 {
-    // notify the leader to seal next block
-    auto nextProposalIndex = _checkpointProposal->index() + 1;
-    if (!_checkpointProposal->systemProposal() && nextProposalIndex < m_config->highWaterMark())
+    // find the non-consecutive minimum proposal index and notify the corresponding leader to pack
+    // the block
+    auto committedIndex = m_config->committedProposal()->index();
+    bcos::protocol::BlockNumber lastIndex = committedIndex;
+    for (auto const& it : m_proposalsToStableConsensus)
     {
-        m_config->notifySealer(nextProposalIndex);
-        PBFT_LOG(INFO)
-            << LOG_DESC(
-                   "Receive valid non-system prePrepare proposal, notify to seal next proposal")
-            << LOG_KV("nextProposalIndex", nextProposalIndex);
+        if (lastIndex + 1 < it)
+        {
+            break;
+        }
+        lastIndex = it;
     }
+    auto nextProposalIndex = lastIndex + 1;
+    m_config->notifySealer(nextProposalIndex);
+    PBFT_LOG(INFO) << LOG_DESC("notify to seal next proposal")
+                   << LOG_KV("nextProposalIndex", nextProposalIndex);
 }
 
 // execute the proposal and broadcast checkpoint message
 void PBFTCacheProcessor::applyStateMachine(
     ProposalInterface::ConstPtr _lastAppliedProposal, PBFTProposalInterface::Ptr _proposal)
 {
-    notifyToSealNextBlock(_proposal);
     PBFT_LOG(INFO) << LOG_DESC("applyStateMachine") << LOG_KV("index", _proposal->index())
                    << LOG_KV("hash", _proposal->hash().abridged()) << m_config->printCurrentState();
     auto executedProposal = m_config->pbftMessageFactory()->createPBFTProposal();
@@ -785,6 +794,7 @@ ViewChangeMsgInterface::Ptr PBFTCacheProcessor::fetchPrecommitData(
 
 void PBFTCacheProcessor::removeConsensusedCache(ViewType _view, BlockNumber _consensusedNumber)
 {
+    m_proposalsToStableConsensus.erase(_consensusedNumber);
     for (auto pcache = m_caches.begin(); pcache != m_caches.end();)
     {
         // Note: can't remove stabledCommitted cache here for need to fetch
