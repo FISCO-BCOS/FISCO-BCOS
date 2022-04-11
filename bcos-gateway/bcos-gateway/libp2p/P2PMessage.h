@@ -22,9 +22,8 @@
 
 #include <bcos-boostssl/interfaces/MessageFace.h>
 #include <bcos-boostssl/websocket/WsMessage.h>
+#include <bcos-framework/interfaces/gateway/GatewayTypeDef.h>
 #include <bcos-framework/interfaces/protocol/Protocol.h>
-#include <bcos-gateway/libnetwork/Common.h>
-#include <bcos-gateway/libnetwork/Message.h>
 #include <bcos-utilities/Common.h>
 
 namespace bcos
@@ -101,7 +100,7 @@ class P2PMessage : public bcos::boostssl::MessageFace
 public:
     using Ptr = std::shared_ptr<P2PMessage>;
 
-    /// length(4) + version(2) + packetType(2) + ext(2) + seqLength(2)
+    /// length(4) + version(2) + packetType(2) + seqLength(2) + ext(2)
     const static size_t MESSAGE_HEADER_LENGTH = 12;
     const static size_t MAX_MESSAGE_LENGTH =
         100 * 1024 * 1024;  ///< The maximum length of data is 100M.
@@ -116,19 +115,16 @@ public:
 
 public:
     uint32_t length() const { return m_length; }
-    virtual void setLength(uint32_t length) { m_length = length; }
+    virtual void setLength(uint32_t _length) { m_length = _length; }
 
-    uint16_t version() const { return m_version; }
-    virtual void setVersion(uint16_t version) { m_version = version; }
+    uint16_t version() const override { return m_version; }
+    virtual void setVersion(uint16_t _version) override { m_version = _version; }
 
     uint16_t packetType() const override { return m_packetType; }
-    virtual void setPacketType(uint16_t packetType) override { m_packetType = packetType; }
+    virtual void setPacketType(uint16_t _packetType) override { m_packetType = _packetType; }
 
     std::string seq() const override { return m_seq; }
-    virtual void setSeq(std::string seq) override { m_seq = seq; }
-
-    // uint32_t seqLength() const { return m_seqLength; }
-    // virtual void setSeqLength(uint32_t _seqLength) { m_seqLength = _seqLength; }
+    virtual void setSeq(std::string _seq) override { m_seq = _seq; }
 
     uint16_t ext() const override { return m_ext; }
     virtual void setExt(uint16_t _ext) override { m_ext = _ext; }
@@ -154,15 +150,8 @@ public:
 
 protected:
     uint32_t m_length = 0;
-    uint16_t m_version = 0;
-    uint16_t m_packetType = 0;
-    std::string m_seq;
-    uint16_t m_ext = 0;
-    // uint8_t m_seqLength = 0;
 
     P2PMessageOptions::Ptr m_options;  ///< options fields
-
-    std::shared_ptr<bytes> m_payload;  ///< payload data
 };
 
 class P2PMessageFactory : public bcos::boostssl::MessageFaceFactory
@@ -180,11 +169,11 @@ public:
 
     virtual std::string newSeq() override
     {
-        uint32_t seq = ++m_seq;
+        uint64_t seq = ++m_seq;
         return boost::lexical_cast<std::string>(seq);
     }
 
-    std::atomic<uint32_t> m_seq = {1};
+    std::atomic<uint64_t> m_seq = {1};
 };
 
 inline std::ostream& operator<<(std::ostream& _out, const P2PMessage _p2pMessage)

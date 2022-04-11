@@ -25,7 +25,6 @@
 
 using namespace bcos;
 using namespace bcos::gateway;
-using namespace bcos::crypto;
 
 #define CHECK_OFFSET_WITH_THROW_EXCEPTION(offset, length)                                    \
     do                                                                                       \
@@ -170,8 +169,8 @@ bool P2PMessage::encode(bytes& _buffer)
     uint32_t length = 0;
     uint16_t version = boost::asio::detail::socket_ops::host_to_network_short(m_version);
     uint16_t packetType = boost::asio::detail::socket_ops::host_to_network_short(m_packetType);
-    uint16_t ext = boost::asio::detail::socket_ops::host_to_network_short(m_ext);
     uint16_t seqLength = boost::asio::detail::socket_ops::host_to_network_short(m_seq.size());
+    uint16_t ext = boost::asio::detail::socket_ops::host_to_network_short(m_ext);
 
     _buffer.insert(_buffer.end(), (byte*)&length, (byte*)&length + 4);
     _buffer.insert(_buffer.end(), (byte*)&version, (byte*)&version + 2);
@@ -220,7 +219,6 @@ ssize_t P2PMessage::decodeHeader(bytesConstRef _buffer)
 
     // seqLength
     uint16_t seqLength = boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)p));
-    // uint16_t seqLength = *((uint16_t*)&p);
     p += 2;
     offset += 2;
 

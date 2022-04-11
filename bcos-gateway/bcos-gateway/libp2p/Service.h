@@ -44,32 +44,28 @@ public:
     void stop() override;
 
     virtual bool actived() { return m_run; }
-    nodeID id() const override { return m_nodeID; }
-    void setId(const nodeID& _nodeID) { m_nodeID = _nodeID; }
+    P2pID id() const override { return m_p2pID; }
+    void setId(const P2pID& _nodeID) { m_p2pID = _nodeID; }
 
-    virtual void onConnect(std::shared_ptr<boostssl::ws::WsSession> session);
+    virtual void onConnect(std::shared_ptr<boostssl::ws::WsSession> _session);
     virtual void onDisconnect(NetworkException e, P2PSession::Ptr p2pSession);
     virtual void onMessage(NetworkException e, boostssl::ws::WsSession::Ptr session,
         bcos::boostssl::MessageFace::Ptr message, std::weak_ptr<P2PSession> p2pSessionWeakPtr);
 
     std::shared_ptr<bcos::boostssl::MessageFace> sendMessageByNodeID(
-        nodeID nodeID, std::shared_ptr<bcos::boostssl::MessageFace> message) override;
+        P2pID p2pID, std::shared_ptr<bcos::boostssl::MessageFace> message) override;
     void sendMessageBySession(
-        int _packetType, bytesConstRef _payload, boostssl::ws::WsSession::Ptr _p2pSession) override;
+        int _packetType, bytesConstRef _payload, P2PSession::Ptr _p2pSession) override;
     void sendRespMessageBySession(bytesConstRef _payload,
-        bcos::boostssl::MessageFace::Ptr _p2pMessage,
-        boostssl::ws::WsSession::Ptr _p2pSession) override;
-    void asyncSendMessageByNodeID(P2pID nodeID,
-        std::shared_ptr<bcos::boostssl::MessageFace> message, CallbackFuncWithSession callback,
-        Options options = Options()) override;
+        bcos::boostssl::MessageFace::Ptr _p2pMessage, P2PSession::Ptr _p2pSession) override;
+    void asyncSendMessageByNodeID(P2pID p2pID, std::shared_ptr<bcos::boostssl::MessageFace> message,
+        CallbackFuncWithSession callback,
+        boostssl::ws::Options options = boostssl::ws::Options()) override;
 
     void asyncBroadcastMessage(
         std::shared_ptr<bcos::boostssl::MessageFace> message, Options options) override;
 
-    virtual std::map<boostssl::NodeIPEndpoint, boostssl::nodeID> staticNodes()
-    {
-        return m_staticNodes;
-    }
+    virtual std::map<boostssl::NodeIPEndpoint, P2pID> staticNodes() { return m_staticNodes; }
     virtual void setStaticNodes(const std::set<boostssl::NodeIPEndpoint>& staticNodes)
     {
         for (const auto& endpoint : staticNodes)
@@ -81,14 +77,13 @@ public:
     void obtainHostAndPortFromString(
         std::string const& _endpointString, std::string& host, uint16_t& port);
     std::string obtainCommonNameFromSubject(std::string const& subject);
-    void obtainNodeInfo(NodeInfo& info, std::string const& node_info);
 
-    NodeInfos sessionInfos() override;  ///< Only connected node
+    P2pInfos sessionInfos() override;  ///< Only connected node
 
-    NodeInfo nodeInfo();
-    NodeInfo localP2pInfo() override;
+    P2pInfo nodeInfo();
+    P2pInfo localP2pInfo() override;
 
-    bool isConnected(nodeID const& nodeID) const override;
+    bool isConnected(P2pID const& p2pID) const override;
 
     std::shared_ptr<boostssl::ws::WsService> wsService() { return m_wsService; }
     virtual void setWsService(std::shared_ptr<boostssl::ws::WsService> wsService)
@@ -112,19 +107,19 @@ public:
         m_keyFactory = _keyFactory;
     }
 
-    void updateEndpointToWservice();
+    void updateUnconnectedEndpointToWservice();
 
-    void updateStaticNodes(std::string const& _endPoint, nodeID const& nodeID);
+    void updateStaticNodes(std::string const& _endPoint, P2pID const& p2pID);
 
     void registerDisconnectHandler(std::function<void(NetworkException, P2PSession::Ptr)> _handler)
     {
         m_disconnectionHandlers.push_back(_handler);
     }
 
-    std::shared_ptr<P2PSession> getP2PSessionByNodeId(nodeID const& _nodeID) override
+    std::shared_ptr<P2PSession> getP2PSessionByNodeId(P2pID const& _p2pID) override
     {
         RecursiveGuard l(x_sessions);
-        auto it = m_sessions.find(_nodeID);
+        auto it = m_sessions.find(_p2pID);
         if (it != m_sessions.end())
         {
             return it->second;
@@ -132,20 +127,23 @@ public:
         return nullptr;
     }
 
-    void asyncSendMessageByP2PNodeID(int16_t _type, boostssl::nodeID _dstNodeID,
-        bytesConstRef _payload, boostssl::ws::Options options,
-        P2PResponseCallback _callback) override;
+    void asyncSendMessageByP2PNodeID(int16_t _type, P2pID _dstNodeID, bytesConstRef _payload,
+        boostssl::ws::Options options, P2PResponseCallback _callback) override;
 
     void asyncBroadcastMessageToP2PNodes(
         int16_t _type, bytesConstRef _payload, boostssl::ws::Options _options) override;
 
-    void asyncSendMessageByP2PNodeIDs(int16_t _type, const std::vector<nodeID>& _nodeIDs,
+    void asyncSendMessageByP2PNodeIDs(int16_t _type, const std::vector<P2pID>& _nodeIDs,
         bytesConstRef _payload, boostssl::ws::Options _options) override;
 
-    void registerHandlerByMsgType(uint32_t _type, MessageHandler _msgHandler) override
+    void registerHandlerByMsgType(uint32_t _type, MessageHandler _p2pMsgHandler) override
     {
-        // todo: m_wsService->registerMsgHandler 考虑对变量m_msgType2Method加锁
-        if (!m_wsService->registerMsgHandler(_type, _msgHandler))
+        auto handler = [_p2pMsgHandler](bcos::boostssl::MessageFace::Ptr _message,
+                           bcos::boostssl::ws::WsSession::Ptr _session) {
+            _p2pMsgHandler(std::dynamic_pointer_cast<P2PMessage>(_message),
+                std::dynamic_pointer_cast<P2PSession>(_session));
+        };
+        if (!m_wsService->registerMsgHandler(_type, handler))
         {
             SERVICE_LOG(INFO) << "registerMsgHandler failed, maybe msgType has a handler"
                               << LOG_KV("msgType", _type);
@@ -154,10 +152,17 @@ public:
 
     MessageHandler getMessageHandlerByMsgType(uint32_t _type)
     {
-        return m_wsService->getMsgHandler(_type);
+        auto handler = m_wsService->getMsgHandler(_type);
     }
 
-    void eraseHandlerByMsgType(uint32_t _type) override { m_wsService->eraseMsgHandler(_type); }
+    void eraseHandlerByMsgType(uint32_t _type) override
+    {
+        if (!m_wsService->eraseMsgHandler(_type))
+        {
+            SERVICE_LOG(INFO) << "eraseMsgHandler failed, maybe msgType has a handler"
+                              << LOG_KV("msgType", _type);
+        }
+    }
 
     bool connected(std::string const& _nodeID) override;
 
@@ -173,17 +178,17 @@ private:
 
     std::shared_ptr<bcos::crypto::KeyFactory> m_keyFactory;
 
-    std::map<NodeIPEndpoint, nodeID> m_staticNodes;
+    std::map<boostssl::NodeIPEndpoint, P2pID> m_staticNodes;
     bcos::RecursiveMutex x_nodes;
 
     std::shared_ptr<boostssl::ws::WsService> m_wsService;
 
-    std::unordered_map<nodeID, P2PSession::Ptr> m_sessions;
+    std::unordered_map<P2pID, P2PSession::Ptr> m_sessions;
     mutable bcos::RecursiveMutex x_sessions;
 
     std::shared_ptr<boostssl::MessageFaceFactory> m_messageFactory;
 
-    nodeID m_nodeID;
+    P2pID m_p2pID;
 
     std::shared_ptr<boost::asio::deadline_timer> m_timer;
 
@@ -195,6 +200,7 @@ private:
     // the local protocol
     bcos::protocol::ProtocolInfo::ConstPtr m_localProtocol;
     bcos::protocol::ProtocolInfoCodec::ConstPtr m_codec;
+    P2pInfo m_p2pInfo;
 };
 
 }  // namespace gateway

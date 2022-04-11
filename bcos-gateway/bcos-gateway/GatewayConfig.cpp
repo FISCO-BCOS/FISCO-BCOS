@@ -124,15 +124,10 @@ void GatewayConfig::initConfig(std::string const& _configPath, bool _uuidRequire
     {
         boost::property_tree::ptree pt;
         boost::property_tree::ini_parser::read_ini(_configPath, pt);
+        m_wsConfig = std::make_shared<boostssl::ws::WsConfig>();
+
         initP2PConfig(pt, _uuidRequired);
-        if (m_smSSL)
-        {
-            initSMCertConfig(pt);
-        }
-        else
-        {
-            initCertConfig(pt);
-        }
+        initWsConfig(pt);
     }
     catch (const std::exception& e)
     {
@@ -148,9 +143,31 @@ void GatewayConfig::initConfig(std::string const& _configPath, bool _uuidRequire
     }
 
     GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("initConfig ok!") << LOG_KV("configPath", _configPath)
-                             << LOG_KV("listenIP", m_listenIP) << LOG_KV("listenPort", m_listenPort)
-                             << LOG_KV("smSSL", m_smSSL)
-                             << LOG_KV("peers", m_connectedNodes.size());
+                             << LOG_KV("listenIP", m_wsConfig->listenIP())
+                             << LOG_KV("listenPort", m_wsConfig->listenPort())
+                             << LOG_KV("smSSL", m_wsConfig->smSSL());
+}
+
+void GatewayConfig::initWsConfig(const boost::property_tree::ptree& _pt)
+{
+    // Mixed = server + client
+    m_wsConfig->setModel(boostssl::ws::WsModel::Mixed);
+    m_wsConfig->setModuleName("GATEWAY");
+    m_wsConfig->setThreadPoolSize(m_threadPoolSize);
+    m_wsConfig->setDisableSsl(false);
+
+    // init contextConfig
+    auto contextConfig = std::make_shared<boostssl::context::ContextConfig>();
+    if (m_wsConfig->smSSL())
+    {
+        contextConfig->initSMCertConfig(_pt);
+    }
+    else
+    {
+        contextConfig->initCertConfig(_pt);
+    }
+
+    m_wsConfig->setContextConfig(contextConfig);
 }
 
 /// loads p2p configuration items from the configuration file
@@ -166,7 +183,7 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
       listen_port=30300
       nodes_path=./
       nodes_file=nodes.json
-      */
+    */
     m_uuid = _pt.get<std::string>("p2p.uuid", "");
     if (_uuidRequired && m_uuid.size() == 0)
     {
@@ -191,9 +208,9 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
 
     m_nodeFileName = _pt.get<std::string>("p2p.nodes_file", "nodes.json");
 
-    m_smSSL = smSSL;
-    m_listenIP = listenIP;
-    m_listenPort = (uint16_t)listenPort;
+    m_wsConfig->setSmSSL(smSSL);
+    m_wsConfig->setListenIP(listenIP);
+    m_wsConfig->setListenPort((uint16_t)listenPort);
 
     GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("initP2PConfig ok!") << LOG_KV("listenIP", listenIP)
                              << LOG_KV("listenPort", listenPort) << LOG_KV("smSSL", smSSL)
@@ -216,135 +233,15 @@ void GatewayConfig::loadP2pConnectedNodes()
     }
 
     parseConnectedJson(*jsonContent.get(), nodes);
-    m_connectedNodes = nodes;
+    auto nodesPtr = std::make_shared<std::set<NodeIPEndpoint>>();
+    for (auto node : nodes)
+    {
+        nodesPtr->insert(node);
+    }
+    m_wsConfig->setConnectedPeers(nodesPtr);
 
     GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("loadP2pConnectedNodes ok!")
                              << LOG_KV("nodePath", m_nodePath)
                              << LOG_KV("nodeFileName", m_nodeFileName)
                              << LOG_KV("nodes", nodes.size());
-}
-
-boostssl::ws::EndPointsPtr GatewayConfig::obtainPeersForWsService(
-    const std::set<NodeIPEndpoint>& _nodeIPEndpointSet)
-{
-    auto peers = std::make_shared<boostssl::ws::EndPoints>();
-    for (auto const& it : _nodeIPEndpointSet)
-    {
-        boostssl::ws::EndPoint endPoint;
-        endPoint.host = it.address();
-        endPoint.port = it.port();
-        peers->push_back(endPoint);
-    }
-    return peers;
-}
-
-/// loads ca configuration items from the configuration file
-void GatewayConfig::initCertConfig(const boost::property_tree::ptree& _pt)
-{
-    /*
-    [cert]
-      ; directory the certificates located in
-      ca_path=./
-      ; the ca certificate file
-      ca_cert=ca.crt
-      ; the node private key file
-      node_key=ssl.key
-      ; the node certificate file
-      node_cert=ssl.crt
-    */
-    if (m_certPath.size() == 0)
-    {
-        m_certPath = _pt.get<std::string>("cert.ca_path", "./");
-    }
-    std::string caCertFile = m_certPath + "/" + _pt.get<std::string>("cert.ca_cert", "ca.crt");
-    std::string nodeCertFile = m_certPath + "/" + _pt.get<std::string>("cert.node_cert", "ssl.crt");
-    std::string nodeKeyFile = m_certPath + "/" + _pt.get<std::string>("cert.node_key", "ssl.key");
-
-    GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("initCertConfig") << LOG_KV("ca_path", m_certPath)
-                             << LOG_KV("ca_cert", caCertFile) << LOG_KV("node_cert", nodeCertFile)
-                             << LOG_KV("node_key", nodeKeyFile);
-
-    checkFileExist(caCertFile);
-    checkFileExist(nodeCertFile);
-    checkFileExist(nodeKeyFile);
-
-    boostssl::context::ContextConfig::CertConfig certConfig;
-    certConfig.caCert = caCertFile;
-    certConfig.nodeCert = nodeCertFile;
-    certConfig.nodeKey = nodeKeyFile;
-
-    m_certConfig = certConfig;
-
-    GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("initCertConfig") << LOG_KV("ca", certConfig.caCert)
-                             << LOG_KV("node_cert", certConfig.nodeCert)
-                             << LOG_KV("node_key", certConfig.nodeKey);
-}
-
-// loads sm ca configuration items from the configuration file
-void GatewayConfig::initSMCertConfig(const boost::property_tree::ptree& _pt)
-{
-    /*
-    [cert]
-    ; directory the certificates located in
-    ca_path=./
-    ; the ca certificate file
-    sm_ca_cert=sm_ca.crt
-    ; the node private key file
-    sm_node_key=sm_ssl.key
-    ; the node certificate file
-    sm_node_cert=sm_ssl.crt
-    ; the node private key file
-    sm_ennode_key=sm_enssl.key
-    ; the node certificate file
-    sm_ennode_cert=sm_enssl.crt
-    */
-    // not set the certPath, load from the configuration
-    if (m_certPath.size() == 0)
-    {
-        m_certPath = _pt.get<std::string>("cert.ca_path", "./");
-    }
-    std::string smCaCertFile =
-        m_certPath + "/" + _pt.get<std::string>("cert.sm_ca_cert", "sm_ca.crt");
-    std::string smNodeCertFile =
-        m_certPath + "/" + _pt.get<std::string>("cert.sm_node_cert", "sm_ssl.crt");
-    std::string smNodeKeyFile =
-        m_certPath + "/" + _pt.get<std::string>("cert.sm_node_key", "sm_ssl.key");
-    std::string smEnNodeCertFile =
-        m_certPath + "/" + _pt.get<std::string>("cert.sm_ennode_cert", "sm_enssl.crt");
-    std::string smEnNodeKeyFile =
-        m_certPath + "/" + _pt.get<std::string>("cert.sm_ennode_key", "sm_enssl.key");
-
-    checkFileExist(smCaCertFile);
-    checkFileExist(smNodeCertFile);
-    checkFileExist(smNodeKeyFile);
-    checkFileExist(smEnNodeCertFile);
-    checkFileExist(smEnNodeKeyFile);
-
-    boostssl::context::ContextConfig::SMCertConfig smCertConfig;
-    smCertConfig.caCert = smCaCertFile;
-    smCertConfig.nodeCert = smNodeCertFile;
-    smCertConfig.nodeKey = smNodeKeyFile;
-    smCertConfig.enNodeCert = smEnNodeCertFile;
-    smCertConfig.enNodeKey = smEnNodeKeyFile;
-
-    m_smCertConfig = smCertConfig;
-
-    GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("initSMCertConfig") << LOG_KV("ca_path", m_certPath)
-                             << LOG_KV("sm_ca_cert", smCertConfig.caCert)
-                             << LOG_KV("sm_node_cert", smCertConfig.nodeCert)
-                             << LOG_KV("sm_node_key", smCertConfig.nodeKey)
-                             << LOG_KV("sm_ennode_cert", smCertConfig.enNodeCert)
-                             << LOG_KV("sm_ennode_key", smCertConfig.enNodeKey);
-}
-
-void GatewayConfig::checkFileExist(const std::string& _path)
-{
-    auto fileContent = readContentsToString(boost::filesystem::path(_path));
-    if (!fileContent || fileContent->empty())
-    {
-        BOOST_THROW_EXCEPTION(
-            InvalidParameter() << errinfo_comment("checkFileExist: unable to load file content "
-                                                  " maybe file not exist, path: " +
-                                                  _path));
-    }
 }

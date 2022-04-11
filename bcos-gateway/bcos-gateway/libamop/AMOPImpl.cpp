@@ -20,7 +20,7 @@
 #include "AMOPImpl.h"
 #include <bcos-framework/interfaces/protocol/CommonError.h>
 #include <bcos-gateway/libamop/AMOPMessage.h>
-#include <bcos-gateway/libnetwork/Common.h>
+
 #include <boost/bind/bind.hpp>
 using namespace bcos;
 using namespace bcos::gateway;
@@ -473,13 +473,12 @@ void AMOPImpl::asyncSendBroadbastMessageByTopic(
                     << LOG_KV("topic", _topic) << LOG_KV("data size", _data.size());
 }
 
-void AMOPImpl::onAMOPMessage(
-    std::shared_ptr<boostssl::MessageFace> _message, std::shared_ptr<WsSession> _session)
+void AMOPImpl::onAMOPMessage(boostssl::MessageFace::Ptr _message, P2PSession::Ptr _p2pSession)
 {
-    m_threadPool->enqueue([this, _session, _message]() {
+    m_threadPool->enqueue([this, _p2pSession, _message]() {
         try
         {
-            dispatcherAMOPMessage(_session, _message);
+            dispatcherAMOPMessage(_message, _p2pSession);
         }
         catch (std::exception const& e)
         {
@@ -490,7 +489,7 @@ void AMOPImpl::onAMOPMessage(
 }
 
 void AMOPImpl::dispatcherAMOPMessage(
-    WsSession::Ptr _session, std::shared_ptr<boostssl::MessageFace> _message)
+    boostssl::MessageFace::Ptr _message, P2PSession::Ptr _p2pSession)
 {
     if (_message->packetType() != MessageType::AMOPMessageType)
     {
@@ -498,7 +497,7 @@ void AMOPImpl::dispatcherAMOPMessage(
     }
     auto amopMessage = m_messageFactory->buildMessage(ref(*_message->payload()));
     auto amopMsgType = amopMessage->type();
-    auto fromNodeID = _session->nodeId();
+    auto fromNodeID = _p2pSession->nodeId();
     switch (amopMsgType)
     {
     case AMOPMessage::Type::TopicSeq:
@@ -512,7 +511,7 @@ void AMOPImpl::dispatcherAMOPMessage(
         break;
     case AMOPMessage::Type::AMOPRequest:
         onReceiveAMOPMessage(fromNodeID, amopMessage,
-            [this, _session, _message](bytesPointer _responseData, int16_t _type) {
+            [this, _p2pSession, _message](bytesPointer _responseData, int16_t _type) {
                 auto responseP2PMsg = std::dynamic_pointer_cast<P2PMessage>(
                     m_network->messageFactory()->buildMessage());
                 AMOP_LOG(INFO) << LOG_DESC("onReceiveAMOPMessage: sendResponse")
@@ -521,7 +520,7 @@ void AMOPImpl::dispatcherAMOPMessage(
                 responseP2PMsg->setRespPacket();
                 responseP2PMsg->setPayload(_responseData);
                 responseP2PMsg->setPacketType(_type);
-                _session->asyncSendMessage(responseP2PMsg);
+                _p2pSession->asyncSendMessage(responseP2PMsg);
             });
         break;
     case AMOPMessage::Type::AMOPBroadcast:

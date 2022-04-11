@@ -7,9 +7,10 @@
 
 #include <bcos-boostssl/interfaces/MessageFace.h>
 #include <bcos-boostssl/websocket/WsSession.h>
-#include <bcos-gateway/libnetwork/Host.h>
+#include <bcos-framework/interfaces/gateway/GatewayTypeDef.h>
 #include <bcos-gateway/libp2p/Common.h>
 #include <bcos-gateway/libp2p/P2PMessage.h>
+#include <bcos-gateway/libp2p/P2PSession.h>
 #include <memory>
 
 namespace bcos
@@ -51,8 +52,8 @@ public:
     virtual void asyncBroadcastMessage(
         std::shared_ptr<bcos::boostssl::MessageFace> message, boostssl::ws::Options options) = 0;
 
-    virtual NodeInfos sessionInfos() = 0;
-    virtual NodeInfo localP2pInfo() = 0;
+    virtual P2pInfos sessionInfos() = 0;
+    virtual P2pInfo localP2pInfo() = 0;
 
     virtual bool isConnected(P2pID const& _nodeID) const = 0;
 
@@ -88,17 +89,16 @@ public:
     virtual void asyncSendMessageByP2PNodeIDs(int16_t _type, const std::vector<P2pID>& _nodeIDs,
         bytesConstRef _payload, boostssl::ws::Options _options) = 0;
 
-    using MessageHandler = std::function<void(
-        std::shared_ptr<boostssl::MessageFace>, std::shared_ptr<boostssl::ws::WsSession>)>;
+    using MessageHandler =
+        std::function<void(std::shared_ptr<boostssl::MessageFace>, std::shared_ptr<P2PSession>)>;
     virtual void registerHandlerByMsgType(uint32_t _type, MessageHandler _msgHandler) = 0;
     virtual void eraseHandlerByMsgType(uint32_t _type) = 0;
 
     virtual bool connected(std::string const& _nodeID) = 0;
-    virtual void sendMessageBySession(int _packetType, bytesConstRef _payload,
-        std::shared_ptr<boostssl::ws::WsSession> _p2pSession) = 0;
+    virtual void sendMessageBySession(
+        int _packetType, bytesConstRef _payload, P2PSession::Ptr _p2pSession) = 0;
     virtual void sendRespMessageBySession(bytesConstRef _payload,
-        bcos::boostssl::MessageFace::Ptr _p2pMessage,
-        std::shared_ptr<boostssl::ws::WsSession> _p2pSession) = 0;
+        bcos::boostssl::MessageFace::Ptr _p2pMessage, P2PSession::Ptr _p2pSession) = 0;
 };
 
 }  // namespace gateway

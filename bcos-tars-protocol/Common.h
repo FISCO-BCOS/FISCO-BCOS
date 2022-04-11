@@ -25,6 +25,7 @@
 #include "bcos-tars-protocol/tars/GatewayInfo.h"
 #include "bcos-tars-protocol/tars/GroupInfo.h"
 #include "bcos-tars-protocol/tars/LedgerConfig.h"
+#include <bcos-boostssl/interfaces/NodeInfoDef.h>
 #include <bcos-crypto/interfaces/crypto/Hash.h>
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/interfaces/consensus/ConsensusNode.h>
@@ -270,14 +271,14 @@ inline bcostars::LedgerConfig toTarsLedgerConfig(bcos::ledger::LedgerConfig::Ptr
     return ledgerConfig;
 }
 
-inline bcostars::P2PInfo toTarsP2PInfo(bcos::gateway::NodeInfo const& _p2pInfo)
+inline bcostars::P2PInfo toTarsP2PInfo(bcos::gateway::P2pInfo const& _p2pInfo)
 {
     bcostars::P2PInfo tarsP2PInfo;
-    tarsP2PInfo.p2pID = _p2pInfo.nodeID;
+    tarsP2PInfo.p2pID = _p2pInfo.p2pID;
     tarsP2PInfo.agencyName = _p2pInfo.agencyName;
     tarsP2PInfo.nodeName = _p2pInfo.nodeName;
-    tarsP2PInfo.host = _p2pInfo.nodeIPEndpoint.address();
-    tarsP2PInfo.port = _p2pInfo.nodeIPEndpoint.port();
+    tarsP2PInfo.host = _p2pInfo.hostIp;
+    tarsP2PInfo.port = boost::lexical_cast<int>(_p2pInfo.hostPort);
     return tarsP2PInfo;
 }
 
@@ -308,13 +309,14 @@ inline bcostars::GatewayInfo toTarsGatewayInfo(bcos::gateway::GatewayInfo::Ptr _
 }
 
 // Note: use struct here maybe Inconvenient to override
-inline bcos::gateway::NodeInfo toBcosP2PNodeInfo(bcostars::P2PInfo const& _tarsP2pInfo)
+inline bcos::gateway::P2pInfo toBcosP2PNodeInfo(bcostars::P2PInfo const& _tarsP2pInfo)
 {
-    bcos::gateway::NodeInfo p2pInfo;
-    p2pInfo.nodeID = _tarsP2pInfo.p2pID;
+    bcos::gateway::P2pInfo p2pInfo;
+    p2pInfo.p2pID = _tarsP2pInfo.p2pID;
     p2pInfo.agencyName = _tarsP2pInfo.agencyName;
     p2pInfo.nodeName = _tarsP2pInfo.nodeName;
-    p2pInfo.nodeIPEndpoint = bcos::gateway::NodeIPEndpoint(_tarsP2pInfo.host, _tarsP2pInfo.port);
+    p2pInfo.hostIp = _tarsP2pInfo.host;
+    p2pInfo.hostPort = boost::lexical_cast<std::string>(_tarsP2pInfo.port);
     return p2pInfo;
 }
 

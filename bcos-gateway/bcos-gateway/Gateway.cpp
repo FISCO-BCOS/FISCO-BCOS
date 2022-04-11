@@ -88,7 +88,7 @@ void Gateway::asyncGetPeers(
     for (auto const& info : sessionInfos)
     {
         auto gatewayInfo = std::make_shared<GatewayInfo>(info);
-        auto nodeIDList = m_gatewayNodeManager->peersNodeIDList(info.nodeID);
+        auto nodeIDList = m_gatewayNodeManager->peersNodeIDList(info.p2pID);
         gatewayInfo->setNodeIDInfo(std::move(nodeIDList));
         peerGatewayInfos->emplace_back(gatewayInfo);
     }
@@ -394,7 +394,7 @@ void Gateway::asyncNotifyGroupInfo(
 }
 
 void Gateway::onReceiveP2PMessage(
-    std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<WsSession> _session)
+    std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<P2PSession> _p2pSession)
 {
     auto p2pMessage = std::dynamic_pointer_cast<P2PMessage>(_msg);
     auto options = p2pMessage->options();
@@ -407,7 +407,7 @@ void Gateway::onReceiveP2PMessage(
     auto dstNodeIDPtr = m_gatewayNodeManager->keyFactory()->createKey(*dstNodeIDs[0].get());
     auto gateway = std::weak_ptr<Gateway>(shared_from_this());
     onReceiveP2PMessage(groupID, srcNodeIDPtr, dstNodeIDPtr, bytesConstRefPayload,
-        [groupID, srcNodeIDPtr, dstNodeIDPtr, _session, p2pMessage, gateway](Error::Ptr _error) {
+        [groupID, srcNodeIDPtr, dstNodeIDPtr, _p2pSession, p2pMessage, gateway](Error::Ptr _error) {
             auto gatewayPtr = gateway.lock();
             if (!gatewayPtr)
             {
@@ -425,12 +425,12 @@ void Gateway::onReceiveP2PMessage(
                     << LOG_KV("dst", dstNodeIDPtr->shortHex());
             }
             gatewayPtr->m_p2pInterface->sendRespMessageBySession(
-                bytesConstRef((byte*)errorCode.data(), errorCode.size()), p2pMessage, _session);
+                bytesConstRef((byte*)errorCode.data(), errorCode.size()), p2pMessage, _p2pSession);
         });
 }
 
 void Gateway::onReceiveBroadcastMessage(
-    std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<WsSession> _session)
+    std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<P2PSession> _p2pSession)
 {
     auto p2pMessage = std::dynamic_pointer_cast<P2PMessage>(_msg);
     auto srcNodeIDPtr =

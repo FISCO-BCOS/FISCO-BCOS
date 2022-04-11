@@ -21,13 +21,12 @@
 #pragma once
 #include "LocalRouterTable.h"
 #include "PeersRouterTable.h"
+#include <bcos-boostssl/websocket/WsSession.h>
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-gateway/Common.h>
-#include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libp2p/P2PInterface.h>
 #include <bcos-gateway/libp2p/P2PSession.h>
 #include <bcos-gateway/protocol/GatewayNodeStatus.h>
-#include <bcos-boostssl/websocket/WsSession.h>
 #include <bcos-utilities/Timer.h>
 namespace bcos
 {
@@ -84,11 +83,11 @@ protected:
     virtual void broadcastStatusSeq();
 
     virtual void onReceiveStatusSeq(
-        std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<boostssl::ws::WsSession> _session);
+        std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<P2PSession> _p2pSession);
     virtual void onRequestNodeStatus(
-        std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<boostssl::ws::WsSession> _session);
+        std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<P2PSession> _p2pSession);
     virtual void onReceiveNodeStatus(
-        std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<boostssl::ws::WsSession> _session);
+        std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<P2PSession> _p2pSession);
     virtual bytesPointer generateNodeStatus();
     virtual void syncLatestNodeIDList();
 
