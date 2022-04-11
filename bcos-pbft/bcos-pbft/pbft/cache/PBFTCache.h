@@ -78,46 +78,7 @@ public:
 
     virtual PBFTMessageInterface::Ptr preCommitCache() { return m_precommit; }
     virtual PBFTMessageInterface::Ptr preCommitWithoutData() { return m_precommitWithoutData; }
-    bool resetPrecommitCache(PBFTMessageInterface::Ptr _precommit, bool _needReExec)
-    {
-        RecursiveGuard l(m_mutex);
-        if (m_resetted)
-        {
-            return false;
-        }
-        if (!m_precommit)
-        {
-            return false;
-        }
-        if (_precommit->hash() != m_precommit->hash())
-        {
-            return false;
-        }
-        m_prePrepare = _precommit;
-        m_precommit = m_prePrepare;
-        m_precommit->setGeneratedFrom(m_config->nodeIndex());
-        m_precommit->consensusProposal()->setReExecFlag(_needReExec);
-        m_precommitWithoutData = m_precommit->populateWithoutProposal();
-        auto precommitProposalWithoutData =
-            m_config->pbftMessageFactory()->populateFrom(m_precommit->consensusProposal(), false);
-        m_precommitWithoutData->setConsensusProposal(precommitProposalWithoutData);
-        if (_needReExec && !m_reExecuted && m_reExecHandler)
-        {
-            PBFT_LOG(INFO) << LOG_DESC("resetPrecommitCache and re-exec the proposal")
-                           << printPBFTMsgInfo(m_precommit);
-            m_reExecuted = true;
-            // stall the pipeline
-            m_config->setWaitSealUntil(m_index);
-            m_config->setWaitResealUntil(m_index);
-            m_config->setExpectedCheckPoint(m_index);
-            // reset the checkpoint proposal
-            m_checkpointProposal = nullptr;
-            m_reExecHandler(m_precommit->consensusProposal());
-        }
-        checkAndCommitStableCheckPoint();
-        m_resetted = true;
-        return true;
-    }
+    bool resetPrecommitCache(PBFTMessageInterface::Ptr _precommit, bool _needReExec);
     virtual bool checkAndPreCommit();
     virtual bool checkAndCommit();
     virtual bool shouldStopTimer();

@@ -156,7 +156,20 @@ public:
     StateMachineInterface::Ptr stateMachine() { return m_stateMachine; }
 
     int64_t waterMarkLimit() const { return m_waterMarkLimit; }
-    void setWaterMarkLimit(int64_t _waterMarkLimit) { m_waterMarkLimit = _waterMarkLimit; }
+    void setWaterMarkLimit(int64_t _waterMarkLimit)
+    {
+        m_waterMarkLimit = _waterMarkLimit;
+        m_originWaterMarkLimit = _waterMarkLimit;
+    }
+    void recoverWaterMarkLimit()
+    {
+        if (m_waterMarkLimit == m_originWaterMarkLimit)
+        {
+            return;
+        }
+        m_waterMarkLimit = m_originWaterMarkLimit;
+    }
+    void enforceSerial() { m_waterMarkLimit = 1; }
 
     int64_t checkPointTimeoutInterval() const { return m_checkPointTimeoutInterval; }
     void setCheckPointTimeoutInterval(int64_t _timeoutInterval)
@@ -398,7 +411,8 @@ protected:
     std::atomic<bcos::protocol::BlockNumber> m_sealStartIndex = {0};
     std::atomic<bcos::protocol::BlockNumber> m_sealEndIndex = {0};
 
-    int64_t m_waterMarkLimit = 100;
+    int64_t m_waterMarkLimit = 10;
+    int64_t m_originWaterMarkLimit = 10;
     std::atomic<int64_t> m_checkPointTimeoutInterval = {3000};
 
     std::atomic<uint64_t> m_leaderSwitchPeriod = {1};
