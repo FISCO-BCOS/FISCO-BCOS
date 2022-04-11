@@ -209,6 +209,8 @@ protected:
     virtual ProposalInterface::ConstPtr getAppliedCheckPointProposal(
         bcos::protocol::BlockNumber _index);
 
+    virtual void notifyToSealNextBlock();
+
 protected:
     using PBFTCachesType = std::map<bcos::protocol::BlockNumber, PBFTCache::Ptr>;
     using UpdateCacheHandler =
@@ -220,9 +222,6 @@ protected:
         std::map<IndexType, ViewChangeMsgInterface::Ptr> _viewChangeCache);
     void reCalculateViewChangeWeight();
     void removeInvalidRecoverCache(ViewType _view);
-
-    virtual void notifyToSealNextBlock(PBFTProposalInterface::Ptr _checkpointProposal);
-
     void notifyMaxProposalIndex(bcos::protocol::BlockNumber _proposalIndex);
 
 protected:
@@ -246,7 +245,12 @@ protected:
         m_committedQueue;
     std::map<bcos::crypto::HashType, bcos::protocol::BlockNumber> m_executingProposals;
 
-    std::set<bcos::protocol::BlockNumber> m_committedProposalList;
+    std::set<bcos::protocol::BlockNumber, std::less<bcos::protocol::BlockNumber>>
+        m_committedProposalList;
+
+    // ordered by the index
+    std::set<bcos::protocol::BlockNumber, std::less<bcos::protocol::BlockNumber>>
+        m_proposalsToStableConsensus;
 
     std::priority_queue<PBFTProposalInterface::Ptr, std::vector<PBFTProposalInterface::Ptr>,
         PBFTProposalCmp>
