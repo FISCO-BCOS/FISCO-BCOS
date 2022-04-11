@@ -41,7 +41,7 @@ public:
         // threadpool for verify block
         m_verifier = std::make_shared<ThreadPool>("verifier", 8);
         m_sealer = std::make_shared<ThreadPool>("txsSeal", 1);
-        m_filler = std::make_shared<ThreadPool>("txsFiller", 4);
+        m_filler = std::make_shared<ThreadPool>("txsFiller", 32);
         m_remover = std::make_shared<ThreadPool>("txsRemove", 1);
         TXPOOL_LOG(INFO) << LOG_DESC("create TxPool")
                          << LOG_KV("submitterWorkerNum", _verifierWorkerNum);
