@@ -87,10 +87,10 @@ public:
 protected:
     virtual void notifyGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo);
 
-    virtual void onRecvHandshakeRequest(std::shared_ptr<boostssl::ws::WsMessage> _msg,
+    virtual void onRecvHandshakeRequest(std::shared_ptr<boostssl::MessageFace> _msg,
         std::shared_ptr<boostssl::ws::WsSession> _session);
 
-    virtual bool negotiatedVersion(std::shared_ptr<boostssl::ws::WsMessage> _msg,
+    virtual bool negotiatedVersion(std::shared_ptr<boostssl::MessageFace> _msg,
         std::shared_ptr<boostssl::ws::WsSession> _session);
 
 private:

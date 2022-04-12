@@ -252,7 +252,7 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_codec)
     auto encodeMsg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
 
     uint16_t version = 0x1234;
-    uint32_t seq = 0x12345678;
+    std::string seq = boost::lexical_cast<std::string>(0x12345678);
     uint16_t packetType = GatewayMessageType::PeerToPeerMessage;
     uint16_t ext = 0x1111;
     // auto payload = std::make_shared<bytes>(10000, 'a');

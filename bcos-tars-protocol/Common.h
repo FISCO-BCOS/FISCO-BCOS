@@ -33,6 +33,9 @@
 #include <bcos-framework/interfaces/ledger/LedgerConfig.h>
 #include <bcos-framework/interfaces/multigroup/ChainNodeInfoFactory.h>
 #include <bcos-framework/interfaces/multigroup/GroupInfoFactory.h>
+#include <bcos-utilities/Common.h>
+#include <tarscpp/servant/Application.h>
+#include <tarscpp/tup/Tars.h>
 #include <cstdint>
 #include <functional>
 #include <memory>

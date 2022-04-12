@@ -324,6 +324,7 @@ void Gateway::asyncSendBroadcastMessage(
         _type, _groupID, _srcNodeID, _payload);
     auto message =
         std::static_pointer_cast<P2PMessage>(m_p2pInterface->messageFactory()->buildMessage());
+    auto seq = m_p2pInterface->messageFactory()->newSeq();
     message->setPacketType(GatewayMessageType::BroadcastMessage);
     message->setExt(_type);
     message->setSeq(seq);

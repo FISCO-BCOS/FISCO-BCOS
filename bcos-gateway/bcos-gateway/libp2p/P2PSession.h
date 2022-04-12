@@ -7,11 +7,9 @@
 
 #include <bcos-boostssl/websocket/WsSession.h>
 #include <bcos-framework/interfaces/protocol/ProtocolInfo.h>
-#include <bcos-gateway/libnetwork/Common.h>
 #include <bcos-gateway/libp2p/Common.h>
 #include <bcos-gateway/libp2p/P2PMessage.h>
 #include <memory>
-
 
 namespace bcos
 {
@@ -34,15 +32,6 @@ public:
     virtual void start();
 
     virtual P2pID p2pID() { return m_p2pInfo->p2pID; }
-    // TODO: temporarily not be used
-    virtual void setP2PInfo(P2pInfo const& p2pInfo)
-    {
-        *m_p2pInfo = p2pInfo;
-        auto& stream = m_wsStreamDelegate->tcpStream();
-        auto endpoint = stream.socket().remote_endpoint();
-        m_p2pInfo->hostIp = endpoint.address().to_string();
-        m_p2pInfo->hostPort = std::to_string(endpoint.port());
-    }
     // Note: the p2pInfo must be setted after session setted
     virtual void initP2PInfo()
     {
@@ -76,6 +65,9 @@ private:
     std::shared_ptr<P2pInfo> m_p2pInfo;
     std::weak_ptr<Service> m_service;
     bool m_run = false;
+
+    bcos::protocol::ProtocolInfo::ConstPtr m_protocolInfo = nullptr;
+    mutable bcos::SharedMutex x_protocolInfo;
 };
 
 class P2pSessionFactory : public boostssl::ws::WsSessionFactory

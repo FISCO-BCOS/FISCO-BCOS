@@ -20,7 +20,6 @@
 #include <bcos-gateway/libp2p/P2PInterface.h>
 #include <bcos-gateway/libp2p/P2PSession.h>
 
-
 #include <map>
 #include <memory>
 #include <unordered_map>
@@ -35,7 +34,7 @@ class Gateway;
 class Service : public P2PInterface, public std::enable_shared_from_this<Service>
 {
 public:
-    Service();
+    Service(std::shared_ptr<boostssl::ws::WsService> _wsService);
     virtual ~Service() { stop(); }
 
     using Ptr = std::shared_ptr<Service>;
@@ -62,8 +61,8 @@ public:
         CallbackFuncWithSession callback,
         boostssl::ws::Options options = boostssl::ws::Options()) override;
 
-    void asyncBroadcastMessage(
-        std::shared_ptr<bcos::boostssl::MessageFace> message, Options options) override;
+    void asyncBroadcastMessage(std::shared_ptr<bcos::boostssl::MessageFace> message,
+        boostssl::ws::Options options) override;
 
     virtual std::map<boostssl::NodeIPEndpoint, P2pID> staticNodes() { return m_staticNodes; }
     virtual void setStaticNodes(const std::set<boostssl::NodeIPEndpoint>& staticNodes)
@@ -86,10 +85,6 @@ public:
     bool isConnected(P2pID const& p2pID) const override;
 
     std::shared_ptr<boostssl::ws::WsService> wsService() { return m_wsService; }
-    virtual void setWsService(std::shared_ptr<boostssl::ws::WsService> wsService)
-    {
-        m_wsService = wsService;
-    }
 
     std::shared_ptr<boostssl::MessageFaceFactory> messageFactory() override
     {
@@ -152,7 +147,8 @@ public:
 
     MessageHandler getMessageHandlerByMsgType(uint32_t _type)
     {
-        auto handler = m_wsService->getMsgHandler(_type);
+        auto msgHandler = m_wsService->getMsgHandler(_type);
+        return msgHandler;
     }
 
     void eraseHandlerByMsgType(uint32_t _type) override
@@ -169,9 +165,9 @@ public:
 private:
     std::shared_ptr<P2PMessage> newP2PMessage(int16_t _type, bytesConstRef _payload);
     // handshake protocol
-    void asyncSendProtocol(P2PSession::Ptr _session);
+    void asyncSendProtocol(bcos::boostssl::ws::WsSession::Ptr _session);
     void onReceiveProtocol(
-        NetworkException _e, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message);
+        boostssl::MessageFace::Ptr _message, std::shared_ptr<P2PSession> _session);
 
 private:
     std::vector<std::function<void(NetworkException, P2PSession::Ptr)>> m_disconnectionHandlers;

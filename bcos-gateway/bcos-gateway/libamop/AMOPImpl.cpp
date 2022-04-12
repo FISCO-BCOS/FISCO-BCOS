@@ -491,7 +491,7 @@ void AMOPImpl::onAMOPMessage(boostssl::MessageFace::Ptr _message, P2PSession::Pt
 void AMOPImpl::dispatcherAMOPMessage(
     boostssl::MessageFace::Ptr _message, P2PSession::Ptr _p2pSession)
 {
-    if (_message->packetType() != MessageType::AMOPMessageType)
+    if (_message->packetType() != GatewayMessageType::AMOPMessageType)
     {
         return;
     }

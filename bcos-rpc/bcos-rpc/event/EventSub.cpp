@@ -205,7 +205,7 @@ bool EventSub::sendEvents(std::shared_ptr<bcos::boostssl::ws::WsSession> _sessio
     {
         auto msg =
             std::dynamic_pointer_cast<boostssl::ws::WsMessage>(m_messageFactory->buildMessage());
-        msg->setPacketType(bcos::event::MessageType::EVENT_LOG_PUSH);
+        msg->setPacketType(bcos::protocol::MessageType::EVENT_LOG_PUSH);
         sendResponse(_session, msg, _id, EP_STATUS_CODE::PUSH_COMPLETED);
         return true;
     }
@@ -229,7 +229,7 @@ bool EventSub::sendEvents(std::shared_ptr<bcos::boostssl::ws::WsSession> _sessio
     auto data = std::make_shared<bcos::bytes>(strEventInfo.begin(), strEventInfo.end());
 
     auto msg = m_messageFactory->buildMessage();
-    msg->setPacketType(bcos::event::MessageType::EVENT_LOG_PUSH);
+    msg->setPacketType(bcos::protocol::MessageType::EVENT_LOG_PUSH);
     msg->setPayload(data);
     _session->asyncSendMessage(msg);
 

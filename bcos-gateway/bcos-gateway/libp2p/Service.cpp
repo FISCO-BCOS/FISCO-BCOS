@@ -20,18 +20,17 @@ using namespace bcos::boostssl;
 using namespace bcos::boostssl::ws;
 using namespace bcos::boostssl::context;
 
-static const uint32_t CHECK_INTERVEL = 10000;
-
-Service::Service()
+Service::Service(std::shared_ptr<boostssl::ws::WsService> _wsService) : m_wsService(_wsService)
 {
     m_localProtocol = g_BCOSConfig.protocolInfo(ProtocolModuleID::GatewayService);
     m_codec = g_BCOSConfig.codec();
+
     // Process handshake packet logic, handshake protocol and determine
     // the version, when handshake finished the version field of P2PMessage
     // should be set
-    registerHandlerByMsgType(GatewayMessageType::Handshake,
-        boost::bind(&Service::onReceiveProtocol, this, boost::placeholders::_1,
-            boost::placeholders::_2, boost::placeholders::_3));
+    registerHandlerByMsgType(
+        GatewayMessageType::Handshake, boost::bind(&Service::onReceiveProtocol, this,
+                                           boost::placeholders::_1, boost::placeholders::_2));
 }
 
 void Service::start()
@@ -159,6 +158,25 @@ void Service::updateUnconnectedEndpointToWservice()
     {
         m_wsService->setReconnectedPeers(reconnectedPeers);
     }
+}
+
+void Service::obtainHostAndPortFromString(
+    std::string const& _endpointString, std::string& host, uint16_t& port)
+{
+    std::vector<std::string> endpoint_info_vec;
+    boost::split(
+        endpoint_info_vec, _endpointString, boost::is_any_of(":"), boost::token_compress_on);
+    if (!endpoint_info_vec.empty())
+    {
+        host = endpoint_info_vec[0];
+    }
+    if (endpoint_info_vec.size() > 1)
+    {
+        port = boost::lexical_cast<uint16_t>(endpoint_info_vec[1]);
+    }
+
+    SERVICE_LOG(INFO) << "obtainHostAndPortFromString " << LOG_KV("host", host)
+                      << LOG_KV("port", port);
 }
 
 /// update the staticNodes
@@ -618,7 +636,7 @@ void Service::asyncSendMessageByP2PNodeIDs(int16_t _type, const std::vector<P2pI
 }
 
 // send the protocolInfo
-void Service::asyncSendProtocol(P2PSession::Ptr _session)
+void Service::asyncSendProtocol(WsSession::Ptr _session)
 {
     auto payload = std::make_shared<bytes>();
     m_codec->encode(m_localProtocol, *payload);
@@ -630,20 +648,13 @@ void Service::asyncSendProtocol(P2PSession::Ptr _session)
 
     SERVICE_LOG(INFO) << LOG_DESC("asyncSendProtocol") << LOG_KV("payload", payload->size())
                       << LOG_KV("seq", seq);
-    _session->session()->asyncSendMessage(message, Options(), nullptr);
+    _session->asyncSendMessage(message, Options(), nullptr);
 }
 
 // receive the protocolInfo
 void Service::onReceiveProtocol(
-    NetworkException _e, std::shared_ptr<P2PSession> _session, P2PMessage::Ptr _message)
+    boostssl::MessageFace::Ptr _message, std::shared_ptr<P2PSession> _session)
 {
-    if (_e.errorCode())
-    {
-        SERVICE_LOG(WARNING) << LOG_DESC("onReceiveProtocol error")
-                             << LOG_KV("errorCode", _e.errorCode()) << LOG_KV("errorMsg", _e.what())
-                             << LOG_KV("peer", _session ? _session->p2pID() : "unknown");
-        return;
-    }
     try
     {
         auto payload = _message->payload();
@@ -659,7 +670,7 @@ void Service::onReceiveProtocol(
                 << LOG_KV("maxVersion", protocolInfo->maxVersion())
                 << LOG_KV("supportMinVersion", m_localProtocol->minVersion())
                 << LOG_KV("supportMaxVersion", m_localProtocol->maxVersion());
-            _session->session()->disconnect(DisconnectReason::NegotiateFailed);
+            _session->drop(DisconnectReason::NegotiateFailed);
             return;
         }
         auto version = std::min(m_localProtocol->maxVersion(), protocolInfo->maxVersion());
