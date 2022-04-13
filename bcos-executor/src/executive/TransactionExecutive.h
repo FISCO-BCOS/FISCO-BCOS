@@ -139,9 +139,23 @@ public:
         m_builtInPrecompiled = std::move(_builtInPrecompiled);
     }
 
-    bool isBuiltInPrecompiled(const std::string& _a) const;
+    inline bool isBuiltInPrecompiled(const std::string& _a) const
+    {
+        std::stringstream prefix;
+        prefix << std::setfill('0') << std::setw(36);
+        if (_a.find(prefix.str()) != 0)
+            return false;
+        return m_builtInPrecompiled->find(_a) != m_builtInPrecompiled->end();
+    }
 
-    bool isEthereumPrecompiled(const std::string& _a) const;
+    inline bool isEthereumPrecompiled(const std::string& _a) const
+    {
+        std::stringstream prefix;
+        prefix << std::setfill('0') << std::setw(39) << "0";
+        if (!m_evmPrecompiled || _a.find(prefix.str()) != 0)
+            return false;
+        return m_evmPrecompiled->find(_a) != m_evmPrecompiled->end();
+    }
 
     std::pair<bool, bytes> executeOriginPrecompiled(const std::string& _a, bytesConstRef _in) const;
 
@@ -181,6 +195,7 @@ private:
         CallParameters::UniquePtr callParameters);
     std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> create(
         CallParameters::UniquePtr callParameters);
+    CallParameters::UniquePtr internalCreate(CallParameters::UniquePtr callParameters);
     CallParameters::UniquePtr go(
         HostContext& hostContext, CallParameters::UniquePtr extraData = nullptr);
 
@@ -227,8 +242,8 @@ private:
     void creatAuthTable(
         std::string_view _tableName, std::string_view _origin, std::string_view _sender);
 
-    bool buildBfsPath(std::string const& _absoluteDir, const std::string& _origin,
-        const std::string& _sender, int64_t gasLeft);
+    bool buildBfsPath(std::string_view _absoluteDir, std::string_view _origin,
+        std::string_view _sender, std::string_view _type, int64_t gasLeft);
 
     std::weak_ptr<BlockContext> m_blockContext;  ///< Information on the runtime environment.
     std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>

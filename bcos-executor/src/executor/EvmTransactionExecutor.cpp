@@ -37,6 +37,7 @@
 #include "../precompiled/PrecompiledResult.h"
 #include "../precompiled/SystemConfigPrecompiled.h"
 #include "../precompiled/TableFactoryPrecompiled.h"
+#include "../precompiled/TableManagerPrecompiled.h"
 #include "../precompiled/Utilities.h"
 #include "../precompiled/extension/ContractAuthPrecompiled.h"
 #include "../precompiled/extension/DagTransferPrecompiled.h"
@@ -125,17 +126,15 @@ void EvmTransactionExecutor::initPrecompiled()
 
     auto sysConfig = std::make_shared<precompiled::SystemConfigPrecompiled>(m_hashImpl);
     auto consensusPrecompiled = std::make_shared<precompiled::ConsensusPrecompiled>(m_hashImpl);
-    // FIXME: not support crud now
-    // auto tableFactoryPrecompiled =
-    // std::make_shared<precompiled::TableFactoryPrecompiled>(m_hashImpl);
+    auto tableManagerPrecompiled =
+        std::make_shared<precompiled::TableManagerPrecompiled>(m_hashImpl);
     auto kvTableFactoryPrecompiled =
         std::make_shared<precompiled::KVTableFactoryPrecompiled>(m_hashImpl);
 
     // in EVM
     m_constantPrecompiled->insert({SYS_CONFIG_ADDRESS, sysConfig});
     m_constantPrecompiled->insert({CONSENSUS_ADDRESS, consensusPrecompiled});
-    // FIXME: not support crud now
-    // m_constantPrecompiled.insert({TABLE_ADDRESS, tableFactoryPrecompiled});
+    m_constantPrecompiled->insert({TABLE_MANAGER_ADDRESS, tableManagerPrecompiled});
     m_constantPrecompiled->insert({KV_TABLE_ADDRESS, kvTableFactoryPrecompiled});
     m_constantPrecompiled->insert(
         {DAG_TRANSFER_ADDRESS, std::make_shared<precompiled::DagTransferPrecompiled>(m_hashImpl)});

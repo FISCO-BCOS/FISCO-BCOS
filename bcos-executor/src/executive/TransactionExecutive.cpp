@@ -302,7 +302,12 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
     extraData->abi = std::move(callParameters->abi);
 
     EXECUTIVE_LOG(DEBUG) << LOG_DESC("deploy") << LOG_KV("tableName", tableName)
-                         << LOG_KV("abi len", extraData->abi.size());
+                         << LOG_KV("abi len", extraData->abi.size())
+                         << LOG_KV("internalCreate", callParameters->internalCreate);
+    if (callParameters->internalCreate)
+    {
+        return {nullptr, internalCreate(std::move(callParameters))};
+    }
 
     // check permission first
     if (blockContext->isAuthCheck())
@@ -322,15 +327,11 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
     if (blockContext->isWasm())
     {
         // Liquid
-        auto code = bytes();
-        auto params = bytes();
-
-        auto data = ref(callParameters->data);
-        auto input = std::make_pair(code, params);
+        std::pair<bytes, bytes> input;
         auto codec = std::make_shared<CodecWrapper>(blockContext->hashHandler(), true);
-        codec->decode(data, input);
+        codec->decode(ref(callParameters->data), input);
+        auto& [code, params] = input;
 
-        std::tie(code, params) = input;
         if (!hasWasmPreamble(code))
         {
             revert();
@@ -392,6 +393,81 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
     auto hostContext =
         std::make_unique<HostContext>(std::move(callParameters), shared_from_this(), tableName);
     return {std::move(hostContext), std::move(extraData)};
+}
+
+CallParameters::UniquePtr TransactionExecutive::internalCreate(
+    CallParameters::UniquePtr callParameters)
+{
+    auto blockContext = m_blockContext.lock();
+    if (!blockContext)
+    {
+        BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "blockContext is null"));
+    }
+    auto newAddress = string(callParameters->codeAddress);
+    EXECUTIVE_LOG(DEBUG) << LOG_DESC("internalCreate") << LOG_KV("newAddress", newAddress);
+    auto codec =
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+    std::string tableName;
+    std::string codeString;
+    codec->decode(ref(callParameters->data), tableName, codeString);
+
+    if (blockContext->isWasm())
+    {
+        /// BFS create contract table and write metadata in parent table
+        if (!buildBfsPath(newAddress, callParameters->origin, newAddress, FS_TYPE_CONTRACT,
+                callParameters->gas))
+        {
+            revert();
+            auto buildCallResults = move(callParameters);
+            buildCallResults->type = CallParameters::REVERT;
+            buildCallResults->status = (int32_t)TransactionStatus::RevertInstruction;
+            buildCallResults->message = "Error occurs in build BFS dir";
+            EXECUTIVE_LOG(ERROR) << buildCallResults->message << LOG_KV("newAddress", newAddress);
+            return buildCallResults;
+        }
+        /// set code field
+        Entry entry = {};
+        entry.importFields({codeString});
+        m_storageWrapper->setRow(newAddress, ACCOUNT_CODE, std::move(entry));
+    }
+    else
+    {
+        /// BFS create contract table and write metadata in parent table
+        if (!buildBfsPath(
+                tableName, callParameters->origin, newAddress, FS_TYPE_LINK, callParameters->gas))
+        {
+            revert();
+            auto buildCallResults = move(callParameters);
+            buildCallResults->type = CallParameters::REVERT;
+            buildCallResults->status = (int32_t)TransactionStatus::RevertInstruction;
+            buildCallResults->message = "Error occurs in build BFS dir";
+            EXECUTIVE_LOG(ERROR) << buildCallResults->message << LOG_KV("newAddress", newAddress);
+            return buildCallResults;
+        }
+
+        /// create code index contract
+        auto codeAddress = getContractTableName(newAddress, false);
+        m_storageWrapper->createTable(codeAddress, STORAGE_VALUE);
+
+        /// set code field
+        Entry entry = {};
+        entry.importFields({codeString});
+        m_storageWrapper->setRow(codeAddress, ACCOUNT_CODE, std::move(entry));
+
+        /// set link data
+        Entry addressEntry = {};
+        addressEntry.importFields({newAddress});
+        m_storageWrapper->setRow(tableName, FS_LINK_ADDRESS, std::move(addressEntry));
+        Entry typeEntry = {};
+        typeEntry.importFields({FS_TYPE_LINK});
+        m_storageWrapper->setRow(tableName, FS_KEY_TYPE, std::move(typeEntry));
+    }
+    callParameters->type = CallParameters::FINISHED;
+    callParameters->status = (int32_t)TransactionStatus::None;
+    callParameters->internalCreate = false;
+    callParameters->create = false;
+    callParameters->data.clear();
+    return callParameters;
 }
 
 CallParameters::UniquePtr TransactionExecutive::go(
@@ -537,8 +613,8 @@ CallParameters::UniquePtr TransactionExecutive::go(
             {
                 // BFS create contract table and write metadata in parent table
                 auto tableName = getContractTableName(hostContext.myAddress(), true);
-                if (!buildBfsPath(tableName, callResults->origin,
-                        std::string(hostContext.myAddress()), callResults->gas))
+                if (!buildBfsPath(tableName, callResults->origin, hostContext.myAddress(),
+                        FS_TYPE_CONTRACT, callResults->gas))
                 {
                     revert();
                     auto buildCallResults = move(callResults);
@@ -624,7 +700,6 @@ CallParameters::UniquePtr TransactionExecutive::go(
             return callResults;
         }
     }
-    // Note: won't call the catch branch
     catch (bcos::Error& e)
     {
         auto callResults = hostContext.takeCallParameters();
@@ -739,24 +814,6 @@ std::shared_ptr<Precompiled> TransactionExecutive::getPrecompiled(const std::str
         return constantPrecompiled->second;
     }
     return {};
-}
-
-bool TransactionExecutive::isBuiltInPrecompiled(const std::string& _a) const
-{
-    std::stringstream prefix;
-    prefix << std::setfill('0') << std::setw(36);
-    if (_a.find(prefix.str()) != 0)
-        return false;
-    return m_builtInPrecompiled->find(_a) != m_builtInPrecompiled->end();
-}
-
-bool TransactionExecutive::isEthereumPrecompiled(const string& _a) const
-{
-    std::stringstream prefix;
-    prefix << std::setfill('0') << std::setw(39) << "0";
-    if (!m_evmPrecompiled || _a.find(prefix.str()) != 0)
-        return false;
-    return m_evmPrecompiled->find(_a) != m_evmPrecompiled->end();
 }
 
 std::pair<bool, bcos::bytes> TransactionExecutive::executeOriginPrecompiled(
@@ -995,12 +1052,12 @@ void TransactionExecutive::creatAuthTable(
     }
 }
 
-bool TransactionExecutive::buildBfsPath(std::string const& _absoluteDir, const std::string& _origin,
-    const std::string& _sender, int64_t gasLeft)
+bool TransactionExecutive::buildBfsPath(std::string_view _absoluteDir, std::string_view _origin,
+    std::string_view _sender, std::string_view _type, int64_t gasLeft)
 {
     EXECUTIVE_LOG(DEBUG) << LOG_DESC("buildBfsPath") << LOG_KV("absoluteDir", _absoluteDir);
-    auto response = externalTouchNewFile(
-        shared_from_this(), _origin, _sender, _absoluteDir, FS_TYPE_CONTRACT, gasLeft);
+    auto response =
+        externalTouchNewFile(shared_from_this(), _origin, _sender, _absoluteDir, _type, gasLeft);
     return response == (int)precompiled::CODE_SUCCESS;
 }
 

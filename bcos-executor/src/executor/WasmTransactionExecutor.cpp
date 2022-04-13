@@ -32,6 +32,7 @@
 #include "../precompiled/FileSystemPrecompiled.h"
 #include "../precompiled/KVTableFactoryPrecompiled.h"
 #include "../precompiled/SystemConfigPrecompiled.h"
+#include "../precompiled/TableManagerPrecompiled.h"
 #include "../precompiled/extension/ContractAuthPrecompiled.h"
 #include "../precompiled/extension/DagTransferPrecompiled.h"
 #include "../vm/gas_meter/GasInjector.h"
@@ -75,17 +76,15 @@ void WasmTransactionExecutor::initPrecompiled()
 
     auto sysConfig = std::make_shared<precompiled::SystemConfigPrecompiled>(m_hashImpl);
     auto consensusPrecompiled = std::make_shared<precompiled::ConsensusPrecompiled>(m_hashImpl);
-    // FIXME: not support crud now
-    // auto tableFactoryPrecompiled =
-    // std::make_shared<precompiled::TableFactoryPrecompiled>(m_hashImpl);
+    auto tableManagerPrecompiled =
+        std::make_shared<precompiled::TableManagerPrecompiled>(m_hashImpl);
     auto kvTableFactoryPrecompiled =
         std::make_shared<precompiled::KVTableFactoryPrecompiled>(m_hashImpl);
 
     // in WASM
     m_constantPrecompiled->insert({SYS_CONFIG_NAME, sysConfig});
     m_constantPrecompiled->insert({CONSENSUS_NAME, consensusPrecompiled});
-    // FIXME: not support crud now
-    // m_constantPrecompiled.insert({TABLE_NAME, tableFactoryPrecompiled});
+    m_constantPrecompiled->insert({TABLE_MANAGER_NAME, tableManagerPrecompiled});
     m_constantPrecompiled->insert({KV_TABLE_NAME, kvTableFactoryPrecompiled});
     m_constantPrecompiled->insert(
         {DAG_TRANSFER_NAME, std::make_shared<precompiled::DagTransferPrecompiled>(m_hashImpl)});
