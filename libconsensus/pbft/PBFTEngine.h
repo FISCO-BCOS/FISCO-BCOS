@@ -176,7 +176,7 @@ public:
     void rehandleCommitedPrepareCache(PrepareReq const& req);
     bool shouldSeal();
     /// broadcast prepare message
-    bool generatePrepare(dev::eth::Block::Ptr _block);
+    bool generatePrepare(RecursiveMutex& _blockMutex, dev::eth::Block::Ptr _block);
     /// update the context of PBFT after commit a block into the block-chain
     void reportBlock(dev::eth::Block const& block) override;
     void onViewChange(std::function<void()> const& _f)
@@ -710,7 +710,7 @@ protected:
     std::shared_ptr<PBFTReqCache> m_reqCache;
     TimeManager m_timeManager;
     PBFTMsgQueue m_msgQueue;
-    mutable Mutex m_mutex;
+    mutable RecursiveMutex m_mutex;
 
     boost::condition_variable m_signalled;
     boost::mutex x_signalled;
@@ -754,7 +754,6 @@ protected:
     // Make object destructive overhead asynchronous
     dev::ThreadPool::Ptr m_destructorThread;
     bool m_enablePrepareWithTxsHash = false;
-    std::atomic_bool m_generatePrepare = {false};
 };
 }  // namespace consensus
 }  // namespace dev

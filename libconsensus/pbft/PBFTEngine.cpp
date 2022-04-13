@@ -49,11 +49,13 @@ void PBFTEngine::start()
     createPBFTReqCache();
     assert(m_reqCache);
     // set checkSignCallback for reqCache
-    m_reqCache->setCheckSignCallback(boost::bind(&PBFTEngine::checkSign, this, boost::placeholders::_1));
+    m_reqCache->setCheckSignCallback(
+        boost::bind(&PBFTEngine::checkSign, this, boost::placeholders::_1));
 
     // register P2P callback after create PBFTMsgFactory
     m_service->registerHandlerByProtoclID(
-        m_protocolId, boost::bind(&PBFTEngine::handleP2PMessage, this, boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3));
+        m_protocolId, boost::bind(&PBFTEngine::handleP2PMessage, this, boost::placeholders::_1,
+                          boost::placeholders::_2, boost::placeholders::_3));
     registerDisconnectHandler();
     ConsensusEngineBase::start();
     initPBFTEnv(3 * getEmptyBlockGenTime());
@@ -81,7 +83,7 @@ void PBFTEngine::registerDisconnectHandler()
                     {
                         return;
                     }
-                    Guard l(pbftEngine->m_mutex);
+                    RecursiveGuard l(pbftEngine->m_mutex);
                     PBFTENGINE_LOG(DEBUG)
                         << LOG_DESC("eraseLatestViewChangeCache for disconnected node")
                         << LOG_KV("node", _p2pSession->nodeID().abridged())
@@ -198,7 +200,7 @@ bool PBFTEngine::shouldSeal()
  */
 void PBFTEngine::rehandleCommitedPrepareCache(PrepareReq const& req)
 {
-    Guard l(m_mutex);
+    RecursiveGuard l(m_mutex);
     PBFTENGINE_LOG(INFO) << LOG_DESC("rehandleCommittedPrepare") << LOG_KV("nodeIdx", nodeIdx())
                          << LOG_KV("nodeId", m_keyPair.pub().abridged()) << LOG_KV("view", m_view)
                          << LOG_KV("hash", req.block_hash.abridged()) << LOG_KV("H", req.height);
@@ -421,29 +423,21 @@ void PBFTEngine::sendPrepareMsgFromLeader(
 }
 
 /// sealing the generated block into prepareReq and push its to msgQueue
-bool PBFTEngine::generatePrepare(dev::eth::Block::Ptr _block)
+bool PBFTEngine::generatePrepare(RecursiveMutex& _blockMutex, dev::eth::Block::Ptr _block)
 {
     // fix the deadlock cases below
-    // 1. the sealer has sealed enough txs and is handling the block, but stucked at the
-    // generatePrepare for the PBFTEngine is checking timeout and ready to change view
-    // 2. the PBFTEngine trigger view change and release the m_mutex, the leader has been changed
-    // 3. the PBFTEngine calls handlePrepare for receive the PBFT prepare message from the leader,
-    // and handle the block
-    // 4. the next leader is the node-self, the PBFTEngine tries to notify the node to seal the next
-    // block
-    // 5. since the x_sealing is stucked at step 1, the PBFTEngine has been stucked at notifySeal
-    // Solution:
-    // if the sealer execute step1 (m_generatePrepare is equal to true), won't trigger notifySeal
-    m_generatePrepare = true;
-    Guard l(m_mutex);
+    PrepareReq::Ptr prepareReq;
+    {
+        RecursiveGuard l(_blockMutex);
+        prepareReq = constructPrepareReq(_block);
+    }
+    RecursiveGuard l(m_mutex);
     // the leader has been changed
     if (!getLeader().first || getLeader().second != nodeIdx())
     {
-        m_generatePrepare = false;
         return true;
     }
     m_notifyNextLeaderSeal = false;
-    auto prepareReq = constructPrepareReq(_block);
 
     if (prepareReq->pBlock->getTransactionSize() == 0 && m_omitEmptyBlock)
     {
@@ -460,7 +454,6 @@ bool PBFTEngine::generatePrepare(dev::eth::Block::Ptr _block)
                          << LOG_KV("H", prepareReq->height) << LOG_KV("nodeIdx", nodeIdx())
                          << LOG_KV("myNode", m_keyPair.pub().abridged());
     m_signalled.notify_all();
-    m_generatePrepare = false;
     return true;
 }
 
@@ -737,7 +730,7 @@ CheckResult PBFTEngine::isValidPrepare(PrepareReq const& req, std::ostringstream
     if (!req.isEmpty && !isHashSavedAfterCommit(req))
     {
         PBFTENGINE_LOG(INFO) << LOG_DESC("InvalidPrepare: not saved after commit")
-                              << LOG_KV("EINFO", oss.str());
+                             << LOG_KV("EINFO", oss.str());
         return CheckResult::INVALID;
     }
     if (isFuturePrepare(req))
@@ -783,7 +776,7 @@ bool PBFTEngine::checkBlock(Block const& block)
         return false;
     }
     {
-        Guard l(m_mutex);
+        RecursiveGuard l(m_mutex);
         resetConfig();
     }
     // the current sealer list
@@ -863,7 +856,7 @@ bool PBFTEngine::checkSign(IDXTYPE const& _idx, dev::h256 const& _hash, bytes co
  */
 void PBFTEngine::notifySealing(dev::eth::Block const& block)
 {
-    if (!m_onNotifyNextLeaderReset || m_generatePrepare)
+    if (!m_onNotifyNextLeaderReset)
     {
         return;
     }
@@ -1328,7 +1321,7 @@ void PBFTEngine::checkAndSave()
 void PBFTEngine::reportBlock(Block const& block)
 {
     ConsensusEngineBase::reportBlock(block);
-    Guard l(m_mutex);
+    RecursiveGuard l(m_mutex);
     reportBlockWithoutLock(block);
 }
 /// update the context of PBFT after commit a block into the block-chain
@@ -1657,7 +1650,7 @@ bool PBFTEngine::checkAndChangeView(VIEWTYPE const& _view)
 /// collect all caches
 void PBFTEngine::collectGarbage()
 {
-    Guard l(m_mutex);
+    RecursiveGuard l(m_mutex);
     if (!m_highestBlock)
     {
         return;
@@ -1685,7 +1678,7 @@ void PBFTEngine::checkTimeout()
 {
     bool flag = false;
     {
-        Guard l(m_mutex);
+        RecursiveGuard l(m_mutex);
         if (m_timeManager.isTimeout())
         {
             /// timeout not triggered by fast view change
@@ -1727,7 +1720,7 @@ void PBFTEngine::checkTimeout()
 
 void PBFTEngine::handleMsg(PBFTMsgPacket::Ptr pbftMsg)
 {
-    Guard l(m_mutex);
+    RecursiveGuard l(m_mutex);
     std::shared_ptr<PBFTMsg> pbft_msg;
     bool succ = false;
     switch (pbftMsg->packet_id)
@@ -1862,7 +1855,7 @@ void PBFTEngine::waitSignal()
 /// handle the prepareReq cached in the futurePrepareCache
 void PBFTEngine::handleFutureBlock()
 {
-    Guard l(m_mutex);
+    RecursiveGuard l(m_mutex);
     // handle the future block with full-txs firstly
     std::shared_ptr<PrepareReq> p_future_prepare =
         m_reqCache->futurePrepareCache(m_consensusBlockNumber);
@@ -2337,7 +2330,7 @@ bool PBFTEngine::handleReceivedPartiallyPrepare(std::shared_ptr<P2PSession> _ses
     {
         return false;
     }
-    Guard l(m_mutex);
+    RecursiveGuard l(m_mutex);
     bool succ = handlePartiallyPrepare(prepareReq);
     // maybe return succ for addFuturePrepare
     if (!prepareReq->pBlock)
@@ -2366,7 +2359,7 @@ void PBFTEngine::onReceiveMissedTxsResponse(
 {
     try
     {
-        Guard l(m_mutex);
+        RecursiveGuard l(m_mutex);
         PBFTENGINE_LOG(DEBUG) << LOG_DESC("onReceiveMissedTxsResponse and fillBlock")
                               << LOG_KV("size", _message->length())
                               << LOG_KV("peer", _session->nodeID().abridged());

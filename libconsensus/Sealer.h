@@ -193,7 +193,7 @@ protected:
     /// current sealing block(include block, transaction set of block and execute context)
     Sealing m_sealing;
     /// lock on m_sealing
-    mutable SharedMutex x_sealing;
+    mutable RecursiveMutex x_sealing;
     /// extra data
     std::vector<bytes> m_extraData;
 
