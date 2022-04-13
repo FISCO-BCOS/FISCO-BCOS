@@ -896,9 +896,8 @@ void TransactionExecutor::prepare(
         return;
     }
 
-    bcos::storage::TransactionalStorageInterface::TwoPCParams storageParams;  // TODO: add tikv
-                                                                              // params
-    storageParams.number = params.number;
+    bcos::storage::TransactionalStorageInterface::TwoPCParams storageParams{
+        params.number, params.primaryTableName, params.primaryTableKey, params.startTS};
 
     m_backendStorage->asyncPrepare(
         storageParams, *(first->storage), [callback = std::move(callback)](auto&& error, uint64_t) {
@@ -945,8 +944,8 @@ void TransactionExecutor::commit(
         return;
     }
 
-    bcos::storage::TransactionalStorageInterface::TwoPCParams storageParams;  // Add tikv params
-    storageParams.number = params.number;
+    bcos::storage::TransactionalStorageInterface::TwoPCParams storageParams{
+        params.number, params.primaryTableName, params.primaryTableKey, params.startTS};
     m_backendStorage->asyncCommit(storageParams,
         [this, callback = std::move(callback), blockNumber = params.number](Error::Ptr&& error) {
             if (error)

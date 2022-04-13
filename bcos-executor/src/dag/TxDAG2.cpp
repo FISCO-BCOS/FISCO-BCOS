@@ -35,7 +35,7 @@ using namespace tbb::flow;
 void TxDAG2::init(critical::CriticalFieldsInterface::Ptr _txsCriticals, ExecuteTxFunc const& _f)
 {
     auto txsSize = _txsCriticals->size();
-    DAG_LOG(TRACE) << LOG_DESC("Begin init transaction DAG") << LOG_KV("transactionNum", txsSize);
+    DAG_LOG(INFO) << LOG_DESC("Begin init transaction DAG") << LOG_KV("transactionNum", txsSize);
 
     f_executeTx = _f;
     m_totalParaTxs = _txsCriticals->size();
