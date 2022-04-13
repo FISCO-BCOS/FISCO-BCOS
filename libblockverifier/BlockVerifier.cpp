@@ -68,8 +68,9 @@ ExecutiveContext::Ptr BlockVerifier::executeBlock(Block& block, BlockInfo const&
     }
     catch (exception& e)
     {
-        BLOCKVERIFIER_LOG(ERROR) << LOG_BADGE("executeBlock") << LOG_DESC("executeBlock exception")
-                                 << LOG_KV("blockNumber", block.blockHeader().number());
+        BLOCKVERIFIER_LOG(WARNING)
+            << LOG_BADGE("executeBlock") << LOG_DESC("executeBlock exception")
+            << LOG_KV("blockNumber", block.blockHeader().number());
         return nullptr;
     }
     m_executingNumber = block.blockHeader().number();
