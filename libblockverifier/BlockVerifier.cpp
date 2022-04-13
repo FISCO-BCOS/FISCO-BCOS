@@ -94,20 +94,20 @@ ExecutiveContext::Ptr BlockVerifier::serialExecuteBlock(
 
     uint64_t startTime = utcTime();
 
-    ExecutiveContext::Ptr executiveContext = std::make_shared<ExecutiveContext>();
+    ExecutiveContext::Ptr executiveContext;
     try
     {
-        m_executiveContextFactory->initExecutiveContext(
-            parentBlockInfo, parentBlockInfo.stateRoot, executiveContext);
+        executiveContext = m_executiveContextFactory->createExecutiveContext(
+            parentBlockInfo, parentBlockInfo.stateRoot);
     }
     catch (exception& e)
     {
-        BLOCKVERIFIER_LOG(ERROR) << LOG_DESC("[executeBlock] Error during initExecutiveContext")
+        BLOCKVERIFIER_LOG(ERROR) << LOG_DESC("[executeBlock] Error during createExecutiveContext")
                                  << LOG_KV("blkNum", block.blockHeader().number())
                                  << LOG_KV("EINFO", boost::diagnostic_information(e));
 
-        BOOST_THROW_EXCEPTION(InvalidBlockWithBadStateOrReceipt()
-                              << errinfo_comment("Error during initExecutiveContext"));
+        BOOST_THROW_EXCEPTION(
+            BlockExecuteError() << errinfo_comment("Error during createExecutiveContext"));
     }
 
     BlockHeader tmpHeader = block.blockHeader();
@@ -230,19 +230,19 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
 
     auto start_time = utcTime();
     auto record_time = utcTime();
-    ExecutiveContext::Ptr executiveContext = std::make_shared<ExecutiveContext>();
+    ExecutiveContext::Ptr executiveContext;
     try
     {
-        m_executiveContextFactory->initExecutiveContext(
-            parentBlockInfo, parentBlockInfo.stateRoot, executiveContext);
+        executiveContext = m_executiveContextFactory->createExecutiveContext(
+            parentBlockInfo, parentBlockInfo.stateRoot);
     }
     catch (exception& e)
     {
-        BLOCKVERIFIER_LOG(ERROR) << LOG_DESC("[executeBlock] Error during initExecutiveContext")
+        BLOCKVERIFIER_LOG(ERROR) << LOG_DESC("[executeBlock] Error during createExecutiveContext")
                                  << LOG_KV("EINFO", boost::diagnostic_information(e));
 
-        BOOST_THROW_EXCEPTION(InvalidBlockWithBadStateOrReceipt()
-                              << errinfo_comment("Error during initExecutiveContext"));
+        BOOST_THROW_EXCEPTION(
+            BlockExecuteError() << errinfo_comment("Error during createExecutiveContext"));
     }
 
     auto memoryTableFactory = executiveContext->getMemoryTableFactory();
@@ -399,18 +399,20 @@ ExecutiveContext::Ptr BlockVerifier::parallelExecuteBlock(
 TransactionReceipt::Ptr BlockVerifier::executeTransaction(
     const BlockHeader& blockHeader, dev::eth::Transaction::Ptr _t)
 {
-    ExecutiveContext::Ptr executiveContext = std::make_shared<ExecutiveContext>();
+    ExecutiveContext::Ptr executiveContext;
     BlockInfo blockInfo{blockHeader.hash(), blockHeader.number(), blockHeader.stateRoot()};
     try
     {
-        m_executiveContextFactory->initExecutiveContext(
-            blockInfo, blockHeader.stateRoot(), executiveContext);
+        executiveContext =
+            m_executiveContextFactory->createExecutiveContext(blockInfo, blockHeader.stateRoot());
     }
     catch (exception& e)
     {
         BLOCKVERIFIER_LOG(ERROR)
-            << LOG_DESC("[executeTransaction] Error during execute initExecutiveContext")
+            << LOG_DESC("[executeTransaction] Error during execute createExecutiveContext")
             << LOG_KV("errorMsg", boost::diagnostic_information(e));
+        BOOST_THROW_EXCEPTION(
+            BlockExecuteError() << errinfo_comment("Error during createExecutiveContext"));
     }
     EnvInfo envInfo(blockHeader, m_pNumberHash, 0);
     envInfo.setPrecompiledEngine(executiveContext);

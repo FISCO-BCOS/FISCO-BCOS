@@ -81,6 +81,7 @@ DEV_SIMPLE_EXCEPTION(UnknownParent);
 DEV_SIMPLE_EXCEPTION(InvalidBlockFormat);
 DEV_SIMPLE_EXCEPTION(InvalidBlockHeaderItemCount);
 DEV_SIMPLE_EXCEPTION(InvalidBlockWithBadStateOrReceipt);
+DEV_SIMPLE_EXCEPTION(BlockExecuteError);
 DEV_SIMPLE_EXCEPTION(ErrorBlockHash);
 
 /// block execution related

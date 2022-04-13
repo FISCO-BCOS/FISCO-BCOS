@@ -109,6 +109,7 @@ dev::precompiled::PrecompiledExecResult::Ptr ExecutiveContext::call(
     }
 }
 
+// Note: the table precompiled may call registerPrecompiled in-run-time
 Address ExecutiveContext::registerPrecompiled(std::shared_ptr<precompiled::Precompiled> p)
 {
     auto count = ++m_addressCount;
@@ -117,7 +118,7 @@ Address ExecutiveContext::registerPrecompiled(std::shared_ptr<precompiled::Preco
     {
         p->setPrecompiledExecResultFactory(m_precompiledExecResultFactory);
     }
-    m_address2Precompiled.insert(std::make_pair(address, p));
+    m_address2Precompiled->insert(std::make_pair(address, p));
 
     return address;
 }
@@ -125,14 +126,14 @@ Address ExecutiveContext::registerPrecompiled(std::shared_ptr<precompiled::Preco
 
 bool ExecutiveContext::isPrecompiled(Address address) const
 {
-    return (m_address2Precompiled.count(address));
+    return (m_address2Precompiled->count(address));
 }
 
 std::shared_ptr<precompiled::Precompiled> ExecutiveContext::getPrecompiled(Address address) const
 {
-    auto itPrecompiled = m_address2Precompiled.find(address);
+    auto itPrecompiled = m_address2Precompiled->find(address);
 
-    if (itPrecompiled != m_address2Precompiled.end())
+    if (itPrecompiled != m_address2Precompiled->end())
     {
         return itPrecompiled->second;
     }

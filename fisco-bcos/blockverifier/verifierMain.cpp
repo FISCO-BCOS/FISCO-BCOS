@@ -74,8 +74,13 @@ int main(int argc, char* argv[])
 
     // auto stateFactory = std::make_shared<dev::mptstate::MPTStateFactory>(
     //    dev::u256(0), "test_state", dev::h256(0), dev::WithExisting::Trust);
+    auto precompiledResultFactory =
+        std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+    auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
+    precompiledResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
 
-    auto executiveContextFactory = std::make_shared<dev::blockverifier::ExecutiveContextFactory>();
+    auto executiveContextFactory =
+        std::make_shared<dev::blockverifier::ExecutiveContextFactory>(precompiledResultFactory);
     executiveContextFactory->setStateFactory(stateFactory);
     executiveContextFactory->setStateStorage(storage);
 

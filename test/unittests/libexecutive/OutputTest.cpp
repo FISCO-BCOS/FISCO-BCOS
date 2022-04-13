@@ -60,34 +60,30 @@ struct OutputFixture
         g_BCOSConfig.setSupportedVersion("2.5.0", V2_5_0);
         contractAddress = Address("0xa4adafef4c989e17675479565b9abb5821d81f2c");
         accountAddress = Address("0x420f853b49838bd3e9466c85a4cc3428c960dde1");
-
-        context = std::make_shared<ExecutiveContext>();
         blockInfo.hash = h256(0);
         blockInfo.number = 0;
-        context->setBlockInfo(blockInfo);
 
         auto storage = std::make_shared<MemoryStorage>();
         auto storageStateFactory = std::make_shared<StorageStateFactory>(h256(0));
-        ExecutiveContextFactory factory;
-        auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory>();
-        factory.setStateStorage(storage);
-        factory.setStateFactory(storageStateFactory);
-        factory.setTableFactoryFactory(tableFactoryFactory);
-        factory.initExecutiveContext(blockInfo, h256(0), context);
-        memoryTableFactory = context->getMemoryTableFactory();
-
-        tableFactoryPrecompiled = std::make_shared<dev::precompiled::TableFactoryPrecompiled>();
-        tableFactoryPrecompiled->setMemoryTableFactory(memoryTableFactory);
-        clcPrecompiled = context->getPrecompiled(Address(0x1007));
-        cgPrecompiled = context->getPrecompiled(Address(0x1008));
 
         auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
         auto precompiledExecResultFactory =
             std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
         precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
-        clcPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
-        cgPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
+        ExecutiveContextFactory factory(precompiledExecResultFactory);
 
+        auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory>();
+        factory.setStateStorage(storage);
+        factory.setStateFactory(storageStateFactory);
+        factory.setTableFactoryFactory(tableFactoryFactory);
+        context = factory.createExecutiveContext(blockInfo, h256(0));
+        memoryTableFactory = context->getMemoryTableFactory();
+
+        tableFactoryPrecompiled = std::make_shared<dev::precompiled::TableFactoryPrecompiled>();
+        tableFactoryPrecompiled->setMemoryTableFactory(memoryTableFactory);
+        tableFactoryPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
+        clcPrecompiled = context->getPrecompiled(Address(0x1007));
+        cgPrecompiled = context->getPrecompiled(Address(0x1008));
         // createTable of contract
         std::string tableName("c_" + contractAddress.hex());
         table = memoryTableFactory->createTable(tableName, STORAGE_KEY, STORAGE_VALUE, false);

@@ -26,8 +26,12 @@ struct ConsensusPrecompiledFixture
     {
         blockInfo.hash = h256(0);
         blockInfo.number = 0;
-        context = std::make_shared<ExecutiveContext>();
-        ExecutiveContextFactory factory;
+
+        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
+        auto precompiledExecResultFactory =
+            std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+        precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
+        ExecutiveContextFactory factory(precompiledExecResultFactory);
         // auto storage = std::make_shared<MemoryStorage>();
         auto storageStateFactory = std::make_shared<StorageStateFactory>(h256(0));
         auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory2>();
@@ -40,15 +44,10 @@ struct ConsensusPrecompiledFixture
         factory.setStateStorage(cachedStorage);
         factory.setStateFactory(storageStateFactory);
         factory.setTableFactoryFactory(tableFactoryFactory);
-        factory.initExecutiveContext(blockInfo, h256(0), context);
+        context = factory.createExecutiveContext(blockInfo, h256(0));
         consensusPrecompiled = std::make_shared<ConsensusPrecompiled>();
-        memoryTableFactory = context->getMemoryTableFactory();
-
-        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
-        auto precompiledExecResultFactory =
-            std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
-        precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
         consensusPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
+        memoryTableFactory = context->getMemoryTableFactory();
     }
 
     ~ConsensusPrecompiledFixture() {}

@@ -38,45 +38,12 @@ class ExecutiveContextFactory : public std::enable_shared_from_this<ExecutiveCon
 {
 public:
     typedef std::shared_ptr<ExecutiveContextFactory> Ptr;
-    ExecutiveContextFactory()
-    {
-        m_precompiledContract.insert(std::make_pair(
-            dev::Address(1), dev::eth::PrecompiledContract(
-                                 3000, 0, dev::eth::PrecompiledRegistrar::executor("ecrecover"))));
-        m_precompiledContract.insert(std::make_pair(
-            dev::Address(2), dev::eth::PrecompiledContract(
-                                 60, 12, dev::eth::PrecompiledRegistrar::executor("sha256"))));
-        m_precompiledContract.insert(std::make_pair(
-            dev::Address(3), dev::eth::PrecompiledContract(
-                                 600, 120, dev::eth::PrecompiledRegistrar::executor("ripemd160"))));
-        m_precompiledContract.insert(std::make_pair(
-            dev::Address(4), dev::eth::PrecompiledContract(
-                                 15, 3, dev::eth::PrecompiledRegistrar::executor("identity"))));
-        if (g_BCOSConfig.version() >= V2_5_0)
-        {
-            m_precompiledContract.insert({dev::Address{0x5},
-                dev::eth::PrecompiledContract(dev::eth::PrecompiledRegistrar::pricer("modexp"),
-                    dev::eth::PrecompiledRegistrar::executor("modexp"))});
-            m_precompiledContract.insert({dev::Address{0x6},
-                dev::eth::PrecompiledContract(
-                    150, 0, dev::eth::PrecompiledRegistrar::executor("alt_bn128_G1_add"))});
-            m_precompiledContract.insert({dev::Address{0x7},
-                dev::eth::PrecompiledContract(
-                    6000, 0, dev::eth::PrecompiledRegistrar::executor("alt_bn128_G1_mul"))});
-            m_precompiledContract.insert({dev::Address{0x8},
-                dev::eth::PrecompiledContract(
-                    dev::eth::PrecompiledRegistrar::pricer("alt_bn128_pairing_product"),
-                    dev::eth::PrecompiledRegistrar::executor("alt_bn128_pairing_product"))});
-            m_precompiledContract.insert({dev::Address{0x9},
-                dev::eth::PrecompiledContract(
-                    dev::eth::PrecompiledRegistrar::pricer("blake2_compression"),
-                    dev::eth::PrecompiledRegistrar::executor("blake2_compression"))});
-        }
-    };
+    ExecutiveContextFactory(std::shared_ptr<dev::precompiled::PrecompiledExecResultFactory>
+            _precompiledExecResultFactory);
     virtual ~ExecutiveContextFactory(){};
 
-    virtual void initExecutiveContext(
-        BlockInfo blockInfo, h256 const& stateRoot, ExecutiveContext::Ptr context);
+    virtual ExecutiveContext::Ptr createExecutiveContext(
+        BlockInfo blockInfo, h256 const& stateRoot);
 
     virtual void setStateStorage(dev::storage::Storage::Ptr stateStorage);
 
@@ -88,20 +55,21 @@ public:
         m_tableFactoryFactory = tableFactoryFactory;
     }
 
-    void setPrecompiledExecResultFactory(
-        std::shared_ptr<dev::precompiled::PrecompiledExecResultFactory>
-            _precompiledExecResultFactory);
-
 private:
+    std::shared_ptr<dev::precompiled::PrecompiledExecResultFactory> m_precompiledExecResultFactory;
+    std::shared_ptr<tbb::concurrent_unordered_map<Address,
+        std::shared_ptr<precompiled::Precompiled>, std::hash<Address>>>
+        m_buildInPrecompiledContract;
+
     dev::storage::TableFactoryFactory::Ptr m_tableFactoryFactory;
     dev::storage::Storage::Ptr m_stateStorage;
     std::shared_ptr<dev::executive::StateFactoryInterface> m_stateFactoryInterface;
     std::unordered_map<Address, dev::eth::PrecompiledContract> m_precompiledContract;
 
-    std::shared_ptr<dev::precompiled::PrecompiledExecResultFactory> m_precompiledExecResultFactory;
-
     void setTxGasLimitToContext(ExecutiveContext::Ptr context);
-    void registerUserPrecompiled(ExecutiveContext::Ptr context);
+    void registerUserPrecompiled(std::shared_ptr<tbb::concurrent_unordered_map<Address,
+            std::shared_ptr<precompiled::Precompiled>, std::hash<Address>>>
+            _buildInPrecompiled);
 };
 
 }  // namespace blockverifier

@@ -63,23 +63,21 @@ public:
     {
         blockInfo.hash = h256(0);
         blockInfo.number = 0;
-        context = std::make_shared<ExecutiveContext>();
-        ExecutiveContextFactory factory;
+        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
+        auto precompiledExecResultFactory =
+            std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
+        precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
+        ExecutiveContextFactory factory(precompiledExecResultFactory);
         auto storage = std::make_shared<MemoryStorage>();
         auto storageStateFactory = std::make_shared<StorageStateFactory>(h256(0));
         factory.setStateStorage(storage);
         factory.setStateFactory(storageStateFactory);
         auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory>();
         factory.setTableFactoryFactory(tableFactoryFactory);
-        factory.initExecutiveContext(blockInfo, h256(0), context);
+        context = factory.createExecutiveContext(blockInfo, h256(0));
         memoryTableFactory = context->getMemoryTableFactory();
         parallelConfigPrecompiled = std::dynamic_pointer_cast<ParallelConfigPrecompiled>(
             context->getPrecompiled(Address(0x1006)));
-
-        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
-        auto precompiledExecResultFactory =
-            std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
-        precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
         parallelConfigPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
     };
 

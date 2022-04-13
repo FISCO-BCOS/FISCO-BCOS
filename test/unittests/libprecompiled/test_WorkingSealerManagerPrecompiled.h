@@ -86,7 +86,6 @@ public:
 
     void initWorkingSealerMgrFixture(size_t _epochSealerNum = 4, size_t _epochBlockNum = 10)
     {
-        context = std::make_shared<ExecutiveContext>();
         workingSealerManagerPrecompiled = std::make_shared<WorkingSealerManagerPrecompiled>();
         initContext();
 
@@ -118,7 +117,11 @@ public:
     void initContext()
     {
         // init storage and tables
-        ExecutiveContextFactory factory;
+        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
+        auto precompiledExecResultFactory = std::make_shared<PrecompiledExecResultFactory>();
+        precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
+        ExecutiveContextFactory factory(precompiledExecResultFactory);
+
         auto storageStateFactory = std::make_shared<StorageStateFactory>(h256(0));
         auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory2>();
         auto memStorage = std::make_shared<MemoryStorage2>();
@@ -132,7 +135,7 @@ public:
         BlockInfo blockInfo;
         blockInfo.hash = h256(0);
         blockInfo.number = 0;
-        factory.initExecutiveContext(blockInfo, h256(0), context);
+        context = factory.createExecutiveContext(blockInfo, h256(0));
         memoryTableFactory = context->getMemoryTableFactory();
     }
 

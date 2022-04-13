@@ -44,30 +44,28 @@ struct CRUDPrecompiledFixture
 {
     CRUDPrecompiledFixture()
     {
-        context = std::make_shared<ExecutiveContext>();
         blockInfo.hash = h256(0);
         blockInfo.number = 0;
-        context->setBlockInfo(blockInfo);
 
         auto storage = std::make_shared<MemoryStorage>();
         auto storageStateFactory = std::make_shared<StorageStateFactory>(h256(0));
-        ExecutiveContextFactory factory;
-        auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory>();
-        factory.setStateStorage(storage);
-        factory.setStateFactory(storageStateFactory);
-        factory.setTableFactoryFactory(tableFactoryFactory);
-        factory.initExecutiveContext(blockInfo, h256(0), context);
-        memoryTableFactory = context->getMemoryTableFactory();
-
-        tableFactoryPrecompiled = std::make_shared<dev::precompiled::TableFactoryPrecompiled>();
-        tableFactoryPrecompiled->setMemoryTableFactory(memoryTableFactory);
-        crudPrecompiled = context->getPrecompiled(Address(0x1002));
 
         auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
         auto precompiledExecResultFactory = std::make_shared<PrecompiledExecResultFactory>();
         precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
-        crudPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
+        ExecutiveContextFactory factory(precompiledExecResultFactory);
+
+        auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory>();
+        factory.setStateStorage(storage);
+        factory.setStateFactory(storageStateFactory);
+        factory.setTableFactoryFactory(tableFactoryFactory);
+        context = factory.createExecutiveContext(blockInfo, h256(0));
+        memoryTableFactory = context->getMemoryTableFactory();
+
+        tableFactoryPrecompiled = std::make_shared<dev::precompiled::TableFactoryPrecompiled>();
         tableFactoryPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
+        tableFactoryPrecompiled->setMemoryTableFactory(memoryTableFactory);
+        crudPrecompiled = context->getPrecompiled(Address(0x1002));
     }
 
     ~CRUDPrecompiledFixture() {}

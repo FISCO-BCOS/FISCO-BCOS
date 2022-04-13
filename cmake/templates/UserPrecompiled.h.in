@@ -25,17 +25,17 @@
 
     void
     dev::blockverifier::ExecutiveContextFactory::registerUserPrecompiled(
-        dev::blockverifier::ExecutiveContext::Ptr context)
+        std::shared_ptr<tbb::concurrent_unordered_map<Address,
+            std::shared_ptr<precompiled::Precompiled>, std::hash<Address>>>
+            _buildInPrecompiled)
 {
     // Address should in [0x5001,0xffff]
-    // context->setAddress2Precompiled(Address(0x5001),
-    // std::make_shared<dev::precompiled::HelloWorldPrecompiled>());
-    context->setAddress2Precompiled(Address(dev::precompiled::DAG_TRANSFER_ADDRESS),
-        std::make_shared<dev::precompiled::DagTransferPrecompiled>());
-    context->setAddress2Precompiled(Address(dev::precompiled::PAILLIER_ADDRESS),
-        std::make_shared<dev::precompiled::PaillierPrecompiled>());
-    context->setAddress2Precompiled(Address(dev::precompiled::GROUP_SIG_ADDRESS),
-        std::make_shared<dev::precompiled::GroupSigPrecompiled>());
-    context->setAddress2Precompiled(Address(dev::precompiled::RING_SIG_ADDRESS),
-        std::make_shared<dev::precompiled::RingSigPrecompiled>());
+    _buildInPrecompiled->insert(std::make_pair(dev::precompiled::DAG_TRANSFER_ADDRESS,
+        std::make_shared<dev::precompiled::DagTransferPrecompiled>()));
+    _buildInPrecompiled->insert(std::make_pair(dev::precompiled::PAILLIER_ADDRESS,
+        std::make_shared<dev::precompiled::PaillierPrecompiled>()));
+    _buildInPrecompiled->insert(std::make_pair(dev::precompiled::GROUP_SIG_ADDRESS,
+        std::make_shared<dev::precompiled::GroupSigPrecompiled>()));
+    _buildInPrecompiled->insert(std::make_pair(dev::precompiled::RING_SIG_ADDRESS,
+        std::make_shared<dev::precompiled::RingSigPrecompiled>()));
 }

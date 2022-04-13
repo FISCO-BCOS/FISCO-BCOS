@@ -467,23 +467,22 @@ void DBInitializer::createExecutiveContext()
             "createExecutiveContext Failed for storage has not been initialized");
         return;
     }
-
-    DBInitializer_LOG(INFO) << LOG_DESC("createExecutiveContext...");
-    m_executiveContextFactory = std::make_shared<ExecutiveContextFactory>();
-    /// storage
-    m_executiveContextFactory->setStateStorage(m_storage);
-    // mpt or storage
-    m_executiveContextFactory->setStateFactory(m_stateFactory);
-    m_executiveContextFactory->setTableFactoryFactory(m_tableFactoryFactory);
     // create precompiled related factory
     auto precompiledResultFactory =
         std::make_shared<dev::precompiled::PrecompiledExecResultFactory>();
     auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(
         m_param->mutableGenesisParam().evmFlags);
     precompiledResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
-    m_executiveContextFactory->setPrecompiledExecResultFactory(precompiledResultFactory);
     DBInitializer_LOG(INFO) << LOG_DESC(
         "create precompiledGasFactory and precompiledResultFactory");
+
+    DBInitializer_LOG(INFO) << LOG_DESC("createExecutiveContext...");
+    m_executiveContextFactory = std::make_shared<ExecutiveContextFactory>(precompiledResultFactory);
+    /// storage
+    m_executiveContextFactory->setStateStorage(m_storage);
+    // mpt or storage
+    m_executiveContextFactory->setStateFactory(m_stateFactory);
+    m_executiveContextFactory->setTableFactoryFactory(m_tableFactoryFactory);
 
     DBInitializer_LOG(INFO) << LOG_DESC("createExecutiveContext SUCC");
 }

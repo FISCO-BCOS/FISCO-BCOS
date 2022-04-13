@@ -47,20 +47,20 @@ struct CNSPrecompiledFixture
     {
         blockInfo.hash = h256(0);
         blockInfo.number = 0;
-        context = std::make_shared<ExecutiveContext>();
-        ExecutiveContextFactory factory;
+
+        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
+        auto precompiledExecResultFactory = std::make_shared<PrecompiledExecResultFactory>();
+        precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
+        ExecutiveContextFactory factory(precompiledExecResultFactory);
+
         auto storage = std::make_shared<MemoryStorage>();
         auto storageStateFactory = std::make_shared<StorageStateFactory>(h256(0));
         auto tableFactoryFactory = std::make_shared<MemoryTableFactoryFactory2>();
         factory.setStateStorage(storage);
         factory.setStateFactory(storageStateFactory);
         factory.setTableFactoryFactory(tableFactoryFactory);
-        factory.initExecutiveContext(blockInfo, h256(0), context);
+        context = factory.createExecutiveContext(blockInfo, h256(0));
         cnsPrecompiled = std::make_shared<CNSPrecompiled>();
-
-        auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
-        auto precompiledExecResultFactory = std::make_shared<PrecompiledExecResultFactory>();
-        precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
         cnsPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
         memoryTableFactory = context->getMemoryTableFactory();
     }

@@ -65,7 +65,16 @@ class ExecutiveContext : public std::enable_shared_from_this<ExecutiveContext>
 public:
     typedef std::shared_ptr<ExecutiveContext> Ptr;
     using ParallelConfigKey = std::pair<Address, uint32_t>;
-    ExecutiveContext() : m_addressCount(0x10000) {}
+    ExecutiveContext()
+      : m_address2Precompiled(std::make_shared<tbb::concurrent_unordered_map<Address,
+                std::shared_ptr<precompiled::Precompiled>, std::hash<Address>>>()),
+        m_addressCount(0x10000)
+    {}
+    ExecutiveContext(std::shared_ptr<tbb::concurrent_unordered_map<Address,
+            std::shared_ptr<precompiled::Precompiled>, std::hash<Address>>>
+            _address2Precompiled)
+      : m_address2Precompiled(_address2Precompiled)
+    {}
     virtual ~ExecutiveContext()
     {
         if (m_memoryTableFactory)
@@ -90,7 +99,7 @@ public:
         {
             precompiled->setPrecompiledExecResultFactory(m_precompiledExecResultFactory);
         }
-        m_address2Precompiled.insert(std::make_pair(address, precompiled));
+        m_address2Precompiled->insert(std::make_pair(address, precompiled));
     }
 
     void registerParallelPrecompiled(std::shared_ptr<dev::precompiled::Precompiled> _precompiled);
@@ -136,9 +145,10 @@ public:
     void setStateStorage(std::shared_ptr<dev::storage::Storage> _stateStorage);
 
 private:
-    tbb::concurrent_unordered_map<Address, std::shared_ptr<precompiled::Precompiled>,
-        std::hash<Address>>
+    std::shared_ptr<tbb::concurrent_unordered_map<Address,
+        std::shared_ptr<precompiled::Precompiled>, std::hash<Address>>>
         m_address2Precompiled;
+
     std::atomic<int> m_addressCount;
     BlockInfo m_blockInfo;
     std::shared_ptr<dev::executive::StateFace> m_stateFace;

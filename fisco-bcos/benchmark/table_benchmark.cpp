@@ -125,6 +125,11 @@ int main(int argc, const char* argv[])
     auto context = std::make_shared<ExecutiveContext>();
     context->setMemoryTableFactory(tableFactory);
     auto tableFactoryPrecompiled = std::make_shared<precompiled::TableFactoryPrecompiled>();
+    auto precompiledGasFactory = std::make_shared<dev::precompiled::PrecompiledGasFactory>(0);
+    auto precompiledExecResultFactory = std::make_shared<PrecompiledExecResultFactory>();
+    precompiledExecResultFactory->setPrecompiledGasFactory(precompiledGasFactory);
+    tableFactoryPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
+
     tableFactoryPrecompiled->setMemoryTableFactory(tableFactory);
     context->setAddress2Precompiled(Address(0x1001), tableFactoryPrecompiled);
     // BlockInfo blockInfo{h256(), 1, h256()};
@@ -134,6 +139,7 @@ int main(int argc, const char* argv[])
     Address origin(1);
     auto kvTableFactoryPrecompiled = std::make_shared<precompiled::KVTableFactoryPrecompiled>();
     kvTableFactoryPrecompiled->setMemoryTableFactory(tableFactory);
+    kvTableFactoryPrecompiled->setPrecompiledExecResultFactory(precompiledExecResultFactory);
 
     auto statetable = tableFactory->openTable(SYS_CURRENT_STATE);
     auto entry = statetable->newEntry();
