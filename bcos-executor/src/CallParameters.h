@@ -50,7 +50,8 @@ struct CallParameters
 
     int32_t status = 0;  // by response
     Type type;
-    bool staticCall = false;  // common field
-    bool create = false;      // by request, is create
+    bool staticCall = false;        // common field
+    bool create = false;            // by request, is creation
+    bool internalCreate = false;    // by internal precompiled request, is creation
 };
 }  // namespace bcos::executor

@@ -54,10 +54,16 @@ inline void getErrorCodeOut(bytes& out, int const& result, const CodecWrapper& _
     }
     out = _codec.encode(s256(result));
 }
-inline std::string getTableName(const std::string& _tableName)
+
+inline std::string getTableName(const std::string_view& _tableName)
 {
     auto tableName = (_tableName[0] == '/') ? _tableName.substr(1) : _tableName;
-    return USER_TABLE_PREFIX + tableName;
+    return USER_TABLE_PREFIX + std::string(tableName);
+}
+
+inline std::string getActualTableName(const std::string& _tableName)
+{
+    return "u_" + _tableName;
 }
 
 inline std::string trimHexPrefix(const std::string& _hex)
@@ -69,12 +75,12 @@ inline std::string trimHexPrefix(const std::string& _hex)
     return _hex;
 }
 
-void checkNameValidate(std::string_view tableName, std::vector<std::string>& keyFieldList,
+void checkNameValidate(std::string_view tableName, std::string_view _keyField,
     std::vector<std::string>& valueFieldList);
 void checkLengthValidate(std::string_view field_value, int32_t max_length, int32_t errorCode);
 
-void checkCreateTableParam(
-    const std::string& _tableName, std::string& _keyField, std::string& _valueField);
+void checkCreateTableParam(const std::string_view& _tableName, std::string& _keyField,
+    const std::variant<std::string, std::vector<std::string>>& _valueField);
 
 uint32_t getFuncSelector(std::string const& _functionName, const crypto::Hash::Ptr& _hashImpl);
 uint32_t getParamFunc(bytesConstRef _param);
@@ -85,28 +91,24 @@ bcos::precompiled::ContractStatus getContractStatus(
     std::shared_ptr<bcos::executor::TransactionExecutive> _executive,
     std::string const& _tableName);
 
-bytesConstRef getParamData(bytesConstRef _param);
+inline bytesConstRef getParamData(bytesConstRef _param)
+{
+    return _param.getCroppedData(4);
+}
 
 uint64_t getEntriesCapacity(precompiled::EntriesPtr _entries);
-
-void sortKeyValue(std::vector<std::string>& _v);
 
 bool checkPathValid(std::string const& _absolutePath);
 
 std::pair<std::string, std::string> getParentDirAndBaseName(const std::string& _absolutePath);
 
-std::pair<std::string, std::string> getLinkNameAndVersion(const std::string& _absolutePath);
-
-bool recursiveBuildDir(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-    const std::string& _absoluteDir);
-
 executor::CallParameters::UniquePtr externalRequest(
-    const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef _param,
-    const std::string& _origin, const std::string& _sender, const std::string& _to, bool _isStatic,
+    const std::shared_ptr<executor::TransactionExecutive>& _executive, const bytesConstRef& _param,
+    std::string_view _origin, std::string_view _sender, std::string_view _to, bool _isStatic,
     bool _isCreate, int64_t gasLeft);
 
 s256 externalTouchNewFile(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-    const std::string& _origin, const std::string& _sender, const std::string& _filePath,
-    const std::string& _fileType, int64_t gasLeft);
+    std::string_view _origin, std::string_view _sender, std::string_view _filePath,
+    std::string_view _fileType, int64_t gasLeft);
 }  // namespace precompiled
 }  // namespace bcos

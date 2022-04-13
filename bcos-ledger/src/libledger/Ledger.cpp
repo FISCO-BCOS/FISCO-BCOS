@@ -1573,11 +1573,10 @@ void Ledger::buildDir(const std::string& _absoluteDir)
             getSysBaseName(precompiled::SYS_CONFIG_NAME),
             getSysBaseName(precompiled::CONSENSUS_NAME),
             getSysBaseName(precompiled::CONTRACT_AUTH_NAME),
-            getSysBaseName(precompiled::PARALLEL_CONFIG_NAME),
             getSysBaseName(precompiled::KV_TABLE_NAME),
             getSysBaseName(precompiled::CRYPTO_NAME),
             getSysBaseName(precompiled::BFS_NAME),
-            getSysBaseName(precompiled::TABLE_NAME)
+            getSysBaseName(precompiled::TABLE_MANAGER_NAME)
         });
         // clang-format on
         for (const auto& contract : sysContracts)

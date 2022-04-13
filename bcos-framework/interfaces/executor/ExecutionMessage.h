@@ -83,6 +83,9 @@ public:
     virtual bool create() const = 0;
     virtual void setCreate(bool create) = 0;
 
+    virtual bool internalCreate() const = 0;
+    virtual void setInternalCreate(bool internalCreate) = 0;
+
     // -----------------------------------------------
     // Request / Response common fields
     // -----------------------------------------------

@@ -1331,6 +1331,7 @@ std::unique_ptr<protocol::ExecutionMessage> TransactionExecutor::toExecutionResu
     message->setData(std::move(params->data));
     message->setStaticCall(params->staticCall);
     message->setCreate(params->create);
+    message->setInternalCreate(params->internalCreate);
     if (params->createSalt)
     {
         message->setCreateSalt(*params->createSalt);
@@ -1456,6 +1457,7 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->receiveAddress = input.to();
     callParameters->codeAddress = input.to();
     callParameters->create = input.create();
+    callParameters->internalCreate = input.internalCreate();
     callParameters->data = input.takeData();
     callParameters->gas = input.gasAvailable();
     callParameters->staticCall = staticCall;
@@ -1484,6 +1486,7 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->gas = input.gasAvailable();
     callParameters->staticCall = input.staticCall();
     callParameters->create = input.create();
+    callParameters->internalCreate = input.internalCreate();
     callParameters->data = tx.input().toBytes();
     callParameters->keyLocks = input.takeKeyLocks();
     callParameters->abi = tx.abi();

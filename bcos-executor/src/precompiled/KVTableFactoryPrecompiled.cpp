@@ -141,6 +141,7 @@ void KVTableFactoryPrecompiled::createTable(
     }
     auto ret = _executive->storage().openTable(newTableName);
     auto sysTable = _executive->storage().openTable(StorageInterface::SYS_TABLES);
+    // FIXME: here is a trick to update table value fields
     auto sysEntry = sysTable->getRow(newTableName);
     if (!ret || !sysEntry)
     {
