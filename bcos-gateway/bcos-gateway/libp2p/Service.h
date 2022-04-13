@@ -191,7 +191,6 @@ private:
     bool m_run = false;
 
     std::map<int32_t, MessageHandler> m_msgHandlers;
-    mutable SharedMutex x_msgHandlers;
 
     // the local protocol
     bcos::protocol::ProtocolInfo::ConstPtr m_localProtocol;

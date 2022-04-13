@@ -12,8 +12,8 @@ hunter_config(bcos-crypto VERSION 3.0.0-rc3-local
 
 hunter_config(bcos-boostssl
     VERSION 3.0.0-rc3-local
-    URL https://github.com/LucasLi1024/bcos-boostssl/archive/8d7d64ba768f7c264d6f65076fd49bf7a2992759.tar.gz
-	SHA1 c82670d85d874dfddc35970acca44df38e6d7c67
+    URL https://github.com/LucasLi1024/bcos-boostssl/archive/203ece604d6b1d420bf72853c0c1178b193114cf.tar.gz
+	SHA1 3b028d520278070c5ed7862cfeb609086237ad91
     CMAKE_ARGS HUNTER_PACKAGE_LOG_BUILD=ON HUNTER_PACKAGE_LOG_INSTALL=ON
 )
 

@@ -752,7 +752,7 @@ generate_common_ini() {
     enable=true
     log_path=./log
     ; info debug trace
-    level=TRACE
+    level=DEBUG
     ; MB
     max_log_file_size=200
 EOF
