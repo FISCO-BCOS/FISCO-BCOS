@@ -19,12 +19,12 @@
  * @date 2021-10-28
  */
 #include "AMOPClient.h"
+#include <bcos-boostssl/interfaces/MessageFace.h>
 #include <bcos-framework/interfaces/gateway/GatewayTypeDef.h>
 #include <bcos-framework/interfaces/protocol/CommonError.h>
 #include <bcos-protocol/amop/TopicItem.h>
 #include <bcos-rpc/Common.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
-#include <bcos-boostssl/interfaces/MessageFace.h>
 using namespace bcos;
 using namespace bcos::rpc;
 using namespace bcos::boostssl;
@@ -74,7 +74,7 @@ void AMOPClient::onRecvSubTopics(
     std::shared_ptr<MessageFace> _msg, std::shared_ptr<WsSession> _session)
 {
     auto topicInfo = std::string(_msg->payload()->begin(), _msg->payload()->end());
-    auto seq = std::string(_msg->seq().begin(), _msg->seq().end());
+    auto seq = _msg->seq();
     if (gatewayInactivated())
     {
         AMOP_CLIENT_LOG(WARNING) << LOG_BADGE("onRecvSubTopics: the gateway in-activated")
@@ -101,8 +101,8 @@ void AMOPClient::onRecvAMOPRequest(
     std::shared_ptr<MessageFace> _msg, std::shared_ptr<WsSession> _session)
 {
     auto seq = _msg->seq();
-    auto amopReq =
-        m_requestFactory->buildRequest(bytesConstRef(_msg->payload()->data(), _msg->payload()->size()));
+    auto amopReq = m_requestFactory->buildRequest(
+        bytesConstRef(_msg->payload()->data(), _msg->payload()->size()));
     AMOP_CLIENT_LOG(DEBUG) << LOG_DESC("onRecvAMOPRequest") << LOG_KV("seq", seq)
                            << LOG_KV("topic", amopReq->topic());
 
@@ -133,7 +133,8 @@ void AMOPClient::onRecvAMOPRequest(
                 {
                     return;
                 }
-                auto responseMsg = dynamic_pointer_cast<WsMessage>(amopClient->m_wsMessageFactory->buildMessage());
+                auto responseMsg =
+                    dynamic_pointer_cast<WsMessage>(amopClient->m_wsMessageFactory->buildMessage());
                 auto orgSeq = seq;
                 if (_error && _error->errorCode() != bcos::protocol::CommonError::SUCCESS)
                 {
@@ -152,7 +153,8 @@ void AMOPClient::onRecvAMOPRequest(
                     }
                     responseMsg->setStatus(errorCode);
                     // constructor the response
-                    responseMsg->setPayload(std::make_shared<bytes>(errorMsg.begin(), errorMsg.end()));
+                    responseMsg->setPayload(
+                        std::make_shared<bytes>(errorMsg.begin(), errorMsg.end()));
                     // recover the seq
                     responseMsg->setSeq(orgSeq);
                     AMOP_CLIENT_LOG(ERROR)
@@ -165,7 +167,8 @@ void AMOPClient::onRecvAMOPRequest(
                 }
                 // Note: the decode function will recover m_seq of wsMessage, so it should be
                 // better not set orgSeq into the responseMsg before decode
-                auto size = responseMsg->decode(bytesConstRef(_responseData->data(), _responseData->size()));
+                auto size = responseMsg->decode(
+                    bytesConstRef(_responseData->data(), _responseData->size()));
                 AMOP_CLIENT_LOG(DEBUG)
                     << LOG_BADGE("onRecvAMOPRequest")
                     << LOG_DESC("AMOP async send message: receive message response for sdk")
@@ -183,8 +186,8 @@ void AMOPClient::onRecvAMOPRequest(
         });
 }
 
-bool AMOPClient::trySendAMOPRequestToLocalNode(
-    std::shared_ptr<WsSession> _session, std::string const& _topic, std::shared_ptr<MessageFace> _msg)
+bool AMOPClient::trySendAMOPRequestToLocalNode(std::shared_ptr<WsSession> _session,
+    std::string const& _topic, std::shared_ptr<MessageFace> _msg)
 {
     // the local node has no client subscribe to the topic
     auto selectedSession = randomChooseSession(_topic);
@@ -203,7 +206,8 @@ bool AMOPClient::trySendAMOPRequestToLocalNode(
                     return;
                 }
                 auto responseMsg = amopClient->m_wsMessageFactory->buildMessage();
-                auto size = responseMsg->decode(bytesConstRef(_responseData->data(), _responseData->size()));
+                auto size = responseMsg->decode(
+                    bytesConstRef(_responseData->data(), _responseData->size()));
                 auto seq = responseMsg->seq();
                 _session->asyncSendMessage(responseMsg);
                 AMOP_CLIENT_LOG(DEBUG)
@@ -227,8 +231,8 @@ bool AMOPClient::trySendAMOPRequestToLocalNode(
 void AMOPClient::onRecvAMOPBroadcast(std::shared_ptr<MessageFace> _msg, std::shared_ptr<WsSession>)
 {
     auto seq = _msg->seq();
-    auto amopReq =
-        m_requestFactory->buildRequest(bytesConstRef(_msg->payload()->data(), _msg->payload()->size()));
+    auto amopReq = m_requestFactory->buildRequest(
+        bytesConstRef(_msg->payload()->data(), _msg->payload()->size()));
     // broadcast message to the sdks connected to the local node
     broadcastAMOPMessage(amopReq->topic(), _msg);
     // broadcast messsage to sdks connected to other nodes
@@ -243,7 +247,8 @@ void AMOPClient::sendMessageToClient(std::string const& _topic,
     std::function<void(Error::Ptr&&, bytesPointer)> _callback)
 {
     _selectSession->asyncSendMessage(_msg, Options(30000),
-        [_msg, _topic, _callback](bcos::Error::Ptr _error, std::shared_ptr<boostssl::MessageFace> _responseMsg,
+        [_msg, _topic, _callback](bcos::Error::Ptr _error,
+            std::shared_ptr<boostssl::MessageFace> _responseMsg,
             std::shared_ptr<WsSession> _session) {
             auto seq = _msg->seq();
             if (_error && _error->errorCode() != bcos::protocol::CommonError::SUCCESS)
@@ -287,7 +292,8 @@ void AMOPClient::asyncNotifyAMOPMessage(std::string const& _topic, bytesConstRef
 
     if (!clientSession)
     {
-        auto responseMessage = std::dynamic_pointer_cast<WsMessage>(m_wsMessageFactory->buildMessage());
+        auto responseMessage =
+            std::dynamic_pointer_cast<WsMessage>(m_wsMessageFactory->buildMessage());
         responseMessage->setStatus(bcos::protocol::CommonError::NotFoundClientByTopicDispatchMsg);
         responseMessage->setPacketType(AMOPClientMessageType::AMOP_RESPONSE);
         auto buffer = std::make_shared<bcos::bytes>();
@@ -487,8 +493,8 @@ void AMOPClient::pingGatewayAndNotifyTopics()
     m_gatewayActivated.store(true);
 }
 
-bool AMOPClient::onGatewayInactivated(std::shared_ptr<MessageFace> _msg,
-    std::shared_ptr<boostssl::ws::WsSession> _session)
+bool AMOPClient::onGatewayInactivated(
+    std::shared_ptr<MessageFace> _msg, std::shared_ptr<boostssl::ws::WsSession> _session)
 {
     auto activeEndPoints = getActiveGatewayEndPoints();
     // the gateway is in-activated
