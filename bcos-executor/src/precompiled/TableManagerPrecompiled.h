@@ -41,6 +41,9 @@ public:
     void createTable(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
         const PrecompiledGas::Ptr& gasPricer, const std::string& _origin, int64_t gasLeft);
+    void appendColumns(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
+        const PrecompiledGas::Ptr& gasPricer);
     //     void select(const std::shared_ptr<executor::TransactionExecutive>& _executive,
     //         bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
     //         const PrecompiledGas::Ptr& gasPricer);

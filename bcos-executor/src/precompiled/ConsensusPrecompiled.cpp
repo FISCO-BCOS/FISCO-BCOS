@@ -51,7 +51,7 @@ ConsensusPrecompiled::ConsensusPrecompiled(crypto::Hash::Ptr _hashImpl) : Precom
 
 std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
     std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
-    const std::string&, const std::string&, int64_t)
+    const std::string&, const std::string& _sender, int64_t)
 {
     // parse function name
     uint32_t func = getParamFunc(_param);
@@ -64,6 +64,15 @@ std::shared_ptr<PrecompiledExecResult> ConsensusPrecompiled::call(
 
     auto blockContext = _executive->blockContext().lock();
     auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+
+    if (blockContext->isAuthCheck() && !checkSenderFromAuth(_sender))
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ConsensusPrecompiled")
+                               << LOG_DESC("sender is not from sys") << LOG_KV("sender", _sender);
+        getErrorCodeOut(callResult->mutableExecResult(), CODE_NO_AUTHORIZED, codec);
+        callResult->setGas(gasPricer->calTotalGas());
+        return callResult;
+    }
 
     int result = 0;
     if (func == name2Selector[CSS_METHOD_ADD_SEALER])
@@ -361,6 +370,10 @@ void ConsensusPrecompiled::showConsensusTable(
         return;
     }
 
+    if (c_fileLogLevel < bcos::LogLevel::TRACE)
+    {
+        return;
+    }
     auto consensusList = entry->getObject<ConsensusNodeList>();
 
     std::stringstream s;

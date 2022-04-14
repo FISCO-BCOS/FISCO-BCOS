@@ -29,11 +29,11 @@ using namespace bcos::storage;
 
 /// wasm
 const char* const AUTH_METHOD_GET_ADMIN = "getAdmin(string)";
-const char* const AUTH_METHOD_SET_ADMIN = "resetAdmin(string,address)";
+const char* const AUTH_METHOD_SET_ADMIN = "resetAdmin(string,string)";
 const char* const AUTH_METHOD_SET_AUTH_TYPE = "setMethodAuthType(string,bytes4,uint8)";
-const char* const AUTH_METHOD_OPEN_AUTH = "openMethodAuth(string,bytes4,address)";
-const char* const AUTH_METHOD_CLOSE_AUTH = "closeMethodAuth(string,bytes4,address)";
-const char* const AUTH_METHOD_CHECK_AUTH = "checkMethodAuth(string,bytes4,address)";
+const char* const AUTH_METHOD_OPEN_AUTH = "openMethodAuth(string,bytes4,string)";
+const char* const AUTH_METHOD_CLOSE_AUTH = "closeMethodAuth(string,bytes4,string)";
+const char* const AUTH_METHOD_CHECK_AUTH = "checkMethodAuth(string,bytes4,string)";
 /// evm
 const char* const AUTH_METHOD_GET_ADMIN_ADD = "getAdmin(address)";
 const char* const AUTH_METHOD_SET_ADMIN_ADD = "resetAdmin(address,address)";
@@ -41,12 +41,19 @@ const char* const AUTH_METHOD_SET_AUTH_TYPE_ADD = "setMethodAuthType(address,byt
 const char* const AUTH_METHOD_OPEN_AUTH_ADD = "openMethodAuth(address,bytes4,address)";
 const char* const AUTH_METHOD_CLOSE_AUTH_ADD = "closeMethodAuth(address,bytes4,address)";
 const char* const AUTH_METHOD_CHECK_AUTH_ADD = "checkMethodAuth(address,bytes4,address)";
+const char* const AUTH_METHOD_SET_CONTRACT = "setContractStatus(address,bool)";
 
+/// deploy
 const char* const AUTH_METHOD_GET_DEPLOY_TYPE = "deployType()";
 const char* const AUTH_METHOD_SET_DEPLOY_TYPE = "setDeployAuthType(uint8)";
-const char* const AUTH_OPEN_DEPLOY_ACCOUNT = "openDeployAuth(address)";
-const char* const AUTH_CLOSE_DEPLOY_ACCOUNT = "closeDeployAuth(address)";
-const char* const AUTH_CHECK_DEPLOY_ACCESS = "hasDeployAuth(address)";
+/// evm
+const char* const AUTH_OPEN_DEPLOY_ACCOUNT = "openDeployAuth(string)";
+const char* const AUTH_CLOSE_DEPLOY_ACCOUNT = "closeDeployAuth(string)";
+const char* const AUTH_CHECK_DEPLOY_ACCESS = "hasDeployAuth(string)";
+/// wasm
+const char* const AUTH_OPEN_DEPLOY_ACCOUNT_ADD = "openDeployAuth(address)";
+const char* const AUTH_CLOSE_DEPLOY_ACCOUNT_ADD = "closeDeployAuth(address)";
+const char* const AUTH_CHECK_DEPLOY_ACCESS_ADD = "hasDeployAuth(address)";
 
 ContractAuthPrecompiled::ContractAuthPrecompiled(crypto::Hash::Ptr _hashImpl)
   : Precompiled(_hashImpl)
@@ -73,16 +80,26 @@ ContractAuthPrecompiled::ContractAuthPrecompiled(crypto::Hash::Ptr _hashImpl)
         getFuncSelector(AUTH_METHOD_CLOSE_AUTH_ADD, _hashImpl);
     name2Selector[AUTH_METHOD_CHECK_AUTH_ADD] =
         getFuncSelector(AUTH_METHOD_CHECK_AUTH_ADD, _hashImpl);
+    name2Selector[AUTH_METHOD_SET_CONTRACT] = getFuncSelector(AUTH_METHOD_SET_CONTRACT, _hashImpl);
 
     /// deploy
     name2Selector[AUTH_METHOD_GET_DEPLOY_TYPE] =
         getFuncSelector(AUTH_METHOD_GET_DEPLOY_TYPE, _hashImpl);
     name2Selector[AUTH_METHOD_SET_DEPLOY_TYPE] =
         getFuncSelector(AUTH_METHOD_SET_DEPLOY_TYPE, _hashImpl);
+
+    /// wasm deploy auth
     name2Selector[AUTH_OPEN_DEPLOY_ACCOUNT] = getFuncSelector(AUTH_OPEN_DEPLOY_ACCOUNT, _hashImpl);
     name2Selector[AUTH_CLOSE_DEPLOY_ACCOUNT] =
         getFuncSelector(AUTH_CLOSE_DEPLOY_ACCOUNT, _hashImpl);
     name2Selector[AUTH_CHECK_DEPLOY_ACCESS] = getFuncSelector(AUTH_CHECK_DEPLOY_ACCESS, _hashImpl);
+    /// evm deploy auth
+    name2Selector[AUTH_OPEN_DEPLOY_ACCOUNT_ADD] =
+        getFuncSelector(AUTH_OPEN_DEPLOY_ACCOUNT_ADD, _hashImpl);
+    name2Selector[AUTH_CLOSE_DEPLOY_ACCOUNT_ADD] =
+        getFuncSelector(AUTH_CLOSE_DEPLOY_ACCOUNT_ADD, _hashImpl);
+    name2Selector[AUTH_CHECK_DEPLOY_ACCESS_ADD] =
+        getFuncSelector(AUTH_CHECK_DEPLOY_ACCESS_ADD, _hashImpl);
 }
 
 std::shared_ptr<PrecompiledExecResult> ContractAuthPrecompiled::call(
@@ -141,17 +158,24 @@ std::shared_ptr<PrecompiledExecResult> ContractAuthPrecompiled::call(
     {
         setDeployType(_executive, data, callResult, _sender, gasPricer);
     }
-    else if (func == name2Selector[AUTH_OPEN_DEPLOY_ACCOUNT])
+    else if (func == name2Selector[AUTH_OPEN_DEPLOY_ACCOUNT] ||
+             func == name2Selector[AUTH_OPEN_DEPLOY_ACCOUNT_ADD])
     {
         openDeployAuth(_executive, data, callResult, _sender, gasPricer);
     }
-    else if (func == name2Selector[AUTH_CLOSE_DEPLOY_ACCOUNT])
+    else if (func == name2Selector[AUTH_CLOSE_DEPLOY_ACCOUNT] ||
+             func == name2Selector[AUTH_CLOSE_DEPLOY_ACCOUNT_ADD])
     {
         closeDeployAuth(_executive, data, callResult, _sender, gasPricer);
     }
-    else if (func == name2Selector[AUTH_CHECK_DEPLOY_ACCESS])
+    else if (func == name2Selector[AUTH_CHECK_DEPLOY_ACCESS] ||
+             func == name2Selector[AUTH_CHECK_DEPLOY_ACCESS_ADD])
     {
         hasDeployAuth(_executive, data, callResult);
+    }
+    else if (func == name2Selector[AUTH_METHOD_SET_CONTRACT])
+    {
+        setContractStatus(_executive, data, callResult, _sender, gasPricer);
     }
     else
     {
@@ -204,15 +228,17 @@ void ContractAuthPrecompiled::resetAdmin(
     const PrecompiledGas::Ptr& gasPricer)
 {
     std::string path;
-    Address admin;
+    std::string admin;
     auto blockContext = _executive->blockContext().lock();
     auto codec =
         std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     if (!blockContext->isWasm())
     {
         Address contractAddress;
-        codec->decode(data, contractAddress, admin);
+        Address adminAddress;
+        codec->decode(data, contractAddress, adminAddress);
         path = contractAddress.hex();
+        admin = adminAddress.hex();
     }
     else
     {
@@ -220,7 +246,7 @@ void ContractAuthPrecompiled::resetAdmin(
     }
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthPrecompiled") << LOG_DESC("resetAdmin")
                            << LOG_KV("path", path) << LOG_KV("admin", admin);
-    if (!checkSender(_sender))
+    if (!checkSenderFromAuth(_sender))
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthPrecompiled")
                                << LOG_DESC("sender is not from sys") << LOG_KV("path", path)
@@ -238,7 +264,7 @@ void ContractAuthPrecompiled::resetAdmin(
             protocol::PrecompiledError() << errinfo_comment("Contract address not found."));
     }
     auto newEntry = table->newEntry();
-    newEntry.setField(SYS_VALUE, admin.hex());
+    newEntry.setField(SYS_VALUE, admin);
     table->setRow(ADMIN_FIELD, std::move(newEntry));
     gasPricer->updateMemUsed(1);
     gasPricer->appendOperation(InterfaceOpcode::Set);
@@ -337,15 +363,17 @@ bool ContractAuthPrecompiled::checkMethodAuth(
 {
     std::string path;
     string32 _func;
-    Address account;
+    std::string account;
     auto blockContext = _executive->blockContext().lock();
     auto codec =
         std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     if (!blockContext->isWasm())
     {
         Address contractAddress;
-        codec->decode(data, contractAddress, _func, account);
+        Address accountAddress;
+        codec->decode(data, contractAddress, _func, accountAddress);
         path = contractAddress.hex();
+        account = accountAddress.hex();
     }
     else
     {
@@ -357,7 +385,7 @@ bool ContractAuthPrecompiled::checkMethodAuth(
 
 bool ContractAuthPrecompiled::checkMethodAuth(
     const std::shared_ptr<executor::TransactionExecutive>& _executive, const std::string& _path,
-    bytesRef func, const Address& account)
+    bytesRef func, const std::string& account)
 {
     auto path = _path;
     path = getAuthTableName(path);
@@ -430,7 +458,7 @@ void ContractAuthPrecompiled::setMethodAuth(
     const std::string& _sender, const PrecompiledGas::Ptr& gasPricer)
 {
     std::string path;
-    Address account;
+    std::string account;
     string32 _func;
     auto blockContext = _executive->blockContext().lock();
     auto codec =
@@ -439,8 +467,10 @@ void ContractAuthPrecompiled::setMethodAuth(
     if (!blockContext->isWasm())
     {
         Address contractAddress;
-        codec->decode(data, contractAddress, _func, account);
+        Address accountAddress;
+        codec->decode(data, contractAddress, _func, accountAddress);
         path = contractAddress.hex();
+        account = accountAddress.hex();
     }
     else
     {
@@ -449,7 +479,7 @@ void ContractAuthPrecompiled::setMethodAuth(
     bytes func = codec::fromString32(_func).ref().getCroppedData(0, 4).toBytes();
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthPrecompiled") << LOG_DESC("setAuth")
                            << LOG_KV("path", path) << LOG_KV("func", toHexStringWithPrefix(func))
-                           << LOG_KV("account", account.hex());
+                           << LOG_KV("account", account);
     path = getAuthTableName(path);
     auto table = _executive->storage().openTable(path);
     if (!table)
@@ -466,8 +496,8 @@ void ContractAuthPrecompiled::setMethodAuth(
         callResult->setExecResult(codec->encode(authType));
         return;
     }
-    auto admin = Address(getContractAdmin(_executive, path));
-    if (Address(_sender) != admin)
+    auto admin = getContractAdmin(_executive, path);
+    if (_sender != admin)
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthPrecompiled")
                                << LOG_DESC("Permission denied, only admin can set contract access.")
@@ -648,7 +678,7 @@ void ContractAuthPrecompiled::setDeployType(
     auto codec =
         std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     codec->decode(data, _type);
-    if (!checkSender(_sender))
+    if (!checkSenderFromAuth(_sender))
     {
         getErrorCodeOut(callResult->mutableExecResult(), CODE_NO_AUTHORIZED, *codec);
         return;
@@ -694,23 +724,32 @@ void ContractAuthPrecompiled::setDeployAuth(
     const std::shared_ptr<PrecompiledExecResult>& callResult, bool _isClose,
     const std::string& _sender, const PrecompiledGas::Ptr& gasPricer)
 {
-    Address account;
+    std::string account;
     auto blockContext = _executive->blockContext().lock();
     auto codec =
         std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
-    codec->decode(data, account);
-    if (!checkSender(_sender))
+    if (blockContext->isWasm())
+    {
+        codec->decode(data, account);
+    }
+    else
+    {
+        Address accountAddress;
+        codec->decode(data, accountAddress);
+        account = accountAddress.hex();
+    }
+    if (!checkSenderFromAuth(_sender))
     {
         getErrorCodeOut(callResult->mutableExecResult(), CODE_NO_AUTHORIZED, *codec);
         return;
     }
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthPrecompiled") << LOG_DESC("setDeployAuth")
-                           << LOG_KV("account", account.hex()) << LOG_KV("isClose", _isClose);
+                           << LOG_KV("account", account) << LOG_KV("isClose", _isClose);
     auto table = _executive->storage().openTable("/apps");
     auto type = getDeployAuthType(_executive);
     auto getAclStr = (type == (int)AuthType::BLACK_LIST_MODE) ? FS_ACL_BLACK : FS_ACL_WHITE;
 
-    std::map<Address, bool> aclMap;
+    std::map<std::string, bool> aclMap;
     auto entry = table->getRow(getAclStr);
     auto mapStr = std::string(entry->getField(0));
     if (!mapStr.empty())
@@ -734,17 +773,25 @@ void ContractAuthPrecompiled::hasDeployAuth(
     const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
     const std::shared_ptr<PrecompiledExecResult>& callResult)
 {
-    Address account;
+    std::string account;
     auto blockContext = _executive->blockContext().lock();
     auto codec =
         std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
-    codec->decode(data, account);
-
+    if (blockContext->isWasm())
+    {
+        codec->decode(data, account);
+    }
+    else
+    {
+        Address accountAddress;
+        codec->decode(data, accountAddress);
+        account = accountAddress.hex();
+    }
     callResult->setExecResult(codec->encode(checkDeployAuth(_executive, account)));
 }
 
 bool ContractAuthPrecompiled::checkDeployAuth(
-    const std::shared_ptr<executor::TransactionExecutive>& _executive, const Address& _account)
+    const std::shared_ptr<executor::TransactionExecutive>& _executive, const std::string& _account)
 {
     auto lastStorage = _executive->lastStorage();
     auto table =
@@ -767,7 +814,7 @@ bool ContractAuthPrecompiled::checkDeployAuth(
         //      if black list mode， return true
         return type == (int)AuthType::BLACK_LIST_MODE;
     }
-    std::map<Address, bool> aclMap;
+    std::map<std::string, bool> aclMap;
     auto&& out = asBytes(std::string(entry->getField(0)));
     codec::scale::decode(aclMap, gsl::make_span(out));
     if (aclMap.find(_account) == aclMap.end())
@@ -782,4 +829,58 @@ bool ContractAuthPrecompiled::checkDeployAuth(
         return !aclMap.at(_account);
     }
     return aclMap.at(_account);
+}
+
+void ContractAuthPrecompiled::setContractStatus(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
+    const std::shared_ptr<PrecompiledExecResult>& callResult, const std::string& _sender,
+    const PrecompiledGas::Ptr& gasPricer)
+{
+    std::string address;
+    bool isFreeze = false;
+    auto blockContext = _executive->blockContext().lock();
+    auto codec =
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+    if (blockContext->isWasm())
+    {
+        codec->decode(data, address, isFreeze);
+    }
+    else
+    {
+        Address contractAddress;
+        codec->decode(data, contractAddress, isFreeze);
+        address = contractAddress.hex();
+    }
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("ContractAuthPrecompiled") << LOG_DESC("setContractStatus")
+                           << LOG_KV("address", address) << LOG_KV("isFreeze", isFreeze);
+    // 1. check exist
+    auto path = getAuthTableName(address);
+    auto table = _executive->storage().openTable(path);
+    if (!table)
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthPrecompiled")
+                               << LOG_DESC("auth table not found") << LOG_KV("path", path);
+        getErrorCodeOut(callResult->mutableExecResult(), CODE_TABLE_NOT_EXIST, *codec);
+        return;
+    }
+    gasPricer->appendOperation(InterfaceOpcode::OpenTable);
+    // 2. check sender is admin
+    auto admin = getContractAdmin(_executive, path);
+    if (_sender != admin)
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthPrecompiled")
+                               << LOG_DESC("Permission denied, only admin can set contract access.")
+                               << LOG_KV("address", path) << LOG_KV("sender", _sender);
+        getErrorCodeOut(callResult->mutableExecResult(), CODE_NO_AUTHORIZED, *codec);
+        return;
+    }
+    // 3. set contract status
+    /// TODO: use external call to write status
+    auto status = isFreeze ? "freeze" : "normal";
+    Entry entry = {};
+    entry.importFields({status});
+    table->setRow("status", std::move(entry));
+    gasPricer->updateMemUsed(1);
+    gasPricer->appendOperation(InterfaceOpcode::Set);
+    getErrorCodeOut(callResult->mutableExecResult(), CODE_SUCCESS, *codec);
 }
