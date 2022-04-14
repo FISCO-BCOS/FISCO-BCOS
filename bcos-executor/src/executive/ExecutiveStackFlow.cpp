@@ -29,29 +29,42 @@ void ExecutiveStackFlow::submit(CallParameters::UniquePtr txInput)
 {
     auto contextID = txInput->contextID;
     auto seq = txInput->seq;
-    auto executiveState = m_executives.find({contextID, seq});
-    if (executiveState == m_executives.end())
+    auto executiveState = m_executives[{contextID, seq}];
+    if (executiveState == nullptr)
     {
         // add to top if not exists
-        // std::cout << " push " << contextID << " | " << seq << " | " << txInput->type <<
-        // std::endl;
-        auto newExecutiveState =
-            std::make_shared<ExecutiveState>(m_executiveFactory, std::move(txInput));
-        m_runPool.push(newExecutiveState);
-        m_executives[{contextID, seq}] = newExecutiveState;
+        /*
+        std::cout << "[EXECUTOR] >>>> " << contextID << " | " << seq << " | " << txInput->toString()
+                  << " | NEED_RUN" << std::endl;
+                  */
+        executiveState = std::make_shared<ExecutiveState>(m_executiveFactory, std::move(txInput));
+        m_executives[{contextID, seq}] = executiveState;
     }
     else
     {
         // update resume params
-        // std::cout << " rsme " << contextID << " | " << seq << " | " << txInput->type <<
-        // std::endl;
-        executiveState->second->setResumeParam(std::move(txInput));
+        /*
+        std::cout << "[EXECUTOR] >>>> " << contextID << " | " << seq << " | " << txInput->toString()
+                  << " | NEED_RESUME" << std::endl;
+                  */
+        executiveState->setResumeParam(std::move(txInput));
     }
+
+    if (!m_hasFirstRun)
+    {
+        m_originStack.push(executiveState);
+    }
+    else
+    {
+        m_pausedPool.erase({contextID, seq});
+        m_waitingPool.insert({contextID, seq});
+    };
 }
 
 void ExecutiveStackFlow::submit(std::shared_ptr<std::vector<CallParameters::UniquePtr>> txInputs)
 {
     WriteGuard lock(x_lock);
+
     // from back to front, push in stack, so stack's tx can be executed from top
     for (auto i = txInputs->size(); i > 0; i--)
     {
@@ -59,82 +72,34 @@ void ExecutiveStackFlow::submit(std::shared_ptr<std::vector<CallParameters::Uniq
     }
 }
 
-void ExecutiveStackFlow::asyncRun(std::function<void(CallParameters::UniquePtr)> onTxFinished,
-    std::function<void(std::shared_ptr<std::vector<CallParameters::UniquePtr>>)> onPaused,
+void ExecutiveStackFlow::asyncRun(std::function<void(CallParameters::UniquePtr)> onTxReturn,
     std::function<void(bcos::Error::UniquePtr)> onFinished)
 {
-    asyncTo([this, onTxFinished = std::move(onTxFinished), onPaused = std::move(onPaused),
-                onFinished = std::move(onFinished)]() { run(onTxFinished, onPaused, onFinished); });
+    asyncTo([this, onTxReturn = std::move(onTxReturn), onFinished = std::move(onFinished)]() {
+        run(onTxReturn, onFinished);
+    });
 }
 
-void ExecutiveStackFlow::run(std::function<void(CallParameters::UniquePtr)> onTxFinished,
-    std::function<void(std::shared_ptr<std::vector<CallParameters::UniquePtr>>)> onPaused,
+void ExecutiveStackFlow::run(std::function<void(CallParameters::UniquePtr)> onTxReturn,
     std::function<void(bcos::Error::UniquePtr)> onFinished)
 {
     try
     {
         bcos::WriteGuard lock(x_lock);
-        while (!m_runPool.empty())
+        m_hasFirstRun = true;
+
+        if (!m_waitingPool.empty())
         {
-            auto executiveState = m_runPool.top();
-            CallParameters::UniquePtr output;
-
-            // try to execute this state
-            switch (executiveState->getStatus())
-            {
-            case ExecutiveState::NEED_RUN:
-            case ExecutiveState::NEED_RESUME:
-            {
-                // exec this state
-                output = executiveState->go();
-                break;
-            }
-            case ExecutiveState::PAUSED:
-            {
-                // haven't been executed since last pause step
-                output = nullptr;
-                break;
-            }
-            case ExecutiveState::FINISHED:
-            {
-                m_runPool.pop();
-                continue;
-                break;
-            }
-            }
-
-            // check this state after exec
-            switch (executiveState->getStatus())
-            {
-            case ExecutiveState::NEED_RUN:
-            case ExecutiveState::NEED_RESUME:
-            {
-                asyncTo([onFinished = std::move(onFinished)]() { onFinished(nullptr); });
-                return;
-            }
-            case ExecutiveState::PAUSED:
-            {  // just ignore, need to set resume params
-                auto outputs = std::make_shared<std::vector<CallParameters::UniquePtr>>();
-                if (output)
-                {
-                    outputs->push_back(std::move(output));
-                }
-                asyncTo([onPaused = std::move(onPaused), outputs = std::move(outputs)]() {
-                    onPaused(outputs);
-                });
-                return;
-            }
-            case ExecutiveState::FINISHED:
-            {
-                onTxFinished(std::move(output));
-                break;
-            }
-            }
-            m_runPool.pop();
+            runWaitingPool(onTxReturn);
         }
-        // asyncTo([onFinished = std::move(onFinished)]() {
-        //  return
+
+        if (m_pausedPool.empty())
+        {
+            runOriginStack(onTxReturn);
+        }
+
         onFinished(nullptr);
+
         // });
     }
     catch (std::exception& e)
@@ -142,5 +107,62 @@ void ExecutiveStackFlow::run(std::function<void(CallParameters::UniquePtr)> onTx
         EXECUTIVE_LOG(ERROR) << "ExecutiveStackFlow run error: "
                              << boost::diagnostic_information(e);
         onFinished(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(-1, "ExecutiveStackFlow run error", e));
+    }
+}
+
+
+void ExecutiveStackFlow::runWaitingPool(std::function<void(CallParameters::UniquePtr)> onTxReturn)
+{
+    for (auto contextIDAndSeq : m_waitingPool)
+    {
+        auto executiveState = m_executives[contextIDAndSeq];
+        runOne(executiveState, onTxReturn);
+    }
+
+    m_waitingPool.clear();
+}
+
+void ExecutiveStackFlow::runOriginStack(std::function<void(CallParameters::UniquePtr)> onTxReturn)
+{
+    while (!m_originStack.empty())
+    {
+        auto executiveState = m_originStack.top();
+        m_originStack.pop();
+        runOne(executiveState, onTxReturn);
+
+        if (executiveState->getStatus() == ExecutiveState::PAUSED)
+        {
+            break;  // break at once paused
+        }
+    }
+}
+
+void ExecutiveStackFlow::runOne(
+    ExecutiveState::Ptr executiveState, std::function<void(CallParameters::UniquePtr)> onTxReturn)
+{
+    CallParameters::UniquePtr output;
+
+    output = executiveState->go();
+
+    switch (executiveState->getStatus())
+    {
+    case ExecutiveState::NEED_RUN:
+    case ExecutiveState::NEED_RESUME:
+    {
+        // assume never goes here
+        assert(false);
+        break;
+    }
+    case ExecutiveState::PAUSED:
+    {
+        m_pausedPool.insert({executiveState->getContextID(), executiveState->getSeq()});
+        onTxReturn(std::move(output));
+        break;
+    }
+    case ExecutiveState::FINISHED:
+    {
+        onTxReturn(std::move(output));
+        break;
+    }
     }
 }

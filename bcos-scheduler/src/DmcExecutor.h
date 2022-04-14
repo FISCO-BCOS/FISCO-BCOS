@@ -30,8 +30,11 @@
 #include <tbb/concurrent_unordered_map.h>
 #include <string>
 
+#define DMC_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("DMC")
+// #define DMC_LOG(LEVEL) std::cout << LOG_BADGE("DMC")
 namespace bcos::scheduler
 {
+
 class DmcExecutor
 {
 public:
@@ -56,11 +59,15 @@ public:
     {}
 
     void submit(protocol::ExecutionMessage::UniquePtr message, bool withDAG);
-    bool prepare();  // return finished(true). If others need re-prepare, return unfinished(false)
+    void prepare();
+    bool unlockPrepare();  // return true if need to detect deadlock
+    void releaseOutdatedLock();
+    bool detectLockAndRevert();  // return true if detect a tx and revert
+
     void go(std::function<void(bcos::Error::UniquePtr, Status)> callback);
     bool hasFinished() { return m_lockingPool.empty() && m_pendingPool.empty(); }
 
-    void schedulerIn(ExecutiveState::Ptr executive);
+    void scheduleIn(ExecutiveState::Ptr executive);
 
     void setSchedulerOutHandler(std::function<void(ExecutiveState::Ptr)> onSchedulerOut)
     {
@@ -85,7 +92,7 @@ public:
 private:
     MessageHint handleExecutiveMessage(ExecutiveState::Ptr executive);
     void handleExecutiveOutputs(std::vector<bcos::protocol::ExecutionMessage::UniquePtr> outputs);
-    void schedulerOut(ContextID contextID);
+    void scheduleOut(ContextID contextID);
     void removeOutdatedStatus();
 
     std::string newEVMAddress(int64_t blockNumber, int64_t contextID, int64_t seq);

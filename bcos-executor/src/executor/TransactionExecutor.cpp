@@ -1189,21 +1189,10 @@ void TransactionExecutor::asyncExecuteExecutiveFlow(ExecutiveFlowInterface::Ptr 
     ExecuteOutputs::Ptr allOutputs = std::make_shared<ExecuteOutputs>();
 
     executiveFlow->asyncRun(
-        // onTxFinished
+        // onTxReturn
         [this, allOutputs, callback](CallParameters::UniquePtr output) {
             auto message = toExecutionResult(std::move(output));
             allOutputs->add(std::move(message));
-        },
-        // onPaused
-        [this, allOutputs, callback](
-            std::shared_ptr<std::vector<CallParameters::UniquePtr>> outputs) {
-            auto messages = allOutputs->dumpAndClear();
-            for (auto& output : *outputs)
-            {
-                auto message = toExecutionResult(std::move(output));
-                messages.push_back(std::move(message));
-            }
-            callback(nullptr, std::move(messages));
         },
         // onFinished
         [this, allOutputs, callback](bcos::Error::UniquePtr error) {
@@ -1663,7 +1652,6 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
         break;
     }
     case ExecutionMessage::SEND_BACK:
-    case ExecutionMessage::REVERT_KEY_LOCK:
     case ExecutionMessage::TXHASH:
     {
         BOOST_THROW_EXCEPTION(BCOS_ERROR(

@@ -222,14 +222,12 @@ void BlockExecutive::asyncExecute(
             }
 
             auto newBatchStatus = std::make_shared<BatchStatus>();
-            newBatchStatus->total = m_dmcExecutors.size();
             DMCExecute(newBatchStatus, std::move(callback));
         });
     }
     else
     {
         auto newBatchStatus = std::make_shared<BatchStatus>();
-        newBatchStatus->total = m_dmcExecutors.size();
         DMCExecute(newBatchStatus, std::move(callback));
     }
 }
@@ -407,6 +405,7 @@ void BlockExecutive::DMCExecute(BatchStatus::Ptr batchStatus,
     {
         contractAddress.push_back(it->first);
     }
+    batchStatus->total = contractAddress.size();
 
     auto executorCallback =
         [this, batchStatus = std::move(batchStatus), callback = std::move(callback)](
@@ -462,7 +461,6 @@ void BlockExecutive::DMCExecute(BatchStatus::Ptr batchStatus,
             {
                 // Start next DMC round
                 auto newBatchStatus = std::make_shared<BatchStatus>();
-                newBatchStatus->total = m_dmcExecutors.size();
                 DMCExecute(newBatchStatus, std::move(callback));
             }
             else if (batchStatus->finished == batchStatus->total)
@@ -791,7 +789,7 @@ void BlockExecutive::schedulerExecutive(ExecutiveState::Ptr executiveState)
         dmcExecutor = registerAndGetDmcExecutor(to);
     }
 
-    dmcExecutor->schedulerIn(executiveState);
+    dmcExecutor->scheduleIn(executiveState);
 }
 
 void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr output)
@@ -816,27 +814,79 @@ void BlockExecutive::serialPrepareExecutor()
     // m_dmcExecutors must be prepared in contractAddress less<> serial order
     // Aquire lock happens in dmcExecutor->prepare()
 
-    std::set<std::string, std::less<>> contracts;
-
-    bool unfinished = true;
-    while (unfinished)
+    // prepare current contract(each DmcExecutor belongs to one contract)
+    std::set<std::string, std::less<>> currentExecutors;
+    for (auto it = m_dmcExecutors.begin(); it != m_dmcExecutors.end(); it++)
     {
-        contracts.clear();
+        it->second->releaseOutdatedLock();  // release last round's lock
+        currentExecutors.insert(it->first);
+    }
+    for (auto address : currentExecutors)
+    {
+        DMC_LOG(TRACE) << "----------------- " << address << " | "
+                       << m_block->blockHeaderConst()->number() << " -----------------"
+                       << std::endl;
+        m_dmcExecutors[address]->prepare();  // may generate new contract in m_dmcExecutors
+    }
 
+    // prepare new generated contract
+    for (auto it = m_dmcExecutors.begin(); it != m_dmcExecutors.end(); it++)
+    {
+        auto& address = it->first;
+        if (currentExecutors.count(address) == 0)
+        {
+            // is new generated contract
+            DMC_LOG(TRACE) << "----------------- " << address << " | "
+                           << m_block->blockHeaderConst()->number() << " -----------------"
+                           << std::endl;
+            m_dmcExecutors[address]->prepare();
+        }
+    }
+
+    // try to unlock some locked tx
+    bool needDetectDeadlock = true;
+    bool allFinished = true;
+    for (auto it = m_dmcExecutors.begin(); it != m_dmcExecutors.end(); it++)
+    {
+        auto& address = it->first;
+        auto dmcExecutor = m_dmcExecutors[address];
+        if (dmcExecutor->hasFinished())
+        {
+            continue;  // must jump finished executor
+        }
+        DMC_LOG(TRACE) << " --unlockPrepare-- " << address << " | "
+                       << m_block->blockHeaderConst()->number() << " -----------------"
+                       << std::endl;
+
+        allFinished = false;
+        bool need = dmcExecutor->unlockPrepare();
+        needDetectDeadlock &= need;
+        // if there is an executor need detect deadlock, noNeedDetectDeadlock = false
+    }
+
+    if (needDetectDeadlock && !allFinished)
+    {
+        bool needRevert = false;
+        // detect deadlock and revert the first tx TODO: revert many tx in one DMC round
         for (auto it = m_dmcExecutors.begin(); it != m_dmcExecutors.end(); it++)
         {
-            contracts.insert(it->first);
+            auto& address = it->first;
+            DMC_LOG(TRACE) << " --detect--revert-- " << address << " | "
+                           << m_block->blockHeaderConst()->number() << " -----------------"
+                           << std::endl;
+            if (m_dmcExecutors[address]->detectLockAndRevert())
+            {
+                needRevert = true;
+                break;  // Just revert the first found tx
+            }
         }
 
-        unfinished = false;
-        for (auto address : contracts)
+        if (!needRevert)
         {
-            // if there has one unfinised, reprepare all DmcExecutor
-            // std::cout << std::endl
-            //          << "---------------- " << address << " | "
-            //          << m_block->blockHeaderConst()->number() << " ----------------" <<
-            //          std::endl;
-            unfinished |= !m_dmcExecutors[address]->prepare();
+            std::string errorMsg = "Need detect deadlock but no deadlock detected! block: " +
+                                   toString(m_block->blockHeaderConst()->number());
+            DMC_LOG(ERROR) << errorMsg;
+            BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, errorMsg));
         }
     }
 }

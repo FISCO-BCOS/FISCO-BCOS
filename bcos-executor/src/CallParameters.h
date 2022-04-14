@@ -3,6 +3,7 @@
 #include "bcos-protocol/LogEntry.h"
 #include <bcos-utilities/Common.h>
 #include <memory>
+#include <sstream>
 #include <string>
 
 namespace bcos::executor
@@ -52,5 +53,29 @@ struct CallParameters
     Type type;
     bool staticCall = false;  // common field
     bool create = false;      // by request, is create
+
+
+    std::string toString()
+    {
+        std::stringstream ss;
+        ss << "[" << contextID << "|" << seq << "|";
+        switch (type)
+        {
+        case MESSAGE:
+            ss << "MESSAGE";
+            break;
+        case KEY_LOCK:
+            ss << "KEY_LOCK";
+            break;
+        case FINISHED:
+            ss << "FINISHED";
+            break;
+        case REVERT:
+            ss << "REVERT";
+            break;
+        };
+        ss << "]";
+        return ss.str();
+    }
 };
 }  // namespace bcos::executor
