@@ -379,6 +379,10 @@ void PBFTCacheProcessor::notifyToSealNextBlock()
 void PBFTCacheProcessor::applyStateMachine(
     ProposalInterface::ConstPtr _lastAppliedProposal, PBFTProposalInterface::Ptr _proposal)
 {
+    if (_proposal->reExecFlag())
+    {
+        m_config->timer()->restart();
+    }
     PBFT_LOG(INFO) << LOG_DESC("applyStateMachine") << LOG_KV("index", _proposal->index())
                    << LOG_KV("hash", _proposal->hash().abridged()) << m_config->printCurrentState();
     auto executedProposal = m_config->pbftMessageFactory()->createPBFTProposal();

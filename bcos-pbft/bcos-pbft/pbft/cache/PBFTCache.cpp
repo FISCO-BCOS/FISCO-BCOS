@@ -67,6 +67,7 @@ void PBFTCache::onCheckPointTimeout()
     {
         // set the waterMarkLimit to 1 when discover deterministic proposal
         m_config->enforceSerial();
+        m_config->timer()->restart();
         PBFT_LOG(INFO) << LOG_DESC("Discover non-deterministic proposal, into recovery process")
                        << printPBFTProposal(m_checkpointProposal) << m_config->printCurrentState();
         return;
@@ -645,6 +646,7 @@ bool PBFTCache::resetPrecommitCache(PBFTMessageInterface::Ptr _precommit, bool _
         return false;
     }
     m_config->enforceSerial();
+    m_config->timer()->restart();
     m_prePrepare = _precommit;
     m_precommit = m_prePrepare;
     m_precommit->setGeneratedFrom(m_config->nodeIndex());

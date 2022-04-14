@@ -89,7 +89,8 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify, 
         for (auto it = m_blocks.begin(); it != m_blocks.end();)
         {
             auto index = it->get()->block()->blockHeader()->number();
-            if (index >= block->blockHeader()->number())
+            auto undeterministic = it->get()->block()->blockHeader()->undeterministic();
+            if (index >= block->blockHeader()->number() && !undeterministic)
             {
                 SCHEDULER_LOG(INFO)
                     << "ExecuteBlock: remove undeterministic block" << LOG_KV("index", index);
