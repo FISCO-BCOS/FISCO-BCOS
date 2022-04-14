@@ -22,6 +22,8 @@
 #include <memory>
 #include <ostream>
 #include <string>
+#include <limits>
+
 namespace bcos
 {
 namespace protocol
