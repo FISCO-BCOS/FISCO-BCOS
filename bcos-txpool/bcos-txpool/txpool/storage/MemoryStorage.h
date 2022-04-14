@@ -21,6 +21,7 @@
 #pragma once
 #include "bcos-txpool/TxPoolConfig.h"
 #include <bcos-utilities/ThreadPool.h>
+#include <tbb/concurrent_set.h>
 #include <tbb/concurrent_unordered_map.h>
 #define TBB_PREVIEW_CONCURRENT_ORDERED_CONTAINERS 1
 #include <tbb/concurrent_set.h>
@@ -148,6 +149,10 @@ private:
     TxPoolConfig::Ptr m_config;
     ThreadPool::Ptr m_notifier;
     ThreadPool::Ptr m_worker;
+
+    using TransactionQueue =
+        tbb::concurrent_set<bcos::protocol::Transaction::Transaction::ConstPtr, TransactionCompare>;
+    TransactionQueue m_txsQueue;
 
     tbb::concurrent_unordered_map<bcos::crypto::HashType, bcos::protocol::Transaction::ConstPtr,
         std::hash<bcos::crypto::HashType>>

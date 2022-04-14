@@ -310,7 +310,7 @@ void PBFTConfig::notifySealer(BlockNumber _progressedIndex, bool _enforce)
         return;
     }
     // recover the water_mark_limit if no non-deterministic transactions for 10 consecutive blocks
-    if (startSealIndex - m_waitSealUntil >= 10)
+    if (startSealIndex - m_waitSealUntil >= 5)
     {
         recoverWaterMarkLimit();
     }

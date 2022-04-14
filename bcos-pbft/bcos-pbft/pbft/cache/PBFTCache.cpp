@@ -128,6 +128,10 @@ bool PBFTCache::triggerNonDeterministic()
         m_nodesWithInconsistentCheckPoint.clear();
         return false;
     }
+    if (nodesWithInconsistentCheckPoint.size() == 0)
+    {
+        return false;
+    }
     // stall the pipeline
     m_config->setWaitSealUntil(m_index);
     m_config->setWaitResealUntil(m_index);

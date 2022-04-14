@@ -55,6 +55,7 @@ TransactionStatus MemoryStorage::submitTransaction(
     try
     {
         auto tx = m_config->txFactory()->createTransaction(ref(*_txData), false);
+        tx->setImportTime(utcTime());
         auto result = verifyAndSubmitTransaction(tx, _txSubmitCallback, true, true);
         if (result != TransactionStatus::None)
         {
@@ -229,7 +230,6 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
     result = m_config->txValidator()->verify(_tx);
     if (result == TransactionStatus::None)
     {
-        _tx->setImportTime(utcTime());
         if (_txSubmitCallback)
         {
             _tx->setSubmitCallback(_txSubmitCallback);
@@ -283,6 +283,7 @@ TransactionStatus MemoryStorage::insertWithoutLock(Transaction::ConstPtr _tx)
         return TransactionStatus::AlreadyInTxPool;
     }
     m_onReady();
+    m_txsQueue.insert(_tx);
     preCommitTransaction(_tx);
     notifyUnsealedTxsSize();
 #if FISCO_DEBUG
@@ -361,6 +362,7 @@ Transaction::ConstPtr MemoryStorage::removeWithoutLock(HashType const& _txHash)
         m_sealedTxsSize--;
     }
     m_txsTable.unsafe_erase(_txHash);
+    m_txsQueue.unsafe_erase(tx);
 #if FISCO_DEBUG
     // TODO: remove this, now just for bug tracing
     TXPOOL_LOG(DEBUG) << LOG_DESC("remove tx: ") << tx->hash().abridged()
@@ -581,16 +583,16 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
     ReadGuard l(x_txpoolMutex);
     auto lockT = utcTime() - startT;
     startT = utcTime();
-    for (auto const& it : m_txsTable)
+    for (auto const& it : m_txsQueue)
     {
-        auto const& tx = it.second;
+        auto const& tx = it;
         // Note: When inserting data into tbb::concurrent_unordered_map while traversing,
         // it.second will occasionally be a null pointer.
         if (!tx)
         {
             continue;
         }
-        auto txHash = it.first;
+        auto txHash = tx->hash();
         if (m_invalidTxs.count(txHash))
         {
             continue;
