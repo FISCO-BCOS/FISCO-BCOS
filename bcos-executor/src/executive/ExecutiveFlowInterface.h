@@ -38,11 +38,8 @@ public:
     virtual void submit(std::shared_ptr<std::vector<CallParameters::UniquePtr>> txInputs) = 0;
 
     virtual void asyncRun(
-        // onTxFinished(output)
-        std::function<void(CallParameters::UniquePtr)> onTxFinished,
-
-        // onPaused(pushMessages)
-        std::function<void(std::shared_ptr<std::vector<CallParameters::UniquePtr>>)> onPaused,
+        // onTxReturn(output)
+        std::function<void(CallParameters::UniquePtr)> onTxReturn,
 
         // onFinished(success, errorMessage)
         std::function<void(bcos::Error::UniquePtr)> onFinished) = 0;

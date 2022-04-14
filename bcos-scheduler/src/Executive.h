@@ -29,9 +29,8 @@ struct ExecutiveState  // Executive state per tx
     std::string toString()
     {
         std::stringstream ss;
-        ss << " " << contextID << " | " << (message ? message->seq() : -1) << " | "
-           << (message ? protocol::ExecutionMessage::getTypeName(message->type()) : "null") << " | "
-           << callStack.size() << " | ";
+        ss << " " << contextID << " | " << callStack.size() << " | ["
+           << (message ? message->toString() : "null") << "]";
         return ss.str();
     }
 };

@@ -47,19 +47,33 @@ public:
     void submit(std::shared_ptr<std::vector<CallParameters::UniquePtr>> txInputs) override;
 
     void asyncRun(
-        // onTxFinished(output)
-        std::function<void(CallParameters::UniquePtr)> onTxFinished,
-
-        // onPaused(pushMessages)
-        std::function<void(std::shared_ptr<std::vector<CallParameters::UniquePtr>>)> onPaused,
+        // onTxReturn(output)
+        std::function<void(CallParameters::UniquePtr)> onTxReturn,
 
         // onFinished(success, errorMessage)
         std::function<void(bcos::Error::UniquePtr)> onFinished) override;
 
+    struct ContextIDSeqCmp
+    {
+        bool operator()(
+            const std::tuple<int64_t, int64_t>& a, const std::tuple<int64_t, int64_t>& b) const
+        {
+            // <ContextID, Seq> order: ContextID increasing and Seq decreasing
+            return std::get<0>(a) == std::get<0>(b) ? std::get<1>(a) < std::get<1>(b) :
+                                                      std::get<0>(a) > std::get<0>(b);
+        }
+    };
+
 private:
-    void run(std::function<void(CallParameters::UniquePtr)> onTxFinished,
-        std::function<void(std::shared_ptr<std::vector<CallParameters::UniquePtr>>)> onPaused,
+    void run(std::function<void(CallParameters::UniquePtr)> onTxReturn,
         std::function<void(bcos::Error::UniquePtr)> onFinished);
+
+    void runWaitingPool(std::function<void(CallParameters::UniquePtr)> onTxReturn);
+
+    void runOriginStack(std::function<void(CallParameters::UniquePtr)> onTxReturn);
+
+    void runOne(ExecutiveState::Ptr executiveState,
+        std::function<void(CallParameters::UniquePtr)> onTxReturn);
 
     template <class F>
     void asyncTo(F f)
@@ -69,10 +83,22 @@ private:
             shared_from_this(), std::move(f));
     }
 
-    std::stack<ExecutiveState::Ptr> m_runPool;
+    std::stack<ExecutiveState::Ptr> m_originStack;
+
+    // <ContextID, seq> -> Executive
+    std::set<std::tuple<int64_t, int64_t>> m_pausedPool;
+
+    // ContextID -> Executive
+    std::set<std::tuple<int64_t, int64_t>, ContextIDSeqCmp> m_waitingPool;
+
+    // <ContextID, seq> -> Executive
     std::map<std::tuple<int64_t, int64_t>, ExecutiveState::Ptr> m_executives;
+
     ExecutiveFactory::Ptr m_executiveFactory;
+
     mutable SharedMutex x_lock;
+
+    bool m_hasFirstRun = false;
 };
 
 
