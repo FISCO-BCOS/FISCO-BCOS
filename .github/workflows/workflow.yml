@@ -38,20 +38,20 @@ jobs:
         id: cache
         with:
           path: deps/src
-          key: deps-v8-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: deps-v9-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            deps-v8-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            deps-v8-${{ runner.temp }}-${{ github.base_ref }}-
-            deps-v8-${{ runner.temp }}-
+            deps-v9-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            deps-v9-${{ runner.temp }}-${{ github.base_ref }}-
+            deps-v9-${{ runner.temp }}-
       - uses: actions/cache@v2
         id: ccache
         with:
           path: ccache
-          key: ccache-v3-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+          key: ccache-v4-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
           restore-keys: |
-            ccache-v3-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
-            ccache-v3-${{ runner.temp }}-${{ github.base_ref }}-
-            ccache-v3-${{ runner.temp }}-
+            ccache-v4-${{ runner.temp }}-${{ github.base_ref }}-${{ hashFiles('.github/workflows/workflow.yml') }}
+            ccache-v4-${{ runner.temp }}-${{ github.base_ref }}-
+            ccache-v4-${{ runner.temp }}-
       - name: install macOS dependencies
         if: runner.os == 'macOS'
         run: brew install openssl@1.1 ccache gmp cmake
