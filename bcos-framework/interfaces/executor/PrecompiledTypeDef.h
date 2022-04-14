@@ -35,6 +35,8 @@ const char* const KV_TABLE_NAME = "/sys/kv_storage";
 const char* const CRYPTO_NAME = "/sys/crypto_tools";
 const char* const DAG_TRANSFER_NAME = "/sys/dag_test";
 const char* const BFS_NAME = "/sys/bfs";
+const char* const GROUP_SIG_NAME = "/sys/group_sig";
+const char* const RING_SIG_NAME = "/sys/ring_sig";
 
 /// precompiled contract for solidity
 const char* const SYS_CONFIG_ADDRESS = "0000000000000000000000000000000000001000";
@@ -49,6 +51,9 @@ const char* const DAG_TRANSFER_ADDRESS = "00000000000000000000000000000000000010
 const char* const BFS_ADDRESS = "000000000000000000000000000000000000100e";
 const char* const SYS_ADDRESS_PREFIX = "00000000000000000000000000000000000";
 
+
+const char GROUPSIG_ADDRESS[] = "0000000000000000000000000000000000005004";
+const char RINGSIG_ADDRESS[] = "0000000000000000000000000000000000005005";
 
 /// auth system contract for solidity
 const char* const AUTH_INTERCEPT_ADDRESS = "0000000000000000000000000000000000010000";
