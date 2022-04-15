@@ -283,7 +283,7 @@ TransactionStatus MemoryStorage::insertWithoutLock(Transaction::ConstPtr _tx)
         return TransactionStatus::AlreadyInTxPool;
     }
     m_onReady();
-    m_txsQueue.insert(_tx);
+    m_txsQueue.push(_tx);
     preCommitTransaction(_tx);
     notifyUnsealedTxsSize();
 #if FISCO_DEBUG
@@ -362,7 +362,6 @@ Transaction::ConstPtr MemoryStorage::removeWithoutLock(HashType const& _txHash)
         m_sealedTxsSize--;
     }
     m_txsTable.unsafe_erase(_txHash);
-    m_txsQueue.unsafe_erase(tx);
 #if FISCO_DEBUG
     // TODO: remove this, now just for bug tracing
     TXPOOL_LOG(DEBUG) << LOG_DESC("remove tx: ") << tx->hash().abridged()
@@ -583,9 +582,14 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
     ReadGuard l(x_txpoolMutex);
     auto lockT = utcTime() - startT;
     startT = utcTime();
-    for (auto const& it : m_txsQueue)
+    Transaction::ConstPtr tx;
+    while (m_txsQueue.size() != 0)
     {
-        auto const& tx = it;
+        auto ret = m_txsQueue.try_pop(tx);
+        if (!ret)
+        {
+            break;
+        }
         // Note: When inserting data into tbb::concurrent_unordered_map while traversing,
         // it.second will occasionally be a null pointer.
         if (!tx)
@@ -666,6 +670,7 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
     TXPOOL_LOG(INFO) << LOG_DESC("batchFetchTxs") << LOG_KV("timecost", (utcTime() - recordT))
                      << LOG_KV("txsSize", _txsList->transactionsMetaDataSize())
                      << LOG_KV("sysTxsSize", _sysTxsList->transactionsMetaDataSize())
+                     << LOG_KV("queueSize", m_txsQueue.size())
                      << LOG_KV("pendingTxs", m_txsTable.size()) << LOG_KV("limit", _txsLimit)
                      << LOG_KV("fetchTxsT", fetchTxsT) << LOG_KV("lockT", lockT);
 }
@@ -805,6 +810,10 @@ void MemoryStorage::batchMarkTxs(
         {
             tx->setBatchId(_batchId);
             tx->setBatchHash(_batchHash);
+        }
+        if (!_sealFlag)
+        {
+            m_txsQueue.push(tx);
         }
 #if FISCO_DEBUG
         // TODO: remove this, now just for bug tracing
