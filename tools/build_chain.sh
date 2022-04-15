@@ -321,7 +321,8 @@ dir_must_not_exists() {
 }
 
 gen_rsa_chain_cert() {
-    local chaindir="${1}"
+    local name="${1}"
+    local chaindir="${2}"
 
     mkdir -p "${chaindir}"
 
@@ -335,7 +336,7 @@ gen_rsa_chain_cert() {
     dir_must_exists "$chaindir"
 
     openssl genrsa -out "${chaindir}"/ca.key "${rsa_key_length}" 2>/dev/null
-    openssl req -new -x509 -days "${days}" -subj "/CN=FISCO-BCOS/O=fisco-bcos/OU=chain" -key "${chaindir}"/ca.key -out "${chaindir}"/ca.crt  2>/dev/null
+    openssl req -new -x509 -days "${days}" -subj "/CN=${name}/O=fisco-bcos/OU=chain" -key "${chaindir}"/ca.key -out "${chaindir}"/ca.crt  2>/dev/null
 
     LOG_INFO "Generate rsa ca cert successfully!"
 }
@@ -1677,12 +1678,12 @@ prepare_ca(){
         for agency_name in ${agency_array[*]};do
             if [ ! -d "${output_dir}/cert/${agency_name}" ];then
                 gen_agency_cert "${output_dir}/cert" "${output_dir}/cert/${agency_name}" >>"${logfile}" 2>&1
-                gen_rsa_chain_cert "${output_dir}/cert/${agency_name}-channel" >>"${logfile}" 2>&1
+                gen_rsa_chain_cert ${agency_name} "${output_dir}/cert/${agency_name}-channel" >>"${logfile}" 2>&1
             fi
         done
     else
         gen_agency_cert "${output_dir}/cert" "${output_dir}/cert/agency" >"${logfile}" 2>&1
-        gen_rsa_chain_cert "${output_dir}/cert/agency-channel" >>"${logfile}" 2>&1
+        gen_rsa_chain_cert "agency" "${output_dir}/cert/agency-channel" >>"${logfile}" 2>&1
     fi
 
     if [[ -n "${guomi_mode}" ]];then
