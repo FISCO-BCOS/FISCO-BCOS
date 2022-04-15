@@ -106,6 +106,9 @@ private:
         mutable SharedMutex x_lock;
     };
 
+    void DAGExecute(std::function<void(Error::UniquePtr)> callback);  // only used for DAG
+    std::map<std::tuple<std::string, ContextID>, ExecutiveState::Ptr, std::less<>>
+        m_executiveStates;  // only used for DAG
 
     void DMCExecute(std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback);
     std::shared_ptr<DmcExecutor> registerAndGetDmcExecutor(std::string contractAddress);

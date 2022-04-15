@@ -31,8 +31,8 @@
 #include <string>
 
 //#define DMC_TRACE_LOG_ENABLE
-//#define DMC_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("DMC")
-#define DMC_LOG(LEVEL) std::cout << LOG_BADGE("DMC")
+#define DMC_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("DMC")
+//#define DMC_LOG(LEVEL) std::cout << LOG_BADGE("DMC")
 namespace bcos::scheduler
 {
 
@@ -79,6 +79,36 @@ public:
         std::function<void(bcos::protocol::ExecutionMessage::UniquePtr)> onTxFinished)
     {
         f_onTxFinished = std::move(onTxFinished);
+    }
+
+    void forEachExecutive(std::function<void(ContextID, int64_t, ExecutiveState::Ptr)> handler,
+        bool needInOrder = false)
+    {
+        if (needInOrder)
+        {
+            std::set<ContextID, std::less<>> orderedContextID;
+            for (auto it : m_pendingPool)
+            {
+                orderedContextID.insert(it.first);
+            }
+
+            for (auto contextID : orderedContextID)
+            {
+                auto executiveState = m_pendingPool.find(contextID)->second;
+                auto seq = executiveState->message->seq();
+                handler(contextID, seq, executiveState);
+            }
+        }
+        else
+        {
+            for (auto it : m_pendingPool)
+            {
+                auto executiveState = it.second;
+                auto contextID = executiveState->message->contextID();
+                auto seq = executiveState->message->seq();
+                handler(contextID, seq, executiveState);
+            }
+        }
     }
 
 

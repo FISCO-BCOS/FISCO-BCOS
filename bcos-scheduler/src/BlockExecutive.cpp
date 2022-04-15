@@ -158,7 +158,11 @@ void BlockExecutive::prepare()
     }
 
     // prepare all executors
-    serialPrepareExecutor();
+    if (!m_withDAG)
+    {
+        // prepare DMC executor
+        serialPrepareExecutor();
+    }
 
     m_hasPrepared = true;
 
@@ -205,12 +209,17 @@ void BlockExecutive::asyncExecute(
             nullptr);
     }
     m_currentTimePoint = std::chrono::system_clock::now();
+    auto startT = utcTime();
     prepare();
 
+    auto createMsgT = utcTime() - startT;
+    startT = utcTime();
     if (!m_staticCall)
     {
         // Execute nextBlock
-        batchNextBlock([this, callback = std::move(callback)](Error::UniquePtr error) {
+        bool withDAG = m_withDAG;
+        batchNextBlock([this, withDAG, createMsgT, startT, callback = std::move(callback)](
+                           Error::UniquePtr error) {
             if (error)
             {
                 SCHEDULER_LOG(ERROR)
@@ -221,7 +230,32 @@ void BlockExecutive::asyncExecute(
                 return;
             }
 
-            DMCExecute(std::move(callback));
+            if (withDAG)
+            {
+                DAGExecute([this, createMsgT, startT, callback = std::move(callback)](
+                               Error::UniquePtr error) {
+                    if (error)
+                    {
+                        SCHEDULER_LOG(ERROR) << "DAG execute block with error!"
+                                             << boost::diagnostic_information(*error);
+                        callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
+                                     SchedulerError::DAGError, "DAG execute error!", *error),
+                            nullptr);
+                        return;
+                    }
+                    auto blockHeader = m_block->blockHeader();
+                    SCHEDULER_LOG(INFO)
+                        << LOG_DESC("DAGExecute success") << LOG_KV("createMsgT", createMsgT)
+                        << LOG_KV("dagExecuteT", (utcTime() - startT))
+                        << LOG_KV("hash", blockHeader->hash().abridged())
+                        << LOG_KV("number", blockHeader->number());
+                    DMCExecute(std::move(callback));
+                });
+            }
+            else
+            {
+                DMCExecute(std::move(callback));
+            }
         });
     }
     else
@@ -390,6 +424,107 @@ void BlockExecutive::asyncNotify(
     });
 }
 
+void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
+{
+    // dump executive states from DmcExecutor
+    for (auto it : m_dmcExecutors)
+    {
+        auto& address = it.first;
+        auto dmcExecutor = it.second;
+        dmcExecutor->forEachExecutive(
+            [this, &address](ContextID contextID, int64_t, ExecutiveState::Ptr executiveState) {
+                m_executiveStates.emplace(std::make_tuple(address, contextID), executiveState);
+            });
+    }
+
+
+    std::multimap<std::string, decltype(m_executiveStates)::iterator> requests;
+
+    for (auto it = m_executiveStates.begin(); it != m_executiveStates.end(); ++it)
+    {
+        if (it->second->enableDAG)
+        {
+            requests.emplace(std::get<0>(it->first), it);
+        }
+    }
+
+    if (requests.empty())
+    {
+        callback(nullptr);
+        return;
+    }
+
+    auto totalCount = std::make_shared<std::atomic_size_t>(requests.size());
+    auto failed = std::make_shared<std::atomic_size_t>(0);
+    auto callbackPtr = std::make_shared<decltype(callback)>(std::move(callback));
+
+    for (auto it = requests.begin(); it != requests.end(); it = requests.upper_bound(it->first))
+    {
+        SCHEDULER_LOG(TRACE) << "DAG contract: " << it->first;
+        auto startT = utcTime();
+
+        auto executor = m_scheduler->m_executorManager->dispatchExecutor(it->first);
+        auto count = requests.count(it->first);
+        auto range = requests.equal_range(it->first);
+
+        auto messages = std::make_shared<std::vector<protocol::ExecutionMessage::UniquePtr>>(count);
+        auto iterators = std::vector<decltype(m_executiveStates)::iterator>(count);
+        size_t i = 0;
+        for (auto messageIt = range.first; messageIt != range.second; ++messageIt)
+        {
+            SCHEDULER_LOG(TRACE) << "DAG message: " << messageIt->second->second->message.get()
+                                 << " to: " << messageIt->first;
+            messageIt->second->second->callStack.push(messageIt->second->second->currentSeq++);
+            messages->at(i) = std::move(messageIt->second->second->message);
+            iterators[i] = messageIt->second;
+
+            ++i;
+        }
+        auto prepareT = utcTime() - startT;
+        startT = utcTime();
+        executor->dagExecuteTransactions(*messages,
+            [messages, startT, prepareT, iterators = std::move(iterators), totalCount, failed,
+                callbackPtr](bcos::Error::UniquePtr error,
+                std::vector<bcos::protocol::ExecutionMessage::UniquePtr> responseMessages) {
+                if (error)
+                {
+                    ++(*failed);
+                    SCHEDULER_LOG(ERROR)
+                        << "DAG execute error: " << boost::diagnostic_information(*error);
+                }
+                else if (messages->size() != responseMessages.size())
+                {
+                    ++(*failed);
+                    SCHEDULER_LOG(ERROR) << "DAG messages mismatch!";
+                }
+                else
+                {
+#pragma omp parallel for
+                    for (size_t j = 0; j < responseMessages.size(); ++j)
+                    {
+                        assert(responseMessages[j]);
+                        iterators[j]->second->message = std::move(responseMessages[j]);
+                    }
+                }
+
+                totalCount->fetch_sub(responseMessages.size());
+                // TODO: must wait more response
+                if (*totalCount == 0)
+                {
+                    if (*failed > 0)
+                    {
+                        (*callbackPtr)(BCOS_ERROR_UNIQUE_PTR(
+                            SchedulerError::DAGError, "Execute dag with errors"));
+                        return;
+                    }
+                    SCHEDULER_LOG(INFO)
+                        << LOG_DESC("DAGExecute finish") << LOG_KV("prepareT", prepareT)
+                        << LOG_KV("execT", (utcTime() - startT));
+                    (*callbackPtr)(nullptr);
+                }
+            });
+    }
+}
 
 void BlockExecutive::DMCExecute(
     std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback)
