@@ -767,8 +767,9 @@ void TransactionExecutive::setEVMPrecompiled(
 {
     m_evmPrecompiled = std::move(precompiledContract);
 }
+
 void TransactionExecutive::setConstantPrecompiled(
-    std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
+    shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
         _constantPrecompiled)
 {
     m_constantPrecompiled = _constantPrecompiled;

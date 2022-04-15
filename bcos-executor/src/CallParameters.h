@@ -3,6 +3,7 @@
 #include "bcos-protocol/LogEntry.h"
 #include <bcos-utilities/Common.h>
 #include <memory>
+#include <sstream>
 #include <string>
 
 namespace bcos::executor
@@ -36,9 +37,9 @@ struct CallParameters
     std::string receiveAddress;  // common field, readable format
     std::string origin;          // common field, readable format
 
-    int64_t gas = 0;             // common field
-    bcos::bytes data;            // common field, transaction data, binary format
-    std::string abi;             // common field, contract abi, json format
+    int64_t gas = 0;   // common field
+    bcos::bytes data;  // common field, transaction data, binary format
+    std::string abi;   // common field, contract abi, json format
 
     std::vector<std::string> keyLocks;  // common field
     std::string acquireKeyLock;         // by response
@@ -52,5 +53,29 @@ struct CallParameters
     Type type;
     bool staticCall = false;  // common field
     bool create = false;      // by request, is create
+
+
+    std::string toString()
+    {
+        std::stringstream ss;
+        ss << "[" << contextID << "|" << seq << "|";
+        switch (type)
+        {
+        case MESSAGE:
+            ss << "MESSAGE";
+            break;
+        case KEY_LOCK:
+            ss << "KEY_LOCK";
+            break;
+        case FINISHED:
+            ss << "FINISHED";
+            break;
+        case REVERT:
+            ss << "REVERT";
+            break;
+        };
+        ss << "]";
+        return ss.str();
+    }
 };
 }  // namespace bcos::executor

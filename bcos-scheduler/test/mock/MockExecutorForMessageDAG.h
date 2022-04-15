@@ -107,6 +107,13 @@ public:
 
     void clear() { m_dagHashes.clear(); }
 
+    virtual void dmcExecuteTransactions(std::string,
+        gsl::span<bcos::protocol::ExecutionMessage::UniquePtr>,
+
+        // called every time at all tx stop( pause or finish)
+        std::function<void(bcos::Error::UniquePtr,
+            std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>) override
+    {}
     std::string m_name;
     bcos::protocol::BlockNumber m_blockNumber = 0;
     std::set<bcos::crypto::HashType> m_dagHashes;

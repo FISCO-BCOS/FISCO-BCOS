@@ -70,6 +70,7 @@ enum ExecutorVersion : int32_t
 };
 
 class TransactionExecutive;
+class ExecutiveFlowInterface;
 class BlockContext;
 class PrecompiledContract;
 template <typename T, typename V>
@@ -100,6 +101,12 @@ public:
 
     void executeTransaction(bcos::protocol::ExecutionMessage::UniquePtr input,
         std::function<void(bcos::Error::UniquePtr, bcos::protocol::ExecutionMessage::UniquePtr)>
+            callback) override;
+
+    void dmcExecuteTransactions(std::string contractAddress,
+        gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
+        std::function<void(
+            bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
             callback) override;
 
     void call(bcos::protocol::ExecutionMessage::UniquePtr input,
@@ -136,6 +143,29 @@ public:
         std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) override;
 
     void removeState(bcos::protocol::BlockNumber _number) override;
+    struct HashCombine
+    {
+        size_t hash(const std::tuple<int64_t, int64_t>& val) const
+        {
+            size_t seed = hashInt64(std::get<0>(val));
+            boost::hash_combine(seed, hashInt64(std::get<1>(val)));
+
+            return seed;
+        }
+
+        bool equal(
+            const std::tuple<int64_t, int64_t>& lhs, const std::tuple<int64_t, int64_t>& rhs) const
+        {
+            return std::get<0>(lhs) == std::get<0>(rhs) && std::get<1>(lhs) == std::get<1>(rhs);
+        }
+
+        std::hash<int64_t> hashInt64;
+    };
+
+    struct CallState
+    {
+        std::shared_ptr<BlockContext> blockContext;
+    };
 
 protected:
     virtual void dagExecuteTransactionsInternal(gsl::span<std::unique_ptr<CallParameters>> inputs,
@@ -187,6 +217,16 @@ protected:
         gsl::span<std::unique_ptr<CallParameters>> inputs,
         std::vector<protocol::ExecutionMessage::UniquePtr>& executionResults);
 
+    std::shared_ptr<ExecutiveFlowInterface> getExecutiveFlow(
+        std::string codeAddress, bool isStaticCall);
+
+    void asyncExecuteExecutiveFlow(std::shared_ptr<ExecutiveFlowInterface> executiveFlow,
+        std::function<void(
+            bcos::Error::UniquePtr&&, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>&&)>
+            callback);
+
+    virtual std::shared_ptr<BlockContext> createBlockContextForCall(int64_t contextID, int64_t seq);
+
     txpool::TxPoolInterface::Ptr m_txpool;
     storage::MergeableStorageInterface::Ptr m_cachedStorage;
     std::shared_ptr<storage::TransactionalStorageInterface> m_backendStorage;
@@ -211,36 +251,16 @@ protected:
     bcos::storage::StorageInterface::Ptr m_lastStateStorage;
     bcos::protocol::BlockNumber m_lastCommittedBlockNumber = 1;
 
-    struct HashCombine
-    {
-        size_t hash(const std::tuple<int64_t, int64_t>& val) const
-        {
-            size_t seed = hashInt64(std::get<0>(val));
-            boost::hash_combine(seed, hashInt64(std::get<1>(val)));
-
-            return seed;
-        }
-
-        bool equal(
-            const std::tuple<int64_t, int64_t>& lhs, const std::tuple<int64_t, int64_t>& rhs) const
-        {
-            return std::get<0>(lhs) == std::get<0>(rhs) && std::get<1>(lhs) == std::get<1>(rhs);
-        }
-
-        std::hash<int64_t> hashInt64;
-    };
-
-    struct CallState
-    {
-        std::shared_ptr<BlockContext> blockContext;
-    };
-    tbb::concurrent_hash_map<std::tuple<int64_t, int64_t>, CallState, HashCombine> m_calledContext;
+    std::shared_ptr<tbb::concurrent_hash_map<std::tuple<int64_t, int64_t>, CallState, HashCombine>>
+        m_calledContext = std::make_shared<
+            tbb::concurrent_hash_map<std::tuple<int64_t, int64_t>, CallState, HashCombine>>();
     std::shared_mutex m_stateStoragesMutex;
 
     std::shared_ptr<std::map<std::string, std::shared_ptr<PrecompiledContract>>>
         m_precompiledContract;
     std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
-        m_constantPrecompiled;
+        m_constantPrecompiled =
+            std::make_shared<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>();
     std::shared_ptr<const std::set<std::string>> m_builtInPrecompiled;
     unsigned int m_DAGThreadNum = std::max(std::thread::hardware_concurrency(), (unsigned int)1);
     std::shared_ptr<wasm::GasInjector> m_gasInjector = nullptr;

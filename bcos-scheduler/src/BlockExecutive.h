@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Executive.h"
 #include "ExecutorManager.h"
 #include "GraphKeyLocks.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
@@ -27,6 +28,7 @@
 namespace bcos::scheduler
 {
 class SchedulerImpl;
+class DmcExecutor;
 
 class BlockExecutive : public std::enable_shared_from_this<BlockExecutive>
 {
@@ -82,18 +84,6 @@ public:
     void removeAllState();
 
 private:
-    void DAGExecute(std::function<void(Error::UniquePtr)> error);
-    void DMTExecute(std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback);
-
-    enum TraverseHint : int8_t
-    {
-        PASS = 0,
-        DELETE,
-        SKIP,
-        UPDATE,
-        END,
-    };
-
     struct CommitStatus
     {
         std::atomic_size_t total;
@@ -108,53 +98,35 @@ private:
 
     struct BatchStatus  // Batch state per batch
     {
+        using Ptr = std::shared_ptr<BatchStatus>;
         std::atomic_size_t total = 0;
-        std::atomic_size_t received = 0;
+        std::atomic_size_t paused = 0;
+        std::atomic_size_t finished = 0;
         std::atomic_size_t error = 0;
 
-        std::function<void(Error::UniquePtr)> callback;
         std::atomic_bool callbackExecuted = false;
-        std::atomic_bool allSended = false;
+        mutable SharedMutex x_lock;
     };
-    void startBatch(std::function<void(Error::UniquePtr)> callback);
-    void checkBatch(BatchStatus& status);
 
-    std::string newEVMAddress(int64_t blockNumber, ContextID contextID, Seq seq);
-    std::string newEVMAddress(
-        const std::string_view& _sender, bytesConstRef _init, u256 const& _salt);
+    void DAGExecute(std::function<void(Error::UniquePtr)> callback);  // only used for DAG
+    std::map<std::tuple<std::string, ContextID>, ExecutiveState::Ptr, std::less<>>
+        m_executiveStates;  // only used for DAG
 
+    void DMCExecute(std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback);
+    std::shared_ptr<DmcExecutor> registerAndGetDmcExecutor(std::string contractAddress);
+    void scheduleExecutive(ExecutiveState::Ptr executiveState);
+    void onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr output);
+    void onDmcExecuteFinish(
+        std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback);
+    void serialPrepareExecutor();
     std::string preprocessAddress(const std::string_view& address);
 
-    struct ExecutiveState  // Executive state per tx
-    {
-        ExecutiveState(int64_t _contextID, bcos::protocol::ExecutionMessage::UniquePtr _message,
-            bool _enableDAG)
-          : contextID(_contextID), message(std::move(_message)), enableDAG(_enableDAG)
-        {}
-
-        int64_t contextID;
-        std::stack<int64_t, std::list<int64_t>> callStack;
-        bcos::protocol::ExecutionMessage::UniquePtr message;
-        bcos::Error::UniquePtr error;
-        int64_t currentSeq = 0;
-        bool enableDAG;
-        bool skip = false;
-    };
-
-    std::map<std::tuple<std::string, ContextID>, ExecutiveState, std::less<>> m_executiveStates;
-    void traverseExecutive(std::function<TraverseHint(ExecutiveState&)> callback);
-
-    struct ExecutiveResult
-    {
-        bcos::protocol::TransactionReceipt::Ptr receipt;
-        bcos::crypto::HashType transactionHash;
-        std::string source;
-    };
+    std::map<std::string, std::shared_ptr<DmcExecutor>, std::less<>> m_dmcExecutors;
     std::vector<ExecutiveResult> m_executiveResults;
 
     size_t m_gasUsed = 0;
 
-    GraphKeyLocks m_keyLocks;
+    GraphKeyLocks::Ptr m_keyLocks = std::make_shared<GraphKeyLocks>();
 
     std::chrono::system_clock::time_point m_currentTimePoint;
 
@@ -172,7 +144,7 @@ private:
     bool m_syncBlock = false;
     bool m_hasPrepared = false;
     bool m_withDAG = false;
-    mutable SharedMutex x_prepareLock;
+    mutable SharedMutex x_dmcExecutorLock;
 };
 
 }  // namespace bcos::scheduler

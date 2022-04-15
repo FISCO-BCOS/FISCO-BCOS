@@ -226,7 +226,6 @@ private:
     bool buildBfsPath(std::string const& _absoluteDir);
 
     std::weak_ptr<BlockContext> m_blockContext;  ///< Information on the runtime environment.
-
     std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
         m_constantPrecompiled;
     std::shared_ptr<const std::map<std::string, std::shared_ptr<PrecompiledContract>>>

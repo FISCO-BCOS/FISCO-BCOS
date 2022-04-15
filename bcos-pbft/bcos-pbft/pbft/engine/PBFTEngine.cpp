@@ -246,7 +246,7 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, bytesConstRef _proposalData
                           << m_config->printCurrentState()
                           << LOG_KV("syncingHighestNumber", m_config->syncingHighestNumber());
         m_config->notifyResetSealing(consProposalIndex);
-        m_config->validator()->asyncResetTxsFlag(_proposalData, false);
+        // m_config->validator()->asyncResetTxsFlag(_proposalData, false);
         return;
     }
     if (_proposalIndex <= m_config->committedProposal()->index() ||
@@ -271,7 +271,7 @@ void PBFTEngine::onRecvProposal(bool _containSysTxs, bytesConstRef _proposalData
                           << LOG_KV("hash", _proposalHash.abridged())
                           << m_config->printCurrentState();
         m_config->notifyResetSealing(consProposalIndex);
-        m_config->validator()->asyncResetTxsFlag(_proposalData, false);
+        // m_config->validator()->asyncResetTxsFlag(_proposalData, false);
         return;
     }
     if (m_config->timeout())
@@ -326,7 +326,7 @@ void PBFTEngine::resetSealedTxs(std::shared_ptr<PBFTMessageInterface> _prePrepar
         return;
     }
     m_config->notifyResetSealing();
-    m_config->validator()->asyncResetTxsFlag(_prePrepareMsg->consensusProposal()->data(), false);
+    // m_config->validator()->asyncResetTxsFlag(_prePrepareMsg->consensusProposal()->data(), false);
 }
 
 // receive the new block notification from the sync module

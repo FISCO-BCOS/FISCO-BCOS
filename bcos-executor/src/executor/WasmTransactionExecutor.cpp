@@ -109,7 +109,7 @@ void WasmTransactionExecutor::initPrecompiled()
     m_constantPrecompiled->insert({CONSENSUS_NAME, consensusPrecompiled});
     m_constantPrecompiled->insert({PARALLEL_CONFIG_NAME, parallelConfigPrecompiled});
     // FIXME: not support crud now
-    // m_constantPrecompiled.insert({TABLE_NAME, tableFactoryPrecompiled});
+    // m_constantPrecompiled->insert({TABLE_NAME, tableFactoryPrecompiled});
     m_constantPrecompiled->insert({KV_TABLE_NAME, kvTableFactoryPrecompiled});
     m_constantPrecompiled->insert(
         {DAG_TRANSFER_NAME, std::make_shared<precompiled::DagTransferPrecompiled>(m_hashImpl)});
