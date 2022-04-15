@@ -1071,10 +1071,10 @@ bool TransactionExecutive::checkAuth(
                                                          precompiled::CONTRACT_AUTH_ADDRESS;
     auto contractAuthPrecompiled = dynamic_pointer_cast<precompiled::ContractAuthPrecompiled>(
         m_constantPrecompiled->at(authAddress));
-    Address address(callParameters->origin);
+    std::string address = callParameters->origin;
     auto path = string(callParameters->codeAddress);
     EXECUTIVE_LOG(DEBUG) << "check auth" << LOG_KV("codeAddress", path)
-                         << LOG_KV("isCreate", _isCreate) << LOG_KV("originAddress", address.hex());
+                         << LOG_KV("isCreate", _isCreate) << LOG_KV("originAddress", address);
     if (_isCreate)
     {
         return contractAuthPrecompiled->checkDeployAuth(shared_from_this(), address);
