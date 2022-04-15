@@ -26,7 +26,7 @@
 
 namespace bcos::precompiled
 {
-using MethodAuthMap = std::map<bytes, std::map<bcos::Address, bool>>;
+using MethodAuthMap = std::map<bytes, std::map<std::string, bool>>;
 
 enum AuthType : int
 {
@@ -46,10 +46,10 @@ public:
         const std::string& _origin, const std::string& _sender, int64_t gasLeft) override;
 
     bool checkMethodAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        const std::string& path, bytesRef func, const Address& account);
+        const std::string& path, bytesRef func, const std::string& account);
 
-    bool checkDeployAuth(
-        const std::shared_ptr<executor::TransactionExecutive>& _executive, const Address& account);
+    bool checkDeployAuth(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        const std::string& account);
 
 private:
     void getAdmin(const std::shared_ptr<executor::TransactionExecutive>& _executive,
@@ -102,6 +102,10 @@ private:
         bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
         bool _isClose, const std::string& _sender, const PrecompiledGas::Ptr& gasPricer);
 
+    void setContractStatus(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
+        const std::string& _sender, const PrecompiledGas::Ptr& gasPricer);
+
     s256 getMethodAuthType(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const std::string& _path, bytesConstRef _func);
 
@@ -109,11 +113,6 @@ private:
         const std::string& _path);
 
     u256 getDeployAuthType(const std::shared_ptr<executor::TransactionExecutive>& _executive);
-
-    inline bool checkSender(std::string_view _sender)
-    {
-        return _sender == precompiled::AUTH_COMMITTEE_ADDRESS;
-    }
 
     inline std::string getAuthTableName(const std::string& _name)
     {

@@ -33,6 +33,7 @@ pragma experimental ABIEncoderV2;
     // 数量限制
     struct Limit {
         uint offset;
+        // count limit 1000
         uint count;
     }
 
