@@ -24,7 +24,7 @@ find_package(jsoncpp CONFIG REQUIRED)
 
 file(GLOB_RECURSE SRCS src/*.cpp)
 add_library(${EXECUTOR_TARGET} ${SRCS})
-target_link_libraries(${EXECUTOR_TARGET} PUBLIC jsoncpp_lib_static ${CODEC_TARGET} ${CRYPTO_TARGET} ${WEDPR_EXTEND_LIB} ${TABLE_TARGET} Boost::context evmone fbwasm evmc::loader evmc::instructions wabt GroupSig)
+target_link_libraries(${EXECUTOR_TARGET} PUBLIC jsoncpp_lib_static ${CODEC_TARGET} ${GROUPSIG_LIBRARY} ${CRYPTO_TARGET} ${WEDPR_EXTEND_LIB} ${TABLE_TARGET} Boost::context evmone fbwasm evmc::loader evmc::instructions wabt GroupSig Cryptopp)
 
 # add_subdirectory(test/trie-test)
 # add_subdirectory(test/flow-graph)

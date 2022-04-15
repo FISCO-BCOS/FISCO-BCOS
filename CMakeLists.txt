@@ -23,9 +23,9 @@ include(CompilerSettings)
 include(BuildInfoGenerator)
 
 # import dependencies
+include(ProjectGroupSig)
 include(ProjectCryptopp)
 include(ProjectJsonCpp)
-include(ProjectGroupSig)
 include(ProjectTCMalloc)
 include(ProjectWABT)
 include(ProjectBCOSWASM)
