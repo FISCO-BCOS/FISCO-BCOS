@@ -7,7 +7,7 @@ else()
 endif()
 
 ExternalProject_Add(jsoncpp
-    PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/deps
+    PREFIX ${CMAKE_SOURCE_DIR}/deps
     DOWNLOAD_NAME jsoncpp-1.7.7.tar.gz
     DOWNLOAD_NO_PROGRESS 1
     URL https://github.com/open-source-parsers/jsoncpp/archive/1.7.7.tar.gz
