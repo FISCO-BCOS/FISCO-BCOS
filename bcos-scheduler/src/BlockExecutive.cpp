@@ -221,14 +221,12 @@ void BlockExecutive::asyncExecute(
                 return;
             }
 
-            auto newBatchStatus = std::make_shared<BatchStatus>();
-            DMCExecute(newBatchStatus, std::move(callback));
+            DMCExecute(std::move(callback));
         });
     }
     else
     {
-        auto newBatchStatus = std::make_shared<BatchStatus>();
-        DMCExecute(newBatchStatus, std::move(callback));
+        DMCExecute(std::move(callback));
     }
 }
 
@@ -393,7 +391,7 @@ void BlockExecutive::asyncNotify(
 }
 
 
-void BlockExecutive::DMCExecute(BatchStatus::Ptr batchStatus,
+void BlockExecutive::DMCExecute(
     std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback)
 {
     // prepare all dmcExecutor
@@ -405,6 +403,7 @@ void BlockExecutive::DMCExecute(BatchStatus::Ptr batchStatus,
     {
         contractAddress.push_back(it->first);
     }
+    auto batchStatus = std::make_shared<BatchStatus>();
     batchStatus->total = contractAddress.size();
 
     auto executorCallback =
@@ -460,8 +459,7 @@ void BlockExecutive::DMCExecute(BatchStatus::Ptr batchStatus,
             else if (batchStatus->paused != 0)  // new contract
             {
                 // Start next DMC round
-                auto newBatchStatus = std::make_shared<BatchStatus>();
-                DMCExecute(newBatchStatus, std::move(callback));
+                DMCExecute(std::move(callback));
             }
             else if (batchStatus->finished == batchStatus->total)
             {
@@ -474,8 +472,8 @@ void BlockExecutive::DMCExecute(BatchStatus::Ptr batchStatus,
             }
         };
 
-    // for each dmcExecutor
-    //#pragma omp parallel for
+// for each dmcExecutor
+#pragma omp parallel for
     for (size_t i = 0; i < contractAddress.size(); i++)
     {
         auto dmcExecutor = m_dmcExecutors[contractAddress[i]];
@@ -518,9 +516,16 @@ void BlockExecutive::onDmcExecuteFinish(
                 std::chrono::system_clock::now() - m_currentTimePoint);
 
             // Set result to m_block
-            for (auto& it : m_executiveResults)
+            for (size_t i = 0; i < m_executiveResults.size(); i++)
             {
-                m_block->appendReceipt(it.receipt);
+                auto receipt = m_executiveResults[i].receipt;
+#ifdef DMC_TRACE_LOG_ENABLE
+                if (receipt == nullptr)
+                {
+                    DMC_LOG(TRACE) << " nullptr of receipt: " << i << std::endl;
+                }
+#endif
+                m_block->appendReceipt(receipt);
             }
             auto executedBlockHeader =
                 m_blockFactory->blockHeaderFactory()->populateBlockHeader(m_block->blockHeader());
@@ -757,36 +762,49 @@ void BlockExecutive::batchBlockRollback(std::function<void(Error::UniquePtr)> ca
 
 DmcExecutor::Ptr BlockExecutive::registerAndGetDmcExecutor(std::string contractAddress)
 {
-    auto dmcExecutor = m_dmcExecutors[contractAddress];
-    if (dmcExecutor)
+    auto dmcExecutorIt = m_dmcExecutors.find(contractAddress);
+    if (dmcExecutorIt != m_dmcExecutors.end())
     {
+        return dmcExecutorIt->second;
+    }
+    {
+        bcos::WriteGuard lock(x_dmcExecutorLock);
+        dmcExecutorIt = m_dmcExecutors.find(contractAddress);
+        if (dmcExecutorIt != m_dmcExecutors.end())
+        {
+            return dmcExecutorIt->second;
+        }
+        auto executor = m_scheduler->executorManager()->dispatchExecutor(contractAddress);
+        auto dmcExecutor = std::make_shared<DmcExecutor>(
+            contractAddress, m_block, executor, m_keyLocks, m_scheduler->m_hashImpl);
+        m_dmcExecutors.emplace(contractAddress, dmcExecutor);
+
+        // register functions
+        dmcExecutor->setSchedulerOutHandler(
+            [this](ExecutiveState::Ptr executiveState) { scheduleExecutive(executiveState); });
+
+        dmcExecutor->setOnTxFinishedHandler(
+            [this](bcos::protocol::ExecutionMessage::UniquePtr output) {
+                onTxFinish(std::move(output));
+            });
+
         return dmcExecutor;
     }
-
-    auto executor = m_scheduler->executorManager()->dispatchExecutor(contractAddress);
-    dmcExecutor = std::make_shared<DmcExecutor>(
-        contractAddress, m_block, executor, m_keyLocks, m_scheduler->m_hashImpl);
-    m_dmcExecutors[contractAddress] = dmcExecutor;
-
-    // register functions
-    dmcExecutor->setSchedulerOutHandler(
-        [this](ExecutiveState::Ptr executiveState) { schedulerExecutive(executiveState); });
-
-    dmcExecutor->setOnTxFinishedHandler([this](bcos::protocol::ExecutionMessage::UniquePtr output) {
-        onTxFinish(std::move(output));
-    });
-
-    return dmcExecutor;
 }
 
-void BlockExecutive::schedulerExecutive(ExecutiveState::Ptr executiveState)
+void BlockExecutive::scheduleExecutive(ExecutiveState::Ptr executiveState)
 {
     auto to = std::string(executiveState->message->to());
 
-    auto dmcExecutor = m_dmcExecutors[to];
-    if (!dmcExecutor)
+    DmcExecutor::Ptr dmcExecutor;
+    auto it = m_dmcExecutors.find(to);
+    if (it == m_dmcExecutors.end())
     {
         dmcExecutor = registerAndGetDmcExecutor(to);
+    }
+    else
+    {
+        dmcExecutor = it->second;
     }
 
     dmcExecutor->scheduleIn(executiveState);
@@ -797,7 +815,10 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
     auto txGasUsed = TRANSACTION_GAS - output->gasAvailable();
     // Calc the gas set to header
     m_gasUsed += txGasUsed;
-
+#ifdef DMC_TRACE_LOG_ENABLE
+    DMC_LOG(TRACE) << " [^^] " << output->toString() << " -> "
+                   << output->contextID() - m_startContextID << std::endl;
+#endif
     // write receipt in results
     m_executiveResults[output->contextID() - m_startContextID].receipt =
         m_scheduler->m_blockFactory->receiptFactory()->createReceipt(txGasUsed,
@@ -823,9 +844,11 @@ void BlockExecutive::serialPrepareExecutor()
     }
     for (auto address : currentExecutors)
     {
+#ifdef DMC_TRACE_LOG_ENABLE
         DMC_LOG(TRACE) << "----------------- " << address << " | "
                        << m_block->blockHeaderConst()->number() << " -----------------"
                        << std::endl;
+#endif
         m_dmcExecutors[address]->prepare();  // may generate new contract in m_dmcExecutors
     }
 
@@ -836,9 +859,11 @@ void BlockExecutive::serialPrepareExecutor()
         if (currentExecutors.count(address) == 0)
         {
             // is new generated contract
+#ifdef DMC_TRACE_LOG_ENABLE
             DMC_LOG(TRACE) << "----------------- " << address << " | "
                            << m_block->blockHeaderConst()->number() << " -----------------"
                            << std::endl;
+#endif
             m_dmcExecutors[address]->prepare();
         }
     }
@@ -854,9 +879,11 @@ void BlockExecutive::serialPrepareExecutor()
         {
             continue;  // must jump finished executor
         }
+#ifdef DMC_TRACE_LOG_ENABLE
         DMC_LOG(TRACE) << " --unlockPrepare-- " << address << " | "
                        << m_block->blockHeaderConst()->number() << " -----------------"
                        << std::endl;
+#endif
 
         allFinished = false;
         bool need = dmcExecutor->unlockPrepare();
@@ -871,9 +898,11 @@ void BlockExecutive::serialPrepareExecutor()
         for (auto it = m_dmcExecutors.begin(); it != m_dmcExecutors.end(); it++)
         {
             auto& address = it->first;
+#ifdef DMC_TRACE_LOG_ENABLE
             DMC_LOG(TRACE) << " --detect--revert-- " << address << " | "
                            << m_block->blockHeaderConst()->number() << " -----------------"
                            << std::endl;
+#endif
             if (m_dmcExecutors[address]->detectLockAndRevert())
             {
                 needRevert = true;
