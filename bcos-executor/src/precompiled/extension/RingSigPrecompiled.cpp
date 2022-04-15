@@ -49,7 +49,7 @@ std::shared_ptr<PrecompiledExecResult> RingSigPrecompiled::call(
         const std::string& , const std::string& , int64_t)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("RingSigPrecompiled") << LOG_DESC("call")
-                           << LOG_KV("param", toHex(_param));
+                           << LOG_KV("param", toHexString(_param));
 
     // parse function name
     uint32_t func = getParamFunc(_param);
@@ -65,7 +65,7 @@ std::shared_ptr<PrecompiledExecResult> RingSigPrecompiled::call(
     {
         // ringSigVerify(string,string,string)
         std::string signature, message, paramInfo;
-        codec->decode(data, signature, message, gpkInfo, paramInfo);
+        codec->decode(data, signature, message, paramInfo);
         bool result = false;
 
         try
@@ -78,11 +78,11 @@ std::shared_ptr<PrecompiledExecResult> RingSigPrecompiled::call(
             PRECOMPILED_LOG(ERROR) << LOG_BADGE("RingSigPrecompiled") << LOG_DESC(errorMsg)
                                    << LOG_KV("signature", signature) << LOG_KV("message", message)
                                    << LOG_KV("paramInfo", paramInfo);
-            callResult->setExecResult(codec->encode(u256((int)VERIFY_GROUP_SIG_FAILED)));
+            callResult->setExecResult(codec->encode(u256((int)VERIFY_RING_SIG_FAILED)));
             getErrorCodeOut(callResult->mutableExecResult(), 1, *codec);
             return callResult;
         }
-        callResult->setExecResult(acodec->encode(result));
+        callResult->setExecResult(codec->encode(result));
     }
     else
     {
