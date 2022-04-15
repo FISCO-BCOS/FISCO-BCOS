@@ -72,7 +72,8 @@ public:
     std::string toString()
     {
         std::stringstream ss;
-        ss << seq() << "|" << getTypeName(type()) << "|" << from() << "." << to() << "|";
+        ss << contextID() << "|" << seq() << "|" << getTypeName(type()) << "|" << from() << "."
+           << to() << "|";
         for (auto& lock : keyLocks())
         {
             ss << toHex(lock) << ".";

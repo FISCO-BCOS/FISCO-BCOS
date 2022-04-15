@@ -106,11 +106,13 @@ private:
         mutable SharedMutex x_lock;
     };
 
+    void DAGExecute(std::function<void(Error::UniquePtr)> callback);  // only used for DAG
+    std::map<std::tuple<std::string, ContextID>, ExecutiveState::Ptr, std::less<>>
+        m_executiveStates;  // only used for DAG
 
-    void DMCExecute(BatchStatus::Ptr batchStatus,
-        std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback);
+    void DMCExecute(std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback);
     std::shared_ptr<DmcExecutor> registerAndGetDmcExecutor(std::string contractAddress);
-    void schedulerExecutive(ExecutiveState::Ptr executiveState);
+    void scheduleExecutive(ExecutiveState::Ptr executiveState);
     void onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr output);
     void onDmcExecuteFinish(
         std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback);
@@ -140,7 +142,7 @@ private:
     bool m_syncBlock = false;
     bool m_hasPrepared = false;
     bool m_withDAG = false;
-    mutable SharedMutex x_prepareLock;
+    mutable SharedMutex x_dmcExecutorLock;
 };
 
 }  // namespace bcos::scheduler
