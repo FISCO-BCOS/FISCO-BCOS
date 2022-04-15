@@ -49,7 +49,7 @@ std::shared_ptr<PrecompiledExecResult> GroupSigPrecompiled::call(
         const std::string& , const std::string& , int64_t)
 {
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("GroupSigPrecompiled") << LOG_DESC("call")
-                           << LOG_KV("param", toHex(_param));
+                           << LOG_KV("param", toHexString(_param));
 
     // parse function name
     uint32_t func = getParamFunc(_param);
@@ -82,7 +82,7 @@ std::shared_ptr<PrecompiledExecResult> GroupSigPrecompiled::call(
             getErrorCodeOut(callResult->mutableExecResult(), 1, *codec);
             return callResult;
         }
-        callResult->setExecResult(acodec->encode(result));
+        callResult->setExecResult(codec->encode(result));
     }
     else
     {
