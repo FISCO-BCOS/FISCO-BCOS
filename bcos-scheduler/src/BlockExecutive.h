@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Executive.h"
 #include "ExecutorManager.h"
 #include "GraphKeyLocks.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
@@ -27,11 +28,13 @@
 namespace bcos::scheduler
 {
 class SchedulerImpl;
+class DmcExecutor;
 
 class BlockExecutive : public std::enable_shared_from_this<BlockExecutive>
 {
 public:
     using UniquePtr = std::unique_ptr<BlockExecutive>;
+    using Ptr = std::shared_ptr<BlockExecutive>;
 
     BlockExecutive(bcos::protocol::Block::Ptr block, SchedulerImpl* scheduler,
         size_t startContextID,
@@ -60,6 +63,7 @@ public:
     BlockExecutive& operator=(const BlockExecutive&) = delete;
     BlockExecutive& operator=(BlockExecutive&&) = delete;
 
+    void prepare();
     void asyncExecute(std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback);
     void asyncCall(
         std::function<void(Error::UniquePtr&&, protocol::TransactionReceipt::Ptr&&)> callback);
@@ -78,18 +82,6 @@ public:
     bool isCall() { return m_staticCall; }
 
 private:
-    void DAGExecute(std::function<void(Error::UniquePtr)> error);
-    void DMTExecute(std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback);
-
-    enum TraverseHint : int8_t
-    {
-        PASS = 0,
-        DELETE,
-        SKIP,
-        UPDATE,
-        END,
-    };
-
     struct CommitStatus
     {
         std::atomic_size_t total;
@@ -104,53 +96,33 @@ private:
 
     struct BatchStatus  // Batch state per batch
     {
+        using Ptr = std::shared_ptr<BatchStatus>;
         std::atomic_size_t total = 0;
-        std::atomic_size_t received = 0;
+        std::atomic_size_t paused = 0;
+        std::atomic_size_t finished = 0;
         std::atomic_size_t error = 0;
 
-        std::function<void(Error::UniquePtr)> callback;
         std::atomic_bool callbackExecuted = false;
-        std::atomic_bool allSended = false;
+        mutable SharedMutex x_lock;
     };
-    void startBatch(std::function<void(Error::UniquePtr)> callback);
-    void checkBatch(BatchStatus& status);
 
-    std::string newEVMAddress(int64_t blockNumber, ContextID contextID, Seq seq);
-    std::string newEVMAddress(
-        const std::string_view& _sender, bytesConstRef _init, u256 const& _salt);
 
+    void DMCExecute(BatchStatus::Ptr batchStatus,
+        std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback);
+    std::shared_ptr<DmcExecutor> registerAndGetDmcExecutor(std::string contractAddress);
+    void schedulerExecutive(ExecutiveState::Ptr executiveState);
+    void onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr output);
+    void onDmcExecuteFinish(
+        std::function<void(Error::UniquePtr, protocol::BlockHeader::Ptr)> callback);
+    void serialPrepareExecutor();
     std::string preprocessAddress(const std::string_view& address);
 
-    struct ExecutiveState  // Executive state per tx
-    {
-        ExecutiveState(int64_t _contextID, bcos::protocol::ExecutionMessage::UniquePtr _message,
-            bool _enableDAG)
-          : contextID(_contextID), message(std::move(_message)), enableDAG(_enableDAG)
-        {}
-
-        int64_t contextID;
-        std::stack<int64_t, std::list<int64_t>> callStack;
-        bcos::protocol::ExecutionMessage::UniquePtr message;
-        bcos::Error::UniquePtr error;
-        int64_t currentSeq = 0;
-        bool enableDAG;
-        bool skip = false;
-    };
-
-    std::map<std::tuple<std::string, ContextID>, ExecutiveState, std::less<>> m_executiveStates;
-    void traverseExecutive(std::function<TraverseHint(ExecutiveState&)> callback);
-
-    struct ExecutiveResult
-    {
-        bcos::protocol::TransactionReceipt::Ptr receipt;
-        bcos::crypto::HashType transactionHash;
-        std::string source;
-    };
+    std::map<std::string, std::shared_ptr<DmcExecutor>, std::less<>> m_dmcExecutors;
     std::vector<ExecutiveResult> m_executiveResults;
 
     size_t m_gasUsed = 0;
 
-    GraphKeyLocks m_keyLocks;
+    GraphKeyLocks::Ptr m_keyLocks = std::make_shared<GraphKeyLocks>();
 
     std::chrono::system_clock::time_point m_currentTimePoint;
 
@@ -166,6 +138,9 @@ private:
     bcos::protocol::BlockFactory::Ptr m_blockFactory;
     bool m_staticCall = false;
     bool m_syncBlock = false;
+    bool m_hasPrepared = false;
+    bool m_withDAG = false;
+    mutable SharedMutex x_prepareLock;
 };
 
 }  // namespace bcos::scheduler

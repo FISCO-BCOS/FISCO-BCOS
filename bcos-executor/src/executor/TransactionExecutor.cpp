@@ -28,6 +28,8 @@
 #include "../dag/TxDAG.h"
 #include "../dag/TxDAG2.h"
 #include "../executive/BlockContext.h"
+#include "../executive/ExecutiveFactory.h"
+#include "../executive/ExecutiveStackFlow.h"
 #include "../executive/TransactionExecutive.h"
 #include "../precompiled/Common.h"
 #include "../precompiled/ConsensusPrecompiled.h"
@@ -43,6 +45,7 @@
 #include "../precompiled/extension/DagTransferPrecompiled.h"
 #include "../vm/Precompiled.h"
 #include "../vm/gas_meter/GasInjector.h"
+#include "ExecuteOutputs.h"
 #include "bcos-codec/abi/ContractABIType.h"
 #include "bcos-framework/interfaces/dispatcher/SchedulerInterface.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
@@ -206,7 +209,7 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
         // Create a temp block context
         blockContext = createBlockContext(
             number, h256(), 0, 0, std::move(storage));  // TODO: complete the block info
-        auto inserted = m_calledContext.emplace(
+        auto inserted = m_calledContext->emplace(
             std::tuple{input->contextID(), input->seq()}, CallState{blockContext});
 
         if (!inserted)
@@ -224,8 +227,8 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
     case protocol::ExecutionMessage::FINISHED:
     case protocol::ExecutionMessage::REVERT:
     {
-        decltype(m_calledContext)::accessor it;
-        m_calledContext.find(it, std::tuple{input->contextID(), input->seq()});
+        tbb::concurrent_hash_map<std::tuple<int64_t, int64_t>, CallState, HashCombine>::accessor it;
+        m_calledContext->find(it, std::tuple{input->contextID(), input->seq()});
 
         if (it.empty())
         {
@@ -267,7 +270,8 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
             if (result->type() == protocol::ExecutionMessage::FINISHED ||
                 result->type() == protocol::ExecutionMessage::REVERT)
             {
-                auto erased = m_calledContext.erase(std::tuple{result->contextID(), result->seq()});
+                auto erased =
+                    m_calledContext->erase(std::tuple{result->contextID(), result->seq()});
 
                 if (!erased)
                 {
@@ -319,6 +323,122 @@ void TransactionExecutor::executeTransaction(bcos::protocol::ExecutionMessage::U
         });
 }
 
+
+void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
+    gsl::span<bcos::protocol::ExecutionMessage::UniquePtr> inputs,
+    std::function<void(
+        bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
+        callback)
+{
+    auto recoredT = utcTime();
+    auto startT = utcTime();
+    // for fill block
+    auto txHashes = make_shared<HashList>();
+    std::vector<decltype(inputs)::index_type> indexes;
+    auto fillInputs = std::make_shared<std::vector<bcos::protocol::ExecutionMessage::UniquePtr>>();
+
+    // final result
+    auto callParametersList =
+        std::make_shared<std::vector<CallParameters::UniquePtr>>(inputs.size());
+
+    bool isStaticCall = inputs[0]->staticCall();  // staticCall only has one element in inputs
+
+#pragma omp parallel for
+    for (decltype(inputs)::index_type i = 0; i < inputs.size(); ++i)
+    {
+        auto& params = inputs[i];
+
+        switch (params->type())
+        {
+        case ExecutionMessage::TXHASH:
+        {
+#pragma omp critical
+            {
+                txHashes->emplace_back(params->transactionHash());
+                indexes.emplace_back(i);
+                fillInputs->emplace_back(std::move(params));
+            }
+
+            break;
+        }
+        case ExecutionMessage::MESSAGE:
+        case bcos::protocol::ExecutionMessage::REVERT:
+        case bcos::protocol::ExecutionMessage::FINISHED:
+        case bcos::protocol::ExecutionMessage::KEY_LOCK:
+        {
+            callParametersList->at(i) = createCallParameters(*params, params->staticCall());
+            break;
+        }
+        default:
+        {
+            auto message = (boost::format("Unsupported message type: %d") % params->type()).str();
+            EXECUTOR_LOG(ERROR) << "DAG Execute error, " << message;
+            // callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::DAG_ERROR, message), {});
+            break;
+        }
+        }
+    }
+    auto prepareT = utcTime() - startT;
+    startT = utcTime();
+
+    if (!txHashes->empty())
+    {
+        m_txpool->asyncFillBlock(txHashes,
+            [this, isStaticCall, contractAddress, indexes = std::move(indexes),
+                fillInputs = std::move(fillInputs),
+                callParametersList = std::move(callParametersList), callback = std::move(callback),
+                txHashes](Error::Ptr error, protocol::TransactionsPtr transactions) mutable {
+                if (error)
+                {
+                    auto errorMessage = "asyncFillBlock failed";
+                    EXECUTOR_LOG(ERROR) << errorMessage << boost::diagnostic_information(*error);
+                    callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(
+                                 ExecuteError::DAG_ERROR, errorMessage, *error),
+                        {});
+                    return;
+                }
+                auto startT = utcTime();
+#pragma omp parallel for
+                for (size_t i = 0; i < transactions->size(); ++i)
+                {
+                    assert(transactions->at(i));
+                    callParametersList->at(indexes[i]) =
+                        createCallParameters(*fillInputs->at(i), *transactions->at(i));
+                }
+                auto prepareT = utcTime() - startT;
+                startT = utcTime();
+
+                std::shared_ptr<BlockContext> blockContext;
+
+                auto executiveFlow = getExecutiveFlow(contractAddress, isStaticCall);
+                executiveFlow->submit(callParametersList);
+
+                asyncExecuteExecutiveFlow(executiveFlow,
+                    [callback = std::move(callback)](bcos::Error::UniquePtr&& error,
+                        std::vector<bcos::protocol::ExecutionMessage::UniquePtr>&& messages) {
+                        callback(std::move(error), std::move(messages));
+                    });
+                EXECUTOR_LOG(INFO)
+                    << LOG_DESC("dmcExecuteTransactionsInternal after fillblock")
+                    << LOG_KV("prepareT", prepareT) << LOG_KV("dagT", (utcTime() - startT));
+            });
+    }
+    else
+    {
+        auto executiveFlow = getExecutiveFlow(contractAddress, isStaticCall);
+        executiveFlow->submit(callParametersList);
+
+        asyncExecuteExecutiveFlow(executiveFlow,
+            [callback = std::move(callback)](bcos::Error::UniquePtr&& error,
+                std::vector<bcos::protocol::ExecutionMessage::UniquePtr>&& messages) {
+                callback(std::move(error), std::move(messages));
+            });
+    }
+    EXECUTOR_LOG(INFO) << LOG_DESC("executeTransactions") << LOG_KV("prepareT", prepareT)
+                       << LOG_KV("fillBlockT", (utcTime() - startT))
+                       << LOG_KV("total", (utcTime() - recoredT));
+}
+
 void TransactionExecutor::getHash(bcos::protocol::BlockNumber number,
     std::function<void(bcos::Error::UniquePtr, crypto::HashType)> callback)
 {
@@ -359,6 +479,8 @@ void TransactionExecutor::dagExecuteTransactions(
         bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
         callback)
 {
+    auto recoredT = utcTime();
+    auto startT = utcTime();
     // for fill block
     auto txHashes = make_shared<HashList>();
     std::vector<decltype(inputs)::index_type> indexes;
@@ -399,6 +521,8 @@ void TransactionExecutor::dagExecuteTransactions(
         }
         }
     }
+    auto prepareT = utcTime() - startT;
+    startT = utcTime();
     if (!txHashes->empty())
     {
         m_txpool->asyncFillBlock(txHashes,
@@ -414,7 +538,7 @@ void TransactionExecutor::dagExecuteTransactions(
                         {});
                     return;
                 }
-
+                auto startT = utcTime();
 #pragma omp parallel for
                 for (size_t i = 0; i < transactions->size(); ++i)
                 {
@@ -422,14 +546,21 @@ void TransactionExecutor::dagExecuteTransactions(
                     callParametersList->at(indexes[i]) =
                         createCallParameters(*fillInputs->at(i), *transactions->at(i));
                 }
-
+                auto prepareT = utcTime() - startT;
+                startT = utcTime();
                 dagExecuteTransactionsInternal(*callParametersList, std::move(callback));
+                EXECUTOR_LOG(INFO)
+                    << LOG_DESC("dagExecuteTransactionsInternal after fillblock")
+                    << LOG_KV("prepareT", prepareT) << LOG_KV("dagT", (utcTime() - startT));
             });
     }
     else
     {
         dagExecuteTransactionsInternal(*callParametersList, std::move(callback));
     }
+    EXECUTOR_LOG(INFO) << LOG_DESC("dagExecuteTransactions") << LOG_KV("prepareT", prepareT)
+                       << LOG_KV("fillBlockT", (utcTime() - startT))
+                       << LOG_KV("total", (utcTime() - recoredT));
 }
 
 bytes getComponentBytes(size_t index, const std::string& typeName, const bytesConstRef& data)
@@ -439,8 +570,8 @@ bytes getComponentBytes(size_t index, const std::string& typeName, const bytesCo
     if (typeName == "string" || typeName == "bytes")
     {
         u256 u = fromBigEndian<u256>(header);
-        auto offset = static_cast<std::size_t>(u);
-        auto rawData = data.getCroppedData(offset);
+        auto offset1 = static_cast<std::size_t>(u);
+        auto rawData = data.getCroppedData(offset1);
         auto len = static_cast<std::size_t>(
             fromBigEndian<u256>(bytes(rawData.begin(), rawData.begin() + 32)));
         return bytes(rawData.begin() + 32, rawData.begin() + 32 + static_cast<std::size_t>(len));
@@ -643,6 +774,9 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
         bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
         callback)
 {
+    auto recordT = utcTime();
+    auto startT = utcTime();
+
     auto transactionsNum = inputs.size();
     auto executionResults = vector<ExecutionMessage::UniquePtr>(transactionsNum);
 
@@ -672,11 +806,9 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                 auto abiKey = bytes(to.cbegin(), to.cend());
                 abiKey.insert(abiKey.end(), selector.begin(), selector.end());
                 // if precompiled
-                auto executive = createExecutive(
-                    m_blockContext, params->codeAddress, params->contextID, params->seq);
-                auto p = executive->getPrecompiled(params->receiveAddress);
-                if (p)
+                if (m_constantPrecompiled->count(params->receiveAddress))
                 {
+                    auto p = m_constantPrecompiled->at(params->receiveAddress);
                     // Precompile transaction
                     if (p->isParallelPrecompiled())
                     {
@@ -799,7 +931,8 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
                 txsCriticals->put(i, std::move(conflictFields));
             }
         });
-
+    auto dagInitT = utcTime() - startT;
+    startT = utcTime();
     // DAG run
     try
     {
@@ -814,7 +947,9 @@ void TransactionExecutor::dagExecuteTransactionsInternal(
             vector<ExecutionMessage::UniquePtr>{});
         return;
     }
-
+    EXECUTOR_LOG(INFO) << LOG_DESC("dagExecuteTransactionsInternal") << LOG_KV("dagInitT", dagInitT)
+                       << LOG_KV("dagRunT", (utcTime() - startT))
+                       << LOG_KV("totalCost", (utcTime() - recordT));
     callback(nullptr, std::move(executionResults));
 }
 
@@ -1014,6 +1149,175 @@ void TransactionExecutor::getCode(
         });
 }
 
+///*
+
+ExecutiveFlowInterface::Ptr TransactionExecutor::getExecutiveFlow(
+    std::string codeAddress, bool isStaticCall)
+{
+    if (isStaticCall)
+    {
+        // is a static call and return a tmp executiveFlow
+        auto executiveFactory = std::make_shared<ExecutiveFactory>(nullptr, m_precompiledContract,
+            m_constantPrecompiled, m_builtInPrecompiled, m_gasInjector,
+            [this](int64_t contextID, int64_t seq) {
+                return createBlockContextForCall(contextID, seq);
+            });
+        auto executiveFlow = std::make_shared<ExecutiveStackFlow>(executiveFactory);
+        return executiveFlow;
+    }
+
+    ExecutiveFlowInterface::Ptr executiveFlow = m_blockContext->getExecutiveFlow(codeAddress);
+    if (executiveFlow == nullptr)
+    {
+        auto executiveFactory = std::make_shared<ExecutiveFactory>(m_blockContext,
+            m_precompiledContract, m_constantPrecompiled, m_builtInPrecompiled, m_gasInjector,
+            [this](int64_t contextID, int64_t seq) {
+                return createBlockContextForCall(contextID, seq);
+            });
+        executiveFlow = std::make_shared<ExecutiveStackFlow>(executiveFactory);
+        m_blockContext->setExecutiveFlow(codeAddress, executiveFlow);
+    }
+    return executiveFlow;
+}
+
+
+void TransactionExecutor::asyncExecuteExecutiveFlow(ExecutiveFlowInterface::Ptr executiveFlow,
+    std::function<void(
+        bcos::Error::UniquePtr&&, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>&&)>
+        callback)
+{
+    ExecuteOutputs::Ptr allOutputs = std::make_shared<ExecuteOutputs>();
+
+    executiveFlow->asyncRun(
+        // onTxReturn
+        [this, allOutputs, callback](CallParameters::UniquePtr output) {
+            auto message = toExecutionResult(std::move(output));
+            allOutputs->add(std::move(message));
+        },
+        // onFinished
+        [this, allOutputs, callback](bcos::Error::UniquePtr error) {
+            // do nothing
+            if (error != nullptr)
+            {
+                EXECUTOR_LOG(ERROR)
+                    << "ExecutiveFlow asyncRun error: " << LOG_KV("errorCode", error->errorCode())
+                    << LOG_KV("errorMessage", error->errorMessage());
+                m_blockContext->clear();
+                callback(std::move(error), std::vector<protocol::ExecutionMessage::UniquePtr>());
+            }
+            else
+            {
+                auto messages = allOutputs->dumpAndClear();
+                callback(nullptr, std::move(messages));
+            }
+        });
+}
+
+void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContext,
+    bcos::protocol::ExecutionMessage::UniquePtr input, bool staticCall,
+    std::function<void(bcos::Error::UniquePtr&&, bcos::protocol::ExecutionMessage::UniquePtr&&)>
+        callback)
+{
+    EXECUTOR_LOG(TRACE) << "Import key locks size: " << input->keyLocks().size();
+
+    switch (input->type())
+    {
+    case bcos::protocol::ExecutionMessage::TXHASH:
+    {
+        // Get transaction first
+        auto txHashes = std::make_shared<bcos::crypto::HashList>(1);
+        (*txHashes)[0] = (input->transactionHash());
+
+        m_txpool->asyncFillBlock(std::move(txHashes),
+            [this, staticCall, inputPtr = input.release(), blockContext = std::move(blockContext),
+                callback](Error::Ptr error, bcos::protocol::TransactionsPtr transactions) mutable {
+                auto input = std::unique_ptr<bcos::protocol::ExecutionMessage>(inputPtr);
+
+                if (error)
+                {
+                    callback(BCOS_ERROR_WITH_PREV_UNIQUE_PTR(ExecuteError::EXECUTE_ERROR,
+                                 "Transaction does not exists: " + input->transactionHash().hex(),
+                                 *error),
+                        nullptr);
+                    return;
+                }
+
+                if (!transactions || transactions->empty())
+                {
+                    callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::EXECUTE_ERROR,
+                                 "Transaction does not exists: " + input->transactionHash().hex()),
+                        nullptr);
+                    return;
+                }
+
+                auto tx = (*transactions)[0];
+                if (!tx)
+                {
+                    callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::EXECUTE_ERROR,
+                                 "Transaction is null: " + input->transactionHash().hex()),
+                        nullptr);
+                    return;
+                }
+
+                // merge real tx data into input
+                auto callParameters = createCallParameters(*input, *tx);
+
+                ExecutiveFlowInterface::Ptr executiveFlow =
+                    getExecutiveFlow(callParameters->codeAddress, staticCall);
+                executiveFlow->submit(std::move(callParameters));
+
+                asyncExecuteExecutiveFlow(executiveFlow,
+                    [callback = std::move(callback)](bcos::Error::UniquePtr&& error,
+                        std::vector<bcos::protocol::ExecutionMessage::UniquePtr>&& messages) {
+                        if (error)
+                        {
+                            callback(std::move(error), nullptr);
+                        }
+                        else
+                        {
+                            callback(std::move(error), std::move(messages[0]));
+                        }
+                    });
+            });
+        break;
+    }
+    case bcos::protocol::ExecutionMessage::MESSAGE:
+    case bcos::protocol::ExecutionMessage::REVERT:
+    case bcos::protocol::ExecutionMessage::FINISHED:
+    case bcos::protocol::ExecutionMessage::KEY_LOCK:
+    {
+        auto callParameters = createCallParameters(*input, staticCall);
+
+        ExecutiveFlowInterface::Ptr executiveFlow =
+            getExecutiveFlow(callParameters->codeAddress, staticCall);
+        executiveFlow->submit(std::move(callParameters));
+        asyncExecuteExecutiveFlow(executiveFlow,
+            [callback = std::move(callback)](bcos::Error::UniquePtr&& error,
+                std::vector<bcos::protocol::ExecutionMessage::UniquePtr>&& messages) {
+                if (error)
+                {
+                    callback(std::move(error), nullptr);
+                }
+                else
+                {
+                    callback(std::move(error), std::move(messages[0]));
+                }
+            });
+
+        break;
+    }
+    default:
+    {
+        EXECUTOR_LOG(ERROR) << "Unknown message type: " << input->type();
+        callback(BCOS_ERROR_UNIQUE_PTR(ExecuteError::EXECUTE_ERROR,
+                     "Unknown type" + boost::lexical_cast<std::string>(input->type())),
+            nullptr);
+        return;
+    }
+    }
+}
+/*/
+
 void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContext,
     bcos::protocol::ExecutionMessage::UniquePtr input, bool staticCall,
     std::function<void(bcos::Error::UniquePtr&&, bcos::protocol::ExecutionMessage::UniquePtr&&)>
@@ -1174,6 +1478,7 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
     }
     }
 }
+//*/
 
 std::function<void(const TransactionExecutive& executive, std::unique_ptr<CallParameters> input)>
 TransactionExecutor::createExternalFunctionCall(
@@ -1194,7 +1499,6 @@ std::unique_ptr<ExecutionMessage> TransactionExecutor::toExecutionResult(
 
     message->setContextID(executive.contextID());
     message->setSeq(executive.seq());
-
     return message;
 }
 
@@ -1348,7 +1652,6 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
         break;
     }
     case ExecutionMessage::SEND_BACK:
-    case ExecutionMessage::REVERT_KEY_LOCK:
     case ExecutionMessage::TXHASH:
     {
         BOOST_THROW_EXCEPTION(BCOS_ERROR(
@@ -1422,4 +1725,53 @@ void TransactionExecutor::executeTransactionsWithCriticals(
     });
 
     txDag->run(m_DAGThreadNum);
+}
+
+
+std::shared_ptr<BlockContext> TransactionExecutor::createBlockContextForCall(
+    int64_t contextID, int64_t seq)
+{
+    tbb::concurrent_hash_map<std::tuple<int64_t, int64_t>, TransactionExecutor::CallState,
+        TransactionExecutor::HashCombine>::accessor it;
+    m_calledContext->find(it, std::tuple{contextID, seq});
+    std::shared_ptr<BlockContext> blockContext;
+
+    if (it.empty())
+    {
+        bcos::protocol::BlockNumber number = m_lastCommittedBlockNumber;
+        storage::StorageInterface::Ptr prev;
+
+        if (m_cachedStorage)
+        {
+            prev = m_cachedStorage;
+        }
+        else
+        {
+            prev = m_backendStorage;
+        }
+
+        // Create a temp storage
+        auto storage = std::make_shared<storage::StateStorage>(std::move(prev));
+
+        // Create a temp block context
+        blockContext = createBlockContext(
+            number, h256(), 0, 0, std::move(storage));  // TODO: complete the block info
+
+        auto inserted =
+            m_calledContext->emplace(std::tuple{contextID, seq}, CallState{blockContext});
+
+        if (!inserted)
+        {
+            auto message = "Call error, contextID: " + boost::lexical_cast<std::string>(contextID) +
+                           " seq: " + boost::lexical_cast<std::string>(seq) + " exists";
+            EXECUTOR_LOG(ERROR) << message;
+            return nullptr;
+        }
+    }
+    else
+    {
+        blockContext = it->second.blockContext;
+    }
+
+    return blockContext;
 }

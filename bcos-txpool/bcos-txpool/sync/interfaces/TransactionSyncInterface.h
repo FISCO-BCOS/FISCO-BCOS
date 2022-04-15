@@ -38,15 +38,19 @@ public:
     virtual void start() = 0;
     virtual void stop() = 0;
 
+    using VerifyResponseCallback = std::function<void(Error::Ptr, bool)>;
     virtual void requestMissedTxs(bcos::crypto::PublicPtr _generatedNodeID,
         bcos::crypto::HashListPtr _missedTxs, bcos::protocol::Block::Ptr _verifiedProposal,
-        std::function<void(Error::Ptr, bool)> _onVerifyFinished) = 0;
+        VerifyResponseCallback _onVerifyFinished) = 0;
 
     virtual void onRecvSyncMessage(bcos::Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
         bytesConstRef _data, std::function<void(bytesConstRef _response)> _sendResponse) = 0;
 
     virtual TransactionSyncConfig::Ptr config() { return m_config; }
     virtual void onEmptyTxs() = 0;
+    virtual void requestMissedTxsFromPeer(bcos::crypto::PublicPtr _generatedNodeID,
+        bcos::crypto::HashListPtr _missedTxs, bcos::protocol::Block::Ptr _verifiedProposal,
+        VerifyResponseCallback _onVerifyFinished) = 0;
 
 protected:
     TransactionSyncConfig::Ptr m_config;

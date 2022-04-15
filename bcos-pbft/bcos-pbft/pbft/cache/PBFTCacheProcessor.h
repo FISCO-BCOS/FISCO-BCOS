@@ -144,6 +144,8 @@ public:
     {
         m_committedProposalNotifier = _committedProposalNotifier;
     }
+
+    bool tryToPreApplyProposal(ProposalInterface::Ptr _proposal);
     bool tryToApplyCommitQueue();
 
     void removeFutureProposals();
@@ -182,7 +184,11 @@ public:
 
     bool proposalCommitted(bcos::protocol::BlockNumber _index)
     {
-        return m_committedProposalList.count(_index);
+        if (!m_caches.count(_index))
+        {
+            return false;
+        }
+        return m_committedQueueIndexList.count(_index);
     }
 
     virtual uint64_t getViewChangeWeight(ViewType _view) { return m_viewChangeWeight.at(_view); }
@@ -211,7 +217,7 @@ protected:
     void reCalculateViewChangeWeight();
     void removeInvalidRecoverCache(ViewType _view);
 
-    virtual void notifyToSealNextBlock(PBFTProposalInterface::Ptr _checkpointProposal);
+    virtual void notifyToSealNextBlock();
 
     void notifyMaxProposalIndex(bcos::protocol::BlockNumber _proposalIndex);
 
@@ -234,9 +240,14 @@ protected:
     std::priority_queue<PBFTProposalInterface::Ptr, std::vector<PBFTProposalInterface::Ptr>,
         PBFTProposalCmp>
         m_committedQueue;
+
     std::map<bcos::crypto::HashType, bcos::protocol::BlockNumber> m_executingProposals;
 
-    std::set<bcos::protocol::BlockNumber> m_committedProposalList;
+    std::set<bcos::protocol::BlockNumber, std::less<bcos::protocol::BlockNumber>>
+        m_committedProposalList;
+
+    std::set<bcos::protocol::BlockNumber, std::less<bcos::protocol::BlockNumber>>
+        m_committedQueueIndexList;
 
     std::priority_queue<PBFTProposalInterface::Ptr, std::vector<PBFTProposalInterface::Ptr>,
         PBFTProposalCmp>

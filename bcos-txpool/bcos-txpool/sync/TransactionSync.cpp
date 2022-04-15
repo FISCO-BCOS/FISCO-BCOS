@@ -30,7 +30,7 @@ using namespace bcos::txpool;
 using namespace bcos::protocol;
 using namespace bcos::ledger;
 using namespace bcos::consensus;
-static unsigned const c_maxSendTransactions = 1000;
+static unsigned const c_maxSendTransactions = 10000;
 
 void TransactionSync::start()
 {
@@ -159,6 +159,7 @@ void TransactionSync::onRecvSyncMessage(
 void TransactionSync::onReceiveTxsRequest(TxsSyncMsgInterface::Ptr _txsRequest,
     SendResponseCallback _sendResponse, bcos::crypto::PublicPtr _peer)
 {
+    auto startT = utcTime();
     auto const& txsHash = _txsRequest->txsHash();
     HashList missedTxs;
     auto txs = m_config->txpoolStorage()->fetchTxs(missedTxs, txsHash);
@@ -167,6 +168,7 @@ void TransactionSync::onReceiveTxsRequest(TxsSyncMsgInterface::Ptr _txsRequest,
     {
         SYNC_LOG(DEBUG) << LOG_DESC("onReceiveTxsRequest: transaction missing")
                         << LOG_KV("missedTxsSize", missedTxs.size())
+                        << LOG_KV("txsSize", txs->size())
                         << LOG_KV("peer", _peer ? _peer->shortHex() : "unknown")
                         << LOG_KV("nodeId", m_config->nodeID()->shortHex());
 #if FISCO_DEBUG
@@ -192,7 +194,7 @@ void TransactionSync::onReceiveTxsRequest(TxsSyncMsgInterface::Ptr _txsRequest,
     _sendResponse(ref(*packetData));
     SYNC_LOG(INFO) << LOG_DESC("onReceiveTxsRequest: response txs")
                    << LOG_KV("peer", _peer ? _peer->shortHex() : "unknown")
-                   << LOG_KV("txsSize", txs->size());
+                   << LOG_KV("txsSize", txs->size()) << LOG_KV("timecost", (utcTime() - startT));
 }
 
 void TransactionSync::requestMissedTxs(PublicPtr _generatedNodeID, HashListPtr _missedTxs,
@@ -406,6 +408,8 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
             false);
         return;
     }
+    auto importT = utcTime() - startT;
+    startT = utcTime();
     // check the transaction hash
     for (size_t i = 0; i < _missedTxs->size(); i++)
     {
@@ -422,7 +426,8 @@ void TransactionSync::verifyFetchedTxs(Error::Ptr _error, NodeIDPtr _nodeID, byt
                     << LOG_KV(
                            "hash", (proposalHeader) ? proposalHeader->hash().abridged() : "unknown")
                     << LOG_KV("consNum", (proposalHeader) ? proposalHeader->number() : -1)
-                    << LOG_KV("decodeT", decodeT) << LOG_KV("importT", (utcTime() - startT))
+                    << LOG_KV("decodeT", decodeT) << LOG_KV("importT", importT)
+                    << LOG_KV("checkT", (utcTime() - startT))
                     << LOG_KV("timecost", (utcTime() - recordT));
 }
 
@@ -447,7 +452,9 @@ void TransactionSync::maintainDownloadingTransactions()
         auto txsBuffer = (*localBuffer)[i];
         auto transactions =
             m_config->blockFactory()->createBlock(txsBuffer->txsData(), true, false);
-        importDownloadedTxs(txsBuffer->from(), transactions);
+        m_worker->enqueue([this, txsBuffer, transactions]() {
+            importDownloadedTxs(txsBuffer->from(), transactions);
+        });
     }
 }
 
@@ -523,39 +530,21 @@ bool TransactionSync::importDownloadedTxs(
     startT = utcTime();
     // import the transactions into txpool
     auto txpool = m_config->txpoolStorage();
-    size_t successImportTxs = 0;
-    for (size_t i = 0; i < txsSize; i++)
+    if (enforceImport)
     {
-        auto tx = (*_txs)[i];
-        if (tx->invalid())
+        if (!txpool->batchVerifyAndSubmitTransaction(proposalHeader, _txs))
         {
-            continue;
+            return false;
         }
-        // Note: when the transaction is used to reach a consensus, the transaction must be imported
-        // into the txpool even if the txpool is full
-        auto result = txpool->submitTransaction(
-            std::const_pointer_cast<Transaction>(tx), nullptr, enforceImport, false);
-        if (result != TransactionStatus::None)
-        {
-            if (enforceImport)
-            {
-                SYNC_LOG(DEBUG) << LOG_BADGE("importDownloadedTxs: verify proposal failed")
-                                << LOG_KV("tx", tx->hash().abridged()) << LOG_KV("result", result)
-                                << LOG_KV("propIndex", proposalHeader->number())
-                                << LOG_KV("propHash", proposalHeader->hash().abridged());
-                return false;
-            }
-            SYNC_LOG(TRACE) << LOG_BADGE("importDownloadedTxs")
-                            << LOG_DESC("Import transaction into txpool failed")
-                            << LOG_KV("errorCode", result) << LOG_KV("tx", tx->hash().abridged());
-            continue;
-        }
-        successImportTxs++;
+    }
+    else
+    {
+        txpool->batchImportTxs(_txs);
     }
     SYNC_LOG(DEBUG) << LOG_DESC("importDownloadedTxs success")
                     << LOG_KV("nodeId", m_config->nodeID()->shortHex())
-                    << LOG_KV("successImportTxs", successImportTxs) << LOG_KV("totalTxs", txsSize)
-                    << LOG_KV("verifyT", verifyT) << LOG_KV("submitT", (utcTime() - startT))
+                    << LOG_KV("totalTxs", txsSize) << LOG_KV("verifyT", verifyT)
+                    << LOG_KV("submitT", (utcTime() - startT))
                     << LOG_KV("timecost", (utcTime() - recordT));
     return true;
 }
@@ -564,12 +553,15 @@ void TransactionSync::maintainTransactions()
 {
     auto consensusNodeList = m_config->consensusNodeList();
     auto connectedNodeList = m_config->connectedNodeList();
-    if (consensusNodeList.size() == 0)
+    if (connectedNodeList.size() == 0)
     {
+        m_newTransactions = false;
         return;
     }
-    if (consensusNodeList.size() == 1 && consensusNodeList[0]->nodeID() == m_config->nodeID())
+    if (consensusNodeList.size() == 1 &&
+        consensusNodeList[0]->nodeID()->data() == m_config->nodeID()->data())
     {
+        m_newTransactions = false;
         return;
     }
     auto txs = m_config->txpoolStorage()->fetchNewTxs(c_maxSendTransactions);
@@ -720,7 +712,7 @@ void TransactionSync::onPeerTxsStatus(NodeIDPtr _fromNode, TxsSyncMsgInterface::
     {
         return;
     }
-    requestMissedTxs(_fromNode, requestTxs, nullptr, nullptr);
+    requestMissedTxsFromPeer(_fromNode, requestTxs, nullptr, nullptr);
     SYNC_LOG(DEBUG) << LOG_DESC("onPeerTxsStatus") << LOG_KV("reqSize", requestTxs->size())
                     << LOG_KV("peerTxsSize", _txsStatus->txsHash().size())
                     << LOG_KV("peer", _fromNode->shortHex());

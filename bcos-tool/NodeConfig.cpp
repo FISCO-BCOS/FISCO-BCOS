@@ -363,8 +363,9 @@ void NodeConfig::loadConsensusConfig(boost::property_tree::ptree const& _pt)
                                   "Please set consensus.checkpoint_timeout to no less than " +
                                   std::to_string(3000) + "ms!"));
     }
+    m_waterMarkLimit = checkAndGetValue(_pt, "consensus.water_mark", "100");
     NodeConfig_LOG(INFO) << LOG_DESC("loadConsensusConfig")
-                         << LOG_KV("checkPointTimeoutInterval", m_checkPointTimeoutInterval);
+                         << LOG_KV("waterMarkLimit", m_waterMarkLimit);
 }
 
 void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisConfig)

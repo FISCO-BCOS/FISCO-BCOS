@@ -40,9 +40,9 @@ public:
       : TransactionSyncInterface(_config),
         Worker("txsSync", 0),
         m_downloadTxsBuffer(std::make_shared<TxsSyncMsgList>()),
-        m_worker(std::make_shared<ThreadPool>("txsSyncWorker", 1)),
-        m_txsRequester(std::make_shared<ThreadPool>("txsRequester", 1)),
-        m_forwardWorker(std::make_shared<ThreadPool>("txsForward", 1))
+        m_worker(std::make_shared<ThreadPool>("txsSyncWorker", 16)),
+        m_txsRequester(std::make_shared<ThreadPool>("txsRequester", 16)),
+        m_forwardWorker(std::make_shared<ThreadPool>("txsForward", 16))
     {
         m_txsSubmitted = m_config->txpoolStorage()->onReady([&]() { this->noteNewTransactions(); });
     }
@@ -56,7 +56,6 @@ public:
     void onRecvSyncMessage(bcos::Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
         bytesConstRef _data, SendResponseCallback _sendResponse) override;
 
-    using VerifyResponseCallback = std::function<void(Error::Ptr, bool)>;
     void requestMissedTxs(bcos::crypto::PublicPtr _generatedNodeID,
         bcos::crypto::HashListPtr _missedTxs, bcos::protocol::Block::Ptr _verifiedProposal,
         VerifyResponseCallback _onVerifyFinished) override;
@@ -64,6 +63,10 @@ public:
     virtual void maintainTransactions();
     virtual void maintainDownloadingTransactions();
     void onEmptyTxs() override;
+
+    void requestMissedTxsFromPeer(bcos::crypto::PublicPtr _generatedNodeID,
+        bcos::crypto::HashListPtr _missedTxs, bcos::protocol::Block::Ptr _verifiedProposal,
+        VerifyResponseCallback _onVerifyFinished) override;
 
 protected:
     virtual void responseTxsStatus(bcos::crypto::NodeIDPtr _fromNode);
@@ -88,9 +91,6 @@ protected:
     virtual void verifyFetchedTxs(Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
         bytesConstRef _data, bcos::crypto::HashListPtr _missedTxs,
         bcos::protocol::Block::Ptr _verifiedProposal, VerifyResponseCallback _onVerifyFinished);
-    virtual void requestMissedTxsFromPeer(bcos::crypto::PublicPtr _generatedNodeID,
-        bcos::crypto::HashListPtr _missedTxs, bcos::protocol::Block::Ptr _verifiedProposal,
-        VerifyResponseCallback _onVerifyFinished);
 
     virtual size_t onGetMissedTxsFromLedger(std::set<bcos::crypto::HashType>& _missedTxs,
         Error::Ptr _error, bcos::protocol::TransactionsPtr _fetchedTxs,

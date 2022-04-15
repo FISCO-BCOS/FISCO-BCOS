@@ -65,6 +65,10 @@ public:
             return;
         }
         m_prePrepare = _prePrepareMsg;
+        if (_prePrepareMsg->consStartTime() > 0)
+        {
+            m_consStartTime = _prePrepareMsg->consStartTime();
+        }
         PBFT_LOG(INFO) << LOG_DESC("addPrePrepareCache") << printPBFTMsgInfo(_prePrepareMsg)
                        << LOG_KV("sys", _prePrepareMsg->consensusProposal()->systemProposal())
                        << m_config->printCurrentState();
@@ -207,6 +211,7 @@ protected:
     PBFTTimer::Ptr m_timer;
 
     std::function<void(bcos::protocol::BlockNumber)> m_committedIndexNotifier;
+    int64_t m_consStartTime = 0;
 };
 }  // namespace consensus
 }  // namespace bcos

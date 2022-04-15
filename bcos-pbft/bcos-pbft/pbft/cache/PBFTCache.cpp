@@ -302,9 +302,13 @@ bool PBFTCache::checkAndCommit()
     {
         return false;
     }
-    PBFT_LOG(INFO) << LOG_DESC("checkAndCommit")
-                   << printPBFTProposal(m_precommit->consensusProposal())
-                   << m_config->printCurrentState();
+    if (m_consStartTime > 0)
+    {
+        PBFT_LOG(INFO) << LOG_DESC("checkAndCommit success")
+                       << LOG_KV("consTime", (utcTime() - m_consStartTime))
+                       << printPBFTProposal(m_precommit->consensusProposal())
+                       << m_config->printCurrentState();
+    }
     m_submitted.store(true);
     return true;
 }
@@ -322,12 +326,6 @@ void PBFTCache::resetCache(ViewType _curView)
 {
     m_submitted = false;
     m_precommitted = false;
-    if (!m_precommit && m_prePrepare && m_prePrepare->consensusProposal() &&
-        m_prePrepare->view() < _curView)
-    {
-        // reset the exceptioned txs to unsealed
-        m_config->validator()->asyncResetTxsFlag(m_prePrepare->consensusProposal()->data(), false);
-    }
     // clear the expired prepare cache
     resetCacheAfterViewChange(m_prepareCacheList, _curView);
     // clear the expired commit cache

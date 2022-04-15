@@ -240,8 +240,11 @@ void SealingManager::fetchTransactions()
     // try to fetch transactions
     m_fetchingTxs = true;
     auto self = std::weak_ptr<SealingManager>(shared_from_this());
+    ssize_t startSealingNumber = m_startSealingNumber;
+    ssize_t endSealingNumber = m_endSealingNumber;
     m_config->txpool()->asyncSealTxs(txsToFetch, nullptr,
-        [self](Error::Ptr _error, Block::Ptr _txsHashList, Block::Ptr _sysTxsList) {
+        [self, startSealingNumber, endSealingNumber](
+            Error::Ptr _error, Block::Ptr _txsHashList, Block::Ptr _sysTxsList) {
             try
             {
                 auto sealingMgr = self.lock();
@@ -257,9 +260,30 @@ void SealingManager::fetchTransactions()
                     sealingMgr->m_fetchingTxs = false;
                     return;
                 }
-                sealingMgr->appendTransactions(sealingMgr->m_pendingTxs, _txsHashList);
-                sealingMgr->appendTransactions(sealingMgr->m_pendingSysTxs, _sysTxsList);
+                if ((sealingMgr->m_sealingNumber >= startSealingNumber) &&
+                    (sealingMgr->m_sealingNumber <= endSealingNumber))
+                {
+                    sealingMgr->appendTransactions(sealingMgr->m_pendingTxs, _txsHashList);
+                    sealingMgr->appendTransactions(sealingMgr->m_pendingSysTxs, _sysTxsList);
+                }
+                else
+                {
+                    SEAL_LOG(INFO) << LOG_DESC("fetchTransactions finish: abort the expired txs")
+                                   << LOG_KV("txsSize", _txsHashList->transactionsMetaDataSize())
+                                   << LOG_KV("sysTxsSize", _sysTxsList->transactionsMetaDataSize());
+                    // Note: should reset the aborted txs
+                    sealingMgr->notifyResetProposal(_txsHashList);
+                    sealingMgr->notifyResetProposal(_sysTxsList);
+                }
+
                 sealingMgr->m_fetchingTxs = false;
+                sealingMgr->m_onReady();
+                SEAL_LOG(DEBUG) << LOG_DESC("fetchTransactions finish")
+                                << LOG_KV("txsSize", _txsHashList->transactionsMetaDataSize())
+                                << LOG_KV("sysTxsSize", _sysTxsList->transactionsMetaDataSize())
+                                << LOG_KV("startSealing", startSealingNumber)
+                                << LOG_KV("endSealing", endSealingNumber)
+                                << LOG_KV("sealingNumber", sealingMgr->m_sealingNumber);
             }
             catch (std::exception const& e)
             {

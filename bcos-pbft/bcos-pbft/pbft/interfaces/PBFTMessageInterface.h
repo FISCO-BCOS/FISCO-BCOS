@@ -39,6 +39,11 @@ public:
     virtual PBFTProposalList const& proposals() const = 0;
 
     virtual PBFTMessageInterface::Ptr populateWithoutProposal() = 0;
+    virtual void setConsStartTime(int64_t _consStartTime) { m_consStartTime = _consStartTime; }
+    virtual int64_t consStartTime() { return m_consStartTime; }
+
+protected:
+    int64_t m_consStartTime = 0;
 };
 using PBFTMessageList = std::vector<PBFTMessageInterface::Ptr>;
 using PBFTMessageListPtr = std::shared_ptr<PBFTMessageList>;

@@ -64,7 +64,7 @@ public:
         assert(cryptoSuite);
         smCryptoSuite = std::make_shared<CryptoSuite>(smHashImpl, sm2Sign, nullptr);
         txpool = std::make_shared<MockTxPool>();
-        assert(DEFAULT_PERMISSION_ADDRESS);
+        // assert(DEFAULT_PERMISSION_ADDRESS);
     }
 
     virtual ~PrecompiledFixture() {}

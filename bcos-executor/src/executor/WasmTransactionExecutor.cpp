@@ -105,18 +105,18 @@ void WasmTransactionExecutor::initPrecompiled()
         std::make_shared<precompiled::KVTableFactoryPrecompiled>(m_hashImpl);
 
     // in WASM
-    m_constantPrecompiled.insert({SYS_CONFIG_NAME, sysConfig});
-    m_constantPrecompiled.insert({CONSENSUS_NAME, consensusPrecompiled});
-    m_constantPrecompiled.insert({PARALLEL_CONFIG_NAME, parallelConfigPrecompiled});
+    m_constantPrecompiled->insert({SYS_CONFIG_NAME, sysConfig});
+    m_constantPrecompiled->insert({CONSENSUS_NAME, consensusPrecompiled});
+    m_constantPrecompiled->insert({PARALLEL_CONFIG_NAME, parallelConfigPrecompiled});
     // FIXME: not support crud now
-    // m_constantPrecompiled.insert({TABLE_NAME, tableFactoryPrecompiled});
-    m_constantPrecompiled.insert({KV_TABLE_NAME, kvTableFactoryPrecompiled});
-    m_constantPrecompiled.insert(
+    // m_constantPrecompiled->insert({TABLE_NAME, tableFactoryPrecompiled});
+    m_constantPrecompiled->insert({KV_TABLE_NAME, kvTableFactoryPrecompiled});
+    m_constantPrecompiled->insert(
         {DAG_TRANSFER_NAME, std::make_shared<precompiled::DagTransferPrecompiled>(m_hashImpl)});
-    m_constantPrecompiled.insert({CRYPTO_NAME, std::make_shared<CryptoPrecompiled>(m_hashImpl)});
-    m_constantPrecompiled.insert(
+    m_constantPrecompiled->insert({CRYPTO_NAME, std::make_shared<CryptoPrecompiled>(m_hashImpl)});
+    m_constantPrecompiled->insert(
         {BFS_NAME, std::make_shared<precompiled::FileSystemPrecompiled>(m_hashImpl)});
-    m_constantPrecompiled.insert(
+    m_constantPrecompiled->insert(
         {CONTRACT_AUTH_NAME, std::make_shared<precompiled::ContractAuthPrecompiled>(m_hashImpl)});
     CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
     SmallBankPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);

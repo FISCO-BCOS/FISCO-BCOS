@@ -58,6 +58,7 @@ public:
     virtual void setUnsealedTxsSize(size_t _unsealedTxsSize)
     {
         m_unsealedTxsSize = _unsealedTxsSize;
+        m_onReady();
         m_config->consensus()->asyncNoteUnSealedTxsSize(_unsealedTxsSize, [](Error::Ptr _error) {
             if (_error)
             {
@@ -88,6 +89,7 @@ public:
         }
         m_endSealingNumber = _endSealingNumber;
         m_maxTxsPerBlock = _maxTxsPerBlock;
+        m_onReady();
         SEAL_LOG(INFO) << LOG_DESC("resetSealingInfo") << LOG_KV("start", m_startSealingNumber)
                        << LOG_KV("end", m_endSealingNumber)
                        << LOG_KV("sealingNumber", m_sealingNumber);

@@ -94,6 +94,7 @@ public:
 
     size_t minSealTime() const { return m_minSealTime; }
     size_t checkPointTimeoutInterval() const { return m_checkPointTimeoutInterval; }
+    size_t waterMarkLimit() const { return m_waterMarkLimit; }
 
     std::string const& storagePath() const { return m_storagePath; }
     std::string const& storageDBName() const { return m_storageDBName; }
@@ -218,6 +219,7 @@ private:
     // sealer configuration
     size_t m_minSealTime = 0;
     size_t m_checkPointTimeoutInterval;
+    size_t m_waterMarkLimit = 100;
     // for security
     std::string m_privateKeyPath;
 

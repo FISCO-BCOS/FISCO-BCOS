@@ -91,9 +91,8 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
     }
 
     // the node is syncing, reset the timeout state to false for view recovery
-    if (m_syncingHighestNumber > _ledgerConfig->blockNumber())
+    if (_syncedBlock)
     {
-        m_timeoutState = true;
         m_syncingState = true;
         // notify resetSealing(the syncing node should not seal block)
         notifyResetSealing();
@@ -243,6 +242,7 @@ bool PBFTConfig::tryTriggerFastViewChange(IndexType _leaderIndex)
 
 void PBFTConfig::notifySealer(BlockNumber _progressedIndex, bool _enforce)
 {
+    RecursiveGuard l(m_mutex);
     auto currentLeader = leaderIndex(_progressedIndex);
     if (currentLeader != nodeIndex())
     {
@@ -286,8 +286,11 @@ void PBFTConfig::notifySealer(BlockNumber _progressedIndex, bool _enforce)
                        << LOG_KV("expectedEndIndex", endProposalIndex) << printCurrentState();
         return;
     }
-    auto committedIndex = m_committedProposal->index();
-    if (m_validator->resettingProposalSize() > 0 && (startSealIndex > (committedIndex + 1)))
+    if (m_sealStartIndex <= startSealIndex && m_sealEndIndex >= endProposalIndex)
+    {
+        return;
+    }
+    if (m_validator->resettingProposalSize() > 0)
     {
         PBFT_LOG(INFO) << LOG_DESC(
                               "Not notify the sealer to sealing for txs of some proposals have not "
@@ -422,11 +425,10 @@ std::string PBFTConfig::printCurrentState()
         return stringstream.str();
     }
     stringstream << LOG_KV("committedIndex", committedProposal()->index())
-                 << LOG_KV("consNum", progressedIndex())
+                 << LOG_KV("toExec", m_expectedCheckPoint)
                  << LOG_KV("committedHash", committedProposal()->hash().abridged())
                  << LOG_KV("view", view()) << LOG_KV("toView", toView())
-                 << LOG_KV("changeCycle", m_timer->changeCycle())
-                 << LOG_KV("expectedCheckPoint", m_expectedCheckPoint) << LOG_KV("Idx", nodeIndex())
+                 << LOG_KV("changeCycle", m_timer->changeCycle()) << LOG_KV("Idx", nodeIndex())
                  << LOG_KV("unsealedTxs", m_unsealedTxsSize.load())
                  << LOG_KV("sealUntil", m_waitSealUntil)
                  << LOG_KV("waitResealUntil", m_waitResealUntil)

@@ -72,5 +72,8 @@ public:
 
     virtual void getCode(
         std::string_view contract, std::function<void(Error::Ptr, bcos::bytes)> callback) = 0;
+
+    // for performance, do the things before executing block in executor.
+    virtual void preExecuteBlock(bcos::protocol::Block::Ptr block, bool verify) = 0;
 };
 }  // namespace bcos::scheduler
