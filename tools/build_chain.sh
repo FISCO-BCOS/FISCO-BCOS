@@ -145,7 +145,7 @@ while getopts "f:l:o:p:e:t:v:s:C:c:k:K:X:izhgGTNFRSdEDZ6q" option;do
     ;;
     o) output_dir=$OPTARG;;
     i) listen_ip="0.0.0.0" && LOG_WARN "jsonrpc_listen_ip linstens 0.0.0.0 is unsafe.";;
-    q) LOG_INFO "Show the history releases of FISCO-BCOS " && curl -sS https://gitee.com/api/v5/repos/FISCO-BCOS/FISCO-BCOS/tags | grep -oe "\"name\":\"v[2-9]*\.[0-9]*\.[0-9]*\"" | cut -d \" -f 4 | sort -V && exit 0;;
+    q) LOG_INFO "Show the history releases of FISCO-BCOS " && curl --insecure -sS https://gitee.com/api/v5/repos/FISCO-BCOS/FISCO-BCOS/tags | grep -oe "\"name\":\"v[2-9]*\.[0-9]*\.[0-9]*\"" | cut -d \" -f 4 | sort -V && exit 0;;
     v) compatibility_version="${OPTARG//[vV]/}";;
     p) port_start=(${OPTARG//,/ })
     if [ ${#port_start[@]} -ne 3 ];then LOG_WARN "start port error. e.g: 30300,20200,8545" && exit 1;fi
@@ -265,15 +265,15 @@ if [ -n "${guomi_mode}" ]; then
         local tassl_link_perfix="${cdn_link_header}/FISCO-BCOS/tools/tassl-1.0.2"
         LOG_INFO "Downloading tassl binary from ${tassl_link_perfix}..."
         if [[ -n "${macOS}" ]];then
-            curl -#LO "${tassl_link_perfix}/tassl_mac.tar.gz"
+            curl --insecure -#LO "${tassl_link_perfix}/tassl_mac.tar.gz"
             mv tassl_mac.tar.gz tassl.tar.gz
             export OPENSSL_CONF=/etc/ssl/
         else
             if [[ "$(uname -p)" == "aarch64" ]];then
-                curl -#LO "${tassl_link_perfix}/tassl-aarch64.tar.gz"
+                curl --insecure -#LO "${tassl_link_perfix}/tassl-aarch64.tar.gz"
                 mv tassl-aarch64.tar.gz tassl.tar.gz
             elif [[ "$(uname -p)" == "x86_64" ]];then
-                curl -#LO "${tassl_link_perfix}/tassl.tar.gz"
+                curl --insecure -#LO "${tassl_link_perfix}/tassl.tar.gz"
             else
                 LOG_WARN "Unsupported platform"
                 exit 1
@@ -1186,7 +1186,7 @@ function check_node_work_properly() {
         groups=\$(ls \${nodedir}/conf/group*genesis | grep -o "group.*.genesis" | grep -o "group.*.genesis" | cut -d \. -f 2)
         for group in \${groups}; do
                 # get blocknumber
-                heightresult=\$(curl -s "http://\$config_ip:\$config_port" -X POST --data "{\"jsonrpc\":\"2.0\",\"method\":\"getBlockNumber\",\"params\":[\${group}],\"id\":67}")
+                heightresult=\$(curl --insecure -s "http://\$config_ip:\$config_port" -X POST --data "{\"jsonrpc\":\"2.0\",\"method\":\"getBlockNumber\",\"params\":[\${group}],\"id\":67}")
                 echo \$heightresult
                 height=\$(echo \$heightresult | awk -F'"' '{if(\$2=="id" && \$4=="jsonrpc" && \$8=="result") {print \$10}}')
                 [[ -z "\$height" ]] && {
@@ -1200,7 +1200,7 @@ function check_node_work_properly() {
                 heightvalue=\$(printf "%d\n" "\$height")
                 prev_heightvalue=\$(printf "%d\n" "\$prev_height")
 
-                viewresult=\$(curl -s "http://\$config_ip:\$config_port" -X POST --data "{\"jsonrpc\":\"2.0\",\"method\":\"getPbftView\",\"params\":[\$group],\"id\":68}")
+                viewresult=\$(curl --insecure -s "http://\$config_ip:\$config_port" -X POST --data "{\"jsonrpc\":\"2.0\",\"method\":\"getPbftView\",\"params\":[\$group],\"id\":68}")
                 echo \$viewresult
                 view=\$(echo \$viewresult | awk -F'"' '{if(\$2=="id" && \$4=="jsonrpc" && \$8=="result") {print \$10}}')
                 [[ -z "\$view" ]] && {
@@ -1316,13 +1316,13 @@ sm_crypto=\$(cat "\${SHELL_FOLDER}"/node*/config.ini | grep sm_crypto_channel= |
 download_link=https://github.com/FISCO-BCOS/console/releases/download/v\${download_version}/\${package_name}
 cos_download_link=${cdn_link_header}/console/releases/v\${download_version}/\${package_name}
 echo "Downloading console \${version} from \${download_link}"
-if [ \$(curl -IL -o /dev/null -s -w %{http_code}  \${cos_download_link}) == 200 ];then
-    curl -#LO \${download_link} --speed-time 30 --speed-limit 102400 -m 450 || {
+if [ \$(curl --insecure -IL -o /dev/null -s -w %{http_code}  \${cos_download_link}) == 200 ];then
+    curl --insecure -#LO \${download_link} --speed-time 30 --speed-limit 102400 -m 450 || {
         echo -e "\033[32m Download speed is too low, try \${cos_download_link} \033[0m"
-        curl -#LO \${cos_download_link}
+        curl --insecure -#LO \${cos_download_link}
     }
 else
-    curl -#LO \${download_link}
+    curl --insecure -#LO \${download_link}
 fi
 tar -zxf \${package_name} && cd console && chmod +x *.sh
 
@@ -1372,13 +1372,13 @@ fi
 
 getNodeVersion()
 {
-    result="\$(curl -X POST --data '{"jsonrpc":"2.0","method":"getClientVersion","params":[],"id":1}' \${ip_port})"
+    result="\$(curl --insecure -X POST --data '{"jsonrpc":"2.0","method":"getClientVersion","params":[],"id":1}' \${ip_port})"
     version="\$(echo \${result} | cut -c250- | cut -d \" -f3)"
 }
 
 block_limit()
 {
-    result=\$(curl -s -X POST --data '{"jsonrpc":"2.0","method":"getBlockNumber","params":['\${target_group}'],"id":83}' \${ip_port})
+    result=\$(curl --insecure -s -X POST --data '{"jsonrpc":"2.0","method":"getBlockNumber","params":['\${target_group}'],"id":83}' \${ip_port})
     if [ \$(echo \${result} | grep -i failed | wc -l) -gt 0 ] || [ -z \${result} ];then
         echo "getBlockNumber error!"
         exit 1
@@ -1398,7 +1398,7 @@ send_a_tx()
         txBytes="f8eca003eb675ec791c2d19858c91d0046821c27d815e2e9c15\${random_id}0a8402faf08082\${limit}948c17cf316c1063ab6c89df875e96c9f0f5b2f74480b8644ed3885e0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000a464953434f2042434f53000000000000000000000000000000000000000000000101801ba09edf7c0cb63645442aff11323916d51ec5440de979950747c0189f338afdcefda02f3473184513c6a3516e066ea98b7cfb55a79481c9db98e658dd016c37f03dcf"
     fi
     #echo \$txBytes
-    curl -s -X POST --data '{"jsonrpc":"2.0","method":"sendRawTransaction","params":['\${target_group}', "'\$txBytes'"],"id":83}' \${ip_port}
+    curl --insecure -s -X POST --data '{"jsonrpc":"2.0","method":"sendRawTransaction","params":['\${target_group}', "'\$txBytes'"],"id":83}' \${ip_port}
 }
 
 send_many_tx()
@@ -1481,7 +1481,7 @@ while getopts "b:o:v:hml" option;do
     b) download_branch="\$OPTARG";;
     v) download_version="\${OPTARG//[vV]/}";;
     m) download_mini="true";;
-    l) LOG_INFO "Show the history releases of FISCO-BCOS " && curl -sS https://gitee.com/api/v5/repos/\${project}/tags | grep -oe "\"name\":\"v[2-9]*\.[0-9]*\.[0-9]*\"" | cut -d \" -f 4 | sort -V && exit 0;;
+    l) LOG_INFO "Show the history releases of FISCO-BCOS " && curl --insecure -sS https://gitee.com/api/v5/repos/\${project}/tags | grep -oe "\"name\":\"v[2-9]*\.[0-9]*\.[0-9]*\"" | cut -d \" -f 4 | sort -V && exit 0;;
     h) help;;
     *) help;;
     esac
@@ -1490,9 +1490,9 @@ done
 
 download_artifact_linux(){
     local branch="\$1"
-    build_num=\$(curl https://circleci.com/api/v1.1/project/github/\${project}/tree/\${branch}\?circle-token\=\&limit\=1\&offset\=0\&filter\=successful 2>/dev/null| grep build_num | sed "s/ //g"| cut -d ":" -f 2| sed "s/,//g" | sort -u | tail -n1)
+    build_num=\$(curl --insecure https://circleci.com/api/v1.1/project/github/\${project}/tree/\${branch}\?circle-token\=\&limit\=1\&offset\=0\&filter\=successful 2>/dev/null| grep build_num | sed "s/ //g"| cut -d ":" -f 2| sed "s/,//g" | sort -u | tail -n1)
 
-    local response="\$(curl https://circleci.com/api/v1.1/project/github/\${project}/\${build_num}/artifacts?circle-token= 2>/dev/null)"
+    local response="\$(curl --insecure https://circleci.com/api/v1.1/project/github/\${project}/\${build_num}/artifacts?circle-token= 2>/dev/null)"
     if [ -z "\${download_mini}" ];then
         link="\$(echo \${response}| grep -o 'https://[^"]*' | grep -v mini)"
     else
@@ -1500,7 +1500,7 @@ download_artifact_linux(){
     fi
     if [ -z "\${link}" ];then
         build_num=\$(( build_num - 1 ))
-        response="\$(curl https://circleci.com/api/v1.1/project/github/\${project}/\${build_num}/artifacts?circle-token= 2>/dev/null)"
+        response="\$(curl --insecure https://circleci.com/api/v1.1/project/github/\${project}/\${build_num}/artifacts?circle-token= 2>/dev/null)"
         if [ -z "\${download_mini}" ];then
             link="\$(echo \${response}| grep -o 'https://[^"]*' | grep -v mini| tail -n 1)"
         else
@@ -1512,7 +1512,7 @@ download_artifact_linux(){
         exit 1
     fi
     LOG_INFO "Downloading binary from \${link} "
-    curl -#LO \${link} && tar -zxf fisco*.tar.gz && rm fisco*.tar.gz
+    curl --insecure -#LO \${link} && tar -zxf fisco*.tar.gz && rm fisco*.tar.gz
     result=\$?
     if [[ "\${result}" != "0" ]];then LOG_ERROR "Download failed, please try again" && exit 1;fi
 
@@ -1523,15 +1523,15 @@ download_artifact_macOS(){
     exit 1
     local branch="\$1"
     # TODO: https://developer.github.com/v3/actions/artifacts/#download-an-artifact
-    local workflow_artifacts_url="\$(curl https://api.github.com/repos/\${project}/actions/runs\?branch\=\${branch}\&status\=success\&event\=push | grep artifacts_url | head -n 1 | cut -d \" -f 4)"
-    local archive_download_url="\$(curl \${workflow_artifacts_url} | grep archive_download_url | cut -d \" -f 4)"
+    local workflow_artifacts_url="\$(curl --insecure https://api.github.com/repos/\${project}/actions/runs\?branch\=\${branch}\&status\=success\&event\=push | grep artifacts_url | head -n 1 | cut -d \" -f 4)"
+    local archive_download_url="\$(curl --insecure \${workflow_artifacts_url} | grep archive_download_url | cut -d \" -f 4)"
     if [ -z "\${archive_download_url}" ];then
         echo "GitHub action \${workflow_artifacts_url} can't find artifact."
         exit 1
     fi
     LOG_INFO "Downloading macOS binary from \${archive_download_url} "
     # FIXME: https://github.com/actions/upload-artifact/issues/51
-    curl -#LO "\${archive_download_url}" && tar -zxf fisco-bcos-macOS.tar.gz && rm fisco-bcos-macOS.tar.gz
+    curl --insecure -#LO "\${archive_download_url}" && tar -zxf fisco-bcos-macOS.tar.gz && rm fisco-bcos-macOS.tar.gz
 }
 
 download_branch_artifact(){
@@ -1554,13 +1554,13 @@ download_released_artifact(){
     local download_link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/\${version}/\${package_name}"
     local cdn_download_link="\${cdn_link_header}/FISCO-BCOS/releases/\${version}/\${package_name}"
     LOG_INFO "Downloading binary of \${version}, from \${download_link}"
-    if [ \$(curl -IL -o /dev/null -s -w %{http_code} \${cdn_download_link}) == 200 ];then
-        curl -#LO \${download_link} --speed-time 20 --speed-limit 102400 -m \${download_timeout} || {
+    if [ \$(curl --insecure -IL -o /dev/null -s -w %{http_code} \${cdn_download_link}) == 200 ];then
+        curl --insecure -#LO \${download_link} --speed-time 20 --speed-limit 102400 -m \${download_timeout} || {
             echo "Download speed is too low, try \${cdn_download_link}"
-            curl -#LO "\${cdn_download_link}"
+            curl --insecure -#LO "\${cdn_download_link}"
         }
     else
-        curl -#LO \${download_link}
+        curl --insecure -#LO \${download_link}
     fi
     tar -zxf "\${package_name}" && rm "\${package_name}"
 }
@@ -1568,7 +1568,7 @@ download_released_artifact(){
 main() {
     [ -f "\${output_dir}/fisco-bcos" ] && mv "\${output_dir}/fisco-bcos" "\${output_dir}/fisco-bcos.bak"
     mkdir -p "\${output_dir}" && cd "\${output_dir}"
-    latest_version=\$(curl -sS https://gitee.com/api/v5/repos/\${project}/tags | grep -oe "\"name\":\"v[2-9]*\.[0-9]*\.[0-9]*\"" | cut -d \" -f 4 | sort -V | tail -n 1)
+    latest_version=\$(curl --insecure -sS https://gitee.com/api/v5/repos/\${project}/tags | grep -oe "\"name\":\"v[2-9]*\.[0-9]*\.[0-9]*\"" | cut -d \" -f 4 | sort -V | tail -n 1)
     if [ -n "\${download_version}" ];then
         download_released_artifact "v\${download_version}"
     elif [ -n "\${download_branch}" ];then
@@ -1613,13 +1613,13 @@ download_bin()
     Download_Link="https://github.com/FISCO-BCOS/FISCO-BCOS/releases/download/v${compatibility_version}/${package_name}"
     local cdn_download_link="${cdn_link_header}/FISCO-BCOS/releases/v${compatibility_version}/${package_name}"
     LOG_INFO "Downloading fisco-bcos binary from ${Download_Link} ..."
-    if [ $(curl -IL -o /dev/null -s -w %{http_code} "${cdn_download_link}") == 200 ];then
-        curl -#LO "${Download_Link}" --speed-time 20 --speed-limit 102400 -m "${download_timeout}" || {
+    if [ $(curl --insecure -IL -o /dev/null -s -w %{http_code} "${cdn_download_link}") == 200 ];then
+        curl --insecure -#LO "${Download_Link}" --speed-time 20 --speed-limit 102400 -m "${download_timeout}" || {
             LOG_INFO "Download speed is too low, try ${cdn_download_link}"
-            curl -#LO "${cdn_download_link}"
+            curl --insecure -#LO "${cdn_download_link}"
         }
     else
-        curl -#LO "${Download_Link}"
+        curl --insecure -#LO "${Download_Link}"
     fi
     if [[ "$(ls -al . | grep tar.gz | awk '{print $5}')" -lt "1048576" ]];then
         exit_with_clean "Download fisco-bcos failed, please try again. Or download and extract it manually from ${Download_Link} and use -e option."
@@ -1737,7 +1737,7 @@ fi
 
 # if [ -z "${compatibility_version}" ];then
 #     set +e
-#     compatibility_version=$(curl -s https://api.github.com/repos/FISCO-BCOS/FISCO-BCOS/releases | grep "tag_name" | grep "\"v2\.[0-9]*\.[0-9]*\"" | sort -V | tail -n 1 | cut -d \" -f 4 | sed "s/^[vV]//")
+#     compatibility_version=$(curl --insecure -s https://api.github.com/repos/FISCO-BCOS/FISCO-BCOS/releases | grep "tag_name" | grep "\"v2\.[0-9]*\.[0-9]*\"" | sort -V | tail -n 1 | cut -d \" -f 4 | sed "s/^[vV]//")
 #     set -e
 # fi
 
