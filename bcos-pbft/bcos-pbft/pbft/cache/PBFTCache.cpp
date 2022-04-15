@@ -132,6 +132,8 @@ bool PBFTCache::triggerNonDeterministic()
     {
         return false;
     }
+    m_config->setExpectedCheckPoint(m_checkpointProposal->index());
+    m_config->setWaitSealUntil(m_checkpointProposal->index());
     // stall the pipeline
     m_config->setWaitSealUntil(m_index);
     m_config->setWaitResealUntil(m_index);
@@ -274,6 +276,7 @@ void PBFTCache::onReceiveExecResult(Error::Ptr _error, NodeIDPtr _nodeID, bytesC
                               "the proposal")
                        << LOG_KV("index", localExecResult->blockHeader()->number())
                        << LOG_KV("hash", localExecResult->blockHeader()->hash().abridged());
+        m_config->setExpectedCheckPoint(localExecResult->blockHeader()->number());
         // remove the executed proposal
         // re-exec block
         auto encodedData = std::make_shared<bytes>();

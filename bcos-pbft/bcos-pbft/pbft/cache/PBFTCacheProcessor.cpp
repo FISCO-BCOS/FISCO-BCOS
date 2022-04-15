@@ -319,6 +319,11 @@ bool PBFTCacheProcessor::tryToApplyCommitQueue()
            m_committedQueue.top()->index() < m_config->expectedCheckPoint())
     {
         auto index = m_committedQueue.top()->index();
+        auto reExecFlag = m_committedQueue.top()->reExecFlag();
+        if (reExecFlag)
+        {
+            continue;
+        }
         PBFT_LOG(INFO) << LOG_DESC("updateCommitQueue: remove invalid proposal")
                        << LOG_KV("index", index)
                        << LOG_KV("expectedIndex", m_config->expectedCheckPoint())

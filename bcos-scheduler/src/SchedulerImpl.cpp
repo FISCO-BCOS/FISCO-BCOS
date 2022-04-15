@@ -19,12 +19,13 @@ void SchedulerImpl::getExecResult(bcos::protocol::BlockNumber _blockNumber,
 {
     SCHEDULER_LOG(INFO) << LOG_DESC("getExecResult") << LOG_KV("index", _blockNumber);
     std::unique_lock<std::mutex> execLock(m_executeMutex);
-    std::unique_lock<std::mutex> blocksLock(m_blocksMutex);
     {
         ReadGuard l(x_executedBlocks);
         if (m_executedBlocks.count(_blockNumber))
         {
             auto block = m_executedBlocks.at(_blockNumber);
+            SCHEDULER_LOG(INFO) << LOG_DESC("getExecResult success")
+                                << LOG_KV("index", _blockNumber);
             _callback(nullptr, std::move(block));
             return;
         }
@@ -32,6 +33,7 @@ void SchedulerImpl::getExecResult(bcos::protocol::BlockNumber _blockNumber,
     if (m_blocks.empty())
     {
         _callback(std::make_shared<bcos::Error>(-1, "Not executed block"), nullptr);
+        SCHEDULER_LOG(INFO) << LOG_DESC("getExecResult error") << LOG_KV("index", _blockNumber);
         return;
     }
     auto& frontBlock = m_blocks.front();
@@ -53,8 +55,10 @@ void SchedulerImpl::getExecResult(bcos::protocol::BlockNumber _blockNumber,
 
         auto block = it->get()->block();
         _callback(nullptr, std::move(block));
+        SCHEDULER_LOG(INFO) << LOG_DESC("getExecResult success") << LOG_KV("index", _blockNumber);
         return;
     }
+    SCHEDULER_LOG(INFO) << LOG_DESC("getExecResult error") << LOG_KV("index", _blockNumber);
     _callback(std::make_shared<bcos::Error>(-1, "Not executed block"), nullptr);
     return;
 }
@@ -122,6 +126,8 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify, 
             SCHEDULER_LOG(INFO) << "ExecuteBlock success, return executed block"
                                 << LOG_KV("block number", block->blockHeaderConst()->number())
                                 << LOG_KV("signatureSize", signature.size())
+                                << LOG_KV(
+                                       "undetermine", block->blockHeaderConst()->undeterministic())
                                 << LOG_KV("verify", verify)
                                 << LOG_KV(
                                        "undeterministic", block->blockHeader()->undeterministic());
