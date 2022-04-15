@@ -21,27 +21,14 @@
 #pragma once
 #include "bcos-txpool/TxPoolConfig.h"
 #include <bcos-utilities/ThreadPool.h>
+#include <tbb/concurrent_set.h>
 #include <tbb/concurrent_unordered_map.h>
 #define TBB_PREVIEW_CONCURRENT_ORDERED_CONTAINERS 1
-#include <tbb/concurrent_set.h>
+#include <tbb/concurrent_queue.h>
 namespace bcos
 {
 namespace txpool
 {
-struct TransactionCompare
-{
-    bool operator()(bcos::protocol::Transaction::ConstPtr _first,
-        bcos::protocol::Transaction::ConstPtr _second) const
-    {
-        // high priority for system transactions
-        if (_first->systemTx() && !_second->systemTx())
-        {
-            return true;
-        }
-        // sort by importTime in ascending order
-        return _first->importTime() <= _second->importTime();
-    }
-};
 class MemoryStorage : public TxPoolStorageInterface,
                       public std::enable_shared_from_this<MemoryStorage>
 {
@@ -148,6 +135,10 @@ private:
     TxPoolConfig::Ptr m_config;
     ThreadPool::Ptr m_notifier;
     ThreadPool::Ptr m_worker;
+
+    using TransactionQueue =
+        tbb::concurrent_bounded_queue<bcos::protocol::Transaction::Transaction::ConstPtr>;
+    TransactionQueue m_txsQueue;
 
     tbb::concurrent_unordered_map<bcos::crypto::HashType, bcos::protocol::Transaction::ConstPtr,
         std::hash<bcos::crypto::HashType>>

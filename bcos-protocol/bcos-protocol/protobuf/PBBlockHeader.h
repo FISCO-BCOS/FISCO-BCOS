@@ -178,6 +178,12 @@ public:
         noteDirty();
     }
 
+    void setUndeterministic(bool _undeterministic) override
+    {
+        m_blockHeader->set_undeterministic(_undeterministic);
+    }
+    bool undeterministic() const override { return m_blockHeader->undeterministic(); }
+
 private:
     void encodeHashFields() const;
     void encodeSignatureList() const;

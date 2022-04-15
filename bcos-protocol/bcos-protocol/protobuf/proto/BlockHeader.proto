@@ -10,4 +10,5 @@ message PBRawBlockHeader{
     bytes hashFieldsData = 2;
     bytes hashFieldsHash = 4;
     repeated PBSignatureList signatureList = 3;
+    bool undeterministic = 5;
 }

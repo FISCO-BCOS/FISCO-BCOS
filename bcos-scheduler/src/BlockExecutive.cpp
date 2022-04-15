@@ -7,6 +7,7 @@
 #include "bcos-framework/interfaces/executor/ParallelTransactionExecutorInterface.h"
 #include "bcos-framework/interfaces/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/interfaces/protocol/Transaction.h"
+#include "bcos-protocol/LogEntry.h"
 #include "bcos-table/src/StateStorage.h"
 #include <bcos-utilities/Error.h>
 #include <tbb/parallel_for_each.h>
@@ -31,7 +32,7 @@ void BlockExecutive::prepare()
     }
 
     auto startT = utcTime();
-
+    std::atomic<uint64_t> abortedTxs = 0;
     if (m_block->transactionsMetaDataSize() > 0)
     {
         SCHEDULER_LOG(DEBUG) << LOG_KV("block number", m_block->blockHeaderConst()->number())
@@ -42,7 +43,18 @@ void BlockExecutive::prepare()
         for (size_t i = 0; i < m_block->transactionsMetaDataSize(); i++)
         {
             auto metaData = m_block->transactionMetaData(i);
+            if (metaData)
+            {
+                m_executiveResults[i].transactionHash = metaData->hash();
+                m_executiveResults[i].source = metaData->source();
+            }
 
+            // skip the aborted tx
+            if (metaData->abort())
+            {
+                abortedTxs++;
+                continue;
+            }
             auto message = m_scheduler->m_executionMessageFactory->createExecutionMessage();
             message->setContextID(i + m_startContextID);
             message->setType(protocol::ExecutionMessage::TXHASH);
@@ -78,13 +90,6 @@ void BlockExecutive::prepare()
             {
                 m_withDAG = true;
             }
-
-            if (metaData)
-            {
-                m_executiveResults[i].transactionHash = metaData->hash();
-                m_executiveResults[i].source = metaData->source();
-            }
-
             std::string to = {message->to().data(), message->to().size()};
 #pragma omp critical
             registerAndGetDmcExecutor(to)->submit(std::move(message), m_withDAG);
@@ -100,6 +105,12 @@ void BlockExecutive::prepare()
         for (size_t i = 0; i < m_block->transactionsSize(); ++i)
         {
             auto tx = m_block->transaction(i);
+            // skip the aborted tx
+            if (tx->abort())
+            {
+                abortedTxs++;
+                continue;
+            }
             m_executiveResults[i].transactionHash = tx->hash();
             m_executiveResults[i].source = tx->source();
 
@@ -171,6 +182,7 @@ void BlockExecutive::prepare()
                          << LOG_KV(
                                 "blockHeader.timestamp", m_block->blockHeaderConst()->timestamp())
                          << LOG_KV("meta tx count", m_block->transactionsMetaDataSize())
+                         << LOG_KV("abortedTxs", abortedTxs)
                          << LOG_KV("timeCost", (utcTime() - startT));
 }
 
@@ -423,7 +435,26 @@ void BlockExecutive::asyncNotify(
                             << LOG_KV("msg", _error->errorMessage());
     });
 }
-
+void BlockExecutive::removeAllState()
+{
+    SCHEDULER_LOG(INFO) << LOG_DESC("removeAllState") << LOG_KV("syncedBlock", m_syncBlock)
+                        << LOG_KV("number", m_block->blockHeader()->number());
+    auto txsSize = m_block->transactionsHashSize();
+    for (size_t i = 0; i < txsSize; i++)
+    {
+        std::string to;
+        if (m_syncBlock)
+        {
+            to = m_block->transaction(i)->to();
+        }
+        else
+        {
+            to = m_block->transactionMetaData(i)->to();
+        }
+        auto executor = m_scheduler->m_executorManager->dispatchExecutor(to);
+        executor->removeState(m_block->blockHeader()->number());
+    }
+}
 void BlockExecutive::DAGExecute(std::function<void(Error::UniquePtr)> callback)
 {
     // dump executive states from DmcExecutor
@@ -654,12 +685,16 @@ void BlockExecutive::onDmcExecuteFinish(
             for (size_t i = 0; i < m_executiveResults.size(); i++)
             {
                 auto receipt = m_executiveResults[i].receipt;
-#ifdef DMC_TRACE_LOG_ENABLE
-                if (receipt == nullptr)
+                // Note: the receipt maybe empty for the tx has been aborted
+                if (!receipt)
                 {
-                    DMC_LOG(TRACE) << " nullptr of receipt: " << i << std::endl;
+                    std::string contractAddress = "";
+                    auto logEntries = std::make_shared<std::vector<bcos::protocol::LogEntry>>();
+                    receipt = m_blockFactory->receiptFactory()->createReceipt(0, contractAddress,
+                        logEntries, (int32_t)bcos::protocol::TransactionStatus::Abort, bytes(),
+                        m_block->blockHeader()->number());
+                    m_executiveResults[i].receipt = receipt;
                 }
-#endif
                 m_block->appendReceipt(receipt);
             }
             auto executedBlockHeader =

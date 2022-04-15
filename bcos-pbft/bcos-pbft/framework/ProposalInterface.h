@@ -65,6 +65,12 @@ public:
     // the proposal type
     virtual bool systemProposal() const = 0;
     virtual void setSystemProposal(bool _systemProposal) = 0;
+
+    virtual void setReExecFlag(bool _reExecFlag) { m_reExecFlag = _reExecFlag; }
+    virtual bool reExecFlag() const { return m_reExecFlag; }
+
+private:
+    bool m_reExecFlag = false;
 };
 using ProposalList = std::vector<ProposalInterface::Ptr>;
 using ProposalListPtr = std::shared_ptr<ProposalList>;

@@ -19,7 +19,6 @@
  * @date 2021-04-13
  */
 #pragma once
-#include "../../config/PBFTConfig.h"
 #include "../../interfaces/PBFTMessageInterface.h"
 #include "PBFTBaseMessage.h"
 #include "bcos-pbft/pbft/protocol/proto/PBFT.pb.h"
@@ -77,7 +76,7 @@ public:
     PBFTProposalInterface::Ptr consensusProposal() override { return m_consensusProposal; }
 
     virtual void decodeAndSetSignature(
-        bcos::crypto::CryptoSuite::Ptr _pbftConfig, bytesConstRef _data);
+        bcos::crypto::CryptoSuite::Ptr _cryptoSuite, bytesConstRef _data);
 
     bool operator==(PBFTMessage const& _pbftMessage);
 

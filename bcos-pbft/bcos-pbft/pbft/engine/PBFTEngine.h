@@ -154,6 +154,7 @@ protected:
 
     void handleRecoverResponse(PBFTMessageInterface::Ptr _recoverResponse);
     void handleRecoverRequest(PBFTMessageInterface::Ptr _request);
+    void handleDeterministicStateResponse(std::shared_ptr<PBFTMessageInterface> _stateResponse);
     void sendRecoverResponse(bcos::crypto::NodeIDPtr _dstNode);
     bool isSyncingHigher();
     /**
@@ -176,6 +177,9 @@ protected:
         std::shared_ptr<PBFTBaseMessageInterface> _pbftMessage, SendResponseCallback _sendResponse);
     void sendCommittedProposalResponse(
         PBFTProposalList const& _proposalList, SendResponseCallback _sendResponse);
+
+    void onReceiveTxsStateRequest(
+        std::shared_ptr<PBFTBaseMessageInterface> _stateReq, SendResponseCallback _sendResponse);
 
 private:
     // utility functions

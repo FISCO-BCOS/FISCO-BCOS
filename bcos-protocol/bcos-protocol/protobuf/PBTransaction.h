@@ -89,6 +89,9 @@ public:
     std::string_view source() const override { return m_transaction->source(); }
     void setSource(std::string const& _source) override { m_transaction->set_source(_source); }
 
+    void setAbort(bool _abort) override { m_transaction->set_abort(_abort); }
+    bool abort() const override { return m_transaction->abort(); }
+
 protected:
     explicit PBTransaction(bcos::crypto::CryptoSuite::Ptr _cryptoSuite)
       : Transaction(_cryptoSuite),

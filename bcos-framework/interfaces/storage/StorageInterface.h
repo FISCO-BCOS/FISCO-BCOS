@@ -24,7 +24,6 @@
  */
 
 #pragma once
-#include "../../interfaces/protocol/Block.h"
 #include "../../interfaces/protocol/ProtocolTypeDef.h"
 #include "Common.h"
 #include "Entry.h"

@@ -181,9 +181,12 @@ void PBFTCacheProcessor::addCache(
     auto index = _pbftReq->index();
     if (!(_pbftCache.count(index)))
     {
-        _pbftCache[index] = m_cacheFactory->createPBFTCache(m_config, index,
+        auto cache = m_cacheFactory->createPBFTCache(m_config, index,
             boost::bind(
                 &PBFTCacheProcessor::notifyCommittedProposalIndex, this, boost::placeholders::_1));
+        cache->registerReExecProposal(
+            boost::bind(&PBFTCacheProcessor::updateCommitQueue, this, boost::placeholders::_1));
+        _pbftCache[index] = cache;
     }
     _handler(_pbftCache[index], _pbftReq);
 }
@@ -244,7 +247,7 @@ void PBFTCacheProcessor::resetTimer()
 void PBFTCacheProcessor::updateCommitQueue(PBFTProposalInterface::Ptr _committedProposal)
 {
     assert(_committedProposal);
-    if (m_executingProposals.count(_committedProposal->hash()))
+    if (!_committedProposal->reExecFlag() && m_executingProposals.count(_committedProposal->hash()))
     {
         return;
     }
@@ -316,6 +319,11 @@ bool PBFTCacheProcessor::tryToApplyCommitQueue()
            m_committedQueue.top()->index() < m_config->expectedCheckPoint())
     {
         auto index = m_committedQueue.top()->index();
+        auto reExecFlag = m_committedQueue.top()->reExecFlag();
+        if (reExecFlag)
+        {
+            continue;
+        }
         PBFT_LOG(INFO) << LOG_DESC("updateCommitQueue: remove invalid proposal")
                        << LOG_KV("index", index)
                        << LOG_KV("expectedIndex", m_config->expectedCheckPoint())
@@ -376,6 +384,10 @@ void PBFTCacheProcessor::notifyToSealNextBlock()
 void PBFTCacheProcessor::applyStateMachine(
     ProposalInterface::ConstPtr _lastAppliedProposal, PBFTProposalInterface::Ptr _proposal)
 {
+    if (_proposal->reExecFlag())
+    {
+        m_config->timer()->restart();
+    }
     PBFT_LOG(INFO) << LOG_DESC("applyStateMachine") << LOG_KV("index", _proposal->index())
                    << LOG_KV("hash", _proposal->hash().abridged()) << m_config->printCurrentState();
     auto executedProposal = m_config->pbftMessageFactory()->createPBFTProposal();
@@ -409,6 +421,7 @@ void PBFTCacheProcessor::applyStateMachine(
                                << LOG_KV("index", _proposal->index())
                                << LOG_KV("beforeExec", _proposal->hash().abridged())
                                << LOG_KV("afterExec", executedProposal->hash().abridged())
+                               << LOG_KV("reExec", _proposal->reExecFlag())
                                << config->printCurrentState()
                                << LOG_KV("timecost", utcTime() - startT);
             }
@@ -446,6 +459,9 @@ void PBFTCacheProcessor::setCheckPointProposal(PBFTProposalInterface::Ptr _propo
                                       << LOG_KV("errorInfo", boost::diagnostic_information(e));
                 }
             });
+        (m_caches[index])
+            ->registerReExecProposal(
+                boost::bind(&PBFTCacheProcessor::updateCommitQueue, this, boost::placeholders::_1));
     }
     (m_caches[index])->setCheckPointProposal(_proposal);
 }
@@ -1151,4 +1167,71 @@ PBFTProposalInterface::Ptr PBFTCacheProcessor::fetchPrecommitProposal(
         return nullptr;
     }
     return cache->preCommitCache()->consensusProposal();
+}
+
+void PBFTCacheProcessor::updatePrecommit(PBFTProposalInterface::Ptr _proposal)
+{
+    auto pbftMessage = m_config->pbftMessageFactory()->createPBFTMsg();
+    pbftMessage->setConsensusProposal(_proposal);
+    pbftMessage->setIndex(_proposal->index());
+    pbftMessage->setHash(_proposal->hash());
+    addCache(
+        m_caches, pbftMessage, [](PBFTCache::Ptr _pbftCache, PBFTMessageInterface::Ptr _precommit) {
+            _pbftCache->setPrecommitCache(_precommit);
+        });
+}
+
+bool PBFTCacheProcessor::resetPrecommitCache(PBFTMessageInterface::Ptr _precommit, bool _needReExec)
+{
+    auto index = _precommit->index();
+    if (!m_caches.count(index))
+    {
+        addCache(m_caches, _precommit,
+            [_needReExec](PBFTCache::Ptr _pbftCache, PBFTMessageInterface::Ptr _precommit) {
+                _pbftCache->resetPrecommitCache(_precommit, _needReExec);
+            });
+        return true;
+    }
+    auto const& cache = m_caches.at(index);
+    return cache->resetPrecommitCache(_precommit, _needReExec);
+}
+
+void PBFTCacheProcessor::responseTxsState(std::shared_ptr<PBFTBaseMessageInterface> _stateReq,
+    std::function<void(bytesConstRef _respData)> _sendResponse)
+{
+    if (!m_caches.count(_stateReq->index()))
+    {
+        PBFT_LOG(INFO)
+            << LOG_DESC("onReceiveTxsStateRequest and send response failed for empty local cache")
+            << LOG_KV("index", _stateReq->index()) << LOG_KV("from", _stateReq->generatedFrom());
+        return;
+    }
+    auto cache = m_caches.at(_stateReq->index());
+    auto execResult = cache->undeterministicBlock();
+    if (!execResult)
+    {
+        PBFT_LOG(INFO)
+            << LOG_DESC(
+                   "onReceiveTxsStateRequest and send response failed for empty local execResult")
+            << LOG_KV("index", _stateReq->index()) << LOG_KV("from", _stateReq->generatedFrom());
+        return;
+    }
+    auto proposal = m_config->pbftMessageFactory()->createPBFTProposal();
+    auto proposalState = std::make_shared<bytes>();
+    execResult->encode(*proposalState);
+    proposal->setData(ref(*proposalState));
+    proposal->setIndex(execResult->blockHeader()->number());
+    proposal->setHash(execResult->blockHeader()->hash());
+    auto response = m_config->pbftMessageFactory()->createPBFTMsg();
+    response->setConsensusProposal(proposal);
+    response->setPacketType(PacketType::StateResponse);
+    response->setGeneratedFrom(m_config->nodeIndex());
+    response->setHash(execResult->blockHeader()->hash());
+    response->setIndex(execResult->blockHeader()->number());
+    auto encodedData = m_config->codec()->encode(response);
+    _sendResponse(ref(*encodedData));
+    PBFT_LOG(INFO) << LOG_DESC("onReceiveTxsStateRequest and send response")
+                   << LOG_KV("hash", execResult->blockHeader()->hash().abridged())
+                   << LOG_KV("index", execResult->blockHeader()->number())
+                   << LOG_KV("to", _stateReq->generatedFrom());
 }

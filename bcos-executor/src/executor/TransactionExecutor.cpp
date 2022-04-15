@@ -113,6 +113,8 @@ TransactionExecutor::TransactionExecutor(txpool::TxPoolInterface::Ptr txpool,
     GlobalHashImpl::g_hashImpl = m_hashImpl;
     m_abiCache = make_shared<ClockCache<bcos::bytes, FunctionAbi>>(32);
     m_gasInjector = std::make_shared<wasm::GasInjector>(wasm::GetInstructionTable());
+    m_constantPrecompiled =
+        std::make_shared<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>();
 }
 
 void TransactionExecutor::nextBlockHeader(const bcos::protocol::BlockHeader::ConstPtr& blockHeader,
@@ -1065,7 +1067,6 @@ void TransactionExecutor::rollback(
         auto errorMessage = "Rollback error: empty stateStorages";
         EXECUTOR_LOG(ERROR) << errorMessage;
         callback(BCOS_ERROR_PTR(-1, errorMessage));
-
         return;
     }
 
@@ -1570,6 +1571,19 @@ TransactionExecutive::Ptr TransactionExecutor::createExecutive(
     // TODO: register User developed Precompiled contract
     // registerUserPrecompiled(context);
     return executive;
+}
+
+void TransactionExecutor::removeState(bcos::protocol::BlockNumber _number)
+{
+    std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
+    for (auto it = m_stateStorages.begin(); it != m_stateStorages.end();it++)
+    {
+        if (it->number == _number)
+        {
+            m_stateStorages.erase(it);
+            break;
+        }
+    }
 }
 
 void TransactionExecutor::removeCommittedState()

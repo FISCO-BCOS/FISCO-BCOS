@@ -119,6 +119,11 @@ public:
         });
     }
 
+    virtual void removeState(bcos::protocol::BlockNumber _number) override
+    {
+        m_executor->removeState(_number);
+    }
+
 private:
     bcos::ThreadPool m_pool;
     bcos::executor::TransactionExecutor::Ptr m_executor;

@@ -44,6 +44,9 @@ enum PacketType : uint32_t
     CheckPoint = 0x9,
     RecoverRequest = 0xa,
     RecoverResponse = 0xb,
+    StateRequest = 0xc,
+    StateResponse = 0xd,
+    DeterministicState = 0xe,
 };
 DERIVE_BCOS_EXCEPTION(UnknownPBFTMsgType);
 DERIVE_BCOS_EXCEPTION(InitPBFTException);

@@ -275,7 +275,6 @@ void SealingManager::fetchTransactions()
                     sealingMgr->notifyResetProposal(_txsHashList);
                     sealingMgr->notifyResetProposal(_sysTxsList);
                 }
-
                 sealingMgr->m_fetchingTxs = false;
                 sealingMgr->m_onReady();
                 SEAL_LOG(DEBUG) << LOG_DESC("fetchTransactions finish")

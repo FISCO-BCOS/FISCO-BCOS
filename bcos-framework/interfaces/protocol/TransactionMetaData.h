@@ -47,6 +47,8 @@ public:
 
     virtual std::string_view source() const = 0;
     virtual void setSource(std::string source) = 0;
+    virtual void setAbort(bool _abort) = 0;
+    virtual bool abort() const = 0;
 };
 
 using TransactionMetaDataList = std::vector<TransactionMetaData::Ptr>;

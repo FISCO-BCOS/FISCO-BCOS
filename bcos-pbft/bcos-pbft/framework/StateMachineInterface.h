@@ -21,6 +21,7 @@
 #pragma once
 #include "ProposalInterface.h"
 #include <bcos-framework/interfaces/consensus/ConsensusNode.h>
+#include <bcos-framework/interfaces/protocol/BlockFactory.h>
 namespace bcos
 {
 namespace consensus
@@ -39,6 +40,11 @@ public:
     // (Not required): Just for performance, call this before "asyncApply" in the other thread.
     virtual void asyncPreApply(
         ProposalInterface::Ptr _proposal, std::function<void(bool)> _onPreApplyFinished) = 0;
+
+    virtual void getExecResult(bcos::protocol::BlockNumber,
+        std::function<void(bcos::Error::Ptr&&, bcos::protocol::Block::Ptr&&)>)
+    {}
+    virtual bcos::protocol::BlockFactory::Ptr blockFactory() const = 0;
 };
 }  // namespace consensus
 }  // namespace bcos

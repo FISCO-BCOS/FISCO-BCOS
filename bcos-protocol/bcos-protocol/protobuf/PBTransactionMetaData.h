@@ -71,6 +71,9 @@ public:
     std::string_view source() const override { return m_pbTxMetaData->source(); }
     void setSource(std::string _source) override { m_pbTxMetaData->set_source(_source); }
 
+    void setAbort(bool _abort) override { m_pbTxMetaData->set_abort(_abort); }
+    bool abort() const override { return m_pbTxMetaData->abort(); }
+
 private:
     std::shared_ptr<PBRawTransactionMetaData> m_pbTxMetaData;
     mutable bcos::crypto::HashType m_hash = bcos::crypto::HashType();
