@@ -22,6 +22,7 @@
 #include "HelloWorldPrecompiled.h"
 #include "PermissionPrecompiledInterface.h"
 #include "CpuHeavyPrecompiled.h"
+#include "SmallBankPrecompiled.h"
 
 namespace bcos::precompiled
 {

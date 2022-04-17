@@ -119,6 +119,7 @@ void WasmTransactionExecutor::initPrecompiled()
     m_constantPrecompiled->insert(
         {CONTRACT_AUTH_NAME, std::make_shared<precompiled::ContractAuthPrecompiled>(m_hashImpl)});
     CpuHeavyPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
+    SmallBankPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
     set<string> builtIn = {CRYPTO_NAME};
     m_builtInPrecompiled = make_shared<set<string>>(builtIn);
 }

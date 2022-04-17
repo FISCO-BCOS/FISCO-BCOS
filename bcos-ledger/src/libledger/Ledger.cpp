@@ -1354,6 +1354,24 @@ bool Ledger::buildGenesisBlock(
         SYS_CNS, SYS_VALUE,
         DAG_TRANSFER, "balance"
     };
+    
+    //create smallbank mutli-contracts table
+    for(int i = 0; i < 128; ++i){
+        std::promise<std::tuple<Error::UniquePtr>> createTablePromise;
+        std::string tableName = std::to_string(i);
+        std::string path = SMALLBANK_TRANSFER;
+        tableName = path + tableName;
+        LEDGER_LOG(INFO) << LOG_BADGE("SmallBank") << LOG_DESC("asyncCreateTable") << LOG_KV("tableName", tableName);
+        m_storage->asyncCreateTable(tableName, std::string("balance"),
+            [&createTablePromise](auto&& error, std::optional<Table>&&) {
+                createTablePromise.set_value({std::move(error)});
+            });
+        auto createTableResult = createTablePromise.get_future().get();
+        if (std::get<0>(createTableResult))
+        {
+            BOOST_THROW_EXCEPTION(*(std::get<0>(createTableResult)));
+        }
+    }
     // clang-format on
     size_t total = sizeof(tables) / sizeof(std::string_view);
 
