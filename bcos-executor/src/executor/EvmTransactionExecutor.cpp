@@ -36,6 +36,7 @@
 #include "../precompiled/KVTableFactoryPrecompiled.h"
 #include "../precompiled/ParallelConfigPrecompiled.h"
 #include "../precompiled/PrecompiledResult.h"
+#include "../precompiled/RandomPrecompiled.h"
 #include "../precompiled/SystemConfigPrecompiled.h"
 #include "../precompiled/TableFactoryPrecompiled.h"
 #include "../precompiled/Utilities.h"
@@ -173,4 +174,8 @@ void EvmTransactionExecutor::initPrecompiled()
     SmallBankPrecompiled::registerPrecompiled(m_constantPrecompiled, m_hashImpl);
     set<string> builtIn = {CRYPTO_ADDRESS};
     m_builtInPrecompiled = make_shared<set<string>>(builtIn);
+
+    // for Non-deterministic  test
+    m_constantPrecompiled->insert(
+        {RANDOM_PRECOMPILED_ADDRESS, std::make_shared<RandomPrecompiled>(m_hashImpl)});
 }

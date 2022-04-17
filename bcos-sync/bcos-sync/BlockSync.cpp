@@ -690,6 +690,7 @@ void BlockSync::fetchAndSendBlock(
                     << LOG_DESC("fetchAndSendBlock: response block")
                     << LOG_KV("toPeer", _peer->shortHex()) << LOG_KV("number", _number)
                     << LOG_KV("hash", blockHeader->hash().abridged())
+                    << LOG_KV("undetermine", blockHeader->undeterministic())
                     << LOG_KV("signatureSize", signature.size())
                     << LOG_KV("transactionsSize", _block->transactionsSize());
             }

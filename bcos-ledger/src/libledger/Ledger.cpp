@@ -22,6 +22,7 @@
  */
 
 #include "Ledger.h"
+#include "utilities/Common.h"
 #include <bcos-codec/scale/Scale.h>
 #include <bcos-crypto/interfaces/crypto/CommonType.h>
 #include <bcos-framework/interfaces/consensus/ConsensusNode.h>
@@ -67,7 +68,9 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
         return;
     }
     auto header = block->blockHeaderConst();
-
+    LEDGER_LOG(INFO) << LOG_DESC("asyncPrewriteBlock") << LOG_KV("index", header->number())
+                     << LOG_KV("hash", header->hash().abridged())
+                     << LOG_KV("undeterministic", header->undeterministic());
     auto blockNumberStr = boost::lexical_cast<std::string>(header->number());
 
     // 8 storage callbacks and write hash=>receipt
@@ -146,6 +149,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
             auto originTransactionMetaData = block->transactionMetaData(i);
             auto transactionMetaData = m_blockFactory->createTransactionMetaData(
                 originTransactionMetaData->hash(), std::string(originTransactionMetaData->to()));
+            transactionMetaData->setAbort(originTransactionMetaData->abort());
             transactionsBlock->appendTransactionMetaData(std::move(transactionMetaData));
         }
     }
@@ -156,6 +160,7 @@ void Ledger::asyncPrewriteBlock(bcos::storage::StorageInterface::Ptr storage,
             auto transaction = block->transaction(i);
             auto transactionMetaData = m_blockFactory->createTransactionMetaData(
                 transaction->hash(), std::string(transaction->to()));
+            transactionMetaData->setAbort(transaction->abort());
             transactionsBlock->appendTransactionMetaData(std::move(transactionMetaData));
         }
     }
@@ -352,46 +357,55 @@ void Ledger::asyncGetBlockDataByNumber(bcos::protocol::BlockNumber _blockNumber,
     if ((_blockFlag & TRANSACTIONS) || (_blockFlag & RECEIPTS))
     {
         fetchers.push_back([this, block, _blockNumber, finally, _blockFlag]() {
-            asyncGetBlockTransactionHashes(_blockNumber, [this, _blockFlag, block, finally](
-                                                             Error::Ptr&& error,
-                                                             std::vector<std::string>&& hashes) {
-                if (error)
-                {
+            asyncGetBlockTransactionsMetaData(
+                _blockNumber, [this, _blockFlag, block, finally](
+                                  Error::Ptr&& error, bcos::protocol::Block::Ptr&& _metaDatas) {
+                    if (error)
+                    {
+                        if (_blockFlag & TRANSACTIONS)
+                            finally(std::move(error));
+                        if (_blockFlag & RECEIPTS)
+                            finally(std::move(error));
+                        return;
+                    }
+
+                    auto hashesPtr = std::make_shared<std::vector<std::string>>();
+                    hashesPtr->resize(_metaDatas->transactionsHashSize());
+                    for (size_t i = 0; i < _metaDatas->transactionsHashSize(); ++i)
+                    {
+                        auto hash = _metaDatas->transactionHash(i);
+                        (*hashesPtr)[i] = hash.hex();
+                    }
+                    LEDGER_LOG(TRACE)
+                        << "Get transactions hash list success, size:" << hashesPtr->size();
                     if (_blockFlag & TRANSACTIONS)
-                        finally(std::move(error));
+                    {
+                        asyncBatchGetTransactions(
+                            hashesPtr, [_metaDatas, block, finally](Error::Ptr&& error,
+                                           std::vector<protocol::Transaction::Ptr>&& transactions) {
+                                size_t i = 0;
+                                for (auto& it : transactions)
+                                {
+                                    it->setAbort(_metaDatas->transactionMetaData(i)->abort());
+                                    block->appendTransaction(it);
+                                    i++;
+                                }
+                                finally(std::move(error));
+                            });
+                    }
                     if (_blockFlag & RECEIPTS)
-                        finally(std::move(error));
-                    return;
-                }
-
-                LEDGER_LOG(TRACE) << "Get transactions hash list success, size:" << hashes.size();
-
-                auto hashesPtr = std::make_shared<std::vector<std::string>>(std::move(hashes));
-                if (_blockFlag & TRANSACTIONS)
-                {
-                    asyncBatchGetTransactions(
-                        hashesPtr, [block, finally](Error::Ptr&& error,
-                                       std::vector<protocol::Transaction::Ptr>&& transactions) {
-                            for (auto& it : transactions)
-                            {
-                                block->appendTransaction(it);
-                            }
-                            finally(std::move(error));
-                        });
-                }
-                if (_blockFlag & RECEIPTS)
-                {
-                    asyncBatchGetReceipts(
-                        hashesPtr, [block, finally](Error::Ptr&& error,
-                                       std::vector<protocol::TransactionReceipt::Ptr>&& receipts) {
-                            for (auto& it : receipts)
-                            {
-                                block->appendReceipt(it);
-                            }
-                            finally(std::move(error));
-                        });
-                }
-            });
+                    {
+                        asyncBatchGetReceipts(hashesPtr,
+                            [block, finally](Error::Ptr&& error,
+                                std::vector<protocol::TransactionReceipt::Ptr>&& receipts) {
+                                for (auto& it : receipts)
+                                {
+                                    block->appendReceipt(it);
+                                }
+                                finally(std::move(error));
+                            });
+                    }
+                });
         });
     }
 
@@ -1013,15 +1027,15 @@ void Ledger::asyncGetBlockHeader(bcos::protocol::Block::Ptr block,
         });
 }
 
-void Ledger::asyncGetBlockTransactionHashes(bcos::protocol::BlockNumber blockNumber,
-    std::function<void(Error::Ptr&&, std::vector<std::string>&&)> callback)
+void Ledger::asyncGetBlockTransactionsMetaData(bcos::protocol::BlockNumber blockNumber,
+    std::function<void(Error::Ptr&&, bcos::protocol::Block::Ptr&&)> callback)
 {
     m_storage->asyncOpenTable(SYS_NUMBER_2_TXS,
         [this, blockNumber, callback](auto&& error, std::optional<Table>&& table) {
             auto validError = checkTableValid(std::move(error), table, SYS_NUMBER_2_BLOCK_HEADER);
             if (validError)
             {
-                callback(std::move(validError), std::vector<std::string>());
+                callback(std::move(validError), nullptr);
                 return;
             }
 
@@ -1031,23 +1045,35 @@ void Ledger::asyncGetBlockTransactionHashes(bcos::protocol::BlockNumber blockNum
                         std::move(error), entry, boost::lexical_cast<std::string>(blockNumber));
                     if (validError)
                     {
-                        callback(std::move(validError), std::vector<std::string>());
+                        callback(std::move(validError), nullptr);
                         return;
                     }
 
                     auto txs = entry->getField(0);
                     auto blockWithTxs = m_blockFactory->createBlock(
                         bcos::bytesConstRef((bcos::byte*)txs.data(), txs.size()));
-
-                    std::vector<std::string> hashList(blockWithTxs->transactionsHashSize());
-                    for (size_t i = 0; i < blockWithTxs->transactionsHashSize(); ++i)
-                    {
-                        auto hash = blockWithTxs->transactionHash(i);
-                        hashList[i] = hash.hex();
-                    }
-
-                    callback(nullptr, std::move(hashList));
+                    callback(nullptr, std::move(blockWithTxs));
                 });
+        });
+}
+
+void Ledger::asyncGetBlockTransactionHashes(bcos::protocol::BlockNumber blockNumber,
+    std::function<void(Error::Ptr&&, std::vector<std::string>&&)> callback)
+{
+    asyncGetBlockTransactionsMetaData(
+        blockNumber, [callback](Error::Ptr&& _error, bcos::protocol::Block::Ptr&& _block) {
+            if (_error)
+            {
+                callback(std::move(_error), std::vector<std::string>());
+                return;
+            }
+            std::vector<std::string> hashList(_block->transactionsHashSize());
+            for (size_t i = 0; i < _block->transactionsHashSize(); ++i)
+            {
+                auto hash = _block->transactionHash(i);
+                hashList[i] = hash.hex();
+            }
+            callback(nullptr, std::move(hashList));
         });
 }
 

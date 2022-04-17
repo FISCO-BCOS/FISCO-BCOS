@@ -20,4 +20,5 @@ message PBRawTransaction{
     int64 import_time = 12;
     uint32 attribute = 13;
     string source = 14;
+    bool abort = 15;
 }

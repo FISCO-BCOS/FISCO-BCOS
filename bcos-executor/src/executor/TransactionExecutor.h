@@ -142,6 +142,7 @@ public:
     void getCode(std::string_view contract,
         std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) override;
 
+    void removeState(bcos::protocol::BlockNumber _number) override;
     struct HashCombine
     {
         size_t hash(const std::tuple<int64_t, int64_t>& val) const

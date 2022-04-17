@@ -142,6 +142,8 @@ public:
     virtual void setSignatureList(gsl::span<const Signature> const& _signatureList) = 0;
     virtual void setSignatureList(SignatureList&& _signatureList) = 0;
     virtual bcos::crypto::CryptoSuite::Ptr cryptoSuite() { return m_cryptoSuite; }
+    virtual void setUndeterministic(bool _undeterministic) = 0;
+    virtual bool undeterministic() const = 0;
 
 protected:
     bcos::crypto::CryptoSuite::Ptr m_cryptoSuite;

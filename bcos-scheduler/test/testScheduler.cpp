@@ -156,8 +156,8 @@ BOOST_AUTO_TEST_CASE(executeBlock)
 
     bcos::protocol::BlockHeader::Ptr executedHeader;
 
-    scheduler->executeBlock(
-        block, false, [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header) {
+    scheduler->executeBlock(block, false, false,
+        [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header) {
             BOOST_CHECK(!error);
             BOOST_CHECK(header);
 
@@ -213,7 +213,7 @@ BOOST_AUTO_TEST_CASE(parallelExecuteBlock)
     std::promise<bcos::protocol::BlockHeader::Ptr> executedHeader;
 
     scheduler->executeBlock(
-        block, false, [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr header) {
+        block, false, false, [&](bcos::Error::Ptr error, bcos::protocol::BlockHeader::Ptr header) {
             BOOST_CHECK(!error);
             BOOST_CHECK(header);
 
@@ -341,8 +341,8 @@ BOOST_AUTO_TEST_CASE(createContract)
     block->appendTransactionMetaData(std::move(metaTx));
 
     bcos::protocol::BlockHeader::Ptr executedHeader;
-    scheduler->executeBlock(
-        block, false, [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header) {
+    scheduler->executeBlock(block, false, false,
+        [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header) {
             BOOST_CHECK(!error);
             BOOST_CHECK(header);
 
@@ -371,8 +371,8 @@ BOOST_AUTO_TEST_CASE(dag)
     }
 
     std::promise<bcos::protocol::BlockHeader::Ptr> executedHeader;
-    scheduler->executeBlock(
-        block, false, [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header) {
+    scheduler->executeBlock(block, false, false,
+        [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header) {
             BOOST_CHECK(!error);
             BOOST_CHECK(header);
 
@@ -408,8 +408,8 @@ BOOST_AUTO_TEST_CASE(dagByMessage)
     }
 
     std::promise<bcos::protocol::BlockHeader::Ptr> executedHeader;
-    scheduler->executeBlock(
-        block, false, [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header) {
+    scheduler->executeBlock(block, false, false,
+        [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header) {
             BOOST_CHECK(!error);
             BOOST_CHECK(header);
 
@@ -445,8 +445,8 @@ BOOST_AUTO_TEST_CASE(executedBlock)
         }
 
         std::promise<bcos::protocol::BlockHeader::Ptr> executedHeader;
-        scheduler->executeBlock(
-            block, false, [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header) {
+        scheduler->executeBlock(block, false, false,
+            [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header) {
                 BOOST_CHECK(!error);
                 BOOST_CHECK(header);
 
@@ -471,8 +471,8 @@ BOOST_AUTO_TEST_CASE(executedBlock)
         auto block = blockFactory->createBlock();
         block->blockHeader()->setNumber(blockNumber);
 
-        scheduler->executeBlock(
-            block, false, [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header) {
+        scheduler->executeBlock(block, false, false,
+            [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header) {
                 BOOST_CHECK(!error);
                 BOOST_CHECK_EQUAL(header->stateRoot().hex(), hashes[blockNumber].hex());
             });
@@ -496,8 +496,8 @@ BOOST_AUTO_TEST_CASE(testDeploySysContract)
     block->appendTransaction(std::move(tx));
 
     std::promise<bcos::protocol::BlockHeader::Ptr> executedHeader;
-    scheduler->executeBlock(
-        block, false, [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header) {
+    scheduler->executeBlock(block, false, false,
+        [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header) {
             // callback(BCOS_ERROR_UNIQUE_PTR(-1, "deploy sys contract!"), nullptr);
             BOOST_CHECK(error == nullptr);
             executedHeader.set_value(std::move(header));
@@ -552,8 +552,8 @@ BOOST_AUTO_TEST_CASE(checkCommittedBlock)
     }
 
     std::promise<bcos::protocol::BlockHeader::Ptr> executedHeader;
-    scheduler->executeBlock(
-        block, false, [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header) {
+    scheduler->executeBlock(block, false, false,
+        [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header) {
             BOOST_CHECK(!error);
             BOOST_CHECK(header);
 
@@ -578,7 +578,7 @@ BOOST_AUTO_TEST_CASE(checkCommittedBlock)
     block->setBlockHeader(newHeader);
 
     scheduler->executeBlock(
-        block, false, [](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&&) {
+        block, false, false, [](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&&) {
             BOOST_CHECK(error);
             BOOST_CHECK_EQUAL(
                 error->errorCode(), bcos::scheduler::SchedulerError::InvalidBlockNumber);
@@ -611,8 +611,8 @@ BOOST_AUTO_TEST_CASE(executeWithSystemError)
     block->appendTransactionMetaData(std::move(metaTx));
 
     std::promise<void> executedHeader;
-    scheduler->executeBlock(
-        block, false, [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header) {
+    scheduler->executeBlock(block, false, false,
+        [&](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& header) {
             BOOST_CHECK(error);
             BOOST_CHECK_EQUAL(error->errorCode(), bcos::scheduler::SchedulerError::UnknownError);
             BOOST_CHECK_GT(error->errorMessage().size(), 0);
@@ -650,8 +650,8 @@ BOOST_AUTO_TEST_CASE(executeWithDeadLock)
         block->appendTransactionMetaData(std::move(metaTx));
     }
 
-    scheduler->executeBlock(
-        block, false, [](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& blockHeader) {
+    scheduler->executeBlock(block, false, false,
+        [](bcos::Error::Ptr&& error, bcos::protocol::BlockHeader::Ptr&& blockHeader) {
             BOOST_CHECK(!error);
             BOOST_CHECK(blockHeader);
         });

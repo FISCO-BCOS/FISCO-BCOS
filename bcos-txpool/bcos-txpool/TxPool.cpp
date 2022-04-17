@@ -356,12 +356,14 @@ void TxPool::asyncMarkTxs(HashListPtr _txsHash, bool _sealedFlag,
     bcos::protocol::BlockNumber _batchId, bcos::crypto::HashType const& _batchHash,
     std::function<void(Error::Ptr)> _onRecvResponse)
 {
-    m_txpoolStorage->batchMarkTxs(*_txsHash, _batchId, _batchHash, _sealedFlag);
-    if (!_onRecvResponse)
-    {
-        return;
-    }
-    _onRecvResponse(nullptr);
+    m_resetter->enqueue([this, _txsHash, _sealedFlag, _batchId, _batchHash, _onRecvResponse]() {
+        m_txpoolStorage->batchMarkTxs(*_txsHash, _batchId, _batchHash, _sealedFlag);
+        if (!_onRecvResponse)
+        {
+            return;
+        }
+        _onRecvResponse(nullptr);
+    });
 }
 
 void TxPool::asyncResetTxPool(std::function<void(Error::Ptr)> _onRecvResponse)

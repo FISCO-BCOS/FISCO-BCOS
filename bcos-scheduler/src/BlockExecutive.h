@@ -81,6 +81,8 @@ public:
 
     bool isCall() { return m_staticCall; }
 
+    void removeAllState();
+
 private:
     struct CommitStatus
     {

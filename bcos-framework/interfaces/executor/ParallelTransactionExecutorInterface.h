@@ -101,6 +101,7 @@ public:
 
     virtual void getCode(
         std::string_view contract, std::function<void(bcos::Error::Ptr, bcos::bytes)> callback) = 0;
+    virtual void removeState(bcos::protocol::BlockNumber) {}
 };
 }  // namespace executor
 }  // namespace bcos

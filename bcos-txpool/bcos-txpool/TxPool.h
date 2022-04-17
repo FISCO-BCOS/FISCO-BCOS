@@ -41,8 +41,9 @@ public:
         // threadpool for verify block
         m_verifier = std::make_shared<ThreadPool>("verifier", 8);
         m_sealer = std::make_shared<ThreadPool>("txsSeal", 1);
-        m_filler = std::make_shared<ThreadPool>("txsFiller", 4);
+        m_filler = std::make_shared<ThreadPool>("txsFiller", 32);
         m_remover = std::make_shared<ThreadPool>("txsRemove", 1);
+        m_resetter = std::make_shared<ThreadPool>("txsResetter", 1);
         TXPOOL_LOG(INFO) << LOG_DESC("create TxPool")
                          << LOG_KV("submitterWorkerNum", _verifierWorkerNum);
     }
@@ -158,6 +159,7 @@ private:
     ThreadPool::Ptr m_sealer;
     ThreadPool::Ptr m_filler;
     ThreadPool::Ptr m_remover;
+    ThreadPool::Ptr m_resetter;
     std::atomic_bool m_running = {false};
 };
 }  // namespace txpool

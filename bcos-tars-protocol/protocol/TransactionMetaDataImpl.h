@@ -77,6 +77,8 @@ public:
     bcostars::TransactionMetaData& mutableInner() { return *m_inner(); }
     bcostars::TransactionMetaData takeInner() { return std::move(*m_inner()); }
     void setInner(bcostars::TransactionMetaData inner) { *m_inner() = std::move(inner); }
+    void setAbort(bool _abort) override { m_inner()->abort = _abort; }
+    bool abort() const override { return m_inner()->abort; }
 
 private:
     std::function<bcostars::TransactionMetaData*()> m_inner;

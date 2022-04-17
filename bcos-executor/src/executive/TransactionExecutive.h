@@ -131,9 +131,6 @@ public:
 
     std::shared_ptr<precompiled::Precompiled> getPrecompiled(const std::string& _address) const;
 
-    void setConstantPrecompiled(
-        const std::string& _address, std::shared_ptr<precompiled::Precompiled> precompiled);
-
     void setBuiltInPrecompiled(std::shared_ptr<const std::set<std::string>> _builtInPrecompiled)
     {
         m_builtInPrecompiled = std::move(_builtInPrecompiled);

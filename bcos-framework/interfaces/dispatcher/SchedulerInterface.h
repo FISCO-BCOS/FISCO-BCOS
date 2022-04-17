@@ -39,8 +39,12 @@ public:
     SchedulerInterface() = default;
     virtual ~SchedulerInterface() {}
 
+    virtual void getExecResult(bcos::protocol::BlockNumber,
+        std::function<void(bcos::Error::Ptr&&, bcos::protocol::Block::Ptr&&)>)
+    {}
+
     // by pbft & sync
-    virtual void executeBlock(bcos::protocol::Block::Ptr block, bool verify,
+    virtual void executeBlock(bcos::protocol::Block::Ptr block, bool verify, bool _reExecFlag,
         std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&)> callback) = 0;
 
     // by pbft & sync
