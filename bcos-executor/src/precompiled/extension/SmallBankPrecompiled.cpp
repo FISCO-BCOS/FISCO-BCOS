@@ -19,12 +19,12 @@
  */
 
 #include "SmallBankPrecompiled.h"
-#include "DagTransferPrecompiled.h"
-#include "../PrecompiledResult.h"
-#include "../Utilities.h"
-#include "../PrecompiledCodec.h"
-#include "../TableFactoryPrecompiled.h"
 #include "../../executive/BlockContext.h"
+#include "../PrecompiledCodec.h"
+#include "../PrecompiledResult.h"
+#include "../TableFactoryPrecompiled.h"
+#include "../Utilities.h"
+#include "DagTransferPrecompiled.h"
 #include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
 #include <bcos-framework/interfaces/storage/Common.h>
 
@@ -40,13 +40,13 @@ const char* const SMALL_BANK_METHOD_ADD_STR_UINT = "updateBalance(string,uint256
 const char* const SMALL_BANK_METHOD_TRS_STR2_UINT = "sendPayment(string,string,uint256)";
 const size_t SMALLBANK_TRANSFER_FIELD_BALANCE = 0;
 
-SmallBankPrecompiled::SmallBankPrecompiled(crypto::Hash::Ptr _hashImpl, std::string _tableName) : Precompiled(_hashImpl),m_tableName(_tableName) {
-    name2Selector[SMALL_BANK_METHOD_ADD_STR_UINT] = 
-    getFuncSelector(SMALL_BANK_METHOD_ADD_STR_UINT, _hashImpl);
-    name2Selector[SMALL_BANK_METHOD_TRS_STR2_UINT] = 
-    getFuncSelector(SMALL_BANK_METHOD_TRS_STR2_UINT, _hashImpl);
-
-
+SmallBankPrecompiled::SmallBankPrecompiled(crypto::Hash::Ptr _hashImpl, std::string _tableName)
+  : Precompiled(_hashImpl), m_tableName(_tableName)
+{
+    name2Selector[SMALL_BANK_METHOD_ADD_STR_UINT] =
+        getFuncSelector(SMALL_BANK_METHOD_ADD_STR_UINT, _hashImpl);
+    name2Selector[SMALL_BANK_METHOD_TRS_STR2_UINT] =
+        getFuncSelector(SMALL_BANK_METHOD_TRS_STR2_UINT, _hashImpl);
 }
 
 
@@ -55,7 +55,7 @@ std::vector<std::string> SmallBankPrecompiled::getParallelTag(bytesConstRef _par
     // parse function name
     uint32_t func = getParamFunc(_param);
     bytesConstRef data = getParamData(_param);
-    std::vector<std::string> results; 
+    std::vector<std::string> results;
     auto codec = std::make_shared<PrecompiledCodec>(m_hashImpl, _isWasm);
 
     // user_name user_balance 2 fields in table, the key of table is user_name field
@@ -84,17 +84,19 @@ std::vector<std::string> SmallBankPrecompiled::getParallelTag(bytesConstRef _par
             results.push_back(toUser);
         }
     }
-    std::cout << "SmallBank getParallelTag done." << std::endl;
+    // std::cout << "SmallBank getParallelTag done." << std::endl;
     return results;
 }
 
-std::string SmallBankPrecompiled::toString() {
+std::string SmallBankPrecompiled::toString()
+{
     return "SmallBank";
 }
 
 std::shared_ptr<PrecompiledExecResult> SmallBankPrecompiled::call(
-        std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
-        const std::string & _origin, const std::string &) {
+    std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
+    const std::string& _origin, const std::string&)
+{
     PRECOMPILED_LOG(TRACE) << LOG_BADGE("SmallBankPrecompiled") << LOG_DESC("call")
                            << LOG_KV("param", toHexString(_param));
     // parse function name
@@ -121,12 +123,13 @@ std::shared_ptr<PrecompiledExecResult> SmallBankPrecompiled::call(
 
     callResult->setGas(gasPricer->calTotalGas());
     callResult->setExecResult(bytes());
-    std::cout << "SmallBank Precompiled call done." << std::endl;
+    // std::cout << "SmallBank Precompiled call done." << std::endl;
     return callResult;
 }
 
-void SmallBankPrecompiled::updateBalanceCall(std::shared_ptr<executor::TransactionExecutive> _executive,
-    bytesConstRef _data, std::string const&, bytes& _out)
+void SmallBankPrecompiled::updateBalanceCall(
+    std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _data,
+    std::string const&, bytes& _out)
 {
     // userAdd(string,uint256)
     std::string user;
@@ -147,7 +150,8 @@ void SmallBankPrecompiled::updateBalanceCall(std::shared_ptr<executor::Transacti
             break;
         }
         auto table = _executive->storage().openTable(m_tableName);
-        std::cout << "SmallBank  ---------- updateBalancecall tableName is " << m_tableName << std::endl;
+        // std::cout << "SmallBank  ---------- updateBalancecall tableName is " << m_tableName <<
+        // std::endl;
         if (!table)
         {
             strErrorMsg = "openTable failed.";
@@ -165,7 +169,8 @@ void SmallBankPrecompiled::updateBalanceCall(std::shared_ptr<executor::Transacti
         // user not exist, insert user into it.
         auto newEntry = table->newEntry();
         newEntry.setField(SMALLBANK_TRANSFER_FIELD_BALANCE, amount.str());
-        std::cout << "SmallBank  ---------- user message has insert tableName: " << m_tableName << ", userName is" << user << ", balance is " << amount.str() << std::endl;
+        // std::cout << "SmallBank  ---------- user message has insert tableName: " << m_tableName
+        // << ", userName is" << user << ", balance is " << amount.str() << std::endl;
         table->setRow(user, newEntry);
         ret = 0;
     } while (false);
@@ -215,7 +220,8 @@ void SmallBankPrecompiled::sendPaymentCall(
             break;
         }
         auto table = _executive->storage().openTable(m_tableName);
-        std::cout << "SmallBank  ---------- sendPaymentCall tableName is " << m_tableName << std::endl;
+        // std::cout << "SmallBank  ---------- sendPaymentCall tableName is " << m_tableName <<
+        // std::endl;
         if (!table)
         {
             strErrorMsg = "openTable failed.";
@@ -263,10 +269,12 @@ void SmallBankPrecompiled::sendPaymentCall(
 
         newFromUserBalance = fromUserBalance - amount;
         newToUserBalance = toUserBalance + amount;
-        
-        std::cout << "SmallBank  ---------- user transfer message has insert tableName: " << m_tableName << ", fromUser is" << fromUser << ",fromUserBalance is" << fromUserBalance
-        <<", newFromUserBalance is "<< newFromUserBalance << ", toUser is" << toUser <<  ", toUserBalance is" << toUserBalance << ", newToUserBalance is "<< newToUserBalance << std::endl;
-        // update fromUser balance info.
+
+        // std::cout << "SmallBank  ---------- user transfer message has insert tableName: " <<
+        // m_tableName << ", fromUser is" << fromUser << ",fromUserBalance is" << fromUserBalance
+        // <<", newFromUserBalance is "<< newFromUserBalance << ", toUser is" << toUser <<  ",
+        // toUserBalance is" << toUserBalance << ", newToUserBalance is "<< newToUserBalance <<
+        // std::endl; update fromUser balance info.
         entry = table->newEntry();
         entry->setField(SMALLBANK_TRANSFER_FIELD_BALANCE, newFromUserBalance.str());
         table->setRow(fromUser, *entry);
@@ -285,5 +293,3 @@ void SmallBankPrecompiled::sendPaymentCall(
     }
     _out = codec->encode(u256(ret));
 }
-
-
