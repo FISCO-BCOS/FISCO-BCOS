@@ -1576,7 +1576,7 @@ TransactionExecutive::Ptr TransactionExecutor::createExecutive(
 void TransactionExecutor::removeState(bcos::protocol::BlockNumber _number)
 {
     std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
-    for (auto it = m_stateStorages.begin(); it != m_stateStorages.end();it++)
+    for (auto it = m_stateStorages.begin(); it != m_stateStorages.end(); it++)
     {
         if (it->number == _number)
         {

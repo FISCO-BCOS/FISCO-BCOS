@@ -22,70 +22,66 @@
 
 #include "../../vm/Precompiled.h"
 #include "../Common.h"
-#include <bcos-framework/interfaces/storage/Table.h>
 #include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>
+#include <bcos-framework/interfaces/storage/Table.h>
 
-namespace bcos {
-namespace precompiled {
-class SmallBankPrecompiled : public bcos::precompiled::Precompiled {
-  public:
-  using Ptr = std::shared_ptr<SmallBankPrecompiled>;
+namespace bcos
+{
+namespace precompiled
+{
+class SmallBankPrecompiled : public bcos::precompiled::Precompiled
+{
+public:
+    using Ptr = std::shared_ptr<SmallBankPrecompiled>;
 
-  SmallBankPrecompiled(crypto::Hash::Ptr _hashImpl, std::string _tableName);
+    SmallBankPrecompiled(crypto::Hash::Ptr _hashImpl, std::string _tableName);
 
-  virtual ~SmallBankPrecompiled() {};
+    virtual ~SmallBankPrecompiled(){};
 
-  std::string toString() override;
+    std::string toString() override;
 
-  std::shared_ptr<PrecompiledExecResult>
-  call(std::shared_ptr<executor::TransactionExecutive> _executive,
-       bytesConstRef _param, const std::string &_origin,
-       const std::string &_sender) override;
+    std::shared_ptr<PrecompiledExecResult> call(
+        std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
+        const std::string& _origin, const std::string& _sender) override;
 
-  public:
-  // is this precompiled need parallel processing, default false.
-  bool isParallelPrecompiled() override { return true; }
-  std::vector<std::string> getParallelTag(bytesConstRef param,
-                                          bool _isWasm) override;
+public:
+    // is this precompiled need parallel processing, default false.
+    bool isParallelPrecompiled() override { return true; }
+    std::vector<std::string> getParallelTag(bytesConstRef param, bool _isWasm) override;
 
-  static std::string getAddress(unsigned int id) {
-    u160 address = u160("0x6200");
-    address += id;
-    h160 addressBytes = h160(address);
-    return addressBytes.hex();
-  }
-
-  static void registerPrecompiled(
-      std::map<std::string, std::shared_ptr<precompiled::Precompiled> > &
-          registeredMap,
-      crypto::Hash::Ptr _hashImpl) {
-    for (int id = 0; id < 128; id++) {
-      std::string _tableName = std::to_string(id);
-      std::string path = bcos::ledger::SMALLBANK_TRANSFER;
-      _tableName = path + _tableName;
-      std::string address = getAddress(id);
-      BCOS_LOG(INFO) << LOG_BADGE("SmallBank")
-                     << "Register SmallBankPrecompiled "
-                     << LOG_KV("address", address)
-                     << LOG_KV("tableName", _tableName);
-      registeredMap.insert(
-          { std::move(address),
-            std::make_shared<precompiled::SmallBankPrecompiled>(_hashImpl,
-                                                                _tableName) });
+    static std::string getAddress(unsigned int id)
+    {
+        u160 address = u160("0x6200");
+        address += id;
+        h160 addressBytes = h160(address);
+        return addressBytes.hex();
     }
-  }
 
-  public:
-  void
-  updateBalanceCall(std::shared_ptr<executor::TransactionExecutive> _executive,
-                    bytesConstRef _data, std::string const &_origin,
-                    bytes &_out);
-  void
-  sendPaymentCall(std::shared_ptr<executor::TransactionExecutive> _executive,
-                  bytesConstRef _data, std::string const &_origin, bytes &_out);
+    static void registerPrecompiled(
+        std::map<std::string, std::shared_ptr<precompiled::Precompiled> >& registeredMap,
+        crypto::Hash::Ptr _hashImpl)
+    {
+        for (int id = 0; id < 128; id++)
+        {
+            std::string _tableName = std::to_string(id);
+            std::string path = bcos::ledger::SMALLBANK_TRANSFER;
+            _tableName = path + _tableName;
+            std::string address = getAddress(id);
+            BCOS_LOG(INFO) << LOG_BADGE("SmallBank") << "Register SmallBankPrecompiled "
+                           << LOG_KV("address", address) << LOG_KV("tableName", _tableName);
+            registeredMap.insert({std::move(address),
+                std::make_shared<precompiled::SmallBankPrecompiled>(_hashImpl, _tableName)});
+        }
+    }
 
-  private:
-  std::string m_tableName;
+public:
+    void updateBalanceCall(std::shared_ptr<executor::TransactionExecutive> _executive,
+        bytesConstRef _data, std::string const& _origin, bytes& _out);
+    void sendPaymentCall(std::shared_ptr<executor::TransactionExecutive> _executive,
+        bytesConstRef _data, std::string const& _origin, bytes& _out);
+
+private:
+    std::string m_tableName;
 };
-} // namespace precompiled
-} // namespace bcos
+}  // namespace precompiled
+}  // namespace bcos
