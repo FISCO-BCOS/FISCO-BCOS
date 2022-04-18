@@ -110,7 +110,7 @@ inline bool checkSenderFromAuth(std::string_view _sender)
 executor::CallParameters::UniquePtr externalRequest(
     const std::shared_ptr<executor::TransactionExecutive>& _executive, const bytesConstRef& _param,
     std::string_view _origin, std::string_view _sender, std::string_view _to, bool _isStatic,
-    bool _isCreate, int64_t gasLeft);
+    bool _isCreate, int64_t gasLeft, bool _isInternalCall = false);
 
 s256 externalTouchNewFile(const std::shared_ptr<executor::TransactionExecutive>& _executive,
     std::string_view _origin, std::string_view _sender, std::string_view _filePath,

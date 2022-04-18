@@ -40,7 +40,7 @@ std::shared_ptr<PrecompiledExecResult> PermissionInterceptorPrecompiled::call(
     // parse function name
     uint32_t func = getParamFunc(_param);
     // bytesConstRef data = getParamData(_param);
-    PRECOMPILED_LOG(TRACE) << LOG_BADGE("ContractAuthPrecompiled") << LOG_DESC("call")
+    PRECOMPILED_LOG(TRACE) << LOG_BADGE("AuthManagerPrecompiled") << LOG_DESC("call")
                            << LOG_KV("func", func);
     auto callResult = std::make_shared<PrecompiledExecResult>();
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
@@ -57,7 +57,7 @@ std::shared_ptr<PrecompiledExecResult> PermissionInterceptorPrecompiled::call(
     }
     else
     {
-        PRECOMPILED_LOG(ERROR) << LOG_BADGE("ContractAuthPrecompiled")
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("AuthManagerPrecompiled")
                                << LOG_DESC("call undefined function") << LOG_KV("func", func);
     }
     gasPricer->updateMemUsed(callResult->m_execResult.size());

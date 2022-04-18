@@ -38,7 +38,6 @@
 #include "../precompiled/SystemConfigPrecompiled.h"
 #include "../precompiled/TableFactoryPrecompiled.h"
 #include "../precompiled/Utilities.h"
-#include "../precompiled/extension/ContractAuthPrecompiled.h"
 #include "../precompiled/extension/DagTransferPrecompiled.h"
 #include "../vm/Precompiled.h"
 #include "../vm/gas_meter/GasInjector.h"
@@ -1332,6 +1331,7 @@ std::unique_ptr<protocol::ExecutionMessage> TransactionExecutor::toExecutionResu
     message->setStaticCall(params->staticCall);
     message->setCreate(params->create);
     message->setInternalCreate(params->internalCreate);
+    message->setInternalCall(params->internalCall);
     if (params->createSalt)
     {
         message->setCreateSalt(*params->createSalt);
@@ -1458,6 +1458,7 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->codeAddress = input.to();
     callParameters->create = input.create();
     callParameters->internalCreate = input.internalCreate();
+    callParameters->internalCall = input.internalCall();
     callParameters->data = input.takeData();
     callParameters->gas = input.gasAvailable();
     callParameters->staticCall = staticCall;
@@ -1487,6 +1488,7 @@ std::unique_ptr<CallParameters> TransactionExecutor::createCallParameters(
     callParameters->staticCall = input.staticCall();
     callParameters->create = input.create();
     callParameters->internalCreate = input.internalCreate();
+    callParameters->internalCall = input.internalCall();
     callParameters->data = tx.input().toBytes();
     callParameters->keyLocks = input.takeKeyLocks();
     callParameters->abi = tx.abi();

@@ -77,9 +77,14 @@ static const char* const ACCOUNT_FROZEN = "frozen";
 /// auth
 static const char* const CONTRACT_SUFFIX = "_accessAuth";
 static const char* const ADMIN_FIELD = "admin";
+static const char* const STATUS_FIELD = "status";
 static const char* const METHOD_AUTH_TYPE = "method_auth_type";
 static const char* const METHOD_AUTH_WHITE = "method_auth_white";
 static const char* const METHOD_AUTH_BLACK = "method_auth_black";
+
+/// contract status
+static const char* const CONTRACT_FROZEN = "frozen";
+static const char* const CONTRACT_NORMAL = "normal";
 
 /// FileSystem table keys
 static const char* const FS_KEY_NAME = "name";

@@ -50,8 +50,14 @@ struct CallParameters
 
     int32_t status = 0;  // by response
     Type type;
-    bool staticCall = false;        // common field
-    bool create = false;            // by request, is creation
-    bool internalCreate = false;    // by internal precompiled request, is creation
+    bool staticCall = false;      // common field
+    bool create = false;          // by request, is creation
+    bool internalCreate = false;  // by internal precompiled request, is creation
+    /**
+     * Internal precompiled request, this option is used to modify
+     * contract table, which address scheduled by 'to', by a certain
+     * precompiled
+     */
+    bool internalCall = false;
 };
 }  // namespace bcos::executor
