@@ -747,7 +747,7 @@ generate_common_ini() {
 [txpool]
     limit=15000
     notify_worker_num=2
-    verify_worker_num=2
+    ;verify_worker_num=2
 [log]
     enable=true
     log_path=./log

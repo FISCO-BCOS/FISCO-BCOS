@@ -294,8 +294,7 @@ void NodeConfig::loadTxPoolConfig(boost::property_tree::ptree const& _pt)
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "Please set txpool.notify_worker_num to positive !"));
     }
-
-    m_verifierWorkerNum = checkAndGetValue(_pt, "txpool.verify_worker_num", "2");
+    m_verifierWorkerNum = _pt.get("txpool.verify_worker_num", std::thread::hardware_concurrency());
     if (m_verifierWorkerNum <= 0)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
