@@ -234,7 +234,7 @@ LOG_INFO "CA Path         : $ca_path"
 [ -n "${guomi_mode}" ] && LOG_INFO "Guomi CA Path   : $gmca_path"
 [ -n "${guomi_mode}" ] && LOG_INFO "Guomi mode      : $guomi_mode"
 [ "${sm_crypto_channel}" == "true" ] && LOG_INFO "SM channel      : $guomi_mode"
-[ "${sm_crypto_channel}" == "false" ] && [ "${rsa_crypto_channel}" == "true" ] && LOG_INFO "RSA channel     : $guomi_mode"
+[ "${sm_crypto_channel}" == "false" ] && [ "${rsa_crypto_channel}" == "true" ] && LOG_INFO "RSA channel     : $rsa_crypto_channel"
 
 echo "=============================================================="
 LOG_INFO "Execute the download_console.sh script in directory named by IP to get FISCO-BCOS console."
@@ -249,13 +249,11 @@ check_env() {
         macOS="macOS"
     fi
 
-    # TODO: 
-    # [ ! -z "$(openssl version | grep 1.0.2)" ] || [ ! -z "$(openssl version | grep 1.1)" ] || {
-    #    echo "please install openssl!"
-    #    #echo "download openssl from https://www.openssl.org."
-    #    echo "use \"openssl version\" command to check."
-    #    exit 1
-    # }
+    [ ! -z "$(openssl version | grep 1.0.2)" ] || [ ! -z "$(openssl version | grep 1.1)" ] || {
+        echo "Openssl 1.1.0 or 1.0.2 is required, you should install openssl first Or use \"openssl version\" command to check whether the openssl version is suitable."
+       #echo "download openssl from https://www.openssl.org."
+      exit 1
+    }
 
     if [ "$(uname -m)" != "x86_64" ];then
         x86_64_arch="false"
