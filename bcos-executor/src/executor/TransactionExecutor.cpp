@@ -1167,6 +1167,7 @@ ExecutiveFlowInterface::Ptr TransactionExecutor::getExecutiveFlow(
         return executiveFlow;
     }
 
+    bcos::RecursiveGuard lock(x_executiveFlowLock);
     ExecutiveFlowInterface::Ptr executiveFlow = m_blockContext->getExecutiveFlow(codeAddress);
     if (executiveFlow == nullptr)
     {
