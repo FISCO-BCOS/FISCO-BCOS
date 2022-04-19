@@ -304,7 +304,8 @@ file_must_exists() {
 
 file_must_not_exists() {
     if [ -f "$1" ]; then
-        exit_with_clean "$1 file exists, please check!"
+        LOG_WARN "$1 file exists, please check!"
+        exit 1
     fi
 }
 
@@ -1679,12 +1680,12 @@ prepare_ca(){
         for agency_name in ${agency_array[*]};do
             if [ ! -d "${output_dir}/cert/${agency_name}" ];then
                 gen_agency_cert "${output_dir}/cert" "${output_dir}/cert/${agency_name}" >>"${logfile}" 2>&1
-                gen_rsa_chain_cert ${agency_name} "${output_dir}/cert/${agency_name}-channel" >>"${logfile}" 2>&1
+                gen_rsa_chain_cert ${agency_name} "${output_dir}/cert/${agency_name}/channel" >>"${logfile}" 2>&1
             fi
         done
     else
         gen_agency_cert "${output_dir}/cert" "${output_dir}/cert/agency" >"${logfile}" 2>&1
-        gen_rsa_chain_cert "agency" "${output_dir}/cert/agency-channel" >>"${logfile}" 2>&1
+        gen_rsa_chain_cert "agency" "${output_dir}/cert/agency/channel" >>"${logfile}" 2>&1
     fi
 
     if [[ -n "${guomi_mode}" ]];then
@@ -1794,7 +1795,7 @@ for line in ${ip_array[*]};do
             gen_cert "${output_dir}/cert/${agency}" "${sdk_path}" "sdk"
              mv node.nodeid sdk.publickey
         else
-            gen_rsa_node_cert "${output_dir}/cert/${agency}-channel" "${sdk_path}" "sdk"
+            gen_rsa_node_cert "${output_dir}/cert/${agency}/channel" "${sdk_path}" "sdk"
         fi
         
         cd "${output_dir}"
@@ -1855,7 +1856,7 @@ for line in ${ip_array[*]};do
         fi
 
         local agency="${agency_array[${server_count}]}"
-        local agency_rsa_ca="${output_dir}/cert/${agency}-channel"
+        local agency_rsa_ca="${output_dir}/cert/${agency}/channel"
         local node_channel_ca="${node_dir}/${conf_path}/channel_cert"
         gen_rsa_node_cert "${agency_rsa_ca}" "${node_channel_ca}" "node"
         # LOG_INFO " generate node channel rsa ca, i: ${i} ,node_count: ${node_count} ,agency: ${agency}, conf dir: ${conf_path}, node dir: ${node_dir}"
