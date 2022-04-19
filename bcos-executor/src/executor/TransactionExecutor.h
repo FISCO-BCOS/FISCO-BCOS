@@ -264,6 +264,7 @@ protected:
     std::shared_ptr<const std::set<std::string>> m_builtInPrecompiled;
     unsigned int m_DAGThreadNum = std::max(std::thread::hardware_concurrency(), (unsigned int)1);
     std::shared_ptr<wasm::GasInjector> m_gasInjector = nullptr;
+    mutable bcos::RecursiveMutex x_executiveFlowLock;
     bool m_isWasm = false;
 };
 
