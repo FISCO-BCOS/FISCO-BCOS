@@ -233,6 +233,9 @@ LOG_INFO "Output Dir      : ${output_dir}"
 LOG_INFO "CA Path         : $ca_path"
 [ -n "${guomi_mode}" ] && LOG_INFO "Guomi CA Path   : $gmca_path"
 [ -n "${guomi_mode}" ] && LOG_INFO "Guomi mode      : $guomi_mode"
+[ "${sm_crypto_channel}" == "true" ] && LOG_INFO "SM channel      : $guomi_mode"
+[ "${sm_crypto_channel}" == "false" ] && [ "${rsa_crypto_channel}" == "true" ] && LOG_INFO "RSA channel     : $rsa_crypto_channel"
+
 echo "=============================================================="
 LOG_INFO "Execute the download_console.sh script in directory named by IP to get FISCO-BCOS console."
 echo "e.g.  bash ${output_dir}/${ip_array[0]%:*}/download_console.sh -f"
@@ -246,13 +249,11 @@ check_env() {
         macOS="macOS"
     fi
 
-    # TODO: 
-    # [ ! -z "$(openssl version | grep 1.0.2)" ] || [ ! -z "$(openssl version | grep 1.1)" ] || {
-    #    echo "please install openssl!"
-    #    #echo "download openssl from https://www.openssl.org."
-    #    echo "use \"openssl version\" command to check."
-    #    exit 1
-    # }
+    [ ! -z "$(openssl version | grep 1.0.2)" ] || [ ! -z "$(openssl version | grep 1.1)" ] || {
+        echo "Openssl 1.1.0 or 1.0.2 is required, you should install openssl first Or use \"openssl version\" command to check whether the openssl version is suitable."
+       #echo "download openssl from https://www.openssl.org."
+      exit 1
+    }
 
     if [ "$(uname -m)" != "x86_64" ];then
         x86_64_arch="false"
@@ -321,7 +322,8 @@ dir_must_not_exists() {
 }
 
 gen_rsa_chain_cert() {
-    local chaindir="${1}"
+    local name="${1}"
+    local chaindir="${2}"
 
     mkdir -p "${chaindir}"
 
@@ -335,7 +337,7 @@ gen_rsa_chain_cert() {
     dir_must_exists "$chaindir"
 
     openssl genrsa -out "${chaindir}"/ca.key "${rsa_key_length}" 2>/dev/null
-    openssl req -new -x509 -days "${days}" -subj "/CN=FISCO-BCOS/O=fisco-bcos/OU=chain" -key "${chaindir}"/ca.key -out "${chaindir}"/ca.crt  2>/dev/null
+    openssl req -new -x509 -days "${days}" -subj "/CN=${name}/O=fisco-bcos/OU=chain" -key "${chaindir}"/ca.key -out "${chaindir}"/ca.crt  2>/dev/null
 
     LOG_INFO "Generate rsa ca cert successfully!"
 }
@@ -1677,12 +1679,12 @@ prepare_ca(){
         for agency_name in ${agency_array[*]};do
             if [ ! -d "${output_dir}/cert/${agency_name}" ];then
                 gen_agency_cert "${output_dir}/cert" "${output_dir}/cert/${agency_name}" >>"${logfile}" 2>&1
-                gen_rsa_chain_cert "${output_dir}/cert/${agency_name}-channel" >>"${logfile}" 2>&1
+                gen_rsa_chain_cert ${agency_name} "${output_dir}/cert/${agency_name}-channel" >>"${logfile}" 2>&1
             fi
         done
     else
         gen_agency_cert "${output_dir}/cert" "${output_dir}/cert/agency" >"${logfile}" 2>&1
-        gen_rsa_chain_cert "${output_dir}/cert/agency-channel" >>"${logfile}" 2>&1
+        gen_rsa_chain_cert "agency" "${output_dir}/cert/agency-channel" >>"${logfile}" 2>&1
     fi
 
     if [[ -n "${guomi_mode}" ]];then
