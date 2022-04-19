@@ -18,6 +18,8 @@
  * @date 2022/4/8
  */
 
+#pragma once
+
 #include "../executive/TransactionExecutive.h"
 #include "../vm/Precompiled.h"
 #include "Common.h"

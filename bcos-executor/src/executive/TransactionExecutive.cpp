@@ -21,7 +21,8 @@
 
 #include "TransactionExecutive.h"
 #include "../precompiled/FileSystemPrecompiled.h"
-#include "../precompiled/extension/ContractAuthPrecompiled.h"
+#include "../precompiled/extension/AuthManagerPrecompiled.h"
+#include "../precompiled/extension/ContractAuthMgrPrecompiled.h"
 #include "../vm/EVMHostInterface.h"
 #include "../vm/HostContext.h"
 #include "../vm/Precompiled.h"
@@ -168,7 +169,7 @@ void TransactionExecutive::externalAcquireKeyLocks(std::string acquireKeyLock)
     auto output = std::move(m_exchangeMessage);
     if (output->type == CallParameters::REVERT)
     {
-        // Dead lock, revert
+        // Deadlock, revert
         BOOST_THROW_EXCEPTION(BCOS_ERROR(
             ExecuteError::DEAD_LOCK, "Dead lock detected, revert transaction: " +
                                          boost::lexical_cast<std::string>(output->type)));
@@ -214,7 +215,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
         BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "blockContext is null"));
     }
 
-    if (isPrecompiled(callParameters->codeAddress))
+    if (isPrecompiled(callParameters->codeAddress) || callParameters->internalCall)
     {
         return callPrecompiled(std::move(callParameters));
     }
@@ -241,10 +242,26 @@ TransactionExecutive::callPrecompiled(CallParameters::UniquePtr callParameters)
     callParameters->type = CallParameters::FINISHED;
     try
     {
-        auto precompiledResult =
-            execPrecompiled(callParameters->codeAddress, ref(callParameters->data),
-                callParameters->origin, callParameters->senderAddress, callParameters->gas);
-        auto gas = precompiledResult->m_gas;
+        std::shared_ptr<PrecompiledExecResult> precompiledExecResult;
+        if (callParameters->internalCall)
+        {
+            std::string contract;
+            bytes data;
+            auto blockContext = m_blockContext.lock();
+            auto codec =
+                std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+            codec->decode(ref(callParameters->data), contract, data);
+            precompiledExecResult = execPrecompiled(contract, ref(data), callParameters->origin,
+                callParameters->senderAddress, callParameters->gas);
+        }
+        else
+        {
+            precompiledExecResult =
+                execPrecompiled(callParameters->codeAddress, ref(callParameters->data),
+                    callParameters->origin, callParameters->senderAddress, callParameters->gas);
+        }
+
+        auto gas = precompiledExecResult->m_gas;
         if (callParameters->gas < gas)
         {
             callParameters->type = CallParameters::REVERT;
@@ -253,7 +270,7 @@ TransactionExecutive::callPrecompiled(CallParameters::UniquePtr callParameters)
         }
         callParameters->gas -= gas;
         callParameters->status = (int32_t)TransactionStatus::None;
-        callParameters->data.swap(precompiledResult->m_execResult);
+        callParameters->data.swap(precompiledExecResult->m_execResult);
     }
     catch (protocol::PrecompiledError const& e)
     {
@@ -318,6 +335,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
             callParameters->status = (int32_t)TransactionStatus::PermissionDenied;
             callParameters->type = CallParameters::REVERT;
             callParameters->message = "Create permission denied";
+            callParameters->create = false;
             EXECUTIVE_LOG(ERROR) << callParameters->message << LOG_KV("newAddress", newAddress)
                                  << LOG_KV("origin", callParameters->origin);
             return {nullptr, std::move(callParameters)};
@@ -1038,6 +1056,10 @@ void TransactionExecutive::creatAuthTable(
         adminEntry.importFields({admin});
         m_storageWrapper->setRow(authTableName, ADMIN_FIELD, std::move(adminEntry));
 
+        Entry statusEntry(table->tableInfo());
+        statusEntry.importFields({CONTRACT_NORMAL});
+        m_storageWrapper->setRow(authTableName, STATUS_FIELD, std::move(statusEntry));
+
         Entry emptyType;
         emptyType.importFields({""});
         m_storageWrapper->setRow(authTableName, METHOD_AUTH_TYPE, std::move(emptyType));
@@ -1067,18 +1089,29 @@ bool TransactionExecutive::checkAuth(
     if (callParameters->staticCall)
         return true;
     auto blockContext = m_blockContext.lock();
-    auto authAddress = m_blockContext.lock()->isWasm() ? precompiled::CONTRACT_AUTH_NAME :
-                                                         precompiled::CONTRACT_AUTH_ADDRESS;
-    auto contractAuthPrecompiled = dynamic_pointer_cast<precompiled::ContractAuthPrecompiled>(
-        m_constantPrecompiled->at(authAddress));
+    auto authMgrAddress =
+        blockContext->isWasm() ? precompiled::AUTH_MANAGER_NAME : precompiled::AUTH_MANAGER_ADDRESS;
+    auto contractAuthPrecompiled = dynamic_pointer_cast<precompiled::ContractAuthMgrPrecompiled>(
+        m_constantPrecompiled->at(AUTH_CONTRACT_MGR_ADDRESS));
     std::string address = callParameters->origin;
-    auto path = string(callParameters->codeAddress);
+    auto path = callParameters->codeAddress;
     EXECUTIVE_LOG(DEBUG) << "check auth" << LOG_KV("codeAddress", path)
                          << LOG_KV("isCreate", _isCreate) << LOG_KV("originAddress", address);
     if (_isCreate)
     {
-        return contractAuthPrecompiled->checkDeployAuth(shared_from_this(), address);
+        /// external call authMgrAddress to check deploy auth
+        auto codec =
+            std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+        auto input = blockContext->isWasm() ?
+                         codec->encodeWithSig("hasDeployAuth(string)", address) :
+                         codec->encodeWithSig("hasDeployAuth(address)", Address(address));
+        auto response = externalRequest(shared_from_this(), ref(input), callParameters->origin,
+            callParameters->senderAddress, authMgrAddress, true, false, callParameters->gas);
+        bool result = true;
+        codec->decode(ref(response->data), result);
+        return result;
     }
     bytesRef func = ref(callParameters->data).getCroppedData(0, 4);
-    return contractAuthPrecompiled->checkMethodAuth(shared_from_this(), path, func, address);
+    return contractAuthPrecompiled->checkMethodAuth(
+        shared_from_this(), std::move(path), func, address);
 }
