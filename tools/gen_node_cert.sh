@@ -13,7 +13,10 @@ gm_conf_path="gmconf/"
 TASSL_CMD="${HOME}"/.fisco/tassl
 guomi_mode=
 sdk_cert=
+gen_rsa_cert="false"
+gen_rsa_sdk_cert="true"
 days=36500
+rsa_key_length=2048
 
 LOG_WARN()
 {
@@ -33,6 +36,7 @@ Usage:
     -c <cert path>              [Required] cert key path
     -g <gm cert path>           gmcert key path, if generate gm node cert
     -s                          If set -s, generate certificate for sdk
+    -R                          If set -R, generate certificate for sdk with ecdsa, default rsa, work with -s
     -o <Output Dir>             Default ${output_dir}
     -h Help
 e.g
@@ -63,7 +67,7 @@ check_and_install_tassl(){
 
 parse_params()
 {
-while getopts "c:o:g:hsX:" option;do
+while getopts "c:o:g:hRsX:" option;do
     case $option in
     c) [ ! -z $OPTARG ] && key_path=$OPTARG
     ;;
@@ -72,6 +76,7 @@ while getopts "c:o:g:hsX:" option;do
     g) guomi_mode="yes" && gmkey_path=$OPTARG
         check_and_install_tassl
     ;;
+    R) gen_rsa_sdk_cert="false";;
     s) sdk_cert="true";;
     X) days="$OPTARG";;
     h) help;;
@@ -85,6 +90,8 @@ echo "=============================================================="
 LOG_INFO "Cert Path   : $key_path"
 [ ! -z "${guomi_mode}" ] && LOG_INFO "GM Cert Path: $gmkey_path"
 LOG_INFO "Output Dir  : $output_dir"
+LOG_INFO "RSA cert    : ${gen_rsa_cert}"
+LOG_INFO "RSA SDK cert    : ${gen_rsa_sdk_cert}"
 echo "=============================================================="
 LOG_INFO "All completed. Files in $output_dir"
 }
@@ -106,7 +113,7 @@ check_name() {
     local value="$2"
     [[ "$value" =~ ^[a-zA-Z0-9._-]+$ ]] || {
         echo "$name name [$value] invalid, it should match regex: ^[a-zA-Z0-9._-]+\$"
-        exit $EXIT_CODE
+        exit 1
     }
 }
 
@@ -123,6 +130,13 @@ exit_with_clean()
 file_must_exists() {
     if [ ! -f "$1" ]; then
         exit_with_clean "$1 file does not exist, please check!"
+    fi
+}
+
+file_must_not_exists() {
+    if [ -f "$1" ]; then
+        LOG_WARN "$1 file exists, please check!"
+        exit 1
     fi
 }
 
@@ -214,6 +228,58 @@ gen_node_cert_gm() {
     cd $ndpath
 }
 
+gen_rsa_chain_cert() {
+    local name="${1}"
+    local chaindir="${2}"
+
+    mkdir -p "${chaindir}"
+
+    LOG_INFO "chaindir: ${chaindir}"
+
+    file_must_not_exists "${chaindir}"/ca.key
+    file_must_not_exists "${chaindir}"/ca.crt
+    # file_must_exists "${cert_conf}"
+
+    mkdir -p "$chaindir"
+    dir_must_exists "$chaindir"
+
+    openssl genrsa -out "${chaindir}"/ca.key "${rsa_key_length}" 2>/dev/null
+    openssl req -new -x509 -days "${days}" -subj "/CN=${name}/O=fisco-bcos/OU=chain" -key "${chaindir}"/ca.key -out "${chaindir}"/ca.crt  2>/dev/null
+
+    LOG_INFO "Generate rsa ca cert successfully!"
+}
+
+gen_rsa_node_cert() {
+    local capath="${1}"
+    local ndpath="${2}"
+    local type="${3}"
+
+    file_must_exists "$capath/ca.key"
+    file_must_exists "$capath/ca.crt"
+    # check_name node "$node"
+
+    file_must_not_exists "$ndpath"/"${type}".key
+    file_must_not_exists "$ndpath"/"${type}".crt
+
+    mkdir -p "${ndpath}"
+    dir_must_exists "${ndpath}"
+
+    openssl genrsa -out "${ndpath}"/"${type}".key "${rsa_key_length}" 2>/dev/null
+    openssl req -new -sha256 -subj "/CN=FISCO-BCOS/O=fisco-bcos/OU=agency" -key "$ndpath"/"${type}".key -out "$ndpath"/"${type}".csr
+    openssl x509 -req -days "${days}" -sha256 -CA "${capath}"/ca.crt -CAkey "$capath"/ca.key -CAcreateserial \
+        -in "$ndpath"/"${type}".csr -out "$ndpath"/"${type}".crt -extensions v4_req 2>/dev/null
+
+    openssl pkcs8 -topk8 -in "$ndpath"/"${type}".key -out "$ndpath"/pkcs8_node.key -nocrypt
+
+    rm -f "$ndpath"/"$type".csr
+    rm -f "$ndpath"/"$type".key
+
+    mv "$ndpath"/pkcs8_node.key "$ndpath"/"$type".key
+    cp "$capath/ca.crt" "$ndpath"
+
+    # LOG_INFO "Generate ${ndpath} node rsa cert successful!"
+}
+
 generate_script_template()
 {
     local filepath=$1
@@ -279,6 +345,11 @@ main(){
         export PATH="/usr/local/opt/openssl/bin:$PATH"
     fi
 
+    # gen rsa ca for channel
+    if [ -f "${key_path}/channel/ca.key" ] && [ -f "${key_path}/channel/ca.crt" ]; then
+        gen_rsa_cert="true"
+    fi
+
     while :
     do
         gen_node_cert "${key_path}" "${output_dir}"
@@ -310,6 +381,12 @@ main(){
         fi
         break;
     done
+
+    # gen rsa cert for node
+    if [ "${gen_rsa_cert}" == "true" ];then 
+        gen_rsa_node_cert "${key_path}/channel" "${output_dir}/${conf_path}/channel_cert" "node"
+    fi
+
     # generate_node_scripts "${output_dir}"
     cat ${key_path}/agency.crt >> ${output_dir}/${conf_path}/node.crt
     cat ${key_path}/ca.crt >> ${output_dir}/${conf_path}/node.crt
@@ -318,6 +395,10 @@ main(){
 
         #move origin conf to gm conf
         # rm ${output_dir}/${conf_path}/node.nodeid
+        if [ -d "${output_dir}/${conf_path}/channel_cert" ]; then
+            mv "${output_dir}/${conf_path}/channel_cert" ${output_dir}/${gm_conf_path}
+        fi
+
         cp -r ${output_dir}/${conf_path} ${output_dir}/${gm_conf_path}/origin_cert
         #remove original cert files
         rm -rf ${output_dir:?}/${conf_path}
@@ -330,20 +411,36 @@ main(){
             mv "${output_dir}/${conf_path}/gmennode.key" "${output_dir}/${conf_path}/gmensdk.key"
             mv "${output_dir}/${conf_path}/gmennode.crt" "${output_dir}/${conf_path}/gmensdk.crt"
             mv "${output_dir}/${conf_path}/gmnode.nodeid" "${output_dir}/${conf_path}/gmsdk.publickey"
-            mv "${output_dir}/${conf_path}/origin_cert/node.key" "${output_dir}/sdk.key"
-            mv "${output_dir}/${conf_path}/origin_cert/node.crt" "${output_dir}/sdk.crt"
-            mv "${output_dir}/${conf_path}/origin_cert/ca.crt" "${output_dir}/ca.crt"
-            mv "${output_dir}/${conf_path}/origin_cert/node.nodeid" "${output_dir}/sdk.publickey"
+
+            if [ "${gen_rsa_sdk_cert}" == "true" ];then
+                mv "${output_dir}/${conf_path}/channel_cert/node.key" "${output_dir}/sdk.key"
+                mv "${output_dir}/${conf_path}/channel_cert/node.crt" "${output_dir}/sdk.crt"
+                mv "${output_dir}/${conf_path}/channel_cert/ca.crt" "${output_dir}/ca.crt"
+            else
+                mv "${output_dir}/${conf_path}/origin_cert/node.key" "${output_dir}/sdk.key"
+                mv "${output_dir}/${conf_path}/origin_cert/node.crt" "${output_dir}/sdk.crt"
+                mv "${output_dir}/${conf_path}/origin_cert/ca.crt" "${output_dir}/ca.crt"
+                mv "${output_dir}/${conf_path}/origin_cert/node.nodeid" "${output_dir}/sdk.publickey"
+            fi
+
             rm -rf "${output_dir:?}/${conf_path}/origin_cert"
             mv "${output_dir}/${conf_path}" "${output_dir}/gm"
         else
-            mv "${output_dir}/${conf_path}/node.key" "${output_dir}/sdk.key"
-            mv "${output_dir}/${conf_path}/node.nodeid" "${output_dir}/sdk.publickey"
-            mv "${output_dir}/${conf_path}/node.crt" "${output_dir}/sdk.crt"
-            mv "${output_dir}/${conf_path}/ca.crt" "${output_dir}/ca.crt"
+            if [ "${gen_rsa_sdk_cert}" == "true" ];then 
+                mv "${output_dir}/${conf_path}/channel_cert/node.key" "${output_dir}/sdk.key"
+                mv "${output_dir}/${conf_path}/channel_cert/node.crt" "${output_dir}/sdk.crt"
+                mv "${output_dir}/${conf_path}/channel_cert/ca.crt" "${output_dir}/ca.crt"
+            else 
+                mv "${output_dir}/${conf_path}/node.key" "${output_dir}/sdk.key"
+                mv "${output_dir}/${conf_path}/node.nodeid" "${output_dir}/sdk.publickey"
+                mv "${output_dir}/${conf_path}/node.crt" "${output_dir}/sdk.crt"
+                mv "${output_dir}/${conf_path}/ca.crt" "${output_dir}/ca.crt"
+            fi
+          
             rm -rf "${output_dir:?}/${conf_path}"
         fi
     fi
+
     if [ -f "${logfile}" ];then rm "${logfile}";fi
 
 }

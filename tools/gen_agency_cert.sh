@@ -10,6 +10,8 @@ root_crt=
 gmroot_crt=
 TASSL_CMD="${HOME}"/.fisco/tassl
 days=36500
+rsa_key_length=2048
+EXIT_CODE=1
 
 LOG_WARN()
 {
@@ -39,28 +41,35 @@ check_name() {
     local name="$1"
     local value="$2"
     [[ "$value" =~ ^[a-zA-Z0-9._-]+$ ]] || {
-        echo "$name name [$value] invalid, it should match regex: ^[a-zA-Z0-9._-]+\$"
+        LOG_WARN "$name name [$value] invalid, it should match regex: ^[a-zA-Z0-9._-]+\$"
         exit "${EXIT_CODE}"
     }
 }
 
 file_must_exists() {
     if [ ! -f "$1" ]; then
-        echo "$1 file does not exist, please check!"
+        LOG_WARN "$1 file does not exist, please check!"
+        exit "${EXIT_CODE}"
+    fi
+}
+
+file_must_not_exists() {
+    if [ -f "$1" ]; then
+        LOG_WARN "$1 file exists, please check!"
         exit "${EXIT_CODE}"
     fi
 }
 
 dir_must_exists() {
     if [ ! -d "$1" ]; then
-        echo "$1 DIR does not exist, please check!"
+        LOG_WARN "$1 DIR does not exist, please check!"
         exit "${EXIT_CODE}"
     fi
 }
 
 dir_must_not_exists() {
-    if [ -e "$1" ]; then
-        echo "$1 DIR exists, please clean old DIR!"
+    if [ -d "$1" ]; then
+        LOG_WARN "$1 DIR exists, please clean old DIR!"
         exit "${EXIT_CODE}"
     fi
 }
@@ -349,6 +358,58 @@ gen_agency_cert_gm() {
     rm -f "$agencydir/gmagency.csr"
 }
 
+gen_rsa_chain_cert() {
+    local name="${1}"
+    local chaindir="${2}"
+
+    mkdir -p "${chaindir}"
+
+    LOG_INFO "chaindir: ${chaindir}"
+
+    file_must_not_exists "${chaindir}"/ca.key
+    file_must_not_exists "${chaindir}"/ca.crt
+    # file_must_exists "${cert_conf}"
+
+    mkdir -p "$chaindir"
+    dir_must_exists "$chaindir"
+
+    openssl genrsa -out "${chaindir}"/ca.key "${rsa_key_length}" 2>/dev/null
+    openssl req -new -x509 -days "${days}" -subj "/CN=${name}/O=fisco-bcos/OU=chain" -key "${chaindir}"/ca.key -out "${chaindir}"/ca.crt  2>/dev/null
+
+    LOG_INFO "Generate rsa ca cert successfully!"
+}
+
+gen_rsa_node_cert() {
+    local capath="${1}"
+    local ndpath="${2}"
+    local type="${3}"
+
+    file_must_exists "$capath/ca.key"
+    file_must_exists "$capath/ca.crt"
+    # check_name node "$node"
+
+    file_must_not_exists "$ndpath"/"${type}".key
+    file_must_not_exists "$ndpath"/"${type}".crt
+
+    mkdir -p "${ndpath}"
+    dir_must_exists "${ndpath}"
+
+    openssl genrsa -out "${ndpath}"/"${type}".key "${rsa_key_length}" 2>/dev/null
+    openssl req -new -sha256 -subj "/CN=FISCO-BCOS/O=fisco-bcos/OU=agency" -key "$ndpath"/"${type}".key -out "$ndpath"/"${type}".csr
+    openssl x509 -req -days "${days}" -sha256 -CA "${capath}"/ca.crt -CAkey "$capath"/ca.key -CAcreateserial \
+        -in "$ndpath"/"${type}".csr -out "$ndpath"/"${type}".crt -extensions v4_req 2>/dev/null
+
+    openssl pkcs8 -topk8 -in "$ndpath"/"${type}".key -out "$ndpath"/pkcs8_node.key -nocrypt
+
+    rm -f "$ndpath"/"$type".csr
+    rm -f "$ndpath"/"$type".key
+
+    mv "$ndpath"/pkcs8_node.key "$ndpath"/"$type".key
+    cp "$capath/ca.crt" "$ndpath"
+
+    # LOG_INFO "Generate ${ndpath} node rsa cert successful!"
+}
+
 main()
 {
     if openssl version | grep -q reSSL ;then
@@ -356,6 +417,8 @@ main()
     fi
     generate_cert_conf "${ca_path}/cert.cnf"
     gen_agency_cert "${ca_path}" "${ca_path}/${agency}" > "${logfile}" 2>&1
+    # gen rsa cert for channel ssl
+    gen_rsa_chain_cert "${agency}" "${ca_path}/${agency}/channel" >>"${logfile}" 2>&1
     if [ -n "${guomi_mode}" ]; then
         check_and_install_tassl
         generate_cert_conf_gm "${gmca_path}/gmcert.cnf"
