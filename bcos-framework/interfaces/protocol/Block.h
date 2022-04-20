@@ -50,7 +50,8 @@ public:
     using ConstPtr = std::shared_ptr<Block const>;
     Block(
         TransactionFactory::Ptr _transactionFactory, TransactionReceiptFactory::Ptr _receiptFactory)
-      : m_transactionFactory(_transactionFactory), m_receiptFactory(_receiptFactory)
+      : m_transactionFactory(std::move(_transactionFactory)),
+        m_receiptFactory(std::move(_receiptFactory))
     {}
 
     virtual ~Block() {}
