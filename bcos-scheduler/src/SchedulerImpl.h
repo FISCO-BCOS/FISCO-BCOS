@@ -150,5 +150,6 @@ private:
         std::function<void(Error::Ptr)>)>
         m_txNotifier;
     std::function<void(uint32_t _version)> m_versionNotification;
+    uint64_t m_lastExecuteFinishTime = 0;
 };
 }  // namespace bcos::scheduler
