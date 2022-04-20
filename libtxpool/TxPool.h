@@ -104,6 +104,10 @@ public:
         {
             m_workerPool->stop();
         }
+        if (m_cleanUpTimer)
+        {
+            m_cleanUpTimer->stop();
+        }
         TXPOOL_LOG(DEBUG) << LOG_DESC("TxPool Stopped!");
     }
     void setMaxBlockLimit(unsigned const& _limit)
@@ -301,7 +305,7 @@ private:
     Timer::Ptr m_cleanUpTimer;
     // Maximum number of transactions traversed by m_cleanUpTimer,
     // The limit set here is to minimize the impact of the cleanup operation on txpool performance
-    uint64_t m_maxTraverseTxsNum = 10000;
+    uint64_t c_maxTraverseTxsNum = 10000;
 
     // function to get the aligned time
     std::function<int64_t()> m_alignedTimeGetter;

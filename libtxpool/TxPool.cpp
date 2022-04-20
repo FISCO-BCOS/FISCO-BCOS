@@ -621,8 +621,7 @@ std::shared_ptr<Transactions> TxPool::topTransactions(
                 continue;
             }
             // check txs expiration
-            if (currentTime > tx->importTime() &&
-                (currentTime - tx->importTime() > m_txsExpirationTime))
+            if (currentTime > (m_txsExpirationTime + tx->importTime()))
             {
                 m_invalidTxs->insert(std::pair<h256, u256>(tx->hash(), tx->nonce()));
                 TXPOOL_LOG(WARNING)
@@ -838,7 +837,7 @@ void TxPool::clearUpExpiredTransactions()
         size_t erasedTxs = 0;
         auto currentTime = getAlignedTime();
         for (auto it = m_txsQueue.begin();
-             traversedTxsNum <= m_maxTraverseTxsNum && it != m_txsQueue.end(); it++)
+             traversedTxsNum <= c_maxTraverseTxsNum && it != m_txsQueue.end(); it++)
         {
             auto tx = *it;
             if (m_invalidTxs->count(tx->hash()))
@@ -846,8 +845,7 @@ void TxPool::clearUpExpiredTransactions()
                 continue;
             }
             // the txs expired or not
-            if (currentTime > tx->importTime() &&
-                (currentTime - tx->importTime() > m_txsExpirationTime))
+            if (currentTime > (m_txsExpirationTime + tx->importTime()))
             {
                 m_invalidTxs->insert(std::make_pair(tx->hash(), tx->nonce()));
                 erasedTxs++;

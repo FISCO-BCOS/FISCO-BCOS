@@ -126,9 +126,9 @@ jobs:
       - checkout
       - restore_cache:
           keys:
-            - deps-v3-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
-            - deps-v3-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
-            - deps-v3-{{ .Environment.CIRCLE_JOB }}-
+            - deps-v4-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+            - deps-v4-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-
+            - deps-v4-{{ .Environment.CIRCLE_JOB }}-
       - run:
           name: Compile
           no_output_timeout: 40m
@@ -139,7 +139,7 @@ jobs:
             cmake3 -DTESTS=ON -DTOOL=ON -DDEMO=ON ..
             make -j2
       - save_cache:
-          key: deps-v3-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
+          key: deps-v4-{{ .Environment.CIRCLE_JOB }}-{{ .Branch }}-{{ checksum ".circleci/config.yml" }}
           paths:
             - deps
             - /ccache
