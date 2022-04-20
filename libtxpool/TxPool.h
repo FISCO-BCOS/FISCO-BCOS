@@ -26,6 +26,7 @@
 #include "TxPoolInterface.h"
 #include <libblockchain/BlockChainInterface.h>
 #include <libdevcore/ThreadPool.h>
+#include <libdevcore/Timer.h>
 #include <libethcore/Block.h>
 #include <libethcore/Common.h>
 #include <libethcore/Protocol.h>
@@ -65,13 +66,16 @@ class TxPool : public TxPoolInterface, public std::enable_shared_from_this<TxPoo
 {
 public:
     TxPool() = default;
+    // the default transaction expiration time is 30min
     TxPool(std::shared_ptr<dev::p2p::P2PInterface> _p2pService,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
-        PROTOCOL_ID const& _protocolId, uint64_t const& _limit = 102400, uint64_t workThreads = 2)
+        PROTOCOL_ID const& _protocolId, uint64_t const& _limit = 102400, uint64_t workThreads = 2,
+        uint64_t _txsExpirationTime = 600 * 1000)
       : m_service(_p2pService),
         m_blockChain(_blockChain),
         m_limit(_limit),
-        m_protocolId(_protocolId)
+        m_protocolId(_protocolId),
+        m_txsExpirationTime(_txsExpirationTime)
     {
         assert(m_service && m_blockChain);
         if (m_protocolId == 0)
@@ -84,8 +88,12 @@ public:
             std::make_shared<dev::ThreadPool>("txPool-" + std::to_string(m_groupId), workThreads);
         m_invalidTxs = std::make_shared<std::map<dev::h256, dev::u256>>();
         m_txsHashFilter = std::make_shared<std::set<h256>>();
+        // Trigger a transaction cleanup operation every 3s
+        m_cleanUpTimer = std::make_shared<Timer>(3000);
+        m_cleanUpTimer->registerTimeoutHandler(
+            boost::bind(&TxPool::clearUpExpiredTransactions, this));
     }
-    void start() override {}
+    void start() override { m_cleanUpTimer->start(); }
     void stop() override
     {
         if (m_submitPool)
@@ -176,7 +184,23 @@ public:
     void setMaxMemoryLimit(int64_t const& _maxMemoryLimit) { m_maxMemoryLimit = _maxMemoryLimit; }
     void freshTxsStatus() override;
 
+    void registerAlignedTimeGetter(std::function<int64_t()> _alignedTimeGetter)
+    {
+        m_alignedTimeGetter = _alignedTimeGetter;
+    }
+    // check the node existsInGroup or not
+    void registerGroupChecker(std::function<bool()> _existsInGroup)
+    {
+        m_existsInGroup = _existsInGroup;
+    }
+
+    void registerTxsClearUpSwitch(std::function<bool()> _txsClearUpSwitch)
+    {
+        m_txsClearUpSwitch = _txsClearUpSwitch;
+    }
+
 protected:
+    virtual void clearUpExpiredTransactions();
     /**
      * @brief : submit a transaction through p2p, Verify and add transaction to the queue
      * synchronously.
@@ -194,6 +218,15 @@ protected:
     bool dropTransactions(std::shared_ptr<Block> block, bool needNotify = false);
     void removeInvalidTxs();
     void dropBlockTxsFilter(std::shared_ptr<dev::eth::Block> _block);
+
+    int64_t getAlignedTime()
+    {
+        if (!m_alignedTimeGetter)
+        {
+            return utcTime();
+        }
+        return m_alignedTimeGetter();
+    }
 
 private:
     void startSubmitThread();
@@ -220,8 +253,6 @@ private:
     }
 
     void notifyReceipt(dev::eth::Transaction::Ptr _tx, ImportResult const& _verifyRet);
-
-    bool isSealerOrObserver();
     void registerSyncStatusChecker(std::function<bool()> _handler) override
     {
         m_syncStatusChecker = _handler;
@@ -262,8 +293,20 @@ private:
 
     std::atomic<int64_t> m_usedMemorySize = {0};
     int64_t m_maxMemoryLimit = 512 * 1024 * 1024;
+    // the default transaction expiration time is 10min
+    int64_t m_txsExpirationTime = 600 * 1000;
 
     unsigned m_maxBlockLimit;
+
+    Timer::Ptr m_cleanUpTimer;
+    // Maximum number of transactions traversed by m_cleanUpTimer,
+    // The limit set here is to minimize the impact of the cleanup operation on txpool performance
+    uint64_t m_maxTraverseTxsNum = 10000;
+
+    // function to get the aligned time
+    std::function<int64_t()> m_alignedTimeGetter;
+    std::function<bool()> m_txsClearUpSwitch;
+    std::function<bool()> m_existsInGroup;
 };
 }  // namespace txpool
 }  // namespace dev

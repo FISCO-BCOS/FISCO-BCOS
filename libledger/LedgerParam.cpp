@@ -235,10 +235,27 @@ void LedgerParam::initTxPoolConfig(ptree const& pt)
                                       "Please set tx_pool.notify_worker_num to positive !"));
         }
         mutableTxPoolParam().notifyWorkerNum = notifyWorkerNum;
+        auto txsExpirationTime =
+            pt.get<int64_t>("tx_pool.txs_expiration_time", DEFAULT_TXS_EXPIRATION_TIME_SECOND);
+        if (txsExpirationTime * 1000 <= mutableConsensusParam().consensusTimeout)
+        {
+            mutableTxPoolParam().txsExpirationTime = mutableConsensusParam().consensusTimeout;
+            LedgerParam_LOG(INFO) << LOG_DESC(
+                                         "configurated txs is smaller than consensusTimeout, "
+                                         "enforce to consensusTimeout")
+                                  << LOG_KV("consensusTimeout",
+                                         mutableConsensusParam().consensusTimeout);
+        }
+        else
+        {
+            mutableTxPoolParam().txsExpirationTime = txsExpirationTime * 1000;
+        }
         LedgerParam_LOG(INFO) << LOG_BADGE("initTxPoolConfig")
                               << LOG_KV("txPoolLimit", mutableTxPoolParam().txPoolLimit)
                               << LOG_KV("memorySizeLimit(MB)", memorySizeLimit)
-                              << LOG_KV("notifyWorkerNum", notifyWorkerNum);
+                              << LOG_KV("notifyWorkerNum", notifyWorkerNum)
+                              << LOG_KV("txsExpirationTime(ms)",
+                                     mutableTxPoolParam().txsExpirationTime);
     }
     catch (std::exception& e)
     {
@@ -430,8 +447,8 @@ void LedgerParam::initConsensusConfig(ptree const& pt)
     // sort the sealerList
     if (g_BCOSConfig.version() >= V2_9_0)
     {
-        std::sort(mutableConsensusParam().sealerList.begin(),
-            mutableConsensusParam().sealerList.end());
+        std::sort(
+            mutableConsensusParam().sealerList.begin(), mutableConsensusParam().sealerList.end());
     }
 
     // init nodeListMark

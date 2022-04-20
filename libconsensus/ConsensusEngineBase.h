@@ -34,7 +34,7 @@
 #include <libp2p/P2PSession.h>
 #include <libsync/NodeTimeMaintenance.h>
 #include <libsync/SyncInterface.h>
-#include <libtxpool/TxPoolInterface.h>
+#include <libtxpool/TxPool.h>
 
 namespace dev
 {
@@ -87,6 +87,12 @@ public:
                 }
                 return selectedNode;
             });
+        auto txpool = std::dynamic_pointer_cast<dev::txpool::TxPool>(m_txPool);
+        // register alignedTimeGetter to txpool
+        txpool->registerAlignedTimeGetter(boost::bind(&ConsensusEngineBase::getAlignedTime, this));
+
+        // register existsInGroup
+        txpool->registerGroupChecker([this]() { return m_existsInGroup; });
     }
 
     void start() override;
@@ -288,6 +294,7 @@ protected:
     }
 
     void statGasUsed(dev::eth::Block const& _block);
+    virtual bool locatedInChosedConsensensusNodes() const { return m_idx != MAXIDX; }
 
 protected:
     std::atomic<uint64_t> m_maxBlockTransactions = {1000};
@@ -325,6 +332,8 @@ protected:
     /// sealer list
     mutable SharedMutex m_sealerListMutex;
     dev::h512s m_sealerList;
+    // the node exist in the group or not
+    bool m_existsInGroup = true;
 
     /// allow future blocks or not
     bool m_allowFutureBlocks = true;

@@ -195,6 +195,16 @@ void ConsensusEngineBase::updateConsensusNodeList()
             // get all nodes
             dev::h512s nodeList = sealerList + observerList;
             std::sort(nodeList.begin(), nodeList.end());
+            // check the node exists in the group or not(observer node or sealer node)
+            auto it = std::find(nodeList.begin(), nodeList.end(), m_keyPair.pub());
+            if (it != nodeList.end())
+            {
+                m_existsInGroup = true;
+            }
+            else
+            {
+                m_existsInGroup = false;
+            }
             if (m_blockSync->syncTreeRouterEnabled())
             {
                 if (m_sealerListUpdated)

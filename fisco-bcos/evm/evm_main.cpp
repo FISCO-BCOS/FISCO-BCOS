@@ -51,9 +51,7 @@ static void ExecuteTransaction(
     /// execute transaction
     if (!executive.execute())
     {
-        /// Timer timer;
         executive.go();
-        /// double execTime = timer.elapsed();
     }
     executive.finalize();
 }

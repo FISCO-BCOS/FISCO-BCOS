@@ -758,6 +758,9 @@ function generate_group_ini()
     ; number of threads responsible for transaction notification,
     ; default is 2, not recommended for more than 8
     notify_worker_num=2
+    ; transaction expiration time, in seconds
+    ; default is 10 minute(600s)
+    txs_expiration_time=600
 [sync]
     ; max memory size used for block sync, must >= 32MB
     max_block_sync_memory_size=512

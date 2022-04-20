@@ -260,27 +260,6 @@ private:
     unsigned m_ms;
 };
 
-class Timer
-{
-public:
-    Timer() { restart(); }
-
-    std::chrono::high_resolution_clock::duration duration() const
-    {
-        return std::chrono::high_resolution_clock::now() - m_t;
-    }
-    /// return seconds
-    double elapsed() const
-    {
-        return std::chrono::duration_cast<std::chrono::microseconds>(duration()).count() /
-               1000000.0;
-    }
-    void restart() { m_t = std::chrono::high_resolution_clock::now(); }
-
-private:
-    std::chrono::high_resolution_clock::time_point m_t;
-};
-
 #define DEV_TIMED(S)                                                             \
     for (::std::pair<::dev::TimerHelper, bool> __eth_t(S, true); __eth_t.second; \
          __eth_t.second = false)
