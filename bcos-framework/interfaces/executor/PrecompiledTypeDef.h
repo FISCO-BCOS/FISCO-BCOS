@@ -30,7 +30,7 @@ const char * const SYS_CONFIG_NAME = "/sys/status";
 const char * const TABLE_NAME = "/sys/table_storage";
 const char * const TABLE_MANAGER_NAME = "/sys/table_manager";
 const char * const CONSENSUS_NAME = "/sys/consensus";
-const char * const CONTRACT_AUTH_NAME = "/sys/auth";
+const char * const AUTH_MANAGER_NAME = "/sys/auth";
 const char * const KV_TABLE_NAME = "/sys/kv_storage";
 const char * const CRYPTO_NAME = "/sys/crypto_tools";
 const char * const DAG_TRANSFER_NAME = "/sys/dag_test";
@@ -41,7 +41,7 @@ const char * const SYS_CONFIG_ADDRESS = "000000000000000000000000000000000000100
 const char * const TABLE_ADDRESS = "0000000000000000000000000000000000001001";
 const char * const TABLE_MANAGER_ADDRESS = "0000000000000000000000000000000000001002";
 const char * const CONSENSUS_ADDRESS = "0000000000000000000000000000000000001003";
-const char * const CONTRACT_AUTH_ADDRESS = "0000000000000000000000000000000000001005";
+const char * const AUTH_MANAGER_ADDRESS = "0000000000000000000000000000000000001005";
 const char * const KV_TABLE_ADDRESS = "0000000000000000000000000000000000001009";
 const char * const CRYPTO_ADDRESS = "000000000000000000000000000000000000100a";
 const char * const WORKING_SEALER_MGR_ADDRESS = "000000000000000000000000000000000000100b";
@@ -51,6 +51,7 @@ const char * const BFS_ADDRESS = "000000000000000000000000000000000000100e";
 /// auth system contract for solidity
 const char * const AUTH_INTERCEPT_ADDRESS = "0000000000000000000000000000000000010000";
 const char * const AUTH_COMMITTEE_ADDRESS = "0000000000000000000000000000000000010001";
+const char * const AUTH_CONTRACT_MGR_ADDRESS = "0000000000000000000000000000000000010002";
 
 const std::set<std::string> c_systemTxsAddress = {bcos::precompiled::SYS_CONFIG_ADDRESS,
     bcos::precompiled::CONSENSUS_ADDRESS, bcos::precompiled::WORKING_SEALER_MGR_ADDRESS,

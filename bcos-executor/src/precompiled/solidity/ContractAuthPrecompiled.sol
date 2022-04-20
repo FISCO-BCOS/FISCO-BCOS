@@ -8,6 +8,7 @@ contract ContractAuthPrecompiled {
     function openMethodAuth(address path, bytes4 func, address account) public returns (int256){}
     function closeMethodAuth(address path, bytes4 func, address account) public returns (int256){}
     function checkMethodAuth(address path, bytes4 func, address account) public returns (bool){}
+    function setContractStatus(address _address, bool isFreeze) public returns(int);
 
     function deployType() public view returns (uint256) {}
     function setDeployAuthType(uint8 _type) public returns (int256) {}

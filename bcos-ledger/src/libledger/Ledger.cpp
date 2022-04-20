@@ -1572,7 +1572,7 @@ void Ledger::buildDir(const std::string& _absoluteDir)
         std::vector<std::string> sysContracts({
             getSysBaseName(precompiled::SYS_CONFIG_NAME),
             getSysBaseName(precompiled::CONSENSUS_NAME),
-            getSysBaseName(precompiled::CONTRACT_AUTH_NAME),
+            getSysBaseName(precompiled::AUTH_MANAGER_NAME),
             getSysBaseName(precompiled::KV_TABLE_NAME),
             getSysBaseName(precompiled::CRYPTO_NAME),
             getSysBaseName(precompiled::BFS_NAME),

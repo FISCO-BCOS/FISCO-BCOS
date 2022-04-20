@@ -39,7 +39,8 @@
 #include "../precompiled/TableFactoryPrecompiled.h"
 #include "../precompiled/TableManagerPrecompiled.h"
 #include "../precompiled/Utilities.h"
-#include "../precompiled/extension/ContractAuthPrecompiled.h"
+#include "../precompiled/extension/AuthManagerPrecompiled.h"
+#include "../precompiled/extension/ContractAuthMgrPrecompiled.h"
 #include "../precompiled/extension/DagTransferPrecompiled.h"
 #include "../vm/Precompiled.h"
 #include "../vm/gas_meter/GasInjector.h"
@@ -142,8 +143,14 @@ void EvmTransactionExecutor::initPrecompiled()
         {CRYPTO_ADDRESS, std::make_shared<CryptoPrecompiled>(m_hashImpl)});
     m_constantPrecompiled->insert(
         {BFS_ADDRESS, std::make_shared<precompiled::FileSystemPrecompiled>(m_hashImpl)});
-    m_constantPrecompiled->insert({CONTRACT_AUTH_ADDRESS,
-        std::make_shared<precompiled::ContractAuthPrecompiled>(m_hashImpl)});
+    /// auth precompiled
+    if(m_isAuthCheck)
+    {
+        m_constantPrecompiled->insert({AUTH_MANAGER_ADDRESS,
+            std::make_shared<precompiled::AuthManagerPrecompiled>(m_hashImpl)});
+        m_constantPrecompiled->insert({AUTH_CONTRACT_MGR_ADDRESS,
+            std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl)});
+    }
     set<string> builtIn = {CRYPTO_ADDRESS};
     m_builtInPrecompiled = make_shared<set<string>>(builtIn);
 }

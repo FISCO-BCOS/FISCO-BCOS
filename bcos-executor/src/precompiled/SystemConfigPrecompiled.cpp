@@ -82,7 +82,7 @@ SystemConfigPrecompiled::SystemConfigPrecompiled(crypto::Hash::Ptr _hashImpl)
 
 std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
     std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
-    const std::string&, const std::string&, int64_t)
+    const std::string&, const std::string& _sender, int64_t)
 {
     // parse function name
     uint32_t func = getParamFunc(_param);
@@ -95,31 +95,39 @@ std::shared_ptr<PrecompiledExecResult> SystemConfigPrecompiled::call(
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
     if (func == name2Selector[SYSCONFIG_METHOD_SET_STR])
     {
-        int result;
         // setValueByKey(string,string)
-        std::string configKey, configValue;
-        codec->decode(data, configKey, configValue);
-        // Uniform lowercase configKey
-        boost::to_lower(configKey);
-        PRECOMPILED_LOG(DEBUG) << LOG_BADGE("SystemConfigPrecompiled")
-                               << LOG_DESC("setValueByKey func") << LOG_KV("configKey", configKey)
-                               << LOG_KV("configValue", configValue);
+        if (blockContext->isAuthCheck() && !checkSenderFromAuth(_sender))
+        {
+            PRECOMPILED_LOG(ERROR)
+                << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("sender is not from sys")
+                << LOG_KV("sender", _sender);
+            getErrorCodeOut(callResult->mutableExecResult(), CODE_NO_AUTHORIZED, *codec);
+        }
+        else
+        {
+            std::string configKey, configValue;
+            codec->decode(data, configKey, configValue);
+            // Uniform lowercase configKey
+            boost::to_lower(configKey);
+            PRECOMPILED_LOG(DEBUG)
+                << LOG_BADGE("SystemConfigPrecompiled") << LOG_DESC("setValueByKey func")
+                << LOG_KV("configKey", configKey) << LOG_KV("configValue", configValue);
 
-        checkValueValid(configKey, configValue);
-        auto table = _executive->storage().openTable(ledger::SYS_CONFIG);
+            checkValueValid(configKey, configValue);
+            auto table = _executive->storage().openTable(ledger::SYS_CONFIG);
 
-        auto entry = table->newEntry();
-        auto systemConfigEntry = SystemConfigEntry{configValue, blockContext->number() + 1};
-        entry.setObject(systemConfigEntry);
+            auto entry = table->newEntry();
+            auto systemConfigEntry = SystemConfigEntry{configValue, blockContext->number() + 1};
+            entry.setObject(systemConfigEntry);
 
-        table->setRow(configKey, std::move(entry));
+            table->setRow(configKey, std::move(entry));
 
-        PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled")
-                              << LOG_DESC("set system config") << LOG_KV("configKey", configKey)
-                              << LOG_KV("configValue", configValue)
-                              << LOG_KV("enableNum", blockContext->number() + 1);
-        result = 0;
-        getErrorCodeOut(callResult->mutableExecResult(), result, *codec);
+            PRECOMPILED_LOG(INFO) << LOG_BADGE("SystemConfigPrecompiled")
+                                  << LOG_DESC("set system config") << LOG_KV("configKey", configKey)
+                                  << LOG_KV("configValue", configValue)
+                                  << LOG_KV("enableNum", blockContext->number() + 1);
+            getErrorCodeOut(callResult->mutableExecResult(), CODE_SUCCESS, *codec);
+        }
     }
     else if (func == name2Selector[SYSCONFIG_METHOD_GET_STR])
     {
