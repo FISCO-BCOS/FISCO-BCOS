@@ -19,6 +19,11 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
     std::function<void(bcos::Error::Ptr&&, bcos::protocol::BlockHeader::Ptr&&, bool _sysBlock)>
         callback)
 {
+    uint64_t waitT = 0;
+    if (m_lastExecuteFinishTime > 0)
+    {
+        waitT = utcTime() - m_lastExecuteFinishTime;
+    }
     auto signature = block->blockHeaderConst()->signatureList();
     fetchGasLimit(block->blockHeaderConst()->number());
     SCHEDULER_LOG(INFO) << "ExecuteBlock request"
@@ -27,7 +32,8 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
                         << LOG_KV("signatureSize", signature.size())
                         << LOG_KV("tx count", block->transactionsSize())
                         << LOG_KV("meta tx count", block->transactionsMetaDataSize())
-                        << LOG_KV("version", (bcos::protocol::Version)(block->version()));
+                        << LOG_KV("version", (bcos::protocol::Version)(block->version()))
+                        << LOG_KV("waitT", waitT);
     auto executeLock =
         std::make_shared<std::unique_lock<std::mutex>>(m_executeMutex, std::try_to_lock);
     if (!executeLock->owns_lock())
@@ -132,7 +138,7 @@ void SchedulerImpl::executeBlock(bcos::protocol::Block::Ptr block, bool verify,
                             << LOG_KV("signatureSize", signature.size());
 
         m_lastExecutedBlockNumber.store(header->number());
-
+        m_lastExecuteFinishTime = utcTime();
         executeLock->unlock();
         callback(std::move(error), std::move(header), _sysBlock);
     });

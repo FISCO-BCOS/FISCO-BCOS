@@ -210,6 +210,7 @@ TransactionStatus MemoryStorage::insert(Transaction::ConstPtr _tx)
     }
     m_txsTable[_tx->hash()] = _tx;
     m_onReady();
+    m_txsQueue.push(_tx);
     preCommitTransaction(_tx);
     notifyUnsealedTxsSize();
 #if FISCO_DEBUG
@@ -472,11 +473,22 @@ ConstTransactionsPtr MemoryStorage::fetchNewTxs(size_t _txsLimit)
 void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, size_t _txsLimit,
     TxsHashSetPtr _avoidTxs, bool _avoidDuplicate)
 {
+    TXPOOL_LOG(INFO) << LOG_DESC("begin batchFetchTxs") << LOG_KV("pendingTxs", m_txsTable.size())
+                     << LOG_KV("limit", _txsLimit);
     auto blockFactory = m_config->blockFactory();
+    auto recordT = utcTime();
+    auto startT = utcTime();
     ReadGuard l(x_txpoolMutex);
-    for (auto it : m_txsTable)
+    auto lockT = utcTime() - startT;
+    startT = utcTime();
+    Transaction::ConstPtr tx;
+    while (m_txsQueue.size() != 0)
     {
-        auto tx = it.second;
+        auto ret = m_txsQueue.try_pop(tx);
+        if (!ret)
+        {
+            break;
+        }
         // Note: When inserting data into tbb::concurrent_unordered_map while traversing,
         // it.second will occasionally be a null pointer.
         if (!tx)
@@ -552,8 +564,16 @@ void MemoryStorage::batchFetchTxs(Block::Ptr _txsList, Block::Ptr _sysTxsList, s
             break;
         }
     }
+    auto fetchTxsT = utcTime() - startT;
     notifyUnsealedTxsSize();
     removeInvalidTxs();
+    TXPOOL_LOG(INFO) << LOG_DESC("batchFetchTxs success")
+                     << LOG_KV("timecost", (utcTime() - recordT))
+                     << LOG_KV("txsSize", _txsList->transactionsMetaDataSize())
+                     << LOG_KV("sysTxsSize", _sysTxsList->transactionsMetaDataSize())
+                     << LOG_KV("queueSize", m_txsQueue.size())
+                     << LOG_KV("pendingTxs", m_txsTable.size()) << LOG_KV("limit", _txsLimit)
+                     << LOG_KV("fetchTxsT", fetchTxsT) << LOG_KV("lockT", lockT);
 }
 
 void MemoryStorage::removeInvalidTxs()
@@ -688,6 +708,10 @@ void MemoryStorage::batchMarkTxs(
             tx->setBatchId(_batchId);
             tx->setBatchHash(_batchHash);
         }
+        if (!_sealFlag)
+        {
+            m_txsQueue.push(tx);
+        }
 #if FISCO_DEBUG
         // TODO: remove this, now just for bug tracing
         TXPOOL_LOG(DEBUG) << LOG_DESC("mark ") << tx->hash().abridged() << ":" << _sealFlag
@@ -716,6 +740,10 @@ void MemoryStorage::batchMarkAllTxs(bool _sealFlag)
         {
             tx->setBatchId(-1);
             tx->setBatchHash(HashType());
+        }
+        if (!_sealFlag)
+        {
+            m_txsQueue.push(tx);
         }
     }
     if (_sealFlag)
