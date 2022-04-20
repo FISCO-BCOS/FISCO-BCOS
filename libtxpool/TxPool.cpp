@@ -44,7 +44,7 @@ std::pair<h256, Address> TxPool::submit(Transaction::Ptr _tx)
         {
             // RequestNotBelongToTheGroup: 10004
             ImportResult verifyRet = ImportResult::NotBelongToTheGroup;
-            if (isSealerOrObserver())
+            if (m_existsInGroup && m_existsInGroup())
             {
                 // check sync status failed
                 if (m_syncStatusChecker && !m_syncStatusChecker())
@@ -202,18 +202,6 @@ std::pair<h256, Address> TxPool::submitTransactions(dev::eth::Transaction::Ptr _
     }
 }
 
-
-bool TxPool::isSealerOrObserver()
-{
-    auto _nodeList = m_blockChain->sealerList() + m_blockChain->observerList();
-    auto it = std::find(_nodeList.begin(), _nodeList.end(), m_service->id());
-    if (it == _nodeList.end())
-    {
-        return false;
-    }
-    return true;
-}
-
 /**
  * @brief : Verify and add transaction to the queue synchronously.
  *
@@ -223,7 +211,7 @@ bool TxPool::isSealerOrObserver()
  */
 ImportResult TxPool::import(Transaction::Ptr _tx, IfDropped)
 {
-    _tx->setImportTime(u256(utcTime()));
+    _tx->setImportTime(u256(getAlignedTime()));
     auto memoryUsed = m_usedMemorySize + _tx->capacity();
     if (memoryUsed > m_maxMemoryLimit)
     {
@@ -417,7 +405,8 @@ bool TxPool::removeTrans(h256 const& _txHash, bool _needTriggerCallback,
                 pReceipt = std::make_shared<LocalisedTransactionReceipt>(
                     TransactionException::TransactionRefused);
                 TXPOOL_LOG(WARNING) << LOG_DESC(
-                    "NotifyReceipt: TransactionRefused, maybe invalid blocklimit or nonce");
+                    "NotifyReceipt: TransactionRefused, maybe invalid blocklimit or nonce or txs "
+                    "expired");
             }
             TxCallback callback{transaction->rpcCallback(), pReceipt};
 
@@ -598,13 +587,14 @@ std::shared_ptr<Transactions> TxPool::topTransactions(
     auto ret = std::make_shared<Transactions>();
     std::vector<dev::h256> invalidBlockLimitTxs;
     std::vector<dev::eth::NonceKeyType> nonceKeyCache;
-
+    auto currentTime = getAlignedTime();
     {
         WriteGuard wl(x_invalidTxs);
         ReadGuard l(m_lock);
         for (auto it = m_txsQueue.begin(); txCnt < limit && it != m_txsQueue.end(); it++)
         {
-            if (m_invalidTxs->count((*it)->hash()))
+            auto tx = *it;
+            if (m_invalidTxs->count(tx->hash()))
             {
                 continue;
             }
@@ -612,22 +602,33 @@ std::shared_ptr<Transactions> TxPool::topTransactions(
             // since the invalid nonce has already been checked before the txs import into the
             // txPool the txs with duplicated nonce here are already-committed, but have not been
             // dropped, so no need to insert the already-committed transaction into m_invalidTxs
-            if (!m_txNonceCheck->isNonceOk(*(*it), false))
+            if (!m_txNonceCheck->isNonceOk(*tx, false))
             {
                 TXPOOL_LOG(DEBUG) << LOG_DESC(
                                          "Duplicated nonce: transaction maybe already-committed")
-                                  << LOG_KV("nonce", (*it)->nonce())
-                                  << LOG_KV("hash", (*it)->hash().abridged());
+                                  << LOG_KV("nonce", tx->nonce())
+                                  << LOG_KV("hash", tx->hash().abridged());
                 continue;
             }
             // check block limit(only insert txs with invalid blockLimit into m_invalidTxs)
-            if (!m_txNonceCheck->isBlockLimitOk(*(*it)))
+            if (!m_txNonceCheck->isBlockLimitOk(*tx))
             {
-                m_invalidTxs->insert(std::pair<h256, u256>((*it)->hash(), (*it)->nonce()));
+                m_invalidTxs->insert(std::pair<h256, u256>(tx->hash(), tx->nonce()));
                 TXPOOL_LOG(WARNING)
-                    << LOG_DESC("Invalid blocklimit") << LOG_KV("hash", (*it)->hash().abridged())
-                    << LOG_KV("blockLimit", (*it)->blockLimit())
+                    << LOG_DESC("Invalid blocklimit") << LOG_KV("hash", tx->hash().abridged())
+                    << LOG_KV("blockLimit", tx->blockLimit())
                     << LOG_KV("blockNumber", m_blockChain->number());
+                continue;
+            }
+            // check txs expiration
+            if (currentTime > tx->importTime() &&
+                (currentTime - tx->importTime() > m_txsExpirationTime))
+            {
+                m_invalidTxs->insert(std::pair<h256, u256>(tx->hash(), tx->nonce()));
+                TXPOOL_LOG(WARNING)
+                    << LOG_DESC("Expired tx") << LOG_KV("hash", tx->hash().abridged())
+                    << LOG_KV("currentTime", currentTime)
+                    << LOG_KV("txImportTime", tx->importTime());
                 continue;
             }
             if (!_avoid.count((*it)->hash()))
@@ -639,7 +640,6 @@ std::shared_ptr<Transactions> TxPool::topTransactions(
             }
         }
     }
-    // TXPOOL_LOG(DEBUG) << "topTransaction done, ignore: " << ignoreCount;
     m_workerPool->enqueue([this]() { removeInvalidTxs(); });
     return ret;
 }
@@ -817,5 +817,49 @@ void TxPool::freshTxsStatus()
     }
 }
 
+void TxPool::clearUpExpiredTransactions()
+{
+    m_cleanUpTimer->restart();
+    {
+        // Note: In order to minimize the impact of cleanUp on performance,
+        // the normal consensus node does not clear expired txs in m_clearUpTimer, but clears
+        // expired txs in the process of sealing txs
+        if (m_txsClearUpSwitch && !m_txsClearUpSwitch())
+        {
+            return;
+        }
+        WriteGuard lock(x_invalidTxs);
+        ReadGuard l(m_lock);
+        if (m_txsQueue.size() == 0)
+        {
+            return;
+        }
+        size_t traversedTxsNum = 0;
+        size_t erasedTxs = 0;
+        auto currentTime = getAlignedTime();
+        for (auto it = m_txsQueue.begin();
+             traversedTxsNum <= m_maxTraverseTxsNum && it != m_txsQueue.end(); it++)
+        {
+            auto tx = *it;
+            if (m_invalidTxs->count(tx->hash()))
+            {
+                continue;
+            }
+            // the txs expired or not
+            if (currentTime > tx->importTime() &&
+                (currentTime - tx->importTime() > m_txsExpirationTime))
+            {
+                m_invalidTxs->insert(std::make_pair(tx->hash(), tx->nonce()));
+                erasedTxs++;
+            }
+            traversedTxsNum++;
+        }
+        TXPOOL_LOG(INFO) << LOG_DESC("clearUpExpiredTransactions")
+                         << LOG_KV("pendingTxs", m_txsQueue.size())
+                         << LOG_KV("erasedTxs", erasedTxs);
+    }
+    // Note: will notify receipt to sdk
+    m_workerPool->enqueue([this]() { removeInvalidTxs(); });
+}
 }  // namespace txpool
 }  // namespace dev

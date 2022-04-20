@@ -60,11 +60,11 @@ public:
 
 private:
     TestOutputHelper() {}
-    Timer m_timer;
     size_t m_currTest;
     size_t m_maxTests;
     std::string m_currentTestName;
     std::string m_currentTestCaseName;
+    int64_t m_startTime;
     boost::filesystem::path m_currentTestFileName;
     typedef std::pair<double, std::string> execTimeName;
     std::vector<execTimeName> m_execTimeResults;

@@ -80,6 +80,17 @@ public:
         m_blockSync->registerConsensusVerifyHandler(
             boost::bind(&PBFTEngine::checkBlock, this, boost::placeholders::_1));
 
+        // register consensusNode checker
+        auto txpool = std::dynamic_pointer_cast<dev::txpool::TxPool>(m_txPool);
+        txpool->registerTxsClearUpSwitch([this]() -> bool {
+            if (!locatedInChosedConsensensusNodes())
+            {
+                return true;
+            }
+            // consensus timeout
+            return m_leaderFailed.load();
+        });
+
         m_threadPool =
             std::make_shared<dev::ThreadPool>("pbftPool-" + std::to_string(m_groupId), 1);
         m_broacastTargetsFilter =
@@ -261,7 +272,6 @@ public:
 protected:
     virtual void registerDisconnectHandler();
     virtual void resetConsensusTimeout();
-    virtual bool locatedInChosedConsensensusNodes() const { return m_idx != MAXIDX; }
     virtual void addRawPrepare(PrepareReq::Ptr _prepareReq);
     void reportBlockWithoutLock(dev::eth::Block const& block);
     void workLoop() override;

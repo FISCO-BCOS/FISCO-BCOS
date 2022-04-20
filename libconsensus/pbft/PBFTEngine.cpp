@@ -1094,7 +1094,7 @@ void PBFTEngine::addRawPrepare(PrepareReq::Ptr _prepareReq)
 bool PBFTEngine::execPrepareAndGenerateSignMsg(
     PrepareReq::Ptr _prepareReq, std::ostringstream& _oss)
 {
-    Timer t;
+    auto recordT = utcTime();
     Sealing workingSealing(m_blockFactory);
     try
     {
@@ -1144,6 +1144,7 @@ bool PBFTEngine::execPrepareAndGenerateSignMsg(
                           << LOG_KV("hash", sign_prepare->block_hash.abridged())
                           << LOG_KV("nodeIdx", nodeIdx())
                           << LOG_KV("addPrepareTime", utcTime() - startT)
+                          << LOG_KV("totalcost", utcTime() - recordT)
                           << LOG_KV("myNode", m_keyPair.pub().abridged());
 
     /// broadcast the re-generated signReq(add the signReq to cache)
@@ -1151,7 +1152,7 @@ bool PBFTEngine::execPrepareAndGenerateSignMsg(
 
     checkAndCommit();
     PBFTENGINE_LOG(INFO) << LOG_DESC("handlePrepareMsg Succ")
-                         << LOG_KV("Timecost", 1000 * t.elapsed()) << LOG_KV("INFO", _oss.str());
+                         << LOG_KV("timecost", (utcTime() - startT)) << LOG_KV("INFO", _oss.str());
     return true;
 }
 
@@ -1372,7 +1373,7 @@ void PBFTEngine::reportBlockWithoutLock(Block const& block)
  */
 bool PBFTEngine::handleSignMsg(SignReq::Ptr sign_req, PBFTMsgPacket const& pbftMsg)
 {
-    Timer t;
+    auto startT = utcTime();
     bool valid = decodeToRequests(*sign_req, ref(pbftMsg.data));
     if (!valid)
     {
@@ -1399,8 +1400,8 @@ bool PBFTEngine::handleSignMsg(SignReq::Ptr sign_req, PBFTMsgPacket const& pbftM
     m_reqCache->addSignReq(sign_req);
 
     checkAndCommit();
-    PBFTENGINE_LOG(INFO) << LOG_DESC("handleSignMsg Succ") << LOG_KV("Timecost", 1000 * t.elapsed())
-                         << LOG_KV("INFO", oss.str());
+    PBFTENGINE_LOG(INFO) << LOG_DESC("handleSignMsg Succ")
+                         << LOG_KV("Timecost", (utcTime() - startT)) << LOG_KV("INFO", oss.str());
     return true;
 }
 
@@ -1448,7 +1449,7 @@ CheckResult PBFTEngine::isValidSignReq(SignReq::Ptr req, std::ostringstream& oss
  */
 bool PBFTEngine::handleCommitMsg(CommitReq::Ptr commit_req, PBFTMsgPacket const& pbftMsg)
 {
-    Timer t;
+    auto startT = utcTime();
     bool valid = decodeToRequests(*commit_req, ref(pbftMsg.data));
     if (!valid)
     {
@@ -1476,7 +1477,7 @@ bool PBFTEngine::handleCommitMsg(CommitReq::Ptr commit_req, PBFTMsgPacket const&
     m_reqCache->addCommitReq(commit_req);
     checkAndSave();
     PBFTENGINE_LOG(INFO) << LOG_DESC("handleCommitMsg Succ") << LOG_KV("INFO", oss.str())
-                         << LOG_KV("Timecost", 1000 * t.elapsed());
+                         << LOG_KV("Timecost", (utcTime() - startT));
     return true;
 }
 
@@ -1655,7 +1656,7 @@ void PBFTEngine::collectGarbage()
     {
         return;
     }
-    Timer t;
+    auto startT = utcTime();
     std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
     if (now - m_timeManager.m_lastGarbageCollection >
         std::chrono::seconds(m_timeManager.CollectInterval))
@@ -1670,7 +1671,7 @@ void PBFTEngine::collectGarbage()
 
         m_timeManager.m_lastGarbageCollection = now;
         PBFTENGINE_LOG(DEBUG) << LOG_DESC("collectGarbage")
-                              << LOG_KV("Timecost", 1000 * t.elapsed());
+                              << LOG_KV("Timecost", (utcTime() - startT));
     }
 }
 
@@ -1694,7 +1695,7 @@ void PBFTEngine::checkTimeout()
                 }
             }
             m_timeManager.updateChangeCycle();
-            Timer t;
+            auto startT = utcTime();
             m_toView += 1;
             m_leaderFailed = true;
             m_blockSync->noteSealingBlockNumber(m_blockChain->number());
@@ -1711,7 +1712,7 @@ void PBFTEngine::checkTimeout()
                                  << LOG_KV("toView", m_toView) << LOG_KV("nodeIdx", nodeIdx())
                                  << LOG_KV("changeCycle", m_timeManager.m_changeCycle)
                                  << LOG_KV("myNode", m_keyPair.pub().abridged())
-                                 << LOG_KV("timecost", t.elapsed() * 1000);
+                                 << LOG_KV("timecost", (utcTime() - startT));
         }
     }
     if (flag && m_onViewChange)

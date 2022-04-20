@@ -891,7 +891,7 @@ void perfTestTrie(char const* _name)
         d.init();
         LOG(INFO) << "TriePerf " << _name << p;
         std::vector<h256> keys(1000);
-        Timer t;
+        auto startT = utcTime();
         size_t ki = 0;
         for (size_t i = 0; i < p; ++i)
         {
@@ -902,20 +902,20 @@ void perfTestTrie(char const* _name)
             if (i % (p / 1000) == 0)
                 keys[ki++] = k;
         }
-        LOG(INFO) << "Insert " << p << "values: " << t.elapsed();
-        t.restart();
+        LOG(INFO) << "Insert " << p << "values: " << (utcTime() - startT);
+        startT = utcTime();
         for (auto k : keys)
             d.at(k);
-        LOG(INFO) << "Query 1000 values: " << t.elapsed();
-        t.restart();
+        LOG(INFO) << "Query 1000 values: " << (utcTime() - startT);
+        startT = utcTime();
         size_t i = 0;
         for (auto it = d.begin(); i < 1000 && it != d.end(); ++it, ++i)
             *it;
-        LOG(INFO) << "Iterate 1000 values: " << t.elapsed();
-        t.restart();
+        LOG(INFO) << "Iterate 1000 values: " << (utcTime() - startT);
+        startT = utcTime();
         for (auto k : keys)
             d.remove(k);
-        LOG(INFO) << "Remove 1000 values:" << t.elapsed() << "\n";
+        LOG(INFO) << "Remove 1000 values:" << (utcTime() - startT) << "\n";
     }
 }
 

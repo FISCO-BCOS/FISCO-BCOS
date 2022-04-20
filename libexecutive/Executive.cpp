@@ -592,7 +592,7 @@ bool Executive::go()
     if (m_ext)
     {
 #if ETH_TIMED_EXECUTIONS
-        Timer t;
+        auto startT = utcTime();
 #endif
         try
         {
@@ -749,7 +749,7 @@ bool Executive::go()
         }
 
 #if ETH_TIMED_EXECUTIONS
-        cnote << "VM took:" << t.elapsed() << "; gas used: " << (sgas - m_endGas);
+        cnote << "VM took:" << (utcTime() - startT) << "; gas used: " << (sgas - m_endGas);
 #endif
     }
     return true;
