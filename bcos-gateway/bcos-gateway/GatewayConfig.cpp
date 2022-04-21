@@ -5,11 +5,16 @@
 
 #include <bcos-gateway/GatewayConfig.h>
 #include <bcos-utilities/FileUtility.h>
+#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-security/bcos-security/KeyCenter.h>
 #include <json/json.h>
 #include <boost/throw_exception.hpp>
 
 using namespace bcos;
+using namespace security;
 using namespace gateway;
+
+#define MAX_BLOCK_LIMIT 5000
 
 bool GatewayConfig::isValidPort(int port)
 {
@@ -124,6 +129,8 @@ void GatewayConfig::initConfig(std::string const& _configPath, bool _uuidRequire
         boost::property_tree::ptree pt;
         boost::property_tree::ini_parser::read_ini(_configPath, pt);
         initP2PConfig(pt, _uuidRequired);
+        initChainConfig(pt);
+        initStorageSecurityConfig(pt);
         if (m_smSSL)
         {
             initSMCertConfig(pt);
@@ -198,6 +205,73 @@ void GatewayConfig::initP2PConfig(const boost::property_tree::ptree& _pt, bool _
                              << LOG_KV("listenPort", listenPort) << LOG_KV("smSSL", smSSL)
                              << LOG_KV("nodePath", m_nodePath)
                              << LOG_KV("nodeFileName", m_nodeFileName);
+}
+
+void GatewayConfig::initChainConfig(boost::property_tree::ptree const& _pt)
+{
+    bool smCryptoType = _pt.get<bool>("chain.sm_crypto", false);
+    std::string groupId = _pt.get<std::string>("chain.group_id", "group");
+    std::string chainId = _pt.get<std::string>("chain.chain_id", "chain");
+    if (!isalNumStr(chainId))
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidParameter() << errinfo_comment("The chainId must be number or digit"));
+    }
+    size_t blockLimit = checkAndGetValue(_pt, "chain.block_limit", "1000");
+    if (blockLimit <= 0 || blockLimit > MAX_BLOCK_LIMIT)
+    {
+        BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                  "Please set chain.block_limit to positive and less than " +
+                                  std::to_string(MAX_BLOCK_LIMIT) + " !"));
+    }
+    GATEWAY_CONFIG_LOG(INFO) << LOG_DESC("loadChainConfig") << LOG_KV("smCrypto", smCryptoType)
+                         << LOG_KV("chainId", chainId) << LOG_KV("groupId", groupId)
+                         << LOG_KV("blockLimit", blockLimit);
+    
+    m_chainConfig.smCryptoType = smCryptoType;
+    m_chainConfig.groupId = groupId;
+    m_chainConfig.chainId = chainId;
+    m_chainConfig.blockLimit = blockLimit;
+}
+
+/// loads storage security configuration items from the configuration file
+void GatewayConfig::initStorageSecurityConfig(const boost::property_tree::ptree& _pt)
+{
+    bool enable = _pt.get<bool>("storage_security.enable", false);
+    std::string keyCenterIp = _pt.get<std::string>("storage_security.key_manager_ip", "");
+    unsigned short keyCenterPort =
+        _pt.get<unsigned short>("storage_security.key_manager_port", 20000);
+
+    if (false == isValidPort(keyCenterPort))
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidParameter() << errinfo_comment(
+                "initGlobalConfig storage_security failed! Invalid key_manange_port!"));
+    }
+
+    std::string dataKey;
+    if (true == enable)
+    {
+        std::string cipherDataKey = _pt.get<string>("storage_security.cipher_data_key", "");
+        if (true == cipherDataKey.empty())
+        {
+            BOOST_THROW_EXCEPTION(
+                InvalidParameter() << errinfo_comment("Please provide cipher_data_key!"));
+        }
+
+        KeyCenter keyClient;
+        keyClient.setIpPort(keyCenterIp, keyCenterPort);
+        dataKey = asString(keyClient.getDataKey(cipherDataKey, m_chainConfig.smCryptoType));
+        
+        GATEWAY_CONFIG_LOG(INFO) << LOG_BADGE("initKeyManager")
+                              << LOG_KV("url.IP", keyCenterIp)
+                              << LOG_KV("url.port", to_string(keyCenterPort));
+    }
+
+    m_storageSecurityConfig.enable = enable;
+    m_storageSecurityConfig.keyManagerIp = keyCenterIp;
+    m_storageSecurityConfig.keyManagerPort = keyCenterPort;
+    m_storageSecurityConfig.dataKey = dataKey;
 }
 
 // load p2p connected peers
@@ -331,5 +405,22 @@ void GatewayConfig::checkFileExist(const std::string& _path)
             InvalidParameter() << errinfo_comment("checkFileExist: unable to load file content "
                                                   " maybe file not exist, path: " +
                                                   _path));
+    }
+}
+
+    // Note: make sure the consensus param checker is consistent with the precompiled param checker
+int64_t GatewayConfig::checkAndGetValue(boost::property_tree::ptree const& _pt,
+    std::string const& _key, std::string const& _defaultValue)
+{
+    auto value = _pt.get<std::string>(_key, _defaultValue);
+    try
+    {
+        return boost::lexical_cast<int64_t>(value);
+    }
+    catch (std::exception const& e)
+    {
+        BOOST_THROW_EXCEPTION(InvalidParameter() << errinfo_comment(
+                                  "Invalid value " + value + " for configuration " + _key +
+                                  ", please set the value with a valid number"));
     }
 }

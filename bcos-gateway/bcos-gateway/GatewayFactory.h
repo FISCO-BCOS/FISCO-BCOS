@@ -47,10 +47,10 @@ public:
 
     // build ssl context
     std::shared_ptr<boost::asio::ssl::context> buildSSLContext(
-        const GatewayConfig::CertConfig& _certConfig);
+        const GatewayConfig::CertConfig& _certConfig, const GatewayConfig::StorageSecurityConfig& i_storageSecurityEnable);
     // build sm ssl context
     std::shared_ptr<boost::asio::ssl::context> buildSSLContext(
-        const GatewayConfig::SMCertConfig& _smCertConfig);
+        const GatewayConfig::SMCertConfig& _smCertConfig, const GatewayConfig::StorageSecurityConfig& i_storageSecurityEnable);
 
     /**
      * @brief: construct Gateway
