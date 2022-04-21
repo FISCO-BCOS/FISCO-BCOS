@@ -2372,10 +2372,11 @@ bool Rpc::checkParamsForPeers(const Json::Value& _params,
         }
         pos++;
     }
-    if ( _endpoints.size >= peersParamLimit )
+    if ( _endpoints.size() >= peersParamLimit )
     {
         _response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
         _response["message"] = "refused for to many param peers. Limit: " + std::to_string(peersParamLimit);
+        return false;
     }
     return true;
 }
