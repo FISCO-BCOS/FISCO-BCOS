@@ -39,6 +39,8 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <bcos-utilities/DataConvertUtility.h>
+#include <bcos-security/bcos-security/EncryptedFile.h>
 
 using namespace bcos;
 using namespace bcos::rpc;
@@ -48,6 +50,7 @@ using namespace bcos::gateway;
 using namespace bcos::group;
 using namespace bcos::boostssl::ws;
 using namespace bcos::protocol;
+using namespace bcos::security;
 
 RpcFactory::RpcFactory(std::string const& _chainID, GatewayInterface::Ptr _gatewayInterface,
     KeyFactory::Ptr _keyFactory)
@@ -79,9 +82,74 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
     if (!_nodeConfig->rpcSmSsl())
     {  //  ssl
         boostssl::context::ContextConfig::CertConfig certConfig;
-        certConfig.caCert = _nodeConfig->caCert();
-        certConfig.nodeCert = _nodeConfig->nodeCert();
-        certConfig.nodeKey = _nodeConfig->nodeKey();
+
+        std::shared_ptr<bytes> keyContent;
+
+        //caCert
+        if (false == _nodeConfig->caCert().empty())
+        {
+            try
+            {
+                keyContent = readContents(boost::filesystem::path(_nodeConfig->caCert()));
+                if (nullptr != keyContent)
+                {
+                    certConfig.caCert.resize(keyContent->size());
+                    memcpy(certConfig.caCert.data(), keyContent->data(), keyContent->size());
+                }
+            }
+            catch (std::exception& e)
+            {
+                BCOS_LOG(ERROR) << LOG_BADGE("RpcFactory") << LOG_DESC("open caCert failed")
+                                << LOG_KV("file", _nodeConfig->caCert());
+                exit(1);
+            }
+        }
+
+        //nodeCert
+        if (false == _nodeConfig->nodeCert().empty())
+        {
+            try
+            {
+                keyContent = readContents(boost::filesystem::path(_nodeConfig->nodeCert()));
+                if (nullptr != keyContent)
+                {
+                    certConfig.nodeCert.resize(keyContent->size());
+                    memcpy(certConfig.nodeCert.data(), keyContent->data(), keyContent->size());
+                }
+            }
+            catch (std::exception& e)
+            {
+                BCOS_LOG(ERROR) << LOG_BADGE("RpcFactory") << LOG_DESC("open nodeCert failed")
+                                << LOG_KV("file", _nodeConfig->nodeCert());
+                exit(1);
+            }
+        }
+
+        //nodeKey
+        if (false == _nodeConfig->nodeKey().empty())
+        {
+            try
+            {
+                keyContent = readContents(boost::filesystem::path(_nodeConfig->nodeKey()));
+                if (nullptr != keyContent && true == _nodeConfig->storageSecurityEnable())
+                {
+                    keyContent =
+                        EncryptedFile::decryptContents(keyContent, _nodeConfig->storageSecurityDataKey());
+                }
+            }
+            catch (std::exception& e)
+            {
+                BCOS_LOG(ERROR)
+                    << LOG_BADGE("RpcFactory") << LOG_DESC("open nodeKey failed")
+                    << LOG_KV("file", _nodeConfig->nodeKey());
+                exit(1);
+            }
+        }
+        certConfig.nodeKey.resize(keyContent->size());
+        memcpy(certConfig.nodeKey.data(), keyContent->data(), keyContent->size());
+
+        contextConfig->setIsCertPath(false);
+
         contextConfig->setCertConfig(certConfig);
         contextConfig->setSslType("ssl");
 
@@ -98,11 +166,115 @@ std::shared_ptr<bcos::boostssl::ws::WsConfig> RpcFactory::initConfig(
     else
     {  // sm ssl
         boostssl::context::ContextConfig::SMCertConfig certConfig;
-        certConfig.caCert = _nodeConfig->smCaCert();
-        certConfig.nodeCert = _nodeConfig->smNodeCert();
-        certConfig.nodeKey = _nodeConfig->smNodeKey();
-        certConfig.enNodeCert = _nodeConfig->enSmNodeCert();
-        certConfig.enNodeKey = _nodeConfig->enSmNodeKey();
+
+        std::shared_ptr<bytes> keyContent;
+
+        // caCert
+        if (false == _nodeConfig->smCaCert().empty())
+        {
+            try
+            {
+                keyContent = readContents(boost::filesystem::path(_nodeConfig->smCaCert()));
+                if (nullptr != keyContent)
+                {
+                    certConfig.caCert.resize(keyContent->size());
+                    memcpy(certConfig.caCert.data(), keyContent->data(), keyContent->size());
+                }
+            }
+            catch (std::exception& e)
+            {
+                BCOS_LOG(ERROR) << LOG_BADGE("RpcFactory") << LOG_DESC("open smCaCert failed")
+                                << LOG_KV("file", _nodeConfig->caCert());
+                exit(1);
+            }
+        }
+
+        // nodeCert
+        if (false == _nodeConfig->smNodeCert().empty())
+        {
+            try
+            {
+                keyContent = readContents(boost::filesystem::path(_nodeConfig->smNodeCert()));
+                if (nullptr != keyContent)
+                {
+                    certConfig.nodeCert.resize(keyContent->size());
+                    memcpy(certConfig.nodeCert.data(), keyContent->data(), keyContent->size());
+                }
+            }
+            catch (std::exception& e)
+            {
+                BCOS_LOG(ERROR) << LOG_BADGE("RpcFactory") << LOG_DESC("open smNodeCert failed")
+                                << LOG_KV("file", _nodeConfig->nodeCert());
+                exit(1);
+            }
+        }
+
+        // nodeKey
+        if (false == _nodeConfig->smNodeKey().empty())
+        {
+            try
+            {
+                keyContent = readContents(boost::filesystem::path(_nodeConfig->smNodeKey()));
+                if (nullptr != keyContent && true == _nodeConfig->storageSecurityEnable())
+                {
+                    keyContent = EncryptedFile::decryptContentsSM(
+                        keyContent, _nodeConfig->storageSecurityDataKey());
+                }
+            }
+            catch (std::exception& e)
+            {
+                BCOS_LOG(ERROR) << LOG_BADGE("RpcFactory") << LOG_DESC("open smNodeKey failed")
+                                << LOG_KV("file", _nodeConfig->nodeKey());
+                exit(1);
+            }
+        }
+        certConfig.nodeKey.resize(keyContent->size());
+        memcpy(certConfig.nodeKey.data(), keyContent->data(), keyContent->size());
+
+        // enNodeCert
+        if (false == _nodeConfig->enSmNodeCert().empty())
+        {
+            try
+            {
+                keyContent = readContents(boost::filesystem::path(_nodeConfig->enSmNodeCert()));
+                if (nullptr != keyContent)
+                {
+                    certConfig.enNodeCert.resize(keyContent->size());
+                    memcpy(certConfig.enNodeCert.data(), keyContent->data(), keyContent->size());
+                }
+            }
+            catch (std::exception& e)
+            {
+                BCOS_LOG(ERROR) << LOG_BADGE("RpcFactory") << LOG_DESC("open enSmNodeCert failed")
+                                << LOG_KV("file", _nodeConfig->nodeCert());
+                exit(1);
+            }
+        }
+
+        // enNodeKey
+        if (false == _nodeConfig->enSmNodeKey().empty())
+        {
+            try
+            {
+                keyContent = readContents(boost::filesystem::path(_nodeConfig->enSmNodeKey()));
+                if (nullptr != keyContent && true == _nodeConfig->storageSecurityEnable())
+                {
+                    keyContent = EncryptedFile::decryptContentsSM(
+                        keyContent, _nodeConfig->storageSecurityDataKey());
+                }
+            }
+            catch (std::exception& e)
+            {
+                BCOS_LOG(ERROR) << LOG_BADGE("RpcFactory") << LOG_DESC("open enSmNodeKey failed")
+                                << LOG_KV("file", _nodeConfig->nodeKey());
+                exit(1);
+            }
+        }
+        certConfig.enNodeKey.resize(keyContent->size());
+        memcpy(certConfig.enNodeKey.data(), keyContent->data(), keyContent->size());
+
+        contextConfig->setIsCertPath(false);
+
         contextConfig->setSmCertConfig(certConfig);
         contextConfig->setSslType("sm_ssl");
 

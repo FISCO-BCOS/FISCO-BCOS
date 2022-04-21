@@ -39,7 +39,9 @@ using namespace std;
 
 #define STORAGE_ROCKSDB_LOG(LEVEL) BCOS_LOG(LEVEL) << "[STORAGE-RocksDB]"
 
-RocksDBStorage::RocksDBStorage(std::unique_ptr<rocksdb::DB>&& db) : m_db(std::move(db))
+RocksDBStorage::RocksDBStorage(std::unique_ptr<rocksdb::DB>&& db,
+    const EncHookFunction& encFunc, const DecHookFunction& decFunc)
+  : m_db(std::move(db)), m_encryptHandler(std::move(encFunc)), m_decryptHandler(std::move(decFunc))
 {
     m_writeBatch = std::make_shared<WriteBatch>();
 }
@@ -97,6 +99,9 @@ void RocksDBStorage::asyncGetRow(std::string_view _table, std::string_view _key,
         auto status = m_db->Get(
             ReadOptions(), m_db->DefaultColumnFamily(), Slice(dbKey.data(), dbKey.size()), &value);
 
+        if(nullptr != m_decryptHandler && false == value.empty())
+            m_decryptHandler(value);
+
         if (!status.ok())
         {
             if (status.IsNotFound())
@@ -121,6 +126,7 @@ void RocksDBStorage::asyncGetRow(std::string_view _table, std::string_view _key,
         std::optional<Entry> entry((Entry()));
         entry->set(std::move(value));
         _callback(nullptr, entry);
+
         STORAGE_ROCKSDB_LOG(TRACE)
             << LOG_DESC("asyncGetRow") << LOG_KV("table", _table)
             << LOG_KV("key", boost::algorithm::hex_lower(std::string(_key)))
@@ -178,7 +184,12 @@ void RocksDBStorage::asyncGetRows(std::string_view _table,
                             if (status.ok())
                             {
                                 entries[i] = std::make_optional(Entry());
-                                entries[i]->set(value.ToString());
+
+                                std::string v = value.ToString();
+                                if(nullptr != m_decryptHandler && false == v.empty())
+                                    m_decryptHandler(v);
+                                    
+                                entries[i]->set(v);
                             }
                             else
                             {
@@ -222,7 +233,7 @@ void RocksDBStorage::asyncSetRow(std::string_view _table, std::string_view _key,
     {
         if (!isValid(_table, _key))
         {
-            STORAGE_ROCKSDB_LOG(WARNING) << LOG_DESC("asyncGetRow empty tableName or key")
+            STORAGE_ROCKSDB_LOG(WARNING) << LOG_DESC( "asyncGetRow empty tableName or key")
                                          << LOG_KV("table", _table) << LOG_KV("key", _key);
             _callback(BCOS_ERROR_UNIQUE_PTR(TableNotExists, "empty tableName or key"));
             return;
@@ -242,7 +253,13 @@ void RocksDBStorage::asyncSetRow(std::string_view _table, std::string_view _key,
             STORAGE_ROCKSDB_LOG(TRACE)
                 << LOG_DESC("asyncSetRow") << LOG_KV("table", _table)
                 << LOG_KV("key", boost::algorithm::hex_lower(std::string(_key)));
-            status = m_db->Put(options, dbKey, _entry.get());
+
+            std::string value(_entry.get().data(), _entry.get().size());         
+            std::string encryptValue(_entry.get().data(), _entry.get().size());
+            if(nullptr != m_encryptHandler && false == value.empty())
+                m_encryptHandler(value, encryptValue);
+
+            status = m_db->Put(options, dbKey, encryptValue);
         }
 
         if (!status.ok())
@@ -296,7 +313,13 @@ void RocksDBStorage::asyncPrepare(const TwoPCParams& param, const TraverseStorag
                 else
                 {
                     tbb::spin_mutex::scoped_lock lock(m_writeBatchMutex);
-                    auto status = m_writeBatch->Put(dbKey, entry.get());
+
+                    std::string value(entry.get().data(), entry.get().size());
+                    std::string encryptValue(entry.get().data(), entry.get().size());
+                    if(nullptr != m_encryptHandler && false == value.empty())
+                        m_encryptHandler(value, encryptValue);
+
+                    auto status = m_writeBatch->Put(dbKey, encryptValue);
                 }
                 return true;
             });
@@ -336,6 +359,7 @@ void RocksDBStorage::asyncCommit(
             options.sync = true;
             count = m_writeBatch->Count();
             m_db->Write(options, m_writeBatch.get());
+
             m_writeBatch = nullptr;
         }
     }

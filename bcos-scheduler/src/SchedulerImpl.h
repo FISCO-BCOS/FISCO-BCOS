@@ -96,6 +96,7 @@ public:
                 return;
             }
         }
+
         std::promise<std::tuple<Error::Ptr, std::string>> p;
         m_ledger->asyncGetSystemConfigByKey(ledger::SYSTEM_KEY_TX_GAS_LIMIT,
             [&p](Error::Ptr _e, std::string _value, protocol::BlockNumber) {
@@ -111,6 +112,7 @@ public:
             BOOST_THROW_EXCEPTION(
                 BCOS_ERROR(SchedulerError::fetchGasLimitError, e->errorMessage()));
         }
+
         m_gasLimit = boost::lexical_cast<uint64_t>(value);
     }
 

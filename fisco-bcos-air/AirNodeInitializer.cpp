@@ -41,6 +41,7 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
 
     boost::property_tree::ptree pt;
     boost::property_tree::read_ini(_configFilePath, pt);
+
     m_logInitializer = std::make_shared<BoostLogInitializer>();
     m_logInitializer->initLog(pt);
 
@@ -58,12 +59,14 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
 
     // create the node
     initAirNode(_configFilePath, _genesisFile, m_gateway);
+
     auto pbftInitializer = m_nodeInitializer->pbftInitializer();
     auto groupInfo = m_nodeInitializer->pbftInitializer()->groupInfo();
     auto nodeService =
         std::make_shared<NodeService>(m_nodeInitializer->ledger(), m_nodeInitializer->scheduler(),
             m_nodeInitializer->txPoolInitializer()->txpool(), pbftInitializer->pbft(),
             pbftInitializer->blockSync(), m_nodeInitializer->protocolInitializer()->blockFactory());
+
     // create rpc
     RpcFactory rpcFactory(nodeConfig->chainId(), m_gateway, keyFactory);
     rpcFactory.setNodeConfig(nodeConfig);

@@ -16,12 +16,16 @@
 #include <bcos-gateway/libp2p/Service.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <bcos-utilities/FileUtility.h>
+#include <bcos-security/bcos-security/EncryptedFile.h>
+#include <bcos-boostssl/context/Common.h>
 
 using namespace bcos::rpc;
 using namespace bcos;
+using namespace security;
 using namespace gateway;
 using namespace bcos::amop;
 using namespace bcos::protocol;
+using namespace bcos::boostssl;
 
 // register the function fetch pub hex from the cert
 void GatewayFactory::initCert2PubHexHandler()
@@ -115,7 +119,7 @@ void GatewayFactory::initSSLContextPubHexHandler()
 }
 
 std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
-    const GatewayConfig::CertConfig& _certConfig)
+    const GatewayConfig::CertConfig& _certConfig, const GatewayConfig::StorageSecurityConfig& _storageSecurityConfig)
 {
     std::shared_ptr<boost::asio::ssl::context> sslContext =
         std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv12);
@@ -126,8 +130,25 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
 
     sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_none);
    */
-    auto keyContent =
-        readContentsToString(boost::filesystem::path(_certConfig.nodeKey));  // node.key content
+    std::shared_ptr<bytes> keyContent;
+    if (!_certConfig.nodeKey.empty())
+    {
+        try
+        {
+            keyContent = readContents(boost::filesystem::path(_certConfig.nodeKey));
+
+            if (nullptr != keyContent && true == _storageSecurityConfig.enable)
+                keyContent = EncryptedFile::decryptContents(keyContent, _storageSecurityConfig.dataKey);
+        }
+        catch (std::exception& e)
+        {
+            GATEWAY_FACTORY_LOG(ERROR) << LOG_BADGE("SecureInitializer")
+                                   << LOG_DESC("open privateKey failed") << LOG_KV("file", _certConfig.nodeKey);
+            ERROR_OUTPUT << LOG_BADGE("SecureInitializer") << LOG_DESC("open privateKey failed")
+                         << LOG_KV("file", _certConfig.nodeKey) << std::endl;
+            exit(1);
+        }
+    }
     if (!keyContent || keyContent->empty())
     {
         GATEWAY_FACTORY_LOG(ERROR)
@@ -177,23 +198,60 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
 }
 
 std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
-    const GatewayConfig::SMCertConfig& _smCertConfig)
+    const GatewayConfig::SMCertConfig& _smCertConfig, const GatewayConfig::StorageSecurityConfig& _storageSecurityConfig)
 {
     std::shared_ptr<boost::asio::ssl::context> sslContext =
         std::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv12);
 
     sslContext->set_verify_mode(boost::asio::ssl::context_base::verify_none);
 
-    auto keyContent =
-        readContentsToString(boost::filesystem::path(_smCertConfig.nodeKey));  // node.key content
-
+    std::shared_ptr<bytes> keyContent;
+    if (!_smCertConfig.nodeKey.empty())
+    {
+        try
+        {
+            keyContent = readContents(boost::filesystem::path(_smCertConfig.nodeKey));
+            if (nullptr != keyContent && true == _storageSecurityConfig.enable)
+                keyContent = EncryptedFile::decryptContentsSM(keyContent, _storageSecurityConfig.dataKey);
+        }
+        catch (std::exception& e)
+        {
+            GATEWAY_FACTORY_LOG(ERROR) << LOG_BADGE("SecureInitializer")
+                                   << LOG_DESC("open privateKey failed") << LOG_KV("file", _smCertConfig.nodeKey);
+            ERROR_OUTPUT << LOG_BADGE("SecureInitializer") << LOG_DESC("open privateKey failed")
+                         << LOG_KV("file", _smCertConfig.nodeKey) << std::endl;
+            exit(1);
+        }
+    }
     boost::asio::const_buffer keyBuffer(keyContent->data(), keyContent->size());
     sslContext->use_private_key(keyBuffer, boost::asio::ssl::context::file_format::pem);
 
+    std::shared_ptr<bytes> enNodeKeyContent;
+    if (!_smCertConfig.enNodeKey.empty())
+    {
+        try
+        {
+            enNodeKeyContent = readContents(boost::filesystem::path(_smCertConfig.enNodeKey));
+            if (nullptr != enNodeKeyContent && true == _storageSecurityConfig.enable)
+                enNodeKeyContent = EncryptedFile::decryptContentsSM(enNodeKeyContent, _storageSecurityConfig.dataKey);
+        }
+        catch (std::exception& e)
+        {
+            GATEWAY_FACTORY_LOG(ERROR) << LOG_BADGE("SecureInitializer")
+                                   << LOG_DESC("open privateKey failed") << LOG_KV("file", _smCertConfig.enNodeKey);
+            ERROR_OUTPUT << LOG_BADGE("SecureInitializer") << LOG_DESC("open privateKey failed")
+                         << LOG_KV("file", _smCertConfig.enNodeKey) << std::endl;
+            exit(1);
+        }
+    }
+
     SSL_CTX_use_enc_certificate_file(
         sslContext->native_handle(), _smCertConfig.enNodeCert.c_str(), SSL_FILETYPE_PEM);
-    if (SSL_CTX_use_enc_PrivateKey_file(
-            sslContext->native_handle(), _smCertConfig.enNodeKey.c_str(), SSL_FILETYPE_PEM) <= 0)
+
+    std::string enNodeKeyStr((const char *)enNodeKeyContent->data(), enNodeKeyContent->size());
+
+    if (SSL_CTX_use_enc_PrivateKey(
+            sslContext->native_handle(), toEvpPkey(enNodeKeyStr.c_str())) <= 0)
     {
         GATEWAY_FACTORY_LOG(ERROR) << LOG_DESC("SSL_CTX_use_enc_PrivateKey_file error");
         BOOST_THROW_EXCEPTION(
@@ -264,9 +322,9 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         }
 
         std::shared_ptr<ba::ssl::context> sslContext =
-            (_config->smSSL() ? buildSSLContext(_config->smCertConfig()) :
-                                buildSSLContext(_config->certConfig()));
-
+            (_config->smSSL() ? buildSSLContext(_config->smCertConfig(), _config->storageSecurityConfig()) :
+                                buildSSLContext(_config->certConfig(), _config->storageSecurityConfig()));
+        
         // init ASIOInterface
         auto asioInterface = std::make_shared<ASIOInterface>();
         asioInterface->setIOService(std::make_shared<ba::io_service>());

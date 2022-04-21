@@ -47,6 +47,7 @@
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tool/NodeConfig.h>
 #include <bcos-tool/LedgerConfigFetcher.cpp>
+#include <bcos-security/bcos-security/StorageEncDecHelper.h>
 
 using namespace bcos;
 using namespace bcos::tool;
@@ -123,7 +124,30 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
         bcos::storage::TransactionalStorageInterface::Ptr schedulerStorage = nullptr;
         if (boost::iequals(m_nodeConfig->storageType(), "RocksDB"))
         {
-            storage = StorageInitializer::build(storagePath);
+            //if the storage security is enable
+            if (true == m_nodeConfig->storageSecurityEnable())
+            {
+                const std::string& dataKeyString = m_nodeConfig->storageSecurityDataKey();
+
+                bytes dataKey(dataKeyString.size(), 0);
+                memcpy(dataKey.data(), dataKeyString.data(), dataKeyString.size());
+
+                if (false == m_nodeConfig->p2pSmSsl())
+                {
+                    storage = StorageInitializer::build(storagePath,
+                        bcos::security::StorageEncDecHelper::getEncryptHandler(dataKey),
+                        bcos::security::StorageEncDecHelper::getDecryptHandler(dataKey));
+                }
+                else
+                {
+                    storage = StorageInitializer::build(storagePath,
+                        bcos::security::StorageEncDecHelper::getEncryptHandlerSM(dataKey),
+                        bcos::security::StorageEncDecHelper::getDecryptHandlerSM(dataKey));
+                }
+            }
+            else
+                storage = StorageInitializer::build(storagePath);
+
             schedulerStorage = storage;
         }
         else if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
@@ -169,6 +193,7 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
         {
             BCOS_LOG(INFO) << LOG_DESC("initNode: disableLRUCacheStorage");
         }
+
         // Note: ensure that there has at least one executor before pbft/sync execute block
         auto executor = ExecutorInitializer::build(m_txpoolInitializer->txpool(), cache, storage,
             executionMessageFactory, m_protocolInitializer->cryptoSuite()->hashImpl(),
@@ -186,7 +211,32 @@ void Initializer::init(bcos::initializer::NodeArchitectureType _nodeArchType,
         }
         BCOS_LOG(INFO) << LOG_DESC("initNode: init storage for consensus")
                        << LOG_KV("consensusStoragePath", consensusStoragePath);
-        auto consensusStorage = StorageInitializer::build(consensusStoragePath);
+
+        bcos::storage::TransactionalStorageInterface::Ptr consensusStorage{ nullptr };
+        // if the storage security is enable
+        if (true == m_nodeConfig->storageSecurityEnable())
+        {
+            const std::string& dataKeyString = m_nodeConfig->storageSecurityDataKey();
+
+            bytes dataKey(dataKeyString.size(), 0);
+            memcpy(dataKey.data(), dataKeyString.data(), dataKeyString.size());
+
+            if (false == m_nodeConfig->p2pSmSsl())
+            {
+                consensusStorage = StorageInitializer::build(consensusStoragePath,
+                    bcos::security::StorageEncDecHelper::getEncryptHandler(dataKey),
+                    bcos::security::StorageEncDecHelper::getDecryptHandler(dataKey));
+            }
+            else
+            {
+                consensusStorage = StorageInitializer::build(consensusStoragePath,
+                    bcos::security::StorageEncDecHelper::getEncryptHandlerSM(dataKey),
+                    bcos::security::StorageEncDecHelper::getDecryptHandlerSM(dataKey));
+            }
+        }
+        else
+            consensusStorage = StorageInitializer::build(consensusStoragePath);
+
         // build and init the pbft related modules
         if (_nodeArchType == NodeArchitectureType::AIR)
         {
