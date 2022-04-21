@@ -132,6 +132,11 @@ public:
         m_transactionSync->config()->setTxPoolStorage(_txpoolStorage);
     }
 
+    void registerTxsCleanUpSwitch(std::function<bool()> _txsCleanUpSwitch) override
+    {
+        m_txpoolStorage->registerTxsCleanUpSwitch(_txsCleanUpSwitch);
+    }
+
 protected:
     virtual bool checkExistsInGroup(bcos::protocol::TxSubmitCallback _txSubmitCallback);
     virtual void getTxsFromLocalLedger(bcos::crypto::HashListPtr _txsHash,

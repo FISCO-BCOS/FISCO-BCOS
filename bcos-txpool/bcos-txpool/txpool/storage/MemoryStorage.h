@@ -21,9 +21,9 @@
 #pragma once
 #include "bcos-txpool/TxPoolConfig.h"
 #include <bcos-utilities/ThreadPool.h>
+#include <bcos-utilities/Timer.h>
 #include <tbb/concurrent_unordered_map.h>
 #define TBB_PREVIEW_CONCURRENT_ORDERED_CONTAINERS 1
-#include <tbb/concurrent_queue.h>
 #include <tbb/concurrent_set.h>
 namespace bcos
 {
@@ -33,7 +33,9 @@ class MemoryStorage : public TxPoolStorageInterface,
                       public std::enable_shared_from_this<MemoryStorage>
 {
 public:
-    explicit MemoryStorage(TxPoolConfig::Ptr _config, size_t _notifyWorkerNum = 2);
+    // the default txsExpirationTime is 10 minutes
+    explicit MemoryStorage(TxPoolConfig::Ptr _config, size_t _notifyWorkerNum = 2,
+        int64_t _txsExpirationTime = 10 * 60 * 1000);
     ~MemoryStorage() override {}
 
     bcos::protocol::TransactionStatus submitTransaction(bytesPointer _txData,
@@ -78,7 +80,7 @@ public:
     size_t unSealedTxsSize() override;
 
     void stop() override;
-
+    void start() override;
     void printPendingTxs() override;
 
     std::shared_ptr<bcos::crypto::HashList> batchVerifyProposal(
@@ -112,6 +114,7 @@ protected:
     virtual void preCommitTransaction(bcos::protocol::Transaction::ConstPtr _tx);
 
     virtual void notifyUnsealedTxsSize(size_t _retryTime = 0);
+    virtual void cleanUpExpiredTransactions();
 
 private:
     TxPoolConfig::Ptr m_config;
@@ -121,9 +124,6 @@ private:
     tbb::concurrent_unordered_map<bcos::crypto::HashType, bcos::protocol::Transaction::ConstPtr,
         std::hash<bcos::crypto::HashType>>
         m_txsTable;
-    using TransactionQueue =
-        tbb::concurrent_bounded_queue<bcos::protocol::Transaction::Transaction::ConstPtr>;
-    TransactionQueue m_txsQueue;
 
     mutable SharedMutex x_txpoolMutex;
 
@@ -139,6 +139,14 @@ private:
     std::atomic<bcos::protocol::BlockNumber> m_blockNumber = {0};
     std::atomic_bool m_printed = {false};
     int64_t m_blockNumberUpdatedTime;
+
+    // the txs expiration time, default is 10 minutes
+    int64_t m_txsExpirationTime = 10 * 60 * 1000;
+    // timer to clear up the expired txs in-period
+    std::shared_ptr<Timer> m_cleanUpTimer;
+    // Maximum number of transactions traversed by m_cleanUpTimer,
+    // The limit set here is to minimize the impact of the cleanup operation on txpool performance
+    uint64_t c_maxTraverseTxsNum = 10000;
 };
 }  // namespace txpool
 }  // namespace bcos

@@ -76,27 +76,19 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
 
 void AirNodeInitializer::start()
 {
-    try
+    if (m_nodeInitializer)
     {
-        if (m_nodeInitializer)
-        {
-            m_nodeInitializer->start();
-        }
-
-        if (m_gateway)
-        {
-            m_gateway->start();
-        }
-
-        if (m_rpc)
-        {
-            m_rpc->start();
-        }
+        m_nodeInitializer->start();
     }
-    catch (std::exception const& e)
+
+    if (m_gateway)
     {
-        std::cout << "start bcos-node failed for " << boost::diagnostic_information(e);
-        exit(-1);
+        m_gateway->start();
+    }
+
+    if (m_rpc)
+    {
+        m_rpc->start();
     }
 }
 

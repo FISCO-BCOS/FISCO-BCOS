@@ -107,7 +107,7 @@ protected:
     LocalRouterTable::Ptr m_localRouterTable;
     PeersRouterTable::Ptr m_peersRouterTable;
 
-    unsigned const SEQ_SYNC_PERIOD = 3000;
+    unsigned const SEQ_SYNC_PERIOD = 1000;
     std::shared_ptr<Timer> m_timer;
 
     GatewayNodeStatusFactory::Ptr m_gatewayNodeStatusFactory;

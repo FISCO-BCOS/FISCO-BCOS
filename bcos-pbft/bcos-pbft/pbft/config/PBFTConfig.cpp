@@ -53,6 +53,8 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
     // set ConsensusNodeList
     auto& consensusList = _ledgerConfig->mutableConsensusNodeList();
     setConsensusNodeList(consensusList);
+    auto observerList = _ledgerConfig->mutableObserverList();
+    setObserverNodeList(*observerList);
     // set leader_period
     setLeaderSwitchPeriod(_ledgerConfig->leaderSwitchPeriod());
     // reset the timer
@@ -67,8 +69,16 @@ void PBFTConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig, bool _syncedBlock)
         PBFT_LOG(INFO) << LOG_DESC("^^^^^^^^Report") << LOG_KV("sealer", _ledgerConfig->sealerId())
                        << LOG_KV("txs", _ledgerConfig->txsSize()) << printCurrentState();
     }
-    // notify the txpool validator to update the consensusNodeList.
-    m_validator->updateValidatorConfig(consensusList, _ledgerConfig->observerNodeList());
+    // notify the txpool validator to update the consensusNodeList and the observerNodeList
+    if (m_consensusNodeListUpdated || m_observerNodeListUpdated)
+    {
+        m_validator->updateValidatorConfig(consensusList, *observerList);
+        PBFT_LOG(INFO) << LOG_DESC("updateValidatorConfig")
+                       << LOG_KV("consensusNodeListUpdated", m_consensusNodeListUpdated)
+                       << LOG_KV("observerNodeListUpdated", m_observerNodeListUpdated)
+                       << LOG_KV("consensusNodeSize", consensusList.size())
+                       << LOG_KV("observerNodeSize", observerList->size());
+    }
 
     // notify the latest block number to the sealer
     if (m_stateNotifier)
