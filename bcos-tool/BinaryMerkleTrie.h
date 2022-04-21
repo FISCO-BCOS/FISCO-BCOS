@@ -3,6 +3,7 @@
 #include <bcos-crypto/interfaces/crypto/Hashing.h>
 #include <boost/concept/assert.hpp>
 #include <boost/concept_check.hpp>
+#include <boost/iterator/iterator_traits.hpp>
 #include <boost/range.hpp>
 #include <boost/range/concepts.hpp>
 #include <algorithm>
@@ -13,17 +14,17 @@ namespace bcos::tool
 class BinaryMerkleTrie
 {
 public:
-    template <class Range, class Out, class HashType>
-    void parseRange(Range&& range, Out out)
+    template <class HashType, class Range, class Out>
+    void parseRange(Range& range, Out out)
     {
-        using RangeType = std::remove_reference<std::remove_cv<Range>>;
-
-        BOOST_CONCEPT_ASSERT((boost::RandomAccessRangeConcept<RangeType>));
-        static_assert(std::is_same_v<boost::range_value<RangeType>, bcos::h256>,
+        BOOST_CONCEPT_ASSERT((boost::RandomAccessRangeConcept<Range>));
+        static_assert(std::is_same_v<boost::range_value<Range>, bcos::h256>,
             "Input range value type isn't bcos::h256!");
         static_assert(
             std::is_base_of_v<crypto::Hashing<HashType>, HashType>, "Input HashType mismatch!");
         BOOST_CONCEPT_ASSERT((boost::Mutable_ForwardIteratorConcept<Out>));
+        static_assert(std::is_same_v<boost::iterator_value<Out>, bcos::h256>,
+            "Output iterator value type isn't bcos::h256!");
 
         size_t count = 0;
         auto begin = boost::begin(range);
@@ -37,20 +38,20 @@ public:
         {
             if (i + 1 < total)
             {
-                *out++ = (localHasher << *(begin + i) << *(begin + i + 1)).final();
+                auto& hash1 = *(begin + i);
+                auto& hash2 = *(begin + i + 1);
+                *out++ = localHasher.update(gsl::span<byte const>(hash1.data(), hash1.size))
+                             .update(gsl::span<byte const>(hash2.data(), hash2.size))
+                             .final();
             }
             else
             {
-                *out++ = (localHasher << *(begin + i)).final();
+                auto& hash = *(begin + i);
+                *out++ = localHasher.update(gsl::span<byte const>(hash.data(), hash.size)).final();
             }
 
 #pragma omp atomic
             ++count;
-        }
-
-        if (count > 1)
-        {
-            parseRange(std::make_tuple(outBegin, out), out);
         }
     }
 

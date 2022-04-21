@@ -5,8 +5,8 @@ hunter_config(bcos-utilities VERSION 1.0.0-rc2-local
 )
 
 hunter_config(bcos-crypto VERSION 3.0.0-rc3-local
-    URL https://${URL_BASE}/FISCO-BCOS/bcos-crypto/archive/1d94e85b430cb858df24d5d432e9f89d629e58b0.tar.gz
-	SHA1 27101ff11729c5ceadb6b664050b31125aa3e72b
+    URL https://${URL_BASE}/FISCO-BCOS/bcos-crypto/archive/56be55c1a90bacd8cbad89ebdbe1395aeea26112.tar.gz
+	SHA1 5ae9c8f3b8f3dc9c494e8085722cd54a1b1ccb68
     CMAKE_ARGS HUNTER_PACKAGE_LOG_BUILD=ON HUNTER_PACKAGE_LOG_INSTALL=ON SM2_OPTIMIZE=ON
 )
 
