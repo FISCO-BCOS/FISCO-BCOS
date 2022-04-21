@@ -10,34 +10,38 @@
 
 namespace bcos::tool
 {
-class BinaryMerkleTree
+class BinaryMerkleTrie
 {
 public:
-    template <class Range, class Out, class HashImpl>
-    void parseRange(Range&& range, Out out, bcos::crypto::Hashing<HashImpl>&& hasher)
+    template <class Range, class Out, class HashType>
+    void parseRange(Range&& range, Out out)
     {
         using RangeType = std::remove_reference<std::remove_cv<Range>>;
+
+        BOOST_CONCEPT_ASSERT((boost::RandomAccessRangeConcept<RangeType>));
         static_assert(std::is_same_v<boost::range_value<RangeType>, bcos::h256>,
             "Input range value type isn't bcos::h256!");
+        static_assert(
+            std::is_base_of_v<crypto::Hashing<HashType>, HashType>, "Input HashType mismatch!");
         BOOST_CONCEPT_ASSERT((boost::Mutable_ForwardIteratorConcept<Out>));
-        BOOST_CONCEPT_ASSERT((boost::RandomAccessRangeConcept<RangeType>));
 
         size_t count = 0;
         auto begin = boost::begin(range);
         auto total = boost::size(range);
         auto outBegin = out;
-        
-#pragma omp threadprivate(hasher)
-#pragma omp parallel for
+
+#pragma omp parallel
+        HashType localHasher;
+#pragma omp for
         for (size_t i = 0; i < total; i += 2)
         {
             if (i + 1 < total)
             {
-                *out++ = (hasher << *(begin + i) << *(begin + i + 1)).final();
+                *out++ = (localHasher << *(begin + i) << *(begin + i + 1)).final();
             }
             else
             {
-                *out++ = (hasher << *(begin + i)).final();
+                *out++ = (localHasher << *(begin + i)).final();
             }
 
 #pragma omp atomic
@@ -46,8 +50,7 @@ public:
 
         if (count > 1)
         {
-            parseRange(std::make_tuple(outBegin, out), out,
-                std::forward<bcos::crypto::Hashing<HashImpl>>(hasher));
+            parseRange(std::make_tuple(outBegin, out), out);
         }
     }
 
