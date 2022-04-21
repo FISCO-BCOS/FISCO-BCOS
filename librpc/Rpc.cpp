@@ -2240,7 +2240,7 @@ Json::Value Rpc::addPeers(const Json::Value& _hostPorts)
         else
         {
             response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
-            response["message"] = "add peers failed during outputing to configfile";
+            response["message"] = "add peers failed during updating configfile";
             return response;
         }
     }
@@ -2302,7 +2302,7 @@ Json::Value Rpc::erasePeers(const Json::Value& _hostPorts)
         else
         {
             response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
-            response["message"] = "erase peers fails during outputing to configfile";
+            response["message"] = "erase peers fails during updating configfile";
             return response;
         }
     }

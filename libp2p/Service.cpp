@@ -44,6 +44,7 @@ using namespace dev::network;
 using namespace dev::stat;
 
 static const uint32_t CHECK_INTERVEL = 10000;
+static const uint32_t MAX_NODES_LIMIT = 300;
 
 Service::Service()
   : m_topics(std::make_shared<std::set<std::string>>()),
@@ -1142,6 +1143,12 @@ bool Service::addPeers(std::vector<dev::network::NodeIPEndpoint> const& endpoint
     {
         nodes.insert(std::make_pair(endpoint, NodeID()));
     }
+    if (nodes.size() > MAX_NODES_LIMIT)
+    {
+        SERVICE_LOG(INFO) << LOG_DESC("refused for too many peers")
+                          << LOG_KV("LIMIT", MAX_NODES_LIMIT);
+        return false;
+    }
     setStaticNodes(nodes);
     SERVICE_LOG(INFO) << LOG_DESC("add peers to the running node successfully!");
     SERVICE_LOG(INFO) << LOG_DESC("try to update the configfile now");
@@ -1186,6 +1193,7 @@ bool Service::updatePeersToIni(std::map<dev::network::NodeIPEndpoint, NodeID> co
     boost::regex expComment("[\\s]*;.*");
     bool tmpDataUsed{false};
     unsigned long _behindp2p = 0;
+    RecursiveGuard l(x_fileOperation);
 
     std::ifstream configFile(confDir);
     if (!configFile.is_open())
@@ -1195,16 +1203,18 @@ bool Service::updatePeersToIni(std::map<dev::network::NodeIPEndpoint, NodeID> co
     }
     else
     {
+        bool lastLineEmpty = false;
         while (!configFile.eof())
         {
             std::getline(configFile, line);
             if (line.empty())
             {
-                fileData += "\n";
+                fileData += (lastLineEmpty ? "\n" : "");
+                lastLineEmpty = true;
             }
             else if (boost::regex_match(line, expComment) || !boost::regex_search(line, expNode))
             {
-                fileData += line + "\n";
+                fileData += (lastLineEmpty ? "\n" : "") + line + "\n";
                 // try to locate the pos that ought to print nodes' information
                 if (line.npos != line.find("; nodes to connect"))
                 {
@@ -1213,6 +1223,7 @@ bool Service::updatePeersToIni(std::map<dev::network::NodeIPEndpoint, NodeID> co
                 }
                 if (line.find("[p2p]") == 0)
                     _behindp2p = fileData.size();
+                lastLineEmpty = false;
             }
             else
             {
@@ -1249,7 +1260,29 @@ bool Service::updatePeersToIni(std::map<dev::network::NodeIPEndpoint, NodeID> co
         outfile.flush();
         outfile << fileData;
         outfile.close();
-        SERVICE_LOG(INFO) << LOG_DESC("output data to config file successfully");
+        SERVICE_LOG(INFO) << LOG_DESC("try to output data to config file");
+    }
+    // make sure the output all right
+    std::ifstream newConffile(newDir);
+    if (!newConffile.is_open())
+    {
+        SERVICE_LOG(WARNING) << LOG_DESC("fail to find config file") << LOG_KV("path", confDir);
+        return false;
+    }
+    else
+    {
+        newConffile.seekg(0, std::ios::end);
+        size_t len = newConffile.tellg();
+        newConffile.close();
+        if (len == fileData.size())
+        {
+            SERVICE_LOG(INFO) << LOG_DESC("output data to config file successfully");
+        }
+        else
+        {
+            SERVICE_LOG(INFO) << LOG_DESC("fail to output data to config file actually");
+            return false;
+        }
     }
 
     if (0 != std::rename(newDir.c_str(), confDir.c_str()))

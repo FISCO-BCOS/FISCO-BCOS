@@ -285,6 +285,9 @@ private:
     std::shared_ptr<std::unordered_map<uint32_t,
         std::pair<std::shared_ptr<boost::asio::deadline_timer>, dev::p2p::CallbackFuncWithSession>>>
         m_localAMOPCallbacks;
+
+    //for config file Operation
+    mutable RecursiveMutex x_fileOperation;
 };
 
 }  // namespace p2p
