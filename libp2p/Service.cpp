@@ -1136,7 +1136,8 @@ void Service::removeGroupBandwidthLimiter(GROUP_ID const& _groupID)
                       << LOG_KV("group", std::to_string(_groupID));
 }
 
-bool Service::addPeers(std::vector<dev::network::NodeIPEndpoint> const& endpoints)
+bool Service::addPeers(
+    std::vector<dev::network::NodeIPEndpoint> const& endpoints, std::string& response)
 {
     auto nodes = staticNodes();
     for (auto& endpoint : endpoints)
@@ -1147,15 +1148,17 @@ bool Service::addPeers(std::vector<dev::network::NodeIPEndpoint> const& endpoint
     {
         SERVICE_LOG(INFO) << LOG_DESC("refused for too many peers")
                           << LOG_KV("LIMIT", MAX_NODES_LIMIT);
+        response = "refused for too many peers. LIMIT: " + std::to_string(MAX_NODES_LIMIT);
         return false;
     }
     setStaticNodes(nodes);
     SERVICE_LOG(INFO) << LOG_DESC("add peers to the running node successfully!");
     SERVICE_LOG(INFO) << LOG_DESC("try to update the configfile now");
-    return updatePeersToIni(nodes);
+    return updatePeersToIni(nodes, response);
 }
 
-bool Service::erasePeers(std::vector<dev::network::NodeIPEndpoint> const& endpoints)
+bool Service::erasePeers(
+    std::vector<dev::network::NodeIPEndpoint> const& endpoints, std::string& response)
 {
     auto nodes = staticNodes();
     for (auto& endpoint : endpoints)
@@ -1169,10 +1172,11 @@ bool Service::erasePeers(std::vector<dev::network::NodeIPEndpoint> const& endpoi
     setStaticNodes(nodes);
     SERVICE_LOG(INFO) << LOG_DESC("erase peers to the running node successfully!");
     SERVICE_LOG(INFO) << LOG_DESC("try to update the configfile now");
-    return updatePeersToIni(nodes);
+    return updatePeersToIni(nodes, response);
 }
 
-bool Service::updatePeersToIni(std::map<dev::network::NodeIPEndpoint, NodeID> const& nodes)
+bool Service::updatePeersToIni(
+    std::map<dev::network::NodeIPEndpoint, NodeID> const& nodes, std::string& response)
 {
     std::string tmpdata = "";
     int _count = 0;
@@ -1199,6 +1203,7 @@ bool Service::updatePeersToIni(std::map<dev::network::NodeIPEndpoint, NodeID> co
     if (!configFile.is_open())
     {
         SERVICE_LOG(WARNING) << LOG_DESC("fail to find config file") << LOG_KV("path", confDir);
+        response = "fail to find config file";
         return false;
     }
     else
@@ -1245,6 +1250,7 @@ bool Service::updatePeersToIni(std::map<dev::network::NodeIPEndpoint, NodeID> co
         {
             SERVICE_LOG(WARNING) << LOG_DESC("fail to insert peers' data into config file")
                                  << LOG_KV("path", confDir);
+            response = "fail to insert peers' data into config file";
             return false;
         }
     }
@@ -1252,7 +1258,9 @@ bool Service::updatePeersToIni(std::map<dev::network::NodeIPEndpoint, NodeID> co
     std::ofstream outfile(newDir);
     if (!outfile.is_open())
     {
-        SERVICE_LOG(WARNING) << LOG_DESC("fail to open the config file") << LOG_KV("path", newDir);
+        SERVICE_LOG(WARNING) << LOG_DESC("fail to create a tmp config file")
+                             << LOG_KV("path", newDir);
+        response = "fail to create a tmp config file";
         return false;
     }
     else
@@ -1266,7 +1274,9 @@ bool Service::updatePeersToIni(std::map<dev::network::NodeIPEndpoint, NodeID> co
     std::ifstream newConffile(newDir);
     if (!newConffile.is_open())
     {
-        SERVICE_LOG(WARNING) << LOG_DESC("fail to find config file") << LOG_KV("path", confDir);
+        SERVICE_LOG(WARNING) << LOG_DESC("fail to reopen the tmp config file")
+                             << LOG_KV("path", confDir);
+        response = "fail to check the tmp config file";
         return false;
     }
     else
@@ -1274,21 +1284,23 @@ bool Service::updatePeersToIni(std::map<dev::network::NodeIPEndpoint, NodeID> co
         newConffile.seekg(0, std::ios::end);
         size_t len = newConffile.tellg();
         newConffile.close();
-        if (len == fileData.size())
+        if (fileData.size() == len)
         {
             SERVICE_LOG(INFO) << LOG_DESC("output data to config file successfully");
         }
         else
         {
-            SERVICE_LOG(INFO) << LOG_DESC("fail to output data to config file actually");
+            SERVICE_LOG(WARNING) << LOG_DESC("fail to output data to config file as expected");
+            response = "fail to output data to config file as expected";
             return false;
         }
     }
 
     if (0 != std::rename(newDir.c_str(), confDir.c_str()))
     {
-        SERVICE_LOG(WARNING) << LOG_DESC("fail to remove bak file") << LOG_KV("path", newDir)
+        SERVICE_LOG(WARNING) << LOG_DESC("fail to rename the config file") << LOG_KV("path", newDir)
                              << LOG_KV("error", std::strerror(errno));
+        response = "fail to rename the config file";
         return false;
     }
     SERVICE_LOG(INFO) << LOG_DESC("update config file successfully") << LOG_KV("path", confDir);

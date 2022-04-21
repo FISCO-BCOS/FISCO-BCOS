@@ -203,8 +203,10 @@ public:
         m_channelNetworkStatHandler = _channelNetworkStatHandler;
     }
 
-    bool addPeers(std::vector<dev::network::NodeIPEndpoint> const& endpoints) override;
-    bool erasePeers(std::vector<dev::network::NodeIPEndpoint> const& endpoints) override;
+    bool addPeers(
+        std::vector<dev::network::NodeIPEndpoint> const& endpoints, std::string& response) override;
+    bool erasePeers(
+        std::vector<dev::network::NodeIPEndpoint> const& endpoints, std::string& response) override;
 
 private:
     void callDisconnectHandlers(dev::network::NetworkException _e, P2PSession::Ptr _p2pSession);
@@ -227,7 +229,8 @@ private:
     void updateIncomingTraffic(P2PMessage::Ptr _msg);
     void updateOutgoingTraffic(P2PMessage::Ptr _msg);
     void acquirePermits(P2PMessage::Ptr _msg);
-    bool updatePeersToIni(std::map<dev::network::NodeIPEndpoint, NodeID> const& nodes);
+    bool updatePeersToIni(
+        std::map<dev::network::NodeIPEndpoint, NodeID> const& nodes, std::string& response);
 
 private:
     std::map<dev::network::NodeIPEndpoint, NodeID> m_staticNodes;
@@ -286,7 +289,7 @@ private:
         std::pair<std::shared_ptr<boost::asio::deadline_timer>, dev::p2p::CallbackFuncWithSession>>>
         m_localAMOPCallbacks;
 
-    //for config file Operation
+    // for config file Operation
     mutable RecursiveMutex x_fileOperation;
 };
 
