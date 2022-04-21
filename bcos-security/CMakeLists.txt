@@ -1,7 +1,7 @@
 #------------------------------------------------------------------------------
-# Top-level CMake file for bcos-tool
+# Top-level CMake file for bcos-security
 # ------------------------------------------------------------------------------
-# Copyright (C) 2021 bcos-tool
+# Copyright (C) 2021 bcos-security
 # SPDX-License-Identifier: Apache-2.0
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,23 +20,10 @@ cmake_minimum_required(VERSION 3.10)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment version")
 
 include(Version)
-project(bcos-tool VERSION ${VERSION})
+project(bcos-security VERSION ${VERSION})
 
-# find Snappy
-hunter_add_package(Snappy)
-find_package(Snappy REQUIRED)
+aux_source_directory(./bcos-security SRC_LIST)
+include_directories(./bcos-security)
+add_library(${SECURITY_TARGET} ${SRC_LIST})
 
-file(GLOB_RECURSE SRCS *.cpp)
-add_library(${TOOL_TARGET} ${SRCS})
-target_compile_options(${TOOL_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
-target_link_libraries(${TOOL_TARGET} PUBLIC ${UTILITIES_TARGET} PUBLIC ${SECURITY_TARGET} Snappy::snappy)
-
-# for doxygen
-# include(BuildDocs)
-# buildDoc(bcos-tool-doc)
-
-# for code coverage
-if (COVERAGE)
-    include(Coverage)
-    config_coverage("tool-cov" "'/usr*' '${CMAKE_CURRENT_SOURCE_DIR}/bcos-cmake-scripts*' '${CMAKE_CURRENT_SOURCE_DIR}/test/bcos-test*'")
-endif ()
+target_link_libraries(${SECURITY_TARGET} PUBLIC ${UTILITIES_TARGET} ${TOOL_TARGET})

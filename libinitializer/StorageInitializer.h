@@ -28,13 +28,16 @@
 #include <bcos-storage/src/RocksDBStorage.h>
 #include <bcos-storage/src/TiKVStorage.h>
 #include <rocksdb/write_batch.h>
+#include <bcos-security/bcos-security/StorageEncDecHelper.h>
 
 namespace bcos::initializer
 {
 class StorageInitializer
 {
 public:
-    static bcos::storage::TransactionalStorageInterface::Ptr build(const std::string& _storagePath)
+    static bcos::storage::TransactionalStorageInterface::Ptr build(const std::string& _storagePath,
+        const bcos::security::EncHookFunction& encFunc = nullptr,
+        const bcos::security::DecHookFunction& decFunc = nullptr)
     {
         boost::filesystem::create_directories(_storagePath);
         rocksdb::DB* db;
@@ -49,7 +52,8 @@ public:
         // open DB
         rocksdb::Status s = rocksdb::DB::Open(options, _storagePath, &db);
 
-        return std::make_shared<bcos::storage::RocksDBStorage>(std::unique_ptr<rocksdb::DB>(db));
+        return std::make_shared<bcos::storage::RocksDBStorage>(
+            std::unique_ptr<rocksdb::DB>(db), encFunc, decFunc);
     }
 
     static bcos::storage::TransactionalStorageInterface::Ptr build(
