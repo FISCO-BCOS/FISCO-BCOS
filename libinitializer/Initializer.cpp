@@ -44,6 +44,7 @@
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/interfaces/protocol/GlobalConfig.h>
 #include <bcos-scheduler/src/ExecutorManager.h>
+#include <bcos-security/bcos-security/StorageEncDecHelper.h>
 #include <bcos-sync/BlockSync.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tool/NodeConfig.h>
@@ -147,6 +148,54 @@ void Initializer::init(bcos::protocol::NodeArchitectureType _nodeArchType,
     auto ledger =
         LedgerInitializer::build(m_protocolInitializer->blockFactory(), storage, m_nodeConfig);
     m_ledger = ledger;
+    // build the storage
+    auto storagePath = m_nodeConfig->storagePath();
+    if (!_airVersion)
+    {
+        storagePath = ServerConfig::BasePath + ".." + c_fileSeparator + m_nodeConfig->groupId() +
+                      c_fileSeparator + m_nodeConfig->storagePath();
+    }
+    BCOS_LOG(INFO) << LOG_DESC("initNode") << LOG_KV("storagePath", storagePath)
+                   << LOG_KV("storageType", m_nodeConfig->storageType());
+    bcos::storage::TransactionalStorageInterface::Ptr storage = nullptr;
+    bcos::storage::TransactionalStorageInterface::Ptr schedulerStorage = nullptr;
+    if (boost::iequals(m_nodeConfig->storageType(), "RocksDB"))
+    {
+        // if the storage security is enable
+        if (true == m_nodeConfig->storageSecurityEnable())
+        {
+            const std::string& dataKeyString = m_nodeConfig->storageSecurityDataKey();
+
+            bytes dataKey(dataKeyString.size(), 0);
+            memcpy(dataKey.data(), dataKeyString.data(), dataKeyString.size());
+
+            if (false == m_nodeConfig->p2pSmSsl())
+            {
+                storage = StorageInitializer::build(storagePath,
+                    bcos::security::StorageEncDecHelper::getEncryptHandler(dataKey),
+                    bcos::security::StorageEncDecHelper::getDecryptHandler(dataKey));
+            }
+            else
+            {
+                storage = StorageInitializer::build(storagePath,
+                    bcos::security::StorageEncDecHelper::getEncryptHandlerSM(dataKey),
+                    bcos::security::StorageEncDecHelper::getDecryptHandlerSM(dataKey));
+            }
+        }
+        else
+            storage = StorageInitializer::build(storagePath);
+
+        schedulerStorage = storage;
+    }
+    else if (boost::iequals(m_nodeConfig->storageType(), "TiKV"))
+    {
+        storage = StorageInitializer::build(m_nodeConfig->pdAddrs());
+        schedulerStorage = StorageInitializer::build(m_nodeConfig->pdAddrs());
+    }
+    else
+    {
+        throw std::runtime_error("storage type not support");
+    }
 
     bcos::protocol::ExecutionMessageFactory::Ptr executionMessageFactory = nullptr;
     if (_nodeArchType == bcos::protocol::NodeArchitectureType::MAX)
