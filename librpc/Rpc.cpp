@@ -50,6 +50,7 @@ using namespace dev::initializer;
 
 static const int64_t maxTransactionGasLimit = 0x7fffffffffffffff;
 static const int64_t gasPrice = 1;
+static const int64_t peersParamLimit = 10;
 
 std::map<int, std::string> dev::rpc::RPCMsg{{RPCExceptionType::Success, "Success"},
     {RPCExceptionType::GroupID, "GroupID does not exist"},
@@ -2332,7 +2333,7 @@ bool Rpc::checkParamsForPeers(const Json::Value& _params,
     if (_params.empty())
     {
         _response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
-        _response["message"] = "erasePeer failed for empty host list, expect at least one peer";
+        _response["message"] = "failed for empty host list, expect at least one peer";
         return false;
     }
 
@@ -2370,6 +2371,12 @@ bool Rpc::checkParamsForPeers(const Json::Value& _params,
             return false;
         }
         pos++;
+    }
+    if ( _endpoints.size() >= peersParamLimit )
+    {
+        _response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
+        _response["message"] = "refused for to many param peers. Limit: " + std::to_string(peersParamLimit);
+        return false;
     }
     return true;
 }
