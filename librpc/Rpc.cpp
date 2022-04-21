@@ -2236,7 +2236,7 @@ Json::Value Rpc::addPeers(const Json::Value& _hostPorts)
         if (service()->addPeers(endpoints, resp))
         {
             response["code"] = LedgerManagementStatusCode::SUCCESS;
-            response["message"] = "add peers successfully";
+            response["message"] = "add peers :" + resp;
             return response;
         }
         else
@@ -2299,7 +2299,7 @@ Json::Value Rpc::erasePeers(const Json::Value& _hostPorts)
         if (service()->erasePeers(endpoints, resp))
         {
             response["code"] = LedgerManagementStatusCode::SUCCESS;
-            response["message"] = "erase peers successfully";
+            response["message"] = "erase peers :" + resp;
             return response;
         }
         else

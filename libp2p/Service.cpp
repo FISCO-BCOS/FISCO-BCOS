@@ -44,7 +44,7 @@ using namespace dev::network;
 using namespace dev::stat;
 
 static const uint32_t CHECK_INTERVEL = 10000;
-static const uint32_t MAX_NODES_LIMIT = 300;
+static const uint32_t MAX_NODES_LIMIT = 100;
 
 Service::Service()
   : m_topics(std::make_shared<std::set<std::string>>()),
@@ -1140,9 +1140,16 @@ bool Service::addPeers(
     std::vector<dev::network::NodeIPEndpoint> const& endpoints, std::string& response)
 {
     auto nodes = staticNodes();
+    auto rec = nodes.size();
     for (auto& endpoint : endpoints)
     {
         nodes.insert(std::make_pair(endpoint, NodeID()));
+    }
+    if (nodes.size() == rec)
+    {
+        SERVICE_LOG(INFO) << LOG_DESC("no peers need to add");
+        response = "no peers need to add";
+        return true;
     }
     if (nodes.size() > MAX_NODES_LIMIT)
     {
@@ -1154,13 +1161,21 @@ bool Service::addPeers(
     setStaticNodes(nodes);
     SERVICE_LOG(INFO) << LOG_DESC("add peers to the running node successfully!");
     SERVICE_LOG(INFO) << LOG_DESC("try to update the configfile now");
-    return updatePeersToIni(nodes, response);
+    try
+    {
+        return updatePeersToIni(nodes, response);
+    }
+    catch (std::exception& e)
+    {
+        throw e;
+    }
 }
 
 bool Service::erasePeers(
     std::vector<dev::network::NodeIPEndpoint> const& endpoints, std::string& response)
 {
     auto nodes = staticNodes();
+    auto rec = nodes.size();
     for (auto& endpoint : endpoints)
     {
         auto it = nodes.find(endpoint);
@@ -1169,10 +1184,23 @@ bool Service::erasePeers(
             nodes.erase(it);
         }
     }
+    if (nodes.size() == rec)
+    {
+        SERVICE_LOG(INFO) << LOG_DESC("no peers can be erased");
+        response = "no peers can be erased";
+        return true;
+    }
     setStaticNodes(nodes);
     SERVICE_LOG(INFO) << LOG_DESC("erase peers to the running node successfully!");
     SERVICE_LOG(INFO) << LOG_DESC("try to update the configfile now");
-    return updatePeersToIni(nodes, response);
+    try
+    {
+        return updatePeersToIni(nodes, response);
+    }
+    catch (std::exception& e)
+    {
+        throw e;
+    }
 }
 
 bool Service::updatePeersToIni(
@@ -1196,7 +1224,6 @@ bool Service::updatePeersToIni(
     boost::regex expNode("node\\.([0-9])+=(\\S)+:([0-9])+");
     boost::regex expComment("[\\s]*;.*");
     bool tmpDataUsed{false};
-    unsigned long _behindp2p = 0;
     RecursiveGuard l(x_fileOperation);
 
     std::ifstream configFile(confDir);
@@ -1220,14 +1247,12 @@ bool Service::updatePeersToIni(
             else if (boost::regex_match(line, expComment) || !boost::regex_search(line, expNode))
             {
                 fileData += (lastLineEmpty ? "\n" : "") + line + "\n";
-                // try to locate the pos that ought to print nodes' information
-                if (line.npos != line.find("; nodes to connect"))
+                // only '[p2p]' is ahead of the line
+                if (line.find("[p2p]") == 0)
                 {
                     fileData += tmpdata;
                     tmpDataUsed = true;
                 }
-                if (line.find("[p2p]") == 0)
-                    _behindp2p = fileData.size();
                 lastLineEmpty = false;
             }
             else
@@ -1237,22 +1262,13 @@ bool Service::updatePeersToIni(
         }
         configFile.close();
     }
-    // if not find '; nodes to connect' locate the tmpdate behind '[p2p]'
+    // if not find '[p2p]' section
     if (!tmpDataUsed)
     {
-        if (_behindp2p)
-        {
-            fileData.insert(_behindp2p, tmpdata);
-            SERVICE_LOG(INFO) << LOG_DESC(
-                "peers' information will be insert behind '[p2p]' section");
-        }
-        else
-        {
-            SERVICE_LOG(WARNING) << LOG_DESC("fail to insert peers' data into config file")
-                                 << LOG_KV("path", confDir);
-            response = "fail to insert peers' data into config file";
-            return false;
-        }
+        SERVICE_LOG(WARNING) << LOG_DESC("fail to insert peers' data into config file")
+                             << LOG_KV("path", confDir);
+        response = "fail to insert peers' data into config file";
+        return false;
     }
 
     std::ofstream outfile(newDir);
@@ -1271,29 +1287,16 @@ bool Service::updatePeersToIni(
         SERVICE_LOG(INFO) << LOG_DESC("try to output data to config file");
     }
     // make sure the output all right
-    std::ifstream newConffile(newDir);
-    if (!newConffile.is_open())
+    boost::filesystem::path p(newDir);
+    if (fileData.size() == boost::filesystem::file_size(p))
     {
-        SERVICE_LOG(WARNING) << LOG_DESC("fail to reopen the tmp config file")
-                             << LOG_KV("path", confDir);
-        response = "fail to check the tmp config file";
-        return false;
+        SERVICE_LOG(INFO) << LOG_DESC("output data to config file successfully");
     }
     else
     {
-        newConffile.seekg(0, std::ios::end);
-        size_t len = newConffile.tellg();
-        newConffile.close();
-        if (fileData.size() == len)
-        {
-            SERVICE_LOG(INFO) << LOG_DESC("output data to config file successfully");
-        }
-        else
-        {
-            SERVICE_LOG(WARNING) << LOG_DESC("fail to output data to config file as expected");
-            response = "fail to output data to config file as expected";
-            return false;
-        }
+        SERVICE_LOG(WARNING) << LOG_DESC("fail to output data to config file as expected");
+        response = "fail to output data to config file as expected";
+        return false;
     }
 
     if (0 != std::rename(newDir.c_str(), confDir.c_str()))
@@ -1304,5 +1307,6 @@ bool Service::updatePeersToIni(
         return false;
     }
     SERVICE_LOG(INFO) << LOG_DESC("update config file successfully") << LOG_KV("path", confDir);
+    response = "update config file successfully";
     return true;
 }
