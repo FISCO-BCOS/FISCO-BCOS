@@ -60,7 +60,7 @@ public:
 
     /**
      * @brief: construct Gateway
-     * @param _configPath: config.ini path
+     * @param _configPath: config.ini paths
      * @return void
      */
     Gateway::Ptr buildGateway(const std::string& _configPath, bool _airVersion,

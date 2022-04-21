@@ -25,6 +25,7 @@
 #pragma once
 #include "boost/filesystem.hpp"
 #include <bcos-framework/interfaces/storage/StorageInterface.h>
+#include <bcos-security/bcos-security/StorageEncDecHelper.h>
 #include <bcos-storage/src/RocksDBStorage.h>
 #include <bcos-storage/src/TiKVStorage.h>
 #include <rocksdb/write_batch.h>
