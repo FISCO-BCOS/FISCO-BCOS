@@ -55,6 +55,7 @@ TransactionStatus MemoryStorage::submitTransaction(
     try
     {
         auto tx = m_config->txFactory()->createTransaction(ref(*_txData), false);
+        tx->setImportTime(utcTime());
         auto result = submitTransaction(tx, _txSubmitCallback);
         if (result != TransactionStatus::None)
         {
@@ -168,7 +169,6 @@ TransactionStatus MemoryStorage::verifyAndSubmitTransaction(
     result = m_config->txValidator()->verify(_tx);
     if (result == TransactionStatus::None)
     {
-        _tx->setImportTime(utcTime());
         if (_txSubmitCallback)
         {
             _tx->setSubmitCallback(_txSubmitCallback);

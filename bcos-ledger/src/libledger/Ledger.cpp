@@ -983,8 +983,6 @@ Error::Ptr Ledger::checkEntryValid(Error::UniquePtr&& error,
     {
         std::stringstream ss;
         ss << "Entry: " << key << " does not exists!";
-        LEDGER_LOG(ERROR) << ss.str();
-
         return BCOS_ERROR_PTR(LedgerError::GetStorageError, ss.str());
     }
 
