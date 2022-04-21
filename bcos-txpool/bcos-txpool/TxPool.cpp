@@ -39,6 +39,7 @@ void TxPool::start()
         return;
     }
     m_transactionSync->start();
+    m_txpoolStorage->start();
     m_running = true;
     TXPOOL_LOG(INFO) << LOG_DESC("Start the txpool.");
 }

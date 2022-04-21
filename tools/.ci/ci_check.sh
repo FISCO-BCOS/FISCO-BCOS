@@ -14,6 +14,12 @@ LOG_INFO() {
     echo -e "\033[32m ${content}\033[0m"
 }
 
+stop_node()
+{
+    cd ${current_path}
+    LOG_INFO "exit_node >>>>>>> stop all nodes <<<<<<<<<<<"
+    bash nodes/127.0.0.1/stop_all.sh
+}
 exit_node()
 {
     cd ${current_path}
@@ -26,27 +32,29 @@ exit_node()
         cat nodes/127.0.0.1/${node}/nohup.out
         LOG_ERROR "exit_node ########### print nohup info for ${node} finish ###########"
     done
-    LOG_INFO "exit_node >>>>>>> stop all nodes <<<<<<<<<<<"
-    bash nodes/127.0.0.1/stop_all.sh
+    stop_node
     LOG_ERROR "exit_node ######### exit for ${1}"
     exit 1
 }
 
 init() 
 {
+    sm_option="${1}"
     cd ${current_path}
     echo " ==> fisco-bcos version: "
     ${fisco_bcos_path} -v
-    bash ${build_chain_path} -l "127.0.0.1:4" -e ${fisco_bcos_path}
+    bash ${build_chain_path} -l "127.0.0.1:4" -e ${fisco_bcos_path} "${sm_option}"
     cd nodes/127.0.0.1 && bash start_all.sh
 }
 
 check_consensus()
 {
     cd ${current_path}/nodes/127.0.0.1
+    LOG_INFO "=== wait for the node to init, waitTime: 20s ====="
+    sleep 20
+    LOG_INFO "=== wait for the node to init finish ====="
     for node in ${node_list}
     do
-        sleep 5
         LOG_INFO "check_consensus for ${node}"
         result=$(cat ${node}/log/* |grep -i reachN)
         if [[ -z "${result}" ]];
@@ -61,7 +69,7 @@ check_consensus()
     done
 }
 
-config_console()
+download_console()
 {
     cd ${current_path}
     LOG_INFO "Download console ..."
@@ -69,8 +77,20 @@ config_console()
     LOG_INFO "Download console success, branch: ${console_branch}"
     LOG_INFO "Build and Config console ..."
     bash gradlew build -x test && cd dist
+}
+
+config_console()
+{
+    cd ${current_path}/console/dist
+    use_sm="${1}"
     cp -r ${current_path}/nodes/127.0.0.1/sdk/* conf/
     cp conf/config-example.toml conf/config.toml
+    local sed_cmd="sed -i"
+    if [ "$(uname)" == "Darwin" ];then
+        sed_cmd="sed -i .bkp"
+    fi
+    use_sm_str="useSMCrypto = \"${use_sm}\""
+    ${sed_cmd} "s/useSMCrypto = \"false\"/${use_sm_str}/g" conf/config.toml
     LOG_INFO "Build and Config console success ..."
 }
 
@@ -109,9 +129,35 @@ check_sync()
     fi
     LOG_INFO "check sync success..."
 }
+
+clear_node()
+{
+    cd ${current_path}
+    bash nodes/127.0.0.1/stop_all.sh
+    rm -rf nodes
+}
+
 txs_num=10
-init
+# non-sm test
+LOG_INFO "======== check non-sm case ========"
+init ""
 check_consensus
-config_console
+download_console
+config_console "false"
 send_transactions ${txs_num}
 check_sync ${txs_num}
+LOG_INFO "======== check non-sm success ========"
+
+LOG_INFO "======== clear node after non-sm test ========"
+clear_node
+LOG_INFO "======== clear node after non-sm test success ========"
+
+# sm test
+LOG_INFO "======== check sm case ========"
+init "-s"
+check_consensus
+config_console "true"
+send_transactions ${txs_num}
+check_sync ${txs_num}
+stop_node
+LOG_INFO "======== check sm case success ========"

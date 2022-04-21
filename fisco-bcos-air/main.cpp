@@ -54,7 +54,10 @@ int main(int argc, const char* argv[])
     }
     catch (std::exception const& e)
     {
-        std::cerr << "Init failed, error:" << boost::diagnostic_information(e) << std::endl;
+        bcos::initializer::printVersion();
+        std::cout << "[" << bcos::getCurrentDateTime() << "] ";
+        std::cerr << "start fisco-bcos failed, error:" << boost::diagnostic_information(e)
+                  << std::endl;
         return -1;
     }
     bcos::initializer::printVersion();

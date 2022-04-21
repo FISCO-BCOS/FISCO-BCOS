@@ -296,7 +296,7 @@ public:
     void setConsensusNodeList(ConsensusNodeList& _consensusNodeList) override
     {
         ConsensusConfig::setConsensusNodeList(_consensusNodeList);
-        if (!m_nodeUpdated)
+        if (!m_consensusNodeListUpdated)
         {
             return;
         }

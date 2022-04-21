@@ -517,7 +517,7 @@ for dir in \${dirs[*]}
 do
     if [[ -f "\${dirpath}/\${dir}/config.ini" && -f "\${dirpath}/\${dir}/start.sh" ]];then
         echo "try to start \${dir}"
-        bash \${dirpath}/\${dir}/start.sh
+        bash \${dirpath}/\${dir}/start.sh &
     fi
 done
 wait
@@ -745,9 +745,14 @@ generate_common_ini() {
     pd_addrs=
 
 [txpool]
+    ; size of the txpool, default is 15000
     limit=15000
+    ; txs notification threads num, default is 2
     notify_worker_num=2
+    ; txs verification threads num, default is the number of CPU cores
     ;verify_worker_num=2
+    ; txs expiration time, in seconds, default is 10 minutes
+    txs_expiration_time = 600
 [log]
     enable=true
     log_path=./log
