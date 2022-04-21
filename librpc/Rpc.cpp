@@ -2224,6 +2224,7 @@ Json::Value Rpc::addPeers(const Json::Value& _hostPorts)
     try
     {
         Json::Value response;
+        std::string resp;
         RPC_LOG(INFO) << LOG_BADGE("addPeers") << LOG_KV("request", _hostPorts);
         std::vector<dev::network::NodeIPEndpoint> endpoints;
         // deal with the param
@@ -2231,7 +2232,7 @@ Json::Value Rpc::addPeers(const Json::Value& _hostPorts)
         {
             return response;
         }
-        if (service()->addPeers(endpoints))
+        if (service()->addPeers(endpoints, resp))
         {
             response["code"] = LedgerManagementStatusCode::SUCCESS;
             response["message"] = "add peers successfully";
@@ -2240,7 +2241,7 @@ Json::Value Rpc::addPeers(const Json::Value& _hostPorts)
         else
         {
             response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
-            response["message"] = "add peers failed during updating configfile";
+            response["message"] = resp;
             return response;
         }
     }
@@ -2285,6 +2286,7 @@ Json::Value Rpc::erasePeers(const Json::Value& _hostPorts)
     try
     {
         Json::Value response;
+        std::string resp;
         RPC_LOG(INFO) << LOG_BADGE("erasePeers") << LOG_KV("request", _hostPorts);
 
         std::vector<dev::network::NodeIPEndpoint> endpoints;
@@ -2293,7 +2295,7 @@ Json::Value Rpc::erasePeers(const Json::Value& _hostPorts)
         {
             return response;
         }
-        if (service()->erasePeers(endpoints))
+        if (service()->erasePeers(endpoints, resp))
         {
             response["code"] = LedgerManagementStatusCode::SUCCESS;
             response["message"] = "erase peers successfully";
@@ -2302,7 +2304,7 @@ Json::Value Rpc::erasePeers(const Json::Value& _hostPorts)
         else
         {
             response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
-            response["message"] = "erase peers fails during updating configfile";
+            response["message"] = resp;
             return response;
         }
     }
