@@ -707,24 +707,26 @@ void BlockExecutive::batchBlockCommit(std::function<void(Error::UniquePtr)> call
 
         executor::ParallelTransactionExecutorInterface::TwoPCParams executorParams;
         executorParams.number = number();
-        tbb::parallel_for_each(m_scheduler->m_executorManager->begin(),
-            m_scheduler->m_executorManager->end(), [&](auto const& executorIt) {
-                executorIt->commit(executorParams, [status](bcos::Error::Ptr&& error) {
-                    if (error)
-                    {
-                        SCHEDULER_LOG(ERROR)
-                            << "Commit executor error!" << boost::diagnostic_information(*error);
-                        ++status->failed;
-                    }
-                    else
-                    {
-                        ++status->success;
-                        SCHEDULER_LOG(DEBUG)
-                            << "Commit executor success, success: " << status->success;
-                    }
-                    status->checkAndCommit(*status);
-                });
+        // tbb::parallel_for_each(
+        //     *(m_scheduler->m_executorManager), [&](auto const& executorIt) {
+        for (auto executorIt : *(m_scheduler->m_executorManager))
+        {
+            executorIt->commit(executorParams, [status](bcos::Error::Ptr&& error) {
+                if (error)
+                {
+                    SCHEDULER_LOG(ERROR)
+                        << "Commit executor error!" << boost::diagnostic_information(*error);
+                    ++status->failed;
+                }
+                else
+                {
+                    ++status->success;
+                    SCHEDULER_LOG(DEBUG) << "Commit executor success, success: " << status->success;
+                }
+                status->checkAndCommit(*status);
             });
+        }
+        // });
     });
 }
 
@@ -927,8 +929,8 @@ void BlockExecutive::startBatch(std::function<void(Error::UniquePtr)> callback)
             SCHEDULER_LOG(TRACE) << "Send back, " << contextID << " | " << seq << " | "
                                  << message->transactionHash() << LOG_KV("to", message->to());
 
-            // Note: the executiveMessage for synced block should not setTransactionHash to avoid of
-            // duplicated txs-fetching
+            // Note: the executiveMessage for synced block should not setTransactionHash to
+            // avoid of duplicated txs-fetching
             if (message->transactionHash() != h256(0))
             {
                 message->setType(protocol::ExecutionMessage::TXHASH);

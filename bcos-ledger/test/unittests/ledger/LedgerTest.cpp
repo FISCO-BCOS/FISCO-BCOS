@@ -168,7 +168,7 @@ public:
     {
         std::promise<bool> fakeBlockPromise;
         auto future = fakeBlockPromise.get_future();
-        m_ledger->asyncGetBlockHashByNumber(0, [=, &fakeBlockPromise](Error::Ptr, HashType _hash) {
+        m_ledger->asyncGetBlockHashByNumber(0, [=, &fakeBlockPromise, this](Error::Ptr, HashType _hash) {
             m_fakeBlocks = fakeBlocks(
                 m_blockFactory->cryptoSuite(), m_blockFactory, 1, 1, _number, _hash.hex());
             fakeBlockPromise.set_value(true);
@@ -180,7 +180,7 @@ public:
     {
         std::promise<bool> fakeBlockPromise;
         auto future = fakeBlockPromise.get_future();
-        m_ledger->asyncGetBlockHashByNumber(0, [=, &fakeBlockPromise](Error::Ptr, HashType _hash) {
+        m_ledger->asyncGetBlockHashByNumber(0, [=, &fakeBlockPromise, this](Error::Ptr, HashType _hash) {
             m_fakeBlocks = fakeEmptyBlocks(
                 m_blockFactory->cryptoSuite(), m_blockFactory, _number, _hash.hex());
             fakeBlockPromise.set_value(true);
@@ -722,7 +722,7 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
     std::promise<bool> p1;
     auto f1 = p1.get_future();
     m_ledger->asyncGetBatchTxsByHashList(hashList, true,
-        [=, &p1](Error::Ptr _error, protocol::TransactionsPtr _txList,
+        [=, &p1, this](Error::Ptr _error, protocol::TransactionsPtr _txList,
             std::shared_ptr<std::map<std::string, MerkleProofPtr>> _proof) {
             BOOST_CHECK_EQUAL(_error, nullptr);
             BOOST_CHECK(_txList != nullptr);
@@ -735,7 +735,7 @@ BOOST_AUTO_TEST_CASE(getTransactionByHash)
     std::promise<bool> p2;
     auto f2 = p2.get_future();
     m_ledger->asyncGetBatchTxsByHashList(fullHashList, true,
-        [=, &p2](Error::Ptr _error, protocol::TransactionsPtr _txList,
+        [=, &p2, this](Error::Ptr _error, protocol::TransactionsPtr _txList,
             std::shared_ptr<std::map<std::string, MerkleProofPtr>> _proof) {
             BOOST_CHECK_EQUAL(_error, nullptr);
             BOOST_CHECK(_txList != nullptr);

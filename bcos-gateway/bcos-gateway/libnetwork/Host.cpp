@@ -58,7 +58,7 @@ void Host::startAccept(boost::system::error_code boost_error)
         /// define callback after accept connections
         m_asioInterface->asyncAccept(
             socket,
-            [=](boost::system::error_code ec) {
+            [=, this](boost::system::error_code ec) {
                 /// get the endpoint information of remote client after accept the
                 /// connections
                 auto endpoint = socket->remoteEndpoint();
@@ -416,7 +416,7 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
     /// if async connect timeout, close the socket directly
     auto connect_timer = std::make_shared<boost::asio::deadline_timer>(
         *(m_asioInterface->ioService()), boost::posix_time::milliseconds(m_connectTimeThre));
-    connect_timer->async_wait([=](const boost::system::error_code& error) {
+    connect_timer->async_wait([=, this](const boost::system::error_code& error) {
         /// return when cancel has been called
         if (error == boost::asio::error::operation_aborted)
         {
@@ -439,7 +439,7 @@ void Host::asyncConnect(NodeIPEndpoint const& _nodeIPEndpoint,
         }
     });
     /// callback async connect
-    m_asioInterface->asyncResolveConnect(socket, [=](boost::system::error_code const& ec) {
+    m_asioInterface->asyncResolveConnect(socket, [=, this](boost::system::error_code const& ec) {
         if (ec)
         {
             HOST_LOG(ERROR) << LOG_DESC("TCP Connection refused by node")

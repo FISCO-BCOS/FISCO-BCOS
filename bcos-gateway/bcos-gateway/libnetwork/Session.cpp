@@ -544,7 +544,7 @@ void Session::onTimeout(const boost::system::error_code& error, uint32_t seq)
     ResponseCallback::Ptr callbackPtr = getCallbackBySeq(seq);
     if (!callbackPtr)
         return;
-    server->threadPool()->enqueue([=]() {
+    server->threadPool()->enqueue([=, this]() {
         NetworkException e(P2PExceptionType::NetworkTimeout, "NetworkTimeout");
         callbackPtr->callback(e, Message::Ptr());
         removeSeqCallback(seq);

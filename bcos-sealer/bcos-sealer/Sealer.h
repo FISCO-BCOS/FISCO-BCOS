@@ -35,7 +35,7 @@ public:
       : Worker("Sealer", 0), m_sealerConfig(_sealerConfig)
     {
         m_sealingManager = std::make_shared<SealingManager>(_sealerConfig);
-        m_sealingManager->onReady([=]() { this->noteGenerateProposal(); });
+        m_sealingManager->onReady([=, this]() { this->noteGenerateProposal(); });
     }
     virtual ~Sealer() {}
 

@@ -124,7 +124,7 @@ void FrontService::start()
             }
         });
 
-    m_frontServiceThread = std::make_shared<std::thread>([=]() {
+    m_frontServiceThread = std::make_shared<std::thread>([=, this]() {
         while (m_run)
         {
             try

@@ -17,7 +17,7 @@ BOOST_AUTO_TEST_CASE(testCalcHash)
 {
     bcos::tool::BinaryMerkleTrie trie;
 
-    size_t count = 1000;
+    size_t count = 100000;
     std::vector<bcos::h256> hashes;
     hashes.reserve(count);
 
@@ -26,8 +26,9 @@ BOOST_AUTO_TEST_CASE(testCalcHash)
         hashes.emplace_back(i);
     }
 
-    std::vector<bcos::h256> result;
-    trie.parseRange<bcos::crypto::openssl::SHA3_256Hashing>(hashes, std::back_inserter(result));
+    std::vector<bcos::h256> result(100000);
+    std::vector<std::string> resultFake;
+    trie.parseRange<bcos::crypto::openssl::SHA3_256Hashing>(hashes, result);
     // trie.parseRange<std::string>(hashes, std::back_inserter(result));
 }
 
