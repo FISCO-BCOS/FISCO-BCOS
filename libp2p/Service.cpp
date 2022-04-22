@@ -1140,12 +1140,12 @@ bool Service::addPeers(
     std::vector<dev::network::NodeIPEndpoint> const& endpoints, std::string& response)
 {
     auto nodes = staticNodes();
-    auto rec = nodes.size();
+    auto siz = nodes.size();
     for (auto& endpoint : endpoints)
     {
         nodes.insert(std::make_pair(endpoint, NodeID()));
     }
-    if (nodes.size() == rec)
+    if (nodes.size() == siz)
     {
         SERVICE_LOG(INFO) << LOG_DESC("no peers need to add");
         response = "no peers need to add";
@@ -1161,21 +1161,14 @@ bool Service::addPeers(
     setStaticNodes(nodes);
     SERVICE_LOG(INFO) << LOG_DESC("add peers to the running node successfully!");
     SERVICE_LOG(INFO) << LOG_DESC("try to update the configfile now");
-    try
-    {
-        return updatePeersToIni(nodes, response);
-    }
-    catch (std::exception& e)
-    {
-        throw e;
-    }
+    return updatePeersToIni(nodes, response);
 }
 
 bool Service::erasePeers(
     std::vector<dev::network::NodeIPEndpoint> const& endpoints, std::string& response)
 {
     auto nodes = staticNodes();
-    auto rec = nodes.size();
+    auto siz = nodes.size();
     for (auto& endpoint : endpoints)
     {
         auto it = nodes.find(endpoint);
@@ -1184,7 +1177,7 @@ bool Service::erasePeers(
             nodes.erase(it);
         }
     }
-    if (nodes.size() == rec)
+    if (nodes.size() == siz)
     {
         SERVICE_LOG(INFO) << LOG_DESC("no peers can be erased");
         response = "no peers can be erased";
@@ -1193,24 +1186,17 @@ bool Service::erasePeers(
     setStaticNodes(nodes);
     SERVICE_LOG(INFO) << LOG_DESC("erase peers to the running node successfully!");
     SERVICE_LOG(INFO) << LOG_DESC("try to update the configfile now");
-    try
-    {
-        return updatePeersToIni(nodes, response);
-    }
-    catch (std::exception& e)
-    {
-        throw e;
-    }
+    return updatePeersToIni(nodes, response);
 }
 
 bool Service::updatePeersToIni(
     std::map<dev::network::NodeIPEndpoint, NodeID> const& nodes, std::string& response)
 {
-    std::string tmpdata = "";
+    std::string tmpData = "";
     int _count = 0;
     for (auto it = nodes.begin(); it != nodes.end(); it++)
     {
-        tmpdata += "    node." + std::to_string(_count) + (it->first.m_ipv6 ? "=[" : "=") +
+        tmpData += "    node." + std::to_string(_count) + (it->first.m_ipv6 ? "=[" : "=") +
                    it->first.m_host + (it->first.m_ipv6 ? "]:" : ":") +
                    std::to_string(it->first.m_port) + "\n";
         _count++;
@@ -1218,7 +1204,7 @@ bool Service::updatePeersToIni(
 
     // output the nodes to the file "config.ini"
     auto confDir = g_BCOSConfig.iniDir();
-    auto newDir = confDir + ".new";
+    auto tmpConfDir = confDir + ".tmp";
     std::string fileData;
     std::string line;
     boost::regex expNode("node\\.([0-9])+=(\\S)+:([0-9])+");
@@ -1250,7 +1236,7 @@ bool Service::updatePeersToIni(
                 // only '[p2p]' is ahead of the line
                 if (line.find("[p2p]") == 0)
                 {
-                    fileData += tmpdata;
+                    fileData += tmpData;
                     tmpDataUsed = true;
                 }
                 lastLineEmpty = false;
@@ -1271,24 +1257,24 @@ bool Service::updatePeersToIni(
         return false;
     }
 
-    std::ofstream outfile(newDir);
-    if (!outfile.is_open())
+    std::ofstream tmpConfigFile(tmpConfDir);
+    if (!tmpConfigFile.is_open())
     {
         SERVICE_LOG(WARNING) << LOG_DESC("fail to create a tmp config file")
-                             << LOG_KV("path", newDir);
+                             << LOG_KV("path", tmpConfDir);
         response = "fail to create a tmp config file";
         return false;
     }
     else
     {
-        outfile.flush();
-        outfile << fileData;
-        outfile.close();
+        tmpConfigFile.flush();
+        tmpConfigFile << fileData;
+        tmpConfigFile.close();
         SERVICE_LOG(INFO) << LOG_DESC("try to output data to config file");
     }
     // make sure the output all right
-    boost::filesystem::path p(newDir);
-    if (fileData.size() == boost::filesystem::file_size(p))
+    boost::filesystem::path tmpConfigPath(tmpConfDir);
+    if (fileData.size() == boost::filesystem::file_size(tmpConfigPath))
     {
         SERVICE_LOG(INFO) << LOG_DESC("output data to config file successfully");
     }
@@ -1299,10 +1285,10 @@ bool Service::updatePeersToIni(
         return false;
     }
 
-    if (0 != std::rename(newDir.c_str(), confDir.c_str()))
+    if (0 != std::rename(tmpConfDir.c_str(), confDir.c_str()))
     {
-        SERVICE_LOG(WARNING) << LOG_DESC("fail to rename the config file") << LOG_KV("path", newDir)
-                             << LOG_KV("error", std::strerror(errno));
+        SERVICE_LOG(WARNING) << LOG_DESC("fail to rename the config file")
+                             << LOG_KV("path", tmpConfDir) << LOG_KV("error", std::strerror(errno));
         response = "fail to rename the config file";
         return false;
     }
