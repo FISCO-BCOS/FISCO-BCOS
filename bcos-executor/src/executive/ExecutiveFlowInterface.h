@@ -49,19 +49,23 @@ protected:
     template <class S, class F>
     void asyncTo(S self, F f)
     {
-        // f();  // TODO: fix enqueue bugs below
+        // f();
         getPool()->enqueue([self = std::move(self), f = std::move(f)]() { f(); });
     }
 
 private:
-    static std::shared_ptr<bcos::ThreadPool> m_pool;
     std::shared_ptr<bcos::ThreadPool> getPool()
     {
         static std::shared_ptr<bcos::ThreadPool> m_pool;
         if (!m_pool)
         {
-            m_pool = std::make_shared<bcos::ThreadPool>(
-                "ExecutiveFlow", std::thread::hardware_concurrency());
+            static bcos::RecursiveMutex x_pool;
+            bcos::RecursiveGuard lock(x_pool);
+            if (!m_pool)
+            {
+                m_pool = std::make_shared<bcos::ThreadPool>(
+                    "ExecutiveFlow", std::thread::hardware_concurrency());
+            }
         }
         return m_pool;
     }
