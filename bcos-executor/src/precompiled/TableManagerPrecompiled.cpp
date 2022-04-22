@@ -35,24 +35,15 @@ using namespace bcos::precompiled;
 using namespace bcos::protocol;
 
 const char* const TABLE_METHOD_CREATE = "createTable(string,(string,string[]))";
+const char* const TABLE_METHOD_CREATE_KV = "createKVTable(string,string,string)";
 const char* const TABLE_METHOD_APPEND = "appendColumns(string,string[])";
-// const char* const TABLE_METHOD_SELECT = "select(string,((string,string,uint8)[]))";
-// const char* const TABLE_METHOD_INSERT = "insert(string,((string,string)[]))";
-// const char* const TABLE_METHOD_UPDATE =
-// "update(string,((string,string)[]),((string,string,uint8)[]))"; const char* const
-// TABLE_METHOD_REMOVE = "remove(string,((string,string,uint8)[]))"; const char* const
-// TABLE_METHOD_DESC = "desc(string)";
 
 TableManagerPrecompiled::TableManagerPrecompiled(crypto::Hash::Ptr _hashImpl)
   : Precompiled(_hashImpl)
 {
     name2Selector[TABLE_METHOD_CREATE] = getFuncSelector(TABLE_METHOD_CREATE, _hashImpl);
     name2Selector[TABLE_METHOD_APPEND] = getFuncSelector(TABLE_METHOD_APPEND, _hashImpl);
-    //    name2Selector[TABLE_METHOD_SELECT] = getFuncSelector(TABLE_METHOD_SELECT, _hashImpl);
-    //    name2Selector[TABLE_METHOD_INSERT] = getFuncSelector(TABLE_METHOD_INSERT, _hashImpl);
-    //    name2Selector[TABLE_METHOD_UPDATE] = getFuncSelector(TABLE_METHOD_UPDATE, _hashImpl);
-    //    name2Selector[TABLE_METHOD_REMOVE] = getFuncSelector(TABLE_METHOD_REMOVE, _hashImpl);
-    //    name2Selector[TABLE_METHOD_DESC] = getFuncSelector(TABLE_METHOD_DESC, _hashImpl);
+    name2Selector[TABLE_METHOD_CREATE_KV] = getFuncSelector(TABLE_METHOD_CREATE_KV, _hashImpl);
 }
 
 std::shared_ptr<PrecompiledExecResult> TableManagerPrecompiled::call(
@@ -67,12 +58,17 @@ std::shared_ptr<PrecompiledExecResult> TableManagerPrecompiled::call(
 
     if (func == name2Selector[TABLE_METHOD_CREATE])
     {
-        // createTable(string,string,string)
+        /// createTable(string,string,string)
         createTable(_executive, data, callResult, gasPricer, _origin, gasLeft);
+    }
+    else if (func == name2Selector[TABLE_METHOD_CREATE_KV])
+    {
+        /// createKVTable(string,string,string)
+        createKVTable(_executive, data, callResult, gasPricer, _origin, gasLeft);
     }
     else if (func == name2Selector[TABLE_METHOD_APPEND])
     {
-        // appendColumns(string,string[])
+        /// appendColumns(string,string[])
         appendColumns(_executive, data, callResult, gasPricer);
     }
     else
@@ -115,8 +111,9 @@ void TableManagerPrecompiled::createTable(
     }
     std::string tableManagerAddress =
         blockContext->isWasm() ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS;
+    std::string tableAddress = blockContext->isWasm() ? TABLE_NAME : TABLE_ADDRESS;
     /// TODO: add codeString
-    std::string codeString;
+    std::string codeString = getDynamicPrecompiledCodeString(tableAddress, newTableName);
     auto input = codec->encode(newTableName, codeString);
     auto response = externalRequest(_executive, ref(input), _origin, tableManagerAddress,
         blockContext->isWasm() ? newTableName : "", false, true,
@@ -131,8 +128,58 @@ void TableManagerPrecompiled::createTable(
         BOOST_THROW_EXCEPTION(PrecompiledError("Create table error."));
     }
 
-    /// FIXME: use key-page interface to create actual table storage
+    // here is a trick to set table key field info
+    valueField = keyField + "," + valueField;
     _executive->storage().createTable(getActualTableName(newTableName), valueField);
+    getErrorCodeOut(callResult->mutableExecResult(), CODE_SUCCESS, *codec);
+}
+
+void TableManagerPrecompiled::createKVTable(
+    const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
+    const std::shared_ptr<PrecompiledExecResult>& callResult, const PrecompiledGas::Ptr& gasPricer,
+    const std::string& _origin, int64_t gasLeft)
+{
+    /// createKVTable(string,string,string)
+    std::string tableName, key, value;
+    auto blockContext = _executive->blockContext().lock();
+    auto codec =
+        std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
+    codec->decode(data, tableName, key, value);
+    precompiled::checkCreateTableParam(tableName, key, value);
+    PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TableManagerPrecompiled")
+                           << LOG_KV("createKVTable", tableName) << LOG_KV("keyField", key)
+                           << LOG_KV("valueField", value);
+    gasPricer->appendOperation(InterfaceOpcode::CreateTable);
+    // /tables + tableName
+    auto newTableName = getTableName(tableName);
+    auto table = _executive->storage().openTable(newTableName);
+    if (table)
+    {
+        // table already exist
+        getErrorCodeOut(callResult->mutableExecResult(), CODE_TABLE_NAME_ALREADY_EXIST, *codec);
+        return;
+    }
+    std::string tableManagerAddress =
+        blockContext->isWasm() ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS;
+    std::string kvTableAddress = blockContext->isWasm() ? KV_TABLE_NAME : KV_TABLE_ADDRESS;
+    std::string codeString = getDynamicPrecompiledCodeString(kvTableAddress, newTableName);
+
+    auto input = codec->encode(newTableName, codeString);
+    auto response = externalRequest(_executive, ref(input), _origin, tableManagerAddress,
+        blockContext->isWasm() ? newTableName : "", false, true,
+        gasLeft - gasPricer->calTotalGas());
+
+    if (response->status != (int32_t)TransactionStatus::None)
+    {
+        PRECOMPILED_LOG(ERROR) << LOG_BADGE("TableManagerPrecompiled")
+                               << LOG_DESC("create kv table error")
+                               << LOG_KV("tableName", newTableName) << LOG_KV("valueField", value);
+        BOOST_THROW_EXCEPTION(PrecompiledError("Create table error."));
+    }
+
+    // here is a trick to set table key field info
+    value = key + "," + value;
+    _executive->storage().createTable(getActualTableName(newTableName), value);
     getErrorCodeOut(callResult->mutableExecResult(), CODE_SUCCESS, *codec);
 }
 
@@ -147,6 +194,7 @@ void TableManagerPrecompiled::appendColumns(
     auto codec =
         std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
     codec->decode(data, tableName, newColumns);
+    tableName = getActualTableName(getTableName(tableName));
 
     PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TableManagerPrecompiled") << LOG_DESC("appendColumns")
                            << LOG_KV("tableName", tableName)
@@ -160,13 +208,17 @@ void TableManagerPrecompiled::appendColumns(
         getErrorCodeOut(callResult->mutableExecResult(), CODE_TABLE_NOT_EXIST, *codec);
         return;
     }
-    std::set<std::string> fields(
-        table->tableInfo()->fields().begin(), table->tableInfo()->fields().end());
+    // here is a trick to avoid key field dup, s_table save user table (key,fields)
+    auto originFields = table->tableInfo()->fields();
+    std::set<std::string> checkDupFields(originFields.begin() + 1, originFields.end());
     // 2. check columns not duplicate
     bool insertSuccess = true;
     for (const auto& col : newColumns)
     {
-        std::tie(std::ignore, insertSuccess) = fields.insert(col);
+        checkLengthValidate(
+            col, USER_TABLE_FIELD_NAME_MAX_LENGTH, CODE_TABLE_FIELD_LENGTH_OVERFLOW);
+        std::tie(std::ignore, insertSuccess) = checkDupFields.insert(col);
+        originFields.emplace_back(col);
         if (!insertSuccess)
             break;
     }
@@ -179,19 +231,13 @@ void TableManagerPrecompiled::appendColumns(
         return;
     }
     // 3. append new columns
-    /// 3.1 use key page interface
-    /// 3.2 manually change sys_table
-    auto sysTable = _executive->storage().openTable(StorageInterface::SYS_TABLES);
-    // FIXME: here is a trick to update table value fields
-    auto sysEntry = sysTable->getRow(tableName);
-    if (!sysEntry)
-    {
-        getErrorCodeOut(callResult->mutableExecResult(), CODE_TABLE_CREATE_ERROR, *codec);
-        return;
-    }
-    auto newField = boost::join(fields, ",");
-    sysEntry->setField(0, newField);
-    sysTable->setRow(tableName, sysEntry.value());
+    // manually change sys_table
+    // here is a trick to update table value fields
+    Entry newEntry;
+    auto newField = boost::join(originFields, ",");
+
+    newEntry.importFields({std::move(newField)});
+    _executive->storage().setRow(StorageInterface::SYS_TABLES, tableName, std::move(newEntry));
     gasPricer->appendOperation(InterfaceOpcode::Set, 1);
     getErrorCodeOut(callResult->mutableExecResult(), CODE_SUCCESS, *codec);
 }

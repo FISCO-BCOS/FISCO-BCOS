@@ -33,7 +33,7 @@ pragma experimental ABIEncoderV2;
     // 数量限制
     struct Limit {
         uint offset;
-        // count limit 1000
+        // count limit max is 1000
         uint count;
     }
 
@@ -41,6 +41,8 @@ pragma experimental ABIEncoderV2;
 abstract contract TableManager {
     // 创建表，传入TableInfo ——是否只允许用sdk建表，链外建表
     function createTable(string memory path, TableInfo memory tableInfo) public virtual returns (int);
+
+    function createKVTable(string memory tableName, string memory key, string memory valueFields) public returns (int);
 
     // 变更表字段
     // 原本TableInfo的字段必须全部存在，只能新增字段，不能删除字段，新增的字段默认值为空
@@ -58,9 +60,6 @@ abstract contract Table {
     // 按条件批量查询entry，condition为空则查询所有记录
     function select(Condition[] memory conditions, Limit memory limit) public virtual view returns (Entry[] memory);
 
-    // 按condition查询符合条件的entry数——count是否要独立存在
-    function count(Condition[] memory conditions, Limit memory limit) public virtual view returns (int);
-
     // 插入数据
     function insert(Entry memory entry) public virtual returns (int);
 
@@ -76,8 +75,8 @@ abstract contract Table {
     function remove(Condition[] memory conditions, Limit memory limit) public virtual returns (int);
 }
 
-contract KVTable {
-    function createTable(string memory tableName, string memory key, string memory valueFields) public returns (int256){}
-    function get(string memory tableName, string memory key) public view returns (bool, Entry memory){}
-    function set(string memory tableName,string memory key, Entry memory) public returns (int256){}
+abstract contract KVTable {
+    function desc() public virtual returns (TableInfo memory);
+    function get(string memory key) public view returns (bool, Entry memory);
+    function set(string memory key, string memory value) public returns (int);
 }

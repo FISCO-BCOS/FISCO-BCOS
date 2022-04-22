@@ -13,7 +13,7 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @file KVTableFactoryPrecompiled.h
+ * @file KVTablePrecompiled.h
  * @author: kyonRay
  * @date 2021-05-27
  */
@@ -33,30 +33,29 @@ contract KVTableFactory {
 }
 #endif
 
-class KVTableFactoryPrecompiled : public bcos::precompiled::Precompiled
+class KVTablePrecompiled : public bcos::precompiled::Precompiled
 {
 public:
-    using Ptr = std::shared_ptr<KVTableFactoryPrecompiled>;
-    KVTableFactoryPrecompiled(crypto::Hash::Ptr _hashImpl);
-    virtual ~KVTableFactoryPrecompiled(){};
+    using Ptr = std::shared_ptr<KVTablePrecompiled>;
+    KVTablePrecompiled(crypto::Hash::Ptr _hashImpl);
+    virtual ~KVTablePrecompiled(){};
 
     std::shared_ptr<PrecompiledExecResult> call(
         std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
         const std::string& _origin, const std::string& _sender, int64_t gasLeft) override;
 
 private:
-    void createTable(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
-        const PrecompiledGas::Ptr& gasPricer, const std::string& _origin,
-        const std::string& _sender, int64_t gasLeft);
-    void get(const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
+    void get(const std::string& tableName,
+        const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
         const std::shared_ptr<PrecompiledExecResult>& callResult,
         const PrecompiledGas::Ptr& gasPricer);
-    void set(const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
+    void set(const std::string& tableName,
+        const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
         const std::shared_ptr<PrecompiledExecResult>& callResult,
         const PrecompiledGas::Ptr& gasPricer);
-    void desc(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-        bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
+    void desc(const std::string& tableName,
+        const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        const std::shared_ptr<PrecompiledExecResult>& callResult,
         const PrecompiledGas::Ptr& gasPricer);
 };
 

@@ -54,9 +54,9 @@ struct CallParameters
     bool create = false;          // by request, is creation
     bool internalCreate = false;  // by internal precompiled request, is creation
     /**
-     * Internal precompiled request, this option is used to modify
-     * contract table, which address scheduled by 'to', by a certain
-     * precompiled
+     * Internal precompiled contract request, this option is used to
+     * modify contract table, which address scheduled by 'to', by a
+     * certain precompiled contract
      */
     bool internalCall = false;
 };

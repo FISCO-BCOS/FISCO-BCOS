@@ -20,7 +20,6 @@
 
 #include "DagTransferPrecompiled.h"
 #include "../PrecompiledResult.h"
-#include "../TableFactoryPrecompiled.h"
 #include "../Utilities.h"
 #include "bcos-codec/wrapper/CodecWrapper.h"
 #include <bcos-framework/interfaces/ledger/LedgerTypeDef.h>

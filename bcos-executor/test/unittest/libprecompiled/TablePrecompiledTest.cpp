@@ -43,7 +43,7 @@ public:
 
     ExecutionMessage::UniquePtr creatTable(protocol::BlockNumber _number,
         const std::string& tableName, const std::string& key, const std::vector<std::string>& value,
-        int _errorCode = 0, bool errorInTableManager = false)
+        const std::string& callAddress, int _errorCode = 0, bool errorInTableManager = false)
     {
         nextBlock(_number);
         TableInfoTuple tableInfoTuple = std::make_tuple(key, value);
@@ -86,7 +86,7 @@ public:
         }
 
         // set new address
-        result2->setTo(tableTestAddress);
+        result2->setTo(callAddress);
         // external create
         result2->setSeq(1001);
 
@@ -136,6 +136,45 @@ public:
         }
         commitBlock(_number);
         return result6;
+    };
+
+    ExecutionMessage::UniquePtr appendColumns(protocol::BlockNumber _number,
+        const std::string& tableName, const std::vector<std::string>& values, int _errorCode = 0)
+    {
+        nextBlock(_number);
+        bytes in = codec->encodeWithSig("appendColumns(string,string[])", tableName, values);
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 100, 10000, "1", "1");
+        sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+        auto hash = tx->hash();
+        txpool->hash2Transaction.emplace(hash, tx);
+        auto params2 = std::make_unique<NativeExecutionMessage>();
+        params2->setTransactionHash(hash);
+        params2->setContextID(100);
+        params2->setSeq(1000);
+        params2->setDepth(0);
+        params2->setFrom(sender);
+        params2->setTo(isWasm ? TABLE_MANAGER_NAME : TABLE_MANAGER_ADDRESS);
+        params2->setOrigin(sender);
+        params2->setStaticCall(false);
+        params2->setGasAvailable(gas);
+        params2->setData(std::move(in));
+        params2->setType(NativeExecutionMessage::TXHASH);
+
+        // call precompiled
+        std::promise<ExecutionMessage::UniquePtr> executePromise2;
+        executor->executeTransaction(std::move(params2),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise2.set_value(std::move(result));
+            });
+        auto result2 = executePromise2.get_future().get();
+
+        if (_errorCode != 0)
+        {
+            BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode)));
+        }
+        commitBlock(_number);
+        return result2;
     };
 
     ExecutionMessage::UniquePtr list(
@@ -215,6 +254,40 @@ public:
         return result2;
     };
 
+    ExecutionMessage::UniquePtr desc(protocol::BlockNumber _number, const std::string& callAddress)
+    {
+        nextBlock(_number);
+        bytes in = codec->encodeWithSig("desc()");
+        auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
+        sender = boost::algorithm::hex_lower(std::string(tx->sender()));
+        auto hash = tx->hash();
+        txpool->hash2Transaction.emplace(hash, tx);
+        auto params2 = std::make_unique<NativeExecutionMessage>();
+        params2->setTransactionHash(hash);
+        params2->setContextID(1000);
+        params2->setSeq(1000);
+        params2->setDepth(0);
+        params2->setFrom(sender);
+        params2->setTo(callAddress);
+        params2->setOrigin(sender);
+        params2->setStaticCall(false);
+        params2->setGasAvailable(gas);
+        params2->setData(std::move(in));
+        params2->setType(NativeExecutionMessage::TXHASH);
+
+        std::promise<ExecutionMessage::UniquePtr> executePromise2;
+        executor->executeTransaction(std::move(params2),
+            [&](bcos::Error::UniquePtr&& error, ExecutionMessage::UniquePtr&& result) {
+                BOOST_CHECK(!error);
+                executePromise2.set_value(std::move(result));
+            });
+        auto result2 = executePromise2.get_future().get();
+
+        // call precompiled
+        commitBlock(_number);
+        return result2;
+    }
+
     std::string tableTestAddress;
     std::string sender;
 };
@@ -223,9 +296,10 @@ BOOST_FIXTURE_TEST_SUITE(precompiledTableTest, TableFactoryPrecompiledFixture)
 
 BOOST_AUTO_TEST_CASE(createTableTest)
 {
+    auto callAddress = tableTestAddress;
     BlockNumber number = 1;
     {
-        creatTable(number++, "t_test", "id", {"item_name", "item_id"});
+        creatTable(number++, "t_test", "id", {"item_name", "item_id"}, callAddress);
     }
 
     // check create
@@ -247,34 +321,92 @@ BOOST_AUTO_TEST_CASE(createTableTest)
 
     // createTable exist
     {
-        creatTable(number++, "t_test", "id", {"item_name", "item_id"},
+        creatTable(number++, "t_test", "id", {"item_name", "item_id"}, callAddress,
             CODE_TABLE_NAME_ALREADY_EXIST, true);
     }
 
     // createTable too long tableName, key and field
     std::string errorStr;
-    for (int i = 0; i <= SYS_TABLE_VALUE_FIELD_MAX_LENGTH; i++)
+    for (int i = 0; i <= SYS_TABLE_VALUE_FIELD_NAME_MAX_LENGTH; i++)
     {
         errorStr += std::to_string(1);
     }
     {
-        auto r1 = creatTable(number++, errorStr, "id", {"item_name", "item_id"}, 0, true);
+        auto r1 =
+            creatTable(number++, errorStr, "id", {"item_name", "item_id"}, callAddress, 0, true);
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
-        auto r2 = creatTable(number++, "t_test", errorStr, {"item_name", "item_id"}, 0, true);
+        auto r2 = creatTable(
+            number++, "t_test", errorStr, {"item_name", "item_id"}, callAddress, 0, true);
         BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
-        auto r3 = creatTable(number++, "t_test", "id", {errorStr}, 0, true);
+        auto r3 = creatTable(number++, "t_test", "id", {errorStr}, callAddress, 0, true);
         BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 
     // createTable error key and field
     std::string errorStr2 = "/test&";
     {
-        auto r1 = creatTable(number++, errorStr2, "id", {"item_name", "item_id"}, 0, true);
+        auto r1 =
+            creatTable(number++, errorStr2, "id", {"item_name", "item_id"}, callAddress, 0, true);
         BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
-        auto r2 = creatTable(number++, "t_test", errorStr2, {"item_name", "item_id"}, 0, true);
+        auto r2 = creatTable(
+            number++, "t_test", errorStr2, {"item_name", "item_id"}, callAddress, 0, true);
         BOOST_CHECK(r2->status() == (int32_t)TransactionStatus::PrecompiledError);
-        auto r3 = creatTable(number++, "t_test", "id", {errorStr2}, 0, true);
+        auto r3 = creatTable(number++, "t_test", "id", {errorStr2}, callAddress, 0, true);
         BOOST_CHECK(r3->status() == (int32_t)TransactionStatus::PrecompiledError);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(appendColumnsTest)
+{
+    auto callAddress = tableTestAddress;
+    BlockNumber number = 1;
+    {
+        creatTable(number++, "t_test", "id", {"item_name", "item_id"}, callAddress);
+    }
+
+    // check create
+    {
+        auto response1 = readlink(number++, "/tables/t_test");
+        Address address;
+        codec->decode(response1->data(), address);
+        BOOST_CHECK(address.hex() == tableTestAddress);
+        auto response2 = list(number++, "/tables");
+        s256 ret;
+        std::vector<BfsTuple> bfsInfos;
+        codec->decode(response2->data(), ret, bfsInfos);
+        BOOST_CHECK(ret == 0);
+        BOOST_CHECK(bfsInfos.size() == 1);
+        auto fileInfo = bfsInfos[0];
+        BOOST_CHECK(std::get<0>(fileInfo) == "t_test");
+        BOOST_CHECK(std::get<1>(fileInfo) == FS_TYPE_LINK);
+    }
+    // simple append
+    {
+        auto r1 = appendColumns(number++, "t_test", {"v1", "v2"});
+        auto r2 = desc(number++, callAddress);
+        TableInfoTuple tableInfo = {"id", {"item_name", "item_id", "v1", "v2"}};
+        BOOST_CHECK(r2->data().toBytes() == codec->encode(tableInfo));
+    }
+    // append not exist table
+    {
+        auto r1 = appendColumns(number++, "t_test2", {"v1", "v2"});
+        BOOST_CHECK(r1->data().toBytes() == codec->encode((int)CODE_TABLE_NOT_EXIST));
+    }
+    // append duplicate field
+    {
+        auto r1 = appendColumns(number++, "t_test", {"v1", "v3"});
+        BOOST_CHECK(r1->data().toBytes() == codec->encode((int)CODE_TABLE_DUPLICATE_FIELD));
+    }
+
+    // append too long field
+    {
+        std::string longField = "0";
+        for (int j = 0; j < USER_TABLE_FIELD_NAME_MAX_LENGTH; ++j)
+        {
+            longField += "0";
+        }
+        auto r1 = appendColumns(number++, "t_test", {"v3", longField});
+        BOOST_CHECK(r1->status() == (int32_t)TransactionStatus::PrecompiledError);
     }
 }
 
