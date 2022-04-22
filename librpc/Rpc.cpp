@@ -50,6 +50,7 @@ using namespace dev::initializer;
 
 static const int64_t maxTransactionGasLimit = 0x7fffffffffffffff;
 static const int64_t gasPrice = 1;
+static const int64_t peersParamLimit = 10;
 
 std::map<int, std::string> dev::rpc::RPCMsg{{RPCExceptionType::Success, "Success"},
     {RPCExceptionType::GroupID, "GroupID does not exist"},
@@ -2224,6 +2225,7 @@ Json::Value Rpc::addPeers(const Json::Value& _hostPorts)
     try
     {
         Json::Value response;
+        std::string resp;
         RPC_LOG(INFO) << LOG_BADGE("addPeers") << LOG_KV("request", _hostPorts);
         std::vector<dev::network::NodeIPEndpoint> endpoints;
         // deal with the param
@@ -2231,16 +2233,16 @@ Json::Value Rpc::addPeers(const Json::Value& _hostPorts)
         {
             return response;
         }
-        if (service()->addPeers(endpoints))
+        if (service()->addPeers(endpoints, resp))
         {
             response["code"] = LedgerManagementStatusCode::SUCCESS;
-            response["message"] = "add peers successfully";
+            response["message"] = "add peers :" + resp;
             return response;
         }
         else
         {
             response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
-            response["message"] = "add peers failed during outputing to configfile";
+            response["message"] = resp;
             return response;
         }
     }
@@ -2285,6 +2287,7 @@ Json::Value Rpc::erasePeers(const Json::Value& _hostPorts)
     try
     {
         Json::Value response;
+        std::string resp;
         RPC_LOG(INFO) << LOG_BADGE("erasePeers") << LOG_KV("request", _hostPorts);
 
         std::vector<dev::network::NodeIPEndpoint> endpoints;
@@ -2293,16 +2296,16 @@ Json::Value Rpc::erasePeers(const Json::Value& _hostPorts)
         {
             return response;
         }
-        if (service()->erasePeers(endpoints))
+        if (service()->erasePeers(endpoints, resp))
         {
             response["code"] = LedgerManagementStatusCode::SUCCESS;
-            response["message"] = "erase peers successfully";
+            response["message"] = "erase peers :" + resp;
             return response;
         }
         else
         {
             response["code"] = LedgerManagementStatusCode::INTERNAL_ERROR;
-            response["message"] = "erase peers fails during outputing to configfile";
+            response["message"] = resp;
             return response;
         }
     }
@@ -2330,7 +2333,7 @@ bool Rpc::checkParamsForPeers(const Json::Value& _params,
     if (_params.empty())
     {
         _response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
-        _response["message"] = "erasePeer failed for empty host list, expect at least one peer";
+        _response["message"] = "failed for empty host list, expect at least one peer";
         return false;
     }
 
@@ -2368,6 +2371,13 @@ bool Rpc::checkParamsForPeers(const Json::Value& _params,
             return false;
         }
         pos++;
+    }
+    if (_endpoints.size() >= peersParamLimit)
+    {
+        _response["code"] = LedgerManagementStatusCode::INVALID_PARAMS;
+        _response["message"] =
+            "refused for to many param peers. Limit: " + std::to_string(peersParamLimit);
+        return false;
     }
     return true;
 }
