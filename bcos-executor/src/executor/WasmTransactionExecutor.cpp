@@ -30,9 +30,10 @@
 #include "../precompiled/ConsensusPrecompiled.h"
 #include "../precompiled/CryptoPrecompiled.h"
 #include "../precompiled/FileSystemPrecompiled.h"
-#include "../precompiled/KVTableFactoryPrecompiled.h"
+#include "../precompiled/KVTablePrecompiled.h"
 #include "../precompiled/SystemConfigPrecompiled.h"
 #include "../precompiled/TableManagerPrecompiled.h"
+#include "../precompiled/TablePrecompiled.h"
 #include "../precompiled/extension/AuthManagerPrecompiled.h"
 #include "../precompiled/extension/ContractAuthMgrPrecompiled.h"
 #include "../precompiled/extension/DagTransferPrecompiled.h"
@@ -79,14 +80,15 @@ void WasmTransactionExecutor::initPrecompiled()
     auto consensusPrecompiled = std::make_shared<precompiled::ConsensusPrecompiled>(m_hashImpl);
     auto tableManagerPrecompiled =
         std::make_shared<precompiled::TableManagerPrecompiled>(m_hashImpl);
-    auto kvTableFactoryPrecompiled =
-        std::make_shared<precompiled::KVTableFactoryPrecompiled>(m_hashImpl);
+    auto kvTablePrecompiled = std::make_shared<precompiled::KVTablePrecompiled>(m_hashImpl);
+    auto tablePrecompiled = std::make_shared<precompiled::TablePrecompiled>(m_hashImpl);
 
     // in WASM
     m_constantPrecompiled->insert({SYS_CONFIG_NAME, sysConfig});
     m_constantPrecompiled->insert({CONSENSUS_NAME, consensusPrecompiled});
     m_constantPrecompiled->insert({TABLE_MANAGER_NAME, tableManagerPrecompiled});
-    m_constantPrecompiled->insert({KV_TABLE_NAME, kvTableFactoryPrecompiled});
+    m_constantPrecompiled->insert({KV_TABLE_NAME, kvTablePrecompiled});
+    m_constantPrecompiled->insert({TABLE_NAME, tablePrecompiled});
     m_constantPrecompiled->insert(
         {DAG_TRANSFER_NAME, std::make_shared<precompiled::DagTransferPrecompiled>(m_hashImpl)});
     m_constantPrecompiled->insert({CRYPTO_NAME, std::make_shared<CryptoPrecompiled>(m_hashImpl)});
@@ -98,7 +100,6 @@ void WasmTransactionExecutor::initPrecompiled()
             {AUTH_MANAGER_NAME, std::make_shared<precompiled::AuthManagerPrecompiled>(m_hashImpl)});
         m_constantPrecompiled->insert({AUTH_CONTRACT_MGR_ADDRESS,
             std::make_shared<precompiled::ContractAuthMgrPrecompiled>(m_hashImpl)});
-
     }
     set<string> builtIn = {CRYPTO_NAME};
     m_builtInPrecompiled = make_shared<set<string>>(builtIn);

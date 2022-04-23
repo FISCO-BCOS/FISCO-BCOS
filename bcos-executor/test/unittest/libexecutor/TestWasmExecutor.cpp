@@ -69,7 +69,7 @@ struct WasmExecutorFixture
 {
     WasmExecutorFixture()
     {
-        //                boost::log::core::get()->set_logging_enabled(false);
+        // boost::log::core::get()->set_logging_enabled(false);
         hashImpl = std::make_shared<Keccak256>();
         assert(hashImpl);
         auto signatureImpl = std::make_shared<Secp256k1Crypto>();

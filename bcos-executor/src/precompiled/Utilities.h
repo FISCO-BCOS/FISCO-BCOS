@@ -36,14 +36,6 @@ namespace bcos
 {
 namespace precompiled
 {
-using ConditionTuple = std::tuple<std::vector<std::tuple<std::string, std::string, u256>>>;
-using EntryTuple = std::tuple<std::vector<std::tuple<std::string, std::string>>>;
-using BfsTuple = std::tuple<std::string, std::string, std::vector<std::string>>;
-
-static const std::string USER_TABLE_PREFIX = "/tables/";
-static const std::string USER_APPS_PREFIX = "/apps/";
-static const std::string USER_SYS_PREFIX = "/sys/";
-
 
 inline void getErrorCodeOut(bytes& out, int const& result, const CodecWrapper& _codec)
 {
@@ -58,12 +50,19 @@ inline void getErrorCodeOut(bytes& out, int const& result, const CodecWrapper& _
 inline std::string getTableName(const std::string_view& _tableName)
 {
     auto tableName = (_tableName[0] == '/') ? _tableName.substr(1) : _tableName;
-    return USER_TABLE_PREFIX + std::string(tableName);
+    return executor::USER_TABLE_PREFIX + std::string(tableName);
 }
 
 inline std::string getActualTableName(const std::string& _tableName)
 {
     return "u_" + _tableName;
+}
+
+inline std::string getDynamicPrecompiledCodeString(
+    const std::string& _address, const std::string& _params)
+{
+    /// Prefix , address , params
+    return boost::join(std::vector<std::string>({PRECOMPILED_CODE_FIELD, _address, _params}), ",");
 }
 
 inline std::string trimHexPrefix(const std::string& _hex)
@@ -96,7 +95,6 @@ inline bytesConstRef getParamData(bytesConstRef _param)
     return _param.getCroppedData(4);
 }
 
-uint64_t getEntriesCapacity(precompiled::EntriesPtr _entries);
 
 bool checkPathValid(std::string const& _absolutePath);
 

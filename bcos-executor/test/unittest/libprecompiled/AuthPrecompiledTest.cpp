@@ -127,8 +127,8 @@ public:
         commitBlock(2);
     }
 
-    ExecutionMessage::UniquePtr deployHelloInAuthCheck(
-        std::string newAddress, BlockNumber _number, Address _address = Address(), bool _noAuth = false)
+    ExecutionMessage::UniquePtr deployHelloInAuthCheck(std::string newAddress, BlockNumber _number,
+        Address _address = Address(), bool _noAuth = false)
     {
         bytes input;
         boost::algorithm::unhex(helloBin, std::back_inserter(input));
@@ -306,7 +306,7 @@ public:
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise4;
         executor->executeTransaction(
             std::move(result3), [&](bcos::Error::UniquePtr&& error,
-                                   bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise4.set_value(std::move(result));
             });
@@ -1313,7 +1313,7 @@ BOOST_AUTO_TEST_CASE(testDeployBlackList)
         // can still deploy
         {
             auto result = deployHelloInAuthCheck(
-                "1234654b49838bd3e9466c85a4cc3428c9601235", _number++, admin,false);
+                "1234654b49838bd3e9466c85a4cc3428c9601235", _number++, admin, false);
             BOOST_CHECK(
                 result->newEVMContractAddress() == "1234654b49838bd3e9466c85a4cc3428c9601235");
         }
@@ -1335,7 +1335,7 @@ BOOST_AUTO_TEST_CASE(testDeployBlackList)
         // deploy permission denied
         {
             auto result = deployHelloInAuthCheck(
-                "1234654b49838bd3e9466c85a4cc3428c9605431", _number++, admin,true);
+                "1234654b49838bd3e9466c85a4cc3428c9605431", _number++, admin, true);
             BOOST_CHECK(result->status() == (int32_t)TransactionStatus::PermissionDenied);
             BOOST_CHECK(result->type() == ExecutionMessage::REVERT);
         }
@@ -1352,7 +1352,7 @@ BOOST_AUTO_TEST_CASE(testDeployBlackList)
         // deploy ok
         {
             auto result = deployHelloInAuthCheck(
-                "1234654b49838bd3e9466c85a4cc3428c9605430", _number++, admin,false);
+                "1234654b49838bd3e9466c85a4cc3428c9605430", _number++, admin, false);
             BOOST_CHECK(
                 result->newEVMContractAddress() == "1234654b49838bd3e9466c85a4cc3428c9605430");
         }
@@ -1443,7 +1443,7 @@ BOOST_AUTO_TEST_CASE(testDeployCommitteeManagerAndCall)
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise3;
         executor->executeTransaction(
             std::move(result2), [&](bcos::Error::UniquePtr&& error,
-                                   bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise3.set_value(std::move(result));
             });
@@ -1464,7 +1464,7 @@ BOOST_AUTO_TEST_CASE(testDeployCommitteeManagerAndCall)
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise4;
         executor->executeTransaction(
             std::move(result3), [&](bcos::Error::UniquePtr&& error,
-                                   bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise4.set_value(std::move(result));
             });
@@ -1476,7 +1476,7 @@ BOOST_AUTO_TEST_CASE(testDeployCommitteeManagerAndCall)
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise5;
         executor->executeTransaction(
             std::move(result4), [&](bcos::Error::UniquePtr&& error,
-                                   bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise5.set_value(std::move(result));
             });
@@ -1578,7 +1578,7 @@ BOOST_AUTO_TEST_CASE(testDeployCommitteeManagerAndCall)
         std::promise<bcos::protocol::ExecutionMessage::UniquePtr> executePromise11;
         executor->executeTransaction(
             std::move(result10), [&](bcos::Error::UniquePtr&& error,
-                                    bcos::protocol::ExecutionMessage::UniquePtr&& result) {
+                                     bcos::protocol::ExecutionMessage::UniquePtr&& result) {
                 BOOST_CHECK(!error);
                 executePromise11.set_value(std::move(result));
             });
