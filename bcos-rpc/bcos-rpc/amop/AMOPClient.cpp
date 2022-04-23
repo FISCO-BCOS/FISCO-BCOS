@@ -294,6 +294,7 @@ void AMOPClient::asyncNotifyAMOPMessage(std::string const& _topic, bytesConstRef
     {
         auto responseMessage =
             std::dynamic_pointer_cast<WsMessage>(m_wsMessageFactory->buildMessage());
+        responseMessage->setSeq(m_wsMessageFactory->newSeq());
         responseMessage->setStatus(bcos::protocol::CommonError::NotFoundClientByTopicDispatchMsg);
         responseMessage->setPacketType(AMOPClientMessageType::AMOP_RESPONSE);
         auto buffer = std::make_shared<bcos::bytes>();
@@ -308,6 +309,7 @@ void AMOPClient::asyncNotifyAMOPMessage(std::string const& _topic, bytesConstRef
     AMOP_CLIENT_LOG(DEBUG) << LOG_BADGE("asyncNotifyAMOPMessage") << LOG_KV("topic", _topic)
                            << LOG_KV("choosedSession", clientSession->endPoint());
     auto requestMsg = std::dynamic_pointer_cast<WsMessage>(m_wsMessageFactory->buildMessage());
+    requestMsg->setSeq(m_wsMessageFactory->newSeq());
     requestMsg->setPacketType(AMOPClientMessageType::AMOP_REQUEST);
     auto requestPayLoad = std::make_shared<bytes>(_amopRequestData.begin(), _amopRequestData.end());
     requestMsg->setPayload(requestPayLoad);
@@ -320,6 +322,7 @@ void AMOPClient::asyncNotifyAMOPBroadcastMessage(std::string const& _topic, byte
     AMOP_CLIENT_LOG(DEBUG) << LOG_DESC("asyncNotifyAMOPBroadcastMessage")
                            << LOG_KV("topic", _topic);
     auto requestMsg = std::dynamic_pointer_cast<WsMessage>(m_wsMessageFactory->buildMessage());
+    requestMsg->setSeq(m_wsMessageFactory->newSeq());
     requestMsg->setPacketType(AMOPClientMessageType::AMOP_BROADCAST);
     requestMsg->setPayload(std::make_shared<bytes>(_data.begin(), _data.end()));
     broadcastAMOPMessage(_topic, requestMsg);
