@@ -19,6 +19,7 @@
  */
 #include "bcos-codec/abi/ContractABICodec.h"
 #include "bcos-codec/abi/ContractABIType.h"
+#include "bcos-codec/wrapper/CodecWrapper.h"
 #include <bcos-crypto/hash/Keccak256.h>
 #include <bcos-crypto/hash/SM3.h>
 #include <bcos-utilities/testutils/TestPromptFixture.h>
@@ -245,6 +246,156 @@ BOOST_AUTO_TEST_CASE(ContractABIType_s256)
     s256 s = 1000;
     r = *toHexString(ct.serialise(s));
     BOOST_CHECK_EQUAL(r, "00000000000000000000000000000000000000000000000000000000000003e8");
+}
+
+BOOST_AUTO_TEST_CASE(ContractABIType_integer)
+{
+    auto hashImpl = std::make_shared<Keccak256>();
+    auto codec = CodecWrapper(hashImpl, false);
+
+    // int8
+    {
+        int8_t i8 = INT8_MAX;
+        auto b = codec.encode(i8);
+        std::string r = *toHexString(b);
+        BOOST_CHECK_EQUAL(r, "000000000000000000000000000000000000000000000000000000000000007f");
+        int8_t ri8;
+        codec.decode(ref(b), ri8);
+        BOOST_CHECK(i8 == ri8);
+
+        i8 = INT8_MIN;
+        b = codec.encode(i8);
+        r = *toHexString(b);
+        BOOST_CHECK_EQUAL(r, "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80");
+        codec.decode(ref(b), ri8);
+        BOOST_CHECK(i8 == ri8);
+    }
+
+    // int16
+    {
+        int16_t i16 = INT16_MAX;
+        auto b = codec.encode(i16);
+        std::string r = *toHexString(b);
+        BOOST_CHECK_EQUAL(r, "0000000000000000000000000000000000000000000000000000000000007fff");
+        int16_t ri16;
+        codec.decode(ref(b), ri16);
+        BOOST_CHECK(i16 == ri16);
+
+        i16 = INT16_MIN;
+        b = codec.encode(i16);
+        r = *toHexString(b);
+        BOOST_CHECK_EQUAL(r, "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff8000");
+        codec.decode(ref(b), ri16);
+        BOOST_CHECK(i16 == ri16);
+    }
+
+    // int32
+    {
+        int32_t i32 = INT32_MAX;
+        auto b = codec.encode(i32);
+        std::string r = *toHexString(b);
+        BOOST_CHECK_EQUAL(r, "000000000000000000000000000000000000000000000000000000007fffffff");
+        int32_t ri32;
+        codec.decode(ref(b), ri32);
+        BOOST_CHECK(i32 == ri32);
+
+        i32 = INT32_MIN;
+        b = codec.encode(i32);
+        r = *toHexString(b);
+        BOOST_CHECK_EQUAL(r, "ffffffffffffffffffffffffffffffffffffffffffffffffffffffff80000000");
+        codec.decode(ref(b), ri32);
+        BOOST_CHECK(i32 == ri32);
+    }
+    
+    // int64
+    {
+        int64_t i64 = INT64_MAX;
+        auto b = codec.encode(i64);
+        std::string r = *toHexString(b);
+        BOOST_CHECK_EQUAL(r, "0000000000000000000000000000000000000000000000007fffffffffffffff");
+        int64_t ri64;
+        codec.decode(ref(b), ri64);
+        BOOST_CHECK(i64 == ri64);
+        
+        i64 = INT64_MIN;
+        b = codec.encode(i64);
+        r = *toHexString(b);
+        BOOST_CHECK_EQUAL(r, "ffffffffffffffffffffffffffffffffffffffffffffffff8000000000000000");
+        codec.decode(ref(b), ri64);
+        BOOST_CHECK(i64 == ri64);
+    }
+    
+    // uint8
+    {
+        uint8_t u8 = UINT8_MAX;
+        auto b = codec.encode(u8);
+        std::string r = *toHexString(b);
+        BOOST_CHECK_EQUAL(r, "00000000000000000000000000000000000000000000000000000000000000ff");
+        uint8_t ru8;
+        codec.decode(ref(b), ru8);
+        BOOST_CHECK(u8 == ru8);
+        
+        u8 = 0;
+        b = codec.encode(u8);
+        r = *toHexString(b);
+        BOOST_CHECK_EQUAL(r, "0000000000000000000000000000000000000000000000000000000000000000");
+        codec.decode(ref(b), ru8);
+        BOOST_CHECK(u8 == ru8);
+    }
+
+    // uint16
+    {
+        uint16_t u16 = UINT16_MAX;
+        auto b = codec.encode(u16);
+        std::string r = *toHexString(b);
+        BOOST_CHECK_EQUAL(r, "000000000000000000000000000000000000000000000000000000000000ffff");
+        uint16_t ru16;
+        codec.decode(ref(b), ru16);
+        BOOST_CHECK(u16 == ru16);
+
+        u16 = 0;
+        b = codec.encode(u16);
+        r = *toHexString(b);
+        BOOST_CHECK_EQUAL(r, "0000000000000000000000000000000000000000000000000000000000000000");
+        codec.decode(ref(b), ru16);
+        BOOST_CHECK(u16 == ru16);
+    }
+
+    // uint32
+    {
+        uint32_t u32 = UINT32_MAX;
+        auto b = codec.encode(u32);
+        std::string r = *toHexString(b);
+        BOOST_CHECK_EQUAL(r, "00000000000000000000000000000000000000000000000000000000ffffffff");
+        uint32_t ru32;
+        codec.decode(ref(b), ru32);
+        BOOST_CHECK(u32 == ru32);
+
+        u32 = 0;
+        b = codec.encode(u32);
+        r = *toHexString(b);
+        BOOST_CHECK_EQUAL(r, "0000000000000000000000000000000000000000000000000000000000000000");
+        codec.decode(ref(b), ru32);
+        BOOST_CHECK(u32 == ru32);
+    }
+    
+    // uint64
+    {
+        uint64_t u64 = UINT64_MAX;
+        auto b = codec.encode(u64);
+        std::string r = *toHexString(b);
+        BOOST_CHECK_EQUAL(r, "000000000000000000000000000000000000000000000000ffffffffffffffff");
+        uint64_t ru64;
+        codec.decode(ref(b), ru64);
+        BOOST_CHECK(u64 == ru64);
+        
+        u64 = 0;
+        b = codec.encode(u64);
+        r = *toHexString(b);
+        BOOST_CHECK_EQUAL(r, "0000000000000000000000000000000000000000000000000000000000000000");
+        codec.decode(ref(b), ru64);
+        BOOST_CHECK(u64 == ru64);
+    }
 }
 
 BOOST_AUTO_TEST_CASE(ContractABIType_bool)

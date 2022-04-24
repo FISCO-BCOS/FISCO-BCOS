@@ -255,15 +255,33 @@ class ContractABICodec
 public:
     explicit ContractABICodec(bcos::crypto::Hash::Ptr _hashImpl) : m_hashImpl(_hashImpl) {}
 
-    template <class T>
+    template <class T, std::enable_if_t<!std::is_integral<T>::value>>
     bytes serialise(const T& _t)
     {  // unsupport type
         (void)_t;
         static_assert(ABIElementType<T>::value, "ABI not support type.");
         return bytes{};
     }
-    // unsigned integer type int.
-    bytes serialise(const int& _in);
+
+    //    template <typename T, typename I = std::decay_t<T>,
+    //        std::enable_if_t<std::is_integral<I>::value> = true>
+    //    bytes serialise(const T& _in)
+    //    {
+    //        return serialise(s256(_in));
+    //    }
+
+    /// FIXME: use template
+    bytes serialise(const uint8_t& _in) { return serialise(u256(_in)); }
+    bytes serialise(const uint16_t& _in) { return serialise(u256(_in)); }
+    bytes serialise(const uint32_t& _in) { return serialise(u256(_in)); }
+    bytes serialise(const uint64_t& _in) { return serialise(u256(_in)); }
+
+    /// FIXME: use template
+    bytes serialise(const int8_t& _in) { return serialise(s256(_in)); }
+    bytes serialise(const int16_t& _in) { return serialise(s256(_in)); }
+    bytes serialise(const int32_t& _in) { return serialise(s256(_in)); }
+    bytes serialise(const int64_t& _in) { return serialise(s256(_in)); }
+
 
     // unsigned integer type uint256.
     bytes serialise(const u256& _in);
@@ -299,7 +317,7 @@ public:
     template <class... T>
     bytes serialise(const std::tuple<T...>& _in);
 
-    template <class T>
+    template <class T, std::enable_if_t<!std::is_integral_v<T>>>
     void deserialize(const T& _t, std::size_t _offset)
     {  // unsupport type
         (void)_t;
@@ -312,6 +330,58 @@ public:
     void deserialize(u256& _out, std::size_t _offset);
 
     void deserialize(bool& _out, std::size_t _offset);
+
+    /// FIXME: use template
+    void deserialize(int8_t& _out, std::size_t _offset)
+    {
+        s256 out;
+        deserialize(out, _offset);
+        _out = out.convert_to<int8_t>();
+    }
+    void deserialize(int16_t& _out, std::size_t _offset)
+    {
+        s256 out;
+        deserialize(out, _offset);
+        _out = out.convert_to<int16_t>();
+    }
+    void deserialize(int32_t& _out, std::size_t _offset)
+    {
+        s256 out;
+        deserialize(out, _offset);
+        _out = out.convert_to<int32_t>();
+    }
+    void deserialize(int64_t& _out, std::size_t _offset)
+    {
+        s256 out;
+        deserialize(out, _offset);
+        _out = out.convert_to<int64_t>();
+    }
+
+    /// FIXME: use template
+    void deserialize(uint8_t& _out, std::size_t _offset)
+    {
+        u256 out;
+        deserialize(out, _offset);
+        _out = out.convert_to<uint8_t>();
+    }
+    void deserialize(uint16_t& _out, std::size_t _offset)
+    {
+        u256 out;
+        deserialize(out, _offset);
+        _out = out.convert_to<uint16_t>();
+    }
+    void deserialize(uint32_t& _out, std::size_t _offset)
+    {
+        u256 out;
+        deserialize(out, _offset);
+        _out = out.convert_to<uint32_t>();
+    }
+    void deserialize(uint64_t& _out, std::size_t _offset)
+    {
+        u256 out;
+        deserialize(out, _offset);
+        _out = out.convert_to<uint64_t>();
+    }
 
     void deserialize(Address& _out, std::size_t _offset);
 
@@ -549,7 +619,8 @@ void ContractABICodec::deserialize(std::array<T, N>& _out, std::size_t _offset)
     {
         auto thisOffset = _offset;
 
-        if (ABIDynamicType<T>::value)
+        if (ABIDynamicType<
+                typename std::remove_const<typename std::remove_reference<T>::type>::type>::value)
         {  // dynamic type
             // N element offset
             u256 length;

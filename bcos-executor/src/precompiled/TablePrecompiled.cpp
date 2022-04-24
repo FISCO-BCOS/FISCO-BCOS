@@ -111,7 +111,7 @@ std::shared_ptr<PrecompiledExecResult> TablePrecompiled::call(
     }
     else if (func == name2Selector[TABLE_METHOD_REMOVE_CON])
     {
-        /// remove((uint8,string),(uint,uint))
+        /// remove((uint8,string)[],(uint,uint))
         removeByCondition(tableName, _executive, data, callResult, gasPricer);
     }
     else if (func == name2Selector[TABLE_METHOD_DESC])
@@ -133,9 +133,11 @@ void TablePrecompiled::buildKeyCondition(const std::shared_ptr<storage::Conditio
 {
     auto& offset = std::get<0>(limit);
     auto& count = std::get<1>(limit);
-    if (count > USER_TABLE_MAX_LIMIT_COUNT)
+    if (count > USER_TABLE_MAX_LIMIT_COUNT || offset > offset + count)
     {
-        BOOST_THROW_EXCEPTION(PrecompiledError("Limit count overflow."));
+        PRECOMPILED_LOG(ERROR) << LOG_DESC("") << LOG_KV("offset", offset)
+                               << LOG_KV("count", count);
+        BOOST_THROW_EXCEPTION(PrecompiledError("Limit overflow."));
     }
     for (const auto& condition : conditions)
     {
@@ -161,7 +163,7 @@ void TablePrecompiled::buildKeyCondition(const std::shared_ptr<storage::Conditio
         }
     }
 
-    keyCondition->limit(offset, count);
+    keyCondition->limit(offset, offset + count);
 }
 
 void TablePrecompiled::desc(const std::string& tableName,
@@ -200,10 +202,17 @@ void TablePrecompiled::selectByKey(const std::string& tableName,
     PRECOMPILED_LOG(DEBUG) << LOG_DESC("Table select") << LOG_KV("tableName", tableName);
 
     auto entry = _executive->storage().getRow(tableName, key);
+    if (!entry.has_value())
+    {
+        PRECOMPILED_LOG(DEBUG) << LOG_DESC("Table select not exist") << LOG_KV("key", key);
+        EntryTuple emptyEntry = {};
+        callResult->setExecResult(codec->encode(std::move(emptyEntry)));
+        return;
+    }
     auto values = entry->getObject<std::vector<std::string>>();
 
     // update the memory gas and the computation gas
-    gasPricer->updateMemUsed(1);
+    gasPricer->updateMemUsed(values.size());
     gasPricer->appendOperation(InterfaceOpcode::Select);
     PRECOMPILED_LOG(DEBUG) << LOG_DESC("Table select") << LOG_KV("key", key)
                            << LOG_KV("valueSize", values.size());
@@ -264,7 +273,7 @@ void TablePrecompiled::insert(const std::string& tableName,
     auto& values = std::get<1>(insertEntry);
 
     PRECOMPILED_LOG(DEBUG) << LOG_DESC("Table insert") << LOG_KV("tableName", tableName)
-                           << LOG_KV("key", tableName) << LOG_KV("valueSize", values.size());
+                           << LOG_KV("key", key) << LOG_KV("valueSize", values.size());
 
     // here is a trick, s_table save table info as (key,values)
     if (values.size() != table->tableInfo()->fields().size() - 1)
@@ -285,7 +294,7 @@ void TablePrecompiled::insert(const std::string& tableName,
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("INSERT")
                                << LOG_DESC("key already exist in table, please use UPDATE method")
                                << LOG_KV("key", key);
-        getErrorCodeOut(callResult->mutableExecResult(), CODE_INSERT_KEY_EXIST, *codec);
+        callResult->setExecResult(codec->encode(int32_t(CODE_INSERT_KEY_EXIST)));
         return;
     }
 
@@ -295,7 +304,7 @@ void TablePrecompiled::insert(const std::string& tableName,
     gasPricer->appendOperation(InterfaceOpcode::Insert);
     gasPricer->updateMemUsed(entry.size());
     _executive->storage().setRow(tableName, key, std::move(entry));
-    callResult->setExecResult(codec->encode(int(1)));
+    callResult->setExecResult(codec->encode(int32_t(1)));
 }
 
 void TablePrecompiled::updateByKey(const std::string& tableName,
@@ -304,7 +313,7 @@ void TablePrecompiled::updateByKey(const std::string& tableName,
 {
     /// update(string,(uint,string)[])
     std::string key;
-    std::vector<precompiled::UpdataFieldTuple> updateFields;
+    std::vector<precompiled::UpdateFieldTuple> updateFields;
     auto blockContext = _executive->blockContext().lock();
     auto codec =
         std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
@@ -318,7 +327,7 @@ void TablePrecompiled::updateByKey(const std::string& tableName,
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("UPDATE")
                                << LOG_DESC("key not exist in table, please use INSERT method")
                                << LOG_KV("notExistKey", key);
-        getErrorCodeOut(callResult->mutableExecResult(), CODE_UPDATE_KEY_NOT_EXIST, *codec);
+        callResult->setExecResult(codec->encode(int32_t(CODE_UPDATE_KEY_NOT_EXIST)));
         return;
     }
 
@@ -347,7 +356,7 @@ void TablePrecompiled::updateByKey(const std::string& tableName,
 
     gasPricer->setMemUsed(fieldsSize);
     gasPricer->appendOperation(InterfaceOpcode::Update);
-    callResult->setExecResult(codec->encode(int(1)));
+    callResult->setExecResult(codec->encode(int32_t(1)));
 }
 
 void TablePrecompiled::updateByCondition(const std::string& tableName,
@@ -357,7 +366,7 @@ void TablePrecompiled::updateByCondition(const std::string& tableName,
     /// update((uint8,string)[],(uint,uint),(uint,string)[])
     std::vector<precompiled::ConditionTuple> conditions;
     precompiled::LimitTuple limitTuple;
-    std::vector<precompiled::UpdataFieldTuple> updateFields;
+    std::vector<precompiled::UpdateFieldTuple> updateFields;
     auto blockContext = _executive->blockContext().lock();
     auto codec =
         std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
@@ -396,12 +405,14 @@ void TablePrecompiled::updateByCondition(const std::string& tableName,
             }
             values[index] = value;
         }
-        _executive->storage().setRow(tableName, key, std::move(tableEntry.value()));
+        Entry updateEntry;
+        updateEntry.setObject(std::move(values));
+        _executive->storage().setRow(tableName, key, std::move(updateEntry));
         PRECOMPILED_LOG(DEBUG) << LOG_DESC("Table update") << LOG_KV("key", key);
     }
     gasPricer->setMemUsed(tableKeyList.size() * fieldsSize);
     gasPricer->appendOperation(InterfaceOpcode::Update, tableKeyList.size());
-    callResult->setExecResult(codec->encode((int)tableKeyList.size()));
+    callResult->setExecResult(codec->encode((int32_t)tableKeyList.size()));
 }
 
 void TablePrecompiled::removeByKey(const std::string& tableName,
@@ -422,7 +433,7 @@ void TablePrecompiled::removeByKey(const std::string& tableName,
     {
         PRECOMPILED_LOG(ERROR) << LOG_BADGE("TablePrecompiled") << LOG_BADGE("REMOVE")
                                << LOG_DESC("key not exist in table") << LOG_KV("notExistKey", key);
-        getErrorCodeOut(callResult->mutableExecResult(), CODE_REMOVE_KEY_NOT_EXIST, *codec);
+        callResult->setExecResult(codec->encode(int32_t(CODE_REMOVE_KEY_NOT_EXIST)));
         return;
     }
     Entry deletedEntry;
@@ -430,13 +441,14 @@ void TablePrecompiled::removeByKey(const std::string& tableName,
     _executive->storage().setRow(tableName, key, std::move(deletedEntry));
 
     gasPricer->appendOperation(InterfaceOpcode::Remove);
-    callResult->setExecResult(codec->encode(int(1)));
+    callResult->setExecResult(codec->encode(int32_t(1)));
 }
 
 void TablePrecompiled::removeByCondition(const std::string& tableName,
     const std::shared_ptr<executor::TransactionExecutive>& _executive, bytesConstRef& data,
     const std::shared_ptr<PrecompiledExecResult>& callResult, const PrecompiledGas::Ptr& gasPricer)
 {
+    /// remove((uint8,string)[],(uint,uint))
     std::vector<precompiled::ConditionTuple> conditions;
     precompiled::LimitTuple limitTuple;
     auto blockContext = _executive->blockContext().lock();
@@ -464,5 +476,5 @@ void TablePrecompiled::removeByCondition(const std::string& tableName,
     }
     gasPricer->setMemUsed(tableKeyList.size());
     gasPricer->appendOperation(InterfaceOpcode::Remove, tableKeyList.size());
-    callResult->setExecResult(codec->encode((int)tableKeyList.size()));
+    callResult->setExecResult(codec->encode((int32_t)tableKeyList.size()));
 }

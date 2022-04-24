@@ -95,7 +95,7 @@ struct WasmExecutorFixture
                 ->data(),
             64);
 
-        codec = std::make_unique<bcos::precompiled::CodecWrapper>(hashImpl, true);
+        codec = std::make_unique<bcos::CodecWrapper>(hashImpl, true);
 
         helloWorldBin.assign(hello_world_wasm, hello_world_wasm + hello_world_wasm_len);
         helloWorldBin = codec->encode(helloWorldBin);
@@ -204,7 +204,7 @@ struct WasmExecutorFixture
 
     KeyPairInterface::Ptr keyPair;
     int64_t gas = 3000000000;
-    std::unique_ptr<bcos::precompiled::CodecWrapper> codec;
+    std::unique_ptr<bcos::CodecWrapper> codec;
 
     bytes helloWorldBin;
     std::string helloWorldAbi;

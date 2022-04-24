@@ -81,7 +81,7 @@ public:
         {
             if (_errorCode != 0)
             {
-                BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(_errorCode)));
+                BOOST_CHECK(result2->data().toBytes() == codec->encode(int32_t(_errorCode)));
             }
             commitBlock(_number);
             return result2;
@@ -440,7 +440,6 @@ BOOST_AUTO_TEST_CASE(setTest)
     boost::log::core::get()->set_logging_enabled(true);
 }
 
-
 BOOST_AUTO_TEST_CASE(setWasmTest)
 {
     init(true);
@@ -498,7 +497,6 @@ BOOST_AUTO_TEST_CASE(setWasmTest)
     }
     boost::log::core::get()->set_logging_enabled(true);
 }
-
 
 BOOST_AUTO_TEST_SUITE_END()
 }  // namespace bcos::test
