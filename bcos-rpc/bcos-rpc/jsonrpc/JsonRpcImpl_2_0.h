@@ -294,7 +294,7 @@ protected:
 
     void onRPCRequest(const std::string& _requestBody, Sender _sender) override;
 
-    virtual void handleRpcRequest(std::shared_ptr<boostssl::ws::WsMessage> _msg,
+    virtual void handleRpcRequest(std::shared_ptr<boostssl::MessageFace> _msg,
         std::shared_ptr<boostssl::ws::WsSession> _session);
 
 private:

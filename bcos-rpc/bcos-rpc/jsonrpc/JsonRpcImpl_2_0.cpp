@@ -56,23 +56,24 @@ JsonRpcImpl_2_0::JsonRpcImpl_2_0(GroupManager::Ptr _groupManager,
     initMethod();
 }
 
-void JsonRpcImpl_2_0::handleRpcRequest(std::shared_ptr<boostssl::ws::WsMessage> _msg,
-    std::shared_ptr<boostssl::ws::WsSession> _session)
+void JsonRpcImpl_2_0::handleRpcRequest(
+    std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<boostssl::ws::WsSession> _session)
 {
-    std::string req = std::string(_msg->data()->begin(), _msg->data()->end());
+    std::string req = std::string(_msg->payload()->begin(), _msg->payload()->end());
     // Note: Clean up request data to prevent taking up too much memory
     bytes emptyBuffer;
-    _msg->data()->swap(emptyBuffer);
+    _msg->payload()->swap(emptyBuffer);
+
     onRPCRequest(req, [req, _msg, _session](const std::string& _resp) {
         if (_session && _session->isConnected())
         {
             auto buffer = std::make_shared<bcos::bytes>(_resp.begin(), _resp.end());
-            _msg->setData(buffer);
+            _msg->setPayload(buffer);
             _session->asyncSendMessage(_msg);
         }
         else
         {
-            auto seq = std::string(_msg->seq()->begin(), _msg->seq()->end());
+            auto seq = _msg->seq();
             // remove the callback
             _session->getAndRemoveRespCallback(seq);
             BCOS_LOG(WARNING) << LOG_DESC("[RPC][FACTORY][buildJsonRpc]")
@@ -1320,8 +1321,7 @@ void JsonRpcImpl_2_0::gatewayInfoToJson(
 {
     auto p2pInfo = _gatewayInfo->p2pInfo();
     _response["p2pNodeID"] = p2pInfo.p2pID;
-    _response["endPoint"] =
-        p2pInfo.nodeIPEndpoint.address() + ":" + std::to_string(p2pInfo.nodeIPEndpoint.port());
+    _response["endPoint"] = p2pInfo.hostIp + ":" + p2pInfo.hostPort;
     // set the groupNodeIDInfo
     auto groupNodeIDInfo = _gatewayInfo->nodeIDInfo();
     Json::Value groupInfo(Json::arrayValue);

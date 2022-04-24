@@ -18,7 +18,7 @@
  * @date 2021-06-21
  */
 #pragma once
-#include <bcos-gateway/libnetwork/Common.h>
+
 #include <chrono>
 #include <ctime>
 #include <memory>

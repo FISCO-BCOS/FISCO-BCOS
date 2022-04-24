@@ -38,7 +38,6 @@ namespace bcos
 namespace ws
 {
 class WsSession;
-class WsMessage;
 }  // namespace ws
 
 namespace event
@@ -59,9 +58,9 @@ public:
     void executeWorker() override;
 
 public:
-    virtual void onRecvSubscribeEvent(std::shared_ptr<bcos::boostssl::ws::WsMessage> _msg,
+    virtual void onRecvSubscribeEvent(std::shared_ptr<bcos::boostssl::MessageFace> _msg,
         std::shared_ptr<bcos::boostssl::ws::WsSession> _session);
-    virtual void onRecvUnsubscribeEvent(std::shared_ptr<bcos::boostssl::ws::WsMessage> _msg,
+    virtual void onRecvUnsubscribeEvent(std::shared_ptr<bcos::boostssl::MessageFace> _msg,
         std::shared_ptr<bcos::boostssl::ws::WsSession> _session);
 
 public:
@@ -74,7 +73,7 @@ public:
      * @return bool: if _session is inactive, false will be return
      */
     bool sendResponse(std::shared_ptr<bcos::boostssl::ws::WsSession> _session,
-        std::shared_ptr<bcos::boostssl::ws::WsMessage> _msg, const std::string& _id,
+        std::shared_ptr<bcos::boostssl::MessageFace> _msg, const std::string& _id,
         int32_t _status);
 
     /**
@@ -125,11 +124,11 @@ public:
         m_groupManager = _groupManager;
     }
 
-    std::shared_ptr<bcos::boostssl::ws::WsMessageFactory> messageFactory() const
+    std::shared_ptr<bcos::boostssl::MessageFaceFactory> messageFactory() const
     {
         return m_messageFactory;
     }
-    void setMessageFactory(std::shared_ptr<bcos::boostssl::ws::WsMessageFactory> _messageFactory)
+    void setMessageFactory(std::shared_ptr<bcos::boostssl::MessageFaceFactory> _messageFactory)
     {
         m_messageFactory = _messageFactory;
     }
@@ -142,7 +141,7 @@ private:
     // match for event log compare
     std::shared_ptr<EventSubMatcher> m_matcher;
     // message factory
-    std::shared_ptr<bcos::boostssl::ws::WsMessageFactory> m_messageFactory;
+    std::shared_ptr<bcos::boostssl::MessageFaceFactory> m_messageFactory;
 
 private:
     std::shared_ptr<boostssl::ws::WsService> m_wsService;

@@ -28,6 +28,7 @@
 using namespace bcos;
 using namespace gateway;
 using namespace bcos::test;
+using namespace bcos::boostssl;
 
 BOOST_FIXTURE_TEST_SUITE(GatewayConfigTest, TestPromptFixture)
 
@@ -125,10 +126,10 @@ BOOST_AUTO_TEST_CASE(test_initConfig)
         config->initConfig(configIni);
         config->loadP2pConnectedNodes();
 
-        BOOST_CHECK_EQUAL(config->listenIP(), "127.0.0.1");
-        BOOST_CHECK_EQUAL(config->listenPort(), 12345);
-        BOOST_CHECK_EQUAL(config->smSSL(), false);
-        BOOST_CHECK_EQUAL(config->connectedNodes().size(), 3);
+        BOOST_CHECK_EQUAL(config->wsConfig()->listenIP(), "127.0.0.1");
+        BOOST_CHECK_EQUAL(config->wsConfig()->listenPort(), 12345);
+        BOOST_CHECK_EQUAL(config->wsConfig()->smSSL(), false);
+        BOOST_CHECK_EQUAL(config->wsConfig()->connectedPeers()->size(), 3);
 
         auto certConfig = config->certConfig();
         BOOST_CHECK(!certConfig.caCert.empty());
@@ -146,10 +147,10 @@ BOOST_AUTO_TEST_CASE(test_initSMConfig)
         config->initConfig(configIni);
         config->loadP2pConnectedNodes();
 
-        BOOST_CHECK_EQUAL(config->listenIP(), "0.0.0.0");
-        BOOST_CHECK_EQUAL(config->listenPort(), 54321);
-        BOOST_CHECK_EQUAL(config->smSSL(), true);
-        BOOST_CHECK_EQUAL(config->connectedNodes().size(), 1);
+        BOOST_CHECK_EQUAL(config->wsConfig()->listenIP(), "0.0.0.0");
+        BOOST_CHECK_EQUAL(config->wsConfig()->listenPort(), 54321);
+        BOOST_CHECK_EQUAL(config->wsConfig()->smSSL(), true);
+        BOOST_CHECK_EQUAL(config->wsConfig()->connectedPeers()->size(), 1);
 
         auto smCertConfig = config->smCertConfig();
         BOOST_CHECK(!smCertConfig.caCert.empty());

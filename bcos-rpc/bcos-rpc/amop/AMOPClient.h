@@ -111,17 +111,17 @@ public:
 
 protected:
     /// for AMOP requests from SDK
-    virtual void onRecvSubTopics(std::shared_ptr<boostssl::ws::WsMessage> _msg,
+    virtual void onRecvSubTopics(std::shared_ptr<boostssl::MessageFace> _msg,
         std::shared_ptr<boostssl::ws::WsSession> _session);
     /**
      * @brief: receive amop request message from sdk
      */
-    virtual void onRecvAMOPRequest(std::shared_ptr<boostssl::ws::WsMessage> _msg,
+    virtual void onRecvAMOPRequest(std::shared_ptr<boostssl::MessageFace> _msg,
         std::shared_ptr<boostssl::ws::WsSession> _session);
     /**
      * @brief: receive amop broadcast message from sdk
      */
-    virtual void onRecvAMOPBroadcast(std::shared_ptr<boostssl::ws::WsMessage> _msg,
+    virtual void onRecvAMOPBroadcast(std::shared_ptr<boostssl::MessageFace> _msg,
         std::shared_ptr<boostssl::ws::WsSession> _session);
 
     std::shared_ptr<boostssl::ws::WsSession> randomChooseSession(std::string const& _topic);
@@ -161,18 +161,18 @@ protected:
 
     void sendMessageToClient(std::string const& _topic,
         std::shared_ptr<boostssl::ws::WsSession> _selectSession,
-        std::shared_ptr<boostssl::ws::WsMessage> _msg,
+        std::shared_ptr<boostssl::MessageFace> _msg,
         std::function<void(bcos::Error::Ptr&&, bytesPointer)> _callback);
 
     bool trySendAMOPRequestToLocalNode(std::shared_ptr<boostssl::ws::WsSession> _session,
-        std::string const& _topic, std::shared_ptr<boostssl::ws::WsMessage> _msg);
+        std::string const& _topic, std::shared_ptr<boostssl::MessageFace> _msg);
 
     void broadcastAMOPMessage(
-        std::string const& _topic, std::shared_ptr<boostssl::ws::WsMessage> _msg);
+        std::string const& _topic, std::shared_ptr<boostssl::MessageFace> _msg);
 
     virtual void pingGatewayAndNotifyTopics();
 
-    virtual bool onGatewayInactivated(std::shared_ptr<boostssl::ws::WsMessage> _msg,
+    virtual bool onGatewayInactivated(std::shared_ptr<boostssl::MessageFace> _msg,
         std::shared_ptr<boostssl::ws::WsSession> _session);
     std::string generateTopicInfo();
 

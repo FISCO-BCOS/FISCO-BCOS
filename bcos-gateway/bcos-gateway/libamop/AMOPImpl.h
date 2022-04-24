@@ -19,6 +19,7 @@
  */
 #pragma once
 #include "Common.h"
+#include <bcos-boostssl/websocket/WsSession.h>
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/interfaces/protocol/AMOPRequest.h>
 #include <bcos-gateway/libamop/AMOPMessage.h>
@@ -68,16 +69,14 @@ public:
     virtual void asyncSendBroadbastMessageByTopic(
         const std::string& _topic, bcos::bytesConstRef _data);
 
-    virtual void onAMOPMessage(bcos::gateway::NetworkException const& _e,
-        bcos::gateway::P2PSession::Ptr _session,
-        std::shared_ptr<bcos::gateway::P2PMessage> _message);
+    virtual void onAMOPMessage(
+        boostssl::MessageFace::Ptr _message, gateway::P2PSession::Ptr _p2pSession);
 
     virtual TopicManager::Ptr topicManager() { return m_topicManager; }
 
 protected:
-    virtual void dispatcherAMOPMessage(bcos::gateway::NetworkException const& _e,
-        bcos::gateway::P2PSession::Ptr _session,
-        std::shared_ptr<bcos::gateway::P2PMessage> _message);
+    virtual void dispatcherAMOPMessage(
+        boostssl::MessageFace::Ptr _message, gateway::P2PSession::Ptr _p2pSession);
     /**
      * @brief: periodically send topicSeq to all other nodes
      * @return void

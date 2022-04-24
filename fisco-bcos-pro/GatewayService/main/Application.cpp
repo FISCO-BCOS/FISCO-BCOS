@@ -39,25 +39,31 @@ protected:
 
         // init gateway config
         auto gatewayConfig = std::make_shared<bcos::gateway::GatewayConfig>();
+        auto wsConfig = std::make_shared<bcos::boostssl::ws::WsConfig>();
+        gatewayConfig->setWsConfig(wsConfig);
+
         gatewayConfig->initP2PConfig(pt, true);
         gatewayConfig->setCertPath(ServerConfig::BasePath);
         gatewayConfig->setNodePath(ServerConfig::BasePath);
-        if (gatewayConfig->smSSL())
+
+        auto contextConfig = std::make_shared<boostssl::context::ContextConfig>();
+        if (gatewayConfig->wsConfig()->smSSL())
         {
             addConfig("sm_ca.crt");
             addConfig("sm_ssl.crt");
             addConfig("sm_enssl.crt");
             addConfig("sm_ssl.key");
             addConfig("sm_enssl.key");
-            gatewayConfig->initSMCertConfig(pt);
+            contextConfig->initSMCertConfig(pt);
         }
         else
         {
             addConfig("ca.crt");
             addConfig("ssl.key");
             addConfig("ssl.crt");
-            gatewayConfig->initCertConfig(pt);
+            contextConfig->initCertConfig(pt);
         }
+        gatewayConfig->wsConfig()->setContextConfig(contextConfig);
 
         // nodes.json
         addConfig("nodes.json");

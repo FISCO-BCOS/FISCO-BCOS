@@ -66,16 +66,16 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage)
     auto r = encodeMsg->encode(*buffer.get());
 
     BOOST_CHECK_EQUAL(r, true);
-    BOOST_CHECK_EQUAL(buffer->size(), 14);
+    BOOST_CHECK_EQUAL(buffer->size(), 12);
 
     // decode default
     auto decodeMsg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
     auto ret = decodeMsg->decode(bytesConstRef(buffer->data(), buffer->size()));
-    BOOST_CHECK_EQUAL(ret, 14);
-    BOOST_CHECK_EQUAL(decodeMsg->length(), 14);
+    BOOST_CHECK_EQUAL(ret, 12);
+    BOOST_CHECK_EQUAL(decodeMsg->length(), 12);
     BOOST_CHECK_EQUAL(decodeMsg->version(), 0);
     BOOST_CHECK_EQUAL(decodeMsg->packetType(), 0);
-    BOOST_CHECK_EQUAL(decodeMsg->seq(), 0);
+    // BOOST_CHECK_EQUAL(decodeMsg->seq(), "0");
     BOOST_CHECK_EQUAL(decodeMsg->ext(), 0);
     BOOST_CHECK_EQUAL(decodeMsg->payload()->size(), 0);
 
@@ -103,10 +103,10 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_withoutOptions)
     // default P2PMessage object
     auto encodeMsg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
     uint16_t version = 0x1234;
-    uint32_t seq = 0x12345678;
-    uint16_t packetType = 0x4321;
+    std::string seq = boost::lexical_cast<std::string>(0x12345678);
+    uint16_t packetType = 4321;
     uint16_t ext = 0x1111;
-    auto payload = std::make_shared<bytes>(10000, 'a');
+    auto payload = std::make_shared<bytes>(30000, 'a');
 
     encodeMsg->setVersion(version);
     encodeMsg->setSeq(seq);
@@ -117,13 +117,13 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_withoutOptions)
     auto buffer = std::make_shared<bytes>();
     auto r = encodeMsg->encode(*buffer.get());
     BOOST_CHECK_EQUAL(r, true);
-    BOOST_CHECK_EQUAL(buffer->size(), 14 + payload->size());
+    BOOST_CHECK_EQUAL(buffer->size(), 12 + seq.size() + payload->size());
 
     // decode default
     auto decodeMsg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
     auto ret = decodeMsg->decode(bytesConstRef(buffer->data(), buffer->size()));
-    BOOST_CHECK_EQUAL(ret, 14 + payload->size());
-    BOOST_CHECK_EQUAL(decodeMsg->length(), 14 + payload->size());
+    BOOST_CHECK_EQUAL(ret, 12 + seq.size() + payload->size());
+    BOOST_CHECK_EQUAL(decodeMsg->length(), 12 + seq.size() + payload->size());
     BOOST_CHECK_EQUAL(decodeMsg->version(), version);
     BOOST_CHECK_EQUAL(decodeMsg->packetType(), packetType);
     BOOST_CHECK_EQUAL(decodeMsg->seq(), seq);
@@ -252,10 +252,12 @@ BOOST_AUTO_TEST_CASE(test_P2PMessage_codec)
     auto encodeMsg = std::static_pointer_cast<P2PMessage>(factory->buildMessage());
 
     uint16_t version = 0x1234;
-    uint32_t seq = 0x12345678;
+    std::string seq = boost::lexical_cast<std::string>(0x12345678);
     uint16_t packetType = GatewayMessageType::PeerToPeerMessage;
     uint16_t ext = 0x1111;
-    auto payload = std::make_shared<bytes>(10000, 'a');
+    // auto payload = std::make_shared<bytes>(10000, 'a');
+    std::string payload_str = "aaaaaabbbbbbccccccddddddeeeeeeffffffgggggggh";
+    auto payload = std::make_shared<bytes>(payload_str.begin(), payload_str.end());
 
     encodeMsg->setVersion(version);
     encodeMsg->setSeq(seq);

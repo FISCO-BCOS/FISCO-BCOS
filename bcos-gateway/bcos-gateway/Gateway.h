@@ -20,6 +20,8 @@
 
 #pragma once
 
+#include <bcos-boostssl/interfaces/MessageFace.h>
+#include <bcos-boostssl/websocket/WsSession.h>
 #include <bcos-framework/interfaces/front/FrontServiceInterface.h>
 #include <bcos-framework/interfaces/gateway/GatewayInterface.h>
 #include <bcos-gateway/Common.h>
@@ -44,11 +46,11 @@ public:
     {
         m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::PeerToPeerMessage,
             boost::bind(&Gateway::onReceiveP2PMessage, this, boost::placeholders::_1,
-                boost::placeholders::_2, boost::placeholders::_3));
+                boost::placeholders::_2));
 
         m_p2pInterface->registerHandlerByMsgType(GatewayMessageType::BroadcastMessage,
             boost::bind(&Gateway::onReceiveBroadcastMessage, this, boost::placeholders::_1,
-                boost::placeholders::_2, boost::placeholders::_3));
+                boost::placeholders::_2));
     }
     virtual ~Gateway() { stop(); }
 
@@ -166,7 +168,7 @@ protected:
     // for UT
     Gateway() {}
     virtual void onReceiveP2PMessage(
-        NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg);
+        std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<P2PSession> _p2pSession);
 
     /**
      * @brief: receive group broadcast message
@@ -176,7 +178,7 @@ protected:
      * @return void
      */
     virtual void onReceiveBroadcastMessage(
-        NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg);
+        std::shared_ptr<boostssl::MessageFace> _msg, std::shared_ptr<P2PSession> _p2pSession);
 
 private:
     std::string m_chainID;

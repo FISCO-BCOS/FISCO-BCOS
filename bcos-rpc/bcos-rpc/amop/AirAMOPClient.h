@@ -20,6 +20,8 @@
  */
 #pragma once
 #include "AMOPClient.h"
+#include <bcos-boostssl/interfaces/MessageFace.h>
+#include <bcos-boostssl/websocket/WsSession.h>
 
 namespace bcos
 {
@@ -40,7 +42,7 @@ public:
     void start() override { m_gatewayActivated.store(true); }
 
     bool onGatewayInactivated(
-        std::shared_ptr<boostssl::ws::WsMessage>, std::shared_ptr<boostssl::ws::WsSession>) override
+        std::shared_ptr<boostssl::MessageFace>, std::shared_ptr<boostssl::ws::WsSession>) override
     {
         return false;
     }

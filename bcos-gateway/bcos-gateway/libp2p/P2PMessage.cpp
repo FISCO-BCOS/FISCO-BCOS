@@ -25,7 +25,6 @@
 
 using namespace bcos;
 using namespace bcos::gateway;
-using namespace bcos::crypto;
 
 #define CHECK_OFFSET_WITH_THROW_EXCEPTION(offset, length)                                    \
     do                                                                                       \
@@ -102,7 +101,7 @@ bool P2PMessageOptions::encode(bytes& _buffer)
 ///       src nodeID        : bytes
 ///       src nodeID count  :1 bytes
 ///       dst nodeIDs       : bytes
-ssize_t P2PMessageOptions::decode(bytesConstRef _buffer)
+int64_t P2PMessageOptions::decode(bytesConstRef _buffer)
 {
     size_t offset = 0;
     size_t length = _buffer.size();
@@ -170,13 +169,14 @@ bool P2PMessage::encode(bytes& _buffer)
     uint32_t length = 0;
     uint16_t version = boost::asio::detail::socket_ops::host_to_network_short(m_version);
     uint16_t packetType = boost::asio::detail::socket_ops::host_to_network_short(m_packetType);
-    uint32_t seq = boost::asio::detail::socket_ops::host_to_network_long(m_seq);
+    uint16_t seqLength = boost::asio::detail::socket_ops::host_to_network_short(m_seq.size());
     uint16_t ext = boost::asio::detail::socket_ops::host_to_network_short(m_ext);
 
     _buffer.insert(_buffer.end(), (byte*)&length, (byte*)&length + 4);
     _buffer.insert(_buffer.end(), (byte*)&version, (byte*)&version + 2);
     _buffer.insert(_buffer.end(), (byte*)&packetType, (byte*)&packetType + 2);
-    _buffer.insert(_buffer.end(), (byte*)&seq, (byte*)&seq + 4);
+    _buffer.insert(_buffer.end(), (byte*)&seqLength, (byte*)&seqLength + 2);
+    _buffer.insert(_buffer.end(), m_seq.begin(), m_seq.end());
     _buffer.insert(_buffer.end(), (byte*)&ext, (byte*)&ext + 2);
 
     // encode options
@@ -193,6 +193,7 @@ bool P2PMessage::encode(bytes& _buffer)
     std::copy((byte*)&length, (byte*)&length + 4, _buffer.data());
     // set buffer size to m_length
     m_length = _buffer.size();
+
     return true;
 }
 
@@ -200,33 +201,42 @@ ssize_t P2PMessage::decodeHeader(bytesConstRef _buffer)
 {
     int32_t offset = 0;
 
+    m_seq.clear();
+    auto p = _buffer.data();
+
     // length field
-    m_length =
-        boost::asio::detail::socket_ops::network_to_host_long(*((uint32_t*)&_buffer[offset]));
+    m_length = boost::asio::detail::socket_ops::network_to_host_long(*((uint32_t*)p));
+    p += 4;
     offset += 4;
 
     // version
-    m_version =
-        boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)&_buffer[offset]));
+    m_version = boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)p));
+    p += 2;
     offset += 2;
 
     // packetType
-    m_packetType =
-        boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)&_buffer[offset]));
+    m_packetType = boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)p));
+    p += 2;
+    offset += 2;
+
+    // seqLength
+    uint16_t seqLength = boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)p));
+    p += 2;
     offset += 2;
 
     // seq
-    m_seq = boost::asio::detail::socket_ops::network_to_host_long(*((uint32_t*)&_buffer[offset]));
-    offset += 4;
+    m_seq.insert(m_seq.begin(), p, p + seqLength);
+    offset += seqLength;
+    p += seqLength;
 
     // ext
-    m_ext = boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)&_buffer[offset]));
+    m_ext = boost::asio::detail::socket_ops::network_to_host_short(*((uint16_t*)p));
     offset += 2;
 
     return offset;
 }
 
-ssize_t P2PMessage::decode(bytesConstRef _buffer)
+int64_t P2PMessage::decode(bytesConstRef _buffer)
 {
     // check if packet header fully received
     if (_buffer.size() < P2PMessage::MESSAGE_HEADER_LENGTH)
