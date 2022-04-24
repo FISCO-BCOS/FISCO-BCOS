@@ -852,9 +852,9 @@ void TxPool::clearUpExpiredTransactions()
             }
             traversedTxsNum++;
         }
-        TXPOOL_LOG(INFO) << LOG_DESC("clearUpExpiredTransactions")
-                         << LOG_KV("pendingTxs", m_txsQueue.size())
-                         << LOG_KV("erasedTxs", erasedTxs);
+        TXPOOL_LOG(DEBUG) << LOG_DESC("clearUpExpiredTransactions")
+                          << LOG_KV("pendingTxs", m_txsQueue.size())
+                          << LOG_KV("erasedTxs", erasedTxs);
     }
     // Note: will notify receipt to sdk
     m_workerPool->enqueue([this]() { removeInvalidTxs(); });
