@@ -5,7 +5,6 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 
 # FIXME: should move to fisco-bcos-pro or fisco-bcos-max
 # import services
-#list(APPEND SERVICE_LIST FrontService GatewayService RpcService TxPoolService PBFTService NodeService)
 list(APPEND SERVICE_LIST GatewayService RpcService NodeService)
 # TODO:
 # SchedulerService, ExecutorService

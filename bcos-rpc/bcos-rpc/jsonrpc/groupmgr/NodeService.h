@@ -91,9 +91,9 @@ public:
 
     template <typename T, typename S, typename... Args>
     std::pair<std::shared_ptr<T>, S> createServiceClient(
-        std::string const& _completedServiceName, const Args&... _args)
+        std::string const& _serviceName, const Args&... _args)
     {
-        auto prx = Application::getCommunicator()->stringToProxy<S>(_completedServiceName);
+        auto prx = Application::getCommunicator()->stringToProxy<S>(_serviceName);
         return std::make_pair(std::make_shared<T>(prx, _args...), prx);
     }
 
@@ -106,13 +106,7 @@ public:
         {
             return std::make_pair(nullptr, nullptr);
         }
-        auto serviceObj = bcos::protocol::getServiceObjByType(_type);
-        if (serviceObj == bcos::protocol::UNKNOWN_SERVANT)
-        {
-            return std::make_pair(nullptr, nullptr);
-        }
-        auto completedServiceName = bcos::protocol::getPrxDesc(serviceName, serviceObj);
-        return createServiceClient<T, S>(completedServiceName, _args...);
+        return createServiceClient<T, S>(serviceName, _args...);
     }
 };
 }  // namespace rpc
