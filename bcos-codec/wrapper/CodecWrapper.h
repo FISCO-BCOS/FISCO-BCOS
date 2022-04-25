@@ -25,8 +25,6 @@
 
 namespace bcos
 {
-namespace precompiled
-{
 enum VMType
 {
     EVM,
@@ -127,5 +125,4 @@ private:
     VMType m_type = VMType::UNDEFINED;
     crypto::Hash::Ptr m_hash;
 };
-}  // namespace precompiled
 }  // namespace bcos

@@ -50,16 +50,16 @@ public:
         if (_isWasm)
         {
             auto result1 = creatKVTable(1, "test1", "id", "item1", "/tables/test1");
-            BOOST_CHECK(result1->data().toBytes() == codec->encode(s256(0)));
+            BOOST_CHECK(result1->data().toBytes() == codec->encode(int32_t(0)));
             auto result2 = creatKVTable(2, "test2", "id", "item1", "/tables/test2");
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(s256(0)));
+            BOOST_CHECK(result2->data().toBytes() == codec->encode(int32_t(0)));
         }
         else
         {
             auto result1 = creatKVTable(1, "test1", "id", "item1", tableTestAddress1);
-            BOOST_CHECK(result1->data().toBytes() == codec->encode(int(0)));
+            BOOST_CHECK(result1->data().toBytes() == codec->encode(int32_t(0)));
             auto result2 = creatKVTable(2, "test2", "id", "item1", tableTestAddress2);
-            BOOST_CHECK(result2->data().toBytes() == codec->encode(int(0)));
+            BOOST_CHECK(result2->data().toBytes() == codec->encode(int32_t(0)));
         }
 
         h256 addressCreate("ff6f30856ad3bae00b1169808488502786a13e3c174d85682135ffd51310310e");

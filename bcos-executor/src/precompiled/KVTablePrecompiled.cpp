@@ -148,7 +148,7 @@ void KVTablePrecompiled::set(const std::string& tableName,
     Entry entry;
     entry.importFields({value});
     _executive->storage().setRow(tableName, key, std::move(entry));
-    callResult->setExecResult(codec->encode(int(1)));
+    callResult->setExecResult(codec->encode(int32_t(1)));
     gasPricer->setMemUsed(1);
     gasPricer->appendOperation(InterfaceOpcode::Insert);
 }

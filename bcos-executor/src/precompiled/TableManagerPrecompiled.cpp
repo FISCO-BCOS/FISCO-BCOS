@@ -106,7 +106,7 @@ void TableManagerPrecompiled::createTable(
     if (table)
     {
         // table already exist
-        getErrorCodeOut(callResult->mutableExecResult(), CODE_TABLE_NAME_ALREADY_EXIST, *codec);
+        callResult->setExecResult(codec->encode(int32_t(CODE_TABLE_NAME_ALREADY_EXIST)));
         return;
     }
     std::string tableManagerAddress =
@@ -131,7 +131,7 @@ void TableManagerPrecompiled::createTable(
     // here is a trick to set table key field info
     valueField = keyField + "," + valueField;
     _executive->storage().createTable(getActualTableName(newTableName), valueField);
-    getErrorCodeOut(callResult->mutableExecResult(), CODE_SUCCESS, *codec);
+    callResult->setExecResult(codec->encode(int32_t(CODE_SUCCESS)));
 }
 
 void TableManagerPrecompiled::createKVTable(
@@ -156,7 +156,7 @@ void TableManagerPrecompiled::createKVTable(
     if (table)
     {
         // table already exist
-        getErrorCodeOut(callResult->mutableExecResult(), CODE_TABLE_NAME_ALREADY_EXIST, *codec);
+        callResult->setExecResult(codec->encode(int32_t(CODE_TABLE_NAME_ALREADY_EXIST)));
         return;
     }
     std::string tableManagerAddress =
@@ -180,7 +180,7 @@ void TableManagerPrecompiled::createKVTable(
     // here is a trick to set table key field info
     value = key + "," + value;
     _executive->storage().createTable(getActualTableName(newTableName), value);
-    getErrorCodeOut(callResult->mutableExecResult(), CODE_SUCCESS, *codec);
+    callResult->setExecResult(codec->encode(int32_t(CODE_SUCCESS)));
 }
 
 void TableManagerPrecompiled::appendColumns(
@@ -205,7 +205,7 @@ void TableManagerPrecompiled::appendColumns(
     {
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TableManagerPrecompiled")
                                << LOG_DESC("table not exists") << LOG_KV("tableName", tableName);
-        getErrorCodeOut(callResult->mutableExecResult(), CODE_TABLE_NOT_EXIST, *codec);
+        callResult->setExecResult(codec->encode(int32_t(CODE_TABLE_NOT_EXIST)));
         return;
     }
     // here is a trick to avoid key field dup, s_table save user table (key,fields)
@@ -227,7 +227,7 @@ void TableManagerPrecompiled::appendColumns(
         // dup
         PRECOMPILED_LOG(DEBUG) << LOG_BADGE("TableManagerPrecompiled")
                                << LOG_DESC("columns duplicate") << LOG_KV("tableName", tableName);
-        getErrorCodeOut(callResult->mutableExecResult(), CODE_TABLE_DUPLICATE_FIELD, *codec);
+        callResult->setExecResult(codec->encode(int32_t(CODE_TABLE_DUPLICATE_FIELD)));
         return;
     }
     // 3. append new columns
@@ -239,5 +239,5 @@ void TableManagerPrecompiled::appendColumns(
     newEntry.importFields({std::move(newField)});
     _executive->storage().setRow(StorageInterface::SYS_TABLES, tableName, std::move(newEntry));
     gasPricer->appendOperation(InterfaceOpcode::Set, 1);
-    getErrorCodeOut(callResult->mutableExecResult(), CODE_SUCCESS, *codec);
+    callResult->setExecResult(codec->encode(int32_t(CODE_SUCCESS)));
 }
