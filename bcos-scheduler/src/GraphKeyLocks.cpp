@@ -50,13 +50,17 @@ bool GraphKeyLocks::acquireKeyLock(
         auto vertex = boost::get(VertexPropertyTag(), boost::target(*it, m_graph));
         if (std::get<0>(*vertex) != contextID)
         {
-            SCHEDULER_LOG(TRACE) << boost::format(
-                                        "Acquire key lock failed, request: [%s, %s, %ld, %ld] "
-                                        "exists: [%ld]") %
-                                        contract % key % contextID % seq % std::get<0>(*vertex);
+            KEY_LOCK_LOG(TRACE) << boost::format(
+                                       "Acquire key lock failed, request: [%s, %s, %ld, %ld] "
+                                       "exists: [%ld]") %
+                                       contract % toHex(key) % contextID % seq %
+                                       std::get<0>(*vertex)
+                                << std::endl;
 
             // Key lock holding by another context
             addEdge(contextVertex, keyVertex, seq);
+            KEY_LOCK_LOG(TRACE) << " [[" << std::string(contract) << ":" << toHex(key) << "]]  -> "
+                                << contextID << " | " << seq << std::endl;
             return false;
         }
     }
@@ -66,6 +70,8 @@ bool GraphKeyLocks::acquireKeyLock(
 
     // Add an own edge
     addEdge(keyVertex, contextVertex, seq);
+    KEY_LOCK_LOG(TRACE) << " [" << std::string(contract) << ":" << toHex(key) << "]  -> "
+                        << contextID << " | " << seq << std::endl;
 
     SCHEDULER_LOG(TRACE) << "Acquire key lock success, contract: " << contract << " key: " << key
                          << " contextID: " << contextID << " seq: " << seq;
@@ -105,6 +111,8 @@ std::vector<std::string> GraphKeyLocks::getKeyLocksNotHoldingByContext(
 void GraphKeyLocks::releaseKeyLocks(int64_t contextID, int64_t seq)
 {
     SCHEDULER_LOG(TRACE) << "Release key lock, contextID: " << contextID << " seq: " << seq;
+
+    KEY_LOCK_LOG(TRACE) << " [*****] -> " << contextID << " | " << seq << std::endl;
     auto vertex = touchContext(contextID);
 
     auto edgeRemoveFunc = [seq, graph = &m_graph](auto range) mutable -> bool {
