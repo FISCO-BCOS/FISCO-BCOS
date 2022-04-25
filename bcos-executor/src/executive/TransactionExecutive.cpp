@@ -219,6 +219,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
     {
         return callPrecompiled(std::move(callParameters));
     }
+    /// FIXME: consider wasm call CRUD table address
     auto tableName = getContractTableName(callParameters->codeAddress, blockContext->isWasm());
     // check permission first
     if (blockContext->isAuthCheck() && !blockContext->isWasm() && !checkAuth(callParameters, false))
@@ -270,7 +271,7 @@ TransactionExecutive::callPrecompiled(CallParameters::UniquePtr callParameters)
         }
         callParameters->gas -= gas;
         callParameters->status = (int32_t)TransactionStatus::None;
-        callParameters->data.swap(precompiledExecResult->m_execResult);
+        callParameters->data = std::move(precompiledExecResult->m_execResult);
     }
     catch (protocol::PrecompiledError const& e)
     {
@@ -345,7 +346,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
     if (blockContext->isWasm())
     {
         // Liquid
-        std::pair<bytes, bytes> input;
+        std::tuple<bytes, bytes> input;
         auto codec = std::make_shared<CodecWrapper>(blockContext->hashHandler(), true);
         codec->decode(ref(callParameters->data), input);
         auto& [code, params] = input;
@@ -450,7 +451,7 @@ CallParameters::UniquePtr TransactionExecutive::internalCreate(
     }
     else
     {
-        /// BFS create contract table and write metadata in parent table
+        /// BFS create link table and write metadata in parent table
         if (!buildBfsPath(
                 tableName, callParameters->origin, newAddress, FS_TYPE_LINK, callParameters->gas))
         {
@@ -679,8 +680,8 @@ CallParameters::UniquePtr TransactionExecutive::go(
         }
         else
         {
-            auto code = hostContext.code();
-            if (code.empty())
+            auto codeEntry = hostContext.code();
+            if (!codeEntry.has_value())
             {
                 revert();
                 auto callResult = hostContext.takeCallParameters();
@@ -692,6 +693,11 @@ CallParameters::UniquePtr TransactionExecutive::go(
                     << LOG_KV("sender", callResult->senderAddress);
                 return callResult;
             }
+            auto code = codeEntry->get();
+            if (hasPrecompiledPrefix(code))
+            {
+                return callDynamicPrecompiled(hostContext.takeCallParameters(), std::string(code));
+            }
 
             auto vmKind = VMKind::evmone;
             if (hasWasmPreamble(code))
@@ -702,7 +708,8 @@ CallParameters::UniquePtr TransactionExecutive::go(
 
             auto mode = toRevision(hostContext.vmSchedule());
             auto evmcMessage = getEVMCMessage(*blockContext, hostContext);
-            auto ret = vm.exec(hostContext, mode, &evmcMessage, code.data(), code.size());
+            auto ret = vm.exec(hostContext, mode, &evmcMessage,
+                reinterpret_cast<const byte*>(code.data()), code.size());
 
             auto callResults = hostContext.takeCallParameters();
             callResults = parseEVMCResult(std::move(callResults), ret);
@@ -771,6 +778,25 @@ CallParameters::UniquePtr TransactionExecutive::go(
         // Another solution would be to reject this transaction, but that also
         // has drawbacks. Essentially, the amount of ram has to be increased here.
     }
+}
+
+CallParameters::UniquePtr TransactionExecutive::callDynamicPrecompiled(
+    CallParameters::UniquePtr callParameters, const std::string& code)
+{
+    auto blockContext = m_blockContext.lock();
+    auto codec = CodecWrapper(blockContext->hashHandler(), blockContext->isWasm());
+    std::vector<std::string> codeParameters;
+    boost::split(codeParameters, code, boost::is_any_of(","));
+    if (codeParameters.size() < 3)
+    {
+        BOOST_THROW_EXCEPTION(BCOS_ERROR(-1, "CallDynamicPrecompiled error code field."));
+    }
+    callParameters->codeAddress = codeParameters[1];
+    /// FIXME: consider scalability
+    auto params = codeParameters[2];
+    auto newParams = codec.encode(params, callParameters->data);
+    callParameters->data = std::move(newParams);
+    return std::get<1>(callPrecompiled(std::move(callParameters)));
 }
 
 void TransactionExecutive::spawnAndCall(std::function<void(ResumeHandler)> function)

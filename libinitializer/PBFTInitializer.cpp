@@ -308,6 +308,16 @@ void PBFTInitializer::registerHandlers()
                                          << LOG_KV("error", boost::diagnostic_information(e));
             }
         });
+    m_txpool->registerTxsCleanUpSwitch([this]() -> bool {
+        auto config = m_pbft->pbftEngine()->pbftConfig();
+        // should clean up expired txs periodically for non-consensus node
+        if (!config->isConsensusNode())
+        {
+            return true;
+        }
+        // clean up the expired txs for the consensus-timeout node
+        return config->timeout();
+    });
 }
 
 void PBFTInitializer::createSealer()

@@ -29,7 +29,6 @@
 
 namespace bcos::precompiled
 {
-using TableInfoTuple = std::tuple<std::string, std::vector<std::string>>;
 class TableManagerPrecompiled : public Precompiled
 {
 public:
@@ -40,26 +39,16 @@ public:
     std::shared_ptr<PrecompiledExecResult> call(
         std::shared_ptr<executor::TransactionExecutive> _executive, bytesConstRef _param,
         const std::string& _origin, const std::string& _sender, int64_t gasLeft) override;
+
+private:
     void createTable(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
+        const PrecompiledGas::Ptr& gasPricer, const std::string& _origin, int64_t gasLeft);
+    void createKVTable(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
         const PrecompiledGas::Ptr& gasPricer, const std::string& _origin, int64_t gasLeft);
     void appendColumns(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
         const PrecompiledGas::Ptr& gasPricer);
-    //     void select(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-    //         bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
-    //         const PrecompiledGas::Ptr& gasPricer);
-    //     void insert(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-    //         bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
-    //         const PrecompiledGas::Ptr& gasPricer);
-    //     void update(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-    //         bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
-    //         const PrecompiledGas::Ptr& gasPricer);
-    //     void remove(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-    //         bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
-    //         const PrecompiledGas::Ptr& gasPricer);
-    //     void desc(const std::shared_ptr<executor::TransactionExecutive>& _executive,
-    //         bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
-    //         const PrecompiledGas::Ptr& gasPricer);
 };
 }  // namespace bcos::precompiled

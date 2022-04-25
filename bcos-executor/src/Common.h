@@ -65,6 +65,10 @@ enum ExecuteError : int32_t
     TABLE_NOT_FOUND,
 };
 
+static const char* const USER_TABLE_PREFIX = "/tables/";
+static const char* const USER_APPS_PREFIX = "/apps/";
+static const char* const USER_SYS_PREFIX = "/sys/";
+
 static const char* const STORAGE_VALUE = "value";
 static const char* const ACCOUNT_CODE_HASH = "codeHash";
 static const char* const ACCOUNT_CODE = "code";
@@ -314,9 +318,10 @@ protocol::TransactionStatus toTransactionStatus(Exception const& _e);
 
 }  // namespace executor
 
+bool hasWasmPreamble(const std::string_view& _input);
 bool hasWasmPreamble(const bytesConstRef& _input);
 bool hasWasmPreamble(const bytes& _input);
-
+bool hasPrecompiledPrefix(const std::string_view& _code);
 /**
  * @brief : trans string addess to evm address
  * @param _addr : the string address

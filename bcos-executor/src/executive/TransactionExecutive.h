@@ -27,6 +27,7 @@
 #include "BlockContext.h"
 #include "SyncStorageWrapper.h"
 #include "bcos-framework/interfaces/executor/ExecutionMessage.h"
+#include "bcos-framework/interfaces/executor/PrecompiledTypeDef.h"
 #include "bcos-framework/interfaces/protocol/BlockHeader.h"
 #include "bcos-framework/interfaces/protocol/Transaction.h"
 #include "bcos-protocol/TransactionStatus.h"
@@ -142,7 +143,7 @@ public:
     inline bool isBuiltInPrecompiled(const std::string& _a) const
     {
         std::stringstream prefix;
-        prefix << std::setfill('0') << std::setw(36);
+        prefix << std::setfill('0') << std::setw(36) << "0";
         if (_a.find(prefix.str()) != 0)
             return false;
         return m_builtInPrecompiled->find(_a) != m_builtInPrecompiled->end();
@@ -198,7 +199,8 @@ private:
     CallParameters::UniquePtr internalCreate(CallParameters::UniquePtr callParameters);
     CallParameters::UniquePtr go(
         HostContext& hostContext, CallParameters::UniquePtr extraData = nullptr);
-
+    CallParameters::UniquePtr callDynamicPrecompiled(
+        CallParameters::UniquePtr callParameters, const std::string& code);
     void spawnAndCall(std::function<void(ResumeHandler)> function);
 
     void revert();
@@ -216,25 +218,32 @@ private:
     inline std::string getContractTableName(const std::string_view& _address, bool isWasm = false)
     {
         auto blockContext = m_blockContext.lock();
+
+        if (blockContext->isAuthCheck())
+        {
+            if (_address.find(precompiled::SYS_ADDRESS_PREFIX) == 0)
+            {
+                return std::string(USER_SYS_PREFIX).append(_address);
+            }
+        }
+
+
         std::string formatAddress(_address);
         if (!isWasm)
         {
             // evm address needs to be lower
             boost::algorithm::to_lower(formatAddress);
         }
-
-        std::string address = (_address[0] == '/') ? formatAddress.substr(1) : formatAddress;
-
-        if (blockContext->isAuthCheck())
+        else
         {
-            std::stringstream prefix;
-            prefix << std::setfill('0') << std::setw(36) << 1;
-            if (_address.find(prefix.str()) == 0)
+            if (_address.find(USER_TABLE_PREFIX) == 0)
             {
-                return std::string("/sys/").append(address);
+                return formatAddress;
             }
+            formatAddress = (_address[0] == '/') ? formatAddress.substr(1) : formatAddress;
         }
-        return std::string("/apps/").append(address);
+
+        return std::string(USER_APPS_PREFIX).append(formatAddress);
     }
 
     bool checkAuth(const CallParameters::UniquePtr& callParameters, bool _isCreate);

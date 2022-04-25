@@ -99,6 +99,11 @@ void PBFTEngine::start()
     ConsensusEngine::start();
     // when the node setup, start the timer for view recovery
     m_config->timer()->start();
+    // trigger fast viewchange to reachNewView
+    if (!m_config->startRecovered())
+    {
+        triggerTimeout(false);
+    }
 }
 
 void PBFTEngine::stop()
@@ -1020,7 +1025,6 @@ bool PBFTEngine::isValidViewChangeMsg(bcos::crypto::NodeIDPtr _fromNode,
                        << printPBFTMsgInfo(_viewChangeMsg) << m_config->printCurrentState();
         return false;
     }
-
     // check the view
     if ((_viewChangeMsg->view() < m_config->view()) ||
         (_viewChangeMsg->view() + 1 < m_config->toView()))
@@ -1034,7 +1038,6 @@ bool PBFTEngine::isValidViewChangeMsg(bcos::crypto::NodeIDPtr _fromNode,
                                << printPBFTMsgInfo(_viewChangeMsg) << m_config->printCurrentState();
                 sendViewChange(_fromNode);
             }
-
             PBFT_LOG(INFO) << LOG_DESC("sendRecoverResponse to the node whose view falling behind")
                            << LOG_KV("dst", _fromNode->shortHex())
                            << printPBFTMsgInfo(_viewChangeMsg) << m_config->printCurrentState();
@@ -1094,9 +1097,9 @@ bool PBFTEngine::handleViewChangeMsg(ViewChangeMsgInterface::Ptr _viewChangeMsg)
     // not expired
     auto leaderIndex =
         m_config->leaderIndexInNewViewPeriod(_viewChangeMsg->index() + 1, _viewChangeMsg->index());
-    if (m_config->timeout() && (_viewChangeMsg->generatedFrom() == leaderIndex ||
-                                   (m_cacheProcessor->getViewChangeWeight(_viewChangeMsg->view()) >
-                                       m_config->maxFaultyQuorum())))
+    if (_viewChangeMsg->generatedFrom() == leaderIndex ||
+        (m_cacheProcessor->getViewChangeWeight(_viewChangeMsg->view()) >
+            m_config->maxFaultyQuorum()))
     {
         auto view = m_cacheProcessor->tryToTriggerFastViewChange();
         if (view > 0)

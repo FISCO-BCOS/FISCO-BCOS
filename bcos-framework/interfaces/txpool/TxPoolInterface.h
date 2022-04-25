@@ -115,6 +115,9 @@ public:
 
     virtual void notifyConnectedNodes(bcos::crypto::NodeIDSet const& _connectedNodes,
         std::function<void(Error::Ptr)> _onResponse) = 0;
+
+    // determine to clean up txs periodically or not
+    virtual void registerTxsCleanUpSwitch(std::function<bool()>) {}
 };
 }  // namespace txpool
 }  // namespace bcos

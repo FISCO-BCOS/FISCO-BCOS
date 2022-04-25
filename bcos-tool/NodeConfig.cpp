@@ -28,6 +28,7 @@
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string/trim.hpp>
+#include <thread>
 
 #define MAX_BLOCK_LIMIT 5000
 
@@ -294,16 +295,33 @@ void NodeConfig::loadTxPoolConfig(boost::property_tree::ptree const& _pt)
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "Please set txpool.notify_worker_num to positive !"));
     }
-
-    m_verifierWorkerNum = checkAndGetValue(_pt, "txpool.verify_worker_num", "2");
+    m_verifierWorkerNum = checkAndGetValue(
+        _pt, "txpool.verify_worker_num", std::to_string(std::thread::hardware_concurrency()));
     if (m_verifierWorkerNum <= 0)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "Please set txpool.verify_worker_num to positive !"));
     }
+    // the txs expiration time, in second
+    auto txsExpirationTime = checkAndGetValue(_pt, "txpool.txs_expiration_time", "600");
+    if (txsExpirationTime * 1000 <= DEFAULT_MIN_CONSENSUS_TIME_MS)
+    {
+        NodeConfig_LOG(WARNING)
+            << LOG_DESC(
+                   "loadTxPoolConfig: the configured txs_expiration_time is smaller than default "
+                   "consensus time, reset to the consensus time")
+            << LOG_KV("txsExpirationTime(seconds)", txsExpirationTime)
+            << LOG_KV("defaultConsTime", DEFAULT_MIN_CONSENSUS_TIME_MS);
+        m_txsExpirationTime = DEFAULT_MIN_CONSENSUS_TIME_MS;
+    }
+    else
+    {
+        m_txsExpirationTime = txsExpirationTime * 1000;
+    }
     NodeConfig_LOG(INFO) << LOG_DESC("loadTxPoolConfig") << LOG_KV("txpoolLimit", m_txpoolLimit)
                          << LOG_KV("notifierWorkers", m_notifyWorkerNum)
-                         << LOG_KV("verifierWorkers", m_verifierWorkerNum);
+                         << LOG_KV("verifierWorkers", m_verifierWorkerNum)
+                         << LOG_KV("txsExpirationTime(ms)", m_txsExpirationTime);
 }
 
 void NodeConfig::loadChainConfig(boost::property_tree::ptree const& _pt)
@@ -361,12 +379,13 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
 
 void NodeConfig::loadConsensusConfig(boost::property_tree::ptree const& _pt)
 {
-    m_checkPointTimeoutInterval = checkAndGetValue(_pt, "consensus.checkpoint_timeout", "3000");
-    if (m_checkPointTimeoutInterval < 3000)
+    m_checkPointTimeoutInterval = checkAndGetValue(
+        _pt, "consensus.checkpoint_timeout", std::to_string(DEFAULT_MIN_CONSENSUS_TIME_MS));
+    if (m_checkPointTimeoutInterval < DEFAULT_MIN_CONSENSUS_TIME_MS)
     {
         BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
                                   "Please set consensus.checkpoint_timeout to no less than " +
-                                  std::to_string(3000) + "ms!"));
+                                  std::to_string(DEFAULT_MIN_CONSENSUS_TIME_MS) + "ms!"));
     }
     NodeConfig_LOG(INFO) << LOG_DESC("loadConsensusConfig")
                          << LOG_KV("checkPointTimeoutInterval", m_checkPointTimeoutInterval);

@@ -37,6 +37,7 @@ class NodeConfig
 {
 public:
     constexpr static ssize_t DEFAULT_CACHE_SIZE = 32 * 1024 * 1024;
+    constexpr static ssize_t DEFAULT_MIN_CONSENSUS_TIME_MS = 3000;
 
     using Ptr = std::shared_ptr<NodeConfig>;
     NodeConfig() : m_ledgerConfig(std::make_shared<bcos::ledger::LedgerConfig>()) {}
@@ -83,9 +84,11 @@ public:
     virtual void loadConfig(boost::property_tree::ptree const& _pt);
     virtual void loadGenesisConfig(boost::property_tree::ptree const& _genesisConfig);
 
+    // the txpool configurations
     size_t txpoolLimit() const { return m_txpoolLimit; }
     size_t notifyWorkerNum() const { return m_notifyWorkerNum; }
     size_t verifierWorkerNum() const { return m_verifierWorkerNum; }
+    int64_t txsExpirationTime() const { return m_txsExpirationTime; }
 
     bool smCryptoType() const { return m_smCryptoType; }
     std::string const& chainId() const { return m_chainId; }
@@ -130,14 +133,14 @@ public:
         return m_chainId + "." + _nodeName + _serviceName;
     }
 
-    // rpc
+    // the rpc configurations
     const std::string& rpcListenIP() const { return m_rpcListenIP; }
     uint16_t rpcListenPort() const { return m_rpcListenPort; }
     uint32_t rpcThreadPoolSize() const { return m_rpcThreadPoolSize; }
     bool rpcSmSsl() const { return m_rpcSmSsl; }
     bool rpcDisableSsl() const { return m_rpcDisableSsl; }
 
-    // gateway
+    // the gateway configurations
     const std::string& p2pListenIP() const { return m_p2pListenIP; }
     uint16_t p2pListenPort() const { return m_p2pListenPort; }
     bool p2pSmSsl() const { return m_p2pSmSsl; }
@@ -214,6 +217,7 @@ private:
     size_t m_txpoolLimit;
     size_t m_notifyWorkerNum;
     size_t m_verifierWorkerNum;
+    int64_t m_txsExpirationTime;
     // TODO: the block sync module need some configurations?
 
     // chain configuration

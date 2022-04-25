@@ -72,7 +72,7 @@ struct DagExecutorFixture
 {
     DagExecutorFixture()
     {
-        //        boost::log::core::get()->set_logging_enabled(false);
+        // boost::log::core::get()->set_logging_enabled(false);
         hashImpl = std::make_shared<Keccak256>();
         assert(hashImpl);
         auto signatureImpl = std::make_shared<Secp256k1Crypto>();
@@ -191,7 +191,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyTransfer)
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
     auto executor = bcos::executor::TransactionExecutorFactory::build(
         txpool, nullptr, backend, executionResultFactory, hashImpl, true, false);
-    auto codec = std::make_unique<bcos::precompiled::CodecWrapper>(hashImpl, true);
+    auto codec = std::make_unique<bcos::CodecWrapper>(hashImpl, true);
 
     bytes transferBin(transfer_wasm, transfer_wasm + transfer_wasm_len);
     transferBin = codec->encode(transferBin);
@@ -420,7 +420,7 @@ BOOST_AUTO_TEST_CASE(callWasmConcurrentlyHelloWorld)
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
     auto executor = bcos::executor::TransactionExecutorFactory::build(
         txpool, nullptr, backend, executionResultFactory, hashImpl, true, false);
-    auto codec = std::make_unique<bcos::precompiled::CodecWrapper>(hashImpl, true);
+    auto codec = std::make_unique<bcos::CodecWrapper>(hashImpl, true);
 
     bytes helloWorldBin(hello_world_wasm, hello_world_wasm + hello_world_wasm_len);
     helloWorldBin = codec->encode(helloWorldBin);
@@ -642,7 +642,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
     auto executor = bcos::executor::TransactionExecutorFactory::build(
         txpool, nullptr, backend, executionResultFactory, hashImpl, false, false);
-    auto codec = std::make_unique<bcos::precompiled::CodecWrapper>(hashImpl, false);
+    auto codec = std::make_unique<bcos::CodecWrapper>(hashImpl, false);
 
     std::string bin =
         "608060405234801561001057600080fd5b506105db806100206000396000f30060806040526004361061006257"
@@ -880,7 +880,7 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
     auto executionResultFactory = std::make_shared<NativeExecutionMessageFactory>();
     auto executor = bcos::executor::TransactionExecutorFactory::build(
         txpool, nullptr, backend, executionResultFactory, hashImpl, false, false);
-    auto codec = std::make_unique<bcos::precompiled::CodecWrapper>(hashImpl, false);
+    auto codec = std::make_unique<bcos::CodecWrapper>(hashImpl, false);
 
     std::string bin =
         "608060405234801561001057600080fd5b50610519806100206000396000f30060806040526004361061006157"

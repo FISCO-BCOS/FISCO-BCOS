@@ -223,7 +223,7 @@ void FileSystemPrecompiled::listDir(
                 auto abiEntry = _executive->storage().getRow(absolutePath, FS_LINK_ABI);
                 std::vector<std::string> ext;
                 ext.emplace_back(addressEntry->getField(0));
-                ext.emplace_back(abiEntry->getField(0));
+                ext.emplace_back(abiEntry.has_value() ? abiEntry->getField(0) : "");
                 BfsTuple link = std::make_tuple(baseName, FS_TYPE_LINK, std::move(ext));
                 files.emplace_back(std::move(link));
             }

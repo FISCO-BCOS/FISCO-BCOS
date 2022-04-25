@@ -33,11 +33,11 @@
 #include "../precompiled/ConsensusPrecompiled.h"
 #include "../precompiled/CryptoPrecompiled.h"
 #include "../precompiled/FileSystemPrecompiled.h"
-#include "../precompiled/KVTableFactoryPrecompiled.h"
+#include "../precompiled/KVTablePrecompiled.h"
 #include "../precompiled/PrecompiledResult.h"
 #include "../precompiled/SystemConfigPrecompiled.h"
-#include "../precompiled/TableFactoryPrecompiled.h"
 #include "../precompiled/TableManagerPrecompiled.h"
+#include "../precompiled/TablePrecompiled.h"
 #include "../precompiled/Utilities.h"
 #include "../precompiled/extension/AuthManagerPrecompiled.h"
 #include "../precompiled/extension/ContractAuthMgrPrecompiled.h"
@@ -129,14 +129,15 @@ void EvmTransactionExecutor::initPrecompiled()
     auto consensusPrecompiled = std::make_shared<precompiled::ConsensusPrecompiled>(m_hashImpl);
     auto tableManagerPrecompiled =
         std::make_shared<precompiled::TableManagerPrecompiled>(m_hashImpl);
-    auto kvTableFactoryPrecompiled =
-        std::make_shared<precompiled::KVTableFactoryPrecompiled>(m_hashImpl);
+    auto kvTablePrecompiled = std::make_shared<precompiled::KVTablePrecompiled>(m_hashImpl);
+    auto tablePrecompiled = std::make_shared<precompiled::TablePrecompiled>(m_hashImpl);
 
     // in EVM
     m_constantPrecompiled->insert({SYS_CONFIG_ADDRESS, sysConfig});
     m_constantPrecompiled->insert({CONSENSUS_ADDRESS, consensusPrecompiled});
     m_constantPrecompiled->insert({TABLE_MANAGER_ADDRESS, tableManagerPrecompiled});
-    m_constantPrecompiled->insert({KV_TABLE_ADDRESS, kvTableFactoryPrecompiled});
+    m_constantPrecompiled->insert({KV_TABLE_ADDRESS, kvTablePrecompiled});
+    m_constantPrecompiled->insert({TABLE_ADDRESS, tablePrecompiled});
     m_constantPrecompiled->insert(
         {DAG_TRANSFER_ADDRESS, std::make_shared<precompiled::DagTransferPrecompiled>(m_hashImpl)});
     m_constantPrecompiled->insert(
@@ -144,7 +145,7 @@ void EvmTransactionExecutor::initPrecompiled()
     m_constantPrecompiled->insert(
         {BFS_ADDRESS, std::make_shared<precompiled::FileSystemPrecompiled>(m_hashImpl)});
     /// auth precompiled
-    if(m_isAuthCheck)
+    if (m_isAuthCheck)
     {
         m_constantPrecompiled->insert({AUTH_MANAGER_ADDRESS,
             std::make_shared<precompiled::AuthManagerPrecompiled>(m_hashImpl)});

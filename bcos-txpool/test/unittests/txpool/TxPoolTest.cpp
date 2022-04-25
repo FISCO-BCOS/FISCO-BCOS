@@ -282,7 +282,7 @@ void testAsyncSealTxs(TxPoolFixture::Ptr _faker, TxPoolInterface::Ptr _txpool,
 
     // case: the other left txs expired for invalid blockLimit
     finish = false;
-    std::cout << "######### ayncSeal with invalid blocklimit" << std::endl;
+    std::cout << "######### asyncSealTxs with invalid blocklimit" << std::endl;
     std::cout << "##### origin txsSize:" << _txpoolStorage->size() << std::endl;
 
     _txpool->asyncResetTxPool(nullptr);

@@ -170,17 +170,11 @@ void bcos::precompiled::checkCreateTableParam(const std::string_view& _tableName
     checkNameValidate(_tableName, _keyField, fieldNameList);
 
     auto valueField = boost::join(fieldNameList, ",");
-    if (_keyField.size() > (size_t)SYS_TABLE_KEY_FIELD_MAX_LENGTH)
-    {
-        BOOST_THROW_EXCEPTION(
-            protocol::PrecompiledError(std::string("total table key name length overflow ") +
-                                       std::to_string(SYS_TABLE_KEY_FIELD_MAX_LENGTH)));
-    }
-    if (valueField.size() > (size_t)SYS_TABLE_VALUE_FIELD_MAX_LENGTH)
+    if (valueField.size() > (size_t)SYS_TABLE_VALUE_FIELD_NAME_MAX_LENGTH)
     {
         BOOST_THROW_EXCEPTION(
             protocol::PrecompiledError(std::string("total table field name length overflow ") +
-                                       std::to_string(SYS_TABLE_VALUE_FIELD_MAX_LENGTH)));
+                                       std::to_string(SYS_TABLE_VALUE_FIELD_NAME_MAX_LENGTH)));
     }
 
     auto tableName = precompiled::getTableName(_tableName);
@@ -258,16 +252,6 @@ bcos::precompiled::ContractStatus bcos::precompiled::getContractStatus(
     {
         return ContractStatus::Available;
     }
-}
-
-uint64_t precompiled::getEntriesCapacity(precompiled::EntriesPtr _entries)
-{
-    int64_t totalCapacity = 0;
-    for (auto& entry : *_entries)
-    {
-        totalCapacity += entry.size();
-    }
-    return totalCapacity;
 }
 
 bool precompiled::checkPathValid(std::string const& _path)

@@ -64,6 +64,7 @@ struct TransactionExecutorFixture
 {
     TransactionExecutorFixture()
     {
+        // boost::log::core::get()->set_logging_enabled(false);
         hashImpl = std::make_shared<Keccak256>();
         assert(hashImpl);
         auto signatureImpl = std::make_shared<Secp256k1Crypto>();
@@ -91,7 +92,7 @@ struct TransactionExecutorFixture
                 ->data(),
             64);
 
-        codec = std::make_unique<bcos::precompiled::CodecWrapper>(hashImpl, false);
+        codec = std::make_unique<bcos::CodecWrapper>(hashImpl, false);
     }
 
     TransactionExecutor::Ptr executor;
@@ -102,7 +103,7 @@ struct TransactionExecutorFixture
 
     KeyPairInterface::Ptr keyPair;
     int64_t gas = 3000000;
-    std::unique_ptr<bcos::precompiled::CodecWrapper> codec;
+    std::unique_ptr<bcos::CodecWrapper> codec;
 
     string helloBin =
         "60806040526040805190810160405280600181526020017f3100000000000000000000000000000000000000"

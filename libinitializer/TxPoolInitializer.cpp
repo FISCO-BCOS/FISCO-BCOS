@@ -43,8 +43,8 @@ TxPoolInitializer::TxPoolInitializer(bcos::tool::NodeConfig::Ptr _nodeConfig,
         m_frontService, m_ledger, m_nodeConfig->groupId(), m_nodeConfig->chainId(),
         m_nodeConfig->blockLimit());
     // init the txpool
-    m_txpool = txpoolFactory->createTxPool(
-        m_nodeConfig->notifyWorkerNum(), m_nodeConfig->verifierWorkerNum());
+    m_txpool = txpoolFactory->createTxPool(m_nodeConfig->notifyWorkerNum(),
+        m_nodeConfig->verifierWorkerNum(), m_nodeConfig->txsExpirationTime());
     auto txpoolConfig = m_txpool->txpoolConfig();
     txpoolConfig->setPoolLimit(m_nodeConfig->txpoolLimit());
 }

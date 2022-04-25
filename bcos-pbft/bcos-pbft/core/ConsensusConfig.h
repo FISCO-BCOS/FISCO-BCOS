@@ -33,7 +33,9 @@ class ConsensusConfig : public ConsensusConfigInterface
 public:
     using Ptr = std::shared_ptr<ConsensusConfig>;
     explicit ConsensusConfig(bcos::crypto::KeyPairInterface::Ptr _keyPair)
-      : m_keyPair(_keyPair), m_consensusNodeList(std::make_shared<ConsensusNodeList>())
+      : m_keyPair(_keyPair),
+        m_consensusNodeList(std::make_shared<ConsensusNodeList>()),
+        m_observerNodeList(std::make_shared<ConsensusNodeList>())
     {}
     virtual ~ConsensusConfig() {}
 
@@ -106,6 +108,7 @@ public:
 
     IndexType consensusNodesNum() const { return m_consensusNodeNum.load(); }
 
+    void setObserverNodeList(ConsensusNodeList& _observerNodeList);
 
 private:
     bool compareConsensusNode(ConsensusNodeList const& _left, ConsensusNodeList const& _right);
@@ -117,6 +120,11 @@ protected:
 
     ConsensusNodeListPtr m_consensusNodeList;
     mutable bcos::SharedMutex x_consensusNodeList;
+    std::atomic_bool m_consensusNodeListUpdated = {false};
+
+    ConsensusNodeListPtr m_observerNodeList;
+    mutable bcos::SharedMutex x_observerNodeList;
+    std::atomic_bool m_observerNodeListUpdated = {false};
 
     // default timeout is 3000ms
     std::atomic<uint64_t> m_consensusTimeout = {3000};
@@ -129,8 +137,6 @@ protected:
     std::atomic<bcos::protocol::BlockNumber> m_progressedIndex = {0};
     std::atomic_bool m_syncingState = {false};
     bcos::protocol::BlockNumber m_syncingHighestNumber = {0};
-
-    std::atomic_bool m_nodeUpdated = {false};
 };
 }  // namespace consensus
 }  // namespace bcos

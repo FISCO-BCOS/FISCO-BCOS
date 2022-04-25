@@ -96,6 +96,7 @@ public:
     }
 
     virtual void stop() = 0;
+    virtual void start() = 0;
     virtual void printPendingTxs() {}
 
     virtual std::shared_ptr<bcos::crypto::HashList> batchVerifyProposal(
@@ -104,10 +105,17 @@ public:
     virtual bool batchVerifyProposal(std::shared_ptr<bcos::crypto::HashList> _txsHashList) = 0;
     virtual bcos::crypto::HashListPtr getAllTxsHash() = 0;
 
+    void registerTxsCleanUpSwitch(std::function<bool()> _txsCleanUpSwitch)
+    {
+        m_txsCleanUpSwitch = _txsCleanUpSwitch;
+    }
+
 protected:
     bcos::CallbackCollectionHandler<> m_onReady;
     // notify the sealer the latest unsealed txs
     std::function<void(size_t, std::function<void(Error::Ptr)>)> m_unsealedTxsNotifier;
+    // Determine to periodically clean up expired transactions or not
+    std::function<bool()> m_txsCleanUpSwitch;
 };
 }  // namespace txpool
 }  // namespace bcos

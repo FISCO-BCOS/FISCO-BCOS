@@ -306,26 +306,18 @@ void Initializer::initSysContract()
 
 void Initializer::start()
 {
-    try
+    if (m_txpoolInitializer)
     {
-        if (m_txpoolInitializer)
-        {
-            m_txpoolInitializer->start();
-        }
-        if (m_pbftInitializer)
-        {
-            m_pbftInitializer->start();
-        }
-
-        if (m_frontServiceInitializer)
-        {
-            m_frontServiceInitializer->start();
-        }
+        m_txpoolInitializer->start();
     }
-    catch (std::exception const& e)
+    if (m_pbftInitializer)
     {
-        std::cout << "start bcos-node failed for " << boost::diagnostic_information(e);
-        exit(-1);
+        m_pbftInitializer->start();
+    }
+
+    if (m_frontServiceInitializer)
+    {
+        m_frontServiceInitializer->start();
     }
 }
 
