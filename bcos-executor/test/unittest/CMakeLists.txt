@@ -35,5 +35,5 @@ add_test(NAME test-executor WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} 
 # for code coverage
 if (COVERAGE)
     include(Coverage)
-    config_coverage("coverage" "'/usr*' 'boost/**' 'deps/**'")
+    config_coverage("executor-coverage" "'/usr*' 'boost/**' 'deps/**'")
 endif ()
