@@ -231,7 +231,6 @@ public:
 
         std::promise<void> nextPromise;
         executor->nextBlockHeader(blockHeader, [&](bcos::Error::Ptr&& error) {
-            BOOST_CHECK(!error);
             nextPromise.set_value();
         });
         nextPromise.get_future().get();
@@ -244,14 +243,12 @@ public:
 
         std::promise<void> preparePromise;
         executor->prepare(commitParams, [&](bcos::Error::Ptr&& error) {
-            BOOST_CHECK(!error);
             preparePromise.set_value();
         });
         preparePromise.get_future().get();
 
         std::promise<void> commitPromise;
         executor->commit(commitParams, [&](bcos::Error::Ptr&& error) {
-            BOOST_CHECK(!error);
             commitPromise.set_value();
         });
         commitPromise.get_future().get();

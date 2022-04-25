@@ -346,7 +346,7 @@ std::tuple<std::unique_ptr<HostContext>, CallParameters::UniquePtr> TransactionE
     if (blockContext->isWasm())
     {
         // Liquid
-        std::pair<bytes, bytes> input;
+        std::tuple<bytes, bytes> input;
         auto codec = std::make_shared<CodecWrapper>(blockContext->hashHandler(), true);
         codec->decode(ref(callParameters->data), input);
         auto& [code, params] = input;

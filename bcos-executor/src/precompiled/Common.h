@@ -37,7 +37,7 @@ namespace precompiled
 using TableInfoTuple = std::tuple<std::string, std::vector<std::string>>;
 using ConditionTuple = std::tuple<uint8_t, std::string>;
 using LimitTuple = std::tuple<uint, uint>;
-using UpdataFieldTuple = std::tuple<uint, std::string>;
+using UpdateFieldTuple = std::tuple<uint, std::string>;
 using EntryTuple = std::tuple<std::string, std::vector<std::string>>;
 using BfsTuple = std::tuple<std::string, std::string, std::vector<std::string>>;
 
