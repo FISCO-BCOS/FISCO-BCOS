@@ -233,6 +233,8 @@ bytesPointer GatewayNodeManager::generateNodeStatus()
                                << LOG_KV("nodeListSize", groupNodeInfo->nodeIDList().size())
                                << LOG_KV("seq", statusSeq());
     }
+    NODE_MANAGER_LOG(INFO) << LOG_DESC("generateNodeStatus")
+                           << LOG_KV("nodeListSize", nodeList.size());
     nodeStatus->setGroupNodeInfos(std::move(groupNodeInfos));
     return nodeStatus->encode();
 }

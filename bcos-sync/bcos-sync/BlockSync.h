@@ -74,6 +74,8 @@ public:
     // used to optimize consensus
     bool faultyNode(bcos::crypto::NodeIDPtr _nodeID) override;
 
+    void enableAsMaster(bool _masterNode);
+
 protected:
     virtual void asyncNotifyBlockSyncMessage(Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
         bytesConstRef _data, std::function<void(bytesConstRef _respData)> _sendResponse,
@@ -133,6 +135,8 @@ protected:
     boost::mutex x_signalled;
     bcos::protocol::BlockNumber m_waterMark = 10;
     bcos::protocol::BlockNumber c_FaultyNodeBlockDelta = 50;
+
+    std::atomic_bool m_masterNode = {false};
 };
 }  // namespace sync
 }  // namespace bcos

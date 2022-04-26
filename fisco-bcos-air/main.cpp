@@ -56,7 +56,7 @@ int main(int argc, const char* argv[])
     {
         bcos::initializer::printVersion();
         std::cout << "[" << bcos::getCurrentDateTime() << "] ";
-        std::cerr << "start fisco-bcos failed, error:" << boost::diagnostic_information(e)
+        std::cout << "start fisco-bcos failed, error:" << boost::diagnostic_information(e)
                   << std::endl;
         return -1;
     }

@@ -120,6 +120,16 @@ public:
         m_nodeTypeChanged = _onNodeTypeChanged;
     }
 
+    void setMasterNode(bool _masterNode)
+    {
+        m_masterNode = _masterNode;
+        // notify nodeType to the gateway
+        if (m_nodeTypeChanged)
+        {
+            m_nodeTypeChanged(nodeType());
+        }
+    }
+
 protected:
     void setHash(bcos::crypto::HashType const& _hash);
 
@@ -164,6 +174,8 @@ private:
     bcos::protocol::NodeType m_nodeType = bcos::protocol::NodeType::None;
 
     std::function<void(bcos::protocol::NodeType)> m_nodeTypeChanged;
+
+    std::atomic_bool m_masterNode = {false};
 };
 }  // namespace sync
 }  // namespace bcos

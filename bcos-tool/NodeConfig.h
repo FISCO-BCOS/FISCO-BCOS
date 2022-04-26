@@ -38,6 +38,7 @@ class NodeConfig
 public:
     constexpr static ssize_t DEFAULT_CACHE_SIZE = 32 * 1024 * 1024;
     constexpr static ssize_t DEFAULT_MIN_CONSENSUS_TIME_MS = 3000;
+    constexpr static ssize_t DEFAULT_MIN_LEASE_TTL_SECONDS = 3;
 
     using Ptr = std::shared_ptr<NodeConfig>;
     NodeConfig() : m_ledgerConfig(std::make_shared<bcos::ledger::LedgerConfig>()) {}
@@ -179,6 +180,10 @@ public:
     uint32_t compatibilityVersion() const { return m_compatibilityVersion; }
     std::string const& version() const { return m_version; }
 
+    std::string const& memberID() const { return m_memberID; }
+    unsigned leaseTTL() const { return m_leaseTTL; }
+    bool enableConsensusBackup() const { return m_enableConsensusBackup; }
+
 protected:
     virtual void loadChainConfig(boost::property_tree::ptree const& _pt);
     virtual void loadRpcConfig(boost::property_tree::ptree const& _pt);
@@ -227,6 +232,7 @@ private:
     // sealer configuration
     size_t m_minSealTime = 0;
     size_t m_checkPointTimeoutInterval;
+
     // for security
     std::string m_privateKeyPath;
 
@@ -287,6 +293,11 @@ private:
     ssize_t m_cacheSize = DEFAULT_CACHE_SIZE;  // 32MB for default
     uint32_t m_compatibilityVersion;
     std::string m_version;
+
+    // consensus config
+    std::string m_memberID;
+    unsigned m_leaseTTL = 0;
+    bool m_enableConsensusBackup = false;
 };
 }  // namespace tool
 }  // namespace bcos

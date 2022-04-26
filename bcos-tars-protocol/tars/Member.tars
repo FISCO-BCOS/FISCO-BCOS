@@ -1,0 +1,6 @@
+module bcostars {
+    struct Member {
+        1 require string memberID;
+        2 optional string memberConfig;
+    };
+};

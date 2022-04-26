@@ -42,6 +42,7 @@ BlockSync::BlockSync(BlockSyncConfig::Ptr _config, unsigned _idleWaitMs)
     m_downloadingTimer->registerTimeoutHandler(boost::bind(&BlockSync::onDownloadTimeout, this));
     m_downloadingQueue->registerNewBlockHandler(
         boost::bind(&BlockSync::onNewBlock, this, boost::placeholders::_1));
+    initSendResponseHandler();
 }
 
 void BlockSync::start()
@@ -73,7 +74,18 @@ void BlockSync::init()
     m_config->setGenesisHash(genesisHash);
     m_config->resetConfig(fetcher->ledgerConfig());
     BLKSYNC_LOG(INFO) << LOG_DESC("init block sync success");
-    initSendResponseHandler();
+}
+
+void BlockSync::enableAsMaster(bool _masterNode)
+{
+    BLKSYNC_LOG(INFO) << LOG_DESC("enableAsMaster:") << _masterNode;
+    m_config->setMasterNode(_masterNode);
+    m_masterNode = _masterNode;
+    if (!_masterNode)
+    {
+        return;
+    }
+    init();
 }
 
 void BlockSync::initSendResponseHandler()
@@ -162,6 +174,10 @@ void BlockSync::printSyncInfo()
 
 void BlockSync::executeWorker()
 {
+    if (!m_masterNode)
+    {
+        return;
+    }
     if (isSyncing())
     {
         printSyncInfo();
@@ -262,6 +278,10 @@ void BlockSync::maintainDownloadingBuffer()
 void BlockSync::asyncNotifyBlockSyncMessage(Error::Ptr _error, std::string const& _uuid,
     NodeIDPtr _nodeID, bytesConstRef _data, std::function<void(Error::Ptr _error)> _onRecv)
 {
+    if (!m_masterNode)
+    {
+        return;
+    }
     auto self = std::weak_ptr<BlockSync>(shared_from_this());
     asyncNotifyBlockSyncMessage(
         _error, _nodeID, _data,

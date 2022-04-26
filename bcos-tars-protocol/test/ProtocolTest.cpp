@@ -1,5 +1,6 @@
 #include "bcos-tars-protocol/protocol/BlockFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/BlockHeaderFactoryImpl.h"
+#include "bcos-tars-protocol/protocol/GroupInfoCodecImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionFactoryImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionMetaDataImpl.h"
 #include "bcos-tars-protocol/protocol/TransactionReceiptFactoryImpl.h"
@@ -14,6 +15,7 @@
 #include <bcos-framework/interfaces/protocol/LogEntry.h>
 #include <bcos-framework/interfaces/protocol/ProtocolTypeDef.h>
 #include <bcos-framework/interfaces/protocol/Transaction.h>
+#include <bcos-tars-protocol/protocol/MemberImpl.h>
 #include <bcos-utilities/DataConvertUtility.h>
 #include <tbb/parallel_for.h>
 #include <boost/test/tools/old/interface.hpp>
@@ -497,6 +499,82 @@ BOOST_AUTO_TEST_CASE(tarsMovable)
     BOOST_CHECK_EQUAL((intptr_t)addressTx1, (intptr_t)tx2.data.input.data());
 
     BOOST_CHECK_EQUAL((intptr_t)tx1.data.input.data(), (intptr_t) nullptr);
+}
+
+BOOST_AUTO_TEST_CASE(testMemberImpl)
+{
+    auto memberFactory = std::make_shared<bcostars::protocol::MemberFactoryImpl>();
+    auto member = memberFactory->createMember();
+    std::string memberID = "testID";
+    std::string memberConfig = "testConfig";
+    member->setMemberID(memberID);
+    member->setMemberConfig(memberConfig);
+    BOOST_CHECK(member->memberID() == memberID);
+    BOOST_CHECK(member->memberConfig() == memberConfig);
+
+    std::string encodedData;
+    member->encode(encodedData);
+
+    auto member2 = memberFactory->createMember(encodedData);
+    BOOST_CHECK(member2->memberID() == memberID);
+    BOOST_CHECK(member2->memberConfig() == memberConfig);
+
+    // test groupInfoCodec
+    auto groupInfoCodec = std::make_shared<bcostars::protocol::GroupInfoCodecImpl>();
+    std::string chainID = "test_chain";
+    std::string groupID = "groupID";
+    std::string genesisConfig = "genesis;";
+    std::string iniConfig = "ini";
+
+    // the nodeInfo
+    std::string nodeName = "node_test";
+    std::string nodeID = "node_tid";
+    bcos::group::NodeCryptoType nodeCryptoType = bcos::group::NodeCryptoType::SM_NODE;
+    bcos::protocol::ProtocolInfo protocolInfo;
+    protocolInfo.setProtocolModuleID(bcos::protocol::ProtocolModuleID::GatewayService);
+    protocolInfo.setMaxVersion(10);
+    protocolInfo.setMinVersion(1);
+    auto groupInfo = std::make_shared<bcos::group::GroupInfo>(chainID, groupID);
+    for (int i = 0; i < 3; i++)
+    {
+        auto chainNode = std::make_shared<bcos::group::ChainNodeInfo>();
+        chainNode->setNodeName(nodeName + std::to_string(i));
+        chainNode->setNodeCryptoType(nodeCryptoType);
+        chainNode->appendServiceInfo(bcos::protocol::ServiceType::SCHEDULER, "SCHEDULER");
+        chainNode->setIniConfig(iniConfig);
+        chainNode->setNodeID(nodeID);
+        chainNode->setSystemVersion(10);
+        chainNode->setNodeType(bcos::protocol::NodeType::CONSENSUS_NODE);
+        chainNode->setMicroService(true);
+        chainNode->setNodeProtocol(protocolInfo);
+        groupInfo->appendNodeInfo(chainNode);
+    }
+    groupInfo->setGenesisConfig(genesisConfig);
+    groupInfo->setIniConfig(iniConfig);
+    std::string encodedData2;
+    groupInfoCodec->serialize(encodedData2, groupInfo);
+
+    auto decodedGroupInfo = groupInfoCodec->deserialize(encodedData2);
+    BOOST_CHECK(decodedGroupInfo->groupID() == groupID);
+    BOOST_CHECK(decodedGroupInfo->chainID() == chainID);
+    BOOST_CHECK(decodedGroupInfo->iniConfig() == iniConfig);
+    BOOST_CHECK(decodedGroupInfo->genesisConfig() == genesisConfig);
+    BOOST_CHECK(decodedGroupInfo->nodesNum() == 3);
+
+    auto nodesInfo = decodedGroupInfo->nodeInfos();
+    auto firstNodeInfo = nodesInfo.at(nodeName + std::to_string(0));
+    BOOST_CHECK(firstNodeInfo->nodeCryptoType() == nodeCryptoType);
+    BOOST_CHECK(firstNodeInfo->iniConfig() == iniConfig);
+    BOOST_CHECK(firstNodeInfo->nodeID() == nodeID);
+    BOOST_CHECK(firstNodeInfo->microService() == true);
+    BOOST_CHECK(firstNodeInfo->systemVersion() == 10);
+    BOOST_CHECK(firstNodeInfo->nodeType() == bcos::protocol::NodeType::CONSENSUS_NODE);
+    BOOST_CHECK(firstNodeInfo->serviceName(bcos::protocol::ServiceType::SCHEDULER) == "SCHEDULER");
+
+    auto decodedProtocolInfo = firstNodeInfo->nodeProtocol();
+    BOOST_CHECK(decodedProtocolInfo->protocolModuleID() == protocolInfo.protocolModuleID());
+    BOOST_CHECK(decodedProtocolInfo->maxVersion() == protocolInfo.maxVersion());
+    BOOST_CHECK(decodedProtocolInfo->minVersion() == protocolInfo.minVersion());
 }
 
 BOOST_AUTO_TEST_SUITE_END()

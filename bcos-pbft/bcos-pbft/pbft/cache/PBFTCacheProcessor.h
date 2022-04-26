@@ -197,6 +197,25 @@ public:
 
     virtual uint64_t getViewChangeWeight(ViewType _view) { return m_viewChangeWeight.at(_view); }
 
+    virtual void clearAllCache()
+    {
+        m_caches.clear();
+        m_viewChangeCache.clear();
+        std::priority_queue<PBFTProposalInterface::Ptr, std::vector<PBFTProposalInterface::Ptr>,
+            PBFTProposalCmp>
+            emptyQueue;
+        m_committedQueue.swap(emptyQueue);
+        m_executingProposals.clear();
+        m_committedProposalList.clear();
+        m_proposalsToStableConsensus.clear();
+
+        std::priority_queue<PBFTProposalInterface::Ptr, std::vector<PBFTProposalInterface::Ptr>,
+            PBFTProposalCmp>
+            emptyStableCheckPointQueue;
+        m_stableCheckPointQueue.swap(emptyStableCheckPointQueue);
+        m_recoverReqCache.clear();
+    }
+
 protected:
     virtual void loadAndVerifyProposal(bcos::crypto::NodeIDPtr _fromNode,
         PBFTProposalInterface::Ptr _proposal, size_t _retryTime = 0);

@@ -55,6 +55,9 @@ set(RPC_TARGET "rpc")
 # bcos-tool
 set(TOOL_TARGET "tool")
 
+# bcos-leader-election
+set(LEADER_ELECTION_TARGET "leader_election")
+
 # libinitializer
 set(PROTOCOL_INIT_LIB protocol_init)
 set(FRONTSERVICE_INIT_LIB front_init)

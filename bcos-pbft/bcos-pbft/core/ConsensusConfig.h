@@ -45,7 +45,10 @@ public:
     // the nodeIndex of this node
     IndexType nodeIndex() const override { return m_nodeIndex; }
 
-    bool isConsensusNode() const override { return (m_nodeIndex != NON_CONSENSUS_NODE); }
+    bool isConsensusNode() const override
+    {
+        return (m_nodeIndex != NON_CONSENSUS_NODE) && m_asMasterNode.load();
+    }
     // the consensus node list
     ConsensusNodeList consensusNodeList() const override;
     bcos::crypto::NodeIDs consensusNodeIDList(bool _excludeSelf = true) const override;
@@ -110,6 +113,9 @@ public:
 
     void setObserverNodeList(ConsensusNodeList& _observerNodeList);
 
+    bool asMasterNode() const { return m_asMasterNode.load(); }
+    virtual void enableAsMaterNode(bool _isMasterNode) { m_asMasterNode.store(_isMasterNode); }
+
 private:
     bool compareConsensusNode(ConsensusNodeList const& _left, ConsensusNodeList const& _right);
 
@@ -137,6 +143,8 @@ protected:
     std::atomic<bcos::protocol::BlockNumber> m_progressedIndex = {0};
     std::atomic_bool m_syncingState = {false};
     bcos::protocol::BlockNumber m_syncingHighestNumber = {0};
+
+    std::atomic_bool m_asMasterNode = {false};
 };
 }  // namespace consensus
 }  // namespace bcos

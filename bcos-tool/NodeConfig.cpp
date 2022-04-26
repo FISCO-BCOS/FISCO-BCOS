@@ -53,8 +53,8 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt)
 
     loadSecurityConfig(_pt);
     loadSealerConfig(_pt);
-    loadConsensusConfig(_pt);
     loadStorageConfig(_pt);
+    loadConsensusConfig(_pt);
     loadExecutorConfig(_pt);
 }
 
@@ -378,8 +378,30 @@ void NodeConfig::loadConsensusConfig(boost::property_tree::ptree const& _pt)
                                   "Please set consensus.checkpoint_timeout to no less than " +
                                   std::to_string(DEFAULT_MIN_CONSENSUS_TIME_MS) + "ms!"));
     }
+    // only enable leaderElection when using tikv
+    if (boost::iequals(storageType(), "TiKV"))
+    {
+        m_memberID = _pt.get("consensus.member_id", "");
+        if (m_memberID.size() == 0)
+        {
+            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                      "Please set consensus.member_id must be non-empty "));
+        }
+        m_leaseTTL = checkAndGetValue(
+            _pt, "consensus.lease_ttl", std::to_string(DEFAULT_MIN_LEASE_TTL_SECONDS));
+        if (m_leaseTTL < DEFAULT_MIN_LEASE_TTL_SECONDS)
+        {
+            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                      "Please set consensus.lease_ttl to no less than " +
+                                      std::to_string(DEFAULT_MIN_LEASE_TTL_SECONDS) + " seconds!"));
+        }
+        m_enableConsensusBackup = true;
+    }
     NodeConfig_LOG(INFO) << LOG_DESC("loadConsensusConfig")
-                         << LOG_KV("checkPointTimeoutInterval", m_checkPointTimeoutInterval);
+                         << LOG_KV("checkPointTimeoutInterval", m_checkPointTimeoutInterval)
+                         << LOG_KV("memberID", m_memberID.size() > 0 ? m_memberID : "not-set")
+                         << LOG_KV("leaseTTL", m_leaseTTL)
+                         << LOG_KV("enableConsensusBackup", m_enableConsensusBackup);
 }
 
 void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisConfig)

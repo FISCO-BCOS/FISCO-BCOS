@@ -40,10 +40,8 @@ FrontService::FrontService()
 {
     m_localProtocol = g_BCOSConfig.protocolInfo(ProtocolModuleID::NodeService);
     FRONT_LOG(INFO) << LOG_DESC("FrontService") << LOG_KV("this", this)
-                    << LOG_KV(
-                           "minVersion", (bcos::protocol::Version)(m_localProtocol->minVersion()))
-                    << LOG_KV(
-                           "maxVersion", (bcos::protocol::Version)(m_localProtocol->maxVersion()));
+                    << LOG_KV("minVersion", m_localProtocol->minVersion())
+                    << LOG_KV("maxVersion", m_localProtocol->maxVersion());
 }
 
 FrontService::~FrontService()

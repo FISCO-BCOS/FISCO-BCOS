@@ -87,6 +87,8 @@ public:
         m_cacheProcessor->registerCommittedProposalNotifier(_committedProposalNotifier);
     }
 
+    virtual void restart();
+
 protected:
     virtual void initSendResponseHandler();
     virtual void onReceivePBFTMessage(bcos::Error::Ptr _error, bcos::crypto::NodeIDPtr _nodeID,
@@ -184,6 +186,7 @@ private:
         boost::unique_lock<boost::mutex> l(x_signalled);
         m_signalled.wait_for(l, boost::chrono::milliseconds(5));
     }
+    void clearAllCache();
 
 protected:
     // PBFT configuration class
