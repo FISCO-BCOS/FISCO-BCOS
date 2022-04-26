@@ -65,6 +65,7 @@ PBFTInitializer::PBFTInitializer(bcos::initializer::NodeArchitectureType _nodeAr
     createPBFT();
     createSync();
     registerHandlers();
+    initChainNodeInfo(m_nodeArchType, m_nodeConfig);
 }
 
 std::string PBFTInitializer::generateGenesisConfig(bcos::tool::NodeConfig::Ptr _nodeConfig)
@@ -129,37 +130,29 @@ void PBFTInitializer::initChainNodeInfo(
     {
         microServiceMode = false;
     }
-    auto chainNodeInfo = std::make_shared<ChainNodeInfo>(_nodeConfig->nodeName(), nodeType);
-    chainNodeInfo->setNodeID(m_protocolInitializer->keyPair()->publicKey()->hex());
 
-    chainNodeInfo->setIniConfig(generateIniConfig(_nodeConfig));
-    chainNodeInfo->setMicroService(microServiceMode);
-    chainNodeInfo->setNodeType(m_blockSync->config()->nodeType());
-    chainNodeInfo->setNodeCryptoType(
+    m_nodeInfo = std::make_shared<ChainNodeInfo>(_nodeConfig->nodeName(), nodeType);
+    m_nodeInfo->setNodeID(m_protocolInitializer->keyPair()->publicKey()->hex());
+
+    m_nodeInfo->setIniConfig(generateIniConfig(_nodeConfig));
+    m_nodeInfo->setMicroService(microServiceMode);
+    m_nodeInfo->setNodeType(m_blockSync->config()->nodeType());
+    m_nodeInfo->setNodeCryptoType(
         (_nodeConfig->smCryptoType() ? NodeCryptoType::SM_NODE : NON_SM_NODE));
-
-    bool useConfigServiceName = false;
-    if (_nodeArchType == bcos::initializer::NodeArchitectureType::MAX)
+    if (_nodeArchType == bcos::initializer::NodeArchitectureType::AIR)
     {
-        useConfigServiceName = true;
+        m_nodeInfo->appendServiceInfo(SCHEDULER, SCHEDULER_SERVANT_NAME);
+        m_nodeInfo->appendServiceInfo(LEDGER, LEDGER_SERVANT_NAME);
+        m_nodeInfo->appendServiceInfo(FRONT, FRONT_SERVANT_NAME);
+        m_nodeInfo->appendServiceInfo(TXPOOL, TXPOOL_SERVANT_NAME);
     }
-    auto localNodeServiceName = ServerConfig::Application + "." + ServerConfig::ServerName;
-    chainNodeInfo->appendServiceInfo(SCHEDULER,
-        useConfigServiceName ? m_nodeConfig->schedulerServiceName() : localNodeServiceName);
-    chainNodeInfo->appendServiceInfo(LEDGER,
-        useConfigServiceName ? bcostars::getProxyDesc(LEDGER_SERVANT_NAME) : localNodeServiceName);
-    chainNodeInfo->appendServiceInfo(
-        FRONT, useConfigServiceName ? m_nodeConfig->frontServiceName() : localNodeServiceName);
-    chainNodeInfo->appendServiceInfo(CONSENSUS, localNodeServiceName);
-    chainNodeInfo->appendServiceInfo(
-        TXPOOL, useConfigServiceName ? m_nodeConfig->txpoolServiceName() : localNodeServiceName);
     // set protocolInfo
     auto nodeProtocolInfo = g_BCOSConfig.protocolInfo(ProtocolModuleID::NodeService);
-    chainNodeInfo->setNodeProtocol(*nodeProtocolInfo);
-    m_groupInfo->appendNodeInfo(chainNodeInfo);
+    m_nodeInfo->setNodeProtocol(*nodeProtocolInfo);
+    m_groupInfo->appendNodeInfo(m_nodeInfo);
     INITIALIZER_LOG(INFO) << LOG_DESC("PBFTInitializer::initChainNodeInfo")
-                          << LOG_KV("nodeType", chainNodeInfo->nodeType())
-                          << LOG_KV("nodeCryptoType", chainNodeInfo->nodeCryptoType())
+                          << LOG_KV("nodeType", m_nodeInfo->nodeType())
+                          << LOG_KV("nodeCryptoType", m_nodeInfo->nodeCryptoType())
                           << LOG_KV("nodeName", _nodeConfig->nodeName());
 }
 
@@ -182,7 +175,6 @@ void PBFTInitializer::init()
     m_sealer->init(m_pbft);
     m_blockSync->init();
     m_pbft->init();
-    initChainNodeInfo(m_nodeArchType, m_nodeConfig);
 }
 
 void PBFTInitializer::registerHandlers()

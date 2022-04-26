@@ -113,6 +113,7 @@ public:
             m_executor->getABI(contract, std::move(callback));
         });
     }
+
 private:
     bcos::ThreadPool m_pool;
     bcos::executor::TransactionExecutor::Ptr m_executor;
