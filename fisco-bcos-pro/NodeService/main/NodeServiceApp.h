@@ -52,6 +52,7 @@ protected:
     virtual void initLog();
     virtual void initNodeService();
     virtual void initTarsNodeService();
+    void initServiceInfo(Application* _application);
 
 private:
     bcos::BoostLogInitializer::Ptr m_logInitializer;

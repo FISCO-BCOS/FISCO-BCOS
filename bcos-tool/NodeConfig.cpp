@@ -113,20 +113,11 @@ void NodeConfig::loadNodeServiceConfig(
     m_nodeName = nodeName;
     m_schedulerServiceName = getServiceName(_pt, "service.scheduler", SCHEDULER_SERVANT_NAME,
         getDefaultServiceName(nodeName, SCHEDULER_SERVICE_NAME), false);
-    m_txpoolServiceName = getServiceName(_pt, "service.txpool", TXPOOL_SERVANT_NAME,
-        getDefaultServiceName(nodeName, TXPOOL_SERVICE_NAME), false);
-    m_consensusServiceName = getServiceName(_pt, "service.consensus", CONSENSUS_SERVANT_NAME,
-        getDefaultServiceName(nodeName, CONSENSUS_SERVICE_NAME), false);
-    m_frontServiceName = getServiceName(_pt, "service.front", FRONT_SERVANT_NAME,
-        getDefaultServiceName(nodeName, FRONT_SERVICE_NAME), false);
     m_executorServiceName = getServiceName(_pt, "service.executor", EXECUTOR_SERVANT_NAME,
         getDefaultServiceName(nodeName, EXECUTOR_SERVICE_NAME), false);
 
     NodeConfig_LOG(INFO) << LOG_DESC("load node service") << LOG_KV("nodeName", m_nodeName)
                          << LOG_KV("schedulerServiceName", m_schedulerServiceName)
-                         << LOG_KV("txpoolServiceName", m_txpoolServiceName)
-                         << LOG_KV("consensusServiceName", m_consensusServiceName)
-                         << LOG_KV("frontServiceName", m_frontServiceName)
                          << LOG_KV("executorServiceName", m_executorServiceName);
 }
 void NodeConfig::checkService(std::string const& _serviceType, std::string const& _serviceName)
