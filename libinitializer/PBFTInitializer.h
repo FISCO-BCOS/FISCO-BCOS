@@ -79,6 +79,7 @@ public:
     bcos::crypto::KeyFactory::Ptr keyFactory() { return m_protocolInitializer->keyFactory(); }
 
     bcos::group::GroupInfo::Ptr groupInfo() { return m_groupInfo; }
+    bcos::group::ChainNodeInfo::Ptr nodeInfo() { return m_nodeInfo; }
 
 protected:
     virtual void initChainNodeInfo(bcos::initializer::NodeArchitectureType _nodeArchType,
@@ -109,6 +110,7 @@ protected:
     std::shared_ptr<bcos::consensus::PBFTImpl> m_pbft;
 
     bcos::group::GroupInfo::Ptr m_groupInfo;
+    bcos::group::ChainNodeInfo::Ptr m_nodeInfo;
 
     // Note: If the groupNodeInfo fails to be pulled because the gateway is closed in pro-mode, it
     // will periodically retry to pull the groupInfo until the information is successfully pulled.

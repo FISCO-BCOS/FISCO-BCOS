@@ -177,7 +177,7 @@ bool LocalRouterTable::updateGroupNodeInfos(bcos::group::GroupInfo::Ptr _groupIn
         }
         auto frontService =
             createServiceClient<bcostars::FrontServiceClient, bcostars::FrontServicePrx>(
-                serviceName, FRONT_SERVANT_NAME, m_keyFactory);
+                serviceName, m_keyFactory);
         UpgradeGuard ul(l);
         auto frontServiceInfo = std::make_shared<FrontServiceInfo>(
             nodeInfo->nodeID(), frontService.first, nodeInfo->nodeType(), frontService.second);

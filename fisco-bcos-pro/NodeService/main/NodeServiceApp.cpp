@@ -53,6 +53,8 @@ void NodeServiceApp::initialize()
     initLog();
     initNodeService();
     initTarsNodeService();
+    initServiceInfo(this);
+    m_nodeInitializer->start();
 }
 
 void NodeServiceApp::initLog()
@@ -68,7 +70,6 @@ void NodeServiceApp::initNodeService()
 {
     m_nodeInitializer = std::make_shared<Initializer>();
     m_nodeInitializer->initMicroServiceNode(m_iniConfigPath, m_genesisConfigPath, m_privateKeyPath);
-    m_nodeInitializer->start();
     auto rpcServiceName = m_nodeInitializer->nodeConfig()->rpcServiceName();
     auto rpcServicePrx =
         Application::getCommunicator()->stringToProxy<bcostars::RpcServicePrx>(rpcServiceName);
@@ -108,4 +109,41 @@ void NodeServiceApp::initTarsNodeService()
     frontServiceParam.frontServiceInitializer = m_nodeInitializer->frontService();
     addServantWithParams<FrontServiceServer, FrontServiceParam>(
         getProxyDesc(FRONT_SERVANT_NAME), frontServiceParam);
+}
+
+void NodeServiceApp::initServiceInfo(Application* _application)
+{
+    auto nodeInfo = m_nodeInitializer->pbftInitializer()->nodeInfo();
+    // Note: must call this after addServantWithParams of NodeServiceApp
+    auto schedulerDesc = getEndPointDescByAdapter(_application, SCHEDULER_SERVANT_NAME);
+    if (!schedulerDesc.first)
+    {
+        throw std::runtime_error("init NodeService failed for get scheduler-desc failed");
+    }
+    nodeInfo->appendServiceInfo(SCHEDULER, schedulerDesc.second);
+
+    auto ledgerDesc = getEndPointDescByAdapter(_application, LEDGER_SERVANT_NAME);
+    if (!ledgerDesc.first)
+    {
+        throw std::runtime_error("init NodeService failed for get ledger-desc failed");
+    }
+    nodeInfo->appendServiceInfo(LEDGER, ledgerDesc.second);
+
+    auto frontServiceDesc = getEndPointDescByAdapter(_application, FRONT_SERVANT_NAME);
+    if (!frontServiceDesc.first)
+    {
+        throw std::runtime_error("init NodeService failed for get front-service-desc failed");
+    }
+    nodeInfo->appendServiceInfo(FRONT, frontServiceDesc.second);
+
+    auto txpoolServiceDesc = getEndPointDescByAdapter(_application, TXPOOL_SERVANT_NAME);
+    if (!txpoolServiceDesc.first)
+    {
+        throw std::runtime_error("init NodeService failed for get txpool-service-desc failed");
+    }
+    nodeInfo->appendServiceInfo(TXPOOL, txpoolServiceDesc.second);
+    BCOS_LOG(INFO) << LOG_DESC("initServiceInfo") << LOG_KV("schedulerDesc", schedulerDesc.second)
+                   << LOG_KV("ledgerDesc", ledgerDesc.second)
+                   << LOG_KV("frontServiceDesc", frontServiceDesc.second)
+                   << LOG_KV("txpoolServiceDesc", txpoolServiceDesc.second);
 }
