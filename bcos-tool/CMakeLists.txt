@@ -22,14 +22,10 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment ver
 include(Version)
 project(bcos-tool VERSION ${VERSION})
 
-# find Snappy
-hunter_add_package(Snappy)
-find_package(Snappy REQUIRED)
-
 file(GLOB_RECURSE SRCS *.cpp)
 add_library(${TOOL_TARGET} ${SRCS})
 target_compile_options(${TOOL_TARGET} PRIVATE -Wno-error -Wno-unused-variable)
-target_link_libraries(${TOOL_TARGET} PUBLIC ${UTILITIES_TARGET} PUBLIC ${SECURITY_TARGET} Snappy::snappy)
+target_link_libraries(${TOOL_TARGET} PUBLIC ${UTILITIES_TARGET} PUBLIC ${SECURITY_TARGET})
 
 # for doxygen
 # include(BuildDocs)
