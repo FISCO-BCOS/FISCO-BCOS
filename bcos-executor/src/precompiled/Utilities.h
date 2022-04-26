@@ -49,6 +49,10 @@ inline void getErrorCodeOut(bytes& out, int const& result, const CodecWrapper& _
 
 inline std::string getTableName(const std::string_view& _tableName)
 {
+    if (_tableName.substr(0, strlen(executor::USER_TABLE_PREFIX)) == executor::USER_TABLE_PREFIX)
+    {
+        return std::string(_tableName);
+    }
     auto tableName = (_tableName[0] == '/') ? _tableName.substr(1) : _tableName;
     return executor::USER_TABLE_PREFIX + std::string(tableName);
 }
