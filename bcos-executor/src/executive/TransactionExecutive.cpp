@@ -1148,7 +1148,7 @@ bool TransactionExecutive::checkAuth(
                          codec->encodeWithSig("hasDeployAuth(string)", address) :
                          codec->encodeWithSig("hasDeployAuth(address)", Address(address));
         auto response = externalRequest(shared_from_this(), ref(input), callParameters->origin,
-            callParameters->senderAddress, authMgrAddress, false, false, callParameters->gas);
+            callParameters->receiveAddress, authMgrAddress, false, false, callParameters->gas);
         bool result = true;
         codec->decode(ref(response->data), result);
         return result;
