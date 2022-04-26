@@ -39,17 +39,12 @@ public:
     ~StorageEncDecHelper() = default;
 
 public:
-    static EncHookFunction getEncryptHandler(
-        const std::vector<uint8_t>& _encryptKey, bool _enableCompress = false);
-    static DecHookFunction getDecryptHandler(
-        const std::vector<uint8_t>& _encryptKey, bool _enableCompress = false);
+    static EncHookFunction getEncryptHandler(const std::vector<uint8_t>& _encryptKey);
+    static DecHookFunction getDecryptHandler(const std::vector<uint8_t>& _encryptKey);
 
-    static EncHookFunction getEncryptHandlerSM(
-        const std::vector<uint8_t>& _encryptKey, bool _enableCompress = false);
-    static DecHookFunction getDecryptHandlerSM(
-        const std::vector<uint8_t>& _encryptKey, bool _enableCompress = false);
+    static EncHookFunction getEncryptHandlerSM(const std::vector<uint8_t>& _encryptKey);
+    static DecHookFunction getDecryptHandlerSM(const std::vector<uint8_t>& _encryptKey);
 };
-
 }
 
 }
