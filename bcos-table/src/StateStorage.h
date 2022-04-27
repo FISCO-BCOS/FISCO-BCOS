@@ -24,11 +24,7 @@
  */
 #pragma once
 
-#include "bcos-framework/interfaces/storage/StorageInterface.h"
-#include "bcos-framework/interfaces/storage/Table.h"
-#include "tbb/enumerable_thread_specific.h"
-#include <bcos-crypto/interfaces/crypto/Hash.h>
-#include <bcos-utilities/Error.h>
+#include "bcos-table/src/StateStorageInterface.h"
 #include <boost/core/ignore_unused.hpp>
 #include <boost/format.hpp>
 #include <boost/multi_index/hashed_index.hpp>
@@ -38,47 +34,11 @@
 #include <boost/multi_index/sequenced_index.hpp>
 #include <boost/multi_index_container.hpp>
 #include <boost/property_map/property_map.hpp>
-#include <boost/throw_exception.hpp>
-#include <future>
-#include <memory>
-#include <optional>
-#include <shared_mutex>
-#include <type_traits>
 
 namespace bcos::storage
 {
-class Recoder
-{
-public:
-    using Ptr = std::shared_ptr<Recoder>;
-    using ConstPtr = std::shared_ptr<Recoder>;
-
-    struct Change
-    {
-        Change(std::string _table, std::string _key, std::optional<Entry> _entry)
-          : table(std::move(_table)), key(std::move(_key)), entry(std::move(_entry))
-        {}
-        Change(const Change&) = delete;
-        Change& operator=(const Change&) = delete;
-        Change(Change&&) noexcept = default;
-        Change& operator=(Change&&) noexcept = default;
-
-        std::string table;
-        std::string key;
-        std::optional<Entry> entry;
-    };
-
-    void log(Change&& change) { m_changes.emplace_front(std::move(change)); }
-    auto begin() const { return m_changes.cbegin(); }
-    auto end() const { return m_changes.cend(); }
-    void clear() { m_changes.clear(); }
-
-private:
-    std::list<Change> m_changes;
-};
-
 template <bool enableLRU = false>
-class BaseStorage : public virtual storage::TraverseStorageInterface,
+class BaseStorage : public virtual storage::StateStorageInterface,
                     public virtual storage::MergeableStorageInterface
 {
 private:
@@ -121,9 +81,7 @@ public:
     using Ptr = std::shared_ptr<BaseStorage<enableLRU>>;
 
     explicit BaseStorage(std::shared_ptr<StorageInterface> prev)
-      : storage::TraverseStorageInterface(),
-        m_prev(std::move(prev)),
-        m_buckets(std::thread::hardware_concurrency())
+      : storage::StateStorageInterface(prev), m_buckets(std::thread::hardware_concurrency())
     {}
 
     BaseStorage(const BaseStorage&) = delete;
@@ -196,7 +154,7 @@ public:
                     auto localIt = localKeys.find(*it);
                     if (localIt != localKeys.end())
                     {
-                        if (localIt->second != Entry::NORMAL)
+                        if (localIt->second == Entry::DELETED)
                         {
                             it = remoteKeys.erase(it);
                             deleted = true;
@@ -234,7 +192,7 @@ public:
         {
             auto& entry = it->entry;
 
-            if (entry.status() != Entry::NORMAL)
+            if (entry.status() == Entry::DELETED)
             {
                 lock.unlock();
 
@@ -479,39 +437,7 @@ public:
         STORAGE_LOG(INFO) << "Successful merged " << count << " records";
     }
 
-    std::optional<Table> openTable(const std::string_view& tableView)
-    {
-        std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> openPromise;
-        asyncOpenTable(tableView, [&](auto&& error, auto&& table) {
-            openPromise.set_value({std::move(error), std::move(table)});
-        });
-
-        auto [error, table] = openPromise.get_future().get();
-        if (error)
-        {
-            BOOST_THROW_EXCEPTION(*error);
-        }
-
-        return table;
-    }
-
-    std::optional<Table> createTable(std::string _tableName, std::string _valueFields)
-    {
-        std::promise<std::tuple<Error::UniquePtr, std::optional<Table>>> createPromise;
-        asyncCreateTable(
-            _tableName, _valueFields, [&](Error::UniquePtr&& error, std::optional<Table>&& table) {
-                createPromise.set_value({std::move(error), std::move(table)});
-            });
-        auto [error, table] = createPromise.get_future().get();
-        if (error)
-        {
-            BOOST_THROW_EXCEPTION(*error);
-        }
-
-        return table;
-    }
-
-    crypto::HashType hash(const bcos::crypto::Hash::Ptr& hashImpl) const
+    crypto::HashType hash(const bcos::crypto::Hash::Ptr& hashImpl) const override
     {
         bcos::crypto::HashType totalHash;
 
@@ -563,15 +489,8 @@ public:
         return totalHash;
     }
 
-    void setPrev(std::shared_ptr<StorageInterface> prev)
-    {
-        std::unique_lock<std::shared_mutex> lock(m_prevMutex);
-        m_prev = std::move(prev);
-    }
 
-    typename Recoder::Ptr newRecoder() { return std::make_shared<Recoder>(); }
-    void setRecoder(typename Recoder::Ptr recoder) { m_recoder.local().swap(recoder); }
-    void rollback(const Recoder& recoder)
+    void rollback(const Recoder& recoder) override
     {
         if (m_readOnly)
         {
@@ -644,7 +563,7 @@ public:
     }
 
     void setEnableTraverse(bool enableTraverse) { m_enableTraverse = enableTraverse; }
-    void setReadOnly(bool readOnly) { m_readOnly = readOnly; }
+
     void setMaxCapacity(ssize_t capacity) { m_maxCapacity = capacity; }
 
 private:
@@ -691,13 +610,7 @@ private:
         return prev;
     }
 
-    tbb::enumerable_thread_specific<typename Recoder::Ptr> m_recoder;
-
-    std::shared_ptr<StorageInterface> m_prev;
-    std::shared_mutex m_prevMutex;
-
     bool m_enableTraverse = false;
-    bool m_readOnly = false;
 
     ssize_t m_maxCapacity = 32 * 1024 * 1024;
 

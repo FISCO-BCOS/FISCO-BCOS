@@ -38,9 +38,9 @@ public:
         storage::MergeableStorageInterface::Ptr cachedStorage,
         storage::TransactionalStorageInterface::Ptr backendStorage,
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
-        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck)
+        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool useKeyPage)
       : TransactionExecutor(std::move(txpool), std::move(cachedStorage), std::move(backendStorage),
-            std::move(executionMessageFactory), std::move(hashImpl), isAuthCheck)
+            std::move(executionMessageFactory), std::move(hashImpl), isAuthCheck, useKeyPage)
     {
         m_isWasm = false;
         m_schedule = FiscoBcosScheduleV4;
@@ -55,15 +55,6 @@ public:
 private:
     void initPrecompiled();
 
-#if 0
-    std::shared_ptr<std::vector<bytes>> extractConflictFields(const FunctionAbi& functionAbi,
-        const CallParameters& params, std::shared_ptr<BlockContext> _blockContext) override;
-
-    void dagExecuteTransactionsInternal(gsl::span<std::unique_ptr<CallParameters>> inputs,
-        std::function<void(
-            bcos::Error::UniquePtr, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>)>
-            callback) override;
-#endif
 };
 
 }  // namespace executor

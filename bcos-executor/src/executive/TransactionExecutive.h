@@ -88,7 +88,7 @@ public:
         m_seq(seq),
         m_gasInjector(gasInjector)
     {
-        m_recoder = m_blockContext.lock()->storage()->newRecoder();
+        m_recoder = std::make_shared<storage::Recoder>();
         m_hashImpl = m_blockContext.lock()->hashHandler();
     }
 

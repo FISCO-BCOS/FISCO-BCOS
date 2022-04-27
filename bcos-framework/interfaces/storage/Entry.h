@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Common.h"
+#include "bcos-crypto/interfaces/crypto/Hash.h"
 #include <bcos-utilities/Common.h>
 #include <bcos-utilities/Error.h>
 #include <boost/archive/basic_archive.hpp>
@@ -23,7 +24,9 @@ public:
     enum Status : int8_t
     {
         NORMAL = 0,
-        DELETED
+        DELETED = 1,
+        NONE = 2,
+        // MODIFIED = 3,  // dirty() can use status
     };
 
     constexpr static int32_t SMALL_SIZE = 32;
@@ -192,6 +195,33 @@ public:
     }
 
     bool valid() const { return m_status == Status::NORMAL; }
+    crypto::HashType hash(
+        std::string_view table, std::string_view key, const bcos::crypto::Hash::Ptr& hashImpl) const
+    {
+        bcos::crypto::HashType entryHash;
+        if (m_status != Entry::DELETED)
+        {
+            auto value = get();
+            bcos::bytesConstRef ref((const bcos::byte*)value.data(), value.size());
+            entryHash = hashImpl->hash(ref);
+            if (c_fileLogLevel >= TRACE)
+            {
+                STORAGE_LOG(TRACE)
+                    << "Entry Calc hash, dirty entry: " << table << " | " << toHex(key) << " | "
+                    << toHex(value) << LOG_KV("hash", entryHash.abridged());
+            }
+        }
+        else
+        {
+            entryHash = bcos::crypto::HashType(0x1);
+            if (c_fileLogLevel >= TRACE)
+            {
+                STORAGE_LOG(TRACE) << "Entry Calc hash, deleted entry: " << table << " | "
+                                   << toHex(toHex(key)) << LOG_KV("hash", entryHash.abridged());
+            }
+        }
+        return entryHash;
+    }
 
 private:
     std::string_view outputValueView(const ValueType& value) const
@@ -220,7 +250,7 @@ private:
         return view;
     }
 
-    ValueType m_value;                 // should serialization
+    ValueType m_value = "";            // should serialization
     int32_t m_size = 0;                // no need to serialization
     Status m_status = Status::NORMAL;  // should serialization
     bool m_dirty = false;              // no need to serialization

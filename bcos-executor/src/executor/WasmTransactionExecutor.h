@@ -38,16 +38,15 @@ public:
         storage::MergeableStorageInterface::Ptr cachedStorage,
         storage::TransactionalStorageInterface::Ptr backendStorage,
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
-        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck)
+        bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool useKeyPage)
       : TransactionExecutor(std::move(txpool), std::move(cachedStorage), std::move(backendStorage),
-            std::move(executionMessageFactory), std::move(hashImpl), isAuthCheck)
+            std::move(executionMessageFactory), std::move(hashImpl), isAuthCheck, useKeyPage)
     {
         m_isWasm = true;
         m_schedule = BCOSWASMSchedule;
         initPrecompiled();
         assert(!m_constantPrecompiled->empty());
         assert(m_builtInPrecompiled);
-        m_isWasm = true;
     }
 
     ~WasmTransactionExecutor() override = default;

@@ -12,10 +12,10 @@ public:
         txpool::TxPoolInterface::Ptr txpool, storage::MergeableStorageInterface::Ptr cache,
         storage::TransactionalStorageInterface::Ptr storage,
         protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
-        bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck)
+        bcos::crypto::Hash::Ptr hashImpl, bool isWasm, bool isAuthCheck, bool useKeyPage = true)
     {
         return bcos::executor::TransactionExecutorFactory::build(
-            txpool, cache, storage, executionMessageFactory, hashImpl, isWasm, isAuthCheck);
+            txpool, cache, storage, executionMessageFactory, hashImpl, isWasm, isAuthCheck, useKeyPage);
     }
 };
 }  // namespace bcos::initializer

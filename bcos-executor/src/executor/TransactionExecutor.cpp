@@ -53,6 +53,7 @@
 #include "bcos-framework/interfaces/protocol/TransactionReceipt.h"
 #include "bcos-framework/interfaces/storage/StorageInterface.h"
 #include "bcos-framework/interfaces/storage/Table.h"
+#include "bcos-table/src/KeyPageStorage.h"
 #include "bcos-table/src/StateStorage.h"
 #include "tbb/flow_graph.h"
 #include <bcos-framework/interfaces/protocol/LogEntry.h>
@@ -75,6 +76,7 @@
 #include <functional>
 #include <gsl/gsl_util>
 #include <iterator>
+#include <memory>
 #include <mutex>
 #include <shared_mutex>
 #include <string>
@@ -95,8 +97,8 @@ crypto::Hash::Ptr GlobalHashImpl::g_hashImpl;
 
 
 BlockContext::Ptr TransactionExecutor::createBlockContext(
-    const protocol::BlockHeader::ConstPtr& currentHeader, storage::StateStorage::Ptr storage,
-    storage::StorageInterface::Ptr lastStorage)
+    const protocol::BlockHeader::ConstPtr& currentHeader,
+    storage::StateStorageInterface::Ptr storage, storage::StorageInterface::Ptr lastStorage)
 {
     BlockContext::Ptr context = make_shared<BlockContext>(storage, lastStorage, m_hashImpl,
         currentHeader, FiscoBcosScheduleV4, m_isWasm, m_isAuthCheck);
@@ -106,7 +108,7 @@ BlockContext::Ptr TransactionExecutor::createBlockContext(
 
 std::shared_ptr<BlockContext> TransactionExecutor::createBlockContext(
     bcos::protocol::BlockNumber blockNumber, h256 blockHash, uint64_t timestamp,
-    int32_t blockVersion, storage::StateStorage::Ptr storage)
+    int32_t blockVersion, storage::StateStorageInterface::Ptr storage)
 {
     BlockContext::Ptr context = make_shared<BlockContext>(storage, m_hashImpl, blockNumber,
         blockHash, timestamp, blockVersion, FiscoBcosScheduleV4, m_isWasm, m_isAuthCheck);
@@ -119,14 +121,15 @@ TransactionExecutor::TransactionExecutor(txpool::TxPoolInterface::Ptr txpool,
     storage::MergeableStorageInterface::Ptr cachedStorage,
     storage::TransactionalStorageInterface::Ptr backendStorage,
     protocol::ExecutionMessageFactory::Ptr executionMessageFactory,
-    bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck)
+    bcos::crypto::Hash::Ptr hashImpl, bool isAuthCheck, bool useKeyPage = false)
   : m_txpool(std::move(txpool)),
     m_cachedStorage(std::move(cachedStorage)),
     m_backendStorage(std::move(backendStorage)),
     m_executionMessageFactory(std::move(executionMessageFactory)),
     m_hashImpl(std::move(hashImpl)),
     m_isAuthCheck(isAuthCheck),
-    m_isWasm(false)
+    m_isWasm(false),
+    m_useKeyPage(useKeyPage)
 {
     assert(m_backendStorage);
 
@@ -145,24 +148,24 @@ void TransactionExecutor::nextBlockHeader(const bcos::protocol::BlockHeader::Con
 
         {
             std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
-            bcos::storage::StateStorage::Ptr stateStorage;
+            bcos::storage::StateStorageInterface::Ptr stateStorage;
             bcos::storage::StorageInterface::Ptr lastStateStorage;
             if (m_stateStorages.empty())
             {
                 if (m_cachedStorage)
                 {
-                    stateStorage = std::make_shared<bcos::storage::StateStorage>(m_cachedStorage);
+                    stateStorage = createStateStorage(m_cachedStorage);
                 }
                 else
                 {
-                    stateStorage = std::make_shared<bcos::storage::StateStorage>(m_backendStorage);
+                    stateStorage = createStateStorage(m_backendStorage);
                 }
                 lastStateStorage =
                     m_lastStateStorage ?
                         m_lastStateStorage :
                         (m_cachedStorage ?
-                                std::make_shared<bcos::storage::StateStorage>(m_cachedStorage) :
-                                std::make_shared<bcos::storage::StateStorage>(m_backendStorage));
+                                createStateStorage(m_cachedStorage) :
+                                createStateStorage(m_backendStorage));
             }
             else
             {
@@ -180,7 +183,7 @@ void TransactionExecutor::nextBlockHeader(const bcos::protocol::BlockHeader::Con
 
                 prev.storage->setReadOnly(true);
                 lastStateStorage = prev.storage;
-                stateStorage = std::make_shared<bcos::storage::StateStorage>(prev.storage);
+                stateStorage = createStateStorage(prev.storage);
             }
             // set last commit state storage to blockContext, to auth read last block state
             m_blockContext = createBlockContext(blockHeader, stateStorage, lastStateStorage);
@@ -1516,7 +1519,7 @@ void TransactionExecutor::removeCommittedState()
     }
 
     bcos::protocol::BlockNumber number;
-    bcos::storage::StateStorage::Ptr storage;
+    bcos::storage::StateStorageInterface::Ptr storage;
 
     {
         std::unique_lock<std::shared_mutex> lock(m_stateStoragesMutex);
@@ -1676,4 +1679,19 @@ void TransactionExecutor::executeTransactionsWithCriticals(
     });
 
     txDag->run(m_DAGThreadNum);
+}
+
+bcos::storage::StateStorageInterface::Ptr TransactionExecutor::createStateStorage(
+    bcos::storage::StorageInterface::Ptr storage)
+{
+    if (m_useKeyPage)
+    {
+        auto keyPageStorage = std::dynamic_pointer_cast<bcos::storage::KeyPageStorage>(storage);
+        if(keyPageStorage)
+        {
+            keyPageStorage->setReturnPage(true);
+        }
+        return std::make_shared<bcos::storage::KeyPageStorage>(storage, false);
+    }
+    return std::make_shared<bcos::storage::StateStorage>(storage);
 }
