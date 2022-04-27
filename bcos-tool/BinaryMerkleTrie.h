@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ExceptionHolder.h"
+#include "Exceptions.h"
 #include <bcos-crypto/interfaces/crypto/Hasher.h>
 #include <boost/throw_exception.hpp>
 #include <algorithm>
@@ -23,31 +23,41 @@ template <class Range>
 concept OutputHashRange =
     std::ranges::random_access_range<Range> && std::ranges::output_range<Range, bcos::h256>;
 
+template <bcos::crypto::Hasher Hasher>
 class BinaryMerkleTrie
 {
 public:
     BinaryMerkleTrie(){};
 
-    // Accept random access range
-    // explicit BinaryMerkleTrie(auto&& input)
-    // {
-    //     auto nodeSize = std::size(input);
-    //     if (nodeSize <= 0)
-    //     {
-    //         BOOST_THROW_EXCEPTION(MerkleTrieException{});
-    //     }
+    void calcHash(InputHashRange auto const& input)
+    {
+        auto inputSize = std::size(input);
+        if (inputSize <= 0)
+        {
+            BOOST_THROW_EXCEPTION(MerkleTrieException{});
+        }
 
-    //     nodeSize += (nodeSize - 1);
-    //     m_nodes.resize(nodeSize);
-    // }
+        m_nodes.resize(inputSize + (inputSize - 1));
 
-    template <bcos::crypto::Hasher Hasher>
-    void parseRange(InputHashRange auto const& input, OutputHashRange auto& output)
+        std::copy_n(std::begin(input), std::size(input), std::begin(m_nodes));
+
+        auto range = std::make_pair(m_nodes.begin(), m_nodes.begin() + inputSize);
+        while (range.first != range.second)
+        {
+            auto length = parseRange(range, std::make_pair(range.second, m_nodes.end()));
+            range.first = range.second;
+            range.second += length;
+        }
+    }
+
+    size_t parseRange(InputHashRange auto const& input, OutputHashRange auto& output)
     {
         auto inputSize = std::size(input);
         auto outputSize = std::size(output);
 
-        if (outputSize < (inputSize + 1) / 2)
+        auto expectOutputSize = (inputSize + 1) / 2;
+
+        if (outputSize < expectOutputSize)
         {
             BOOST_THROW_EXCEPTION(MerkleTrieException{});
         }
@@ -59,7 +69,7 @@ public:
 #pragma omp for
             for (size_t i = 0; i < inputSize; i += 2)
             {
-                holder([&]() {
+                holder.run([&]() {
                     if (i + 1 < inputSize) [[likely]]
                     {
                         auto& hash1 = input[i];
@@ -78,6 +88,13 @@ public:
             }
         }
         holder.rethrow();
+
+        return expectOutputSize;
+    }
+
+    std::vector<bcos::h256> getProof(bcos::h256 hash)
+    {
+        return {};
     }
 
 private:

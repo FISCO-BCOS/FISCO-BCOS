@@ -219,7 +219,7 @@ public:
                     }
                 }
 
-                callback(nullptr, std::move(remoteKeys));
+                callback(nullptr, std::forward<decltype(remoteKeys)>(remoteKeys));
             });
     }
 
