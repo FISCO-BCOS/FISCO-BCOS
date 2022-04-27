@@ -75,22 +75,6 @@ public:
     }
 
 private:
-    template <class InputRange>
-    constexpr void checkInputRange()
-    {
-        BOOST_CONCEPT_ASSERT((boost::RandomAccessRangeConcept<InputRange>));
-        static_assert(std::is_same_v<typename boost::range_value<InputRange>::type, bcos::h256>,
-            "Input range value type isn't bcos::h256!");
-    }
-
-    template <class OutputRange>
-    constexpr void checkOutputRange()
-    {
-        BOOST_CONCEPT_ASSERT((boost::Mutable_RandomAccessContainer<OutputRange>));
-        static_assert(std::is_same_v<typename boost::range_value<OutputRange>::type, bcos::h256>,
-            "Output range value type isn't bcos::h256!");
-    }
-
     std::vector<bcos::h256> m_nodes;
 };
 }  // namespace bcos::tool

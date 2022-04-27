@@ -1,4 +1,4 @@
-#include <bcos-crypto/hashing/OpenSSLHashing.h>
+#include <bcos-crypto/hasher/OpenSSLHasher.h>
 #include <bcos-tool/BinaryMerkleTrie.h>
 #include <bcos-utilities/FixedBytes.h>
 #include <boost/test/unit_test.hpp>
@@ -28,7 +28,7 @@ BOOST_AUTO_TEST_CASE(testCalcHash)
 
     std::vector<bcos::h256> result(100000);
     std::vector<std::string> resultFake;
-    trie.parseRange<bcos::crypto::openssl::SHA3_256Hashing>(hashes, result);
+    trie.parseRange<bcos::crypto::openssl::OpenSSL_SHA2_256_Hasher>(hashes, result);
     // trie.parseRange<std::string>(hashes, std::back_inserter(result));
 }
 
