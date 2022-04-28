@@ -32,8 +32,11 @@ public:
     LeaderEntryPointInterface() = default;
     virtual ~LeaderEntryPointInterface() {}
 
-    virtual MemberInterface::Ptr getLeader() = 0;
-    virtual std::string const& leaderKey() const = 0;
+    virtual bcos::protocol::MemberInterface::Ptr getLeaderByKey(std::string const& _leaderKey) = 0;
+    virtual std::map<std::string, bcos::protocol::MemberInterface::Ptr> getAllLeaders() = 0;
+
+    virtual void addMemberChangeNotificationHandler(
+        std::function<void(std::string const&, bcos::protocol::MemberInterface::Ptr)>) = 0;
 };
 
 class LeaderEntryPointFactory
@@ -41,9 +44,10 @@ class LeaderEntryPointFactory
 public:
     using Ptr = std::shared_ptr<LeaderEntryPointFactory>();
     LeaderEntryPointFactory() = default;
-    virtual ~LeaderEntryPointFactory(){}
+    virtual ~LeaderEntryPointFactory() {}
 
-    virtual LeaderEntryPointInterface::Ptr createLeaderEntryPoint(std::string const& _etcdEndPoint, std::string const& _leaderKey, std::string const& _purpose) = 0;    
+    virtual LeaderEntryPointInterface::Ptr createLeaderEntryPoint(std::string const& _etcdEndPoint,
+        std::string const& _watchDir, std::string const& _purpose) = 0;
 };
 }  // namespace election
 }  // namespace bcos

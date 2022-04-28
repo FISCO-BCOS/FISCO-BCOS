@@ -443,11 +443,14 @@ void PBFTInitializer::initConsensusLeaderElection(KeyInterface::Ptr _nodeID)
     m_leaderElection = leaderElectionFactory->createLeaderElection(m_nodeConfig->memberID(),
         nodeConfig, etcdUrl, leaderKey, "consensus_fault_tolerance", m_nodeConfig->leaseTTL());
     // register the handler
-    m_leaderElection->registerOnCampaignHandler([this](bool _success) {
-        m_pbft->enableAsMaterNode(_success);
-        m_blockSync->enableAsMaster(_success);
-        m_txpool->clearAllTxs();
-    });
+    m_leaderElection->registerOnCampaignHandler(
+        [this](bool _success, bcos::protocol::MemberInterface::Ptr _leader) {
+            m_pbft->enableAsMaterNode(_success);
+            m_blockSync->enableAsMaster(_success);
+            m_txpool->clearAllTxs();
+            INITIALIZER_LOG(INFO) << LOG_DESC("onCampaignHandler") << LOG_KV("success", _success)
+                                  << LOG_KV("leader", _leader ? _leader->memberID() : "None");
+        });
     m_leaderElection->start();
     INITIALIZER_LOG(INFO) << LOG_DESC("initConsensusLeaderElection")
                           << LOG_KV("leaderKey", leaderKey) << LOG_KV("nodeConfig", nodeConfig);

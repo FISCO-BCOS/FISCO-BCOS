@@ -92,11 +92,13 @@ bool CampaignConfig::checkAndUpdateLeaderKey(etcd::Response _response)
         return false;
     }
     auto leader = m_memberFactory->createMember(_response.value().as_string());
+    auto seq = _response.value().modified_index();
+    leader->setSeq(seq);
     WriteGuard l(x_leader);
     m_leader = leader;
     ELECTION_LOG(INFO) << LOG_DESC("checkAndUpdateLeaderKey success")
                        << LOG_KV("leaderKey", m_leaderKey) << LOG_KV("leader", m_leader->memberID())
-                       << LOG_KV("version", valueVersion);
+                       << LOG_KV("version", valueVersion) << LOG_KV("modifiedIndex", seq);
     return true;
 }
 

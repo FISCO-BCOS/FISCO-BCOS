@@ -60,7 +60,8 @@ public:
         campaignLeader();
     }
     // called when campaign success, this logic should start to work when campaign success
-    virtual void registerOnCampaignHandler(std::function<void(bool)> _onCampaignHandler)
+    virtual void registerOnCampaignHandler(
+        std::function<void(bool, bcos::protocol::MemberInterface::Ptr)> _onCampaignHandler)
     {
         m_onCampaignHandler = _onCampaignHandler;
     }
@@ -84,7 +85,7 @@ protected:
     std::shared_ptr<etcd::Client> m_etcdClient;
     std::shared_ptr<etcd::KeepAlive> m_keepAlive;
     std::function<void(std::exception_ptr)> m_onKeepAliveException;
-    std::function<void(bool)> m_onCampaignHandler;
+    std::function<void(bool, bcos::protocol::MemberInterface::Ptr)> m_onCampaignHandler;
     mutable RecursiveMutex m_mutex;
 
     // for trigger campaign after disconnect

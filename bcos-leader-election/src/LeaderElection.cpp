@@ -101,9 +101,10 @@ bool LeaderElection::campaignLeader()
         m_keepAlive = std::make_shared<etcd::KeepAlive>(*(m_config->etcdClient()),
             boost::bind(&LeaderElection::onKeepAliveException, this, boost::placeholders::_1),
             keepAliveTTL, leaseID);
+        auto leader = m_config->getLeader();
         if (m_onCampaignHandler)
         {
-            m_onCampaignHandler(true);
+            m_onCampaignHandler(true, leader);
         }
         ELECTION_LOG(INFO)
             << LOG_DESC("campaignLeader: establish new keepAlive thread and switch to master-node")
@@ -159,5 +160,5 @@ void LeaderElection::tryToSwitchToBackup()
     ELECTION_LOG(INFO) << LOG_DESC("tryToSwitchToBackup")
                        << LOG_KV("memberID", m_config->self()->memberID())
                        << LOG_KV("leader", leader ? leader->memberID() : "no-leader");
-    m_onCampaignHandler(false);
+    m_onCampaignHandler(false, leader);
 }

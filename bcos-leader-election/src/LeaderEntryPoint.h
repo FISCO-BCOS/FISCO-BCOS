@@ -19,7 +19,7 @@
  * @date 2022-04-26
  */
 #pragma once
-#include <ElectionConfig.h>
+#include <WatcherConfig.h>
 #include <bcos-framework/interfaces/election/LeaderEntryPointInterface.h>
 #include <memory>
 
@@ -31,13 +31,25 @@ class LeaderEntryPoint : public LeaderEntryPointInterface
 {
 public:
     using Ptr = std::shared_ptr<LeaderEntryPoint>;
-    LeaderEntryPoint(ElectionConfig::Ptr _config) : m_config(_config) {}
+    LeaderEntryPoint(WatcherConfig::Ptr _config) : m_config(_config) {}
 
-    std::string const& leaderKey() const override { return m_config->leaseKey(); }
-    bcos::protocol::MemberInterface::Ptr getLeader() override { return m_config->getLeader(); }
+    MemberInterface::Ptr getLeaderByKey(std::string const& _leaderKey) override
+    {
+        return m_config->leader(_leaderKey);
+    }
+    std::map<std::string, MemberInterface::Ptr> getAllLeaders() override
+    {
+        return m_config->keyToLeader();
+    }
+
+    void addMemberChangeNotificationHandler(
+        std::function<void(std::string const&, bcos::protocol::MemberInterface::Ptr)> _handler)
+    {
+        m_config->addMemberChangeNotificationHandler(_handler);
+    }
 
 private:
-    ElectionConfig::Ptr m_config;
+    WatcherConfig::Ptr m_config;
 };
 
 class LeaderEntryPointFactoryImpl : public LeaderEntryPointFactory
@@ -50,12 +62,12 @@ public:
     ~LeaderEntryPointFactoryImpl() override {}
 
     LeaderEntryPointInterface::Ptr createLeaderEntryPoint(std::string const& _etcdEndPoint,
-        std::string const& _leaderKey, std::string const& _purpose) override
+        std::string const& _watchDir, std::string const& _purpose) override
     {
         auto config =
-            std::make_shared<ElectionConfig>(_etcdEndPoint, m_memberFactory, _leaderKey, _purpose);
+            std::make_shared<WatcherConfig>(_etcdEndPoint, m_memberFactory, _watchDir, _purpose);
         ELECTION_LOG(INFO) << LOG_DESC("createLeaderEntryPoint")
-                           << LOG_KV("etcdAddr", _etcdEndPoint) << LOG_KV("leaderKey", _leaderKey)
+                           << LOG_KV("etcdAddr", _etcdEndPoint) << LOG_KV("watchDir", _watchDir)
                            << LOG_KV("purpose", _purpose);
         return std::make_shared<LeaderEntryPoint>(config);
     }

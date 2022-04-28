@@ -31,7 +31,7 @@ public:
     using Ptr = std::shared_ptr<CampaignConfig>;
     CampaignConfig(bcos::protocol::MemberInterface::Ptr _self, std::string const& _etcdEndPoint,
         bcos::protocol::MemberFactoryInterface::Ptr _memberFactory, std::string const& _leaderKey,
-        std::string const& _purpose, unsigned _leaseTTL = 10)
+        std::string const& _purpose, unsigned _leaseTTL = 3)
       : ElectionConfig(_etcdEndPoint, _memberFactory, _purpose)
     {
         m_leaderKey = _leaderKey;

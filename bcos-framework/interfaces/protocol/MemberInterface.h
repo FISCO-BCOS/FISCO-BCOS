@@ -35,14 +35,19 @@ public:
     virtual void setMemberID(std::string const& _memberID) = 0;
     // the memberConfig of different service
     virtual void setMemberConfig(std::string const& _config) = 0;
+    virtual void setSeq(int64_t _seq) { m_seq = _seq; }
 
     virtual std::string const& memberID() const = 0;
     virtual std::string const& memberConfig() const = 0;
+    virtual int64_t seq() const { return m_seq; }
 
     // encode the member into string
     virtual void encode(std::string& _encodedData) = 0;
     // decode the member info
     virtual void decode(std::string const& _memberData) = 0;
+
+protected:
+    int64_t m_seq;
 };
 
 class MemberFactoryInterface
