@@ -56,7 +56,7 @@ void P2PInitializer::initConfig(boost::property_tree::ptree const& _pt)
                      << LOG_KV("peers_param_limit", peersParamLimit) << std::endl;
         exit(1);
     }
-    int maxNodesLimit = _pt.get<int>("p2p.max_nodes_linit", 100);
+    int maxNodesLimit = _pt.get<int>("p2p.max_nodes_limit", 100);
     if (maxNodesLimit <= 0)
     {
         INITIALIZER_LOG(ERROR) << LOG_BADGE("P2PInitializer") << LOG_DESC("Invalid maxNodesLimit")
