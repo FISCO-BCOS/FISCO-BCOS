@@ -35,12 +35,13 @@ using namespace bcos::precompiled;
 using namespace bcos::protocol;
 
 const char* const TABLE_METHOD_SELECT_KEY = "select(string)";
-const char* const TABLE_METHOD_SELECT_CON = "select((uint8,string)[],(uint,uint))";
+const char* const TABLE_METHOD_SELECT_CON = "select((uint8,string)[],(uint32,uint32))";
 const char* const TABLE_METHOD_INSERT = "insert((string,string[]))";
-const char* const TABLE_METHOD_UPDATE_KEY = "update(string,(uint,string)[])";
-const char* const TABLE_METHOD_UPDATE_CON = "update((uint8,string)[],(uint,uint),(uint,string)[])";
+const char* const TABLE_METHOD_UPDATE_KEY = "update(string,(uint32,string)[])";
+const char* const TABLE_METHOD_UPDATE_CON =
+    "update((uint8,string)[],(uint32,uint32),(uint32,string)[])";
 const char* const TABLE_METHOD_REMOVE_KEY = "remove(string)";
-const char* const TABLE_METHOD_REMOVE_CON = "remove((uint8,string)[],(uint,uint))";
+const char* const TABLE_METHOD_REMOVE_CON = "remove((uint8,string)[],(uint32,uint32))";
 const char* const TABLE_METHOD_DESC = "desc()";
 
 TablePrecompiled::TablePrecompiled(crypto::Hash::Ptr _hashImpl) : Precompiled(_hashImpl)

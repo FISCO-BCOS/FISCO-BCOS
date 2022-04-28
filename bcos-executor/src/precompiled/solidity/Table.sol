@@ -17,7 +17,7 @@ struct Entry {
 
 // 更新字段，用于update
 struct UpdateField {
-    uint index;
+    uint32 index;
     // string columnName;
     // 考虑工具类
     string value;
@@ -32,31 +32,31 @@ struct Condition {
 
 // 数量限制
 struct Limit {
-    uint offset;
-    // count limit max is 1000
-    uint count;
+    uint32 offset;
+    // count limit max is 500
+    uint32 count;
 }
 
 // 表管理合约，是静态Precompiled，有固定的合约地址
 abstract contract TableManager {
     // 创建表，传入TableInfo
-    function createTable(string memory path, TableInfo memory tableInfo) public virtual returns (int);
+    function createTable(string memory path, TableInfo memory tableInfo) public virtual returns (int32);
 
     // 创建KV表，传入key和value字段名
-    function createKVTable(string memory tableName, string memory keyField, string memory valueField) public virtual returns (int);
+    function createKVTable(string memory tableName, string memory keyField, string memory valueField) public virtual returns (int32);
 
     // 只提供给Solidity合约调用时使用
     function openTable(string memory path) public view virtual returns (address);
 
     // 变更表字段
     // 只能新增字段，不能删除字段，新增的字段默认值为空，不能与原有字段重复
-    function appendColumns(string memory path, string[] memory newColumns) public virtual returns (int);
+    function appendColumns(string memory path, string[] memory newColumns) public virtual returns (int32);
 }
 
 // 表合约，是动态Precompiled，TableManager创建时指定地址
 abstract contract Table {
     // 获取表信息
-    function desc() public virtual returns (TableInfo memory);
+    function desc() public view virtual returns (TableInfo memory);
 
     // 按key查询entry
     function select(string memory key) public virtual view returns (Entry memory);
@@ -65,24 +65,24 @@ abstract contract Table {
     function select(Condition[] memory conditions, Limit memory limit) public virtual view returns (Entry[] memory);
 
     // 插入数据
-    function insert(Entry memory entry) public virtual returns (int);
+    function insert(Entry memory entry) public virtual returns (int32);
 
     // 按key更新entry
-    function update(string memory key, UpdateField[] memory updateFields) public virtual returns (int);
+    function update(string memory key, UpdateField[] memory updateFields) public virtual returns (int32);
 
     // 按条件批量更新entry，condition为空则更新所有记录
-    function update(Condition[] memory conditions, Limit memory limit, UpdateField[] memory updateFields) public virtual returns (int);
+    function update(Condition[] memory conditions, Limit memory limit, UpdateField[] memory updateFields) public virtual returns (int32);
 
     // 按key删除entry
-    function remove(string memory key) public virtual returns (int);
+    function remove(string memory key) public virtual returns (int32);
     // 按条件批量删除entry，condition为空则删除所有记录
-    function remove(Condition[] memory conditions, Limit memory limit) public virtual returns (int);
+    function remove(Condition[] memory conditions, Limit memory limit) public virtual returns (int32);
 }
 
 abstract contract KVTable {
-    function desc() public virtual returns (TableInfo memory);
+    function desc() public view virtual returns (TableInfo memory);
 
-    function get(string memory key) public view virtual returns (bool, Entry memory);
+    function get(string memory key) public view virtual returns (bool, string memory);
 
-    function set(string memory key, string memory value) public virtual returns (int);
+    function set(string memory key, string memory value) public virtual returns (int32);
 }
