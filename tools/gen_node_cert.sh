@@ -392,6 +392,7 @@ main(){
     cat ${key_path}/ca.crt >> ${output_dir}/${conf_path}/node.crt
     if [ -n "$guomi_mode" ]; then
         cat ${gmkey_path}/gmagency.crt >> ${output_dir}/${gm_conf_path}/gmnode.crt
+        cat ${gmkey_path}/gmca.crt >> ${output_dir}/${gm_conf_path}/gmnode.crt
 
         #move origin conf to gm conf
         # rm ${output_dir}/${conf_path}/node.nodeid
