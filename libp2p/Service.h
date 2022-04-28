@@ -207,6 +207,15 @@ public:
         std::vector<dev::network::NodeIPEndpoint> const& endpoints, std::string& response) override;
     bool erasePeers(
         std::vector<dev::network::NodeIPEndpoint> const& endpoints, std::string& response) override;
+    void setPeersParamLimit(uint32_t const& peersParamLimit) 
+    {
+        m_peersParamLimit = peersParamLimit;
+    }
+    void setMaxNodesLimit(uint32_t const& maxNodesLimit)
+    {
+        m_maxNodesLimit = maxNodesLimit;
+    }
+
 
 private:
     void callDisconnectHandlers(dev::network::NetworkException _e, P2PSession::Ptr _p2pSession);
@@ -291,6 +300,8 @@ private:
 
     // for config file Operation
     mutable RecursiveMutex x_fileOperation;
+    std::atomic<uint32_t> m_peersParamLimit = {10};
+    std::atomic<uint32_t> m_maxNodesLimit = {100};
 };
 
 }  // namespace p2p
