@@ -51,6 +51,7 @@ void NodeConfig::loadConfig(boost::property_tree::ptree const& _pt)
     loadGatewayConfig(_pt);
     loadTxPoolConfig(_pt);
 
+    loadFailOverConfig(_pt);
     loadSecurityConfig(_pt);
     loadSealerConfig(_pt);
     loadStorageConfig(_pt);
@@ -368,6 +369,37 @@ void NodeConfig::loadStorageConfig(boost::property_tree::ptree const& _pt)
                          << LOG_KV("enableLRUCacheStorage", m_enableLRUCacheStorage);
 }
 
+void NodeConfig::loadFailOverConfig(boost::property_tree::ptree const& _pt)
+{
+    // only enable leaderElection when using tikv
+    m_enableFailOver = _pt.get("failover.enable", false);
+    if (!m_enableFailOver)
+    {
+        return;
+    }
+    m_failOverClusterUrl = _pt.get<std::string>("failover.cluster_url", "127.0.0.1:2379");
+    m_memberID = _pt.get("failover.member_id", "");
+    if (m_memberID.size() == 0)
+    {
+        BOOST_THROW_EXCEPTION(
+            InvalidConfig() << errinfo_comment("Please set failover.member_id must be non-empty "));
+    }
+    m_leaseTTL =
+        checkAndGetValue(_pt, "failover.lease_ttl", std::to_string(DEFAULT_MIN_LEASE_TTL_SECONDS));
+    if (m_leaseTTL < DEFAULT_MIN_LEASE_TTL_SECONDS)
+    {
+        BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
+                                  "Please set failover.lease_ttl to no less than " +
+                                  std::to_string(DEFAULT_MIN_LEASE_TTL_SECONDS) + " seconds!"));
+    }
+
+    NodeConfig_LOG(INFO) << LOG_DESC("loadFailOverConfig")
+                         << LOG_KV("failOverClusterUrl", m_failOverClusterUrl)
+                         << LOG_KV("memberID", m_memberID.size() > 0 ? m_memberID : "not-set")
+                         << LOG_KV("leaseTTL", m_leaseTTL)
+                         << LOG_KV("enableFailOver", m_enableFailOver);
+}
+
 void NodeConfig::loadConsensusConfig(boost::property_tree::ptree const& _pt)
 {
     m_checkPointTimeoutInterval = checkAndGetValue(
@@ -378,30 +410,8 @@ void NodeConfig::loadConsensusConfig(boost::property_tree::ptree const& _pt)
                                   "Please set consensus.checkpoint_timeout to no less than " +
                                   std::to_string(DEFAULT_MIN_CONSENSUS_TIME_MS) + "ms!"));
     }
-    // only enable leaderElection when using tikv
-    if (boost::iequals(storageType(), "TiKV"))
-    {
-        m_memberID = _pt.get("consensus.member_id", "");
-        if (m_memberID.size() == 0)
-        {
-            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                      "Please set consensus.member_id must be non-empty "));
-        }
-        m_leaseTTL = checkAndGetValue(
-            _pt, "consensus.lease_ttl", std::to_string(DEFAULT_MIN_LEASE_TTL_SECONDS));
-        if (m_leaseTTL < DEFAULT_MIN_LEASE_TTL_SECONDS)
-        {
-            BOOST_THROW_EXCEPTION(InvalidConfig() << errinfo_comment(
-                                      "Please set consensus.lease_ttl to no less than " +
-                                      std::to_string(DEFAULT_MIN_LEASE_TTL_SECONDS) + " seconds!"));
-        }
-        m_enableConsensusBackup = true;
-    }
     NodeConfig_LOG(INFO) << LOG_DESC("loadConsensusConfig")
-                         << LOG_KV("checkPointTimeoutInterval", m_checkPointTimeoutInterval)
-                         << LOG_KV("memberID", m_memberID.size() > 0 ? m_memberID : "not-set")
-                         << LOG_KV("leaseTTL", m_leaseTTL)
-                         << LOG_KV("enableConsensusBackup", m_enableConsensusBackup);
+                         << LOG_KV("checkPointTimeoutInterval", m_checkPointTimeoutInterval);
 }
 
 void NodeConfig::loadLedgerConfig(boost::property_tree::ptree const& _genesisConfig)

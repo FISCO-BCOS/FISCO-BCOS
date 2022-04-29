@@ -19,7 +19,7 @@
  * @date 2022-04-26
  */
 #pragma once
-#include "MemberInterface.h"
+#include "bcos-framework/interfaces/protocol/MemberInterface.h"
 #include <memory>
 namespace bcos
 {
@@ -37,6 +37,7 @@ public:
 
     virtual void addMemberChangeNotificationHandler(
         std::function<void(std::string const&, bcos::protocol::MemberInterface::Ptr)>) = 0;
+    virtual void start() = 0;
 };
 
 class LeaderEntryPointFactory

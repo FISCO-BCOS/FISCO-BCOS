@@ -20,6 +20,7 @@
  */
 
 #pragma once
+#include "bcos-rpc/groupmgr/GroupManager.h"
 #include <bcos-framework/interfaces/rpc/RPCInterface.h>
 #include <bcos-rpc/amop/AMOPClient.h>
 #include <bcos-rpc/event/EventSub.h>
@@ -84,6 +85,8 @@ public:
         m_amopClient->asyncNotifySubscribeTopic(_callback);
     }
 
+    GroupManager::Ptr groupManager() { return m_groupManager; }
+
 protected:
     virtual void notifyGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo);
 
@@ -98,6 +101,8 @@ private:
     bcos::rpc::JsonRpcImpl_2_0::Ptr m_jsonRpcImpl;
     bcos::event::EventSub::Ptr m_eventSub;
     AMOPClient::Ptr m_amopClient;
+    GroupManager::Ptr m_groupManager;
+
     bcos::protocol::ProtocolInfo::ConstPtr m_localProtocol;
 };
 

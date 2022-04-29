@@ -39,6 +39,12 @@ public:
 
     ~WatcherConfig() override {}
 
+    void start() override
+    {
+        ElectionConfig::start();
+        fetchLeadersInfo();
+    }
+
     std::string const& watchDir() const { return m_watchDir; }
     std::map<std::string, bcos::protocol::MemberInterface::Ptr> keyToLeader() const
     {
@@ -64,6 +70,9 @@ public:
     }
 
 protected:
+    virtual void fetchLeadersInfo();
+    void updateLeaderInfo(etcd::Value const& _value);
+
     void reCreateWatcher() override;
     virtual void onWatcherKeyChanged(etcd::Response _response);
 

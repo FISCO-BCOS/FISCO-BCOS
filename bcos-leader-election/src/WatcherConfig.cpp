@@ -31,6 +31,55 @@ void WatcherConfig::reCreateWatcher()
         boost::bind(&WatcherConfig::onWatcherKeyChanged, this, boost::placeholders::_1));
 }
 
+void WatcherConfig::fetchLeadersInfo()
+{
+    auto response = m_etcdClient->ls(m_watchDir).get();
+    if (!response.is_ok())
+    {
+        ELECTION_LOG(WARNING) << LOG_DESC("fetchLeadersInfo failed")
+                              << LOG_KV("watchDir", m_watchDir);
+        return;
+    }
+    auto const& values = response.values();
+    for (auto const& value : values)
+    {
+        updateLeaderInfo(value);
+    }
+}
+
+void WatcherConfig::updateLeaderInfo(etcd::Value const& _value)
+{
+    try
+    {
+        auto version = _value.version();
+        if (version == 0)
+        {
+            ELECTION_LOG(INFO) << LOG_DESC("updateLeaderInfo: the leaderKey has been released")
+                               << LOG_KV("leaderKey", _value.key());
+            return;
+        }
+        auto const& leaderKey = _value.key();
+        auto member = m_memberFactory->createMember(_value.as_string());
+        auto seq = _value.modified_index();
+        member->setSeq(seq);
+        ELECTION_LOG(INFO) << LOG_DESC("updateLeaderInfo: update leader")
+                           << LOG_KV("leaderKey", leaderKey) << LOG_KV("member", member->memberID())
+                           << LOG_KV("modifiedIndex", seq);
+        {
+            WriteGuard l(x_keyToLeader);
+            m_keyToLeader[leaderKey] = member;
+        }
+        callNotificationHandlers(leaderKey, member);
+    }
+    catch (std::exception const& e)
+    {
+        ELECTION_LOG(WARNING) << LOG_DESC("updateLeaderInfo exception")
+                              << LOG_KV("watchDir", m_watchDir) << LOG_KV("key", _value.key())
+                              << LOG_KV("value", _value.as_string())
+                              << LOG_KV("error", boost::diagnostic_information(e));
+    }
+}
+
 void WatcherConfig::onWatcherKeyChanged(etcd::Response _response)
 {
     if (!_response.is_ok())
@@ -39,23 +88,5 @@ void WatcherConfig::onWatcherKeyChanged(etcd::Response _response)
                               << LOG_KV("code", _response.error_code())
                               << LOG_KV("msg", _response.error_message());
     }
-    auto version = _response.value().version();
-    if (version == 0)
-    {
-        ELECTION_LOG(INFO) << LOG_DESC("onWatcherKeyChanged: the leaderKey has been released")
-                           << LOG_KV("leaderKey", _response.value().key());
-        return;
-    }
-    auto leaderKey = _response.value().key();
-    auto member = m_memberFactory->createMember(_response.value().as_string());
-    auto seq = _response.value().modified_index();
-    member->setSeq(seq);
-    ELECTION_LOG(INFO) << LOG_DESC("onWatcherKeyChanged: update leader")
-                       << LOG_KV("leaderKey", leaderKey) << LOG_KV("member", member->memberID())
-                       << LOG_KV("modifiedIndex", seq);
-    {
-        WriteGuard l(x_keyToLeader);
-        m_keyToLeader[leaderKey] = member;
-    }
-    callNotificationHandlers(leaderKey, member);
+    updateLeaderInfo(_response.value());
 }

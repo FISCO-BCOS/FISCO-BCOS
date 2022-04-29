@@ -19,8 +19,9 @@
  * @date 2021-06-10
  */
 #include "PBFTInitializer.h"
-#include "bcos-framework/interfaces/storage/KVStorageHelper.h"
+#include <bcos-framework/interfaces/election/FailOverTypeDef.h>
 #include <bcos-framework/interfaces/protocol/GlobalConfig.h>
+#include <bcos-framework/interfaces/storage/KVStorageHelper.h>
 #include <bcos-pbft/pbft/PBFTFactory.h>
 #include <bcos-sealer/SealerFactory.h>
 #include <bcos-sync/BlockSyncFactory.h>
@@ -179,9 +180,9 @@ void PBFTInitializer::init()
     m_sealer->init(m_pbft);
     m_blockSync->init();
     m_pbft->init();
-    if (m_nodeConfig->enableConsensusBackup())
+    if (m_nodeConfig->enableFailOver())
     {
-        initConsensusLeaderElection(m_protocolInitializer->keyPair()->publicKey());
+        initConsensusFailOver(m_protocolInitializer->keyPair()->publicKey());
     }
     else
     {
@@ -427,21 +428,17 @@ void PBFTInitializer::syncGroupNodeInfo()
         });
 }
 
-void PBFTInitializer::initConsensusLeaderElection(KeyInterface::Ptr _nodeID)
+void PBFTInitializer::initConsensusFailOver(KeyInterface::Ptr _nodeID)
 {
-    auto memberFactory = std::make_shared<bcostars::protocol::MemberFactoryImpl>();
-    auto leaderElectionFactory = std::make_shared<LeaderElectionFactory>(memberFactory);
-    std::string leaderKey = "/consensus/" + _nodeID->hex();
+    m_memberFactory = std::make_shared<bcostars::protocol::MemberFactoryImpl>();
+    auto leaderElectionFactory = std::make_shared<LeaderElectionFactory>(m_memberFactory);
+    std::string leaderKey = bcos::election::CONSENSUS_LEADER_DIR + _nodeID->hex();
     auto groupInfoCodec = std::make_shared<bcostars::protocol::GroupInfoCodecImpl>();
     std::string nodeConfig;
     groupInfoCodec->serialize(nodeConfig, m_groupInfo);
-    std::string etcdUrl;
-    for (auto const& addr : m_nodeConfig->pdAddrs())
-    {
-        etcdUrl += addr + ",";
-    }
     m_leaderElection = leaderElectionFactory->createLeaderElection(m_nodeConfig->memberID(),
-        nodeConfig, etcdUrl, leaderKey, "consensus_fault_tolerance", m_nodeConfig->leaseTTL());
+        nodeConfig, m_nodeConfig->failOverClusterUrl(), leaderKey, "consensus_fault_tolerance",
+        m_nodeConfig->leaseTTL());
     // register the handler
     m_leaderElection->registerOnCampaignHandler(
         [this](bool _success, bcos::protocol::MemberInterface::Ptr _leader) {
@@ -452,6 +449,6 @@ void PBFTInitializer::initConsensusLeaderElection(KeyInterface::Ptr _nodeID)
                                   << LOG_KV("leader", _leader ? _leader->memberID() : "None");
         });
     m_leaderElection->start();
-    INITIALIZER_LOG(INFO) << LOG_DESC("initConsensusLeaderElection")
-                          << LOG_KV("leaderKey", leaderKey) << LOG_KV("nodeConfig", nodeConfig);
+    INITIALIZER_LOG(INFO) << LOG_DESC("initConsensusFailOver") << LOG_KV("leaderKey", leaderKey)
+                          << LOG_KV("nodeConfig", nodeConfig);
 }

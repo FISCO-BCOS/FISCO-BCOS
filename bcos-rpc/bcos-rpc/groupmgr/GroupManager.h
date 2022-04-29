@@ -31,15 +31,8 @@ public:
     using Ptr = std::shared_ptr<GroupManager>;
     GroupManager(std::string const& _chainID, NodeServiceFactory::Ptr _nodeServiceFactory)
       : m_chainID(_chainID), m_nodeServiceFactory(_nodeServiceFactory)
-    {
-        m_startTime = utcTime();
-        m_groupStatusUpdater = std::make_shared<Timer>(1000);
-        m_groupStatusUpdater->start();
-        m_groupStatusUpdater->registerTimeoutHandler(
-            boost::bind(&GroupManager::updateGroupStatus, this));
-    }
+    {}
     virtual ~GroupManager() {}
-
     virtual void updateGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo);
 
     virtual NodeService::Ptr getNodeService(
@@ -158,22 +151,16 @@ public:
 
 protected:
     GroupManager(std::string const& _chainID) : m_chainID(_chainID) {}
-    virtual void updateGroupStatus();
 
     void updateNodeServiceWithoutLock(
         std::string const& _groupID, bcos::group::ChainNodeInfo::Ptr _nodeInfo);
-
-
+    bool shouldRebuildNodeService(
+        std::string const& _groupID, bcos::group::ChainNodeInfo::Ptr _nodeInfo);
     virtual NodeService::Ptr selectNode(std::string const& _groupID) const;
     virtual std::string selectNodeByBlockNumber(std::string const& _groupID) const;
     virtual NodeService::Ptr selectNodeRandomly(std::string const& _groupID) const;
     virtual NodeService::Ptr queryNodeService(
         std::string const& _groupID, std::string const& _nodeName) const;
-    virtual void removeGroupBlockInfo(
-        std::map<std::string, std::set<std::string>> const& _unreachableNodes);
-    virtual void removeUnreachableNodeService(
-        std::map<std::string, std::set<std::string>> const& _unreachableNodes);
-    virtual std::map<std::string, std::set<std::string>> checkNodeStatus();
 
     virtual void initNodeInfo(
         std::string const& _groupID, std::string const& _nodeName, NodeService::Ptr _nodeService);
@@ -193,13 +180,10 @@ protected:
     std::map<std::string, bcos::protocol::BlockNumber> m_groupBlockInfos;
     mutable SharedMutex x_groupBlockInfos;
 
-    std::shared_ptr<Timer> m_groupStatusUpdater;
     std::function<void(bcos::group::GroupInfo::Ptr)> m_groupInfoNotifier;
 
     std::function<void(std::string const&, std::string const&, bcos::protocol::BlockNumber)>
         m_blockNumberNotifier;
-    uint64_t c_tarsAdminRefreshInitTime = 120 * 1000;
-    uint64_t m_startTime = 0;
 };
 }  // namespace rpc
 }  // namespace bcos

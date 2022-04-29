@@ -19,7 +19,7 @@
  * @date 2022-04-26
  */
 #pragma once
-#include <WatcherConfig.h>
+#include "WatcherConfig.h"
 #include <bcos-framework/interfaces/election/LeaderEntryPointInterface.h>
 #include <memory>
 
@@ -32,18 +32,22 @@ class LeaderEntryPoint : public LeaderEntryPointInterface
 public:
     using Ptr = std::shared_ptr<LeaderEntryPoint>;
     LeaderEntryPoint(WatcherConfig::Ptr _config) : m_config(_config) {}
+    ~LeaderEntryPoint() {}
 
-    MemberInterface::Ptr getLeaderByKey(std::string const& _leaderKey) override
+    void start() override { m_config->start(); }
+
+    bcos::protocol::MemberInterface::Ptr getLeaderByKey(std::string const& _leaderKey) override
     {
         return m_config->leader(_leaderKey);
     }
-    std::map<std::string, MemberInterface::Ptr> getAllLeaders() override
+    std::map<std::string, bcos::protocol::MemberInterface::Ptr> getAllLeaders() override
     {
         return m_config->keyToLeader();
     }
 
     void addMemberChangeNotificationHandler(
         std::function<void(std::string const&, bcos::protocol::MemberInterface::Ptr)> _handler)
+        override
     {
         m_config->addMemberChangeNotificationHandler(_handler);
     }
@@ -65,7 +69,7 @@ public:
         std::string const& _watchDir, std::string const& _purpose) override
     {
         auto config =
-            std::make_shared<WatcherConfig>(_etcdEndPoint, m_memberFactory, _watchDir, _purpose);
+            std::make_shared<WatcherConfig>(_etcdEndPoint, _watchDir, m_memberFactory, _purpose);
         ELECTION_LOG(INFO) << LOG_DESC("createLeaderEntryPoint")
                            << LOG_KV("etcdAddr", _etcdEndPoint) << LOG_KV("watchDir", _watchDir)
                            << LOG_KV("purpose", _purpose);

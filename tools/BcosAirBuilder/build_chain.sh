@@ -714,7 +714,7 @@ EOF
 
 generate_common_ini() {
     local output=${1}
-
+    local uuid=$(cat /dev/urandom | od -x | head -1 | awk '{print $2$3"-"$4$5"-"$6$7"-"$8$9}')
     cat <<EOF >>"${output}"
 
 [chain]
@@ -753,6 +753,15 @@ generate_common_ini() {
     ;verify_worker_num=2
     ; txs expiration time, in seconds, default is 10 minutes
     txs_expiration_time = 600
+[failover]
+    ; enable failover or not, default disable
+    enable = false
+    ; the uuid that uniquely identifies the node
+    member_id=${uuid}
+    ; failover time, in seconds, default is 3s
+    lease_ttl=3
+    ; the address of etcd, can configure multiple comma-separated
+    cluster_url=127.0.0.1:2379
 [log]
     enable=true
     log_path=./log

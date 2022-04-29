@@ -22,6 +22,7 @@
 #include <bcos-crypto/interfaces/crypto/KeyFactory.h>
 #include <bcos-framework/interfaces/multigroup/GroupInfoFactory.h>
 #include <bcos-framework/interfaces/rpc/RPCInterface.h>
+#include <bcos-leader-election/src/LeaderEntryPoint.h>
 #include <bcos-tool/NodeConfig.h>
 #include <memory>
 #include <utility>
@@ -67,5 +68,7 @@ private:
     bcos::group::GroupInfoFactory::Ptr m_groupInfoFactory;
     bcos::group::ChainNodeInfoFactory::Ptr m_chainNodeInfoFactory;
     std::atomic_bool m_running = {false};
+
+    bcos::election::LeaderEntryPointInterface::Ptr m_leaderEntryPoint;
 };
 }  // namespace bcostars

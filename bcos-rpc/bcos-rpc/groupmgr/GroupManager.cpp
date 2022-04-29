@@ -44,20 +44,46 @@ void GroupManager::updateGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo)
     }
 }
 
+bool GroupManager::shouldRebuildNodeService(
+    std::string const& _groupID, bcos::group::ChainNodeInfo::Ptr _nodeInfo)
+{
+    auto const& nodeAppName = _nodeInfo->nodeName();
+    if (!m_nodeServiceList.count(_groupID) || !m_nodeServiceList[_groupID].count(nodeAppName))
+    {
+        return true;
+    }
+    auto nodeInfo = m_groupInfos.at(_groupID)->nodeInfo(nodeAppName);
+    // update the systemVersion(Note: the system version maybe updated in-runtime)
+    if (nodeInfo->systemVersion() != _nodeInfo->systemVersion())
+    {
+        GROUP_LOG(INFO) << LOG_DESC("update systemVersion to ") << _nodeInfo->systemVersion();
+        nodeInfo->setSystemVersion(_nodeInfo->systemVersion());
+    }
+    // check the serviceInfo
+    auto const& originServiceInfo = nodeInfo->serviceInfo();
+    auto const& serviceInfo = _nodeInfo->serviceInfo();
+    if (originServiceInfo.size() != serviceInfo.size())
+    {
+        GROUP_LOG(INFO) << LOG_DESC("shouldRebuildNodeService for serviceInfo changed");
+        return true;
+    }
+    for (auto const& it : serviceInfo)
+    {
+        if (!originServiceInfo.count(it.first) || originServiceInfo.at(it.first) != it.second)
+        {
+            GROUP_LOG(INFO) << LOG_DESC("shouldRebuildNodeService for serviceInfo changed");
+            return true;
+        }
+    }
+    return false;
+}
+
 void GroupManager::updateNodeServiceWithoutLock(
     std::string const& _groupID, ChainNodeInfo::Ptr _nodeInfo)
 {
-    auto nodeAppName = _nodeInfo->nodeName();
-    // the node has already been existed
-    if (m_nodeServiceList.count(_groupID) && m_nodeServiceList[_groupID].count(nodeAppName))
+    auto const& nodeAppName = _nodeInfo->nodeName();
+    if (!shouldRebuildNodeService(_groupID, _nodeInfo))
     {
-        auto nodeInfo = m_groupInfos.at(_groupID)->nodeInfo(nodeAppName);
-        // update the systemVersion(Note: the system version maybe updated in-runtime)
-        if (nodeInfo->systemVersion() != _nodeInfo->systemVersion())
-        {
-            GROUP_LOG(INFO) << LOG_DESC("update systemVersion to ") << _nodeInfo->systemVersion();
-            nodeInfo->setSystemVersion(_nodeInfo->systemVersion());
-        }
         return;
     }
     // a started node
@@ -70,6 +96,7 @@ void GroupManager::updateNodeServiceWithoutLock(
     initNodeInfo(_groupID, _nodeInfo->nodeName(), nodeService);
     m_nodeServiceList[_groupID][nodeAppName] = nodeService;
     auto groupInfo = m_groupInfos[_groupID];
+    // will cover the old NodeInfo
     groupInfo->appendNodeInfo(_nodeInfo);
     m_groupInfoNotifier(groupInfo);
     BCOS_LOG(INFO) << LOG_DESC("buildNodeService for the started new node")
@@ -162,107 +189,6 @@ NodeService::Ptr GroupManager::getNodeService(
         return queryNodeService(_groupID, _nodeName);
     }
     return selectNode(_groupID);
-}
-
-void GroupManager::updateGroupStatus()
-{
-    m_groupStatusUpdater->restart();
-    if (utcTime() - m_startTime <= c_tarsAdminRefreshInitTime)
-    {
-        return;
-    }
-    auto unreachableNodes = checkNodeStatus();
-    if (unreachableNodes.size() == 0)
-    {
-        return;
-    }
-    removeUnreachableNodeService(unreachableNodes);
-    removeGroupBlockInfo(unreachableNodes);
-}
-
-std::map<std::string, std::set<std::string>> GroupManager::checkNodeStatus()
-{
-    ReadGuard l(x_nodeServiceList);
-    std::map<std::string, std::set<std::string>> unreachableNodes;
-    for (auto const& it : m_groupInfos)
-    {
-        bool groupInfoUpdated = false;
-        auto groupInfo = it.second;
-        auto groupID = groupInfo->groupID();
-        auto const& groupNodeList = groupInfo->nodeInfos();
-        for (auto const& nodeInfo : groupNodeList)
-        {
-            if (!m_nodeServiceList.count(groupID) ||
-                !m_nodeServiceList[groupID].count(nodeInfo.first) ||
-                m_nodeServiceList[groupID][nodeInfo.first]->unreachable())
-            {
-                groupInfo->removeNodeInfo(nodeInfo.second);
-                unreachableNodes[groupID].insert(nodeInfo.first);
-                groupInfoUpdated = true;
-                continue;
-            }
-        }
-        // notify the updated groupInfo to the sdk
-        if (m_groupInfoNotifier && groupInfoUpdated)
-        {
-            m_groupInfoNotifier(groupInfo);
-        }
-    }
-    return unreachableNodes;
-}
-
-void GroupManager::removeUnreachableNodeService(
-    std::map<std::string, std::set<std::string>> const& _unreachableNodes)
-{
-    WriteGuard l(x_nodeServiceList);
-    for (auto const& it : _unreachableNodes)
-    {
-        auto group = it.first;
-        if (!m_nodeServiceList.count(group))
-        {
-            continue;
-        }
-        auto const& nodeList = it.second;
-        for (auto const& node : nodeList)
-        {
-            BCOS_LOG(INFO) << LOG_DESC("GroupManager: removeUnreachablNodeService")
-                           << LOG_KV("group", group) << LOG_KV("node", node);
-            m_nodeServiceList[group].erase(node);
-        }
-        if (m_nodeServiceList[group].size() == 0)
-        {
-            m_nodeServiceList.erase(group);
-        }
-    }
-}
-void GroupManager::removeGroupBlockInfo(
-    std::map<std::string, std::set<std::string>> const& _unreachableNodes)
-{
-    WriteGuard l(x_groupBlockInfos);
-    for (auto const& it : _unreachableNodes)
-    {
-        auto group = it.first;
-        if (!m_nodesWithLatestBlockNumber.count(group))
-        {
-            m_groupBlockInfos.erase(group);
-            continue;
-        }
-        if (!m_groupBlockInfos.count(group))
-        {
-            m_nodesWithLatestBlockNumber.erase(group);
-            continue;
-        }
-        auto const& nodeList = it.second;
-        for (auto const& node : nodeList)
-        {
-            m_nodesWithLatestBlockNumber[group].erase(node);
-        }
-        if (m_nodesWithLatestBlockNumber[group].size() == 0)
-        {
-            m_groupBlockInfos.erase(group);
-            m_nodesWithLatestBlockNumber.erase(group);
-        }
-    }
 }
 
 void GroupManager::initNodeInfo(

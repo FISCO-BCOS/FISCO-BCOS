@@ -39,7 +39,8 @@ Rpc::Rpc(std::shared_ptr<boostssl::ws::WsService> _wsService,
   : m_wsService(_wsService),
     m_jsonRpcImpl(_jsonRpcImpl),
     m_eventSub(_eventSub),
-    m_amopClient(_amopClient)
+    m_amopClient(_amopClient),
+    m_groupManager(m_jsonRpcImpl->groupManager())
 {
     // init the local protocol
     m_localProtocol = g_BCOSConfig.protocolInfo(ProtocolModuleID::RpcService);
