@@ -365,7 +365,7 @@ public:
         const std::string& callAddress)
     {
         nextBlock(_number);
-        bytes in = codec->encodeWithSig("select((uint8,string)[],(uint,uint))", keyCond, limit);
+        bytes in = codec->encodeWithSig("select((uint8,string)[],(uint32,uint32))", keyCond, limit);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
@@ -401,7 +401,7 @@ public:
         const std::string& callAddress)
     {
         nextBlock(_number);
-        bytes in = codec->encodeWithSig("update(string,(uint,string)[])", key, _updateFields);
+        bytes in = codec->encodeWithSig("update(string,(uint32,string)[])", key, _updateFields);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
@@ -438,7 +438,7 @@ public:
         const std::string& callAddress)
     {
         nextBlock(_number);
-        bytes in = codec->encodeWithSig("update((uint8,string)[],(uint,uint),(uint,string)[])",
+        bytes in = codec->encodeWithSig("update((uint8,string)[],(uint32,uint32),(uint32,string)[])",
             conditions, _limit, _updateFields);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
@@ -510,7 +510,7 @@ public:
         const std::string& callAddress)
     {
         nextBlock(_number);
-        bytes in = codec->encodeWithSig("remove((uint8,string)[],(uint,uint))", keyCond, limit);
+        bytes in = codec->encodeWithSig("remove((uint8,string)[],(uint32,uint32))", keyCond, limit);
         auto tx = fakeTransaction(cryptoSuite, keyPair, "", in, 101, 100001, "1", "1");
         sender = boost::algorithm::hex_lower(std::string(tx->sender()));
         auto hash = tx->hash();
