@@ -30,6 +30,7 @@
 #include <bcos-framework/interfaces/storage/StorageInterface.h>
 #include <bcos-framework/interfaces/sync/BlockSyncInterface.h>
 #include <bcos-framework/interfaces/txpool/TxPoolInterface.h>
+#include <bcos-leader-election/src/LeaderElectionFactory.h>
 #include <bcos-ledger/src/libledger/Ledger.h>
 
 namespace bcos
@@ -92,6 +93,7 @@ protected:
     std::string generateIniConfig(bcos::tool::NodeConfig::Ptr _nodeConfig);
 
     void syncGroupNodeInfo();
+    virtual void initConsensusLeaderElection(bcos::crypto::KeyInterface::Ptr _nodeID);
 
 protected:
     bcos::initializer::NodeArchitectureType m_nodeArchType;
@@ -115,6 +117,8 @@ protected:
     // Note: If the groupNodeInfo fails to be pulled because the gateway is closed in pro-mode, it
     // will periodically retry to pull the groupInfo until the information is successfully pulled.
     std::atomic_bool m_groupNodeInfoFetched = {false};
+
+    bcos::election::LeaderElection::Ptr m_leaderElection;
 };
 }  // namespace initializer
 }  // namespace bcos

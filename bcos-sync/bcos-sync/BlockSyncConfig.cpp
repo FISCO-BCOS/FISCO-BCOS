@@ -59,7 +59,7 @@ void BlockSyncConfig::resetConfig(LedgerConfig::Ptr _ledgerConfig)
     if (type != m_nodeType)
     {
         m_nodeType = type;
-        if (m_nodeTypeChanged)
+        if (m_nodeTypeChanged && m_masterNode)
         {
             m_nodeTypeChanged(type);
         }

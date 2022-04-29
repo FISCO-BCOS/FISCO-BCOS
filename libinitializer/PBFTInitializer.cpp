@@ -26,6 +26,8 @@
 #include <bcos-sync/BlockSyncFactory.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tars-protocol/client/RpcServiceClient.h>
+#include <bcos-tars-protocol/protocol/GroupInfoCodecImpl.h>
+#include <bcos-tars-protocol/protocol/MemberImpl.h>
 #include <bcos-txpool/TxPool.h>
 #include <bcos-txpool/TxPoolFactory.h>
 #include <bcos-utilities/FileUtility.h>
@@ -45,6 +47,8 @@ using namespace bcos::storage;
 using namespace bcos::scheduler;
 using namespace bcos::initializer;
 using namespace bcos::group;
+using namespace bcos::protocol;
+using namespace bcos::election;
 
 PBFTInitializer::PBFTInitializer(bcos::initializer::NodeArchitectureType _nodeArchType,
     bcos::tool::NodeConfig::Ptr _nodeConfig, ProtocolInitializer::Ptr _protocolInitializer,
@@ -175,6 +179,15 @@ void PBFTInitializer::init()
     m_sealer->init(m_pbft);
     m_blockSync->init();
     m_pbft->init();
+    if (m_nodeConfig->enableConsensusBackup())
+    {
+        initConsensusLeaderElection(m_protocolInitializer->keyPair()->publicKey());
+    }
+    else
+    {
+        m_blockSync->enableAsMaster(true);
+        m_pbft->enableAsMaterNode(true);
+    }
 }
 
 void PBFTInitializer::registerHandlers()
@@ -412,4 +425,33 @@ void PBFTInitializer::syncGroupNodeInfo()
                                          << LOG_KV("error", boost::diagnostic_information(e));
             }
         });
+}
+
+void PBFTInitializer::initConsensusLeaderElection(KeyInterface::Ptr _nodeID)
+{
+    auto memberFactory = std::make_shared<bcostars::protocol::MemberFactoryImpl>();
+    auto leaderElectionFactory = std::make_shared<LeaderElectionFactory>(memberFactory);
+    std::string leaderKey = "/consensus/" + _nodeID->hex();
+    auto groupInfoCodec = std::make_shared<bcostars::protocol::GroupInfoCodecImpl>();
+    std::string nodeConfig;
+    groupInfoCodec->serialize(nodeConfig, m_groupInfo);
+    std::string etcdUrl;
+    for (auto const& addr : m_nodeConfig->pdAddrs())
+    {
+        etcdUrl += addr + ",";
+    }
+    m_leaderElection = leaderElectionFactory->createLeaderElection(m_nodeConfig->memberID(),
+        nodeConfig, etcdUrl, leaderKey, "consensus_fault_tolerance", m_nodeConfig->leaseTTL());
+    // register the handler
+    m_leaderElection->registerOnCampaignHandler(
+        [this](bool _success, bcos::protocol::MemberInterface::Ptr _leader) {
+            m_pbft->enableAsMaterNode(_success);
+            m_blockSync->enableAsMaster(_success);
+            m_txpool->clearAllTxs();
+            INITIALIZER_LOG(INFO) << LOG_DESC("onCampaignHandler") << LOG_KV("success", _success)
+                                  << LOG_KV("leader", _leader ? _leader->memberID() : "None");
+        });
+    m_leaderElection->start();
+    INITIALIZER_LOG(INFO) << LOG_DESC("initConsensusLeaderElection")
+                          << LOG_KV("leaderKey", leaderKey) << LOG_KV("nodeConfig", nodeConfig);
 }

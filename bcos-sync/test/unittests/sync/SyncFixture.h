@@ -47,6 +47,7 @@ public:
       : BlockSync(_config, _idleWaitMs)
     {
         m_running = true;
+        enableAsMaster(true);
     }
     ~FakeBlockSync() override {}
 

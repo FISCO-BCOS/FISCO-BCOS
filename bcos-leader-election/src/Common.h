@@ -1,5 +1,5 @@
 /**
- *  Copyright (C) 2021 FISCO BCOS.
+ *  Copyright (C) 2022 FISCO BCOS.
  *  SPDX-License-Identifier: Apache-2.0
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -13,29 +13,9 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  *
- * @brief the information used to deploy new node
- * @file GroupInfoCodec.h
+ * @file Common.h
  * @author: yujiechen
- * @date 2022-03-29
+ * @date 2022-04-26
  */
-#pragma once
-#include "GroupInfo.h"
-#include <json/value.h>
-#include <memory>
-
-namespace bcos
-{
-namespace group
-{
-class GroupInfoCodec
-{
-public:
-    using Ptr = std::shared_ptr<GroupInfoCodec>;
-    GroupInfoCodec() = default;
-    virtual ~GroupInfoCodec() {}
-
-    virtual GroupInfo::Ptr deserialize(const std::string& _encodedData) = 0;
-    virtual void serialize(std::string& _encodedData, GroupInfo::Ptr _groupInfo) = 0;
-};
-}  // namespace group
-}  // namespace bcos
+#include <bcos-utilities/Common.h>
+#define ELECTION_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("Election")

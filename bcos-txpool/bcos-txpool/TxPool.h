@@ -137,6 +137,8 @@ public:
         m_txpoolStorage->registerTxsCleanUpSwitch(_txsCleanUpSwitch);
     }
 
+    void clearAllTxs() override { m_txpoolStorage->clear(); }
+
 protected:
     virtual bool checkExistsInGroup(bcos::protocol::TxSubmitCallback _txSubmitCallback);
     virtual void getTxsFromLocalLedger(bcos::crypto::HashListPtr _txsHash,

@@ -135,6 +135,7 @@ public:
         m_cacheProcessor->registerOnLoadAndVerifyProposalSucc(boost::bind(
             &FakePBFTEngine::onLoadAndVerifyProposalSucc, this, boost::placeholders::_1));
         initSendResponseHandler();
+        _config->enableAsMaterNode(true);
     }
     ~FakePBFTEngine() override {}
 
@@ -176,7 +177,11 @@ public:
 class FakePBFTImpl : public PBFTImpl
 {
 public:
-    explicit FakePBFTImpl(PBFTEngine::Ptr _pbftEngine) : PBFTImpl(_pbftEngine) { m_running = true; }
+    explicit FakePBFTImpl(PBFTEngine::Ptr _pbftEngine) : PBFTImpl(_pbftEngine)
+    {
+        m_running = true;
+        m_masterNode.store(true);
+    }
     ~FakePBFTImpl() {}
 };
 

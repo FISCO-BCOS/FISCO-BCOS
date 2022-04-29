@@ -651,6 +651,10 @@ void MemoryStorage::clear()
 {
     WriteGuard l(x_txpoolMutex);
     m_txsTable.clear();
+    m_invalidTxs.clear();
+    m_invalidNonces.clear();
+    m_missedTxs.clear();
+    notifyUnsealedTxsSize();
 }
 
 HashListPtr MemoryStorage::filterUnknownTxs(HashList const& _txsHashList, NodeIDPtr _peer)
