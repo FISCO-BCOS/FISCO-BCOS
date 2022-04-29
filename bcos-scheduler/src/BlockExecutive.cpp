@@ -965,7 +965,7 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
     // Calc the gas set to header
     m_gasUsed += txGasUsed;
 #ifdef DMC_TRACE_LOG_ENABLE
-    DMC_LOG(TRACE) << " GenReceipt: \t\t[^^] " << output->toString() << " -> "
+    DMC_LOG(TRACE) << " 6.GenReceipt:\t\t [^^] " << output->toString() << " -> "
                    << output->contextID() - m_startContextID << std::endl;
 #endif
     // write receipt in results
@@ -995,7 +995,7 @@ void BlockExecutive::serialPrepareExecutor()
     {
         // TODO: Add more description of the log meaning
 #ifdef DMC_TRACE_LOG_ENABLE
-        DMC_LOG(TRACE) << " Pre-DmcExecutor:\t----------------- addr:" << address
+        DMC_LOG(TRACE) << " 0.Pre-DmcExecutor: ----------------- addr:" << address
                        << " | number:" << m_block->blockHeaderConst()->number()
                        << " -----------------" << std::endl;
 #endif
@@ -1030,7 +1030,7 @@ void BlockExecutive::serialPrepareExecutor()
             continue;  // must jump finished executor
         }
 #ifdef DMC_TRACE_LOG_ENABLE
-        DMC_LOG(TRACE) << " unlockPrepare: \t|---------------- addr:" << address
+        DMC_LOG(TRACE) << " 3.UnlockPrepare: \t |---------------- addr:" << address
                        << " | number:" << m_block->blockHeaderConst()->number()
                        << " ----------------|" << std::endl;
 #endif

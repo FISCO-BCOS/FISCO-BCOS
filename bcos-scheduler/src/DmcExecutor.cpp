@@ -26,7 +26,7 @@ void DmcExecutor::prepare()
     // logging
     for (auto& it : m_pendingPool)
     {
-        DMC_LOG(TRACE) << " NeedPrepare: \t\t[--] " << it.second->toString() << std::endl;
+        DMC_LOG(TRACE) << " 1.NeedPrepare: \t [--] " << it.second->toString() << std::endl;
     }
 #endif
 
@@ -136,7 +136,7 @@ bool DmcExecutor::unlockPrepare()
             m_needSendPool.insert(contextID);
             m_lockingPool.unsafe_erase(contextID);
 #ifdef DMC_TRACE_LOG_ENABLE
-            DMC_LOG(TRACE) << " AfterPrepare: \t[..] " << executiveState->toString() << " UNLOCK"
+            DMC_LOG(TRACE) << " 3.AfterPrepare: \t [..] " << executiveState->toString() << " UNLOCK"
                            << std::endl;
 #endif
         }
@@ -176,7 +176,7 @@ bool DmcExecutor::detectLockAndRevert()
             m_needSendPool.insert(contextID);
             m_lockingPool.unsafe_erase(contextID);
 #ifdef DMC_TRACE_LOG_ENABLE
-            DMC_LOG(TRACE) << " AfterPrepare: \t[..] " << executiveState->toString() << " REVERT"
+            DMC_LOG(TRACE) << " 2.AfterPrepare: \t [..] " << executiveState->toString() << " REVERT"
                            << std::endl;
 #endif
             return true;  // just detect one TODO: detect and unlock more deadlock
@@ -265,7 +265,7 @@ void DmcExecutor::go(std::function<void(bcos::Error::UniquePtr, Status)> callbac
             auto keyLocks = m_keyLocks->getKeyLocksNotHoldingByContext(message->to(), contextID);
             message->setKeyLocks(std::move(keyLocks));  // TODO: consider thread safe
 #ifdef DMC_TRACE_LOG_ENABLE
-            DMC_LOG(TRACE) << " SendToExecutor: \t>>>> " << executiveState->toString()
+            DMC_LOG(TRACE) << " 4.SendToExecutor:\t >>>> " << executiveState->toString()
                            << " >>>> flowAddr:" << m_contractAddress << std::endl;
 #endif
 
@@ -347,7 +347,7 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
                     newEVMAddress(m_block->blockHeaderConst()->number(), contextID, newSeq));
             }
 #ifdef DMC_TRACE_LOG_ENABLE
-            DMC_LOG(TRACE) << " AfterPrepare: \t[..] " << executiveState->toString()
+            DMC_LOG(TRACE) << " 2.AfterPrepare: \t [..] " << executiveState->toString()
                            << " SCHEDULER_OUT" << std::endl;
 #endif
         }
@@ -389,7 +389,7 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
             f_onTxFinished(std::move(message));
             // TODO: add words
 #ifdef DMC_TRACE_LOG_ENABLE
-            DMC_LOG(TRACE) << " AfterPrepare: \t[..] " << executiveState->toString() << " END"
+            DMC_LOG(TRACE) << " 2.AfterPrepare: \t [..] " << executiveState->toString() << " END"
                            << std::endl;
 #endif
             return END;
@@ -412,7 +412,7 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
 
         executiveState->message = std::move(message);
 #ifdef DMC_TRACE_LOG_ENABLE
-        DMC_LOG(TRACE) << " AfterPrepare: \t[..] " << executiveState->toString() << " LOCKED"
+        DMC_LOG(TRACE) << " 2.AfterPrepare: \t [..] " << executiveState->toString() << " LOCKED"
                        << std::endl;
 #endif
         return LOCKED;
@@ -464,7 +464,7 @@ DmcExecutor::MessageHint DmcExecutor::handleExecutiveMessage(ExecutiveState::Ptr
         }
     }
 #ifdef DMC_TRACE_LOG_ENABLE
-    DMC_LOG(TRACE) << " AfterPrepare: \t[..] " << executiveState->toString() << " NEED_SEND"
+    DMC_LOG(TRACE) << " 2.AfterPrepare: \t [..] " << executiveState->toString() << " NEED_SEND"
                    << std::endl;
 #endif
     return NEED_SEND;
@@ -483,7 +483,7 @@ void DmcExecutor::handleExecutiveOutputs(
         executiveState = m_pendingPool[contextID];
         executiveState->message = std::move(output);
 #ifdef DMC_TRACE_LOG_ENABLE
-        DMC_LOG(TRACE) << " RevFromExecutor: \t<<<< addr:" << m_contractAddress << " <<<< "
+        DMC_LOG(TRACE) << " 5.RevFromExecutor: <<<< addr:" << m_contractAddress << " <<<< "
                        << executiveState->toString() << std::endl;
 #endif
 
