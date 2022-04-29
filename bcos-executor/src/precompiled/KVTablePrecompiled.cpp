@@ -55,9 +55,10 @@ std::shared_ptr<PrecompiledExecResult> KVTablePrecompiled::call(
     auto blockContext = _executive->blockContext().lock();
     auto codec =
         std::make_shared<CodecWrapper>(blockContext->hashHandler(), blockContext->isWasm());
-    std::string tableName;
+    std::vector<std::string> dynamicParams;
     bytes param;
-    codec->decode(_param, tableName, param);
+    codec->decode(_param, dynamicParams, param);
+    auto tableName = dynamicParams.at(0);
     tableName = getActualTableName(tableName);
     auto originParam = ref(param);
     uint32_t func = getParamFunc(originParam);

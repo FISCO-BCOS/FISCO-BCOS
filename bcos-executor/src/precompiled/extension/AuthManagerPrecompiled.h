@@ -74,6 +74,10 @@ private:
         const std::string& _origin, const std::string& _sender,
         const PrecompiledGas::Ptr& gasPricer, int64_t _gasLeft);
 
+    void contractAvailable(const std::shared_ptr<executor::TransactionExecutive>& _executive,
+        bytesConstRef& data, const std::shared_ptr<PrecompiledExecResult>& callResult,
+        const std::string& _origin, const PrecompiledGas::Ptr& gasPricer, int64_t _gasLeft);
+
     void getDeployType(const std::shared_ptr<executor::TransactionExecutive>& _executive,
         const std::shared_ptr<PrecompiledExecResult>& callResult,
         const PrecompiledGas::Ptr& gasPricer);
