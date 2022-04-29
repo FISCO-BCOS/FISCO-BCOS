@@ -39,18 +39,16 @@ public:
         m_groupStatusUpdater->registerTimeoutHandler(
             boost::bind(&TarsGroupManager::updateGroupStatus, this));
     }
-    virtual ~TarsGroupManager() {}
+    virtual ~TarsGroupManager()
+    {
+        if (m_groupStatusUpdater)
+        {
+            m_groupStatusUpdater->stop();
+        }
+    }
 
 protected:
     virtual void updateGroupStatus();
-
-    void updateNodeServiceWithoutLock(
-        std::string const& _groupID, bcos::group::ChainNodeInfo::Ptr _nodeInfo);
-
-    virtual void removeGroupBlockInfo(
-        std::map<std::string, std::set<std::string>> const& _unreachableNodes);
-    virtual void removeUnreachableNodeService(
-        std::map<std::string, std::set<std::string>> const& _unreachableNodes);
     virtual std::map<std::string, std::set<std::string>> checkNodeStatus();
 
 protected:

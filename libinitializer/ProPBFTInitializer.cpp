@@ -110,9 +110,6 @@ void ProPBFTInitializer::start()
     {
         m_timer->start();
     }
-    m_sealer->start();
-    m_blockSync->start();
-    m_pbft->start();
 }
 
 void ProPBFTInitializer::stop()
@@ -126,7 +123,6 @@ void ProPBFTInitializer::stop()
 
 void ProPBFTInitializer::init()
 {
-    PBFTInitializer::init();
     auto groupInfoCodec = std::make_shared<bcostars::protocol::GroupInfoCodecImpl>();
     m_timer->registerTimeoutHandler(boost::bind(&ProPBFTInitializer::scheduledTask, this));
     m_blockSync->config()->registerOnNodeTypeChanged(
@@ -158,4 +154,5 @@ void ProPBFTInitializer::init()
                 reportNodeInfo();
             }
         });
+    PBFTInitializer::init();
 }

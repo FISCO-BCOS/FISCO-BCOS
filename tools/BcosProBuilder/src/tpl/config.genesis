@@ -7,6 +7,11 @@
     leader_period=100
     ; the node id of consensusers
     node.0= 
+    
+[version]
+    ; compatible version, can be dynamically upgraded through setSystemConfig
+    ; the default is 3.0.0-rc4
+    compatibility_version=3.0.0-rc4
 
 [tx]
     ; transaction gas limit

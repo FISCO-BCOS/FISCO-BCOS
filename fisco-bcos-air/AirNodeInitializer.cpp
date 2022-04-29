@@ -53,7 +53,7 @@ void AirNodeInitializer::init(std::string const& _configFilePath, std::string co
 
     // create gateway
     GatewayFactory gatewayFactory(nodeConfig->chainId(), "localRpc");
-    auto gateway = gatewayFactory.buildGateway(_configFilePath, true);
+    auto gateway = gatewayFactory.buildGateway(_configFilePath, true, nullptr);
     m_gateway = gateway;
 
     // create the node

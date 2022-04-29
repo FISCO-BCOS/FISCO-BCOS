@@ -144,6 +144,8 @@ class GenesisConfig:
             self.config, section, "consensus_type", "pbft", False)
         self.gas_limit = utilities.get_value(
             self.config, section, "gas_limit", "3000000000", False)
+        self.compatibility_version = utilities.get_value(
+            self.config, section, "compatibility_version", "3.0.0-rc4", False)
 
 
 class GroupConfig:
@@ -199,6 +201,10 @@ class ChainConfig:
             self.config, "chain", "rpc_sm_ssl", False, False)
         self.gateway_sm_ssl = utilities.get_value(
             self.config, "chain", "gateway_sm_ssl", False, False)
+        self.enable_failover = utilities.get_value(
+            self.config, "chain", "enable_failover", False, False)
+        self.failover_cluster_url = utilities.get_value(
+            self.config, "chain", "failover_cluster_url", "127.0.0.1:2379", False)
 
     def parse_service_config(self, section_name, chain_id, constructor):
         service_list = utilities.get_value(

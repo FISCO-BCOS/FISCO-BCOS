@@ -27,12 +27,14 @@ using namespace bcos::election;
 void WatcherConfig::reCreateWatcher()
 {
     ELECTION_LOG(INFO) << LOG_DESC("reCreateWatcher");
+    // Note: set recursive to watch subdirectory change
     m_watcher = std::make_shared<etcd::Watcher>(*m_etcdClient, m_watchDir,
-        boost::bind(&WatcherConfig::onWatcherKeyChanged, this, boost::placeholders::_1));
+        boost::bind(&WatcherConfig::onWatcherKeyChanged, this, boost::placeholders::_1), true);
 }
 
 void WatcherConfig::fetchLeadersInfo()
 {
+    ELECTION_LOG(INFO) << LOG_DESC("fetchLeadersInfo") << LOG_KV("watchDir", m_watchDir);
     auto response = m_etcdClient->ls(m_watchDir).get();
     if (!response.is_ok())
     {
@@ -45,6 +47,7 @@ void WatcherConfig::fetchLeadersInfo()
     {
         updateLeaderInfo(value);
     }
+    ELECTION_LOG(INFO) << LOG_DESC("fetchLeadersInfo success") << LOG_KV("watchDir", m_watchDir);
 }
 
 void WatcherConfig::updateLeaderInfo(etcd::Value const& _value)
@@ -56,6 +59,18 @@ void WatcherConfig::updateLeaderInfo(etcd::Value const& _value)
         {
             ELECTION_LOG(INFO) << LOG_DESC("updateLeaderInfo: the leaderKey has been released")
                                << LOG_KV("leaderKey", _value.key());
+            {
+                auto const& leaderKey = _value.key();
+                UpgradableGuard l(x_keyToLeader);
+                if (!m_keyToLeader.count(leaderKey))
+                {
+                    return;
+                }
+                auto member = m_keyToLeader.at(leaderKey);
+                UpgradeGuard ul(l);
+                m_keyToLeader.erase(leaderKey);
+                onMemberDeleted(leaderKey, member);
+            }
             return;
         }
         auto const& leaderKey = _value.key();
@@ -88,5 +103,45 @@ void WatcherConfig::onWatcherKeyChanged(etcd::Response _response)
                               << LOG_KV("code", _response.error_code())
                               << LOG_KV("msg", _response.error_message());
     }
+    ELECTION_LOG(INFO) << LOG_DESC("onWatcherKeyChanged") << LOG_KV("key", _response.value().key())
+                       << LOG_KV("version", _response.value().version());
     updateLeaderInfo(_response.value());
+}
+
+void WatcherConfig::callNotificationHandlers(
+    std::string const& _key, bcos::protocol::MemberInterface::Ptr _member)
+{
+    ReadGuard l(x_notificationHandlers);
+    for (auto const& handler : m_notificationHandlers)
+    {
+        try
+        {
+            handler(_key, _member);
+        }
+        catch (std::exception const& e)
+        {
+            ELECTION_LOG(ERROR) << LOG_DESC("callNotificationHandlers exception")
+                                << LOG_KV("key", _key) << LOG_KV("memberID", _member->memberID())
+                                << LOG_KV("error", boost::diagnostic_information(e));
+        }
+    }
+}
+
+void WatcherConfig::onMemberDeleted(
+    std::string const& _key, bcos::protocol::MemberInterface::Ptr _member)
+{
+    ReadGuard l(x_onMemberDeleted);
+    for (auto const& handler : m_onMemberDeleted)
+    {
+        try
+        {
+            handler(_key, _member);
+        }
+        catch (std::exception const& e)
+        {
+            ELECTION_LOG(ERROR) << LOG_DESC("onMemberDeleted exception") << LOG_KV("key", _key)
+                                << LOG_KV("memberID", _member->memberID())
+                                << LOG_KV("error", boost::diagnostic_information(e));
+        }
+    }
 }

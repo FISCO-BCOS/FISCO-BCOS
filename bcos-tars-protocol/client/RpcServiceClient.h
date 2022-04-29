@@ -124,13 +124,13 @@ public:
         }
         vector<EndpointInfo> activeEndPoints;
         vector<EndpointInfo> nactiveEndPoints;
+        m_prx->tars_endpointsAll(activeEndPoints, nactiveEndPoints);
         if (activeEndPoints.size() == 0)
         {
             BCOS_LOG(TRACE) << LOG_DESC("RPC: asyncNotifyGroupInfo error for empty connection")
                             << bcos::group::printGroupInfo(_groupInfo);
             return;
         }
-        m_prx->tars_endpointsAll(activeEndPoints, nactiveEndPoints);
         // notify groupInfo to all rpc nodes
         auto tarsGroupInfo = toTarsGroupInfo(_groupInfo);
         for (auto const& endPoint : activeEndPoints)

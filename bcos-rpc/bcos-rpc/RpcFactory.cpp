@@ -231,7 +231,19 @@ GroupManager::Ptr RpcFactory::buildGroupManager(
                               << LOG_KV("modifyIndex", _member->seq())
                               << LOG_KV("groupID", groupInfo->groupID());
             });
-        _entryPoint->start();
+
+        _entryPoint->addMemberDeleteNotificationHandler(
+            [groupManager, groupInfoCodec](
+                std::string const& _leaderKey, bcos::protocol::MemberInterface::Ptr _leader) {
+                auto const& groupInfoStr = _leader->memberConfig();
+                auto groupInfo = groupInfoCodec->deserialize(groupInfoStr);
+                RPC_LOG(INFO) << LOG_DESC("The leader entryPoint has been deleted")
+                              << LOG_KV("key", _leaderKey)
+                              << LOG_KV("memberID", _leader->memberID())
+                              << LOG_KV("modifyIndex", _leader->seq())
+                              << LOG_KV("groupID", groupInfo->groupID());
+                groupManager->removeGroupNodeList(groupInfo);
+            });
         return groupManager;
     }
     RPC_LOG(INFO) << LOG_DESC("buildGroupManager: using tars to manager the node info");

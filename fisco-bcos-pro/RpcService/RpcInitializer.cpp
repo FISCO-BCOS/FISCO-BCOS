@@ -23,10 +23,11 @@
 #include "libinitializer/ProtocolInitializer.h"
 #include <bcos-crypto/signature/key/KeyFactoryImpl.h>
 #include <bcos-framework/interfaces/election/FailOverTypeDef.h>
-#include <bcos-framework/interfaces/election/LeaderEntryPointInterface.h>
+#include <bcos-leader-election/src/LeaderEntryPoint.h>
 #include <bcos-rpc/RpcFactory.h>
 #include <bcos-tars-protocol/client/GatewayServiceClient.h>
 #include <bcos-tars-protocol/protocol/MemberImpl.h>
+
 using namespace bcos::group;
 using namespace bcostars;
 
@@ -52,7 +53,6 @@ void RpcInitializer::init(std::string const& _configDir)
     if (m_nodeConfig->enableFailOver())
     {
         RPCSERVICE_LOG(INFO) << LOG_DESC("enable failover");
-        // LeaderEntryPointFactoryImpl
         auto memberFactory = std::make_shared<bcostars::protocol::MemberFactoryImpl>();
         auto leaderEntryPointFactory =
             std::make_shared<bcos::election::LeaderEntryPointFactoryImpl>(memberFactory);
@@ -106,6 +106,11 @@ void RpcInitializer::start()
         return;
     }
     m_running = true;
+    if (m_leaderEntryPoint)
+    {
+        RPCSERVICE_LOG(INFO) << LOG_DESC("start leader-entry-point");
+        m_leaderEntryPoint->start();
+    }
     RPCSERVICE_LOG(INFO) << LOG_DESC("start rpc");
     m_rpc->start();
     RPCSERVICE_LOG(INFO) << LOG_DESC("start rpc success");

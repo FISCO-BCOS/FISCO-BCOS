@@ -45,6 +45,7 @@ void TarsGroupManager::updateGroupStatus()
 std::map<std::string, std::set<std::string>> TarsGroupManager::checkNodeStatus()
 {
     ReadGuard l(x_nodeServiceList);
+    // groupID => {unreachableNodes}
     std::map<std::string, std::set<std::string>> unreachableNodes;
     for (auto const& it : m_groupInfos)
     {
@@ -71,58 +72,4 @@ std::map<std::string, std::set<std::string>> TarsGroupManager::checkNodeStatus()
         }
     }
     return unreachableNodes;
-}
-
-void TarsGroupManager::removeUnreachableNodeService(
-    std::map<std::string, std::set<std::string>> const& _unreachableNodes)
-{
-    WriteGuard l(x_nodeServiceList);
-    for (auto const& it : _unreachableNodes)
-    {
-        auto group = it.first;
-        if (!m_nodeServiceList.count(group))
-        {
-            continue;
-        }
-        auto const& nodeList = it.second;
-        for (auto const& node : nodeList)
-        {
-            BCOS_LOG(INFO) << LOG_DESC("GroupManager: removeUnreachablNodeService")
-                           << LOG_KV("group", group) << LOG_KV("node", node);
-            m_nodeServiceList[group].erase(node);
-        }
-        if (m_nodeServiceList[group].size() == 0)
-        {
-            m_nodeServiceList.erase(group);
-        }
-    }
-}
-void TarsGroupManager::removeGroupBlockInfo(
-    std::map<std::string, std::set<std::string>> const& _unreachableNodes)
-{
-    WriteGuard l(x_groupBlockInfos);
-    for (auto const& it : _unreachableNodes)
-    {
-        auto group = it.first;
-        if (!m_nodesWithLatestBlockNumber.count(group))
-        {
-            m_groupBlockInfos.erase(group);
-            continue;
-        }
-        if (!m_groupBlockInfos.count(group))
-        {
-            m_nodesWithLatestBlockNumber.erase(group);
-            continue;
-        }
-        auto const& nodeList = it.second;
-        for (auto const& node : nodeList)
-        {
-            m_nodesWithLatestBlockNumber[group].erase(node);
-        }
-        if (m_nodesWithLatestBlockNumber[group].size() == 0)
-        {
-            m_groupBlockInfos.erase(group);
-            m_nodesWithLatestBlockNumber.erase(group);
-        }
-    }
 }

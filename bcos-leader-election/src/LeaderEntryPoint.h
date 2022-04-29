@@ -52,6 +52,13 @@ public:
         m_config->addMemberChangeNotificationHandler(_handler);
     }
 
+    void addMemberDeleteNotificationHandler(
+        std::function<void(std::string const&, bcos::protocol::MemberInterface::Ptr)> _handler)
+        override
+    {
+        m_config->addMemberDeleteNotificationHandler(_handler);
+    }
+
 private:
     WatcherConfig::Ptr m_config;
 };

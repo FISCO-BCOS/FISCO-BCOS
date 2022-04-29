@@ -162,6 +162,11 @@ public:
             _groupID, _nodeID, _nodeType, _frontService, _protocolInfo);
     }
 
+    virtual bool unregisterNode(const std::string& _groupID, std::string const& _nodeID)
+    {
+        return m_gatewayNodeManager->unregisterNode(_groupID, _nodeID);
+    }
+
 protected:
     // for UT
     Gateway() {}

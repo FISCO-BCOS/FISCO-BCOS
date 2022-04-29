@@ -69,6 +69,13 @@ public:
         m_notificationHandlers.emplace_back(_handler);
     }
 
+    void addMemberDeleteNotificationHandler(
+        std::function<void(std::string const&, bcos::protocol::MemberInterface::Ptr)> _handler)
+    {
+        ReadGuard l(x_onMemberDeleted);
+        m_onMemberDeleted.emplace_back(_handler);
+    }
+
 protected:
     virtual void fetchLeadersInfo();
     void updateLeaderInfo(etcd::Value const& _value);
@@ -77,14 +84,9 @@ protected:
     virtual void onWatcherKeyChanged(etcd::Response _response);
 
     virtual void callNotificationHandlers(
-        std::string const& _key, bcos::protocol::MemberInterface::Ptr _member)
-    {
-        ReadGuard l(x_notificationHandlers);
-        for (auto const& handler : m_notificationHandlers)
-        {
-            handler(_key, _member);
-        }
-    }
+        std::string const& _key, bcos::protocol::MemberInterface::Ptr _member);
+    virtual void onMemberDeleted(
+        std::string const& _key, bcos::protocol::MemberInterface::Ptr _member);
 
 private:
     std::string m_watchDir;
@@ -94,6 +96,10 @@ private:
     std::vector<std::function<void(std::string const&, bcos::protocol::MemberInterface::Ptr)>>
         m_notificationHandlers;
     mutable SharedMutex x_notificationHandlers;
+
+    std::vector<std::function<void(std::string const&, bcos::protocol::MemberInterface::Ptr)>>
+        m_onMemberDeleted;
+    mutable SharedMutex x_onMemberDeleted;
 };
 }  // namespace election
 }  // namespace bcos

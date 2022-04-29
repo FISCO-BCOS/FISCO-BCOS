@@ -44,6 +44,21 @@ void GroupManager::updateGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo)
     }
 }
 
+void GroupManager::removeGroupNodeList(bcos::group::GroupInfo::Ptr _groupInfo)
+{
+    GROUP_LOG(INFO) << LOG_DESC("removeGroupNodeList") << printGroupInfo(_groupInfo);
+    std::map<std::string, std::set<std::string>> groupToUnreachableNodes;
+    std::set<std::string> unreachableNodes;
+    auto nodeList = _groupInfo->nodeInfos();
+    for (auto const& node : nodeList)
+    {
+        unreachableNodes.insert(node.second->nodeName());
+    }
+    groupToUnreachableNodes[_groupInfo->groupID()] = unreachableNodes;
+    removeGroupBlockInfo(groupToUnreachableNodes);
+    removeUnreachableNodeService(groupToUnreachableNodes);
+}
+
 bool GroupManager::shouldRebuildNodeService(
     std::string const& _groupID, bcos::group::ChainNodeInfo::Ptr _nodeInfo)
 {
@@ -99,8 +114,8 @@ void GroupManager::updateNodeServiceWithoutLock(
     // will cover the old NodeInfo
     groupInfo->appendNodeInfo(_nodeInfo);
     m_groupInfoNotifier(groupInfo);
-    BCOS_LOG(INFO) << LOG_DESC("buildNodeService for the started new node")
-                   << printNodeInfo(_nodeInfo) << printGroupInfo(groupInfo);
+    GROUP_LOG(INFO) << LOG_DESC("buildNodeService for the started new node")
+                    << printNodeInfo(_nodeInfo) << printGroupInfo(groupInfo);
 }
 
 bcos::protocol::BlockNumber GroupManager::getBlockNumberByGroup(const std::string& _groupID)
@@ -230,4 +245,58 @@ void GroupManager::initNodeInfo(
                                    << LOG_KV("error", boost::diagnostic_information(e));
             }
         });
+}
+
+void GroupManager::removeUnreachableNodeService(
+    std::map<std::string, std::set<std::string>> const& _unreachableNodes)
+{
+    WriteGuard l(x_nodeServiceList);
+    for (auto const& it : _unreachableNodes)
+    {
+        auto group = it.first;
+        if (!m_nodeServiceList.count(group))
+        {
+            continue;
+        }
+        auto const& nodeList = it.second;
+        for (auto const& node : nodeList)
+        {
+            GROUP_LOG(INFO) << LOG_DESC("GroupManager: removeUnreachablNodeService")
+                            << LOG_KV("group", group) << LOG_KV("node", node);
+            m_nodeServiceList[group].erase(node);
+        }
+        if (m_nodeServiceList[group].size() == 0)
+        {
+            m_nodeServiceList.erase(group);
+        }
+    }
+}
+void GroupManager::removeGroupBlockInfo(
+    std::map<std::string, std::set<std::string>> const& _unreachableNodes)
+{
+    WriteGuard l(x_groupBlockInfos);
+    for (auto const& it : _unreachableNodes)
+    {
+        auto group = it.first;
+        if (!m_nodesWithLatestBlockNumber.count(group))
+        {
+            m_groupBlockInfos.erase(group);
+            continue;
+        }
+        if (!m_groupBlockInfos.count(group))
+        {
+            m_nodesWithLatestBlockNumber.erase(group);
+            continue;
+        }
+        auto const& nodeList = it.second;
+        for (auto const& node : nodeList)
+        {
+            m_nodesWithLatestBlockNumber[group].erase(node);
+        }
+        if (m_nodesWithLatestBlockNumber[group].size() == 0)
+        {
+            m_groupBlockInfos.erase(group);
+            m_nodesWithLatestBlockNumber.erase(group);
+        }
+    }
 }

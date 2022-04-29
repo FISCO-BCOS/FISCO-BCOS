@@ -128,25 +128,24 @@ bool LocalRouterTable::insertNode(const std::string& _groupID, NodeIDPtr _nodeID
  * @param _groupID: groupID
  * @param _nodeID: nodeID
  */
-bool LocalRouterTable::removeNode(const std::string& _groupID, NodeIDPtr _nodeID)
+bool LocalRouterTable::removeNode(const std::string& _groupID, std::string const& _nodeID)
 {
-    auto nodeIDStr = _nodeID->hex();
     UpgradableGuard l(x_nodeList);
-    if (!m_nodeList.count(_groupID) || !m_nodeList[_groupID].count(nodeIDStr))
+    if (!m_nodeList.count(_groupID) || !m_nodeList[_groupID].count(_nodeID))
     {
         ROUTER_LOG(INFO) << LOG_DESC("removeNode: the node is not registered")
-                         << LOG_KV("groupID", _groupID) << LOG_KV("nodeID", nodeIDStr);
+                         << LOG_KV("groupID", _groupID) << LOG_KV("nodeID", _nodeID);
         return false;
     }
     // erase the node from m_nodeList
     UpgradeGuard ul(l);
-    (m_nodeList[_groupID]).erase(nodeIDStr);
+    (m_nodeList[_groupID]).erase(_nodeID);
     if (m_nodeList.at(_groupID).empty())
     {
         m_nodeList.erase(_groupID);
     }
     ROUTER_LOG(INFO) << LOG_DESC("removeNode") << LOG_KV("groupID", _groupID)
-                     << LOG_KV("nodeID", nodeIDStr);
+                     << LOG_KV("nodeID", _nodeID);
     return true;
 }
 

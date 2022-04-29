@@ -18,4 +18,4 @@ aux_source_directory(../ SRC_LIST)
 add_executable(${BINARY_NAME} ${SRC_LIST})
 
 target_compile_options(${BINARY_NAME} PRIVATE -Wno-error -Wno-unused-parameter -Wno-variadic-macros -Wno-return-type -Wno-pedantic)
-target_link_libraries(${BINARY_NAME} ${COMMAND_HELPER_LIB} ${PROTOCOL_INIT_LIB} ${TOOL_TARGET} ${GATEWAY_TARGET} OpenSSL::SSL OpenSSL::Crypto TCMalloc)
+target_link_libraries(${BINARY_NAME} ${COMMAND_HELPER_LIB} ${PROTOCOL_INIT_LIB} ${TOOL_TARGET} ${GATEWAY_TARGET} ${LEADER_ELECTION_TARGET} OpenSSL::SSL OpenSSL::Crypto TCMalloc)

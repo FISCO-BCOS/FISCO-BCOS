@@ -34,6 +34,7 @@ public:
     {}
     virtual ~GroupManager() {}
     virtual void updateGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo);
+    virtual void removeGroupNodeList(bcos::group::GroupInfo::Ptr _groupInfo);
 
     virtual NodeService::Ptr getNodeService(
         std::string const& _groupID, std::string const& _nodeName) const;
@@ -164,6 +165,11 @@ protected:
 
     virtual void initNodeInfo(
         std::string const& _groupID, std::string const& _nodeName, NodeService::Ptr _nodeService);
+
+    virtual void removeGroupBlockInfo(
+        std::map<std::string, std::set<std::string>> const& _unreachableNodes);
+    virtual void removeUnreachableNodeService(
+        std::map<std::string, std::set<std::string>> const& _unreachableNodes);
 
 protected:
     std::string m_chainID;

@@ -30,7 +30,7 @@ command="deploy"
 ca_dir=""
 config_path=""
 docker_mode=
-default_version="v3.0.0-rc3"
+default_version="v3.0.0-rc4"
 compatibility_version=${default_version}
 auth_mode="false"
 auth_admin_account=
@@ -714,7 +714,9 @@ EOF
 
 generate_common_ini() {
     local output=${1}
-    local uuid=$(cat /dev/urandom | od -x | head -1 | awk '{print $2$3"-"$4$5"-"$6$7"-"$8$9}')
+    LOG_INFO "Begin generate uuid"
+    local uuid=$(uuidgen)
+    LOG_INFO "Generate uuid success: ${uuid}"
     cat <<EOF >>"${output}"
 
 [chain]
@@ -901,7 +903,9 @@ generate_genesis_config() {
     ${node_list}
 
 [version]
-    compatibility_version=3.0.0-rc3
+    ; compatible version, can be dynamically upgraded through setSystemConfig
+    ; the default is 3.0.0-rc4
+    compatibility_version=3.0.0-rc4
 [tx]
     ; transaction gas limit
     gas_limit=3000000000
