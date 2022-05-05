@@ -39,7 +39,7 @@ namespace dev
 {
 namespace consensus
 {
-class Sealer : public Worker, public std::enable_shared_from_this<Sealer>
+class Sealer : public Worker
 {
 public:
     using Ptr = std::shared_ptr<Sealer>;

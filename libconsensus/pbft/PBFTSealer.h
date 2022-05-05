@@ -35,14 +35,16 @@ namespace dev
 {
 namespace consensus
 {
-class PBFTSealer : public Sealer
+class PBFTSealer : public Sealer, public std::enable_shared_from_this<PBFTSealer>
 {
 public:
     PBFTSealer(std::shared_ptr<dev::txpool::TxPoolInterface> _txPool,
         std::shared_ptr<dev::blockchain::BlockChainInterface> _blockChain,
         std::shared_ptr<dev::sync::SyncInterface> _blockSync)
       : Sealer(_txPool, _blockChain, _blockSync)
-    {}
+    {
+        m_worker = std::make_shared<ThreadPool>("sealerWorker", 1);
+    }
 
     void start() override;
     void stop() override;
@@ -92,11 +94,11 @@ protected:
         m_pbftEngine = std::dynamic_pointer_cast<PBFTEngine>(m_consensusEngine);
 
         // called by viewchange procedure to reset block when timeout
-        m_pbftEngine->onViewChange(boost::bind(&PBFTSealer::resetBlockForViewChange, this));
+        m_pbftEngine->onViewChange(boost::bind(&PBFTSealer::asyncResetBlockForViewChange, this));
 
         /// called by the next leader to reset block when it receives the prepare block
         m_pbftEngine->onNotifyNextLeaderReset(
-            boost::bind(&PBFTSealer::resetBlockForNextLeader, this, boost::placeholders::_1));
+            boost::bind(&PBFTSealer::asyncResetBlockForNextLeader, this, boost::placeholders::_1));
 
         // resetConfig to update m_sealersNum
         m_pbftEngine->resetConfig();
@@ -134,6 +136,20 @@ private:
     void increaseMaxTxsCanSeal();
     void onCommitBlock(
         uint64_t const& blockNumber, uint64_t const& sealingTxNumber, unsigned const& changeCycle);
+
+    void asyncResetBlockForViewChange()
+    {
+        // Note: this will be called by PBFTEngine, enqueue here to in case of dead-lock
+        auto self = std::weak_ptr<PBFTSealer>(shared_from_this());
+        m_worker->enqueue([self]() {
+            auto sealer = self.lock();
+            if (!sealer)
+            {
+                return;
+            }
+            sealer->resetBlockForViewChange();
+        });
+    }
     /// reset block when view changes
     void resetBlockForViewChange()
     {
@@ -165,6 +181,19 @@ private:
         m_blockSignalled.notify_all();
     }
 
+    void asyncResetBlockForNextLeader(dev::h256Hash const& filter)
+    {
+        // Note: this will be called by PBFTEngine, enqueue here to in case of dead-lock
+        auto self = std::weak_ptr<PBFTSealer>(shared_from_this());
+        m_worker->enqueue([self, filter]() {
+            auto sealer = self.lock();
+            if (!sealer)
+            {
+                return;
+            }
+            sealer->resetBlockForNextLeader(filter);
+        });
+    }
     /// reset block for the next leader
     void resetBlockForNextLeader(dev::h256Hash const& filter)
     {
@@ -191,6 +220,8 @@ protected:
     uint64_t m_lastBlockNumber = 0;
     bool m_enableDynamicBlockSize = true;
     float m_blockSizeIncreaseRatio = 0.5;
+
+    std::shared_ptr<ThreadPool> m_worker;
 };
 }  // namespace consensus
 }  // namespace dev
