@@ -31,8 +31,8 @@ CallParameters::UniquePtr ExecutiveState::go()
     // init
     if (!m_executive)
     {
-        m_executive = m_executiveFactory->build(
-            m_input->codeAddress, m_input->contextID, m_input->seq, m_input->staticCall);
+        m_executive =
+            m_executiveFactory->build(m_input->codeAddress, m_input->contextID, m_input->seq);
     }
 
     // run
@@ -44,6 +44,8 @@ CallParameters::UniquePtr ExecutiveState::go()
         break;
     case PAUSED:
         // just ignore, need to set resume params
+        EXECUTOR_LOG(FATAL) << "Invalid type";
+        assert(false);
         break;
     case NEED_RESUME:
         output = m_executive->resume();
@@ -66,6 +68,7 @@ CallParameters::UniquePtr ExecutiveState::go()
         break;
     }
 
+    // TODO: debug in executive
     // Bug: Must force set contextID here to fix bug.
     // But why output->context & output->seq here always be 0 ?????
     output->contextID = m_contextID;

@@ -68,9 +68,9 @@ private:
     void run(std::function<void(CallParameters::UniquePtr)> onTxReturn,
         std::function<void(bcos::Error::UniquePtr)> onFinished);
 
-    void runWaitingPool(std::function<void(CallParameters::UniquePtr)> onTxReturn);
+    void runWaitingFlow(std::function<void(CallParameters::UniquePtr)> onTxReturn);
 
-    void runOriginStack(std::function<void(CallParameters::UniquePtr)> onTxReturn);
+    void runOriginFlow(std::function<void(CallParameters::UniquePtr)> onTxReturn);
 
     void runOne(ExecutiveState::Ptr executiveState,
         std::function<void(CallParameters::UniquePtr)> onTxReturn);
@@ -83,13 +83,13 @@ private:
             shared_from_this(), std::move(f));
     }
 
-    std::stack<ExecutiveState::Ptr> m_originStack;
+    std::queue<ExecutiveState::Ptr> m_originFlow;
 
     // <ContextID, seq> -> Executive
     std::set<std::tuple<int64_t, int64_t>> m_pausedPool;
 
     // ContextID -> Executive
-    std::set<std::tuple<int64_t, int64_t>, ContextIDSeqCmp> m_waitingPool;
+    std::set<std::tuple<int64_t, int64_t>, ContextIDSeqCmp> m_waitingFlow;
 
     // <ContextID, seq> -> Executive
     std::map<std::tuple<int64_t, int64_t>, ExecutiveState::Ptr> m_executives;

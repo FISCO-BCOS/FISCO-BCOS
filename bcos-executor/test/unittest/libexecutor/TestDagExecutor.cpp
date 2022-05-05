@@ -846,18 +846,19 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransfer)
                 params->setData(codec->encodeWithSig("balanceOf(string)", account));
                 params->setType(NativeExecutionMessage::MESSAGE);
 
-                std::optional<ExecutionMessage::UniquePtr> output;
+                std::promise<std::optional<ExecutionMessage::UniquePtr>> outputPromise;
                 executor->executeTransaction(
-                    std::move(params), [&output](bcos::Error::UniquePtr&& error,
+                    std::move(params), [&outputPromise](bcos::Error::UniquePtr&& error,
                                            NativeExecutionMessage::UniquePtr&& result) {
                         if (error)
                         {
                             std::cout << "Error!" << boost::diagnostic_information(*error);
                         }
                         // BOOST_CHECK(!error);
-                        output = std::move(result);
+                        outputPromise.set_value(std::move(result));
                     });
-                auto& balanceResult = *output;
+                ExecutionMessage::UniquePtr balanceResult =
+                    std::move(*outputPromise.get_future().get());
 
                 bcos::u256 value(0);
                 codec->decode(balanceResult->data(), value);
@@ -1075,18 +1076,19 @@ BOOST_AUTO_TEST_CASE(callEvmConcurrentlyTransferByMessage)
                 params->setData(codec->encodeWithSig("balanceOf(string)", account));
                 params->setType(NativeExecutionMessage::MESSAGE);
 
-                std::optional<ExecutionMessage::UniquePtr> output;
+                std::promise<std::optional<ExecutionMessage::UniquePtr>> outputPromise;
                 executor->executeTransaction(
-                    std::move(params), [&output](bcos::Error::UniquePtr&& error,
+                    std::move(params), [&outputPromise](bcos::Error::UniquePtr&& error,
                                            NativeExecutionMessage::UniquePtr&& result) {
                         if (error)
                         {
                             std::cout << "Error!" << boost::diagnostic_information(*error);
                         }
                         // BOOST_CHECK(!error);
-                        output = std::move(result);
+                        outputPromise.set_value(std::move(result));
                     });
-                auto& balanceResult = *output;
+                ExecutionMessage::UniquePtr balanceResult =
+                    std::move(*outputPromise.get_future().get());
 
                 bcos::u256 value(0);
                 codec->decode(balanceResult->data(), value);

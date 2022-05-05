@@ -29,9 +29,9 @@
 #include <tbb/concurrent_unordered_map.h>
 #include <string>
 
-//#define DMC_TRACE_LOG_ENABLE
-#define DMC_LOG(LEVEL) BCOS_LOG(LEVEL) << LOG_BADGE("DMC")
-//#define DMC_LOG(LEVEL) std::cout << LOG_BADGE("DMC")
+#define DMC_TRACE_LOG_ENABLE
+//#define DMC_LOG(LEVEL) SCHEDULER_LOG(LEVEL) << LOG_BADGE("DMC")
+#define DMC_LOG(LEVEL) std::cout << LOG_BADGE("DMC")
 namespace bcos::scheduler
 {
 
@@ -110,7 +110,6 @@ public:
         }
     }
 
-
     enum MessageHint : int8_t
     {
         NEED_SEND,
@@ -140,7 +139,7 @@ private:
     tbb::concurrent_set<ContextID> m_lockingPool;
     tbb::concurrent_set<ContextID> m_needSendPool;
     tbb::concurrent_set<ContextID> m_needRemove;
-
+    // TODO: optimize here, remove these pools
 
     mutable SharedMutex x_concurrentLock;
 

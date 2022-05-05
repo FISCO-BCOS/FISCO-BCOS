@@ -554,7 +554,7 @@ void BlockExecutive::DMCExecute(
     serialPrepareExecutor();
 
     // dump address for omp parallization
-    std::vector<std::string> contractAddress;
+    std::vector<std::string> contractAddress;  // todo: reserve
     for (auto it = m_dmcExecutors.begin(); it != m_dmcExecutors.end(); it++)
     {
         contractAddress.push_back(it->first);
@@ -624,6 +624,7 @@ void BlockExecutive::DMCExecute(
             else
             {
                 // assume never goes here
+                SCHEDULER_LOG(FATAL) << "Invalid type";
                 assert(false);
             }
         };
@@ -941,6 +942,7 @@ DmcExecutor::Ptr BlockExecutive::registerAndGetDmcExecutor(std::string contractA
 
 void BlockExecutive::scheduleExecutive(ExecutiveState::Ptr executiveState)
 {
+    // TODO: add lock
     auto to = std::string(executiveState->message->to());
 
     DmcExecutor::Ptr dmcExecutor;
@@ -963,7 +965,7 @@ void BlockExecutive::onTxFinish(bcos::protocol::ExecutionMessage::UniquePtr outp
     // Calc the gas set to header
     m_gasUsed += txGasUsed;
 #ifdef DMC_TRACE_LOG_ENABLE
-    DMC_LOG(TRACE) << " [^^] " << output->toString() << " -> "
+    DMC_LOG(TRACE) << " GenReceipt: \t\t[^^] " << output->toString() << " -> "
                    << output->contextID() - m_startContextID << std::endl;
 #endif
     // write receipt in results
@@ -989,12 +991,13 @@ void BlockExecutive::serialPrepareExecutor()
         it->second->releaseOutdatedLock();  // release last round's lock
         currentExecutors.insert(it->first);
     }
-    for (auto address : currentExecutors)
+    for (auto& address : currentExecutors)  // TODO: ADD & in all this
     {
+        // TODO: Add more description of the log meaning
 #ifdef DMC_TRACE_LOG_ENABLE
-        DMC_LOG(TRACE) << "----------------- " << address << " | "
-                       << m_block->blockHeaderConst()->number() << " -----------------"
-                       << std::endl;
+        DMC_LOG(TRACE) << " Pre-DmcExecutor:\t----------------- addr:" << address
+                       << " | number:" << m_block->blockHeaderConst()->number()
+                       << " -----------------" << std::endl;
 #endif
         m_dmcExecutors[address]->prepare();  // may generate new contract in m_dmcExecutors
     }
@@ -1027,9 +1030,9 @@ void BlockExecutive::serialPrepareExecutor()
             continue;  // must jump finished executor
         }
 #ifdef DMC_TRACE_LOG_ENABLE
-        DMC_LOG(TRACE) << " --unlockPrepare-- " << address << " | "
-                       << m_block->blockHeaderConst()->number() << " -----------------"
-                       << std::endl;
+        DMC_LOG(TRACE) << " unlockPrepare: \t|---------------- addr:" << address
+                       << " | number:" << m_block->blockHeaderConst()->number()
+                       << " ----------------|" << std::endl;
 #endif
 
         allFinished = false;

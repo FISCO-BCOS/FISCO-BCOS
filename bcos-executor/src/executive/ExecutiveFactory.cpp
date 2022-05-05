@@ -26,32 +26,15 @@ using namespace bcos::executor;
 
 
 std::shared_ptr<TransactionExecutive> ExecutiveFactory::build(
-    const std::string& _contractAddress, int64_t contextID, int64_t seq, bool isStaticCall)
+    const std::string& _contractAddress, int64_t contextID, int64_t seq)
 {
-    if (isStaticCall)
-    {
-        auto blockContext = f_createBlockContextForCall(contextID, seq);
+    auto executive = std::make_shared<TransactionExecutive>(
+        m_blockContext, _contractAddress, contextID, seq, m_gasInjector);
+    executive->setConstantPrecompiled(m_constantPrecompiled);
+    executive->setEVMPrecompiled(m_precompiledContract);
+    executive->setBuiltInPrecompiled(m_builtInPrecompiled);
 
-        auto executive = std::make_shared<TransactionExecutive>(
-            blockContext, _contractAddress, contextID, seq, m_gasInjector);
-        executive->setConstantPrecompiled(m_constantPrecompiled);
-        executive->setEVMPrecompiled(m_precompiledContract);
-        executive->setBuiltInPrecompiled(m_builtInPrecompiled);
-
-        // TODO: register User developed Precompiled contract
-        // registerUserPrecompiled(context);
-        return executive;
-    }
-    else
-    {
-        auto executive = std::make_shared<TransactionExecutive>(
-            m_blockContext, _contractAddress, contextID, seq, m_gasInjector);
-        executive->setConstantPrecompiled(m_constantPrecompiled);
-        executive->setEVMPrecompiled(m_precompiledContract);
-        executive->setBuiltInPrecompiled(m_builtInPrecompiled);
-
-        // TODO: register User developed Precompiled contract
-        // registerUserPrecompiled(context);
-        return executive;
-    }
+    // TODO: register User developed Precompiled contract
+    // registerUserPrecompiled(context);
+    return executive;
 }

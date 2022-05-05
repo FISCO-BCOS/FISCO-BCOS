@@ -167,7 +167,7 @@ protected:
         int64_t contextID, int64_t seq);
 
     void asyncExecute(std::shared_ptr<BlockContext> blockContext,
-        bcos::protocol::ExecutionMessage::UniquePtr input, bool staticCall,
+        bcos::protocol::ExecutionMessage::UniquePtr input,
         std::function<void(bcos::Error::UniquePtr&&, bcos::protocol::ExecutionMessage::UniquePtr&&)>
             callback);
 
@@ -196,14 +196,13 @@ protected:
         std::vector<protocol::ExecutionMessage::UniquePtr>& executionResults);
 
     std::shared_ptr<ExecutiveFlowInterface> getExecutiveFlow(
-        std::string codeAddress, bool isStaticCall);
+        std::shared_ptr<BlockContext> blockContext, std::string codeAddress);
+
 
     void asyncExecuteExecutiveFlow(std::shared_ptr<ExecutiveFlowInterface> executiveFlow,
         std::function<void(
             bcos::Error::UniquePtr&&, std::vector<bcos::protocol::ExecutionMessage::UniquePtr>&&)>
             callback);
-
-    virtual std::shared_ptr<BlockContext> createBlockContextForCall(int64_t contextID, int64_t seq);
 
     txpool::TxPoolInterface::Ptr m_txpool;
     storage::MergeableStorageInterface::Ptr m_cachedStorage;

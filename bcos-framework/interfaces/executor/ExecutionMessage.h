@@ -73,12 +73,13 @@ public:
     std::string toString()
     {
         std::stringstream ss;
-        ss << contextID() << "|" << seq() << "|" << getTypeName(type()) << "|" << from() << "."
-           << to() << "|";
+        ss << "[" << (staticCall() ? "call" : "tx") << "|" << contextID() << "|" << seq() << "|"
+           << getTypeName(type()) << "|" << from() << "->" << to() << "|";
         for (auto& lock : keyLocks())
         {
             ss << toHex(lock) << ".";
         }
+        ss << "]";
         return ss.str();
     }
 

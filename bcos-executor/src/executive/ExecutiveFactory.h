@@ -46,19 +46,16 @@ public:
         std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
             constantPrecompiled,
         std::shared_ptr<const std::set<std::string>> builtInPrecompiled,
-        std::shared_ptr<wasm::GasInjector> gasInjector,
-        std::function<std::shared_ptr<BlockContext>(int64_t contextID, int64_t seq)>
-            createBlockContextForCall)
+        std::shared_ptr<wasm::GasInjector> gasInjector)
       : m_precompiledContract(precompiledContract),
         m_constantPrecompiled(constantPrecompiled),
         m_builtInPrecompiled(builtInPrecompiled),
         m_blockContext(blockContext),
-        m_gasInjector(gasInjector),
-        f_createBlockContextForCall(std::move(createBlockContextForCall))
+        m_gasInjector(gasInjector)
     {}
 
     std::shared_ptr<TransactionExecutive> build(
-        const std::string& _contractAddress, int64_t contextID, int64_t seq, bool isStaticCall);
+        const std::string& _contractAddress, int64_t contextID, int64_t seq);
 
 
 private:
@@ -69,9 +66,6 @@ private:
     std::shared_ptr<const std::set<std::string>> m_builtInPrecompiled;
     std::shared_ptr<BlockContext> m_blockContext;
     std::shared_ptr<wasm::GasInjector> m_gasInjector;
-
-    std::function<std::shared_ptr<BlockContext>(int64_t contextID, int64_t seq)>
-        f_createBlockContextForCall;
 };
 
 }  // namespace executor

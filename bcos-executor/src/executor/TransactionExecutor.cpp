@@ -277,7 +277,7 @@ void TransactionExecutor::call(bcos::protocol::ExecutionMessage::UniquePtr input
     }
     }
 
-    asyncExecute(std::move(blockContext), std::move(input), true,
+    asyncExecute(std::move(blockContext), std::move(input),
         [this, callback = std::move(callback)](
             Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
             if (error)
@@ -328,7 +328,7 @@ void TransactionExecutor::executeTransaction(bcos::protocol::ExecutionMessage::U
         return;
     }
 
-    asyncExecute(m_blockContext, std::move(input), false,
+    asyncExecute(m_blockContext, std::move(input),
         [callback = std::move(callback)](
             Error::UniquePtr&& error, bcos::protocol::ExecutionMessage::UniquePtr&& result) {
             if (error)
@@ -362,12 +362,16 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
     auto callParametersList =
         std::make_shared<std::vector<CallParameters::UniquePtr>>(inputs.size());
 
-    bool isStaticCall = inputs[0]->staticCall();  // staticCall only has one element in inputs
-
+    bool isStaticCall = true;
 #pragma omp parallel for
     for (decltype(inputs)::index_type i = 0; i < inputs.size(); ++i)
     {
         auto& params = inputs[i];
+
+        if (!params->staticCall())
+        {
+            isStaticCall = false;
+        }
 
         switch (params->type())
         {
@@ -399,13 +403,21 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
         }
         }
     }
+
+    if (isStaticCall)
+    {
+        EXECUTOR_LOG(FATAL) << "dmcExecuteTransactions() only handle non static transactions but "
+                               "receive static call";
+        assert(false);
+    }
+
     auto prepareT = utcTime() - startT;
     startT = utcTime();
 
     if (!txHashes->empty())
     {
         m_txpool->asyncFillBlock(txHashes,
-            [this, isStaticCall, contractAddress, indexes = std::move(indexes),
+            [this, contractAddress, indexes = std::move(indexes),
                 fillInputs = std::move(fillInputs),
                 callParametersList = std::move(callParametersList), callback = std::move(callback),
                 txHashes](Error::Ptr error, protocol::TransactionsPtr transactions) mutable {
@@ -429,9 +441,7 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
                 auto prepareT = utcTime() - startT;
                 startT = utcTime();
 
-                std::shared_ptr<BlockContext> blockContext;
-
-                auto executiveFlow = getExecutiveFlow(contractAddress, isStaticCall);
+                auto executiveFlow = getExecutiveFlow(m_blockContext, contractAddress);
                 executiveFlow->submit(callParametersList);
 
                 asyncExecuteExecutiveFlow(executiveFlow,
@@ -446,7 +456,7 @@ void TransactionExecutor::dmcExecuteTransactions(std::string contractAddress,
     }
     else
     {
-        auto executiveFlow = getExecutiveFlow(contractAddress, isStaticCall);
+        auto executiveFlow = getExecutiveFlow(m_blockContext, contractAddress);
         executiveFlow->submit(callParametersList);
 
         asyncExecuteExecutiveFlow(executiveFlow,
@@ -1244,31 +1254,16 @@ void TransactionExecutor::getABI(
 
 
 ExecutiveFlowInterface::Ptr TransactionExecutor::getExecutiveFlow(
-    std::string codeAddress, bool isStaticCall)
+    std::shared_ptr<BlockContext> blockContext, std::string codeAddress)
 {
-    if (isStaticCall)
-    {
-        // is a static call and return a tmp executiveFlow
-        auto executiveFactory = std::make_shared<ExecutiveFactory>(nullptr, m_precompiledContract,
-            m_constantPrecompiled, m_builtInPrecompiled, m_gasInjector,
-            [this](int64_t contextID, int64_t seq) {
-                return createBlockContextForCall(contextID, seq);
-            });
-        auto executiveFlow = std::make_shared<ExecutiveStackFlow>(executiveFactory);
-        return executiveFlow;
-    }
-
     bcos::RecursiveGuard lock(x_executiveFlowLock);
-    ExecutiveFlowInterface::Ptr executiveFlow = m_blockContext->getExecutiveFlow(codeAddress);
+    ExecutiveFlowInterface::Ptr executiveFlow = blockContext->getExecutiveFlow(codeAddress);
     if (executiveFlow == nullptr)
     {
-        auto executiveFactory = std::make_shared<ExecutiveFactory>(m_blockContext,
-            m_precompiledContract, m_constantPrecompiled, m_builtInPrecompiled, m_gasInjector,
-            [this](int64_t contextID, int64_t seq) {
-                return createBlockContextForCall(contextID, seq);
-            });
+        auto executiveFactory = std::make_shared<ExecutiveFactory>(blockContext,
+            m_precompiledContract, m_constantPrecompiled, m_builtInPrecompiled, m_gasInjector);
         executiveFlow = std::make_shared<ExecutiveStackFlow>(executiveFactory);
-        m_blockContext->setExecutiveFlow(codeAddress, executiveFlow);
+        blockContext->setExecutiveFlow(codeAddress, executiveFlow);
     }
     return executiveFlow;
 }
@@ -1307,7 +1302,7 @@ void TransactionExecutor::asyncExecuteExecutiveFlow(ExecutiveFlowInterface::Ptr 
 }
 
 void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContext,
-    bcos::protocol::ExecutionMessage::UniquePtr input, bool staticCall,
+    bcos::protocol::ExecutionMessage::UniquePtr input,
     std::function<void(bcos::Error::UniquePtr&&, bcos::protocol::ExecutionMessage::UniquePtr&&)>
         callback)
 {
@@ -1324,8 +1319,8 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
         (*txHashes)[0] = (input->transactionHash());
 
         m_txpool->asyncFillBlock(std::move(txHashes),
-            [this, staticCall, inputPtr = input.release(), blockContext = std::move(blockContext),
-                callback](Error::Ptr error, bcos::protocol::TransactionsPtr transactions) mutable {
+            [this, inputPtr = input.release(), blockContext = std::move(blockContext), callback](
+                Error::Ptr error, bcos::protocol::TransactionsPtr transactions) mutable {
                 auto input = std::unique_ptr<bcos::protocol::ExecutionMessage>(inputPtr);
 
                 if (error)
@@ -1357,7 +1352,7 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
                 auto callParameters = createCallParameters(*input, *tx);
 
                 ExecutiveFlowInterface::Ptr executiveFlow =
-                    getExecutiveFlow(callParameters->codeAddress, staticCall);
+                    getExecutiveFlow(blockContext, callParameters->codeAddress);
                 executiveFlow->submit(std::move(callParameters));
 
                 asyncExecuteExecutiveFlow(executiveFlow,
@@ -1381,27 +1376,21 @@ void TransactionExecutor::asyncExecute(std::shared_ptr<BlockContext> blockContex
     case bcos::protocol::ExecutionMessage::FINISHED:
     case bcos::protocol::ExecutionMessage::KEY_LOCK:
     {
-        auto contextID = input->contextID();
-        auto seq = input->seq();
-        auto callParameters = createCallParameters(*input, staticCall);
-
+        auto callParameters = createCallParameters(*input, input->staticCall());
         ExecutiveFlowInterface::Ptr executiveFlow =
-            getExecutiveFlow(callParameters->codeAddress, staticCall);
+            getExecutiveFlow(blockContext, callParameters->codeAddress);
         executiveFlow->submit(std::move(callParameters));
         asyncExecuteExecutiveFlow(executiveFlow,
-            [seq, contextID, callback = std::move(callback)](bcos::Error::UniquePtr&& error,
-                std::vector<bcos::protocol::ExecutionMessage::UniquePtr>&&) {
+            [callback = std::move(callback)](bcos::Error::UniquePtr&& error,
+                std::vector<bcos::protocol::ExecutionMessage::UniquePtr>&& messages) {
                 if (error)
                 {
                     callback(std::move(error), nullptr);
                 }
                 else
                 {
-                    EXECUTOR_LOG(ERROR) << "KEY LOCK not found executive, contextID: " << contextID
-                                        << " seq: " << seq;
-                    callback(BCOS_ERROR_UNIQUE_PTR(
-                                 ExecuteError::EXECUTE_ERROR, "KEY LOCK not found executive"),
-                        nullptr);
+                    EXECUTOR_LOG(ERROR) << "Execute error: " << messages[0];
+                    callback(std::move(error), std::move(messages[0]));
                 }
             });
 
@@ -1680,53 +1669,4 @@ void TransactionExecutor::executeTransactionsWithCriticals(
     });
 
     txDag->run(m_DAGThreadNum);
-}
-
-
-std::shared_ptr<BlockContext> TransactionExecutor::createBlockContextForCall(
-    int64_t contextID, int64_t seq)
-{
-    tbb::concurrent_hash_map<std::tuple<int64_t, int64_t>, TransactionExecutor::CallState,
-        TransactionExecutor::HashCombine>::accessor it;
-    m_calledContext->find(it, std::tuple{contextID, seq});
-    std::shared_ptr<BlockContext> blockContext;
-
-    if (it.empty())
-    {
-        bcos::protocol::BlockNumber number = m_lastCommittedBlockNumber;
-        storage::StorageInterface::Ptr prev;
-
-        if (m_cachedStorage)
-        {
-            prev = m_cachedStorage;
-        }
-        else
-        {
-            prev = m_backendStorage;
-        }
-
-        // Create a temp storage
-        auto storage = std::make_shared<storage::StateStorage>(std::move(prev));
-
-        // Create a temp block context
-        blockContext = createBlockContext(
-            number, h256(), 0, 0, std::move(storage));  // TODO: complete the block info
-
-        auto inserted =
-            m_calledContext->emplace(std::tuple{contextID, seq}, CallState{blockContext});
-
-        if (!inserted)
-        {
-            auto message = "Call error, contextID: " + boost::lexical_cast<std::string>(contextID) +
-                           " seq: " + boost::lexical_cast<std::string>(seq) + " exists";
-            EXECUTOR_LOG(ERROR) << message;
-            return nullptr;
-        }
-    }
-    else
-    {
-        blockContext = it->second.blockContext;
-    }
-
-    return blockContext;
 }

@@ -52,12 +52,12 @@ void ExecutiveStackFlow::submit(CallParameters::UniquePtr txInput)
 
     if (!m_hasFirstRun)
     {
-        m_originStack.push(executiveState);
+        m_originFlow.push(executiveState);
     }
     else
     {
         m_pausedPool.erase({contextID, seq});
-        m_waitingPool.insert({contextID, seq});
+        m_waitingFlow.insert({contextID, seq});
     };
 }
 
@@ -66,9 +66,9 @@ void ExecutiveStackFlow::submit(std::shared_ptr<std::vector<CallParameters::Uniq
     WriteGuard lock(x_lock);
 
     // from back to front, push in stack, so stack's tx can be executed from top
-    for (auto i = txInputs->size(); i > 0; i--)
+    for (unsigned long i = 0; i < txInputs->size(); i++)
     {
-        submit(std::move((*txInputs)[i - 1]));
+        submit(std::move((*txInputs)[i]));
     }
 }
 
@@ -83,24 +83,32 @@ void ExecutiveStackFlow::asyncRun(std::function<void(CallParameters::UniquePtr)>
 void ExecutiveStackFlow::run(std::function<void(CallParameters::UniquePtr)> onTxReturn,
     std::function<void(bcos::Error::UniquePtr)> onFinished)
 {
+    // origin flow: all messages received in first DMC iteration. if paused, move to paused pool
+    // paused poll: all paused messages during DMC iteration. if resumed, move to waiting pool
+    // waiting flow: include all messages received during DMC iteration.
+
+    // These three pool above run as a stack manner.
+    // We must run waiting flow before origin flow and push message in waiting flow during DMC
+    // iteration.
+
     try
     {
         bcos::WriteGuard lock(x_lock);
         m_hasFirstRun = true;
 
-        if (!m_waitingPool.empty())
+        // must run all messages in waiting pool before origin pool
+        if (!m_waitingFlow.empty())
         {
-            runWaitingPool(onTxReturn);
+            runWaitingFlow(onTxReturn);
         }
 
         if (m_pausedPool.empty())
         {
-            runOriginStack(onTxReturn);
+            // origin flow can only be run if there is no paused message
+            runOriginFlow(onTxReturn);
         }
 
         onFinished(nullptr);
-
-        // });
     }
     catch (std::exception& e)
     {
@@ -111,23 +119,23 @@ void ExecutiveStackFlow::run(std::function<void(CallParameters::UniquePtr)> onTx
 }
 
 
-void ExecutiveStackFlow::runWaitingPool(std::function<void(CallParameters::UniquePtr)> onTxReturn)
+void ExecutiveStackFlow::runWaitingFlow(std::function<void(CallParameters::UniquePtr)> onTxReturn)
 {
-    for (auto contextIDAndSeq : m_waitingPool)
+    for (auto contextIDAndSeq : m_waitingFlow)
     {
         auto executiveState = m_executives[contextIDAndSeq];
         runOne(executiveState, onTxReturn);
     }
 
-    m_waitingPool.clear();
+    m_waitingFlow.clear();
 }
 
-void ExecutiveStackFlow::runOriginStack(std::function<void(CallParameters::UniquePtr)> onTxReturn)
+void ExecutiveStackFlow::runOriginFlow(std::function<void(CallParameters::UniquePtr)> onTxReturn)
 {
-    while (!m_originStack.empty())
+    while (!m_originFlow.empty())
     {
-        auto executiveState = m_originStack.top();
-        m_originStack.pop();
+        auto executiveState = m_originFlow.front();
+        m_originFlow.pop();
         runOne(executiveState, onTxReturn);
 
         if (executiveState->getStatus() == ExecutiveState::PAUSED)
@@ -150,7 +158,9 @@ void ExecutiveStackFlow::runOne(
     case ExecutiveState::NEED_RESUME:
     {
         // assume never goes here
+
         assert(false);
+        EXECUTIVE_LOG(FATAL) << "Invalid executiveState type";
         break;
     }
     case ExecutiveState::PAUSED:
