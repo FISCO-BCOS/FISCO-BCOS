@@ -195,7 +195,7 @@ void Gateway::asyncSendMessageByNodeID(const std::string& _groupID, NodeIDPtr _s
                 // network error
                 if (e.errorCode() != P2PExceptionType::Success)
                 {
-                    GATEWAY_LOG(DEBUG)
+                    GATEWAY_LOG(ERROR)
                         << LOG_BADGE("Retry") << LOG_DESC("network callback")
                         << LOG_KV("p2pid", p2pID) << LOG_KV("errorCode", e.errorCode())
                         << LOG_KV("errorMessage", e.what());

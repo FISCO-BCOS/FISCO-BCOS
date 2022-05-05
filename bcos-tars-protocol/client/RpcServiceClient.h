@@ -52,10 +52,12 @@ public:
 
         void callback_asyncNotifyBlockNumber(const bcostars::Error& ret) override
         {
+            s_tarsTimeoutCount.store(0);
             m_callback(toBcosError(ret));
         }
         void callback_asyncNotifyBlockNumber_exception(tars::Int32 ret) override
         {
+            s_tarsTimeoutCount++;
             m_callback(toBcosError(ret));
         }
 
@@ -67,6 +69,7 @@ public:
         bcos::protocol::BlockNumber _blockNumber,
         std::function<void(bcos::Error::Ptr)> _callback) override
     {
+        auto shouldBlockCall = shouldStopCall();
         auto ret = checkConnection(
             c_moduleName, "asyncNotifyBlockNumber", m_prx, [_callback](bcos::Error::Ptr _error) {
                 if (_callback)
@@ -74,13 +77,26 @@ public:
                     _callback(_error);
                 }
             });
-        if (!ret)
+        if (!ret && shouldBlockCall)
         {
             return;
         }
         vector<EndpointInfo> activeEndPoints;
         vector<EndpointInfo> nactiveEndPoints;
         m_prx->tars_endpointsAll(activeEndPoints, nactiveEndPoints);
+        // try to call non-activate-endpoints when with zero connection
+        if (activeEndPoints.size() == 0)
+        {
+            // notify groupInfo to all gateway nodes
+            for (auto const& endPoint : nactiveEndPoints)
+            {
+                auto endPointStr = endPointToString(endPoint);
+                auto prx =
+                    Application::getCommunicator()->stringToProxy<RpcServicePrx>(endPointStr);
+                prx->async_asyncNotifyBlockNumber(
+                    new Callback(_callback), _groupID, _nodeName, _blockNumber);
+            }
+        }
         // notify block number to all rpc nodes
         for (auto const& endPoint : activeEndPoints)
         {
@@ -101,38 +117,49 @@ public:
 
             void callback_asyncNotifyGroupInfo(const bcostars::Error& ret) override
             {
+                s_tarsTimeoutCount.store(0);
                 m_callback(toBcosError(ret));
             }
             void callback_asyncNotifyGroupInfo_exception(tars::Int32 ret) override
             {
+                s_tarsTimeoutCount++;
                 m_callback(toBcosError(ret));
             }
 
         private:
             std::function<void(bcos::Error::Ptr&&)> m_callback;
         };
+        auto shouldBlockCall = shouldStopCall();
         auto ret = checkConnection(
-            c_moduleName, "asyncNotifyGroupInfo", m_prx, [_callback](bcos::Error::Ptr _error) {
+            c_moduleName, "asyncNotifyGroupInfo", m_prx,
+            [_callback](bcos::Error::Ptr _error) {
                 if (_callback)
                 {
                     _callback(std::move(_error));
                 }
-            });
-        if (!ret)
+            },
+            shouldBlockCall);
+        if (!ret && shouldBlockCall)
         {
             return;
         }
         vector<EndpointInfo> activeEndPoints;
         vector<EndpointInfo> nactiveEndPoints;
         m_prx->tars_endpointsAll(activeEndPoints, nactiveEndPoints);
+        auto tarsGroupInfo = toTarsGroupInfo(_groupInfo);
+        // notify groupInfo to all rpc nodes
+        // try to call non-activate-endpoints when with zero connection
         if (activeEndPoints.size() == 0)
         {
-            BCOS_LOG(TRACE) << LOG_DESC("RPC: asyncNotifyGroupInfo error for empty connection")
-                            << bcos::group::printGroupInfo(_groupInfo);
-            return;
+            // notify groupInfo to all gateway nodes
+            for (auto const& endPoint : nactiveEndPoints)
+            {
+                auto endPointStr = endPointToString(endPoint);
+                auto prx =
+                    Application::getCommunicator()->stringToProxy<RpcServicePrx>(endPointStr);
+                prx->async_asyncNotifyGroupInfo(new Callback(_callback), tarsGroupInfo);
+            }
         }
-        // notify groupInfo to all rpc nodes
-        auto tarsGroupInfo = toTarsGroupInfo(_groupInfo);
         for (auto const& endPoint : activeEndPoints)
         {
             auto endPointStr = endPointToString(endPoint);
@@ -155,26 +182,31 @@ public:
             void callback_asyncNotifyAMOPMessage(
                 const bcostars::Error& ret, const vector<tars::Char>& _responseData) override
             {
+                s_tarsTimeoutCount.store(0);
                 auto responseData =
                     std::make_shared<bcos::bytes>(_responseData.begin(), _responseData.end());
                 m_callback(toBcosError(ret), responseData);
             }
             void callback_asyncNotifyAMOPMessage_exception(tars::Int32 ret) override
             {
+                s_tarsTimeoutCount++;
                 m_callback(toBcosError(ret), nullptr);
             }
 
         private:
             std::function<void(bcos::Error::Ptr&&, bcos::bytesPointer)> m_callback;
         };
+        auto shouldBlockCall = shouldStopCall();
         auto ret = checkConnection(
-            c_moduleName, "asyncNotifyAMOPMessage", m_prx, [_callback](bcos::Error::Ptr _error) {
+            c_moduleName, "asyncNotifyAMOPMessage", m_prx,
+            [_callback](bcos::Error::Ptr _error) {
                 if (_callback)
                 {
                     _callback(std::move(_error), nullptr);
                 }
-            });
-        if (!ret)
+            },
+            shouldBlockCall);
+        if (!ret && shouldBlockCall)
         {
             return;
         }
@@ -196,24 +228,29 @@ public:
             void callback_asyncNotifySubscribeTopic(
                 const bcostars::Error& ret, std::string const& _topicInfo) override
             {
+                s_tarsTimeoutCount.store(0);
                 m_callback(toBcosError(ret), _topicInfo);
             }
             void callback_asyncNotifySubscribeTopic_exception(tars::Int32 ret) override
             {
+                s_tarsTimeoutCount++;
                 m_callback(toBcosError(ret), "");
             }
 
         private:
             std::function<void(bcos::Error::Ptr&&, std::string)> m_callback;
         };
+        auto shouldBlockCall = shouldStopCall();
         auto ret = checkConnection(
-            c_moduleName, "asyncNotifySubscribeTopic", m_prx, [_callback](bcos::Error::Ptr _error) {
+            c_moduleName, "asyncNotifySubscribeTopic", m_prx,
+            [_callback](bcos::Error::Ptr _error) {
                 if (_callback)
                 {
                     _callback(std::move(_error), "");
                 }
-            });
-        if (!ret)
+            },
+            shouldBlockCall);
+        if (!ret && shouldBlockCall)
         {
             return;
         }
@@ -231,12 +268,17 @@ protected:
                boost::lexical_cast<std::string>(_endPoint.getEndpoint().getPort());
     }
 
+    static bool shouldStopCall() { return (s_tarsTimeoutCount >= c_maxTarsTimeoutCount); }
+
 private:
     bcostars::RpcServicePrx m_prx;
     std::string m_rpcServiceName;
     std::string const c_moduleName = "RpcServiceClient";
     // AMOP timeout 40s
     const int c_amopTimeout = 40000;
+
+    static std::atomic<int64_t> s_tarsTimeoutCount;
+    static const int64_t c_maxTarsTimeoutCount;
 };
 
 }  // namespace bcostars

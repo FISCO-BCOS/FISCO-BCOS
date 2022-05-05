@@ -115,10 +115,6 @@ protected:
     bcos::group::GroupInfo::Ptr m_groupInfo;
     bcos::group::ChainNodeInfo::Ptr m_nodeInfo;
 
-    // Note: If the groupNodeInfo fails to be pulled because the gateway is closed in pro-mode, it
-    // will periodically retry to pull the groupInfo until the information is successfully pulled.
-    std::atomic_bool m_groupNodeInfoFetched = {false};
-
     bcos::protocol::MemberFactoryInterface::Ptr m_memberFactory;
     bcos::election::LeaderElection::Ptr m_leaderElection;
 };

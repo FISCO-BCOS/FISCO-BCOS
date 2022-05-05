@@ -26,13 +26,19 @@ using namespace bcos::group;
 using namespace bcos::rpc;
 using namespace bcos::protocol;
 
+bool TarsGroupManager::updateGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo)
+{
+    auto ret = GroupManager::updateGroupInfo(_groupInfo);
+    if (ret)
+    {
+        m_groupStatusUpdater->restart();
+    }
+    return ret;
+}
+
 void TarsGroupManager::updateGroupStatus()
 {
     m_groupStatusUpdater->restart();
-    if (utcTime() - m_startTime <= c_tarsAdminRefreshInitTime)
-    {
-        return;
-    }
     auto unreachableNodes = checkNodeStatus();
     if (unreachableNodes.size() == 0)
     {

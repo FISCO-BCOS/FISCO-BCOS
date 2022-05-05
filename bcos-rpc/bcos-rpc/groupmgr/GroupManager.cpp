@@ -26,7 +26,7 @@ using namespace bcos::group;
 using namespace bcos::rpc;
 using namespace bcos::protocol;
 
-void GroupManager::updateGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo)
+bool GroupManager::updateGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo)
 {
     WriteGuard l(x_nodeServiceList);
     auto const& groupID = _groupInfo->groupID();
@@ -35,13 +35,17 @@ void GroupManager::updateGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo)
         m_groupInfos[groupID] = _groupInfo;
         GROUP_LOG(INFO) << LOG_DESC("updateGroupInfo") << printGroupInfo(_groupInfo);
         m_groupInfoNotifier(_groupInfo);
-        return;
     }
     auto nodeInfos = _groupInfo->nodeInfos();
+    auto ret = false;
     for (auto const& it : nodeInfos)
     {
-        updateNodeServiceWithoutLock(groupID, it.second);
+        if (updateNodeServiceWithoutLock(groupID, it.second))
+        {
+            ret = true;
+        }
     }
+    return ret;
 }
 
 void GroupManager::removeGroupNodeList(bcos::group::GroupInfo::Ptr _groupInfo)
@@ -93,19 +97,19 @@ bool GroupManager::shouldRebuildNodeService(
     return false;
 }
 
-void GroupManager::updateNodeServiceWithoutLock(
+bool GroupManager::updateNodeServiceWithoutLock(
     std::string const& _groupID, ChainNodeInfo::Ptr _nodeInfo)
 {
     auto const& nodeAppName = _nodeInfo->nodeName();
     if (!shouldRebuildNodeService(_groupID, _nodeInfo))
     {
-        return;
+        return false;
     }
     // a started node
     auto nodeService = m_nodeServiceFactory->buildNodeService(m_chainID, _groupID, _nodeInfo);
     if (!nodeService)
     {
-        return;
+        return false;
     }
     // fetch blockNumber to the node
     initNodeInfo(_groupID, _nodeInfo->nodeName(), nodeService);
@@ -116,6 +120,7 @@ void GroupManager::updateNodeServiceWithoutLock(
     m_groupInfoNotifier(groupInfo);
     GROUP_LOG(INFO) << LOG_DESC("buildNodeService for the started new node")
                     << printNodeInfo(_nodeInfo) << printGroupInfo(groupInfo);
+    return true;
 }
 
 bcos::protocol::BlockNumber GroupManager::getBlockNumberByGroup(const std::string& _groupID)

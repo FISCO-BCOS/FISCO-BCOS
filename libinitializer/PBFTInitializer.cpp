@@ -189,6 +189,7 @@ void PBFTInitializer::init()
         m_blockSync->enableAsMaster(true);
         m_pbft->enableAsMaterNode(true);
     }
+    syncGroupNodeInfo();
 }
 
 void PBFTInitializer::registerHandlers()
@@ -392,7 +393,6 @@ void PBFTInitializer::syncGroupNodeInfo()
                 INITIALIZER_LOG(WARNING)
                     << LOG_DESC("asyncGetGroupNodeInfo failed")
                     << LOG_KV("code", _error->errorCode()) << LOG_KV("msg", _error->errorMessage());
-                pbftInit->m_groupNodeInfoFetched.store(false);
                 return;
             }
             try
@@ -403,6 +403,10 @@ void PBFTInitializer::syncGroupNodeInfo()
                 }
                 NodeIDSet nodeIdSet;
                 auto const& nodeIDList = _groupNodeInfo->nodeIDList();
+                if (nodeIDList.size() == 0)
+                {
+                    return;
+                }
                 for (auto const& nodeIDStr : nodeIDList)
                 {
                     auto nodeID =
@@ -410,8 +414,6 @@ void PBFTInitializer::syncGroupNodeInfo()
                             fromHex(nodeIDStr));
                     nodeIdSet.insert(nodeID);
                 }
-                // fetch the groupNodeInfo success
-                pbftInit->m_groupNodeInfoFetched.store(true);
                 // the blockSync module set the connected node list
                 pbftInit->m_blockSync->config()->setConnectedNodeList(std::move(nodeIdSet));
                 // the txpool module set the connected node list

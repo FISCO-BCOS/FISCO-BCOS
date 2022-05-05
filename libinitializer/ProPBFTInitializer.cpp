@@ -60,24 +60,9 @@ ProPBFTInitializer::ProPBFTInitializer(bcos::initializer::NodeArchitectureType _
 void ProPBFTInitializer::scheduledTask()
 {
     // not enable failover, report nodeInfo to rpc/gw periodly
-    if (!m_nodeConfig->enableFailOver())
-    {
-        // reportNodeInfo to gateway and rpc
-        reportNodeInfo();
-    }
-    else if (m_groupNodeInfoFetched)
-    {
-        // enable failover, stop the timer after groupInfo successfully
-        m_timer->stop();
-        return;
-    }
-    // Note: If the groupNodeInfo fails to be pulled because the gateway is closed in pro-mode, it
-    // will periodically retry to pull the groupInfo until the information is successfully pulled.
-    if (!m_groupNodeInfoFetched)
-    {
-        syncGroupNodeInfo();
-    }
+    reportNodeInfo();
     m_timer->restart();
+    return;
 }
 
 void ProPBFTInitializer::reportNodeInfo()
@@ -106,7 +91,7 @@ void ProPBFTInitializer::reportNodeInfo()
 void ProPBFTInitializer::start()
 {
     PBFTInitializer::start();
-    if (m_timer)
+    if (m_timer && !m_nodeConfig->enableFailOver())
     {
         m_timer->start();
     }
@@ -155,4 +140,5 @@ void ProPBFTInitializer::init()
             }
         });
     PBFTInitializer::init();
+    reportNodeInfo();
 }

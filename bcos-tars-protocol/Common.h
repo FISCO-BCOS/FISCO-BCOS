@@ -340,7 +340,7 @@ inline bcos::gateway::GatewayInfo::Ptr fromTarsGatewayInfo(bcostars::GatewayInfo
 
 template <typename T>
 bool checkConnection(std::string const& _module, std::string const& _func, T prx,
-    std::function<void(bcos::Error::Ptr)> _errorCallback)
+    std::function<void(bcos::Error::Ptr)> _errorCallback, bool _callsErrorCallback = true)
 {
     std::vector<tars::EndpointInfo> activeEndPoints;
     std::vector<tars::EndpointInfo> nactiveEndPoints;
@@ -349,7 +349,7 @@ bool checkConnection(std::string const& _module, std::string const& _func, T prx
     {
         return true;
     }
-    if (_errorCallback)
+    if (_errorCallback && _callsErrorCallback)
     {
         std::string errorMessage =
             _module + " calls interface " + _func + " failed for empty connection";

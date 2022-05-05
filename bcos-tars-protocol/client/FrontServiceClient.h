@@ -117,17 +117,6 @@ public:
         private:
             bcos::front::ReceiveMsgFunc m_callback;
         };
-        auto ret = checkConnection(c_moduleName, "onReceiveMessage", m_proxy,
-            [_receiveMsgCallback](bcos::Error::Ptr _error) {
-                if (_receiveMsgCallback)
-                {
-                    _receiveMsgCallback(_error);
-                }
-            });
-        if (!ret)
-        {
-            return;
-        }
         auto nodeIDData = _nodeID->data();
         m_proxy->async_onReceiveMessage(new Callback(_receiveMsgCallback), _groupID,
             std::vector<char>(nodeIDData.begin(), nodeIDData.end()),
@@ -164,17 +153,6 @@ public:
         private:
             bcos::front::ReceiveMsgFunc m_callback;
         };
-        auto ret = checkConnection(c_moduleName, "onReceiveBroadcastMessage", m_proxy,
-            [_receiveMsgCallback](bcos::Error::Ptr _error) {
-                if (_receiveMsgCallback)
-                {
-                    _receiveMsgCallback(_error);
-                }
-            });
-        if (!ret)
-        {
-            return;
-        }
         auto nodeIDData = _nodeID->data();
         m_proxy->async_onReceiveBroadcastMessage(new Callback(_receiveMsgCallback), _groupID,
             std::vector<char>(nodeIDData.begin(), nodeIDData.end()),
@@ -231,17 +209,6 @@ public:
     void asyncSendResponse(const std::string& _id, int _moduleID, bcos::crypto::NodeIDPtr _nodeID,
         bcos::bytesConstRef _data, bcos::front::ReceiveMsgFunc _receiveMsgCallback) override
     {
-        auto ret = checkConnection(c_moduleName, "asyncSendResponse", m_proxy,
-            [_receiveMsgCallback](bcos::Error::Ptr _error) {
-                if (_receiveMsgCallback)
-                {
-                    _receiveMsgCallback(_error);
-                }
-            });
-        if (!ret)
-        {
-            return;
-        }
         auto nodeIDData = _nodeID->data();
         m_proxy->asyncSendResponse(_id, _moduleID,
             std::vector<char>(nodeIDData.begin(), nodeIDData.end()),

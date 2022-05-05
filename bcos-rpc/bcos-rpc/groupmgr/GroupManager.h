@@ -33,7 +33,7 @@ public:
       : m_chainID(_chainID), m_nodeServiceFactory(_nodeServiceFactory)
     {}
     virtual ~GroupManager() {}
-    virtual void updateGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo);
+    virtual bool updateGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo);
     virtual void removeGroupNodeList(bcos::group::GroupInfo::Ptr _groupInfo);
 
     virtual NodeService::Ptr getNodeService(
@@ -153,7 +153,7 @@ public:
 protected:
     GroupManager(std::string const& _chainID) : m_chainID(_chainID) {}
 
-    void updateNodeServiceWithoutLock(
+    bool updateNodeServiceWithoutLock(
         std::string const& _groupID, bcos::group::ChainNodeInfo::Ptr _nodeInfo);
     bool shouldRebuildNodeService(
         std::string const& _groupID, bcos::group::ChainNodeInfo::Ptr _nodeInfo);

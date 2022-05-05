@@ -33,8 +33,7 @@ public:
     TarsGroupManager(std::string const& _chainID, NodeServiceFactory::Ptr _nodeServiceFactory)
       : GroupManager(_chainID, _nodeServiceFactory)
     {
-        m_startTime = utcTime();
-        m_groupStatusUpdater = std::make_shared<Timer>(1000);
+        m_groupStatusUpdater = std::make_shared<Timer>(c_tarsAdminRefreshTime);
         m_groupStatusUpdater->start();
         m_groupStatusUpdater->registerTimeoutHandler(
             boost::bind(&TarsGroupManager::updateGroupStatus, this));
@@ -47,14 +46,17 @@ public:
         }
     }
 
+    bool updateGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo) override;
+
 protected:
     virtual void updateGroupStatus();
     virtual std::map<std::string, std::set<std::string>> checkNodeStatus();
 
 protected:
     std::shared_ptr<Timer> m_groupStatusUpdater;
-    uint64_t c_tarsAdminRefreshInitTime = 120 * 1000;
-    uint64_t m_startTime = 0;
+    // Note: since tars need at-least 1min to update the endpoint info, we schedule
+    // updateGroupStatus every 1min
+    uint64_t c_tarsAdminRefreshTime = 60 * 1000;
 };
 }  // namespace rpc
 }  // namespace bcos

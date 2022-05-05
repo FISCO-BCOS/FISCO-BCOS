@@ -72,12 +72,14 @@ std::set<P2pID> PeersRouterTable::queryP2pIDsByGroupID(const std::string& _group
 void PeersRouterTable::updatePeerStatus(
     P2pID const& _p2pID, GatewayNodeStatus::Ptr _gatewayNodeStatus)
 {
+    auto const& nodeList = _gatewayNodeStatus->groupNodeInfos();
     ROUTER_LOG(INFO) << LOG_DESC("updatePeerStatus")
-                     << LOG_KV("gatewayUUID", _gatewayNodeStatus->uuid());
+                     << LOG_KV("gatewayUUID", _gatewayNodeStatus->uuid())
+                     << LOG_KV("nodeList", nodeList.size());
     // remove the old nodeList from the groupNodeList
     removeP2PIDFromGroupNodeList(_p2pID);
     // insert the new nodeList into the  groupNodeList
-    batchInsertNodeList(_p2pID, _gatewayNodeStatus->groupNodeInfos());
+    batchInsertNodeList(_p2pID, nodeList);
     // update the peers status
     updatePeerNodeList(_p2pID, _gatewayNodeStatus);
     // update the gatewayInfo

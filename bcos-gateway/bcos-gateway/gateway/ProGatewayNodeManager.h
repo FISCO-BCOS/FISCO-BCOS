@@ -32,9 +32,9 @@ public:
         std::shared_ptr<bcos::crypto::KeyFactory> _keyFactory, P2PInterface::Ptr _p2pInterface)
       : GatewayNodeManager(_uuid, _nodeID, _keyFactory, _p2pInterface)
     {
-        m_nodeAliveDetector = std::make_shared<Timer>(1000, "nodeUpdater");
+        m_nodeAliveDetector =
+            std::make_shared<Timer>(c_tarsAdminRefreshTimeInterval, "nodeUpdater");
         m_nodeAliveDetector->registerTimeoutHandler([this]() { DetectNodeAlive(); });
-        m_startT = utcTime();
     }
 
     void start() override
@@ -54,8 +54,9 @@ private:
 
 private:
     std::shared_ptr<Timer> m_nodeAliveDetector;
-    uint64_t m_startT;
-    uint64_t c_tarsAdminRefreshInitTime = 120 * 1000;
+    // Note: since tars need at-least 1min to update the endpoint info, we schedule DetectNodeAlive
+    // every 1min
+    uint64_t c_tarsAdminRefreshTimeInterval = 60 * 1000;
 };
 }  // namespace gateway
 }  // namespace bcos
