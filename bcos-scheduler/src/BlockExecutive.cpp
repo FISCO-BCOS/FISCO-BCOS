@@ -984,7 +984,7 @@ void BlockExecutive::serialPrepareExecutor()
     // Notice:
     // For the same DMC lock priority
     // m_dmcExecutors must be prepared in contractAddress less<> serial order
-    // Aquire lock happens in dmcExecutor->prepare()
+    // Acquire lock happens in dmcExecutor->prepare()
 
     // prepare current contract(each DmcExecutor belongs to one contract)
     std::set<std::string, std::less<>> currentExecutors;
