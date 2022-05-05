@@ -78,6 +78,9 @@ private:
 
     std::function<bool(const std::string& priKey, std::string& pubHex)> m_certPubHexHandler;
 
+    void initFailOver(std::shared_ptr<Gateway> _gateWay,
+        bcos::election::LeaderEntryPointInterface::Ptr _entryPoint);
+
 private:
     std::string m_chainID;
     std::string m_rpcServiceName;

@@ -65,7 +65,6 @@ std::map<std::string, std::set<std::string>> TarsGroupManager::checkNodeStatus()
                 !m_nodeServiceList[groupID].count(nodeInfo.first) ||
                 m_nodeServiceList[groupID][nodeInfo.first]->unreachable())
             {
-                groupInfo->removeNodeInfo(nodeInfo.second);
                 unreachableNodes[groupID].insert(nodeInfo.first);
                 groupInfoUpdated = true;
                 continue;

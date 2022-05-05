@@ -28,19 +28,29 @@ using namespace bcos::protocol;
 
 bool GroupManager::updateGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo)
 {
-    WriteGuard l(x_nodeServiceList);
-    auto const& groupID = _groupInfo->groupID();
-    if (!m_groupInfos.count(groupID))
+    bool enforceUpdate = false;
     {
-        m_groupInfos[groupID] = _groupInfo;
-        GROUP_LOG(INFO) << LOG_DESC("updateGroupInfo") << printGroupInfo(_groupInfo);
-        m_groupInfoNotifier(_groupInfo);
+        UpgradableGuard l(x_nodeServiceList);
+        auto const& groupID = _groupInfo->groupID();
+        if (!m_groupInfos.count(groupID))
+        {
+            UpgradeGuard ul(l);
+            m_groupInfos[groupID] = _groupInfo;
+            GROUP_LOG(INFO) << LOG_DESC("updateGroupInfo") << printGroupInfo(_groupInfo);
+            m_groupInfoNotifier(_groupInfo);
+            enforceUpdate = true;
+        }
     }
-    auto nodeInfos = _groupInfo->nodeInfos();
+    return updateGroupServices(_groupInfo, enforceUpdate);
+}
+
+bool GroupManager::updateGroupServices(bcos::group::GroupInfo::Ptr _groupInfo, bool _enforce)
+{
     auto ret = false;
+    auto nodeInfos = _groupInfo->nodeInfos();
     for (auto const& it : nodeInfos)
     {
-        if (updateNodeServiceWithoutLock(groupID, it.second))
+        if (updateNodeService(_groupInfo->groupID(), it.second, _enforce))
         {
             ret = true;
         }
@@ -97,11 +107,12 @@ bool GroupManager::shouldRebuildNodeService(
     return false;
 }
 
-bool GroupManager::updateNodeServiceWithoutLock(
-    std::string const& _groupID, ChainNodeInfo::Ptr _nodeInfo)
+bool GroupManager::updateNodeService(
+    std::string const& _groupID, ChainNodeInfo::Ptr _nodeInfo, bool _enforceUpdate)
 {
+    UpgradableGuard l(x_nodeServiceList);
     auto const& nodeAppName = _nodeInfo->nodeName();
-    if (!shouldRebuildNodeService(_groupID, _nodeInfo))
+    if (!_enforceUpdate && !shouldRebuildNodeService(_groupID, _nodeInfo))
     {
         return false;
     }
@@ -113,6 +124,7 @@ bool GroupManager::updateNodeServiceWithoutLock(
     }
     // fetch blockNumber to the node
     initNodeInfo(_groupID, _nodeInfo->nodeName(), nodeService);
+    UpgradeGuard ul(l);
     m_nodeServiceList[_groupID][nodeAppName] = nodeService;
     auto groupInfo = m_groupInfos[_groupID];
     // will cover the old NodeInfo
@@ -258,8 +270,9 @@ void GroupManager::removeUnreachableNodeService(
     WriteGuard l(x_nodeServiceList);
     for (auto const& it : _unreachableNodes)
     {
-        auto group = it.first;
-        if (!m_nodeServiceList.count(group))
+        auto groupID = it.first;
+        auto& groupInfo = m_groupInfos[groupID];
+        if (!m_nodeServiceList.count(groupID))
         {
             continue;
         }
@@ -267,12 +280,13 @@ void GroupManager::removeUnreachableNodeService(
         for (auto const& node : nodeList)
         {
             GROUP_LOG(INFO) << LOG_DESC("GroupManager: removeUnreachablNodeService")
-                            << LOG_KV("group", group) << LOG_KV("node", node);
-            m_nodeServiceList[group].erase(node);
+                            << LOG_KV("group", groupID) << LOG_KV("node", node);
+            m_nodeServiceList[groupID].erase(node);
+            groupInfo->removeNodeInfo(node);
         }
-        if (m_nodeServiceList[group].size() == 0)
+        if (m_nodeServiceList[groupID].size() == 0)
         {
-            m_nodeServiceList.erase(group);
+            m_nodeServiceList.erase(groupID);
         }
     }
 }

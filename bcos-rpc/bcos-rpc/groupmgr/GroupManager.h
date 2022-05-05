@@ -153,8 +153,9 @@ public:
 protected:
     GroupManager(std::string const& _chainID) : m_chainID(_chainID) {}
 
-    bool updateNodeServiceWithoutLock(
-        std::string const& _groupID, bcos::group::ChainNodeInfo::Ptr _nodeInfo);
+    bool updateGroupServices(bcos::group::GroupInfo::Ptr _groupInfo, bool _enforceUpdate);
+    bool updateNodeService(std::string const& _groupID, bcos::group::ChainNodeInfo::Ptr _nodeInfo,
+        bool _enforceUpdate);
     bool shouldRebuildNodeService(
         std::string const& _groupID, bcos::group::ChainNodeInfo::Ptr _nodeInfo);
     virtual NodeService::Ptr selectNode(std::string const& _groupID) const;

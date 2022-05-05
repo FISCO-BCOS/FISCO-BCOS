@@ -142,8 +142,16 @@ void NodeServiceApp::initServiceInfo(Application* _application)
         throw std::runtime_error("init NodeService failed for get txpool-service-desc failed");
     }
     nodeInfo->appendServiceInfo(TXPOOL, txpoolServiceDesc.second);
+
+    auto consensusServiceDesc = getEndPointDescByAdapter(_application, CONSENSUS_SERVANT_NAME);
+    if (!consensusServiceDesc.first)
+    {
+        throw std::runtime_error("init NodeService failed for get consensus-service-desc failed");
+    }
+    nodeInfo->appendServiceInfo(CONSENSUS, consensusServiceDesc.second);
     BCOS_LOG(INFO) << LOG_DESC("initServiceInfo") << LOG_KV("schedulerDesc", schedulerDesc.second)
                    << LOG_KV("ledgerDesc", ledgerDesc.second)
                    << LOG_KV("frontServiceDesc", frontServiceDesc.second)
-                   << LOG_KV("txpoolServiceDesc", txpoolServiceDesc.second);
+                   << LOG_KV("txpoolServiceDesc", txpoolServiceDesc.second)
+                   << LOG_KV("consensusServiceDesc", consensusServiceDesc.second);
 }

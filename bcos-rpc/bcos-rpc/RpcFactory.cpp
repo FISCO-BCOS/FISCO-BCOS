@@ -214,40 +214,38 @@ GroupManager::Ptr RpcFactory::buildGroupManager(
     bcos::election::LeaderEntryPointInterface::Ptr _entryPoint)
 {
     auto nodeServiceFactory = std::make_shared<NodeServiceFactory>();
-    if (_entryPoint)
+    if (!_entryPoint)
     {
-        RPC_LOG(INFO) << LOG_DESC(
-            "buildGroupManager with leaderEntryPoint to manager the node info");
-        auto groupManager = std::make_shared<GroupManager>(m_chainID, nodeServiceFactory);
-        auto groupInfoCodec = std::make_shared<bcostars::protocol::GroupInfoCodecImpl>();
-        _entryPoint->addMemberChangeNotificationHandler(
-            [groupManager, groupInfoCodec](
-                std::string const& _key, bcos::protocol::MemberInterface::Ptr _member) {
-                auto const& groupInfoStr = _member->memberConfig();
-                auto groupInfo = groupInfoCodec->deserialize(groupInfoStr);
-                groupManager->updateGroupInfo(groupInfo);
-                RPC_LOG(INFO) << LOG_DESC("The leader entryPoint changed") << LOG_KV("key", _key)
-                              << LOG_KV("memberID", _member->memberID())
-                              << LOG_KV("modifyIndex", _member->seq())
-                              << LOG_KV("groupID", groupInfo->groupID());
-            });
-
-        _entryPoint->addMemberDeleteNotificationHandler(
-            [groupManager, groupInfoCodec](
-                std::string const& _leaderKey, bcos::protocol::MemberInterface::Ptr _leader) {
-                auto const& groupInfoStr = _leader->memberConfig();
-                auto groupInfo = groupInfoCodec->deserialize(groupInfoStr);
-                RPC_LOG(INFO) << LOG_DESC("The leader entryPoint has been deleted")
-                              << LOG_KV("key", _leaderKey)
-                              << LOG_KV("memberID", _leader->memberID())
-                              << LOG_KV("modifyIndex", _leader->seq())
-                              << LOG_KV("groupID", groupInfo->groupID());
-                groupManager->removeGroupNodeList(groupInfo);
-            });
-        return groupManager;
+        RPC_LOG(INFO) << LOG_DESC("buildGroupManager: using tars to manager the node info");
+        return std::make_shared<TarsGroupManager>(m_chainID, nodeServiceFactory);
     }
-    RPC_LOG(INFO) << LOG_DESC("buildGroupManager: using tars to manager the node info");
-    return std::make_shared<TarsGroupManager>(m_chainID, nodeServiceFactory);
+    RPC_LOG(INFO) << LOG_DESC("buildGroupManager with leaderEntryPoint to manager the node info");
+    auto groupManager = std::make_shared<GroupManager>(m_chainID, nodeServiceFactory);
+    auto groupInfoCodec = std::make_shared<bcostars::protocol::GroupInfoCodecImpl>();
+    _entryPoint->addMemberChangeNotificationHandler(
+        [groupManager, groupInfoCodec](
+            std::string const& _key, bcos::protocol::MemberInterface::Ptr _member) {
+            auto const& groupInfoStr = _member->memberConfig();
+            auto groupInfo = groupInfoCodec->deserialize(groupInfoStr);
+            groupManager->updateGroupInfo(groupInfo);
+            RPC_LOG(INFO) << LOG_DESC("The leader entryPoint changed") << LOG_KV("key", _key)
+                          << LOG_KV("memberID", _member->memberID())
+                          << LOG_KV("modifyIndex", _member->seq())
+                          << LOG_KV("groupID", groupInfo->groupID());
+        });
+
+    _entryPoint->addMemberDeleteNotificationHandler(
+        [groupManager, groupInfoCodec](
+            std::string const& _leaderKey, bcos::protocol::MemberInterface::Ptr _leader) {
+            auto const& groupInfoStr = _leader->memberConfig();
+            auto groupInfo = groupInfoCodec->deserialize(groupInfoStr);
+            RPC_LOG(INFO) << LOG_DESC("The leader entryPoint has been deleted")
+                          << LOG_KV("key", _leaderKey) << LOG_KV("memberID", _leader->memberID())
+                          << LOG_KV("modifyIndex", _leader->seq())
+                          << LOG_KV("groupID", groupInfo->groupID());
+            groupManager->removeGroupNodeList(groupInfo);
+        });
+    return groupManager;
 }
 
 AirGroupManager::Ptr RpcFactory::buildAirGroupManager(

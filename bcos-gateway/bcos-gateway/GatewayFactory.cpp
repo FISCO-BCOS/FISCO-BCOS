@@ -335,50 +335,8 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
         {
             return gateway;
         }
+        initFailOver(gateway, _entryPoint);
 
-        auto groupInfoCodec = std::make_shared<bcostars::protocol::GroupInfoCodecImpl>();
-        _entryPoint->addMemberChangeNotificationHandler(
-            [gateway, groupInfoCodec](
-                std::string const& _leaderKey, bcos::protocol::MemberInterface::Ptr _leader) {
-                auto const& groupInfoStr = _leader->memberConfig();
-                auto groupInfo = groupInfoCodec->deserialize(groupInfoStr);
-                GATEWAY_FACTORY_LOG(INFO)
-                    << LOG_DESC("The leader entryPoint changed") << LOG_KV("key", _leaderKey)
-                    << LOG_KV("memberID", _leader->memberID())
-                    << LOG_KV("modifyIndex", _leader->seq())
-                    << LOG_KV("groupID", groupInfo->groupID());
-                gateway->asyncNotifyGroupInfo(groupInfo, [](Error::Ptr&& _error) {
-                    if (_error)
-                    {
-                        GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("memberChangedNotification error")
-                                                  << LOG_KV("code", _error->errorCode())
-                                                  << LOG_KV("msg", _error->errorMessage());
-                        return;
-                    }
-                    GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("memberChangedNotification success");
-                });
-            });
-
-        _entryPoint->addMemberDeleteNotificationHandler(
-            [gateway, groupInfoCodec](
-                std::string const& _leaderKey, bcos::protocol::MemberInterface::Ptr _leader) {
-                auto const& groupInfoStr = _leader->memberConfig();
-                auto groupInfo = groupInfoCodec->deserialize(groupInfoStr);
-                GATEWAY_FACTORY_LOG(INFO)
-                    << LOG_DESC("The leader entryPoint has been deleted")
-                    << LOG_KV("key", _leaderKey) << LOG_KV("memberID", _leader->memberID())
-                    << LOG_KV("modifyIndex", _leader->seq())
-                    << LOG_KV("groupID", groupInfo->groupID());
-                auto nodeInfos = groupInfo->nodeInfos();
-                for (auto const& node : nodeInfos)
-                {
-                    gateway->unregisterNode(groupInfo->groupID(), node.second->nodeID());
-                    GATEWAY_FACTORY_LOG(INFO)
-                        << LOG_DESC("unregisterNode") << LOG_KV("group", groupInfo->groupID())
-                        << LOG_KV("node", node.second->nodeID());
-                }
-            });
-        GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("addMemberChangeNotificationHandler success");
         return gateway;
     }
     catch (const std::exception& e)
@@ -387,6 +345,52 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
                                    << LOG_KV("error", boost::diagnostic_information(e));
         BOOST_THROW_EXCEPTION(e);
     }
+}
+
+void GatewayFactory::initFailOver(
+    std::shared_ptr<Gateway> _gateWay, bcos::election::LeaderEntryPointInterface::Ptr _entryPoint)
+{
+    auto groupInfoCodec = std::make_shared<bcostars::protocol::GroupInfoCodecImpl>();
+    _entryPoint->addMemberChangeNotificationHandler(
+        [_gateWay, groupInfoCodec](
+            std::string const& _leaderKey, bcos::protocol::MemberInterface::Ptr _leader) {
+            auto const& groupInfoStr = _leader->memberConfig();
+            auto groupInfo = groupInfoCodec->deserialize(groupInfoStr);
+            GATEWAY_FACTORY_LOG(INFO)
+                << LOG_DESC("The leader entryPoint changed") << LOG_KV("key", _leaderKey)
+                << LOG_KV("memberID", _leader->memberID()) << LOG_KV("modifyIndex", _leader->seq())
+                << LOG_KV("groupID", groupInfo->groupID());
+            _gateWay->asyncNotifyGroupInfo(groupInfo, [](Error::Ptr&& _error) {
+                if (_error)
+                {
+                    GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("memberChangedNotification error")
+                                              << LOG_KV("code", _error->errorCode())
+                                              << LOG_KV("msg", _error->errorMessage());
+                    return;
+                }
+                GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("memberChangedNotification success");
+            });
+        });
+
+    _entryPoint->addMemberDeleteNotificationHandler(
+        [_gateWay, groupInfoCodec](
+            std::string const& _leaderKey, bcos::protocol::MemberInterface::Ptr _leader) {
+            auto const& groupInfoStr = _leader->memberConfig();
+            auto groupInfo = groupInfoCodec->deserialize(groupInfoStr);
+            GATEWAY_FACTORY_LOG(INFO)
+                << LOG_DESC("The leader entryPoint has been deleted") << LOG_KV("key", _leaderKey)
+                << LOG_KV("memberID", _leader->memberID()) << LOG_KV("modifyIndex", _leader->seq())
+                << LOG_KV("groupID", groupInfo->groupID());
+            auto nodeInfos = groupInfo->nodeInfos();
+            for (auto const& node : nodeInfos)
+            {
+                _gateWay->unregisterNode(groupInfo->groupID(), node.second->nodeID());
+                GATEWAY_FACTORY_LOG(INFO)
+                    << LOG_DESC("unregisterNode") << LOG_KV("group", groupInfo->groupID())
+                    << LOG_KV("node", node.second->nodeID());
+            }
+        });
+    GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("initFailOver for gateway success");
 }
 
 bcos::amop::AMOPImpl::Ptr GatewayFactory::buildAMOP(
