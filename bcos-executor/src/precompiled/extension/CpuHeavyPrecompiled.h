@@ -52,7 +52,7 @@ public:
 
     static std::string getAddress(unsigned int id)
     {
-        u160 address = u160("0x5200");
+        u160 address = u160(CPU_HEAVY_START_ADDRESS);
         address += id;
         h160 addressBytes = h160(address);
         return addressBytes.hex();
@@ -63,7 +63,7 @@ public:
             registeredMap,
         crypto::Hash::Ptr _hashImpl)
     {
-        for (int id = 0; id < 128; id++)
+        for (int id = 0; id < CPU_HEAVY_CONTRACT_NUM; id++)
         {
             std::string address = getAddress(id);
             BCOS_LOG(INFO) << LOG_BADGE("CpuHeavy") << "Register CpuHeavyPrecompiled "

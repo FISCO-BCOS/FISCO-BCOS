@@ -176,7 +176,7 @@ bool DmcExecutor::detectLockAndRevert()
             m_needSendPool.insert(contextID);
             m_lockingPool.unsafe_erase(contextID);
 #ifdef DMC_TRACE_LOG_ENABLE
-            DMC_LOG(TRACE) << " 2.AfterPrepare: \t [..] " << executiveState->toString() << " REVERT"
+            DMC_LOG(TRACE) << " 3.AfterPrepare: \t [..] " << executiveState->toString() << " REVERT"
                            << std::endl;
 #endif
             return true;  // just detect one TODO: detect and unlock more deadlock

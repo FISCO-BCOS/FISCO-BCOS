@@ -59,6 +59,7 @@ void BlockExecutive::prepare()
             // Note: set here for fetching txs when send_back
             message->setTransactionHash(metaData->hash());
 
+
             if (metaData->attribute() & bcos::protocol::Transaction::Attribute::LIQUID_SCALE_CODEC)
             {
                 // LIQUID
@@ -84,6 +85,7 @@ void BlockExecutive::prepare()
             message->setDepth(0);
             message->setGasAvailable(m_gasLimit);
             message->setStaticCall(false);
+
 
             bool enableDAG = metaData->attribute() & bcos::protocol::Transaction::Attribute::DAG;
 

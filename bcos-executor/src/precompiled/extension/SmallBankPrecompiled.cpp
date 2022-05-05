@@ -99,6 +99,24 @@ std::shared_ptr<PrecompiledExecResult> SmallBankPrecompiled::call(
     auto callResult = std::make_shared<PrecompiledExecResult>();
     auto gasPricer = m_precompiledGasFactory->createPrecompiledGas();
 
+    auto table = _executive->storage().openTable(precompiled::getTableName(m_tableName));
+    gasPricer->appendOperation(InterfaceOpcode::OpenTable);
+    if (!table)
+    {
+        // table is not exist, create it.
+        table =
+            _executive->storage().createTable(precompiled::getTableName(m_tableName), m_tableName);
+        gasPricer->appendOperation(InterfaceOpcode::CreateTable);
+        if (!table)
+        {
+            PRECOMPILED_LOG(ERROR) << LOG_BADGE("HelloWorldPrecompiled") << LOG_DESC("set")
+                                   << LOG_DESC("open table failed.");
+            auto blockContext = _executive->blockContext().lock();
+            getErrorCodeOut(callResult->mutableExecResult(), CODE_NO_AUTHORIZED,
+                CodecWrapper(blockContext->hashHandler(), blockContext->isWasm()));
+            return callResult;
+        }
+    }
 
     // user_name user_balance 2 fields in table, the key of table is user_name field
     if (func == name2Selector[SMALL_BANK_METHOD_ADD_STR_UINT])

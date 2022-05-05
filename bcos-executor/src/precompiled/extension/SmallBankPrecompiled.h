@@ -49,17 +49,18 @@ public:
 
     static std::string getAddress(unsigned int id)
     {
-        u160 address = u160("0x6200");
+        u160 address = u160(SMALLBANK_START_ADDRESS);
         address += id;
         h160 addressBytes = h160(address);
         return addressBytes.hex();
     }
 
     static void registerPrecompiled(
-        std::map<std::string, std::shared_ptr<precompiled::Precompiled> >& registeredMap,
+        std::shared_ptr<std::map<std::string, std::shared_ptr<precompiled::Precompiled>>>
+            registeredMap,
         crypto::Hash::Ptr _hashImpl)
     {
-        for (int id = 0; id < 128; id++)
+        for (int id = 0; id < SMALLBANK_CONTRACT_NUM; id++)
         {
             std::string _tableName = std::to_string(id);
             std::string path = bcos::ledger::SMALLBANK_TRANSFER;
@@ -67,7 +68,7 @@ public:
             std::string address = getAddress(id);
             BCOS_LOG(INFO) << LOG_BADGE("SmallBank") << "Register SmallBankPrecompiled "
                            << LOG_KV("address", address) << LOG_KV("tableName", _tableName);
-            registeredMap.insert({std::move(address),
+            registeredMap->insert({std::move(address),
                 std::make_shared<precompiled::SmallBankPrecompiled>(_hashImpl, _tableName)});
         }
     }
