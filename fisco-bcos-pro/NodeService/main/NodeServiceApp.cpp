@@ -46,15 +46,24 @@ void NodeServiceApp::destroyApp()
 
 void NodeServiceApp::initialize()
 {
-    BCOS_LOG(INFO) << LOG_DESC("initGlobalConfig");
-    g_BCOSConfig.setCodec(std::make_shared<bcostars::protocol::ProtocolInfoCodecImpl>());
+    try
+    {
+        BCOS_LOG(INFO) << LOG_DESC("initGlobalConfig");
+        g_BCOSConfig.setCodec(std::make_shared<bcostars::protocol::ProtocolInfoCodecImpl>());
 
-    initConfig();
-    initLog();
-    initNodeService();
-    initTarsNodeService();
-    initServiceInfo(this);
-    m_nodeInitializer->start();
+        initConfig();
+        initLog();
+        initNodeService();
+        initTarsNodeService();
+        initServiceInfo(this);
+        m_nodeInitializer->start();
+    }
+    catch (std::exception const& e)
+    {
+        std::cout << "init NodeService failed, error: " << boost::diagnostic_information(e)
+                  << std::endl;
+        throw e;
+    }
 }
 
 void NodeServiceApp::initLog()

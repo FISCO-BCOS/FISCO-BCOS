@@ -166,6 +166,10 @@ void PBFTInitializer::start()
     m_sealer->start();
     m_blockSync->start();
     m_pbft->start();
+    if (m_leaderElection)
+    {
+        m_leaderElection->start();
+    }
 }
 
 void PBFTInitializer::stop()
@@ -173,6 +177,10 @@ void PBFTInitializer::stop()
     m_sealer->stop();
     m_blockSync->stop();
     m_pbft->stop();
+    if (m_leaderElection)
+    {
+        m_leaderElection->stop();
+    }
 }
 
 void PBFTInitializer::init()
@@ -450,7 +458,6 @@ void PBFTInitializer::initConsensusFailOver(KeyInterface::Ptr _nodeID)
             INITIALIZER_LOG(INFO) << LOG_DESC("onCampaignHandler") << LOG_KV("success", _success)
                                   << LOG_KV("leader", _leader ? _leader->memberID() : "None");
         });
-    m_leaderElection->start();
     INITIALIZER_LOG(INFO) << LOG_DESC("initConsensusFailOver") << LOG_KV("leaderKey", leaderKey)
                           << LOG_KV("nodeConfig", nodeConfig);
 }

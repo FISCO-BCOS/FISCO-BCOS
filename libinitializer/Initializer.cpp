@@ -76,7 +76,6 @@ void Initializer::initMicroServiceNode(std::string const& _configFilePath,
 void Initializer::initConfig(std::string const& _configFilePath, std::string const& _genesisFile,
     std::string const& _privateKeyPath, bool _airVersion)
 {
-    // loadConfig
     m_nodeConfig = std::make_shared<NodeConfig>(std::make_shared<bcos::crypto::KeyFactoryImpl>());
     m_nodeConfig->loadConfig(_configFilePath);
     m_nodeConfig->loadGenesisConfig(_genesisFile);

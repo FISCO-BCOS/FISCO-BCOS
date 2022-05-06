@@ -47,7 +47,7 @@ public:
         GatewayNodeManager::stop();
         m_nodeAliveDetector->stop();
     }
-    void updateFrontServiceInfo(bcos::group::GroupInfo::Ptr _groupInfo) override;
+    bool updateFrontServiceInfo(bcos::group::GroupInfo::Ptr _groupInfo) override;
 
 private:
     virtual void DetectNodeAlive();

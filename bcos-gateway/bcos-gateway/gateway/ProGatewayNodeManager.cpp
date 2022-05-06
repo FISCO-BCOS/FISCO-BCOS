@@ -35,14 +35,12 @@ void ProGatewayNodeManager::DetectNodeAlive()
     syncLatestNodeIDList();
 }
 
-void ProGatewayNodeManager::updateFrontServiceInfo(bcos::group::GroupInfo::Ptr _groupInfo)
+bool ProGatewayNodeManager::updateFrontServiceInfo(bcos::group::GroupInfo::Ptr _groupInfo)
 {
-    auto updated = m_localRouterTable->updateGroupNodeInfos(_groupInfo);
-    if (!updated)
+    auto ret = GatewayNodeManager::updateFrontServiceInfo(_groupInfo);
+    if (ret)
     {
-        return;
+        m_nodeAliveDetector->restart();
     }
-    m_nodeAliveDetector->restart();
-    increaseSeq();
-    syncLatestNodeIDList();
+    return ret;
 }

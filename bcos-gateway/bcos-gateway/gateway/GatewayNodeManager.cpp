@@ -167,6 +167,17 @@ void GatewayNodeManager::updatePeerStatus(std::string const& _p2pID, GatewayNode
     syncLatestNodeIDList();
 }
 
+bool GatewayNodeManager::updateFrontServiceInfo(bcos::group::GroupInfo::Ptr _groupInfo)
+{
+    auto updated = m_localRouterTable->updateGroupNodeInfos(_groupInfo);
+    if (updated)
+    {
+        increaseSeq();
+        syncLatestNodeIDList();
+    }
+    return updated;
+}
+
 void GatewayNodeManager::onRequestNodeStatus(
     NetworkException const& _e, P2PSession::Ptr _session, std::shared_ptr<P2PMessage> _msg)
 {

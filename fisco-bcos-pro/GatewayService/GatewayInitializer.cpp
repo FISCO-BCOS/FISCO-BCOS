@@ -41,7 +41,7 @@ void GatewayInitializer::init(std::string const& _configPath)
 
     GATEWAYSERVICE_LOG(INFO) << LOG_DESC("load nodeConfig");
     auto nodeConfig = std::make_shared<bcos::tool::NodeConfig>();
-    nodeConfig->loadConfig(_configPath);
+    nodeConfig->loadConfig(_configPath, false);
 
     boost::property_tree::ptree pt;
     boost::property_tree::read_ini(_configPath, pt);
