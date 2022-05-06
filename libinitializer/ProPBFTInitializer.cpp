@@ -106,39 +106,33 @@ void ProPBFTInitializer::stop()
     PBFTInitializer::stop();
 }
 
+void ProPBFTInitializer::onGroupInfoChanged()
+{
+    if (!m_leaderElection)
+    {
+        reportNodeInfo();
+        return;
+    }
+    PBFTInitializer::onGroupInfoChanged();
+}
+
+
 void ProPBFTInitializer::init()
 {
-    auto groupInfoCodec = std::make_shared<bcostars::protocol::GroupInfoCodecImpl>();
     m_timer->registerTimeoutHandler(boost::bind(&ProPBFTInitializer::scheduledTask, this));
-    m_blockSync->config()->registerOnNodeTypeChanged(
-        [this, groupInfoCodec](bcos::protocol::NodeType _type) {
-            INITIALIZER_LOG(INFO) << LOG_DESC("OnNodeTypeChange") << LOG_KV("type", _type)
-                                  << LOG_KV("nodeName", m_nodeConfig->nodeName());
-            auto nodeInfo = m_groupInfo->nodeInfo(m_nodeConfig->nodeName());
-            if (!nodeInfo)
-            {
-                INITIALIZER_LOG(WARNING) << LOG_DESC("failed to find the given node information")
-                                         << LOG_KV("node", m_nodeConfig->nodeName());
-                return;
-            }
-            nodeInfo->setNodeType(_type);
-            // failover enabled, should sync the latest information to the etcd if the node is
-            // leader
-            if (m_leaderElection)
-            {
-                INITIALIZER_LOG(INFO) << LOG_DESC("OnNodeTypeChange, update the memberConfig");
-                std::string modifiedConfig;
-                groupInfoCodec->serialize(modifiedConfig, m_groupInfo);
-                auto memberInfo = m_memberFactory->createMember();
-                memberInfo->setMemberID(m_nodeConfig->memberID());
-                memberInfo->setMemberConfig(modifiedConfig);
-                m_leaderElection->updateSelfConfig(memberInfo);
-            }
-            else
-            {
-                reportNodeInfo();
-            }
-        });
+    m_blockSync->config()->registerOnNodeTypeChanged([this](bcos::protocol::NodeType _type) {
+        INITIALIZER_LOG(INFO) << LOG_DESC("OnNodeTypeChange") << LOG_KV("type", _type)
+                              << LOG_KV("nodeName", m_nodeConfig->nodeName());
+        auto nodeInfo = m_groupInfo->nodeInfo(m_nodeConfig->nodeName());
+        if (!nodeInfo)
+        {
+            INITIALIZER_LOG(WARNING) << LOG_DESC("failed to find the given node information")
+                                     << LOG_KV("node", m_nodeConfig->nodeName());
+            return;
+        }
+        nodeInfo->setNodeType(_type);
+        onGroupInfoChanged();
+    });
     PBFTInitializer::init();
     reportNodeInfo();
 }

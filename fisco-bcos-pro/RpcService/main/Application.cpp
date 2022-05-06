@@ -42,6 +42,7 @@ public:
             std::string clientID = ret.second;
             BCOS_LOG(INFO) << LOG_DESC("begin init rpc") << LOG_KV("rpcID", ret.second);
             param.rpcInitializer->setClientID(ret.second);
+            m_rpcInitializer->start();
         }
         catch (std::exception const& e)
         {
@@ -91,7 +92,6 @@ protected:
         nodeConfig->loadServiceConfig(pt);
 
         m_rpcInitializer = std::make_shared<RpcInitializer>(_configDir, nodeConfig);
-        m_rpcInitializer->start();
     }
 
 private:

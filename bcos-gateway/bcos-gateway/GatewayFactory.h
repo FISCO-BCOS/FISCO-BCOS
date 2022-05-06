@@ -58,14 +58,16 @@ public:
      * @return void
      */
     Gateway::Ptr buildGateway(const std::string& _configPath, bool _airVersion,
-        bcos::election::LeaderEntryPointInterface::Ptr _entryPoint);
+        bcos::election::LeaderEntryPointInterface::Ptr _entryPoint,
+        std::string const& _gatewayServiceName);
     /**
      * @brief: construct Gateway
      * @param _config: config parameter object
      * @return void
      */
     Gateway::Ptr buildGateway(GatewayConfig::Ptr _config, bool _airVersion,
-        bcos::election::LeaderEntryPointInterface::Ptr _entryPoint);
+        bcos::election::LeaderEntryPointInterface::Ptr _entryPoint,
+        std::string const& _gatewayServiceName);
 
 protected:
     virtual bcos::amop::AMOPImpl::Ptr buildAMOP(

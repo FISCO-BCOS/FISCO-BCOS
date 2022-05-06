@@ -60,7 +60,7 @@ public:
     std::shared_ptr<boostssl::ws::WsService> buildWsService(
         bcos::boostssl::ws::WsConfig::Ptr _config);
 
-    Rpc::Ptr buildRpc(std::string const& _gatewayServiceName,
+    Rpc::Ptr buildRpc(std::string const& _gatewayServiceName, std::string const& _rpcServiceName,
         bcos::election::LeaderEntryPointInterface::Ptr _entryPoint);
     Rpc::Ptr buildLocalRpc(bcos::group::GroupInfo::Ptr _groupInfo, NodeService::Ptr _nodeService);
 
@@ -77,7 +77,8 @@ public:
 
 protected:
     // for groupManager builder
-    GroupManager::Ptr buildGroupManager(bcos::election::LeaderEntryPointInterface::Ptr _entryPoint);
+    GroupManager::Ptr buildGroupManager(std::string const& _rpcServiceName,
+        bcos::election::LeaderEntryPointInterface::Ptr _entryPoint);
     AirGroupManager::Ptr buildAirGroupManager(
         bcos::group::GroupInfo::Ptr _groupInfo, NodeService::Ptr _nodeService);
 

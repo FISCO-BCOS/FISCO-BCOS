@@ -166,11 +166,11 @@ bcos::event::EventSub::Ptr RpcFactory::buildEventSub(
 }
 
 Rpc::Ptr RpcFactory::buildRpc(std::string const& _gatewayServiceName,
-    bcos::election::LeaderEntryPointInterface::Ptr _entryPoint)
+    std::string const& _rpcServiceName, bcos::election::LeaderEntryPointInterface::Ptr _entryPoint)
 {
     auto config = initConfig(m_nodeConfig);
     auto wsService = buildWsService(config);
-    auto groupManager = buildGroupManager(_entryPoint);
+    auto groupManager = buildGroupManager(_rpcServiceName, _entryPoint);
     auto amopClient = buildAMOPClient(wsService, _gatewayServiceName);
 
     RPC_LOG(INFO) << LOG_KV("listenIP", config->listenIP())
@@ -211,16 +211,17 @@ Rpc::Ptr RpcFactory::buildRpc(std::shared_ptr<boostssl::ws::WsService> _wsServic
 }
 
 GroupManager::Ptr RpcFactory::buildGroupManager(
-    bcos::election::LeaderEntryPointInterface::Ptr _entryPoint)
+    std::string const& _rpcServiceName, bcos::election::LeaderEntryPointInterface::Ptr _entryPoint)
 {
     auto nodeServiceFactory = std::make_shared<NodeServiceFactory>();
     if (!_entryPoint)
     {
         RPC_LOG(INFO) << LOG_DESC("buildGroupManager: using tars to manager the node info");
-        return std::make_shared<TarsGroupManager>(m_chainID, nodeServiceFactory);
+        return std::make_shared<TarsGroupManager>(_rpcServiceName, m_chainID, nodeServiceFactory);
     }
     RPC_LOG(INFO) << LOG_DESC("buildGroupManager with leaderEntryPoint to manager the node info");
-    auto groupManager = std::make_shared<GroupManager>(m_chainID, nodeServiceFactory);
+    auto groupManager =
+        std::make_shared<GroupManager>(_rpcServiceName, m_chainID, nodeServiceFactory);
     auto groupInfoCodec = std::make_shared<bcostars::protocol::GroupInfoCodecImpl>();
     _entryPoint->addMemberChangeNotificationHandler(
         [groupManager, groupInfoCodec](

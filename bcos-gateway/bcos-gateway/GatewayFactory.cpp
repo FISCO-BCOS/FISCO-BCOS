@@ -228,7 +228,8 @@ std::shared_ptr<boost::asio::ssl::context> GatewayFactory::buildSSLContext(
  * @return void
  */
 std::shared_ptr<Gateway> GatewayFactory::buildGateway(const std::string& _configPath,
-    bool _airVersion, bcos::election::LeaderEntryPointInterface::Ptr _entryPoint)
+    bool _airVersion, bcos::election::LeaderEntryPointInterface::Ptr _entryPoint,
+    std::string const& _gatewayServiceName)
 {
     auto config = std::make_shared<GatewayConfig>();
     // load config
@@ -243,7 +244,7 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(const std::string& _config
         config->initConfig(_configPath, true);
     }
     config->loadP2pConnectedNodes();
-    return buildGateway(config, _airVersion, _entryPoint);
+    return buildGateway(config, _airVersion, _entryPoint, _gatewayServiceName);
 }
 
 /**
@@ -252,7 +253,8 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(const std::string& _config
  * @return void
  */
 std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config, bool _airVersion,
-    bcos::election::LeaderEntryPointInterface::Ptr _entryPoint)
+    bcos::election::LeaderEntryPointInterface::Ptr _entryPoint,
+    std::string const& _gatewayServiceName)
 {
     try
     {
@@ -296,7 +298,8 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
 
         GATEWAY_FACTORY_LOG(INFO) << LOG_DESC("GatewayFactory::init")
                                   << LOG_KV("myself pub id", pubHex)
-                                  << LOG_KV("rpcService", m_rpcServiceName);
+                                  << LOG_KV("rpcService", m_rpcServiceName)
+                                  << LOG_KV("gatewayServiceName", _gatewayServiceName);
 
         service->setId(pubHex);
         service->setMessageFactory(messageFactory);
@@ -318,7 +321,8 @@ std::shared_ptr<Gateway> GatewayFactory::buildGateway(GatewayConfig::Ptr _config
             amop = buildAMOP(service, pubHex);
         }
         // init Gateway
-        auto gateway = std::make_shared<Gateway>(m_chainID, service, gatewayNodeManager, amop);
+        auto gateway = std::make_shared<Gateway>(
+            m_chainID, service, gatewayNodeManager, amop, _gatewayServiceName);
         auto weakptrGatewayNodeManager = std::weak_ptr<GatewayNodeManager>(gatewayNodeManager);
         // register disconnect handler
         service->registerDisconnectHandler(

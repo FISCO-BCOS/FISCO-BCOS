@@ -47,22 +47,25 @@ void GatewayInitializer::init(std::string const& _configPath)
     boost::property_tree::read_ini(_configPath, pt);
     nodeConfig->loadServiceConfig(pt);
     GATEWAYSERVICE_LOG(INFO) << LOG_DESC("load nodeConfig success");
-
-    GATEWAYSERVICE_LOG(INFO) << LOG_DESC("buildGateWay")
-                             << LOG_KV("certPath", m_gatewayConfig->certPath())
-                             << LOG_KV("nodePath", m_gatewayConfig->nodePath());
     if (nodeConfig->enableFailOver())
     {
         GATEWAYSERVICE_LOG(INFO) << LOG_DESC("enable failover");
         auto memberFactory = std::make_shared<bcostars::protocol::MemberFactoryImpl>();
         auto leaderEntryPointFactory =
             std::make_shared<bcos::election::LeaderEntryPointFactoryImpl>(memberFactory);
-        m_leaderEntryPoint =
-            leaderEntryPointFactory->createLeaderEntryPoint(nodeConfig->failOverClusterUrl(),
-                bcos::election::CONSENSUS_LEADER_DIR, "watchLeaderChange");
+        auto watchDir = "/" + nodeConfig->chainId() + bcos::election::CONSENSUS_LEADER_DIR;
+        m_leaderEntryPoint = leaderEntryPointFactory->createLeaderEntryPoint(
+            nodeConfig->failOverClusterUrl(), watchDir, "watchLeaderChange");
     }
+
     bcos::gateway::GatewayFactory factory(nodeConfig->chainId(), nodeConfig->rpcServiceName());
-    auto gateway = factory.buildGateway(m_gatewayConfig, false, m_leaderEntryPoint);
+    auto gatewayServiceName = bcostars::getProxyDesc(bcos::protocol::GATEWAY_SERVANT_NAME);
+    GATEWAYSERVICE_LOG(INFO) << LOG_DESC("buildGateWay")
+                             << LOG_KV("certPath", m_gatewayConfig->certPath())
+                             << LOG_KV("nodePath", m_gatewayConfig->nodePath())
+                             << LOG_KV("gatewayServiceName", gatewayServiceName);
+    auto gateway =
+        factory.buildGateway(m_gatewayConfig, false, m_leaderEntryPoint, gatewayServiceName);
 
     m_gateway = gateway;
     GATEWAYSERVICE_LOG(INFO) << LOG_DESC("buildGateway success");

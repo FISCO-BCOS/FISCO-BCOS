@@ -29,8 +29,11 @@ class GroupManager : public std::enable_shared_from_this<GroupManager>
 {
 public:
     using Ptr = std::shared_ptr<GroupManager>;
-    GroupManager(std::string const& _chainID, NodeServiceFactory::Ptr _nodeServiceFactory)
-      : m_chainID(_chainID), m_nodeServiceFactory(_nodeServiceFactory)
+    GroupManager(std::string _rpcServiceName, std::string const& _chainID,
+        NodeServiceFactory::Ptr _nodeServiceFactory)
+      : m_rpcServiceName(_rpcServiceName),
+        m_chainID(_chainID),
+        m_nodeServiceFactory(_nodeServiceFactory)
     {}
     virtual ~GroupManager() {}
     virtual bool updateGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo);
@@ -172,7 +175,10 @@ protected:
     virtual void removeUnreachableNodeService(
         std::map<std::string, std::set<std::string>> const& _unreachableNodes);
 
+    bool checkGroupInfo(bcos::group::GroupInfo::Ptr _groupInfo);
+
 protected:
+    std::string m_rpcServiceName;
     std::string m_chainID;
     NodeServiceFactory::Ptr m_nodeServiceFactory;
 

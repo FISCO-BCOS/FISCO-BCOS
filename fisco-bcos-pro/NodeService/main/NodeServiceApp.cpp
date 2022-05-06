@@ -158,6 +158,8 @@ void NodeServiceApp::initServiceInfo(Application* _application)
         throw std::runtime_error("init NodeService failed for get consensus-service-desc failed");
     }
     nodeInfo->appendServiceInfo(CONSENSUS, consensusServiceDesc.second);
+    // sync the latest groupInfo to rpc/gateway
+    m_nodeInitializer->pbftInitializer()->onGroupInfoChanged();
     BCOS_LOG(INFO) << LOG_DESC("initServiceInfo") << LOG_KV("schedulerDesc", schedulerDesc.second)
                    << LOG_KV("ledgerDesc", ledgerDesc.second)
                    << LOG_KV("frontServiceDesc", frontServiceDesc.second)

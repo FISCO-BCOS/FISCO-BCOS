@@ -180,7 +180,7 @@ void LeaderElection::updateSelfConfig(bcos::protocol::MemberInterface::Ptr _self
     auto tx = std::make_shared<etcdv3::Transaction>(m_config->leaderKey());
     tx->init_compare(m_leaseID, etcdv3::CompareResult::EQUAL, etcdv3::CompareTarget::LEASE);
     tx->setup_basic_failure_operation(m_config->leaderKey());
-    tx->setup_basic_create_sequence(m_config->leaderKey(), m_config->leaderValue(), m_leaseID);
+    tx->setup_compare_and_swap_sequence(m_config->leaderValue(), m_leaseID);
     auto response = m_etcdClient->txn(*tx).get();
     if (!response.is_ok())
     {

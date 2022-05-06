@@ -43,15 +43,17 @@ public:
 
     virtual ~ProPBFTInitializer() { stop(); }
 
-    virtual void init();
+    void init() override;
 
-    virtual void start();
-    virtual void stop();
+    void start() override;
+    void stop() override;
 
 protected:
     // the task triggered by the timer periodically
     virtual void scheduledTask();
     virtual void reportNodeInfo();
+
+    void onGroupInfoChanged() override;
 
 private:
     std::shared_ptr<bcos::Timer> m_timer;
