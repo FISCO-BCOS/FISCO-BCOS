@@ -24,7 +24,7 @@ ExecutiveState::Ptr ExecutivePool::get(ContextID contextID)
     {
         return nullptr;
     }
-};
+}
 
 void ExecutivePool::markAs(ContextID contextID, MessageHint type)
 {
@@ -116,6 +116,7 @@ bool ExecutivePool::empty(MessageHint type)
         return m_pendingExecutives.empty();
     }
     }
+    return true;
 }
 
 

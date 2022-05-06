@@ -259,9 +259,7 @@ void DmcExecutor::handleCreateMessage(ExecutiveState::Ptr executiveState)
     auto& message = executiveState->message;
     auto contextID = message->contextID();
 
-    switch (message->type())
-    {
-    case protocol::ExecutionMessage::SEND_BACK:
+    if (message->type() == protocol::ExecutionMessage::SEND_BACK)
     {
         if (message->transactionHash() != h256(0))
         {
@@ -271,9 +269,10 @@ void DmcExecutor::handleCreateMessage(ExecutiveState::Ptr executiveState)
         {
             message->setType(protocol::ExecutionMessage::MESSAGE);
         }
-        // Notice: no "break" here, just pass to MESSAGE/TXHASH to create address
-        // no!! break;
     }
+
+    switch (message->type())
+    {
     case protocol::ExecutionMessage::MESSAGE:
     case protocol::ExecutionMessage::TXHASH:
     {
